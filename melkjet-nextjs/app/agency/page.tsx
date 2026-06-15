@@ -53,7 +53,7 @@ export default function AgencyPage() {
   return (
     <div dir="rtl" style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: "'Vazirmatn', sans-serif" }}>
       {/* SIDEBAR */}
-      <aside style={{ width: 240, flexShrink: 0, position: 'sticky', top: 0, height: '100vh', overflow: 'auto', background: 'var(--bg2)', borderLeft: '1px solid var(--line)', display: 'flex', flexDirection: 'column', padding: '18px 13px' }}>
+      <aside className="mjg-side" style={{ width: 240, flexShrink: 0, position: 'sticky', top: 0, height: '100vh', overflow: 'auto', background: 'var(--bg2)', borderLeft: '1px solid var(--line)', display: 'flex', flexDirection: 'column', padding: '18px 13px' }}>
         <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 11, textDecoration: 'none', color: 'var(--text)', padding: '6px 8px 16px' }}>
           <span style={{ width: 34, height: 34, borderRadius: 10, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <span style={{ width: 13, height: 13, background: 'var(--bg2)', transform: 'rotate(45deg)', borderRadius: 2, display: 'block' }}></span>
@@ -67,7 +67,7 @@ export default function AgencyPage() {
           {navItems.map(m => (
             <button key={m.id} onClick={() => setView(m.id)} style={navStyle(view === m.id)}>
               <span style={{ width: 22, textAlign: 'center', fontSize: 15 }}>{m.ic}</span>
-              <span style={{ flex: 1, textAlign: 'right' }}>{m.l}</span>
+              <span className="mjg-sidelabel" style={{ flex: 1, textAlign: 'right' }}>{m.l}</span>
             </button>
           ))}
         </nav>
@@ -95,7 +95,7 @@ export default function AgencyPage() {
           {/* OVERVIEW */}
           {view === 'overview' && (
             <div style={{ display: 'grid', gap: 18 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
+              <div className="mjg-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
                 {kpis.map(k => (
                   <div key={k.l} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -108,7 +108,7 @@ export default function AgencyPage() {
                 ))}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 18 }}>
+              <div className="mjg-2col" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 18 }}>
                 <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 20 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 18 }}>
                     <div><div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>عملکرد فروش شعب</div><div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>۶ ماه گذشته (م.د)</div></div>
@@ -211,7 +211,7 @@ export default function AgencyPage() {
           {/* FINANCE */}
           {view === 'finance' && (
             <div style={{ display: 'grid', gap: 18 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
+              <div className="mjg-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
                 {[['درآمد ناخالص', '۸۴ م.د'], ['کمیسیون مشاوران', '۳۸٫۵ م.د'], ['سهم آژانس', '۴۵٫۵ م.د'], ['هزینه‌ها', '۸٫۲ م.د']].map(([l, v]) => (
                   <div key={String(l)} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18 }}>
                     <span style={{ fontSize: 12, color: 'var(--muted)' }}>{String(l)}</span>

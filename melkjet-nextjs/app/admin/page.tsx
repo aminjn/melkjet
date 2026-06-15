@@ -176,14 +176,14 @@ function OverviewView() {
   ]
   return (
     <div style={{ animation: 'fade .35s ease' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
+      <div className="mjsa-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
         <KPI label="آگهی فعال" value="۲۴۰٬۰۰۰" trend="↑ ۱٬۸۴۰ این هفته" icon="🏠" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" trendUp />
         <KPI label="تأیید AI امروز" value="۹۸۲" trend="↑ ۱۲٪ نسبت به دیروز" icon="✓" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" trendUp />
         <KPI label="محتوای تولیدشده" value="۳۴۰" trend="مقاله + صفحه سئو" icon="✦" iconBg="var(--goldDim)" iconColor="var(--gold)" />
         <KPI label="مصرف توکن" value="۸٫۴M" trend="↑ ۴٪ هزینه این ماه" icon="◈" iconBg="rgba(231,103,74,.15)" iconColor="#e7674a" />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      <div className="mjsa-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         <Card>
           <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>دسترسی سریع</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -353,7 +353,7 @@ function ModerationView() {
 
   return (
     <div style={{ animation: 'fade .35s ease' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
+      <div className="mjsa-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
         <KPI label="در صف بررسی" value="۳۲" trend="↑ ۸ از دیروز" icon="⏳" iconBg="rgba(231,103,74,.15)" iconColor="#e7674a" />
         <KPI label="تأیید خودکار امروز" value="۷۴۶" trend="۹۸.۲٪ دقت مدل" icon="✓" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" trendUp />
         <KPI label="رد شده" value="۱۲۴" trend="۱۲٪ از کل بررسی‌ها" icon="✗" iconBg="rgba(231,103,74,.1)" iconColor="#e7674a" />
@@ -534,14 +534,14 @@ function APIView() {
 
   return (
     <div style={{ animation: 'fade .35s ease' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
+      <div className="mjsa-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
         <KPI label="توکن مصرف‌شده" value="۸٫۴M" trend="این ماه" icon="◈" iconBg="var(--goldDim)" iconColor="var(--gold)" />
         <KPI label="هزینه این ماه" value="$۴۸۴" trend="↓ ۱۲٪ بهینه‌سازی" icon="💰" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" trendUp />
         <KPI label="میانگین لیتنسی" value="۳۸۲ms" trend="P99: ۱.۲s" icon="⚡" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" />
         <KPI label="ایجنت فعال" value="۱۴" trend="۳ در حالت آزمایشی" icon="◍" iconBg="rgba(231,161,74,.15)" iconColor="#e7a14a" />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+      <div className="mjsa-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
         <Card>
           <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>پروایدرهای AI</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -622,7 +622,7 @@ function UsersView() {
 
   return (
     <div style={{ animation: 'fade .35s ease' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
+      <div className="mjsa-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
         <KPI label="کل کاربران" value="۱۸٬۵۰۰" trend="↑ ۳۴۰ این ماه" icon="◍" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" trendUp />
         <KPI label="مشاور فعال" value="۴٬۲۰۰" trend="↑ ۷٪ رشد" icon="★" iconBg="var(--goldDim)" iconColor="var(--gold)" trendUp />
         <KPI label="آژانس ثبت‌شده" value="۸۴۰" trend="۶۲ جدید این ماه" icon="▦" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" />
@@ -772,14 +772,14 @@ function HealthView() {
 
   return (
     <div style={{ animation: 'fade .35s ease' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
+      <div className="mjsa-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
         <KPI label="آپتایم کلی" value="۹۹.۹۷٪" trend="SLA: ۹۹.۹٪" icon="◉" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" trendUp />
         <KPI label="درخواست/ثانیه" value="۴٬۸۴۰" trend="پیک: ۸٬۲۰۰" icon="⚡" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" />
         <KPI label="میانگین پاسخ" value="۱۴۲ms" trend="P99: ۴۸۰ms" icon="⏱" iconBg="var(--goldDim)" iconColor="var(--gold)" />
         <KPI label="نرخ خطا" value="۰.۱۲٪" trend="↓ بهتر از دیروز" icon="✗" iconBg="rgba(231,103,74,.1)" iconColor="#e7674a" trendUp />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 14 }}>
+      <div className="mjsa-2col" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 14 }}>
         <Card>
           <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>وضعیت سرورها</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -968,7 +968,7 @@ export default function SuperAdminPage() {
     <div style={{ display: 'flex', height: '100vh', background: 'var(--bg)', overflow: 'hidden', direction: 'rtl' }}>
 
       {/* ── Sidebar ─────────────────────────────────────────── */}
-      <aside style={{
+      <aside className="mjsa-side" style={{
         width: 248, flexShrink: 0, background: 'var(--bg2)', borderLeft: '1px solid var(--line)',
         display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden'
       }}>
@@ -1010,7 +1010,7 @@ export default function SuperAdminPage() {
                   }}
                 >
                   <span style={{ fontSize: 15, width: 20, textAlign: 'center', flexShrink: 0, color: active === item.id ? '#e7674a' : 'var(--faint)' }}>{item.icon}</span>
-                  <span style={{ flex: 1 }}>{item.label}</span>
+                  <span className="mjsa-sidelabel" style={{ flex: 1 }}>{item.label}</span>
                   {item.badge && <Badge label={item.badge} color={item.badgeColor ?? '#5fd98a'} />}
                 </button>
               ))}
