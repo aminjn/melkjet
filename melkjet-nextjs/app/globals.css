@@ -60,3 +60,103 @@ body {
 @keyframes pop { 0% { transform: scale(0.4); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
 @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
 @keyframes drop { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+
+/* ─── Mobile Responsive ─────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Grid layouts collapse to single column */
+  [style*="grid-template-columns: 1fr 320px"],
+  [style*="grid-template-columns:1fr 320px"],
+  [style*="grid-template-columns: 1fr 280px"],
+  [style*="grid-template-columns: 2fr 1fr"],
+  [style*="grid-template-columns:2fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Sidebar becomes regular block on mobile */
+  aside[style*="position:sticky"],
+  aside[style*="position: sticky"] {
+    position: relative !important;
+    top: auto !important;
+  }
+
+  /* Nav mobile: hide desktop links */
+  nav .desktop-links { display: none !important; }
+
+  /* Reduce padding on mobile */
+  main[style*="padding"] {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+
+  /* Stat/KPI grids: max 2 cols on mobile */
+  [style*="grid-template-columns: repeat(4,1fr)"],
+  [style*="grid-template-columns:repeat(4,1fr)"],
+  [style*="grid-template-columns: repeat(4, 1fr)"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  [style*="grid-template-columns: repeat(3,1fr)"],
+  [style*="grid-template-columns:repeat(3,1fr)"],
+  [style*="grid-template-columns: repeat(3, 1fr)"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Full width cards */
+  [style*="width: 320px"],
+  [style*="width:320px"],
+  [style*="width: 280px"],
+  [style*="width: 248px"],
+  [style*="width:248px"] {
+    width: 100% !important;
+  }
+
+  /* Font size adjustments */
+  h1 { font-size: clamp(22px, 5vw, 34px) !important; }
+  h2 { font-size: clamp(18px, 4vw, 26px) !important; }
+
+  /* Table horizontal scroll */
+  table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Bottom safe area for iOS */
+  body { padding-bottom: env(safe-area-inset-bottom); }
+}
+
+@media (max-width: 480px) {
+  [style*="grid-template-columns: repeat(2,1fr)"],
+  [style*="grid-template-columns:repeat(2,1fr)"],
+  [style*="grid-template-columns: repeat(2, 1fr)"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Kanban columns scroll horizontally */
+  [style*="grid-template-columns: repeat(4"]:has(.kanban) {
+    display: flex;
+    overflow-x: auto;
+    gap: 12px;
+    padding-bottom: 16px;
+  }
+}
+
+/* Nav component mobile */
+.mj-nav-mobile-menu {
+  display: none;
+}
+@media (max-width: 768px) {
+  .mj-nav-links { display: none; }
+  .mj-nav-mobile-menu { display: flex; }
+}
+
+/* Sidebar dashboards: full width on mobile with top tab nav */
+@media (max-width: 900px) {
+  [style*="width: 240px"][style*="height: 100vh"],
+  [style*="width:240px"][style*="height:100vh"] {
+    width: 100% !important;
+    height: auto !important;
+    position: relative !important;
+    flex-direction: row !important;
+    overflow-x: auto;
+    padding: 8px 16px !important;
+    border-left: none !important;
+    border-bottom: 1px solid var(--line) !important;
+  }
+}
