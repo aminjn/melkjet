@@ -304,7 +304,7 @@ export default function StatesPage() {
                   <button style={{ height:42, padding:'0 20px', border:'1px solid var(--line2)', borderRadius:12, background:'var(--surface)', color:'var(--text)', fontFamily:'inherit', fontWeight:600, fontSize:14, cursor:'pointer' }}>ثانویه</button>
                   <button style={{ height:42, padding:'0 20px', border:'1px solid transparent', borderRadius:12, background:'transparent', color:'var(--gold)', fontFamily:'inherit', fontWeight:600, fontSize:14, cursor:'pointer' }}>Ghost</button>
                   <button style={{ height:42, padding:'0 20px', border:'1px solid var(--line)', borderRadius:12, background:'var(--bg2)', color:'var(--faint)', fontFamily:'inherit', fontWeight:600, fontSize:14, cursor:'not-allowed', opacity:.6 }} disabled>غیرفعال</button>
-                  <button style={{ height:42, padding:'0 20px', border:'none', borderRadius:12, background:'rgba(231,103,74,0.15)', color:'#e7674a', fontFamily:'inherit', fontWeight:700, fontSize:14, cursor:'pointer', border:'1px solid rgba(231,103,74,0.3)' } as React.CSSProperties}>خطرناک</button>
+                  <button style={{ height:42, padding:'0 20px', borderRadius:12, background:'rgba(231,103,74,0.15)', color:'#e7674a', fontFamily:'inherit', fontWeight:700, fontSize:14, cursor:'pointer', border:'1px solid rgba(231,103,74,0.3)' } as React.CSSProperties}>خطرناک</button>
                 </div>
               </>
             )}

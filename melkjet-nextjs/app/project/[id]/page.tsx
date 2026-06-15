@@ -1,966 +1,645 @@
 'use client'
 
-import Nav from '@/app/components/Nav'
-import Footer from '@/app/components/Footer'
 import { useParams } from 'next/navigation'
+import { useState } from 'react'
+import Nav from '../../components/Nav'
+import Footer from '../../components/Footer'
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface Unit { type: string; size: string; floor: string; price: string; status: 'available' | 'sold' | 'reserved' }
+interface Milestone { label: string; date: string; done: boolean; active: boolean }
+interface Amenity { ic: string; l: string }
+interface FloorPlan { label: string; rooms: string; size: string }
+interface Review { n: string; r: string; av: string; t: string }
+interface SimilarProject { title: string; area: string; price: string; status: string; bg: string }
+interface DevProfile { name: string; logo: string; projects: string; delivered: string; rating: string; since: string }
+
+interface Project {
+  title: string; developer: string; location: string; cover: string; devLogo: string
+  status: string; statusColor: string; totalUnits: number; floors: number
+  startDate: string; deliveryDate: string; priceFrom: string; priceTo: string; yieldPct: string
+  progress: number; aiSummary: string; riskScore: number; riskLabel: string; riskColor: string
+  gallery: { label: string; bg: string }[]
+  units: Unit[]
+  milestones: Milestone[]
+  amenities: Amenity[]
+  floorPlans: FloorPlan[]
+  similar: SimilarProject[]
+  reviews: Review[]
+  devProfile: DevProfile
+}
+
+// ─── Static Data ──────────────────────────────────────────────────────────────
+
+const projects: Record<string, Project> = {
+  '1': {
+    title: 'برج لوکس آرین', developer: 'گروه ساختمانی آرین', location: 'سعادت‌آباد، بلوار دریا',
+    cover: 'linear-gradient(135deg,#1a2535,#0d1520)', devLogo: 'آ',
+    status: 'پیش‌فروش', statusColor: '#c9a96a', totalUnits: 182, floors: 18,
+    startDate: 'فروردین ۱۴۰۱', deliveryDate: 'اسفند ۱۴۰۵', priceFrom: '۱۴ میلیارد', priceTo: '۸۵ میلیارد', yieldPct: '۳۸٪',
+    progress: 75,
+    aiSummary: 'این پروژه با پیشرفت فیزیکی ۷۵ درصد و تأخیر احتمالی صفر روزه، در وضعیت بسیار مطلوبی قرار دارد. قیمت هر متر مربع ۱۸٪ کمتر از میانگین منطقه سعادت‌آباد است که نشان‌دهنده فرصت سرمایه‌گذاری مناسب است. سازنده سابقه ۰ پرونده ناتمام در ۲۰ سال دارد.',
+    riskScore: 82, riskLabel: 'ریسک پایین', riskColor: '#5fd98a',
+    gallery: [
+      { label: 'نمای بیرونی', bg: 'linear-gradient(135deg,#1a2535,#0d1520)' },
+      { label: 'لابی', bg: 'linear-gradient(135deg,#2a1a35,#150d20)' },
+      { label: 'آپارتمان نمونه', bg: 'linear-gradient(135deg,#1a3525,#0d2015)' },
+      { label: 'روف‌گاردن', bg: 'linear-gradient(135deg,#35251a,#20150d)' },
+      { label: 'استخر', bg: 'linear-gradient(135deg,#1a2a35,#0d1520)' },
+      { label: 'پارکینگ', bg: 'linear-gradient(135deg,#251a35,#150d20)' },
+    ],
+    units: [
+      { type: 'استودیو', size: '۵۵ م', floor: '۲–۵', price: 'از ۱۴ م', status: 'available' },
+      { type: 'یک‌خوابه', size: '۸۵ م', floor: '۳–۱۰', price: 'از ۲۲ م', status: 'available' },
+      { type: 'دوخوابه', size: '۱۲۰ م', floor: '۵–۱۵', price: 'از ۳۸ م', status: 'reserved' },
+      { type: 'سه‌خوابه', size: '۱۶۵ م', floor: '۸–۱۶', price: 'از ۵۵ م', status: 'available' },
+      { type: 'دوبلکس', size: '۲۲۰ م', floor: '۱۶–۱۷', price: 'از ۷۲ م', status: 'sold' },
+      { type: 'پنت‌هاوس', size: '۳۵۰ م', floor: '۱۸', price: 'از ۸۵ م', status: 'reserved' },
+    ],
+    milestones: [
+      { label: 'پی‌ریزی', date: 'تیر ۱۴۰۱', done: true, active: false },
+      { label: 'اسکلت', date: 'اسفند ۱۴۰۲', done: true, active: false },
+      { label: 'سفت‌کاری', date: 'شهریور ۱۴۰۳', done: true, active: false },
+      { label: 'نازک‌کاری', date: 'مهر ۱۴۰۴', done: false, active: true },
+      { label: 'تحویل', date: 'اسفند ۱۴۰۵', done: false, active: false },
+    ],
+    amenities: [
+      { ic: '🏊', l: 'استخر سرپوشیده' }, { ic: '🧖', l: 'سونا و جکوزی' },
+      { ic: '💪', l: 'باشگاه بدنسازی' }, { ic: '🏓', l: 'سالن بازی' },
+      { ic: '🌿', l: 'روف‌گاردن' }, { ic: '🚗', l: 'پارکینگ هوشمند' },
+      { ic: '🔐', l: 'امنیت ۲۴ ساعته' }, { ic: '🛎', l: 'نگهبانی و لابی' },
+      { ic: '⚡', l: 'پنل خورشیدی' }, { ic: '📡', l: 'خانه هوشمند' },
+      { ic: '🌐', l: 'اینترنت پرسرعت' }, { ic: '🐾', l: 'پارک حیوانات' },
+    ],
+    floorPlans: [
+      { label: 'استودیو', rooms: '۱ اتاق', size: '۵۵ م²' },
+      { label: 'یک‌خوابه', rooms: '۲ اتاق', size: '۸۵ م²' },
+      { label: 'دوخوابه', rooms: '۳ اتاق', size: '۱۲۰ م²' },
+      { label: 'سه‌خوابه', rooms: '۴ اتاق', size: '۱۶۵ م²' },
+    ],
+    similar: [
+      { title: 'برج الماس', area: 'شهرک غرب', price: 'از ۱۸ م', status: 'پیش‌فروش', bg: 'linear-gradient(135deg,#2a3545,#1a2535)' },
+      { title: 'مجتمع صدف', area: 'سعادت‌آباد', price: 'از ۱۵ م', status: 'در حال ساخت', bg: 'linear-gradient(135deg,#352a45,#201535)' },
+      { title: 'رزیدنس پارک', area: 'ولنجک', price: 'از ۲۵ م', status: 'تحویل آماده', bg: 'linear-gradient(135deg,#2a4535,#153520)' },
+    ],
+    reviews: [
+      { n: 'محسن طاهری', r: '۵٫۰', av: 'linear-gradient(135deg,#5b9bd5,#2f5f8a)', t: 'واحد خریدم کاملاً مطابق مشخصات اعلام‌شده است. کیفیت ساخت عالی.' },
+      { n: 'فریبا کریمی', r: '۴٫۸', av: 'linear-gradient(135deg,#c97a9a,#7a4458)', t: 'تیم فروش حرفه‌ای و صادق. هیچ اطلاعات پنهانی وجود نداشت.' },
+      { n: 'رضا اسدی', r: '۴٫۷', av: 'linear-gradient(135deg,#7aa88f,#476e58)', t: 'پیشرفت پروژه مطابق جدول زمانی است. راضی از انتخابم.' },
+    ],
+    devProfile: {
+      name: 'گروه ساختمانی آرین', logo: 'آ', projects: '۱۲ پروژه', delivered: '۱٬۸۰۰ واحد', rating: '۴٫۷', since: '۱۳۸۴'
+    },
+  },
+  '2': {
+    title: 'مجتمع مسکونی نگین', developer: 'سازنده نگین', location: 'پونک، خیابان اشرفی',
+    cover: 'linear-gradient(135deg,#352020,#201515)', devLogo: 'ن',
+    status: 'در حال ساخت', statusColor: '#5b9bd5', totalUnits: 96, floors: 12,
+    startDate: 'مهر ۱۴۰۲', deliveryDate: 'شهریور ۱۴۰۵', priceFrom: '۹ میلیارد', priceTo: '۴۲ میلیارد', yieldPct: '۳۲٪',
+    progress: 48,
+    aiSummary: 'پروژه در مرحله سفت‌کاری با ۴۸٪ پیشرفت قرار دارد. زمانبندی مطابق برنامه. قیمت‌ها در محدوده منطقی منطقه پونک است. سازنده سابقه مثبت با ۲ پروژه قبلی تحویل‌شده دارد.',
+    riskScore: 64, riskLabel: 'ریسک متوسط', riskColor: '#c9a96a',
+    gallery: [
+      { label: 'نمای پروژه', bg: 'linear-gradient(135deg,#352020,#201515)' },
+      { label: 'لابی', bg: 'linear-gradient(135deg,#203520,#152015)' },
+      { label: 'واحد نمونه', bg: 'linear-gradient(135deg,#202035,#151520)' },
+      { label: 'محوطه', bg: 'linear-gradient(135deg,#352035,#201520)' },
+      { label: 'سقف', bg: 'linear-gradient(135deg,#203530,#152020)' },
+      { label: 'زیرزمین', bg: 'linear-gradient(135deg,#252525,#151515)' },
+    ],
+    units: [
+      { type: 'یک‌خوابه', size: '۷۵ م', floor: '۲–۶', price: 'از ۹ م', status: 'available' },
+      { type: 'دوخوابه', size: '۱۱۰ م', floor: '۴–۱۰', price: 'از ۱۸ م', status: 'available' },
+      { type: 'سه‌خوابه', size: '۱۵۰ م', floor: '۷–۱۲', price: 'از ۳۲ م', status: 'reserved' },
+      { type: 'پنت‌هاوس', size: '۲۸۰ م', floor: '۱۲', price: 'از ۴۲ م', status: 'available' },
+    ],
+    milestones: [
+      { label: 'پی‌ریزی', date: 'دی ۱۴۰۲', done: true, active: false },
+      { label: 'اسکلت', date: 'شهریور ۱۴۰۳', done: true, active: false },
+      { label: 'سفت‌کاری', date: 'اسفند ۱۴۰۴', done: false, active: true },
+      { label: 'نازک‌کاری', date: 'خرداد ۱۴۰۵', done: false, active: false },
+      { label: 'تحویل', date: 'شهریور ۱۴۰۵', done: false, active: false },
+    ],
+    amenities: [
+      { ic: '🏋', l: 'باشگاه' }, { ic: '🌿', l: 'فضای سبز' },
+      { ic: '🚗', l: 'پارکینگ' }, { ic: '🔐', l: 'امنیت' },
+      { ic: '📡', l: 'هوشمند' }, { ic: '🐾', l: 'پارک' },
+      { ic: '⚡', l: 'پنل خورشیدی' }, { ic: '🛎', l: 'نگهبانی' },
+    ],
+    floorPlans: [
+      { label: 'یک‌خوابه', rooms: '۲ اتاق', size: '۷۵ م²' },
+      { label: 'دوخوابه', rooms: '۳ اتاق', size: '۱۱۰ م²' },
+      { label: 'سه‌خوابه', rooms: '۴ اتاق', size: '۱۵۰ م²' },
+    ],
+    similar: [
+      { title: 'مجتمع آزادی', area: 'پونک', price: 'از ۱۰ م', status: 'پیش‌فروش', bg: 'linear-gradient(135deg,#2a3545,#1a2535)' },
+      { title: 'برج سبز', area: 'جنت‌آباد', price: 'از ۱۲ م', status: 'در حال ساخت', bg: 'linear-gradient(135deg,#2a4535,#153520)' },
+      { title: 'رزیدنس شهر', area: 'اشرفی', price: 'از ۸ م', status: 'تحویل آماده', bg: 'linear-gradient(135deg,#35352a,#202015)' },
+    ],
+    reviews: [
+      { n: 'ناهید رضایی', r: '۴٫۶', av: 'linear-gradient(135deg,#9b7ad0,#5e4488)', t: 'سازنده خوش‌قول و پاسخ‌گوست. از انتخابم راضی‌ام.' },
+      { n: 'امید نوری', r: '۴٫۵', av: 'linear-gradient(135deg,#c98a4a,#8a5a2e)', t: 'قیمت مناسب در منطقه. پیشرفت هم سر موعد.' },
+    ],
+    devProfile: {
+      name: 'سازنده نگین', logo: 'ن', projects: '۳ پروژه', delivered: '۲۸۰ واحد', rating: '۴٫۵', since: '۱۳۹۵'
+    },
+  },
+}
+
+// ─── Sub-components ──────────────────────────────────────────────────────────
+
+function RiskGauge({ score, color }: { score: number; color: string }) {
+  const r = 40
+  const circ = 2 * Math.PI * r
+  const arc = circ * 0.75
+  const dash = (score / 100) * arc
+  const offset = circ * 0.125
+  return (
+    <svg width="100" height="80" viewBox="0 0 100 80">
+      <circle cx="50" cy="55" r={r} fill="none" stroke="var(--line)" strokeWidth="8"
+        strokeDasharray={`${arc} ${circ - arc}`} strokeDashoffset={-offset}
+        strokeLinecap="round" transform="rotate(0 50 55)" />
+      <circle cx="50" cy="55" r={r} fill="none" stroke={color} strokeWidth="8"
+        strokeDasharray={`${dash} ${circ - dash}`} strokeDashoffset={-offset}
+        strokeLinecap="round" style={{ transition: 'stroke-dasharray 0.6s ease' }} />
+      <text x="50" y="52" textAnchor="middle" fontSize="16" fontWeight="800" fill={color} fontFamily="Vazirmatn">{score}</text>
+      <text x="50" y="66" textAnchor="middle" fontSize="8" fill="var(--faint)" fontFamily="Vazirmatn">امتیاز</text>
+    </svg>
+  )
+}
+
+function MapSVG({ title }: { title: string }) {
+  return (
+    <svg width="100%" viewBox="0 0 260 160" style={{ display: 'block', borderRadius: 10 }}>
+      <rect width="260" height="160" fill="var(--bg2)" rx="10" />
+      {[40, 80, 120].map(y => <line key={y} x1="0" y1={y} x2="260" y2={y} stroke="var(--line)" strokeWidth="0.5" />)}
+      {[65, 130, 195].map(x => <line key={x} x1={x} y1="0" x2={x} y2="160" stroke="var(--line)" strokeWidth="0.5" />)}
+      <circle cx="120" cy="72" r="32" fill="var(--gold)" fillOpacity="0.08" stroke="var(--gold)" strokeWidth="1.5" strokeOpacity="0.4" />
+      <circle cx="120" cy="72" r="8" fill="var(--gold)" fillOpacity="0.3" />
+      <circle cx="120" cy="72" r="4" fill="var(--gold)" />
+      <line x1="120" y1="72" x2="120" y2="52" stroke="var(--gold)" strokeWidth="2" />
+      <rect x="100" y="36" width="40" height="16" rx="5" fill="var(--bg2)" stroke="var(--gold)" strokeWidth="1" />
+      <text x="120" y="48" textAnchor="middle" fontSize="8" fill="var(--gold)" fontFamily="Vazirmatn">{title.substring(0, 8)}</text>
+      <text x="130" y="152" textAnchor="middle" fontSize="9" fill="var(--faint)" fontFamily="Vazirmatn">موقعیت پروژه روی نقشه</text>
+    </svg>
+  )
+}
+
+function FloorPlanSVG() {
+  return (
+    <svg width="100%" viewBox="0 0 300 220" style={{ display: 'block' }}>
+      <rect width="300" height="220" fill="var(--bg)" />
+      <rect x="20" y="20" width="260" height="180" fill="none" stroke="var(--gold)" strokeWidth="1.5" rx="2" />
+      <line x1="140" y1="20" x2="140" y2="200" stroke="var(--gold)" strokeWidth="1" />
+      <line x1="20" y1="100" x2="140" y2="100" stroke="var(--gold)" strokeWidth="1" />
+      <line x1="140" y1="130" x2="300" y2="130" stroke="var(--gold)" strokeWidth="1" />
+      <text x="80" y="58" textAnchor="middle" fontSize="9" fill="var(--muted)" fontFamily="Vazirmatn">اتاق خواب اصلی</text>
+      <text x="80" y="150" textAnchor="middle" fontSize="9" fill="var(--muted)" fontFamily="Vazirmatn">پذیرایی</text>
+      <text x="220" y="76" textAnchor="middle" fontSize="9" fill="var(--muted)" fontFamily="Vazirmatn">آشپزخانه</text>
+      <text x="220" y="165" textAnchor="middle" fontSize="9" fill="var(--muted)" fontFamily="Vazirmatn">اتاق دوم</text>
+      <rect x="26" y="26" width="108" height="68" fill="var(--gold)" fillOpacity="0.05" rx="2" />
+      <rect x="26" y="106" width="108" height="88" fill="var(--gold)" fillOpacity="0.08" rx="2" />
+      <rect x="146" y="26" width="148" height="98" fill="var(--gold)" fillOpacity="0.06" rx="2" />
+      <rect x="146" y="136" width="148" height="58" fill="var(--gold)" fillOpacity="0.05" rx="2" />
+      <rect x="26" y="26" width="24" height="6" fill="var(--bg)" />
+      <path d="M26 26 Q38 26 38 20" fill="none" stroke="var(--gold)" strokeWidth="1" />
+    </svg>
+  )
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ProjectPage() {
   const params = useParams()
-  const id = params?.id
+  const id = (params?.id as string) || '1'
+  const project = projects[id] || projects['1']
 
-  const milestones = [
-    { label: 'پی‌ریزی', state: 'done' },
-    { label: 'اسکلت', state: 'done' },
-    { label: 'سفت‌کاری', state: 'done' },
-    { label: 'نازک‌کاری', state: 'active' },
-    { label: 'تحویل', state: 'upcoming' },
-  ]
+  const [activeImg, setActiveImg] = useState(0)
+  const [activePlan, setActivePlan] = useState(0)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [modalStep, setModalStep] = useState(1)
+  const [resName, setResName] = useState('')
+  const [resPhone, setResPhone] = useState('')
+  const [resUnit, setResUnit] = useState('')
+  const [resSent, setResSent] = useState(false)
 
-  const gallery = [
-    { label: 'نمای بیرونی', bg: 'linear-gradient(135deg, #1a2535, #0d1520)' },
-    { label: 'لابی', bg: 'linear-gradient(135deg, #251a0d, #1a1208)' },
-    { label: 'نمونه آپارتمان', bg: 'linear-gradient(135deg, #1a2518, #0f1a0d)' },
-    { label: 'پارکینگ', bg: 'linear-gradient(135deg, #1f1f2a, #141420)' },
-    { label: 'روف‌گاردن', bg: 'linear-gradient(135deg, #1a2520, #0d1a14)' },
-    { label: 'استخر', bg: 'linear-gradient(135deg, #0d1e2a, #081318)' },
-  ]
+  const p = project
 
-  const units = [
-    { type: 'یک خوابه', size: '۸۵ م²', floor: '۳-۸', price: '۱۱.۹ م.د', status: 'موجود', statusColor: '#2ecc71', statusBg: 'rgba(46,204,113,0.12)' },
-    { type: 'دو خوابه', size: '۱۲۰ م²', floor: '۵-۱۵', price: '۱۶.۸ م.د', status: 'موجود', statusColor: '#2ecc71', statusBg: 'rgba(46,204,113,0.12)' },
-    { type: 'دو خوابه', size: '۱۳۵ م²', floor: '۱۰-۱۸', price: '۱۹.۴ م.د', status: 'محدود', statusColor: '#c9a84c', statusBg: 'rgba(201,168,76,0.12)' },
-    { type: 'سه خوابه', size: '۱۸۰ م²', floor: '۱۲-۱۸', price: '۲۶.۱ م.د', status: 'محدود', statusColor: '#c9a84c', statusBg: 'rgba(201,168,76,0.12)' },
-    { type: 'پنت‌هاوس', size: '۲۸۰ م²', floor: '۱۷-۱۸', price: '۴۵.۰ م.د', status: 'رزرو', statusColor: '#888', statusBg: 'rgba(136,136,136,0.12)' },
-  ]
+  const inpSt: React.CSSProperties = {
+    width: '100%', border: '1px solid var(--line2)', borderRadius: 11,
+    background: 'var(--bg2)', color: 'var(--text)', fontFamily: 'inherit',
+    fontSize: 13, padding: '11px 13px', outline: 'none', boxSizing: 'border-box',
+  }
 
-  const reviews = [
-    {
-      name: 'آقای محمدی',
-      stars: 5,
-      text: 'کیفیت ساخت فوق‌العاده‌ست. از اول پروژه تا الان همه چیز طبق برنامه پیش رفته. مشاورین شرکت هم خیلی حرفه‌ای بودن.',
-      date: '۱۴۰۳/۰۱/۱۵',
-      tag: 'خریدار واحد ۱۲۰ متری',
-    },
-    {
-      name: 'خانم رضایی',
-      stars: 4,
-      text: 'موقعیت مکانی عالیه. دسترسی به مترو و مراکز خرید خیلی راحته. فقط تحویل یه ماه عقب افتاد که بابتش توضیح دادن.',
-      date: '۱۴۰۳/۰۲/۰۸',
-      tag: 'خریدار واحد ۸۵ متری',
-    },
-    {
-      name: 'آقای صادقی',
-      stars: 5,
-      text: 'سرمایه‌گذاری خوبیه. قیمت منطقه داره بالا میره و این پروژه خوب قیمت‌گذاری شده.',
-      date: '۱۴۰۳/۰۳/۲۲',
-      tag: 'سرمایه‌گذار',
-    },
-  ]
+  const unitStatusLabel: Record<string, string> = { available: 'موجود', sold: 'فروش رفته', reserved: 'رزرو شده' }
+  const unitStatusColor: Record<string, string> = { available: '#5fd98a', sold: '#ff6b6b', reserved: '#c9a96a' }
+
+  const handleReserve = () => {
+    if (modalStep < 3) { setModalStep(s => s + 1) }
+    else { setResSent(true) }
+  }
 
   return (
-    <div
-      dir="rtl"
-      style={{
-        minHeight: '100vh',
-        background: 'var(--bg)',
-        color: 'var(--text)',
-        fontFamily: 'inherit',
-      }}
-    >
+    <div dir="rtl" style={{
+      '--bg': '#0d0d0f', '--bg2': '#141417', '--surface': '#18181c',
+      '--navbg': 'rgba(13,13,15,0.72)', '--line': 'rgba(255,255,255,0.08)',
+      '--line2': 'rgba(255,255,255,0.14)', '--text': '#f2f1ee',
+      '--muted': '#9a9a98', '--faint': '#6a6a68',
+      '--gold': '#c9a96a', '--gold2': '#e0c489', '--goldDim': 'rgba(201,169,106,0.12)',
+      minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)',
+      fontFamily: "'Vazirmatn', system-ui, sans-serif",
+    } as React.CSSProperties}>
+
       <Nav />
 
-      {/* Hero Banner */}
-      <div
-        style={{
-          position: 'relative',
-          height: 300,
-          background: 'linear-gradient(to bottom, #1a1612, #0f0e0c)',
-          overflow: 'hidden',
-        }}
-      >
-        {/* Subtle texture overlay */}
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            backgroundImage:
-              'repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(255,255,255,0.015) 40px, rgba(255,255,255,0.015) 41px), repeating-linear-gradient(90deg, transparent, transparent 60px, rgba(255,255,255,0.01) 60px, rgba(255,255,255,0.01) 61px)',
-            pointerEvents: 'none',
-          }}
-        />
-
-        {/* Breadcrumb top */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 16,
-            right: 32,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            fontSize: 12,
-            color: 'rgba(255,255,255,0.45)',
-            zIndex: 2,
-          }}
-        >
-          <span style={{ cursor: 'pointer', color: 'rgba(255,255,255,0.55)' }}>خانه</span>
-          <span style={{ color: 'rgba(255,255,255,0.25)' }}>/</span>
-          <span style={{ cursor: 'pointer', color: 'rgba(255,255,255,0.55)' }}>پروژه‌ها</span>
-          <span style={{ color: 'rgba(255,255,255,0.25)' }}>/</span>
-          <span style={{ color: 'rgba(255,255,255,0.8)' }}>برج مروارید</span>
-        </div>
-
-        {/* Active pre-sale badge top-left (in RTL, left is the end so this is the left edge visually) */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 16,
-            left: 32,
-            zIndex: 2,
-          }}
-        >
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '6px 14px',
-              borderRadius: 999,
-              background: 'rgba(34,197,94,0.18)',
-              border: '1px solid rgba(34,197,94,0.45)',
-              color: '#4ade80',
-              fontSize: 12,
-              fontWeight: 700,
-              backdropFilter: 'blur(8px)',
-            }}
-          >
-            <span
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: '50%',
-                background: '#4ade80',
-                display: 'inline-block',
-                boxShadow: '0 0 6px #4ade80',
-              }}
-            />
-            پیش‌فروش فعال
-          </span>
-        </div>
-
-        {/* Project name centered */}
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 1,
-            padding: '0 32px',
-            textAlign: 'center',
-          }}
-        >
-          <h1
-            style={{
-              margin: 0,
-              fontSize: 38,
-              fontWeight: 900,
-              color: '#ffffff',
-              letterSpacing: '-0.5px',
-              textShadow: '0 2px 16px rgba(0,0,0,0.6)',
-            }}
-          >
-            برج مروارید سعادت‌آباد
-          </h1>
-        </div>
-
-        {/* Builder + location bottom overlay */}
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            padding: '24px 32px 20px',
-            background: 'linear-gradient(to top, rgba(10,9,8,0.85) 0%, transparent 100%)',
-            zIndex: 2,
-            textAlign: 'center',
-          }}
-        >
-          <p
-            style={{
-              margin: 0,
-              fontSize: 13,
-              color: 'rgba(255,255,255,0.6)',
-              letterSpacing: '0.2px',
-            }}
-          >
-            توسعه‌دهنده: گروه ساختمانی ایران نو &nbsp;|&nbsp; سعادت‌آباد، بلوار مرزداران
-          </p>
+      {/* Hero */}
+      <div style={{ position: 'relative', height: 320, background: p.cover, overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', inset: 0, backgroundImage: 'repeating-linear-gradient(135deg,transparent,transparent 14px,rgba(255,255,255,0.025) 14px,rgba(255,255,255,0.025) 15px)' }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom,transparent 40%,rgba(13,13,15,0.9) 100%)' }} />
+        <div style={{ position: 'absolute', top: 18, right: 18, background: 'rgba(13,13,15,0.7)', backdropFilter: 'blur(8px)', borderRadius: 10, padding: '7px 16px', fontSize: 12.5, fontWeight: 700, color: p.statusColor, border: `1px solid ${p.statusColor}55` }}>● {p.status}</div>
+        <div style={{ position: 'absolute', top: 18, left: 18, background: 'rgba(13,13,15,0.7)', backdropFilter: 'blur(8px)', borderRadius: 10, padding: '7px 14px', fontSize: 12, color: 'var(--muted)', border: '1px solid var(--line)' }}>رندر پروژه</div>
+        <div style={{ position: 'absolute', bottom: 24, right: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 14, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16140f', fontSize: 18, fontWeight: 900 }}>{p.devLogo}</div>
+            <span style={{ fontSize: 13, color: 'var(--muted)' }}>{p.developer}</span>
+          </div>
+          <h1 style={{ margin: 0, fontSize: 'clamp(22px,3.5vw,34px)', fontWeight: 900, color: '#fff', textShadow: '0 2px 12px rgba(0,0,0,0.5)' }}>{p.title}</h1>
+          <div style={{ marginTop: 8, fontSize: 13.5, color: 'rgba(255,255,255,0.65)' }}>📍 {p.location}</div>
         </div>
       </div>
 
-      {/* Main layout */}
-      <div
-        style={{
-          maxWidth: 1240,
-          margin: '0 auto',
-          padding: '40px 24px 80px',
-          display: 'grid',
-          gridTemplateColumns: '1fr 320px',
-          gap: 32,
-          alignItems: 'start',
-        }}
-      >
-        {/* ─── LEFT CONTENT ─── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+      {/* Key stats bar */}
+      <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--line)' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)' }}>
+          {[
+            { v: String(p.totalUnits), l: 'تعداد واحد', ic: '▦' },
+            { v: String(p.floors) + ' طبقه', l: 'ارتفاع برج', ic: '↑' },
+            { v: p.deliveryDate, l: 'تحویل', ic: '◷' },
+            { v: p.yieldPct, l: 'بازده پیش‌بینی', ic: '↗' },
+          ].map((s, i) => (
+            <div key={i} style={{ padding: '18px 16px', textAlign: 'center', borderRight: i < 3 ? '1px solid var(--line)' : 'none' }}>
+              <div style={{ fontSize: 11, color: 'var(--faint)', marginBottom: 6 }}>{s.ic} {s.l}</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--gold)' }}>{s.v}</div>
+            </div>
+          ))}
+        </div>
+      </div>
 
-          {/* Section 1 — 4 Stats */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(4, 1fr)',
-              gap: 14,
-            }}
-          >
-            {[
-              { icon: '⬛', number: '۱۸۲', label: 'واحدها', sub: 'واحد' },
-              { icon: '🏢', number: '۱۸', label: 'طبقات', sub: 'طبقه' },
-              { icon: '📅', number: '۱۴۰۶', label: 'تحویل', sub: '' },
-              { icon: '📈', number: '۳۸٪', label: 'بازده سرمایه', sub: '' },
-            ].map((stat) => (
-              <div
-                key={stat.label}
-                style={{
-                  background: 'var(--surface)',
-                  border: '1px solid var(--line)',
-                  borderRadius: 16,
-                  padding: '20px 16px',
-                  textAlign: 'center',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 8,
-                }}
-              >
-                <span style={{ fontSize: 24 }}>{stat.icon}</span>
-                <span
-                  style={{
-                    fontSize: 26,
-                    fontWeight: 900,
-                    color: 'var(--gold)',
-                    lineHeight: 1,
-                  }}
-                >
-                  {stat.number}
-                </span>
-                <span style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>
-                  {stat.label}
-                  {stat.sub && (
-                    <span style={{ color: 'var(--faint)', marginRight: 3 }}>{stat.sub}</span>
-                  )}
-                </span>
+      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '28px 24px 100px', display: 'grid', gridTemplateColumns: '1fr 340px', gap: 24, alignItems: 'start' }}>
+
+        {/* LEFT COLUMN */}
+        <div style={{ display: 'grid', gap: 22, minWidth: 0 }}>
+
+          {/* Gallery */}
+          <section style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 20, overflow: 'hidden' }}>
+            <div style={{ height: 260, background: p.gallery[activeImg]?.bg, position: 'relative' }}>
+              <div style={{ position: 'absolute', inset: 0, backgroundImage: 'repeating-linear-gradient(135deg,transparent,transparent 12px,rgba(255,255,255,0.03) 12px,rgba(255,255,255,0.03) 13px)' }} />
+              <div style={{ position: 'absolute', bottom: 14, left: 14, background: 'rgba(13,13,15,0.75)', backdropFilter: 'blur(6px)', borderRadius: 8, padding: '5px 12px', fontSize: 12, color: 'var(--muted)' }}>{p.gallery[activeImg]?.label}</div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, padding: 12, overflowX: 'auto' }}>
+              {p.gallery.map((g, i) => (
+                <div key={i} onClick={() => setActiveImg(i)} style={{ width: 72, height: 52, flexShrink: 0, borderRadius: 8, background: g.bg, cursor: 'pointer', border: `2px solid ${activeImg === i ? 'var(--gold)' : 'transparent'}`, transition: 'border-color 0.2s', position: 'relative', overflow: 'hidden' }}>
+                  <div style={{ position: 'absolute', inset: 0, backgroundImage: 'repeating-linear-gradient(135deg,transparent,transparent 8px,rgba(255,255,255,0.03) 8px,rgba(255,255,255,0.03) 9px)' }} />
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* AI Summary + Risk */}
+          <section style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 20, padding: 22 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <span style={{ width: 28, height: 28, borderRadius: 9, background: 'var(--goldDim)', color: 'var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>✦</span>
+                  <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)' }}>تحلیل هوش مصنوعی</span>
+                </div>
+                <p style={{ margin: 0, fontSize: 13.5, color: 'var(--muted)', lineHeight: 2 }}>{p.aiSummary}</p>
               </div>
-            ))}
-          </div>
+              <div style={{ textAlign: 'center', flexShrink: 0 }}>
+                <RiskGauge score={p.riskScore} color={p.riskColor} />
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: p.riskColor, marginTop: 4 }}>{p.riskLabel}</div>
+              </div>
+            </div>
+          </section>
 
-          {/* Section 2 — Construction progress with milestones */}
-          <div
-            style={{
-              background: 'var(--surface)',
-              border: '1px solid var(--line)',
-              borderRadius: 18,
-              padding: '28px 28px 32px',
-            }}
-          >
-            <h2
-              style={{
-                margin: '0 0 36px',
-                fontSize: 17,
-                fontWeight: 800,
-                color: 'var(--text)',
-              }}
-            >
-              پیشرفت ساخت
-            </h2>
+          {/* Construction Progress */}
+          <section style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 20, padding: 22 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)', marginBottom: 18 }}>پیشرفت ساخت</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <span style={{ fontSize: 13, color: 'var(--muted)' }}>پیشرفت فیزیکی</span>
+              <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--gold)' }}>{p.progress}٪</span>
+            </div>
+            <div style={{ height: 8, borderRadius: 999, background: 'var(--line)', marginBottom: 24 }}>
+              <div style={{ height: '100%', borderRadius: 999, width: `${p.progress}%`, background: 'linear-gradient(90deg,var(--gold2),var(--gold))', transition: 'width 0.8s ease' }} />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${p.milestones.length},1fr)`, position: 'relative' }}>
+              <div style={{ position: 'absolute', top: 11, right: 0, left: 0, height: 2, background: 'var(--line)', zIndex: 0 }} />
+              {p.milestones.map((m, i) => (
+                <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, position: 'relative', zIndex: 1 }}>
+                  <div style={{
+                    width: 24, height: 24, borderRadius: 999, border: `2px solid ${m.done ? 'var(--gold)' : m.active ? 'var(--gold)' : 'var(--line)'}`,
+                    background: m.done ? 'var(--gold)' : m.active ? 'var(--goldDim)' : 'var(--bg)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: m.done ? '#16140f' : m.active ? 'var(--gold)' : 'var(--faint)',
+                  }}>{m.done ? '✓' : m.active ? '◉' : '○'}</div>
+                  <div style={{ fontSize: 11.5, fontWeight: m.active ? 700 : 400, color: m.active ? 'var(--gold)' : m.done ? 'var(--text)' : 'var(--faint)', textAlign: 'center' }}>{m.label}</div>
+                  <div style={{ fontSize: 10, color: 'var(--faint)', textAlign: 'center' }}>{m.date}</div>
+                </div>
+              ))}
+            </div>
+          </section>
 
-            {/* Milestone track */}
-            <div style={{ position: 'relative', padding: '0 28px' }}>
-              {/* Background track line */}
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 9,
-                  right: 28,
-                  left: 28,
-                  height: 4,
-                  background: 'var(--line2)',
-                  borderRadius: 2,
-                  zIndex: 0,
-                }}
-              />
-              {/* Gold fill — 70% */}
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 9,
-                  right: 28,
-                  width: '70%',
-                  height: 4,
-                  background: 'linear-gradient(to left, var(--gold), var(--gold2))',
-                  borderRadius: 2,
-                  zIndex: 1,
-                }}
-              />
+          {/* Unit Types Table */}
+          <section style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 20, padding: 22 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)', marginBottom: 16 }}>انواع واحدها</div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--line)' }}>
+                    {['نوع', 'متراژ', 'طبقه', 'قیمت از', 'وضعیت'].map(h => (
+                      <th key={h} style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: 'var(--muted)', fontSize: 12 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {p.units.map((u, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid var(--line)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
+                      <td style={{ padding: '12px 12px', fontWeight: 700, color: 'var(--text)' }}>{u.type}</td>
+                      <td style={{ padding: '12px 12px', color: 'var(--muted)' }}>{u.size}</td>
+                      <td style={{ padding: '12px 12px', color: 'var(--muted)' }}>{u.floor}</td>
+                      <td style={{ padding: '12px 12px', color: 'var(--gold)', fontWeight: 700 }}>{u.price}</td>
+                      <td style={{ padding: '12px 12px' }}>
+                        <span style={{ fontSize: 11.5, fontWeight: 700, padding: '4px 10px', borderRadius: 999, color: unitStatusColor[u.status], background: `${unitStatusColor[u.status]}20`, border: `1px solid ${unitStatusColor[u.status]}44` }}>{unitStatusLabel[u.status]}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
 
-              {/* Dots + labels row */}
-              <div
-                style={{
-                  position: 'relative',
-                  zIndex: 2,
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                }}
-              >
-                {milestones.map((m) => (
-                  <div
-                    key={m.label}
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: 12,
-                    }}
-                  >
-                    {/* Dot */}
-                    <div
-                      style={{
-                        width: m.state === 'active' ? 20 : 16,
-                        height: m.state === 'active' ? 20 : 16,
-                        borderRadius: '50%',
-                        background:
-                          m.state === 'upcoming'
-                            ? 'var(--bg2)'
-                            : 'var(--gold)',
-                        border:
-                          m.state === 'upcoming'
-                            ? '2px solid var(--line2)'
-                            : m.state === 'active'
-                            ? '3px solid var(--gold)'
-                            : '2px solid var(--gold2)',
-                        boxShadow:
-                          m.state === 'done'
-                            ? '0 0 8px rgba(201,168,76,0.4)'
-                            : m.state === 'active'
-                            ? '0 0 14px rgba(201,168,76,0.7)'
-                            : 'none',
-                        animation:
-                          m.state === 'active'
-                            ? 'pulse 1.6s ease-in-out infinite'
-                            : 'none',
-                        flexShrink: 0,
-                        marginTop: m.state === 'active' ? -2 : 0,
-                      }}
-                    />
+          {/* Amenities */}
+          <section style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 20, padding: 22 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)', marginBottom: 16 }}>امکانات و تجهیزات</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+              {p.amenities.map((a, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '11px 13px', border: '1px solid var(--line)', borderRadius: 12, background: 'var(--bg2)' }}>
+                  <span style={{ fontSize: 18 }}>{a.ic}</span>
+                  <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{a.l}</span>
+                </div>
+              ))}
+            </div>
+          </section>
 
-                    {/* Label */}
-                    <span
-                      style={{
-                        fontSize: 11,
-                        fontWeight: m.state === 'active' ? 700 : 500,
-                        color:
-                          m.state === 'upcoming'
-                            ? 'var(--faint)'
-                            : m.state === 'active'
-                            ? 'var(--gold)'
-                            : 'var(--muted)',
-                        textAlign: 'center',
-                        whiteSpace: 'nowrap',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        gap: 2,
-                      }}
-                    >
-                      {m.label}
-                      {m.state === 'done' && (
-                        <span style={{ color: 'var(--gold)', fontSize: 10 }}>✓</span>
-                      )}
-                      {m.state === 'active' && (
-                        <span style={{ color: 'var(--gold)', fontSize: 9, opacity: 0.8 }}>
-                          در حال اجرا
-                        </span>
-                      )}
-                    </span>
+          {/* Floor Plan Viewer */}
+          <section style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 20, padding: 22 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)', marginBottom: 16 }}>نقشه طبقات</div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+              {p.floorPlans.map((fp, i) => (
+                <button key={i} onClick={() => setActivePlan(i)} style={{ padding: '8px 14px', borderRadius: 10, border: `1px solid ${activePlan === i ? 'var(--gold)' : 'var(--line)'}`, background: activePlan === i ? 'var(--goldDim)' : 'var(--bg2)', color: activePlan === i ? 'var(--gold)' : 'var(--muted)', fontFamily: 'inherit', fontSize: 13, cursor: 'pointer', fontWeight: activePlan === i ? 700 : 400 }}>{fp.label}</button>
+              ))}
+            </div>
+            <div style={{ border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden' }}>
+              <FloorPlanSVG />
+            </div>
+            <div style={{ display: 'flex', gap: 18, marginTop: 12, fontSize: 12.5, color: 'var(--muted)' }}>
+              <span>نوع: <strong style={{ color: 'var(--text)' }}>{p.floorPlans[activePlan]?.label}</strong></span>
+              <span>تعداد اتاق: <strong style={{ color: 'var(--text)' }}>{p.floorPlans[activePlan]?.rooms}</strong></span>
+              <span>متراژ: <strong style={{ color: 'var(--gold)' }}>{p.floorPlans[activePlan]?.size}</strong></span>
+            </div>
+          </section>
+
+          {/* Developer Profile */}
+          <section style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 20, padding: 22 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)', marginBottom: 16 }}>پروفایل سازنده</div>
+            <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ width: 56, height: 56, borderRadius: 18, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16140f', fontSize: 22, fontWeight: 900 }}>{p.devProfile.logo}</div>
+              <div>
+                <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--text)' }}>{p.devProfile.name}</div>
+                <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 4 }}>فعال از {p.devProfile.since}</div>
+              </div>
+              <div style={{ marginRight: 'auto', display: 'flex', gap: 20 }}>
+                {[
+                  { v: p.devProfile.projects, l: 'پروژه‌ها' },
+                  { v: p.devProfile.delivered, l: 'واحد تحویلی' },
+                  { v: `★ ${p.devProfile.rating}`, l: 'امتیاز' },
+                ].map((s, i) => (
+                  <div key={i} style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--gold)' }}>{s.v}</div>
+                    <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 3 }}>{s.l}</div>
                   </div>
                 ))}
               </div>
             </div>
+          </section>
 
-            {/* Overall % */}
-            <div
-              style={{
-                marginTop: 28,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '12px 16px',
-                background: 'var(--bg2)',
-                borderRadius: 10,
-                border: '1px solid var(--line)',
-              }}
-            >
-              <span style={{ fontSize: 13, color: 'var(--muted)' }}>پیشرفت کلی پروژه</span>
-              <span style={{ fontSize: 18, fontWeight: 900, color: 'var(--gold)' }}>۷۰٪</span>
+          {/* Reviews */}
+          <section style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 20, padding: 22 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)', marginBottom: 16 }}>نظرات خریداران</div>
+            <div style={{ display: 'grid', gap: 12 }}>
+              {p.reviews.map((rv, i) => (
+                <div key={i} style={{ display: 'flex', gap: 14, padding: 16, border: '1px solid var(--line)', borderRadius: 14, background: 'var(--bg2)' }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 13, background: rv.av, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14, fontWeight: 700 }}>{rv.n.charAt(0)}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{rv.n}</span>
+                      <span style={{ fontSize: 13, color: 'var(--gold)', fontWeight: 700 }}>★ {rv.r}</span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)', lineHeight: 1.8 }}>{rv.t}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Similar Projects */}
+          <section style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 20, padding: 22 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)', marginBottom: 16 }}>پروژه‌های مشابه</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+              {p.similar.map((s, i) => (
+                <div key={i} style={{ borderRadius: 14, overflow: 'hidden', border: '1px solid var(--line)', cursor: 'pointer' }}>
+                  <div style={{ height: 88, background: s.bg, position: 'relative' }}>
+                    <div style={{ position: 'absolute', inset: 0, backgroundImage: 'repeating-linear-gradient(135deg,transparent,transparent 9px,rgba(255,255,255,0.03) 9px,rgba(255,255,255,0.03) 10px)' }} />
+                    <span style={{ position: 'absolute', top: 8, right: 8, fontSize: 10.5, fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: 'rgba(13,13,15,0.75)', color: 'var(--gold)' }}>{s.status}</span>
+                  </div>
+                  <div style={{ padding: '11px 13px' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 3 }}>{s.title}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 5 }}>📍 {s.area}</div>
+                    <div style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>{s.price}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+        </div>
+
+        {/* RIGHT SIDEBAR */}
+        <div style={{ display: 'grid', gap: 16, position: 'sticky', top: 80 }}>
+
+          {/* Reservation CTA */}
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--gold)', borderRadius: 20, padding: 22 }}>
+            <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 6 }}>قیمت شروع از</div>
+            <div style={{ fontSize: 26, fontWeight: 900, color: 'var(--gold)', marginBottom: 4 }}>{p.priceFrom}</div>
+            <div style={{ fontSize: 12, color: 'var(--faint)', marginBottom: 18 }}>تا {p.priceTo} · بازده {p.yieldPct}</div>
+            <button onClick={() => { setModalOpen(true); setModalStep(1); setResSent(false) }} style={{ width: '100%', padding: '14px', borderRadius: 13, border: 'none', background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontFamily: 'inherit', fontWeight: 700, fontSize: 14.5, cursor: 'pointer', marginBottom: 9 }}>رزرو واحد</button>
+            <button style={{ width: '100%', padding: '12px', borderRadius: 13, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--text)', fontFamily: 'inherit', fontWeight: 600, fontSize: 13.5, cursor: 'pointer' }}>دریافت مشاوره رایگان</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 16, padding: '12px 14px', background: 'var(--bg2)', borderRadius: 11 }}>
+              <span style={{ color: 'var(--gold)', fontSize: 16 }}>✦</span>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>بازده پیش‌بینی‌شده</div>
+                <div style={{ fontSize: 20, fontWeight: 900, color: '#5fd98a', marginTop: 2 }}>{p.yieldPct}</div>
+              </div>
             </div>
           </div>
 
-          {/* Section 3 — Gallery 3×2 grid */}
-          <div
-            style={{
-              background: 'var(--surface)',
-              border: '1px solid var(--line)',
-              borderRadius: 18,
-              padding: 24,
-            }}
-          >
-            <h2 style={{ margin: '0 0 20px', fontSize: 17, fontWeight: 800, color: 'var(--text)' }}>
-              گالری تصاویر
-            </h2>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: 12,
-              }}
-            >
-              {gallery.map((item) => (
-                <div
-                  key={item.label}
-                  style={{
-                    height: 180,
-                    borderRadius: 12,
-                    background: item.bg,
-                    border: '1px solid var(--line)',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <div
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      background:
-                        'linear-gradient(to top, rgba(0,0,0,0.65) 0%, transparent 55%)',
-                    }}
-                  />
-                  <div
-                    style={{
-                      position: 'absolute',
-                      bottom: 10,
-                      right: 12,
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: 'rgba(255,255,255,0.9)',
-                    }}
-                  >
-                    {item.label}
-                  </div>
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: 8,
-                      left: 8,
-                      width: 28,
-                      height: 28,
-                      borderRadius: '50%',
-                      background: 'rgba(0,0,0,0.4)',
-                      backdropFilter: 'blur(4px)',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 12,
-                    }}
-                  >
-                    🔍
-                  </div>
+          {/* Timeline summary */}
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 12 }}>جدول زمانی</div>
+            <div style={{ display: 'grid', gap: 9 }}>
+              {[
+                { l: 'شروع ساخت', v: p.startDate },
+                { l: 'تاریخ تحویل', v: p.deliveryDate },
+                { l: 'پیشرفت فعلی', v: `${p.progress}٪` },
+              ].map((item, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5 }}>
+                  <span style={{ color: 'var(--muted)' }}>{item.l}</span>
+                  <span style={{ color: 'var(--text)', fontWeight: 700 }}>{item.v}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Section 4 — Available units table */}
-          <div
-            style={{
-              background: 'var(--surface)',
-              border: '1px solid var(--line)',
-              borderRadius: 18,
-              overflow: 'hidden',
-            }}
-          >
-            <div style={{ padding: '22px 24px 18px', borderBottom: '1px solid var(--line)' }}>
-              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: 'var(--text)' }}>
-                واحدهای موجود
-              </h2>
+          {/* Developer link */}
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 16, display: 'flex', gap: 12, alignItems: 'center', cursor: 'pointer' }}>
+            <div style={{ width: 42, height: 42, borderRadius: 13, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16140f', fontSize: 17, fontWeight: 900 }}>{p.devProfile.logo}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.devProfile.name}</div>
+              <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{p.devProfile.projects} · ★ {p.devProfile.rating}</div>
             </div>
+            <span style={{ color: 'var(--gold)', fontSize: 14 }}>←</span>
+          </div>
 
-            {/* Table header */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1.4fr 0.9fr 0.9fr 1.1fr 1fr',
-                padding: '12px 24px',
-                background: 'var(--bg2)',
-                borderBottom: '1px solid var(--line)',
-                fontSize: 11,
-                fontWeight: 700,
-                color: 'var(--faint)',
-                gap: 8,
-              }}
-            >
-              <span>نوع</span>
-              <span>متراژ</span>
-              <span>طبقه</span>
-              <span>قیمت</span>
-              <span>وضعیت</span>
-            </div>
+          {/* Map */}
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 10 }}>موقعیت مکانی</div>
+            <MapSVG title={p.title} />
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>📍 {p.location}</div>
+          </div>
 
-            {/* Table rows */}
-            {units.map((unit, i) => (
-              <div
-                key={i}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1.4fr 0.9fr 0.9fr 1.1fr 1fr',
-                  padding: '15px 24px',
-                  borderBottom: i < units.length - 1 ? '1px solid var(--line)' : 'none',
-                  fontSize: 13,
-                  alignItems: 'center',
-                  gap: 8,
-                  background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.012)',
-                }}
-              >
-                <span style={{ fontWeight: 600, color: 'var(--text)' }}>{unit.type}</span>
-                <span style={{ color: 'var(--muted)' }}>{unit.size}</span>
-                <span
-                  style={{
-                    color: 'var(--muted)',
-                    direction: 'ltr',
-                    unicodeBidi: 'embed',
-                    display: 'inline-block',
-                  }}
-                >
-                  {unit.floor}
-                </span>
-                <span style={{ fontWeight: 700, color: 'var(--gold)' }}>{unit.price}</span>
-                <span>
-                  <span
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 5,
-                      padding: '4px 10px',
-                      borderRadius: 6,
-                      background: unit.statusBg,
-                      color: unit.statusColor,
-                      fontSize: 11,
-                      fontWeight: 700,
-                      border: `1px solid ${unit.statusColor}40`,
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: 5,
-                        height: 5,
-                        borderRadius: '50%',
-                        background: unit.statusColor,
-                        display: 'inline-block',
-                      }}
-                    />
-                    {unit.status}
-                  </span>
-                </span>
+          {/* Trust badges */}
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 12 }}>ضمانت‌ها</div>
+            {[
+              { ic: '✓', l: 'پروانه ساخت معتبر', c: '#5fd98a' },
+              { ic: '✓', l: 'ثبت در سامانه ثبت ملک', c: '#5fd98a' },
+              { ic: '✓', l: 'قرارداد رسمی پیش‌فروش', c: '#5fd98a' },
+              { ic: '✦', l: 'تأیید ملک‌جت', c: 'var(--gold)' },
+            ].map((b, i) => (
+              <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'center', fontSize: 12.5, color: 'var(--muted)', marginBottom: 8 }}>
+                <span style={{ color: b.c, fontWeight: 700, flexShrink: 0 }}>{b.ic}</span>
+                {b.l}
               </div>
             ))}
           </div>
 
-          {/* Section 5 — Buyer reviews */}
-          <div>
-            <h2
-              style={{
-                margin: '0 0 20px',
-                fontSize: 17,
-                fontWeight: 800,
-                color: 'var(--text)',
-              }}
-            >
-              نظرات خریداران
-            </h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {reviews.map((review, i) => (
-                <div
-                  key={i}
-                  style={{
-                    background: 'var(--surface)',
-                    border: '1px solid var(--line)',
-                    borderRadius: 16,
-                    padding: '20px 22px',
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      justifyContent: 'space-between',
-                      marginBottom: 14,
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      {/* Avatar */}
-                      <div
-                        style={{
-                          width: 42,
-                          height: 42,
-                          borderRadius: '50%',
-                          background:
-                            'linear-gradient(140deg, var(--gold2), var(--gold))',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: 15,
-                          fontWeight: 800,
-                          color: '#16140f',
-                          flexShrink: 0,
-                        }}
-                      >
-                        {review.name.charAt(review.name.length - 1)}
-                      </div>
-                      <div>
-                        <div
-                          style={{
-                            fontWeight: 700,
-                            fontSize: 14,
-                            color: 'var(--text)',
-                            marginBottom: 4,
-                          }}
-                        >
-                          {review.name}
-                        </div>
-                        <span
-                          style={{
-                            fontSize: 10,
-                            color: 'var(--faint)',
-                            padding: '2px 8px',
-                            borderRadius: 4,
-                            background: 'var(--bg2)',
-                            border: '1px solid var(--line)',
-                            display: 'inline-block',
-                          }}
-                        >
-                          {review.tag}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div style={{ textAlign: 'left', flexShrink: 0 }}>
-                      <div
-                        style={{
-                          fontSize: 14,
-                          color: 'var(--gold)',
-                          letterSpacing: 1,
-                          marginBottom: 4,
-                        }}
-                      >
-                        {Array.from({ length: 5 }).map((_, si) =>
-                          si < review.stars ? '★' : '☆'
-                        )}
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--faint)' }}>{review.date}</div>
-                    </div>
-                  </div>
-
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: 13.5,
-                      color: 'var(--muted)',
-                      lineHeight: 1.8,
-                    }}
-                  >
-                    {review.text}
-                  </p>
-                </div>
-              ))}
+          {/* AI Risk badge */}
+          <div style={{ background: `${p.riskColor}12`, border: `1px solid ${p.riskColor}44`, borderRadius: 14, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+            <RiskGauge score={p.riskScore} color={p.riskColor} />
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: p.riskColor }}>{p.riskLabel}</div>
+              <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4, lineHeight: 1.6 }}>امتیاز ریسک توسط<br />هوش مصنوعی ملک‌جت</div>
             </div>
           </div>
+
         </div>
+      </main>
 
-        {/* ─── RIGHT SIDEBAR ─── */}
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 18,
-            position: 'sticky',
-            top: 80,
-          }}
-        >
-          {/* Card 1 — Pricing */}
-          <div
-            style={{
-              background: 'var(--surface)',
-              border: '1px solid var(--line)',
-              borderRadius: 20,
-              padding: '26px 22px',
-              boxShadow: '0 4px 32px var(--shadow)',
-            }}
-          >
-            <div
-              style={{
-                fontSize: 12,
-                color: 'var(--muted)',
-                marginBottom: 6,
-                fontWeight: 500,
-              }}
-            >
-              قیمت شروع از
-            </div>
-            <div
-              style={{
-                fontSize: 38,
-                fontWeight: 900,
-                color: 'var(--gold)',
-                lineHeight: 1,
-                marginBottom: 10,
-              }}
-            >
-              ۱۴ م.د
-            </div>
-            <div
-              style={{
-                fontSize: 12,
-                color: 'var(--muted)',
-                padding: '9px 12px',
-                background: 'rgba(201,168,76,0.08)',
-                borderRadius: 8,
-                border: '1px solid rgba(201,168,76,0.2)',
-                marginBottom: 20,
-                lineHeight: 1.55,
-              }}
-            >
-              بازده سرمایه‌گذاری ۳۸٪ در ۳ سال
-            </div>
+      {/* Reservation Modal */}
+      {modalOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.78)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={e => { if (e.target === e.currentTarget) setModalOpen(false) }}>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 26, padding: 32, width: '100%', maxWidth: 520 }}>
 
-            {/* Primary CTA */}
-            <button
-              style={{
-                width: '100%',
-                padding: '14px 0',
-                borderRadius: 12,
-                background: 'linear-gradient(140deg, var(--gold2), var(--gold))',
-                color: '#16140f',
-                fontWeight: 800,
-                fontSize: 14,
-                border: 'none',
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                marginBottom: 10,
-                boxShadow: '0 6px 20px -6px var(--gold)',
-                letterSpacing: '0.2px',
-              }}
-            >
-              درخواست بازدید / رزرو واحد
-            </button>
-
-            {/* Secondary CTA */}
-            <button
-              style={{
-                width: '100%',
-                padding: '12px 0',
-                borderRadius: 12,
-                background: 'transparent',
-                color: 'var(--muted)',
-                fontWeight: 600,
-                fontSize: 13,
-                border: '1px solid var(--line)',
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                marginBottom: 16,
-              }}
-            >
-              دانلود کاتالوگ پروژه ↓
-            </button>
-
-            {/* Urgency text */}
-            <div
-              style={{
-                textAlign: 'center',
-                fontSize: 12,
-                fontWeight: 700,
-                color: '#e05c3a',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-              }}
-            >
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  background: '#e05c3a',
-                  display: 'inline-block',
-                  animation: 'pulse 1.4s ease-in-out infinite',
-                }}
-              />
-              ۱۲ واحد باقی مانده
-            </div>
-          </div>
-
-          {/* Card 2 — Builder profile */}
-          <div
-            style={{
-              background: 'var(--surface)',
-              border: '1px solid var(--line)',
-              borderRadius: 20,
-              padding: '22px 22px 18px',
-            }}
-          >
-            <div
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                color: 'var(--faint)',
-                letterSpacing: '0.6px',
-                marginBottom: 18,
-                textTransform: 'uppercase',
-              }}
-            >
-              سازنده پروژه
-            </div>
-
-            {/* Avatar + name */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 14,
-                marginBottom: 20,
-              }}
-            >
-              <div
-                style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: '50%',
-                  background:
-                    'linear-gradient(140deg, var(--gold2), var(--gold))',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 22,
-                  fontWeight: 900,
-                  color: '#16140f',
-                  flexShrink: 0,
-                  boxShadow: '0 4px 16px -6px var(--gold)',
-                }}
-              >
-                ن
-              </div>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
               <div>
-                <div
-                  style={{
-                    fontWeight: 800,
-                    fontSize: 14,
-                    color: 'var(--text)',
-                    marginBottom: 4,
-                  }}
-                >
-                  گروه ساختمانی ایران نو
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--faint)' }}>تأسیس ۱۳۷۸</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>رزرو واحد — {p.title}</div>
+                {!resSent && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>مرحله {modalStep} از ۳</div>}
               </div>
+              <button onClick={() => setModalOpen(false)} style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid var(--line)', background: 'var(--bg2)', color: 'var(--muted)', cursor: 'pointer', fontSize: 16, fontFamily: 'inherit' }}>✕</button>
             </div>
 
-            {/* Stats */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: 10,
-                marginBottom: 14,
-              }}
-            >
-              {[
-                { value: '۲۳', label: 'پروژه تکمیل‌شده' },
-                { value: '۴٬۲۰۰', label: 'واحد تحویلی' },
-              ].map((s) => (
-                <div
-                  key={s.label}
-                  style={{
-                    textAlign: 'center',
-                    padding: '12px 8px',
-                    background: 'var(--bg2)',
-                    borderRadius: 10,
-                    border: '1px solid var(--line)',
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: 20,
-                      fontWeight: 900,
-                      color: 'var(--gold)',
-                      marginBottom: 3,
-                    }}
-                  >
-                    {s.value}
-                  </div>
-                  <div style={{ fontSize: 10, color: 'var(--faint)' }}>{s.label}</div>
+            {/* Step indicators */}
+            {!resSent && (
+              <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+                {[1, 2, 3].map(s => (
+                  <div key={s} style={{ flex: 1, height: 4, borderRadius: 999, background: s <= modalStep ? 'var(--gold)' : 'var(--line)', transition: 'background 0.3s' }} />
+                ))}
+              </div>
+            )}
+
+            {resSent ? (
+              <div style={{ textAlign: 'center', padding: '30px 0' }}>
+                <div style={{ width: 64, height: 64, borderRadius: 22, background: 'rgba(95,217,138,0.12)', border: '1px solid rgba(95,217,138,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 18px', fontSize: 28, color: '#5fd98a' }}>✓</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text)', marginBottom: 10 }}>رزرو با موفقیت ثبت شد!</div>
+                <p style={{ fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.8, margin: '0 0 24px' }}>کارشناسان ما در کمتر از ۲۴ ساعت با شما تماس خواهند گرفت و مراحل بعدی را توضیح خواهند داد.</p>
+                <button onClick={() => { setModalOpen(false); setModalStep(1); setResSent(false) }} style={{ padding: '12px 32px', borderRadius: 13, border: 'none', background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontFamily: 'inherit', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>بستن</button>
+              </div>
+            ) : modalStep === 1 ? (
+              <div style={{ display: 'grid', gap: 13 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>اطلاعات شخصی</div>
+                <input value={resName} onChange={e => setResName(e.target.value)} placeholder="نام و نام‌خانوادگی" style={inpSt} />
+                <input value={resPhone} onChange={e => setResPhone(e.target.value)} placeholder="شماره موبایل" style={{ ...inpSt, direction: 'ltr' }} />
+                <input placeholder="ایمیل (اختیاری)" style={{ ...inpSt, direction: 'ltr' }} />
+                <button onClick={handleReserve} disabled={!resName || !resPhone} style={{ padding: '13px', borderRadius: 13, border: 'none', background: resName && resPhone ? 'linear-gradient(140deg,var(--gold2),var(--gold))' : 'var(--line)', color: resName && resPhone ? '#16140f' : 'var(--faint)', fontFamily: 'inherit', fontWeight: 700, fontSize: 14, cursor: resName && resPhone ? 'pointer' : 'default' }}>مرحله بعد ←</button>
+              </div>
+            ) : modalStep === 2 ? (
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 14 }}>انتخاب واحد</div>
+                <div style={{ display: 'grid', gap: 9, marginBottom: 16 }}>
+                  {p.units.filter(u => u.status === 'available').map((u, i) => (
+                    <div key={i} onClick={() => setResUnit(u.type)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 16px', border: `1px solid ${resUnit === u.type ? 'var(--gold)' : 'var(--line)'}`, borderRadius: 12, background: resUnit === u.type ? 'var(--goldDim)' : 'var(--bg2)', cursor: 'pointer' }}>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{u.type}</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>{u.size} · طبقه {u.floor}</div>
+                      </div>
+                      <div style={{ textAlign: 'left' }}>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--gold)' }}>{u.price}</div>
+                        {resUnit === u.type && <div style={{ fontSize: 10.5, color: '#5fd98a', marginTop: 2 }}>✓ انتخاب‌شده</div>}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+                <button onClick={handleReserve} disabled={!resUnit} style={{ width: '100%', padding: '13px', borderRadius: 13, border: 'none', background: resUnit ? 'linear-gradient(140deg,var(--gold2),var(--gold))' : 'var(--line)', color: resUnit ? '#16140f' : 'var(--faint)', fontFamily: 'inherit', fontWeight: 700, fontSize: 14, cursor: resUnit ? 'pointer' : 'default' }}>مرحله بعد ←</button>
+              </div>
+            ) : (
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 14 }}>تأیید نهایی</div>
+                <div style={{ background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 14, padding: 18, marginBottom: 16 }}>
+                  {[
+                    { l: 'نام', v: resName },
+                    { l: 'موبایل', v: resPhone },
+                    { l: 'واحد انتخابی', v: resUnit },
+                    { l: 'پروژه', v: p.title },
+                    { l: 'سازنده', v: p.developer },
+                  ].map((row, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '8px 0', borderBottom: i < 4 ? '1px solid var(--line)' : 'none' }}>
+                      <span style={{ color: 'var(--muted)' }}>{row.l}</span>
+                      <span style={{ color: 'var(--text)', fontWeight: 700 }}>{row.v}</span>
+                    </div>
+                  ))}
+                </div>
+                <p style={{ fontSize: 12.5, color: 'var(--faint)', marginBottom: 16, lineHeight: 1.7 }}>با کلیک روی «تأیید رزرو» موافقت خود را با شرایط پیش‌فروش اعلام می‌کنید. مبلغ رزرو: ۵۰۰ میلیون تومان.</p>
+                <button onClick={handleReserve} style={{ width: '100%', padding: '14px', borderRadius: 13, border: 'none', background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontFamily: 'inherit', fontWeight: 700, fontSize: 14.5, cursor: 'pointer' }}>✓ تأیید رزرو</button>
+              </div>
+            )}
 
-            {/* Rating */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '10px 14px',
-                background: 'var(--bg2)',
-                borderRadius: 10,
-                border: '1px solid var(--line)',
-                marginBottom: 16,
-              }}
-            >
-              <span style={{ fontSize: 16, color: 'var(--gold)' }}>★</span>
-              <span style={{ fontWeight: 800, fontSize: 16, color: 'var(--gold)' }}>۴.۸</span>
-              <span style={{ fontSize: 12, color: 'var(--faint)' }}>( ۱۴۲ نظر )</span>
-            </div>
-
-            {/* Link */}
-            <div
-              style={{
-                textAlign: 'center',
-                fontSize: 12,
-                color: 'var(--gold)',
-                fontWeight: 600,
-                cursor: 'pointer',
-                padding: '10px 0 0',
-                borderTop: '1px solid var(--line)',
-              }}
-            >
-              مشاهده پروفایل سازنده ←
-            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* FAB */}
+      <button onClick={() => { setModalOpen(true); setModalStep(1); setResSent(false) }} style={{ position: 'fixed', bottom: 28, left: 28, height: 50, padding: '0 22px', borderRadius: 18, border: 'none', background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 14, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', boxShadow: '0 6px 28px rgba(201,169,106,0.35)', zIndex: 100 }}>رزرو واحد ✦</button>
 
       <Footer />
     </div>
