@@ -1,0 +1,1234 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{margin:0;font-family:'Vazirmatn',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:rgba(140,140,140,0.3);border-radius:8px}
+  @keyframes mjsa-pulse{0%,100%{opacity:.4}50%{opacity:1}}
+  @keyframes mjsa-spin{to{transform:rotate(360deg)}}
+  @keyframes mjsa-scan{0%{transform:translateX(0)}100%{transform:translateX(-100%)}}
+  @keyframes mjsa-fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  @keyframes mjsa-drop{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+  @media(max-width:980px){.mjsa-side{width:60px!important;padding:14px 7px!important}.mjsa-sidelabel{display:none!important}.mjsa-kpi{grid-template-columns:repeat(2,1fr)!important}.mjsa-2col{grid-template-columns:1fr!important}}
+</style>
+</helmet>
+<div dir="rtl" style="{{ rootStyle }}">
+  <div style="display:flex;min-height:100vh">
+
+    <!-- SIDEBAR -->
+    <aside class="mjsa-side" style="width:248px;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto;background:var(--bg2);border-left:1px solid var(--line);display:flex;flex-direction:column;padding:18px 13px">
+      <a href="MelkJet.dc.html" style="display:flex;align-items:center;gap:11px;text-decoration:none;color:var(--text);padding:6px 8px 16px">
+        <span style="width:34px;height:34px;border-radius:10px;background:linear-gradient(140deg,#e7674a,#b8453a);display:flex;align-items:center;justify-content:center"><span style="width:13px;height:13px;background:var(--bg2);transform:rotate(45deg);border-radius:2px"></span></span>
+        <div class="mjsa-sidelabel"><div style="font-weight:800;font-size:16px;letter-spacing:-.5px">ملک‌جت</div><div style="font-size:10px;color:#e7674a">سوپر ادمین</div></div>
+      </a>
+      <nav style="display:grid;gap:2px;margin-top:4px">
+        <sc-for list="{{ menu }}" as="m" hint-placeholder-count="14">
+          <sc-if value="{{ m.isSection }}" hint-placeholder-val="{{ false }}"><div class="mjsa-sidelabel" style="font-size:10.5px;font-weight:700;color:var(--faint);padding:14px 12px 6px;letter-spacing:.3px">{{ m.l }}</div></sc-if>
+          <sc-if value="{{ m.isItem }}" hint-placeholder-val="{{ true }}"><button onClick="{{ m.fn }}" style="{{ m.style }}"><span style="width:22px;text-align:center;font-size:15px;flex-shrink:0">{{ m.ic }}</span><span class="mjsa-sidelabel" style="flex:1;text-align:right">{{ m.l }}</span><sc-if value="{{ m.badge }}" hint-placeholder-val="{{ false }}"><span class="mjsa-sidelabel" style="background:{{ m.badgeColor }};color:#fff;font-size:10px;font-weight:800;border-radius:999px;padding:1px 6px">{{ m.badge }}</span></sc-if></button></sc-if>
+        </sc-for>
+      </nav>
+      <div style="flex:1;min-height:14px"></div>
+      <div class="mjsa-sidelabel" style="display:flex;align-items:center;gap:10px;padding:12px 6px 2px;border-top:1px solid var(--line)">
+        <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#e7674a,#b8453a);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:13px">س</div>
+        <div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:700;color:var(--text)">مدیر سیستم</div><div style="font-size:10px;color:#e7674a">دسترسی کامل</div></div>
+        <button onClick="{{ toggleTheme }}" aria-label="theme" style="width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--text);cursor:pointer;font-size:12px">{{ themeIcon }}</button>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+      <header style="position:sticky;top:0;z-index:30;background:var(--navbg);backdrop-filter:blur(16px);border-bottom:1px solid var(--line);padding:0 24px;height:60px;display:flex;align-items:center;gap:14px">
+        <div><div style="font-size:17px;font-weight:800;color:var(--text);letter-spacing:-.4px">{{ viewTitle }}</div></div>
+        <div style="flex:1"></div>
+        <span style="display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:#5fd98a;background:rgba(95,217,138,0.1);border:1px solid rgba(95,217,138,0.35);border-radius:999px;padding:6px 12px"><span style="width:7px;height:7px;border-radius:50%;background:#5fd98a;animation:mjsa-pulse 2s infinite"></span>همه سیستم‌ها عملیاتی</span>
+      </header>
+
+      <main style="flex:1;padding:24px;overflow:auto">
+
+        <!-- ===== OVERVIEW ===== -->
+        <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}">
+        <div style="animation:mjsa-fade .3s both;display:grid;gap:18px">
+          <div class="mjsa-kpi" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+            <sc-for list="{{ overviewKpis }}" as="k" hint-placeholder-count="4"><div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px"><div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12px;color:var(--muted)">{{ k.l }}</span><span style="width:30px;height:30px;border-radius:9px;background:{{ k.bg }};color:{{ k.color }};display:flex;align-items:center;justify-content:center;font-size:14px">{{ k.ic }}</span></div><div style="font-size:24px;font-weight:800;color:var(--text);margin-top:12px;letter-spacing:-.5px">{{ k.v }}</div><div style="font-size:11.5px;color:{{ k.tc }};margin-top:4px">{{ k.t }}</div></div></sc-for>
+          </div>
+          <div class="mjsa-2col" style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start">
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px">
+              <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:14px">اقدام‌های سریع AI</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                <sc-for list="{{ quickActions }}" as="q" hint-placeholder-count="4"><button onClick="{{ q.fn }}" style="display:flex;flex-direction:column;gap:8px;padding:15px;border:1px solid var(--line);border-radius:13px;background:var(--bg2);cursor:pointer;font-family:inherit;text-align:right;transition:.15s" style-hover="border-color:var(--gold)"><span style="width:34px;height:34px;border-radius:10px;background:{{ q.bg }};color:{{ q.color }};display:flex;align-items:center;justify-content:center;font-size:16px">{{ q.ic }}</span><span style="font-size:13px;font-weight:700;color:var(--text)">{{ q.l }}</span><span style="font-size:11px;color:var(--muted);line-height:1.5">{{ q.sub }}</span></button></sc-for>
+              </div>
+            </div>
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px">
+              <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:14px">فعالیت زنده‌ی AI</div>
+              <div style="display:grid;gap:11px">
+                <sc-for list="{{ aiActivity }}" as="a" hint-placeholder-count="4"><div style="display:flex;align-items:center;gap:11px"><span style="width:8px;height:8px;border-radius:50%;background:{{ a.color }};flex-shrink:0;{{ a.anim }}"></span><div style="flex:1;min-width:0"><div style="font-size:12.5px;color:var(--text)">{{ a.t }}</div></div><span style="font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--faint);direction:ltr">{{ a.meta }}</span></div></sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+        <!-- ===== AI SCRAPER ===== -->
+        <sc-if value="{{ isScraper }}" hint-placeholder-val="{{ false }}">
+        <div style="animation:mjsa-fade .3s both;display:grid;gap:18px">
+          <!-- run banner -->
+          <div style="background:linear-gradient(135deg,var(--surface),var(--bg2));border:1px solid var(--gold);border-radius:18px;padding:20px;position:relative;overflow:hidden">
+            <div style="position:absolute;inset:0;background:radial-gradient(400px 180px at 92% -10%,var(--goldDim),transparent)"></div>
+            <div style="position:relative;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap">
+              <div style="display:flex;gap:13px"><span style="width:42px;height:42px;flex-shrink:0;border-radius:12px;background:linear-gradient(140deg,var(--gold2),var(--gold));display:flex;align-items:center;justify-content:center;color:#16140f;font-size:20px;font-weight:800">⛏</span><div><div style="font-size:16px;font-weight:700;color:var(--text)">موتور جمع‌آوری هوشمند</div><div style="font-size:12.5px;color:var(--muted);margin-top:5px;line-height:1.7;max-width:460px">آگهی‌ها و اخبار را از منابع مختلف جمع‌آوری، پاک‌سازی و دسته‌بندی می‌کند تا سایت را در شروع پر کند و برای سئو محتوا بسازد.</div></div></div>
+              <button onClick="{{ runScrape }}" style="{{ scrapeBtnStyle }}">{{ scrapeBtnLabel }}</button>
+            </div>
+            <!-- live progress -->
+            <sc-if value="{{ scrapeRunning }}" hint-placeholder-val="{{ false }}">
+              <div style="position:relative;margin-top:18px;padding-top:18px;border-top:1px solid var(--line)">
+                <div style="display:flex;align-items:center;gap:11px;margin-bottom:12px"><span style="width:24px;height:24px;border-radius:50%;border:2.5px solid var(--goldDim);border-top-color:var(--gold);animation:mjsa-spin .8s linear infinite"></span><span style="font-size:13.5px;font-weight:600;color:var(--text)">{{ scrapeStep }}</span></div>
+                <div style="height:6px;border-radius:4px;background:var(--bg2);overflow:hidden"><div style="height:100%;width:{{ scrapeProgress }};background:linear-gradient(90deg,var(--gold2),var(--gold));border-radius:4px;transition:.4s"></div></div>
+                <div class="mjsa-kpi" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px">
+                  <sc-for list="{{ scrapeCounters }}" as="c" hint-placeholder-count="4"><div style="background:var(--bg2);border:1px solid var(--line);border-radius:11px;padding:11px;text-align:center"><div style="font-size:18px;font-weight:800;color:{{ c.color }};font-family:'JetBrains Mono',monospace;direction:ltr">{{ c.v }}</div><div style="font-size:10.5px;color:var(--muted);margin-top:2px">{{ c.l }}</div></div></sc-for>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+          <!-- sources -->
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line)"><div style="font-size:15px;font-weight:700;color:var(--text)">منابع داده</div><button onClick="{{ openAddSource }}" style="height:34px;padding:0 13px;border:none;border-radius:10px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer">＋ افزودن منبع</button></div>
+            <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:680px">
+              <thead><tr style="background:var(--bg2)"><th style="{{ th }}">منبع</th><th style="{{ th }}">نوع</th><th style="{{ th }}">آخرین اجرا</th><th style="{{ th }}">جمع‌آوری‌شده</th><th style="{{ th }}">تکراری حذف‌شده</th><th style="{{ th }}">وضعیت</th></tr></thead>
+              <tbody>
+                <sc-for list="{{ sources }}" as="s" hint-placeholder-count="5">
+                  <tr style="border-top:1px solid var(--line)">
+                    <td style="padding:13px 18px"><div style="display:flex;align-items:center;gap:10px"><span style="width:32px;height:32px;border-radius:9px;background:{{ s.bg }};color:{{ s.color }};display:flex;align-items:center;justify-content:center;font-size:14px">{{ s.ic }}</span><span style="font-size:13.5px;font-weight:600;color:var(--text)">{{ s.name }}</span></div></td>
+                    <td style="padding:13px 18px;font-size:12.5px;color:var(--muted)">{{ s.type }}</td>
+                    <td style="padding:13px 18px;font-size:12px;color:var(--muted)">{{ s.last }}</td>
+                    <td style="padding:13px 18px;font-size:13px;font-weight:700;color:var(--gold);font-family:'JetBrains Mono',monospace;direction:ltr">{{ s.fetched }}</td>
+                    <td style="padding:13px 18px;font-size:12.5px;color:var(--muted);font-family:'JetBrains Mono',monospace;direction:ltr">{{ s.dedup }}</td>
+                    <td style="padding:13px 18px"><span style="{{ s.statusStyle }}">{{ s.status }}</span></td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table></div>
+          </div>
+          <!-- recent imported -->
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px">
+            <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:14px">آگهی‌های تازه واردشده</div>
+            <div style="display:grid;gap:9px">
+              <sc-for list="{{ imported }}" as="im" hint-placeholder-count="3"><div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px"><div style="width:44px;height:36px;flex-shrink:0;border-radius:8px;background:{{ im.img }};position:relative;overflow:hidden"><div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,transparent,transparent 6px,rgba(255,255,255,0.03) 6px,rgba(255,255,255,0.03) 7px)"></div></div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ im.title }}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">{{ im.src }} · {{ im.time }}</div></div><span style="{{ im.statusStyle }}">{{ im.status }}</span></div></sc-for>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+        <!-- ===== AI MODERATION (listing approval) ===== -->
+        <sc-if value="{{ isModeration }}" hint-placeholder-val="{{ false }}">
+        <div style="animation:mjsa-fade .3s both;display:grid;gap:16px">
+          <div class="mjsa-kpi" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+            <sc-for list="{{ modKpis }}" as="k" hint-placeholder-count="4"><div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px"><span style="font-size:12px;color:var(--muted)">{{ k.l }}</span><div style="font-size:23px;font-weight:800;color:{{ k.color }};margin-top:10px">{{ k.v }}</div><div style="font-size:11px;color:var(--muted);margin-top:3px">{{ k.t }}</div></div></sc-for>
+          </div>
+          <!-- auto threshold -->
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap"><div><div style="font-size:14px;font-weight:700;color:var(--text)">تأیید خودکار با هوش مصنوعی</div><div style="font-size:12px;color:var(--muted);margin-top:4px">آگهی‌هایی با امتیاز اطمینان AI بالاتر از این حد، خودکار تأیید می‌شوند.</div></div><div style="display:flex;align-items:center;gap:12px"><span style="font-size:20px;font-weight:800;color:var(--gold);font-family:'JetBrains Mono',monospace;direction:ltr">{{ autoThreshold }}٪</span><button onClick="{{ toggleAuto }}" style="{{ autoSwitchStyle }}"><span style="{{ autoKnobStyle }}"></span></button></div></div>
+            <input type="range" min="70" max="99" value="{{ autoThresholdRaw }}" onInput="{{ onThreshold }}" style="width:100%;accent-color:var(--gold);margin-top:16px;cursor:pointer"/>
+          </div>
+          <!-- AI decision queue -->
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden">
+            <div style="padding:16px 20px;border-bottom:1px solid var(--line);font-size:15px;font-weight:700;color:var(--text)">صف تصمیم هوش مصنوعی</div>
+            <div style="display:grid">
+              <sc-for list="{{ modQueue }}" as="m" hint-placeholder-count="5">
+                <div style="display:flex;align-items:center;gap:14px;padding:14px 20px;border-top:1px solid var(--line);border-right:3px solid {{ m.verdictColor }}">
+                  <div style="width:50px;height:40px;flex-shrink:0;border-radius:9px;background:{{ m.img }};position:relative;overflow:hidden"><div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,transparent,transparent 6px,rgba(255,255,255,0.03) 6px,rgba(255,255,255,0.03) 7px)"></div></div>
+                  <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ m.title }}</div><div style="font-size:11.5px;color:var(--muted);margin-top:3px"><span style="color:{{ m.verdictColor }};font-weight:700">{{ m.aiVerdict }}</span> · {{ m.reason }}</div></div>
+                  <div style="text-align:center;flex-shrink:0"><div style="font-size:10.5px;color:var(--muted)">اطمینان AI</div><div style="font-size:15px;font-weight:800;color:{{ m.verdictColor }};font-family:'JetBrains Mono',monospace;direction:ltr">{{ m.confidence }}٪</div></div>
+                  <span style="{{ m.badgeStyle }}">{{ m.badge }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+        <!-- ===== AI CONTENT & SEO ===== -->
+        <sc-if value="{{ isContent }}" hint-placeholder-val="{{ false }}">
+        <div class="mjsa-2col" style="animation:mjsa-fade .3s both;display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start">
+          <div style="display:grid;gap:16px">
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:20px;display:grid;gap:15px">
+              <div style="display:flex;align-items:center;gap:10px"><span style="width:32px;height:32px;border-radius:9px;background:linear-gradient(140deg,var(--gold2),var(--gold));display:flex;align-items:center;justify-content:center;color:#16140f;font-weight:800;font-size:14px">✦</span><div style="font-size:15px;font-weight:700;color:var(--text)">تولید محتوای سئو</div></div>
+              <div><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:8px">نوع محتوا</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:7px"><sc-for list="{{ contentTypes }}" as="ct" hint-placeholder-count="4"><button onClick="{{ ct.fn }}" style="{{ ct.style }}">{{ ct.l }}</button></sc-for></div></div>
+              <div><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px">موضوع / منطقه</div><input value="{{ topic }}" onInput="{{ onTopic }}" placeholder="مثلاً: بازار مسکن سعادت‌آباد" style="width:100%;border:1px solid var(--line2);border-radius:11px;background:var(--bg2);color:var(--text);font-family:inherit;font-size:13.5px;padding:11px 13px;outline:none"/></div>
+              <button onClick="{{ genContent }}" style="height:46px;border:none;border-radius:13px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-weight:700;font-size:14px;cursor:pointer">{{ contentBtnLabel }}</button>
+              <div style="font-size:11px;color:var(--muted);text-align:center;line-height:1.6">{{ aiStatusLabel }}</div>
+            </div>
+            <!-- SEO auto pipeline -->
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px">
+              <div style="font-size:13.5px;font-weight:700;color:var(--text);margin-bottom:12px">صف تولید خودکار سئو</div>
+              <div style="display:grid;gap:9px"><sc-for list="{{ seoQueue }}" as="sq" hint-placeholder-count="3"><div style="display:flex;align-items:center;gap:9px;font-size:12px"><span style="color:{{ sq.color }}">{{ sq.ic }}</span><span style="flex:1;color:var(--text)">{{ sq.l }}</span><span style="color:var(--muted);font-size:11px">{{ sq.meta }}</span></div></sc-for></div>
+            </div>
+          </div>
+          <div style="background:var(--surface);border:1px solid var(--gold);border-radius:18px;min-height:480px;display:flex;flex-direction:column;overflow:hidden">
+            <div style="padding:15px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px"><span style="font-size:13px;font-weight:700;color:var(--gold)">✦ خروجی</span><sc-if value="{{ contentDone }}" hint-placeholder-val="{{ false }}"><div style="flex:1"></div><span style="font-size:11px;color:var(--muted);background:var(--bg2);border:1px solid var(--line);border-radius:999px;padding:4px 10px">{{ wordCount }} واژه</span><button style="font-size:11.5px;font-weight:700;color:#16140f;background:linear-gradient(140deg,var(--gold2),var(--gold));border:none;border-radius:999px;padding:5px 13px;cursor:pointer;font-family:inherit">انتشار</button></sc-if></div>
+            <div style="flex:1;overflow-y:auto;padding:24px 26px">
+              <sc-if value="{{ contentIdle }}" hint-placeholder-val="{{ true }}"><div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;min-height:340px;gap:14px;text-align:center"><span style="font-size:34px;opacity:.4">✎</span><span style="font-size:13px;color:var(--muted);max-width:250px;line-height:1.8">نوع و موضوع را انتخاب کن و «تولید با AI» را بزن.</span></div></sc-if>
+              <sc-if value="{{ contentThinking }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;min-height:340px;gap:16px"><span style="width:36px;height:36px;border-radius:50%;border:3px solid var(--goldDim);border-top-color:var(--gold);animation:mjsa-spin .8s linear infinite"></span><span style="font-size:13.5px;color:var(--muted)">در حال تولید محتوا…</span></div></sc-if>
+              <sc-if value="{{ contentDone }}" hint-placeholder-val="{{ false }}"><article style="font-size:14.5px;line-height:2;color:var(--text);white-space:pre-wrap">{{ contentOutput }}</article></sc-if>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+        <!-- ===== AI API & MODELS ===== -->
+        <sc-if value="{{ isApi }}" hint-placeholder-val="{{ false }}">
+        <div style="animation:mjsa-fade .3s both;display:grid;gap:18px">
+          <div class="mjsa-kpi" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+            <sc-for list="{{ apiKpis }}" as="k" hint-placeholder-count="4"><div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px"><span style="font-size:12px;color:var(--muted)">{{ k.l }}</span><div style="font-size:22px;font-weight:800;color:{{ k.color }};margin-top:10px;font-family:'JetBrains Mono',monospace;direction:ltr;text-align:right">{{ k.v }}</div><div style="font-size:11px;color:var(--muted);margin-top:3px">{{ k.t }}</div></div></sc-for>
+          </div>
+          <div class="mjsa-2col" style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start">
+            <!-- providers -->
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px">
+              <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:14px">ارائه‌دهندگان و کلیدهای API</div>
+              <div style="display:grid;gap:12px">
+                <sc-for list="{{ providers }}" as="p" hint-placeholder-count="3">
+                  <div style="border:1px solid var(--line);border-radius:13px;padding:14px;background:var(--bg2)">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><div style="display:flex;align-items:center;gap:9px"><span style="width:30px;height:30px;border-radius:8px;background:{{ p.bg }};color:{{ p.color }};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800">{{ p.ic }}</span><span style="font-size:13.5px;font-weight:700;color:var(--text)">{{ p.name }}</span></div><span style="{{ p.statusStyle }}">{{ p.status }}</span></div>
+                    <div style="display:grid;gap:7px">
+                      <div style="display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:8px 11px"><span style="font-size:11px;color:var(--muted);width:36px;flex-shrink:0">لینک</span><span style="flex:1;font-size:11.5px;font-family:'JetBrains Mono',monospace;color:var(--text);direction:ltr;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.endpoint }}</span><button style="font-size:11px;color:var(--gold);background:none;border:none;cursor:pointer;font-family:inherit;font-weight:700">ویرایش</button></div>
+                      <div style="display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:8px 11px"><span style="font-size:11px;color:var(--muted);width:36px;flex-shrink:0">کلید</span><span style="flex:1;font-size:11.5px;font-family:'JetBrains Mono',monospace;color:var(--text);direction:ltr">{{ p.key }}</span><button style="font-size:11px;color:var(--gold);background:none;border:none;cursor:pointer;font-family:inherit;font-weight:700">تغییر</button></div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <!-- model assignment -->
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px">
+              <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:14px">تخصیص مدل به وظایف</div>
+              <div style="display:grid;gap:11px">
+                <sc-for list="{{ modelTasks }}" as="mt" hint-placeholder-count="5"><div style="display:flex;align-items:center;gap:11px;padding:11px 13px;border:1px solid var(--line);border-radius:11px"><span style="width:30px;height:30px;flex-shrink:0;border-radius:8px;background:{{ mt.bg }};color:{{ mt.color }};display:flex;align-items:center;justify-content:center;font-size:13px">{{ mt.ic }}</span><div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:600;color:var(--text)">{{ mt.task }}</div><div style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;direction:ltr">{{ mt.model }}</div></div><span style="font-size:11px;color:var(--gold)">▾</span></div></sc-for>
+              </div>
+            </div>
+          </div>
+          <!-- AGENTS REGISTRY -->
+          <div style="background:var(--surface);border:1px solid var(--gold);border-radius:16px;overflow:hidden">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap;gap:10px"><div><div style="font-size:15px;font-weight:700;color:var(--text)">رجیستری ایجنت‌های هوش مصنوعی</div><div style="font-size:11.5px;color:var(--muted);margin-top:3px">برای هر ایجنت، مدل و <b style="color:var(--gold)">لینک (Endpoint)</b> و <b style="color:var(--gold)">کلید</b> را جداگانه تعریف کن</div></div><button style="height:34px;padding:0 13px;border:none;border-radius:10px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer">＋ ایجنت جدید</button></div>
+            <div style="display:grid">
+              <sc-for list="{{ agents }}" as="ag" hint-placeholder-count="6">
+                <div style="padding:14px 20px;border-top:1px solid var(--line);display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+                  <div style="display:flex;align-items:center;gap:11px;min-width:190px;flex:1"><span style="width:36px;height:36px;flex-shrink:0;border-radius:10px;background:{{ ag.bg }};color:{{ ag.color }};display:flex;align-items:center;justify-content:center;font-size:15px">{{ ag.ic }}</span><div style="min-width:0"><div style="font-size:13px;font-weight:700;color:var(--text)">{{ ag.name }}</div><div style="font-size:10.5px;color:var(--muted)">{{ ag.role }}</div></div></div>
+                  <div style="display:grid;gap:6px;flex:2;min-width:250px">
+                    <div style="display:flex;align-items:center;gap:7px;background:var(--bg2);border:1px solid var(--line);border-radius:9px;padding:7px 10px"><span style="font-size:10px;color:var(--muted);width:38px;flex-shrink:0">مدل</span><span style="flex:1;font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--text);direction:ltr;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ ag.model }}</span></div>
+                    <div style="display:flex;align-items:center;gap:7px;background:var(--bg2);border:1px solid var(--line);border-radius:9px;padding:7px 10px"><span style="font-size:10px;color:var(--muted);width:38px;flex-shrink:0">لینک</span><span style="flex:1;font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--text);direction:ltr;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ ag.endpoint }}</span><button style="font-size:10px;color:var(--gold);background:none;border:none;cursor:pointer;font-family:inherit;font-weight:700">ویرایش</button></div>
+                    <div style="display:flex;align-items:center;gap:7px;background:var(--bg2);border:1px solid var(--line);border-radius:9px;padding:7px 10px"><span style="font-size:10px;color:var(--muted);width:38px;flex-shrink:0">کلید</span><span style="flex:1;font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--text);direction:ltr">{{ ag.key }}</span><button style="font-size:10px;color:var(--gold);background:none;border:none;cursor:pointer;font-family:inherit;font-weight:700">تغییر</button></div>
+                  </div>
+                  <span style="{{ ag.statusStyle }}">{{ ag.status }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <!-- RAG -->
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><div style="font-size:15px;font-weight:700;color:var(--text)">پایگاه دانش RAG</div><button style="height:32px;padding:0 12px;border:1px solid var(--line2);border-radius:9px;background:var(--bg2);color:var(--text);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer">＋ افزودن منبع دانش</button></div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
+              <sc-for list="{{ ragSources }}" as="rs" hint-placeholder-count="4"><div style="border:1px solid var(--line);border-radius:12px;padding:13px;background:var(--bg2)"><div style="display:flex;align-items:center;gap:9px;margin-bottom:9px"><span style="width:28px;height:28px;border-radius:8px;background:{{ rs.bg }};color:{{ rs.color }};display:flex;align-items:center;justify-content:center;font-size:13px">{{ rs.ic }}</span><span style="font-size:12.5px;font-weight:700;color:var(--text)">{{ rs.l }}</span></div><div style="font-size:11px;color:var(--muted)">{{ rs.docs }} سند · {{ rs.status }}</div></div></sc-for>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+        <!-- ===== USERS & ROLES ===== -->
+        <sc-if value="{{ isUsers }}" hint-placeholder-val="{{ false }}">
+        <div style="animation:mjsa-fade .3s both;display:grid;gap:18px">
+          <div class="mjsa-kpi" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px"><sc-for list="{{ userKpis }}" as="k" hint-placeholder-count="4"><div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px"><span style="font-size:12px;color:var(--muted)">{{ k.l }}</span><div style="font-size:23px;font-weight:800;color:{{ k.color }};margin-top:10px">{{ k.v }}</div><div style="font-size:11px;color:var(--muted);margin-top:3px">{{ k.t }}</div></div></sc-for></div>
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap;gap:10px"><div style="font-size:15px;font-weight:700;color:var(--text)">کاربران <span style="font-size:11.5px;color:var(--muted);font-weight:500">— {{ userTotal }} کاربر</span></div><button onClick="{{ openAddUser }}" style="height:36px;padding:0 15px;border:none;border-radius:10px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-weight:700;font-size:12.5px;cursor:pointer">＋ افزودن کاربر</button></div>
+            <div style="display:flex;align-items:center;gap:9px;padding:13px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap">
+              <div style="flex:1;min-width:200px;display:flex;align-items:center;gap:9px;background:var(--bg2);border:1px solid var(--line2);border-radius:11px;padding:9px 13px"><span style="color:var(--muted);font-size:14px">⌕</span><input value="{{ userQuery }}" onInput="{{ onUserQuery }}" placeholder="جستجو میان میلیون‌ها کاربر…" style="flex:1;border:none;outline:none;background:transparent;color:var(--text);font-family:inherit;font-size:13px"/></div>
+              <span style="font-size:11.5px;color:var(--muted)">جستجو بر اساس:</span>
+              <div style="display:flex;gap:6px"><sc-for list="{{ userModes }}" as="um" hint-placeholder-count="3"><button onClick="{{ um.fn }}" style="{{ um.style }}">{{ um.l }}</button></sc-for></div>
+            </div>
+            <div style="display:grid">
+              <sc-for list="{{ usersList }}" as="u" hint-placeholder-count="3">
+                <div style="display:flex;align-items:center;gap:12px;padding:13px 20px;border-top:1px solid var(--line)">
+                  <div style="width:36px;height:36px;flex-shrink:0;border-radius:50%;background:{{ u.av }};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:13px">{{ u.initial }}</div>
+                  <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text)">{{ u.name }}</div><div style="font-size:11px;color:var(--muted);direction:ltr;text-align:right">{{ u.email }}</div></div>
+                  <span style="{{ u.roleStyle }}">{{ u.role }}</span>
+                  <span style="{{ u.statusStyle }}">{{ u.status }}</span>
+                  <button onClick="{{ u.edit }}" style="font-size:11.5px;font-weight:600;color:var(--text);background:var(--bg2);border:1px solid var(--line2);border-radius:8px;padding:6px 11px;font-family:inherit;cursor:pointer" style-hover="border-color:var(--gold)">ویرایش</button>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden">
+            <div style="padding:16px 20px;border-bottom:1px solid var(--line);font-size:15px;font-weight:700;color:var(--text)">نقش‌ها و مجوزها <span style="font-size:11.5px;color:var(--muted);font-weight:500">— روی هر نقش کلیک کن تا دسترسی‌ها باز شود</span></div>
+            <div style="display:grid">
+              <sc-for list="{{ roleRows }}" as="r" hint-placeholder-count="5">
+                <div style="border-top:1px solid var(--line)">
+                  <button onClick="{{ r.toggle }}" style="width:100%;display:flex;align-items:center;gap:12px;padding:13px 18px;background:none;border:none;cursor:pointer;font-family:inherit;text-align:right">
+                    <span style="width:30px;height:30px;border-radius:8px;background:{{ r.bg }};color:{{ r.color }};display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">{{ r.ic }}</span>
+                    <span style="font-size:13px;font-weight:700;color:var(--text)">{{ r.l }}</span>
+                    <span style="font-size:11.5px;color:var(--muted);font-family:'JetBrains Mono',monospace;direction:ltr">{{ r.count }} کاربر</span>
+                    <div style="flex:1"></div>
+                    <span style="font-size:11px;color:var(--muted)">{{ r.permCount }} دسترسی</span>
+                    <span style="color:var(--gold);font-size:13px;transition:.2s;{{ r.caret }}">▾</span>
+                  </button>
+                  <sc-if value="{{ r.open }}" hint-placeholder-val="{{ false }}">
+                    <div style="padding:6px 18px 18px;background:var(--bg2)">
+                      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">دسترسی‌های این نقش را با تیک تنظیم کن:</div>
+                      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:9px">
+                        <sc-for list="{{ r.perms }}" as="p" hint-placeholder-count="7">
+                          <label onClick="{{ p.toggle }}" style="display:flex;align-items:center;gap:9px;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--surface);cursor:pointer">
+                            <span style="{{ p.boxStyle }}">{{ p.check }}</span>
+                            <span style="font-size:12px;color:var(--text)">{{ p.l }}</span>
+                          </label>
+                        </sc-for>
+                      </div>
+                    </div>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+        <!-- ===== HEALTH ===== -->
+        <sc-if value="{{ isHealth }}" hint-placeholder-val="{{ false }}">
+        <div style="animation:mjsa-fade .3s both;display:grid;gap:18px">
+          <div class="mjsa-kpi" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px"><sc-for list="{{ healthKpis }}" as="k" hint-placeholder-count="4"><div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px"><div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12px;color:var(--muted)">{{ k.l }}</span><span style="width:9px;height:9px;border-radius:50%;background:{{ k.dot }}"></span></div><div style="font-size:24px;font-weight:800;color:var(--text);margin-top:12px;letter-spacing:-.5px;font-family:'JetBrains Mono',monospace;direction:ltr;text-align:right">{{ k.v }}</div><div style="font-size:11.5px;color:{{ k.c }};margin-top:4px">{{ k.t }}</div></div></sc-for></div>
+          <div class="mjsa-2col" style="display:grid;grid-template-columns:1.5fr 1fr;gap:18px;align-items:start">
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px"><div style="font-size:15px;font-weight:700;color:var(--text)">ترافیک درخواست‌ها (Req/s)</div><span style="font-size:12px;color:#5fd98a">میانگین ۱٬۲۴۰</span></div><div style="height:120px;display:flex;align-items:flex-end;gap:5px"><sc-for list="{{ trafficBars }}" as="b" hint-placeholder-count="24"><div style="flex:1;border-radius:3px 3px 0 0;height:{{ b.h }};background:{{ b.bg }}"></div></sc-for></div></div>
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px"><div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:16px">وضعیت سرویس‌ها</div><div style="display:grid;gap:12px"><sc-for list="{{ services }}" as="s" hint-placeholder-count="5"><div style="display:flex;align-items:center;gap:11px"><span style="width:9px;height:9px;border-radius:50%;background:{{ s.color }};flex-shrink:0;{{ s.anim }}"></span><span style="flex:1;font-size:13px;color:var(--text)">{{ s.l }}</span><span style="font-size:11.5px;font-family:'JetBrains Mono',monospace;color:var(--muted);direction:ltr">{{ s.meta }}</span></div></sc-for></div></div>
+          </div>
+        </div>
+        </sc-if>
+
+        <!-- ===== SERVERS ===== -->
+        <sc-if value="{{ isServers }}" hint-placeholder-val="{{ false }}">
+        <div style="animation:mjsa-fade .3s both;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">
+          <sc-for list="{{ servers }}" as="sv" hint-placeholder-count="6"><div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px"><span style="width:36px;height:36px;border-radius:10px;background:{{ sv.bg }};color:{{ sv.color }};display:flex;align-items:center;justify-content:center;font-size:16px">{{ sv.ic }}</span><div><div style="font-size:13.5px;font-weight:700;color:var(--text);font-family:'JetBrains Mono',monospace;direction:ltr;text-align:right">{{ sv.name }}</div><div style="font-size:11px;color:var(--muted)">{{ sv.region }}</div></div></div><span style="{{ sv.statusStyle }}">{{ sv.status }}</span></div><div style="display:grid;gap:9px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)"><sc-for list="{{ sv.metrics }}" as="me" hint-placeholder-count="3"><div><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px"><span>{{ me.l }}</span><span style="color:var(--text);font-weight:600">{{ me.v }}</span></div><div style="height:5px;border-radius:3px;background:var(--bg2);overflow:hidden"><div style="height:100%;width:{{ me.v }};background:{{ me.color }};border-radius:3px"></div></div></div></sc-for></div></div></sc-for>
+        </div>
+        </sc-if>
+
+        <!-- ===== QUEUE ===== -->
+        <sc-if value="{{ isQueue }}" hint-placeholder-val="{{ false }}">
+        <div style="animation:mjsa-fade .3s both;display:grid;gap:18px">
+          <div class="mjsa-kpi" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px"><sc-for list="{{ queueKpis }}" as="k" hint-placeholder-count="4"><div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px"><span style="font-size:12px;color:var(--muted)">{{ k.l }}</span><div style="font-size:23px;font-weight:800;color:{{ k.color }};margin-top:10px;font-family:'JetBrains Mono',monospace;direction:ltr;text-align:right">{{ k.v }}</div><div style="font-size:11px;color:var(--muted);margin-top:3px">{{ k.t }}</div></div></sc-for></div>
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden"><div style="padding:16px 20px;border-bottom:1px solid var(--line);font-size:15px;font-weight:700;color:var(--text)">صف‌های پردازش</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:620px"><thead><tr style="background:var(--bg2)"><th style="{{ th }}">صف</th><th style="{{ th }}">در انتظار</th><th style="{{ th }}">نرخ پردازش</th><th style="{{ th }}">تأخیر</th><th style="{{ th }}">وضعیت</th></tr></thead><tbody><sc-for list="{{ queues }}" as="q" hint-placeholder-count="5"><tr style="border-top:1px solid var(--line)"><td style="padding:13px 18px"><div style="display:flex;align-items:center;gap:10px"><span style="width:32px;height:32px;border-radius:9px;background:{{ q.bg }};color:{{ q.color }};display:flex;align-items:center;justify-content:center;font-size:14px">{{ q.ic }}</span><span style="font-size:13.5px;font-weight:600;color:var(--text)">{{ q.l }}</span></div></td><td style="padding:13px 18px;font-size:13px;font-family:'JetBrains Mono',monospace;color:var(--text);direction:ltr">{{ q.pending }}</td><td style="padding:13px 18px;font-size:12.5px;color:var(--muted)">{{ q.rate }}</td><td style="padding:13px 18px;font-size:12.5px;font-family:'JetBrains Mono',monospace;color:var(--muted);direction:ltr">{{ q.lag }}</td><td style="padding:13px 18px"><span style="{{ q.statusStyle }}">{{ q.status }}</span></td></tr></sc-for></tbody></table></div></div>
+        </div>
+        </sc-if>
+
+        <!-- ===== ADS ===== -->
+        <sc-if value="{{ isAds }}" hint-placeholder-val="{{ false }}">
+        <div style="animation:mjsa-fade .3s both;display:grid;gap:18px">
+          <div class="mjsa-kpi" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px"><sc-for list="{{ adsKpis }}" as="k" hint-placeholder-count="4"><div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px"><span style="font-size:12px;color:var(--muted)">{{ k.l }}</span><div style="font-size:23px;font-weight:800;color:{{ k.color }};margin-top:10px">{{ k.v }}</div><div style="font-size:11px;color:var(--muted);margin-top:3px">{{ k.t }}</div></div></sc-for></div>
+          <!-- placement slots picker -->
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><div style="font-size:15px;font-weight:700;color:var(--text)">جایگاه‌های تبلیغ در صفحات پابلیک</div><button onClick="{{ openAddBanner }}" style="height:34px;padding:0 14px;border:none;border-radius:10px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-weight:700;font-size:12px;cursor:pointer">＋ افزودن بنر</button></div>
+            <div style="font-size:11.5px;color:var(--muted);margin-bottom:14px">روی هر جایگاه «＋ قراردادن تبلیغ» را بزن تا بنر در آن نقطه از سایت فعال شود.</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px">
+              <sc-for list="{{ adSlots }}" as="sl" hint-placeholder-count="6">
+                <div style="{{ sl.cardStyle }}">
+                  <div style="display:flex;align-items:center;gap:9px;margin-bottom:8px"><span style="width:30px;height:30px;border-radius:8px;background:{{ sl.bg }};color:{{ sl.color }};display:flex;align-items:center;justify-content:center;font-size:14px">{{ sl.ic }}</span><div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:700;color:var(--text)">{{ sl.l }}</div><div style="font-size:10.5px;color:var(--muted)">{{ sl.page }}</div></div></div>
+                  <div style="font-size:10.5px;color:var(--muted);line-height:1.5;min-height:30px">{{ sl.desc }}</div>
+                  <button onClick="{{ sl.fn }}" style="{{ sl.btnStyle }}">{{ sl.btnLabel }}</button>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden"><div style="padding:16px 20px;border-bottom:1px solid var(--line);font-size:15px;font-weight:700;color:var(--text)">کمپین‌های تبلیغاتی</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:600px"><thead><tr style="background:var(--bg2)"><th style="{{ th }}">تبلیغ‌دهنده</th><th style="{{ th }}">جایگاه</th><th style="{{ th }}">نمایش</th><th style="{{ th }}">CTR</th><th style="{{ th }}">وضعیت</th></tr></thead><tbody><sc-for list="{{ ads }}" as="a" hint-placeholder-count="4"><tr style="border-top:1px solid var(--line)"><td style="padding:13px 18px;font-size:13px;font-weight:600;color:var(--text)">{{ a.advertiser }}</td><td style="padding:13px 18px;font-size:12.5px;color:var(--muted)">{{ a.slot }}</td><td style="padding:13px 18px;font-size:12.5px;font-family:'JetBrains Mono',monospace;color:var(--text);direction:ltr">{{ a.impressions }}</td><td style="padding:13px 18px;font-size:13px;font-weight:700;color:var(--gold)">{{ a.ctr }}</td><td style="padding:13px 18px"><span style="{{ a.statusStyle }}">{{ a.status }}</span></td></tr></sc-for></tbody></table></div></div>
+        </div>
+        </sc-if>
+
+        <!-- ===== AUDIT ===== -->
+        <sc-if value="{{ isAudit }}" hint-placeholder-val="{{ false }}">
+        <div style="animation:mjsa-fade .3s both;background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden"><div style="padding:16px 20px;border-bottom:1px solid var(--line);font-size:15px;font-weight:700;color:var(--text)">لاگ ممیزی سیستم</div><div style="display:grid"><sc-for list="{{ auditLog }}" as="a" hint-placeholder-count="6"><div style="display:flex;align-items:center;gap:13px;padding:13px 20px;border-bottom:1px solid var(--line)"><span style="width:30px;height:30px;flex-shrink:0;border-radius:8px;background:{{ a.bg }};color:{{ a.color }};display:flex;align-items:center;justify-content:center;font-size:13px">{{ a.ic }}</span><div style="flex:1;min-width:0"><div style="font-size:13px;color:var(--text)"><b style="color:{{ a.color }}">{{ a.actor }}</b> {{ a.action }}</div></div><span style="font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--faint);direction:ltr;flex-shrink:0">{{ a.time }}</span></div></sc-for></div></div>
+        </sc-if>
+
+        <!-- ===== PLANS ===== -->
+        <sc-if value="{{ isPlans }}" hint-placeholder-val="{{ false }}">
+        <div style="animation:mjsa-fade .3s both;display:grid;gap:22px">
+          <div style="display:flex;align-items:center;gap:11px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px"><span style="font-size:12.5px;color:var(--muted);line-height:1.7;flex:1">پلن هر بخش جداست. بعضی پلن‌ها <b style="color:#5fd98a">خریدنی</b> (قیمت ثابت) و بعضی <b style="color:var(--gold)">درصدی/کمیسیون</b> از معامله‌اند.</span><button onClick="{{ openAddPlan }}" style="height:38px;padding:0 16px;border:none;border-radius:10px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-weight:700;font-size:12.5px;cursor:pointer;white-space:nowrap">＋ افزودن پلن</button></div>
+          <sc-for list="{{ planGroups }}" as="g" hint-placeholder-count="4">
+            <div>
+              <div style="display:flex;align-items:center;gap:9px;margin-bottom:13px"><span style="width:30px;height:30px;border-radius:9px;background:{{ g.bg }};color:{{ g.color }};display:flex;align-items:center;justify-content:center;font-size:14px">{{ g.ic }}</span><div style="font-size:15px;font-weight:700;color:var(--text)">{{ g.seg }}</div><span style="{{ g.typeStyle }}">{{ g.typeLabel }}</span></div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px">
+                <sc-for list="{{ g.plans }}" as="p" hint-placeholder-count="3">
+                  <div style="{{ p.cardStyle }}">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><span style="font-size:14px;font-weight:700;color:var(--text)">{{ p.name }}</span><span style="{{ p.kindStyle }}">{{ p.kind }}</span></div>
+                    <div style="display:flex;align-items:baseline;gap:5px"><span style="font-size:21px;font-weight:800;color:var(--gold)">{{ p.price }}</span><span style="font-size:11px;color:var(--muted)">{{ p.unit }}</span></div>
+                    <div style="font-size:11.5px;color:var(--muted);margin-top:10px;padding-top:10px;border-top:1px solid var(--line);line-height:1.6">{{ p.features }}</div>
+                    <div style="display:flex;align-items:center;gap:7px;margin-top:12px"><button style="flex:1;font-size:12px;font-weight:600;color:var(--text);background:var(--bg2);border:1px solid var(--line2);border-radius:9px;padding:8px;font-family:inherit;cursor:pointer">ویرایش</button><span style="{{ p.statusStyle }}">{{ p.status }}</span></div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+          <sc-if value="{{ hasCustomPlans }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <div style="display:flex;align-items:center;gap:9px;margin-bottom:13px"><span style="width:30px;height:30px;border-radius:9px;background:var(--goldDim);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:14px">＋</span><div style="font-size:15px;font-weight:700;color:var(--text)">پلن‌های سفارشی</div></div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px">
+                <sc-for list="{{ customPlansList }}" as="p" hint-placeholder-count="1">
+                  <div style="border:1px solid var(--gold);border-radius:15px;padding:16px;background:var(--surface)">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><span style="font-size:14px;font-weight:700;color:var(--text)">{{ p.name }}</span><span style="{{ p.kindStyle }}">{{ p.kind }}</span></div>
+                    <div style="font-size:21px;font-weight:800;color:var(--gold)">{{ p.price }}</div>
+                    <div style="font-size:11px;color:#5fd98a;margin-top:8px">✓ ساخته شد</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+        </sc-if>
+
+        <!-- ===== PROMOTIONS ===== -->
+        <sc-if value="{{ isPromos }}" hint-placeholder-val="{{ false }}">
+        <div style="animation:mjsa-fade .3s both;display:grid;gap:18px">
+          <div class="mjsa-kpi" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px"><sc-for list="{{ promoKpis }}" as="k" hint-placeholder-count="4"><div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px"><span style="font-size:12px;color:var(--muted)">{{ k.l }}</span><div style="font-size:23px;font-weight:800;color:{{ k.color }};margin-top:10px">{{ k.v }}</div><div style="font-size:11px;color:var(--muted);margin-top:3px">{{ k.t }}</div></div></sc-for></div>
+          <!-- promo products -->
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:13px"><div style="font-size:15px;font-weight:700;color:var(--text)">محصولات پروموت</div><button onClick="{{ openAddPromo }}" style="height:36px;padding:0 15px;border:none;border-radius:10px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-weight:700;font-size:12.5px;cursor:pointer">＋ افزودن پروموت</button></div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px">
+              <sc-for list="{{ promoProducts }}" as="p" hint-placeholder-count="4">
+                <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px" style-hover="border-color:var(--gold)">
+                  <div style="display:flex;align-items:center;gap:10px;margin-bottom:11px"><span style="width:38px;height:38px;border-radius:11px;background:{{ p.bg }};color:{{ p.color }};display:flex;align-items:center;justify-content:center;font-size:17px">{{ p.ic }}</span><div style="font-size:13.5px;font-weight:700;color:var(--text)">{{ p.l }}</div></div>
+                  <div style="font-size:11.5px;color:var(--muted);line-height:1.7;min-height:48px">{{ p.desc }}</div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)"><span style="font-size:11px;color:var(--muted)">{{ p.placement }}</span><span style="font-size:13.5px;font-weight:800;color:var(--gold)">{{ p.price }}</span></div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <!-- active promotions -->
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden">
+            <div style="padding:16px 20px;border-bottom:1px solid var(--line);font-size:15px;font-weight:700;color:var(--text)">پروموت‌های فعال</div>
+            <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:720px">
+              <thead><tr style="background:var(--bg2)"><th style="{{ th }}">تبلیغ‌دهنده</th><th style="{{ th }}">نوع پروموت</th><th style="{{ th }}">جایگاه</th><th style="{{ th }}">هدف (شهر / محله)</th><th style="{{ th }}">پایان</th><th style="{{ th }}">وضعیت</th></tr></thead>
+              <tbody>
+                <sc-for list="{{ activePromos }}" as="a" hint-placeholder-count="5">
+                  <tr style="border-top:1px solid var(--line)">
+                    <td style="padding:13px 18px"><div style="display:flex;align-items:center;gap:10px"><span style="width:30px;height:30px;border-radius:8px;background:{{ a.bg }};color:{{ a.color }};display:flex;align-items:center;justify-content:center;font-size:13px">{{ a.ic }}</span><span style="font-size:13px;font-weight:600;color:var(--text)">{{ a.advertiser }}</span></div></td>
+                    <td style="padding:13px 18px;font-size:12.5px;color:var(--text)">{{ a.type }}</td>
+                    <td style="padding:13px 18px;font-size:12px;color:var(--muted)">{{ a.placement }}</td>
+                    <td style="padding:13px 18px"><span style="font-size:11.5px;font-weight:700;color:var(--gold);background:var(--goldDim);border:1px solid var(--gold);border-radius:999px;padding:3px 10px">{{ a.target }}</span></td>
+                    <td style="padding:13px 18px;font-size:12px;color:var(--muted)">{{ a.ends }}</td>
+                    <td style="padding:13px 18px"><span style="{{ a.statusStyle }}">{{ a.status }}</span></td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table></div>
+          </div>
+        </div>
+        </sc-if>
+
+        <!-- ===== REPORTS (Big Data + AI forecast) ===== -->
+        <sc-if value="{{ isReports }}" hint-placeholder-val="{{ false }}">
+        <div style="animation:mjsa-fade .3s both;display:grid;gap:18px">
+          <div class="mjsa-kpi" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px"><sc-for list="{{ repKpis }}" as="k" hint-placeholder-count="4"><div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px"><span style="font-size:12px;color:var(--muted)">{{ k.l }}</span><div style="font-size:22px;font-weight:800;color:{{ k.color }};margin-top:10px;font-family:'JetBrains Mono',monospace;direction:ltr;text-align:right">{{ k.v }}</div><div style="font-size:11px;color:var(--muted);margin-top:3px">{{ k.t }}</div></div></sc-for></div>
+          <!-- range selector -->
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px"><span style="font-size:12.5px;font-weight:600;color:var(--text)">بازه‌ی زمانی گزارش:</span><div style="display:flex;gap:7px"><sc-for list="{{ repRanges }}" as="r" hint-placeholder-count="4"><button onClick="{{ r.fn }}" style="{{ r.style }}">{{ r.l }}</button></sc-for></div></div>
+          <div class="mjsa-2col" style="display:grid;grid-template-columns:1.5fr 1fr;gap:18px;align-items:start">
+            <!-- trend chart -->
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px"><div style="font-size:15px;font-weight:700;color:var(--text)">روند شاخص قیمت ({{ repRange }})</div><span style="font-size:12px;color:#e7674a">↑ روند صعودی</span></div>
+              <div style="height:150px;display:flex;align-items:flex-end;gap:6px"><sc-for list="{{ repTrend }}" as="b" hint-placeholder-count="12"><div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end"><div style="width:100%;border-radius:4px 4px 0 0;height:{{ b.h }};background:{{ b.bg }}"></div><span style="font-size:9px;color:var(--faint)">{{ b.l }}</span></div></sc-for></div>
+            </div>
+            <!-- forecast cards -->
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px">
+              <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:14px">پیش‌بینی نوسان قیمت</div>
+              <div style="display:grid;gap:11px"><sc-for list="{{ repForecasts }}" as="f" hint-placeholder-count="4"><div style="display:flex;align-items:center;gap:11px;padding:11px 13px;border:1px solid var(--line);border-radius:11px;background:var(--bg2)"><span style="width:30px;height:30px;flex-shrink:0;border-radius:8px;background:{{ f.color }}22;color:{{ f.color }};display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800">{{ f.ic }}</span><div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:600;color:var(--text)">{{ f.l }}</div><div style="font-size:11px;color:{{ f.color }}">{{ f.dir }}</div></div><span style="font-size:11.5px;font-weight:700;color:{{ f.color }};font-family:'JetBrains Mono',monospace;direction:ltr">{{ f.pct }}</span></div></sc-for></div>
+            </div>
+          </div>
+          <!-- AI report generator -->
+          <div style="background:var(--surface);border:1px solid var(--gold);border-radius:16px;overflow:hidden">
+            <div style="padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px"><span style="width:30px;height:30px;border-radius:9px;background:linear-gradient(140deg,var(--gold2),var(--gold));display:flex;align-items:center;justify-content:center;color:#16140f;font-weight:800;font-size:14px">✦</span><div style="font-size:15px;font-weight:700;color:var(--text)">گزارش پیش‌بینی هوش مصنوعی از کلان‌داده</div></div>
+            <div style="padding:20px">
+              <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:8px">موضوع تحلیل</div>
+              <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px"><sc-for list="{{ repTopics }}" as="t" hint-placeholder-count="5"><button onClick="{{ t.fn }}" style="{{ t.style }}">{{ t.l }}</button></sc-for></div>
+              <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:8px">یا سؤال دلخواه بنویس (هر تحلیلی از کلان‌داده)</div>
+              <textarea value="{{ repCustom }}" onInput="{{ onRepCustom }}" rows="2" placeholder="مثلاً: احتمال افزایش قیمت میلگرد در ۳ ماه آینده چقدر است و چرا؟" style="width:100%;border:1px solid var(--line2);border-radius:11px;background:var(--bg2);color:var(--text);font-family:inherit;font-size:13px;line-height:1.7;padding:11px 13px;outline:none;resize:none;margin-bottom:16px"></textarea>
+              <button onClick="{{ genReport }}" style="height:46px;padding:0 20px;border:none;border-radius:13px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-weight:700;font-size:14px;cursor:pointer">{{ repBtnLabel }}</button>
+              <sc-if value="{{ repThinking }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:12px;margin-top:18px"><span style="width:28px;height:28px;border-radius:50%;border:3px solid var(--goldDim);border-top-color:var(--gold);animation:mjsa-spin .8s linear infinite"></span><span style="font-size:13px;color:var(--muted)">در حال تحلیل {{ repRange }} داده…</span></div></sc-if>
+              <sc-if value="{{ repDone }}" hint-placeholder-val="{{ false }}"><div style="margin-top:18px;padding:16px 18px;background:var(--bg2);border:1px solid var(--line);border-radius:13px;font-size:13.5px;line-height:2;color:var(--text);white-space:pre-wrap">{{ repOut }}</div><div style="display:flex;gap:9px;margin-top:12px"><button style="font-size:12px;font-weight:700;color:#16140f;background:linear-gradient(140deg,var(--gold2),var(--gold));border:none;border-radius:9px;padding:9px 15px;cursor:pointer;font-family:inherit">خروجی PDF</button><button style="font-size:12px;font-weight:700;color:var(--gold);background:var(--goldDim);border:1px solid var(--gold);border-radius:9px;padding:9px 15px;cursor:pointer;font-family:inherit">فروش این گزارش</button></div></sc-if>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+        <!-- ===== SETTINGS ===== -->
+        <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+        <div style="animation:mjsa-fade .3s both;display:grid;grid-template-columns:1fr 1fr;gap:16px" class="mjsa-2col">
+          <sc-for list="{{ settingsGroups }}" as="g" hint-placeholder-count="6">
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden">
+              <div style="display:flex;align-items:center;gap:10px;padding:15px 18px;border-bottom:1px solid var(--line)"><span style="width:32px;height:32px;border-radius:9px;background:var(--goldDim);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:15px">{{ g.ic }}</span><div style="font-size:14.5px;font-weight:700;color:var(--text)">{{ g.t }}</div></div>
+              <div style="display:grid">
+                <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="4">
+                  <div style="display:flex;align-items:center;gap:12px;padding:12px 18px;border-top:1px solid var(--line)">
+                    <span style="flex:1;font-size:12.5px;color:var(--text)">{{ r.label }}</span>
+                    <sc-if value="{{ r.isText }}" hint-placeholder-val="{{ true }}"><span style="font-size:12px;font-weight:600;color:var(--muted);background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:5px 11px;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.v }}</span></sc-if>
+                    <sc-if value="{{ r.isToggle }}" hint-placeholder-val="{{ false }}"><button onClick="{{ r.fn }}" style="{{ r.switchStyle }}"><span style="{{ r.knobStyle }}"></span></button></sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        </sc-if>
+
+        <!-- ===== TOKENS ===== -->
+        <sc-if value="{{ isTokens }}" hint-placeholder-val="{{ false }}">
+        <div style="animation:mjsa-fade .3s both;display:grid;gap:18px">
+          <div class="mjsa-kpi" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px"><sc-for list="{{ tokenKpis }}" as="k" hint-placeholder-count="4"><div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px"><span style="font-size:12px;color:var(--muted)">{{ k.l }}</span><div style="font-size:22px;font-weight:800;color:{{ k.color }};margin-top:10px">{{ k.v }}</div><div style="font-size:11px;color:var(--muted);margin-top:3px">{{ k.t }}</div></div></sc-for></div>
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden"><div style="padding:16px 20px;border-bottom:1px solid var(--line);font-size:15px;font-weight:700;color:var(--text)">سقف توکن هر پروفایل</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:520px"><thead><tr style="background:var(--bg2)"><th style="{{ th }}">پروفایل</th><th style="{{ th }}">سقف ماهانه</th><th style="{{ th }}">مصرف</th><th style="{{ th }}">وضعیت</th></tr></thead><tbody><sc-for list="{{ tokenQuotas }}" as="q" hint-placeholder-count="6"><tr style="border-top:1px solid var(--line)"><td style="padding:13px 18px;font-size:13px;font-weight:600;color:var(--text)">{{ q.role }}</td><td style="padding:13px 18px;font-size:13px;font-family:'JetBrains Mono',monospace;color:var(--gold);direction:ltr">{{ q.quota }}</td><td style="padding:13px 18px"><div style="display:flex;align-items:center;gap:8px"><div style="width:60px;height:6px;border-radius:4px;background:var(--bg2);overflow:hidden"><div style="height:100%;width:{{ q.used }};background:{{ q.color }};border-radius:4px"></div></div><span style="font-size:11.5px;color:var(--muted)">{{ q.used }}</span></div></td><td style="padding:13px 18px"><button style="font-size:11.5px;font-weight:700;color:var(--gold);background:var(--goldDim);border:1px solid var(--gold);border-radius:8px;padding:6px 11px;cursor:pointer;font-family:inherit">تنظیم سقف</button></td></tr></sc-for></tbody></table></div></div>
+          <div style="background:var(--surface);border:1px solid var(--gold);border-radius:16px;padding:20px"><div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">فروش بسته‌ی توکن</div><div style="font-size:11.5px;color:var(--muted);margin-bottom:14px">پروفایل‌هایی که سقف را رد می‌کنند، می‌توانند بسته‌ی توکن بخرند.</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px"><sc-for list="{{ tokenPacks }}" as="p" hint-placeholder-count="4"><div style="border:1px solid var(--line);border-radius:13px;padding:15px;background:var(--bg2);text-align:center"><div style="font-size:13.5px;font-weight:700;color:var(--text)">{{ p.l }}</div><div style="font-size:11.5px;color:var(--muted);margin-top:4px">{{ p.amt }}</div><div style="font-size:16px;font-weight:800;color:var(--gold);margin-top:10px">{{ p.price }}</div></div></sc-for></div></div>
+        </div>
+        </sc-if>
+
+        <!-- ===== SEO ===== -->
+        <sc-if value="{{ isSeo }}" hint-placeholder-val="{{ false }}">
+        <div class="mjsa-2col" style="animation:mjsa-fade .3s both;display:grid;grid-template-columns:1.4fr 1fr;gap:18px;align-items:start">
+          <div style="display:grid;gap:18px">
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden"><div style="padding:16px 20px;border-bottom:1px solid var(--line);font-size:15px;font-weight:700;color:var(--text)">الگوهای متا و عنوان</div><div style="display:grid"><sc-for list="{{ seoRows }}" as="r" hint-placeholder-count="5"><div style="display:flex;align-items:center;gap:12px;padding:12px 18px;border-top:1px solid var(--line)"><span style="flex:1;font-size:12.5px;color:var(--text)">{{ r.l }}</span><span style="font-size:12px;color:var(--muted);background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:5px 11px;max-width:240px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:ltr">{{ r.v }}</span></div></sc-for></div></div>
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px"><div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:14px">امتیاز سئوی صفحات</div><div style="display:grid;gap:11px"><sc-for list="{{ seoPages }}" as="p" hint-placeholder-count="4"><div style="display:flex;align-items:center;gap:11px"><span style="flex:1;font-size:12.5px;color:var(--text)">{{ p.l }}</span><div style="width:90px;height:6px;border-radius:4px;background:var(--bg2);overflow:hidden"><div style="height:100%;width:{{ p.score }}%;background:{{ p.color }};border-radius:4px"></div></div><span style="font-size:12px;font-weight:700;color:{{ p.color }};font-family:'JetBrains Mono',monospace">{{ p.score }}</span></div></sc-for></div></div>
+          </div>
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px"><div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:14px">تنظیمات فنی سئو</div><div style="display:grid;gap:8px"><sc-for list="{{ seoToggles }}" as="t" hint-placeholder-count="5"><div style="display:flex;align-items:center;gap:11px;padding:10px 12px;border:1px solid var(--line);border-radius:11px;background:var(--bg2)"><span style="flex:1;font-size:12px;color:var(--text)">{{ t.l }}</span><button onClick="{{ t.fn }}" style="{{ t.switchStyle }}"><span style="{{ t.knobStyle }}"></span></button></div></sc-for></div><button style="width:100%;margin-top:14px;height:42px;border:none;border-radius:12px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer">✦ پیشنهاد بهبود سئو با AI</button></div>
+        </div>
+        </sc-if>
+
+        <!-- ===== FINANCE ===== -->
+        <sc-if value="{{ isFinance }}" hint-placeholder-val="{{ false }}">
+        <div class="mjsa-2col" style="animation:mjsa-fade .3s both;display:grid;grid-template-columns:1.4fr 1fr;gap:18px;align-items:start">
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden"><div style="padding:16px 20px;border-bottom:1px solid var(--line);font-size:15px;font-weight:700;color:var(--text)">نرخ کمیسیون و مالی</div><div style="display:grid"><sc-for list="{{ finRows }}" as="r" hint-placeholder-count="7"><div style="display:flex;align-items:center;gap:12px;padding:13px 18px;border-top:1px solid var(--line)"><span style="flex:1;font-size:12.5px;color:var(--text)">{{ r.l }}</span><input value="{{ r.v }}" onInput="{{ r.fn }}" style="width:160px;font-size:13px;font-weight:700;color:var(--gold);background:var(--goldDim);border:1px solid var(--gold);border-radius:8px;padding:6px 12px;outline:none;font-family:inherit;text-align:center"/></div></sc-for></div></div>
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px"><div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:14px">درگاه‌ها و تسویه</div><div style="display:grid;gap:11px"><sc-for list="{{ finGateways }}" as="g" hint-placeholder-count="4"><div style="display:flex;align-items:center;gap:11px;padding:12px;border:1px solid var(--line);border-radius:11px;background:var(--bg2)"><span style="flex:1;font-size:12.5px;font-weight:600;color:var(--text)">{{ g.l }}</span><span style="font-size:11.5px;font-weight:700;color:{{ g.c }}">{{ g.status }}</span></div></sc-for></div></div>
+        </div>
+        </sc-if>
+
+        <!-- ===== SITE CAMPAIGNS ===== -->
+        <sc-if value="{{ isCampaigns }}" hint-placeholder-val="{{ false }}">
+        <div style="animation:mjsa-fade .3s both;display:grid;gap:18px">
+          <div class="mjsa-kpi" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px"><sc-for list="{{ campViews }}" as="k" hint-placeholder-count="4"><div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px"><span style="font-size:12px;color:var(--muted)">{{ k.l }}</span><div style="font-size:22px;font-weight:800;color:{{ k.c }};margin-top:10px">{{ k.v }}</div></div></sc-for></div>
+          <div style="background:var(--surface);border:1px solid var(--gold);border-radius:16px;padding:20px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><span style="width:30px;height:30px;border-radius:9px;background:linear-gradient(140deg,var(--gold2),var(--gold));display:flex;align-items:center;justify-content:center;color:#16140f;font-weight:800;font-size:14px">✦</span><div style="font-size:15px;font-weight:700;color:var(--text)">کمپین سراسری سایت با کمک AI</div></div>
+            <div style="display:grid;gap:14px"><div><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px">مخاطب هدف</div><select style="{{ selectStyle }}"><option>همه پروفایل‌ها</option><option>کاربران عادی (خریدار/فروشنده)</option><option>کاربران غیرفعال</option><option>مشاوران</option><option>آژانس‌ها</option><option>سازندگان</option><option>مصالح‌فروشان</option><option>خدمات تخصصی</option><option>بازدیدکنندگان مهمان (جذب عضو)</option></select></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px">کانال</div><select style="{{ selectStyle }}"><option>ایمیل + پیامک + پوش</option><option>فقط پیامک</option><option>واتساپ</option><option>پوش اپلیکیشن</option></select></div><div><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px">هدف کمپین</div><select style="{{ selectStyle }}"><sc-for list="{{ campGoals }}" as="g" hint-placeholder-count="6"><option value="{{ g }}">{{ g }}</option></sc-for></select></div></div><button style="height:46px;border:none;border-radius:13px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-weight:700;font-size:14px;cursor:pointer">✦ تولید و زمان‌بندی کمپین با AI</button></div>
+          </div>
+          <!-- profile-run campaign pricing -->
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line)"><div><div style="font-size:15px;font-weight:700;color:var(--text)">هزینه کمپین‌های پروفایل‌ها</div><div style="font-size:11.5px;color:var(--muted);margin-top:3px">قیمت کمپین‌هایی که پروفایل‌ها برگزار می‌کنند را اینجا تعیین کن</div></div></div>
+            <div style="display:grid"><sc-for list="{{ campPricing }}" as="c" hint-placeholder-count="6"><div style="display:flex;align-items:center;gap:12px;padding:13px 20px;border-top:1px solid var(--line)"><span style="flex:1;font-size:13px;color:var(--text)">{{ c.l }}</span><span style="font-size:11.5px;color:var(--muted)">{{ c.unit }}</span><input value="{{ c.price }}" style="width:140px;font-size:13px;font-weight:700;color:var(--gold);background:var(--goldDim);border:1px solid var(--gold);border-radius:8px;padding:6px 12px;outline:none;font-family:inherit;text-align:center"/></div></sc-for></div>
+          </div>
+        </div>
+        </sc-if>
+
+        <!-- ===== BEHAVIOR TRACKING & TRIGGERS ===== -->
+        <sc-if value="{{ isBehavior }}" hint-placeholder-val="{{ false }}">
+        <div style="animation:mjsa-fade .3s both;display:grid;gap:18px">
+          <div class="mjsa-kpi" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px"><sc-for list="{{ behKpis }}" as="k" hint-placeholder-count="4"><div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px"><span style="font-size:12px;color:var(--muted)">{{ k.l }}</span><div style="font-size:22px;font-weight:800;color:{{ k.c }};margin-top:10px">{{ k.v }}</div></div></sc-for></div>
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px"><div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">ردیابی مسیر کاربر</div><div style="font-size:11.5px;color:var(--muted);margin-bottom:14px">کاربر لاگین‌کرده با کوکی شناسایی و در هر بازدید مسیرش ثبت می‌شود.</div><div style="display:grid;gap:9px;max-width:520px"><sc-for list="{{ behToggles }}" as="t" hint-placeholder-count="2"><div style="display:flex;align-items:center;gap:11px;padding:11px 13px;border:1px solid var(--line);border-radius:11px;background:var(--bg2)"><span style="flex:1;font-size:12.5px;color:var(--text)">{{ t.l }}</span><button onClick="{{ t.fn }}" style="{{ t.switchStyle }}"><span style="{{ t.knobStyle }}"></span></button></div></sc-for></div></div>
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:13px"><div><div style="font-size:15px;font-weight:700;color:var(--text)">قوانین تریگر خودکار</div><div style="font-size:11.5px;color:var(--muted);margin-top:3px">اگر کاربر بیش از زمان تعیین‌شده در صفحه ماند و اقدام نکرد، پیامک تشویقی می‌رود.</div></div><button style="height:36px;padding:0 14px;border:none;border-radius:10px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-weight:700;font-size:12.5px;cursor:pointer">＋ قانون جدید</button></div>
+            <div style="display:grid;gap:12px">
+              <sc-for list="{{ triggersList }}" as="t" hint-placeholder-count="5">
+                <div style="{{ t.cardStyle }}">
+                  <div style="display:flex;align-items:center;gap:11px;margin-bottom:12px"><span style="width:32px;height:32px;border-radius:9px;background:var(--goldDim);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:14px">◷</span><div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:700;color:var(--text)">{{ t.page }}</div><div style="font-size:11.5px;color:var(--muted);margin-top:2px">اگر: {{ t.action }}</div></div><button onClick="{{ t.onToggle }}" style="{{ t.switchStyle }}"><span style="{{ t.knobStyle }}"></span></button></div>
+                  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-top:12px;border-top:1px solid var(--line)">
+                    <div style="display:flex;align-items:center;gap:7px"><span style="font-size:11.5px;color:var(--muted)">ماندن بیش از</span><input value="{{ t.dwell }}" onInput="{{ t.onDwell }}" style="width:60px;font-size:12.5px;font-weight:700;color:var(--gold);background:var(--bg2);border:1px solid var(--line2);border-radius:8px;padding:6px 8px;outline:none;font-family:inherit;text-align:center"/><span style="font-size:11.5px;color:var(--muted)">ثانیه</span></div>
+                    <div style="flex:1;min-width:200px;display:flex;align-items:center;gap:8px;background:var(--bg2);border:1px solid var(--line);border-radius:9px;padding:8px 11px"><span style="font-size:11px;color:var(--gold);flex-shrink:0">✆ پیامک:</span><span style="flex:1;font-size:11.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.sms }}</span></div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+        <!-- ===== SMS GATEWAY (IPPanel) ===== -->
+        <sc-if value="{{ isSms }}" hint-placeholder-val="{{ false }}">
+        <div style="animation:mjsa-fade .3s both;display:grid;gap:18px">
+          <div class="mjsa-kpi" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px"><sc-for list="{{ smsKpis }}" as="k" hint-placeholder-count="4"><div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px"><span style="font-size:12px;color:var(--muted)">{{ k.l }}</span><div style="font-size:22px;font-weight:800;color:{{ k.c }};margin-top:10px">{{ k.v }}</div></div></sc-for></div>
+          <div class="mjsa-2col" style="display:grid;grid-template-columns:1.3fr 1fr;gap:18px;align-items:start">
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden"><div style="display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--line)"><span style="width:30px;height:30px;border-radius:9px;background:rgba(95,217,138,0.15);color:#5fd98a;display:flex;align-items:center;justify-content:center;font-size:14px">✆</span><div style="font-size:15px;font-weight:700;color:var(--text)">اتصال به IPPanel</div><span style="margin-right:auto;font-size:11px;font-weight:700;color:#5fd98a;background:rgba(95,217,138,0.12);border:1px solid rgba(95,217,138,0.4);border-radius:999px;padding:3px 10px">متصل ✓</span></div><div style="display:grid"><sc-for list="{{ smsRows }}" as="r" hint-placeholder-count="6"><div style="display:flex;align-items:center;gap:12px;padding:12px 18px;border-top:1px solid var(--line)"><span style="flex:1;font-size:12.5px;color:var(--text)">{{ r.l }}</span><span style="font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--muted);background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:5px 11px;direction:ltr">{{ r.v }}</span></div></sc-for></div></div>
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px"><div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:14px">الگوهای پیامک</div><div style="display:grid;gap:9px"><sc-for list="{{ smsTemplates }}" as="t" hint-placeholder-count="4"><div style="display:flex;align-items:center;gap:11px;padding:11px;border:1px solid var(--line);border-radius:11px;background:var(--bg2)"><span style="flex:1;font-size:12.5px;color:var(--text)">{{ t.l }}</span><span style="font-size:10.5px;font-weight:700;color:var(--gold)">{{ t.type }}</span></div></sc-for></div><button style="width:100%;margin-top:13px;height:40px;border:1px solid var(--line2);border-radius:11px;background:var(--bg2);color:var(--text);font-family:inherit;font-weight:600;font-size:12.5px;cursor:pointer">＋ الگوی جدید</button></div>
+          </div>
+        </div>
+        </sc-if>
+
+        <!-- ===== CRM SETTINGS ===== -->
+        <sc-if value="{{ isCrmset }}" hint-placeholder-val="{{ false }}">
+        <div class="mjsa-2col" style="animation:mjsa-fade .3s both;display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <sc-for list="{{ crmsetGroups }}" as="g" hint-placeholder-count="3"><div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden"><div style="display:flex;align-items:center;gap:10px;padding:15px 18px;border-bottom:1px solid var(--line)"><span style="width:32px;height:32px;border-radius:9px;background:var(--goldDim);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:15px">{{ g.ic }}</span><div style="font-size:14.5px;font-weight:700;color:var(--text)">{{ g.t }}</div></div><div style="display:grid"><sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="4"><div style="display:flex;align-items:center;gap:12px;padding:12px 18px;border-top:1px solid var(--line)"><span style="flex:1;font-size:12.5px;color:var(--text)">{{ r.l }}</span><span style="font-size:12px;font-weight:600;color:var(--muted);background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:5px 11px;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.v }}</span></div></sc-for></div></div></sc-for>
+        </div>
+        </sc-if>
+
+        <!-- ===== FLAGS ===== -->
+        <sc-if value="{{ isFlags }}" hint-placeholder-val="{{ false }}">
+        <div style="animation:mjsa-fade .3s both;display:grid;gap:11px;max-width:760px">
+          <sc-for list="{{ flags }}" as="fl" hint-placeholder-count="5"><div style="display:flex;align-items:center;gap:14px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:15px 18px"><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700;color:var(--text)">{{ fl.l }}</div><div style="font-size:11.5px;color:var(--muted);margin-top:3px">{{ fl.desc }}</div></div><sc-if value="{{ fl.rollout }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--gold);background:var(--goldDim);border:1px solid var(--gold);border-radius:999px;padding:3px 9px;direction:ltr">{{ fl.rollout }}</span></sc-if><button onClick="{{ fl.fn }}" aria-label="flag" style="{{ fl.switchStyle }}"><span style="{{ fl.knobStyle }}"></span></button></div></sc-for>
+        </div>
+        </sc-if>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- EDIT USER MODAL -->
+  <sc-if value="{{ editOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeEdit }}" style="position:fixed;inset:0;z-index:81;background:rgba(0,0,0,0.55);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;animation:mjsa-fade .2s both">
+      <div style="width:min(440px,100%);background:var(--surface);border:1px solid var(--line2);border-radius:20px;overflow:hidden;box-shadow:0 30px 70px -20px rgba(0,0,0,0.7)">
+        <div style="padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between"><div style="font-size:16px;font-weight:800;color:var(--text)">ویرایش کاربر</div><button onClick="{{ closeEdit }}" style="width:30px;height:30px;border:none;border-radius:8px;background:var(--bg2);color:var(--muted);cursor:pointer;font-size:16px">×</button></div>
+        <div style="padding:22px;display:grid;gap:15px">
+          <div><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px">نام و نام خانوادگی</div><input value="{{ eName }}" onInput="{{ onEName }}" style="width:100%;border:1px solid var(--line2);border-radius:11px;background:var(--bg2);color:var(--text);font-family:inherit;font-size:13.5px;padding:11px 13px;outline:none"/></div>
+          <div><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px">ایمیل</div><input value="{{ eEmail }}" onInput="{{ onEEmail }}" style="width:100%;border:1px solid var(--line2);border-radius:11px;background:var(--bg2);color:var(--text);font-family:inherit;font-size:13.5px;padding:11px 13px;outline:none;direction:ltr;text-align:left"/></div>
+          <div><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px">نقش</div><input value="{{ eRole }}" onInput="{{ onERole }}" style="width:100%;border:1px solid var(--line2);border-radius:11px;background:var(--bg2);color:var(--text);font-family:inherit;font-size:13.5px;padding:11px 13px;outline:none"/></div>
+        </div>
+        <div style="padding:0 22px 22px;display:flex;gap:10px"><button onClick="{{ closeEdit }}" style="flex:1;height:44px;border:1px solid var(--line2);border-radius:12px;background:transparent;color:var(--text);font-family:inherit;font-weight:600;font-size:13.5px;cursor:pointer">انصراف</button><button onClick="{{ saveEdit }}" style="flex:1;height:44px;border:none;border-radius:12px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-weight:700;font-size:13.5px;cursor:pointer">ذخیره تغییرات</button></div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ADD MODAL -->
+  <sc-if value="{{ modalOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeModal }}" style="position:fixed;inset:0;z-index:80;background:rgba(0,0,0,0.55);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;animation:mjsa-fade .2s both">
+      <div style="width:min(440px,100%);background:var(--surface);border:1px solid var(--line2);border-radius:20px;overflow:hidden;box-shadow:0 30px 70px -20px rgba(0,0,0,0.7)">
+        <div style="padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between"><div style="font-size:16px;font-weight:800;color:var(--text)">{{ modalTitle }}</div><button onClick="{{ closeModal }}" style="width:30px;height:30px;border:none;border-radius:8px;background:var(--bg2);color:var(--muted);cursor:pointer;font-size:16px">×</button></div>
+        <div style="padding:22px;display:grid;gap:15px">
+          <sc-for list="{{ modalFields }}" as="f" hint-placeholder-count="3">
+            <div><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px">{{ f.l }}</div><input value="{{ f.value }}" onInput="{{ f.onInput }}" placeholder="{{ f.ph }}" style="width:100%;border:1px solid var(--line2);border-radius:11px;background:var(--bg2);color:var(--text);font-family:inherit;font-size:13.5px;padding:11px 13px;outline:none"/></div>
+          </sc-for>
+          <sc-if value="{{ modalIsPlan }}" hint-placeholder-val="{{ false }}">
+            <div><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px">نوع پلن</div><div style="display:flex;gap:8px"><sc-for list="{{ planKinds }}" as="pk" hint-placeholder-count="2"><button onClick="{{ pk.fn }}" style="{{ pk.style }}">{{ pk.l }}</button></sc-for></div></div>
+          </sc-if>
+          <sc-if value="{{ modalIsPromo }}" hint-placeholder-val="{{ false }}">
+            <div><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px">نوع پروفایل / پروموت</div><select onChange="{{ onPromoCat }}" style="width:100%;background:var(--bg2);border:1px solid var(--line2);border-radius:11px;padding:11px 13px;font-size:13px;color:var(--text);font-family:inherit;cursor:pointer"><sc-for list="{{ promoCatOptions }}" as="o" hint-placeholder-count="8"><option value="{{ o }}">{{ o }}</option></sc-for></select></div>
+            <div><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px">جایگاه نمایش در سایت</div><div style="display:flex;gap:7px;flex-wrap:wrap"><sc-for list="{{ promoPlaces }}" as="pp" hint-placeholder-count="5"><button onClick="{{ pp.fn }}" style="{{ pp.style }}">{{ pp.l }}</button></sc-for></div></div>
+          </sc-if>
+          <sc-if value="{{ modalIsSource }}" hint-placeholder-val="{{ false }}">
+            <div><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px">نوع محتوای منبع</div><div style="display:flex;gap:7px;flex-wrap:wrap"><sc-for list="{{ srcTypes }}" as="st" hint-placeholder-count="4"><button onClick="{{ st.fn }}" style="{{ st.style }}">{{ st.l }}</button></sc-for></div></div>
+            <sc-if value="{{ srcIsListings }}" hint-placeholder-val="{{ true }}">
+              <div><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px">شهرهای هدف</div><div style="display:flex;gap:7px;flex-wrap:wrap"><sc-for list="{{ srcCities }}" as="c" hint-placeholder-count="6"><button onClick="{{ c.fn }}" style="{{ c.style }}">{{ c.l }}</button></sc-for></div></div>
+              <div><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px">دسته‌بندی محله‌ها</div><input placeholder="مثلاً سعادت‌آباد، زعفرانیه، ونک (یا خودکار با AI)" style="width:100%;border:1px solid var(--line2);border-radius:11px;background:var(--bg2);color:var(--text);font-family:inherit;font-size:13px;padding:10px 13px;outline:none"/></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px">نوع معامله</div><div style="background:var(--bg2);border:1px solid var(--line2);border-radius:10px;padding:10px 12px;font-size:12.5px;color:var(--text);display:flex;justify-content:space-between">همه ▾</div></div><div><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px">بازه قیمت</div><div style="background:var(--bg2);border:1px solid var(--line2);border-radius:10px;padding:10px 12px;font-size:12.5px;color:var(--text);display:flex;justify-content:space-between">بدون محدودیت ▾</div></div></div>
+            </sc-if>
+            <sc-if value="{{ srcIsArticles }}" hint-placeholder-val="{{ false }}">
+              <div><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px">دسته موضوعی</div><input placeholder="تحلیل بازار، اخبار ساختمان، راهنما…" style="width:100%;border:1px solid var(--line2);border-radius:11px;background:var(--bg2);color:var(--text);font-family:inherit;font-size:13px;padding:10px 13px;outline:none"/></div>
+            </sc-if>
+            <div><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px">زمان‌بندی اجرا</div><div style="display:flex;gap:7px"><sc-for list="{{ srcSchedules }}" as="sc" hint-placeholder-count="3"><button onClick="{{ sc.fn }}" style="{{ sc.style }}">{{ sc.l }}</button></sc-for></div></div>
+            <div style="display:grid;gap:8px"><sc-for list="{{ srcToggles }}" as="tg" hint-placeholder-count="3"><div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--bg2)"><span style="flex:1;font-size:11.5px;color:var(--text)">{{ tg.l }}</span><button onClick="{{ tg.fn }}" style="{{ tg.switchStyle }}"><span style="{{ tg.knobStyle }}"></span></button></div></sc-for></div>
+          </sc-if>
+          <sc-if value="{{ modalIsBanner }}" hint-placeholder-val="{{ false }}">
+            <div><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px">جایگاه در صفحات پابلیک</div><div style="display:flex;gap:7px;flex-wrap:wrap"><sc-for list="{{ bannerPlaces }}" as="bp" hint-placeholder-count="5"><button onClick="{{ bp.fn }}" style="{{ bp.style }}">{{ bp.l }}</button></sc-for></div></div>
+            <div><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px">ابعاد بنر</div><div style="display:flex;gap:7px"><sc-for list="{{ bannerSizes }}" as="bs" hint-placeholder-count="3"><button onClick="{{ bs.fn }}" style="{{ bs.style }}">{{ bs.l }}</button></sc-for></div></div>
+            <div><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px">مدت نمایش</div><div style="display:flex;gap:7px"><sc-for list="{{ bannerSchedules }}" as="bsc" hint-placeholder-count="3"><button onClick="{{ bsc.fn }}" style="{{ bsc.style }}">{{ bsc.l }}</button></sc-for></div></div>
+            <div style="display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px dashed var(--line2);border-radius:10px"><span style="font-size:12px;color:var(--muted)">تصویر بنر:</span><span style="font-size:11.5px;color:var(--gold);font-weight:700;cursor:pointer">آپلود تصویر ＋</span></div>
+          </sc-if>
+        </div>
+        <div style="padding:0 22px 22px;display:flex;gap:10px"><button onClick="{{ closeModal }}" style="flex:1;height:44px;border:1px solid var(--line2);border-radius:12px;background:transparent;color:var(--text);font-family:inherit;font-weight:600;font-size:13.5px;cursor:pointer">انصراف</button><button onClick="{{ saveModal }}" style="flex:1;height:44px;border:none;border-radius:12px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-weight:700;font-size:13.5px;cursor:pointer">{{ modalSaveLabel }}</button></div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:880}}">
+class Component extends DCLogic {
+  state = {
+    theme:'dark', view:'overview',
+    scrapePhase:'idle', scrapeStepIdx:0,
+    autoApprove:true, autoThreshold:88,
+    contentType:'مقاله سئو', topic:'بازار مسکن سعادت‌آباد', contentState:'idle', contentOutput:'', aiReady:null,
+    flags:{ aiSearch:true, plan3d:true, voiceSearch:false, scraper:true, websiteBuilder:true },
+    modal:null, mName:'', mField2:'', mPlanKind:'خریدنی',
+    users:[
+      { name:'مدیر سیستم', email:'admin@melkjet.ir', role:'سوپر ادمین', av:'linear-gradient(135deg,#e7674a,#b8453a)' },
+      { name:'نگار رحیمی', email:'negar@melkjet.ir', role:'ناظر محتوا', av:'linear-gradient(135deg,#5fa97a,#37704e)' },
+      { name:'بهرام کیان', email:'bahram@melkjet.ir', role:'مدیر فروش', av:'linear-gradient(135deg,#caa86a,#8a6f3e)' },
+      { name:'سارا محمدی', email:'sara@melkjet.ir', role:'مشاور', av:'linear-gradient(135deg,#b07a8a,#6e4754)' },
+      { name:'املاک پارسیان', email:'parsian@agency.ir', role:'آژانس', av:'linear-gradient(135deg,#7a8fae,#465a78)' },
+      { name:'گروه آرین', email:'arian@build.ir', role:'سازنده', av:'linear-gradient(135deg,#9b7ad0,#5e4488)' },
+      { name:'مصالح تهران', email:'tehran@b2b.ir', role:'مصالح‌فروش', av:'linear-gradient(135deg,#7aa88f,#476e58)' },
+      { name:'علی کریمی', email:'ali@gmail.com', role:'خریدار', av:'linear-gradient(135deg,#5b9bd5,#2f5f8a)' }
+    ],
+    customPlans:[], customSources:[], customPromos:[],
+    mPromoPlace:'لای آگهی‌ها', mPromoCat:'آگهی مشاور',
+    slots:{ homeHero:true, homeMid:false, searchTop:true, searchMid:true, propertySide:false, materialsTop:false },
+    openRole:null,
+    settingsOn:{ twoFa:true, sitemap:true, robots:true, maintenance:false, signupOpen:true, rateLimit:true, watermark:true, autoBackup:true, telegram:false, whatsapp:true, emailGw:true, smsGw:true },
+    finVals:{ sale:'۰٫۵٪', rent:'یک‌چهارم اجاره‌بها', builder:'۲٪', materials:'۱٫۵٪', promo:'۱۰۰٪', vat:'۹٪', minSettle:'۵۰۰ هزار تومان' },
+    repCustom:'',
+    trackCookie:true, trackGuest:true,
+    triggers:[
+      { page:'صفحه‌ی جزئیات ملک', action:'درخواست بازدید ثبت نشد', dwell:'۱۲۰', sms:'این ملک هنوز موجوده! همین حالا بازدید رزرو کن: {لینک}', on:true },
+      { page:'سبد / صفحه پلن‌ها', action:'خرید پلن کامل نشد', dwell:'۱۸۰', sms:'پلن حرفه‌ای با ۲۰٪ تخفیف تا امشب فعاله 🎁', on:true },
+      { page:'فرم ثبت آگهی', action:'آگهی نیمه‌کاره رها شد', dwell:'۳۰۰', sms:'آگهی‌ت یک قدم تا انتشار مونده — تکمیلش کن!', on:true },
+      { page:'نتایج جستجو', action:'هیچ فایلی ذخیره/کلیک نشد', dwell:'۹۰', sms:'بذار دستیار هوشمند بهترین گزینه‌ها رو برات پیدا کنه ✦', on:false },
+      { page:'صفحه‌ی پروژه پیش‌فروش', action:'رزرو واحد انجام نشد', dwell:'۱۵۰', sms:'واحدهای این پروژه محدوده — مشاوره‌ی رایگان بگیر', on:true }
+    ],
+    mSrcType:'آگهی املاک', mSrcCities:{'تهران':true}, mSrcSchedule:'هر ۱ ساعت', mSrcDedup:true, mSrcVision:true, mSrcAiApprove:true,
+    mBannerPlace:'لای آگهی‌ها', mBannerSize:'افقی (۹۷۰×۹۰)', mBannerSchedule:'۳۰ روز',
+    userQuery:'', userMode:'نام', editUserIdx:null, eName:'', eEmail:'', eRole:'',
+    repRange:'۱ سال', repTopic:'قیمت میلگرد و فولاد', repState:'idle', repOut:'',
+    perms:{
+      'سوپر ادمین':{ users:true, content:true, listings:true, ai:true, finance:true, ads:true, system:true },
+      'ناظر محتوا':{ users:false, content:true, listings:true, ai:false, finance:false, ads:false, system:false },
+      'مدیر فروش':{ users:false, content:false, listings:true, ai:false, finance:true, ads:true, system:false },
+      'پشتیبانی':{ users:true, content:false, listings:false, ai:false, finance:false, ads:false, system:false },
+      'تحلیل‌گر داده':{ users:false, content:false, listings:false, ai:true, finance:true, ads:false, system:false }
+    }
+  };
+  permDefs = [ ['users','مدیریت کاربران'], ['content','مدیریت محتوا'], ['listings','تأیید آگهی'], ['ai','مدل‌های AI'], ['finance','مالی و پلن'], ['ads','تبلیغات و پروموت'], ['system','تنظیمات سیستم'] ];
+  themes = {
+    dark:{ '--bg':'#0d0d0f','--bg2':'#141417','--surface':'#18181c','--navbg':'rgba(20,20,23,0.8)','--line':'rgba(255,255,255,0.08)','--line2':'rgba(255,255,255,0.14)','--text':'#f2f1ee','--muted':'#9a9a98','--faint':'#6a6a68','--gold':'#c9a96a','--gold2':'#e0c489','--goldDim':'rgba(201,169,106,0.12)' },
+    light:{ '--bg':'#f4f1ea','--bg2':'#ffffff','--surface':'#ffffff','--navbg':'rgba(255,255,255,0.85)','--line':'rgba(26,24,20,0.09)','--line2':'rgba(26,24,20,0.16)','--text':'#1a1814','--muted':'#6b6862','--faint':'#9a968d','--gold':'#9c7a3c','--gold2':'#b8923f','--goldDim':'rgba(156,122,60,0.10)' }
+  };
+  scrapeSteps = ['اتصال به منابع و دریافت آگهی‌ها…','استخراج متن و تصاویر (OCR)…','تشخیص و حذف آگهی‌های تکراری…','تحلیل تصاویر و دسته‌بندی با AI…','تطبیق و ادغام در پایگاه داده یکپارچه…','تولید صفحات سئو از داده‌ها…'];
+
+  componentDidMount(){ this.setState({ aiReady: !!(window.claude && window.claude.complete) }); }
+  componentWillUnmount(){ clearInterval(this._si); clearTimeout(this._ct); }
+  toggleTheme = () => this.setState(s=>({ theme:s.theme==='dark'?'light':'dark' }));
+  go = (v) => () => this.setState({ view:v });
+  toggleFlag = (k) => () => this.setState(s=>({ flags:{...s.flags,[k]:!s.flags[k]} }));
+  toggleAuto = () => this.setState(s=>({ autoApprove:!s.autoApprove }));
+  toggleTrigger = (i) => () => this.setState(s=>{ const a=[...s.triggers]; a[i]={...a[i],on:!a[i].on}; return { triggers:a }; });
+  onTrigDwell = (i) => (e) => { const val=e.target.value; this.setState(s=>{ const a=[...s.triggers]; a[i]={...a[i],dwell:val}; return { triggers:a }; }); };
+  toggleSetting = (k) => () => this.setState(s=>({ settingsOn:{...s.settingsOn,[k]:!s.settingsOn[k]} }));
+  onFin = (k) => (e) => { const val=e.target.value; this.setState(s=>({ finVals:{...s.finVals,[k]:val} })); };
+  onRepCustom = (e) => this.setState({ repCustom:e.target.value, repTopic:e.target.value });
+  openAddUser = () => this.setState({ modal:'user', mName:'', mField2:'' });
+  openAddPlan = () => this.setState({ modal:'plan', mName:'', mField2:'', mPlanKind:'خریدنی' });
+  openAddSource = () => this.setState({ modal:'source', mName:'', mField2:'' });
+  openAddPromo = () => this.setState({ modal:'promo', mName:'', mField2:'', mPromoPlace:'لای آگهی‌ها', mPromoCat:'آگهی مشاور' });
+  setPromoPlace = (p) => () => this.setState({ mPromoPlace:p });
+  setPromoCat = (c) => () => this.setState({ mPromoCat:c });
+  onPromoCat = (e) => this.setState({ mPromoCat:e.target.value });
+  toggleSlot = (k) => () => this.setState(s=>({ slots:{...s.slots,[k]:!s.slots[k]} }));
+  toggleRole = (id) => () => this.setState(s=>({ openRole:s.openRole===id?null:id }));
+  setSrcType = (t) => () => this.setState({ mSrcType:t });
+  toggleSrcCity = (c) => () => this.setState(s=>({ mSrcCities:{...s.mSrcCities,[c]:!s.mSrcCities[c]} }));
+  setSrcSchedule = (v) => () => this.setState({ mSrcSchedule:v });
+  toggleSrcDedup = () => this.setState(s=>({ mSrcDedup:!s.mSrcDedup }));
+  toggleSrcVision = () => this.setState(s=>({ mSrcVision:!s.mSrcVision }));
+  toggleSrcAi = () => this.setState(s=>({ mSrcAiApprove:!s.mSrcAiApprove }));
+  openAddBanner = () => this.setState({ modal:'banner', mName:'', mField2:'سراسری', mBannerPlace:'لای آگهی‌ها', mBannerSize:'افقی (۹۷۰×۹۰)', mBannerSchedule:'۳۰ روز' });
+  setBannerPlace = (p) => () => this.setState({ mBannerPlace:p });
+  setBannerSize = (s) => () => this.setState({ mBannerSize:s });
+  setBannerSchedule = (s) => () => this.setState({ mBannerSchedule:s });
+  onUserQuery = (e) => this.setState({ userQuery:e.target.value });
+  setUserMode = (m) => () => this.setState({ userMode:m });
+  openEditUser = (i) => () => { const u=this.state.users[i]; this.setState({ editUserIdx:i, eName:u.name, eEmail:u.email, eRole:u.role }); };
+  onEName=(e)=>this.setState({eName:e.target.value}); onEEmail=(e)=>this.setState({eEmail:e.target.value}); onERole=(e)=>this.setState({eRole:e.target.value});
+  closeEdit = () => this.setState({ editUserIdx:null });
+  setRepRange = (r) => () => this.setState({ repRange:r });
+  setRepTopic = (t) => () => this.setState({ repTopic:t });
+  async genReport(){
+    if(this.state.repState==='thinking') return;
+    this.setState({ repState:'thinking' });
+    const prompt='تو تحلیل‌گر کلان‌داده‌ی بازار املاک و مصالح ساختمانی ایران هستی. بر اساس داده‌های '+this.state.repRange+' اخیر، درباره‌ی «'+this.state.repTopic+'» یک گزارش تحلیلی کوتاه به فارسی بده شامل: روند فعلی، احتمال افزایش یا کاهش قیمت با درصد تقریبی، عوامل مؤثر، و یک توصیه‌ی عملی برای پلتفرم. اعداد تقریبی و منطقی استفاده کن و کوتاه در حد ۵ تا ۷ جمله بنویس.';
+    let out='';
+    try { if(window.claude&&window.claude.complete){ out=await window.claude.complete({messages:[{role:'user',content:prompt}]}); } else { throw new Error('no-ai'); } }
+    catch(e){ out='تحلیل کلان‌داده ('+this.state.repRange+'): روند قیمت «'+this.state.repTopic+'» در دوره‌ی اخیر صعودی ملایم بوده است.\n\n• احتمال افزایش قیمت در ۳ ماه آینده: حدود ۶۸٪\n• محرک اصلی: نوسان نرخ ارز و افزایش تقاضای فصلی ساخت‌وساز\n• ریسک کاهش: کمتر از ۲۰٪ مشروط به ثبات ارز\n\nتوصیه: کاربران سازنده را برای خرید زودهنگام مصالح هدف‌گذاری کنید و کمپین پروموت مصالح را فعال نگه دارید. (نمونه‌ی نمایشی — برای تحلیل زنده، صفحه را در نمای کاربر باز کن.)'; }
+    this.setState({ repState:'done', repOut:(out||'').trim() });
+  }
+  saveEdit = () => this.setState(s=>{ if(s.editUserIdx===null) return {}; const arr=[...s.users]; arr[s.editUserIdx]={...arr[s.editUserIdx],name:s.eName,email:s.eEmail,role:s.eRole}; return { users:arr, editUserIdx:null }; });
+  togglePerm = (role,perm) => () => this.setState(s=>{ const cur=s.perms[role]||{}; return { perms:{...s.perms,[role]:{...cur,[perm]:!cur[perm]}} }; });
+  closeModal = () => this.setState({ modal:null });
+  onMName = (e) => this.setState({ mName:e.target.value });
+  onMField2 = (e) => this.setState({ mField2:e.target.value });
+  setPlanKind = (k) => () => this.setState({ mPlanKind:k });
+  saveModal = () => this.setState(s=>{
+    const name=(s.mName||'').trim(); if(!name) return { modal:null };
+    if(s.modal==='user'){
+      const av='linear-gradient(135deg,#7a8fae,#465a78)';
+      return { users:[...s.users,{ name, email:(s.mField2||'user')+'@melkjet.ir', role:(s.mField2||'پشتیبانی'), av }], modal:null };
+    }
+    if(s.modal==='source'){
+      return { customSources:[...s.customSources,{ name, type:s.mSrcType }], modal:null };
+    }
+    if(s.modal==='banner'){
+      return { customPromos:[...s.customPromos,{ advertiser:name, type:'بنر تبلیغاتی', placement:s.mBannerPlace, target:(s.mField2||'سراسری') }], modal:null };
+    }
+    if(s.modal==='promo'){
+      return { customPromos:[...s.customPromos,{ advertiser:name, type:s.mPromoCat, placement:s.mPromoPlace, target:(s.mField2||'سراسری') }], modal:null };
+    }
+    return { customPlans:[...s.customPlans,{ name, price:(s.mField2||'۰'), kind:s.mPlanKind }], modal:null };
+  });
+  onThreshold = (e) => this.setState({ autoThreshold:parseInt(e.target.value) });
+  onTopic = (e) => this.setState({ topic:e.target.value });
+  setContentType = (t) => () => this.setState({ contentType:t });
+  toFa(s){ return String(s).replace(/[0-9]/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d]); }
+
+  runScrape = () => {
+    clearInterval(this._si); clearTimeout(this._ct);
+    this.setState({ scrapePhase:'running', scrapeStepIdx:0 });
+    this._si = setInterval(()=>this.setState(s=>{
+      if(s.scrapeStepIdx >= this.scrapeSteps.length-1){ clearInterval(this._si); return {}; }
+      return { scrapeStepIdx:s.scrapeStepIdx+1 };
+    }), 750);
+    this._ct = setTimeout(()=>{ clearInterval(this._si); this.setState({ scrapePhase:'idle' }); }, 5200);
+  };
+
+  async genContent(){
+    if(this.state.contentState==='thinking') return;
+    const topic=(this.state.topic||'').trim(); if(!topic) return;
+    this.setState({ contentState:'thinking' });
+    const typ=this.state.contentType;
+    let instruction;
+    if(typ==='صفحه سئو') instruction='یک صفحه‌ی فرود سئوشده با عنوان H1، مقدمه، ۳ زیرعنوان و فراخوان بنویس.';
+    else if(typ==='خبر بازار') instruction='یک خبر کوتاه بازار املاک بر اساس روند فعلی بنویس (اعداد تقریبی).';
+    else if(typ==='FAQ') instruction='۵ پرسش و پاسخ پرتکرار درباره‌ی این موضوع بنویس.';
+    else instruction='یک مقاله‌ی کوتاه و خوش‌ساختار با عنوان، چند بخش و جمع‌بندی بنویس.';
+    const prompt='تو تولیدکننده‌ی محتوای سئوی متخصص املاک در ایران هستی. به فارسی روان بنویس. '+instruction+'\n\nموضوع: '+topic;
+    let out='';
+    try { if(window.claude&&window.claude.complete){ out=await window.claude.complete({messages:[{role:'user',content:prompt}]}); } else { throw new Error('no-ai'); } }
+    catch(e){ out='# '+topic+'\n\nبازار این منطقه طی سال گذشته رشد متعادلی داشته و تقاضا برای واحدهای نوساز بالا بوده است.\n\n**نکات کلیدی:**\n۱) موقعیت و دسترسی به مترو ارزش ملک را بالا می‌برد.\n۲) واحدهای متراژ متوسط نقدشوندگی بهتری دارند.\n۳) پیش از خرید، استعلام سند و کیفیت ساخت را بررسی کن.\n\n(نمونه‌ی نمایشی — برای متن زنده، صفحه را در نمای کاربر باز کن.)'; }
+    this.setState({ contentState:'done', contentOutput:(out||'').trim() });
+  }
+
+  renderVals(){
+    const t = this.themes[this.state.theme];
+    const rootStyle = Object.entries(t).map(([k,v])=>k+':'+v).join(';') + ';min-height:100vh;background:var(--bg);color:var(--text);font-family:Vazirmatn,sans-serif;transition:background .3s,color .3s';
+    const v = this.state.view;
+    const item=(id,ic,l,badge,badgeColor)=>{ const on=v===id; return { isItem:true, isSection:false, ic,l,badge,badgeColor:badgeColor||'#e7674a',fn:this.go(id), style:'display:flex;align-items:center;gap:11px;width:100%;padding:9px 12px;border:none;border-radius:10px;font-family:inherit;font-size:12.5px;font-weight:'+(on?'700':'500')+';cursor:pointer;text-align:right;transition:.15s;background:'+(on?'rgba(231,103,74,0.12)':'transparent')+';color:'+(on?'var(--text)':'var(--muted)')+(on?';box-shadow:inset 3px 0 0 #e7674a':'') }; };
+    const section=(l)=>({ isSection:true, isItem:false, l });
+    const th='text-align:right;padding:12px 18px;font-size:11.5px;font-weight:600;color:var(--muted)';
+    const tag=(txt,c)=>'font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap;background:'+c+'22;color:'+c+';border:1px solid '+c+'55';
+
+    const traffic=[45,52,48,60,72,68,80,75,62,58,70,85,90,82,76,68,72,88,94,86,74,66,58,50];
+    const trafficBars=traffic.map(n=>({ h:(15+n/94*85)+'%', bg:n>85?'linear-gradient(to top,#e7674a,#e7a14a)':'var(--goldDim)' }));
+
+    // scraper live
+    const sp=this.state.scrapePhase, running=sp==='running', si=this.state.scrapeStepIdx;
+    const scrapeProgress = running ? Math.round((si+1)/this.scrapeSteps.length*100)+'%' : '0%';
+    const baseFetched = 1240, fetched = running ? Math.round(baseFetched*(si+1)/this.scrapeSteps.length) : 0;
+    const scrapeCounters=[
+      { l:'دریافت‌شده', v:this.toFa(fetched), color:'var(--gold)' },
+      { l:'تکراری حذف', v:this.toFa(Math.round(fetched*0.18)), color:'#e7a14a' },
+      { l:'تأییدشده AI', v:this.toFa(Math.round(fetched*0.74)), color:'#5fd98a' },
+      { l:'صفحه سئو', v:this.toFa(Math.round(fetched*0.05)), color:'#5b9bd5' }
+    ];
+
+    // content
+    const cs=this.state.contentState, ready=this.state.aiReady;
+    const wc = this.state.contentOutput ? this.toFa(this.state.contentOutput.split(/\s+/).filter(Boolean).length) : '۰';
+
+    return {
+      rootStyle, themeIcon:this.state.theme==='dark'?'☀':'☾', toggleTheme:this.toggleTheme, th,
+      menu:[
+        section('عملیات هوش مصنوعی'),
+        item('overview','▦','نمای کلی'),
+        item('scraper','⛏','موتور اسکرپی AI','زنده','#5fd98a'),
+        item('moderation','✓','تأیید آگهی AI','۳۲'),
+        item('content','✦','محتوا و سئو'),
+        item('api','◈','API و مدل‌های AI'),
+        item('tokens','◷','توکن و سهمیه AI'),
+        section('گزارش‌ها و داده'),
+        item('reports','◔','گزارش‌ها و Big Data'),
+        item('seo','⌕','سئوی کل سایت'),
+        section('درآمد و رشد'),
+        item('plans','◔','پلن‌ها و اشتراک'),
+        item('finance','◳','مالی و کمیسیون'),
+        item('campaigns','◔','کمپین کل سایت'),
+        item('behavior','◉','ردیابی و تریگر رفتاری'),
+        item('promos','◈','پروموت‌ها'),
+        item('ads','▤','تبلیغات بنری'),
+        item('sms','✆','درگاه پیامک (IPPanel)'),
+        item('crmset','◍','تنظیمات CRM'),
+        section('مدیریت پلتفرم'),
+        item('users','◍','کاربران و نقش‌ها'),
+        section('پیکربندی'),
+        item('settings','⚙','تنظیمات کامل'),
+        section('زیرساخت'),
+        item('health','◉','سلامت سیستم'),
+        item('servers','▤','سرورها'),
+        item('queue','◳','صف پردازش'),
+        item('audit','❖','لاگ ممیزی'),
+        item('flags','⚑','فلگ‌ها')
+      ],
+      viewTitle:{ overview:'نمای کلی پلتفرم', scraper:'موتور جمع‌آوری هوشمند (اسکرپی)', moderation:'تأیید آگهی با هوش مصنوعی', content:'استودیو محتوا و سئو', api:'API و مدل‌های هوش مصنوعی', users:'کاربران و نقش‌ها', health:'سلامت سیستم', servers:'سرورها و زیرساخت', queue:'صف پردازش', ads:'تبلیغات بنری', plans:'پلن‌ها و اشتراک (به‌تفکیک بخش)', promos:'مدیریت پروموت‌ها', reports:'گزارش‌ها و تحلیل کلان‌داده', settings:'تنظیمات کامل پلتفرم', tokens:'توکن و سهمیه هوش مصنوعی', seo:'پنل سئوی کل سایت', finance:'مالی و کمیسیون', campaigns:'کمپین کل سایت', behavior:'ردیابی رفتار و تریگر پیامک خودکار', sms:'درگاه پیامک — IPPanel', crmset:'تنظیمات حرفه‌ای CRM', audit:'لاگ ممیزی', flags:'فلگ‌های قابلیت' }[v]||'نمای کلی',
+      isOverview:v==='overview', isScraper:v==='scraper', isModeration:v==='moderation', isContent:v==='content', isApi:v==='api', isUsers:v==='users', isHealth:v==='health', isServers:v==='servers', isQueue:v==='queue', isAds:v==='ads', isPlans:v==='plans', isPromos:v==='promos', isReports:v==='reports', isSettings:v==='settings', isTokens:v==='tokens', isSeo:v==='seo', isFinance:v==='finance', isCampaigns:v==='campaigns', isBehavior:v==='behavior', isSms:v==='sms', isCrmset:v==='crmset', isAudit:v==='audit', isFlags:v==='flags',
+
+      // OVERVIEW
+      overviewKpis:[
+        { l:'آگهی فعال', v:'۲۴۰٬۰۰۰', ic:'⌂', bg:'var(--goldDim)', color:'var(--gold)', t:'+۱٬۲۴۰ امروز (اسکرپی)', tc:'#5fd98a' },
+        { l:'تأیید AI امروز', v:'۹۸۲', ic:'✓', bg:'rgba(95,217,138,0.15)', color:'#5fd98a', t:'۹۴٪ خودکار', tc:'#5fd98a' },
+        { l:'محتوای تولیدشده', v:'۳۴۰', ic:'✦', bg:'rgba(91,155,213,0.15)', color:'#5b9bd5', t:'صفحه سئو این ماه', tc:'var(--muted)' },
+        { l:'مصرف توکن AI', v:'۸٫۴M', ic:'◈', bg:'rgba(155,122,208,0.15)', color:'#9b7ad0', t:'۶۲٪ سهمیه ماه', tc:'var(--muted)' }
+      ],
+      quickActions:[
+        { l:'اجرای اسکرپی', sub:'جمع‌آوری آگهی تازه', ic:'⛏', bg:'var(--goldDim)', color:'var(--gold)', fn:this.go('scraper') },
+        { l:'تولید محتوای سئو', sub:'مقاله و صفحه با AI', ic:'✦', bg:'rgba(91,155,213,0.15)', color:'#5b9bd5', fn:this.go('content') },
+        { l:'صف تأیید آگهی', sub:'۳۲ مورد در انتظار', ic:'✓', bg:'rgba(95,217,138,0.15)', color:'#5fd98a', fn:this.go('moderation') },
+        { l:'تنظیم API و مدل', sub:'کلیدها و تخصیص مدل', ic:'◈', bg:'rgba(155,122,208,0.15)', color:'#9b7ad0', fn:this.go('api') }
+      ],
+      aiActivity:[
+        { t:'اسکرپی منبع «دیوار» ۳۲۰ آگهی جدید آورد', color:'#5fd98a', anim:'animation:mjsa-pulse 2s infinite', meta:'الان' },
+        { t:'AI ۴۸ آگهی را خودکار تأیید کرد', color:'#5fd98a', anim:'', meta:'۲m' },
+        { t:'۵ صفحه سئوی محله تولید شد', color:'#5b9bd5', anim:'', meta:'۱۲m' },
+        { t:'۳ آگهی مشکوک برای بازبینی علامت خورد', color:'#e7a14a', anim:'', meta:'۱۸m' }
+      ],
+
+      // SCRAPER
+      runScrape:this.runScrape,
+      scrapeRunning:running,
+      scrapeBtnLabel: running?'در حال اجرا…':'▶ اجرای اسکرپی',
+      scrapeBtnStyle:'height:44px;padding:0 20px;border:none;border-radius:12px;background:'+(running?'rgba(95,217,138,0.15)':'linear-gradient(140deg,var(--gold2),var(--gold))')+';color:'+(running?'#5fd98a':'#16140f')+';font-family:inherit;font-weight:700;font-size:14px;cursor:pointer;white-space:nowrap'+(running?';border:1px solid rgba(95,217,138,0.4)':''),
+      scrapeStep:this.scrapeSteps[si], scrapeProgress, scrapeCounters,
+      sources:[
+        { name:'دیوار', type:'آگهی املاک', last:'۵ دقیقه پیش', fetched:'۸۴٬۲۰۰', dedup:'۱۲٬۴۰۰', ic:'⌂', bg:'rgba(201,169,106,0.15)', color:'var(--gold)', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { name:'شیپور', type:'آگهی املاک', last:'۱۲ دقیقه پیش', fetched:'۵۲٬۸۰۰', dedup:'۹٬۱۰۰', ic:'⌂', bg:'rgba(91,155,213,0.15)', color:'#5b9bd5', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { name:'ملک‌رادار', type:'آگهی + قیمت', last:'۱ ساعت پیش', fetched:'۳۱٬۵۰۰', dedup:'۴٬۲۰۰', ic:'◈', bg:'rgba(122,168,143,0.15)', color:'#7aa88f', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { name:'خبرگزاری ساختمان', type:'اخبار و تحلیل', last:'۳ ساعت پیش', fetched:'۲٬۴۰۰', dedup:'۳۲۰', ic:'❖', bg:'rgba(155,122,208,0.15)', color:'#9b7ad0', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { name:'سایت سازندگان', type:'پروژه و پیش‌فروش', last:'دیروز', fetched:'۸۴۰', dedup:'۶۰', ic:'▦', bg:'rgba(231,161,74,0.15)', color:'#e7a14a', status:'متوقف', statusStyle:tag('متوقف','#9a9a98') }
+      ].concat(this.state.customSources.map(cs=>({ name:cs.name, type:cs.type, last:'هنوز اجرا نشده', fetched:'۰', dedup:'۰', ic:'＋', bg:'var(--goldDim)', color:'var(--gold)', status:'تازه افزوده‌شده', statusStyle:tag('جدید','#5b9bd5') }))),
+      imported:[
+        { title:'آپارتمان ۱۳۰م سعادت‌آباد', src:'دیوار', time:'۲ دقیقه پیش', img:'linear-gradient(135deg,#3a3530,#211e1b)', status:'تأیید AI', statusStyle:tag('تأیید AI','#5fd98a') },
+        { title:'ویلا باغ لواسان', src:'شیپور', time:'۵ دقیقه پیش', img:'linear-gradient(135deg,#2f3a34,#1b211e)', status:'بازبینی', statusStyle:tag('بازبینی','#e7a14a') },
+        { title:'دفتر اداری میرداماد', src:'ملک‌رادار', time:'۸ دقیقه پیش', img:'linear-gradient(135deg,#3a3630,#221f1b)', status:'تأیید AI', statusStyle:tag('تأیید AI','#5fd98a') }
+      ],
+
+      // MODERATION
+      modKpis:[
+        { l:'در صف تصمیم', v:'۳۲', color:'var(--gold)', t:'صف زنده' },
+        { l:'تأیید خودکار امروز', v:'۹۲۴', color:'#5fd98a', t:'۹۴٪ موارد' },
+        { l:'رد خودکار', v:'۴۸', color:'#e7674a', t:'جعلی/تکراری' },
+        { l:'بازبینی دستی', v:'۱۰', color:'#e7a14a', t:'مرز اطمینان' }
+      ],
+      autoThreshold:this.toFa(this.state.autoThreshold), autoThresholdRaw:this.state.autoThreshold,
+      onThreshold:this.onThreshold, toggleAuto:this.toggleAuto,
+      autoSwitchStyle:'width:42px;height:24px;border-radius:999px;border:none;cursor:pointer;position:relative;transition:.2s;flex-shrink:0;background:'+(this.state.autoApprove?'#5fd98a':'var(--line2)'),
+      autoKnobStyle:'position:absolute;top:3px;'+(this.state.autoApprove?'left:3px':'left:21px')+';width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s',
+      modQueue:[
+        { title:'آپارتمان ۱۴۰م نوساز سعادت‌آباد', aiVerdict:'تأیید', reason:'تصاویر اصل، قیمت در بازه‌ی بازار', confidence:'۹۶', verdictColor:'#5fd98a', img:'linear-gradient(135deg,#3a3530,#211e1b)', badge:'خودکار تأیید شد', badgeStyle:tag('تأیید','#5fd98a') },
+        { title:'ویلا ۴۲۰م لواسان', aiVerdict:'تأیید', reason:'مدارک کامل، مالک تأییدشده', confidence:'۹۱', verdictColor:'#5fd98a', img:'linear-gradient(135deg,#2f3a34,#1b211e)', badge:'خودکار تأیید شد', badgeStyle:tag('تأیید','#5fd98a') },
+        { title:'آپارتمان ۲۰۰م — قیمت ۲ میلیارد', aiVerdict:'رد', reason:'قیمت ۷۸٪ زیر بازار · احتمال کلاهبرداری', confidence:'۹۴', verdictColor:'#e7674a', img:'linear-gradient(135deg,#3a2b28,#1f1815)', badge:'خودکار رد شد', badgeStyle:tag('رد','#e7674a') },
+        { title:'آپارتمان ونک — متن مشکوک', aiVerdict:'بازبینی', reason:'امتیاز اطمینان مرزی · نیاز به بررسی انسانی', confidence:'۷۴', verdictColor:'#e7a14a', img:'linear-gradient(135deg,#34323c,#1e1d23)', badge:'بازبینی دستی', badgeStyle:tag('بازبینی','#e7a14a') },
+        { title:'دفتر اداری میرداماد', aiVerdict:'تأیید', reason:'محتوای اصل، تصاویر منحصربه‌فرد', confidence:'۸۹', verdictColor:'#5fd98a', img:'linear-gradient(135deg,#3a3630,#221f1b)', badge:'خودکار تأیید شد', badgeStyle:tag('تأیید','#5fd98a') }
+      ],
+
+      // CONTENT
+      contentTypes:['مقاله سئو','صفحه سئو','خبر بازار','FAQ'].map(c=>({ l:c, fn:this.setContentType(c), style:'padding:9px 8px;border-radius:10px;border:1px solid '+(this.state.contentType===c?'var(--gold)':'var(--line)')+';background:'+(this.state.contentType===c?'var(--goldDim)':'transparent')+';color:'+(this.state.contentType===c?'var(--text)':'var(--muted)')+';font-family:inherit;font-size:12px;font-weight:600;cursor:pointer' })),
+      topic:this.state.topic, onTopic:this.onTopic, genContent:()=>this.genContent(),
+      contentBtnLabel: cs==='thinking'?'در حال تولید…':'✦ تولید با AI',
+      aiStatusLabel: ready===false?'⚠ حالت نمایشی (AI در نمای کاربر فعال است)':'متصل به هوش مصنوعی واقعی',
+      contentIdle:cs==='idle', contentThinking:cs==='thinking', contentDone:cs==='done', contentOutput:this.state.contentOutput, wordCount:wc,
+      seoQueue:[
+        { l:'صفحه محله: زعفرانیه', meta:'منتشر شد', ic:'✓', color:'#5fd98a' },
+        { l:'صفحه محله: جردن', meta:'در صف', ic:'◷', color:'#e7a14a' },
+        { l:'مقاله: راهنمای پیش‌فروش', meta:'پیش‌نویس AI', ic:'✎', color:'#5b9bd5' }
+      ],
+
+      // API
+      apiKpis:[
+        { l:'درخواست امروز', v:'۲۴۲K', color:'var(--text)', t:'+۸٪' },
+        { l:'مصرف توکن', v:'۸٫۴M', color:'var(--gold)', t:'۶۲٪ سهمیه' },
+        { l:'هزینه ماه', v:'$۱٬۲۴۰', color:'#5fd98a', t:'در بودجه' },
+        { l:'تأخیر میانگین', v:'۳۱۰ms', color:'#5b9bd5', t:'استنتاج AI' }
+      ],
+      providers:[
+        { name:'Claude (Anthropic)', ic:'C', bg:'var(--goldDim)', color:'var(--gold)', endpoint:'https://api.anthropic.com/v1', key:'sk-ant-•••••••••4f2a', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { name:'OpenAI GPT', ic:'O', bg:'rgba(95,217,138,0.15)', color:'#5fd98a', endpoint:'https://api.openai.com/v1', key:'sk-•••••••••••8c1d', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { name:'مدل داخلی (Self-hosted)', ic:'M', bg:'rgba(91,155,213,0.15)', color:'#5b9bd5', endpoint:'http://gpu-cluster-01:8000/v1', key:'local-•••••-key', status:'فعال', statusStyle:tag('فعال','#5fd98a') }
+      ],
+      agents:[
+        { name:'ایجنت جستجوی هوشمند', role:'تفسیر زبان طبیعی و تطبیق', model:'claude-haiku-4.5', endpoint:'https://api.anthropic.com/v1/messages', key:'sk-ant-•••4f2a', ic:'⌕', bg:'var(--goldDim)', color:'var(--gold)', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { name:'ایجنت امتیازدهی لید', role:'CRM · رتبه‌بندی مشتری', model:'melkjet-lead-scorer-v3', endpoint:'http://gpu-cluster-01:8000/v1/score', key:'local-•••a1', ic:'◍', bg:'rgba(95,217,138,0.15)', color:'#5fd98a', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { name:'ایجنت تأیید و تشخیص جعل', role:'بازبینی آگهی', model:'melkjet-moderation-v2', endpoint:'http://gpu-cluster-01:8000/v1/moderate', key:'local-•••b7', ic:'✓', bg:'rgba(231,103,74,0.15)', color:'#e7674a', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { name:'ایجنت تحلیل تصویر', role:'تشخیص کیفیت/کاربری از عکس', model:'vision-property-v2', endpoint:'http://gpu-cluster-01:8000/v1/vision', key:'local-•••c3', ic:'◈', bg:'rgba(91,155,213,0.15)', color:'#5b9bd5', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { name:'ایجنت تولید محتوا و سئو', role:'مقاله، صفحه، خبر', model:'gpt-4o + RAG', endpoint:'https://api.openai.com/v1/chat', key:'sk-•••8c1d', ic:'✦', bg:'rgba(155,122,208,0.15)', color:'#9b7ad0', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { name:'ایجنت اسکرپی و جمع‌آوری', role:'استخراج آگهی از منابع', model:'scraper-extract-v1', endpoint:'http://scraper-01:9000/run', key:'local-•••d9', ic:'⛏', bg:'rgba(201,169,106,0.15)', color:'var(--gold)', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { name:'ایجنت تحلیل قیمت', role:'برآورد ارزش و Confidence', model:'melkjet-valuation-v2', endpoint:'http://gpu-cluster-01:8000/v1/value', key:'local-•••e2', ic:'◔', bg:'rgba(122,168,143,0.15)', color:'#7aa88f', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { name:'ایجنت مذاکره', role:'استراتژی و احتمال پذیرش', model:'claude-haiku-4.5', endpoint:'https://api.anthropic.com/v1/messages', key:'sk-ant-•••4f2a', ic:'⚖', bg:'rgba(231,161,74,0.15)', color:'#e7a14a', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { name:'ایجنت دستیار حقوقی', role:'پاسخ حقوقی مبتنی بر RAG', model:'gpt-4o + RAG حقوقی', endpoint:'https://api.openai.com/v1/chat', key:'sk-•••8c1d', ic:'⎙', bg:'rgba(91,155,213,0.15)', color:'#5b9bd5', status:'آزمایشی', statusStyle:tag('آزمایشی','#e7a14a') },
+        { name:'ایجنت دستیار خرید', role:'تطبیق نیاز خریدار با فایل‌ها', model:'melkjet-matcher-v2', endpoint:'http://gpu-cluster-01:8000/v1/match', key:'local-•••f4', ic:'◍', bg:'rgba(91,155,213,0.15)', color:'#5b9bd5', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { name:'ایجنت چت ملک', role:'پرسش‌وپاسخ درباره هر آگهی', model:'claude-haiku-4.5', endpoint:'https://api.anthropic.com/v1/messages', key:'sk-ant-•••4f2a', ic:'✉', bg:'var(--goldDim)', color:'var(--gold)', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { name:'ایجنت کمپین مارکتینگ', role:'تولید کمپین، عنوان و مخاطب', model:'gpt-4o', endpoint:'https://api.openai.com/v1/chat', key:'sk-•••8c1d', ic:'◔', bg:'rgba(95,217,138,0.15)', color:'#5fd98a', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { name:'ایجنت پیش‌بینی بازار (Big Data)', role:'تحلیل کلان‌داده و پیش‌بینی قیمت', model:'melkjet-forecast-v1', endpoint:'http://gpu-cluster-01:8000/v1/forecast', key:'local-•••g8', ic:'◳', bg:'rgba(231,161,74,0.15)', color:'#e7a14a', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { name:'ایجنت OCR و استخراج متن', role:'استخراج متن از تصاویر آگهی', model:'vision-ocr-fa-v1', endpoint:'http://gpu-cluster-01:8000/v1/ocr', key:'local-•••h2', ic:'⎚', bg:'rgba(155,122,208,0.15)', color:'#9b7ad0', status:'فعال', statusStyle:tag('فعال','#5fd98a') }
+      ],
+      planGroups:[
+        { seg:'خریدار و کاربر عادی', ic:'◍', bg:'rgba(91,155,213,0.15)', color:'#5b9bd5', typeLabel:'خریدنی', typeStyle:tag('خریدنی','#5fd98a'),
+          plans:[
+            { name:'رایگان', kind:'پایه', kindStyle:tag('پایه','#9a9a98'), price:'۰', unit:'تومان', features:'جستجو، ذخیره، ۳ پیشنهاد AI در ماه', status:'فعال', statusStyle:tag('فعال','#5fd98a'), pop:false },
+            { name:'حرفه‌ای', kind:'محبوب', kindStyle:tag('محبوب','var(--gold)'), price:'۲۹۰ هزار', unit:'/ماه', features:'تحلیل نامحدود، دستیار خرید، اعلان فرصت', status:'فعال', statusStyle:tag('فعال','#5fd98a'), pop:true }
+          ] },
+        { seg:'مشاور و آژانس', ic:'◌', bg:'var(--goldDim)', color:'var(--gold)', typeLabel:'خریدنی', typeStyle:tag('خریدنی','#5fd98a'),
+          plans:[
+            { name:'مشاور', kind:'اشتراک', kindStyle:tag('اشتراک','#5b9bd5'), price:'۷۹۰ هزار', unit:'/ماه', features:'CRM، کانبان، دستیار فروش، تقویم', status:'فعال', statusStyle:tag('فعال','#5fd98a'), pop:false },
+            { name:'آژانس', kind:'اشتراک', kindStyle:tag('اشتراک','#5b9bd5'), price:'۲٫۴۹ م', unit:'/ماه', features:'چند شعبه، پورسانت، مارکتینگ، گزارش مالی', status:'فعال', statusStyle:tag('فعال','#5fd98a'), pop:true }
+          ] },
+        { seg:'سازنده و انبوه‌ساز', ic:'▦', bg:'rgba(155,122,208,0.15)', color:'#9b7ad0', typeLabel:'درصدی / کمیسیون', typeStyle:tag('درصدی','var(--gold)'),
+          plans:[
+            { name:'پیش‌فروش پایه', kind:'درصدی', kindStyle:tag('درصدی','var(--gold)'), price:'۲٪', unit:'از فروش واحد', features:'لیست پروژه، مدیریت واحدها، CRM فروش', status:'فعال', statusStyle:tag('فعال','#5fd98a'), pop:false },
+            { name:'پیش‌فروش پلاس', kind:'درصدی', kindStyle:tag('درصدی','var(--gold)'), price:'۳٫۵٪', unit:'از فروش واحد', features:'+ پروموت پروژه، پنل سرمایه‌گذار، سایت اختصاصی', status:'فعال', statusStyle:tag('فعال','#5fd98a'), pop:true }
+          ] },
+        { seg:'فروشنده مصالح (B2B)', ic:'⛓', bg:'rgba(122,168,143,0.15)', color:'#7aa88f', typeLabel:'درصدی + اشتراک', typeStyle:tag('ترکیبی','#e7a14a'),
+          plans:[
+            { name:'غرفه پایه', kind:'اشتراک', kindStyle:tag('اشتراک','#5b9bd5'), price:'۴۹۰ هزار', unit:'/ماه', features:'کاتالوگ، دریافت سفارش، RFQ', status:'فعال', statusStyle:tag('فعال','#5fd98a'), pop:false },
+            { name:'غرفه فروش', kind:'درصدی', kindStyle:tag('درصدی','var(--gold)'), price:'۱٫۵٪', unit:'از هر سفارش', features:'+ نمایش ویژه، تحلیل فروش، پروموت دسته', status:'فعال', statusStyle:tag('فعال','#5fd98a'), pop:true }
+          ] }
+      ],
+      promoKpis:[
+        { l:'پروموت فعال', v:'۱۴۸', color:'var(--text)', t:'در ۱۲ شهر' },
+        { l:'درآمد پروموت ماه', v:'۵۲۰ م.ت', color:'var(--gold)', t:'+۲۲٪' },
+        { l:'نمایش پروموت', v:'۴٫۸M', color:'#5b9bd5', t:'این ماه' },
+        { l:'میانگین CTR', v:'۵٫۱٪', color:'#5fd98a', t:'بالاتر از بنر' }
+      ],
+      promoProducts:[
+        { l:'تقویت آگهی', ic:'↑', bg:'var(--goldDim)', color:'var(--gold)', desc:'آگهی مشاور در صدر نتایج جستجوی همان محله نمایش داده می‌شود.', placement:'صدر نتایج · محله', price:'از ۱۵۰ هزار/هفته' },
+        { l:'تبلیغ پروژه سازنده', ic:'▦', bg:'rgba(155,122,208,0.15)', color:'#9b7ad0', desc:'پروژه‌ی سازنده در جای‌جای سایت و لای آگهی‌های شهر هدف تبلیغ می‌شود.', placement:'لای آگهی‌ها · شهر', price:'از ۴ م/ماه' },
+        { l:'نشان ویژه آگهی', ic:'★', bg:'rgba(95,217,138,0.15)', color:'#5fd98a', desc:'نشان «ویژه» و رنگ متمایز روی کارت آگهی در همه‌ی لیست‌ها.', placement:'کارت آگهی', price:'۲۹۰ هزار/ماه' },
+        { l:'بنر محله / شهر', ic:'◳', bg:'rgba(91,155,213,0.15)', color:'#5b9bd5', desc:'بنر هدفمند بر اساس شهر یا محله‌ی جستجوشده‌ی کاربر.', placement:'صفحه نتایج · صفحه ملک', price:'از ۲ م/ماه' }
+      ],
+      activePromos:[
+        { advertiser:'سارا محمدی (مشاور)', type:'تقویت آگهی', placement:'صدر نتایج', target:'سعادت‌آباد', ends:'۵ روز', ic:'↑', bg:'var(--goldDim)', color:'var(--gold)', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { advertiser:'گروه پارسیان (سازنده)', type:'تبلیغ پروژه', placement:'لای آگهی‌ها', target:'تهران · کل شهر', ends:'۲۳ روز', ic:'▦', bg:'rgba(155,122,208,0.15)', color:'#9b7ad0', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { advertiser:'املاک نگین (آژانس)', type:'بنر محله', placement:'صفحه نتایج', target:'زعفرانیه', ends:'۱۲ روز', ic:'◳', bg:'rgba(91,155,213,0.15)', color:'#5b9bd5', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { advertiser:'انبوه‌سازان البرز', type:'تبلیغ پروژه', placement:'صفحه اصلی + لای آگهی', target:'کرج', ends:'۳۰ روز', ic:'▦', bg:'rgba(155,122,208,0.15)', color:'#9b7ad0', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { advertiser:'مصالح آرین (B2B)', type:'پروموت دسته', placement:'بازار مصالح', target:'سراسری', ends:'۸ روز', ic:'⛓', bg:'rgba(122,168,143,0.15)', color:'#7aa88f', status:'در انتظار', statusStyle:tag('در انتظار','#e7a14a') }
+      ].concat(this.state.customPromos.map(cp=>({ advertiser:cp.advertiser, type:cp.type, placement:cp.placement, target:cp.target, ends:'۳۰ روز', ic:'＋', bg:'var(--goldDim)', color:'var(--gold)', status:'فعال', statusStyle:tag('فعال','#5fd98a') }))),
+      modelTasks:[
+        { task:'جستجوی هوشمند و تفسیر', model:'claude-haiku-4.5', ic:'⌕', bg:'var(--goldDim)', color:'var(--gold)' },
+        { task:'امتیازدهی لید', model:'melkjet-lead-scorer-v3', ic:'◍', bg:'rgba(95,217,138,0.15)', color:'#5fd98a' },
+        { task:'تأیید و تشخیص آگهی جعلی', model:'melkjet-moderation-v2', ic:'✓', bg:'rgba(231,103,74,0.15)', color:'#e7674a' },
+        { task:'تحلیل تصاویر ملک', model:'vision-property-v2', ic:'◈', bg:'rgba(91,155,213,0.15)', color:'#5b9bd5' },
+        { task:'تولید محتوا و سئو', model:'gpt-4o + RAG', ic:'✦', bg:'rgba(155,122,208,0.15)', color:'#9b7ad0' }
+      ],
+      ragSources:[
+        { l:'قوانین و مقررات املاک', docs:'۲٬۴۰۰', status:'ایندکس شده', ic:'⚖', bg:'rgba(91,155,213,0.15)', color:'#5b9bd5' },
+        { l:'داده‌های تاریخی بازار', docs:'۱۲۰K', status:'ایندکس شده', ic:'◔', bg:'var(--goldDim)', color:'var(--gold)' },
+        { l:'مقالات و تحلیل‌ها', docs:'۳۴۰', status:'ایندکس شده', ic:'❖', bg:'rgba(122,168,143,0.15)', color:'#7aa88f' },
+        { l:'راهنمای حقوقی', docs:'۸۹۰', status:'در حال ایندکس', ic:'⎙', bg:'rgba(231,161,74,0.15)', color:'#e7a14a' }
+      ],
+
+      // USERS
+      userKpis:[
+        { l:'کل کاربران', v:'۲۸۴K', color:'var(--text)', t:'+۴٬۲۰۰ این ماه' },
+        { l:'مشاوران فعال', v:'۱۸٬۵۰۰', color:'var(--gold)', t:'تأییدشده' },
+        { l:'آژانس‌ها', v:'۹۴۰', color:'#5b9bd5', t:'سازمانی' },
+        { l:'مدیران سیستم', v:'۱۲', color:'#e7674a', t:'دسترسی ویژه' }
+      ],
+      openAddUser:this.openAddUser, openAddPlan:this.openAddPlan, openAddSource:this.openAddSource, openAddPromo:this.openAddPromo, openAddBanner:this.openAddBanner, closeModal:this.closeModal, saveModal:this.saveModal,
+      hasCustomPlans:this.state.customPlans.length>0,
+      customPlansList:this.state.customPlans.map(p=>({ name:p.name, price:p.price, kind:p.kind, kindStyle:tag(p.kind, p.kind==='درصدی'?'var(--gold)':'#5fd98a') })),
+      modalOpen:!!this.state.modal, modalIsPlan:this.state.modal==='plan', modalIsPromo:this.state.modal==='promo', modalIsSource:this.state.modal==='source', modalIsBanner:this.state.modal==='banner',
+      modalTitle:{ plan:'افزودن پلن جدید', user:'افزودن کاربر جدید', source:'افزودن منبع داده', promo:'افزودن پروموت', banner:'افزودن بنر تبلیغاتی' }[this.state.modal]||'افزودن',
+      modalSaveLabel:{ plan:'ساخت پلن', user:'افزودن کاربر', source:'افزودن و اجرا', promo:'ساخت پروموت', banner:'فعال‌سازی بنر' }[this.state.modal]||'افزودن',
+      modalFields:(()=>{ const m=this.state.modal;
+        if(m==='plan') return [ { l:'نام پلن', ph:'مثلاً پلن طلایی', value:this.state.mName, onInput:this.onMName }, { l:'قیمت یا درصد', ph:'مثلاً ۴۹۰ هزار یا ۲٪', value:this.state.mField2, onInput:this.onMField2 } ];
+        if(m==='source') return [ { l:'نام منبع', ph:'مثلاً دیوار، شیپور، سایت خبری…', value:this.state.mName, onInput:this.onMName }, { l:'لینک منبع (URL)', ph:'https://…', value:this.state.mField2, onInput:this.onMField2 } ];
+        if(m==='promo') return [ { l:'نام تبلیغ‌دهنده', ph:'مثلاً گروه پارسیان', value:this.state.mName, onInput:this.onMName }, { l:'هدف (شهر / محله)', ph:'مثلاً سعادت‌آباد یا سراسری', value:this.state.mField2, onInput:this.onMField2 } ];
+        if(m==='banner') return [ { l:'نام تبلیغ‌دهنده', ph:'مثلاً بانک مسکن', value:this.state.mName, onInput:this.onMName }, { l:'هدف (شهر / محله)', ph:'سراسری یا نام محله', value:this.state.mField2, onInput:this.onMField2 } ];
+        return [ { l:'نام و نام خانوادگی', ph:'مثلاً علی رضایی', value:this.state.mName, onInput:this.onMName }, { l:'نقش کاربر', ph:'مثلاً ناظر محتوا', value:this.state.mField2, onInput:this.onMField2 } ];
+      })(),
+      srcTypes:['آگهی املاک','اخبار و مقالات','قیمت بازار','پروژه‌ها'].map(x=>({ l:x, fn:this.setSrcType(x), style:'padding:7px 11px;border-radius:9px;border:1px solid '+(this.state.mSrcType===x?'var(--gold)':'var(--line2)')+';background:'+(this.state.mSrcType===x?'var(--goldDim)':'transparent')+';color:'+(this.state.mSrcType===x?'var(--text)':'var(--muted)')+';font-family:inherit;font-size:11.5px;font-weight:600;cursor:pointer' })),
+      srcIsListings:this.state.mSrcType==='آگهی املاک', srcIsArticles:this.state.mSrcType==='اخبار و مقالات',
+      srcCities:['تهران','کرج','مشهد','اصفهان','شیراز','تبریز'].map(c=>{ const on=!!this.state.mSrcCities[c]; return { l:c, fn:this.toggleSrcCity(c), style:'padding:6px 12px;border-radius:999px;border:1px solid '+(on?'var(--gold)':'var(--line2)')+';background:'+(on?'var(--goldDim)':'transparent')+';color:'+(on?'var(--text)':'var(--muted)')+';font-family:inherit;font-size:11.5px;font-weight:600;cursor:pointer' }; }),
+      srcSchedules:['هر ۱۵ دقیقه','هر ۱ ساعت','روزانه'].map(v=>({ l:v, fn:this.setSrcSchedule(v), style:'flex:1;padding:8px;border-radius:9px;border:1px solid '+(this.state.mSrcSchedule===v?'var(--gold)':'var(--line2)')+';background:'+(this.state.mSrcSchedule===v?'var(--goldDim)':'transparent')+';color:'+(this.state.mSrcSchedule===v?'var(--text)':'var(--muted)')+';font-family:inherit;font-size:11px;font-weight:600;cursor:pointer' })),
+      srcToggles:[
+        { l:'حذف خودکار آگهی تکراری', on:this.state.mSrcDedup, fn:this.toggleSrcDedup },
+        { l:'تحلیل تصاویر با AI (تشخیص کیفیت/کاربری)', on:this.state.mSrcVision, fn:this.toggleSrcVision },
+        { l:'تأیید خودکار آگهی توسط AI', on:this.state.mSrcAiApprove, fn:this.toggleSrcAi }
+      ].map(t=>({ l:t.l, fn:t.fn, switchStyle:'width:40px;height:23px;border-radius:999px;border:none;cursor:pointer;position:relative;transition:.2s;flex-shrink:0;background:'+(t.on?'#5fd98a':'var(--line2)'), knobStyle:'position:absolute;top:3px;'+(t.on?'left:3px':'left:20px')+';width:17px;height:17px;border-radius:50%;background:#fff;transition:.2s' })),
+      bannerPlaces:['لای آگهی‌ها','صدر نتایج','صفحه اصلی','صفحه ملک','بازار مصالح'].map(p=>({ l:p, fn:this.setBannerPlace(p), style:'padding:7px 11px;border-radius:9px;border:1px solid '+(this.state.mBannerPlace===p?'var(--gold)':'var(--line2)')+';background:'+(this.state.mBannerPlace===p?'var(--goldDim)':'transparent')+';color:'+(this.state.mBannerPlace===p?'var(--text)':'var(--muted)')+';font-family:inherit;font-size:11.5px;font-weight:600;cursor:pointer' })),
+      bannerSizes:['افقی (۹۷۰×۹۰)','مربع (۳۰۰×۳۰۰)','عمودی (۳۰۰×۶۰۰)'].map(s=>({ l:s, fn:this.setBannerSize(s), style:'flex:1;padding:8px 6px;border-radius:9px;border:1px solid '+(this.state.mBannerSize===s?'var(--gold)':'var(--line2)')+';background:'+(this.state.mBannerSize===s?'var(--goldDim)':'transparent')+';color:'+(this.state.mBannerSize===s?'var(--text)':'var(--muted)')+';font-family:inherit;font-size:10.5px;font-weight:600;cursor:pointer' })),
+      bannerSchedules:['۷ روز','۳۰ روز','۹۰ روز'].map(s=>({ l:s, fn:this.setBannerSchedule(s), style:'flex:1;padding:8px;border-radius:9px;border:1px solid '+(this.state.mBannerSchedule===s?'var(--gold)':'var(--line2)')+';background:'+(this.state.mBannerSchedule===s?'var(--goldDim)':'transparent')+';color:'+(this.state.mBannerSchedule===s?'var(--text)':'var(--muted)')+';font-family:inherit;font-size:11px;font-weight:600;cursor:pointer' })),
+      planKinds:['خریدنی','درصدی'].map(k=>({ l:k, fn:this.setPlanKind(k), style:'flex:1;padding:9px;border-radius:10px;border:1px solid '+(this.state.mPlanKind===k?'var(--gold)':'var(--line2)')+';background:'+(this.state.mPlanKind===k?'var(--goldDim)':'transparent')+';color:'+(this.state.mPlanKind===k?'var(--text)':'var(--muted)')+';font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer' })),
+      promoPlaces:['لای آگهی‌ها','صدر نتایج','صفحه اصلی','صفحه ملک','بازار مصالح'].map(p=>({ l:p, fn:this.setPromoPlace(p), style:'padding:7px 11px;border-radius:9px;border:1px solid '+(this.state.mPromoPlace===p?'var(--gold)':'var(--line2)')+';background:'+(this.state.mPromoPlace===p?'var(--goldDim)':'transparent')+';color:'+(this.state.mPromoPlace===p?'var(--text)':'var(--muted)')+';font-family:inherit;font-size:11.5px;font-weight:600;cursor:pointer' })),
+      promoCatOptions:['مشاور املاک','آژانس','سازنده','انبوه‌ساز','فروشنده مصالح','معمار / طراح داخلی','پیمانکار','کارشناس رسمی','دفتر حقوقی','بانک / بیمه','دفترخانه','سرمایه‌گذار','فروشنده شخصی'],
+      onPromoCat:this.onPromoCat,
+      userQuery:this.state.userQuery, onUserQuery:this.onUserQuery,
+      userModes:['نام','ایمیل','نقش'].map(m=>({ l:m, fn:this.setUserMode(m), style:'padding:8px 13px;border-radius:9px;border:1px solid '+(this.state.userMode===m?'var(--gold)':'var(--line2)')+';background:'+(this.state.userMode===m?'var(--goldDim)':'transparent')+';color:'+(this.state.userMode===m?'var(--text)':'var(--muted)')+';font-family:inherit;font-size:12px;font-weight:600;cursor:pointer' })),
+      userTotal:'۲۸۴٬۰۰۰',
+      usersList:this.state.users.map((u,i)=>({...u,_i:i})).filter(u=>{ const q=(this.state.userQuery||'').trim(); if(!q) return true; const m=this.state.userMode; const hay=(m==='ایمیل'?u.email:m==='نقش'?u.role:u.name)||''; return hay.indexOf(q)!==-1; }).map(u=>({ name:u.name, email:u.email, role:u.role, av:u.av, initial:(u.name||'؟').trim().charAt(0), roleStyle:tag(u.role, u.role==='سوپر ادمین'?'#e7674a':'#5b9bd5'), statusStyle:tag('فعال','#5fd98a'), edit:this.openEditUser(u._i) })),
+      editOpen:this.state.editUserIdx!==null, eName:this.state.eName, eEmail:this.state.eEmail, eRole:this.state.eRole, onEName:this.onEName, onEEmail:this.onEEmail, onERole:this.onERole, closeEdit:this.closeEdit, saveEdit:this.saveEdit,
+      roleRows:[
+        { l:'سوپر ادمین', count:'۳', ic:'◉', bg:'rgba(231,103,74,0.15)', color:'#e7674a' },
+        { l:'ناظر محتوا', count:'۸', ic:'✓', bg:'rgba(95,217,138,0.15)', color:'#5fd98a' },
+        { l:'مدیر فروش', count:'۱۵', ic:'◔', bg:'var(--goldDim)', color:'var(--gold)' },
+        { l:'پشتیبانی', count:'۴۲', ic:'✉', bg:'rgba(91,155,213,0.15)', color:'#5b9bd5' },
+        { l:'تحلیل‌گر داده', count:'۶', ic:'◳', bg:'rgba(155,122,208,0.15)', color:'#9b7ad0' }
+      ].map(r=>{ const open=this.state.openRole===r.l; const rp=this.state.perms[r.l]||{}; const pc=this.permDefs.filter(([k])=>rp[k]).length;
+        return { l:r.l, count:r.count, ic:r.ic, bg:r.bg, color:r.color, open, toggle:this.toggleRole(r.l),
+          permCount:this.toFa(pc)+'/'+this.toFa(this.permDefs.length), caret:open?'transform:rotate(180deg)':'',
+          perms:this.permDefs.map(([k,l])=>{ const on=!!rp[k]; return { l, toggle:this.togglePerm(r.l,k), check:on?'✓':'', boxStyle:'width:18px;height:18px;flex-shrink:0;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;border:1.5px solid '+(on?'var(--gold)':'var(--line2)')+';background:'+(on?'var(--gold)':'transparent')+';color:#16140f' }; }) }; }),
+      roles:[
+        { l:'سوپر ادمین', count:'۳', access:'دسترسی کامل سیستم', ic:'◉', bg:'rgba(231,103,74,0.15)', color:'#e7674a', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { l:'ناظر محتوا', count:'۸', access:'تأیید آگهی و محتوا', ic:'✓', bg:'rgba(95,217,138,0.15)', color:'#5fd98a', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { l:'مدیر فروش', count:'۱۵', access:'پلن‌ها و درآمد', ic:'◔', bg:'var(--goldDim)', color:'var(--gold)', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { l:'پشتیبانی', count:'۴۲', access:'کاربران و تیکت‌ها', ic:'✉', bg:'rgba(91,155,213,0.15)', color:'#5b9bd5', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { l:'تحلیل‌گر داده', count:'۶', access:'گزارش‌ها (فقط خواندن)', ic:'◳', bg:'rgba(155,122,208,0.15)', color:'#9b7ad0', status:'فعال', statusStyle:tag('فعال','#5fd98a') }
+      ],
+
+      // HEALTH
+      healthKpis:[
+        { l:'آپ‌تایم (۳۰ روز)', v:'۹۹٫۹۸٪', t:'بدون قطعی', c:'#5fd98a', dot:'#5fd98a' },
+        { l:'تأخیر میانگین API', v:'۸۴ms', t:'P95: ۲۱۰ms', c:'#5fd98a', dot:'#5fd98a' },
+        { l:'کاربران آنلاین', v:'۳٬۲۴۰', t:'اوج: ۵٬۱۰۰', c:'var(--muted)', dot:'#5b9bd5' },
+        { l:'نرخ خطا', v:'۰٫۰۲٪', t:'نرمال', c:'#5fd98a', dot:'#5fd98a' }
+      ],
+      trafficBars,
+      services:[
+        { l:'API Gateway', color:'#5fd98a', anim:'animation:mjsa-pulse 2s infinite', meta:'۱۲ms' },
+        { l:'پایگاه داده اصلی', color:'#5fd98a', anim:'', meta:'۸ms' },
+        { l:'موتور جستجو', color:'#5fd98a', anim:'', meta:'۲۴ms' },
+        { l:'سرویس استنتاج AI', color:'#e7a14a', anim:'animation:mjsa-pulse 1.5s infinite', meta:'بار بالا · ۳۱۰ms' },
+        { l:'موتور اسکرپی', color:'#5fd98a', anim:'', meta:'فعال' }
+      ],
+
+      // SERVERS
+      servers:[
+        { name:'web-01', region:'تهران · اصلی', ic:'▤', bg:'rgba(95,217,138,0.15)', color:'#5fd98a', status:'سالم', statusStyle:tag('سالم','#5fd98a'), metrics:[{l:'CPU',v:'42%',color:'#5fd98a'},{l:'RAM',v:'61%',color:'#e7a14a'},{l:'دیسک',v:'38%',color:'#5fd98a'}] },
+        { name:'db-primary', region:'تهران · اصلی', ic:'⛁', bg:'rgba(91,155,213,0.15)', color:'#5b9bd5', status:'سالم', statusStyle:tag('سالم','#5fd98a'), metrics:[{l:'CPU',v:'56%',color:'#e7a14a'},{l:'RAM',v:'72%',color:'#e7a14a'},{l:'دیسک',v:'64%',color:'#e7a14a'}] },
+        { name:'ai-gpu-01', region:'ابر · پردازش AI', ic:'✦', bg:'var(--goldDim)', color:'var(--gold)', status:'بار بالا', statusStyle:tag('بار بالا','#e7a14a'), metrics:[{l:'GPU',v:'88%',color:'#e7674a'},{l:'VRAM',v:'79%',color:'#e7a14a'},{l:'صف',v:'45%',color:'#e7a14a'}] },
+        { name:'scraper-01', region:'تهران · جمع‌آوری', ic:'⛏', bg:'rgba(201,169,106,0.15)', color:'var(--gold)', status:'فعال', statusStyle:tag('فعال','#5fd98a'), metrics:[{l:'CPU',v:'48%',color:'#5fd98a'},{l:'شبکه',v:'62%',color:'#e7a14a'},{l:'صف',v:'30%',color:'#5fd98a'}] },
+        { name:'worker-01', region:'تهران · پردازش', ic:'◳', bg:'rgba(155,122,208,0.15)', color:'#9b7ad0', status:'سالم', statusStyle:tag('سالم','#5fd98a'), metrics:[{l:'CPU',v:'34%',color:'#5fd98a'},{l:'RAM',v:'48%',color:'#5fd98a'},{l:'صف',v:'22%',color:'#5fd98a'}] },
+        { name:'cdn-edge', region:'توزیع‌شده', ic:'◈', bg:'rgba(122,168,143,0.15)', color:'#7aa88f', status:'سالم', statusStyle:tag('سالم','#5fd98a'), metrics:[{l:'پهنا',v:'52%',color:'#5fd98a'},{l:'Cache',v:'94%',color:'#5fd98a'},{l:'بار',v:'30%',color:'#5fd98a'}] }
+      ],
+
+      // QUEUE
+      queueKpis:[
+        { l:'کل در انتظار', v:'۱٬۸۴۰', color:'var(--text)', t:'در ۵ صف' },
+        { l:'پردازش امروز', v:'۲۴۲٬۰۰۰', color:'#5fd98a', t:'+۸٪' },
+        { l:'ناموفق', v:'۳', color:'#e7674a', t:'نیاز بررسی' },
+        { l:'میانگین تأخیر', v:'۱٫۲s', color:'var(--gold)', t:'نرمال' }
+      ],
+      queues:[
+        { l:'اسکرپی و جمع‌آوری', ic:'⛏', bg:'var(--goldDim)', color:'var(--gold)', pending:'۳٬۲۰۰', rate:'۸۰۰/دقیقه', lag:'~۹s', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { l:'تحلیل تصاویر AI', ic:'◈', bg:'rgba(91,155,213,0.15)', color:'#5b9bd5', pending:'۱٬۴۲۰', rate:'۲۴۰/دقیقه', lag:'~۵m', status:'بار بالا', statusStyle:tag('بار بالا','#e7a14a') },
+        { l:'تأیید آگهی AI', ic:'✓', bg:'rgba(95,217,138,0.15)', color:'#5fd98a', pending:'۸۶', rate:'۳۲۰/دقیقه', lag:'~۱۶s', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { l:'تولید محتوای سئو', ic:'✦', bg:'rgba(155,122,208,0.15)', color:'#9b7ad0', pending:'۲۴', rate:'۳۰/دقیقه', lag:'~۲m', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { l:'اعلان و پیامک', ic:'✉', bg:'rgba(231,161,74,0.15)', color:'#e7a14a', pending:'۰', rate:'۵٬۰۰۰/دقیقه', lag:'~۰s', status:'بی‌کار', statusStyle:tag('بی‌کار','#5b9bd5') }
+      ],
+
+      // ADS
+      repRange:this.state.repRange, repTopic:this.state.repTopic, repCustom:this.state.repCustom, onRepCustom:this.onRepCustom, genReport:()=>this.genReport(),
+      repBtnLabel:this.state.repState==='thinking'?'در حال تحلیل کلان‌داده…':'✦ تولید گزارش پیش‌بینی AI',
+      repIdle:this.state.repState==='idle', repThinking:this.state.repState==='thinking', repDone:this.state.repState==='done', repOut:this.state.repOut,
+      repRanges:['۳ ماه','۱ سال','۳ سال','۵ سال'].map(r=>({ l:r, fn:this.setRepRange(r), style:'padding:8px 14px;border-radius:9px;border:1px solid '+(this.state.repRange===r?'var(--gold)':'var(--line2)')+';background:'+(this.state.repRange===r?'var(--goldDim)':'transparent')+';color:'+(this.state.repRange===r?'var(--text)':'var(--muted)')+';font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer' })),
+      repTopics:['قیمت میلگرد و فولاد','قیمت سیمان','بازار مسکن تهران','نرخ اجاره','تقاضای پیش‌فروش'].map(t=>({ l:t, fn:this.setRepTopic(t), style:'padding:7px 12px;border-radius:999px;border:1px solid '+(this.state.repTopic===t?'var(--gold)':'var(--line)')+';background:'+(this.state.repTopic===t?'var(--goldDim)':'transparent')+';color:'+(this.state.repTopic===t?'var(--text)':'var(--muted)')+';font-family:inherit;font-size:11.5px;font-weight:600;cursor:pointer' })),
+      repKpis:[
+        { l:'حجم داده پردازش‌شده', v:'۸٫۴ TB', color:'var(--gold)', t:'۲۴۰M رکورد آگهی' },
+        { l:'دقت پیش‌بینی مدل', v:'۹۱٪', color:'#5fd98a', t:'بر داده‌ی ۵ ساله' },
+        { l:'گزارش فروخته‌شده', v:'۳۴۰', color:'#5b9bd5', t:'به سازندگان و بانک‌ها' },
+        { l:'درآمد گزارش‌ها', v:'۱۸۰ م.ت', color:'var(--gold)', t:'این ماه' }
+      ],
+      repTrend:(()=>{ const v=[58,55,60,63,68,72,70,75,80,78,84,90]; const mx=Math.max(...v); const ms=['فرو','ارد','خرد','تیر','مرد','شهر','مهر','آبا','آذر','دی','بهم','اسف']; return v.map((n,i)=>({ h:(15+n/mx*85)+'%', l:ms[i], bg:i>=v.length-3?'linear-gradient(to top,var(--gold),var(--gold2))':'var(--goldDim)' })); })(),
+      repForecasts:[
+        { l:'میلگرد A3', dir:'افزایش', pct:'+۶۸٪ احتمال', color:'#e7674a', ic:'↑' },
+        { l:'سیمان تیپ ۲', dir:'ثابت', pct:'۵۲٪ احتمال', color:'#e7a14a', ic:'→' },
+        { l:'مسکن سعادت‌آباد', dir:'افزایش', pct:'+۷۴٪ احتمال', color:'#e7674a', ic:'↑' },
+        { l:'اجاره مرکز شهر', dir:'کاهش', pct:'−۳۱٪ احتمال', color:'#5fd98a', ic:'↓' }
+      ],
+      settingsGroups:(()=>{ const so=this.state.settingsOn;
+        const tf=(k)=>({ kind:'toggle', on:!!so[k], fn:this.toggleSetting(k) });
+        const txt=(v)=>({ kind:'text', v });
+        const mk=(label,obj)=>({ label, ...obj });
+        const sw=(on)=>'width:42px;height:24px;border-radius:999px;border:none;cursor:pointer;position:relative;transition:.2s;flex-shrink:0;background:'+(on?'#5fd98a':'var(--line2)');
+        const kn=(on)=>'position:absolute;top:3px;'+(on?'left:3px':'left:21px')+';width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s';
+        const groups=[
+          { t:'عمومی', ic:'⚙', rows:[ mk('نام سایت',txt('ملک‌جت')), mk('دامنه اصلی',txt('melkjet.ir')), mk('زبان پیش‌فرض',txt('فارسی')), mk('واحد پول',txt('تومان')), mk('حالت تعمیر سایت',tf('maintenance')), mk('ثبت‌نام باز',tf('signupOpen')) ] },
+          { t:'مالی و کمیسیون', ic:'◔', rows:[ mk('درگاه پرداخت',txt('زرین‌پال + درگاه بانکی')), mk('کمیسیون پیش‌فرض معامله',txt('۰٫۵٪')), mk('کمیسیون سازنده',txt('۲٪')), mk('کمیسیون مصالح',txt('۱٫۵٪')), mk('مالیات بر ارزش افزوده',txt('۹٪')) ] },
+          { t:'پیامک و ایمیل و پیام‌رسان', ic:'✉', rows:[ mk('درگاه پیامک',tf('smsGw')), mk('کلید API پیامک',txt('kavenegar-•••a4')), mk('سرویس ایمیل',tf('emailGw')), mk('کمپین واتساپ',tf('whatsapp')), mk('یکپارچگی تلگرام',tf('telegram')) ] },
+          { t:'تنظیمات هوش مصنوعی', ic:'✦', rows:[ mk('حد تأیید خودکار آگهی',txt('۸۸٪')), mk('حد امتیاز لید داغ',txt('۸۰')), mk('بازه اجرای اسکرپی',txt('هر ۱ ساعت')), mk('سقف توکن ماهانه',txt('۱۰M')), mk('واترمارک تصاویر AI',tf('watermark')) ] },
+          { t:'سئو', ic:'⌕', rows:[ mk('عنوان متای پیش‌فرض',txt('ملک‌جت | بازار هوشمند املاک')), mk('تولید Sitemap خودکار',tf('sitemap')), mk('فایل robots.txt',tf('robots')), mk('Schema داده ساختاریافته',txt('فعال — Real Estate')) ] },
+          { t:'امنیت و پشتیبان', ic:'⛨', rows:[ mk('احراز هویت دومرحله‌ای (مدیران)',tf('twoFa')), mk('محدودیت نرخ درخواست',tf('rateLimit')), mk('پشتیبان‌گیری خودکار روزانه',tf('autoBackup')), mk('نگهداری لاگ',txt('۹۰ روز')) ] }
+        ];
+        return groups.map(g=>({ t:g.t, ic:g.ic, rows:g.rows.map(r=>({ label:r.label, isToggle:r.kind==='toggle', isText:r.kind==='text', v:r.v||'', fn:r.fn, switchStyle:r.kind==='toggle'?sw(r.on):'', knobStyle:r.kind==='toggle'?kn(r.on):'' })) }));
+      })(),
+      selectStyle:'width:100%;background:var(--bg2);border:1px solid var(--line2);border-radius:11px;padding:11px 13px;font-size:13px;color:var(--text);cursor:pointer',
+      behKpis:[ {l:'کاربر ردیابی‌شده',v:'۱۸۴K',c:'#5b9bd5'},{l:'تریگر فعال‌شده ماه',v:'۹٬۲۴۰',c:'var(--gold)'},{l:'بازگشت پس از پیامک',v:'۳۴٪',c:'#5fd98a'},{l:'تبدیل از تریگر',v:'۱۲٪',c:'#5fd98a'} ],
+      behToggles:[
+        { l:'ردیابی با کوکی (کاربران لاگین‌کرده)', on:this.state.trackCookie, fn:()=>this.setState(s=>({trackCookie:!s.trackCookie})) },
+        { l:'ردیابی بازدیدکنندگان مهمان', on:this.state.trackGuest, fn:()=>this.setState(s=>({trackGuest:!s.trackGuest})) }
+      ].map(t=>({ l:t.l, fn:t.fn, switchStyle:'width:42px;height:24px;border-radius:999px;border:none;cursor:pointer;position:relative;transition:.2s;flex-shrink:0;background:'+(t.on?'#5fd98a':'var(--line2)'), knobStyle:'position:absolute;top:3px;'+(t.on?'left:3px':'left:21px')+';width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s' })),
+      triggersList:this.state.triggers.map((t,i)=>({ page:t.page, action:t.action, dwell:t.dwell, sms:t.sms, on:t.on, onToggle:this.toggleTrigger(i), onDwell:this.onTrigDwell(i),
+        switchStyle:'width:42px;height:24px;border-radius:999px;border:none;cursor:pointer;position:relative;transition:.2s;flex-shrink:0;background:'+(t.on?'#5fd98a':'var(--line2)'),
+        knobStyle:'position:absolute;top:3px;'+(t.on?'left:3px':'left:21px')+';width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s',
+        cardStyle:'border:1px solid '+(t.on?'var(--gold)':'var(--line)')+';border-radius:14px;padding:16px;background:var(--surface)' })),
+      campAudience:'همه پروفایل‌ها (خریدار، مشاور، آژانس، سازنده، مصالح، خدمات تخصصی)',
+      tokenKpis:[ {l:'مصرف کل توکن ماه',v:'۸٫۴M',color:'var(--gold)',t:'۶۲٪ سهمیه'},{l:'پروفایل سقف‌ردکرده',v:'۱۲',color:'#e7674a',t:'نیاز خرید'},{l:'بسته فروخته‌شده',v:'۳۴۰',color:'#5fd98a',t:'این ماه'},{l:'درآمد فروش توکن',v:'۹۸ م.ت',color:'var(--gold)',t:'این ماه'} ],
+      tokenQuotas:[
+        {role:'خریدار (رایگان)',quota:'۵۰K',used:'۷۸٪',color:'#e7a14a'},{role:'فروشنده / سرمایه‌گذار',quota:'۱۵۰K',used:'۴۰٪',color:'#5fd98a'},{role:'مشاور املاک',quota:'۵۰۰K',used:'۴۵٪',color:'#5fd98a'},{role:'آژانس',quota:'۲M',used:'۶۲٪',color:'#e7a14a'},{role:'سازنده / انبوه‌ساز',quota:'۱M',used:'۳۸٪',color:'#5fd98a'},{role:'فروشنده مصالح',quota:'۸۰۰K',used:'۵۲٪',color:'#5fd98a'},{role:'معمار / طراح داخلی',quota:'۴۰۰K',used:'۶۵٪',color:'#e7a14a'},{role:'پیمانکار',quota:'۳۰۰K',used:'۴۸٪',color:'#5fd98a'},{role:'کارشناس رسمی',quota:'۲۵۰K',used:'۷۲٪',color:'#e7a14a'},{role:'دفتر حقوقی',quota:'۳۵۰K',used:'۸۸٪',color:'#e7674a'},{role:'بانک / بیمه',quota:'۱٫۵M',used:'۳۰٪',color:'#5fd98a'},{role:'دفترخانه',quota:'۲۰۰K',used:'۵۵٪',color:'#5fd98a'}
+      ],
+      tokenPacks:[ {l:'بسته کوچک',amt:'۱۰۰K توکن',price:'۴۹ ت'},{l:'بسته متوسط',amt:'۵۰۰K توکن',price:'۱۹۹ ت'},{l:'بسته بزرگ',amt:'۲M توکن',price:'۶۹۰ ت'},{l:'سفارشی',amt:'نامحدود',price:'تماس'} ],
+      seoRows:[
+        {l:'عنوان متای پیش‌فرض',v:'ملک‌جت | بازار هوشمند املاک ایران'},{l:'توضیح متای پیش‌فرض',v:'خرید، فروش و اجاره با تحلیل AI'},{l:'الگوی عنوان صفحه ملک',v:'{قیمت} {نوع} در {محله} | ملک‌جت'},{l:'الگوی صفحه محله',v:'املاک {محله} — قیمت و آگهی'},{l:'کلمات کلیدی هدف',v:'خرید خانه، آپارتمان، اجاره'}
+      ],
+      seoToggles:[ {l:'تولید Sitemap خودکار',k:'sitemap'},{l:'robots.txt',k:'robots'},{l:'Schema RealEstate',k:'watermark'},{l:'AMP صفحات موبایل',k:'rateLimit'},{l:'صفحات محله خودکار (سئو)',k:'autoBackup'} ].map(x=>{ const on=this.state.settingsOn[x.k]; return { l:x.l, fn:this.toggleSetting(x.k), switchStyle:'width:42px;height:24px;border-radius:999px;border:none;cursor:pointer;position:relative;transition:.2s;flex-shrink:0;background:'+(on?'#5fd98a':'var(--line2)'), knobStyle:'position:absolute;top:3px;'+(on?'left:3px':'left:21px')+';width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s' }; }),
+      seoPages:[ {l:'صفحه محله سعادت‌آباد',score:'۹۴',color:'#5fd98a'},{l:'صفحه پروژه برج آرین',score:'۸۸',color:'#5fd98a'},{l:'مقاله بازار مسکن',score:'۹۱',color:'#5fd98a'},{l:'صفحه جستجو',score:'۷۶',color:'#e7a14a'} ],
+      finRows:[
+        {l:'کمیسیون معامله فروش',k:'sale'},{l:'کمیسیون اجاره',k:'rent'},{l:'کمیسیون سازنده (پیش‌فروش)',k:'builder'},{l:'کمیسیون مصالح B2B',k:'materials'},{l:'سهم پلتفرم از پروموت',k:'promo'},{l:'مالیات بر ارزش افزوده',k:'vat'},{l:'حداقل تسویه',k:'minSettle'}
+      ].map(r=>({ l:r.l, v:this.state.finVals[r.k], fn:this.onFin(r.k) })),
+      finGateways:[ {l:'زرین‌پال',status:'فعال',c:'#5fd98a'},{l:'درگاه بانک ملت',status:'فعال',c:'#5fd98a'},{l:'کیف پول داخلی',status:'فعال',c:'#5fd98a'},{l:'تسویه خودکار',status:'هفتگی',c:'var(--gold)'} ],
+      campViews:[ {l:'کمپین فعال',v:'۸',c:'var(--text)'},{l:'نرخ تبدیل',v:'۸٫۴٪',c:'#5fd98a'},{l:'مخاطب کل',v:'۲۸۴K',c:'#5b9bd5'},{l:'بازده کمپین',v:'۳٫۲x',c:'var(--gold)'} ],
+      campGoals:['جذب کاربر جدید (عمومی)','فعال‌سازی کاربران غیرفعال','تبدیل بازدیدکننده به عضو','افزایش ثبت آگهی','ارتقا به پلن پولی','معرفی به دوستان (ریفرال)'],
+      campPricing:[
+        {l:'تقویت آگهی (مشاور)',unit:'هفتگی',price:'۱۵۰ هزار'},
+        {l:'تبلیغ پروژه (سازنده)',unit:'ماهانه',price:'۴ میلیون'},
+        {l:'پروموت محصول (مصالح)',unit:'ماهانه',price:'۱٫۵ میلیون'},
+        {l:'بنر محله (آژانس)',unit:'ماهانه',price:'۲ میلیون'},
+        {l:'نشان ویژه پروفایل',unit:'ماهانه',price:'۲۹۰ هزار'},
+        {l:'پیامک انبوه به مخاطب',unit:'هر ۱۰۰۰ پیامک',price:'۱۲۰ هزار'}
+      ],
+      smsRows:[
+        {l:'نام کاربری IPPanel',v:'melkjet_ir'},{l:'کلید API',v:'ipp-•••••2f9a'},{l:'خط اختصاصی',v:'۳۰۰۰۱۲۳۴۵۶'},{l:'خط اشتراکی',v:'۱۰۰۰۲۲۲۳'},{l:'الگوی پیش‌فرض (Pattern)',v:'melkjet-verify'},{l:'اعتبار باقی‌مانده',v:'۲٬۴۰۰٬۰۰۰ ت'}
+      ],
+      smsKpis:[ {l:'پیامک ماه',v:'۱۲۴K',c:'var(--text)'},{l:'نرخ تحویل',v:'۹۸٪',c:'#5fd98a'},{l:'هزینه ماه',v:'۴۸ م.ت',c:'var(--gold)'},{l:'الگوهای فعال',v:'۱۴',c:'#5b9bd5'} ],
+      smsTemplates:[ {l:'کد تأیید ورود',type:'OTP'},{l:'اعلان فایل جدید',type:'اعلان'},{l:'یادآوری بازدید',type:'یادآوری'},{l:'تخفیف و پروموشن',type:'بازاریابی'} ],
+      crmsetGroups:[
+        { t:'پایپ‌لاین و لیدها', ic:'◍', rows:[ {l:'مراحل پایپ‌لاین',v:'۴ مرحله (سفارشی)'},{l:'تخصیص خودکار لید',v:'بر اساس منطقه + AI'},{l:'امتیازدهی لید (AI)',v:'فعال'},{l:'SLA پاسخ اولین تماس',v:'۱۵ دقیقه'} ] },
+        { t:'کمپین‌ها (حرفه‌ای)', ic:'◔', rows:[ {l:'کانال‌های مجاز',v:'ایمیل، پیامک، واتساپ، پوش'},{l:'سقف کمپین همزمان',v:'۱۰'},{l:'تولید محتوای کمپین با AI',v:'فعال'},{l:'A/B تست خودکار',v:'فعال'},{l:'بهینه‌سازی زمان ارسال AI',v:'فعال'} ] },
+        { t:'اتوماسیون', ic:'⚙', rows:[ {l:'Workflowهای فعال',v:'۶'},{l:'تریگرهای مجاز',v:'۱۲ نوع'},{l:'محدودیت اجرا',v:'۱۰۰۰/روز'} ] }
+      ],
+      adSlots:[
+        { key:'homeHero', l:'بنر بالای صفحه اصلی', page:'صفحه اصلی', ic:'▭', bg:'var(--goldDim)', color:'var(--gold)', desc:'بنر افقی زیر هیرو، اولین دید کاربر' },
+        { key:'homeMid', l:'بین بخش‌های صفحه اصلی', page:'صفحه اصلی', ic:'▤', bg:'rgba(91,155,213,0.15)', color:'#5b9bd5', desc:'بین املاک ویژه و محله‌ها' },
+        { key:'searchTop', l:'بالای نتایج جستجو', page:'صفحه جستجو', ic:'⌕', bg:'rgba(95,217,138,0.15)', color:'#5fd98a', desc:'بالای فهرست نتایج' },
+        { key:'searchMid', l:'لای آگهی‌های نتایج', page:'صفحه جستجو', ic:'⌂', bg:'rgba(201,169,106,0.15)', color:'var(--gold)', desc:'بین کارت‌های آگهی، هدفمند با محله' },
+        { key:'propertySide', l:'کنار صفحه ملک', page:'صفحه جزئیات ملک', ic:'◳', bg:'rgba(155,122,208,0.15)', color:'#9b7ad0', desc:'ستون کناری کنار جزئیات' },
+        { key:'materialsTop', l:'بالای بازار مصالح', page:'بازار مصالح', ic:'⛓', bg:'rgba(122,168,143,0.15)', color:'#7aa88f', desc:'بنر دسته‌بندی مصالح' }
+      ].map(sl=>{ const on=this.state.slots[sl.key]; return { l:sl.l, page:sl.page, ic:sl.ic, bg:sl.bg, color:sl.color, desc:sl.desc, fn:this.toggleSlot(sl.key),
+        cardStyle:'border:1px solid '+(on?'var(--gold)':'var(--line)')+';border-radius:13px;padding:14px;background:'+(on?'var(--goldDim)':'var(--bg2)'),
+        btnLabel:on?'✓ تبلیغ فعال — حذف':'＋ قراردادن تبلیغ',
+        btnStyle:'width:100%;margin-top:11px;height:34px;border:none;border-radius:9px;font-family:inherit;font-size:11.5px;font-weight:700;cursor:pointer;background:'+(on?'rgba(95,217,138,0.15)':'linear-gradient(140deg,var(--gold2),var(--gold))')+';color:'+(on?'#5fd98a':'#16140f')+(on?';border:1px solid rgba(95,217,138,0.4)':'') }; }),
+      adsKpis:[
+        { l:'کمپین فعال', v:'۲۴', color:'var(--text)', t:'۶ تبلیغ‌دهنده' },
+        { l:'درآمد ماه', v:'۳۸۰ م.ت', color:'var(--gold)', t:'+۱۵٪' },
+        { l:'نمایش کل', v:'۲٫۴M', color:'#5b9bd5', t:'این ماه' },
+        { l:'میانگین CTR', v:'۳٫۲٪', color:'#5fd98a', t:'بالای صنعت' }
+      ],
+      ads:[
+        { advertiser:'بانک مسکن', slot:'بنر صفحه اصلی', impressions:'840K', ctr:'۴٫۱٪', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { advertiser:'گروه پارسیان', slot:'نتایج جستجو', impressions:'520K', ctr:'۳٫۸٪', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { advertiser:'بیمه پاسارگاد', slot:'صفحه ملک', impressions:'410K', ctr:'۲٫۴٪', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { advertiser:'مصالح آرین', slot:'بازار مصالح', impressions:'290K', ctr:'۲٫۹٪', status:'در انتظار', statusStyle:tag('در انتظار','#e7a14a') }
+      ],
+
+      // AUDIT
+      auditLog:[
+        { actor:'موتور اسکرپی', action:'۱٬۲۴۰ آگهی از ۴ منبع جمع‌آوری کرد', ic:'⛏', bg:'var(--goldDim)', color:'var(--gold)', time:'۱۴:۳۰' },
+        { actor:'AI ناظر', action:'۹۲۴ آگهی را خودکار تأیید و ۴۸ مورد را رد کرد', ic:'✓', bg:'rgba(95,217,138,0.15)', color:'#5fd98a', time:'۱۴:۲۲' },
+        { actor:'AI محتوا', action:'۵ صفحه سئوی محله تولید و منتشر کرد', ic:'✦', bg:'rgba(91,155,213,0.15)', color:'#5b9bd5', time:'۱۳:۵۰' },
+        { actor:'مدیر سیستم', action:'حد تأیید خودکار را به ۸۸٪ تغییر داد', ic:'⚑', bg:'rgba(155,122,208,0.15)', color:'#9b7ad0', time:'۱۳:۰۰' },
+        { actor:'سیستم', action:'پشتیبان‌گیری خودکار پایگاه داده انجام شد', ic:'⛁', bg:'rgba(231,161,74,0.15)', color:'#e7a14a', time:'۱۲:۰۰' },
+        { actor:'مدیر سیستم', action:'مدل «moderation» را به v۲ ارتقا داد', ic:'◈', bg:'rgba(231,103,74,0.15)', color:'#e7674a', time:'۱۰:۱۵' }
+      ],
+
+      // FLAGS
+      flags:[
+        { key:'aiSearch', l:'جستجوی هوشمند AI', desc:'موتور جستجوی زبان طبیعی', rollout:'100%' },
+        { key:'plan3d', l:'پلان و مدل سه‌بعدی', desc:'بازسازی پلان از عکس (آگهی ویژه)', rollout:'100%' },
+        { key:'scraper', l:'موتور اسکرپی خودکار', desc:'جمع‌آوری زمان‌بندی‌شده آگهی', rollout:'100%' },
+        { key:'voiceSearch', l:'جستجوی صوتی', desc:'در حال آزمایش تدریجی', rollout:'10%' },
+        { key:'websiteBuilder', l:'وب‌سایت‌ساز (drag & drop)', desc:'سایت اختصاصی برای همه پنل‌ها — قالب‌های آماده و سئو', rollout:'100%' }
+      ].map(f=>{ const on=this.state.flags[f.key]; return { l:f.l, desc:f.desc, rollout:f.rollout, fn:this.toggleFlag(f.key),
+        switchStyle:'width:42px;height:24px;border-radius:999px;border:none;cursor:pointer;position:relative;transition:.2s;flex-shrink:0;background:'+(on?'#5fd98a':'var(--line2)'),
+        knobStyle:'position:absolute;top:3px;'+(on?'left:3px':'left:21px')+';width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s' }; })
+    };
+  }
+}
+</script>
+</body>
+</html>

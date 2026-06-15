@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{margin:0;font-family:'Vazirmatn',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:rgba(140,140,140,0.3);border-radius:8px}
+  @keyframes mjsu-fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  @keyframes mjsu-glow{0%,100%{opacity:.4}50%{opacity:.9}}
+</style>
+</helmet>
+<div dir="rtl" style="{{ rootStyle }}">
+
+  <!-- NAV -->
+  <header style="position:sticky;top:0;z-index:50;backdrop-filter:blur(18px);background:var(--navbg);border-bottom:1px solid var(--line)">
+    <nav style="max-width:1080px;margin:0 auto;padding:0 22px;height:64px;display:flex;align-items:center;gap:16px">
+      <a href="MelkJet.dc.html" style="display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--text)">
+        <span style="width:32px;height:32px;border-radius:9px;background:linear-gradient(140deg,var(--gold2),var(--gold));display:flex;align-items:center;justify-content:center"><span style="width:12px;height:12px;background:var(--bg);transform:rotate(45deg);border-radius:2px"></span></span>
+        <span style="font-weight:800;font-size:18px;letter-spacing:-.5px">ملک‌جت</span>
+      </a>
+      <div style="flex:1"></div>
+      <button onClick="{{ toggleTheme }}" aria-label="theme" style="width:38px;height:38px;border-radius:11px;border:1px solid var(--line);background:var(--surface);color:var(--text);cursor:pointer;font-size:14px">{{ themeIcon }}</button>
+      <a href="#" style="font-size:13.5px;font-weight:600;color:var(--muted);text-decoration:none">ورود</a>
+    </nav>
+  </header>
+
+  <!-- STAGE: PHONE -->
+  <sc-if value="{{ stagePhone }}" hint-placeholder-val="{{ true }}">
+  <main style="max-width:440px;margin:0 auto;padding:clamp(40px,7vw,80px) 22px">
+    <div style="animation:mjsu-fade .3s both;background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:32px;text-align:center">
+      <span style="width:56px;height:56px;border-radius:16px;background:linear-gradient(140deg,var(--gold2),var(--gold));display:inline-flex;align-items:center;justify-content:center;color:#16140f;font-size:26px;font-weight:800">✆</span>
+      <h1 style="font-size:23px;font-weight:800;color:var(--text);margin-top:18px">ورود یا ثبت‌نام</h1>
+      <p style="font-size:13.5px;color:var(--muted);margin-top:10px;line-height:1.8">شماره موبایلت را وارد کن تا کد تأیید برایت پیامک شود.</p>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:24px;background:var(--bg2);border:1px solid var(--line2);border-radius:13px;padding:13px 15px"><span style="font-size:13px;color:var(--muted);direction:ltr">🇮🇷 ۹۸+</span><input value="{{ phone }}" onInput="{{ onPhone }}" inputmode="tel" placeholder="۰۹۱۲ ۳۴۵ ۶۷۸۹" style="flex:1;border:none;outline:none;background:transparent;color:var(--text);font-family:inherit;font-size:15px;direction:ltr;text-align:right"/></div>
+      <button onClick="{{ sendOtp }}" style="width:100%;height:50px;margin-top:18px;border:none;border-radius:14px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-weight:700;font-size:15px;cursor:pointer">ارسال کد تأیید</button>
+      <div style="font-size:11.5px;color:var(--faint);margin-top:14px;line-height:1.7">با ادامه، قوانین و حریم خصوصی ملک‌جت را می‌پذیری.</div>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- STAGE: OTP -->
+  <sc-if value="{{ stageOtp }}" hint-placeholder-val="{{ false }}">
+  <main style="max-width:440px;margin:0 auto;padding:clamp(40px,7vw,80px) 22px">
+    <div style="animation:mjsu-fade .3s both;background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:32px;text-align:center">
+      <span style="width:56px;height:56px;border-radius:16px;background:var(--goldDim);color:var(--gold);display:inline-flex;align-items:center;justify-content:center;font-size:24px">⌨</span>
+      <h1 style="font-size:21px;font-weight:800;color:var(--text);margin-top:18px">کد تأیید را وارد کن</h1>
+      <p style="font-size:13px;color:var(--muted);margin-top:10px;line-height:1.8">کد ۵ رقمی به شماره <b style="color:var(--text);direction:ltr;display:inline-block">{{ phoneMasked }}</b> پیامک شد. <button onClick="{{ editPhone }}" style="color:var(--gold);background:none;border:none;cursor:pointer;font-family:inherit;font-weight:700;font-size:13px">ویرایش</button></p>
+      <input value="{{ otp }}" onInput="{{ onOtp }}" inputmode="numeric" placeholder="– – – – –" style="width:100%;margin-top:22px;border:1px solid var(--line2);border-radius:13px;background:var(--bg2);color:var(--text);font-family:inherit;font-size:24px;font-weight:800;letter-spacing:10px;text-align:center;padding:14px;outline:none;direction:ltr"/>
+      <button onClick="{{ verifyOtp }}" style="width:100%;height:50px;margin-top:18px;border:none;border-radius:14px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-weight:700;font-size:15px;cursor:pointer">تأیید و ادامه</button>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:14px">کد را دریافت نکردی؟ <span style="color:var(--gold);font-weight:700;cursor:pointer">ارسال مجدد (۰۰:۵۹)</span></div>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- STAGE: ROLE (category → role → form) -->
+  <sc-if value="{{ stageRole }}" hint-placeholder-val="{{ false }}">
+  <main style="max-width:880px;margin:0 auto;padding:clamp(28px,5vw,56px) 22px 90px">
+    <!-- progress -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:30px;justify-content:center">
+      <sc-for list="{{ steps }}" as="st" hint-placeholder-count="3">
+        <div style="display:flex;align-items:center;gap:8px"><span style="{{ st.dotStyle }}">{{ st.n }}</span><span style="{{ st.labelStyle }}">{{ st.l }}</span></div>
+        <span style="width:28px;height:2px;border-radius:2px;background:{{ st.barColor }};{{ st.barHide }}"></span>
+      </sc-for>
+    </div>
+
+    <!-- STEP 1: category -->
+    <sc-if value="{{ s1 }}" hint-placeholder-val="{{ true }}">
+    <div style="animation:mjsu-fade .3s both;text-align:center">
+      <h1 style="font-size:clamp(24px,3.6vw,34px);font-weight:800;letter-spacing:-.8px;color:var(--text)">به‌عنوان چه کسی وارد می‌شوی؟</h1>
+      <p style="font-size:15px;color:var(--muted);margin-top:12px;line-height:1.8">دسته‌ی خودت را انتخاب کن تا مسیر ثبت‌نام دقیقاً متناسب با تو باشد.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:32px;text-align:right">
+        <sc-for list="{{ categories }}" as="c" hint-placeholder-count="3">
+          <button onClick="{{ c.fn }}" style="{{ c.style }}">
+            <span style="width:48px;height:48px;border-radius:14px;background:{{ c.bg }};color:{{ c.color }};display:flex;align-items:center;justify-content:center;font-size:22px">{{ c.ic }}</span>
+            <div style="font-size:17px;font-weight:700;color:var(--text);margin-top:14px">{{ c.l }}</div>
+            <div style="font-size:12.5px;color:var(--muted);margin-top:6px;line-height:1.7">{{ c.desc }}</div>
+            <div style="font-size:11.5px;color:var(--gold);margin-top:10px">{{ c.roleNote }}</div>
+          </button>
+        </sc-for>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- STEP 2: exact role -->
+    <sc-if value="{{ s2 }}" hint-placeholder-val="{{ false }}">
+    <div style="animation:mjsu-fade .3s both">
+      <div style="text-align:center;margin-bottom:8px"><h1 style="font-size:clamp(22px,3.2vw,30px);font-weight:800;letter-spacing:-.6px;color:var(--text)">نقش دقیق‌ات را انتخاب کن</h1><p style="font-size:14px;color:var(--muted);margin-top:10px">دسته: <b style="color:var(--gold)">{{ catLabel }}</b></p></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:13px;margin-top:26px">
+        <sc-for list="{{ roleOptions }}" as="r" hint-placeholder-count="4">
+          <button onClick="{{ r.fn }}" style="{{ r.style }}">
+            <span style="width:38px;height:38px;flex-shrink:0;border-radius:11px;background:{{ r.bg }};color:{{ r.color }};display:flex;align-items:center;justify-content:center;font-size:17px">{{ r.ic }}</span>
+            <div style="min-width:0"><div style="font-size:14.5px;font-weight:700;color:var(--text)">{{ r.l }}</div><div style="font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.5">{{ r.desc }}</div></div>
+          </button>
+        </sc-for>
+      </div>
+      <button onClick="{{ back }}" style="margin-top:24px;height:42px;padding:0 18px;border:1px solid var(--line2);border-radius:12px;background:transparent;color:var(--text);font-family:inherit;font-weight:600;font-size:13.5px;cursor:pointer">→ مرحله قبل</button>
+    </div>
+    </sc-if>
+
+    <!-- STEP 3: tailored form -->
+    <sc-if value="{{ s3 }}" hint-placeholder-val="{{ false }}">
+    <div style="animation:mjsu-fade .3s both;max-width:560px;margin:0 auto">
+      <div style="display:flex;align-items:center;gap:13px;background:var(--surface);border:1px solid var(--gold);border-radius:16px;padding:16px 18px;margin-bottom:24px">
+        <span style="width:46px;height:46px;flex-shrink:0;border-radius:13px;background:{{ role.bg }};color:{{ role.color }};display:flex;align-items:center;justify-content:center;font-size:21px">{{ role.ic }}</span>
+        <div style="flex:1"><div style="font-size:16px;font-weight:700;color:var(--text)">ثبت‌نام به‌عنوان {{ role.l }}</div><div style="font-size:12px;color:var(--muted);margin-top:3px">{{ role.formNote }}</div></div>
+        <button onClick="{{ back }}" style="font-size:12px;color:var(--gold);background:none;border:none;cursor:pointer;font-family:inherit;font-weight:700">تغییر نقش</button>
+      </div>
+      <div style="display:grid;gap:15px">
+        <sc-for list="{{ formFields }}" as="f" hint-placeholder-count="4">
+          <div><div style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:7px">{{ f.l }}</div><input placeholder="{{ f.ph }}" style="width:100%;border:1px solid var(--line2);border-radius:12px;background:var(--surface);color:var(--text);font-family:inherit;font-size:14px;padding:12px 14px;outline:none"/></div>
+        </sc-for>
+        <sc-if value="{{ role.needsDocs }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;gap:11px;padding:13px 15px;border:1px dashed var(--line2);border-radius:12px;background:var(--bg2)"><span style="color:var(--gold);font-size:16px">❖</span><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--text)">{{ role.docLabel }}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">برای تأیید هویت و فعال‌سازی پنل لازم است</div></div><span style="font-size:11.5px;color:var(--gold);font-weight:700">آپلود ＋</span></div>
+        </sc-if>
+        <label style="display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--muted);cursor:pointer"><span style="width:18px;height:18px;border-radius:5px;border:1.5px solid var(--gold);background:var(--gold);color:#16140f;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800">✓</span> قوانین و حریم خصوصی ملک‌جت را می‌پذیرم</label>
+        <a href="{{ role.dest }}" style="height:50px;display:flex;align-items:center;justify-content:center;border-radius:14px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;text-decoration:none;font-weight:700;font-size:15px">ساخت حساب و ورود به پنل {{ role.l }} ←</a>
+        <div style="text-align:center;font-size:12px;color:var(--muted)">پس از ثبت‌نام مستقیم به میز کار اختصاصی خودت می‌روی.</div>
+      </div>
+    </div>
+    </sc-if>
+  </main>
+  </sc-if>
+
+  <a href="MelkJet.dc.html" aria-label="home" style="position:fixed;bottom:22px;left:22px;z-index:60;width:52px;height:52px;border-radius:16px;text-decoration:none;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-size:19px;font-weight:800;box-shadow:0 14px 34px -10px var(--gold);display:flex;align-items:center;justify-content:center">✦</a>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:900,&quot;height&quot;:760}}">
+class Component extends DCLogic {
+  state = { theme:'dark', stage:'phone', phone:'', otp:'', step:1, cat:null, role:null };
+  themes = {
+    dark:{ '--bg':'#0d0d0f','--bg2':'#141417','--surface':'#18181c','--navbg':'rgba(13,13,15,0.72)','--line':'rgba(255,255,255,0.08)','--line2':'rgba(255,255,255,0.14)','--text':'#f2f1ee','--muted':'#9a9a98','--faint':'#6a6a68','--gold':'#c9a96a','--gold2':'#e0c489','--goldDim':'rgba(201,169,106,0.12)' },
+    light:{ '--bg':'#f4f1ea','--bg2':'#faf7f1','--surface':'#ffffff','--navbg':'rgba(244,241,234,0.82)','--line':'rgba(26,24,20,0.09)','--line2':'rgba(26,24,20,0.16)','--text':'#1a1814','--muted':'#6b6862','--faint':'#9a968d','--gold':'#9c7a3c','--gold2':'#b8923f','--goldDim':'rgba(156,122,60,0.10)' }
+  };
+  toggleTheme = () => this.setState(s=>({ theme:s.theme==='dark'?'light':'dark' }));
+  onPhone = (e) => this.setState({ phone:e.target.value });
+  sendOtp = () => { if(((this.state.phone||'').trim()).length>=10) this.setState({ stage:'otp' }); };
+  onOtp = (e) => this.setState({ otp:e.target.value });
+  verifyOtp = () => this.setState({ stage:'role' });
+  editPhone = () => this.setState({ stage:'phone' });
+  pickCat = (c) => () => this.setState({ cat:c, step:2 });
+  pickRole = (r) => () => this.setState({ role:r, step:3 });
+  back = () => this.setState(s=>({ step:s.step-1 }));
+
+  cats = {
+    customer:{ l:'مشتری', ic:'◍', bg:'rgba(91,155,213,0.15)', color:'#5b9bd5', desc:'دنبال خرید، فروش، اجاره یا سرمایه‌گذاری ملک هستم.', roleNote:'۳ نقش' },
+    pro:{ l:'متخصص املاک', ic:'◌', bg:'var(--goldDim)', color:'var(--gold)', desc:'مشاور، آژانس، سازنده یا فروشنده مصالح هستم.', roleNote:'۴ نقش' },
+    service:{ l:'خدمات تخصصی', ic:'◈', bg:'rgba(155,122,208,0.15)', color:'#9b7ad0', desc:'معمار، کارشناس، حقوقی، بانک، دفترخانه یا پیمانکار.', roleNote:'۷ نقش' }
+  };
+  roles = {
+    // customer
+    buyer:{ l:'خریدار / اجاره‌کننده', ic:'◍', bg:'rgba(91,155,213,0.15)', color:'#5b9bd5', desc:'جستجو و دریافت پیشنهاد هوشمند', dest:'MelkJet Buyer.dc.html', formNote:'فقط چند ثانیه', needsDocs:false, fields:['name','phone','city'] },
+    seller:{ l:'فروشنده / مالک', ic:'⌂', bg:'rgba(95,217,138,0.15)', color:'#5fd98a', desc:'ثبت و فروش ملک شخصی', dest:'MelkJet Owner.dc.html', formNote:'فقط چند ثانیه', needsDocs:false, fields:['name','phone','city'] },
+    investor:{ l:'سرمایه‌گذار', ic:'◈', bg:'var(--goldDim)', color:'var(--gold)', desc:'فرصت‌های بازده و سبد دارایی', dest:'MelkJet Owner.dc.html', formNote:'تعریف معیار سرمایه‌گذاری', needsDocs:false, fields:['name','phone','budget'] },
+    // pro
+    advisor:{ l:'مشاور املاک', ic:'◌', bg:'var(--goldDim)', color:'var(--gold)', desc:'CRM، مدیریت فایل و مشتری', dest:'MelkJet CRM.dc.html', formNote:'نیاز به تأیید پروانه', needsDocs:true, docLabel:'پروانه/کارت مشاور املاک', fields:['name','phone','license','area'] },
+    agency:{ l:'آژانس / دپارتمان', ic:'◉', bg:'rgba(122,143,174,0.15)', color:'#7a8fae', desc:'مدیریت شعب و مشاوران', dest:'MelkJet Agency.dc.html', formNote:'ثبت اطلاعات سازمانی', needsDocs:true, docLabel:'جواز کسب آژانس', fields:['agencyName','manager','phone','branches'] },
+    builder:{ l:'سازنده / انبوه‌ساز', ic:'▦', bg:'rgba(155,122,208,0.15)', color:'#9b7ad0', desc:'مدیریت پروژه و پیش‌فروش', dest:'MelkJet Builder.dc.html', formNote:'ثبت اطلاعات شرکت', needsDocs:true, docLabel:'پروانه ساخت / جواز شرکت', fields:['companyName','manager','phone','projects'] },
+    materials:{ l:'فروشنده مصالح (B2B)', ic:'⛓', bg:'rgba(122,168,143,0.15)', color:'#7aa88f', desc:'کاتالوگ، سفارش و RFQ', dest:'MelkJet Materials.dc.html', formNote:'ثبت اطلاعات فروشگاه', needsDocs:true, docLabel:'جواز کسب', fields:['storeName','owner','phone','category'] },
+    // service
+    architect:{ l:'معمار / طراح داخلی', ic:'△', bg:'rgba(155,122,208,0.15)', color:'#9b7ad0', desc:'پروژه طراحی و نمونه‌کار', dest:'MelkJet Pros.dc.html', formNote:'نیاز به نمونه‌کار', needsDocs:true, docLabel:'پروانه نظام‌مهندسی', fields:['name','phone','field','license'] },
+    contractor:{ l:'پیمانکار', ic:'⚒', bg:'rgba(201,138,74,0.15)', color:'#c98a4a', desc:'پروژه اجرایی و تیم', dest:'MelkJet Pros.dc.html', formNote:'ثبت رتبه پیمانکاری', needsDocs:true, docLabel:'گواهی رتبه‌بندی', fields:['name','company','phone','grade'] },
+    appraiser:{ l:'کارشناس رسمی', ic:'◎', bg:'rgba(91,155,213,0.15)', color:'#5b9bd5', desc:'ارزیابی و گزارش رسمی', dest:'MelkJet Pros.dc.html', formNote:'نیاز به پروانه کارشناسی', needsDocs:true, docLabel:'پروانه کارشناس رسمی دادگستری', fields:['name','phone','license','expertise'] },
+    legal:{ l:'دفتر حقوقی / وکیل', ic:'⚖', bg:'rgba(90,122,156,0.15)', color:'#5a7a9c', desc:'پرونده و قرارداد ملکی', dest:'MelkJet Pros.dc.html', formNote:'نیاز به پروانه وکالت', needsDocs:true, docLabel:'پروانه وکالت/مشاوره حقوقی', fields:['name','phone','barId','field'] },
+    bank:{ l:'بانک / شرکت بیمه', ic:'⛁', bg:'rgba(95,169,122,0.15)', color:'#5fa97a', desc:'تسهیلات و بیمه ملک', dest:'MelkJet Pros.dc.html', formNote:'ثبت اطلاعات سازمانی', needsDocs:true, docLabel:'مجوز فعالیت سازمانی', fields:['orgName','contact','phone','type'] },
+    notary:{ l:'دفترخانه اسناد رسمی', ic:'❖', bg:'rgba(176,122,138,0.15)', color:'#b07a8a', desc:'انتقال سند و نوبت‌دهی', dest:'MelkJet Pros.dc.html', formNote:'نیاز به شماره دفترخانه', needsDocs:true, docLabel:'ابلاغ سردفتری', fields:['notaryName','number','phone','city'] }
+  };
+  catRoles = { customer:['buyer','seller','investor'], pro:['advisor','agency','builder','materials'], service:['architect','contractor','appraiser','legal','bank','notary'] };
+  fieldLabels = {
+    name:['نام و نام خانوادگی','مثلاً علی رضایی'], phone:['شماره موبایل','۰۹۱۲۳۴۵۶۷۸۹'], city:['شهر','مثلاً تهران'], budget:['بودجه سرمایه‌گذاری (میلیارد)','مثلاً ۵۰'],
+    license:['شماره پروانه','شماره جواز/پروانه'], area:['منطقه فعالیت','مثلاً سعادت‌آباد'], agencyName:['نام آژانس','مثلاً املاک پارسیان'], manager:['نام مدیر','نام مدیرمسئول'], branches:['تعداد شعب','مثلاً ۳'],
+    companyName:['نام شرکت','نام شرکت ساختمانی'], projects:['تعداد پروژه فعال','مثلاً ۲'], storeName:['نام فروشگاه','نام فروشگاه مصالح'], owner:['نام مالک','نام صاحب کسب‌وکار'], category:['دسته محصولات','مثلاً آهن و میلگرد'],
+    field:['حوزه تخصص','مثلاً طراحی داخلی'], company:['نام شرکت/پیمانکاری','اختیاری'], grade:['رتبه پیمانکاری','مثلاً پایه ۳'], expertise:['رشته کارشناسی','مثلاً راه و ساختمان'],
+    barId:['شماره پروانه وکالت','شماره پروانه'], orgName:['نام سازمان','نام بانک/بیمه'], contact:['نام رابط','نام مسئول'], type:['نوع سازمان','بانک / بیمه'], notaryName:['نام دفترخانه','مثلاً دفترخانه ۱۲۰'], number:['شماره دفترخانه','مثلاً ۱۲۰']
+  };
+
+  renderVals(){
+    const t = this.themes[this.state.theme];
+    const rootStyle = Object.entries(t).map(([k,v])=>k+':'+v).join(';') + ';min-height:100vh;background:var(--bg);color:var(--text);font-family:Vazirmatn,sans-serif;transition:background .3s,color .3s';
+    const step=this.state.step;
+    const stepNames=['','دسته','نقش','اطلاعات'];
+    const steps=[1,2,3].map(n=>{ const done=n<step, active=n===step; return { n:done?'✓':this.toFa(n), l:stepNames[n], dotStyle:'width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;'+((active||done)?'background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f':'background:var(--surface);border:1px solid var(--line);color:var(--muted)'), labelStyle:'font-size:12.5px;font-weight:'+(active?'700':'500')+';color:'+((active||done)?'var(--text)':'var(--muted)'), barColor:n<step?'var(--gold)':'var(--line)', barHide:n===3?'display:none':'' }; });
+
+    const catCard=(id)=>{ const c=this.cats[id]; return { l:c.l, ic:c.ic, bg:c.bg, color:c.color, desc:c.desc, roleNote:c.roleNote, fn:this.pickCat(id), style:'display:flex;flex-direction:column;align-items:flex-start;padding:24px;border:1px solid var(--line);border-radius:18px;background:var(--surface);cursor:pointer;font-family:inherit;transition:.18s' }; };
+    const roleCard=(id)=>{ const r=this.roles[id]; return { l:r.l, ic:r.ic, bg:r.bg, color:r.color, desc:r.desc, fn:this.pickRole(id), style:'display:flex;align-items:flex-start;gap:12px;padding:16px;border:1px solid var(--line);border-radius:15px;background:var(--surface);cursor:pointer;font-family:inherit;text-align:right;transition:.18s' }; };
+
+    const curRole = this.state.role ? this.roles[this.state.role] : null;
+    const formFields = curRole ? curRole.fields.map(k=>({ l:(this.fieldLabels[k]||[k,''])[0], ph:(this.fieldLabels[k]||['',''])[1] })) : [];
+
+    return {
+      rootStyle, themeIcon:this.state.theme==='dark'?'☀':'☾', toggleTheme:this.toggleTheme,
+      stagePhone:this.state.stage==='phone', stageOtp:this.state.stage==='otp', stageRole:this.state.stage==='role',
+      phone:this.state.phone, onPhone:this.onPhone, sendOtp:this.sendOtp, otp:this.state.otp, onOtp:this.onOtp, verifyOtp:this.verifyOtp, editPhone:this.editPhone,
+      phoneMasked:(this.state.phone||'۰۹۱۲۳۴۵۶۷۸۹'),
+      steps, s1:step===1, s2:step===2, s3:step===3, back:this.back,
+      categories:['customer','pro','service'].map(catCard),
+      catLabel: this.state.cat ? this.cats[this.state.cat].l : '',
+      roleOptions: this.state.cat ? this.catRoles[this.state.cat].map(roleCard) : [],
+      role: curRole ? { l:curRole.l, ic:curRole.ic, bg:curRole.bg, color:curRole.color, dest:curRole.dest, formNote:curRole.formNote, needsDocs:curRole.needsDocs, docLabel:curRole.docLabel||'' } : { l:'', ic:'', bg:'', color:'', dest:'#', formNote:'', needsDocs:false, docLabel:'' },
+      formFields
+    };
+  }
+  toFa(s){ return String(s).replace(/[0-9]/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d]); }
+}
+</script>
+</body>
+</html>

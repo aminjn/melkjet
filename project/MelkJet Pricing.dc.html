@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{margin:0;font-family:'Vazirmatn',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:rgba(140,140,140,0.3);border-radius:8px}
+  @keyframes mjr-glow{0%,100%{opacity:.4}50%{opacity:.9}}
+  @media(max-width:860px){.mjr-nav{display:none!important}}
+</style>
+</helmet>
+<div dir="rtl" style="{{ rootStyle }}">
+
+  <!-- NAV -->
+  <header style="position:sticky;top:0;z-index:50;backdrop-filter:blur(18px);background:var(--navbg);border-bottom:1px solid var(--line)">
+    <nav style="max-width:1200px;margin:0 auto;padding:0 22px;height:64px;display:flex;align-items:center;gap:22px">
+      <a href="MelkJet.dc.html" style="display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--text)">
+        <span style="width:32px;height:32px;border-radius:9px;background:linear-gradient(140deg,var(--gold2),var(--gold));display:flex;align-items:center;justify-content:center"><span style="width:12px;height:12px;background:var(--bg);transform:rotate(45deg);border-radius:2px"></span></span>
+        <span style="font-weight:800;font-size:18px;letter-spacing:-.5px">ملک‌جت</span>
+      </a>
+      <div class="mjr-nav" style="display:flex;gap:2px;font-size:13.5px;font-weight:500">
+        <sc-for list="{{ navLinks }}" as="l" hint-placeholder-count="4"><a href="{{ l.href }}" style="padding:7px 11px;border-radius:9px;color:var(--muted);text-decoration:none" style-hover="background:var(--goldDim);color:var(--text)">{{ l.t }}</a></sc-for>
+      </div>
+      <div style="flex:1"></div>
+      <button onClick="{{ toggleTheme }}" aria-label="theme" style="width:38px;height:38px;border-radius:11px;border:1px solid var(--line);background:var(--surface);color:var(--text);cursor:pointer;font-size:14px">{{ themeIcon }}</button>
+      <a href="MelkJet Buyer.dc.html" style="padding:0 16px;height:38px;display:flex;align-items:center;border-radius:11px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;text-decoration:none;font-size:13.5px;font-weight:700">ورود</a>
+    </nav>
+  </header>
+
+  <main style="max-width:1200px;margin:0 auto;padding:clamp(40px,6vw,72px) 22px 90px">
+    <!-- hero -->
+    <div style="text-align:center;max-width:640px;margin:0 auto">
+      <div style="display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;border:1px solid var(--line2);background:var(--surface);font-size:12.5px;font-weight:600;color:var(--gold)"><span style="width:7px;height:7px;border-radius:50%;background:var(--gold);animation:mjr-glow 2s infinite"></span>پلن‌ها و اشتراک</div>
+      <h1 style="font-size:clamp(28px,4.5vw,44px);font-weight:800;letter-spacing:-1px;color:var(--text);margin-top:18px">پلنی برای هر نقش</h1>
+      <p style="font-size:16px;line-height:1.85;color:var(--muted);margin-top:14px">از جستجوی رایگان تا ابزارهای سازمانی. هر زمان ارتقا بده یا لغو کن.</p>
+      <!-- billing toggle -->
+      <div style="display:inline-flex;align-items:center;gap:4px;margin-top:24px;padding:5px;border-radius:13px;background:var(--surface);border:1px solid var(--line)">
+        <button onClick="{{ setMonthly }}" style="{{ monthlyStyle }}">ماهانه</button>
+        <button onClick="{{ setYearly }}" style="{{ yearlyStyle }}">سالانه <span style="color:#5fd98a;font-size:11px">۲۰٪ تخفیف</span></button>
+      </div>
+    </div>
+
+    <!-- plans -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-top:40px">
+      <sc-for list="{{ plans }}" as="p" hint-placeholder-count="6">
+        <div style="{{ p.cardStyle }}">
+          <sc-if value="{{ p.popular }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;top:0;left:0;right:0;text-align:center;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-size:11.5px;font-weight:800;padding:5px">پرطرفدار</div></sc-if>
+          <div style="{{ p.bodyStyle }}">
+            <div style="font-size:15px;font-weight:700;color:var(--text)">{{ p.name }}</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:5px;line-height:1.5;min-height:32px">{{ p.who }}</div>
+            <div style="display:flex;align-items:baseline;gap:5px;margin-top:14px"><span style="font-size:28px;font-weight:800;color:var(--text);letter-spacing:-.5px">{{ p.price }}</span><span style="font-size:12px;color:var(--muted)">{{ p.unit }}</span></div>
+            <a href="MelkJet Buyer.dc.html" style="{{ p.ctaStyle }}">{{ p.cta }}</a>
+            <div style="display:grid;gap:9px;margin-top:18px;padding-top:18px;border-top:1px solid var(--line)">
+              <sc-for list="{{ p.features }}" as="f" hint-placeholder-count="4">
+                <div style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--text)"><span style="color:{{ f.color }};flex-shrink:0">{{ f.ic }}</span><span style="line-height:1.5">{{ f.t }}</span></div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- enterprise strip -->
+    <div style="margin-top:24px;background:var(--surface);border:1px solid var(--gold);border-radius:20px;padding:clamp(24px,4vw,36px);display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;position:relative;overflow:hidden">
+      <div style="position:absolute;inset:0;background:radial-gradient(500px 200px at 90% 0,var(--goldDim),transparent)"></div>
+      <div style="position:relative">
+        <div style="font-size:13px;font-weight:700;color:var(--gold)">سازمانی · سفارشی</div>
+        <h2 style="font-size:clamp(20px,3vw,28px);font-weight:800;color:var(--text);margin-top:8px;letter-spacing:-.5px">راهکار اختصاصی برای هلدینگ‌ها</h2>
+        <p style="font-size:14px;color:var(--muted);margin-top:8px;max-width:460px;line-height:1.7">API اختصاصی، مدل AI سفارشی، مدیریت چندشرکتی، SLA و پشتیبانی ۲۴/۷.</p>
+      </div>
+      <a href="#" style="position:relative;flex-shrink:0;padding:0 24px;height:46px;display:flex;align-items:center;border-radius:13px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;text-decoration:none;font-weight:700;font-size:14px">تماس با فروش</a>
+    </div>
+
+    <!-- comparison -->
+    <div style="margin-top:48px">
+      <h2 style="text-align:center;font-size:clamp(22px,3vw,30px);font-weight:800;color:var(--text);letter-spacing:-.6px;margin-bottom:28px">مقایسه‌ی امکانات</h2>
+      <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden;overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;min-width:680px">
+          <thead><tr style="background:var(--bg2)"><th style="text-align:right;padding:14px 20px;font-size:12.5px;font-weight:700;color:var(--text)">امکانات</th>
+            <sc-for list="{{ compCols }}" as="c" hint-placeholder-count="4"><th style="text-align:center;padding:14px;font-size:12.5px;font-weight:700;color:{{ c.color }}">{{ c.l }}</th></sc-for>
+          </tr></thead>
+          <tbody>
+            <sc-for list="{{ compRows }}" as="r" hint-placeholder-count="6">
+              <tr style="border-top:1px solid var(--line)">
+                <td style="padding:13px 20px;font-size:12.5px;color:var(--text)">{{ r.l }}</td>
+                <sc-for list="{{ r.cells }}" as="cell" hint-placeholder-count="4"><td style="text-align:center;padding:13px"><span style="{{ cell.style }}">{{ cell.v }}</span></td></sc-for>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <a href="MelkJet.dc.html" aria-label="home" style="position:fixed;bottom:22px;left:22px;z-index:60;width:52px;height:52px;border-radius:16px;text-decoration:none;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-size:19px;font-weight:800;box-shadow:0 14px 34px -10px var(--gold);display:flex;align-items:center;justify-content:center">✦</a>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1200,&quot;height&quot;:1100}}">
+class Component extends DCLogic {
+  state = { theme:'dark', billing:'monthly' };
+  themes = {
+    dark:{ '--bg':'#0d0d0f','--bg2':'#141417','--surface':'#18181c','--navbg':'rgba(13,13,15,0.72)','--line':'rgba(255,255,255,0.08)','--line2':'rgba(255,255,255,0.14)','--text':'#f2f1ee','--muted':'#9a9a98','--faint':'#6a6a68','--gold':'#c9a96a','--gold2':'#e0c489','--goldDim':'rgba(201,169,106,0.12)' },
+    light:{ '--bg':'#f4f1ea','--bg2':'#faf7f1','--surface':'#ffffff','--navbg':'rgba(244,241,234,0.82)','--line':'rgba(26,24,20,0.09)','--line2':'rgba(26,24,20,0.16)','--text':'#1a1814','--muted':'#6b6862','--faint':'#9a968d','--gold':'#9c7a3c','--gold2':'#b8923f','--goldDim':'rgba(156,122,60,0.10)' }
+  };
+  toggleTheme = () => this.setState(s=>({ theme:s.theme==='dark'?'light':'dark' }));
+  setMonthly = () => this.setState({ billing:'monthly' });
+  setYearly = () => this.setState({ billing:'yearly' });
+
+  renderVals(){
+    const t = this.themes[this.state.theme];
+    const rootStyle = Object.entries(t).map(([k,v])=>k+':'+v).join(';') + ';min-height:100vh;background:var(--bg);color:var(--text);font-family:Vazirmatn,sans-serif;transition:background .3s,color .3s';
+    const yr = this.state.billing==='yearly';
+    const yes={ic:'✓',color:'#5fd98a'}; const no={ic:'—',color:'var(--faint)'};
+    const f=(t)=>({ ic:'✓', color:'#5fd98a', t });
+    const tabOn='padding:8px 16px;border-radius:10px;border:none;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f';
+    const tabOff='padding:8px 16px;border-radius:10px;border:none;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;background:transparent;color:var(--muted)';
+
+    const mk=(price)=> yr&&price>0 ? Math.round(price*0.8) : price;
+    const fa=(n)=>String(n).replace(/[0-9]/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d]);
+
+    const plan=(name,who,price,cta,popular,features)=>{
+      const pop=popular;
+      return { name, who,
+        price: price===0?'رایگان':fa(mk(price))+' هزار',
+        unit: price===0?'':'تومان / ماه',
+        cta, popular:pop, features,
+        cardStyle:'position:relative;border-radius:18px;overflow:hidden;border:1.5px solid '+(pop?'var(--gold)':'var(--line)')+';background:var(--surface);'+(pop?'box-shadow:0 16px 40px -18px var(--gold)':''),
+        bodyStyle:'padding:'+(pop?'30px 20px 22px':'22px 20px'),
+        ctaStyle:'display:block;text-align:center;margin-top:16px;height:42px;line-height:42px;border-radius:12px;text-decoration:none;font-weight:700;font-size:13.5px;'+(pop?'background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f':'background:var(--bg2);border:1px solid var(--line2);color:var(--text)')
+      };
+    };
+
+    return {
+      rootStyle, themeIcon:this.state.theme==='dark'?'☀':'☾', toggleTheme:this.toggleTheme,
+      navLinks:[{t:'خانه',href:'MelkJet.dc.html'},{t:'جستجو',href:'MelkJet Search.dc.html'},{t:'مشاوران',href:'MelkJet CRM.dc.html'},{t:'پلن‌ها',href:'#'}],
+      setMonthly:this.setMonthly, setYearly:this.setYearly,
+      monthlyStyle: this.state.billing==='monthly'?tabOn:tabOff,
+      yearlyStyle: this.state.billing==='yearly'?tabOn:tabOff,
+      plans:[
+        plan('رایگان','خریداران و جستجوگران',0,'شروع کنید',false,[f('جستجوی هوشمند و کلاسیک'),f('ذخیره و علاقه‌مندی'),f('۳ پیشنهاد AI در ماه'),f('دستیار پایه')]),
+        plan('حرفه‌ای','فروشندگان و کاربران جدی',290,'انتخاب پلن',true,[f('همه‌ی امکانات رایگان'),f('تحلیل قیمت نامحدود'),f('دستیار خرید شخصی'),f('اعلان فرصت لحظه‌ای')]),
+        plan('مشاور','مشاوران املاک',790,'انتخاب پلن',false,[f('CRM کامل + کانبان'),f('مدیریت فایل نامحدود'),f('دستیار فروش AI'),f('تقویم و وظایف')]),
+        plan('آژانس','آژانس‌ها و دپارتمان‌ها',2490,'انتخاب پلن',false,[f('چند شعبه و چند مشاور'),f('مدیریت پورسانت و KPI'),f('مارکتینگ اتومیشن'),f('گزارش مالی سازمانی')]),
+        plan('سازنده','سازندگان و انبوه‌سازان',3900,'انتخاب پلن',false,[f('مدیریت پروژه و واحدها'),f('پیش‌فروش و موجودی'),f('پنل سرمایه‌گذاران'),f('وب‌سایت اختصاصی')]),
+        plan('سازمانی','هلدینگ‌ها','تماس',0,false,[f('همه‌چیز نامحدود'),f('API و مدل AI سفارشی'),f('مدیریت چندشرکتی'),f('پشتیبانی ۲۴/۷ + SLA')])
+      ].map((p,i)=> i===5 ? {...p, price:'تماس بگیرید', unit:'', cta:'تماس با فروش'} : p),
+      compCols:[{l:'رایگان',color:'var(--muted)'},{l:'حرفه‌ای',color:'var(--gold)'},{l:'مشاور',color:'var(--text)'},{l:'آژانس',color:'var(--text)'}],
+      compRows:[
+        { l:'جستجوی هوشمند AI', cells:[yes,yes,yes,yes] },
+        { l:'تحلیل قیمت', cells:[{ic:'۳/ماه',color:'var(--muted)'},yes,yes,yes] },
+        { l:'دستیار خرید شخصی', cells:[no,yes,yes,yes] },
+        { l:'CRM و مدیریت فایل', cells:[no,no,yes,yes] },
+        { l:'مارکتینگ اتومیشن', cells:[no,no,{ic:'محدود',color:'var(--muted)'},yes] },
+        { l:'مدیریت چند شعبه', cells:[no,no,no,yes] },
+        { l:'گزارش مالی سازمانی', cells:[no,no,no,yes] }
+      ].map(r=>({ l:r.l, cells:r.cells.map(c=>({ v:c.ic, style: c.ic==='✓'?'display:inline-flex;width:24px;height:24px;border-radius:7px;background:rgba(95,217,138,0.15);color:#5fd98a;align-items:center;justify-content:center;font-size:13px;font-weight:800': c.ic==='—'?'color:var(--faint)':'font-size:11px;font-weight:700;color:'+c.color })) }))
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{margin:0;font-family:'Vazirmatn',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:rgba(140,140,140,0.3);border-radius:8px}
+  @keyframes mjp-fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  @media(max-width:880px){.mjp-nav{display:none!important}.mjp-kpi{grid-template-columns:repeat(2,1fr)!important}.mjp-2col{grid-template-columns:1fr!important}.mjp-roles{overflow-x:auto!important}.mjp-tabs{overflow-x:auto!important}.mjp-msg{grid-template-columns:1fr!important}}
+</style>
+</helmet>
+<div dir="rtl" style="{{ rootStyle }}">
+
+  <!-- NAV -->
+  <header style="position:sticky;top:0;z-index:50;backdrop-filter:blur(18px);background:var(--navbg);border-bottom:1px solid var(--line)">
+    <nav style="max-width:1200px;margin:0 auto;padding:0 22px;height:62px;display:flex;align-items:center;gap:20px">
+      <a href="MelkJet.dc.html" style="display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--text)">
+        <span style="width:32px;height:32px;border-radius:9px;background:linear-gradient(140deg,var(--gold2),var(--gold));display:flex;align-items:center;justify-content:center"><span style="width:12px;height:12px;background:var(--bg);transform:rotate(45deg);border-radius:2px"></span></span>
+        <div class="mjp-nav"><div style="font-weight:800;font-size:17px;letter-spacing:-.5px">ملک‌جت</div><div style="font-size:10px;color:var(--gold)">خدمات تخصصی</div></div>
+      </a>
+      <div style="flex:1"></div>
+      <a href="MelkJet CRM.dc.html" style="font-size:13px;font-weight:600;color:var(--muted);text-decoration:none;padding:7px 10px;border-radius:9px" style-hover="background:var(--goldDim);color:var(--text)">◍ CRM</a>
+      <a href="MelkJet Marketing.dc.html" style="font-size:13px;font-weight:600;color:var(--muted);text-decoration:none;padding:7px 10px;border-radius:9px" style-hover="background:var(--goldDim);color:var(--text)">◔ مارکتینگ</a>
+      <a href="MelkJet Workflow.dc.html" style="font-size:13px;font-weight:600;color:var(--muted);text-decoration:none;padding:7px 10px;border-radius:9px" style-hover="background:var(--goldDim);color:var(--text)">⚙ اتوماسیون</a>
+      <a href="MelkJet Website Builder.dc.html?role=agency" style="font-size:13px;font-weight:600;color:var(--muted);text-decoration:none;padding:7px 10px;border-radius:9px" style-hover="background:var(--goldDim);color:var(--text)">◧ وب‌سایت‌ساز</a>
+      <a href="MelkJet Public Profile.dc.html" style="font-size:13px;font-weight:600;color:var(--muted);text-decoration:none;padding:7px 10px;border-radius:9px" style-hover="background:var(--goldDim);color:var(--text)">◐ صفحه عمومی</a>
+      <div style="width:1px;height:24px;background:var(--line)"></div>
+      <button onClick="{{ toggleTheme }}" aria-label="theme" style="width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--text);cursor:pointer;font-size:14px">{{ themeIcon }}</button>
+      <div style="width:36px;height:36px;border-radius:50%;background:{{ role.av }};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px">{{ role.initial }}</div>
+    </nav>
+  </header>
+
+  <!-- ROLE SWITCHER -->
+  <div style="border-bottom:1px solid var(--line);background:var(--bg2)">
+    <div class="mjp-roles" style="max-width:1200px;margin:0 auto;padding:14px 22px;display:flex;gap:10px">
+      <sc-for list="{{ roleTabs }}" as="r" hint-placeholder-count="4">
+        <button onClick="{{ r.fn }}" style="{{ r.style }}"><span style="font-size:17px">{{ r.ic }}</span><div style="text-align:right"><div style="font-size:13.5px;font-weight:700">{{ r.l }}</div><div style="font-size:10.5px;opacity:.7">{{ r.sub }}</div></div></button>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- TAB BAR -->
+  <div style="border-bottom:1px solid var(--line);background:var(--bg2);position:sticky;top:62px;z-index:40">
+    <div class="mjp-tabs" style="max-width:1200px;margin:0 auto;padding:0 22px;display:flex;gap:4px">
+      <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+        <button onClick="{{ t.fn }}" style="{{ t.style }}"><span style="font-size:14px">{{ t.ic }}</span>{{ t.l }}</button>
+      </sc-for>
+    </div>
+  </div>
+
+  <main style="max-width:1200px;margin:0 auto;padding:24px 22px 80px">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:20px">
+      <div><h1 style="font-size:clamp(20px,2.6vw,26px);font-weight:800;letter-spacing:-.5px;color:var(--text)">{{ role.title }}</h1><p style="font-size:13px;color:var(--muted);margin-top:5px">{{ viewSub }}</p></div>
+      <button style="height:42px;padding:0 18px;border:none;border-radius:12px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-weight:700;font-size:13.5px;cursor:pointer">{{ ctaLabel }}</button>
+    </div>
+
+    <!-- ===== CASES (dashboard) ===== -->
+    <sc-if value="{{ isCases }}" hint-placeholder-val="{{ true }}">
+    <div style="animation:mjp-fade .3s both">
+      <div class="mjp-kpi" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px">
+        <sc-for list="{{ role.kpis }}" as="k" hint-placeholder-count="4">
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px"><div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12px;color:var(--muted)">{{ k.l }}</span><span style="width:9px;height:9px;border-radius:50%;background:{{ k.dot }}"></span></div><div style="font-size:24px;font-weight:800;color:var(--text);margin-top:12px;letter-spacing:-.5px">{{ k.v }}</div><div style="font-size:11.5px;color:var(--muted);margin-top:4px">{{ k.t }}</div></div>
+        </sc-for>
+      </div>
+      <div class="mjp-2col" style="display:grid;grid-template-columns:1.5fr 1fr;gap:18px;align-items:start">
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line)"><div style="font-size:15px;font-weight:700;color:var(--text)">{{ role.listTitle }}</div><div style="display:flex;gap:7px"><sc-for list="{{ role.filters }}" as="f" hint-placeholder-count="3"><span style="{{ f.style }}">{{ f.l }}</span></sc-for></div></div>
+          <div style="display:grid">
+            <sc-for list="{{ role.cases }}" as="c" hint-placeholder-count="4">
+              <div style="display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--line)" style-hover="background:var(--bg2)">
+                <span style="width:42px;height:42px;flex-shrink:0;border-radius:11px;background:{{ c.bg }};display:flex;align-items:center;justify-content:center;font-size:18px">{{ c.ic }}</span>
+                <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.title }}</div><div style="font-size:12px;color:var(--muted);margin-top:3px">{{ c.sub }}</div></div>
+                <div style="text-align:left;flex-shrink:0"><div style="font-size:13px;font-weight:700;color:var(--gold)">{{ c.value }}</div><div style="margin-top:5px"><span style="{{ c.statusStyle }}">{{ c.status }}</span></div></div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display:grid;gap:16px;position:sticky;top:140px">
+          <div style="background:var(--surface);border:1px solid var(--gold);border-radius:16px;padding:18px;position:relative;overflow:hidden">
+            <div style="position:absolute;inset:0;background:radial-gradient(200px 90px at 90% 0,var(--goldDim),transparent)"></div>
+            <div style="position:relative;display:flex;gap:11px"><span style="width:30px;height:30px;flex-shrink:0;border-radius:9px;background:linear-gradient(140deg,var(--gold2),var(--gold));display:flex;align-items:center;justify-content:center;color:#16140f;font-weight:800;font-size:14px">✦</span><div><div style="font-size:13.5px;font-weight:700;color:var(--text)">دستیار هوشمند</div><div style="font-size:12px;color:var(--muted);margin-top:5px;line-height:1.7">{{ role.aiHint }}</div></div></div>
+          </div>
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px">
+            <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:14px">{{ role.sideTitle }}</div>
+            <sc-if value="{{ role.sideIsGrid }}" hint-placeholder-val="{{ false }}">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><sc-for list="{{ role.sideItems }}" as="s" hint-placeholder-count="4"><div style="border-radius:11px;overflow:hidden;border:1px solid var(--line)"><div style="height:78px;background:{{ s.img }};position:relative"><div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,transparent,transparent 7px,rgba(255,255,255,0.03) 7px,rgba(255,255,255,0.03) 8px)"></div></div><div style="padding:9px 11px;font-size:11.5px;font-weight:600;color:var(--text)">{{ s.l }}</div></div></sc-for></div>
+            </sc-if>
+            <sc-if value="{{ role.sideIsList }}" hint-placeholder-val="{{ true }}">
+              <div style="display:grid;gap:11px"><sc-for list="{{ role.sideItems }}" as="s" hint-placeholder-count="4"><div style="display:flex;align-items:center;gap:11px"><span style="width:32px;height:32px;flex-shrink:0;border-radius:9px;background:{{ s.bg }};color:{{ s.color }};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">{{ s.ic }}</span><div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:600;color:var(--text)">{{ s.l }}</div><div style="font-size:11px;color:var(--muted)">{{ s.sub }}</div></div><span style="font-size:12.5px;font-weight:700;color:{{ s.valColor }};white-space:nowrap">{{ s.val }}</span></div></sc-for></div>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ===== CALENDAR ===== -->
+    <sc-if value="{{ isCal }}" hint-placeholder-val="{{ false }}">
+    <div style="animation:mjp-fade .3s both;background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line)"><div style="font-size:15px;font-weight:700;color:var(--text)">هفته‌ی جاری · خرداد ۱۴۰۵</div><div style="display:flex;gap:6px"><button style="width:32px;height:32px;border:1px solid var(--line);border-radius:9px;background:var(--bg2);color:var(--text);cursor:pointer">›</button><button style="width:32px;height:32px;border:1px solid var(--line);border-radius:9px;background:var(--bg2);color:var(--text);cursor:pointer">‹</button></div></div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr)">
+        <sc-for list="{{ week }}" as="day" hint-placeholder-count="7">
+          <div style="border-left:1px solid var(--line);min-height:300px">
+            <div style="{{ day.headStyle }}"><div style="font-size:11px;color:var(--muted)">{{ day.dow }}</div><div style="font-size:16px;font-weight:700;color:{{ day.numColor }};margin-top:2px">{{ day.num }}</div></div>
+            <div style="padding:8px;display:grid;gap:7px"><sc-for list="{{ day.events }}" as="ev" hint-placeholder-count="1"><div style="{{ ev.style }}"><div style="font-size:10px;opacity:.75">{{ ev.time }}</div><div style="font-size:11px;font-weight:600;margin-top:1px;line-height:1.4">{{ ev.t }}</div></div></sc-for></div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ===== MESSAGES ===== -->
+    <sc-if value="{{ isMessages }}" hint-placeholder-val="{{ false }}">
+    <div class="mjp-msg" style="animation:mjp-fade .3s both;display:grid;grid-template-columns:300px 1fr;gap:16px;align-items:start">
+      <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden">
+        <sc-for list="{{ threads }}" as="t" hint-placeholder-count="3"><button onClick="{{ t.fn }}" style="{{ t.style }}"><div style="width:42px;height:42px;flex-shrink:0;border-radius:50%;background:{{ t.av }}"></div><div style="flex:1;min-width:0;text-align:right"><div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:13.5px;font-weight:700;color:var(--text)">{{ t.name }}</span><span style="font-size:10.5px;color:var(--faint)">{{ t.time }}</span></div><div style="font-size:12px;color:var(--muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.last }}</div></div></button></sc-for>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;display:flex;flex-direction:column;height:440px;overflow:hidden">
+        <div style="padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:11px"><div style="width:38px;height:38px;border-radius:50%;background:{{ activeThread.av }}"></div><div><div style="font-size:14px;font-weight:700;color:var(--text)">{{ activeThread.name }}</div><div style="font-size:11px;color:#5fd98a">آنلاین</div></div></div>
+        <div style="flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:12px"><sc-for list="{{ chat }}" as="m" hint-placeholder-count="3"><div style="{{ m.rowStyle }}"><div style="{{ m.bubbleStyle }}">{{ m.text }}<div style="font-size:9.5px;opacity:.6;margin-top:4px">{{ m.time }}</div></div></div></sc-for></div>
+        <div style="padding:13px 16px;border-top:1px solid var(--line)"><div style="display:flex;gap:9px;align-items:center;background:var(--bg2);border:1px solid var(--line2);border-radius:13px;padding:8px 8px 8px 14px"><input placeholder="پیامت را بنویس…" style="flex:1;border:none;outline:none;background:transparent;color:var(--text);font-family:inherit;font-size:13.5px"/><button style="width:36px;height:36px;border:none;border-radius:10px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;cursor:pointer;font-weight:800">↑</button></div></div>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ===== DOCUMENTS ===== -->
+    <sc-if value="{{ isDocs }}" hint-placeholder-val="{{ false }}">
+    <div style="animation:mjp-fade .3s both;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px">
+      <sc-for list="{{ docs }}" as="d" hint-placeholder-count="4">
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:15px;padding:18px" style-hover="border-color:var(--gold)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><span style="width:42px;height:42px;border-radius:11px;background:{{ d.bg }};display:flex;align-items:center;justify-content:center;font-size:18px">{{ d.ic }}</span><span style="{{ d.statusStyle }}">{{ d.status }}</span></div>
+          <div style="font-size:14px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ d.title }}</div>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:4px">{{ d.sub }}</div>
+          <div style="display:flex;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)"><button style="flex:1;font-size:12px;font-weight:600;color:var(--text);background:var(--bg2);border:1px solid var(--line2);border-radius:9px;padding:8px;font-family:inherit;cursor:pointer">مشاهده</button><button style="flex:1;font-size:12px;font-weight:600;color:var(--gold);background:var(--goldDim);border:1px solid var(--gold);border-radius:9px;padding:8px;font-family:inherit;cursor:pointer">دانلود</button></div>
+        </div>
+      </sc-for>
+    </div>
+    </sc-if>
+
+  </main>
+
+  <a href="MelkJet.dc.html" aria-label="home" style="position:fixed;bottom:22px;left:22px;z-index:60;width:52px;height:52px;border-radius:16px;text-decoration:none;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-size:19px;font-weight:800;box-shadow:0 14px 34px -10px var(--gold);display:flex;align-items:center;justify-content:center">✦</a>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1200,&quot;height&quot;:860}}">
+class Component extends DCLogic {
+  state = { theme:'dark', role:'architect', tab:'cases', thread:0 };
+  themes = {
+    dark:{ '--bg':'#0d0d0f','--bg2':'#141417','--surface':'#18181c','--navbg':'rgba(13,13,15,0.72)','--line':'rgba(255,255,255,0.08)','--line2':'rgba(255,255,255,0.14)','--text':'#f2f1ee','--muted':'#9a9a98','--faint':'#6a6a68','--gold':'#c9a96a','--gold2':'#e0c489','--goldDim':'rgba(201,169,106,0.12)' },
+    light:{ '--bg':'#f4f1ea','--bg2':'#faf7f1','--surface':'#ffffff','--navbg':'rgba(244,241,234,0.82)','--line':'rgba(26,24,20,0.09)','--line2':'rgba(26,24,20,0.16)','--text':'#1a1814','--muted':'#6b6862','--faint':'#9a968d','--gold':'#9c7a3c','--gold2':'#b8923f','--goldDim':'rgba(156,122,60,0.10)' }
+  };
+  toggleTheme = () => this.setState(s=>({ theme:s.theme==='dark'?'light':'dark' }));
+  setRole = (r) => () => this.setState({ role:r, tab:'cases' });
+  setTab = (t) => () => this.setState({ tab:t });
+  setThread = (i) => () => this.setState({ thread:i });
+
+  roles = {
+    architect:{
+      ic:'△', l:'معمار / طراح داخلی', sub:'طراحی و نظارت', av:'linear-gradient(135deg,#9b7ad0,#5e4488)', initial:'م',
+      title:'میز کار معمار و طراح داخلی', tagline:'پروژه‌های طراحی، نظارت و نمونه‌کارها', primaryCta:'＋ پروژه جدید',
+      kpis:[ {l:'پروژه فعال',v:'۷',t:'۳ در مرحله طراحی',dot:'#5fd98a'}, {l:'درخواست مشاوره',v:'۱۲',t:'۴ جدید',dot:'#e7a14a'}, {l:'بازدید نمونه‌کار',v:'۸۴۰',t:'این ماه',dot:'#5b9bd5'}, {l:'امتیاز',v:'۴٫۹ ★',t:'۶۸ نظر',dot:'var(--gold)'} ],
+      listTitle:'پروژه‌های طراحی', filters:['همه','در حال طراحی','نظارت'],
+      cases:[
+        {ic:'△',bg:'rgba(155,122,208,0.15)',title:'طراحی داخلی پنت‌هاوس زعفرانیه',sub:'۲۶۰ متر · سبک مدرن مینیمال',value:'۴۲۰ م',status:'در حال طراحی',statusColor:'#e7a14a'},
+        {ic:'▦',bg:'rgba(91,155,213,0.15)',title:'نمای ساختمان مسکونی سعادت‌آباد',sub:'۸ طبقه · نمای کامپوزیت',value:'۲۸۰ م',status:'نظارت',statusColor:'#5b9bd5'},
+        {ic:'◧',bg:'rgba(201,169,106,0.15)',title:'بازسازی آپارتمان ونک',sub:'۱۲۰ متر · کلاسیک مدرن',value:'۱۵۰ م',status:'تحویل شد',statusColor:'#5fd98a'},
+        {ic:'△',bg:'rgba(95,217,138,0.15)',title:'طراحی لابی مجتمع نگین',sub:'دروس · فاز کانسپت',value:'۹۰ م',status:'پیش‌نویس',statusColor:'#9a9a98'}
+      ],
+      aiHint:'بر اساس سبک پروژه‌های قبلی‌ات، AI ۳ مرجع الهام و پالت رنگ پیشنهاد داده است.',
+      sideTitle:'نمونه‌کارها', sideType:'grid',
+      sideItems:[ {l:'ویلای لواسان',img:'linear-gradient(135deg,#2f3a34,#1b211e)'},{l:'دفتر کار مدرن',img:'linear-gradient(135deg,#33303a,#1d1b22)'},{l:'پنت‌هاوس',img:'linear-gradient(135deg,#3a3530,#211e1b)'},{l:'کافه و رستوران',img:'linear-gradient(135deg,#2c343a,#1a1f23)'} ],
+      docType:'نقشه و قرارداد طراحی'
+    },
+    appraiser:{
+      ic:'◎', l:'کارشناس رسمی', sub:'ارزیابی و گزارش', av:'linear-gradient(135deg,#5b9bd5,#2f5f8a)', initial:'ک',
+      title:'میز کار کارشناس رسمی دادگستری', tagline:'درخواست‌های ارزیابی، بازدید و صدور گزارش', primaryCta:'＋ پرونده جدید',
+      kpis:[ {l:'پرونده فعال',v:'۹',t:'۵ در انتظار بازدید',dot:'#e7a14a'}, {l:'گزارش این ماه',v:'۲۳',t:'صادرشده',dot:'#5fd98a'}, {l:'بازدید پیش‌رو',v:'۴',t:'این هفته',dot:'#5b9bd5'}, {l:'میانگین زمان',v:'۳٫۲ روز',t:'تا صدور گزارش',dot:'var(--gold)'} ],
+      listTitle:'درخواست‌های ارزیابی', filters:['همه','بازدید','گزارش'],
+      cases:[
+        {ic:'◎',bg:'rgba(91,155,213,0.15)',title:'ارزیابی آپارتمان سعادت‌آباد',sub:'برای وام بانکی · بانک ملت',value:'۱۷٫۸ م',status:'در حال بازدید',statusColor:'#e7a14a'},
+        {ic:'⚖',bg:'rgba(231,103,74,0.15)',title:'ارزیابی برای پرونده قضایی',sub:'ملک تجاری میرداماد · دادگستری',value:'۳۴ م',status:'فوری',statusColor:'#e7674a'},
+        {ic:'◎',bg:'rgba(95,217,138,0.15)',title:'ارزیابی ویلا لواسان',sub:'برای فروش · مالک شخصی',value:'۱۲۰ م',status:'گزارش صادر شد',statusColor:'#5fd98a'},
+        {ic:'▦',bg:'rgba(201,169,106,0.15)',title:'ارزیابی زمین کشاورزی',sub:'کرج · برای تسهیلات',value:'۸۵ م',status:'در انتظار بازدید',statusColor:'#9a9a98'}
+      ],
+      aiHint:'AI داده‌های ۲۴۰ معامله‌ی مشابه را برای پشتیبانی گزارش ارزیابی آماده کرده است.',
+      sideTitle:'بازدیدهای این هفته', sideType:'list',
+      sideItems:[ {ic:'ش',bg:'rgba(201,169,106,0.15)',color:'var(--gold)',l:'آپارتمان سعادت‌آباد',sub:'شنبه · ۱۰:۰۰',val:'۹ صبح',valColor:'var(--muted)'},{ic:'د',bg:'rgba(91,155,213,0.15)',color:'#5b9bd5',l:'ملک تجاری میرداماد',sub:'دوشنبه · ۱۴:۳۰',val:'فوری',valColor:'#e7674a'},{ic:'چ',bg:'rgba(95,217,138,0.15)',color:'#5fd98a',l:'زمین کرج',sub:'چهارشنبه · ۹:۰۰',val:'تأیید',valColor:'#5fd98a'} ],
+      docType:'گزارش ارزیابی رسمی'
+    },
+    bank:{
+      ic:'⛁', l:'بانک و بیمه', sub:'وام و پوشش', av:'linear-gradient(135deg,#5fa97a,#37704e)', initial:'ب',
+      title:'میز کار بانک و شرکت بیمه', tagline:'درخواست‌های تسهیلات و بیمه‌ی ملک', primaryCta:'＋ بررسی درخواست',
+      kpis:[ {l:'درخواست وام',v:'۳۴',t:'۱۲ در حال بررسی',dot:'#e7a14a'}, {l:'تأییدشده',v:'۱۸',t:'این ماه',dot:'#5fd98a'}, {l:'بیمه‌نامه فعال',v:'۲۴۰',t:'+۱۵ این هفته',dot:'#5b9bd5'}, {l:'مبلغ پرداختی',v:'۸۴۰ م.ت',t:'تسهیلات ماه',dot:'var(--gold)'} ],
+      listTitle:'درخواست‌های تسهیلات و بیمه', filters:['همه','وام','بیمه'],
+      cases:[
+        {ic:'⛁',bg:'rgba(95,217,138,0.15)',title:'وام خرید مسکن — علی رضایی',sub:'آپارتمان دروس · ارزیابی تأیید شده',value:'۵ م',status:'آماده پرداخت',statusColor:'#5fd98a'},
+        {ic:'⛨',bg:'rgba(91,155,213,0.15)',title:'بیمه آتش‌سوزی — برج آرین',sub:'۱۸۲ واحد · پوشش کامل',value:'۲۲۰ م',status:'در حال صدور',statusColor:'#e7a14a'},
+        {ic:'⛁',bg:'rgba(231,161,74,0.15)',title:'وام جعاله — مریم عباسی',sub:'بازسازی · در انتظار مدارک',value:'۸۰۰ م.ت',status:'نیاز به مدرک',statusColor:'#e7674a'},
+        {ic:'⛨',bg:'rgba(201,169,106,0.15)',title:'بیمه عمر و سرمایه‌گذاری',sub:'سرمایه‌گذار · ۱۰ ساله',value:'۴۵ م',status:'تأیید شد',statusColor:'#5fd98a'}
+      ],
+      aiHint:'AI ریسک اعتباری و ارزش وثیقه را تحلیل کرده؛ ۳ درخواست کم‌ریسک برای تأیید سریع علامت خورده‌اند.',
+      sideTitle:'نرخ‌های امروز', sideType:'list',
+      sideItems:[ {ic:'٪',bg:'rgba(95,217,138,0.15)',color:'#5fd98a',l:'وام خرید مسکن',sub:'بازپرداخت ۲۰ ساله',val:'۱۸٪',valColor:'var(--text)'},{ic:'٪',bg:'rgba(91,155,213,0.15)',color:'#5b9bd5',l:'وام جعاله',sub:'بازپرداخت ۵ ساله',val:'۲۳٪',valColor:'var(--text)'},{ic:'⛨',bg:'rgba(201,169,106,0.15)',color:'var(--gold)',l:'بیمه آتش‌سوزی',sub:'سالانه',val:'۰٫۸٪',valColor:'var(--text)'} ],
+      docType:'قرارداد تسهیلات / بیمه‌نامه'
+    },
+    notary:{
+      ic:'❖', l:'دفترخانه', sub:'سند و انتقال', av:'linear-gradient(135deg,#b07a8a,#6e4754)', initial:'د',
+      title:'میز کار دفتر اسناد رسمی', tagline:'نوبت‌های انتقال سند و پرونده‌های در جریان', primaryCta:'＋ ثبت نوبت',
+      kpis:[ {l:'نوبت امروز',v:'۶',t:'۲ تکمیل شده',dot:'#5fd98a'}, {l:'پرونده در جریان',v:'۱۴',t:'۵ نیاز به مدرک',dot:'#e7a14a'}, {l:'سند صادرشده',v:'۸۹',t:'این ماه',dot:'#5b9bd5'}, {l:'میانگین زمان',v:'۴۵ دقیقه',t:'هر انتقال',dot:'var(--gold)'} ],
+      listTitle:'پرونده‌های انتقال سند', filters:['همه','امروز','در جریان'],
+      cases:[
+        {ic:'❖',bg:'rgba(95,217,138,0.15)',title:'انتقال سند — آپارتمان جردن',sub:'فروشنده و خریدار حاضر · مدارک کامل',value:'۱۴٫۵ م',status:'آماده امضا',statusColor:'#5fd98a'},
+        {ic:'⎙',bg:'rgba(231,161,74,0.15)',title:'تنظیم مبایعه‌نامه — ونک',sub:'در انتظار استعلام شهرداری',value:'۹٫۲ م',status:'استعلام',statusColor:'#e7a14a'},
+        {ic:'❖',bg:'rgba(91,155,213,0.15)',title:'وکالت فروش — لواسان',sub:'موکل خارج از کشور',value:'۱۲۰ م',status:'در جریان',statusColor:'#5b9bd5'},
+        {ic:'⚠',bg:'rgba(231,103,74,0.15)',title:'انتقال سند — میرداماد',sub:'مغایرت در حدود ملک',value:'۶٫۸ م',status:'نیاز به اصلاح',statusColor:'#e7674a'}
+      ],
+      aiHint:'AI مدارک هر پرونده را بررسی و موارد ناقص را علامت زده؛ استعلام‌های لازم به‌صورت خودکار درخواست شده‌اند.',
+      sideTitle:'نوبت‌های امروز', sideType:'list',
+      sideItems:[ {ic:'۱',bg:'rgba(95,217,138,0.15)',color:'#5fd98a',l:'انتقال سند جردن',sub:'۱۰:۰۰ · اتاق ۱',val:'تکمیل',valColor:'#5fd98a'},{ic:'۲',bg:'rgba(201,169,106,0.15)',color:'var(--gold)',l:'مبایعه‌نامه ونک',sub:'۱۱:۳۰ · اتاق ۲',val:'در حال',valColor:'var(--gold)'},{ic:'۳',bg:'rgba(91,155,213,0.15)',color:'#5b9bd5',l:'وکالت لواسان',sub:'۱۴:۰۰ · اتاق ۱',val:'پیش‌رو',valColor:'var(--muted)'} ],
+      docType:'سند و مدارک رسمی'
+    },
+    contractor:{
+      ic:'⚒', l:'پیمانکار', sub:'اجرا و ساخت', av:'linear-gradient(135deg,#c98a4a,#8a5a2e)', initial:'پ',
+      title:'میز کار پیمانکار', tagline:'پروژه‌های اجرایی، پیشرفت کار و مدیریت تیم', primaryCta:'＋ پروژه اجرایی',
+      kpis:[ {l:'پروژه فعال',v:'۵',t:'۲ در مرحله اسکلت',dot:'#5fd98a'}, {l:'درخواست مناقصه',v:'۸',t:'۳ جدید',dot:'#e7a14a'}, {l:'تیم اجرایی',v:'۴۲',t:'نفر فعال',dot:'#5b9bd5'}, {l:'میانگین پیشرفت',v:'۶۴٪',t:'پروژه‌ها',dot:'var(--gold)'} ],
+      listTitle:'پروژه‌های اجرایی', filters:['همه','در حال اجرا','تحویل'],
+      cases:[
+        {ic:'⚒',bg:'rgba(201,138,74,0.15)',title:'اسکلت بتنی برج آرین',sub:'۱۸ طبقه · فاز اسکلت',value:'۴۲ م',status:'در حال اجرا',statusColor:'#e7a14a'},
+        {ic:'▦',bg:'rgba(91,155,213,0.15)',title:'نازک‌کاری مجتمع نگین',sub:'۹۶ واحد · گچ و کاشی',value:'۲۸ م',status:'در حال اجرا',statusColor:'#5b9bd5'},
+        {ic:'✓',bg:'rgba(95,217,138,0.15)',title:'محوطه‌سازی ویلا لواسان',sub:'تحویل‌شده',value:'۸ م',status:'تحویل شد',statusColor:'#5fd98a'},
+        {ic:'⚠',bg:'rgba(231,103,74,0.15)',title:'تأسیسات برج دیپلمات',sub:'تأخیر در تأمین مصالح',value:'۱۵ م',status:'نیاز پیگیری',statusColor:'#e7674a'}
+      ],
+      aiHint:'AI زمان‌بندی پروژه‌ها را تحلیل کرده؛ پروژه‌ی دیپلمات ۸ روز از برنامه عقب است — تأمین مصالح را اولویت بده.',
+      sideTitle:'وضعیت پیشرفت پروژه‌ها', sideType:'list',
+      sideItems:[ {ic:'آ',bg:'rgba(201,138,74,0.15)',color:'#c98a4a',l:'برج آرین',sub:'فاز اسکلت',val:'۴۵٪',valColor:'var(--gold)'},{ic:'ن',bg:'rgba(91,155,213,0.15)',color:'#5b9bd5',l:'مجتمع نگین',sub:'نازک‌کاری',val:'۷۰٪',valColor:'#5fd98a'},{ic:'د',bg:'rgba(231,103,74,0.15)',color:'#e7674a',l:'برج دیپلمات',sub:'تأسیسات',val:'۳۸٪',valColor:'#e7674a'} ],
+      docType:'قرارداد و صورت‌وضعیت'
+    },
+    designer:{
+      ic:'◑', l:'طراح داخلی', sub:'دکوراسیون و چیدمان', av:'linear-gradient(135deg,#c97a9a,#7a4458)', initial:'ط',
+      title:'میز کار طراح داخلی', tagline:'پروژه‌های دکوراسیون، مودبورد و نمونه‌کارها', primaryCta:'＋ پروژه طراحی',
+      kpis:[ {l:'پروژه فعال',v:'۹',t:'۴ در مرحله اجرا',dot:'#5fd98a'}, {l:'درخواست مشاوره',v:'۱۶',t:'۶ جدید',dot:'#e7a14a'}, {l:'بازدید نمونه‌کار',v:'۱٬۲۴۰',t:'این ماه',dot:'#5b9bd5'}, {l:'امتیاز',v:'۴٫۸ ★',t:'۹۲ نظر',dot:'var(--gold)'} ],
+      listTitle:'پروژه‌های دکوراسیون', filters:['همه','طراحی','اجرا'],
+      cases:[
+        {ic:'◑',bg:'rgba(201,122,154,0.15)',title:'دکوراسیون پنت‌هاوس زعفرانیه',sub:'۲۶۰ متر · سبک نئوکلاسیک',value:'۱۸۰ م',status:'در حال طراحی',statusColor:'#e7a14a'},
+        {ic:'▥',bg:'rgba(155,122,208,0.15)',title:'بازطراحی کافه مرکز شهر',sub:'سبک صنعتی مدرن',value:'۹۵ م',status:'اجرا',statusColor:'#5b9bd5'},
+        {ic:'✓',bg:'rgba(95,217,138,0.15)',title:'چیدمان آپارتمان ونک',sub:'تحویل‌شده',value:'۴۵ م',status:'تحویل شد',statusColor:'#5fd98a'},
+        {ic:'◑',bg:'rgba(231,161,74,0.15)',title:'مودبورد ویلا لواسان',sub:'فاز مفهومی',value:'۶۰ م',status:'پیش‌نویس',statusColor:'#9a9a98'}
+      ],
+      aiHint:'AI بر اساس سبک پروژه‌هایت ۴ مرجع الهام و پالت رنگ پیشنهاد داده؛ مودبورد ویلا را می‌توانی خودکار تکمیل کنی.',
+      sideTitle:'نمونه‌کارها', sideType:'grid',
+      sideItems:[ {l:'پنت‌هاوس مدرن',img:'linear-gradient(135deg,#33303a,#1d1b22)'},{l:'کافه صنعتی',img:'linear-gradient(135deg,#3a3530,#211e1b)'},{l:'لابی هتل',img:'linear-gradient(135deg,#2c343a,#1a1f23)'},{l:'دفتر کار',img:'linear-gradient(135deg,#2f3a34,#1b211e)'} ],
+      docType:'نقشه و قرارداد طراحی'
+    },
+    legal:{
+      ic:'⚖', l:'دفتر حقوقی', sub:'وکالت و دعاوی', av:'linear-gradient(135deg,#5a7a9c,#34506e)', initial:'ح',
+      title:'میز کار دفتر حقوقی', tagline:'پرونده‌های حقوقی، قراردادها و دعاوی ملکی', primaryCta:'＋ پرونده حقوقی',
+      kpis:[ {l:'پرونده فعال',v:'۱۱',t:'۳ در دادگاه',dot:'#e7a14a'}, {l:'قرارداد تنظیمی',v:'۳۴',t:'این ماه',dot:'#5fd98a'}, {l:'مشاوره',v:'۲۲',t:'۷ جدید',dot:'#5b9bd5'}, {l:'نرخ موفقیت',v:'۹۱٪',t:'پرونده‌ها',dot:'var(--gold)'} ],
+      listTitle:'پرونده‌های حقوقی', filters:['همه','دعاوی','قرارداد'],
+      cases:[
+        {ic:'⚖',bg:'rgba(90,122,156,0.15)',title:'دعوای خلع ید — میرداماد',sub:'در حال رسیدگی دادگاه',value:'۳۴ م',status:'در دادگاه',statusColor:'#e7a14a'},
+        {ic:'⎙',bg:'rgba(95,217,138,0.15)',title:'تنظیم قرارداد مشارکت در ساخت',sub:'سازنده و مالک · آماده امضا',value:'۱۲۰ م',status:'آماده امضا',statusColor:'#5fd98a'},
+        {ic:'⚖',bg:'rgba(91,155,213,0.15)',title:'مطالبه وجه — قرارداد پیش‌فروش',sub:'تنظیم دادخواست',value:'۱۸ م',status:'در جریان',statusColor:'#5b9bd5'},
+        {ic:'⚠',bg:'rgba(231,103,74,0.15)',title:'اختلاف ملکی ارثی',sub:'نیاز به مدارک تکمیلی',value:'۸۵ م',status:'نیاز مدرک',statusColor:'#e7674a'}
+      ],
+      aiHint:'دستیار حقوقی AI پرونده‌ها را با قوانین روز تطبیق داده و پیش‌نویس دادخواست و لوایح را آماده می‌کند.',
+      sideTitle:'مهلت‌های قانونی پیش‌رو', sideType:'list',
+      sideItems:[ {ic:'!',bg:'rgba(231,103,74,0.15)',color:'#e7674a',l:'تقدیم لایحه میرداماد',sub:'مهلت تا ۳ روز',val:'فوری',valColor:'#e7674a'},{ic:'۲',bg:'rgba(201,169,106,0.15)',color:'var(--gold)',l:'جلسه دادگاه خلع ید',sub:'دوشنبه · ۹ صبح',val:'پیش‌رو',valColor:'var(--gold)'},{ic:'۳',bg:'rgba(91,155,213,0.15)',color:'#5b9bd5',l:'امضای قرارداد مشارکت',sub:'چهارشنبه',val:'برنامه',valColor:'var(--muted)'} ],
+      docType:'قرارداد و لایحه حقوقی'
+    }
+  };
+
+  threadsByRole = {
+    architect:[ {name:'کارفرما — برج نگین', av:'linear-gradient(135deg,#9b7ad0,#5e4488)', time:'۱۰:۲۰', last:'نقشه‌ی فاز ۲ را تأیید کردم'}, {name:'پیمانکار اجرا', av:'linear-gradient(135deg,#7a8fae,#465a78)', time:'دیروز', last:'متریال نما رسید'} ],
+    appraiser:[ {name:'بانک ملت — وام', av:'linear-gradient(135deg,#5fa97a,#37704e)', time:'۰۹:۴۵', last:'گزارش ارزیابی را امروز نیاز داریم'}, {name:'مالک — ویلا لواسان', av:'linear-gradient(135deg,#caa86a,#8a6f3e)', time:'دیروز', last:'زمان بازدید را هماهنگ کنیم'} ],
+    bank:[ {name:'علی رضایی — متقاضی وام', av:'linear-gradient(135deg,#7a8fae,#465a78)', time:'۱۱:۰۰', last:'مدارک تکمیلی را ارسال کردم'}, {name:'کارشناس ارزیابی', av:'linear-gradient(135deg,#5b9bd5,#2f5f8a)', time:'دیروز', last:'ارزش وثیقه تأیید شد'} ],
+    notary:[ {name:'خریدار — آپارتمان جردن', av:'linear-gradient(135deg,#b07a8a,#6e4754)', time:'۱۰:۳۰', last:'فردا برای امضا حاضر می‌شویم'}, {name:'شهرداری — استعلام', av:'linear-gradient(135deg,#5fa97a,#37704e)', time:'دیروز', last:'پاسخ استعلام صادر شد'} ],
+    contractor:[ {name:'کارفرما — برج آرین', av:'linear-gradient(135deg,#c98a4a,#8a5a2e)', time:'۱۰:۱۰', last:'صورت‌وضعیت فاز اسکلت را بفرست'}, {name:'تأمین‌کننده مصالح', av:'linear-gradient(135deg,#7aa88f,#476e58)', time:'دیروز', last:'محموله سیمان فردا می‌رسد'} ],
+    designer:[ {name:'کارفرما — پنت‌هاوس', av:'linear-gradient(135deg,#c97a9a,#7a4458)', time:'۱۱:۰۰', last:'پالت رنگ را تأیید کردم'}, {name:'پیمانکار اجرا', av:'linear-gradient(135deg,#c98a4a,#8a5a2e)', time:'دیروز', last:'متریال کفپوش رسید'} ],
+    legal:[ {name:'موکل — پرونده میرداماد', av:'linear-gradient(135deg,#5a7a9c,#34506e)', time:'۰۹:۳۰', last:'مدارک را تکمیل کردم'}, {name:'سازنده — قرارداد مشارکت', av:'linear-gradient(135deg,#9b7ad0,#5e4488)', time:'دیروز', last:'برای امضا آماده‌ایم'} ]
+  };
+  chatsByRole = {
+    architect:[ [{who:'them',text:'نقشه‌ی فاز ۲ را تأیید کردم، می‌توانیم اجرا را شروع کنیم',time:'۱۰:۲۰'},{who:'me',text:'عالی، جزئیات اجرایی را ارسال می‌کنم',time:'۱۰:۲۲'}], [{who:'them',text:'متریال نما رسید',time:'دیروز'}] ],
+    appraiser:[ [{who:'them',text:'گزارش ارزیابی را امروز نیاز داریم',time:'۰۹:۴۵'},{who:'me',text:'تا عصر آماده و ارسال می‌شود',time:'۰۹:۵۰'}], [{who:'them',text:'زمان بازدید را هماهنگ کنیم',time:'دیروز'}] ],
+    bank:[ [{who:'them',text:'مدارک تکمیلی را ارسال کردم',time:'۱۱:۰۰'},{who:'me',text:'دریافت شد، در حال بررسی نهایی',time:'۱۱:۰۵'}], [{who:'them',text:'ارزش وثیقه تأیید شد',time:'دیروز'}] ],
+    notary:[ [{who:'them',text:'فردا برای امضا حاضر می‌شویم',time:'۱۰:۳۰'},{who:'me',text:'مدارک کامل است، ساعت ۱۰ منتظریم',time:'۱۰:۳۲'}], [{who:'them',text:'پاسخ استعلام صادر شد',time:'دیروز'}] ],
+    contractor:[ [{who:'them',text:'صورت‌وضعیت فاز اسکلت را بفرست',time:'۱۰:۱۰'},{who:'me',text:'تا امروز عصر ارسال می‌کنم',time:'۱۰:۱۵'}], [{who:'them',text:'محموله سیمان فردا می‌رسد',time:'دیروز'}] ],
+    designer:[ [{who:'them',text:'پالت رنگ را تأیید کردم',time:'۱۱:۰۰'},{who:'me',text:'عالی، مرحله اجرا را شروع می‌کنم',time:'۱۱:۰۴'}], [{who:'them',text:'متریال کفپوش رسید',time:'دیروز'}] ],
+    legal:[ [{who:'them',text:'مدارک را تکمیل کردم',time:'۰۹:۳۰'},{who:'me',text:'دریافت شد، دادخواست را تنظیم می‌کنم',time:'۰۹:۴۰'}], [{who:'them',text:'برای امضا آماده‌ایم',time:'دیروز'}] ]
+  };
+
+  renderVals(){
+    const t = this.themes[this.state.theme];
+    const rootStyle = Object.entries(t).map(([k,v])=>k+':'+v).join(';') + ';min-height:100vh;background:var(--bg);color:var(--text);font-family:Vazirmatn,sans-serif;transition:background .3s,color .3s';
+    const cur = this.state.role; const v = this.state.tab;
+    const tag=(txt,c)=>'font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap;background:'+c+'22;color:'+c+';border:1px solid '+c+'55';
+    const filterChip='font-size:11.5px;font-weight:600;padding:5px 11px;border-radius:999px;border:1px solid var(--line);color:var(--muted);background:transparent';
+    const filterChipOn='font-size:11.5px;font-weight:600;padding:5px 11px;border-radius:999px;border:1px solid var(--gold);color:var(--text);background:var(--goldDim)';
+    const tabBtn=(on)=>'display:flex;align-items:center;gap:7px;padding:14px 14px;border:none;background:none;cursor:pointer;font-family:inherit;font-size:13.5px;font-weight:'+(on?'700':'500')+';color:'+(on?'var(--text)':'var(--muted)')+';border-bottom:2px solid '+(on?'var(--gold)':'transparent')+';white-space:nowrap';
+
+    const roleTabs = Object.entries(this.roles).map(([id,r])=>{
+      const on=cur===id;
+      return { ic:r.ic, l:r.l, sub:r.sub, fn:this.setRole(id),
+        style:'display:flex;align-items:center;gap:10px;padding:10px 15px;border-radius:13px;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0;transition:.15s;border:1px solid '+(on?'var(--gold)':'var(--line)')+';background:'+(on?'var(--goldDim)':'var(--surface)')+';color:'+(on?'var(--text)':'var(--muted)') };
+    });
+
+    const r = this.roles[cur];
+    const role = { ...r, kpis:r.kpis, filters:r.filters.map((f,i)=>({ l:f, style:i===0?filterChipOn:filterChip })), cases:r.cases.map(c=>({ ...c, statusStyle:tag(c.status,c.statusColor) })), sideIsGrid:r.sideType==='grid', sideIsList:r.sideType==='list', sideItems:r.sideItems };
+
+    // CALENDAR: place role's cases as events across the week
+    const dows=[['شنبه','۹'],['یکشنبه','۱۰'],['دوشنبه','۱۱'],['سه‌شنبه','۱۲'],['چهارشنبه','۱۳'],['پنجشنبه','۱۴'],['جمعه','۱۵']];
+    const evColors=['#e7a14a','#5b9bd5','#5fd98a','var(--gold)'];
+    const evTimes=['۱۰:۰۰','۱۳:۳۰','۱۱:۰۰','۰۹:۳۰'];
+    const evDays=[0,2,3,5];
+    const today=2;
+    const week = dows.map((d,i)=>{
+      const idx = evDays.indexOf(i);
+      const evs = idx>=0 && r.cases[idx] ? [{ time:evTimes[idx], t:r.cases[idx].title.split('—')[0].slice(0,18), color:evColors[idx%evColors.length] }] : [];
+      return { dow:d[0], num:d[1], numColor:i===today?'var(--gold)':'var(--text)',
+        headStyle:'padding:11px;text-align:center;border-bottom:1px solid var(--line);'+(i===today?'background:var(--goldDim)':''),
+        events:evs.map(e=>({ time:e.time, t:e.t, style:'border-radius:8px;padding:7px 8px;background:'+e.color+'22;border-right:3px solid '+e.color+';color:var(--text)' })) };
+    });
+
+    // MESSAGES
+    const ti=this.state.thread;
+    const threadsData=this.threadsByRole[cur];
+    const safeTi = ti < threadsData.length ? ti : 0;
+    const threads=threadsData.map((th,i)=>({ ...th, fn:this.setThread(i), style:'display:flex;align-items:center;gap:11px;width:100%;padding:14px 16px;border:none;border-bottom:1px solid var(--line);cursor:pointer;font-family:inherit;text-align:right;transition:.15s;background:'+(safeTi===i?'var(--goldDim)':'transparent') }));
+    const chat=this.chatsByRole[cur][safeTi].map(m=>{ const me=m.who==='me'; return { text:m.text, time:m.time, rowStyle:'display:flex;'+(me?'justify-content:flex-start':'justify-content:flex-end'), bubbleStyle:'max-width:78%;padding:11px 14px;border-radius:'+(me?'13px 13px 4px 13px':'13px 13px 13px 4px')+';font-size:13px;line-height:1.7;background:'+(me?'linear-gradient(140deg,var(--gold2),var(--gold))':'var(--bg2)')+';color:'+(me?'#16140f':'var(--text)') }; });
+
+    // DOCUMENTS: derive from role's cases
+    const docs=r.cases.map(c=>({ ic:c.ic, bg:c.bg, title:c.title, sub:r.docType+' · '+c.value, status:c.status, statusStyle:tag(c.status,c.statusColor) }));
+
+    const subs={ cases:r.tagline, cal:'تقویم نوبت‌ها و بازدیدها', messages:'گفتگو با کارفرما، مشتری و همکاران', docs:'اسناد و مدارک '+r.l };
+    const ctas={ cases:r.primaryCta, cal:'＋ نوبت جدید', messages:'＋ گفتگوی جدید', docs:'＋ بارگذاری سند' };
+
+    return {
+      rootStyle, themeIcon:this.state.theme==='dark'?'☀':'☾', toggleTheme:this.toggleTheme,
+      roleTabs, role,
+      tabs:[{id:'cases',ic:'▤',l:'پرونده‌ها'},{id:'cal',ic:'▦',l:'تقویم'},{id:'messages',ic:'✉',l:'پیام‌ها'},{id:'docs',ic:'❖',l:'اسناد'}].map(x=>({ ic:x.ic, l:x.l, fn:this.setTab(x.id), style:tabBtn(v===x.id) })),
+      isCases:v==='cases', isCal:v==='cal', isMessages:v==='messages', isDocs:v==='docs',
+      viewSub:subs[v]||r.tagline, ctaLabel:ctas[v]||r.primaryCta,
+      week, threads, activeThread:threadsData[safeTi], chat, docs
+    };
+  }
+}
+</script>
+</body>
+</html>

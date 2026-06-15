@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{margin:0;font-family:'Vazirmatn',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:rgba(140,140,140,0.3);border-radius:8px}
+  @keyframes mjw-dash{to{stroke-dashoffset:-18}}
+  @keyframes mjw-glow{0%,100%{opacity:.4}50%{opacity:.9}}
+  @keyframes mjw-ping{0%{transform:scale(.9);opacity:.7}70%{transform:scale(1.4);opacity:0}100%{opacity:0}}
+  @media(max-width:1080px){.mjw-palette{display:none!important}.mjw-config{display:none!important}}
+</style>
+</helmet>
+<div dir="rtl" style="{{ rootStyle }}">
+  <div style="display:flex;flex-direction:column;height:100vh">
+
+    <!-- TOOLBAR -->
+    <header style="flex-shrink:0;background:var(--bg2);border-bottom:1px solid var(--line);padding:0 20px;height:60px;display:flex;align-items:center;gap:16px">
+      <a href="MelkJet CRM.dc.html" style="display:flex;align-items:center;gap:9px;text-decoration:none;color:var(--muted);font-size:13px;font-weight:600" style-hover="color:var(--text)">‹ بازگشت به CRM</a>
+      <div style="width:1px;height:26px;background:var(--line)"></div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="width:30px;height:30px;border-radius:9px;background:var(--goldDim);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:15px">⚡</span>
+        <div><div style="font-size:14.5px;font-weight:700;color:var(--text)">تخصیص خودکار لید داغ</div><div style="font-size:11px;color:var(--muted)">آخرین ویرایش: امروز</div></div>
+      </div>
+      <div style="flex:1"></div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)">
+        <span>فعال</span>
+        <button onClick="{{ toggleEnabled }}" aria-label="enable" style="{{ switchStyle }}"><span style="{{ knobStyle }}"></span></button>
+      </div>
+      <button onClick="{{ runTest }}" style="{{ testBtnStyle }}">{{ testLabel }}</button>
+      <button onClick="{{ toggleTheme }}" aria-label="theme" style="width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--text);cursor:pointer;font-size:14px">{{ themeIcon }}</button>
+      <button style="height:38px;padding:0 16px;border:none;border-radius:10px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer">ذخیره</button>
+    </header>
+
+    <div style="flex:1;display:flex;min-height:0">
+
+      <!-- PALETTE -->
+      <aside class="mjw-palette" style="width:212px;flex-shrink:0;background:var(--bg2);border-left:1px solid var(--line);padding:16px;overflow:auto">
+        <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:12px">گره‌های موجود</div>
+        <div style="display:grid;gap:9px">
+          <sc-for list="{{ palette }}" as="p" hint-placeholder-count="6">
+            <div style="display:flex;align-items:center;gap:10px;padding:11px 12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;cursor:grab" style-hover="border-color:var(--gold)">
+              <span style="width:30px;height:30px;flex-shrink:0;border-radius:9px;background:{{ p.bg }};color:{{ p.color }};display:flex;align-items:center;justify-content:center;font-size:14px">{{ p.ic }}</span>
+              <div style="min-width:0"><div style="font-size:12.5px;font-weight:600;color:var(--text)">{{ p.l }}</div><div style="font-size:10px;color:var(--muted)">{{ p.type }}</div></div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="margin-top:18px;padding:13px;background:var(--surface);border:1px dashed var(--line2);border-radius:12px;font-size:11px;color:var(--muted);line-height:1.7;text-align:center">گره را بکش و روی بوم رها کن تا به جریان اضافه شود</div>
+      </aside>
+
+      <!-- CANVAS -->
+      <div style="flex:1;min-width:0;position:relative;overflow:auto;background:var(--canvas)">
+        <div style="position:absolute;inset:0;background-image:radial-gradient(var(--dot) 1.2px,transparent 1.2px);background-size:24px 24px;opacity:.55"></div>
+        <div style="position:relative;width:780px;height:980px;margin:0 auto">
+          <!-- connectors -->
+          <svg viewBox="0 0 780 980" style="position:absolute;inset:0;width:780px;height:980px;pointer-events:none;overflow:visible">
+            <sc-for list="{{ edges }}" as="e" hint-placeholder-count="8">
+              <path d="{{ e.d }}" fill="none" stroke="{{ e.stroke }}" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="{{ e.dash }}" style="{{ e.anim }}"></path>
+            </sc-for>
+          </svg>
+          <!-- branch labels -->
+          <div style="position:absolute;top:516px;right:418px;font-size:11px;font-weight:700;color:#5fd98a;background:var(--bg2);border:1px solid rgba(95,217,138,0.4);border-radius:999px;padding:2px 9px">امتیاز ≥ ۸۰</div>
+          <div style="position:absolute;top:516px;right:230px;font-size:11px;font-weight:700;color:var(--muted);background:var(--bg2);border:1px solid var(--line2);border-radius:999px;padding:2px 9px">امتیاز &lt; ۸۰</div>
+          <!-- nodes -->
+          <sc-for list="{{ nodes }}" as="n" hint-placeholder-count="8">
+            <button onClick="{{ n.select }}" style="{{ n.style }}">
+              <div style="display:flex;align-items:center;gap:10px;width:100%">
+                <span style="width:32px;height:32px;flex-shrink:0;border-radius:9px;background:{{ n.iconBg }};color:{{ n.iconColor }};display:flex;align-items:center;justify-content:center;font-size:15px">{{ n.ic }}</span>
+                <div style="flex:1;min-width:0;text-align:right">
+                  <div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ n.title }}</div>
+                  <div style="font-size:10.5px;color:var(--muted)">{{ n.kind }}</div>
+                </div>
+                <sc-if value="{{ n.lit }}" hint-placeholder-val="{{ false }}">
+                  <span style="width:18px;height:18px;border-radius:50%;background:#5fd98a;color:#0a2a16;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">✓</span>
+                </sc-if>
+              </div>
+              <div style="font-size:11px;color:var(--muted);margin-top:7px;text-align:right;line-height:1.5;width:100%">{{ n.desc }}</div>
+            </button>
+          </sc-for>
+        </div>
+      </div>
+
+      <!-- CONFIG PANEL -->
+      <aside class="mjw-config" style="width:296px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--line);padding:18px;overflow:auto">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+          <span style="width:34px;height:34px;border-radius:10px;background:{{ sel.iconBg }};color:{{ sel.iconColor }};display:flex;align-items:center;justify-content:center;font-size:16px">{{ sel.ic }}</span>
+          <div><div style="font-size:14.5px;font-weight:700;color:var(--text)">{{ sel.title }}</div><div style="font-size:11px;color:var(--gold)">{{ sel.kind }}</div></div>
+        </div>
+        <div style="display:grid;gap:14px">
+          <sc-for list="{{ sel.fields }}" as="f" hint-placeholder-count="3">
+            <div>
+              <div style="font-size:11.5px;font-weight:600;color:var(--muted);margin-bottom:7px">{{ f.l }}</div>
+              <sc-if value="{{ f.isChips }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-wrap:wrap;gap:6px">
+                  <sc-for list="{{ f.chips }}" as="c" hint-placeholder-count="2"><span style="{{ c.style }}">{{ c.t }}</span></sc-for>
+                </div>
+              </sc-if>
+              <sc-if value="{{ f.isText }}" hint-placeholder-val="{{ true }}">
+                <div style="background:var(--surface);border:1px solid var(--line2);border-radius:10px;padding:10px 12px;font-size:13px;color:var(--text);{{ f.mono }}">{{ f.v }}</div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+        <div style="margin-top:20px;padding:14px;background:var(--surface);border:1px solid var(--gold);border-radius:13px;position:relative;overflow:hidden">
+          <div style="position:absolute;inset:0;background:radial-gradient(180px 80px at 90% 0,var(--goldDim),transparent)"></div>
+          <div style="position:relative;display:flex;gap:9px"><span style="color:var(--gold);font-size:14px">✦</span><div style="font-size:11.5px;line-height:1.7;color:var(--text)">{{ sel.aiHint }}</div></div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:820}}">
+class Component extends DCLogic {
+  state = { theme:'dark', enabled:true, selected:'trigger', running:false, step:-1 };
+
+  themes = {
+    dark:{ '--bg':'#0d0d0f','--bg2':'#141417','--surface':'#18181c','--canvas':'#101012','--dot':'rgba(255,255,255,0.07)','--line':'rgba(255,255,255,0.08)','--line2':'rgba(255,255,255,0.14)','--text':'#f2f1ee','--muted':'#9a9a98','--faint':'#6a6a68','--gold':'#c9a96a','--gold2':'#e0c489','--goldDim':'rgba(201,169,106,0.12)' },
+    light:{ '--bg':'#f4f1ea','--bg2':'#ffffff','--surface':'#ffffff','--canvas':'#efece4','--dot':'rgba(26,24,20,0.10)','--line':'rgba(26,24,20,0.09)','--line2':'rgba(26,24,20,0.16)','--text':'#1a1814','--muted':'#6b6862','--faint':'#9a968d','--gold':'#9c7a3c','--gold2':'#b8923f','--goldDim':'rgba(156,122,60,0.10)' }
+  };
+
+  // node defs: id, order, x(left), y(top), w, h, icon, title, kind, desc, palette colors
+  N = [
+    { id:'trigger', order:0, x:288, y:24, w:204, h:84, ic:'▣', title:'لید جدید ثبت شد', kind:'تریگر', desc:'وقتی فرم تماس یا درخواست بازدید پر شود', c:'#5b9bd5' },
+    { id:'ai', order:1, x:288, y:156, w:204, h:90, ic:'✦', title:'تحلیل هوش مصنوعی', kind:'هوش مصنوعی', desc:'امتیازدهی لید، تشخیص نیاز و فوریت', c:'#c9a96a' },
+    { id:'assign', order:2, x:288, y:294, w:204, h:90, ic:'◍', title:'تخصیص مشاور', kind:'اقدام', desc:'به مناسب‌ترین مشاور بر اساس تخصص و منطقه', c:'#9b7ad0' },
+    { id:'cond', order:3, x:308, y:432, w:164, h:80, ic:'◆', title:'امتیاز لید چقدر است؟', kind:'شرط', desc:'انشعاب بر اساس امتیاز AI', c:'#e7a14a' },
+    { id:'sms', order:4, x:96, y:560, w:200, h:90, ic:'✉', title:'ارسال پیامک فوری', kind:'اقدام', desc:'پیام شخصی‌سازی‌شده به لید و مشاور', c:'#5fd98a' },
+    { id:'drip', order:4, x:484, y:560, w:200, h:90, ic:'⛁', title:'افزودن به کمپین Drip', kind:'بازاریابی', desc:'دنباله‌ی ایمیل/پیامک پرورش لید', c:'#9a9a98' },
+    { id:'task', order:5, x:96, y:692, w:200, h:90, ic:'✓', title:'ایجاد وظیفه پیگیری', kind:'اقدام', desc:'وظیفه‌ی تماس با اولویت «فوری» تا ۱ ساعت', c:'#e7674a' },
+    { id:'crm', order:6, x:288, y:828, w:204, h:84, ic:'⟳', title:'به‌روزرسانی CRM', kind:'اقدام', desc:'ثبت مرحله، زمان‌بندی یادآور و لاگ فعالیت', c:'#5b9bd5' }
+  ];
+
+  // edges: from->to with path d and target order for activation
+  E = [
+    { d:'M390,108 L390,156', to:1 },
+    { d:'M390,246 L390,294', to:1.5 },
+    { d:'M390,384 L390,432', to:2.5 },
+    { d:'M340,512 C300,540 196,524 196,560', to:4 },
+    { d:'M440,512 C480,540 584,524 584,560', to:4 },
+    { d:'M196,650 L196,692', to:5 },
+    { d:'M196,782 C196,810 390,800 390,828', to:6 },
+    { d:'M584,650 C584,770 390,740 390,828', to:6 }
+  ];
+
+  configs = {
+    trigger:{ aiHint:'این تریگر ماهانه حدود ۱۸۰ بار فعال می‌شود.', fields:[
+      { l:'منبع رویداد', isText:true, v:'فرم تماس، درخواست بازدید، چت' },
+      { l:'فیلتر', isChips:true, chips:['همه‌ی فایل‌ها','وضعیت: فعال'] }
+    ] },
+    ai:{ aiHint:'مدل بر اساس داده‌ی ۱۲ ماه گذشته آموزش دیده؛ دقت امتیازدهی ۹۱٪.', fields:[
+      { l:'خروجی‌ها', isChips:true, chips:['امتیاز لید (۰-۱۰۰)','سطح فوریت','نیاز تشخیص‌داده‌شده'] },
+      { l:'مدل', isText:true, mono:true, v:'melkjet-lead-scorer v۳' }
+    ] },
+    assign:{ aiHint:'تخصیص هوشمند زمان پاسخ اولین تماس را ۴۰٪ کاهش داده است.', fields:[
+      { l:'منطق تخصیص', isText:true, v:'تطبیق تخصص و منطقه + بار کاری متعادل' },
+      { l:'جایگزین', isText:true, v:'در صورت عدم پاسخ تا ۱۵ دقیقه → مشاور بعدی' }
+    ] },
+    cond:{ aiHint:'حدود ۳۴٪ لیدها امتیاز ۸۰ یا بالاتر می‌گیرند (مسیر داغ).', fields:[
+      { l:'شرط', isText:true, mono:true, v:'lead.score >= ۸۰' },
+      { l:'انشعاب‌ها', isChips:true, chips:['داغ → پیامک + وظیفه','عادی → Drip'] }
+    ] },
+    sms:{ aiHint:'متن پیامک توسط AI شخصی‌سازی می‌شود تا نرخ پاسخ بالاتر برود.', fields:[
+      { l:'گیرنده', isChips:true, chips:['لید','مشاور تخصیص‌یافته'] },
+      { l:'قالب پیام', isText:true, v:'«سلام {نام}، فایل مناسب نیاز شما آماده است…»' }
+    ] },
+    drip:{ aiHint:'کمپین Drip لیدهای سرد را در ۳۰ روز پرورش می‌دهد.', fields:[
+      { l:'دنباله', isText:true, v:'۵ پیام طی ۳۰ روز' },
+      { l:'کانال', isChips:true, chips:['ایمیل','پیامک'] }
+    ] },
+    task:{ aiHint:'وظایف فوری که در ۱ ساعت انجام شوند، ۳ برابر شانس تبدیل دارند.', fields:[
+      { l:'نوع وظیفه', isText:true, v:'تماس تلفنی' },
+      { l:'اولویت و مهلت', isChips:true, chips:['فوری','تا ۱ ساعت'] }
+    ] },
+    crm:{ aiHint:'همه‌ی فعالیت‌ها برای گزارش‌گیری و تحلیل ثبت می‌شوند.', fields:[
+      { l:'به‌روزرسانی‌ها', isChips:true, chips:['مرحله‌ی لید','یادآور بعدی','لاگ فعالیت'] }
+    ] }
+  };
+
+  componentWillUnmount(){ clearInterval(this._ti); }
+  toggleTheme = () => this.setState(s=>({ theme:s.theme==='dark'?'light':'dark' }));
+  toggleEnabled = () => this.setState(s=>({ enabled:!s.enabled }));
+  selectNode = (id) => () => this.setState({ selected:id });
+  runTest = () => {
+    clearInterval(this._ti);
+    this.setState({ running:true, step:0 });
+    this._ti = setInterval(()=>{
+      this.setState(s=>{
+        if(s.step>=6){ clearInterval(this._ti); return { running:false }; }
+        return { step:s.step+1 };
+      });
+    }, 640);
+  };
+
+  renderVals(){
+    const t = this.themes[this.state.theme];
+    const rootStyle = Object.entries(t).map(([k,v])=>k+':'+v).join(';') + ';height:100vh;background:var(--bg);color:var(--text);font-family:Vazirmatn,sans-serif;transition:background .3s,color .3s';
+    const step = this.state.step, running = this.state.running, selId = this.state.selected;
+
+    const nodes = this.N.map(n=>{
+      const lit = step>=n.order;
+      const selected = selId===n.id;
+      const border = selected ? 'var(--gold)' : lit ? '#5fd98a' : 'var(--line2)';
+      const glow = lit ? ';box-shadow:0 0 0 1px #5fd98a,0 8px 26px -10px rgba(95,217,138,0.5)' : selected ? ';box-shadow:0 0 0 1px var(--gold),0 10px 28px -12px var(--gold)' : '';
+      return { ...n, lit, kind:n.kind,
+        select:this.selectNode(n.id),
+        iconBg:n.c+'22', iconColor:n.c,
+        style:'position:absolute;left:'+n.x+'px;top:'+n.y+'px;width:'+n.w+'px;min-height:'+n.h+'px;display:flex;flex-direction:column;align-items:flex-start;padding:13px 14px;border:1.5px solid '+border+';border-radius:15px;background:var(--surface);cursor:pointer;font-family:inherit;transition:.2s'+glow };
+    });
+
+    const edges = this.E.map(e=>{
+      const active = running ? step>=Math.floor(e.to) : false;
+      const done = step>Math.ceil(e.to) || (!running && false);
+      const lit = step>=e.to;
+      return { d:e.d,
+        stroke: lit ? '#5fd98a' : 'var(--line2)',
+        dash: lit ? '6 7' : '0',
+        anim: lit ? 'animation:mjw-dash .6s linear infinite' : '' };
+    });
+
+    const selN = this.N.find(n=>n.id===selId) || this.N[0];
+    const cfg = this.configs[selId] || this.configs.trigger;
+    const chipStyle = 'padding:5px 11px;border-radius:999px;background:var(--goldDim);border:1px solid var(--gold);color:var(--text);font-size:11.5px;font-weight:600';
+    const fields = cfg.fields.map(f=>({
+      l:f.l,
+      isChips:!!f.isChips, isText:!f.isChips,
+      mono: f.mono ? "font-family:'JetBrains Mono',monospace;direction:ltr;text-align:left;font-size:12px" : '',
+      v:f.v,
+      chips:(f.chips||[]).map(c=>({ t:c, style:chipStyle }))
+    }));
+
+    const knobOn = this.state.enabled;
+    return {
+      rootStyle,
+      themeIcon:this.state.theme==='dark'?'☀':'☾',
+      toggleTheme:this.toggleTheme, toggleEnabled:this.toggleEnabled,
+      switchStyle:'width:42px;height:24px;border-radius:999px;border:none;cursor:pointer;position:relative;transition:.2s;background:'+(knobOn?'var(--gold)':'var(--line2)'),
+      knobStyle:'position:absolute;top:3px;'+(knobOn?'left:3px':'left:21px')+';width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s',
+      runTest:this.runTest,
+      testLabel: running ? '● در حال اجرا…' : '▶ اجرای آزمایشی',
+      testBtnStyle:'height:38px;padding:0 16px;border:1px solid '+(running?'#5fd98a':'var(--gold)')+';border-radius:10px;background:'+(running?'rgba(95,217,138,0.12)':'var(--goldDim)')+';color:'+(running?'#5fd98a':'var(--gold)')+';font-family:inherit;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap',
+      palette:[
+        { ic:'▣', l:'تریگر', type:'شروع جریان', bg:'rgba(91,155,213,0.15)', color:'#5b9bd5' },
+        { ic:'✦', l:'هوش مصنوعی', type:'تحلیل و امتیاز', bg:'var(--goldDim)', color:'var(--gold)' },
+        { ic:'◆', l:'شرط', type:'انشعاب منطقی', bg:'rgba(231,161,74,0.15)', color:'#e7a14a' },
+        { ic:'✉', l:'پیامک / ایمیل', type:'اقدام', bg:'rgba(95,217,138,0.15)', color:'#5fd98a' },
+        { ic:'✓', l:'وظیفه', type:'اقدام', bg:'rgba(231,103,74,0.15)', color:'#e7674a' },
+        { ic:'⏲', l:'تأخیر', type:'زمان‌بندی', bg:'rgba(155,122,208,0.15)', color:'#9b7ad0' }
+      ],
+      nodes, edges,
+      sel:{ ic:selN.ic, title:selN.title, kind:selN.kind, iconBg:selN.c+'22', iconColor:selN.c, aiHint:cfg.aiHint, fields }
+    };
+  }
+}
+</script>
+</body>
+</html>

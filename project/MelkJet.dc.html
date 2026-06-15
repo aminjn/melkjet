@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{margin:0;font-family:'Vazirmatn',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:rgba(140,140,140,0.3);border-radius:8px}
+  @keyframes mjx-glow{0%,100%{opacity:.4}50%{opacity:.9}}
+  .mjx-card:hover{border-color:var(--gold)!important;transform:translateY(-4px)}
+  .mjx-card:hover .mjx-open{opacity:1!important}
+  @media(max-width:760px){.mjx-flow{flex-wrap:wrap!important}}
+</style>
+</helmet>
+<div dir="rtl" style="{{ rootStyle }}">
+
+  <!-- HEADER -->
+  <header style="max-width:1240px;margin:0 auto;padding:28px 24px 0;display:flex;align-items:center;gap:16px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span style="width:40px;height:40px;border-radius:12px;background:linear-gradient(140deg,var(--gold2),var(--gold));display:flex;align-items:center;justify-content:center;box-shadow:0 8px 22px -8px var(--gold)"><span style="width:15px;height:15px;background:var(--bg);transform:rotate(45deg);border-radius:3px"></span></span>
+      <div><div style="font-weight:800;font-size:22px;letter-spacing:-.6px">ملک‌جت</div><div style="font-size:11px;color:var(--gold)">مرکز ناوبری پروژه</div></div>
+    </div>
+    <div style="flex:1"></div>
+    <button onClick="{{ toggleTheme }}" style="display:flex;align-items:center;gap:8px;height:42px;padding:0 16px;border:1px solid var(--line2);border-radius:12px;background:var(--surface);color:var(--text);font-family:inherit;font-weight:600;font-size:13px;cursor:pointer">{{ themeIcon }} {{ themeLabel }}</button>
+  </header>
+
+  <!-- HERO -->
+  <section style="max-width:1240px;margin:0 auto;padding:36px 24px 28px">
+    <div style="display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;border:1px solid var(--line2);background:var(--surface);font-size:12.5px;font-weight:600;color:var(--gold)">
+      <span style="width:7px;height:7px;border-radius:50%;background:var(--gold);animation:mjx-glow 2s infinite"></span>
+      اکوسیستم هوشمند املاک · ۲۷ صفحه · پروتوتایپ تعاملی
+    </div>
+    <h1 style="font-size:clamp(30px,5vw,52px);font-weight:800;letter-spacing:-1.2px;line-height:1.15;margin-top:18px;color:var(--text)">
+      یک پلتفرم،<br><span style="background:linear-gradient(120deg,var(--gold2),var(--gold));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent">شش نقش، نُه میز کار</span>
+    </h1>
+    <p style="font-size:16px;line-height:1.85;color:var(--muted);max-width:600px;margin-top:16px">
+      هر کارت یک پیش‌نمایش زنده است؛ روی آن کلیک کن تا صفحه‌ی کامل باز شود. همه‌ی صفحات RTL، با هوش مصنوعی ظریف و دو حالت روشن/تیره.
+    </p>
+    <div style="display:flex;flex-wrap:wrap;gap:22px;margin-top:26px">
+      <sc-for list="{{ summary }}" as="s" hint-placeholder-count="4">
+        <div style="display:flex;align-items:center;gap:11px">
+          <span style="font-size:26px;font-weight:800;color:var(--gold)">{{ s.n }}</span>
+          <span style="font-size:13px;color:var(--muted);line-height:1.4">{{ s.l }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- GROUPS -->
+  <main style="max-width:1240px;margin:0 auto;padding:8px 24px 80px">
+    <sc-for list="{{ groups }}" as="g" hint-placeholder-count="3">
+      <section style="margin-top:40px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">
+          <span style="width:32px;height:32px;border-radius:9px;background:var(--goldDim);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:15px">{{ g.ic }}</span>
+          <div>
+            <h2 style="font-size:19px;font-weight:800;color:var(--text)">{{ g.title }}</h2>
+            <div style="font-size:12.5px;color:var(--muted);margin-top:2px">{{ g.sub }}</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:18px">
+          <sc-for list="{{ g.pages }}" as="p" hint-placeholder-count="3">
+            <a href="{{ p.file }}" class="mjx-card" style="display:block;text-decoration:none;background:var(--surface);border:1px solid var(--line);border-radius:18px;overflow:hidden;transition:.22s">
+              <div style="position:relative;height:226px;overflow:hidden;background:var(--bg2);border-bottom:1px solid var(--line)">
+                <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--faint)">
+                  <span style="width:38px;height:38px;border-radius:11px;background:var(--goldDim);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:17px">✦</span>
+                  <span style="font-size:11px;font-family:'JetBrains Mono',monospace">پیش‌نمایش زنده</span>
+                </div>
+                <iframe src="{{ p.file }}" loading="lazy" tabindex="-1" scrolling="no" style="position:absolute;top:0;right:0;width:1200px;height:753px;border:0;transform:scale(0.3017);transform-origin:top right;pointer-events:none"></iframe>
+                <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,0.04),transparent 40%)"></div>
+                <span style="position:absolute;top:12px;right:12px;width:26px;height:26px;border-radius:8px;background:rgba(20,18,14,0.72);backdrop-filter:blur(6px);color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center">{{ p.n }}</span>
+                <span style="position:absolute;top:12px;left:12px;padding:4px 11px;border-radius:999px;background:rgba(20,18,14,0.72);backdrop-filter:blur(6px);font-size:11px;font-weight:700;color:{{ p.tagColor }};border:1px solid {{ p.tagColor }}">{{ p.tag }}</span>
+                <span class="mjx-open" style="position:absolute;bottom:12px;left:12px;display:flex;align-items:center;gap:6px;padding:7px 13px;border-radius:10px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-size:12px;font-weight:700;opacity:0;transition:.2s">باز کردن ←</span>
+              </div>
+              <div style="padding:15px 17px">
+                <div style="font-size:16px;font-weight:700;color:var(--text)">{{ p.title }}</div>
+                <div style="font-size:12.5px;color:var(--muted);margin-top:6px;line-height:1.7">{{ p.desc }}</div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">
+                  <sc-for list="{{ p.chips }}" as="c" hint-placeholder-count="2">
+                    <span style="font-size:10.5px;color:var(--muted);background:var(--bg2);border:1px solid var(--line);border-radius:999px;padding:3px 9px">{{ c }}</span>
+                  </sc-for>
+                </div>
+              </div>
+            </a>
+          </sc-for>
+        </div>
+      </section>
+    </sc-for>
+
+    <!-- FLOW -->
+    <section style="margin-top:48px;background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:26px">
+      <h2 style="font-size:17px;font-weight:800;color:var(--text);margin-bottom:4px">مسیر کاربر</h2>
+      <p style="font-size:12.5px;color:var(--muted);margin-bottom:20px">صفحات چطور به هم وصل می‌شوند</p>
+      <div class="mjx-flow" style="display:flex;align-items:center;gap:10px">
+        <sc-for list="{{ flow }}" as="f" hint-placeholder-count="5">
+          <a href="{{ f.file }}" style="flex:1;min-width:120px;text-decoration:none;display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 12px;background:var(--bg2);border:1px solid var(--line);border-radius:14px;transition:.2s" style-hover="border-color:var(--gold)">
+            <span style="width:34px;height:34px;border-radius:10px;background:var(--goldDim);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:16px">{{ f.ic }}</span>
+            <span style="font-size:12.5px;font-weight:600;color:var(--text);text-align:center">{{ f.l }}</span>
+          </a>
+        </sc-for>
+      </div>
+    </section>
+
+    <div style="margin-top:32px;text-align:center;font-size:12px;color:var(--faint)">ملک‌جت · پروتوتایپ تعاملی · ساخته‌شده با ✦ هوش مصنوعی</div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1240,&quot;height&quot;:1000}}">
+class Component extends DCLogic {
+  state = { theme:'dark' };
+  themes = {
+    dark:{ '--bg':'#0d0d0f','--bg2':'#141417','--surface':'#18181c','--line':'rgba(255,255,255,0.08)','--line2':'rgba(255,255,255,0.14)','--text':'#f2f1ee','--muted':'#9a9a98','--faint':'#6a6a68','--gold':'#c9a96a','--gold2':'#e0c489','--goldDim':'rgba(201,169,106,0.12)' },
+    light:{ '--bg':'#f4f1ea','--bg2':'#faf7f1','--surface':'#ffffff','--line':'rgba(26,24,20,0.09)','--line2':'rgba(26,24,20,0.16)','--text':'#1a1814','--muted':'#6b6862','--faint':'#9a968d','--gold':'#9c7a3c','--gold2':'#b8923f','--goldDim':'rgba(156,122,60,0.10)' }
+  };
+  toggleTheme = () => this.setState(s=>({ theme:s.theme==='dark'?'light':'dark' }));
+
+  renderVals(){
+    const t = this.themes[this.state.theme];
+    const rootStyle = Object.entries(t).map(([k,v])=>k+':'+v).join(';') + ';min-height:100vh;background:var(--bg);color:var(--text);font-family:Vazirmatn,sans-serif;transition:background .3s,color .3s';
+    return {
+      rootStyle,
+      themeIcon:this.state.theme==='dark'?'☀':'☾', themeLabel:this.state.theme==='dark'?'حالت روشن':'حالت تیره',
+      toggleTheme:this.toggleTheme,
+      summary:[
+        { n:'۲۷', l:'صفحه‌ی کامل' }, { n:'۱۳', l:'نقش کاربری' }, { n:'AI', l:'زنده' }, { n:'۲', l:'روشن/تیره' }
+      ],
+      groups:[
+        { ic:'◍', title:'صفحات عمومی', sub:'تجربه‌ی کاربر نهایی — کشف و انتخاب ملک',
+          pages:[
+            { n:'۱', file:'MelkJet Home.dc.html', tag:'صفحه اصلی', tagColor:'#e0c489', title:'خانه + جستجوی هوشمند', desc:'موتور جستجوی زبان طبیعی AI، املاک ویژه، نقشه بازار، دستیار همیشگی.', chips:['AI Search','جستجوی صوتی','دستیار'] },
+            { n:'۲', file:'MelkJet Search.dc.html', tag:'جستجو', tagColor:'#5b9bd5', title:'نتایج + نقشه تعاملی', desc:'لیست و نقشه‌ی حرارتی قیمت با پین‌های رنگی، فیلتر پیشرفته، همگام‌سازی hover.', chips:['نقشه حرارتی','فیلترها'] },
+            { n:'۳', file:'MelkJet Property.dc.html', tag:'جزئیات', tagColor:'#5fd98a', title:'صفحه‌ی ملک + تحلیل AI', desc:'خلاصه و امتیازهای AI، نمودار قیمت، محاسبه وام، چت مخصوص ملک.', chips:['۵ امتیاز AI','محاسبه وام'] }
+          ] },
+        { ic:'▦', title:'میزهای کار', sub:'داشبوردهای نقش‌محور',
+          pages:[
+            { n:'۴', file:'MelkJet Buyer.dc.html', tag:'خریدار', tagColor:'#9b7ad0', title:'میز کار خریدار', desc:'دستیار خرید شخصی، فرصت‌های تازه، جستجوهای ذخیره‌شده، علاقه‌مندی‌ها.', chips:['دستیار خرید','اعلان فرصت'] },
+            { n:'★', file:'MelkJet Owner.dc.html', tag:'مالک', tagColor:'#5fd98a', title:'میز کار فروشنده / سرمایه‌گذار', desc:'دو نقش: مدیریت فایل و تحلیل بازدید فروشنده، و فرصت‌های بازدهی و سبد سرمایه‌گذار.', chips:['فروشنده','سرمایه‌گذار'] },
+            { n:'✦', file:'MelkJet Legal.dc.html', tag:'AI زنده', tagColor:'#5fd98a', title:'دستیار حقوقی + موتور مذاکره', desc:'چت حقوقی و تحلیل استراتژی مذاکره — متصل به هوش مصنوعی واقعی با پاسخ زنده.', chips:['AI واقعی','حقوقی','مذاکره'] },
+            { n:'✦', file:'MelkJet Content.dc.html', tag:'AI زنده', tagColor:'#5fd98a', title:'استودیوی تولید محتوا', desc:'تولید مقاله، تحلیل بازار، صفحه سئو و FAQ با هوش مصنوعی واقعی و پیش‌نمایش زنده.', chips:['AI واقعی','مقاله','سئو'] },
+            { n:'◈', file:'MelkJet PlanAI.dc.html', tag:'بینایی AI', tagColor:'#7aa88f', title:'پلان و مدل سه‌بعدی', desc:'از روی چند عکس و قوانین، نقشه‌ی کف دوبعدی و مدل سه‌بعدی ایزومتریک قابل‌چرخش می‌سازد.', chips:['نقشه کف','۳بعدی','بینایی'] },
+            { n:'＋', file:'MelkJet Submit.dc.html', tag:'ثبت آگهی', tagColor:'#5fd98a', title:'ثبت آگهی چندمرحله‌ای', desc:'فرم ثبت آگهی با نگارش توضیحات و قیمت‌گذاری AI؛ پلان و مدل سه‌بعدی به‌عنوان مزیت آگهی ویژه.', chips:['۵ مرحله','آگهی ویژه','پلان ۳بعدی'] },
+            { n:'◍', file:'MelkJet Signup.dc.html', tag:'ثبت‌نام', tagColor:'#5b9bd5', title:'ثبت‌نام نقش‌محور', desc:'انتخاب دسته → نقش دقیق → فرم متناسب. مسیر واضح برای ۱۳ نقش کاربری تا گیج نشوند.', chips:['۳ مرحله','۱۳ نقش','هدایت به پنل'] },
+            { n:'▤', file:'MelkJet Directory.dc.html', tag:'دایرکتوری', tagColor:'#5fd98a', title:'دایرکتوری متخصصان', desc:'فهرست پابلیک همه‌ی متخصصان هر نوع (مشاور، سازنده، کارشناس…) با خدماتشان؛ کلیک → صفحه‌ی پابلیک.', chips:['۱۰ دسته','جستجو','پروموت'] },
+            { n:'◫', file:'MelkJet Project.dc.html', tag:'پروژه', tagColor:'#9b7ad0', title:'صفحه پابلیک پروژه', desc:'معرفی پروژه‌ی پیش‌فروش سازنده: واحدها، پیشرفت ساخت، گالری و رزرو.', chips:['پیش‌فروش','واحدها','گالری'] },
+            { n:'⛓', file:'MelkJet Store.dc.html', tag:'غرفه مصالح', tagColor:'#7aa88f', title:'غرفه پابلیک مصالح', desc:'فروشگاه عمومی فروشنده مصالح B2B با محصولات، قیمت و استعلام عمده.', chips:['B2B','محصولات','RFQ'] },
+            { n:'¶', file:'MelkJet Article.dc.html', tag:'بلاگ', tagColor:'#5b9bd5', title:'صفحه مقاله (سئو)', desc:'صفحه پابلیک مقاله‌ی بلاگ با تولید AI، مقالات مرتبط و بهینه برای سئو.', chips:['سئو','بلاگ','AI'] },
+            { n:'◷', file:'MelkJet Neighborhood.dc.html', tag:'محله', tagColor:'#e7a14a', title:'صفحه محله (لندینگ سئو)', desc:'لندینگ سئوی هر محله: آمار قیمت، روند بازار، آگهی‌ها، امکانات و تحلیل AI.', chips:['سئو','آمار بازار','محله'] },
+            { n:'◐', file:'MelkJet Public Profile.dc.html', tag:'پروفایل پابلیک', tagColor:'#7aa88f', title:'صفحه عمومی پروفایل', desc:'صفحه پابلیک هر نقش (۱۰ نوع) برای نمایش خدمات، نمونه‌کار، نظرات و تماس — قابل پروموت و تبلیغ.', chips:['۱۰ نقش','خدمات','پروموت'] },
+            { n:'◧', file:'MelkJet Website Builder.dc.html', tag:'وب‌سایت‌ساز', tagColor:'#9b7ad0', title:'وب‌سایت‌ساز (Drag & Drop)', desc:'سایت اختصاصی برای هر پنل با بلوک‌های آماده، قالب‌های متعدد، پیش‌نمایش موبایل و سئوی عالی.', chips:['بلوک','قالب','سئو'] },
+            { n:'◉', file:'MelkJet SuperAdmin.dc.html', tag:'سوپر ادمین', tagColor:'#e7674a', title:'سوپر ادمین · عملیات سیستم', desc:'سلامت سیستم، سرورها، صف پردازش، تشخیص آگهی جعلی، تبلیغات، لاگ ممیزی و فلگ‌های قابلیت.', chips:['سرورها','صف پردازش','آگهی جعلی'] },
+            { n:'۵', file:'MelkJet CRM.dc.html', tag:'مشاور', tagColor:'#e0c489', title:'CRM مشاور', desc:'داشبورد، فایل‌ها، پایپ‌لاین کانبان، وظایف، تقویم — در یک اپ.', chips:['کانبان','تقویم','۵ نما'] },
+            { n:'۶', file:'MelkJet Builder.dc.html', tag:'سازنده', tagColor:'#5fd98a', title:'میز کار سازنده', desc:'شبکه‌ی موجودی واحدها، پیش‌فروش، مراحل ساخت، سرمایه‌گذاران.', chips:['موجودی واحد','پیش‌فروش'] },
+            { n:'۷', file:'MelkJet Materials.dc.html', tag:'مصالح', tagColor:'#e7a14a', title:'بازار مصالح (B2B)', desc:'کاتالوگ، سفارش‌ها، و استعلام عمده (RFQ) سازندگان با پیشنهاد قیمت AI.', chips:['مارکت‌پلیس','RFQ','کاتالوگ'] },
+            { n:'۸', file:'MelkJet Pros.dc.html', tag:'تخصصی', tagColor:'#9b7ad0', title:'خدمات تخصصی', desc:'چهار نقش در یک مرکز: معمار، کارشناس رسمی، بانک و بیمه، دفترخانه — با سوییچر نقش.', chips:['معمار','کارشناس','بانک','دفترخانه'] },
+            { n:'۹', file:'MelkJet Marketing.dc.html', tag:'مارکتینگ', tagColor:'#5fd98a', title:'مارکتینگ اتومیشن', desc:'کمپین ایمیل/پیامک/واتساپ/پوش، سگمنت مخاطب، قیف تبدیل، و سازنده‌ی کمپین با AI.', chips:['کمپین','سگمنت','قیف','AI'] },
+            { n:'۱۰', file:'MelkJet Agency.dc.html', tag:'آژانس', tagColor:'#7a8fae', title:'پنل آژانس / دپارتمان', desc:'مدیریت شعب، رتبه‌بندی مشاوران، پورسانت، و گزارش مالی سازمانی.', chips:['شعب','پورسانت','KPI'] },
+            { n:'۱۱', file:'MelkJet Pricing.dc.html', tag:'پلن‌ها', tagColor:'#e0c489', title:'پلن‌ها و اشتراک', desc:'۶ پلن از رایگان تا سازمانی، تغییر صورتحساب ماهانه/سالانه، و جدول مقایسه.', chips:['۶ پلن','مقایسه','صورتحساب'] }
+          ] },
+        { ic:'⚙', title:'پلتفرم و سیستم', sub:'مدیریت، اتوماسیون و مرجع طراحی',
+          pages:[
+            { n:'۱۲', file:'MelkJet Workflow.dc.html', tag:'اتوماسیون', tagColor:'#e7a14a', title:'سازنده اتوماسیون', desc:'ویرایشگر گره‌محور با اجرای آزمایشی متحرک: لید → AI → تخصیص → اقدام.', chips:['Workflow','اجرای زنده'] },
+            { n:'۱۳', file:'MelkJet SuperAdmin.dc.html', tag:'گزارش', tagColor:'#5b9bd5', title:'گزارش‌ها و Big Data', desc:'گزارش‌های چندساله و پیش‌بینی AI از کلان‌داده — احتمال نوسان قیمت مصالح و بازار. (در سوپر ادمین)', chips:['Big Data','پیش‌بینی AI','چندساله'] },
+            { n:'۱۴', file:'MelkJet Design System.dc.html', tag:'مرجع', tagColor:'#5b9bd5', title:'سیستم طراحی', desc:'توکن‌های رنگ و تایپ، فاصله و شعاع، و کتابخانه‌ی کامل کامپوننت‌ها.', chips:['توکن‌ها','کامپوننت'] },
+            { n:'۱۵', file:'MelkJet States.dc.html', tag:'حالت‌ها', tagColor:'#e7a14a', title:'حالت‌ها و الگوها', desc:'بارگذاری (اسکلت)، حالت خالی، خطا (۴۰۴/شبکه/فرم)، و میکرو‌اینتراکشن‌های تعاملی.', chips:['Loading','Empty','Error'] }
+          ] }
+      ],
+      flow:[
+        { ic:'◍', l:'خانه', file:'MelkJet Home.dc.html' },
+        { ic:'⌕', l:'جستجو و نقشه', file:'MelkJet Search.dc.html' },
+        { ic:'⌂', l:'جزئیات ملک', file:'MelkJet Property.dc.html' },
+        { ic:'♥', l:'میز کار خریدار', file:'MelkJet Buyer.dc.html' },
+        { ic:'◎', l:'CRM مشاور', file:'MelkJet CRM.dc.html' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

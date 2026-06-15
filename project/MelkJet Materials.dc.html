@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{margin:0;font-family:'Vazirmatn',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:rgba(140,140,140,0.3);border-radius:8px}
+  @keyframes mjm-pulse{0%,100%{opacity:.45}50%{opacity:1}}
+  @media(max-width:920px){.mjm-side{width:62px!important;padding:14px 8px!important}.mjm-sidelabel{display:none!important}.mjm-kpi{grid-template-columns:repeat(2,1fr)!important}.mjm-2col{grid-template-columns:1fr!important}}
+</style>
+</helmet>
+<div dir="rtl" style="{{ rootStyle }}">
+  <div style="display:flex;min-height:100vh">
+
+    <!-- SIDEBAR -->
+    <aside class="mjm-side" style="width:236px;flex-shrink:0;position:sticky;top:0;height:100vh;background:var(--bg2);border-left:1px solid var(--line);display:flex;flex-direction:column;padding:18px 13px">
+      <a href="MelkJet.dc.html" style="display:flex;align-items:center;gap:11px;text-decoration:none;color:var(--text);padding:6px 8px 16px">
+        <span style="width:34px;height:34px;border-radius:10px;background:linear-gradient(140deg,var(--gold2),var(--gold));display:flex;align-items:center;justify-content:center"><span style="width:13px;height:13px;background:var(--bg2);transform:rotate(45deg);border-radius:2px"></span></span>
+        <div class="mjm-sidelabel"><div style="font-weight:800;font-size:16px;letter-spacing:-.5px">ملک‌جت</div><div style="font-size:10px;color:var(--gold)">بازار مصالح</div></div>
+      </a>
+      <nav style="display:grid;gap:3px;margin-top:6px">
+        <sc-for list="{{ menu }}" as="m" hint-placeholder-count="5">
+          <button onClick="{{ m.fn }}" style="{{ m.style }}"><span style="width:22px;text-align:center;font-size:15px;flex-shrink:0">{{ m.ic }}</span><span class="mjm-sidelabel" style="flex:1;text-align:right">{{ m.l }}</span><sc-if value="{{ m.badge }}" hint-placeholder-val="{{ false }}"><span class="mjm-sidelabel" style="background:var(--gold);color:#16140f;font-size:10px;font-weight:800;border-radius:999px;padding:1px 7px">{{ m.badge }}</span></sc-if></button>
+        </sc-for>
+      </nav>
+      <div style="flex:1"></div>
+      <div class="mjm-sidelabel" style="background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:13px">
+        <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;color:var(--text)"><span style="width:9px;height:9px;border-radius:50%;background:#5fd98a;animation:mjm-pulse 2s infinite"></span>فروشگاه فعال</div>
+        <div style="font-size:10.5px;color:var(--muted);margin-top:6px;line-height:1.6">امتیاز تأمین‌کننده: ۴٫۸ ★</div>
+      </div>
+      <div class="mjm-sidelabel" style="display:flex;align-items:center;gap:10px;padding:12px 6px 2px;margin-top:10px;border-top:1px solid var(--line)">
+        <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#b07a4a,#6e4a28);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px">ک</div>
+        <div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:700;color:var(--text)">بازار مصالح کیان</div><div style="font-size:10px;color:var(--muted)">تأمین‌کننده</div></div>
+        <button onClick="{{ toggleTheme }}" aria-label="theme" style="width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--text);cursor:pointer;font-size:12px">{{ themeIcon }}</button>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+      <header style="position:sticky;top:0;z-index:30;background:var(--navbg);backdrop-filter:blur(16px);border-bottom:1px solid var(--line);padding:0 24px;height:60px;display:flex;align-items:center;gap:14px">
+        <div style="font-size:17px;font-weight:800;color:var(--text);letter-spacing:-.4px">{{ viewTitle }}</div>
+        <div style="flex:1"></div>
+        <div style="display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:8px 13px;width:min(260px,28vw)"><span style="color:var(--muted);font-size:14px">⌕</span><input placeholder="جستجوی محصول، سفارش…" style="flex:1;border:none;outline:none;background:transparent;color:var(--text);font-family:inherit;font-size:13px;min-width:0"/></div>
+        <button style="display:flex;align-items:center;gap:7px;height:40px;padding:0 15px;border:none;border-radius:11px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer">＋ محصول جدید</button>
+      </header>
+
+      <main style="flex:1;padding:24px;overflow:auto">
+
+        <!-- ===== DASHBOARD ===== -->
+        <sc-if value="{{ isDash }}" hint-placeholder-val="{{ true }}">
+          <div style="display:grid;gap:18px">
+            <div class="mjm-kpi" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+              <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="4">
+                <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px">
+                  <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12px;color:var(--muted)">{{ k.l }}</span><span style="width:28px;height:28px;border-radius:8px;background:var(--goldDim);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:13px">{{ k.ic }}</span></div>
+                  <div style="font-size:24px;font-weight:800;color:var(--text);margin-top:12px;letter-spacing:-.5px">{{ k.v }}</div>
+                  <div style="font-size:11.5px;color:{{ k.c }};margin-top:4px">{{ k.t }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div class="mjm-2col" style="display:grid;grid-template-columns:1.6fr 1fr;gap:18px;align-items:start">
+              <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px">
+                  <div><div style="font-size:15px;font-weight:700;color:var(--text)">فروش ۶ ماهه</div><div style="font-size:12px;color:var(--muted);margin-top:4px">میلیون تومان</div></div>
+                  <div style="text-align:left"><div style="font-size:20px;font-weight:800;color:var(--gold)">۳٬۲۴۰ م.ت</div><div style="font-size:11.5px;color:#5fd98a">↗ ۱۸٪ این ماه</div></div>
+                </div>
+                <div style="height:160px;display:flex;align-items:flex-end;gap:12px">
+                  <sc-for list="{{ salesBars }}" as="bar" hint-placeholder-count="6">
+                    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;height:100%;justify-content:flex-end"><div style="width:100%;border-radius:6px 6px 0 0;height:{{ bar.h }};background:{{ bar.bg }};transition:.3s"></div><span style="font-size:10px;color:var(--faint)">{{ bar.m }}</span></div>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px">
+                <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:16px">دسته‌های پرفروش</div>
+                <div style="display:grid;gap:13px">
+                  <sc-for list="{{ topCats }}" as="c" hint-placeholder-count="4">
+                    <div>
+                      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><span style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text)"><span>{{ c.ic }}</span>{{ c.l }}</span><span style="font-size:12px;font-weight:700;color:var(--text)">{{ c.v }}</span></div>
+                      <div style="height:6px;border-radius:4px;background:var(--bg2);overflow:hidden"><div style="height:100%;width:{{ c.pct }};background:var(--gold);border-radius:4px"></div></div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+            <div class="mjm-2col" style="display:grid;grid-template-columns:1fr 1.3fr;gap:18px;align-items:start">
+              <!-- low stock -->
+              <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px">
+                <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px"><span style="color:#e7a14a;font-size:16px">⚠</span><div style="font-size:15px;font-weight:700;color:var(--text)">هشدار موجودی کم</div></div>
+                <div style="display:grid;gap:11px">
+                  <sc-for list="{{ lowStock }}" as="s" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:center;gap:11px;padding:11px;border:1px solid var(--line);border-radius:11px">
+                      <span style="width:34px;height:34px;flex-shrink:0;border-radius:9px;background:{{ s.bg }};display:flex;align-items:center;justify-content:center;font-size:15px">{{ s.ic }}</span>
+                      <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text)">{{ s.l }}</div><div style="font-size:11px;color:#e7a14a">فقط {{ s.qty }} باقی مانده</div></div>
+                      <button style="height:30px;padding:0 11px;border:1px solid var(--gold);border-radius:9px;background:var(--goldDim);color:var(--gold);font-family:inherit;font-size:11.5px;font-weight:700;cursor:pointer">تأمین</button>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+              <!-- recent orders -->
+              <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line)"><div style="font-size:15px;font-weight:700;color:var(--text)">سفارش‌های اخیر</div><button onClick="{{ goOrders }}" style="border:none;background:transparent;color:var(--gold);font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer">همه ←</button></div>
+                <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:420px">
+                  <tbody>
+                    <sc-for list="{{ recentOrders }}" as="o" hint-placeholder-count="4">
+                      <tr style="border-top:1px solid var(--line)">
+                        <td style="padding:12px 18px"><div style="font-size:13px;font-weight:600;color:var(--text)">{{ o.buyer }}</div><div style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;direction:ltr">{{ o.id }}</div></td>
+                        <td style="padding:12px 18px;font-size:12.5px;color:var(--muted)">{{ o.items }}</td>
+                        <td style="padding:12px 18px;font-size:13px;font-weight:700;color:var(--gold)">{{ o.total }}</td>
+                        <td style="padding:12px 18px"><span style="{{ o.statusStyle }}">{{ o.status }}</span></td>
+                      </tr>
+                    </sc-for>
+                  </tbody>
+                </table></div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ===== CATALOG ===== -->
+        <sc-if value="{{ isCatalog }}" hint-placeholder-val="{{ false }}">
+          <div style="display:grid;gap:18px">
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px">
+              <sc-for list="{{ categories }}" as="c" hint-placeholder-count="6">
+                <div style="background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;text-align:center" style-hover="border-color:var(--gold)">
+                  <div style="font-size:24px">{{ c.ic }}</div>
+                  <div style="font-size:13px;font-weight:600;color:var(--text);margin-top:8px">{{ c.l }}</div>
+                  <div style="font-size:11px;color:var(--muted);margin-top:3px">{{ c.count }} کالا</div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden">
+              <div style="padding:16px 20px;border-bottom:1px solid var(--line);font-size:15px;font-weight:700;color:var(--text)">محصولات من</div>
+              <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:680px">
+                <thead><tr style="background:var(--bg2)"><th style="{{ th }}">محصول</th><th style="{{ th }}">قیمت / واحد</th><th style="{{ th }}">موجودی</th><th style="{{ th }}">پیشنهاد قیمت AI</th><th style="{{ th }}">وضعیت</th></tr></thead>
+                <tbody>
+                  <sc-for list="{{ products }}" as="p" hint-placeholder-count="6">
+                    <tr style="border-top:1px solid var(--line)">
+                      <td style="padding:13px 18px"><div style="display:flex;align-items:center;gap:12px"><span style="width:38px;height:38px;flex-shrink:0;border-radius:9px;background:{{ p.bg }};display:flex;align-items:center;justify-content:center;font-size:16px">{{ p.ic }}</span><div><div style="font-size:13px;font-weight:600;color:var(--text)">{{ p.l }}</div><div style="font-size:11px;color:var(--muted)">{{ p.sub }}</div></div></div></td>
+                      <td style="padding:13px 18px;font-size:13px;font-weight:700;color:var(--gold)">{{ p.price }}</td>
+                      <td style="padding:13px 18px"><span style="{{ p.stockStyle }}">{{ p.stock }}</span></td>
+                      <td style="padding:13px 18px"><span style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:{{ p.aiColor }}"><span style="color:var(--gold)">✦</span>{{ p.ai }}</span></td>
+                      <td style="padding:13px 18px"><span style="{{ p.statusStyle }}">{{ p.status }}</span></td>
+                    </tr>
+                  </sc-for>
+                </tbody>
+              </table></div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ===== ORDERS ===== -->
+        <sc-if value="{{ isOrdersView }}" hint-placeholder-val="{{ false }}">
+          <div style="display:grid;gap:18px">
+            <div class="mjm-kpi" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+              <sc-for list="{{ orderStages }}" as="s" hint-placeholder-count="4">
+                <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;align-items:center;gap:12px">
+                  <span style="width:10px;height:10px;border-radius:50%;background:{{ s.c }}"></span>
+                  <div><div style="font-size:20px;font-weight:800;color:var(--text)">{{ s.v }}</div><div style="font-size:11.5px;color:var(--muted)">{{ s.l }}</div></div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden">
+              <div style="padding:16px 20px;border-bottom:1px solid var(--line);font-size:15px;font-weight:700;color:var(--text)">همه‌ی سفارش‌ها</div>
+              <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:720px">
+                <thead><tr style="background:var(--bg2)"><th style="{{ th }}">شناسه</th><th style="{{ th }}">خریدار</th><th style="{{ th }}">اقلام</th><th style="{{ th }}">مبلغ</th><th style="{{ th }}">تاریخ</th><th style="{{ th }}">وضعیت</th></tr></thead>
+                <tbody>
+                  <sc-for list="{{ orders }}" as="o" hint-placeholder-count="6">
+                    <tr style="border-top:1px solid var(--line)">
+                      <td style="padding:13px 18px;font-size:12px;color:var(--muted);font-family:'JetBrains Mono',monospace;direction:ltr">{{ o.id }}</td>
+                      <td style="padding:13px 18px;font-size:13px;font-weight:600;color:var(--text)">{{ o.buyer }}</td>
+                      <td style="padding:13px 18px;font-size:12.5px;color:var(--muted)">{{ o.items }}</td>
+                      <td style="padding:13px 18px;font-size:13px;font-weight:700;color:var(--gold)">{{ o.total }}</td>
+                      <td style="padding:13px 18px;font-size:12px;color:var(--muted)">{{ o.date }}</td>
+                      <td style="padding:13px 18px"><span style="{{ o.statusStyle }}">{{ o.status }}</span></td>
+                    </tr>
+                  </sc-for>
+                </tbody>
+              </table></div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ===== RFQ ===== -->
+        <sc-if value="{{ isRfq }}" hint-placeholder-val="{{ false }}">
+          <div style="display:grid;gap:16px;max-width:920px">
+            <div style="background:var(--surface);border:1px solid var(--gold);border-radius:16px;padding:18px;display:flex;align-items:center;gap:14px;position:relative;overflow:hidden">
+              <div style="position:absolute;inset:0;background:radial-gradient(300px 120px at 95% 0,var(--goldDim),transparent)"></div>
+              <span style="position:relative;width:40px;height:40px;border-radius:11px;background:linear-gradient(140deg,var(--gold2),var(--gold));display:flex;align-items:center;justify-content:center;color:#16140f;font-weight:800;font-size:17px">✦</span>
+              <div style="position:relative;flex:1"><div style="font-size:14.5px;font-weight:700;color:var(--text)">۵ استعلام جدید از سازندگان</div><div style="font-size:12px;color:var(--muted);margin-top:3px">AI پیشنهاد قیمت رقابتی برای هر استعلام آماده کرده است</div></div>
+            </div>
+            <sc-for list="{{ rfqs }}" as="r" hint-placeholder-count="4">
+              <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap">
+                  <div style="display:flex;align-items:center;gap:12px">
+                    <span style="width:42px;height:42px;border-radius:11px;background:{{ r.bg }};display:flex;align-items:center;justify-content:center;font-size:18px">{{ r.ic }}</span>
+                    <div><div style="font-size:15px;font-weight:700;color:var(--text)">{{ r.title }}</div><div style="font-size:12px;color:var(--muted);margin-top:3px">{{ r.builder }} · {{ r.when }}</div></div>
+                  </div>
+                  <span style="{{ r.urgencyStyle }}">{{ r.urgency }}</span>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:18px;margin-top:16px;padding:14px;background:var(--bg2);border-radius:12px">
+                  <div><div style="font-size:11px;color:var(--muted)">مقدار</div><div style="font-size:14px;font-weight:700;color:var(--text);margin-top:3px">{{ r.qty }}</div></div>
+                  <div><div style="font-size:11px;color:var(--muted)">تحویل</div><div style="font-size:14px;font-weight:700;color:var(--text);margin-top:3px">{{ r.delivery }}</div></div>
+                  <div><div style="font-size:11px;color:var(--muted)">بودجه خریدار</div><div style="font-size:14px;font-weight:700;color:var(--text);margin-top:3px">{{ r.budget }}</div></div>
+                  <div style="flex:1;min-width:160px;border-right:1px solid var(--line);padding-right:18px"><div style="font-size:11px;color:var(--gold)">✦ پیشنهاد قیمت AI</div><div style="font-size:14px;font-weight:800;color:var(--gold);margin-top:3px">{{ r.aiPrice }}</div><div style="font-size:10.5px;color:var(--muted)">{{ r.aiNote }}</div></div>
+                </div>
+                <div style="display:flex;gap:10px;margin-top:14px">
+                  <button style="height:40px;padding:0 18px;border:none;border-radius:11px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer">ارسال پیشنهاد قیمت</button>
+                  <button style="height:40px;padding:0 16px;border:1px solid var(--line2);border-radius:11px;background:var(--bg2);color:var(--text);font-family:inherit;font-weight:600;font-size:13px;cursor:pointer">گفتگو با خریدار</button>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+      </main>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:860}}">
+class Component extends DCLogic {
+  state = { theme:'dark', view:'dash' };
+  themes = {
+    dark:{ '--bg':'#0d0d0f','--bg2':'#141417','--surface':'#18181c','--navbg':'rgba(20,20,23,0.8)','--line':'rgba(255,255,255,0.08)','--line2':'rgba(255,255,255,0.14)','--text':'#f2f1ee','--muted':'#9a9a98','--faint':'#6a6a68','--gold':'#c9a96a','--gold2':'#e0c489','--goldDim':'rgba(201,169,106,0.12)' },
+    light:{ '--bg':'#f4f1ea','--bg2':'#ffffff','--surface':'#ffffff','--navbg':'rgba(255,255,255,0.85)','--line':'rgba(26,24,20,0.09)','--line2':'rgba(26,24,20,0.16)','--text':'#1a1814','--muted':'#6b6862','--faint':'#9a968d','--gold':'#9c7a3c','--gold2':'#b8923f','--goldDim':'rgba(156,122,60,0.10)' }
+  };
+  toggleTheme = () => this.setState(s=>({ theme:s.theme==='dark'?'light':'dark' }));
+  go = (v) => () => this.setState({ view:v });
+
+  renderVals(){
+    const t = this.themes[this.state.theme];
+    const rootStyle = Object.entries(t).map(([k,v])=>k+':'+v).join(';') + ';min-height:100vh;background:var(--bg);color:var(--text);font-family:Vazirmatn,sans-serif;transition:background .3s,color .3s';
+    const v = this.state.view;
+    const navItem=(id,ic,l,badge)=>{ const on=v===id; return { ic,l,badge,fn:this.go(id), style:'display:flex;align-items:center;gap:11px;width:100%;padding:10px 12px;border:none;border-radius:11px;font-family:inherit;font-size:13px;font-weight:'+(on?'700':'500')+';cursor:pointer;text-align:right;transition:.15s;background:'+(on?'var(--goldDim)':'transparent')+';color:'+(on?'var(--text)':'var(--muted)')+(on?';box-shadow:inset 3px 0 0 var(--gold)':'') }; };
+    const titles={ dash:'داشبورد فروش', catalog:'کاتالوگ محصولات', orders:'سفارش‌ها', rfq:'استعلام‌ها (RFQ)' };
+    const th='text-align:right;padding:12px 18px;font-size:11.5px;font-weight:600;color:var(--muted)';
+    const tag=(txt,c)=>'font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap;background:'+c+'22;color:'+c+';border:1px solid '+c+'55';
+
+    const sales=[420,480,510,560,520,610]; const smax=Math.max(...sales);
+    const salesBars=sales.map((n,i)=>({ m:['آذر','دی','بهمن','اسفند','فرو','ارد'][i], h:(16+n/smax*82)+'%', bg:i===5?'linear-gradient(to top,var(--gold),var(--gold2))':'var(--goldDim)' }));
+
+    return {
+      rootStyle, themeIcon:this.state.theme==='dark'?'☀':'☾', toggleTheme:this.toggleTheme, th,
+      menu:[ navItem('dash','▦','داشبورد',null), navItem('catalog','▤','کاتالوگ',null), navItem('orders','◳','سفارش‌ها','۸'), navItem('rfq','✦','استعلام‌ها','۵'),
+        (()=>{ const it=navItem('crm','◍','CRM مشتریان',null); it.fn=()=>{ window.location.href='MelkJet CRM.dc.html'; }; return it; })(),
+        (()=>{ const it=navItem('market','◔','مارکتینگ',null); it.fn=()=>{ window.location.href='MelkJet Marketing.dc.html'; }; return it; })(),
+        (()=>{ const it=navItem('auto','⚙','اتوماسیون',null); it.fn=()=>{ window.location.href='MelkJet Workflow.dc.html'; }; return it; })(),
+        (()=>{ const it=navItem('site','◧','وب‌سایت‌ساز',null); it.fn=()=>{ window.location.href='MelkJet Website Builder.dc.html?role=materials'; }; return it; })(),
+        navItem('settings','⚙','تنظیمات',null) ],
+      viewTitle:titles[v]||'داشبورد فروش', goOrders:this.go('orders'),
+      isDash:v==='dash', isCatalog:v==='catalog', isOrdersView:v==='orders', isRfq:v==='rfq',
+
+      kpis:[
+        { l:'فروش این ماه', v:'۶۱۰ م.ت', ic:'◔', t:'+۱۸٪', c:'#5fd98a' },
+        { l:'سفارش‌های فعال', v:'۲۴', ic:'◳', t:'۸ در انتظار ارسال', c:'var(--muted)' },
+        { l:'استعلام جدید', v:'۵', ic:'✦', t:'نیاز به پاسخ', c:'#e7a14a' },
+        { l:'محصولات فعال', v:'۱۴۸', ic:'▤', t:'۳ موجودی کم', c:'var(--muted)' }
+      ],
+      salesBars,
+      topCats:[
+        { ic:'🔩', l:'آهن و میلگرد', v:'۳۸٪', pct:'88%' },
+        { ic:'🧱', l:'سیمان و گچ', v:'۲۴٪', pct:'56%' },
+        { ic:'◧', l:'کاشی و سرامیک', v:'۲۰٪', pct:'46%' },
+        { ic:'🚿', l:'شیرآلات', v:'۱۸٪', pct:'42%' }
+      ],
+      lowStock:[
+        { ic:'🔩', bg:'rgba(201,169,106,0.15)', l:'میلگرد آجدار ۱۶', qty:'۱٫۲ تن' },
+        { ic:'🧱', bg:'rgba(91,155,213,0.15)', l:'سیمان تیپ ۲ کیسه‌ای', qty:'۸۰ کیسه' },
+        { ic:'◧', bg:'rgba(155,122,208,0.15)', l:'کاشی ۶۰×۶۰ کرم', qty:'۴۰ متر' }
+      ],
+      recentOrders:[
+        { buyer:'گروه آرین', id:'#ORD-۸۴۲۱', items:'۳ قلم', total:'۸۴ م', status:'ارسال شد', statusStyle:tag('ارسال شد','#5b9bd5') },
+        { buyer:'پیمانکاری دلتا', id:'#ORD-۸۴۱۹', items:'۷ قلم', total:'۱۴۲ م', status:'در حال آماده‌سازی', statusStyle:tag('آماده‌سازی','#e7a14a') },
+        { buyer:'مجتمع نگین', id:'#ORD-۸۴۱۵', items:'۲ قلم', total:'۳۶ م', status:'تحویل شد', statusStyle:tag('تحویل شد','#5fd98a') },
+        { buyer:'ساختمانی پارس', id:'#ORD-۸۴۱۰', items:'۵ قلم', total:'۹۸ م', status:'پرداخت معلق', statusStyle:tag('پرداخت معلق','#e7674a') }
+      ],
+
+      categories:[
+        { ic:'🔩', l:'آهن و فولاد', count:'۴۲' }, { ic:'🧱', l:'سیمان و گچ', count:'۱۸' }, { ic:'◧', l:'کاشی و سرامیک', count:'۳۶' },
+        { ic:'🚿', l:'شیرآلات', count:'۲۴' }, { ic:'❄', l:'سرمایش/گرمایش', count:'۱۵' }, { ic:'⬆', l:'آسانسور', count:'۸' }
+      ],
+      products:[
+        { ic:'🔩', bg:'rgba(201,169,106,0.15)', l:'میلگرد آجدار ۱۶', sub:'فولاد مبارکه', price:'۲۸٬۵۰۰ ت/کیلو', stock:'۱٫۲ تن', stockStyle:tag('موجودی کم','#e7a14a'), ai:'۲۹٬۲۰۰ بهینه', aiColor:'#5fd98a', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { ic:'🧱', bg:'rgba(91,155,213,0.15)', l:'سیمان تیپ ۲', sub:'سیمان تهران', price:'۸۵٬۰۰۰ ت/کیسه', stock:'۸۰ کیسه', stockStyle:tag('موجودی کم','#e7a14a'), ai:'قیمت مناسب', aiColor:'var(--muted)', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { ic:'◧', bg:'rgba(155,122,208,0.15)', l:'کاشی ۶۰×۶۰ کرم', sub:'کاشی الوند', price:'۱۹۵٬۰۰۰ ت/متر', stock:'۴۲۰ متر', stockStyle:tag('۴۲۰ متر','#5fd98a'), ai:'۲۰۵٬۰۰۰ بهینه', aiColor:'#5fd98a', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { ic:'🚿', bg:'rgba(95,217,138,0.15)', l:'شیر اهرمی روشویی', sub:'قهرمان', price:'۱٬۲۴۰٬۰۰۰ ت', stock:'۱۸۰ عدد', stockStyle:tag('۱۸۰ عدد','#5fd98a'), ai:'قیمت مناسب', aiColor:'var(--muted)', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { ic:'❄', bg:'rgba(91,155,213,0.15)', l:'داکت اسپلیت ۳۶۰۰۰', sub:'گری', price:'۴۸٬۰۰۰٬۰۰۰ ت', stock:'۲۴ عدد', stockStyle:tag('۲۴ عدد','#5fd98a'), ai:'۸٪ بالاتر از بازار', aiColor:'#e7a14a', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { ic:'◧', bg:'rgba(201,169,106,0.15)', l:'سرامیک کف طوسی', sub:'مرجان', price:'۲۴۵٬۰۰۰ ت/متر', stock:'۰', stockStyle:tag('ناموجود','#e7674a'), ai:'تأمین مجدد', aiColor:'#e7a14a', status:'غیرفعال', statusStyle:tag('غیرفعال','#9a9a98') }
+      ],
+
+      orderStages:[
+        { c:'#e7a14a', v:'۸', l:'در انتظار آماده‌سازی' },
+        { c:'#5b9bd5', v:'۶', l:'ارسال‌شده' },
+        { c:'#5fd98a', v:'۱۰', l:'تحویل‌شده' },
+        { c:'#e7674a', v:'۲', l:'پرداخت معلق' }
+      ],
+      orders:[
+        { id:'#ORD-۸۴۲۱', buyer:'گروه آرین', items:'میلگرد، سیمان، کاشی', total:'۸۴ م', date:'امروز', status:'ارسال شد', statusStyle:tag('ارسال شد','#5b9bd5') },
+        { id:'#ORD-۸۴۱۹', buyer:'پیمانکاری دلتا', items:'۷ قلم متنوع', total:'۱۴۲ م', date:'امروز', status:'آماده‌سازی', statusStyle:tag('آماده‌سازی','#e7a14a') },
+        { id:'#ORD-۸۴۱۵', buyer:'مجتمع نگین', items:'شیرآلات', total:'۳۶ م', date:'دیروز', status:'تحویل شد', statusStyle:tag('تحویل شد','#5fd98a') },
+        { id:'#ORD-۸۴۱۰', buyer:'ساختمانی پارس', items:'۵ قلم', total:'۹۸ م', date:'۲ روز پیش', status:'پرداخت معلق', statusStyle:tag('پرداخت معلق','#e7674a') },
+        { id:'#ORD-۸۴۰۵', buyer:'گروه آرین', items:'داکت اسپلیت ×۴', total:'۱۹۲ م', date:'۳ روز پیش', status:'تحویل شد', statusStyle:tag('تحویل شد','#5fd98a') },
+        { id:'#ORD-۸۳۹۸', buyer:'برج‌سازان کیهان', items:'سیمان ×۵۰۰', total:'۴۲ م', date:'هفته پیش', status:'تحویل شد', statusStyle:tag('تحویل شد','#5fd98a') }
+      ],
+
+      rfqs:[
+        { ic:'🔩', bg:'rgba(201,169,106,0.15)', title:'میلگرد آجدار ۱۶ و ۱۸', builder:'گروه آرین', when:'۲ ساعت پیش', urgency:'فوری', urgencyStyle:tag('فوری','#e7674a'), qty:'۸۰ تن', delivery:'۱ هفته', budget:'۲٫۳ میلیارد', aiPrice:'۲۸٬۸۰۰ ت/کیلو', aiNote:'۲٪ زیر میانگین رقبا — شانس برد بالا' },
+        { ic:'🧱', bg:'rgba(91,155,213,0.15)', title:'سیمان تیپ ۲ فله', builder:'برج‌سازان کیهان', when:'۵ ساعت پیش', urgency:'معمولی', urgencyStyle:tag('معمولی','#5b9bd5'), qty:'۲۰۰ تن', delivery:'۲ هفته', budget:'۱٫۱ میلیارد', aiPrice:'۸۲٬۰۰۰ ت/کیسه', aiNote:'قیمت رقابتی پیشنهادی' },
+        { ic:'◧', bg:'rgba(155,122,208,0.15)', title:'کاشی و سرامیک پروژه', builder:'مجتمع نگین', when:'دیروز', urgency:'معمولی', urgencyStyle:tag('معمولی','#5b9bd5'), qty:'۴٬۲۰۰ متر', delivery:'۳ هفته', budget:'۸۹۰ میلیون', aiPrice:'۱۹۸٬۰۰۰ ت/متر', aiNote:'با تخفیف حجمی پیشنهادی' },
+        { ic:'🚿', bg:'rgba(95,217,138,0.15)', title:'شیرآلات ۹۶ واحد', builder:'ساختمانی پارس', when:'دیروز', urgency:'فوری', urgencyStyle:tag('فوری','#e7674a'), qty:'۹۶ ست کامل', delivery:'۱۰ روز', budget:'۱٫۸ میلیارد', aiPrice:'۱۸٬۵۰۰٬۰۰۰ ت/ست', aiNote:'حاشیه سود ۲۲٪ حفظ می‌شود' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

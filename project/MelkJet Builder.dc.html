@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{margin:0;font-family:'Vazirmatn',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:rgba(140,140,140,0.3);border-radius:8px}
+  @keyframes mju-pop{from{transform:scale(.95);opacity:0}to{transform:scale(1);opacity:1}}
+  @keyframes mju-pulse{0%,100%{opacity:.45}50%{opacity:1}}
+  @media(max-width:920px){.mju-side{width:62px!important;padding:14px 8px!important}.mju-sidelabel{display:none!important}.mju-kpi{grid-template-columns:repeat(2,1fr)!important}.mju-2col{grid-template-columns:1fr!important}}
+</style>
+</helmet>
+<div dir="rtl" style="{{ rootStyle }}">
+  <div style="display:flex;min-height:100vh">
+
+    <!-- SIDEBAR -->
+    <aside class="mju-side" style="width:236px;flex-shrink:0;position:sticky;top:0;height:100vh;background:var(--bg2);border-left:1px solid var(--line);display:flex;flex-direction:column;padding:18px 13px">
+      <a href="MelkJet Home.dc.html" style="display:flex;align-items:center;gap:11px;text-decoration:none;color:var(--text);padding:6px 8px 16px">
+        <span style="width:34px;height:34px;border-radius:10px;background:linear-gradient(140deg,var(--gold2),var(--gold));display:flex;align-items:center;justify-content:center"><span style="width:13px;height:13px;background:var(--bg2);transform:rotate(45deg);border-radius:2px"></span></span>
+        <div class="mju-sidelabel"><div style="font-weight:800;font-size:16px;letter-spacing:-.5px">ملک‌جت</div><div style="font-size:10px;color:var(--gold)">میز کار سازنده</div></div>
+      </a>
+      <nav style="display:grid;gap:3px;margin-top:6px">
+        <sc-for list="{{ menu }}" as="m" hint-placeholder-count="5">
+          <button onClick="{{ m.fn }}" style="{{ m.style }}"><span style="width:22px;text-align:center;font-size:15px;flex-shrink:0">{{ m.ic }}</span><span class="mju-sidelabel" style="flex:1;text-align:right">{{ m.l }}</span></button>
+        </sc-for>
+      </nav>
+      <div style="flex:1"></div>
+      <div class="mju-sidelabel" style="background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:13px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">پیشرفت ساخت</div>
+        <div style="display:flex;align-items:baseline;gap:6px"><span style="font-size:22px;font-weight:800;color:var(--gold)">۶۸٪</span><span style="font-size:11px;color:var(--muted)">فاز ۲</span></div>
+        <div style="height:6px;border-radius:4px;background:var(--bg2);overflow:hidden;margin-top:8px"><div style="height:100%;width:68%;background:linear-gradient(90deg,var(--gold2),var(--gold));border-radius:4px"></div></div>
+      </div>
+      <div class="mju-sidelabel" style="display:flex;align-items:center;gap:10px;padding:12px 6px 2px;margin-top:10px;border-top:1px solid var(--line)">
+        <div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#7aa88f,#476e58);flex-shrink:0"></div>
+        <div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:700;color:var(--text)">گروه آرین</div><div style="font-size:10px;color:var(--muted)">انبوه‌ساز</div></div>
+        <button onClick="{{ toggleTheme }}" aria-label="theme" style="width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--text);cursor:pointer;font-size:12px">{{ themeIcon }}</button>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+      <header style="position:sticky;top:0;z-index:30;background:var(--navbg);backdrop-filter:blur(16px);border-bottom:1px solid var(--line);padding:0 24px;height:60px;display:flex;align-items:center;gap:14px">
+        <div style="font-size:17px;font-weight:800;color:var(--text);letter-spacing:-.4px">{{ viewTitle }}</div>
+        <div style="flex:1"></div>
+        <button style="display:flex;align-items:center;gap:9px;height:40px;padding:0 14px;border:1px solid var(--line2);border-radius:11px;background:var(--surface);color:var(--text);font-family:inherit;font-weight:600;font-size:13px;cursor:pointer"><span style="width:8px;height:8px;border-radius:50%;background:var(--gold)"></span>پروژه برج آرین · سعادت‌آباد <span style="color:var(--muted)">▾</span></button>
+      </header>
+
+      <main style="flex:1;padding:24px;overflow:auto">
+
+        <!-- ===== OVERVIEW ===== -->
+        <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}">
+          <div style="display:grid;gap:18px">
+            <div class="mju-kpi" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+              <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="4">
+                <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px">
+                  <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12px;color:var(--muted)">{{ k.l }}</span><span style="width:9px;height:9px;border-radius:50%;background:{{ k.dot }}"></span></div>
+                  <div style="font-size:26px;font-weight:800;color:var(--text);margin-top:12px;letter-spacing:-.5px">{{ k.v }}</div>
+                  <div style="font-size:11.5px;color:var(--muted);margin-top:4px">{{ k.t }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div class="mju-2col" style="display:grid;grid-template-columns:1.6fr 1fr;gap:18px;align-items:start">
+              <!-- sales chart -->
+              <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px">
+                  <div><div style="font-size:15px;font-weight:700;color:var(--text)">فروش و پیش‌فروش</div><div style="font-size:12px;color:var(--muted);margin-top:4px">۶ ماه گذشته · واحد فروخته‌شده</div></div>
+                  <div style="text-align:left"><div style="font-size:20px;font-weight:800;color:var(--gold)">۱۴۲ واحد</div><div style="font-size:11.5px;color:#5fd98a">↗ ۷۸٪ از کل پروژه</div></div>
+                </div>
+                <div style="height:160px;display:flex;align-items:flex-end;gap:12px">
+                  <sc-for list="{{ salesBars }}" as="bar" hint-placeholder-count="6">
+                    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;height:100%;justify-content:flex-end">
+                      <div style="width:100%;border-radius:6px 6px 0 0;height:{{ bar.h }};background:{{ bar.bg }};transition:.3s"></div>
+                      <span style="font-size:10px;color:var(--faint)">{{ bar.m }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+              <!-- inventory donut -->
+              <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px">
+                <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:16px">وضعیت موجودی</div>
+                <div style="display:flex;align-items:center;gap:18px">
+                  <div style="position:relative;width:108px;height:108px;flex-shrink:0">
+                    <div style="position:absolute;inset:0;border-radius:50%;background:conic-gradient(#5fd98a 0deg 198deg,#e7a14a 198deg 252deg,var(--gold) 252deg 360deg)"></div>
+                    <div style="position:absolute;inset:13px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;flex-direction:column"><span style="font-size:24px;font-weight:800;color:var(--text)">۱۸۲</span><span style="font-size:10px;color:var(--faint)">کل واحد</span></div>
+                  </div>
+                  <div style="flex:1;display:grid;gap:10px">
+                    <sc-for list="{{ invLegend }}" as="i" hint-placeholder-count="3">
+                      <div style="display:flex;align-items:center;gap:9px"><span style="width:11px;height:11px;border-radius:3px;background:{{ i.c }}"></span><span style="font-size:12.5px;color:var(--text);flex:1">{{ i.l }}</span><span style="font-size:13px;font-weight:700;color:var(--text)">{{ i.v }}</span></div>
+                    </sc-for>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- milestones -->
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px">
+              <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:18px">مراحل ساخت</div>
+              <div style="display:flex;align-items:flex-start;gap:0;overflow-x:auto;padding-bottom:4px">
+                <sc-for list="{{ milestones }}" as="m" hint-placeholder-count="5">
+                  <div style="flex:1;min-width:130px;display:flex;flex-direction:column;align-items:center;text-align:center;position:relative">
+                    <div style="position:absolute;top:13px;right:50%;left:-50%;height:2px;background:{{ m.lineColor }}"></div>
+                    <span style="position:relative;z-index:2;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;background:{{ m.bg }};color:{{ m.fg }};border:2px solid {{ m.bd }}">{{ m.ic }}</span>
+                    <div style="font-size:12.5px;font-weight:600;color:{{ m.tc }};margin-top:10px">{{ m.l }}</div>
+                    <div style="font-size:10.5px;color:var(--muted);margin-top:3px">{{ m.date }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ===== UNIT INVENTORY ===== -->
+        <sc-if value="{{ isUnits }}" hint-placeholder-val="{{ false }}">
+          <div class="mju-2col" style="display:grid;grid-template-columns:1fr 300px;gap:18px;align-items:start">
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px">
+                <div style="font-size:15px;font-weight:700;color:var(--text)">شبکه‌ی واحدها · بلوک A</div>
+                <div style="display:flex;gap:14px;flex-wrap:wrap">
+                  <sc-for list="{{ statusLegend }}" as="s" hint-placeholder-count="3">
+                    <span style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted)"><span style="width:11px;height:11px;border-radius:3px;background:{{ s.c }}"></span>{{ s.l }}</span>
+                  </sc-for>
+                </div>
+              </div>
+              <!-- grid: floors x units -->
+              <div style="overflow-x:auto">
+                <div style="display:grid;gap:8px;min-width:520px">
+                  <sc-for list="{{ floors }}" as="fl" hint-placeholder-count="8">
+                    <div style="display:flex;align-items:center;gap:10px">
+                      <span style="width:54px;flex-shrink:0;font-size:11.5px;color:var(--muted);text-align:left">{{ fl.label }}</span>
+                      <div style="display:flex;gap:8px;flex:1">
+                        <sc-for list="{{ fl.units }}" as="u" hint-placeholder-count="6">
+                          <button onClick="{{ u.select }}" style="{{ u.style }}">{{ u.num }}</button>
+                        </sc-for>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+            <!-- unit detail -->
+            <div style="position:sticky;top:84px">
+              <sc-if value="{{ hasSelected }}" hint-placeholder-val="{{ true }}">
+                <div style="background:var(--surface);border:1px solid var(--gold);border-radius:16px;overflow:hidden;animation:mju-pop .25s both">
+                  <div style="padding:16px 18px;border-bottom:1px solid var(--line);background:var(--goldDim)">
+                    <div style="font-size:12px;color:var(--gold);font-weight:700">واحد انتخاب‌شده</div>
+                    <div style="font-size:20px;font-weight:800;color:var(--text);margin-top:4px">{{ sel.title }}</div>
+                  </div>
+                  <div style="padding:18px;display:grid;gap:13px">
+                    <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12.5px;color:var(--muted)">وضعیت</span><span style="{{ sel.statusStyle }}">{{ sel.status }}</span></div>
+                    <sc-for list="{{ sel.specs }}" as="sp" hint-placeholder-count="4">
+                      <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12.5px;color:var(--muted)">{{ sp.l }}</span><span style="font-size:13px;font-weight:600;color:var(--text)">{{ sp.v }}</span></div>
+                    </sc-for>
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding-top:13px;border-top:1px solid var(--line)"><span style="font-size:12.5px;color:var(--muted)">قیمت</span><span style="font-size:18px;font-weight:800;color:var(--gold)">{{ sel.price }}</span></div>
+                    <button style="height:42px;border:none;border-radius:12px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-weight:700;font-size:13.5px;cursor:pointer;margin-top:4px">{{ sel.cta }}</button>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ===== PRESALE & SALES ===== -->
+        <sc-if value="{{ isSales }}" hint-placeholder-val="{{ false }}">
+          <div style="display:grid;gap:18px">
+            <div class="mju-kpi" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+              <sc-for list="{{ salesKpis }}" as="k" hint-placeholder-count="4">
+                <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px"><span style="font-size:12px;color:var(--muted)">{{ k.l }}</span><div style="font-size:23px;font-weight:800;color:{{ k.color }};margin-top:10px">{{ k.v }}</div></div>
+              </sc-for>
+            </div>
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden">
+              <div style="padding:16px 20px;border-bottom:1px solid var(--line);font-size:15px;font-weight:700;color:var(--text)">فروش‌های اخیر</div>
+              <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:640px">
+                <thead><tr style="background:var(--bg2)"><th style="{{ th }}">واحد</th><th style="{{ th }}">خریدار</th><th style="{{ th }}">نوع</th><th style="{{ th }}">مبلغ</th><th style="{{ th }}">پرداخت</th></tr></thead>
+                <tbody>
+                  <sc-for list="{{ salesRows }}" as="r" hint-placeholder-count="5">
+                    <tr style="border-top:1px solid var(--line)">
+                      <td style="padding:13px 18px;font-size:13px;font-weight:600;color:var(--text)">{{ r.unit }}</td>
+                      <td style="padding:13px 18px;font-size:13px;color:var(--text)">{{ r.buyer }}</td>
+                      <td style="padding:13px 18px"><span style="{{ r.typeStyle }}">{{ r.type }}</span></td>
+                      <td style="padding:13px 18px;font-size:13px;font-weight:700;color:var(--gold)">{{ r.amount }}</td>
+                      <td style="padding:13px 18px"><div style="display:flex;align-items:center;gap:8px"><div style="width:60px;height:6px;border-radius:4px;background:var(--bg2);overflow:hidden"><div style="height:100%;width:{{ r.paid }};background:#5fd98a;border-radius:4px"></div></div><span style="font-size:11px;color:var(--muted)">{{ r.paid }}</span></div></td>
+                    </tr>
+                  </sc-for>
+                </tbody>
+              </table></div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ===== INVESTORS ===== -->
+        <sc-if value="{{ isInvestors }}" hint-placeholder-val="{{ false }}">
+          <div class="mju-2col" style="display:grid;grid-template-columns:1fr 1.3fr;gap:18px;align-items:start">
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px">
+              <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:18px">سهام سرمایه‌گذاران</div>
+              <div style="display:grid;gap:15px">
+                <sc-for list="{{ investors }}" as="i" hint-placeholder-count="4">
+                  <div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px"><span style="display:flex;align-items:center;gap:9px;font-size:13px;color:var(--text)"><span style="width:11px;height:11px;border-radius:3px;background:{{ i.c }}"></span>{{ i.n }}</span><span style="font-size:13px;font-weight:700;color:var(--text)">{{ i.share }}</span></div>
+                    <div style="height:8px;border-radius:5px;background:var(--bg2);overflow:hidden"><div style="height:100%;width:{{ i.share }};background:{{ i.c }};border-radius:5px"></div></div>
+                    <div style="font-size:11px;color:var(--muted);margin-top:4px">سرمایه: {{ i.cap }} · بازده پیش‌بینی: <span style="color:#5fd98a">{{ i.roi }}</span></div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px">
+              <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:8px">سبد چندپروژه‌ای</div>
+              <div style="font-size:12px;color:var(--muted);margin-bottom:18px">عملکرد پروژه‌های فعال انبوه‌ساز</div>
+              <div style="display:grid;gap:12px">
+                <sc-for list="{{ portfolio }}" as="p" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:center;gap:14px;padding:14px;border:1px solid var(--line);border-radius:13px">
+                    <div style="width:46px;height:46px;flex-shrink:0;border-radius:11px;background:{{ p.img }};position:relative;overflow:hidden"><div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,transparent,transparent 6px,rgba(255,255,255,0.04) 6px,rgba(255,255,255,0.04) 7px)"></div></div>
+                    <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:700;color:var(--text)">{{ p.n }}</div><div style="font-size:11.5px;color:var(--muted);margin-top:2px">{{ p.loc }} · {{ p.units }} واحد</div></div>
+                    <div style="text-align:left"><div style="font-size:14px;font-weight:800;color:var(--gold)">{{ p.sold }}</div><div style="font-size:10.5px;color:#5fd98a">{{ p.roi }} بازده</div></div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+      </main>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:860}}">
+class Component extends DCLogic {
+  state = { theme:'dark', view:'overview', selUnit:'A-۵-۳' };
+  themes = {
+    dark:{ '--bg':'#0d0d0f','--bg2':'#141417','--surface':'#18181c','--navbg':'rgba(20,20,23,0.8)','--line':'rgba(255,255,255,0.08)','--line2':'rgba(255,255,255,0.14)','--text':'#f2f1ee','--muted':'#9a9a98','--faint':'#6a6a68','--gold':'#c9a96a','--gold2':'#e0c489','--goldDim':'rgba(201,169,106,0.12)' },
+    light:{ '--bg':'#f4f1ea','--bg2':'#ffffff','--surface':'#ffffff','--navbg':'rgba(255,255,255,0.85)','--line':'rgba(26,24,20,0.09)','--line2':'rgba(26,24,20,0.16)','--text':'#1a1814','--muted':'#6b6862','--faint':'#9a968d','--gold':'#9c7a3c','--gold2':'#b8923f','--goldDim':'rgba(156,122,60,0.10)' }
+  };
+  // status: sold, reserved, available
+  unitData = {};
+  toggleTheme = () => this.setState(s=>({ theme:s.theme==='dark'?'light':'dark' }));
+  go = (v) => () => this.setState({ view:v });
+  selectUnit = (id) => () => this.setState({ selUnit:id });
+  toFa(s){ return String(s).replace(/[0-9]/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d]); }
+
+  renderVals(){
+    const t = this.themes[this.state.theme];
+    const rootStyle = Object.entries(t).map(([k,v])=>k+':'+v).join(';') + ';min-height:100vh;background:var(--bg);color:var(--text);font-family:Vazirmatn,sans-serif;transition:background .3s,color .3s';
+    const v = this.state.view;
+    const navItem=(id,ic,l)=>{ const on=v===id; return { ic,l,fn:this.go(id), style:'display:flex;align-items:center;gap:11px;width:100%;padding:10px 12px;border:none;border-radius:11px;font-family:inherit;font-size:13px;font-weight:'+(on?'700':'500')+';cursor:pointer;text-align:right;transition:.15s;background:'+(on?'var(--goldDim)':'transparent')+';color:'+(on?'var(--text)':'var(--muted)')+(on?';box-shadow:inset 3px 0 0 var(--gold)':'') }; };
+    const titles={ overview:'نمای کلی پروژه', units:'موجودی واحدها', sales:'پیش‌فروش و فروش', investors:'سرمایه‌گذاران' };
+    const th='text-align:right;padding:12px 18px;font-size:11.5px;font-weight:600;color:var(--muted)';
+    const tag=(txt,c)=>'font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap;background:'+c+'22;color:'+c+';border:1px solid '+c+'55';
+
+    const sales=[14,22,28,31,26,21]; const smax=Math.max(...sales);
+    const salesBars=sales.map((n,i)=>({ m:['آذر','دی','بهمن','اسفند','فرو','ارد'][i], h:(16+n/smax*82)+'%', bg:i===4?'linear-gradient(to top,var(--gold),var(--gold2))':'var(--goldDim)' }));
+
+    // unit grid: floors 12..1, units per floor 6
+    const C={ sold:'#5fd98a', reserved:'#e7a14a', available:'var(--gold)' };
+    const statusFa={ sold:'فروخته‌شده', reserved:'رزرو', available:'موجود' };
+    const pattern=['sold','sold','reserved','available','sold','available'];
+    const floors=[];
+    for(let f=12; f>=1; f--){
+      const units=[];
+      for(let u=1; u<=6; u++){
+        let st = pattern[(f+u)%6];
+        if(f>=10) st = u<=4?'available':'reserved';
+        if(f<=3) st='sold';
+        const id='A-'+this.toFa(f)+'-'+this.toFa(u);
+        const sel=this.state.selUnit===id;
+        const c=C[st];
+        units.push({ num:this.toFa(u), select:this.selectUnit(id),
+          style:'width:42px;height:34px;flex:1;border-radius:8px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;transition:.15s;color:'+(st==='available'?'#16140f':'#0a1a10')+';background:'+c+';border:'+(sel?'2.5px solid var(--text)':'1px solid '+c)+';opacity:'+(st==='sold'?'0.92':'1') , _st:st, _id:id, _f:f, _u:u });
+      }
+      floors.push({ label:'طبقه '+this.toFa(f), units });
+    }
+
+    // selected unit detail
+    let sel=null;
+    for(const fl of floors){ for(const u of fl.units){ if(u._id===this.state.selUnit){ sel=u; } } }
+    const selDetail = sel ? {
+      title:'واحد '+sel._id,
+      status:statusFa[sel._st], statusStyle:tag(statusFa[sel._st], C[sel._st]),
+      specs:[ {l:'طبقه',v:this.toFa(sel._f)}, {l:'متراژ',v:this.toFa(105+(sel._u*8))+' متر'}, {l:'خواب',v:sel._u<=2?'۲':'۳'}, {l:'جهت',v:['شمالی','جنوبی','شرقی'][sel._u%3]} ],
+      price:this.toFa((13+sel._u).toFixed(1).replace('.','٫'))+' م',
+      cta: sel._st==='available'?'رزرو برای خریدار':sel._st==='reserved'?'تکمیل فروش':'مشاهده قرارداد'
+    } : null;
+
+    return {
+      rootStyle, themeIcon:this.state.theme==='dark'?'☀':'☾', toggleTheme:this.toggleTheme, th,
+      menu:[ navItem('overview','▦','نمای کلی'), navItem('units','▦','موجودی واحدها'), navItem('sales','◔','پیش‌فروش و فروش'), navItem('investors','◍','سرمایه‌گذاران'), navItem('reports','▤','گزارش‌ها'),
+        (()=>{ const it=navItem('crm','◍','CRM و مشتریان'); it.fn=()=>{ window.location.href='MelkJet CRM.dc.html'; }; return it; })(),
+        (()=>{ const it=navItem('market','◔','مارکتینگ'); it.fn=()=>{ window.location.href='MelkJet Marketing.dc.html'; }; return it; })(),
+        (()=>{ const it=navItem('auto','⚙','اتوماسیون'); it.fn=()=>{ window.location.href='MelkJet Workflow.dc.html'; }; return it; })(),
+        (()=>{ const it=navItem('site','◧','وب‌سایت‌ساز'); it.fn=()=>{ window.location.href='MelkJet Website Builder.dc.html?role=builder'; }; return it; })() ],
+      viewTitle:titles[v]||'نمای کلی پروژه',
+      isOverview:v==='overview', isUnits:v==='units', isSales:v==='sales', isInvestors:v==='investors',
+
+      kpis:[
+        { l:'واحد فروخته‌شده', v:'۱۴۲', t:'از ۱۸۲ واحد', dot:'#5fd98a' },
+        { l:'رزرو', v:'۲۴', t:'در انتظار تکمیل', dot:'#e7a14a' },
+        { l:'موجود', v:'۱۶', t:'آماده فروش', dot:'var(--gold)' },
+        { l:'درآمد پیش‌فروش', v:'۱٬۸۴۰ م.ت', t:'+۱۲٪ این فصل', dot:'#5b9bd5' }
+      ],
+      salesBars,
+      invLegend:[ {c:'#5fd98a',l:'فروخته‌شده',v:'۱۴۲'}, {c:'#e7a14a',l:'رزرو',v:'۲۴'}, {c:'var(--gold)',l:'موجود',v:'۱۶'} ],
+      milestones:[
+        { ic:'✓', l:'پی و اسکلت', date:'تکمیل', done:true },
+        { ic:'✓', l:'سفت‌کاری', date:'تکمیل', done:true },
+        { ic:'۳', l:'نازک‌کاری', date:'در حال انجام', active:true },
+        { ic:'۴', l:'تأسیسات', date:'تابستان ۱۴۰۵', future:true },
+        { ic:'۵', l:'تحویل', date:'پاییز ۱۴۰۵', future:true }
+      ].map((m,i)=>({ ...m,
+        bg:m.done?'#5fd98a':m.active?'var(--goldDim)':'transparent',
+        fg:m.done?'#0a2a16':m.active?'var(--gold)':'var(--muted)',
+        bd:m.done?'#5fd98a':m.active?'var(--gold)':'var(--line2)',
+        tc:m.done||m.active?'var(--text)':'var(--muted)',
+        lineColor:i===0?'transparent':(m.done?'#5fd98a':'var(--line2)') })),
+
+      statusLegend:[ {c:'#5fd98a',l:'فروخته‌شده'}, {c:'#e7a14a',l:'رزرو'}, {c:'var(--gold)',l:'موجود'} ],
+      floors,
+      hasSelected: !!selDetail, sel:selDetail||{ title:'', status:'', statusStyle:'', specs:[], price:'', cta:'' },
+
+      salesKpis:[
+        { l:'کل فروش', v:'۱٬۸۴۰ م.ت', color:'var(--gold)' },
+        { l:'این ماه', v:'۲۱ واحد', color:'var(--text)' },
+        { l:'اقساطی', v:'۸۶ خریدار', color:'var(--text)' },
+        { l:'نرخ تبدیل بازدید', v:'۳۴٪', color:'#5fd98a' }
+      ],
+      salesRows:[
+        { unit:'A-۸-۲', buyer:'علی رضایی', type:'نقدی', typeStyle:tag('نقدی','#5fd98a'), amount:'۱۹ م', paid:'100%' },
+        { unit:'B-۵-۴', buyer:'مریم عباسی', type:'اقساطی', typeStyle:tag('اقساطی','#5b9bd5'), amount:'۲۲ م', paid:'45%' },
+        { unit:'A-۱۱-۱', buyer:'گروه سرمایه پارس', type:'عمده', typeStyle:tag('عمده','#9b7ad0'), amount:'۸۴ م', paid:'70%' },
+        { unit:'C-۳-۶', buyer:'نگار کریمی', type:'اقساطی', typeStyle:tag('اقساطی','#5b9bd5'), amount:'۱۶ م', paid:'30%' },
+        { unit:'A-۹-۳', buyer:'کاوه اسدی', type:'نقدی', typeStyle:tag('نقدی','#5fd98a'), amount:'۲۰ م', paid:'100%' }
+      ],
+      investors:[
+        { n:'گروه آرین (سازنده)', c:'var(--gold)', share:'۴۵٪', cap:'۸۲۰ م.ت', roi:'۳۸٪' },
+        { n:'صندوق سرمایه پارس', c:'#5b9bd5', share:'۳۰٪', cap:'۵۴۰ م.ت', roi:'۳۲٪' },
+        { n:'سرمایه‌گذاران خرد', c:'#9b7ad0', share:'۱۵٪', cap:'۲۷۰ م.ت', roi:'۲۹٪' },
+        { n:'شریک زمین', c:'#5fd98a', share:'۱۰٪', cap:'۱۸۰ م.ت', roi:'۲۵٪' }
+      ],
+      portfolio:[
+        { n:'برج آرین', loc:'سعادت‌آباد', units:'۱۸۲', sold:'۷۸٪', roi:'۳۸٪', img:'linear-gradient(135deg,#3a3530,#211e1b)' },
+        { n:'مجتمع نگین', loc:'دروس', units:'۹۶', sold:'۵۲٪', roi:'۳۱٪', img:'linear-gradient(135deg,#33303a,#1d1b22)' },
+        { n:'باغ‌ویلاهای لواسان', loc:'لواسان', units:'۲۴', sold:'۴۰٪', roi:'۴۲٪', img:'linear-gradient(135deg,#2f3a34,#1b211e)' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

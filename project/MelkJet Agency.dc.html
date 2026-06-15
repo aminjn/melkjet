@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{margin:0;font-family:'Vazirmatn',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:rgba(140,140,140,0.3);border-radius:8px}
+  @keyframes mjg-pulse{0%,100%{opacity:.45}50%{opacity:1}}
+  @media(max-width:920px){.mjg-side{width:62px!important;padding:14px 8px!important}.mjg-sidelabel{display:none!important}.mjg-kpi{grid-template-columns:repeat(2,1fr)!important}.mjg-2col{grid-template-columns:1fr!important}}
+</style>
+</helmet>
+<div dir="rtl" style="{{ rootStyle }}">
+  <div style="display:flex;min-height:100vh">
+
+    <!-- SIDEBAR -->
+    <aside class="mjg-side" style="width:236px;flex-shrink:0;position:sticky;top:0;height:100vh;background:var(--bg2);border-left:1px solid var(--line);display:flex;flex-direction:column;padding:18px 13px">
+      <a href="MelkJet.dc.html" style="display:flex;align-items:center;gap:11px;text-decoration:none;color:var(--text);padding:6px 8px 16px">
+        <span style="width:34px;height:34px;border-radius:10px;background:linear-gradient(140deg,var(--gold2),var(--gold));display:flex;align-items:center;justify-content:center"><span style="width:13px;height:13px;background:var(--bg2);transform:rotate(45deg);border-radius:2px"></span></span>
+        <div class="mjg-sidelabel"><div style="font-weight:800;font-size:16px;letter-spacing:-.5px">ملک‌جت</div><div style="font-size:10px;color:var(--gold)">پنل آژانس</div></div>
+      </a>
+      <nav style="display:grid;gap:3px;margin-top:6px">
+        <sc-for list="{{ menu }}" as="m" hint-placeholder-count="5">
+          <button onClick="{{ m.fn }}" style="{{ m.style }}"><span style="width:22px;text-align:center;font-size:15px;flex-shrink:0">{{ m.ic }}</span><span class="mjg-sidelabel" style="flex:1;text-align:right">{{ m.l }}</span></button>
+        </sc-for>
+      </nav>
+      <div style="flex:1"></div>
+      <div class="mjg-sidelabel" style="display:flex;align-items:center;gap:10px;padding:12px 6px 2px;margin-top:10px;border-top:1px solid var(--line)">
+        <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#7a8fae,#465a78);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:13px">پ</div>
+        <div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:700;color:var(--text)">املاک پارسیان</div><div style="font-size:10px;color:var(--muted)">۵ شعبه · مدیر</div></div>
+        <button onClick="{{ toggleTheme }}" aria-label="theme" style="width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--text);cursor:pointer;font-size:12px">{{ themeIcon }}</button>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+      <header style="position:sticky;top:0;z-index:30;background:var(--navbg);backdrop-filter:blur(16px);border-bottom:1px solid var(--line);padding:0 24px;height:60px;display:flex;align-items:center;gap:14px">
+        <div style="font-size:17px;font-weight:800;color:var(--text);letter-spacing:-.4px">{{ viewTitle }}</div>
+        <div style="flex:1"></div>
+        <button style="display:flex;align-items:center;gap:8px;height:40px;padding:0 14px;border:1px solid var(--line2);border-radius:11px;background:var(--surface);color:var(--text);font-family:inherit;font-weight:600;font-size:13px;cursor:pointer"><span style="width:8px;height:8px;border-radius:50%;background:var(--gold)"></span>همه شعب <span style="color:var(--muted)">▾</span></button>
+      </header>
+
+      <main style="flex:1;padding:24px;overflow:auto">
+
+        <!-- ===== OVERVIEW ===== -->
+        <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}">
+          <div style="display:grid;gap:18px">
+            <div class="mjg-kpi" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+              <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="4">
+                <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px">
+                  <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12px;color:var(--muted)">{{ k.l }}</span><span style="width:28px;height:28px;border-radius:8px;background:var(--goldDim);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:13px">{{ k.ic }}</span></div>
+                  <div style="font-size:24px;font-weight:800;color:var(--text);margin-top:12px;letter-spacing:-.5px">{{ k.v }}</div>
+                  <div style="font-size:11.5px;color:{{ k.c }};margin-top:4px">{{ k.t }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div class="mjg-2col" style="display:grid;grid-template-columns:1.6fr 1fr;gap:18px;align-items:start">
+              <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px"><div><div style="font-size:15px;font-weight:700;color:var(--text)">عملکرد شعب</div><div style="font-size:12px;color:var(--muted);margin-top:4px">فروش ماهانه (میلیارد)</div></div><div style="text-align:left"><div style="font-size:20px;font-weight:800;color:var(--gold)">۸۴ م.د</div><div style="font-size:11.5px;color:#5fd98a">↗ ۲۲٪</div></div></div>
+                <div style="height:160px;display:flex;align-items:flex-end;gap:16px;padding:0 8px">
+                  <sc-for list="{{ branchBars }}" as="b" hint-placeholder-count="5">
+                    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;height:100%;justify-content:flex-end"><div style="width:100%;border-radius:7px 7px 0 0;height:{{ b.h }};background:{{ b.bg }};transition:.3s"></div><span style="font-size:10.5px;color:var(--faint)">{{ b.l }}</span></div>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px">
+                <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:16px">سهم لید کانال‌ها</div>
+                <div style="display:grid;gap:13px">
+                  <sc-for list="{{ leadSources }}" as="l" hint-placeholder-count="4">
+                    <div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><span style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text)"><span style="width:10px;height:10px;border-radius:3px;background:{{ l.c }}"></span>{{ l.l }}</span><span style="font-size:12px;font-weight:700;color:var(--text)">{{ l.v }}</span></div><div style="height:6px;border-radius:4px;background:var(--bg2);overflow:hidden"><div style="height:100%;width:{{ l.pct }};background:{{ l.c }};border-radius:4px"></div></div></div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+            <!-- AI insight -->
+            <div style="background:var(--surface);border:1px solid var(--gold);border-radius:16px;padding:18px;display:flex;gap:13px;position:relative;overflow:hidden">
+              <div style="position:absolute;inset:0;background:radial-gradient(300px 120px at 95% 0,var(--goldDim),transparent)"></div>
+              <span style="position:relative;width:34px;height:34px;flex-shrink:0;border-radius:10px;background:linear-gradient(140deg,var(--gold2),var(--gold));display:flex;align-items:center;justify-content:center;color:#16140f;font-weight:800">✦</span>
+              <div style="position:relative;font-size:13px;line-height:1.8;color:var(--text)">شعبه‌ی <b style="color:var(--gold)">زعفرانیه</b> با نرخ تبدیل ۱۸٪ بهترین عملکرد را دارد. شعبه‌ی <b style="color:#e7a14a">شرق</b> به آموزش تیم نیاز دارد — نرخ تبدیل ۴٪ پایین‌تر از میانگین.</div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ===== BRANCHES ===== -->
+        <sc-if value="{{ isBranches }}" hint-placeholder-val="{{ false }}">
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px">
+            <sc-for list="{{ branches }}" as="b" hint-placeholder-count="5">
+              <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px" style-hover="border-color:var(--gold)">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px"><span style="width:38px;height:38px;border-radius:11px;background:var(--goldDim);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:16px">◉</span><div><div style="font-size:14.5px;font-weight:700;color:var(--text)">{{ b.name }}</div><div style="font-size:11px;color:var(--muted)">{{ b.advisors }} مشاور</div></div></div><span style="{{ b.rankStyle }}">{{ b.rank }}</span></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
+                  <div><div style="font-size:11px;color:var(--muted)">فروش ماه</div><div style="font-size:16px;font-weight:800;color:var(--gold);margin-top:2px">{{ b.sales }}</div></div>
+                  <div><div style="font-size:11px;color:var(--muted)">نرخ تبدیل</div><div style="font-size:16px;font-weight:800;color:{{ b.convColor }};margin-top:2px">{{ b.conv }}</div></div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <!-- ===== ADVISORS ===== -->
+        <sc-if value="{{ isAdvisors }}" hint-placeholder-val="{{ false }}">
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden">
+            <div style="padding:16px 20px;border-bottom:1px solid var(--line);font-size:15px;font-weight:700;color:var(--text)">مشاوران · رتبه‌بندی عملکرد</div>
+            <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:680px">
+              <thead><tr style="background:var(--bg2)"><th style="{{ th }}">مشاور</th><th style="{{ th }}">شعبه</th><th style="{{ th }}">معاملات ماه</th><th style="{{ th }}">فروش</th><th style="{{ th }}">پورسانت</th><th style="{{ th }}">هدف</th></tr></thead>
+              <tbody>
+                <sc-for list="{{ advisors }}" as="a" hint-placeholder-count="5">
+                  <tr style="border-top:1px solid var(--line)">
+                    <td style="padding:13px 18px"><div style="display:flex;align-items:center;gap:11px"><div style="width:36px;height:36px;border-radius:50%;background:{{ a.av }};flex-shrink:0"></div><div><div style="font-size:13px;font-weight:600;color:var(--text)">{{ a.n }}</div><div style="font-size:11px;color:var(--gold)">★ {{ a.rate }}</div></div></div></td>
+                    <td style="padding:13px 18px;font-size:12.5px;color:var(--muted)">{{ a.branch }}</td>
+                    <td style="padding:13px 18px;font-size:13px;font-weight:700;color:var(--text)">{{ a.deals }}</td>
+                    <td style="padding:13px 18px;font-size:13px;font-weight:700;color:var(--gold)">{{ a.sales }}</td>
+                    <td style="padding:13px 18px;font-size:12.5px;color:var(--text)">{{ a.commission }}</td>
+                    <td style="padding:13px 18px"><div style="display:flex;align-items:center;gap:8px"><div style="width:54px;height:6px;border-radius:4px;background:var(--bg2);overflow:hidden"><div style="height:100%;width:{{ a.goalPct }};background:{{ a.goalColor }};border-radius:4px"></div></div><span style="font-size:11px;color:var(--muted)">{{ a.goalPct }}</span></div></td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table></div>
+          </div>
+        </sc-if>
+
+        <!-- ===== FINANCE ===== -->
+        <sc-if value="{{ isFinance }}" hint-placeholder-val="{{ false }}">
+          <div style="display:grid;gap:18px">
+            <div class="mjg-kpi" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+              <sc-for list="{{ finKpis }}" as="k" hint-placeholder-count="4">
+                <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px"><span style="font-size:12px;color:var(--muted)">{{ k.l }}</span><div style="font-size:22px;font-weight:800;color:{{ k.color }};margin-top:10px">{{ k.v }}</div><div style="font-size:11px;color:var(--muted);margin-top:3px">{{ k.t }}</div></div>
+              </sc-for>
+            </div>
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden">
+              <div style="padding:16px 20px;border-bottom:1px solid var(--line);font-size:15px;font-weight:700;color:var(--text)">گزارش پورسانت شعب</div>
+              <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:560px">
+                <thead><tr style="background:var(--bg2)"><th style="{{ th }}">شعبه</th><th style="{{ th }}">درآمد ناخالص</th><th style="{{ th }}">پورسانت مشاوران</th><th style="{{ th }}">سهم آژانس</th><th style="{{ th }}">وضعیت</th></tr></thead>
+                <tbody>
+                  <sc-for list="{{ finance }}" as="f" hint-placeholder-count="5">
+                    <tr style="border-top:1px solid var(--line)">
+                      <td style="padding:13px 18px;font-size:13px;font-weight:600;color:var(--text)">{{ f.branch }}</td>
+                      <td style="padding:13px 18px;font-size:13px;color:var(--text);font-family:'JetBrains Mono',monospace;direction:ltr">{{ f.gross }}</td>
+                      <td style="padding:13px 18px;font-size:13px;color:var(--muted);font-family:'JetBrains Mono',monospace;direction:ltr">{{ f.commission }}</td>
+                      <td style="padding:13px 18px;font-size:13px;font-weight:700;color:var(--gold);font-family:'JetBrains Mono',monospace;direction:ltr">{{ f.net }}</td>
+                      <td style="padding:13px 18px"><span style="{{ f.statusStyle }}">{{ f.status }}</span></td>
+                    </tr>
+                  </sc-for>
+                </tbody>
+              </table></div>
+            </div>
+          </div>
+        </sc-if>
+
+      </main>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:860}}">
+class Component extends DCLogic {
+  state = { theme:'dark', view:'overview' };
+  themes = {
+    dark:{ '--bg':'#0d0d0f','--bg2':'#141417','--surface':'#18181c','--navbg':'rgba(20,20,23,0.8)','--line':'rgba(255,255,255,0.08)','--line2':'rgba(255,255,255,0.14)','--text':'#f2f1ee','--muted':'#9a9a98','--faint':'#6a6a68','--gold':'#c9a96a','--gold2':'#e0c489','--goldDim':'rgba(201,169,106,0.12)' },
+    light:{ '--bg':'#f4f1ea','--bg2':'#ffffff','--surface':'#ffffff','--navbg':'rgba(255,255,255,0.85)','--line':'rgba(26,24,20,0.09)','--line2':'rgba(26,24,20,0.16)','--text':'#1a1814','--muted':'#6b6862','--faint':'#9a968d','--gold':'#9c7a3c','--gold2':'#b8923f','--goldDim':'rgba(156,122,60,0.10)' }
+  };
+  toggleTheme = () => this.setState(s=>({ theme:s.theme==='dark'?'light':'dark' }));
+  go = (v) => () => this.setState({ view:v });
+
+  renderVals(){
+    const t = this.themes[this.state.theme];
+    const rootStyle = Object.entries(t).map(([k,v])=>k+':'+v).join(';') + ';min-height:100vh;background:var(--bg);color:var(--text);font-family:Vazirmatn,sans-serif;transition:background .3s,color .3s';
+    const v = this.state.view;
+    const navItem=(id,ic,l)=>{ const on=v===id; return { ic,l,fn:this.go(id), style:'display:flex;align-items:center;gap:11px;width:100%;padding:10px 12px;border:none;border-radius:11px;font-family:inherit;font-size:13px;font-weight:'+(on?'700':'500')+';cursor:pointer;text-align:right;transition:.15s;background:'+(on?'var(--goldDim)':'transparent')+';color:'+(on?'var(--text)':'var(--muted)')+(on?';box-shadow:inset 3px 0 0 var(--gold)':'') }; };
+    const titles={ overview:'داشبورد مدیریتی', branches:'شعب', advisors:'مشاوران', finance:'گزارش مالی' };
+    const th='text-align:right;padding:12px 18px;font-size:11.5px;font-weight:600;color:var(--muted)';
+    const tag=(txt,c)=>'font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap;background:'+c+'22;color:'+c+';border:1px solid '+c+'55';
+
+    const bvals=[84,72,68,54,46]; const bmax=Math.max(...bvals);
+    const branchBars=bvals.map((n,i)=>({ l:['زعفرانیه','مرکز','غرب','شرق','شمال'][i], h:(18+n/bmax*80)+'%', bg:i===0?'linear-gradient(to top,var(--gold),var(--gold2))':'var(--goldDim)' }));
+
+    return {
+      rootStyle, themeIcon:this.state.theme==='dark'?'☀':'☾', toggleTheme:this.toggleTheme, th,
+      menu:[ navItem('overview','▦','داشبورد'), navItem('branches','◉','شعب'), navItem('advisors','◍','مشاوران'), navItem('finance','◔','گزارش مالی'),
+        (()=>{ const it=navItem('crm','◍','CRM سازمانی'); it.fn=()=>{ window.location.href='MelkJet CRM.dc.html'; }; return it; })(),
+        (()=>{ const it=navItem('market','◔','مارکتینگ'); it.fn=()=>{ window.location.href='MelkJet Marketing.dc.html'; }; return it; })(),
+        (()=>{ const it=navItem('auto','⚙','اتوماسیون'); it.fn=()=>{ window.location.href='MelkJet Workflow.dc.html'; }; return it; })(),
+        (()=>{ const it=navItem('site','◧','وب‌سایت‌ساز'); it.fn=()=>{ window.location.href='MelkJet Website Builder.dc.html?role=agency'; }; return it; })() ],
+      viewTitle:titles[v]||'داشبورد مدیریتی',
+      isOverview:v==='overview', isBranches:v==='branches', isAdvisors:v==='advisors', isFinance:v==='finance',
+
+      kpis:[
+        { l:'فروش کل ماه', v:'۸۴ م.د', ic:'◔', t:'+۲۲٪', c:'#5fd98a' },
+        { l:'مشاوران فعال', v:'۳۸', ic:'◍', t:'در ۵ شعبه', c:'var(--muted)' },
+        { l:'لید جدید', v:'۴۲۰', ic:'◷', t:'این ماه', c:'#5fd98a' },
+        { l:'نرخ تبدیل', v:'۱۲٪', ic:'↗', t:'هدف: ۱۵٪', c:'var(--muted)' }
+      ],
+      branchBars,
+      leadSources:[
+        { c:'var(--gold)', l:'ملک‌جت', v:'۴۸٪', pct:'88%' },
+        { c:'#5b9bd5', l:'معرفی مشتری', v:'۲۲٪', pct:'46%' },
+        { c:'#9b7ad0', l:'شبکه‌های اجتماعی', v:'۱۸٪', pct:'38%' },
+        { c:'#5fd98a', l:'مراجعه حضوری', v:'۱۲٪', pct:'26%' }
+      ],
+
+      branches:[
+        { name:'شعبه زعفرانیه', advisors:'۹', sales:'۲۲ م.د', conv:'۱۸٪', convColor:'#5fd98a', rank:'برتر', rankStyle:tag('برتر','#5fd98a') },
+        { name:'شعبه مرکزی', advisors:'۱۰', sales:'۱۹ م.د', conv:'۱۴٪', convColor:'var(--text)', rank:'خوب', rankStyle:tag('خوب','#5b9bd5') },
+        { name:'شعبه غرب', advisors:'۸', sales:'۱۶ م.د', conv:'۱۲٪', convColor:'var(--text)', rank:'متوسط', rankStyle:tag('متوسط','#c9a96a') },
+        { name:'شعبه شرق', advisors:'۶', sales:'۱۲ م.د', conv:'۸٪', convColor:'#e7a14a', rank:'نیاز توجه', rankStyle:tag('نیاز توجه','#e7a14a') },
+        { name:'شعبه شمال', advisors:'۵', sales:'۱۰ م.د', conv:'۱۰٪', convColor:'var(--text)', rank:'متوسط', rankStyle:tag('متوسط','#c9a96a') }
+      ],
+      advisors:[
+        { n:'سارا محمدی', branch:'زعفرانیه', deals:'۸', sales:'۹٫۲ م.د', commission:'۲۸۰ م.ت', rate:'۴٫۹', av:'linear-gradient(135deg,#caa86a,#8a6f3e)', goalPct:'92%', goalColor:'#5fd98a' },
+        { n:'امیر رضایی', branch:'مرکزی', deals:'۷', sales:'۸٫۱ م.د', commission:'۲۴۰ م.ت', rate:'۴٫۸', av:'linear-gradient(135deg,#7a8fae,#465a78)', goalPct:'84%', goalColor:'#5fd98a' },
+        { n:'نگار کریمی', branch:'زعفرانیه', deals:'۶', sales:'۶٫۸ م.د', commission:'۲۰۵ م.ت', rate:'۵٫۰', av:'linear-gradient(135deg,#b07a8a,#6e4754)', goalPct:'76%', goalColor:'var(--gold)' },
+        { n:'کاوه اسدی', branch:'غرب', deals:'۵', sales:'۵٫۴ م.د', commission:'۱۶۰ م.ت', rate:'۴٫۷', av:'linear-gradient(135deg,#7aa88f,#476e58)', goalPct:'58%', goalColor:'#e7a14a' },
+        { n:'مریم عباسی', branch:'مرکزی', deals:'۵', sales:'۵٫۱ م.د', commission:'۱۵۵ م.ت', rate:'۴٫۸', av:'linear-gradient(135deg,#9b7ad0,#5e4488)', goalPct:'62%', goalColor:'var(--gold)' }
+      ],
+
+      finKpis:[
+        { l:'درآمد ناخالص', v:'۲٬۸۴۰ م.ت', color:'var(--gold)', t:'این ماه' },
+        { l:'پورسانت پرداختی', v:'۱٬۰۴۰ م.ت', color:'var(--text)', t:'به مشاوران' },
+        { l:'سهم آژانس', v:'۱٬۸۰۰ م.ت', color:'#5fd98a', t:'سود خالص' },
+        { l:'هزینه‌ها', v:'۴۲۰ م.ت', color:'var(--text)', t:'عملیاتی' }
+      ],
+      finance:[
+        { branch:'زعفرانیه', gross:'820M', commission:'287M', net:'533M', status:'تسویه شد', statusStyle:tag('تسویه شد','#5fd98a') },
+        { branch:'مرکزی', gross:'710M', commission:'248M', net:'462M', status:'تسویه شد', statusStyle:tag('تسویه شد','#5fd98a') },
+        { branch:'غرب', gross:'590M', commission:'206M', net:'384M', status:'در انتظار', statusStyle:tag('در انتظار','#e7a14a') },
+        { branch:'شرق', gross:'430M', commission:'150M', net:'280M', status:'در انتظار', statusStyle:tag('در انتظار','#e7a14a') },
+        { branch:'شمال', gross:'290M', commission:'101M', net:'189M', status:'تسویه شد', statusStyle:tag('تسویه شد','#5fd98a') }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

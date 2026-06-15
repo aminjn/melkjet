@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{margin:0;font-family:'Vazirmatn',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  ::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-thumb{background:rgba(140,140,140,0.3);border-radius:8px}
+  @media(max-width:860px){.mjst-grid{grid-template-columns:1fr 1fr!important}.mjst-2col{grid-template-columns:1fr!important}}
+</style>
+</helmet>
+<div dir="rtl" style="{{ rootStyle }}">
+  <header style="position:sticky;top:0;z-index:50;backdrop-filter:blur(18px);background:var(--navbg);border-bottom:1px solid var(--line)">
+    <nav style="max-width:1100px;margin:0 auto;padding:0 22px;height:62px;display:flex;align-items:center;gap:16px">
+      <a href="MelkJet.dc.html" style="display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--text)"><span style="width:32px;height:32px;border-radius:9px;background:linear-gradient(140deg,var(--gold2),var(--gold));display:flex;align-items:center;justify-content:center"><span style="width:12px;height:12px;background:var(--bg);transform:rotate(45deg);border-radius:2px"></span></span><span style="font-weight:800;font-size:18px;letter-spacing:-.5px">ملک‌جت</span></a>
+      <a href="MelkJet Directory.dc.html?cat=materials" style="font-size:13px;font-weight:600;color:var(--muted);text-decoration:none">‹ فروشندگان مصالح</a>
+      <div style="flex:1"></div>
+      <button onClick="{{ toggleTheme }}" aria-label="theme" style="width:38px;height:38px;border-radius:11px;border:1px solid var(--line);background:var(--surface);color:var(--text);cursor:pointer;font-size:14px">{{ themeIcon }}</button>
+    </nav>
+  </header>
+  <main style="max-width:1100px;margin:0 auto;padding:20px 22px 90px">
+    <!-- store header -->
+    <div style="display:flex;align-items:center;gap:18px;background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:22px;flex-wrap:wrap">
+      <div style="width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,#7aa88f,#476e58);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:28px;font-weight:800">م</div>
+      <div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap"><h1 style="font-size:clamp(20px,2.8vw,26px);font-weight:800;color:var(--text)">مصالح تهران</h1><span style="font-size:11.5px;font-weight:700;color:#5fd98a;background:rgba(95,217,138,0.12);border:1px solid rgba(95,217,138,0.4);border-radius:999px;padding:3px 10px">✓ تأمین‌کننده تأییدشده</span></div><div style="display:flex;gap:16px;margin-top:8px;font-size:13px;color:var(--muted);flex-wrap:wrap"><span style="color:var(--gold);font-weight:700">★ ۴٫۶</span><span>۸۴۰ محصول</span><span>۱٬۲۰۰ سفارش</span><span>عرضه سراسری</span></div></div>
+      <a href="MelkJet Submit.dc.html" style="height:44px;padding:0 20px;display:flex;align-items:center;border-radius:13px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;text-decoration:none;font-weight:700;font-size:14px">دریافت پیش‌فاکتور</a>
+    </div>
+    <!-- categories -->
+    <div style="display:flex;gap:8px;margin-top:18px;flex-wrap:wrap"><sc-for list="{{ cats }}" as="c" hint-placeholder-count="5"><button onClick="{{ c.fn }}" style="{{ c.style }}">{{ c.l }}</button></sc-for></div>
+    <!-- products -->
+    <div class="mjst-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:18px">
+      <sc-for list="{{ products }}" as="p" hint-placeholder-count="8">
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden" style-hover="border-color:var(--gold)">
+          <div style="height:110px;background:{{ p.img }};position:relative"><div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,transparent,transparent 9px,rgba(255,255,255,0.03) 9px,rgba(255,255,255,0.03) 10px)"></div><sc-if value="{{ p.hot }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:9px;right:9px;padding:3px 9px;border-radius:999px;background:rgba(231,103,74,0.9);color:#fff;font-size:10px;font-weight:700">پرفروش</span></sc-if></div>
+          <div style="padding:13px 14px"><div style="font-size:13.5px;font-weight:700;color:var(--text)">{{ p.l }}</div><div style="font-size:11.5px;color:var(--muted);margin-top:3px">{{ p.unit }}</div><div style="display:flex;align-items:center;justify-content:space-between;margin-top:11px;padding-top:11px;border-top:1px solid var(--line)"><span style="font-size:14px;font-weight:800;color:var(--gold)">{{ p.price }}</span><span style="{{ p.stockStyle }}">{{ p.stock }}</span></div></div>
+        </div>
+      </sc-for>
+    </div>
+    <!-- reviews -->
+    <div style="margin-top:20px;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:22px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px"><div style="font-size:16px;font-weight:800;color:var(--text)">نظرات خریداران</div><span style="font-size:13px;color:var(--gold);font-weight:700">★ ۴٫۶ از ۳۲۰ نظر</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <sc-for list="{{ reviews }}" as="rv" hint-placeholder-count="4"><div style="display:flex;gap:11px;padding:14px;border:1px solid var(--line);border-radius:13px"><div style="width:36px;height:36px;flex-shrink:0;border-radius:50%;background:{{ rv.av }}"></div><div style="flex:1;min-width:0"><div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12.5px;font-weight:700;color:var(--text)">{{ rv.n }}</span><span style="font-size:11.5px;color:var(--gold)">★ {{ rv.r }}</span></div><div style="font-size:12px;color:var(--muted);margin-top:5px;line-height:1.8">{{ rv.t }}</div></div></div></sc-for>
+      </div>
+    </div>
+    <!-- RFQ banner -->
+    <div style="margin-top:20px;background:var(--goldDim);border:1px solid var(--gold);border-radius:18px;padding:22px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap"><div><div style="font-size:16px;font-weight:800;color:var(--text)">خرید عمده برای پروژه؟</div><div style="font-size:13px;color:var(--muted);margin-top:6px;line-height:1.7">استعلام قیمت عمده (RFQ) بده تا بهترین پیشنهاد را دریافت کنی.</div></div><a href="MelkJet Submit.dc.html" style="height:46px;padding:0 22px;display:flex;align-items:center;border-radius:13px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;text-decoration:none;font-weight:700;font-size:14px">ثبت استعلام عمده</a></div>
+  </main>
+  <a href="MelkJet.dc.html" aria-label="home" style="position:fixed;bottom:22px;left:22px;z-index:60;width:52px;height:52px;border-radius:16px;text-decoration:none;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-size:19px;font-weight:800;box-shadow:0 14px 34px -10px var(--gold);display:flex;align-items:center;justify-content:center">✦</a>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1100,&quot;height&quot;:860}}">
+class Component extends DCLogic {
+  state = { theme:'dark', cat:'همه' };
+  themes = {
+    dark:{ '--bg':'#0d0d0f','--bg2':'#141417','--surface':'#18181c','--navbg':'rgba(13,13,15,0.72)','--line':'rgba(255,255,255,0.08)','--line2':'rgba(255,255,255,0.14)','--text':'#f2f1ee','--muted':'#9a9a98','--faint':'#6a6a68','--gold':'#c9a96a','--gold2':'#e0c489','--goldDim':'rgba(201,169,106,0.12)' },
+    light:{ '--bg':'#f4f1ea','--bg2':'#faf7f1','--surface':'#ffffff','--navbg':'rgba(244,241,234,0.82)','--line':'rgba(26,24,20,0.09)','--line2':'rgba(26,24,20,0.16)','--text':'#1a1814','--muted':'#6b6862','--faint':'#9a968d','--gold':'#9c7a3c','--gold2':'#b8923f','--goldDim':'rgba(156,122,60,0.10)' }
+  };
+  toggleTheme = () => this.setState(s=>({ theme:s.theme==='dark'?'light':'dark' }));
+  setCat = (c) => () => this.setState({ cat:c });
+  renderVals(){
+    const t=this.themes[this.state.theme];
+    const rootStyle=Object.entries(t).map(([k,v])=>k+':'+v).join(';')+';min-height:100vh;background:var(--bg);color:var(--text);font-family:Vazirmatn,sans-serif;transition:background .3s,color .3s';
+    const chip=(on)=>'padding:8px 14px;border-radius:11px;border:1px solid '+(on?'var(--gold)':'var(--line)')+';background:'+(on?'var(--goldDim)':'var(--surface)')+';color:'+(on?'var(--text)':'var(--muted)')+';font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer';
+    const tag=(txt,c)=>'font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap;background:'+c+'22;color:'+c+';border:1px solid '+c+'55';
+    const imgs=['linear-gradient(135deg,#3a3530,#211e1b)','linear-gradient(135deg,#2c343a,#1a1f23)','linear-gradient(135deg,#33303a,#1d1b22)','linear-gradient(135deg,#2f3a34,#1b211e)'];
+    return { rootStyle, themeIcon:this.state.theme==='dark'?'☀':'☾', toggleTheme:this.toggleTheme,
+      reviews:[ {n:'گروه آرین',r:'۵٫۰',av:'linear-gradient(135deg,#9b7ad0,#5e4488)',t:'کیفیت میلگرد عالی و تحویل به‌موقع. برای پروژه‌ی بعدی هم سفارش می‌دهیم.'},{n:'پیمانکاری عمران',r:'۴٫۵',av:'linear-gradient(135deg,#c98a4a,#8a5a2e)',t:'قیمت رقابتی و پاسخ‌گویی سریع برای استعلام عمده.'},{n:'سازنده نگین',r:'۴٫۸',av:'linear-gradient(135deg,#7a8fae,#465a78)',t:'تنوع محصولات خوب بود و فاکتور رسمی دادند.'},{n:'علی مرادی',r:'۴٫۲',av:'linear-gradient(135deg,#7aa88f,#476e58)',t:'سیمان باکیفیت، فقط ارسال کمی دیر شد.'} ],
+      cats:['همه','آهن و میلگرد','سیمان و گچ','کاشی و سرامیک','کابینت','شیرآلات'].map(c=>({ l:c, fn:this.setCat(c), style:chip(this.state.cat===c) })),
+      products:[
+        {l:'میلگرد آجدار A3',unit:'هر کیلوگرم',price:'۲۸ ت',img:imgs[0],hot:true,stock:'موجود',stockStyle:tag('موجود','#5fd98a')},
+        {l:'سیمان تیپ ۲',unit:'هر پاکت ۵۰ کیلو',price:'۴۵ ت',img:imgs[1],hot:true,stock:'موجود',stockStyle:tag('موجود','#5fd98a')},
+        {l:'کاشی پرسلان ۶۰×۶۰',unit:'هر متر مربع',price:'۱۸۰ ت',img:imgs[2],hot:false,stock:'موجود',stockStyle:tag('موجود','#5fd98a')},
+        {l:'سرامیک کف',unit:'هر متر مربع',price:'۱۲۰ ت',img:imgs[3],hot:false,stock:'محدود',stockStyle:tag('محدود','#e7a14a')},
+        {l:'تیرآهن ۱۴',unit:'هر شاخه',price:'۱٬۸۵۰ ت',img:imgs[0],hot:false,stock:'موجود',stockStyle:tag('موجود','#5fd98a')},
+        {l:'گچ ساختمانی',unit:'هر کیسه',price:'۳۸ ت',img:imgs[1],hot:false,stock:'موجود',stockStyle:tag('موجود','#5fd98a')},
+        {l:'کابینت MDF',unit:'هر متر طول',price:'۲٬۴۰۰ ت',img:imgs[2],hot:true,stock:'سفارشی',stockStyle:tag('سفارشی','#5b9bd5')},
+        {l:'شیرآلات اهرمی',unit:'هر ست',price:'۱٬۲۰۰ ت',img:imgs[3],hot:false,stock:'موجود',stockStyle:tag('موجود','#5fd98a')}
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{margin:0;font-family:'Vazirmatn',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  ::selection{background:rgba(201,169,106,0.3)}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:rgba(140,140,140,0.3);border-radius:8px}
+  @keyframes mj-fade{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  @keyframes mj-pulse{0%,100%{opacity:.35;transform:scale(.85)}50%{opacity:1;transform:scale(1)}}
+  @keyframes mj-spin{to{transform:rotate(360deg)}}
+  @keyframes mj-scan{0%{transform:translateX(0)}100%{transform:translateX(-100%)}}
+  @keyframes mj-glow{0%,100%{opacity:.4}50%{opacity:.9}}
+  @keyframes mj-rise{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
+  @keyframes mj-blink{0%,100%{opacity:1}50%{opacity:.25}}
+</style>
+</helmet>
+<div dir="rtl" style="{{ rootStyle }}">
+
+  <!-- ============ NAV ============ -->
+  <header style="position:sticky;top:0;z-index:50;backdrop-filter:blur(18px);background:var(--navbg,rgba(13,13,15,0.72));border-bottom:1px solid var(--line,rgba(255,255,255,0.08))">
+    <nav style="max-width:1280px;margin:0 auto;padding:0 24px;height:68px;display:flex;align-items:center;gap:28px">
+      <a href="#" style="display:flex;align-items:center;gap:11px;text-decoration:none;color:var(--text,#f2f1ee)">
+        <span style="width:34px;height:34px;border-radius:10px;background:linear-gradient(140deg,var(--gold2,#e0c489),var(--gold,#c9a96a));display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px -6px var(--gold,#c9a96a)">
+          <span style="width:13px;height:13px;background:var(--bg,#0d0d0f);transform:rotate(45deg);border-radius:2px"></span>
+        </span>
+        <span style="font-weight:800;font-size:20px;letter-spacing:-.5px">ملک‌جت</span>
+      </a>
+      <div style="display:flex;align-items:center;gap:4px;font-size:14.5px;font-weight:500" class="mj-navlinks">
+        <sc-for list="{{ navLinks }}" as="link" hint-placeholder-count="6">
+          <a href="#" style="padding:9px 13px;border-radius:9px;color:var(--muted,#9a9a98);text-decoration:none;transition:.18s" style-hover="background:var(--goldDim,rgba(201,169,106,0.12));color:var(--text,#f2f1ee)">{{ link }}</a>
+        </sc-for>
+      </div>
+      <div style="flex:1"></div>
+      <button onClick="{{ toggleTheme }}" aria-label="theme" style="width:40px;height:40px;border-radius:11px;border:1px solid var(--line,rgba(255,255,255,0.08));background:var(--surface,#18181c);color:var(--text,#f2f1ee);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:.18s" style-hover="border-color:var(--gold,#c9a96a)">{{ themeIcon }}</button>
+      <a href="MelkJet Signup.dc.html" style="display:none;padding:0 16px;height:40px;align-items:center;border-radius:11px;border:1px solid var(--line2,rgba(255,255,255,0.14));color:var(--text,#f2f1ee);text-decoration:none;font-size:14px;font-weight:600" class="mj-login">ورود / ثبت‌نام</a>
+      <a href="MelkJet Submit.dc.html" style="padding:0 18px;height:40px;display:flex;align-items:center;border-radius:11px;background:linear-gradient(140deg,var(--gold2,#e0c489),var(--gold,#c9a96a));color:#16140f;text-decoration:none;font-size:14px;font-weight:700;box-shadow:0 8px 22px -10px var(--gold,#c9a96a)">ثبت آگهی</a>
+    </nav>
+  </header>
+
+  <!-- ============ HERO ============ -->
+  <section style="position:relative;overflow:hidden;padding:clamp(48px,7vw,96px) 24px clamp(40px,5vw,72px)">
+    <div style="position:absolute;inset:0;background:radial-gradient(900px 460px at 78% -8%,var(--goldDim,rgba(201,169,106,0.12)),transparent 60%);pointer-events:none"></div>
+    <div style="position:relative;max-width:980px;margin:0 auto;text-align:center">
+      <div style="display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;border:1px solid var(--line2,rgba(255,255,255,0.14));background:var(--surface,#18181c);font-size:13px;font-weight:600;color:var(--gold,#c9a96a)">
+        <span style="width:7px;height:7px;border-radius:50%;background:var(--gold,#c9a96a);box-shadow:0 0 0 4px var(--goldDim,rgba(201,169,106,0.12));animation:mj-glow 2s infinite"></span>
+        موتور تصمیم‌گیری هوشمند املاک
+      </div>
+      <h1 style="margin-top:22px;font-size:clamp(34px,6vw,64px);line-height:1.12;font-weight:800;letter-spacing:-1px;color:var(--text,#f2f1ee)">
+        خانه‌ی بعدی‌ات،<br>
+        <span style="background:linear-gradient(120deg,var(--gold2,#e0c489),var(--gold,#c9a96a));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent">هوشمندانه</span> انتخاب می‌شود
+      </h1>
+      <p style="margin:20px auto 0;max-width:620px;font-size:clamp(15px,2vw,18.5px);line-height:1.85;color:var(--muted,#9a9a98)">
+        به زبان خودت بگو چه می‌خواهی. ملک‌جت بازار را تحلیل می‌کند، دلیل هر پیشنهاد را توضیح می‌دهد و کنارت می‌ماند تا بهترین تصمیم را بگیری.
+      </p>
+
+      <!-- AI SEARCH CARD -->
+      <div style="margin:34px auto 0;max-width:740px;text-align:right">
+        <div style="display:flex;gap:6px;padding:5px;border-radius:16px 16px 0 0;background:var(--surface,#18181c);border:1px solid var(--line,rgba(255,255,255,0.08));border-bottom:none;width:max-content;margin-right:14px">
+          <button onClick="{{ setSmart }}" style="{{ tabSmartStyle }}">✦ جستجوی هوشمند</button>
+          <button onClick="{{ setClassic }}" style="{{ tabClassicStyle }}">فیلتر پیشرفته</button>
+        </div>
+        <div style="position:relative;background:var(--surface,#18181c);border:1px solid var(--line2,rgba(255,255,255,0.14));border-radius:2px 18px 18px 18px;padding:18px;box-shadow:var(--shadow,0 24px 60px -20px rgba(0,0,0,0.7))">
+          <div style="display:flex;gap:12px;align-items:flex-start">
+            <button onClick="{{ toggleVoice }}" aria-label="voice" style="{{ micStyle }}">
+              <span style="display:block;width:13px;height:19px;border:2px solid currentColor;border-radius:7px"></span>
+            </button>
+            <textarea value="{{ query }}" onInput="{{ onQuery }}" placeholder="مثلاً: آپارتمان ۱۳۰ متری در سعادت‌آباد، زیر ۱۸ میلیارد، با آسانسور و پارکینگ، نزدیک مترو…" rows="2" style="flex:1;resize:none;border:none;outline:none;background:transparent;color:var(--text,#f2f1ee);font-family:inherit;font-size:16px;line-height:1.7;padding-top:8px"></textarea>
+            <button onClick="{{ runSearch }}" style="flex-shrink:0;height:48px;padding:0 22px;border:none;border-radius:13px;background:linear-gradient(140deg,var(--gold2,#e0c489),var(--gold,#c9a96a));color:#16140f;font-family:inherit;font-weight:700;font-size:15px;cursor:pointer;box-shadow:0 10px 24px -10px var(--gold,#c9a96a)">جستجو</button>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line,rgba(255,255,255,0.08))">
+            <span style="font-size:12.5px;color:var(--faint,#6a6a68);align-self:center;margin-left:2px">امتحان کنید:</span>
+            <sc-for list="{{ examples }}" as="ex" hint-placeholder-count="4">
+              <button onClick="{{ ex.run }}" style="padding:7px 13px;border-radius:999px;border:1px solid var(--line,rgba(255,255,255,0.08));background:var(--bg2,#141417);color:var(--muted,#9a9a98);font-family:inherit;font-size:12.5px;cursor:pointer;transition:.16s" style-hover="border-color:var(--gold,#c9a96a);color:var(--text,#f2f1ee)">{{ ex.text }}</button>
+            </sc-for>
+          </div>
+        </div>
+
+        <!-- THINKING -->
+        <sc-if value="{{ isThinking }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:14px;background:var(--surface,#18181c);border:1px solid var(--line,rgba(255,255,255,0.08));border-radius:16px;padding:20px">
+            <div style="display:flex;align-items:center;gap:12px">
+              <span style="width:34px;height:34px;border-radius:50%;border:2.5px solid var(--goldDim,rgba(201,169,106,0.12));border-top-color:var(--gold,#c9a96a);animation:mj-spin .8s linear infinite"></span>
+              <div style="flex:1">
+                <div style="font-weight:600;color:var(--text,#f2f1ee);font-size:14.5px">{{ thinkingLine }}</div>
+                <div style="margin-top:8px;height:4px;border-radius:4px;background:var(--bg2,#141417);overflow:hidden"><div style="height:100%;width:40%;background:linear-gradient(90deg,transparent,var(--gold,#c9a96a),transparent);animation:mj-scan 1s linear infinite"></div></div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- RESULTS -->
+        <sc-if value="{{ isResults }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:14px;animation:mj-rise .5s both">
+            <div style="background:var(--surface,#18181c);border:1px solid var(--gold,#c9a96a);border-radius:16px;padding:18px 20px;position:relative;overflow:hidden">
+              <div style="position:absolute;inset:0;background:radial-gradient(400px 160px at 90% 0,var(--goldDim,rgba(201,169,106,0.12)),transparent)"></div>
+              <div style="position:relative;display:flex;gap:12px;align-items:flex-start">
+                <span style="flex-shrink:0;width:32px;height:32px;border-radius:9px;background:linear-gradient(140deg,var(--gold2,#e0c489),var(--gold,#c9a96a));display:flex;align-items:center;justify-content:center;color:#16140f;font-weight:800;font-size:15px">✦</span>
+                <div style="flex:1">
+                  <div style="font-weight:700;font-size:14px;color:var(--gold,#c9a96a);margin-bottom:6px">تحلیل ملک‌جت</div>
+                  <p style="font-size:14.5px;line-height:1.85;color:var(--text,#f2f1ee)">{{ aiSummary }}</p>
+                  <button onClick="{{ runSearch }}" style="margin-top:12px;padding:9px 14px;border-radius:10px;border:1px solid var(--line2,rgba(255,255,255,0.14));background:var(--bg2,#141417);color:var(--text,#f2f1ee);font-family:inherit;font-size:13px;cursor:pointer;text-align:right">{{ aiFollowup }}</button>
+                </div>
+              </div>
+            </div>
+            <div style="display:grid;gap:12px;margin-top:12px">
+              <sc-for list="{{ matches }}" as="p" hint-placeholder-count="2">
+                <a href="MelkJet Property.dc.html" style="display:flex;gap:14px;text-decoration:none;background:var(--surface,#18181c);border:1px solid var(--line,rgba(255,255,255,0.08));border-radius:14px;padding:12px;align-items:center" style-hover="border-color:var(--gold,#c9a96a)">
+                  <div style="width:96px;height:74px;border-radius:10px;flex-shrink:0;background:{{ p.img }};position:relative;overflow:hidden">
+                    <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,transparent,transparent 7px,rgba(255,255,255,0.03) 7px,rgba(255,255,255,0.03) 8px)"></div>
+                  </div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-weight:700;font-size:14.5px;color:var(--text,#f2f1ee);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.title }}</div>
+                    <div style="font-size:12.5px;color:var(--muted,#9a9a98);margin-top:3px">{{ p.loc }} · {{ p.size }} متر · {{ p.beds }} خواب</div>
+                    <div style="font-weight:800;font-size:15px;color:var(--gold,#c9a96a);margin-top:6px">{{ p.price }}</div>
+                  </div>
+                  <div style="text-align:center;flex-shrink:0;padding-left:6px">
+                    <div style="font-size:11px;color:var(--faint,#6a6a68)">تطابق</div>
+                    <div style="font-weight:800;font-size:19px;color:var(--text,#f2f1ee)">{{ p.match }}٪</div>
+                  </div>
+                </a>
+              </sc-for>
+            </div>
+            <a href="MelkJet Search.dc.html" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;height:46px;border-radius:13px;border:1px solid var(--gold,#c9a96a);background:var(--goldDim,rgba(201,169,106,0.12));color:var(--gold,#c9a96a);text-decoration:none;font-weight:700;font-size:14px" style-hover="background:var(--gold,#c9a96a);color:#16140f">مشاهده‌ی همه‌ی نتایج روی نقشه ←</a>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ STATS STRIP ============ -->
+  <section style="border-top:1px solid var(--line,rgba(255,255,255,0.08));border-bottom:1px solid var(--line,rgba(255,255,255,0.08));background:var(--bg2,#141417)">
+    <div style="max-width:1280px;margin:0 auto;padding:26px 24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:18px">
+      <sc-for list="{{ stats }}" as="s" hint-placeholder-count="4">
+        <div style="text-align:center">
+          <div style="font-size:clamp(24px,3vw,32px);font-weight:800;color:var(--text,#f2f1ee);letter-spacing:-.5px">{{ s.n }}</div>
+          <div style="font-size:13px;color:var(--muted,#9a9a98);margin-top:4px">{{ s.l }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ============ FEATURED ============ -->
+  <section style="max-width:1280px;margin:0 auto;padding:clamp(48px,6vw,80px) 24px">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:28px">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--gold,#c9a96a);margin-bottom:8px">★ منتخب ملک‌جت</div>
+        <h2 style="font-size:clamp(24px,3.4vw,34px);font-weight:800;letter-spacing:-.6px;color:var(--text,#f2f1ee)">املاک ویژه و لوکس</h2>
+      </div>
+      <a href="#" style="flex-shrink:0;font-size:14px;font-weight:600;color:var(--muted,#9a9a98);text-decoration:none;padding:9px 14px;border:1px solid var(--line,rgba(255,255,255,0.08));border-radius:11px" style-hover="color:var(--text,#f2f1ee);border-color:var(--gold,#c9a96a)">مشاهده همه ←</a>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:18px">
+      <sc-for list="{{ featured }}" as="p" hint-placeholder-count="6">
+        <a href="MelkJet Property.dc.html" style="display:block;text-decoration:none;background:var(--surface,#18181c);border:1px solid var(--line,rgba(255,255,255,0.08));border-radius:18px;overflow:hidden;transition:.2s" style-hover="border-color:var(--gold,#c9a96a);transform:translateY(-4px)">
+          <div style="position:relative;height:184px;background:{{ p.img }}">
+            <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,transparent,transparent 9px,rgba(255,255,255,0.025) 9px,rgba(255,255,255,0.025) 10px)"></div>
+            <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,0.35),transparent 55%)"></div>
+            <span style="position:absolute;top:12px;right:12px;padding:5px 11px;border-radius:999px;background:rgba(20,18,14,0.65);backdrop-filter:blur(6px);color:var(--gold2,#e0c489);font-size:11.5px;font-weight:700;border:1px solid var(--gold,#c9a96a)">{{ p.tag }}</span>
+            <button onClick="{{ p.toggleLike }}" aria-label="save" style="position:absolute;top:12px;left:12px;width:34px;height:34px;border-radius:10px;border:none;cursor:pointer;background:rgba(20,18,14,0.6);backdrop-filter:blur(6px);color:{{ p.likeColor }};font-size:16px;display:flex;align-items:center;justify-content:center">♥</button>
+            <span style="position:absolute;bottom:12px;left:12px;display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;background:rgba(20,18,14,0.7);backdrop-filter:blur(6px);font-size:11.5px;font-weight:700;color:#fff"><span style="color:var(--gold2,#e0c489)">✦</span> امتیاز AI {{ p.score }}</span>
+            <span style="position:absolute;bottom:12px;right:12px;font-family:monospace;font-size:10px;color:rgba(255,255,255,0.45)">تصویر ملک</span>
+          </div>
+          <div style="padding:16px 18px 18px">
+            <div style="font-size:20px;font-weight:800;color:var(--gold,#c9a96a);letter-spacing:-.3px">{{ p.price }}</div>
+            <div style="font-size:16px;font-weight:700;color:var(--text,#f2f1ee);margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.title }}</div>
+            <div style="font-size:13px;color:var(--muted,#9a9a98);margin-top:4px">{{ p.loc }}</div>
+            <div style="display:flex;gap:14px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line,rgba(255,255,255,0.08));font-size:12.5px;color:var(--muted,#9a9a98)">
+              <span>{{ p.size }} متر</span><span style="color:var(--faint,#6a6a68)">·</span>
+              <span>{{ p.beds }} خواب</span><span style="color:var(--faint,#6a6a68)">·</span>
+              <span>ساخت {{ p.year }}</span>
+            </div>
+          </div>
+        </a>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ============ INVESTMENT ============ -->
+  <section style="max-width:1280px;margin:0 auto;padding:0 24px clamp(48px,6vw,80px)">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:28px">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--gold,#c9a96a);margin-bottom:8px">◈ بازده بالا</div>
+        <h2 style="font-size:clamp(24px,3.4vw,34px);font-weight:800;letter-spacing:-.6px;color:var(--text,#f2f1ee)">فرصت‌های سرمایه‌گذاری</h2>
+      </div>
+      <a href="MelkJet Owner.dc.html" style="flex-shrink:0;font-size:14px;font-weight:600;color:var(--muted,#9a9a98);text-decoration:none;padding:9px 14px;border:1px solid var(--line,rgba(255,255,255,0.08));border-radius:11px" style-hover="color:var(--text,#f2f1ee);border-color:var(--gold,#c9a96a)">میز کار سرمایه‌گذار ←</a>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px">
+      <sc-for list="{{ invest }}" as="o" hint-placeholder-count="3">
+        <a href="MelkJet Property.dc.html" style="display:block;text-decoration:none;background:var(--surface,#18181c);border:1px solid var(--line,rgba(255,255,255,0.08));border-radius:18px;overflow:hidden" style-hover="border-color:var(--gold,#c9a96a);transform:translateY(-4px);transition:.2s">
+          <div style="position:relative;height:150px;background:{{ o.img }}">
+            <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,transparent,transparent 9px,rgba(255,255,255,0.025) 9px,rgba(255,255,255,0.025) 10px)"></div>
+            <div style="position:absolute;top:12px;right:12px;display:flex;flex-direction:column;gap:5px"><span style="padding:5px 11px;border-radius:999px;background:rgba(95,217,138,0.9);color:#0a2a16;font-size:12px;font-weight:800">بازده {{ o.roi }}</span></div>
+            <span style="position:absolute;bottom:12px;left:12px;padding:4px 10px;border-radius:999px;background:rgba(20,18,14,0.7);backdrop-filter:blur(6px);color:{{ o.riskColor }};font-size:11px;font-weight:700">ریسک {{ o.risk }}</span>
+          </div>
+          <div style="padding:16px 18px">
+            <div style="font-size:16px;font-weight:700;color:var(--text,#f2f1ee)">{{ o.title }}</div>
+            <div style="font-size:13px;color:var(--muted,#9a9a98);margin-top:4px">{{ o.loc }}</div>
+            <div style="font-weight:800;font-size:16px;color:var(--gold,#c9a96a);margin-top:12px;padding-top:12px;border-top:1px solid var(--line,rgba(255,255,255,0.08))">{{ o.price }}</div>
+          </div>
+        </a>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ============ AI MODULES ============ -->
+  <section style="background:var(--bg2,#141417);border-top:1px solid var(--line,rgba(255,255,255,0.08));border-bottom:1px solid var(--line,rgba(255,255,255,0.08))">
+    <div style="max-width:1280px;margin:0 auto;padding:clamp(48px,6vw,80px) 24px">
+      <div style="text-align:center;max-width:640px;margin:0 auto 40px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold,#c9a96a);margin-bottom:10px">✦ هوش مصنوعی ملک‌جت</div>
+        <h2 style="font-size:clamp(24px,3.4vw,34px);font-weight:800;letter-spacing:-.6px;color:var(--text,#f2f1ee)">تصمیم بگیر، نه حدس بزن</h2>
+        <p style="margin-top:14px;font-size:16px;line-height:1.85;color:var(--muted,#9a9a98)">سه موتور هوشمند که قبل از هر تصمیم، تصویر کاملی از ارزش، بازار و آینده‌ی ملک به تو می‌دهند.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px">
+        <sc-for list="{{ modules }}" as="m" hint-placeholder-count="3">
+          <div style="background:var(--surface,#18181c);border:1px solid var(--line,rgba(255,255,255,0.08));border-radius:18px;padding:26px;transition:.2s" style-hover="border-color:var(--gold,#c9a96a)">
+            <div style="width:50px;height:50px;border-radius:14px;background:var(--goldDim,rgba(201,169,106,0.12));border:1px solid var(--gold,#c9a96a);display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--gold,#c9a96a)">{{ m.ic }}</div>
+            <h3 style="font-size:19px;font-weight:700;color:var(--text,#f2f1ee);margin-top:18px">{{ m.t }}</h3>
+            <p style="font-size:14px;line-height:1.85;color:var(--muted,#9a9a98);margin-top:10px">{{ m.d }}</p>
+            <a href="#" style="display:inline-flex;align-items:center;gap:6px;margin-top:16px;font-size:14px;font-weight:700;color:var(--gold,#c9a96a);text-decoration:none">{{ m.cta }} ←</a>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ NEIGHBORHOODS ============ -->
+  <section style="max-width:1280px;margin:0 auto;padding:clamp(48px,6vw,80px) 24px">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:28px">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--gold,#c9a96a);margin-bottom:8px">◴ نقشه بازار</div>
+        <h2 style="font-size:clamp(24px,3.4vw,34px);font-weight:800;letter-spacing:-.6px;color:var(--text,#f2f1ee)">محله‌های محبوب تهران</h2>
+      </div>
+      <a href="#" style="flex-shrink:0;font-size:14px;font-weight:600;color:var(--muted,#9a9a98);text-decoration:none;padding:9px 14px;border:1px solid var(--line,rgba(255,255,255,0.08));border-radius:11px" style-hover="color:var(--text,#f2f1ee);border-color:var(--gold,#c9a96a)">نقشه کامل ←</a>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px">
+      <sc-for list="{{ hoods }}" as="h" hint-placeholder-count="6">
+        <a href="MelkJet Neighborhood.dc.html" style="position:relative;display:block;height:148px;border-radius:16px;overflow:hidden;background:{{ h.img }};text-decoration:none;border:1px solid var(--line,rgba(255,255,255,0.08))" style-hover="border-color:var(--gold,#c9a96a)">
+          <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,transparent,transparent 9px,rgba(255,255,255,0.025) 9px,rgba(255,255,255,0.025) 10px)"></div>
+          <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,0.6),transparent 60%)"></div>
+          <span style="position:absolute;top:10px;left:10px;padding:4px 9px;border-radius:999px;background:rgba(63,191,111,0.18);color:#5fd98a;font-size:11px;font-weight:700;border:1px solid rgba(63,191,111,0.4)">{{ h.g }}</span>
+          <div style="position:absolute;bottom:12px;right:12px;left:12px">
+            <div style="font-size:16px;font-weight:800;color:#fff">{{ h.n }}</div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.75);margin-top:2px">میانگین {{ h.p }} / متر</div>
+          </div>
+        </a>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ============ PROJECTS ============ -->
+  <section style="max-width:1280px;margin:0 auto;padding:clamp(48px,6vw,80px) 24px 0">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:28px">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--gold,#c9a96a);margin-bottom:8px">▦ سازندگان برتر</div>
+        <h2 style="font-size:clamp(24px,3.4vw,34px);font-weight:800;letter-spacing:-.6px;color:var(--text,#f2f1ee)">پروژه‌های ساختمانی</h2>
+      </div>
+      <a href="MelkJet Builder.dc.html" style="flex-shrink:0;font-size:14px;font-weight:600;color:var(--muted,#9a9a98);text-decoration:none;padding:9px 14px;border:1px solid var(--line,rgba(255,255,255,0.08));border-radius:11px" style-hover="color:var(--text,#f2f1ee);border-color:var(--gold,#c9a96a)">همه پروژه‌ها ←</a>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:18px">
+      <sc-for list="{{ projects }}" as="p" hint-placeholder-count="3">
+        <a href="MelkJet Project.dc.html" style="display:block;text-decoration:none;background:var(--surface,#18181c);border:1px solid var(--line,rgba(255,255,255,0.08));border-radius:18px;overflow:hidden" style-hover="border-color:var(--gold,#c9a96a)">
+          <div style="position:relative;height:160px;background:{{ p.img }}">
+            <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,transparent,transparent 9px,rgba(255,255,255,0.025) 9px,rgba(255,255,255,0.025) 10px)"></div>
+            <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,0.4),transparent 55%)"></div>
+            <span style="position:absolute;top:12px;right:12px;padding:5px 11px;border-radius:999px;background:rgba(20,18,14,0.7);backdrop-filter:blur(6px);color:var(--gold2,#e0c489);font-size:11.5px;font-weight:700;border:1px solid var(--gold,#c9a96a)">{{ p.status }}</span>
+            <div style="position:absolute;bottom:12px;right:12px;left:12px"><div style="font-size:17px;font-weight:800;color:#fff">{{ p.title }}</div><div style="font-size:12px;color:rgba(255,255,255,0.8);margin-top:2px">{{ p.builder }}</div></div>
+          </div>
+          <div style="padding:16px 18px">
+            <div style="display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted,#9a9a98)"><span>{{ p.loc }}</span><span>{{ p.units }}</span></div>
+            <div style="margin-top:12px"><div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted,#9a9a98);margin-bottom:6px"><span>پیشرفت ساخت</span><span style="color:var(--gold,#c9a96a);font-weight:700">{{ p.progress }}</span></div><div style="height:6px;border-radius:4px;background:var(--bg2,#141417);overflow:hidden"><div style="height:100%;width:{{ p.progress }};background:linear-gradient(90deg,var(--gold2,#e0c489),var(--gold,#c9a96a));border-radius:4px"></div></div></div>
+          </div>
+        </a>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ============ MATERIALS ============ -->
+  <section style="max-width:1280px;margin:0 auto;padding:clamp(48px,6vw,80px) 24px 0">
+    <div style="position:relative;overflow:hidden;border-radius:24px;border:1px solid var(--line,rgba(255,255,255,0.08));background:var(--bg2,#141417);padding:clamp(28px,4vw,44px)">
+      <div style="position:absolute;inset:0;background:radial-gradient(500px 220px at 88% -10%,var(--goldDim,rgba(201,169,106,0.12)),transparent 60%);pointer-events:none"></div>
+      <div style="position:relative;display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:24px">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--gold,#c9a96a);margin-bottom:8px">⛓ بازار B2B</div>
+          <h2 style="font-size:clamp(22px,3vw,30px);font-weight:800;letter-spacing:-.6px;color:var(--text,#f2f1ee)">بازار مصالح ساختمانی</h2>
+          <p style="font-size:14px;color:var(--muted,#9a9a98);margin-top:8px;max-width:460px;line-height:1.7">خرید عمده، استعلام قیمت و سفارش مستقیم از تأمین‌کنندگان معتبر.</p>
+        </div>
+        <a href="MelkJet Store.dc.html" style="flex-shrink:0;padding:0 18px;height:44px;display:flex;align-items:center;border-radius:12px;background:linear-gradient(140deg,var(--gold2,#e0c489),var(--gold,#c9a96a));color:#16140f;text-decoration:none;font-weight:700;font-size:14px">ورود به بازار مصالح ←</a>
+      </div>
+      <div style="position:relative;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px">
+        <sc-for list="{{ materials }}" as="m" hint-placeholder-count="6">
+          <a href="MelkJet Materials.dc.html" style="display:flex;align-items:center;gap:11px;padding:14px;border-radius:13px;background:var(--surface,#18181c);border:1px solid var(--line,rgba(255,255,255,0.08));text-decoration:none" style-hover="border-color:var(--gold,#c9a96a)">
+            <span style="width:38px;height:38px;flex-shrink:0;border-radius:10px;background:{{ m.bg }};color:{{ m.color }};display:flex;align-items:center;justify-content:center;font-size:18px">{{ m.ic }}</span>
+            <span style="font-size:13px;font-weight:600;color:var(--text,#f2f1ee)">{{ m.l }}</span>
+          </a>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ADVISORS ============ -->
+  <section style="background:var(--bg2,#141417);border-top:1px solid var(--line,rgba(255,255,255,0.08));border-bottom:1px solid var(--line,rgba(255,255,255,0.08))">
+    <div style="max-width:1280px;margin:0 auto;padding:clamp(48px,6vw,80px) 24px">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:28px">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--gold,#c9a96a);margin-bottom:8px">♛ تأییدشده</div>
+          <h2 style="font-size:clamp(24px,3.4vw,34px);font-weight:800;letter-spacing:-.6px;color:var(--text,#f2f1ee)">مشاوران برتر</h2>
+        </div>
+        <a href="MelkJet Directory.dc.html" style="flex-shrink:0;font-size:14px;font-weight:600;color:var(--muted,#9a9a98);text-decoration:none;padding:9px 14px;border:1px solid var(--line,rgba(255,255,255,0.08));border-radius:11px" style-hover="color:var(--text,#f2f1ee);border-color:var(--gold,#c9a96a)">همه مشاوران ←</a>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px">
+        <sc-for list="{{ advisors }}" as="a" hint-placeholder-count="4">
+          <div style="background:var(--surface,#18181c);border:1px solid var(--line,rgba(255,255,255,0.08));border-radius:18px;padding:22px;text-align:center;transition:.2s" style-hover="border-color:var(--gold,#c9a96a)">
+            <div style="width:72px;height:72px;border-radius:50%;margin:0 auto;background:{{ a.img }};border:2px solid var(--gold,#c9a96a)"></div>
+            <div style="font-size:17px;font-weight:700;color:var(--text,#f2f1ee);margin-top:14px">{{ a.n }}</div>
+            <div style="font-size:12.5px;color:var(--muted,#9a9a98);margin-top:4px">{{ a.r }}</div>
+            <div style="display:flex;justify-content:center;gap:18px;margin-top:16px;padding-top:16px;border-top:1px solid var(--line,rgba(255,255,255,0.08))">
+              <div><div style="font-size:16px;font-weight:800;color:var(--text,#f2f1ee)">{{ a.deals }}</div><div style="font-size:11px;color:var(--faint,#6a6a68)">معامله</div></div>
+              <div><div style="font-size:16px;font-weight:800;color:var(--gold,#c9a96a)">★ {{ a.rate }}</div><div style="font-size:11px;color:var(--faint,#6a6a68)">امتیاز</div></div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ APP PROMO ============ -->
+  <section style="max-width:1280px;margin:0 auto;padding:clamp(48px,6vw,80px) 24px">
+    <div style="position:relative;overflow:hidden;border-radius:28px;border:1px solid var(--gold,#c9a96a);background:linear-gradient(120deg,var(--surface,#18181c),var(--bg2,#141417));display:grid;grid-template-columns:1.3fr 1fr;gap:24px;align-items:center">
+      <div style="position:absolute;inset:0;background:radial-gradient(600px 300px at 12% 120%,var(--goldDim,rgba(201,169,106,0.12)),transparent 60%);pointer-events:none"></div>
+      <div style="position:relative;padding:clamp(32px,4vw,52px)">
+        <div style="font-size:13px;font-weight:700;color:var(--gold,#c9a96a);margin-bottom:12px">اپلیکیشن ملک‌جت</div>
+        <h2 style="font-size:clamp(26px,3.4vw,36px);font-weight:800;letter-spacing:-.6px;color:var(--text,#f2f1ee);line-height:1.25">مشاور هوشمندت<br>همیشه در جیب توست</h2>
+        <p style="margin-top:16px;font-size:15.5px;line-height:1.85;color:var(--muted,#9a9a98);max-width:420px">اعلان فرصت‌های تازه، تحلیل لحظه‌ای قیمت و گفتگو با دستیار AI — هرجا که باشی.</p>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:24px">
+          <a href="#" style="display:flex;align-items:center;gap:10px;padding:12px 20px;border-radius:14px;background:var(--text,#f2f1ee);color:var(--bg,#0d0d0f);text-decoration:none;font-weight:700;font-size:14px"> بازار / مایکت</a>
+          <a href="#" style="display:flex;align-items:center;gap:10px;padding:12px 20px;border-radius:14px;border:1px solid var(--line2,rgba(255,255,255,0.14));color:var(--text,#f2f1ee);text-decoration:none;font-weight:700;font-size:14px">App Store</a>
+        </div>
+      </div>
+      <div style="position:relative;height:300px;display:flex;align-items:flex-end;justify-content:center">
+        <div style="width:170px;height:340px;border-radius:32px 32px 0 0;background:var(--bg,#0d0d0f);border:6px solid var(--line2,rgba(255,255,255,0.14));border-bottom:none;position:relative;overflow:hidden;box-shadow:var(--shadow,0 24px 60px -20px rgba(0,0,0,0.7))">
+          <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,transparent,transparent 10px,rgba(255,255,255,0.02) 10px,rgba(255,255,255,0.02) 11px)"></div>
+          <div style="position:absolute;top:14px;left:0;right:0;text-align:center;font-family:monospace;font-size:10px;color:var(--faint,#6a6a68)">نمای اپ موبایل</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ARTICLES ============ -->
+  <section style="max-width:1280px;margin:0 auto;padding:clamp(48px,6vw,80px) 24px 0">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:28px">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--gold,#c9a96a);margin-bottom:8px">✎ تولید با AI</div>
+        <h2 style="font-size:clamp(24px,3.4vw,34px);font-weight:800;letter-spacing:-.6px;color:var(--text,#f2f1ee)">مقالات و تحلیل بازار</h2>
+      </div>
+      <a href="MelkJet Content.dc.html" style="flex-shrink:0;font-size:14px;font-weight:600;color:var(--muted,#9a9a98);text-decoration:none;padding:9px 14px;border:1px solid var(--line,rgba(255,255,255,0.08));border-radius:11px" style-hover="color:var(--text,#f2f1ee);border-color:var(--gold,#c9a96a)">همه مقالات ←</a>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:18px">
+      <sc-for list="{{ articles }}" as="a" hint-placeholder-count="3">
+        <a href="MelkJet Content.dc.html" style="display:block;text-decoration:none;background:var(--surface,#18181c);border:1px solid var(--line,rgba(255,255,255,0.08));border-radius:18px;overflow:hidden" style-hover="border-color:var(--gold,#c9a96a)">
+          <div style="position:relative;height:150px;background:{{ a.img }}">
+            <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,transparent,transparent 9px,rgba(255,255,255,0.025) 9px,rgba(255,255,255,0.025) 10px)"></div>
+            <span style="position:absolute;top:12px;right:12px;padding:4px 10px;border-radius:999px;background:rgba(20,18,14,0.7);backdrop-filter:blur(6px);color:var(--gold2,#e0c489);font-size:11px;font-weight:700">{{ a.tag }}</span>
+          </div>
+          <div style="padding:16px 18px">
+            <div style="font-size:15.5px;font-weight:700;color:var(--text,#f2f1ee);line-height:1.5">{{ a.title }}</div>
+            <div style="font-size:12px;color:var(--muted,#9a9a98);margin-top:10px">{{ a.meta }}</div>
+          </div>
+        </a>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ============ FAQ ============ -->
+  <section style="max-width:820px;margin:0 auto;padding:clamp(40px,5vw,72px) 24px">
+    <h2 style="text-align:center;font-size:clamp(24px,3.4vw,34px);font-weight:800;letter-spacing:-.6px;color:var(--text,#f2f1ee);margin-bottom:32px">سوال‌های پرتکرار</h2>
+    <div style="display:grid;gap:12px">
+      <sc-for list="{{ faqs }}" as="f" hint-placeholder-count="4">
+        <div style="background:var(--surface,#18181c);border:1px solid var(--line,rgba(255,255,255,0.08));border-radius:16px;overflow:hidden">
+          <button onClick="{{ f.toggle }}" style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:18px 20px;border:none;background:transparent;cursor:pointer;font-family:inherit;text-align:right">
+            <span style="font-size:15.5px;font-weight:600;color:var(--text,#f2f1ee)">{{ f.q }}</span>
+            <span style="flex-shrink:0;width:26px;height:26px;border-radius:8px;background:var(--goldDim,rgba(201,169,106,0.12));color:var(--gold,#c9a96a);font-size:18px;display:flex;align-items:center;justify-content:center">{{ f.sign }}</span>
+          </button>
+          <sc-if value="{{ f.open }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:0 20px 18px;font-size:14.5px;line-height:1.9;color:var(--muted,#9a9a98)">{{ f.a }}</div>
+          </sc-if>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ============ FOOTER ============ -->
+  <footer style="border-top:1px solid var(--line,rgba(255,255,255,0.08));background:var(--bg2,#141417)">
+    <div style="max-width:1280px;margin:0 auto;padding:56px 24px 28px;display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:32px">
+      <div>
+        <a href="#" style="display:flex;align-items:center;gap:11px;text-decoration:none;color:var(--text,#f2f1ee)">
+          <span style="width:34px;height:34px;border-radius:10px;background:linear-gradient(140deg,var(--gold2,#e0c489),var(--gold,#c9a96a));display:flex;align-items:center;justify-content:center"><span style="width:13px;height:13px;background:var(--bg2,#141417);transform:rotate(45deg);border-radius:2px"></span></span>
+          <span style="font-weight:800;font-size:20px">ملک‌جت</span>
+        </a>
+        <p style="margin-top:16px;font-size:13.5px;line-height:1.9;color:var(--muted,#9a9a98);max-width:280px">بزرگ‌ترین اکوسیستم هوشمند صنعت املاک و ساختمان ایران. تصمیم بهتر، با داده‌ی بهتر.</p>
+      </div>
+      <sc-for list="{{ footerCols }}" as="col" hint-placeholder-count="3">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text,#f2f1ee);margin-bottom:14px">{{ col.h }}</div>
+          <div style="display:grid;gap:10px">
+            <sc-for list="{{ col.links }}" as="l" hint-placeholder-count="4">
+              <a href="{{ l.href }}" style="font-size:13.5px;color:var(--muted,#9a9a98);text-decoration:none" style-hover="color:var(--gold,#c9a96a)">{{ l.t }}</a>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="border-top:1px solid var(--line,rgba(255,255,255,0.08))">
+      <div style="max-width:1280px;margin:0 auto;padding:18px 24px;display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:center;font-size:12.5px;color:var(--faint,#6a6a68)">
+        <span>© ۱۴۰۵ ملک‌جت · تمام حقوق محفوظ است</span>
+        <span>ساخته‌شده با ✦ هوش مصنوعی</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ============ PERSISTENT AI ASSISTANT ============ -->
+  <button onClick="{{ toggleAssistant }}" aria-label="assistant" style="position:fixed;bottom:24px;left:24px;z-index:60;width:58px;height:58px;border-radius:18px;border:none;cursor:pointer;background:linear-gradient(140deg,var(--gold2,#e0c489),var(--gold,#c9a96a));color:#16140f;font-size:22px;font-weight:800;box-shadow:0 14px 34px -10px var(--gold,#c9a96a);display:flex;align-items:center;justify-content:center;transition:.2s" style-hover="transform:translateY(-3px)">✦</button>
+  <sc-if value="{{ assistantOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;bottom:92px;left:24px;z-index:60;width:min(360px,calc(100vw - 48px));background:var(--surface,#18181c);border:1px solid var(--line2,rgba(255,255,255,0.14));border-radius:20px;box-shadow:var(--shadow,0 24px 60px -20px rgba(0,0,0,0.7));overflow:hidden;animation:mj-rise .35s both">
+      <div style="padding:16px 18px;border-bottom:1px solid var(--line,rgba(255,255,255,0.08));display:flex;align-items:center;gap:11px">
+        <span style="width:34px;height:34px;border-radius:10px;background:linear-gradient(140deg,var(--gold2,#e0c489),var(--gold,#c9a96a));display:flex;align-items:center;justify-content:center;color:#16140f;font-weight:800">✦</span>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:14.5px;color:var(--text,#f2f1ee)">دستیار ملک‌جت</div>
+          <div style="font-size:11.5px;color:var(--gold,#c9a96a);display:flex;align-items:center;gap:5px"><span style="width:6px;height:6px;border-radius:50%;background:#3fbf6f"></span>آنلاین · پاسخ‌گوی شما</div>
+        </div>
+        <button onClick="{{ toggleAssistant }}" style="border:none;background:transparent;color:var(--muted,#9a9a98);cursor:pointer;font-size:20px;line-height:1">×</button>
+      </div>
+      <div style="padding:18px;display:grid;gap:10px">
+        <div style="background:var(--bg2,#141417);border-radius:13px 13px 13px 4px;padding:12px 14px;font-size:13.5px;line-height:1.8;color:var(--text,#f2f1ee)">سلام 👋 من می‌توانم در خرید، فروش، اجاره، تحلیل قیمت و سرمایه‌گذاری کمکت کنم. از کجا شروع کنیم؟</div>
+        <div style="display:flex;flex-wrap:wrap;gap:7px">
+          <sc-for list="{{ assistChips }}" as="c" hint-placeholder-count="3">
+            <button style="padding:8px 12px;border-radius:999px;border:1px solid var(--line,rgba(255,255,255,0.08));background:transparent;color:var(--muted,#9a9a98);font-family:inherit;font-size:12.5px;cursor:pointer" style-hover="border-color:var(--gold,#c9a96a);color:var(--text,#f2f1ee)">{{ c }}</button>
+          </sc-for>
+        </div>
+      </div>
+      <div style="padding:0 18px 18px">
+        <div style="display:flex;gap:8px;background:var(--bg2,#141417);border:1px solid var(--line,rgba(255,255,255,0.08));border-radius:13px;padding:8px 8px 8px 14px;align-items:center">
+          <input placeholder="پیامت را بنویس…" style="flex:1;border:none;outline:none;background:transparent;color:var(--text,#f2f1ee);font-family:inherit;font-size:13.5px"/>
+          <button style="width:34px;height:34px;border:none;border-radius:9px;background:linear-gradient(140deg,var(--gold2,#e0c489),var(--gold,#c9a96a));color:#16140f;cursor:pointer;font-weight:800">↑</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <helmet>
+    <style>
+      @media(max-width:860px){.mj-navlinks{display:none!important}}
+      @media(min-width:861px){.mj-login{display:flex!important}}
+    </style>
+  </helmet>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:900}}">
+class Component extends DCLogic {
+  state = { theme:'dark', mode:'smart', query:'', phase:'idle', voice:false, assistantOpen:false, likes:{}, thinkIdx:0, faqOpen:0, hood:'سعادت‌آباد' };
+
+  featured = [
+    { id:1, title:'آپارتمان لوکس نوساز', loc:'سعادت‌آباد، تهران', price:'۱۷٫۸ میلیارد', perM:'۱۲۷ م/متر', size:'۱۴۰', beds:'۳', year:'۱۴۰۲', tag:'ویژه', score:96, img:'linear-gradient(135deg,#3a3530,#211e1b)' },
+    { id:2, title:'پنت‌هاوس دوبلکس با ویو', loc:'زعفرانیه، تهران', price:'۸۵ میلیارد', perM:'۳۲۷ م/متر', size:'۲۶۰', beds:'۴', year:'۱۴۰۳', tag:'لوکس', score:94, img:'linear-gradient(135deg,#33303a,#1d1b22)' },
+    { id:3, title:'آپارتمان دنج و آفتاب‌گیر', loc:'ونک، تهران', price:'۹٫۲ میلیارد', perM:'۹۷ م/متر', size:'۹۵', beds:'۲', year:'۱۳۹۸', tag:'فرصت', score:88, img:'linear-gradient(135deg,#2c343a,#1a1f23)' },
+    { id:4, title:'ویلا باغ با استخر', loc:'لواسان', price:'۱۲۰ میلیارد', perM:'۲۸۶ م/متر', size:'۴۲۰', beds:'۵', year:'۱۴۰۱', tag:'لوکس', score:92, img:'linear-gradient(135deg,#2f3a34,#1b211e)' },
+    { id:5, title:'آپارتمان روشن خوش‌نقشه', loc:'جردن، تهران', price:'۱۴٫۵ میلیارد', perM:'۱۳۲ م/متر', size:'۱۱۰', beds:'۲', year:'۱۴۰۰', tag:'ویژه', score:91, img:'linear-gradient(135deg,#34323c,#1e1d23)' },
+    { id:6, title:'دفتر کار اداری مدرن', loc:'میرداماد، تهران', price:'۶٫۸ میلیارد', perM:'۸۵ م/متر', size:'۸۰', beds:'—', year:'۱۳۹۹', tag:'اداری', score:84, img:'linear-gradient(135deg,#3a3630,#221f1b)' }
+  ];
+  stats = [
+    { n:'۲۴۰٬۰۰۰+', l:'فایل فعال' }, { n:'۱۸٬۵۰۰', l:'مشاور تأییدشده' }, { n:'۴۲', l:'شهر تحت پوشش' }, { n:'۹۸٪', l:'دقت تحلیل قیمت' }
+  ];
+  modules = [
+    { ic:'◈', t:'تحلیل ارزش واقعی', d:'برآورد قیمت منصفانه بر اساس موقعیت، متراژ و داده‌های تاریخی، همراه با Confidence Score.', cta:'محاسبه ارزش ملک' },
+    { ic:'◰', t:'نقشه حرارتی بازار', d:'میانگین قیمت، رشد، تقاضا و فرصت سرمایه‌گذاری هر محله را روی نقشه ببین.', cta:'مشاهده نقشه' },
+    { ic:'◴', t:'پیش‌بینی آینده بازار', d:'روند رشد، احتمال کاهش و میزان ریسک هر منطقه را پیش از تصمیم بدان.', cta:'پیش‌بینی منطقه' }
+  ];
+  hoods = [
+    { n:'سعادت‌آباد', p:'۱۲۷ م', g:'+۸٪', img:'linear-gradient(135deg,#3a3530,#23201c)' },
+    { n:'زعفرانیه', p:'۳۲۷ م', g:'+۵٪', img:'linear-gradient(135deg,#33303a,#201d26)' },
+    { n:'ونک', p:'۹۷ م', g:'+۱۱٪', img:'linear-gradient(135deg,#2c343a,#1c2126)' },
+    { n:'جردن', p:'۱۳۲ م', g:'+۶٪', img:'linear-gradient(135deg,#34323c,#221f29)' },
+    { n:'لواسان', p:'۲۸۶ م', g:'+۹٪', img:'linear-gradient(135deg,#2f3a34,#1d231f)' },
+    { n:'میرداماد', p:'۱۰۵ م', g:'+۴٪', img:'linear-gradient(135deg,#3a3630,#241f1a)' }
+  ];
+  advisors = [
+    { n:'سارا محمدی', r:'مشاور لوکس · زعفرانیه', deals:'۱۲۴', rate:'۴٫۹', img:'linear-gradient(135deg,#caa86a,#8a6f3e)' },
+    { n:'امیر رضایی', r:'سرمایه‌گذاری · ونک', deals:'۲۰۳', rate:'۴٫۸', img:'linear-gradient(135deg,#7a8fae,#465a78)' },
+    { n:'نگار کریمی', r:'مسکونی · سعادت‌آباد', deals:'۹۷', rate:'۵٫۰', img:'linear-gradient(135deg,#b07a8a,#6e4754)' },
+    { n:'کاوه اسدی', r:'تجاری و اداری · میرداماد', deals:'۱۵۶', rate:'۴٫۷', img:'linear-gradient(135deg,#7aa88f,#476e58)' }
+  ];
+  invest = [
+    { title:'پیش‌فروش برج آرین', loc:'سعادت‌آباد', roi:'۳۸٪', risk:'کم', riskColor:'#5fd98a', price:'از ۱۴ م.د', img:'linear-gradient(135deg,#3a3530,#211e1b)' },
+    { title:'مجتمع تجاری ونک‌پارک', loc:'ونک', roi:'۲۹٪', risk:'متوسط', riskColor:'#e7a14a', price:'از ۳۴ م.د', img:'linear-gradient(135deg,#2c343a,#1a1f23)' },
+    { title:'ویلاهای باغ لواسان', loc:'لواسان', roi:'۴۲٪', risk:'متوسط', riskColor:'#e7a14a', price:'از ۱۲۰ م.د', img:'linear-gradient(135deg,#2f3a34,#1b211e)' }
+  ];
+  projects = [
+    { title:'برج لوکس آرین', builder:'گروه ساختمانی پارسیان', loc:'سعادت‌آباد', units:'۱۸۲ واحد', progress:'۷۵٪', prog:75, status:'پیش‌فروش', img:'linear-gradient(135deg,#33303a,#1d1b22)' },
+    { title:'مجتمع نگین ونک', builder:'انبوه‌سازان البرز', loc:'ونک', units:'۹۶ واحد', progress:'۴۰٪', prog:40, status:'در حال ساخت', img:'linear-gradient(135deg,#2c343a,#1a1f23)' },
+    { title:'باغ‌برج دیپلمات', builder:'مهندسی تهران‌سازه', loc:'دروس', units:'۲۴۰ واحد', progress:'۹۰٪', prog:90, status:'آماده تحویل', img:'linear-gradient(135deg,#3a3530,#211e1b)' }
+  ];
+  materials = [
+    { l:'آهن و میلگرد', ic:'▭', bg:'rgba(122,143,174,0.15)', color:'#7a8fae' },
+    { l:'سیمان و گچ', ic:'◳', bg:'rgba(201,169,106,0.15)', color:'var(--gold,#c9a96a)' },
+    { l:'کاشی و سرامیک', ic:'▦', bg:'rgba(176,122,138,0.15)', color:'#b07a8a' },
+    { l:'کابینت و دکور', ic:'◫', bg:'rgba(122,168,143,0.15)', color:'#7aa88f' },
+    { l:'شیرآلات', ic:'◌', bg:'rgba(91,155,213,0.15)', color:'#5b9bd5' },
+    { l:'سرمایش و گرمایش', ic:'❄', bg:'rgba(155,122,208,0.15)', color:'#9b7ad0' }
+  ];
+  articles = [
+    { tag:'تحلیل بازار', title:'پیش‌بینی بازار مسکن تهران در نیمه‌ی دوم ۱۴۰۵', meta:'۸ دقیقه مطالعه', img:'linear-gradient(135deg,#3a3530,#211e1b)' },
+    { tag:'راهنما', title:'۷ نکته‌ی کلیدی پیش از خرید اولین خانه', meta:'۵ دقیقه مطالعه', img:'linear-gradient(135deg,#2c343a,#1a1f23)' },
+    { tag:'سرمایه‌گذاری', title:'پیش‌فروش یا آماده؟ کدام بازده بهتری دارد؟', meta:'۶ دقیقه مطالعه', img:'linear-gradient(135deg,#2f3a34,#1b211e)' }
+  ];
+  faqs = [
+    { q:'جستجوی هوشمند ملک‌جت چطور کار می‌کند؟', a:'کافی‌ست نیازت را به زبان طبیعی بنویسی؛ هوش مصنوعی منظور تو را تحلیل می‌کند، در صورت نیاز سؤال تکمیلی می‌پرسد و بهترین فایل‌ها را همراه با دلیل انتخاب نمایش می‌دهد.' },
+    { q:'تحلیل قیمت ملک‌جت چقدر دقیق است؟', a:'موتور قیمت‌گذاری ما با اتکا به داده‌های تاریخی، املاک مشابه و روند بازار، ارزش منصفانه را با Confidence Score برآورد می‌کند تا بدانی یک ملک گران است یا ارزان.' },
+    { q:'آیا ثبت آگهی و استفاده رایگان است؟', a:'پلن رایگان برای جستجو، ذخیره و دریافت پیشنهادهای هوشمند در دسترس است. مشاوران و آژانس‌ها می‌توانند با پلن‌های حرفه‌ای به CRM، اتوماسیون و ابزارهای بازاریابی دسترسی پیدا کنند.' },
+    { q:'دستیار هوشمند چه کارهایی انجام می‌دهد؟', a:'دستیار همیشگی ملک‌جت در خرید، فروش، اجاره، تحلیل قیمت، مذاکره و راهنمایی حقوقی کنار توست و ۲۴ ساعته پاسخ‌گوست.' }
+  ];
+
+  toggleFaq = (i) => () => this.setState(s=>({ faqOpen: s.faqOpen===i?-1:i }));
+
+  themes = {
+    dark:{ '--bg':'#0d0d0f','--bg2':'#141417','--surface':'#18181c','--surface2':'#1f1f24','--navbg':'rgba(13,13,15,0.72)','--line':'rgba(255,255,255,0.08)','--line2':'rgba(255,255,255,0.14)','--text':'#f2f1ee','--muted':'#9a9a98','--faint':'#6a6a68','--gold':'#c9a96a','--gold2':'#e0c489','--goldDim':'rgba(201,169,106,0.12)','--shadow':'0 24px 60px -20px rgba(0,0,0,0.7)' },
+    light:{ '--bg':'#f4f1ea','--bg2':'#ffffff','--surface':'#ffffff','--surface2':'#faf7f1','--navbg':'rgba(244,241,234,0.78)','--line':'rgba(26,24,20,0.09)','--line2':'rgba(26,24,20,0.16)','--text':'#1a1814','--muted':'#6b6862','--faint':'#9a968d','--gold':'#9c7a3c','--gold2':'#b8923f','--goldDim':'rgba(156,122,60,0.10)','--shadow':'0 24px 60px -28px rgba(40,30,10,0.18)' }
+  };
+
+  props_data = [
+    { id:1, title:'آپارتمان لوکس نوساز سعادت‌آباد', loc:'سعادت‌آباد، تهران', price:'۱۷٫۸ میلیارد', size:'۱۴۰', beds:'۳', match:96, img:'linear-gradient(135deg,#3a3530,#211e1b)' },
+    { id:5, title:'آپارتمان روشن جردن', loc:'جردن، تهران', price:'۱۴٫۵ میلیارد', size:'۱۱۰', beds:'۲', match:91, img:'linear-gradient(135deg,#34323c,#1e1d23)' },
+    { id:3, title:'آپارتمان دنج ونک', loc:'ونک، تهران', price:'۹٫۲ میلیارد', size:'۹۵', beds:'۲', match:88, img:'linear-gradient(135deg,#2c343a,#1a1f23)' }
+  ];
+  thinkingLines = ['در حال تحلیل درخواست شما…','بررسی ۲٬۴۰۰ فایل فعال در منطقه…','محاسبه امتیاز تطابق و ارزش…'];
+
+  componentWillUnmount(){ clearInterval(this._ti); clearTimeout(this._tt); }
+
+  toggleTheme = () => this.setState(s=>({ theme:s.theme==='dark'?'light':'dark' }));
+  setSmart = () => this.setState({ mode:'smart' });
+  setClassic = () => this.setState({ mode:'classic' });
+  toggleVoice = () => this.setState(s=>({ voice:!s.voice }));
+  toggleAssistant = () => this.setState(s=>({ assistantOpen:!s.assistantOpen }));
+  onQuery = (e) => this.setState({ query:e.target.value });
+  toggleLike = (id) => this.setState(s=>({ likes:{...s.likes,[id]:!s.likes[id]} }));
+
+  runSearch = () => {
+    clearInterval(this._ti); clearTimeout(this._tt);
+    this.setState({ phase:'thinking', thinkIdx:0 });
+    this._ti = setInterval(()=>this.setState(s=>({ thinkIdx:(s.thinkIdx+1)%this.thinkingLines.length })), 700);
+    this._tt = setTimeout(()=>{ clearInterval(this._ti); this.setState({ phase:'results' }); }, 2100);
+  };
+  fill = (text) => () => { this.setState({ query:text }); this.runSearch(); };
+
+  renderVals(){
+    const t = this.themes[this.state.theme];
+    const rootStyle = Object.entries(t).map(([k,v])=>k+':'+v).join(';') + ';min-height:100vh;background:var(--bg);color:var(--text);font-family:Vazirmatn,sans-serif;transition:background .3s,color .3s';
+    const tab = (on) => 'padding:9px 16px;border:none;border-radius:11px;font-family:inherit;font-weight:600;font-size:13.5px;cursor:pointer;transition:.18s;'+(on?'background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f':'background:transparent;color:var(--muted)');
+    return {
+      rootStyle,
+      navLinks:['خرید','اجاره','پیش‌فروش','پروژه‌ها','مشاوران','تحلیل بازار'],
+      themeIcon: this.state.theme==='dark' ? '☀' : '☾',
+      toggleTheme:this.toggleTheme, toggleAssistant:this.toggleAssistant,
+      setSmart:this.setSmart, setClassic:this.setClassic, toggleVoice:this.toggleVoice,
+      tabSmartStyle: tab(this.state.mode==='smart'),
+      tabClassicStyle: tab(this.state.mode==='classic'),
+      micStyle: 'flex-shrink:0;width:48px;height:48px;border-radius:13px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;transition:.18s;'+(this.state.voice?'background:var(--gold);color:#16140f;border:1px solid var(--gold)':'background:var(--bg2);color:var(--muted);border:1px solid var(--line)'),
+      query:this.state.query, onQuery:this.onQuery, runSearch:this.runSearch,
+      examples:[
+        { text:'آپارتمان نوساز در زعفرانیه با ویو', run:this.fill('آپارتمان نوساز در زعفرانیه با ویو و آسانسور') },
+        { text:'خانه زیر ۱۰ میلیارد برای سرمایه‌گذاری', run:this.fill('خانه زیر ۱۰ میلیارد با پتانسیل رشد برای سرمایه‌گذاری') },
+        { text:'اجاره ۲ خوابه نزدیک مترو ونک', run:this.fill('اجاره آپارتمان ۲ خوابه نزدیک مترو در ونک') },
+        { text:'ویلا در شمال با باغ', run:this.fill('ویلا در شمال با باغ و استخر') }
+      ],
+      isThinking: this.state.phase==='thinking',
+      isResults: this.state.phase==='results',
+      thinkingLine: this.thinkingLines[this.state.thinkIdx],
+      aiSummary:'۳ گزینه با تطابق بالا پیدا کردم. بودجه‌ی شما برای سعادت‌آباد منطقی است؛ اما با حدود ۵٪ افزایش، واحدهای نوسازتر با کیفیت ساخت بالاتر هم در دسترس می‌شوند.',
+      aiFollowup:'↩ ترجیح می‌دهی نوساز باشد یا متراژ بیشتر مهم‌تر است؟',
+      matches:this.props_data,
+      assistChips:['تحلیل قیمت یک ملک','بهترین محله برای بودجه‌ام','شروع فروش ملک'],
+      assistantOpen:this.state.assistantOpen,
+      featured:this.featured.map(p=>({ ...p, liked:!!this.state.likes[p.id], likeColor:this.state.likes[p.id]?'#ff6b81':'rgba(255,255,255,0.85)', toggleLike:()=>this.toggleLike(p.id) })),
+      stats:this.stats, modules:this.modules, hoods:this.hoods, advisors:this.advisors,
+      invest:this.invest, projects:this.projects, materials:this.materials, articles:this.articles,
+      faqs:this.faqs.map((f,i)=>({ ...f, open:this.state.faqOpen===i, sign:this.state.faqOpen===i?'−':'+', toggle:this.toggleFaq(i) })),
+      footerCols:[
+        { h:'محصول', links:[{t:'جستجوی هوشمند',href:'MelkJet Search.dc.html'},{t:'تحلیل قیمت',href:'MelkJet Property.dc.html'},{t:'بازار مصالح',href:'MelkJet Materials.dc.html'},{t:'میز کار خریدار',href:'MelkJet Buyer.dc.html'},{t:'فروشنده / سرمایه‌گذار',href:'MelkJet Owner.dc.html'}] },
+        { h:'برای کسب‌وکار', links:[{t:'پنل آژانس',href:'MelkJet Agency.dc.html'},{t:'مارکتینگ',href:'MelkJet Marketing.dc.html'},{t:'پلن‌ها و اشتراک',href:'MelkJet Pricing.dc.html'},{t:'میز کار سازنده',href:'MelkJet Builder.dc.html'},{t:'اتوماسیون بازاریابی',href:'MelkJet CRM.dc.html'},{t:'وب‌سایت اختصاصی',href:'#'}] },
+        { h:'ملک‌جت', links:[{t:'درباره ما',href:'#'},{t:'سیستم طراحی',href:'MelkJet Design System.dc.html'},{t:'تماس با ما',href:'#'},{t:'قوانین',href:'#'},{t:'پنل مدیریت',href:'MelkJet Admin.dc.html'}] }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

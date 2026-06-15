@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{margin:0;font-family:'Vazirmatn',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:rgba(140,140,140,0.3);border-radius:8px}
+  @keyframes mjp-spin{to{transform:rotate(360deg)}}
+  @keyframes mjp-scan{0%{top:0}100%{top:100%}}
+  @keyframes mjp-draw{to{stroke-dashoffset:0}}
+  @keyframes mjp-fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  @media(max-width:980px){.mjp-nav{display:none!important}.mjp-grid{grid-template-columns:1fr!important}.mjp-shots{grid-template-columns:repeat(3,1fr)!important}}
+</style>
+</helmet>
+<div dir="rtl" style="{{ rootStyle }}">
+
+  <!-- NAV -->
+  <header style="position:sticky;top:0;z-index:50;backdrop-filter:blur(18px);background:var(--navbg);border-bottom:1px solid var(--line)">
+    <nav style="max-width:1200px;margin:0 auto;padding:0 22px;height:62px;display:flex;align-items:center;gap:20px">
+      <a href="MelkJet.dc.html" style="display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--text)">
+        <span style="width:32px;height:32px;border-radius:9px;background:linear-gradient(140deg,var(--gold2),var(--gold));display:flex;align-items:center;justify-content:center"><span style="width:12px;height:12px;background:var(--bg);transform:rotate(45deg);border-radius:2px"></span></span>
+        <div class="mjp-nav"><div style="font-weight:800;font-size:17px;letter-spacing:-.5px">ملک‌جت</div><div style="font-size:10px;color:var(--gold)">پلان و سه‌بعدی AI</div></div>
+      </a>
+      <div style="flex:1"></div>
+      <span style="font-size:11.5px;color:#5fd98a;display:flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:var(--surface)"><span style="width:6px;height:6px;border-radius:50%;background:#5fd98a"></span>موتور بینایی هوشمند</span>
+      <button onClick="{{ toggleTheme }}" aria-label="theme" style="width:38px;height:38px;border-radius:11px;border:1px solid var(--line);background:var(--surface);color:var(--text);cursor:pointer;font-size:14px">{{ themeIcon }}</button>
+    </nav>
+  </header>
+
+  <main style="max-width:1200px;margin:0 auto;padding:26px 22px 90px">
+    <div style="margin-bottom:22px"><h1 style="font-size:clamp(22px,3vw,30px);font-weight:800;letter-spacing:-.5px;color:var(--text)">بازسازی پلان و مدل سه‌بعدی از روی عکس</h1><p style="font-size:14px;color:var(--muted);margin-top:7px;line-height:1.7">چند عکس از فضا را بده، قوانین را تنظیم کن — هوش مصنوعی نقشه‌ی کف و مدل سه‌بعدی را می‌سازد.</p></div>
+
+    <!-- STEP RAIL -->
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:22px;flex-wrap:wrap">
+      <sc-for list="{{ steps }}" as="st" hint-placeholder-count="3">
+        <div style="display:flex;align-items:center;gap:6px"><span style="{{ st.dotStyle }}">{{ st.n }}</span><span style="{{ st.labelStyle }}">{{ st.l }}</span></div>
+        <span style="width:24px;height:1.5px;background:var(--line);{{ st.barHide }}"></span>
+      </sc-for>
+    </div>
+
+    <div class="mjp-grid" style="display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start">
+
+      <!-- LEFT: inputs -->
+      <div style="display:grid;gap:16px">
+        <!-- photos -->
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px">
+          <div style="font-size:13.5px;font-weight:700;color:var(--text);margin-bottom:4px">۱. عکس‌های فضا</div>
+          <div style="font-size:11.5px;color:var(--muted);margin-bottom:13px;line-height:1.6">عکس‌های هر اتاق را از زاویه‌های مختلف بکش و رها کن.</div>
+          <div class="mjp-shots" style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
+            <x-import component-from-global-scope="image-slot" from="./image-slot.js" id="plan-shot-1" shape="rounded" radius="12" placeholder="نشیمن" style="width:100%;height:84px" hint-size="100%,84px"></x-import>
+            <x-import component-from-global-scope="image-slot" from="./image-slot.js" id="plan-shot-2" shape="rounded" radius="12" placeholder="آشپزخانه" style="width:100%;height:84px" hint-size="100%,84px"></x-import>
+            <x-import component-from-global-scope="image-slot" from="./image-slot.js" id="plan-shot-3" shape="rounded" radius="12" placeholder="اتاق خواب" style="width:100%;height:84px" hint-size="100%,84px"></x-import>
+            <x-import component-from-global-scope="image-slot" from="./image-slot.js" id="plan-shot-4" shape="rounded" radius="12" placeholder="سرویس" style="width:100%;height:84px" hint-size="100%,84px"></x-import>
+          </div>
+        </div>
+        <!-- rules -->
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px;display:grid;gap:15px">
+          <div style="font-size:13.5px;font-weight:700;color:var(--text)">۲. قوانین و پارامترها</div>
+          <div><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px">متراژ کل (متر مربع)</div><input value="{{ area }}" onInput="{{ onArea }}" inputmode="decimal" style="width:100%;border:1px solid var(--line2);border-radius:11px;background:var(--bg2);color:var(--text);font-family:inherit;font-size:14px;padding:10px 13px;outline:none"/></div>
+          <div><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px">تعداد خواب</div><div style="display:flex;gap:7px"><sc-for list="{{ bedOpts }}" as="b" hint-placeholder-count="4"><button onClick="{{ b.fn }}" style="{{ b.style }}">{{ b.l }}</button></sc-for></div></div>
+          <div><div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px">سبک پلان</div><div style="display:flex;gap:7px;flex-wrap:wrap"><sc-for list="{{ styleOpts }}" as="s" hint-placeholder-count="3"><button onClick="{{ s.fn }}" style="{{ s.style }}">{{ s.l }}</button></sc-for></div></div>
+          <label style="display:flex;align-items:center;gap:9px;cursor:pointer"><button onClick="{{ toggleOpen }}" style="{{ switchStyle }}"><span style="{{ knobStyle }}"></span></button><span style="font-size:12.5px;color:var(--text)">پلان اوپن (یکپارچه نشیمن و آشپزخانه)</span></label>
+          <button onClick="{{ generate }}" style="height:48px;border:none;border-radius:13px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-weight:700;font-size:14.5px;cursor:pointer">{{ genLabel }}</button>
+        </div>
+      </div>
+
+      <!-- RIGHT: output -->
+      <div style="background:var(--surface);border:1px solid var(--gold);border-radius:18px;overflow:hidden;min-height:560px;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:10px;padding:14px 20px;border-bottom:1px solid var(--line)">
+          <span style="width:30px;height:30px;border-radius:9px;background:linear-gradient(140deg,var(--gold2),var(--gold));display:flex;align-items:center;justify-content:center;color:#16140f;font-weight:800;font-size:14px">✦</span>
+          <div style="flex:1;font-size:14.5px;font-weight:700;color:var(--text)">خروجی هوش مصنوعی</div>
+          <sc-if value="{{ isDone }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;gap:5px;padding:4px;border-radius:11px;background:var(--bg2);border:1px solid var(--line)">
+              <button onClick="{{ show2d }}" style="{{ tab2dStyle }}">پلان ۲بعدی</button>
+              <button onClick="{{ show3d }}" style="{{ tab3dStyle }}">مدل سه‌بعدی</button>
+            </div>
+          </sc-if>
+        </div>
+
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:24px;position:relative">
+          <!-- idle -->
+          <sc-if value="{{ isIdle }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center"><span style="font-size:38px;opacity:.4">⊞</span><span style="font-size:13px;color:var(--muted);max-width:280px;line-height:1.8">عکس‌ها را اضافه کن، قوانین را تنظیم کن و «ساخت پلان و سه‌بعدی» را بزن.</span></div>
+          </sc-if>
+
+          <!-- processing -->
+          <sc-if value="{{ isProcessing }}" hint-placeholder-val="{{ false }}">
+            <div style="width:100%;max-width:440px">
+              <div style="position:relative;height:240px;border-radius:14px;overflow:hidden;border:1px solid var(--line2);background:var(--bg2)">
+                <div style="position:absolute;inset:0;background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:28px 28px;opacity:.6"></div>
+                <div style="position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent);box-shadow:0 0 12px var(--gold);animation:mjp-scan 1.4s linear infinite"></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:11px;margin-top:18px"><span style="width:26px;height:26px;border-radius:50%;border:2.5px solid var(--goldDim);border-top-color:var(--gold);animation:mjp-spin .8s linear infinite"></span><span style="font-size:13.5px;color:var(--text);font-weight:600">{{ procStep }}</span></div>
+              <div style="margin-top:12px;display:grid;gap:7px">
+                <sc-for list="{{ procLog }}" as="p" hint-placeholder-count="3"><div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)"><span style="color:#5fd98a">✓</span>{{ p }}</div></sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- 2D plan -->
+          <sc-if value="{{ show2dPlan }}" hint-placeholder-val="{{ false }}">
+            <div style="width:100%;animation:mjp-fade .4s both">
+              <svg viewBox="0 0 400 300" style="width:100%;max-height:380px;display:block">
+                <rect x="20" y="20" width="360" height="260" fill="none" stroke="{{ cText }}" stroke-width="3"></rect>
+                <!-- rooms -->
+                <sc-for list="{{ rooms }}" as="r" hint-placeholder-count="5">
+                  <rect x="{{ r.x }}" y="{{ r.y }}" width="{{ r.w }}" height="{{ r.h }}" fill="{{ r.fill }}" stroke="{{ cText }}" stroke-width="2"></rect>
+                  <text x="{{ r.cx }}" y="{{ r.cy }}" fill="{{ cText }}" font-size="11" font-weight="700" text-anchor="middle" font-family="Vazirmatn">{{ r.l }}</text>
+                  <text x="{{ r.cx }}" y="{{ r.cy2 }}" fill="{{ cMuted }}" font-size="8.5" text-anchor="middle" font-family="Vazirmatn">{{ r.area }}</text>
+                </sc-for>
+                <!-- door arcs -->
+                <sc-for list="{{ doors }}" as="d" hint-placeholder-count="3"><path d="{{ d }}" fill="none" stroke="{{ cGold }}" stroke-width="1.5"></path></sc-for>
+              </svg>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
+                <div style="font-size:12px;color:var(--muted)">مقیاس ۱:۱۰۰ · {{ areaLabel }} متر مربع · {{ roomCount }} فضا</div>
+                <button style="font-size:12px;font-weight:700;color:var(--gold);background:var(--goldDim);border:1px solid var(--gold);border-radius:9px;padding:6px 13px;cursor:pointer;font-family:inherit">دانلود DWG</button>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- 3D model (isometric SVG projection) -->
+          <sc-if value="{{ show3dModel }}" hint-placeholder-val="{{ false }}">
+            <div style="width:100%;animation:mjp-fade .4s both;display:flex;flex-direction:column;align-items:center">
+              <svg viewBox="0 0 400 320" style="width:100%;max-height:330px;display:block">
+                <!-- floor slab -->
+                <polygon points="{{ floorPts }}" fill="{{ cGoldDim }}" stroke="{{ cGold }}" stroke-width="2"></polygon>
+                <!-- extruded room faces (painter-sorted) -->
+                <sc-for list="{{ faces }}" as="f" hint-placeholder-count="12">
+                  <polygon points="{{ f.pts }}" fill="{{ f.fill }}" stroke="{{ f.stroke }}" stroke-width="1.3" stroke-linejoin="round"></polygon>
+                </sc-for>
+                <!-- room labels on top faces -->
+                <sc-for list="{{ labels3d }}" as="t" hint-placeholder-count="4">
+                  <text x="{{ t.x }}" y="{{ t.y }}" fill="{{ cText }}" font-size="9" font-weight="700" text-anchor="middle" font-family="Vazirmatn">{{ t.l }}</text>
+                </sc-for>
+              </svg>
+              <input type="range" min="0" max="360" value="{{ spin }}" onInput="{{ onSpin }}" style="width:80%;max-width:320px;accent-color:var(--gold);margin-top:14px;cursor:pointer"/>
+              <div style="font-size:11.5px;color:var(--muted);margin-top:8px">برای چرخش مدل، اسلایدر را بکش</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;width:100%;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
+                <div style="font-size:12px;color:var(--muted)">مدل حجمی · {{ areaLabel }} م² · ارتفاع سقف ۳ متر</div>
+                <button style="font-size:12px;font-weight:700;color:var(--gold);background:var(--goldDim);border:1px solid var(--gold);border-radius:9px;padding:6px 13px;cursor:pointer;font-family:inherit">خروجی GLB / OBJ</button>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <a href="MelkJet.dc.html" aria-label="home" style="position:fixed;bottom:22px;left:22px;z-index:60;width:52px;height:52px;border-radius:16px;text-decoration:none;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-size:19px;font-weight:800;box-shadow:0 14px 34px -10px var(--gold);display:flex;align-items:center;justify-content:center">✦</a>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1200,&quot;height&quot;:820}}">
+class Component extends DCLogic {
+  state = { theme:'dark', area:'۱۲۰', beds:'۲', style:'مدرن', open:true, phase:'idle', procIdx:0, out:'2d', spin:30 };
+  themes = {
+    dark:{ '--bg':'#0d0d0f','--bg2':'#141417','--surface':'#18181c','--navbg':'rgba(13,13,15,0.72)','--line':'rgba(255,255,255,0.08)','--line2':'rgba(255,255,255,0.14)','--text':'#f2f1ee','--muted':'#9a9a98','--faint':'#6a6a68','--gold':'#c9a96a','--gold2':'#e0c489','--goldDim':'rgba(201,169,106,0.12)' },
+    light:{ '--bg':'#f4f1ea','--bg2':'#faf7f1','--surface':'#ffffff','--navbg':'rgba(244,241,234,0.82)','--line':'rgba(26,24,20,0.09)','--line2':'rgba(26,24,20,0.16)','--text':'#1a1814','--muted':'#6b6862','--faint':'#9a968d','--gold':'#9c7a3c','--gold2':'#b8923f','--goldDim':'rgba(156,122,60,0.10)' }
+  };
+  procSteps = ['تحلیل عکس‌ها و تشخیص دیوارها…','تخمین ابعاد و چیدمان فضاها…','ساخت نقشه‌ی کف…','مدل‌سازی حجمی سه‌بعدی…'];
+  procLogItems = ['۴ عکس پردازش شد','۸ دیوار و ۳ بازشو تشخیص داده شد','ابعاد با خطای کمتر از ۵٪ تخمین زده شد'];
+
+  componentWillUnmount(){ clearInterval(this._ti); clearTimeout(this._tt); }
+  toggleTheme = () => this.setState(s=>({ theme:s.theme==='dark'?'light':'dark' }));
+  onArea = (e) => this.setState({ area:e.target.value });
+  setBeds = (b) => () => this.setState({ beds:b });
+  setStyle = (s) => () => this.setState({ style:s });
+  toggleOpen = () => this.setState(s=>({ open:!s.open }));
+  show2d = () => this.setState({ out:'2d' });
+  show3d = () => this.setState({ out:'3d' });
+  onSpin = (e) => this.setState({ spin:parseInt(e.target.value) });
+
+  generate = () => {
+    clearInterval(this._ti); clearTimeout(this._tt);
+    this.setState({ phase:'processing', procIdx:0 });
+    this._ti = setInterval(()=>this.setState(s=>({ procIdx:Math.min(s.procIdx+1,this.procSteps.length-1) })), 700);
+    this._tt = setTimeout(()=>{ clearInterval(this._ti); this.setState({ phase:'done', out:'2d' }); }, 3000);
+  };
+
+  toFa(s){ return String(s).replace(/[0-9]/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d]); }
+  toEn(s){ return String(s).replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)); }
+
+  renderVals(){
+    const t = this.themes[this.state.theme];
+    const rootStyle = Object.entries(t).map(([k,v])=>k+':'+v).join(';') + ';min-height:100vh;background:var(--bg);color:var(--text);font-family:Vazirmatn,sans-serif;transition:background .3s,color .3s';
+    const ph = this.state.phase;
+    // concrete colors for SVG presentation attributes (var() does NOT resolve there)
+    const cText=t['--text'], cMuted=t['--muted'], cGold=t['--gold'], cGoldDim=t['--goldDim'];
+    const resolve=(v)=> v==='var(--text)'?cText : v==='var(--muted)'?cMuted : v==='var(--gold)'?cGold : v==='var(--goldDim)'?cGoldDim : v;
+    const chip=(on)=>'padding:8px 12px;border-radius:10px;border:1px solid '+(on?'var(--gold)':'var(--line)')+';background:'+(on?'var(--goldDim)':'transparent')+';color:'+(on?'var(--text)':'var(--muted)')+';font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer;transition:.15s';
+    const tab=(on)=>'padding:6px 13px;border-radius:8px;border:none;font-family:inherit;font-size:12px;font-weight:'+(on?'700':'600')+';cursor:pointer;background:'+(on?'linear-gradient(140deg,var(--gold2),var(--gold))':'transparent')+';color:'+(on?'#16140f':'var(--muted)');
+
+    const stepState = ph==='idle'?0: ph==='processing'?1:2;
+    const steps=[{n:'۱',l:'ورودی'},{n:'۲',l:'پردازش AI'},{n:'۳',l:'خروجی'}].map((s,i)=>{
+      const active=i<=stepState;
+      return { n: i<stepState?'✓':s.n, l:s.l,
+        dotStyle:'width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;'+(active?'background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f':'background:var(--surface);border:1px solid var(--line);color:var(--muted)'),
+        labelStyle:'font-size:12.5px;font-weight:'+(active?'700':'500')+';color:'+(active?'var(--text)':'var(--muted)'),
+        barHide: i===2?'display:none':'' };
+    });
+
+    const knobOn=this.state.open;
+    // 2D rooms layout (depends on open plan)
+    const open=this.state.open;
+    const rooms = open ? [
+      { l:'نشیمن-آشپزخانه', x:20,y:20,w:220,h:160, fill:'var(--goldDim)' },
+      { l:'اتاق خواب ۱', x:240,y:20,w:140,h:130, fill:'transparent' },
+      { l:'اتاق خواب ۲', x:240,y:150,w:140,h:90, fill:'transparent' },
+      { l:'سرویس', x:20,y:180,w:95,h:100, fill:'transparent' },
+      { l:'راهرو', x:115,y:180,w:125,h:100, fill:'transparent' }
+    ] : [
+      { l:'نشیمن', x:20,y:20,w:160,h:160, fill:'var(--goldDim)' },
+      { l:'آشپزخانه', x:180,y:20,w:120,h:110, fill:'transparent' },
+      { l:'اتاق خواب ۱', x:300,y:20,w:80,h:130, fill:'transparent' },
+      { l:'اتاق خواب ۲', x:240,y:150,w:140,h:90, fill:'transparent' },
+      { l:'سرویس', x:20,y:180,w:90,h:100, fill:'transparent' }
+    ];
+    const areaN = parseFloat(this.toEn(this.state.area))||120;
+    const roomsR = rooms.map(r=>{
+      const frac = (r.w*r.h)/(360*260);
+      return { ...r, fill:resolve(r.fill), cx:r.x+r.w/2, cy:r.y+r.h/2, cy2:r.y+r.h/2+13, area:this.toFa(Math.round(areaN*frac))+'م²' };
+    });
+    const doors=['M240 70 A20 20 0 0 1 220 90','M115 210 A18 18 0 0 1 133 228','M180 60 A16 16 0 0 1 196 76'];
+
+    // ===== isometric 3D projection =====
+    const theta = (this.state.spin||0) * Math.PI/180;
+    const phi = 32 * Math.PI/180;          // fixed tilt
+    const cT=Math.cos(theta), sT=Math.sin(theta), sP=Math.sin(phi);
+    const cx=200, cy=150, s=0.66, oy=180;  // floor center + scale + screen origin Y
+    // project world (X,Y on floor plane, Z up) -> screen + depth
+    const proj=(X,Y,Z)=>{
+      const x=X-cx, y=Y-cy;
+      const rx = x*cT - y*sT;
+      const ry = x*sT + y*cT;
+      return { sx: 200 + rx*s, sy: oy + ry*s*sP - Z*s, depth: ry };
+    };
+    const pts=(arr)=>arr.map(p=>p.sx.toFixed(1)+','+p.sy.toFixed(1)).join(' ');
+    // room footprints (x,y,w,h on 360x260 floor) + height + palette
+    const palette=[
+      { top:'var(--goldDim)', tStroke:'var(--gold)', light:'rgba(201,169,106,0.42)', dark:'rgba(201,169,106,0.22)' },
+      { top:'rgba(122,143,174,0.30)', tStroke:'#7a8fae', light:'rgba(122,143,174,0.5)', dark:'rgba(122,143,174,0.28)' },
+      { top:'rgba(176,122,138,0.30)', tStroke:'#b07a8a', light:'rgba(176,122,138,0.5)', dark:'rgba(176,122,138,0.28)' },
+      { top:'rgba(122,168,143,0.30)', tStroke:'#7aa88f', light:'rgba(122,168,143,0.5)', dark:'rgba(122,168,143,0.28)' },
+      { top:'rgba(150,150,150,0.26)', tStroke:'var(--muted)', light:'rgba(160,160,160,0.4)', dark:'rgba(120,120,120,0.24)' }
+    ];
+    const fp = roomsR.map((r,i)=>({ x:r.x, y:r.y, w:r.w, h:r.h, H:90+(i%3)*22, l:r.l, p:palette[i%palette.length] }));
+    // floor slab polygon
+    const fc=[proj(20,20,0),proj(380,20,0),proj(380,280,0),proj(20,280,0)];
+    const floorPts = pts(fc);
+    // build faces (walls + roof) with painter depth
+    let faces=[]; let labels3d=[];
+    fp.forEach(r=>{
+      const x0=r.x,y0=r.y,x1=r.x+r.w,y1=r.y+r.h,H=r.H;
+      const corners={ a0:proj(x0,y0,0),b0:proj(x1,y0,0),c0:proj(x1,y1,0),d0:proj(x0,y1,0), aH:proj(x0,y0,H),bH:proj(x1,y0,H),cH:proj(x1,y1,H),dH:proj(x0,y1,H) };
+      // four walls
+      const walls=[
+        { q:[corners.a0,corners.b0,corners.bH,corners.aH], d:(corners.a0.depth+corners.b0.depth)/2, shade:r.p.light },
+        { q:[corners.b0,corners.c0,corners.cH,corners.bH], d:(corners.b0.depth+corners.c0.depth)/2, shade:r.p.dark },
+        { q:[corners.c0,corners.d0,corners.dH,corners.cH], d:(corners.c0.depth+corners.d0.depth)/2, shade:r.p.light },
+        { q:[corners.d0,corners.a0,corners.aH,corners.dH], d:(corners.d0.depth+corners.a0.depth)/2, shade:r.p.dark }
+      ];
+      walls.forEach(w=>faces.push({ pts:pts(w.q), fill:resolve(w.shade), stroke:cText, depth:w.d }));
+      // roof
+      const roof=[corners.aH,corners.bH,corners.cH,corners.dH];
+      const roofDepth=(corners.aH.depth+corners.cH.depth)/2;
+      faces.push({ pts:pts(roof), fill:resolve(r.p.top), stroke:resolve(r.p.tStroke), depth:roofDepth+0.01, roof:true });
+      // label at roof center
+      const lc=proj(x0+r.w/2,y0+r.h/2,H);
+      labels3d.push({ x:lc.sx.toFixed(1), y:lc.sy.toFixed(1), l:r.l, depth:roofDepth });
+    });
+    // painter's algorithm: farther (smaller depth = behind when ry large?) -> sort ascending by depth so far drawn first
+    faces.sort((a,b)=> a.depth-b.depth);
+    labels3d.sort((a,b)=> a.depth-b.depth);
+
+    return {
+      rootStyle, themeIcon:this.state.theme==='dark'?'☀':'☾', toggleTheme:this.toggleTheme,
+      steps,
+      area:this.state.area, onArea:this.onArea,
+      bedOpts:['۱','۲','۳','+۴'].map(b=>({ l:b, fn:this.setBeds(b), style:chip(this.state.beds===b) })),
+      styleOpts:['مدرن','کلاسیک','مینیمال'].map(s=>({ l:s, fn:this.setStyle(s), style:chip(this.state.style===s) })),
+      toggleOpen:this.toggleOpen,
+      switchStyle:'width:42px;height:24px;border-radius:999px;border:none;cursor:pointer;position:relative;transition:.2s;flex-shrink:0;background:'+(knobOn?'var(--gold)':'var(--line2)'),
+      knobStyle:'position:absolute;top:3px;'+(knobOn?'left:3px':'left:21px')+';width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s',
+      generate:this.generate,
+      genLabel: ph==='processing'?'در حال ساخت…':'✦ ساخت پلان و سه‌بعدی',
+
+      isIdle:ph==='idle', isProcessing:ph==='processing', isDone:ph==='done',
+      procStep:this.procSteps[this.state.procIdx],
+      procLog:this.procLogItems.slice(0,this.state.procIdx),
+
+      show2d:this.show2d, show3d:this.show3d,
+      tab2dStyle:tab(this.state.out==='2d'), tab3dStyle:tab(this.state.out==='3d'),
+      show2dPlan: ph==='done' && this.state.out==='2d',
+      show3dModel: ph==='done' && this.state.out==='3d',
+      cText, cMuted, cGold, cGoldDim,
+      rooms:roomsR, doors, roomCount:this.toFa(rooms.length), areaLabel:this.toFa(Math.round(areaN)),
+      floorPts, faces, labels3d, spin:this.state.spin, onSpin:this.onSpin
+    };
+  }
+}
+</script>
+</body>
+</html>

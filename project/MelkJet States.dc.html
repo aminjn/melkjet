@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{margin:0;font-family:'Vazirmatn',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:rgba(140,140,140,0.3);border-radius:8px}
+  @keyframes mjs-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+  @keyframes mjs-spin{to{transform:rotate(360deg)}}
+  @keyframes mjs-scan{0%{transform:translateX(0)}100%{transform:translateX(-100%)}}
+  @keyframes mjs-blink{0%,100%{opacity:1}50%{opacity:.25}}
+  @keyframes mjs-pop{0%{transform:scale(.4)}60%{transform:scale(1.18)}100%{transform:scale(1)}}
+  @keyframes mjs-toastin{from{transform:translateY(16px)}to{transform:translateY(0)}}
+  @keyframes mjs-check{from{stroke-dashoffset:32}to{stroke-dashoffset:0}}
+  @keyframes mjs-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+  .mjs-skel{background:linear-gradient(90deg,var(--sk1) 25%,var(--sk2) 50%,var(--sk1) 75%);background-size:200% 100%;animation:mjs-shimmer 1.4s linear infinite;border-radius:7px}
+  @media(max-width:880px){.mjs-nav{display:none!important}.mjs-main{padding:24px 18px!important}.mjs-3{grid-template-columns:1fr!important}.mjs-2{grid-template-columns:1fr!important}}
+</style>
+</helmet>
+<div dir="rtl" style="{{ rootStyle }}">
+  <div style="display:flex;max-width:1280px;margin:0 auto">
+
+    <!-- NAV -->
+    <aside class="mjs-nav" style="width:230px;flex-shrink:0;position:sticky;top:0;height:100vh;border-left:1px solid var(--line);padding:24px 18px;overflow:auto">
+      <a href="MelkJet.dc.html" style="display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--text);margin-bottom:6px">
+        <span style="width:32px;height:32px;border-radius:9px;background:linear-gradient(140deg,var(--gold2),var(--gold));display:flex;align-items:center;justify-content:center"><span style="width:12px;height:12px;background:var(--bg);transform:rotate(45deg);border-radius:2px"></span></span>
+        <div><div style="font-weight:800;font-size:16px;letter-spacing:-.5px">ملک‌جت</div><div style="font-size:10px;color:var(--gold)">حالت‌ها و الگوها</div></div>
+      </a>
+      <div style="font-size:11px;color:var(--faint);font-family:'JetBrains Mono',monospace;direction:ltr;text-align:left;padding:8px 0 14px;border-bottom:1px solid var(--line);margin-bottom:12px">States · Patterns</div>
+      <nav style="display:grid;gap:2px">
+        <sc-for list="{{ sections }}" as="s" hint-placeholder-count="4">
+          <a href="{{ s.href }}" style="padding:8px 11px;border-radius:9px;color:var(--muted);text-decoration:none;font-size:13px;font-weight:500" style-hover="background:var(--goldDim);color:var(--text)">{{ s.l }}</a>
+        </sc-for>
+      </nav>
+      <a href="MelkJet.dc.html" style="display:block;margin-top:18px;padding:9px 11px;border-radius:9px;background:var(--surface);border:1px solid var(--line);color:var(--muted);text-decoration:none;font-size:12px" style-hover="border-color:var(--gold);color:var(--text)">‹ مرکز ناوبری</a>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="mjs-main" style="flex:1;min-width:0;padding:32px 40px 100px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px">
+        <div>
+          <div style="font-size:12.5px;font-weight:700;color:var(--gold)">production-ready</div>
+          <h1 style="font-size:clamp(26px,4vw,38px);font-weight:800;letter-spacing:-1px;color:var(--text);margin-top:8px">حالت‌ها و میکرو‌اینتراکشن‌ها</h1>
+          <p style="font-size:15px;line-height:1.85;color:var(--muted);max-width:560px;margin-top:12px">هر تجربه‌ی واقعی نیاز به حالت‌های بارگذاری، خالی و خطا دارد. این الگوها در تمام صفحات ملک‌جت یکدست به‌کار می‌روند.</p>
+        </div>
+        <button onClick="{{ toggleTheme }}" style="flex-shrink:0;display:flex;align-items:center;gap:8px;height:42px;padding:0 16px;border:1px solid var(--line2);border-radius:12px;background:var(--surface);color:var(--text);font-family:inherit;font-weight:600;font-size:13px;cursor:pointer">{{ themeIcon }} {{ themeLabel }}</button>
+      </div>
+
+      <!-- ===== LOADING ===== -->
+      <section id="loading" style="margin-top:40px">
+        <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:18px;padding-bottom:12px;border-bottom:1px solid var(--line)">
+          <h2 style="font-size:21px;font-weight:800;color:var(--text)">۱ · بارگذاری</h2>
+          <span style="font-size:12.5px;color:var(--muted)">اسکلت، اسپینر، تحلیل AI</span>
+        </div>
+        <div class="mjs-3" style="display:grid;grid-template-columns:1.2fr 1fr;gap:16px">
+          <!-- skeleton card -->
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px">
+            <div style="font-size:12.5px;font-weight:700;color:var(--muted);margin-bottom:14px">اسکلت کارت ملک</div>
+            <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;overflow:hidden;max-width:280px">
+              <div class="mjs-skel" style="height:130px;border-radius:0"></div>
+              <div style="padding:14px;display:grid;gap:9px">
+                <div class="mjs-skel" style="height:18px;width:55%"></div>
+                <div class="mjs-skel" style="height:13px;width:80%"></div>
+                <div class="mjs-skel" style="height:13px;width:40%"></div>
+              </div>
+            </div>
+          </div>
+          <!-- spinners + AI -->
+          <div style="display:grid;gap:16px">
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px">
+              <div style="font-size:12.5px;font-weight:700;color:var(--muted);margin-bottom:16px">اسپینر و نوار پیشرفت</div>
+              <div style="display:flex;align-items:center;gap:18px">
+                <span style="width:34px;height:34px;border-radius:50%;border:3px solid var(--goldDim);border-top-color:var(--gold);animation:mjs-spin .8s linear infinite"></span>
+                <span style="width:26px;height:26px;border-radius:50%;border:2.5px solid var(--line);border-top-color:var(--text);animation:mjs-spin 1s linear infinite"></span>
+                <div style="flex:1;height:6px;border-radius:4px;background:var(--bg2);overflow:hidden"><div style="height:100%;width:40%;background:linear-gradient(90deg,transparent,var(--gold),transparent);animation:mjs-scan 1.1s linear infinite"></div></div>
+              </div>
+            </div>
+            <div style="background:var(--surface);border:1px solid var(--gold);border-radius:16px;padding:18px">
+              <div style="font-size:12.5px;font-weight:700;color:var(--gold);margin-bottom:14px">✦ تحلیل هوش مصنوعی</div>
+              <div style="display:flex;align-items:center;gap:11px">
+                <span style="width:30px;height:30px;border-radius:50%;border:2.5px solid var(--goldDim);border-top-color:var(--gold);animation:mjs-spin .8s linear infinite"></span>
+                <div style="flex:1"><div style="font-size:13px;color:var(--text);font-weight:600">در حال بررسی ۲٬۴۰۰ فایل…</div><div style="display:flex;gap:4px;margin-top:6px"><span style="width:6px;height:6px;border-radius:50%;background:var(--gold);animation:mjs-blink 1s infinite"></span><span style="width:6px;height:6px;border-radius:50%;background:var(--gold);animation:mjs-blink 1s .2s infinite"></span><span style="width:6px;height:6px;border-radius:50%;background:var(--gold);animation:mjs-blink 1s .4s infinite"></span></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- skeleton list rows -->
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px;margin-top:16px">
+          <div style="font-size:12.5px;font-weight:700;color:var(--muted);margin-bottom:14px">اسکلت ردیف لیست</div>
+          <div style="display:grid;gap:10px">
+            <sc-for list="{{ skelRows }}" as="r" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:12px">
+                <div class="mjs-skel" style="width:48px;height:48px;border-radius:10px;flex-shrink:0"></div>
+                <div style="flex:1;display:grid;gap:7px"><div class="mjs-skel" style="height:14px;width:45%"></div><div class="mjs-skel" style="height:11px;width:65%"></div></div>
+                <div class="mjs-skel" style="width:60px;height:24px;border-radius:999px"></div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== EMPTY ===== -->
+      <section id="empty" style="margin-top:44px">
+        <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:18px;padding-bottom:12px;border-bottom:1px solid var(--line)">
+          <h2 style="font-size:21px;font-weight:800;color:var(--text)">۲ · حالت خالی</h2>
+          <span style="font-size:12.5px;color:var(--muted)">با اقدام پیشنهادی، نه بن‌بست</span>
+        </div>
+        <div class="mjs-2" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <sc-for list="{{ emptyStates }}" as="e" hint-placeholder-count="4">
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:36px 24px;text-align:center;display:flex;flex-direction:column;align-items:center">
+              <div style="width:64px;height:64px;border-radius:18px;background:var(--goldDim);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:28px;animation:mjs-float 3s ease-in-out infinite">{{ e.ic }}</div>
+              <div style="font-size:16px;font-weight:700;color:var(--text);margin-top:18px">{{ e.t }}</div>
+              <div style="font-size:13px;color:var(--muted);margin-top:8px;line-height:1.7;max-width:280px">{{ e.d }}</div>
+              <button style="margin-top:18px;height:40px;padding:0 20px;border:none;border-radius:12px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer">{{ e.cta }}</button>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+
+      <!-- ===== ERROR ===== -->
+      <section id="error" style="margin-top:44px">
+        <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:18px;padding-bottom:12px;border-bottom:1px solid var(--line)">
+          <h2 style="font-size:21px;font-weight:800;color:var(--text)">۳ · خطا</h2>
+          <span style="font-size:12.5px;color:var(--muted)">روشن، بدون سرزنش، با راه خروج</span>
+        </div>
+        <div class="mjs-2" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <!-- 404 big -->
+          <div style="grid-column:1 / -1;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:34px;display:flex;align-items:center;gap:28px;flex-wrap:wrap">
+            <div style="font-size:clamp(48px,8vw,80px);font-weight:800;letter-spacing:-3px;background:linear-gradient(120deg,var(--gold2),var(--gold));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent">۴۰۴</div>
+            <div style="flex:1;min-width:200px">
+              <div style="font-size:18px;font-weight:700;color:var(--text)">این ملک دیگر در دسترس نیست</div>
+              <div style="font-size:13.5px;color:var(--muted);margin-top:8px;line-height:1.8">شاید فروخته شده یا آگهی حذف شده باشد. بگذار گزینه‌های مشابه را نشانت دهم.</div>
+              <div style="display:flex;gap:10px;margin-top:16px">
+                <button style="height:40px;padding:0 18px;border:none;border-radius:11px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer">مشاهده مشابه‌ها</button>
+                <button style="height:40px;padding:0 18px;border:1px solid var(--line2);border-radius:11px;background:var(--bg2);color:var(--text);font-family:inherit;font-weight:600;font-size:13px;cursor:pointer">بازگشت به خانه</button>
+              </div>
+            </div>
+          </div>
+          <!-- network -->
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:22px">
+            <div style="display:flex;align-items:center;gap:11px;margin-bottom:12px"><span style="width:36px;height:36px;border-radius:10px;background:rgba(231,103,74,0.15);color:#e7674a;display:flex;align-items:center;justify-content:center;font-size:17px">⚠</span><div style="font-size:15px;font-weight:700;color:var(--text)">اتصال قطع شد</div></div>
+            <div style="font-size:13px;color:var(--muted);line-height:1.8">اینترنت در دسترس نیست. تغییرات تو ذخیره شده و پس از اتصال همگام می‌شود.</div>
+            <button style="margin-top:14px;height:38px;padding:0 16px;border:1px solid var(--line2);border-radius:10px;background:var(--bg2);color:var(--text);font-family:inherit;font-weight:600;font-size:12.5px;cursor:pointer">↻ تلاش دوباره</button>
+          </div>
+          <!-- AI failure -->
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:22px">
+            <div style="display:flex;align-items:center;gap:11px;margin-bottom:12px"><span style="width:36px;height:36px;border-radius:10px;background:var(--goldDim);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:17px">✦</span><div style="font-size:15px;font-weight:700;color:var(--text)">دستیار در دسترس نیست</div></div>
+            <div style="font-size:13px;color:var(--muted);line-height:1.8">تحلیل هوشمند موقتاً ممکن نشد. می‌توانی از جستجوی کلاسیک با فیلترها استفاده کنی.</div>
+            <button style="margin-top:14px;height:38px;padding:0 16px;border:1px solid var(--gold);border-radius:10px;background:var(--goldDim);color:var(--gold);font-family:inherit;font-weight:700;font-size:12.5px;cursor:pointer">جستجوی کلاسیک</button>
+          </div>
+          <!-- form validation -->
+          <div style="grid-column:1 / -1;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:22px">
+            <div style="font-size:12.5px;font-weight:700;color:var(--muted);margin-bottom:14px">اعتبارسنجی فرم</div>
+            <div class="mjs-2" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+              <div>
+                <div style="font-size:12px;color:var(--muted);margin-bottom:7px">شماره موبایل</div>
+                <div style="display:flex;align-items:center;gap:9px;background:var(--bg2);border:1px solid #e7674a;border-radius:11px;padding:11px 14px"><input value="0912" style="flex:1;border:none;outline:none;background:transparent;color:var(--text);font-family:'JetBrains Mono',monospace;direction:ltr;font-size:13px"/><span style="color:#e7674a">✕</span></div>
+                <div style="font-size:11.5px;color:#e7674a;margin-top:6px;display:flex;align-items:center;gap:5px">⚠ شماره موبایل باید ۱۱ رقم باشد</div>
+              </div>
+              <div>
+                <div style="font-size:12px;color:var(--muted);margin-bottom:7px">کد تأیید</div>
+                <div style="display:flex;align-items:center;gap:9px;background:var(--bg2);border:1px solid #5fd98a;border-radius:11px;padding:11px 14px"><input value="۸۴۲۱۹" style="flex:1;border:none;outline:none;background:transparent;color:var(--text);font-size:13px"/><span style="color:#5fd98a">✓</span></div>
+                <div style="font-size:11.5px;color:#5fd98a;margin-top:6px;display:flex;align-items:center;gap:5px">✓ تأیید شد</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== MICRO-INTERACTIONS ===== -->
+      <section id="micro" style="margin-top:44px">
+        <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:18px;padding-bottom:12px;border-bottom:1px solid var(--line)">
+          <h2 style="font-size:21px;font-weight:800;color:var(--text)">۴ · میکرو‌اینتراکشن</h2>
+          <span style="font-size:12.5px;color:var(--muted)">امتحانشان کن — تعاملی‌اند</span>
+        </div>
+        <div class="mjs-3" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+          <!-- like -->
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:24px;text-align:center">
+            <div style="font-size:12.5px;font-weight:700;color:var(--muted);margin-bottom:18px">ذخیره / علاقه‌مندی</div>
+            <button onClick="{{ toggleLike }}" style="width:60px;height:60px;border-radius:18px;border:1px solid var(--line2);background:var(--bg2);cursor:pointer;font-size:26px;color:{{ likeColor }};transition:.2s">{{ likeIcon }}</button>
+            <div style="font-size:12px;color:var(--muted);margin-top:12px">{{ likeLabel }}</div>
+          </div>
+          <!-- success check -->
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:24px;text-align:center">
+            <div style="font-size:12.5px;font-weight:700;color:var(--muted);margin-bottom:18px">تأیید موفقیت</div>
+            <button onClick="{{ fireSuccess }}" style="width:60px;height:60px;border-radius:50%;border:none;background:{{ successBg }};cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:.3s">
+              <span style="{{ successIconStyle }}">✓</span>
+            </button>
+            <div style="font-size:12px;color:var(--muted);margin-top:12px">برای پخش کلیک کن</div>
+          </div>
+          <!-- toast trigger -->
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:24px;text-align:center">
+            <div style="font-size:12.5px;font-weight:700;color:var(--muted);margin-bottom:18px">اعلان (Toast)</div>
+            <div style="display:grid;gap:8px">
+              <button onClick="{{ toastOk }}" style="height:40px;border:none;border-radius:11px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer">اعلان موفقیت</button>
+              <button onClick="{{ toastErr }}" style="height:40px;border:1px solid var(--line2);border-radius:11px;background:var(--bg2);color:var(--text);font-family:inherit;font-weight:600;font-size:13px;cursor:pointer">اعلان خطا</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- TOAST -->
+  <sc-if value="{{ toastShow }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:80;display:flex;align-items:center;gap:11px;padding:13px 18px;border-radius:14px;background:var(--surface);border:1px solid {{ toastColor }};box-shadow:0 18px 44px -16px rgba(0,0,0,0.5);animation:mjs-toastin .25s ease both">
+      <span style="width:28px;height:28px;border-radius:9px;background:{{ toastColor }}22;color:{{ toastColor }};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800">{{ toastIcon }}</span>
+      <span style="font-size:13.5px;font-weight:600;color:var(--text)">{{ toastMsg }}</span>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:1000}}">
+class Component extends DCLogic {
+  state = { theme:'dark', liked:false, success:false, toast:null };
+  themes = {
+    dark:{ '--bg':'#0d0d0f','--bg2':'#141417','--surface':'#18181c','--sk1':'#1c1c20','--sk2':'#262629','--line':'rgba(255,255,255,0.08)','--line2':'rgba(255,255,255,0.14)','--text':'#f2f1ee','--muted':'#9a9a98','--faint':'#6a6a68','--gold':'#c9a96a','--gold2':'#e0c489','--goldDim':'rgba(201,169,106,0.12)' },
+    light:{ '--bg':'#f4f1ea','--bg2':'#faf7f1','--surface':'#ffffff','--sk1':'#ece8e0','--sk2':'#f6f3ed','--line':'rgba(26,24,20,0.09)','--line2':'rgba(26,24,20,0.16)','--text':'#1a1814','--muted':'#6b6862','--faint':'#9a968d','--gold':'#9c7a3c','--gold2':'#b8923f','--goldDim':'rgba(156,122,60,0.10)' }
+  };
+  componentWillUnmount(){ clearTimeout(this._st); clearTimeout(this._tt); }
+  toggleTheme = () => this.setState(s=>({ theme:s.theme==='dark'?'light':'dark' }));
+  toggleLike = () => this.setState(s=>({ liked:!s.liked }));
+  fireSuccess = () => { this.setState({ success:false }); clearTimeout(this._st); requestAnimationFrame(()=>{ this.setState({ success:true }); this._st=setTimeout(()=>this.setState({ success:false }), 1400); }); };
+  showToast = (kind) => { clearTimeout(this._tt); this.setState({ toast:kind }); this._tt=setTimeout(()=>this.setState({ toast:null }), 2600); };
+  toastOk = () => this.showToast('ok');
+  toastErr = () => this.showToast('err');
+
+  renderVals(){
+    const t = this.themes[this.state.theme];
+    const rootStyle = Object.entries(t).map(([k,v])=>k+':'+v).join(';') + ';min-height:100vh;background:var(--bg);color:var(--text);font-family:Vazirmatn,sans-serif;transition:background .3s,color .3s';
+    const dark = this.state.theme==='dark';
+    const tk = this.state.toast;
+    return {
+      rootStyle,
+      themeIcon: dark?'☀':'☾', themeLabel: dark?'حالت روشن':'حالت تیره', toggleTheme:this.toggleTheme,
+      sections:[ { l:'بارگذاری', href:'#loading' }, { l:'حالت خالی', href:'#empty' }, { l:'خطا', href:'#error' }, { l:'میکرو‌اینتراکشن', href:'#micro' } ],
+      skelRows:[1,2,3],
+      emptyStates:[
+        { ic:'⌕', t:'نتیجه‌ای یافت نشد', d:'با این فیلترها ملکی پیدا نشد. کمی بازه‌ی قیمت یا محله را گسترده‌تر کن.', cta:'بازنشانی فیلترها' },
+        { ic:'♥', t:'هنوز علاقه‌مندی نداری', d:'ملک‌هایی که ذخیره کنی اینجا جمع می‌شوند تا بعداً مقایسه کنی.', cta:'شروع جستجو' },
+        { ic:'◍', t:'لیدی ثبت نشده', d:'وقتی مشتری جدیدی فرم تماس را پر کند، اینجا ظاهر می‌شود.', cta:'افزودن دستی لید' },
+        { ic:'✦', t:'دستیار خرید را راه بینداز', d:'نیازت را یک بار بگو تا بازار را ۲۴ ساعته برایت بپایم.', cta:'تعریف نیاز' }
+      ],
+      liked:this.state.liked,
+      likeIcon: this.state.liked?'♥':'♡',
+      likeColor: this.state.liked?'#ff6b81':'var(--muted)',
+      likeLabel: this.state.liked?'ذخیره شد ✓':'برای ذخیره کلیک کن',
+      toggleLike:this.toggleLike,
+      fireSuccess:this.fireSuccess,
+      successBg: this.state.success?'#5fd98a':'var(--bg2)',
+      successIconStyle: 'font-size:26px;font-weight:800;color:'+(this.state.success?'#0a2a16':'var(--muted)')+';'+(this.state.success?'animation:mjs-pop .4s both':''),
+      toastOk:this.toastOk, toastErr:this.toastErr,
+      toastShow: !!tk,
+      toastColor: tk==='err'?'#e7674a':'#5fd98a',
+      toastIcon: tk==='err'?'✕':'✓',
+      toastMsg: tk==='err'?'خطا در ذخیره — دوباره تلاش کن':'با موفقیت ذخیره شد',
+    };
+  }
+}
+</script>
+</body>
+</html>

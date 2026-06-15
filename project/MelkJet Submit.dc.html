@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{margin:0;font-family:'Vazirmatn',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:rgba(140,140,140,0.3);border-radius:8px}
+  @keyframes mjs-fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  @keyframes mjs-glow{0%,100%{opacity:.4}50%{opacity:.9}}
+  @media(max-width:920px){.mjs-nav{display:none!important}.mjs-grid{grid-template-columns:1fr!important}.mjs-summary{position:static!important}}
+</style>
+</helmet>
+<div dir="rtl" style="{{ rootStyle }}">
+
+  <!-- NAV -->
+  <header style="position:sticky;top:0;z-index:50;backdrop-filter:blur(18px);background:var(--navbg);border-bottom:1px solid var(--line)">
+    <nav style="max-width:1140px;margin:0 auto;padding:0 22px;height:62px;display:flex;align-items:center;gap:20px">
+      <a href="MelkJet.dc.html" style="display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--text)">
+        <span style="width:32px;height:32px;border-radius:9px;background:linear-gradient(140deg,var(--gold2),var(--gold));display:flex;align-items:center;justify-content:center"><span style="width:12px;height:12px;background:var(--bg);transform:rotate(45deg);border-radius:2px"></span></span>
+        <div class="mjs-nav"><div style="font-weight:800;font-size:17px;letter-spacing:-.5px">ملک‌جت</div><div style="font-size:10px;color:var(--gold)">ثبت آگهی</div></div>
+      </a>
+      <div style="flex:1"></div>
+      <a href="MelkJet Owner.dc.html" style="font-size:13px;font-weight:600;color:var(--muted);text-decoration:none" style-hover="color:var(--text)">میز کار من ←</a>
+      <button onClick="{{ toggleTheme }}" aria-label="theme" style="width:38px;height:38px;border-radius:11px;border:1px solid var(--line);background:var(--surface);color:var(--text);cursor:pointer;font-size:14px">{{ themeIcon }}</button>
+    </nav>
+  </header>
+
+  <main style="max-width:1140px;margin:0 auto;padding:26px 22px 90px">
+    <div style="margin-bottom:22px"><h1 style="font-size:clamp(22px,3vw,30px);font-weight:800;letter-spacing:-.5px;color:var(--text)">ثبت آگهی جدید</h1><p style="font-size:14px;color:var(--muted);margin-top:7px">اطلاعات ملک را وارد کن — هوش مصنوعی به تکمیل، قیمت‌گذاری و ساخت پلان کمکت می‌کند.</p></div>
+
+    <!-- STEP RAIL -->
+    <div style="display:flex;align-items:center;gap:5px;margin-bottom:24px;flex-wrap:wrap">
+      <sc-for list="{{ steps }}" as="st" hint-placeholder-count="5">
+        <button onClick="{{ st.fn }}" style="display:flex;align-items:center;gap:8px;background:none;border:none;cursor:pointer;font-family:inherit;padding:0"><span style="{{ st.dotStyle }}">{{ st.n }}</span><span style="{{ st.labelStyle }}">{{ st.l }}</span></button>
+        <span style="width:20px;height:1.5px;background:var(--line);{{ st.barHide }}"></span>
+      </sc-for>
+    </div>
+
+    <div class="mjs-grid" style="display:grid;grid-template-columns:1fr 300px;gap:20px;align-items:start">
+      <!-- FORM -->
+      <div style="background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:24px;min-height:420px">
+
+        <!-- step 1: type -->
+        <sc-if value="{{ s1 }}" hint-placeholder-val="{{ true }}">
+          <div style="animation:mjs-fade .3s both;display:grid;gap:20px">
+            <div><div style="{{ secTitle }}">نوع معامله</div><div style="display:flex;gap:9px;flex-wrap:wrap"><sc-for list="{{ deals }}" as="d" hint-placeholder-count="4"><button onClick="{{ d.fn }}" style="{{ d.style }}">{{ d.l }}</button></sc-for></div></div>
+            <div><div style="{{ secTitle }}">نوع ملک</div><div style="display:flex;gap:9px;flex-wrap:wrap"><sc-for list="{{ ptypes }}" as="p" hint-placeholder-count="6"><button onClick="{{ p.fn }}" style="{{ p.style }}">{{ p.ic }} {{ p.l }}</button></sc-for></div></div>
+          </div>
+        </sc-if>
+
+        <!-- step 2: location -->
+        <sc-if value="{{ s2 }}" hint-placeholder-val="{{ false }}">
+          <div style="animation:mjs-fade .3s both;display:grid;gap:18px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+              <div><div style="{{ fieldLabel }}">استان</div><div style="{{ selectBox }}">تهران ▾</div></div>
+              <div><div style="{{ fieldLabel }}">شهر</div><div style="{{ selectBox }}">تهران ▾</div></div>
+            </div>
+            <div><div style="{{ fieldLabel }}">منطقه / محله</div><input placeholder="مثلاً سعادت‌آباد، بلوار دریا" style="{{ inputBox }}"/></div>
+            <div><div style="{{ fieldLabel }}">نشانی دقیق (نمایش داده نمی‌شود)</div><input placeholder="خیابان، کوچه، پلاک" style="{{ inputBox }}"/></div>
+            <div style="height:150px;border-radius:13px;border:1px solid var(--line2);background:linear-gradient(135deg,#23272a,#15181a);position:relative;overflow:hidden"><div style="position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,0.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.05) 1px,transparent 1px);background-size:30px 30px"></div><div style="position:absolute;top:50%;right:50%;transform:translate(50%,-50%);width:18px;height:18px;border-radius:50% 50% 50% 0;background:var(--gold);transform-origin:center;rotate:-45deg"></div><span style="position:absolute;bottom:10px;right:12px;font-family:monospace;font-size:10px;color:var(--faint)">انتخاب روی نقشه</span></div>
+          </div>
+        </sc-if>
+
+        <!-- step 3: specs -->
+        <sc-if value="{{ s3 }}" hint-placeholder-val="{{ false }}">
+          <div style="animation:mjs-fade .3s both;display:grid;gap:18px">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+              <div><div style="{{ fieldLabel }}">متراژ (م²)</div><input value="۱۴۰" style="{{ inputBox }}"/></div>
+              <div><div style="{{ fieldLabel }}">خواب</div><input value="۳" style="{{ inputBox }}"/></div>
+              <div><div style="{{ fieldLabel }}">سال ساخت</div><input value="۱۴۰۲" style="{{ inputBox }}"/></div>
+            </div>
+            <div><div style="{{ secTitle }}">امکانات</div><div style="display:flex;gap:8px;flex-wrap:wrap"><sc-for list="{{ amens }}" as="a" hint-placeholder-count="6"><button onClick="{{ a.fn }}" style="{{ a.style }}">{{ a.l }}</button></sc-for></div></div>
+            <div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px"><span style="{{ fieldLabel }}">توضیحات</span><button onClick="{{ writeAi }}" style="font-size:11.5px;font-weight:700;color:var(--gold);background:var(--goldDim);border:1px solid var(--gold);border-radius:8px;padding:5px 11px;cursor:pointer;font-family:inherit">✦ نگارش با AI</button></div><textarea value="{{ desc }}" onInput="{{ onDesc }}" rows="4" placeholder="توضیحات ملک…" style="{{ inputBox }};resize:none;line-height:1.7"></textarea></div>
+          </div>
+        </sc-if>
+
+        <!-- step 4: media + AI PLAN/3D -->
+        <sc-if value="{{ s4 }}" hint-placeholder-val="{{ false }}">
+          <div style="animation:mjs-fade .3s both;display:grid;gap:20px">
+            <div><div style="{{ secTitle }}">عکس‌های ملک</div>
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+                <x-import component-from-global-scope="image-slot" from="./image-slot.js" id="sub-shot-1" shape="rounded" radius="12" placeholder="عکس ۱" style="width:100%;height:90px" hint-size="100%,90px"></x-import>
+                <x-import component-from-global-scope="image-slot" from="./image-slot.js" id="sub-shot-2" shape="rounded" radius="12" placeholder="عکس ۲" style="width:100%;height:90px" hint-size="100%,90px"></x-import>
+                <x-import component-from-global-scope="image-slot" from="./image-slot.js" id="sub-shot-3" shape="rounded" radius="12" placeholder="عکس ۳" style="width:100%;height:90px" hint-size="100%,90px"></x-import>
+                <x-import component-from-global-scope="image-slot" from="./image-slot.js" id="sub-shot-4" shape="rounded" radius="12" placeholder="عکس ۴" style="width:100%;height:90px" hint-size="100%,90px"></x-import>
+              </div>
+            </div>
+
+            <!-- AI PLAN & 3D — featured feature -->
+            <div style="{{ planCardStyle }}">
+              <div style="position:absolute;inset:0;background:radial-gradient(300px 130px at 92% 0,var(--goldDim),transparent);pointer-events:none"></div>
+              <div style="position:relative">
+                <div style="display:flex;align-items:flex-start;gap:13px">
+                  <span style="width:42px;height:42px;flex-shrink:0;border-radius:12px;background:linear-gradient(140deg,var(--gold2),var(--gold));display:flex;align-items:center;justify-content:center;color:#16140f;font-size:20px;font-weight:800">◈</span>
+                  <div style="flex:1">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:15px;font-weight:700;color:var(--text)">پلان و مدل سه‌بعدی هوشمند</span><span style="font-size:10.5px;font-weight:700;color:var(--gold);background:var(--goldDim);border:1px solid var(--gold);border-radius:999px;padding:2px 9px">ویژه ★</span></div>
+                    <div style="font-size:12.5px;color:var(--muted);margin-top:6px;line-height:1.7">از روی همین عکس‌ها، نقشه‌ی کف دوبعدی و مدل سه‌بعدی قابل‌چرخش بساز. آگهی‌های دارای پلان و مدل سه‌بعدی <b style="color:var(--text)">۳ برابر</b> بازدید بیشتری می‌گیرند.</div>
+                  </div>
+                </div>
+                <!-- gated -->
+                <sc-if value="{{ planLocked }}" hint-placeholder-val="{{ true }}">
+                  <div style="margin-top:15px;display:flex;align-items:center;gap:11px;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:12px 14px">
+                    <span style="color:var(--muted);font-size:15px">🔒</span>
+                    <div style="flex:1;font-size:12.5px;color:var(--muted)">این قابلیت بخشی از <b style="color:var(--text)">آگهی ویژه</b> است.</div>
+                    <button onClick="{{ enableFeatured }}" style="font-size:12px;font-weight:700;color:#16140f;background:linear-gradient(140deg,var(--gold2),var(--gold));border:none;border-radius:9px;padding:8px 13px;cursor:pointer;font-family:inherit;white-space:nowrap">ارتقا به ویژه</button>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ planUnlocked }}" hint-placeholder-val="{{ false }}">
+                  <a href="MelkJet PlanAI.dc.html" style="margin-top:15px;display:flex;align-items:center;justify-content:center;gap:9px;height:46px;border-radius:12px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;text-decoration:none;font-weight:700;font-size:14px" style-hover="filter:brightness(1.05)">◈ ساخت پلان و مدل سه‌بعدی →</a>
+                  <div style="margin-top:9px;font-size:11px;color:var(--muted);text-align:center">در استودیوی بینایی هوشمند باز می‌شود</div>
+                </sc-if>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- step 5: price + publish -->
+        <sc-if value="{{ s5 }}" hint-placeholder-val="{{ false }}">
+          <div style="animation:mjs-fade .3s both;display:grid;gap:18px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+              <div><div style="{{ fieldLabel }}">قیمت کل (میلیارد تومان)</div><input value="{{ price }}" onInput="{{ onPrice }}" style="{{ inputBox }}"/></div>
+              <div><div style="{{ fieldLabel }}">قیمت هر متر (میلیون)</div><div style="{{ selectBox }};color:var(--muted)">محاسبه خودکار</div></div>
+            </div>
+            <!-- AI price hint -->
+            <div style="display:flex;gap:11px;background:var(--surface2,var(--bg2));border:1px solid var(--gold);border-radius:13px;padding:14px;position:relative;overflow:hidden">
+              <span style="width:30px;height:30px;flex-shrink:0;border-radius:9px;background:linear-gradient(140deg,var(--gold2),var(--gold));display:flex;align-items:center;justify-content:center;color:#16140f;font-weight:800;font-size:14px">✦</span>
+              <div style="font-size:12.5px;line-height:1.8;color:var(--text)">تحلیل قیمت ملک‌جت: قیمت پیشنهادی شما <b style="color:#5fd98a">منصفانه</b> است. بازه‌ی بازار برای این ملک: <b style="color:var(--gold)">۱۶٫۵ تا ۱۸٫۲ میلیارد</b>.</div>
+            </div>
+            <label style="display:flex;align-items:center;gap:11px;cursor:pointer;background:var(--bg2);border:1px solid {{ featuredBorder }};border-radius:13px;padding:14px"><button onClick="{{ toggleFeatured }}" style="{{ switchStyle }}"><span style="{{ knobStyle }}"></span></button><div style="flex:1"><div style="font-size:13.5px;font-weight:700;color:var(--text)">آگهی ویژه ★</div><div style="font-size:11.5px;color:var(--muted);margin-top:2px">نمایش در صدر نتایج + پلان و مدل سه‌بعدی + نشان ویژه</div></div><span style="font-size:13px;font-weight:800;color:var(--gold)">۲۹۰ هزار/ماه</span></label>
+          </div>
+        </sc-if>
+
+        <!-- nav buttons -->
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:26px;padding-top:20px;border-top:1px solid var(--line)">
+          <button onClick="{{ back }}" style="{{ backStyle }}">→ مرحله قبل</button>
+          <button onClick="{{ next }}" style="height:44px;padding:0 22px;border:none;border-radius:12px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-weight:700;font-size:14px;cursor:pointer">{{ nextLabel }}</button>
+        </div>
+      </div>
+
+      <!-- SUMMARY -->
+      <div class="mjs-summary" style="position:sticky;top:82px;display:grid;gap:14px">
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden">
+          <div style="height:120px;background:linear-gradient(135deg,#3a3530,#211e1b);position:relative"><div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,transparent,transparent 8px,rgba(255,255,255,0.03) 8px,rgba(255,255,255,0.03) 9px)"></div><sc-if value="{{ featured }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:10px;right:10px;font-size:10.5px;font-weight:700;color:#16140f;background:linear-gradient(140deg,var(--gold2),var(--gold));border-radius:999px;padding:3px 10px">ویژه ★</span></sc-if><span style="position:absolute;bottom:8px;right:10px;font-family:monospace;font-size:9.5px;color:rgba(255,255,255,0.45)">پیش‌نمایش آگهی</span></div>
+          <div style="padding:15px">
+            <div style="font-size:13px;color:var(--muted)">{{ summaryType }}</div>
+            <div style="font-size:15px;font-weight:700;color:var(--text);margin-top:5px">{{ summaryTitle }}</div>
+            <div style="font-size:18px;font-weight:800;color:var(--gold);margin-top:8px">{{ summaryPrice }}</div>
+          </div>
+        </div>
+        <sc-if value="{{ featured }}" hint-placeholder-val="{{ false }}">
+          <div style="background:var(--goldDim);border:1px solid var(--gold);border-radius:14px;padding:13px;display:flex;gap:9px;align-items:flex-start"><span style="color:var(--gold);font-size:14px">◈</span><div style="font-size:11.5px;line-height:1.7;color:var(--text)">پلان و مدل سه‌بعدی برای این آگهی فعال است.</div></div>
+        </sc-if>
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px"><div style="font-size:11.5px;font-weight:700;color:var(--muted);margin-bottom:9px">پیشرفت تکمیل</div><div style="height:6px;border-radius:4px;background:var(--bg2);overflow:hidden"><div style="height:100%;width:{{ progress }};background:linear-gradient(90deg,var(--gold2),var(--gold));border-radius:4px;transition:.3s"></div></div><div style="font-size:11px;color:var(--muted);margin-top:7px">{{ progress }} تکمیل شده</div></div>
+      </div>
+    </div>
+  </main>
+
+  <a href="MelkJet.dc.html" aria-label="home" style="position:fixed;bottom:22px;left:22px;z-index:60;width:52px;height:52px;border-radius:16px;text-decoration:none;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-size:19px;font-weight:800;box-shadow:0 14px 34px -10px var(--gold);display:flex;align-items:center;justify-content:center">✦</a>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1140,&quot;height&quot;:840}}">
+class Component extends DCLogic {
+  state = { theme:'dark', step:1, deal:'فروش', ptype:'آپارتمان', amens:{'آسانسور':true,'پارکینگ':true}, desc:'', price:'۱۷٫۸', featured:false };
+  themes = {
+    dark:{ '--bg':'#0d0d0f','--bg2':'#141417','--surface':'#18181c','--surface2':'#1f1f24','--navbg':'rgba(13,13,15,0.72)','--line':'rgba(255,255,255,0.08)','--line2':'rgba(255,255,255,0.14)','--text':'#f2f1ee','--muted':'#9a9a98','--faint':'#6a6a68','--gold':'#c9a96a','--gold2':'#e0c489','--goldDim':'rgba(201,169,106,0.12)' },
+    light:{ '--bg':'#f4f1ea','--bg2':'#faf7f1','--surface':'#ffffff','--surface2':'#faf7f1','--navbg':'rgba(244,241,234,0.82)','--line':'rgba(26,24,20,0.09)','--line2':'rgba(26,24,20,0.16)','--text':'#1a1814','--muted':'#6b6862','--faint':'#9a968d','--gold':'#9c7a3c','--gold2':'#b8923f','--goldDim':'rgba(156,122,60,0.10)' }
+  };
+  toggleTheme = () => this.setState(s=>({ theme:s.theme==='dark'?'light':'dark' }));
+  goStep = (n) => () => this.setState({ step:n });
+  next = () => this.setState(s=>({ step:Math.min(s.step+1,5) }));
+  back = () => this.setState(s=>({ step:Math.max(s.step-1,1) }));
+  setDeal = (d) => () => this.setState({ deal:d });
+  setPtype = (p) => () => this.setState({ ptype:p });
+  toggleAmen = (a) => () => this.setState(s=>({ amens:{...s.amens,[a]:!s.amens[a]} }));
+  onDesc = (e) => this.setState({ desc:e.target.value });
+  writeAi = () => this.setState({ desc:'آپارتمان نوساز و خوش‌نقشه با نورگیری عالی، کفپوش سرامیک درجه‌یک، آشپزخانه اپن مدرن، و دسترسی آسان به مترو و مراکز خرید. سند تک‌برگ، آماده‌ی بازدید.' });
+  onPrice = (e) => this.setState({ price:e.target.value });
+  toggleFeatured = () => this.setState(s=>({ featured:!s.featured }));
+  enableFeatured = () => this.setState({ featured:true });
+
+  renderVals(){
+    const t = this.themes[this.state.theme];
+    const rootStyle = Object.entries(t).map(([k,v])=>k+':'+v).join(';') + ';min-height:100vh;background:var(--bg);color:var(--text);font-family:Vazirmatn,sans-serif;transition:background .3s,color .3s';
+    const step=this.state.step;
+    const chip=(on)=>'padding:9px 14px;border-radius:11px;border:1px solid '+(on?'var(--gold)':'var(--line)')+';background:'+(on?'var(--goldDim)':'transparent')+';color:'+(on?'var(--text)':'var(--muted)')+';font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:.15s';
+    const amenChip=(on)=>'padding:8px 12px;border-radius:999px;border:1px solid '+(on?'var(--gold)':'var(--line)')+';background:'+(on?'var(--goldDim)':'transparent')+';color:'+(on?'var(--text)':'var(--muted)')+';font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;transition:.15s';
+    const secTitle='font-size:13.5px;font-weight:700;color:var(--text);margin-bottom:11px';
+    const fieldLabel='font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px';
+    const inputBox='width:100%;border:1px solid var(--line2);border-radius:11px;background:var(--bg2);color:var(--text);font-family:inherit;font-size:13.5px;padding:11px 13px;outline:none';
+    const selectBox='width:100%;border:1px solid var(--line2);border-radius:11px;background:var(--bg2);color:var(--text);font-size:13.5px;padding:11px 13px;display:flex;align-items:center;justify-content:space-between;cursor:pointer';
+
+    const stepNames=['','نوع','موقعیت','مشخصات','عکس و پلان','قیمت و انتشار'];
+    const steps=[1,2,3,4,5].map(n=>{
+      const done=n<step, active=n===step;
+      return { n:done?'✓':this.toFa(n), l:stepNames[n], fn:this.goStep(n),
+        dotStyle:'width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;transition:.15s;'+((active||done)?'background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f':'background:var(--surface);border:1px solid var(--line);color:var(--muted)'),
+        labelStyle:'font-size:12.5px;font-weight:'+(active?'700':'500')+';color:'+((active||done)?'var(--text)':'var(--muted)'),
+        barHide: n===5?'display:none':'' };
+    });
+
+    const fmtPrice = (this.state.price||'')+' میلیارد';
+    return {
+      rootStyle, themeIcon:this.state.theme==='dark'?'☀':'☾', toggleTheme:this.toggleTheme,
+      steps, secTitle, fieldLabel, inputBox, selectBox,
+      s1:step===1, s2:step===2, s3:step===3, s4:step===4, s5:step===5,
+      deals:['فروش','اجاره','رهن کامل','پیش‌فروش'].map(d=>({ l:d, fn:this.setDeal(d), style:chip(this.state.deal===d) })),
+      ptypes:[{l:'آپارتمان',ic:'⌂'},{l:'ویلا',ic:'⌂'},{l:'زمین',ic:'▦'},{l:'تجاری',ic:'▣'},{l:'اداری',ic:'▤'},{l:'کلنگی',ic:'◫'}].map(p=>({ l:p.l, ic:p.ic, fn:this.setPtype(p.l), style:chip(this.state.ptype===p.l) })),
+      amens:['آسانسور','پارکینگ','انباری','بالکن','استخر','روف‌گاردن'].map(a=>({ l:a, fn:this.toggleAmen(a), style:amenChip(!!this.state.amens[a]) })),
+      desc:this.state.desc, onDesc:this.onDesc, writeAi:this.writeAi,
+      price:this.state.price, onPrice:this.onPrice,
+
+      // featured / plan gating
+      featured:this.state.featured,
+      planLocked:!this.state.featured, planUnlocked:this.state.featured,
+      enableFeatured:this.enableFeatured, toggleFeatured:this.toggleFeatured,
+      planCardStyle:'position:relative;overflow:hidden;border-radius:16px;padding:18px;border:1px solid '+(this.state.featured?'var(--gold)':'var(--line2)')+';background:var(--surface2,var(--bg2))',
+      featuredBorder:this.state.featured?'var(--gold)':'var(--line2)',
+      switchStyle:'width:42px;height:24px;border-radius:999px;border:none;cursor:pointer;position:relative;transition:.2s;flex-shrink:0;background:'+(this.state.featured?'var(--gold)':'var(--line2)'),
+      knobStyle:'position:absolute;top:3px;'+(this.state.featured?'left:3px':'left:21px')+';width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s',
+
+      back:this.back, next: step===5?(()=>{}):this.next,
+      backStyle:'height:44px;padding:0 18px;border:1px solid var(--line2);border-radius:12px;background:transparent;color:var(--text);font-family:inherit;font-weight:600;font-size:13.5px;cursor:pointer;'+(step===1?'visibility:hidden':''),
+      nextLabel: step===5?'انتشار آگهی ✓':'مرحله بعد ←',
+
+      summaryType:this.state.deal+' · '+this.state.ptype,
+      summaryTitle:this.state.ptype+' در سعادت‌آباد',
+      summaryPrice:fmtPrice,
+      progress:this.toFa(step*20)+'٪'
+    };
+  }
+  toFa(s){ return String(s).replace(/[0-9]/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d]); }
+}
+</script>
+</body>
+</html>

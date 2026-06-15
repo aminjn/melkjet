@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{margin:0;font-family:'Vazirmatn',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:rgba(140,140,140,0.3);border-radius:8px}
+  @keyframes mjk-pulse{0%,100%{opacity:.45}50%{opacity:1}}
+  @keyframes mjk-spin{to{transform:rotate(360deg)}}
+  @media(max-width:920px){.mjk-side{width:62px!important;padding:14px 8px!important}.mjk-sidelabel{display:none!important}.mjk-kpi{grid-template-columns:repeat(2,1fr)!important}.mjk-2col{grid-template-columns:1fr!important}}
+</style>
+</helmet>
+<div dir="rtl" style="{{ rootStyle }}">
+  <div style="display:flex;min-height:100vh">
+
+    <!-- SIDEBAR -->
+    <aside class="mjk-side" style="width:236px;flex-shrink:0;position:sticky;top:0;height:100vh;background:var(--bg2);border-left:1px solid var(--line);display:flex;flex-direction:column;padding:18px 13px">
+      <a href="MelkJet CRM.dc.html" style="display:flex;align-items:center;gap:11px;text-decoration:none;color:var(--text);padding:6px 8px 16px">
+        <span style="width:34px;height:34px;border-radius:10px;background:linear-gradient(140deg,var(--gold2),var(--gold));display:flex;align-items:center;justify-content:center"><span style="width:13px;height:13px;background:var(--bg2);transform:rotate(45deg);border-radius:2px"></span></span>
+        <div class="mjk-sidelabel"><div style="font-weight:800;font-size:16px;letter-spacing:-.5px">ملک‌جت</div><div style="font-size:10px;color:var(--gold)">مارکتینگ</div></div>
+      </a>
+      <nav style="display:grid;gap:3px;margin-top:6px">
+        <sc-for list="{{ menu }}" as="m" hint-placeholder-count="6">
+          <button onClick="{{ m.fn }}" style="{{ m.style }}"><span style="width:22px;text-align:center;font-size:15px;flex-shrink:0">{{ m.ic }}</span><span class="mjk-sidelabel" style="flex:1;text-align:right">{{ m.l }}</span></button>
+        </sc-for>
+      </nav>
+      <div style="flex:1"></div>
+      <div class="mjk-sidelabel" style="display:grid;gap:6px">
+        <a href="MelkJet CRM.dc.html" style="display:block;padding:9px 11px;border-radius:9px;background:var(--surface);border:1px solid var(--line);color:var(--muted);text-decoration:none;font-size:12px" style-hover="border-color:var(--gold);color:var(--text)">◍ CRM مشتریان</a>
+        <a href="MelkJet Website Builder.dc.html?role=advisor" style="display:block;padding:9px 11px;border-radius:9px;background:var(--surface);border:1px solid var(--line);color:var(--muted);text-decoration:none;font-size:12px" style-hover="border-color:var(--gold);color:var(--text)">◧ وب‌سایت‌ساز</a>
+        <a href="MelkJet CRM.dc.html" style="display:block;padding:9px 11px;border-radius:9px;background:var(--goldDim);border:1px solid var(--gold);color:var(--gold);text-decoration:none;font-size:12px;font-weight:700;text-align:center" style-hover="background:var(--gold);color:#16140f">‹ بازگشت به میز کار</a>
+      </div>
+      <div class="mjk-sidelabel" style="display:flex;align-items:center;gap:10px;padding:12px 6px 2px;margin-top:10px;border-top:1px solid var(--line)">
+        <div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#caa86a,#8a6f3e);flex-shrink:0"></div>
+        <div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:700;color:var(--text)">سارا محمدی</div><div style="font-size:10px;color:var(--muted)">پلن حرفه‌ای</div></div>
+        <button onClick="{{ toggleTheme }}" aria-label="theme" style="width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--text);cursor:pointer;font-size:12px">{{ themeIcon }}</button>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+      <header style="position:sticky;top:0;z-index:30;background:var(--navbg);backdrop-filter:blur(16px);border-bottom:1px solid var(--line);padding:0 24px;height:60px;display:flex;align-items:center;gap:14px">
+        <div style="font-size:17px;font-weight:800;color:var(--text);letter-spacing:-.4px">{{ viewTitle }}</div>
+        <div style="flex:1"></div>
+        <button onClick="{{ goAi }}" style="display:flex;align-items:center;gap:7px;height:40px;padding:0 15px;border:1px solid var(--gold);border-radius:11px;background:var(--goldDim);color:var(--gold);font-family:inherit;font-weight:700;font-size:13px;cursor:pointer">✦ ساخت با AI</button>
+      </header>
+
+      <main style="flex:1;padding:24px;overflow:auto">
+
+        <!-- ===== CAMPAIGNS ===== -->
+        <sc-if value="{{ isCampaigns }}" hint-placeholder-val="{{ true }}">
+          <div style="display:grid;gap:18px">
+            <div class="mjk-kpi" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+              <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="4">
+                <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px">
+                  <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12px;color:var(--muted)">{{ k.l }}</span><span style="width:28px;height:28px;border-radius:8px;background:var(--goldDim);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:13px">{{ k.ic }}</span></div>
+                  <div style="font-size:24px;font-weight:800;color:var(--text);margin-top:12px;letter-spacing:-.5px">{{ k.v }}</div>
+                  <div style="font-size:11.5px;color:{{ k.c }};margin-top:4px">{{ k.t }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line)"><div style="font-size:15px;font-weight:700;color:var(--text)">کمپین‌ها</div><button onClick="{{ goAi }}" style="height:36px;padding:0 14px;border:none;border-radius:10px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-weight:700;font-size:12.5px;cursor:pointer">＋ کمپین جدید</button></div>
+              <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:720px">
+                <thead><tr style="background:var(--bg2)"><th style="{{ th }}">کمپین</th><th style="{{ th }}">کانال</th><th style="{{ th }}">مخاطب</th><th style="{{ th }}">نرخ باز شدن</th><th style="{{ th }}">تبدیل</th><th style="{{ th }}">وضعیت</th></tr></thead>
+                <tbody>
+                  <sc-for list="{{ campaigns }}" as="c" hint-placeholder-count="5">
+                    <tr style="border-top:1px solid var(--line)">
+                      <td style="padding:13px 18px"><div style="font-size:13px;font-weight:600;color:var(--text)">{{ c.name }}</div><div style="font-size:11px;color:var(--muted)">{{ c.date }}</div></td>
+                      <td style="padding:13px 18px"><span style="{{ c.chanStyle }}">{{ c.chanIc }} {{ c.channel }}</span></td>
+                      <td style="padding:13px 18px;font-size:12.5px;color:var(--text)">{{ c.audience }}</td>
+                      <td style="padding:13px 18px"><div style="display:flex;align-items:center;gap:8px"><div style="width:52px;height:6px;border-radius:4px;background:var(--bg2);overflow:hidden"><div style="height:100%;width:{{ c.open }};background:var(--gold);border-radius:4px"></div></div><span style="font-size:11.5px;color:var(--muted)">{{ c.open }}</span></div></td>
+                      <td style="padding:13px 18px;font-size:13px;font-weight:700;color:#5fd98a">{{ c.conv }}</td>
+                      <td style="padding:13px 18px"><span style="{{ c.statusStyle }}">{{ c.status }}</span></td>
+                    </tr>
+                  </sc-for>
+                </tbody>
+              </table></div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ===== AI GENERATOR ===== -->
+        <sc-if value="{{ isAi }}" hint-placeholder-val="{{ false }}">
+          <div class="mjk-2col" style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;max-width:1000px">
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:22px">
+              <div style="display:flex;align-items:center;gap:11px;margin-bottom:18px"><span style="width:34px;height:34px;border-radius:10px;background:linear-gradient(140deg,var(--gold2),var(--gold));display:flex;align-items:center;justify-content:center;color:#16140f;font-weight:800">✦</span><div style="font-size:16px;font-weight:700;color:var(--text)">سازنده‌ی کمپین هوشمند</div></div>
+              <div style="display:grid;gap:16px">
+                <div><div style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:8px">هدف کمپین</div><div style="display:flex;flex-wrap:wrap;gap:7px"><sc-for list="{{ goals }}" as="g" hint-placeholder-count="3"><button onClick="{{ g.fn }}" style="{{ g.style }}">{{ g.l }}</button></sc-for></div></div>
+                <div><div style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:8px">کانال</div><div style="display:flex;flex-wrap:wrap;gap:7px"><sc-for list="{{ aiChannels }}" as="ch" hint-placeholder-count="4"><button onClick="{{ ch.fn }}" style="{{ ch.style }}">{{ ch.ic }} {{ ch.l }}</button></sc-for></div></div>
+                <div><div style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:8px">مخاطب هدف</div><div style="background:var(--bg2);border:1px solid var(--line2);border-radius:11px;padding:12px 14px;font-size:13px;color:var(--text)">خریداران علاقه‌مند به سعادت‌آباد · ۱٬۲۴۰ نفر</div></div>
+                <button onClick="{{ generate }}" style="height:46px;border:none;border-radius:13px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-weight:700;font-size:14px;cursor:pointer">{{ genLabel }}</button>
+              </div>
+            </div>
+            <div style="background:var(--surface);border:1px solid var(--gold);border-radius:18px;padding:22px;min-height:280px">
+              <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:16px">✦ خروجی تولیدشده</div>
+              <sc-if value="{{ genThinking }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 0;gap:14px"><span style="width:34px;height:34px;border-radius:50%;border:3px solid var(--goldDim);border-top-color:var(--gold);animation:mjk-spin .8s linear infinite"></span><span style="font-size:13px;color:var(--muted)">در حال نگارش متن کمپین…</span></div>
+              </sc-if>
+              <sc-if value="{{ genDone }}" hint-placeholder-val="{{ false }}">
+                <div style="display:grid;gap:14px">
+                  <div><div style="font-size:11px;color:var(--muted);margin-bottom:5px">عنوان (Subject)</div><div style="background:var(--bg2);border:1px solid var(--line);border-radius:11px;padding:12px 14px;font-size:14px;font-weight:700;color:var(--text)">۵ فرصت تازه در سعادت‌آباد — مخصوص شما 🏡</div></div>
+                  <div><div style="font-size:11px;color:var(--muted);margin-bottom:5px">متن پیام</div><div style="background:var(--bg2);border:1px solid var(--line);border-radius:11px;padding:13px 15px;font-size:13px;line-height:1.9;color:var(--text)">سلام {نام} عزیز، بر اساس جستجوهای شما، ۵ ملک نوساز با قیمت زیر بودجه‌تان پیدا کردیم. این فایل‌ها سریع فروش می‌روند — همین حالا ببینید.</div></div>
+                  <div style="display:flex;gap:10px"><button style="flex:1;height:40px;border:none;border-radius:11px;background:linear-gradient(140deg,var(--gold2),var(--gold));color:#16140f;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer">ارسال کمپین</button><button style="height:40px;padding:0 14px;border:1px solid var(--line2);border-radius:11px;background:var(--bg2);color:var(--text);font-family:inherit;font-size:13px;cursor:pointer">↻ نسخه دیگر</button></div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ genIdle }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 0;gap:12px;text-align:center"><span style="font-size:30px;opacity:.5">✎</span><span style="font-size:12.5px;color:var(--muted);max-width:200px;line-height:1.7">هدف و کانال را انتخاب کن و «تولید» را بزن تا متن کمپین آماده شود.</span></div>
+              </sc-if>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ===== SEGMENTS ===== -->
+        <sc-if value="{{ isSegments }}" hint-placeholder-val="{{ false }}">
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px">
+            <sc-for list="{{ segments }}" as="s" hint-placeholder-count="4">
+              <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px" style-hover="border-color:var(--gold)">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><span style="width:38px;height:38px;border-radius:11px;background:{{ s.bg }};color:{{ s.color }};display:flex;align-items:center;justify-content:center;font-size:17px">{{ s.ic }}</span><span style="font-size:11px;color:var(--gold);background:var(--goldDim);border-radius:999px;padding:3px 9px">پویا</span></div>
+                <div style="font-size:15px;font-weight:700;color:var(--text)">{{ s.l }}</div>
+                <div style="font-size:12px;color:var(--muted);margin-top:5px;line-height:1.6">{{ s.desc }}</div>
+                <div style="display:flex;align-items:baseline;gap:6px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)"><span style="font-size:22px;font-weight:800;color:var(--text)">{{ s.count }}</span><span style="font-size:12px;color:var(--muted)">مخاطب</span></div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <!-- ===== FUNNEL ===== -->
+        <sc-if value="{{ isFunnel }}" hint-placeholder-val="{{ false }}">
+          <div class="mjk-2col" style="display:grid;grid-template-columns:1.3fr 1fr;gap:18px;align-items:start">
+            <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:22px">
+              <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:20px">قیف تبدیل</div>
+              <div style="display:grid;gap:10px">
+                <sc-for list="{{ funnel }}" as="f" hint-placeholder-count="5">
+                  <div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><span style="font-size:12.5px;color:var(--text);font-weight:600">{{ f.l }}</span><span style="font-size:12px;color:var(--muted)">{{ f.v }} · {{ f.pct }}</span></div>
+                    <div style="height:34px;border-radius:9px;background:var(--bg2);overflow:hidden"><div style="height:100%;width:{{ f.pct }};background:{{ f.bg }};border-radius:9px;display:flex;align-items:center;padding-right:12px;color:#16140f;font-size:11.5px;font-weight:700;transition:.3s">{{ f.v }}</div></div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="background:var(--surface);border:1px solid var(--gold);border-radius:16px;padding:20px;position:relative;overflow:hidden">
+              <div style="position:absolute;inset:0;background:radial-gradient(220px 100px at 90% 0,var(--goldDim),transparent)"></div>
+              <div style="position:relative">
+                <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px"><span style="width:30px;height:30px;border-radius:9px;background:linear-gradient(140deg,var(--gold2),var(--gold));display:flex;align-items:center;justify-content:center;color:#16140f;font-weight:800;font-size:14px">✦</span><div style="font-size:14.5px;font-weight:700;color:var(--text)">پیشنهاد بهینه‌سازی</div></div>
+                <div style="display:grid;gap:11px">
+                  <sc-for list="{{ funnelTips }}" as="ti" hint-placeholder-count="3">
+                    <div style="display:flex;gap:9px;background:var(--bg2);border:1px solid var(--line);border-radius:11px;padding:12px"><span style="color:{{ ti.color }};font-size:14px">{{ ti.ic }}</span><div style="font-size:12px;line-height:1.7;color:var(--text)">{{ ti.t }}</div></div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ===== CHANNELS ===== -->
+        <sc-if value="{{ isChannels }}" hint-placeholder-val="{{ false }}">
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px">
+            <sc-for list="{{ channels }}" as="c" hint-placeholder-count="5">
+              <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><span style="width:42px;height:42px;border-radius:12px;background:{{ c.bg }};color:{{ c.color }};display:flex;align-items:center;justify-content:center;font-size:20px">{{ c.ic }}</span><span style="{{ c.statusStyle }}">{{ c.statusL }}</span></div>
+                <div style="font-size:15px;font-weight:700;color:var(--text)">{{ c.l }}</div>
+                <div style="font-size:12px;color:var(--muted);margin-top:4px">{{ c.sub }}</div>
+                <div style="display:flex;justify-content:space-between;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)"><div><div style="font-size:16px;font-weight:800;color:var(--text)">{{ c.sent }}</div><div style="font-size:10.5px;color:var(--faint)">ارسال‌شده</div></div><div style="text-align:left"><div style="font-size:16px;font-weight:800;color:#5fd98a">{{ c.rate }}</div><div style="font-size:10.5px;color:var(--faint)">نرخ تعامل</div></div></div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+      </main>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:860}}">
+class Component extends DCLogic {
+  state = { theme:'dark', view:'campaigns', goal:'فروش', chan:'ایمیل', gen:'idle' };
+  themes = {
+    dark:{ '--bg':'#0d0d0f','--bg2':'#141417','--surface':'#18181c','--navbg':'rgba(20,20,23,0.8)','--line':'rgba(255,255,255,0.08)','--line2':'rgba(255,255,255,0.14)','--text':'#f2f1ee','--muted':'#9a9a98','--faint':'#6a6a68','--gold':'#c9a96a','--gold2':'#e0c489','--goldDim':'rgba(201,169,106,0.12)' },
+    light:{ '--bg':'#f4f1ea','--bg2':'#ffffff','--surface':'#ffffff','--navbg':'rgba(255,255,255,0.85)','--line':'rgba(26,24,20,0.09)','--line2':'rgba(26,24,20,0.16)','--text':'#1a1814','--muted':'#6b6862','--faint':'#9a968d','--gold':'#9c7a3c','--gold2':'#b8923f','--goldDim':'rgba(156,122,60,0.10)' }
+  };
+  componentWillUnmount(){ clearTimeout(this._t); }
+  toggleTheme = () => this.setState(s=>({ theme:s.theme==='dark'?'light':'dark' }));
+  go = (v) => () => this.setState({ view:v });
+  goAi = () => this.setState({ view:'ai' });
+  setGoal = (g) => () => this.setState({ goal:g });
+  setChan = (c) => () => this.setState({ chan:c });
+  generate = () => { clearTimeout(this._t); this.setState({ gen:'thinking' }); this._t=setTimeout(()=>this.setState({ gen:'done' }), 1600); };
+
+  renderVals(){
+    const t = this.themes[this.state.theme];
+    const rootStyle = Object.entries(t).map(([k,v])=>k+':'+v).join(';') + ';min-height:100vh;background:var(--bg);color:var(--text);font-family:Vazirmatn,sans-serif;transition:background .3s,color .3s';
+    const v = this.state.view;
+    const navItem=(id,ic,l)=>{ const on=v===id; return { ic,l,fn:this.go(id), style:'display:flex;align-items:center;gap:11px;width:100%;padding:10px 12px;border:none;border-radius:11px;font-family:inherit;font-size:13px;font-weight:'+(on?'700':'500')+';cursor:pointer;text-align:right;transition:.15s;background:'+(on?'var(--goldDim)':'transparent')+';color:'+(on?'var(--text)':'var(--muted)')+(on?';box-shadow:inset 3px 0 0 var(--gold)':'') }; };
+    const titles={ campaigns:'کمپین‌ها', ai:'سازنده کمپین AI', segments:'سگمنت مخاطبان', funnel:'قیف بازاریابی', channels:'کانال‌ها' };
+    const th='text-align:right;padding:12px 18px;font-size:11.5px;font-weight:600;color:var(--muted)';
+    const tag=(txt,c)=>'font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap;background:'+c+'22;color:'+c+';border:1px solid '+c+'55';
+    const pick=(on)=>'padding:8px 13px;border-radius:10px;border:1px solid '+(on?'var(--gold)':'var(--line)')+';background:'+(on?'var(--goldDim)':'transparent')+';color:'+(on?'var(--text)':'var(--muted)')+';font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer;transition:.15s';
+
+    return {
+      rootStyle, themeIcon:this.state.theme==='dark'?'☀':'☾', toggleTheme:this.toggleTheme, th, goAi:this.goAi,
+      menu:[ navItem('campaigns','◔','کمپین‌ها'), navItem('ai','✦','ساخت با AI'), navItem('segments','◍','سگمنت مخاطبان'), navItem('funnel','▽','قیف بازاریابی'), navItem('channels','⛒','کانال‌ها') ],
+      viewTitle:titles[v]||'کمپین‌ها',
+      isCampaigns:v==='campaigns', isAi:v==='ai', isSegments:v==='segments', isFunnel:v==='funnel', isChannels:v==='channels',
+
+      kpis:[
+        { l:'کمپین فعال', v:'۸', ic:'◔', t:'۳ زمان‌بندی‌شده', c:'var(--muted)' },
+        { l:'نرخ باز شدن', v:'۴۲٪', ic:'✉', t:'+۶٪ این ماه', c:'#5fd98a' },
+        { l:'لید تولیدشده', v:'۳۲۰', ic:'◍', t:'این ماه', c:'#5fd98a' },
+        { l:'نرخ تبدیل', v:'۸٫۴٪', ic:'↗', t:'بالاتر از میانگین', c:'#5fd98a' }
+      ],
+      campaigns:[
+        { name:'فرصت‌های تازه سعادت‌آباد', date:'۲ روز پیش', channel:'ایمیل', chanIc:'✉', chanStyle:tag('ایمیل','#5b9bd5'), audience:'۱٬۲۴۰', open:'۴۸٪', conv:'۱۲٪', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { name:'یادآوری بازدیدها', date:'دیروز', channel:'پیامک', chanIc:'✆', chanStyle:tag('پیامک','#5fd98a'), audience:'۳۲۰', open:'۹۲٪', conv:'۲۴٪', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { name:'کاهش قیمت فایل‌های منتخب', date:'۳ روز پیش', channel:'واتساپ', chanIc:'◉', chanStyle:tag('واتساپ','#5fd98a'), audience:'۸۴۰', open:'۷۶٪', conv:'۱۸٪', status:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { name:'خبرنامه هفتگی بازار', date:'برنامه‌ریزی', channel:'ایمیل', chanIc:'✉', chanStyle:tag('ایمیل','#5b9bd5'), audience:'۴٬۲۰۰', open:'—', conv:'—', status:'زمان‌بندی', statusStyle:tag('زمان‌بندی','#e7a14a') },
+        { name:'پوش فایل‌های لوکس', date:'پیش‌نویس', channel:'پوش', chanIc:'◔', chanStyle:tag('پوش','#9b7ad0'), audience:'۲٬۱۰۰', open:'—', conv:'—', status:'پیش‌نویس', statusStyle:tag('پیش‌نویس','#9a9a98') }
+      ],
+
+      goals:['فروش','جذب لید','بازگشت مشتری'].map(g=>({ l:g, fn:this.setGoal(g), style:pick(this.state.goal===g) })),
+      aiChannels:[{l:'ایمیل',ic:'✉'},{l:'پیامک',ic:'✆'},{l:'واتساپ',ic:'◉'},{l:'پوش',ic:'◔'}].map(c=>({ l:c.l, ic:c.ic, fn:this.setChan(c.l), style:pick(this.state.chan===c.l) })),
+      generate:this.generate, genLabel: this.state.gen==='thinking'?'در حال تولید…':'✦ تولید متن کمپین',
+      genThinking:this.state.gen==='thinking', genDone:this.state.gen==='done', genIdle:this.state.gen==='idle',
+
+      segments:[
+        { ic:'★', bg:'var(--goldDim)', color:'var(--gold)', l:'خریداران داغ', desc:'بازدید بالا در ۷ روز اخیر + جستجوی فعال', count:'۳۲۰' },
+        { ic:'◷', bg:'rgba(91,155,213,0.15)', color:'#5b9bd5', l:'لیدهای سرد', desc:'بدون فعالیت در ۳۰ روز گذشته', count:'۱٬۱۰۰' },
+        { ic:'◈', bg:'rgba(155,122,208,0.15)', color:'#9b7ad0', l:'سرمایه‌گذاران', desc:'علاقه‌مند به فرصت‌های بازدهی بالا', count:'۲۴۰' },
+        { ic:'⌂', bg:'rgba(95,217,138,0.15)', color:'#5fd98a', l:'فروشندگان بالقوه', desc:'مالکانی که قیمت ملک‌شان را استعلام کرده‌اند', count:'۴۸۰' }
+      ],
+
+      funnel:[
+        { l:'بازدید کمپین', v:'۴٬۲۰۰', pct:'100%', bg:'linear-gradient(90deg,var(--gold2),var(--gold))' },
+        { l:'کلیک', v:'۱٬۸۹۰', pct:'45%', bg:'var(--gold)' },
+        { l:'مشاهده فایل', v:'۹۸۰', pct:'23%', bg:'rgba(201,169,106,0.7)' },
+        { l:'درخواست بازدید', v:'۳۲۰', pct:'8%', bg:'rgba(201,169,106,0.5)' },
+        { l:'معامله', v:'۴۲', pct:'1%', bg:'#5fd98a' }
+      ],
+      funnelTips:[
+        { ic:'↗', color:'#5fd98a', t:'نرخ کلیک ایمیل‌ها بالاست؛ بودجه‌ی بیشتری به این کانال اختصاص بده.' },
+        { ic:'⚠', color:'#e7a14a', t:'افت بزرگ بین «مشاهده فایل» و «درخواست بازدید» — دکمه‌ی بازدید را برجسته‌تر کن.' },
+        { ic:'✦', color:'var(--gold)', t:'سگمنت «خریداران داغ» ۳ برابر تبدیل بهتری دارد؛ کمپین اختصاصی بساز.' }
+      ],
+
+      channels:[
+        { ic:'✉', bg:'rgba(91,155,213,0.15)', color:'#5b9bd5', l:'ایمیل مارکتینگ', sub:'خبرنامه و کمپین', sent:'۱۲٬۴۰۰', rate:'۴۲٪', statusL:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { ic:'✆', bg:'rgba(95,217,138,0.15)', color:'#5fd98a', l:'پیامک', sub:'یادآوری و اعلان', sent:'۸٬۲۰۰', rate:'۹۲٪', statusL:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { ic:'◉', bg:'rgba(95,217,138,0.15)', color:'#5fd98a', l:'واتساپ', sub:'کمپین تعاملی', sent:'۵٬۶۰۰', rate:'۷۶٪', statusL:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { ic:'◔', bg:'rgba(155,122,208,0.15)', color:'#9b7ad0', l:'پوش نوتیفیکیشن', sub:'اپلیکیشن موبایل', sent:'۹٬۸۰۰', rate:'۳۴٪', statusL:'فعال', statusStyle:tag('فعال','#5fd98a') },
+        { ic:'✈', bg:'rgba(91,155,213,0.15)', color:'#5b9bd5', l:'تلگرام', sub:'معماری آماده', sent:'—', rate:'—', statusL:'به‌زودی', statusStyle:tag('به‌زودی','#9a9a98') }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
