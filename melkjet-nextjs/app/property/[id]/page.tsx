@@ -270,7 +270,7 @@ export default function PropertyDetail() {
         </div>
 
         {/* thumbnail strip */}
-        <div style={{ display:'flex', gap:10, marginTop:10, paddingBottom:4, overflowX:'auto' }}>
+        <div className="mjp-thumbs" style={{ display:'flex', gap:10, marginTop:10, paddingBottom:4, overflowX:'auto' }}>
           {gallery.map((g, i) => (
             <button key={i} onClick={() => setActiveImg(i)} style={{
               flexShrink:0, width:88, height:58, borderRadius:10,
@@ -285,7 +285,7 @@ export default function PropertyDetail() {
       </section>
 
       {/* ── 2/3 + 1/3 GRID ────────────────────────────────────────────── */}
-      <section style={{ maxWidth:1280, margin:'0 auto', padding:'32px 24px 80px', display:'grid', gridTemplateColumns:'2fr 1fr', gap:32, alignItems:'start' }}>
+      <section className="mjp-grid" style={{ maxWidth:1280, margin:'0 auto', padding:'32px 24px 80px', display:'grid', gridTemplateColumns:'2fr 1fr', gap:32, alignItems:'start' }}>
 
         {/* ══ LEFT COLUMN ══════════════════════════════════════════════ */}
         <div style={{ display:'flex', flexDirection:'column', gap:28 }}>
@@ -319,7 +319,7 @@ export default function PropertyDetail() {
           </div>
 
           {/* 3. Facts row */}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12 }}>
+          <div className="mjp-facts" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12 }}>
             {[
               { icon:'📐', label:'متراژ',   value:'۱۴۰ م²' },
               { icon:'🛏', label:'خواب',    value:'۳'       },
@@ -376,7 +376,7 @@ export default function PropertyDetail() {
             <div style={{ fontSize:14, fontWeight:700, color:'var(--text)', marginBottom:20, display:'flex', alignItems:'center', gap:8 }}>
               <span style={{ color:'var(--gold)' }}>✦</span> امتیازات هوشمند ملک‌جت
             </div>
-            <div style={{ display:'flex', justifyContent:'space-around', gap:8 }}>
+            <div className="mjp-scores" style={{ display:'flex', justifyContent:'space-around', gap:8 }}>
               {aiScores.map(s => <ScoreRing key={s.label} value={s.value} label={s.label}/>)}
             </div>
           </div>
@@ -490,7 +490,7 @@ export default function PropertyDetail() {
         </div>
 
         {/* ══ RIGHT COLUMN (sticky) ════════════════════════════════════ */}
-        <div style={{ position:'sticky', top:90, display:'flex', flexDirection:'column', gap:16 }}>
+        <div className="mjp-side" style={{ position:'sticky', top:90, display:'flex', flexDirection:'column', gap:16 }}>
 
           {/* Agent card */}
           <div style={{ background:'var(--surface)', border:'1px solid var(--line)', borderRadius:20, padding:22 }}>

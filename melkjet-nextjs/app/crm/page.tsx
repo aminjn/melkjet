@@ -195,7 +195,7 @@ export default function CRMPage() {
     <div dir="rtl" style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'Vazirmatn, system-ui, sans-serif' }}>
 
       {/* ===== SIDEBAR ===== */}
-      <aside style={{
+      <aside className="mjc-side" style={{
         width: 248,
         flexShrink: 0,
         background: 'var(--bg2)',
@@ -255,7 +255,7 @@ export default function CRMPage() {
                 }}
               >
                 <span style={{ fontSize: 16, opacity: isActive ? 1 : 0.7 }}>{item.icon}</span>
-                <span style={{ flex: 1 }}>{item.label}</span>
+                <span className="mjc-sidelabel" style={{ flex: 1 }}>{item.label}</span>
                 {isActive && (
                   <span style={{
                     width: 5, height: 5,
@@ -376,7 +376,7 @@ export default function CRMPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
               {/* KPI Cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+              <div className="mjc-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
                 {kpis.map((kpi, i) => (
                   <div key={i} style={{
                     background: 'var(--surface)',
@@ -503,7 +503,7 @@ export default function CRMPage() {
               </div>
 
               {/* Recent Leads + Today Tasks */}
-              <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 16 }}>
+              <div className="mjc-dash" style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 16 }}>
 
                 {/* Recent Leads */}
                 <div style={{
@@ -689,7 +689,7 @@ export default function CRMPage() {
           {/* ==================== PIPELINE ==================== */}
           {activeView === 'pipeline' && (
             <div>
-              <div style={{ display: 'flex', gap: 14, overflowX: 'auto', paddingBottom: 8 }}>
+              <div className="mjc-kanban" style={{ display: 'flex', gap: 14, overflowX: 'auto', paddingBottom: 8 }}>
                 {pipelineColumns.map(col => (
                   <div key={col.id} style={{ flex: '0 0 260px', display: 'flex', flexDirection: 'column' }}>
 
