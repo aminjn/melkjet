@@ -1,0 +1,978 @@
+'use client'
+import { useState } from 'react'
+import Nav from '../components/Nav'
+
+type View = 'dashboard' | 'listings' | 'pipeline' | 'tasks' | 'calendar'
+
+interface Task {
+  id: string
+  done: boolean
+  text: string
+  time: string
+  priority: 'high' | 'medium' | 'low'
+}
+
+const navItems = [
+  { id: 'dashboard', icon: '◈', label: 'داشبورد' },
+  { id: 'listings', icon: '◰', label: 'فایل‌ها' },
+  { id: 'pipeline', icon: '◴', label: 'پایپ‌لاین CRM' },
+  { id: 'tasks', icon: '✓', label: 'وظایف' },
+  { id: 'calendar', icon: '◫', label: 'تقویم' },
+]
+
+const kpis = [
+  { label: 'لیدهای فعال', value: '۲۴', change: '+۳', changeDir: 'up', icon: '◈' },
+  { label: 'معاملات ماه', value: '۷', change: '+۲', changeDir: 'up', icon: '◰' },
+  { label: 'درآمد ماه', value: '۸۵ م.ت', change: '+۱۲٪', changeDir: 'up', icon: '◴' },
+  { label: 'نرخ تبدیل', value: '۲۹٪', change: '-۲٪', changeDir: 'down', icon: '◫' },
+]
+
+const salesData = [
+  { month: 'بهمن', value: 45, deals: 4 },
+  { month: 'اسفند', value: 62, deals: 5 },
+  { month: 'فروردین', value: 38, deals: 3 },
+  { month: 'اردیبهشت', value: 71, deals: 6 },
+  { month: 'خرداد', value: 85, deals: 7 },
+  { month: 'تیر', value: 58, deals: 5 },
+]
+
+const insights = [
+  { icon: '✦', text: 'لید «رضا موسوی» ۳ روز است بدون پاسخ. پیگیری کنید.' },
+  { icon: '◈', text: 'قیمت سعادت‌آباد ۴٪ این هفته رشد کرده. به لیدها اطلاع دهید.' },
+  { icon: '◰', text: '۲ ملک با بودجه لید «شیوا حیدری» منطبق است.' },
+]
+
+const recentLeads = [
+  { name: 'رضا موسوی', need: 'خرید · سعادت‌آباد', budget: '۲۰ میلیارد', status: 'داغ', statusColor: '#e74c3c', lastContact: '۳ روز پیش' },
+  { name: 'شیوا حیدری', need: 'اجاره · ونک', budget: '۱۵ م.ت', status: 'گرم', statusColor: '#e7a14a', lastContact: 'دیروز' },
+  { name: 'کاوه اسدی', need: 'خرید · جردن', budget: '۱۵ میلیارد', status: 'سرد', statusColor: '#7a8fae', lastContact: 'هفته پیش' },
+  { name: 'نیلوفر رشیدی', need: 'پیش‌فروش · شهرک غرب', budget: '۱۸ میلیارد', status: 'گرم', statusColor: '#e7a14a', lastContact: 'امروز' },
+]
+
+const todayTasksData = [
+  { done: false, text: 'تماس با رضا موسوی برای پیگیری', time: '۱۰:۰۰' },
+  { done: true, text: 'ارسال قرارداد به خانواده احمدی', time: '۱۱:۳۰' },
+  { done: false, text: 'بازدید ملک سعادت‌آباد با شیوا حیدری', time: '۱۴:۰۰' },
+  { done: false, text: 'تنظیم آگهی جدید برج آرین', time: '۱۶:۳۰' },
+]
+
+const listings = [
+  { id: '1', title: 'آپارتمان ۱۴۰ متری سعادت‌آباد', status: 'فعال', statusColor: '#5fd98a', price: '۱۷٫۸ میلیارد', views: '۲۴۳', aiSuggestion: 'قیمت مناسب - حفظ شود', suggestionColor: '#5fd98a' },
+  { id: '2', title: 'پنت‌هاوس دوبلکس زعفرانیه', status: 'در مذاکره', statusColor: '#e7a14a', price: '۸۵ میلیارد', views: '۱۸۷', aiSuggestion: '۳ لید علاقه‌مند دارد', suggestionColor: 'var(--gold)' },
+  { id: '3', title: 'آپارتمان ۹۵ متری ونک', status: 'فعال', statusColor: '#5fd98a', price: '۹٫۲ میلیارد', views: '۵۱۲', aiSuggestion: 'کاهش ۵٪ توصیه می‌شود', suggestionColor: '#e74c3c' },
+  { id: '4', title: 'دفتر کار میرداماد', status: 'غیرفعال', statusColor: 'var(--faint)', price: '۶٫۸ میلیارد', views: '۸۹', aiSuggestion: 'بازنویسی توضیحات', suggestionColor: '#e7a14a' },
+  { id: '5', title: 'ویلا باغ لواسان', status: 'فعال', statusColor: '#5fd98a', price: '۱۲۰ میلیارد', views: '۳۴۱', aiSuggestion: 'قیمت رقابتی - نگه دار', suggestionColor: '#5fd98a' },
+]
+
+const pipelineColumns = [
+  {
+    id: 'new', label: 'لید جدید', color: '#7a8fae',
+    cards: [
+      { id: 'l1', name: 'رضا موسوی', phone: '۰۹۱۲-۱۱۱-۲۲۳۳', need: 'خرید · سعادت‌آباد', budget: '۲۰ م', score: 72 },
+      { id: 'l2', name: 'مریم صادقی', phone: '۰۹۱۲-۴۴۴-۵۵۶۶', need: 'اجاره · ونک', budget: '۱۲ م.ت', score: 55 },
+    ]
+  },
+  {
+    id: 'review', label: 'در حال بررسی', color: '#e7a14a',
+    cards: [
+      { id: 'l3', name: 'شیوا حیدری', phone: '۰۹۱۲-۷۷۷-۸۸۹۹', need: 'اجاره · ونک', budget: '۱۵ م.ت', score: 81 },
+      { id: 'l4', name: 'کاوه اسدی', phone: '۰۹۳۳-۲۲۲-۳۳۴۴', need: 'خرید · جردن', budget: '۱۵ م', score: 63 },
+    ]
+  },
+  {
+    id: 'offered', label: 'پیشنهاد داده‌شده', color: 'var(--gold)',
+    cards: [
+      { id: 'l5', name: 'نیلوفر رشیدی', phone: '۰۹۱۲-۵۵۵-۶۶۷۷', need: 'پیش‌فروش · شهرک غرب', budget: '۱۸ م', score: 89 },
+    ]
+  },
+  {
+    id: 'contract', label: 'قرارداد', color: '#5fd98a',
+    cards: [
+      { id: 'l6', name: 'احمد کریمی', phone: '۰۹۱۲-۸۸۸-۹۹۰۰', need: 'خرید · فرمانیه', budget: '۴۰ م', score: 95 },
+    ]
+  },
+]
+
+const initialTasks: Task[] = [
+  { id: 't1', done: false, text: 'تماس با رضا موسوی برای پیگیری', time: '۱۰:۰۰', priority: 'high' },
+  { id: 't2', done: true, text: 'ارسال قرارداد به خانواده احمدی', time: '۱۱:۳۰', priority: 'medium' },
+  { id: 't3', done: false, text: 'بازدید ملک سعادت‌آباد با شیوا حیدری', time: '۱۴:۰۰', priority: 'high' },
+  { id: 't4', done: false, text: 'تنظیم آگهی جدید برج آرین', time: '۱۶:۳۰', priority: 'low' },
+  { id: 't5', done: false, text: 'مذاکره قیمت پنت‌هاوس زعفرانیه', time: 'فردا', priority: 'medium' },
+]
+
+const weekDays = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه']
+const weekDates = ['۱۵', '۱۶', '۱۷', '۱۸', '۱۹', '۲۰', '۲۱']
+const calendarEvents = [
+  { day: 0, time: '۱۰:۰۰', title: 'بازدید سعادت‌آباد', duration: 1.5, color: 'var(--gold)' },
+  { day: 1, time: '۱۱:۳۰', title: 'جلسه با خانواده احمدی', duration: 1, color: '#7a8fae' },
+  { day: 2, time: '۱۴:۰۰', title: 'بازدید پنت‌هاوس', duration: 2, color: '#5fd98a' },
+  { day: 3, time: '۱۰:۰۰', title: 'تماس با رضا موسوی', duration: 0.5, color: '#e7a14a' },
+  { day: 4, time: '۱۶:۰۰', title: 'امضای قرارداد', duration: 1, color: '#e74c3c' },
+]
+
+const viewTitles: Record<View, string> = {
+  dashboard: 'داشبورد',
+  listings: 'فایل‌های ملکی',
+  pipeline: 'پایپ‌لاین CRM',
+  tasks: 'وظایف',
+  calendar: 'تقویم هفتگی',
+}
+
+function getInitials(name: string) {
+  return name.split(' ').map((p: string) => p[0]).join('').slice(0, 2)
+}
+
+const avatarGradients = [
+  'linear-gradient(135deg,#c9a84c,#e8c96d)',
+  'linear-gradient(135deg,#7a8fae,#a0b4cc)',
+  'linear-gradient(135deg,#5fd98a,#3ab06a)',
+  'linear-gradient(135deg,#e7a14a,#c97c2a)',
+  'linear-gradient(135deg,#e74c3c,#c0392b)',
+]
+
+function getGradient(name: string) {
+  return avatarGradients[name.charCodeAt(0) % avatarGradients.length]
+}
+
+const persianDigits = '۰۱۲۳۴۵۶۷۸۹'
+
+function persianToLatin(str: string) {
+  return str.split('').map(c => {
+    const idx = persianDigits.indexOf(c)
+    return idx >= 0 ? String(idx) : c
+  }).join('')
+}
+
+function timeToMinutesFrom9(timeStr: string) {
+  const latin = persianToLatin(timeStr)
+  const [h, m] = latin.split(':').map(Number)
+  return (h - 9) * 60 + (m || 0)
+}
+
+const priorityColor: Record<string, string> = { high: '#e74c3c', medium: '#e7a14a', low: '#5fd98a' }
+const calendarHours = Array.from({ length: 10 }, (_, i) => i + 9)
+
+export default function CRMPage() {
+  const [activeView, setActiveView] = useState<View>('dashboard')
+  const [tasks, setTasks] = useState<Task[]>(initialTasks)
+  const [newTaskText, setNewTaskText] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [todayTasks, setTodayTasks] = useState(todayTasksData)
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+
+  const toggleTheme = () => {
+    const html = document.documentElement
+    if (theme === 'dark') {
+      html.classList.add('light')
+      setTheme('light')
+    } else {
+      html.classList.remove('light')
+      setTheme('dark')
+    }
+  }
+
+  const addTask = () => {
+    if (!newTaskText.trim()) return
+    const newTask: Task = {
+      id: `t${Date.now()}`,
+      done: false,
+      text: newTaskText.trim(),
+      time: 'بدون زمان',
+      priority: 'medium',
+    }
+    setTasks(prev => [newTask, ...prev])
+    setNewTaskText('')
+  }
+
+  const toggleTask = (id: string) => {
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, done: !t.done } : t))
+  }
+
+  const maxSales = Math.max(...salesData.map(d => d.value))
+
+  return (
+    <div dir="rtl" style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'Vazirmatn, system-ui, sans-serif' }}>
+
+      {/* ===== SIDEBAR ===== */}
+      <aside style={{
+        width: 248,
+        flexShrink: 0,
+        background: 'var(--bg2)',
+        borderLeft: '1px solid var(--line)',
+        position: 'sticky',
+        top: 0,
+        height: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}>
+
+        {/* Logo */}
+        <div style={{ padding: '20px 16px 16px', borderBottom: '1px solid var(--line)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              width: 38, height: 38, borderRadius: 10,
+              background: 'linear-gradient(140deg,var(--gold2),var(--gold))',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 6px 18px -6px var(--gold)',
+              flexShrink: 0,
+            }}>
+              <div style={{ width: 14, height: 14, background: 'var(--bg)', transform: 'rotate(45deg)', borderRadius: 3 }} />
+            </div>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.5px' }}>ملک‌جت</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>میز کار مشاور</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Nav links */}
+        <nav style={{ padding: '10px 8px', flex: 1, overflowY: 'auto' }}>
+          {navItems.map(item => {
+            const isActive = activeView === item.id
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveView(item.id as View)}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '10px 16px',
+                  borderRadius: 10,
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: isActive ? 'var(--goldDim)' : 'transparent',
+                  color: isActive ? 'var(--gold)' : 'var(--muted)',
+                  fontWeight: isActive ? 700 : 500,
+                  fontSize: 14,
+                  textAlign: 'right',
+                  transition: 'all 0.15s',
+                  marginBottom: 2,
+                  fontFamily: 'Vazirmatn, system-ui, sans-serif',
+                }}
+              >
+                <span style={{ fontSize: 16, opacity: isActive ? 1 : 0.7 }}>{item.icon}</span>
+                <span style={{ flex: 1 }}>{item.label}</span>
+                {isActive && (
+                  <span style={{
+                    width: 5, height: 5,
+                    borderRadius: '50%',
+                    background: 'var(--gold)',
+                    display: 'inline-block',
+                  }} />
+                )}
+              </button>
+            )
+          })}
+
+          {/* AI Promo */}
+          <div style={{
+            margin: '16px 8px 0',
+            border: '1px solid var(--gold)',
+            borderRadius: 14,
+            padding: 14,
+            background: 'var(--goldDim)',
+          }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold)', marginBottom: 6 }}>✦ دستیار هوشمند</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.7 }}>پیشنهادهای هوشمند برای لیدهای شما</div>
+            <button style={{
+              marginTop: 10, width: '100%', padding: '8px',
+              borderRadius: 8, background: 'var(--gold)', border: 'none',
+              color: '#16140f', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+              fontFamily: 'Vazirmatn, system-ui, sans-serif',
+            }}>فعال‌سازی</button>
+          </div>
+        </nav>
+
+        {/* Agent profile */}
+        <div style={{
+          padding: '12px 16px',
+          borderTop: '1px solid var(--line)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+        }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: '50%',
+            background: 'linear-gradient(135deg,var(--gold2),var(--gold))',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 12, fontWeight: 700, color: '#16140f',
+            flexShrink: 0,
+          }}>سم</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>سارا محمدی</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>مشاور ارشد</div>
+          </div>
+          <button
+            onClick={toggleTheme}
+            title="تغییر تم"
+            style={{
+              width: 32, height: 32, borderRadius: 8,
+              background: 'var(--surface)', border: '1px solid var(--line)',
+              color: 'var(--text)', cursor: 'pointer', fontSize: 15,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
+        </div>
+      </aside>
+
+      {/* ===== MAIN ===== */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+
+        {/* Topbar */}
+        <div style={{
+          position: 'sticky', top: 0, zIndex: 40,
+          backdropFilter: 'blur(16px)',
+          background: 'var(--navbg)',
+          borderBottom: '1px solid var(--line)',
+          padding: '0 24px',
+          height: 64,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 16,
+        }}>
+          <h2 style={{ fontSize: 16, fontWeight: 700, flex: 1 }}>{viewTitles[activeView]}</h2>
+          <input
+            placeholder="جستجو..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            style={{
+              padding: '8px 14px',
+              borderRadius: 10,
+              background: 'var(--surface)',
+              border: '1px solid var(--line)',
+              color: 'var(--text)',
+              fontSize: 13,
+              width: 200,
+              outline: 'none',
+              fontFamily: 'Vazirmatn, system-ui, sans-serif',
+            }}
+          />
+          <button style={{
+            padding: '8px 16px', borderRadius: 10,
+            background: 'var(--goldDim)', border: '1px solid var(--gold)',
+            color: 'var(--gold)', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            fontFamily: 'Vazirmatn, system-ui, sans-serif',
+          }}>✦ دستیار</button>
+          <button style={{
+            width: 40, height: 40, borderRadius: 10,
+            background: 'var(--surface)', border: '1px solid var(--line)',
+            color: 'var(--text)', cursor: 'pointer', fontSize: 18,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>🔔</button>
+        </div>
+
+        {/* Content */}
+        <main style={{ flex: 1, padding: 24, overflow: 'auto' }}>
+
+          {/* ==================== DASHBOARD ==================== */}
+          {activeView === 'dashboard' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+              {/* KPI Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+                {kpis.map((kpi, i) => (
+                  <div key={i} style={{
+                    background: 'var(--surface)',
+                    border: '1px solid var(--line)',
+                    borderRadius: 16,
+                    padding: 20,
+                    position: 'relative',
+                    overflow: 'hidden',
+                  }}>
+                    <div style={{
+                      position: 'absolute', top: 10, left: 14,
+                      fontSize: 48, opacity: 0.05, color: 'var(--gold)',
+                      fontWeight: 900, userSelect: 'none', lineHeight: 1,
+                    }}>{kpi.icon}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                      <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 500 }}>{kpi.label}</span>
+                      <span style={{
+                        width: 30, height: 30, borderRadius: 8,
+                        background: 'var(--goldDim)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 14, color: 'var(--gold)',
+                      }}>{kpi.icon}</span>
+                    </div>
+                    <div style={{ fontSize: 28, fontWeight: 800, marginBottom: 10, letterSpacing: '-0.5px' }}>{kpi.value}</div>
+                    <div style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      fontSize: 12, fontWeight: 600,
+                      color: kpi.changeDir === 'up' ? '#5fd98a' : '#e74c3c',
+                      background: kpi.changeDir === 'up' ? 'rgba(95,217,138,0.12)' : 'rgba(231,76,60,0.12)',
+                      padding: '3px 8px', borderRadius: 6,
+                    }}>
+                      <span>{kpi.changeDir === 'up' ? '↑' : '↓'}</span>
+                      <span>{kpi.change} این ماه</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Bar Chart + AI Insights */}
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
+
+                {/* Sales Bar Chart */}
+                <div style={{
+                  background: 'var(--surface)',
+                  border: '1px solid var(--line)',
+                  borderRadius: 16,
+                  padding: 24,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+                    <h3 style={{ fontSize: 15, fontWeight: 700 }}>عملکرد فروش</h3>
+                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>۶ ماه گذشته</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, height: 168, paddingTop: 32 }}>
+                    {salesData.map((d, i) => {
+                      const pct = (d.value / maxSales) * 100
+                      const isLast = i === salesData.length - 1
+                      return (
+                        <div key={i} style={{
+                          flex: 1,
+                          display: 'flex', flexDirection: 'column',
+                          alignItems: 'center', gap: 6,
+                          height: '100%', justifyContent: 'flex-end',
+                        }}>
+                          <span style={{
+                            fontSize: 11, color: 'var(--gold)',
+                            fontWeight: 700, opacity: isLast ? 1 : 0.65,
+                          }}>{d.deals}</span>
+                          <div style={{
+                            width: '100%',
+                            height: `${pct}%`,
+                            background: isLast
+                              ? 'linear-gradient(180deg,var(--gold2),var(--gold))'
+                              : 'linear-gradient(180deg,rgba(201,168,76,0.55),rgba(201,168,76,0.28))',
+                            borderRadius: '6px 6px 0 0',
+                            position: 'relative',
+                            minHeight: 8,
+                          }}>
+                            {isLast && (
+                              <div style={{
+                                position: 'absolute', top: -26, left: '50%',
+                                transform: 'translateX(-50%)',
+                                background: 'var(--gold)', color: '#16140f',
+                                fontSize: 10, fontWeight: 700,
+                                padding: '2px 6px', borderRadius: 4,
+                                whiteSpace: 'nowrap',
+                              }}>{d.value} م.ت</div>
+                            )}
+                          </div>
+                          <span style={{ fontSize: 11, color: 'var(--muted)' }}>{d.month}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* AI Insights */}
+                <div style={{
+                  background: 'var(--surface)',
+                  border: '1px solid var(--gold)',
+                  borderRadius: 16,
+                  padding: 20,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+                    <span style={{ fontSize: 16, color: 'var(--gold)' }}>✦</span>
+                    <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--gold)' }}>بینش‌های هوش مصنوعی</h3>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {insights.map((ins, i) => (
+                      <div key={i} style={{
+                        padding: '12px 14px',
+                        borderRadius: 10,
+                        background: 'var(--goldDim)',
+                        border: '1px solid rgba(201,168,76,0.2)',
+                        display: 'flex',
+                        gap: 10,
+                        alignItems: 'flex-start',
+                      }}>
+                        <span style={{ color: 'var(--gold)', fontSize: 14, flexShrink: 0, marginTop: 2 }}>{ins.icon}</span>
+                        <span style={{ fontSize: 12, color: 'var(--text)', lineHeight: 1.8 }}>{ins.text}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Recent Leads + Today Tasks */}
+              <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 16 }}>
+
+                {/* Recent Leads */}
+                <div style={{
+                  background: 'var(--surface)',
+                  border: '1px solid var(--line)',
+                  borderRadius: 16,
+                  padding: 20,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+                    <h3 style={{ fontSize: 15, fontWeight: 700 }}>لیدهای اخیر</h3>
+                    <button
+                      onClick={() => setActiveView('pipeline')}
+                      style={{
+                        fontSize: 12, color: 'var(--gold)',
+                        background: 'none', border: 'none',
+                        cursor: 'pointer', fontFamily: 'Vazirmatn, system-ui, sans-serif',
+                      }}
+                    >مشاهده همه ←</button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {recentLeads.map((lead, i) => (
+                      <div key={i} style={{
+                        display: 'flex', alignItems: 'center', gap: 12,
+                        padding: '10px 14px',
+                        borderRadius: 10,
+                        background: 'var(--bg)',
+                        border: '1px solid var(--line)',
+                      }}>
+                        <div style={{
+                          width: 36, height: 36, borderRadius: '50%',
+                          background: getGradient(lead.name),
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 12, fontWeight: 700, color: '#16140f',
+                          flexShrink: 0,
+                        }}>{getInitials(lead.name)}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600 }}>{lead.name}</div>
+                          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{lead.need}</div>
+                        </div>
+                        <div style={{ flexShrink: 0, textAlign: 'left' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'flex-end' }}>
+                            <span style={{
+                              width: 7, height: 7, borderRadius: '50%',
+                              background: lead.statusColor, display: 'inline-block',
+                            }} />
+                            <span style={{ fontSize: 12, color: lead.statusColor, fontWeight: 600 }}>{lead.status}</span>
+                          </div>
+                          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>{lead.lastContact}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Today's Tasks */}
+                <div style={{
+                  background: 'var(--surface)',
+                  border: '1px solid var(--line)',
+                  borderRadius: 16,
+                  padding: 20,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+                    <h3 style={{ fontSize: 15, fontWeight: 700 }}>وظایف امروز</h3>
+                    <span style={{
+                      fontSize: 11, background: 'var(--goldDim)',
+                      color: 'var(--gold)', padding: '2px 8px',
+                      borderRadius: 6, fontWeight: 600,
+                    }}>{todayTasks.filter(t => !t.done).length} باقی‌مانده</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {todayTasks.map((task, i) => (
+                      <div
+                        key={i}
+                        onClick={() => setTodayTasks(prev => prev.map((t, j) => j === i ? { ...t, done: !t.done } : t))}
+                        style={{
+                          display: 'flex', alignItems: 'flex-start', gap: 10,
+                          padding: '10px 12px',
+                          borderRadius: 10,
+                          background: 'var(--bg)',
+                          border: '1px solid var(--line)',
+                          cursor: 'pointer',
+                          opacity: task.done ? 0.6 : 1,
+                          transition: 'opacity 0.2s',
+                        }}
+                      >
+                        <div style={{
+                          width: 18, height: 18, borderRadius: 5,
+                          border: task.done ? '2px solid #5fd98a' : '2px solid var(--line2)',
+                          background: task.done ? '#5fd98a' : 'transparent',
+                          flexShrink: 0, marginTop: 1,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          transition: 'all 0.15s',
+                        }}>
+                          {task.done && <span style={{ color: '#16140f', fontSize: 11, fontWeight: 900 }}>✓</span>}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{
+                            fontSize: 12, fontWeight: 500,
+                            textDecoration: task.done ? 'line-through' : 'none',
+                            color: task.done ? 'var(--muted)' : 'var(--text)',
+                            lineHeight: 1.5,
+                          }}>{task.text}</div>
+                          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{task.time}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ==================== LISTINGS ==================== */}
+          {activeView === 'listings' && (
+            <div style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--line)',
+              borderRadius: 16,
+              overflow: 'hidden',
+            }}>
+              <div style={{
+                padding: '18px 20px',
+                borderBottom: '1px solid var(--line)',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              }}>
+                <h3 style={{ fontSize: 15, fontWeight: 700 }}>فایل‌های ملکی من</h3>
+                <button style={{
+                  padding: '8px 16px', borderRadius: 10,
+                  background: 'var(--gold)', border: 'none',
+                  color: '#16140f', fontSize: 13, fontWeight: 700,
+                  cursor: 'pointer', fontFamily: 'Vazirmatn, system-ui, sans-serif',
+                }}>+ افزودن فایل</button>
+              </div>
+
+              {/* Table Header */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '2fr 120px 150px 80px 1fr',
+                padding: '11px 20px',
+                background: 'var(--bg2)',
+                borderBottom: '1px solid var(--line)',
+              }}>
+                {['ملک', 'وضعیت', 'قیمت', 'بازدید', 'پیشنهاد هوش مصنوعی'].map((h, i) => (
+                  <div key={i} style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>{h}</div>
+                ))}
+              </div>
+
+              {listings.map((item, i) => (
+                <div
+                  key={item.id}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '2fr 120px 150px 80px 1fr',
+                    padding: '14px 20px',
+                    borderBottom: i < listings.length - 1 ? '1px solid var(--line)' : 'none',
+                    background: i % 2 === 1 ? 'rgba(255,255,255,0.018)' : 'transparent',
+                    alignItems: 'center',
+                  }}
+                >
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{item.title}</div>
+                  <div>
+                    <span style={{
+                      fontSize: 11, fontWeight: 600,
+                      color: item.statusColor,
+                      background: `${item.statusColor}22`,
+                      padding: '3px 10px', borderRadius: 6,
+                    }}>{item.status}</span>
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{item.price}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>👁</span>
+                    <span style={{ fontSize: 13 }}>{item.views}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ color: item.suggestionColor, fontSize: 13 }}>✦</span>
+                    <span style={{ fontSize: 12, color: item.suggestionColor }}>{item.aiSuggestion}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ==================== PIPELINE ==================== */}
+          {activeView === 'pipeline' && (
+            <div>
+              <div style={{ display: 'flex', gap: 14, overflowX: 'auto', paddingBottom: 8 }}>
+                {pipelineColumns.map(col => (
+                  <div key={col.id} style={{ flex: '0 0 260px', display: 'flex', flexDirection: 'column' }}>
+
+                    {/* Column Header */}
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      marginBottom: 12, padding: '10px 14px',
+                      background: 'var(--surface)',
+                      border: '1px solid var(--line)',
+                      borderRadius: 12,
+                      borderTop: `3px solid ${col.color}`,
+                    }}>
+                      <span style={{ flex: 1, fontSize: 13, fontWeight: 700 }}>{col.label}</span>
+                      <span style={{
+                        width: 22, height: 22, borderRadius: 6,
+                        background: `${col.color}22`,
+                        color: col.color,
+                        fontSize: 11, fontWeight: 700,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>{col.cards.length}</span>
+                    </div>
+
+                    {/* Cards */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {col.cards.map(card => (
+                        <div key={card.id} style={{
+                          background: 'var(--surface)',
+                          borderRadius: 12,
+                          padding: 14,
+                          border: '1px solid var(--line)',
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                            <div style={{
+                              width: 34, height: 34, borderRadius: '50%',
+                              background: getGradient(card.name),
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: 11, fontWeight: 700, color: '#16140f',
+                              flexShrink: 0,
+                            }}>{getInitials(card.name)}</div>
+                            <div>
+                              <div style={{ fontSize: 13, fontWeight: 700 }}>{card.name}</div>
+                              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>{card.phone}</div>
+                            </div>
+                          </div>
+                          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>{card.need}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: 13, fontWeight: 600 }}>{card.budget}</span>
+                            <div style={{
+                              display: 'flex', alignItems: 'center', gap: 4,
+                              background: 'var(--goldDim)',
+                              border: '1px solid rgba(201,168,76,0.3)',
+                              borderRadius: 8, padding: '3px 8px',
+                            }}>
+                              <span style={{ fontSize: 10, color: 'var(--gold)' }}>✦</span>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold)' }}>{card.score}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ==================== TASKS ==================== */}
+          {activeView === 'tasks' && (
+            <div style={{ maxWidth: 720 }}>
+
+              {/* Add Task */}
+              <div style={{
+                display: 'flex', gap: 10, marginBottom: 20,
+                background: 'var(--surface)',
+                border: '1px solid var(--line)',
+                borderRadius: 14, padding: 14,
+              }}>
+                <input
+                  value={newTaskText}
+                  onChange={e => setNewTaskText(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addTask()}
+                  placeholder="وظیفه جدید اضافه کنید..."
+                  style={{
+                    flex: 1, padding: '8px 12px',
+                    borderRadius: 10, background: 'var(--bg)',
+                    border: '1px solid var(--line)', color: 'var(--text)',
+                    fontSize: 13, outline: 'none',
+                    fontFamily: 'Vazirmatn, system-ui, sans-serif',
+                  }}
+                />
+                <button
+                  onClick={addTask}
+                  style={{
+                    padding: '8px 20px', borderRadius: 10,
+                    background: 'var(--gold)', border: 'none',
+                    color: '#16140f', fontWeight: 700, fontSize: 13,
+                    cursor: 'pointer', fontFamily: 'Vazirmatn, system-ui, sans-serif',
+                  }}
+                >+ افزودن</button>
+              </div>
+
+              {/* Stats row */}
+              <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+                {[
+                  { label: 'کل', count: tasks.length, color: 'var(--text)' },
+                  { label: 'انجام‌شده', count: tasks.filter(t => t.done).length, color: '#5fd98a' },
+                  { label: 'باقی‌مانده', count: tasks.filter(t => !t.done).length, color: '#e7a14a' },
+                ].map((s, i) => (
+                  <div key={i} style={{
+                    flex: 1, padding: '12px 16px',
+                    background: 'var(--surface)',
+                    border: '1px solid var(--line)',
+                    borderRadius: 10, textAlign: 'center',
+                  }}>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.count}</div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Task List */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {tasks.map(task => (
+                  <div
+                    key={task.id}
+                    onClick={() => toggleTask(task.id)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 12,
+                      padding: '14px 16px',
+                      background: 'var(--surface)',
+                      border: '1px solid var(--line)',
+                      borderRadius: 12,
+                      cursor: 'pointer',
+                      opacity: task.done ? 0.65 : 1,
+                      transition: 'opacity 0.2s',
+                    }}
+                  >
+                    <div style={{
+                      width: 20, height: 20, borderRadius: 6,
+                      border: task.done ? '2px solid #5fd98a' : '2px solid var(--line2)',
+                      background: task.done ? '#5fd98a' : 'transparent',
+                      flexShrink: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      transition: 'all 0.15s',
+                    }}>
+                      {task.done && <span style={{ color: '#16140f', fontSize: 12, fontWeight: 900, lineHeight: 1 }}>✓</span>}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{
+                        fontSize: 14, fontWeight: 500,
+                        textDecoration: task.done ? 'line-through' : 'none',
+                      }}>{task.text}</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                      <span style={{
+                        fontSize: 11, color: 'var(--muted)',
+                        background: 'var(--bg)',
+                        padding: '3px 10px', borderRadius: 6,
+                        border: '1px solid var(--line)',
+                      }}>{task.time}</span>
+                      <span style={{
+                        width: 8, height: 8, borderRadius: '50%',
+                        background: priorityColor[task.priority],
+                        display: 'inline-block',
+                        boxShadow: `0 0 6px ${priorityColor[task.priority]}88`,
+                      }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ==================== CALENDAR ==================== */}
+          {activeView === 'calendar' && (
+            <div style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--line)',
+              borderRadius: 16,
+              overflow: 'hidden',
+            }}>
+              {/* Calendar toolbar */}
+              <div style={{
+                padding: '16px 20px',
+                borderBottom: '1px solid var(--line)',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              }}>
+                <h3 style={{ fontSize: 15, fontWeight: 700 }}>هفته جاری — خرداد ۱۴۰۴</h3>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button style={{
+                    padding: '6px 14px', borderRadius: 8,
+                    background: 'var(--bg)', border: '1px solid var(--line)',
+                    color: 'var(--text)', fontSize: 13, cursor: 'pointer',
+                    fontFamily: 'Vazirmatn, system-ui, sans-serif',
+                  }}>← قبلی</button>
+                  <button style={{
+                    padding: '6px 14px', borderRadius: 8,
+                    background: 'var(--goldDim)', border: '1px solid var(--gold)',
+                    color: 'var(--gold)', fontSize: 13, cursor: 'pointer', fontWeight: 600,
+                    fontFamily: 'Vazirmatn, system-ui, sans-serif',
+                  }}>امروز</button>
+                  <button style={{
+                    padding: '6px 14px', borderRadius: 8,
+                    background: 'var(--bg)', border: '1px solid var(--line)',
+                    color: 'var(--text)', fontSize: 13, cursor: 'pointer',
+                    fontFamily: 'Vazirmatn, system-ui, sans-serif',
+                  }}>بعدی →</button>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex' }}>
+                {/* Time axis */}
+                <div style={{ width: 56, flexShrink: 0, borderLeft: '1px solid var(--line)', paddingTop: 48 }}>
+                  {calendarHours.map(h => (
+                    <div key={h} style={{
+                      height: 60,
+                      display: 'flex', alignItems: 'flex-start',
+                      justifyContent: 'flex-end',
+                      paddingLeft: 8, paddingTop: 4,
+                      fontSize: 11, color: 'var(--faint)',
+                    }}>{h}:۰۰</div>
+                  ))}
+                </div>
+
+                {/* Day columns */}
+                <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
+                  {weekDays.map((day, di) => (
+                    <div key={di} style={{
+                      borderLeft: di < weekDays.length - 1 ? '1px solid var(--line)' : 'none',
+                    }}>
+                      {/* Day header */}
+                      <div style={{
+                        height: 48,
+                        display: 'flex', flexDirection: 'column',
+                        alignItems: 'center', justifyContent: 'center',
+                        borderBottom: '1px solid var(--line)',
+                        background: di === 0 ? 'var(--goldDim)' : 'transparent',
+                      }}>
+                        <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 500 }}>{day}</div>
+                        <div style={{
+                          fontSize: 15, fontWeight: 700, marginTop: 2,
+                          color: di === 0 ? 'var(--gold)' : 'var(--text)',
+                        }}>{weekDates[di]}</div>
+                      </div>
+
+                      {/* Hour grid + events */}
+                      <div style={{ position: 'relative' }}>
+                        {calendarHours.map(h => (
+                          <div key={h} style={{
+                            height: 60,
+                            borderBottom: '1px solid var(--line)',
+                          }} />
+                        ))}
+                        {calendarEvents.filter(ev => ev.day === di).map((ev, ei) => {
+                          const topPx = timeToMinutesFrom9(ev.time)
+                          const heightPx = ev.duration * 60
+                          return (
+                            <div key={ei} style={{
+                              position: 'absolute',
+                              top: topPx,
+                              left: 3, right: 3,
+                              height: Math.max(heightPx - 4, 28),
+                              background: `${ev.color}22`,
+                              border: `1px solid ${ev.color}66`,
+                              borderRadius: 6,
+                              padding: '4px 6px',
+                              overflow: 'hidden',
+                            }}>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: ev.color, lineHeight: 1.4 }}>{ev.time}</div>
+                              <div style={{ fontSize: 10, color: 'var(--text)', lineHeight: 1.4, marginTop: 1 }}>{ev.title}</div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+        </main>
+      </div>
+    </div>
+  )
+}
