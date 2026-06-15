@@ -1,550 +1,776 @@
 'use client'
 import { useState } from 'react'
 import Link from 'next/link'
-import Nav from '../components/Nav'
-import Footer from '../components/Footer'
+import Nav from '@/app/components/Nav'
+import Footer from '@/app/components/Footer'
 
-type Template = {
-  id: string
-  name: string
-  desc: string
-  gradient: string
-  tag: string
-  tagColor: string
-  pages: string[]
+type Device = 'desktop' | 'mobile' | 'tablet'
+type ActiveTab = 'seo' | 'settings' | 'pages'
+
+interface Block {
+  id: number
+  type: string
+  heading: string
 }
 
-type PageItem = { id: string; label: string; icon: string; active: boolean }
-type ComponentItem = { id: string; label: string; icon: string }
-
-const templates: Template[] = [
-  {
-    id: 'modern',
-    name: 'مدرن',
-    desc: 'قالب مینیمال با تمرکز بر عکس‌های ملک',
-    gradient: 'linear-gradient(135deg,#2a2620,#1a1714)',
-    tag: 'محبوب',
-    tagColor: 'var(--gold)',
-    pages: ['خانه', 'آگهی‌ها', 'درباره ما', 'تماس'],
-  },
-  {
-    id: 'luxury',
-    name: 'لوکس',
-    desc: 'طراحی پرمایه برای آژانس‌های ممتاز',
-    gradient: 'linear-gradient(135deg,#1e2028,#141419)',
-    tag: 'پیشنهادی',
-    tagColor: '#7a8fae',
-    pages: ['خانه', 'ملک‌های لوکس', 'سرمایه‌گذاری', 'مشاوران', 'تماس'],
-  },
-  {
-    id: 'classic',
-    name: 'کلاسیک',
-    desc: 'قالب اعتمادساز با ساختار سنتی',
-    gradient: 'linear-gradient(135deg,#1e2318,#131711)',
-    tag: 'ساده',
-    tagColor: '#5fd98a',
-    pages: ['خانه', 'خرید', 'اجاره', 'مشاوران', 'وبلاگ', 'تماس'],
-  },
-  {
-    id: 'minimal',
-    name: 'مینیمال',
-    desc: 'ساده و سریع با تجربه کاربری عالی',
-    gradient: 'linear-gradient(135deg,#221e2a,#161320)',
-    tag: 'سریع',
-    tagColor: '#b07a8a',
-    pages: ['خانه', 'جستجو', 'تماس'],
-  },
+const BLOCK_LIBRARY = [
+  { type: 'hero', label: 'هیرو', icon: '◇' },
+  { type: 'search', label: 'نوار جستجو', icon: '⌕' },
+  { type: 'listings', label: 'آگهی‌های من', icon: '⌂' },
+  { type: 'services', label: 'خدمات', icon: '◈' },
+  { type: 'about', label: 'درباره ما', icon: '¶' },
+  { type: 'stats', label: 'آمار', icon: '◔' },
+  { type: 'gallery', label: 'گالری', icon: '▥' },
+  { type: 'testimonials', label: 'نظرات مشتریان', icon: '❝' },
+  { type: 'cta', label: 'دعوت به اقدام', icon: '➤' },
+  { type: 'contact', label: 'فرم تماس', icon: '✉' },
+  { type: 'footer', label: 'فوتر', icon: '▬' },
 ]
 
-const pageComponents: ComponentItem[] = [
-  { id: 'hero', label: 'بنر اصلی', icon: '▭' },
-  { id: 'search', label: 'جستجوی ملک', icon: '◎' },
-  { id: 'listings', label: 'لیست آگهی‌ها', icon: '◰' },
-  { id: 'stats', label: 'آمار و ارقام', icon: '◈' },
-  { id: 'team', label: 'تیم مشاوران', icon: '◧' },
-  { id: 'testimonials', label: 'نظرات مشتریان', icon: '◴' },
-  { id: 'map', label: 'نقشه تعاملی', icon: '▦' },
-  { id: 'contact', label: 'فرم تماس', icon: '◫' },
-  { id: 'cta', label: 'دکمه اقدام', icon: '◐' },
-  { id: 'gallery', label: 'گالری تصاویر', icon: '▢' },
+const STARTER_TEMPLATES = [
+  { id: 'classic', name: 'مشاور کلاسیک', blocks: ['hero', 'listings', 'testimonials', 'contact'], desc: 'هیرو، فایل‌ها، نظرات، تماس' },
+  { id: 'modern', name: 'مشاور مدرن', blocks: ['hero', 'stats', 'listings', 'about'], desc: 'هیرو، آمار، فایل‌ها، تیم' },
+  { id: 'agency', name: 'آژانس جامع', blocks: ['hero', 'services', 'listings', 'about'], desc: 'هیرو، خدمات، فایل‌ها، تیم' },
+  { id: 'presale', name: 'پیش‌فروش', blocks: ['hero', 'gallery', 'contact'], desc: 'هیرو، پروژه‌ها، فرم' },
 ]
 
-type ActiveTab = 'design' | 'pages' | 'settings' | 'publish'
+const DEFAULT_HEADINGS: Record<string, string> = {
+  hero: 'بهترین ملک را با ما بیابید',
+  search: 'جستجوی ملک',
+  listings: 'آگهی‌های من',
+  services: 'خدمات ما',
+  about: 'درباره ما',
+  stats: 'آمار و ارقام',
+  gallery: 'گالری تصاویر',
+  testimonials: 'نظرات مشتریان',
+  cta: 'همین امروز با ما تماس بگیرید',
+  contact: 'فرم تماس',
+  footer: 'ملک‌جت',
+}
 
-export default function WebsiteBuilderPage() {
-  const [selectedTemplate, setSelectedTemplate] = useState<Template>(templates[0])
-  const [activeTab, setActiveTab] = useState<ActiveTab>('design')
-  const [pages, setPages] = useState<PageItem[]>([
-    { id: 'home', label: 'خانه', icon: '◈', active: true },
-    { id: 'listings', label: 'آگهی‌ها', icon: '◰', active: false },
-    { id: 'about', label: 'درباره ما', icon: '◴', active: false },
-    { id: 'contact', label: 'تماس', icon: '◧', active: false },
-  ])
-  const [activePage, setActivePage] = useState('home')
-  const [addedComponents, setAddedComponents] = useState<string[]>(['hero', 'search', 'listings'])
-  const [primaryColor, setPrimaryColor] = useState('#c9a84c')
-  const [fontChoice, setFontChoice] = useState('vazirmatn')
-  const [layoutStyle, setLayoutStyle] = useState('rtl')
-  const [domain, setDomain] = useState('')
-  const [siteName, setSiteName] = useState('آژانس ملکی نمونه')
-  const [publishStep, setPublishStep] = useState(0)
+let nextId = 1
 
-  const colorOptions = ['#c9a84c', '#5fd98a', '#7a8fae', '#b07a8a', '#e7a14a', '#e7674a']
+function makeBlock(type: string): Block {
+  return { id: nextId++, type, heading: DEFAULT_HEADINGS[type] || type }
+}
 
-  const addComponent = (id: string) => {
-    if (!addedComponents.includes(id)) setAddedComponents(prev => [...prev, id])
-  }
-
-  const removeComponent = (id: string) => {
-    setAddedComponents(prev => prev.filter(c => c !== id))
-  }
-
-  const addPage = () => {
-    const id = `page_${Date.now()}`
-    setPages(prev => [...prev, { id, label: 'صفحه جدید', icon: '◰', active: false }])
-  }
-
-  const previewComponents = pageComponents.filter(c => addedComponents.includes(c.id))
+function BlockPreview({ block, selected, onSelect, onUp, onDown, onDelete }: {
+  block: Block
+  selected: boolean
+  onSelect: () => void
+  onUp: () => void
+  onDown: () => void
+  onDelete: () => void
+}) {
+  const [hovered, setHovered] = useState(false)
+  const showControls = hovered || selected
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
-      <Nav />
-
-      {/* Header */}
-      <section style={{ background: 'var(--bg2)', borderBottom: '1px solid var(--line)', padding: '36px 24px 32px' }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 20 }}>
-            <div>
-              <div style={{ fontSize: 11, background: 'var(--goldDim)', color: 'var(--gold)', padding: '4px 10px', borderRadius: 20, fontWeight: 700, display: 'inline-block', marginBottom: 12 }}>سازنده وبسایت</div>
-              <h1 style={{ fontSize: 30, fontWeight: 900, margin: '0 0 8px', letterSpacing: '-1px' }}>ساخت وبسایت تخصصی ملک ✦</h1>
-              <p style={{ color: 'var(--muted)', fontSize: 14, margin: 0 }}>وبسایت اختصاصی آژانس یا مشاور خود را در چند دقیقه بسازید</p>
-            </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button style={{ padding: '10px 20px', borderRadius: 11, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--text)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                پیش‌نمایش
-              </button>
-              <button
-                onClick={() => setPublishStep(1)}
-                style={{ padding: '10px 22px', borderRadius: 11, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 13, fontWeight: 800, border: 'none', cursor: 'pointer' }}>
-                انتشار وبسایت
-              </button>
-            </div>
-          </div>
-
-          {/* Tabs */}
-          <div style={{ display: 'flex', gap: 4, marginTop: 24, borderBottom: '1px solid var(--line)', paddingBottom: 0 }}>
-            {([
-              ['design', 'طراحی', '◈'],
-              ['pages', 'صفحات', '◰'],
-              ['settings', 'تنظیمات', '◴'],
-              ['publish', 'انتشار', '▦'],
-            ] as [ActiveTab, string, string][]).map(([id, label, icon]) => (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 7,
-                  padding: '10px 20px', border: 'none', background: 'transparent',
-                  color: activeTab === id ? 'var(--gold)' : 'var(--muted)',
-                  fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                  borderBottom: `2px solid ${activeTab === id ? 'var(--gold)' : 'transparent'}`,
-                  marginBottom: -1,
-                }}
-              >
-                <span>{icon}</span>
-                <span>{label}</span>
-              </button>
-            ))}
-          </div>
+    <div
+      onClick={onSelect}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        position: 'relative',
+        border: selected ? '2px solid var(--gold)' : '2px solid transparent',
+        cursor: 'pointer',
+        transition: 'border-color .15s',
+      }}
+    >
+      {showControls && (
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
+          display: 'flex', alignItems: 'center',
+          background: selected ? 'var(--gold)' : 'rgba(0,0,0,0.78)',
+          padding: '4px 10px', gap: 6,
+        }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: selected ? '#16140f' : '#fff', flex: 1 }}>
+            {BLOCK_LIBRARY.find(b => b.type === block.type)?.label || block.type}
+          </span>
+          <button onClick={e => { e.stopPropagation(); onUp() }} style={{ width: 22, height: 22, borderRadius: 5, border: 'none', background: 'rgba(255,255,255,0.2)', color: '#fff', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>▲</button>
+          <button onClick={e => { e.stopPropagation(); onDown() }} style={{ width: 22, height: 22, borderRadius: 5, border: 'none', background: 'rgba(255,255,255,0.2)', color: '#fff', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>▼</button>
+          <button onClick={e => { e.stopPropagation(); onDelete() }} style={{ width: 22, height: 22, borderRadius: 5, border: 'none', background: 'rgba(220,60,60,0.55)', color: '#fff', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
         </div>
-      </section>
+      )}
 
-      {/* Template Selection (always shown at top if design tab) */}
-      {activeTab === 'design' && (
-        <div style={{ background: 'var(--bg2)', borderBottom: '1px solid var(--line)', padding: '20px 24px' }}>
-          <div style={{ maxWidth: 1280, margin: '0 auto' }}>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12, fontWeight: 600 }}>قالب‌ها:</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-              {templates.map(t => (
-                <div
-                  key={t.id}
-                  onClick={() => setSelectedTemplate(t)}
-                  style={{
-                    border: `2px solid ${selectedTemplate.id === t.id ? 'var(--gold)' : 'var(--line)'}`,
-                    borderRadius: 13, overflow: 'hidden', cursor: 'pointer',
-                    boxShadow: selectedTemplate.id === t.id ? '0 0 0 3px rgba(201,168,76,0.15)' : 'none',
-                    transition: 'all .2s',
-                  }}
-                >
-                  <div style={{ height: 80, background: t.gradient, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div style={{ width: '70%', height: 10, borderRadius: 4, background: 'rgba(255,255,255,0.15)', marginBottom: 8 }} />
-                    <span style={{ position: 'absolute', top: 8, right: 8, fontSize: 9, padding: '2px 7px', borderRadius: 8, background: `${t.tagColor}30`, color: t.tagColor, fontWeight: 700 }}>{t.tag}</span>
-                  </div>
-                  <div style={{ padding: '10px 12px', background: 'var(--surface)' }}>
-                    <div style={{ fontWeight: 700, fontSize: 13 }}>{t.name}</div>
-                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2, lineHeight: 1.4 }}>{t.desc}</div>
-                  </div>
-                </div>
-              ))}
+      {block.type === 'hero' && (
+        <div style={{ background: 'linear-gradient(140deg,#1a1510,#2d2215,#1a1510)', padding: '44px 24px', textAlign: 'center', direction: 'rtl' }}>
+          <div style={{ fontSize: 20, fontWeight: 900, color: '#fff', marginBottom: 8, letterSpacing: '-0.5px' }}>{block.heading}</div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 18 }}>مشاور املاک حرفه‌ای با بیش از ۱۰ سال تجربه</div>
+          <span style={{ display: 'inline-block', padding: '8px 22px', background: 'linear-gradient(135deg,#b8922a,#c9a84c)', borderRadius: 8, fontSize: 12, fontWeight: 700, color: '#16140f' }}>مشاهده ملک‌ها</span>
+        </div>
+      )}
+      {block.type === 'search' && (
+        <div style={{ background: '#f5f3ef', padding: '20px 24px', direction: 'rtl' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#2a2215', marginBottom: 12 }}>{block.heading}</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ flex: 1, height: 36, background: '#fff', border: '1px solid #ddd', borderRadius: 8, display: 'flex', alignItems: 'center', padding: '0 12px' }}>
+              <span style={{ fontSize: 11, color: '#aaa' }}>منطقه، شهر یا محله را وارد کنید...</span>
+            </div>
+            <div style={{ width: 80, height: 36, background: 'linear-gradient(135deg,#b8922a,#c9a84c)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#16140f' }}>جستجو</span>
             </div>
           </div>
         </div>
       )}
-
-      {/* Main Builder Layout */}
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 40px' }}>
-
-        {/* Design Tab */}
-        {activeTab === 'design' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 260px', gap: 20, marginTop: 24 }}>
-            {/* Left Panel - Components */}
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: '16px', height: 'fit-content' }}>
-              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 14, color: 'var(--muted)' }}>اجزای صفحه</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {pageComponents.map(comp => {
-                  const isAdded = addedComponents.includes(comp.id)
-                  return (
-                    <div
-                      key={comp.id}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 10,
-                        padding: '9px 12px', borderRadius: 10,
-                        background: isAdded ? 'var(--goldDim)' : 'var(--bg)',
-                        border: `1px solid ${isAdded ? 'var(--gold)' : 'var(--line)'}`,
-                        cursor: 'pointer', transition: 'all .15s',
-                        fontSize: 12.5,
-                      }}
-                      onClick={() => isAdded ? removeComponent(comp.id) : addComponent(comp.id)}
-                    >
-                      <span style={{ color: isAdded ? 'var(--gold)' : 'var(--faint)' }}>{comp.icon}</span>
-                      <span style={{ flex: 1, color: isAdded ? 'var(--gold)' : 'var(--text)' }}>{comp.label}</span>
-                      <span style={{ fontSize: 11, color: isAdded ? 'var(--gold)' : 'var(--faint)' }}>{isAdded ? '✓' : '+'}</span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* Center - Preview */}
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden' }}>
-              {/* Browser mockup bar */}
-              <div style={{ background: 'var(--bg)', borderBottom: '1px solid var(--line)', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ display: 'flex', gap: 5 }}>
-                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#e7674a' }} />
-                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#e7a14a' }} />
-                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#5fd98a' }} />
-                </div>
-                <div style={{ flex: 1, background: 'var(--surface)', borderRadius: 7, padding: '4px 12px', fontSize: 11, color: 'var(--faint)', textAlign: 'center' }}>
-                  {siteName.toLowerCase().replace(/\s/g, '')}.melkjet.ir
-                </div>
-              </div>
-              {/* Preview Content */}
-              <div style={{ direction: 'rtl', fontFamily: 'Vazirmatn, sans-serif' }}>
-                {/* Mock Nav */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', background: 'var(--navbg)', borderBottom: '1px solid var(--line)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ width: 28, height: 28, borderRadius: 8, background: primaryColor, opacity: 0.9 }} />
-                    <span style={{ fontWeight: 800, fontSize: 14 }}>{siteName}</span>
-                  </div>
-                  <div style={{ display: 'flex', gap: 12, fontSize: 12, color: 'var(--muted)' }}>
-                    {selectedTemplate.pages.slice(0, 4).map(p => <span key={p}>{p}</span>)}
-                  </div>
-                </div>
-
-                {/* Preview Blocks */}
-                <div>
-                  {previewComponents.map(comp => (
-                    <div key={comp.id} style={{ borderBottom: '1px dashed var(--line)', padding: '18px 20px', position: 'relative' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                        <span style={{ fontSize: 14, color: primaryColor }}>{comp.icon}</span>
-                        <span style={{ fontSize: 13, fontWeight: 700 }}>{comp.label}</span>
-                        <button
-                          onClick={() => removeComponent(comp.id)}
-                          style={{ marginRight: 'auto', width: 22, height: 22, borderRadius: 6, border: '1px solid var(--line)', background: 'transparent', cursor: 'pointer', color: 'var(--faint)', fontSize: 12 }}>×</button>
-                      </div>
-                      {comp.id === 'hero' && (
-                        <div style={{ borderRadius: 12, background: selectedTemplate.gradient, height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-                          <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: 16, fontWeight: 800, color: 'rgba(255,255,255,0.9)', marginBottom: 8 }}>{siteName}</div>
-                            <div style={{ display: 'inline-block', padding: '6px 16px', background: primaryColor, borderRadius: 8, fontSize: 12, fontWeight: 700, color: '#16140f' }}>جستجوی ملک</div>
-                          </div>
-                        </div>
-                      )}
-                      {comp.id === 'search' && (
-                        <div style={{ display: 'flex', gap: 8, background: 'var(--bg)', padding: 12, borderRadius: 10 }}>
-                          <div style={{ flex: 1, height: 32, background: 'var(--surface)', borderRadius: 7, border: '1px solid var(--line)' }} />
-                          <div style={{ width: 70, height: 32, background: primaryColor, borderRadius: 7, opacity: 0.8 }} />
-                        </div>
-                      )}
-                      {comp.id === 'listings' && (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
-                          {[1,2,3].map(i => (
-                            <div key={i} style={{ background: 'var(--bg)', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--line)' }}>
-                              <div style={{ height: 50, background: `linear-gradient(135deg,#${(3+i).toString(16)}a3530,#2${i}1e1b)` }} />
-                              <div style={{ padding: 8 }}>
-                                <div style={{ height: 8, background: 'var(--surface)', borderRadius: 3, marginBottom: 5 }} />
-                                <div style={{ height: 6, background: 'var(--surface)', borderRadius: 3, width: '60%' }} />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {!['hero','search','listings'].includes(comp.id) && (
-                        <div style={{ height: 44, background: 'var(--bg)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <span style={{ fontSize: 12, color: 'var(--faint)' }}>بلوک {comp.label}</span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                  {previewComponents.length === 0 && (
-                    <div style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, color: 'var(--faint)' }}>
-                      <span style={{ fontSize: 32 }}>◈</span>
-                      <span style={{ fontSize: 13 }}>از پنل سمت راست اجزا را اضافه کنید</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Right Panel - Style Controls */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18 }}>
-                <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 14, color: 'var(--muted)' }}>رنگ اصلی</div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {colorOptions.map(c => (
-                    <div
-                      key={c}
-                      onClick={() => setPrimaryColor(c)}
-                      style={{
-                        width: 32, height: 32, borderRadius: 9, background: c, cursor: 'pointer',
-                        border: primaryColor === c ? '3px solid var(--text)' : '3px solid transparent',
-                        transition: 'all .15s',
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18 }}>
-                <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, color: 'var(--muted)' }}>فونت</div>
-                {['vazirmatn', 'iran-sans', 'dana'].map(f => (
-                  <label key={f} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, cursor: 'pointer', fontSize: 13 }}>
-                    <input type="radio" name="font" checked={fontChoice === f} onChange={() => setFontChoice(f)} style={{ accentColor: 'var(--gold)' }} />
-                    <span>{f === 'vazirmatn' ? 'وزیرمتن' : f === 'iran-sans' ? 'ایران سنس' : 'دانا'}</span>
-                  </label>
-                ))}
-              </div>
-
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18 }}>
-                <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, color: 'var(--muted)' }}>چیدمان</div>
-                {[['rtl', 'راست به چپ (فارسی)'], ['ltr', 'چپ به راست']].map(([val, label]) => (
-                  <label key={val} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, cursor: 'pointer', fontSize: 13 }}>
-                    <input type="radio" name="layout" checked={layoutStyle === val} onChange={() => setLayoutStyle(val)} style={{ accentColor: 'var(--gold)' }} />
-                    <span>{label}</span>
-                  </label>
-                ))}
-              </div>
-
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18 }}>
-                <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, color: 'var(--muted)' }}>قالب انتخابی</div>
-                <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{selectedTemplate.name}</div>
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.5 }}>{selectedTemplate.desc}</div>
-                <div style={{ fontSize: 11, color: 'var(--faint)' }}>{selectedTemplate.pages.length} صفحه پیش‌فرض</div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Pages Tab */}
-        {activeTab === 'pages' && (
-          <div style={{ marginTop: 24, display: 'grid', gridTemplateColumns: '280px 1fr', gap: 20 }}>
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18, height: 'fit-content' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--muted)' }}>صفحات سایت</div>
-                <button onClick={addPage} style={{ padding: '4px 10px', borderRadius: 7, background: 'var(--goldDim)', color: 'var(--gold)', border: '1px solid rgba(201,168,76,0.3)', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>+ افزودن</button>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {pages.map(page => (
-                  <div
-                    key={page.id}
-                    onClick={() => setActivePage(page.id)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 11,
-                      background: activePage === page.id ? 'var(--goldDim)' : 'var(--bg)',
-                      border: `1px solid ${activePage === page.id ? 'var(--gold)' : 'var(--line)'}`,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <span style={{ color: activePage === page.id ? 'var(--gold)' : 'var(--faint)' }}>{page.icon}</span>
-                    <span style={{ fontSize: 13, fontWeight: activePage === page.id ? 700 : 400 }}>{page.label}</span>
-                    {activePage === page.id && <span style={{ marginRight: 'auto', fontSize: 10, color: 'var(--gold)' }}>فعال</span>}
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 24 }}>
-              <h3 style={{ margin: '0 0 20px', fontSize: 16, fontWeight: 800 }}>تنظیمات صفحه</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div>
-                  <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>عنوان صفحه</label>
-                  <input defaultValue={pages.find(p => p.id === activePage)?.label} style={{ width: '100%', padding: '10px 14px', background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 10, color: 'var(--text)', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>آدرس URL</label>
-                  <input defaultValue={`/${activePage}`} style={{ width: '100%', padding: '10px 14px', background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 10, color: 'var(--text)', fontSize: 14, outline: 'none', boxSizing: 'border-box', direction: 'ltr' }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>توضیحات سئو</label>
-                  <textarea rows={3} placeholder="توضیح کوتاه برای موتورهای جستجو..." style={{ width: '100%', padding: '10px 14px', background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 10, color: 'var(--text)', fontSize: 13, outline: 'none', resize: 'vertical', boxSizing: 'border-box' }} />
-                </div>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-                    <input type="checkbox" defaultChecked style={{ accentColor: 'var(--gold)' }} />
-                    <span>در منوی اصلی نمایش داده شود</span>
-                  </label>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Settings Tab */}
-        {activeTab === 'settings' && (
-          <div style={{ marginTop: 24, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 20 }}>
-            {[
-              {
-                title: 'اطلاعات سایت',
-                fields: [
-                  { label: 'نام سایت', value: siteName, setter: setSiteName, type: 'text' },
-                  { label: 'توضیحات کوتاه', value: 'بهترین آژانس ملکی منطقه', setter: () => {}, type: 'text' },
-                  { label: 'ایمیل تماس', value: 'info@example.com', setter: () => {}, type: 'email' },
-                  { label: 'شماره تماس', value: '۰۲۱-۱۲۳۴۵۶۷۸', setter: () => {}, type: 'text' },
-                ],
-              },
-              {
-                title: 'آدرس دفتر',
-                fields: [
-                  { label: 'شهر', value: 'تهران', setter: () => {}, type: 'text' },
-                  { label: 'منطقه / محله', value: 'سعادت‌آباد', setter: () => {}, type: 'text' },
-                  { label: 'آدرس کامل', value: 'خیابان سرو، پلاک ۱۲', setter: () => {}, type: 'text' },
-                  { label: 'کد پستی', value: '۱۴۵۷۹', setter: () => {}, type: 'text' },
-                ],
-              },
-            ].map(section => (
-              <div key={section.title} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 24 }}>
-                <h3 style={{ margin: '0 0 18px', fontSize: 15, fontWeight: 800 }}>{section.title}</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  {section.fields.map(field => (
-                    <div key={field.label}>
-                      <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 5 }}>{field.label}</label>
-                      <input defaultValue={field.value} type={field.type} style={{ width: '100%', padding: '9px 13px', background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 9, color: 'var(--text)', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
-                    </div>
-                  ))}
+      {block.type === 'listings' && (
+        <div style={{ background: '#fff', padding: '20px 24px', direction: 'rtl' }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: '#1a1510', marginBottom: 14 }}>{block.heading}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+            {[['#2d2215','#1e1a12'],['#1e2215','#141a10'],['#15202d','#101828']].map(([from,to], i) => (
+              <div key={i} style={{ background: '#f5f3ef', borderRadius: 10, overflow: 'hidden', border: '1px solid #eee' }}>
+                <div style={{ height: 70, background: `linear-gradient(135deg,${from},${to})` }} />
+                <div style={{ padding: '10px' }}>
+                  <div style={{ height: 8, background: '#e0ddd8', borderRadius: 3, marginBottom: 5, width: '80%' }} />
+                  <div style={{ height: 6, background: '#e0ddd8', borderRadius: 3, width: '55%', marginBottom: 8 }} />
+                  <div style={{ height: 10, background: 'rgba(201,168,76,0.25)', borderRadius: 3, width: '45%' }} />
                 </div>
               </div>
             ))}
-
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 24 }}>
-              <h3 style={{ margin: '0 0 18px', fontSize: 15, fontWeight: 800 }}>شبکه‌های اجتماعی</h3>
-              {[['اینستاگرام', '@ نام کاربری'], ['تلگرام', 't.me/...'], ['واتساپ', '۰۹۱۲...']].map(([label, placeholder]) => (
-                <div key={label} style={{ marginBottom: 14 }}>
-                  <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 5 }}>{label}</label>
-                  <input placeholder={placeholder} style={{ width: '100%', padding: '9px 13px', background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 9, color: 'var(--text)', fontSize: 13, outline: 'none', boxSizing: 'border-box', direction: 'ltr' }} />
-                </div>
-              ))}
-            </div>
-
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 24 }}>
-              <h3 style={{ margin: '0 0 18px', fontSize: 15, fontWeight: 800 }}>سئو پیشرفته</h3>
-              {[['کلمات کلیدی', 'خرید ملک، اجاره آپارتمان...'], ['عنوان در گوگل', `${siteName} | آژانس ملکی`]].map(([label, placeholder]) => (
-                <div key={label} style={{ marginBottom: 14 }}>
-                  <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 5 }}>{label}</label>
-                  <input placeholder={placeholder} style={{ width: '100%', padding: '9px 13px', background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 9, color: 'var(--text)', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
-                </div>
-              ))}
-              <div style={{ marginTop: 12 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-                  <input type="checkbox" defaultChecked style={{ accentColor: 'var(--gold)' }} />
-                  <span>فعال‌سازی Sitemap خودکار</span>
-                </label>
+          </div>
+        </div>
+      )}
+      {block.type === 'services' && (
+        <div style={{ background: '#faf9f7', padding: '20px 24px', direction: 'rtl' }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: '#1a1510', marginBottom: 14, textAlign: 'center' }}>{block.heading}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+            {[['خرید ملک','◇'],['اجاره','⌂'],['مشاوره','◈']].map(([s,icon]) => (
+              <div key={s} style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: '14px 10px', textAlign: 'center' }}>
+                <div style={{ fontSize: 20, marginBottom: 6, color: '#c9a84c' }}>{icon}</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#1a1510' }}>{s}</div>
               </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {block.type === 'about' && (
+        <div style={{ background: '#fff', padding: '22px 24px', direction: 'rtl' }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: '#1a1510', marginBottom: 12 }}>{block.heading}</div>
+          {[85, 65, 75, 50, 80].map((w, i) => (
+            <div key={i} style={{ height: 7, background: '#ece9e4', borderRadius: 3, marginBottom: 7, width: `${w}%` }} />
+          ))}
+        </div>
+      )}
+      {block.type === 'stats' && (
+        <div style={{ background: '#f5f3ef', padding: '20px 24px', direction: 'rtl' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+            {[['۵۰۰+','ملک فروخته'],['۱۲','سال تجربه'],['۲۰۰','مشتری راضی'],['۹۸٪','رضایت']].map(([num,lbl]) => (
+              <div key={lbl} style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: '12px 8px', textAlign: 'center' }}>
+                <div style={{ fontSize: 16, fontWeight: 900, color: '#c9a84c', marginBottom: 4 }}>{num}</div>
+                <div style={{ fontSize: 10, color: '#888' }}>{lbl}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {block.type === 'gallery' && (
+        <div style={{ background: '#fff', padding: '20px 24px', direction: 'rtl' }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: '#1a1510', marginBottom: 12 }}>{block.heading}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }}>
+            {[['#2d2215','#1a1510'],['#1e2530','#141c25'],['#252015','#1a1a0d'],['#201528','#150e1e']].map(([from,to], i) => (
+              <div key={i} style={{ height: 64, background: `linear-gradient(135deg,${from},${to})`, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ fontSize: 18, color: 'rgba(255,255,255,0.18)' }}>▥</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {block.type === 'testimonials' && (
+        <div style={{ background: '#faf9f7', padding: '20px 24px', direction: 'rtl' }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: '#1a1510', marginBottom: 12, textAlign: 'center' }}>{block.heading}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10 }}>
+            {[['علی رضایی','خرید آپارتمان در نیاوران'],['مریم احمدی','اجاره ویلا در شمال']].map(([name,desc]) => (
+              <div key={name} style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: '12px' }}>
+                <div style={{ fontSize: 16, color: '#c9a84c', marginBottom: 6 }}>❝</div>
+                <div style={{ height: 6, background: '#ece9e4', borderRadius: 3, marginBottom: 5, width: '90%' }} />
+                <div style={{ height: 6, background: '#ece9e4', borderRadius: 3, marginBottom: 10, width: '70%' }} />
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#1a1510' }}>{name}</div>
+                <div style={{ fontSize: 9, color: '#aaa' }}>{desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {block.type === 'cta' && (
+        <div style={{ background: 'linear-gradient(135deg,#2d2215,#1a1510)', padding: '30px 24px', textAlign: 'center', direction: 'rtl' }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', marginBottom: 6 }}>{block.heading}</div>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', marginBottom: 18 }}>کارشناسان ما آماده پاسخگویی هستند</div>
+          <span style={{ display: 'inline-block', padding: '8px 24px', background: 'linear-gradient(135deg,#b8922a,#c9a84c)', borderRadius: 8, fontSize: 12, fontWeight: 700, color: '#16140f' }}>تماس با ما</span>
+        </div>
+      )}
+      {block.type === 'contact' && (
+        <div style={{ background: '#fff', padding: '20px 24px', direction: 'rtl' }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: '#1a1510', marginBottom: 14 }}>{block.heading}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+            <div style={{ height: 32, background: '#f5f3ef', border: '1px solid #ddd', borderRadius: 7 }} />
+            <div style={{ height: 32, background: '#f5f3ef', border: '1px solid #ddd', borderRadius: 7 }} />
+          </div>
+          <div style={{ height: 64, background: '#f5f3ef', border: '1px solid #ddd', borderRadius: 7, marginBottom: 10 }} />
+          <div style={{ width: 90, height: 30, background: 'linear-gradient(135deg,#b8922a,#c9a84c)', borderRadius: 7 }} />
+        </div>
+      )}
+      {block.type === 'footer' && (
+        <div style={{ background: '#0d0b08', padding: '22px 24px', direction: 'rtl' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 14 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: '#c9a84c', marginBottom: 8 }}>{block.heading}</div>
+              {[60,50,45].map((w,i) => <div key={i} style={{ height: 5, background: '#2a2218', borderRadius: 2, marginBottom: 5, width: `${w}%` }} />)}
+            </div>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#555', marginBottom: 8 }}>لینک‌های سریع</div>
+              {['خانه','آگهی‌ها','درباره ما','تماس'].map(l => <div key={l} style={{ fontSize: 10, color: '#444', marginBottom: 5 }}>{l}</div>)}
+            </div>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#555', marginBottom: 8 }}>اطلاعات تماس</div>
+              {[55,65,50].map((w,i) => <div key={i} style={{ height: 5, background: '#2a2218', borderRadius: 2, marginBottom: 5, width: `${w}%` }} />)}
             </div>
           </div>
-        )}
+          <div style={{ borderTop: '1px solid #1a1510', paddingTop: 10, textAlign: 'center' }}>
+            <span style={{ fontSize: 9, color: '#333' }}>© ۱۴۰۴ — تمامی حقوق محفوظ است</span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
-        {/* Publish Tab */}
-        {activeTab === 'publish' && (
-          <div style={{ marginTop: 24, maxWidth: 600 }}>
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 28, marginBottom: 20 }}>
-              <h3 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: 800 }}>انتشار وبسایت</h3>
+export default function WebsiteBuilderPage() {
+  const [blocks, setBlocks] = useState<Block[]>([
+    makeBlock('hero'),
+    makeBlock('search'),
+    makeBlock('listings'),
+  ])
+  const [selectedBlock, setSelectedBlock] = useState<number | null>(null)
+  const [device, setDevice] = useState<Device>('desktop')
+  const [activeTab, setActiveTab] = useState<ActiveTab>('seo')
+  const [seoTitle, setSeoTitle] = useState('آژانس ملکی نمونه | خرید و فروش ملک')
+  const [seoDesc, setSeoDesc] = useState('بهترین آژانس ملکی در تهران با بیش از ۱۰ سال سابقه. خرید، فروش و اجاره ملک با مشاوره رایگان.')
+  const [slug, setSlug] = useState('agency-sample')
+  const [publishSuccess, setPublishSuccess] = useState(false)
+  const [history, setHistory] = useState<Block[][]>([])
+  const [pages, setPages] = useState([
+    { id: 'home', label: 'صفحه اصلی', active: true },
+    { id: 'listings', label: 'فایل‌ها / محصولات', active: false },
+    { id: 'about', label: 'درباره ما', active: false },
+    { id: 'contact', label: 'تماس', active: false },
+  ])
+  const [blockHeadingEdit, setBlockHeadingEdit] = useState('')
 
-              <div style={{ marginBottom: 20 }}>
-                <label style={{ fontSize: 13, color: 'var(--muted)', display: 'block', marginBottom: 8 }}>آدرس وبسایت (زیردامنه ملک‌جت)</label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <input
-                    value={domain}
-                    onChange={e => setDomain(e.target.value)}
-                    placeholder="نام-آژانس"
-                    style={{ flex: 1, padding: '10px 14px', background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 10, color: 'var(--text)', fontSize: 14, outline: 'none', direction: 'ltr' }}
-                  />
-                  <span style={{ display: 'flex', alignItems: 'center', padding: '0 14px', background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 10, fontSize: 13, color: 'var(--muted)', direction: 'ltr' }}>.melkjet.ir</span>
-                </div>
+  const pushHistory = (b: Block[]) => setHistory(h => [...h.slice(-19), b])
+
+  const addBlock = (type: string) => {
+    pushHistory(blocks)
+    const nb = makeBlock(type)
+    setBlocks(prev => [...prev, nb])
+    setSelectedBlock(nb.id)
+    setBlockHeadingEdit(nb.heading)
+    setActiveTab('settings')
+  }
+
+  const loadTemplate = (tpl: typeof STARTER_TEMPLATES[0]) => {
+    pushHistory(blocks)
+    const nb = tpl.blocks.map(t => makeBlock(t))
+    setBlocks(nb)
+    setSelectedBlock(null)
+  }
+
+  const deleteBlock = (id: number) => {
+    pushHistory(blocks)
+    setBlocks(prev => prev.filter(b => b.id !== id))
+    if (selectedBlock === id) setSelectedBlock(null)
+  }
+
+  const moveBlock = (id: number, dir: -1 | 1) => {
+    pushHistory(blocks)
+    setBlocks(prev => {
+      const idx = prev.findIndex(b => b.id === id)
+      if (idx < 0) return prev
+      const next = idx + dir
+      if (next < 0 || next >= prev.length) return prev
+      const arr = [...prev]
+      ;[arr[idx], arr[next]] = [arr[next], arr[idx]]
+      return arr
+    })
+  }
+
+  const undo = () => {
+    if (history.length === 0) return
+    setBlocks(history[history.length - 1])
+    setHistory(h => h.slice(0, -1))
+  }
+
+  const updateBlockHeading = (id: number, heading: string) => {
+    setBlocks(prev => prev.map(b => b.id === id ? { ...b, heading } : b))
+  }
+
+  const selectedBlockObj = blocks.find(b => b.id === selectedBlock) || null
+
+  const canvasWidth: string | number = device === 'mobile' ? 375 : device === 'tablet' ? 768 : '100%'
+
+  const addPage = () => {
+    setPages(prev => [...prev, { id: `page_${Date.now()}`, label: 'صفحه جدید', active: false }])
+  }
+
+  return (
+    <div style={{ height: '100vh', background: 'var(--bg)', color: 'var(--text)', direction: 'rtl', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+      {/* STICKY TOOLBAR */}
+      <div style={{
+        flexShrink: 0,
+        background: 'var(--navbg)',
+        borderBottom: '1px solid var(--line)',
+        backdropFilter: 'blur(20px)',
+        display: 'flex', alignItems: 'center', gap: 12, padding: '0 20px', height: 52,
+        zIndex: 100,
+      }}>
+        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 5, textDecoration: 'none', color: 'var(--muted)', fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
+          <span style={{ fontSize: 16, lineHeight: 1 }}>‹</span>
+          <span>بازگشت</span>
+        </Link>
+
+        <div style={{ width: 1, height: 24, background: 'var(--line)', flexShrink: 0 }} />
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ width: 11, height: 11, background: 'var(--bg)', transform: 'rotate(45deg)', borderRadius: 2, display: 'block' }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800, lineHeight: 1.1 }}>وب‌سایت‌ساز ملک‌جت</div>
+            <div style={{ fontSize: 10, color: 'var(--muted)', direction: 'ltr', lineHeight: 1.3 }}>{slug}.melkjet.site</div>
+          </div>
+        </div>
+
+        <div style={{ flex: 1 }} />
+
+        {/* Device toggle */}
+        <div style={{ display: 'flex', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 9, padding: 3, gap: 2 }}>
+          {([
+            ['desktop', '▭', 'دسکتاپ'],
+            ['tablet', '▯', 'تبلت'],
+            ['mobile', '☐', 'موبایل'],
+          ] as [Device, string, string][]).map(([d, icon, label]) => (
+            <button
+              key={d}
+              onClick={() => setDevice(d)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 7,
+                border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                background: device === d ? 'var(--goldDim)' : 'transparent',
+                color: device === d ? 'var(--gold)' : 'var(--muted)',
+                transition: 'all .15s',
+              }}
+            >
+              <span>{icon}</span>
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
+
+        <div style={{ width: 1, height: 24, background: 'var(--line)', flexShrink: 0 }} />
+
+        <button
+          onClick={undo}
+          disabled={history.length === 0}
+          style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid var(--line)', background: 'transparent', color: history.length > 0 ? 'var(--text)' : 'var(--faint)', cursor: history.length > 0 ? 'pointer' : 'default', fontSize: 12, fontWeight: 600 }}
+        >↩ واگرد</button>
+        <button style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid var(--line)', background: 'transparent', color: 'var(--faint)', cursor: 'default', fontSize: 12, fontWeight: 600 }}>
+          ↪ بازگرد
+        </button>
+
+        <button style={{ padding: '5px 16px', borderRadius: 8, border: '1px solid var(--line)', background: 'transparent', color: 'var(--text)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+          ذخیره
+        </button>
+
+        <button
+          onClick={() => setPublishSuccess(true)}
+          style={{ padding: '6px 18px', borderRadius: 8, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', border: 'none', color: '#16140f', fontSize: 12, fontWeight: 800, cursor: 'pointer', flexShrink: 0 }}
+        >
+          انتشار سایت
+        </button>
+      </div>
+
+      {/* THREE-COLUMN BUILDER */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+
+        {/* LEFT PANEL - Block Library */}
+        <div style={{
+          width: 230, flexShrink: 0, borderLeft: '1px solid var(--line)',
+          background: 'var(--bg2)', overflowY: 'auto', padding: '16px 0',
+        }}>
+          <div style={{ padding: '0 14px', marginBottom: 4 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', marginBottom: 10 }}>قالب آماده</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {STARTER_TEMPLATES.map(tpl => (
+                <button
+                  key={tpl.id}
+                  onClick={() => loadTemplate(tpl)}
+                  style={{
+                    textAlign: 'right', padding: '9px 12px', borderRadius: 10,
+                    border: '1px solid var(--line)', background: 'var(--surface)',
+                    cursor: 'pointer', transition: 'all .15s', width: '100%',
+                  }}
+                >
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 2 }}>{tpl.name}</div>
+                  <div style={{ fontSize: 10, color: 'var(--faint)', lineHeight: 1.4 }}>{tpl.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ height: 1, background: 'var(--line)', margin: '14px 0' }} />
+
+          <div style={{ padding: '0 14px' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', marginBottom: 10 }}>بلوک‌ها</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {BLOCK_LIBRARY.map(bl => (
+                <button
+                  key={bl.type}
+                  onClick={() => addBlock(bl.type)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '8px 12px', borderRadius: 9,
+                    border: '1px solid var(--line)', background: 'var(--surface)',
+                    cursor: 'pointer', transition: 'all .15s', width: '100%', textAlign: 'right',
+                  }}
+                >
+                  <span style={{ fontSize: 14, color: 'var(--gold)', flexShrink: 0 }}>{bl.icon}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text)', fontWeight: 600 }}>{bl.label}</span>
+                  <span style={{ marginRight: 'auto', fontSize: 14, color: 'var(--faint)' }}>+</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* CENTER - Canvas */}
+        <div style={{
+          flex: 1, background: 'var(--bg)', overflowY: 'auto', overflowX: 'auto',
+          display: 'flex', flexDirection: 'column',
+          alignItems: device !== 'desktop' ? 'center' : 'stretch',
+          padding: device !== 'desktop' ? '20px' : 0,
+        }}>
+          <div style={{
+            width: canvasWidth,
+            minHeight: '100%',
+            background: '#fff',
+            boxShadow: device !== 'desktop' ? '0 8px 40px rgba(0,0,0,0.45)' : 'none',
+            borderRadius: device !== 'desktop' ? 16 : 0,
+            overflow: 'hidden',
+            flexShrink: 0,
+          }}>
+            {/* Browser chrome */}
+            <div style={{ background: 'var(--bg2)', borderBottom: '1px solid var(--line)', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8, position: 'sticky', top: 0, zIndex: 5 }}>
+              <div style={{ display: 'flex', gap: 5 }}>
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#e7674a' }} />
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#e7a14a' }} />
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#5fd98a' }} />
               </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
-                {[
-                  { label: 'بررسی محتوا', done: publishStep >= 1 },
-                  { label: 'ساخت صفحات', done: publishStep >= 2 },
-                  { label: 'آپلود فایل‌ها', done: publishStep >= 3 },
-                  { label: 'فعال‌سازی دامنه', done: publishStep >= 4 },
-                ].map((step, i) => (
-                  <div key={step.label} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{
-                      width: 28, height: 28, borderRadius: 8, flexShrink: 0,
-                      background: step.done ? 'rgba(95,217,138,0.15)' : 'var(--bg)',
-                      border: `1px solid ${step.done ? '#5fd98a' : 'var(--line)'}`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 13, color: step.done ? '#5fd98a' : 'var(--faint)',
-                    }}>
-                      {step.done ? '✓' : i + 1}
-                    </div>
-                    <span style={{ fontSize: 14, color: step.done ? 'var(--text)' : 'var(--muted)' }}>{step.label}</span>
-                  </div>
-                ))}
+              <div style={{ flex: 1, background: 'var(--surface)', borderRadius: 6, padding: '4px 10px', fontSize: 10, color: 'var(--faint)', textAlign: 'center', direction: 'ltr' }}>
+                https://{slug}.melkjet.site
               </div>
-
-              <button
-                onClick={() => setPublishStep(p => Math.min(p + 1, 4))}
-                disabled={publishStep >= 4}
-                style={{
-                  width: '100%', padding: '14px', borderRadius: 12,
-                  background: publishStep >= 4 ? 'rgba(95,217,138,0.15)' : 'linear-gradient(140deg,var(--gold2),var(--gold))',
-                  color: publishStep >= 4 ? '#5fd98a' : '#16140f',
-                  border: publishStep >= 4 ? '1px solid #5fd98a' : 'none',
-                  fontSize: 15, fontWeight: 800, cursor: publishStep >= 4 ? 'default' : 'pointer',
-                }}
-              >
-                {publishStep >= 4 ? '✓ وبسایت منتشر شد!' : 'مرحله بعد'}
-              </button>
             </div>
 
-            {publishStep >= 4 && (
-              <div style={{ background: 'rgba(95,217,138,0.08)', border: '1px solid rgba(95,217,138,0.3)', borderRadius: 16, padding: 24, textAlign: 'center' }}>
-                <div style={{ fontSize: 32, marginBottom: 10 }}>🎉</div>
-                <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 6, color: '#5fd98a' }}>وبسایت شما آماده است!</div>
-                <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 14 }}>
-                  آدرس: <span style={{ direction: 'ltr', display: 'inline-block' }}>{domain || 'agency'}.melkjet.ir</span>
+            {/* Canvas blocks */}
+            <div style={{ direction: 'rtl' }}>
+              {blocks.length === 0 ? (
+                <div style={{ height: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 14 }}>
+                  <div style={{ fontSize: 44, opacity: 0.15 }}>◈</div>
+                  <div style={{ fontSize: 14, color: 'var(--faint)', textAlign: 'center', lineHeight: 1.8 }}>
+                    از پنل سمت راست یک قالب انتخاب کنید<br />
+                    <span style={{ fontSize: 12 }}>یا بلوک‌ها را یکی یکی اضافه نمایید</span>
+                  </div>
                 </div>
-                <Link href="/" style={{ display: 'inline-block', padding: '10px 24px', background: '#5fd98a', color: '#fff', borderRadius: 10, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
-                  مشاهده وبسایت
-                </Link>
+              ) : (
+                blocks.map(block => (
+                  <BlockPreview
+                    key={block.id}
+                    block={block}
+                    selected={selectedBlock === block.id}
+                    onSelect={() => {
+                      setSelectedBlock(block.id)
+                      setBlockHeadingEdit(block.heading)
+                      setActiveTab('settings')
+                    }}
+                    onUp={() => moveBlock(block.id, -1)}
+                    onDown={() => moveBlock(block.id, 1)}
+                    onDelete={() => deleteBlock(block.id)}
+                  />
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT PANEL - Inspector */}
+        <div style={{
+          width: 288, flexShrink: 0, borderRight: '1px solid var(--line)',
+          background: 'var(--bg2)', display: 'flex', flexDirection: 'column',
+        }}>
+          {/* Tabs */}
+          <div style={{ display: 'flex', borderBottom: '1px solid var(--line)', flexShrink: 0 }}>
+            {([
+              ['seo', 'سئو'],
+              ['settings', 'تنظیمات بلوک'],
+              ['pages', 'صفحات'],
+            ] as [ActiveTab, string][]).map(([t, label]) => (
+              <button
+                key={t}
+                onClick={() => setActiveTab(t)}
+                style={{
+                  flex: 1, padding: '11px 4px', border: 'none', background: 'transparent',
+                  fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                  color: activeTab === t ? 'var(--gold)' : 'var(--muted)',
+                  borderBottom: `2px solid ${activeTab === t ? 'var(--gold)' : 'transparent'}`,
+                  marginBottom: -1, transition: 'all .15s',
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+
+            {/* SEO Tab */}
+            {activeTab === 'seo' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: '14px 16px' }}>
+                  <div style={{ position: 'relative', width: 56, height: 56, flexShrink: 0 }}>
+                    <svg width="56" height="56" viewBox="0 0 56 56">
+                      <circle cx="28" cy="28" r="24" fill="none" stroke="var(--line2)" strokeWidth="4" />
+                      <circle cx="28" cy="28" r="24" fill="none" stroke="var(--gold)" strokeWidth="4"
+                        strokeDasharray={`${2 * Math.PI * 24 * 0.92} ${2 * Math.PI * 24 * (1 - 0.92)}`}
+                        strokeLinecap="round"
+                        transform="rotate(-90 28 28)" />
+                    </svg>
+                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 900, color: 'var(--gold)' }}>۹۲</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>امتیاز سئو</div>
+                    <div style={{ fontSize: 11, color: '#5fd98a', fontWeight: 600 }}>وضعیت: عالی</div>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 11, color: 'var(--muted)', display: 'block', marginBottom: 5 }}>عنوان صفحه</label>
+                  <input
+                    value={seoTitle}
+                    onChange={e => setSeoTitle(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, color: 'var(--text)', fontSize: 12, outline: 'none', boxSizing: 'border-box' }}
+                  />
+                  <div style={{ fontSize: 10, color: seoTitle.length > 60 ? '#e7674a' : 'var(--faint)', marginTop: 4 }}>{seoTitle.length}/۶۰ کاراکتر</div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 11, color: 'var(--muted)', display: 'block', marginBottom: 5 }}>توضیح متا</label>
+                  <textarea
+                    value={seoDesc}
+                    onChange={e => setSeoDesc(e.target.value)}
+                    rows={3}
+                    style={{ width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, color: 'var(--text)', fontSize: 12, outline: 'none', resize: 'vertical', boxSizing: 'border-box' }}
+                  />
+                  <div style={{ fontSize: 10, color: seoDesc.length > 160 ? '#e7674a' : 'var(--faint)', marginTop: 4 }}>{seoDesc.length}/۱۶۰ کاراکتر</div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 11, color: 'var(--muted)', display: 'block', marginBottom: 5 }}>آدرس سایت (Slug)</label>
+                  <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--line)', borderRadius: 8, overflow: 'hidden', background: 'var(--surface)' }}>
+                    <input
+                      value={slug}
+                      onChange={e => setSlug(e.target.value.replace(/[^a-z0-9-]/g, ''))}
+                      style={{ flex: 1, padding: '8px 10px', background: 'transparent', border: 'none', color: 'var(--text)', fontSize: 12, outline: 'none', direction: 'ltr' }}
+                    />
+                    <span style={{ padding: '8px 10px', background: 'var(--bg)', borderRight: '1px solid var(--line)', fontSize: 10, color: 'var(--faint)', direction: 'ltr', flexShrink: 0 }}>.melkjet.site</span>
+                  </div>
+                </div>
+
+                <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, padding: '12px 14px' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', marginBottom: 10 }}>بررسی‌های سئو</div>
+                  {[
+                    'رندرینگ سمت سرور (SSR)',
+                    'دامنه اختصاصی فعال',
+                    'اسکیما Schema.org',
+                    'سرعت بارگذاری ۹۰+',
+                    'نقشه سایت (Sitemap)',
+                  ].map(label => (
+                    <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
+                      <span style={{ fontSize: 12, color: '#5fd98a', flexShrink: 0 }}>✓</span>
+                      <span style={{ fontSize: 11, color: 'var(--text)' }}>{label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Settings Tab */}
+            {activeTab === 'settings' && (
+              <div>
+                {selectedBlockObj ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>
+                      ویرایش: {BLOCK_LIBRARY.find(b => b.type === selectedBlockObj.type)?.label}
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: 11, color: 'var(--muted)', display: 'block', marginBottom: 5 }}>عنوان بلوک</label>
+                      <input
+                        value={blockHeadingEdit}
+                        onChange={e => {
+                          setBlockHeadingEdit(e.target.value)
+                          updateBlockHeading(selectedBlockObj.id, e.target.value)
+                        }}
+                        style={{ width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, color: 'var(--text)', fontSize: 12, outline: 'none', boxSizing: 'border-box' }}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: 11, color: 'var(--muted)', display: 'block', marginBottom: 8 }}>رنگ پس‌زمینه</label>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {['#1a1510', '#f5f3ef', '#ffffff', '#0d0b08', '#2d2215', '#1e2530'].map(c => (
+                          <div key={c} style={{ width: 28, height: 28, borderRadius: 7, background: c, border: '2px solid var(--line)', cursor: 'pointer', flexShrink: 0 }} />
+                        ))}
+                      </div>
+                    </div>
+
+                    {selectedBlockObj.type === 'hero' && (
+                      <>
+                        <div>
+                          <label style={{ fontSize: 11, color: 'var(--muted)', display: 'block', marginBottom: 5 }}>زیرعنوان</label>
+                          <input
+                            defaultValue="مشاور املاک حرفه‌ای با بیش از ۱۰ سال تجربه"
+                            style={{ width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, color: 'var(--text)', fontSize: 12, outline: 'none', boxSizing: 'border-box' }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 11, color: 'var(--muted)', display: 'block', marginBottom: 5 }}>متن دکمه</label>
+                          <input
+                            defaultValue="مشاهده ملک‌ها"
+                            style={{ width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, color: 'var(--text)', fontSize: 12, outline: 'none', boxSizing: 'border-box' }}
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {selectedBlockObj.type === 'cta' && (
+                      <div>
+                        <label style={{ fontSize: 11, color: 'var(--muted)', display: 'block', marginBottom: 5 }}>متن دکمه</label>
+                        <input
+                          defaultValue="تماس با ما"
+                          style={{ width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, color: 'var(--text)', fontSize: 12, outline: 'none', boxSizing: 'border-box' }}
+                        />
+                      </div>
+                    )}
+
+                    <div style={{ height: 1, background: 'var(--line)' }} />
+
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        onClick={() => moveBlock(selectedBlockObj.id, -1)}
+                        style={{ flex: 1, padding: '7px', borderRadius: 8, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--text)', cursor: 'pointer', fontSize: 12 }}
+                      >▲ بالا</button>
+                      <button
+                        onClick={() => moveBlock(selectedBlockObj.id, 1)}
+                        style={{ flex: 1, padding: '7px', borderRadius: 8, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--text)', cursor: 'pointer', fontSize: 12 }}
+                      >▼ پایین</button>
+                    </div>
+
+                    <button
+                      onClick={() => deleteBlock(selectedBlockObj.id)}
+                      style={{ width: '100%', padding: '9px', borderRadius: 8, border: '1px solid rgba(220,60,60,0.4)', background: 'rgba(220,60,60,0.08)', color: '#e05050', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}
+                    >
+                      × حذف بلوک
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '48px 20px' }}>
+                    <div style={{ fontSize: 40, marginBottom: 14, opacity: 0.2 }}>◇</div>
+                    <div style={{ fontSize: 13, color: 'var(--faint)', lineHeight: 1.8 }}>
+                      برای ویرایش<br />یک بلوک را انتخاب کنید
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Pages Tab */}
+            {activeTab === 'pages' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', marginBottom: 4 }}>صفحات سایت</div>
+                {pages.map((page, idx) => (
+                  <div
+                    key={page.id}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '10px 12px', borderRadius: 10,
+                      background: idx === 0 ? 'var(--goldDim)' : 'var(--surface)',
+                      border: `1px solid ${idx === 0 ? 'var(--gold)' : 'var(--line)'}`,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <span style={{ fontSize: 12, color: idx === 0 ? 'var(--gold)' : 'var(--faint)' }}>◰</span>
+                    <span style={{ fontSize: 12, fontWeight: idx === 0 ? 700 : 400, color: idx === 0 ? 'var(--gold)' : 'var(--text)' }}>{page.label}</span>
+                    {idx === 0 && <span style={{ marginRight: 'auto', fontSize: 9, color: 'var(--gold)', background: 'rgba(201,168,76,0.2)', padding: '2px 7px', borderRadius: 10 }}>فعال</span>}
+                  </div>
+                ))}
+                <button
+                  onClick={addPage}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px', borderRadius: 10, border: '1px dashed var(--line)', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontWeight: 700, marginTop: 4 }}
+                >
+                  <span>+</span><span>صفحه جدید</span>
+                </button>
               </div>
             )}
           </div>
-        )}
+        </div>
       </div>
 
-      <Footer />
+      {/* PUBLISH SUCCESS MODAL */}
+      {publishSuccess && (
+        <div
+          onClick={() => setPublishSuccess(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 200,
+            background: 'rgba(0,0,0,0.78)', backdropFilter: 'blur(8px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 20,
+              padding: '40px 44px', textAlign: 'center', maxWidth: 420, width: '90%',
+              boxShadow: '0 24px 80px rgba(0,0,0,0.65)',
+              direction: 'rtl',
+            }}
+          >
+            <div style={{ width: 68, height: 68, borderRadius: '50%', background: 'rgba(95,217,138,0.12)', border: '2px solid #5fd98a', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 22px', fontSize: 30, color: '#5fd98a' }}>✓</div>
+
+            <div style={{ fontSize: 22, fontWeight: 900, marginBottom: 8 }}>سایت شما منتشر شد!</div>
+            <div style={{ fontSize: 14, color: 'var(--muted)', marginBottom: 24, lineHeight: 1.7 }}>وب‌سایت شما با موفقیت آنلاین شد و در دسترس کاربران است.</div>
+
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, padding: '11px 16px', marginBottom: 28, direction: 'ltr', fontSize: 13, color: 'var(--gold)', fontWeight: 700 }}>
+              {slug}.melkjet.site
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <a
+                href={`https://${slug}.melkjet.site`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ padding: '10px 24px', borderRadius: 10, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 13, fontWeight: 800, textDecoration: 'none', display: 'inline-block' }}
+              >
+                مشاهده سایت
+              </a>
+              <button
+                onClick={() => setPublishSuccess(false)}
+                style={{ padding: '10px 24px', borderRadius: 10, border: '1px solid var(--line)', background: 'transparent', color: 'var(--text)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+              >
+                بستن
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
