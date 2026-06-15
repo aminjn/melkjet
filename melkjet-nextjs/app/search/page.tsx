@@ -174,7 +174,7 @@ export default function SearchPage() {
         }}
       >
         {/* Search row */}
-        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '14px 24px', display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div className="mjs-filterbar" style={{ maxWidth: 1280, margin: '0 auto', padding: '14px 24px', display: 'flex', gap: 10, alignItems: 'center' }}>
           {/* Search input */}
           <div style={{ flex: 1, position: 'relative' }}>
             <span style={{
@@ -382,7 +382,7 @@ export default function SearchPage() {
       </div>
 
       {/* ─── Main Content (split layout) ────────────────────────── */}
-      <div style={{
+      <div className="mjs-grid" style={{
         maxWidth: 1280, margin: '0 auto', padding: '0 24px 48px',
         display: 'grid',
         gridTemplateColumns: '1fr 1fr',
@@ -408,7 +408,7 @@ export default function SearchPage() {
           </div>
 
           {/* 2-column card grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div className="mjs-cards" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             {sortedProperties.map((p, index) => {
               const tc = tagColors[p.tag] || tagColors['ویژه']
               const isHov = hoveredCard === p.id
@@ -596,7 +596,7 @@ function MapPanelDesktop({
         paddingTop: 20,
         paddingRight: 12,
       }}
-      className="map-panel"
+      className="map-panel mjs-map"
     >
       <style>{`
         @media (max-width: 768px) { .map-panel { display: none !important; } }

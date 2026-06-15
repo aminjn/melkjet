@@ -177,7 +177,7 @@ export default function Home() {
           <div><div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}>★ منتخب ملک‌جت</div><h2 style={{ fontSize: 'clamp(24px,3.4vw,34px)', fontWeight: 800, letterSpacing: '-.6px', color: 'var(--text)' }}>املاک ویژه و لوکس</h2></div>
           <Link href="/search" style={{ flexShrink: 0, fontSize: 14, fontWeight: 600, color: 'var(--muted)', textDecoration: 'none', padding: '9px 14px', border: '1px solid var(--line)', borderRadius: 11 }}>مشاهده همه ←</Link>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 18 }}>
+        <div className="mj-feat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 18 }}>
           {featured.map(p => (
             <PropertyCard key={p.id} {...p} liked={likes[p.id]} onLike={() => setLikes(prev => ({ ...prev, [p.id]: !prev[p.id] }))} />
           ))}

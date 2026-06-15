@@ -34,7 +34,7 @@ export default function Nav() {
         </Link>
 
         {/* Desktop links */}
-        <div className="mj-nav-links mj-navlinks" style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 14.5, fontWeight: 500 }}>
+        <div className="mj-nav-links mj-navlinks mjs-navlinks" style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 14.5, fontWeight: 500 }}>
           {navLinks.map(l => (
             <Link key={l.href} href={l.href} style={{ padding: '9px 13px', borderRadius: 9, color: 'var(--muted)', textDecoration: 'none' }}>{l.label}</Link>
           ))}
