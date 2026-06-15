@@ -449,7 +449,7 @@ export default function SubmitPage() {
 
   const step5 = (
     <div>
-      <div style={cardStyle}>
+      <div className="mjsub-summary" style={cardStyle}>
         <p style={sectionTitle}>خلاصه آگهی</p>
         <SummaryRow label="نوع معامله" value={form.dealType} />
         <SummaryRow label="نوع ملک" value={form.propertyType} />
@@ -516,7 +516,7 @@ export default function SubmitPage() {
     <div dir="rtl" style={containerStyle}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       <Nav />
-      <div style={innerStyle}>
+      <div className="mjsub-grid" style={innerStyle}>
         <h1 style={{ fontSize: 26, fontWeight: 800, marginBottom: 8, color: 'var(--text)' }}>ثبت آگهی ملک</h1>
         <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 32 }}>اطلاعات ملک خود را در چند مرحله وارد کنید.</p>
         {progressBar}

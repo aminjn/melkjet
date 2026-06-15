@@ -136,7 +136,7 @@ export default function BuyerPage() {
         </div>
 
         {/* ── 2-col grid ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 28, alignItems: 'start' }}>
+        <div className="mjb-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 28, alignItems: 'start' }}>
 
           {/* ══ LEFT COLUMN ══════════════════════════════════════ */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
@@ -183,7 +183,7 @@ export default function BuyerPage() {
                 {/* Need Tags */}
                 <div style={{ marginBottom: 20 }}>
                   <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>نیازهای ذخیره‌شده شما:</p>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                  <div className="mjb-tabs" style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
                     {needTags.map(tag => (
                       <span key={tag} style={{
                         padding: '4px 12px', borderRadius: 20,
@@ -200,7 +200,7 @@ export default function BuyerPage() {
                   <p style={{ margin: '0 0 14px', fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
                     ✦ فرصت‌های تازه‌ای که AI پیدا کرد
                   </p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div className="mjb-opp" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     {aiOpportunities.map(op => (
                       <div key={op.id} style={{
                         background: 'var(--bg2)',
@@ -349,7 +349,7 @@ export default function BuyerPage() {
                   }}>مقایسه {compareSet.length} ملک</button>
                 )}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
+              <div className="mjb-fav" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
                 {favorites.filter(f => !heartRemoved.includes(f.id)).map(prop => (
                   <Link key={prop.id} href={`/property/${prop.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                     <div style={{

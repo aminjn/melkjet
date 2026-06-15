@@ -638,7 +638,7 @@ function InvestorPortfolio() {
         <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: 14 }}>نمای کلی سبد ملکی شما و عملکرد سرمایه‌گذاری‌ها</p>
       </div>
       {/* KPI row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+      <div className="mjo-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
         {kpis.map((k) => (
           <Card key={k.label} style={{ textAlign: 'center' }}>
             <div style={{ color: 'var(--muted)', fontSize: 12, marginBottom: 8 }}>{k.label}</div>
@@ -904,6 +904,7 @@ export default function OwnerPage() {
   return (
     <div
       dir="rtl"
+      className="mjo-2col"
       style={{
         display: 'flex',
         minHeight: '100vh',
@@ -933,7 +934,7 @@ export default function OwnerPage() {
 
         {/* Role toggle */}
         <div style={{ padding: '16px 16px 12px' }}>
-          <div style={{ display: 'flex', gap: 8, background: 'var(--bg2)', borderRadius: 10, padding: 4 }}>
+          <div className="mjo-tabs" style={{ display: 'flex', gap: 8, background: 'var(--bg2)', borderRadius: 10, padding: 4 }}>
             {(['seller', 'investor'] as Role[]).map((r) => (
               <button
                 key={r}
