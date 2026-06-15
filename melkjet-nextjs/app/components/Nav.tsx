@@ -34,7 +34,7 @@ export default function Nav() {
         </Link>
 
         {/* Desktop links */}
-        <div className="mj-nav-links" style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 14.5, fontWeight: 500 }}>
+        <div className="mj-nav-links mj-navlinks" style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 14.5, fontWeight: 500 }}>
           {navLinks.map(l => (
             <Link key={l.href} href={l.href} style={{ padding: '9px 13px', borderRadius: 9, color: 'var(--muted)', textDecoration: 'none' }}>{l.label}</Link>
           ))}
@@ -43,7 +43,7 @@ export default function Nav() {
         <div style={{ flex: 1 }}></div>
 
         {/* Desktop actions */}
-        <div className="mj-nav-links" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div className="mj-nav-links mj-login" style={{ display: 'none', alignItems: 'center', gap: 10 }}>
           <ThemeToggle size={40} />
           <Link href="/auth" style={{ padding: '0 16px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, border: '1px solid var(--line2)', color: 'var(--text)', textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>ورود</Link>
           <Link href="/submit" style={{ padding: '0 18px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontSize: 14, fontWeight: 700 }}>ثبت آگهی</Link>
