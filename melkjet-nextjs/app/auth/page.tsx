@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Nav from '@/app/components/Nav';
 import Footer from '@/app/components/Footer';
 
@@ -24,6 +25,7 @@ const ROLES = [
 ];
 
 export default function AuthPage() {
+  const router = useRouter();
   const [mode, setMode] = useState<AuthMode>('login');
   const [loginTab, setLoginTab] = useState<LoginTab>('password');
   const [selectedRole, setSelectedRole] = useState<string>('');
@@ -33,6 +35,59 @@ export default function AuthPage() {
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginPhone, setLoginPhone] = useState('');
+
+  // OTP state
+  const [otpStep, setOtpStep] = useState<'phone' | 'code'>('phone');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpError, setOtpError] = useState('');
+  const [otpCountdown, setOtpCountdown] = useState(0);
+
+  function startCountdown() {
+    setOtpCountdown(120);
+    const t = setInterval(() => {
+      setOtpCountdown(c => { if (c <= 1) { clearInterval(t); return 0; } return c - 1; });
+    }, 1000);
+  }
+
+  async function sendOTP() {
+    setOtpError('');
+    if (!/^09[0-9]{9}$/.test(loginPhone)) {
+      setOtpError('شماره موبایل معتبر نیست (مثال: 09123456789)');
+      return;
+    }
+    setOtpLoading(true);
+    try {
+      const res = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: loginPhone }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setOtpError(data.error || 'خطا در ارسال پیامک'); return; }
+      setOtpStep('code');
+      setOtpCode('');
+      startCountdown();
+    } catch { setOtpError('خطا در اتصال به سرور'); }
+    finally { setOtpLoading(false); }
+  }
+
+  async function verifyOTP() {
+    setOtpError('');
+    if (otpCode.length !== 6) { setOtpError('کد ۶ رقمی را وارد کنید'); return; }
+    setOtpLoading(true);
+    try {
+      const res = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: loginPhone, code: otpCode }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setOtpError(data.error || 'کد اشتباه است'); return; }
+      router.push(data.role === 'super_admin' ? '/admin' : '/');
+    } catch { setOtpError('خطا در اتصال به سرور'); }
+    finally { setOtpLoading(false); }
+  }
 
   // Register form state
   const [fullName, setFullName] = useState('');
@@ -308,26 +363,60 @@ export default function AuthPage() {
                         فراموشی رمز عبور؟
                       </a>
                     </div>
+                    <button style={btnPrimaryStyle}>ورود به حساب</button>
+                  </>
+                ) : otpStep === 'phone' ? (
+                  <>
+                    <div style={fieldStyle}>
+                      <label style={labelStyle}>شماره موبایل</label>
+                      <input
+                        type="tel"
+                        inputMode="numeric"
+                        placeholder="09xxxxxxxxx"
+                        value={loginPhone}
+                        onChange={(e) => setLoginPhone(e.target.value.replace(/\D/g, '').slice(0, 11))}
+                        onKeyDown={(e) => e.key === 'Enter' && sendOTP()}
+                        style={inputStyle}
+                      />
+                      <p style={{ fontSize: 12, color: 'var(--faint)', marginTop: 8 }}>
+                        کد تایید ۶ رقمی به این شماره ارسال می‌شود
+                      </p>
+                    </div>
+                    {otpError && <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 9, background: 'rgba(220,53,69,.1)', border: '1px solid rgba(220,53,69,.25)', color: '#e25563', fontSize: 13 }}>{otpError}</div>}
+                    <button onClick={sendOTP} disabled={otpLoading} style={{ ...btnPrimaryStyle, opacity: otpLoading ? 0.7 : 1 }}>
+                      {otpLoading ? 'در حال ارسال...' : 'ارسال کد تایید'}
+                    </button>
                   </>
                 ) : (
-                  <div style={fieldStyle}>
-                    <label style={labelStyle}>شماره موبایل</label>
-                    <input
-                      type="tel"
-                      placeholder="09xxxxxxxxx"
-                      value={loginPhone}
-                      onChange={(e) => setLoginPhone(e.target.value)}
-                      style={inputStyle}
-                    />
-                    <p style={{ fontSize: 12, color: 'var(--faint)', marginTop: 8 }}>
-                      کد تایید به این شماره ارسال خواهد شد
-                    </p>
-                  </div>
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                      <button onClick={() => { setOtpStep('phone'); setOtpCode(''); setOtpError(''); }} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 20, padding: 0, lineHeight: 1 }}>←</button>
+                      <p style={{ fontSize: 13, color: 'var(--muted)', margin: 0 }}>کد ارسال شده به <strong style={{ color: 'var(--text)' }}>{loginPhone}</strong></p>
+                    </div>
+                    <div style={fieldStyle}>
+                      <label style={labelStyle}>کد تایید</label>
+                      <input
+                        type="tel"
+                        inputMode="numeric"
+                        placeholder="_ _ _ _ _ _"
+                        maxLength={6}
+                        value={otpCode}
+                        onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        onKeyDown={(e) => e.key === 'Enter' && verifyOTP()}
+                        style={{ ...inputStyle, fontSize: 22, textAlign: 'center', letterSpacing: 6, direction: 'ltr' }}
+                        autoFocus
+                      />
+                    </div>
+                    {otpError && <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 9, background: 'rgba(220,53,69,.1)', border: '1px solid rgba(220,53,69,.25)', color: '#e25563', fontSize: 13 }}>{otpError}</div>}
+                    <button onClick={verifyOTP} disabled={otpLoading} style={{ ...btnPrimaryStyle, opacity: otpLoading ? 0.7 : 1 }}>
+                      {otpLoading ? 'در حال تایید...' : 'تایید و ورود'}
+                    </button>
+                    <div style={{ textAlign: 'center', marginTop: 14, fontSize: 13, color: 'var(--muted)' }}>
+                      {otpCountdown > 0 ? <span>ارسال مجدد پس از {otpCountdown} ثانیه</span>
+                        : <button onClick={sendOTP} style={{ background: 'none', border: 'none', color: 'var(--gold)', cursor: 'pointer', fontSize: 13, fontWeight: 700, textDecoration: 'underline' }}>ارسال مجدد کد</button>}
+                    </div>
+                  </>
                 )}
-
-                <button style={btnPrimaryStyle}>
-                  {loginTab === 'sms' ? 'ارسال کد تایید' : 'ورود به حساب'}
-                </button>
               </>
             )}
 

@@ -151,5 +151,12 @@ body {
 /* States */
 @media(max-width:880px){.mjst-nav{display:none!important}.mjst-main{padding:24px 18px!important}.mjst-3{grid-template-columns:1fr!important}.mjst-2{grid-template-columns:1fr!important}}
 
+/* Mobile bottom nav */
+@media(max-width:860px){.mj-bottom-nav{display:block!important}}
+@media(max-width:860px){body{padding-bottom:calc(60px + env(safe-area-inset-bottom))!important}}
+
+/* Nav hamburger button — show on mobile */
+@media(max-width:860px){.mj-nav-mobile-menu{display:flex!important}}
+
 /* Global safe area */
 body { padding-bottom: env(safe-area-inset-bottom); }

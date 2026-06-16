@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import BottomNav from './components/BottomNav'
+import PWAInstall from './components/PWAInstall'
 
 export const metadata: Metadata = {
   title: 'ملک‌جت - اکوسیستم هوشمند املاک',
@@ -41,6 +43,8 @@ export default function RootLayout({
       </head>
       <body style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
         {children}
+        <BottomNav />
+        <PWAInstall />
       </body>
     </html>
   )
