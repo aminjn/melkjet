@@ -5,18 +5,20 @@ export default function ThemeToggle({ size = 40 }: { size?: number }) {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
 
   useEffect(() => {
-    const saved = localStorage.getItem('melkjet-theme') as 'dark' | 'light' | null
-    if (saved) {
-      setTheme(saved)
-      document.documentElement.classList.toggle('light', saved === 'light')
-    }
+    // Read from the class that was applied by the inline head script
+    const isLight = document.documentElement.classList.contains('light')
+    setTheme(isLight ? 'light' : 'dark')
   }, [])
 
   const toggle = () => {
     const next = theme === 'dark' ? 'light' : 'dark'
     setTheme(next)
     document.documentElement.classList.toggle('light', next === 'light')
-    localStorage.setItem('melkjet-theme', next)
+    if (next === 'light') {
+      localStorage.setItem('melkjet-theme', 'light')
+    } else {
+      localStorage.removeItem('melkjet-theme')
+    }
   }
 
   return (

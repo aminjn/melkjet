@@ -36,6 +36,8 @@ export default function RootLayout({
   return (
     <html lang="fa" dir="rtl">
       <head>
+        {/* Theme init — runs before render to prevent flash of wrong theme */}
+        <script dangerouslySetInnerHTML={{__html:`(function(){try{var t=localStorage.getItem('melkjet-theme');if(t==='light')document.documentElement.classList.add('light')}catch(e){}})()`}}/>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
