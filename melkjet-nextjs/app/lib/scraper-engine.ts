@@ -147,8 +147,11 @@ function looksLikeXml(text: string) {
 export async function scrapeSource(source: Source): Promise<RawItem[]> {
   const method: Method = source.method
 
-  // Divar official-API connector (JSON via proxy) — no HTML fetch
-  if (method === 'divar') {
+  // Divar: use the official-API connector (via proxy) for the 'divar' method
+  // OR whenever the URL points at divar.ir (so pasting a Divar URL just works).
+  let isDivarUrl = false
+  try { isDivarUrl = /(^|\.)divar\.ir$/i.test(new URL(source.url).hostname) } catch {}
+  if (method === 'divar' || isDivarUrl) {
     return scrapeDivar(source)
   }
 

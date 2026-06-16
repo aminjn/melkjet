@@ -12,6 +12,35 @@ function norm(s: string): string {
   return (s || '').replace(/‌/g, '').replace(/\s+/g, '').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim()
 }
 
+// Divar web city slug → numeric city_id
+const CITY_SLUG: Record<string, string> = {
+  tehran: '1', karaj: '2', mashhad: '4', tabriz: '5',
+  isfahan: '6', esfahan: '6', shiraz: '7', ahvaz: '8', qom: '9',
+}
+// Divar web category slug (deal-type) → API category value (type-deal)
+const CAT_SLUG: Record<string, string> = {
+  'rent-apartment': 'apartment-rent', 'buy-apartment': 'apartment-sell',
+  'rent-villa': 'house-villa-rent', 'buy-villa': 'house-villa-sell',
+  'rent-house': 'house-villa-rent', 'buy-house': 'house-villa-sell',
+  'rent-residential': 'residential-rent', 'buy-residential': 'residential-sell',
+  'rent-office': 'office-rent', 'buy-office': 'office-sell',
+  'rent-shop': 'store-rent', 'buy-shop': 'store-sell',
+}
+
+// Pull city_id / category / neighbourhood out of a pasted Divar URL.
+function parseDivarUrl(url: string): { cityId?: string; category?: string } {
+  try {
+    const u = new URL(url)
+    if (!/divar\.ir$/i.test(u.hostname)) return {}
+    const parts = u.pathname.split('/').filter(Boolean) // ['s','tehran','rent-apartment','abshar']
+    if (parts[0] !== 's') return {}
+    const out: { cityId?: string; category?: string } = {}
+    if (parts[1]) out.cityId = CITY_SLUG[parts[1].toLowerCase()]
+    if (parts[2]) out.category = CAT_SLUG[parts[2].toLowerCase()] || parts[2]
+    return out
+  } catch { return {} }
+}
+
 function mapRow(w: any): RawItem {
   const data = w.data || {}
   const payload = data.action?.payload || {}
@@ -30,8 +59,10 @@ function mapRow(w: any): RawItem {
 /** Scrape Divar listings via the official web search API (JSON, through proxy).
  *  Supports pagination and optional client-side neighbourhood filtering. */
 export async function scrapeDivar(source: Source): Promise<RawItem[]> {
-  const cityId = source.meta?.['city_id'] || '1'
-  const category = source.meta?.['category'] || 'apartment-rent'
+  // A pasted Divar URL overrides the city/category dropdowns
+  const fromUrl = parseDivarUrl(source.url || '')
+  const cityId = fromUrl.cityId || source.meta?.['city_id'] || '1'
+  const category = fromUrl.category || source.meta?.['category'] || 'apartment-rent'
   const wantHood = norm(source.meta?.['محله'] || '')
   const proxyUrl = getAdminData().divar?.proxyUrl
     || process.env.HTTPS_PROXY || process.env.https_proxy
