@@ -222,118 +222,327 @@ function OverviewView() {
   )
 }
 
+interface ScrSource {
+  id: string; name: string; url: string; type: 'listing' | 'article' | 'price'
+  method: 'auto' | 'jsonld' | 'og' | 'rss'; enabled: boolean; schedule: string
+  lastRun: number | null; lastCount: number; status: 'idle' | 'ok' | 'error'; lastError?: string
+}
+interface ScrItem {
+  id: string; sourceName: string; type: string; title: string; price?: string
+  location?: string; image?: string; url?: string; excerpt?: string; scrapedAt: number; status: string
+}
+
+const TYPE_META: Record<string, { label: string; icon: string; color: string }> = {
+  listing: { label: 'آگهی‌ها', icon: '⌂', color: '#5fd98a' },
+  article: { label: 'مقالات', icon: '✦', color: '#5b9bd5' },
+  price:   { label: 'قیمت‌ها', icon: '◷', color: '#e7a14a' },
+}
+const SCHEDULE_LABEL: Record<string, string> = { manual: 'دستی', hourly: 'ساعتی', '6h': 'هر ۶ ساعت', daily: 'روزانه' }
+const METHOD_LABEL: Record<string, string> = { auto: 'خودکار', jsonld: 'JSON-LD', og: 'OpenGraph', rss: 'RSS/خبر' }
+const ITEM_STATUS: Record<string, { label: string; color: string }> = {
+  pending: { label: 'منتظر بررسی', color: '#5b9bd5' },
+  approved: { label: 'تأیید شد', color: '#5fd98a' },
+  duplicate: { label: 'تکراری', color: '#e7a14a' },
+  rejected: { label: 'رد شد', color: '#e7674a' },
+}
+
+function timeAgo(ts: number | null): string {
+  if (!ts) return 'هرگز'
+  const d = Date.now() - ts
+  const m = Math.floor(d / 60000)
+  if (m < 1) return 'همین لحظه'
+  if (m < 60) return `${m} دقیقه پیش`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h} ساعت پیش`
+  return `${Math.floor(h / 24)} روز پیش`
+}
+
 function ScraperView() {
-  const [running, setRunning] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const [step, setStep] = useState(0)
-  const steps = ['اتصال به منابع', 'دریافت صفحات', 'پردازش داده', 'پاک‌سازی', 'ذخیره‌سازی']
-  const [counts, setCounts] = useState({ total: 0, newItems: 0, dup: 0 })
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [tab, setTab] = useState<'listing' | 'article' | 'price'>('listing')
+  const [sources, setSources] = useState<ScrSource[]>([])
+  const [items, setItems] = useState<ScrItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [running, setRunning] = useState<string | 'all' | null>(null)
+  const [log, setLog] = useState<{ source: string; ok: boolean; added: number; dup: number; error?: string }[]>([])
+  const [modal, setModal] = useState(false)
+  const [form, setForm] = useState({ name: '', url: '', type: 'listing', method: 'auto', schedule: 'manual' })
+  const [formErr, setFormErr] = useState('')
+  const [saving, setSaving] = useState(false)
 
-  const sources = [
-    { name: 'دیوار', status: 'فعال', count: '۱۸۳٬۰۰۰', lastRun: '۱۲ دقیقه پیش', color: '#5fd98a' },
-    { name: 'شیپور', status: 'فعال', count: '۳۴٬۵۰۰', lastRun: '۲۵ دقیقه پیش', color: '#5fd98a' },
-    { name: 'ملک‌رادار', status: 'فعال', count: '۱۲٬۸۰۰', lastRun: '۱ ساعت پیش', color: '#5fd98a' },
-    { name: 'خبرگزاری‌ها', status: 'در انتظار', count: '۲٬۱۰۰', lastRun: '۳ ساعت پیش', color: '#e7a14a' },
-    { name: 'سایت سازندگان', status: 'خطا', count: '۸۴۰', lastRun: 'ناموفق', color: '#e7674a' },
-  ]
-  const recent = [
-    { id: '#۸۸۴۹', title: 'آپارتمان ۱۴۰ متری نوساز', location: 'سعادت‌آباد', price: '۱۷٫۸ م.د', source: 'دیوار', status: 'منتظر بررسی' },
-    { id: '#۸۸۴۸', title: 'ویلا باغ لواسان', location: 'لواسان', price: '۱۲۰ م.د', source: 'شیپور', status: 'تأیید شد' },
-    { id: '#۸۸۴۷', title: 'دفتر اداری', location: 'میرداماد', price: '۶٫۸ م.د', source: 'ملک‌رادار', status: 'تکراری' },
-  ]
-
-  const runScraper = () => {
-    if (intervalRef.current) clearInterval(intervalRef.current)
-    setRunning(true); setProgress(0); setStep(0); setCounts({ total: 0, newItems: 0, dup: 0 })
-    let p = 0
-    intervalRef.current = setInterval(() => {
-      p += Math.random() * 4 + 1
-      if (p > 100) p = 100
-      const s = Math.min(4, Math.floor(p / 20))
-      setProgress(Math.round(p))
-      setStep(s)
-      setCounts({ total: Math.round(p * 14.3), newItems: Math.round(p * 9.8), dup: Math.round(p * 2.1) })
-      if (p >= 100) { clearInterval(intervalRef.current!); setRunning(false) }
-    }, 180)
+  const loadSources = async () => {
+    const r = await fetch('/api/admin/scraper/sources')
+    if (r.ok) setSources((await r.json()).sources)
   }
+  const loadItems = async (t: string) => {
+    const r = await fetch(`/api/admin/scraper/items?type=${t}`)
+    if (r.ok) setItems((await r.json()).items)
+  }
+
+  useEffect(() => { (async () => { setLoading(true); await loadSources(); await loadItems(tab); setLoading(false) })() }, [])
+  useEffect(() => { loadItems(tab) }, [tab])
+
+  const run = async (id?: string) => {
+    setRunning(id || 'all'); setLog([])
+    try {
+      const r = await fetch('/api/admin/scraper/run', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(id ? { id } : {}),
+      })
+      const d = await r.json()
+      if (!r.ok) { setLog([{ source: '—', ok: false, added: 0, dup: 0, error: d.error }]); return }
+      setLog(d.results || [])
+      if (d.sources) setSources(d.sources)
+      await loadItems(tab)
+    } catch {
+      setLog([{ source: '—', ok: false, added: 0, dup: 0, error: 'خطای ارتباط با سرور' }])
+    } finally { setRunning(null) }
+  }
+
+  const addSource = async () => {
+    setFormErr('')
+    if (!form.name.trim() || !form.url.trim()) { setFormErr('نام و آدرس الزامی است'); return }
+    setSaving(true)
+    try {
+      const r = await fetch('/api/admin/scraper/sources', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
+      })
+      const d = await r.json()
+      if (!r.ok) { setFormErr(d.error || 'خطا در ذخیره'); return }
+      setModal(false); setForm({ name: '', url: '', type: tab, method: 'auto', schedule: 'manual' })
+      await loadSources()
+    } finally { setSaving(false) }
+  }
+
+  const removeSource = async (id: string) => {
+    await fetch(`/api/admin/scraper/sources?id=${id}`, { method: 'DELETE' })
+    await loadSources()
+  }
+  const toggleSource = async (s: ScrSource) => {
+    await fetch('/api/admin/scraper/sources', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: s.id, patch: { enabled: !s.enabled } }),
+    })
+    await loadSources()
+  }
+  const setItemStatus = async (id: string, status: string) => {
+    setItems(items.map(i => i.id === id ? { ...i, status } : i))
+    await fetch('/api/admin/scraper/items', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status }),
+    })
+  }
+
+  const tabSources = sources.filter(s => s.type === tab)
+  const inputCss: React.CSSProperties = {
+    width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10,
+    padding: '10px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none',
+  }
+  const labelCss: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', marginBottom: 6, display: 'block', fontWeight: 600 }
 
   return (
     <div style={{ animation: 'fade .35s ease' }}>
+      {/* KPI */}
+      <div className="mjsa-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 18 }}>
+        <KPI label="کل منابع" value={sources.length.toString()} trend={`${sources.filter(s => s.enabled).length} فعال`} icon="◈" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" trendUp />
+        <KPI label="آگهی‌ها" value={sources.filter(s => s.type === 'listing').reduce((a, s) => a + s.lastCount, 0).toString()} trend="آخرین واکشی" icon="⌂" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" />
+        <KPI label="مقالات" value={sources.filter(s => s.type === 'article').reduce((a, s) => a + s.lastCount, 0).toString()} trend="آخرین واکشی" icon="✦" iconBg="var(--goldDim)" iconColor="var(--gold)" />
+        <KPI label="منابع دارای خطا" value={sources.filter(s => s.status === 'error').length.toString()} trend="نیاز به بررسی" icon="⚠" iconBg="rgba(231,103,74,.15)" iconColor="#e7674a" />
+      </div>
+
+      {/* Toolbar */}
       <Card style={{ marginBottom: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: running ? 18 : 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>اجرای اسکرپر</div>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>واکشی و ایمپورت آگهی از منابع خارجی</div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>موتور اسکرپ هوشمند</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>واکشی خودکار آگهی، مقاله و قیمت از منابع خارجی (JSON-LD · OpenGraph · RSS)</div>
           </div>
-          <GoldButton onClick={runScraper} style={{ opacity: running ? .6 : 1, pointerEvents: running ? 'none' : 'auto' }}>
-            {running ? '⏳ در حال اجرا…' : '▶ اجرای اسکرپر'}
-          </GoldButton>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <OutlineButton onClick={() => run()} style={{ opacity: running ? .6 : 1, pointerEvents: running ? 'none' : 'auto' }}>
+              {running === 'all' ? '⏳ در حال اجرا…' : '▶ اجرای همه فعال‌ها'}
+            </OutlineButton>
+            <GoldButton onClick={() => { setForm({ name: '', url: '', type: tab, method: 'auto', schedule: 'manual' }); setFormErr(''); setModal(true) }}>
+              + افزودن منبع
+            </GoldButton>
+          </div>
         </div>
-        {running && (
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-              {steps.map((s2, i) => (
-                <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flex: 1 }}>
-                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: i <= step ? '#5fd98a' : 'var(--line2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: i <= step ? '#fff' : 'var(--faint)', transition: 'background .3s' }}>
-                    {i < step ? '✓' : i + 1}
-                  </div>
-                  <div style={{ fontSize: 10.5, color: i <= step ? 'var(--text)' : 'var(--faint)', textAlign: 'center' }}>{s2}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ height: 6, borderRadius: 999, background: 'var(--line2)', overflow: 'hidden', marginTop: 8 }}>
-              <div style={{ height: '100%', borderRadius: 999, background: 'linear-gradient(90deg,var(--gold2),var(--gold))', width: `${progress}%`, transition: 'width .2s' }} />
-            </div>
-            <div style={{ display: 'flex', gap: 24, marginTop: 12, fontSize: 13 }}>
-              <span>کل: <strong style={{ color: 'var(--gold)' }}>{counts.total.toLocaleString()}</strong></span>
-              <span>جدید: <strong style={{ color: '#5fd98a' }}>{counts.newItems.toLocaleString()}</strong></span>
-              <span>تکراری: <strong style={{ color: 'var(--muted)' }}>{counts.dup.toLocaleString()}</strong></span>
-            </div>
+
+        {/* run log */}
+        {log.length > 0 && (
+          <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {log.map((l, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5, background: 'var(--bg2)', borderRadius: 9, padding: '8px 12px' }}>
+                <span style={{ color: l.ok ? '#5fd98a' : '#e7674a' }}>{l.ok ? '✓' : '✕'}</span>
+                <span style={{ fontWeight: 600 }}>{l.source}</span>
+                {l.ok
+                  ? <span style={{ color: 'var(--muted)' }}>{l.added} مورد جدید · {l.dup} تکراری</span>
+                  : <span style={{ color: '#e7674a' }}>{l.error}</span>}
+              </div>
+            ))}
           </div>
         )}
       </Card>
 
+      {/* Tabs */}
+      <div className="mjsa-roles" style={{ display: 'flex', gap: 8, marginBottom: 14, overflowX: 'auto' }}>
+        {(['listing', 'article', 'price'] as const).map(t => {
+          const m = TYPE_META[t]; const active = tab === t
+          return (
+            <button key={t} onClick={() => setTab(t)} style={{
+              display: 'flex', alignItems: 'center', gap: 7, padding: '9px 18px', borderRadius: 11,
+              border: `1px solid ${active ? m.color : 'var(--line2)'}`, whiteSpace: 'nowrap',
+              background: active ? `${m.color}1a` : 'transparent', color: active ? m.color : 'var(--muted)',
+              fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+            }}>
+              <span>{m.icon}</span>{m.label}
+              <span style={{ fontSize: 11, opacity: .8 }}>({sources.filter(s => s.type === t).length})</span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Sources for active tab */}
       <Card style={{ marginBottom: 14 }}>
-        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>منابع داده</div>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--line)' }}>
-              {['منبع', 'وضعیت', 'تعداد آگهی', 'آخرین اجرا', ''].map(h => (
-                <th key={h} style={{ textAlign: 'right', padding: '8px 0', fontSize: 12, color: 'var(--faint)', fontWeight: 600 }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {sources.map(s => (
-              <tr key={s.name} style={{ borderBottom: '1px solid var(--line)' }}>
-                <td style={{ padding: '12px 0', fontWeight: 600 }}>{s.name}</td>
-                <td style={{ padding: '12px 0' }}><Badge label={s.status} color={s.color} /></td>
-                <td style={{ padding: '12px 0', color: 'var(--muted)' }}>{s.count}</td>
-                <td style={{ padding: '12px 0', color: 'var(--faint)', fontSize: 12 }}>{s.lastRun}</td>
-                <td style={{ padding: '12px 0' }}><OutlineButton style={{ fontSize: 12, padding: '5px 12px' }}>اجرا</OutlineButton></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>منابع {TYPE_META[tab].label}</div>
+        {loading ? (
+          <div style={{ color: 'var(--muted)', fontSize: 13, padding: '12px 0' }}>در حال بارگذاری…</div>
+        ) : tabSources.length === 0 ? (
+          <div style={{ color: 'var(--muted)', fontSize: 13, padding: '20px 0', textAlign: 'center' }}>
+            هنوز منبعی برای این بخش اضافه نشده. روی «+ افزودن منبع» بزنید.
+          </div>
+        ) : (
+          <div className="mjsa-table" style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 620 }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--line)' }}>
+                  {['منبع', 'روش', 'زمان‌بندی', 'آخرین اجرا', 'نتیجه', 'فعال', ''].map(h => (
+                    <th key={h} style={{ textAlign: 'right', padding: '8px 8px', fontSize: 12, color: 'var(--faint)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {tabSources.map(s => (
+                  <tr key={s.id} style={{ borderBottom: '1px solid var(--line)' }}>
+                    <td style={{ padding: '12px 8px' }}>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{s.name}</div>
+                      <a href={s.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: 'var(--faint)', textDecoration: 'none', direction: 'ltr', display: 'inline-block', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.url}</a>
+                      {s.status === 'error' && s.lastError && <div style={{ fontSize: 10.5, color: '#e7674a', marginTop: 3 }}>⚠ {s.lastError}</div>}
+                    </td>
+                    <td style={{ padding: '12px 8px' }}><Badge label={METHOD_LABEL[s.method]} color="#5b9bd5" /></td>
+                    <td style={{ padding: '12px 8px', fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap' }}>{SCHEDULE_LABEL[s.schedule]}</td>
+                    <td style={{ padding: '12px 8px', fontSize: 12, color: 'var(--faint)', whiteSpace: 'nowrap' }}>{timeAgo(s.lastRun)}</td>
+                    <td style={{ padding: '12px 8px' }}>
+                      <Badge label={s.status === 'error' ? 'خطا' : s.status === 'ok' ? `${s.lastCount} مورد` : 'آماده'} color={s.status === 'error' ? '#e7674a' : s.status === 'ok' ? '#5fd98a' : 'var(--faint)'} />
+                    </td>
+                    <td style={{ padding: '12px 8px' }}><Toggle on={s.enabled} onChange={() => toggleSource(s)} /></td>
+                    <td style={{ padding: '12px 8px' }}>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <OutlineButton onClick={() => run(s.id)} style={{ fontSize: 11.5, padding: '5px 11px', opacity: running ? .6 : 1, pointerEvents: running ? 'none' : 'auto' }}>
+                          {running === s.id ? '⏳' : 'اجرا'}
+                        </OutlineButton>
+                        <button onClick={() => removeSource(s.id)} style={{ fontSize: 11.5, padding: '5px 11px', borderRadius: 9, border: '1px solid rgba(231,103,74,.3)', color: '#e7674a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>حذف</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
 
+      {/* Scraped items for active tab */}
       <Card>
-        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>آگهی‌های اخیراً ایمپورت‌شده</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {recent.map(r => (
-            <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 14, background: 'var(--bg2)', borderRadius: 12, padding: '12px 16px' }}>
-              <span style={{ fontSize: 12, color: 'var(--faint)', minWidth: 50 }}>{r.id}</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 600 }}>{r.title}</div>
-                <div style={{ fontSize: 12, color: 'var(--muted)' }}>{r.location} · {r.source}</div>
-              </div>
-              <span style={{ fontWeight: 700, color: 'var(--gold)', fontSize: 13 }}>{r.price}</span>
-              <Badge label={r.status} color={r.status === 'تأیید شد' ? '#5fd98a' : r.status === 'تکراری' ? '#e7a14a' : '#5b9bd5'} />
-            </div>
-          ))}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div style={{ fontWeight: 700, fontSize: 14 }}>{TYPE_META[tab].label} واکشی‌شده ({items.length})</div>
+          <span style={{ fontSize: 11.5, color: 'var(--faint)' }}>به‌ترتیب جدیدترین</span>
         </div>
+        {items.length === 0 ? (
+          <div style={{ color: 'var(--muted)', fontSize: 13, padding: '20px 0', textAlign: 'center' }}>
+            هنوز موردی واکشی نشده. یک منبع اجرا کنید تا نتایج اینجا نمایش داده شود.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {items.map(it => (
+              <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 14, background: 'var(--bg2)', borderRadius: 12, padding: '12px 16px', flexWrap: 'wrap' }}>
+                {it.image
+                  ? <img src={it.image} alt="" style={{ width: 46, height: 46, borderRadius: 9, objectFit: 'cover', flexShrink: 0, background: 'var(--line)' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                  : <span style={{ width: 46, height: 46, borderRadius: 9, background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: TYPE_META[tab].color, fontSize: 18 }}>{TYPE_META[tab].icon}</span>}
+                <div style={{ flex: 1, minWidth: 180 }}>
+                  <a href={it.url || '#'} target="_blank" rel="noreferrer" style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text)', textDecoration: 'none', display: 'block', lineHeight: 1.5 }}>{it.title}</a>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                    {it.location && <span>📍 {it.location} · </span>}{it.sourceName} · {timeAgo(it.scrapedAt)}
+                  </div>
+                </div>
+                {it.price && <span style={{ fontWeight: 700, color: 'var(--gold)', fontSize: 13, whiteSpace: 'nowrap' }}>{it.price}</span>}
+                <Badge label={ITEM_STATUS[it.status]?.label || it.status} color={ITEM_STATUS[it.status]?.color || 'var(--faint)'} />
+                {it.status === 'pending' && (
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button onClick={() => setItemStatus(it.id, 'approved')} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 8, border: '1px solid #5fd98a', color: '#5fd98a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>تأیید</button>
+                    <button onClick={() => setItemStatus(it.id, 'rejected')} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 8, border: '1px solid #e7674a', color: '#e7674a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>رد</button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
+
+      {/* Add-source modal */}
+      {modal && (
+        <div onClick={() => setModal(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 18, padding: 24, width: '100%', maxWidth: 460, animation: 'rise .25s ease' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+              <div style={{ fontWeight: 800, fontSize: 16 }}>افزودن منبع جدید</div>
+              <button onClick={() => setModal(false)} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 20, cursor: 'pointer' }}>×</button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={labelCss}>نام منبع</label>
+                <input style={inputCss} placeholder="مثلاً: دیوار - تهران" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+              </div>
+              <div>
+                <label style={labelCss}>آدرس صفحه (URL)</label>
+                <input style={{ ...inputCss, direction: 'ltr', textAlign: 'left' }} placeholder="https://example.com/listings یا فید RSS" value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={labelCss}>نوع محتوا</label>
+                  <select style={inputCss} value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>
+                    <option value="listing">آگهی ملک</option>
+                    <option value="article">مقاله / خبر</option>
+                    <option value="price">قیمت / آمار</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={labelCss}>روش استخراج</label>
+                  <select style={inputCss} value={form.method} onChange={e => setForm({ ...form, method: e.target.value })}>
+                    <option value="auto">خودکار (پیشنهادی)</option>
+                    <option value="jsonld">JSON-LD</option>
+                    <option value="og">OpenGraph</option>
+                    <option value="rss">RSS / خبرخوان</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label style={labelCss}>زمان‌بندی اجرا</label>
+                <select style={inputCss} value={form.schedule} onChange={e => setForm({ ...form, schedule: e.target.value })}>
+                  <option value="manual">فقط دستی</option>
+                  <option value="hourly">هر ساعت</option>
+                  <option value="6h">هر ۶ ساعت</option>
+                  <option value="daily">روزانه</option>
+                </select>
+              </div>
+              {formErr && <div style={{ color: '#e7674a', fontSize: 12.5 }}>⚠ {formErr}</div>}
+              <div style={{ fontSize: 11.5, color: 'var(--faint)', lineHeight: 1.7, background: 'var(--bg2)', borderRadius: 10, padding: '10px 12px' }}>
+                💡 موتور به‌صورت خودکار داده‌های ساختاریافته (JSON-LD)، تگ‌های OpenGraph و فیدهای RSS را تشخیص می‌دهد. برای سایت‌های خبری، آدرس فید RSS بهترین نتیجه را می‌دهد.
+              </div>
+              <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                <GoldButton onClick={addSource} style={{ flex: 1, opacity: saving ? .6 : 1, pointerEvents: saving ? 'none' : 'auto' }}>{saving ? 'در حال ذخیره…' : 'افزودن و ذخیره'}</GoldButton>
+                <OutlineButton onClick={() => setModal(false)}>انصراف</OutlineButton>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
