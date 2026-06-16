@@ -23,6 +23,9 @@ export interface AdminData {
   neshan?: {
     serviceKey: string   // Neshan web-service key (reverse geocoding)
   }
+  divar?: {
+    proxyUrl?: string    // HTTP proxy used to reach api.divar.ir from the server
+  }
 }
 
 export function getAdminData(): AdminData {

@@ -34,12 +34,13 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const b = await req.json()
-  if (!b.name || !b.url) return NextResponse.json({ error: 'نام و آدرس الزامی است' }, { status: 400 })
-  try { new URL(b.url) } catch { return NextResponse.json({ error: 'آدرس نامعتبر است' }, { status: 400 }) }
-  const method = (['auto', 'jsonld', 'og', 'rss', 'css'].includes(b.method) ? b.method : 'auto') as Method
+  const method = (['auto', 'jsonld', 'og', 'rss', 'css', 'divar'].includes(b.method) ? b.method : 'auto') as Method
+  // Divar connector uses the official API, not a page URL
+  if (!b.name || (!b.url && method !== 'divar')) return NextResponse.json({ error: 'نام و آدرس الزامی است' }, { status: 400 })
+  if (b.url) { try { new URL(b.url) } catch { return NextResponse.json({ error: 'آدرس نامعتبر است' }, { status: 400 }) } }
   const src = addSource({
     name: String(b.name).slice(0, 80),
-    url: String(b.url),
+    url: String(b.url || 'https://divar.ir'),
     type: (['listing', 'directory', 'product', 'article', 'price'].includes(b.type) ? b.type : 'listing') as SourceType,
     category: b.type === 'directory' && b.category ? String(b.category).slice(0, 40) : undefined,
     method,

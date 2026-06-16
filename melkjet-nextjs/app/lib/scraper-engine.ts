@@ -1,5 +1,6 @@
 import type { Source, Item, Method } from './scraper-store'
 import { parseHTML, queryAll, queryOne, textOf } from './html-select'
+import { scrapeDivar } from './divar'
 
 type RawItem = Omit<Item, 'id' | 'sourceId' | 'sourceName' | 'type' | 'category' | 'scrapedAt' | 'status'>
 
@@ -144,8 +145,14 @@ function looksLikeXml(text: string) {
 
 /** Scrape a source. Returns extracted raw items. Throws on network errors. */
 export async function scrapeSource(source: Source): Promise<RawItem[]> {
-  const text = await fetchPage(source.url)
   const method: Method = source.method
+
+  // Divar official-API connector (JSON via proxy) — no HTML fetch
+  if (method === 'divar') {
+    return scrapeDivar(source)
+  }
+
+  const text = await fetchPage(source.url)
 
   // Detailed CSS extraction takes priority when configured
   if (method === 'css') {

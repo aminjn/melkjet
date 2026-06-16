@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { DEAL_TYPES, PROPERTY_KINDS, PROVINCES, citiesOf, neighborhoodsOf } from '@/app/lib/taxonomy'
+import { DIVAR_CATEGORIES, DIVAR_CITIES } from '@/app/lib/divar-meta'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 type View =
@@ -410,6 +411,37 @@ const FIELD_OPTIONS: { k: string; label: string }[] = [
   { k: 'image', label: 'تصویر' }, { k: 'url', label: 'لینک' }, { k: 'phone', label: 'تلفن' }, { k: 'excerpt', label: 'توضیح' },
 ]
 
+function DivarProxyConfig() {
+  const [url, setUrl] = useState('')
+  const [saved, setSaved] = useState('')
+  const [msg, setMsg] = useState('')
+  const [open, setOpen] = useState(false)
+  useEffect(() => { fetch('/api/admin/divar-config').then(r => r.ok ? r.json() : null).then(d => d && setSaved(d.proxyUrl || '')) }, [])
+  const save = async () => {
+    setMsg('')
+    const r = await fetch('/api/admin/divar-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ proxyUrl: url }) })
+    if (r.ok) { setMsg('✓ ذخیره شد'); setSaved(url) } else setMsg('خطا')
+  }
+  return (
+    <Card style={{ marginBottom: 14 }}>
+      <div onClick={() => setOpen(!open)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
+        <div style={{ fontWeight: 700, fontSize: 14 }}>پروکسی دیوار {saved ? <span style={{ color: '#5fd98a', fontSize: 12 }}>● تنظیم‌شده</span> : <span style={{ color: '#e7a14a', fontSize: 12 }}>● تنظیم نشده</span>}</div>
+        <span style={{ color: 'var(--muted)' }}>{open ? '▲' : '▼'}</span>
+      </div>
+      {open && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>چون دیوار فقط از طریق پروکسی در دسترس است، آدرس پروکسی سرور را اینجا بگذار (مثلاً <span style={{ direction: 'ltr', display: 'inline-block' }}>http://127.0.0.1:8889</span>). برای پیداکردنش روی سرور بزن: <span style={{ direction: 'ltr', display: 'inline-block' }}>proxy-on; env | grep -i proxy</span></div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <input value={url} onChange={e => setUrl(e.target.value)} placeholder={saved || 'http://host:port'} style={{ flex: 1, minWidth: 220, direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }} />
+            <GoldButton onClick={save}>ذخیره</GoldButton>
+          </div>
+          {msg && <div style={{ marginTop: 8, fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</div>}
+        </div>
+      )}
+    </Card>
+  )
+}
+
 function ScraperView() {
   const [tab, setTab] = useState<ScrTab>('listing')
   const [sources, setSources] = useState<ScrSource[]>([])
@@ -551,6 +583,7 @@ function ScraperView() {
 
   return (
     <div style={{ animation: 'fade .35s ease' }}>
+      <DivarProxyConfig />
       {/* KPI */}
       <div className="mjsa-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 18 }}>
         <KPI label="کل منابع" value={sources.length.toString()} trend={`${sources.filter(s => s.enabled).length} فعال`} icon="◈" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" trendUp />
@@ -726,11 +759,29 @@ function ScraperView() {
                 </div>
               </div>
 
-              <div>
-                <label style={labelCss}>آدرس دقیق صفحه (URL)</label>
-                <input style={{ ...inputCss, direction: 'ltr', textAlign: 'left' }} placeholder="https://site.com/tehran/saadatabad/buy-apartment" value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} />
-                <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 4 }}>همان صفحه‌ای که می‌خواهید از آن واکشی شود را دقیق وارد کنید (با فیلتر شهر/محله/نوع آگهی).</div>
-              </div>
+              {form.method !== 'divar' && (
+                <div>
+                  <label style={labelCss}>آدرس دقیق صفحه (URL)</label>
+                  <input style={{ ...inputCss, direction: 'ltr', textAlign: 'left' }} placeholder="https://site.com/tehran/saadatabad/buy-apartment" value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} />
+                  <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 4 }}>همان صفحه‌ای که می‌خواهید از آن واکشی شود را دقیق وارد کنید (با فیلتر شهر/محله/نوع آگهی).</div>
+                </div>
+              )}
+
+              {/* ── کانکتور دیوار: شهر + دسته (API رسمی، بدون URL) ── */}
+              {form.method === 'divar' && (
+                <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: 14 }}>
+                  <label style={labelCss}>تنظیمات دیوار — مستقیم از API رسمی دیوار خوانده می‌شود</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <select style={inputCss} value={form.meta['city_id'] || '1'} onChange={e => setMeta('city_id', e.target.value)}>
+                      {DIVAR_CITIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                    <select style={inputCss} value={form.meta['category'] || 'apartment-rent'} onChange={e => setMeta('category', e.target.value)}>
+                      {DIVAR_CATEGORIES.map(c => <option key={c.slug} value={c.slug}>{c.label}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 6 }}>نیازمند تنظیم «پروکسی دیوار» در بالای همین صفحه است (چون دیوار فقط از طریق پروکسی در دسترس است).</div>
+                </div>
+              )}
 
               {/* ── دسته‌بندی برای دایرکتوری (مشاور/حقوقی/وکیل/بیمه…) با امکان افزودن ── */}
               {form.type === 'directory' && (
@@ -812,6 +863,7 @@ function ScraperView() {
                   <label style={labelCss}>روش استخراج</label>
                   <select style={inputCss} value={form.method} onChange={e => { setForm({ ...form, method: e.target.value }); setPreview(null) }}>
                     <option value="auto">خودکار (تشخیص داده)</option>
+                    <option value="divar">دیوار (API رسمی)</option>
                     <option value="css">CSS سفارشی (دقیق، با انتخابگر)</option>
                     <option value="jsonld">JSON-LD</option>
                     <option value="og">OpenGraph</option>

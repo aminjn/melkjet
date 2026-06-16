@@ -6,7 +6,7 @@ const DATA_FILE = join(process.cwd(), '.scraper-data.json')
 
 // Top-level content type → which public page it feeds
 export type SourceType = 'listing' | 'directory' | 'product' | 'article' | 'price'
-export type Method = 'auto' | 'jsonld' | 'og' | 'rss' | 'css'
+export type Method = 'auto' | 'jsonld' | 'og' | 'rss' | 'css' | 'divar'
 export type ItemStatus = 'pending' | 'approved' | 'duplicate' | 'rejected'
 
 // Field-level extraction rule (used when method === 'css')
