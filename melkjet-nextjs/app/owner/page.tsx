@@ -276,7 +276,7 @@ function SellerOverview() {
         <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: 14 }}>خوش آمدید مهدی جان — عملکرد آگهی‌های شما در یک نگاه</p>
       </div>
       {/* KPI row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+      <div className="mjo-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
         {stats.map((s) => (
           <Card key={s.label}>
             <div style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 8 }}>{s.label}</div>
@@ -576,7 +576,7 @@ function SellerPriceAnalysis() {
                 fontFamily: 'JetBrains Mono',
               }}>{item.diff}</span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+            <div className="mjo-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
               <div style={{ background: 'var(--bg2)', borderRadius: 10, padding: 16, textAlign: 'center' }}>
                 <div style={{ color: 'var(--muted)', fontSize: 12, marginBottom: 6 }}>قیمت فعلی شما</div>
                 <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', fontFamily: 'JetBrains Mono' }}>{item.listed}</div>
@@ -605,7 +605,7 @@ function SellerPriceAnalysis() {
       {/* Market comparison note */}
       <Card style={{ background: 'var(--bg2)' }}>
         <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>مقایسه با بازار</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+        <div className="mjo-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
           {[
             { label: 'میانگین منطقه', value: '۷۸ م.د/متر', status: 'متر مربع' },
             { label: 'بالاترین مشابه', value: '۱۴۵ م.د/متر', status: 'متر مربع' },
@@ -682,7 +682,7 @@ function InvestorPortfolio() {
                     fontFamily: 'JetBrains Mono',
                   }}>{p.roi}</span>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+                <div className="mjo-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
                   {[
                     { label: 'ارزش فعلی', value: p.currentValue, color: 'var(--gold)' },
                     { label: 'قیمت خرید', value: p.buyPrice, color: 'var(--text)' },
@@ -734,7 +734,7 @@ function InvestorMarket() {
       {/* Heatmap grid */}
       <Card>
         <h2 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>محلات تهران</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+        <div className="mjo-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
           {marketNeighborhoods.map((n) => {
             const c = levelColors[n.level];
             return (

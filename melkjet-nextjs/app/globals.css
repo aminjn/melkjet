@@ -151,6 +151,24 @@ body {
 /* States */
 @media(max-width:880px){.mjst-nav{display:none!important}.mjst-main{padding:24px 18px!important}.mjst-3{grid-template-columns:1fr!important}.mjst-2{grid-template-columns:1fr!important}}
 
+/* Store sidebar — hide on mobile */
+@media(max-width:860px){.mjst-sidebar{display:none!important}}
+
+/* CRM chart 2-col, table scroll, calendar scroll */
+@media(max-width:760px){.mjc-2col{grid-template-columns:1fr!important}.mjc-table{overflow-x:auto!important}.mjc-row{min-width:560px!important}.mjc-cal{overflow-x:auto!important}.mjc-cal-inner{min-width:560px!important}}
+
+/* Admin agents 3-col */
+@media(max-width:760px){.mjsa-agents{grid-template-columns:1fr 1fr!important}}
+@media(max-width:480px){.mjsa-agents{grid-template-columns:1fr!important}}
+
+/* Property gallery & detail grids */
+@media(max-width:640px){.mjp-gallery{grid-template-columns:1fr!important;grid-template-rows:220px!important;height:220px!important}.mjp-gallery>div:nth-child(n+2){display:none!important}.mjp-2col{grid-template-columns:1fr!important}.mjp-similar{grid-template-columns:1fr 1fr!important}}
+@media(max-width:480px){.mjp-similar{grid-template-columns:1fr!important}}
+
+/* Submit step grids */
+@media(max-width:640px){.mjsub-3col{grid-template-columns:1fr 1fr!important}.mjsub-2col{grid-template-columns:1fr!important}.mjsub-4col{grid-template-columns:1fr 1fr!important}}
+@media(max-width:480px){.mjsub-3col{grid-template-columns:1fr!important}.mjsub-4col{grid-template-columns:1fr!important}}
+
 /* AI Assistant — lift above bottom nav on mobile */
 @media(max-width:860px){.mj-ai-btn{bottom:86px!important}}
 @media(max-width:860px){.mj-ai-panel{bottom:154px!important}}

@@ -246,7 +246,7 @@ export default function PropertyDetail() {
       {/* ── GALLERY ────────────────────────────────────────────────────── */}
       <section style={{ maxWidth:1280, margin:'0 auto', padding:'28px 24px 0' }}>
         {/* main grid: 2fr + 1fr with 2 stacked thumbs */}
-        <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gridTemplateRows:'200px 200px', gap:10, borderRadius:20, overflow:'hidden', height:410 }}>
+        <div className="mjp-gallery" style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gridTemplateRows:'200px 200px', gap:10, borderRadius:20, overflow:'hidden', height:410 }}>
           {/* large main */}
           <div style={{ gridRow:'1/3', position:'relative', background:gallery[activeImg].bg, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
             <div style={{ position:'absolute', inset:0, background:'linear-gradient(to top,rgba(0,0,0,0.4),transparent 55%)' }}/>
@@ -354,7 +354,7 @@ export default function PropertyDetail() {
               <p style={{ fontSize:14.5, lineHeight:1.9, color:'var(--text)', marginBottom:16 }}>
                 این آپارتمان نوساز در یکی از معتبرترین محله‌های شمال غرب تهران، با طراحی مدرن و متریال درجه یک، گزینه‌ای ایده‌آل برای خانواده‌هایی است که کیفیت و موقعیت را در اولویت دارند. قیمت فعلی ۴٪ پایین‌تر از میانگین منطقه است.
               </p>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+              <div className="mjp-2col" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
                 <div>
                   <div style={{ fontSize:12, fontWeight:700, color:'#5fd98a', marginBottom:8 }}>✓ مزایا</div>
                   {['نوساز ۱۴۰۲ با سند تک‌برگ','موقعیت عالی نزدیک مترو','کیفیت ساخت بالا و متریال لوکس','بازار پایدار با رشد مستمر'].map(p => (
@@ -415,7 +415,7 @@ export default function PropertyDetail() {
           {/* 7. Amenities 2×4 */}
           <div style={{ background:'var(--surface)', border:'1px solid var(--line)', borderRadius:18, padding:22 }}>
             <div style={{ fontSize:14, fontWeight:700, color:'var(--text)', marginBottom:16 }}>امکانات ملک</div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10 }}>
+            <div className="mjp-facts" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10 }}>
               {amenities.map(a => (
                 <div key={a} style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 12px', borderRadius:10, background:'var(--bg2)', border:'1px solid var(--line)' }}>
                   <span style={{ width:8, height:8, borderRadius:'50%', background:'#5fd98a', flexShrink:0 }}/>
@@ -428,7 +428,7 @@ export default function PropertyDetail() {
           {/* 8. Nearby */}
           <div style={{ background:'var(--surface)', border:'1px solid var(--line)', borderRadius:18, padding:22 }}>
             <div style={{ fontSize:14, fontWeight:700, color:'var(--text)', marginBottom:16 }}>دسترسی‌های مجاور</div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+            <div className="mjp-2col" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
               {nearby.map(n => (
                 <div key={n.label} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', borderRadius:12, background:'var(--bg2)', border:'1px solid var(--line)' }}>
                   <span style={{ fontSize:22, flexShrink:0 }}>{n.icon}</span>
@@ -470,7 +470,7 @@ export default function PropertyDetail() {
           {/* 10. Similar Properties */}
           <div>
             <div style={{ fontSize:16, fontWeight:700, color:'var(--text)', marginBottom:16 }}>ملک‌های مشابه</div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14 }}>
+            <div className="mjp-similar" style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14 }}>
               {similar.map(p => (
                 <Link key={p.id} href={`/property/${p.id}`} style={{ textDecoration:'none', background:'var(--surface)', border:'1px solid var(--line)', borderRadius:16, overflow:'hidden', display:'block' }}>
                   <div style={{ height:110, background:p.bg, display:'flex', alignItems:'center', justifyContent:'center' }}>

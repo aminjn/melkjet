@@ -582,7 +582,7 @@ export default function StorePage() {
       <div style={{ maxWidth: 1340, margin: '0 auto', padding: '28px 24px', display: 'flex', gap: 24 }}>
 
         {/* ── LEFT SIDEBAR ── */}
-        <aside style={{ width: 260, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 16, alignSelf: 'flex-start', position: 'sticky', top: 24 }}>
+        <aside className="mjst-sidebar" style={{ width: 260, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 16, alignSelf: 'flex-start', position: 'sticky', top: 24 }}>
 
           {/* Categories Tree */}
           <div style={{ ...s, padding: '18px 0', overflow: 'hidden' }}>

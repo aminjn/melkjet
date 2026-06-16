@@ -416,7 +416,7 @@ export default function CRMPage() {
               </div>
 
               {/* Bar Chart + AI Insights */}
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
+              <div className="mjc-2col" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
 
                 {/* Sales Bar Chart */}
                 <div style={{
@@ -618,7 +618,7 @@ export default function CRMPage() {
 
           {/* ==================== LISTINGS ==================== */}
           {activeView === 'listings' && (
-            <div style={{
+            <div className="mjc-table" style={{
               background: 'var(--surface)',
               border: '1px solid var(--line)',
               borderRadius: 16,
@@ -639,7 +639,7 @@ export default function CRMPage() {
               </div>
 
               {/* Table Header */}
-              <div style={{
+              <div className="mjc-row" style={{
                 display: 'grid',
                 gridTemplateColumns: '2fr 120px 150px 80px 1fr',
                 padding: '11px 20px',
@@ -654,6 +654,7 @@ export default function CRMPage() {
               {listings.map((item, i) => (
                 <div
                   key={item.id}
+                  className="mjc-row"
                   style={{
                     display: 'grid',
                     gridTemplateColumns: '2fr 120px 150px 80px 1fr',
@@ -865,7 +866,7 @@ export default function CRMPage() {
 
           {/* ==================== CALENDAR ==================== */}
           {activeView === 'calendar' && (
-            <div style={{
+            <div className="mjc-cal" style={{
               background: 'var(--surface)',
               border: '1px solid var(--line)',
               borderRadius: 16,
@@ -900,7 +901,7 @@ export default function CRMPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'flex' }}>
+              <div className="mjc-cal-inner" style={{ display: 'flex' }}>
                 {/* Time axis */}
                 <div style={{ width: 56, flexShrink: 0, borderLeft: '1px solid var(--line)', paddingTop: 48 }}>
                   {calendarHours.map(h => (

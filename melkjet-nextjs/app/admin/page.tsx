@@ -445,7 +445,7 @@ function ContentView() {
   }
 
   return (
-    <div style={{ animation: 'fade .35s ease', display: 'grid', gridTemplateColumns: '220px 1fr', gap: 14 }}>
+    <div style={{ animation: 'fade .35s ease', display: 'grid', gridTemplateColumns: '220px 1fr', gap: 14 }} className="mjsa-2col">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <Card style={{ padding: 14 }}>
           <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12 }}>صف سئو</div>
@@ -583,7 +583,7 @@ function APIView() {
 
       <Card>
         <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>ریجستری ایجنت‌های AI ({agents.length})</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+        <div className="mjsa-agents" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
           {agents.map(a => (
             <div key={a.name} style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -724,7 +724,7 @@ function PlansView() {
       {segments.map(seg => (
         <div key={seg.name} style={{ marginBottom: 22 }}>
           <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 12, color: seg.color }}>{seg.name}</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="mjsa-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             {seg.plans.map(plan => (
               <Card key={plan.name} style={{ borderColor: seg.color === 'var(--gold)' ? 'rgba(201,168,76,.25)' : seg.color + '33' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>

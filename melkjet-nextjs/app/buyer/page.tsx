@@ -211,7 +211,7 @@ export default function BuyerPage() {
                         gap: 0,
                       }}>
                         {/* Image placeholder */}
-                        <div style={{
+                        <div className="mjb-oppimg" style={{
                           width: 90, minHeight: 80,
                           background: op.gradient,
                           flexShrink: 0,

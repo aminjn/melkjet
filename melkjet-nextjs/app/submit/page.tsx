@@ -224,7 +224,7 @@ export default function SubmitPage() {
       </div>
       <div style={cardStyle}>
         <p style={sectionTitle}>نوع ملک</p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        <div className="mjsub-3col" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
           {PROPERTY_TYPES.map((t) => (
             <button key={t} onClick={() => set('propertyType', t)} style={{
               padding: '22px 12px', borderRadius: 12, border: '2px solid',
@@ -254,7 +254,7 @@ export default function SubmitPage() {
           <label style={labelStyle}>آدرس کامل</label>
           <textarea style={{ ...inputStyle, height: 80, resize: 'none' }} placeholder="استان، شهر، خیابان، کوچه..." value={form.address} onChange={(e) => set('address', e.target.value)} />
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <div className="mjsub-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <div>
             <label style={labelStyle}>استان</label>
             <select style={inputStyle} value={form.province} onChange={(e) => { set('province', e.target.value); set('city', ''); }}>
@@ -274,7 +274,7 @@ export default function SubmitPage() {
           <label style={labelStyle}>محله</label>
           <input style={inputStyle} placeholder="نام محله یا منطقه" value={form.neighborhood} onChange={(e) => set('neighborhood', e.target.value)} />
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+        <div className="mjsub-3col" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
           <div>
             <label style={labelStyle}>طبقه</label>
             <input style={inputStyle} type="number" placeholder="۳" value={form.floor} onChange={(e) => set('floor', e.target.value)} />
@@ -296,7 +296,7 @@ export default function SubmitPage() {
             <input style={inputStyle} type="number" placeholder="۵" value={form.buildingAge} onChange={(e) => set('buildingAge', e.target.value)} />
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+        <div className="mjsub-3col" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
           {([['parking', 'پارکینگ'], ['elevator', 'آسانسور'], ['storage', 'انباری']] as [keyof FormData, string][]).map(([key, label]) => (
             <div key={key}>
               <label style={{ ...labelStyle, marginBottom: 10 }}>{label}</label>
@@ -375,7 +375,7 @@ export default function SubmitPage() {
         <p style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 20 }}>
           حداکثر ۸ تصویر با کیفیت بالا آپلود کنید. فرمت‌های JPG، PNG و WEBP پشتیبانی می‌شوند.
         </p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+        <div className="mjsub-4col" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
           {Array(8).fill(null).map((_, i) => (
             <div
               key={i}
