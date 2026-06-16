@@ -160,6 +160,18 @@ export async function scrapeSource(source: Source): Promise<RawItem[]> {
     const items = parseJsonLd(text)
     if (items.length) return items
   }
+  // auto: if the HTML page links to an RSS/Atom feed, follow it (great for
+  // news/tag listing pages where the visible HTML is a card list)
+  if (method === 'auto') {
+    const feed = findFeedLink(text, source.url)
+    if (feed) {
+      try {
+        const x = await fetchPage(feed)
+        const items = parseRSS(x)
+        if (items.length) return items
+      } catch { /* ignore, fall through */ }
+    }
+  }
   if (method === 'og' || method === 'auto') {
     const items = parseOG(text)
     if (items.length) return items
@@ -170,4 +182,15 @@ export async function scrapeSource(source: Source): Promise<RawItem[]> {
     if (items.length) return items
   }
   return []
+}
+
+// Discover a feed URL from <link rel="alternate" type="application/rss+xml" href="…">
+function findFeedLink(html: string, base: string): string | null {
+  const linkTags = html.match(/<link\b[^>]*>/gi) || []
+  for (const tag of linkTags) {
+    if (!/rss\+xml|atom\+xml/i.test(tag)) continue
+    const href = tag.match(/href=["']([^"']+)["']/i)?.[1]
+    if (href) return absUrl(href, base)
+  }
+  return null
 }
