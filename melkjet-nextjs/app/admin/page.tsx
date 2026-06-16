@@ -779,7 +779,8 @@ function ScraperView() {
                       {DIVAR_CATEGORIES.map(c => <option key={c.slug} value={c.slug}>{c.label}</option>)}
                     </select>
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 6 }}>نیازمند تنظیم «پروکسی دیوار» در بالای همین صفحه است (چون دیوار فقط از طریق پروکسی در دسترس است).</div>
+                  <input style={{ ...inputCss, marginTop: 10 }} placeholder="محله (اختیاری) — دقیقاً مثل دیوار، مثلاً: سعادت‌آباد" value={form.meta['محله'] || ''} onChange={e => setMeta('محله', e.target.value)} />
+                  <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 6 }}>اگر محله را پر کنی، چند صفحه از دیوار خوانده می‌شود و فقط آگهی‌های همان محله نگه داشته می‌شود. نیازمند «پروکسی دیوار» (بالای صفحه).</div>
                 </div>
               )}
 
