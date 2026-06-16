@@ -20,6 +20,9 @@ export interface AdminData {
     sender: string
     pattern: string
   }
+  neshan?: {
+    serviceKey: string   // Neshan web-service key (reverse geocoding)
+  }
 }
 
 export function getAdminData(): AdminData {

@@ -4,7 +4,7 @@ import { DEAL_TYPES, PROPERTY_KINDS, PROVINCES, citiesOf, neighborhoodsOf } from
 
 /* ─── Types ─────────────────────────────────────────────────── */
 type View =
-  | 'overview' | 'scraper' | 'moderation' | 'content' | 'api'
+  | 'overview' | 'scraper' | 'geo' | 'moderation' | 'content' | 'api'
   | 'reports' | 'plans' | 'promos' | 'ads' | 'users'
   | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags'
 
@@ -41,6 +41,7 @@ const sections: NavSection[] = [
     title: 'مدیریت پلتفرم',
     items: [
       { id: 'users', icon: '◍', label: 'کاربران و نقش‌ها' },
+      { id: 'geo', icon: '🗺', label: 'مناطق و محله‌ها' },
     ],
   },
   {
@@ -64,6 +65,7 @@ const sections: NavSection[] = [
 const viewTitles: Record<View, string> = {
   overview:   'نمای کلی سیستم',
   scraper:    'موتور اسکرپی هوشمند',
+  geo:        'مدیریت مناطق و محله‌ها',
   moderation: 'تأیید آگهی با هوش مصنوعی',
   content:    'استودیو محتوا و سئو',
   api:        'API و مدل‌های هوش مصنوعی',
@@ -258,6 +260,138 @@ function timeAgo(ts: number | null): string {
   const h = Math.floor(m / 60)
   if (h < 24) return `${h} ساعت پیش`
   return `${Math.floor(h / 24)} روز پیش`
+}
+
+// ─── GEO: مدیریت استان/شهر/منطقه/محله ─────────────────────────────────────
+interface GeoDistrict { id: string; name: string; neighborhoods: string[] }
+interface GeoCity { id: string; name: string; districts: GeoDistrict[] }
+interface GeoProvince { id: string; name: string; cities: GeoCity[] }
+
+function GeoCol({ title, items, selId, onSelect, onAdd, onRename, onDelete, addPlaceholder }: {
+  title: string
+  items: { id: string; name: string }[]
+  selId: string | null
+  onSelect: (id: string) => void
+  onAdd: (name: string) => void
+  onRename: (id: string, name: string) => void
+  onDelete: (id: string) => void
+  addPlaceholder: string
+}) {
+  const [val, setVal] = useState('')
+  return (
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: 12, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>{title} <span style={{ color: 'var(--faint)', fontWeight: 400 }}>({items.length})</span></div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 340, overflowY: 'auto', marginBottom: 10 }}>
+        {items.map(it => (
+          <div key={it.id} onClick={() => onSelect(it.id)} style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
+            padding: '7px 9px', borderRadius: 8, cursor: 'pointer',
+            background: selId === it.id ? 'var(--goldDim)' : 'transparent',
+            border: `1px solid ${selId === it.id ? 'var(--gold)' : 'transparent'}`,
+          }}>
+            <span style={{ fontSize: 12.5, color: selId === it.id ? 'var(--gold)' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.name}</span>
+            <span style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+              <button onClick={e => { e.stopPropagation(); const n = prompt('نام جدید:', it.name); if (n) onRename(it.id, n) }} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 12 }}>✎</button>
+              <button onClick={e => { e.stopPropagation(); if (confirm(`حذف «${it.name}»؟`)) onDelete(it.id) }} style={{ background: 'transparent', border: 'none', color: '#e7674a', cursor: 'pointer', fontSize: 13 }}>×</button>
+            </span>
+          </div>
+        ))}
+        {items.length === 0 && <div style={{ fontSize: 11.5, color: 'var(--faint)', padding: '8px 4px' }}>موردی نیست</div>}
+      </div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input value={val} onChange={e => setVal(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && val.trim()) { onAdd(val.trim()); setVal('') } }}
+          placeholder={addPlaceholder} style={{ flex: 1, minWidth: 0, background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '8px 10px', color: 'var(--text)', fontSize: 12.5, fontFamily: 'inherit', outline: 'none' }} />
+        <button onClick={() => { if (val.trim()) { onAdd(val.trim()); setVal('') } }} style={{ padding: '8px 12px', borderRadius: 9, border: 'none', background: 'var(--gold)', color: '#16140f', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>+</button>
+      </div>
+    </div>
+  )
+}
+
+function NeshanConfig() {
+  const [masked, setMasked] = useState('')
+  const [key, setKey] = useState('')
+  const [msg, setMsg] = useState('')
+  useEffect(() => { fetch('/api/admin/neshan-config').then(r => r.ok ? r.json() : null).then(d => d && setMasked(d.masked)) }, [])
+  const save = async () => {
+    setMsg('')
+    const r = await fetch('/api/admin/neshan-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ serviceKey: key }) })
+    if (r.ok) { setMsg('✓ ذخیره شد'); setMasked('***' + key.slice(-4)); setKey('') } else setMsg('خطا در ذخیره')
+  }
+  return (
+    <Card style={{ marginBottom: 14 }}>
+      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>کلید سرویس نشان (Neshan) — برای تشخیص محله از روی نقشه</div>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>کلید Web-Service از نشان بگیر و اینجا بذار. اگر خالی باشد، از OpenStreetMap استفاده می‌شود. {masked && <span style={{ color: '#5fd98a' }}>وضعیت: تنظیم‌شده ({masked})</span>}</div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <input value={key} onChange={e => setKey(e.target.value)} placeholder="service.xxxxxxxx" style={{ flex: 1, minWidth: 220, direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }} />
+        <GoldButton onClick={save}>ذخیره کلید</GoldButton>
+      </div>
+      {msg && <div style={{ marginTop: 8, fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</div>}
+    </Card>
+  )
+}
+
+function GeoView() {
+  const [provinces, setProvinces] = useState<GeoProvince[]>([])
+  const [pid, setPid] = useState<string | null>(null)
+  const [cid, setCid] = useState<string | null>(null)
+  const [did, setDid] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const load = async () => {
+    const r = await fetch('/api/admin/geo')
+    if (r.ok) setProvinces((await r.json()).provinces)
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  const act = async (body: any) => {
+    const r = await fetch('/api/admin/geo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    if (r.ok) setProvinces((await r.json()).provinces)
+  }
+
+  const prov = provinces.find(p => p.id === pid)
+  const city = prov?.cities.find(c => c.id === cid)
+  const dist = city?.districts.find(d => d.id === did)
+
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <NeshanConfig />
+      <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 12 }}>
+        ستون‌ها را از راست به چپ انتخاب کن: استان ← شهر ← منطقه ← محله. افزودن/ویرایش/حذف در هر ستون.
+      </div>
+      {loading ? <div style={{ color: 'var(--muted)' }}>در حال بارگذاری…</div> : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }} className="mjsa-2col">
+          <GeoCol title="استان" addPlaceholder="استان جدید"
+            items={provinces.map(p => ({ id: p.id, name: p.name }))} selId={pid}
+            onSelect={id => { setPid(id); setCid(null); setDid(null) }}
+            onAdd={name => act({ action: 'addProvince', name })}
+            onRename={(id, name) => act({ action: 'rename', level: 'province', pid: id, name })}
+            onDelete={id => act({ action: 'delete', level: 'province', pid: id })} />
+
+          <GeoCol title="شهر" addPlaceholder={pid ? 'شهر جدید' : 'اول استان'}
+            items={(prov?.cities || []).map(c => ({ id: c.id, name: c.name }))} selId={cid}
+            onSelect={id => { setCid(id); setDid(null) }}
+            onAdd={name => pid && act({ action: 'addCity', pid, name })}
+            onRename={(id, name) => act({ action: 'rename', level: 'city', pid, cid: id, name })}
+            onDelete={id => act({ action: 'delete', level: 'city', pid, cid: id })} />
+
+          <GeoCol title="منطقه" addPlaceholder={cid ? 'منطقه جدید' : 'اول شهر'}
+            items={(city?.districts || []).map(d => ({ id: d.id, name: d.name }))} selId={did}
+            onSelect={id => setDid(id)}
+            onAdd={name => cid && act({ action: 'addDistrict', pid, cid, name })}
+            onRename={(id, name) => act({ action: 'rename', level: 'district', pid, cid, did: id, name })}
+            onDelete={id => act({ action: 'delete', level: 'district', pid, cid, did: id })} />
+
+          <GeoCol title="محله" addPlaceholder={did ? 'محله جدید' : 'اول منطقه'}
+            items={(dist?.neighborhoods || []).map(n => ({ id: n, name: n }))} selId={null}
+            onSelect={() => {}}
+            onAdd={name => did && act({ action: 'addNeighborhood', pid, cid, did, name })}
+            onRename={(id, name) => act({ action: 'addNeighborhood', pid, cid, did, name }).then(() => act({ action: 'delete', level: 'neighborhood', pid, cid, did, name: id }))}
+            onDelete={id => act({ action: 'delete', level: 'neighborhood', pid, cid, did, name: id })} />
+        </div>
+      )}
+    </div>
+  )
 }
 
 interface FieldRow { key: string; selector: string; attr: string }
@@ -1382,6 +1516,7 @@ export default function SuperAdminPage() {
     switch (active) {
       case 'overview':   return <OverviewView />
       case 'scraper':    return <ScraperView />
+      case 'geo':        return <GeoView />
       case 'moderation': return <ModerationView />
       case 'content':    return <ContentView />
       case 'api':        return <APIView />

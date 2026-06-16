@@ -1,8 +1,13 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Nav from '@/app/components/Nav';
 import Footer from '@/app/components/Footer';
+import LocationPicker from '@/app/components/LocationPicker';
+
+interface GeoDistrict { id: string; name: string; neighborhoods: string[] }
+interface GeoCity { id: string; name: string; districts: GeoDistrict[] }
+interface GeoProvince { id: string; name: string; cities: GeoCity[] }
 
 const STEPS = [
   { id: 1, label: 'معامله' },
@@ -14,17 +19,6 @@ const STEPS = [
 
 const DEAL_TYPES = ['فروش', 'اجاره', 'پیش‌فروش'];
 const PROPERTY_TYPES = ['آپارتمان', 'خانه', 'ویلا', 'زمین', 'اداری', 'تجاری'];
-const PROVINCES = ['تهران', 'اصفهان', 'مشهد', 'شیراز', 'تبریز', 'کرج', 'اهواز', 'قم'];
-const CITIES: Record<string, string[]> = {
-  تهران: ['تهران', 'شهریار', 'ری', 'اسلامشهر'],
-  اصفهان: ['اصفهان', 'کاشان', 'نجف‌آباد'],
-  مشهد: ['مشهد', 'نیشابور', 'سبزوار'],
-  شیراز: ['شیراز', 'مرودشت', 'فسا'],
-  تبریز: ['تبریز', 'ارومیه', 'مراغه'],
-  کرج: ['کرج', 'فردیس', 'نظرآباد'],
-  اهواز: ['اهواز', 'آبادان', 'خرمشهر'],
-  قم: ['قم', 'محلات'],
-};
 
 type ToggleValue = 'yes' | 'no' | null;
 type Images = (File | null)[];
@@ -36,7 +30,10 @@ interface FormData {
   address: string;
   province: string;
   city: string;
+  district: string;
   neighborhood: string;
+  lat: number | null;
+  lng: number | null;
   floor: string;
   totalFloors: string;
   area: string;
@@ -61,7 +58,10 @@ export default function SubmitPage() {
     address: '',
     province: '',
     city: '',
+    district: '',
     neighborhood: '',
+    lat: null,
+    lng: null,
     floor: '',
     totalFloors: '',
     area: '',
@@ -78,6 +78,18 @@ export default function SubmitPage() {
   });
   const [aiLoading, setAiLoading] = useState(false);
   const [aiDescription, setAiDescription] = useState('');
+  const [geo, setGeo] = useState<GeoProvince[]>([]);
+
+  useEffect(() => {
+    fetch('/api/geo', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : { provinces: [] }))
+      .then((d) => setGeo(d.provinces || []))
+      .catch(() => {});
+  }, []);
+
+  const geoProvince = geo.find((p) => p.name === form.province);
+  const geoCity = geoProvince?.cities.find((c) => c.name === form.city);
+  const geoDistrict = geoCity?.districts.find((d) => d.name === form.district);
   const imageRefs = useRef<(HTMLInputElement | null)[]>(Array(8).fill(null));
   const floorPlanRef = useRef<HTMLInputElement | null>(null);
 
@@ -257,22 +269,47 @@ export default function SubmitPage() {
         <div className="mjsub-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <div>
             <label style={labelStyle}>استان</label>
-            <select style={inputStyle} value={form.province} onChange={(e) => { set('province', e.target.value); set('city', ''); }}>
+            <select style={inputStyle} value={form.province} onChange={(e) => { set('province', e.target.value); set('city', ''); set('district', ''); set('neighborhood', ''); }}>
               <option value="">انتخاب کنید</option>
-              {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
+              {geo.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
             </select>
           </div>
           <div>
             <label style={labelStyle}>شهر</label>
-            <select style={inputStyle} value={form.city} onChange={(e) => set('city', e.target.value)} disabled={!form.province}>
+            <select style={inputStyle} value={form.city} onChange={(e) => { set('city', e.target.value); set('district', ''); set('neighborhood', ''); }} disabled={!form.province}>
               <option value="">انتخاب کنید</option>
-              {(CITIES[form.province] || []).map((c) => <option key={c} value={c}>{c}</option>)}
+              {(geoProvince?.cities || []).map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="mjsub-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div>
+            <label style={labelStyle}>منطقه</label>
+            <select style={inputStyle} value={form.district} onChange={(e) => { set('district', e.target.value); set('neighborhood', ''); }} disabled={!form.city}>
+              <option value="">انتخاب کنید</option>
+              {(geoCity?.districts || []).map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>محله</label>
+            <select style={inputStyle} value={form.neighborhood} onChange={(e) => set('neighborhood', e.target.value)} disabled={!form.district}>
+              <option value="">انتخاب کنید</option>
+              {(geoDistrict?.neighborhoods || []).map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </div>
         </div>
         <div>
-          <label style={labelStyle}>محله</label>
-          <input style={inputStyle} placeholder="نام محله یا منطقه" value={form.neighborhood} onChange={(e) => set('neighborhood', e.target.value)} />
+          <label style={labelStyle}>موقعیت روی نقشه — روی محل ملک کلیک کنید تا محله به‌صورت خودکار تشخیص داده شود</label>
+          <LocationPicker
+            lat={form.lat}
+            lng={form.lng}
+            onPick={(r) => {
+              set('lat', r.lat); set('lng', r.lng);
+              if (r.neighbourhood) set('neighborhood', r.neighbourhood);
+              if (r.city && !form.city) set('city', r.city);
+              if (r.address) set('address', r.address);
+            }}
+          />
         </div>
         <div className="mjsub-3col" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
           <div>
@@ -455,7 +492,7 @@ export default function SubmitPage() {
         <SummaryRow label="نوع ملک" value={form.propertyType} />
         <SummaryRow label="عنوان" value={form.title} />
         <SummaryRow label="استان / شهر" value={[form.province, form.city].filter(Boolean).join(' / ')} />
-        <SummaryRow label="محله" value={form.neighborhood} />
+        <SummaryRow label="منطقه / محله" value={[form.district, form.neighborhood].filter(Boolean).join(' / ')} />
         <SummaryRow label="متراژ" value={form.area ? form.area + ' متر مربع' : ''} />
         <SummaryRow label="اتاق" value={form.rooms ? form.rooms + ' اتاق' : ''} />
         <SummaryRow label="طبقه" value={form.floor ? `طبقه ${form.floor} از ${form.totalFloors || '؟'}` : ''} />
