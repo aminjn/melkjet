@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateOTP, setOTP } from '@/app/lib/otp-store'
+import { getAdminData } from '@/app/lib/admin-store'
 
 export async function POST(req: NextRequest) {
   const { phone } = await req.json()
@@ -11,12 +12,12 @@ export async function POST(req: NextRequest) {
   const code = generateOTP()
   setOTP(phone, code)
 
-  const apiKey = process.env.IPPANEL_API_KEY
-  const sender = process.env.IPPANEL_SENDER
-  const pattern = process.env.IPPANEL_PATTERN
+  // Try env vars first, then admin-store config
+  const apiKey = process.env.IPPANEL_API_KEY || getAdminData().ippanel?.apiKey
+  const sender = process.env.IPPANEL_SENDER || getAdminData().ippanel?.sender
+  const pattern = process.env.IPPANEL_PATTERN || getAdminData().ippanel?.pattern
 
   if (!apiKey || !sender || !pattern) {
-    // Dev mode — OTP printed to server console
     console.log(`[DEV OTP] ${phone} → ${code}`)
     return NextResponse.json({ ok: true, dev: true })
   }

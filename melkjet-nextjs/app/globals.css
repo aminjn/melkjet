@@ -158,5 +158,8 @@ body {
 /* Nav hamburger button — show on mobile */
 @media(max-width:860px){.mj-nav-mobile-menu{display:flex!important}}
 
+/* Auth page — hide left panel on mobile */
+@media(max-width:860px){.mj-auth-panel{display:none!important}}
+
 /* Global safe area */
 body { padding-bottom: env(safe-area-inset-bottom); }
