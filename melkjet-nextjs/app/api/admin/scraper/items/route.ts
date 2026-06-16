@@ -9,9 +9,12 @@ async function guard() {
 
 export async function GET(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
-  const type = new URL(req.url).searchParams.get('type') as SourceType | null
-  const items = listItems(type && ['listing', 'article', 'price'].includes(type) ? type : undefined)
-  return NextResponse.json({ items: items.slice(0, 100) })
+  const sp = new URL(req.url).searchParams
+  const type = sp.get('type') as SourceType | null
+  const category = sp.get('category') || undefined
+  const valid = type && ['listing', 'directory', 'product', 'article', 'price'].includes(type)
+  const items = listItems(valid ? type : undefined, { category })
+  return NextResponse.json({ items: items.slice(0, 200) })
 }
 
 export async function PATCH(req: NextRequest) {

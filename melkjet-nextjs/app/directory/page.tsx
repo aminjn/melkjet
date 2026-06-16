@@ -2,20 +2,41 @@
 
 import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { fetchContent, gradientFor, initialsFor, type ContentItem } from '@/app/lib/content-display'
 
 const categories = [
-  { id: 'مشاور', label: 'مشاور', count: '۱۸٬۵۰۰' },
-  { id: 'آژانس', label: 'آژانس', count: '۹۴۰' },
-  { id: 'سازنده', label: 'سازنده', count: '۱٬۲۴۰' },
-  { id: 'مصالح', label: 'مصالح', count: '۳٬۲۰۰' },
-  { id: 'معمار', label: 'معمار', count: '۲٬۱۰۰' },
-  { id: 'پیمانکار', label: 'پیمانکار', count: '۱٬۸۰۰' },
-  { id: 'کارشناس', label: 'کارشناس', count: '۸۴۰' },
-  { id: 'حقوقی', label: 'حقوقی', count: '۱٬۱۰۰' },
-  { id: 'بانک', label: 'بانک', count: '۳۲۰' },
-  { id: 'دفترخانه', label: 'دفترخانه', count: '۶۸۰' },
+  { id: 'مشاور', label: 'مشاور' },
+  { id: 'آژانس', label: 'آژانس' },
+  { id: 'سازنده', label: 'سازنده' },
+  { id: 'مصالح', label: 'مصالح' },
+  { id: 'معمار', label: 'معمار' },
+  { id: 'پیمانکار', label: 'پیمانکار' },
+  { id: 'کارشناس', label: 'کارشناس' },
+  { id: 'حقوقی', label: 'حقوقی' },
+  { id: 'بانک', label: 'بانک' },
+  { id: 'دفترخانه', label: 'دفترخانه' },
 ]
+
+function toProfessional(it: ContentItem) {
+  return {
+    id: it.id,
+    name: it.title,
+    role: it.category || 'متخصص',
+    rating: it.rating || '—',
+    area: it.location || '',
+    deals: '',
+    years: '',
+    tags: it.tags || [],
+    initials: initialsFor(it.title),
+    category: it.category || '',
+    promoted: false,
+    coverGradient: gradientFor(it.title, 'cover'),
+    avatarGradient: gradientFor(it.title, 'avatar'),
+    url: it.url,
+    phone: it.phone,
+  }
+}
 
 const professionals = [
   {
@@ -113,10 +134,21 @@ const professionals = [
 export default function DirectoryPage() {
   const [activeCategory, setActiveCategory] = useState('مشاور')
   const [searchQuery, setSearchQuery] = useState('')
+  const [items, setItems] = useState<ContentItem[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const filteredProfessionals = professionals.filter(
-    (p) => p.category === activeCategory
-  )
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    fetchContent('directory', activeCategory).then((d) => {
+      if (alive) { setItems(d); setLoading(false) }
+    })
+    return () => { alive = false }
+  }, [activeCategory])
+
+  const filteredProfessionals = items
+    .filter((p) => !searchQuery || p.title.includes(searchQuery) || (p.location || '').includes(searchQuery))
+    .map(toProfessional)
 
   return (
     <div
@@ -284,7 +316,7 @@ export default function DirectoryPage() {
                     fontWeight: 400,
                   }}
                 >
-                  {cat.count}
+                  {isActive ? `${filteredProfessionals.length}` : ''}
                 </span>
               </button>
             )
@@ -317,9 +349,7 @@ export default function DirectoryPage() {
               margin: 0,
             }}
           >
-            {activeCategory === 'مشاور'
-              ? `${filteredProfessionals.length} متخصص یافت شد`
-              : 'نتایج دسته‌بندی'}
+            {loading ? 'در حال بارگذاری…' : `${filteredProfessionals.length} مورد در «${activeCategory}»`}
           </h2>
           <span
             style={{
@@ -332,7 +362,11 @@ export default function DirectoryPage() {
         </div>
 
         {/* Cards Grid */}
-        {filteredProfessionals.length > 0 ? (
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '80px 24px', color: 'var(--muted)' }}>
+            در حال بارگذاری…
+          </div>
+        ) : filteredProfessionals.length > 0 ? (
           <div
             className="mjdir-grid"
             style={{
@@ -379,7 +413,7 @@ export default function DirectoryPage() {
 }
 
 type Professional = {
-  id: number
+  id: string
   name: string
   role: string
   rating: string
@@ -392,6 +426,8 @@ type Professional = {
   promoted: boolean
   coverGradient: string
   avatarGradient: string
+  url?: string
+  phone?: string
 }
 
 function ProfessionalCard({ pro }: { pro: Professional }) {
@@ -575,54 +611,20 @@ function ProfessionalCard({ pro }: { pro: Professional }) {
           </span>
         </div>
 
-        {/* Stats Row */}
-        <div
-          style={{
-            display: 'flex',
-            gap: '12px',
-            marginBottom: '12px',
-            padding: '8px 12px',
-            background: 'var(--faint)',
-            borderRadius: '8px',
-            border: '1px solid var(--line2)',
-          }}
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <span
-              style={{
-                fontSize: '0.88rem',
-                fontWeight: 700,
-                color: 'var(--text)',
-              }}
-            >
-              {pro.deals}
-            </span>
-            <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>
-              معامله
-            </span>
-          </div>
+        {/* Phone */}
+        {pro.phone && (
           <div
             style={{
-              width: '1px',
-              background: 'var(--line)',
-              alignSelf: 'stretch',
+              fontSize: '0.8rem',
+              color: 'var(--muted)',
+              marginBottom: '12px',
+              direction: 'ltr',
+              textAlign: 'right',
             }}
-          />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <span
-              style={{
-                fontSize: '0.88rem',
-                fontWeight: 700,
-                color: 'var(--text)',
-              }}
-            >
-              {pro.years}
-            </span>
-            <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>
-              سال سابقه
-            </span>
+          >
+            ☎ {pro.phone}
           </div>
-        </div>
+        )}
 
         {/* Tags */}
         <div
@@ -654,8 +656,10 @@ function ProfessionalCard({ pro }: { pro: Professional }) {
         {/* CTA */}
         <div style={{ marginTop: 'auto' }}>
           <a
-            href="#"
-            onClick={(e) => e.preventDefault()}
+            href={pro.url || '#'}
+            target={pro.url ? '_blank' : undefined}
+            rel="noreferrer"
+            onClick={pro.url ? undefined : (e) => e.preventDefault()}
             style={{
               display: 'inline-flex',
               alignItems: 'center',

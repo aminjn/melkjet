@@ -1,107 +1,39 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Nav from '@/app/components/Nav'
+import { fetchContent, gradientFor, type ContentItem } from '@/app/lib/content-display'
 
-const properties = [
-  {
-    id: '1',
-    title: 'آپارتمان نوساز ۱۴۰متری سعادت‌آباد',
-    location: 'سعادت‌آباد، تهران',
-    price: '۱۷.۸م',
-    priceNum: 17.8,
-    beds: '۳',
-    size: '۱۴۰',
-    year: '۱۴۰۲',
-    tag: 'ویژه',
-    score: 96,
-    img: 'linear-gradient(135deg,#3a3530 0%,#211e1b 100%)',
-    pinX: 30,
-    pinY: 34,
-    pinColor: '#e7674a',
-  },
-  {
-    id: '2',
-    title: 'آپارتمان ۱۳۰متری خوش‌نقشه سعادت‌آباد',
-    location: 'سعادت‌آباد، تهران',
-    price: '۱۶.۲م',
-    priceNum: 16.2,
-    beds: '۳',
-    size: '۱۳۰',
-    year: '۱۴۰۱',
-    tag: 'پیشنهاد AI',
-    score: 93,
-    img: 'linear-gradient(135deg,#2f3040 0%,#1a1b28 100%)',
-    pinX: 52,
-    pinY: 28,
-    pinColor: '#e7674a',
-  },
-  {
-    id: '3',
-    title: 'آپارتمان ۱۲۵متری دنج شهرک غرب',
-    location: 'شهرک غرب، تهران',
-    price: '۱۴.۵م',
-    priceNum: 14.5,
-    beds: '۲',
-    size: '۱۲۵',
-    year: '۱۴۰۰',
-    tag: 'فرصت',
-    score: 89,
-    img: 'linear-gradient(135deg,#2c343a 0%,#1a1f23 100%)',
-    pinX: 22,
-    pinY: 58,
-    pinColor: 'var(--gold)',
-  },
-  {
-    id: '4',
-    title: 'آپارتمان ۱۵۰متری لوکس سعادت‌آباد',
-    location: 'سعادت‌آباد، تهران',
-    price: '۱۹.۴م',
-    priceNum: 19.4,
-    beds: '۴',
-    size: '۱۵۰',
-    year: '۱۴۰۳',
-    tag: 'لوکس',
-    score: 91,
-    img: 'linear-gradient(135deg,#33303a 0%,#1d1b22 100%)',
-    pinX: 64,
-    pinY: 52,
-    pinColor: '#e7674a',
-  },
-  {
-    id: '5',
-    title: 'آپارتمان ۱۱۰متری فرحزاد',
-    location: 'فرحزاد، تهران',
-    price: '۱۱.۸م',
-    priceNum: 11.8,
-    beds: '۲',
-    size: '۱۱۰',
-    year: '۱۳۹۹',
-    tag: 'اقتصادی',
-    score: 85,
-    img: 'linear-gradient(135deg,#283830 0%,#161f1b 100%)',
-    pinX: 44,
-    pinY: 68,
-    pinColor: '#5fd98a',
-  },
-  {
-    id: '6',
-    title: 'آپارتمان ۱۳۵متری دوبلکس دروس',
-    location: 'دروس، تهران',
-    price: '۱۷.۱م',
-    priceNum: 17.1,
-    beds: '۳',
-    size: '۱۳۵',
-    year: '۱۴۰۲',
-    tag: 'ویژه',
-    score: 90,
-    img: 'linear-gradient(135deg,#3a3020 0%,#221b10 100%)',
-    pinX: 76,
-    pinY: 38,
-    pinColor: 'var(--gold)',
-  },
-]
+function seedNum(s: string): number {
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
+  return Math.abs(h)
+}
+
+function toProperty(it: ContentItem) {
+  const h = seedNum(it.id)
+  const sizeMatch = it.title.match(/(\d+)\s*متر/)
+  const priceNum = parseFloat((it.price || '').replace(/[^\d.]/g, '')) || 0
+  return {
+    id: it.id,
+    title: it.title,
+    location: it.location || 'نامشخص',
+    price: it.price || '—',
+    priceNum,
+    beds: '—',
+    size: sizeMatch ? sizeMatch[1] : '—',
+    year: '—',
+    tag: '',
+    score: 80 + (h % 19),
+    img: it.image ? '' : gradientFor(it.title),
+    image: it.image,
+    url: it.url,
+    pinX: 12 + (h % 74),
+    pinY: 16 + ((h >> 3) % 66),
+    pinColor: ['var(--gold)', '#e7674a', '#5fd98a'][h % 3],
+  }
+}
 
 const tagColors: Record<string, { bg: string; color: string; border: string }> = {
   ویژه:        { bg: 'rgba(201,168,76,0.18)',  color: '#c9a84c', border: 'rgba(201,168,76,0.45)' },
@@ -130,6 +62,16 @@ export default function SearchPage() {
   const [sortBy, setSortBy] = useState('پیشنهاد ملک‌جت')
   const [hoveredCard, setHoveredCard] = useState<string | null>(null)
   const [activePin, setActivePin] = useState<string | null>(null)
+  const [properties, setProperties] = useState<ReturnType<typeof toProperty>[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let alive = true
+    fetchContent('listing', undefined, 60).then((d) => {
+      if (alive) { setProperties(d.map(toProperty)); setLoading(false) }
+    })
+    return () => { alive = false }
+  }, [])
 
   const toggleAmenity = (a: string) =>
     setCheckedAmenities(prev => prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a])
@@ -407,6 +349,13 @@ export default function SearchPage() {
             </div>
           </div>
 
+          {/* loading / empty */}
+          {(loading || sortedProperties.length === 0) && (
+            <div style={{ padding: '60px 24px', textAlign: 'center', color: 'var(--muted)', fontSize: 14 }}>
+              {loading ? 'در حال بارگذاری آگهی‌ها…' : 'هنوز آگهی‌ای ثبت نشده. از پنل مدیریت، منبع اسکرپ اضافه و اجرا کنید.'}
+            </div>
+          )}
+
           {/* 2-column card grid */}
           <div className="mjs-cards" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             {sortedProperties.map((p, index) => {
@@ -480,7 +429,7 @@ export default function SearchPage() {
                 >
                   <Link href={`/property/${p.id}`} style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}>
                     {/* Image placeholder */}
-                    <div style={{ height: 156, background: p.img, position: 'relative' }}>
+                    <div style={{ height: 156, background: p.image ? `center/cover no-repeat url(${p.image})` : p.img, position: 'relative' }}>
                       {/* Diagonal texture */}
                       <div style={{
                         position: 'absolute', inset: 0,
@@ -503,13 +452,15 @@ export default function SearchPage() {
                         ✦ {p.score}
                       </div>
                       {/* Tag chip */}
-                      <div style={{
-                        position: 'absolute', top: 10, left: 10,
-                        background: tc.bg, color: tc.color,
-                        border: `1px solid ${tc.border}`,
-                        borderRadius: 8, padding: '4px 9px',
-                        fontSize: 11.5, fontWeight: 700,
-                      }}>{p.tag}</div>
+                      {p.tag && (
+                        <div style={{
+                          position: 'absolute', top: 10, left: 10,
+                          background: tc.bg, color: tc.color,
+                          border: `1px solid ${tc.border}`,
+                          borderRadius: 8, padding: '4px 9px',
+                          fontSize: 11.5, fontWeight: 700,
+                        }}>{p.tag}</div>
+                      )}
                     </div>
 
                     {/* Card body */}

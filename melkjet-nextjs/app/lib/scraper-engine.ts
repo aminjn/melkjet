@@ -1,6 +1,7 @@
 import type { Source, Item, Method } from './scraper-store'
+import { parseHTML, queryAll, queryOne, textOf } from './html-select'
 
-type RawItem = Omit<Item, 'id' | 'sourceId' | 'sourceName' | 'type' | 'scrapedAt' | 'status'>
+type RawItem = Omit<Item, 'id' | 'sourceId' | 'sourceName' | 'type' | 'category' | 'scrapedAt' | 'status'>
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
 
@@ -62,15 +63,20 @@ function parseJsonLd(html: string, limit = 30): RawItem[] {
     const type = (node['@type'] || '').toString().toLowerCase()
     const offers = node.offers || {}
     const price = node.price || offers.price || offers.lowPrice
-    const isItem = /product|apartment|house|residence|offer|realestate|singlefamily|listing|article|newsarticle|blogposting/.test(type)
+    const isItem = /product|apartment|house|residence|offer|realestate|singlefamily|listing|article|newsarticle|blogposting|organization|localbusiness|person|store|professionalservice|legalservice|financialservice/.test(type)
     if (isItem && (node.name || node.headline)) {
+      const addr = node.address || {}
+      const rating = node.aggregateRating?.ratingValue || node.aggregateRating?.ratingValue?.toString()
+      const phone = node.telephone || node.contactPoint?.telephone
       out.push({
         title: decode((node.name || node.headline || '').toString()),
         price: price ? `${price}${offers.priceCurrency ? ' ' + offers.priceCurrency : ''}` : undefined,
-        location: node.address?.addressLocality || node.address?.streetAddress || node.contentLocation?.name,
+        location: addr.addressLocality || addr.streetAddress || node.contentLocation?.name || (typeof addr === 'string' ? addr : undefined),
         image: typeof node.image === 'string' ? node.image : (Array.isArray(node.image) ? node.image[0] : node.image?.url),
         url: (node.url || node.mainEntityOfPage?.['@id'] || node.mainEntityOfPage || '').toString() || undefined,
         excerpt: decode((node.description || '').toString()).slice(0, 220) || undefined,
+        phone: phone ? phone.toString() : undefined,
+        rating: rating ? rating.toString() : undefined,
       })
     }
     // recurse into common containers
@@ -103,6 +109,34 @@ function parseOG(html: string): RawItem[] {
   }]
 }
 
+// ─── CSS-selector extraction (detailed, user-configured) ──────────────────
+function absUrl(href: string, base: string): string {
+  try { return new URL(href, base).toString() } catch { return href }
+}
+
+function parseCss(html: string, source: Source, limit = 60): RawItem[] {
+  if (!source.container || !source.fields?.length) return []
+  const root = parseHTML(html)
+  const containers = queryAll(root, source.container).slice(0, limit)
+  const out: RawItem[] = []
+  for (const c of containers) {
+    const item: any = {}
+    for (const f of source.fields) {
+      const node = f.selector ? queryOne(c, f.selector) : c
+      if (!node) continue
+      let val = ''
+      if (!f.attr || f.attr === 'text') val = textOf(node)
+      else val = node.attrs[f.attr.toLowerCase()] || ''
+      if (!val) continue
+      if (f.key === 'url' || f.key === 'image') val = absUrl(val, source.url)
+      if (f.key === 'excerpt') val = val.slice(0, 220)
+      item[f.key] = val
+    }
+    if (item.title) out.push(item)
+  }
+  return out
+}
+
 function looksLikeXml(text: string) {
   const head = text.slice(0, 400).toLowerCase()
   return head.includes('<rss') || head.includes('<feed') || head.includes('<?xml')
@@ -112,6 +146,11 @@ function looksLikeXml(text: string) {
 export async function scrapeSource(source: Source): Promise<RawItem[]> {
   const text = await fetchPage(source.url)
   const method: Method = source.method
+
+  // Detailed CSS extraction takes priority when configured
+  if (method === 'css') {
+    return parseCss(text, source)
+  }
 
   if (method === 'rss' || (method === 'auto' && looksLikeXml(text))) {
     const items = parseRSS(text)

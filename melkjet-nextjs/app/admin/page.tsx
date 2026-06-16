@@ -233,9 +233,11 @@ interface ScrItem {
 }
 
 const TYPE_META: Record<string, { label: string; icon: string; color: string }> = {
-  listing: { label: 'آگهی‌ها', icon: '⌂', color: '#5fd98a' },
-  article: { label: 'مقالات', icon: '✦', color: '#5b9bd5' },
-  price:   { label: 'قیمت‌ها', icon: '◷', color: '#e7a14a' },
+  listing:   { label: 'آگهی‌ها', icon: '⌂', color: '#5fd98a' },
+  directory: { label: 'پروفایل/دفاتر', icon: '◍', color: '#a77fd4' },
+  product:   { label: 'فروشگاه', icon: '▣', color: '#4ec4e8' },
+  article:   { label: 'مقالات', icon: '✦', color: '#5b9bd5' },
+  price:     { label: 'قیمت‌ها', icon: '◷', color: '#e7a14a' },
 }
 const SCHEDULE_LABEL: Record<string, string> = { manual: 'دستی', hourly: 'ساعتی', '6h': 'هر ۶ ساعت', daily: 'روزانه' }
 const METHOD_LABEL: Record<string, string> = { auto: 'خودکار', jsonld: 'JSON-LD', og: 'OpenGraph', rss: 'RSS/خبر' }
@@ -257,17 +259,43 @@ function timeAgo(ts: number | null): string {
   return `${Math.floor(h / 24)} روز پیش`
 }
 
+interface FieldRow { key: string; selector: string; attr: string }
+type ScrTab = 'listing' | 'directory' | 'product' | 'article' | 'price'
+
+function emptyForm(type: ScrTab) {
+  return {
+    name: '', url: '', type: type as string, category: 'مشاور',
+    method: 'auto', schedule: 'manual',
+    container: '', fields: [] as FieldRow[], meta: {} as Record<string, string>,
+  }
+}
+
+// Suggested metadata fields per content type (شهر، محله، نوع آگهی، تخصص …)
+const META_PRESETS: Record<string, string[]> = {
+  listing: ['شهر', 'محله', 'نوع آگهی'],
+  directory: ['تخصص', 'شهر'],
+  product: ['برند', 'دسته'],
+  article: ['موضوع'],
+  price: ['منطقه'],
+}
+const DIR_CATEGORIES = ['مشاور', 'آژانس', 'سازنده', 'مصالح', 'معمار', 'پیمانکار', 'کارشناس', 'حقوقی', 'بانک', 'دفترخانه']
+const FIELD_OPTIONS: { k: string; label: string }[] = [
+  { k: 'title', label: 'عنوان' }, { k: 'price', label: 'قیمت' }, { k: 'location', label: 'موقعیت' },
+  { k: 'image', label: 'تصویر' }, { k: 'url', label: 'لینک' }, { k: 'phone', label: 'تلفن' }, { k: 'excerpt', label: 'توضیح' },
+]
+
 function ScraperView() {
-  const [tab, setTab] = useState<'listing' | 'article' | 'price'>('listing')
+  const [tab, setTab] = useState<ScrTab>('listing')
   const [sources, setSources] = useState<ScrSource[]>([])
   const [items, setItems] = useState<ScrItem[]>([])
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState<string | 'all' | null>(null)
   const [log, setLog] = useState<{ source: string; ok: boolean; added: number; dup: number; error?: string }[]>([])
   const [modal, setModal] = useState(false)
-  const [form, setForm] = useState({ name: '', url: '', type: 'listing', method: 'auto', schedule: 'manual' })
+  const [form, setForm] = useState(() => emptyForm('listing'))
   const [formErr, setFormErr] = useState('')
   const [saving, setSaving] = useState(false)
+  const [preview, setPreview] = useState<{ loading: boolean; count?: number; items?: any[]; error?: string } | null>(null)
 
   const loadSources = async () => {
     const r = await fetch('/api/admin/scraper/sources')
@@ -298,20 +326,60 @@ function ScraperView() {
     } finally { setRunning(null) }
   }
 
+  const formPayload = () => ({
+    name: form.name, url: form.url, type: form.type, category: form.category,
+    method: form.method, schedule: form.schedule,
+    container: form.container,
+    fields: form.fields.filter(f => f.key && f.selector.trim()),
+    meta: Object.fromEntries(Object.entries(form.meta).filter(([, v]) => v && v.trim())),
+  })
+
   const addSource = async () => {
     setFormErr('')
     if (!form.name.trim() || !form.url.trim()) { setFormErr('نام و آدرس الزامی است'); return }
+    if (form.method === 'css' && !form.container.trim()) { setFormErr('برای روش CSS، انتخابگر کانتینر الزامی است'); return }
     setSaving(true)
     try {
       const r = await fetch('/api/admin/scraper/sources', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formPayload()),
       })
       const d = await r.json()
       if (!r.ok) { setFormErr(d.error || 'خطا در ذخیره'); return }
-      setModal(false); setForm({ name: '', url: '', type: tab, method: 'auto', schedule: 'manual' })
+      setModal(false); setForm(emptyForm(tab)); setPreview(null)
       await loadSources()
     } finally { setSaving(false) }
   }
+
+  const testSource = async () => {
+    setPreview({ loading: true })
+    try {
+      const r = await fetch('/api/admin/scraper/test', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formPayload()),
+      })
+      const d = await r.json()
+      if (d.ok) setPreview({ loading: false, count: d.count, items: d.items })
+      else setPreview({ loading: false, error: d.error || 'خطا' })
+    } catch {
+      setPreview({ loading: false, error: 'خطای ارتباط' })
+    }
+  }
+
+  const wipe = async (scope: 'all' | 'tab') => {
+    const msg = scope === 'all' ? 'همهٔ دیتاهای واکشی‌شده (و دموها) پاک شوند؟' : `همهٔ آیتم‌های «${TYPE_META[tab].label}» پاک شوند؟`
+    if (!confirm(msg)) return
+    await fetch('/api/admin/scraper/clear', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(scope === 'tab' ? { type: tab } : {}),
+    })
+    await loadItems(tab); await loadSources()
+  }
+
+  // field/meta row helpers
+  const addField = () => setForm({ ...form, fields: [...form.fields, { key: 'title', selector: '', attr: 'text' }] })
+  const setField = (i: number, patch: Partial<FieldRow>) =>
+    setForm({ ...form, fields: form.fields.map((f, idx) => idx === i ? { ...f, ...patch } : f) })
+  const delField = (i: number) => setForm({ ...form, fields: form.fields.filter((_, idx) => idx !== i) })
+  const setMeta = (k: string, v: string) => setForm({ ...form, meta: { ...form.meta, [k]: v } })
 
   const removeSource = async (id: string) => {
     await fetch(`/api/admin/scraper/sources?id=${id}`, { method: 'DELETE' })
@@ -355,11 +423,14 @@ function ScraperView() {
             <div style={{ fontWeight: 700, fontSize: 15 }}>موتور اسکرپ هوشمند</div>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>واکشی خودکار آگهی، مقاله و قیمت از منابع خارجی (JSON-LD · OpenGraph · RSS)</div>
           </div>
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button onClick={() => wipe('all')} style={{ background: 'transparent', color: '#e7674a', border: '1px solid rgba(231,103,74,.35)', borderRadius: 11, padding: '9px 16px', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+              🗑 حذف همه دیتاها
+            </button>
             <OutlineButton onClick={() => run()} style={{ opacity: running ? .6 : 1, pointerEvents: running ? 'none' : 'auto' }}>
               {running === 'all' ? '⏳ در حال اجرا…' : '▶ اجرای همه فعال‌ها'}
             </OutlineButton>
-            <GoldButton onClick={() => { setForm({ name: '', url: '', type: tab, method: 'auto', schedule: 'manual' }); setFormErr(''); setModal(true) }}>
+            <GoldButton onClick={() => { setForm(emptyForm(tab)); setFormErr(''); setPreview(null); setModal(true) }}>
               + افزودن منبع
             </GoldButton>
           </div>
@@ -383,7 +454,7 @@ function ScraperView() {
 
       {/* Tabs */}
       <div className="mjsa-roles" style={{ display: 'flex', gap: 8, marginBottom: 14, overflowX: 'auto' }}>
-        {(['listing', 'article', 'price'] as const).map(t => {
+        {(['listing', 'directory', 'product', 'article', 'price'] as const).map(t => {
           const m = TYPE_META[t]; const active = tab === t
           return (
             <button key={t} onClick={() => setTab(t)} style={{
@@ -486,55 +557,143 @@ function ScraperView() {
         )}
       </Card>
 
-      {/* Add-source modal */}
+      {/* Add-source modal — detailed configurator */}
       {modal && (
-        <div onClick={() => setModal(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 20 }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 18, padding: 24, width: '100%', maxWidth: 460, animation: 'rise .25s ease' }}>
+        <div onClick={() => setModal(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 100, padding: 20, overflowY: 'auto' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 18, padding: 24, width: '100%', maxWidth: 560, margin: 'auto', animation: 'rise .25s ease' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-              <div style={{ fontWeight: 800, fontSize: 16 }}>افزودن منبع جدید</div>
+              <div style={{ fontWeight: 800, fontSize: 16 }}>افزودن منبع — پیکربندی دقیق</div>
               <button onClick={() => setModal(false)} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 20, cursor: 'pointer' }}>×</button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div>
-                <label style={labelCss}>نام منبع</label>
-                <input style={inputCss} placeholder="مثلاً: دیوار - تهران" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
-              </div>
-              <div>
-                <label style={labelCss}>آدرس صفحه (URL)</label>
-                <input style={{ ...inputCss, direction: 'ltr', textAlign: 'left' }} placeholder="https://example.com/listings یا فید RSS" value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} />
-              </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
+                  <label style={labelCss}>نام منبع</label>
+                  <input style={inputCss} placeholder="مثلاً: دیوار - وکلای تهران" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+                </div>
+                <div>
                   <label style={labelCss}>نوع محتوا</label>
-                  <select style={inputCss} value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>
+                  <select style={inputCss} value={form.type} onChange={e => setForm({ ...form, type: e.target.value, meta: {} })}>
                     <option value="listing">آگهی ملک</option>
+                    <option value="directory">پروفایل / دفتر (مشاور، حقوقی، وکیل…)</option>
+                    <option value="product">محصول فروشگاه</option>
                     <option value="article">مقاله / خبر</option>
                     <option value="price">قیمت / آمار</option>
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label style={labelCss}>آدرس دقیق صفحه (URL)</label>
+                <input style={{ ...inputCss, direction: 'ltr', textAlign: 'left' }} placeholder="https://site.com/tehran/saadatabad/buy-apartment" value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} />
+                <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 4 }}>همان صفحه‌ای که می‌خواهید از آن واکشی شود را دقیق وارد کنید (با فیلتر شهر/محله/نوع آگهی).</div>
+              </div>
+
+              {form.type === 'directory' && (
+                <div>
+                  <label style={labelCss}>دسته‌بندی دایرکتوری</label>
+                  <select style={inputCss} value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
+                    {DIR_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {/* Metadata — جزییات ثابت روی هر آیتم */}
+              <div>
+                <label style={labelCss}>جزئیات ثابت این منبع</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  {(META_PRESETS[form.type] || []).map(k => (
+                    <div key={k}>
+                      <input style={inputCss} placeholder={k} value={form.meta[k] || ''} onChange={e => setMeta(k, e.target.value)} />
+                    </div>
+                  ))}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 4 }}>این مقادیر روی همهٔ آیتم‌های واکشی‌شدهٔ این منبع نشانده می‌شود (مثلاً شهر تهران، محله سعادت‌آباد، تخصص وکیل).</div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   <label style={labelCss}>روش استخراج</label>
-                  <select style={inputCss} value={form.method} onChange={e => setForm({ ...form, method: e.target.value })}>
-                    <option value="auto">خودکار (پیشنهادی)</option>
+                  <select style={inputCss} value={form.method} onChange={e => { setForm({ ...form, method: e.target.value }); setPreview(null) }}>
+                    <option value="auto">خودکار (تشخیص داده)</option>
+                    <option value="css">CSS سفارشی (دقیق، با انتخابگر)</option>
                     <option value="jsonld">JSON-LD</option>
                     <option value="og">OpenGraph</option>
                     <option value="rss">RSS / خبرخوان</option>
                   </select>
                 </div>
+                <div>
+                  <label style={labelCss}>زمان‌بندی اجرا</label>
+                  <select style={inputCss} value={form.schedule} onChange={e => setForm({ ...form, schedule: e.target.value })}>
+                    <option value="manual">فقط دستی</option>
+                    <option value="hourly">هر ساعت</option>
+                    <option value="6h">هر ۶ ساعت</option>
+                    <option value="daily">روزانه</option>
+                  </select>
+                </div>
               </div>
+
+              {/* CSS detailed config */}
+              {form.method === 'css' && (
+                <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div>
+                    <label style={labelCss}>انتخابگر کانتینر هر آیتم</label>
+                    <input style={{ ...inputCss, direction: 'ltr', textAlign: 'left' }} placeholder=".post-card  یا  article.listing" value={form.container} onChange={e => setForm({ ...form, container: e.target.value })} />
+                    <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 4 }}>هر کارت/ردیف در صفحه (مثلاً <span style={{ direction: 'ltr', display: 'inline-block' }}>.kt-post-card</span>).</div>
+                  </div>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <label style={{ ...labelCss, marginBottom: 0 }}>نگاشت فیلدها (انتخابگر داخل کانتینر)</label>
+                      <button onClick={addField} style={{ fontSize: 11.5, padding: '4px 10px', borderRadius: 8, border: '1px solid var(--gold)', color: 'var(--gold)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>+ فیلد</button>
+                    </div>
+                    {form.fields.length === 0 && <div style={{ fontSize: 11.5, color: 'var(--faint)' }}>حداقل فیلد «عنوان» را اضافه کنید.</div>}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {form.fields.map((f, i) => (
+                        <div key={i} style={{ display: 'grid', gridTemplateColumns: '90px 1fr 78px 28px', gap: 6, alignItems: 'center' }}>
+                          <select style={{ ...inputCss, padding: '8px 8px' }} value={f.key} onChange={e => setField(i, { key: e.target.value })}>
+                            {FIELD_OPTIONS.map(o => <option key={o.k} value={o.k}>{o.label}</option>)}
+                          </select>
+                          <input style={{ ...inputCss, padding: '8px 10px', direction: 'ltr', textAlign: 'left' }} placeholder=".title a" value={f.selector} onChange={e => setField(i, { selector: e.target.value })} />
+                          <input style={{ ...inputCss, padding: '8px 8px', direction: 'ltr', textAlign: 'left' }} placeholder="text" value={f.attr} onChange={e => setField(i, { attr: e.target.value })} />
+                          <button onClick={() => delField(i)} style={{ background: 'transparent', border: 'none', color: '#e7674a', fontSize: 16, cursor: 'pointer' }}>×</button>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 6, lineHeight: 1.7 }}>
+                      ستون سوم = منبع مقدار: <b>text</b> برای متن، <b>href</b> برای لینک، <b>src</b> برای تصویر، یا نام هر صفت دیگر.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Test / preview */}
               <div>
-                <label style={labelCss}>زمان‌بندی اجرا</label>
-                <select style={inputCss} value={form.schedule} onChange={e => setForm({ ...form, schedule: e.target.value })}>
-                  <option value="manual">فقط دستی</option>
-                  <option value="hourly">هر ساعت</option>
-                  <option value="6h">هر ۶ ساعت</option>
-                  <option value="daily">روزانه</option>
-                </select>
+                <OutlineButton onClick={testSource} style={{ width: '100%', opacity: preview?.loading ? .6 : 1, pointerEvents: preview?.loading ? 'none' : 'auto' }}>
+                  {preview?.loading ? '⏳ در حال تست…' : '🔍 تست و پیش‌نمایش نتیجه'}
+                </OutlineButton>
+                {preview && !preview.loading && (
+                  <div style={{ marginTop: 10, background: 'var(--bg2)', borderRadius: 10, padding: 12, maxHeight: 220, overflowY: 'auto' }}>
+                    {preview.error
+                      ? <div style={{ color: '#e7674a', fontSize: 12.5 }}>⚠ {preview.error}</div>
+                      : preview.count === 0
+                        ? <div style={{ color: '#e7a14a', fontSize: 12.5 }}>هیچ موردی استخراج نشد — انتخابگرها را بررسی کنید.</div>
+                        : <>
+                            <div style={{ fontSize: 12, color: '#5fd98a', marginBottom: 8 }}>✓ {preview.count} مورد یافت شد — نمونه:</div>
+                            {preview.items?.map((it, i) => (
+                              <div key={i} style={{ borderBottom: '1px solid var(--line)', padding: '6px 0', fontSize: 12 }}>
+                                <div style={{ fontWeight: 600 }}>{it.title}</div>
+                                <div style={{ color: 'var(--muted)', fontSize: 11 }}>
+                                  {[it.price, it.location, it.phone].filter(Boolean).join(' · ')}
+                                </div>
+                              </div>
+                            ))}
+                          </>}
+                  </div>
+                )}
               </div>
+
               {formErr && <div style={{ color: '#e7674a', fontSize: 12.5 }}>⚠ {formErr}</div>}
-              <div style={{ fontSize: 11.5, color: 'var(--faint)', lineHeight: 1.7, background: 'var(--bg2)', borderRadius: 10, padding: '10px 12px' }}>
-                💡 موتور به‌صورت خودکار داده‌های ساختاریافته (JSON-LD)، تگ‌های OpenGraph و فیدهای RSS را تشخیص می‌دهد. برای سایت‌های خبری، آدرس فید RSS بهترین نتیجه را می‌دهد.
-              </div>
+
               <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
                 <GoldButton onClick={addSource} style={{ flex: 1, opacity: saving ? .6 : 1, pointerEvents: saving ? 'none' : 'auto' }}>{saving ? 'در حال ذخیره…' : 'افزودن و ذخیره'}</GoldButton>
                 <OutlineButton onClick={() => setModal(false)}>انصراف</OutlineButton>

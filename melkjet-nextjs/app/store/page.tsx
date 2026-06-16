@@ -1,7 +1,8 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
+import { fetchContent } from '@/app/lib/content-display'
 
 type StockStatus = 'موجود' | 'محدود' | 'سفارشی'
 
@@ -19,6 +20,8 @@ type Product = {
   gradientTo: string
   description: string
   specs: string[]
+  image?: string
+  url?: string
 }
 
 type CartItem = { product: Product; qty: number }
@@ -31,178 +34,36 @@ type Review = {
   date: string
 }
 
-const PRODUCTS: Product[] = [
-  {
-    id: 'rebar-a3',
-    name: 'میلگرد آجدار A3',
-    brand: 'فولاد خوزستان',
-    category: 'آهن و میلگرد',
-    price: 28000,
-    priceLabel: '۲۸٬۰۰۰',
-    unit: 'تومان/کیلو',
-    stock: 'موجود',
-    hot: true,
-    gradientFrom: '#374151',
-    gradientTo: '#1f2937',
-    description: 'میلگرد آجدار A3 با استاندارد ملی، مناسب برای سازه‌های بتن‌آرمه',
-    specs: ['قطر ۸ تا ۳۲ میلی‌متر', 'استاندارد ISIRI 3132', 'تحویل در بسته‌های ۲ تنی'],
-  },
-  {
-    id: 'cement-t2',
-    name: 'سیمان تیپ ۲',
-    brand: 'سیمان تهران',
-    category: 'سیمان و گچ',
-    price: 45000,
-    priceLabel: '۴۵٬۰۰۰',
-    unit: 'تومان/پاکت',
-    stock: 'موجود',
-    hot: true,
-    gradientFrom: '#9ca3af',
-    gradientTo: '#6b7280',
-    description: 'سیمان پرتلند تیپ ۲ مقاوم در برابر سولفات، مناسب پی‌سازی',
-    specs: ['پاکت ۵۰ کیلوگرمی', 'مقاومت ۳۲.۵ مگاپاسکال', 'استاندارد ملی'],
-  },
-  {
-    id: 'porcelain-60',
-    name: 'کاشی پرسلان ۶۰×۶۰',
-    brand: 'سرامیک ایران',
-    category: 'کاشی‌وسرامیک',
-    price: 180000,
-    priceLabel: '۱۸۰٬۰۰۰',
-    unit: 'تومان/م²',
-    stock: 'موجود',
-    gradientFrom: '#f3f4f6',
-    gradientTo: '#d1d5db',
-    description: 'کاشی پرسلان درجه یک با پوشش ضد لک و سطح صیقلی',
-    specs: ['ابعاد ۶۰×۶۰ سانتی‌متر', 'درجه یک', 'مقاوم در برابر ضربه'],
-  },
-  {
-    id: 'ceramic-40',
-    name: 'سرامیک کف ۴۰×۴۰',
-    brand: 'کاشی یزد',
-    category: 'کاشی‌وسرامیک',
-    price: 120000,
-    priceLabel: '۱۲۰٬۰۰۰',
-    unit: 'تومان/م²',
-    stock: 'محدود',
-    gradientFrom: '#d97706',
-    gradientTo: '#92400e',
-    description: 'سرامیک کف با طرح سنگ طبیعی، مناسب فضاهای پرتردد',
-    specs: ['ابعاد ۴۰×۴۰ سانتی‌متر', 'ضد لغزش', 'مقاوم در برابر خراش'],
-  },
-  {
-    id: 'ipe14',
-    name: 'تیرآهن IPE14',
-    brand: 'ذوب‌آهن اصفهان',
-    category: 'آهن و میلگرد',
-    price: 1850000,
-    priceLabel: '۱٬۸۵۰٬۰۰۰',
-    unit: 'تومان/شاخه',
-    stock: 'موجود',
-    gradientFrom: '#1e3a5f',
-    gradientTo: '#0f2340',
-    description: 'تیرآهن بال پهن IPE14 اصفهان، مناسب سازه‌های فلزی',
-    specs: ['طول ۱۲ متر', 'وزن ۱۲.۹ کیلو/متر', 'استاندارد DIN 1025'],
-  },
-  {
-    id: 'plaster',
-    name: 'گچ ساختمانی',
-    brand: 'گچ سپاهان',
-    category: 'سیمان و گچ',
-    price: 38000,
-    priceLabel: '۳۸٬۰۰۰',
-    unit: 'تومان/کیسه',
-    stock: 'موجود',
-    gradientFrom: '#f9fafb',
-    gradientTo: '#e5e7eb',
-    description: 'گچ ساختمانی درجه یک سپاهان با زمان گیرش مناسب',
-    specs: ['کیسه ۴۰ کیلوگرمی', 'زمان گیرش ۳۰ دقیقه', 'سفیدی بالا'],
-  },
-  {
-    id: 'cabinet-mdf',
-    name: 'کابینت MDF لاکری',
-    brand: 'کابینت ایران',
-    category: 'دکوراسیون',
-    price: 2400000,
-    priceLabel: '۲٬۴۰۰٬۰۰۰',
-    unit: 'تومان/م طول',
-    stock: 'سفارشی',
-    gradientFrom: '#7c3aed',
-    gradientTo: '#4c1d95',
-    description: 'کابینت MDF با روکش لاکری براق، طراحی مدرن',
-    specs: ['MDF ۱۸ میلی‌متر', 'یراق‌آلات بلوم', 'گارانتی ۵ سال'],
-  },
-  {
-    id: 'faucet',
-    name: 'شیرآلات اهرمی',
-    brand: 'شیرآلات ایساتیس',
-    category: 'تأسیسات',
-    price: 1200000,
-    priceLabel: '۱٬۲۰۰٬۰۰۰',
-    unit: 'تومان/ست',
-    stock: 'موجود',
-    gradientFrom: '#c0c0c0',
-    gradientTo: '#888',
-    description: 'ست شیرآلات اهرمی با بدنه برنج و آب‌کاری کروم',
-    specs: ['بدنه برنج', 'آب‌کاری کروم', 'استاندارد اروپایی'],
-  },
-  {
-    id: 'security-door',
-    name: 'درب ضدسرقت',
-    brand: 'درب آریا',
-    category: 'درب‌وپنجره',
-    price: 8500000,
-    priceLabel: '۸٬۵۰۰٬۰۰۰',
-    unit: 'تومان/دستگاه',
-    stock: 'موجود',
-    gradientFrom: '#1c1917',
-    gradientTo: '#292524',
-    description: 'درب ضدسرقت کلاس C با قفل چندنقطه‌ای اروپایی',
-    specs: ['کلاس C ضدسرقت', 'قفل ۵ نقطه‌ای', 'ضخامت ۷ سانتی‌متر'],
-  },
-  {
-    id: 'upvc-window',
-    name: 'پنجره UPVC',
-    brand: 'ترموپنجره',
-    category: 'درب‌وپنجره',
-    price: 2800000,
-    priceLabel: '۲٬۸۰۰٬۰۰۰',
-    unit: 'تومان/م²',
-    stock: 'موجود',
-    gradientFrom: '#0ea5e9',
-    gradientTo: '#0369a1',
-    description: 'پنجره UPVC دوجداره با شیشه لمینت، عایق صدا و حرارت',
-    specs: ['پروفیل ۷۰ میلی‌متر', 'شیشه دوجداره ۲۴ میلی‌متر', 'گارانتی ۱۰ سال'],
-  },
-  {
-    id: 'paint',
-    name: 'رنگ روغنی ساختمانی',
-    brand: 'ایران رنگ',
-    category: 'دکوراسیون',
-    price: 85000,
-    priceLabel: '۸۵٬۰۰۰',
-    unit: 'تومان/لیتر',
-    stock: 'موجود',
-    gradientFrom: '#16a34a',
-    gradientTo: '#14532d',
-    description: 'رنگ روغنی ساختمانی ضد حرارت با قدرت پوشش بالا',
-    specs: ['قدرت پوشش ۱۲ م²/لیتر', 'خشک‌شوی سریع', 'مقاوم در برابر رطوبت'],
-  },
-  {
-    id: 'switch',
-    name: 'پریز و کلید استاندارد',
-    brand: 'برق سیمه',
-    category: 'تأسیسات',
-    price: 450000,
-    priceLabel: '۴۵۰٬۰۰۰',
-    unit: 'تومان/ست',
-    stock: 'موجود',
-    gradientFrom: '#fbbf24',
-    gradientTo: '#d97706',
-    description: 'ست کامل پریز و کلید استاندارد با گواهینامه اینستیتو',
-    specs: ['استاندارد ملی', 'گواهی اینستیتو', 'رنگ‌بندی متنوع'],
-  },
+const PRODUCT_PALETTE: [string, string][] = [
+  ['#374151', '#1f2937'], ['#9ca3af', '#6b7280'], ['#d97706', '#92400e'],
+  ['#1e3a5f', '#0f2340'], ['#7c3aed', '#4c1d95'], ['#0f766e', '#134e4a'],
 ]
+function seedNumP(str: string): number {
+  let h = 0
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0
+  return Math.abs(h)
+}
+function toProduct(it: { id: string; title: string; price?: string; sourceName: string; category?: string; excerpt?: string; tags?: string[]; image?: string; url?: string }): Product {
+  const priceNum = parseFloat((it.price || '').replace(/[^\d.]/g, '')) || 0
+  const [from, to] = PRODUCT_PALETTE[seedNumP(it.id) % PRODUCT_PALETTE.length]
+  return {
+    id: it.id,
+    name: it.title,
+    brand: it.sourceName || 'نامشخص',
+    category: it.category || 'سایر',
+    price: priceNum,
+    priceLabel: it.price || '—',
+    unit: '',
+    stock: 'موجود',
+    hot: false,
+    gradientFrom: from,
+    gradientTo: to,
+    description: it.excerpt || '',
+    specs: it.tags || [],
+    image: it.image,
+    url: it.url,
+  }
+}
 
 const BRANDS = [
   { name: 'فولاد خوزستان', abbr: 'F.KH', color: '#374151' },
@@ -254,6 +115,16 @@ export default function StorePage() {
   const [selectedBrands, setSelectedBrands] = useState<Set<string>>(new Set())
   const [modalQty, setModalQty] = useState(1)
   const [addedId, setAddedId] = useState<string | null>(null)
+  const [products, setProducts] = useState<Product[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let alive = true
+    fetchContent('product', undefined, 100).then((d) => {
+      if (alive) { setProducts(d.map(toProduct)); setLoading(false) }
+    })
+    return () => { alive = false }
+  }, [])
 
   const toggleCategory = (cat: string) => {
     setExpandedCategories(prev => {
@@ -285,7 +156,7 @@ export default function StorePage() {
   const totalItems = cart.reduce((sum, i) => sum + i.qty, 0)
   const totalPrice = cart.reduce((sum, i) => sum + i.product.price * i.qty, 0)
 
-  let filtered = PRODUCTS.filter(p => {
+  let filtered = products.filter(p => {
     if (activeCategory !== 'همه' && p.category !== activeCategory) return false
     if (selectedBrands.size > 0 && !selectedBrands.has(p.brand)) return false
     if (p.price < priceMin || p.price > priceMax) return false

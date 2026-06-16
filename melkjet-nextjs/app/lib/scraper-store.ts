@@ -4,18 +4,37 @@ import { randomBytes } from 'crypto'
 
 const DATA_FILE = join(process.cwd(), '.scraper-data.json')
 
-export type SourceType = 'listing' | 'article' | 'price'
-export type Method = 'auto' | 'jsonld' | 'og' | 'rss'
+// Top-level content type → which public page it feeds
+export type SourceType = 'listing' | 'directory' | 'product' | 'article' | 'price'
+export type Method = 'auto' | 'jsonld' | 'og' | 'rss' | 'css'
 export type ItemStatus = 'pending' | 'approved' | 'duplicate' | 'rejected'
+
+// Field-level extraction rule (used when method === 'css')
+export type FieldKey = 'title' | 'price' | 'location' | 'image' | 'url' | 'phone' | 'excerpt'
+export interface FieldRule {
+  key: FieldKey
+  selector: string   // CSS selector relative to the item container
+  attr: string       // 'text' | 'href' | 'src' | any attribute name
+}
+
+// Directory sub-categories (used when type === 'directory')
+export const DIRECTORY_CATEGORIES = [
+  'مشاور', 'آژانس', 'سازنده', 'مصالح', 'معمار', 'پیمانکار', 'کارشناس', 'حقوقی', 'بانک', 'دفترخانه',
+] as const
 
 export interface Source {
   id: string
   name: string
   url: string
   type: SourceType
+  category?: string          // for directory sources
   method: Method
   enabled: boolean
-  schedule: string          // 'manual' | 'hourly' | 'daily' | '6h'
+  schedule: string           // 'manual' | 'hourly' | '6h' | 'daily'
+  // Detailed CSS extraction config (method === 'css')
+  container?: string         // selector for each item/card on the page
+  fields?: FieldRule[]       // per-field selectors inside the container
+  meta?: Record<string, string>  // fixed values merged into every item (شهر، محله، نوع آگهی، تخصص…)
   lastRun: number | null
   lastCount: number
   status: 'idle' | 'ok' | 'error'
@@ -27,12 +46,17 @@ export interface Item {
   sourceId: string
   sourceName: string
   type: SourceType
+  category?: string
   title: string
   price?: string
   location?: string
   image?: string
   url?: string
   excerpt?: string
+  phone?: string
+  rating?: string
+  tags?: string[]
+  meta?: Record<string, string>   // شهر، محله، نوع آگهی، تخصص …
   scrapedAt: number
   status: ItemStatus
 }
@@ -42,8 +66,6 @@ interface DB { sources: Source[]; items: Item[] }
 function id() { return randomBytes(6).toString('hex') }
 
 const DEFAULT_SOURCES: Source[] = [
-  { id: id(), name: 'دیوار - تهران', url: 'https://divar.ir/s/tehran/buy-apartment', type: 'listing', method: 'auto', enabled: true, schedule: '6h', lastRun: null, lastCount: 0, status: 'idle' },
-  { id: id(), name: 'شیپور - املاک', url: 'https://www.sheypoor.com/s/tehran/real-estate', type: 'listing', method: 'auto', enabled: true, schedule: 'daily', lastRun: null, lastCount: 0, status: 'idle' },
   { id: id(), name: 'اخبار املاک - ایسنا', url: 'https://www.isna.ir/rss/tp/45', type: 'article', method: 'rss', enabled: true, schedule: 'daily', lastRun: null, lastCount: 0, status: 'idle' },
 ]
 
@@ -84,9 +106,11 @@ export function deleteSource(sid: string) {
   save(db)
 }
 
-export function listItems(type?: SourceType): Item[] {
+export function listItems(type?: SourceType, opts?: { category?: string; publicOnly?: boolean }): Item[] {
   const db = load()
-  const items = type ? db.items.filter(i => i.type === type) : db.items
+  let items = type ? db.items.filter(i => i.type === type) : db.items
+  if (opts?.category) items = items.filter(i => i.category === opts.category)
+  if (opts?.publicOnly) items = items.filter(i => i.status !== 'rejected' && i.status !== 'duplicate')
   return items.sort((a, b) => b.scrapedAt - a.scrapedAt)
 }
 
@@ -96,8 +120,15 @@ export function setItemStatus(itemId: string, status: ItemStatus) {
   if (it) { it.status = status; save(db) }
 }
 
+// Wipe all items, or only one type. Sources are kept.
+export function clearItems(type?: SourceType) {
+  const db = load()
+  db.items = type ? db.items.filter(i => i.type !== type) : []
+  save(db)
+}
+
 // Insert items, dedup by url+title. Returns {added, dup}
-export function insertItems(source: Source, raw: Omit<Item, 'id' | 'sourceId' | 'sourceName' | 'type' | 'scrapedAt' | 'status'>[]): { added: number; dup: number } {
+export function insertItems(source: Source, raw: Omit<Item, 'id' | 'sourceId' | 'sourceName' | 'type' | 'category' | 'meta' | 'scrapedAt' | 'status'>[]): { added: number; dup: number } {
   const db = load()
   const existingKeys = new Set(db.items.map(i => (i.url || '') + '|' + i.title))
   let added = 0, dup = 0
@@ -105,14 +136,19 @@ export function insertItems(source: Source, raw: Omit<Item, 'id' | 'sourceId' | 
     const key = (r.url || '') + '|' + r.title
     if (existingKeys.has(key)) { dup++; continue }
     existingKeys.add(key)
+    // merge source meta (city/neighborhood/type/specialty) into the item
+    const meta = source.meta && Object.keys(source.meta).length ? source.meta : undefined
+    const loc = r.location
+      || [meta?.['شهر'], meta?.['محله']].filter(Boolean).join('، ')
+      || undefined
     db.items.unshift({
       id: id(), sourceId: source.id, sourceName: source.name, type: source.type,
-      scrapedAt: Date.now(), status: 'pending', ...r,
+      category: source.category, meta, scrapedAt: Date.now(), status: 'pending',
+      ...r, location: loc,
     })
     added++
   }
-  // cap stored items to last 500
-  if (db.items.length > 500) db.items = db.items.slice(0, 500)
+  if (db.items.length > 1000) db.items = db.items.slice(0, 1000)
   const s = db.sources.find(x => x.id === source.id)
   if (s) { s.lastRun = Date.now(); s.lastCount = added; s.status = 'ok'; s.lastError = undefined }
   save(db)
