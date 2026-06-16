@@ -393,7 +393,7 @@ export default function WebsiteBuilderPage() {
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
         {/* LEFT PANEL - Block Library */}
-        <div style={{
+        <div className="mjwb-lib" style={{
           width: 230, flexShrink: 0, borderLeft: '1px solid var(--line)',
           background: 'var(--bg2)', overflowY: 'auto', padding: '16px 0',
         }}>
@@ -502,7 +502,7 @@ export default function WebsiteBuilderPage() {
         </div>
 
         {/* RIGHT PANEL - Inspector */}
-        <div style={{
+        <div className="mjwb-insp" style={{
           width: 288, flexShrink: 0, borderRight: '1px solid var(--line)',
           background: 'var(--bg2)', display: 'flex', flexDirection: 'column',
         }}>

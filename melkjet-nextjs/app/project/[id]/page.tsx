@@ -286,7 +286,7 @@ export default function ProjectPage() {
         </div>
       </div>
 
-      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '28px 24px 100px', display: 'grid', gridTemplateColumns: '1fr 340px', gap: 24, alignItems: 'start' }}>
+      <main className="mjpr-grid" style={{ maxWidth: 1200, margin: '0 auto', padding: '28px 24px 100px', display: 'grid', gridTemplateColumns: '1fr 340px', gap: 24, alignItems: 'start' }}>
 
         {/* LEFT COLUMN */}
         <div style={{ display: 'grid', gap: 22, minWidth: 0 }}>
@@ -381,7 +381,7 @@ export default function ProjectPage() {
           {/* Amenities */}
           <section style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 20, padding: 22 }}>
             <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)', marginBottom: 16 }}>امکانات و تجهیزات</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+            <div className="mjpr-units" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
               {p.amenities.map((a, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '11px 13px', border: '1px solid var(--line)', borderRadius: 12, background: 'var(--bg2)' }}>
                   <span style={{ fontSize: 18 }}>{a.ic}</span>

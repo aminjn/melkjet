@@ -212,6 +212,7 @@ export default function DirectoryPage() {
 
       {/* Sticky Tab Bar */}
       <div
+        className="mjdir-cats"
         style={{
           position: 'sticky',
           top: 0,
@@ -333,6 +334,7 @@ export default function DirectoryPage() {
         {/* Cards Grid */}
         {filteredProfessionals.length > 0 ? (
           <div
+            className="mjdir-grid"
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(3, 1fr)',

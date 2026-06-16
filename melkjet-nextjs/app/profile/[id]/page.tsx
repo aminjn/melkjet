@@ -570,7 +570,7 @@ export default function ProfilePage() {
       <Nav />
 
       {/* Role switcher */}
-      <div style={{ borderBottom: '1px solid var(--line)', background: 'var(--bg2)', overflowX: 'auto' }}>
+      <div className="mjpp-roles" style={{ borderBottom: '1px solid var(--line)', background: 'var(--bg2)', overflowX: 'auto' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '11px 22px', display: 'flex', gap: 7, alignItems: 'center' }}>
           <span style={{ fontSize: 11.5, color: 'var(--muted)', whiteSpace: 'nowrap', marginLeft: 6 }}>پیش‌نمایش نقش:</span>
           {roleTabs.map(r => {
@@ -598,7 +598,7 @@ export default function ProfilePage() {
             <div style={{ position: 'absolute', inset: 0, backgroundImage: 'repeating-linear-gradient(135deg,transparent,transparent 11px,rgba(255,255,255,0.03) 11px,rgba(255,255,255,0.03) 12px)' }} />
             <span style={{ position: 'absolute', top: 14, left: 14, display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px', borderRadius: 999, background: 'rgba(20,18,14,0.7)', backdropFilter: 'blur(6px)', color: 'var(--gold2)', fontSize: 12, fontWeight: 800, border: '1px solid var(--gold)' }}>★ پروفایل پروموت‌شده در {p.area}</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 20, padding: '0 26px 22px', marginTop: -44, position: 'relative', flexWrap: 'wrap' }}>
+          <div className="mjpp-hero" style={{ display: 'flex', alignItems: 'flex-end', gap: 20, padding: '0 26px 22px', marginTop: -44, position: 'relative', flexWrap: 'wrap' }}>
             <div style={{ width: 96, height: 96, borderRadius: 24, background: p.av, border: '4px solid var(--surface)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 34, fontWeight: 800 }}>{p.initial}</div>
             <div style={{ flex: 1, minWidth: 0, paddingBottom: 4 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
@@ -652,7 +652,7 @@ export default function ProfilePage() {
         </div>
 
         {/* Main grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 20, marginTop: 20, alignItems: 'start' }}>
+        <div className="mjpp-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 20, marginTop: 20, alignItems: 'start' }}>
 
           {/* LEFT */}
           <div style={{ display: 'grid', gap: 20, minWidth: 0 }}>

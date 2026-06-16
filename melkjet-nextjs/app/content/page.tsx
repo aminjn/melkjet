@@ -104,7 +104,7 @@ export default function ContentPage() {
     <div dir="rtl" style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: "'Vazirmatn', sans-serif" }}>
 
       {/* SIDEBAR */}
-      <aside style={{ width: 240, flexShrink: 0, position: 'sticky', top: 0, height: '100vh', overflow: 'auto', background: 'var(--bg2)', borderLeft: '1px solid var(--line)', display: 'flex', flexDirection: 'column', padding: '18px 13px' }}>
+      <aside className="mjcon-nav" style={{ width: 240, flexShrink: 0, position: 'sticky', top: 0, height: '100vh', overflow: 'auto', background: 'var(--bg2)', borderLeft: '1px solid var(--line)', display: 'flex', flexDirection: 'column', padding: '18px 13px' }}>
         <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 11, textDecoration: 'none', color: 'var(--text)', padding: '6px 8px 16px' }}>
           <span style={{ width: 34, height: 34, borderRadius: 10, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <span style={{ width: 13, height: 13, background: 'var(--bg2)', transform: 'rotate(45deg)', borderRadius: 2, display: 'block' }}></span>
@@ -351,7 +351,7 @@ export default function ContentPage() {
           {/* ─── SEO VIEW ─── */}
           {view === 'seo' && (
             <div style={{ display: 'grid', gap: 18 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 18 }}>
+              <div className="mjcon-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 18 }}>
 
                 {/* Score meter + checklist */}
                 <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>

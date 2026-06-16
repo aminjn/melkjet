@@ -108,7 +108,7 @@ export default function BuilderPage() {
       <div style={{ display: 'flex', minHeight: 'calc(100vh - 120px)', position: 'relative' }}>
 
         {/* ── SIDEBAR ── */}
-        <aside style={{
+        <aside className="mju-side" style={{
           width: 240,
           minHeight: '100%',
           background: 'var(--surface)',
@@ -171,7 +171,7 @@ export default function BuilderPage() {
                   }}
                 >
                   <span style={{ fontSize: 16, width: 20, textAlign: 'center' }}>{item.icon}</span>
-                  {item.label}
+                  <span className="mju-sidelabel">{item.label}</span>
                   {isActive && <span style={{ marginRight: 'auto', width: 6, height: 6, borderRadius: '50%', background: 'var(--gold)', flexShrink: 0 }} />}
                 </button>
               )
@@ -264,7 +264,7 @@ export default function BuilderPage() {
                 <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 24, color: 'var(--text)' }}>داشبورد پروژه</h1>
 
                 {/* KPI cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 28 }}>
+                <div className="mju-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 28 }}>
                   {[
                     { label: 'فروخته‌شده', value: '۱۴۲', unit: 'واحد', color: '#22c55e', icon: '✓' },
                     { label: 'رزرو', value: '۲۴', unit: 'واحد', color: '#f97316', icon: '⏸' },
@@ -295,7 +295,7 @@ export default function BuilderPage() {
                 </div>
 
                 {/* Charts + Timeline row */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                <div className="mju-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
 
                   {/* Bar chart */}
                   <div style={{

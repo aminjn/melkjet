@@ -142,7 +142,7 @@ export default function MaterialsPage() {
   const Dashboard = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       {/* KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
+      <div className="mjm-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
         {kpis.map((k) => (
           <div key={k.label} style={{ ...surface, display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -343,7 +343,7 @@ export default function MaterialsPage() {
   const Orders = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* Status counters */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
+      <div className="mjm-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
         {orderStatusCounts.map((s) => (
           <div key={s.label} style={{
             ...surface,
@@ -520,7 +520,7 @@ export default function MaterialsPage() {
             </div>
 
             {/* Details */}
-            <div style={{
+            <div className="mjm-2col" style={{
               display: 'grid',
               gridTemplateColumns: '1fr 1fr',
               gap: 10,
@@ -604,7 +604,7 @@ export default function MaterialsPage() {
       <div style={{ display: 'flex', minHeight: 'calc(100vh - 120px)', maxWidth: 1300, margin: '0 auto', padding: '32px 20px', gap: 24 }}>
 
         {/* ── SIDEBAR ── */}
-        <aside style={{
+        <aside className="mjm-side" style={{
           width: 220,
           flexShrink: 0,
           background: 'var(--surface)',
@@ -678,7 +678,7 @@ export default function MaterialsPage() {
                   }}
                 >
                   <span style={{ fontSize: 16 }}>{item.icon}</span>
-                  {item.label}
+                  <span className="mjm-sidelabel">{item.label}</span>
                   {item.id === 'rfq' && (
                     <span style={{
                       marginRight: 'auto',

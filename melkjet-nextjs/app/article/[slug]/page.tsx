@@ -111,7 +111,7 @@ export default function ArticlePage({ params }: { params: Promise<{ slug: string
       </div>
 
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 24px 80px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 32, alignItems: 'start' }}>
+        <div className="mja-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 32, alignItems: 'start' }}>
 
           {/* MAIN ARTICLE CONTENT */}
           <article>

@@ -131,7 +131,7 @@ export default function LegalPage() {
       </div>
 
       {/* Two-column layout */}
-      <div style={{
+      <div className="mjl-2col" style={{
         maxWidth: '1280px',
         margin: '0 auto',
         padding: '2rem 1.5rem',

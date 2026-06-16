@@ -275,7 +275,7 @@ export default function PricingPage() {
 
       {/* Plans grid */}
       <section style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 80px' }}>
-        <div style={{
+        <div className="mjr-grid" style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(3, 1fr)',
           gap: 20,

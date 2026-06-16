@@ -164,6 +164,7 @@ export default function MarketingPage() {
     >
       {/* SIDEBAR */}
       <aside
+        className="mjk-side"
         style={{
           width: 240,
           flexShrink: 0,
@@ -215,7 +216,7 @@ export default function MarketingPage() {
           {navItems.map((m) => (
             <button key={m.id} onClick={() => setView(m.id)} style={navStyle(view === m.id)}>
               <span style={{ width: 22, textAlign: 'center' as const, fontSize: 15 }}>{m.ic}</span>
-              <span style={{ flex: 1, textAlign: 'right' as const }}>{m.l}</span>
+              <span className="mjk-sidelabel" style={{ flex: 1, textAlign: 'right' as const }}>{m.l}</span>
             </button>
           ))}
         </nav>
@@ -316,7 +317,7 @@ export default function MarketingPage() {
             <div style={{ display: 'grid', gap: 18 }}>
 
               {/* KPI Cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
+              <div className="mjk-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
                 {kpis.map((k) => (
                   <div
                     key={k.l}
@@ -759,6 +760,7 @@ export default function MarketingPage() {
                       </span>
                     </div>
                     <div
+                      className="mjk-2col"
                       style={{
                         display: 'grid',
                         gridTemplateColumns: '1fr 1fr',

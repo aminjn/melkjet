@@ -124,7 +124,7 @@ export default function PlanAIPage() {
 
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: '32px 24px' }}>
         {!analyzed ? (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 24 }}>
+          <div className="mjpai-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 24 }}>
             {/* Upload Area */}
             <div>
               <div
@@ -215,7 +215,7 @@ export default function PlanAIPage() {
         ) : (
           <div>
             {/* Results */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 24 }}>
+            <div className="mjpai-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 24 }}>
 
               {/* Main Analysis Area */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>

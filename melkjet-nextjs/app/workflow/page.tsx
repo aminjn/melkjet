@@ -331,6 +331,7 @@ export default function WorkflowPage() {
 
         {/* Left panel: Block types */}
         <div
+          className="mjw-palette"
           style={{
             width: '240px',
             flexShrink: 0,
@@ -542,6 +543,7 @@ export default function WorkflowPage() {
 
         {/* Right panel: Settings */}
         <div
+          className="mjw-config"
           style={{
             width: '280px',
             flexShrink: 0,

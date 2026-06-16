@@ -11,6 +11,7 @@ export default function AIAssistant() {
       <button
         onClick={() => setOpen(o => !o)}
         aria-label="دستیار هوشمند"
+        className="mj-ai-btn"
         style={{
           position: 'fixed', bottom: 24, left: 24, zIndex: 60,
           width: 58, height: 58, borderRadius: 18, border: 'none', cursor: 'pointer',
@@ -25,6 +26,7 @@ export default function AIAssistant() {
       </button>
       {open && (
         <div
+          className="mj-ai-panel"
           style={{
             position: 'fixed', bottom: 92, left: 24, zIndex: 60,
             width: 'min(360px,calc(100vw - 48px))',

@@ -79,7 +79,7 @@ export default function NeighborhoodPage() {
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 1.5rem' }}>
 
         {/* KPI Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginTop: '-32px', marginBottom: '2.25rem', position: 'relative', zIndex: 10 }}>
+        <div className="mjn-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginTop: '-32px', marginBottom: '2.25rem', position: 'relative', zIndex: 10 }}>
 
           <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '12px', padding: '1.25rem 1.25rem 1rem', boxShadow: 'var(--shadow)' }}>
             <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '0.4rem' }}>قیمت میانگین</div>
@@ -114,7 +114,7 @@ export default function NeighborhoodPage() {
         </div>
 
         {/* Main 2-column layout */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '1.5rem', alignItems: 'start', paddingBottom: '3.5rem' }}>
+        <div className="mjn-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '1.5rem', alignItems: 'start', paddingBottom: '3.5rem' }}>
 
           {/* LEFT CONTENT */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -174,7 +174,7 @@ export default function NeighborhoodPage() {
                 <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text)', margin: 0 }}>آگهی‌های برگزیده</h2>
                 <Link href="/search" style={{ fontSize: '0.8rem', color: 'var(--gold)', textDecoration: 'none' }}>مشاهده همه ←</Link>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+              <div className="mjn-listings" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
                 {listings.map((listing, i) => (
                   <Link key={i} href="/search" style={{ textDecoration: 'none', display: 'block' }}>
                     <div

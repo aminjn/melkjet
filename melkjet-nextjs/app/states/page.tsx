@@ -141,12 +141,12 @@ export default function StatesPage() {
         </div>
       </div>
 
-      <div style={{ maxWidth:1280, margin:'0 auto', padding:'40px 24px 100px', display:'grid', gap:44 }}>
+      <div className="mjst-main" style={{ maxWidth:1280, margin:'0 auto', padding:'40px 24px 100px', display:'grid', gap:44 }}>
 
         {/* ════ 1. LOADING ════ */}
         <section id="loading">
           {sectionHead('۱', 'بارگذاری', 'اسکلت، اسپینر، تحلیل AI')}
-          <div style={{ display:'grid', gridTemplateColumns:'1.2fr 1fr', gap:16, marginBottom:16 }}>
+          <div className="mjst-2" style={{ display:'grid', gridTemplateColumns:'1.2fr 1fr', gap:16, marginBottom:16 }}>
             {/* skeleton card */}
             {card(
               <>
@@ -217,7 +217,7 @@ export default function StatesPage() {
         {/* ════ 2. EMPTY STATES ════ */}
         <section id="empty">
           {sectionHead('۲', 'حالت خالی', 'با اقدام پیشنهادی، نه بن‌بست')}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
+          <div className="mjst-2" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
             {EMPTY_STATES.map((e,i) => (
               <div key={i} style={{ background:'var(--surface)', border:'1px solid var(--line)', borderRadius:16, padding:'36px 24px', textAlign:'center', display:'flex', flexDirection:'column', alignItems:'center' }}>
                 <div style={{ width:64, height:64, borderRadius:18, background:'var(--goldDim)', color:'var(--gold)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:28, animation:'mjs-float 3s ease-in-out infinite' }}>{e.ic}</div>
@@ -232,7 +232,7 @@ export default function StatesPage() {
         {/* ════ 3. ERRORS ════ */}
         <section id="error">
           {sectionHead('۳', 'خطا', 'روشن، بدون سرزنش، با راه خروج')}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
+          <div className="mjst-2" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
             {/* 404 */}
             <div style={{ gridColumn:'1/-1', background:'var(--surface)', border:'1px solid var(--line)', borderRadius:16, padding:34, display:'flex', alignItems:'center', gap:28, flexWrap:'wrap' }}>
               <div style={{ fontSize:'clamp(48px,8vw,80px)', fontWeight:800, letterSpacing:'-3px', background:'linear-gradient(120deg,var(--gold2),var(--gold))', WebkitBackgroundClip:'text', backgroundClip:'text', WebkitTextFillColor:'transparent' }}>۴۰۴</div>
@@ -557,7 +557,7 @@ export default function StatesPage() {
         {/* ════ 10. MICRO-INTERACTIONS ════ */}
         <section id="micro">
           {sectionHead('۱۰', 'میکرواینتراکشن', 'امتحانشان کن — تعاملی‌اند')}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:16 }}>
+          <div className="mjst-3" style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:16 }}>
             {/* Like */}
             {card(
               <>

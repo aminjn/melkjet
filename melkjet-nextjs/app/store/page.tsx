@@ -751,7 +751,7 @@ export default function StorePage() {
 
           {/* GRID VIEW */}
           {viewMode === 'grid' && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 18 }}>
+            <div className="mjst-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 18 }}>
               {filtered.map(product => {
                 const justAdded = addedId === product.id
                 return (
