@@ -5,18 +5,7 @@ import Footer from '@/app/components/Footer'
 import { useState, useEffect } from 'react'
 import { fetchContent, gradientFor, initialsFor, type ContentItem } from '@/app/lib/content-display'
 
-const categories = [
-  { id: 'مشاور', label: 'مشاور' },
-  { id: 'آژانس', label: 'آژانس' },
-  { id: 'سازنده', label: 'سازنده' },
-  { id: 'مصالح', label: 'مصالح' },
-  { id: 'معمار', label: 'معمار' },
-  { id: 'پیمانکار', label: 'پیمانکار' },
-  { id: 'کارشناس', label: 'کارشناس' },
-  { id: 'حقوقی', label: 'حقوقی' },
-  { id: 'بانک', label: 'بانک' },
-  { id: 'دفترخانه', label: 'دفترخانه' },
-]
+const DEFAULT_CATS = ['مشاور', 'آژانس', 'سازنده', 'مصالح', 'معمار', 'پیمانکار', 'کارشناس', 'حقوقی', 'وکیل', 'بیمه', 'بانک', 'دفترخانه']
 
 function toProfessional(it: ContentItem) {
   return {
@@ -136,6 +125,17 @@ export default function DirectoryPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [items, setItems] = useState<ContentItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [categoryList, setCategoryList] = useState<string[]>(DEFAULT_CATS)
+
+  useEffect(() => {
+    fetch('/api/content/categories', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : { categories: [] })
+      .then(d => {
+        const merged = Array.from(new Set([...(d.categories || []), ...DEFAULT_CATS]))
+        if (merged.length) setCategoryList(merged)
+      })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     let alive = true
@@ -268,12 +268,12 @@ export default function DirectoryPage() {
             boxSizing: 'border-box',
           }}
         >
-          {categories.map((cat) => {
-            const isActive = activeCategory === cat.id
+          {categoryList.map((cat) => {
+            const isActive = activeCategory === cat
             return (
               <button
-                key={cat.id}
-                onClick={() => setActiveCategory(cat.id)}
+                key={cat}
+                onClick={() => setActiveCategory(cat)}
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
@@ -307,7 +307,7 @@ export default function DirectoryPage() {
                 }}
               >
                 <span style={{ fontSize: '0.9rem', fontWeight: isActive ? 700 : 500 }}>
-                  {cat.label}
+                  {cat}
                 </span>
                 <span
                   style={{

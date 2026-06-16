@@ -61,9 +61,14 @@ export interface Item {
   status: ItemStatus
 }
 
-interface DB { sources: Source[]; items: Item[] }
+interface DB { sources: Source[]; items: Item[]; categories?: string[] }
 
 function id() { return randomBytes(6).toString('hex') }
+
+const DEFAULT_CATEGORIES = [
+  'مشاور', 'آژانس', 'سازنده', 'مصالح', 'معمار', 'پیمانکار', 'کارشناس',
+  'حقوقی', 'وکیل', 'بیمه', 'بانک', 'دفترخانه', 'سردفتر', 'ارزیاب',
+]
 
 const DEFAULT_SOURCES: Source[] = [
   { id: id(), name: 'اخبار املاک - ایسنا', url: 'https://www.isna.ir/rss/tp/45', type: 'article', method: 'rss', enabled: true, schedule: 'daily', lastRun: null, lastCount: 0, status: 'idle' },
@@ -81,6 +86,24 @@ export function save(db: DB) {
 }
 
 export function listSources(): Source[] { return load().sources }
+
+export function listCategories(): string[] {
+  const db = load()
+  const fromItems = Array.from(new Set(db.items.filter(i => i.type === 'directory' && i.category).map(i => i.category as string)))
+  const merged = Array.from(new Set([...(db.categories || DEFAULT_CATEGORIES), ...fromItems]))
+  return merged
+}
+
+export function addCategory(name: string): string[] {
+  const db = load()
+  const n = name.trim()
+  if (!n) return listCategories()
+  const cats = db.categories || DEFAULT_CATEGORIES.slice()
+  if (!cats.includes(n)) cats.unshift(n)
+  db.categories = cats
+  save(db)
+  return listCategories()
+}
 
 export function addSource(input: Omit<Source, 'id' | 'lastRun' | 'lastCount' | 'status'>): Source {
   const db = load()

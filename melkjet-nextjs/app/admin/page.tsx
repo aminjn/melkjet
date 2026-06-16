@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
+import { DEAL_TYPES, PROPERTY_KINDS, PROVINCES, citiesOf, neighborhoodsOf } from '@/app/lib/taxonomy'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 type View =
@@ -270,15 +271,6 @@ function emptyForm(type: ScrTab) {
   }
 }
 
-// Suggested metadata fields per content type (شهر، محله، نوع آگهی، تخصص …)
-const META_PRESETS: Record<string, string[]> = {
-  listing: ['شهر', 'محله', 'نوع آگهی'],
-  directory: ['تخصص', 'شهر'],
-  product: ['برند', 'دسته'],
-  article: ['موضوع'],
-  price: ['منطقه'],
-}
-const DIR_CATEGORIES = ['مشاور', 'آژانس', 'سازنده', 'مصالح', 'معمار', 'پیمانکار', 'کارشناس', 'حقوقی', 'بانک', 'دفترخانه']
 const FIELD_OPTIONS: { k: string; label: string }[] = [
   { k: 'title', label: 'عنوان' }, { k: 'price', label: 'قیمت' }, { k: 'location', label: 'موقعیت' },
   { k: 'image', label: 'تصویر' }, { k: 'url', label: 'لینک' }, { k: 'phone', label: 'تلفن' }, { k: 'excerpt', label: 'توضیح' },
@@ -296,6 +288,23 @@ function ScraperView() {
   const [formErr, setFormErr] = useState('')
   const [saving, setSaving] = useState(false)
   const [preview, setPreview] = useState<{ loading: boolean; count?: number; items?: any[]; error?: string } | null>(null)
+  const [cats, setCats] = useState<string[]>([])
+  const [newCat, setNewCat] = useState('')
+
+  const loadCats = async () => {
+    const r = await fetch('/api/admin/scraper/categories')
+    if (r.ok) setCats((await r.json()).categories)
+  }
+  useEffect(() => { loadCats() }, [])
+
+  const addNewCategory = async () => {
+    const n = newCat.trim()
+    if (!n) return
+    const r = await fetch('/api/admin/scraper/categories', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: n }),
+    })
+    if (r.ok) { setCats((await r.json()).categories); setForm(f => ({ ...f, category: n })); setNewCat('') }
+  }
 
   const loadSources = async () => {
     const r = await fetch('/api/admin/scraper/sources')
@@ -589,27 +598,80 @@ function ScraperView() {
                 <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 4 }}>همان صفحه‌ای که می‌خواهید از آن واکشی شود را دقیق وارد کنید (با فیلتر شهر/محله/نوع آگهی).</div>
               </div>
 
+              {/* ── دسته‌بندی برای دایرکتوری (مشاور/حقوقی/وکیل/بیمه…) با امکان افزودن ── */}
               {form.type === 'directory' && (
                 <div>
-                  <label style={labelCss}>دسته‌بندی دایرکتوری</label>
-                  <select style={inputCss} value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
-                    {DIR_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
+                  <label style={labelCss}>دسته‌بندی (می‌توانید دستهٔ جدید بسازید)</label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 8 }}>
+                    {cats.map(c => (
+                      <button key={c} onClick={() => setForm({ ...form, category: c })} style={{
+                        padding: '6px 13px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5,
+                        border: `1px solid ${form.category === c ? 'var(--gold)' : 'var(--line2)'}`,
+                        background: form.category === c ? 'var(--goldDim)' : 'transparent',
+                        color: form.category === c ? 'var(--gold)' : 'var(--muted)', fontWeight: form.category === c ? 700 : 500,
+                      }}>{c}</button>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input style={inputCss} placeholder="دستهٔ جدید (مثلاً: وکیل، بیمه، کارشناس رسمی)" value={newCat}
+                      onChange={e => setNewCat(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addNewCategory() }} />
+                    <OutlineButton onClick={addNewCategory}>+ افزودن دسته</OutlineButton>
+                  </div>
                 </div>
               )}
 
-              {/* Metadata — جزییات ثابت روی هر آیتم */}
-              <div>
-                <label style={labelCss}>جزئیات ثابت این منبع</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  {(META_PRESETS[form.type] || []).map(k => (
-                    <div key={k}>
-                      <input style={inputCss} placeholder={k} value={form.meta[k] || ''} onChange={e => setMeta(k, e.target.value)} />
-                    </div>
-                  ))}
+              {/* ── جزئیات آگهی: نوع معامله / نوع ملک / استان / شهر / محله (کشویی) ── */}
+              {form.type === 'listing' && (
+                <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: 14 }}>
+                  <label style={labelCss}>جزئیات آگهی — این مقادیر روی همهٔ آگهی‌های این منبع نشانده می‌شود</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <select style={inputCss} value={form.meta['نوع معامله'] || ''} onChange={e => setMeta('نوع معامله', e.target.value)}>
+                      <option value="">نوع معامله…</option>
+                      {DEAL_TYPES.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                    <select style={inputCss} value={form.meta['نوع ملک'] || ''} onChange={e => setMeta('نوع ملک', e.target.value)}>
+                      <option value="">نوع ملک…</option>
+                      {PROPERTY_KINDS.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                    <select style={inputCss} value={form.meta['استان'] || ''}
+                      onChange={e => setForm({ ...form, meta: { ...form.meta, 'استان': e.target.value, 'شهر': '', 'محله': '' } })}>
+                      <option value="">استان…</option>
+                      {PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                    <select style={inputCss} value={form.meta['شهر'] || ''} disabled={!form.meta['استان']}
+                      onChange={e => setForm({ ...form, meta: { ...form.meta, 'شهر': e.target.value, 'محله': '' } })}>
+                      <option value="">{form.meta['استان'] ? 'شهر…' : 'اول استان را انتخاب کنید'}</option>
+                      {citiesOf(form.meta['استان'] || '').map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <select style={{ ...inputCss, gridColumn: '1 / -1' }} value={form.meta['محله'] || ''} disabled={!form.meta['شهر']}
+                      onChange={e => setMeta('محله', e.target.value)}>
+                      <option value="">{form.meta['شهر'] ? 'محله / منطقه…' : 'اول شهر را انتخاب کنید'}</option>
+                      {neighborhoodsOf(form.meta['شهر'] || '').map(n => <option key={n} value={n}>{n}</option>)}
+                      {form.meta['شهر'] && <option value="__custom__">+ محلهٔ دیگر (دستی)…</option>}
+                    </select>
+                    {form.meta['محله'] === '__custom__' && (
+                      <input style={{ ...inputCss, gridColumn: '1 / -1' }} placeholder="نام محله را تایپ کنید" autoFocus
+                        onChange={e => setMeta('محله', e.target.value)} />
+                    )}
+                  </div>
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 4 }}>این مقادیر روی همهٔ آیتم‌های واکشی‌شدهٔ این منبع نشانده می‌شود (مثلاً شهر تهران، محله سعادت‌آباد، تخصص وکیل).</div>
-              </div>
+              )}
+
+              {/* ── شهر برای دایرکتوری/مقاله/قیمت (اختیاری) ── */}
+              {form.type !== 'listing' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <select style={inputCss} value={form.meta['استان'] || ''}
+                    onChange={e => setForm({ ...form, meta: { ...form.meta, 'استان': e.target.value, 'شهر': '' } })}>
+                    <option value="">استان (اختیاری)…</option>
+                    {PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                  <select style={inputCss} value={form.meta['شهر'] || ''} disabled={!form.meta['استان']}
+                    onChange={e => setMeta('شهر', e.target.value)}>
+                    <option value="">شهر (اختیاری)…</option>
+                    {citiesOf(form.meta['استان'] || '').map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              )}
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
