@@ -26,6 +26,11 @@ export interface AdminData {
   divar?: {
     proxyUrl?: string    // HTTP proxy used to reach api.divar.ir from the server
   }
+  gapgpt?: {
+    baseUrl: string      // e.g. https://api.gapgpt.app/v1
+    apiKey: string
+  }
+  agentModels?: Record<string, { text?: string; image?: string }>  // per-agent model assignment
 }
 
 export function getAdminData(): AdminData {

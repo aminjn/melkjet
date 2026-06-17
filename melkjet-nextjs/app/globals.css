@@ -158,7 +158,7 @@ body {
 @media(max-width:760px){.mjc-2col{grid-template-columns:1fr!important}.mjc-table{overflow-x:auto!important}.mjc-row{min-width:560px!important}.mjc-cal{overflow-x:auto!important}.mjc-cal-inner{min-width:560px!important}}
 
 /* Admin agents 3-col */
-@media(max-width:760px){.mjsa-agents{grid-template-columns:1fr 1fr!important}}
+@media(max-width:760px){.mjsa-agents{grid-template-columns:1fr 1fr!important}.mjsa-agentrow{grid-template-columns:1fr!important}}
 @media(max-width:480px){.mjsa-agents{grid-template-columns:1fr!important}}
 
 /* Property gallery & detail grids */

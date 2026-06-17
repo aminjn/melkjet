@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { DEAL_TYPES, PROPERTY_KINDS, PROVINCES, citiesOf, neighborhoodsOf } from '@/app/lib/taxonomy'
 import { DIVAR_CATEGORIES, DIVAR_CITIES } from '@/app/lib/divar-meta'
+import { AGENTS, categorizeModel, CATEGORY_LABEL, FALLBACK_MODELS, DEFAULT_GAP_BASE, type ModelCategory } from '@/app/lib/ai-agents'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 type View =
@@ -1282,90 +1283,115 @@ function ContentView() {
   )
 }
 
+function ModelSelect({ models, value, onChange, only }: { models: string[]; value: string; onChange: (v: string) => void; only?: ModelCategory }) {
+  const groups: Record<string, string[]> = {}
+  for (const m of models) {
+    const cat = categorizeModel(m)
+    if (only && cat !== only) continue
+    ;(groups[cat] = groups[cat] || []).push(m)
+  }
+  const order: ModelCategory[] = ['text', 'image', 'embedding', 'audio']
+  return (
+    <select value={value} onChange={e => onChange(e.target.value)} style={{
+      width: '100%', background: 'var(--bg)', border: '1px solid var(--line2)', borderRadius: 9,
+      padding: '8px 10px', color: 'var(--text)', fontSize: 12.5, fontFamily: 'inherit', outline: 'none',
+    }}>
+      <option value="">— انتخاب مدل —</option>
+      {order.filter(c => groups[c]?.length).map(c => (
+        <optgroup key={c} label={CATEGORY_LABEL[c]}>
+          {groups[c].map(m => <option key={m} value={m}>{m}</option>)}
+        </optgroup>
+      ))}
+    </select>
+  )
+}
+
 function APIView() {
-  const providers = [
-    { name: 'Claude (Anthropic)', model: 'claude-sonnet-4-6', status: 'فعال', latency: '۳۴۰ms', cost: '$0.015/1K', color: '#5b9bd5' },
-    { name: 'OpenAI', model: 'gpt-4o', status: 'پشتیبان', latency: '۴۲۰ms', cost: '$0.030/1K', color: '#5fd98a' },
-    { name: 'Self-hosted (Llama)', model: 'llama-3.1-70B', status: 'غیرفعال', latency: '۸۸۰ms', cost: '$0.001/1K', color: '#e7a14a' },
-  ]
-  const agents = [
-    { name: 'ScraperAgent', task: 'واکشی و پردازش آگهی', model: 'Claude Haiku', status: 'فعال' },
-    { name: 'ModerationAgent', task: 'تأیید و امتیازدهی آگهی', model: 'Claude Sonnet', status: 'فعال' },
-    { name: 'ContentAgent', task: 'تولید مقاله و سئو', model: 'Claude Opus', status: 'فعال' },
-    { name: 'PricingAgent', task: 'تحلیل و برآورد قیمت', model: 'Claude Sonnet', status: 'فعال' },
-    { name: 'ChatAgent', task: 'دستیار چت کاربر', model: 'Claude Haiku', status: 'فعال' },
-    { name: 'SearchAgent', task: 'جستجوی معنایی', model: 'Self-hosted', status: 'آزمایشی' },
-    { name: 'ImageAgent', task: 'تحلیل تصاویر ملک', model: 'GPT-4o Vision', status: 'آزمایشی' },
-    { name: 'FraudAgent', task: 'تشخیص تقلب', model: 'Claude Opus', status: 'فعال' },
-    { name: 'TranslationAgent', task: 'ترجمه محتوا', model: 'Claude Haiku', status: 'غیرفعال' },
-    { name: 'SummaryAgent', task: 'خلاصه‌سازی گزارش', model: 'Claude Sonnet', status: 'فعال' },
-    { name: 'LeadAgent', task: 'مدیریت لیدهای فروش', model: 'GPT-4o', status: 'آزمایشی' },
-    { name: 'AlertAgent', task: 'اعلان‌های هوشمند', model: 'Claude Haiku', status: 'فعال' },
-    { name: 'AnalyticsAgent', task: 'تحلیل رفتار کاربر', model: 'Self-hosted', status: 'فعال' },
-    { name: 'NegotiationAgent', task: 'پشتیبانی مذاکره', model: 'Claude Opus', status: 'آزمایشی' },
-  ]
-  const agentStatusColor: Record<string, string> = { فعال: '#5fd98a', آزمایشی: '#e7a14a', غیرفعال: 'var(--faint)' }
+  const [baseUrl, setBaseUrl] = useState(DEFAULT_GAP_BASE)
+  const [apiKey, setApiKey] = useState('')
+  const [masked, setMasked] = useState('')
+  const [models, setModels] = useState<string[]>(FALLBACK_MODELS)
+  const [modelsSource, setModelsSource] = useState('')
+  const [assign, setAssign] = useState<Record<string, { text?: string; image?: string }>>({})
+  const [msg, setMsg] = useState('')
+  const [loadingModels, setLoadingModels] = useState(false)
+
+  const loadConfig = async () => {
+    const r = await fetch('/api/admin/ai/config')
+    if (r.ok) { const d = await r.json(); setBaseUrl(d.baseUrl); setMasked(d.masked) }
+  }
+  const loadAgents = async () => {
+    const r = await fetch('/api/admin/ai/agents')
+    if (r.ok) setAssign((await r.json()).agentModels || {})
+  }
+  const loadModels = async () => {
+    setLoadingModels(true)
+    const r = await fetch('/api/admin/ai/models')
+    if (r.ok) { const d = await r.json(); setModels(d.models || FALLBACK_MODELS); setModelsSource(d.source) }
+    setLoadingModels(false)
+  }
+  useEffect(() => { loadConfig(); loadAgents(); loadModels() }, [])
+
+  const saveConfig = async () => {
+    setMsg('')
+    const r = await fetch('/api/admin/ai/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ baseUrl, apiKey }) })
+    if (r.ok) { setMsg('✓ ذخیره شد'); setApiKey(''); await loadConfig(); await loadModels() } else setMsg('خطا در ذخیره')
+  }
+
+  const setAgentModel = async (agentId: string, slot: 'text' | 'image', model: string) => {
+    setAssign(a => ({ ...a, [agentId]: { ...a[agentId], [slot]: model } }))
+    await fetch('/api/admin/ai/agents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agentId, [slot]: model }) })
+  }
 
   return (
     <div style={{ animation: 'fade .35s ease' }}>
-      <div className="mjsa-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
-        <KPI label="توکن مصرف‌شده" value="۸٫۴M" trend="این ماه" icon="◈" iconBg="var(--goldDim)" iconColor="var(--gold)" />
-        <KPI label="هزینه این ماه" value="$۴۸۴" trend="↓ ۱۲٪ بهینه‌سازی" icon="💰" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" trendUp />
-        <KPI label="میانگین لیتنسی" value="۳۸۲ms" trend="P99: ۱.۲s" icon="⚡" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" />
-        <KPI label="ایجنت فعال" value="۱۴" trend="۳ در حالت آزمایشی" icon="◍" iconBg="rgba(231,161,74,.15)" iconColor="#e7a14a" />
-      </div>
-
-      <div className="mjsa-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-        <Card>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>پروایدرهای AI</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {providers.map(p => (
-              <div key={p.name} style={{ background: 'var(--bg2)', borderRadius: 12, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 10, height: 10, borderRadius: '50%', background: p.color, flexShrink: 0 }} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13 }}>{p.name}</div>
-                  <div style={{ fontSize: 11.5, color: 'var(--muted)', fontFamily: '"JetBrains Mono", monospace' }}>{p.model}</div>
-                </div>
-                <div style={{ textAlign: 'left', fontSize: 12 }}>
-                  <div style={{ color: 'var(--muted)' }}>{p.latency}</div>
-                  <div style={{ color: 'var(--gold)', fontWeight: 600 }}>{p.cost}</div>
-                </div>
-                <Badge label={p.status} color={p.status === 'فعال' ? '#5fd98a' : p.status === 'پشتیبان' ? '#5b9bd5' : 'var(--faint)'} />
-              </div>
-            ))}
+      {/* API config */}
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>اتصال به API گپ‌جی‌پی‌تی</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>
+          سازگار با OpenAI. کلید را از پنل توسعه‌دهندگان گپ بگیر. {masked && <span style={{ color: '#5fd98a' }}>وضعیت: تنظیم‌شده ({masked})</span>}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }} className="mjsa-2col">
+          <div>
+            <label style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 5, display: 'block', fontWeight: 600 }}>Base URL</label>
+            <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)} style={{ width: '100%', direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }} />
           </div>
-        </Card>
+          <div>
+            <label style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 5, display: 'block', fontWeight: 600 }}>API Key {masked && '(برای تغییر وارد کن)'}</label>
+            <input value={apiKey} onChange={e => setApiKey(e.target.value)} type="password" placeholder={masked || 'sk-...'} style={{ width: '100%', direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }} />
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <GoldButton onClick={saveConfig}>ذخیره و اتصال</GoldButton>
+          <OutlineButton onClick={loadModels}>{loadingModels ? 'در حال دریافت…' : '↻ دریافت لیست مدل‌ها'}</OutlineButton>
+          {modelsSource && <span style={{ fontSize: 12, color: modelsSource === 'live' ? '#5fd98a' : 'var(--muted)' }}>{modelsSource === 'live' ? `✓ ${models.length} مدل زنده از گپ` : `لیست پیش‌فرض (${models.length} مدل) — کلید را ذخیره کن تا لیست زنده بیاید`}</span>}
+          {msg && <span style={{ fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</span>}
+        </div>
+      </Card>
 
-        <Card>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>پایگاه دانش RAG</div>
-          {[
-            { name: 'قوانین و مقررات ملکی', docs: '۱٬۲۴۰', size: '۸.۳ MB' },
-            { name: 'داده‌های تاریخی قیمت', docs: '۴۸٬۰۰۰', size: '۳۴۰ MB' },
-            { name: 'مستندات آژانس‌ها', docs: '۳٬۸۰۰', size: '۲۸ MB' },
-            { name: 'محتوای سئوی منتشرشده', docs: '۸۴۰', size: '۶.۲ MB' },
-          ].map((kb, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{kb.name}</div>
-                <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{kb.docs} سند · {kb.size}</div>
-              </div>
-              <OutlineButton style={{ fontSize: 11.5, padding: '5px 12px' }}>به‌روزرسانی</OutlineButton>
-            </div>
-          ))}
-        </Card>
-      </div>
-
+      {/* Agents → models */}
       <Card>
-        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>ریجستری ایجنت‌های AI ({agents.length})</div>
-        <div className="mjsa-agents" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
-          {agents.map(a => (
-            <div key={a.name} style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span style={{ fontWeight: 700, fontSize: 12.5, fontFamily: '"JetBrains Mono", monospace' }}>{a.name}</span>
-                <span style={{ width: 7, height: 7, borderRadius: '50%', background: agentStatusColor[a.status], animation: a.status === 'فعال' ? 'pulse 2s infinite' : undefined, display: 'inline-block' }} />
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>تخصیص مدل به ایجنت‌ها ({AGENTS.length})</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 16 }}>برای هر ایجنت مدل را از لیست گپ انتخاب کن. ایجنت‌های متن+تصویر (مثل تولید محتوا) دو مدل می‌گیرند.</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {AGENTS.map(ag => (
+            <div key={ag.id} style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 14px', display: 'grid', gridTemplateColumns: '1.1fr 1fr 1fr', gap: 12, alignItems: 'center' }} className="mjsa-agentrow">
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 12.5, fontFamily: '"JetBrains Mono", monospace' }}>{ag.name}</div>
+                <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{ag.task}</div>
               </div>
-              <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 6 }}>{a.task}</div>
-              <Badge label={a.model} color="#5b9bd5" />
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--faint)', marginBottom: 3 }}>مدل متن/چت</div>
+                <ModelSelect models={models} value={assign[ag.id]?.text || ''} onChange={v => setAgentModel(ag.id, 'text', v)} only="text" />
+              </div>
+              <div>
+                {ag.needs === 'both' ? (
+                  <>
+                    <div style={{ fontSize: 11, color: 'var(--gold)', marginBottom: 3 }}>مدل تصویر</div>
+                    <ModelSelect models={models} value={assign[ag.id]?.image || ''} onChange={v => setAgentModel(ag.id, 'image', v)} only="image" />
+                  </>
+                ) : <div style={{ fontSize: 11, color: 'var(--faint)' }}>—</div>}
+              </div>
             </div>
           ))}
         </div>
