@@ -57,6 +57,9 @@ function mapRow(w: any): RawItem {
   const payload = data.action?.payload || {}
   const wi = payload.web_info || {}
   const token = payload.token
+  // bottom_description_text is usually "<آژانس/شخص> در <محله>" → owner = before " در "
+  const bottom = data.bottom_description_text || ''
+  const owner = bottom.includes(' در ') ? bottom.split(' در ')[0].trim() : undefined
   return {
     title: data.title || '',
     price: data.top_description_text || data.middle_description_text || undefined,
@@ -64,6 +67,7 @@ function mapRow(w: any): RawItem {
     image: data.image_url || undefined,
     url: token ? `https://divar.ir/v/${token}` : undefined,
     excerpt: [data.middle_description_text, data.bottom_description_text].filter(Boolean).join(' · ') || undefined,
+    owner,
   }
 }
 

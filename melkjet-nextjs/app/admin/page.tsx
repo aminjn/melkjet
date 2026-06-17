@@ -613,12 +613,46 @@ function ScraperView() {
   const [preview, setPreview] = useState<{ loading: boolean; count?: number; items?: any[]; error?: string } | null>(null)
   const [cats, setCats] = useState<string[]>([])
   const [newCat, setNewCat] = useState('')
+  const [divarCities, setDivarCities] = useState<{ id: number; name: string }[]>([])
+  const [divarDistricts, setDivarDistricts] = useState<{ id: number; name: string }[]>([])
+  const [placesSummary, setPlacesSummary] = useState<{ cities: number; citiesWithDistricts: number } | null>(null)
+  const [importing, setImporting] = useState('')
+
+  const loadPlaces = async () => {
+    const r = await fetch('/api/admin/divar-places')
+    if (r.ok) { const d = await r.json(); setDivarCities(d.cities || []); setPlacesSummary(d.summary) }
+  }
+  const loadDistrictsFor = async (cityId: string) => {
+    if (!cityId) { setDivarDistricts([]); return }
+    let r = await fetch(`/api/admin/divar-places?cityId=${cityId}`)
+    let d = r.ok ? await r.json() : { districts: [] }
+    if (!d.districts?.length) {  // not cached yet → fetch from Divar
+      await fetch('/api/admin/divar-places', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'districts', cityId }) })
+      r = await fetch(`/api/admin/divar-places?cityId=${cityId}`); d = r.ok ? await r.json() : { districts: [] }
+    }
+    setDivarDistricts(d.districts || [])
+  }
+  const importAllPlaces = async () => {
+    setImporting('در حال دریافت شهرها…')
+    const cr = await fetch('/api/admin/divar-places', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'cities' }) })
+    const cd = await cr.json()
+    if (!cd.ok) { setImporting(`خطا: ${cd.error || ''}`); return }
+    await loadPlaces()
+    const r2 = await fetch('/api/admin/divar-places'); const all = await r2.json()
+    const cities = all.cities || []
+    for (let i = 0; i < cities.length; i++) {
+      setImporting(`دریافت محله‌ها… ${i + 1}/${cities.length} (${cities[i].name})`)
+      await fetch('/api/admin/divar-places', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'districts', cityId: cities[i].id }) }).catch(() => {})
+    }
+    await loadPlaces()
+    setImporting('✓ کامل شد')
+  }
 
   const loadCats = async () => {
     const r = await fetch('/api/admin/scraper/categories')
     if (r.ok) setCats((await r.json()).categories)
   }
-  useEffect(() => { loadCats() }, [])
+  useEffect(() => { loadCats(); loadPlaces() }, [])
 
   const addNewCategory = async () => {
     const n = newCat.trim()
@@ -757,6 +791,9 @@ function ScraperView() {
             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>واکشی خودکار آگهی، مقاله و قیمت از منابع خارجی (JSON-LD · OpenGraph · RSS)</div>
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button onClick={importAllPlaces} style={{ background: 'transparent', color: '#5b9bd5', border: '1px solid rgba(91,155,213,.4)', borderRadius: 11, padding: '9px 16px', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+              {importing ? importing : `📥 دریافت شهر/محله‌های ایران${placesSummary ? ` (${placesSummary.citiesWithDistricts}/${placesSummary.cities})` : ''}`}
+            </button>
             <button onClick={() => wipe('all')} style={{ background: 'transparent', color: '#e7674a', border: '1px solid rgba(231,103,74,.35)', borderRadius: 11, padding: '9px 16px', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
               🗑 حذف همه دیتاها
             </button>
@@ -924,21 +961,31 @@ function ScraperView() {
                 </div>
               )}
 
-              {/* ── کانکتور دیوار: شهر + دسته (API رسمی، بدون URL) ── */}
+              {/* ── کانکتور دیوار: شهر + دسته + محله (از دیتابیس دیوار) ── */}
               {form.method === 'divar' && (
                 <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: 14 }}>
-                  <label style={labelCss}>تنظیمات دیوار — مستقیم از API رسمی دیوار خوانده می‌شود</label>
+                  <label style={labelCss}>تنظیمات دیوار — انتخاب از دیتابیس شهر/محلهٔ دیوار</label>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                    <select style={inputCss} value={form.meta['city_id'] || '1'} onChange={e => setMeta('city_id', e.target.value)}>
-                      {DIVAR_CITIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    <select style={inputCss} value={form.meta['city_id'] || ''} onChange={e => {
+                      const c = divarCities.find(x => String(x.id) === e.target.value)
+                      setForm({ ...form, meta: { ...form.meta, city_id: e.target.value, 'شهر': c?.name || '', district_id: '', 'محله': '' } })
+                      loadDistrictsFor(e.target.value)
+                    }}>
+                      <option value="">انتخاب شهر…</option>
+                      {(divarCities.length ? divarCities : DIVAR_CITIES.map(c => ({ id: Number(c.id), name: c.name }))).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                     <select style={inputCss} value={form.meta['category'] || 'apartment-rent'} onChange={e => setMeta('category', e.target.value)}>
                       {DIVAR_CATEGORIES.map(c => <option key={c.slug} value={c.slug}>{c.label}</option>)}
                     </select>
                   </div>
-                  <input style={{ ...inputCss, marginTop: 10, direction: 'ltr', textAlign: 'left' }} placeholder="کد محلهٔ دیوار (اختیاری) — مثلاً 992 برای آبشار" value={form.meta['district_id'] || ''} onChange={e => setMeta('district_id', e.target.value)} />
-                  <input style={{ ...inputCss, marginTop: 8 }} placeholder="یا نام محله برای فیلتر تقریبی — مثلاً سعادت‌آباد" value={form.meta['محله'] || ''} onChange={e => setMeta('محله', e.target.value)} />
-                  <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 6 }}>بهترین راه: آدرس نقشهٔ محله را در فیلد URL بالا بگذار (کد محله خودکار از <span style={{ direction: 'ltr', display: 'inline-block' }}>map_place_hash</span> خوانده می‌شود). نیازمند «پروکسی دیوار».</div>
+                  <select style={{ ...inputCss, marginTop: 10 }} value={form.meta['district_id'] || ''} disabled={!form.meta['city_id']} onChange={e => {
+                    const d = divarDistricts.find(x => String(x.id) === e.target.value)
+                    setForm({ ...form, meta: { ...form.meta, district_id: e.target.value, 'محله': d?.name || '' } })
+                  }}>
+                    <option value="">{form.meta['city_id'] ? (divarDistricts.length ? 'انتخاب محله (همه محله‌ها)…' : 'در حال بارگذاری محله‌ها…') : 'اول شهر را انتخاب کن'}</option>
+                    {divarDistricts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                  <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 6 }}>محله را از لیست انتخاب کن — کد دقیق دیوار خودکار اعمال می‌شود. (یا آدرس نقشهٔ دیوار را در فیلد URL بالا بگذار.)</div>
                 </div>
               )}
 

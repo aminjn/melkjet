@@ -54,6 +54,8 @@ export interface Item {
   url?: string
   excerpt?: string
   phone?: string
+  owner?: string                  // نام آگهی‌دهنده / آژانس
+  ownerId?: string                // شناسهٔ کاربرِ آگهی‌دهنده (برای جلوگیری از تکرار)
   rating?: string
   tags?: string[]
   meta?: Record<string, string>   // شهر، محله، نوع آگهی، تخصص …
@@ -66,7 +68,14 @@ export interface Item {
 // Fields an admin may edit on a stored item
 export type EditableItem = Partial<Pick<Item, 'title' | 'price' | 'location' | 'image' | 'url' | 'excerpt' | 'phone' | 'category' | 'status' | 'featured'>>
 
-interface DB { sources: Source[]; items: Item[]; categories?: string[] }
+export interface Owner { id: string; name: string; phone?: string; count: number; firstSeen: number }
+interface DB { sources: Source[]; items: Item[]; categories?: string[]; owners?: Owner[] }
+
+function normName(s: string): string { return (s || '').replace(/‌/g, '').replace(/\s+/g, ' ').trim() }
+
+export function listOwners(): Owner[] {
+  return (load().owners || []).sort((a, b) => b.count - a.count)
+}
 
 function id() { return randomBytes(6).toString('hex') }
 
@@ -192,6 +201,7 @@ export function insertItems(source: Source, raw: Omit<Item, 'id' | 'sourceId' | 
   const db = load()
   const existingKeys = new Set(db.items.map(i => (i.url || '') + '|' + i.title))
   let added = 0, dup = 0
+  db.owners = db.owners || []
   for (const r of raw) {
     const key = (r.url || '') + '|' + r.title
     if (existingKeys.has(key)) { dup++; continue }
@@ -201,10 +211,24 @@ export function insertItems(source: Source, raw: Omit<Item, 'id' | 'sourceId' | 
     const loc = r.location
       || [meta?.['شهر'], meta?.['محله']].filter(Boolean).join('، ')
       || undefined
+    // owner dedup: one user per advertiser (by phone, else by name)
+    let ownerId: string | undefined
+    if (r.owner || r.phone) {
+      const pn = r.phone ? r.phone.replace(/\D/g, '') : ''
+      const nn = normName(r.owner || '')
+      let owner = db.owners.find(o => (pn && o.phone && o.phone.replace(/\D/g, '') === pn) || (!pn && nn && normName(o.name) === nn))
+      if (!owner) {
+        owner = { id: id(), name: r.owner || 'نامشخص', phone: r.phone, count: 0, firstSeen: Date.now() }
+        db.owners.push(owner)
+      }
+      if (r.phone && !owner.phone) owner.phone = r.phone
+      owner.count++
+      ownerId = owner.id
+    }
     db.items.unshift({
       id: id(), sourceId: source.id, sourceName: source.name, type: source.type,
       category: source.category, meta, scrapedAt: Date.now(), status: 'pending',
-      ...r, location: loc,
+      ...r, location: loc, ownerId,
     })
     added++
   }
