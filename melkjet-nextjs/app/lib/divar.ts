@@ -27,16 +27,27 @@ const CAT_SLUG: Record<string, string> = {
   'rent-shop': 'store-rent', 'buy-shop': 'store-sell',
 }
 
-// Pull city_id / category / neighbourhood out of a pasted Divar URL.
-function parseDivarUrl(url: string): { cityId?: string; category?: string } {
+// Pull city_id / category / district out of a pasted Divar URL.
+// Map-view URLs carry map_place_hash = "cityId|districtId|category" (e.g. "1|992|apartment-rent").
+function parseDivarUrl(url: string): { cityId?: string; category?: string; district?: string } {
   try {
     const u = new URL(url)
     if (!/divar\.ir$/i.test(u.hostname)) return {}
+    const out: { cityId?: string; category?: string; district?: string } = {}
+
+    const placeHash = u.searchParams.get('map_place_hash') || u.searchParams.get('place_hash')
+    if (placeHash) {
+      const [c, dist, cat] = placeHash.split('|')
+      if (c) out.cityId = c
+      if (dist) out.district = dist
+      if (cat) out.category = cat
+    }
+
     const parts = u.pathname.split('/').filter(Boolean) // ['s','tehran','rent-apartment','abshar']
-    if (parts[0] !== 's') return {}
-    const out: { cityId?: string; category?: string } = {}
-    if (parts[1]) out.cityId = CITY_SLUG[parts[1].toLowerCase()]
-    if (parts[2]) out.category = CAT_SLUG[parts[2].toLowerCase()] || parts[2]
+    if (parts[0] === 's') {
+      if (!out.cityId && parts[1]) out.cityId = CITY_SLUG[parts[1].toLowerCase()]
+      if (!out.category && parts[2]) out.category = CAT_SLUG[parts[2].toLowerCase()] || parts[2]
+    }
     return out
   } catch { return {} }
 }
@@ -58,30 +69,64 @@ function mapRow(w: any): RawItem {
 
 /** Scrape Divar listings via the official web search API (JSON, through proxy).
  *  Supports pagination and optional client-side neighbourhood filtering. */
+/** Scrape Divar listings via the official web search API (JSON, through proxy).
+ *  - If a district id is available (from a map URL's place_hash), Divar filters
+ *    server-side → all listings of that neighbourhood.
+ *  - Otherwise: city+category, optionally client-filtered by محله name. */
 export async function scrapeDivar(source: Source): Promise<RawItem[]> {
-  // A pasted Divar URL overrides the city/category dropdowns
   const fromUrl = parseDivarUrl(source.url || '')
   const cityId = fromUrl.cityId || source.meta?.['city_id'] || '1'
   const category = fromUrl.category || source.meta?.['category'] || 'apartment-rent'
-  const wantHood = norm(source.meta?.['محله'] || '')
+  const district = fromUrl.district || source.meta?.['district_id'] || ''
+  const wantHood = district ? '' : norm(source.meta?.['محله'] || '')   // server-side district makes name-filter unnecessary
+
   const proxyUrl = getAdminData().divar?.proxyUrl
     || process.env.HTTPS_PROXY || process.env.https_proxy
     || process.env.HTTP_PROXY || process.env.http_proxy
     || undefined
 
-  const searchData = { form_data: { data: { category: { str: { value: category } } } } }
-  const headers = { 'content-type': 'application/json', 'user-agent': UA, accept: 'application/json' }
+  const headers = {
+    'content-type': 'application/json',
+    accept: 'application/json, text/plain, */*',
+    'user-agent': UA,
+    origin: 'https://divar.ir',
+    referer: 'https://divar.ir/',
+    'x-standard-divar-error': 'true',
+    'x-render-type': 'CSR',
+    'x-screen-size': '1280x720',
+  }
 
-  const maxPages = wantHood ? 6 : 2          // dig deeper when filtering by a neighbourhood
-  const targetCount = 60
+  const buildBody = (pagination: any): string => {
+    const data: any = { category: { str: { value: category } } }
+    const body: any = {
+      city_ids: [String(cityId)],
+      disable_recommendation: false,
+      search_data: {
+        form_data: { data },
+        server_payload: {
+          '@type': 'type.googleapis.com/widgets.SearchData.ServerPayload',
+          additional_form_data: { data: { sort: { str: { value: 'sort_date' } } } },
+        },
+      },
+    }
+    if (district) {
+      data.districts = { repeated_string: { value: [String(district)] } }
+      body.source_view = 'MAP_DISCOVERY_MAP'
+      body.map_state = { camera_info: { place_hash: `${cityId}|${district}|${category}`, zoom: 14 }, page_state: 'FULL_MAP' }
+      body.current_tab_slug = 'default'
+      body.previous_place_ids = []
+    }
+    if (pagination) body.pagination_data = pagination
+    return JSON.stringify(body)
+  }
+
+  const maxPages = (district || wantHood) ? 10 : 2
+  const targetCount = 120
   let pagination: any = null
   const collected: RawItem[] = []
 
   for (let page = 0; page < maxPages; page++) {
-    const body: any = { city_ids: [String(cityId)], search_data: searchData }
-    if (pagination) body.pagination_data = pagination
-
-    const res = await proxiedRequest(ENDPOINT, { method: 'POST', headers, body: JSON.stringify(body), proxyUrl, timeout: 20000 })
+    const res = await proxiedRequest(ENDPOINT, { method: 'POST', headers, body: buildBody(pagination), proxyUrl, timeout: 20000 })
     if (res.status !== 200) { if (page === 0) throw new Error(`Divar HTTP ${res.status}`); break }
 
     let d: any
@@ -108,7 +153,6 @@ export async function scrapeDivar(source: Source): Promise<RawItem[]> {
     pagination = d.pagination.data
   }
 
-  // dedup by url/title
   const seen = new Set<string>()
   return collected.filter((i) => { const k = i.url || i.title; if (seen.has(k)) return false; seen.add(k); return true })
 }

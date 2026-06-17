@@ -762,8 +762,8 @@ function ScraperView() {
               {form.method !== 'divar' && (
                 <div>
                   <label style={labelCss}>آدرس دقیق صفحه (URL)</label>
-                  <input style={{ ...inputCss, direction: 'ltr', textAlign: 'left' }} placeholder="https://site.com/tehran/saadatabad/buy-apartment" value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} />
-                  <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 4 }}>همان صفحه‌ای که می‌خواهید از آن واکشی شود را دقیق وارد کنید (با فیلتر شهر/محله/نوع آگهی).</div>
+                  <input style={{ ...inputCss, direction: 'ltr', textAlign: 'left' }} placeholder="https://divar.ir/s/tehran/rent-apartment/abshar?...map_place_hash=1|992|apartment-rent" value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} />
+                  <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 4 }}>برای دیوار: روی نقشهٔ همان محله برو و آدرس را کپی کن — اگر <span style={{ direction: 'ltr', display: 'inline-block' }}>map_place_hash</span> داشته باشد، همهٔ آگهی‌های آن محله مستقیم گرفته می‌شود.</div>
                 </div>
               )}
 
@@ -779,8 +779,9 @@ function ScraperView() {
                       {DIVAR_CATEGORIES.map(c => <option key={c.slug} value={c.slug}>{c.label}</option>)}
                     </select>
                   </div>
-                  <input style={{ ...inputCss, marginTop: 10 }} placeholder="محله (اختیاری) — دقیقاً مثل دیوار، مثلاً: سعادت‌آباد" value={form.meta['محله'] || ''} onChange={e => setMeta('محله', e.target.value)} />
-                  <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 6 }}>اگر محله را پر کنی، چند صفحه از دیوار خوانده می‌شود و فقط آگهی‌های همان محله نگه داشته می‌شود. نیازمند «پروکسی دیوار» (بالای صفحه).</div>
+                  <input style={{ ...inputCss, marginTop: 10, direction: 'ltr', textAlign: 'left' }} placeholder="کد محلهٔ دیوار (اختیاری) — مثلاً 992 برای آبشار" value={form.meta['district_id'] || ''} onChange={e => setMeta('district_id', e.target.value)} />
+                  <input style={{ ...inputCss, marginTop: 8 }} placeholder="یا نام محله برای فیلتر تقریبی — مثلاً سعادت‌آباد" value={form.meta['محله'] || ''} onChange={e => setMeta('محله', e.target.value)} />
+                  <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 6 }}>بهترین راه: آدرس نقشهٔ محله را در فیلد URL بالا بگذار (کد محله خودکار از <span style={{ direction: 'ltr', display: 'inline-block' }}>map_place_hash</span> خوانده می‌شود). نیازمند «پروکسی دیوار».</div>
                 </div>
               )}
 
