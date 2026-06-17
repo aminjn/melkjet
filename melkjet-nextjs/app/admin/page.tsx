@@ -169,12 +169,9 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
 /* ─── Views ──────────────────────────────────────────────────── */
 
 function OverviewView() {
-  const feed = [
-    { dot: '#5fd98a', text: 'اسکرپر دیوار ۱۴۳ آگهی جدید واکشی کرد', time: 'همین لحظه' },
-    { dot: '#5b9bd5', text: 'مدل Claude محتوای ۸ صفحه سئو تولید کرد', time: '۲ دقیقه پیش' },
-    { dot: '#e7a14a', text: 'آگهی #۸۸۴۵ برای بازبینی دستی فلگ شد', time: '۵ دقیقه پیش' },
-    { dot: '#e7674a', text: '۳ آگهی تقلبی با امتیاز بالا رد شد', time: '۱۱ دقیقه پیش' },
-  ]
+  const [p, setP] = useState<any>(null)
+  useEffect(() => { fetch('/api/admin/market').then(r => r.ok ? r.json() : null).then(d => setP(d?.platform)) }, [])
+  const fa = (n: number) => (n || 0).toLocaleString('fa-IR')
   const actions = [
     { icon: '⛏', label: 'اجرای اسکرپر', color: '#5b9bd5' },
     { icon: '✦', label: 'تولید محتوا', color: '#5fd98a' },
@@ -184,10 +181,10 @@ function OverviewView() {
   return (
     <div style={{ animation: 'fade .35s ease' }}>
       <div className="mjsa-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
-        <KPI label="آگهی فعال" value="۲۴۰٬۰۰۰" trend="↑ ۱٬۸۴۰ این هفته" icon="🏠" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" trendUp />
-        <KPI label="تأیید AI امروز" value="۹۸۲" trend="↑ ۱۲٪ نسبت به دیروز" icon="✓" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" trendUp />
-        <KPI label="محتوای تولیدشده" value="۳۴۰" trend="مقاله + صفحه سئو" icon="✦" iconBg="var(--goldDim)" iconColor="var(--gold)" />
-        <KPI label="مصرف توکن" value="۸٫۴M" trend="↑ ۴٪ هزینه این ماه" icon="◈" iconBg="rgba(231,103,74,.15)" iconColor="#e7674a" />
+        <KPI label="کل آگهی" value={fa(p?.listings.total)} trend={p ? `فروش ${fa(p.listings.sale)} · اجاره ${fa(p.listings.rent)}` : '—'} icon="🏠" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" />
+        <KPI label="پروفایل/دفتر" value={fa(p?.directory.total)} trend={p ? `${fa(p.directory.byCategory.length)} دسته` : '—'} icon="◍" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" />
+        <KPI label="آگهی‌دهنده" value={fa(p?.owners)} trend="کاربران واکشی‌شده" icon="👤" iconBg="var(--goldDim)" iconColor="var(--gold)" />
+        <KPI label="دیتاست دانش" value={fa(p?.dataset)} trend="دادهٔ بازار" icon="🧠" iconBg="rgba(231,103,74,.15)" iconColor="#e7674a" />
       </div>
 
       <div className="mjsa-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
@@ -208,18 +205,18 @@ function OverviewView() {
         </Card>
 
         <Card>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>فعالیت زنده هوش مصنوعی</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {feed.map((f, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                <span style={{
-                  width: 8, height: 8, borderRadius: '50%', background: f.dot, flexShrink: 0, marginTop: 5,
-                  boxShadow: `0 0 6px ${f.dot}`, animation: i === 0 ? 'pulse 2s infinite' : undefined
-                }} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.4 }}>{f.text}</div>
-                  <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 2 }}>{f.time}</div>
-                </div>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>ترکیب دیتای پلتفرم</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {[
+              { label: 'آگهی فروش', value: p?.listings.sale, color: '#5fd98a' },
+              { label: 'آگهی اجاره', value: p?.listings.rent, color: '#5b9bd5' },
+              { label: 'پروفایل و دفاتر', value: p?.directory.total, color: '#a77fd4' },
+              { label: 'محصول فروشگاه', value: p?.products, color: '#4ec4e8' },
+              { label: 'مقاله', value: p?.articles, color: 'var(--gold)' },
+            ].map(r => (
+              <div key={r.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--line)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: r.color }} /><span style={{ fontSize: 13 }}>{r.label}</span></div>
+                <span style={{ fontWeight: 700, color: 'var(--gold)' }}>{fa(r.value)}</span>
               </div>
             ))}
           </div>
@@ -1307,45 +1304,84 @@ function KnowledgeBase() {
 }
 
 function ReportsView() {
-  const [d, setD] = useState<{ totalSaleListings: number; neighbourhoods: number; rows: any[] } | null>(null)
+  const [d, setD] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   useEffect(() => { fetch('/api/admin/market').then(r => r.ok ? r.json() : null).then(x => { setD(x); setLoading(false) }) }, [])
-  const fa = (n: number) => n.toLocaleString('fa-IR')
-  const mt = (n: number) => `${fa(Math.round(n / 1e6))} م.ت`
+  const fa = (n: number) => (n || 0).toLocaleString('fa-IR')
+  const mt = (n: number) => n ? `${fa(Math.round(n / 1e6))} م.ت` : '—'
+  const p = d?.platform
   return (
     <div style={{ animation: 'fade .35s ease' }}>
       <KnowledgeBase />
-      <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 14 }}>آمار واقعی بازار از دیتای اسکرپ‌شده (قیمت هر متر فروش به‌تفکیک محله). هرچه بیشتر اسکرپ کنید، دقیق‌تر می‌شود — همین دیتاست پایهٔ مدل یادگیری ماشین آینده است.</div>
-      <div className="mjsa-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 18 }}>
-        <KPI label="آگهی فروش تحلیل‌شده" value={d ? fa(d.totalSaleListings) : '—'} icon="▦" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" />
-        <KPI label="محله با دیتا" value={d ? fa(d.neighbourhoods) : '—'} icon="◍" iconBg="var(--goldDim)" iconColor="var(--gold)" />
-        <KPI label="وضعیت مدل" value="جمع‌آوری دیتا" icon="🧠" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" />
+
+      <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 14 }}>نمای کامل دیتای واقعی پلتفرم (آگهی‌ها، پروفایل‌ها، محصولات، مقالات، آگهی‌دهنده‌ها، دیتاست). همین داده پایهٔ مدل یادگیری ماشین است.</div>
+
+      {/* full platform KPIs */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 12, marginBottom: 18 }} className="mjsa-kpi">
+        <KPI label="کل آگهی" value={fa(p?.listings.total)} trend={p ? `فروش ${fa(p.listings.sale)} · اجاره ${fa(p.listings.rent)}` : ''} icon="⌂" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" />
+        <KPI label="پروفایل/دفتر" value={fa(p?.directory.total)} trend={p ? `${fa(p.directory.byCategory.length)} دسته` : ''} icon="◍" iconBg="rgba(167,127,212,.15)" iconColor="#a77fd4" />
+        <KPI label="آگهی‌دهنده" value={fa(p?.owners)} icon="👤" iconBg="var(--goldDim)" iconColor="var(--gold)" />
+        <KPI label="محصول فروشگاه" value={fa(p?.products)} icon="▣" iconBg="rgba(78,196,232,.15)" iconColor="#4ec4e8" />
+        <KPI label="مقاله" value={fa(p?.articles)} icon="✦" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" />
+        <KPI label="دیتاست دانش" value={fa(p?.dataset)} icon="🧠" iconBg="rgba(231,161,74,.15)" iconColor="#e7a14a" />
       </div>
-      <Card>
-        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>قیمت هر متر به‌تفکیک محله</div>
-        {loading ? <div style={{ color: 'var(--muted)' }}>در حال محاسبه…</div> : !d?.rows.length ? (
-          <div style={{ color: 'var(--muted)', fontSize: 13, padding: '20px 0', textAlign: 'center' }}>هنوز دیتای کافی نیست. چند منبع دیوار (فروش) اجرا کنید.</div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
-              <thead><tr style={{ borderBottom: '1px solid var(--line)' }}>{['محله', 'شهر', 'تعداد', 'میانگین/متر', 'میانه', 'کمینه', 'بیشینه'].map(h => <th key={h} style={{ textAlign: 'right', padding: '8px', fontSize: 12, color: 'var(--faint)', fontWeight: 600 }}>{h}</th>)}</tr></thead>
-              <tbody>
-                {d.rows.map((r, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid var(--line)' }}>
-                    <td style={{ padding: '10px 8px', fontWeight: 600, fontSize: 13 }}>{r.district}</td>
-                    <td style={{ padding: '10px 8px', fontSize: 12, color: 'var(--muted)' }}>{r.city}</td>
-                    <td style={{ padding: '10px 8px', fontSize: 12 }}>{fa(r.count)}</td>
-                    <td style={{ padding: '10px 8px', color: 'var(--gold)', fontWeight: 700, fontSize: 13 }}>{mt(r.avg)}</td>
-                    <td style={{ padding: '10px 8px', fontSize: 12 }}>{mt(r.median)}</td>
-                    <td style={{ padding: '10px 8px', fontSize: 12, color: 'var(--muted)' }}>{mt(r.min)}</td>
-                    <td style={{ padding: '10px 8px', fontSize: 12, color: 'var(--muted)' }}>{mt(r.max)}</td>
-                  </tr>
+
+      <div className="mjsa-2col" style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 14, marginBottom: 14 }}>
+        {/* listings by district */}
+        <Card>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>آگهی‌ها به‌تفکیک محله</div>
+          {loading ? <div style={{ color: 'var(--muted)' }}>در حال محاسبه…</div> : !p?.listings.byDistrict.length ? (
+            <div style={{ color: 'var(--muted)', fontSize: 13, padding: '20px 0', textAlign: 'center' }}>هنوز آگهی‌ای واکشی نشده. منبع دیوار اجرا کنید.</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
+                <thead><tr style={{ borderBottom: '1px solid var(--line)' }}>{['محله', 'شهر', 'کل', 'فروش', 'اجاره', 'میانگین فروش/متر', 'میانگین ودیعه'].map(h => <th key={h} style={{ textAlign: 'right', padding: '7px', fontSize: 11.5, color: 'var(--faint)', fontWeight: 600 }}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {p.listings.byDistrict.map((r: any, i: number) => (
+                    <tr key={i} style={{ borderBottom: '1px solid var(--line)' }}>
+                      <td style={{ padding: '8px 7px', fontWeight: 600, fontSize: 12.5 }}>{r.district}</td>
+                      <td style={{ padding: '8px 7px', fontSize: 12, color: 'var(--muted)' }}>{r.city}</td>
+                      <td style={{ padding: '8px 7px', fontSize: 12 }}>{fa(r.count)}</td>
+                      <td style={{ padding: '8px 7px', fontSize: 12, color: '#5fd98a' }}>{fa(r.sale)}</td>
+                      <td style={{ padding: '8px 7px', fontSize: 12, color: '#5b9bd5' }}>{fa(r.rent)}</td>
+                      <td style={{ padding: '8px 7px', fontSize: 12, color: 'var(--gold)', fontWeight: 600 }}>{mt(r.avgSalePpm)}</td>
+                      <td style={{ padding: '8px 7px', fontSize: 12, color: 'var(--muted)' }}>{r.avgDeposit ? mt(r.avgDeposit) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+
+        {/* directory by category + cities */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <Card>
+            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>پروفایل‌ها به‌تفکیک دسته</div>
+            {!p?.directory.byCategory.length ? <div style={{ color: 'var(--muted)', fontSize: 12.5 }}>هنوز پروفایلی واکشی نشده.</div> : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                {p.directory.byCategory.map((c: any) => (
+                  <div key={c.category} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
+                    <span>{c.category}</span><span style={{ color: 'var(--gold)', fontWeight: 700 }}>{fa(c.count)}</span>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+              </div>
+            )}
+          </Card>
+          <Card>
+            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>آگهی‌ها به‌تفکیک شهر</div>
+            {!p?.listings.byCity.length ? <div style={{ color: 'var(--muted)', fontSize: 12.5 }}>—</div> : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                {p.listings.byCity.slice(0, 10).map((c: any) => (
+                  <div key={c.city} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
+                    <span>{c.city}</span><span style={{ color: 'var(--gold)', fontWeight: 700 }}>{fa(c.count)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
+      </div>
     </div>
   )
 }
@@ -1705,42 +1741,11 @@ function UsersView() {
 
   return (
     <div style={{ animation: 'fade .35s ease' }}>
-      <div className="mjsa-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
-        <KPI label="کل کاربران" value="۱۸٬۵۰۰" trend="↑ ۳۴۰ این ماه" icon="◍" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" trendUp />
-        <KPI label="مشاور فعال" value="۴٬۲۰۰" trend="↑ ۷٪ رشد" icon="★" iconBg="var(--goldDim)" iconColor="var(--gold)" trendUp />
-        <KPI label="آژانس ثبت‌شده" value="۸۴۰" trend="۶۲ جدید این ماه" icon="▦" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" />
-        <KPI label="معلق/غیرفعال" value="۲۸۰" trend="نیاز به بررسی" icon="⚠" iconBg="rgba(231,161,74,.15)" iconColor="#e7a14a" />
+      <div className="mjsa-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 22 }}>
+        <KPI label="آگهی‌دهندگان واکشی‌شده" value={owners.length.toLocaleString('fa-IR')} trend="کاربران واقعی از آگهی‌ها" icon="◍" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" />
+        <KPI label="دارای شماره" value={owners.filter(o => o.phone).length.toLocaleString('fa-IR')} trend="قابل تماس" icon="☎" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" />
+        <KPI label="کل آگهی این افراد" value={owners.reduce((a, o) => a + o.count, 0).toLocaleString('fa-IR')} trend="مجموع آگهی‌ها" icon="▦" iconBg="var(--goldDim)" iconColor="var(--gold)" />
       </div>
-
-      <Card style={{ marginBottom: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <div style={{ fontWeight: 700, fontSize: 14 }}>جدول کاربران</div>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="جستجوی نام یا ایمیل…"
-            style={{ background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '8px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', width: 220 }} />
-        </div>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--line)' }}>
-              {['نام', 'ایمیل', 'نقش', 'پلن', 'وضعیت', 'عضویت', ''].map(h => (
-                <th key={h} style={{ textAlign: 'right', padding: '8px 0', fontSize: 12, color: 'var(--faint)', fontWeight: 600 }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(u => (
-              <tr key={u.email} style={{ borderBottom: '1px solid var(--line)' }}>
-                <td style={{ padding: '11px 0', fontWeight: 600 }}>{u.name}</td>
-                <td style={{ padding: '11px 0', fontSize: 12, color: 'var(--muted)', fontFamily: '"JetBrains Mono", monospace' }}>{u.email}</td>
-                <td style={{ padding: '11px 0' }}><Badge label={u.role} color="#5b9bd5" /></td>
-                <td style={{ padding: '11px 0', color: 'var(--gold)', fontWeight: 600, fontSize: 13 }}>{u.plan}</td>
-                <td style={{ padding: '11px 0' }}><Badge label={u.status} color={statusColor[u.status]} /></td>
-                <td style={{ padding: '11px 0', fontSize: 12, color: 'var(--faint)' }}>{u.joined}</td>
-                <td style={{ padding: '11px 0' }}><OutlineButton style={{ fontSize: 11.5, padding: '4px 10px' }}>ویرایش</OutlineButton></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
 
       <Card style={{ marginBottom: 14 }}>
         <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>آگهی‌دهندگان واکشی‌شده ({owners.length})</div>
