@@ -17,6 +17,8 @@ export async function POST(req: NextRequest) {
     type: b.type || 'listing', category: b.category,
     method: b.method || 'auto', enabled: true, schedule: 'manual',
     container: b.container, fields: b.fields, meta: b.meta,
+    pages: b.pages ? Math.max(1, Math.min(20, parseInt(b.pages) || 1)) : undefined,
+    useProxy: b.useProxy === true,
     lastRun: null, lastCount: 0, status: 'idle',
   }
   try {

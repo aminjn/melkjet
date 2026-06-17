@@ -49,6 +49,8 @@ export async function POST(req: NextRequest) {
     container: method === 'css' && b.container ? String(b.container).slice(0, 200) : undefined,
     fields: method === 'css' ? sanitizeFields(b.fields) : undefined,
     meta: sanitizeMeta(b.meta),
+    pages: b.pages ? Math.max(1, Math.min(20, parseInt(b.pages) || 1)) : undefined,
+    useProxy: b.useProxy === true || undefined,
   })
   return NextResponse.json({ ok: true, source: src })
 }

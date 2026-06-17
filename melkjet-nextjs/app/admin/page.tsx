@@ -244,7 +244,7 @@ const TYPE_META: Record<string, { label: string; icon: string; color: string }> 
   price:     { label: 'قیمت‌ها', icon: '◷', color: '#e7a14a' },
 }
 const SCHEDULE_LABEL: Record<string, string> = { manual: 'دستی', hourly: 'ساعتی', '6h': 'هر ۶ ساعت', daily: 'روزانه' }
-const METHOD_LABEL: Record<string, string> = { auto: 'خودکار', jsonld: 'JSON-LD', og: 'OpenGraph', rss: 'RSS/خبر' }
+const METHOD_LABEL: Record<string, string> = { auto: 'خودکار', jsonld: 'JSON-LD', og: 'OpenGraph', rss: 'RSS/خبر', css: 'CSS سفارشی', divar: 'دیوار API' }
 const ITEM_STATUS: Record<string, { label: string; color: string }> = {
   pending: { label: 'منتظر بررسی', color: '#5b9bd5' },
   approved: { label: 'تأیید شد', color: '#5fd98a' },
@@ -635,8 +635,10 @@ type ScrTab = 'listing' | 'directory' | 'product' | 'article' | 'price'
 function emptyForm(type: ScrTab) {
   return {
     name: '', url: '', type: type as string, category: 'مشاور',
-    method: 'auto', schedule: 'manual',
+    // آگهی‌ها از API دیوار، بقیهٔ بخش‌ها وب‌اسکرپ خودکار از هر سایتی
+    method: type === 'listing' ? 'divar' : 'auto', schedule: 'manual',
     container: '', fields: [] as FieldRow[], meta: {} as Record<string, string>,
+    pages: '1', useProxy: false,
   }
 }
 
@@ -644,6 +646,37 @@ const FIELD_OPTIONS: { k: string; label: string }[] = [
   { k: 'title', label: 'عنوان' }, { k: 'price', label: 'قیمت' }, { k: 'location', label: 'موقعیت' },
   { k: 'image', label: 'تصویر' }, { k: 'url', label: 'لینک' }, { k: 'phone', label: 'تلفن' }, { k: 'excerpt', label: 'توضیح' },
 ]
+
+// فیلدهای پیشنهادی (پیش‌فرض) برای هر بخش هنگام وب‌اسکرپ سفارشی (CSS)
+const SECTION_FIELDS: Record<ScrTab, FieldRow[]> = {
+  listing: [
+    { key: 'title', selector: '', attr: 'text' }, { key: 'price', selector: '', attr: 'text' },
+    { key: 'location', selector: '', attr: 'text' }, { key: 'image', selector: 'img', attr: 'src' }, { key: 'url', selector: 'a', attr: 'href' },
+  ],
+  directory: [
+    { key: 'title', selector: '', attr: 'text' }, { key: 'phone', selector: '', attr: 'text' },
+    { key: 'location', selector: '', attr: 'text' }, { key: 'image', selector: 'img', attr: 'src' }, { key: 'url', selector: 'a', attr: 'href' },
+  ],
+  product: [
+    { key: 'title', selector: '', attr: 'text' }, { key: 'price', selector: '', attr: 'text' },
+    { key: 'image', selector: 'img', attr: 'src' }, { key: 'url', selector: 'a', attr: 'href' },
+  ],
+  article: [
+    { key: 'title', selector: '', attr: 'text' }, { key: 'excerpt', selector: '', attr: 'text' },
+    { key: 'image', selector: 'img', attr: 'src' }, { key: 'url', selector: 'a', attr: 'href' },
+  ],
+  price: [
+    { key: 'title', selector: '', attr: 'text' }, { key: 'price', selector: '', attr: 'text' }, { key: 'location', selector: '', attr: 'text' },
+  ],
+}
+// راهنمای کوتاه هر بخش
+const SECTION_HINT: Record<ScrTab, string> = {
+  listing: 'آگهی‌های ملک — معمولاً از API دیوار. برای سایت‌های دیگر، روش «خودکار» یا «CSS سفارشی» را انتخاب کنید.',
+  directory: 'پروفایل/دفتر (مشاور، حقوقی، وکیل، بیمه…) از هر سایتی: صفحهٔ لیست را بدهید، فیلدها را نگاشت کنید (نام، تلفن، آدرس).',
+  product: 'محصولات فروشگاهی از هر فروشگاه آنلاین: روش «خودکار» اغلب قیمت/عکس را از JSON-LD می‌گیرد؛ در غیر این صورت CSS سفارشی.',
+  article: 'مقاله/خبر از هر خبرگزاری یا وبلاگ: اگر سایت RSS دارد روش «RSS» سریع‌ترین است، وگرنه «خودکار».',
+  price: 'قیمت/آمار بازار از هر منبع: صفحهٔ جدول قیمت را بدهید و فیلدها را نگاشت کنید (عنوان، قیمت، منطقه).',
+}
 
 function DivarProxyConfig() {
   const [url, setUrl] = useState('')
@@ -785,6 +818,7 @@ function ScraperView() {
     container: form.container,
     fields: form.fields.filter(f => f.key && f.selector.trim()),
     meta: Object.fromEntries(Object.entries(form.meta).filter(([, v]) => v && v.trim())),
+    pages: form.pages, useProxy: form.useProxy,
   })
 
   const addSource = async () => {
@@ -885,7 +919,7 @@ function ScraperView() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
             <div style={{ fontWeight: 700, fontSize: 15 }}>موتور اسکرپ هوشمند</div>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>واکشی خودکار آگهی، مقاله و قیمت از منابع خارجی (JSON-LD · OpenGraph · RSS)</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>وب‌اسکرپ از هر سایتی — آگهی، پروفایل، فروشگاه، مقاله و قیمت (دیوار API · CSS سفارشی · JSON-LD · OpenGraph · RSS · چندصفحه‌ای)</div>
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button onClick={importAllPlaces} style={{ background: 'transparent', color: '#5b9bd5', border: '1px solid rgba(91,155,213,.4)', borderRadius: 11, padding: '9px 16px', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -1051,11 +1085,17 @@ function ScraperView() {
                 </div>
               </div>
 
+              {/* راهنمای بخش انتخاب‌شده */}
+              <div style={{ background: 'var(--goldDim)', border: '1px solid rgba(212,175,55,.25)', borderRadius: 10, padding: '10px 12px', fontSize: 12, color: 'var(--muted)', lineHeight: 1.7 }}>
+                <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{TYPE_META[form.type as ScrTab]?.icon} {TYPE_META[form.type as ScrTab]?.label}: </span>
+                {SECTION_HINT[form.type as ScrTab]}
+              </div>
+
               {form.method !== 'divar' && (
                 <div>
                   <label style={labelCss}>آدرس دقیق صفحه (URL)</label>
-                  <input style={{ ...inputCss, direction: 'ltr', textAlign: 'left' }} placeholder="https://divar.ir/s/tehran/rent-apartment/abshar?...map_place_hash=1|992|apartment-rent" value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} />
-                  <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 4 }}>برای دیوار: روی نقشهٔ همان محله برو و آدرس را کپی کن — اگر <span style={{ direction: 'ltr', display: 'inline-block' }}>map_place_hash</span> داشته باشد، همهٔ آگهی‌های آن محله مستقیم گرفته می‌شود.</div>
+                  <input style={{ ...inputCss, direction: 'ltr', textAlign: 'left' }} placeholder="https://example.com/list?page={page}" value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} />
+                  <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 4 }}>آدرس صفحهٔ لیست هر سایتی را بگذارید. برای واکشی چندصفحه‌ای می‌توانید <span style={{ direction: 'ltr', display: 'inline-block' }}>{'{page}'}</span> را در آدرس بگذارید (مثلاً <span style={{ direction: 'ltr', display: 'inline-block' }}>?page={'{page}'}</span>)؛ اگر نگذارید، خودکار <span style={{ direction: 'ltr', display: 'inline-block' }}>?page=N</span> اضافه می‌شود.</div>
                 </div>
               )}
 
@@ -1185,6 +1225,24 @@ function ScraperView() {
                 </div>
               </div>
 
+              {/* واکشی چندصفحه‌ای + پروکسی — برای وب‌اسکرپ هر سایتی */}
+              {form.method !== 'divar' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignItems: 'end' }}>
+                  <div>
+                    <label style={labelCss}>تعداد صفحات (واکشی چندصفحه‌ای)</label>
+                    <input type="number" min={1} max={20} style={{ ...inputCss, direction: 'ltr', textAlign: 'left' }} value={form.pages} onChange={e => setForm({ ...form, pages: e.target.value })} />
+                    <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 4 }}>۱ یعنی فقط همان صفحه. بیشتر = پیمایش خودکار صفحات بعدی تا پایان نتایج.</div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg2)', borderRadius: 10, padding: '10px 12px' }}>
+                    <Toggle on={form.useProxy} onChange={v => setForm({ ...form, useProxy: v })} />
+                    <div>
+                      <div style={{ fontSize: 12.5, fontWeight: 600 }}>واکشی از طریق پروکسی</div>
+                      <div style={{ fontSize: 10.5, color: 'var(--faint)' }}>برای سایت‌های فیلتر/غیرقابل‌دسترس مستقیم (از پروکسی دیوار استفاده می‌شود).</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* CSS detailed config */}
               {form.method === 'css' && (
                 <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -1194,9 +1252,12 @@ function ScraperView() {
                     <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 4 }}>هر کارت/ردیف در صفحه (مثلاً <span style={{ direction: 'ltr', display: 'inline-block' }}>.kt-post-card</span>).</div>
                   </div>
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, gap: 6, flexWrap: 'wrap' }}>
                       <label style={{ ...labelCss, marginBottom: 0 }}>نگاشت فیلدها (انتخابگر داخل کانتینر)</label>
-                      <button onClick={addField} style={{ fontSize: 11.5, padding: '4px 10px', borderRadius: 8, border: '1px solid var(--gold)', color: 'var(--gold)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>+ فیلد</button>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button onClick={() => setForm({ ...form, fields: SECTION_FIELDS[form.type as ScrTab].map(f => ({ ...f })) })} style={{ fontSize: 11.5, padding: '4px 10px', borderRadius: 8, border: '1px solid var(--line2)', color: 'var(--muted)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>↻ فیلدهای پیش‌فرض این بخش</button>
+                        <button onClick={addField} style={{ fontSize: 11.5, padding: '4px 10px', borderRadius: 8, border: '1px solid var(--gold)', color: 'var(--gold)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>+ فیلد</button>
+                      </div>
                     </div>
                     {form.fields.length === 0 && <div style={{ fontSize: 11.5, color: 'var(--faint)' }}>حداقل فیلد «عنوان» را اضافه کنید.</div>}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

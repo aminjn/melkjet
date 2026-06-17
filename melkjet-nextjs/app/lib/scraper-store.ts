@@ -35,6 +35,8 @@ export interface Source {
   container?: string         // selector for each item/card on the page
   fields?: FieldRule[]       // per-field selectors inside the container
   meta?: Record<string, string>  // fixed values merged into every item (شهر، محله، نوع آگهی، تخصص…)
+  pages?: number             // تعداد صفحات برای واکشی چندصفحه‌ای (هر سایت). از {page} در URL یا ?page=N استفاده می‌شود
+  useProxy?: boolean         // واکشی از طریق پروکسی سرور (برای سایت‌های فیلتر/خارج از دسترس مستقیم)
   lastRun: number | null
   lastCount: number
   status: 'idle' | 'ok' | 'error'

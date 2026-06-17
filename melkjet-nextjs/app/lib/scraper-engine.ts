@@ -1,12 +1,26 @@
 import type { Source, Item, Method } from './scraper-store'
 import { parseHTML, queryAll, queryOne, textOf } from './html-select'
 import { scrapeDivar } from './divar'
+import { proxiedRequest } from './proxy-fetch'
+import { getAdminData } from './admin-store'
 
 type RawItem = Omit<Item, 'id' | 'sourceId' | 'sourceName' | 'type' | 'category' | 'scrapedAt' | 'status'>
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
 
-async function fetchPage(url: string): Promise<string> {
+async function fetchPage(url: string, useProxy = false): Promise<string> {
+  // Sites that are filtered/unreachable directly are fetched through the server proxy (HTTPS-over-CONNECT)
+  if (useProxy && /^https:/i.test(url)) {
+    const proxyUrl = getAdminData().divar?.proxyUrl
+    const res = await proxiedRequest(url, {
+      method: 'GET',
+      headers: { 'User-Agent': UA, 'Accept': 'text/html,application/xhtml+xml,application/xml,application/rss+xml,*/*' },
+      proxyUrl,
+      timeout: 20000,
+    })
+    if (res.status < 200 || res.status >= 400) throw new Error(`HTTP ${res.status}`)
+    return res.body
+  }
   const ctrl = new AbortController()
   const t = setTimeout(() => ctrl.abort(), 15000)
   try {
@@ -19,6 +33,19 @@ async function fetchPage(url: string): Promise<string> {
     return await res.text()
   } finally {
     clearTimeout(t)
+  }
+}
+
+// Build the URL for page N. Uses {page} placeholder if present, else appends ?page=N.
+function pageUrl(base: string, n: number): string {
+  if (base.includes('{page}')) return base.replace(/\{page\}/g, String(n))
+  if (n <= 1) return base
+  try {
+    const u = new URL(base)
+    u.searchParams.set('page', String(n))
+    return u.toString()
+  } catch {
+    return base + (base.includes('?') ? '&' : '?') + 'page=' + n
   }
 }
 
@@ -143,24 +170,11 @@ function looksLikeXml(text: string) {
   return head.includes('<rss') || head.includes('<feed') || head.includes('<?xml')
 }
 
-/** Scrape a source. Returns extracted raw items. Throws on network errors. */
-export async function scrapeSource(source: Source): Promise<RawItem[]> {
+// Extract items from a single already-fetched page, honoring the chosen method.
+async function extractFromText(text: string, source: Source): Promise<RawItem[]> {
   const method: Method = source.method
-
-  // Divar: use the official-API connector (via proxy) for the 'divar' method
-  // OR whenever the URL points at divar.ir (so pasting a Divar URL just works).
-  let isDivarUrl = false
-  try { isDivarUrl = /(^|\.)divar\.ir$/i.test(new URL(source.url).hostname) } catch {}
-  if (method === 'divar' || isDivarUrl) {
-    return scrapeDivar(source)
-  }
-
-  const text = await fetchPage(source.url)
-
   // Detailed CSS extraction takes priority when configured
-  if (method === 'css') {
-    return parseCss(text, source)
-  }
+  if (method === 'css') return parseCss(text, source)
 
   if (method === 'rss' || (method === 'auto' && looksLikeXml(text))) {
     const items = parseRSS(text)
@@ -176,7 +190,7 @@ export async function scrapeSource(source: Source): Promise<RawItem[]> {
     const feed = findFeedLink(text, source.url)
     if (feed) {
       try {
-        const x = await fetchPage(feed)
+        const x = await fetchPage(feed, source.useProxy)
         const items = parseRSS(x)
         if (items.length) return items
       } catch { /* ignore, fall through */ }
@@ -192,6 +206,50 @@ export async function scrapeSource(source: Source): Promise<RawItem[]> {
     if (items.length) return items
   }
   return []
+}
+
+/** Scrape a source (any website). Returns extracted raw items. Throws on network errors. */
+export async function scrapeSource(source: Source): Promise<RawItem[]> {
+  const method: Method = source.method
+
+  // Divar: use the official-API connector (via proxy) for the 'divar' method
+  // OR whenever the URL points at divar.ir (so pasting a Divar URL just works).
+  let isDivarUrl = false
+  try { isDivarUrl = /(^|\.)divar\.ir$/i.test(new URL(source.url).hostname) } catch {}
+  if (method === 'divar' || isDivarUrl) {
+    return scrapeDivar(source)
+  }
+
+  // Generic multi-page scraping: works on ANY site (css / auto / jsonld / og / rss).
+  const pages = Math.max(1, Math.min(20, Number(source.pages) || 1))
+  if (pages === 1) {
+    const text = await fetchPage(source.url, source.useProxy)
+    return extractFromText(text, source)
+  }
+
+  const out: RawItem[] = []
+  const seen = new Set<string>()
+  let firstError: any = null
+  for (let n = 1; n <= pages; n++) {
+    let items: RawItem[] = []
+    try {
+      const text = await fetchPage(pageUrl(source.url, n), source.useProxy)
+      items = await extractFromText(text, source)
+    } catch (e) {
+      if (n === 1) { firstError = e; break }   // page 1 failing is a real error
+      break                                     // later pages failing → just stop
+    }
+    if (!items.length) break                    // no more results → stop paging
+    let fresh = 0
+    for (const it of items) {
+      const key = (it.url || '') + '|' + it.title
+      if (seen.has(key)) continue
+      seen.add(key); out.push(it); fresh++
+    }
+    if (!fresh) break                           // page repeated previous results → stop
+  }
+  if (firstError) throw firstError
+  return out
 }
 
 // Discover a feed URL from <link rel="alternate" type="application/rss+xml" href="…">
