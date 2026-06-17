@@ -10,7 +10,7 @@ interface Item {
   owner?: string; sourceName: string; status: string; scrapedAt: number; meta?: Record<string, string>
 }
 interface Fact { label: string; value: string }
-interface Analysis { summary: string; pros: string[]; cons: string[]; scores: Record<string, number>; confidence: number }
+interface Analysis { summary: string; pros: string[]; cons: string[]; scores: Record<string, number>; confidence: number; facts?: Fact[]; amenities?: string[] }
 
 function toFa(n: number | string): string { return String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d]) }
 function timeAgo(ts: number): string {
@@ -46,6 +46,7 @@ export default function PropertyPage() {
   const [gallery, setGallery] = useState<string[]>([])
   const [activeImg, setActiveImg] = useState(0)
   const [facts, setFacts] = useState<Fact[]>([])
+  const [aiAmenities, setAiAmenities] = useState<string[]>([])
   const [analysis, setAnalysis] = useState<Analysis | null>(null)
   const [aiError, setAiError] = useState('')
   const [similar, setSimilar] = useState<Item[]>([])
@@ -67,7 +68,14 @@ export default function PropertyPage() {
       const m = (it.url || '').match(/divar\.ir\/v\/([A-Za-z0-9_-]+)/)
       const finishAnalyze = (fct: Fact[], desc: string) => {
         fetch('/api/ai/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: it.title, price: it.price, location: it.location, facts: fct, description: desc }) })
-          .then(r => r.json()).then(a => { if (a.ok && a.analysis) setAnalysis(a.analysis); else setAiError(a.error || 'تحلیل در دسترس نیست') }).catch(() => setAiError('خطا در ارتباط با هوش مصنوعی'))
+          .then(r => r.json()).then(a => {
+            if (a.ok && a.analysis) {
+              setAnalysis(a.analysis)
+              // if Divar didn't give structured facts, use the AI-extracted ones
+              if (!fct.length && a.analysis.facts?.length) setFacts(a.analysis.facts)
+              if (a.analysis.amenities?.length) setAiAmenities(a.analysis.amenities)
+            } else setAiError(a.error || 'تحلیل در دسترس نیست')
+          }).catch(() => setAiError('خطا در ارتباط با هوش مصنوعی'))
       }
       if (m) {
         fetch(`/api/divar/post?token=${m[1]}`).then(r => r.ok ? r.json() : {}).then((g: any) => {
@@ -87,7 +95,8 @@ export default function PropertyPage() {
   const images = gallery.length ? gallery : (item?.image ? [item.image] : [])
   const amenities = (() => {
     const text = (item?.excerpt || '') + ' ' + facts.map(f => f.label + ' ' + f.value).join(' ')
-    return AMENITY_WORDS.filter(w => text.includes(w))
+    const fromText = AMENITY_WORDS.filter(w => text.includes(w))
+    return Array.from(new Set([...fromText, ...aiAmenities]))
   })()
   const perMeter = (() => {
     const area = parseFloat((facts.find(f => f.label === 'متراژ')?.value || '').replace(/[^\d.]/g, ''))
