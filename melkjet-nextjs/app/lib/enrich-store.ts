@@ -4,6 +4,7 @@ import { join } from 'path'
 const FILE = join(process.cwd(), '.enrich-data.json')
 
 export interface Enrichment {
+  v?: number             // نسخهٔ کش — برای باطل‌کردن ورودی‌های قدیمی/خراب
   gallery?: string[]
   facts?: { label: string; value: string }[]
   amenities?: string[]
