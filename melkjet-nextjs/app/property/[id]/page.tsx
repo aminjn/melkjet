@@ -27,6 +27,9 @@ export default function PropertyPage() {
   const [loading, setLoading] = useState(true)
   const [gallery, setGallery] = useState<string[]>([])
   const [activeImg, setActiveImg] = useState(0)
+  const [facts, setFacts] = useState<{ label: string; value: string }[]>([])
+  const [analysis, setAnalysis] = useState('')
+  const [analyzing, setAnalyzing] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -34,17 +37,42 @@ export default function PropertyPage() {
       .then(r => (r.ok ? r.json() : { item: null }))
       .then(d => {
         setItem(d.item); setLoading(false)
-        // For Divar items, fetch the full photo gallery by token
+        // For Divar items, fetch the full photo gallery + facts by token
         const m = (d.item?.url || '').match(/divar\.ir\/v\/([A-Za-z0-9_-]+)/)
         if (m) {
           fetch(`/api/divar/post?token=${m[1]}`)
-            .then(r => r.ok ? r.json() : { images: [] })
-            .then(g => { if (g.images?.length) setGallery(g.images); if (g.description) setItem((it: Item | null) => it ? { ...it, excerpt: g.description } : it) })
+            .then(r => r.ok ? r.json() : {})
+            .then((g: any) => { if (g.images?.length) setGallery(g.images); if (g.facts?.length) setFacts(g.facts); if (g.description) setItem((it: Item | null) => it ? { ...it, excerpt: g.description } : it) })
             .catch(() => {})
         }
       })
       .catch(() => setLoading(false))
   }, [id])
+
+  const [phone, setPhone] = useState<string | null>(null)
+  const [gettingPhone, setGettingPhone] = useState(false)
+  const getContact = async () => {
+    if (!item || gettingPhone) return
+    const m = (item.url || '').match(/divar\.ir\/v\/([A-Za-z0-9_-]+)/)
+    if (!m) return
+    setGettingPhone(true)
+    try {
+      const r = await fetch(`/api/divar/contact?token=${m[1]}`)
+      const d = await r.json()
+      setPhone(d.phone || 'شماره در دسترس نیست')
+    } catch { setPhone('خطا') } finally { setGettingPhone(false) }
+  }
+
+  const analyze = async () => {
+    if (!item || analyzing) return
+    setAnalyzing(true); setAnalysis('')
+    const info = `عنوان: ${item.title}\nقیمت: ${item.price || '-'}\nموقعیت: ${item.location || '-'}\n${facts.map(f => `${f.label}: ${f.value}`).join('\n')}\nتوضیحات: ${(item.excerpt || '').slice(0, 1000)}`
+    try {
+      const r = await fetch('/api/ai/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agent: 'pricing', input: `این آگهی ملک را تحلیل کن: نکات مثبت، نکات منفی، برآورد منصفانهٔ قیمت و توصیه به خریدار. مختصر و فارسی.\n\n${info}` }) })
+      const d = await r.json()
+      setAnalysis(d.ok ? d.text : `⚠ ${d.error || 'خطا'}`)
+    } catch { setAnalysis('⚠ خطا در ارتباط') } finally { setAnalyzing(false) }
+  }
 
   const images = gallery.length ? gallery : (item?.image ? [item.image] : [])
 
@@ -118,11 +146,35 @@ export default function PropertyPage() {
                 )}
               </div>
 
+              {/* Facts */}
+              {facts.length > 0 && (
+                <div className="mjp-facts" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(facts.length, 4)},1fr)`, gap: 12 }}>
+                  {facts.slice(0, 8).map(f => (
+                    <div key={f.label} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: '14px 12px', textAlign: 'center' }}>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)' }}>{f.value}</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4 }}>{f.label}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* AI analysis */}
+              <div style={{ position: 'relative', background: 'var(--surface)', border: '1px solid var(--gold)', borderRadius: 18, padding: 22, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: analysis || analyzing ? 14 : 0, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ width: 34, height: 34, borderRadius: 10, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, color: '#16140f', fontWeight: 800 }}>✦</span>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gold)' }}>تحلیل هوشمند ملک‌جت</div>
+                  </div>
+                  {!analysis && <button onClick={analyze} disabled={analyzing} style={{ padding: '8px 16px', borderRadius: 10, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', border: 'none', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', opacity: analyzing ? 0.6 : 1 }}>{analyzing ? 'در حال تحلیل…' : 'تحلیل این ملک'}</button>}
+                </div>
+                {analysis && <p style={{ fontSize: 14.5, lineHeight: 1.95, color: 'var(--text)', whiteSpace: 'pre-wrap' }}>{analysis}</p>}
+              </div>
+
               {/* Description */}
               {item.excerpt && (
                 <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 20 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 10 }}>توضیحات</div>
-                  <p style={{ fontSize: 14.5, lineHeight: 1.9, color: 'var(--text)' }}>{item.excerpt}</p>
+                  <p style={{ fontSize: 14.5, lineHeight: 1.9, color: 'var(--text)', whiteSpace: 'pre-wrap' }}>{item.excerpt}</p>
                 </div>
               )}
 
@@ -154,13 +206,15 @@ export default function PropertyPage() {
                   </div>
                 )}
 
-                {item.phone ? (
-                  <a href={`tel:${item.phone}`} style={{ display: 'block', textAlign: 'center', padding: '13px', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontWeight: 800 }}>
-                    ☎ تماس — {item.phone}
+                {(item.phone || (phone && /^\d/.test(phone))) ? (
+                  <a href={`tel:${item.phone || phone}`} style={{ display: 'block', textAlign: 'center', padding: '13px', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontWeight: 800 }}>
+                    ☎ تماس — {item.phone || phone}
                   </a>
+                ) : phone ? (
+                  <div style={{ textAlign: 'center', padding: '13px', borderRadius: 12, background: 'var(--bg2)', color: 'var(--muted)', fontSize: 13 }}>{phone}</div>
                 ) : (
-                  <button style={{ width: '100%', padding: '13px', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', border: 'none', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', fontSize: 14 }}>
-                    دریافت اطلاعات تماس
+                  <button onClick={getContact} disabled={gettingPhone} style={{ width: '100%', padding: '13px', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', border: 'none', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, opacity: gettingPhone ? 0.6 : 1 }}>
+                    {gettingPhone ? 'در حال دریافت…' : 'دریافت اطلاعات تماس'}
                   </button>
                 )}
               </div>

@@ -36,11 +36,26 @@ export async function GET(req: NextRequest) {
       if (images.length >= 15) break
     }
 
-    // Try to pull a longer description (best-effort)
-    const descMatch = res.body.match(/"description"\s*:\s*"((?:[^"\\]|\\.){20,})"/)
-    const description = descMatch ? descMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\//g, '/') : undefined
+    const unesc = (s: string) => s.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\//g, '/')
 
-    return NextResponse.json({ images, description })
+    // Longest description (the full توضیحات)
+    let description: string | undefined
+    const descs = [...res.body.matchAll(/"description"\s*:\s*"((?:[^"\\]|\\.){20,})"/g)].map(m => unesc(m[1]))
+    if (descs.length) description = descs.sort((a, b) => b.length - a.length)[0]
+
+    // Key facts: title/value pairs where one side is a known real-estate label
+    const LABELS = ['متراژ', 'ساخت', 'سن بنا', 'سال ساخت', 'اتاق', 'تعداد اتاق', 'طبقه', 'ودیعه', 'اجاره', 'اجارهٔ ماهانه', 'قیمت', 'قیمت کل', 'قیمت هر متر', 'پارکینگ', 'آسانسور', 'انباری', 'بالکن', 'جهت ساختمان', 'نوع', 'سند']
+    const factsMap: Record<string, string> = {}
+    const addPair = (a: string, b: string) => {
+      a = unesc(a).trim(); b = unesc(b).trim()
+      if (LABELS.includes(a) && b && !factsMap[a]) factsMap[a] = b
+      else if (LABELS.includes(b) && a && !factsMap[b]) factsMap[b] = a
+    }
+    for (const m of res.body.matchAll(/"title":"([^"]{1,30})","value":"([^"]{1,40})"/g)) addPair(m[1], m[2])
+    for (const m of res.body.matchAll(/"value":"([^"]{1,40})","title":"([^"]{1,30})"/g)) addPair(m[2], m[1])
+    const facts = Object.entries(factsMap).map(([label, value]) => ({ label, value }))
+
+    return NextResponse.json({ images, description, facts })
   } catch (e: any) {
     return NextResponse.json({ images: [], reason: e?.message || 'error' })
   }

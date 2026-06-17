@@ -1472,6 +1472,8 @@ function APIView() {
 function UsersView() {
   const [search, setSearch] = useState('')
   const [openRole, setOpenRole] = useState<string | null>(null)
+  const [owners, setOwners] = useState<{ id: string; name: string; phone?: string; count: number; firstSeen: number }[]>([])
+  useEffect(() => { fetch('/api/admin/owners').then(r => r.ok ? r.json() : { owners: [] }).then(d => setOwners(d.owners || [])) }, [])
   const users = [
     { name: 'سارا محمدی', email: 'sara@example.com', role: 'مشاور', plan: 'Pro', status: 'فعال', joined: '۱۴۰۳/۰۱/۱۵' },
     { name: 'امیر رضایی', email: 'amir@example.com', role: 'آژانس', plan: 'Business', status: 'فعال', joined: '۱۴۰۲/۱۱/۰۸' },
@@ -1526,6 +1528,27 @@ function UsersView() {
             ))}
           </tbody>
         </table>
+      </Card>
+
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>آگهی‌دهندگان واکشی‌شده ({owners.length})</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>هر آگهی‌دهنده یک کاربر؛ آگهی‌های تکراری از یک شخص به همین کاربر وصل می‌شوند.</div>
+        {owners.length === 0 ? (
+          <div style={{ color: 'var(--muted)', fontSize: 13, padding: '14px 0' }}>هنوز آگهی‌دهنده‌ای واکشی نشده. یک منبع دیوار اجرا کنید.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {owners.slice(0, 50).map(o => (
+              <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg2)', borderRadius: 10, padding: '10px 14px' }}>
+                <span style={{ width: 34, height: 34, borderRadius: '50%', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, flexShrink: 0 }}>{(o.name || '؟').slice(0, 1)}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{o.name}</div>
+                  {o.phone && <div style={{ fontSize: 12, color: 'var(--muted)', direction: 'ltr', textAlign: 'right' }}>{o.phone}</div>}
+                </div>
+                <Badge label={`${o.count} آگهی`} color="#5b9bd5" />
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
 
       <Card>
