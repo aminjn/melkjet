@@ -10,7 +10,7 @@ import { analyzeListing } from '@/app/lib/analyze'
 // انجام می‌شود (نه fetch به دامنهٔ عمومی) تا به شبکهٔ بیرونی سرور وابسته نباشد.
 
 const inflight = new Map<string, Promise<Enrichment>>()
-const V = 2  // نسخهٔ کش؛ با بالا بردن این عدد، کش‌های قدیمی نادیده گرفته می‌شوند
+const V = 3  // نسخهٔ کش؛ با بالا بردن این عدد، کش‌های قدیمی نادیده گرفته می‌شوند
 
 async function generate(id: string): Promise<Enrichment> {
   const it = getItemById(id)
