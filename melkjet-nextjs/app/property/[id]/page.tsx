@@ -11,7 +11,15 @@ interface Item {
   owner?: string; sourceName: string; status: string; scrapedAt: number; meta?: Record<string, string>
 }
 interface Fact { label: string; value: string }
-interface Analysis { summary: string; pros: string[]; cons: string[]; scores: Record<string, number>; confidence: number; facts?: Fact[]; amenities?: string[] }
+interface Analysis {
+  summary: string; pros: string[]; cons: string[]; scores: Record<string, number>; confidence: number
+  facts?: Fact[]; amenities?: string[]
+  nearby?: { label: string; time: string }[]
+  priceTrend?: { values: number[]; yearGrowth: string; forecast: string }
+  originality?: { verdict: string; fakeProbability: string }
+}
+const MONTHS = ['تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند', 'فروردین', 'اردیبهشت', 'خرداد']
+const NEARBY_ICONS: Record<string, string> = { مترو: '🚇', 'مرکز خرید': '🛍', بیمارستان: '🏥', پارک: '🌳', مدرسه: '🏫', اتوبوس: '🚌', بانک: '🏦' }
 
 function toFa(n: number | string): string { return String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d]) }
 function timeAgo(ts: number): string {
@@ -56,6 +64,21 @@ export default function PropertyPage() {
   const [phone, setPhone] = useState<string | null>(null)
   const [gettingPhone, setGettingPhone] = useState(false)
   const [loan, setLoan] = useState(5_000_000_000)
+  const [ask, setAsk] = useState('')
+  const [askMsgs, setAskMsgs] = useState<{ role: 'user' | 'ai'; text: string }[]>([])
+  const [asking, setAsking] = useState(false)
+
+  const sendAsk = async (q?: string) => {
+    const content = (q ?? ask).trim()
+    if (!content || !item || asking) return
+    setAsk(''); setAskMsgs(m => [...m, { role: 'user', text: content }]); setAsking(true)
+    const ctx = `دربارهٔ این آگهی پاسخ بده:\nعنوان: ${item.title}\nقیمت: ${item.price}\nموقعیت: ${item.location}\n${facts.map(f => `${f.label}: ${f.value}`).join('\n')}\nتوضیحات: ${(item.excerpt || '').slice(0, 800)}\n\nسؤال: ${content}`
+    try {
+      const r = await fetch('/api/ai/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agent: 'chat', input: ctx }) })
+      const d = await r.json()
+      setAskMsgs(m => [...m, { role: 'ai', text: d.ok ? d.text : `⚠ ${d.error || 'خطا'}` }])
+    } catch { setAskMsgs(m => [...m, { role: 'ai', text: '⚠ خطا در ارتباط' }]) } finally { setAsking(false) }
+  }
 
   useEffect(() => {
     if (!id) return
@@ -235,6 +258,49 @@ export default function PropertyPage() {
                 </div>
               )}
 
+              {/* price trend */}
+              {analysis?.priceTrend?.values?.length === 12 && (
+                <div style={card}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 8 }}>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700 }}>روند قیمت در ۱۲ ماه گذشته</div>
+                      <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>میانگین قیمت هر متر در {item.meta?.['محله'] || item.location}</div>
+                    </div>
+                    <div style={{ textAlign: 'left' }}>
+                      <div style={{ color: '#5fd98a', fontWeight: 700, fontSize: 13 }}>↗ {analysis.priceTrend.yearGrowth} رشد سالانه</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>پیش‌بینی: {analysis.priceTrend.forecast}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 140 }}>
+                    {analysis.priceTrend.values.map((v, i) => {
+                      const max = Math.max(...analysis.priceTrend!.values)
+                      const last = i === 11
+                      return (
+                        <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                          <div style={{ width: '100%', height: `${(v / max) * 110}px`, borderRadius: 6, background: last ? 'linear-gradient(180deg,var(--gold2),var(--gold))' : 'var(--goldDim)', border: last ? '1px solid var(--gold)' : 'none' }} />
+                          <span style={{ fontSize: 9.5, color: 'var(--faint)' }}>{MONTHS[i]}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* nearby */}
+              {analysis?.nearby?.length ? (
+                <div style={card}>
+                  <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>دسترسی‌های اطراف</div>
+                  <div className="mjp-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    {analysis.nearby.map(n => (
+                      <div key={n.label} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 12, background: 'var(--bg2)', border: '1px solid var(--line)' }}>
+                        <span style={{ fontSize: 22 }}>{NEARBY_ICONS[n.label] || '📍'}</span>
+                        <div><div style={{ fontSize: 13, fontWeight: 600 }}>{n.label}</div><div style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>{n.time}</div></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
               {/* map */}
               {geo && (
                 <div style={card}>
@@ -301,6 +367,44 @@ export default function PropertyPage() {
                 ) : (
                   <button onClick={getContact} disabled={gettingPhone} style={{ width: '100%', padding: '13px', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', border: 'none', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, opacity: gettingPhone ? 0.6 : 1 }}>{gettingPhone ? 'در حال دریافت…' : 'دریافت اطلاعات تماس'}</button>
                 )}
+              </div>
+
+              {/* originality badge */}
+              {analysis?.originality && (
+                <div style={{ ...card, padding: 16, display: 'flex', alignItems: 'center', gap: 12, border: '1px solid rgba(95,217,138,0.3)' }}>
+                  <span style={{ width: 34, height: 34, borderRadius: '50%', background: 'rgba(95,217,138,0.15)', color: '#5fd98a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>✓</span>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700 }}>این آگهی توسط ملک‌جت بررسی و <span style={{ color: '#5fd98a' }}>{analysis.originality.verdict}</span> تشخیص داده شد</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>احتمال جعلی بودن: {analysis.originality.fakeProbability}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* ask about this property */}
+              <div style={{ ...card, border: '1px solid var(--gold)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
+                  <span style={{ width: 30, height: 30, borderRadius: 9, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16140f', fontWeight: 800 }}>✦</span>
+                  <div><div style={{ fontWeight: 700, fontSize: 13.5 }}>دربارهٔ این ملک بپرس</div><div style={{ fontSize: 11, color: 'var(--muted)' }}>دستیار همین آگهی</div></div>
+                </div>
+                <div style={{ maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
+                  {askMsgs.length === 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {['کیفیت ساخت؟', 'برای سرمایه‌گذاری؟', 'قابل مذاکره؟'].map(c => (
+                        <button key={c} onClick={() => sendAsk(c)} style={{ padding: '7px 11px', borderRadius: 999, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--muted)', fontFamily: 'inherit', fontSize: 12, cursor: 'pointer' }}>{c}</button>
+                      ))}
+                    </div>
+                  )}
+                  {askMsgs.map((m, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-start' : 'flex-end' }}>
+                      <div style={{ maxWidth: '88%', fontSize: 12.5, lineHeight: 1.8, padding: '8px 11px', borderRadius: 12, whiteSpace: 'pre-wrap', background: m.role === 'user' ? 'linear-gradient(140deg,var(--gold2),var(--gold))' : 'var(--bg2)', color: m.role === 'user' ? '#16140f' : 'var(--text)' }}>{m.text}</div>
+                    </div>
+                  ))}
+                  {asking && <div style={{ fontSize: 12, color: 'var(--muted)' }}>در حال پاسخ…</div>}
+                </div>
+                <div style={{ display: 'flex', gap: 8, background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 12, padding: '6px 6px 6px 12px', alignItems: 'center' }}>
+                  <input value={ask} onChange={e => setAsk(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') sendAsk() }} placeholder="سؤالت را بپرس…" style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', color: 'var(--text)', fontFamily: 'inherit', fontSize: 13 }} />
+                  <button onClick={() => sendAsk()} disabled={asking} style={{ width: 32, height: 32, border: 'none', borderRadius: 9, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', cursor: 'pointer', fontWeight: 800, opacity: asking ? 0.6 : 1 }}>↑</button>
+                </div>
               </div>
             </div>
           </section>
