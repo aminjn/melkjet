@@ -61,6 +61,9 @@ export interface Item {
   meta?: Record<string, string>   // شهر، محله، نوع آگهی، تخصص …
   featured?: boolean
   edited?: boolean
+  aiReason?: string               // علت تأیید/رد توسط هوش مصنوعی
+  aiScore?: number                // امتیاز کیفیت/اعتبار ۰-۱۰۰
+  moderatedAt?: number
   scrapedAt: number
   status: ItemStatus
 }
@@ -173,6 +176,17 @@ export function listItems(type?: SourceType, opts?: { category?: string; publicO
 
 export function getItemById(itemId: string): Item | null {
   return load().items.find(i => i.id === itemId) || null
+}
+
+// Items awaiting AI moderation (pending, not yet moderated)
+export function pendingForModeration(limit = 25): Item[] {
+  return load().items.filter(i => i.status === 'pending' && !i.moderatedAt).slice(0, limit)
+}
+
+export function setModeration(itemId: string, status: ItemStatus, reason: string, score: number) {
+  const db = load()
+  const it = db.items.find(i => i.id === itemId)
+  if (it) { it.status = status; it.aiReason = reason; it.aiScore = score; it.moderatedAt = Date.now(); save(db) }
 }
 
 export function setItemStatus(itemId: string, status: ItemStatus) {

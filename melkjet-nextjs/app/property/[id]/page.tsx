@@ -14,12 +14,18 @@ interface Fact { label: string; value: string }
 interface Analysis {
   summary: string; pros: string[]; cons: string[]; scores: Record<string, number>; confidence: number
   facts?: Fact[]; amenities?: string[]
-  nearby?: { label: string; time: string }[]
+  nearby?: { type?: string; name?: string; label?: string; time: string }[]
   priceTrend?: { values: number[]; yearGrowth: string; forecast: string }
   originality?: { verdict: string; fakeProbability: string }
 }
 const MONTHS = ['تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند', 'فروردین', 'اردیبهشت', 'خرداد']
-const NEARBY_ICONS: Record<string, string> = { مترو: '🚇', 'مرکز خرید': '🛍', بیمارستان: '🏥', پارک: '🌳', مدرسه: '🏫', اتوبوس: '🚌', بانک: '🏦' }
+const NEARBY_ICONS: Record<string, string> = { مترو: '🚇', 'مرکز خرید': '🛍', بیمارستان: '🏥', پارک: '🌳', مدرسه: '🏫', اتوبوس: '🚌', بانک: '🏦', بزرگراه: '🛣', دانشگاه: '🎓', پاساژ: '🛍', بوستان: '🌳' }
+// نزدیک‌ترین آیکن را بر اساس نوع یا کلمات کلیدی نام محل پیدا کن
+function nearbyIcon(n: { type?: string; name?: string; label?: string }): string {
+  const hay = `${n.type || ''} ${n.name || ''} ${n.label || ''}`
+  for (const [k, v] of Object.entries(NEARBY_ICONS)) if (hay.includes(k)) return v
+  return '📍'
+}
 
 function toFa(n: number | string): string { return String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d]) }
 function timeAgo(ts: number): string {
@@ -307,10 +313,10 @@ export default function PropertyPage() {
                 <div style={card}>
                   <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>دسترسی‌های اطراف</div>
                   <div className="mjp-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                    {analysis.nearby.map(n => (
-                      <div key={n.label} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 12, background: 'var(--bg2)', border: '1px solid var(--line)' }}>
-                        <span style={{ fontSize: 22 }}>{NEARBY_ICONS[n.label] || '📍'}</span>
-                        <div><div style={{ fontSize: 13, fontWeight: 600 }}>{n.label}</div><div style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>{n.time}</div></div>
+                    {analysis.nearby.map((n, i) => (
+                      <div key={(n.name || n.label || '') + i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 12, background: 'var(--bg2)', border: '1px solid var(--line)' }}>
+                        <span style={{ fontSize: 22 }}>{nearbyIcon(n)}</span>
+                        <div style={{ minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 600 }}>{n.name || n.label}</div><div style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>{[n.type && n.name ? n.type : '', n.time].filter(Boolean).join(' · ')}</div></div>
                       </div>
                     ))}
                   </div>

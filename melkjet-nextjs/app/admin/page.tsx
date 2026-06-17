@@ -125,13 +125,13 @@ function Card({ children, style }: { children: React.ReactNode; style?: React.CS
   )
 }
 
-function GoldButton({ children, onClick, style }: { children: React.ReactNode; onClick?: () => void; style?: React.CSSProperties }) {
+function GoldButton({ children, onClick, style, disabled }: { children: React.ReactNode; onClick?: () => void; style?: React.CSSProperties; disabled?: boolean }) {
   return (
-    <button onClick={onClick} style={{
+    <button onClick={onClick} disabled={disabled} style={{
       background: 'linear-gradient(140deg,var(--gold2),var(--gold))',
       color: '#16140f', border: 'none', borderRadius: 11, padding: '10px 20px',
-      fontWeight: 700, fontSize: 13.5, cursor: 'pointer', fontFamily: 'inherit',
-      boxShadow: '0 8px 22px -10px var(--gold)', ...style
+      fontWeight: 700, fontSize: 13.5, cursor: disabled ? 'default' : 'pointer', fontFamily: 'inherit',
+      boxShadow: '0 8px 22px -10px var(--gold)', opacity: disabled ? .6 : 1, ...style
     }}>
       {children}
     </button>
@@ -266,8 +266,9 @@ function timeAgo(ts: number | null): string {
 // ─── مدیریت آگهی‌ها و محتوای واکشی‌شده ─────────────────────────────────────
 interface MItem {
   id: string; type: string; category?: string; title: string; price?: string
-  location?: string; image?: string; url?: string; excerpt?: string; phone?: string
+  location?: string; image?: string; url?: string; excerpt?: string; phone?: string; owner?: string
   sourceName: string; status: string; featured?: boolean; edited?: boolean; scrapedAt: number
+  aiReason?: string; aiScore?: number; moderatedAt?: number
 }
 const M_TYPES: { k: string; label: string }[] = [
   { k: '', label: 'همه' }, { k: 'listing', label: 'آگهی' }, { k: 'directory', label: 'پروفایل/دفتر' },
@@ -286,6 +287,8 @@ function ListingsView() {
   const [status, setStatus] = useState('')
   const [q, setQ] = useState('')
   const [edit, setEdit] = useState<MItem | null>(null)
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [aiBusy, setAiBusy] = useState(false)
   const [sel, setSel] = useState<Set<string>>(new Set())
 
   const load = async () => {
@@ -328,6 +331,26 @@ function ListingsView() {
     const ids = [...sel]; setItems(items.map(i => sel.has(i.id) ? { ...i, featured } : i)); setSel(new Set())
     await Promise.all(ids.map(id => fetch('/api/admin/scraper/items', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, patch: { featured } }) })))
   }
+  // ویرایش دسته‌ای: فقط فیلدهایی که پر شده‌اند روی همهٔ انتخاب‌شده‌ها اعمال می‌شود
+  const bulkEditSave = async (patchData: Record<string, string>) => {
+    const fields = Object.fromEntries(Object.entries(patchData).filter(([, v]) => v !== '' && v != null))
+    if (!sel.size || !Object.keys(fields).length) { setBulkOpen(false); return }
+    const ids = [...sel]
+    setItems(items.map(i => sel.has(i.id) ? { ...i, ...fields, edited: true } : i)); setSel(new Set()); setBulkOpen(false)
+    await Promise.all(ids.map(id => fetch('/api/admin/scraper/items', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, patch: fields }) })))
+  }
+  // تأیید/رد دسته‌ای با هوش مصنوعی روی موارد انتخاب‌شده
+  const bulkAi = async () => {
+    if (!sel.size || aiBusy) return
+    setAiBusy(true)
+    try {
+      const ids = [...sel]
+      for (const id of ids) {
+        try { await fetch('/api/admin/scraper/moderate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }) } catch {}
+      }
+      await load()
+    } finally { setAiBusy(false) }
+  }
 
   const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '8px 11px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
 
@@ -361,6 +384,8 @@ function ListingsView() {
             <button onClick={() => bulkStatus('approved')} style={{ background: 'transparent', border: '1px solid #5fd98a', color: '#5fd98a', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>✓ تأیید</button>
             <button onClick={() => bulkStatus('rejected')} style={{ background: 'transparent', border: '1px solid #e7a14a', color: '#e7a14a', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>↧ رد</button>
             <button onClick={() => bulkFeature(true)} style={{ background: 'transparent', border: '1px solid var(--gold)', color: 'var(--gold)', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>★ ویژه</button>
+            <button onClick={() => setBulkOpen(true)} style={{ background: 'transparent', border: '1px solid #8a7bd8', color: '#a99bf0', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>✎ ویرایش دسته‌ای</button>
+            <button onClick={bulkAi} disabled={aiBusy} style={{ background: 'transparent', border: '1px solid var(--gold)', color: 'var(--gold)', borderRadius: 8, padding: '5px 12px', cursor: aiBusy ? 'default' : 'pointer', fontFamily: 'inherit', fontSize: 12.5, opacity: aiBusy ? .6 : 1 }}>{aiBusy ? '⏳ در حال بررسی…' : '🤖 بررسی با AI'}</button>
             <button onClick={delSelected} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.4)', color: '#e7674a', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>🗑 حذف</button>
           </>}
         </div>
@@ -381,6 +406,7 @@ function ListingsView() {
                 <div style={{ flex: 1, minWidth: 180 }}>
                   <a href={it.url || '#'} target="_blank" rel="noreferrer" style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text)', textDecoration: 'none', display: 'block', lineHeight: 1.5 }}>{it.featured && '★ '}{it.title}{it.edited && <span style={{ color: 'var(--faint)', fontSize: 10, marginRight: 4 }}>(ویرایش‌شده)</span>}</a>
                   <div style={{ fontSize: 12, color: 'var(--muted)' }}>{[it.location, it.sourceName, it.category].filter(Boolean).join(' · ')}</div>
+                  {it.aiReason && <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ color: 'var(--gold)' }}>🤖</span><span>{it.aiReason}</span>{typeof it.aiScore === 'number' && <span style={{ color: it.aiScore >= 70 ? '#5fd98a' : it.aiScore >= 45 ? '#e7a14a' : '#e7674a', fontWeight: 700 }}>({it.aiScore})</span>}</div>}
                 </div>
                 {it.price && <span style={{ fontWeight: 700, color: 'var(--gold)', fontSize: 13, whiteSpace: 'nowrap' }}>{it.price}</span>}
                 <Badge label={M_STATUS[it.status]?.label || it.status} color={M_STATUS[it.status]?.color || 'var(--faint)'} />
@@ -398,6 +424,42 @@ function ListingsView() {
       </Card>
 
       {edit && <EditItemModal item={edit} onClose={() => setEdit(null)} onSave={saveEdit} />}
+      {bulkOpen && <BulkEditModal count={sel.size} onClose={() => setBulkOpen(false)} onSave={bulkEditSave} />}
+    </div>
+  )
+}
+
+// ویرایش دسته‌ای: مقادیر پر‌شده روی همهٔ آیتم‌های انتخاب‌شده اعمال می‌شوند، فیلدهای خالی دست‌نخورده می‌مانند
+function BulkEditModal({ count, onClose, onSave }: { count: number; onClose: () => void; onSave: (p: Record<string, string>) => void }) {
+  const [f, setF] = useState({ category: '', location: '', price: '', status: '' })
+  const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+  const lab: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', marginBottom: 5, display: 'block', fontWeight: 600 }
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 100, padding: 20, overflowY: 'auto' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 18, padding: 24, width: '100%', maxWidth: 460, margin: 'auto', animation: 'rise .25s ease' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <div style={{ fontWeight: 800, fontSize: 16 }}>ویرایش دسته‌ای</div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 20, cursor: 'pointer' }}>×</button>
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 16 }}>روی {count.toLocaleString('fa-IR')} مورد انتخاب‌شده اعمال می‌شود. فیلدهای خالی تغییری نمی‌کنند.</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div><label style={lab}>دسته‌بندی</label><input style={inp} placeholder="بدون تغییر" value={f.category} onChange={e => setF({ ...f, category: e.target.value })} /></div>
+          <div><label style={lab}>موقعیت (شهر/محله)</label><input style={inp} placeholder="بدون تغییر" value={f.location} onChange={e => setF({ ...f, location: e.target.value })} /></div>
+          <div><label style={lab}>قیمت</label><input style={inp} placeholder="بدون تغییر" value={f.price} onChange={e => setF({ ...f, price: e.target.value })} /></div>
+          <div><label style={lab}>وضعیت</label>
+            <select style={inp} value={f.status} onChange={e => setF({ ...f, status: e.target.value })}>
+              <option value="">بدون تغییر</option>
+              <option value="approved">تأیید‌شده</option>
+              <option value="pending">منتظر</option>
+              <option value="rejected">رد‌شده</option>
+            </select>
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+            <GoldButton onClick={() => onSave(f)} style={{ flex: 1 }}>اعمال روی {count.toLocaleString('fa-IR')} مورد</GoldButton>
+            <OutlineButton onClick={onClose}>انصراف</OutlineButton>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -702,6 +764,16 @@ function ScraperView() {
       setLog(d.results || [])
       if (d.sources) setSources(d.sources)
       await loadItems(tab)
+      // auto-moderate the newly scraped (pending) items with AI
+      const added = (d.results || []).reduce((a: number, x: any) => a + (x.added || 0), 0)
+      if (added > 0) {
+        setLog(l => [...l, { source: '🤖 تأیید خودکار AI', ok: true, added: 0, dup: 0 }])
+        try {
+          let total = 0
+          for (let i = 0; i < 4; i++) { const m = await fetch('/api/admin/scraper/moderate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); const md = await m.json(); if (!md.moderated) break; total += md.moderated }
+          if (total) { setLog(l => [...l, { source: `✓ ${total} آگهی توسط AI بررسی شد`, ok: true, added: 0, dup: 0 }]); await loadItems(tab) }
+        } catch {}
+      }
     } catch {
       setLog([{ source: '—', ok: false, added: 0, dup: 0, error: 'خطای ارتباط با سرور' }])
     } finally { setRunning(null) }
@@ -1441,77 +1513,115 @@ function ReportsView() {
 }
 
 function ModerationView() {
-  const [threshold, setThreshold] = useState(72)
-  const queue = [
-    { id: '#۸۸۴۵', title: 'آپارتمان زعفرانیه', score: 94, verdict: 'تأیید', reason: 'اطلاعات کامل، قیمت منطقی' },
-    { id: '#۸۸۴۴', title: 'ویلا کردان فوری', score: 38, verdict: 'رد', reason: 'قیمت غیرواقعی، تصاویر تکراری' },
-    { id: '#۸۸۴۳', title: 'پنت‌هاوس الهیه', score: 61, verdict: 'بازبینی', reason: 'قیمت بالا، نیاز به تأیید مدارک' },
-    { id: '#۸۸۴۲', title: 'دفتر تجاری ونک', score: 88, verdict: 'تأیید', reason: 'آگهی معتبر از مشاور تأییدشده' },
-    { id: '#۸۸۴۱', title: 'آپارتمان نوساز پونک', score: 55, verdict: 'بازبینی', reason: 'اطلاعات ناقص، متراژ نامشخص' },
-    { id: '#۸۸۴۰', title: 'خانه ویلایی لواسان', score: 91, verdict: 'تأیید', reason: 'مدارک کامل، قیمت بازار' },
-    { id: '#۸۸۳۹', title: 'اجاره روزانه شمال', score: 22, verdict: 'رد', reason: 'محتوای مشکوک، گزارش کاربران' },
-  ]
-  const verdictColor: Record<string, string> = { تأیید: '#5fd98a', رد: '#e7674a', بازبینی: '#e7a14a' }
+  const [items, setItems] = useState<MItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState('')
+
+  const load = async () => {
+    setLoading(true)
+    const r = await fetch('/api/admin/scraper/items?type=listing')
+    if (r.ok) { const d = await r.json(); setItems(d.items as MItem[]) }
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  // اجرای تأیید خودکار AI روی صف منتظر، دسته‌دسته تا تمام شدن
+  const runAuto = async () => {
+    if (busy) return
+    setBusy(true); setProgress('در حال بررسی…')
+    try {
+      let total = 0
+      for (let i = 0; i < 12; i++) {
+        const r = await fetch('/api/admin/scraper/moderate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+        const d = await r.json()
+        if (d.error) { setProgress('⚠ ' + d.error); break }
+        if (!d.moderated) break
+        total += d.moderated
+        setProgress(`${total.toLocaleString('fa-IR')} آگهی بررسی شد…`)
+      }
+      setProgress(total ? `✓ ${total.toLocaleString('fa-IR')} آگهی توسط AI بررسی شد` : 'موردی برای بررسی نبود')
+      await load()
+    } finally { setBusy(false) }
+  }
+
+  const setStatusOf = async (id: string, s: string) => {
+    setItems(items.map(i => i.id === id ? { ...i, status: s } : i))
+    await fetch('/api/admin/scraper/items', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status: s }) })
+  }
+
+  const pending = items.filter(i => i.status === 'pending')
+  const awaiting = pending.filter(i => !i.moderatedAt)
+  const moderated = items.filter(i => i.moderatedAt).sort((a, b) => (b.moderatedAt || 0) - (a.moderatedAt || 0))
+  const approved = items.filter(i => i.status === 'approved' && i.moderatedAt)
+  const rejected = items.filter(i => i.status === 'rejected' && i.moderatedAt)
+  const review = pending.filter(i => i.moderatedAt)
+  const fa = (n: number) => n.toLocaleString('fa-IR')
+  const verdictOf = (it: MItem) => it.status === 'approved' ? { label: 'تأیید', color: '#5fd98a' } : it.status === 'rejected' ? { label: 'رد', color: '#e7674a' } : { label: 'بازبینی', color: '#e7a14a' }
 
   return (
     <div style={{ animation: 'fade .35s ease' }}>
       <div className="mjsa-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
-        <KPI label="در صف بررسی" value="۳۲" trend="↑ ۸ از دیروز" icon="⏳" iconBg="rgba(231,103,74,.15)" iconColor="#e7674a" />
-        <KPI label="تأیید خودکار امروز" value="۷۴۶" trend="۹۸.۲٪ دقت مدل" icon="✓" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" trendUp />
-        <KPI label="رد شده" value="۱۲۴" trend="۱۲٪ از کل بررسی‌ها" icon="✗" iconBg="rgba(231,103,74,.1)" iconColor="#e7674a" />
-        <KPI label="بازبینی دستی" value="۱۱۲" trend="میانگین ۴ دقیقه/آگهی" icon="👁" iconBg="rgba(231,161,74,.15)" iconColor="#e7a14a" />
+        <KPI label="در انتظار بررسی AI" value={fa(awaiting.length)} trend={awaiting.length ? 'آماده بررسی خودکار' : 'صف خالی است'} icon="⏳" iconBg="rgba(231,103,74,.15)" iconColor="#e7674a" />
+        <KPI label="تأییدشده توسط AI" value={fa(approved.length)} trend="آگهی معتبر" icon="✓" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" trendUp />
+        <KPI label="رد‌شده توسط AI" value={fa(rejected.length)} trend="مشکوک/ناقص" icon="✗" iconBg="rgba(231,103,74,.1)" iconColor="#e7674a" />
+        <KPI label="نیازمند بازبینی دستی" value={fa(review.length)} trend="حکم: بازبینی" icon="👁" iconBg="rgba(231,161,74,.15)" iconColor="#e7a14a" />
       </div>
 
       <Card style={{ marginBottom: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 14 }}>آستانه خودکار AI</div>
-            <div style={{ fontSize: 12, color: 'var(--muted)' }}>امتیاز بالای این مقدار: تأیید خودکار — پایین‌تر: بازبینی دستی</div>
+            <div style={{ fontWeight: 700, fontSize: 14 }}>تأیید خودکار هوش مصنوعی</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3, maxWidth: 460, lineHeight: 1.6 }}>هوش مصنوعی هر آگهی منتظر را بررسی می‌کند و آن را تأیید، رد یا برای بازبینی دستی علامت می‌زند و علت تصمیم را ثبت می‌کند. این کار پس از هر واکشی به‌صورت خودکار هم اجرا می‌شود.</div>
+            {progress && <div style={{ fontSize: 12.5, color: 'var(--gold)', marginTop: 8, fontWeight: 600 }}>{progress}</div>}
           </div>
-          <span style={{ fontSize: 28, fontWeight: 800, color: 'var(--gold)' }}>{threshold}</span>
-        </div>
-        <input type="range" min={40} max={95} value={threshold} onChange={e => setThreshold(+e.target.value)}
-          style={{ width: '100%', accentColor: 'var(--gold)', cursor: 'pointer' }} />
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--faint)', marginTop: 4 }}>
-          <span>۴۰ – محافظه‌کار</span><span>۶۵ – متعادل</span><span>۹۵ – تهاجمی</span>
+          <GoldButton onClick={runAuto} disabled={busy}>{busy ? '⏳ در حال بررسی…' : `🤖 بررسی ${fa(awaiting.length)} آگهی منتظر`}</GoldButton>
         </div>
       </Card>
 
       <Card>
-        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>صف تصمیم‌گیری</div>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--line)' }}>
-              {['شناسه', 'عنوان', 'امتیاز', 'حکم AI', 'دلیل', ''].map(h => (
-                <th key={h} style={{ textAlign: 'right', padding: '8px 0', fontSize: 12, color: 'var(--faint)', fontWeight: 600 }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {queue.map(q => (
-              <tr key={q.id} style={{ borderBottom: '1px solid var(--line)' }}>
-                <td style={{ padding: '11px 0', fontSize: 12, color: 'var(--faint)' }}>{q.id}</td>
-                <td style={{ padding: '11px 0', fontWeight: 600, fontSize: 13 }}>{q.title}</td>
-                <td style={{ padding: '11px 0' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <div style={{ width: 36, height: 6, borderRadius: 999, background: 'var(--line2)', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${q.score}%`, background: verdictColor[q.verdict], borderRadius: 999 }} />
-                    </div>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: verdictColor[q.verdict] }}>{q.score}</span>
-                  </div>
-                </td>
-                <td style={{ padding: '11px 0' }}><Badge label={q.verdict} color={verdictColor[q.verdict]} /></td>
-                <td style={{ padding: '11px 0', fontSize: 12, color: 'var(--muted)', maxWidth: 180 }}>{q.reason}</td>
-                <td style={{ padding: '11px 0' }}>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button style={{ fontSize: 11, padding: '4px 10px', borderRadius: 8, border: '1px solid #5fd98a', color: '#5fd98a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>تأیید</button>
-                    <button style={{ fontSize: 11, padding: '4px 10px', borderRadius: 8, border: '1px solid #e7674a', color: '#e7674a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>رد</button>
-                  </div>
-                </td>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>آخرین تصمیم‌های هوش مصنوعی</div>
+        {loading ? (
+          <div style={{ color: 'var(--muted)', fontSize: 13, padding: '24px 0', textAlign: 'center' }}>در حال بارگذاری…</div>
+        ) : moderated.length === 0 ? (
+          <div style={{ color: 'var(--muted)', fontSize: 13, padding: '24px 0', textAlign: 'center' }}>هنوز آگهی‌ای بررسی نشده. دکمهٔ «بررسی با AI» را بزنید.</div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--line)' }}>
+                {['عنوان', 'امتیاز', 'حکم AI', 'دلیل', ''].map(h => (
+                  <th key={h} style={{ textAlign: 'right', padding: '8px 0', fontSize: 12, color: 'var(--faint)', fontWeight: 600 }}>{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {moderated.slice(0, 50).map(it => {
+                const v = verdictOf(it); const score = it.aiScore ?? 0
+                return (
+                  <tr key={it.id} style={{ borderBottom: '1px solid var(--line)' }}>
+                    <td style={{ padding: '11px 0', fontWeight: 600, fontSize: 13, maxWidth: 220 }}>{it.title}<div style={{ fontSize: 11, color: 'var(--faint)', fontWeight: 400 }}>{[it.location, it.price].filter(Boolean).join(' · ')}</div></td>
+                    <td style={{ padding: '11px 0' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ width: 36, height: 6, borderRadius: 999, background: 'var(--line2)', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${score}%`, background: v.color, borderRadius: 999 }} />
+                        </div>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: v.color }}>{score}</span>
+                      </div>
+                    </td>
+                    <td style={{ padding: '11px 0' }}><Badge label={v.label} color={v.color} /></td>
+                    <td style={{ padding: '11px 0', fontSize: 12, color: 'var(--muted)', maxWidth: 220, lineHeight: 1.5 }}>{it.aiReason || '—'}</td>
+                    <td style={{ padding: '11px 0' }}>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {it.status !== 'approved' && <button onClick={() => setStatusOf(it.id, 'approved')} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 8, border: '1px solid #5fd98a', color: '#5fd98a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>تأیید</button>}
+                        {it.status !== 'rejected' && <button onClick={() => setStatusOf(it.id, 'rejected')} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 8, border: '1px solid #e7674a', color: '#e7674a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>رد</button>}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
       </Card>
     </div>
   )
