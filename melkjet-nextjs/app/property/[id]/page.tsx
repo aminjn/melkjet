@@ -67,7 +67,7 @@ export default function PropertyPage() {
       // Divar gallery + facts + description
       const m = (it.url || '').match(/divar\.ir\/v\/([A-Za-z0-9_-]+)/)
       const finishAnalyze = (fct: Fact[], desc: string) => {
-        fetch('/api/ai/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: it.title, price: it.price, location: it.location, facts: fct, description: desc }) })
+        fetch('/api/ai/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: it.title, price: it.price, location: it.location, facts: fct, description: desc, meta: it.meta }) })
           .then(r => r.json()).then(a => {
             if (a.ok && a.analysis) {
               setAnalysis(a.analysis)
