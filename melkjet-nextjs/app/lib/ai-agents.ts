@@ -19,6 +19,7 @@ export const AGENTS: AgentDef[] = [
   { id: 'alert', name: 'AlertAgent', task: 'اعلان‌های هوشمند', needs: 'text' },
   { id: 'analytics', name: 'AnalyticsAgent', task: 'تحلیل رفتار کاربر', needs: 'text' },
   { id: 'negotiation', name: 'NegotiationAgent', task: 'پشتیبانی مذاکره', needs: 'both' },
+  { id: 'studio', name: 'StudioAgent', task: 'بازسازی پلان و مدل سه‌بعدی از روی عکس (متن + تصویر)', needs: 'both' },
 ]
 
 export type ModelCategory = 'text' | 'image' | 'embedding' | 'audio'

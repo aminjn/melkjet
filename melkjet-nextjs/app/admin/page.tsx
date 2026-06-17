@@ -3,10 +3,11 @@ import { useState, useEffect, useRef } from 'react'
 import { DEAL_TYPES, PROPERTY_KINDS, PROVINCES, citiesOf, neighborhoodsOf } from '@/app/lib/taxonomy'
 import { DIVAR_CATEGORIES, DIVAR_CITIES } from '@/app/lib/divar-meta'
 import { AGENTS, categorizeModel, CATEGORY_LABEL, FALLBACK_MODELS, DEFAULT_GAP_BASE, type ModelCategory } from '@/app/lib/ai-agents'
+import PlanStudio from '@/app/components/PlanStudio'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 type View =
-  | 'overview' | 'scraper' | 'listings' | 'geo' | 'moderation' | 'content' | 'api'
+  | 'overview' | 'scraper' | 'listings' | 'geo' | 'moderation' | 'content' | 'studio' | 'api'
   | 'reports' | 'plans' | 'promos' | 'ads' | 'users'
   | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags'
 
@@ -23,6 +24,7 @@ const sections: NavSection[] = [
       { id: 'listings',    icon: '▤',  label: 'مدیریت آگهی‌ها' },
       { id: 'moderation',  icon: '✓',  label: 'تأیید آگهی AI',     badge: '32',    badgeColor: '#e7674a' },
       { id: 'content',     icon: '✦',  label: 'محتوا و سئو' },
+      { id: 'studio',      icon: '◳',  label: 'استودیو پلان و سه‌بعدی' },
       { id: 'api',         icon: '◈',  label: 'API و مدل‌های AI' },
     ],
   },
@@ -72,6 +74,7 @@ const viewTitles: Record<View, string> = {
   geo:        'مدیریت مناطق و محله‌ها',
   moderation: 'تأیید آگهی با هوش مصنوعی',
   content:    'استودیو محتوا و سئو',
+  studio:     'استودیو پلان و مدل سه‌بعدی',
   api:        'API و مدل‌های هوش مصنوعی',
   reports:    'گزارش‌ها و تحلیل داده',
   plans:      'پلن‌ها و اشتراک‌ها',
@@ -1705,6 +1708,18 @@ function ModerationView() {
   )
 }
 
+function StudioView() {
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>استودیو پلان و مدل سه‌بعدی</div>
+        <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>عکس‌های فضا را بده و پارامترها را تنظیم کن؛ هوش مصنوعی نقشهٔ کف دوبعدی و رندر سه‌بعدی می‌سازد. مدل این بخش از «API و مدل‌های AI → StudioAgent» تنظیم می‌شود (یک مدل متن + یک مدل تصویر).</div>
+      </Card>
+      <PlanStudio />
+    </div>
+  )
+}
+
 function ContentView() {
   const [type, setType] = useState('مقاله سئو')
   const [topic, setTopic] = useState('')
@@ -2326,6 +2341,7 @@ export default function SuperAdminPage() {
       case 'geo':        return <GeoView />
       case 'moderation': return <ModerationView />
       case 'content':    return <ContentView />
+      case 'studio':     return <StudioView />
       case 'api':        return <APIView />
       case 'users':      return <UsersView />
       case 'plans':      return <PlansView />

@@ -9,6 +9,7 @@ const navLinks = [
   { href: '/search?type=presale', label: 'پیش‌فروش' },
   { href: '/directory', label: 'مشاوران' },
   { href: '/neighborhood/tehran', label: 'تحلیل بازار' },
+  { href: '/plan-ai', label: 'استودیو پلان و سه‌بعدی' },
 ]
 
 export default function Nav() {
