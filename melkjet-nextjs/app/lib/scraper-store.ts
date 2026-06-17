@@ -142,6 +142,10 @@ export function listItems(type?: SourceType, opts?: { category?: string; publicO
   return items.sort((a, b) => b.scrapedAt - a.scrapedAt)
 }
 
+export function getItemById(itemId: string): Item | null {
+  return load().items.find(i => i.id === itemId) || null
+}
+
 export function setItemStatus(itemId: string, status: ItemStatus) {
   const db = load()
   const it = db.items.find(i => i.id === itemId)
