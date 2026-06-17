@@ -1,6 +1,7 @@
 import type { Source, Item } from './scraper-store'
 import { getAdminData } from './admin-store'
 import { proxiedRequest } from './proxy-fetch'
+import { getDistricts } from './divar-places'
 
 type RawItem = Omit<Item, 'id' | 'sourceId' | 'sourceName' | 'type' | 'category' | 'meta' | 'scrapedAt' | 'status'>
 
@@ -79,10 +80,24 @@ function mapRow(w: any): RawItem {
  *  - Otherwise: city+category, optionally client-filtered by محله name. */
 export async function scrapeDivar(source: Source): Promise<RawItem[]> {
   const fromUrl = parseDivarUrl(source.url || '')
-  const cityId = fromUrl.cityId || source.meta?.['city_id'] || '1'
-  const category = fromUrl.category || source.meta?.['category'] || 'apartment-rent'
-  const district = fromUrl.district || source.meta?.['district_id'] || ''
+  // Dropdown selections (meta) win over the URL; URL is the fallback.
+  const cityId = source.meta?.['city_id'] || fromUrl.cityId || '1'
+  const category = source.meta?.['category'] || fromUrl.category || 'apartment-rent'
+  const district = source.meta?.['district_id'] || fromUrl.district || ''
   const wantHood = district ? '' : norm(source.meta?.['محله'] || '')   // server-side district makes name-filter unnecessary
+
+  // centroid of the district → bbox (so Divar returns the whole neighbourhood, not just near the center)
+  let bbox: { min_latitude: number; min_longitude: number; max_latitude: number; max_longitude: number } | undefined
+  if (district) {
+    let lat = parseFloat(source.meta?.['lat'] || ''), lng = parseFloat(source.meta?.['lng'] || '')
+    if (Number.isNaN(lat) || Number.isNaN(lng)) {
+      const d = getDistricts(cityId).find(x => String(x.id) === String(district))
+      if (d?.lat && d?.lng) { lat = d.lat; lng = d.lng }
+    }
+    if (!Number.isNaN(lat) && !Number.isNaN(lng) && lat && lng) {
+      bbox = { min_latitude: lat - 0.04, min_longitude: lng - 0.035, max_latitude: lat + 0.04, max_longitude: lng + 0.035 }
+    }
+  }
 
   const proxyUrl = getAdminData().divar?.proxyUrl
     || process.env.HTTPS_PROXY || process.env.https_proxy
@@ -116,7 +131,9 @@ export async function scrapeDivar(source: Source): Promise<RawItem[]> {
     if (district) {
       data.districts = { repeated_string: { value: [String(district)] } }
       body.source_view = 'MAP_DISCOVERY_MAP'
-      body.map_state = { camera_info: { place_hash: `${cityId}|${district}|${category}`, zoom: 14 }, page_state: 'FULL_MAP' }
+      const cam: any = { place_hash: `${cityId}|${district}|${category}`, zoom: 13 }
+      if (bbox) cam.bbox = bbox
+      body.map_state = { camera_info: cam, page_state: 'FULL_MAP' }
       body.current_tab_slug = 'default'
       body.previous_place_ids = []
     }
@@ -124,8 +141,8 @@ export async function scrapeDivar(source: Source): Promise<RawItem[]> {
     return JSON.stringify(body)
   }
 
-  const maxPages = (district || wantHood) ? 10 : 2
-  const targetCount = 120
+  const maxPages = (district || wantHood) ? 20 : 2
+  const targetCount = 300
   let pagination: any = null
   const collected: RawItem[] = []
 

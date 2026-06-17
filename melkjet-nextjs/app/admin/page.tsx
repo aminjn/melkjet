@@ -614,7 +614,7 @@ function ScraperView() {
   const [cats, setCats] = useState<string[]>([])
   const [newCat, setNewCat] = useState('')
   const [divarCities, setDivarCities] = useState<{ id: number; name: string }[]>([])
-  const [divarDistricts, setDivarDistricts] = useState<{ id: number; name: string }[]>([])
+  const [divarDistricts, setDivarDistricts] = useState<{ id: number; name: string; lat?: number; lng?: number }[]>([])
   const [placesSummary, setPlacesSummary] = useState<{ cities: number; citiesWithDistricts: number } | null>(null)
   const [importing, setImporting] = useState('')
 
@@ -980,7 +980,7 @@ function ScraperView() {
                   </div>
                   <select style={{ ...inputCss, marginTop: 10 }} value={form.meta['district_id'] || ''} disabled={!form.meta['city_id']} onChange={e => {
                     const d = divarDistricts.find(x => String(x.id) === e.target.value)
-                    setForm({ ...form, meta: { ...form.meta, district_id: e.target.value, 'محله': d?.name || '' } })
+                    setForm({ ...form, meta: { ...form.meta, district_id: e.target.value, 'محله': d?.name || '', lat: d?.lat ? String(d.lat) : '', lng: d?.lng ? String(d.lng) : '' } })
                   }}>
                     <option value="">{form.meta['city_id'] ? (divarDistricts.length ? 'انتخاب محله (همه محله‌ها)…' : 'در حال بارگذاری محله‌ها…') : 'اول شهر را انتخاب کن'}</option>
                     {divarDistricts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}

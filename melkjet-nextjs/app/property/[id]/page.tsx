@@ -129,7 +129,7 @@ export default function PropertyPage() {
               {/* Meta chips */}
               {item.meta && Object.keys(item.meta).length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {Object.entries(item.meta).filter(([k]) => !['city_id', 'category', 'district_id'].includes(k)).map(([k, v]) => (
+                  {Object.entries(item.meta).filter(([k]) => !['city_id', 'category', 'district_id', 'lat', 'lng'].includes(k)).map(([k, v]) => (
                     <span key={k} style={{ background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 10, padding: '7px 12px', fontSize: 12.5, color: 'var(--muted)' }}>
                       {k}: <b style={{ color: 'var(--text)' }}>{v}</b>
                     </span>
