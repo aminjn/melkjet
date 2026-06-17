@@ -6,6 +6,11 @@
 ```bash
 cd /var/www/melkjet/melkjet-nextjs && git pull && npm run build && pm2 restart melkjet
 ```
+After deploy, **purge the Arvan CDN cache** (panel → CDN → clear cache) — otherwise
+the CDN serves stale HTML pointing at old CSS/JS chunks and the whole site looks
+unstyled ("گرافیک ریخت"). next.config sets `no-cache` on HTML + `immutable` on
+`/_next/static` to mitigate this, but a purge after deploy is the sure fix.
+Quick check after deploy: Ctrl+Shift+R — if styling returns, it was the cache.
 
 ## Server
 - VPS: 185.206.95.40 (Arvan Cloud)
