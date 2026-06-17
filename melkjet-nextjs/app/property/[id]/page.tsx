@@ -10,6 +10,8 @@ interface Item {
   sourceName: string; status: string; scrapedAt: number; meta?: Record<string, string>
 }
 
+function toFa(n: number | string): string { return String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d]) }
+
 function timeAgo(ts: number): string {
   const d = Date.now() - ts
   const h = Math.floor(d / 3600000)
@@ -23,14 +25,28 @@ export default function PropertyPage() {
   const id = String(params?.id || '')
   const [item, setItem] = useState<Item | null>(null)
   const [loading, setLoading] = useState(true)
+  const [gallery, setGallery] = useState<string[]>([])
+  const [activeImg, setActiveImg] = useState(0)
 
   useEffect(() => {
     if (!id) return
     fetch(`/api/content/item?id=${id}`, { cache: 'no-store' })
       .then(r => (r.ok ? r.json() : { item: null }))
-      .then(d => { setItem(d.item); setLoading(false) })
+      .then(d => {
+        setItem(d.item); setLoading(false)
+        // For Divar items, fetch the full photo gallery by token
+        const m = (d.item?.url || '').match(/divar\.ir\/v\/([A-Za-z0-9_-]+)/)
+        if (m) {
+          fetch(`/api/divar/post?token=${m[1]}`)
+            .then(r => r.ok ? r.json() : { images: [] })
+            .then(g => { if (g.images?.length) setGallery(g.images); if (g.description) setItem((it: Item | null) => it ? { ...it, excerpt: g.description } : it) })
+            .catch(() => {})
+        }
+      })
       .catch(() => setLoading(false))
   }, [id])
+
+  const images = gallery.length ? gallery : (item?.image ? [item.image] : [])
 
   return (
     <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
@@ -60,13 +76,32 @@ export default function PropertyPage() {
           <div className="mjp-grid" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 28, alignItems: 'start' }}>
             {/* LEFT */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-              {/* Image */}
-              <div style={{ position: 'relative', borderRadius: 18, overflow: 'hidden', background: 'var(--surface)', border: '1px solid var(--line)', minHeight: 320 }}>
-                {item.image ? (
-                  <img src={item.image} alt={item.title} style={{ width: '100%', maxHeight: 460, objectFit: 'cover', display: 'block' }}
-                    onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                ) : (
-                  <div style={{ height: 320, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 64, opacity: 0.1 }}>🏠</div>
+              {/* Gallery */}
+              <div>
+                <div style={{ position: 'relative', borderRadius: 18, overflow: 'hidden', background: 'var(--surface)', border: '1px solid var(--line)', minHeight: 320 }}>
+                  {images.length ? (
+                    <img src={images[activeImg]} alt={item.title} style={{ width: '100%', maxHeight: 480, objectFit: 'cover', display: 'block' }}
+                      onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                  ) : (
+                    <div style={{ height: 320, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 64, opacity: 0.1 }}>🏠</div>
+                  )}
+                  {images.length > 1 && (
+                    <div style={{ position: 'absolute', bottom: 12, right: 12, background: 'rgba(0,0,0,0.6)', color: '#fff', borderRadius: 999, padding: '4px 12px', fontSize: 12 }}>
+                      {toFa(activeImg + 1)} / {toFa(images.length)}
+                    </div>
+                  )}
+                </div>
+                {images.length > 1 && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10, overflowX: 'auto', paddingBottom: 4 }}>
+                    {images.map((src, i) => (
+                      <button key={i} onClick={() => setActiveImg(i)} style={{
+                        flexShrink: 0, width: 84, height: 60, borderRadius: 10, padding: 0, cursor: 'pointer', overflow: 'hidden',
+                        border: `2px solid ${i === activeImg ? 'var(--gold)' : 'transparent'}`, background: 'var(--surface)',
+                      }}>
+                        <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.visibility = 'hidden' }} />
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
 
