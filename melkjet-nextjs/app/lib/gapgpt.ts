@@ -19,20 +19,18 @@ export function agentModel(agentId: string, slot: 'text' | 'image' = 'text'): st
   return getAdminData().agentModels?.[agentId]?.[slot]
 }
 
-// HTTP helper. The server usually reaches GapGPT only via the proxy, so when a
-// proxy is configured we use it first, then fall back to a direct request.
+// HTTP helper. GapGPT is a domestic service and works best DIRECTLY — routing it
+// through the (foreign) Divar proxy breaks long chat responses. So: direct first,
+// proxy only as a last resort if the direct request throws a network error.
 async function gapHttp(url: string, init: { method: string; headers: Record<string, string>; body?: string }, timeout = 90000): Promise<{ status: number; body: string }> {
-  const px = proxy()
-  const direct = async () => {
+  try {
     const r = await fetch(url, { method: init.method, headers: init.headers, body: init.body, signal: AbortSignal.timeout(timeout) })
     return { status: r.status, body: await r.text() }
+  } catch (e) {
+    const px = proxy()
+    if (!px) throw e
+    return proxiedRequest(url, { method: init.method, headers: init.headers, body: init.body, proxyUrl: px, timeout })
   }
-  const viaProxy = () => proxiedRequest(url, { method: init.method, headers: init.headers, body: init.body, proxyUrl: px, timeout })
-
-  if (px) {
-    try { return await viaProxy() } catch { return direct() }
-  }
-  try { return await direct() } catch { return viaProxy() }
 }
 
 export async function listModels(): Promise<string[]> {
