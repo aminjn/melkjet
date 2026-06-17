@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Nav from '../../components/Nav'
 import Footer from '../../components/Footer'
 import { fetchContent, gradientFor, type ContentItem } from '@/app/lib/content-display'
+import { mdToHtml } from '@/app/lib/markdown'
 
 const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹'
 function toFa(n: number | string): string {
@@ -68,10 +69,25 @@ export default function ArticlePage() {
   useEffect(() => {
     let alive = true
     setLoading(true)
-    fetch(`/api/content/item?id=${encodeURIComponent(slug)}`, { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : { item: null }))
-      .then((d) => { if (alive) { setItem(d?.item || null); setLoading(false) } })
-      .catch(() => { if (alive) { setItem(null); setLoading(false) } })
+    // First try by slug; if no item is found, fall back to id.
+    ;(async () => {
+      try {
+        let found: ContentItem | null = null
+        const bySlug = await fetch(`/api/content/item?slug=${encodeURIComponent(slug)}`, { cache: 'no-store' })
+          .then((r) => (r.ok ? r.json() : { item: null }))
+          .catch(() => ({ item: null }))
+        found = bySlug?.item || null
+        if (!found) {
+          const byId = await fetch(`/api/content/item?id=${encodeURIComponent(slug)}`, { cache: 'no-store' })
+            .then((r) => (r.ok ? r.json() : { item: null }))
+            .catch(() => ({ item: null }))
+          found = byId?.item || null
+        }
+        if (alive) { setItem(found); setLoading(false) }
+      } catch {
+        if (alive) { setItem(null); setLoading(false) }
+      }
+    })()
 
     fetchContent('article', undefined, 4 + 1).then((items) => {
       if (alive) setRelated(items.filter((it) => it.id !== slug).slice(0, 4))
@@ -113,8 +129,11 @@ export default function ArticlePage() {
   const readTime = readTimeFa(body || title)
   const heroImage = item?.image || ''
   const heroGradient = gradientFor(item?.id || slug)
-  // the item-by-id API returns the full stored Item, which may carry an AI quality score
-  const aiScore = (item as { aiScore?: number } | null)?.aiScore
+  // the item-by-id/slug API returns the full stored Item, which may carry extra rich fields
+  const rich = item as ({ aiScore?: number; meta?: { author?: string; metaDescription?: string; slug?: string } } | null)
+  const aiScore = rich?.aiScore
+  const metaDescription = rich?.meta?.metaDescription || ''
+  const author = rich?.meta?.author || ''
 
   if (loading) {
     return (
@@ -203,8 +222,8 @@ export default function ArticlePage() {
                     color: '#16140f', fontWeight: 800, fontSize: 18, flexShrink: 0
                   }}>✦</div>
                   <div>
-                    <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text)' }}>{sourceName}</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>منبع مقاله · گردآوری ملک‌جت</div>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text)' }}>{author || sourceName}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{author ? `نویسنده · ${sourceName}` : 'منبع مقاله · گردآوری ملک‌جت'}</div>
                   </div>
                 </div>
 
@@ -287,12 +306,22 @@ export default function ArticlePage() {
               </div>
             </div>
 
-            {/* Article Body — real scraped text */}
+            {/* Summary box — from SEO meta description, when present */}
+            {metaDescription && (
+              <div style={{
+                marginBottom: 24, padding: '14px 18px', borderRadius: 14,
+                background: 'var(--goldDim)', border: '1px solid var(--gold)',
+                fontSize: 14.5, lineHeight: 1.9, color: 'var(--text)'
+              }}>
+                <span style={{ color: 'var(--gold)', fontWeight: 700 }}>خلاصه: </span>
+                {metaDescription}
+              </div>
+            )}
+
+            {/* Article Body — Markdown rendered to HTML */}
             <div id="intro" style={{ fontSize: 16, lineHeight: 2.1, color: 'var(--text)' }}>
               {body ? (
-                body.split(/\n{2,}|\r\n\r\n/).map((para) => para.trim()).filter(Boolean).map((para, i) => (
-                  <p key={i} style={{ marginBottom: 18 }}>{para}</p>
-                ))
+                <div className="mj-article-body" dangerouslySetInnerHTML={{ __html: mdToHtml(body) }} />
               ) : (
                 <p style={{ marginBottom: 18, color: 'var(--muted)' }}>
                   متن کامل این مقاله در دسترس نیست. برای مطالعه‌ی کامل به منبع اصلی مراجعه کنید.

@@ -1,53 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { addArticle, updateArticle, listArticles, deleteItem } from '@/app/lib/scraper-store'
+import { addArticle, updateArticle, listArticles, deleteItem, getItemById, ArticleInput, Item } from '@/app/lib/scraper-store'
 
-async function guard() {
-  const s = await getSession()
-  return s && s.role === 'super_admin'
+// CMS مقالات (شبیه وردپرس) — نوشتن/ویرایش برای هر کاربر واردشده در همهٔ پنل‌ها.
+function toArticle(it: Item) {
+  const m = it.meta || {}
+  return {
+    id: it.id, title: it.title, body: it.excerpt || '', image: it.image || '',
+    category: it.category || '', tags: it.tags || [],
+    slug: m.slug || '', seoTitle: m.seoTitle || it.title, metaDescription: m.metaDescription || '',
+    focusKeyword: m.focusKeyword || '', status: m.cmsStatus || 'published', author: m.author || it.sourceName,
+    excerpt: m.summary || '', updatedAt: it.scrapedAt, edited: !!it.edited,
+  }
 }
 
-// GET → { articles }
-export async function GET() {
-  if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
-  return NextResponse.json({ articles: listArticles() })
+export async function GET(req: NextRequest) {
+  const id = new URL(req.url).searchParams.get('id')
+  if (id) { const it = getItemById(id); return NextResponse.json({ article: it && it.type === 'article' ? toArticle(it) : null }) }
+  return NextResponse.json({ articles: listArticles().map(toArticle) })
 }
 
-// POST { title, body, image?, category? } → create article
 export async function POST(req: NextRequest) {
-  if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
-  const b = await req.json().catch(() => ({}))
-  const title = (b.title || '').toString().trim()
-  const body = (b.body || '').toString().trim()
-  if (!title || !body) return NextResponse.json({ error: 'عنوان و متن الزامی است' }, { status: 400 })
-  const item = addArticle({
-    title,
-    body,
-    image: b.image ? String(b.image) : undefined,
-    category: b.category ? String(b.category) : undefined,
-    source: b.source ? String(b.source) : undefined,
-  })
-  return NextResponse.json({ ok: true, id: item.id, item })
+  const s = await getSession()
+  if (!s) return NextResponse.json({ error: 'برای انتشار باید وارد شوید' }, { status: 401 })
+  const b = await req.json().catch(() => ({})) as ArticleInput
+  if (!b.title || !b.body) return NextResponse.json({ error: 'عنوان و متن مقاله الزامی است' }, { status: 400 })
+  const it = addArticle({ ...b, author: b.author || (s as any).name || (s as any).phone })
+  return NextResponse.json({ ok: true, id: it.id, article: toArticle(it) })
 }
 
-// PATCH { id, title?, body?, image?, category? } → update article
 export async function PATCH(req: NextRequest) {
-  if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  const s = await getSession()
+  if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
   const b = await req.json().catch(() => ({}))
   if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
-  const it = updateArticle(String(b.id), {
-    title: b.title !== undefined ? String(b.title) : undefined,
-    body: b.body !== undefined ? String(b.body) : undefined,
-    image: b.image !== undefined ? String(b.image) : undefined,
-    category: b.category !== undefined ? String(b.category) : undefined,
-  })
-  if (!it) return NextResponse.json({ error: 'یافت نشد' }, { status: 404 })
-  return NextResponse.json({ ok: true, item: it })
+  const it = updateArticle(b.id, b)
+  if (!it) return NextResponse.json({ error: 'مقاله یافت نشد' }, { status: 404 })
+  return NextResponse.json({ ok: true, article: toArticle(it) })
 }
 
-// DELETE ?id=xxx → delete article
 export async function DELETE(req: NextRequest) {
-  if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  const s = await getSession()
+  if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
   const id = new URL(req.url).searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
   deleteItem(id)

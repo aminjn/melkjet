@@ -1,27 +1,9 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
+import ArticleEditor from '@/app/components/ArticleEditor'
 
 type View = 'articles' | 'media' | 'seo' | 'published' | 'drafts'
-
-interface CmsArticle {
-  id: string
-  title: string
-  excerpt?: string
-  image?: string
-  category?: string
-  sourceName?: string
-  scrapedAt: number
-}
-
-const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹'
-function faDate(ts?: number): string {
-  if (!ts) return ''
-  try { return new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(ts)) } catch { return '' }
-}
-function toFa(n: number | string): string { return String(n).replace(/\d/g, d => FA_DIGITS[+d]) }
-
-const categories = ['خرید و فروش', 'اجاره', 'سرمایه‌گذاری', 'بازار', 'راهنما']
 
 const articles = [
   { id: 1, title: 'راهنمای خرید آپارتمان در تهران ۱۴۰۳', author: 'علی رضایی', category: 'خرید و فروش', views: '۱۲٬۴۰۰', date: '۱۴۰۳/۰۳/۱۵', status: 'منتشر', statusColor: '#5fd98a' },
@@ -62,86 +44,9 @@ const navItems: { id: View; ic: string; l: string }[] = [
 export default function ContentPage() {
   const [view, setView] = useState<View>('articles')
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
-  const [selectedCategory, setSelectedCategory] = useState('')
   const [mediaFilter, setMediaFilter] = useState('')
   const [searchText, setSearchText] = useState('')
-  const [newArticle, setNewArticle] = useState({
-    title: '', content: '', category: '', tags: '',
-    metaTitle: '', metaDesc: '', keywords: '',
-  })
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [generating, setGenerating] = useState(false)
-  const [publishing, setPublishing] = useState(false)
-  const [toast, setToast] = useState('')
-  const [cmsArticles, setCmsArticles] = useState<CmsArticle[]>([])
   const seoScore = 72
-
-  const flash = (m: string) => { setToast(m); setTimeout(() => setToast(''), 2600) }
-
-  const loadArticles = useCallback(() => {
-    fetch('/api/cms', { cache: 'no-store' })
-      .then(r => r.ok ? r.json() : { articles: [] })
-      .then(d => setCmsArticles(Array.isArray(d.articles) ? d.articles : []))
-      .catch(() => {})
-  }, [])
-
-  useEffect(() => { loadArticles() }, [loadArticles])
-
-  // Generate article body with the content AI agent
-  async function generateWithAI() {
-    const topic = newArticle.title.trim() || newArticle.content.trim()
-    if (!topic) { flash('ابتدا یک عنوان یا موضوع وارد کنید'); return }
-    setGenerating(true)
-    try {
-      const prompt = `یک مقالهٔ کامل، روان و سئو-محور به فارسی دربارهٔ موضوع زیر بنویس${newArticle.category ? ` (دستهٔ «${newArticle.category}»)` : ''}: ${topic}`
-      const r = await fetch('/api/ai/run', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agent: 'content', input: prompt }),
-      })
-      const d = await r.json()
-      if (!r.ok || !d.ok) { flash(d.error || 'خطا در تولید محتوا'); return }
-      setNewArticle(p => ({ ...p, content: d.text || p.content }))
-      flash('محتوا با هوش مصنوعی تولید شد')
-    } catch { flash('خطا در ارتباط با هوش مصنوعی') } finally { setGenerating(false) }
-  }
-
-  // Publish (create or update) the article to the shared store → public site
-  async function publishArticle() {
-    const title = newArticle.title.trim()
-    const body = newArticle.content.trim()
-    if (!title || !body) { flash('عنوان و متن مقاله الزامی است'); return }
-    setPublishing(true)
-    try {
-      const payload = { title, body, category: newArticle.category || undefined }
-      const r = editingId
-        ? await fetch('/api/cms', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editingId, ...payload }) })
-        : await fetch('/api/cms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      const d = await r.json()
-      if (!r.ok || !d.ok) { flash(d.error || 'خطا در انتشار'); return }
-      flash(editingId ? 'مقاله ویرایش شد' : 'مقاله منتشر شد')
-      setNewArticle({ title: '', content: '', category: '', tags: '', metaTitle: '', metaDesc: '', keywords: '' })
-      setEditingId(null)
-      loadArticles()
-    } catch { flash('خطا در ارتباط با سرور') } finally { setPublishing(false) }
-  }
-
-  function editArticle(a: CmsArticle) {
-    setEditingId(a.id)
-    setNewArticle(p => ({ ...p, title: a.title, content: a.excerpt || '', category: a.category || '' }))
-    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
-    flash('مقاله برای ویرایش بارگذاری شد')
-  }
-
-  async function deleteArticle(id: string) {
-    if (typeof window !== 'undefined' && !window.confirm('این مقاله حذف شود؟')) return
-    try {
-      const r = await fetch(`/api/cms?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
-      if (!r.ok) { flash('خطا در حذف'); return }
-      if (editingId === id) { setEditingId(null); setNewArticle({ title: '', content: '', category: '', tags: '', metaTitle: '', metaDesc: '', keywords: '' }) }
-      flash('مقاله حذف شد')
-      loadArticles()
-    } catch { flash('خطا در ارتباط با سرور') }
-  }
 
   const viewTitles: Record<View, string> = {
     articles: 'مدیریت مقالات',
@@ -171,10 +76,6 @@ export default function ContentPage() {
     background: 'var(--bg2)', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit',
     outline: 'none', boxSizing: 'border-box' as const,
   }
-
-  const cmsRealFiltered = cmsArticles.filter(a =>
-    (!selectedCategory || a.category === selectedCategory)
-  )
 
   const filteredMedia = mediaItems.filter(m =>
     (!mediaFilter || m.type === mediaFilter)
@@ -232,176 +133,9 @@ export default function ContentPage() {
 
         <main style={{ flex: 1, padding: 24, overflow: 'auto' }}>
 
-          {/* ─── ARTICLES VIEW ─── */}
+          {/* ─── ARTICLES VIEW — WordPress-like editor ─── */}
           {view === 'articles' && (
-            <div style={{ display: 'grid', gap: 20 }}>
-
-              {/* Filter row */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <button
-                  onClick={() => setSelectedCategory('')}
-                  style={{ ...smallBtn, background: !selectedCategory ? 'var(--goldDim)' : 'var(--bg2)', color: !selectedCategory ? 'var(--gold)' : 'var(--muted)', fontWeight: !selectedCategory ? 700 : 400 }}
-                >همه</button>
-                {categories.map(cat => (
-                  <button
-                    key={cat}
-                    onClick={() => setSelectedCategory(cat === selectedCategory ? '' : cat)}
-                    style={{ ...smallBtn, background: selectedCategory === cat ? 'var(--goldDim)' : 'var(--bg2)', color: selectedCategory === cat ? 'var(--gold)' : 'var(--muted)', fontWeight: selectedCategory === cat ? 700 : 400 }}
-                  >{cat}</button>
-                ))}
-                <div style={{ flex: 1 }}></div>
-                <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{toFa(cmsRealFiltered.length)} مقاله منتشرشده</span>
-              </div>
-
-              {/* Articles table — real published articles from the shared store */}
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden' }}>
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
-                    <thead>
-                      <tr>
-                        <th style={th}>عنوان</th>
-                        <th style={th}>منبع</th>
-                        <th style={th}>دسته‌بندی</th>
-                        <th style={th}>تاریخ</th>
-                        <th style={th}>وضعیت</th>
-                        <th style={th}>عملیات</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {cmsRealFiltered.map(a => (
-                        <tr key={a.id}>
-                          <td style={{ ...td, fontWeight: 600, maxWidth: 260 }}>
-                            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.title}</div>
-                          </td>
-                          <td style={{ ...td, color: 'var(--muted)', fontSize: 12 }}>{a.sourceName || 'تحریریه'}</td>
-                          <td style={td}>
-                            <span style={{ padding: '3px 9px', borderRadius: 999, background: 'var(--bg2)', color: 'var(--muted)', fontSize: 11.5, fontWeight: 600 }}>{a.category || '—'}</span>
-                          </td>
-                          <td style={{ ...td, color: 'var(--muted)', fontSize: 12 }}>{faDate(a.scrapedAt)}</td>
-                          <td style={td}>
-                            <span style={{ padding: '3px 10px', borderRadius: 999, background: '#5fd98a22', color: '#5fd98a', fontSize: 11.5, fontWeight: 700, border: '1px solid #5fd98a44' }}>منتشر</span>
-                          </td>
-                          <td style={td}>
-                            <div style={{ display: 'flex', gap: 6 }}>
-                              <Link href={`/article/${a.id}`} target="_blank" style={{ ...smallBtn, textDecoration: 'none', display: 'inline-block' }}>مشاهده</Link>
-                              <button style={smallBtn} onClick={() => editArticle(a)}>ویرایش</button>
-                              <button style={{ ...smallBtn, color: '#e07070', borderColor: '#e0707044' }} onClick={() => deleteArticle(a.id)}>حذف</button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                      {cmsRealFiltered.length === 0 && (
-                        <tr>
-                          <td colSpan={6} style={{ ...td, textAlign: 'center', color: 'var(--muted)', padding: 32 }}>هنوز مقاله‌ای منتشر نشده است. از فرم پایین یک مقاله بسازید.</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Article creation form */}
-              <div style={cardStyle}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, paddingBottom: 14, borderBottom: '1px solid var(--line)' }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>{editingId ? 'ویرایش مقاله' : 'ایجاد مقاله جدید'}</div>
-                  {editingId && (
-                    <button
-                      onClick={() => { setEditingId(null); setNewArticle({ title: '', content: '', category: '', tags: '', metaTitle: '', metaDesc: '', keywords: '' }) }}
-                      style={smallBtn}
-                    >لغو ویرایش</button>
-                  )}
-                </div>
-                <div style={{ display: 'grid', gap: 14 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                    <div>
-                      <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>عنوان مقاله</label>
-                      <input
-                        style={inputStyle}
-                        placeholder="عنوان مقاله را وارد کنید"
-                        value={newArticle.title}
-                        onChange={e => setNewArticle(p => ({ ...p, title: e.target.value }))}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>دسته‌بندی</label>
-                      <select
-                        style={{ ...inputStyle, cursor: 'pointer' }}
-                        value={newArticle.category}
-                        onChange={e => setNewArticle(p => ({ ...p, category: e.target.value }))}
-                      >
-                        <option value="">انتخاب دسته‌بندی</option>
-                        {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>برچسب‌ها</label>
-                    <input
-                      style={inputStyle}
-                      placeholder="برچسب‌ها را با کاما جدا کنید"
-                      value={newArticle.tags}
-                      onChange={e => setNewArticle(p => ({ ...p, tags: e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                      <label style={{ fontSize: 12, color: 'var(--muted)' }}>محتوای مقاله</label>
-                      <button
-                        onClick={generateWithAI}
-                        disabled={generating}
-                        style={{ ...smallBtn, color: 'var(--gold)', borderColor: 'var(--gold)', background: 'var(--goldDim)', opacity: generating ? 0.6 : 1, cursor: generating ? 'wait' : 'pointer' }}
-                      >{generating ? 'در حال تولید…' : '✦ تولید با هوش مصنوعی'}</button>
-                    </div>
-                    <textarea
-                      style={{ ...inputStyle, height: 200, resize: 'vertical' }}
-                      placeholder="متن مقاله را اینجا بنویسید یا با هوش مصنوعی تولید کنید..."
-                      value={newArticle.content}
-                      onChange={e => setNewArticle(p => ({ ...p, content: e.target.value }))}
-                    />
-                  </div>
-                  <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: 16, border: '1px solid var(--line)' }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--muted)', marginBottom: 12 }}>تنظیمات سئو</div>
-                    <div style={{ display: 'grid', gap: 12 }}>
-                      <div>
-                        <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>عنوان سئو</label>
-                        <input
-                          style={inputStyle}
-                          placeholder="عنوان صفحه برای موتورهای جستجو"
-                          value={newArticle.metaTitle}
-                          onChange={e => setNewArticle(p => ({ ...p, metaTitle: e.target.value }))}
-                        />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>توضیحات متا</label>
-                        <textarea
-                          style={{ ...inputStyle, height: 80, resize: 'vertical' }}
-                          placeholder="توضیحات کوتاه برای نمایش در نتایج جستجو"
-                          value={newArticle.metaDesc}
-                          onChange={e => setNewArticle(p => ({ ...p, metaDesc: e.target.value }))}
-                        />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>کلمات کلیدی</label>
-                        <input
-                          style={inputStyle}
-                          placeholder="کلمات کلیدی را با کاما جدا کنید"
-                          value={newArticle.keywords}
-                          onChange={e => setNewArticle(p => ({ ...p, keywords: e.target.value }))}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                    <button
-                      onClick={publishArticle}
-                      disabled={publishing}
-                      style={{ ...goldBtn, opacity: publishing ? 0.6 : 1, cursor: publishing ? 'wait' : 'pointer' }}
-                    >{publishing ? 'در حال انتشار…' : (editingId ? 'ذخیره تغییرات' : 'انتشار مقاله')}</button>
-                    {toast && <span style={{ fontSize: 12.5, color: 'var(--gold)', fontWeight: 600 }}>{toast}</span>}
-                  </div>
-                </div>
-              </div>
-            </div>
+            <ArticleEditor />
           )}
 
           {/* ─── MEDIA VIEW ─── */}

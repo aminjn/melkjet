@@ -317,37 +317,86 @@ export function addUserListing(raw: {
 }
 
 // ── Articles (CMS) ──────────────────────────────────────────────────────────
-// Insert an editorial article. Stored as a type:'article', status:'approved' item
-// so it appears immediately on the public site (excerpt holds the article body).
-export function addArticle(raw: { title: string; body: string; image?: string; category?: string; source?: string }): Item {
+// ── WordPress-like editorial article fields (rich CMS) ──────────────────────
+export interface ArticleInput {
+  title: string; body: string; excerpt?: string; image?: string; category?: string
+  tags?: string[]; slug?: string; seoTitle?: string; metaDescription?: string
+  focusKeyword?: string; status?: 'draft' | 'published'; author?: string; source?: string
+}
+
+export function slugify(s: string): string {
+  return (s || '').trim().toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^\w؀-ۿ-]/g, '')
+    .replace(/-+/g, '-').replace(/^-|-$/g, '')
+    .slice(0, 80) || 'مقاله'
+}
+
+function uniqueSlug(db: DB, base: string, exceptId?: string): string {
+  const s = slugify(base)
+  let candidate = s, n = 2
+  const taken = (sl: string) => db.items.some(i => i.type === 'article' && i.id !== exceptId && i.meta?.slug === sl)
+  while (taken(candidate)) candidate = `${s}-${n++}`
+  return candidate
+}
+
+// Insert an editorial article. Published → public immediately; draft → hidden from lists.
+export function addArticle(raw: ArticleInput): Item {
   const db = load()
+  const status = raw.status || 'published'
+  const slug = uniqueSlug(db, raw.slug || raw.title)
+  const meta: Record<string, string> = {
+    slug,
+    cmsStatus: status,
+    author: raw.author || raw.source || 'تحریریه ملک‌جت',
+    seoTitle: raw.seoTitle || raw.title,
+    metaDescription: raw.metaDescription || (raw.excerpt || raw.body).slice(0, 160),
+    focusKeyword: raw.focusKeyword || '',
+    summary: raw.excerpt || raw.body.replace(/[#*_>`-]/g, '').slice(0, 200),
+  }
   const item: Item = {
-    id: id(), sourceId: 'cms', sourceName: raw.source || 'تحریریه ملک‌جت', type: 'article',
+    id: id(), sourceId: 'cms', sourceName: raw.source || meta.author, type: 'article',
     category: raw.category, title: raw.title, image: raw.image, excerpt: raw.body,
-    scrapedAt: Date.now(), status: 'approved',
+    tags: raw.tags && raw.tags.length ? raw.tags : undefined,
+    meta, scrapedAt: Date.now(), status: 'approved',
   }
   db.items.unshift(item)
   save(db)
   return item
 }
 
-// Update an existing editorial article (body maps onto excerpt).
-export function updateArticle(itemId: string, patch: { title?: string; body?: string; image?: string; category?: string }): Item | null {
+export function updateArticle(itemId: string, patch: Partial<ArticleInput>): Item | null {
   const db = load()
   const it = db.items.find(i => i.id === itemId && i.type === 'article')
   if (!it) return null
+  const meta = { ...(it.meta || {}) }
   if (patch.title !== undefined) it.title = patch.title
-  if (patch.body !== undefined) it.excerpt = patch.body
+  if (patch.body !== undefined) { it.excerpt = patch.body; if (!patch.excerpt) meta.summary = patch.body.replace(/[#*_>`-]/g, '').slice(0, 200) }
+  if (patch.excerpt !== undefined) meta.summary = patch.excerpt
   if (patch.image !== undefined) it.image = patch.image
   if (patch.category !== undefined) it.category = patch.category
+  if (patch.tags !== undefined) it.tags = patch.tags.length ? patch.tags : undefined
+  if (patch.slug !== undefined && patch.slug.trim()) meta.slug = uniqueSlug(db, patch.slug, itemId)
+  if (patch.seoTitle !== undefined) meta.seoTitle = patch.seoTitle
+  if (patch.metaDescription !== undefined) meta.metaDescription = patch.metaDescription
+  if (patch.focusKeyword !== undefined) meta.focusKeyword = patch.focusKeyword
+  if (patch.author !== undefined) { meta.author = patch.author; it.sourceName = patch.author }
+  if (patch.status !== undefined) meta.cmsStatus = patch.status
+  it.meta = meta
   it.edited = true
   save(db)
   return it
 }
 
-// Convenience: all article items (newest first).
-export function listArticles(): Item[] {
-  return load().items.filter(i => i.type === 'article').sort((a, b) => b.scrapedAt - a.scrapedAt)
+// All article items (newest first), optionally only published.
+export function listArticles(opts?: { publishedOnly?: boolean }): Item[] {
+  return load().items
+    .filter(i => i.type === 'article' && (!opts?.publishedOnly || i.meta?.cmsStatus !== 'draft'))
+    .sort((a, b) => b.scrapedAt - a.scrapedAt)
+}
+
+export function getArticleBySlug(slug: string): Item | null {
+  return load().items.find(i => i.type === 'article' && i.meta?.slug === slug) || null
 }
 
 export function markError(sourceId: string, err: string) {

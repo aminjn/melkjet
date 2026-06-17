@@ -132,6 +132,24 @@ export default function MarketingPage() {
   const [smsText, setSmsText] = useState('')
   const [smsSending, setSmsSending] = useState(false)
   const [smsResult, setSmsResult] = useState('')
+  const [composing, setComposing] = useState('')
+
+  // نوشتن متن کمپین با هوش مصنوعی
+  const composeAi = async (kind: 'sms' | 'email') => {
+    if (composing) return
+    const topic = window.prompt(kind === 'sms' ? 'موضوع پیامک تبلیغاتی چیست؟ (مثلاً: تخفیف ویژهٔ مشاوره)' : 'موضوع ایمیل کمپین چیست؟')
+    if (!topic || !topic.trim()) return
+    setComposing(kind)
+    try {
+      const instruction = kind === 'sms'
+        ? `یک متن پیامک تبلیغاتی کوتاه و حرفه‌ای (حداکثر ۱۵۰ کاراکتر) برای املاک ملک‌جت دربارهٔ «${topic}» بنویس. فقط متن پیامک، بدون توضیح اضافه.`
+        : `یک متن ایمیل کمپین بازاریابی املاک، جذاب و حرفه‌ای، برای ملک‌جت دربارهٔ «${topic}» بنویس. لحن گرم و انسانی. فقط متن ایمیل.`
+      const r = await fetch('/api/ai/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agent: 'content', input: instruction }) })
+      const d = await r.json()
+      if (d.ok && d.text) { if (kind === 'sms') setSmsText(d.text.trim().slice(0, 300)); else { setEmailBody(d.text.trim()); if (!emailSubject) setEmailSubject(topic) } }
+      else alert(d.error || 'خطا در تولید')
+    } catch { alert('خطا در ارتباط') } finally { setComposing('') }
+  }
 
   const sendSms = async () => {
     if (smsSending) return
@@ -262,6 +280,10 @@ export default function MarketingPage() {
           <Link href="/plan-ai" style={{ display: 'flex', alignItems: 'center', gap: 0, padding: '10px 12px', borderRadius: 10, color: 'var(--gold)', textDecoration: 'none', fontSize: 13.5, fontWeight: 600, marginTop: 4, border: '1px solid rgba(212,175,55,0.25)' }}>
             <span style={{ width: 22, textAlign: 'center', fontSize: 15 }}>◳</span>
             <span className="mjk-sidelabel" style={{ flex: 1, textAlign: 'right' }}>استودیو پلان و سه‌بعدی</span>
+          </Link>
+          <Link href="/content" style={{ display: 'flex', alignItems: 'center', gap: 0, padding: '10px 12px', borderRadius: 10, color: 'var(--gold)', textDecoration: 'none', fontSize: 13.5, fontWeight: 600, marginTop: 4, border: '1px solid rgba(212,175,55,0.25)' }}>
+            <span style={{ width: 22, textAlign: 'center', fontSize: 15 }}>✎</span>
+            <span className="mjk-sidelabel" style={{ flex: 1, textAlign: 'right' }}>مقالات و وبلاگ</span>
           </Link>
         </nav>
 
@@ -753,6 +775,12 @@ export default function MarketingPage() {
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: 12, color: emailResult.startsWith('✓') ? '#5fd98a' : emailResult ? '#e7a14a' : 'var(--faint)' }}>{emailResult}</span>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => composeAi('email')}
+                      disabled={!!composing}
+                      style={{ padding: '11px 18px', borderRadius: 11, border: '1px solid var(--gold)', background: 'transparent', color: 'var(--gold)', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: composing ? 0.6 : 1 }}
+                    >{composing === 'email' ? 'در حال نوشتن…' : '✦ بنویس با AI'}</button>
                     <button
                       onClick={sendEmail}
                       disabled={emailSending}
@@ -771,6 +799,7 @@ export default function MarketingPage() {
                     >
                       {emailSending ? 'در حال ارسال…' : 'ارسال'}
                     </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -965,6 +994,12 @@ export default function MarketingPage() {
                     <span style={{ fontSize: 12, color: smsResult.startsWith('✓') ? '#5fd98a' : smsResult ? '#e7a14a' : 'var(--faint)' }}>
                       {smsResult || `${smsText.length}/۱۶۰ کاراکتر`}
                     </span>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => composeAi('sms')}
+                      disabled={!!composing}
+                      style={{ padding: '11px 18px', borderRadius: 11, border: '1px solid var(--gold)', background: 'transparent', color: 'var(--gold)', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: composing ? 0.6 : 1 }}
+                    >{composing === 'sms' ? 'در حال نوشتن…' : '✦ بنویس با AI'}</button>
                     <button
                       onClick={sendSms}
                       disabled={smsSending}
@@ -983,6 +1018,7 @@ export default function MarketingPage() {
                     >
                       {smsSending ? 'در حال ارسال…' : 'ارسال'}
                     </button>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -4,10 +4,11 @@ import { DEAL_TYPES, PROPERTY_KINDS, PROVINCES, citiesOf, neighborhoodsOf } from
 import { DIVAR_CATEGORIES, DIVAR_CITIES } from '@/app/lib/divar-meta'
 import { AGENTS, categorizeModel, CATEGORY_LABEL, FALLBACK_MODELS, DEFAULT_GAP_BASE, type ModelCategory } from '@/app/lib/ai-agents'
 import PlanStudio from '@/app/components/PlanStudio'
+import ArticleEditor from '@/app/components/ArticleEditor'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 type View =
-  | 'overview' | 'scraper' | 'listings' | 'geo' | 'moderation' | 'content' | 'studio' | 'api'
+  | 'overview' | 'scraper' | 'listings' | 'geo' | 'moderation' | 'content' | 'studio' | 'articles' | 'api'
   | 'reports' | 'plans' | 'promos' | 'ads' | 'users'
   | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags'
 
@@ -25,6 +26,7 @@ const sections: NavSection[] = [
       { id: 'moderation',  icon: '✓',  label: 'تأیید آگهی AI',     badge: '32',    badgeColor: '#e7674a' },
       { id: 'content',     icon: '✦',  label: 'محتوا و سئو' },
       { id: 'studio',      icon: '◳',  label: 'استودیو پلان و سه‌بعدی' },
+      { id: 'articles',    icon: '✎',  label: 'مدیریت مقالات (CMS)' },
       { id: 'api',         icon: '◈',  label: 'API و مدل‌های AI' },
     ],
   },
@@ -75,6 +77,7 @@ const viewTitles: Record<View, string> = {
   moderation: 'تأیید آگهی با هوش مصنوعی',
   content:    'استودیو محتوا و سئو',
   studio:     'استودیو پلان و مدل سه‌بعدی',
+  articles:   'مدیریت مقالات و وبلاگ',
   api:        'API و مدل‌های هوش مصنوعی',
   reports:    'گزارش‌ها و تحلیل داده',
   plans:      'پلن‌ها و اشتراک‌ها',
@@ -1720,6 +1723,14 @@ function StudioView() {
   )
 }
 
+function ArticlesView() {
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <ArticleEditor />
+    </div>
+  )
+}
+
 function ContentView() {
   const [type, setType] = useState('مقاله سئو')
   const [topic, setTopic] = useState('')
@@ -2380,6 +2391,7 @@ export default function SuperAdminPage() {
       case 'moderation': return <ModerationView />
       case 'content':    return <ContentView />
       case 'studio':     return <StudioView />
+      case 'articles':   return <ArticlesView />
       case 'api':        return <APIView />
       case 'users':      return <UsersView />
       case 'plans':      return <PlansView />
