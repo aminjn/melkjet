@@ -1,11 +1,11 @@
 import https from 'node:https'
 import dns from 'node:dns'
 import { Resolver } from 'node:dns'
-import type { LookupFunction } from 'node:net'
 
-// چرا این فایل: سرور مدام «fetch failed» می‌داد چون /etc/resolv.conf (DNS شکن)
-// ریست می‌شد و api.gapgpt.app دیگر resolve نمی‌شد. اینجا DNS را مستقیماً از داخل
-// برنامه روی شکن می‌بریم تا مستقل از resolv.conf سرور همیشه کار کند.
+// چرا این فایل: سرور آروان اینترنت بین‌الملل ندارد و /etc/resolv.conf (DNS شکن)
+// مدام ریست می‌شد، پس api.gapgpt.app / api.neshan.org گاهی resolve نمی‌شدند و
+// «fetch failed / timeout» می‌گرفتیم. اینجا IP را مستقیماً با شکن resolve می‌کنیم
+// و بعد به همان IP با SNI صحیح وصل می‌شویم — مستقل از resolv.conf سرور.
 
 const SHECAN = ['178.22.122.100', '185.51.200.2']
 const resolver = new Resolver()
@@ -14,33 +14,37 @@ try { resolver.setServers(SHECAN) } catch { /* ignore */ }
 const cache = new Map<string, { ip: string; exp: number }>()
 const TTL = 5 * 60 * 1000
 
-// lookup سفارشی: اول از شکن resolve می‌کند، اگر نشد به resolver سیستم برمی‌گردد
-const shecanLookup: LookupFunction = (hostname, options, callback) => {
-  const cb = callback as (err: NodeJS.ErrnoException | null, address: string, family: number) => void
+// resolve یک هاست به IPv4 از طریق شکن (با fallback به resolver سیستم)
+function resolveIp(hostname: string): Promise<string> {
   const c = cache.get(hostname)
-  if (c && c.exp > Date.now()) return cb(null, c.ip, 4)
-  resolver.resolve4(hostname, (err, addrs) => {
-    if (!err && addrs && addrs.length) {
-      cache.set(hostname, { ip: addrs[0], exp: Date.now() + TTL })
-      return cb(null, addrs[0], 4)
-    }
-    // fallback: resolver سیستم‌عامل
-    dns.lookup(hostname, options as any, cb as any)
+  if (c && c.exp > Date.now()) return Promise.resolve(c.ip)
+  return new Promise((resolve, reject) => {
+    resolver.resolve4(hostname, (err, addrs) => {
+      if (!err && addrs && addrs.length && addrs[0]) {
+        cache.set(hostname, { ip: addrs[0], exp: Date.now() + TTL })
+        return resolve(addrs[0])
+      }
+      // fallback: resolver سیستم‌عامل
+      dns.lookup(hostname, { family: 4 }, (e, address) => {
+        if (!e && address) { cache.set(hostname, { ip: address, exp: Date.now() + TTL }); resolve(address) }
+        else reject(e || err || new Error('dns resolve failed: ' + hostname))
+      })
+    })
   })
 }
 
 export interface ShecanResp { status: number; body: string }
 
-// درخواست HTTPS مستقیم با DNS شکن (بدون وابستگی به resolv.conf و بدون پروکسی)
-export function shecanRequest(url: string, init: { method: string; headers: Record<string, string>; body?: string; timeout?: number }): Promise<ShecanResp> {
+// درخواست HTTPS با IP حل‌شده توسط شکن (مستقل از resolv.conf، بدون پروکسی)
+export async function shecanRequest(url: string, init: { method: string; headers: Record<string, string>; body?: string; timeout?: number }): Promise<ShecanResp> {
   const u = new URL(url)
   const timeout = init.timeout ?? 90000
+  const ip = await resolveIp(u.hostname)
   return new Promise((resolve, reject) => {
     const req = https.request({
-      host: u.hostname, port: 443, path: u.pathname + u.search, method: init.method,
+      host: ip, port: 443, path: u.pathname + u.search, method: init.method,
       headers: { ...init.headers, Host: u.hostname },
       servername: u.hostname,   // SNI صحیح برای اعتبارسنجی گواهی
-      lookup: shecanLookup,
       timeout,
     }, (res) => {
       let data = ''
@@ -58,15 +62,15 @@ export function shecanRequest(url: string, init: { method: string; headers: Reco
 export interface ShecanBuf { status: number; buffer: Buffer; contentType: string }
 
 // مثل بالا ولی پاسخ باینری (مثلاً تصویر نقشهٔ استاتیک نشان)
-export function shecanRequestBuffer(url: string, init: { method?: string; headers?: Record<string, string>; timeout?: number } = {}): Promise<ShecanBuf> {
+export async function shecanRequestBuffer(url: string, init: { method?: string; headers?: Record<string, string>; timeout?: number } = {}): Promise<ShecanBuf> {
   const u = new URL(url)
   const timeout = init.timeout ?? 15000
+  const ip = await resolveIp(u.hostname)
   return new Promise((resolve, reject) => {
     const req = https.request({
-      host: u.hostname, port: 443, path: u.pathname + u.search, method: init.method || 'GET',
+      host: ip, port: 443, path: u.pathname + u.search, method: init.method || 'GET',
       headers: { ...(init.headers || {}), Host: u.hostname },
       servername: u.hostname,
-      lookup: shecanLookup,
       timeout,
     }, (res) => {
       const chunks: Buffer[] = []
