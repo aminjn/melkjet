@@ -5,7 +5,7 @@ import { DIVAR_CATEGORIES, DIVAR_CITIES } from '@/app/lib/divar-meta'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 type View =
-  | 'overview' | 'scraper' | 'geo' | 'moderation' | 'content' | 'api'
+  | 'overview' | 'scraper' | 'listings' | 'geo' | 'moderation' | 'content' | 'api'
   | 'reports' | 'plans' | 'promos' | 'ads' | 'users'
   | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags'
 
@@ -19,6 +19,7 @@ const sections: NavSection[] = [
     items: [
       { id: 'overview',    icon: '▦',  label: 'نمای کلی' },
       { id: 'scraper',     icon: '⛏',  label: 'موتور اسکرپی AI',   badge: 'زنده',  badgeColor: '#5fd98a' },
+      { id: 'listings',    icon: '▤',  label: 'مدیریت آگهی‌ها' },
       { id: 'moderation',  icon: '✓',  label: 'تأیید آگهی AI',     badge: '32',    badgeColor: '#e7674a' },
       { id: 'content',     icon: '✦',  label: 'محتوا و سئو' },
       { id: 'api',         icon: '◈',  label: 'API و مدل‌های AI' },
@@ -66,6 +67,7 @@ const sections: NavSection[] = [
 const viewTitles: Record<View, string> = {
   overview:   'نمای کلی سیستم',
   scraper:    'موتور اسکرپی هوشمند',
+  listings:   'مدیریت آگهی‌ها و محتوا',
   geo:        'مدیریت مناطق و محله‌ها',
   moderation: 'تأیید آگهی با هوش مصنوعی',
   content:    'استودیو محتوا و سئو',
@@ -261,6 +263,160 @@ function timeAgo(ts: number | null): string {
   const h = Math.floor(m / 60)
   if (h < 24) return `${h} ساعت پیش`
   return `${Math.floor(h / 24)} روز پیش`
+}
+
+// ─── مدیریت آگهی‌ها و محتوای واکشی‌شده ─────────────────────────────────────
+interface MItem {
+  id: string; type: string; category?: string; title: string; price?: string
+  location?: string; image?: string; url?: string; excerpt?: string; phone?: string
+  sourceName: string; status: string; featured?: boolean; edited?: boolean; scrapedAt: number
+}
+const M_TYPES: { k: string; label: string }[] = [
+  { k: '', label: 'همه' }, { k: 'listing', label: 'آگهی' }, { k: 'directory', label: 'پروفایل/دفتر' },
+  { k: 'product', label: 'فروشگاه' }, { k: 'article', label: 'مقاله' }, { k: 'price', label: 'قیمت' },
+]
+const M_STATUS: Record<string, { label: string; color: string }> = {
+  pending: { label: 'منتظر', color: '#5b9bd5' }, approved: { label: 'تأیید', color: '#5fd98a' },
+  duplicate: { label: 'تکراری', color: '#e7a14a' }, rejected: { label: 'رد', color: '#e7674a' },
+}
+
+function ListingsView() {
+  const [items, setItems] = useState<MItem[]>([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [type, setType] = useState('')
+  const [status, setStatus] = useState('')
+  const [q, setQ] = useState('')
+  const [edit, setEdit] = useState<MItem | null>(null)
+  const [sel, setSel] = useState<Set<string>>(new Set())
+
+  const load = async () => {
+    setLoading(true)
+    const sp = new URLSearchParams()
+    if (type) sp.set('type', type)
+    if (status) sp.set('status', status)
+    if (q.trim()) sp.set('q', q.trim())
+    const r = await fetch(`/api/admin/scraper/items?${sp}`)
+    if (r.ok) { const d = await r.json(); setItems(d.items); setTotal(d.total) }
+    setLoading(false); setSel(new Set())
+  }
+  useEffect(() => { load() }, [type, status])
+
+  const patch = async (id: string, body: any) => {
+    await fetch('/api/admin/scraper/items', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...body }) })
+  }
+  const setStatusOf = async (id: string, s: string) => { setItems(items.map(i => i.id === id ? { ...i, status: s } : i)); await patch(id, { status: s }) }
+  const toggleFeatured = async (it: MItem) => { setItems(items.map(i => i.id === it.id ? { ...i, featured: !it.featured } : i)); await patch(it.id, { patch: { featured: !it.featured } }) }
+  const del = async (id: string) => { if (!confirm('این آیتم حذف شود؟')) return; setItems(items.filter(i => i.id !== id)); await fetch(`/api/admin/scraper/items?id=${id}`, { method: 'DELETE' }) }
+  const delSelected = async () => {
+    if (!sel.size || !confirm(`${sel.size} آیتم حذف شود؟`)) return
+    const ids = [...sel]; setItems(items.filter(i => !sel.has(i.id))); setSel(new Set())
+    await fetch('/api/admin/scraper/items', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) })
+  }
+  const saveEdit = async (patchData: any) => {
+    if (!edit) return
+    setItems(items.map(i => i.id === edit.id ? { ...i, ...patchData } : i))
+    await patch(edit.id, { patch: patchData }); setEdit(null)
+  }
+  const toggleSel = (id: string) => setSel(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+
+  const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '8px 11px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      {/* filters */}
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          {M_TYPES.map(t => (
+            <button key={t.k} onClick={() => setType(t.k)} style={{
+              padding: '7px 13px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5,
+              border: `1px solid ${type === t.k ? 'var(--gold)' : 'var(--line2)'}`,
+              background: type === t.k ? 'var(--goldDim)' : 'transparent', color: type === t.k ? 'var(--gold)' : 'var(--muted)', fontWeight: type === t.k ? 700 : 500,
+            }}>{t.label}</button>
+          ))}
+          <div style={{ flex: 1 }} />
+          <select style={inp} value={status} onChange={e => setStatus(e.target.value)}>
+            <option value="">همه وضعیت‌ها</option>
+            <option value="pending">منتظر</option>
+            <option value="approved">تأیید‌شده</option>
+            <option value="rejected">رد‌شده</option>
+          </select>
+          <input style={inp} placeholder="جستجو…" value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') load() }} />
+          <OutlineButton onClick={load}>جستجو</OutlineButton>
+        </div>
+        <div style={{ marginTop: 10, fontSize: 12.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span>{loading ? 'در حال بارگذاری…' : `${total} مورد`}</span>
+          {sel.size > 0 && <button onClick={delSelected} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.4)', color: '#e7674a', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>🗑 حذف {sel.size} مورد انتخاب‌شده</button>}
+        </div>
+      </Card>
+
+      {/* list */}
+      <Card>
+        {items.length === 0 && !loading ? (
+          <div style={{ color: 'var(--muted)', fontSize: 13, padding: '30px 0', textAlign: 'center' }}>موردی نیست. یک منبع اجرا کنید یا فیلترها را تغییر دهید.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {items.map(it => (
+              <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg2)', borderRadius: 12, padding: '10px 12px', flexWrap: 'wrap' }}>
+                <input type="checkbox" checked={sel.has(it.id)} onChange={() => toggleSel(it.id)} style={{ width: 16, height: 16, accentColor: 'var(--gold)', cursor: 'pointer' }} />
+                {it.image
+                  ? <img src={it.image} alt="" style={{ width: 48, height: 48, borderRadius: 9, objectFit: 'cover', flexShrink: 0, background: 'var(--surface)' }} onError={e => { (e.target as HTMLImageElement).style.visibility = 'hidden' }} />
+                  : <span style={{ width: 48, height: 48, borderRadius: 9, background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--gold)' }}>▤</span>}
+                <div style={{ flex: 1, minWidth: 180 }}>
+                  <a href={it.url || '#'} target="_blank" rel="noreferrer" style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text)', textDecoration: 'none', display: 'block', lineHeight: 1.5 }}>{it.featured && '★ '}{it.title}{it.edited && <span style={{ color: 'var(--faint)', fontSize: 10, marginRight: 4 }}>(ویرایش‌شده)</span>}</a>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>{[it.location, it.sourceName, it.category].filter(Boolean).join(' · ')}</div>
+                </div>
+                {it.price && <span style={{ fontWeight: 700, color: 'var(--gold)', fontSize: 13, whiteSpace: 'nowrap' }}>{it.price}</span>}
+                <Badge label={M_STATUS[it.status]?.label || it.status} color={M_STATUS[it.status]?.color || 'var(--faint)'} />
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button title="ویژه" onClick={() => toggleFeatured(it)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16, color: it.featured ? 'var(--gold)' : 'var(--faint)' }}>★</button>
+                  {it.status !== 'approved' && <button title="تأیید" onClick={() => setStatusOf(it.id, 'approved')} style={{ background: 'transparent', border: '1px solid #5fd98a', color: '#5fd98a', borderRadius: 8, padding: '4px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11.5 }}>✓</button>}
+                  {it.status !== 'rejected' && <button title="رد" onClick={() => setStatusOf(it.id, 'rejected')} style={{ background: 'transparent', border: '1px solid #e7a14a', color: '#e7a14a', borderRadius: 8, padding: '4px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11.5 }}>↧</button>}
+                  <OutlineButton onClick={() => setEdit(it)} style={{ fontSize: 11.5, padding: '4px 11px' }}>ویرایش</OutlineButton>
+                  <button title="حذف" onClick={() => del(it.id)} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', borderRadius: 8, padding: '4px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>×</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {edit && <EditItemModal item={edit} onClose={() => setEdit(null)} onSave={saveEdit} />}
+    </div>
+  )
+}
+
+function EditItemModal({ item, onClose, onSave }: { item: MItem; onClose: () => void; onSave: (p: any) => void }) {
+  const [f, setF] = useState({ title: item.title || '', price: item.price || '', location: item.location || '', excerpt: item.excerpt || '', phone: item.phone || '', image: item.image || '', url: item.url || '' })
+  const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+  const lab: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', marginBottom: 5, display: 'block', fontWeight: 600 }
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 100, padding: 20, overflowY: 'auto' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 18, padding: 24, width: '100%', maxWidth: 520, margin: 'auto', animation: 'rise .25s ease' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+          <div style={{ fontWeight: 800, fontSize: 16 }}>ویرایش آیتم</div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 20, cursor: 'pointer' }}>×</button>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div><label style={lab}>عنوان</label><input style={inp} value={f.title} onChange={e => setF({ ...f, title: e.target.value })} /></div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div><label style={lab}>قیمت</label><input style={inp} value={f.price} onChange={e => setF({ ...f, price: e.target.value })} /></div>
+            <div><label style={lab}>موقعیت</label><input style={inp} value={f.location} onChange={e => setF({ ...f, location: e.target.value })} /></div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div><label style={lab}>تلفن</label><input style={{ ...inp, direction: 'ltr', textAlign: 'left' }} value={f.phone} onChange={e => setF({ ...f, phone: e.target.value })} /></div>
+            <div><label style={lab}>لینک</label><input style={{ ...inp, direction: 'ltr', textAlign: 'left' }} value={f.url} onChange={e => setF({ ...f, url: e.target.value })} /></div>
+          </div>
+          <div><label style={lab}>تصویر (URL)</label><input style={{ ...inp, direction: 'ltr', textAlign: 'left' }} value={f.image} onChange={e => setF({ ...f, image: e.target.value })} /></div>
+          <div><label style={lab}>توضیح</label><textarea style={{ ...inp, height: 70, resize: 'none' }} value={f.excerpt} onChange={e => setF({ ...f, excerpt: e.target.value })} /></div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+            <GoldButton onClick={() => onSave(f)} style={{ flex: 1 }}>ذخیره تغییرات</GoldButton>
+            <OutlineButton onClick={onClose}>انصراف</OutlineButton>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // ─── GEO: مدیریت استان/شهر/منطقه/محله ─────────────────────────────────────
@@ -1570,6 +1726,7 @@ export default function SuperAdminPage() {
     switch (active) {
       case 'overview':   return <OverviewView />
       case 'scraper':    return <ScraperView />
+      case 'listings':   return <ListingsView />
       case 'geo':        return <GeoView />
       case 'moderation': return <ModerationView />
       case 'content':    return <ContentView />

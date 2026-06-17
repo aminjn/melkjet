@@ -57,9 +57,14 @@ export interface Item {
   rating?: string
   tags?: string[]
   meta?: Record<string, string>   // شهر، محله، نوع آگهی، تخصص …
+  featured?: boolean
+  edited?: boolean
   scrapedAt: number
   status: ItemStatus
 }
+
+// Fields an admin may edit on a stored item
+export type EditableItem = Partial<Pick<Item, 'title' | 'price' | 'location' | 'image' | 'url' | 'excerpt' | 'phone' | 'category' | 'status' | 'featured'>>
 
 interface DB { sources: Source[]; items: Item[]; categories?: string[] }
 
@@ -141,6 +146,34 @@ export function setItemStatus(itemId: string, status: ItemStatus) {
   const db = load()
   const it = db.items.find(i => i.id === itemId)
   if (it) { it.status = status; save(db) }
+}
+
+export function updateItem(itemId: string, patch: EditableItem) {
+  const db = load()
+  const it = db.items.find(i => i.id === itemId)
+  if (!it) return null
+  const allowed: (keyof EditableItem)[] = ['title', 'price', 'location', 'image', 'url', 'excerpt', 'phone', 'category', 'status', 'featured']
+  for (const k of allowed) {
+    if (patch[k] !== undefined) (it as any)[k] = patch[k]
+  }
+  it.edited = true
+  save(db)
+  return it
+}
+
+export function deleteItem(itemId: string) {
+  const db = load()
+  const n = db.items.length
+  db.items = db.items.filter(i => i.id !== itemId)
+  save(db)
+  return db.items.length < n
+}
+
+export function deleteItems(ids: string[]) {
+  const db = load()
+  const set = new Set(ids)
+  db.items = db.items.filter(i => !set.has(i.id))
+  save(db)
 }
 
 // Wipe all items, or only one type. Sources are kept.

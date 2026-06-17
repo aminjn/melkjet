@@ -10,5 +10,7 @@ export async function GET(req: NextRequest) {
   const limit = Math.min(parseInt(sp.get('limit') || '60', 10) || 60, 200)
   const valid = type && ['listing', 'directory', 'product', 'article', 'price'].includes(type)
   const items = listItems(valid ? type : undefined, { category, publicOnly: true })
-  return NextResponse.json({ items: items.slice(0, limit) })
+  // featured first, then newest
+  items.sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0) || b.scrapedAt - a.scrapedAt)
+  return NextResponse.json({ items: items.slice(0, limit), total: items.length })
 }
