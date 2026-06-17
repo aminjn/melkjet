@@ -1204,19 +1204,20 @@ function ContentView() {
     { title: 'شرایط دریافت وام مسکن ۱۴۰۳', status: 'در بررسی', views: '—' },
   ]
   const statusColor: Record<string, string> = { منتشر: '#5fd98a', 'پیش‌نویس': '#5b9bd5', 'در بررسی': '#e7a14a' }
-  const ivRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const generate = () => {
-    if (!topic) return
-    if (ivRef.current) clearInterval(ivRef.current)
+  const generate = async () => {
+    if (!topic || generating) return
     setGenerating(true); setOutput('')
-    const text = `# ${topic}\n\nاین یک ${type} جامع درباره ${topic} است که توسط هوش مصنوعی تولید شده.\n\n## مقدمه\n\nبازار ${topic} در سال‌های اخیر شاهد تحولات چشمگیری بوده است. بر اساس داده‌های ملک‌جت، تقاضا برای این حوزه در تهران به شدت افزایش یافته است.\n\n## تحلیل بازار\n\nمیانگین قیمت در این بازار طی ۶ ماه گذشته ۱۲٪ رشد داشته است. کارشناسان انتظار دارند این روند ادامه یابد.\n\n## نتیجه‌گیری\n\nبرای موفقیت در این حوزه، توجه به موقعیت، دسترسی و کیفیت ساخت ضروری است.`
-    let i = 0
-    ivRef.current = setInterval(() => {
-      i += 8
-      setOutput(text.slice(0, i))
-      if (i >= text.length) { clearInterval(ivRef.current!); setGenerating(false) }
-    }, 30)
+    try {
+      const r = await fetch('/api/ai/run', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agent: 'content', input: `یک «${type}» کامل و سئو-محور دربارهٔ موضوع زیر بنویس:\n${topic}` }),
+      })
+      const d = await r.json()
+      setOutput(d.ok ? d.text : `⚠ ${d.error || 'خطا در تولید محتوا'}`)
+    } catch {
+      setOutput('⚠ خطا در ارتباط با سرور')
+    } finally { setGenerating(false) }
   }
 
   return (

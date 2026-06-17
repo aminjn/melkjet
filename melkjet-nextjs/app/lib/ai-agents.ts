@@ -39,14 +39,25 @@ export const CATEGORY_LABEL: Record<ModelCategory, string> = {
   audio: 'مدل‌های صوتی',
 }
 
-// Curated fallback list (used if the live /models call fails)
+// Curated fallback list (used only if the live /models call fails)
 export const FALLBACK_MODELS: string[] = [
-  'gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini', 'o3', 'o4-mini', 'gpt-3.5-turbo',
-  'gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash',
-  'claude-3-7-sonnet', 'claude-3-5-sonnet', 'claude-3-5-haiku',
-  'deepseek-chat', 'deepseek-reasoner', 'grok-3', 'llama-3.3-70b',
-  'gpt-image-1', 'dall-e-3', 'flux-1.1-pro', 'flux-schnell', 'imagen-3', 'stable-diffusion-3.5-large',
-  'text-embedding-3-small', 'text-embedding-3-large',
+  // OpenAI chat
+  'gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4-turbo',
+  'o3', 'o3-mini', 'o4-mini', 'o1', 'o1-mini', 'gpt-3.5-turbo', 'chatgpt-4o-latest',
+  // Gemini
+  'gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-pro', 'gemini-1.5-flash',
+  // Claude
+  'claude-opus-4', 'claude-sonnet-4', 'claude-3-7-sonnet', 'claude-3-5-sonnet', 'claude-3-5-haiku', 'claude-3-opus',
+  // DeepSeek / Grok / others
+  'deepseek-chat', 'deepseek-reasoner', 'grok-4', 'grok-3', 'grok-3-mini',
+  'llama-3.3-70b', 'llama-4-maverick', 'qwen-2.5-72b', 'mistral-large',
+  // Image generation
+  'gpt-image-1', 'dall-e-3', 'dall-e-2', 'flux-1.1-pro', 'flux-pro', 'flux-dev', 'flux-schnell',
+  'imagen-3', 'imagen-4', 'stable-diffusion-3.5-large', 'ideogram-v2',
+  // Embedding
+  'text-embedding-3-small', 'text-embedding-3-large', 'text-embedding-ada-002',
+  // Audio
+  'whisper-1', 'tts-1', 'tts-1-hd',
 ]
 
 export const DEFAULT_GAP_BASE = 'https://api.gapgpt.app/v1'

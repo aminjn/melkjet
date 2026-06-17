@@ -144,21 +144,25 @@ export default function PropertyPage() {
                 {item.price && <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--gold)', marginBottom: 4 }}>{item.price}</div>}
                 <div style={{ fontSize: 12, color: 'var(--faint)', marginBottom: 18 }}>منبع: {item.sourceName} · {timeAgo(item.scrapedAt)}</div>
 
-                {item.phone && (
-                  <a href={`tel:${item.phone}`} style={{ display: 'block', textAlign: 'center', padding: '12px', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontWeight: 800, marginBottom: 10 }}>
-                    ☎ {item.phone}
-                  </a>
+                {(item as any).owner && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, paddingBottom: 14, borderBottom: '1px solid var(--line)' }}>
+                    <span style={{ width: 40, height: 40, borderRadius: '50%', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, flexShrink: 0 }}>{((item as any).owner || '؟').slice(0, 1)}</span>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 13.5 }}>{(item as any).owner}</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>مالک / مشاور آگهی</div>
+                    </div>
+                  </div>
                 )}
 
-                {item.url && (
-                  <a href={item.url} target="_blank" rel="noreferrer" style={{ display: 'block', textAlign: 'center', padding: '12px', borderRadius: 12, border: '1px solid var(--gold)', color: 'var(--gold)', textDecoration: 'none', fontWeight: 700 }}>
-                    مشاهدهٔ آگهی اصلی ↗
+                {item.phone ? (
+                  <a href={`tel:${item.phone}`} style={{ display: 'block', textAlign: 'center', padding: '13px', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontWeight: 800 }}>
+                    ☎ تماس — {item.phone}
                   </a>
+                ) : (
+                  <button style={{ width: '100%', padding: '13px', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', border: 'none', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', fontSize: 14 }}>
+                    دریافت اطلاعات تماس
+                  </button>
                 )}
-
-                <div style={{ marginTop: 16, padding: 14, background: 'var(--bg2)', borderRadius: 12, fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>
-                   این آگهی به‌صورت خودکار از منبع خارجی واکشی شده است. برای تصاویر کامل و جزئیات بیشتر، روی «مشاهدهٔ آگهی اصلی» بزنید.
-                </div>
               </div>
             </div>
           </div>
