@@ -48,18 +48,19 @@ export async function GET(req: NextRequest) {
     }
     if (res.status !== 200) return NextResponse.json({ images: [], reason: `http_${res.status}`, token })
 
-    // Collect real photo URLs (exclude icons/logos). Dedup, cap 20.
+    // Collect real photo URLs (exclude icons/logos). Divar serves thumbnail +
+    // full of the same photo (same filename, different size folder) — dedup by
+    // filename and prefer the non-thumbnail version. Cap 20.
     const re = /https?:\\?\/\\?\/[^"'\s]*divarcdn[^"'\s]*\.(?:jpe?g|png|webp)/gi
     const found = (res.body.match(re) || []).map(u => u.replace(/\\\//g, '/'))
-    const seen = new Set<string>()
-    const images: string[] = []
+    const byName = new Map<string, string>()
     for (const u of found) {
       if (/widget-icons|\/imgs\/|logo|avatar|brand/i.test(u)) continue
-      const key = u.split('?')[0]
-      if (seen.has(key)) continue
-      seen.add(key); images.push(u)
-      if (images.length >= 20) break
+      const name = (u.split('?')[0].split('/').pop() || u)
+      const ex = byName.get(name)
+      if (!ex || (/thumbnail/i.test(ex) && !/thumbnail/i.test(u))) byName.set(name, u)
     }
+    const images = Array.from(byName.values()).slice(0, 20)
 
     // ── Parse the JSON and extract everything structured ──
     let d: any = null

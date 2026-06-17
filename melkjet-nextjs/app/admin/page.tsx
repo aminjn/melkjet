@@ -1244,6 +1244,19 @@ function KnowledgeBase() {
   const del = async (id: string) => { setPoints(points.filter(p => p.id !== id)); await fetch(`/api/admin/market/data?id=${id}`, { method: 'DELETE' }) }
   const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '8px 11px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
 
+  const [model, setModel] = useState<any>(null)
+  const [report, setReport] = useState('')
+  const [working, setWorking] = useState('')
+  const trainModel = async () => { setWorking('train'); const r = await fetch('/api/admin/market/model'); setModel(r.ok ? await r.json() : null); setWorking('') }
+  const genReport = async () => { setWorking('report'); setReport(''); const r = await fetch('/api/admin/market/report', { method: 'POST' }); const d = await r.json(); setReport(d.ok ? d.text : `⚠ ${d.error || 'خطا'}`); setWorking('') }
+  const exportCsv = () => {
+    const head = 'metric,value,unit,city,district,period,source\n'
+    const body = points.map(p => [p.metric, p.value, p.unit || '', p.city || '', p.district || '', p.period || '', p.source].map(x => `"${String(x).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob(['﻿' + head + body], { type: 'text/csv' }); const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob); a.download = 'melkjet-dataset.csv'; a.click()
+  }
+  const clearAll = async () => { if (!confirm('کل دیتاست پاک شود؟')) return; await fetch('/api/admin/market/data', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clearAll: true }) }); load(); setModel(null) }
+
   return (
     <>
       <Card style={{ marginBottom: 14 }}>
@@ -1298,6 +1311,47 @@ function KnowledgeBase() {
             </table>
           </div>
         )}
+      </Card>
+
+      {/* model + controls */}
+      <Card>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
+          <div style={{ fontWeight: 700, fontSize: 14 }}>مدل قیمت + ابزارها</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <GoldButton onClick={trainModel} style={{ fontSize: 12.5, padding: '7px 13px', opacity: working ? .6 : 1 }}>{working === 'train' ? 'در حال ساخت…' : '🧠 ساخت/به‌روزرسانی مدل'}</GoldButton>
+            <OutlineButton onClick={genReport} style={{ fontSize: 12.5, padding: '7px 13px', opacity: working ? .6 : 1 }}>{working === 'report' ? 'در حال نوشتن…' : '📄 گزارش بازار (AI)'}</OutlineButton>
+            <OutlineButton onClick={exportCsv} style={{ fontSize: 12.5, padding: '7px 13px' }}>⬇ خروجی CSV</OutlineButton>
+            <button onClick={clearAll} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', borderRadius: 11, padding: '7px 13px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>🗑 پاک‌کردن دیتاست</button>
+          </div>
+        </div>
+        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.8 }}>
+          «ساخت مدل» روی همهٔ داده‌های قیمتِ دیتاست یک شاخص قیمت برای هر محله می‌سازد (آخرین قیمت، نرخ رشد، پیش‌بینی دورهٔ بعد). این مدل به تحلیل آگهی‌ها و امتیاز «ارزش خرید» وصل است و هرچه دیتای بیشتری وارد کنی دقیق‌تر می‌شود.
+        </div>
+        {model && (
+          <>
+            <div style={{ fontSize: 12.5, color: '#5fd98a', marginBottom: 10 }}>✓ مدل روی {model.trainedOn.toLocaleString('fa-IR')} نقطه‌دادهٔ قیمت ساخته شد — {model.indices.length} محله</div>
+            {model.indices.length > 0 && (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 520 }}>
+                  <thead><tr style={{ borderBottom: '1px solid var(--line)' }}>{['محله', 'شهر', 'داده', 'آخرین قیمت', 'رشد', 'پیش‌بینی دورهٔ بعد'].map(h => <th key={h} style={{ textAlign: 'right', padding: '7px', fontSize: 11.5, color: 'var(--faint)', fontWeight: 600 }}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {model.indices.slice(0, 40).map((r: any, i: number) => (
+                      <tr key={i} style={{ borderBottom: '1px solid var(--line)' }}>
+                        <td style={{ padding: '8px 7px', fontWeight: 600, fontSize: 12.5 }}>{r.district}</td>
+                        <td style={{ padding: '8px 7px', fontSize: 12, color: 'var(--muted)' }}>{r.city}</td>
+                        <td style={{ padding: '8px 7px', fontSize: 12 }}>{r.points.toLocaleString('fa-IR')}</td>
+                        <td style={{ padding: '8px 7px', fontSize: 12.5, color: 'var(--gold)', fontWeight: 600 }}>{r.latest.toLocaleString('fa-IR')}</td>
+                        <td style={{ padding: '8px 7px', fontSize: 12, color: r.growth >= 0 ? '#5fd98a' : '#e7674a' }}>{r.growth >= 0 ? '↑' : '↓'} {Math.abs(r.growth).toLocaleString('fa-IR')}٪</td>
+                        <td style={{ padding: '8px 7px', fontSize: 12.5, fontWeight: 600 }}>{r.forecast.toLocaleString('fa-IR')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+        {report && <div style={{ marginTop: 14, background: 'var(--bg2)', borderRadius: 12, padding: 16, fontSize: 13.5, lineHeight: 1.9, whiteSpace: 'pre-wrap' }}>{report}</div>}
       </Card>
     </>
   )

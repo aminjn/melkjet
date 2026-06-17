@@ -74,3 +74,29 @@ export function dataStats() {
   const metrics = Array.from(new Set(pts.map(p => p.metric)))
   return { total: pts.length, sources: sources.length, metrics, sourceList: sources }
 }
+
+// "Train" a market model from the dataset: per (city, district) build a price
+// index, growth rate, and a next-period forecast from the time-ordered points.
+export function buildModel() {
+  const pts = load().points.filter(p => /قیمت/.test(p.metric))
+  const groups: Record<string, { city?: string; district?: string; series: { period: string; value: number }[] }> = {}
+  for (const p of pts) {
+    const k = `${p.district || '—'}|${p.city || '—'}`
+    const g = groups[k] || (groups[k] = { city: p.city, district: p.district, series: [] })
+    g.series.push({ period: p.period || '', value: p.value })
+  }
+  const indices = Object.values(groups).map(g => {
+    const s = g.series.sort((a, b) => a.period.localeCompare(b.period))
+    const first = s[0]?.value || 0, latest = s[s.length - 1]?.value || 0
+    const growth = first ? (latest - first) / first : 0
+    const perStep = s.length > 1 ? growth / (s.length - 1) : growth
+    const forecast = Math.round(latest * (1 + perStep))
+    return {
+      district: g.district || '—', city: g.city || '—', points: s.length,
+      latest: Math.round(latest), growth: Math.round(growth * 100),
+      forecast, series: s,
+    }
+  }).sort((a, b) => b.latest - a.latest)
+  return { trainedOn: pts.length, totalPoints: load().points.length, indices, trainedAt: Date.now() }
+}
+
