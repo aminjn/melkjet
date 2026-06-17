@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
     }
     if (res.status !== 200) return NextResponse.json({ images: [], reason: `http_${res.status}`, token })
 
-    // Collect real photo URLs (exclude icons/logos). Dedup, cap 15.
+    // Collect real photo URLs (exclude icons/logos). Dedup, cap 20.
     const re = /https?:\\?\/\\?\/[^"'\s]*divarcdn[^"'\s]*\.(?:jpe?g|png|webp)/gi
     const found = (res.body.match(re) || []).map(u => u.replace(/\\\//g, '/'))
     const seen = new Set<string>()
@@ -58,34 +58,78 @@ export async function GET(req: NextRequest) {
       const key = u.split('?')[0]
       if (seen.has(key)) continue
       seen.add(key); images.push(u)
-      if (images.length >= 15) break
+      if (images.length >= 20) break
     }
 
-    const unesc = (s: string) => s.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\//g, '/')
+    // ── Parse the JSON and extract everything structured ──
+    let d: any = null
+    try { d = JSON.parse(res.body) } catch { /* fall back below */ }
 
-    // Longest description (the full توضیحات)
-    let description: string | undefined
-    const descs = [...res.body.matchAll(/"description"\s*:\s*"((?:[^"\\]|\\.){20,})"/g)].map(m => unesc(m[1]))
-    if (descs.length) description = descs.sort((a, b) => b.length - a.length)[0]
+    const strOf = (x: any): string => {
+      if (x == null) return ''
+      if (typeof x === 'string') return x
+      if (typeof x === 'number') return String(x)
+      if (typeof x === 'object') return strOf(x.value ?? x.str?.value ?? x.text ?? x.normalized_text ?? x.name ?? x.title ?? '')
+      return ''
+    }
+    const findFirst = (o: any, key: string): any => {
+      let res: any
+      const walk = (x: any) => { if (res !== undefined || !x || typeof x !== 'object') return; if (key in x) { res = x[key]; return }; for (const k in x) walk(x[k]) }
+      walk(o); return res
+    }
 
-    // Key facts: scan small JSON objects; if an object contains a known label,
-    // take the other short string in it as the value (robust to field order).
-    const LABELS = ['متراژ', 'ساخت', 'سن بنا', 'سال ساخت', 'اتاق', 'تعداد اتاق', 'خواب', 'طبقه', 'ودیعه', 'اجاره', 'اجارهٔ ماهانه', 'قیمت', 'قیمت کل', 'قیمت هر متر', 'پارکینگ', 'آسانسور', 'انباری', 'بالکن', 'جهت ساختمان', 'سند', 'وضعیت واحد']
+    const FACT_LABELS = ['متراژ', 'ساخت', 'سن بنا', 'سال ساخت', 'اتاق', 'تعداد اتاق', 'خواب', 'طبقه', 'ودیعه', 'اجاره', 'اجارهٔ ماهانه', 'قیمت', 'قیمت کل', 'قیمت کل (تومان)', 'قیمت هر متر', 'پارکینگ', 'آسانسور', 'انباری', 'بالکن', 'جهت ساختمان', 'سند', 'وضعیت واحد', 'نوع']
+    const AMENITY_WORDS = ['آسانسور', 'پارکینگ', 'انباری', 'بالکن', 'تراس', 'کولر', 'پکیج', 'لابی', 'سالن اجتماعات', 'استخر', 'سونا', 'جکوزی', 'روف‌گاردن', 'دوربین', 'سیستم امنیتی', 'لاندری', 'مستر', 'نگهبان', 'سرایدار', 'فول مشاعات']
     const factsMap: Record<string, string> = {}
-    for (const om of res.body.matchAll(/\{[^{}]{0,260}\}/g)) {
-      const o = om[0]
-      const label = LABELS.find(l => o.includes(`"${l}"`))
-      if (!label || factsMap[label]) continue
-      const vals = [...o.matchAll(/"(?:value|title|text|normalized_text|display_text)":"([^"]{1,40})"/g)]
-        .map(x => unesc(x[1]).trim())
-        .filter(v => v && !LABELS.includes(v) && v !== 'true' && v !== 'false')
-      if (vals.length) factsMap[label] = vals[0]
-    }
-    // keep a sensible order
-    const order = ['متراژ', 'خواب', 'اتاق', 'تعداد اتاق', 'ساخت', 'سال ساخت', 'سن بنا', 'طبقه', 'قیمت', 'قیمت کل', 'قیمت هر متر', 'ودیعه', 'اجاره', 'اجارهٔ ماهانه', 'پارکینگ', 'آسانسور', 'انباری', 'بالکن', 'جهت ساختمان', 'سند', 'وضعیت واحد']
-    const facts = order.filter(l => factsMap[l]).map(l => ({ label: l, value: factsMap[l] }))
+    const amenitySet = new Set<string>()
+    let lat: number | undefined, lng: number | undefined
+    let description: string | undefined
 
-    return NextResponse.json({ images, description, facts })
+    if (d) {
+      // schema.org structured fields (most reliable)
+      const fs = findFirst(d, 'floorSize'); if (fs) factsMap['متراژ'] = strOf(fs).replace(/[^\d۰-۹٬,]/g, '') + ' متر'
+      const nr = findFirst(d, 'numberOfRooms'); if (nr != null) factsMap['اتاق'] = strOf(nr)
+      // geo for the map
+      const la = findFirst(d, 'latitude'), lo = findFirst(d, 'longitude')
+      if (typeof la === 'number' && typeof lo === 'number') { lat = la; lng = lo }
+      // full description
+      const dsc = findFirst(d, 'description'); if (dsc) description = strOf(dsc)
+
+      // walk widgets: collect {title,value} fact pairs + amenity chips
+      const walk = (x: any) => {
+        if (!x || typeof x !== 'object') return
+        if (Array.isArray(x)) { x.forEach(walk); return }
+        if ('title' in x && 'value' in x) {
+          const a = strOf(x.title).trim(), b = strOf(x.value).trim()
+          if (a && b && a.length <= 40 && b.length <= 40) {
+            if (FACT_LABELS.includes(b) && !factsMap[b]) factsMap[b] = a
+            else if (FACT_LABELS.includes(a) && !factsMap[a]) factsMap[a] = b
+          }
+        }
+        // amenity feature rows often just have a title
+        const t = strOf(x.title).trim()
+        if (t && AMENITY_WORDS.some(w => t === w || t.includes(w))) AMENITY_WORDS.forEach(w => { if (t.includes(w)) amenitySet.add(w) })
+        for (const k in x) walk(x[k])
+      }
+      walk(d)
+    }
+
+    // amenities also from the description text
+    const dtext = description || ''
+    AMENITY_WORDS.forEach(w => { if (dtext.includes(w)) amenitySet.add(w) })
+
+    // longest description fallback (regex) if JSON parse missed it
+    if (!description) {
+      const unesc = (s: string) => s.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\//g, '/')
+      const descs = [...res.body.matchAll(/"description"\s*:\s*"((?:[^"\\]|\\.){20,})"/g)].map(m => unesc(m[1]))
+      if (descs.length) description = descs.sort((a, b) => b.length - a.length)[0]
+    }
+
+    const order = ['متراژ', 'خواب', 'اتاق', 'تعداد اتاق', 'ساخت', 'سال ساخت', 'سن بنا', 'طبقه', 'قیمت', 'قیمت کل', 'قیمت کل (تومان)', 'قیمت هر متر', 'ودیعه', 'اجاره', 'اجارهٔ ماهانه', 'نوع', 'سند', 'جهت ساختمان', 'وضعیت واحد']
+    const facts = order.filter(l => factsMap[l]).map(l => ({ label: l, value: factsMap[l] }))
+    const amenities = Array.from(amenitySet)
+
+    return NextResponse.json({ images, description, facts, amenities, lat, lng })
   } catch (e: any) {
     return NextResponse.json({ images: [], reason: e?.message || 'error' })
   }

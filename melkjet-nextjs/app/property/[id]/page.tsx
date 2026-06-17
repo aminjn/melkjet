@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import Nav from '@/app/components/Nav'
+import PropertyMap from '@/app/components/PropertyMap'
 
 interface Item {
   id: string; type: string; category?: string; title: string; price?: string
@@ -47,6 +48,8 @@ export default function PropertyPage() {
   const [activeImg, setActiveImg] = useState(0)
   const [facts, setFacts] = useState<Fact[]>([])
   const [aiAmenities, setAiAmenities] = useState<string[]>([])
+  const [divarAmenities, setDivarAmenities] = useState<string[]>([])
+  const [geo, setGeo] = useState<{ lat: number; lng: number } | null>(null)
   const [analysis, setAnalysis] = useState<Analysis | null>(null)
   const [aiError, setAiError] = useState('')
   const [similar, setSimilar] = useState<Item[]>([])
@@ -82,6 +85,8 @@ export default function PropertyPage() {
           if (g.images?.length) setGallery(g.images)
           const fct: Fact[] = g.facts?.length ? g.facts : []
           if (fct.length) setFacts(fct)
+          if (g.amenities?.length) setDivarAmenities(g.amenities)
+          if (typeof g.lat === 'number' && typeof g.lng === 'number') setGeo({ lat: g.lat, lng: g.lng })
           const desc = g.description || it.excerpt || ''
           if (g.description) setItem(p => p ? { ...p, excerpt: g.description } : p)
           finishAnalyze(fct, desc)
@@ -96,7 +101,7 @@ export default function PropertyPage() {
   const amenities = (() => {
     const text = (item?.excerpt || '') + ' ' + facts.map(f => f.label + ' ' + f.value).join(' ')
     const fromText = AMENITY_WORDS.filter(w => text.includes(w))
-    return Array.from(new Set([...fromText, ...aiAmenities]))
+    return Array.from(new Set([...divarAmenities, ...fromText, ...aiAmenities]))
   })()
   const perMeter = (() => {
     const area = parseFloat((facts.find(f => f.label === 'متراژ')?.value || '').replace(/[^\d.]/g, ''))
@@ -227,6 +232,14 @@ export default function PropertyPage() {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(130px,1fr))', gap: 10 }}>
                     {amenities.map(a => <div key={a} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--line)' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#5fd98a' }} /><span style={{ fontSize: 12.5 }}>{a}</span></div>)}
                   </div>
+                </div>
+              )}
+
+              {/* map */}
+              {geo && (
+                <div style={card}>
+                  <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>موقعیت روی نقشه</div>
+                  <PropertyMap lat={geo.lat} lng={geo.lng} />
                 </div>
               )}
 
