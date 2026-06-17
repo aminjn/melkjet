@@ -12,7 +12,8 @@ export async function GET(req: NextRequest) {
   const key = nz?.mapKey || nz?.serviceKey
   if (!key) return new Response('no-neshan-key', { status: 404 })
 
-  const url = `https://api.neshan.org/v4/static?key=${encodeURIComponent(key)}&type=neshan&zoom=15&center=${lat},${lng}&width=720&height=320&marker=red,${lat},${lng}`
+  // استایل «neshan» منقضی می‌شود؛ از standard-night (نمایش شب، هماهنگ با تم تیره) استفاده می‌کنیم
+  const url = `https://api.neshan.org/v4/static?key=${encodeURIComponent(key)}&type=standard-night&zoom=15&center=${lat},${lng}&width=720&height=320&marker=red,${lat},${lng}`
   try {
     const r = await fetch(url, { signal: AbortSignal.timeout(10000) })
     if (!r.ok) return new Response('neshan-error', { status: 502 })
