@@ -36,6 +36,17 @@ async function nearestPlace(key: string, term: string, lat: number, lng: number)
   return best
 }
 
+// از بین کلیدهای موجود (سرویس و نقشه) کلیدی را پیدا کن که مجوز Search دارد
+async function pickSearchKey(keys: string[], lat: number, lng: number): Promise<string | null> {
+  for (const k of keys) {
+    try {
+      const r = await fetch(`https://api.neshan.org/v1/search?term=${encodeURIComponent('بانک')}&lat=${lat}&lng=${lng}`, { headers: { 'Api-Key': k }, signal: AbortSignal.timeout(7000) })
+      if (r.ok) return k
+    } catch { /* try next */ }
+  }
+  return null
+}
+
 async function routeMatrix(key: string, lat: number, lng: number, dests: { lat: number; lng: number }[]) {
   const origins = `${lat},${lng}`
   const destinations = dests.map(d => `${d.lat},${d.lng}`).join('|')
@@ -52,8 +63,13 @@ export interface NearbyResult { nearby: { type?: string; name?: string; time: st
 // دسترسی‌های واقعی اطراف یک نقطه — فقط از سرویس داخلی نشان (سرور آروان اینترنت
 // بین‌الملل ندارد، پس هیچ سرویس خارجی مثل OSM قابل استفاده نیست).
 export async function computeNearby(lat: number, lng: number): Promise<NearbyResult> {
-  const key = getAdminData().neshan?.serviceKey
-  if (!key) return { nearby: [], source: 'none', note: 'کلید سرویس نشان تنظیم نشده است.' }
+  const nz = getAdminData().neshan
+  const keys = Array.from(new Set([nz?.serviceKey, nz?.mapKey].filter(Boolean) as string[]))
+  if (!keys.length) return { nearby: [], source: 'none', note: 'کلید نشان تنظیم نشده است.' }
+
+  // هر دو کلید را امتحان کن؛ هرکدام مجوز Search داشت همان استفاده می‌شود
+  const key = await pickSearchKey(keys, lat, lng)
+  if (!key) return { nearby: [], source: 'neshan', note: 'هیچ‌کدام از کلیدهای نشان مجوز سرویس Search را ندارند — در پنل نشان سرویس‌های Search و Distance-Matrix را روی کلید فعال/مشترک کنید.' }
 
   const places = (await Promise.all(CATEGORIES.map(async (c) => {
     try {
@@ -64,7 +80,7 @@ export async function computeNearby(lat: number, lng: number): Promise<NearbyRes
   }))).filter(Boolean) as { type: string; name: string; lat: number; lng: number; km: number }[]
 
   if (!places.length) {
-    return { nearby: [], source: 'neshan', note: 'کلید سرویس نشان مجوز سرویس‌های Search و Distance-Matrix را ندارد — در پنل نشان روی همین کلید این دو سرویس را فعال کنید.' }
+    return { nearby: [], source: 'neshan', note: 'سرویس Search فعال است ولی نتیجه‌ای برنگشت.' }
   }
 
   let elements: any[] | null = null
