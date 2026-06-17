@@ -4,27 +4,92 @@ import Nav from '@/app/components/Nav';
 import Footer from '@/app/components/Footer';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { fetchContent, gradientFor, type ContentItem } from '@/app/lib/content-display';
+
+// ── helpers ────────────────────────────────────────────────────────────────
+const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
+function toFa(n: number | string): string {
+  return String(n).replace(/\d/g, (d) => FA_DIGITS[+d]);
+}
+// قیمت هر متر (تومان) را به «N م/متر» (میلیون تومان بر متر) فارسی تبدیل کن
+function ppmToFa(ppm: number): string {
+  return `${toFa(Math.round(ppm / 1e6))} م/متر`;
+}
+
+interface TrendPoint { month: string; avg: number }
+interface MarketStats { avg: number; count: number; median?: number; min?: number; max?: number; trend: TrendPoint[] }
+
+// ماه شمسیِ کوتاه از کلید «YYYY-M» میلادی (تقریبی برای برچسب نمودار)
+const MONTH_LABELS = ['فرو', 'ارد', 'خرد', 'تیر', 'مرد', 'شهر', 'مهر', 'آبا', 'آذر', 'دی', 'بهم', 'اسف'];
+function monthLabel(key: string, idx: number): string {
+  const m = parseInt((key.split('-')[1] || ''), 10);
+  if (m >= 1 && m <= 12) return MONTH_LABELS[m - 1];
+  return MONTH_LABELS[idx % 12];
+}
 
 export default function NeighborhoodPage() {
   const params = useParams();
-  const id = (params?.id as string) || 'saadatabad';
-  void id;
-  const neighborhoodName = 'سعادت‌آباد';
+  const rawId = (params?.id as string) || 'saadatabad';
+  // route id is the neighbourhood/city name (e.g. "tehran" or a Persian name)
+  let decoded = rawId;
+  try { decoded = decodeURIComponent(rawId); } catch { /* keep raw */ }
+  const neighborhoodName = decoded;
 
-  const months = ['فرو', 'ارد', 'خرد', 'تیر', 'مرد', 'شهر', 'مهر', 'آبا', 'آذر', 'دی', 'بهم', 'اسف'];
-  const barHeights = [80, 85, 82, 88, 90, 92, 95, 98, 100, 105, 110, 115];
-  const maxBar = 115;
+  const [stats, setStats] = useState<MarketStats | null>(null);
+  const [statsLoaded, setStatsLoaded] = useState(false);
+  const [listingItems, setListingItems] = useState<ContentItem[]>([]);
+  const [advisorItems, setAdvisorItems] = useState<ContentItem[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    // Treat the route id as both district and city; the API matches whichever fits.
+    const q = `city=${encodeURIComponent(decoded)}&district=${encodeURIComponent(decoded)}`;
+    fetch(`/api/market/stats?${q}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : { stats: null }))
+      .then((d) => { if (alive) { setStats(d?.stats || null); setStatsLoaded(true); } })
+      .catch(() => { if (alive) setStatsLoaded(true); });
+
+    fetchContent('listing', undefined, 12).then((items) => {
+      if (!alive) return;
+      const name = decoded;
+      const matched = items.filter((it) => {
+        const hay = `${it.location || ''} ${it.title || ''}`;
+        return name && hay.includes(name);
+      });
+      setListingItems((matched.length ? matched : items).slice(0, 3));
+    });
+
+    fetchContent('directory', undefined, 6).then((items) => {
+      if (alive) setAdvisorItems(items.slice(0, 3));
+    });
+
+    return () => { alive = false; };
+  }, [decoded]);
+
+  // ── derived chart data from real trend (fallback to flat baseline) ──────────
+  const trend = stats?.trend && stats.trend.length ? stats.trend.slice(-12) : [];
+  const months = trend.length
+    ? trend.map((t, i) => monthLabel(t.month, i))
+    : ['فرو', 'ارد', 'خرد', 'تیر', 'مرد', 'شهر', 'مهر', 'آبا', 'آذر', 'دی', 'بهم', 'اسف'];
+  const trendAvgs = trend.map((t) => t.avg);
+  const barHeights = trendAvgs.length ? trendAvgs : [80, 85, 82, 88, 90, 92, 95, 98, 100, 105, 110, 115];
+  const maxBar = Math.max(...barHeights, 1);
   const maxHeight = 150;
-  const barWidth = 34;
+  const barCount = barHeights.length || 12;
   const barGap = 12;
   const svgPaddingLeft = 52;
+  const barWidth = Math.max(8, (596 - svgPaddingLeft - barGap * (barCount - 1) - 4) / barCount);
   const baselineY = 175;
 
-  const listings = [
-    { title: 'آپارتمان ۱۴۰ متری', price: '۱۷.۸ م.د', location: 'سعادت‌آباد شمالی', grad: 'linear-gradient(135deg, #2a1a0a 0%, #7c5a1e 100%)' },
-    { title: 'آپارتمان ۹۵ متری', price: '۱۱.۲ م.د', location: 'بلوار اصلی', grad: 'linear-gradient(135deg, #0a1a2a 0%, #1e4a7c 100%)' },
-    { title: 'پنت‌هاوس ۲۲۰ متری', price: '۳۲.۵ م.د', location: 'برج آزادی', grad: 'linear-gradient(135deg, #1a0a2a 0%, #5a1e7c 100%)' },
-  ];
+  // average price KPI + year-over-year growth from real trend
+  const avgLabel = stats ? ppmToFa(stats.avg) : '—';
+  let growthPct: number | null = null;
+  if (trendAvgs.length >= 2) {
+    const first = trendAvgs[0];
+    const last = trendAvgs[trendAvgs.length - 1];
+    if (first > 0) growthPct = Math.round(((last - first) / first) * 100);
+  }
 
   const amenities = [
     { icon: '🏫', label: 'مدارس', value: '۱۲ مدرسه' },
@@ -84,10 +149,12 @@ export default function NeighborhoodPage() {
           <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '12px', padding: '1.25rem 1.25rem 1rem', boxShadow: 'var(--shadow)' }}>
             <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '0.4rem' }}>قیمت میانگین</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '1.35rem', fontWeight: 700, color: 'var(--text)' }}>۱۲۷ م/متر</span>
-              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#22c55e', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.28)', borderRadius: '6px', padding: '2px 7px' }}>+۸٪</span>
+              <span style={{ fontSize: '1.35rem', fontWeight: 700, color: 'var(--text)' }}>{avgLabel}</span>
+              {growthPct !== null && (
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: growthPct >= 0 ? '#22c55e' : '#e74c3c', background: growthPct >= 0 ? 'rgba(34,197,94,0.12)' : 'rgba(231,76,60,0.12)', border: `1px solid ${growthPct >= 0 ? 'rgba(34,197,94,0.28)' : 'rgba(231,76,60,0.28)'}`, borderRadius: '6px', padding: '2px 7px' }}>{growthPct >= 0 ? '+' : ''}{toFa(growthPct)}٪</span>
+              )}
             </div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--faint)', marginTop: '0.3rem' }}>نسبت به سال گذشته</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--faint)', marginTop: '0.3rem' }}>{stats ? 'بر اساس آگهی‌های واقعی' : statsLoaded ? 'داده کافی موجود نیست' : 'در حال بارگذاری…'}</div>
           </div>
 
           <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '12px', padding: '1.25rem 1.25rem 1rem', boxShadow: 'var(--shadow)' }}>
@@ -98,8 +165,8 @@ export default function NeighborhoodPage() {
 
           <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '12px', padding: '1.25rem 1.25rem 1rem', boxShadow: 'var(--shadow)' }}>
             <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '0.4rem' }}>آگهی‌های فعال</div>
-            <div style={{ fontSize: '1.35rem', fontWeight: 700, color: 'var(--text)' }}>۲٬۴۰۰</div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--faint)', marginTop: '0.3rem' }}>به‌روزشده امروز</div>
+            <div style={{ fontSize: '1.35rem', fontWeight: 700, color: 'var(--text)' }}>{stats ? toFa(stats.count) : '—'}</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--faint)', marginTop: '0.3rem' }}>آگهی فروش این منطقه</div>
           </div>
 
           <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '12px', padding: '1.25rem 1.25rem 1rem', boxShadow: 'var(--shadow)' }}>
@@ -121,12 +188,17 @@ export default function NeighborhoodPage() {
 
             {/* Section 1 – 12-month price trend SVG bar chart */}
             <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '12px', padding: '1.5rem', boxShadow: 'var(--shadow)' }}>
-              <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text)', margin: '0 0 1.25rem 0' }}>روند قیمت ۱۲ ماه گذشته</h2>
+              <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text)', margin: '0 0 1.25rem 0' }}>روند قیمت {toFa(barCount)} ماه گذشته</h2>
 
-              <svg viewBox="0 0 600 200" style={{ width: '100%', height: 'auto', display: 'block' }} aria-label="نمودار روند قیمت ۱۲ ماه گذشته">
-                <text x="46" y="32" textAnchor="end" fontSize="10" fill="var(--muted)" fontFamily="inherit">۱۴۰م</text>
-                <text x="46" y="100" textAnchor="end" fontSize="10" fill="var(--muted)" fontFamily="inherit">۱۲۰م</text>
-                <text x="46" y="168" textAnchor="end" fontSize="10" fill="var(--muted)" fontFamily="inherit">۱۰۰م</text>
+              {statsLoaded && !trendAvgs.length ? (
+                <div style={{ padding: '2rem 0', textAlign: 'center', color: 'var(--muted)', fontSize: '0.85rem' }}>
+                  داده کافی برای نمایش روند قیمت این محله موجود نیست.
+                </div>
+              ) : (
+              <svg viewBox="0 0 600 200" style={{ width: '100%', height: 'auto', display: 'block' }} aria-label="نمودار روند قیمت">
+                <text x="46" y="32" textAnchor="end" fontSize="10" fill="var(--muted)" fontFamily="inherit">{ppmToFa(maxBar)}</text>
+                <text x="46" y="100" textAnchor="end" fontSize="10" fill="var(--muted)" fontFamily="inherit">{ppmToFa(maxBar / 2)}</text>
+                <text x="46" y="168" textAnchor="end" fontSize="10" fill="var(--muted)" fontFamily="inherit">۰</text>
                 <line x1="50" y1="28" x2="596" y2="28" stroke="var(--line)" strokeWidth="0.5" strokeDasharray="4,3" />
                 <line x1="50" y1="96" x2="596" y2="96" stroke="var(--line)" strokeWidth="0.5" strokeDasharray="4,3" />
                 <line x1="50" y1="164" x2="596" y2="164" stroke="var(--line)" strokeWidth="0.5" strokeDasharray="4,3" />
@@ -134,7 +206,7 @@ export default function NeighborhoodPage() {
                   const scaledH = (h / maxBar) * maxHeight;
                   const x = svgPaddingLeft + i * (barWidth + barGap);
                   const y = baselineY - scaledH;
-                  const isGold = i >= 9;
+                  const isGold = i >= barCount - 3;
                   return (
                     <g key={i}>
                       <rect x={x} y={y} width={barWidth} height={scaledH} rx="4" ry="4" fill={isGold ? 'var(--gold)' : 'var(--line2, #3a3028)'} opacity={isGold ? 1 : 0.5} />
@@ -144,6 +216,7 @@ export default function NeighborhoodPage() {
                 })}
                 <line x1="50" y1={baselineY + 1} x2="596" y2={baselineY + 1} stroke="var(--line)" strokeWidth="1" />
               </svg>
+              )}
             </div>
 
             {/* Section 2 – AI Insight */}
@@ -174,26 +247,32 @@ export default function NeighborhoodPage() {
                 <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text)', margin: 0 }}>آگهی‌های برگزیده</h2>
                 <Link href="/search" style={{ fontSize: '0.8rem', color: 'var(--gold)', textDecoration: 'none' }}>مشاهده همه ←</Link>
               </div>
+              {listingItems.length === 0 ? (
+                <div style={{ padding: '1.5rem 0', textAlign: 'center', color: 'var(--muted)', fontSize: '0.85rem' }}>
+                  آگهی‌ای برای نمایش یافت نشد.
+                </div>
+              ) : (
               <div className="mjn-listings" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
-                {listings.map((listing, i) => (
-                  <Link key={i} href="/search" style={{ textDecoration: 'none', display: 'block' }}>
+                {listingItems.map((listing) => (
+                  <Link key={listing.id} href={`/property/${listing.id}`} style={{ textDecoration: 'none', display: 'block' }}>
                     <div
                       style={{ border: '1px solid var(--line)', borderRadius: '10px', overflow: 'hidden', cursor: 'pointer', transition: 'border-color 0.2s, box-shadow 0.2s' }}
                       onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--gold)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 16px rgba(212,175,55,0.15)'; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--line)'; (e.currentTarget as HTMLDivElement).style.boxShadow = 'none'; }}
                     >
-                      <div style={{ height: '100px', background: listing.grad, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <span style={{ fontSize: '1.6rem', opacity: 0.35 }}>🏢</span>
+                      <div style={{ height: '100px', background: listing.image ? `url(${listing.image}) center/cover` : gradientFor(listing.id), display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {!listing.image && <span style={{ fontSize: '1.6rem', opacity: 0.35 }}>🏢</span>}
                       </div>
                       <div style={{ padding: '0.75rem' }}>
-                        <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--gold)', marginBottom: '0.25rem' }}>{listing.price}</div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text)', marginBottom: '0.25rem' }}>{listing.title}</div>
-                        <div style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>📍 {listing.location}</div>
+                        {listing.price && <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--gold)', marginBottom: '0.25rem' }}>{listing.price}</div>}
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text)', marginBottom: '0.25rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{listing.title}</div>
+                        {listing.location && <div style={{ fontSize: '0.72rem', color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📍 {listing.location}</div>}
                       </div>
                     </div>
                   </Link>
                 ))}
               </div>
+              )}
             </div>
 
             {/* Section 4 – Amenities grid */}
@@ -265,21 +344,25 @@ export default function NeighborhoodPage() {
               <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text)', margin: '0 0 0.3rem 0' }}>
                 مشاوران فعال در {neighborhoodName}
               </h3>
-              <p style={{ fontSize: '0.78rem', color: 'var(--muted)', margin: '0 0 1rem 0' }}>۲۴ مشاور تأییدشده در این منطقه</p>
+              <p style={{ fontSize: '0.78rem', color: 'var(--muted)', margin: '0 0 1rem 0' }}>{advisorItems.length ? `${toFa(advisorItems.length)} مشاور تأییدشده` : 'مشاوران تأییدشده ملک‌جت'}</p>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginBottom: '1.25rem' }}>
-                {advisors.map((advisor, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0.75rem', borderRadius: '8px', background: 'var(--bg2)', border: '1px solid var(--line)' }}>
-                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: `linear-gradient(135deg, hsl(${advisor.hue},55%,32%) 0%, hsl(${advisor.hue + 20},65%,50%) 100%)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.88rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-                      {advisor.name[0]}
+                {advisorItems.length === 0 ? (
+                  <div style={{ fontSize: '0.78rem', color: 'var(--muted)', textAlign: 'center', padding: '0.5rem 0' }}>مشاوری یافت نشد.</div>
+                ) : advisorItems.map((advisor) => (
+                  <div key={advisor.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0.75rem', borderRadius: '8px', background: 'var(--bg2)', border: '1px solid var(--line)' }}>
+                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: gradientFor(advisor.id, 'avatar'), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.88rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                      {advisor.title?.trim()?.[0] || '؟'}
                     </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text)' }}>{advisor.name}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{advisor.title}</div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                      <span style={{ color: 'var(--gold)', fontSize: '0.8rem' }}>★</span>
-                      <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--gold)' }}>{advisor.rating}</span>
-                    </div>
+                    {advisor.rating && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', flexShrink: 0 }}>
+                        <span style={{ color: 'var(--gold)', fontSize: '0.8rem' }}>★</span>
+                        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--gold)' }}>{advisor.rating}</span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

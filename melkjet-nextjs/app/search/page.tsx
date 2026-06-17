@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, Suspense } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import Nav from '@/app/components/Nav'
 import { fetchContent, gradientFor, type ContentItem } from '@/app/lib/content-display'
 
@@ -11,17 +12,45 @@ function seedNum(s: string): number {
   return Math.abs(h)
 }
 
+// Map Persian/Arabic-Indic digits to ASCII so we can parse numbers from titles/prices.
+const FA_DIGITS: Record<string, string> = {
+  '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
+  '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
+  '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+  '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
+}
+function faToEn(s: string): string {
+  return s.replace(/[۰-۹٠-٩]/g, d => FA_DIGITS[d] ?? d)
+}
+function toPersianDigits(n: number | string): string {
+  return String(n).replace(/[0-9]/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d])
+}
+
+// Detect bedroom count from text like "۲ خواب" / "2 خوابه".
+function parseBeds(text: string): number | null {
+  const m = faToEn(text).match(/(\d+)\s*خواب/)
+  return m ? parseInt(m[1], 10) : null
+}
+
 function toProperty(it: ContentItem) {
   const h = seedNum(it.id)
-  const sizeMatch = it.title.match(/(\d+)\s*متر/)
-  const priceNum = parseFloat((it.price || '').replace(/[^\d.]/g, '')) || 0
+  const enTitle = faToEn(it.title)
+  const sizeMatch = enTitle.match(/(\d+)\s*متر/)
+  const priceNum = parseFloat(faToEn(it.price || '').replace(/[^\d.]/g, '')) || 0
+  const bedsNum = parseBeds(`${it.title} ${it.excerpt || ''}`)
+  // Lowercased haystack of all text we can match search terms / amenities against.
+  const searchText = [
+    it.title, it.location, it.excerpt,
+    it.category, ...(it.tags || []),
+  ].filter(Boolean).join(' ').toLowerCase()
   return {
     id: it.id,
     title: it.title,
     location: it.location || 'نامشخص',
     price: it.price || '—',
     priceNum,
-    beds: '—',
+    beds: bedsNum != null ? toPersianDigits(bedsNum) : '—',
+    bedsNum,
     size: sizeMatch ? sizeMatch[1] : '—',
     year: '—',
     tag: '',
@@ -29,6 +58,8 @@ function toProperty(it: ContentItem) {
     img: it.image ? '' : gradientFor(it.title),
     image: it.image,
     url: it.url,
+    category: it.category || '',
+    searchText,
     pinX: 12 + (h % 74),
     pinY: 16 + ((h >> 3) % 66),
     pinColor: ['var(--gold)', '#e7674a', '#5fd98a'][h % 3],
@@ -53,8 +84,32 @@ const aiTags = [
 
 const amenitiesOptions = ['آسانسور', 'پارکینگ', 'انباری', 'بالکن']
 
+// Persian bed-button label (۱، ۲، ۳، +۴) → numeric predicate.
+function bedsButtonMatches(label: string, bedsNum: number | null): boolean {
+  if (label === 'همه') return true
+  if (bedsNum == null) return true // tolerant: unknown bed count is never excluded
+  if (label === '+۴') return bedsNum >= 4
+  const n = parseInt(faToEn(label), 10)
+  return Number.isNaN(n) ? true : bedsNum === n
+}
+
+type PropertyT = ReturnType<typeof toProperty>
+
 export default function SearchPage() {
+  return (
+    <Suspense fallback={null}>
+      <SearchPageInner />
+    </Suspense>
+  )
+}
+
+function SearchPageInner() {
+  const searchParams = useSearchParams()
+  const initialQuery = searchParams.get('q') || ''
+
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [search, setSearch] = useState(initialQuery)
+  const [searchTerm, setSearchTerm] = useState(initialQuery)
   const [dealType, setDealType] = useState<string>('خرید')
   const [beds, setBeds] = useState<string>('همه')
   const [maxPrice, setMaxPrice] = useState(18)
@@ -62,7 +117,7 @@ export default function SearchPage() {
   const [sortBy, setSortBy] = useState('پیشنهاد ملک‌جت')
   const [hoveredCard, setHoveredCard] = useState<string | null>(null)
   const [activePin, setActivePin] = useState<string | null>(null)
-  const [properties, setProperties] = useState<ReturnType<typeof toProperty>[]>([])
+  const [properties, setProperties] = useState<PropertyT[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -82,12 +137,48 @@ export default function SearchPage() {
     (maxPrice !== 50 ? 1 : 0) +
     checkedAmenities.length
 
-  const sortedProperties = [...properties].sort((a, b) => {
-    if (sortBy === 'ارزان‌ترین') return a.priceNum - b.priceNum
-    if (sortBy === 'گران‌ترین')  return b.priceNum - a.priceNum
-    if (sortBy === 'جدیدترین')  return parseInt(b.year) - parseInt(a.year)
-    return b.score - a.score
-  })
+  // ─── Apply search + filters, then sort ───────────────────────
+  const filteredProperties = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase()
+    return properties.filter(p => {
+      // Free-text search: match title + location (case-insensitive).
+      if (term) {
+        const hay = `${p.title} ${p.location}`.toLowerCase()
+        if (!hay.includes(term) && !p.searchText.includes(term)) return false
+      }
+      // Deal type: only filter when the item declares a deal type (category/text);
+      // tolerant — items without that info pass through.
+      if (dealType !== 'خرید') {
+        const dealHay = `${p.category} ${p.searchText}`
+        if (dealHay.includes('خرید') || dealHay.includes('اجاره') ||
+            dealHay.includes('رهن') || dealHay.includes('پیش‌فروش')) {
+          if (!dealHay.includes(dealType)) return false
+        }
+      }
+      // Bedrooms.
+      if (beds !== 'همه' && !bedsButtonMatches(beds, p.bedsNum)) return false
+      // Max price (in billion-toman units, same scale as the slider). Items with
+      // an unparseable price (priceNum === 0) are kept.
+      if (p.priceNum > 0 && p.priceNum > maxPrice) return false
+      // Amenities: every checked amenity must appear in the item's text.
+      for (const a of checkedAmenities) {
+        if (!p.searchText.includes(a.toLowerCase())) {
+          // tolerant — only exclude if the item has descriptive text to match against
+          if (p.searchText.trim()) return false
+        }
+      }
+      return true
+    })
+  }, [properties, searchTerm, dealType, beds, maxPrice, checkedAmenities])
+
+  const sortedProperties = useMemo(() => {
+    return [...filteredProperties].sort((a, b) => {
+      if (sortBy === 'ارزان‌ترین') return a.priceNum - b.priceNum
+      if (sortBy === 'گران‌ترین')  return b.priceNum - a.priceNum
+      if (sortBy === 'جدیدترین')  return parseInt(b.year) - parseInt(a.year)
+      return b.score - a.score
+    })
+  }, [filteredProperties, sortBy])
 
   const activeProperty = properties.find(
     p => p.id === hoveredCard || p.id === activePin
@@ -124,7 +215,10 @@ export default function SearchPage() {
               color: 'var(--gold)', fontSize: 16, pointerEvents: 'none', zIndex: 1,
             }}>✦</span>
             <input
-              defaultValue="آپارتمان ۱۳۰ متری در سعادت‌آباد زیر ۱۸ میلیارد با آسانسور و پارکینگ"
+              value={search}
+              onChange={e => { setSearch(e.target.value); setSearchTerm(e.target.value) }}
+              onKeyDown={e => { if (e.key === 'Enter') setSearchTerm(search) }}
+              placeholder="آپارتمان ۱۳۰ متری در سعادت‌آباد زیر ۱۸ میلیارد با آسانسور و پارکینگ"
               style={{
                 width: '100%', height: 48,
                 paddingRight: 42, paddingLeft: 110,
@@ -341,7 +435,7 @@ export default function SearchPage() {
             marginBottom: 18,
           }}>
             <div style={{ fontSize: 14, color: 'var(--muted)' }}>
-              <span style={{ color: 'var(--gold)', fontWeight: 800, fontSize: 16 }}>۶</span>
+              <span style={{ color: 'var(--gold)', fontWeight: 800, fontSize: 16 }}>{toPersianDigits(sortedProperties.length)}</span>
               {' '}ملک پیدا شد
             </div>
             <div style={{ fontSize: 13, color: 'var(--faint)' }}>

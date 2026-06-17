@@ -7,6 +7,7 @@ interface Message {
   id: number
   role: 'ai' | 'user'
   text: string
+  error?: boolean
 }
 
 const initialMessages: Message[] = [
@@ -26,13 +27,6 @@ const initialMessages: Message[] = [
     text: 'برای خرید آپارتمان به مدارک زیر نیاز دارید:\n۱) سند مالکیت تک‌برگ\n۲) استعلام ثبت اسناد\n۳) گواهی عدم خلافی\n۴) کد رهگیری از سامانه هوشمند\n۵) مبایعه‌نامه رسمی\n\nآیا سوال دیگری دارید؟',
   },
 ]
-
-const mockAIReplies: Record<string, string> = {
-  'سند مالکیت': 'سند مالکیت تک‌برگ مهم‌ترین سند ملک است. این سند توسط سازمان ثبت اسناد و املاک صادر می‌شود و دارای کد یکتا و قابل استعلام آنلاین است. حتماً قبل از خرید از صحت آن اطمینان حاصل کنید.',
-  'قرارداد اجاره': 'قرارداد اجاره باید شامل مشخصات کامل موجر و مستاجر، آدرس دقیق ملک، مبلغ رهن و اجاره، مدت قرارداد، و شرایط فسخ باشد. توصیه می‌شود قرارداد از طریق بنگاه رسمی و با کد رهگیری تنظیم شود.',
-  'مشاوره خرید': 'قبل از خرید ملک، موارد زیر را بررسی کنید: ۱) بررسی سند و عدم توقیف ملک ۲) استعلام بدهی‌های مالیاتی ۳) بررسی وضعیت ساختمان از نظر خلافی ۴) بررسی کاربری ملک ۵) ارزیابی دقیق قیمت توسط کارشناس رسمی.',
-  'حقوق مستاجر': 'مستاجر دارای حقوق قانونی مهمی است: ۱) حق سکونت آرام بدون مزاحمت موجر ۲) حق تمدید اجاره در صورت عدم دریافت اخطار ۳) استرداد ودیعه در پایان قرارداد ۴) عدم افزایش اجاره بدون توافق.',
-}
 
 const quickChips = ['سند مالکیت', 'قرارداد اجاره', 'مشاوره خرید', 'حقوق مستاجر']
 
@@ -81,20 +75,49 @@ function formatRial(n: number): string {
 export default function LegalPage() {
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
   const [offerPct, setOfferPct] = useState(90)
   const [selectedStrategy, setSelectedStrategy] = useState<string>('smart')
 
   const propertyValue = 4_500_000_000
 
-  const sendMessage = (text: string) => {
-    if (!text.trim()) return
-    const userMsg: Message = { id: Date.now(), role: 'user', text: text.trim() }
-    const aiText =
-      mockAIReplies[text.trim()] ||
-      'با تشکر از سوال شما. کارشناسان حقوقی ملک‌جت در اسرع وقت پاسخ دقیق و کاملی برای شما آماده خواهند کرد. همچنین می‌توانید از طریق خط پشتیبانی ۰۲۱-۱۲۳۴۵۶۷۸ با ما تماس بگیرید.'
-    const aiMsg: Message = { id: Date.now() + 1, role: 'ai', text: aiText }
-    setMessages(prev => [...prev, userMsg, aiMsg])
+  const sendMessage = async (text: string) => {
+    const q = text.trim()
+    if (!q || loading) return
+    const userMsg: Message = { id: Date.now(), role: 'user', text: q }
+    setMessages(prev => [...prev, userMsg])
     setInput('')
+    setLoading(true)
+    try {
+      const res = await fetch('/api/ai/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agent: 'chat',
+          input: `به‌عنوان مشاور حقوقی املاک پاسخ بده: ${q}`,
+        }),
+      })
+      const d: { ok?: boolean; text?: string; error?: string } = await res.json().catch(() => ({}))
+      if (d.ok && d.text) {
+        setMessages(prev => [...prev, { id: Date.now() + 1, role: 'ai', text: d.text as string }])
+      } else {
+        setMessages(prev => [...prev, {
+          id: Date.now() + 1,
+          role: 'ai',
+          text: d.error || 'خطا در دریافت پاسخ. لطفاً دوباره تلاش کنید.',
+          error: true,
+        }])
+      }
+    } catch {
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        role: 'ai',
+        text: 'خطا در ارتباط با سرور. لطفاً دوباره تلاش کنید.',
+        error: true,
+      }])
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleChip = (chip: string) => sendMessage(chip)
@@ -212,12 +235,12 @@ export default function LegalPage() {
                     ? '0.75rem 0.75rem 0.75rem 0.1rem'
                     : '0.75rem 0.75rem 0.1rem 0.75rem',
                   background: msg.role === 'ai'
-                    ? 'var(--bg2)'
+                    ? (msg.error ? 'rgba(239,68,68,0.12)' : 'var(--bg2)')
                     : 'linear-gradient(135deg, var(--gold), var(--gold2))',
-                  color: msg.role === 'ai' ? 'var(--text)' : '#000',
+                  color: msg.role === 'ai' ? (msg.error ? '#ef4444' : 'var(--text)') : '#000',
                   fontSize: '0.875rem',
                   lineHeight: '1.7',
-                  border: msg.role === 'ai' ? '1px solid var(--line)' : 'none',
+                  border: msg.role === 'ai' ? `1px solid ${msg.error ? '#ef4444' : 'var(--line)'}` : 'none',
                   whiteSpace: 'pre-line',
                   fontWeight: msg.role === 'user' ? 600 : 400,
                 }}>
@@ -235,6 +258,30 @@ export default function LegalPage() {
                 )}
               </div>
             ))}
+
+            {loading && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem', alignItems: 'flex-end' }}>
+                <div style={{
+                  width: '32px', height: '32px', borderRadius: '50%',
+                  background: 'linear-gradient(135deg, var(--gold), var(--gold2))',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '0.85rem', flexShrink: 0, fontWeight: 700, color: '#000',
+                }}>
+                  ✦
+                </div>
+                <div style={{
+                  padding: '0.85rem 1rem',
+                  borderRadius: '0.75rem 0.75rem 0.75rem 0.1rem',
+                  background: 'var(--bg2)',
+                  border: '1px solid var(--line)',
+                  display: 'flex', alignItems: 'center', gap: '0.3rem',
+                }}>
+                  <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--gold)', animation: 'typing-dot 1.2s infinite', animationDelay: '0s' }} />
+                  <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--gold)', animation: 'typing-dot 1.2s infinite', animationDelay: '0.2s' }} />
+                  <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--gold)', animation: 'typing-dot 1.2s infinite', animationDelay: '0.4s' }} />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Quick chips */}
@@ -249,6 +296,7 @@ export default function LegalPage() {
               <button
                 key={chip}
                 onClick={() => handleChip(chip)}
+                disabled={loading}
                 style={{
                   padding: '0.35rem 0.85rem',
                   borderRadius: '999px',
@@ -287,6 +335,7 @@ export default function LegalPage() {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && sendMessage(input)}
+              disabled={loading}
               placeholder="سوال حقوقی خود را بنویسید..."
               style={{
                 flex: 1,
@@ -303,12 +352,14 @@ export default function LegalPage() {
             />
             <button
               onClick={() => sendMessage(input)}
+              disabled={loading}
               style={{
                 background: 'linear-gradient(135deg, var(--gold), var(--gold2))',
                 border: 'none',
                 borderRadius: '0.6rem',
                 padding: '0 1.1rem',
-                cursor: 'pointer',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading ? 0.6 : 1,
                 color: '#000',
                 fontSize: '1.1rem',
                 fontWeight: 700,
@@ -574,6 +625,10 @@ export default function LegalPage() {
           0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
           70% { box-shadow: 0 0 0 7px rgba(34,197,94,0); }
           100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+        }
+        @keyframes typing-dot {
+          0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+          30% { opacity: 1; transform: translateY(-3px); }
         }
         @media (max-width: 768px) {
           .legal-grid { grid-template-columns: 1fr !important; }

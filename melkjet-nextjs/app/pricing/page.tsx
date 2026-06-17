@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
 
@@ -208,7 +209,14 @@ const faqs = [
   },
 ]
 
+// Self-serve CTAs go to signup; sales/demo CTAs go to the contact/submit form.
+const SALES_CTAS = ['تماس با فروش', 'درخواست دمو']
+function ctaTarget(cta: string): string {
+  return SALES_CTAS.includes(cta) ? '/submit' : '/auth'
+}
+
 export default function PricingPage() {
+  const router = useRouter()
   const [annual, setAnnual] = useState(false)
   const [openFaq, setOpenFaq] = useState<number | null>(null)
 
@@ -340,7 +348,9 @@ export default function PricingPage() {
                 )}
               </div>
 
-              <button style={{
+              <button
+                onClick={() => router.push(ctaTarget(plan.cta))}
+                style={{
                 width: '100%', padding: '12px 0', borderRadius: 12, fontWeight: 700,
                 fontSize: 15, cursor: 'pointer', border: '1px solid',
                 transition: 'opacity .15s',
@@ -487,7 +497,9 @@ export default function PricingPage() {
           جلسه مشاوره رایگان رزرو کنید.
         </p>
         <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <button style={{
+          <button
+            onClick={() => router.push('/submit')}
+            style={{
             padding: '14px 36px', borderRadius: 12, fontWeight: 700, fontSize: 15,
             background: 'linear-gradient(135deg, var(--gold2), var(--gold))',
             border: 'none', cursor: 'pointer', color: '#1a1200',
@@ -495,7 +507,9 @@ export default function PricingPage() {
           }}>
             رزرو مشاوره رایگان
           </button>
-          <button style={{
+          <button
+            onClick={() => router.push('/submit')}
+            style={{
             padding: '14px 36px', borderRadius: 12, fontWeight: 700, fontSize: 15,
             background: 'transparent', border: '1px solid var(--line2)', cursor: 'pointer',
             color: 'var(--text)',

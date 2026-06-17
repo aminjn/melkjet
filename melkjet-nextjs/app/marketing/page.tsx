@@ -109,6 +109,25 @@ export default function MarketingPage() {
   const [emailBody, setEmailBody] = useState('')
   const [smsNumbers, setSmsNumbers] = useState('')
   const [smsText, setSmsText] = useState('')
+  const [smsSending, setSmsSending] = useState(false)
+  const [smsResult, setSmsResult] = useState('')
+
+  const sendSms = async () => {
+    if (smsSending) return
+    if (!smsText.trim()) { setSmsResult('⚠ متن پیامک را بنویسید'); return }
+    if (!smsNumbers.trim()) { setSmsResult('⚠ شماره‌ها را وارد کنید (۰۹...)'); return }
+    setSmsSending(true); setSmsResult('')
+    try {
+      const r = await fetch('/api/sms/send', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipients: smsNumbers, message: smsText }),
+      })
+      const d = await r.json()
+      setSmsResult(d.ok ? `✓ پیامک به ${d.sent} شماره ارسال شد` : `⚠ ${d.error || 'خطا'}`)
+      if (d.ok) { setSmsText(''); setSmsNumbers('') }
+    } catch { setSmsResult('⚠ خطا در ارتباط با سرور') }
+    finally { setSmsSending(false) }
+  }
 
   const navStyle = (active: boolean) => ({
     display: 'flex',
@@ -901,10 +920,12 @@ export default function MarketingPage() {
                       alignItems: 'center',
                     }}
                   >
-                    <span style={{ fontSize: 12, color: 'var(--faint)' }}>
-                      {smsText.length}/۱۶۰ کاراکتر
+                    <span style={{ fontSize: 12, color: smsResult.startsWith('✓') ? '#5fd98a' : smsResult ? '#e7a14a' : 'var(--faint)' }}>
+                      {smsResult || `${smsText.length}/۱۶۰ کاراکتر`}
                     </span>
                     <button
+                      onClick={sendSms}
+                      disabled={smsSending}
                       style={{
                         padding: '11px 28px',
                         borderRadius: 11,
@@ -913,11 +934,12 @@ export default function MarketingPage() {
                         color: 'var(--bg)',
                         fontSize: 14,
                         fontWeight: 700,
-                        cursor: 'pointer',
+                        cursor: smsSending ? 'default' : 'pointer',
                         fontFamily: 'inherit',
+                        opacity: smsSending ? 0.6 : 1,
                       }}
                     >
-                      ارسال
+                      {smsSending ? 'در حال ارسال…' : 'ارسال'}
                     </button>
                   </div>
                 </div>

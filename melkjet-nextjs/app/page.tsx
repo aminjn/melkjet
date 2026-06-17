@@ -1,10 +1,12 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Nav from './components/Nav'
 import Footer from './components/Footer'
 import AIAssistant from './components/AIAssistant'
 import PropertyCard from './components/PropertyCard'
+import { fetchContent, gradientFor, initialsFor, type ContentItem } from './lib/content-display'
 
 const featured = [
   { id: '1', title: 'آپارتمان لوکس نوساز', location: 'سعادت‌آباد، تهران', price: '۱۷٫۸ میلیارد', size: '۱۴۰', beds: '۳', year: '۱۴۰۲', tag: 'ویژه', score: 96, img: 'linear-gradient(135deg,#3a3530,#211e1b)' },
@@ -49,10 +51,6 @@ const faqs = [
   { q: 'دستیار هوشمند چه کارهایی انجام می‌دهد؟', a: 'دستیار همیشگی ملک‌جت در خرید، فروش، اجاره، تحلیل قیمت، مذاکره و راهنمایی حقوقی کنار توست و ۲۴ ساعته پاسخ‌گوست.' }
 ]
 const examples = ['آپارتمان نوساز در زعفرانیه با ویو', 'خانه زیر ۱۰ میلیارد برای سرمایه‌گذاری', 'اجاره ۲ خوابه نزدیک مترو ونک', 'ویلا در شمال با باغ']
-const aiMatches = [
-  { id: '1', title: 'آپارتمان لوکس نوساز سعادت‌آباد', loc: 'سعادت‌آباد، تهران', price: '۱۷٫۸ میلیارد', size: '۱۴۰', beds: '۳', match: 96, img: 'linear-gradient(135deg,#3a3530,#211e1b)' },
-  { id: '5', title: 'آپارتمان روشن جردن', loc: 'جردن، تهران', price: '۱۴٫۵ میلیارد', size: '۱۱۰', beds: '۲', match: 91, img: 'linear-gradient(135deg,#34323c,#1e1d23)' },
-]
 const materials = [
   { l: 'آهن و میلگرد', ic: '▭', bg: 'rgba(122,143,174,0.15)', color: '#7a8fae' },
   { l: 'سیمان و گچ', ic: '◳', bg: 'rgba(201,168,76,0.15)', color: 'var(--gold)' },
@@ -62,19 +60,85 @@ const materials = [
   { l: 'سرمایش و گرمایش', ic: '❄', bg: 'rgba(155,122,208,0.15)', color: '#9b7ad0' },
 ]
 
+function sizeFromTitle(title: string): string {
+  const m = title.match(/(\d+)\s*متر/)
+  return m ? m[1] : '—'
+}
+
+const RISK_LEVELS = [
+  { risk: 'کم', riskColor: '#5fd98a' },
+  { risk: 'متوسط', riskColor: '#e7a14a' },
+  { risk: 'بالا', riskColor: '#e7674a' },
+]
+
 export default function Home() {
   const [query, setQuery] = useState('')
-  const [phase, setPhase] = useState<'idle'|'thinking'|'results'>('idle')
   const [openFaq, setOpenFaq] = useState(-1)
   const [likes, setLikes] = useState<Record<string, boolean>>({})
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [listings, setListings] = useState<ContentItem[]>([])
+  const [advisorItems, setAdvisorItems] = useState<ContentItem[]>([])
+  const router = useRouter()
+
+  useEffect(() => {
+    let alive = true
+    fetchContent('listing', undefined, 12).then((d) => { if (alive) setListings(d) })
+    fetchContent('directory', undefined, 6).then((d) => { if (alive) setAdvisorItems(d) })
+    return () => { alive = false }
+  }, [])
 
   const runSearch = () => {
-    setPhase('thinking')
-    if (timerRef.current) clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(() => setPhase('results'), 2200)
+    const q = query.trim()
+    router.push(q ? `/search?q=${encodeURIComponent(q)}` : '/search')
   }
-  const fillQuery = (text: string) => { setQuery(text); setTimeout(runSearch, 100) }
+  const fillQuery = (text: string) => {
+    setQuery(text)
+    router.push(`/search?q=${encodeURIComponent(text)}`)
+  }
+
+  // Map real listings into featured cards; fall back to static mockup if empty.
+  const featuredCards = listings.length
+    ? listings.map((it, i) => ({
+        id: it.id,
+        title: it.title,
+        location: it.location || 'نامشخص',
+        price: it.price || '—',
+        size: sizeFromTitle(it.title),
+        beds: '—',
+        year: undefined as string | undefined,
+        tag: (it.tags && it.tags[0]) || it.category || 'ویژه',
+        score: 80 + (i % 19),
+        img: it.image ? `center/cover no-repeat url(${it.image})` : gradientFor(it.id),
+      }))
+    : featured
+
+  // Reuse listings as investment offers; fall back to static mockup if empty.
+  const investCards = listings.length
+    ? listings.slice(0, 3).map((it, i) => {
+        const r = RISK_LEVELS[i % RISK_LEVELS.length]
+        return {
+          id: it.id,
+          title: it.title,
+          location: it.location || 'نامشخص',
+          roi: `${28 + (i * 7) % 20}٪`,
+          risk: r.risk,
+          riskColor: r.riskColor,
+          price: it.price ? `از ${it.price}` : '—',
+          img: it.image ? `center/cover no-repeat url(${it.image})` : gradientFor(it.id),
+        }
+      })
+    : invest
+
+  // Map real directory entries into advisor cards; fall back to static mockup if empty.
+  const advisorCards = advisorItems.length
+    ? advisorItems.map((it) => ({
+        n: it.title,
+        r: [it.category, it.location].filter(Boolean).join(' · ') || 'متخصص',
+        deals: '—',
+        rate: it.rating || '—',
+        img: gradientFor(it.title, 'avatar'),
+        initials: initialsFor(it.title),
+      }))
+    : advisors.map((a) => ({ ...a, initials: initialsFor(a.n) }))
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
@@ -99,7 +163,7 @@ export default function Home() {
           <div style={{ margin: '34px auto 0', maxWidth: 740, textAlign: 'right' }}>
             <div style={{ position: 'relative', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 18, padding: 18, boxShadow: 'var(--shadow)' }}>
               <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                <textarea value={query} onChange={e => setQuery(e.target.value)} placeholder="مثلاً: آپارتمان ۱۳۰ متری در سعادت‌آباد، زیر ۱۸ میلیارد، با آسانسور و پارکینگ، نزدیک مترو…" rows={2} style={{ flex: 1, resize: 'none', border: 'none', outline: 'none', background: 'transparent', color: 'var(--text)', fontFamily: 'inherit', fontSize: 16, lineHeight: 1.7, paddingTop: 8 }} />
+                <textarea value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runSearch() } }} placeholder="مثلاً: آپارتمان ۱۳۰ متری در سعادت‌آباد، زیر ۱۸ میلیارد، با آسانسور و پارکینگ، نزدیک مترو…" rows={2} style={{ flex: 1, resize: 'none', border: 'none', outline: 'none', background: 'transparent', color: 'var(--text)', fontFamily: 'inherit', fontSize: 16, lineHeight: 1.7, paddingTop: 8 }} />
                 <button onClick={runSearch} style={{ flexShrink: 0, height: 48, padding: '0 22px', border: 'none', borderRadius: 13, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontFamily: 'inherit', fontWeight: 700, fontSize: 15, cursor: 'pointer', boxShadow: '0 10px 24px -10px var(--gold)' }}>جستجو</button>
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
@@ -109,52 +173,6 @@ export default function Home() {
                 ))}
               </div>
             </div>
-
-            {phase === 'thinking' && (
-              <div style={{ marginTop: 14, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 20 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <span style={{ width: 34, height: 34, borderRadius: '50%', border: '2.5px solid var(--goldDim)', borderTopColor: 'var(--gold)', animation: 'spin .8s linear infinite', display: 'block', flexShrink: 0 }}></span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, color: 'var(--text)', fontSize: 14.5 }}>در حال تحلیل درخواست شما…</div>
-                    <div style={{ marginTop: 8, height: 4, borderRadius: 4, background: 'var(--bg2)', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: '40%', background: 'linear-gradient(90deg,transparent,var(--gold),transparent)', animation: 'scan 1s linear infinite' }}></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {phase === 'results' && (
-              <div style={{ marginTop: 14, animation: 'rise .5s both' }}>
-                <div style={{ background: 'var(--surface)', border: '1px solid var(--gold)', borderRadius: 16, padding: '18px 20px', position: 'relative', overflow: 'hidden' }}>
-                  <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(400px 160px at 90% 0,var(--goldDim),transparent)' }}></div>
-                  <div style={{ position: 'relative', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                    <span style={{ flexShrink: 0, width: 32, height: 32, borderRadius: 9, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16140f', fontWeight: 800, fontSize: 15 }}>✦</span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--gold)', marginBottom: 6 }}>تحلیل ملک‌جت</div>
-                      <p style={{ fontSize: 14.5, lineHeight: 1.85, color: 'var(--text)' }}>۳ گزینه با تطابق بالا پیدا کردم. بودجه‌ی شما برای سعادت‌آباد منطقی است؛ اما با حدود ۵٪ افزایش، واحدهای نوسازتر با کیفیت ساخت بالاتر هم در دسترس می‌شوند.</p>
-                    </div>
-                  </div>
-                </div>
-                <div style={{ display: 'grid', gap: 12, marginTop: 12 }}>
-                  {aiMatches.map(p => (
-                    <Link key={p.id} href={`/property/${p.id}`} style={{ display: 'flex', gap: 14, textDecoration: 'none', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: 12, alignItems: 'center' }}>
-                      <div style={{ width: 96, height: 74, borderRadius: 10, flexShrink: 0, background: p.img }}></div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 700, fontSize: 14.5, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.title}</div>
-                        <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3 }}>{p.loc} · {p.size} متر · {p.beds} خواب</div>
-                        <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--gold)', marginTop: 6 }}>{p.price}</div>
-                      </div>
-                      <div style={{ textAlign: 'center', flexShrink: 0 }}>
-                        <div style={{ fontSize: 11, color: 'var(--faint)' }}>تطابق</div>
-                        <div style={{ fontWeight: 800, fontSize: 19, color: 'var(--text)' }}>{p.match}٪</div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-                <Link href="/search" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, height: 46, borderRadius: 13, border: '1px solid var(--gold)', background: 'var(--goldDim)', color: 'var(--gold)', textDecoration: 'none', fontWeight: 700, fontSize: 14 }}>مشاهده‌ی همه‌ی نتایج روی نقشه ←</Link>
-              </div>
-            )}
           </div>
         </div>
       </section>
@@ -178,7 +196,7 @@ export default function Home() {
           <Link href="/search" style={{ flexShrink: 0, fontSize: 14, fontWeight: 600, color: 'var(--muted)', textDecoration: 'none', padding: '9px 14px', border: '1px solid var(--line)', borderRadius: 11 }}>مشاهده همه ←</Link>
         </div>
         <div className="mj-feat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 18 }}>
-          {featured.map(p => (
+          {featuredCards.map(p => (
             <PropertyCard key={p.id} {...p} liked={likes[p.id]} onLike={() => setLikes(prev => ({ ...prev, [p.id]: !prev[p.id] }))} />
           ))}
         </div>
@@ -191,7 +209,7 @@ export default function Home() {
           <Link href="/owner" style={{ flexShrink: 0, fontSize: 14, fontWeight: 600, color: 'var(--muted)', textDecoration: 'none', padding: '9px 14px', border: '1px solid var(--line)', borderRadius: 11 }}>میز کار سرمایه‌گذار ←</Link>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 18 }}>
-          {invest.map(o => (
+          {investCards.map(o => (
             <Link key={o.id} href={`/property/${o.id}`} style={{ display: 'block', textDecoration: 'none', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, overflow: 'hidden' }}>
               <div style={{ position: 'relative', height: 150, background: o.img }}>
                 <span style={{ position: 'absolute', top: 12, right: 12, padding: '5px 11px', borderRadius: 999, background: 'rgba(95,217,138,0.9)', color: '#0a2a16', fontSize: 12, fontWeight: 800 }}>بازده {o.roi}</span>
@@ -256,9 +274,9 @@ export default function Home() {
             <Link href="/directory" style={{ flexShrink: 0, fontSize: 14, fontWeight: 600, color: 'var(--muted)', textDecoration: 'none', padding: '9px 14px', border: '1px solid var(--line)', borderRadius: 11 }}>همه مشاوران ←</Link>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 18 }}>
-            {advisors.map(a => (
+            {advisorCards.map(a => (
               <div key={a.n} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 22, textAlign: 'center' }}>
-                <div style={{ width: 72, height: 72, borderRadius: '50%', margin: '0 auto', background: a.img, border: '2px solid var(--gold)' }}></div>
+                <div style={{ width: 72, height: 72, borderRadius: '50%', margin: '0 auto', background: a.img, border: '2px solid var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 18, fontWeight: 700 }}>{a.initials}</div>
                 <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text)', marginTop: 14 }}>{a.n}</div>
                 <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 4 }}>{a.r}</div>
                 <div style={{ display: 'flex', justifyContent: 'center', gap: 18, marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--line)' }}>

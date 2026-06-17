@@ -117,6 +117,8 @@ export default function StorePage() {
   const [addedId, setAddedId] = useState<string | null>(null)
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
+  const [orderState, setOrderState] = useState<'idle' | 'sending' | 'done'>('idle')
+  const [rfqState, setRfqState] = useState<'idle' | 'sending' | 'done'>('idle')
 
   useEffect(() => {
     let alive = true
@@ -156,6 +158,48 @@ export default function StorePage() {
   const totalItems = cart.reduce((sum, i) => sum + i.qty, 0)
   const totalPrice = cart.reduce((sum, i) => sum + i.product.price * i.qty, 0)
 
+  const placeOrder = async () => {
+    if (cart.length === 0 || orderState === 'sending') return
+    setOrderState('sending')
+    const lines = cart.map(i => `${i.product.name} (${i.product.brand}) × ${i.qty}`).join('\n')
+    const description = `سفارش از فروشگاه ملک‌جت:\n${lines}\n\nجمع کل: ${totalPrice.toLocaleString('fa-IR')} تومان`
+    try {
+      const res = await fetch('/api/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'سفارش فروشگاه', description }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok && d.ok) {
+        setOrderState('done')
+        setCart([])
+      } else {
+        setOrderState('idle')
+      }
+    } catch {
+      setOrderState('idle')
+    }
+  }
+
+  const sendRfq = async () => {
+    if (rfqState === 'sending') return
+    setRfqState('sending')
+    const source = cart.length > 0 ? cart : products.slice(0, 10).map(p => ({ product: p, qty: 1 }))
+    const lines = source.map(i => `${i.product.name} (${i.product.brand}) × ${i.qty}`).join('\n')
+    const description = `درخواست استعلام قیمت عمده (RFQ):\n${lines || 'بدون محصول انتخاب‌شده — لطفاً تماس بگیرید.'}`
+    try {
+      const res = await fetch('/api/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'استعلام قیمت عمده (RFQ)', description }),
+      })
+      const d = await res.json().catch(() => ({}))
+      setRfqState(res.ok && d.ok ? 'done' : 'idle')
+    } catch {
+      setRfqState('idle')
+    }
+  }
+
   let filtered = products.filter(p => {
     if (activeCategory !== 'همه' && p.category !== activeCategory) return false
     if (selectedBrands.size > 0 && !selectedBrands.has(p.brand)) return false
@@ -184,7 +228,7 @@ export default function StorePage() {
       {cartOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 300 }}>
           <div
-            onClick={() => setCartOpen(false)}
+            onClick={() => { setCartOpen(false); setOrderState('idle') }}
             style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)' }}
           />
           <div style={{
@@ -195,7 +239,7 @@ export default function StorePage() {
             <div style={{ padding: '24px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>سبد خرید ({totalItems})</h2>
               <button
-                onClick={() => setCartOpen(false)}
+                onClick={() => { setCartOpen(false); setOrderState('idle') }}
                 style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid var(--line)', background: 'var(--surface)', cursor: 'pointer', color: 'var(--text)', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >
                 ×
@@ -203,10 +247,20 @@ export default function StorePage() {
             </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
               {cart.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--muted)' }}>
-                  <div style={{ fontSize: 48, marginBottom: 12, opacity: 0.3 }}>◈</div>
-                  <div style={{ fontSize: 14 }}>سبد خرید خالی است</div>
-                </div>
+                orderState === 'done' ? (
+                  <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text)' }}>
+                    <div style={{ fontSize: 48, marginBottom: 12, color: '#22c55e' }}>✓</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 6 }}>سفارش ثبت شد</div>
+                    <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.8 }}>
+                      سفارش شما با موفقیت ثبت شد. کارشناسان ما به‌زودی با شما تماس می‌گیرند.
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--muted)' }}>
+                    <div style={{ fontSize: 48, marginBottom: 12, opacity: 0.3 }}>◈</div>
+                    <div style={{ fontSize: 14 }}>سبد خرید خالی است</div>
+                  </div>
+                )
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {cart.map(item => (
@@ -244,11 +298,16 @@ export default function StorePage() {
                   <span style={{ color: 'var(--muted)' }}>جمع کل:</span>
                   <span style={{ color: 'var(--gold)' }}>{totalPrice.toLocaleString('fa-IR')} تومان</span>
                 </div>
-                <button style={{
+                <button
+                  onClick={placeOrder}
+                  disabled={orderState === 'sending'}
+                  style={{
                   width: '100%', padding: '13px', background: 'linear-gradient(135deg, var(--gold2), var(--gold))',
-                  color: '#000', border: 'none', borderRadius: 12, fontSize: 15, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit',
+                  color: '#000', border: 'none', borderRadius: 12, fontSize: 15, fontWeight: 800,
+                  cursor: orderState === 'sending' ? 'not-allowed' : 'pointer',
+                  opacity: orderState === 'sending' ? 0.7 : 1, fontFamily: 'inherit',
                 }}>
-                  ثبت سفارش
+                  {orderState === 'sending' ? 'در حال ثبت...' : 'ثبت سفارش'}
                 </button>
               </div>
             )}
@@ -782,12 +841,17 @@ export default function StorePage() {
                 </div>
               </div>
             </div>
-            <button style={{
+            <button
+              onClick={sendRfq}
+              disabled={rfqState === 'sending'}
+              style={{
               padding: '12px 28px', borderRadius: 12, border: 'none',
-              background: 'linear-gradient(135deg, var(--gold2), var(--gold))',
-              color: '#000', fontSize: 14, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
+              background: rfqState === 'done' ? '#22c55e' : 'linear-gradient(135deg, var(--gold2), var(--gold))',
+              color: rfqState === 'done' ? '#fff' : '#000', fontSize: 14, fontWeight: 800,
+              cursor: rfqState === 'sending' ? 'not-allowed' : 'pointer',
+              opacity: rfqState === 'sending' ? 0.7 : 1, fontFamily: 'inherit', flexShrink: 0,
             }}>
-              ارسال استعلام (RFQ)
+              {rfqState === 'sending' ? 'در حال ارسال...' : rfqState === 'done' ? '✓ استعلام ثبت شد' : 'ارسال استعلام (RFQ)'}
             </button>
           </div>
 
