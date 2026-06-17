@@ -54,6 +54,19 @@ export async function chatComplete(model: string, messages: { role: string; cont
   return d.choices?.[0]?.message?.content || ''
 }
 
+// Like chatComplete, but if the chosen model fails (e.g. 503/unavailable on
+// GapGPT), retry once with a known-good cheap model so the feature still works.
+export async function chatCompleteSafe(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number } = {}): Promise<string> {
+  try {
+    return await chatComplete(model, messages, opts)
+  } catch (e) {
+    if (model !== 'gpt-4o-mini') {
+      return await chatComplete('gpt-4o-mini', messages, opts)
+    }
+    throw e
+  }
+}
+
 export async function generateImage(model: string, prompt: string, size = '1024x1024'): Promise<string> {
   const { base, key } = cfg()
   const res = await gapHttp(`${base}/images/generations`, {

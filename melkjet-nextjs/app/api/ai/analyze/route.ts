@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { chatComplete, agentModel } from '@/app/lib/gapgpt'
+import { chatCompleteSafe, agentModel } from '@/app/lib/gapgpt'
 
 // Structured AI analysis for a property listing → fills the property page design.
 export async function POST(req: NextRequest) {
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
 اعداد scores بین ۰ تا ۱۰ و confidence بین ۰ تا ۱۰۰.`
 
   try {
-    let text = await chatComplete(model, [{ role: 'system', content: system }, { role: 'user', content: info }], { temperature: 0.5 })
+    let text = await chatCompleteSafe(model, [{ role: 'system', content: system }, { role: 'user', content: info }], { temperature: 0.5 })
     // strip code fences / extract JSON
     const m = text.match(/\{[\s\S]*\}/)
     if (m) text = m[0]

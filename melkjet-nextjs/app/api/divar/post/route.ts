@@ -43,17 +43,22 @@ export async function GET(req: NextRequest) {
     const descs = [...res.body.matchAll(/"description"\s*:\s*"((?:[^"\\]|\\.){20,})"/g)].map(m => unesc(m[1]))
     if (descs.length) description = descs.sort((a, b) => b.length - a.length)[0]
 
-    // Key facts: title/value pairs where one side is a known real-estate label
-    const LABELS = ['متراژ', 'ساخت', 'سن بنا', 'سال ساخت', 'اتاق', 'تعداد اتاق', 'طبقه', 'ودیعه', 'اجاره', 'اجارهٔ ماهانه', 'قیمت', 'قیمت کل', 'قیمت هر متر', 'پارکینگ', 'آسانسور', 'انباری', 'بالکن', 'جهت ساختمان', 'نوع', 'سند']
+    // Key facts: scan small JSON objects; if an object contains a known label,
+    // take the other short string in it as the value (robust to field order).
+    const LABELS = ['متراژ', 'ساخت', 'سن بنا', 'سال ساخت', 'اتاق', 'تعداد اتاق', 'خواب', 'طبقه', 'ودیعه', 'اجاره', 'اجارهٔ ماهانه', 'قیمت', 'قیمت کل', 'قیمت هر متر', 'پارکینگ', 'آسانسور', 'انباری', 'بالکن', 'جهت ساختمان', 'سند', 'وضعیت واحد']
     const factsMap: Record<string, string> = {}
-    const addPair = (a: string, b: string) => {
-      a = unesc(a).trim(); b = unesc(b).trim()
-      if (LABELS.includes(a) && b && !factsMap[a]) factsMap[a] = b
-      else if (LABELS.includes(b) && a && !factsMap[b]) factsMap[b] = a
+    for (const om of res.body.matchAll(/\{[^{}]{0,260}\}/g)) {
+      const o = om[0]
+      const label = LABELS.find(l => o.includes(`"${l}"`))
+      if (!label || factsMap[label]) continue
+      const vals = [...o.matchAll(/"(?:value|title|text|normalized_text|display_text)":"([^"]{1,40})"/g)]
+        .map(x => unesc(x[1]).trim())
+        .filter(v => v && !LABELS.includes(v) && v !== 'true' && v !== 'false')
+      if (vals.length) factsMap[label] = vals[0]
     }
-    for (const m of res.body.matchAll(/"title":"([^"]{1,30})","value":"([^"]{1,40})"/g)) addPair(m[1], m[2])
-    for (const m of res.body.matchAll(/"value":"([^"]{1,40})","title":"([^"]{1,30})"/g)) addPair(m[2], m[1])
-    const facts = Object.entries(factsMap).map(([label, value]) => ({ label, value }))
+    // keep a sensible order
+    const order = ['متراژ', 'خواب', 'اتاق', 'تعداد اتاق', 'ساخت', 'سال ساخت', 'سن بنا', 'طبقه', 'قیمت', 'قیمت کل', 'قیمت هر متر', 'ودیعه', 'اجاره', 'اجارهٔ ماهانه', 'پارکینگ', 'آسانسور', 'انباری', 'بالکن', 'جهت ساختمان', 'سند', 'وضعیت واحد']
+    const facts = order.filter(l => factsMap[l]).map(l => ({ label: l, value: factsMap[l] }))
 
     return NextResponse.json({ images, description, facts })
   } catch (e: any) {

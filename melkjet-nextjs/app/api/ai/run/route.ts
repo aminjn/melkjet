@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { chatComplete, generateImage, agentModel } from '@/app/lib/gapgpt'
+import { chatCompleteSafe, generateImage, agentModel } from '@/app/lib/gapgpt'
 
 // System prompts per agent — defines what each agent does
 const SYSTEMS: Record<string, string> = {
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const system = SYSTEMS[agent] || SYSTEMS.chat
-    const text = await chatComplete(textModel, [
+    const text = await chatCompleteSafe(textModel, [
       { role: 'system', content: system },
       { role: 'user', content: input },
     ])

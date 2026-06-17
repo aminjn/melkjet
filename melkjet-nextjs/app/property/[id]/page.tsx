@@ -162,11 +162,11 @@ export default function PropertyPage() {
               </div>
 
               {facts.length > 0 && (
-                <div className="mjp-facts" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(facts.length, 4)},1fr)`, gap: 12 }}>
-                  {facts.slice(0, 4).map(f => (
-                    <div key={f.label} style={{ ...card, padding: '16px 12px', textAlign: 'center', borderRadius: 14 }}>
-                      <div style={{ fontSize: 17, fontWeight: 800 }}>{f.value}</div>
-                      <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4 }}>{f.label}</div>
+                <div className="mjp-facts" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(110px,1fr))', gap: 12 }}>
+                  {facts.map(f => (
+                    <div key={f.label} style={{ ...card, padding: '14px 10px', textAlign: 'center', borderRadius: 14 }}>
+                      <div style={{ fontSize: 15.5, fontWeight: 800, wordBreak: 'break-word' }}>{f.value}</div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{f.label}</div>
                     </div>
                   ))}
                 </div>
