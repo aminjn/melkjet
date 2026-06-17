@@ -399,6 +399,25 @@ export function getArticleBySlug(slug: string): Item | null {
   return load().items.find(i => i.type === 'article' && i.meta?.slug === slug) || null
 }
 
+// ایجاد دستی یک آیتم (آگهی/محصول/پروفایل/قیمت) از سوپرادمین — منتشرشده.
+export function addItemManual(raw: {
+  type: SourceType; title: string; price?: string; location?: string; image?: string
+  url?: string; excerpt?: string; phone?: string; category?: string; owner?: string
+  meta?: Record<string, string>
+}): Item {
+  const db = load()
+  const item: Item = {
+    id: id(), sourceId: 'manual', sourceName: 'ثبت دستی مدیر', type: raw.type,
+    category: raw.category, title: raw.title, price: raw.price, location: raw.location,
+    image: raw.image, url: raw.url, excerpt: raw.excerpt, phone: raw.phone, owner: raw.owner,
+    meta: raw.meta && Object.keys(raw.meta).length ? raw.meta : undefined,
+    scrapedAt: Date.now(), status: 'approved', edited: true,
+  }
+  db.items.unshift(item)
+  save(db)
+  return item
+}
+
 export function markError(sourceId: string, err: string) {
   const db = load()
   const s = db.sources.find(x => x.id === sourceId)

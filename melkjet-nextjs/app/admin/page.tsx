@@ -8,8 +8,8 @@ import ArticleEditor from '@/app/components/ArticleEditor'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 type View =
-  | 'overview' | 'scraper' | 'listings' | 'geo' | 'moderation' | 'content' | 'studio' | 'articles' | 'api'
-  | 'reports' | 'plans' | 'promos' | 'ads' | 'users'
+  | 'overview' | 'scraper' | 'listings' | 'products' | 'geo' | 'moderation' | 'content' | 'studio' | 'articles' | 'categories' | 'crm' | 'api'
+  | 'reports' | 'plans' | 'promos' | 'ads' | 'users' | 'connections'
   | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags'
 
 interface NavItem { id: View; icon: string; label: string; badge?: string; badgeColor?: string }
@@ -23,10 +23,12 @@ const sections: NavSection[] = [
       { id: 'overview',    icon: '▦',  label: 'نمای کلی' },
       { id: 'scraper',     icon: '⛏',  label: 'موتور اسکرپی AI',   badge: 'زنده',  badgeColor: '#5fd98a' },
       { id: 'listings',    icon: '▤',  label: 'مدیریت آگهی‌ها' },
+      { id: 'products',    icon: '◰',  label: 'مدیریت محصولات' },
       { id: 'moderation',  icon: '✓',  label: 'تأیید آگهی AI',     badge: '32',    badgeColor: '#e7674a' },
       { id: 'content',     icon: '✦',  label: 'محتوا و سئو' },
       { id: 'studio',      icon: '◳',  label: 'استودیو پلان و سه‌بعدی' },
       { id: 'articles',    icon: '✎',  label: 'مدیریت مقالات (CMS)' },
+      { id: 'categories',  icon: '☰',  label: 'دسته‌بندی‌ها' },
       { id: 'api',         icon: '◈',  label: 'API و مدل‌های AI' },
     ],
   },
@@ -48,12 +50,14 @@ const sections: NavSection[] = [
     title: 'مدیریت پلتفرم',
     items: [
       { id: 'users', icon: '◍', label: 'کاربران و نقش‌ها' },
+      { id: 'crm', icon: '◈', label: 'CRM کاربران' },
       { id: 'geo', icon: '🗺', label: 'مناطق و محله‌ها' },
     ],
   },
   {
     title: 'پیکربندی',
     items: [
+      { id: 'connections', icon: '⚯', label: 'اتصال‌ها و سرویس‌ها' },
       { id: 'settings', icon: '⚙', label: 'تنظیمات کامل' },
     ],
   },
@@ -73,6 +77,10 @@ const viewTitles: Record<View, string> = {
   overview:   'نمای کلی سیستم',
   scraper:    'موتور اسکرپی هوشمند',
   listings:   'مدیریت آگهی‌ها و محتوا',
+  products:   'مدیریت محصولات فروشگاه',
+  categories: 'دسته‌بندی‌ها',
+  crm:        'CRM و مدیریت لیدهای کاربران',
+  connections: 'اتصال‌ها و سرویس‌ها',
   geo:        'مدیریت مناطق و محله‌ها',
   moderation: 'تأیید آگهی با هوش مصنوعی',
   content:    'استودیو محتوا و سئو',
@@ -1850,6 +1858,215 @@ function ModelSelect({ models, value, onChange, only }: { models: string[]; valu
   )
 }
 
+// ─── IPPanel SMS config ───────────────────────────────────────────────────
+function IPPanelConfig() {
+  const [f, setF] = useState({ apiKey: '', sender: '', pattern: '' })
+  const [masked, setMasked] = useState('')
+  const [msg, setMsg] = useState('')
+  useEffect(() => { fetch('/api/admin/ippanel-config').then(r => r.ok ? r.json() : null).then(d => { if (d) { setMasked(d.apiKey || ''); setF(p => ({ ...p, sender: d.sender || '', pattern: d.pattern || '' })) } }) }, [])
+  const save = async () => {
+    setMsg('')
+    const r = await fetch('/api/admin/ippanel-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(f) })
+    const d = await r.json()
+    setMsg(r.ok ? '✓ ذخیره شد' : `⚠ ${d.error || 'خطا'}`)
+    if (r.ok && f.apiKey) setMasked('***' + f.apiKey.slice(-4))
+  }
+  const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', direction: 'ltr', textAlign: 'left' }
+  const lab: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', marginBottom: 5, display: 'block', fontWeight: 600 }
+  return (
+    <Card style={{ marginBottom: 14 }}>
+      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>سرویس پیامک (IPPanel) {masked && <span style={{ color: '#5fd98a', fontSize: 12 }}>● تنظیم‌شده ({masked})</span>}</div>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>کلید API و خط ارسال را از پنل IPPanel بگیر. «کد پترن» برای پیامک کد ورود (OTP) و خط ارسال برای کمپین‌های پیامکی استفاده می‌شود.</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }} className="mjsa-2col">
+        <div style={{ gridColumn: '1 / -1' }}><label style={lab}>کلید API</label><input style={inp} placeholder="کلید IPPanel" value={f.apiKey} onChange={e => setF({ ...f, apiKey: e.target.value })} /></div>
+        <div><label style={lab}>خط ارسال (Sender)</label><input style={inp} placeholder="3000xxxx" value={f.sender} onChange={e => setF({ ...f, sender: e.target.value })} /></div>
+        <div><label style={lab}>کد پترن (OTP)</label><input style={inp} placeholder="pattern code" value={f.pattern} onChange={e => setF({ ...f, pattern: e.target.value })} /></div>
+      </div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <GoldButton onClick={save}>ذخیره</GoldButton>
+        {msg && <span style={{ fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</span>}
+      </div>
+    </Card>
+  )
+}
+
+// ─── Connections / integrations hub ────────────────────────────────────────
+function ConnectionsView() {
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>اتصال‌ها و سرویس‌ها</div>
+        <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>همهٔ سرویس‌های بیرونی از اینجا تنظیم می‌شوند: نقشه (نشان)، پیامک (IPPanel)، ایمیل (SMTP) و پروکسی دیوار. کلید هوش مصنوعی و تخصیص مدل‌ها در «API و مدل‌های AI» است.</div>
+      </Card>
+      <NeshanConfig />
+      <IPPanelConfig />
+      <SmtpConfig />
+      <DivarProxyConfig />
+    </div>
+  )
+}
+
+// ─── Categories CRUD (WordPress-like) ──────────────────────────────────────
+function CategoriesView() {
+  const TYPES: [string, string][] = [['article', 'مقالات'], ['listing', 'آگهی‌ها'], ['product', 'محصولات'], ['directory', 'پروفایل/دفاتر']]
+  const [type, setType] = useState('article')
+  const [cats, setCats] = useState<{ id: string; name: string; slug: string }[]>([])
+  const [name, setName] = useState('')
+  const load = (t: string) => fetch(`/api/admin/categories?type=${t}`).then(r => r.ok ? r.json() : { categories: [] }).then(d => setCats(d.categories || []))
+  useEffect(() => { load(type) }, [type])
+  const add = async () => { if (!name.trim()) return; const r = await fetch('/api/admin/categories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, name: name.trim() }) }); const d = await r.json(); setCats(d.categories || cats); setName('') }
+  const rename = async (id: string, cur: string) => { const n = prompt('نام جدید:', cur); if (!n) return; const r = await fetch('/api/admin/categories', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, id, name: n }) }); setCats((await r.json()).categories || cats) }
+  const del = async (id: string) => { if (!confirm('این دسته حذف شود؟')) return; const r = await fetch(`/api/admin/categories?type=${type}&id=${id}`, { method: 'DELETE' }); setCats((await r.json()).categories || cats) }
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10 }}>دسته‌بندی‌ها</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {TYPES.map(([k, l]) => <button key={k} onClick={() => setType(k)} style={{ padding: '7px 15px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5, border: `1px solid ${type === k ? 'var(--gold)' : 'var(--line2)'}`, background: type === k ? 'var(--goldDim)' : 'transparent', color: type === k ? 'var(--gold)' : 'var(--muted)', fontWeight: type === k ? 700 : 500 }}>{l}</button>)}
+        </div>
+      </Card>
+      <Card>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+          <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') add() }} placeholder="نام دستهٔ جدید…" style={{ flex: 1, background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }} />
+          <GoldButton onClick={add}>＋ افزودن</GoldButton>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {cats.length === 0 ? <div style={{ color: 'var(--muted)', fontSize: 13, padding: '16px 0', textAlign: 'center' }}>دسته‌ای نیست.</div> : cats.map(c => (
+            <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg2)', borderRadius: 10, padding: '10px 12px' }}>
+              <div><span style={{ fontSize: 13.5, fontWeight: 600 }}>{c.name}</span><span style={{ fontSize: 11, color: 'var(--faint)', marginInlineStart: 8, direction: 'ltr' }}>/{c.slug}</span></div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => rename(c.id, c.name)} style={{ fontSize: 11.5, padding: '4px 11px', borderRadius: 8, border: '1px solid var(--gold)', color: 'var(--gold)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>ویرایش</button>
+                <button onClick={() => del(c.id)} style={{ fontSize: 12.5, padding: '4px 10px', borderRadius: 8, border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>×</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+// ─── Products management (create / edit / delete) ──────────────────────────
+function ProductsView() {
+  const [items, setItems] = useState<MItem[]>([])
+  const [edit, setEdit] = useState<MItem | null>(null)
+  const [show, setShow] = useState(false)
+  const [cats, setCats] = useState<string[]>([])
+  const [f, setF] = useState({ title: '', price: '', location: '', image: '', excerpt: '', category: '' })
+  const load = () => fetch('/api/admin/scraper/items?type=product').then(r => r.ok ? r.json() : { items: [] }).then(d => setItems(d.items || []))
+  useEffect(() => { load(); fetch('/api/categories?type=product').then(r => r.json()).then(d => setCats(d.categories || [])) }, [])
+  const create = async () => {
+    if (!f.title.trim()) return
+    await fetch('/api/admin/scraper/items', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'product', ...f }) })
+    setF({ title: '', price: '', location: '', image: '', excerpt: '', category: '' }); setShow(false); load()
+  }
+  const del = async (id: string) => { if (!confirm('این محصول حذف شود؟')) return; setItems(items.filter(i => i.id !== id)); await fetch(`/api/admin/scraper/items?id=${id}`, { method: 'DELETE' }) }
+  const saveEdit = async (patch: any) => { if (!edit) return; setItems(items.map(i => i.id === edit.id ? { ...i, ...patch } : i)); await fetch('/api/admin/scraper/items', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: edit.id, patch }) }); setEdit(null) }
+  const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '9px 11px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          <div><div style={{ fontWeight: 800, fontSize: 16 }}>مدیریت محصولات فروشگاه</div><div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3 }}>{items.length.toLocaleString('fa-IR')} محصول — ایجاد، ویرایش و حذف</div></div>
+          <GoldButton onClick={() => setShow(s => !s)}>{show ? 'بستن' : '＋ محصول جدید'}</GoldButton>
+        </div>
+        {show && (
+          <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }} className="mjsa-2col">
+            <input style={inp} placeholder="نام محصول *" value={f.title} onChange={e => setF({ ...f, title: e.target.value })} />
+            <input style={inp} placeholder="قیمت" value={f.price} onChange={e => setF({ ...f, price: e.target.value })} />
+            <select style={inp} value={f.category} onChange={e => setF({ ...f, category: e.target.value })}><option value="">دسته…</option>{cats.map(c => <option key={c} value={c}>{c}</option>)}</select>
+            <input style={inp} placeholder="تأمین‌کننده/موقعیت" value={f.location} onChange={e => setF({ ...f, location: e.target.value })} />
+            <input style={{ ...inp, gridColumn: '1 / -1', direction: 'ltr', textAlign: 'left' }} placeholder="تصویر (URL)" value={f.image} onChange={e => setF({ ...f, image: e.target.value })} />
+            <textarea style={{ ...inp, gridColumn: '1 / -1', height: 60, resize: 'none' }} placeholder="توضیح" value={f.excerpt} onChange={e => setF({ ...f, excerpt: e.target.value })} />
+            <div style={{ gridColumn: '1 / -1' }}><GoldButton onClick={create}>ثبت محصول</GoldButton></div>
+          </div>
+        )}
+      </Card>
+      <Card>
+        {items.length === 0 ? <div style={{ color: 'var(--muted)', fontSize: 13, padding: '24px 0', textAlign: 'center' }}>محصولی نیست. «محصول جدید» را بزن یا از موتور اسکرپ محصول واکشی کن.</div> : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {items.map(it => (
+              <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg2)', borderRadius: 12, padding: '10px 12px', flexWrap: 'wrap' }}>
+                {it.image ? <img src={it.image} alt="" style={{ width: 46, height: 46, borderRadius: 9, objectFit: 'cover', flexShrink: 0 }} onError={e => { (e.target as HTMLImageElement).style.visibility = 'hidden' }} /> : <span style={{ width: 46, height: 46, borderRadius: 9, background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--gold)' }}>◰</span>}
+                <div style={{ flex: 1, minWidth: 160 }}><div style={{ fontSize: 13.5, fontWeight: 600 }}>{it.title}</div><div style={{ fontSize: 12, color: 'var(--muted)' }}>{[it.location, it.category].filter(Boolean).join(' · ')}</div></div>
+                {it.price && <span style={{ fontWeight: 700, color: 'var(--gold)', fontSize: 13 }}>{it.price}</span>}
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <OutlineButton onClick={() => setEdit(it)} style={{ fontSize: 11.5, padding: '4px 11px' }}>ویرایش</OutlineButton>
+                  <button onClick={() => del(it.id)} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', borderRadius: 8, padding: '4px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>×</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+      {edit && <EditItemModal item={edit} onClose={() => setEdit(null)} onSave={saveEdit} />}
+    </div>
+  )
+}
+
+// ─── Super-admin CRM control center ────────────────────────────────────────
+function CrmAdminView() {
+  const [data, setData] = useState<any>(null)
+  const load = () => fetch('/api/admin/crm').then(r => r.ok ? r.json() : null).then(setData)
+  useEffect(() => { load() }, [])
+  const del = async (kind: string, id: string) => { if (!confirm('حذف شود؟')) return; await fetch(`/api/admin/crm?kind=${kind}&id=${id}`, { method: 'DELETE' }); load() }
+  const STAGE: Record<string, { l: string; c: string }> = { new: { l: 'لید جدید', c: '#7a8fae' }, review: { l: 'بررسی', c: '#e7a14a' }, offered: { l: 'پیشنهاد', c: 'var(--gold)' }, contract: { l: 'قرارداد', c: '#5fd98a' }, lost: { l: 'ازدست‌رفته', c: '#e7674a' } }
+  const setStage = async (id: string, stage: string) => { await fetch('/api/admin/crm', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'lead', id, stage }) }); load() }
+  if (!data) return <Card>در حال بارگذاری…</Card>
+  const s = data.stats || {}
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <div className="mjsa-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 18 }}>
+        <KPI label="کل لیدها" value={(s.totalLeads || 0).toLocaleString('fa-IR')} icon="◈" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" trend={`${(s.byStage?.contract || 0).toLocaleString('fa-IR')} قرارداد`} />
+        <KPI label="وظایف باز" value={(s.openTasks || 0).toLocaleString('fa-IR')} icon="✓" iconBg="var(--goldDim)" iconColor="var(--gold)" trend={`${(s.totalTasks || 0).toLocaleString('fa-IR')} کل`} />
+        <KPI label="مشتریان" value={(s.totalClients || 0).toLocaleString('fa-IR')} icon="♛" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" trend="ثبت‌شده" />
+        <KPI label="در مذاکره" value={((s.byStage?.offered || 0) + (s.byStage?.review || 0)).toLocaleString('fa-IR')} icon="◴" iconBg="rgba(231,161,74,.15)" iconColor="#e7a14a" trend="بررسی+پیشنهاد" />
+      </div>
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>لیدها ({(data.leads || []).length.toLocaleString('fa-IR')})</div>
+        {(data.leads || []).length === 0 ? <div style={{ color: 'var(--muted)', fontSize: 13, padding: '12px 0' }}>هنوز لیدی ثبت نشده. لیدها از پنل CRM مشاوران ثبت می‌شوند.</div> : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {(data.leads || []).map((l: any) => (
+              <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg2)', borderRadius: 10, padding: '10px 12px', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: 150 }}><div style={{ fontSize: 13.5, fontWeight: 600 }}>{l.name}</div><div style={{ fontSize: 12, color: 'var(--muted)' }}>{[l.need, l.budget, l.phone].filter(Boolean).join(' · ')}</div></div>
+                <select value={l.stage} onChange={e => setStage(l.id, e.target.value)} style={{ background: 'var(--surface)', border: `1px solid ${STAGE[l.stage]?.c || 'var(--line2)'}`, color: STAGE[l.stage]?.c || 'var(--text)', borderRadius: 8, padding: '5px 9px', fontFamily: 'inherit', fontSize: 12 }}>{Object.entries(STAGE).map(([k, v]) => <option key={k} value={k}>{v.l}</option>)}</select>
+                <button onClick={() => del('lead', l.id)} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', borderRadius: 8, padding: '4px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>×</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+      <div className="mjsa-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <Card>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>وظایف ({(data.tasks || []).length.toLocaleString('fa-IR')})</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {(data.tasks || []).slice(0, 30).map((t: any) => (
+              <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, background: 'var(--bg2)', borderRadius: 8, padding: '8px 10px' }}>
+                <span style={{ color: t.done ? '#5fd98a' : 'var(--faint)' }}>{t.done ? '✓' : '○'}</span>
+                <span style={{ flex: 1, textDecoration: t.done ? 'line-through' : 'none', color: t.done ? 'var(--muted)' : 'var(--text)' }}>{t.title}</span>
+                <button onClick={() => del('task', t.id)} style={{ background: 'transparent', border: 'none', color: '#e7674a', cursor: 'pointer', fontSize: 14 }}>×</button>
+              </div>
+            ))}
+            {(data.tasks || []).length === 0 && <div style={{ color: 'var(--muted)', fontSize: 12.5 }}>وظیفه‌ای نیست.</div>}
+          </div>
+        </Card>
+        <Card>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>مشتریان ({(data.clients || []).length.toLocaleString('fa-IR')})</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {(data.clients || []).slice(0, 30).map((c: any) => (
+              <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, background: 'var(--bg2)', borderRadius: 8, padding: '8px 10px' }}>
+                <span style={{ flex: 1 }}>{c.name}{c.phone && <span style={{ color: 'var(--faint)', marginInlineStart: 6, direction: 'ltr' }}>{c.phone}</span>}</span>
+                <button onClick={() => del('client', c.id)} style={{ background: 'transparent', border: 'none', color: '#e7674a', cursor: 'pointer', fontSize: 14 }}>×</button>
+              </div>
+            ))}
+            {(data.clients || []).length === 0 && <div style={{ color: 'var(--muted)', fontSize: 12.5 }}>مشتری‌ای نیست.</div>}
+          </div>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
 function SmtpConfig() {
   const [f, setF] = useState({ host: '', port: '465', user: '', pass: '', from: '' })
   const [configured, setConfigured] = useState(false)
@@ -2387,6 +2604,10 @@ export default function SuperAdminPage() {
       case 'overview':   return <OverviewView />
       case 'scraper':    return <ScraperView />
       case 'listings':   return <ListingsView />
+      case 'products':   return <ProductsView />
+      case 'categories': return <CategoriesView />
+      case 'crm':        return <CrmAdminView />
+      case 'connections': return <ConnectionsView />
       case 'geo':        return <GeoView />
       case 'moderation': return <ModerationView />
       case 'content':    return <ContentView />

@@ -48,8 +48,10 @@ next-env.d.ts
 .market-data.json
 .enrich-data.json
 .crm-data.json
+.leads-data.json
 .user-data.json
 .pros-data.json
 .workflow-data.json
 .sites-data.json
 .cms-data.json
+.category-data.json

@@ -14,7 +14,7 @@ const empty = (): Omit<Article, 'id' | 'author' | 'updatedAt'> & { id?: string }
   title: '', body: '', image: '', category: '', tags: [], slug: '', seoTitle: '', metaDescription: '', focusKeyword: '', status: 'draft', excerpt: '',
 })
 
-const CATS = ['راهنمای خرید', 'راهنمای اجاره', 'تحلیل بازار', 'سرمایه‌گذاری', 'حقوقی', 'وام و تسهیلات', 'معماری و دکوراسیون', 'اخبار']
+const DEFAULT_CATS = ['راهنمای خرید', 'راهنمای اجاره', 'تحلیل بازار', 'سرمایه‌گذاری', 'حقوقی', 'وام و تسهیلات', 'معماری و دکوراسیون', 'اخبار']
 
 export default function ArticleEditor({ compact }: { compact?: boolean }) {
   const [tab, setTab] = useState<'list' | 'edit'>('list')
@@ -25,10 +25,17 @@ export default function ArticleEditor({ compact }: { compact?: boolean }) {
   const [msg, setMsg] = useState('')
   const [preview, setPreview] = useState(false)
   const [aiTopic, setAiTopic] = useState('')
+  const [cats, setCats] = useState<string[]>(DEFAULT_CATS)
   const bodyRef = useRef<HTMLTextAreaElement | null>(null)
 
   const load = () => fetch('/api/cms').then(r => r.ok ? r.json() : { articles: [] }).then(d => setArticles(d.articles || []))
   useEffect(() => { load() }, [])
+  useEffect(() => {
+    fetch('/api/categories?type=article')
+      .then(r => r.ok ? r.json() : { categories: [] })
+      .then(d => { if (Array.isArray(d.categories) && d.categories.length) setCats(d.categories) })
+      .catch(() => {})
+  }, [])
 
   const set = (k: string, v: any) => setF(p => ({ ...p, [k]: v }))
   const newPost = () => { setF(empty()); setTab('edit'); setMsg(''); setPreview(false) }
@@ -187,7 +194,7 @@ export default function ArticleEditor({ compact }: { compact?: boolean }) {
             <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>دسته‌بندی</div>
             <select value={f.category} onChange={e => set('category', e.target.value)} style={inp}>
               <option value="">— انتخاب —</option>
-              {CATS.map(c => <option key={c} value={c}>{c}</option>)}
+              {cats.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
             <div style={{ ...lab, marginTop: 12 }}>تصویر شاخص (URL)</div>
             <input value={f.image} onChange={e => set('image', e.target.value)} placeholder="https://…" style={{ ...inp, direction: 'ltr', textAlign: 'left' }} />

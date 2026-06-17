@@ -1,11 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listItems, setItemStatus, updateItem, deleteItem, deleteItems, SourceType, ItemStatus, EditableItem } from '@/app/lib/scraper-store'
+import { listItems, setItemStatus, updateItem, deleteItem, deleteItems, addItemManual, SourceType, ItemStatus, EditableItem } from '@/app/lib/scraper-store'
 import { clearEnrichment } from '@/app/lib/enrich-store'
 
 async function guard() {
   const s = await getSession()
   return s && s.role === 'super_admin'
+}
+
+// POST → ساخت دستی آیتم جدید (آگهی/محصول/…)
+export async function POST(req: NextRequest) {
+  if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  const b = await req.json().catch(() => ({}))
+  const type = (['listing', 'directory', 'product', 'article', 'price'].includes(b.type) ? b.type : 'listing') as SourceType
+  if (!b.title || !String(b.title).trim()) return NextResponse.json({ error: 'عنوان الزامی است' }, { status: 400 })
+  const it = addItemManual({
+    type, title: String(b.title).slice(0, 200),
+    price: b.price ? String(b.price) : undefined, location: b.location ? String(b.location) : undefined,
+    image: b.image ? String(b.image) : undefined, url: b.url ? String(b.url) : undefined,
+    excerpt: b.excerpt ? String(b.excerpt) : undefined, phone: b.phone ? String(b.phone) : undefined,
+    category: b.category ? String(b.category) : undefined, owner: b.owner ? String(b.owner) : undefined,
+  })
+  return NextResponse.json({ ok: true, id: it.id, item: it })
 }
 
 export async function GET(req: NextRequest) {
