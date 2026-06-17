@@ -19,16 +19,20 @@ export function agentModel(agentId: string, slot: 'text' | 'image' = 'text'): st
   return getAdminData().agentModels?.[agentId]?.[slot]
 }
 
-// HTTP helper: try direct fetch first; on a network failure, retry via the proxy.
+// HTTP helper. The server usually reaches GapGPT only via the proxy, so when a
+// proxy is configured we use it first, then fall back to a direct request.
 async function gapHttp(url: string, init: { method: string; headers: Record<string, string>; body?: string }, timeout = 90000): Promise<{ status: number; body: string }> {
-  // 1) direct
-  try {
+  const px = proxy()
+  const direct = async () => {
     const r = await fetch(url, { method: init.method, headers: init.headers, body: init.body, signal: AbortSignal.timeout(timeout) })
     return { status: r.status, body: await r.text() }
-  } catch {
-    // 2) via proxy (server likely can't reach the host directly)
-    return proxiedRequest(url, { method: init.method, headers: init.headers, body: init.body, proxyUrl: proxy(), timeout })
   }
+  const viaProxy = () => proxiedRequest(url, { method: init.method, headers: init.headers, body: init.body, proxyUrl: px, timeout })
+
+  if (px) {
+    try { return await viaProxy() } catch { return direct() }
+  }
+  try { return await direct() } catch { return viaProxy() }
 }
 
 export async function listModels(): Promise<string[]> {

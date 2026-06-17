@@ -1332,8 +1332,10 @@ function ContentView() {
 }
 
 function ModelSelect({ models, value, onChange, only }: { models: string[]; value: string; onChange: (v: string) => void; only?: ModelCategory }) {
+  // ensure a previously-saved model still shows even if it's not in the live list
+  const all = value && !models.includes(value) ? [value, ...models] : models
   const groups: Record<string, string[]> = {}
-  for (const m of models) {
+  for (const m of all) {
     const cat = categorizeModel(m)
     if (only && cat !== only) continue
     ;(groups[cat] = groups[cat] || []).push(m)
