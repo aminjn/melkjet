@@ -302,6 +302,7 @@ function ListingsView() {
   const [q, setQ] = useState('')
   const [edit, setEdit] = useState<MItem | null>(null)
   const [bulkOpen, setBulkOpen] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
   const [aiBusy, setAiBusy] = useState(false)
   const [sel, setSel] = useState<Set<string>>(new Set())
 
@@ -332,6 +333,12 @@ function ListingsView() {
     if (!edit) return
     setItems(items.map(i => i.id === edit.id ? { ...i, ...patchData } : i))
     await patch(edit.id, { patch: patchData }); setEdit(null)
+  }
+  // ساخت آیتم جدید (آگهی/پروفایل/محصول/قیمت) و بازخوانی لیست
+  const createItem = async (data: { type: string; title: string; price?: string; location?: string; image?: string; url?: string; excerpt?: string }) => {
+    const r = await fetch('/api/admin/scraper/items', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
+    if (r.ok) { setCreateOpen(false); await load() }
+    else { const d = await r.json().catch(() => ({})); alert(d.error || 'خطا در ساخت آیتم') }
   }
   const toggleSel = (id: string) => setSel(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
   const selectAll = () => setSel(sel.size === items.length ? new Set() : new Set(items.map(i => i.id)))
@@ -389,6 +396,7 @@ function ListingsView() {
           </select>
           <input style={inp} placeholder="جستجو…" value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') load() }} />
           <OutlineButton onClick={load}>جستجو</OutlineButton>
+          <GoldButton onClick={() => setCreateOpen(true)}>＋ آگهی جدید</GoldButton>
         </div>
         <div style={{ marginTop: 10, fontSize: 12.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <span>{loading ? 'در حال بارگذاری…' : `${total} مورد`}</span>
@@ -439,6 +447,55 @@ function ListingsView() {
 
       {edit && <EditItemModal item={edit} onClose={() => setEdit(null)} onSave={saveEdit} />}
       {bulkOpen && <BulkEditModal count={sel.size} onClose={() => setBulkOpen(false)} onSave={bulkEditSave} />}
+      {createOpen && <CreateItemModal onClose={() => setCreateOpen(false)} onSave={createItem} />}
+    </div>
+  )
+}
+
+// ساخت آیتم جدید — فرم فشرده با انتخاب نوع (آگهی/پروفایل/محصول/قیمت)
+function CreateItemModal({ onClose, onSave }: { onClose: () => void; onSave: (d: { type: string; title: string; price?: string; location?: string; image?: string; url?: string; excerpt?: string }) => void }) {
+  const [f, setF] = useState({ type: 'listing', title: '', price: '', location: '', image: '', url: '', excerpt: '' })
+  const [busy, setBusy] = useState(false)
+  const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+  const lab: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', marginBottom: 5, display: 'block', fontWeight: 600 }
+  const submit = async () => {
+    if (!f.title.trim() || busy) return
+    setBusy(true)
+    try { await onSave({ type: f.type, title: f.title.trim(), price: f.price || undefined, location: f.location || undefined, image: f.image || undefined, url: f.url || undefined, excerpt: f.excerpt || undefined }) }
+    finally { setBusy(false) }
+  }
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 100, padding: 20, overflowY: 'auto' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 18, padding: 24, width: '100%', maxWidth: 520, margin: 'auto', animation: 'rise .25s ease' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+          <div style={{ fontWeight: 800, fontSize: 16 }}>آگهی / آیتم جدید</div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 20, cursor: 'pointer' }}>×</button>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div><label style={lab}>نوع</label>
+              <select style={inp} value={f.type} onChange={e => setF({ ...f, type: e.target.value })}>
+                <option value="listing">آگهی</option>
+                <option value="directory">پروفایل/دفتر</option>
+                <option value="product">محصول</option>
+                <option value="price">قیمت</option>
+              </select>
+            </div>
+            <div><label style={lab}>قیمت</label><input style={inp} value={f.price} onChange={e => setF({ ...f, price: e.target.value })} /></div>
+          </div>
+          <div><label style={lab}>عنوان *</label><input style={inp} value={f.title} onChange={e => setF({ ...f, title: e.target.value })} /></div>
+          <div><label style={lab}>موقعیت</label><input style={inp} value={f.location} onChange={e => setF({ ...f, location: e.target.value })} /></div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div><label style={lab}>تصویر (URL)</label><input style={{ ...inp, direction: 'ltr', textAlign: 'left' }} value={f.image} onChange={e => setF({ ...f, image: e.target.value })} /></div>
+            <div><label style={lab}>لینک</label><input style={{ ...inp, direction: 'ltr', textAlign: 'left' }} value={f.url} onChange={e => setF({ ...f, url: e.target.value })} /></div>
+          </div>
+          <div><label style={lab}>توضیح</label><textarea style={{ ...inp, height: 70, resize: 'none' }} value={f.excerpt} onChange={e => setF({ ...f, excerpt: e.target.value })} /></div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+            <GoldButton onClick={submit} disabled={busy || !f.title.trim()} style={{ flex: 1 }}>{busy ? 'در حال ساخت…' : 'ساخت آیتم'}</GoldButton>
+            <OutlineButton onClick={onClose}>انصراف</OutlineButton>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

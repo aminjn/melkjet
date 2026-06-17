@@ -14,6 +14,30 @@ interface Task {
   createdAt: number
 }
 
+// Mirrors app/lib/leads-store.ts Lead (the API shape).
+type Stage = 'new' | 'review' | 'offered' | 'contract' | 'lost'
+interface Lead {
+  id: string
+  name: string
+  phone?: string
+  need?: string
+  budget?: string
+  stage: Stage
+  score?: number
+  note?: string
+  createdAt: number
+  updatedAt: number
+}
+
+// Pipeline stage columns (kanban). Order matters for ‹ › moves.
+const stageColumns: { id: Stage; label: string; color: string }[] = [
+  { id: 'new', label: 'لید جدید', color: '#7a8fae' },
+  { id: 'review', label: 'در حال بررسی', color: '#e7a14a' },
+  { id: 'offered', label: 'پیشنهاد داده‌شده', color: 'var(--gold)' },
+  { id: 'contract', label: 'قرارداد', color: '#5fd98a' },
+  { id: 'lost', label: 'از دست‌رفته', color: '#e74c3c' },
+]
+
 const navItems = [
   { id: 'dashboard', icon: '◈', label: 'داشبورد' },
   { id: 'listings', icon: '◰', label: 'فایل‌ها' },
@@ -56,35 +80,6 @@ const todayTasksData = [
   { done: true, text: 'ارسال قرارداد به خانواده احمدی', time: '۱۱:۳۰' },
   { done: false, text: 'بازدید ملک سعادت‌آباد با شیوا حیدری', time: '۱۴:۰۰' },
   { done: false, text: 'تنظیم آگهی جدید برج آرین', time: '۱۶:۳۰' },
-]
-
-const pipelineColumns = [
-  {
-    id: 'new', label: 'لید جدید', color: '#7a8fae',
-    cards: [
-      { id: 'l1', name: 'رضا موسوی', phone: '۰۹۱۲-۱۱۱-۲۲۳۳', need: 'خرید · سعادت‌آباد', budget: '۲۰ م', score: 72 },
-      { id: 'l2', name: 'مریم صادقی', phone: '۰۹۱۲-۴۴۴-۵۵۶۶', need: 'اجاره · ونک', budget: '۱۲ م.ت', score: 55 },
-    ]
-  },
-  {
-    id: 'review', label: 'در حال بررسی', color: '#e7a14a',
-    cards: [
-      { id: 'l3', name: 'شیوا حیدری', phone: '۰۹۱۲-۷۷۷-۸۸۹۹', need: 'اجاره · ونک', budget: '۱۵ م.ت', score: 81 },
-      { id: 'l4', name: 'کاوه اسدی', phone: '۰۹۳۳-۲۲۲-۳۳۴۴', need: 'خرید · جردن', budget: '۱۵ م', score: 63 },
-    ]
-  },
-  {
-    id: 'offered', label: 'پیشنهاد داده‌شده', color: 'var(--gold)',
-    cards: [
-      { id: 'l5', name: 'نیلوفر رشیدی', phone: '۰۹۱۲-۵۵۵-۶۶۷۷', need: 'پیش‌فروش · شهرک غرب', budget: '۱۸ م', score: 89 },
-    ]
-  },
-  {
-    id: 'contract', label: 'قرارداد', color: '#5fd98a',
-    cards: [
-      { id: 'l6', name: 'احمد کریمی', phone: '۰۹۱۲-۸۸۸-۹۹۰۰', need: 'خرید · فرمانیه', budget: '۴۰ م', score: 95 },
-    ]
-  },
 ]
 
 const weekDays = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه']
@@ -157,6 +152,9 @@ export default function CRMPage() {
   const [listings, setListings] = useState<ContentItem[]>([])
   const [listingsLoaded, setListingsLoaded] = useState(false)
 
+  // Real CRM leads for the pipeline (kanban) and dashboard recent-leads.
+  const [leads, setLeads] = useState<Lead[]>([])
+
   // Real neighbourhood growth for the dashboard insights card.
   const [growth, setGrowth] = useState<number | null>(null)
 
@@ -171,6 +169,14 @@ export default function CRMPage() {
     fetch('/api/crm/tasks')
       .then(r => r.ok ? r.json() : { tasks: [] })
       .then(d => setTasks(Array.isArray(d.tasks) ? d.tasks : []))
+      .catch(() => {})
+  }, [])
+
+  // Load real CRM leads on mount.
+  useEffect(() => {
+    fetch('/api/crm/leads')
+      .then(r => r.ok ? r.json() : { leads: [] })
+      .then(d => setLeads(Array.isArray(d.leads) ? d.leads : []))
       .catch(() => {})
   }, [])
 
@@ -239,6 +245,48 @@ export default function CRMPage() {
     fetch('/api/crm/tasks?id=' + encodeURIComponent(id), { method: 'DELETE' }).catch(() => {})
   }
 
+  // Create a lead via a simple prompt flow, then refresh from state.
+  const addLead = async () => {
+    const name = window.prompt('نام لید:')?.trim()
+    if (!name) return
+    const need = window.prompt('نیاز (مثلاً خرید · سعادت‌آباد):')?.trim() || undefined
+    const budget = window.prompt('بودجه (مثلاً ۲۰ میلیارد):')?.trim() || undefined
+    const phone = window.prompt('تلفن:')?.trim() || undefined
+    try {
+      const r = await fetch('/api/crm/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, need, budget, phone }),
+      })
+      if (r.ok) {
+        const { lead } = await r.json()
+        if (lead) setLeads(prev => [lead, ...prev])
+      }
+    } catch {}
+  }
+
+  // Move a lead to a new stage (optimistic) and PATCH the backend.
+  const moveLead = (id: string, stage: Stage) => {
+    setLeads(prev => prev.map(l => l.id === id ? { ...l, stage } : l))
+    fetch('/api/crm/leads', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, stage }),
+    }).catch(() => {})
+  }
+
+  // Shift a lead one column left/right in the pipeline order.
+  const shiftLead = (lead: Lead, dir: -1 | 1) => {
+    const idx = stageColumns.findIndex(c => c.id === lead.stage)
+    const next = stageColumns[idx + dir]
+    if (next) moveLead(lead.id, next.id)
+  }
+
+  const deleteLead = (id: string) => {
+    setLeads(prev => prev.filter(l => l.id !== id))
+    fetch('/api/crm/leads?id=' + encodeURIComponent(id), { method: 'DELETE' }).catch(() => {})
+  }
+
   const runAi = async () => {
     const input = aiInput.trim()
     if (!input || aiLoading) return
@@ -258,6 +306,25 @@ export default function CRMPage() {
       setAiLoading(false)
     }
   }
+
+  // Dashboard "recent leads" — real leads when present, else the original demo copy.
+  const stageMeta: Record<Stage, { status: string; color: string }> = {
+    new: { status: 'سرد', color: '#7a8fae' },
+    review: { status: 'گرم', color: '#e7a14a' },
+    offered: { status: 'داغ', color: '#e74c3c' },
+    contract: { status: 'قرارداد', color: '#5fd98a' },
+    lost: { status: 'از دست‌رفته', color: '#7a8fae' },
+  }
+  const recentLeadsLive = leads.length > 0
+    ? leads.slice(0, 5).map(l => ({
+        name: l.name,
+        need: l.need || '—',
+        budget: l.budget || '—',
+        status: stageMeta[l.stage].status,
+        statusColor: stageMeta[l.stage].color,
+        lastContact: (() => { try { return new Date(l.updatedAt).toLocaleDateString('fa-IR') } catch { return '—' } })(),
+      }))
+    : recentLeads
 
   // Real growth sentence when available, else the original copy.
   const insightsLive = insights.map(ins =>
@@ -611,7 +678,7 @@ export default function CRMPage() {
                     >مشاهده همه ←</button>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {recentLeads.map((lead, i) => (
+                    {recentLeadsLive.map((lead, i) => (
                       <div key={i} style={{
                         display: 'flex', alignItems: 'center', gap: 12,
                         padding: '10px 14px',
@@ -789,8 +856,24 @@ export default function CRMPage() {
           {/* ==================== PIPELINE ==================== */}
           {activeView === 'pipeline' && (
             <div>
+              {/* Pipeline toolbar */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <span style={{ fontSize: 13, color: 'var(--muted)' }}>{leads.length} لید در پایپ‌لاین</span>
+                <button
+                  onClick={addLead}
+                  style={{
+                    padding: '8px 16px', borderRadius: 10,
+                    background: 'var(--gold)', border: 'none',
+                    color: '#16140f', fontSize: 13, fontWeight: 700,
+                    cursor: 'pointer', fontFamily: 'Vazirmatn, system-ui, sans-serif',
+                  }}
+                >＋ لید جدید</button>
+              </div>
+
               <div className="mjc-kanban" style={{ display: 'flex', gap: 14, overflowX: 'auto', paddingBottom: 8 }}>
-                {pipelineColumns.map(col => (
+                {stageColumns.map((col, colIdx) => {
+                  const colLeads = leads.filter(l => l.stage === col.id)
+                  return (
                   <div key={col.id} style={{ flex: '0 0 260px', display: 'flex', flexDirection: 'column' }}>
 
                     {/* Column Header */}
@@ -809,12 +892,15 @@ export default function CRMPage() {
                         color: col.color,
                         fontSize: 11, fontWeight: 700,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}>{col.cards.length}</span>
+                      }}>{colLeads.length}</span>
                     </div>
 
                     {/* Cards */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      {col.cards.map(card => (
+                      {colLeads.length === 0 && (
+                        <div style={{ fontSize: 11.5, color: 'var(--faint)', textAlign: 'center', padding: '12px 0' }}>—</div>
+                      )}
+                      {colLeads.map(card => (
                         <div key={card.id} style={{
                           background: 'var(--surface)',
                           borderRadius: 12,
@@ -829,29 +915,84 @@ export default function CRMPage() {
                               fontSize: 11, fontWeight: 700, color: '#16140f',
                               flexShrink: 0,
                             }}>{getInitials(card.name)}</div>
-                            <div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontSize: 13, fontWeight: 700 }}>{card.name}</div>
-                              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>{card.phone}</div>
+                              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>{card.phone || '—'}</div>
                             </div>
+                            <button
+                              onClick={() => deleteLead(card.id)}
+                              title="حذف لید"
+                              style={{
+                                width: 22, height: 22, borderRadius: 6,
+                                background: 'var(--bg)', border: '1px solid var(--line)',
+                                color: 'var(--muted)', cursor: 'pointer', fontSize: 13, lineHeight: 1,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                flexShrink: 0, fontFamily: 'Vazirmatn, system-ui, sans-serif',
+                              }}
+                            >×</button>
                           </div>
-                          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>{card.need}</div>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: 13, fontWeight: 600 }}>{card.budget}</span>
-                            <div style={{
-                              display: 'flex', alignItems: 'center', gap: 4,
-                              background: 'var(--goldDim)',
-                              border: '1px solid rgba(201,168,76,0.3)',
-                              borderRadius: 8, padding: '3px 8px',
-                            }}>
-                              <span style={{ fontSize: 10, color: 'var(--gold)' }}>✦</span>
-                              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold)' }}>{card.score}</span>
-                            </div>
+                          {card.need && <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>{card.need}</div>}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                            <span style={{ fontSize: 13, fontWeight: 600 }}>{card.budget || '—'}</span>
+                            {typeof card.score === 'number' && (
+                              <div style={{
+                                display: 'flex', alignItems: 'center', gap: 4,
+                                background: 'var(--goldDim)',
+                                border: '1px solid rgba(201,168,76,0.3)',
+                                borderRadius: 8, padding: '3px 8px',
+                              }}>
+                                <span style={{ fontSize: 10, color: 'var(--gold)' }}>✦</span>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold)' }}>{card.score}</span>
+                              </div>
+                            )}
+                          </div>
+                          {/* Stage move controls */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <button
+                              onClick={() => shiftLead(card, -1)}
+                              disabled={colIdx === 0}
+                              title="مرحله قبل"
+                              style={{
+                                width: 26, height: 26, borderRadius: 7,
+                                background: 'var(--bg)', border: '1px solid var(--line)',
+                                color: 'var(--text)', cursor: colIdx === 0 ? 'default' : 'pointer',
+                                opacity: colIdx === 0 ? 0.4 : 1, fontSize: 13, lineHeight: 1,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontFamily: 'Vazirmatn, system-ui, sans-serif',
+                              }}
+                            >›</button>
+                            <select
+                              value={card.stage}
+                              onChange={e => moveLead(card.id, e.target.value as Stage)}
+                              style={{
+                                flex: 1, padding: '5px 8px', borderRadius: 7,
+                                background: 'var(--bg)', border: '1px solid var(--line)',
+                                color: 'var(--text)', fontSize: 11.5, outline: 'none',
+                                fontFamily: 'Vazirmatn, system-ui, sans-serif', cursor: 'pointer',
+                              }}
+                            >
+                              {stageColumns.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                            </select>
+                            <button
+                              onClick={() => shiftLead(card, 1)}
+                              disabled={colIdx === stageColumns.length - 1}
+                              title="مرحله بعد"
+                              style={{
+                                width: 26, height: 26, borderRadius: 7,
+                                background: 'var(--bg)', border: '1px solid var(--line)',
+                                color: 'var(--text)', cursor: colIdx === stageColumns.length - 1 ? 'default' : 'pointer',
+                                opacity: colIdx === stageColumns.length - 1 ? 0.4 : 1, fontSize: 13, lineHeight: 1,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontFamily: 'Vazirmatn, system-ui, sans-serif',
+                              }}
+                            >‹</button>
                           </div>
                         </div>
                       ))}
                     </div>
                   </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )}
