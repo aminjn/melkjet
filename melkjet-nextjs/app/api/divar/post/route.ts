@@ -12,12 +12,16 @@ export async function GET(req: NextRequest) {
   let token = sp.get('token') || ''
   const debug = sp.get('debug') === '1'
   const itemId = sp.get('id')
+  let storedUrl: string | undefined
   if (itemId) {
     const it = getItemById(itemId)
+    storedUrl = it?.url
     const m = (it?.url || '').match(/divar\.ir\/v\/([A-Za-z0-9_-]+)/)
     if (m) token = m[1]
   }
-  if (!token || !/^[A-Za-z0-9_-]{4,20}$/.test(token)) return NextResponse.json({ error: 'توکن نامعتبر', token }, { status: 400 })
+  if (!token || !/^[A-Za-z0-9_-]{4,20}$/.test(token)) {
+    return NextResponse.json({ error: 'توکن نامعتبر', token, storedUrl, itemFound: !!storedUrl }, { status: 400 })
+  }
 
   const proxyUrl = getAdminData().divar?.proxyUrl
     || process.env.HTTPS_PROXY || process.env.https_proxy
