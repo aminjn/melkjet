@@ -1839,6 +1839,43 @@ function ModelSelect({ models, value, onChange, only }: { models: string[]; valu
   )
 }
 
+function SmtpConfig() {
+  const [f, setF] = useState({ host: '', port: '465', user: '', pass: '', from: '' })
+  const [configured, setConfigured] = useState(false)
+  const [msg, setMsg] = useState('')
+  useEffect(() => {
+    fetch('/api/admin/smtp-config').then(r => r.ok ? r.json() : null).then(d => {
+      if (d) { setConfigured(d.configured); setF(p => ({ ...p, host: d.host || '', port: String(d.port || 465), user: d.user || '', from: d.from || '', pass: d.pass || '' })) }
+    })
+  }, [])
+  const save = async () => {
+    setMsg('')
+    const r = await fetch('/api/admin/smtp-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(f) })
+    const d = await r.json()
+    setMsg(r.ok ? '✓ ذخیره شد' : `⚠ ${d.error || 'خطا'}`)
+    if (r.ok) setConfigured(true)
+  }
+  const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', direction: 'ltr', textAlign: 'left' }
+  const lab: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', marginBottom: 5, display: 'block', fontWeight: 600 }
+  return (
+    <Card style={{ marginBottom: 14 }}>
+      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>سرویس ایمیل (SMTP) — برای کمپین ایمیل {configured && <span style={{ color: '#5fd98a', fontSize: 12 }}>● تنظیم‌شده</span>}</div>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>اطلاعات SMTP سرویس ایمیلت را بگذار (پورت ۴۶۵ برای TLS مستقیم، ۵۸۷ برای STARTTLS).</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12, marginBottom: 12 }} className="mjsa-2col">
+        <div><label style={lab}>هاست SMTP</label><input style={inp} placeholder="smtp.example.com" value={f.host} onChange={e => setF({ ...f, host: e.target.value })} /></div>
+        <div><label style={lab}>پورت</label><input style={inp} placeholder="465" value={f.port} onChange={e => setF({ ...f, port: e.target.value })} /></div>
+        <div><label style={lab}>نام کاربری</label><input style={inp} placeholder="user@example.com" value={f.user} onChange={e => setF({ ...f, user: e.target.value })} /></div>
+        <div><label style={lab}>رمز عبور</label><input style={inp} type="password" placeholder="••••••" value={f.pass} onChange={e => setF({ ...f, pass: e.target.value })} /></div>
+        <div style={{ gridColumn: '1 / -1' }}><label style={lab}>آدرس فرستنده (From)</label><input style={inp} placeholder="info@melkjet.com" value={f.from} onChange={e => setF({ ...f, from: e.target.value })} /></div>
+      </div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <GoldButton onClick={save}>ذخیره</GoldButton>
+        {msg && <span style={{ fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</span>}
+      </div>
+    </Card>
+  )
+}
+
 function APIView() {
   const [baseUrl, setBaseUrl] = useState(DEFAULT_GAP_BASE)
   const [apiKey, setApiKey] = useState('')
@@ -1906,6 +1943,7 @@ function APIView() {
 
   return (
     <div style={{ animation: 'fade .35s ease' }}>
+      <SmtpConfig />
       {/* API config */}
       <Card style={{ marginBottom: 14 }}>
         <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>اتصال به API گپ‌جی‌پی‌تی</div>

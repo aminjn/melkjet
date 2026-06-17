@@ -20,6 +20,13 @@ export interface AdminData {
     sender: string
     pattern: string
   }
+  smtp?: {
+    host: string
+    port: number
+    user: string
+    pass: string
+    from: string
+  }
   neshan?: {
     serviceKey: string   // Neshan web-service key (search / reverse / distance-matrix) — «service.…»
     mapKey?: string      // Neshan map key (static map / map display) — «web.…»

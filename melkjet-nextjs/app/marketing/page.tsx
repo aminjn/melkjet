@@ -107,6 +107,27 @@ export default function MarketingPage() {
   const [emailTitle, setEmailTitle] = useState('')
   const [emailSubject, setEmailSubject] = useState('')
   const [emailBody, setEmailBody] = useState('')
+  const [emailTo, setEmailTo] = useState('')
+  const [emailSending, setEmailSending] = useState(false)
+  const [emailResult, setEmailResult] = useState('')
+
+  const sendEmail = async () => {
+    if (emailSending) return
+    if (!emailSubject.trim()) { setEmailResult('⚠ موضوع ایمیل را وارد کنید'); return }
+    if (!emailBody.trim()) { setEmailResult('⚠ متن ایمیل را بنویسید'); return }
+    if (!emailTo.trim()) { setEmailResult('⚠ ایمیل گیرندگان را وارد کنید'); return }
+    setEmailSending(true); setEmailResult('')
+    try {
+      const r = await fetch('/api/email/send', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipients: emailTo, subject: emailSubject, body: emailBody }),
+      })
+      const d = await r.json()
+      setEmailResult(d.ok ? `✓ ایمیل به ${d.sent} گیرنده ارسال شد` : `⚠ ${d.error || 'خطا'}`)
+      if (d.ok) { setEmailBody(''); setEmailTo(''); setEmailSubject('') }
+    } catch { setEmailResult('⚠ خطا در ارتباط با سرور') }
+    finally { setEmailSending(false) }
+  }
   const [smsNumbers, setSmsNumbers] = useState('')
   const [smsText, setSmsText] = useState('')
   const [smsSending, setSmsSending] = useState(false)
@@ -691,6 +712,23 @@ export default function MarketingPage() {
                     <label
                       style={{ fontSize: 12.5, color: 'var(--muted)', display: 'block', marginBottom: 6 }}
                     >
+                      گیرندگان (ایمیل‌ها با کاما/فاصله جدا شوند)
+                    </label>
+                    <input
+                      value={emailTo}
+                      onChange={(e) => setEmailTo(e.target.value)}
+                      placeholder="a@example.com, b@example.com"
+                      style={{
+                        width: '100%', padding: '11px 14px', borderRadius: 10, border: '1px solid var(--line)',
+                        background: 'var(--bg2)', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit',
+                        outline: 'none', boxSizing: 'border-box' as const, direction: 'ltr', textAlign: 'left',
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label
+                      style={{ fontSize: 12.5, color: 'var(--muted)', display: 'block', marginBottom: 6 }}
+                    >
                       متن ایمیل
                     </label>
                     <textarea
@@ -713,8 +751,11 @@ export default function MarketingPage() {
                       }}
                     />
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, color: emailResult.startsWith('✓') ? '#5fd98a' : emailResult ? '#e7a14a' : 'var(--faint)' }}>{emailResult}</span>
                     <button
+                      onClick={sendEmail}
+                      disabled={emailSending}
                       style={{
                         padding: '11px 28px',
                         borderRadius: 11,
@@ -723,11 +764,12 @@ export default function MarketingPage() {
                         color: 'var(--bg)',
                         fontSize: 14,
                         fontWeight: 700,
-                        cursor: 'pointer',
+                        cursor: emailSending ? 'default' : 'pointer',
                         fontFamily: 'inherit',
+                        opacity: emailSending ? 0.6 : 1,
                       }}
                     >
-                      ارسال
+                      {emailSending ? 'در حال ارسال…' : 'ارسال'}
                     </button>
                   </div>
                 </div>
