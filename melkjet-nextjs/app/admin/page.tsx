@@ -1391,6 +1391,24 @@ function APIView() {
     await fetch('/api/admin/ai/agents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agentId, [slot]: model }) })
   }
 
+  const autoAssign = async () => {
+    const has = (re: RegExp) => models.find(m => re.test(m.toLowerCase()))
+    const textPick = has(/gpt-4o(?!-mini)/) || has(/gpt-4\.1(?!-mini)/) || has(/gemini-2\.5-pro/) || has(/claude.*sonnet/) || models.find(m => categorizeModel(m) === 'text') || ''
+    const fastText = has(/gpt-4o-mini/) || has(/gemini.*flash/) || has(/4\.1-mini/) || textPick
+    const visionPick = has(/gpt-4o(?!-mini)/) || has(/gemini-2\.5/) || has(/claude.*sonnet/) || textPick
+    const imagePick = has(/gpt-image/) || has(/dall-e-3/) || has(/flux/) || models.find(m => categorizeModel(m) === 'image') || ''
+    for (const ag of AGENTS) {
+      const isVision = ag.id === 'image' || ag.id === 'fraud'
+      const isFast = ag.id === 'chat' || ag.id === 'alert' || ag.id === 'translation'
+      const text = isVision ? visionPick : (isFast ? fastText : textPick)
+      const image = ag.needs === 'both' ? imagePick : undefined
+      if (text || image) {
+        setAssign(a => ({ ...a, [ag.id]: { text: text || a[ag.id]?.text, image: image || a[ag.id]?.image } }))
+        await fetch('/api/admin/ai/agents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agentId: ag.id, text, image }) })
+      }
+    }
+  }
+
   return (
     <div style={{ animation: 'fade .35s ease' }}>
       {/* API config */}
@@ -1419,7 +1437,10 @@ function APIView() {
 
       {/* Agents → models */}
       <Card>
-        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>تخصیص مدل به ایجنت‌ها ({AGENTS.length})</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ fontWeight: 700, fontSize: 14 }}>تخصیص مدل به ایجنت‌ها ({AGENTS.length})</div>
+          <GoldButton onClick={autoAssign} style={{ fontSize: 12.5, padding: '7px 14px' }}>🎯 تخصیص خودکار مدل پیشنهادی</GoldButton>
+        </div>
         <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 16 }}>برای هر ایجنت مدل را از لیست گپ انتخاب کن. ایجنت‌های متن+تصویر (مثل تولید محتوا) دو مدل می‌گیرند.</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {AGENTS.map(ag => (
@@ -1429,8 +1450,8 @@ function APIView() {
                 <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{ag.task}</div>
               </div>
               <div>
-                <div style={{ fontSize: 11, color: 'var(--faint)', marginBottom: 3 }}>مدل متن/چت</div>
-                <ModelSelect models={models} value={assign[ag.id]?.text || ''} onChange={v => setAgentModel(ag.id, 'text', v)} only="text" />
+                <div style={{ fontSize: 11, color: 'var(--faint)', marginBottom: 3 }}>{(ag.id === 'image' || ag.id === 'fraud') ? 'مدل بینایی (چندوجهی)' : 'مدل متن/چت'}</div>
+                <ModelSelect models={models} value={assign[ag.id]?.text || ''} onChange={v => setAgentModel(ag.id, 'text', v)} />
               </div>
               <div>
                 {ag.needs === 'both' ? (
