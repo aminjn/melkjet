@@ -1,5 +1,6 @@
 import { getAdminData } from './admin-store'
 import { DEFAULT_GAP_BASE } from './ai-agents'
+import { shecanRequest } from './shecan-https'
 
 function cfg() {
   const g = getAdminData().gapgpt
@@ -12,11 +13,16 @@ export function agentModel(agentId: string, slot: 'text' | 'image' = 'text'): st
 }
 
 // GapGPT is a DOMESTIC service — always direct, NEVER via the (foreign) proxy,
-// which breaks/empties its responses. The `dispatcher: undefined` + explicit
-// agent avoids any global/env proxy that might be set on the process.
+// which breaks/empties its responses. We resolve DNS via Shecan inside the app
+// (shecanRequest) so a reset/broken /etc/resolv.conf can no longer cause
+// "fetch failed". If that path fails for any reason, fall back to plain fetch.
 async function gapHttp(url: string, init: { method: string; headers: Record<string, string>; body?: string }, timeout = 90000): Promise<{ status: number; body: string }> {
-  const r = await fetch(url, { method: init.method, headers: init.headers, body: init.body, signal: AbortSignal.timeout(timeout) })
-  return { status: r.status, body: await r.text() }
+  try {
+    return await shecanRequest(url, { method: init.method, headers: init.headers, body: init.body, timeout })
+  } catch (e) {
+    const r = await fetch(url, { method: init.method, headers: init.headers, body: init.body, signal: AbortSignal.timeout(timeout) })
+    return { status: r.status, body: await r.text() }
+  }
 }
 
 export async function listModels(): Promise<string[]> {

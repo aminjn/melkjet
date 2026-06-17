@@ -87,7 +87,15 @@ export async function GET(req: NextRequest) {
     } catch { return null }
   }))).filter(Boolean) as { type: string; name: string; lat: number; lng: number; km: number }[]
 
-  if (!places.length) return NextResponse.json({ ok: true, nearby: [], source: 'neshan' })
+  if (!places.length) {
+    // علت رایج خالی‌بودن: کلید سرویس، Search/Distance-Matrix را فعال ندارد (خطای 485 نشان)
+    let note = ''
+    try {
+      const r = await fetch(`https://api.neshan.org/v1/search?term=${encodeURIComponent('بانک')}&lat=${lat}&lng=${lng}`, { headers: { 'Api-Key': key }, signal: AbortSignal.timeout(6000) })
+      if (r.status === 485 || r.status === 401 || r.status === 403) note = 'کلید سرویس نشان مجوز سرویس‌های Search و Distance-Matrix را ندارد — در پنل نشان این سرویس‌ها را روی همین کلید فعال کنید.'
+    } catch { note = 'دسترسی به سرویس نشان از سرور ممکن نشد.' }
+    return NextResponse.json({ ok: true, nearby: [], source: 'neshan', note })
+  }
 
   // ۲) زمان واقعی مسیر (ماشین) برای همه با یک درخواست
   let elements: any[] | null = null

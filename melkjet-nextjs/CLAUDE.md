@@ -32,9 +32,12 @@ The VPS egress is restricted. Each external service has a different path:
 - **Divar (api.divar.ir)** → via HTTP proxy (`http://127.0.0.1:10809`), saved in
   admin → «پروکسی دیوار». Direct is DNS/filter-blocked.
 - **github / foreign** → need `proxy-on` for manual git.
-- **Shecan DNS is required** in `/etc/resolv.conf` (made immutable):
-  `nameserver 178.22.122.100` + `185.51.200.2`, then `chattr +i /etc/resolv.conf`.
-  Without it, gapgpt.app / divar.ir don't resolve → "fetch failed".
+- **Shecan DNS**: GapGPT now resolves DNS via Shecan *inside the app*
+  (`app/lib/shecan-https.ts` — custom `lookup` on the https request, independent
+  of `/etc/resolv.conf`), so a reset resolv.conf no longer breaks AI. Still good
+  to keep `/etc/resolv.conf` on Shecan (178.22.122.100 + 185.51.200.2, `chattr +i`)
+  for Divar/Neshan. Neshan errors are usually key-permission (485 "services not
+  match" → enable Search + Distance-Matrix on that service key), not DNS.
 - Test AI from server: `node -e 'fetch("https://api.gapgpt.app/v1/chat/completions",{...})'`
   should return STATUS 200.
 
