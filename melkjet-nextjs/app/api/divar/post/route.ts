@@ -36,8 +36,11 @@ export async function GET(req: NextRequest) {
       timeout: 15000,
     })
     if (debug) {
-      const strings = [...res.body.matchAll(/"(?:title|value|text|normalized_text)":"([^"]{1,40})"/g)].map(m => m[1]).slice(0, 120)
-      return NextResponse.json({ token, status: res.status, size: res.body.length, strings })
+      const keys = Array.from(new Set([...res.body.matchAll(/"([a-zA-Z_]{2,40})":/g)].map(m => m[1]))).slice(0, 200)
+      // slice around the first square-meter / "متر" marker to find the facts block
+      const idx = res.body.indexOf('متر')
+      const around = idx >= 0 ? res.body.slice(Math.max(0, idx - 400), idx + 400) : ''
+      return NextResponse.json({ token, status: res.status, size: res.body.length, keys, sample: res.body.slice(0, 2500), around })
     }
     if (res.status !== 200) return NextResponse.json({ images: [], reason: `http_${res.status}`, token })
 
