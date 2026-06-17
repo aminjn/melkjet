@@ -65,6 +65,19 @@ export async function GET(req: NextRequest) {
   const key = getAdminData().neshan?.serviceKey
   if (!key) return NextResponse.json({ ok: true, nearby: [], source: 'none', note: 'کلید سرویس نشان تنظیم نشده' })
 
+  // حالت دیباگ: وضعیت واقعی پاسخ نشان را برمی‌گرداند تا علت خالی‌بودن مشخص شود
+  if (sp.get('debug') === '1') {
+    try {
+      const r = await fetch(`https://api.neshan.org/v1/search?term=${encodeURIComponent('بیمارستان')}&lat=${lat}&lng=${lng}`, {
+        headers: { 'Api-Key': key }, signal: AbortSignal.timeout(8000),
+      })
+      const text = await r.text()
+      return NextResponse.json({ debug: true, status: r.status, keyTail: '***' + key.slice(-4), body: text.slice(0, 500) })
+    } catch (e: any) {
+      return NextResponse.json({ debug: true, error: e?.message || 'fetch failed', cause: String(e?.cause || ''), keyTail: '***' + key.slice(-4) })
+    }
+  }
+
   // ۱) نزدیک‌ترین مکان هر دسته
   const places = (await Promise.all(CATEGORIES.map(async (c) => {
     try {
