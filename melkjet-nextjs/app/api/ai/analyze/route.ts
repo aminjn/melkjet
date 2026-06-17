@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { chatCompleteSafe, agentModel } from '@/app/lib/gapgpt'
+import { knowledgeFor } from '@/app/lib/market-data'
 
 // Structured AI analysis for a property listing → fills the property page design.
 export async function POST(req: NextRequest) {
@@ -7,12 +8,21 @@ export async function POST(req: NextRequest) {
   const model = agentModel('pricing', 'text') || agentModel('content', 'text') || agentModel('chat', 'text')
   if (!model) return NextResponse.json({ error: 'مدلی به ایجنت تخصیص داده نشده (پنل → API و مدل‌های AI → تخصیص خودکار)' }, { status: 400 })
 
+  // real market knowledge for this neighbourhood (from uploaded docs / dataset)
+  const city = b.meta?.['شهر'] || ''
+  const district = b.meta?.['محله'] || (b.location || '').split('،')[0]?.trim() || ''
+  const knowledge = knowledgeFor(city, district)
+  const knowledgeLine = knowledge.length
+    ? 'دادهٔ واقعی بازار (از پایگاه دانش):\n' + knowledge.map(k => `- ${[k.district, k.city].filter(Boolean).join(' ')} ${k.period || ''} | ${k.metric}: ${k.value.toLocaleString('fa-IR')} ${k.unit || ''}`).join('\n')
+    : ''
+
   const info = [
     `عنوان: ${b.title || ''}`,
     `قیمت: ${b.price || ''}`,
     `موقعیت: ${b.location || ''}`,
     ...(Array.isArray(b.facts) ? b.facts.map((f: any) => `${f.label}: ${f.value}`) : []),
     Array.isArray(b.amenities) && b.amenities.length ? `امکانات موجود: ${b.amenities.join('، ')}` : '',
+    knowledgeLine,
     `توضیحات: ${(b.description || '').slice(0, 1500)}`,
   ].filter(Boolean).join('\n')
 

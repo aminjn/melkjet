@@ -1189,6 +1189,123 @@ function ScraperView() {
   )
 }
 
+async function loadScript(src: string): Promise<void> {
+  return new Promise((res, rej) => {
+    if (document.querySelector(`script[src="${src}"]`)) return res()
+    const s = document.createElement('script'); s.src = src; s.onload = () => res(); s.onerror = () => rej(new Error('load')); document.body.appendChild(s)
+  })
+}
+async function extractFileText(file: File): Promise<string> {
+  const name = file.name.toLowerCase()
+  if (name.endsWith('.pdf')) {
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js')
+    const lib = (window as any).pdfjsLib
+    lib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
+    const pdf = await lib.getDocument({ data: await file.arrayBuffer() }).promise
+    let text = ''
+    for (let i = 1; i <= pdf.numPages; i++) { const p = await pdf.getPage(i); const c = await p.getTextContent(); text += c.items.map((it: any) => it.str).join(' ') + '\n' }
+    return text
+  }
+  if (name.endsWith('.docx')) {
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js')
+    const r = await (window as any).mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() })
+    return r.value
+  }
+  return await file.text()
+}
+
+function KnowledgeBase() {
+  const [text, setText] = useState('')
+  const [source, setSource] = useState('')
+  const [busy, setBusy] = useState('')
+  const [msg, setMsg] = useState('')
+  const [points, setPoints] = useState<any[]>([])
+  const [stats, setStats] = useState<{ total: number; sources: number } | null>(null)
+  const [man, setMan] = useState({ metric: '', value: '', city: '', district: '', period: '', unit: '' })
+
+  const load = () => fetch('/api/admin/market/data').then(r => r.ok ? r.json() : null).then(d => { if (d) { setPoints(d.points); setStats(d.stats) } })
+  useEffect(() => { load() }, [])
+
+  const onFile = async (f: File | null) => {
+    if (!f) return
+    setBusy('در حال خواندن سند…'); setMsg('')
+    try { const t = await extractFileText(f); setText(t.slice(0, 20000)); setSource(f.name); setBusy('') ; setMsg(`✓ ${t.length} کاراکتر استخراج شد — دکمهٔ «استخراج با AI» را بزنید`) }
+    catch { setBusy(''); setMsg('⚠ خواندن سند ناموفق بود (PDF/Word). متن را دستی پیست کنید.') }
+  }
+  const ingest = async () => {
+    if (text.trim().length < 30) { setMsg('متن کافی نیست'); return }
+    setBusy('در حال استخراج با هوش مصنوعی…'); setMsg('')
+    const r = await fetch('/api/admin/market/ingest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, source: source || 'سند' }) })
+    const d = await r.json(); setBusy('')
+    if (d.ok) { setMsg(`✓ ${d.added} داده استخراج و ذخیره شد`); setText(''); load() } else setMsg(`⚠ ${d.error || 'خطا'}`)
+  }
+  const addManual = async () => {
+    if (!man.metric || !man.value) return
+    await fetch('/api/admin/market/data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(man) })
+    setMan({ metric: '', value: '', city: '', district: '', period: '', unit: '' }); load()
+  }
+  const del = async (id: string) => { setPoints(points.filter(p => p.id !== id)); await fetch(`/api/admin/market/data?id=${id}`, { method: 'DELETE' }) }
+  const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '8px 11px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+
+  return (
+    <>
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>پایگاه دانش بازار (تغذیهٔ مدل)</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>سند PDF/Word (گزارش سالانه، آمار معاملات و...) آپلود کن یا متن را پیست کن؛ هوش مصنوعی داده‌های عددی را استخراج و در دیتاست ذخیره می‌کند. {stats && <span style={{ color: '#5fd98a' }}>· {stats.total.toLocaleString('fa-IR')} داده از {stats.sources} منبع</span>}</div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+          <label style={{ ...inp, cursor: 'pointer', border: '1px dashed var(--gold)', color: 'var(--gold)' }}>
+            📎 آپلود PDF / Word
+            <input type="file" accept=".pdf,.docx,.txt" style={{ display: 'none' }} onChange={e => onFile(e.target.files?.[0] || null)} />
+          </label>
+          <input style={{ ...inp, flex: 1, minWidth: 160 }} placeholder="نام منبع (اختیاری)" value={source} onChange={e => setSource(e.target.value)} />
+        </div>
+        <textarea style={{ ...inp, width: '100%', height: 110, resize: 'vertical' }} placeholder="یا متن گزارش را اینجا پیست کنید…" value={text} onChange={e => setText(e.target.value)} />
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
+          <GoldButton onClick={ingest} style={{ opacity: busy ? .6 : 1, pointerEvents: busy ? 'none' : 'auto' }}>{busy || '✦ استخراج با هوش مصنوعی'}</GoldButton>
+          {msg && <span style={{ fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</span>}
+        </div>
+      </Card>
+
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>افزودن دستی داده</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: 8 }}>
+          <input style={inp} placeholder="متریک*" value={man.metric} onChange={e => setMan({ ...man, metric: e.target.value })} />
+          <input style={inp} placeholder="مقدار*" value={man.value} onChange={e => setMan({ ...man, value: e.target.value })} />
+          <input style={inp} placeholder="شهر" value={man.city} onChange={e => setMan({ ...man, city: e.target.value })} />
+          <input style={inp} placeholder="محله" value={man.district} onChange={e => setMan({ ...man, district: e.target.value })} />
+          <input style={inp} placeholder="دوره (۱۴۰۳)" value={man.period} onChange={e => setMan({ ...man, period: e.target.value })} />
+          <input style={inp} placeholder="واحد" value={man.unit} onChange={e => setMan({ ...man, unit: e.target.value })} />
+        </div>
+        <OutlineButton onClick={addManual} style={{ marginTop: 10 }}>+ افزودن</OutlineButton>
+      </Card>
+
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>دیتاست ({points.length.toLocaleString('fa-IR')})</div>
+        {points.length === 0 ? <div style={{ color: 'var(--muted)', fontSize: 13 }}>هنوز داده‌ای نیست. یک سند آپلود کنید.</div> : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
+              <thead><tr style={{ borderBottom: '1px solid var(--line)' }}>{['متریک', 'مقدار', 'محله', 'شهر', 'دوره', 'منبع', ''].map(h => <th key={h} style={{ textAlign: 'right', padding: '7px', fontSize: 12, color: 'var(--faint)', fontWeight: 600 }}>{h}</th>)}</tr></thead>
+              <tbody>
+                {points.slice(0, 100).map(p => (
+                  <tr key={p.id} style={{ borderBottom: '1px solid var(--line)' }}>
+                    <td style={{ padding: '8px 7px', fontSize: 12.5, fontWeight: 600 }}>{p.metric}</td>
+                    <td style={{ padding: '8px 7px', fontSize: 12.5, color: 'var(--gold)' }}>{Number(p.value).toLocaleString('fa-IR')} {p.unit || ''}</td>
+                    <td style={{ padding: '8px 7px', fontSize: 12 }}>{p.district || '—'}</td>
+                    <td style={{ padding: '8px 7px', fontSize: 12 }}>{p.city || '—'}</td>
+                    <td style={{ padding: '8px 7px', fontSize: 12 }}>{p.period || '—'}</td>
+                    <td style={{ padding: '8px 7px', fontSize: 11.5, color: 'var(--muted)' }}>{p.source}</td>
+                    <td style={{ padding: '8px 7px' }}><button onClick={() => del(p.id)} style={{ background: 'transparent', border: 'none', color: '#e7674a', cursor: 'pointer', fontSize: 14 }}>×</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </>
+  )
+}
+
 function ReportsView() {
   const [d, setD] = useState<{ totalSaleListings: number; neighbourhoods: number; rows: any[] } | null>(null)
   const [loading, setLoading] = useState(true)
@@ -1197,6 +1314,7 @@ function ReportsView() {
   const mt = (n: number) => `${fa(Math.round(n / 1e6))} م.ت`
   return (
     <div style={{ animation: 'fade .35s ease' }}>
+      <KnowledgeBase />
       <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 14 }}>آمار واقعی بازار از دیتای اسکرپ‌شده (قیمت هر متر فروش به‌تفکیک محله). هرچه بیشتر اسکرپ کنید، دقیق‌تر می‌شود — همین دیتاست پایهٔ مدل یادگیری ماشین آینده است.</div>
       <div className="mjsa-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 18 }}>
         <KPI label="آگهی فروش تحلیل‌شده" value={d ? fa(d.totalSaleListings) : '—'} icon="▦" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" />

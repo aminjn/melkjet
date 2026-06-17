@@ -45,3 +45,4 @@ next-env.d.ts
 .scraper-data.json
 .geo-data.json
 .divar-places.json
+.market-data.json
