@@ -544,21 +544,43 @@ function GeoCol({ title, items, selId, onSelect, onAdd, onRename, onDelete, addP
 
 function NeshanConfig() {
   const [masked, setMasked] = useState('')
+  const [mapMasked, setMapMasked] = useState('')
   const [key, setKey] = useState('')
+  const [mapKey, setMapKey] = useState('')
   const [msg, setMsg] = useState('')
-  useEffect(() => { fetch('/api/admin/neshan-config').then(r => r.ok ? r.json() : null).then(d => d && setMasked(d.masked)) }, [])
+  useEffect(() => { fetch('/api/admin/neshan-config').then(r => r.ok ? r.json() : null).then(d => { if (d) { setMasked(d.masked); setMapMasked(d.mapMasked) } }) }, [])
   const save = async () => {
     setMsg('')
-    const r = await fetch('/api/admin/neshan-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ serviceKey: key }) })
-    if (r.ok) { setMsg('✓ ذخیره شد'); setMasked('***' + key.slice(-4)); setKey('') } else setMsg('خطا در ذخیره')
+    const body: any = {}
+    if (key.trim()) body.serviceKey = key.trim()
+    if (mapKey.trim()) body.mapKey = mapKey.trim()
+    if (!Object.keys(body).length) { setMsg('چیزی برای ذخیره نیست'); return }
+    const r = await fetch('/api/admin/neshan-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    if (r.ok) {
+      setMsg('✓ ذخیره شد')
+      if (key.trim()) { setMasked('***' + key.trim().slice(-4)); setKey('') }
+      if (mapKey.trim()) { setMapMasked('***' + mapKey.trim().slice(-4)); setMapKey('') }
+    } else setMsg('خطا در ذخیره')
   }
+  const inp: React.CSSProperties = { flex: 1, minWidth: 220, direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
   return (
     <Card style={{ marginBottom: 14 }}>
-      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>کلید سرویس نشان (Neshan) — برای تشخیص محله از روی نقشه</div>
-      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>کلید Web-Service از نشان بگیر و اینجا بذار. اگر خالی باشد، از OpenStreetMap استفاده می‌شود. {masked && <span style={{ color: '#5fd98a' }}>وضعیت: تنظیم‌شده ({masked})</span>}</div>
+      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>کلیدهای نشان (Neshan)</div>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.8 }}>
+        نشان دو نوع کلید دارد و هرکدام جداست:
+        <br />• <b>کلید سرویس</b> (<span style={{ direction: 'ltr', display: 'inline-block' }}>service.…</span>) برای جستجو، تشخیص محله و دسترسی‌های اطراف (زمان/فاصلهٔ واقعی).
+        <br />• <b>کلید نقشه</b> (<span style={{ direction: 'ltr', display: 'inline-block' }}>web.…</span>) برای نمایش نقشه روی صفحهٔ آگهی. نقشه با کلید سرویس کار نمی‌کند.
+      </div>
+
+      <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>کلید سرویس (Web-Service) {masked && <span style={{ color: '#5fd98a', fontWeight: 400 }}>— تنظیم‌شده ({masked})</span>}</div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+        <input value={key} onChange={e => setKey(e.target.value)} placeholder="service.xxxxxxxx" style={inp} />
+      </div>
+
+      <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>کلید نقشه (Map) {mapMasked && <span style={{ color: '#5fd98a', fontWeight: 400 }}>— تنظیم‌شده ({mapMasked})</span>}</div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <input value={key} onChange={e => setKey(e.target.value)} placeholder="service.xxxxxxxx" style={{ flex: 1, minWidth: 220, direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }} />
-        <GoldButton onClick={save}>ذخیره کلید</GoldButton>
+        <input value={mapKey} onChange={e => setMapKey(e.target.value)} placeholder="web.xxxxxxxx" style={inp} />
+        <GoldButton onClick={save}>ذخیره کلیدها</GoldButton>
       </div>
       {msg && <div style={{ marginTop: 8, fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</div>}
     </Card>

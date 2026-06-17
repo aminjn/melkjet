@@ -7,7 +7,7 @@ export default function PropertyMap({ lat, lng }: { lat: number; lng: number }) 
   if (err) {
     return (
       <div style={{ width: '100%', height: 200, borderRadius: 14, border: '1px solid var(--line)', background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: 13, textAlign: 'center', padding: 16 }}>
-        نقشه نیاز به کلید نشان دارد (پنل → مناطق و محله‌ها → کلید نشان)
+        نقشه به «کلید نقشهٔ نشان» (web.…) نیاز دارد — پنل → مناطق و محله‌ها → کلید نقشه
       </div>
     )
   }

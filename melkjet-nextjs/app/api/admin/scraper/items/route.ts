@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { listItems, setItemStatus, updateItem, deleteItem, deleteItems, SourceType, ItemStatus, EditableItem } from '@/app/lib/scraper-store'
+import { clearEnrichment } from '@/app/lib/enrich-store'
 
 async function guard() {
   const s = await getSession()
@@ -29,6 +30,7 @@ export async function PATCH(req: NextRequest) {
   if (b.patch && typeof b.patch === 'object') {
     const it = updateItem(b.id, b.patch as EditableItem)
     if (!it) return NextResponse.json({ error: 'یافت نشد' }, { status: 404 })
+    clearEnrichment(b.id)   // کش غنی‌سازی باطل شود تا ویرایش اعمال گردد
     return NextResponse.json({ ok: true, item: it })
   }
   if (b.status && ['pending', 'approved', 'duplicate', 'rejected'].includes(b.status)) {

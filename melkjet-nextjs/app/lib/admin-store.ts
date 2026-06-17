@@ -21,7 +21,8 @@ export interface AdminData {
     pattern: string
   }
   neshan?: {
-    serviceKey: string   // Neshan web-service key (reverse geocoding)
+    serviceKey: string   // Neshan web-service key (search / reverse / distance-matrix) — «service.…»
+    mapKey?: string      // Neshan map key (static map / map display) — «web.…»
   }
   divar?: {
     proxyUrl?: string    // HTTP proxy used to reach api.divar.ir from the server

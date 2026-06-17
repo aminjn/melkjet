@@ -101,44 +101,24 @@ export default function PropertyPage() {
       fetch(`/api/content?type=listing&limit=12`).then(r => r.ok ? r.json() : { items: [] }).then(s => {
         setSimilar((s.items || []).filter((x: Item) => x.id !== it.id).slice(0, 3))
       }).catch(() => {})
-      // Divar gallery + facts + description
-      const m = (it.url || '').match(/divar\.ir\/v\/([A-Za-z0-9_-]+)/)
-      const finishAnalyze = (fct: Fact[], desc: string, ams: string[] = []) => {
-        fetch('/api/ai/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: it.title, price: it.price, location: it.location, facts: fct, description: desc, meta: it.meta, amenities: ams }) })
-          .then(r => r.json()).then(a => {
-            if (a.ok && a.analysis) {
-              setAnalysis(a.analysis)
-              // if Divar didn't give structured facts, use the AI-extracted ones
-              if (!fct.length && a.analysis.facts?.length) setFacts(a.analysis.facts)
-              if (a.analysis.amenities?.length) setAiAmenities(a.analysis.amenities)
-            } else setAiError(a.error || 'تحلیل در دسترس نیست')
-          }).catch(() => setAiError('خطا در ارتباط با هوش مصنوعی'))
-      }
-      if (m) {
-        fetch(`/api/divar/post?token=${m[1]}`).then(r => r.ok ? r.json() : {}).then((g: any) => {
-          if (g.images?.length) setGallery(g.images)
-          const fct: Fact[] = g.facts?.length ? g.facts : []
-          if (fct.length) setFacts(fct)
-          if (g.amenities?.length) setDivarAmenities(g.amenities)
-          if (typeof g.lat === 'number' && typeof g.lng === 'number') setGeo({ lat: g.lat, lng: g.lng })
-          const desc = g.description || it.excerpt || ''
-          if (g.description) setItem(p => p ? { ...p, excerpt: g.description } : p)
-          finishAnalyze(fct, desc, g.amenities || [])
-        }).catch(() => finishAnalyze([], it.excerpt || ''))
-      } else {
-        finishAnalyze([], it.excerpt || '')
-      }
+      // غنی‌سازی کش‌شده: گالری/مشخصات/تحلیل AI/دسترسی‌ها فقط یک‌بار تولید و سپس از کش خوانده می‌شوند
+      fetch(`/api/listing/enrich?id=${id}`).then(r => r.ok ? r.json() : null).then((e: any) => {
+        if (!e) { setAiError('تحلیل در دسترس نیست'); return }
+        if (e.gallery?.length) setGallery(e.gallery)
+        if (e.facts?.length) setFacts(e.facts)
+        if (e.amenities?.length) setDivarAmenities(e.amenities)
+        if (e.geo) setGeo(e.geo)
+        if (e.nearby?.length) setNearby(e.nearby)
+        if (e.description) setItem(p => p ? { ...p, excerpt: e.description } : p)
+        if (e.analysis) {
+          setAnalysis(e.analysis)
+          if (!e.facts?.length && e.analysis.facts?.length) setFacts(e.analysis.facts)
+          if (e.analysis.amenities?.length) setAiAmenities(e.analysis.amenities)
+        } else setAiError('تحلیل هوشمند هنوز آماده نیست — چند لحظه بعد دوباره باز کنید')
+      }).catch(() => setAiError('خطا در ارتباط با هوش مصنوعی'))
     }).catch(() => setLoading(false))
   }, [id])
 
-  // دسترسی‌های واقعی اطراف بر اساس مختصات واقعی ملک (نه حدس مدل)
-  useEffect(() => {
-    if (!geo) return
-    fetch(`/api/geo/nearby?lat=${geo.lat}&lng=${geo.lng}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.nearby?.length) setNearby(d.nearby) })
-      .catch(() => {})
-  }, [geo])
 
   const images = gallery.length ? gallery : (item?.image ? [item.image] : [])
   const amenities = (() => {

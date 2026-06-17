@@ -7,7 +7,9 @@ export async function GET(req: NextRequest) {
   const lat = parseFloat(sp.get('lat') || ''), lng = parseFloat(sp.get('lng') || '')
   if (Number.isNaN(lat) || Number.isNaN(lng)) return new Response('bad coords', { status: 400 })
 
-  const key = getAdminData().neshan?.serviceKey
+  // نقشهٔ استاتیک نشان به «کلید نقشه» (web.…) نیاز دارد، نه «کلید سرویس» (service.…)
+  const nz = getAdminData().neshan
+  const key = nz?.mapKey || nz?.serviceKey
   if (!key) return new Response('no-neshan-key', { status: 404 })
 
   const url = `https://api.neshan.org/v4/static?key=${encodeURIComponent(key)}&type=neshan&zoom=15&center=${lat},${lng}&width=720&height=320&marker=red,${lat},${lng}`
