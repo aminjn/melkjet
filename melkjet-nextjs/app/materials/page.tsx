@@ -1,10 +1,10 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
+import { fetchContent, type ContentItem } from '@/app/lib/content-display'
 
 type View = 'dashboard' | 'catalog' | 'orders' | 'rfq'
-type Category = 'همه' | 'سیمان' | 'آجر' | 'کاشی' | 'تأسیسات' | 'رنگ'
 
 const kpis = [
   { label: 'فروش ماهانه', value: '۴٬۸۰۰ م.ت', icon: '﷼', color: 'var(--gold)' },
@@ -27,15 +27,6 @@ const recentOrders = [
   { id: '#۱۰۴۳', product: 'کاشی پرسلان', supplier: 'سرامیک ایران', amount: '۲۸٬۰۰۰٬۰۰۰', status: 'در انتظار', statusColor: 'var(--gold)' },
   { id: '#۱۰۴۲', product: 'لوله آهنی', supplier: 'فولاد مبارکه', amount: '۸٬۵۰۰٬۰۰۰', status: 'تحویل‌شده', statusColor: '#34d399' },
   { id: '#۱۰۴۱', product: 'رنگ ساختمانی', supplier: 'ایران رنگ', amount: '۴٬۵۰۰٬۰۰۰', status: 'لغو‌شده', statusColor: '#f87171' },
-]
-
-const allProducts = [
-  { name: 'سیمان پرتلند ۴۲.۵', unit: 'کیلوگرم', price: '۱۲٬۵۰۰', aiPrice: '۱۱٬۸۰۰', aiDiff: '-۵.۶٪', stock: 'موجود', cat: 'سیمان' },
-  { name: 'آجر سفال ۲۰×۱۰', unit: 'هزار عدد', price: '۴٬۸۰۰٬۰۰۰', aiPrice: '۴٬۵۰۰٬۰۰۰', aiDiff: '-۶.۳٪', stock: 'موجود', cat: 'آجر' },
-  { name: 'کاشی پرسلان ۶۰×۶۰', unit: 'متر مربع', price: '۲۸۰٬۰۰۰', aiPrice: '۲۶۵٬۰۰۰', aiDiff: '-۵.۴٪', stock: 'موجود', cat: 'کاشی' },
-  { name: 'لوله آهنی ۱ اینچ', unit: 'متر', price: '۸۵٬۰۰۰', aiPrice: '۷۹٬۰۰۰', aiDiff: '-۷.۱٪', stock: 'کمبود موجودی', cat: 'تأسیسات' },
-  { name: 'رنگ ساختمانی سفید', unit: 'لیتر', price: '۴۵٬۰۰۰', aiPrice: '۴۲٬۵۰۰', aiDiff: '-۵.۶٪', stock: 'موجود', cat: 'رنگ' },
-  { name: 'پروفیل آلومینیوم', unit: 'متر', price: '۱۲۰٬۰۰۰', aiPrice: '۱۱۵٬۰۰۰', aiDiff: '-۴.۲٪', stock: 'موجود', cat: 'تأسیسات' },
 ]
 
 const ordersList = [
@@ -90,14 +81,94 @@ const navItems: { id: View; label: string; icon: string }[] = [
   { id: 'rfq', label: 'استعلام (RFQ)', icon: '◎' },
 ]
 
-const catFilters: Category[] = ['همه', 'سیمان', 'آجر', 'کاشی', 'تأسیسات', 'رنگ']
-
 export default function MaterialsPage() {
   const [view, setView] = useState<View>('dashboard')
-  const [activeCat, setActiveCat] = useState<Category>('همه')
+  const [activeCat, setActiveCat] = useState<string>('همه')
+
+  // محصولات واقعی از داده‌های اسکرپ‌شده
+  const [products, setProducts] = useState<ContentItem[]>([])
+  const [productsLoading, setProductsLoading] = useState(true)
+
+  // وضعیت ثبت سفارش هر محصول و استعلام RFQ
+  const [orderState, setOrderState] = useState<Record<string, 'idle' | 'sending' | 'done'>>({})
+  const [rfqState, setRfqState] = useState<'idle' | 'sending' | 'done'>('idle')
+  const [toast, setToast] = useState<string | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    fetchContent('product', undefined, 40).then((d) => {
+      if (alive) { setProducts(d); setProductsLoading(false) }
+    })
+    return () => { alive = false }
+  }, [])
+
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 3500)
+    return () => clearTimeout(t)
+  }, [toast])
+
+  // دسته‌بندی‌ها از روی فیلد category محصولات واقعی + «همه»
+  const catFilters = useMemo<string[]>(() => {
+    const cats = Array.from(new Set(products.map((p) => p.category).filter((c): c is string => !!c)))
+    return ['همه', ...cats]
+  }, [products])
 
   const filteredProducts =
-    activeCat === 'همه' ? allProducts : allProducts.filter((p) => p.cat === activeCat)
+    activeCat === 'همه' ? products : products.filter((p) => p.category === activeCat)
+
+  // ثبت سفارش یک محصول از طریق /api/submit
+  const submitOrder = async (p: ContentItem) => {
+    setOrderState((s) => ({ ...s, [p.id]: 'sending' }))
+    try {
+      const description = [
+        `درخواست سفارش محصول «${p.title}»`,
+        p.price ? `قیمت اعلام‌شده: ${p.price}` : '',
+        p.location ? `محل: ${p.location}` : '',
+        p.url ? `منبع: ${p.url}` : '',
+      ].filter(Boolean).join('\n')
+      const res = await fetch('/api/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: `سفارش مصالح: ${p.title}`, description }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok && d.ok) {
+        setOrderState((s) => ({ ...s, [p.id]: 'done' }))
+        setToast(`سفارش «${p.title}» ثبت شد`)
+      } else {
+        setOrderState((s) => ({ ...s, [p.id]: 'idle' }))
+        setToast('ثبت سفارش با خطا مواجه شد')
+      }
+    } catch {
+      setOrderState((s) => ({ ...s, [p.id]: 'idle' }))
+      setToast('ثبت سفارش با خطا مواجه شد')
+    }
+  }
+
+  // ثبت استعلام قیمت (RFQ) از طریق /api/submit
+  const submitRfq = async (detail?: string) => {
+    setRfqState('sending')
+    try {
+      const description = detail || 'درخواست استعلام قیمت مصالح ساختمانی از تأمین‌کنندگان.'
+      const res = await fetch('/api/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'استعلام مصالح (RFQ)', description }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok && d.ok) {
+        setRfqState('done')
+        setToast('استعلام قیمت ثبت شد')
+      } else {
+        setRfqState('idle')
+        setToast('ثبت استعلام با خطا مواجه شد')
+      }
+    } catch {
+      setRfqState('idle')
+      setToast('ثبت استعلام با خطا مواجه شد')
+    }
+  }
 
   /* ── shared styles ── */
   const surface: React.CSSProperties = {
@@ -263,8 +334,8 @@ export default function MaterialsPage() {
         alignItems: 'center',
         gap: 8,
       }}>
-        <span style={{ fontSize: 16 }}>🤖</span>
-        هوش مصنوعی قیمت‌های رقابتی را بر اساس داده‌های بازار روز تحلیل کرده است.
+        <span style={{ fontSize: 16 }}>🏭</span>
+        محصولات واقعی تأمین‌کنندگان مصالح ساختمانی — برای ثبت سفارش روی دکمه «سفارش» بزنید.
       </div>
 
       {/* Products table */}
@@ -273,59 +344,69 @@ export default function MaterialsPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: 'var(--bg2)' }}>
-                {['محصول', 'واحد', 'قیمت (ریال)', 'پیشنهاد AI', 'تفاوت', 'موجودی', 'عملیات'].map((h) => (
+                {['محصول', 'دسته', 'قیمت', 'تأمین‌کننده', 'عملیات'].map((h) => (
                   <th key={h} style={th}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filteredProducts.map((p) => (
-                <tr
-                  key={p.name}
-                  style={{ transition: 'background 0.15s' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg2)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                >
-                  <td style={{ ...td, fontWeight: 600 }}>{p.name}</td>
-                  <td style={{ ...td, color: 'var(--muted)' }}>{p.unit}</td>
-                  <td style={{ ...td, fontVariantNumeric: 'tabular-nums' }}>{p.price}</td>
-                  <td style={{ ...td, color: '#34d399', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{p.aiPrice}</td>
-                  <td style={td}>
-                    <span style={badge('#34d399', '#34d39922')}>{p.aiDiff}</span>
-                  </td>
-                  <td style={td}>
-                    <span style={p.stock === 'موجود'
-                      ? badge('#34d399', '#34d39922')
-                      : badge('#f87171', '#f8717122')}>
-                      {p.stock}
-                    </span>
-                  </td>
-                  <td style={td}>
-                    <button style={{
-                      padding: '5px 14px',
-                      borderRadius: 8,
-                      border: '1px solid var(--gold)',
-                      background: 'transparent',
-                      color: 'var(--gold)',
-                      fontSize: 12,
-                      cursor: 'pointer',
-                      fontFamily: 'inherit',
-                      transition: 'all 0.2s',
-                    }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'var(--gold)'
-                        e.currentTarget.style.color = '#000'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'transparent'
-                        e.currentTarget.style.color = 'var(--gold)'
-                      }}
-                    >
-                      سفارش
-                    </button>
+              {productsLoading ? (
+                <tr>
+                  <td style={{ ...td, textAlign: 'center', color: 'var(--muted)' }} colSpan={5}>
+                    در حال بارگذاری محصولات…
                   </td>
                 </tr>
-              ))}
+              ) : filteredProducts.length === 0 ? (
+                <tr>
+                  <td style={{ ...td, textAlign: 'center', color: 'var(--muted)' }} colSpan={5}>
+                    محصولی یافت نشد.
+                  </td>
+                </tr>
+              ) : filteredProducts.map((p) => {
+                const st = orderState[p.id] || 'idle'
+                return (
+                  <tr
+                    key={p.id}
+                    style={{ transition: 'background 0.15s' }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg2)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <td style={{ ...td, fontWeight: 600 }}>{p.title}</td>
+                    <td style={{ ...td, color: 'var(--muted)' }}>{p.category || '—'}</td>
+                    <td style={{ ...td, fontVariantNumeric: 'tabular-nums' }}>{p.price || 'استعلامی'}</td>
+                    <td style={{ ...td, color: 'var(--muted)' }}>{p.sourceName || '—'}</td>
+                    <td style={td}>
+                      <button
+                        onClick={() => st === 'idle' && submitOrder(p)}
+                        disabled={st !== 'idle'}
+                        style={{
+                          padding: '5px 14px',
+                          borderRadius: 8,
+                          border: st === 'done' ? '1px solid #34d399' : '1px solid var(--gold)',
+                          background: st === 'done' ? '#34d39922' : 'transparent',
+                          color: st === 'done' ? '#34d399' : 'var(--gold)',
+                          fontSize: 12,
+                          cursor: st === 'idle' ? 'pointer' : 'default',
+                          fontFamily: 'inherit',
+                          transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={(e) => {
+                          if (st !== 'idle') return
+                          e.currentTarget.style.background = 'var(--gold)'
+                          e.currentTarget.style.color = '#000'
+                        }}
+                        onMouseLeave={(e) => {
+                          if (st !== 'idle') return
+                          e.currentTarget.style.background = 'transparent'
+                          e.currentTarget.style.color = 'var(--gold)'
+                        }}
+                      >
+                        {st === 'sending' ? 'در حال ثبت…' : st === 'done' ? '✓ ثبت شد' : 'سفارش'}
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -375,17 +456,19 @@ export default function MaterialsPage() {
       <div style={{ ...surface, padding: 0, overflow: 'hidden' }}>
         <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>لیست سفارش‌ها</span>
-          <button style={{
-            padding: '7px 18px',
-            borderRadius: 8,
-            border: 'none',
-            background: 'var(--gold)',
-            color: '#000',
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-          }}>
+          <button
+            onClick={() => setView('catalog')}
+            style={{
+              padding: '7px 18px',
+              borderRadius: 8,
+              border: 'none',
+              background: 'var(--gold)',
+              color: '#000',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}>
             + سفارش جدید
           </button>
         </div>
@@ -559,6 +642,10 @@ export default function MaterialsPage() {
 
             {/* CTA */}
             <button
+              onClick={() => rfqState !== 'sending' && submitRfq(
+                `ارائه پیشنهاد برای استعلام ${r.builder} — محصول: ${r.product}، کمیت: ${r.qty}، مهلت: ${r.deadline}`
+              )}
+              disabled={rfqState === 'sending'}
               style={{
                 width: '100%',
                 padding: '11px 0',
@@ -568,14 +655,14 @@ export default function MaterialsPage() {
                 color: '#000',
                 fontSize: 14,
                 fontWeight: 700,
-                cursor: 'pointer',
+                cursor: rfqState === 'sending' ? 'default' : 'pointer',
                 fontFamily: 'inherit',
                 transition: 'opacity 0.2s',
               }}
               onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.88')}
               onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
             >
-              ارائه پیشنهاد
+              {rfqState === 'sending' ? 'در حال ثبت…' : rfqState === 'done' ? '✓ پیشنهاد ثبت شد' : 'ارائه پیشنهاد'}
             </button>
           </div>
         ))}
@@ -737,29 +824,43 @@ export default function MaterialsPage() {
               </div>
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
-              <button style={{
-                padding: '9px 18px',
-                borderRadius: 10,
-                border: '1px solid var(--line)',
-                background: 'var(--surface)',
-                color: 'var(--text)',
-                fontSize: 13,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-              }}>
+              <button
+                onClick={() => {
+                  const rows = [['عنوان', 'دسته', 'قیمت', 'تأمین‌کننده'],
+                    ...products.map((p) => [p.title, p.category || '', p.price || '', p.sourceName || ''])]
+                  const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
+                  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url; a.download = 'melkjet-materials.csv'; a.click()
+                  URL.revokeObjectURL(url)
+                }}
+                style={{
+                  padding: '9px 18px',
+                  borderRadius: 10,
+                  border: '1px solid var(--line)',
+                  background: 'var(--surface)',
+                  color: 'var(--text)',
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}>
                 ⬇ خروجی
               </button>
-              <button style={{
-                padding: '9px 18px',
-                borderRadius: 10,
-                border: 'none',
-                background: 'linear-gradient(135deg, var(--gold2), var(--gold))',
-                color: '#000',
-                fontSize: 13,
-                fontWeight: 700,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-              }}>
+              <button
+                onClick={() => { setView('rfq'); if (rfqState !== 'sending') submitRfq() }}
+                disabled={rfqState === 'sending'}
+                style={{
+                  padding: '9px 18px',
+                  borderRadius: 10,
+                  border: 'none',
+                  background: 'linear-gradient(135deg, var(--gold2), var(--gold))',
+                  color: '#000',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: rfqState === 'sending' ? 'default' : 'pointer',
+                  fontFamily: 'inherit',
+                }}>
                 + استعلام جدید
               </button>
             </div>
@@ -769,6 +870,30 @@ export default function MaterialsPage() {
           {viewMap[view]}
         </main>
       </div>
+
+      {/* Toast تأیید */}
+      {toast && (
+        <div style={{
+          position: 'fixed',
+          bottom: 24,
+          left: 24,
+          zIndex: 1000,
+          background: 'var(--surface)',
+          border: '1px solid var(--gold)',
+          borderRadius: 12,
+          padding: '14px 20px',
+          fontSize: 14,
+          fontWeight: 600,
+          color: 'var(--text)',
+          boxShadow: 'var(--shadow)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+        }}>
+          <span style={{ color: 'var(--gold)' }}>✓</span>
+          {toast}
+        </div>
+      )}
 
       <Footer />
     </div>

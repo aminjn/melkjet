@@ -316,6 +316,40 @@ export function addUserListing(raw: {
   return item
 }
 
+// ── Articles (CMS) ──────────────────────────────────────────────────────────
+// Insert an editorial article. Stored as a type:'article', status:'approved' item
+// so it appears immediately on the public site (excerpt holds the article body).
+export function addArticle(raw: { title: string; body: string; image?: string; category?: string; source?: string }): Item {
+  const db = load()
+  const item: Item = {
+    id: id(), sourceId: 'cms', sourceName: raw.source || 'تحریریه ملک‌جت', type: 'article',
+    category: raw.category, title: raw.title, image: raw.image, excerpt: raw.body,
+    scrapedAt: Date.now(), status: 'approved',
+  }
+  db.items.unshift(item)
+  save(db)
+  return item
+}
+
+// Update an existing editorial article (body maps onto excerpt).
+export function updateArticle(itemId: string, patch: { title?: string; body?: string; image?: string; category?: string }): Item | null {
+  const db = load()
+  const it = db.items.find(i => i.id === itemId && i.type === 'article')
+  if (!it) return null
+  if (patch.title !== undefined) it.title = patch.title
+  if (patch.body !== undefined) it.excerpt = patch.body
+  if (patch.image !== undefined) it.image = patch.image
+  if (patch.category !== undefined) it.category = patch.category
+  it.edited = true
+  save(db)
+  return it
+}
+
+// Convenience: all article items (newest first).
+export function listArticles(): Item[] {
+  return load().items.filter(i => i.type === 'article').sort((a, b) => b.scrapedAt - a.scrapedAt)
+}
+
 export function markError(sourceId: string, err: string) {
   const db = load()
   const s = db.sources.find(x => x.id === sourceId)

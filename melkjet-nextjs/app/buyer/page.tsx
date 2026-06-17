@@ -1,70 +1,19 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
+import { fetchContent, gradientFor, type ContentItem } from '@/app/lib/content-display'
 
-/* ─── Data ─────────────────────────────────────────────── */
+/* ─── Types ─────────────────────────────────────────────── */
+
+interface SavedSearch { id: string; label: string; query: string; createdAt: number }
+interface Prefs { favorites: string[]; savedSearches: SavedSearch[] }
+
+/* ─── Static UI data (local-only sections) ─────────────── */
 
 const needTags = ['آپارتمان', 'سعادت‌آباد', '۱۳۰–۱۵۰ متر', 'زیر ۱۸م', 'آسانسور', 'پارکینگ']
-
-const aiOpportunities = [
-  {
-    id: 1,
-    title: 'آپارتمان ۱۴۰م سعادت‌آباد',
-    match: 96,
-    price: '۱۷٫۸ میلیارد',
-    priceDropLabel: '↓۴۰۰م',
-    why: 'متراژ دقیقاً در محدوده نیاز شما، آسانسور و پارکینگ دارد، قیمت ۴۰۰ میلیون کاهش یافته.',
-    gradient: 'linear-gradient(135deg,#0d2010 0%,#1a3d1a 60%,#0d2810 100%)',
-  },
-  {
-    id: 2,
-    title: 'آپارتمان ۱۳۰م سعادت‌آباد',
-    match: 91,
-    price: '۱۵٫۲ میلیارد',
-    priceDropLabel: null,
-    why: 'کمترین قیمت در محدوده سعادت‌آباد برای این متراژ، واحد تازه بازسازی‌شده.',
-    gradient: 'linear-gradient(135deg,#0d0d20 0%,#1a1a3d 60%,#0d0d28 100%)',
-  },
-]
-
-const savedSearches = [
-  {
-    id: 1,
-    name: 'آپارتمان سعادت‌آباد ۱۳۰–۱۵۰م',
-    updated: 'امروز ۱۴:۲۲',
-    chips: ['سعادت‌آباد', '۱۳۰–۱۵۰م', 'زیر ۱۸م'],
-    count: 6,
-    newCount: 2,
-  },
-  {
-    id: 2,
-    name: 'اجاره ونک ۲ خوابه',
-    updated: 'دیروز ۱۰:۰۵',
-    chips: ['ونک', '۲ خوابه', 'اجاره'],
-    count: 14,
-    newCount: 0,
-  },
-  {
-    id: 3,
-    name: 'سرمایه‌گذاری لواسان',
-    updated: '۳ روز پیش',
-    chips: ['لواسان', 'ویلا', 'سرمایه‌گذاری'],
-    count: 3,
-    newCount: 0,
-  },
-]
-
-const favorites = [
-  { id: 1, title: 'آپارتمان نوساز سعادت‌آباد', location: 'سعادت‌آباد، تهران', price: '۱۷٫۸ میلیارد', score: 96, drop: '↓۴۰۰م', gradient: 'linear-gradient(135deg,#0d2010,#1a3d1a)' },
-  { id: 2, title: 'آپارتمان لوکس جردن', location: 'جردن، تهران', price: '۱۴٫۵ میلیارد', score: 88, drop: null, gradient: 'linear-gradient(135deg,#0d0d20,#1a1a3d)' },
-  { id: 3, title: 'آپارتمان ونک', location: 'ونک، تهران', price: '۹٫۲ میلیارد', score: 82, drop: null, gradient: 'linear-gradient(135deg,#200d0d,#3d1a1a)' },
-  { id: 4, title: 'پنت‌هاوس الهیه', location: 'الهیه، تهران', price: '۴۵ میلیارد', score: 74, drop: '↓۱٫۵ب', gradient: 'linear-gradient(135deg,#1e1a0a,#3d3310)' },
-  { id: 5, title: 'آپارتمان نیاوران', location: 'نیاوران، تهران', price: '۲۲ میلیارد', score: 79, drop: null, gradient: 'linear-gradient(135deg,#0a1a1e,#103340)' },
-  { id: 6, title: 'آپارتمان فرشته', location: 'فرشته، تهران', price: '۳۱ میلیارد', score: 71, drop: null, gradient: 'linear-gradient(135deg,#1a0d1a,#3a1a3a)' },
-]
 
 const journeySteps = [
   { label: 'تعریف نیاز', done: true, active: false },
@@ -83,13 +32,118 @@ const notifications = [
 /* ─── Component ─────────────────────────────────────────── */
 
 export default function BuyerPage() {
-  const [heartRemoved, setHeartRemoved] = useState<number[]>([])
-  const [compareSet, setCompareSet] = useState<number[]>([])
-  const [whyOpen, setWhyOpen] = useState<number | null>(null)
+  const [compareSet, setCompareSet] = useState<string[]>([])
   const [visitCancelled, setVisitCancelled] = useState(false)
 
-  const toggleCompare = (id: number) =>
+  // Real data
+  const [prefs, setPrefs] = useState<Prefs>({ favorites: [], savedSearches: [] })
+  const [listings, setListings] = useState<ContentItem[]>([])
+  const [loaded, setLoaded] = useState(false)
+
+  // AI assistant
+  const [aiInput, setAiInput] = useState('')
+  const [aiReply, setAiReply] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState('')
+
+  const toggleCompare = (id: string) =>
     setCompareSet(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+
+  // Load prefs + real listings
+  const reloadPrefs = useCallback(async () => {
+    try {
+      const r = await fetch('/api/user/prefs', { cache: 'no-store' })
+      if (r.ok) {
+        const d = await r.json()
+        setPrefs({
+          favorites: Array.isArray(d.favorites) ? d.favorites : [],
+          savedSearches: Array.isArray(d.savedSearches) ? d.savedSearches : [],
+        })
+      }
+    } catch { /* keep current */ }
+  }, [])
+
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      const [items] = await Promise.all([fetchContent('listing', undefined, 24), reloadPrefs()])
+      if (!alive) return
+      setListings(items)
+      setLoaded(true)
+    })()
+    return () => { alive = false }
+  }, [reloadPrefs])
+
+  const byId = new Map(listings.map(l => [l.id, l]))
+  const favListings = prefs.favorites.map(id => byId.get(id)).filter(Boolean) as ContentItem[]
+  const hasFavorites = favListings.length > 0
+  // When the user has no favorites, suggest all real listings as add-able cards.
+  const gridItems = hasFavorites ? favListings : listings
+
+  const addFav = async (listingId: string) => {
+    setPrefs(p => ({ ...p, favorites: [listingId, ...p.favorites.filter(x => x !== listingId)] }))
+    try {
+      const r = await fetch('/api/user/prefs', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'addFav', listingId }),
+      })
+      if (r.ok) setPrefs(await r.json())
+    } catch { reloadPrefs() }
+  }
+
+  const removeFav = async (listingId: string) => {
+    setPrefs(p => ({ ...p, favorites: p.favorites.filter(x => x !== listingId) }))
+    try {
+      const r = await fetch('/api/user/prefs', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'removeFav', listingId }),
+      })
+      if (r.ok) setPrefs(await r.json())
+    } catch { reloadPrefs() }
+  }
+
+  const addSearch = async () => {
+    const query = (window.prompt('عبارت جستجوی موردنظر را وارد کنید:', '') || '').trim()
+    if (!query) return
+    const label = (window.prompt('یک عنوان برای این جستجو وارد کنید:', query) || query).trim()
+    try {
+      const r = await fetch('/api/user/prefs', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'addSearch', label, query }),
+      })
+      if (r.ok) setPrefs(await r.json())
+    } catch { reloadPrefs() }
+  }
+
+  const removeSearch = async (id: string) => {
+    setPrefs(p => ({ ...p, savedSearches: p.savedSearches.filter(s => s.id !== id) }))
+    try {
+      const r = await fetch('/api/user/prefs', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'removeSearch', id }),
+      })
+      if (r.ok) setPrefs(await r.json())
+    } catch { reloadPrefs() }
+  }
+
+  const askAi = async () => {
+    const input = aiInput.trim() ||
+      `بر اساس نیازهای من (${needTags.join('، ')}) چه پیشنهادهایی برای خرید ملک داری؟`
+    setAiLoading(true); setAiError(''); setAiReply('')
+    try {
+      const r = await fetch('/api/ai/run', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agent: 'chat', input }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (r.ok && d.ok && d.text) setAiReply(d.text)
+      else setAiError(d.error || 'خطا در دریافت پاسخ دستیار')
+    } catch {
+      setAiError('ارتباط با دستیار برقرار نشد')
+    } finally {
+      setAiLoading(false)
+    }
+  }
 
   return (
     <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: "'Vazirmatn', sans-serif" }}>
@@ -195,79 +249,61 @@ export default function BuyerPage() {
                   </div>
                 </div>
 
-                {/* AI Finds */}
+                {/* AI Assistant — real call to /api/ai/run */}
                 <div>
                   <p style={{ margin: '0 0 14px', fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
-                    ✦ فرصت‌های تازه‌ای که AI پیدا کرد
+                    ✦ از دستیار خرید درباره پیشنهادها بپرسید
                   </p>
-                  <div className="mjb-opp" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {aiOpportunities.map(op => (
-                      <div key={op.id} style={{
+
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+                    <input
+                      value={aiInput}
+                      onChange={e => setAiInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' && !aiLoading) askAi() }}
+                      placeholder="مثلاً: برای خرید آپارتمان در سعادت‌آباد چه پیشنهادی داری؟"
+                      style={{
+                        flex: 1, minWidth: 180,
+                        padding: '10px 14px', borderRadius: 9,
                         background: 'var(--bg2)',
                         border: '1px solid var(--line2)',
-                        borderRadius: 12,
-                        overflow: 'hidden',
-                        display: 'flex',
-                        gap: 0,
-                      }}>
-                        {/* Image placeholder */}
-                        <div className="mjb-oppimg" style={{
-                          width: 90, minHeight: 80,
-                          background: op.gradient,
-                          flexShrink: 0,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: 28, color: 'rgba(255,255,255,0.1)',
-                        }}>⌂</div>
+                        color: 'var(--text)', fontSize: 13,
+                        fontFamily: "'Vazirmatn', sans-serif",
+                        outline: 'none',
+                      }}
+                    />
+                    <button
+                      onClick={askAi}
+                      disabled={aiLoading}
+                      style={{
+                        padding: '10px 18px', borderRadius: 9,
+                        background: 'linear-gradient(140deg,var(--gold2),var(--gold))',
+                        border: 'none', color: '#16140f', fontSize: 13, fontWeight: 700,
+                        cursor: aiLoading ? 'default' : 'pointer', opacity: aiLoading ? 0.6 : 1,
+                        fontFamily: "'Vazirmatn', sans-serif", flexShrink: 0,
+                      }}
+                    >{aiLoading ? 'در حال پردازش…' : 'بپرس از AI'}</button>
+                  </div>
 
-                        <div style={{ flex: 1, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                          <div>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 3 }}>{op.title}</div>
-                            <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--gold)' }}>{op.price}</div>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                            {op.priceDropLabel && (
-                              <span style={{
-                                padding: '3px 9px', borderRadius: 6,
-                                background: 'rgba(61,186,110,0.15)',
-                                border: '1px solid rgba(61,186,110,0.3)',
-                                color: '#3dba6e', fontSize: 12, fontWeight: 700,
-                              }}>{op.priceDropLabel}</span>
-                            )}
-                            <span style={{
-                              padding: '3px 10px', borderRadius: 20,
-                              background: 'rgba(61,186,110,0.12)',
-                              border: '1px solid rgba(61,186,110,0.25)',
-                              color: '#3dba6e', fontSize: 12, fontWeight: 700,
-                            }}>{op.match}٪ تطابق</span>
-                            <div style={{ position: 'relative' }}>
-                              <button
-                                onClick={() => setWhyOpen(whyOpen === op.id ? null : op.id)}
-                                style={{
-                                  padding: '4px 11px', borderRadius: 7,
-                                  border: '1px solid var(--line2)',
-                                  background: 'transparent',
-                                  color: 'var(--muted)', fontSize: 12, cursor: 'pointer',
-                                  fontFamily: "'Vazirmatn', sans-serif",
-                                }}
-                              >چرا؟</button>
-                              {whyOpen === op.id && (
-                                <div style={{
-                                  position: 'absolute', top: '110%', left: 0,
-                                  width: 240, zIndex: 20,
-                                  background: 'var(--surface)',
-                                  border: '1px solid var(--line2)',
-                                  borderRadius: 10, padding: '12px 14px',
-                                  fontSize: 12, color: 'var(--muted)', lineHeight: 1.7,
-                                  boxShadow: '0 12px 32px -8px rgba(0,0,0,0.5)',
-                                }}>
-                                  {op.why}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                  <div style={{
+                    background: 'var(--bg2)',
+                    border: '1px solid var(--line2)',
+                    borderRadius: 12,
+                    padding: '14px 16px',
+                    fontSize: 13, lineHeight: 1.9, color: 'var(--text)',
+                    whiteSpace: 'pre-wrap', minHeight: 60,
+                  }}>
+                    {aiLoading && (
+                      <span style={{ color: 'var(--muted)' }}>دستیار در حال بررسی بازار است…</span>
+                    )}
+                    {!aiLoading && aiError && (
+                      <span style={{ color: '#e05555' }}>{aiError}</span>
+                    )}
+                    {!aiLoading && !aiError && aiReply && aiReply}
+                    {!aiLoading && !aiError && !aiReply && (
+                      <span style={{ color: 'var(--muted)' }}>
+                        سؤال خود را بنویسید یا روی «بپرس از AI» بزنید تا بر اساس نیازهای ذخیره‌شده‌تان پیشنهاد بدهد.
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -277,56 +313,70 @@ export default function BuyerPage() {
             <section>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                 <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>جستجوهای ذخیره‌شده</h2>
-                <button style={{
-                  padding: '7px 16px', borderRadius: 9,
-                  background: 'linear-gradient(140deg,var(--gold2),var(--gold))',
-                  border: 'none', color: '#16140f', fontSize: 13, fontWeight: 700,
-                  cursor: 'pointer', fontFamily: "'Vazirmatn', sans-serif",
-                }}>+ جستجوی جدید</button>
+                <button
+                  onClick={addSearch}
+                  style={{
+                    padding: '7px 16px', borderRadius: 9,
+                    background: 'linear-gradient(140deg,var(--gold2),var(--gold))',
+                    border: 'none', color: '#16140f', fontSize: 13, fontWeight: 700,
+                    cursor: 'pointer', fontFamily: "'Vazirmatn', sans-serif",
+                  }}>+ جستجوی جدید</button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {savedSearches.map(s => (
+                {prefs.savedSearches.length === 0 && (
+                  <div style={{
+                    background: 'var(--surface)',
+                    border: '1px dashed var(--line2)',
+                    borderRadius: 14, padding: '20px',
+                    fontSize: 13, color: 'var(--muted)', textAlign: 'center',
+                  }}>
+                    هنوز جستجویی ذخیره نکرده‌اید. با «+ جستجوی جدید» اولین جستجوی خود را اضافه کنید.
+                  </div>
+                )}
+                {prefs.savedSearches.map(s => (
                   <div key={s.id} style={{
                     background: 'var(--surface)',
-                    border: s.newCount > 0 ? '1px solid rgba(61,186,110,0.35)' : '1px solid var(--line)',
+                    border: '1px solid var(--line)',
                     borderRadius: 14, padding: '16px 20px',
                     transition: 'border-color 0.2s',
                   }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 8, flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{s.name}</span>
-                          {s.newCount > 0 && (
-                            <span style={{
-                              padding: '2px 10px', borderRadius: 20,
-                              background: 'rgba(61,186,110,0.15)',
-                              border: '1px solid rgba(61,186,110,0.35)',
-                              color: '#3dba6e', fontSize: 11, fontWeight: 700,
-                            }}>نتایج جدید: {s.newCount} فایل</span>
-                          )}
+                          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{s.label}</span>
                         </div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
-                          {s.chips.map(chip => (
-                            <span key={chip} style={{
-                              padding: '3px 10px', borderRadius: 20,
-                              background: 'rgba(255,255,255,0.05)',
-                              border: '1px solid var(--line2)',
-                              fontSize: 11, color: 'var(--muted)',
-                            }}>{chip}</span>
-                          ))}
+                          <span style={{
+                            padding: '3px 10px', borderRadius: 20,
+                            background: 'rgba(255,255,255,0.05)',
+                            border: '1px solid var(--line2)',
+                            fontSize: 11, color: 'var(--muted)',
+                          }}>{s.query}</span>
                         </div>
                         <div style={{ fontSize: 11, color: 'var(--faint)' }}>
-                          آخرین بروزرسانی: {s.updated} · {s.count} نتیجه
+                          ذخیره‌شده در: {new Date(s.createdAt).toLocaleDateString('fa-IR')}
                         </div>
                       </div>
-                      <button style={{
-                        padding: '7px 16px', borderRadius: 8,
-                        background: 'var(--goldDim)',
-                        border: '1px solid rgba(201,168,76,0.25)',
-                        color: 'var(--gold)', fontSize: 12, fontWeight: 600,
-                        cursor: 'pointer', fontFamily: "'Vazirmatn', sans-serif",
-                        flexShrink: 0,
-                      }}>مشاهده نتایج</button>
+                      <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+                        <Link
+                          href={`/search?q=${encodeURIComponent(s.query)}`}
+                          style={{
+                            padding: '7px 16px', borderRadius: 8,
+                            background: 'var(--goldDim)',
+                            border: '1px solid rgba(201,168,76,0.25)',
+                            color: 'var(--gold)', fontSize: 12, fontWeight: 600,
+                            cursor: 'pointer', textDecoration: 'none',
+                          }}>مشاهده نتایج</Link>
+                        <button
+                          onClick={() => removeSearch(s.id)}
+                          style={{
+                            padding: '7px 14px', borderRadius: 8,
+                            background: 'transparent',
+                            border: '1px solid rgba(220,60,60,0.3)',
+                            color: '#e05555', fontSize: 12, fontWeight: 600,
+                            cursor: 'pointer', fontFamily: "'Vazirmatn', sans-serif",
+                          }}>حذف</button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -337,20 +387,36 @@ export default function BuyerPage() {
             <section>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                 <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>
-                  علاقه‌مندی‌ها
-                  <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--muted)', marginRight: 8 }}>({favorites.filter(f => !heartRemoved.includes(f.id)).length} ملک)</span>
+                  {hasFavorites ? 'علاقه‌مندی‌ها' : 'پیشنهاد برای شما'}
+                  <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--muted)', marginRight: 8 }}>
+                    {hasFavorites ? `(${favListings.length} ملک)` : '(هنوز علاقه‌مندی ندارید — افزودن کنید)'}
+                  </span>
                 </h2>
-                {compareSet.length > 0 && (
-                  <button style={{
-                    padding: '7px 16px', borderRadius: 9,
-                    background: 'linear-gradient(140deg,var(--gold2),var(--gold))',
-                    border: 'none', color: '#16140f', fontSize: 13, fontWeight: 700,
-                    cursor: 'pointer', fontFamily: "'Vazirmatn', sans-serif",
-                  }}>مقایسه {compareSet.length} ملک</button>
+                {compareSet.length > 1 && (
+                  <Link
+                    href={`/search?compare=${compareSet.map(encodeURIComponent).join(',')}`}
+                    style={{
+                      padding: '7px 16px', borderRadius: 9,
+                      background: 'linear-gradient(140deg,var(--gold2),var(--gold))',
+                      border: 'none', color: '#16140f', fontSize: 13, fontWeight: 700,
+                      cursor: 'pointer', textDecoration: 'none',
+                    }}>مقایسه {compareSet.length} ملک</Link>
                 )}
               </div>
+              {loaded && gridItems.length === 0 && (
+                <div style={{
+                  background: 'var(--surface)',
+                  border: '1px dashed var(--line2)',
+                  borderRadius: 14, padding: '24px',
+                  fontSize: 13, color: 'var(--muted)', textAlign: 'center',
+                }}>
+                  در حال حاضر ملکی برای نمایش وجود ندارد.
+                </div>
+              )}
               <div className="mjb-fav" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
-                {favorites.filter(f => !heartRemoved.includes(f.id)).map(prop => (
+                {gridItems.map(prop => {
+                  const isFav = prefs.favorites.includes(prop.id)
+                  return (
                   <Link key={prop.id} href={`/property/${prop.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                     <div style={{
                       background: 'var(--surface)',
@@ -362,63 +428,61 @@ export default function BuyerPage() {
                       {/* Image */}
                       <div style={{
                         height: 130,
-                        background: prop.gradient,
+                        background: prop.image ? `center/cover no-repeat url(${prop.image})` : gradientFor(prop.id),
                         position: 'relative',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontSize: 36, color: 'rgba(255,255,255,0.09)',
                       }}>
-                        ⌂
-                        {/* Heart */}
+                        {!prop.image && '⌂'}
+                        {/* Heart — add or remove favorite */}
                         <button
-                          onClick={e => { e.preventDefault(); setHeartRemoved(prev => [...prev, prop.id]) }}
+                          onClick={e => { e.preventDefault(); isFav ? removeFav(prop.id) : addFav(prop.id) }}
+                          title={isFav ? 'حذف از علاقه‌مندی' : 'افزودن به علاقه‌مندی'}
                           style={{
                             position: 'absolute', top: 10, left: 10,
                             width: 30, height: 30, borderRadius: '50%',
                             background: 'rgba(0,0,0,0.45)',
                             border: 'none', cursor: 'pointer',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 15, color: '#e05555',
+                            fontSize: 15, color: isFav ? '#e05555' : 'rgba(255,255,255,0.8)',
                           }}
-                        >♥</button>
-                        {/* AI Score */}
-                        <span style={{
-                          position: 'absolute', top: 10, right: 10,
-                          padding: '2px 8px', borderRadius: 20,
-                          background: 'rgba(0,0,0,0.55)',
-                          color: '#3dba6e', fontSize: 11, fontWeight: 700,
-                          border: '1px solid rgba(61,186,110,0.3)',
-                        }}>{prop.score}٪</span>
-                        {/* Price Drop */}
-                        {prop.drop && (
-                          <span style={{
-                            position: 'absolute', bottom: 10, right: 10,
-                            padding: '2px 8px', borderRadius: 6,
-                            background: 'rgba(61,186,110,0.9)',
-                            color: '#fff', fontSize: 11, fontWeight: 700,
-                          }}>{prop.drop}</span>
-                        )}
+                        >{isFav ? '♥' : '♡'}</button>
                       </div>
                       {/* Body */}
                       <div style={{ padding: '12px 14px' }}>
                         <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 3, lineHeight: 1.4 }}>{prop.title}</div>
-                        <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>{prop.location}</div>
-                        <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--gold)', marginBottom: 10 }}>{prop.price}</div>
-                        <label
-                          onClick={e => e.preventDefault()}
-                          style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 11, color: 'var(--muted)' }}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={compareSet.includes(prop.id)}
-                            onChange={() => toggleCompare(prop.id)}
-                            style={{ accentColor: 'var(--gold)', width: 13, height: 13 }}
-                          />
-                          مقایسه
-                        </label>
+                        <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>{prop.location || '—'}</div>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--gold)', marginBottom: 10 }}>{prop.price || 'توافقی'}</div>
+                        {hasFavorites ? (
+                          <label
+                            onClick={e => e.preventDefault()}
+                            style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 11, color: 'var(--muted)' }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={compareSet.includes(prop.id)}
+                              onChange={() => toggleCompare(prop.id)}
+                              style={{ accentColor: 'var(--gold)', width: 13, height: 13 }}
+                            />
+                            مقایسه
+                          </label>
+                        ) : (
+                          <button
+                            onClick={e => { e.preventDefault(); addFav(prop.id) }}
+                            style={{
+                              width: '100%', padding: '7px 0', borderRadius: 8,
+                              background: 'var(--goldDim)',
+                              border: '1px solid rgba(201,168,76,0.25)',
+                              color: 'var(--gold)', fontSize: 11, fontWeight: 600,
+                              cursor: 'pointer', fontFamily: "'Vazirmatn', sans-serif",
+                            }}
+                          >+ افزودن به علاقه‌مندی</button>
+                        )}
                       </div>
                     </div>
                   </Link>
-                ))}
+                  )
+                })}
               </div>
             </section>
 
@@ -544,12 +608,14 @@ export default function BuyerPage() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button style={{
-                    flex: 1, padding: '8px 0', borderRadius: 9,
-                    background: 'linear-gradient(140deg,var(--gold2),var(--gold))',
-                    border: 'none', color: '#16140f', fontSize: 12, fontWeight: 700,
-                    cursor: 'pointer', fontFamily: "'Vazirmatn', sans-serif",
-                  }}>تغییر زمان</button>
+                  <button
+                    onClick={() => alert('برای تغییر زمان بازدید با مشاور خود تماس بگیرید.')}
+                    style={{
+                      flex: 1, padding: '8px 0', borderRadius: 9,
+                      background: 'linear-gradient(140deg,var(--gold2),var(--gold))',
+                      border: 'none', color: '#16140f', fontSize: 12, fontWeight: 700,
+                      cursor: 'pointer', fontFamily: "'Vazirmatn', sans-serif",
+                    }}>تغییر زمان</button>
                   <button
                     onClick={() => setVisitCancelled(true)}
                     style={{

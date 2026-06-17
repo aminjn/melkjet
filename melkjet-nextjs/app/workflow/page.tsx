@@ -152,6 +152,9 @@ export default function WorkflowPage() {
   const [activeNodeIndex, setActiveNodeIndex] = useState<number>(-1);
   const [status, setStatus] = useState<string>('آماده');
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [workflowId, setWorkflowId] = useState<string | null>(null);
+  const [workflowName, setWorkflowName] = useState<string>('گردش کار جدید');
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const selectedNode = nodes.find((n) => n.id === selectedId) ?? null;
@@ -192,11 +195,59 @@ export default function WorkflowPage() {
     };
   }, []);
 
-  const handleSave = () => {
-    setSaved(true);
-    setStatus('ذخیره شد');
-    setTimeout(() => setSaved(false), 2000);
-  };
+  // Load the most recently saved workflow on mount (if any).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/workflow');
+        if (!res.ok) return;
+        const data = await res.json();
+        const recent = data.workflows?.[0];
+        if (!recent || cancelled) return;
+        setWorkflowId(recent.id);
+        setWorkflowName(recent.name);
+        if (Array.isArray(recent.nodes) && recent.nodes.length) {
+          setNodes(recent.nodes);
+        }
+      } catch {
+        /* ignore — keep defaults */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleSave = useCallback(async () => {
+    if (saving) return;
+    setSaving(true);
+    setStatus('در حال ذخیره...');
+    try {
+      const res = await fetch('/api/workflow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: workflowId,
+          name: workflowName,
+          nodes,
+          connections: CONNECTIONS,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setStatus(res.status === 401 ? 'برای ذخیره وارد شوید' : (err.error || 'خطا در ذخیره'));
+        return;
+      }
+      const data = await res.json();
+      if (data.workflow?.id) setWorkflowId(data.workflow.id);
+      setSaved(true);
+      setStatus('ذخیره شد ✓');
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      setStatus('خطا در اتصال');
+    } finally {
+      setSaving(false);
+    }
+  }, [saving, workflowId, workflowName, nodes]);
 
   const handleNodeClick = (id: string) => {
     setSelectedId(id);
@@ -256,19 +307,21 @@ export default function WorkflowPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button
             onClick={handleSave}
+            disabled={saving}
             style={{
               padding: '7px 18px',
               borderRadius: '8px',
               border: '1px solid var(--line)',
               background: saved ? 'var(--gold)' : 'var(--surface)',
               color: saved ? '#000' : 'var(--text)',
-              cursor: 'pointer',
+              cursor: saving ? 'default' : 'pointer',
+              opacity: saving ? 0.7 : 1,
               fontSize: '13px',
               fontWeight: 600,
               transition: 'all 0.2s',
             }}
           >
-            {saved ? 'ذخیره شد ✓' : 'ذخیره'}
+            {saving ? 'در حال ذخیره...' : saved ? 'ذخیره شد ✓' : 'ذخیره'}
           </button>
           <button
             onClick={handleRunTest}

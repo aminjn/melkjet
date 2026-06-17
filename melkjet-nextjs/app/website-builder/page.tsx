@@ -247,6 +247,10 @@ export default function WebsiteBuilderPage() {
   const [seoDesc, setSeoDesc] = useState('بهترین آژانس ملکی در تهران با بیش از ۱۰ سال سابقه. خرید، فروش و اجاره ملک با مشاوره رایگان.')
   const [slug, setSlug] = useState('agency-sample')
   const [publishSuccess, setPublishSuccess] = useState(false)
+  const [publishedSlug, setPublishedSlug] = useState('')
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [publishing, setPublishing] = useState(false)
+  const [publishError, setPublishError] = useState('')
   const [history, setHistory] = useState<Block[][]>([])
   const [pages, setPages] = useState([
     { id: 'home', label: 'صفحه اصلی', active: true },
@@ -311,6 +315,56 @@ export default function WebsiteBuilderPage() {
     setPages(prev => [...prev, { id: `page_${Date.now()}`, label: 'صفحه جدید', active: false }])
   }
 
+  // Persist the current site (draft). Returns the server-resolved slug, or null on failure.
+  const persistSite = async (): Promise<{ slug: string; url: string } | null> => {
+    const res = await fetch('/api/sites', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        slug,
+        title: seoTitle,
+        blocks: blocks.map(b => ({ id: b.id, type: b.type, heading: b.heading })),
+        seo: { title: seoTitle, description: seoDesc },
+      }),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    if (data.slug && data.slug !== slug) setSlug(data.slug)
+    return { slug: data.slug, url: data.url }
+  }
+
+  const handleSave = async () => {
+    if (saveState === 'saving') return
+    setSaveState('saving')
+    try {
+      const result = await persistSite()
+      if (!result) { setSaveState('error'); return }
+      setSaveState('saved')
+      setTimeout(() => setSaveState('idle'), 2000)
+    } catch {
+      setSaveState('error')
+    }
+  }
+
+  const handlePublish = async () => {
+    if (publishing) return
+    setPublishing(true)
+    setPublishError('')
+    try {
+      const result = await persistSite()
+      if (!result) {
+        setPublishError('برای انتشار ابتدا وارد شوید')
+        return
+      }
+      setPublishedSlug(result.slug)
+      setPublishSuccess(true)
+    } catch {
+      setPublishError('خطا در انتشار سایت')
+    } finally {
+      setPublishing(false)
+    }
+  }
+
   return (
     <div style={{ height: '100vh', background: 'var(--bg)', color: 'var(--text)', direction: 'rtl', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
@@ -336,7 +390,7 @@ export default function WebsiteBuilderPage() {
           </div>
           <div>
             <div style={{ fontSize: 13, fontWeight: 800, lineHeight: 1.1 }}>وب‌سایت‌ساز ملک‌جت</div>
-            <div style={{ fontSize: 10, color: 'var(--muted)', direction: 'ltr', lineHeight: 1.3 }}>{slug}.melkjet.site</div>
+            <div style={{ fontSize: 10, color: 'var(--muted)', direction: 'ltr', lineHeight: 1.3 }}>melkjet.com/{slug}</div>
           </div>
         </div>
 
@@ -377,16 +431,24 @@ export default function WebsiteBuilderPage() {
           ↪ بازگرد
         </button>
 
-        <button style={{ padding: '5px 16px', borderRadius: 8, border: '1px solid var(--line)', background: 'transparent', color: 'var(--text)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-          ذخیره
+        <button
+          onClick={handleSave}
+          disabled={saveState === 'saving'}
+          style={{ padding: '5px 16px', borderRadius: 8, border: '1px solid var(--line)', background: saveState === 'saved' ? 'var(--goldDim)' : 'transparent', color: saveState === 'error' ? '#e7674a' : saveState === 'saved' ? 'var(--gold)' : 'var(--text)', fontSize: 12, fontWeight: 700, cursor: saveState === 'saving' ? 'default' : 'pointer' }}
+        >
+          {saveState === 'saving' ? 'در حال ذخیره...' : saveState === 'saved' ? 'ذخیره شد ✓' : saveState === 'error' ? 'ورود لازم است' : 'ذخیره'}
         </button>
 
         <button
-          onClick={() => setPublishSuccess(true)}
-          style={{ padding: '6px 18px', borderRadius: 8, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', border: 'none', color: '#16140f', fontSize: 12, fontWeight: 800, cursor: 'pointer', flexShrink: 0 }}
+          onClick={handlePublish}
+          disabled={publishing}
+          style={{ padding: '6px 18px', borderRadius: 8, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', border: 'none', color: '#16140f', fontSize: 12, fontWeight: 800, cursor: publishing ? 'default' : 'pointer', opacity: publishing ? 0.7 : 1, flexShrink: 0 }}
         >
-          انتشار سایت
+          {publishing ? 'در حال انتشار...' : 'انتشار سایت'}
         </button>
+        {publishError && (
+          <span style={{ fontSize: 11, color: '#e7674a', fontWeight: 600, flexShrink: 0 }}>{publishError}</span>
+        )}
       </div>
 
       {/* THREE-COLUMN BUILDER */}
@@ -466,7 +528,7 @@ export default function WebsiteBuilderPage() {
                 <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#5fd98a' }} />
               </div>
               <div style={{ flex: 1, background: 'var(--surface)', borderRadius: 6, padding: '4px 10px', fontSize: 10, color: 'var(--faint)', textAlign: 'center', direction: 'ltr' }}>
-                https://{slug}.melkjet.site
+                https://melkjet.com/{slug}
               </div>
             </div>
 
@@ -574,13 +636,13 @@ export default function WebsiteBuilderPage() {
 
                 <div>
                   <label style={{ fontSize: 11, color: 'var(--muted)', display: 'block', marginBottom: 5 }}>آدرس سایت (Slug)</label>
-                  <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--line)', borderRadius: 8, overflow: 'hidden', background: 'var(--surface)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--line)', borderRadius: 8, overflow: 'hidden', background: 'var(--surface)', direction: 'ltr' }}>
+                    <span style={{ padding: '8px 10px', background: 'var(--bg)', borderRight: '1px solid var(--line)', fontSize: 10, color: 'var(--faint)', flexShrink: 0 }}>melkjet.com/</span>
                     <input
                       value={slug}
-                      onChange={e => setSlug(e.target.value.replace(/[^a-z0-9-]/g, ''))}
+                      onChange={e => setSlug(e.target.value.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''))}
                       style={{ flex: 1, padding: '8px 10px', background: 'transparent', border: 'none', color: 'var(--text)', fontSize: 12, outline: 'none', direction: 'ltr' }}
                     />
-                    <span style={{ padding: '8px 10px', background: 'var(--bg)', borderRight: '1px solid var(--line)', fontSize: 10, color: 'var(--faint)', direction: 'ltr', flexShrink: 0 }}>.melkjet.site</span>
                   </div>
                 </div>
 
@@ -749,12 +811,12 @@ export default function WebsiteBuilderPage() {
             <div style={{ fontSize: 14, color: 'var(--muted)', marginBottom: 24, lineHeight: 1.7 }}>وب‌سایت شما با موفقیت آنلاین شد و در دسترس کاربران است.</div>
 
             <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, padding: '11px 16px', marginBottom: 28, direction: 'ltr', fontSize: 13, color: 'var(--gold)', fontWeight: 700 }}>
-              {slug}.melkjet.site
+              melkjet.com/{publishedSlug}
             </div>
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <a
-                href={`https://${slug}.melkjet.site`}
+                href={`/${publishedSlug}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{ padding: '10px 24px', borderRadius: 10, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 13, fontWeight: 800, textDecoration: 'none', display: 'inline-block' }}

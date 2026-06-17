@@ -1,31 +1,37 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
 type View = 'clients' | 'calendar' | 'tasks' | 'performance'
 
-type DealStage = 'در حال مذاکره' | 'بازدید ملک' | 'پیشنهاد داده شد' | 'قرارداد' | 'تکمیل شد'
+// ── Client store types (mirrors app/lib/pros-store.ts) ──
+interface StoredClient {
+  id: string
+  name: string
+  phone?: string
+  need?: string
+  status?: string
+  createdAt: number
+}
 
-const clients = [
-  { id: 1, name: 'آرمان حسینی', phone: '۰۹۱۲-۳۴۵-۶۷۸۹', budget: '۵ تا ۸ م.د', type: 'خرید', propertyType: 'آپارتمان', area: 'تهران شمال', stage: 'در حال مذاکره' as DealStage, stageColor: 'var(--gold)', lastContact: '۲ روز پیش', priority: 'بالا' },
-  { id: 2, name: 'شیرین کاظمی', phone: '۰۹۳۵-۲۱۴-۸۷۶۵', budget: '۱۲ تا ۱۸ م.د', type: 'خرید', propertyType: 'ویلا', area: 'شمال کشور', stage: 'بازدید ملک' as DealStage, stageColor: '#5b9bd5', lastContact: 'امروز', priority: 'بالا' },
-  { id: 3, name: 'داریوش نجفی', phone: '۰۹۱۸-۷۶۵-۴۳۲۱', budget: '۲۰ م.ت/ماه', type: 'اجاره', propertyType: 'دفتر تجاری', area: 'تهران مرکز', stage: 'پیشنهاد داده شد' as DealStage, stageColor: '#9b7ad0', lastContact: '۱ هفته پیش', priority: 'متوسط' },
-  { id: 4, name: 'نرگس آقایی', phone: '۰۹۱۱-۱۲۳-۴۵۶۷', budget: '۳ تا ۵ م.د', type: 'خرید', propertyType: 'آپارتمان', area: 'تهران غرب', stage: 'قرارداد' as DealStage, stageColor: '#5fd98a', lastContact: 'دیروز', priority: 'بالا' },
-  { id: 5, name: 'بهروز صمدی', phone: '۰۹۱۶-۵۵۵-۰۰۱۱', budget: '۳۵ م.د', type: 'خرید', propertyType: 'پنت‌هاوس', area: 'تهران شمال', stage: 'تکمیل شد' as DealStage, stageColor: '#5fd98a', lastContact: '۳ روز پیش', priority: 'پایین' },
-  { id: 6, name: 'فاطمه رحیمی', phone: '۰۹۱۵-۸۸۸-۹۹۷۷', budget: '۸ م.ت/ماه', type: 'اجاره', propertyType: 'خانه مسکونی', area: 'تهران شرق', stage: 'در حال مذاکره' as DealStage, stageColor: 'var(--gold)', lastContact: 'امروز', priority: 'متوسط' },
-]
+// ── Task store types (mirrors app/lib/pros-store.ts) ──
+type StorePriority = 'high' | 'medium' | 'low'
+interface StoredTask {
+  id: string
+  title: string
+  done: boolean
+  priority?: StorePriority
+  due?: string
+  createdAt: number
+}
 
 type TaskPriority = 'فوری' | 'عادی' | 'کم‌اهمیت'
 
-const initialTasks = [
-  { id: 1, title: 'پیگیری آرمان حسینی برای قرارداد', client: 'آرمان حسینی', priority: 'فوری' as TaskPriority, priorityColor: '#e05a5a', due: '۱۴۰۳/۰۳/۲۰', done: false },
-  { id: 2, title: 'هماهنگی بازدید ملک برای شیرین کاظمی', client: 'شیرین کاظمی', priority: 'فوری' as TaskPriority, priorityColor: '#e05a5a', due: '۱۴۰۳/۰۳/۲۱', done: false },
-  { id: 3, title: 'ارسال پیشنهاد قیمت به داریوش نجفی', client: 'داریوش نجفی', priority: 'عادی' as TaskPriority, priorityColor: 'var(--gold)', due: '۱۴۰۳/۰۳/۲۲', done: false },
-  { id: 4, title: 'تنظیم قرارداد نرگس آقایی', client: 'نرگس آقایی', priority: 'فوری' as TaskPriority, priorityColor: '#e05a5a', due: '۱۴۰۳/۰۳/۱۹', done: true },
-  { id: 5, title: 'ارسال پرونده ملکی به وکیل', client: '', priority: 'عادی' as TaskPriority, priorityColor: 'var(--gold)', due: '۱۴۰۳/۰۳/۲۵', done: false },
-  { id: 6, title: 'به‌روزرسانی پروفایل ملک شماره ۱۲۴', client: '', priority: 'کم‌اهمیت' as TaskPriority, priorityColor: '#5b9bd5', due: '۱۴۰۳/۰۳/۳۰', done: false },
-  { id: 7, title: 'جلسه هفتگی تیم', client: '', priority: 'عادی' as TaskPriority, priorityColor: 'var(--gold)', due: '۱۴۰۳/۰۳/۲۴', done: false },
-]
+// Persian <-> store priority mapping
+const faToStore: Record<TaskPriority, StorePriority> = { 'فوری': 'high', 'عادی': 'medium', 'کم‌اهمیت': 'low' }
+const storeToFa: Record<StorePriority, TaskPriority> = { high: 'فوری', medium: 'عادی', low: 'کم‌اهمیت' }
+const priorityColorMap: Record<TaskPriority, string> = { 'فوری': '#e05a5a', 'عادی': 'var(--gold)', 'کم‌اهمیت': '#5b9bd5' }
+function faPriority(p?: StorePriority): TaskPriority { return p ? storeToFa[p] : 'عادی' }
 
 const appointments = [
   { day: 3, title: 'بازدید ملک با شیرین', time: '۱۰:۰۰', color: '#5b9bd5' },
@@ -71,11 +77,24 @@ const viewTitles: Record<View, string> = {
 export default function ProsPage() {
   const [view, setView] = useState<View>('clients')
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
-  const [tasks, setTasks] = useState(initialTasks)
+  const [tasks, setTasks] = useState<StoredTask[]>([])
   const [taskFilter, setTaskFilter] = useState<'همه' | TaskPriority>('همه')
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [newTaskPriority, setNewTaskPriority] = useState<TaskPriority>('عادی')
   const [newTaskDue, setNewTaskDue] = useState('')
+  const [clients, setClients] = useState<StoredClient[]>([])
+
+  // Load persisted tasks + clients on mount.
+  useEffect(() => {
+    fetch('/api/pros?kind=tasks')
+      .then(r => r.ok ? r.json() : { tasks: [] })
+      .then(d => setTasks(Array.isArray(d.tasks) ? d.tasks : []))
+      .catch(() => {})
+    fetch('/api/pros?kind=clients')
+      .then(r => r.ok ? r.json() : { clients: [] })
+      .then(d => setClients(Array.isArray(d.clients) ? d.clients : []))
+      .catch(() => {})
+  }, [])
 
   const navStyle = (active: boolean): React.CSSProperties => ({
     display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 11, border: 'none',
@@ -90,39 +109,71 @@ export default function ProsPage() {
   const smallBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 8, border: '1px solid var(--line)', background: 'var(--bg2)', color: 'var(--muted)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }
   const goldBtn: React.CSSProperties = { padding: '9px 18px', borderRadius: 10, border: 'none', background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#1a1506', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }
 
-  const toggleTask = (id: number) => {
+  const toggleTask = (id: string) => {
+    // optimistic
     setTasks(prev => prev.map(t => t.id === id ? { ...t, done: !t.done } : t))
+    fetch('/api/pros', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'task', id }),
+    }).catch(() => {})
   }
 
-  const deleteTask = (id: number) => {
+  const deleteTask = (id: string) => {
     setTasks(prev => prev.filter(t => t.id !== id))
+    fetch('/api/pros?kind=tasks&id=' + encodeURIComponent(id), { method: 'DELETE' }).catch(() => {})
   }
 
-  const addTask = () => {
-    if (!newTaskTitle.trim()) return
-    const priorityColorMap: Record<TaskPriority, string> = { 'فوری': '#e05a5a', 'عادی': 'var(--gold)', 'کم‌اهمیت': '#5b9bd5' }
-    setTasks(prev => [...prev, {
-      id: Date.now(),
-      title: newTaskTitle.trim(),
-      client: '',
-      priority: newTaskPriority,
-      priorityColor: priorityColorMap[newTaskPriority],
-      due: newTaskDue || '۱۴۰۳/۰۴/۰۱',
-      done: false,
-    }])
+  const addTask = async () => {
+    const title = newTaskTitle.trim()
+    if (!title) return
+    const priority = faToStore[newTaskPriority]
+    const due = newTaskDue.trim()
     setNewTaskTitle('')
     setNewTaskDue('')
+    try {
+      const r = await fetch('/api/pros', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'task', title, priority, due: due || undefined }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (d.task) setTasks(prev => [d.task as StoredTask, ...prev])
+    } catch {}
   }
 
-  const filteredTasks = taskFilter === 'همه' ? tasks : tasks.filter(t => t.priority === taskFilter)
+  const filteredTasks = taskFilter === 'همه' ? tasks : tasks.filter(t => faPriority(t.priority) === taskFilter)
   const sortedTasks = [...filteredTasks].sort((a, b) => {
     const order: Record<TaskPriority, number> = { 'فوری': 0, 'عادی': 1, 'کم‌اهمیت': 2 }
-    return order[a.priority] - order[b.priority]
+    return order[faPriority(a.priority)] - order[faPriority(b.priority)]
   })
 
-  const activeDeals = clients.filter(c => c.stage !== 'تکمیل شد').length
-  const closingThisWeek = clients.filter(c => c.stage === 'قرارداد').length
   const doneCount = tasks.filter(t => t.done).length
+
+  // ── Client handlers ──
+  const addClient = async () => {
+    const name = (window.prompt('نام مشتری:') || '').trim()
+    if (!name) return
+    const phone = (window.prompt('شماره تماس (اختیاری):') || '').trim()
+    const need = (window.prompt('نیاز مشتری (اختیاری، مثلا خرید آپارتمان):') || '').trim()
+    try {
+      const r = await fetch('/api/pros', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'client', name, phone: phone || undefined, need: need || undefined, status: 'لید جدید' }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (d.client) setClients(prev => [d.client as StoredClient, ...prev])
+    } catch {}
+  }
+
+  const deleteClient = (id: string) => {
+    setClients(prev => prev.filter(c => c.id !== id))
+    fetch('/api/pros?kind=clients&id=' + encodeURIComponent(id), { method: 'DELETE' }).catch(() => {})
+  }
+
+  const activeDeals = clients.filter(c => c.status !== 'تکمیل شد').length
+  const closingThisWeek = clients.filter(c => c.status === 'قرارداد').length
 
   // Calendar helpers
   const dayHeaders = ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج']
@@ -235,71 +286,61 @@ export default function ProsPage() {
               {/* Clients table */}
               <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden' }}>
                 <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
                     <thead>
                       <tr>
                         <th style={th}>مشتری</th>
                         <th style={th}>تلفن</th>
-                        <th style={th}>بودجه</th>
-                        <th style={th}>نوع</th>
-                        <th style={th}>نوع ملک</th>
-                        <th style={th}>منطقه</th>
-                        <th style={th}>مرحله معامله</th>
-                        <th style={th}>آخرین تماس</th>
-                        <th style={th}>اولویت</th>
+                        <th style={th}>نیاز</th>
+                        <th style={th}>وضعیت</th>
                         <th style={th}>عملیات</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {clients.map(c => {
-                        const priorityMap: Record<string, { color: string; bg: string }> = {
-                          'بالا': { color: '#e05a5a', bg: 'rgba(224,90,90,0.12)' },
-                          'متوسط': { color: 'var(--gold)', bg: 'var(--goldDim)' },
-                          'پایین': { color: 'var(--muted)', bg: 'var(--bg2)' },
-                        }
-                        const pri = priorityMap[c.priority] || { color: 'var(--muted)', bg: 'var(--bg2)' }
-                        return (
-                          <tr key={c.id}>
-                            <td style={td}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                                <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg,#caa86a,#8a6f3e)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#fff', fontWeight: 700 }}>
-                                  {c.name.charAt(0)}
-                                </div>
-                                <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{c.name}</span>
+                      {clients.length === 0 ? (
+                        <tr>
+                          <td style={{ ...td, textAlign: 'center' as const, color: 'var(--muted)', padding: '28px 16px' }} colSpan={5}>
+                            هنوز مشتری‌ای ثبت نشده — با دکمه «مشتری جدید» شروع کنید
+                          </td>
+                        </tr>
+                      ) : clients.map(c => (
+                        <tr key={c.id}>
+                          <td style={td}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                              <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg,#caa86a,#8a6f3e)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#fff', fontWeight: 700 }}>
+                                {c.name.charAt(0)}
                               </div>
-                            </td>
-                            <td style={{ ...td, fontSize: 12, color: 'var(--muted)', direction: 'ltr', textAlign: 'right' as const }}>{c.phone}</td>
-                            <td style={{ ...td, fontWeight: 600, whiteSpace: 'nowrap' }}>{c.budget}</td>
-                            <td style={{ ...td, fontSize: 12 }}>{c.type}</td>
-                            <td style={{ ...td, fontSize: 12 }}>{c.propertyType}</td>
-                            <td style={{ ...td, fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap' }}>{c.area}</td>
-                            <td style={td}>
-                              <span style={{ padding: '4px 10px', borderRadius: 20, background: c.stageColor + '26', color: c.stageColor, fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap', border: `1px solid ${c.stageColor}40` }}>
-                                {c.stage}
+                              <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{c.name}</span>
+                            </div>
+                          </td>
+                          <td style={{ ...td, fontSize: 12, color: 'var(--muted)', direction: 'ltr', textAlign: 'right' as const }}>{c.phone || '—'}</td>
+                          <td style={{ ...td, fontSize: 12 }}>{c.need || '—'}</td>
+                          <td style={td}>
+                            {c.status ? (
+                              <span style={{ padding: '4px 10px', borderRadius: 20, background: 'var(--goldDim)', color: 'var(--gold)', fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap', border: '1px solid var(--gold2)' }}>
+                                {c.status}
                               </span>
-                            </td>
-                            <td style={{ ...td, fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap' }}>{c.lastContact}</td>
-                            <td style={td}>
-                              <span style={{ padding: '3px 9px', borderRadius: 20, background: pri.bg, color: pri.color, fontSize: 11.5, fontWeight: 700 }}>
-                                {c.priority}
-                              </span>
-                            </td>
-                            <td style={td}>
-                              <div style={{ display: 'flex', gap: 6 }}>
-                                <button style={smallBtn}>تماس</button>
-                                <button style={smallBtn}>پرونده</button>
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      })}
+                            ) : <span style={{ color: 'var(--muted)' }}>—</span>}
+                          </td>
+                          <td style={td}>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              {c.phone ? (
+                                <a href={`tel:${c.phone}`} style={{ ...smallBtn, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>تماس</a>
+                              ) : (
+                                <span style={{ ...smallBtn, opacity: 0.5 }}>تماس</span>
+                              )}
+                              <button onClick={() => deleteClient(c.id)} style={smallBtn}>حذف</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
               </div>
 
               <div>
-                <button style={goldBtn}>مشتری جدید +</button>
+                <button onClick={addClient} style={goldBtn}>مشتری جدید +</button>
               </div>
             </div>
           )}
@@ -436,7 +477,10 @@ export default function ProsPage() {
 
               {/* Task list */}
               <div style={{ display: 'grid', gap: 8 }}>
-                {sortedTasks.map(task => (
+                {sortedTasks.map(task => {
+                  const faPri = faPriority(task.priority)
+                  const priColor = priorityColorMap[faPri]
+                  return (
                   <div
                     key={task.id}
                     style={{
@@ -463,20 +507,15 @@ export default function ProsPage() {
                       <div style={{ fontSize: 13.5, fontWeight: 600, color: task.done ? 'var(--muted)' : 'var(--text)', textDecoration: task.done ? 'line-through' : 'none' }}>
                         {task.title}
                       </div>
-                      {task.client && (
-                        <span style={{ fontSize: 11, background: 'var(--bg2)', color: 'var(--muted)', border: '1px solid var(--line)', borderRadius: 6, padding: '2px 8px', marginTop: 4, display: 'inline-block' }}>
-                          {task.client}
-                        </span>
-                      )}
                     </div>
 
                     {/* Priority badge */}
-                    <span style={{ padding: '3px 10px', borderRadius: 20, background: `${task.priorityColor}1a`, color: task.priorityColor, fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                      {task.priority}
+                    <span style={{ padding: '3px 10px', borderRadius: 20, background: `${priColor}1a`, color: priColor, fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      {faPri}
                     </span>
 
                     {/* Due date */}
-                    <span style={{ fontSize: 11.5, color: 'var(--faint)', whiteSpace: 'nowrap', flexShrink: 0 }}>{task.due}</span>
+                    {task.due && <span style={{ fontSize: 11.5, color: 'var(--faint)', whiteSpace: 'nowrap', flexShrink: 0 }}>{task.due}</span>}
 
                     {/* Delete */}
                     <button
@@ -484,7 +523,8 @@ export default function ProsPage() {
                       style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid var(--line)', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     >✕</button>
                   </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )}

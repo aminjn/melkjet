@@ -1,7 +1,9 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
+import { fetchContent, type ContentItem } from '@/app/lib/content-display'
 
 type View = 'dashboard' | 'units' | 'sales' | 'investors'
 
@@ -92,6 +94,81 @@ const statusLabel: Record<UnitStatus, string> = {
 export default function BuilderPage() {
   const [activeView, setActiveView] = useState<View>('dashboard')
   const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null)
+
+  // آگهی‌های واقعی بازار از داده‌های اسکرپ‌شده
+  const [marketListings, setMarketListings] = useState<ContentItem[]>([])
+
+  // وضعیت ثبت رزرو/قرارداد و پیام تأیید
+  const [reserveState, setReserveState] = useState<'idle' | 'sending' | 'done'>('idle')
+  const [contractState, setContractState] = useState<'idle' | 'sending' | 'done'>('idle')
+  const [toast, setToast] = useState<string | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    fetchContent('listing', undefined, 8).then((d) => {
+      if (alive) setMarketListings(d)
+    })
+    return () => { alive = false }
+  }, [])
+
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 3500)
+    return () => clearTimeout(t)
+  }, [toast])
+
+  // ثبت رزرو یک واحد از طریق /api/submit
+  const submitReserve = async (unit: Unit) => {
+    setReserveState('sending')
+    try {
+      const description = [
+        `درخواست رزرو واحد ${unit.id} در پروژه برج آرین (سعادت‌آباد).`,
+        `طبقه ${unit.floor} · متراژ ${unit.size} م² · قیمت ${unit.price} م.د`,
+      ].join('\n')
+      const res = await fetch('/api/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: `رزرو واحد ${unit.id}`, description }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok && d.ok) {
+        setReserveState('done')
+        setToast(`رزرو واحد ${unit.id} ثبت شد`)
+      } else {
+        setReserveState('idle')
+        setToast('ثبت رزرو با خطا مواجه شد')
+      }
+    } catch {
+      setReserveState('idle')
+      setToast('ثبت رزرو با خطا مواجه شد')
+    }
+  }
+
+  // ثبت قرارداد جدید از طریق /api/submit
+  const submitContract = async () => {
+    setContractState('sending')
+    try {
+      const res = await fetch('/api/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'قرارداد جدید',
+          description: 'ثبت درخواست قرارداد فروش جدید در پروژه برج آرین (سعادت‌آباد).',
+        }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok && d.ok) {
+        setContractState('done')
+        setToast('قرارداد جدید ثبت شد')
+      } else {
+        setContractState('idle')
+        setToast('ثبت قرارداد با خطا مواجه شد')
+      }
+    } catch {
+      setContractState('idle')
+      setToast('ثبت قرارداد با خطا مواجه شد')
+    }
+  }
 
   const navItems: { id: View; label: string; icon: string }[] = [
     { id: 'dashboard', label: 'داشبورد', icon: '◈' },
@@ -381,6 +458,56 @@ export default function BuilderPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* آگهی‌های مرتبط بازار (داده واقعی) */}
+                {marketListings.length > 0 && (
+                  <div style={{ marginTop: 28 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>آگهی‌های مرتبط بازار</div>
+                      <div style={{ fontSize: 12, color: 'var(--muted)' }}>قیمت‌های روز منطقه</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 14, overflowX: 'auto', paddingBottom: 6 }}>
+                      {marketListings.map((m) => (
+                        <Link
+                          key={m.id}
+                          href={`/property/${m.id}`}
+                          style={{
+                            flex: '0 0 220px',
+                            background: 'var(--surface)',
+                            border: '1px solid var(--line)',
+                            borderRadius: 14,
+                            padding: '16px 18px',
+                            textDecoration: 'none',
+                            color: 'inherit',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 8,
+                            transition: 'border-color 0.2s',
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--gold)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--line)')}
+                        >
+                          <div style={{
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: 'var(--text)',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}>{m.title}</div>
+                          {m.location && (
+                            <div style={{ fontSize: 12, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              📍 {m.location}
+                            </div>
+                          )}
+                          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gold)', marginTop: 'auto' }}>
+                            {m.price || 'توافقی'}
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -429,7 +556,7 @@ export default function BuilderPage() {
                             return (
                               <button
                                 key={unit.id}
-                                onClick={() => setSelectedUnit(isSelected ? null : unit)}
+                                onClick={() => { setSelectedUnit(isSelected ? null : unit); setReserveState('idle') }}
                                 style={{
                                   height: 40,
                                   borderRadius: 8,
@@ -493,19 +620,24 @@ export default function BuilderPage() {
                           ))}
                         </div>
                         {selectedUnit.status === 'available' && (
-                          <button style={{
-                            marginTop: 20,
-                            width: '100%',
-                            padding: '10px',
-                            background: 'linear-gradient(135deg, var(--gold), var(--gold2))',
-                            color: '#000',
-                            border: 'none',
-                            borderRadius: 10,
-                            fontSize: 13,
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                          }}>
-                            ثبت رزرو
+                          <button
+                            onClick={() => reserveState !== 'sending' && submitReserve(selectedUnit)}
+                            disabled={reserveState === 'sending'}
+                            style={{
+                              marginTop: 20,
+                              width: '100%',
+                              padding: '10px',
+                              background: reserveState === 'done'
+                                ? 'rgba(34,197,94,0.15)'
+                                : 'linear-gradient(135deg, var(--gold), var(--gold2))',
+                              color: reserveState === 'done' ? '#22c55e' : '#000',
+                              border: reserveState === 'done' ? '1px solid #22c55e' : 'none',
+                              borderRadius: 10,
+                              fontSize: 13,
+                              fontWeight: 700,
+                              cursor: reserveState === 'sending' ? 'default' : 'pointer',
+                            }}>
+                            {reserveState === 'sending' ? 'در حال ثبت…' : reserveState === 'done' ? '✓ رزرو ثبت شد' : 'ثبت رزرو'}
                           </button>
                         )}
                       </>
@@ -528,17 +660,22 @@ export default function BuilderPage() {
                     <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4, color: 'var(--text)' }}>گزارش فروش</h1>
                     <div style={{ fontSize: 13, color: 'var(--muted)' }}>برج آرین · ۸ قرارداد فعال</div>
                   </div>
-                  <button style={{
-                    padding: '9px 18px',
-                    background: 'linear-gradient(135deg, var(--gold), var(--gold2))',
-                    color: '#000',
-                    border: 'none',
-                    borderRadius: 10,
-                    fontSize: 13,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                  }}>
-                    + قرارداد جدید
+                  <button
+                    onClick={() => contractState !== 'sending' && submitContract()}
+                    disabled={contractState === 'sending'}
+                    style={{
+                      padding: '9px 18px',
+                      background: contractState === 'done'
+                        ? 'rgba(34,197,94,0.15)'
+                        : 'linear-gradient(135deg, var(--gold), var(--gold2))',
+                      color: contractState === 'done' ? '#22c55e' : '#000',
+                      border: contractState === 'done' ? '1px solid #22c55e' : 'none',
+                      borderRadius: 10,
+                      fontSize: 13,
+                      fontWeight: 700,
+                      cursor: contractState === 'sending' ? 'default' : 'pointer',
+                    }}>
+                    {contractState === 'sending' ? 'در حال ثبت…' : contractState === 'done' ? '✓ ثبت شد' : '+ قرارداد جدید'}
                   </button>
                 </div>
 
@@ -748,6 +885,30 @@ export default function BuilderPage() {
           </div>
         </main>
       </div>
+
+      {/* Toast تأیید */}
+      {toast && (
+        <div style={{
+          position: 'fixed',
+          bottom: 24,
+          left: 24,
+          zIndex: 1000,
+          background: 'var(--surface)',
+          border: '1px solid var(--gold)',
+          borderRadius: 12,
+          padding: '14px 20px',
+          fontSize: 14,
+          fontWeight: 600,
+          color: 'var(--text)',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+        }}>
+          <span style={{ color: 'var(--gold)' }}>✓</span>
+          {toast}
+        </div>
+      )}
 
       <Footer />
 
