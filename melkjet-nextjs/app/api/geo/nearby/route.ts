@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAdminData } from '@/app/lib/admin-store'
 import { computeNearby } from '@/app/lib/nearby'
+import { shecanRequest } from '@/app/lib/shecan-https'
 
 export async function GET(req: NextRequest) {
   const sp = new URL(req.url).searchParams
@@ -13,8 +14,8 @@ export async function GET(req: NextRequest) {
     const nz = getAdminData().neshan
     const hit = async (k: string, url: string) => {
       try {
-        const r = await fetch(url, { headers: { 'Api-Key': k }, signal: AbortSignal.timeout(8000) })
-        return { status: r.status, ok: r.status === 200 }
+        const r = await shecanRequest(url, { method: 'GET', headers: { 'Api-Key': k, accept: 'application/json' }, timeout: 8000 })
+        return { status: r.status, ok: r.status === 200, body: r.body.slice(0, 120) }
       } catch (e: any) { return { error: e?.message || 'fetch failed' } }
     }
     const testKey = async (label: string, k?: string) => {

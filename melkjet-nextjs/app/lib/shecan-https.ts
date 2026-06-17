@@ -54,3 +54,27 @@ export function shecanRequest(url: string, init: { method: string; headers: Reco
     req.end()
   })
 }
+
+export interface ShecanBuf { status: number; buffer: Buffer; contentType: string }
+
+// مثل بالا ولی پاسخ باینری (مثلاً تصویر نقشهٔ استاتیک نشان)
+export function shecanRequestBuffer(url: string, init: { method?: string; headers?: Record<string, string>; timeout?: number } = {}): Promise<ShecanBuf> {
+  const u = new URL(url)
+  const timeout = init.timeout ?? 15000
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      host: u.hostname, port: 443, path: u.pathname + u.search, method: init.method || 'GET',
+      headers: { ...(init.headers || {}), Host: u.hostname },
+      servername: u.hostname,
+      lookup: shecanLookup,
+      timeout,
+    }, (res) => {
+      const chunks: Buffer[] = []
+      res.on('data', (c) => chunks.push(c as Buffer))
+      res.on('end', () => resolve({ status: res.statusCode || 0, buffer: Buffer.concat(chunks), contentType: res.headers['content-type'] || 'image/png' }))
+    })
+    req.on('error', reject)
+    req.setTimeout(timeout, () => req.destroy(new Error('request timeout')))
+    req.end()
+  })
+}

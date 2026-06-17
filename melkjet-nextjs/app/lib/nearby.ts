@@ -1,4 +1,14 @@
 import { getAdminData } from './admin-store'
+import { shecanRequest } from './shecan-https'
+
+// همهٔ تماس‌های نشان از DNS شکن داخل برنامه عبور می‌کنند (مثل GapGPT) تا مستقل از
+// resolv.conf سرور همیشه به api.neshan.org برسند.
+async function neshanGet(url: string, key: string, timeout = 8000): Promise<{ status: number; json: any }> {
+  const r = await shecanRequest(url, { method: 'GET', headers: { 'Api-Key': key, accept: 'application/json' }, timeout })
+  let json: any = null
+  try { json = JSON.parse(r.body) } catch {}
+  return { status: r.status, json }
+}
 
 const CATEGORIES: { type: string; term: string }[] = [
   { type: 'مترو', term: 'ایستگاه مترو' },
@@ -21,11 +31,8 @@ function haversine(lat1: number, lng1: number, lat2: number, lng2: number): numb
 }
 
 async function nearestPlace(key: string, term: string, lat: number, lng: number) {
-  const r = await fetch(`https://api.neshan.org/v1/search?term=${encodeURIComponent(term)}&lat=${lat}&lng=${lng}`, {
-    headers: { 'Api-Key': key }, signal: AbortSignal.timeout(7000),
-  })
-  if (!r.ok) return null
-  const d = await r.json()
+  const { status, json: d } = await neshanGet(`https://api.neshan.org/v1/search?term=${encodeURIComponent(term)}&lat=${lat}&lng=${lng}`, key)
+  if (status !== 200 || !d) return null
   let best: { name: string; lat: number; lng: number; km: number } | null = null
   for (const it of (d.items || []).slice(0, 10)) {
     const y = it.location?.y, x = it.location?.x
@@ -40,8 +47,8 @@ async function nearestPlace(key: string, term: string, lat: number, lng: number)
 async function pickSearchKey(keys: string[], lat: number, lng: number): Promise<string | null> {
   for (const k of keys) {
     try {
-      const r = await fetch(`https://api.neshan.org/v1/search?term=${encodeURIComponent('بانک')}&lat=${lat}&lng=${lng}`, { headers: { 'Api-Key': k }, signal: AbortSignal.timeout(7000) })
-      if (r.ok) return k
+      const { status } = await neshanGet(`https://api.neshan.org/v1/search?term=${encodeURIComponent('بانک')}&lat=${lat}&lng=${lng}`, k)
+      if (status === 200) return k
     } catch { /* try next */ }
   }
   return null
@@ -50,11 +57,8 @@ async function pickSearchKey(keys: string[], lat: number, lng: number): Promise<
 async function routeMatrix(key: string, lat: number, lng: number, dests: { lat: number; lng: number }[]) {
   const origins = `${lat},${lng}`
   const destinations = dests.map(d => `${d.lat},${d.lng}`).join('|')
-  const r = await fetch(`https://api.neshan.org/v1/distance-matrix?type=car&origins=${origins}&destinations=${encodeURIComponent(destinations)}`, {
-    headers: { 'Api-Key': key }, signal: AbortSignal.timeout(8000),
-  })
-  if (!r.ok) return null
-  const d = await r.json()
+  const { status, json: d } = await neshanGet(`https://api.neshan.org/v1/distance-matrix?type=car&origins=${origins}&destinations=${encodeURIComponent(destinations)}`, key)
+  if (status !== 200 || !d) return null
   return d.rows?.[0]?.elements || null
 }
 
