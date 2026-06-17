@@ -191,6 +191,19 @@ export function setModeration(itemId: string, status: ItemStatus, reason: string
   if (it) { it.status = status; it.aiReason = reason; it.aiScore = score; it.moderatedAt = Date.now(); save(db) }
 }
 
+// Persist many moderation verdicts in a single atomic write (avoids file races under concurrency).
+export function setModerationBatch(verdicts: { id: string; status: ItemStatus; reason: string; score: number }[]) {
+  if (!verdicts.length) return
+  const db = load()
+  const now = Date.now()
+  const map = new Map(verdicts.map(v => [v.id, v]))
+  for (const it of db.items) {
+    const v = map.get(it.id)
+    if (v) { it.status = v.status; it.aiReason = v.reason; it.aiScore = v.score; it.moderatedAt = now }
+  }
+  save(db)
+}
+
 export function setItemStatus(itemId: string, status: ItemStatus) {
   const db = load()
   const it = db.items.find(i => i.id === itemId)
@@ -273,6 +286,34 @@ export function insertItems(source: Source, raw: Omit<Item, 'id' | 'sourceId' | 
   if (s) { s.lastRun = Date.now(); s.lastCount = added; s.status = 'ok'; s.lastError = undefined }
   save(db)
   return { added, dup }
+}
+
+// Insert a single user-submitted listing (status pending → goes to AI moderation immediately).
+export function addUserListing(raw: {
+  title: string; price?: string; location?: string; image?: string; excerpt?: string;
+  phone?: string; owner?: string; url?: string; meta?: Record<string, string>
+}): Item {
+  const db = load()
+  db.owners = db.owners || []
+  let ownerId: string | undefined
+  if (raw.owner || raw.phone) {
+    const pn = raw.phone ? raw.phone.replace(/\D/g, '') : ''
+    const nn = normName(raw.owner || '')
+    let owner = db.owners.find(o => (pn && o.phone && o.phone.replace(/\D/g, '') === pn) || (!pn && nn && normName(o.name) === nn))
+    if (!owner) { owner = { id: id(), name: raw.owner || 'کاربر', phone: raw.phone, count: 0, firstSeen: Date.now() }; db.owners.push(owner) }
+    if (raw.phone && !owner.phone) owner.phone = raw.phone
+    owner.count++; ownerId = owner.id
+  }
+  const item: Item = {
+    id: id(), sourceId: 'user', sourceName: 'ثبت توسط کاربر', type: 'listing',
+    title: raw.title, price: raw.price, location: raw.location, image: raw.image,
+    excerpt: raw.excerpt, phone: raw.phone, owner: raw.owner, url: raw.url, ownerId,
+    meta: raw.meta && Object.keys(raw.meta).length ? raw.meta : undefined,
+    scrapedAt: Date.now(), status: 'pending',
+  }
+  db.items.unshift(item)
+  save(db)
+  return item
 }
 
 export function markError(sourceId: string, err: string) {

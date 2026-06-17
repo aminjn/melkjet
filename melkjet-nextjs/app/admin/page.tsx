@@ -797,15 +797,10 @@ function ScraperView() {
       setLog(d.results || [])
       if (d.sources) setSources(d.sources)
       await loadItems(tab)
-      // auto-moderate the newly scraped (pending) items with AI
-      const added = (d.results || []).reduce((a: number, x: any) => a + (x.added || 0), 0)
-      if (added > 0) {
-        setLog(l => [...l, { source: '🤖 تأیید خودکار AI', ok: true, added: 0, dup: 0 }])
-        try {
-          let total = 0
-          for (let i = 0; i < 4; i++) { const m = await fetch('/api/admin/scraper/moderate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); const md = await m.json(); if (!md.moderated) break; total += md.moderated }
-          if (total) { setLog(l => [...l, { source: `✓ ${total} آگهی توسط AI بررسی شد`, ok: true, added: 0, dup: 0 }]); await loadItems(tab) }
-        } catch {}
+      // آگهی‌های تازه‌واکشی‌شده روی سرور بلافاصله توسط AI تأیید/رد شده‌اند
+      if (d.moderated > 0) {
+        setLog(l => [...l, { source: `🤖 ${d.moderated} آگهی بلافاصله توسط AI بررسی (تأیید/رد) شد`, ok: true, added: 0, dup: 0 }])
+        await loadItems(tab)
       }
     } catch {
       setLog([{ source: '—', ok: false, added: 0, dup: 0, error: 'خطای ارتباط با سرور' }])

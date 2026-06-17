@@ -64,6 +64,7 @@ export default function PropertyPage() {
   const [aiAmenities, setAiAmenities] = useState<string[]>([])
   const [divarAmenities, setDivarAmenities] = useState<string[]>([])
   const [geo, setGeo] = useState<{ lat: number; lng: number } | null>(null)
+  const [nearby, setNearby] = useState<{ type?: string; name?: string; time: string }[]>([])
   const [analysis, setAnalysis] = useState<Analysis | null>(null)
   const [market, setMarket] = useState<{ stats: { avg: number; count: number; trend: { month: string; avg: number }[] } | null; value?: number } | null>(null)
   const [aiError, setAiError] = useState('')
@@ -129,6 +130,15 @@ export default function PropertyPage() {
       }
     }).catch(() => setLoading(false))
   }, [id])
+
+  // دسترسی‌های واقعی اطراف بر اساس مختصات واقعی ملک (نه حدس مدل)
+  useEffect(() => {
+    if (!geo) return
+    fetch(`/api/geo/nearby?lat=${geo.lat}&lng=${geo.lng}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.nearby?.length) setNearby(d.nearby) })
+      .catch(() => {})
+  }, [geo])
 
   const images = gallery.length ? gallery : (item?.image ? [item.image] : [])
   const amenities = (() => {
@@ -308,15 +318,15 @@ export default function PropertyPage() {
                 )
               })()}
 
-              {/* nearby */}
-              {analysis?.nearby?.length ? (
+              {/* nearby — فقط مکان‌های واقعی از نشان/OSM بر اساس مختصات واقعی ملک */}
+              {nearby.length ? (
                 <div style={card}>
                   <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>دسترسی‌های اطراف</div>
                   <div className="mjp-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                    {analysis.nearby.map((n, i) => (
-                      <div key={(n.name || n.label || '') + i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 12, background: 'var(--bg2)', border: '1px solid var(--line)' }}>
+                    {nearby.map((n, i) => (
+                      <div key={(n.name || '') + i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 12, background: 'var(--bg2)', border: '1px solid var(--line)' }}>
                         <span style={{ fontSize: 22 }}>{nearbyIcon(n)}</span>
-                        <div style={{ minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 600 }}>{n.name || n.label}</div><div style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>{[n.type && n.name ? n.type : '', n.time].filter(Boolean).join(' · ')}</div></div>
+                        <div style={{ minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 600 }}>{n.name}</div><div style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>{[n.type, n.time].filter(Boolean).join(' · ')}</div></div>
                       </div>
                     ))}
                   </div>

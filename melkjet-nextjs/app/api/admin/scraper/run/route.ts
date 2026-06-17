@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { listSources, insertItems, markError } from '@/app/lib/scraper-store'
 import { scrapeSource } from '@/app/lib/scraper-engine'
+import { moderatePending } from '@/app/lib/moderation'
 
 async function guard() {
   const s = await getSession()
@@ -37,5 +38,11 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, totalAdded, totalDup, results, sources: listSources() })
+  // تأیید خودکار فوری: هر آگهی تازه‌واکشی‌شده بلافاصله توسط هوش مصنوعی تأیید/رد می‌شود
+  let moderated = 0
+  if (totalAdded > 0) {
+    try { moderated = (await moderatePending()).moderated } catch { /* اگر مدل تنظیم نشده باشد */ }
+  }
+
+  return NextResponse.json({ ok: true, totalAdded, totalDup, moderated, results, sources: listSources() })
 }

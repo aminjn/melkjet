@@ -79,6 +79,25 @@ export default function SubmitPage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiDescription, setAiDescription] = useState('');
   const [geo, setGeo] = useState<GeoProvince[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitResult, setSubmitResult] = useState<{ status: string; reason: string } | null>(null);
+
+  const submitListing = async () => {
+    if (submitting) return;
+    if (!form.title.trim()) { alert('لطفاً عنوان آگهی را وارد کنید.'); return; }
+    setSubmitting(true); setSubmitResult(null);
+    try {
+      const r = await fetch('/api/submit', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, description: aiDescription, images: undefined, floorPlan: undefined }),
+      });
+      const d = await r.json();
+      if (!r.ok) { alert(d.error || 'خطا در ثبت آگهی'); return; }
+      setSubmitResult({ status: d.status, reason: d.reason });
+    } catch {
+      alert('خطا در ارتباط با سرور');
+    } finally { setSubmitting(false); }
+  };
 
   useEffect(() => {
     fetch('/api/geo', { cache: 'no-store' })
@@ -586,17 +605,32 @@ export default function SubmitPage() {
             </button>
           ) : (
             <button
+              disabled={submitting}
               style={{
                 padding: '12px 36px', borderRadius: 10,
                 background: 'var(--gold)', border: 'none',
-                color: '#000', cursor: 'pointer', fontWeight: 700, fontSize: 15,
+                color: '#000', cursor: submitting ? 'default' : 'pointer', fontWeight: 700, fontSize: 15,
+                opacity: submitting ? 0.6 : 1,
               }}
-              onClick={() => alert('آگهی شما با موفقیت ثبت شد!')}
+              onClick={submitListing}
             >
-              ✦ ثبت نهایی آگهی
+              {submitting ? '⏳ در حال ثبت و بررسی هوش مصنوعی…' : '✦ ثبت نهایی آگهی'}
             </button>
           )}
         </div>
+
+        {submitResult && (
+          <div style={{
+            marginTop: 18, borderRadius: 12, padding: '16px 18px',
+            border: `1px solid ${submitResult.status === 'approved' ? '#5fd98a' : submitResult.status === 'rejected' ? '#e7674a' : '#e7a14a'}`,
+            background: submitResult.status === 'approved' ? 'rgba(95,217,138,.08)' : submitResult.status === 'rejected' ? 'rgba(231,103,74,.08)' : 'rgba(231,161,74,.08)',
+          }}>
+            <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 6, color: submitResult.status === 'approved' ? '#5fd98a' : submitResult.status === 'rejected' ? '#e7674a' : '#e7a14a' }}>
+              {submitResult.status === 'approved' ? '✓ آگهی شما توسط هوش مصنوعی تأیید و منتشر شد' : submitResult.status === 'rejected' ? '✕ آگهی شما توسط هوش مصنوعی رد شد' : '⏳ آگهی شما برای بازبینی دستی ارسال شد'}
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.7 }}>علت: {submitResult.reason}</div>
+          </div>
+        )}
       </div>
       <Footer />
     </div>
