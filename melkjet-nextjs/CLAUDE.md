@@ -19,6 +19,20 @@ cd /var/www/melkjet/melkjet-nextjs && git pull && npm run build && pm2 restart m
 - Super admin phone: 09122862184
 - Admin email: naeiniamini@gmail.com
 
+## Networking (CRITICAL — this caused long debugging)
+The VPS egress is restricted. Each external service has a different path:
+- **GapGPT (AI, api.gapgpt.app)** → DIRECT, never via proxy. It's domestic but
+  `.app` needs Shecan DNS to resolve. The foreign proxy EMPTIES its responses.
+  `app/lib/gapgpt.ts` is direct-only.
+- **Divar (api.divar.ir)** → via HTTP proxy (`http://127.0.0.1:10809`), saved in
+  admin → «پروکسی دیوار». Direct is DNS/filter-blocked.
+- **github / foreign** → need `proxy-on` for manual git.
+- **Shecan DNS is required** in `/etc/resolv.conf` (made immutable):
+  `nameserver 178.22.122.100` + `185.51.200.2`, then `chattr +i /etc/resolv.conf`.
+  Without it, gapgpt.app / divar.ir don't resolve → "fetch failed".
+- Test AI from server: `node -e 'fetch("https://api.gapgpt.app/v1/chat/completions",{...})'`
+  should return STATUS 200.
+
 ## Responsive System
 CSS variables are used in inline styles. To make elements responsive:
 1. Add `className="xyz"` to the JSX element
