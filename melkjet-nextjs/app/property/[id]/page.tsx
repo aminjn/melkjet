@@ -59,6 +59,7 @@ export default function PropertyPage() {
   const [divarAmenities, setDivarAmenities] = useState<string[]>([])
   const [geo, setGeo] = useState<{ lat: number; lng: number } | null>(null)
   const [analysis, setAnalysis] = useState<Analysis | null>(null)
+  const [market, setMarket] = useState<{ stats: { avg: number; count: number; trend: { month: string; avg: number }[] } | null; value?: number } | null>(null)
   const [aiError, setAiError] = useState('')
   const [similar, setSimilar] = useState<Item[]>([])
   const [phone, setPhone] = useState<string | null>(null)
@@ -86,6 +87,9 @@ export default function PropertyPage() {
       const it: Item | null = d.item
       setItem(it); setLoading(false)
       if (!it) return
+      // real market stats (price/m² of the neighbourhood, from our scraped data)
+      const mq = new URLSearchParams({ city: it.meta?.['شهر'] || '', district: it.meta?.['محله'] || '', price: it.price || '', title: it.title || '' })
+      fetch(`/api/market/stats?${mq}`).then(r => r.ok ? r.json() : null).then(setMarket).catch(() => {})
       // similar (same category, exclude self)
       fetch(`/api/content?type=listing&limit=12`).then(r => r.ok ? r.json() : { items: [] }).then(s => {
         setSimilar((s.items || []).filter((x: Item) => x.id !== it.id).slice(0, 3))
@@ -242,9 +246,15 @@ export default function PropertyPage() {
               {/* score rings */}
               {analysis?.scores && (
                 <div style={card}>
-                  <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 18, display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ color: 'var(--gold)' }}>✦</span> امتیازهای تحلیلی</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 18, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ color: 'var(--gold)' }}>✦</span> امتیازهای تحلیلی
+                    {market?.value != null && market.stats && <span style={{ fontSize: 11, fontWeight: 500, color: '#5fd98a', background: 'rgba(95,217,138,0.12)', borderRadius: 999, padding: '3px 10px' }}>✓ ارزش خرید از {toFa(market.stats.count)} آگهی واقعی محله</span>}
+                  </div>
                   <div className="mjp-scores" style={{ display: 'flex', justifyContent: 'space-around', gap: 8, flexWrap: 'wrap' }}>
-                    {Object.entries(analysis.scores).map(([label, v]) => <ScoreRing key={label} value={Number(v)} label={label} />)}
+                    {Object.entries(analysis.scores).map(([label, v]) => {
+                      const real = (market?.value != null && /ارزش خرید/.test(label)) ? market.value : Number(v)
+                      return <ScoreRing key={label} value={real} label={label} />
+                    })}
                   </div>
                 </div>
               )}
@@ -258,33 +268,39 @@ export default function PropertyPage() {
                 </div>
               )}
 
-              {/* price trend */}
-              {analysis?.priceTrend?.values?.length === 12 && (
-                <div style={card}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 8 }}>
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 700 }}>روند قیمت در ۱۲ ماه گذشته</div>
-                      <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>میانگین قیمت هر متر در {item.meta?.['محله'] || item.location}</div>
+              {/* price trend — real market data if we have ≥3 months, else AI estimate */}
+              {(() => {
+                const real = market?.stats?.trend && market.stats.trend.length >= 3
+                const labels = real ? market!.stats!.trend.map(t => t.month.split('-')[1] + '/' + t.month.split('-')[0].slice(2)) : MONTHS
+                const values = real ? market!.stats!.trend.map(t => t.avg) : (analysis?.priceTrend?.values || [])
+                if (!values.length) return null
+                const max = Math.max(...values)
+                return (
+                  <div style={card}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 8 }}>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700 }}>روند قیمت {real ? '' : 'در ۱۲ ماه'}</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>میانگین قیمت هر متر در {item.meta?.['محله'] || item.location}</div>
+                      </div>
+                      <div style={{ textAlign: 'left' }}>
+                        {real ? <div style={{ color: '#5fd98a', fontWeight: 700, fontSize: 12 }}>✓ از {toFa(market!.stats!.count)} آگهی واقعی</div>
+                          : analysis?.priceTrend && <><div style={{ color: '#5fd98a', fontWeight: 700, fontSize: 13 }}>↗ {analysis.priceTrend.yearGrowth} رشد سالانه</div><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>تخمین AI · {analysis.priceTrend.forecast}</div></>}
+                      </div>
                     </div>
-                    <div style={{ textAlign: 'left' }}>
-                      <div style={{ color: '#5fd98a', fontWeight: 700, fontSize: 13 }}>↗ {analysis.priceTrend.yearGrowth} رشد سالانه</div>
-                      <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>پیش‌بینی: {analysis.priceTrend.forecast}</div>
+                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 140 }}>
+                      {values.map((v, i) => {
+                        const last = i === values.length - 1
+                        return (
+                          <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                            <div title={real ? `${Math.round(v / 1e6)} م.ت/متر` : ''} style={{ width: '100%', height: `${(v / max) * 110}px`, borderRadius: 6, background: last ? 'linear-gradient(180deg,var(--gold2),var(--gold))' : 'var(--goldDim)', border: last ? '1px solid var(--gold)' : 'none' }} />
+                            <span style={{ fontSize: 9, color: 'var(--faint)' }}>{labels[i]}</span>
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 140 }}>
-                    {analysis.priceTrend.values.map((v, i) => {
-                      const max = Math.max(...analysis.priceTrend!.values)
-                      const last = i === 11
-                      return (
-                        <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                          <div style={{ width: '100%', height: `${(v / max) * 110}px`, borderRadius: 6, background: last ? 'linear-gradient(180deg,var(--gold2),var(--gold))' : 'var(--goldDim)', border: last ? '1px solid var(--gold)' : 'none' }} />
-                          <span style={{ fontSize: 9.5, color: 'var(--faint)' }}>{MONTHS[i]}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
+                )
+              })()}
 
               {/* nearby */}
               {analysis?.nearby?.length ? (

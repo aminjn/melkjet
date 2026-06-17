@@ -1189,6 +1189,49 @@ function ScraperView() {
   )
 }
 
+function ReportsView() {
+  const [d, setD] = useState<{ totalSaleListings: number; neighbourhoods: number; rows: any[] } | null>(null)
+  const [loading, setLoading] = useState(true)
+  useEffect(() => { fetch('/api/admin/market').then(r => r.ok ? r.json() : null).then(x => { setD(x); setLoading(false) }) }, [])
+  const fa = (n: number) => n.toLocaleString('fa-IR')
+  const mt = (n: number) => `${fa(Math.round(n / 1e6))} م.ت`
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 14 }}>آمار واقعی بازار از دیتای اسکرپ‌شده (قیمت هر متر فروش به‌تفکیک محله). هرچه بیشتر اسکرپ کنید، دقیق‌تر می‌شود — همین دیتاست پایهٔ مدل یادگیری ماشین آینده است.</div>
+      <div className="mjsa-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 18 }}>
+        <KPI label="آگهی فروش تحلیل‌شده" value={d ? fa(d.totalSaleListings) : '—'} icon="▦" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" />
+        <KPI label="محله با دیتا" value={d ? fa(d.neighbourhoods) : '—'} icon="◍" iconBg="var(--goldDim)" iconColor="var(--gold)" />
+        <KPI label="وضعیت مدل" value="جمع‌آوری دیتا" icon="🧠" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" />
+      </div>
+      <Card>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>قیمت هر متر به‌تفکیک محله</div>
+        {loading ? <div style={{ color: 'var(--muted)' }}>در حال محاسبه…</div> : !d?.rows.length ? (
+          <div style={{ color: 'var(--muted)', fontSize: 13, padding: '20px 0', textAlign: 'center' }}>هنوز دیتای کافی نیست. چند منبع دیوار (فروش) اجرا کنید.</div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
+              <thead><tr style={{ borderBottom: '1px solid var(--line)' }}>{['محله', 'شهر', 'تعداد', 'میانگین/متر', 'میانه', 'کمینه', 'بیشینه'].map(h => <th key={h} style={{ textAlign: 'right', padding: '8px', fontSize: 12, color: 'var(--faint)', fontWeight: 600 }}>{h}</th>)}</tr></thead>
+              <tbody>
+                {d.rows.map((r, i) => (
+                  <tr key={i} style={{ borderBottom: '1px solid var(--line)' }}>
+                    <td style={{ padding: '10px 8px', fontWeight: 600, fontSize: 13 }}>{r.district}</td>
+                    <td style={{ padding: '10px 8px', fontSize: 12, color: 'var(--muted)' }}>{r.city}</td>
+                    <td style={{ padding: '10px 8px', fontSize: 12 }}>{fa(r.count)}</td>
+                    <td style={{ padding: '10px 8px', color: 'var(--gold)', fontWeight: 700, fontSize: 13 }}>{mt(r.avg)}</td>
+                    <td style={{ padding: '10px 8px', fontSize: 12 }}>{mt(r.median)}</td>
+                    <td style={{ padding: '10px 8px', fontSize: 12, color: 'var(--muted)' }}>{mt(r.min)}</td>
+                    <td style={{ padding: '10px 8px', fontSize: 12, color: 'var(--muted)' }}>{mt(r.max)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </div>
+  )
+}
+
 function ModerationView() {
   const [threshold, setThreshold] = useState(72)
   const queue = [
@@ -1924,6 +1967,7 @@ export default function SuperAdminPage() {
       case 'settings':   return <SettingsView />
       case 'flags':      return <FlagsView />
       case 'health':     return <HealthView />
+      case 'reports':    return <ReportsView />
       default:           return <SimpleView title={viewTitles[active]} />
     }
   }
