@@ -1,6 +1,5 @@
 import { getAdminData } from './admin-store'
 import { DEFAULT_GAP_BASE } from './ai-agents'
-import { proxiedRequest } from './proxy-fetch'
 
 function cfg() {
   const g = getAdminData().gapgpt
@@ -8,29 +7,16 @@ function cfg() {
   return { base: (g.baseUrl || DEFAULT_GAP_BASE).replace(/\/$/, ''), key: g.apiKey }
 }
 
-function proxy() {
-  return getAdminData().divar?.proxyUrl
-    || process.env.HTTPS_PROXY || process.env.https_proxy
-    || process.env.HTTP_PROXY || process.env.http_proxy
-    || undefined
-}
-
 export function agentModel(agentId: string, slot: 'text' | 'image' = 'text'): string | undefined {
   return getAdminData().agentModels?.[agentId]?.[slot]
 }
 
-// HTTP helper. GapGPT is a domestic service and works best DIRECTLY — routing it
-// through the (foreign) Divar proxy breaks long chat responses. So: direct first,
-// proxy only as a last resort if the direct request throws a network error.
+// GapGPT is a DOMESTIC service — always direct, NEVER via the (foreign) proxy,
+// which breaks/empties its responses. The `dispatcher: undefined` + explicit
+// agent avoids any global/env proxy that might be set on the process.
 async function gapHttp(url: string, init: { method: string; headers: Record<string, string>; body?: string }, timeout = 90000): Promise<{ status: number; body: string }> {
-  try {
-    const r = await fetch(url, { method: init.method, headers: init.headers, body: init.body, signal: AbortSignal.timeout(timeout) })
-    return { status: r.status, body: await r.text() }
-  } catch (e) {
-    const px = proxy()
-    if (!px) throw e
-    return proxiedRequest(url, { method: init.method, headers: init.headers, body: init.body, proxyUrl: px, timeout })
-  }
+  const r = await fetch(url, { method: init.method, headers: init.headers, body: init.body, signal: AbortSignal.timeout(timeout) })
+  return { status: r.status, body: await r.text() }
 }
 
 export async function listModels(): Promise<string[]> {
