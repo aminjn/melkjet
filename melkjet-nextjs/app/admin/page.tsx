@@ -320,6 +320,17 @@ function ListingsView() {
     await patch(edit.id, { patch: patchData }); setEdit(null)
   }
   const toggleSel = (id: string) => setSel(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const selectAll = () => setSel(sel.size === items.length ? new Set() : new Set(items.map(i => i.id)))
+  const bulkStatus = async (status: string) => {
+    if (!sel.size) return
+    const ids = [...sel]; setItems(items.map(i => sel.has(i.id) ? { ...i, status } : i)); setSel(new Set())
+    await Promise.all(ids.map(id => fetch('/api/admin/scraper/items', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status }) })))
+  }
+  const bulkFeature = async (featured: boolean) => {
+    if (!sel.size) return
+    const ids = [...sel]; setItems(items.map(i => sel.has(i.id) ? { ...i, featured } : i)); setSel(new Set())
+    await Promise.all(ids.map(id => fetch('/api/admin/scraper/items', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, patch: { featured } }) })))
+  }
 
   const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '8px 11px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
 
@@ -347,7 +358,14 @@ function ListingsView() {
         </div>
         <div style={{ marginTop: 10, fontSize: 12.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <span>{loading ? 'در حال بارگذاری…' : `${total} مورد`}</span>
-          {sel.size > 0 && <button onClick={delSelected} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.4)', color: '#e7674a', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>🗑 حذف {sel.size} مورد انتخاب‌شده</button>}
+          <button onClick={selectAll} style={{ background: 'transparent', border: '1px solid var(--line2)', color: 'var(--muted)', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>{sel.size === items.length && items.length ? 'لغو انتخاب همه' : 'انتخاب همه'}</button>
+          {sel.size > 0 && <>
+            <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{sel.size} انتخاب‌شده:</span>
+            <button onClick={() => bulkStatus('approved')} style={{ background: 'transparent', border: '1px solid #5fd98a', color: '#5fd98a', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>✓ تأیید</button>
+            <button onClick={() => bulkStatus('rejected')} style={{ background: 'transparent', border: '1px solid #e7a14a', color: '#e7a14a', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>↧ رد</button>
+            <button onClick={() => bulkFeature(true)} style={{ background: 'transparent', border: '1px solid var(--gold)', color: 'var(--gold)', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>★ ویژه</button>
+            <button onClick={delSelected} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.4)', color: '#e7674a', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>🗑 حذف</button>
+          </>}
         </div>
       </Card>
 
@@ -758,6 +776,16 @@ function ScraperView() {
     })
     await loadSources()
   }
+  const editSource = async (s: ScrSource) => {
+    const name = prompt('نام منبع:', s.name)
+    if (name === null) return
+    const schedule = prompt('زمان‌بندی (manual / hourly / 6h / daily):', s.schedule) || s.schedule
+    await fetch('/api/admin/scraper/sources', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: s.id, patch: { name, schedule } }),
+    })
+    await loadSources()
+  }
   const setItemStatus = async (id: string, status: string) => {
     setItems(items.map(i => i.id === id ? { ...i, status } : i))
     await fetch('/api/admin/scraper/items', {
@@ -879,6 +907,7 @@ function ScraperView() {
                         <OutlineButton onClick={() => run(s.id)} style={{ fontSize: 11.5, padding: '5px 11px', opacity: running ? .6 : 1, pointerEvents: running ? 'none' : 'auto' }}>
                           {running === s.id ? '⏳' : 'اجرا'}
                         </OutlineButton>
+                        <button onClick={() => editSource(s)} style={{ fontSize: 11.5, padding: '5px 11px', borderRadius: 9, border: '1px solid var(--line2)', color: 'var(--muted)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>ویرایش</button>
                         <button onClick={() => removeSource(s.id)} style={{ fontSize: 11.5, padding: '5px 11px', borderRadius: 9, border: '1px solid rgba(231,103,74,.3)', color: '#e7674a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>حذف</button>
                       </div>
                     </td>
