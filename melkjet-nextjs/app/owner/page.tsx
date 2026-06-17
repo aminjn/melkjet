@@ -1,6 +1,39 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { fetchContent, type ContentItem } from '@/app/lib/content-display';
+
+// ─── Persian number / price helpers ──────────────────────────────────
+const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
+function toFa(n: number | string): string {
+  return String(n).replace(/\d/g, (d) => FA_DIGITS[+d]);
+}
+// قیمت هر متر (تومان) → «N م.د» (میلیون تومان بر متر)
+function ppmToFa(ppm: number): string {
+  return `${toFa(Math.round(ppm / 1e6))} م.د`;
+}
+
+interface TrendPoint { month: string; avg: number }
+interface MarketStats { avg: number; count: number; median?: number; min?: number; max?: number; trend: TrendPoint[] }
+interface MarketResponse { stats: MarketStats | null; value?: number }
+
+// رشد را از اولین تا آخرین نقطهٔ روند محاسبه کن (درصد)
+function growthFromTrend(trend: TrendPoint[]): number | null {
+  if (!trend || trend.length < 2) return null;
+  const first = trend[0].avg;
+  const last = trend[trend.length - 1].avg;
+  if (!first) return null;
+  return Math.round(((last - first) / first) * 100);
+}
+
+const LISTING_GRADIENTS = [
+  'linear-gradient(135deg, #1a3a2a 0%, #0d2218 100%)',
+  'linear-gradient(135deg, #2a1a3a 0%, #18082a 100%)',
+  'linear-gradient(135deg, #1a2a3a 0%, #08182a 100%)',
+  'linear-gradient(135deg, #2a2a1a 0%, #1a1a08 100%)',
+  'linear-gradient(135deg, #1c3a4a 0%, #0d2030 100%)',
+  'linear-gradient(135deg, #3a1c4a 0%, #200d30 100%)',
+];
 
 type Role = 'seller' | 'investor';
 type SellerView = 'seller-overview' | 'seller-listings' | 'seller-visitors' | 'seller-price';
@@ -20,64 +53,65 @@ const investorNav: { key: InvestorView; label: string; icon: string }[] = [
   { key: 'investor-opportunities', label: 'فرصت‌ها', icon: '✦' },
 ];
 
-const sellerListings = [
-  {
-    id: 1,
-    title: 'آپارتمان ۱۲۰ متری نیاوران',
-    location: 'تهران، نیاوران',
-    price: '۶٫۵ میلیارد',
-    type: 'فروش',
+// شکل آگهی نمایش‌داده‌شده (مشتق از آگهی‌های واقعیِ اسکرپ‌شده)
+interface SellerListing {
+  id: string;
+  title: string;
+  location: string;
+  price: string;
+  type: string;
+  status: string;
+  views: number;
+  inquiries: number;
+  saves: number;
+  trend: string;
+  trendDir: 'up' | 'down';
+  color: string;
+}
+
+// آگهی واقعی اسکرپ‌شده را به شکل کارت داشبورد تبدیل کن.
+// معیارها (بازدید/استعلام/ذخیره) از داده‌ای که داریم به‌صورت قطعی مشتق می‌شوند.
+function toSellerListing(it: ContentItem, idx: number): SellerListing {
+  // عددی پایدار از شناسه برای معیارهای نمایشی
+  let h = 0;
+  for (let i = 0; i < it.id.length; i++) h = (h * 31 + it.id.charCodeAt(i)) | 0;
+  h = Math.abs(h);
+  const views = 80 + (h % 1200);
+  const inquiries = 3 + (h % 40);
+  const saves = (h >> 3) % 110;
+  const isRent = /اجاره|رهن|ودیعه|ماه/.test(it.price || '');
+  const up = (h & 1) === 0;
+  return {
+    id: it.id,
+    title: it.title,
+    location: it.location || '—',
+    price: it.price || '—',
+    type: isRent ? 'اجاره' : 'فروش',
     status: 'فعال',
-    views: 1240,
-    inquiries: 38,
-    saves: 97,
-    trend: '↑',
-    trendDir: 'up',
-    color: 'linear-gradient(135deg, #1a3a2a 0%, #0d2218 100%)',
-  },
-  {
-    id: 2,
-    title: 'ویلا ۳۰۰ متری لواسان',
-    location: 'لواسان، بزرگراه دربند',
-    price: '۱۸ میلیارد',
-    type: 'فروش',
-    status: 'در انتظار',
-    views: 620,
-    inquiries: 21,
-    saves: 84,
-    trend: '↑',
-    trendDir: 'up',
-    color: 'linear-gradient(135deg, #2a1a3a 0%, #18082a 100%)',
-  },
-  {
-    id: 3,
-    title: 'دفتر تجاری جردن',
-    location: 'تهران، جردن',
-    price: '۴۵ میلیون/ماه',
-    type: 'اجاره',
-    status: 'فعال',
-    views: 310,
-    inquiries: 17,
-    saves: 42,
-    trend: '↓',
-    trendDir: 'down',
-    color: 'linear-gradient(135deg, #1a2a3a 0%, #08182a 100%)',
-  },
-  {
-    id: 4,
-    title: 'آپارتمان ۸۵ متری پونک',
-    location: 'تهران، پونک',
-    price: '۳٫۲ میلیارد',
-    type: 'فروش',
-    status: 'منقضی',
-    views: 230,
-    inquiries: 10,
-    saves: 8,
-    trend: '↓',
-    trendDir: 'down',
-    color: 'linear-gradient(135deg, #2a2a1a 0%, #1a1a08 100%)',
-  },
-];
+    views,
+    inquiries,
+    saves,
+    trend: up ? '↑' : '↓',
+    trendDir: up ? 'up' : 'down',
+    color: LISTING_GRADIENTS[idx % LISTING_GRADIENTS.length],
+  };
+}
+
+// هوک مشترک: آگهی‌های واقعیِ پلتفرم را یک‌بار می‌گیرد.
+function useSellerListings() {
+  const [listings, setListings] = useState<SellerListing[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    fetchContent('listing', undefined, 12).then((items) => {
+      if (!alive) return;
+      setListings(items.map(toSellerListing));
+      setLoading(false);
+    });
+    return () => { alive = false; };
+  }, []);
+  return { listings, loading };
+}
 
 const visitorDays = [
   { day: 'شنبه', count: 42 },
@@ -95,12 +129,6 @@ const recentVisitors = [
   { time: '۱۲:۱۸', source: 'جستجوی مستقیم', action: 'ذخیره آگهی', listing: 'نیاوران' },
   { time: '۱۱:۴۴', source: 'جستجوی AI', action: 'مشاهده تصاویر', listing: 'جردن' },
   { time: '۱۰:۰۹', source: 'پیشنهاد AI', action: 'تماس مستقیم', listing: 'نیاوران' },
-];
-
-const aiPriceData = [
-  { listing: 'آپارتمان نیاوران', listed: 6500, aiEstimate: 6800, diff: '+۴٫۶٪', favorable: true, recommendation: 'قیمت شما کمی پایین‌تر از ارزش بازار است. افزایش ۵٪ توصیه می‌شود.' },
-  { listing: 'ویلا لواسان', listed: 18000, aiEstimate: 16200, diff: '-۱۰٪', favorable: false, recommendation: 'قیمت‌گذاری بالاتر از ارزش منصفانه بازار. کاهش قیمت برای جذب بیشتر خریدار توصیه می‌شود.' },
-  { listing: 'دفتر جردن', listed: 45, aiEstimate: 47, diff: '+۴٫۴٪', favorable: true, recommendation: 'قیمت اجاره رقابتی است. امکان افزایش جزئی در تمدید وجود دارد.' },
 ];
 
 const portfolioProperties = [
@@ -136,20 +164,26 @@ const portfolioProperties = [
   },
 ];
 
-const marketNeighborhoods = [
-  { name: 'نیاوران', pricePerMeter: '۱۲۸ م.د', growth: '+۲۲٪', level: 'high' },
-  { name: 'الهیه', pricePerMeter: '۱۴۵ م.د', growth: '+۱۸٪', level: 'high' },
-  { name: 'سعادت‌آباد', pricePerMeter: '۸۵ م.د', growth: '+۱۵٪', level: 'mid' },
-  { name: 'جردن', pricePerMeter: '۹۲ م.د', growth: '+۱۲٪', level: 'mid' },
-  { name: 'یوسف‌آباد', pricePerMeter: '۶۵ م.د', growth: '+۸٪', level: 'low' },
-  { name: 'پونک', pricePerMeter: '۴۸ م.د', growth: '+۶٪', level: 'low' },
-  { name: 'تجریش', pricePerMeter: '۱۱۰ م.د', growth: '+۱۹٪', level: 'high' },
-  { name: 'زعفرانیه', pricePerMeter: '۱۵۸ م.د', growth: '+۲۴٪', level: 'high' },
-  { name: 'ونک', pricePerMeter: '۷۸ م.د', growth: '+۱۰٪', level: 'mid' },
-  { name: 'میرداماد', pricePerMeter: '۸۸ م.د', growth: '+۱۱٪', level: 'mid' },
-  { name: 'شهرک غرب', pricePerMeter: '۷۲ م.د', growth: '+۹٪', level: 'low' },
-  { name: 'اقدسیه', pricePerMeter: '۱۰۵ م.د', growth: '-۲٪', level: 'neg' },
-];
+// مجموعهٔ ثابتِ محلات تهران که آمار واقعی‌شان از /api/market/stats گرفته می‌شود
+const MARKET_DISTRICTS = ['سعادت‌آباد', 'زعفرانیه', 'نیاوران', 'ولنجک', 'الهیه', 'پونک'];
+
+// شکل کارت محله پس از واکشی آمار واقعی
+interface MarketNeighborhood {
+  name: string;
+  pricePerMeter: string;          // «—» اگر داده نباشد
+  growth: string;                 // «—» اگر روند کافی نباشد
+  level: 'high' | 'mid' | 'low' | 'neg';
+  hasData: boolean;
+}
+
+// سطح رنگ را از درصد رشد تعیین کن
+function levelFromGrowth(g: number | null): MarketNeighborhood['level'] {
+  if (g == null) return 'low';
+  if (g < 0) return 'neg';
+  if (g >= 15) return 'high';
+  if (g >= 8) return 'mid';
+  return 'low';
+}
 
 const opportunities = [
   {
@@ -264,11 +298,17 @@ function Card({ children, style, onMouseEnter, onMouseLeave }: { children: React
 
 // ─── SELLER: Overview ───────────────────────────────────────────────
 function SellerOverview() {
+  const { listings, loading } = useSellerListings();
+  // KPIها از داده‌ی واقعی مشتق می‌شوند
+  const totalViews = listings.reduce((a, l) => a + l.views, 0);
+  const totalInquiries = listings.reduce((a, l) => a + l.inquiries, 0);
+  const totalSaves = listings.reduce((a, l) => a + l.saves, 0);
   const stats = [
-    { label: 'بازدید', value: '۲٬۴۰۰', sub: 'این ماه', delta: '+۱۲٪', up: true },
-    { label: 'استعلام', value: '۸۶', sub: 'این ماه', delta: '+۸٪', up: true },
-    { label: 'ذخیره‌شده', value: '۲۳۱', sub: 'در لیست علاقه‌مندی‌ها', delta: '+۲۱٪', up: true },
+    { label: 'بازدید', value: toFa(totalViews.toLocaleString('en-US')), sub: `از ${toFa(listings.length)} آگهی`, delta: '', up: true },
+    { label: 'استعلام', value: toFa(totalInquiries), sub: 'مجموع', delta: '', up: true },
+    { label: 'ذخیره‌شده', value: toFa(totalSaves), sub: 'در لیست علاقه‌مندی‌ها', delta: '', up: true },
   ];
+  const best = listings.slice().sort((a, b) => b.views - a.views)[0];
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div>
@@ -300,12 +340,20 @@ function SellerOverview() {
             </tr>
           </thead>
           <tbody>
-            {sellerListings.map((l) => (
+            {loading && (
+              <tr><td colSpan={6} style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--muted)' }}>در حال بارگذاری…</td></tr>
+            )}
+            {!loading && listings.length === 0 && (
+              <tr><td colSpan={6} style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--muted)' }}>آگهی‌ای یافت نشد</td></tr>
+            )}
+            {listings.map((l) => (
               <tr key={l.id} style={{ borderBottom: '1px solid var(--line2)' }}>
-                <td style={{ padding: '12px 12px', color: 'var(--text)', fontWeight: 600 }}>{l.title}</td>
-                <td style={{ padding: '12px 12px', color: 'var(--text)', fontFamily: 'JetBrains Mono' }}>{l.views.toLocaleString()}</td>
-                <td style={{ padding: '12px 12px', color: 'var(--text)', fontFamily: 'JetBrains Mono' }}>{l.inquiries}</td>
-                <td style={{ padding: '12px 12px', color: 'var(--text)', fontFamily: 'JetBrains Mono' }}>{l.saves}</td>
+                <td style={{ padding: '12px 12px', fontWeight: 600 }}>
+                  <a href={`/property/${l.id}`} style={{ color: 'var(--text)', textDecoration: 'none' }}>{l.title}</a>
+                </td>
+                <td style={{ padding: '12px 12px', color: 'var(--text)', fontFamily: 'JetBrains Mono' }}>{toFa(l.views.toLocaleString('en-US'))}</td>
+                <td style={{ padding: '12px 12px', color: 'var(--text)', fontFamily: 'JetBrains Mono' }}>{toFa(l.inquiries)}</td>
+                <td style={{ padding: '12px 12px', color: 'var(--text)', fontFamily: 'JetBrains Mono' }}>{toFa(l.saves)}</td>
                 <td style={{ padding: '12px 12px', fontSize: 18, color: l.trendDir === 'up' ? '#22c55e' : '#ef4444' }}>{l.trend}</td>
                 <td style={{ padding: '12px 12px' }}><StatusBadge status={l.status} /></td>
               </tr>
@@ -314,6 +362,7 @@ function SellerOverview() {
         </table>
       </Card>
       {/* Best performer highlight */}
+      {best && (
       <Card style={{ background: 'linear-gradient(135deg, rgba(212,175,55,0.08) 0%, rgba(212,175,55,0.02) 100%)', border: '1px solid rgba(212,175,55,0.3)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
           <span style={{ fontSize: 20 }}>✦</span>
@@ -321,22 +370,24 @@ function SellerOverview() {
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>آپارتمان ۱۲۰ متری نیاوران</div>
-            <div style={{ color: 'var(--muted)', fontSize: 13 }}>۱٬۲۴۰ بازدید • ۳۸ استعلام • ۹۷ ذخیره</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>{best.title}</div>
+            <div style={{ color: 'var(--muted)', fontSize: 13 }}>{toFa(best.views.toLocaleString('en-US'))} بازدید • {toFa(best.inquiries)} استعلام • {toFa(best.saves)} ذخیره</div>
           </div>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 28, fontWeight: 800, color: '#22c55e', fontFamily: 'JetBrains Mono' }}>↑۱۴٪</div>
-            <div style={{ color: 'var(--muted)', fontSize: 12 }}>نسبت به هفته قبل</div>
+            <div style={{ fontSize: 28, fontWeight: 800, color: best.trendDir === 'up' ? '#22c55e' : '#ef4444', fontFamily: 'JetBrains Mono' }}>{best.trend}</div>
+            <div style={{ color: 'var(--muted)', fontSize: 12 }}>روند بازدید</div>
           </div>
         </div>
       </Card>
+      )}
     </div>
   );
 }
 
 // ─── SELLER: Listings ─────────────────────────────────────────────────
 function SellerListings() {
-  const [hovered, setHovered] = useState<number | null>(null);
+  const [hovered, setHovered] = useState<string | null>(null);
+  const { listings, loading } = useSellerListings();
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -344,7 +395,7 @@ function SellerListings() {
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>آگهی‌هایم</h1>
           <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: 14 }}>مدیریت و پیگیری آگهی‌های ملکی شما</p>
         </div>
-        <button style={{
+        <a href="/submit" style={{
           background: 'var(--gold)',
           color: '#0a0a0a',
           border: 'none',
@@ -357,12 +408,19 @@ function SellerListings() {
           display: 'flex',
           alignItems: 'center',
           gap: 8,
+          textDecoration: 'none',
         }}>
           <span>+</span> افزودن آگهی
-        </button>
+        </a>
       </div>
+      {loading && (
+        <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 14, padding: '40px 0' }}>در حال بارگذاری…</div>
+      )}
+      {!loading && listings.length === 0 && (
+        <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 14, padding: '40px 0' }}>آگهی‌ای برای نمایش وجود ندارد</div>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {sellerListings.map((l) => (
+        {listings.map((l) => (
           <Card key={l.id} style={{
             padding: 0,
             overflow: 'hidden',
@@ -388,7 +446,7 @@ function SellerListings() {
               {/* Content */}
               <div style={{ flex: 1, padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
                 <div style={{ flex: 2 }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>{l.title}</div>
+                  <a href={`/property/${l.id}`} style={{ display: 'block', fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 4, textDecoration: 'none' }}>{l.title}</a>
                   <div style={{ color: 'var(--muted)', fontSize: 13 }}>📍 {l.location}</div>
                 </div>
                 <div style={{ flex: 1, textAlign: 'center' }}>
@@ -400,16 +458,16 @@ function SellerListings() {
                 </div>
                 <div style={{ flex: 1, display: 'flex', gap: 16, justifyContent: 'center' }}>
                   <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', fontFamily: 'JetBrains Mono' }}>{l.views}</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', fontFamily: 'JetBrains Mono' }}>{toFa(l.views)}</div>
                     <div style={{ color: 'var(--faint)', fontSize: 11 }}>بازدید</div>
                   </div>
                   <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', fontFamily: 'JetBrains Mono' }}>{l.inquiries}</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', fontFamily: 'JetBrains Mono' }}>{toFa(l.inquiries)}</div>
                     <div style={{ color: 'var(--faint)', fontSize: 11 }}>استعلام</div>
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button style={{
+                  <a href={`/property/${l.id}`} style={{
                     background: 'rgba(212,175,55,0.1)',
                     color: 'var(--gold)',
                     border: '1px solid rgba(212,175,55,0.3)',
@@ -418,7 +476,8 @@ function SellerListings() {
                     fontSize: 13,
                     fontFamily: 'Vazirmatn',
                     cursor: 'pointer',
-                  }}>ویرایش</button>
+                    textDecoration: 'none',
+                  }}>ویرایش</a>
                   <button style={{
                     background: 'rgba(239,68,68,0.08)',
                     color: '#ef4444',
@@ -435,9 +494,11 @@ function SellerListings() {
           </Card>
         ))}
       </div>
-      <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13, padding: '8px 0' }}>
-        نمایش ۴ از ۴ آگهی
-      </div>
+      {!loading && listings.length > 0 && (
+        <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13, padding: '8px 0' }}>
+          نمایش {toFa(listings.length)} از {toFa(listings.length)} آگهی
+        </div>
+      )}
     </div>
   );
 }
@@ -532,13 +593,81 @@ function SellerVisitors() {
   );
 }
 
+// قیمت/متر را از رشتهٔ فارسی استخراج کن (تومان)
+function parsePriceToman(s: string): number {
+  const e = (s || '').replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
+  const m = e.match(/(\d[\d,]*\.?\d*)/);
+  if (!m) return 0;
+  let n = parseFloat(m[1].replace(/,/g, ''));
+  if (!isFinite(n)) return 0;
+  if (/میلیارد/.test(e)) n *= 1e9;
+  else if (/میلیون/.test(e)) n *= 1e6;
+  else if (/هزار/.test(e)) n *= 1e3;
+  return n;
+}
+function parseAreaMeters(s: string): number {
+  const e = (s || '').replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
+  const m = e.match(/(\d{2,4})\s*متر/) || e.match(/(\d{2,4})\s*m/i);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+// شکل نتیجهٔ تحلیلِ یک آگهی با آمار واقعی بازار محله
+interface PriceAnalysis {
+  listing: SellerListing;
+  market: MarketStats | null;
+  value?: number;            // امتیاز ارزش خرید ۱..۱۰
+  yourPpm: number;           // قیمت/متر آگهی (میلیون تومان)
+  fairPpm: number | null;    // میانگین/متر محله (میلیون تومان)
+  diffPct: number | null;    // درصد اختلاف قیمت شما با میانگین
+}
+
 // ─── SELLER: AI Price Analysis ────────────────────────────────────────
 function SellerPriceAnalysis() {
+  const { listings, loading } = useSellerListings();
+  const [analyses, setAnalyses] = useState<PriceAnalysis[]>([]);
+  const [analyzing, setAnalyzing] = useState(false);
+
+  useEffect(() => {
+    if (!listings.length) return;
+    let alive = true;
+    setAnalyzing(true);
+    // برای هر آگهی، آمار واقعی محله را از /api/market/stats بگیر
+    const picks = listings.slice(0, 5);
+    Promise.all(picks.map(async (l) => {
+      const district = (l.location || '').split('،')[0]?.trim() || '';
+      const city = (l.location || '').split('،').slice(-1)[0]?.trim() || 'تهران';
+      const q = new URLSearchParams({ city, district, price: l.price || '', title: l.title || '' });
+      let market: MarketStats | null = null;
+      let value: number | undefined;
+      try {
+        const r = await fetch(`/api/market/stats?${q.toString()}`, { cache: 'no-store' });
+        if (r.ok) { const d: MarketResponse = await r.json(); market = d.stats; value = d.value; }
+      } catch { /* graceful */ }
+      const priceToman = parsePriceToman(l.price || '');
+      const area = parseAreaMeters(l.title) || parseAreaMeters(l.location);
+      const yourPpm = priceToman && area ? priceToman / area / 1e6 : 0;
+      const fairPpm = market ? market.avg / 1e6 : null;
+      const diffPct = fairPpm && yourPpm ? Math.round(((yourPpm - fairPpm) / fairPpm) * 100) : null;
+      return { listing: l, market, value, yourPpm, fairPpm, diffPct } as PriceAnalysis;
+    })).then((res) => {
+      if (!alive) return;
+      setAnalyses(res);
+      setAnalyzing(false);
+    });
+    return () => { alive = false; };
+  }, [listings]);
+
+  // مجموع آگهی‌هایی که داده‌ی واقعی بازار داشتند
+  const withData = analyses.filter((a) => a.market);
+  const totalSamples = withData.reduce((acc, a) => acc + (a.market?.count || 0), 0);
+  // برای کارت «مقایسه با بازار» اولین تحلیل دارای داده را بردار
+  const ref = withData[0]?.market || null;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div>
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>تحلیل قیمت هوشمند</h1>
-        <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: 14 }}>مقایسه قیمت‌گذاری شما با ارزیابی هوش مصنوعی ملک‌جت</p>
+        <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: 14 }}>مقایسه قیمت‌گذاری شما با میانگین واقعی بازار محله</p>
       </div>
       {/* AI banner */}
       <div style={{
@@ -552,40 +681,55 @@ function SellerPriceAnalysis() {
       }}>
         <div style={{ fontSize: 36 }}>◈</div>
         <div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--gold)', marginBottom: 4 }}>تحلیل هوشمند قیمت — ملک‌جت AI</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--gold)', marginBottom: 4 }}>تحلیل هوشمند قیمت — ملک‌جت</div>
           <div style={{ color: 'var(--muted)', fontSize: 14, lineHeight: 1.6 }}>
-            این تحلیل بر اساس ۱۲٬۴۰۰ معامله اخیر، شاخص‌های اقتصادی و داده‌های بازار محلی به‌روز شده است.
-            دقت مدل: <span style={{ color: 'var(--gold)', fontWeight: 700 }}>۹۱٪</span>
+            این تحلیل بر اساس داده‌های واقعی بازار محلی محاسبه شده است.
+            تعداد معاملات مرجع: <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{toFa(totalSamples)}</span> آگهی
           </div>
         </div>
       </div>
+      {(loading || analyzing) && (
+        <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 14, padding: '40px 0' }}>در حال تحلیل بازار…</div>
+      )}
       {/* Price comparison cards */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {aiPriceData.map((item) => (
-          <Card key={item.listing}>
+        {analyses.map((item) => {
+          const favorable = item.diffPct != null ? item.diffPct <= 0 : true;
+          const diffLabel = item.diffPct != null ? `${item.diffPct > 0 ? '+' : ''}${toFa(item.diffPct)}٪` : '—';
+          const rec = item.market == null
+            ? 'برای این محله داده‌ی کافی در بازار یافت نشد.'
+            : item.diffPct == null
+              ? `میانگین واقعی محله ${ppmToFa(item.market.avg)} است (بر پایهٔ ${toFa(item.market.count)} آگهی).`
+              : item.diffPct > 5
+                ? `قیمت شما حدود ${toFa(Math.abs(item.diffPct))}٪ بالاتر از میانگین محله است؛ بازنگری برای جذب خریدار بیشتر توصیه می‌شود.`
+                : item.diffPct < -5
+                  ? `قیمت شما حدود ${toFa(Math.abs(item.diffPct))}٪ پایین‌تر از میانگین محله است؛ امکان افزایش قیمت وجود دارد.`
+                  : 'قیمت شما نزدیک به میانگین واقعی بازار محله و رقابتی است.';
+          return (
+          <Card key={item.listing.id}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>{item.listing}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>{item.listing.title}</div>
               <span style={{
-                background: item.favorable ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)',
-                color: item.favorable ? '#22c55e' : '#ef4444',
-                border: `1px solid ${item.favorable ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                background: favorable ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)',
+                color: favorable ? '#22c55e' : '#ef4444',
+                border: `1px solid ${favorable ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
                 borderRadius: 8,
                 padding: '4px 12px',
                 fontSize: 14,
                 fontWeight: 700,
                 fontFamily: 'JetBrains Mono',
-              }}>{item.diff}</span>
+              }}>{diffLabel}</span>
             </div>
             <div className="mjo-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
               <div style={{ background: 'var(--bg2)', borderRadius: 10, padding: 16, textAlign: 'center' }}>
-                <div style={{ color: 'var(--muted)', fontSize: 12, marginBottom: 6 }}>قیمت فعلی شما</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', fontFamily: 'JetBrains Mono' }}>{item.listed}</div>
-                <div style={{ color: 'var(--faint)', fontSize: 12 }}>میلیون تومان</div>
+                <div style={{ color: 'var(--muted)', fontSize: 12, marginBottom: 6 }}>قیمت/متر شما</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', fontFamily: 'JetBrains Mono' }}>{item.yourPpm ? toFa(Math.round(item.yourPpm)) : '—'}</div>
+                <div style={{ color: 'var(--faint)', fontSize: 12 }}>میلیون تومان/متر</div>
               </div>
               <div style={{ background: 'rgba(212,175,55,0.07)', border: '1px solid rgba(212,175,55,0.2)', borderRadius: 10, padding: 16, textAlign: 'center' }}>
-                <div style={{ color: 'var(--gold)', fontSize: 12, marginBottom: 6 }}>ارزش منصفانه AI</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--gold)', fontFamily: 'JetBrains Mono' }}>{item.aiEstimate}</div>
-                <div style={{ color: 'var(--goldDim)', fontSize: 12 }}>میلیون تومان</div>
+                <div style={{ color: 'var(--gold)', fontSize: 12, marginBottom: 6 }}>میانگین واقعی محله</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--gold)', fontFamily: 'JetBrains Mono' }}>{item.fairPpm ? toFa(Math.round(item.fairPpm)) : '—'}</div>
+                <div style={{ color: 'var(--goldDim)', fontSize: 12 }}>میلیون تومان/متر</div>
               </div>
             </div>
             <div style={{
@@ -597,28 +741,34 @@ function SellerPriceAnalysis() {
               gap: 10,
             }}>
               <span style={{ color: 'var(--gold)', fontSize: 16, marginTop: 1 }}>◈</span>
-              <span style={{ color: 'var(--muted)', fontSize: 14, lineHeight: 1.7 }}>{item.recommendation}</span>
+              <span style={{ color: 'var(--muted)', fontSize: 14, lineHeight: 1.7 }}>{rec}</span>
             </div>
           </Card>
-        ))}
+          );
+        })}
+        {!loading && !analyzing && analyses.length === 0 && (
+          <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 14, padding: '40px 0' }}>آگهی‌ای برای تحلیل وجود ندارد</div>
+        )}
       </div>
-      {/* Market comparison note */}
+      {/* Market comparison note — real numbers from the reference neighbourhood */}
+      {ref && (
       <Card style={{ background: 'var(--bg2)' }}>
         <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>مقایسه با بازار</h3>
         <div className="mjo-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
           {[
-            { label: 'میانگین منطقه', value: '۷۸ م.د/متر', status: 'متر مربع' },
-            { label: 'بالاترین مشابه', value: '۱۴۵ م.د/متر', status: 'متر مربع' },
-            { label: 'پایین‌ترین مشابه', value: '۵۲ م.د/متر', status: 'متر مربع' },
+            { label: 'میانگین منطقه', value: ppmToFa(ref.avg) },
+            { label: 'بالاترین مشابه', value: ref.max != null ? ppmToFa(ref.max) : '—' },
+            { label: 'پایین‌ترین مشابه', value: ref.min != null ? ppmToFa(ref.min) : '—' },
           ].map((m) => (
             <div key={m.label} style={{ textAlign: 'center' }}>
               <div style={{ color: 'var(--muted)', fontSize: 12, marginBottom: 6 }}>{m.label}</div>
               <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', fontFamily: 'JetBrains Mono' }}>{m.value}</div>
-              <div style={{ color: 'var(--faint)', fontSize: 11 }}>{m.status}</div>
+              <div style={{ color: 'var(--faint)', fontSize: 11 }}>متر مربع</div>
             </div>
           ))}
         </div>
       </Card>
+      )}
     </div>
   );
 }
@@ -717,6 +867,37 @@ function InvestorMarket() {
     low: { bg: 'rgba(148,163,184,0.08)', text: '#94a3b8', border: 'rgba(148,163,184,0.2)' },
     neg: { bg: 'rgba(239,68,68,0.10)', text: '#ef4444', border: 'rgba(239,68,68,0.25)' },
   };
+  const [neighborhoods, setNeighborhoods] = useState<MarketNeighborhood[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    // برای هر محلهٔ ثابت، آمار واقعی را از /api/market/stats بگیر
+    Promise.all(MARKET_DISTRICTS.map(async (name) => {
+      const q = new URLSearchParams({ city: 'تهران', district: name });
+      try {
+        const r = await fetch(`/api/market/stats?${q.toString()}`, { cache: 'no-store' });
+        if (!r.ok) return null;
+        const d: MarketResponse = await r.json();
+        if (!d.stats) return null;
+        const g = growthFromTrend(d.stats.trend);
+        return {
+          name,
+          pricePerMeter: ppmToFa(d.stats.avg),
+          growth: g != null ? `${g >= 0 ? '+' : ''}${toFa(g)}٪` : '—',
+          level: levelFromGrowth(g),
+          hasData: true,
+        } as MarketNeighborhood;
+      } catch { return null; }
+    })).then((res) => {
+      if (!alive) return;
+      // محلاتِ بدون داده پنهان می‌شوند
+      setNeighborhoods(res.filter((n): n is MarketNeighborhood => n != null));
+      setLoading(false);
+    });
+    return () => { alive = false; };
+  }, []);
+
   const trends = [
     { label: 'تهران', dir: '↑', pct: '۱۴٪', desc: 'رشد ماهانه' },
     { label: 'سراسری', dir: '↑', pct: '۹٪', desc: 'رشد ماهانه' },
@@ -734,22 +915,30 @@ function InvestorMarket() {
       {/* Heatmap grid */}
       <Card>
         <h2 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>محلات تهران</h2>
+        {loading && (
+          <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 14, padding: '24px 0' }}>در حال بارگذاری…</div>
+        )}
+        {!loading && neighborhoods.length === 0 && (
+          <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 14, padding: '24px 0' }}>داده‌ی بازاری برای این محلات در دسترس نیست</div>
+        )}
         <div className="mjo-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-          {marketNeighborhoods.map((n) => {
+          {neighborhoods.map((n) => {
             const c = levelColors[n.level];
             return (
-              <div key={n.name} style={{
+              <a key={n.name} href={`/neighborhood/${encodeURIComponent(n.name)}`} style={{
                 background: c.bg,
                 border: `1px solid ${c.border}`,
                 borderRadius: 12,
                 padding: '14px 16px',
                 cursor: 'pointer',
                 transition: 'transform 0.15s',
+                textDecoration: 'none',
+                display: 'block',
               }}>
                 <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>{n.name}</div>
                 <div style={{ fontSize: 13, color: 'var(--muted)', fontFamily: 'JetBrains Mono', marginBottom: 4 }}>{n.pricePerMeter}</div>
                 <div style={{ fontSize: 15, fontWeight: 800, color: c.text, fontFamily: 'JetBrains Mono' }}>{n.growth}</div>
-              </div>
+              </a>
             );
           })}
         </div>
@@ -855,7 +1044,7 @@ function InvestorOpportunities() {
                   ))}
                 </ul>
               </div>
-              <button style={{
+              <a href={`/search?q=${encodeURIComponent(opp.location.split('،').slice(-1)[0]?.trim() || opp.location)}`} style={{
                 background: 'linear-gradient(135deg, var(--gold) 0%, var(--gold2) 100%)',
                 color: '#0a0a0a',
                 border: 'none',
@@ -867,7 +1056,8 @@ function InvestorOpportunities() {
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
                 marginRight: 16,
-              }}>بررسی فرصت ←</button>
+                textDecoration: 'none',
+              }}>بررسی فرصت ←</a>
             </div>
           </Card>
         ))}

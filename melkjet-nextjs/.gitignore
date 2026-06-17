@@ -47,3 +47,4 @@ next-env.d.ts
 .divar-places.json
 .market-data.json
 .enrich-data.json
+.crm-data.json

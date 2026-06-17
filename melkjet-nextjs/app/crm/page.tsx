@@ -1,15 +1,17 @@
 'use client'
-import { useState } from 'react'
-import Nav from '../components/Nav'
+import { useState, useEffect } from 'react'
+import { fetchContent, type ContentItem } from '../lib/content-display'
 
 type View = 'dashboard' | 'listings' | 'pipeline' | 'tasks' | 'calendar'
 
+// Mirrors app/lib/crm-store.ts Task (the API shape). `time` is derived from due/createdAt for display.
 interface Task {
   id: string
   done: boolean
-  text: string
-  time: string
-  priority: 'high' | 'medium' | 'low'
+  title: string
+  due?: string
+  priority?: 'high' | 'medium' | 'low'
+  createdAt: number
 }
 
 const navItems = [
@@ -56,14 +58,6 @@ const todayTasksData = [
   { done: false, text: 'تنظیم آگهی جدید برج آرین', time: '۱۶:۳۰' },
 ]
 
-const listings = [
-  { id: '1', title: 'آپارتمان ۱۴۰ متری سعادت‌آباد', status: 'فعال', statusColor: '#5fd98a', price: '۱۷٫۸ میلیارد', views: '۲۴۳', aiSuggestion: 'قیمت مناسب - حفظ شود', suggestionColor: '#5fd98a' },
-  { id: '2', title: 'پنت‌هاوس دوبلکس زعفرانیه', status: 'در مذاکره', statusColor: '#e7a14a', price: '۸۵ میلیارد', views: '۱۸۷', aiSuggestion: '۳ لید علاقه‌مند دارد', suggestionColor: 'var(--gold)' },
-  { id: '3', title: 'آپارتمان ۹۵ متری ونک', status: 'فعال', statusColor: '#5fd98a', price: '۹٫۲ میلیارد', views: '۵۱۲', aiSuggestion: 'کاهش ۵٪ توصیه می‌شود', suggestionColor: '#e74c3c' },
-  { id: '4', title: 'دفتر کار میرداماد', status: 'غیرفعال', statusColor: 'var(--faint)', price: '۶٫۸ میلیارد', views: '۸۹', aiSuggestion: 'بازنویسی توضیحات', suggestionColor: '#e7a14a' },
-  { id: '5', title: 'ویلا باغ لواسان', status: 'فعال', statusColor: '#5fd98a', price: '۱۲۰ میلیارد', views: '۳۴۱', aiSuggestion: 'قیمت رقابتی - نگه دار', suggestionColor: '#5fd98a' },
-]
-
 const pipelineColumns = [
   {
     id: 'new', label: 'لید جدید', color: '#7a8fae',
@@ -91,14 +85,6 @@ const pipelineColumns = [
       { id: 'l6', name: 'احمد کریمی', phone: '۰۹۱۲-۸۸۸-۹۹۰۰', need: 'خرید · فرمانیه', budget: '۴۰ م', score: 95 },
     ]
   },
-]
-
-const initialTasks: Task[] = [
-  { id: 't1', done: false, text: 'تماس با رضا موسوی برای پیگیری', time: '۱۰:۰۰', priority: 'high' },
-  { id: 't2', done: true, text: 'ارسال قرارداد به خانواده احمدی', time: '۱۱:۳۰', priority: 'medium' },
-  { id: 't3', done: false, text: 'بازدید ملک سعادت‌آباد با شیوا حیدری', time: '۱۴:۰۰', priority: 'high' },
-  { id: 't4', done: false, text: 'تنظیم آگهی جدید برج آرین', time: '۱۶:۳۰', priority: 'low' },
-  { id: 't5', done: false, text: 'مذاکره قیمت پنت‌هاوس زعفرانیه', time: 'فردا', priority: 'medium' },
 ]
 
 const weekDays = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه']
@@ -153,13 +139,62 @@ function timeToMinutesFrom9(timeStr: string) {
 const priorityColor: Record<string, string> = { high: '#e74c3c', medium: '#e7a14a', low: '#5fd98a' }
 const calendarHours = Array.from({ length: 10 }, (_, i) => i + 9)
 
+// Display label for a task's time: its due text, else creation date.
+function taskTimeLabel(t: Task): string {
+  if (t.due) return t.due
+  try { return new Date(t.createdAt).toLocaleDateString('fa-IR') } catch { return 'بدون زمان' }
+}
+
 export default function CRMPage() {
   const [activeView, setActiveView] = useState<View>('dashboard')
-  const [tasks, setTasks] = useState<Task[]>(initialTasks)
+  const [tasks, setTasks] = useState<Task[]>([])
   const [newTaskText, setNewTaskText] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [todayTasks, setTodayTasks] = useState(todayTasksData)
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+
+  // Real scraped listings for the "فایل‌ها" view.
+  const [listings, setListings] = useState<ContentItem[]>([])
+  const [listingsLoaded, setListingsLoaded] = useState(false)
+
+  // Real neighbourhood growth for the dashboard insights card.
+  const [growth, setGrowth] = useState<number | null>(null)
+
+  // AI assistant modal state.
+  const [aiOpen, setAiOpen] = useState(false)
+  const [aiInput, setAiInput] = useState('')
+  const [aiReply, setAiReply] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
+
+  // Load persisted tasks on mount.
+  useEffect(() => {
+    fetch('/api/crm/tasks')
+      .then(r => r.ok ? r.json() : { tasks: [] })
+      .then(d => setTasks(Array.isArray(d.tasks) ? d.tasks : []))
+      .catch(() => {})
+  }, [])
+
+  // Load real listings on mount.
+  useEffect(() => {
+    fetchContent('listing', undefined, 20)
+      .then(items => setListings(items))
+      .catch(() => {})
+      .finally(() => setListingsLoaded(true))
+  }, [])
+
+  // Load real neighbourhood price growth (سعادت‌آباد، تهران) from the market trend.
+  useEffect(() => {
+    fetch('/api/market/stats?city=' + encodeURIComponent('تهران') + '&district=' + encodeURIComponent('سعادت‌آباد'))
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        const trend: { avg: number }[] = d?.stats?.trend || []
+        if (trend.length >= 2) {
+          const first = trend[0].avg, last = trend[trend.length - 1].avg
+          if (first > 0) setGrowth(Math.round(((last - first) / first) * 100))
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   const toggleTheme = () => {
     const html = document.documentElement
@@ -172,22 +207,64 @@ export default function CRMPage() {
     }
   }
 
-  const addTask = () => {
-    if (!newTaskText.trim()) return
-    const newTask: Task = {
-      id: `t${Date.now()}`,
-      done: false,
-      text: newTaskText.trim(),
-      time: 'بدون زمان',
-      priority: 'medium',
-    }
-    setTasks(prev => [newTask, ...prev])
+  const addTask = async () => {
+    const title = newTaskText.trim()
+    if (!title) return
     setNewTaskText('')
+    try {
+      const r = await fetch('/api/crm/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, priority: 'medium' }),
+      })
+      if (r.ok) {
+        const { task } = await r.json()
+        if (task) setTasks(prev => [task, ...prev])
+      }
+    } catch {}
   }
 
   const toggleTask = (id: string) => {
+    // optimistic
     setTasks(prev => prev.map(t => t.id === id ? { ...t, done: !t.done } : t))
+    fetch('/api/crm/tasks', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    }).catch(() => {})
   }
+
+  const deleteTask = (id: string) => {
+    setTasks(prev => prev.filter(t => t.id !== id))
+    fetch('/api/crm/tasks?id=' + encodeURIComponent(id), { method: 'DELETE' }).catch(() => {})
+  }
+
+  const runAi = async () => {
+    const input = aiInput.trim()
+    if (!input || aiLoading) return
+    setAiLoading(true)
+    setAiReply('')
+    try {
+      const r = await fetch('/api/ai/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agent: 'chat', input }),
+      })
+      const d = await r.json()
+      setAiReply(d.text || d.error || 'پاسخی دریافت نشد.')
+    } catch {
+      setAiReply('خطا در ارتباط با دستیار.')
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
+  // Real growth sentence when available, else the original copy.
+  const insightsLive = insights.map(ins =>
+    ins.text.startsWith('قیمت سعادت‌آباد') && growth !== null
+      ? { ...ins, text: `قیمت سعادت‌آباد ${growth >= 0 ? '+' : ''}${growth}٪ تغییر کرده (بر اساس داده‌های واقعی). به لیدها اطلاع دهید.` }
+      : ins
+  )
 
   const maxSales = Math.max(...salesData.map(d => d.value))
 
@@ -358,12 +435,14 @@ export default function CRMPage() {
               fontFamily: 'Vazirmatn, system-ui, sans-serif',
             }}
           />
-          <button style={{
-            padding: '8px 16px', borderRadius: 10,
-            background: 'var(--goldDim)', border: '1px solid var(--gold)',
-            color: 'var(--gold)', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-            fontFamily: 'Vazirmatn, system-ui, sans-serif',
-          }}>✦ دستیار</button>
+          <button
+            onClick={() => setAiOpen(true)}
+            style={{
+              padding: '8px 16px', borderRadius: 10,
+              background: 'var(--goldDim)', border: '1px solid var(--gold)',
+              color: 'var(--gold)', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              fontFamily: 'Vazirmatn, system-ui, sans-serif',
+            }}>✦ دستیار</button>
           <button style={{
             width: 40, height: 40, borderRadius: 10,
             background: 'var(--surface)', border: '1px solid var(--line)',
@@ -488,7 +567,7 @@ export default function CRMPage() {
                     <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--gold)' }}>بینش‌های هوش مصنوعی</h3>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {insights.map((ins, i) => (
+                    {insightsLive.map((ins, i) => (
                       <div key={i} style={{
                         padding: '12px 14px',
                         borderRadius: 10,
@@ -655,39 +734,51 @@ export default function CRMPage() {
                 ))}
               </div>
 
-              {listings.map((item, i) => (
-                <div
-                  key={item.id}
-                  className="mjc-row"
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '2fr 120px 150px 80px 1fr',
-                    padding: '14px 20px',
-                    borderBottom: i < listings.length - 1 ? '1px solid var(--line)' : 'none',
-                    background: i % 2 === 1 ? 'rgba(255,255,255,0.018)' : 'transparent',
-                    alignItems: 'center',
-                  }}
-                >
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{item.title}</div>
-                  <div>
-                    <span style={{
-                      fontSize: 11, fontWeight: 600,
-                      color: item.statusColor,
-                      background: `${item.statusColor}22`,
-                      padding: '3px 10px', borderRadius: 6,
-                    }}>{item.status}</span>
-                  </div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{item.price}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>👁</span>
-                    <span style={{ fontSize: 13 }}>{item.views}</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ color: item.suggestionColor, fontSize: 13 }}>✦</span>
-                    <span style={{ fontSize: 12, color: item.suggestionColor }}>{item.aiSuggestion}</span>
-                  </div>
+              {listingsLoaded && listings.length === 0 && (
+                <div style={{ padding: '28px 20px', textAlign: 'center', fontSize: 13, color: 'var(--muted)' }}>
+                  هنوز فایلی ثبت نشده است.
                 </div>
-              ))}
+              )}
+
+              {listings.map((item, i) => {
+                const active = item.status !== 'rejected' && item.status !== 'duplicate'
+                const statusLabel = active ? 'فعال' : 'بایگانی'
+                const statusColor = active ? '#5fd98a' : 'var(--faint)'
+                const suggestion = item.location || item.sourceName || '—'
+                return (
+                  <div
+                    key={item.id}
+                    className="mjc-row"
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '2fr 120px 150px 80px 1fr',
+                      padding: '14px 20px',
+                      borderBottom: i < listings.length - 1 ? '1px solid var(--line)' : 'none',
+                      background: i % 2 === 1 ? 'rgba(255,255,255,0.018)' : 'transparent',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{item.title}</div>
+                    <div>
+                      <span style={{
+                        fontSize: 11, fontWeight: 600,
+                        color: statusColor,
+                        background: `${statusColor}22`,
+                        padding: '3px 10px', borderRadius: 6,
+                      }}>{statusLabel}</span>
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{item.price || '—'}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <span style={{ fontSize: 12, color: 'var(--muted)' }}>{item.rating ? '★' : '👁'}</span>
+                      <span style={{ fontSize: 13 }}>{item.rating || '—'}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ color: 'var(--gold)', fontSize: 13 }}>✦</span>
+                      <span style={{ fontSize: 12, color: 'var(--muted)' }}>{suggestion}</span>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
 
@@ -846,7 +937,7 @@ export default function CRMPage() {
                       <div style={{
                         fontSize: 14, fontWeight: 500,
                         textDecoration: task.done ? 'line-through' : 'none',
-                      }}>{task.text}</div>
+                      }}>{task.title}</div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
                       <span style={{
@@ -854,13 +945,24 @@ export default function CRMPage() {
                         background: 'var(--bg)',
                         padding: '3px 10px', borderRadius: 6,
                         border: '1px solid var(--line)',
-                      }}>{task.time}</span>
+                      }}>{taskTimeLabel(task)}</span>
                       <span style={{
                         width: 8, height: 8, borderRadius: '50%',
-                        background: priorityColor[task.priority],
+                        background: priorityColor[task.priority || 'medium'],
                         display: 'inline-block',
-                        boxShadow: `0 0 6px ${priorityColor[task.priority]}88`,
+                        boxShadow: `0 0 6px ${priorityColor[task.priority || 'medium']}88`,
                       }} />
+                      <button
+                        onClick={e => { e.stopPropagation(); deleteTask(task.id) }}
+                        title="حذف"
+                        style={{
+                          width: 24, height: 24, borderRadius: 6,
+                          background: 'var(--bg)', border: '1px solid var(--line)',
+                          color: 'var(--muted)', cursor: 'pointer', fontSize: 13, lineHeight: 1,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontFamily: 'Vazirmatn, system-ui, sans-serif',
+                        }}
+                      >×</button>
                     </div>
                   </div>
                 ))}
@@ -978,6 +1080,80 @@ export default function CRMPage() {
 
         </main>
       </div>
+
+      {/* ===== AI ASSISTANT MODAL ===== */}
+      {aiOpen && (
+        <div
+          onClick={() => setAiOpen(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 100,
+            background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: 520,
+              background: 'var(--surface)', border: '1px solid var(--gold)',
+              borderRadius: 16, padding: 22,
+              display: 'flex', flexDirection: 'column', gap: 14,
+              boxShadow: '0 20px 60px -20px rgba(0,0,0,0.6)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 16, color: 'var(--gold)' }}>✦</span>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--gold)', flex: 1 }}>دستیار هوشمند ملک‌جت</h3>
+              <button
+                onClick={() => setAiOpen(false)}
+                style={{
+                  width: 28, height: 28, borderRadius: 8,
+                  background: 'var(--bg)', border: '1px solid var(--line)',
+                  color: 'var(--muted)', cursor: 'pointer', fontSize: 15,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >×</button>
+            </div>
+
+            {aiReply && (
+              <div style={{
+                fontSize: 13, lineHeight: 1.9, color: 'var(--text)',
+                background: 'var(--goldDim)', border: '1px solid rgba(201,168,76,0.2)',
+                borderRadius: 10, padding: '12px 14px', whiteSpace: 'pre-wrap',
+                maxHeight: 300, overflowY: 'auto',
+              }}>{aiReply}</div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <input
+                value={aiInput}
+                onChange={e => setAiInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && runAi()}
+                placeholder="سوال خود را بپرسید…"
+                disabled={aiLoading}
+                style={{
+                  flex: 1, padding: '10px 14px',
+                  borderRadius: 10, background: 'var(--bg)',
+                  border: '1px solid var(--line)', color: 'var(--text)',
+                  fontSize: 13, outline: 'none',
+                  fontFamily: 'Vazirmatn, system-ui, sans-serif',
+                }}
+              />
+              <button
+                onClick={runAi}
+                disabled={aiLoading}
+                style={{
+                  padding: '10px 20px', borderRadius: 10,
+                  background: 'var(--gold)', border: 'none',
+                  color: '#16140f', fontWeight: 700, fontSize: 13,
+                  cursor: aiLoading ? 'default' : 'pointer', opacity: aiLoading ? 0.6 : 1,
+                  fontFamily: 'Vazirmatn, system-ui, sans-serif',
+                }}
+              >{aiLoading ? '…' : 'بپرس'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
