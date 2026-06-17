@@ -1475,7 +1475,15 @@ function UsersView() {
   const [search, setSearch] = useState('')
   const [openRole, setOpenRole] = useState<string | null>(null)
   const [owners, setOwners] = useState<{ id: string; name: string; phone?: string; count: number; firstSeen: number }[]>([])
-  useEffect(() => { fetch('/api/admin/owners').then(r => r.ok ? r.json() : { owners: [] }).then(d => setOwners(d.owners || [])) }, [])
+  const [editOwner, setEditOwner] = useState<{ id: string; name: string; phone: string } | null>(null)
+  const loadOwners = () => fetch('/api/admin/owners').then(r => r.ok ? r.json() : { owners: [] }).then(d => setOwners(d.owners || []))
+  useEffect(() => { loadOwners() }, [])
+  const saveOwner = async () => {
+    if (!editOwner) return
+    await fetch('/api/admin/owners', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editOwner) })
+    setEditOwner(null); loadOwners()
+  }
+  const delOwner = async (oid: string) => { if (!confirm('این آگهی‌دهنده حذف شود؟')) return; await fetch(`/api/admin/owners?id=${oid}`, { method: 'DELETE' }); loadOwners() }
   const users = [
     { name: 'سارا محمدی', email: 'sara@example.com', role: 'مشاور', plan: 'Pro', status: 'فعال', joined: '۱۴۰۳/۰۱/۱۵' },
     { name: 'امیر رضایی', email: 'amir@example.com', role: 'آژانس', plan: 'Business', status: 'فعال', joined: '۱۴۰۲/۱۱/۰۸' },
@@ -1544,14 +1552,33 @@ function UsersView() {
                 <span style={{ width: 34, height: 34, borderRadius: '50%', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, flexShrink: 0 }}>{(o.name || '؟').slice(0, 1)}</span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600, fontSize: 13 }}>{o.name}</div>
-                  {o.phone && <div style={{ fontSize: 12, color: 'var(--muted)', direction: 'ltr', textAlign: 'right' }}>{o.phone}</div>}
+                  <div style={{ fontSize: 12, color: o.phone ? 'var(--gold)' : 'var(--faint)', direction: 'ltr', textAlign: 'right' }}>{o.phone || 'بدون شماره'}</div>
                 </div>
                 <Badge label={`${o.count} آگهی`} color="#5b9bd5" />
+                <OutlineButton onClick={() => setEditOwner({ id: o.id, name: o.name, phone: o.phone || '' })} style={{ fontSize: 11.5, padding: '5px 12px' }}>ویرایش</OutlineButton>
+                <button onClick={() => delOwner(o.id)} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', borderRadius: 8, padding: '5px 9px', cursor: 'pointer', fontFamily: 'inherit' }}>×</button>
               </div>
             ))}
           </div>
         )}
       </Card>
+
+      {editOwner && (
+        <div onClick={() => setEditOwner(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 18, padding: 24, width: '100%', maxWidth: 420 }}>
+            <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 16 }}>ویرایش آگهی‌دهنده</div>
+            <label style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 5, display: 'block', fontWeight: 600 }}>نام</label>
+            <input value={editOwner.name} onChange={e => setEditOwner({ ...editOwner, name: e.target.value })} style={{ width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', marginBottom: 12 }} />
+            <label style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 5, display: 'block', fontWeight: 600 }}>شماره موبایل (دستی از دیوار)</label>
+            <input value={editOwner.phone} onChange={e => setEditOwner({ ...editOwner, phone: e.target.value })} placeholder="09xxxxxxxxx" style={{ width: '100%', direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', marginBottom: 16 }} />
+            <div style={{ fontSize: 11, color: 'var(--faint)', marginBottom: 16 }}>شماره روی همهٔ آگهی‌های این شخص نشانده می‌شود.</div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <GoldButton onClick={saveOwner} style={{ flex: 1 }}>ذخیره</GoldButton>
+              <OutlineButton onClick={() => setEditOwner(null)}>انصراف</OutlineButton>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Card>
         <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>نقش‌ها و دسترسی‌ها</div>

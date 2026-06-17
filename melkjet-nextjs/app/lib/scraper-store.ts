@@ -77,6 +77,26 @@ export function listOwners(): Owner[] {
   return (load().owners || []).sort((a, b) => b.count - a.count)
 }
 
+export function updateOwner(ownerId: string, patch: { name?: string; phone?: string }) {
+  const db = load()
+  const o = (db.owners || []).find(x => x.id === ownerId)
+  if (!o) return null
+  if (patch.name !== undefined) o.name = String(patch.name)
+  if (patch.phone !== undefined) {
+    o.phone = String(patch.phone)
+    // propagate the phone to all of this owner's items
+    db.items.forEach(it => { if (it.ownerId === ownerId) it.phone = o.phone })
+  }
+  save(db)
+  return o
+}
+
+export function deleteOwner(ownerId: string) {
+  const db = load()
+  db.owners = (db.owners || []).filter(x => x.id !== ownerId)
+  save(db)
+}
+
 function id() { return randomBytes(6).toString('hex') }
 
 const DEFAULT_CATEGORIES = [
