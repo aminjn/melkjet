@@ -1,36 +1,19 @@
 'use client'
-import { useEffect, useRef } from 'react'
+import { useState } from 'react'
 
-declare global { interface Window { L?: any } }
-const CSS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
-const JS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
-
-function load(): Promise<any> {
-  return new Promise((resolve, reject) => {
-    if (window.L) return resolve(window.L)
-    if (!document.querySelector(`link[href="${CSS}"]`)) { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = CSS; document.head.appendChild(l) }
-    const ex = document.querySelector(`script[src="${JS}"]`) as HTMLScriptElement | null
-    if (ex) { ex.addEventListener('load', () => resolve(window.L)); return }
-    const s = document.createElement('script'); s.src = JS; s.async = true
-    s.onload = () => resolve(window.L); s.onerror = () => reject(new Error('map'))
-    document.body.appendChild(s)
-  })
-}
-
+// Static map via Neshan (domestic). Falls back to a message if no Neshan key.
 export default function PropertyMap({ lat, lng }: { lat: number; lng: number }) {
-  const el = useRef<HTMLDivElement>(null)
-  const map = useRef<any>(null)
-  useEffect(() => {
-    let dead = false
-    load().then(L => {
-      if (dead || !el.current || map.current) return
-      const m = L.map(el.current, { scrollWheelZoom: false }).setView([lat, lng], 15)
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(m)
-      L.circle([lat, lng], { radius: 350, color: 'var(--gold)', fillColor: 'var(--gold)', fillOpacity: 0.15 }).addTo(m)
-      map.current = m
-    }).catch(() => {})
-    return () => { dead = true }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-  return <div ref={el} style={{ width: '100%', height: 280, borderRadius: 14, overflow: 'hidden', border: '1px solid var(--line)', background: 'var(--bg2)' }} />
+  const [err, setErr] = useState(false)
+  if (err) {
+    return (
+      <div style={{ width: '100%', height: 200, borderRadius: 14, border: '1px solid var(--line)', background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: 13, textAlign: 'center', padding: 16 }}>
+        نقشه نیاز به کلید نشان دارد (پنل → مناطق و محله‌ها → کلید نشان)
+      </div>
+    )
+  }
+  return (
+    <a href={`https://neshan.org/maps/@${lat},${lng},16z`} target="_blank" rel="noreferrer" style={{ display: 'block', borderRadius: 14, overflow: 'hidden', border: '1px solid var(--line)' }}>
+      <img src={`/api/geo/static-map?lat=${lat}&lng=${lng}`} alt="نقشه" style={{ width: '100%', height: 'auto', display: 'block' }} onError={() => setErr(true)} />
+    </a>
+  )
 }

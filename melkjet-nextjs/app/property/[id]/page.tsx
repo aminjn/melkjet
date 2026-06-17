@@ -69,8 +69,8 @@ export default function PropertyPage() {
       }).catch(() => {})
       // Divar gallery + facts + description
       const m = (it.url || '').match(/divar\.ir\/v\/([A-Za-z0-9_-]+)/)
-      const finishAnalyze = (fct: Fact[], desc: string) => {
-        fetch('/api/ai/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: it.title, price: it.price, location: it.location, facts: fct, description: desc, meta: it.meta }) })
+      const finishAnalyze = (fct: Fact[], desc: string, ams: string[] = []) => {
+        fetch('/api/ai/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: it.title, price: it.price, location: it.location, facts: fct, description: desc, meta: it.meta, amenities: ams }) })
           .then(r => r.json()).then(a => {
             if (a.ok && a.analysis) {
               setAnalysis(a.analysis)
@@ -89,7 +89,7 @@ export default function PropertyPage() {
           if (typeof g.lat === 'number' && typeof g.lng === 'number') setGeo({ lat: g.lat, lng: g.lng })
           const desc = g.description || it.excerpt || ''
           if (g.description) setItem(p => p ? { ...p, excerpt: g.description } : p)
-          finishAnalyze(fct, desc)
+          finishAnalyze(fct, desc, g.amenities || [])
         }).catch(() => finishAnalyze([], it.excerpt || ''))
       } else {
         finishAnalyze([], it.excerpt || '')

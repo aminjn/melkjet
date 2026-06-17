@@ -92,8 +92,15 @@ export async function GET(req: NextRequest) {
       // geo for the map
       const la = findFirst(d, 'latitude'), lo = findFirst(d, 'longitude')
       if (typeof la === 'number' && typeof lo === 'number') { lat = la; lng = lo }
-      // full description
+      // full description = the longest text value in the document (the توضیحات)
       const dsc = findFirst(d, 'description'); if (dsc) description = strOf(dsc)
+      let longest = description || ''
+      const dwalk = (x: any) => {
+        if (typeof x === 'string') { if (x.length > longest.length) longest = x }
+        else if (x && typeof x === 'object') { for (const k in x) dwalk(x[k]) }
+      }
+      dwalk(d)
+      if (longest.length > (description?.length || 0)) description = longest
 
       // walk widgets: collect {title,value} fact pairs + amenity chips
       const walk = (x: any) => {
