@@ -36,11 +36,15 @@ export async function GET(req: NextRequest) {
       timeout: 15000,
     })
     if (debug) {
-      const keys = Array.from(new Set([...res.body.matchAll(/"([a-zA-Z_]{2,40})":/g)].map(m => m[1]))).slice(0, 200)
-      // slice around the first square-meter / "متر" marker to find the facts block
-      const idx = res.body.indexOf('متر')
-      const around = idx >= 0 ? res.body.slice(Math.max(0, idx - 400), idx + 400) : ''
-      return NextResponse.json({ token, status: res.status, size: res.body.length, keys, sample: res.body.slice(0, 2500), around })
+      const grab = (marker: string, before = 60, after = 350) => { const i = res.body.indexOf(marker); return i >= 0 ? res.body.slice(Math.max(0, i - before), i + after) : '(not found)' }
+      return NextResponse.json({
+        token, status: res.status, size: res.body.length,
+        webengage: grab('"webengage"', 15, 800),
+        floorSize: grab('floorSize', 30, 250),
+        numberOfRooms: grab('numberOfRooms', 15, 150),
+        build: grab('ساخت', 220, 120),
+        floor: grab('طبقه', 220, 120),
+      })
     }
     if (res.status !== 200) return NextResponse.json({ images: [], reason: `http_${res.status}`, token })
 
