@@ -1198,6 +1198,9 @@ export default function OwnerPage() {
           <a href="/content" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderRadius: 10, color: 'var(--gold)', textDecoration: 'none', fontSize: 14, fontWeight: 600, marginTop: 4, border: '1px solid rgba(212,175,55,0.25)' }}>
             <span style={{ fontSize: 17 }}>✎</span> مقالات و وبلاگ
           </a>
+          <a href="/website-builder" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderRadius: 10, color: 'var(--gold)', textDecoration: 'none', fontSize: 14, fontWeight: 600, marginTop: 4, border: '1px solid rgba(212,175,55,0.25)' }}>
+            <span style={{ fontSize: 17 }}>◳</span> وب‌سایت من (سایت‌ساز)
+          </a>
         </nav>
 
         {/* Profile */}

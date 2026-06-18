@@ -419,6 +419,10 @@ export default function CRMPage() {
             <span style={{ fontSize: 16 }}>✎</span>
             <span className="mjc-sidelabel">مقالات و وبلاگ</span>
           </a>
+          <a href="/website-builder" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderRadius: 10, color: 'var(--gold)', textDecoration: 'none', fontWeight: 600, fontSize: 14, marginTop: 4, border: '1px solid rgba(212,175,55,0.25)' }}>
+            <span style={{ fontSize: 16 }}>◳</span>
+            <span className="mjc-sidelabel">وب‌سایت من (سایت‌ساز)</span>
+          </a>
 
           {/* AI Promo */}
           <div style={{

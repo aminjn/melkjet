@@ -28,10 +28,16 @@ const BLOCK_LIBRARY = [
 ]
 
 const STARTER_TEMPLATES = [
-  { id: 'classic', name: 'مشاور کلاسیک', blocks: ['hero', 'listings', 'testimonials', 'contact'], desc: 'هیرو، فایل‌ها، نظرات، تماس' },
-  { id: 'modern', name: 'مشاور مدرن', blocks: ['hero', 'stats', 'listings', 'about'], desc: 'هیرو، آمار، فایل‌ها، تیم' },
-  { id: 'agency', name: 'آژانس جامع', blocks: ['hero', 'services', 'listings', 'about'], desc: 'هیرو، خدمات، فایل‌ها، تیم' },
-  { id: 'presale', name: 'پیش‌فروش', blocks: ['hero', 'gallery', 'contact'], desc: 'هیرو، پروژه‌ها، فرم' },
+  { id: 'classic', name: 'مشاور کلاسیک', profile: 'مشاور', blocks: ['hero', 'listings', 'testimonials', 'contact', 'footer'], desc: 'هیرو، فایل‌ها، نظرات، تماس' },
+  { id: 'modern', name: 'مشاور مدرن', profile: 'مشاور', blocks: ['hero', 'stats', 'listings', 'about', 'footer'], desc: 'هیرو، آمار، فایل‌ها، درباره' },
+  { id: 'agency', name: 'آژانس جامع', profile: 'آژانس', blocks: ['hero', 'services', 'listings', 'about', 'contact', 'footer'], desc: 'هیرو، خدمات، فایل‌ها، تیم، تماس' },
+  { id: 'agencyLux', name: 'آژانس لوکس', profile: 'آژانس', blocks: ['hero', 'gallery', 'services', 'testimonials', 'contact', 'footer'], desc: 'هیرو، گالری، خدمات، نظرات' },
+  { id: 'presale', name: 'پیش‌فروش پروژه', profile: 'سازنده', blocks: ['hero', 'gallery', 'stats', 'contact', 'footer'], desc: 'هیرو، گالری پروژه، آمار، فرم' },
+  { id: 'builder', name: 'سازندهٔ ساختمان', profile: 'سازنده', blocks: ['hero', 'about', 'gallery', 'services', 'cta', 'footer'], desc: 'هیرو، درباره، پروژه‌ها، خدمات' },
+  { id: 'store', name: 'فروشگاه مصالح', profile: 'فروشگاه', blocks: ['hero', 'search', 'services', 'testimonials', 'contact', 'footer'], desc: 'هیرو، جستجو، دسته‌ها، نظرات' },
+  { id: 'invest', name: 'سرمایه‌گذاری', profile: 'سرمایه‌گذار', blocks: ['hero', 'stats', 'listings', 'cta', 'contact', 'footer'], desc: 'هیرو، آمار بازده، فرصت‌ها، CTA' },
+  { id: 'legal', name: 'مشاور حقوقی', profile: 'حقوقی', blocks: ['hero', 'services', 'about', 'testimonials', 'contact', 'footer'], desc: 'هیرو، خدمات حقوقی، درباره، تماس' },
+  { id: 'landing', name: 'لندینگ فروش', profile: 'عمومی', blocks: ['hero', 'cta', 'services', 'testimonials', 'contact'], desc: 'صفحهٔ تک‌برگ فروش با CTA' },
 ]
 
 const DEFAULT_HEADINGS: Record<string, string> = {
@@ -241,6 +247,7 @@ export default function WebsiteBuilderPage() {
     makeBlock('listings'),
   ])
   const [selectedBlock, setSelectedBlock] = useState<number | null>(null)
+  const [tplFilter, setTplFilter] = useState('همه')
   const [device, setDevice] = useState<Device>('desktop')
   const [activeTab, setActiveTab] = useState<ActiveTab>('seo')
   const [seoTitle, setSeoTitle] = useState('آژانس ملکی نمونه | خرید و فروش ملک')
@@ -460,9 +467,14 @@ export default function WebsiteBuilderPage() {
           background: 'var(--bg2)', overflowY: 'auto', padding: '16px 0',
         }}>
           <div style={{ padding: '0 14px', marginBottom: 4 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', marginBottom: 10 }}>قالب آماده</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {STARTER_TEMPLATES.map(tpl => (
+            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', marginBottom: 10 }}>قالب آماده ({STARTER_TEMPLATES.length.toLocaleString('fa-IR')})</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
+              {['همه', ...Array.from(new Set(STARTER_TEMPLATES.map(t => t.profile)))].map(pf => (
+                <button key={pf} onClick={() => setTplFilter(pf)} style={{ fontSize: 10.5, padding: '4px 9px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${tplFilter === pf ? 'var(--gold)' : 'var(--line)'}`, background: tplFilter === pf ? 'var(--goldDim)' : 'transparent', color: tplFilter === pf ? 'var(--gold)' : 'var(--muted)' }}>{pf}</button>
+              ))}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 320, overflowY: 'auto' }}>
+              {STARTER_TEMPLATES.filter(t => tplFilter === 'همه' || t.profile === tplFilter).map(tpl => (
                 <button
                   key={tpl.id}
                   onClick={() => loadTemplate(tpl)}
@@ -472,7 +484,10 @@ export default function WebsiteBuilderPage() {
                     cursor: 'pointer', transition: 'all .15s', width: '100%',
                   }}
                 >
-                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 2 }}>{tpl.name}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 2 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>{tpl.name}</span>
+                    <span style={{ fontSize: 9, color: 'var(--gold)', border: '1px solid rgba(212,175,55,.3)', borderRadius: 999, padding: '1px 7px' }}>{tpl.profile}</span>
+                  </div>
                   <div style={{ fontSize: 10, color: 'var(--faint)', lineHeight: 1.4 }}>{tpl.desc}</div>
                 </button>
               ))}

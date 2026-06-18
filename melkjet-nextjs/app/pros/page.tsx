@@ -239,6 +239,10 @@ export default function ProsPage() {
             <span style={{ width: 22, textAlign: 'center', fontSize: 15 }}>✎</span>
             <span style={{ flex: 1, textAlign: 'right' }}>مقالات و وبلاگ</span>
           </Link>
+          <Link href="/website-builder" style={{ display: 'flex', alignItems: 'center', padding: '10px 12px', borderRadius: 10, color: 'var(--gold)', textDecoration: 'none', fontSize: 13.5, fontWeight: 600, marginTop: 4, border: '1px solid rgba(212,175,55,0.25)' }}>
+            <span style={{ width: 22, textAlign: 'center', fontSize: 15 }}>◳</span>
+            <span style={{ flex: 1, textAlign: 'right' }}>وب‌سایت من (سایت‌ساز)</span>
+          </Link>
         </nav>
 
         <div style={{ flex: 1 }}></div>
