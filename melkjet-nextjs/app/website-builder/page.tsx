@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
@@ -27,17 +27,104 @@ const BLOCK_LIBRARY = [
   { type: 'footer', label: 'فوتر', icon: '▬' },
 ]
 
+const PROFILE_GROUPS = ['مشاور', 'آژانس', 'سازنده', 'فروشگاه', 'سرمایه‌گذار', 'حقوقی', 'عمومی'] as const
+
+// نگاشت مسیر داشبورد کاربر به گروه پروفایل قالب‌ها
+const DASH_TO_PROFILE: Record<string, string> = {
+  '/builder': 'سازنده',
+  '/pros': 'مشاور',
+  '/agency': 'آژانس',
+  '/materials': 'فروشگاه',
+  '/owner': 'سرمایه‌گذار',
+  '/buyer': 'عمومی',
+  '/legal': 'حقوقی',
+  '/crm': 'مشاور',
+}
+
 const STARTER_TEMPLATES = [
-  { id: 'classic', name: 'مشاور کلاسیک', profile: 'مشاور', blocks: ['hero', 'listings', 'testimonials', 'contact', 'footer'], desc: 'هیرو، فایل‌ها، نظرات، تماس' },
-  { id: 'modern', name: 'مشاور مدرن', profile: 'مشاور', blocks: ['hero', 'stats', 'listings', 'about', 'footer'], desc: 'هیرو، آمار، فایل‌ها، درباره' },
-  { id: 'agency', name: 'آژانس جامع', profile: 'آژانس', blocks: ['hero', 'services', 'listings', 'about', 'contact', 'footer'], desc: 'هیرو، خدمات، فایل‌ها، تیم، تماس' },
-  { id: 'agencyLux', name: 'آژانس لوکس', profile: 'آژانس', blocks: ['hero', 'gallery', 'services', 'testimonials', 'contact', 'footer'], desc: 'هیرو، گالری، خدمات، نظرات' },
-  { id: 'presale', name: 'پیش‌فروش پروژه', profile: 'سازنده', blocks: ['hero', 'gallery', 'stats', 'contact', 'footer'], desc: 'هیرو، گالری پروژه، آمار، فرم' },
-  { id: 'builder', name: 'سازندهٔ ساختمان', profile: 'سازنده', blocks: ['hero', 'about', 'gallery', 'services', 'cta', 'footer'], desc: 'هیرو، درباره، پروژه‌ها، خدمات' },
-  { id: 'store', name: 'فروشگاه مصالح', profile: 'فروشگاه', blocks: ['hero', 'search', 'services', 'testimonials', 'contact', 'footer'], desc: 'هیرو، جستجو، دسته‌ها، نظرات' },
-  { id: 'invest', name: 'سرمایه‌گذاری', profile: 'سرمایه‌گذار', blocks: ['hero', 'stats', 'listings', 'cta', 'contact', 'footer'], desc: 'هیرو، آمار بازده، فرصت‌ها، CTA' },
-  { id: 'legal', name: 'مشاور حقوقی', profile: 'حقوقی', blocks: ['hero', 'services', 'about', 'testimonials', 'contact', 'footer'], desc: 'هیرو، خدمات حقوقی، درباره، تماس' },
-  { id: 'landing', name: 'لندینگ فروش', profile: 'عمومی', blocks: ['hero', 'cta', 'services', 'testimonials', 'contact'], desc: 'صفحهٔ تک‌برگ فروش با CTA' },
+  // ───────── مشاور (۱۰) ─────────
+  { id: 'pro-01', name: 'مشاور کلاسیک', profile: 'مشاور', blocks: ['hero', 'listings', 'testimonials', 'contact', 'footer'], desc: 'هیرو، فایل‌ها، نظرات، تماس' },
+  { id: 'pro-02', name: 'مشاور مدرن', profile: 'مشاور', blocks: ['hero', 'stats', 'listings', 'about', 'footer'], desc: 'هیرو، آمار، فایل‌ها، درباره' },
+  { id: 'pro-03', name: 'مشاور حرفه‌ای', profile: 'مشاور', blocks: ['hero', 'gallery', 'services', 'cta', 'contact', 'footer'], desc: 'هیرو، گالری، خدمات، اقدام، تماس' },
+  { id: 'pro-04', name: 'مشاور لوکس', profile: 'مشاور', blocks: ['hero', 'about', 'listings', 'testimonials', 'cta', 'footer'], desc: 'هیرو، معرفی، فایل‌ها، نظرات' },
+  { id: 'pro-05', name: 'مشاور جستجو‌محور', profile: 'مشاور', blocks: ['hero', 'search', 'listings', 'contact', 'footer'], desc: 'هیرو، جستجو، فایل‌ها، تماس' },
+  { id: 'pro-06', name: 'مشاور کامل', profile: 'مشاور', blocks: ['hero', 'services', 'stats', 'listings', 'testimonials', 'footer'], desc: 'هیرو، خدمات، آمار، فایل‌ها، نظرات' },
+  { id: 'pro-07', name: 'مشاور تک‌برگ', profile: 'مشاور', blocks: ['hero', 'listings', 'about', 'cta', 'footer'], desc: 'هیرو، فایل‌ها، درباره، اقدام' },
+  { id: 'pro-08', name: 'مشاور تصویری', profile: 'مشاور', blocks: ['hero', 'gallery', 'listings', 'testimonials', 'contact', 'footer'], desc: 'هیرو، گالری، فایل‌ها، نظرات، تماس' },
+  { id: 'pro-09', name: 'مشاور معتبر', profile: 'مشاور', blocks: ['hero', 'about', 'stats', 'services', 'contact', 'footer'], desc: 'هیرو، درباره، آمار، خدمات، تماس' },
+  { id: 'pro-10', name: 'مشاور سریع', profile: 'مشاور', blocks: ['hero', 'search', 'services', 'testimonials', 'cta', 'footer'], desc: 'هیرو، جستجو، خدمات، نظرات، اقدام' },
+
+  // ───────── آژانس (۱۰) ─────────
+  { id: 'agc-01', name: 'آژانس جامع', profile: 'آژانس', blocks: ['hero', 'services', 'listings', 'about', 'contact', 'footer'], desc: 'هیرو، خدمات، فایل‌ها، تیم، تماس' },
+  { id: 'agc-02', name: 'آژانس لوکس', profile: 'آژانس', blocks: ['hero', 'gallery', 'services', 'testimonials', 'contact', 'footer'], desc: 'هیرو، گالری، خدمات، نظرات' },
+  { id: 'agc-03', name: 'آژانس مدرن', profile: 'آژانس', blocks: ['hero', 'search', 'listings', 'stats', 'cta', 'footer'], desc: 'هیرو، جستجو، فایل‌ها، آمار، اقدام' },
+  { id: 'agc-04', name: 'آژانس حرفه‌ای', profile: 'آژانس', blocks: ['hero', 'about', 'services', 'stats', 'testimonials', 'footer'], desc: 'هیرو، درباره، خدمات، آمار، نظرات' },
+  { id: 'agc-05', name: 'آژانس برتر', profile: 'آژانس', blocks: ['hero', 'stats', 'listings', 'testimonials', 'contact', 'footer'], desc: 'هیرو، آمار، فایل‌ها، نظرات، تماس' },
+  { id: 'agc-06', name: 'آژانس تیمی', profile: 'آژانس', blocks: ['hero', 'about', 'gallery', 'services', 'contact', 'footer'], desc: 'هیرو، تیم، گالری، خدمات، تماس' },
+  { id: 'agc-07', name: 'آژانس کامل', profile: 'آژانس', blocks: ['hero', 'search', 'services', 'listings', 'testimonials', 'footer'], desc: 'هیرو، جستجو، خدمات، فایل‌ها، نظرات' },
+  { id: 'agc-08', name: 'آژانس فروش', profile: 'آژانس', blocks: ['hero', 'listings', 'cta', 'contact', 'footer'], desc: 'هیرو، فایل‌ها، اقدام، تماس' },
+  { id: 'agc-09', name: 'آژانس معتبر', profile: 'آژانس', blocks: ['hero', 'services', 'stats', 'gallery', 'cta', 'footer'], desc: 'هیرو، خدمات، آمار، گالری، اقدام' },
+  { id: 'agc-10', name: 'آژانس بین‌المللی', profile: 'آژانس', blocks: ['hero', 'about', 'listings', 'services', 'testimonials', 'contact', 'footer'], desc: 'هیرو، درباره، فایل‌ها، خدمات، نظرات، تماس' },
+
+  // ───────── سازنده (۱۰) ─────────
+  { id: 'bld-01', name: 'پیش‌فروش پروژه', profile: 'سازنده', blocks: ['hero', 'gallery', 'stats', 'contact', 'footer'], desc: 'هیرو، گالری پروژه، آمار، فرم' },
+  { id: 'bld-02', name: 'سازندهٔ ساختمان', profile: 'سازنده', blocks: ['hero', 'about', 'gallery', 'services', 'cta', 'footer'], desc: 'هیرو، درباره، پروژه‌ها، خدمات' },
+  { id: 'bld-03', name: 'انبوه‌ساز', profile: 'سازنده', blocks: ['hero', 'gallery', 'stats', 'about', 'cta', 'footer'], desc: 'هیرو، گالری، آمار، درباره، اقدام' },
+  { id: 'bld-04', name: 'پروژهٔ لوکس', profile: 'سازنده', blocks: ['hero', 'gallery', 'services', 'testimonials', 'contact', 'footer'], desc: 'هیرو، گالری، خدمات، نظرات، تماس' },
+  { id: 'bld-05', name: 'سازندهٔ مدرن', profile: 'سازنده', blocks: ['hero', 'stats', 'gallery', 'about', 'contact', 'footer'], desc: 'هیرو، آمار، گالری، درباره، تماس' },
+  { id: 'bld-06', name: 'برج مسکونی', profile: 'سازنده', blocks: ['hero', 'about', 'gallery', 'stats', 'cta', 'footer'], desc: 'هیرو، معرفی، گالری، آمار، اقدام' },
+  { id: 'bld-07', name: 'مجتمع تجاری', profile: 'سازنده', blocks: ['hero', 'gallery', 'services', 'stats', 'contact', 'footer'], desc: 'هیرو، گالری، خدمات، آمار، تماس' },
+  { id: 'bld-08', name: 'سازندهٔ کامل', profile: 'سازنده', blocks: ['hero', 'about', 'gallery', 'stats', 'testimonials', 'cta', 'footer'], desc: 'هیرو، درباره، گالری، آمار، نظرات' },
+  { id: 'bld-09', name: 'پروژهٔ نمونه', profile: 'سازنده', blocks: ['hero', 'gallery', 'about', 'cta', 'footer'], desc: 'هیرو، گالری، درباره، اقدام' },
+  { id: 'bld-10', name: 'سازندهٔ معتبر', profile: 'سازنده', blocks: ['hero', 'stats', 'about', 'gallery', 'services', 'footer'], desc: 'هیرو، آمار، درباره، گالری، خدمات' },
+
+  // ───────── فروشگاه (۱۰) ─────────
+  { id: 'shp-01', name: 'فروشگاه مصالح', profile: 'فروشگاه', blocks: ['hero', 'search', 'services', 'testimonials', 'contact', 'footer'], desc: 'هیرو، جستجو، دسته‌ها، نظرات' },
+  { id: 'shp-02', name: 'فروشگاه آنلاین', profile: 'فروشگاه', blocks: ['hero', 'search', 'listings', 'services', 'footer'], desc: 'هیرو، جستجو، محصولات، دسته‌ها' },
+  { id: 'shp-03', name: 'فروشگاه مدرن', profile: 'فروشگاه', blocks: ['hero', 'search', 'services', 'gallery', 'cta', 'footer'], desc: 'هیرو، جستجو، دسته‌ها، گالری، اقدام' },
+  { id: 'shp-04', name: 'فروشگاه کامل', profile: 'فروشگاه', blocks: ['hero', 'search', 'services', 'stats', 'testimonials', 'footer'], desc: 'هیرو، جستجو، دسته‌ها، آمار، نظرات' },
+  { id: 'shp-05', name: 'فروشگاه تخصصی', profile: 'فروشگاه', blocks: ['hero', 'search', 'listings', 'testimonials', 'contact', 'footer'], desc: 'هیرو، جستجو، محصولات، نظرات، تماس' },
+  { id: 'shp-06', name: 'فروشگاه ابزار', profile: 'فروشگاه', blocks: ['hero', 'search', 'services', 'about', 'cta', 'footer'], desc: 'هیرو، جستجو، دسته‌ها، درباره، اقدام' },
+  { id: 'shp-07', name: 'فروشگاه دکوراسیون', profile: 'فروشگاه', blocks: ['hero', 'gallery', 'search', 'services', 'contact', 'footer'], desc: 'هیرو، گالری، جستجو، دسته‌ها، تماس' },
+  { id: 'shp-08', name: 'فروشگاه عمده', profile: 'فروشگاه', blocks: ['hero', 'search', 'services', 'stats', 'contact', 'footer'], desc: 'هیرو، جستجو، دسته‌ها، آمار، تماس' },
+  { id: 'shp-09', name: 'فروشگاه برتر', profile: 'فروشگاه', blocks: ['hero', 'search', 'listings', 'services', 'cta', 'footer'], desc: 'هیرو، جستجو، محصولات، دسته‌ها، اقدام' },
+  { id: 'shp-10', name: 'فروشگاه نمونه', profile: 'فروشگاه', blocks: ['hero', 'search', 'about', 'services', 'testimonials', 'footer'], desc: 'هیرو، جستجو، درباره، دسته‌ها، نظرات' },
+
+  // ───────── سرمایه‌گذار (۱۰) ─────────
+  { id: 'inv-01', name: 'سرمایه‌گذاری', profile: 'سرمایه‌گذار', blocks: ['hero', 'stats', 'listings', 'cta', 'contact', 'footer'], desc: 'هیرو، آمار بازده، فرصت‌ها، اقدام' },
+  { id: 'inv-02', name: 'صندوق املاک', profile: 'سرمایه‌گذار', blocks: ['hero', 'stats', 'about', 'cta', 'footer'], desc: 'هیرو، آمار، درباره، اقدام' },
+  { id: 'inv-03', name: 'فرصت سرمایه‌گذاری', profile: 'سرمایه‌گذار', blocks: ['hero', 'listings', 'stats', 'testimonials', 'contact', 'footer'], desc: 'هیرو، فرصت‌ها، آمار، نظرات، تماس' },
+  { id: 'inv-04', name: 'پرتفوی ملکی', profile: 'سرمایه‌گذار', blocks: ['hero', 'stats', 'gallery', 'cta', 'footer'], desc: 'هیرو، آمار، گالری، اقدام' },
+  { id: 'inv-05', name: 'بازده تضمینی', profile: 'سرمایه‌گذار', blocks: ['hero', 'stats', 'services', 'about', 'contact', 'footer'], desc: 'هیرو، آمار، خدمات، درباره، تماس' },
+  { id: 'inv-06', name: 'سرمایه‌گذاری مدرن', profile: 'سرمایه‌گذار', blocks: ['hero', 'about', 'stats', 'listings', 'cta', 'footer'], desc: 'هیرو، درباره، آمار، فرصت‌ها، اقدام' },
+  { id: 'inv-07', name: 'سرمایه‌گذاری امن', profile: 'سرمایه‌گذار', blocks: ['hero', 'stats', 'testimonials', 'cta', 'contact', 'footer'], desc: 'هیرو، آمار، نظرات، اقدام، تماس' },
+  { id: 'inv-08', name: 'پروژهٔ سرمایه‌گذاری', profile: 'سرمایه‌گذار', blocks: ['hero', 'gallery', 'stats', 'listings', 'cta', 'footer'], desc: 'هیرو، گالری، آمار، فرصت‌ها، اقدام' },
+  { id: 'inv-09', name: 'سرمایه‌گذاری کامل', profile: 'سرمایه‌گذار', blocks: ['hero', 'stats', 'services', 'listings', 'testimonials', 'footer'], desc: 'هیرو، آمار، خدمات، فرصت‌ها، نظرات' },
+  { id: 'inv-10', name: 'سرمایه‌گذاری حرفه‌ای', profile: 'سرمایه‌گذار', blocks: ['hero', 'about', 'stats', 'cta', 'contact', 'footer'], desc: 'هیرو، درباره، آمار، اقدام، تماس' },
+
+  // ───────── حقوقی (۱۰) ─────────
+  { id: 'lgl-01', name: 'مشاور حقوقی', profile: 'حقوقی', blocks: ['hero', 'services', 'about', 'testimonials', 'contact', 'footer'], desc: 'هیرو، خدمات حقوقی، درباره، تماس' },
+  { id: 'lgl-02', name: 'دفتر وکالت', profile: 'حقوقی', blocks: ['hero', 'about', 'services', 'contact', 'footer'], desc: 'هیرو، درباره، خدمات، تماس' },
+  { id: 'lgl-03', name: 'مشاوره ملکی', profile: 'حقوقی', blocks: ['hero', 'services', 'testimonials', 'cta', 'footer'], desc: 'هیرو، خدمات، نظرات، اقدام' },
+  { id: 'lgl-04', name: 'حقوقی حرفه‌ای', profile: 'حقوقی', blocks: ['hero', 'about', 'services', 'stats', 'contact', 'footer'], desc: 'هیرو، درباره، خدمات، آمار، تماس' },
+  { id: 'lgl-05', name: 'وکیل پایه یک', profile: 'حقوقی', blocks: ['hero', 'services', 'about', 'cta', 'contact', 'footer'], desc: 'هیرو، خدمات، درباره، اقدام، تماس' },
+  { id: 'lgl-06', name: 'حقوقی معتبر', profile: 'حقوقی', blocks: ['hero', 'services', 'stats', 'testimonials', 'footer'], desc: 'هیرو، خدمات، آمار، نظرات' },
+  { id: 'lgl-07', name: 'قراردادهای ملکی', profile: 'حقوقی', blocks: ['hero', 'about', 'services', 'testimonials', 'cta', 'footer'], desc: 'هیرو، درباره، خدمات، نظرات، اقدام' },
+  { id: 'lgl-08', name: 'مشاوره تخصصی', profile: 'حقوقی', blocks: ['hero', 'services', 'about', 'stats', 'cta', 'footer'], desc: 'هیرو، خدمات، درباره، آمار، اقدام' },
+  { id: 'lgl-09', name: 'حقوقی کامل', profile: 'حقوقی', blocks: ['hero', 'services', 'testimonials', 'about', 'contact', 'footer'], desc: 'هیرو، خدمات، نظرات، درباره، تماس' },
+  { id: 'lgl-10', name: 'دفتر اسناد', profile: 'حقوقی', blocks: ['hero', 'about', 'services', 'gallery', 'contact', 'footer'], desc: 'هیرو، درباره، خدمات، گالری، تماس' },
+
+  // ───────── عمومی (۱۰) ─────────
+  { id: 'gen-01', name: 'لندینگ فروش', profile: 'عمومی', blocks: ['hero', 'cta', 'services', 'testimonials', 'contact', 'footer'], desc: 'صفحهٔ تک‌برگ فروش با اقدام' },
+  { id: 'gen-02', name: 'صفحهٔ ساده', profile: 'عمومی', blocks: ['hero', 'about', 'contact', 'footer'], desc: 'هیرو، درباره، تماس' },
+  { id: 'gen-03', name: 'معرفی کسب‌وکار', profile: 'عمومی', blocks: ['hero', 'services', 'about', 'cta', 'footer'], desc: 'هیرو، خدمات، درباره، اقدام' },
+  { id: 'gen-04', name: 'پرتال جستجو', profile: 'عمومی', blocks: ['hero', 'search', 'listings', 'contact', 'footer'], desc: 'هیرو، جستجو، فایل‌ها، تماس' },
+  { id: 'gen-05', name: 'نمونه‌کار', profile: 'عمومی', blocks: ['hero', 'gallery', 'about', 'cta', 'footer'], desc: 'هیرو، گالری، درباره، اقدام' },
+  { id: 'gen-06', name: 'صفحهٔ کامل', profile: 'عمومی', blocks: ['hero', 'services', 'stats', 'testimonials', 'contact', 'footer'], desc: 'هیرو، خدمات، آمار، نظرات، تماس' },
+  { id: 'gen-07', name: 'صفحهٔ شرکتی', profile: 'عمومی', blocks: ['hero', 'about', 'services', 'gallery', 'contact', 'footer'], desc: 'هیرو، درباره، خدمات، گالری، تماس' },
+  { id: 'gen-08', name: 'صفحهٔ رویداد', profile: 'عمومی', blocks: ['hero', 'about', 'gallery', 'cta', 'contact', 'footer'], desc: 'هیرو، درباره، گالری، اقدام، تماس' },
+  { id: 'gen-09', name: 'صفحهٔ خدمات', profile: 'عمومی', blocks: ['hero', 'services', 'testimonials', 'cta', 'footer'], desc: 'هیرو، خدمات، نظرات، اقدام' },
+  { id: 'gen-10', name: 'صفحهٔ حرفه‌ای', profile: 'عمومی', blocks: ['hero', 'stats', 'services', 'about', 'contact', 'footer'], desc: 'هیرو، آمار، خدمات، درباره، تماس' },
 ]
 
 const DEFAULT_HEADINGS: Record<string, string> = {
@@ -247,7 +334,7 @@ export default function WebsiteBuilderPage() {
     makeBlock('listings'),
   ])
   const [selectedBlock, setSelectedBlock] = useState<number | null>(null)
-  const [tplFilter, setTplFilter] = useState('همه')
+  const [tplFilter, setTplFilter] = useState('عمومی')
   const [device, setDevice] = useState<Device>('desktop')
   const [activeTab, setActiveTab] = useState<ActiveTab>('seo')
   const [seoTitle, setSeoTitle] = useState('آژانس ملکی نمونه | خرید و فروش ملک')
@@ -266,6 +353,20 @@ export default function WebsiteBuilderPage() {
     { id: 'contact', label: 'تماس', active: false },
   ])
   const [blockHeadingEdit, setBlockHeadingEdit] = useState('')
+
+  // اسکوپ خودکار قالب‌ها بر اساس نقش کاربر واردشده
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/auth/profile')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (cancelled || !data) return
+        const profile = DASH_TO_PROFILE[data.dash as string] || 'عمومی'
+        setTplFilter(profile)
+      })
+      .catch(() => { /* در صورت خطا روی پیش‌فرض «عمومی» می‌ماند */ })
+    return () => { cancelled = true }
+  }, [])
 
   const pushHistory = (b: Block[]) => setHistory(h => [...h.slice(-19), b])
 
@@ -467,14 +568,15 @@ export default function WebsiteBuilderPage() {
           background: 'var(--bg2)', overflowY: 'auto', padding: '16px 0',
         }}>
           <div style={{ padding: '0 14px', marginBottom: 4 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', marginBottom: 10 }}>قالب آماده ({STARTER_TEMPLATES.length.toLocaleString('fa-IR')})</div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', marginBottom: 6 }}>قالب آماده ({STARTER_TEMPLATES.length.toLocaleString('fa-IR')})</div>
+            <div style={{ fontSize: 9.5, color: 'var(--gold)', marginBottom: 10, lineHeight: 1.5 }}>قالب‌های متناسب با پروفایل شما</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
-              {['همه', ...Array.from(new Set(STARTER_TEMPLATES.map(t => t.profile)))].map(pf => (
+              {PROFILE_GROUPS.map(pf => (
                 <button key={pf} onClick={() => setTplFilter(pf)} style={{ fontSize: 10.5, padding: '4px 9px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${tplFilter === pf ? 'var(--gold)' : 'var(--line)'}`, background: tplFilter === pf ? 'var(--goldDim)' : 'transparent', color: tplFilter === pf ? 'var(--gold)' : 'var(--muted)' }}>{pf}</button>
               ))}
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 320, overflowY: 'auto' }}>
-              {STARTER_TEMPLATES.filter(t => tplFilter === 'همه' || t.profile === tplFilter).map(tpl => (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 360, overflowY: 'auto' }}>
+              {STARTER_TEMPLATES.filter(t => t.profile === tplFilter).map(tpl => (
                 <button
                   key={tpl.id}
                   onClick={() => loadTemplate(tpl)}
