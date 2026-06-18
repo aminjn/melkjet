@@ -52,6 +52,9 @@ next-env.d.ts
 .user-data.json
 .pros-data.json
 .workflow-data.json
+.promo-data.json
+.banner-data.json
+.plan-data.json
 .sites-data.json
 .cms-data.json
 .category-data.json

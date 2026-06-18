@@ -2396,69 +2396,147 @@ function UsersView() {
 }
 
 function PlansView() {
-  const segments = [
-    {
-      name: 'خریدار و مستأجر', color: '#5b9bd5',
-      plans: [
-        { name: 'رایگان', price: '۰', features: ['جستجوی هوشمند', 'ذخیره ۵ ملک', 'پیام محدود', 'تحلیل پایه'] },
-        { name: 'پرمیوم', price: '۴۹۰٬۰۰۰', features: ['جستجو بدون محدودیت', 'اعلان قیمت', 'دستیار AI', 'گزارش کامل محله'] },
-      ]
-    },
-    {
-      name: 'مشاور و آژانس', color: 'var(--gold)',
-      plans: [
-        { name: 'Pro', price: '۱٬۹۹۰٬۰۰۰', features: ['آگهی نامحدود', 'CRM پایه', 'صفحه حرفه‌ای', 'آمار کامل'] },
-        { name: 'Business', price: '۴٬۹۹۰٬۰۰۰', features: ['همه‌چیز Pro', 'چند کاربره', 'API دسترسی', 'پشتیبانی اولویت'] },
-      ]
-    },
-    {
-      name: 'سازنده و توسعه‌دهنده', color: '#5fd98a',
-      plans: [
-        { name: 'Builder', price: '۲٬۴۹۰٬۰۰۰', features: ['پروژه نامحدود', 'صفحه پروژه', 'لندینگ اختصاصی', 'لیدهای هدفمند'] },
-        { name: 'Enterprise', price: 'توافقی', features: ['برندینگ اختصاصی', 'API کامل', 'داشبورد سفارشی', 'SLA گارانتی‌شده'] },
-      ]
-    },
-    {
-      name: 'مصالح و B2B', color: '#e7a14a',
-      plans: [
-        { name: 'Catalog', price: '۹۹۰٬۰۰۰', features: ['کاتالوگ محصولات', 'صفحه برند', 'درخواست قیمت', 'آمار بازدید'] },
-        { name: 'Market', price: '۳٬۴۹۰٬۰۰۰', features: ['همه‌چیز Catalog', 'تبلیغات هدفمند', 'CRM خریداران', 'API سفارش'] },
-      ]
-    },
-  ]
-
+  const [plans, setPlans] = useState<any[]>([])
+  const [show, setShow] = useState(false)
+  const [f, setF] = useState({ name: '', priceMonthly: '', priceYearly: '', features: '', highlighted: false, cta: '', active: true })
+  const load = () => fetch('/api/admin/plans').then(r => r.ok ? r.json() : { plans: [] }).then(d => setPlans(d.plans || []))
+  useEffect(() => { load() }, [])
+  const create = async () => {
+    if (!f.name.trim()) return
+    await fetch('/api/admin/plans', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: f.name, priceMonthly: Number(f.priceMonthly) || 0, priceYearly: Number(f.priceYearly) || 0, features: f.features.split('\n').map(x => x.trim()).filter(Boolean), highlighted: f.highlighted, cta: f.cta, active: f.active }) })
+    setF({ name: '', priceMonthly: '', priceYearly: '', features: '', highlighted: false, cta: '', active: true }); setShow(false); load()
+  }
+  const patch = async (id: string, p: any) => { await fetch('/api/admin/plans', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...p }) }); load() }
+  const del = async (id: string) => { if (!confirm('این پلن حذف شود؟')) return; await fetch(`/api/admin/plans?id=${id}`, { method: 'DELETE' }); load() }
+  const editPlan = (p: any) => { const name = prompt('نام پلن:', p.name); if (name === null) return; const pm = prompt('قیمت ماهانه (تومان):', String(p.priceMonthly)); const py = prompt('قیمت سالانه (تومان):', String(p.priceYearly)); const feats = prompt('ویژگی‌ها (هر خط یک مورد):', (p.features || []).join('\n')); patch(p.id, { name, priceMonthly: Number(pm) || p.priceMonthly, priceYearly: Number(py) || p.priceYearly, features: (feats ?? (p.features || []).join('\n')).split('\n').map((x: string) => x.trim()).filter(Boolean) }) }
+  const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '9px 11px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
   return (
     <div style={{ animation: 'fade .35s ease' }}>
-      {segments.map(seg => (
-        <div key={seg.name} style={{ marginBottom: 22 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 12, color: seg.color }}>{seg.name}</div>
-          <div className="mjsa-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            {seg.plans.map(plan => (
-              <Card key={plan.name} style={{ borderColor: seg.color === 'var(--gold)' ? 'rgba(201,168,76,.25)' : seg.color + '33' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                  <span style={{ fontSize: 16, fontWeight: 800 }}>{plan.name}</span>
-                  <div style={{ textAlign: 'left' }}>
-                    <span style={{ fontSize: 18, fontWeight: 800, color: seg.color === 'var(--gold)' ? 'var(--gold)' : seg.color }}>{plan.price}</span>
-                    {plan.price !== 'توافقی' && <span style={{ fontSize: 11, color: 'var(--faint)' }}> تومان/ماه</span>}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                  {plan.features.map(f => (
-                    <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-                      <span style={{ color: seg.color === 'var(--gold)' ? 'var(--gold)' : seg.color, fontSize: 11 }}>✓</span>
-                      <span style={{ color: 'var(--muted)' }}>{f}</span>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-                  <OutlineButton style={{ fontSize: 12, padding: '6px 12px' }}>ویرایش</OutlineButton>
-                  <OutlineButton style={{ fontSize: 12, padding: '6px 12px', color: '#e7674a', borderColor: 'rgba(231,103,74,.3)' }}>غیرفعال</OutlineButton>
-                </div>
-              </Card>
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          <div><div style={{ fontWeight: 800, fontSize: 16 }}>پلن‌ها و اشتراک</div><div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3 }}>این پلن‌ها در صفحهٔ قیمت‌گذاری عمومی نمایش داده می‌شوند.</div></div>
+          <GoldButton onClick={() => setShow(s => !s)}>{show ? 'بستن' : '＋ پلن جدید'}</GoldButton>
+        </div>
+        {show && (
+          <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }} className="mjsa-2col">
+            <input style={inp} placeholder="نام پلن *" value={f.name} onChange={e => setF({ ...f, name: e.target.value })} />
+            <input style={inp} placeholder="عنوان دکمه (مثلاً شروع رایگان)" value={f.cta} onChange={e => setF({ ...f, cta: e.target.value })} />
+            <input style={inp} placeholder="قیمت ماهانه (تومان)" value={f.priceMonthly} onChange={e => setF({ ...f, priceMonthly: e.target.value })} />
+            <input style={inp} placeholder="قیمت سالانه (تومان)" value={f.priceYearly} onChange={e => setF({ ...f, priceYearly: e.target.value })} />
+            <textarea style={{ ...inp, gridColumn: '1 / -1', height: 80, resize: 'none' }} placeholder="ویژگی‌ها (هر خط یک مورد)" value={f.features} onChange={e => setF({ ...f, features: e.target.value })} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}><input type="checkbox" checked={f.highlighted} onChange={e => setF({ ...f, highlighted: e.target.checked })} /> پلن ویژه (محبوب)</label>
+            <div><GoldButton onClick={create}>ثبت پلن</GoldButton></div>
+          </div>
+        )}
+      </Card>
+      <div className="mjsa-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        {plans.map(p => (
+          <Card key={p.id} style={{ borderColor: p.highlighted ? 'rgba(201,168,76,.3)' : 'var(--line2)', opacity: p.active ? 1 : .55 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <span style={{ fontSize: 16, fontWeight: 800 }}>{p.name} {p.highlighted && <span style={{ fontSize: 11, color: 'var(--gold)' }}>★ محبوب</span>}</span>
+              <div style={{ textAlign: 'left' }}><span style={{ fontSize: 17, fontWeight: 800, color: 'var(--gold)' }}>{(p.priceMonthly || 0).toLocaleString('fa-IR')}</span><span style={{ fontSize: 11, color: 'var(--faint)' }}> ت/ماه</span></div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+              {(p.features || []).map((x: string) => <div key={x} style={{ fontSize: 12.5, color: 'var(--muted)' }}>✓ {x}</div>)}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <OutlineButton onClick={() => editPlan(p)} style={{ fontSize: 12, padding: '6px 12px' }}>ویرایش</OutlineButton>
+              <OutlineButton onClick={() => patch(p.id, { active: !p.active })} style={{ fontSize: 12, padding: '6px 12px' }}>{p.active ? 'غیرفعال' : 'فعال'}</OutlineButton>
+              <button onClick={() => del(p.id)} style={{ fontSize: 12, padding: '6px 12px', borderRadius: 9, border: '1px solid rgba(231,103,74,.3)', color: '#e7674a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>حذف</button>
+            </div>
+          </Card>
+        ))}
+        {plans.length === 0 && <Card><div style={{ color: 'var(--muted)', fontSize: 13 }}>پلنی نیست.</div></Card>}
+      </div>
+    </div>
+  )
+}
+
+// ─── Promos (discount codes) ───────────────────────────────────────────────
+function PromosView() {
+  const [promos, setPromos] = useState<any[]>([])
+  const [f, setF] = useState({ code: '', type: 'percent', value: '', description: '', maxUses: '' })
+  const load = () => fetch('/api/admin/promos').then(r => r.ok ? r.json() : { promos: [] }).then(d => setPromos(d.promos || []))
+  useEffect(() => { load() }, [])
+  const add = async () => {
+    if (!f.code.trim() || !f.value) { return }
+    const r = await fetch('/api/admin/promos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: f.code, type: f.type, value: Number(f.value), description: f.description, maxUses: f.maxUses ? Number(f.maxUses) : undefined }) })
+    const d = await r.json(); if (d.error) { alert(d.error); return }
+    setF({ code: '', type: 'percent', value: '', description: '', maxUses: '' }); load()
+  }
+  const patch = async (id: string, p: any) => { await fetch('/api/admin/promos', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...p }) }); load() }
+  const del = async (id: string) => { if (!confirm('این کد حذف شود؟')) return; await fetch(`/api/admin/promos?id=${id}`, { method: 'DELETE' }); load() }
+  const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '9px 11px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 12 }}>کدهای تخفیف</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <input style={{ ...inp, direction: 'ltr', textAlign: 'left', width: 130 }} placeholder="CODE" value={f.code} onChange={e => setF({ ...f, code: e.target.value.toUpperCase() })} />
+          <select style={inp} value={f.type} onChange={e => setF({ ...f, type: e.target.value })}><option value="percent">درصدی</option><option value="amount">مبلغی (تومان)</option></select>
+          <input style={{ ...inp, width: 110 }} placeholder={f.type === 'percent' ? 'درصد' : 'مبلغ'} value={f.value} onChange={e => setF({ ...f, value: e.target.value })} />
+          <input style={{ ...inp, width: 110 }} placeholder="سقف استفاده" value={f.maxUses} onChange={e => setF({ ...f, maxUses: e.target.value })} />
+          <input style={{ ...inp, flex: 1, minWidth: 140 }} placeholder="توضیح" value={f.description} onChange={e => setF({ ...f, description: e.target.value })} />
+          <GoldButton onClick={add}>＋ افزودن</GoldButton>
+        </div>
+      </Card>
+      <Card>
+        {promos.length === 0 ? <div style={{ color: 'var(--muted)', fontSize: 13, padding: '16px 0', textAlign: 'center' }}>کدی نیست.</div> : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {promos.map(p => (
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg2)', borderRadius: 10, padding: '10px 12px', flexWrap: 'wrap', opacity: p.active ? 1 : .5 }}>
+                <span style={{ fontWeight: 800, fontSize: 14, direction: 'ltr', color: 'var(--gold)' }}>{p.code}</span>
+                <span style={{ fontSize: 13 }}>{p.type === 'percent' ? `${p.value}٪` : `${(p.value || 0).toLocaleString('fa-IR')} ت`}</span>
+                <span style={{ fontSize: 12, color: 'var(--muted)', flex: 1, minWidth: 100 }}>{p.description}</span>
+                <span style={{ fontSize: 11.5, color: 'var(--faint)' }}>{(p.used || 0).toLocaleString('fa-IR')}{p.maxUses ? `/${p.maxUses.toLocaleString('fa-IR')}` : ''} استفاده</span>
+                <button onClick={() => patch(p.id, { active: !p.active })} style={{ ...inp, padding: '4px 10px', cursor: 'pointer', fontSize: 11.5, color: p.active ? '#5fd98a' : 'var(--faint)' }}>{p.active ? 'فعال' : 'غیرفعال'}</button>
+                <button onClick={() => del(p.id)} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', borderRadius: 8, padding: '4px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>×</button>
+              </div>
             ))}
           </div>
+        )}
+      </Card>
+    </div>
+  )
+}
+
+// ─── Banner ads ────────────────────────────────────────────────────────────
+function AdsView() {
+  const [banners, setBanners] = useState<any[]>([])
+  const [f, setF] = useState({ title: '', image: '', link: '', placement: 'home' })
+  const load = () => fetch('/api/admin/banners').then(r => r.ok ? r.json() : { banners: [] }).then(d => setBanners(d.banners || []))
+  useEffect(() => { load() }, [])
+  const add = async () => { if (!f.title.trim() || !f.image.trim()) return; await fetch('/api/admin/banners', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(f) }); setF({ title: '', image: '', link: '', placement: 'home' }); load() }
+  const patch = async (id: string, p: any) => { await fetch('/api/admin/banners', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...p }) }); load() }
+  const del = async (id: string) => { if (!confirm('این بنر حذف شود؟')) return; await fetch(`/api/admin/banners?id=${id}`, { method: 'DELETE' }); load() }
+  const PL: Record<string, string> = { home: 'صفحهٔ خانه', search: 'جستجو', sidebar: 'ساید‌بار', article: 'مقالات' }
+  const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '9px 11px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 12 }}>تبلیغات بنری</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }} className="mjsa-2col">
+          <input style={inp} placeholder="عنوان *" value={f.title} onChange={e => setF({ ...f, title: e.target.value })} />
+          <select style={inp} value={f.placement} onChange={e => setF({ ...f, placement: e.target.value })}>{Object.entries(PL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+          <input style={{ ...inp, direction: 'ltr', textAlign: 'left' }} placeholder="تصویر (URL) *" value={f.image} onChange={e => setF({ ...f, image: e.target.value })} />
+          <input style={{ ...inp, direction: 'ltr', textAlign: 'left' }} placeholder="لینک مقصد" value={f.link} onChange={e => setF({ ...f, link: e.target.value })} />
+          <div style={{ gridColumn: '1 / -1' }}><GoldButton onClick={add}>＋ افزودن بنر</GoldButton></div>
         </div>
-      ))}
+      </Card>
+      <Card>
+        {banners.length === 0 ? <div style={{ color: 'var(--muted)', fontSize: 13, padding: '16px 0', textAlign: 'center' }}>بنری نیست.</div> : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {banners.map(b => (
+              <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg2)', borderRadius: 10, padding: 10, flexWrap: 'wrap', opacity: b.active ? 1 : .5 }}>
+                <img src={b.image} alt="" style={{ width: 120, height: 50, borderRadius: 8, objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.visibility = 'hidden' }} />
+                <div style={{ flex: 1, minWidth: 120 }}><div style={{ fontSize: 13.5, fontWeight: 600 }}>{b.title}</div><div style={{ fontSize: 11.5, color: 'var(--faint)' }}>{PL[b.placement] || b.placement} · {(b.clicks || 0).toLocaleString('fa-IR')} کلیک</div></div>
+                <button onClick={() => patch(b.id, { active: !b.active })} style={{ ...inp, padding: '4px 10px', cursor: 'pointer', fontSize: 11.5, color: b.active ? '#5fd98a' : 'var(--faint)' }}>{b.active ? 'فعال' : 'غیرفعال'}</button>
+                <button onClick={() => del(b.id)} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', borderRadius: 8, padding: '4px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>×</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
     </div>
   )
 }
@@ -2673,6 +2751,8 @@ export default function SuperAdminPage() {
       case 'api':        return <APIView />
       case 'users':      return <UsersView />
       case 'plans':      return <PlansView />
+      case 'promos':     return <PromosView />
+      case 'ads':        return <AdsView />
       case 'settings':   return <SettingsView />
       case 'flags':      return <FlagsView />
       case 'health':     return <HealthView />

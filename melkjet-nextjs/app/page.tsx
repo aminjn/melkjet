@@ -6,6 +6,7 @@ import Nav from './components/Nav'
 import Footer from './components/Footer'
 import AIAssistant from './components/AIAssistant'
 import PropertyCard from './components/PropertyCard'
+import BannerSlot from './components/BannerSlot'
 import { fetchContent, gradientFor, initialsFor, type ContentItem } from './lib/content-display'
 
 const featured = [
@@ -187,6 +188,11 @@ export default function Home() {
             </div>
           ))}
         </div>
+      </section>
+
+      {/* AD BANNER */}
+      <section style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px' }}>
+        <BannerSlot placement="home" />
       </section>
 
       {/* FEATURED */}

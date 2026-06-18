@@ -1,10 +1,67 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
 
-const plans = [
+// Shape returned by GET /api/plans (active plans, sorted by order).
+interface ApiPlan {
+  id: string
+  name: string
+  priceMonthly: number
+  priceYearly: number
+  currency?: string
+  features: string[]
+  highlighted: boolean
+  cta?: string
+  order: number
+  active: boolean
+}
+
+// Card shape consumed by the plans grid below.
+interface CardPlan {
+  id: string
+  name: string
+  price: { monthly: number | string; annual: number | string }
+  unit: string
+  desc: string
+  badge: string | null
+  goldBorder: boolean
+  cta: string
+  ctaStyle: 'gold' | 'outline'
+  features: string[]
+}
+
+// Persian-digit + تومان price formatter for live plans.
+const FA_DIGITS = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹']
+function toFaDigits(s: string): string {
+  return s.replace(/\d/g, d => FA_DIGITS[Number(d)])
+}
+function formatToman(amount: number): string {
+  if (!amount) return 'رایگان'
+  return `${toFaDigits(amount.toLocaleString('en-US'))} تومان`
+}
+
+// Map an API plan to the existing card design.
+function apiPlanToCard(p: ApiPlan): CardPlan {
+  return {
+    id: p.id,
+    name: p.name,
+    price: {
+      monthly: formatToman(p.priceMonthly),
+      annual: formatToman(p.priceYearly),
+    },
+    unit: p.priceMonthly ? '/ماه' : '',
+    desc: '',
+    badge: p.highlighted ? 'محبوب' : null,
+    goldBorder: false,
+    cta: p.cta || 'شروع',
+    ctaStyle: p.highlighted ? 'gold' : 'outline',
+    features: p.features,
+  }
+}
+
+const plans: CardPlan[] = [
   {
     id: 'free',
     name: 'رایگان',
@@ -220,6 +277,24 @@ export default function PricingPage() {
   const [annual, setAnnual] = useState(false)
   const [openFaq, setOpenFaq] = useState<number | null>(null)
 
+  // Live plans from the public API; fall back to the hardcoded array so the
+  // page never looks empty (fetch error / empty response).
+  const [livePlans, setLivePlans] = useState<CardPlan[] | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/plans')
+      .then(r => r.json())
+      .then((data: { plans?: ApiPlan[] }) => {
+        if (cancelled) return
+        const list = Array.isArray(data?.plans) ? data.plans : []
+        if (list.length > 0) setLivePlans(list.map(apiPlanToCard))
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  const cardPlans: CardPlan[] = livePlans ?? plans
+
   return (
     <div dir="rtl" style={{ background: 'var(--bg)', minHeight: '100vh', color: 'var(--text)' }}>
       <Nav />
@@ -288,7 +363,7 @@ export default function PricingPage() {
           gridTemplateColumns: 'repeat(3, 1fr)',
           gap: 20,
         }}>
-          {plans.map(plan => (
+          {cardPlans.map(plan => (
             <div
               key={plan.id}
               style={{
