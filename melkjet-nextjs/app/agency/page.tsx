@@ -70,6 +70,18 @@ export default function AgencyPage() {
               <span className="mjg-sidelabel" style={{ flex: 1, textAlign: 'right' }}>{m.l}</span>
             </button>
           ))}
+          <Link href="/website-builder" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 11, color: 'var(--gold)', textDecoration: 'none', fontSize: 13.5, fontWeight: 600, marginTop: 4, border: '1px solid rgba(212,175,55,0.25)' }}>
+            <span style={{ width: 22, textAlign: 'center', fontSize: 15 }}>◳</span>
+            <span className="mjg-sidelabel" style={{ flex: 1, textAlign: 'right' }}>وب‌سایت من (سایت‌ساز)</span>
+          </Link>
+          <Link href="/content" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 11, color: 'var(--gold)', textDecoration: 'none', fontSize: 13.5, fontWeight: 600, marginTop: 4, border: '1px solid rgba(212,175,55,0.25)' }}>
+            <span style={{ width: 22, textAlign: 'center', fontSize: 15 }}>✎</span>
+            <span className="mjg-sidelabel" style={{ flex: 1, textAlign: 'right' }}>مقالات و وبلاگ</span>
+          </Link>
+          <Link href="/plan-ai" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 11, color: 'var(--gold)', textDecoration: 'none', fontSize: 13.5, fontWeight: 600, marginTop: 4, border: '1px solid rgba(212,175,55,0.25)' }}>
+            <span style={{ width: 22, textAlign: 'center', fontSize: 15 }}>✦</span>
+            <span className="mjg-sidelabel" style={{ flex: 1, textAlign: 'right' }}>استودیو پلان و سه‌بعدی</span>
+          </Link>
         </nav>
         <div style={{ flex: 1 }}></div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 6px 4px', borderTop: '1px solid var(--line)' }}>

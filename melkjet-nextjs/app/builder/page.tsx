@@ -253,6 +253,18 @@ export default function BuilderPage() {
                 </button>
               )
             })}
+            <a href="/website-builder" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderRadius: 10, color: 'var(--gold)', textDecoration: 'none', fontSize: 14, fontWeight: 600, marginTop: 4, border: '1px solid rgba(212,175,55,0.25)' }}>
+              <span style={{ fontSize: 16, width: 20, textAlign: 'center' }}>◳</span>
+              <span className="mju-sidelabel">وب‌سایت من (سایت‌ساز)</span>
+            </a>
+            <a href="/content" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderRadius: 10, color: 'var(--gold)', textDecoration: 'none', fontSize: 14, fontWeight: 600, marginTop: 4, border: '1px solid rgba(212,175,55,0.25)' }}>
+              <span style={{ fontSize: 16, width: 20, textAlign: 'center' }}>✎</span>
+              <span className="mju-sidelabel">مقالات و وبلاگ</span>
+            </a>
+            <a href="/plan-ai" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderRadius: 10, color: 'var(--gold)', textDecoration: 'none', fontSize: 14, fontWeight: 600, marginTop: 4, border: '1px solid rgba(212,175,55,0.25)' }}>
+              <span style={{ fontSize: 16, width: 20, textAlign: 'center' }}>✦</span>
+              <span className="mju-sidelabel">استودیو پلان و سه‌بعدی</span>
+            </a>
           </nav>
 
           {/* Construction progress widget */}
