@@ -19,8 +19,10 @@ export async function POST(req: NextRequest) {
   const patternVar = (getAdminData().ippanel?.patternVar || 'code').trim() || 'code'
 
   if (!apiKey || !sender || !pattern) {
+    // پیامک هنوز پیکربندی نشده → کد را برمی‌گردانیم تا کاربر بتواند وارد شود و تست کند.
+    // به‌محض تنظیم IPPanel در پنل مدیریت، این کد دیگر برگردانده نمی‌شود.
     console.log(`[DEV OTP] ${phone} → ${code}`)
-    return NextResponse.json({ ok: true, dev: true })
+    return NextResponse.json({ ok: true, dev: true, code })
   }
 
   try {

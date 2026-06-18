@@ -24,6 +24,7 @@ export default function AuthPage() {
   const [phone, setPhone] = useState('')
   const [otpStep, setOtpStep] = useState<OtpStep>('enter-phone')
   const [code, setCode] = useState('')
+  const [devCode, setDevCode] = useState('') // وقتی پیامک تنظیم نشده، کد را اینجا نشان می‌دهیم
   const [countdown, setCountdown] = useState(0)
 
   // Onboarding state (new users)
@@ -61,9 +62,11 @@ export default function AuthPage() {
         body: JSON.stringify({ phone }),
       })
       const data = await res.json()
-      if (!res.ok) { setError(data.error || 'خطا در ارسال پیامک'); return }
+      // برخی خطاهای سرویس پیامک با وضعیت ۲۰۰ و فیلد error برمی‌گردند
+      if (!res.ok || data.error) { setError(data.error || 'خطا در ارسال پیامک'); return }
       setOtpStep('enter-code')
-      setCode('')
+      setCode(data.code || '')           // اگر کد آزمایشی آمد، خودکار پر می‌شود
+      setDevCode(data.dev ? (data.code || '') : '')
       startCountdown()
     } catch { setError('خطا در اتصال به سرور') }
     finally { setLoading(false) }
@@ -236,6 +239,13 @@ export default function AuthPage() {
                         کد ارسال شده به <strong style={{ color: 'var(--text)' }}>{phone}</strong>
                       </p>
                     </div>
+                    {devCode && (
+                      <div style={{ marginBottom: 14, padding: '12px 14px', borderRadius: 10, background: 'var(--goldDim)', border: '1px solid var(--gold)', color: 'var(--gold)', fontSize: 13, lineHeight: 1.7 }}>
+                        پیامک هنوز فعال نشده — کد ورود شما:
+                        <strong style={{ display: 'block', fontSize: 26, letterSpacing: 8, textAlign: 'center', marginTop: 4, fontFamily: 'JetBrains Mono, monospace' }}>{devCode}</strong>
+                        <span style={{ fontSize: 11, color: 'var(--muted)' }}>برای ارسال پیامک واقعی، IPPanel را در پنل مدیریت تنظیم کنید.</span>
+                      </div>
+                    )}
                     <div style={fieldStyle}>
                       <label style={labelStyle}>کد تایید ۶ رقمی</label>
                       <input
