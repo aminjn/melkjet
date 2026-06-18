@@ -108,11 +108,27 @@ media files in `.media/` + `.media-index.json`.
 - **Builder dashboard `/builder`**: fully rebuilt to match the design — real backend
   (builder-store/API): project switcher, KPIs, inventory donut, sales bars, milestone timeline,
   units/sales/investors/reports all functional.
+- **Materials dashboard `/materials`** («بازار مصالح» seller): fully rebuilt to match the
+  Figma — real per-profile backend (materials-store/API): products CRUD, orders + status,
+  inquiries + reply, low-stock «تأمین»/restock, KPIs, top-category bars, 6-month sales chart,
+  recent orders. Standalone shell like /builder; cross-tool sidebar items link to /crm /marketing
+  /workflow /website-builder.
+- **Per-profile data isolation**: crm-store/leads-store/workflow-store/materials-store are all
+  scoped by owner (session.phone) — every account (incl. super-admin) sees only its own data.
+  CRM/leads/workflow API GETs now require a session.
+- **PanelReturnBar** (`app/components/PanelReturnBar.tsx`): floating profile-aware «بازگشت به
+  پنل» bar on /crm /marketing /workflow /website-builder so users never get stranded; links to
+  the user's own dashboard from /api/auth/profile.
+- **Nav login state**: Nav shows «پنل من/…» + «خروج» when logged in (was always «ورود»).
+- **Cookie/CDN fix**: /api/* served `no-store, private` (next.config + verify-otp/login-email)
+  so Arvan doesn't strip Set-Cookie → login persists across refresh. NEEDS deploy + CDN purge.
+- **Website-builder**: template picker is now a responsive popup («قالب‌ها» button) with real
+  mini-mockup previews, locked to the user's profile (10/profile, ~70 total).
 
 ## PENDING (next sessions) — the per-panel design-match work
-The OTHER role dashboards are still mostly mock and need the SAME treatment the builder got
-(real backend + rebuild to match the user's Figma screenshots): **owner** (seller/investor),
-**buyer**, **pros** (advisor), **agency**, **marketing**, **materials**, **crm** (partially real).
+The OTHER role dashboards are still mostly mock and need the SAME treatment the builder/materials
+got (real backend + rebuild to match the user's Figma screenshots): **owner** (seller/investor),
+**buyer**, **pros** (advisor), **agency**. (DONE: builder, materials.)
 Process per panel: user sends a screenshot → build a file-store + `/api/<role>` → rebuild the page
 to match the design with all sections functional → wire plan-gating for paid sections → build/commit.
 Also pending: **payment gateway** (Zarinpal — config-gated like SMS, then unlock plans/roles on
