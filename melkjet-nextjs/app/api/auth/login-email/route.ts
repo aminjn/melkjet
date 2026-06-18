@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
   // Email admin login always gets super_admin role
   const token = await createSession(SUPER_ADMIN_PHONE)
   const res = NextResponse.json({ ok: true, role: 'super_admin' })
+  res.headers.set('Cache-Control', 'no-store, private')
   res.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',

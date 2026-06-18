@@ -21,6 +21,8 @@ export async function POST(req: NextRequest) {
   const redirect = isSuper ? '/admin' : (needsOnboarding ? '' : dashForRole(account.role))
 
   const res = NextResponse.json({ ok: true, role, isNew, needsOnboarding, name: account.name || '', profileRole: account.role || '', redirect })
+  // مهم: مطمئن می‌شویم CDN این پاسخ (که کوکی ورود را ست می‌کند) را کش/حذف نکند
+  res.headers.set('Cache-Control', 'no-store, private')
   res.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
