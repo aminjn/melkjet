@@ -4,9 +4,11 @@ import { listLeads, addLead, updateLead, deleteLead, Stage } from '@/app/lib/lea
 
 const STAGES: Stage[] = ['new', 'review', 'offered', 'contract', 'lost']
 
-// GET → { leads } — open read for the CRM panel.
+// GET → { leads } — scoped to the current user's own leads.
 export async function GET() {
-  return NextResponse.json({ leads: listLeads() })
+  const s = await getSession()
+  if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
+  return NextResponse.json({ leads: listLeads(s.phone) })
 }
 
 // POST { name, phone?, need?, budget?, stage?, score?, note? } → { lead }
@@ -18,7 +20,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'نام الزامی است' }, { status: 400 })
   }
   const stage: Stage | undefined = b.stage && STAGES.includes(b.stage) ? b.stage : undefined
-  const lead = addLead({
+  const lead = addLead(s.phone, {
     name: b.name,
     phone: b.phone,
     need: b.need,
@@ -26,7 +28,6 @@ export async function POST(req: NextRequest) {
     stage,
     score: typeof b.score === 'number' ? b.score : undefined,
     note: b.note,
-    owner: s.phone,
   })
   return NextResponse.json({ lead })
 }
@@ -38,7 +39,7 @@ export async function PATCH(req: NextRequest) {
   const b = await req.json().catch(() => ({}))
   if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
   const { id, ...patch } = b
-  const lead = updateLead(id, patch)
+  const lead = updateLead(s.phone, id, patch)
   if (!lead) return NextResponse.json({ error: 'یافت نشد' }, { status: 404 })
   return NextResponse.json({ lead })
 }
@@ -49,6 +50,6 @@ export async function DELETE(req: NextRequest) {
   if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
   const id = new URL(req.url).searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
-  deleteLead(id)
+  deleteLead(s.phone, id)
   return NextResponse.json({ ok: true })
 }

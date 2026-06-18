@@ -14,6 +14,7 @@ export interface Task {
   done: boolean
   priority?: Priority
   due?: string
+  owner?: string
   createdAt: number
 }
 
@@ -32,11 +33,13 @@ function save(db: DB) {
   writeFileSync(DATA_FILE, JSON.stringify(db, null, 2), 'utf-8')
 }
 
-export function listTasks(): Task[] {
-  return load().tasks.sort((a, b) => b.createdAt - a.createdAt)
+export function listTasks(owner: string): Task[] {
+  return load().tasks
+    .filter(t => t.owner === owner)
+    .sort((a, b) => b.createdAt - a.createdAt)
 }
 
-export function addTask(input: { title: string; priority?: Priority; due?: string }): Task {
+export function addTask(owner: string, input: { title: string; priority?: Priority; due?: string }): Task {
   const db = load()
   const task: Task = {
     id: id(),
@@ -44,6 +47,7 @@ export function addTask(input: { title: string; priority?: Priority; due?: strin
     done: false,
     priority: input.priority,
     due: input.due,
+    owner,
     createdAt: Date.now(),
   }
   db.tasks.unshift(task)
@@ -51,14 +55,14 @@ export function addTask(input: { title: string; priority?: Priority; due?: strin
   return task
 }
 
-export function toggleTask(taskId: string): void {
+export function toggleTask(owner: string, taskId: string): void {
   const db = load()
-  const t = db.tasks.find(x => x.id === taskId)
+  const t = db.tasks.find(x => x.id === taskId && x.owner === owner)
   if (t) { t.done = !t.done; save(db) }
 }
 
-export function deleteTask(taskId: string): void {
+export function deleteTask(owner: string, taskId: string): void {
   const db = load()
-  db.tasks = db.tasks.filter(x => x.id !== taskId)
+  db.tasks = db.tasks.filter(x => !(x.id === taskId && x.owner === owner))
   save(db)
 }

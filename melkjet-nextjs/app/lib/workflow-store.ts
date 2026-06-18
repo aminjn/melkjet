@@ -25,6 +25,7 @@ export interface Workflow {
   name: string
   nodes: WorkflowNode[]
   connections: WorkflowConnection[]
+  owner?: string
   updatedAt: number
 }
 
@@ -43,37 +44,46 @@ function persist(db: DB) {
   writeFileSync(DATA_FILE, JSON.stringify(db, null, 2), 'utf-8')
 }
 
-export function listWorkflows(): Workflow[] {
-  return load().workflows.sort((a, b) => b.updatedAt - a.updatedAt)
+export function listWorkflows(owner: string): Workflow[] {
+  return load().workflows
+    .filter(w => w.owner === owner)
+    .sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
-export function getWorkflow(workflowId: string): Workflow | null {
-  return load().workflows.find(w => w.id === workflowId) ?? null
+export function getWorkflow(owner: string, workflowId: string): Workflow | null {
+  return load().workflows.find(w => w.id === workflowId && w.owner === owner) ?? null
 }
 
-export function saveWorkflow(input: {
+export function saveWorkflow(owner: string, input: {
   id?: string
   name: string
   nodes: WorkflowNode[]
   connections: WorkflowConnection[]
 }): Workflow {
   const db = load()
+  const existing = input.id && input.id.trim()
+    ? db.workflows.find(w => w.id === input.id && w.owner === owner)
+    : undefined
   const wf: Workflow = {
-    id: input.id && input.id.trim() ? input.id : id(),
+    id: existing ? existing.id : id(),
     name: String(input.name || '').trim() || 'گردش کار بدون نام',
     nodes: Array.isArray(input.nodes) ? input.nodes : [],
     connections: Array.isArray(input.connections) ? input.connections : [],
+    owner,
     updatedAt: Date.now(),
   }
-  const idx = db.workflows.findIndex(w => w.id === wf.id)
-  if (idx >= 0) db.workflows[idx] = wf
-  else db.workflows.unshift(wf)
+  if (existing) {
+    const idx = db.workflows.findIndex(w => w.id === existing.id)
+    db.workflows[idx] = wf
+  } else {
+    db.workflows.unshift(wf)
+  }
   persist(db)
   return wf
 }
 
-export function removeWorkflow(workflowId: string): void {
+export function removeWorkflow(owner: string, workflowId: string): void {
   const db = load()
-  db.workflows = db.workflows.filter(w => w.id !== workflowId)
+  db.workflows = db.workflows.filter(w => !(w.id === workflowId && w.owner === owner))
   persist(db)
 }

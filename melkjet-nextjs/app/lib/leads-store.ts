@@ -42,8 +42,10 @@ function save(db: DB) {
   writeFileSync(DATA_FILE, JSON.stringify(db, null, 2), 'utf-8')
 }
 
-export function listLeads(): Lead[] {
-  return load().leads.sort((a, b) => b.createdAt - a.createdAt)
+export function listLeads(owner: string): Lead[] {
+  return load().leads
+    .filter(l => l.owner === owner)
+    .sort((a, b) => b.createdAt - a.createdAt)
 }
 
 export interface LeadInput {
@@ -57,7 +59,7 @@ export interface LeadInput {
   owner?: string
 }
 
-export function addLead(input: LeadInput): Lead {
+export function addLead(owner: string, input: LeadInput): Lead {
   const db = load()
   const now = Date.now()
   const stage: Stage = input.stage && STAGES.includes(input.stage) ? input.stage : 'new'
@@ -70,7 +72,7 @@ export function addLead(input: LeadInput): Lead {
     stage,
     score: input.score,
     note: input.note,
-    owner: input.owner,
+    owner,
     createdAt: now,
     updatedAt: now,
   }
@@ -81,9 +83,9 @@ export function addLead(input: LeadInput): Lead {
 
 export type LeadPatch = Partial<Omit<Lead, 'id' | 'createdAt' | 'updatedAt'>>
 
-export function updateLead(leadId: string, patch: LeadPatch): Lead | null {
+export function updateLead(owner: string, leadId: string, patch: LeadPatch): Lead | null {
   const db = load()
-  const lead = db.leads.find(x => x.id === leadId)
+  const lead = db.leads.find(x => x.id === leadId && x.owner === owner)
   if (!lead) return null
   if (patch.name !== undefined) lead.name = String(patch.name).trim()
   if (patch.phone !== undefined) lead.phone = patch.phone
@@ -92,14 +94,13 @@ export function updateLead(leadId: string, patch: LeadPatch): Lead | null {
   if (patch.stage !== undefined && STAGES.includes(patch.stage)) lead.stage = patch.stage
   if (patch.score !== undefined) lead.score = patch.score
   if (patch.note !== undefined) lead.note = patch.note
-  if (patch.owner !== undefined) lead.owner = patch.owner
   lead.updatedAt = Date.now()
   save(db)
   return lead
 }
 
-export function deleteLead(leadId: string): void {
+export function deleteLead(owner: string, leadId: string): void {
   const db = load()
-  db.leads = db.leads.filter(x => x.id !== leadId)
+  db.leads = db.leads.filter(x => !(x.id === leadId && x.owner === owner))
   save(db)
 }
