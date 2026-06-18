@@ -61,7 +61,6 @@ export default function RichEditor({ value, onChange }: { value: string; onChang
     ['🔗', link, 'لینک'],
     ['🖼 عکس', () => { pendingKind.current = 'image'; fileRef.current?.click() }, 'آپلود عکس'],
     ['🎬 ویدئو', () => { pendingKind.current = 'video'; fileRef.current?.click() }, 'آپلود ویدئو'],
-    ['🌐 لینک رسانه', () => insertByUrl('image'), 'تصویر از URL'],
     ['▶ امبد', () => insertByUrl('video'), 'ویدئو/یوتیوب/آپارات از لینک'],
     ['✕ قالب', () => exec('removeFormat'), 'حذف قالب‌بندی'],
   ]

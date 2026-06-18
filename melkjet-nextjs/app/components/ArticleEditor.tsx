@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { mdToHtml } from '@/app/lib/markdown'
 import RichEditor from '@/app/components/RichEditor'
+import ImageUpload from '@/app/components/ImageUpload'
 
 // ویرایشگر مقالهٔ شبیه وردپرس: لیست مقالات + ویرایشگر کامل با سئو، برچسب،
 // دسته، تصویر شاخص، پیش‌نویس/انتشار و تولید با هوش مصنوعی (انسان‌نما).
@@ -294,9 +295,7 @@ export default function ArticleEditor({ compact }: { compact?: boolean }) {
               <option value="">— انتخاب —</option>
               {cats.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
-            <div style={{ ...lab, marginTop: 12 }}>تصویر شاخص (URL)</div>
-            <input value={f.image} onChange={e => set('image', e.target.value)} placeholder="https://…" style={{ ...inp, direction: 'ltr', textAlign: 'left' }} />
-            {f.image && <img src={f.image} alt="" style={{ width: '100%', height: 110, objectFit: 'cover', borderRadius: 10, marginTop: 8 }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />}
+            <div style={{ marginTop: 12 }}><ImageUpload label="تصویر شاخص" value={f.image} onChange={url => set('image', url)} /></div>
           </div>
 
           <div style={box}>

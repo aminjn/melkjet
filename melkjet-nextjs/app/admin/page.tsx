@@ -4,6 +4,7 @@ import { DEAL_TYPES, PROPERTY_KINDS, PROVINCES, citiesOf, neighborhoodsOf } from
 import { DIVAR_CATEGORIES, DIVAR_CITIES } from '@/app/lib/divar-meta'
 import { AGENTS, categorizeModel, CATEGORY_LABEL, FALLBACK_MODELS, DEFAULT_GAP_BASE, type ModelCategory } from '@/app/lib/ai-agents'
 import PlanStudio from '@/app/components/PlanStudio'
+import ImageUpload from '@/app/components/ImageUpload'
 import ArticleEditor from '@/app/components/ArticleEditor'
 
 /* ─── Types ─────────────────────────────────────────────────── */
@@ -488,7 +489,7 @@ function CreateItemModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
           <div><label style={lab}>عنوان *</label><input style={inp} value={f.title} onChange={e => setF({ ...f, title: e.target.value })} /></div>
           <div><label style={lab}>موقعیت</label><input style={inp} value={f.location} onChange={e => setF({ ...f, location: e.target.value })} /></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div><label style={lab}>تصویر (URL)</label><input style={{ ...inp, direction: 'ltr', textAlign: 'left' }} value={f.image} onChange={e => setF({ ...f, image: e.target.value })} /></div>
+            <div><ImageUpload label="تصویر" value={f.image} onChange={url => setF({ ...f, image: url })} /></div>
             <div><label style={lab}>لینک</label><input style={{ ...inp, direction: 'ltr', textAlign: 'left' }} value={f.url} onChange={e => setF({ ...f, url: e.target.value })} /></div>
           </div>
           <div><label style={lab}>توضیح</label><textarea style={{ ...inp, height: 70, resize: 'none' }} value={f.excerpt} onChange={e => setF({ ...f, excerpt: e.target.value })} /></div>
@@ -558,7 +559,7 @@ function EditItemModal({ item, onClose, onSave }: { item: MItem; onClose: () => 
             <div><label style={lab}>تلفن</label><input style={{ ...inp, direction: 'ltr', textAlign: 'left' }} value={f.phone} onChange={e => setF({ ...f, phone: e.target.value })} /></div>
             <div><label style={lab}>لینک</label><input style={{ ...inp, direction: 'ltr', textAlign: 'left' }} value={f.url} onChange={e => setF({ ...f, url: e.target.value })} /></div>
           </div>
-          <div><label style={lab}>تصویر (URL)</label><input style={{ ...inp, direction: 'ltr', textAlign: 'left' }} value={f.image} onChange={e => setF({ ...f, image: e.target.value })} /></div>
+          <div><ImageUpload label="تصویر" value={f.image} onChange={url => setF({ ...f, image: url })} /></div>
           <div><label style={lab}>توضیح</label><textarea style={{ ...inp, height: 70, resize: 'none' }} value={f.excerpt} onChange={e => setF({ ...f, excerpt: e.target.value })} /></div>
           <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
             <GoldButton onClick={() => onSave(f)} style={{ flex: 1 }}>ذخیره تغییرات</GoldButton>
@@ -2035,7 +2036,7 @@ function ProductsView() {
             <input style={inp} placeholder="قیمت" value={f.price} onChange={e => setF({ ...f, price: e.target.value })} />
             <select style={inp} value={f.category} onChange={e => setF({ ...f, category: e.target.value })}><option value="">دسته…</option>{cats.map(c => <option key={c} value={c}>{c}</option>)}</select>
             <input style={inp} placeholder="تأمین‌کننده/موقعیت" value={f.location} onChange={e => setF({ ...f, location: e.target.value })} />
-            <input style={{ ...inp, gridColumn: '1 / -1', direction: 'ltr', textAlign: 'left' }} placeholder="تصویر (URL)" value={f.image} onChange={e => setF({ ...f, image: e.target.value })} />
+            <div style={{ gridColumn: '1 / -1' }}><ImageUpload label="تصویر محصول" value={f.image} onChange={url => setF({ ...f, image: url })} /></div>
             <textarea style={{ ...inp, gridColumn: '1 / -1', height: 60, resize: 'none' }} placeholder="توضیح" value={f.excerpt} onChange={e => setF({ ...f, excerpt: e.target.value })} />
             <div style={{ gridColumn: '1 / -1' }}><GoldButton onClick={create}>ثبت محصول</GoldButton></div>
           </div>
@@ -2593,7 +2594,7 @@ function AdsView() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }} className="mjsa-2col">
           <input style={inp} placeholder="عنوان *" value={f.title} onChange={e => setF({ ...f, title: e.target.value })} />
           <select style={inp} value={f.placement} onChange={e => setF({ ...f, placement: e.target.value })}>{Object.entries(PL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
-          <input style={{ ...inp, direction: 'ltr', textAlign: 'left' }} placeholder="تصویر (URL) *" value={f.image} onChange={e => setF({ ...f, image: e.target.value })} />
+          <div><ImageUpload label="تصویر بنر" value={f.image} onChange={url => setF({ ...f, image: url })} height={90} /></div>
           <input style={{ ...inp, direction: 'ltr', textAlign: 'left' }} placeholder="لینک مقصد" value={f.link} onChange={e => setF({ ...f, link: e.target.value })} />
           <div style={{ gridColumn: '1 / -1' }}><GoldButton onClick={add}>＋ افزودن بنر</GoldButton></div>
         </div>
