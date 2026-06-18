@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import PanelReturnBar from '../components/PanelReturnBar';
 
 type NodeType = 'trigger' | 'action' | 'ai' | 'condition' | 'end';
 
@@ -288,6 +289,7 @@ export default function WorkflowPage() {
         overflow: 'hidden',
       }}
     >
+      <PanelReturnBar tool="اتوماسیون" />
       {/* Topbar */}
       <div
         style={{

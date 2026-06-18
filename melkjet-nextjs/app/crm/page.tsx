@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { fetchContent, type ContentItem } from '../lib/content-display'
+import PanelReturnBar from '../components/PanelReturnBar'
 
 type View = 'dashboard' | 'listings' | 'pipeline' | 'tasks' | 'calendar'
 
@@ -337,6 +338,7 @@ export default function CRMPage() {
 
   return (
     <div dir="rtl" style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'Vazirmatn, system-ui, sans-serif' }}>
+      <PanelReturnBar tool="CRM و مشتریان" />
 
       {/* ===== SIDEBAR ===== */}
       <aside className="mjc-side" style={{

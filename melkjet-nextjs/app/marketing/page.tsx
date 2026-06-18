@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import Link from 'next/link'
+import PanelReturnBar from '../components/PanelReturnBar'
 
 type View = 'overview' | 'email' | 'sms' | 'social' | 'reports'
 
@@ -220,6 +221,7 @@ export default function MarketingPage() {
         fontFamily: "'Vazirmatn', sans-serif",
       }}
     >
+      <PanelReturnBar tool="مارکتینگ" />
       {/* SIDEBAR */}
       <aside
         className="mjk-side"
