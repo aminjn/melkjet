@@ -79,6 +79,15 @@ body {
 .mj-faq-item[open] summary::before { content: '−'; }
 .mj-faq-item[open] summary { color: var(--gold); }
 .mj-faq-a { padding: 0 16px 16px 42px; color: var(--muted); line-height: 2; }
+.mj-toc { background: var(--bg2); border: 1px solid var(--line); border-inline-start: 3px solid var(--gold); border-radius: 12px; padding: 14px 18px; margin: 14px 0; }
+.mj-toc strong { color: var(--gold); display: block; margin-bottom: 8px; }
+.mj-toc ul { margin: 0; padding-inline-start: 18px; }
+.mj-toc a { color: var(--text); text-decoration: none; }
+.mj-toc a:hover { color: var(--gold); }
+.mj-takeaways { background: var(--goldDim); border: 1px solid rgba(212,175,55,.3); border-radius: 14px; padding: 16px 18px; margin: 14px 0; }
+.mj-takeaways strong { color: var(--gold); display: block; margin-bottom: 8px; }
+.mj-takeaways ul { margin: 0; padding-inline-start: 20px; }
+.mj-takeaways li { margin: .4em 0; }
 @keyframes scan { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
 @keyframes pop { 0% { transform: scale(0.4); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
 @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }

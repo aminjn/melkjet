@@ -127,6 +127,58 @@ export default function ArticleEditor({ compact }: { compact?: boolean }) {
     } catch { setMsg('⚠ خطا در ساخت متا') } finally { setBusy('') }
   }
 
+  // فهرست مطالب از روی تیترها (بدون AI) — با لینک لنگر
+  const genToc = () => {
+    if (typeof window === 'undefined') return
+    const doc = new DOMParser().parseFromString(`<div id="r">${f.body || ''}</div>`, 'text/html')
+    const root = doc.getElementById('r')!
+    const heads = Array.from(root.querySelectorAll('h2, h3'))
+    if (!heads.length) { setMsg('⚠ ابتدا چند تیتر (H2/H3) در متن بساز'); return }
+    let n = 0
+    const items = heads.map(h => {
+      const id = 'h' + (++n); h.setAttribute('id', id)
+      return `<li style="margin:.3em 0;${h.tagName === 'H3' ? 'margin-inline-start:18px;' : ''}"><a href="#${id}">${h.textContent}</a></li>`
+    }).join('')
+    const toc = `<div class="mj-toc"><strong>فهرست مطالب</strong><ul>${items}</ul></div>`
+    setF(p => ({ ...p, body: toc + root.innerHTML }))
+    setMsg('✓ فهرست مطالب ساخته شد')
+  }
+
+  // تصویر شاخص با AI
+  const genCover = async () => {
+    const title = (f.title || aiTopic).trim()
+    if (!title) { setMsg('⚠ اول عنوان مقاله را وارد کن'); return }
+    setBusy('cover'); setMsg('')
+    try {
+      const r = await fetch('/api/cms/cover', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }) })
+      const d = await r.json()
+      if (!d.ok) { setMsg('⚠ ' + (d.error || 'خطا')); return }
+      setF(p => ({ ...p, image: d.url }))
+      setMsg('✓ تصویر شاخص ساخته شد')
+    } catch { setMsg('⚠ خطا در ارتباط') } finally { setBusy('') }
+  }
+
+  // ابزار متنی عمومی AI: ورودی متن می‌گیرد و طبق دستور بازمی‌گرداند
+  const aiText = async (key: string, instruction: string, onText: (t: string) => void, needBody = true) => {
+    const plain = (f.body || '').replace(/<[^>]+>/g, ' ').trim()
+    if (needBody && plain.length < 40) { setMsg('⚠ ابتدا متنی بنویس یا تولید کن'); return }
+    setBusy(key); setMsg('')
+    try {
+      const ctx = needBody ? `\n\nمتن مقاله:\n${plain.slice(0, 4000)}` : ''
+      const r = await fetch('/api/ai/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agent: 'content', input: instruction + ctx }) })
+      const d = await r.json()
+      if (!d.ok || !d.text) { setMsg('⚠ ' + (d.error || 'خطا')); return }
+      onText(d.text.trim())
+    } catch { setMsg('⚠ خطا در ارتباط') } finally { setBusy('') }
+  }
+
+  const optimizeKeyword = () => { if (!f.focusKeyword.trim()) { setMsg('⚠ ابتدا کلمهٔ کلیدی اصلی را وارد کن'); return } aiText('seo', `این مقاله را برای سئوی کلمهٔ کلیدی «${f.focusKeyword}» بهینه کن: کلمه را طبیعی در عنوان‌ها، اول پاراگراف و متن پخش کن، بدون پر شدن بیش از حد. خروجی کامل مقاله به Markdown.`, t => { setF(p => ({ ...p, body: mdToHtml(t) })); setMsg('✓ برای کلمهٔ کلیدی بهینه شد') }) }
+  const suggestTitle = () => aiText('title', 'پنج عنوان جذاب، کلیک‌خور و سئو برای این مقاله پیشنهاد بده. هر عنوان در یک خط، بدون شماره.', t => { const opts = t.split('\n').map(x => x.replace(/^[-•\d.\s]+/, '').trim()).filter(Boolean); const pick = prompt('یک عنوان را کپی/انتخاب کن:\n\n' + opts.join('\n'), opts[0] || ''); if (pick) setF(p => ({ ...p, title: pick, seoTitle: pick })); setMsg('✓ پیشنهاد عنوان آماده شد') })
+  const genTags = () => aiText('tags', 'برای این مقاله ۶ تا ۸ برچسب (تگ) مرتبط فارسی بده، فقط با کاما جدا شده، بدون توضیح.', t => { const tags = t.split(/[,،\n]/).map(x => x.trim()).filter(Boolean).slice(0, 8); setF(p => ({ ...p, tags: Array.from(new Set([...p.tags, ...tags])) })); setMsg('✓ برچسب‌ها اضافه شد') })
+  const genConclusion = () => aiText('concl', 'یک بخش «جمع‌بندی» کوتاه و کاربردی برای این مقاله بنویس (Markdown، با تیتر ## جمع‌بندی).', t => { setF(p => ({ ...p, body: (p.body || '') + mdToHtml(t) })); setMsg('✓ جمع‌بندی اضافه شد') })
+  const keyTakeaways = () => aiText('take', 'مهم‌ترین ۴ تا ۵ «نکتهٔ کلیدی» این مقاله را به‌صورت فهرست کوتاه بده، هر نکته یک خط، بدون توضیح اضافه.', t => { const pts = t.split('\n').map(x => x.replace(/^[-•\d.\s]+/, '').trim()).filter(Boolean); const li = pts.map(p => `<li>${p.replace(/</g, '&lt;')}</li>`).join(''); const box = `<div class="mj-takeaways"><strong>✦ نکات کلیدی</strong><ul>${li}</ul></div>`; setF(p => ({ ...p, body: box + (p.body || '') })); setMsg('✓ نکات کلیدی اضافه شد') })
+  const fixGrammar = () => aiText('grammar', 'این متن را فقط از نظر نگارشی، املایی و دستوری ویرایش کن؛ معنا و ساختار را تغییر نده. خروجی کامل به Markdown.', t => { setF(p => ({ ...p, body: mdToHtml(t) })); setMsg('✓ ویرایش نگارشی انجام شد') })
+
   // امتیاز سئو (متن HTML را برای شمارش کلمه پاک می‌کنیم)
   const seo = (() => {
     let score = 0; const tips: string[] = []
@@ -209,8 +261,20 @@ export default function ArticleEditor({ compact }: { compact?: boolean }) {
               <button onClick={aiGenerate} disabled={!!busy} style={{ padding: '9px 18px', borderRadius: 9, border: 'none', background: 'var(--gold)', color: '#16140f', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', opacity: busy ? .6 : 1 }}>{busy === 'ai' ? 'در حال نوشتن…' : 'بنویس مقاله کامل'}</button>
             </div>
             <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 10 }}>
-              {[['faq', '❓ سؤالات متداول', genFaq], ['improve', '✦ بهبود و بازنویسی', improveText], ['meta', '📝 چکیده و متا', genMeta]].map(([k, label, fn]: any) => (
-                <button key={k} onClick={fn} disabled={!!busy} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid var(--gold)', background: 'transparent', color: 'var(--gold)', fontWeight: 600, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', opacity: busy ? .6 : 1 }}>{busy === k ? 'در حال انجام…' : label}</button>
+              {[
+                ['faq', '❓ سؤالات متداول', genFaq],
+                ['improve', '✦ بهبود و بازنویسی', improveText],
+                ['take', '◆ نکات کلیدی', keyTakeaways],
+                ['concl', '⊕ جمع‌بندی', genConclusion],
+                ['toc', '☰ فهرست مطالب', genToc],
+                ['seo', '🎯 بهینه‌سازی کلمهٔ کلیدی', optimizeKeyword],
+                ['title', '✎ پیشنهاد عنوان', suggestTitle],
+                ['tags', '#️⃣ تولید برچسب', genTags],
+                ['meta', '📝 چکیده و متا', genMeta],
+                ['grammar', '✓ ویرایش نگارشی', fixGrammar],
+                ['cover', '🖼 تصویر شاخص AI', genCover],
+              ].map(([k, label, fn]: any) => (
+                <button key={k} onClick={fn} disabled={!!busy} style={{ padding: '7px 13px', borderRadius: 8, border: '1px solid var(--gold)', background: 'transparent', color: 'var(--gold)', fontWeight: 600, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', opacity: busy ? .6 : 1 }}>{busy === k ? 'در حال انجام…' : label}</button>
               ))}
             </div>
           </div>
