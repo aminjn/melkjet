@@ -2541,78 +2541,127 @@ function AdsView() {
   )
 }
 
-function HealthView() {
-  const servers = [
-    { name: 'Web-01 (Primary)', uptime: '۹۹.۹۸٪', cpu: 42, mem: 68, status: 'سالم', location: 'تهران DC1' },
-    { name: 'Web-02 (Replica)', uptime: '۹۹.۹۵٪', cpu: 38, mem: 61, status: 'سالم', location: 'تهران DC1' },
-    { name: 'API Gateway', uptime: '۹۹.۹۹٪', cpu: 22, mem: 45, status: 'سالم', location: 'تهران DC2' },
-    { name: 'AI Worker-01', uptime: '۹۸.۴٪', cpu: 87, mem: 91, status: 'هشدار', location: 'اروپا' },
-    { name: 'DB Primary', uptime: '۱۰۰٪', cpu: 31, mem: 74, status: 'سالم', location: 'تهران DC1' },
-    { name: 'Cache (Redis)', uptime: '۹۹.۹۷٪', cpu: 12, mem: 38, status: 'سالم', location: 'تهران DC1' },
-  ]
-  const alerts = [
-    { msg: 'AI Worker-01: مصرف CPU بالای ۸۵٪', level: 'هشدار', time: '۸ دقیقه پیش', color: '#e7a14a' },
-    { msg: 'نرخ خطای API به ۰.۸٪ رسید', level: 'اطلاع', time: '۲۲ دقیقه پیش', color: '#5b9bd5' },
-    { msg: 'به‌روزرسانی موفق پایگاه داده', level: 'موفق', time: '۱ ساعت پیش', color: '#5fd98a' },
-  ]
+function useSystem() {
+  const [d, setD] = useState<any>(null)
+  useEffect(() => { const f = () => fetch('/api/admin/system').then(r => r.ok ? r.json() : null).then(setD).catch(() => {}); f(); const t = setInterval(f, 8000); return () => clearInterval(t) }, [])
+  return d
+}
+function fmtUptime(sec: number) { const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60); return [d && `${d.toLocaleString('fa-IR')} روز`, h && `${h.toLocaleString('fa-IR')} ساعت`, `${m.toLocaleString('fa-IR')} دقیقه`].filter(Boolean).join(' ') }
 
+function HealthView() {
+  const d = useSystem()
+  if (!d) return <Card>در حال خواندن آمار سیستم…</Card>
+  const p = d.process
+  const memPct = Math.round((1 - p.freeMemMB / p.totalMemMB) * 100)
   return (
     <div style={{ animation: 'fade .35s ease' }}>
       <div className="mjsa-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
-        <KPI label="آپتایم کلی" value="۹۹.۹۷٪" trend="SLA: ۹۹.۹٪" icon="◉" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" trendUp />
-        <KPI label="درخواست/ثانیه" value="۴٬۸۴۰" trend="پیک: ۸٬۲۰۰" icon="⚡" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" />
-        <KPI label="میانگین پاسخ" value="۱۴۲ms" trend="P99: ۴۸۰ms" icon="⏱" iconBg="var(--goldDim)" iconColor="var(--gold)" />
-        <KPI label="نرخ خطا" value="۰.۱۲٪" trend="↓ بهتر از دیروز" icon="✗" iconBg="rgba(231,103,74,.1)" iconColor="#e7674a" trendUp />
+        <KPI label="آپتایم پراسس" value={fmtUptime(p.uptimeSec)} trend={`Node ${p.node}`} icon="◉" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" trendUp />
+        <KPI label="حافظهٔ پراسس (RSS)" value={`${p.rssMB.toLocaleString('fa-IR')}MB`} trend={`Heap ${p.heapUsedMB.toLocaleString('fa-IR')}/${p.heapTotalMB.toLocaleString('fa-IR')}MB`} icon="▦" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" />
+        <KPI label="رکوردهای داده" value={(d.totalRecords || 0).toLocaleString('fa-IR')} trend={`${d.stores.length.toLocaleString('fa-IR')} مخزن`} icon="⛁" iconBg="var(--goldDim)" iconColor="var(--gold)" />
+        <KPI label="حافظهٔ سرور" value={`${memPct.toLocaleString('fa-IR')}٪`} trend={`${p.cpus.toLocaleString('fa-IR')} هسته · بار ${p.loadAvg[0]}`} icon="⚡" iconBg="rgba(231,161,74,.1)" iconColor="#e7a14a" />
       </div>
+      <Card>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>مخازن داده (واقعی)</div>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead><tr style={{ borderBottom: '1px solid var(--line)' }}>{['مخزن', 'رکورد', 'حجم', 'آخرین تغییر'].map(h => <th key={h} style={{ textAlign: 'right', padding: '8px 6px', fontSize: 12, color: 'var(--faint)', fontWeight: 600 }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {d.stores.map((s: any) => (
+              <tr key={s.name} style={{ borderBottom: '1px solid var(--line)' }}>
+                <td style={{ padding: '10px 6px', fontSize: 13, fontWeight: 600 }}>{s.label}<span style={{ fontSize: 10.5, color: 'var(--faint)', marginInlineStart: 6, direction: 'ltr' }}>{s.name}</span></td>
+                <td style={{ padding: '10px 6px', fontSize: 13, color: 'var(--gold)', fontWeight: 700 }}>{s.records.toLocaleString('fa-IR')}</td>
+                <td style={{ padding: '10px 6px', fontSize: 12.5, color: 'var(--muted)' }}>{s.sizeKB.toLocaleString('fa-IR')} KB</td>
+                <td style={{ padding: '10px 6px', fontSize: 12, color: 'var(--faint)' }}>{timeAgo(s.updated)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  )
+}
 
-      <div className="mjsa-2col" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 14 }}>
-        <Card>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>وضعیت سرورها</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {servers.map(s => (
-              <div key={s.name} style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: s.status === 'سالم' ? '#5fd98a' : '#e7a14a', animation: 'pulse 2s infinite', display: 'inline-block' }} />
-                    <span style={{ fontWeight: 600, fontSize: 13 }}>{s.name}</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 12, color: 'var(--faint)' }}>{s.location}</span>
-                    <Badge label={s.uptime} color={s.status === 'سالم' ? '#5fd98a' : '#e7a14a'} />
-                  </div>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  {[{ l: 'CPU', v: s.cpu }, { l: 'RAM', v: s.mem }].map(m => (
-                    <div key={m.l}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--faint)', marginBottom: 3 }}>
-                        <span>{m.l}</span><span>{m.v}٪</span>
-                      </div>
-                      <div style={{ height: 5, borderRadius: 999, background: 'var(--line2)' }}>
-                        <div style={{ height: '100%', borderRadius: 999, width: `${m.v}%`, background: m.v > 80 ? '#e7a14a' : m.v > 60 ? 'var(--gold)' : '#5fd98a', transition: 'width .3s' }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
+function ServersView() {
+  const d = useSystem()
+  if (!d) return <Card>در حال خواندن…</Card>
+  const p = d.process
+  const bar = (label: string, used: number, total: number) => {
+    const pct = Math.round(used / total * 100)
+    return (
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 5 }}><span style={{ color: 'var(--muted)' }}>{label}</span><span>{used.toLocaleString('fa-IR')} / {total.toLocaleString('fa-IR')} MB ({pct.toLocaleString('fa-IR')}٪)</span></div>
+        <div style={{ height: 8, borderRadius: 999, background: 'var(--line2)' }}><div style={{ height: '100%', borderRadius: 999, width: `${pct}%`, background: pct > 85 ? '#e7674a' : pct > 65 ? 'var(--gold)' : '#5fd98a' }} /></div>
+      </div>
+    )
+  }
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>سرور برنامه (زنده)</div>
+        <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 16 }}>پلتفرم {p.platform} · Node {p.node} · PID {p.pid.toLocaleString('fa-IR')} · {p.cpus.toLocaleString('fa-IR')} هسته · آپتایم {fmtUptime(p.uptimeSec)}</div>
+        {bar('حافظهٔ سرور', p.totalMemMB - p.freeMemMB, p.totalMemMB)}
+        {bar('حافظهٔ پراسس (RSS)', p.rssMB, p.totalMemMB)}
+        {bar('Heap نود', p.heapUsedMB, p.heapTotalMB)}
+        <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 8 }}>بار سیستم (۱/۵/۱۵ دقیقه): {p.loadAvg.map((n: number) => n.toLocaleString('fa-IR')).join(' · ')}</div>
+      </Card>
+    </div>
+  )
+}
+
+function QueueView() {
+  const [pending, setPending] = useState<any[]>([])
+  const [sources, setSources] = useState<any[]>([])
+  const load = () => {
+    fetch('/api/admin/scraper/items?status=pending').then(r => r.ok ? r.json() : { items: [] }).then(d => setPending(d.items || []))
+    fetch('/api/admin/scraper/sources').then(r => r.ok ? r.json() : { sources: [] }).then(d => setSources(d.sources || []))
+  }
+  useEffect(() => { load() }, [])
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <div className="mjsa-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 18 }}>
+        <KPI label="در صف تأیید" value={pending.length.toLocaleString('fa-IR')} trend="منتظر بررسی AI" icon="⏳" iconBg="rgba(231,103,74,.15)" iconColor="#e7674a" />
+        <KPI label="منابع اسکرپ" value={sources.length.toLocaleString('fa-IR')} trend={`${sources.filter((s: any) => s.enabled).length.toLocaleString('fa-IR')} فعال`} icon="⛏" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" />
+        <KPI label="منابع دارای خطا" value={sources.filter((s: any) => s.status === 'error').length.toLocaleString('fa-IR')} trend="نیاز به بررسی" icon="⚠" iconBg="var(--goldDim)" iconColor="var(--gold)" />
+      </div>
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>آیتم‌های در صف تأیید ({pending.length.toLocaleString('fa-IR')})</div>
+        {pending.length === 0 ? <div style={{ color: 'var(--muted)', fontSize: 13 }}>صف خالی است — همه‌چیز بررسی شده.</div> : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {pending.slice(0, 30).map(it => <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, background: 'var(--bg2)', borderRadius: 8, padding: '8px 10px' }}><span style={{ flex: 1 }}>{it.title}</span><span style={{ color: 'var(--faint)', fontSize: 11 }}>{timeAgo(it.scrapedAt)}</span></div>)}
+          </div>
+        )}
+      </Card>
+      <Card>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>وضعیت منابع اسکرپ</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {sources.map((s: any) => <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, background: 'var(--bg2)', borderRadius: 8, padding: '8px 10px' }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: s.status === 'error' ? '#e7674a' : s.status === 'ok' ? '#5fd98a' : 'var(--faint)' }} /><span style={{ flex: 1 }}>{s.name}</span><span style={{ color: 'var(--faint)', fontSize: 11 }}>{s.lastCount ? `${s.lastCount.toLocaleString('fa-IR')} مورد` : '—'} · {timeAgo(s.lastRun)}</span></div>)}
+          {sources.length === 0 && <div style={{ color: 'var(--muted)', fontSize: 12.5 }}>منبعی نیست.</div>}
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+function AuditView() {
+  const [rows, setRows] = useState<any[]>([])
+  useEffect(() => { fetch('/api/admin/audit').then(r => r.ok ? r.json() : { entries: [] }).then(d => setRows(d.entries || [])) }, [])
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <Card>
+        <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>لاگ ممیزی</div>
+        <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 14 }}>اقدامات ثبت‌شدهٔ مدیران (ساخت/ویرایش/حذف/تغییر وضعیت).</div>
+        {rows.length === 0 ? <div style={{ color: 'var(--muted)', fontSize: 13, padding: '14px 0', textAlign: 'center' }}>هنوز رویدادی ثبت نشده.</div> : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {rows.map(r => (
+              <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5, background: 'var(--bg2)', borderRadius: 8, padding: '9px 12px' }}>
+                <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{r.actor}</span>
+                <span style={{ flex: 1 }}>{r.action}{r.target && <span style={{ color: 'var(--muted)' }}> — {r.target}</span>}</span>
+                <span style={{ color: 'var(--faint)', fontSize: 11 }}>{timeAgo(r.at)}</span>
               </div>
             ))}
           </div>
-        </Card>
-
-        <Card>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>هشدارها</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {alerts.map((a, i) => (
-              <div key={i} style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 14px', borderRight: `3px solid ${a.color}` }}>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{a.msg}</div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Badge label={a.level} color={a.color} />
-                  <span style={{ fontSize: 11, color: 'var(--faint)' }}>{a.time}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
+        )}
+      </Card>
     </div>
   )
 }
@@ -2756,6 +2805,9 @@ export default function SuperAdminPage() {
       case 'settings':   return <SettingsView />
       case 'flags':      return <FlagsView />
       case 'health':     return <HealthView />
+      case 'servers':    return <ServersView />
+      case 'queue':      return <QueueView />
+      case 'audit':      return <AuditView />
       case 'reports':    return <ReportsView />
       default:           return <SimpleView title={viewTitles[active]} />
     }

@@ -55,6 +55,7 @@ next-env.d.ts
 .promo-data.json
 .banner-data.json
 .plan-data.json
+.audit-data.json
 .sites-data.json
 .cms-data.json
 .category-data.json

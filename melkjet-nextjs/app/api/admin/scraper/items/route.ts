@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { listItems, setItemStatus, updateItem, deleteItem, deleteItems, addItemManual, SourceType, ItemStatus, EditableItem } from '@/app/lib/scraper-store'
 import { clearEnrichment } from '@/app/lib/enrich-store'
+import { logAudit } from '@/app/lib/audit-store'
 
 async function guard() {
   const s = await getSession()
   return s && s.role === 'super_admin'
 }
+async function actor() { const s = await getSession(); return (s as any)?.name || (s as any)?.phone || 'مدیر' }
 
 // POST → ساخت دستی آیتم جدید (آگهی/محصول/…)
 export async function POST(req: NextRequest) {
@@ -21,6 +23,7 @@ export async function POST(req: NextRequest) {
     excerpt: b.excerpt ? String(b.excerpt) : undefined, phone: b.phone ? String(b.phone) : undefined,
     category: b.category ? String(b.category) : undefined, owner: b.owner ? String(b.owner) : undefined,
   })
+  logAudit(await actor(), `ساخت ${type}`, it.title)
   return NextResponse.json({ ok: true, id: it.id, item: it })
 }
 
@@ -51,6 +54,7 @@ export async function PATCH(req: NextRequest) {
   }
   if (b.status && ['pending', 'approved', 'duplicate', 'rejected'].includes(b.status)) {
     setItemStatus(b.id, b.status as ItemStatus)
+    logAudit(await actor(), `تغییر وضعیت به ${b.status}`, b.id)
     return NextResponse.json({ ok: true })
   }
   return NextResponse.json({ error: 'ورودی نامعتبر' }, { status: 400 })
@@ -60,8 +64,8 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const id = new URL(req.url).searchParams.get('id')
-  if (id) { deleteItem(id); return NextResponse.json({ ok: true }) }
+  if (id) { deleteItem(id); logAudit(await actor(), 'حذف آیتم', id); return NextResponse.json({ ok: true }) }
   const b = await req.json().catch(() => ({}))
-  if (Array.isArray(b.ids)) { deleteItems(b.ids); return NextResponse.json({ ok: true }) }
+  if (Array.isArray(b.ids)) { deleteItems(b.ids); logAudit(await actor(), `حذف گروهی`, `${b.ids.length} مورد`); return NextResponse.json({ ok: true }) }
   return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
 }
