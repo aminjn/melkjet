@@ -1,9 +1,10 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
+import { dashForRoleId, listRoles } from './role-store'
 
 const FILE = join(process.cwd(), '.account-data.json')
 
-export interface Account { phone: string; name?: string; role?: string; onboarded: boolean; createdAt: number; lastLogin?: number }
+export interface Account { phone: string; name?: string; role?: string; plan?: string; onboarded: boolean; createdAt: number; lastLogin?: number }
 type DB = Record<string, Account>
 
 function load(): DB { if (existsSync(FILE)) { try { return JSON.parse(readFileSync(FILE, 'utf-8')) } catch {} } return {} }
@@ -31,21 +32,30 @@ export function setProfile(phone: string, patch: { name?: string; role?: string 
   return a
 }
 
+// ── مدیریت کاربران از سوپرادمین ──
+export function adminUpdate(phone: string, patch: { name?: string; role?: string; plan?: string }): Account | null {
+  const db = load(); const a = db[phone]; if (!a) return null
+  if (patch.name !== undefined) a.name = String(patch.name).slice(0, 60)
+  if (patch.role !== undefined) { a.role = String(patch.role); a.onboarded = true }
+  if (patch.plan !== undefined) a.plan = String(patch.plan) || undefined
+  save(db); return a
+}
+export function deleteAccount(phone: string) { const db = load(); delete db[phone]; save(db) }
+export function bulkUpdate(phones: string[], patch: { role?: string; plan?: string }) {
+  const db = load()
+  for (const p of phones) { const a = db[p]; if (!a) continue; if (patch.role !== undefined) { a.role = patch.role; a.onboarded = true }; if (patch.plan !== undefined) a.plan = patch.plan || undefined }
+  save(db)
+}
+export function bulkDelete(phones: string[]) { const db = load(); for (const p of phones) delete db[p]; save(db) }
+
 export function listAccounts(): Account[] {
   return Object.values(load()).sort((a, b) => (b.lastLogin || b.createdAt) - (a.lastLogin || a.createdAt))
 }
 
-// نقش کاربر → مسیر داشبورد
-export const ROLE_OPTIONS: { id: string; label: string; dash: string }[] = [
-  { id: 'buyer', label: 'خریدار / مستأجر', dash: '/buyer' },
-  { id: 'seller', label: 'فروشنده / مالک', dash: '/owner' },
-  { id: 'investor', label: 'سرمایه‌گذار', dash: '/owner' },
-  { id: 'advisor', label: 'مشاور املاک', dash: '/pros' },
-  { id: 'agency', label: 'آژانس املاک', dash: '/agency' },
-  { id: 'builder', label: 'سازنده / انبوه‌ساز', dash: '/builder' },
-  { id: 'materials', label: 'تأمین‌کنندهٔ مصالح', dash: '/materials' },
-  { id: 'legal', label: 'مشاور حقوقی', dash: '/legal' },
-]
-export function dashForRole(role?: string): string {
-  return ROLE_OPTIONS.find(r => r.id === role)?.dash || '/buyer'
+// نقش کاربر (شناسه یا نام نقش از role-store) → مسیر داشبورد
+export function dashForRole(role?: string): string { return dashForRoleId(role) }
+
+// آیا این نقش معتبر است؟ (برای آنبوردینگ)
+export function isValidRole(role: string): boolean {
+  return listRoles(true).some(r => r.id === role || r.name === role)
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
@@ -8,15 +8,12 @@ import Footer from '@/app/components/Footer'
 type Tab = 'phone' | 'email'
 type OtpStep = 'enter-phone' | 'enter-code' | 'onboard'
 
-const ROLES = [
-  { id: 'buyer', label: 'خریدار / مستأجر', icon: '🔑' },
-  { id: 'seller', label: 'فروشنده / مالک', icon: '🏠' },
-  { id: 'investor', label: 'سرمایه‌گذار', icon: '📈' },
-  { id: 'advisor', label: 'مشاور املاک', icon: '🤝' },
-  { id: 'agency', label: 'آژانس املاک', icon: '🏢' },
-  { id: 'builder', label: 'سازنده / انبوه‌ساز', icon: '🏗' },
-  { id: 'materials', label: 'تأمین‌کنندهٔ مصالح', icon: '🧱' },
-  { id: 'legal', label: 'مشاور حقوقی', icon: '⚖' },
+const ROLE_ICONS: Record<string, string> = { '/buyer': '🔑', '/owner': '🏠', '/pros': '🤝', '/agency': '🏢', '/builder': '🏗', '/materials': '🧱', '/legal': '⚖' }
+const FALLBACK_ROLES = [
+  { id: 'خریدار / مستأجر', name: 'خریدار / مستأجر', dashboard: '/buyer' },
+  { id: 'فروشنده / مالک', name: 'فروشنده / مالک', dashboard: '/owner' },
+  { id: 'مشاور املاک', name: 'مشاور املاک', dashboard: '/pros' },
+  { id: 'سازنده / انبوه‌ساز', name: 'سازنده / انبوه‌ساز', dashboard: '/builder' },
 ]
 
 export default function AuthPage() {
@@ -32,6 +29,8 @@ export default function AuthPage() {
   // Onboarding state (new users)
   const [name, setName] = useState('')
   const [selectedRole, setSelectedRole] = useState('')
+  const [roles, setRoles] = useState<{ id: string; name: string; dashboard: string }[]>(FALLBACK_ROLES)
+  useEffect(() => { fetch('/api/roles').then(r => r.ok ? r.json() : null).then(d => { if (d?.roles?.length) setRoles(d.roles) }).catch(() => {}) }, [])
 
   // Email state
   const [email, setEmail] = useState('')
@@ -275,13 +274,13 @@ export default function AuthPage() {
                     <div style={fieldStyle}>
                       <label style={labelStyle}>نقش شما در ملک‌جت</label>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                        {ROLES.map(r => (
+                        {roles.map(r => (
                           <button key={r.id} onClick={() => setSelectedRole(r.id)} style={{
                             display: 'flex', alignItems: 'center', gap: 8, padding: '11px 12px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5, textAlign: 'right',
                             border: `1px solid ${selectedRole === r.id ? 'var(--gold)' : 'var(--line)'}`,
                             background: selectedRole === r.id ? 'var(--goldDim)' : 'var(--bg2)',
                             color: selectedRole === r.id ? 'var(--gold)' : 'var(--text)', fontWeight: selectedRole === r.id ? 700 : 500,
-                          }}><span style={{ fontSize: 16 }}>{r.icon}</span>{r.label}</button>
+                          }}><span style={{ fontSize: 16 }}>{ROLE_ICONS[r.dashboard] || '◆'}</span>{r.name}</button>
                         ))}
                       </div>
                     </div>
