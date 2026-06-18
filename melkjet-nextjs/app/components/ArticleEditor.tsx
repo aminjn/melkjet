@@ -26,6 +26,7 @@ export default function ArticleEditor({ compact }: { compact?: boolean }) {
   const [busy, setBusy] = useState('')
   const [msg, setMsg] = useState('')
   const [aiTopic, setAiTopic] = useState('')
+  const [aiLength, setAiLength] = useState('1200')
   const [cats, setCats] = useState<string[]>(DEFAULT_CATS)
 
   const load = () => fetch('/api/cms').then(r => r.ok ? r.json() : { articles: [] }).then(d => setArticles(d.articles || []))
@@ -72,7 +73,7 @@ export default function ArticleEditor({ compact }: { compact?: boolean }) {
     if (!topic) { setMsg('⚠ موضوع مقاله را برای هوش مصنوعی بنویس'); return }
     setBusy('ai'); setMsg('')
     try {
-      const r = await fetch('/api/cms/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic, focusKeyword: f.focusKeyword, category: f.category }) })
+      const r = await fetch('/api/cms/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic, focusKeyword: f.focusKeyword, category: f.category, words: Number(aiLength) || 1200 }) })
       const d = await r.json()
       if (!d.ok) { setMsg('⚠ ' + (d.error || 'خطا در تولید')); return }
       // خروجی AI به‌صورت Markdown است → به HTML تبدیل می‌کنیم تا در ویرایشگر غنی قابل ویرایش باشد
@@ -179,6 +180,8 @@ export default function ArticleEditor({ compact }: { compact?: boolean }) {
   const genConclusion = () => aiText('concl', 'یک بخش «جمع‌بندی» کوتاه و کاربردی برای این مقاله بنویس (Markdown، با تیتر ## جمع‌بندی).', t => { setF(p => ({ ...p, body: (p.body || '') + mdToHtml(t) })); setMsg('✓ جمع‌بندی اضافه شد') })
   const keyTakeaways = () => aiText('take', 'مهم‌ترین ۴ تا ۵ «نکتهٔ کلیدی» این مقاله را به‌صورت فهرست کوتاه بده، هر نکته یک خط، بدون توضیح اضافه.', t => { const pts = t.split('\n').map(x => x.replace(/^[-•\d.\s]+/, '').trim()).filter(Boolean); const li = pts.map(p => `<li>${p.replace(/</g, '&lt;')}</li>`).join(''); const box = `<div class="mj-takeaways"><strong>✦ نکات کلیدی</strong><ul>${li}</ul></div>`; setF(p => ({ ...p, body: box + (p.body || '') })); setMsg('✓ نکات کلیدی اضافه شد') })
   const fixGrammar = () => aiText('grammar', 'این متن را فقط از نظر نگارشی، املایی و دستوری ویرایش کن؛ معنا و ساختار را تغییر نده. خروجی کامل به Markdown.', t => { setF(p => ({ ...p, body: mdToHtml(t) })); setMsg('✓ ویرایش نگارشی انجام شد') })
+  // گسترش مقاله: زیرعنوان‌ها و بخش‌های جدید با عمق بیشتر به انتها اضافه می‌کند (برای رسیدن به طول بالا)
+  const expandText = () => aiText('expand', 'این مقاله را گسترش بده: ۳ تا ۵ زیرعنوان و بخش جدید و مفیدِ مرتبط با همین موضوع بنویس که در متن فعلی نیامده (مثال، نکات تخصصی، اشتباهات رایج، مقایسه، چک‌لیست). فقط بخش‌های جدید را به Markdown بده (با تیتر ##)، تکراری ننویس.', t => { setF(p => ({ ...p, body: (p.body || '') + mdToHtml(t) })); setMsg('✓ مقاله گسترش یافت — برای طولانی‌تر شدن دوباره بزن') })
 
   // امتیاز سئو (متن HTML را برای شمارش کلمه پاک می‌کنیم)
   const seo = (() => {
@@ -258,11 +261,19 @@ export default function ArticleEditor({ compact }: { compact?: boolean }) {
           <div style={{ ...box, padding: 12, border: '1px solid rgba(212,175,55,.3)', background: 'var(--goldDim)' }}>
             <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}>✦ نوشتن با هوش مصنوعی (انسان‌نما و سئو)</div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <input value={aiTopic} onChange={e => setAiTopic(e.target.value)} placeholder="موضوع مقاله (مثلاً: راهنمای خرید آپارتمان در سعادت‌آباد)" style={{ ...inp, flex: 1, minWidth: 200 }} />
+              <input value={aiTopic} onChange={e => setAiTopic(e.target.value)} placeholder="موضوع مقاله (مثلاً: راهنمای خرید آپارتمان در سعادت‌آباد)" style={{ ...inp, flex: 1, minWidth: 180 }} />
+              <select value={aiLength} onChange={e => setAiLength(e.target.value)} title="طول مقاله" style={{ ...inp, width: 'auto' }}>
+                <option value="600">کوتاه (~۶۰۰ کلمه)</option>
+                <option value="1200">متوسط (~۱۲۰۰ کلمه)</option>
+                <option value="2000">بلند (~۲۰۰۰ کلمه)</option>
+                <option value="3500">خیلی بلند (~۳۵۰۰ کلمه)</option>
+                <option value="5000">جامع (~۵۰۰۰ کلمه)</option>
+              </select>
               <button onClick={aiGenerate} disabled={!!busy} style={{ padding: '9px 18px', borderRadius: 9, border: 'none', background: 'var(--gold)', color: '#16140f', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', opacity: busy ? .6 : 1 }}>{busy === 'ai' ? 'در حال نوشتن…' : 'بنویس مقاله کامل'}</button>
             </div>
             <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 10 }}>
               {[
+                ['expand', '➕ طولانی‌تر کن', expandText],
                 ['faq', '❓ سؤالات متداول', genFaq],
                 ['improve', '✦ بهبود و بازنویسی', improveText],
                 ['take', '◆ نکات کلیدی', keyTakeaways],
