@@ -218,3 +218,5 @@ body {
 
 /* Global safe area */
 body { padding-bottom: env(safe-area-inset-bottom); }
+
+.mjwb-tpl:hover{border-color:var(--gold)!important;transform:translateY(-1px)}

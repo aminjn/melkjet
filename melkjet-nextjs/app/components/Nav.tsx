@@ -1,7 +1,14 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import ThemeToggle from './ThemeToggle'
+
+// نام داشبورد هر مسیر برای نمایش در دکمهٔ «داشبورد من»
+const DASH_LABEL: Record<string, string> = {
+  '/admin': 'پنل مدیریت', '/builder': 'پنل سازنده', '/pros': 'پنل مشاور',
+  '/agency': 'پنل آژانس', '/materials': 'پنل فروشگاه', '/owner': 'پنل من',
+  '/buyer': 'پنل من', '/legal': 'پنل حقوقی',
+}
 
 const navLinks = [
   { href: '/search', label: 'خرید' },
@@ -16,6 +23,23 @@ const navLinks = [
 
 export default function Nav() {
   const [menuOpen, setMenuOpen] = useState(false)
+  // وضعیت ورود: undefined=در حال بررسی، null=مهمان، {dash}=واردشده
+  const [me, setMe] = useState<{ dash: string } | null | undefined>(undefined)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/auth/profile')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (!cancelled) setMe(d && d.phone ? { dash: d.dash || '/buyer' } : null) })
+      .catch(() => { if (!cancelled) setMe(null) })
+    return () => { cancelled = true }
+  }, [])
+
+  const logout = async () => {
+    try { await fetch('/api/auth/logout', { method: 'POST' }) } catch {}
+    window.location.href = '/'
+  }
+  const dashLabel = me ? (DASH_LABEL[me.dash] || 'پنل من') : ''
 
   return (
     <header style={{
@@ -48,8 +72,17 @@ export default function Nav() {
         {/* Desktop actions */}
         <div className="mj-nav-links mj-login" style={{ display: 'none', alignItems: 'center', gap: 10 }}>
           <ThemeToggle size={40} />
-          <Link href="/auth" style={{ padding: '0 16px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, border: '1px solid var(--line2)', color: 'var(--text)', textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>ورود</Link>
-          <Link href="/submit" style={{ padding: '0 18px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontSize: 14, fontWeight: 700 }}>ثبت آگهی</Link>
+          {me ? (
+            <>
+              <button onClick={logout} title="خروج از حساب" style={{ padding: '0 14px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--muted)', fontFamily: 'inherit', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>خروج</button>
+              <Link href={me.dash} style={{ padding: '0 18px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontSize: 14, fontWeight: 700 }}>{dashLabel}</Link>
+            </>
+          ) : (
+            <>
+              <Link href="/auth" style={{ padding: '0 16px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, border: '1px solid var(--line2)', color: 'var(--text)', textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>ورود</Link>
+              <Link href="/submit" style={{ padding: '0 18px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontSize: 14, fontWeight: 700 }}>ثبت آگهی</Link>
+            </>
+          )}
         </div>
 
         {/* Mobile: theme + hamburger */}
@@ -75,8 +108,17 @@ export default function Nav() {
               <Link key={l.href} href={l.href} onClick={() => setMenuOpen(false)} style={{ padding: '12px 14px', borderRadius: 10, color: 'var(--text)', textDecoration: 'none', fontSize: 15, fontWeight: 600 }}>{l.label}</Link>
             ))}
             <div style={{ height: 1, background: 'var(--line)', margin: '8px 0' }} />
-            <Link href="/auth" onClick={() => setMenuOpen(false)} style={{ padding: '12px 14px', borderRadius: 10, color: 'var(--text)', textDecoration: 'none', fontSize: 15, fontWeight: 600 }}>ورود / ثبت‌نام</Link>
-            <Link href="/submit" onClick={() => setMenuOpen(false)} style={{ display: 'block', textAlign: 'center', padding: '13px', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontSize: 15, fontWeight: 700, marginTop: 4 }}>+ ثبت آگهی</Link>
+            {me ? (
+              <>
+                <Link href={me.dash} onClick={() => setMenuOpen(false)} style={{ display: 'block', textAlign: 'center', padding: '13px', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontSize: 15, fontWeight: 700 }}>{dashLabel}</Link>
+                <button onClick={() => { setMenuOpen(false); logout() }} style={{ padding: '12px 14px', borderRadius: 10, color: 'var(--muted)', background: 'transparent', border: '1px solid var(--line2)', fontFamily: 'inherit', cursor: 'pointer', fontSize: 15, fontWeight: 600, marginTop: 4 }}>خروج از حساب</button>
+              </>
+            ) : (
+              <>
+                <Link href="/auth" onClick={() => setMenuOpen(false)} style={{ padding: '12px 14px', borderRadius: 10, color: 'var(--text)', textDecoration: 'none', fontSize: 15, fontWeight: 600 }}>ورود / ثبت‌نام</Link>
+                <Link href="/submit" onClick={() => setMenuOpen(false)} style={{ display: 'block', textAlign: 'center', padding: '13px', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontSize: 15, fontWeight: 700, marginTop: 4 }}>+ ثبت آگهی</Link>
+              </>
+            )}
           </div>
         </div>
       )}

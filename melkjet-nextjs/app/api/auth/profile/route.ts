@@ -7,7 +7,9 @@ export async function GET() {
   const s = await getSession()
   if (!s) return NextResponse.json({ account: null }, { status: 401 })
   const a = getAccount(s.phone)
-  return NextResponse.json({ account: a, phone: s.phone, dash: dashForRole(a?.role) })
+  const isSuper = s.role === 'super_admin'
+  const dash = isSuper ? '/admin' : dashForRole(a?.role)
+  return NextResponse.json({ account: a, phone: s.phone, role: s.role, dash })
 }
 
 // تکمیل پروفایل (آنبوردینگ): نام + نقش

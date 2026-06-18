@@ -29,6 +29,22 @@ const BLOCK_LIBRARY = [
 
 const PROFILE_GROUPS = ['مشاور', 'آژانس', 'سازنده', 'فروشگاه', 'سرمایه‌گذار', 'حقوقی', 'عمومی'] as const
 
+// پالت گرافیکی هر پروفایل (گرادیان + آیکن) برای پیش‌نمای جذاب قالب‌ها
+const PROFILE_VISUAL: Record<string, { grad: string; icon: string }> = {
+  'مشاور': { grad: 'linear-gradient(135deg,#1e3a8a,#3b82f6)', icon: '🏢' },
+  'آژانس': { grad: 'linear-gradient(135deg,#0f766e,#14b8a6)', icon: '🤝' },
+  'سازنده': { grad: 'linear-gradient(135deg,#b45309,#f59e0b)', icon: '🏗️' },
+  'فروشگاه': { grad: 'linear-gradient(135deg,#7c3aed,#ec4899)', icon: '🛒' },
+  'سرمایه‌گذار': { grad: 'linear-gradient(135deg,#065f46,#10b981)', icon: '📈' },
+  'حقوقی': { grad: 'linear-gradient(135deg,#334155,#64748b)', icon: '⚖️' },
+  'عمومی': { grad: 'linear-gradient(135deg,#a16207,#d4af37)', icon: '✨' },
+}
+// ارتفاع نسبی هر بلوک در پیش‌نمای مینیاتوری
+const BLOCK_BAR: Record<string, number> = {
+  hero: 14, search: 6, listings: 9, services: 8, about: 7, stats: 6,
+  gallery: 10, testimonials: 7, cta: 5, contact: 6, footer: 4,
+}
+
 // نگاشت مسیر داشبورد کاربر به گروه پروفایل قالب‌ها
 const DASH_TO_PROFILE: Record<string, string> = {
   '/builder': 'سازنده',
@@ -335,6 +351,8 @@ export default function WebsiteBuilderPage() {
   ])
   const [selectedBlock, setSelectedBlock] = useState<number | null>(null)
   const [tplFilter, setTplFilter] = useState('عمومی')
+  // پروفایل قفل‌شده بر اساس نقش کاربر؛ null یعنی مهمان/ادمین (می‌تواند همه را ببیند)
+  const [lockedProfile, setLockedProfile] = useState<string | null>(null)
   const [device, setDevice] = useState<Device>('desktop')
   const [activeTab, setActiveTab] = useState<ActiveTab>('seo')
   const [seoTitle, setSeoTitle] = useState('آژانس ملکی نمونه | خرید و فروش ملک')
@@ -361,8 +379,10 @@ export default function WebsiteBuilderPage() {
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (cancelled || !data) return
-        const profile = DASH_TO_PROFILE[data.dash as string] || 'عمومی'
-        setTplFilter(profile)
+        // اگر نقش کاربر به یک پروفایل مشخص نگاشت شود، فقط همان را می‌بیند (قفل).
+        // ادمین/داشبورد ناشناخته → قفل نمی‌شود تا بتواند همه را مرور کند.
+        const mapped = DASH_TO_PROFILE[data.dash as string]
+        if (mapped) { setTplFilter(mapped); setLockedProfile(mapped) }
       })
       .catch(() => { /* در صورت خطا روی پیش‌فرض «عمومی» می‌ماند */ })
     return () => { cancelled = true }
@@ -568,32 +588,54 @@ export default function WebsiteBuilderPage() {
           background: 'var(--bg2)', overflowY: 'auto', padding: '16px 0',
         }}>
           <div style={{ padding: '0 14px', marginBottom: 4 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', marginBottom: 6 }}>قالب آماده ({STARTER_TEMPLATES.length.toLocaleString('fa-IR')})</div>
-            <div style={{ fontSize: 9.5, color: 'var(--gold)', marginBottom: 10, lineHeight: 1.5 }}>قالب‌های متناسب با پروفایل شما</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
-              {PROFILE_GROUPS.map(pf => (
-                <button key={pf} onClick={() => setTplFilter(pf)} style={{ fontSize: 10.5, padding: '4px 9px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${tplFilter === pf ? 'var(--gold)' : 'var(--line)'}`, background: tplFilter === pf ? 'var(--goldDim)' : 'transparent', color: tplFilter === pf ? 'var(--gold)' : 'var(--muted)' }}>{pf}</button>
-              ))}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 360, overflowY: 'auto' }}>
-              {STARTER_TEMPLATES.filter(t => t.profile === tplFilter).map(tpl => (
+            {(() => {
+              const visible = STARTER_TEMPLATES.filter(t => t.profile === tplFilter)
+              return <>
+            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', marginBottom: 6 }}>قالب‌های {tplFilter} ({visible.length.toLocaleString('fa-IR')})</div>
+            {lockedProfile ? (
+              <div style={{ fontSize: 9.5, color: 'var(--gold)', marginBottom: 10, lineHeight: 1.5 }}>قالب‌های مخصوص پروفایل شما — {lockedProfile}</div>
+            ) : (
+              // فقط مهمان/ادمین می‌تواند بین پروفایل‌ها جابه‌جا شود
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
+                {PROFILE_GROUPS.map(pf => (
+                  <button key={pf} onClick={() => setTplFilter(pf)} style={{ fontSize: 10.5, padding: '4px 9px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${tplFilter === pf ? 'var(--gold)' : 'var(--line)'}`, background: tplFilter === pf ? 'var(--goldDim)' : 'transparent', color: tplFilter === pf ? 'var(--gold)' : 'var(--muted)' }}>{pf}</button>
+                ))}
+              </div>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 420, overflowY: 'auto' }}>
+              {visible.map(tpl => {
+                const v = PROFILE_VISUAL[tpl.profile] || PROFILE_VISUAL['عمومی']
+                return (
                 <button
                   key={tpl.id}
                   onClick={() => loadTemplate(tpl)}
+                  className="mjwb-tpl"
                   style={{
-                    textAlign: 'right', padding: '9px 12px', borderRadius: 10,
+                    textAlign: 'right', padding: 0, borderRadius: 12, overflow: 'hidden',
                     border: '1px solid var(--line)', background: 'var(--surface)',
                     cursor: 'pointer', transition: 'all .15s', width: '100%',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 2 }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>{tpl.name}</span>
-                    <span style={{ fontSize: 9, color: 'var(--gold)', border: '1px solid rgba(212,175,55,.3)', borderRadius: 999, padding: '1px 7px' }}>{tpl.profile}</span>
+                  {/* پیش‌نمای مینیاتوری گرافیکی بر اساس بلوک‌های قالب */}
+                  <div style={{ position: 'relative', height: 70, background: v.grad, padding: '8px 10px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 3 }}>
+                    <span style={{ position: 'absolute', top: 6, left: 8, fontSize: 16, opacity: 0.95 }}>{v.icon}</span>
+                    {tpl.blocks.slice(0, 5).map((b, i) => (
+                      <div key={i} style={{
+                        height: 3, borderRadius: 2,
+                        width: `${Math.min(100, (BLOCK_BAR[b] || 6) * 7 + 18)}%`,
+                        background: i === 0 ? 'rgba(255,255,255,.92)' : 'rgba(255,255,255,.5)',
+                      }} />
+                    ))}
                   </div>
-                  <div style={{ fontSize: 10, color: 'var(--faint)', lineHeight: 1.4 }}>{tpl.desc}</div>
+                  <div style={{ padding: '8px 11px 10px' }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text)', marginBottom: 2 }}>{tpl.name}</div>
+                    <div style={{ fontSize: 10, color: 'var(--faint)', lineHeight: 1.4 }}>{tpl.desc}</div>
+                  </div>
                 </button>
-              ))}
+              )})}
             </div>
+              </>
+            })()}
           </div>
 
           <div style={{ height: 1, background: 'var(--line)', margin: '14px 0' }} />
