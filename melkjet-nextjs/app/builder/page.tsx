@@ -1,935 +1,794 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import Nav from '@/app/components/Nav'
-import Footer from '@/app/components/Footer'
-import { fetchContent, type ContentItem } from '@/app/lib/content-display'
 
-type View = 'dashboard' | 'units' | 'sales' | 'investors'
-
+// ── Types (mirror app/lib/builder-store.ts API shape) ──
 type UnitStatus = 'sold' | 'reserved' | 'available'
-
-interface Unit {
-  id: string
-  floor: number
-  unit: number
-  size: number
-  price: string
-  status: UnitStatus
-  buyer?: string
+interface Unit { id: string; number: string; floor: number; area: number; price: number; status: UnitStatus; buyer?: string }
+interface Investor { id: string; name: string; phone?: string; amount: number; units?: number }
+type MilestoneStatus = 'done' | 'active' | 'pending'
+interface Milestone { id: string; name: string; status: MilestoneStatus; date?: string }
+interface Project {
+  id: string; name: string; location: string; phase: string; progress: number
+  units: Unit[]; investors: Investor[]; milestones: Milestone[]
+  monthlySales: { month: string; count: number }[]
+  createdAt: number
 }
+interface ProjectSummary { id: string; name: string; location: string }
 
-const generateUnits = (): Unit[] => {
-  const units: Unit[] = []
-  const statuses: UnitStatus[] = ['sold', 'sold', 'sold', 'reserved', 'available', 'sold', 'reserved', 'sold']
-  const buyers = ['علی رضایی', 'مریم احمدی', 'حسین موسوی', 'فاطمه کریمی', 'محمد نجفی', 'زهرا صادقی']
-  let bi = 0
-  for (let floor = 6; floor >= 1; floor--) {
-    for (let u = 1; u <= 8; u++) {
-      const idx = (floor + u) % 8
-      const st = statuses[idx]
-      units.push({
-        id: `${floor}${String(u).padStart(2, '0')}`,
-        floor,
-        unit: u,
-        size: 85 + ((floor * u) % 60),
-        price: `${(floor * 2 + u * 3 + 8).toFixed(0)}`,
-        status: st,
-        buyer: st !== 'available' ? buyers[bi++ % buyers.length] : undefined,
-      })
-    }
-  }
-  return units
+type View = 'overview' | 'units' | 'sales' | 'investors' | 'reports'
+
+// ── Status visual maps ──
+const STATUS_COLOR: Record<UnitStatus, string> = {
+  sold: '#34d399',
+  reserved: 'var(--gold)',
+  available: '#7a8fae',
 }
-
-const ALL_UNITS = generateUnits()
-
-const salesData = [
-  { id: '۶۰۱', buyer: 'علی رضایی', type: 'اقساطی', amount: '۱۴ م.د', progress: 72 },
-  { id: '۵۰۳', buyer: 'مریم احمدی', type: 'نقدی', amount: '۱۸ م.د', progress: 100 },
-  { id: '۴۰۲', buyer: 'حسین موسوی', type: 'اقساطی', amount: '۱۲ م.د', progress: 45 },
-  { id: '۳۰۷', buyer: 'فاطمه کریمی', type: 'نقدی', amount: '۱۶ م.د', progress: 100 },
-  { id: '۲۰۴', buyer: 'محمد نجفی', type: 'اقساطی', amount: '۱۱ م.د', progress: 30 },
-  { id: '۱۰۸', buyer: 'زهرا صادقی', type: 'نقدی', amount: '۹ م.د', progress: 100 },
-  { id: '۵۰۶', buyer: 'رضا حسینی', type: 'اقساطی', amount: '۱۵ م.د', progress: 60 },
-  { id: '۴۰۱', buyer: 'سارا محمدی', type: 'اقساطی', amount: '۱۳ م.د', progress: 85 },
-]
-
-const investorsData = [
-  { name: 'شرکت عمران آریا', share: 40, invested: '۲۸۰ م.د', return: '۳۴۲ م.د', color: 'var(--gold)' },
-  { name: 'سرمایه‌گذاری پارس', share: 30, invested: '۲۱۰ م.د', return: '۲۵۷ م.د', color: '#60a5fa' },
-  { name: 'صندوق توسعه مسکن', share: 20, invested: '۱۴۰ م.د', return: '۱۷۱ م.د', color: '#34d399' },
-  { name: 'سرمایه‌گذاران خصوصی', share: 10, invested: '۷۰ م.د', return: '۸۶ م.د', color: '#f87171' },
-]
-
-const milestones = [
-  { label: 'پی‌سازی', status: 'done' },
-  { label: 'اسکلت', status: 'done' },
-  { label: 'نازک‌کاری', status: 'active' },
-  { label: 'تأسیسات', status: 'pending' },
-  { label: 'تحویل', status: 'future' },
-]
-
-const barData = [
-  { month: 'دی', value: 18, max: 35 },
-  { month: 'بهمن', value: 24, max: 35 },
-  { month: 'اسفند', value: 31, max: 35 },
-  { month: 'فروردین', value: 28, max: 35 },
-  { month: 'اردیبهشت', value: 22, max: 35 },
-  { month: 'خرداد', value: 19, max: 35 },
-]
-
-const statusColor: Record<UnitStatus, string> = {
-  sold: '#22c55e',
-  reserved: '#f97316',
-  available: 'var(--gold)',
-}
-
-const statusLabel: Record<UnitStatus, string> = {
+const STATUS_LABEL: Record<UnitStatus, string> = {
   sold: 'فروخته‌شده',
   reserved: 'رزرو',
   available: 'موجود',
 }
 
+// ── Formatting helpers ──
+const fa = (n: number) => n.toLocaleString('fa-IR')
+
+// Money in tomans → readable «م.ت» (میلیون تومان). 1,840 م.ت means ~1.84 میلیارد.
+function money(tomans: number): string {
+  if (tomans >= 1e9) return fa(Math.round(tomans / 1e9)) + ' م.ت' // میلیارد تومان rendered as «م.ت»
+  if (tomans >= 1e6) return fa(Math.round(tomans / 1e6)) + ' م.ت'
+  return fa(Math.round(tomans)) + ' ت'
+}
+// Always express in میلیارد تومان for big sums (revenue, investments).
+function billions(tomans: number): string {
+  return fa(Math.round(tomans / 1e9))
+}
+
+function stats(p: Project | null) {
+  if (!p) return { total: 0, sold: 0, reserved: 0, available: 0, revenue: 0 }
+  const sold = p.units.filter(u => u.status === 'sold')
+  return {
+    total: p.units.length,
+    sold: sold.length,
+    reserved: p.units.filter(u => u.status === 'reserved').length,
+    available: p.units.filter(u => u.status === 'available').length,
+    revenue: sold.reduce((a, u) => a + u.price, 0),
+  }
+}
+
+const VIEW_TITLES: Record<View, string> = {
+  overview: 'نمای کلی پروژه',
+  units: 'موجودی واحدها',
+  sales: 'پیش‌فروش و فروش',
+  investors: 'سرمایه‌گذاران',
+  reports: 'گزارش‌ها',
+}
+
+const NAV_ITEMS: { id: View; label: string; icon: string }[] = [
+  { id: 'overview', label: 'نمای کلی', icon: '▦' },
+  { id: 'units', label: 'موجودی واحدها', icon: '▤' },
+  { id: 'sales', label: 'پیش‌فروش و فروش', icon: '◔' },
+  { id: 'investors', label: 'سرمایه‌گذاران', icon: '◍' },
+  { id: 'reports', label: 'گزارش‌ها', icon: '◳' },
+]
+const NAV_LINKS: { href: string; label: string; icon: string }[] = [
+  { href: '/crm', label: 'CRM و مشتریان', icon: '◇' },
+  { href: '/marketing', label: 'مارکتینگ', icon: '◈' },
+  { href: '/workflow', label: 'اتوماسیون', icon: '⛭' },
+  { href: '/website-builder', label: 'وب‌سایت‌ساز', icon: '◳' },
+]
+
+const FONT = 'Vazirmatn, system-ui, sans-serif'
+const card: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16 }
+
 export default function BuilderPage() {
-  const [activeView, setActiveView] = useState<View>('dashboard')
-  const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null)
+  const [view, setView] = useState<View>('overview')
+  const [projects, setProjects] = useState<ProjectSummary[]>([])
+  const [project, setProject] = useState<Project | null>(null)
+  const [pid, setPid] = useState<string | null>(null)
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const [switcherOpen, setSwitcherOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
 
-  // آگهی‌های واقعی بازار از داده‌های اسکرپ‌شده
-  const [marketListings, setMarketListings] = useState<ContentItem[]>([])
-
-  // وضعیت ثبت رزرو/قرارداد و پیام تأیید
-  const [reserveState, setReserveState] = useState<'idle' | 'sending' | 'done'>('idle')
-  const [contractState, setContractState] = useState<'idle' | 'sending' | 'done'>('idle')
-  const [toast, setToast] = useState<string | null>(null)
-
-  useEffect(() => {
-    let alive = true
-    fetchContent('listing', undefined, 8).then((d) => {
-      if (alive) setMarketListings(d)
-    })
-    return () => { alive = false }
+  // ── Load full project by id ──
+  const loadProject = useCallback(async (id: string) => {
+    try {
+      const r = await fetch('/api/builder?id=' + encodeURIComponent(id))
+      const d = await r.json()
+      if (d.project) setProject(d.project)
+    } catch {}
   }, [])
 
+  // ── On mount: list projects, pick first, load it ──
   useEffect(() => {
-    if (!toast) return
-    const t = setTimeout(() => setToast(null), 3500)
-    return () => clearTimeout(t)
-  }, [toast])
+    fetch('/api/builder')
+      .then(r => r.json())
+      .then((d: { projects: Project[] }) => {
+        const list = Array.isArray(d.projects) ? d.projects : []
+        setProjects(list.map(p => ({ id: p.id, name: p.name, location: p.location })))
+        if (list[0]) { setPid(list[0].id); setProject(list[0]) }
+      })
+      .catch(() => {})
+  }, [])
 
-  // ثبت رزرو یک واحد از طریق /api/submit
-  const submitReserve = async (unit: Unit) => {
-    setReserveState('sending')
+  // ── Generic POST then refresh current project ──
+  const post = useCallback(async (body: Record<string, unknown>): Promise<boolean> => {
+    setBusy(true)
     try {
-      const description = [
-        `درخواست رزرو واحد ${unit.id} در پروژه برج آرین (سعادت‌آباد).`,
-        `طبقه ${unit.floor} · متراژ ${unit.size} م² · قیمت ${unit.price} م.د`,
-      ].join('\n')
-      const res = await fetch('/api/submit', {
+      const r = await fetch('/api/builder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: `رزرو واحد ${unit.id}`, description }),
+        body: JSON.stringify(body),
       })
-      const d = await res.json().catch(() => ({}))
-      if (res.ok && d.ok) {
-        setReserveState('done')
-        setToast(`رزرو واحد ${unit.id} ثبت شد`)
-      } else {
-        setReserveState('idle')
-        setToast('ثبت رزرو با خطا مواجه شد')
-      }
-    } catch {
-      setReserveState('idle')
-      setToast('ثبت رزرو با خطا مواجه شد')
-    }
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { alert(d.error || 'برای تغییر باید وارد شوید'); return false }
+      if (pid) await loadProject(pid)
+      return true
+    } catch { return false } finally { setBusy(false) }
+  }, [pid, loadProject])
+
+  const toggleTheme = () => {
+    const html = document.documentElement
+    if (theme === 'dark') { html.classList.add('light'); setTheme('light') }
+    else { html.classList.remove('light'); setTheme('dark') }
   }
 
-  // ثبت قرارداد جدید از طریق /api/submit
-  const submitContract = async () => {
-    setContractState('sending')
+  const selectProject = async (id: string) => {
+    setSwitcherOpen(false)
+    if (id === pid) return
+    setPid(id)
+    setProject(null)
+    await loadProject(id)
+  }
+
+  const createProject = async () => {
+    setSwitcherOpen(false)
+    const name = window.prompt('نام پروژه:')?.trim()
+    if (!name) return
+    const location = window.prompt('موقعیت (مثلاً تهران، سعادت‌آباد):')?.trim() || ''
+    setBusy(true)
     try {
-      const res = await fetch('/api/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: 'قرارداد جدید',
-          description: 'ثبت درخواست قرارداد فروش جدید در پروژه برج آرین (سعادت‌آباد).',
-        }),
+      const r = await fetch('/api/builder', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'project', name, location }),
       })
-      const d = await res.json().catch(() => ({}))
-      if (res.ok && d.ok) {
-        setContractState('done')
-        setToast('قرارداد جدید ثبت شد')
-      } else {
-        setContractState('idle')
-        setToast('ثبت قرارداد با خطا مواجه شد')
-      }
-    } catch {
-      setContractState('idle')
-      setToast('ثبت قرارداد با خطا مواجه شد')
-    }
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || !d.project) { alert(d.error || 'برای ساخت پروژه باید وارد شوید'); return }
+      const p: Project = d.project
+      setProjects(prev => [{ id: p.id, name: p.name, location: p.location }, ...prev])
+      setPid(p.id); setProject(p)
+    } catch {} finally { setBusy(false) }
   }
 
-  const navItems: { id: View; label: string; icon: string }[] = [
-    { id: 'dashboard', label: 'داشبورد', icon: '◈' },
-    { id: 'units', label: 'واحدها', icon: '⊞' },
-    { id: 'sales', label: 'فروش', icon: '◎' },
-    { id: 'investors', label: 'سرمایه‌گذاران', icon: '◆' },
-  ]
+  const s = stats(project)
+  const current = projects.find(p => p.id === pid)
 
   return (
-    <div style={{ direction: 'rtl', minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'Vazirmatn, Tahoma, sans-serif' }}>
-      <Nav />
+    <div dir="rtl" style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: FONT }}>
 
-      {/* Page wrapper */}
-      <div style={{ display: 'flex', minHeight: 'calc(100vh - 120px)', position: 'relative' }}>
+      {/* ════════════ SIDEBAR ════════════ */}
+      <aside className="mjb-side" style={{
+        width: 230, flexShrink: 0, background: 'var(--bg2)', borderLeft: '1px solid var(--line)',
+        position: 'sticky', top: 0, height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      }}>
+        {/* Title + diamond logo */}
+        <div style={{ padding: '20px 16px 16px', borderBottom: '1px solid var(--line)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: 10,
+              background: 'linear-gradient(140deg,var(--gold2),var(--gold))',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 6px 18px -6px var(--gold)', flexShrink: 0,
+            }}>
+              <div style={{ width: 13, height: 13, background: 'var(--bg)', transform: 'rotate(45deg)', borderRadius: 3 }} />
+            </div>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-0.5px' }}>ملک‌جت</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>میز کار سازنده</div>
+            </div>
+          </div>
+        </div>
 
-        {/* ── SIDEBAR ── */}
-        <aside className="mju-side" style={{
-          width: 240,
-          minHeight: '100%',
-          background: 'var(--surface)',
-          borderLeft: '1px solid var(--line)',
-          display: 'flex',
-          flexDirection: 'column',
-          position: 'sticky',
-          top: 0,
-          height: '100vh',
-          overflowY: 'auto',
-          flexShrink: 0,
-          zIndex: 10,
+        {/* Nav */}
+        <nav style={{ padding: '10px 8px', flex: 1, overflowY: 'auto' }}>
+          {NAV_ITEMS.map(item => {
+            const active = view === item.id
+            return (
+              <button key={item.id} onClick={() => setView(item.id)} style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                background: active ? 'var(--goldDim)' : 'transparent',
+                color: active ? 'var(--gold)' : 'var(--muted)',
+                fontWeight: active ? 700 : 500, fontSize: 14, textAlign: 'right',
+                marginBottom: 2, fontFamily: FONT, transition: 'all 0.15s',
+              }}>
+                <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: active ? 1 : 0.7 }}>{item.icon}</span>
+                <span className="mjb-sidelabel" style={{ flex: 1 }}>{item.label}</span>
+                {active && <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--gold)' }} />}
+              </button>
+            )
+          })}
+          <div style={{ height: 1, background: 'var(--line)', margin: '10px 8px' }} />
+          {NAV_LINKS.map(l => (
+            <Link key={l.href} href={l.href} style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+              padding: '10px 14px', borderRadius: 10, color: 'var(--muted)', textDecoration: 'none',
+              fontWeight: 500, fontSize: 14, marginBottom: 2, fontFamily: FONT,
+            }}>
+              <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: 0.7 }}>{l.icon}</span>
+              <span className="mjb-sidelabel" style={{ flex: 1 }}>{l.label}</span>
+            </Link>
+          ))}
+        </nav>
+
+        {/* Build progress card */}
+        <div style={{ margin: '0 12px 10px', padding: 14, borderRadius: 14, background: 'var(--goldDim)', border: '1px solid rgba(201,168,76,0.2)' }}>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>پیشرفت ساخت</div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}>
+            <span style={{ fontSize: 30, fontWeight: 800, color: 'var(--gold)', lineHeight: 1 }}>{fa(project?.progress ?? 0)}٪</span>
+            <span style={{ fontSize: 12, color: 'var(--muted)' }}>{project?.phase || '—'}</span>
+          </div>
+          <div style={{ height: 4, background: 'var(--line)', borderRadius: 99, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${project?.progress ?? 0}%`, background: 'linear-gradient(90deg,var(--gold2),var(--gold))', borderRadius: 99, transition: 'width 0.5s' }} />
+          </div>
+        </div>
+
+        {/* Company chip + theme toggle */}
+        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 34, height: 34, borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#16140f', flexShrink: 0,
+          }}>آ</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>گروه آرین</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>انبوه‌ساز</div>
+          </div>
+          <button onClick={toggleTheme} title="تغییر تم" style={{
+            width: 32, height: 32, borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--line)',
+            color: 'var(--text)', cursor: 'pointer', fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>{theme === 'dark' ? '☀' : '☾'}</button>
+        </div>
+      </aside>
+
+      {/* ════════════ MAIN ════════════ */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+
+        {/* Topbar */}
+        <div style={{
+          position: 'sticky', top: 0, zIndex: 40, background: 'var(--navbg)', backdropFilter: 'blur(16px)',
+          borderBottom: '1px solid var(--line)', padding: '0 24px', height: 64,
+          display: 'flex', alignItems: 'center', gap: 16,
         }}>
-          {/* Logo */}
-          <div style={{ padding: '28px 20px 24px', borderBottom: '1px solid var(--line)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{
-                width: 38, height: 38,
-                background: 'linear-gradient(135deg, var(--gold), var(--gold2))',
-                borderRadius: 8,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 18, color: '#000', fontWeight: 700,
-                transform: 'rotate(45deg)',
-                flexShrink: 0,
-              }}>
-                <span style={{ transform: 'rotate(-45deg)', display: 'block' }}>م</span>
-              </div>
-              <div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--gold)', letterSpacing: '-0.3px' }}>ملک‌جت</div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>میز کار سازنده</div>
-              </div>
-            </div>
-          </div>
+          <h2 style={{ fontSize: 17, fontWeight: 700, flex: 1 }}>{VIEW_TITLES[view]}</h2>
 
-          {/* Nav items */}
-          <nav style={{ padding: '12px 12px', flex: 1 }}>
-            {navItems.map(item => {
-              const isActive = activeView === item.id
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveView(item.id)}
-                  style={{
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    padding: '11px 14px',
-                    marginBottom: 4,
-                    borderRadius: 10,
-                    border: 'none',
-                    cursor: 'pointer',
-                    background: isActive ? 'linear-gradient(135deg, rgba(212,175,55,0.15), rgba(212,175,55,0.05))' : 'transparent',
-                    color: isActive ? 'var(--gold)' : 'var(--muted)',
-                    fontSize: 14,
-                    fontWeight: isActive ? 600 : 400,
-                    textAlign: 'right',
-                    transition: 'all 0.2s',
-                    boxShadow: isActive ? 'inset 0 0 0 1px rgba(212,175,55,0.25)' : 'none',
-                  }}
-                >
-                  <span style={{ fontSize: 16, width: 20, textAlign: 'center' }}>{item.icon}</span>
-                  <span className="mju-sidelabel">{item.label}</span>
-                  {isActive && <span style={{ marginRight: 'auto', width: 6, height: 6, borderRadius: '50%', background: 'var(--gold)', flexShrink: 0 }} />}
-                </button>
-              )
-            })}
-            <a href="/website-builder" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderRadius: 10, color: 'var(--gold)', textDecoration: 'none', fontSize: 14, fontWeight: 600, marginTop: 4, border: '1px solid rgba(212,175,55,0.25)' }}>
-              <span style={{ fontSize: 16, width: 20, textAlign: 'center' }}>◳</span>
-              <span className="mju-sidelabel">وب‌سایت من (سایت‌ساز)</span>
-            </a>
-            <a href="/content" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderRadius: 10, color: 'var(--gold)', textDecoration: 'none', fontSize: 14, fontWeight: 600, marginTop: 4, border: '1px solid rgba(212,175,55,0.25)' }}>
-              <span style={{ fontSize: 16, width: 20, textAlign: 'center' }}>✎</span>
-              <span className="mju-sidelabel">مقالات و وبلاگ</span>
-            </a>
-            <a href="/plan-ai" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderRadius: 10, color: 'var(--gold)', textDecoration: 'none', fontSize: 14, fontWeight: 600, marginTop: 4, border: '1px solid rgba(212,175,55,0.25)' }}>
-              <span style={{ fontSize: 16, width: 20, textAlign: 'center' }}>✦</span>
-              <span className="mju-sidelabel">استودیو پلان و سه‌بعدی</span>
-            </a>
-          </nav>
-
-          {/* Construction progress widget */}
-          <div style={{
-            margin: 12,
-            padding: '16px',
-            background: 'rgba(212,175,55,0.06)',
-            borderRadius: 12,
-            border: '1px solid rgba(212,175,55,0.2)',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <span style={{ fontSize: 12, color: 'var(--muted)' }}>پیشرفت ساخت</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold)' }}>۶۸٪</span>
-            </div>
-            <div style={{ height: 6, background: 'var(--line)', borderRadius: 99, overflow: 'hidden', marginBottom: 8 }}>
-              <div style={{
-                height: '100%',
-                width: '68%',
-                background: 'linear-gradient(90deg, var(--gold2), var(--gold))',
-                borderRadius: 99,
-              }} />
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>فاز ۲ — نازک‌کاری</div>
-          </div>
-        </aside>
-
-        {/* ── MAIN CONTENT ── */}
-        <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-
-          {/* Topbar */}
-          <div style={{
-            padding: '16px 28px',
-            borderBottom: '1px solid var(--line)',
-            background: 'var(--surface)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 16,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{
-                padding: '8px 16px',
-                background: 'var(--bg2)',
-                border: '1px solid var(--line)',
-                borderRadius: 10,
-                fontSize: 14,
-                fontWeight: 600,
-                color: 'var(--text)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                cursor: 'pointer',
-              }}>
-                <span style={{ color: 'var(--gold)', fontSize: 12 }}>◆</span>
-                پروژه برج آرین · سعادت‌آباد
-                <span style={{ color: 'var(--muted)', fontSize: 11, marginRight: 4 }}>▾</span>
-              </div>
-              <div style={{
-                padding: '6px 12px',
-                background: 'rgba(34,197,94,0.1)',
-                border: '1px solid rgba(34,197,94,0.3)',
-                borderRadius: 8,
-                fontSize: 12,
-                color: '#22c55e',
-              }}>در حال ساخت</div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ fontSize: 12, color: 'var(--muted)' }}>۱۴۰۳/۰۳/۲۵</div>
-              <div style={{
-                width: 34, height: 34,
-                background: 'linear-gradient(135deg, var(--gold), var(--gold2))',
-                borderRadius: '50%',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 13, fontWeight: 700, color: '#000',
-                cursor: 'pointer',
-              }}>س</div>
-            </div>
-          </div>
-
-          {/* View content */}
-          <div style={{ flex: 1, padding: '28px', overflowY: 'auto' }}>
-
-            {/* ══ DASHBOARD VIEW ══ */}
-            {activeView === 'dashboard' && (
-              <div>
-                <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 24, color: 'var(--text)' }}>داشبورد پروژه</h1>
-
-                {/* KPI cards */}
-                <div className="mju-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 28 }}>
-                  {[
-                    { label: 'فروخته‌شده', value: '۱۴۲', unit: 'واحد', color: '#22c55e', icon: '✓' },
-                    { label: 'رزرو', value: '۲۴', unit: 'واحد', color: '#f97316', icon: '⏸' },
-                    { label: 'موجود', value: '۱۶', unit: 'واحد', color: 'var(--gold)', icon: '◎' },
-                    { label: 'پیش‌فروش', value: '۱٬۸۴۰', unit: 'م.د', color: '#60a5fa', icon: '◈' },
-                  ].map(kpi => (
-                    <div key={kpi.label} style={{
-                      background: 'var(--surface)',
-                      border: '1px solid var(--line)',
-                      borderRadius: 14,
-                      padding: '20px 18px',
-                      position: 'relative',
-                      overflow: 'hidden',
-                    }}>
-                      <div style={{
-                        position: 'absolute', top: 0, right: 0,
-                        width: 80, height: 80,
-                        background: `radial-gradient(circle at top right, ${kpi.color}18, transparent)`,
-                      }} />
-                      <div style={{ fontSize: 22, color: kpi.color, marginBottom: 10, fontWeight: 300 }}>{kpi.icon}</div>
-                      <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text)', lineHeight: 1, marginBottom: 6 }}>
-                        {kpi.value}
-                        <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--muted)', marginRight: 4 }}>{kpi.unit}</span>
-                      </div>
-                      <div style={{ fontSize: 13, color: 'var(--muted)' }}>{kpi.label}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Charts + Timeline row */}
-                <div className="mju-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-
-                  {/* Bar chart */}
-                  <div style={{
-                    background: 'var(--surface)',
-                    border: '1px solid var(--line)',
-                    borderRadius: 14,
-                    padding: '22px',
-                  }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 20 }}>فروش ماهانه (واحد)</div>
-                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: 140 }}>
-                      {barData.map((d, i) => (
-                        <div key={d.month} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%', justifyContent: 'flex-end' }}>
-                          <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600 }}>{d.value}</div>
-                          <div style={{
-                            width: '100%',
-                            height: `${(d.value / d.max) * 100}%`,
-                            background: i === 2
-                              ? 'linear-gradient(180deg, var(--gold), var(--gold2))'
-                              : 'linear-gradient(180deg, rgba(212,175,55,0.5), rgba(212,175,55,0.2))',
-                            borderRadius: '4px 4px 2px 2px',
-                            transition: 'opacity 0.2s',
-                            minHeight: 4,
-                          }} />
-                          <div style={{ fontSize: 10, color: 'var(--muted)' }}>{d.month}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Milestone timeline */}
-                  <div style={{
-                    background: 'var(--surface)',
-                    border: '1px solid var(--line)',
-                    borderRadius: 14,
-                    padding: '22px',
-                  }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 22 }}>نقاط عطف ساخت</div>
-                    <div style={{ position: 'relative' }}>
-                      {/* Connecting line */}
-                      <div style={{
-                        position: 'absolute',
-                        top: 14, right: 14,
-                        width: 2,
-                        height: 'calc(100% - 28px)',
-                        background: 'var(--line)',
-                        zIndex: 0,
-                      }} />
-                      {milestones.map((m, i) => {
-                        const isDone = m.status === 'done'
-                        const isActive = m.status === 'active'
-                        const isPending = m.status === 'pending'
-                        const dotColor = isDone ? '#22c55e' : isActive ? 'var(--gold)' : 'var(--line2)'
-                        return (
-                          <div key={m.label} style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: i < milestones.length - 1 ? 18 : 0, position: 'relative', zIndex: 1 }}>
-                            <div style={{
-                              width: 28, height: 28,
-                              borderRadius: '50%',
-                              background: isDone ? 'rgba(34,197,94,0.15)' : isActive ? 'rgba(212,175,55,0.15)' : 'var(--bg2)',
-                              border: `2px solid ${dotColor}`,
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              fontSize: 11, fontWeight: 700, color: dotColor,
-                              flexShrink: 0,
-                              boxShadow: isActive ? '0 0 12px rgba(212,175,55,0.4)' : 'none',
-                              animation: isActive ? 'pulse 2s infinite' : 'none',
-                            }}>
-                              {isDone ? '✓' : isActive ? '●' : '○'}
-                            </div>
-                            <div>
-                              <div style={{ fontSize: 13, fontWeight: isDone ? 500 : isActive ? 700 : 400, color: isDone ? 'var(--muted)' : isActive ? 'var(--gold)' : isPending ? 'var(--text)' : 'var(--faint)' }}>
-                                {m.label}
-                              </div>
-                              {isActive && (
-                                <div style={{ marginTop: 4, height: 3, width: 100, background: 'var(--line)', borderRadius: 99, overflow: 'hidden' }}>
-                                  <div style={{ height: '100%', width: '68%', background: 'var(--gold)', borderRadius: 99 }} />
-                                </div>
-                              )}
-                            </div>
-                            {isDone && <span style={{ marginRight: 'auto', fontSize: 11, color: '#22c55e', background: 'rgba(34,197,94,0.1)', padding: '2px 8px', borderRadius: 99 }}>تکمیل‌شده</span>}
-                            {isActive && <span style={{ marginRight: 'auto', fontSize: 11, color: 'var(--gold)', background: 'rgba(212,175,55,0.1)', padding: '2px 8px', borderRadius: 99 }}>در جریان</span>}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                </div>
-
-                {/* آگهی‌های مرتبط بازار (داده واقعی) */}
-                {marketListings.length > 0 && (
-                  <div style={{ marginTop: 28 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>آگهی‌های مرتبط بازار</div>
-                      <div style={{ fontSize: 12, color: 'var(--muted)' }}>قیمت‌های روز منطقه</div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 14, overflowX: 'auto', paddingBottom: 6 }}>
-                      {marketListings.map((m) => (
-                        <Link
-                          key={m.id}
-                          href={`/property/${m.id}`}
-                          style={{
-                            flex: '0 0 220px',
-                            background: 'var(--surface)',
-                            border: '1px solid var(--line)',
-                            borderRadius: 14,
-                            padding: '16px 18px',
-                            textDecoration: 'none',
-                            color: 'inherit',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 8,
-                            transition: 'border-color 0.2s',
-                          }}
-                          onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--gold)')}
-                          onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--line)')}
-                        >
-                          <div style={{
-                            fontSize: 13,
-                            fontWeight: 600,
-                            color: 'var(--text)',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}>{m.title}</div>
-                          {m.location && (
-                            <div style={{ fontSize: 12, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              📍 {m.location}
-                            </div>
-                          )}
-                          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gold)', marginTop: 'auto' }}>
-                            {m.price || 'توافقی'}
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ══ UNITS VIEW ══ */}
-            {activeView === 'units' && (
-              <div>
-                <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8, color: 'var(--text)' }}>مدیریت واحدها</h1>
-                <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 24 }}>برج آرین · ۶ طبقه · ۴۸ واحد</div>
-
-                {/* Legend */}
-                <div style={{ display: 'flex', gap: 20, marginBottom: 20 }}>
-                  {(['sold', 'reserved', 'available'] as UnitStatus[]).map(s => (
-                    <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--muted)' }}>
-                      <div style={{ width: 12, height: 12, borderRadius: 3, background: statusColor[s] }} />
-                      {statusLabel[s]}
-                    </div>
-                  ))}
-                </div>
-
-                <div style={{ display: 'flex', gap: 20 }}>
-                  {/* Floor grid */}
-                  <div style={{
-                    background: 'var(--surface)',
-                    border: '1px solid var(--line)',
-                    borderRadius: 14,
-                    padding: '22px',
-                    flex: 1,
-                  }}>
-                    {/* Column headers */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '56px repeat(8, 1fr)', gap: 6, marginBottom: 8 }}>
-                      <div />
-                      {Array.from({ length: 8 }, (_, i) => (
-                        <div key={i} style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>واحد {i + 1}</div>
-                      ))}
-                    </div>
-                    {Array.from({ length: 6 }, (_, fi) => {
-                      const floor = 6 - fi
-                      const floorUnits = ALL_UNITS.filter(u => u.floor === floor)
-                      return (
-                        <div key={floor} style={{ display: 'grid', gridTemplateColumns: '56px repeat(8, 1fr)', gap: 6, marginBottom: 6 }}>
-                          <div style={{ fontSize: 12, color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingLeft: 8 }}>
-                            طبقه {floor}
-                          </div>
-                          {floorUnits.map(unit => {
-                            const isSelected = selectedUnit?.id === unit.id
-                            return (
-                              <button
-                                key={unit.id}
-                                onClick={() => { setSelectedUnit(isSelected ? null : unit); setReserveState('idle') }}
-                                style={{
-                                  height: 40,
-                                  borderRadius: 8,
-                                  border: isSelected ? `2px solid ${statusColor[unit.status]}` : '1px solid transparent',
-                                  background: isSelected
-                                    ? `${statusColor[unit.status]}30`
-                                    : `${statusColor[unit.status]}22`,
-                                  cursor: 'pointer',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  fontSize: 10,
-                                  fontWeight: 600,
-                                  color: statusColor[unit.status],
-                                  transition: 'all 0.15s',
-                                  boxShadow: isSelected ? `0 0 8px ${statusColor[unit.status]}44` : 'none',
-                                }}
-                                title={`واحد ${unit.id}`}
-                              >
-                                {unit.id}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      )
-                    })}
-                  </div>
-
-                  {/* Unit detail panel */}
-                  <div style={{
-                    width: 240,
-                    background: 'var(--surface)',
-                    border: '1px solid var(--line)',
-                    borderRadius: 14,
-                    padding: '22px',
-                    flexShrink: 0,
-                  }}>
-                    {selectedUnit ? (
-                      <>
-                        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span>واحد {selectedUnit.id}</span>
-                          <span style={{
-                            fontSize: 11,
-                            padding: '3px 8px',
-                            borderRadius: 99,
-                            background: `${statusColor[selectedUnit.status]}20`,
-                            color: statusColor[selectedUnit.status],
-                          }}>{statusLabel[selectedUnit.status]}</span>
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                          {[
-                            { label: 'طبقه', value: `طبقه ${selectedUnit.floor}` },
-                            { label: 'متراژ', value: `${selectedUnit.size} م²` },
-                            { label: 'قیمت', value: `${selectedUnit.price} م.د` },
-                            { label: 'خریدار', value: selectedUnit.buyer || '—' },
-                          ].map(row => (
-                            <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: '1px solid var(--line)', paddingBottom: 10 }}>
-                              <span style={{ color: 'var(--muted)' }}>{row.label}</span>
-                              <span style={{ color: 'var(--text)', fontWeight: 500 }}>{row.value}</span>
-                            </div>
-                          ))}
-                        </div>
-                        {selectedUnit.status === 'available' && (
-                          <button
-                            onClick={() => reserveState !== 'sending' && submitReserve(selectedUnit)}
-                            disabled={reserveState === 'sending'}
-                            style={{
-                              marginTop: 20,
-                              width: '100%',
-                              padding: '10px',
-                              background: reserveState === 'done'
-                                ? 'rgba(34,197,94,0.15)'
-                                : 'linear-gradient(135deg, var(--gold), var(--gold2))',
-                              color: reserveState === 'done' ? '#22c55e' : '#000',
-                              border: reserveState === 'done' ? '1px solid #22c55e' : 'none',
-                              borderRadius: 10,
-                              fontSize: 13,
-                              fontWeight: 700,
-                              cursor: reserveState === 'sending' ? 'default' : 'pointer',
-                            }}>
-                            {reserveState === 'sending' ? 'در حال ثبت…' : reserveState === 'done' ? '✓ رزرو ثبت شد' : 'ثبت رزرو'}
-                          </button>
-                        )}
-                      </>
-                    ) : (
-                      <div style={{ textAlign: 'center', color: 'var(--muted)', paddingTop: 40 }}>
-                        <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.3 }}>⊞</div>
-                        <div style={{ fontSize: 13 }}>روی یک واحد کلیک کنید</div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ══ SALES VIEW ══ */}
-            {activeView === 'sales' && (
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-                  <div>
-                    <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4, color: 'var(--text)' }}>گزارش فروش</h1>
-                    <div style={{ fontSize: 13, color: 'var(--muted)' }}>برج آرین · ۸ قرارداد فعال</div>
-                  </div>
-                  <button
-                    onClick={() => contractState !== 'sending' && submitContract()}
-                    disabled={contractState === 'sending'}
-                    style={{
-                      padding: '9px 18px',
-                      background: contractState === 'done'
-                        ? 'rgba(34,197,94,0.15)'
-                        : 'linear-gradient(135deg, var(--gold), var(--gold2))',
-                      color: contractState === 'done' ? '#22c55e' : '#000',
-                      border: contractState === 'done' ? '1px solid #22c55e' : 'none',
-                      borderRadius: 10,
-                      fontSize: 13,
-                      fontWeight: 700,
-                      cursor: contractState === 'sending' ? 'default' : 'pointer',
-                    }}>
-                    {contractState === 'sending' ? 'در حال ثبت…' : contractState === 'done' ? '✓ ثبت شد' : '+ قرارداد جدید'}
-                  </button>
-                </div>
-
+          {/* Project switcher */}
+          <div style={{ position: 'relative' }}>
+            <button onClick={() => setSwitcherOpen(o => !o)} style={{
+              display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 10,
+              background: 'var(--surface)', border: '1px solid var(--line)', color: 'var(--text)',
+              fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: FONT, maxWidth: 320,
+            }}>
+              <span style={{ color: 'var(--gold)', fontSize: 9 }}>●</span>
+              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {current ? `${current.name} · ${current.location}` : 'انتخاب پروژه'}
+              </span>
+              <span style={{ color: 'var(--muted)', fontSize: 11 }}>▾</span>
+            </button>
+            {switcherOpen && (
+              <>
+                <div onClick={() => setSwitcherOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 49 }} />
                 <div style={{
-                  background: 'var(--surface)',
-                  border: '1px solid var(--line)',
-                  borderRadius: 14,
-                  overflow: 'hidden',
+                  position: 'absolute', top: 'calc(100% + 6px)', insetInlineStart: 0, zIndex: 50, minWidth: 280,
+                  ...card, padding: 6, boxShadow: 'var(--shadow)',
                 }}>
-                  {/* Table header */}
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: '100px 1fr 100px 100px 200px',
-                    padding: '14px 20px',
-                    background: 'var(--bg2)',
-                    borderBottom: '1px solid var(--line)',
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: 'var(--muted)',
-                  }}>
-                    <div>شناسه واحد</div>
-                    <div>خریدار</div>
-                    <div>نوع</div>
-                    <div>مبلغ</div>
-                    <div>پیشرفت پرداخت</div>
-                  </div>
-                  {salesData.map((row, i) => (
-                    <div
-                      key={row.id}
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: '100px 1fr 100px 100px 200px',
-                        padding: '16px 20px',
-                        borderBottom: i < salesData.length - 1 ? '1px solid var(--line)' : 'none',
-                        fontSize: 13,
-                        alignItems: 'center',
-                        transition: 'background 0.15s',
-                        cursor: 'default',
-                      }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg2)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                    >
-                      <div style={{ fontWeight: 700, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>واحد {row.id}</div>
-                      <div style={{ color: 'var(--text)', fontWeight: 500 }}>{row.buyer}</div>
-                      <div>
-                        <span style={{
-                          fontSize: 11,
-                          padding: '3px 8px',
-                          borderRadius: 99,
-                          background: row.type === 'نقدی' ? 'rgba(34,197,94,0.12)' : 'rgba(96,165,250,0.12)',
-                          color: row.type === 'نقدی' ? '#22c55e' : '#60a5fa',
-                        }}>{row.type}</span>
-                      </div>
-                      <div style={{ fontWeight: 600, color: 'var(--text)' }}>{row.amount}</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ flex: 1, height: 6, background: 'var(--line)', borderRadius: 99, overflow: 'hidden' }}>
-                          <div style={{
-                            height: '100%',
-                            width: `${row.progress}%`,
-                            background: row.progress === 100
-                              ? 'linear-gradient(90deg, #22c55e, #16a34a)'
-                              : 'linear-gradient(90deg, var(--gold2), var(--gold))',
-                            borderRadius: 99,
-                          }} />
-                        </div>
-                        <span style={{ fontSize: 11, color: 'var(--muted)', minWidth: 28, textAlign: 'left' }}>{row.progress}٪</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Summary footer */}
-                <div style={{
-                  marginTop: 16,
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(3, 1fr)',
-                  gap: 12,
-                }}>
-                  {[
-                    { label: 'مجموع درآمد', value: '۱۰۸ م.د', color: 'var(--gold)' },
-                    { label: 'وصول‌شده', value: '۷۲ م.د', color: '#22c55e' },
-                    { label: 'مانده', value: '۳۶ م.د', color: '#f87171' },
-                  ].map(s => (
-                    <div key={s.label} style={{
-                      background: 'var(--surface)',
-                      border: '1px solid var(--line)',
-                      borderRadius: 12,
-                      padding: '16px 18px',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
+                  {projects.map(p => (
+                    <button key={p.id} onClick={() => selectProject(p.id)} style={{
+                      width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px',
+                      borderRadius: 9, border: 'none', cursor: 'pointer', textAlign: 'right', fontFamily: FONT,
+                      background: p.id === pid ? 'var(--goldDim)' : 'transparent',
+                      color: p.id === pid ? 'var(--gold)' : 'var(--text)', fontSize: 13, marginBottom: 2,
                     }}>
-                      <span style={{ fontSize: 13, color: 'var(--muted)' }}>{s.label}</span>
-                      <span style={{ fontSize: 18, fontWeight: 700, color: s.color }}>{s.value}</span>
-                    </div>
+                      <span style={{ fontSize: 9, color: p.id === pid ? 'var(--gold)' : 'var(--faint)' }}>●</span>
+                      <span style={{ flex: 1 }}>{p.name}</span>
+                      <span style={{ fontSize: 11, color: 'var(--muted)' }}>{p.location}</span>
+                    </button>
                   ))}
+                  <div style={{ height: 1, background: 'var(--line)', margin: '4px 0' }} />
+                  <button onClick={createProject} style={{
+                    width: '100%', padding: '10px 12px', borderRadius: 9, border: 'none', cursor: 'pointer',
+                    textAlign: 'right', fontFamily: FONT, background: 'transparent', color: 'var(--gold)', fontSize: 13, fontWeight: 700,
+                  }}>＋ پروژهٔ جدید</button>
                 </div>
-              </div>
+              </>
             )}
-
-            {/* ══ INVESTORS VIEW ══ */}
-            {activeView === 'investors' && (
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-                  <div>
-                    <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4, color: 'var(--text)' }}>سرمایه‌گذاران</h1>
-                    <div style={{ fontSize: 13, color: 'var(--muted)' }}>سهامداران پروژه برج آرین</div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-                  {/* Share breakdown */}
-                  <div style={{
-                    background: 'var(--surface)',
-                    border: '1px solid var(--line)',
-                    borderRadius: 14,
-                    padding: '22px',
-                  }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 20 }}>تقسیم سهام</div>
-                    {investorsData.map(inv => (
-                      <div key={inv.name} style={{ marginBottom: 20 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 13 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ width: 10, height: 10, borderRadius: 2, background: inv.color, flexShrink: 0 }} />
-                            <span style={{ color: 'var(--text)', fontWeight: 500 }}>{inv.name}</span>
-                          </div>
-                          <span style={{ color: inv.color, fontWeight: 700 }}>{inv.share}٪</span>
-                        </div>
-                        <div style={{ height: 8, background: 'var(--line)', borderRadius: 99, overflow: 'hidden' }}>
-                          <div style={{
-                            height: '100%',
-                            width: `${inv.share}%`,
-                            background: inv.color,
-                            borderRadius: 99,
-                            transition: 'width 0.6s ease',
-                          }} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Investor portfolio cards */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {investorsData.map(inv => (
-                      <div key={inv.name} style={{
-                        background: 'var(--surface)',
-                        border: '1px solid var(--line)',
-                        borderRadius: 14,
-                        padding: '18px 20px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 14,
-                        transition: 'border-color 0.2s',
-                        cursor: 'default',
-                      }}
-                        onMouseEnter={e => (e.currentTarget.style.borderColor = inv.color)}
-                        onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--line)')}
-                      >
-                        <div style={{
-                          width: 42, height: 42,
-                          borderRadius: 10,
-                          background: `${inv.color}20`,
-                          border: `1px solid ${inv.color}40`,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: 16, color: inv.color,
-                          flexShrink: 0,
-                        }}>◆</div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{inv.name}</div>
-                          <div style={{ fontSize: 12, color: 'var(--muted)' }}>سرمایه: {inv.invested}</div>
-                        </div>
-                        <div style={{ textAlign: 'left' }}>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: '#22c55e' }}>{inv.return}</div>
-                          <div style={{ fontSize: 11, color: 'var(--muted)' }}>بازده پیش‌بینی</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Total summary */}
-                <div style={{
-                  marginTop: 20,
-                  background: 'linear-gradient(135deg, rgba(212,175,55,0.08), rgba(212,175,55,0.03))',
-                  border: '1px solid rgba(212,175,55,0.25)',
-                  borderRadius: 14,
-                  padding: '22px 24px',
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(4, 1fr)',
-                  gap: 20,
-                }}>
-                  {[
-                    { label: 'ارزش کل پروژه', value: '۸۵۶ م.د' },
-                    { label: 'سرمایه جذب‌شده', value: '۷۰۰ م.د' },
-                    { label: 'بازده پیش‌بینی', value: '۲۲٪' },
-                    { label: 'تاریخ تحویل', value: 'اردیبهشت ۱۴۰۴' },
-                  ].map(s => (
-                    <div key={s.label} style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--gold)', marginBottom: 4 }}>{s.value}</div>
-                      <div style={{ fontSize: 12, color: 'var(--muted)' }}>{s.label}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
           </div>
+        </div>
+
+        {/* Content */}
+        <main style={{ flex: 1, padding: 24, overflow: 'auto' }}>
+          {!project ? (
+            <div style={{ textAlign: 'center', color: 'var(--muted)', padding: '80px 0', fontSize: 14 }}>در حال بارگذاری پروژه…</div>
+          ) : (
+            <>
+              {view === 'overview' && <OverviewView project={project} s={s} onMilestone={(mid, status) => post({ action: 'milestone', pid, mid, status })} busy={busy} />}
+              {view === 'units' && <UnitsView project={project} post={post} pid={pid} busy={busy} />}
+              {view === 'sales' && <SalesView project={project} s={s} />}
+              {view === 'investors' && <InvestorsView project={project} post={post} pid={pid} busy={busy} />}
+              {view === 'reports' && <ReportsView project={project} s={s} />}
+            </>
+          )}
         </main>
       </div>
 
-      {/* Toast تأیید */}
-      {toast && (
-        <div style={{
-          position: 'fixed',
-          bottom: 24,
-          left: 24,
-          zIndex: 1000,
-          background: 'var(--surface)',
-          border: '1px solid var(--gold)',
-          borderRadius: 12,
-          padding: '14px 20px',
-          fontSize: 14,
-          fontWeight: 600,
-          color: 'var(--text)',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-        }}>
-          <span style={{ color: 'var(--gold)' }}>✓</span>
-          {toast}
-        </div>
-      )}
-
-      <Footer />
-
       <style>{`
-        @keyframes pulse {
-          0%, 100% { box-shadow: 0 0 6px rgba(212,175,55,0.4); }
-          50% { box-shadow: 0 0 16px rgba(212,175,55,0.8); }
-        }
+        @keyframes mjbpulse { 0%,100% { box-shadow: 0 0 0 0 rgba(201,168,76,0.5); } 50% { box-shadow: 0 0 0 6px rgba(201,168,76,0); } }
+        @media(max-width:760px){ .mjb-side{ width:62px!important } .mjb-sidelabel{ display:none!important } }
       `}</style>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════
+//  OVERVIEW
+// ════════════════════════════════════════════════════════
+type Stats = ReturnType<typeof stats>
+
+function Donut({ s }: { s: Stats }) {
+  const total = s.total || 1
+  const segs = [
+    { v: s.sold, color: '#34d399' },
+    { v: s.reserved, color: 'var(--gold)' },
+    { v: s.available, color: '#7a8fae' },
+  ]
+  const R = 70, C = 2 * Math.PI * R
+  let offset = 0
+  return (
+    <svg width={180} height={180} viewBox="0 0 180 180">
+      <circle cx={90} cy={90} r={R} fill="none" stroke="var(--line)" strokeWidth={22} />
+      {segs.map((seg, i) => {
+        const frac = seg.v / total
+        const dash = frac * C
+        const el = (
+          <circle key={i} cx={90} cy={90} r={R} fill="none" stroke={seg.color} strokeWidth={22}
+            strokeDasharray={`${dash} ${C - dash}`} strokeDashoffset={-offset}
+            transform="rotate(-90 90 90)" strokeLinecap="butt" />
+        )
+        offset += dash
+        return el
+      })}
+      <text x={90} y={84} textAnchor="middle" fontSize={26} fontWeight={800} fill="var(--text)">{fa(s.total)}</text>
+      <text x={90} y={106} textAnchor="middle" fontSize={12} fill="var(--muted)">کل واحد</text>
+    </svg>
+  )
+}
+
+function OverviewView({ project, s, onMilestone, busy }: {
+  project: Project; s: Stats; onMilestone: (mid: string, status: MilestoneStatus) => void; busy: boolean
+}) {
+  const maxSale = Math.max(1, ...project.monthlySales.map(m => m.count))
+  const tallest = project.monthlySales.reduce((mi, m, i, arr) => m.count > arr[mi].count ? i : mi, 0)
+  const soldPct = s.total ? Math.round((s.sold / s.total) * 100) : 0
+
+  const kpis = [
+    { label: 'درآمد پیش‌فروش', value: billions(s.revenue), unit: 'م.ت', sub: '+۱۳٪ این فصل', dot: '#60a5fa' },
+    { label: 'موجود', value: fa(s.available), unit: 'واحد', sub: 'آماده فروش', dot: 'var(--gold)' },
+    { label: 'رزرو', value: fa(s.reserved), unit: 'واحد', sub: 'در انتظار تکمیل', dot: '#f59e0b' },
+    { label: 'واحد فروخته‌شده', value: fa(s.sold), unit: '', sub: `از ${fa(s.total)} واحد`, dot: '#34d399' },
+  ]
+
+  // milestone cycle pending→active→done→pending
+  const cycle = (m: Milestone) => {
+    const next: Record<MilestoneStatus, MilestoneStatus> = { pending: 'active', active: 'done', done: 'pending' }
+    onMilestone(m.id, next[m.status])
+  }
+  const activeIdx = project.milestones.findIndex(m => m.status === 'active')
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* KPI cards */}
+      <div className="mjb-grid4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
+        {kpis.map(k => (
+          <div key={k.label} style={{ ...card, padding: 18, position: 'relative' }}>
+            <span style={{ position: 'absolute', top: 16, insetInlineStart: 16, width: 9, height: 9, borderRadius: '50%', background: k.dot }} />
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>{k.label}</div>
+            <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.5px', lineHeight: 1 }}>
+              {k.value}{k.unit && <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--muted)', marginInlineStart: 4 }}>{k.unit}</span>}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>{k.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Two-column: donut + sales */}
+      <div className="mjb-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+        {/* Inventory donut */}
+        <div style={{ ...card, padding: 22 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>وضعیت موجودی</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+            <Donut s={s} />
+            <div style={{ flex: 1, minWidth: 140, display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {([
+                ['فروخته‌شده', s.sold, '#34d399'],
+                ['رزرو', s.reserved, 'var(--gold)'],
+                ['موجود', s.available, '#7a8fae'],
+              ] as [string, number, string][]).map(([label, v, color]) => (
+                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ width: 12, height: 12, borderRadius: 3, background: color }} />
+                  <span style={{ flex: 1, fontSize: 13, color: 'var(--muted)' }}>{label}</span>
+                  <span style={{ fontSize: 15, fontWeight: 700 }}>{fa(v)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Sales summary + bars */}
+        <div style={{ ...card, padding: 22 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>فروش و پیش‌فروش</h3>
+          <div style={{ fontSize: 30, fontWeight: 800, lineHeight: 1 }}>{fa(s.sold)} <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--muted)' }}>واحد</span></div>
+          <div style={{ fontSize: 13, color: 'var(--gold)', fontWeight: 600, marginTop: 6, marginBottom: 18 }}>+{fa(soldPct)}٪ از کل پروژه</div>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: 120 }}>
+            {project.monthlySales.map((m, i) => (
+              <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%', justifyContent: 'flex-end' }}>
+                <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600 }}>{fa(m.count)}</span>
+                <div style={{
+                  width: '100%', minHeight: 6, height: `${(m.count / maxSale) * 100}%`,
+                  background: i === tallest ? 'linear-gradient(180deg,var(--gold2),var(--gold))' : 'linear-gradient(180deg,rgba(201,168,76,0.5),rgba(201,168,76,0.22))',
+                  borderRadius: '5px 5px 0 0',
+                }} />
+                <span style={{ fontSize: 10, color: 'var(--muted)' }}>{m.month}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Milestones timeline */}
+      <div style={{ ...card, padding: 22 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>مراحل ساخت</h3>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 24 }}>برای تغییر وضعیت روی هر مرحله کلیک کنید</div>
+        <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+          {/* base line */}
+          <div style={{ position: 'absolute', top: 18, insetInlineStart: 18, insetInlineEnd: 18, height: 2, background: 'var(--line)' }} />
+          {/* progress line up to active node (RTL: starts from right) */}
+          {activeIdx > 0 && (
+            <div style={{
+              position: 'absolute', top: 18, insetInlineEnd: 18, height: 2, background: '#34d399',
+              width: `calc(${(activeIdx / Math.max(1, project.milestones.length - 1)) * 100}% - 36px)`,
+            }} />
+          )}
+          {project.milestones.map((m, i) => {
+            const done = m.status === 'done', active = m.status === 'active'
+            const c = done ? '#34d399' : active ? 'var(--gold)' : 'var(--line2)'
+            return (
+              <div key={m.id} onClick={() => !busy && cycle(m)} style={{
+                position: 'relative', zIndex: 1, flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+                gap: 8, cursor: busy ? 'default' : 'pointer', textAlign: 'center',
+              }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: '50%',
+                  background: done ? 'rgba(52,211,153,0.15)' : active ? 'var(--goldDim)' : 'var(--bg2)',
+                  border: `2px solid ${c}`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 14, fontWeight: 800, color: done ? '#34d399' : active ? 'var(--gold)' : 'var(--muted)',
+                  animation: active ? 'mjbpulse 2s infinite' : 'none',
+                }}>{done ? '✓' : active ? '●' : fa(i + 1)}</div>
+                <div style={{ fontSize: 13, fontWeight: active ? 700 : 500, color: active ? 'var(--gold)' : done ? 'var(--text)' : 'var(--muted)' }}>{m.name}</div>
+                {m.date && <div style={{ fontSize: 11, color: 'var(--faint)' }}>{m.date}</div>}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════
+//  UNITS
+// ════════════════════════════════════════════════════════
+function StatusBadge({ st }: { st: UnitStatus }) {
+  return (
+    <span style={{ fontSize: 11, fontWeight: 600, color: STATUS_COLOR[st], background: `color-mix(in srgb, ${STATUS_COLOR[st]} 16%, transparent)`, padding: '3px 10px', borderRadius: 6 }}>
+      {STATUS_LABEL[st]}
+    </span>
+  )
+}
+
+function UnitsView({ project, post, pid, busy }: {
+  project: Project; post: (b: Record<string, unknown>) => Promise<boolean>; pid: string | null; busy: boolean
+}) {
+  const [filter, setFilter] = useState<'all' | UnitStatus>('all')
+  const [limit, setLimit] = useState(120)
+  const [form, setForm] = useState({ number: '', floor: '', area: '', price: '', status: 'available' as UnitStatus })
+
+  const filtered = project.units.filter(u => filter === 'all' || u.status === filter)
+  const shown = filtered.slice(0, limit)
+
+  const addUnit = async () => {
+    if (!form.number.trim()) { alert('شماره واحد را وارد کنید'); return }
+    const ok = await post({
+      action: 'addUnit', pid, number: form.number.trim(),
+      floor: Number(form.floor) || 1, area: Number(form.area) || 0,
+      price: (Number(form.price) || 0) * 1e9, status: form.status,
+    })
+    if (ok) setForm({ number: '', floor: '', area: '', price: '', status: 'available' })
+  }
+
+  const changeStatus = async (u: Unit, status: UnitStatus) => {
+    const patch: Record<string, unknown> = { status }
+    if (status === 'sold') {
+      const buyer = window.prompt('نام خریدار:', u.buyer || '')?.trim()
+      if (buyer) patch.buyer = buyer
+    }
+    await post({ action: 'updateUnit', pid, uid: u.id, patch })
+  }
+
+  const inputStyle: React.CSSProperties = {
+    padding: '8px 10px', borderRadius: 9, background: 'var(--bg)', border: '1px solid var(--line)',
+    color: 'var(--text)', fontSize: 13, outline: 'none', fontFamily: FONT, width: '100%',
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Add unit form */}
+      <div style={{ ...card, padding: 16 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>＋ واحد جدید</div>
+        <div className="mjb-form" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr auto', gap: 10, alignItems: 'center' }}>
+          <input placeholder="شماره" value={form.number} onChange={e => setForm({ ...form, number: e.target.value })} style={inputStyle} />
+          <input placeholder="طبقه" value={form.floor} onChange={e => setForm({ ...form, floor: e.target.value })} style={inputStyle} />
+          <input placeholder="متراژ" value={form.area} onChange={e => setForm({ ...form, area: e.target.value })} style={inputStyle} />
+          <input placeholder="قیمت (میلیارد ت)" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} style={inputStyle} />
+          <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value as UnitStatus })} style={{ ...inputStyle, cursor: 'pointer' }}>
+            <option value="available">موجود</option>
+            <option value="reserved">رزرو</option>
+            <option value="sold">فروخته‌شده</option>
+          </select>
+          <button onClick={addUnit} disabled={busy} style={{
+            padding: '9px 18px', borderRadius: 9, background: 'var(--gold)', border: 'none', color: '#16140f',
+            fontWeight: 700, fontSize: 13, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1, fontFamily: FONT, whiteSpace: 'nowrap',
+          }}>افزودن</button>
+        </div>
+      </div>
+
+      {/* Filter chips */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {([['all', 'همه'], ['sold', 'فروخته'], ['reserved', 'رزرو'], ['available', 'موجود']] as [typeof filter, string][]).map(([f, label]) => (
+          <button key={f} onClick={() => { setFilter(f); setLimit(120) }} style={{
+            padding: '7px 16px', borderRadius: 99, fontSize: 13, cursor: 'pointer', fontFamily: FONT,
+            border: '1px solid ' + (filter === f ? 'var(--gold)' : 'var(--line)'),
+            background: filter === f ? 'var(--goldDim)' : 'transparent',
+            color: filter === f ? 'var(--gold)' : 'var(--muted)', fontWeight: filter === f ? 700 : 500,
+          }}>{label}</button>
+        ))}
+        <span style={{ marginInlineStart: 'auto', fontSize: 12, color: 'var(--muted)' }}>{fa(filtered.length)} واحد</span>
+      </div>
+
+      {/* Table */}
+      <div style={{ ...card, overflow: 'hidden' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '90px 70px 90px 1fr 110px 1fr 150px', padding: '12px 18px', background: 'var(--bg2)', borderBottom: '1px solid var(--line)', fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>
+          <div>شماره</div><div>طبقه</div><div>متراژ</div><div>قیمت</div><div>وضعیت</div><div>خریدار</div><div style={{ textAlign: 'left' }}>عملیات</div>
+        </div>
+        <div style={{ maxHeight: 540, overflowY: 'auto' }}>
+          {shown.map((u, i) => (
+            <div key={u.id} style={{ display: 'grid', gridTemplateColumns: '90px 70px 90px 1fr 110px 1fr 150px', padding: '12px 18px', borderBottom: i < shown.length - 1 ? '1px solid var(--line)' : 'none', fontSize: 13, alignItems: 'center' }}>
+              <div style={{ fontWeight: 700, color: 'var(--gold)' }}>{u.number}</div>
+              <div style={{ color: 'var(--muted)' }}>طبقه {fa(u.floor)}</div>
+              <div>{fa(u.area)} م²</div>
+              <div style={{ fontWeight: 600 }}>{money(u.price)}</div>
+              <div><StatusBadge st={u.status} /></div>
+              <div style={{ color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.buyer || '—'}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                <select value={u.status} onChange={e => changeStatus(u, e.target.value as UnitStatus)} disabled={busy} style={{
+                  padding: '5px 8px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)',
+                  color: 'var(--text)', fontSize: 11.5, outline: 'none', cursor: 'pointer', fontFamily: FONT,
+                }}>
+                  <option value="available">موجود</option>
+                  <option value="reserved">رزرو</option>
+                  <option value="sold">فروخته‌شده</option>
+                </select>
+                <button onClick={() => post({ action: 'deleteUnit', pid, uid: u.id })} disabled={busy} title="حذف" style={{
+                  width: 26, height: 26, borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)',
+                  color: 'var(--muted)', cursor: 'pointer', fontSize: 14, lineHeight: 1, flexShrink: 0, fontFamily: FONT,
+                }}>×</button>
+              </div>
+            </div>
+          ))}
+          {shown.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>واحدی یافت نشد</div>}
+        </div>
+        {limit < filtered.length && (
+          <button onClick={() => setLimit(l => l + 120)} style={{
+            width: '100%', padding: '12px', background: 'var(--bg2)', border: 'none', borderTop: '1px solid var(--line)',
+            color: 'var(--gold)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: FONT,
+          }}>بیشتر ({fa(filtered.length - limit)} واحد دیگر)</button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════
+//  SALES
+// ════════════════════════════════════════════════════════
+function SalesView({ project, s }: { project: Project; s: Stats }) {
+  const txns = project.units.filter(u => u.status === 'sold' || u.status === 'reserved')
+  const maxSale = Math.max(1, ...project.monthlySales.map(m => m.count))
+  const tallest = project.monthlySales.reduce((mi, m, i, arr) => m.count > arr[mi].count ? i : mi, 0)
+
+  const summary = [
+    { label: 'درآمد محقق‌شده', value: billions(s.revenue) + ' م.ت', color: 'var(--gold)' },
+    { label: 'واحد فروخته‌شده', value: fa(s.sold), color: '#34d399' },
+    { label: 'واحد رزرو', value: fa(s.reserved), color: '#f59e0b' },
+  ]
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* Summary KPIs */}
+      <div className="mjb-grid3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 }}>
+        {summary.map(k => (
+          <div key={k.label} style={{ ...card, padding: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 13, color: 'var(--muted)' }}>{k.label}</span>
+            <span style={{ fontSize: 24, fontWeight: 800, color: k.color }}>{k.value}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Monthly sales mini-chart */}
+      <div style={{ ...card, padding: 22 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 18 }}>فروش ماهانه</h3>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, height: 110 }}>
+          {project.monthlySales.map((m, i) => (
+            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%', justifyContent: 'flex-end' }}>
+              <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600 }}>{fa(m.count)}</span>
+              <div style={{ width: '100%', minHeight: 6, height: `${(m.count / maxSale) * 100}%`, background: i === tallest ? 'linear-gradient(180deg,var(--gold2),var(--gold))' : 'rgba(201,168,76,0.35)', borderRadius: '5px 5px 0 0' }} />
+              <span style={{ fontSize: 10, color: 'var(--muted)' }}>{m.month}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Transactions list */}
+      <div style={{ ...card, overflow: 'hidden' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--line)', fontSize: 15, fontWeight: 700 }}>تراکنش‌ها ({fa(txns.length)})</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 100px 1fr 120px', padding: '12px 20px', background: 'var(--bg2)', borderBottom: '1px solid var(--line)', fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>
+          <div>واحد</div><div>خریدار</div><div>متراژ</div><div>قیمت</div><div>وضعیت</div>
+        </div>
+        <div style={{ maxHeight: 460, overflowY: 'auto' }}>
+          {txns.map((u, i) => (
+            <div key={u.id} style={{ display: 'grid', gridTemplateColumns: '100px 1fr 100px 1fr 120px', padding: '12px 20px', borderBottom: i < txns.length - 1 ? '1px solid var(--line)' : 'none', fontSize: 13, alignItems: 'center' }}>
+              <div style={{ fontWeight: 700, color: 'var(--gold)' }}>{u.number}</div>
+              <div style={{ color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.buyer || '—'}</div>
+              <div style={{ color: 'var(--muted)' }}>{fa(u.area)} م²</div>
+              <div style={{ fontWeight: 600 }}>{money(u.price)}</div>
+              <div><StatusBadge st={u.status} /></div>
+            </div>
+          ))}
+          {txns.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>تراکنشی ثبت نشده است</div>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════
+//  INVESTORS
+// ════════════════════════════════════════════════════════
+function InvestorsView({ project, post, pid, busy }: {
+  project: Project; post: (b: Record<string, unknown>) => Promise<boolean>; pid: string | null; busy: boolean
+}) {
+  const [form, setForm] = useState({ name: '', phone: '', amount: '', units: '' })
+  const totalInvested = project.investors.reduce((a, v) => a + v.amount, 0)
+
+  const addInvestor = async () => {
+    if (!form.name.trim()) { alert('نام سرمایه‌گذار را وارد کنید'); return }
+    const ok = await post({
+      action: 'addInvestor', pid, name: form.name.trim(), phone: form.phone.trim() || undefined,
+      amount: (Number(form.amount) || 0) * 1e9, units: Number(form.units) || 0,
+    })
+    if (ok) setForm({ name: '', phone: '', amount: '', units: '' })
+  }
+
+  const inputStyle: React.CSSProperties = {
+    padding: '8px 10px', borderRadius: 9, background: 'var(--bg)', border: '1px solid var(--line)',
+    color: 'var(--text)', fontSize: 13, outline: 'none', fontFamily: FONT, width: '100%',
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Total summary */}
+      <div style={{ ...card, background: 'linear-gradient(135deg,rgba(201,168,76,0.1),rgba(201,168,76,0.03))', border: '1px solid rgba(201,168,76,0.25)', padding: '22px 24px', display: 'flex', alignItems: 'center', gap: 32, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>کل سرمایهٔ جذب‌شده</div>
+          <div style={{ fontSize: 30, fontWeight: 800, color: 'var(--gold)' }}>{billions(totalInvested)} <span style={{ fontSize: 15, fontWeight: 500 }}>میلیارد تومان</span></div>
+        </div>
+        <div style={{ borderInlineStart: '1px solid var(--line)', paddingInlineStart: 32 }}>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>تعداد سرمایه‌گذاران</div>
+          <div style={{ fontSize: 30, fontWeight: 800 }}>{fa(project.investors.length)}</div>
+        </div>
+      </div>
+
+      {/* Add investor */}
+      <div style={{ ...card, padding: 16 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>＋ سرمایه‌گذار جدید</div>
+        <div className="mjb-form" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 1fr 0.8fr auto', gap: 10 }}>
+          <input placeholder="نام" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} style={inputStyle} />
+          <input placeholder="تلفن" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} style={inputStyle} />
+          <input placeholder="مبلغ (میلیارد ت)" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} style={inputStyle} />
+          <input placeholder="واحد" value={form.units} onChange={e => setForm({ ...form, units: e.target.value })} style={inputStyle} />
+          <button onClick={addInvestor} disabled={busy} style={{
+            padding: '9px 18px', borderRadius: 9, background: 'var(--gold)', border: 'none', color: '#16140f',
+            fontWeight: 700, fontSize: 13, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1, fontFamily: FONT, whiteSpace: 'nowrap',
+          }}>افزودن</button>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div style={{ ...card, overflow: 'hidden' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1.2fr 90px 60px', padding: '12px 20px', background: 'var(--bg2)', borderBottom: '1px solid var(--line)', fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>
+          <div>نام</div><div>تلفن</div><div>سرمایه</div><div>واحد</div><div style={{ textAlign: 'left' }}>حذف</div>
+        </div>
+        {project.investors.map((v, i) => (
+          <div key={v.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1.2fr 90px 60px', padding: '14px 20px', borderBottom: i < project.investors.length - 1 ? '1px solid var(--line)' : 'none', fontSize: 13, alignItems: 'center' }}>
+            <div style={{ fontWeight: 600 }}>{v.name}</div>
+            <div style={{ color: 'var(--muted)' }}>{v.phone || '—'}</div>
+            <div style={{ fontWeight: 700, color: 'var(--gold)' }}>{billions(v.amount)} م.ت</div>
+            <div style={{ color: 'var(--muted)' }}>{fa(v.units || 0)}</div>
+            <div style={{ textAlign: 'left' }}>
+              <button onClick={() => post({ action: 'deleteInvestor', pid, vid: v.id })} disabled={busy} title="حذف" style={{
+                width: 26, height: 26, borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)',
+                color: 'var(--muted)', cursor: 'pointer', fontSize: 14, lineHeight: 1, fontFamily: FONT,
+              }}>×</button>
+            </div>
+          </div>
+        ))}
+        {project.investors.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>سرمایه‌گذاری ثبت نشده است</div>}
+      </div>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════
+//  REPORTS
+// ════════════════════════════════════════════════════════
+function ReportsView({ project, s }: { project: Project; s: Stats }) {
+  const sellRate = s.total ? Math.round((s.sold / s.total) * 100) : 0
+  const withArea = project.units.filter(u => u.area > 0)
+  const avgPerMeter = withArea.length ? Math.round(withArea.reduce((a, u) => a + u.price / u.area, 0) / withArea.length) : 0
+  const maxSale = Math.max(1, ...project.monthlySales.map(m => m.count))
+  const tallest = project.monthlySales.reduce((mi, m, i, arr) => m.count > arr[mi].count ? i : mi, 0)
+
+  const cards = [
+    { label: 'نرخ فروش', value: fa(sellRate) + '٪', sub: `${fa(s.sold)} از ${fa(s.total)} واحد`, color: '#34d399' },
+    { label: 'درآمد محقق‌شده', value: billions(s.revenue) + ' م.ت', sub: 'از واحدهای فروخته‌شده', color: 'var(--gold)' },
+    { label: 'میانگین قیمت هر متر', value: money(avgPerMeter), sub: 'بر اساس کل واحدها', color: '#60a5fa' },
+    { label: 'تعداد سرمایه‌گذاران', value: fa(project.investors.length), sub: `${billions(project.investors.reduce((a, v) => a + v.amount, 0))} م.ت سرمایه`, color: '#f59e0b' },
+  ]
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div className="mjb-grid4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
+        {cards.map(c => (
+          <div key={c.label} style={{ ...card, padding: 20, position: 'relative' }}>
+            <span style={{ position: 'absolute', top: 16, insetInlineStart: 16, width: 9, height: 9, borderRadius: '50%', background: c.color }} />
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>{c.label}</div>
+            <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.5px', lineHeight: 1 }}>{c.value}</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>{c.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Monthly sales chart */}
+      <div style={{ ...card, padding: 22 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 18 }}>نمودار فروش ماهانه</h3>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14, height: 160 }}>
+          {project.monthlySales.map((m, i) => (
+            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, height: '100%', justifyContent: 'flex-end' }}>
+              <span style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 700 }}>{fa(m.count)}</span>
+              <div style={{ width: '100%', minHeight: 8, height: `${(m.count / maxSale) * 100}%`, background: i === tallest ? 'linear-gradient(180deg,var(--gold2),var(--gold))' : 'linear-gradient(180deg,rgba(201,168,76,0.5),rgba(201,168,76,0.22))', borderRadius: '6px 6px 0 0' }} />
+              <span style={{ fontSize: 11, color: 'var(--muted)' }}>{m.month}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
