@@ -70,6 +70,15 @@ body {
 .mj-article-body code { background: var(--bg2); padding: 1px 6px; border-radius: 6px; font-size: .9em; }
 .mj-article-body img, .mj-article-body video, .mj-article-body iframe { max-width: 100%; border-radius: 10px; }
 [contenteditable][data-placeholder]:empty::before { content: attr(data-placeholder); color: var(--faint); }
+/* FAQ accordion — گرافیک جذاب سؤالات متداول */
+.mj-faq { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; }
+.mj-faq-item { background: var(--bg2); border: 1px solid var(--line); border-radius: 12px; padding: 2px 4px; overflow: hidden; }
+.mj-faq-item summary { cursor: pointer; list-style: none; padding: 14px 16px; font-weight: 700; font-size: 1.02em; display: flex; align-items: center; gap: 10px; }
+.mj-faq-item summary::-webkit-details-marker { display: none; }
+.mj-faq-item summary::before { content: '+'; color: var(--gold); font-weight: 800; font-size: 1.2em; width: 18px; flex-shrink: 0; }
+.mj-faq-item[open] summary::before { content: '−'; }
+.mj-faq-item[open] summary { color: var(--gold); }
+.mj-faq-a { padding: 0 16px 16px 42px; color: var(--muted); line-height: 2; }
 @keyframes scan { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
 @keyframes pop { 0% { transform: scale(0.4); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
 @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }

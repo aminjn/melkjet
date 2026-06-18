@@ -78,14 +78,35 @@ export default function Home() {
   const [likes, setLikes] = useState<Record<string, boolean>>({})
   const [listings, setListings] = useState<ContentItem[]>([])
   const [advisorItems, setAdvisorItems] = useState<ContentItem[]>([])
+  const [promoFeatured, setPromoFeatured] = useState<ContentItem[]>([])
+  const [promoInvest, setPromoInvest] = useState<ContentItem[]>([])
+  const [promoAdvisors, setPromoAdvisors] = useState<ContentItem[]>([])
   const router = useRouter()
 
   useEffect(() => {
     let alive = true
     fetchContent('listing', undefined, 12).then((d) => { if (alive) setListings(d) })
     fetchContent('directory', undefined, 6).then((d) => { if (alive) setAdvisorItems(d) })
+    const loadPromo = (slot: string, set: (d: ContentItem[]) => void) =>
+      fetch(`/api/promotions?slot=${slot}`, { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : { items: [] }))
+        .then((d) => { if (alive) set(d.items || []) })
+        .catch(() => {})
+    loadPromo('home_featured', setPromoFeatured)
+    loadPromo('home_invest', setPromoInvest)
+    loadPromo('home_advisors', setPromoAdvisors)
     return () => { alive = false }
   }, [])
+
+  // Prepend promoted items to a listing array, dedup by id.
+  const withPromoted = (promo: ContentItem[], normal: ContentItem[]): ContentItem[] => {
+    const seen = new Set<string>()
+    return [...promo, ...normal].filter((it) => {
+      if (seen.has(it.id)) return false
+      seen.add(it.id)
+      return true
+    })
+  }
 
   const runSearch = () => {
     const q = query.trim()
@@ -96,9 +117,17 @@ export default function Home() {
     router.push(`/search?q=${encodeURIComponent(text)}`)
   }
 
+  // Promoted items lead the featured/invest sections (dedup by id).
+  const featuredSource = withPromoted(promoFeatured, listings)
+  const investSource = withPromoted(promoInvest, listings)
+  const advisorSource = withPromoted(promoAdvisors, advisorItems)
+  const promotedIds = new Set(promoFeatured.map((p) => p.id))
+  const promotedInvestIds = new Set(promoInvest.map((p) => p.id))
+  const promotedAdvisorIds = new Set(promoAdvisors.map((p) => p.id))
+
   // Map real listings into featured cards; fall back to static mockup if empty.
-  const featuredCards = listings.length
-    ? listings.map((it, i) => ({
+  const featuredCards = featuredSource.length
+    ? featuredSource.map((it, i) => ({
         id: it.id,
         title: it.title,
         location: it.location || 'نامشخص',
@@ -106,15 +135,15 @@ export default function Home() {
         size: sizeFromTitle(it.title),
         beds: '—',
         year: undefined as string | undefined,
-        tag: (it.tags && it.tags[0]) || it.category || 'ویژه',
+        tag: promotedIds.has(it.id) ? 'ویژه' : ((it.tags && it.tags[0]) || it.category || 'ویژه'),
         score: 80 + (i % 19),
         img: it.image ? `center/cover no-repeat url(${it.image})` : gradientFor(it.id),
       }))
     : featured
 
   // Reuse listings as investment offers; fall back to static mockup if empty.
-  const investCards = listings.length
-    ? listings.slice(0, 3).map((it, i) => {
+  const investCards = investSource.length
+    ? investSource.slice(0, 3).map((it, i) => {
         const r = RISK_LEVELS[i % RISK_LEVELS.length]
         return {
           id: it.id,
@@ -125,21 +154,23 @@ export default function Home() {
           riskColor: r.riskColor,
           price: it.price ? `از ${it.price}` : '—',
           img: it.image ? `center/cover no-repeat url(${it.image})` : gradientFor(it.id),
+          promoted: promotedInvestIds.has(it.id),
         }
       })
-    : invest
+    : invest.map((o) => ({ ...o, promoted: false }))
 
   // Map real directory entries into advisor cards; fall back to static mockup if empty.
-  const advisorCards = advisorItems.length
-    ? advisorItems.map((it) => ({
+  const advisorCards = advisorSource.length
+    ? advisorSource.map((it) => ({
         n: it.title,
         r: [it.category, it.location].filter(Boolean).join(' · ') || 'متخصص',
         deals: '—',
         rate: it.rating || '—',
         img: gradientFor(it.title, 'avatar'),
         initials: initialsFor(it.title),
+        promoted: promotedAdvisorIds.has(it.id),
       }))
-    : advisors.map((a) => ({ ...a, initials: initialsFor(a.n) }))
+    : advisors.map((a) => ({ ...a, initials: initialsFor(a.n), promoted: false }))
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
@@ -218,6 +249,7 @@ export default function Home() {
           {investCards.map(o => (
             <Link key={o.id} href={`/property/${o.id}`} style={{ display: 'block', textDecoration: 'none', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, overflow: 'hidden' }}>
               <div style={{ position: 'relative', height: 150, background: o.img }}>
+                {o.promoted && <span style={{ position: 'absolute', top: 12, left: 12, padding: '4px 9px', borderRadius: 999, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 11, fontWeight: 800, zIndex: 2 }}>★ ویژه</span>}
                 <span style={{ position: 'absolute', top: 12, right: 12, padding: '5px 11px', borderRadius: 999, background: 'rgba(95,217,138,0.9)', color: '#0a2a16', fontSize: 12, fontWeight: 800 }}>بازده {o.roi}</span>
                 <span style={{ position: 'absolute', bottom: 12, left: 12, padding: '4px 10px', borderRadius: 999, background: 'rgba(20,18,14,0.7)', backdropFilter: 'blur(6px)', color: o.riskColor, fontSize: 11, fontWeight: 700 }}>ریسک {o.risk}</span>
               </div>
@@ -281,7 +313,8 @@ export default function Home() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 18 }}>
             {advisorCards.map(a => (
-              <div key={a.n} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 22, textAlign: 'center' }}>
+              <div key={a.n} style={{ position: 'relative', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 22, textAlign: 'center' }}>
+                {a.promoted && <span style={{ position: 'absolute', top: 12, left: 12, padding: '3px 9px', borderRadius: 999, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 10.5, fontWeight: 800 }}>★ ویژه</span>}
                 <div style={{ width: 72, height: 72, borderRadius: '50%', margin: '0 auto', background: a.img, border: '2px solid var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 18, fontWeight: 700 }}>{a.initials}</div>
                 <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text)', marginTop: 14 }}>{a.n}</div>
                 <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 4 }}>{a.r}</div>

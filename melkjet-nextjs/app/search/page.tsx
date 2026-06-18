@@ -118,6 +118,7 @@ function SearchPageInner() {
   const [hoveredCard, setHoveredCard] = useState<string | null>(null)
   const [activePin, setActivePin] = useState<string | null>(null)
   const [properties, setProperties] = useState<PropertyT[]>([])
+  const [promoted, setPromoted] = useState<PropertyT[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -125,6 +126,10 @@ function SearchPageInner() {
     fetchContent('listing', undefined, 60).then((d) => {
       if (alive) { setProperties(d.map(toProperty)); setLoading(false) }
     })
+    fetch('/api/promotions?slot=search_top', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((d) => { if (alive) setPromoted(((d.items || []) as ContentItem[]).map(toProperty)) })
+      .catch(() => {})
     return () => { alive = false }
   }, [])
 
@@ -180,7 +185,14 @@ function SearchPageInner() {
     })
   }, [filteredProperties, sortBy])
 
-  const activeProperty = properties.find(
+  // Promoted listings lead the results (dedup by id).
+  const shownProperties = useMemo(() => {
+    const promotedIds = new Set(promoted.map(p => p.id))
+    return [...promoted, ...sortedProperties.filter(p => !promotedIds.has(p.id))]
+  }, [promoted, sortedProperties])
+  const promotedIdSet = useMemo(() => new Set(promoted.map(p => p.id)), [promoted])
+
+  const activeProperty = [...promoted, ...properties].find(
     p => p.id === hoveredCard || p.id === activePin
   )
 
@@ -435,7 +447,7 @@ function SearchPageInner() {
             marginBottom: 18,
           }}>
             <div style={{ fontSize: 14, color: 'var(--muted)' }}>
-              <span style={{ color: 'var(--gold)', fontWeight: 800, fontSize: 16 }}>{toPersianDigits(sortedProperties.length)}</span>
+              <span style={{ color: 'var(--gold)', fontWeight: 800, fontSize: 16 }}>{toPersianDigits(shownProperties.length)}</span>
               {' '}ملک پیدا شد
             </div>
             <div style={{ fontSize: 13, color: 'var(--faint)' }}>
@@ -444,7 +456,7 @@ function SearchPageInner() {
           </div>
 
           {/* loading / empty */}
-          {(loading || sortedProperties.length === 0) && (
+          {(loading || shownProperties.length === 0) && (
             <div style={{ padding: '60px 24px', textAlign: 'center', color: 'var(--muted)', fontSize: 14 }}>
               {loading ? 'در حال بارگذاری آگهی‌ها…' : 'هنوز آگهی‌ای ثبت نشده. از پنل مدیریت، منبع اسکرپ اضافه و اجرا کنید.'}
             </div>
@@ -452,9 +464,10 @@ function SearchPageInner() {
 
           {/* 2-column card grid */}
           <div className="mjs-cards" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-            {sortedProperties.map((p, index) => {
+            {shownProperties.map((p, index) => {
               const tc = tagColors[p.tag] || tagColors['ویژه']
               const isHov = hoveredCard === p.id
+              const isPromoted = promotedIdSet.has(p.id)
 
               // Insert promo card after index 3
               const cards = []
@@ -545,8 +558,15 @@ function SearchPageInner() {
                       }}>
                         ✦ {p.score}
                       </div>
-                      {/* Tag chip */}
-                      {p.tag && (
+                      {/* Tag chip / promoted badge */}
+                      {isPromoted ? (
+                        <div style={{
+                          position: 'absolute', top: 10, left: 10,
+                          background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f',
+                          borderRadius: 8, padding: '4px 9px',
+                          fontSize: 11.5, fontWeight: 800,
+                        }}>★ ویژه</div>
+                      ) : p.tag && (
                         <div style={{
                           position: 'absolute', top: 10, left: 10,
                           background: tc.bg, color: tc.color,
@@ -602,7 +622,7 @@ function SearchPageInner() {
 
         {/* ── LEFT: Sticky Map ─────────────────────────────── */}
         <MapPanelDesktop
-          properties={sortedProperties}
+          properties={shownProperties}
           hoveredCard={hoveredCard}
           activePin={activePin}
           setActivePin={setActivePin}

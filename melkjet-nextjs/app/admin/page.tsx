@@ -9,7 +9,7 @@ import ArticleEditor from '@/app/components/ArticleEditor'
 /* ─── Types ─────────────────────────────────────────────────── */
 type View =
   | 'overview' | 'scraper' | 'listings' | 'products' | 'geo' | 'moderation' | 'content' | 'studio' | 'articles' | 'categories' | 'crm' | 'api'
-  | 'reports' | 'plans' | 'promos' | 'ads' | 'users' | 'connections'
+  | 'reports' | 'plans' | 'promos' | 'discounts' | 'ads' | 'users' | 'connections'
   | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags'
 
 interface NavItem { id: View; icon: string; label: string; badge?: string; badgeColor?: string }
@@ -42,7 +42,8 @@ const sections: NavSection[] = [
     title: 'درآمد و رشد',
     items: [
       { id: 'plans',  icon: '◔', label: 'پلن‌ها و اشتراک' },
-      { id: 'promos', icon: '◈', label: 'پروموت‌ها' },
+      { id: 'promos', icon: '★', label: 'پروموت و ویژه‌سازی' },
+      { id: 'discounts', icon: '٪', label: 'کدهای تخفیف' },
       { id: 'ads',    icon: '▤', label: 'تبلیغات بنری' },
     ],
   },
@@ -89,7 +90,8 @@ const viewTitles: Record<View, string> = {
   api:        'API و مدل‌های هوش مصنوعی',
   reports:    'گزارش‌ها و تحلیل داده',
   plans:      'پلن‌ها و اشتراک‌ها',
-  promos:     'پروموت‌ها و کمپین‌ها',
+  promos:     'پروموت و ویژه‌سازی',
+  discounts:  'کدهای تخفیف',
   ads:        'تبلیغات بنری',
   users:      'کاربران و نقش‌ها',
   settings:   'تنظیمات کامل پلتفرم',
@@ -2452,6 +2454,79 @@ function PlansView() {
   )
 }
 
+// ─── Promotions / featuring across the site ────────────────────────────────
+function SlotPromoter({ slot, promos, onChange }: { slot: any; promos: any[]; onChange: () => void }) {
+  const [q, setQ] = useState('')
+  const [results, setResults] = useState<any[]>([])
+  const [open, setOpen] = useState(false)
+  const search = async () => {
+    const r = await fetch(`/api/admin/scraper/items?type=${slot.target}&q=${encodeURIComponent(q)}`)
+    if (r.ok) setResults((await r.json()).items.slice(0, 8))
+  }
+  const promote = async (id: string) => {
+    await fetch('/api/admin/promotions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slot: slot.id, targetId: id }) })
+    setQ(''); setResults([]); setOpen(false); onChange()
+  }
+  const toggle = async (id: string, active: boolean) => { await fetch('/api/admin/promotions', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, active }) }); onChange() }
+  const del = async (id: string) => { await fetch(`/api/admin/promotions?id=${id}`, { method: 'DELETE' }); onChange() }
+  const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '8px 11px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+  return (
+    <Card style={{ marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+        <div><div style={{ fontWeight: 700, fontSize: 14 }}>{slot.label} <span style={{ fontSize: 11, color: 'var(--faint)' }}>({promos.length.toLocaleString('fa-IR')} پروموت)</span></div><div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{slot.where}</div></div>
+        <OutlineButton onClick={() => setOpen(o => !o)} style={{ fontSize: 12, padding: '6px 13px' }}>{open ? 'بستن' : '＋ پروموت آیتم'}</OutlineButton>
+      </div>
+      {open && (
+        <div style={{ marginTop: 12, background: 'var(--bg2)', borderRadius: 10, padding: 10 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input style={{ ...inp, flex: 1 }} placeholder={`جستجوی ${slot.target === 'directory' ? 'مشاور/پروفایل' : slot.target === 'product' ? 'محصول' : 'آگهی'} برای پروموت…`} value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') search() }} />
+            <OutlineButton onClick={search}>جستجو</OutlineButton>
+          </div>
+          {results.length > 0 && (
+            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {results.map(it => (
+                <div key={it.id} onClick={() => promote(it.id)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 9px', borderRadius: 8, cursor: 'pointer', background: 'var(--surface)', fontSize: 12.5 }}>
+                  {it.image && <img src={it.image} alt="" style={{ width: 30, height: 30, borderRadius: 6, objectFit: 'cover' }} />}
+                  <span style={{ flex: 1 }}>{it.title}</span>
+                  <span style={{ color: 'var(--gold)', fontWeight: 700 }}>＋ پروموت</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {promos.length > 0 && (
+        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {promos.map(p => (
+            <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg2)', borderRadius: 9, padding: '8px 10px', opacity: p.active ? 1 : .5 }}>
+              {p.image ? <img src={p.image} alt="" style={{ width: 34, height: 34, borderRadius: 7, objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.visibility = 'hidden' }} /> : <span style={{ width: 34, height: 34, borderRadius: 7, background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--gold)' }}>★</span>}
+              <div style={{ flex: 1, minWidth: 100 }}><div style={{ fontSize: 13, fontWeight: 600 }}>{p.title}</div><div style={{ fontSize: 11.5, color: 'var(--faint)' }}>{[p.location, p.price].filter(Boolean).join(' · ')}</div></div>
+              <button onClick={() => toggle(p.id, !p.active)} style={{ ...inp, padding: '4px 10px', cursor: 'pointer', fontSize: 11.5, color: p.active ? '#5fd98a' : 'var(--faint)' }}>{p.active ? 'فعال' : 'غیرفعال'}</button>
+              <button onClick={() => del(p.id)} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', borderRadius: 8, padding: '4px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function PromotionsView() {
+  const [slots, setSlots] = useState<any[]>([])
+  const [promotions, setPromotions] = useState<any[]>([])
+  const load = () => fetch('/api/admin/promotions').then(r => r.ok ? r.json() : { slots: [], promotions: [] }).then(d => { setSlots(d.slots || []); setPromotions(d.promotions || []) })
+  useEffect(() => { load() }, [])
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>پروموت و ویژه‌سازی</div>
+        <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>هر جای سایت که می‌توان آگهی/مشاور/محصول را «ویژه» کرد در فهرست زیر آمده. برای هر جایگاه، آیتم‌ها را جستجو و پروموت کن؛ روی صفحات عمومی در همان جایگاه و در صدر نمایش داده می‌شوند.</div>
+      </Card>
+      {slots.map(s => <SlotPromoter key={s.id} slot={s} promos={promotions.filter(p => p.slot === s.id)} onChange={load} />)}
+    </div>
+  )
+}
+
 // ─── Promos (discount codes) ───────────────────────────────────────────────
 function PromosView() {
   const [promos, setPromos] = useState<any[]>([])
@@ -2800,7 +2875,8 @@ export default function SuperAdminPage() {
       case 'api':        return <APIView />
       case 'users':      return <UsersView />
       case 'plans':      return <PlansView />
-      case 'promos':     return <PromosView />
+      case 'promos':     return <PromotionsView />
+      case 'discounts':  return <PromosView />
       case 'ads':        return <AdsView />
       case 'settings':   return <SettingsView />
       case 'flags':      return <FlagsView />

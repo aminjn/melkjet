@@ -124,6 +124,7 @@ export default function DirectoryPage() {
   const [activeCategory, setActiveCategory] = useState('مشاور')
   const [searchQuery, setSearchQuery] = useState('')
   const [items, setItems] = useState<ContentItem[]>([])
+  const [promoted, setPromoted] = useState<ContentItem[]>([])
   const [loading, setLoading] = useState(true)
   const [categoryList, setCategoryList] = useState<string[]>(DEFAULT_CATS)
 
@@ -146,9 +147,20 @@ export default function DirectoryPage() {
     return () => { alive = false }
   }, [activeCategory])
 
-  const filteredProfessionals = items
+  useEffect(() => {
+    let alive = true
+    fetch('/api/promotions?slot=directory_top', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((d) => { if (alive) setPromoted((d.items || []) as ContentItem[]) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
+
+  const promotedIds = new Set(promoted.map((p) => p.id))
+  // Promoted profiles lead the list (dedup by id), flagged so the existing badge shows.
+  const filteredProfessionals = [...promoted, ...items.filter((p) => !promotedIds.has(p.id))]
     .filter((p) => !searchQuery || p.title.includes(searchQuery) || (p.location || '').includes(searchQuery))
-    .map(toProfessional)
+    .map((it) => ({ ...toProfessional(it), promoted: promotedIds.has(it.id) }))
 
   return (
     <div

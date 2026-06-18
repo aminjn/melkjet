@@ -39,6 +39,7 @@ export default function NeighborhoodPage() {
   const [stats, setStats] = useState<MarketStats | null>(null);
   const [statsLoaded, setStatsLoaded] = useState(false);
   const [listingItems, setListingItems] = useState<ContentItem[]>([]);
+  const [promotedListings, setPromotedListings] = useState<ContentItem[]>([]);
   const [advisorItems, setAdvisorItems] = useState<ContentItem[]>([]);
 
   useEffect(() => {
@@ -64,8 +65,20 @@ export default function NeighborhoodPage() {
       if (alive) setAdvisorItems(items.slice(0, 3));
     });
 
+    fetch('/api/promotions?slot=neighborhood_featured', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((d) => { if (alive) setPromotedListings((d.items || []) as ContentItem[]); })
+      .catch(() => {});
+
     return () => { alive = false; };
   }, [decoded]);
+
+  // Promoted listings lead the featured strip (dedup by id).
+  const promotedListingIds = new Set(promotedListings.map((p) => p.id));
+  const shownListings = [
+    ...promotedListings,
+    ...listingItems.filter((l) => !promotedListingIds.has(l.id)),
+  ].slice(0, 3);
 
   // ── derived chart data from real trend (fallback to flat baseline) ──────────
   const trend = stats?.trend && stats.trend.length ? stats.trend.slice(-12) : [];
@@ -247,20 +260,21 @@ export default function NeighborhoodPage() {
                 <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text)', margin: 0 }}>آگهی‌های برگزیده</h2>
                 <Link href="/search" style={{ fontSize: '0.8rem', color: 'var(--gold)', textDecoration: 'none' }}>مشاهده همه ←</Link>
               </div>
-              {listingItems.length === 0 ? (
+              {shownListings.length === 0 ? (
                 <div style={{ padding: '1.5rem 0', textAlign: 'center', color: 'var(--muted)', fontSize: '0.85rem' }}>
                   آگهی‌ای برای نمایش یافت نشد.
                 </div>
               ) : (
               <div className="mjn-listings" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
-                {listingItems.map((listing) => (
+                {shownListings.map((listing) => (
                   <Link key={listing.id} href={`/property/${listing.id}`} style={{ textDecoration: 'none', display: 'block' }}>
                     <div
                       style={{ border: '1px solid var(--line)', borderRadius: '10px', overflow: 'hidden', cursor: 'pointer', transition: 'border-color 0.2s, box-shadow 0.2s' }}
                       onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--gold)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 16px rgba(212,175,55,0.15)'; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--line)'; (e.currentTarget as HTMLDivElement).style.boxShadow = 'none'; }}
                     >
-                      <div style={{ height: '100px', background: listing.image ? `url(${listing.image}) center/cover` : gradientFor(listing.id), display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <div style={{ height: '100px', background: listing.image ? `url(${listing.image}) center/cover` : gradientFor(listing.id), display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                        {promotedListingIds.has(listing.id) && <span style={{ position: 'absolute', top: '6px', left: '6px', background: 'linear-gradient(135deg, var(--gold2, #b8860b), var(--gold))', color: '#1a0e04', fontSize: '0.62rem', fontWeight: 800, padding: '2px 7px', borderRadius: '20px' }}>★ ویژه</span>}
                         {!listing.image && <span style={{ fontSize: '1.6rem', opacity: 0.35 }}>🏢</span>}
                       </div>
                       <div style={{ padding: '0.75rem' }}>

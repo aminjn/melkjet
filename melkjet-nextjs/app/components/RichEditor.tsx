@@ -9,8 +9,11 @@ export default function RichEditor({ value, onChange }: { value: string; onChang
   const fileRef = useRef<HTMLInputElement | null>(null)
   const pendingKind = useRef<'image' | 'video'>('image')
 
-  // مقدار اولیه را فقط یک‌بار ست کن تا مکان‌نما نپرد
-  useEffect(() => { if (ref.current && ref.current.innerHTML !== value) ref.current.innerHTML = value || '' }, []) // eslint-disable-line
+  // مقدار را از بیرون (مثل تولید با AI) همگام کن — اما هنگام تایپ (فوکوس) دست نزن تا مکان‌نما نپرد
+  useEffect(() => {
+    const el = ref.current
+    if (el && document.activeElement !== el && el.innerHTML !== (value || '')) el.innerHTML = value || ''
+  }, [value])
 
   const emit = () => { if (ref.current) onChange(ref.current.innerHTML) }
   const exec = (cmd: string, val?: string) => { ref.current?.focus(); document.execCommand(cmd, false, val); emit() }

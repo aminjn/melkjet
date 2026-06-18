@@ -116,6 +116,7 @@ export default function StorePage() {
   const [modalQty, setModalQty] = useState(1)
   const [addedId, setAddedId] = useState<string | null>(null)
   const [products, setProducts] = useState<Product[]>([])
+  const [promoted, setPromoted] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [orderState, setOrderState] = useState<'idle' | 'sending' | 'done'>('idle')
   const [rfqState, setRfqState] = useState<'idle' | 'sending' | 'done'>('idle')
@@ -125,6 +126,13 @@ export default function StorePage() {
     fetchContent('product', undefined, 100).then((d) => {
       if (alive) { setProducts(d.map(toProduct)); setLoading(false) }
     })
+    fetch('/api/promotions?slot=store_featured', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((d) => {
+        if (alive) setPromoted((d.items || []).map((it: { id: string; title: string; price?: string; category?: string; image?: string; url?: string }) =>
+          toProduct({ ...it, sourceName: '' })))
+      })
+      .catch(() => {})
     return () => { alive = false }
   }, [])
 
@@ -210,6 +218,10 @@ export default function StorePage() {
   if (sortBy === 'ارزان‌ترین') filtered = [...filtered].sort((a, b) => a.price - b.price)
   else if (sortBy === 'گران‌ترین') filtered = [...filtered].sort((a, b) => b.price - a.price)
   else if (sortBy === 'پرفروش‌ترین') filtered = [...filtered].sort((a, b) => (b.hot ? 1 : 0) - (a.hot ? 1 : 0))
+
+  // Promoted products lead the grid (dedup by id).
+  const promotedIds = new Set(promoted.map(p => p.id))
+  filtered = [...promoted, ...filtered.filter(p => !promotedIds.has(p.id))]
 
   const stockColor = (s: StockStatus) =>
     s === 'موجود' ? '#34d399' : s === 'محدود' ? '#fbbf24' : '#a78bfa'
@@ -699,6 +711,11 @@ export default function StorePage() {
                     {product.hot && (
                       <div style={{ position: 'absolute', top: 12, right: 12, background: '#ef4444', color: '#fff', fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 20, zIndex: 1 }}>
                         پرفروش
+                      </div>
+                    )}
+                    {promotedIds.has(product.id) && (
+                      <div style={{ position: 'absolute', top: 12, left: 12, background: 'linear-gradient(135deg, var(--gold2), var(--gold))', color: '#16140f', fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 20, zIndex: 1 }}>
+                        ★ ویژه
                       </div>
                     )}
                     <div style={{

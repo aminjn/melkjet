@@ -81,6 +81,52 @@ export default function ArticleEditor({ compact }: { compact?: boolean }) {
     } catch { setMsg('⚠ خطا در ارتباط') } finally { setBusy('') }
   }
 
+  // تولید سؤالات متداول (FAQ) با گرافیک آکاردئونی و افزودن به انتهای مقاله
+  const genFaq = async () => {
+    const topic = (f.title || aiTopic).trim()
+    if (!topic) { setMsg('⚠ اول عنوان یا موضوع مقاله را وارد کن'); return }
+    setBusy('faq'); setMsg('')
+    try {
+      const r = await fetch('/api/cms/faq', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic, context: f.body }) })
+      const d = await r.json()
+      if (!d.ok || !d.faqs?.length) { setMsg('⚠ ' + (d.error || 'سؤالی تولید نشد')); return }
+      const esc = (s: string) => String(s).replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      const items = d.faqs.map((x: any) => `<details class="mj-faq-item"><summary>${esc(x.q)}</summary><div class="mj-faq-a">${esc(x.a)}</div></details>`).join('')
+      const block = `<h2>سؤالات متداول</h2><div class="mj-faq">${items}</div><p><br></p>`
+      setF(p => ({ ...p, body: (p.body || '') + block }))
+      setMsg(`✓ ${d.faqs.length.toLocaleString('fa-IR')} سؤال متداول به انتهای مقاله اضافه شد`)
+    } catch { setMsg('⚠ خطا در ارتباط') } finally { setBusy('') }
+  }
+
+  // بهبود و بازنویسی متنِ موجود (انسان‌نما، حفظ معنا)
+  const improveText = async () => {
+    const plain = (f.body || '').replace(/<[^>]+>/g, ' ').trim()
+    if (plain.length < 40) { setMsg('⚠ ابتدا متنی بنویس یا تولید کن'); return }
+    setBusy('improve'); setMsg('')
+    try {
+      const r = await fetch('/api/ai/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agent: 'content', input: `این متن مقالهٔ املاک را روان‌تر، حرفه‌ای‌تر و کاملاً انسانی بازنویسی کن (ساختار سئو، تیتر با ## و فهرست حفظ شود، Markdown بده، چیزی اضافه نکن جز بهبود):\n\n${plain.slice(0, 4000)}` }) })
+      const d = await r.json()
+      if (!d.ok || !d.text) { setMsg('⚠ ' + (d.error || 'خطا')); return }
+      setF(p => ({ ...p, body: mdToHtml(d.text) }))
+      setMsg('✓ متن بازنویسی و بهبود یافت')
+    } catch { setMsg('⚠ خطا در ارتباط') } finally { setBusy('') }
+  }
+
+  // تولید چکیده + توضیح متا از روی متن
+  const genMeta = async () => {
+    const plain = (f.body || '').replace(/<[^>]+>/g, ' ').trim()
+    if (plain.length < 40) { setMsg('⚠ ابتدا متنی بنویس یا تولید کن'); return }
+    setBusy('meta'); setMsg('')
+    try {
+      const r = await fetch('/api/ai/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agent: 'content', input: `از این متن یک «توضیح متا» سئو حداکثر ۱۵۵ کاراکتر و یک «چکیدهٔ» دو جمله‌ای بساز. فقط JSON: {"meta":"...","excerpt":"..."}\n\n${plain.slice(0, 2000)}` }) })
+      const d = await r.json()
+      let t = d.text || ''; const mm = t.match(/\{[\s\S]*\}/); if (mm) t = mm[0]
+      const j = JSON.parse(t)
+      setF(p => ({ ...p, metaDescription: (j.meta || p.metaDescription).slice(0, 160), excerpt: j.excerpt || p.excerpt }))
+      setMsg('✓ چکیده و توضیح متا ساخته شد')
+    } catch { setMsg('⚠ خطا در ساخت متا') } finally { setBusy('') }
+  }
+
   // امتیاز سئو (متن HTML را برای شمارش کلمه پاک می‌کنیم)
   const seo = (() => {
     let score = 0; const tips: string[] = []
@@ -160,7 +206,12 @@ export default function ArticleEditor({ compact }: { compact?: boolean }) {
             <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}>✦ نوشتن با هوش مصنوعی (انسان‌نما و سئو)</div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <input value={aiTopic} onChange={e => setAiTopic(e.target.value)} placeholder="موضوع مقاله (مثلاً: راهنمای خرید آپارتمان در سعادت‌آباد)" style={{ ...inp, flex: 1, minWidth: 200 }} />
-              <button onClick={aiGenerate} disabled={!!busy} style={{ padding: '9px 18px', borderRadius: 9, border: 'none', background: 'var(--gold)', color: '#16140f', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', opacity: busy ? .6 : 1 }}>{busy === 'ai' ? 'در حال نوشتن…' : 'بنویس'}</button>
+              <button onClick={aiGenerate} disabled={!!busy} style={{ padding: '9px 18px', borderRadius: 9, border: 'none', background: 'var(--gold)', color: '#16140f', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', opacity: busy ? .6 : 1 }}>{busy === 'ai' ? 'در حال نوشتن…' : 'بنویس مقاله کامل'}</button>
+            </div>
+            <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 10 }}>
+              {[['faq', '❓ سؤالات متداول', genFaq], ['improve', '✦ بهبود و بازنویسی', improveText], ['meta', '📝 چکیده و متا', genMeta]].map(([k, label, fn]: any) => (
+                <button key={k} onClick={fn} disabled={!!busy} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid var(--gold)', background: 'transparent', color: 'var(--gold)', fontWeight: 600, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', opacity: busy ? .6 : 1 }}>{busy === k ? 'در حال انجام…' : label}</button>
+              ))}
             </div>
           </div>
 

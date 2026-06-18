@@ -58,6 +58,7 @@ next-env.d.ts
 .audit-data.json
 .media-index.json
 .media/
+.promotion-data.json
 .sites-data.json
 .cms-data.json
 .category-data.json
