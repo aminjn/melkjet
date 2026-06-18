@@ -484,7 +484,7 @@ export default function ArticlePage() {
               </h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                 {related.map((r) => (
-                  <Link key={r.id} href={`/article/${r.id}`} style={{
+                  <Link key={r.id} href={`/article/${(r as any).meta?.slug || r.id}`} style={{
                     display: 'block', textDecoration: 'none',
                     background: 'var(--surface)', border: '1px solid var(--line)',
                     borderRadius: 15, overflow: 'hidden', transition: 'border-color 0.2s'

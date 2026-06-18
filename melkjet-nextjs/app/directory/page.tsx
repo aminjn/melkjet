@@ -668,7 +668,7 @@ function ProfessionalCard({ pro }: { pro: Professional }) {
         {/* CTA */}
         <div style={{ marginTop: 'auto' }}>
           <a
-            href={pro.url || '#'}
+            href={pro.url || `/profile/${pro.id}`}
             target={pro.url ? '_blank' : undefined}
             rel="noreferrer"
             onClick={pro.url ? undefined : (e) => e.preventDefault()}

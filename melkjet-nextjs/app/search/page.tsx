@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import Nav from '@/app/components/Nav'
+import BannerSlot from '@/app/components/BannerSlot'
 import { fetchContent, gradientFor, type ContentItem } from '@/app/lib/content-display'
 
 function seedNum(s: string): number {
@@ -469,49 +470,12 @@ function SearchPageInner() {
               const isHov = hoveredCard === p.id
               const isPromoted = promotedIdSet.has(p.id)
 
-              // Insert promo card after index 3
+              // Insert a real ad banner slot after index 3 (admin-managed; renders nothing if empty)
               const cards = []
               if (index === 3) {
                 cards.push(
-                  <div
-                    key="promo"
-                    style={{
-                      gridColumn: '1 / -1',
-                      border: '1.5px solid var(--gold)',
-                      borderRadius: 14,
-                      background: 'var(--goldDim)',
-                      padding: '18px 20px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 12,
-                      boxShadow: '0 4px 24px -8px rgba(201,168,76,0.25)',
-                    }}
-                  >
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                        <span style={{
-                          background: 'var(--gold)', color: '#16140f',
-                          fontSize: 10.5, fontWeight: 800,
-                          padding: '3px 8px', borderRadius: 6,
-                        }}>تبلیغ</span>
-                        <span style={{ color: 'var(--gold)', fontWeight: 800, fontSize: 15 }}>برج لوکس آرین</span>
-                      </div>
-                      <div style={{ color: 'var(--muted)', fontSize: 13 }}>
-                        پیش‌فروش از ۱۴ میلیارد · بازده پیش‌بینی ۳۸٪
-                      </div>
-                    </div>
-                    <Link
-                      href="/property/promo"
-                      style={{
-                        flexShrink: 0,
-                        padding: '9px 18px', borderRadius: 10,
-                        background: 'linear-gradient(140deg,var(--gold2),var(--gold))',
-                        color: '#16140f', textDecoration: 'none',
-                        fontSize: 13, fontWeight: 700,
-                        whiteSpace: 'nowrap',
-                      }}
-                    >مشاهده ←</Link>
+                  <div key="promo" style={{ gridColumn: '1 / -1' }}>
+                    <BannerSlot placement="search" />
                   </div>
                 )
               }

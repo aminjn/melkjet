@@ -1,7 +1,7 @@
 'use client'
 
 import { useParams } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Nav from '../../components/Nav'
 import Footer from '../../components/Footer'
 
@@ -515,6 +515,26 @@ function ServiceAreaSVG({ areas }: { areas: string[] }) {
   )
 }
 
+// ─── Real item ────────────────────────────────────────────────────────────────
+
+interface RealItem {
+  id: string; title: string; category?: string; location?: string; phone?: string;
+  image?: string; rating?: string; excerpt?: string; url?: string; sourceName?: string;
+  type?: string; meta?: Record<string, string>
+}
+
+// Keep only the digits of a phone string (Persian or Latin) for tel/wa.me links.
+const digits = (s?: string): string => {
+  if (!s) return ''
+  const fa = '۰۱۲۳۴۵۶۷۸۹'
+  return s.replace(/[۰-۹]/g, d => String(fa.indexOf(d))).replace(/\D/g, '')
+}
+// Convert a local Iranian number (09xxxxxxxxx) to international form for wa.me.
+const waNumber = (s?: string): string => {
+  const d = digits(s)
+  return d.startsWith('0') ? '98' + d.slice(1) : d
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ProfilePage() {
@@ -523,21 +543,78 @@ export default function ProfilePage() {
   const validId = (urlId in profiles ? urlId : 'advisor') as RoleId
 
   const [activeRole, setActiveRole] = useState<RoleId>(validId)
+  const [realItem, setRealItem] = useState<RealItem | null>(null)
   const [contactName, setContactName] = useState('')
   const [contactPhone, setContactPhone] = useState('')
   const [contactDesc, setContactDesc] = useState('')
   const [formSent, setFormSent] = useState(false)
+  const [sidebarName, setSidebarName] = useState('')
+  const [sidebarPhone, setSidebarPhone] = useState('')
+  const [sidebarDesc, setSidebarDesc] = useState('')
+  const [sidebarSent, setSidebarSent] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [meetingDate, setMeetingDate] = useState('')
   const [meetingTime, setMeetingTime] = useState('')
+  const [meetingName, setMeetingName] = useState('')
+  const [meetingPhone, setMeetingPhone] = useState('')
   const [meetingSent, setMeetingSent] = useState(false)
   const [activeTab, setActiveTab] = useState<'listings' | 'reviews' | 'about' | 'contact'>('listings')
 
-  const p = profiles[activeRole]
-  const roleColor = p.color
+  // Fetch the real directory item for this id. If none (404 / demo role id), fall back to sample.
+  useEffect(() => {
+    let alive = true
+    setRealItem(null)
+    fetch(`/api/content/item?id=${encodeURIComponent(urlId)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (alive && d && d.item) setRealItem(d.item as RealItem) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [urlId])
 
-  const handleSend = () => { if (contactName && contactPhone) setFormSent(true) }
-  const handleMeeting = () => { if (meetingDate && meetingTime) setMeetingSent(true) }
+  const sample = profiles[activeRole]
+  // realItem ? realData : sampleData — merge real fields into the existing sample layout.
+  const p: Profile = realItem ? {
+    ...sample,
+    name: realItem.title || sample.name,
+    initial: (realItem.title || sample.name).trim().charAt(0) || sample.initial,
+    roleLabel: realItem.category || sample.roleLabel,
+    rating: realItem.rating || sample.rating,
+    area: realItem.location || sample.area,
+    bio: realItem.excerpt || sample.bio,
+  } : sample
+  const realAvatar = realItem?.image
+  const roleColor = p.color
+  const phone = realItem ? realItem.phone : undefined
+  const igLink = realItem?.url && /instagram\.com/i.test(realItem.url) ? realItem.url : undefined
+
+  // Hero CTA: dial the phone if present, otherwise jump to the contact tab.
+  const handleCta = () => {
+    if (phone) { window.location.href = `tel:${digits(phone)}` }
+    else { setActiveTab('contact'); if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' }) }
+  }
+
+  const postLead = (title: string, description: string, name: string, ph: string) =>
+    fetch('/api/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, description, owner: name || undefined, phone: ph || undefined }),
+    }).catch(() => {})
+
+  const handleSend = () => {
+    if (!contactName || !contactPhone) return
+    postLead(`درخواست خدمت از ${p.name}`, `${contactDesc}\n— نام: ${contactName} · تماس: ${contactPhone}`, contactName, contactPhone)
+    setFormSent(true)
+  }
+  const handleSidebar = () => {
+    if (!sidebarName || !sidebarPhone) return
+    postLead(`درخواست خدمت از ${p.name}`, `${sidebarDesc}\n— نام: ${sidebarName} · تماس: ${sidebarPhone}`, sidebarName, sidebarPhone)
+    setSidebarSent(true)
+  }
+  const handleMeeting = () => {
+    if (!meetingDate || !meetingTime) return
+    postLead(`درخواست خدمت از ${p.name}`, `رزرو جلسه — تاریخ: ${meetingDate} · ساعت: ${meetingTime}\nنام: ${meetingName} · تماس: ${meetingPhone}`, meetingName, meetingPhone)
+    setMeetingSent(true)
+  }
 
   const inpSt: React.CSSProperties = {
     width: '100%', border: '1px solid var(--line2)', borderRadius: 11,
@@ -576,7 +653,7 @@ export default function ProfilePage() {
           {roleTabs.map(r => {
             const on = activeRole === r.id
             return (
-              <button key={r.id} onClick={() => { setActiveRole(r.id); setFormSent(false); setActiveTab('listings') }} style={{
+              <button key={r.id} onClick={() => { setActiveRole(r.id); setFormSent(false); setSidebarSent(false); setActiveTab('listings') }} style={{
                 display: 'flex', alignItems: 'center', gap: 5, padding: '7px 12px', borderRadius: 9,
                 border: `1px solid ${on ? 'var(--gold)' : 'var(--line)'}`,
                 background: on ? 'var(--goldDim)' : 'var(--surface)',
@@ -599,7 +676,7 @@ export default function ProfilePage() {
             <span style={{ position: 'absolute', top: 14, left: 14, display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px', borderRadius: 999, background: 'rgba(20,18,14,0.7)', backdropFilter: 'blur(6px)', color: 'var(--gold2)', fontSize: 12, fontWeight: 800, border: '1px solid var(--gold)' }}>★ پروفایل پروموت‌شده در {p.area}</span>
           </div>
           <div className="mjpp-hero" style={{ display: 'flex', alignItems: 'flex-end', gap: 20, padding: '0 26px 22px', marginTop: -44, position: 'relative', flexWrap: 'wrap' }}>
-            <div style={{ width: 96, height: 96, borderRadius: 24, background: p.av, border: '4px solid var(--surface)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 34, fontWeight: 800 }}>{p.initial}</div>
+            <div style={{ width: 96, height: 96, borderRadius: 24, background: realAvatar ? `center/cover no-repeat url(${realAvatar})` : p.av, border: '4px solid var(--surface)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 34, fontWeight: 800 }}>{realAvatar ? '' : p.initial}</div>
             <div style={{ flex: 1, minWidth: 0, paddingBottom: 4 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
                 <h1 style={{ fontSize: 'clamp(20px,2.8vw,26px)', fontWeight: 800, color: 'var(--text)', margin: 0 }}>{p.name}</h1>
@@ -613,7 +690,7 @@ export default function ProfilePage() {
             </div>
             <div style={{ display: 'flex', gap: 9, flexShrink: 0, paddingBottom: 4, flexWrap: 'wrap' }}>
               <button onClick={() => setModalOpen(true)} style={{ height: 42, padding: '0 18px', border: '1px solid var(--line2)', borderRadius: 12, background: 'var(--surface)', color: 'var(--text)', fontFamily: 'inherit', fontWeight: 600, fontSize: 13.5, cursor: 'pointer' }}>رزرو جلسه</button>
-              <button style={{ height: 42, padding: '0 20px', border: 'none', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontFamily: 'inherit', fontWeight: 700, fontSize: 13.5, cursor: 'pointer' }}>{p.cta}</button>
+              <button onClick={handleCta} style={{ height: 42, padding: '0 20px', border: 'none', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontFamily: 'inherit', fontWeight: 700, fontSize: 13.5, cursor: 'pointer' }}>{p.cta}</button>
             </div>
           </div>
         </div>
@@ -630,9 +707,22 @@ export default function ProfilePage() {
             </div>
           ))}
           <div style={{ marginRight: 'auto', display: 'flex', gap: 8 }}>
-            <button style={{ padding: '7px 14px', borderRadius: 9, border: '1px solid var(--line)', background: 'var(--bg2)', color: 'var(--text)', fontFamily: 'inherit', fontSize: 12.5, cursor: 'pointer' }}>📱 واتس‌اپ</button>
-            <button style={{ padding: '7px 14px', borderRadius: 9, border: '1px solid var(--line)', background: 'var(--bg2)', color: 'var(--text)', fontFamily: 'inherit', fontSize: 12.5, cursor: 'pointer' }}>📧 ایمیل</button>
-            <button style={{ padding: '7px 14px', borderRadius: 9, border: '1px solid var(--line)', background: 'var(--bg2)', color: 'var(--text)', fontFamily: 'inherit', fontSize: 12.5, cursor: 'pointer' }}>📢 اینستاگرام</button>
+            {(() => {
+              const cbSt: React.CSSProperties = { padding: '7px 14px', borderRadius: 9, border: '1px solid var(--line)', background: 'var(--bg2)', color: 'var(--text)', fontFamily: 'inherit', fontSize: 12.5, cursor: 'pointer', textDecoration: 'none', display: 'inline-block' }
+              return (
+                <>
+                  {phone
+                    ? <a href={`https://wa.me/${waNumber(phone)}`} target="_blank" rel="noopener noreferrer" style={cbSt}>📱 واتس‌اپ</a>
+                    : <button style={{ ...cbSt, opacity: 0.5, cursor: 'default' }} disabled>📱 واتس‌اپ</button>}
+                  {phone
+                    ? <a href={`mailto:?subject=${encodeURIComponent('تماس از طریق ملک‌جت با ' + p.name)}`} style={cbSt}>📧 ایمیل</a>
+                    : <a href="mailto:" style={cbSt}>📧 ایمیل</a>}
+                  {igLink
+                    ? <a href={igLink} target="_blank" rel="noopener noreferrer" style={cbSt}>📢 اینستاگرام</a>
+                    : <button style={{ ...cbSt, opacity: 0.5, cursor: 'default' }} disabled>📢 اینستاگرام</button>}
+                </>
+              )
+            })()}
           </div>
         </div>
 
@@ -678,7 +768,7 @@ export default function ProfilePage() {
                 <section style={card}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                     <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)' }}>فایل‌های فعال</div>
-                    <a href="#" style={{ fontSize: 13, fontWeight: 600, color: 'var(--gold)', textDecoration: 'none' }}>مشاهده همه ←</a>
+                    <a href="/directory" style={{ fontSize: 13, fontWeight: 600, color: 'var(--gold)', textDecoration: 'none' }}>مشاهده همه ←</a>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                     {p.portfolio.map((it, i) => (
@@ -857,12 +947,21 @@ export default function ProfilePage() {
           <aside style={{ display: 'grid', gap: 16, position: 'sticky', top: 88 }}>
             <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 13 }}>درخواست خدمت</div>
-              <div style={{ display: 'grid', gap: 9 }}>
-                <input placeholder="نام شما" style={inpSt} />
-                <input placeholder="شماره تماس" style={inpSt} />
-                <textarea rows={3} placeholder="نیاز خود را شرح دهید…" style={{ ...inpSt, resize: 'none', lineHeight: 1.6 }} />
-                <button style={{ height: 44, border: 'none', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontFamily: 'inherit', fontWeight: 700, fontSize: 13.5, cursor: 'pointer' }}>ارسال درخواست</button>
-              </div>
+              {sidebarSent ? (
+                <div style={{ textAlign: 'center', padding: '18px 0' }}>
+                  <div style={{ fontSize: 34, marginBottom: 8 }}>✓</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#5fd98a', marginBottom: 6 }}>درخواست شما ثبت شد!</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>{p.name} به زودی با شما تماس می‌گیرد.</div>
+                  <button onClick={() => { setSidebarSent(false); setSidebarName(''); setSidebarPhone(''); setSidebarDesc('') }} style={{ padding: '9px 20px', borderRadius: 11, border: '1px solid var(--line)', background: 'transparent', color: 'var(--text)', cursor: 'pointer', fontSize: 12.5, fontFamily: 'inherit' }}>درخواست جدید</button>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gap: 9 }}>
+                  <input placeholder="نام شما" style={inpSt} value={sidebarName} onChange={e => setSidebarName(e.target.value)} />
+                  <input placeholder="شماره تماس" style={inpSt} value={sidebarPhone} onChange={e => setSidebarPhone(e.target.value)} />
+                  <textarea rows={3} placeholder="نیاز خود را شرح دهید…" style={{ ...inpSt, resize: 'none', lineHeight: 1.6 }} value={sidebarDesc} onChange={e => setSidebarDesc(e.target.value)} />
+                  <button onClick={handleSidebar} style={{ height: 44, border: 'none', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontFamily: 'inherit', fontWeight: 700, fontSize: 13.5, cursor: 'pointer' }}>ارسال درخواست</button>
+                </div>
+              )}
             </div>
             <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 12 }}>اطلاعات تماس</div>
@@ -952,8 +1051,8 @@ export default function ProfilePage() {
                     ))}
                   </div>
                 </div>
-                <input placeholder="نام و نام خانوادگی" style={inpSt} />
-                <input placeholder="شماره تماس" style={inpSt} />
+                <input placeholder="نام و نام خانوادگی" style={inpSt} value={meetingName} onChange={e => setMeetingName(e.target.value)} />
+                <input placeholder="شماره تماس" style={inpSt} value={meetingPhone} onChange={e => setMeetingPhone(e.target.value)} />
                 <button onClick={handleMeeting} style={{ height: 46, border: 'none', borderRadius: 13, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontFamily: 'inherit', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>تأیید رزرو جلسه</button>
               </div>
             )}

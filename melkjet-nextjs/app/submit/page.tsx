@@ -594,7 +594,11 @@ export default function SubmitPage() {
           </button>
           {step < 5 ? (
             <button
-              onClick={() => setStep((s) => Math.min(5, s + 1))}
+              onClick={() => {
+                if (step === 1 && (!form.dealType || !form.propertyType)) { alert('لطفاً نوع معامله و نوع ملک را انتخاب کنید.'); return; }
+                if (step === 2 && (!form.title.trim() || !form.area.trim())) { alert('لطفاً عنوان آگهی و متراژ را وارد کنید.'); return; }
+                setStep((s) => Math.min(5, s + 1));
+              }}
               style={{
                 padding: '12px 36px', borderRadius: 10,
                 background: 'var(--gold)', border: 'none',

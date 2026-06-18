@@ -1,9 +1,17 @@
 'use client'
 
 import { useParams } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import Nav from '../../components/Nav'
 import Footer from '../../components/Footer'
+
+// ─── Real (scraped) item shape from /api/content/item ─────────────────────────
+interface RealItem {
+  id: string; title: string; price?: string; location?: string; image?: string
+  excerpt?: string; url?: string; category?: string; type?: string; phone?: string
+  meta?: Record<string, string>
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -12,7 +20,7 @@ interface Milestone { label: string; date: string; done: boolean; active: boolea
 interface Amenity { ic: string; l: string }
 interface FloorPlan { label: string; rooms: string; size: string }
 interface Review { n: string; r: string; av: string; t: string }
-interface SimilarProject { title: string; area: string; price: string; status: string; bg: string }
+interface SimilarProject { title: string; area: string; price: string; status: string; bg: string; id?: string }
 interface DevProfile { name: string; logo: string; projects: string; delivered: string; rating: string; since: string }
 
 interface Project {
@@ -213,7 +221,7 @@ function FloorPlanSVG() {
 export default function ProjectPage() {
   const params = useParams()
   const id = (params?.id as string) || '1'
-  const project = projects[id] || projects['1']
+  const sampleProject = projects[id] || projects['1']
 
   const [activeImg, setActiveImg] = useState(0)
   const [activePlan, setActivePlan] = useState(0)
@@ -224,7 +232,40 @@ export default function ProjectPage() {
   const [resUnit, setResUnit] = useState('')
   const [resSent, setResSent] = useState(false)
 
-  const p = project
+  const [realItem, setRealItem] = useState<RealItem | null>(null)
+
+  // Sidebar consultation request state
+  const [consultSent, setConsultSent] = useState(false)
+  const [consultBusy, setConsultBusy] = useState(false)
+
+  // Fetch the real scraped item on mount / id change. 404 or empty → keep sample.
+  useEffect(() => {
+    let cancelled = false
+    setRealItem(null)
+    setActiveImg(0)
+    fetch(`/api/content/item?id=${encodeURIComponent(id)}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!cancelled && d && d.item) setRealItem(d.item as RealItem) })
+      .catch(() => { /* keep sample */ })
+    return () => { cancelled = true }
+  }, [id])
+
+  // Merge: prefer real values where present, otherwise keep the sample design defaults.
+  const p: Project = realItem
+    ? {
+        ...sampleProject,
+        title: realItem.title || sampleProject.title,
+        location: realItem.location || sampleProject.location,
+        cover: realItem.image ? 'transparent' : sampleProject.cover,
+        priceFrom: realItem.price || sampleProject.priceFrom,
+        aiSummary: realItem.excerpt || sampleProject.aiSummary,
+        status: realItem.type === 'listing' ? sampleProject.status : (realItem.category || sampleProject.status),
+      }
+    : sampleProject
+
+  // Cover image: real item provides a URL; gallery hero falls back to sample bg.
+  const coverImage = realItem?.image || ''
+  const projectName = p.title
 
   const inpSt: React.CSSProperties = {
     width: '100%', border: '1px solid var(--line2)', borderRadius: 11,
@@ -236,8 +277,49 @@ export default function ProjectPage() {
   const unitStatusColor: Record<string, string> = { available: '#5fd98a', sold: '#ff6b6b', reserved: '#c9a96a' }
 
   const handleReserve = () => {
-    if (modalStep < 3) { setModalStep(s => s + 1) }
-    else { setResSent(true) }
+    if (modalStep < 3) { setModalStep(s => s + 1); return }
+    // Final step: record the reservation as a submission, then show success.
+    const description = [
+      `رزرو واحد برای پروژه «${projectName}»`,
+      `نام: ${resName || '—'}`,
+      `واحد انتخابی: ${resUnit || '—'}`,
+      `سازنده: ${p.developer}`,
+      realItem?.id ? `شناسه پروژه: ${realItem.id}` : '',
+    ].filter(Boolean).join('\n')
+    fetch('/api/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: `رزرو واحد — ${projectName}`,
+        description,
+        phone: resPhone || undefined,
+        owner: resName || undefined,
+      }),
+    }).catch(() => { /* still show success to the user */ })
+    setResSent(true)
+  }
+
+  const handleConsult = () => {
+    if (consultSent || consultBusy) return
+    const phone = typeof window !== 'undefined'
+      ? (window.prompt('شماره تماس شما (اختیاری):') || '')
+      : ''
+    setConsultBusy(true)
+    fetch('/api/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: `درخواست مشاوره پروژه: ${projectName}`,
+        description: [
+          `درخواست مشاوره رایگان برای پروژه «${projectName}»`,
+          `سازنده: ${p.developer}`,
+          realItem?.id ? `شناسه پروژه: ${realItem.id}` : '',
+        ].filter(Boolean).join('\n'),
+        phone: phone.trim() || undefined,
+      }),
+    })
+      .catch(() => { /* still mark as sent */ })
+      .finally(() => { setConsultBusy(false); setConsultSent(true) })
   }
 
   return (
@@ -254,7 +336,11 @@ export default function ProjectPage() {
       <Nav />
 
       {/* Hero */}
-      <div style={{ position: 'relative', height: 320, background: p.cover, overflow: 'hidden' }}>
+      <div style={{ position: 'relative', height: 320, background: coverImage ? 'var(--bg2)' : p.cover, overflow: 'hidden' }}>
+        {coverImage && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={coverImage} alt={p.title} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+        )}
         <div style={{ position: 'absolute', inset: 0, backgroundImage: 'repeating-linear-gradient(135deg,transparent,transparent 14px,rgba(255,255,255,0.025) 14px,rgba(255,255,255,0.025) 15px)' }} />
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom,transparent 40%,rgba(13,13,15,0.9) 100%)' }} />
         <div style={{ position: 'absolute', top: 18, right: 18, background: 'rgba(13,13,15,0.7)', backdropFilter: 'blur(8px)', borderRadius: 10, padding: '7px 16px', fontSize: 12.5, fontWeight: 700, color: p.statusColor, border: `1px solid ${p.statusColor}55` }}>● {p.status}</div>
@@ -294,6 +380,10 @@ export default function ProjectPage() {
           {/* Gallery */}
           <section style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 20, overflow: 'hidden' }}>
             <div style={{ height: 260, background: p.gallery[activeImg]?.bg, position: 'relative' }}>
+              {coverImage && activeImg === 0 && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={coverImage} alt={p.gallery[0]?.label} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+              )}
               <div style={{ position: 'absolute', inset: 0, backgroundImage: 'repeating-linear-gradient(135deg,transparent,transparent 12px,rgba(255,255,255,0.03) 12px,rgba(255,255,255,0.03) 13px)' }} />
               <div style={{ position: 'absolute', bottom: 14, left: 14, background: 'rgba(13,13,15,0.75)', backdropFilter: 'blur(6px)', borderRadius: 8, padding: '5px 12px', fontSize: 12, color: 'var(--muted)' }}>{p.gallery[activeImg]?.label}</div>
             </div>
@@ -457,7 +547,7 @@ export default function ProjectPage() {
             <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)', marginBottom: 16 }}>پروژه‌های مشابه</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
               {p.similar.map((s, i) => (
-                <div key={i} style={{ borderRadius: 14, overflow: 'hidden', border: '1px solid var(--line)', cursor: 'pointer' }}>
+                <Link key={i} href={s.id ? `/project/${s.id}` : '/search?type=presale'} style={{ textDecoration: 'none', borderRadius: 14, overflow: 'hidden', border: '1px solid var(--line)', cursor: 'pointer', display: 'block' }}>
                   <div style={{ height: 88, background: s.bg, position: 'relative' }}>
                     <div style={{ position: 'absolute', inset: 0, backgroundImage: 'repeating-linear-gradient(135deg,transparent,transparent 9px,rgba(255,255,255,0.03) 9px,rgba(255,255,255,0.03) 10px)' }} />
                     <span style={{ position: 'absolute', top: 8, right: 8, fontSize: 10.5, fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: 'rgba(13,13,15,0.75)', color: 'var(--gold)' }}>{s.status}</span>
@@ -467,7 +557,7 @@ export default function ProjectPage() {
                     <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 5 }}>📍 {s.area}</div>
                     <div style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>{s.price}</div>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </section>
@@ -483,7 +573,7 @@ export default function ProjectPage() {
             <div style={{ fontSize: 26, fontWeight: 900, color: 'var(--gold)', marginBottom: 4 }}>{p.priceFrom}</div>
             <div style={{ fontSize: 12, color: 'var(--faint)', marginBottom: 18 }}>تا {p.priceTo} · بازده {p.yieldPct}</div>
             <button onClick={() => { setModalOpen(true); setModalStep(1); setResSent(false) }} style={{ width: '100%', padding: '14px', borderRadius: 13, border: 'none', background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontFamily: 'inherit', fontWeight: 700, fontSize: 14.5, cursor: 'pointer', marginBottom: 9 }}>رزرو واحد</button>
-            <button style={{ width: '100%', padding: '12px', borderRadius: 13, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--text)', fontFamily: 'inherit', fontWeight: 600, fontSize: 13.5, cursor: 'pointer' }}>دریافت مشاوره رایگان</button>
+            <button onClick={handleConsult} disabled={consultSent || consultBusy} style={{ width: '100%', padding: '12px', borderRadius: 13, border: `1px solid ${consultSent ? 'rgba(95,217,138,0.4)' : 'var(--line2)'}`, background: consultSent ? 'rgba(95,217,138,0.12)' : 'transparent', color: consultSent ? '#5fd98a' : 'var(--text)', fontFamily: 'inherit', fontWeight: 600, fontSize: 13.5, cursor: consultSent || consultBusy ? 'default' : 'pointer' }}>{consultSent ? '✓ درخواست مشاوره ثبت شد' : consultBusy ? 'در حال ارسال…' : 'دریافت مشاوره رایگان'}</button>
             <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 16, padding: '12px 14px', background: 'var(--bg2)', borderRadius: 11 }}>
               <span style={{ color: 'var(--gold)', fontSize: 16 }}>✦</span>
               <div>
@@ -511,14 +601,14 @@ export default function ProjectPage() {
           </div>
 
           {/* Developer link */}
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 16, display: 'flex', gap: 12, alignItems: 'center', cursor: 'pointer' }}>
+          <Link href="/directory" style={{ textDecoration: 'none', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 16, display: 'flex', gap: 12, alignItems: 'center', cursor: 'pointer' }}>
             <div style={{ width: 42, height: 42, borderRadius: 13, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16140f', fontSize: 17, fontWeight: 900 }}>{p.devProfile.logo}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.devProfile.name}</div>
               <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{p.devProfile.projects} · ★ {p.devProfile.rating}</div>
             </div>
             <span style={{ color: 'var(--gold)', fontSize: 14 }}>←</span>
-          </div>
+          </Link>
 
           {/* Map */}
           <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 16 }}>
