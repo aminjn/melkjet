@@ -12,6 +12,7 @@ export async function GET() {
     apiKey: data.ippanel?.apiKey ? '***' + data.ippanel.apiKey.slice(-4) : '',
     sender: data.ippanel?.sender || '',
     pattern: data.ippanel?.pattern || '',
+    patternVar: data.ippanel?.patternVar || 'code',
     configured: !!data.ippanel?.apiKey,
   })
 }
@@ -22,14 +23,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   }
 
-  const { apiKey, sender, pattern } = await req.json()
-  if (!apiKey || !sender || !pattern) {
-    return NextResponse.json({ error: 'همه فیلدها الزامی است' }, { status: 400 })
+  const b = await req.json()
+  const data = getAdminData()
+  const cur = data.ippanel || { apiKey: '', sender: '', pattern: '' }
+  // اگر کلید ماسک‌شده آمد، همان قبلی را نگه دار
+  const apiKey = (b.apiKey && !String(b.apiKey).startsWith('***')) ? String(b.apiKey) : cur.apiKey
+  const sender = b.sender !== undefined ? String(b.sender) : cur.sender
+  const pattern = b.pattern !== undefined ? String(b.pattern) : cur.pattern
+  const patternVar = (b.patternVar ? String(b.patternVar) : (cur.patternVar || 'code')).trim() || 'code'
+
+  if (!apiKey || !sender) {
+    return NextResponse.json({ error: 'کلید API و خط ارسال الزامی است' }, { status: 400 })
   }
 
-  const data = getAdminData()
-  data.ippanel = { apiKey, sender, pattern }
+  data.ippanel = { apiKey, sender, pattern, patternVar }
   saveAdminData(data)
-
   return NextResponse.json({ ok: true })
 }

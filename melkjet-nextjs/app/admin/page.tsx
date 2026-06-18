@@ -1920,27 +1920,32 @@ function ModelSelect({ models, value, onChange, only }: { models: string[]; valu
 
 // ─── IPPanel SMS config ───────────────────────────────────────────────────
 function IPPanelConfig() {
-  const [f, setF] = useState({ apiKey: '', sender: '', pattern: '' })
+  const [f, setF] = useState({ apiKey: '', sender: '', pattern: '', patternVar: 'code' })
   const [masked, setMasked] = useState('')
   const [msg, setMsg] = useState('')
-  useEffect(() => { fetch('/api/admin/ippanel-config').then(r => r.ok ? r.json() : null).then(d => { if (d) { setMasked(d.apiKey || ''); setF(p => ({ ...p, sender: d.sender || '', pattern: d.pattern || '' })) } }) }, [])
+  useEffect(() => { fetch('/api/admin/ippanel-config').then(r => r.ok ? r.json() : null).then(d => { if (d) { setMasked(d.apiKey || ''); setF(p => ({ ...p, sender: d.sender || '', pattern: d.pattern || '', patternVar: d.patternVar || 'code' })) } }) }, [])
   const save = async () => {
     setMsg('')
-    const r = await fetch('/api/admin/ippanel-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(f) })
+    const payload: any = { sender: f.sender, pattern: f.pattern, patternVar: f.patternVar }
+    if (f.apiKey.trim()) payload.apiKey = f.apiKey.trim()
+    const r = await fetch('/api/admin/ippanel-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     const d = await r.json()
     setMsg(r.ok ? '✓ ذخیره شد' : `⚠ ${d.error || 'خطا'}`)
-    if (r.ok && f.apiKey) setMasked('***' + f.apiKey.slice(-4))
+    if (r.ok && f.apiKey.trim()) { setMasked('***' + f.apiKey.trim().slice(-4)); setF(p => ({ ...p, apiKey: '' })) }
   }
   const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', direction: 'ltr', textAlign: 'left' }
   const lab: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', marginBottom: 5, display: 'block', fontWeight: 600 }
   return (
     <Card style={{ marginBottom: 14 }}>
       <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>سرویس پیامک (IPPanel) {masked && <span style={{ color: '#5fd98a', fontSize: 12 }}>● تنظیم‌شده ({masked})</span>}</div>
-      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>کلید API و خط ارسال را از پنل IPPanel بگیر. «کد پترن» برای پیامک کد ورود (OTP) و خط ارسال برای کمپین‌های پیامکی استفاده می‌شود.</div>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.9 }}>
+        کلید API و خط ارسال را از پنل IPPanel بگیر. برای **کد ورود (OTP)** باید در پنل IPPanel یک «پترن» بسازی (مثل «کد ورود ملک‌جت: %code%») و **کد پترن** آن (یک عدد) را اینجا بگذاری. «نام متغیر پترن» باید دقیقاً با نام متغیری که در پترن تعریف کردی یکی باشد (پیش‌فرض <span style={{ direction: 'ltr', display: 'inline-block' }}>code</span>).
+      </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }} className="mjsa-2col">
-        <div style={{ gridColumn: '1 / -1' }}><label style={lab}>کلید API</label><input style={inp} placeholder="کلید IPPanel" value={f.apiKey} onChange={e => setF({ ...f, apiKey: e.target.value })} /></div>
-        <div><label style={lab}>خط ارسال (Sender)</label><input style={inp} placeholder="3000xxxx" value={f.sender} onChange={e => setF({ ...f, sender: e.target.value })} /></div>
-        <div><label style={lab}>کد پترن (OTP)</label><input style={inp} placeholder="pattern code" value={f.pattern} onChange={e => setF({ ...f, pattern: e.target.value })} /></div>
+        <div style={{ gridColumn: '1 / -1' }}><label style={lab}>کلید API {masked && <span style={{ color: 'var(--faint)' }}>(برای تغییر، مقدار جدید بزن)</span>}</label><input style={inp} placeholder={masked || 'کلید IPPanel'} value={f.apiKey} onChange={e => setF({ ...f, apiKey: e.target.value })} /></div>
+        <div><label style={lab}>خط ارسال (Sender)</label><input style={inp} placeholder="3000xxxx یا +98..." value={f.sender} onChange={e => setF({ ...f, sender: e.target.value })} /></div>
+        <div><label style={lab}>کد پترن (برای OTP)</label><input style={inp} placeholder="مثلاً 123456" value={f.pattern} onChange={e => setF({ ...f, pattern: e.target.value })} /></div>
+        <div><label style={lab}>نام متغیر پترن</label><input style={inp} placeholder="code" value={f.patternVar} onChange={e => setF({ ...f, patternVar: e.target.value })} /></div>
       </div>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
         <GoldButton onClick={save}>ذخیره</GoldButton>

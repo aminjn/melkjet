@@ -19,6 +19,7 @@ export interface AdminData {
     apiKey: string
     sender: string
     pattern: string
+    patternVar?: string   // نام متغیر کد در پترن IPPanel (پیش‌فرض: code)
   }
   smtp?: {
     host: string
