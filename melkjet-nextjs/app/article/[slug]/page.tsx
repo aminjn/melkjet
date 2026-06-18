@@ -321,7 +321,7 @@ export default function ArticlePage() {
             {/* Article Body — Markdown rendered to HTML */}
             <div id="intro" style={{ fontSize: 16, lineHeight: 2.1, color: 'var(--text)' }}>
               {body ? (
-                <div className="mj-article-body" dangerouslySetInnerHTML={{ __html: mdToHtml(body) }} />
+                <div className="mj-article-body" dangerouslySetInnerHTML={{ __html: /<\/?[a-z][\s\S]*>/i.test(body) ? body : mdToHtml(body) }} />
               ) : (
                 <p style={{ marginBottom: 18, color: 'var(--muted)' }}>
                   متن کامل این مقاله در دسترس نیست. برای مطالعه‌ی کامل به منبع اصلی مراجعه کنید.

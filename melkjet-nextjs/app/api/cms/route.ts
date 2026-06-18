@@ -20,12 +20,21 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ articles: listArticles().map(toArticle) })
 }
 
+// حذف اسکریپت و هندلرهای خطرناک از HTML ذخیره‌شده
+function sanitize(html: string): string {
+  return String(html || '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<\/?(?:script|object|embed)[^>]*>/gi, '')
+    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/javascript:/gi, '')
+}
+
 export async function POST(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای انتشار باید وارد شوید' }, { status: 401 })
   const b = await req.json().catch(() => ({})) as ArticleInput
   if (!b.title || !b.body) return NextResponse.json({ error: 'عنوان و متن مقاله الزامی است' }, { status: 400 })
-  const it = addArticle({ ...b, author: b.author || (s as any).name || (s as any).phone })
+  const it = addArticle({ ...b, body: sanitize(b.body), author: b.author || (s as any).name || (s as any).phone })
   return NextResponse.json({ ok: true, id: it.id, article: toArticle(it) })
 }
 
@@ -34,6 +43,7 @@ export async function PATCH(req: NextRequest) {
   if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
   const b = await req.json().catch(() => ({}))
   if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
+  if (typeof b.body === 'string') b.body = sanitize(b.body)
   const it = updateArticle(b.id, b)
   if (!it) return NextResponse.json({ error: 'مقاله یافت نشد' }, { status: 404 })
   return NextResponse.json({ ok: true, article: toArticle(it) })

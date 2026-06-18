@@ -1,6 +1,7 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { mdToHtml } from '@/app/lib/markdown'
+import RichEditor from '@/app/components/RichEditor'
 
 // ویرایشگر مقالهٔ شبیه وردپرس: لیست مقالات + ویرایشگر کامل با سئو، برچسب،
 // دسته، تصویر شاخص، پیش‌نویس/انتشار و تولید با هوش مصنوعی (انسان‌نما).
@@ -23,10 +24,8 @@ export default function ArticleEditor({ compact }: { compact?: boolean }) {
   const [tagInput, setTagInput] = useState('')
   const [busy, setBusy] = useState('')
   const [msg, setMsg] = useState('')
-  const [preview, setPreview] = useState(false)
   const [aiTopic, setAiTopic] = useState('')
   const [cats, setCats] = useState<string[]>(DEFAULT_CATS)
-  const bodyRef = useRef<HTMLTextAreaElement | null>(null)
 
   const load = () => fetch('/api/cms').then(r => r.ok ? r.json() : { articles: [] }).then(d => setArticles(d.articles || []))
   useEffect(() => { load() }, [])
@@ -38,10 +37,10 @@ export default function ArticleEditor({ compact }: { compact?: boolean }) {
   }, [])
 
   const set = (k: string, v: any) => setF(p => ({ ...p, [k]: v }))
-  const newPost = () => { setF(empty()); setTab('edit'); setMsg(''); setPreview(false) }
+  const newPost = () => { setF(empty()); setTab('edit'); setMsg('') }
   const editPost = async (id: string) => {
     const d = await fetch(`/api/cms?id=${id}`).then(r => r.json())
-    if (d.article) { setF({ ...d.article }); setTab('edit'); setMsg(''); setPreview(false) }
+    if (d.article) { setF({ ...d.article }); setTab('edit'); setMsg('') }
   }
   const slugFromTitle = () => { if (!f.slug && f.title) set('slug', f.title.trim().replace(/\s+/g, '-').slice(0, 70)) }
 
@@ -75,30 +74,23 @@ export default function ArticleEditor({ compact }: { compact?: boolean }) {
       const r = await fetch('/api/cms/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic, focusKeyword: f.focusKeyword, category: f.category }) })
       const d = await r.json()
       if (!d.ok) { setMsg('⚠ ' + (d.error || 'خطا در تولید')); return }
-      setF(p => ({ ...p, title: d.title || p.title, slug: d.slug || p.slug, body: d.body || p.body, excerpt: d.excerpt || p.excerpt, metaDescription: d.metaDescription || p.metaDescription, focusKeyword: d.focusKeyword || p.focusKeyword, seoTitle: d.title || p.seoTitle, tags: d.tags?.length ? d.tags : p.tags }))
+      // خروجی AI به‌صورت Markdown است → به HTML تبدیل می‌کنیم تا در ویرایشگر غنی قابل ویرایش باشد
+      const htmlBody = d.body ? mdToHtml(d.body) : ''
+      setF(p => ({ ...p, title: d.title || p.title, slug: d.slug || p.slug, body: htmlBody || p.body, excerpt: d.excerpt || p.excerpt, metaDescription: d.metaDescription || p.metaDescription, focusKeyword: d.focusKeyword || p.focusKeyword, seoTitle: d.title || p.seoTitle, tags: d.tags?.length ? d.tags : p.tags }))
       setMsg('✓ مقاله توسط هوش مصنوعی نوشته شد — بازبینی و منتشر کن')
     } catch { setMsg('⚠ خطا در ارتباط') } finally { setBusy('') }
   }
 
-  // درج Markdown در محل مکان‌نما
-  const insert = (before: string, after = '') => {
-    const ta = bodyRef.current; if (!ta) return
-    const s = ta.selectionStart, e = ta.selectionEnd, val = f.body
-    const sel = val.slice(s, e) || 'متن'
-    const next = val.slice(0, s) + before + sel + after + val.slice(e)
-    set('body', next)
-    setTimeout(() => { ta.focus(); ta.selectionStart = s + before.length; ta.selectionEnd = s + before.length + sel.length }, 0)
-  }
-
-  // امتیاز سئو
+  // امتیاز سئو (متن HTML را برای شمارش کلمه پاک می‌کنیم)
   const seo = (() => {
     let score = 0; const tips: string[] = []
     const kw = f.focusKeyword.trim()
-    const words = f.body.trim().split(/\s+/).filter(Boolean).length
-    if (kw) { score += 20; if (f.title.includes(kw)) score += 20; else tips.push('کلمهٔ کلیدی در عنوان نیست'); if (f.body.includes(kw)) score += 15; else tips.push('کلمهٔ کلیدی در متن نیست'); if (f.metaDescription.includes(kw)) score += 10; else tips.push('کلمهٔ کلیدی در توضیح متا نیست') } else tips.push('کلمهٔ کلیدی اصلی را وارد کن')
+    const plain = f.body.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ')
+    const words = plain.trim().split(/\s+/).filter(Boolean).length
+    if (kw) { score += 20; if (f.title.includes(kw)) score += 20; else tips.push('کلمهٔ کلیدی در عنوان نیست'); if (plain.includes(kw)) score += 15; else tips.push('کلمهٔ کلیدی در متن نیست'); if (f.metaDescription.includes(kw)) score += 10; else tips.push('کلمهٔ کلیدی در توضیح متا نیست') } else tips.push('کلمهٔ کلیدی اصلی را وارد کن')
     if (words >= 300) score += 15; else tips.push('متن کوتاه است (زیر ۳۰۰ کلمه)')
     if (f.metaDescription.length >= 70 && f.metaDescription.length <= 160) score += 10; else tips.push('توضیح متا ۷۰ تا ۱۶۰ کاراکتر باشد')
-    if (/^##\s|\n##\s/m.test(f.body)) score += 10; else tips.push('زیرعنوان (##) اضافه کن')
+    if (/<h[23]/i.test(f.body)) score += 10; else tips.push('زیرعنوان (تیتر ۲) اضافه کن')
     return { score: Math.min(100, score), tips, words }
   })()
   const seoColor = seo.score >= 80 ? '#5fd98a' : seo.score >= 50 ? 'var(--gold)' : '#e7674a'
@@ -172,18 +164,9 @@ export default function ArticleEditor({ compact }: { compact?: boolean }) {
             </div>
           </div>
 
-          {/* toolbar + body */}
-          <div style={box}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
-              {[['## ', 'زیرعنوان'], ['**', 'بولد'], ['- ', 'فهرست'], ['[', 'پیوند']].map(([b, t], i) => (
-                <button key={i} onClick={() => b === '**' ? insert('**', '**') : b === '[' ? insert('[', '](https://)') : insert(b as string)} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 7, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--muted)', cursor: 'pointer', fontFamily: 'inherit' }}>{t}</button>
-              ))}
-              <div style={{ flex: 1 }} />
-              <button onClick={() => setPreview(p => !p)} style={{ fontSize: 12, padding: '4px 12px', borderRadius: 7, border: '1px solid var(--line2)', background: preview ? 'var(--goldDim)' : 'var(--bg2)', color: preview ? 'var(--gold)' : 'var(--muted)', cursor: 'pointer', fontFamily: 'inherit' }}>{preview ? 'ویرایش' : 'پیش‌نمایش'}</button>
-            </div>
-            {preview
-              ? <div className="mj-article-body" style={{ minHeight: 320, fontSize: 14, lineHeight: 2 }} dangerouslySetInnerHTML={{ __html: mdToHtml(f.body) }} />
-              : <textarea ref={bodyRef} value={f.body} onChange={e => set('body', e.target.value)} placeholder="متن مقاله را اینجا بنویس (Markdown پشتیبانی می‌شود)…" style={{ ...inp, minHeight: 340, resize: 'vertical', lineHeight: 1.9 }} />}
+          {/* WYSIWYG body — مثل وردپرس: قالب‌بندی + عکس/ویدئو */}
+          <div>
+            <RichEditor value={f.body} onChange={v => set('body', v)} />
             <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 6 }}>{seo.words.toLocaleString('fa-IR')} کلمه</div>
           </div>
         </div>

@@ -10,6 +10,7 @@ const navLinks = [
   { href: '/directory', label: 'مشاوران' },
   { href: '/neighborhood/tehran', label: 'تحلیل بازار' },
   { href: '/plan-ai', label: 'استودیو پلان و سه‌بعدی' },
+  { href: '/content', label: 'مقالات و وبلاگ' },
 ]
 
 export default function Nav() {
