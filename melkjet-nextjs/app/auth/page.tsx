@@ -6,7 +6,18 @@ import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
 
 type Tab = 'phone' | 'email'
-type OtpStep = 'enter-phone' | 'enter-code'
+type OtpStep = 'enter-phone' | 'enter-code' | 'onboard'
+
+const ROLES = [
+  { id: 'buyer', label: 'خریدار / مستأجر', icon: '🔑' },
+  { id: 'seller', label: 'فروشنده / مالک', icon: '🏠' },
+  { id: 'investor', label: 'سرمایه‌گذار', icon: '📈' },
+  { id: 'advisor', label: 'مشاور املاک', icon: '🤝' },
+  { id: 'agency', label: 'آژانس املاک', icon: '🏢' },
+  { id: 'builder', label: 'سازنده / انبوه‌ساز', icon: '🏗' },
+  { id: 'materials', label: 'تأمین‌کنندهٔ مصالح', icon: '🧱' },
+  { id: 'legal', label: 'مشاور حقوقی', icon: '⚖' },
+]
 
 export default function AuthPage() {
   const router = useRouter()
@@ -17,6 +28,10 @@ export default function AuthPage() {
   const [otpStep, setOtpStep] = useState<OtpStep>('enter-phone')
   const [code, setCode] = useState('')
   const [countdown, setCountdown] = useState(0)
+
+  // Onboarding state (new users)
+  const [name, setName] = useState('')
+  const [selectedRole, setSelectedRole] = useState('')
 
   // Email state
   const [email, setEmail] = useState('')
@@ -67,7 +82,26 @@ export default function AuthPage() {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'کد اشتباه است'); return }
-      router.push(data.role === 'super_admin' ? '/admin' : '/')
+      if (data.role === 'super_admin') { router.push('/admin'); return }
+      if (data.needsOnboarding) { setOtpStep('onboard'); return }   // کاربر جدید → تکمیل پروفایل
+      router.push(data.redirect || '/buyer')
+    } catch { setError('خطا در اتصال به سرور') }
+    finally { setLoading(false) }
+  }
+
+  async function submitOnboarding() {
+    setError('')
+    if (!name.trim()) { setError('نام خود را وارد کنید'); return }
+    if (!selectedRole) { setError('نقش خود را انتخاب کنید'); return }
+    setLoading(true)
+    try {
+      const res = await fetch('/api/auth/profile', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), role: selectedRole }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'خطا'); return }
+      router.push(data.redirect || '/buyer')
     } catch { setError('خطا در اتصال به سرور') }
     finally { setLoading(false) }
   }
@@ -84,7 +118,7 @@ export default function AuthPage() {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'ایمیل یا رمز اشتباه است'); return }
-      router.push(data.role === 'super_admin' ? '/admin' : '/')
+      router.push(data.role === 'super_admin' ? '/admin' : (data.redirect || '/buyer'))
     } catch { setError('خطا در اتصال به سرور') }
     finally { setLoading(false) }
   }
@@ -154,7 +188,7 @@ export default function AuthPage() {
 
             {/* Tabs: ورود با موبایل | ورود با ایمیل */}
             <div style={{ display: 'flex', borderRadius: 12, background: 'var(--bg2)', border: '1px solid var(--line)', padding: 4, marginBottom: 28, gap: 4 }}>
-              {([['phone', 'ورود با موبایل'], ['email', 'ورود با ایمیل']] as const).map(([t, label]) => (
+              {([['phone', 'ورود / ثبت‌نام'], ['email', 'ورود با ایمیل']] as const).map(([t, label]) => (
                 <button
                   key={t}
                   onClick={() => { setTab(t); setError(''); setOtpStep('enter-phone') }}
@@ -195,7 +229,7 @@ export default function AuthPage() {
                       {loading ? 'در حال ارسال...' : 'ارسال کد تایید'}
                     </button>
                   </>
-                ) : (
+                ) : otpStep === 'enter-code' ? (
                   <>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
                       <button onClick={() => { setOtpStep('enter-phone'); setCode(''); setError('') }} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 22, padding: 0 }}>←</button>
@@ -226,6 +260,35 @@ export default function AuthPage() {
                         : <button onClick={sendOTP} style={{ background: 'none', border: 'none', color: 'var(--gold)', cursor: 'pointer', fontSize: 13, fontWeight: 700, textDecoration: 'underline' }}>ارسال مجدد کد</button>
                       }
                     </div>
+                  </>
+                ) : (
+                  /* ─── Onboarding (new user): name + role ─── */
+                  <>
+                    <div style={{ marginBottom: 16 }}>
+                      <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 4px' }}>به ملک‌جت خوش آمدی! 🎉</p>
+                      <p style={{ fontSize: 12.5, color: 'var(--faint)', margin: 0 }}>برای تکمیل ثبت‌نام، نام و نقشت را انتخاب کن.</p>
+                    </div>
+                    <div style={fieldStyle}>
+                      <label style={labelStyle}>نام و نام خانوادگی</label>
+                      <input value={name} onChange={e => setName(e.target.value)} placeholder="مثلاً علی رضایی" style={inputStyle} autoFocus />
+                    </div>
+                    <div style={fieldStyle}>
+                      <label style={labelStyle}>نقش شما در ملک‌جت</label>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        {ROLES.map(r => (
+                          <button key={r.id} onClick={() => setSelectedRole(r.id)} style={{
+                            display: 'flex', alignItems: 'center', gap: 8, padding: '11px 12px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5, textAlign: 'right',
+                            border: `1px solid ${selectedRole === r.id ? 'var(--gold)' : 'var(--line)'}`,
+                            background: selectedRole === r.id ? 'var(--goldDim)' : 'var(--bg2)',
+                            color: selectedRole === r.id ? 'var(--gold)' : 'var(--text)', fontWeight: selectedRole === r.id ? 700 : 500,
+                          }}><span style={{ fontSize: 16 }}>{r.icon}</span>{r.label}</button>
+                        ))}
+                      </div>
+                    </div>
+                    {error && <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 9, background: 'rgba(220,53,69,.1)', border: '1px solid rgba(220,53,69,.25)', color: '#e25563', fontSize: 13 }}>{error}</div>}
+                    <button onClick={submitOnboarding} disabled={loading} style={btnStyle}>
+                      {loading ? 'در حال ثبت...' : 'تکمیل ثبت‌نام و ورود'}
+                    </button>
                   </>
                 )}
               </>

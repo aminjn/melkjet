@@ -60,6 +60,7 @@ next-env.d.ts
 .media/
 .promotion-data.json
 .builder-data.json
+.account-data.json
 .sites-data.json
 .cms-data.json
 .category-data.json
