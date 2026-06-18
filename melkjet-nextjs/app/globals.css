@@ -219,4 +219,7 @@ body {
 /* Global safe area */
 body { padding-bottom: env(safe-area-inset-bottom); }
 
-.mjwb-tpl:hover{border-color:var(--gold)!important;transform:translateY(-1px)}
+
+.mjwb-tplcard:hover{border-color:var(--gold)!important;transform:translateY(-2px)}
+@media(max-width:880px){.mjwb-tplgrid{grid-template-columns:1fr 1fr!important}}
+@media(max-width:560px){.mjwb-tplgrid{grid-template-columns:1fr!important}}

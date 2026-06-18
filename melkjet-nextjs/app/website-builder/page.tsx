@@ -39,11 +39,6 @@ const PROFILE_VISUAL: Record<string, { grad: string; icon: string }> = {
   'حقوقی': { grad: 'linear-gradient(135deg,#334155,#64748b)', icon: '⚖️' },
   'عمومی': { grad: 'linear-gradient(135deg,#a16207,#d4af37)', icon: '✨' },
 }
-// ارتفاع نسبی هر بلوک در پیش‌نمای مینیاتوری
-const BLOCK_BAR: Record<string, number> = {
-  hero: 14, search: 6, listings: 9, services: 8, about: 7, stats: 6,
-  gallery: 10, testimonials: 7, cta: 5, contact: 6, footer: 4,
-}
 
 // نگاشت مسیر داشبورد کاربر به گروه پروفایل قالب‌ها
 const DASH_TO_PROFILE: Record<string, string> = {
@@ -343,6 +338,39 @@ function BlockPreview({ block, selected, onSelect, onUp, onDown, onDelete }: {
   )
 }
 
+// پیش‌نمای مینیاتوری و حرفه‌ای یک قالب: یک ماکت واقعی از سایت بر اساس بلوک‌هایش
+function TemplateThumb({ tpl }: { tpl: typeof STARTER_TEMPLATES[0] }) {
+  const v = PROFILE_VISUAL[tpl.profile] || PROFILE_VISUAL['عمومی']
+  const block = (b: string, i: number) => {
+    switch (b) {
+      case 'hero': return <div key={i} style={{ background: v.grad, padding: '16px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
+        <div style={{ height: 6, width: '58%', background: 'rgba(255,255,255,.95)', borderRadius: 3 }} />
+        <div style={{ height: 4, width: '42%', background: 'rgba(255,255,255,.6)', borderRadius: 2 }} />
+        <div style={{ height: 10, width: '26%', background: '#fff', borderRadius: 5, marginTop: 4 }} />
+      </div>
+      case 'search': return <div key={i} style={{ padding: '9px 12px', background: '#fff' }}><div style={{ height: 11, background: '#f0f0f2', border: '1px solid #e4e4e7', borderRadius: 6 }} /></div>
+      case 'listings': return <div key={i} style={{ padding: '9px 12px', background: '#fff', display: 'flex', gap: 6 }}>{[0, 1, 2].map(k => <div key={k} style={{ flex: 1 }}><div style={{ height: 24, background: '#e7e7ea', borderRadius: 4, marginBottom: 4 }} /><div style={{ height: 3, width: '80%', background: '#dcdce0', borderRadius: 2, marginBottom: 3 }} /><div style={{ height: 3, width: '55%', background: '#e6e6ea', borderRadius: 2 }} /></div>)}</div>
+      case 'gallery': return <div key={i} style={{ padding: '9px 12px', background: '#fff', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 4 }}>{[0, 1, 2, 3].map(k => <div key={k} style={{ height: 22, background: '#e3e3e7', borderRadius: 3 }} />)}</div>
+      case 'services': return <div key={i} style={{ padding: '9px 12px', background: '#faf9f7', display: 'flex', gap: 6 }}>{[0, 1, 2].map(k => <div key={k} style={{ flex: 1, padding: 7, background: '#fff', border: '1px solid #eee', borderRadius: 5, textAlign: 'center' }}><div style={{ width: 11, height: 11, borderRadius: 3, background: v.grad, margin: '0 auto 5px' }} /><div style={{ height: 3, width: '70%', background: '#ddd', borderRadius: 2, margin: '0 auto' }} /></div>)}</div>
+      case 'stats': return <div key={i} style={{ padding: '11px 12px', background: '#f5f4f1', display: 'flex', justifyContent: 'space-around' }}>{[0, 1, 2, 3].map(k => <div key={k} style={{ textAlign: 'center' }}><div style={{ height: 8, width: 20, background: '#caa94a', borderRadius: 2, marginBottom: 3 }} /><div style={{ height: 3, width: 26, background: '#ccc', borderRadius: 2 }} /></div>)}</div>
+      case 'about': return <div key={i} style={{ padding: '9px 12px', background: '#fff', display: 'flex', gap: 8, alignItems: 'center' }}><div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>{[90, 80, 70, 50].map((w, k) => <div key={k} style={{ height: 3, width: `${w}%`, background: '#dcdce0', borderRadius: 2 }} />)}</div><div style={{ width: 44, height: 34, background: '#e7e7ea', borderRadius: 5 }} /></div>
+      case 'testimonials': return <div key={i} style={{ padding: '9px 12px', background: '#faf9f7' }}><div style={{ padding: 8, background: '#fff', border: '1px solid #eee', borderRadius: 6 }}>{[85, 65].map((w, k) => <div key={k} style={{ height: 3, width: `${w}%`, background: '#dadade', borderRadius: 2, marginBottom: 4 }} />)}<div style={{ height: 6, width: 28, background: '#e3e3e7', borderRadius: 3, marginTop: 5 }} /></div></div>
+      case 'cta': return <div key={i} style={{ padding: '14px 12px', background: v.grad, display: 'flex', justifyContent: 'center' }}><div style={{ height: 10, width: '32%', background: '#fff', borderRadius: 5 }} /></div>
+      case 'contact': return <div key={i} style={{ padding: '9px 12px', background: '#fff', display: 'flex', flexDirection: 'column', gap: 5 }}>{[100, 100, 60].map((w, k) => <div key={k} style={{ height: 9, width: `${w}%`, background: '#f1f1f3', border: '1px solid #e6e6e6', borderRadius: 3 }} />)}</div>
+      case 'footer': return <div key={i} style={{ padding: '11px 12px', background: '#1a1a1f', display: 'flex', justifyContent: 'space-between' }}>{[0, 1, 2].map(k => <div key={k} style={{ height: 3, width: 32, background: '#3a3a42', borderRadius: 2 }} />)}</div>
+      default: return null
+    }
+  }
+  return (
+    <div style={{ background: '#fff', borderRadius: 9, overflow: 'hidden', border: '1px solid var(--line)' }}>
+      <div style={{ height: 16, background: '#ececef', display: 'flex', alignItems: 'center', gap: 4, padding: '0 7px' }}>
+        {['#f25f57', '#fabc2e', '#2aca44'].map(c => <span key={c} style={{ width: 6, height: 6, borderRadius: '50%', background: c }} />)}
+      </div>
+      <div style={{ maxHeight: 220, overflow: 'hidden' }}>{tpl.blocks.map((b, i) => block(b, i))}</div>
+    </div>
+  )
+}
+
 export default function WebsiteBuilderPage() {
   const [blocks, setBlocks] = useState<Block[]>([
     makeBlock('hero'),
@@ -353,6 +381,9 @@ export default function WebsiteBuilderPage() {
   const [tplFilter, setTplFilter] = useState('عمومی')
   // پروفایل قفل‌شده بر اساس نقش کاربر؛ null یعنی مهمان/ادمین (می‌تواند همه را ببیند)
   const [lockedProfile, setLockedProfile] = useState<string | null>(null)
+  const [tplModal, setTplModal] = useState(false)
+  // مسیر بازگشت = پنل خودِ کاربر (نه صفحهٔ اصلی) تا «از پنل بیرون نپرد»
+  const [backHref, setBackHref] = useState('/')
   const [device, setDevice] = useState<Device>('desktop')
   const [activeTab, setActiveTab] = useState<ActiveTab>('seo')
   const [seoTitle, setSeoTitle] = useState('آژانس ملکی نمونه | خرید و فروش ملک')
@@ -379,6 +410,7 @@ export default function WebsiteBuilderPage() {
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (cancelled || !data) return
+        if (data.dash) setBackHref(data.dash as string)
         // اگر نقش کاربر به یک پروفایل مشخص نگاشت شود، فقط همان را می‌بیند (قفل).
         // ادمین/داشبورد ناشناخته → قفل نمی‌شود تا بتواند همه را مرور کند.
         const mapped = DASH_TO_PROFILE[data.dash as string]
@@ -505,9 +537,9 @@ export default function WebsiteBuilderPage() {
         display: 'flex', alignItems: 'center', gap: 12, padding: '0 20px', height: 52,
         zIndex: 100,
       }}>
-        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 5, textDecoration: 'none', color: 'var(--muted)', fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
+        <Link href={backHref} style={{ display: 'flex', alignItems: 'center', gap: 5, textDecoration: 'none', color: 'var(--muted)', fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
           <span style={{ fontSize: 16, lineHeight: 1 }}>‹</span>
-          <span>بازگشت</span>
+          <span>بازگشت به پنل</span>
         </Link>
 
         <div style={{ width: 1, height: 24, background: 'var(--line)', flexShrink: 0 }} />
@@ -521,6 +553,14 @@ export default function WebsiteBuilderPage() {
             <div style={{ fontSize: 10, color: 'var(--muted)', direction: 'ltr', lineHeight: 1.3 }}>melkjet.com/{slug}</div>
           </div>
         </div>
+
+        <button
+          onClick={() => setTplModal(true)}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 9, border: '1px solid var(--gold)', background: 'var(--goldDim)', color: 'var(--gold)', cursor: 'pointer', fontSize: 12.5, fontWeight: 800, fontFamily: 'inherit', flexShrink: 0 }}
+        >
+          <span style={{ fontSize: 14 }}>▦</span>
+          <span>قالب‌ها</span>
+        </button>
 
         <div style={{ flex: 1 }} />
 
@@ -588,54 +628,19 @@ export default function WebsiteBuilderPage() {
           background: 'var(--bg2)', overflowY: 'auto', padding: '16px 0',
         }}>
           <div style={{ padding: '0 14px', marginBottom: 4 }}>
-            {(() => {
-              const visible = STARTER_TEMPLATES.filter(t => t.profile === tplFilter)
-              return <>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', marginBottom: 6 }}>قالب‌های {tplFilter} ({visible.length.toLocaleString('fa-IR')})</div>
-            {lockedProfile ? (
-              <div style={{ fontSize: 9.5, color: 'var(--gold)', marginBottom: 10, lineHeight: 1.5 }}>قالب‌های مخصوص پروفایل شما — {lockedProfile}</div>
-            ) : (
-              // فقط مهمان/ادمین می‌تواند بین پروفایل‌ها جابه‌جا شود
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
-                {PROFILE_GROUPS.map(pf => (
-                  <button key={pf} onClick={() => setTplFilter(pf)} style={{ fontSize: 10.5, padding: '4px 9px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${tplFilter === pf ? 'var(--gold)' : 'var(--line)'}`, background: tplFilter === pf ? 'var(--goldDim)' : 'transparent', color: tplFilter === pf ? 'var(--gold)' : 'var(--muted)' }}>{pf}</button>
-                ))}
-              </div>
-            )}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 420, overflowY: 'auto' }}>
-              {visible.map(tpl => {
-                const v = PROFILE_VISUAL[tpl.profile] || PROFILE_VISUAL['عمومی']
-                return (
-                <button
-                  key={tpl.id}
-                  onClick={() => loadTemplate(tpl)}
-                  className="mjwb-tpl"
-                  style={{
-                    textAlign: 'right', padding: 0, borderRadius: 12, overflow: 'hidden',
-                    border: '1px solid var(--line)', background: 'var(--surface)',
-                    cursor: 'pointer', transition: 'all .15s', width: '100%',
-                  }}
-                >
-                  {/* پیش‌نمای مینیاتوری گرافیکی بر اساس بلوک‌های قالب */}
-                  <div style={{ position: 'relative', height: 70, background: v.grad, padding: '8px 10px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 3 }}>
-                    <span style={{ position: 'absolute', top: 6, left: 8, fontSize: 16, opacity: 0.95 }}>{v.icon}</span>
-                    {tpl.blocks.slice(0, 5).map((b, i) => (
-                      <div key={i} style={{
-                        height: 3, borderRadius: 2,
-                        width: `${Math.min(100, (BLOCK_BAR[b] || 6) * 7 + 18)}%`,
-                        background: i === 0 ? 'rgba(255,255,255,.92)' : 'rgba(255,255,255,.5)',
-                      }} />
-                    ))}
-                  </div>
-                  <div style={{ padding: '8px 11px 10px' }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text)', marginBottom: 2 }}>{tpl.name}</div>
-                    <div style={{ fontSize: 10, color: 'var(--faint)', lineHeight: 1.4 }}>{tpl.desc}</div>
-                  </div>
-                </button>
-              )})}
-            </div>
-              </>
-            })()}
+            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', marginBottom: 8 }}>شروع سریع</div>
+            <button
+              onClick={() => setTplModal(true)}
+              style={{ width: '100%', padding: '14px 12px', borderRadius: 12, border: '1px solid var(--gold)', background: 'var(--goldDim)', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'right', display: 'flex', alignItems: 'center', gap: 10 }}
+            >
+              <span style={{ fontSize: 22, lineHeight: 1 }}>▦</span>
+              <span style={{ display: 'block' }}>
+                <span style={{ display: 'block', fontSize: 13, fontWeight: 800, color: 'var(--gold)' }}>انتخاب قالب حرفه‌ای</span>
+                <span style={{ display: 'block', fontSize: 10.5, color: 'var(--muted)', marginTop: 2 }}>
+                  {lockedProfile ? `قالب‌های مخصوص ${lockedProfile}` : 'مشاهدهٔ قالب‌های آماده'}
+                </span>
+              </span>
+            </button>
           </div>
 
           <div style={{ height: 1, background: 'var(--line)', margin: '14px 0' }} />
@@ -988,6 +993,54 @@ export default function WebsiteBuilderPage() {
               >
                 بستن
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* پاپ‌آپ انتخاب قالب — واکنش‌گرا (موبایل/دسکتاپ) */}
+      {tplModal && (
+        <div
+          onClick={() => setTplModal(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,.62)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '4vh 14px', overflowY: 'auto' }}
+        >
+          <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 1000, background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 18, overflow: 'hidden', boxShadow: '0 30px 80px -20px rgba(0,0,0,.6)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '16px 22px', borderBottom: '1px solid var(--line)', position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 2 }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800 }}>انتخاب قالب حرفه‌ای</div>
+                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 3 }}>
+                  {lockedProfile ? `قالب‌های مخصوص پروفایل ${lockedProfile}` : 'قالب‌های آماده'} — روی هر قالب بزنید تا اعمال شود
+                </div>
+              </div>
+              <button onClick={() => setTplModal(false)} style={{ flexShrink: 0, width: 36, height: 36, borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--text)', cursor: 'pointer', fontSize: 16, fontFamily: 'inherit' }}>✕</button>
+            </div>
+
+            {/* فقط مهمان/ادمین می‌تواند پروفایل دیگری را مرور کند */}
+            {!lockedProfile && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '12px 22px 0' }}>
+                {PROFILE_GROUPS.map(pf => (
+                  <button key={pf} onClick={() => setTplFilter(pf)} style={{ fontSize: 12, padding: '5px 12px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${tplFilter === pf ? 'var(--gold)' : 'var(--line)'}`, background: tplFilter === pf ? 'var(--goldDim)' : 'transparent', color: tplFilter === pf ? 'var(--gold)' : 'var(--muted)' }}>{pf}</button>
+                ))}
+              </div>
+            )}
+
+            <div className="mjwb-tplgrid" style={{ padding: 22, display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 }}>
+              {STARTER_TEMPLATES.filter(t => t.profile === tplFilter).map(tpl => (
+                <button
+                  key={tpl.id}
+                  onClick={() => { loadTemplate(tpl); setTplModal(false) }}
+                  className="mjwb-tplcard"
+                  style={{ textAlign: 'right', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: 11, cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s' }}
+                >
+                  <TemplateThumb tpl={tpl} />
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 10 }}>
+                    <span style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--text)' }}>{tpl.name}</span>
+                    <span style={{ fontSize: 9.5, color: 'var(--gold)', border: '1px solid rgba(212,175,55,.3)', borderRadius: 999, padding: '2px 8px', flexShrink: 0 }}>{tpl.profile}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 3, lineHeight: 1.5 }}>{tpl.desc}</div>
+                  <div style={{ marginTop: 9, textAlign: 'center', padding: '7px', borderRadius: 9, background: 'var(--goldDim)', color: 'var(--gold)', fontSize: 12, fontWeight: 800 }}>استفاده از این قالب</div>
+                </button>
+              ))}
             </div>
           </div>
         </div>
