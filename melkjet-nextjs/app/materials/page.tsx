@@ -1,913 +1,681 @@
 'use client'
-import { useState, useEffect, useMemo } from 'react'
-import Nav from '@/app/components/Nav'
-import Footer from '@/app/components/Footer'
-import { fetchContent, type ContentItem } from '@/app/lib/content-display'
+import { useState, useEffect, useCallback } from 'react'
 
-type View = 'dashboard' | 'catalog' | 'orders' | 'rfq'
+// ════════════════════════════════════════════════════════
+//  Types (mirror app/lib/materials-store.ts API shape)
+// ════════════════════════════════════════════════════════
+type OrderStatus = 'pending' | 'preparing' | 'shipped' | 'delivered' | 'canceled'
+type InquiryStatus = 'new' | 'answered'
 
-const kpis = [
-  { label: 'فروش ماهانه', value: '۴٬۸۰۰ م.ت', icon: '﷼', color: 'var(--gold)' },
-  { label: 'سفارش فعال', value: '۳۷', icon: '📦', color: '#60a5fa' },
-  { label: 'تامین‌کننده', value: '۱۴۲', icon: '🏭', color: '#34d399' },
-  { label: 'صرفه‌جویی AI', value: '۱۲٪', icon: '🤖', color: '#a78bfa' },
-]
+interface Product {
+  id: string; name: string; category: string; price: number; unit: string
+  stock: number; threshold: number; sold: number; active: boolean; createdAt: number
+}
+interface Order { id: string; customer: string; items: number; amount: number; status: OrderStatus; createdAt: number }
+interface Inquiry { id: string; customer: string; product: string; qty: string; note?: string; status: InquiryStatus; reply?: string; createdAt: number }
+interface MonthSale { month: string; amount: number }
+interface LowStock { id: string; name: string; stock: number; unit: string }
+interface Category { label: string; pct: number }
 
-const categories = [
-  { label: 'سیمان و بتون', pct: 34 },
-  { label: 'آجر و بلوک', pct: 22 },
-  { label: 'کاشی و سرامیک', pct: 18 },
-  { label: 'درب و پنجره', pct: 15 },
-  { label: 'تأسیسات', pct: 11 },
-]
+interface Stats {
+  profile: { name: string; rating: number }
+  kpis: {
+    activeProducts: number; lowStockCount: number; newInquiries: number
+    activeOrders: number; awaitingShip: number; thisMonthSales: number; monthChange: number
+  }
+  categories: Category[]
+  monthlySales: MonthSale[]
+  sixMonthTotal: number
+  lowStock: LowStock[]
+  recentOrders: Order[]
+}
+interface MaterialsData { stats: Stats; products: Product[]; orders: Order[]; inquiries: Inquiry[] }
 
-const recentOrders = [
-  { id: '#۱۰۴۵', product: 'سیمان پرتلند', supplier: 'گروه صنعتی ارس', amount: '۱۲٬۵۰۰٬۰۰۰', status: 'تحویل‌شده', statusColor: '#34d399' },
-  { id: '#۱۰۴۴', product: 'آجر سفال', supplier: 'کارخانه آجر نوین', amount: '۴٬۸۰۰٬۰۰۰', status: 'در ارسال', statusColor: '#60a5fa' },
-  { id: '#۱۰۴۳', product: 'کاشی پرسلان', supplier: 'سرامیک ایران', amount: '۲۸٬۰۰۰٬۰۰۰', status: 'در انتظار', statusColor: 'var(--gold)' },
-  { id: '#۱۰۴۲', product: 'لوله آهنی', supplier: 'فولاد مبارکه', amount: '۸٬۵۰۰٬۰۰۰', status: 'تحویل‌شده', statusColor: '#34d399' },
-  { id: '#۱۰۴۱', product: 'رنگ ساختمانی', supplier: 'ایران رنگ', amount: '۴٬۵۰۰٬۰۰۰', status: 'لغو‌شده', statusColor: '#f87171' },
-]
+type View = 'dashboard' | 'catalog' | 'orders' | 'inquiries' | 'settings'
 
-const ordersList = [
-  { id: '#۱۰۴۵', product: 'سیمان پرتلند', supplier: 'گروه صنعتی ارس', date: '۱۴۰۳/۰۳/۱۲', amount: '۱۲٬۵۰۰٬۰۰۰', status: 'تحویل‌شده', statusColor: '#34d399' },
-  { id: '#۱۰۴۴', product: 'آجر سفال', supplier: 'کارخانه آجر نوین', date: '۱۴۰۳/۰۳/۱۰', amount: '۴٬۸۰۰٬۰۰۰', status: 'در ارسال', statusColor: '#60a5fa' },
-  { id: '#۱۰۴۳', product: 'کاشی پرسلان', supplier: 'سرامیک ایران', date: '۱۴۰۳/۰۳/۰۸', amount: '۲۸٬۰۰۰٬۰۰۰', status: 'در انتظار', statusColor: 'var(--gold)' },
-  { id: '#۱۰۴۲', product: 'لوله آهنی', supplier: 'فولاد مبارکه', date: '۱۴۰۳/۰۳/۰۵', amount: '۸٬۵۰۰٬۰۰۰', status: 'تحویل‌شده', statusColor: '#34d399' },
-  { id: '#۱۰۴۱', product: 'رنگ ساختمانی', supplier: 'ایران رنگ', date: '۱۴۰۳/۰۳/۰۱', amount: '۴٬۵۰۰٬۰۰۰', status: 'لغو‌شده', statusColor: '#f87171' },
-  { id: '#۱۰۴۰', product: 'پروفیل آلومینیوم', supplier: 'آلومینیوم البرز', date: '۱۴۰۳/۰۲/۲۸', amount: '۶٬۰۰۰٬۰۰۰', status: 'در انتظار', statusColor: 'var(--gold)' },
-  { id: '#۱۰۳۹', product: 'سیمان پرتلند', supplier: 'گروه صنعتی ارس', date: '۱۴۰۳/۰۲/۲۵', amount: '۹٬۲۰۰٬۰۰۰', status: 'در ارسال', statusColor: '#60a5fa' },
-]
+// ════════════════════════════════════════════════════════
+//  Formatting & status helpers
+// ════════════════════════════════════════════════════════
+const FONT = 'Vazirmatn, system-ui, sans-serif'
+const fa = (n: number) => n.toLocaleString('fa-IR')
+// مبلغ تومان → «م.ت» (میلیون تومان)
+const mt = (tomans: number) => fa(Math.round(tomans / 1_000_000)) + ' م.ت'
 
-const rfqCards = [
-  {
-    builder: 'شرکت عمران پارس',
-    product: 'سیمان',
-    qty: '۵۰۰ تن',
-    aiPrice: '۶٬۲۵۰٬۰۰۰٬۰۰۰ ریال',
-    deadline: '۱۴۰۳/۰۳/۲۰',
-    urgency: 'فوری',
-  },
-  {
-    builder: 'گروه ساختمانی نیلوفر',
-    product: 'آجر سفال',
-    qty: '۲۰۰ هزار عدد',
-    aiPrice: '۹۰۰٬۰۰۰٬۰۰۰ ریال',
-    deadline: '۱۴۰۳/۰۳/۲۵',
-    urgency: 'عادی',
-  },
-  {
-    builder: 'برج‌سازی ایرانیان',
-    product: 'کاشی پرسلان',
-    qty: '۵٬۰۰۰ متر',
-    aiPrice: '۱٬۳۲۵٬۰۰۰٬۰۰۰ ریال',
-    deadline: '۱۴۰۳/۰۴/۰۱',
-    urgency: 'عادی',
-  },
-  {
-    builder: 'مجتمع مسکونی سپند',
-    product: 'رنگ ساختمانی',
-    qty: '۲٬۰۰۰ لیتر',
-    aiPrice: '۸۵٬۰۰۰٬۰۰۰ ریال',
-    deadline: '۱۴۰۳/۰۴/۰۵',
-    urgency: 'عادی',
-  },
-]
+const STATUS_LABEL: Record<OrderStatus, string> = {
+  pending: 'در انتظار پرداخت',
+  preparing: 'در حال آماده‌سازی',
+  shipped: 'ارسال شد',
+  delivered: 'تحویل شد',
+  canceled: 'لغو شد',
+}
+const STATUS_COLOR: Record<OrderStatus, string> = {
+  pending: '#f59e0b',
+  preparing: '#f87171',
+  shipped: '#60a5fa',
+  delivered: '#34d399',
+  canceled: '#7a8fae',
+}
+const ORDER_STATUSES: OrderStatus[] = ['pending', 'preparing', 'shipped', 'delivered', 'canceled']
 
-const navItems: { id: View; label: string; icon: string }[] = [
-  { id: 'dashboard', label: 'داشبورد', icon: '⊞' },
+const CATEGORY_OPTIONS = ['آهن و میلگرد', 'سیمان و گچ', 'کاشی و سرامیک', 'شیرآلات', 'سایر']
+const UNIT_OPTIONS = ['تن', 'کیسه', 'متر', 'عدد', 'شاخه']
+
+const card: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16 }
+const inputStyle: React.CSSProperties = {
+  padding: '9px 11px', borderRadius: 9, background: 'var(--bg)', border: '1px solid var(--line)',
+  color: 'var(--text)', fontSize: 13, outline: 'none', fontFamily: FONT, width: '100%',
+}
+
+const VIEW_TITLES: Record<View, string> = {
+  dashboard: 'داشبورد فروش',
+  catalog: 'کاتالوگ محصولات',
+  orders: 'سفارش‌ها',
+  inquiries: 'استعلام‌ها',
+  settings: 'تنظیمات',
+}
+
+const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'orders' | 'inquiries' }[] = [
+  { id: 'dashboard', label: 'داشبورد', icon: '▦' },
   { id: 'catalog', label: 'کاتالوگ', icon: '◫' },
-  { id: 'orders', label: 'سفارش‌ها', icon: '◈' },
-  { id: 'rfq', label: 'استعلام (RFQ)', icon: '◎' },
+  { id: 'orders', label: 'سفارش‌ها', icon: '◈', badge: 'orders' },
+  { id: 'inquiries', label: 'استعلام‌ها', icon: '◎', badge: 'inquiries' },
+]
+const NAV_LINKS: { href: string; label: string; icon: string }[] = [
+  { href: '/crm', label: 'CRM مشتریان', icon: '◇' },
+  { href: '/marketing', label: 'مارکتینگ', icon: '◈' },
+  { href: '/workflow', label: 'اتوماسیون', icon: '⛭' },
+  { href: '/website-builder', label: 'وب‌سایت‌ساز', icon: '◳' },
 ]
 
+function StatusPill({ st }: { st: OrderStatus }) {
+  const c = STATUS_COLOR[st]
+  return (
+    <span style={{ fontSize: 11, fontWeight: 600, color: c, background: `color-mix(in srgb, ${c} 16%, transparent)`, padding: '3px 10px', borderRadius: 7, whiteSpace: 'nowrap' }}>
+      {STATUS_LABEL[st]}
+    </span>
+  )
+}
+
+// ════════════════════════════════════════════════════════
+//  Page
+// ════════════════════════════════════════════════════════
 export default function MaterialsPage() {
   const [view, setView] = useState<View>('dashboard')
-  const [activeCat, setActiveCat] = useState<string>('همه')
+  const [data, setData] = useState<MaterialsData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [unauth, setUnauth] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const [search, setSearch] = useState('')
+  const [showAdd, setShowAdd] = useState(false)
 
-  // محصولات واقعی از داده‌های اسکرپ‌شده
-  const [products, setProducts] = useState<ContentItem[]>([])
-  const [productsLoading, setProductsLoading] = useState(true)
-
-  // وضعیت ثبت سفارش هر محصول و استعلام RFQ
-  const [orderState, setOrderState] = useState<Record<string, 'idle' | 'sending' | 'done'>>({})
-  const [rfqState, setRfqState] = useState<'idle' | 'sending' | 'done'>('idle')
-  const [toast, setToast] = useState<string | null>(null)
-
-  useEffect(() => {
-    let alive = true
-    fetchContent('product', undefined, 40).then((d) => {
-      if (alive) { setProducts(d); setProductsLoading(false) }
-    })
-    return () => { alive = false }
+  const refresh = useCallback(async () => {
+    try {
+      const r = await fetch('/api/materials')
+      if (r.status === 401) { setUnauth(true); setLoading(false); return }
+      const d = await r.json()
+      setData(d); setUnauth(false)
+    } catch {} finally { setLoading(false) }
   }, [])
 
-  useEffect(() => {
-    if (!toast) return
-    const t = setTimeout(() => setToast(null), 3500)
-    return () => clearTimeout(t)
-  }, [toast])
+  useEffect(() => { refresh() }, [refresh])
 
-  // دسته‌بندی‌ها از روی فیلد category محصولات واقعی + «همه»
-  const catFilters = useMemo<string[]>(() => {
-    const cats = Array.from(new Set(products.map((p) => p.category).filter((c): c is string => !!c)))
-    return ['همه', ...cats]
-  }, [products])
-
-  const filteredProducts =
-    activeCat === 'همه' ? products : products.filter((p) => p.category === activeCat)
-
-  // ثبت سفارش یک محصول از طریق /api/submit
-  const submitOrder = async (p: ContentItem) => {
-    setOrderState((s) => ({ ...s, [p.id]: 'sending' }))
+  // POST mutation then refetch
+  const post = useCallback(async (body: Record<string, unknown>): Promise<boolean> => {
+    setBusy(true)
     try {
-      const description = [
-        `درخواست سفارش محصول «${p.title}»`,
-        p.price ? `قیمت اعلام‌شده: ${p.price}` : '',
-        p.location ? `محل: ${p.location}` : '',
-        p.url ? `منبع: ${p.url}` : '',
-      ].filter(Boolean).join('\n')
-      const res = await fetch('/api/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: `سفارش مصالح: ${p.title}`, description }),
+      const r = await fetch('/api/materials', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       })
-      const d = await res.json().catch(() => ({}))
-      if (res.ok && d.ok) {
-        setOrderState((s) => ({ ...s, [p.id]: 'done' }))
-        setToast(`سفارش «${p.title}» ثبت شد`)
-      } else {
-        setOrderState((s) => ({ ...s, [p.id]: 'idle' }))
-        setToast('ثبت سفارش با خطا مواجه شد')
-      }
-    } catch {
-      setOrderState((s) => ({ ...s, [p.id]: 'idle' }))
-      setToast('ثبت سفارش با خطا مواجه شد')
-    }
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { alert(d.error || 'برای انجام این عملیات وارد شوید'); return false }
+      await refresh()
+      return true
+    } catch { return false } finally { setBusy(false) }
+  }, [refresh])
+
+  const toggleTheme = () => {
+    const html = document.documentElement
+    if (theme === 'dark') { html.classList.add('light'); setTheme('light') }
+    else { html.classList.remove('light'); setTheme('dark') }
   }
 
-  // ثبت استعلام قیمت (RFQ) از طریق /api/submit
-  const submitRfq = async (detail?: string) => {
-    setRfqState('sending')
-    try {
-      const description = detail || 'درخواست استعلام قیمت مصالح ساختمانی از تأمین‌کنندگان.'
-      const res = await fetch('/api/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: 'استعلام مصالح (RFQ)', description }),
-      })
-      const d = await res.json().catch(() => ({}))
-      if (res.ok && d.ok) {
-        setRfqState('done')
-        setToast('استعلام قیمت ثبت شد')
-      } else {
-        setRfqState('idle')
-        setToast('ثبت استعلام با خطا مواجه شد')
-      }
-    } catch {
-      setRfqState('idle')
-      setToast('ثبت استعلام با خطا مواجه شد')
-    }
+  // ── Loading / 401 states ──
+  if (loading) {
+    return (
+      <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT, fontSize: 15 }}>
+        در حال بارگذاری داشبورد فروش…
+      </div>
+    )
+  }
+  if (unauth || !data) {
+    return (
+      <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT }}>
+        <div style={{ ...card, padding: '40px 44px', textAlign: 'center', maxWidth: 380 }}>
+          <div style={{ fontSize: 40, marginBottom: 14 }}>🔒</div>
+          <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>برای دسترسی به پنل وارد شوید</div>
+          <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 22 }}>داشبورد بازار مصالح فقط برای کاربران واردشده در دسترس است.</div>
+          <a href="/auth" style={{
+            display: 'inline-block', padding: '10px 28px', borderRadius: 10,
+            background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f',
+            fontWeight: 700, fontSize: 14, textDecoration: 'none',
+          }}>ورود به حساب</a>
+        </div>
+      </div>
+    )
   }
 
-  /* ── shared styles ── */
-  const surface: React.CSSProperties = {
-    background: 'var(--surface)',
-    border: '1px solid var(--line)',
-    borderRadius: 12,
-    padding: '20px 24px',
-  }
+  const { stats, products, orders, inquiries } = data
 
-  const badge = (color: string, bg: string): React.CSSProperties => ({
-    display: 'inline-block',
-    padding: '3px 10px',
-    borderRadius: 20,
-    fontSize: 12,
-    fontWeight: 600,
-    color,
-    background: bg,
-  })
+  return (
+    <div dir="rtl" style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: FONT }}>
 
-  const th: React.CSSProperties = {
-    padding: '10px 14px',
-    textAlign: 'right',
-    fontSize: 12,
-    fontWeight: 600,
-    color: 'var(--muted)',
-    borderBottom: '1px solid var(--line)',
-    whiteSpace: 'nowrap',
-  }
-
-  const td: React.CSSProperties = {
-    padding: '12px 14px',
-    fontSize: 13,
-    color: 'var(--text)',
-    borderBottom: '1px solid var(--line)',
-    whiteSpace: 'nowrap',
-  }
-
-  /* ════════════════════════════════════════
-     VIEWS
-  ════════════════════════════════════════ */
-
-  const Dashboard = (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {/* KPIs */}
-      <div className="mjm-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
-        {kpis.map((k) => (
-          <div key={k.label} style={{ ...surface, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 22 }}>{k.icon}</span>
-              <span style={{ fontSize: 11, color: 'var(--muted)', background: 'var(--bg2)', padding: '2px 8px', borderRadius: 8 }}>
-                این ماه
-              </span>
+      {/* ════════════ SIDEBAR ════════════ */}
+      <aside className="mjm-side" style={{
+        width: 232, flexShrink: 0, background: 'var(--bg2)', borderLeft: '1px solid var(--line)',
+        position: 'sticky', top: 0, height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      }}>
+        {/* Brand */}
+        <div style={{ padding: '20px 16px 16px', borderBottom: '1px solid var(--line)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(140deg,var(--gold2),var(--gold))',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 6px 18px -6px var(--gold)', flexShrink: 0,
+            }}>
+              <div style={{ width: 13, height: 13, background: 'var(--bg)', transform: 'rotate(45deg)', borderRadius: 3 }} />
             </div>
-            <div style={{ fontSize: 26, fontWeight: 700, color: k.color, fontVariantNumeric: 'tabular-nums' }}>
-              {k.value}
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-0.5px' }}>ملک‌جت</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>بازار مصالح</div>
             </div>
-            <div style={{ fontSize: 13, color: 'var(--muted)' }}>{k.label}</div>
+          </div>
+        </div>
+
+        {/* Nav */}
+        <nav style={{ padding: '10px 8px', flex: 1, overflowY: 'auto' }}>
+          {NAV_ITEMS.map(item => {
+            const active = view === item.id
+            const badge = item.badge === 'orders' ? stats.kpis.activeOrders
+              : item.badge === 'inquiries' ? stats.kpis.newInquiries : 0
+            return (
+              <button key={item.id} onClick={() => setView(item.id)} style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10,
+                border: 'none', cursor: 'pointer', background: active ? 'var(--goldDim)' : 'transparent',
+                color: active ? 'var(--gold)' : 'var(--muted)', fontWeight: active ? 700 : 500, fontSize: 14,
+                textAlign: 'right', marginBottom: 2, fontFamily: FONT, transition: 'all 0.15s',
+              }}>
+                <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: active ? 1 : 0.7 }}>{item.icon}</span>
+                <span className="mjm-sidelabel" style={{ flex: 1 }}>{item.label}</span>
+                {item.badge && badge > 0 && (
+                  <span style={{ background: active ? 'var(--gold)' : 'var(--line2)', color: active ? '#16140f' : 'var(--text)', borderRadius: 9, fontSize: 10, fontWeight: 700, padding: '1px 7px' }}>{fa(badge)}</span>
+                )}
+              </button>
+            )
+          })}
+          <div style={{ height: 1, background: 'var(--line)', margin: '10px 8px' }} />
+          {NAV_LINKS.map(l => (
+            <a key={l.href} href={l.href} style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10,
+              color: 'var(--muted)', textDecoration: 'none', fontWeight: 500, fontSize: 14, marginBottom: 2, fontFamily: FONT,
+            }}>
+              <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: 0.7 }}>{l.icon}</span>
+              <span className="mjm-sidelabel" style={{ flex: 1 }}>{l.label}</span>
+            </a>
+          ))}
+          <button onClick={() => setView('settings')} style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10,
+            border: 'none', cursor: 'pointer', background: view === 'settings' ? 'var(--goldDim)' : 'transparent',
+            color: view === 'settings' ? 'var(--gold)' : 'var(--muted)', fontWeight: view === 'settings' ? 700 : 500,
+            fontSize: 14, textAlign: 'right', marginBottom: 2, fontFamily: FONT,
+          }}>
+            <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: 0.7 }}>⛭</span>
+            <span className="mjm-sidelabel" style={{ flex: 1 }}>تنظیمات</span>
+          </button>
+        </nav>
+
+        {/* Active shop card */}
+        <div style={{ margin: '0 12px 10px', padding: 13, borderRadius: 14, background: 'var(--goldDim)', border: '1px solid rgba(201,168,76,0.2)' }}>
+          <div className="mjm-sidelabel" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#34d399', boxShadow: '0 0 6px #34d399', flexShrink: 0 }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#34d399' }}>فروشگاه فعال</span>
+          </div>
+          <div className="mjm-sidelabel" style={{ fontSize: 12, color: 'var(--muted)' }}>
+            امتیاز تأمین‌کننده: <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{fa(stats.profile.rating)} ★</span>
+          </div>
+        </div>
+
+        {/* Supplier identity */}
+        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 34, height: 34, borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#16140f', flexShrink: 0,
+          }}>{stats.profile.name.trim().charAt(0) || 'ف'}</div>
+          <div className="mjm-sidelabel" style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{stats.profile.name}</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>تأمین‌کننده</div>
+          </div>
+          <button onClick={toggleTheme} title="تغییر تم" style={{
+            width: 32, height: 32, borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--line)',
+            color: 'var(--text)', cursor: 'pointer', fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>{theme === 'dark' ? '☀' : '☾'}</button>
+        </div>
+      </aside>
+
+      {/* ════════════ MAIN ════════════ */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+
+        {/* Topbar */}
+        <div style={{
+          position: 'sticky', top: 0, zIndex: 40, background: 'var(--navbg)', backdropFilter: 'blur(16px)',
+          borderBottom: '1px solid var(--line)', padding: '0 24px', minHeight: 64,
+          display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
+        }}>
+          <h2 style={{ fontSize: 17, fontWeight: 700, flexShrink: 0 }}>{VIEW_TITLES[view]}</h2>
+          <input
+            value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="جستجوی محصول، سفارش..."
+            className="mjm-search"
+            style={{ ...inputStyle, flex: 1, minWidth: 160, maxWidth: 360, marginInlineStart: 'auto' }}
+          />
+          <button onClick={() => { setView('catalog'); setShowAdd(true) }} style={{
+            padding: '9px 18px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))',
+            color: '#16140f', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: FONT, whiteSpace: 'nowrap', flexShrink: 0,
+          }}>+ محصول جدید</button>
+        </div>
+
+        {/* Content */}
+        <main style={{ flex: 1, padding: 24, overflow: 'auto' }}>
+          {view === 'dashboard' && <DashboardView stats={stats} post={post} onAll={() => setView('orders')} />}
+          {view === 'catalog' && <CatalogView products={products} post={post} busy={busy} search={search} showAdd={showAdd} setShowAdd={setShowAdd} />}
+          {view === 'orders' && <OrdersView orders={orders} post={post} busy={busy} search={search} />}
+          {view === 'inquiries' && <InquiriesView inquiries={inquiries} post={post} busy={busy} search={search} />}
+          {view === 'settings' && <SettingsView profile={stats.profile} post={post} busy={busy} />}
+        </main>
+      </div>
+
+      <style>{`
+        @media(max-width:820px){ .mjm-side{ width:62px!important } .mjm-sidelabel{ display:none!important } }
+        @media(max-width:1000px){ .mjm-grid4{ grid-template-columns:repeat(2,1fr)!important } .mjm-grid2{ grid-template-columns:1fr!important } }
+        @media(max-width:680px){ .mjm-grid4{ grid-template-columns:1fr!important } .mjm-form{ grid-template-columns:1fr!important } }
+        @media(max-width:600px){ .mjm-search{ order:3; max-width:none!important; flex-basis:100%!important; margin:0 0 10px!important } }
+      `}</style>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════
+//  DASHBOARD
+// ════════════════════════════════════════════════════════
+function DashboardView({ stats, post, onAll }: {
+  stats: Stats; post: (b: Record<string, unknown>) => Promise<boolean>; onAll: () => void
+}) {
+  const k = stats.kpis
+  const kpis = [
+    { label: 'محصولات فعال', value: fa(k.activeProducts), sub: `${fa(k.lowStockCount)} موجودی کم`, subColor: '#f59e0b' },
+    { label: 'استعلام جدید', value: fa(k.newInquiries), sub: 'نیاز به پاسخ', subColor: 'var(--muted)' },
+    { label: 'سفارش‌های فعال', value: fa(k.activeOrders), sub: `${fa(k.awaitingShip)} در انتظار ارسال`, subColor: 'var(--muted)' },
+    { label: 'فروش این ماه', value: mt(k.thisMonthSales), sub: `${k.monthChange > 0 ? '+' : ''}${fa(k.monthChange)}٪`, subColor: k.monthChange >= 0 ? '#34d399' : '#f87171' },
+  ]
+  const maxSale = Math.max(1, ...stats.monthlySales.map(m => m.amount))
+  const lastIdx = stats.monthlySales.length - 1
+
+  const restockPrompt = async (item: LowStock) => {
+    const raw = window.prompt(`مقدار تأمین برای «${item.name}» (${item.unit}):`, '')
+    if (raw == null) return
+    const qty = Number(raw)
+    if (!qty || qty <= 0) { alert('عدد معتبر وارد کنید'); return }
+    await post({ action: 'restock', id: item.id, qty })
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* KPI cards */}
+      <div className="mjm-grid4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
+        {kpis.map(c => (
+          <div key={c.label} style={{ ...card, padding: 18 }}>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>{c.label}</div>
+            <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.5px', lineHeight: 1 }}>{c.value}</div>
+            <div style={{ fontSize: 12, color: c.subColor, marginTop: 8, fontWeight: 600 }}>{c.sub}</div>
           </div>
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: 20 }}>
-        {/* Categories */}
-        <div style={surface}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 18 }}>
-            دسته‌بندی کالاها
+      {/* Categories + 6-month chart */}
+      <div className="mjm-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+        {/* Top categories */}
+        <div style={{ ...card, padding: 22 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 18 }}>دسته‌های پرفروش</h3>
+          {stats.categories.length === 0 ? (
+            <div style={{ color: 'var(--muted)', fontSize: 13, padding: '20px 0', textAlign: 'center' }}>داده‌ای نیست</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {stats.categories.map(c => (
+                <div key={c.label}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ fontSize: 13 }}>{c.label}</span>
+                    <span style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>{fa(c.pct)}٪</span>
+                  </div>
+                  <div style={{ height: 7, background: 'var(--line2)', borderRadius: 5, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${c.pct}%`, background: 'linear-gradient(90deg,var(--gold2),var(--gold))', borderRadius: 5, transition: 'width 0.6s' }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 6-month sales */}
+        <div style={{ ...card, padding: 22 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>فروش ۶ ماهه</h3>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 16 }}>
+            <span style={{ fontSize: 30, fontWeight: 800, lineHeight: 1 }}>{mt(stats.sixMonthTotal)}</span>
+            <span style={{ fontSize: 13, color: k.monthChange >= 0 ? '#34d399' : '#f87171', fontWeight: 700 }}>
+              {k.monthChange > 0 ? '+' : ''}{fa(k.monthChange)}٪ این ماه
+            </span>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {categories.map((c) => (
-              <div key={c.label}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                  <span style={{ fontSize: 13, color: 'var(--text)' }}>{c.label}</span>
-                  <span style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 600 }}>{c.pct}٪</span>
-                </div>
-                <div style={{ height: 6, background: 'var(--line2)', borderRadius: 4, overflow: 'hidden' }}>
-                  <div
-                    style={{
-                      height: '100%',
-                      width: `${c.pct}%`,
-                      background: 'linear-gradient(90deg, var(--gold2), var(--gold))',
-                      borderRadius: 4,
-                      transition: 'width 0.6s ease',
-                    }}
-                  />
-                </div>
+          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-end', gap: 10, height: 120 }}>
+            {stats.monthlySales.map((m, i) => (
+              <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%', justifyContent: 'flex-end' }}>
+                <div style={{
+                  width: '100%', minHeight: 6, height: `${(m.amount / maxSale) * 100}%`,
+                  background: i === lastIdx ? 'linear-gradient(180deg,var(--gold2),var(--gold))' : 'linear-gradient(180deg,rgba(201,168,76,0.45),rgba(201,168,76,0.2))',
+                  borderRadius: '5px 5px 0 0',
+                }} />
+                <span style={{ fontSize: 10, color: i === lastIdx ? 'var(--gold)' : 'var(--muted)', fontWeight: i === lastIdx ? 700 : 500 }}>{m.month}</span>
               </div>
             ))}
           </div>
         </div>
+      </div>
 
-        {/* Recent Orders */}
-        <div style={{ ...surface, padding: 0, overflow: 'hidden' }}>
-          <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--line)' }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>آخرین سفارش‌ها</span>
+      {/* Recent orders + low stock */}
+      <div className="mjm-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+        {/* Recent orders */}
+        <div style={{ ...card, overflow: 'hidden' }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 15, fontWeight: 700 }}>سفارش‌های اخیر</span>
+            <button onClick={onAll} style={{ background: 'none', border: 'none', color: 'var(--gold)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>همه ←</button>
           </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ background: 'var(--bg2)' }}>
-                  {['شناسه', 'محصول', 'تامین‌کننده', 'مبلغ (ت)', 'وضعیت'].map((h) => (
-                    <th key={h} style={th}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {recentOrders.map((o) => (
-                  <tr key={o.id} style={{ transition: 'background 0.15s' }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg2)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <td style={{ ...td, color: 'var(--gold)', fontWeight: 600 }}>{o.id}</td>
-                    <td style={td}>{o.product}</td>
-                    <td style={{ ...td, color: 'var(--muted)' }}>{o.supplier}</td>
-                    <td style={{ ...td, fontVariantNumeric: 'tabular-nums' }}>{o.amount}</td>
-                    <td style={td}>
-                      <span style={badge(o.statusColor, o.statusColor + '22')}>{o.status}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {stats.recentOrders.length === 0 ? (
+            <div style={{ padding: 28, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>سفارشی ثبت نشده است</div>
+          ) : stats.recentOrders.map((o, i) => (
+            <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 20px', borderBottom: i < stats.recentOrders.length - 1 ? '1px solid var(--line)' : 'none' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o.customer}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>#{o.id} · {fa(o.items)} قلم</div>
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap' }}>{mt(o.amount)}</div>
+              <StatusPill st={o.status} />
+            </div>
+          ))}
+        </div>
+
+        {/* Low stock alert */}
+        <div style={{ ...card, overflow: 'hidden' }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--line)', fontSize: 15, fontWeight: 700, color: '#f87171' }}>
+            ⚠ هشدار موجودی کم
           </div>
+          {stats.lowStock.length === 0 ? (
+            <div style={{ padding: 28, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>موجودی همهٔ محصولات کافی است</div>
+          ) : stats.lowStock.map((item, i) => (
+            <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 20px', borderBottom: i < stats.lowStock.length - 1 ? '1px solid var(--line)' : 'none' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</div>
+                <div style={{ fontSize: 11, color: '#f87171', marginTop: 2 }}>فقط {fa(item.stock)} {item.unit} باقی مانده</div>
+              </div>
+              <button onClick={() => restockPrompt(item)} style={{
+                padding: '6px 16px', borderRadius: 8, border: '1px solid var(--gold)', background: 'var(--goldDim)',
+                color: 'var(--gold)', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: FONT, whiteSpace: 'nowrap',
+              }}>تأمین</button>
+            </div>
+          ))}
         </div>
       </div>
     </div>
   )
+}
 
-  const Catalog = (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {/* Category filters */}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        {catFilters.map((c) => (
-          <button
-            key={c}
-            onClick={() => setActiveCat(c)}
-            style={{
-              padding: '8px 20px',
-              borderRadius: 24,
-              border: activeCat === c ? '1.5px solid var(--gold)' : '1.5px solid var(--line)',
-              background: activeCat === c ? 'var(--gold)' : 'var(--surface)',
-              color: activeCat === c ? '#000' : 'var(--text)',
-              fontSize: 13,
-              fontWeight: activeCat === c ? 700 : 400,
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              transition: 'all 0.2s',
-            }}
-          >
-            {c}
-          </button>
-        ))}
-      </div>
+// ════════════════════════════════════════════════════════
+//  CATALOG
+// ════════════════════════════════════════════════════════
+function CatalogView({ products, post, busy, search, showAdd, setShowAdd }: {
+  products: Product[]; post: (b: Record<string, unknown>) => Promise<boolean>; busy: boolean
+  search: string; showAdd: boolean; setShowAdd: (v: boolean) => void
+}) {
+  const [form, setForm] = useState({ name: '', category: CATEGORY_OPTIONS[0], price: '', unit: UNIT_OPTIONS[0], stock: '' })
 
-      {/* AI hint */}
-      <div style={{
-        background: 'linear-gradient(135deg, #a78bfa18, #60a5fa10)',
-        border: '1px solid #a78bfa44',
-        borderRadius: 10,
-        padding: '12px 18px',
-        fontSize: 13,
-        color: '#a78bfa',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-      }}>
-        <span style={{ fontSize: 16 }}>🏭</span>
-        محصولات واقعی تأمین‌کنندگان مصالح ساختمانی — برای ثبت سفارش روی دکمه «سفارش» بزنید.
-      </div>
+  const q = search.trim()
+  const filtered = q ? products.filter(p => p.name.includes(q) || p.category.includes(q)) : products
 
-      {/* Products table */}
-      <div style={{ ...surface, padding: 0, overflow: 'hidden' }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: 'var(--bg2)' }}>
-                {['محصول', 'دسته', 'قیمت', 'تأمین‌کننده', 'عملیات'].map((h) => (
-                  <th key={h} style={th}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {productsLoading ? (
-                <tr>
-                  <td style={{ ...td, textAlign: 'center', color: 'var(--muted)' }} colSpan={5}>
-                    در حال بارگذاری محصولات…
-                  </td>
-                </tr>
-              ) : filteredProducts.length === 0 ? (
-                <tr>
-                  <td style={{ ...td, textAlign: 'center', color: 'var(--muted)' }} colSpan={5}>
-                    محصولی یافت نشد.
-                  </td>
-                </tr>
-              ) : filteredProducts.map((p) => {
-                const st = orderState[p.id] || 'idle'
-                return (
-                  <tr
-                    key={p.id}
-                    style={{ transition: 'background 0.15s' }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg2)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <td style={{ ...td, fontWeight: 600 }}>{p.title}</td>
-                    <td style={{ ...td, color: 'var(--muted)' }}>{p.category || '—'}</td>
-                    <td style={{ ...td, fontVariantNumeric: 'tabular-nums' }}>{p.price || 'استعلامی'}</td>
-                    <td style={{ ...td, color: 'var(--muted)' }}>{p.sourceName || '—'}</td>
-                    <td style={td}>
-                      <button
-                        onClick={() => st === 'idle' && submitOrder(p)}
-                        disabled={st !== 'idle'}
-                        style={{
-                          padding: '5px 14px',
-                          borderRadius: 8,
-                          border: st === 'done' ? '1px solid #34d399' : '1px solid var(--gold)',
-                          background: st === 'done' ? '#34d39922' : 'transparent',
-                          color: st === 'done' ? '#34d399' : 'var(--gold)',
-                          fontSize: 12,
-                          cursor: st === 'idle' ? 'pointer' : 'default',
-                          fontFamily: 'inherit',
-                          transition: 'all 0.2s',
-                        }}
-                        onMouseEnter={(e) => {
-                          if (st !== 'idle') return
-                          e.currentTarget.style.background = 'var(--gold)'
-                          e.currentTarget.style.color = '#000'
-                        }}
-                        onMouseLeave={(e) => {
-                          if (st !== 'idle') return
-                          e.currentTarget.style.background = 'transparent'
-                          e.currentTarget.style.color = 'var(--gold)'
-                        }}
-                      >
-                        {st === 'sending' ? 'در حال ثبت…' : st === 'done' ? '✓ ثبت شد' : 'سفارش'}
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  )
-
-  const orderStatusCounts = [
-    { label: 'در انتظار', count: '۸', color: 'var(--gold)', bg: 'var(--goldDim)' },
-    { label: 'در حال ارسال', count: '۱۲', color: '#60a5fa', bg: '#60a5fa22' },
-    { label: 'تحویل‌شده', count: '۱۷', color: '#34d399', bg: '#34d39922' },
-    { label: 'لغو‌شده', count: '۲', color: '#f87171', bg: '#f8717122' },
-  ]
-
-  const Orders = (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {/* Status counters */}
-      <div className="mjm-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
-        {orderStatusCounts.map((s) => (
-          <div key={s.label} style={{
-            ...surface,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 14,
-            padding: '16px 20px',
-          }}>
-            <div style={{
-              width: 44,
-              height: 44,
-              borderRadius: 10,
-              background: s.bg,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 20,
-              fontWeight: 700,
-              color: s.color,
-            }}>
-              {s.count}
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>{s.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Orders table */}
-      <div style={{ ...surface, padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>لیست سفارش‌ها</span>
-          <button
-            onClick={() => setView('catalog')}
-            style={{
-              padding: '7px 18px',
-              borderRadius: 8,
-              border: 'none',
-              background: 'var(--gold)',
-              color: '#000',
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}>
-            + سفارش جدید
-          </button>
-        </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: 'var(--bg2)' }}>
-                {['شناسه', 'محصول', 'تامین‌کننده', 'تاریخ', 'مبلغ (ت)', 'وضعیت', 'عملیات'].map((h) => (
-                  <th key={h} style={th}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {ordersList.map((o) => (
-                <tr
-                  key={o.id}
-                  style={{ transition: 'background 0.15s' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg2)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                >
-                  <td style={{ ...td, color: 'var(--gold)', fontWeight: 600 }}>{o.id}</td>
-                  <td style={{ ...td, fontWeight: 600 }}>{o.product}</td>
-                  <td style={{ ...td, color: 'var(--muted)' }}>{o.supplier}</td>
-                  <td style={{ ...td, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{o.date}</td>
-                  <td style={{ ...td, fontVariantNumeric: 'tabular-nums' }}>{o.amount}</td>
-                  <td style={td}>
-                    <span style={badge(o.statusColor, o.statusColor + '22')}>{o.status}</span>
-                  </td>
-                  <td style={td}>
-                    <button style={{
-                      padding: '5px 14px',
-                      borderRadius: 8,
-                      border: '1px solid var(--line)',
-                      background: 'transparent',
-                      color: 'var(--muted)',
-                      fontSize: 12,
-                      cursor: 'pointer',
-                      fontFamily: 'inherit',
-                    }}>
-                      جزئیات
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  )
-
-  const RFQ = (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {/* Gold banner */}
-      <div style={{
-        background: 'linear-gradient(135deg, var(--goldDim), #a8732018)',
-        border: '1px solid var(--gold2)',
-        borderRadius: 12,
-        padding: '16px 22px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 14,
-      }}>
-        <div style={{
-          width: 40,
-          height: 40,
-          borderRadius: '50%',
-          background: 'var(--gold)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 18,
-          flexShrink: 0,
-        }}>
-          🔔
-        </div>
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--gold)' }}>
-            ۵ استعلام جدید دریافت شد، AI قیمت رقابتی آماده کرده است
-          </div>
-        </div>
-      </div>
-
-      {/* RFQ Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 16 }}>
-        {rfqCards.map((r, i) => (
-          <div key={i} style={{
-            ...surface,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 16,
-            position: 'relative',
-            overflow: 'hidden',
-          }}>
-            {/* Urgency tag */}
-            {r.urgency === 'فوری' && (
-              <div style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                background: '#f87171',
-                color: '#fff',
-                fontSize: 11,
-                fontWeight: 700,
-                padding: '3px 12px',
-                borderBottomRightRadius: 8,
-              }}>
-                فوری
-              </div>
-            )}
-
-            {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>{r.builder}</div>
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>
-                  مهلت پاسخ: {r.deadline}
-                </div>
-              </div>
-              <div style={{
-                width: 40,
-                height: 40,
-                borderRadius: 10,
-                background: 'var(--bg2)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 20,
-              }}>
-                📋
-              </div>
-            </div>
-
-            {/* Details */}
-            <div className="mjm-2col" style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: 10,
-              background: 'var(--bg2)',
-              borderRadius: 8,
-              padding: '12px 14px',
-            }}>
-              <div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 3 }}>محصول</div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{r.product}</div>
-              </div>
-              <div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 3 }}>کمیت</div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{r.qty}</div>
-              </div>
-            </div>
-
-            {/* AI Price */}
-            <div style={{
-              background: 'linear-gradient(135deg, #a78bfa14, #60a5fa10)',
-              border: '1px solid #a78bfa33',
-              borderRadius: 8,
-              padding: '10px 14px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-            }}>
-              <span style={{ fontSize: 16 }}>🤖</span>
-              <div>
-                <div style={{ fontSize: 11, color: '#a78bfa', marginBottom: 2 }}>پیشنهاد هوش مصنوعی</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#a78bfa', fontVariantNumeric: 'tabular-nums' }}>
-                  {r.aiPrice}
-                </div>
-              </div>
-            </div>
-
-            {/* CTA */}
-            <button
-              onClick={() => rfqState !== 'sending' && submitRfq(
-                `ارائه پیشنهاد برای استعلام ${r.builder} — محصول: ${r.product}، کمیت: ${r.qty}، مهلت: ${r.deadline}`
-              )}
-              disabled={rfqState === 'sending'}
-              style={{
-                width: '100%',
-                padding: '11px 0',
-                borderRadius: 10,
-                border: 'none',
-                background: 'linear-gradient(135deg, var(--gold2), var(--gold))',
-                color: '#000',
-                fontSize: 14,
-                fontWeight: 700,
-                cursor: rfqState === 'sending' ? 'default' : 'pointer',
-                fontFamily: 'inherit',
-                transition: 'opacity 0.2s',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.88')}
-              onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
-            >
-              {rfqState === 'sending' ? 'در حال ثبت…' : rfqState === 'done' ? '✓ پیشنهاد ثبت شد' : 'ارائه پیشنهاد'}
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-
-  const viewMap: Record<View, React.ReactNode> = {
-    dashboard: Dashboard,
-    catalog: Catalog,
-    orders: Orders,
-    rfq: RFQ,
+  const addProduct = async () => {
+    if (!form.name.trim()) { alert('نام محصول را وارد کنید'); return }
+    const ok = await post({
+      action: 'addProduct', name: form.name.trim(), category: form.category,
+      price: Number(form.price) || 0, unit: form.unit, stock: Number(form.stock) || 0,
+    })
+    if (ok) { setForm({ name: '', category: CATEGORY_OPTIONS[0], price: '', unit: UNIT_OPTIONS[0], stock: '' }); setShowAdd(false) }
   }
 
-  const viewTitle: Record<View, string> = {
-    dashboard: 'داشبورد',
-    catalog: 'کاتالوگ مصالح',
-    orders: 'سفارش‌ها',
-    rfq: 'استعلام قیمت (RFQ)',
+  const editProduct = async (p: Product) => {
+    const priceRaw = window.prompt(`قیمت جدید «${p.name}» (تومان):`, String(p.price))
+    if (priceRaw == null) return
+    const stockRaw = window.prompt(`موجودی جدید (${p.unit}):`, String(p.stock))
+    if (stockRaw == null) return
+    const patch: Record<string, number> = {}
+    if (priceRaw.trim() !== '') patch.price = Number(priceRaw) || 0
+    if (stockRaw.trim() !== '') patch.stock = Number(stockRaw) || 0
+    await post({ action: 'updateProduct', id: p.id, patch })
+  }
+  const restockProduct = async (p: Product) => {
+    const raw = window.prompt(`مقدار تأمین برای «${p.name}» (${p.unit}):`, '')
+    if (raw == null) return
+    const qty = Number(raw)
+    if (!qty || qty <= 0) { alert('عدد معتبر وارد کنید'); return }
+    await post({ action: 'restock', id: p.id, qty })
+  }
+  const removeProduct = async (p: Product) => {
+    if (!window.confirm(`حذف «${p.name}»؟`)) return
+    await post({ action: 'deleteProduct', id: p.id })
   }
 
   return (
-    <div style={{ direction: 'rtl', minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
-      <Nav />
-
-      <div style={{ display: 'flex', minHeight: 'calc(100vh - 120px)', maxWidth: 1300, margin: '0 auto', padding: '32px 20px', gap: 24 }}>
-
-        {/* ── SIDEBAR ── */}
-        <aside className="mjm-side" style={{
-          width: 220,
-          flexShrink: 0,
-          background: 'var(--surface)',
-          border: '1px solid var(--line)',
-          borderRadius: 16,
-          display: 'flex',
-          flexDirection: 'column',
-          padding: '24px 0',
-          height: 'fit-content',
-          position: 'sticky',
-          top: 24,
-          boxShadow: 'var(--shadow)',
-        }}>
-          {/* Logo */}
-          <div style={{ padding: '0 20px 24px', borderBottom: '1px solid var(--line)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{
-                width: 38,
-                height: 38,
-                background: 'linear-gradient(135deg, var(--gold2), var(--gold))',
-                borderRadius: 8,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 18,
-                fontWeight: 900,
-                color: '#000',
-                transform: 'rotate(45deg)',
-                flexShrink: 0,
-              }}>
-                <span style={{ transform: 'rotate(-45deg)', display: 'block', fontSize: 13 }}>م</span>
-              </div>
-              <div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--gold)', letterSpacing: '-0.3px' }}>ملک‌جت</div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>بازار مصالح</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Nav items */}
-          <nav style={{ padding: '16px 10px', display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
-            {navItems.map((item) => {
-              const active = view === item.id
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setView(item.id)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    padding: '10px 14px',
-                    borderRadius: 10,
-                    border: 'none',
-                    background: active ? 'linear-gradient(135deg, var(--goldDim), #a8732015)' : 'transparent',
-                    color: active ? 'var(--gold)' : 'var(--muted)',
-                    fontSize: 14,
-                    fontWeight: active ? 700 : 400,
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    textAlign: 'right',
-                    borderRight: active ? '3px solid var(--gold)' : '3px solid transparent',
-                    transition: 'all 0.15s',
-                    width: '100%',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!active) e.currentTarget.style.background = 'var(--bg2)'
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!active) e.currentTarget.style.background = 'transparent'
-                  }}
-                >
-                  <span style={{ fontSize: 16 }}>{item.icon}</span>
-                  <span className="mjm-sidelabel">{item.label}</span>
-                  {item.id === 'rfq' && (
-                    <span style={{
-                      marginRight: 'auto',
-                      background: '#f87171',
-                      color: '#fff',
-                      borderRadius: 10,
-                      fontSize: 10,
-                      fontWeight: 700,
-                      padding: '1px 7px',
-                    }}>
-                      ۵
-                    </span>
-                  )}
-                </button>
-              )
-            })}
-            <a href="/website-builder" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, color: 'var(--gold)', textDecoration: 'none', fontSize: 14, fontWeight: 600, marginTop: 4, border: '1px solid rgba(212,175,55,0.25)' }}>
-              <span style={{ fontSize: 16 }}>◳</span>
-              <span className="mjm-sidelabel">وب‌سایت من (سایت‌ساز)</span>
-            </a>
-            <a href="/content" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, color: 'var(--gold)', textDecoration: 'none', fontSize: 14, fontWeight: 600, marginTop: 4, border: '1px solid rgba(212,175,55,0.25)' }}>
-              <span style={{ fontSize: 16 }}>✎</span>
-              <span className="mjm-sidelabel">مقالات و وبلاگ</span>
-            </a>
-            <a href="/plan-ai" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, color: 'var(--gold)', textDecoration: 'none', fontSize: 14, fontWeight: 600, marginTop: 4, border: '1px solid rgba(212,175,55,0.25)' }}>
-              <span style={{ fontSize: 16 }}>✦</span>
-              <span className="mjm-sidelabel">استودیو پلان و سه‌بعدی</span>
-            </a>
-          </nav>
-
-          {/* Status badge */}
-          <div style={{ padding: '16px 20px', borderTop: '1px solid var(--line)' }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              background: '#34d39918',
-              border: '1px solid #34d39944',
-              borderRadius: 10,
-              padding: '10px 12px',
-            }}>
-              <div style={{
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                background: '#34d399',
-                boxShadow: '0 0 6px #34d399',
-                flexShrink: 0,
-              }} />
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#34d399' }}>فروشگاه فعال</div>
-                <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>آنلاین</div>
-              </div>
-            </div>
-          </div>
-        </aside>
-
-        {/* ── MAIN CONTENT ── */}
-        <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 24 }}>
-          {/* Page header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', margin: 0 }}>
-                {viewTitle[view]}
-              </h1>
-              <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
-                بازار B2B مصالح ساختمانی | MelkJet
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button
-                onClick={() => {
-                  const rows = [['عنوان', 'دسته', 'قیمت', 'تأمین‌کننده'],
-                    ...products.map((p) => [p.title, p.category || '', p.price || '', p.sourceName || ''])]
-                  const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
-                  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
-                  const url = URL.createObjectURL(blob)
-                  const a = document.createElement('a')
-                  a.href = url; a.download = 'melkjet-materials.csv'; a.click()
-                  URL.revokeObjectURL(url)
-                }}
-                style={{
-                  padding: '9px 18px',
-                  borderRadius: 10,
-                  border: '1px solid var(--line)',
-                  background: 'var(--surface)',
-                  color: 'var(--text)',
-                  fontSize: 13,
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                }}>
-                ⬇ خروجی
-              </button>
-              <button
-                onClick={() => { setView('rfq'); if (rfqState !== 'sending') submitRfq() }}
-                disabled={rfqState === 'sending'}
-                style={{
-                  padding: '9px 18px',
-                  borderRadius: 10,
-                  border: 'none',
-                  background: 'linear-gradient(135deg, var(--gold2), var(--gold))',
-                  color: '#000',
-                  fontSize: 13,
-                  fontWeight: 700,
-                  cursor: rfqState === 'sending' ? 'default' : 'pointer',
-                  fontFamily: 'inherit',
-                }}>
-                + استعلام جدید
-              </button>
-            </div>
-          </div>
-
-          {/* Active view */}
-          {viewMap[view]}
-        </main>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Add product toggle */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button onClick={() => setShowAdd(!showAdd)} style={{
+          padding: '9px 18px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))',
+          color: '#16140f', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: FONT,
+        }}>{showAdd ? '× بستن' : '+ محصول جدید'}</button>
       </div>
 
-      {/* Toast تأیید */}
-      {toast && (
-        <div style={{
-          position: 'fixed',
-          bottom: 24,
-          left: 24,
-          zIndex: 1000,
-          background: 'var(--surface)',
-          border: '1px solid var(--gold)',
-          borderRadius: 12,
-          padding: '14px 20px',
-          fontSize: 14,
-          fontWeight: 600,
-          color: 'var(--text)',
-          boxShadow: 'var(--shadow)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-        }}>
-          <span style={{ color: 'var(--gold)' }}>✓</span>
-          {toast}
+      {/* Add form */}
+      {showAdd && (
+        <div style={{ ...card, padding: 16 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>＋ محصول جدید</div>
+          <div className="mjm-form" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1.2fr 1fr 0.9fr 0.9fr auto', gap: 10, alignItems: 'center' }}>
+            <input placeholder="نام محصول" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} style={inputStyle} />
+            <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} style={{ ...inputStyle, cursor: 'pointer' }}>
+              {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <input placeholder="قیمت (تومان)" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} style={inputStyle} />
+            <select value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} style={{ ...inputStyle, cursor: 'pointer' }}>
+              {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
+            </select>
+            <input placeholder="موجودی" value={form.stock} onChange={e => setForm({ ...form, stock: e.target.value })} style={inputStyle} />
+            <button onClick={addProduct} disabled={busy} style={{
+              padding: '9px 18px', borderRadius: 9, background: 'var(--gold)', border: 'none', color: '#16140f',
+              fontWeight: 700, fontSize: 13, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1, fontFamily: FONT, whiteSpace: 'nowrap',
+            }}>افزودن</button>
+          </div>
         </div>
       )}
 
-      <Footer />
+      {/* Products table */}
+      <div style={{ ...card, overflow: 'hidden' }}>
+        <div className="mjm-prow" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1.1fr 1.3fr 0.9fr 0.7fr 0.7fr 1.4fr', padding: '12px 18px', background: 'var(--bg2)', borderBottom: '1px solid var(--line)', fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>
+          <div>نام</div><div>دسته</div><div>قیمت</div><div>موجودی</div><div>فروخته</div><div>فعال</div><div style={{ textAlign: 'left' }}>عملیات</div>
+        </div>
+        <div style={{ maxHeight: 560, overflowY: 'auto' }}>
+          {filtered.length === 0 ? (
+            <div style={{ padding: 28, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>محصولی یافت نشد</div>
+          ) : filtered.map((p, i) => {
+            const low = p.stock <= p.threshold
+            return (
+              <div key={p.id} className="mjm-prow" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1.1fr 1.3fr 0.9fr 0.7fr 0.7fr 1.4fr', padding: '12px 18px', borderBottom: i < filtered.length - 1 ? '1px solid var(--line)' : 'none', fontSize: 13, alignItems: 'center' }}>
+                <div style={{ fontWeight: 600 }}>{p.name}</div>
+                <div style={{ color: 'var(--muted)' }}>{p.category}</div>
+                <div style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{fa(p.price)} <span style={{ color: 'var(--muted)', fontWeight: 400 }}>تومان/{p.unit}</span></div>
+                <div style={{ fontWeight: 700, color: low ? '#f87171' : 'var(--text)' }}>{fa(p.stock)} {p.unit}</div>
+                <div style={{ color: 'var(--muted)' }}>{fa(p.sold)}</div>
+                <div>
+                  <button onClick={() => post({ action: 'updateProduct', id: p.id, patch: { active: !p.active } })} disabled={busy} style={{
+                    width: 40, height: 22, borderRadius: 99, border: 'none', cursor: busy ? 'default' : 'pointer', position: 'relative',
+                    background: p.active ? 'var(--gold)' : 'var(--line2)', transition: 'background 0.2s', padding: 0,
+                  }}>
+                    <span style={{ position: 'absolute', top: 2, insetInlineStart: p.active ? 2 : 20, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'inset-inline-start 0.2s' }} />
+                  </button>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                  <button onClick={() => editProduct(p)} disabled={busy} style={actionBtn}>ویرایش</button>
+                  <button onClick={() => restockProduct(p)} disabled={busy} style={{ ...actionBtn, color: 'var(--gold)', borderColor: 'var(--gold)' }}>تأمین</button>
+                  <button onClick={() => removeProduct(p)} disabled={busy} title="حذف" style={{ ...actionBtn, color: '#f87171', borderColor: 'var(--line)', width: 28, padding: 0 }}>×</button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const actionBtn: React.CSSProperties = {
+  padding: '5px 12px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)',
+  color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap',
+}
+
+// ════════════════════════════════════════════════════════
+//  ORDERS
+// ════════════════════════════════════════════════════════
+function OrdersView({ orders, post, busy, search }: {
+  orders: Order[]; post: (b: Record<string, unknown>) => Promise<boolean>; busy: boolean; search: string
+}) {
+  const q = search.trim()
+  const sorted = [...orders].sort((a, b) => b.createdAt - a.createdAt)
+  const filtered = q ? sorted.filter(o => o.customer.includes(q) || o.id.includes(q)) : sorted
+
+  return (
+    <div style={{ ...card, overflow: 'hidden' }}>
+      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--line)', fontSize: 15, fontWeight: 700 }}>
+        لیست سفارش‌ها ({fa(filtered.length)})
+      </div>
+      <div className="mjm-orow" style={{ display: 'grid', gridTemplateColumns: '1.3fr 0.7fr 0.9fr 1fr 1.6fr', padding: '12px 20px', background: 'var(--bg2)', borderBottom: '1px solid var(--line)', fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>
+        <div>مشتری</div><div>اقلام</div><div>مبلغ</div><div>تاریخ</div><div>وضعیت</div>
+      </div>
+      <div style={{ maxHeight: 600, overflowY: 'auto' }}>
+        {filtered.length === 0 ? (
+          <div style={{ padding: 28, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>سفارشی یافت نشد</div>
+        ) : filtered.map((o, i) => (
+          <div key={o.id} className="mjm-orow" style={{ display: 'grid', gridTemplateColumns: '1.3fr 0.7fr 0.9fr 1fr 1.6fr', padding: '13px 20px', borderBottom: i < filtered.length - 1 ? '1px solid var(--line)' : 'none', fontSize: 13, alignItems: 'center' }}>
+            <div>
+              <div style={{ fontWeight: 700 }}>{o.customer}</div>
+              <div style={{ fontSize: 11, color: 'var(--gold)', marginTop: 2 }}>#{o.id}</div>
+            </div>
+            <div style={{ color: 'var(--muted)' }}>{fa(o.items)} قلم</div>
+            <div style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{mt(o.amount)}</div>
+            <div style={{ color: 'var(--muted)', fontSize: 12 }}>{new Date(o.createdAt).toLocaleDateString('fa-IR')}</div>
+            <div>
+              <select value={o.status} onChange={e => post({ action: 'setOrderStatus', id: o.id, status: e.target.value })} disabled={busy} style={{
+                padding: '6px 10px', borderRadius: 8, background: 'var(--bg)', border: `1px solid ${STATUS_COLOR[o.status]}55`,
+                color: STATUS_COLOR[o.status], fontSize: 12, fontWeight: 600, outline: 'none', cursor: 'pointer', fontFamily: FONT,
+              }}>
+                {ORDER_STATUSES.map(s => <option key={s} value={s} style={{ color: 'var(--text)' }}>{STATUS_LABEL[s]}</option>)}
+              </select>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════
+//  INQUIRIES
+// ════════════════════════════════════════════════════════
+function InquiriesView({ inquiries, post, busy, search }: {
+  inquiries: Inquiry[]; post: (b: Record<string, unknown>) => Promise<boolean>; busy: boolean; search: string
+}) {
+  const q = search.trim()
+  const filtered = q ? inquiries.filter(x => x.customer.includes(q) || x.product.includes(q)) : inquiries
+
+  const answer = async (x: Inquiry) => {
+    const reply = window.prompt(`پاسخ به «${x.customer}» دربارهٔ ${x.product}:`, x.reply || '')
+    if (reply == null || !reply.trim()) return
+    await post({ action: 'answerInquiry', id: x.id, reply: reply.trim() })
+  }
+
+  if (filtered.length === 0) {
+    return <div style={{ ...card, padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>استعلامی یافت نشد</div>
+  }
+
+  return (
+    <div className="mjm-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      {filtered.map(x => {
+        const isNew = x.status === 'new'
+        return (
+          <div key={x.id} style={{ ...card, padding: 18, borderColor: isNew ? 'rgba(201,168,76,0.4)' : 'var(--line)', background: isNew ? 'var(--goldDim)' : 'var(--surface)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>{x.customer}</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>{x.product} · {x.qty}</div>
+              </div>
+              {isNew
+                ? <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold)', background: 'var(--surface)', padding: '3px 10px', borderRadius: 7 }}>جدید</span>
+                : <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', background: 'var(--bg2)', padding: '3px 10px', borderRadius: 7 }}>پاسخ داده شد</span>}
+            </div>
+            {x.note && <div style={{ fontSize: 13, color: 'var(--text)', background: 'var(--bg)', borderRadius: 8, padding: '10px 12px', marginBottom: 10 }}>{x.note}</div>}
+            {x.reply
+              ? <div style={{ fontSize: 13, color: '#34d399', background: 'color-mix(in srgb,#34d399 12%,transparent)', borderRadius: 8, padding: '10px 12px' }}>
+                  <span style={{ fontSize: 11, color: 'var(--muted)', display: 'block', marginBottom: 3 }}>پاسخ شما:</span>{x.reply}
+                </div>
+              : <button onClick={() => answer(x)} disabled={busy} style={{
+                  padding: '8px 20px', borderRadius: 9, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))',
+                  color: '#16140f', fontSize: 13, fontWeight: 700, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1, fontFamily: FONT,
+                }}>پاسخ</button>}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════
+//  SETTINGS
+// ════════════════════════════════════════════════════════
+function SettingsView({ profile, post, busy }: {
+  profile: { name: string; rating: number }; post: (b: Record<string, unknown>) => Promise<boolean>; busy: boolean
+}) {
+  const [name, setName] = useState(profile.name)
+  useEffect(() => { setName(profile.name) }, [profile.name])
+
+  const save = async () => {
+    if (!name.trim()) { alert('نام فروشگاه را وارد کنید'); return }
+    await post({ action: 'updateProfile', patch: { name: name.trim() } })
+  }
+
+  return (
+    <div style={{ ...card, padding: 24, maxWidth: 520 }}>
+      <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 18 }}>تنظیمات فروشگاه</h3>
+      <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نام فروشگاه</label>
+      <input value={name} onChange={e => setName(e.target.value)} style={{ ...inputStyle, marginBottom: 18 }} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 22 }}>
+        <span style={{ fontSize: 12, color: 'var(--muted)' }}>امتیاز تأمین‌کننده:</span>
+        <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--gold)' }}>{fa(profile.rating)} ★</span>
+      </div>
+      <button onClick={save} disabled={busy} style={{
+        padding: '10px 26px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))',
+        color: '#16140f', fontSize: 14, fontWeight: 700, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1, fontFamily: FONT,
+      }}>ذخیره</button>
     </div>
   )
 }
