@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
+import PanelReturnBar from '@/app/components/PanelReturnBar'
 
 type Device = 'desktop' | 'mobile' | 'tablet'
 type ActiveTab = 'seo' | 'settings' | 'pages'
@@ -382,8 +383,6 @@ export default function WebsiteBuilderPage() {
   // پروفایل قفل‌شده بر اساس نقش کاربر؛ null یعنی مهمان/ادمین (می‌تواند همه را ببیند)
   const [lockedProfile, setLockedProfile] = useState<string | null>(null)
   const [tplModal, setTplModal] = useState(false)
-  // مسیر بازگشت = پنل خودِ کاربر (نه صفحهٔ اصلی) تا «از پنل بیرون نپرد»
-  const [backHref, setBackHref] = useState('/')
   const [device, setDevice] = useState<Device>('desktop')
   const [activeTab, setActiveTab] = useState<ActiveTab>('seo')
   const [seoTitle, setSeoTitle] = useState('آژانس ملکی نمونه | خرید و فروش ملک')
@@ -410,7 +409,6 @@ export default function WebsiteBuilderPage() {
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (cancelled || !data) return
-        if (data.dash) setBackHref(data.dash as string)
         // اگر نقش کاربر به یک پروفایل مشخص نگاشت شود، فقط همان را می‌بیند (قفل).
         // ادمین/داشبورد ناشناخته → قفل نمی‌شود تا بتواند همه را مرور کند.
         const mapped = DASH_TO_PROFILE[data.dash as string]
@@ -527,6 +525,7 @@ export default function WebsiteBuilderPage() {
 
   return (
     <div style={{ height: '100vh', background: 'var(--bg)', color: 'var(--text)', direction: 'rtl', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <PanelReturnBar tool="وب‌سایت‌ساز" />
 
       {/* STICKY TOOLBAR */}
       <div style={{
@@ -537,13 +536,6 @@ export default function WebsiteBuilderPage() {
         display: 'flex', alignItems: 'center', gap: 12, padding: '0 20px', height: 52,
         zIndex: 100,
       }}>
-        <Link href={backHref} style={{ display: 'flex', alignItems: 'center', gap: 5, textDecoration: 'none', color: 'var(--muted)', fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
-          <span style={{ fontSize: 16, lineHeight: 1 }}>‹</span>
-          <span>بازگشت به پنل</span>
-        </Link>
-
-        <div style={{ width: 1, height: 24, background: 'var(--line)', flexShrink: 0 }} />
-
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           <div style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <span style={{ width: 11, height: 11, background: 'var(--bg)', transform: 'rotate(45deg)', borderRadius: 2, display: 'block' }} />
