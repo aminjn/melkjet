@@ -10,7 +10,7 @@ import ArticleEditor from '@/app/components/ArticleEditor'
 /* ─── Types ─────────────────────────────────────────────────── */
 type View =
   | 'overview' | 'scraper' | 'listings' | 'products' | 'geo' | 'moderation' | 'content' | 'studio' | 'articles' | 'categories' | 'crm' | 'api'
-  | 'reports' | 'plans' | 'promos' | 'discounts' | 'ads' | 'users' | 'connections'
+  | 'reports' | 'plans' | 'promos' | 'discounts' | 'ads' | 'users' | 'roles' | 'connections'
   | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags'
 
 interface NavItem { id: View; icon: string; label: string; badge?: string; badgeColor?: string }
@@ -19,48 +19,53 @@ interface NavSection { title: string; items: NavItem[] }
 /* ─── Sidebar nav data ───────────────────────────────────────── */
 const sections: NavSection[] = [
   {
-    title: 'عملیات هوش مصنوعی',
+    title: 'محتوا',
     items: [
-      { id: 'overview',    icon: '▦',  label: 'نمای کلی' },
-      { id: 'scraper',     icon: '⛏',  label: 'موتور اسکرپی AI',   badge: 'زنده',  badgeColor: '#5fd98a' },
-      { id: 'listings',    icon: '▤',  label: 'مدیریت آگهی‌ها' },
-      { id: 'products',    icon: '◰',  label: 'مدیریت محصولات' },
-      { id: 'moderation',  icon: '✓',  label: 'تأیید آگهی AI',     badge: '32',    badgeColor: '#e7674a' },
-      { id: 'content',     icon: '✦',  label: 'محتوا و سئو' },
-      { id: 'studio',      icon: '◳',  label: 'استودیو پلان و سه‌بعدی' },
-      { id: 'articles',    icon: '✎',  label: 'مدیریت مقالات (CMS)' },
+      { id: 'articles',    icon: '✎',  label: 'مقالات' },
       { id: 'categories',  icon: '☰',  label: 'دسته‌بندی‌ها' },
-      { id: 'api',         icon: '◈',  label: 'API و مدل‌های AI' },
+      { id: 'studio',      icon: '◳',  label: 'استودیو پلان و سه‌بعدی' },
     ],
   },
   {
-    title: 'گزارش‌ها و داده',
+    title: 'آگهی و فروشگاه',
     items: [
-      { id: 'reports', icon: '◔', label: 'گزارش‌ها و Big Data' },
+      { id: 'listings',    icon: '▤',  label: 'مدیریت آگهی‌ها' },
+      { id: 'products',    icon: '◰',  label: 'مدیریت محصولات' },
+      { id: 'moderation',  icon: '✓',  label: 'تأیید آگهی AI',     badge: '32',    badgeColor: '#e7674a' },
+      { id: 'scraper',     icon: '⛏',  label: 'موتور اسکرپی',     badge: 'زنده',  badgeColor: '#5fd98a' },
+    ],
+  },
+  {
+    title: 'کاربران و دسترسی',
+    items: [
+      { id: 'users', icon: '◍', label: 'کاربران' },
+      { id: 'roles', icon: '🛡', label: 'نقش‌ها و دسترسی' },
+      { id: 'crm',   icon: '◈', label: 'CRM کاربران' },
     ],
   },
   {
     title: 'درآمد و رشد',
     items: [
-      { id: 'plans',  icon: '◔', label: 'پلن‌ها و اشتراک' },
+      { id: 'plans',  icon: '◔', label: 'پلن‌ها' },
       { id: 'promos', icon: '★', label: 'پروموت و ویژه‌سازی' },
       { id: 'discounts', icon: '٪', label: 'کدهای تخفیف' },
       { id: 'ads',    icon: '▤', label: 'تبلیغات بنری' },
     ],
   },
   {
-    title: 'مدیریت پلتفرم',
+    title: 'داده و گزارش',
     items: [
-      { id: 'users', icon: '◍', label: 'کاربران و نقش‌ها' },
-      { id: 'crm', icon: '◈', label: 'CRM کاربران' },
-      { id: 'geo', icon: '🗺', label: 'مناطق و محله‌ها' },
+      { id: 'overview', icon: '▦', label: 'نمای کلی' },
+      { id: 'reports',  icon: '◔', label: 'گزارش‌ها و Big Data' },
+      { id: 'api',      icon: '◈', label: 'API و مدل‌های AI' },
     ],
   },
   {
     title: 'پیکربندی',
     items: [
       { id: 'connections', icon: '⚯', label: 'اتصال‌ها و سرویس‌ها' },
-      { id: 'settings', icon: '⚙', label: 'تنظیمات کامل' },
+      { id: 'geo',         icon: '🗺', label: 'مناطق و محله‌ها' },
+      { id: 'settings',    icon: '⚙', label: 'تنظیمات کامل' },
     ],
   },
   {
@@ -94,7 +99,8 @@ const viewTitles: Record<View, string> = {
   promos:     'پروموت و ویژه‌سازی',
   discounts:  'کدهای تخفیف',
   ads:        'تبلیغات بنری',
-  users:      'کاربران و نقش‌ها',
+  users:      'کاربران',
+  roles:      'نقش‌ها و دسترسی',
   settings:   'تنظیمات کامل پلتفرم',
   health:     'سلامت سیستم',
   servers:    'مدیریت سرورها',
@@ -2297,107 +2303,360 @@ function APIView() {
   )
 }
 
+/* ─── کاربران: مدیریت کامل حساب‌ها ───────────────────────────── */
+interface Account { phone: string; name?: string; role?: string; plan?: string; onboarded: boolean; createdAt: number; lastLogin?: number }
+interface IdName { id: string; name: string }
+
 function UsersView() {
-  const [search, setSearch] = useState('')
-  const [openRole, setOpenRole] = useState<string | null>(null)
-  const [owners, setOwners] = useState<{ id: string; name: string; phone?: string; count: number; firstSeen: number }[]>([])
-  const [editOwner, setEditOwner] = useState<{ id: string; name: string; phone: string } | null>(null)
-  const loadOwners = () => fetch('/api/admin/owners').then(r => r.ok ? r.json() : { owners: [] }).then(d => setOwners(d.owners || []))
-  useEffect(() => { loadOwners() }, [])
-  const saveOwner = async () => {
-    if (!editOwner) return
-    await fetch('/api/admin/owners', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editOwner) })
-    setEditOwner(null); loadOwners()
+  const [users, setUsers] = useState<Account[]>([])
+  const [roles, setRoles] = useState<IdName[]>([])
+  const [plans, setPlans] = useState<IdName[]>([])
+  const [loading, setLoading] = useState(true)
+  const [q, setQ] = useState('')
+  const [roleFilter, setRoleFilter] = useState('')   // '' = همه
+  const [planFilter, setPlanFilter] = useState('')   // '' = همه ، '__none' = بدون پلن
+  const [sel, setSel] = useState<Set<string>>(new Set())
+
+  const load = async () => {
+    setLoading(true)
+    const r = await fetch('/api/admin/users')
+    if (r.ok) { const d = await r.json(); setUsers(d.users || []); setRoles(d.roles || []); setPlans(d.plans || []) }
+    setLoading(false); setSel(new Set())
   }
-  const delOwner = async (oid: string) => { if (!confirm('این آگهی‌دهنده حذف شود؟')) return; await fetch(`/api/admin/owners?id=${oid}`, { method: 'DELETE' }); loadOwners() }
-  const users = [
-    { name: 'سارا محمدی', email: 'sara@example.com', role: 'مشاور', plan: 'Pro', status: 'فعال', joined: '۱۴۰۳/۰۱/۱۵' },
-    { name: 'امیر رضایی', email: 'amir@example.com', role: 'آژانس', plan: 'Business', status: 'فعال', joined: '۱۴۰۲/۱۱/۰۸' },
-    { name: 'نگار کریمی', email: 'negar@example.com', role: 'خریدار', plan: 'رایگان', status: 'فعال', joined: '۱۴۰۳/۰۳/۲۰' },
-    { name: 'کاوه اسدی', email: 'kaveh@example.com', role: 'سازنده', plan: 'Enterprise', status: 'معلق', joined: '۱۴۰۲/۰۸/۱۲' },
-    { name: 'مریم حسینی', email: 'maryam@example.com', role: 'مشاور', plan: 'Pro', status: 'فعال', joined: '۱۴۰۳/۰۲/۰۵' },
-    { name: 'رضا کمالی', email: 'reza@example.com', role: 'خریدار', plan: 'رایگان', status: 'غیرفعال', joined: '۱۴۰۳/۰۴/۱۸' },
-  ]
-  const roles = [
-    { name: 'سوپر ادمین', perms: ['دسترسی کامل سیستم', 'مدیریت کاربران', 'تنظیمات سرور', 'گزارش مالی'] },
-    { name: 'ادمین محتوا', perms: ['تولید محتوا', 'تأیید آگهی', 'مدیریت سئو', 'مشاهده گزارش'] },
-    { name: 'مشاور تأییدشده', perms: ['ثبت آگهی نامحدود', 'CRM', 'آمار فایل‌ها', 'تبلیغات هدفمند'] },
-    { name: 'کاربر عادی', perms: ['جستجو', 'ذخیره ملک', 'پیام به مشاور', 'دریافت اعلان'] },
-  ]
-  const filtered = users.filter(u => !search || u.name.includes(search) || u.email.includes(search))
-  const statusColor: Record<string, string> = { فعال: '#5fd98a', معلق: '#e7a14a', غیرفعال: 'var(--faint)' }
+  useEffect(() => { load() }, [])
+
+  const patchOne = async (phone: string, patch: { name?: string; role?: string; plan?: string }) => {
+    setUsers(us => us.map(u => u.phone === phone ? { ...u, ...patch, onboarded: patch.role !== undefined ? true : u.onboarded } : u))
+    await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, patch }) })
+  }
+  const delOne = async (phone: string) => {
+    if (!confirm(`کاربر ${phone} حذف شود؟`)) return
+    setUsers(us => us.filter(u => u.phone !== phone)); setSel(s => { const n = new Set(s); n.delete(phone); return n })
+    await fetch(`/api/admin/users?phone=${encodeURIComponent(phone)}`, { method: 'DELETE' })
+  }
+
+  const filtered = users.filter(u => {
+    if (q.trim()) { const t = q.trim(); if (!(u.phone.includes(t) || (u.name || '').includes(t))) return false }
+    if (roleFilter && u.role !== roleFilter) return false
+    if (planFilter === '__none') { if (u.plan) return false }
+    else if (planFilter && u.plan !== planFilter) return false
+    return true
+  })
+
+  const toggleSel = (phone: string) => setSel(s => { const n = new Set(s); n.has(phone) ? n.delete(phone) : n.add(phone); return n })
+  const allVisibleSelected = filtered.length > 0 && filtered.every(u => sel.has(u.phone))
+  const selectAll = () => setSel(allVisibleSelected ? new Set() : new Set(filtered.map(u => u.phone)))
+
+  const bulkRole = async () => {
+    if (!sel.size) return
+    const opts = ['', ...roles.map(r => r.id)]
+    const labels = ['— بدون نقش', ...roles.map(r => r.name)]
+    const choice = prompt(`نقش جدید برای ${sel.size} کاربر:\n${labels.map((l, i) => `${i}) ${l}`).join('\n')}\n\nشمارهٔ گزینه را وارد کنید:`)
+    if (choice === null) return
+    const i = Number(choice); if (Number.isNaN(i) || i < 0 || i >= opts.length) return
+    const role = opts[i]; const phones = [...sel]
+    setUsers(us => us.map(u => sel.has(u.phone) ? { ...u, role: role || undefined, onboarded: true } : u)); setSel(new Set())
+    await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phones, patch: { role } }) })
+  }
+  const bulkPlan = async () => {
+    if (!sel.size) return
+    const opts = ['', ...plans.map(p => p.id)]
+    const labels = ['— بدون پلن', ...plans.map(p => p.name)]
+    const choice = prompt(`پلن جدید برای ${sel.size} کاربر:\n${labels.map((l, i) => `${i}) ${l}`).join('\n')}\n\nشمارهٔ گزینه را وارد کنید:`)
+    if (choice === null) return
+    const i = Number(choice); if (Number.isNaN(i) || i < 0 || i >= opts.length) return
+    const plan = opts[i]; const phones = [...sel]
+    setUsers(us => us.map(u => sel.has(u.phone) ? { ...u, plan: plan || undefined } : u)); setSel(new Set())
+    await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phones, patch: { plan } }) })
+  }
+  const bulkDel = async () => {
+    if (!sel.size || !confirm(`${sel.size} کاربر حذف شود؟`)) return
+    const phones = [...sel]
+    setUsers(us => us.filter(u => !sel.has(u.phone))); setSel(new Set())
+    await fetch('/api/admin/users', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phones }) })
+  }
+
+  const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '8px 11px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+  const cellSel: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 8, padding: '5px 8px', color: 'var(--text)', fontSize: 12.5, fontFamily: 'inherit', outline: 'none', maxWidth: 150 }
+  const th: React.CSSProperties = { textAlign: 'right', fontSize: 11.5, fontWeight: 700, color: 'var(--faint)', padding: '0 10px 10px', whiteSpace: 'nowrap' }
+  const td: React.CSSProperties = { padding: '10px', fontSize: 13, color: 'var(--text)', borderTop: '1px solid var(--line)', verticalAlign: 'middle' }
+
+  const total = users.length
+  const onboardedCount = users.filter(u => u.onboarded).length
+  const withRole = users.filter(u => u.role).length
 
   return (
     <div style={{ animation: 'fade .35s ease' }}>
-      <div className="mjsa-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 22 }}>
-        <KPI label="آگهی‌دهندگان واکشی‌شده" value={owners.length.toLocaleString('fa-IR')} trend="کاربران واقعی از آگهی‌ها" icon="◍" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" />
-        <KPI label="دارای شماره" value={owners.filter(o => o.phone).length.toLocaleString('fa-IR')} trend="قابل تماس" icon="☎" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" />
-        <KPI label="کل آگهی این افراد" value={owners.reduce((a, o) => a + o.count, 0).toLocaleString('fa-IR')} trend="مجموع آگهی‌ها" icon="▦" iconBg="var(--goldDim)" iconColor="var(--gold)" />
+      {/* KPI */}
+      <div className="mjsa-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 18 }}>
+        <KPI label="کل کاربران" value={total.toLocaleString('fa-IR')} trend="حساب‌های ثبت‌شده" icon="◍" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" />
+        <KPI label="تکمیل‌شده (onboarded)" value={onboardedCount.toLocaleString('fa-IR')} trend="پروفایل کامل" icon="✓" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" />
+        <KPI label="نقش‌دار" value={withRole.toLocaleString('fa-IR')} trend="نقش تخصیص‌یافته" icon="🛡" iconBg="var(--goldDim)" iconColor="var(--gold)" />
+        <KPI label="بدون نقش" value={(total - withRole).toLocaleString('fa-IR')} trend="در انتظار تخصیص" icon="○" iconBg="rgba(231,103,74,.15)" iconColor="#e7674a" />
       </div>
 
+      {/* Toolbar */}
       <Card style={{ marginBottom: 14 }}>
-        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>آگهی‌دهندگان واکشی‌شده ({owners.length})</div>
-        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>هر آگهی‌دهنده یک کاربر؛ آگهی‌های تکراری از یک شخص به همین کاربر وصل می‌شوند.</div>
-        {owners.length === 0 ? (
-          <div style={{ color: 'var(--muted)', fontSize: 13, padding: '14px 0' }}>هنوز آگهی‌دهنده‌ای واکشی نشده. یک منبع دیوار اجرا کنید.</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <input style={{ ...inp, flex: 1, minWidth: 160 }} placeholder="جستجو با شماره یا نام…" value={q} onChange={e => setQ(e.target.value)} />
+          <select style={inp} value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
+            <option value="">همه نقش‌ها</option>
+            {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select>
+          <select style={inp} value={planFilter} onChange={e => setPlanFilter(e.target.value)}>
+            <option value="">همه پلن‌ها</option>
+            <option value="__none">بدون پلن</option>
+            {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <OutlineButton onClick={load}>بازخوانی</OutlineButton>
+        </div>
+        <div style={{ marginTop: 10, fontSize: 12.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span>{loading ? 'در حال بارگذاری…' : `${filtered.length.toLocaleString('fa-IR')} از ${total.toLocaleString('fa-IR')} کاربر`}</span>
+          {sel.size > 0 && <>
+            <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{sel.size.toLocaleString('fa-IR')} انتخاب‌شده:</span>
+            <button onClick={bulkRole} style={{ background: 'transparent', border: '1px solid var(--gold)', color: 'var(--gold)', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>تغییر نقش</button>
+            <button onClick={bulkPlan} style={{ background: 'transparent', border: '1px solid #8a7bd8', color: '#a99bf0', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>تغییر پلن</button>
+            <button onClick={bulkDel} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.4)', color: '#e7674a', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>حذف</button>
+          </>}
+        </div>
+      </Card>
+
+      {/* Table */}
+      <Card>
+        {filtered.length === 0 && !loading ? (
+          <div style={{ color: 'var(--muted)', fontSize: 13, padding: '30px 0', textAlign: 'center' }}>کاربری یافت نشد. فیلترها را تغییر دهید.</div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {owners.slice(0, 50).map(o => (
-              <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg2)', borderRadius: 10, padding: '10px 14px' }}>
-                <span style={{ width: 34, height: 34, borderRadius: '50%', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, flexShrink: 0 }}>{(o.name || '؟').slice(0, 1)}</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{o.name}</div>
-                  <div style={{ fontSize: 12, color: o.phone ? 'var(--gold)' : 'var(--faint)', direction: 'ltr', textAlign: 'right' }}>{o.phone || 'بدون شماره'}</div>
-                </div>
-                <Badge label={`${o.count} آگهی`} color="#5b9bd5" />
-                <OutlineButton onClick={() => setEditOwner({ id: o.id, name: o.name, phone: o.phone || '' })} style={{ fontSize: 11.5, padding: '5px 12px' }}>ویرایش</OutlineButton>
-                <button onClick={() => delOwner(o.id)} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', borderRadius: 8, padding: '5px 9px', cursor: 'pointer', fontFamily: 'inherit' }}>×</button>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
+              <thead>
+                <tr>
+                  <th style={{ ...th, width: 30 }}><input type="checkbox" checked={allVisibleSelected} onChange={selectAll} style={{ width: 16, height: 16, accentColor: 'var(--gold)', cursor: 'pointer' }} /></th>
+                  <th style={th}>نام</th>
+                  <th style={th}>شماره</th>
+                  <th style={th}>نقش</th>
+                  <th style={th}>پلن</th>
+                  <th style={th}>وضعیت</th>
+                  <th style={th}>آخرین ورود</th>
+                  <th style={{ ...th, textAlign: 'center' }}>حذف</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(u => (
+                  <tr key={u.phone} style={{ background: sel.has(u.phone) ? 'var(--goldDim)' : 'transparent' }}>
+                    <td style={td}><input type="checkbox" checked={sel.has(u.phone)} onChange={() => toggleSel(u.phone)} style={{ width: 16, height: 16, accentColor: 'var(--gold)', cursor: 'pointer' }} /></td>
+                    <td style={{ ...td, fontWeight: 600 }}>{u.name || '—'}</td>
+                    <td style={{ ...td, direction: 'ltr', textAlign: 'right', fontFamily: '"JetBrains Mono", monospace', color: 'var(--gold)' }}>{u.phone}</td>
+                    <td style={td}>
+                      <select style={cellSel} value={u.role || ''} onChange={e => patchOne(u.phone, { role: e.target.value })}>
+                        <option value="">— بدون نقش</option>
+                        {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                      </select>
+                    </td>
+                    <td style={td}>
+                      <select style={cellSel} value={u.plan || ''} onChange={e => patchOne(u.phone, { plan: e.target.value })}>
+                        <option value="">بدون پلن</option>
+                        {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </td>
+                    <td style={td}>{u.onboarded ? <Badge label="تکمیل‌شده" color="#5fd98a" /> : <Badge label="جدید" color="#5b9bd5" />}</td>
+                    <td style={{ ...td, color: 'var(--muted)', fontSize: 12 }}>{timeAgo(u.lastLogin || null)}</td>
+                    <td style={{ ...td, textAlign: 'center' }}>
+                      <button title="حذف" onClick={() => delOne(u.phone)} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', borderRadius: 8, padding: '4px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>×</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <div style={{ marginTop: 12, fontSize: 11.5, color: 'var(--faint)', lineHeight: 1.8 }}>
+          نقش و پلن هر کاربر را می‌توانید مستقیم از همین جدول تغییر دهید. نقش‌ها و دسترسی‌ها در بخش «نقش‌ها و دسترسی» تعریف می‌شوند.
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+/* ─── نقش‌ها و دسترسی ─────────────────────────────────────────── */
+interface Role { id: string; name: string; dashboard: string; planId?: string; permissions: string[]; builtin?: boolean; active: boolean; createdAt: number }
+interface PermDef { id: string; label: string }
+
+const DASHBOARD_OPTIONS: { value: string; label: string }[] = [
+  { value: '/buyer', label: 'خریدار' },
+  { value: '/owner', label: 'مالک' },
+  { value: '/pros', label: 'مشاور' },
+  { value: '/agency', label: 'آژانس' },
+  { value: '/builder', label: 'سازنده' },
+  { value: '/materials', label: 'مصالح' },
+  { value: '/legal', label: 'حقوقی' },
+  { value: '/crm', label: 'CRM' },
+  { value: '/marketing', label: 'مارکتینگ' },
+]
+const dashLabel = (v: string) => DASHBOARD_OPTIONS.find(d => d.value === v)?.label || v
+
+function RolesView() {
+  const [roles, setRoles] = useState<Role[]>([])
+  const [perms, setPerms] = useState<PermDef[]>([])
+  const [plans, setPlans] = useState<IdName[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showNew, setShowNew] = useState(false)
+  const [editing, setEditing] = useState<string | null>(null)
+  const [form, setForm] = useState<{ name: string; dashboard: string; planId: string; permissions: string[] }>({ name: '', dashboard: '/buyer', planId: '', permissions: [] })
+
+  const load = async () => {
+    setLoading(true)
+    const [rr, pr] = await Promise.all([
+      fetch('/api/admin/roles').then(r => r.ok ? r.json() : null),
+      fetch('/api/admin/plans').then(r => r.ok ? r.json() : null),
+    ])
+    if (rr) { setRoles(rr.roles || []); setPerms(rr.permissions || []) }
+    if (pr) setPlans((pr.plans || []).map((p: any) => ({ id: p.id, name: p.name })))
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  const planName = (id?: string) => id ? (plans.find(p => p.id === id)?.name || id) : 'رایگان / پیش‌فرض'
+
+  const togglePermInForm = (pid: string) => setForm(f => ({ ...f, permissions: f.permissions.includes(pid) ? f.permissions.filter(x => x !== pid) : [...f.permissions, pid] }))
+
+  const create = async () => {
+    if (!form.name.trim()) return
+    const r = await fetch('/api/admin/roles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: form.name.trim(), dashboard: form.dashboard, planId: form.planId || undefined, permissions: form.permissions }) })
+    if (r.ok) { setForm({ name: '', dashboard: '/buyer', planId: '', permissions: [] }); setShowNew(false); load() }
+    else { const d = await r.json().catch(() => ({})); alert(d.error || 'خطا در ساخت نقش') }
+  }
+  const patch = async (id: string, p: any) => {
+    const r = await fetch('/api/admin/roles', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, patch: p }) })
+    if (r.ok) { const d = await r.json(); setRoles(rs => rs.map(x => x.id === id ? d.role : x)) }
+  }
+  const del = async (role: Role) => {
+    if (role.builtin) { alert('نقش پایه قابل حذف نیست'); return }
+    if (!confirm(`نقش «${role.name}» حذف شود؟`)) return
+    const r = await fetch(`/api/admin/roles?id=${role.id}`, { method: 'DELETE' })
+    if (r.ok) setRoles(rs => rs.filter(x => x.id !== role.id))
+    else { const d = await r.json().catch(() => ({})); alert(d.error || 'خطا در حذف') }
+  }
+
+  const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+  const lab: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', marginBottom: 5, display: 'block', fontWeight: 600 }
+
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 14 }}>نقش‌ها و دسترسی</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6, lineHeight: 1.9, maxWidth: 720 }}>
+              هر نقش یک <b>داشبورد پیش‌فرض</b> دارد (مسیری که کاربر بعد از ورود می‌بیند). اگر به یک نقش <b>پلن</b> بدهید، یعنی آن نقش/دسترسی با خرید آن پلن باز (آنلاک) می‌شود؛ نقش بدون پلن، رایگان/پیش‌فرض است. سوپرادمین می‌تواند نقش و پلن را به‌صورت دستی هم در بخش «کاربران» به هر کاربر بدهد.
+            </div>
+          </div>
+          <GoldButton onClick={() => setShowNew(s => !s)}>{showNew ? 'بستن' : '＋ نقش جدید'}</GoldButton>
+        </div>
+
+        {showNew && (
+          <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+              <div><label style={lab}>نام نقش *</label><input style={inp} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="مثلاً مشاور ویژه" /></div>
+              <div><label style={lab}>داشبورد (مسیر)</label>
+                <select style={inp} value={form.dashboard} onChange={e => setForm({ ...form, dashboard: e.target.value })}>
+                  {DASHBOARD_OPTIONS.map(d => <option key={d.value} value={d.value}>{d.label} ({d.value})</option>)}
+                </select>
               </div>
-            ))}
+              <div><label style={lab}>پلن آنلاک‌کننده</label>
+                <select style={inp} value={form.planId} onChange={e => setForm({ ...form, planId: e.target.value })}>
+                  <option value="">رایگان (بدون پلن)</option>
+                  {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <label style={lab}>دسترسی‌ها</label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: 8, marginBottom: 14 }}>
+              {perms.map(p => (
+                <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '8px 10px', cursor: 'pointer', fontSize: 12.5 }}>
+                  <input type="checkbox" checked={form.permissions.includes(p.id)} onChange={() => togglePermInForm(p.id)} style={{ width: 15, height: 15, accentColor: 'var(--gold)', cursor: 'pointer' }} />
+                  {p.label}
+                </label>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <GoldButton onClick={create} disabled={!form.name.trim()}>ساخت نقش</GoldButton>
+              <OutlineButton onClick={() => setShowNew(false)}>انصراف</OutlineButton>
+            </div>
           </div>
         )}
       </Card>
 
-      {editOwner && (
-        <div onClick={() => setEditOwner(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 20 }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 18, padding: 24, width: '100%', maxWidth: 420 }}>
-            <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 16 }}>ویرایش آگهی‌دهنده</div>
-            <label style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 5, display: 'block', fontWeight: 600 }}>نام</label>
-            <input value={editOwner.name} onChange={e => setEditOwner({ ...editOwner, name: e.target.value })} style={{ width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', marginBottom: 12 }} />
-            <label style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 5, display: 'block', fontWeight: 600 }}>شماره موبایل (دستی از دیوار)</label>
-            <input value={editOwner.phone} onChange={e => setEditOwner({ ...editOwner, phone: e.target.value })} placeholder="09xxxxxxxxx" style={{ width: '100%', direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', marginBottom: 16 }} />
-            <div style={{ fontSize: 11, color: 'var(--faint)', marginBottom: 16 }}>شماره روی همهٔ آگهی‌های این شخص نشانده می‌شود.</div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <GoldButton onClick={saveOwner} style={{ flex: 1 }}>ذخیره</GoldButton>
-              <OutlineButton onClick={() => setEditOwner(null)}>انصراف</OutlineButton>
-            </div>
-          </div>
-        </div>
-      )}
-
       <Card>
-        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>نقش‌ها و دسترسی‌ها</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {roles.map(r => (
-            <div key={r.name} style={{ background: 'var(--bg2)', borderRadius: 12, overflow: 'hidden' }}>
-              <button onClick={() => setOpenRole(openRole === r.name ? null : r.name)} style={{
-                width: '100%', background: 'transparent', border: 'none', padding: '14px 16px',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                cursor: 'pointer', fontFamily: 'inherit', color: 'var(--text)', fontWeight: 600, fontSize: 13.5
-              }}>
-                {r.name}
-                <span style={{ color: 'var(--faint)', display: 'inline-block', transition: 'transform .2s', transform: openRole === r.name ? 'rotate(180deg)' : 'none' }}>▾</span>
-              </button>
-              {openRole === r.name && (
-                <div style={{ padding: '4px 16px 14px', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {r.perms.map(p => (
-                    <span key={p} style={{ fontSize: 12, background: 'var(--goldDim)', color: 'var(--gold)', borderRadius: 8, padding: '4px 10px' }}>{p}</span>
-                  ))}
+        {loading ? (
+          <div style={{ color: 'var(--muted)', fontSize: 13, padding: '24px 0', textAlign: 'center' }}>در حال بارگذاری…</div>
+        ) : roles.length === 0 ? (
+          <div style={{ color: 'var(--muted)', fontSize: 13, padding: '24px 0', textAlign: 'center' }}>نقشی تعریف نشده است.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {roles.map(role => (
+              <div key={role.id} style={{ background: 'var(--bg2)', borderRadius: 12, padding: '14px 16px', border: editing === role.id ? '1px solid var(--gold)' : '1px solid var(--line)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 180 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>{role.name}</span>
+                      {role.builtin && <Badge label="پایه" color="var(--gold)" />}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                      <span>مسیر: <b style={{ color: 'var(--text)' }}>{dashLabel(role.dashboard)}</b> <span style={{ direction: 'ltr', display: 'inline-block', color: 'var(--faint)' }}>({role.dashboard})</span></span>
+                      <span>پلن: <b style={{ color: role.planId ? 'var(--gold)' : 'var(--text)' }}>{planName(role.planId)}</b></span>
+                    </div>
+                    {role.permissions.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                        {role.permissions.map(pid => (
+                          <span key={pid} style={{ fontSize: 11, background: 'var(--goldDim)', color: 'var(--gold)', borderRadius: 7, padding: '3px 9px' }}>{perms.find(p => p.id === pid)?.label || pid}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{role.active ? 'فعال' : 'غیرفعال'}</span>
+                      <Toggle on={role.active} onChange={v => patch(role.id, { active: v })} />
+                    </div>
+                    <OutlineButton onClick={() => setEditing(editing === role.id ? null : role.id)} style={{ fontSize: 11.5, padding: '5px 12px' }}>{editing === role.id ? 'بستن' : 'ویرایش'}</OutlineButton>
+                    <button title={role.builtin ? 'نقش پایه قابل حذف نیست' : 'حذف'} onClick={() => del(role)} disabled={role.builtin} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.35)', color: role.builtin ? 'var(--faint)' : '#e7674a', borderRadius: 8, padding: '5px 9px', cursor: role.builtin ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontSize: 13, opacity: role.builtin ? .5 : 1 }}>{role.builtin ? '🔒' : '×'}</button>
+                  </div>
                 </div>
-              )}
-            </div>
-          ))}
-        </div>
+
+                {editing === role.id && (
+                  <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+                      <div><label style={lab}>نام نقش</label><input style={inp} defaultValue={role.name} onBlur={e => { const v = e.target.value.trim(); if (v && v !== role.name) patch(role.id, { name: v }) }} /></div>
+                      <div><label style={lab}>داشبورد (مسیر)</label>
+                        <select style={inp} value={role.dashboard} onChange={e => patch(role.id, { dashboard: e.target.value })}>
+                          {DASHBOARD_OPTIONS.map(d => <option key={d.value} value={d.value}>{d.label} ({d.value})</option>)}
+                        </select>
+                      </div>
+                      <div><label style={lab}>پلن آنلاک‌کننده</label>
+                        <select style={inp} value={role.planId || ''} onChange={e => patch(role.id, { planId: e.target.value || undefined })}>
+                          <option value="">رایگان (بدون پلن)</option>
+                          {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <label style={lab}>دسترسی‌ها</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: 8 }}>
+                      {perms.map(p => {
+                        const on = role.permissions.includes(p.id)
+                        return (
+                          <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 9, padding: '8px 10px', cursor: 'pointer', fontSize: 12.5 }}>
+                            <input type="checkbox" checked={on} onChange={() => patch(role.id, { permissions: on ? role.permissions.filter(x => x !== p.id) : [...role.permissions, p.id] })} style={{ width: 15, height: 15, accentColor: 'var(--gold)', cursor: 'pointer' }} />
+                            {p.label}
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
     </div>
   )
@@ -2880,6 +3139,7 @@ export default function SuperAdminPage() {
       case 'articles':   return <ArticlesView />
       case 'api':        return <APIView />
       case 'users':      return <UsersView />
+      case 'roles':      return <RolesView />
       case 'plans':      return <PlansView />
       case 'promos':     return <PromotionsView />
       case 'discounts':  return <PromosView />
