@@ -1,9 +1,9 @@
 import Link from 'next/link'
 
 const cols = [
-  { h: 'محصول', links: [{ t: 'جستجوی هوشمند', href: '/search' }, { t: 'تحلیل قیمت', href: '/search' }, { t: 'بازار مصالح', href: '/materials' }, { t: 'میز کار خریدار', href: '/buyer' }, { t: 'فروشنده / سرمایه‌گذار', href: '/owner' }] },
-  { h: 'برای کسب‌وکار', links: [{ t: 'پنل آژانس', href: '/agency' }, { t: 'مارکتینگ', href: '/marketing' }, { t: 'پلن‌ها و اشتراک', href: '/pricing' }, { t: 'میز کار سازنده', href: '/builder' }, { t: 'اتوماسیون بازاریابی', href: '/crm' }] },
-  { h: 'ملک‌جت', links: [{ t: 'درباره ما', href: '/' }, { t: 'تماس با ما', href: '/' }, { t: 'قوانین', href: '/legal' }, { t: 'پنل مدیریت', href: '/admin' }] },
+  { h: 'محصول', links: [{ t: 'جستجوی هوشمند', href: '/search' }, { t: 'فروشگاه', href: '/store' }, { t: 'بازار مصالح', href: '/materials' }, { t: 'بلاگ', href: '/blog' }, { t: 'استودیو پلان و سه‌بعدی', href: '/plan-ai' }] },
+  { h: 'برای کسب‌وکار', links: [{ t: 'پنل آژانس', href: '/agency' }, { t: 'مارکتینگ', href: '/marketing' }, { t: 'پلن‌ها و اشتراک', href: '/pricing' }, { t: 'میز کار سازنده', href: '/builder' }, { t: 'CRM مشاوران', href: '/crm' }] },
+  { h: 'ملک‌جت', links: [{ t: 'درباره ما', href: '/about' }, { t: 'تماس با ما', href: '/contact' }, { t: 'قوانین و شرایط', href: '/terms' }, { t: 'بلاگ', href: '/blog' }] },
 ]
 
 export default function Footer() {

@@ -8,9 +8,10 @@ const navLinks = [
   { href: '/search?type=rent', label: 'اجاره' },
   { href: '/search?type=presale', label: 'پیش‌فروش' },
   { href: '/directory', label: 'مشاوران' },
+  { href: '/store', label: 'فروشگاه' },
   { href: '/neighborhood/tehran', label: 'تحلیل بازار' },
-  { href: '/plan-ai', label: 'استودیو پلان و سه‌بعدی' },
-  { href: '/content', label: 'مقالات و وبلاگ' },
+  { href: '/blog', label: 'بلاگ' },
+  { href: '/plan-ai', label: 'استودیو AI' },
 ]
 
 export default function Nav() {

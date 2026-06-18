@@ -88,6 +88,7 @@ body {
 .mj-takeaways strong { color: var(--gold); display: block; margin-bottom: 8px; }
 .mj-takeaways ul { margin: 0; padding-inline-start: 20px; }
 .mj-takeaways li { margin: .4em 0; }
+@media (max-width: 720px) { .mjb-feat { flex-direction: column !important; } .mjb-featimg { width: 100% !important; min-height: 180px !important; } }
 @keyframes scan { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
 @keyframes pop { 0% { transform: scale(0.4); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
 @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
