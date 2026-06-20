@@ -71,6 +71,22 @@ export async function generateImage(model: string, prompt: string, size = '1024x
   return d.data?.[0]?.url || d.data?.[0]?.b64_json || ''
 }
 
+// تحلیل تصویر (چندوجهی): تصاویر را همراه یک پرامپت متنی به مدل بینایی می‌دهد.
+// images آرایه‌ای از data URL یا URL تصویر است (فرمت OpenAI vision).
+export async function chatVision(model: string, prompt: string, images: string[], opts: { max_tokens?: number } = {}): Promise<string> {
+  const { base, key } = cfg()
+  const content: any[] = [{ type: 'text', text: prompt }]
+  for (const img of images.slice(0, 8)) if (img) content.push({ type: 'image_url', image_url: { url: img } })
+  const res = await gapHttp(`${base}/chat/completions`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', Authorization: `Bearer ${key}`, accept: 'application/json' },
+    body: JSON.stringify({ model, messages: [{ role: 'user', content }], max_tokens: opts.max_tokens ?? 700, temperature: 0.4 }),
+  }, 90000)
+  if (res.status !== 200) throw new Error(`گپ بینایی HTTP ${res.status}: ${res.body.slice(0, 300)}`)
+  const d = JSON.parse(res.body)
+  return d.choices?.[0]?.message?.content || ''
+}
+
 // مدل‌های تصویرِ رایج و معتبر روی گپ‌جی‌پی‌تی برای fallback.
 const IMAGE_FALLBACKS = ['dall-e-3', 'gpt-image-1', 'dall-e-2', 'flux']
 

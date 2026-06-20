@@ -24,10 +24,27 @@ export default function PlanStudio({ compact }: { compact?: boolean }) {
   const [err, setErr] = useState('')
   const fileRefs = useRef<Record<number, HTMLInputElement | null>>({})
 
+  // عکس را کوچک می‌کند و به data URL تبدیل می‌کند تا هم پیش‌نمایش شود هم به سرور
+  // (برای تحلیل بینایی) فرستاده شود. کوچک‌سازی حجم را پایین نگه می‌دارد.
   const pickPhoto = (i: number, f: File | null) => {
     if (!f) return
-    const url = URL.createObjectURL(f)
-    setRooms(rs => rs.map((r, idx) => idx === i ? { ...r, preview: url } : r))
+    const reader = new FileReader()
+    reader.onload = () => {
+      const img = new Image()
+      img.onload = () => {
+        const max = 768
+        const scale = Math.min(1, max / Math.max(img.width, img.height))
+        const w = Math.round(img.width * scale), h = Math.round(img.height * scale)
+        const canvas = document.createElement('canvas')
+        canvas.width = w; canvas.height = h
+        const ctx = canvas.getContext('2d')
+        let data = String(reader.result || '')
+        if (ctx) { ctx.drawImage(img, 0, 0, w, h); data = canvas.toDataURL('image/jpeg', 0.72) }
+        setRooms(rs => rs.map((r, idx) => idx === i ? { ...r, preview: data } : r))
+      }
+      img.src = String(reader.result || '')
+    }
+    reader.readAsDataURL(f)
   }
   const addRoom = () => {
     const n = newRoom.trim(); if (!n) return
@@ -42,11 +59,14 @@ export default function PlanStudio({ compact }: { compact?: boolean }) {
     setBusy(true); setErr(''); setOut(null); setProgress('در حال ساخت پلان و مدل سه‌بعدی توسط هوش مصنوعی…')
     try {
       const withPhotos = rooms.filter(r => r.preview).map(r => r.label)
+      // عکس‌های واقعی را هم می‌فرستیم تا مدل بینایی فضا را تحلیل کند و پلان با واقعیت بخوانَد
+      const photos = rooms.filter(r => r.preview && String(r.preview).startsWith('data:')).map(r => ({ label: r.label, image: r.preview as string }))
       const r = await fetch('/api/ai/studio', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           area: toEnDigit(area), bedrooms: BED_VAL[bedrooms] || toEnDigit(bedrooms),
           style, openPlan, rooms: withPhotos.length ? withPhotos : rooms.map(r => r.label),
+          photos,
         }),
       })
       let d: any = null
