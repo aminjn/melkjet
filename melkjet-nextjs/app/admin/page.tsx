@@ -23,7 +23,6 @@ const sections: NavSection[] = [
     items: [
       { id: 'articles',    icon: '✎',  label: 'مقالات' },
       { id: 'categories',  icon: '☰',  label: 'دسته‌بندی‌ها' },
-      { id: 'studio',      icon: '◳',  label: 'استودیو پلان و سه‌بعدی' },
     ],
   },
   {

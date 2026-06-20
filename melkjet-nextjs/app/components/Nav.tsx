@@ -18,7 +18,6 @@ const navLinks = [
   { href: '/store', label: 'فروشگاه' },
   { href: '/neighborhood/tehran', label: 'تحلیل بازار' },
   { href: '/blog', label: 'بلاگ' },
-  { href: '/plan-ai', label: 'استودیو AI' },
 ]
 
 export default function Nav() {

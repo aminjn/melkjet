@@ -1,7 +1,7 @@
 import Link from 'next/link'
 
 const cols = [
-  { h: 'محصول', links: [{ t: 'جستجوی هوشمند', href: '/search' }, { t: 'فروشگاه', href: '/store' }, { t: 'بازار مصالح', href: '/materials' }, { t: 'بلاگ', href: '/blog' }, { t: 'استودیو پلان و سه‌بعدی', href: '/plan-ai' }] },
+  { h: 'محصول', links: [{ t: 'جستجوی هوشمند', href: '/search' }, { t: 'فروشگاه', href: '/store' }, { t: 'بازار مصالح', href: '/materials' }, { t: 'بلاگ', href: '/blog' }] },
   { h: 'برای کسب‌وکار', links: [{ t: 'پنل آژانس', href: '/agency' }, { t: 'مارکتینگ', href: '/marketing' }, { t: 'پلن‌ها و اشتراک', href: '/pricing' }, { t: 'میز کار سازنده', href: '/builder' }, { t: 'CRM مشاوران', href: '/crm' }] },
   { h: 'ملک‌جت', links: [{ t: 'درباره ما', href: '/about' }, { t: 'تماس با ما', href: '/contact' }, { t: 'قوانین و شرایط', href: '/terms' }, { t: 'بلاگ', href: '/blog' }] },
 ]

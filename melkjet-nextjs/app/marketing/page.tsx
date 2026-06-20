@@ -279,10 +279,6 @@ export default function MarketingPage() {
               <span className="mjk-sidelabel" style={{ flex: 1, textAlign: 'right' as const }}>{m.l}</span>
             </button>
           ))}
-          <Link href="/plan-ai" style={{ display: 'flex', alignItems: 'center', gap: 0, padding: '10px 12px', borderRadius: 10, color: 'var(--gold)', textDecoration: 'none', fontSize: 13.5, fontWeight: 600, marginTop: 4, border: '1px solid rgba(212,175,55,0.25)' }}>
-            <span style={{ width: 22, textAlign: 'center', fontSize: 15 }}>◳</span>
-            <span className="mjk-sidelabel" style={{ flex: 1, textAlign: 'right' }}>استودیو پلان و سه‌بعدی</span>
-          </Link>
           <Link href="/content" style={{ display: 'flex', alignItems: 'center', gap: 0, padding: '10px 12px', borderRadius: 10, color: 'var(--gold)', textDecoration: 'none', fontSize: 13.5, fontWeight: 600, marginTop: 4, border: '1px solid rgba(212,175,55,0.25)' }}>
             <span style={{ width: 22, textAlign: 'center', fontSize: 15 }}>✎</span>
             <span className="mjk-sidelabel" style={{ flex: 1, textAlign: 'right' }}>مقالات و وبلاگ</span>
