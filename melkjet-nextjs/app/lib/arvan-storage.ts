@@ -20,8 +20,8 @@ const sha256hex = (data: Buffer | string): string => createHash('sha256').update
 export async function arvanUpload(cfg: ArvanCfg, objectKey: string, buf: Buffer, contentType: string): Promise<string> {
   const endpoint = cfg.endpoint.replace(/^https?:\/\//, '').replace(/\/$/, '')
   const region = cfg.region || endpoint.match(/s3\.([^.]+)\./)?.[1] || 'ir-thr-at1'
-  const host = `${cfg.bucket}.${endpoint}`            // virtual-hosted–style
-  const path = '/' + objectKey.replace(/^\//, '')
+  const host = endpoint                                          // path-style (آروان زیردامنهٔ باکت را DNS ندارد)
+  const path = '/' + cfg.bucket + '/' + objectKey.replace(/^\//, '')
   const now = new Date()
   const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '') // YYYYMMDDTHHMMSSZ
   const dateStamp = amzDate.slice(0, 8)
