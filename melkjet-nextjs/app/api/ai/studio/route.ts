@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { chatCompleteSafe, chatVisionSafe, generateImageSafe, agentModel } from '@/app/lib/gapgpt'
 import { renderFloorPlanSVG, renderIsoSVG, svgDataUrl, type PlanLayout } from '@/app/lib/floorplan-svg'
+import { saveMedia } from '@/app/lib/media-store'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -32,7 +33,20 @@ export async function POST(req: NextRequest) {
   // ===== حالت بازسازی وضع موجود (وقتی عکس داریم) =====
   if (photos.length && visionModel) {
     const labels = photos.map(p => p.label).join('، ')
-    const imgs = photos.map(p => p.image).slice(0, 6)
+    // گپ معمولاً عکسِ base64 را برای بینایی نمی‌پذیرد (۵۰۳ system_error)؛ عکس‌ها را
+    // ذخیره می‌کنیم و لینک عمومی می‌دهیم تا خود گپ از روی URL بخواندشان.
+    const host = req.headers.get('host')
+    const proto = req.headers.get('x-forwarded-proto') || 'https'
+    const toUrl = (dataUrl: string): string => {
+      try {
+        const ci = dataUrl.indexOf(',')
+        if (!host || ci < 0 || !dataUrl.startsWith('data:')) return dataUrl
+        const mime = (dataUrl.slice(5, ci).split(';')[0]) || 'image/jpeg'
+        const saved = saveMedia(Buffer.from(dataUrl.slice(ci + 1), 'base64'), mime, 'studio.jpg')
+        return `${proto}://${host}/api/media/${saved.id}`
+      } catch { return dataUrl }
+    }
+    const imgs = photos.map(p => toUrl(p.image)).slice(0, 6)
     const visionPrompt =
       `These photos show the rooms of ONE existing unit (~${area} m²; room labels: ${labels}). Reconstruct its AS-BUILT floor plan as a SCHEMATIC GRID — do NOT design or improve anything, only reflect what's really there.\n` +
       `Model the footprint as a grid of cols×rows cells (pick cols,rows between 3 and 6 to fit the real proportions). Place EVERY real room as a rectangle on the grid in its REAL relative position/adjacency as seen in the photos; rooms should tile the rectangle with minimal gaps/overlaps. Use ONLY rooms visible in the photos — never invent rooms.\n` +
