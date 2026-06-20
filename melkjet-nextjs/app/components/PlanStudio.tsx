@@ -23,7 +23,9 @@ export default function PlanStudio({ compact }: { compact?: boolean }) {
   const [progress, setProgress] = useState('')
   const [out, setOut] = useState<{ description?: string; planUrl?: string; renderUrl?: string; mode?: string } | null>(null)
   const [err, setErr] = useState('')
-  const [editData, setEditData] = useState<{ labels: string[]; area: number } | null>(null)
+  const [editData, setEditData] = useState<{ labels: string[]; area: number; initial?: any } | null>(null)
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiMsg, setAiMsg] = useState('')
   const fileRefs = useRef<Record<number, HTMLInputElement | null>>({})
 
   // عکس را کوچک می‌کند و به data URL تبدیل می‌کند تا هم پیش‌نمایش شود هم به سرور
@@ -60,6 +62,35 @@ export default function PlanStudio({ compact }: { compact?: boolean }) {
   const openEditor = () => {
     const labels = rooms.map(r => r.label.trim()).filter(Boolean)
     setEditData({ labels, area: Number(toEnDigit(area)) || 100 })
+    setAiMsg('')
+  }
+
+  // پیش‌نویس هوشمند: عکس‌ها را به AI می‌دهد، چیدمان را می‌گیرد و در ویرایشگر باز می‌کند
+  // تا کاربر اصلاحش کند. اگر اینترنت/AI نبود، با پیام، کاربر دستی می‌سازد.
+  const aiDraft = async () => {
+    if (aiBusy) return
+    const photos = rooms.filter(r => r.preview && String(r.preview).startsWith('data:')).map(r => ({ label: r.label, image: r.preview as string }))
+    if (!photos.length) { setAiMsg('برای پیش‌نویس هوشمند، اول از فضاها عکس اضافه کن.'); return }
+    setAiBusy(true); setAiMsg('در حال تحلیل عکس‌ها با هوش مصنوعی…')
+    const labels = rooms.map(r => r.label.trim()).filter(Boolean)
+    const areaN = Number(toEnDigit(area)) || 100
+    try {
+      const r = await fetch('/api/ai/studio', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ area: toEnDigit(area), bedrooms: BED_VAL[bedrooms] || toEnDigit(bedrooms), style, openPlan, rooms: rooms.map(r => r.label), photos }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (d && d.layout && Array.isArray(d.layout.rooms) && d.layout.rooms.length) {
+        setEditData({ labels, area: areaN, initial: d.layout })
+        setAiMsg('✓ پیش‌نویس هوش مصنوعی آماده شد — حالا با درگ اصلاحش کن.')
+      } else {
+        setEditData({ labels, area: areaN }) // دستی شروع کن
+        setAiMsg(d?.error || 'هوش مصنوعی در دسترس نبود؛ نقشه را دستی بساز.')
+      }
+    } catch {
+      setEditData({ labels, area: areaN })
+      setAiMsg('اتصال به هوش مصنوعی برقرار نشد؛ نقشه را دستی بساز.')
+    } finally { setAiBusy(false) }
   }
 
   const generate = async () => {
@@ -157,6 +188,11 @@ export default function PlanStudio({ compact }: { compact?: boolean }) {
             width: '100%', marginTop: 18, padding: '13px', borderRadius: 12, border: 'none', cursor: 'pointer',
             background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 14.5, fontFamily: 'inherit',
           }}>✦ ساخت / ویرایش پلان</button>
+          <button onClick={aiDraft} disabled={aiBusy} style={{
+            width: '100%', marginTop: 8, padding: '11px', borderRadius: 12, cursor: aiBusy ? 'default' : 'pointer',
+            background: 'transparent', border: '1px solid var(--gold)', color: 'var(--gold)', fontWeight: 700, fontSize: 13, fontFamily: 'inherit', opacity: aiBusy ? .6 : 1,
+          }}>{aiBusy ? '⏳ در حال تحلیل…' : '🤖 پیش‌نویس هوشمند از روی عکس (وقتی اینترنت هست)'}</button>
+          {aiMsg && <div style={{ marginTop: 8, fontSize: 11.5, color: aiMsg.startsWith('✓') ? '#5fd98a' : 'var(--muted)', lineHeight: 1.7 }}>{aiMsg}</div>}
         </div>
       </div>
 
@@ -168,7 +204,7 @@ export default function PlanStudio({ compact }: { compact?: boolean }) {
         </div>
 
         {editData ? (
-          <PlanEditor key={editData.labels.join('|') + '@' + editData.area} labels={editData.labels} area={editData.area} />
+          <PlanEditor key={editData.labels.join('|') + '@' + editData.area + (editData.initial ? '#ai' : '')} labels={editData.labels} area={editData.area} initial={editData.initial} />
         ) : (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, color: 'var(--faint)', textAlign: 'center' }}>
             <span style={{ fontSize: 30 }}>▦</span>

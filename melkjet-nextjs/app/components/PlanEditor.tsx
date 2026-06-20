@@ -26,7 +26,7 @@ function typeOf(label: string) {
 }
 
 // ویرایشگر پلانِ کاملاً آفلاین — کاربر اتاق‌ها را با درگ جابه‌جا/تغییراندازه می‌کند.
-export default function PlanEditor({ labels, area }: { labels: string[]; area: number }) {
+export default function PlanEditor({ labels, area, initial }: { labels: string[]; area: number; initial?: { cols: number; rows: number; rooms: { name: string; type?: string; x: number; y: number; w: number; h: number }[] } }) {
   const [cols, setCols] = useState(4)
   const [rows, setRows] = useState(4)
   const [rooms, setRooms] = useState<ERoom[]>([])
@@ -35,13 +35,24 @@ export default function PlanEditor({ labels, area }: { labels: string[]; area: n
   const drag = useRef<any>(null)
 
   useEffect(() => {
+    // اگر پیش‌نویسِ AI آمده، از همان شروع کن؛ وگرنه از روی برچسب فضاها بساز.
+    if (initial && Array.isArray(initial.rooms) && initial.rooms.length) {
+      const c = clamp(initial.cols || 4, 2, 8), r = clamp(initial.rows || 4, 2, 8)
+      setCols(c); setRows(r)
+      setRooms(initial.rooms.map(rm => ({
+        id: rid(), name: rm.name, type: rm.type || typeOf(rm.name),
+        x: clamp(rm.x, 0, c - 1), y: clamp(rm.y, 0, r - 1),
+        w: clamp(rm.w, 1, c - clamp(rm.x, 0, c - 1)), h: clamp(rm.h, 1, r - clamp(rm.y, 0, r - 1)),
+      })))
+      return
+    }
     const names = labels.filter(Boolean).slice(0, 12)
     const n = Math.max(1, names.length)
     const c = Math.min(4, Math.max(2, Math.ceil(Math.sqrt(n))))
     const r = Math.max(2, Math.ceil(n / c))
     setCols(c); setRows(r)
     setRooms(names.map((name, i) => ({ id: rid(), name, type: typeOf(name), x: i % c, y: Math.floor(i / c), w: 1, h: 1 })))
-  }, [labels])
+  }, [labels, initial])
 
   const cellArea = area / (cols * rows)
   const selRoom = rooms.find(r => r.id === sel) || null

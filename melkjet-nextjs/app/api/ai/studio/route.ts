@@ -111,7 +111,8 @@ export async function POST(req: NextRequest) {
       const renderUrl = svgDataUrl(renderIsoSVG(parsed, area, 'نمای سه‌بعدی'))
       const description = String(parsed.summaryFa || '').trim()
         || `این واحد شامل ${parsed.rooms.map(r => r.name).filter(Boolean).join('، ')} است که از روی عکس‌ها بازسازی شده است.`
-      return NextResponse.json({ ok: true, mode: 'photo', description, planUrl, renderUrl, svg: true })
+      // layout را هم برمی‌گردانیم تا در ویرایشگرِ آفلاین قابل‌اصلاح باشد
+      return NextResponse.json({ ok: true, mode: 'photo', description, planUrl, renderUrl, svg: true, layout: { cols: parsed.cols, rows: parsed.rows, rooms: parsed.rooms } })
     }
 
     // تحلیل عکس در دسترس نبود → به‌جای ارورِ خالی، نقشهٔ تقریبی از روی نام فضاها بساز.
