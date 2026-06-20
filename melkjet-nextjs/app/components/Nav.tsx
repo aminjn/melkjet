@@ -37,6 +37,7 @@ export default function Nav() {
 
   const logout = async () => {
     try { await fetch('/api/auth/logout', { method: 'POST' }) } catch {}
+    try { localStorage.removeItem('mj_token'); sessionStorage.removeItem('mj_resume_tried') } catch {}
     window.location.href = '/'
   }
   const dashLabel = me ? (DASH_LABEL[me.dash] || 'پنل من') : ''

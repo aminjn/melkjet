@@ -84,6 +84,7 @@ export default function AuthPage() {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'کد اشتباه است'); return }
+      if (data.token) { try { localStorage.setItem('mj_token', data.token) } catch {} }
       if (data.role === 'super_admin') { router.push('/admin'); return }
       if (data.needsOnboarding) { setOtpStep('onboard'); return }   // کاربر جدید → تکمیل پروفایل
       router.push(data.redirect || '/buyer')
@@ -120,6 +121,7 @@ export default function AuthPage() {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'ایمیل یا رمز اشتباه است'); return }
+      if (data.token) { try { localStorage.setItem('mj_token', data.token) } catch {} }
       router.push(data.role === 'super_admin' ? '/admin' : (data.redirect || '/buyer'))
     } catch { setError('خطا در اتصال به سرور') }
     finally { setLoading(false) }
