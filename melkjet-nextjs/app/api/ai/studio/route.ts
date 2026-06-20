@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { chatCompleteSafe, chatVisionSafe, generateImageSafe, agentModel } from '@/app/lib/gapgpt'
 import { renderFloorPlanSVG, renderIsoSVG, svgDataUrl, type PlanLayout, type PlanRoom } from '@/app/lib/floorplan-svg'
+import { uploadTempImage } from '@/app/lib/img-host'
+import { getAdminData } from '@/app/lib/admin-store'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -55,8 +57,17 @@ export async function POST(req: NextRequest) {
   // ===== حالت بازسازی وضع موجود (وقتی عکس داریم) =====
   if (photos.length && visionModel) {
     const labels = photos.map(p => p.label).join('، ')
-    // base64 مستقیم می‌فرستیم (URL را خودِ سرویس خارجی نمی‌تواند از سرور ایرانی بگیرد).
-    const imgs = photos.map(p => p.image).slice(0, 3)
+    // گپ نه base64 می‌پذیرد و نه می‌تواند هاستِ ایرانیِ ما را فِچ کند؛ پس عکس‌ها را
+    // از طریق پروکسیِ سرور روی litterbox (هاست جهانیِ موقت) می‌گذاریم و لینکش را می‌دهیم.
+    const proxyUrl = getAdminData().divar?.proxyUrl
+    const bufs = photos.slice(0, 4).map(p => {
+      const ci = p.image.indexOf(',')
+      const mime = ci > 0 ? (p.image.slice(5, ci).split(';')[0] || 'image/jpeg') : 'image/jpeg'
+      return { mime, buf: Buffer.from(ci > 0 ? p.image.slice(ci + 1) : '', 'base64') }
+    }).filter(b => b.buf.length)
+    const uploaded = await Promise.allSettled(bufs.map(b => uploadTempImage(b.buf, b.mime, proxyUrl)))
+    const imgs = uploaded.filter(r => r.status === 'fulfilled').map(r => (r as PromiseFulfilledResult<string>).value)
+    const uploadErr = (uploaded.find(r => r.status === 'rejected') as PromiseRejectedResult | undefined)?.reason?.message || ''
     const visionPrompt =
       `These photos show the rooms of ONE existing unit (~${area} m²; room labels: ${labels}). Reconstruct its AS-BUILT floor plan as a SCHEMATIC GRID — do NOT design or improve anything, only reflect what's really there.\n` +
       `Model the footprint as a grid of cols×rows cells (pick cols,rows between 3 and 6 to fit the real proportions). Place EVERY real room as a rectangle on the grid in its REAL relative position/adjacency as seen in the photos; rooms should tile the rectangle with minimal gaps/overlaps. Use ONLY rooms visible in the photos — never invent rooms.\n` +
@@ -66,9 +77,14 @@ export async function POST(req: NextRequest) {
       `x,y are 0-based top-left grid coords; w,h are sizes in cells; every room must fit inside cols×rows.`
 
     let raw = '', visionErr = ''
-    try {
-      raw = (await chatVisionSafe(visionModel, visionPrompt, imgs, { max_tokens: 900, timeout: 40000 })).text
-    } catch (e: any) { visionErr = e?.message || 'خطای نامشخص' }
+    if (imgs.length) {
+      try {
+        raw = (await chatVisionSafe(visionModel, visionPrompt, imgs, { max_tokens: 900, timeout: 40000 })).text
+      } catch (e: any) { visionErr = e?.message || 'خطای نامشخص' }
+    } else {
+      // آپلود عکس‌ها (برای دسترسیِ سرویس بینایی) ناموفق بود → بدون تحلیل عکس ادامه نده
+      visionErr = proxyUrl ? `آپلود عکس‌ها ناموفق بود: ${uploadErr.slice(0, 120)}` : 'پروکسی تنظیم نشده (پنل → اتصال‌ها → پروکسی) تا عکس‌ها برای تحلیل آپلود شوند'
+    }
 
     let parsed = extractJson(raw) as PlanLayout | null
     // تلاش دوم: اگر مدل پاسخ داد ولی JSON معتبر نبود، با یک مدل متنی به قالب JSON تبدیلش کن

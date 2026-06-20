@@ -5,7 +5,7 @@ import tls from 'node:tls'
 interface Opts {
   method?: string
   headers?: Record<string, string>
-  body?: string
+  body?: string | Buffer
   proxyUrl?: string
   timeout?: number
 }
