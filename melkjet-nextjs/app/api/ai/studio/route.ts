@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
         return `${proto}://${host}/api/media/${saved.id}`
       } catch { return dataUrl }
     }
-    const imgs = photos.map(p => toUrl(p.image)).slice(0, 6)
+    const imgs = photos.map(p => toUrl(p.image)).slice(0, 4)
     const visionPrompt =
       `These photos show the rooms of ONE existing unit (~${area} m²; room labels: ${labels}). Reconstruct its AS-BUILT floor plan as a SCHEMATIC GRID — do NOT design or improve anything, only reflect what's really there.\n` +
       `Model the footprint as a grid of cols×rows cells (pick cols,rows between 3 and 6 to fit the real proportions). Place EVERY real room as a rectangle on the grid in its REAL relative position/adjacency as seen in the photos; rooms should tile the rectangle with minimal gaps/overlaps. Use ONLY rooms visible in the photos — never invent rooms.\n` +
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
 
     let raw = '', visionErr = ''
     try {
-      raw = (await chatVisionSafe(visionModel, visionPrompt, imgs, { max_tokens: 900 })).text
+      raw = (await chatVisionSafe(visionModel, visionPrompt, imgs, { max_tokens: 900, timeout: 40000 })).text
     } catch (e: any) { visionErr = e?.message || 'خطای نامشخص' }
 
     let parsed = extractJson(raw) as PlanLayout | null

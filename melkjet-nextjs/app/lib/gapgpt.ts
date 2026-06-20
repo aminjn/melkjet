@@ -73,7 +73,7 @@ export async function generateImage(model: string, prompt: string, size = '1024x
 
 // تحلیل تصویر (چندوجهی): تصاویر را همراه یک پرامپت متنی به مدل بینایی می‌دهد.
 // images آرایه‌ای از data URL یا URL تصویر است (فرمت OpenAI vision).
-export async function chatVision(model: string, prompt: string, images: string[], opts: { max_tokens?: number } = {}): Promise<string> {
+export async function chatVision(model: string, prompt: string, images: string[], opts: { max_tokens?: number; timeout?: number } = {}): Promise<string> {
   const { base, key } = cfg()
   const content: any[] = [{ type: 'text', text: prompt }]
   for (const img of images.slice(0, 8)) if (img) content.push({ type: 'image_url', image_url: { url: img } })
@@ -81,18 +81,17 @@ export async function chatVision(model: string, prompt: string, images: string[]
     method: 'POST',
     headers: { 'content-type': 'application/json', Authorization: `Bearer ${key}`, accept: 'application/json' },
     body: JSON.stringify({ model, messages: [{ role: 'user', content }], max_tokens: opts.max_tokens ?? 700, temperature: 0.4 }),
-  }, 90000)
+  }, opts.timeout ?? 45000)
   if (res.status !== 200) throw new Error(`گپ بینایی HTTP ${res.status}: ${res.body.slice(0, 300)}`)
   const d = JSON.parse(res.body)
   return d.choices?.[0]?.message?.content || ''
 }
 
 // مدل‌های بینایی معتبر روی گپ برای fallback (وقتی مدلِ انتخابی روی عکس 503/خطا می‌دهد).
-const VISION_FALLBACKS = ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini', 'chatgpt-4o-latest']
+// کوتاه نگه داشته‌ایم تا مجموع زمان از حد تایم‌اوت پراکسی رد نشود.
+const VISION_FALLBACKS = ['gpt-4o', 'gpt-4o-mini']
 
-// مثل chatVision ولی اگر مدلِ انتخابی روی ورودیِ عکس جواب نداد (مثلاً 503 system_error
-// که روی گپ برای chatgpt-4o-latest رخ می‌دهد)، خودکار مدل‌های بینایی معتبر را امتحان می‌کند.
-export async function chatVisionSafe(model: string | undefined, prompt: string, images: string[], opts: { max_tokens?: number } = {}): Promise<{ text: string; model: string }> {
+export async function chatVisionSafe(model: string | undefined, prompt: string, images: string[], opts: { max_tokens?: number; timeout?: number } = {}): Promise<{ text: string; model: string }> {
   const candidates: string[] = []
   for (const m of [model, ...VISION_FALLBACKS]) if (m && !candidates.includes(m)) candidates.push(m)
   let lastErr: any = null
