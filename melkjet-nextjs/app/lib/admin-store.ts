@@ -39,12 +39,15 @@ export interface AdminData {
     baseUrl: string      // e.g. https://api.gapgpt.app/v1
     apiKey: string
   }
-  arvan?: {              // پاس‌انبان آروان (S3) — برای میزبانیِ عکس‌های قابل‌دسترس از داخل ایران
-    endpoint: string     // e.g. s3.ir-thr-at1.arvanstorage.ir
+  arvan?: {              // پاس‌انبان آروان (S3) — (برای بینایی گپ جواب نداد؛ نگه‌داری شده)
+    endpoint: string
     bucket: string
     accessKey: string
     secretKey: string
-    region?: string      // e.g. ir-thr-at1 (در صورت خالی از endpoint استخراج می‌شود)
+    region?: string
+  }
+  imgbb?: {              // imgbb — میزبانی عکس روی i.ibb.co که سرورِ گپ می‌تواند فِچ کند
+    apiKey: string
   }
   agentModels?: Record<string, { text?: string; image?: string }>  // per-agent model assignment
 }

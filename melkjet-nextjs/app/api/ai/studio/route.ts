@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { chatCompleteSafe, chatVisionSafe, generateImageSafe, agentModel } from '@/app/lib/gapgpt'
 import { renderFloorPlanSVG, renderIsoSVG, svgDataUrl, type PlanLayout, type PlanRoom } from '@/app/lib/floorplan-svg'
-import { arvanUpload } from '@/app/lib/arvan-storage'
+import { uploadToImgbb } from '@/app/lib/img-host'
 import { getAdminData } from '@/app/lib/admin-store'
-import { randomBytes } from 'crypto'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -58,24 +57,23 @@ export async function POST(req: NextRequest) {
   // ===== حالت بازسازی وضع موجود (وقتی عکس داریم) =====
   if (photos.length && visionModel) {
     const labels = photos.map(p => p.label).join('، ')
-    // گپ نه base64 می‌پذیرد و نه هاستِ پشتِ CDN را می‌گیرد؛ عکس‌ها را روی پاس‌انبان آروان
-    // (ایرانی، بدون فیلتر) می‌گذاریم تا سرورِ گپ بتواند از روی URL بخواندشان.
-    const arvan = getAdminData().arvan
-    const ext = (m: string) => m.includes('png') ? 'png' : m.includes('webp') ? 'webp' : 'jpg'
-    const bufs = photos.slice(0, 4).map(p => {
+    // گپ نه base64 می‌پذیرد و نه هاست‌های ایرانی را می‌گیرد؛ عکس‌ها را روی imgbb (i.ibb.co
+    // که گپ می‌تواند بخواندش) آپلود می‌کنیم. آپلود از طریق پروکسیِ سرور به api.imgbb.com.
+    const admin = getAdminData()
+    const imgbbKey = admin.imgbb?.apiKey
+    const proxyUrl = admin.divar?.proxyUrl
+    const b64s = photos.slice(0, 4).map(p => {
       const ci = p.image.indexOf(',')
-      const mime = ci > 0 ? (p.image.slice(5, ci).split(';')[0] || 'image/jpeg') : 'image/jpeg'
-      return { mime, buf: Buffer.from(ci > 0 ? p.image.slice(ci + 1) : '', 'base64') }
-    }).filter(b => b.buf.length)
+      return ci > 0 ? p.image.slice(ci + 1) : ''
+    }).filter(Boolean)
     let imgs: string[] = []
     let uploadErr = ''
-    if (arvan?.bucket && arvan?.accessKey && arvan?.secretKey) {
-      const uploaded = await Promise.allSettled(bufs.map(b =>
-        arvanUpload(arvan, `studio/${randomBytes(8).toString('hex')}.${ext(b.mime)}`, b.buf, b.mime)))
+    if (imgbbKey) {
+      const uploaded = await Promise.allSettled(b64s.map(b => uploadToImgbb(imgbbKey, b, proxyUrl)))
       imgs = uploaded.filter(r => r.status === 'fulfilled').map(r => (r as PromiseFulfilledResult<string>).value)
       uploadErr = (uploaded.find(r => r.status === 'rejected') as PromiseRejectedResult | undefined)?.reason?.message || ''
     } else {
-      uploadErr = 'no_arvan'
+      uploadErr = 'no_imgbb'
     }
     const visionPrompt =
       `These photos show the rooms of ONE existing unit (~${area} m²; room labels: ${labels}). Reconstruct its AS-BUILT floor plan as a SCHEMATIC GRID — do NOT design or improve anything, only reflect what's really there.\n` +
@@ -91,10 +89,10 @@ export async function POST(req: NextRequest) {
         raw = (await chatVisionSafe(visionModel, visionPrompt, imgs, { max_tokens: 900, timeout: 40000 })).text
       } catch (e: any) { visionErr = e?.message || 'خطای نامشخص' }
     } else {
-      // آپلودِ عکس‌ها روی پاس‌انبان آروان ناموفق/تنظیم‌نشده → بدون تحلیل عکس ادامه نده
-      visionErr = uploadErr === 'no_arvan'
-        ? 'پاس‌انبان آروان تنظیم نشده (پنل → اتصال‌ها → پاس‌انبان آروان) تا عکس‌ها برای تحلیل آپلود شوند'
-        : `آپلودِ عکس‌ها روی آروان ناموفق بود: ${uploadErr.slice(0, 150)}`
+      // آپلودِ عکس‌ها روی imgbb ناموفق/تنظیم‌نشده → بدون تحلیل عکس ادامه نده
+      visionErr = uploadErr === 'no_imgbb'
+        ? 'کلید imgbb تنظیم نشده (پنل → اتصال‌ها → imgbb) تا عکس‌ها برای تحلیل آپلود شوند'
+        : `آپلودِ عکس‌ها روی imgbb ناموفق بود: ${uploadErr.slice(0, 150)}`
     }
 
     let parsed = extractJson(raw) as PlanLayout | null

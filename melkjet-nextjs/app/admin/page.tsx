@@ -780,19 +780,20 @@ const SECTION_HINT: Record<ScrTab, string> = {
   price: 'قیمت/آمار بازار از هر منبع: صفحهٔ جدول قیمت را بدهید و فیلدها را نگاشت کنید (عنوان، قیمت، منطقه).',
 }
 
-function ArvanConfig() {
-  const [f, setF] = useState({ endpoint: 's3.ir-thr-at1.arvanstorage.ir', bucket: '', accessKey: '', secretKey: '', region: '' })
+function ImgbbConfig() {
+  const [key, setKey] = useState('')
+  const [masked, setMasked] = useState('')
   const [configured, setConfigured] = useState(false)
   const [msg, setMsg] = useState('')
   const [open, setOpen] = useState(false)
   useEffect(() => {
-    fetch('/api/admin/arvan-config').then(r => r.ok ? r.json() : null).then(d => {
-      if (d) { setF({ endpoint: d.endpoint || 's3.ir-thr-at1.arvanstorage.ir', bucket: d.bucket || '', accessKey: d.accessKey || '', secretKey: d.secretKey || '', region: d.region || '' }); setConfigured(!!d.configured) }
+    fetch('/api/admin/imgbb-config').then(r => r.ok ? r.json() : null).then(d => {
+      if (d) { setMasked(d.apiKey || ''); setConfigured(!!d.configured) }
     })
   }, [])
   const save = async () => {
     setMsg('')
-    const r = await fetch('/api/admin/arvan-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(f) })
+    const r = await fetch('/api/admin/imgbb-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ apiKey: key || masked }) })
     const d = await r.json().catch(() => ({}))
     if (r.ok) { setMsg('✓ ذخیره شد'); setConfigured(true) } else setMsg(d.error || 'خطا')
   }
@@ -800,21 +801,15 @@ function ArvanConfig() {
   return (
     <Card style={{ marginBottom: 14 }}>
       <div onClick={() => setOpen(!open)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
-        <div style={{ fontWeight: 700, fontSize: 14 }}>پاس‌انبان آروان (میزبانی عکس برای تحلیل) {configured ? <span style={{ color: '#5fd98a', fontSize: 12 }}>● تنظیم‌شده</span> : <span style={{ color: '#e7a14a', fontSize: 12 }}>● تنظیم نشده</span>}</div>
+        <div style={{ fontWeight: 700, fontSize: 14 }}>imgbb (میزبانی عکس برای «ساخت پلان از روی عکس») {configured ? <span style={{ color: '#5fd98a', fontSize: 12 }}>● تنظیم‌شده</span> : <span style={{ color: '#e7a14a', fontSize: 12 }}>● تنظیم نشده</span>}</div>
         <span style={{ color: 'var(--muted)' }}>{open ? '▲' : '▼'}</span>
       </div>
       {open && (
         <div style={{ marginTop: 12 }}>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.8 }}>برای «ساخت پلان از روی عکس»، عکس‌ها روی یک باکتِ <b>عمومی</b> پاس‌انبان آروان آپلود می‌شوند تا سرویس بینایی بتواند بخواندشان. در پنل آروان → پاس‌انبان → یک باکت با دسترسی <b>public</b> بساز و کلیدهایش را اینجا بگذار.</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <input value={f.endpoint} onChange={e => setF({ ...f, endpoint: e.target.value })} placeholder="s3.ir-thr-at1.arvanstorage.ir" style={inp} />
-            <input value={f.bucket} onChange={e => setF({ ...f, bucket: e.target.value })} placeholder="نام باکت (bucket)" style={inp} />
-            <input value={f.accessKey} onChange={e => setF({ ...f, accessKey: e.target.value })} placeholder="Access Key" style={inp} />
-            <input value={f.secretKey} onChange={e => setF({ ...f, secretKey: e.target.value })} placeholder="Secret Key" type="password" style={inp} />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input value={f.region} onChange={e => setF({ ...f, region: e.target.value })} placeholder="region (اختیاری، مثل ir-thr-at1)" style={inp} />
-              <GoldButton onClick={save}>ذخیره</GoldButton>
-            </div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.8 }}>برای تحلیل عکس در سایت‌ساز، عکس‌ها روی imgbb آپلود می‌شوند تا سرویس بینایی بتواند بخواندشان. در <b style={{ direction: 'ltr', display: 'inline-block' }}>imgbb.com</b> ثبت‌نام کن → <b style={{ direction: 'ltr', display: 'inline-block' }}>About → API</b> → یک API key رایگان بساز و اینجا بگذار.</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input value={key} onChange={e => setKey(e.target.value)} placeholder={masked || 'imgbb API key'} style={inp} />
+            <GoldButton onClick={save}>ذخیره</GoldButton>
           </div>
           {msg && <div style={{ marginTop: 8, fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</div>}
         </div>
@@ -2015,7 +2010,7 @@ function ConnectionsView() {
       <NeshanConfig />
       <IPPanelConfig />
       <SmtpConfig />
-      <ArvanConfig />
+      <ImgbbConfig />
       <DivarProxyConfig />
     </div>
   )
