@@ -1,1254 +1,773 @@
-'use client';
+'use client'
+import { useState, useEffect, useCallback } from 'react'
 
-import { useState, useEffect } from 'react';
-import { fetchContent, type ContentItem } from '@/app/lib/content-display';
+// ════════════════════════════════════════════════════════
+//  Types (mirror app/lib/owner-store.ts API shape)
+// ════════════════════════════════════════════════════════
+type Deal = 'sale' | 'rent'
+type PropStatus = 'active' | 'sold' | 'rented' | 'draft'
+type InquiryStatus = 'new' | 'contacted' | 'closed'
+type ViewingStatus = 'scheduled' | 'done' | 'canceled'
+type OfferStatus = 'pending' | 'accepted' | 'rejected'
 
-// ─── Persian number / price helpers ──────────────────────────────────
-const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
-function toFa(n: number | string): string {
-  return String(n).replace(/\d/g, (d) => FA_DIGITS[+d]);
+interface Property {
+  id: string; title: string; ptype: string; location: string; area: number; rooms: number
+  price: number; deal: Deal; status: PropStatus; views: number; createdAt: number
 }
-// قیمت هر متر (تومان) → «N م.د» (میلیون تومان بر متر)
-function ppmToFa(ppm: number): string {
-  return `${toFa(Math.round(ppm / 1e6))} م.د`;
+interface Inquiry { id: string; propertyId: string; name: string; phone?: string; message?: string; status: InquiryStatus; createdAt: number }
+interface Viewing { id: string; propertyId: string; visitor: string; phone?: string; date: string; status: ViewingStatus; createdAt: number }
+interface Offer { id: string; propertyId: string; buyer: string; phone?: string; amount: number; status: OfferStatus; createdAt: number }
+
+interface RecentInquiry { id: string; propertyId: string; name: string; phone?: string; message?: string; status: InquiryStatus; createdAt: number }
+interface Upcoming { id: string; propertyId: string; visitor: string; phone?: string; date: string; status: ViewingStatus; createdAt: number }
+
+interface Stats {
+  profile: { name: string }
+  kpis: {
+    activeCount: number; totalProps: number; newInquiries: number; upcomingViewings: number
+    pendingOffers: number; monthViews: number; monthChange: number; totalViews: number; portfolio: number
+  }
+  monthlyViews: { month: string; count: number }[]
+  recentInquiries: RecentInquiry[]
+  upcoming: Upcoming[]
 }
+interface OwnerData { stats: Stats; properties: Property[]; inquiries: Inquiry[]; viewings: Viewing[]; offers: Offer[] }
 
-interface TrendPoint { month: string; avg: number }
-interface MarketStats { avg: number; count: number; median?: number; min?: number; max?: number; trend: TrendPoint[] }
-interface MarketResponse { stats: MarketStats | null; value?: number }
+type View = 'dashboard' | 'properties' | 'inquiries' | 'viewings' | 'offers' | 'settings'
 
-// رشد را از اولین تا آخرین نقطهٔ روند محاسبه کن (درصد)
-function growthFromTrend(trend: TrendPoint[]): number | null {
-  if (!trend || trend.length < 2) return null;
-  const first = trend[0].avg;
-  const last = trend[trend.length - 1].avg;
-  if (!first) return null;
-  return Math.round(((last - first) / first) * 100);
-}
+// ════════════════════════════════════════════════════════
+//  Formatting & status helpers
+// ════════════════════════════════════════════════════════
+const FONT = 'Vazirmatn, system-ui, sans-serif'
+const fa = (n: number) => n.toLocaleString('fa-IR')
 
-const LISTING_GRADIENTS = [
-  'linear-gradient(135deg, #1a3a2a 0%, #0d2218 100%)',
-  'linear-gradient(135deg, #2a1a3a 0%, #18082a 100%)',
-  'linear-gradient(135deg, #1a2a3a 0%, #08182a 100%)',
-  'linear-gradient(135deg, #2a2a1a 0%, #1a1a08 100%)',
-  'linear-gradient(135deg, #1c3a4a 0%, #0d2030 100%)',
-  'linear-gradient(135deg, #3a1c4a 0%, #200d30 100%)',
-];
-
-type Role = 'seller' | 'investor';
-type SellerView = 'seller-overview' | 'seller-listings' | 'seller-visitors' | 'seller-price';
-type InvestorView = 'investor-portfolio' | 'investor-market' | 'investor-opportunities';
-type ActiveView = SellerView | InvestorView;
-
-const sellerNav: { key: SellerView; label: string; icon: string }[] = [
-  { key: 'seller-overview', label: 'داشبورد', icon: '⊕' },
-  { key: 'seller-listings', label: 'آگهی‌هایم', icon: '▦' },
-  { key: 'seller-visitors', label: 'بازدیدکنندگان', icon: '◉' },
-  { key: 'seller-price', label: 'تحلیل قیمت AI', icon: '◈' },
-];
-
-const investorNav: { key: InvestorView; label: string; icon: string }[] = [
-  { key: 'investor-portfolio', label: 'پرتفولیو', icon: '◐' },
-  { key: 'investor-market', label: 'بازار', icon: '◰' },
-  { key: 'investor-opportunities', label: 'فرصت‌ها', icon: '✦' },
-];
-
-// شکل آگهی نمایش‌داده‌شده (مشتق از آگهی‌های واقعیِ اسکرپ‌شده)
-interface SellerListing {
-  id: string;
-  title: string;
-  location: string;
-  price: string;
-  type: string;
-  status: string;
-  views: number;
-  inquiries: number;
-  saves: number;
-  trend: string;
-  trendDir: 'up' | 'down';
-  color: string;
+// مبلغ تومان به‌صورت فشرده
+function money(n: number): string {
+  if (n >= 1e9) return fa(Math.round((n / 1e9) * 10) / 10) + ' میلیارد'
+  if (n >= 1e6) return fa(Math.round(n / 1e6)) + ' میلیون'
+  return fa(n) + ' تومان'
 }
 
-// آگهی واقعی اسکرپ‌شده را به شکل کارت داشبورد تبدیل کن.
-// معیارها (بازدید/استعلام/ذخیره) از داده‌ای که داریم به‌صورت قطعی مشتق می‌شوند.
-function toSellerListing(it: ContentItem, idx: number): SellerListing {
-  // عددی پایدار از شناسه برای معیارهای نمایشی
-  let h = 0;
-  for (let i = 0; i < it.id.length; i++) h = (h * 31 + it.id.charCodeAt(i)) | 0;
-  h = Math.abs(h);
-  const views = 80 + (h % 1200);
-  const inquiries = 3 + (h % 40);
-  const saves = (h >> 3) % 110;
-  const isRent = /اجاره|رهن|ودیعه|ماه/.test(it.price || '');
-  const up = (h & 1) === 0;
-  return {
-    id: it.id,
-    title: it.title,
-    location: it.location || '—',
-    price: it.price || '—',
-    type: isRent ? 'اجاره' : 'فروش',
-    status: 'فعال',
-    views,
-    inquiries,
-    saves,
-    trend: up ? '↑' : '↓',
-    trendDir: up ? 'up' : 'down',
-    color: LISTING_GRADIENTS[idx % LISTING_GRADIENTS.length],
-  };
+const PROP_LABEL: Record<PropStatus, string> = { active: 'فعال', sold: 'فروخته‌شده', rented: 'اجاره‌رفته', draft: 'پیش‌نویس' }
+const PROP_COLOR: Record<PropStatus, string> = { active: '#34d399', sold: '#60a5fa', rented: '#2dd4bf', draft: '#7a8fae' }
+const PROP_STATUSES: PropStatus[] = ['active', 'sold', 'rented', 'draft']
+
+const INQ_LABEL: Record<InquiryStatus, string> = { new: 'جدید', contacted: 'پیگیری‌شده', closed: 'بسته' }
+const INQ_COLOR: Record<InquiryStatus, string> = { new: 'var(--gold)', contacted: '#60a5fa', closed: '#7a8fae' }
+const INQ_STATUSES: InquiryStatus[] = ['new', 'contacted', 'closed']
+
+const VIEW_LABEL: Record<ViewingStatus, string> = { scheduled: 'برنامه‌ریزی‌شده', done: 'انجام‌شده', canceled: 'لغو' }
+const VIEW_COLOR: Record<ViewingStatus, string> = { scheduled: 'var(--gold)', done: '#34d399', canceled: '#7a8fae' }
+const VIEW_STATUSES: ViewingStatus[] = ['scheduled', 'done', 'canceled']
+
+const OFFER_LABEL: Record<OfferStatus, string> = { pending: 'در انتظار', accepted: 'پذیرفته', rejected: 'رد' }
+const OFFER_COLOR: Record<OfferStatus, string> = { pending: '#f59e0b', accepted: '#34d399', rejected: '#ef4444' }
+
+const DEAL_LABEL: Record<Deal, string> = { sale: 'فروش', rent: 'اجاره' }
+
+const PTYPE_OPTIONS = ['آپارتمان', 'ویلا', 'زمین', 'مغازه', 'سایر']
+
+const card: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16 }
+const inputStyle: React.CSSProperties = {
+  padding: '9px 11px', borderRadius: 9, background: 'var(--bg)', border: '1px solid var(--line)',
+  color: 'var(--text)', fontSize: 13, outline: 'none', fontFamily: FONT, width: '100%',
+}
+const actionBtn: React.CSSProperties = {
+  padding: '5px 12px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)',
+  color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap',
 }
 
-// هوک مشترک: آگهی‌های واقعیِ پلتفرم را یک‌بار می‌گیرد.
-function useSellerListings() {
-  const [listings, setListings] = useState<SellerListing[]>([]);
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    let alive = true;
-    fetchContent('listing', undefined, 12).then((items) => {
-      if (!alive) return;
-      setListings(items.map(toSellerListing));
-      setLoading(false);
-    });
-    return () => { alive = false; };
-  }, []);
-  return { listings, loading };
+const VIEW_TITLES: Record<View, string> = {
+  dashboard: 'داشبورد مالک',
+  properties: 'ملک‌های من',
+  inquiries: 'استعلام‌ها',
+  viewings: 'بازدیدها',
+  offers: 'پیشنهادها',
+  settings: 'تنظیمات',
 }
 
-const visitorDays = [
-  { day: 'شنبه', count: 42 },
-  { day: 'یک‌شنبه', count: 78 },
-  { day: 'دوشنبه', count: 55 },
-  { day: 'سه‌شنبه', count: 91 },
-  { day: 'چهارشنبه', count: 67 },
-  { day: 'پنج‌شنبه', count: 120 },
-  { day: 'جمعه', count: 88 },
-];
+const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'inquiries' | 'viewings' | 'offers' }[] = [
+  { id: 'dashboard', label: 'داشبورد', icon: '▦' },
+  { id: 'properties', label: 'ملک‌های من', icon: '◫' },
+  { id: 'inquiries', label: 'استعلام‌ها', icon: '◎', badge: 'inquiries' },
+  { id: 'viewings', label: 'بازدیدها', icon: '◉', badge: 'viewings' },
+  { id: 'offers', label: 'پیشنهادها', icon: '◈', badge: 'offers' },
+  { id: 'settings', label: 'تنظیمات', icon: '⛭' },
+]
+const NAV_LINKS: { href: string; label: string; icon: string }[] = [
+  { href: '/crm', label: 'CRM و مشتریان', icon: '◇' },
+  { href: '/marketing', label: 'مارکتینگ', icon: '◬' },
+  { href: '/workflow', label: 'اتوماسیون', icon: '⛭' },
+  { href: '/website-builder', label: 'وب‌سایت‌ساز', icon: '◳' },
+]
 
-const recentVisitors = [
-  { time: '۱۴:۳۲', source: 'جستجوی مستقیم', action: 'مشاهده جزئیات', listing: 'نیاوران' },
-  { time: '۱۳:۵۱', source: 'پیشنهاد AI', action: 'ارسال استعلام', listing: 'لواسان' },
-  { time: '۱۲:۱۸', source: 'جستجوی مستقیم', action: 'ذخیره آگهی', listing: 'نیاوران' },
-  { time: '۱۱:۴۴', source: 'جستجوی AI', action: 'مشاهده تصاویر', listing: 'جردن' },
-  { time: '۱۰:۰۹', source: 'پیشنهاد AI', action: 'تماس مستقیم', listing: 'نیاوران' },
-];
-
-const portfolioProperties = [
-  {
-    name: 'برج پارسیان سعادت‌آباد',
-    location: 'تهران، سعادت‌آباد',
-    currentValue: '۱۸۵ میلیارد',
-    buyPrice: '۱۳۸ میلیارد',
-    roi: '+۳۴٪',
-    rentalYield: '۸٫۲٪',
-    color: 'linear-gradient(135deg, #1c3a4a 0%, #0d2030 100%)',
-    trend: [55, 60, 58, 65, 70, 68, 75, 80, 78, 85],
-  },
-  {
-    name: 'آپارتمان الهیه',
-    location: 'تهران، الهیه',
-    currentValue: '۱۴۰ میلیارد',
-    buyPrice: '۱۰۵ میلیارد',
-    roi: '+۳۳٪',
-    rentalYield: '۷٫۵٪',
-    color: 'linear-gradient(135deg, #3a1c4a 0%, #200d30 100%)',
-    trend: [45, 48, 50, 52, 55, 53, 60, 62, 65, 68],
-  },
-  {
-    name: 'پنت‌هاوس نیاوران',
-    location: 'تهران، نیاوران',
-    currentValue: '۹۵ میلیارد',
-    buyPrice: '۷۲ میلیارد',
-    roi: '+۳۲٪',
-    rentalYield: '۶٫۸٪',
-    color: 'linear-gradient(135deg, #2a3a1c 0%, #18200d 100%)',
-    trend: [35, 38, 40, 39, 44, 46, 48, 50, 52, 55],
-  },
-];
-
-// مجموعهٔ ثابتِ محلات تهران که آمار واقعی‌شان از /api/market/stats گرفته می‌شود
-const MARKET_DISTRICTS = ['سعادت‌آباد', 'زعفرانیه', 'نیاوران', 'ولنجک', 'الهیه', 'پونک'];
-
-// شکل کارت محله پس از واکشی آمار واقعی
-interface MarketNeighborhood {
-  name: string;
-  pricePerMeter: string;          // «—» اگر داده نباشد
-  growth: string;                 // «—» اگر روند کافی نباشد
-  level: 'high' | 'mid' | 'low' | 'neg';
-  hasData: boolean;
-}
-
-// سطح رنگ را از درصد رشد تعیین کن
-function levelFromGrowth(g: number | null): MarketNeighborhood['level'] {
-  if (g == null) return 'low';
-  if (g < 0) return 'neg';
-  if (g >= 15) return 'high';
-  if (g >= 8) return 'mid';
-  return 'low';
-}
-
-const opportunities = [
-  {
-    name: 'پروژه تجاری آریا',
-    location: 'تهران، میرداماد',
-    roi: '۲۸٪',
-    risk: 'کم',
-    riskColor: '#22c55e',
-    priceRange: '۸ تا ۱۵ میلیارد',
-    highlights: ['نزدیک به مترو', 'بازده اجاری ۱۱٪', 'سند شش‌دانگ آماده'],
-  },
-  {
-    name: 'ویلاهای ساحلی رامسر',
-    location: 'مازندران، رامسر',
-    roi: '۳۵٪',
-    risk: 'متوسط',
-    riskColor: '#f59e0b',
-    priceRange: '۱۲ تا ۲۸ میلیارد',
-    highlights: ['اجاره توریستی بالا', 'رشد ۳۲٪ در ۲ سال', 'پروانه ساخت معتبر'],
-  },
-  {
-    name: 'آپارتمان‌های ونک',
-    location: 'تهران، ونک',
-    roi: '۲۲٪',
-    risk: 'کم',
-    riskColor: '#22c55e',
-    priceRange: '۵ تا ۱۰ میلیارد',
-    highlights: ['تقاضای بالا', 'مستأجر فوری', 'موقعیت مرکزی'],
-  },
-  {
-    name: 'پروژه مسکونی پردیس',
-    location: 'تهران، پردیس',
-    roi: '۴۵٪',
-    risk: 'بالا',
-    riskColor: '#ef4444',
-    priceRange: '۳ تا ۶ میلیارد',
-    highlights: ['پیش‌فروش اولیه', 'رشد منطقه‌ای بالا', 'ریسک تأخیر تحویل'],
-  },
-  {
-    name: 'مجتمع اداری کرج',
-    location: 'کرج، عظیمیه',
-    roi: '۳۱٪',
-    risk: 'متوسط',
-    riskColor: '#f59e0b',
-    priceRange: '۶ تا ۱۲ میلیارد',
-    highlights: ['نزدیک اتوبان', 'اجاره دولتی', 'عمر بنای جدید'],
-  },
-];
-
-// ─── Mini Trend Sparkline ────────────────────────────────────────────
-function Sparkline({ data }: { data: number[] }) {
-  const max = Math.max(...data);
-  const min = Math.min(...data);
-  const range = max - min || 1;
-  const w = 80;
-  const h = 32;
-  const pts = data.map((v, i) => {
-    const x = (i / (data.length - 1)) * w;
-    const y = h - ((v - min) / range) * h;
-    return `${x},${y}`;
-  });
-  const polyline = pts.join(' ');
+function Pill({ label, color }: { label: string; color: string }) {
   return (
-    <svg width={w} height={h} style={{ display: 'block' }}>
-      <polyline
-        points={polyline}
-        fill="none"
-        stroke="var(--gold)"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
+    <span style={{ fontSize: 11, fontWeight: 600, color, background: `color-mix(in srgb, ${color} 16%, transparent)`, padding: '3px 10px', borderRadius: 7, whiteSpace: 'nowrap' }}>
+      {label}
+    </span>
+  )
 }
 
-// ─── Status Badge ─────────────────────────────────────────────────────
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { bg: string; color: string }> = {
-    'فعال': { bg: 'rgba(34,197,94,0.15)', color: '#22c55e' },
-    'در انتظار': { bg: 'rgba(245,158,11,0.15)', color: '#f59e0b' },
-    'منقضی': { bg: 'rgba(239,68,68,0.15)', color: '#ef4444' },
-  };
-  const s = map[status] || { bg: 'rgba(255,255,255,0.1)', color: 'var(--muted)' };
-  return (
-    <span style={{
-      background: s.bg,
-      color: s.color,
-      border: `1px solid ${s.color}40`,
-      borderRadius: 6,
-      padding: '2px 10px',
-      fontSize: 12,
-      fontFamily: 'Vazirmatn',
-    }}>{status}</span>
-  );
-}
-
-// ─── Section Card Wrapper ────────────────────────────────────────────
-function Card({ children, style, onMouseEnter, onMouseLeave }: { children: React.ReactNode; style?: React.CSSProperties; onMouseEnter?: () => void; onMouseLeave?: () => void }) {
-  return (
-    <div onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} style={{
-      background: 'var(--surface)',
-      border: '1px solid var(--line)',
-      borderRadius: 16,
-      padding: 24,
-      ...style,
-    }}>
-      {children}
-    </div>
-  );
-}
-
-// ─── SELLER: Overview ───────────────────────────────────────────────
-function SellerOverview() {
-  const { listings, loading } = useSellerListings();
-  // KPIها از داده‌ی واقعی مشتق می‌شوند
-  const totalViews = listings.reduce((a, l) => a + l.views, 0);
-  const totalInquiries = listings.reduce((a, l) => a + l.inquiries, 0);
-  const totalSaves = listings.reduce((a, l) => a + l.saves, 0);
-  const stats = [
-    { label: 'بازدید', value: toFa(totalViews.toLocaleString('en-US')), sub: `از ${toFa(listings.length)} آگهی`, delta: '', up: true },
-    { label: 'استعلام', value: toFa(totalInquiries), sub: 'مجموع', delta: '', up: true },
-    { label: 'ذخیره‌شده', value: toFa(totalSaves), sub: 'در لیست علاقه‌مندی‌ها', delta: '', up: true },
-  ];
-  const best = listings.slice().sort((a, b) => b.views - a.views)[0];
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <div>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>داشبورد فروشنده</h1>
-        <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: 14 }}>خوش آمدید مهدی جان — عملکرد آگهی‌های شما در یک نگاه</p>
-      </div>
-      {/* KPI row */}
-      <div className="mjo-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-        {stats.map((s) => (
-          <Card key={s.label}>
-            <div style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 8 }}>{s.label}</div>
-            <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--text)', fontFamily: 'JetBrains Mono', letterSpacing: 1 }}>{s.value}</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
-              <span style={{ color: s.up ? '#22c55e' : '#ef4444', fontSize: 13, fontWeight: 600 }}>{s.delta}</span>
-              <span style={{ color: 'var(--faint)', fontSize: 12 }}>{s.sub}</span>
-            </div>
-          </Card>
-        ))}
-      </div>
-      {/* Listing performance */}
-      <Card>
-        <h2 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>عملکرد آگهی‌ها</h2>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-          <thead>
-            <tr style={{ color: 'var(--muted)' }}>
-              {['عنوان', 'بازدید', 'استعلام', 'ذخیره', 'روند ۷ روز', 'وضعیت'].map((h) => (
-                <th key={h} style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 600, borderBottom: '1px solid var(--line)' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr><td colSpan={6} style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--muted)' }}>در حال بارگذاری…</td></tr>
-            )}
-            {!loading && listings.length === 0 && (
-              <tr><td colSpan={6} style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--muted)' }}>آگهی‌ای یافت نشد</td></tr>
-            )}
-            {listings.map((l) => (
-              <tr key={l.id} style={{ borderBottom: '1px solid var(--line2)' }}>
-                <td style={{ padding: '12px 12px', fontWeight: 600 }}>
-                  <a href={`/property/${l.id}`} style={{ color: 'var(--text)', textDecoration: 'none' }}>{l.title}</a>
-                </td>
-                <td style={{ padding: '12px 12px', color: 'var(--text)', fontFamily: 'JetBrains Mono' }}>{toFa(l.views.toLocaleString('en-US'))}</td>
-                <td style={{ padding: '12px 12px', color: 'var(--text)', fontFamily: 'JetBrains Mono' }}>{toFa(l.inquiries)}</td>
-                <td style={{ padding: '12px 12px', color: 'var(--text)', fontFamily: 'JetBrains Mono' }}>{toFa(l.saves)}</td>
-                <td style={{ padding: '12px 12px', fontSize: 18, color: l.trendDir === 'up' ? '#22c55e' : '#ef4444' }}>{l.trend}</td>
-                <td style={{ padding: '12px 12px' }}><StatusBadge status={l.status} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
-      {/* Best performer highlight */}
-      {best && (
-      <Card style={{ background: 'linear-gradient(135deg, rgba(212,175,55,0.08) 0%, rgba(212,175,55,0.02) 100%)', border: '1px solid rgba(212,175,55,0.3)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-          <span style={{ fontSize: 20 }}>✦</span>
-          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--gold)' }}>بهترین عملکرد این هفته</span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>{best.title}</div>
-            <div style={{ color: 'var(--muted)', fontSize: 13 }}>{toFa(best.views.toLocaleString('en-US'))} بازدید • {toFa(best.inquiries)} استعلام • {toFa(best.saves)} ذخیره</div>
-          </div>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 28, fontWeight: 800, color: best.trendDir === 'up' ? '#22c55e' : '#ef4444', fontFamily: 'JetBrains Mono' }}>{best.trend}</div>
-            <div style={{ color: 'var(--muted)', fontSize: 12 }}>روند بازدید</div>
-          </div>
-        </div>
-      </Card>
-      )}
-    </div>
-  );
-}
-
-// ─── SELLER: Listings ─────────────────────────────────────────────────
-function SellerListings() {
-  const [hovered, setHovered] = useState<string | null>(null);
-  const { listings, loading } = useSellerListings();
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>آگهی‌هایم</h1>
-          <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: 14 }}>مدیریت و پیگیری آگهی‌های ملکی شما</p>
-        </div>
-        <a href="/submit" style={{
-          background: 'var(--gold)',
-          color: '#0a0a0a',
-          border: 'none',
-          borderRadius: 10,
-          padding: '10px 22px',
-          fontSize: 14,
-          fontWeight: 700,
-          fontFamily: 'Vazirmatn',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          textDecoration: 'none',
-        }}>
-          <span>+</span> افزودن آگهی
-        </a>
-      </div>
-      {loading && (
-        <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 14, padding: '40px 0' }}>در حال بارگذاری…</div>
-      )}
-      {!loading && listings.length === 0 && (
-        <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 14, padding: '40px 0' }}>آگهی‌ای برای نمایش وجود ندارد</div>
-      )}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {listings.map((l) => (
-          <Card key={l.id} style={{
-            padding: 0,
-            overflow: 'hidden',
-            boxShadow: hovered === l.id ? '0 4px 24px var(--shadow)' : 'none',
-            transition: 'box-shadow 0.2s',
-          }}
-            onMouseEnter={() => setHovered(l.id)}
-            onMouseLeave={() => setHovered(null)}
-          >
-            <div style={{ display: 'flex', alignItems: 'stretch', gap: 0 }}>
-              {/* Mini image */}
-              <div style={{
-                width: 120,
-                minHeight: 100,
-                background: l.color,
-                flexShrink: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-                <span style={{ fontSize: 28, opacity: 0.5 }}>🏢</span>
-              </div>
-              {/* Content */}
-              <div style={{ flex: 1, padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-                <div style={{ flex: 2 }}>
-                  <a href={`/property/${l.id}`} style={{ display: 'block', fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 4, textDecoration: 'none' }}>{l.title}</a>
-                  <div style={{ color: 'var(--muted)', fontSize: 13 }}>📍 {l.location}</div>
-                </div>
-                <div style={{ flex: 1, textAlign: 'center' }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--gold)', fontFamily: 'JetBrains Mono' }}>{l.price}</div>
-                  <div style={{ color: 'var(--muted)', fontSize: 12, marginTop: 2 }}>تومان • {l.type}</div>
-                </div>
-                <div style={{ flex: 1, textAlign: 'center' }}>
-                  <StatusBadge status={l.status} />
-                </div>
-                <div style={{ flex: 1, display: 'flex', gap: 16, justifyContent: 'center' }}>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', fontFamily: 'JetBrains Mono' }}>{toFa(l.views)}</div>
-                    <div style={{ color: 'var(--faint)', fontSize: 11 }}>بازدید</div>
-                  </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', fontFamily: 'JetBrains Mono' }}>{toFa(l.inquiries)}</div>
-                    <div style={{ color: 'var(--faint)', fontSize: 11 }}>استعلام</div>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <a href={`/property/${l.id}`} style={{
-                    background: 'rgba(212,175,55,0.1)',
-                    color: 'var(--gold)',
-                    border: '1px solid rgba(212,175,55,0.3)',
-                    borderRadius: 8,
-                    padding: '6px 14px',
-                    fontSize: 13,
-                    fontFamily: 'Vazirmatn',
-                    cursor: 'pointer',
-                    textDecoration: 'none',
-                  }}>ویرایش</a>
-                  <button style={{
-                    background: 'rgba(239,68,68,0.08)',
-                    color: '#ef4444',
-                    border: '1px solid rgba(239,68,68,0.2)',
-                    borderRadius: 8,
-                    padding: '6px 14px',
-                    fontSize: 13,
-                    fontFamily: 'Vazirmatn',
-                    cursor: 'pointer',
-                  }}>غیرفعال</button>
-                </div>
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
-      {!loading && listings.length > 0 && (
-        <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13, padding: '8px 0' }}>
-          نمایش {toFa(listings.length)} از {toFa(listings.length)} آگهی
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── SELLER: Visitors ────────────────────────────────────────────────
-function SellerVisitors() {
-  const maxCount = Math.max(...visitorDays.map((d) => d.count));
-  const sources = [
-    { label: 'جستجوی مستقیم', pct: 42, color: 'var(--gold)' },
-    { label: 'پیشنهاد هوش مصنوعی', pct: 35, color: '#818cf8' },
-    { label: 'جستجوی عادی', pct: 23, color: '#22c55e' },
-  ];
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <div>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>بازدیدکنندگان</h1>
-        <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: 14 }}>تحلیل ترافیک و بازدید آگهی‌های شما در ۷ روز گذشته</p>
-      </div>
-      {/* Bar chart */}
-      <Card>
-        <h2 style={{ margin: '0 0 20px', fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>نمودار بازدید ۷ روز گذشته</h2>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: 140, padding: '0 8px' }}>
-          {visitorDays.map((d) => {
-            const h = Math.round((d.count / maxCount) * 120);
-            return (
-              <div key={d.day} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'JetBrains Mono' }}>{d.count}</span>
-                <div style={{
-                  width: '100%',
-                  height: h,
-                  background: 'linear-gradient(180deg, var(--gold) 0%, var(--goldDim) 100%)',
-                  borderRadius: '6px 6px 0 0',
-                  opacity: 0.85,
-                  transition: 'height 0.3s ease',
-                }} />
-                <span style={{ fontSize: 11, color: 'var(--faint)' }}>{d.day}</span>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
-      {/* Source breakdown */}
-      <Card>
-        <h2 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>منبع بازدیدکنندگان</h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {sources.map((s) => (
-            <div key={s.label}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span style={{ color: 'var(--text)', fontSize: 14 }}>{s.label}</span>
-                <span style={{ color: s.color, fontWeight: 700, fontSize: 14, fontFamily: 'JetBrains Mono' }}>{s.pct}٪</span>
-              </div>
-              <div style={{ height: 8, background: 'var(--bg2)', borderRadius: 999, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${s.pct}%`, background: s.color, borderRadius: 999, transition: 'width 0.5s ease' }} />
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-      {/* Recent visitors */}
-      <Card>
-        <h2 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>آخرین بازدیدکنندگان</h2>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-          <thead>
-            <tr style={{ color: 'var(--muted)' }}>
-              {['زمان', 'آگهی', 'منبع', 'اقدام'].map((h) => (
-                <th key={h} style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 600, borderBottom: '1px solid var(--line)' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {recentVisitors.map((v, i) => (
-              <tr key={i} style={{ borderBottom: '1px solid var(--line2)' }}>
-                <td style={{ padding: '10px 12px', color: 'var(--faint)', fontFamily: 'JetBrains Mono', fontSize: 13 }}>{v.time}</td>
-                <td style={{ padding: '10px 12px', color: 'var(--text)', fontWeight: 600 }}>{v.listing}</td>
-                <td style={{ padding: '10px 12px', color: 'var(--muted)' }}>{v.source}</td>
-                <td style={{ padding: '10px 12px' }}>
-                  <span style={{
-                    background: 'rgba(212,175,55,0.08)',
-                    color: 'var(--gold)',
-                    border: '1px solid rgba(212,175,55,0.2)',
-                    borderRadius: 6,
-                    padding: '2px 10px',
-                    fontSize: 12,
-                  }}>{v.action}</span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
-    </div>
-  );
-}
-
-// قیمت/متر را از رشتهٔ فارسی استخراج کن (تومان)
-function parsePriceToman(s: string): number {
-  const e = (s || '').replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
-  const m = e.match(/(\d[\d,]*\.?\d*)/);
-  if (!m) return 0;
-  let n = parseFloat(m[1].replace(/,/g, ''));
-  if (!isFinite(n)) return 0;
-  if (/میلیارد/.test(e)) n *= 1e9;
-  else if (/میلیون/.test(e)) n *= 1e6;
-  else if (/هزار/.test(e)) n *= 1e3;
-  return n;
-}
-function parseAreaMeters(s: string): number {
-  const e = (s || '').replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
-  const m = e.match(/(\d{2,4})\s*متر/) || e.match(/(\d{2,4})\s*m/i);
-  return m ? parseInt(m[1], 10) : 0;
-}
-
-// شکل نتیجهٔ تحلیلِ یک آگهی با آمار واقعی بازار محله
-interface PriceAnalysis {
-  listing: SellerListing;
-  market: MarketStats | null;
-  value?: number;            // امتیاز ارزش خرید ۱..۱۰
-  yourPpm: number;           // قیمت/متر آگهی (میلیون تومان)
-  fairPpm: number | null;    // میانگین/متر محله (میلیون تومان)
-  diffPct: number | null;    // درصد اختلاف قیمت شما با میانگین
-}
-
-// ─── SELLER: AI Price Analysis ────────────────────────────────────────
-function SellerPriceAnalysis() {
-  const { listings, loading } = useSellerListings();
-  const [analyses, setAnalyses] = useState<PriceAnalysis[]>([]);
-  const [analyzing, setAnalyzing] = useState(false);
-
-  useEffect(() => {
-    if (!listings.length) return;
-    let alive = true;
-    setAnalyzing(true);
-    // برای هر آگهی، آمار واقعی محله را از /api/market/stats بگیر
-    const picks = listings.slice(0, 5);
-    Promise.all(picks.map(async (l) => {
-      const district = (l.location || '').split('،')[0]?.trim() || '';
-      const city = (l.location || '').split('،').slice(-1)[0]?.trim() || 'تهران';
-      const q = new URLSearchParams({ city, district, price: l.price || '', title: l.title || '' });
-      let market: MarketStats | null = null;
-      let value: number | undefined;
-      try {
-        const r = await fetch(`/api/market/stats?${q.toString()}`, { cache: 'no-store' });
-        if (r.ok) { const d: MarketResponse = await r.json(); market = d.stats; value = d.value; }
-      } catch { /* graceful */ }
-      const priceToman = parsePriceToman(l.price || '');
-      const area = parseAreaMeters(l.title) || parseAreaMeters(l.location);
-      const yourPpm = priceToman && area ? priceToman / area / 1e6 : 0;
-      const fairPpm = market ? market.avg / 1e6 : null;
-      const diffPct = fairPpm && yourPpm ? Math.round(((yourPpm - fairPpm) / fairPpm) * 100) : null;
-      return { listing: l, market, value, yourPpm, fairPpm, diffPct } as PriceAnalysis;
-    })).then((res) => {
-      if (!alive) return;
-      setAnalyses(res);
-      setAnalyzing(false);
-    });
-    return () => { alive = false; };
-  }, [listings]);
-
-  // مجموع آگهی‌هایی که داده‌ی واقعی بازار داشتند
-  const withData = analyses.filter((a) => a.market);
-  const totalSamples = withData.reduce((acc, a) => acc + (a.market?.count || 0), 0);
-  // برای کارت «مقایسه با بازار» اولین تحلیل دارای داده را بردار
-  const ref = withData[0]?.market || null;
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <div>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>تحلیل قیمت هوشمند</h1>
-        <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: 14 }}>مقایسه قیمت‌گذاری شما با میانگین واقعی بازار محله</p>
-      </div>
-      {/* AI banner */}
-      <div style={{
-        background: 'linear-gradient(135deg, rgba(212,175,55,0.1) 0%, rgba(212,175,55,0.03) 100%)',
-        border: '1px solid rgba(212,175,55,0.4)',
-        borderRadius: 16,
-        padding: '20px 24px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 16,
-      }}>
-        <div style={{ fontSize: 36 }}>◈</div>
-        <div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--gold)', marginBottom: 4 }}>تحلیل هوشمند قیمت — ملک‌جت</div>
-          <div style={{ color: 'var(--muted)', fontSize: 14, lineHeight: 1.6 }}>
-            این تحلیل بر اساس داده‌های واقعی بازار محلی محاسبه شده است.
-            تعداد معاملات مرجع: <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{toFa(totalSamples)}</span> آگهی
-          </div>
-        </div>
-      </div>
-      {(loading || analyzing) && (
-        <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 14, padding: '40px 0' }}>در حال تحلیل بازار…</div>
-      )}
-      {/* Price comparison cards */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {analyses.map((item) => {
-          const favorable = item.diffPct != null ? item.diffPct <= 0 : true;
-          const diffLabel = item.diffPct != null ? `${item.diffPct > 0 ? '+' : ''}${toFa(item.diffPct)}٪` : '—';
-          const rec = item.market == null
-            ? 'برای این محله داده‌ی کافی در بازار یافت نشد.'
-            : item.diffPct == null
-              ? `میانگین واقعی محله ${ppmToFa(item.market.avg)} است (بر پایهٔ ${toFa(item.market.count)} آگهی).`
-              : item.diffPct > 5
-                ? `قیمت شما حدود ${toFa(Math.abs(item.diffPct))}٪ بالاتر از میانگین محله است؛ بازنگری برای جذب خریدار بیشتر توصیه می‌شود.`
-                : item.diffPct < -5
-                  ? `قیمت شما حدود ${toFa(Math.abs(item.diffPct))}٪ پایین‌تر از میانگین محله است؛ امکان افزایش قیمت وجود دارد.`
-                  : 'قیمت شما نزدیک به میانگین واقعی بازار محله و رقابتی است.';
-          return (
-          <Card key={item.listing.id}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>{item.listing.title}</div>
-              <span style={{
-                background: favorable ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)',
-                color: favorable ? '#22c55e' : '#ef4444',
-                border: `1px solid ${favorable ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
-                borderRadius: 8,
-                padding: '4px 12px',
-                fontSize: 14,
-                fontWeight: 700,
-                fontFamily: 'JetBrains Mono',
-              }}>{diffLabel}</span>
-            </div>
-            <div className="mjo-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-              <div style={{ background: 'var(--bg2)', borderRadius: 10, padding: 16, textAlign: 'center' }}>
-                <div style={{ color: 'var(--muted)', fontSize: 12, marginBottom: 6 }}>قیمت/متر شما</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', fontFamily: 'JetBrains Mono' }}>{item.yourPpm ? toFa(Math.round(item.yourPpm)) : '—'}</div>
-                <div style={{ color: 'var(--faint)', fontSize: 12 }}>میلیون تومان/متر</div>
-              </div>
-              <div style={{ background: 'rgba(212,175,55,0.07)', border: '1px solid rgba(212,175,55,0.2)', borderRadius: 10, padding: 16, textAlign: 'center' }}>
-                <div style={{ color: 'var(--gold)', fontSize: 12, marginBottom: 6 }}>میانگین واقعی محله</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--gold)', fontFamily: 'JetBrains Mono' }}>{item.fairPpm ? toFa(Math.round(item.fairPpm)) : '—'}</div>
-                <div style={{ color: 'var(--goldDim)', fontSize: 12 }}>میلیون تومان/متر</div>
-              </div>
-            </div>
-            <div style={{
-              background: 'var(--bg2)',
-              borderRadius: 10,
-              padding: '12px 16px',
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: 10,
-            }}>
-              <span style={{ color: 'var(--gold)', fontSize: 16, marginTop: 1 }}>◈</span>
-              <span style={{ color: 'var(--muted)', fontSize: 14, lineHeight: 1.7 }}>{rec}</span>
-            </div>
-          </Card>
-          );
-        })}
-        {!loading && !analyzing && analyses.length === 0 && (
-          <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 14, padding: '40px 0' }}>آگهی‌ای برای تحلیل وجود ندارد</div>
-        )}
-      </div>
-      {/* Market comparison note — real numbers from the reference neighbourhood */}
-      {ref && (
-      <Card style={{ background: 'var(--bg2)' }}>
-        <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>مقایسه با بازار</h3>
-        <div className="mjo-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-          {[
-            { label: 'میانگین منطقه', value: ppmToFa(ref.avg) },
-            { label: 'بالاترین مشابه', value: ref.max != null ? ppmToFa(ref.max) : '—' },
-            { label: 'پایین‌ترین مشابه', value: ref.min != null ? ppmToFa(ref.min) : '—' },
-          ].map((m) => (
-            <div key={m.label} style={{ textAlign: 'center' }}>
-              <div style={{ color: 'var(--muted)', fontSize: 12, marginBottom: 6 }}>{m.label}</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', fontFamily: 'JetBrains Mono' }}>{m.value}</div>
-              <div style={{ color: 'var(--faint)', fontSize: 11 }}>متر مربع</div>
-            </div>
-          ))}
-        </div>
-      </Card>
-      )}
-    </div>
-  );
-}
-
-// ─── INVESTOR: Portfolio ──────────────────────────────────────────────
-function InvestorPortfolio() {
-  const kpis = [
-    { label: 'ارزش کل', value: '۴۲۰ م', unit: 'میلیارد تومان', color: 'var(--gold)' },
-    { label: 'بازده کل', value: '۳۸٪', unit: 'از زمان خرید', color: '#22c55e' },
-    { label: 'تعداد ملک', value: '۳', unit: 'ملک در پرتفولیو', color: '#818cf8' },
-    { label: 'سود سالانه', value: '۱۵۹ م', unit: 'میلیون تومان', color: '#f59e0b' },
-  ];
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <div>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>پرتفولیو سرمایه‌گذاری</h1>
-        <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: 14 }}>نمای کلی سبد ملکی شما و عملکرد سرمایه‌گذاری‌ها</p>
-      </div>
-      {/* KPI row */}
-      <div className="mjo-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-        {kpis.map((k) => (
-          <Card key={k.label} style={{ textAlign: 'center' }}>
-            <div style={{ color: 'var(--muted)', fontSize: 12, marginBottom: 8 }}>{k.label}</div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: k.color, fontFamily: 'JetBrains Mono' }}>{k.value}</div>
-            <div style={{ color: 'var(--faint)', fontSize: 11, marginTop: 4 }}>{k.unit}</div>
-          </Card>
-        ))}
-      </div>
-      {/* Property cards */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {portfolioProperties.map((p) => (
-          <Card key={p.name} style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'stretch' }}>
-              {/* image placeholder */}
-              <div style={{
-                width: 160,
-                background: p.color,
-                flexShrink: 0,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-              }}>
-                <span style={{ fontSize: 32, opacity: 0.5 }}>🏙️</span>
-              </div>
-              <div style={{ flex: 1, padding: '20px 24px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-                  <div>
-                    <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>{p.name}</div>
-                    <div style={{ color: 'var(--muted)', fontSize: 13 }}>📍 {p.location}</div>
-                  </div>
-                  <span style={{
-                    background: 'rgba(34,197,94,0.12)',
-                    color: '#22c55e',
-                    border: '1px solid rgba(34,197,94,0.3)',
-                    borderRadius: 8,
-                    padding: '4px 14px',
-                    fontSize: 16,
-                    fontWeight: 800,
-                    fontFamily: 'JetBrains Mono',
-                  }}>{p.roi}</span>
-                </div>
-                <div className="mjo-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-                  {[
-                    { label: 'ارزش فعلی', value: p.currentValue, color: 'var(--gold)' },
-                    { label: 'قیمت خرید', value: p.buyPrice, color: 'var(--text)' },
-                    { label: 'بازده (ROI)', value: p.roi, color: '#22c55e' },
-                    { label: 'بازده اجاری', value: p.rentalYield, color: '#818cf8' },
-                  ].map((stat) => (
-                    <div key={stat.label} style={{ background: 'var(--bg2)', borderRadius: 10, padding: '10px 14px', textAlign: 'center' }}>
-                      <div style={{ color: 'var(--faint)', fontSize: 11, marginBottom: 4 }}>{stat.label}</div>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: stat.color, fontFamily: 'JetBrains Mono' }}>{stat.value}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              {/* Sparkline */}
-              <div style={{ width: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 16, gap: 6, borderRight: '1px solid var(--line)' }}>
-                <div style={{ color: 'var(--faint)', fontSize: 11, marginBottom: 4 }}>روند ارزش</div>
-                <Sparkline data={p.trend} />
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── INVESTOR: Market ─────────────────────────────────────────────────
-function InvestorMarket() {
-  const levelColors: Record<string, { bg: string; text: string; border: string }> = {
-    high: { bg: 'rgba(34,197,94,0.12)', text: '#22c55e', border: 'rgba(34,197,94,0.25)' },
-    mid: { bg: 'rgba(245,158,11,0.10)', text: '#f59e0b', border: 'rgba(245,158,11,0.25)' },
-    low: { bg: 'rgba(148,163,184,0.08)', text: '#94a3b8', border: 'rgba(148,163,184,0.2)' },
-    neg: { bg: 'rgba(239,68,68,0.10)', text: '#ef4444', border: 'rgba(239,68,68,0.25)' },
-  };
-  const [neighborhoods, setNeighborhoods] = useState<MarketNeighborhood[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let alive = true;
-    // برای هر محلهٔ ثابت، آمار واقعی را از /api/market/stats بگیر
-    Promise.all(MARKET_DISTRICTS.map(async (name) => {
-      const q = new URLSearchParams({ city: 'تهران', district: name });
-      try {
-        const r = await fetch(`/api/market/stats?${q.toString()}`, { cache: 'no-store' });
-        if (!r.ok) return null;
-        const d: MarketResponse = await r.json();
-        if (!d.stats) return null;
-        const g = growthFromTrend(d.stats.trend);
-        return {
-          name,
-          pricePerMeter: ppmToFa(d.stats.avg),
-          growth: g != null ? `${g >= 0 ? '+' : ''}${toFa(g)}٪` : '—',
-          level: levelFromGrowth(g),
-          hasData: true,
-        } as MarketNeighborhood;
-      } catch { return null; }
-    })).then((res) => {
-      if (!alive) return;
-      // محلاتِ بدون داده پنهان می‌شوند
-      setNeighborhoods(res.filter((n): n is MarketNeighborhood => n != null));
-      setLoading(false);
-    });
-    return () => { alive = false; };
-  }, []);
-
-  const trends = [
-    { label: 'تهران', dir: '↑', pct: '۱۴٪', desc: 'رشد ماهانه' },
-    { label: 'سراسری', dir: '↑', pct: '۹٪', desc: 'رشد ماهانه' },
-    { label: 'لوکس', dir: '↑', pct: '۲۲٪', desc: 'رشد ماهانه' },
-  ];
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>نقشه حرارتی بازار</h1>
-          <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: 14 }}>تحلیل قیمت و رشد محلات تهران</p>
-        </div>
-        <span style={{ color: 'var(--faint)', fontSize: 13, fontFamily: 'JetBrains Mono' }}>به‌روزرسانی: ۱۴۰۳/۰۳/۲۵</span>
-      </div>
-      {/* Heatmap grid */}
-      <Card>
-        <h2 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>محلات تهران</h2>
-        {loading && (
-          <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 14, padding: '24px 0' }}>در حال بارگذاری…</div>
-        )}
-        {!loading && neighborhoods.length === 0 && (
-          <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 14, padding: '24px 0' }}>داده‌ی بازاری برای این محلات در دسترس نیست</div>
-        )}
-        <div className="mjo-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-          {neighborhoods.map((n) => {
-            const c = levelColors[n.level];
-            return (
-              <a key={n.name} href={`/neighborhood/${encodeURIComponent(n.name)}`} style={{
-                background: c.bg,
-                border: `1px solid ${c.border}`,
-                borderRadius: 12,
-                padding: '14px 16px',
-                cursor: 'pointer',
-                transition: 'transform 0.15s',
-                textDecoration: 'none',
-                display: 'block',
-              }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>{n.name}</div>
-                <div style={{ fontSize: 13, color: 'var(--muted)', fontFamily: 'JetBrains Mono', marginBottom: 4 }}>{n.pricePerMeter}</div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: c.text, fontFamily: 'JetBrains Mono' }}>{n.growth}</div>
-              </a>
-            );
-          })}
-        </div>
-        <div style={{ display: 'flex', gap: 20, marginTop: 16, alignItems: 'center' }}>
-          <span style={{ color: 'var(--faint)', fontSize: 13 }}>راهنما:</span>
-          {[
-            { label: 'رشد بالا (>۱۵٪)', color: '#22c55e' },
-            { label: 'رشد متوسط', color: '#f59e0b' },
-            { label: 'رشد کم', color: '#94a3b8' },
-            { label: 'منفی', color: '#ef4444' },
-          ].map((leg) => (
-            <div key={leg.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <div style={{ width: 10, height: 10, borderRadius: 2, background: leg.color }} />
-              <span style={{ color: 'var(--muted)', fontSize: 12 }}>{leg.label}</span>
-            </div>
-          ))}
-        </div>
-      </Card>
-      {/* Trend indicators */}
-      <Card>
-        <h2 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>شاخص‌های کلان بازار</h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {trends.map((t) => (
-            <div key={t.label} style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '14px 20px',
-              background: 'var(--bg2)',
-              borderRadius: 10,
-            }}>
-              <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>{t.label}</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ color: 'var(--muted)', fontSize: 13 }}>{t.desc}</span>
-                <span style={{ fontSize: 20, color: '#22c55e', fontWeight: 800 }}>{t.dir}</span>
-                <span style={{ fontSize: 18, fontWeight: 800, color: '#22c55e', fontFamily: 'JetBrains Mono', minWidth: 50, textAlign: 'left' }}>{t.pct}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-// ─── INVESTOR: Opportunities ──────────────────────────────────────────
-function InvestorOpportunities() {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <div>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>فرصت‌های سرمایه‌گذاری</h1>
-        <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: 14 }}>پروژه‌ها و ملک‌های منتخب با بیشترین پتانسیل رشد</p>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {opportunities.map((opp) => (
-          <Card key={opp.name} style={{ position: 'relative', overflow: 'hidden' }}>
-            {/* Background glow based on ROI */}
-            <div style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              height: 3,
-              background: `linear-gradient(90deg, ${opp.riskColor}60 0%, transparent 100%)`,
-            }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-              <div>
-                <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>{opp.name}</div>
-                <div style={{ color: 'var(--muted)', fontSize: 13 }}>📍 {opp.location}</div>
-              </div>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <span style={{
-                  background: `${opp.riskColor}18`,
-                  color: opp.riskColor,
-                  border: `1px solid ${opp.riskColor}40`,
-                  borderRadius: 8,
-                  padding: '4px 12px',
-                  fontSize: 13,
-                  fontWeight: 700,
-                }}>ریسک: {opp.risk}</span>
-                <span style={{
-                  background: 'rgba(34,197,94,0.1)',
-                  color: '#22c55e',
-                  border: '1px solid rgba(34,197,94,0.3)',
-                  borderRadius: 8,
-                  padding: '4px 14px',
-                  fontSize: 16,
-                  fontWeight: 800,
-                  fontFamily: 'JetBrains Mono',
-                }}>ROI {opp.roi}</span>
-              </div>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ color: 'var(--muted)', fontSize: 12, marginBottom: 8 }}>بازه قیمت</div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--gold)', fontFamily: 'JetBrains Mono', marginBottom: 14 }}>{opp.priceRange} تومان</div>
-                <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {opp.highlights.map((h) => (
-                    <li key={h} style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--muted)', fontSize: 13 }}>
-                      <span style={{ color: 'var(--gold)', fontSize: 10 }}>✦</span>
-                      {h}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <a href={`/search?q=${encodeURIComponent(opp.location.split('،').slice(-1)[0]?.trim() || opp.location)}`} style={{
-                background: 'linear-gradient(135deg, var(--gold) 0%, var(--gold2) 100%)',
-                color: '#0a0a0a',
-                border: 'none',
-                borderRadius: 10,
-                padding: '12px 24px',
-                fontSize: 14,
-                fontWeight: 700,
-                fontFamily: 'Vazirmatn',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                marginRight: 16,
-                textDecoration: 'none',
-              }}>بررسی فرصت ←</a>
-            </div>
-          </Card>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── ROOT PAGE ────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════
+//  Page
+// ════════════════════════════════════════════════════════
 export default function OwnerPage() {
-  const [role, setRole] = useState<Role>('seller');
-  const [activeView, setActiveView] = useState<ActiveView>('seller-overview');
+  const [view, setView] = useState<View>('dashboard')
+  const [data, setData] = useState<OwnerData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [unauth, setUnauth] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const [search, setSearch] = useState('')
+  const [showAdd, setShowAdd] = useState(false)
 
-  const switchRole = (r: Role) => {
-    setRole(r);
-    setActiveView(r === 'seller' ? 'seller-overview' : 'investor-portfolio');
-  };
+  const refresh = useCallback(async () => {
+    try {
+      const r = await fetch('/api/owner')
+      if (r.status === 401) { setUnauth(true); setLoading(false); return }
+      const d = await r.json()
+      setData(d); setUnauth(false)
+    } catch {} finally { setLoading(false) }
+  }, [])
 
-  const currentNav = role === 'seller' ? sellerNav : investorNav;
+  useEffect(() => { refresh() }, [refresh])
 
-  const renderView = () => {
-    switch (activeView) {
-      case 'seller-overview': return <SellerOverview />;
-      case 'seller-listings': return <SellerListings />;
-      case 'seller-visitors': return <SellerVisitors />;
-      case 'seller-price': return <SellerPriceAnalysis />;
-      case 'investor-portfolio': return <InvestorPortfolio />;
-      case 'investor-market': return <InvestorMarket />;
-      case 'investor-opportunities': return <InvestorOpportunities />;
-      default: return null;
-    }
-  };
+  const post = useCallback(async (body: Record<string, unknown>): Promise<boolean> => {
+    setBusy(true)
+    try {
+      const r = await fetch('/api/owner', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { alert(d.error || 'برای انجام این عملیات وارد شوید'); return false }
+      await refresh()
+      return true
+    } catch { return false } finally { setBusy(false) }
+  }, [refresh])
+
+  const toggleTheme = () => {
+    const html = document.documentElement
+    if (theme === 'dark') { html.classList.add('light'); setTheme('light') }
+    else { html.classList.remove('light'); setTheme('dark') }
+  }
+
+  if (loading) {
+    return (
+      <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT, fontSize: 15 }}>
+        در حال بارگذاری پنل مالک…
+      </div>
+    )
+  }
+  if (unauth || !data) {
+    return (
+      <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT }}>
+        <div style={{ ...card, padding: '40px 44px', textAlign: 'center', maxWidth: 380 }}>
+          <div style={{ fontSize: 40, marginBottom: 14 }}>🔒</div>
+          <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>برای دسترسی به پنل مالک وارد شوید</div>
+          <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 22 }}>پنل مالک فقط برای کاربران واردشده در دسترس است.</div>
+          <a href="/auth" style={{
+            display: 'inline-block', padding: '10px 28px', borderRadius: 10,
+            background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f',
+            fontWeight: 700, fontSize: 14, textDecoration: 'none',
+          }}>ورود به حساب</a>
+        </div>
+      </div>
+    )
+  }
+
+  const { stats, properties, inquiries, viewings, offers } = data
+  const propMap = new Map(properties.map(p => [p.id, p.title]))
+  const titleOf = (id: string) => propMap.get(id) || '—'
 
   return (
-    <div
-      dir="rtl"
-      className="mjo-2col"
-      style={{
-        display: 'flex',
-        minHeight: '100vh',
-        background: 'var(--bg)',
-        fontFamily: 'Vazirmatn, sans-serif',
-        color: 'var(--text)',
-      }}
-    >
-      {/* ── Sidebar ─────────────────────────────────────────────── */}
-      <aside style={{
-        width: 248,
-        flexShrink: 0,
-        background: 'var(--navbg)',
-        borderLeft: '1px solid var(--line)',
-        position: 'sticky',
-        top: 0,
-        height: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-      }}>
-        {/* Logo */}
-        <div style={{ padding: '28px 24px 20px', borderBottom: '1px solid var(--line)' }}>
-          <div style={{ fontSize: 24, fontWeight: 900, color: 'var(--gold)', letterSpacing: 1, marginBottom: 4 }}>ملک‌جت</div>
-          <div style={{ fontSize: 12, color: 'var(--muted)' }}>میز کار مالک</div>
-        </div>
+    <div dir="rtl" style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: FONT }}>
 
-        {/* Role toggle */}
-        <div style={{ padding: '16px 16px 12px' }}>
-          <div className="mjo-tabs" style={{ display: 'flex', gap: 8, background: 'var(--bg2)', borderRadius: 10, padding: 4 }}>
-            {(['seller', 'investor'] as Role[]).map((r) => (
-              <button
-                key={r}
-                onClick={() => switchRole(r)}
-                style={{
-                  flex: 1,
-                  padding: '7px 10px',
-                  borderRadius: 8,
-                  border: role === r ? 'none' : '1px solid var(--line)',
-                  background: role === r ? 'var(--gold)' : 'transparent',
-                  color: role === r ? '#0a0a0a' : 'var(--muted)',
-                  fontSize: 13,
-                  fontWeight: role === r ? 700 : 500,
-                  fontFamily: 'Vazirmatn',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                }}
-              >
-                {r === 'seller' ? 'فروشنده' : 'سرمایه‌گذار'}
-              </button>
-            ))}
+      {/* ════════════ SIDEBAR ════════════ */}
+      <aside className="mjo-side" style={{
+        width: 232, flexShrink: 0, background: 'var(--bg2)', borderLeft: '1px solid var(--line)',
+        position: 'sticky', top: 0, height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      }}>
+        {/* Brand */}
+        <div style={{ padding: '20px 16px 16px', borderBottom: '1px solid var(--line)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(140deg,var(--gold2),var(--gold))',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 6px 18px -6px var(--gold)', flexShrink: 0,
+            }}>
+              <div style={{ width: 13, height: 13, background: 'var(--bg)', transform: 'rotate(45deg)', borderRadius: 3 }} />
+            </div>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-0.5px' }}>ملک‌جت</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>پنل مالک</div>
+            </div>
           </div>
         </div>
 
         {/* Nav */}
-        <nav style={{ flex: 1, padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto' }}>
-          {currentNav.map((item) => {
-            const isActive = activeView === item.key;
+        <nav style={{ padding: '10px 8px', flex: 1, overflowY: 'auto' }}>
+          {NAV_ITEMS.map(item => {
+            const active = view === item.id
+            const badge = item.badge === 'inquiries' ? stats.kpis.newInquiries
+              : item.badge === 'viewings' ? stats.kpis.upcomingViewings
+                : item.badge === 'offers' ? stats.kpis.pendingOffers : 0
             return (
-              <button
-                key={item.key}
-                onClick={() => setActiveView(item.key as ActiveView)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: '11px 14px',
-                  borderRadius: 10,
-                  border: 'none',
-                  background: isActive
-                    ? 'linear-gradient(135deg, rgba(212,175,55,0.15) 0%, rgba(212,175,55,0.05) 100%)'
-                    : 'transparent',
-                  color: isActive ? 'var(--gold)' : 'var(--muted)',
-                  fontSize: 14,
-                  fontWeight: isActive ? 700 : 500,
-                  fontFamily: 'Vazirmatn',
-                  cursor: 'pointer',
-                  textAlign: 'right',
-                  width: '100%',
-                  transition: 'all 0.15s',
-                  outline: isActive ? '1px solid rgba(212,175,55,0.2)' : 'none',
-                }}
-              >
-                <span style={{ fontSize: 17, opacity: isActive ? 1 : 0.6 }}>{item.icon}</span>
-                {item.label}
-                {isActive && (
-                  <div style={{
-                    marginRight: 'auto',
-                    width: 4,
-                    height: 4,
-                    borderRadius: '50%',
-                    background: 'var(--gold)',
-                  }} />
+              <button key={item.id} onClick={() => setView(item.id)} style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10,
+                border: 'none', cursor: 'pointer', background: active ? 'var(--goldDim)' : 'transparent',
+                color: active ? 'var(--gold)' : 'var(--muted)', fontWeight: active ? 700 : 500, fontSize: 14,
+                textAlign: 'right', marginBottom: 2, fontFamily: FONT, transition: 'all 0.15s',
+              }}>
+                <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: active ? 1 : 0.7 }}>{item.icon}</span>
+                <span className="mjo-sidelabel" style={{ flex: 1 }}>{item.label}</span>
+                {item.badge && badge > 0 && (
+                  <span style={{ background: active ? 'var(--gold)' : 'var(--line2)', color: active ? '#16140f' : 'var(--text)', borderRadius: 9, fontSize: 10, fontWeight: 700, padding: '1px 7px' }}>{fa(badge)}</span>
                 )}
               </button>
-            );
+            )
           })}
-          <a href="/plan-ai" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderRadius: 10, color: 'var(--gold)', textDecoration: 'none', fontSize: 14, fontWeight: 600, marginTop: 4, border: '1px solid rgba(212,175,55,0.25)' }}>
-            <span style={{ fontSize: 17 }}>◳</span> استودیو پلان و سه‌بعدی
-          </a>
-          <a href="/content" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderRadius: 10, color: 'var(--gold)', textDecoration: 'none', fontSize: 14, fontWeight: 600, marginTop: 4, border: '1px solid rgba(212,175,55,0.25)' }}>
-            <span style={{ fontSize: 17 }}>✎</span> مقالات و وبلاگ
-          </a>
-          <a href="/website-builder" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderRadius: 10, color: 'var(--gold)', textDecoration: 'none', fontSize: 14, fontWeight: 600, marginTop: 4, border: '1px solid rgba(212,175,55,0.25)' }}>
-            <span style={{ fontSize: 17 }}>◳</span> وب‌سایت من (سایت‌ساز)
-          </a>
+          <div style={{ height: 1, background: 'var(--line)', margin: '10px 8px' }} />
+          {NAV_LINKS.map(l => (
+            <a key={l.href} href={l.href} style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10,
+              color: 'var(--muted)', textDecoration: 'none', fontWeight: 500, fontSize: 14, marginBottom: 2, fontFamily: FONT,
+            }}>
+              <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: 0.7 }}>{l.icon}</span>
+              <span className="mjo-sidelabel" style={{ flex: 1 }}>{l.label}</span>
+            </a>
+          ))}
         </nav>
 
-        {/* Profile */}
-        <div style={{
-          padding: '16px 20px',
-          borderTop: '1px solid var(--line)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-        }}>
+        {/* Owner identity */}
+        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{
-            width: 40,
-            height: 40,
-            borderRadius: '50%',
-            background: 'linear-gradient(135deg, var(--gold) 0%, var(--goldDim) 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-            fontSize: 18,
-            fontWeight: 800,
-            color: '#0a0a0a',
-          }}>م</div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 3 }}>مهدی رضوی</div>
-            <span style={{
-              background: 'rgba(212,175,55,0.15)',
-              color: 'var(--gold)',
-              border: '1px solid rgba(212,175,55,0.3)',
-              borderRadius: 6,
-              padding: '1px 8px',
-              fontSize: 11,
-              fontWeight: 600,
-            }}>مالک تأییدشده ✓</span>
+            width: 34, height: 34, borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#16140f', flexShrink: 0,
+          }}>{stats.profile.name.trim().charAt(0) || 'م'}</div>
+          <div className="mjo-sidelabel" style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{stats.profile.name}</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>مالک · فروشنده</div>
           </div>
+          <button onClick={toggleTheme} title="تغییر تم" style={{
+            width: 32, height: 32, borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--line)',
+            color: 'var(--text)', cursor: 'pointer', fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>{theme === 'dark' ? '☀' : '☾'}</button>
         </div>
       </aside>
 
-      {/* ── Main Content ─────────────────────────────────────────── */}
-      <main style={{
-        flex: 1,
-        minWidth: 0,
-        padding: '36px 40px',
-        overflowY: 'auto',
-        maxWidth: 'calc(100vw - 248px)',
-      }}>
-        {renderView()}
-      </main>
+      {/* ════════════ MAIN ════════════ */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+
+        {/* Topbar */}
+        <div style={{
+          position: 'sticky', top: 0, zIndex: 40, background: 'var(--navbg)', backdropFilter: 'blur(16px)',
+          borderBottom: '1px solid var(--line)', padding: '0 24px', minHeight: 64,
+          display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
+        }}>
+          <h2 style={{ fontSize: 17, fontWeight: 700, flexShrink: 0 }}>{VIEW_TITLES[view]}</h2>
+          <input
+            value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="جستجوی ملک، استعلام..."
+            className="mjo-search"
+            style={{ ...inputStyle, flex: 1, minWidth: 160, maxWidth: 360, marginInlineStart: 'auto' }}
+          />
+          <button onClick={() => { setView('properties'); setShowAdd(true) }} style={{
+            padding: '9px 18px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))',
+            color: '#16140f', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: FONT, whiteSpace: 'nowrap', flexShrink: 0,
+          }}>+ ثبت ملک</button>
+        </div>
+
+        {/* Content */}
+        <main style={{ flex: 1, padding: 24, overflow: 'auto' }}>
+          {view === 'dashboard' && <DashboardView stats={stats} titleOf={titleOf} post={post} onViewings={() => setView('viewings')} onInquiries={() => setView('inquiries')} />}
+          {view === 'properties' && <PropertiesView properties={properties} post={post} busy={busy} search={search} showAdd={showAdd} setShowAdd={setShowAdd} />}
+          {view === 'inquiries' && <InquiriesView inquiries={inquiries} properties={properties} titleOf={titleOf} post={post} busy={busy} search={search} />}
+          {view === 'viewings' && <ViewingsView viewings={viewings} properties={properties} titleOf={titleOf} post={post} busy={busy} search={search} />}
+          {view === 'offers' && <OffersView offers={offers} titleOf={titleOf} post={post} busy={busy} search={search} />}
+          {view === 'settings' && <SettingsView profile={stats.profile} post={post} busy={busy} />}
+        </main>
+      </div>
+
+      <style>{`
+        @media(max-width:820px){ .mjo-side{ width:62px!important } .mjo-sidelabel{ display:none!important } }
+        @media(max-width:1000px){ .mjo-grid4{ grid-template-columns:repeat(2,1fr)!important } .mjo-grid2{ grid-template-columns:1fr!important } }
+        @media(max-width:680px){ .mjo-grid4{ grid-template-columns:1fr!important } .mjo-form{ grid-template-columns:1fr!important } }
+        @media(max-width:600px){ .mjo-search{ order:3; max-width:none!important; flex-basis:100%!important; margin:0 0 10px!important } }
+      `}</style>
     </div>
-  );
+  )
+}
+
+// ════════════════════════════════════════════════════════
+//  DASHBOARD
+// ════════════════════════════════════════════════════════
+function DashboardView({ stats, titleOf, post, onViewings, onInquiries }: {
+  stats: Stats; titleOf: (id: string) => string
+  post: (b: Record<string, unknown>) => Promise<boolean>
+  onViewings: () => void; onInquiries: () => void
+}) {
+  const k = stats.kpis
+  const kpis = [
+    { label: 'ملک‌های فعال', value: fa(k.activeCount), sub: `${fa(k.totalProps)} کل`, subColor: 'var(--muted)' },
+    { label: 'استعلام جدید', value: fa(k.newInquiries), sub: 'نیاز به پاسخ', subColor: 'var(--muted)' },
+    { label: 'بازدیدهای پیش‌رو', value: fa(k.upcomingViewings), sub: 'برنامه‌ریزی‌شده', subColor: 'var(--muted)' },
+    { label: 'بازدید این ماه', value: fa(k.monthViews), sub: `${k.monthChange > 0 ? '+' : ''}${fa(k.monthChange)}٪`, subColor: k.monthChange >= 0 ? '#34d399' : '#f87171' },
+  ]
+  const maxView = Math.max(1, ...stats.monthlyViews.map(m => m.count))
+  const lastIdx = stats.monthlyViews.length - 1
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* KPI cards */}
+      <div className="mjo-grid4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
+        {kpis.map(c => (
+          <div key={c.label} style={{ ...card, padding: 18 }}>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>{c.label}</div>
+            <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.5px', lineHeight: 1 }}>{c.value}</div>
+            <div style={{ fontSize: 12, color: c.subColor, marginTop: 8, fontWeight: 600 }}>{c.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Portfolio highlight */}
+      <div style={{
+        ...card, background: 'linear-gradient(135deg,rgba(201,168,76,0.12),rgba(201,168,76,0.03))',
+        border: '1px solid rgba(201,168,76,0.28)', padding: '22px 24px',
+        display: 'flex', alignItems: 'center', gap: 32, flexWrap: 'wrap',
+      }}>
+        <div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>ارزش پورتفوی</div>
+          <div style={{ fontSize: 30, fontWeight: 800, color: 'var(--gold)' }}>{money(k.portfolio)}</div>
+        </div>
+        <div style={{ borderInlineStart: '1px solid var(--line)', paddingInlineStart: 32 }}>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>بازدید کل</div>
+          <div style={{ fontSize: 30, fontWeight: 800 }}>{fa(k.totalViews)}</div>
+        </div>
+      </div>
+
+      {/* Two columns: chart + recent inquiries */}
+      <div className="mjo-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+        {/* 6-month views */}
+        <div style={{ ...card, padding: 22 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 18 }}>بازدید ۶ ماهه</h3>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: 140 }}>
+            {stats.monthlyViews.map((m, i) => (
+              <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%', justifyContent: 'flex-end' }}>
+                <span style={{ fontSize: 10, color: i === lastIdx ? 'var(--gold)' : 'var(--muted)', fontWeight: 600 }}>{fa(m.count)}</span>
+                <div style={{
+                  width: '100%', minHeight: 6, height: `${(m.count / maxView) * 100}%`,
+                  background: i === lastIdx ? 'linear-gradient(180deg,var(--gold2),var(--gold))' : 'linear-gradient(180deg,rgba(201,168,76,0.45),rgba(201,168,76,0.2))',
+                  borderRadius: '5px 5px 0 0',
+                }} />
+                <span style={{ fontSize: 10, color: i === lastIdx ? 'var(--gold)' : 'var(--muted)', fontWeight: i === lastIdx ? 700 : 500 }}>{m.month}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Recent inquiries */}
+        <div style={{ ...card, overflow: 'hidden' }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 15, fontWeight: 700 }}>استعلام‌های اخیر</span>
+            <button onClick={onInquiries} style={{ background: 'none', border: 'none', color: 'var(--gold)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>همه ←</button>
+          </div>
+          {stats.recentInquiries.length === 0 ? (
+            <div style={{ padding: 28, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>استعلامی ثبت نشده است</div>
+          ) : stats.recentInquiries.map((q, i) => (
+            <div key={q.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 20px', borderBottom: i < stats.recentInquiries.length - 1 ? '1px solid var(--line)' : 'none' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{q.name}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{titleOf(q.propertyId)}</div>
+                {q.message && <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{q.message}</div>}
+              </div>
+              <Pill label={INQ_LABEL[q.status]} color={INQ_COLOR[q.status]} />
+              {q.status === 'new' && (
+                <button onClick={() => post({ action: 'setInquiryStatus', id: q.id, status: 'contacted' })} style={{
+                  ...actionBtn, color: 'var(--gold)', borderColor: 'var(--gold)',
+                }}>پاسخ</button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Upcoming viewings */}
+      <div style={{ ...card, overflow: 'hidden' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>بازدیدهای پیش‌رو</span>
+          <button onClick={onViewings} style={{ background: 'none', border: 'none', color: 'var(--gold)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>همه ←</button>
+        </div>
+        {stats.upcoming.length === 0 ? (
+          <div style={{ padding: 28, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>بازدیدی برنامه‌ریزی نشده است</div>
+        ) : stats.upcoming.map((u, i) => (
+          <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 20px', borderBottom: i < stats.upcoming.length - 1 ? '1px solid var(--line)' : 'none' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.visitor}</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{titleOf(u.propertyId)}</div>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap' }}>{u.date}</div>
+            <Pill label={VIEW_LABEL[u.status]} color={VIEW_COLOR[u.status]} />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════
+//  PROPERTIES
+// ════════════════════════════════════════════════════════
+function PropertiesView({ properties, post, busy, search, showAdd, setShowAdd }: {
+  properties: Property[]; post: (b: Record<string, unknown>) => Promise<boolean>; busy: boolean
+  search: string; showAdd: boolean; setShowAdd: (v: boolean) => void
+}) {
+  const [form, setForm] = useState({ title: '', ptype: PTYPE_OPTIONS[0], location: '', area: '', rooms: '', price: '', deal: 'sale' as Deal })
+
+  const q = search.trim()
+  const filtered = q ? properties.filter(p => p.title.includes(q) || p.location.includes(q) || p.ptype.includes(q)) : properties
+
+  const addProperty = async () => {
+    if (!form.title.trim()) { alert('عنوان ملک را وارد کنید'); return }
+    const ok = await post({
+      action: 'addProperty', title: form.title.trim(), ptype: form.ptype, location: form.location.trim(),
+      area: Number(form.area) || 0, rooms: Number(form.rooms) || 0, price: Number(form.price) || 0, deal: form.deal,
+    })
+    if (ok) { setForm({ title: '', ptype: PTYPE_OPTIONS[0], location: '', area: '', rooms: '', price: '', deal: 'sale' }); setShowAdd(false) }
+  }
+
+  const editPrice = async (p: Property) => {
+    const raw = window.prompt(`${p.deal === 'rent' ? 'ودیعهٔ' : 'قیمت'} جدید «${p.title}» (تومان):`, String(p.price))
+    if (raw == null) return
+    const price = Number(raw)
+    if (!price || price < 0) { alert('عدد معتبر وارد کنید'); return }
+    await post({ action: 'updateProperty', id: p.id, patch: { price } })
+  }
+  const removeProperty = async (p: Property) => {
+    if (!window.confirm(`حذف «${p.title}»؟`)) return
+    await post({ action: 'deleteProperty', id: p.id })
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Add toggle */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button onClick={() => setShowAdd(!showAdd)} style={{
+          padding: '9px 18px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))',
+          color: '#16140f', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: FONT,
+        }}>{showAdd ? '× بستن' : '+ ثبت ملک'}</button>
+      </div>
+
+      {/* Add form */}
+      {showAdd && (
+        <div style={{ ...card, padding: 16 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>＋ ثبت ملک جدید</div>
+          <div className="mjo-form" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 1.4fr 0.8fr 0.8fr 1fr 1fr auto', gap: 10, alignItems: 'center' }}>
+            <input placeholder="عنوان" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} style={inputStyle} />
+            <select value={form.ptype} onChange={e => setForm({ ...form, ptype: e.target.value })} style={{ ...inputStyle, cursor: 'pointer' }}>
+              {PTYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <input placeholder="موقعیت" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} style={inputStyle} />
+            <input placeholder="متراژ" value={form.area} onChange={e => setForm({ ...form, area: e.target.value })} style={inputStyle} />
+            <input placeholder="خواب" value={form.rooms} onChange={e => setForm({ ...form, rooms: e.target.value })} style={inputStyle} />
+            <input placeholder="قیمت (تومان)" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} style={inputStyle} />
+            <select value={form.deal} onChange={e => setForm({ ...form, deal: e.target.value as Deal })} style={{ ...inputStyle, cursor: 'pointer' }}>
+              <option value="sale">فروش</option>
+              <option value="rent">اجاره</option>
+            </select>
+            <button onClick={addProperty} disabled={busy} style={{
+              padding: '9px 18px', borderRadius: 9, background: 'var(--gold)', border: 'none', color: '#16140f',
+              fontWeight: 700, fontSize: 13, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1, fontFamily: FONT, whiteSpace: 'nowrap',
+            }}>افزودن</button>
+          </div>
+        </div>
+      )}
+
+      {/* Grid */}
+      {filtered.length === 0 ? (
+        <div style={{ ...card, padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>ملکی یافت نشد</div>
+      ) : (
+        <div className="mjo-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          {filtered.map(p => (
+            <div key={p.id} style={{ ...card, padding: 18 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 12 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.title}</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>{p.ptype} · {p.location}</div>
+                </div>
+                <Pill label={PROP_LABEL[p.status]} color={PROP_COLOR[p.status]} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+                <span style={{ fontSize: 12, color: 'var(--muted)' }}>{fa(p.area)} متر · {fa(p.rooms)} خواب</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--gold)', background: 'var(--goldDim)', padding: '2px 9px', borderRadius: 6 }}>{DEAL_LABEL[p.deal]}</span>
+                <span style={{ marginInlineStart: 'auto', fontSize: 11, color: 'var(--faint)' }}>{fa(p.views)} بازدید</span>
+              </div>
+              <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 14 }}>
+                {money(p.price)} {p.deal === 'rent' && <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--muted)' }}>ودیعه</span>}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <select value={p.status} onChange={e => post({ action: 'updateProperty', id: p.id, patch: { status: e.target.value } })} disabled={busy} style={{
+                  padding: '6px 10px', borderRadius: 8, background: 'var(--bg)', border: `1px solid ${PROP_COLOR[p.status]}55`,
+                  color: PROP_COLOR[p.status], fontSize: 12, fontWeight: 600, outline: 'none', cursor: 'pointer', fontFamily: FONT,
+                }}>
+                  {PROP_STATUSES.map(s => <option key={s} value={s} style={{ color: 'var(--text)' }}>{PROP_LABEL[s]}</option>)}
+                </select>
+                <button onClick={() => editPrice(p)} disabled={busy} style={actionBtn}>ویرایش قیمت</button>
+                <button onClick={() => removeProperty(p)} disabled={busy} title="حذف" style={{ ...actionBtn, color: '#f87171' }}>حذف</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════
+//  INQUIRIES
+// ════════════════════════════════════════════════════════
+function InquiriesView({ inquiries, properties, titleOf, post, busy, search }: {
+  inquiries: Inquiry[]; properties: Property[]; titleOf: (id: string) => string
+  post: (b: Record<string, unknown>) => Promise<boolean>; busy: boolean; search: string
+}) {
+  const [showAdd, setShowAdd] = useState(false)
+  const [form, setForm] = useState({ propertyId: '', name: '', phone: '', message: '' })
+
+  const q = search.trim()
+  const sorted = [...inquiries].sort((a, b) => b.createdAt - a.createdAt)
+  const filtered = q ? sorted.filter(x => x.name.includes(q) || titleOf(x.propertyId).includes(q) || (x.message || '').includes(q)) : sorted
+
+  const addInquiry = async () => {
+    if (!form.propertyId) { alert('ملک را انتخاب کنید'); return }
+    if (!form.name.trim()) { alert('نام را وارد کنید'); return }
+    const ok = await post({ action: 'addInquiry', propertyId: form.propertyId, name: form.name.trim(), phone: form.phone.trim() || undefined, message: form.message.trim() || undefined })
+    if (ok) { setForm({ propertyId: '', name: '', phone: '', message: '' }); setShowAdd(false) }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button onClick={() => setShowAdd(!showAdd)} style={{
+          padding: '9px 18px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))',
+          color: '#16140f', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: FONT,
+        }}>{showAdd ? '× بستن' : '+ افزودن استعلام'}</button>
+      </div>
+
+      {showAdd && (
+        <div style={{ ...card, padding: 16 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>＋ استعلام جدید</div>
+          <div className="mjo-form" style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr 1.6fr auto', gap: 10, alignItems: 'center' }}>
+            <select value={form.propertyId} onChange={e => setForm({ ...form, propertyId: e.target.value })} style={{ ...inputStyle, cursor: 'pointer' }}>
+              <option value="">انتخاب ملک…</option>
+              {properties.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+            </select>
+            <input placeholder="نام" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} style={inputStyle} />
+            <input placeholder="تلفن" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} style={inputStyle} />
+            <input placeholder="پیام" value={form.message} onChange={e => setForm({ ...form, message: e.target.value })} style={inputStyle} />
+            <button onClick={addInquiry} disabled={busy} style={{
+              padding: '9px 18px', borderRadius: 9, background: 'var(--gold)', border: 'none', color: '#16140f',
+              fontWeight: 700, fontSize: 13, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1, fontFamily: FONT, whiteSpace: 'nowrap',
+            }}>افزودن</button>
+          </div>
+        </div>
+      )}
+
+      {filtered.length === 0 ? (
+        <div style={{ ...card, padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>استعلامی یافت نشد</div>
+      ) : (
+        <div className="mjo-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          {filtered.map(x => {
+            const isNew = x.status === 'new'
+            return (
+              <div key={x.id} style={{ ...card, padding: 18, borderColor: isNew ? 'rgba(201,168,76,0.4)' : 'var(--line)', background: isNew ? 'var(--goldDim)' : 'var(--surface)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700 }}>{x.name}</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {titleOf(x.propertyId)}{x.phone ? ` · ${x.phone}` : ''}
+                    </div>
+                  </div>
+                  <Pill label={INQ_LABEL[x.status]} color={INQ_COLOR[x.status]} />
+                </div>
+                {x.message && <div style={{ fontSize: 13, color: 'var(--text)', background: 'var(--bg)', borderRadius: 8, padding: '10px 12px', marginBottom: 10 }}>{x.message}</div>}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 11, color: 'var(--faint)' }}>{new Date(x.createdAt).toLocaleDateString('fa-IR')}</span>
+                  <select value={x.status} onChange={e => post({ action: 'setInquiryStatus', id: x.id, status: e.target.value })} disabled={busy} style={{
+                    marginInlineStart: 'auto', padding: '6px 10px', borderRadius: 8, background: 'var(--bg)', border: `1px solid ${INQ_COLOR[x.status]}55`,
+                    color: INQ_COLOR[x.status], fontSize: 12, fontWeight: 600, outline: 'none', cursor: 'pointer', fontFamily: FONT,
+                  }}>
+                    {INQ_STATUSES.map(s => <option key={s} value={s} style={{ color: 'var(--text)' }}>{INQ_LABEL[s]}</option>)}
+                  </select>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════
+//  VIEWINGS
+// ════════════════════════════════════════════════════════
+function ViewingsView({ viewings, properties, titleOf, post, busy, search }: {
+  viewings: Viewing[]; properties: Property[]; titleOf: (id: string) => string
+  post: (b: Record<string, unknown>) => Promise<boolean>; busy: boolean; search: string
+}) {
+  const [showAdd, setShowAdd] = useState(false)
+  const [form, setForm] = useState({ propertyId: '', visitor: '', phone: '', date: '' })
+
+  const q = search.trim()
+  const sorted = [...viewings].sort((a, b) => b.createdAt - a.createdAt)
+  const filtered = q ? sorted.filter(v => v.visitor.includes(q) || titleOf(v.propertyId).includes(q)) : sorted
+
+  const addViewing = async () => {
+    if (!form.propertyId) { alert('ملک را انتخاب کنید'); return }
+    if (!form.visitor.trim()) { alert('نام بازدیدکننده را وارد کنید'); return }
+    if (!form.date.trim()) { alert('تاریخ را وارد کنید'); return }
+    const ok = await post({ action: 'addViewing', propertyId: form.propertyId, visitor: form.visitor.trim(), phone: form.phone.trim() || undefined, date: form.date.trim() })
+    if (ok) { setForm({ propertyId: '', visitor: '', phone: '', date: '' }); setShowAdd(false) }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button onClick={() => setShowAdd(!showAdd)} style={{
+          padding: '9px 18px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))',
+          color: '#16140f', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: FONT,
+        }}>{showAdd ? '× بستن' : '+ زمان‌بندی بازدید'}</button>
+      </div>
+
+      {showAdd && (
+        <div style={{ ...card, padding: 16 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>＋ زمان‌بندی بازدید</div>
+          <div className="mjo-form" style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr 1.2fr auto', gap: 10, alignItems: 'center' }}>
+            <select value={form.propertyId} onChange={e => setForm({ ...form, propertyId: e.target.value })} style={{ ...inputStyle, cursor: 'pointer' }}>
+              <option value="">انتخاب ملک…</option>
+              {properties.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+            </select>
+            <input placeholder="بازدیدکننده" value={form.visitor} onChange={e => setForm({ ...form, visitor: e.target.value })} style={inputStyle} />
+            <input placeholder="تلفن" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} style={inputStyle} />
+            <input placeholder="تاریخ (مثلاً ۱۴۰۳/۰۴/۱۲)" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} style={inputStyle} />
+            <button onClick={addViewing} disabled={busy} style={{
+              padding: '9px 18px', borderRadius: 9, background: 'var(--gold)', border: 'none', color: '#16140f',
+              fontWeight: 700, fontSize: 13, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1, fontFamily: FONT, whiteSpace: 'nowrap',
+            }}>افزودن</button>
+          </div>
+        </div>
+      )}
+
+      <div style={{ ...card, overflow: 'hidden' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--line)', fontSize: 15, fontWeight: 700 }}>
+          لیست بازدیدها ({fa(filtered.length)})
+        </div>
+        <div className="mjo-vrow" style={{ display: 'grid', gridTemplateColumns: '1.3fr 1.3fr 1fr 1.4fr', padding: '12px 20px', background: 'var(--bg2)', borderBottom: '1px solid var(--line)', fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>
+          <div>بازدیدکننده</div><div>ملک</div><div>تاریخ</div><div>وضعیت</div>
+        </div>
+        <div style={{ maxHeight: 560, overflowY: 'auto' }}>
+          {filtered.length === 0 ? (
+            <div style={{ padding: 28, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>بازدیدی یافت نشد</div>
+          ) : filtered.map((v, i) => (
+            <div key={v.id} className="mjo-vrow" style={{ display: 'grid', gridTemplateColumns: '1.3fr 1.3fr 1fr 1.4fr', padding: '13px 20px', borderBottom: i < filtered.length - 1 ? '1px solid var(--line)' : 'none', fontSize: 13, alignItems: 'center' }}>
+              <div style={{ fontWeight: 700 }}>{v.visitor}{v.phone && <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 400, marginTop: 2 }}>{v.phone}</div>}</div>
+              <div style={{ color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{titleOf(v.propertyId)}</div>
+              <div style={{ color: 'var(--muted)' }}>{v.date}</div>
+              <div>
+                <select value={v.status} onChange={e => post({ action: 'setViewingStatus', id: v.id, status: e.target.value })} disabled={busy} style={{
+                  padding: '6px 10px', borderRadius: 8, background: 'var(--bg)', border: `1px solid ${VIEW_COLOR[v.status]}55`,
+                  color: VIEW_COLOR[v.status], fontSize: 12, fontWeight: 600, outline: 'none', cursor: 'pointer', fontFamily: FONT,
+                }}>
+                  {VIEW_STATUSES.map(s => <option key={s} value={s} style={{ color: 'var(--text)' }}>{VIEW_LABEL[s]}</option>)}
+                </select>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════
+//  OFFERS
+// ════════════════════════════════════════════════════════
+function OffersView({ offers, titleOf, post, busy, search }: {
+  offers: Offer[]; titleOf: (id: string) => string
+  post: (b: Record<string, unknown>) => Promise<boolean>; busy: boolean; search: string
+}) {
+  const q = search.trim()
+  const sorted = [...offers].sort((a, b) => b.createdAt - a.createdAt)
+  const filtered = q ? sorted.filter(o => o.buyer.includes(q) || titleOf(o.propertyId).includes(q)) : sorted
+
+  if (filtered.length === 0) {
+    return <div style={{ ...card, padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>پیشنهادی یافت نشد</div>
+  }
+
+  return (
+    <div className="mjo-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      {filtered.map(o => {
+        const pending = o.status === 'pending'
+        return (
+          <div key={o.id} style={{ ...card, padding: 18 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 12 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>{o.buyer}</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {titleOf(o.propertyId)}{o.phone ? ` · ${o.phone}` : ''}
+                </div>
+              </div>
+              <Pill label={OFFER_LABEL[o.status]} color={OFFER_COLOR[o.status]} />
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--gold)', marginBottom: 14 }}>{money(o.amount)}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 11, color: 'var(--faint)' }}>{new Date(o.createdAt).toLocaleDateString('fa-IR')}</span>
+              <div style={{ marginInlineStart: 'auto', display: 'flex', gap: 8 }}>
+                {pending ? (
+                  <>
+                    <button onClick={() => post({ action: 'setOfferStatus', id: o.id, status: 'accepted' })} disabled={busy} style={{
+                      ...actionBtn, color: '#34d399', borderColor: '#34d39955', fontWeight: 700,
+                    }}>پذیرفتن</button>
+                    <button onClick={() => post({ action: 'setOfferStatus', id: o.id, status: 'rejected' })} disabled={busy} style={{
+                      ...actionBtn, color: '#ef4444', borderColor: '#ef444455', fontWeight: 700,
+                    }}>رد</button>
+                  </>
+                ) : (
+                  <span style={{ fontSize: 12, fontWeight: 700, color: OFFER_COLOR[o.status], background: `color-mix(in srgb, ${OFFER_COLOR[o.status]} 16%, transparent)`, padding: '5px 14px', borderRadius: 7 }}>
+                    {OFFER_LABEL[o.status]}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════
+//  SETTINGS
+// ════════════════════════════════════════════════════════
+function SettingsView({ profile, post, busy }: {
+  profile: { name: string }; post: (b: Record<string, unknown>) => Promise<boolean>; busy: boolean
+}) {
+  const [name, setName] = useState(profile.name)
+  useEffect(() => { setName(profile.name) }, [profile.name])
+
+  const save = async () => {
+    if (!name.trim()) { alert('نام را وارد کنید'); return }
+    await post({ action: 'updateProfile', patch: { name: name.trim() } })
+  }
+
+  return (
+    <div style={{ ...card, padding: 24, maxWidth: 520 }}>
+      <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 18 }}>تنظیمات مالک</h3>
+      <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نام نمایشی</label>
+      <input value={name} onChange={e => setName(e.target.value)} style={{ ...inputStyle, marginBottom: 18 }} />
+      <button onClick={save} disabled={busy} style={{
+        padding: '10px 26px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))',
+        color: '#16140f', fontSize: 14, fontWeight: 700, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1, fontFamily: FONT,
+      }}>ذخیره</button>
+    </div>
+  )
 }
