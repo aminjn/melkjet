@@ -70,3 +70,21 @@ export async function generateImage(model: string, prompt: string, size = '1024x
   const d = JSON.parse(res.body)
   return d.data?.[0]?.url || d.data?.[0]?.b64_json || ''
 }
+
+// مدل‌های تصویرِ رایج و معتبر روی گپ‌جی‌پی‌تی برای fallback.
+const IMAGE_FALLBACKS = ['dall-e-3', 'gpt-image-1', 'dall-e-2', 'flux']
+
+// مثل generateImage ولی اگر مدلِ انتخابی نامعتبر بود (۴۰۴/خطای آپ‌استریم)، خودکار
+// مدل‌های تصویرِ معتبر را امتحان می‌کند تا قابلیت با تنظیمِ اشتباهِ مدل از کار نیفتد.
+export async function generateImageSafe(model: string | undefined, prompt: string, size = '1024x1024'): Promise<{ url: string; model: string }> {
+  const candidates: string[] = []
+  for (const m of [model, ...IMAGE_FALLBACKS]) if (m && !candidates.includes(m)) candidates.push(m)
+  let lastErr: any = null
+  for (const m of candidates) {
+    try {
+      const url = await generateImage(m, prompt, size)
+      if (url) return { url, model: m }
+    } catch (e) { lastErr = e }
+  }
+  throw lastErr || new Error('هیچ مدل تصویری پاسخ نداد')
+}

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { chatCompleteSafe, generateImage, agentModel } from '@/app/lib/gapgpt'
+import { chatCompleteSafe, generateImageSafe, agentModel } from '@/app/lib/gapgpt'
 
 // تولید تصویر کند است؛ اجازهٔ اجرای طولانی‌تر بده تا قبل از اتمام، پراکسی اتصال را نبندد.
 export const runtime = 'nodejs'
@@ -38,17 +38,23 @@ export async function POST(req: NextRequest) {
 
   const [descRes, planRes, renderRes] = await Promise.allSettled([
     descTask,
-    generateImage(imgModel, planPrompt),
-    generateImage(imgModel, renderPrompt),
+    generateImageSafe(imgModel, planPrompt),
+    generateImageSafe(imgModel, renderPrompt),
   ])
   const description = descRes.status === 'fulfilled' ? (descRes.value || '') : ''
-  const planUrl = planRes.status === 'fulfilled' ? planRes.value : ''
-  const renderUrl = renderRes.status === 'fulfilled' ? renderRes.value : ''
+  const planUrl = planRes.status === 'fulfilled' ? planRes.value.url : ''
+  const renderUrl = renderRes.status === 'fulfilled' ? renderRes.value.url : ''
+  const usedModel = planRes.status === 'fulfilled' ? planRes.value.model : renderRes.status === 'fulfilled' ? renderRes.value.model : imgModel
 
   if (!planUrl && !renderUrl) {
     const reason = planRes.status === 'rejected' ? planRes.reason : renderRes.status === 'rejected' ? renderRes.reason : null
-    return NextResponse.json({ error: reason?.message || 'خطا در تولید تصویر — دوباره تلاش کنید' }, { status: 200 })
+    const detail = reason?.message || ''
+    const is404 = /HTTP 404|bad_response_status_code|openai_error/i.test(detail)
+    const msg = is404
+      ? `مدل تصویرِ «${imgModel}» برای تولید تصویر معتبر نیست. در پنل → API و مدل‌های AI → StudioAgent یک «مدل تولید تصویر» معتبر (مثل dall-e-3) انتخاب کن.`
+      : (detail || 'خطا در تولید تصویر — دوباره تلاش کنید')
+    return NextResponse.json({ error: msg }, { status: 200 })
   }
 
-  return NextResponse.json({ ok: true, description, planUrl, renderUrl, model: imgModel })
+  return NextResponse.json({ ok: true, description, planUrl, renderUrl, model: usedModel })
 }
