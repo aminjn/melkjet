@@ -1,5 +1,6 @@
 'use client'
 import { useRef, useState } from 'react'
+import PlanEditor from './PlanEditor'
 
 // استودیو واقعی تولید پلان دوبعدی و رندر سه‌بعدی از روی عکس‌ها + پارامترها.
 // از /api/ai/studio استفاده می‌کند (ایجنت StudioAgent → مدل تصویر).
@@ -22,6 +23,7 @@ export default function PlanStudio({ compact }: { compact?: boolean }) {
   const [progress, setProgress] = useState('')
   const [out, setOut] = useState<{ description?: string; planUrl?: string; renderUrl?: string; mode?: string } | null>(null)
   const [err, setErr] = useState('')
+  const [editData, setEditData] = useState<{ labels: string[]; area: number } | null>(null)
   const fileRefs = useRef<Record<number, HTMLInputElement | null>>({})
 
   // عکس را کوچک می‌کند و به data URL تبدیل می‌کند تا هم پیش‌نمایش شود هم به سرور
@@ -53,6 +55,12 @@ export default function PlanStudio({ compact }: { compact?: boolean }) {
   const removeRoom = (i: number) => setRooms(rs => rs.filter((_, idx) => idx !== i))
 
   const toEnDigit = (s: string) => s.replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+
+  // ساخت نقشه به‌صورت کاملاً آفلاین: ویرایشگر را با فضاهای واردشده باز می‌کند.
+  const openEditor = () => {
+    const labels = rooms.map(r => r.label.trim()).filter(Boolean)
+    setEditData({ labels, area: Number(toEnDigit(area)) || 100 })
+  }
 
   const generate = async () => {
     if (busy) return
@@ -145,42 +153,26 @@ export default function PlanStudio({ compact }: { compact?: boolean }) {
             </button>
           </div>
 
-          <button onClick={generate} disabled={busy} style={{
-            width: '100%', marginTop: 18, padding: '13px', borderRadius: 12, border: 'none', cursor: busy ? 'default' : 'pointer',
-            background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 14.5, fontFamily: 'inherit', opacity: busy ? .6 : 1,
-          }}>{busy ? '⏳ در حال ساخت…' : '✦ ساخت پلان و سه‌بعدی'}</button>
+          <button onClick={openEditor} style={{
+            width: '100%', marginTop: 18, padding: '13px', borderRadius: 12, border: 'none', cursor: 'pointer',
+            background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 14.5, fontFamily: 'inherit',
+          }}>✦ ساخت / ویرایش پلان</button>
         </div>
       </div>
 
-      {/* OUTPUT */}
+      {/* OUTPUT — ویرایشگر آفلاین */}
       <div style={{ ...card, minHeight: 320, display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <div style={{ fontWeight: 800, fontSize: 15 }}>خروجی هوش مصنوعی</div>
-          <span style={{ fontSize: 11, color: 'var(--gold)' }}>✦ موتور بینایی هوشمند</span>
+          <div style={{ fontWeight: 800, fontSize: 15 }}>نقشهٔ شما</div>
+          <span style={{ fontSize: 11, color: '#5fd98a' }}>● آفلاین — بدون اینترنت</span>
         </div>
 
-        {busy && <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, color: 'var(--muted)', fontSize: 13 }}>
-          <div className="mj-studio-spin" style={{ width: 38, height: 38, border: '3px solid var(--line2)', borderTopColor: 'var(--gold)', borderRadius: '50%' }} />
-          <div>{progress}</div>
-        </div>}
-
-        {!busy && err && <div style={{ color: '#e7674a', fontSize: 13, padding: '20px 0', textAlign: 'center', lineHeight: 1.8 }}>⚠ {err}</div>}
-
-        {!busy && !err && !out && (
+        {editData ? (
+          <PlanEditor key={editData.labels.join('|') + '@' + editData.area} labels={editData.labels} area={editData.area} />
+        ) : (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, color: 'var(--faint)', textAlign: 'center' }}>
             <span style={{ fontSize: 30 }}>▦</span>
-            <div style={{ fontSize: 13, maxWidth: 260, lineHeight: 1.8 }}>عکس‌ها را اضافه کن، پارامترها را تنظیم کن و «ساخت پلان و سه‌بعدی» را بزن.</div>
-          </div>
-        )}
-
-        {!busy && out && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ alignSelf: 'flex-start', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: out.mode === 'photo' ? 'rgba(95,217,138,.12)' : out.mode === 'approx' ? 'rgba(231,103,74,.12)' : 'var(--goldDim)', color: out.mode === 'photo' ? '#5fd98a' : out.mode === 'approx' ? '#e7674a' : 'var(--gold)', border: `1px solid ${out.mode === 'photo' ? 'rgba(95,217,138,.35)' : out.mode === 'approx' ? 'rgba(231,103,74,.35)' : 'var(--line)'}` }}>
-              {out.mode === 'photo' ? '✓ بازسازی از روی عکس‌های شما' : out.mode === 'approx' ? '≈ نقشهٔ تقریبی (بدون تحلیل عکس)' : 'بر اساس پارامترها (بدون عکس)'}
-            </div>
-            {out.description && <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.9, background: 'var(--bg2)', borderRadius: 12, padding: '12px 14px' }}>{out.description}</div>}
-            {out.planUrl && <Figure title="پلان دوبعدی" url={out.planUrl} />}
-            {out.renderUrl && <Figure title="رندر سه‌بعدی" url={out.renderUrl} />}
+            <div style={{ fontSize: 13, maxWidth: 280, lineHeight: 1.8 }}>فضاها و متراژ را تنظیم کن و «ساخت / ویرایش پلان» را بزن؛ بعد اتاق‌ها را با درگ جابه‌جا و تغییر اندازه بده.</div>
           </div>
         )}
       </div>
