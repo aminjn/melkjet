@@ -32,14 +32,14 @@ export default function PlanStudio({ compact }: { compact?: boolean }) {
     reader.onload = () => {
       const img = new Image()
       img.onload = () => {
-        const max = 768
+        const max = 560
         const scale = Math.min(1, max / Math.max(img.width, img.height))
         const w = Math.round(img.width * scale), h = Math.round(img.height * scale)
         const canvas = document.createElement('canvas')
         canvas.width = w; canvas.height = h
         const ctx = canvas.getContext('2d')
         let data = String(reader.result || '')
-        if (ctx) { ctx.drawImage(img, 0, 0, w, h); data = canvas.toDataURL('image/jpeg', 0.72) }
+        if (ctx) { ctx.drawImage(img, 0, 0, w, h); data = canvas.toDataURL('image/jpeg', 0.6) }
         setRooms(rs => rs.map((r, idx) => idx === i ? { ...r, preview: data } : r))
       }
       img.src = String(reader.result || '')
@@ -175,8 +175,8 @@ export default function PlanStudio({ compact }: { compact?: boolean }) {
 
         {!busy && out && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ alignSelf: 'flex-start', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: out.mode === 'photo' ? 'rgba(95,217,138,.12)' : 'var(--goldDim)', color: out.mode === 'photo' ? '#5fd98a' : 'var(--gold)', border: `1px solid ${out.mode === 'photo' ? 'rgba(95,217,138,.35)' : 'var(--line)'}` }}>
-              {out.mode === 'photo' ? '✓ بازسازی از روی عکس‌های شما' : 'بر اساس پارامترها (بدون عکس)'}
+            <div style={{ alignSelf: 'flex-start', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: out.mode === 'photo' ? 'rgba(95,217,138,.12)' : out.mode === 'approx' ? 'rgba(231,103,74,.12)' : 'var(--goldDim)', color: out.mode === 'photo' ? '#5fd98a' : out.mode === 'approx' ? '#e7674a' : 'var(--gold)', border: `1px solid ${out.mode === 'photo' ? 'rgba(95,217,138,.35)' : out.mode === 'approx' ? 'rgba(231,103,74,.35)' : 'var(--line)'}` }}>
+              {out.mode === 'photo' ? '✓ بازسازی از روی عکس‌های شما' : out.mode === 'approx' ? '≈ نقشهٔ تقریبی (بدون تحلیل عکس)' : 'بر اساس پارامترها (بدون عکس)'}
             </div>
             {out.description && <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.9, background: 'var(--bg2)', borderRadius: 12, padding: '12px 14px' }}>{out.description}</div>}
             {out.planUrl && <Figure title="پلان دوبعدی" url={out.planUrl} />}

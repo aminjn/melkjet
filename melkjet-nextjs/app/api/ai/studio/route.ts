@@ -1,10 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { chatCompleteSafe, chatVisionSafe, generateImageSafe, agentModel } from '@/app/lib/gapgpt'
-import { renderFloorPlanSVG, renderIsoSVG, svgDataUrl, type PlanLayout } from '@/app/lib/floorplan-svg'
-import { saveMedia } from '@/app/lib/media-store'
+import { renderFloorPlanSVG, renderIsoSVG, svgDataUrl, type PlanLayout, type PlanRoom } from '@/app/lib/floorplan-svg'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
+
+// نوعِ فضا را از روی نام فارسی حدس می‌زند
+function roomType(label: string): string {
+  const s = label || ''
+  if (/آشپز/.test(s)) return 'kitchen'
+  if (/نشیمن|پذیرا|نشین/.test(s)) return 'living'
+  if (/ناهار/.test(s)) return 'dining'
+  if (/خواب|اتاق|مستر/.test(s)) return 'bedroom'
+  if (/سرویس|حمام|بهداشت|توالت|دستشو/.test(s)) return 'bathroom'
+  if (/تراس|بالکن|بالکن|حیاط/.test(s)) return 'balcony'
+  if (/راهرو|ورودی|هال|لابی/.test(s)) return 'hall'
+  return 'other'
+}
+
+// چیدمان تقریبیِ قطعی از روی نام فضاها (وقتی تحلیل عکس در دسترس نیست) — هیچ‌وقت ارورِ خالی ندهیم.
+function layoutFromLabels(labelsArr: string[]): PlanLayout {
+  const names = labelsArr.filter(Boolean).slice(0, 12)
+  const n = Math.max(1, names.length)
+  const cols = Math.min(4, Math.max(2, Math.ceil(Math.sqrt(n))))
+  const rows = Math.ceil(n / cols)
+  const rooms: PlanRoom[] = names.map((name, i) => ({ name, type: roomType(name), x: i % cols, y: Math.floor(i / cols), w: 1, h: 1 }))
+  return { cols, rows, rooms, summaryFa: `چیدمان تقریبی بر اساس فضاهای واردشده: ${names.join('، ')}.` }
+}
 
 // استخراج اولین آبجکت JSON معتبر از خروجی مدل (با حذف ```json و متن اضافه)
 function extractJson(s: string): any | null {
@@ -33,20 +55,8 @@ export async function POST(req: NextRequest) {
   // ===== حالت بازسازی وضع موجود (وقتی عکس داریم) =====
   if (photos.length && visionModel) {
     const labels = photos.map(p => p.label).join('، ')
-    // گپ معمولاً عکسِ base64 را برای بینایی نمی‌پذیرد (۵۰۳ system_error)؛ عکس‌ها را
-    // ذخیره می‌کنیم و لینک عمومی می‌دهیم تا خود گپ از روی URL بخواندشان.
-    const host = req.headers.get('host')
-    const proto = req.headers.get('x-forwarded-proto') || 'https'
-    const toUrl = (dataUrl: string): string => {
-      try {
-        const ci = dataUrl.indexOf(',')
-        if (!host || ci < 0 || !dataUrl.startsWith('data:')) return dataUrl
-        const mime = (dataUrl.slice(5, ci).split(';')[0]) || 'image/jpeg'
-        const saved = saveMedia(Buffer.from(dataUrl.slice(ci + 1), 'base64'), mime, 'studio.jpg')
-        return `${proto}://${host}/api/media/${saved.id}`
-      } catch { return dataUrl }
-    }
-    const imgs = photos.map(p => toUrl(p.image)).slice(0, 4)
+    // base64 مستقیم می‌فرستیم (URL را خودِ سرویس خارجی نمی‌تواند از سرور ایرانی بگیرد).
+    const imgs = photos.map(p => p.image).slice(0, 3)
     const visionPrompt =
       `These photos show the rooms of ONE existing unit (~${area} m²; room labels: ${labels}). Reconstruct its AS-BUILT floor plan as a SCHEMATIC GRID — do NOT design or improve anything, only reflect what's really there.\n` +
       `Model the footprint as a grid of cols×rows cells (pick cols,rows between 3 and 6 to fit the real proportions). Place EVERY real room as a rectangle on the grid in its REAL relative position/adjacency as seen in the photos; rooms should tile the rectangle with minimal gaps/overlaps. Use ONLY rooms visible in the photos — never invent rooms.\n` +
@@ -79,11 +89,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, mode: 'photo', description, planUrl, renderUrl, svg: true })
     }
 
-    // پیام شفاف بر اساس علت واقعی
-    const msg = !raw
-      ? `پردازش عکس روی همهٔ مدل‌های بینایی ناموفق بود (${visionErr.slice(0, 160)}). به احتمال زیاد حسابِ گپ‌جی‌پی‌تیِ شما «ورودی تصویر / Vision» را پشتیبانی نمی‌کند یا شارژ/دسترسی مدل‌های gpt-4o فعال نیست. در پنل گپ‌جی‌پی‌تی دسترسی مدلِ بیناییِ gpt-4o را فعال کن، بعد دوباره تلاش کن.`
-      : 'مدل عکس‌ها را دید ولی نتوانست چیدمان ساخت‌یافته بدهد. یک‌بار دیگر تلاش کن؛ اگر تکرار شد، از هر فضا یک عکس واضح‌تر و کامل‌تر بده.'
-    return NextResponse.json({ error: msg }, { status: 200 })
+    // تحلیل عکس در دسترس نبود → به‌جای ارورِ خالی، نقشهٔ تقریبی از روی نام فضاها بساز.
+    const fallbackLabels = (rooms.length ? rooms : photos.map(p => p.label))
+    if (fallbackLabels.filter(Boolean).length) {
+      const layout = layoutFromLabels(fallbackLabels)
+      const why = !raw
+        ? 'تحلیل عکس روی سرویس هوش مصنوعی فعلی در دسترس نبود'
+        : 'تحلیل عکس‌ها به نتیجهٔ ساخت‌یافته نرسید'
+      return NextResponse.json({
+        ok: true, mode: 'approx',
+        description: `این نقشه «تقریبی» است و بر اساس فضاهایی که نام برده‌ای ساخته شده (نه از روی عکس‌ها) — چون ${why}. می‌توانی فضاها را کم/زیاد کنی تا نزدیک‌تر شود.`,
+        planUrl: svgDataUrl(renderFloorPlanSVG(layout, area, 'پلان تقریبی')),
+        renderUrl: svgDataUrl(renderIsoSVG(layout, area, 'نمای سه‌بعدی')),
+        svg: true,
+      })
+    }
+    return NextResponse.json({ error: `پردازش عکس ناموفق بود (${visionErr.slice(0, 140)}) و نام فضایی هم برای ساخت نقشهٔ تقریبی نبود.` }, { status: 200 })
   }
 
   // ===== حالت پارامتری (بدون عکس) — با مدل تصویر یک پلان نمونه می‌سازد =====
