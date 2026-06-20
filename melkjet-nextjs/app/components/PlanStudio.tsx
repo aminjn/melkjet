@@ -49,10 +49,16 @@ export default function PlanStudio({ compact }: { compact?: boolean }) {
           style, openPlan, rooms: withPhotos.length ? withPhotos : rooms.map(r => r.label),
         }),
       })
-      const d = await r.json()
-      if (!r.ok || d.error) { setErr(d.error || 'خطا در ساخت'); return }
+      let d: any = null
+      try { d = await r.json() } catch {}
+      if (!r.ok || !d || d.error) {
+        setErr((d && d.error) || (r.status >= 500 || r.status === 504
+          ? 'ساخت پلان طول کشید و پاسخ نرسید؛ چند لحظه بعد دوباره تلاش کنید.'
+          : 'خطا در ساخت پلان'))
+        return
+      }
       setOut({ description: d.description, planUrl: d.planUrl, renderUrl: d.renderUrl })
-    } catch { setErr('خطا در ارتباط با سرور') }
+    } catch { setErr('تولید پلان زمان‌بر است و اتصال قطع شد؛ لطفاً دوباره تلاش کنید.') }
     finally { setBusy(false); setProgress('') }
   }
 
