@@ -30,27 +30,36 @@ export async function POST(req: NextRequest) {
   const styleEn = style.includes('کلاسیک') ? 'classic' : style.includes('مینیمال') ? 'minimal' : 'modern'
   const roomsFa = rooms.length ? rooms.join('، ') : 'نشیمن، آشپزخانه، اتاق‌خواب، سرویس بهداشتی'
 
-  // ۱) اگر عکس فرستاده شده، با مدل بینایی فضاها را تحلیل کن تا پلان با واقعیت بخواند.
-  let visionEn = ''   // توصیف انگلیسی برای پرامپتِ تولید تصویر
+  // ۱) اگر عکس فرستاده شده، با مدل بینایی پلانِ «وضع موجود» را از روی عکس‌ها استخراج کن.
+  let visionEn = ''   // توصیف انگلیسی برای بازسازی پلانِ موجود
   if (photos.length && visionModel) {
     try {
       const labels = photos.map(p => p.label).join('، ')
       visionEn = await chatVision(visionModel,
-        `These are photos of the rooms of one residential apartment (${labels}). Look carefully and produce a SHORT English architectural brief to recreate THIS specific unit as a floor plan and 3D render: list each room and its function, the relative layout/adjacency of spaces, window/light positions, flooring & wall materials/colors, and the overall interior style. Be concrete and faithful to the photos. Max 120 words, no preamble.`,
-        photos.map(p => p.image), { max_tokens: 500 }).catch(() => '')
+        `These photos show the rooms of ONE EXISTING apartment (~${area} m², labels: ${labels}). Your job is to RECONSTRUCT the AS-BUILT floor plan of THIS real unit — not to suggest or improve anything. Infer from the photos: every room and its function, the relative position & adjacency of rooms (which connects to which via doors/openings/hallway), exterior walls and window positions, approximate proportions/sizes, and the existing furniture, flooring and finishes. Output a concise, concrete English spec that an illustrator could use to redraw the EXISTING layout faithfully. Do NOT invent rooms that aren't in the photos. Max 130 words, no preamble.`,
+        photos.map(p => p.image), { max_tokens: 550 }).catch(() => '')
     } catch { /* بینایی اختیاری است */ }
   }
-  const visionLine = visionEn ? ` Match this real apartment as closely as possible: ${visionEn}` : ''
+  const reconstruct = !!visionEn   // وقتی عکس تحلیل شد → حالت بازسازی وضع موجود
 
-  const planPrompt = `Architectural 2D floor plan, top-down blueprint view, ${area} square meter residential apartment, ${bedrooms} bedrooms, ${styleEn} style, ${openPlan ? 'open-plan kitchen and living room' : 'separated kitchen and living room'}, clearly labeled rooms (living room, kitchen, bedrooms, bathroom), walls and doors, furniture layout, dimension lines, clean technical line drawing, white background, high detail.${visionLine}`
-  const renderPrompt = `3D isometric dollhouse cutaway render of a ${styleEn} residential apartment interior, ${area} square meters, ${bedrooms} bedrooms, ${openPlan ? 'open-plan living and kitchen' : 'separate rooms'}, realistic furniture and materials, soft natural lighting, architectural visualization, high quality.${visionLine}`
+  // در حالت بازسازی، پلانِ واقعی را از روی تحلیل عکس‌ها می‌سازیم (نه یک پلان عمومی/پیشنهادی)
+  const planPrompt = reconstruct
+    ? `Accurate AS-BUILT 2D floor plan reconstruction of an EXISTING ~${area} square meter apartment. Reproduce EXACTLY this real layout — only the rooms described, correct adjacencies, doors and window positions, furniture matching the photos. Do not add or remove rooms. Top-down architectural blueprint, labeled rooms, walls, doors, furniture, dimension lines, clean technical line drawing, white background, high detail. The real apartment to reproduce: ${visionEn}`
+    : `Architectural 2D floor plan, top-down blueprint view, ${area} square meter residential apartment, ${bedrooms} bedrooms, ${styleEn} style, ${openPlan ? 'open-plan kitchen and living room' : 'separated kitchen and living room'}, clearly labeled rooms (living room, kitchen, bedrooms, bathroom), walls and doors, furniture layout, dimension lines, clean technical line drawing, white background, high detail`
+  const renderPrompt = reconstruct
+    ? `3D isometric dollhouse cutaway render reconstructing THIS EXISTING apartment interior exactly as in the photos — same rooms, same relative layout, matching furniture, flooring and finishes. Realistic materials, soft natural lighting, architectural visualization, high quality. The real apartment to reproduce: ${visionEn}`
+    : `3D isometric dollhouse cutaway render of a ${styleEn} residential apartment interior, ${area} square meters, ${bedrooms} bedrooms, ${openPlan ? 'open-plan living and kitchen' : 'separate rooms'}, realistic furniture and materials, soft natural lighting, architectural visualization, high quality`
 
-  // همه هم‌زمان اجرا می‌شوند (متنِ توضیح + دو تصویر) تا مجموع زمان کم بماند و
-  // قبل از تمام‌شدن، تایم‌اوت پراکسی اتصال را نبندد.
+  // توضیح فارسی: در حالت بازسازی فقط «وضع موجود» را توصیف کن، هیچ پیشنهاد طراحی نده.
   const descTask: Promise<string> = textModel
-    ? chatCompleteSafe(textModel, [
-        { role: 'system', content: 'تو معمار داخلی هستی. بر اساس پارامترها (و در صورت وجود، تحلیل عکس‌های واقعی)، چیدمان منطقی فضاها و توزیع متراژ را در ۳ تا ۴ جملهٔ فارسی توضیح بده. کوتاه و کاربردی.' },
-        { role: 'user', content: `متراژ کل: ${area} مترمربع\nتعداد خواب: ${bedrooms}\nسبک: ${style}\nپلان ${openPlan ? 'اوپن (نشیمن و آشپزخانه یکپارچه)' : 'بسته'}\nفضاهای موجود: ${roomsFa}${visionEn ? `\nتحلیل عکس‌های واقعی واحد: ${visionEn}` : ''}` },
+    ? chatCompleteSafe(textModel, reconstruct
+      ? [
+        { role: 'system', content: 'تو فقط وضعِ موجودِ یک واحد را از روی تحلیل عکس‌ها توصیف می‌کنی. صرفاً بگو چه فضاهایی وجود دارد، موقعیت و مجاورت آن‌ها، و کاربری هر فضا. هیچ پیشنهاد طراحی، بهبود یا «بهتر است» نده. ۳ تا ۴ جملهٔ فارسی، فقط توصیفِ واقعیت.' },
+        { role: 'user', content: `متراژ تقریبی: ${area} مترمربع\nتحلیل عکس‌های واقعی واحد:\n${visionEn}` },
+      ]
+      : [
+        { role: 'system', content: 'تو معمار داخلی هستی. بر اساس پارامترها چیدمان منطقی فضاها و توزیع متراژ را در ۳ تا ۴ جملهٔ فارسی توضیح بده. کوتاه و کاربردی.' },
+        { role: 'user', content: `متراژ کل: ${area} مترمربع\nتعداد خواب: ${bedrooms}\nسبک: ${style}\nپلان ${openPlan ? 'اوپن (نشیمن و آشپزخانه یکپارچه)' : 'بسته'}\nفضاهای موجود: ${roomsFa}` },
       ], { max_tokens: 400 }).catch(() => '')
     : Promise.resolve('')
 
