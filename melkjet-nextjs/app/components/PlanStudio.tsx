@@ -20,7 +20,7 @@ export default function PlanStudio({ compact }: { compact?: boolean }) {
   const [openPlan, setOpenPlan] = useState(true)
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState('')
-  const [out, setOut] = useState<{ description?: string; planUrl?: string; renderUrl?: string } | null>(null)
+  const [out, setOut] = useState<{ description?: string; planUrl?: string; renderUrl?: string; mode?: string } | null>(null)
   const [err, setErr] = useState('')
   const fileRefs = useRef<Record<number, HTMLInputElement | null>>({})
 
@@ -56,7 +56,9 @@ export default function PlanStudio({ compact }: { compact?: boolean }) {
 
   const generate = async () => {
     if (busy) return
-    setBusy(true); setErr(''); setOut(null); setProgress('در حال ساخت پلان و مدل سه‌بعدی توسط هوش مصنوعی…')
+    const hasPhotos = rooms.some(r => r.preview)
+    setBusy(true); setErr(''); setOut(null)
+    setProgress(hasPhotos ? 'در حال تحلیل عکس‌ها و بازسازی نقشهٔ وضع موجود…' : 'در حال ساخت پلان و مدل سه‌بعدی…')
     try {
       const withPhotos = rooms.filter(r => r.preview).map(r => r.label)
       // عکس‌های واقعی را هم می‌فرستیم تا مدل بینایی فضا را تحلیل کند و پلان با واقعیت بخوانَد
@@ -77,7 +79,7 @@ export default function PlanStudio({ compact }: { compact?: boolean }) {
           : 'خطا در ساخت پلان'))
         return
       }
-      setOut({ description: d.description, planUrl: d.planUrl, renderUrl: d.renderUrl })
+      setOut({ description: d.description, planUrl: d.planUrl, renderUrl: d.renderUrl, mode: d.mode })
     } catch { setErr('تولید پلان زمان‌بر است و اتصال قطع شد؛ لطفاً دوباره تلاش کنید.') }
     finally { setBusy(false); setProgress('') }
   }
@@ -173,6 +175,9 @@ export default function PlanStudio({ compact }: { compact?: boolean }) {
 
         {!busy && out && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ alignSelf: 'flex-start', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: out.mode === 'photo' ? 'rgba(95,217,138,.12)' : 'var(--goldDim)', color: out.mode === 'photo' ? '#5fd98a' : 'var(--gold)', border: `1px solid ${out.mode === 'photo' ? 'rgba(95,217,138,.35)' : 'var(--line)'}` }}>
+              {out.mode === 'photo' ? '✓ بازسازی از روی عکس‌های شما' : 'بر اساس پارامترها (بدون عکس)'}
+            </div>
             {out.description && <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.9, background: 'var(--bg2)', borderRadius: 12, padding: '12px 14px' }}>{out.description}</div>}
             {out.planUrl && <Figure title="پلان دوبعدی" url={out.planUrl} />}
             {out.renderUrl && <Figure title="رندر سه‌بعدی" url={out.renderUrl} />}
@@ -185,11 +190,12 @@ export default function PlanStudio({ compact }: { compact?: boolean }) {
 
 function Figure({ title, url }: { title: string; url: string }) {
   const src = url.startsWith('http') || url.startsWith('data:') ? url : `data:image/png;base64,${url}`
+  const ext = src.startsWith('data:image/svg') ? 'svg' : 'png'
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
         <span style={{ fontSize: 12.5, fontWeight: 700 }}>{title}</span>
-        <a href={src} download={`melkjet-${title}.png`} target="_blank" rel="noreferrer" style={{ fontSize: 11.5, color: 'var(--gold)', textDecoration: 'none' }}>دانلود ↓</a>
+        <a href={src} download={`melkjet-${title}.${ext}`} target="_blank" rel="noreferrer" style={{ fontSize: 11.5, color: 'var(--gold)', textDecoration: 'none' }}>دانلود ↓</a>
       </div>
       <img src={src} alt={title} style={{ width: '100%', borderRadius: 12, border: '1px solid var(--line)', display: 'block' }} />
     </div>
