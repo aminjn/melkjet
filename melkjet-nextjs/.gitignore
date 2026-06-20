@@ -65,3 +65,5 @@ next-env.d.ts
 .sites-data.json
 .cms-data.json
 .category-data.json
+.materials-data.json
+.floorplan-data.json

@@ -2,7 +2,8 @@
 // که مدل بینایی از روی عکس‌ها استخراج می‌کند. خروجی SVG است (به‌صورت data URL نمایش داده می‌شود).
 
 export interface PlanRoom { name: string; type?: string; x: number; y: number; w: number; h: number }
-export interface PlanLayout { cols: number; rows: number; rooms: PlanRoom[]; summaryFa?: string }
+export interface PlanDoor { x: number; y: number; side: 'N' | 'S' | 'E' | 'W' }
+export interface PlanLayout { cols: number; rows: number; rooms: PlanRoom[]; doors?: PlanDoor[]; summaryFa?: string }
 
 const clampi = (n: any, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(Number(n) || 0)))
 const fa = (s: any) => String(s).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d])
@@ -15,13 +16,15 @@ const TYPE_FILL: Record<string, string> = {
 const FONT = 'Tahoma, Arial, sans-serif'
 
 // تبدیل آرایهٔ اتاق‌ها به ساختار معتبر و محدودشده در گرید
-function sanitize(layout: PlanLayout): { cols: number; rows: number; rooms: PlanRoom[] } {
+function sanitize(layout: PlanLayout): { cols: number; rows: number; rooms: PlanRoom[]; doors: PlanDoor[] } {
   const cols = clampi(layout.cols, 2, 8), rows = clampi(layout.rows, 2, 8)
   const rooms = (Array.isArray(layout.rooms) ? layout.rooms : []).map(r => {
     const x = clampi(r.x, 0, cols - 1), y = clampi(r.y, 0, rows - 1)
     return { name: String(r.name || '').slice(0, 24), type: String(r.type || 'other'), x, y, w: clampi(r.w, 1, cols - x), h: clampi(r.h, 1, rows - y) }
   }).filter(r => r.name)
-  return { cols, rows, rooms }
+  const doors: PlanDoor[] = (Array.isArray(layout.doors) ? layout.doors : [])
+    .map(d => ({ x: clampi(d.x, 0, cols - 1), y: clampi(d.y, 0, rows - 1), side: (['N', 'S', 'E', 'W'].includes(d.side) ? d.side : 'N') as PlanDoor['side'] }))
+  return { cols, rows, rooms, doors }
 }
 
 export function svgDataUrl(svg: string): string {
@@ -30,7 +33,7 @@ export function svgDataUrl(svg: string): string {
 
 // نقشهٔ کفِ بالا‌نما (۲بعدی)
 export function renderFloorPlanSVG(layoutIn: PlanLayout, totalArea: number, title = 'پلان وضع موجود'): string {
-  const { cols, rows, rooms } = sanitize(layoutIn)
+  const { cols, rows, rooms, doors } = sanitize(layoutIn)
   const W = 900, H = 860, pad = 64, top = 66, bottom = 54
   const gw = W - 2 * pad, gh = H - top - bottom
   const cw = gw / cols, ch = gh / rows
@@ -44,6 +47,19 @@ export function renderFloorPlanSVG(layoutIn: PlanLayout, totalArea: number, titl
     body += `<rect x="${px.toFixed(1)}" y="${py.toFixed(1)}" width="${pw.toFixed(1)}" height="${ph.toFixed(1)}" fill="${fill}" stroke="${wall}" stroke-width="6"/>`
     body += `<text x="${(px + pw / 2).toFixed(1)}" y="${(py + ph / 2 - 3).toFixed(1)}" font-family="${FONT}" font-size="22" font-weight="700" fill="#181818" text-anchor="middle" direction="rtl">${esc(r.name)}</text>`
     body += `<text x="${(px + pw / 2).toFixed(1)}" y="${(py + ph / 2 + 22).toFixed(1)}" font-family="${FONT}" font-size="15" fill="#6a6a6a" text-anchor="middle" direction="rtl">${fa(area)} متر</text>`
+  }
+  // درها: یک شکافِ سفید روی لبهٔ دیوارِ همان سلول (تا حدّ ممکن مثل پلان معماری)
+  const dlen = Math.min(cw, ch) * 0.5
+  for (const d of doors) {
+    const cx = pad + d.x * cw, cy = top + d.y * ch
+    let x1: number, y1: number, x2: number, y2: number
+    if (d.side === 'N') { const m = cx + cw / 2; x1 = m - dlen / 2; x2 = m + dlen / 2; y1 = y2 = cy }
+    else if (d.side === 'S') { const m = cx + cw / 2; x1 = m - dlen / 2; x2 = m + dlen / 2; y1 = y2 = cy + ch }
+    else if (d.side === 'W') { const m = cy + ch / 2; y1 = m - dlen / 2; y2 = m + dlen / 2; x1 = x2 = cx }
+    else { const m = cy + ch / 2; y1 = m - dlen / 2; y2 = m + dlen / 2; x1 = x2 = cx + cw }
+    // شکافِ سفید روی دیوار + خطِ بازشوِ نازکِ در
+    body += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#ffffff" stroke-width="9"/>`
+    body += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#b9892b" stroke-width="3" stroke-dasharray="4 4"/>`
   }
   const head = `<text x="${W / 2}" y="42" font-family="${FONT}" font-size="25" font-weight="800" fill="#111" text-anchor="middle" direction="rtl">${esc(title)} — ${fa(Math.round(totalArea))} متر مربع</text>`
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}"><rect width="${W}" height="${H}" fill="#ffffff"/>${head}${body}</svg>`
