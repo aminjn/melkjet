@@ -68,3 +68,4 @@ next-env.d.ts
 .materials-data.json
 .floorplan-data.json
 .owner-data.json
+.buyer-data.json

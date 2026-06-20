@@ -1,641 +1,375 @@
 'use client'
-
 import { useState, useEffect, useCallback } from 'react'
-import Link from 'next/link'
-import Nav from '@/app/components/Nav'
-import Footer from '@/app/components/Footer'
-import { fetchContent, gradientFor, type ContentItem } from '@/app/lib/content-display'
 
-/* ─── Types ─────────────────────────────────────────────── */
+// ════════════════════════════════════════════════════════
+//  Types (mirror app/lib/buyer-store.ts API shape)
+// ════════════════════════════════════════════════════════
+type Deal = 'sale' | 'rent'
+type ViewingStatus = 'scheduled' | 'done' | 'canceled'
+type OfferStatus = 'pending' | 'accepted' | 'rejected'
 
-interface SavedSearch { id: string; label: string; query: string; createdAt: number }
-interface Prefs { favorites: string[]; savedSearches: SavedSearch[] }
+interface Saved { id: string; title: string; ptype: string; location: string; area: number; rooms: number; price: number; deal: Deal; addedAt: number }
+interface Search { id: string; query: string; ptype?: string; area?: string; priceMax?: number; alerts: boolean; createdAt: number }
+interface Viewing { id: string; propertyTitle: string; advisor?: string; date: string; status: ViewingStatus; createdAt: number }
+interface Offer { id: string; propertyTitle: string; amount: number; status: OfferStatus; createdAt: number }
+interface Message { id: string; from: string; propertyTitle?: string; text: string; unread: boolean; createdAt: number }
 
-/* ─── Static UI data (local-only sections) ─────────────── */
+interface Stats {
+  profile: { name: string; budget?: number; prefType?: string; areas?: string }
+  kpis: { savedCount: number; searchCount: number; upcomingViewings: number; unreadMessages: number; pendingOffers: number }
+  recentSaved: Saved[]
+  upcoming: Viewing[]
+  recentMessages: Message[]
+}
+interface BuyerData { stats: Stats; saved: Saved[]; searches: Search[]; viewings: Viewing[]; offers: Offer[]; messages: Message[] }
 
-const needTags = ['آپارتمان', 'سعادت‌آباد', '۱۳۰–۱۵۰ متر', 'زیر ۱۸م', 'آسانسور', 'پارکینگ']
+type View = 'dashboard' | 'favorites' | 'searches' | 'viewings' | 'offers' | 'messages' | 'settings'
 
-const journeySteps = [
-  { label: 'تعریف نیاز', done: true, active: false },
-  { label: 'بررسی گزینه‌ها', done: false, active: true },
-  { label: 'بازدید حضوری', done: false, active: false },
-  { label: 'قرارداد', done: false, active: false },
+// ════════════════════════════════════════════════════════
+//  Helpers
+// ════════════════════════════════════════════════════════
+const FONT = 'Vazirmatn, system-ui, sans-serif'
+const fa = (n: number) => n.toLocaleString('fa-IR')
+function money(n: number): string {
+  if (!n) return '—'
+  if (n >= 1e9) return fa(Math.round((n / 1e9) * 10) / 10) + ' میلیارد'
+  if (n >= 1e6) return fa(Math.round(n / 1e6)) + ' میلیون'
+  return fa(n) + ' تومان'
+}
+const faDate = (ts: number) => { try { return new Date(ts).toLocaleDateString('fa-IR') } catch { return '' } }
+
+const DEAL_LABEL: Record<Deal, string> = { sale: 'فروش', rent: 'اجاره' }
+const VIEW_LABEL: Record<ViewingStatus, string> = { scheduled: 'رزرو‌شده', done: 'انجام‌شده', canceled: 'لغو' }
+const VIEW_COLOR: Record<ViewingStatus, string> = { scheduled: 'var(--gold)', done: '#34d399', canceled: '#7a8fae' }
+const VIEW_STATUSES: ViewingStatus[] = ['scheduled', 'done', 'canceled']
+const OFFER_LABEL: Record<OfferStatus, string> = { pending: 'در انتظار', accepted: 'پذیرفته', rejected: 'رد' }
+const OFFER_COLOR: Record<OfferStatus, string> = { pending: '#f59e0b', accepted: '#34d399', rejected: '#ef4444' }
+const PTYPE_OPTIONS = ['آپارتمان', 'ویلا', 'زمین', 'مغازه', 'سایر']
+
+const card: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16 }
+const inputStyle: React.CSSProperties = { padding: '9px 11px', borderRadius: 9, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--text)', fontSize: 13, outline: 'none', fontFamily: FONT, width: '100%' }
+const actionBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap' }
+
+const VIEW_TITLES: Record<View, string> = {
+  dashboard: 'پنل خریدار', favorites: 'علاقه‌مندی‌ها', searches: 'جستجوهای ذخیره‌شده',
+  viewings: 'بازدیدهای من', offers: 'پیشنهادهای من', messages: 'پیام‌ها', settings: 'تنظیمات',
+}
+const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'viewings' | 'offers' | 'messages' }[] = [
+  { id: 'dashboard', label: 'داشبورد', icon: '▦' },
+  { id: 'favorites', label: 'علاقه‌مندی‌ها', icon: '♥' },
+  { id: 'searches', label: 'جستجوهای ذخیره‌شده', icon: '◍' },
+  { id: 'viewings', label: 'بازدیدهای من', icon: '◉', badge: 'viewings' },
+  { id: 'offers', label: 'پیشنهادهای من', icon: '◈', badge: 'offers' },
+  { id: 'messages', label: 'پیام‌ها', icon: '✉', badge: 'messages' },
+  { id: 'settings', label: 'تنظیمات', icon: '⛭' },
 ]
 
-const notifications = [
-  { color: '#e05555', dot: '#e05555', text: 'فایل سعادت‌آباد ۱۴۰م – کاهش قیمت ۴۰۰م', time: '۲ ساعت پیش' },
-  { color: '#3dba6e', dot: '#3dba6e', text: 'فایل جدید مطابق جستجوی شما', time: '۵ ساعت پیش' },
-  { color: '#5b8dee', dot: '#5b8dee', text: 'یادآور بازدید فردا ۱۴:۰۰', time: '۱ روز پیش' },
-  { color: '#e8a84c', dot: '#e8a84c', text: 'دستیار AI: ۳ فرصت جدید پیدا شد', time: '۲ روز پیش' },
-]
+function Pill({ label, color }: { label: string; color: string }) {
+  return <span style={{ fontSize: 11, fontWeight: 600, color, background: `color-mix(in srgb, ${color} 16%, transparent)`, padding: '3px 10px', borderRadius: 7, whiteSpace: 'nowrap' }}>{label}</span>
+}
+function Kpi({ label, value, sub, subColor }: { label: string; value: string; sub?: string; subColor?: string }) {
+  return (
+    <div style={{ ...card, padding: '16px 18px', flex: '1 1 150px', minWidth: 150 }}>
+      <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 8 }}>{label}</div>
+      <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.5px' }}>{value}</div>
+      {sub && <div style={{ fontSize: 11.5, color: subColor || 'var(--muted)', marginTop: 4 }}>{sub}</div>}
+    </div>
+  )
+}
+function PropCard({ p, onRemove }: { p: Saved; onRemove: () => void }) {
+  return (
+    <div style={{ ...card, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+        <div style={{ fontWeight: 700, fontSize: 14 }}>{p.title}</div>
+        <Pill label={DEAL_LABEL[p.deal]} color={p.deal === 'sale' ? '#60a5fa' : '#2dd4bf'} />
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--muted)' }}>{p.ptype} · {p.location}</div>
+      <div style={{ fontSize: 12, color: 'var(--muted)' }}>{fa(p.area)} متر{p.rooms ? ` · ${fa(p.rooms)} خواب` : ''}</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
+        <div style={{ fontWeight: 800, color: 'var(--gold)', fontSize: 14 }}>{p.deal === 'rent' ? 'ودیعه ' : ''}{money(p.price)}</div>
+        <button onClick={onRemove} style={{ ...actionBtn, color: '#ef4444', borderColor: 'color-mix(in srgb,#ef4444 30%,transparent)' }}>حذف</button>
+      </div>
+    </div>
+  )
+}
 
-/* ─── Component ─────────────────────────────────────────── */
-
+// ════════════════════════════════════════════════════════
+//  Page
+// ════════════════════════════════════════════════════════
 export default function BuyerPage() {
-  const [compareSet, setCompareSet] = useState<string[]>([])
-  const [visitCancelled, setVisitCancelled] = useState(false)
+  const [view, setView] = useState<View>('dashboard')
+  const [data, setData] = useState<BuyerData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [unauth, setUnauth] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const [search, setSearch] = useState('')
 
-  // Real data
-  const [prefs, setPrefs] = useState<Prefs>({ favorites: [], savedSearches: [] })
-  const [listings, setListings] = useState<ContentItem[]>([])
-  const [loaded, setLoaded] = useState(false)
+  const [newSearch, setNewSearch] = useState({ query: '', ptype: '', area: '', priceMax: '', alerts: true })
+  const [newViewing, setNewViewing] = useState({ propertyTitle: '', advisor: '', date: '' })
+  const [newOffer, setNewOffer] = useState({ propertyTitle: '', amount: '' })
+  const [prof, setProf] = useState({ name: '', budget: '', prefType: '', areas: '' })
 
-  // AI assistant
-  const [aiInput, setAiInput] = useState('')
-  const [aiReply, setAiReply] = useState('')
-  const [aiLoading, setAiLoading] = useState(false)
-  const [aiError, setAiError] = useState('')
-
-  const toggleCompare = (id: string) =>
-    setCompareSet(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
-
-  // Load prefs + real listings
-  const reloadPrefs = useCallback(async () => {
+  const refresh = useCallback(async () => {
     try {
-      const r = await fetch('/api/user/prefs', { cache: 'no-store' })
-      if (r.ok) {
-        const d = await r.json()
-        setPrefs({
-          favorites: Array.isArray(d.favorites) ? d.favorites : [],
-          savedSearches: Array.isArray(d.savedSearches) ? d.savedSearches : [],
-        })
-      }
-    } catch { /* keep current */ }
+      const r = await fetch('/api/buyer')
+      if (r.status === 401) { setUnauth(true); setLoading(false); return }
+      const d = await r.json()
+      setData(d); setUnauth(false)
+      setProf({ name: d.stats.profile.name || '', budget: String(d.stats.profile.budget || ''), prefType: d.stats.profile.prefType || '', areas: d.stats.profile.areas || '' })
+    } catch {} finally { setLoading(false) }
   }, [])
+  useEffect(() => { refresh() }, [refresh])
 
-  useEffect(() => {
-    let alive = true
-    ;(async () => {
-      const [items] = await Promise.all([fetchContent('listing', undefined, 24), reloadPrefs()])
-      if (!alive) return
-      setListings(items)
-      setLoaded(true)
-    })()
-    return () => { alive = false }
-  }, [reloadPrefs])
-
-  const byId = new Map(listings.map(l => [l.id, l]))
-  const favListings = prefs.favorites.map(id => byId.get(id)).filter(Boolean) as ContentItem[]
-  const hasFavorites = favListings.length > 0
-  // When the user has no favorites, suggest all real listings as add-able cards.
-  const gridItems = hasFavorites ? favListings : listings
-
-  const addFav = async (listingId: string) => {
-    setPrefs(p => ({ ...p, favorites: [listingId, ...p.favorites.filter(x => x !== listingId)] }))
+  const post = useCallback(async (body: Record<string, unknown>): Promise<boolean> => {
+    setBusy(true)
     try {
-      const r = await fetch('/api/user/prefs', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'addFav', listingId }),
-      })
-      if (r.ok) setPrefs(await r.json())
-    } catch { reloadPrefs() }
-  }
-
-  const removeFav = async (listingId: string) => {
-    setPrefs(p => ({ ...p, favorites: p.favorites.filter(x => x !== listingId) }))
-    try {
-      const r = await fetch('/api/user/prefs', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'removeFav', listingId }),
-      })
-      if (r.ok) setPrefs(await r.json())
-    } catch { reloadPrefs() }
-  }
-
-  const addSearch = async () => {
-    const query = (window.prompt('عبارت جستجوی موردنظر را وارد کنید:', '') || '').trim()
-    if (!query) return
-    const label = (window.prompt('یک عنوان برای این جستجو وارد کنید:', query) || query).trim()
-    try {
-      const r = await fetch('/api/user/prefs', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'addSearch', label, query }),
-      })
-      if (r.ok) setPrefs(await r.json())
-    } catch { reloadPrefs() }
-  }
-
-  const removeSearch = async (id: string) => {
-    setPrefs(p => ({ ...p, savedSearches: p.savedSearches.filter(s => s.id !== id) }))
-    try {
-      const r = await fetch('/api/user/prefs', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'removeSearch', id }),
-      })
-      if (r.ok) setPrefs(await r.json())
-    } catch { reloadPrefs() }
-  }
-
-  const askAi = async () => {
-    const input = aiInput.trim() ||
-      `بر اساس نیازهای من (${needTags.join('، ')}) چه پیشنهادهایی برای خرید ملک داری؟`
-    setAiLoading(true); setAiError(''); setAiReply('')
-    try {
-      const r = await fetch('/api/ai/run', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agent: 'chat', input }),
-      })
+      const r = await fetch('/api/buyer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       const d = await r.json().catch(() => ({}))
-      if (r.ok && d.ok && d.text) setAiReply(d.text)
-      else setAiError(d.error || 'خطا در دریافت پاسخ دستیار')
-    } catch {
-      setAiError('ارتباط با دستیار برقرار نشد')
-    } finally {
-      setAiLoading(false)
-    }
+      if (!r.ok) { alert(d.error || 'برای انجام این عملیات وارد شوید'); return false }
+      await refresh(); return true
+    } catch { return false } finally { setBusy(false) }
+  }, [refresh])
+
+  const toggleTheme = () => {
+    const html = document.documentElement
+    if (theme === 'dark') { html.classList.add('light'); setTheme('light') } else { html.classList.remove('light'); setTheme('dark') }
   }
+
+  if (loading) return <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT, fontSize: 15 }}>در حال بارگذاری پنل خریدار…</div>
+  if (unauth || !data) return (
+    <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT }}>
+      <div style={{ ...card, padding: '40px 44px', textAlign: 'center', maxWidth: 380 }}>
+        <div style={{ fontSize: 40, marginBottom: 14 }}>🔒</div>
+        <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>برای دسترسی به پنل خریدار وارد شوید</div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 22 }}>این پنل فقط برای کاربران واردشده در دسترس است.</div>
+        <a href="/auth" style={{ display: 'inline-block', padding: '10px 28px', borderRadius: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 14, textDecoration: 'none' }}>ورود به حساب</a>
+      </div>
+    </div>
+  )
+
+  const { stats, saved, searches, viewings, offers, messages } = data
+  const q = search.trim()
+  const savedFiltered = q ? saved.filter(s => (s.title + s.location + s.ptype).includes(q)) : saved
+  const sectionTitle = (t: string) => <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 12 }}>{t}</div>
 
   return (
-    <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: "'Vazirmatn', sans-serif" }}>
-      <Nav />
+    <div dir="rtl" style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: FONT }}>
+      <style>{`@media(max-width:760px){.mjb-side{width:60px!important}.mjb-sidelabel{display:none!important}.mjb-cols{flex-direction:column!important}}`}</style>
 
-      {/* ── Section breadcrumb bar ── */}
-      <div style={{
-        background: 'var(--navbg)',
-        borderBottom: '1px solid var(--line)',
-        backdropFilter: 'blur(12px)',
-        position: 'sticky', top: 68, zIndex: 40,
-      }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px', height: 40, display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--muted)' }}>
-          <span>ملک‌جت</span>
-          <span style={{ color: 'var(--faint)' }}>›</span>
-          <span style={{ color: 'var(--gold)' }}>میز کار خریدار</span>
-        </div>
-      </div>
-
-      {/* ── Page wrapper ── */}
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '36px 24px 60px' }}>
-
-        {/* ── User Header ── */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32, flexWrap: 'wrap', gap: 12 }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: 'var(--text)' }}>
-              سلام، امیر رضایی 👋
-            </h1>
-            <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--muted)' }}>
-              آخرین ورود: دیروز ۲۱:۳۰
-            </p>
-          </div>
+      {/* SIDEBAR */}
+      <aside className="mjb-side" style={{ width: 232, flexShrink: 0, background: 'var(--bg2)', borderLeft: '1px solid var(--line)', position: 'sticky', top: 0, height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ padding: '20px 16px 16px', borderBottom: '1px solid var(--line)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{
-              display: 'flex', alignItems: 'center', gap: 7,
-              padding: '7px 16px', borderRadius: 30,
-              background: 'linear-gradient(140deg,var(--gold2),var(--gold))',
-              color: '#16140f', fontSize: 13, fontWeight: 700,
-            }}>
-              <span style={{ fontSize: 15 }}>★</span>
-              خریدار حرفه‌ای
-            </span>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 6px 18px -6px var(--gold)', flexShrink: 0 }}>
+              <div style={{ width: 13, height: 13, background: 'var(--bg)', transform: 'rotate(45deg)', borderRadius: 3 }} />
+            </div>
+            <div><div style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-0.5px' }}>ملک‌جت</div><div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>پنل خریدار</div></div>
           </div>
         </div>
-
-        {/* ── 2-col grid ── */}
-        <div className="mjb-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 28, alignItems: 'start' }}>
-
-          {/* ══ LEFT COLUMN ══════════════════════════════════════ */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
-
-            {/* ── AI Assistant Card ── */}
-            <div style={{
-              background: 'var(--surface)',
-              border: '1px solid var(--gold)',
-              borderRadius: 16,
-              overflow: 'hidden',
-              boxShadow: '0 0 0 1px rgba(201,168,76,0.12), 0 8px 32px -12px rgba(201,168,76,0.15)',
-            }}>
-              {/* Card Header */}
-              <div style={{
-                padding: '18px 22px', borderBottom: '1px solid var(--line)',
-                background: 'var(--goldDim)',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10,
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{
-                    width: 36, height: 36, borderRadius: 10,
-                    background: 'linear-gradient(140deg,var(--gold2),var(--gold))',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 18, color: '#16140f', flexShrink: 0,
-                  }}>✦</span>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gold)' }}>دستیار خرید شخصی ملک‌جت</div>
-                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>هوش مصنوعی اختصاصی شما</div>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <span style={{
-                    width: 9, height: 9, borderRadius: '50%',
-                    background: '#3dba6e',
-                    boxShadow: '0 0 8px #3dba6e',
-                    display: 'inline-block',
-                    animation: 'pulse 2s infinite',
-                  }} />
-                  <span style={{ fontSize: 12, color: '#3dba6e', fontWeight: 600 }}>پایش بازار ۲۴ ساعته</span>
-                </div>
-              </div>
-
-              <div style={{ padding: '20px 22px' }}>
-                {/* Need Tags */}
-                <div style={{ marginBottom: 20 }}>
-                  <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>نیازهای ذخیره‌شده شما:</p>
-                  <div className="mjb-tabs" style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-                    {needTags.map(tag => (
-                      <span key={tag} style={{
-                        padding: '4px 12px', borderRadius: 20,
-                        background: 'var(--goldDim)',
-                        border: '1px solid rgba(201,168,76,0.3)',
-                        fontSize: 12, color: 'var(--gold)', fontWeight: 600,
-                      }}>{tag}</span>
-                    ))}
-                  </div>
-                </div>
-
-                {/* AI Assistant — real call to /api/ai/run */}
-                <div>
-                  <p style={{ margin: '0 0 14px', fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
-                    ✦ از دستیار خرید درباره پیشنهادها بپرسید
-                  </p>
-
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-                    <input
-                      value={aiInput}
-                      onChange={e => setAiInput(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter' && !aiLoading) askAi() }}
-                      placeholder="مثلاً: برای خرید آپارتمان در سعادت‌آباد چه پیشنهادی داری؟"
-                      style={{
-                        flex: 1, minWidth: 180,
-                        padding: '10px 14px', borderRadius: 9,
-                        background: 'var(--bg2)',
-                        border: '1px solid var(--line2)',
-                        color: 'var(--text)', fontSize: 13,
-                        fontFamily: "'Vazirmatn', sans-serif",
-                        outline: 'none',
-                      }}
-                    />
-                    <button
-                      onClick={askAi}
-                      disabled={aiLoading}
-                      style={{
-                        padding: '10px 18px', borderRadius: 9,
-                        background: 'linear-gradient(140deg,var(--gold2),var(--gold))',
-                        border: 'none', color: '#16140f', fontSize: 13, fontWeight: 700,
-                        cursor: aiLoading ? 'default' : 'pointer', opacity: aiLoading ? 0.6 : 1,
-                        fontFamily: "'Vazirmatn', sans-serif", flexShrink: 0,
-                      }}
-                    >{aiLoading ? 'در حال پردازش…' : 'بپرس از AI'}</button>
-                  </div>
-
-                  <div style={{
-                    background: 'var(--bg2)',
-                    border: '1px solid var(--line2)',
-                    borderRadius: 12,
-                    padding: '14px 16px',
-                    fontSize: 13, lineHeight: 1.9, color: 'var(--text)',
-                    whiteSpace: 'pre-wrap', minHeight: 60,
-                  }}>
-                    {aiLoading && (
-                      <span style={{ color: 'var(--muted)' }}>دستیار در حال بررسی بازار است…</span>
-                    )}
-                    {!aiLoading && aiError && (
-                      <span style={{ color: '#e05555' }}>{aiError}</span>
-                    )}
-                    {!aiLoading && !aiError && aiReply && aiReply}
-                    {!aiLoading && !aiError && !aiReply && (
-                      <span style={{ color: 'var(--muted)' }}>
-                        سؤال خود را بنویسید یا روی «بپرس از AI» بزنید تا بر اساس نیازهای ذخیره‌شده‌تان پیشنهاد بدهد.
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* ── Saved Searches ── */}
-            <section>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>جستجوهای ذخیره‌شده</h2>
-                <button
-                  onClick={addSearch}
-                  style={{
-                    padding: '7px 16px', borderRadius: 9,
-                    background: 'linear-gradient(140deg,var(--gold2),var(--gold))',
-                    border: 'none', color: '#16140f', fontSize: 13, fontWeight: 700,
-                    cursor: 'pointer', fontFamily: "'Vazirmatn', sans-serif",
-                  }}>+ جستجوی جدید</button>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {prefs.savedSearches.length === 0 && (
-                  <div style={{
-                    background: 'var(--surface)',
-                    border: '1px dashed var(--line2)',
-                    borderRadius: 14, padding: '20px',
-                    fontSize: 13, color: 'var(--muted)', textAlign: 'center',
-                  }}>
-                    هنوز جستجویی ذخیره نکرده‌اید. با «+ جستجوی جدید» اولین جستجوی خود را اضافه کنید.
-                  </div>
-                )}
-                {prefs.savedSearches.map(s => (
-                  <div key={s.id} style={{
-                    background: 'var(--surface)',
-                    border: '1px solid var(--line)',
-                    borderRadius: 14, padding: '16px 20px',
-                    transition: 'border-color 0.2s',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 8, flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{s.label}</span>
-                        </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
-                          <span style={{
-                            padding: '3px 10px', borderRadius: 20,
-                            background: 'rgba(255,255,255,0.05)',
-                            border: '1px solid var(--line2)',
-                            fontSize: 11, color: 'var(--muted)',
-                          }}>{s.query}</span>
-                        </div>
-                        <div style={{ fontSize: 11, color: 'var(--faint)' }}>
-                          ذخیره‌شده در: {new Date(s.createdAt).toLocaleDateString('fa-IR')}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
-                        <Link
-                          href={`/search?q=${encodeURIComponent(s.query)}`}
-                          style={{
-                            padding: '7px 16px', borderRadius: 8,
-                            background: 'var(--goldDim)',
-                            border: '1px solid rgba(201,168,76,0.25)',
-                            color: 'var(--gold)', fontSize: 12, fontWeight: 600,
-                            cursor: 'pointer', textDecoration: 'none',
-                          }}>مشاهده نتایج</Link>
-                        <button
-                          onClick={() => removeSearch(s.id)}
-                          style={{
-                            padding: '7px 14px', borderRadius: 8,
-                            background: 'transparent',
-                            border: '1px solid rgba(220,60,60,0.3)',
-                            color: '#e05555', fontSize: 12, fontWeight: 600,
-                            cursor: 'pointer', fontFamily: "'Vazirmatn', sans-serif",
-                          }}>حذف</button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* ── Favorites Grid ── */}
-            <section>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>
-                  {hasFavorites ? 'علاقه‌مندی‌ها' : 'پیشنهاد برای شما'}
-                  <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--muted)', marginRight: 8 }}>
-                    {hasFavorites ? `(${favListings.length} ملک)` : '(هنوز علاقه‌مندی ندارید — افزودن کنید)'}
-                  </span>
-                </h2>
-                {compareSet.length > 1 && (
-                  <Link
-                    href={`/search?compare=${compareSet.map(encodeURIComponent).join(',')}`}
-                    style={{
-                      padding: '7px 16px', borderRadius: 9,
-                      background: 'linear-gradient(140deg,var(--gold2),var(--gold))',
-                      border: 'none', color: '#16140f', fontSize: 13, fontWeight: 700,
-                      cursor: 'pointer', textDecoration: 'none',
-                    }}>مقایسه {compareSet.length} ملک</Link>
-                )}
-              </div>
-              {loaded && gridItems.length === 0 && (
-                <div style={{
-                  background: 'var(--surface)',
-                  border: '1px dashed var(--line2)',
-                  borderRadius: 14, padding: '24px',
-                  fontSize: 13, color: 'var(--muted)', textAlign: 'center',
-                }}>
-                  در حال حاضر ملکی برای نمایش وجود ندارد.
-                </div>
-              )}
-              <div className="mjb-fav" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
-                {gridItems.map(prop => {
-                  const isFav = prefs.favorites.includes(prop.id)
-                  return (
-                  <Link key={prop.id} href={`/property/${prop.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                    <div style={{
-                      background: 'var(--surface)',
-                      border: '1px solid var(--line)',
-                      borderRadius: 14, overflow: 'hidden',
-                      transition: 'border-color 0.15s, transform 0.15s',
-                      cursor: 'pointer',
-                    }}>
-                      {/* Image */}
-                      <div style={{
-                        height: 130,
-                        background: prop.image ? `center/cover no-repeat url(${prop.image})` : gradientFor(prop.id),
-                        position: 'relative',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 36, color: 'rgba(255,255,255,0.09)',
-                      }}>
-                        {!prop.image && '⌂'}
-                        {/* Heart — add or remove favorite */}
-                        <button
-                          onClick={e => { e.preventDefault(); isFav ? removeFav(prop.id) : addFav(prop.id) }}
-                          title={isFav ? 'حذف از علاقه‌مندی' : 'افزودن به علاقه‌مندی'}
-                          style={{
-                            position: 'absolute', top: 10, left: 10,
-                            width: 30, height: 30, borderRadius: '50%',
-                            background: 'rgba(0,0,0,0.45)',
-                            border: 'none', cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 15, color: isFav ? '#e05555' : 'rgba(255,255,255,0.8)',
-                          }}
-                        >{isFav ? '♥' : '♡'}</button>
-                      </div>
-                      {/* Body */}
-                      <div style={{ padding: '12px 14px' }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 3, lineHeight: 1.4 }}>{prop.title}</div>
-                        <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>{prop.location || '—'}</div>
-                        <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--gold)', marginBottom: 10 }}>{prop.price || 'توافقی'}</div>
-                        {hasFavorites ? (
-                          <label
-                            onClick={e => e.preventDefault()}
-                            style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 11, color: 'var(--muted)' }}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={compareSet.includes(prop.id)}
-                              onChange={() => toggleCompare(prop.id)}
-                              style={{ accentColor: 'var(--gold)', width: 13, height: 13 }}
-                            />
-                            مقایسه
-                          </label>
-                        ) : (
-                          <button
-                            onClick={e => { e.preventDefault(); addFav(prop.id) }}
-                            style={{
-                              width: '100%', padding: '7px 0', borderRadius: 8,
-                              background: 'var(--goldDim)',
-                              border: '1px solid rgba(201,168,76,0.25)',
-                              color: 'var(--gold)', fontSize: 11, fontWeight: 600,
-                              cursor: 'pointer', fontFamily: "'Vazirmatn', sans-serif",
-                            }}
-                          >+ افزودن به علاقه‌مندی</button>
-                        )}
-                      </div>
-                    </div>
-                  </Link>
-                  )
-                })}
-              </div>
-            </section>
-
+        <nav style={{ padding: '10px 8px', flex: 1, overflowY: 'auto' }}>
+          {NAV_ITEMS.map(item => {
+            const active = view === item.id
+            const badge = item.badge === 'viewings' ? stats.kpis.upcomingViewings : item.badge === 'offers' ? stats.kpis.pendingOffers : item.badge === 'messages' ? stats.kpis.unreadMessages : 0
+            return (
+              <button key={item.id} onClick={() => setView(item.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: active ? 'var(--goldDim)' : 'transparent', color: active ? 'var(--gold)' : 'var(--muted)', fontWeight: active ? 700 : 500, fontSize: 14, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
+                <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: active ? 1 : 0.7 }}>{item.icon}</span>
+                <span className="mjb-sidelabel" style={{ flex: 1 }}>{item.label}</span>
+                {item.badge && badge > 0 && <span style={{ background: active ? 'var(--gold)' : 'var(--line2)', color: active ? '#16140f' : 'var(--text)', borderRadius: 9, fontSize: 10, fontWeight: 700, padding: '1px 7px' }}>{fa(badge)}</span>}
+              </button>
+            )
+          })}
+          <div style={{ height: 1, background: 'var(--line)', margin: '10px 8px' }} />
+          <a href="/search" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, color: 'var(--gold)', textDecoration: 'none', fontWeight: 600, fontSize: 14, fontFamily: FONT, border: '1px solid color-mix(in srgb,var(--gold) 25%,transparent)' }}>
+            <span style={{ fontSize: 15, width: 18, textAlign: 'center' }}>🔍</span>
+            <span className="mjb-sidelabel" style={{ flex: 1 }}>جستجوی ملک</span>
+          </a>
+        </nav>
+        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#16140f', flexShrink: 0 }}>{stats.profile.name.trim().charAt(0) || 'خ'}</div>
+          <div className="mjb-sidelabel" style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{stats.profile.name}</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>خریدار</div>
           </div>
-          {/* ══ END LEFT COLUMN ══════════════════════════════════ */}
-
-          {/* ══ RIGHT SIDEBAR ════════════════════════════════════ */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20, position: 'sticky', top: 88 }}>
-
-            {/* ── Journey Tracker ── */}
-            <div style={{
-              background: 'var(--surface)',
-              border: '1px solid var(--line)',
-              borderRadius: 16, padding: '20px 20px 22px',
-            }}>
-              <h3 style={{ margin: '0 0 20px', fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>مسیر خرید شما</h3>
-              <div style={{ position: 'relative' }}>
-                {/* Connecting line */}
-                <div style={{
-                  position: 'absolute',
-                  top: 15, right: 15,
-                  width: 2,
-                  height: 'calc(100% - 30px)',
-                  background: 'var(--line2)',
-                }} />
-                {journeySteps.map((step, i) => (
-                  <div key={i} style={{
-                    display: 'flex', alignItems: 'center', gap: 14,
-                    paddingBottom: i < journeySteps.length - 1 ? 22 : 0,
-                    position: 'relative', zIndex: 1,
-                  }}>
-                    {/* Step indicator */}
-                    <div style={{
-                      width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-                      background: step.done
-                        ? 'linear-gradient(140deg,var(--gold2),var(--gold))'
-                        : step.active
-                          ? 'var(--goldDim)'
-                          : 'var(--bg2)',
-                      border: step.active
-                        ? '2px solid var(--gold)'
-                        : step.done
-                          ? 'none'
-                          : '2px solid var(--line2)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 14,
-                      color: step.done ? '#16140f' : step.active ? 'var(--gold)' : 'var(--faint)',
-                      fontWeight: 700,
-                    }}>
-                      {step.done ? '✓' : i + 1}
-                    </div>
-                    <div>
-                      <div style={{
-                        fontSize: 13, fontWeight: step.active ? 700 : 500,
-                        color: step.done || step.active ? 'var(--text)' : 'var(--muted)',
-                      }}>{step.label}</div>
-                      {step.active && (
-                        <div style={{ fontSize: 10, color: 'var(--gold)', marginTop: 2, fontWeight: 600 }}>● در حال انجام</div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* ── Notifications Feed ── */}
-            <div style={{
-              background: 'var(--surface)',
-              border: '1px solid var(--line)',
-              borderRadius: 16, overflow: 'hidden',
-            }}>
-              <div style={{ padding: '16px 18px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <h3 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>اعلان‌ها</h3>
-                <span style={{
-                  padding: '2px 8px', borderRadius: 20,
-                  background: 'rgba(220,60,60,0.15)',
-                  border: '1px solid rgba(220,60,60,0.3)',
-                  color: '#e05555', fontSize: 11, fontWeight: 700,
-                }}>۴ جدید</span>
-              </div>
-              <div>
-                {notifications.map((n, i) => (
-                  <div key={i} style={{
-                    padding: '13px 18px',
-                    borderBottom: i < notifications.length - 1 ? '1px solid var(--line)' : 'none',
-                    display: 'flex', alignItems: 'flex-start', gap: 11,
-                  }}>
-                    <span style={{
-                      width: 9, height: 9, borderRadius: '50%',
-                      background: n.dot, flexShrink: 0, marginTop: 4,
-                    }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, color: 'var(--text)', lineHeight: 1.5, marginBottom: 3 }}>{n.text}</div>
-                      <div style={{ fontSize: 10, color: 'var(--faint)' }}>{n.time}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* ── Upcoming Visit ── */}
-            {!visitCancelled && (
-              <div style={{
-                background: 'var(--surface)',
-                border: '1px solid var(--line)',
-                borderRadius: 16, padding: '18px 20px',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                  <span style={{ fontSize: 16 }}>📅</span>
-                  <h3 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>بازدید پیش‌رو</h3>
-                </div>
-                <div style={{
-                  background: 'var(--bg2)',
-                  border: '1px solid var(--line2)',
-                  borderRadius: 10, padding: '13px 15px', marginBottom: 14,
-                }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 5 }}>آپارتمان سعادت‌آباد</div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 5 }}>
-                    📅 یکشنبه ۱۲ خرداد · ۱۴:۰۰
-                  </div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                    👤 مشاور: سارا محمدی
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                    onClick={() => alert('برای تغییر زمان بازدید با مشاور خود تماس بگیرید.')}
-                    style={{
-                      flex: 1, padding: '8px 0', borderRadius: 9,
-                      background: 'linear-gradient(140deg,var(--gold2),var(--gold))',
-                      border: 'none', color: '#16140f', fontSize: 12, fontWeight: 700,
-                      cursor: 'pointer', fontFamily: "'Vazirmatn', sans-serif",
-                    }}>تغییر زمان</button>
-                  <button
-                    onClick={() => setVisitCancelled(true)}
-                    style={{
-                      flex: 1, padding: '8px 0', borderRadius: 9,
-                      background: 'transparent',
-                      border: '1px solid rgba(220,60,60,0.3)',
-                      color: '#e05555', fontSize: 12, fontWeight: 600,
-                      cursor: 'pointer', fontFamily: "'Vazirmatn', sans-serif",
-                    }}>لغو</button>
-                </div>
-              </div>
-            )}
-
-          </div>
-          {/* ══ END SIDEBAR ══════════════════════════════════════ */}
-
+          <button onClick={toggleTheme} title="تغییر تم" style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--line)', color: 'var(--text)', cursor: 'pointer', fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{theme === 'dark' ? '☀' : '☾'}</button>
         </div>
+      </aside>
+
+      {/* MAIN */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 22px', borderBottom: '1px solid var(--line)', position: 'sticky', top: 0, background: 'var(--navbg)', backdropFilter: 'blur(18px)', zIndex: 20, flexWrap: 'wrap' }}>
+          <div style={{ fontWeight: 800, fontSize: 18 }}>{VIEW_TITLES[view]}</div>
+          <div style={{ flex: 1 }} />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="جستجو در علاقه‌مندی‌ها…" style={{ ...inputStyle, width: 220, maxWidth: '40vw' }} />
+          <a href="/search" style={{ padding: '9px 16px', borderRadius: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, textDecoration: 'none', whiteSpace: 'nowrap' }}>🔍 جستجوی ملک جدید</a>
+        </header>
+
+        <main style={{ padding: 22, flex: 1, overflowY: 'auto' }}>
+          {/* ─── DASHBOARD ─── */}
+          {view === 'dashboard' && <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+              <Kpi label="علاقه‌مندی‌ها" value={fa(stats.kpis.savedCount)} />
+              <Kpi label="جستجوهای ذخیره‌شده" value={fa(stats.kpis.searchCount)} />
+              <Kpi label="بازدیدهای پیش‌رو" value={fa(stats.kpis.upcomingViewings)} />
+              <Kpi label="پیام خوانده‌نشده" value={fa(stats.kpis.unreadMessages)} subColor="var(--gold)" sub={stats.kpis.unreadMessages ? 'نیاز به بررسی' : undefined} />
+              <Kpi label="پیشنهاد در انتظار" value={fa(stats.kpis.pendingOffers)} />
+            </div>
+            <div className="mjb-cols" style={{ display: 'flex', gap: 16 }}>
+              <div style={{ ...card, padding: 18, flex: 2, minWidth: 0 }}>
+                {sectionTitle('علاقه‌مندی‌های اخیر')}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(210px,1fr))', gap: 12 }}>
+                  {stats.recentSaved.length ? stats.recentSaved.map(p => <PropCard key={p.id} p={p} onRemove={() => post({ action: 'removeSaved', id: p.id })} />)
+                    : <div style={{ color: 'var(--faint)', fontSize: 13 }}>هنوز ملکی ذخیره نکرده‌ای.</div>}
+                </div>
+              </div>
+              <div style={{ ...card, padding: 18, flex: 1, minWidth: 0 }}>
+                {sectionTitle('بازدیدهای پیش‌رو')}
+                {stats.upcoming.length ? stats.upcoming.map(v => (
+                  <div key={v.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700 }}>{v.propertyTitle}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{v.advisor || '—'} · {v.date}</div>
+                  </div>
+                )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>بازدیدی برنامه‌ریزی نشده.</div>}
+              </div>
+            </div>
+            <div style={{ ...card, padding: 18 }}>
+              {sectionTitle('پیام‌های اخیر')}
+              {stats.recentMessages.length ? stats.recentMessages.map(m => (
+                <div key={m.id} onClick={() => m.unread && post({ action: 'markMessageRead', id: m.id })} style={{ display: 'flex', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--line)', cursor: m.unread ? 'pointer' : 'default' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: m.unread ? 'var(--gold)' : 'transparent', marginTop: 6, flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: m.unread ? 800 : 600 }}>{m.from}{m.propertyTitle ? <span style={{ color: 'var(--muted)', fontWeight: 400 }}> · {m.propertyTitle}</span> : ''}</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.text}</div>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--faint)', flexShrink: 0 }}>{faDate(m.createdAt)}</div>
+                </div>
+              )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>پیامی نداری.</div>}
+            </div>
+          </div>}
+
+          {/* ─── FAVORITES ─── */}
+          {view === 'favorites' && <div style={{ ...card, padding: 18 }}>
+            {sectionTitle(`علاقه‌مندی‌ها (${fa(savedFiltered.length)})`)}
+            {savedFiltered.length ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(230px,1fr))', gap: 12 }}>
+                {savedFiltered.map(p => <PropCard key={p.id} p={p} onRemove={() => post({ action: 'removeSaved', id: p.id })} />)}
+              </div>
+            ) : <div style={{ color: 'var(--faint)', fontSize: 13, textAlign: 'center', padding: '30px 0' }}>هنوز ملکی ذخیره نکرده‌ای — از <a href="/search" style={{ color: 'var(--gold)' }}>جستجو</a> ملک‌ها را ذخیره کن.</div>}
+          </div>}
+
+          {/* ─── SEARCHES ─── */}
+          {view === 'searches' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ ...card, padding: 18 }}>
+              {sectionTitle('ذخیرهٔ جستجوی جدید')}
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div style={{ flex: '2 1 200px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>عبارت جستجو</label><input value={newSearch.query} onChange={e => setNewSearch({ ...newSearch, query: e.target.value })} placeholder="مثلاً آپارتمان ۲ خوابه شمال تهران" style={inputStyle} /></div>
+                <div style={{ flex: '1 1 120px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>منطقه</label><input value={newSearch.area} onChange={e => setNewSearch({ ...newSearch, area: e.target.value })} style={inputStyle} /></div>
+                <div style={{ flex: '1 1 130px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>حداکثر قیمت (تومان)</label><input value={newSearch.priceMax} onChange={e => setNewSearch({ ...newSearch, priceMax: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                <label style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, padding: '9px 0' }}><input type="checkbox" checked={newSearch.alerts} onChange={e => setNewSearch({ ...newSearch, alerts: e.target.checked })} /> هشدار</label>
+                <button disabled={busy || !newSearch.query.trim()} onClick={async () => { if (await post({ action: 'addSearch', query: newSearch.query.trim(), area: newSearch.area, priceMax: Number(newSearch.priceMax) || undefined, alerts: newSearch.alerts })) setNewSearch({ query: '', ptype: '', area: '', priceMax: '', alerts: true }) }} style={{ padding: '9px 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }}>ذخیره</button>
+              </div>
+            </div>
+            <div style={{ ...card, padding: 18 }}>
+              {sectionTitle('جستجوهای ذخیره‌شده')}
+              {searches.length ? searches.map(s => (
+                <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700 }}>{s.query}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 3, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {s.area && <span>📍 {s.area}</span>}{s.priceMax ? <span>تا {money(s.priceMax)}</span> : null}
+                    </div>
+                  </div>
+                  <button onClick={() => post({ action: 'toggleSearchAlerts', id: s.id })} style={{ ...actionBtn, color: s.alerts ? 'var(--gold)' : 'var(--muted)', borderColor: s.alerts ? 'var(--gold)' : 'var(--line)' }}>{s.alerts ? '🔔 هشدار فعال' : '🔕 هشدار خاموش'}</button>
+                  <button onClick={() => post({ action: 'deleteSearch', id: s.id })} style={{ ...actionBtn, color: '#ef4444' }}>حذف</button>
+                </div>
+              )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>جستجوی ذخیره‌شده‌ای نداری.</div>}
+            </div>
+          </div>}
+
+          {/* ─── VIEWINGS ─── */}
+          {view === 'viewings' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ ...card, padding: 18 }}>
+              {sectionTitle('رزرو بازدید')}
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div style={{ flex: '2 1 200px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>عنوان ملک</label><input value={newViewing.propertyTitle} onChange={e => setNewViewing({ ...newViewing, propertyTitle: e.target.value })} style={inputStyle} /></div>
+                <div style={{ flex: '1 1 140px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>مشاور/آژانس</label><input value={newViewing.advisor} onChange={e => setNewViewing({ ...newViewing, advisor: e.target.value })} style={inputStyle} /></div>
+                <div style={{ flex: '1 1 120px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>تاریخ</label><input value={newViewing.date} onChange={e => setNewViewing({ ...newViewing, date: e.target.value })} placeholder="۱۴۰۴/۰۴/۰۵" style={inputStyle} /></div>
+                <button disabled={busy || !newViewing.propertyTitle.trim() || !newViewing.date.trim()} onClick={async () => { if (await post({ action: 'addViewing', propertyTitle: newViewing.propertyTitle.trim(), advisor: newViewing.advisor, date: newViewing.date.trim() })) setNewViewing({ propertyTitle: '', advisor: '', date: '' }) }} style={{ padding: '9px 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }}>رزرو</button>
+              </div>
+            </div>
+            <div style={{ ...card, padding: 18 }}>
+              {sectionTitle('بازدیدهای من')}
+              {viewings.length ? viewings.map(v => (
+                <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700 }}>{v.propertyTitle}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{v.advisor || '—'} · {v.date}</div>
+                  </div>
+                  <Pill label={VIEW_LABEL[v.status]} color={VIEW_COLOR[v.status]} />
+                  <select value={v.status} onChange={e => post({ action: 'setViewingStatus', id: v.id, status: e.target.value })} style={{ ...actionBtn, cursor: 'pointer' }}>
+                    {VIEW_STATUSES.map(s => <option key={s} value={s}>{VIEW_LABEL[s]}</option>)}
+                  </select>
+                </div>
+              )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>بازدیدی نداری.</div>}
+            </div>
+          </div>}
+
+          {/* ─── OFFERS ─── */}
+          {view === 'offers' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ ...card, padding: 18 }}>
+              {sectionTitle('ثبت پیشنهاد')}
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div style={{ flex: '2 1 200px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>عنوان ملک</label><input value={newOffer.propertyTitle} onChange={e => setNewOffer({ ...newOffer, propertyTitle: e.target.value })} style={inputStyle} /></div>
+                <div style={{ flex: '1 1 160px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>مبلغ پیشنهادی (تومان)</label><input value={newOffer.amount} onChange={e => setNewOffer({ ...newOffer, amount: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                <button disabled={busy || !newOffer.propertyTitle.trim()} onClick={async () => { if (await post({ action: 'addOffer', propertyTitle: newOffer.propertyTitle.trim(), amount: Number(newOffer.amount) || 0 })) setNewOffer({ propertyTitle: '', amount: '' }) }} style={{ padding: '9px 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }}>ثبت</button>
+              </div>
+            </div>
+            <div style={{ ...card, padding: 18 }}>
+              {sectionTitle('پیشنهادهای من')}
+              {offers.length ? offers.map(o => (
+                <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700 }}>{o.propertyTitle}</div>
+                    <div style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 700, marginTop: 2 }}>{money(o.amount)}</div>
+                  </div>
+                  <Pill label={OFFER_LABEL[o.status]} color={OFFER_COLOR[o.status]} />
+                  {o.status === 'pending' && <button onClick={() => post({ action: 'withdrawOffer', id: o.id })} style={{ ...actionBtn, color: '#ef4444' }}>انصراف</button>}
+                </div>
+              )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>پیشنهادی ثبت نکرده‌ای.</div>}
+            </div>
+          </div>}
+
+          {/* ─── MESSAGES ─── */}
+          {view === 'messages' && <div style={{ ...card, padding: 18 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div style={{ fontWeight: 800, fontSize: 15 }}>پیام‌ها</div>
+              <button onClick={() => post({ action: 'markAllRead' })} style={actionBtn}>همه را خوانده‌شده کن</button>
+            </div>
+            {messages.length ? messages.map(m => (
+              <div key={m.id} onClick={() => m.unread && post({ action: 'markMessageRead', id: m.id })} style={{ display: 'flex', gap: 10, padding: '12px 10px', borderRadius: 10, marginBottom: 6, background: m.unread ? 'var(--goldDim)' : 'transparent', cursor: m.unread ? 'pointer' : 'default' }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: m.unread ? 'var(--gold)' : 'var(--line2)', marginTop: 6, flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: m.unread ? 800 : 600 }}>{m.from}{m.propertyTitle ? <span style={{ color: 'var(--muted)', fontWeight: 400 }}> · {m.propertyTitle}</span> : ''}</div>
+                  <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3, lineHeight: 1.7 }}>{m.text}</div>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--faint)', flexShrink: 0 }}>{faDate(m.createdAt)}</div>
+              </div>
+            )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>پیامی نداری.</div>}
+          </div>}
+
+          {/* ─── SETTINGS ─── */}
+          {view === 'settings' && <div style={{ ...card, padding: 18, maxWidth: 480 }}>
+            {sectionTitle('تنظیمات خریدار')}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نام</label><input value={prof.name} onChange={e => setProf({ ...prof, name: e.target.value })} style={inputStyle} /></div>
+              <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>بودجه (تومان) {prof.budget && <span style={{ color: 'var(--gold)' }}>— {money(Number(prof.budget) || 0)}</span>}</label><input value={prof.budget} onChange={e => setProf({ ...prof, budget: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+              <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع ملک موردنظر</label><select value={prof.prefType} onChange={e => setProf({ ...prof, prefType: e.target.value })} style={inputStyle}><option value="">—</option>{PTYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+              <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>مناطق موردنظر</label><input value={prof.areas} onChange={e => setProf({ ...prof, areas: e.target.value })} style={inputStyle} /></div>
+              <button disabled={busy} onClick={() => post({ action: 'updateProfile', patch: { name: prof.name, budget: Number(prof.budget) || 0, prefType: prof.prefType, areas: prof.areas } })} style={{ alignSelf: 'flex-start', padding: '9px 22px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }}>ذخیره</button>
+            </div>
+          </div>}
+        </main>
       </div>
-
-      <Footer />
     </div>
   )
 }
