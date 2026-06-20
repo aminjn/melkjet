@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { chatCompleteSafe, chatVision, generateImageSafe, agentModel } from '@/app/lib/gapgpt'
+import { chatCompleteSafe, chatVisionSafe, generateImageSafe, agentModel } from '@/app/lib/gapgpt'
 import { renderFloorPlanSVG, renderIsoSVG, svgDataUrl, type PlanLayout } from '@/app/lib/floorplan-svg'
 
 export const runtime = 'nodejs'
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
 
     let raw = '', visionErr = ''
     try {
-      raw = await chatVision(visionModel, visionPrompt, imgs, { max_tokens: 900 })
+      raw = (await chatVisionSafe(visionModel, visionPrompt, imgs, { max_tokens: 900 })).text
     } catch (e: any) { visionErr = e?.message || 'خطای نامشخص' }
 
     let parsed = extractJson(raw) as PlanLayout | null
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
 
     // پیام شفاف بر اساس علت واقعی
     const msg = !raw
-      ? `تماس با مدل بینایی ناموفق بود: ${visionErr.slice(0, 180)}. معمولاً یعنی مدلِ متنِ StudioAgent چندوجهی/معتبر نیست (یک مدل بینایی مثل chatgpt-4o-latest یا gpt-4o بده) یا حجم عکس‌ها زیاد است (تعداد کمتر/کوچک‌تر امتحان کن).`
+      ? `پردازش عکس روی همهٔ مدل‌های بینایی ناموفق بود (${visionErr.slice(0, 160)}). به احتمال زیاد حسابِ گپ‌جی‌پی‌تیِ شما «ورودی تصویر / Vision» را پشتیبانی نمی‌کند یا شارژ/دسترسی مدل‌های gpt-4o فعال نیست. در پنل گپ‌جی‌پی‌تی دسترسی مدلِ بیناییِ gpt-4o را فعال کن، بعد دوباره تلاش کن.`
       : 'مدل عکس‌ها را دید ولی نتوانست چیدمان ساخت‌یافته بدهد. یک‌بار دیگر تلاش کن؛ اگر تکرار شد، از هر فضا یک عکس واضح‌تر و کامل‌تر بده.'
     return NextResponse.json({ error: msg }, { status: 200 })
   }

@@ -87,6 +87,24 @@ export async function chatVision(model: string, prompt: string, images: string[]
   return d.choices?.[0]?.message?.content || ''
 }
 
+// مدل‌های بینایی معتبر روی گپ برای fallback (وقتی مدلِ انتخابی روی عکس 503/خطا می‌دهد).
+const VISION_FALLBACKS = ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini', 'chatgpt-4o-latest']
+
+// مثل chatVision ولی اگر مدلِ انتخابی روی ورودیِ عکس جواب نداد (مثلاً 503 system_error
+// که روی گپ برای chatgpt-4o-latest رخ می‌دهد)، خودکار مدل‌های بینایی معتبر را امتحان می‌کند.
+export async function chatVisionSafe(model: string | undefined, prompt: string, images: string[], opts: { max_tokens?: number } = {}): Promise<{ text: string; model: string }> {
+  const candidates: string[] = []
+  for (const m of [model, ...VISION_FALLBACKS]) if (m && !candidates.includes(m)) candidates.push(m)
+  let lastErr: any = null
+  for (const m of candidates) {
+    try {
+      const text = await chatVision(m, prompt, images, opts)
+      if (text && text.trim()) return { text, model: m }
+    } catch (e) { lastErr = e }
+  }
+  throw lastErr || new Error('هیچ مدل بینایی پاسخ نداد')
+}
+
 // مدل‌های تصویرِ رایج و معتبر روی گپ‌جی‌پی‌تی برای fallback.
 const IMAGE_FALLBACKS = ['dall-e-3', 'gpt-image-1', 'dall-e-2', 'flux']
 
