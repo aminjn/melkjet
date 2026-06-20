@@ -32,19 +32,31 @@ export async function POST(req: NextRequest) {
   // ===== حالت بازسازی وضع موجود (وقتی عکس داریم) =====
   if (photos.length && visionModel) {
     const labels = photos.map(p => p.label).join('، ')
-    let raw = ''
-    try {
-      raw = await chatVision(visionModel,
-        `These photos show the rooms of ONE existing unit (~${area} m²; room labels: ${labels}). Reconstruct its AS-BUILT floor plan as a SCHEMATIC GRID — do NOT design or improve anything, only reflect what's really there.\n` +
-        `Model the footprint as a grid of cols×rows cells (pick cols,rows between 3 and 6 to fit the real proportions). Place EVERY real room as a rectangle on the grid in its REAL relative position/adjacency as seen in the photos; rooms should tile the rectangle with minimal gaps/overlaps. Use ONLY rooms visible in the photos — never invent rooms.\n` +
-        `"type" must be one of: kitchen, living, bedroom, bathroom, hall, balcony, office, dining, other.\n` +
-        `Return ONLY valid JSON, no markdown, exactly this shape:\n` +
-        `{"cols":N,"rows":N,"rooms":[{"name":"<persian label>","type":"<type>","x":0,"y":0,"w":1,"h":1}],"summaryFa":"<one short Persian sentence describing the EXISTING layout, no suggestions>"}\n` +
-        `x,y are 0-based top-left grid coords; w,h are sizes in cells; every room must fit inside cols×rows.`,
-        photos.map(p => p.image), { max_tokens: 800 }).catch(() => '')
-    } catch { raw = '' }
+    const imgs = photos.map(p => p.image).slice(0, 6)
+    const visionPrompt =
+      `These photos show the rooms of ONE existing unit (~${area} m²; room labels: ${labels}). Reconstruct its AS-BUILT floor plan as a SCHEMATIC GRID — do NOT design or improve anything, only reflect what's really there.\n` +
+      `Model the footprint as a grid of cols×rows cells (pick cols,rows between 3 and 6 to fit the real proportions). Place EVERY real room as a rectangle on the grid in its REAL relative position/adjacency as seen in the photos; rooms should tile the rectangle with minimal gaps/overlaps. Use ONLY rooms visible in the photos — never invent rooms.\n` +
+      `"type" must be one of: kitchen, living, bedroom, bathroom, hall, balcony, office, dining, other.\n` +
+      `Return ONLY valid JSON, no markdown, exactly this shape:\n` +
+      `{"cols":N,"rows":N,"rooms":[{"name":"<persian label>","type":"<type>","x":0,"y":0,"w":1,"h":1}],"summaryFa":"<one short Persian sentence describing the EXISTING layout, no suggestions>"}\n` +
+      `x,y are 0-based top-left grid coords; w,h are sizes in cells; every room must fit inside cols×rows.`
 
-    const parsed = extractJson(raw) as PlanLayout | null
+    let raw = '', visionErr = ''
+    try {
+      raw = await chatVision(visionModel, visionPrompt, imgs, { max_tokens: 900 })
+    } catch (e: any) { visionErr = e?.message || 'خطای نامشخص' }
+
+    let parsed = extractJson(raw) as PlanLayout | null
+    // تلاش دوم: اگر مدل پاسخ داد ولی JSON معتبر نبود، با یک مدل متنی به قالب JSON تبدیلش کن
+    if (raw && !(parsed && Array.isArray(parsed.rooms) && parsed.rooms.length)) {
+      try {
+        const fixed = await chatCompleteSafe(visionModel, [
+          { role: 'user', content: `این تحلیل را فقط به همین JSON تبدیل کن و چیز دیگری ننویس:\n{"cols":N,"rows":N,"rooms":[{"name","type","x","y","w","h"}],"summaryFa":""}\nتحلیل:\n${raw.slice(0, 2000)}` },
+        ], { max_tokens: 700 })
+        parsed = extractJson(fixed) as PlanLayout | null
+      } catch { /* ادامه به خطای زیر */ }
+    }
+
     if (parsed && Array.isArray(parsed.rooms) && parsed.rooms.length) {
       const planUrl = svgDataUrl(renderFloorPlanSVG(parsed, area, 'پلان وضع موجود'))
       const renderUrl = svgDataUrl(renderIsoSVG(parsed, area, 'نمای سه‌بعدی'))
@@ -52,10 +64,12 @@ export async function POST(req: NextRequest) {
         || `این واحد شامل ${parsed.rooms.map(r => r.name).filter(Boolean).join('، ')} است که از روی عکس‌ها بازسازی شده است.`
       return NextResponse.json({ ok: true, mode: 'photo', description, planUrl, renderUrl, svg: true })
     }
-    // اگر بینایی نتوانست چیدمان بدهد، با پیام شفاف ادامه نده به حالت طراحی (که خواستهٔ کاربر نیست)
-    return NextResponse.json({
-      error: 'مدل بینایی نتوانست چیدمان را از عکس‌ها استخراج کند. عکس‌های واضح‌تر و کامل‌تر از هر فضا بده، یا مطمئن شو مدلِ متنِ StudioAgent یک مدل چندوجهی (مثل chatgpt-4o-latest) است.',
-    }, { status: 200 })
+
+    // پیام شفاف بر اساس علت واقعی
+    const msg = !raw
+      ? `تماس با مدل بینایی ناموفق بود: ${visionErr.slice(0, 180)}. معمولاً یعنی مدلِ متنِ StudioAgent چندوجهی/معتبر نیست (یک مدل بینایی مثل chatgpt-4o-latest یا gpt-4o بده) یا حجم عکس‌ها زیاد است (تعداد کمتر/کوچک‌تر امتحان کن).`
+      : 'مدل عکس‌ها را دید ولی نتوانست چیدمان ساخت‌یافته بدهد. یک‌بار دیگر تلاش کن؛ اگر تکرار شد، از هر فضا یک عکس واضح‌تر و کامل‌تر بده.'
+    return NextResponse.json({ error: msg }, { status: 200 })
   }
 
   // ===== حالت پارامتری (بدون عکس) — با مدل تصویر یک پلان نمونه می‌سازد =====
