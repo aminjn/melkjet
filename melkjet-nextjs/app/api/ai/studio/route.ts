@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { chatCompleteSafe, chatVisionSafe, generateImageSafe, agentModel } from '@/app/lib/gapgpt'
 import { renderFloorPlanSVG, renderIsoSVG, svgDataUrl, type PlanLayout, type PlanRoom } from '@/app/lib/floorplan-svg'
-import { uploadTempImage } from '@/app/lib/img-host'
+import { arvanUpload } from '@/app/lib/arvan-storage'
 import { getAdminData } from '@/app/lib/admin-store'
+import { randomBytes } from 'crypto'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -57,17 +58,25 @@ export async function POST(req: NextRequest) {
   // ===== حالت بازسازی وضع موجود (وقتی عکس داریم) =====
   if (photos.length && visionModel) {
     const labels = photos.map(p => p.label).join('، ')
-    // گپ نه base64 می‌پذیرد و نه می‌تواند هاستِ ایرانیِ ما را فِچ کند؛ پس عکس‌ها را
-    // از طریق پروکسیِ سرور روی litterbox (هاست جهانیِ موقت) می‌گذاریم و لینکش را می‌دهیم.
-    const proxyUrl = getAdminData().divar?.proxyUrl
+    // گپ نه base64 می‌پذیرد و نه هاستِ پشتِ CDN را می‌گیرد؛ عکس‌ها را روی پاس‌انبان آروان
+    // (ایرانی، بدون فیلتر) می‌گذاریم تا سرورِ گپ بتواند از روی URL بخواندشان.
+    const arvan = getAdminData().arvan
+    const ext = (m: string) => m.includes('png') ? 'png' : m.includes('webp') ? 'webp' : 'jpg'
     const bufs = photos.slice(0, 4).map(p => {
       const ci = p.image.indexOf(',')
       const mime = ci > 0 ? (p.image.slice(5, ci).split(';')[0] || 'image/jpeg') : 'image/jpeg'
       return { mime, buf: Buffer.from(ci > 0 ? p.image.slice(ci + 1) : '', 'base64') }
     }).filter(b => b.buf.length)
-    const uploaded = await Promise.allSettled(bufs.map(b => uploadTempImage(b.buf, b.mime, proxyUrl)))
-    const imgs = uploaded.filter(r => r.status === 'fulfilled').map(r => (r as PromiseFulfilledResult<string>).value)
-    const uploadErr = (uploaded.find(r => r.status === 'rejected') as PromiseRejectedResult | undefined)?.reason?.message || ''
+    let imgs: string[] = []
+    let uploadErr = ''
+    if (arvan?.bucket && arvan?.accessKey && arvan?.secretKey) {
+      const uploaded = await Promise.allSettled(bufs.map(b =>
+        arvanUpload(arvan, `studio/${randomBytes(8).toString('hex')}.${ext(b.mime)}`, b.buf, b.mime)))
+      imgs = uploaded.filter(r => r.status === 'fulfilled').map(r => (r as PromiseFulfilledResult<string>).value)
+      uploadErr = (uploaded.find(r => r.status === 'rejected') as PromiseRejectedResult | undefined)?.reason?.message || ''
+    } else {
+      uploadErr = 'no_arvan'
+    }
     const visionPrompt =
       `These photos show the rooms of ONE existing unit (~${area} m²; room labels: ${labels}). Reconstruct its AS-BUILT floor plan as a SCHEMATIC GRID — do NOT design or improve anything, only reflect what's really there.\n` +
       `Model the footprint as a grid of cols×rows cells (pick cols,rows between 3 and 6 to fit the real proportions). Place EVERY real room as a rectangle on the grid in its REAL relative position/adjacency as seen in the photos; rooms should tile the rectangle with minimal gaps/overlaps. Use ONLY rooms visible in the photos — never invent rooms.\n` +
@@ -82,8 +91,10 @@ export async function POST(req: NextRequest) {
         raw = (await chatVisionSafe(visionModel, visionPrompt, imgs, { max_tokens: 900, timeout: 40000 })).text
       } catch (e: any) { visionErr = e?.message || 'خطای نامشخص' }
     } else {
-      // آپلود عکس‌ها (برای دسترسیِ سرویس بینایی) ناموفق بود → بدون تحلیل عکس ادامه نده
-      visionErr = proxyUrl ? `آپلود عکس‌ها ناموفق بود: ${uploadErr.slice(0, 120)}` : 'پروکسی تنظیم نشده (پنل → اتصال‌ها → پروکسی) تا عکس‌ها برای تحلیل آپلود شوند'
+      // آپلودِ عکس‌ها روی پاس‌انبان آروان ناموفق/تنظیم‌نشده → بدون تحلیل عکس ادامه نده
+      visionErr = uploadErr === 'no_arvan'
+        ? 'پاس‌انبان آروان تنظیم نشده (پنل → اتصال‌ها → پاس‌انبان آروان) تا عکس‌ها برای تحلیل آپلود شوند'
+        : `آپلودِ عکس‌ها روی آروان ناموفق بود: ${uploadErr.slice(0, 150)}`
     }
 
     let parsed = extractJson(raw) as PlanLayout | null

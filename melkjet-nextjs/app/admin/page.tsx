@@ -780,6 +780,49 @@ const SECTION_HINT: Record<ScrTab, string> = {
   price: 'قیمت/آمار بازار از هر منبع: صفحهٔ جدول قیمت را بدهید و فیلدها را نگاشت کنید (عنوان، قیمت، منطقه).',
 }
 
+function ArvanConfig() {
+  const [f, setF] = useState({ endpoint: 's3.ir-thr-at1.arvanstorage.ir', bucket: '', accessKey: '', secretKey: '', region: '' })
+  const [configured, setConfigured] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    fetch('/api/admin/arvan-config').then(r => r.ok ? r.json() : null).then(d => {
+      if (d) { setF({ endpoint: d.endpoint || 's3.ir-thr-at1.arvanstorage.ir', bucket: d.bucket || '', accessKey: d.accessKey || '', secretKey: d.secretKey || '', region: d.region || '' }); setConfigured(!!d.configured) }
+    })
+  }, [])
+  const save = async () => {
+    setMsg('')
+    const r = await fetch('/api/admin/arvan-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(f) })
+    const d = await r.json().catch(() => ({}))
+    if (r.ok) { setMsg('✓ ذخیره شد'); setConfigured(true) } else setMsg(d.error || 'خطا')
+  }
+  const inp = { flex: 1, minWidth: 200, direction: 'ltr' as const, textAlign: 'left' as const, background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+  return (
+    <Card style={{ marginBottom: 14 }}>
+      <div onClick={() => setOpen(!open)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
+        <div style={{ fontWeight: 700, fontSize: 14 }}>پاس‌انبان آروان (میزبانی عکس برای تحلیل) {configured ? <span style={{ color: '#5fd98a', fontSize: 12 }}>● تنظیم‌شده</span> : <span style={{ color: '#e7a14a', fontSize: 12 }}>● تنظیم نشده</span>}</div>
+        <span style={{ color: 'var(--muted)' }}>{open ? '▲' : '▼'}</span>
+      </div>
+      {open && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.8 }}>برای «ساخت پلان از روی عکس»، عکس‌ها روی یک باکتِ <b>عمومی</b> پاس‌انبان آروان آپلود می‌شوند تا سرویس بینایی بتواند بخواندشان. در پنل آروان → پاس‌انبان → یک باکت با دسترسی <b>public</b> بساز و کلیدهایش را اینجا بگذار.</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <input value={f.endpoint} onChange={e => setF({ ...f, endpoint: e.target.value })} placeholder="s3.ir-thr-at1.arvanstorage.ir" style={inp} />
+            <input value={f.bucket} onChange={e => setF({ ...f, bucket: e.target.value })} placeholder="نام باکت (bucket)" style={inp} />
+            <input value={f.accessKey} onChange={e => setF({ ...f, accessKey: e.target.value })} placeholder="Access Key" style={inp} />
+            <input value={f.secretKey} onChange={e => setF({ ...f, secretKey: e.target.value })} placeholder="Secret Key" type="password" style={inp} />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input value={f.region} onChange={e => setF({ ...f, region: e.target.value })} placeholder="region (اختیاری، مثل ir-thr-at1)" style={inp} />
+              <GoldButton onClick={save}>ذخیره</GoldButton>
+            </div>
+          </div>
+          {msg && <div style={{ marginTop: 8, fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</div>}
+        </div>
+      )}
+    </Card>
+  )
+}
+
 function DivarProxyConfig() {
   const [url, setUrl] = useState('')
   const [saved, setSaved] = useState('')
@@ -1972,6 +2015,7 @@ function ConnectionsView() {
       <NeshanConfig />
       <IPPanelConfig />
       <SmtpConfig />
+      <ArvanConfig />
       <DivarProxyConfig />
     </div>
   )
