@@ -131,7 +131,6 @@ export default function BuyerPage() {
   const [activeConv, setActiveConv] = useState<string | null>(null)
   const [chatInput, setChatInput] = useState('')
   const [chatSending, setChatSending] = useState(false)
-  const [newConv, setNewConv] = useState({ ownerName: '', propertyTitle: '', text: '' })
   const [drafting, setDrafting] = useState(false)
 
   const refresh = useCallback(async () => {
@@ -184,26 +183,14 @@ export default function BuyerPage() {
       await refresh()
     } catch { alert('اتصال برقرار نشد') } finally { setChatSending(false) }
   }
-  const startConv = async () => {
-    if (!newConv.propertyTitle.trim() || !newConv.text.trim() || chatSending) return
-    setChatSending(true)
-    try {
-      const r = await fetch('/api/buyer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'startConversation', ownerName: newConv.ownerName.trim() || undefined, propertyTitle: newConv.propertyTitle.trim(), text: newConv.text.trim() }) })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) { alert(d.error || 'خطا'); return }
-      setNewConv({ ownerName: '', propertyTitle: '', text: '' })
-      await refresh()
-      if (d.conversation?.id) setActiveConv(d.conversation.id)
-    } catch { alert('اتصال برقرار نشد') } finally { setChatSending(false) }
-  }
-  const draftMessage = async (target: 'new' | 'reply') => {
+  const draftReply = async () => {
     if (drafting) return
     setDrafting(true)
     try {
-      const title = target === 'new' ? newConv.propertyTitle : (data?.conversations.find(c => c.id === activeConv)?.propertyTitle || '')
-      const r = await fetch('/api/buyer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'aiDraft', propertyTitle: title || 'این ملک' }) })
+      const title = data?.conversations.find(c => c.id === activeConv)?.propertyTitle || 'این ملک'
+      const r = await fetch('/api/buyer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'aiDraft', propertyTitle: title }) })
       const d = await r.json().catch(() => ({}))
-      if (d.draft) { if (target === 'new') setNewConv(c => ({ ...c, text: d.draft })); else setChatInput(d.draft) }
+      if (d.draft) setChatInput(d.draft)
     } catch {} finally { setDrafting(false) }
   }
 
@@ -399,16 +386,10 @@ export default function BuyerPage() {
             {/* conversation list */}
             <div style={{ ...card, padding: 14, flex: '0 0 280px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ fontWeight: 800, fontSize: 14, padding: '2px 4px' }}>گفتگوها</div>
-              <div style={{ ...card, padding: 12, background: 'var(--bg2)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--gold)' }}>گفتگوی جدید</div>
-                <input value={newConv.propertyTitle} onChange={e => setNewConv({ ...newConv, propertyTitle: e.target.value })} placeholder="عنوان ملک" style={{ ...inputStyle, fontSize: 12.5 }} />
-                <input value={newConv.ownerName} onChange={e => setNewConv({ ...newConv, ownerName: e.target.value })} placeholder="نام صاحب آگهی (اختیاری)" style={{ ...inputStyle, fontSize: 12.5 }} />
-                <textarea value={newConv.text} onChange={e => setNewConv({ ...newConv, text: e.target.value })} placeholder="متن پیام…" rows={2} style={{ ...inputStyle, fontSize: 12.5, resize: 'vertical' }} />
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button onClick={() => draftMessage('new')} disabled={drafting} title="پیشنهاد متن با هوش مصنوعی" style={{ ...actionBtn, color: 'var(--gold)', borderColor: 'color-mix(in srgb,var(--gold) 35%,transparent)' }}>{drafting ? '…' : '✨ پیشنهاد متن'}</button>
-                  <button onClick={startConv} disabled={chatSending || !newConv.propertyTitle.trim() || !newConv.text.trim()} style={{ flex: 1, padding: '7px 10px', borderRadius: 8, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 12.5, border: 'none', cursor: 'pointer', fontFamily: FONT }}>شروع</button>
-                </div>
-              </div>
+              <a href="/search" style={{ ...card, padding: '12px 14px', background: 'var(--bg2)', borderColor: 'color-mix(in srgb,var(--gold) 30%,transparent)', textDecoration: 'none', color: 'var(--text)', display: 'block' }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--gold)', marginBottom: 4 }}>💬 شروع گفتگوی جدید</div>
+                <div style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.7 }}>برای چت با صاحب یک ملک، وارد صفحهٔ آگهی شو و روی «چت با صاحب آگهی» بزن — گفتگو همین‌جا ذخیره می‌شود.</div>
+              </a>
               <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {conversations.map(c => (
                   <button key={c.id} onClick={() => setActiveConv(c.id)} style={{ textAlign: 'right', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--line)', background: activeConv === c.id ? 'var(--goldDim)' : 'var(--bg)', cursor: 'pointer', fontFamily: FONT }}>
@@ -416,7 +397,7 @@ export default function BuyerPage() {
                     <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.ownerName} · {c.messages[c.messages.length - 1]?.text || ''}</div>
                   </button>
                 ))}
-                {conversations.length === 0 && <div style={{ color: 'var(--faint)', fontSize: 12.5, textAlign: 'center', padding: '20px 0' }}>گفتگویی نداری.</div>}
+                {conversations.length === 0 && <div style={{ color: 'var(--faint)', fontSize: 12.5, textAlign: 'center', padding: '20px 0' }}>هنوز گفتگویی نداری — از صفحهٔ یک آگهی شروع کن.</div>}
               </div>
             </div>
 
@@ -449,7 +430,7 @@ export default function BuyerPage() {
                   {chatSending && <div style={{ alignSelf: 'flex-end', fontSize: 12, color: 'var(--muted)', padding: '4px' }}>در حال پاسخ…</div>}
                 </div>
                 <form onSubmit={e => { e.preventDefault(); sendChat() }} style={{ padding: 14, borderTop: '1px solid var(--line)', display: 'flex', gap: 8 }}>
-                  <button type="button" onClick={() => draftMessage('reply')} disabled={drafting} title="پیشنهاد متن با هوش مصنوعی" style={{ ...actionBtn, color: 'var(--gold)', borderColor: 'color-mix(in srgb,var(--gold) 35%,transparent)', flexShrink: 0 }}>{drafting ? '…' : '✨'}</button>
+                  <button type="button" onClick={draftReply} disabled={drafting} title="پیشنهاد متن با هوش مصنوعی" style={{ ...actionBtn, color: 'var(--gold)', borderColor: 'color-mix(in srgb,var(--gold) 35%,transparent)', flexShrink: 0 }}>{drafting ? '…' : '✨'}</button>
                   <input value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="پیامت را بنویس…" style={{ ...inputStyle, flex: 1 }} />
                   <button type="submit" disabled={chatSending || !chatInput.trim()} style={{ padding: '9px 20px', borderRadius: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13.5, border: 'none', cursor: 'pointer', fontFamily: FONT, opacity: chatSending || !chatInput.trim() ? .6 : 1 }}>ارسال</button>
                 </form>
