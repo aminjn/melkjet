@@ -2,6 +2,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import AssistantPanel from '@/app/components/AssistantPanel'
 import CrmTool, { CRM_VIEWS, type CrmView } from '@/app/components/tools/CrmTool'
+import LocationPicker from '@/app/components/LocationPicker'
+
+// درختِ جغرافیاییِ سایت (استان → شهر → منطقه → محله)
+interface GeoDistrict { id: string; name: string; neighborhoods: string[] }
+interface GeoCity { id: string; name: string; districts: GeoDistrict[] }
+interface GeoProvince { id: string; name: string; cities: GeoCity[] }
 
 // ════════ Types (mirror app/lib/advisor-store.ts) ════════
 type Stage = 'new' | 'contacted' | 'visit' | 'negotiation' | 'closed' | 'lost'
@@ -13,7 +19,7 @@ type CommStatus = 'pending' | 'paid'
 interface Lead { id: string; name: string; phone?: string; need?: string; budget?: string; stage: Stage; source?: string; note?: string; createdAt: number }
 interface Listing {
   id: string; title: string; ptype: string; location: string; price: number; deal: 'sale' | 'rent'; status: ListingStatus; createdAt: number
-  city?: string; neighborhood?: string; facing?: string
+  city?: string; neighborhood?: string; facing?: string; province?: string; district?: string; lat?: number; lng?: number
   rentMonthly?: number; area?: number; rooms?: number; floor?: number; totalFloors?: number; yearBuilt?: number
   parking?: boolean; elevator?: boolean; storage?: boolean; balcony?: boolean; furnished?: boolean
   amenities?: string[]
@@ -112,16 +118,19 @@ export default function ProsPage() {
   const [nl, setNl] = useState({ name: '', phone: '', need: '', budget: '', source: '' })
   const [na, setNa] = useState({ client: '', listingTitle: '', date: '', type: 'visit' })
   // فرمِ کاملِ فایل (پاپ‌آپ)
-  const emptyForm = { title: '', ptype: 'آپارتمان', deal: 'sale' as 'sale' | 'rent', city: '', neighborhood: '', location: '', address: '', facing: '', price: '', rentMonthly: '', area: '', rooms: '', floor: '', totalFloors: '', yearBuilt: '', docType: '', phone: '', description: '', amenities: [] as string[], images: [] as string[], publish: false }
+  const emptyForm = { title: '', ptype: 'آپارتمان', deal: 'sale' as 'sale' | 'rent', province: '', city: '', district: '', neighborhood: '', location: '', address: '', lat: null as number | null, lng: null as number | null, facing: '', price: '', rentMonthly: '', area: '', rooms: '', floor: '', totalFloors: '', yearBuilt: '', docType: '', phone: '', description: '', amenities: [] as string[], images: [] as string[], publish: false }
   const [form, setForm] = useState(emptyForm)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [step, setStep] = useState(0)
+  const [geo, setGeo] = useState<GeoProvince[]>([])
+  useEffect(() => { fetch('/api/geo', { cache: 'no-store' }).then(r => r.ok ? r.json() : { provinces: [] }).then(d => setGeo(d.provinces || [])).catch(() => {}) }, [])
 
-  const openAdd = () => { setForm(emptyForm); setEditingId(null); setShowForm(true) }
+  const openAdd = () => { setForm(emptyForm); setEditingId(null); setStep(0); setShowForm(true) }
   const openEdit = (l: Listing) => {
-    setForm({ title: l.title, ptype: l.ptype, deal: l.deal, city: l.city || '', neighborhood: l.neighborhood || '', location: l.location, address: l.address || '', facing: l.facing || '', price: String(l.price || ''), rentMonthly: String(l.rentMonthly || ''), area: String(l.area || ''), rooms: String(l.rooms ?? ''), floor: String(l.floor || ''), totalFloors: String(l.totalFloors || ''), yearBuilt: String(l.yearBuilt || ''), docType: l.docType || '', phone: l.phone || '', description: l.description || '', amenities: l.amenities || [], images: l.images || [], publish: !!l.published })
-    setEditingId(l.id); setShowForm(true)
+    setForm({ title: l.title, ptype: l.ptype, deal: l.deal, province: l.province || '', city: l.city || '', district: l.district || '', neighborhood: l.neighborhood || '', location: l.location, address: l.address || '', lat: l.lat ?? null, lng: l.lng ?? null, facing: l.facing || '', price: String(l.price || ''), rentMonthly: String(l.rentMonthly || ''), area: String(l.area || ''), rooms: String(l.rooms ?? ''), floor: String(l.floor || ''), totalFloors: String(l.totalFloors || ''), yearBuilt: String(l.yearBuilt || ''), docType: l.docType || '', phone: l.phone || '', description: l.description || '', amenities: l.amenities || [], images: l.images || [], publish: !!l.published })
+    setEditingId(l.id); setStep(0); setShowForm(true)
   }
   const toggleAmenity = (a: string) => setForm(f => ({ ...f, amenities: f.amenities.includes(a) ? f.amenities.filter(x => x !== a) : [...f.amenities, a] }))
   const uploadImages = async (files: FileList | null) => {
@@ -139,7 +148,8 @@ export default function ProsPage() {
     if (!form.title.trim()) { alert('عنوان فایل الزامی است'); return }
     const patch = {
       title: form.title.trim(), ptype: form.ptype, deal: form.deal,
-      city: form.city, neighborhood: form.neighborhood, location: form.location, address: form.address, facing: form.facing,
+      province: form.province, city: form.city, district: form.district, neighborhood: form.neighborhood, location: form.location, address: form.address, facing: form.facing,
+      lat: form.lat ?? undefined, lng: form.lng ?? undefined,
       price: Number(form.price) || 0, rentMonthly: Number(form.rentMonthly) || 0,
       area: Number(form.area) || 0, rooms: Number(form.rooms) || 0, floor: Number(form.floor) || 0,
       totalFloors: Number(form.totalFloors) || 0, yearBuilt: Number(form.yearBuilt) || 0,
@@ -204,6 +214,11 @@ export default function ProsPage() {
   const leadsF = q ? leads.filter(l => (l.name + (l.need || '') + (l.phone || '')).includes(q)) : leads
   const maxDeals = Math.max(1, ...stats.monthlyDeals.map(m => m.count))
   const sectionTitle = (t: string) => <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 12 }}>{t}</div>
+  // درختِ جغرافیایی برای فرمِ افزودن فایل
+  const gProvince = geo.find(p => p.name === form.province)
+  const gCity = gProvince?.cities.find(c => c.name === form.city)
+  const gDistrict = gCity?.districts.find(d => d.name === form.district)
+  const STEPS = ['نوع ملک', 'موقعیت و نقشه', 'مشخصات', 'امکانات و عکس']
 
   return (
     <div dir="rtl" style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: FONT }}>
@@ -504,88 +519,107 @@ export default function ProsPage() {
               <button onClick={() => setShowForm(false)} style={{ background: 'transparent', border: '1px solid var(--line2)', color: 'var(--muted)', borderRadius: 8, width: 30, height: 30, cursor: 'pointer', fontSize: 15 }}>✕</button>
             </div>
 
-            <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 18 }}>
-              {/* images */}
-              <div>
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--muted)', marginBottom: 8 }}>عکس‌های ملک (حداکثر ۱۲)</div>
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  {form.images.map((img, i) => (
-                    <div key={i} style={{ position: 'relative', width: 84, height: 84, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--line)' }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      <button onClick={() => setForm(f => ({ ...f, images: f.images.filter((_, j) => j !== i) }))} style={{ position: 'absolute', top: 2, left: 2, background: 'rgba(0,0,0,.65)', color: '#fff', border: 'none', borderRadius: 6, width: 20, height: 20, cursor: 'pointer', fontSize: 12, lineHeight: 1 }}>✕</button>
-                      {i === 0 && <span style={{ position: 'absolute', bottom: 0, right: 0, left: 0, background: 'var(--gold)', color: '#16140f', fontSize: 9, fontWeight: 800, textAlign: 'center', padding: '1px 0' }}>کاور</span>}
-                    </div>
-                  ))}
-                  {form.images.length < 12 && (
-                    <label style={{ width: 84, height: 84, borderRadius: 10, border: '1px dashed var(--line2)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, cursor: 'pointer', color: 'var(--muted)', fontSize: 11 }}>
-                      <input type="file" accept="image/*" multiple onChange={e => uploadImages(e.target.files)} style={{ display: 'none' }} />
-                      <span style={{ fontSize: 22 }}>{uploading ? '⏳' : '＋'}</span>
-                      {uploading ? 'آپلود…' : 'عکس'}
-                    </label>
-                  )}
+            {/* step indicator */}
+            <div style={{ display: 'flex', gap: 6, padding: '12px 20px', borderBottom: '1px solid var(--line)', overflowX: 'auto' }}>
+              {STEPS.map((s, i) => (
+                <button key={s} onClick={() => { if (i < step || form.title.trim()) setStep(i) }} style={{ flex: 1, minWidth: 80, display: 'flex', alignItems: 'center', gap: 7, padding: '6px 8px', borderRadius: 9, border: 'none', cursor: 'pointer', background: i === step ? 'var(--goldDim)' : 'transparent', fontFamily: FONT }}>
+                  <span style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, background: i <= step ? 'linear-gradient(135deg,var(--gold2),var(--gold))' : 'var(--line2)', color: i <= step ? '#16140f' : 'var(--muted)' }}>{i < step ? '✓' : fa(i + 1)}</span>
+                  <span style={{ fontSize: 11.5, fontWeight: i === step ? 700 : 500, color: i === step ? 'var(--gold)' : 'var(--muted)', whiteSpace: 'nowrap' }}>{s}</span>
+                </button>
+              ))}
+            </div>
+
+            <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16, minHeight: 240 }}>
+              {/* STEP 0 — type */}
+              {step === 0 && <>
+                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>عنوان فایل *</label><input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="مثلاً آپارتمان ۱۲۰ متری نوساز زعفرانیه" style={inputStyle} /></div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع ملک</label><select value={form.ptype} onChange={e => setForm({ ...form, ptype: e.target.value })} style={inputStyle}>{PTYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع معامله</label><select value={form.deal} onChange={e => setForm({ ...form, deal: e.target.value as 'sale' | 'rent' })} style={inputStyle}><option value="sale">فروش</option><option value="rent">اجاره/رهن</option></select></div>
                 </div>
-              </div>
+              </>}
 
-              {/* basic */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12 }}>
-                <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>عنوان فایل *</label><input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="مثلاً آپارتمان ۱۲۰ متری نوساز زعفرانیه" style={inputStyle} /></div>
-                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع ملک</label><select value={form.ptype} onChange={e => setForm({ ...form, ptype: e.target.value })} style={inputStyle}>{PTYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
-                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع معامله</label><select value={form.deal} onChange={e => setForm({ ...form, deal: e.target.value as 'sale' | 'rent' })} style={inputStyle}><option value="sale">فروش</option><option value="rent">اجاره/رهن</option></select></div>
-                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>شهر</label><input value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} placeholder="مثلاً تهران" style={inputStyle} /></div>
-                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>محله</label><input value={form.neighborhood} onChange={e => setForm({ ...form, neighborhood: e.target.value })} placeholder="مثلاً زعفرانیه" style={inputStyle} /></div>
-                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>منطقه/خیابان</label><input value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} placeholder="مثلاً منطقه ۱، خیابان…" style={inputStyle} /></div>
-                <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>آدرس دقیق</label><input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} style={inputStyle} /></div>
-              </div>
-
-              {/* price */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12 }}>
-                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>{form.deal === 'rent' ? 'ودیعه/رهن (تومان)' : 'قیمت کل (تومان)'}</label><input value={form.price} onChange={e => setForm({ ...form, price: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
-                {form.deal === 'rent' && <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>اجاره ماهانه (تومان)</label><input value={form.rentMonthly} onChange={e => setForm({ ...form, rentMonthly: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>}
-              </div>
-
-              {/* specs */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 12 }}>
-                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>متراژ</label><input value={form.area} onChange={e => setForm({ ...form, area: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
-                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>تعداد خواب</label><input value={form.rooms} onChange={e => setForm({ ...form, rooms: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
-                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>طبقه</label><input value={form.floor} onChange={e => setForm({ ...form, floor: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
-                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>تعداد کل طبقات</label><input value={form.totalFloors} onChange={e => setForm({ ...form, totalFloors: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
-                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>سال ساخت</label><input value={form.yearBuilt} onChange={e => setForm({ ...form, yearBuilt: e.target.value.replace(/\D/g, '') })} placeholder="۱۴۰۲" style={inputStyle} /></div>
-                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع سند</label><input value={form.docType} onChange={e => setForm({ ...form, docType: e.target.value })} placeholder="تک‌برگ / منگوله‌دار" style={inputStyle} /></div>
-                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>جهت ساختمان</label><select value={form.facing} onChange={e => setForm({ ...form, facing: e.target.value })} style={inputStyle}><option value="">—</option>{FACING_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
-                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>تلفن تماس</label><input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} /></div>
-              </div>
-
-              {/* amenities */}
-              <div>
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--muted)', marginBottom: 8 }}>امکانات ({fa(form.amenities.length)} انتخاب‌شده)</div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {AMENITIES.map(a => {
-                    const on = form.amenities.includes(a)
-                    return (
-                      <button key={a} type="button" onClick={() => toggleAmenity(a)} style={{ padding: '6px 13px', borderRadius: 999, fontSize: 12.5, cursor: 'pointer', fontFamily: FONT, border: `1px solid ${on ? 'var(--gold)' : 'var(--line2)'}`, background: on ? 'var(--goldDim)' : 'transparent', color: on ? 'var(--gold)' : 'var(--muted)', fontWeight: on ? 700 : 500 }}>{on ? '✓ ' : ''}{a}</button>
-                    )
-                  })}
+              {/* STEP 1 — location + map */}
+              {step === 1 && <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>استان</label><select value={form.province} onChange={e => setForm({ ...form, province: e.target.value, city: '', district: '', neighborhood: '' })} style={inputStyle}><option value="">انتخاب…</option>{geo.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}</select></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>شهر</label><select value={form.city} onChange={e => setForm({ ...form, city: e.target.value, district: '', neighborhood: '' })} disabled={!form.province} style={inputStyle}><option value="">انتخاب…</option>{(gProvince?.cities || []).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>منطقه</label><select value={form.district} onChange={e => setForm({ ...form, district: e.target.value, neighborhood: '' })} disabled={!form.city} style={inputStyle}><option value="">انتخاب…</option>{(gCity?.districts || []).map(d => <option key={d.id} value={d.name}>{d.name}</option>)}</select></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>محله</label><select value={form.neighborhood} onChange={e => setForm({ ...form, neighborhood: e.target.value })} disabled={!form.district} style={inputStyle}><option value="">انتخاب…</option>{(gDistrict?.neighborhoods || []).map(n => <option key={n} value={n}>{n}</option>)}</select></div>
                 </div>
-              </div>
-
-              {/* description */}
-              <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>توضیحات</label><textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={4} placeholder="توضیحات کامل ملک، موقعیت، ویژگی‌های خاص…" style={{ ...inputStyle, resize: 'vertical' }} /></div>
-
-              {/* publish public */}
-              <label style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderRadius: 12, cursor: 'pointer', background: form.publish ? 'var(--goldDim)' : 'var(--bg2)', border: `1px solid ${form.publish ? 'var(--gold)' : 'var(--line)'}` }}>
-                <input type="checkbox" checked={form.publish} onChange={e => setForm({ ...form, publish: e.target.checked })} style={{ width: 18, height: 18, accentColor: 'var(--gold)', cursor: 'pointer' }} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 700, color: form.publish ? 'var(--gold)' : 'var(--text)' }}>🌐 انتشار عمومی روی سایت ملک‌جت</div>
-                  <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2, lineHeight: 1.6 }}>این فایل به‌صورت یک آگهی عمومی در جستجوی سایت نمایش داده می‌شود. هر زمان می‌توانی از همین‌جا خاموشش کنی.</div>
+                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>آدرس دقیق</label><input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="خیابان، کوچه، پلاک…" style={inputStyle} /></div>
+                <div>
+                  <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>موقعیت روی نقشه — روی محل ملک بزنید (محله خودکار تشخیص داده می‌شود)</label>
+                  <LocationPicker lat={form.lat} lng={form.lng} onPick={r => setForm(f => ({ ...f, lat: r.lat, lng: r.lng, neighborhood: r.neighbourhood || f.neighborhood, city: r.city && !f.city ? r.city : f.city }))} />
                 </div>
-              </label>
+              </>}
+
+              {/* STEP 2 — specs */}
+              {step === 2 && <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>{form.deal === 'rent' ? 'ودیعه/رهن (تومان)' : 'قیمت کل (تومان)'}</label><input value={form.price} onChange={e => setForm({ ...form, price: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                  {form.deal === 'rent' ? <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>اجاره ماهانه (تومان)</label><input value={form.rentMonthly} onChange={e => setForm({ ...form, rentMonthly: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div> : <div />}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(110px,1fr))', gap: 12 }}>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>متراژ</label><input value={form.area} onChange={e => setForm({ ...form, area: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>تعداد خواب</label><input value={form.rooms} onChange={e => setForm({ ...form, rooms: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>طبقه</label><input value={form.floor} onChange={e => setForm({ ...form, floor: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>کل طبقات</label><input value={form.totalFloors} onChange={e => setForm({ ...form, totalFloors: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>سال ساخت</label><input value={form.yearBuilt} onChange={e => setForm({ ...form, yearBuilt: e.target.value.replace(/\D/g, '') })} placeholder="۱۴۰۲" style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>جهت</label><select value={form.facing} onChange={e => setForm({ ...form, facing: e.target.value })} style={inputStyle}><option value="">—</option>{FACING_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع سند</label><input value={form.docType} onChange={e => setForm({ ...form, docType: e.target.value })} placeholder="تک‌برگ" style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>تلفن تماس</label><input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} /></div>
+                </div>
+              </>}
+
+              {/* STEP 3 — amenities + images + publish */}
+              {step === 3 && <>
+                <div>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--muted)', marginBottom: 8 }}>عکس‌های ملک (حداکثر ۱۲)</div>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    {form.images.map((img, i) => (
+                      <div key={i} style={{ position: 'relative', width: 84, height: 84, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--line)' }}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <button onClick={() => setForm(f => ({ ...f, images: f.images.filter((_, j) => j !== i) }))} style={{ position: 'absolute', top: 2, left: 2, background: 'rgba(0,0,0,.65)', color: '#fff', border: 'none', borderRadius: 6, width: 20, height: 20, cursor: 'pointer', fontSize: 12, lineHeight: 1 }}>✕</button>
+                        {i === 0 && <span style={{ position: 'absolute', bottom: 0, right: 0, left: 0, background: 'var(--gold)', color: '#16140f', fontSize: 9, fontWeight: 800, textAlign: 'center', padding: '1px 0' }}>کاور</span>}
+                      </div>
+                    ))}
+                    {form.images.length < 12 && (
+                      <label style={{ width: 84, height: 84, borderRadius: 10, border: '1px dashed var(--line2)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, cursor: 'pointer', color: 'var(--muted)', fontSize: 11 }}>
+                        <input type="file" accept="image/*" multiple onChange={e => uploadImages(e.target.files)} style={{ display: 'none' }} />
+                        <span style={{ fontSize: 22 }}>{uploading ? '⏳' : '＋'}</span>
+                        {uploading ? 'آپلود…' : 'عکس'}
+                      </label>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--muted)', marginBottom: 8 }}>امکانات ({fa(form.amenities.length)} انتخاب‌شده)</div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {AMENITIES.map(a => {
+                      const on = form.amenities.includes(a)
+                      return <button key={a} type="button" onClick={() => toggleAmenity(a)} style={{ padding: '6px 13px', borderRadius: 999, fontSize: 12.5, cursor: 'pointer', fontFamily: FONT, border: `1px solid ${on ? 'var(--gold)' : 'var(--line2)'}`, background: on ? 'var(--goldDim)' : 'transparent', color: on ? 'var(--gold)' : 'var(--muted)', fontWeight: on ? 700 : 500 }}>{on ? '✓ ' : ''}{a}</button>
+                    })}
+                  </div>
+                </div>
+                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>توضیحات</label><textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={3} placeholder="توضیحات کامل ملک…" style={{ ...inputStyle, resize: 'vertical' }} /></div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderRadius: 12, cursor: 'pointer', background: form.publish ? 'var(--goldDim)' : 'var(--bg2)', border: `1px solid ${form.publish ? 'var(--gold)' : 'var(--line)'}` }}>
+                  <input type="checkbox" checked={form.publish} onChange={e => setForm({ ...form, publish: e.target.checked })} style={{ width: 18, height: 18, accentColor: 'var(--gold)', cursor: 'pointer' }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, color: form.publish ? 'var(--gold)' : 'var(--text)' }}>🌐 انتشار عمومی روی سایت ملک‌جت</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2, lineHeight: 1.6 }}>به‌صورت آگهی عمومی در جستجوی سایت دیده می‌شود. هر زمان می‌توانی خاموشش کنی.</div>
+                  </div>
+                </label>
+              </>}
             </div>
 
             {/* footer */}
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', padding: '14px 20px', borderTop: '1px solid var(--line)', position: 'sticky', bottom: 0, background: 'var(--surface)', borderRadius: '0 0 16px 16px' }}>
-              <button onClick={() => setShowForm(false)} style={{ ...actionBtn, padding: '9px 20px' }}>انصراف</button>
-              <button disabled={busy || uploading || !form.title.trim()} onClick={saveListing} style={{ ...goldBtn, opacity: busy || uploading || !form.title.trim() ? .6 : 1 }}>{busy ? 'در حال ذخیره…' : editingId ? 'ذخیرهٔ تغییرات' : 'ثبت فایل'}</button>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', padding: '14px 20px', borderTop: '1px solid var(--line)', position: 'sticky', bottom: 0, background: 'var(--surface)', borderRadius: '0 0 16px 16px' }}>
+              <button onClick={() => step === 0 ? setShowForm(false) : setStep(step - 1)} style={{ ...actionBtn, padding: '10px 22px' }}>{step === 0 ? 'انصراف' : '→ قبلی'}</button>
+              {step < STEPS.length - 1
+                ? <button onClick={() => { if (step === 0 && !form.title.trim()) { alert('عنوان فایل الزامی است'); return } setStep(step + 1) }} style={{ ...goldBtn, padding: '10px 26px' }}>بعدی ←</button>
+                : <button disabled={busy || uploading || !form.title.trim()} onClick={saveListing} style={{ ...goldBtn, padding: '10px 26px', opacity: busy || uploading || !form.title.trim() ? .6 : 1 }}>{busy ? 'در حال ذخیره…' : editingId ? 'ذخیرهٔ تغییرات' : 'ثبت فایل'}</button>}
             </div>
           </div>
         </div>

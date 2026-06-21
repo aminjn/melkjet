@@ -113,9 +113,11 @@ export default function PropertyPage() {
       const it: Item | null = d.item
       setItem(it); setLoading(false)
       if (!it) return
-      // گالریِ آگهیِ ثبت‌شده توسط کاربر/مشاور (در meta ذخیره شده)
+      // گالری و موقعیتِ آگهیِ ثبت‌شده توسط کاربر/مشاور (در meta ذخیره شده)
       const g = it.meta?.['__gallery']
       if (g) { const imgs = g.split(/[\n,]+/).map(s => s.trim()).filter(Boolean); if (imgs.length) setGallery(imgs) }
+      const mlat = Number(it.meta?.['__lat']); const mlng = Number(it.meta?.['__lng'])
+      if (mlat && mlng) setGeo({ lat: mlat, lng: mlng })
       // real market stats (price/m² of the neighbourhood, from our scraped data)
       const mq = new URLSearchParams({ city: it.meta?.['شهر'] || '', district: it.meta?.['محله'] || '', price: it.price || '', title: it.title || '' })
       fetch(`/api/market/stats?${mq}`).then(r => r.ok ? r.json() : null).then(setMarket).catch(() => {})

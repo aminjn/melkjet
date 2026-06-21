@@ -17,6 +17,7 @@ export interface Listing {
   id: string; title: string; ptype: string; location: string; price: number; deal: 'sale' | 'rent'; status: ListingStatus; createdAt: number
   // جزئیات کامل فایل (همه اختیاری برای سازگاری با دادهٔ قبلی)
   city?: string; neighborhood?: string; facing?: string
+  province?: string; district?: string; lat?: number; lng?: number
   rentMonthly?: number; area?: number; rooms?: number; floor?: number; totalFloors?: number; yearBuilt?: number
   parking?: boolean; elevator?: boolean; storage?: boolean; balcony?: boolean; furnished?: boolean
   amenities?: string[]
@@ -139,6 +140,10 @@ export function addListing(o: string, input: Partial<Listing>): Listing {
       deal: input.deal === 'rent' ? 'rent' : 'sale', status: 'active', createdAt: Date.now(),
       city: input.city ? String(input.city) : undefined,
       neighborhood: input.neighborhood ? String(input.neighborhood) : undefined,
+      province: input.province ? String(input.province) : undefined,
+      district: input.district ? String(input.district) : undefined,
+      lat: typeof input.lat === 'number' ? input.lat : undefined,
+      lng: typeof input.lng === 'number' ? input.lng : undefined,
       facing: input.facing ? String(input.facing) : undefined,
       rentMonthly: input.rentMonthly ? Number(input.rentMonthly) : undefined,
       area: input.area ? Number(input.area) : undefined,
@@ -162,7 +167,7 @@ export function updateListing(o: string, fid: string, patch: Partial<Listing>): 
   let res: Listing | null = null
   mutate(o, a => {
     const l = a.listings.find(x => x.id === fid); if (!l) return
-    const allow: (keyof Listing)[] = ['title', 'ptype', 'location', 'price', 'deal', 'city', 'neighborhood', 'facing', 'rentMonthly', 'area', 'rooms', 'floor', 'totalFloors', 'yearBuilt', 'parking', 'elevator', 'storage', 'balcony', 'furnished', 'amenities', 'docType', 'address', 'phone', 'description', 'images']
+    const allow: (keyof Listing)[] = ['title', 'ptype', 'location', 'price', 'deal', 'city', 'neighborhood', 'province', 'district', 'lat', 'lng', 'facing', 'rentMonthly', 'area', 'rooms', 'floor', 'totalFloors', 'yearBuilt', 'parking', 'elevator', 'storage', 'balcony', 'furnished', 'amenities', 'docType', 'address', 'phone', 'description', 'images']
     for (const k of allow) if (k in patch) (l as unknown as Record<string, unknown>)[k] = (patch as Record<string, unknown>)[k]
     res = l
   })
@@ -185,12 +190,14 @@ function publicPayload(l: Listing, advisorName: string) {
   const loc = [l.city, l.neighborhood].filter(Boolean).join('، ') || l.location || ''
   const meta: Record<string, string> = {}
   const put = (k: string, v?: string | number) => { if (v !== undefined && v !== '' && v !== 0) meta[k] = String(v) }
-  put('شهر', l.city); put('محله', l.neighborhood); put('نوع معامله', l.deal === 'rent' ? 'اجاره' : 'فروش')
+  put('استان', l.province); put('شهر', l.city); put('منطقه', l.district); put('محله', l.neighborhood)
+  put('نوع معامله', l.deal === 'rent' ? 'اجاره' : 'فروش')
   put('نوع ملک', l.ptype); put('متراژ', l.area ? `${faNum(l.area)} متر` : ''); put('اتاق خواب', faNum(l.rooms))
   put('طبقه', faNum(l.floor)); put('تعداد طبقات', faNum(l.totalFloors)); put('سال ساخت', faNum(l.yearBuilt))
   put('جهت', l.facing); put('سند', l.docType)
   if (l.amenities && l.amenities.length) meta['امکانات'] = l.amenities.join('، ')
   if (l.images && l.images.length) meta['__gallery'] = l.images.join('\n')
+  if (typeof l.lat === 'number' && typeof l.lng === 'number') { meta['__lat'] = String(l.lat); meta['__lng'] = String(l.lng) }
   return { title: l.title, price, location: loc, image: l.images?.[0], excerpt: l.description, phone: l.phone, owner: advisorName, meta }
 }
 export function publishListing(o: string, fid: string): Listing | null {
