@@ -11,7 +11,12 @@ type ApptStatus = 'scheduled' | 'done' | 'canceled'
 type CommStatus = 'pending' | 'paid'
 
 interface Lead { id: string; name: string; phone?: string; need?: string; budget?: string; stage: Stage; source?: string; note?: string; createdAt: number }
-interface Listing { id: string; title: string; ptype: string; location: string; price: number; deal: 'sale' | 'rent'; status: ListingStatus; createdAt: number }
+interface Listing {
+  id: string; title: string; ptype: string; location: string; price: number; deal: 'sale' | 'rent'; status: ListingStatus; createdAt: number
+  rentMonthly?: number; area?: number; rooms?: number; floor?: number; totalFloors?: number; yearBuilt?: number
+  parking?: boolean; elevator?: boolean; storage?: boolean; balcony?: boolean; furnished?: boolean
+  docType?: string; address?: string; phone?: string; description?: string; images?: string[]
+}
 interface Appt { id: string; client: string; listingTitle?: string; date: string; type: ApptType; status: ApptStatus; createdAt: number }
 interface Commission { id: string; dealTitle: string; amount: number; status: CommStatus; date: string; createdAt: number }
 interface Stats {
@@ -99,8 +104,44 @@ export default function ProsPage() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [search, setSearch] = useState('')
   const [nl, setNl] = useState({ name: '', phone: '', need: '', budget: '', source: '' })
-  const [nf, setNf] = useState({ title: '', ptype: '', location: '', price: '', deal: 'sale' })
   const [na, setNa] = useState({ client: '', listingTitle: '', date: '', type: 'visit' })
+  // فرمِ کاملِ فایل (پاپ‌آپ)
+  const emptyForm = { title: '', ptype: 'آپارتمان', deal: 'sale' as 'sale' | 'rent', location: '', address: '', price: '', rentMonthly: '', area: '', rooms: '', floor: '', totalFloors: '', yearBuilt: '', docType: '', phone: '', description: '', parking: false, elevator: false, storage: false, balcony: false, furnished: false, images: [] as string[] }
+  const [form, setForm] = useState(emptyForm)
+  const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+
+  const openAdd = () => { setForm(emptyForm); setEditingId(null); setShowForm(true) }
+  const openEdit = (l: Listing) => {
+    setForm({ title: l.title, ptype: l.ptype, deal: l.deal, location: l.location, address: l.address || '', price: String(l.price || ''), rentMonthly: String(l.rentMonthly || ''), area: String(l.area || ''), rooms: String(l.rooms ?? ''), floor: String(l.floor || ''), totalFloors: String(l.totalFloors || ''), yearBuilt: String(l.yearBuilt || ''), docType: l.docType || '', phone: l.phone || '', description: l.description || '', parking: !!l.parking, elevator: !!l.elevator, storage: !!l.storage, balcony: !!l.balcony, furnished: !!l.furnished, images: l.images || [] })
+    setEditingId(l.id); setShowForm(true)
+  }
+  const uploadImages = async (files: FileList | null) => {
+    if (!files || !files.length) return
+    setUploading(true)
+    const urls: string[] = []
+    for (const file of Array.from(files)) {
+      const fd = new FormData(); fd.append('file', file)
+      try { const r = await fetch('/api/media', { method: 'POST', body: fd }); const d = await r.json(); if (d.url) urls.push(d.url) } catch {}
+    }
+    setForm(f => ({ ...f, images: [...f.images, ...urls].slice(0, 12) }))
+    setUploading(false)
+  }
+  const saveListing = async () => {
+    if (!form.title.trim()) { alert('عنوان فایل الزامی است'); return }
+    const patch = {
+      title: form.title.trim(), ptype: form.ptype, deal: form.deal, location: form.location, address: form.address,
+      price: Number(form.price) || 0, rentMonthly: Number(form.rentMonthly) || 0,
+      area: Number(form.area) || 0, rooms: Number(form.rooms) || 0, floor: Number(form.floor) || 0,
+      totalFloors: Number(form.totalFloors) || 0, yearBuilt: Number(form.yearBuilt) || 0,
+      docType: form.docType, phone: form.phone, description: form.description,
+      parking: form.parking, elevator: form.elevator, storage: form.storage, balcony: form.balcony, furnished: form.furnished,
+      images: form.images,
+    }
+    const ok = editingId ? await post({ action: 'updateListing', id: editingId, patch }) : await post({ action: 'addListing', ...patch })
+    if (ok) { setShowForm(false); setForm(emptyForm); setEditingId(null) }
+  }
   const [nc, setNc] = useState({ dealTitle: '', amount: '' })
   const [prof, setProf] = useState({ name: '', agency: '' })
 
@@ -318,39 +359,42 @@ export default function ProsPage() {
           {/* LISTINGS */}
           {view === 'listings' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ ...card, padding: 18 }}>
-              {sectionTitle('افزودن فایل')}
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                <div style={{ flex: '2 1 180px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>عنوان</label><input value={nf.title} onChange={e => setNf({ ...nf, title: e.target.value })} style={inputStyle} /></div>
-                <div style={{ flex: '1 1 120px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع</label><select value={nf.ptype} onChange={e => setNf({ ...nf, ptype: e.target.value })} style={inputStyle}><option value="">—</option>{PTYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
-                <div style={{ flex: '1 1 120px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>منطقه</label><input value={nf.location} onChange={e => setNf({ ...nf, location: e.target.value })} style={inputStyle} /></div>
-                <div style={{ flex: '1 1 140px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>قیمت (تومان)</label><input value={nf.price} onChange={e => setNf({ ...nf, price: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
-                <div style={{ flex: '0 1 110px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>معامله</label><select value={nf.deal} onChange={e => setNf({ ...nf, deal: e.target.value })} style={inputStyle}><option value="sale">فروش</option><option value="rent">اجاره</option></select></div>
-                <button disabled={busy || !nf.title.trim()} onClick={async () => { if (await post({ action: 'addListing', title: nf.title.trim(), ptype: nf.ptype || 'آپارتمان', location: nf.location, price: Number(nf.price) || 0, deal: nf.deal })) setNf({ title: '', ptype: '', location: '', price: '', deal: 'sale' }) }} style={goldBtn}>افزودن</button>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                <div style={{ fontWeight: 800, fontSize: 15 }}>فایل‌های من ({fa(listings.length)})</div>
+                <button onClick={openAdd} style={goldBtn}>＋ افزودن فایل</button>
               </div>
             </div>
-            <div style={{ ...card, padding: 18 }}>
-              {sectionTitle('فایل‌های من')}
-              {listings.length ? (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 12 }}>
-                  {listings.map(l => (
-                    <div key={l.id} style={{ ...card, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                        <div style={{ fontWeight: 700, fontSize: 14 }}>{l.title}</div>
-                        <Pill label={DEAL_LABEL[l.deal]} color={l.deal === 'sale' ? '#60a5fa' : '#2dd4bf'} />
-                      </div>
+            {listings.length ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 14 }}>
+                {listings.map(l => (
+                  <div key={l.id} style={{ ...card, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ position: 'relative', height: 150, background: 'var(--bg2)' }}>
+                      {l.images && l.images.length ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={l.images[0]} alt={l.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--faint)', fontSize: 30 }}>🏠</div>}
+                      <span style={{ position: 'absolute', top: 8, right: 8 }}><Pill label={DEAL_LABEL[l.deal]} color={l.deal === 'sale' ? '#60a5fa' : '#2dd4bf'} /></span>
+                      {l.images && l.images.length > 1 && <span style={{ position: 'absolute', bottom: 8, left: 8, background: 'rgba(0,0,0,.6)', color: '#fff', fontSize: 11, borderRadius: 7, padding: '2px 8px' }}>📷 {fa(l.images.length)}</span>}
+                    </div>
+                    <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 7, flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14 }}>{l.title}</div>
                       <div style={{ fontSize: 12, color: 'var(--muted)' }}>{l.ptype} · {l.location}</div>
-                      <div style={{ fontWeight: 800, color: 'var(--gold)', fontSize: 14 }}>{money(l.price)}</div>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <select value={l.status} onChange={e => post({ action: 'setListingStatus', id: l.id, status: e.target.value })} style={{ ...actionBtn, cursor: 'pointer', color: LIST_COLOR[l.status], borderColor: LIST_COLOR[l.status] }}>
+                      <div style={{ fontSize: 11.5, color: 'var(--muted)', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        {l.area ? <span>{fa(l.area)}م</span> : null}{l.rooms ? <span>{fa(l.rooms)} خواب</span> : null}{l.floor ? <span>طبقه {fa(l.floor)}</span> : null}{l.yearBuilt ? <span>ساخت {fa(l.yearBuilt)}</span> : null}
+                      </div>
+                      <div style={{ fontWeight: 800, color: 'var(--gold)', fontSize: 14 }}>{l.deal === 'rent' ? `ودیعه ${money(l.price)}${l.rentMonthly ? ` · اجاره ${money(l.rentMonthly)}` : ''}` : money(l.price)}</div>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 'auto' }}>
+                        <select value={l.status} onChange={e => post({ action: 'setListingStatus', id: l.id, status: e.target.value })} style={{ ...actionBtn, cursor: 'pointer', flex: 1, color: LIST_COLOR[l.status], borderColor: LIST_COLOR[l.status] }}>
                           {LIST_STATUSES.map(s => <option key={s} value={s} style={{ color: 'var(--text)' }}>{LIST_LABEL[s]}</option>)}
                         </select>
-                        <button onClick={() => post({ action: 'deleteListing', id: l.id })} style={{ ...actionBtn, color: '#ef4444' }}>حذف</button>
+                        <button onClick={() => openEdit(l)} style={actionBtn}>ویرایش</button>
+                        <button onClick={() => { if (confirm('این فایل حذف شود؟')) post({ action: 'deleteListing', id: l.id }) }} style={{ ...actionBtn, color: '#ef4444' }}>حذف</button>
                       </div>
                     </div>
-                  ))}
-                </div>
-              ) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>فایلی نداری.</div>}
-            </div>
+                  </div>
+                ))}
+              </div>
+            ) : <div style={{ ...card, padding: 40, textAlign: 'center', color: 'var(--faint)', fontSize: 13 }}>هنوز فایلی ثبت نکرده‌ای — روی «افزودن فایل» بزن.</div>}
           </div>}
 
           {/* APPOINTMENTS */}
@@ -425,6 +469,91 @@ export default function ProsPage() {
           </>}
         </main>
       </div>
+
+      {/* ───── ADD/EDIT LISTING MODAL ───── */}
+      {showForm && (
+        <div onClick={() => setShowForm(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '24px 16px', overflowY: 'auto' }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...card, width: 'min(720px, 100%)', padding: 0, margin: 'auto' }}>
+            {/* header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--line)', position: 'sticky', top: 0, background: 'var(--surface)', borderRadius: '16px 16px 0 0', zIndex: 2 }}>
+              <div style={{ fontWeight: 800, fontSize: 16 }}>{editingId ? 'ویرایش فایل' : 'افزودن فایل جدید'}</div>
+              <button onClick={() => setShowForm(false)} style={{ background: 'transparent', border: '1px solid var(--line2)', color: 'var(--muted)', borderRadius: 8, width: 30, height: 30, cursor: 'pointer', fontSize: 15 }}>✕</button>
+            </div>
+
+            <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 18 }}>
+              {/* images */}
+              <div>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--muted)', marginBottom: 8 }}>عکس‌های ملک (حداکثر ۱۲)</div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  {form.images.map((img, i) => (
+                    <div key={i} style={{ position: 'relative', width: 84, height: 84, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--line)' }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <button onClick={() => setForm(f => ({ ...f, images: f.images.filter((_, j) => j !== i) }))} style={{ position: 'absolute', top: 2, left: 2, background: 'rgba(0,0,0,.65)', color: '#fff', border: 'none', borderRadius: 6, width: 20, height: 20, cursor: 'pointer', fontSize: 12, lineHeight: 1 }}>✕</button>
+                      {i === 0 && <span style={{ position: 'absolute', bottom: 0, right: 0, left: 0, background: 'var(--gold)', color: '#16140f', fontSize: 9, fontWeight: 800, textAlign: 'center', padding: '1px 0' }}>کاور</span>}
+                    </div>
+                  ))}
+                  {form.images.length < 12 && (
+                    <label style={{ width: 84, height: 84, borderRadius: 10, border: '1px dashed var(--line2)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, cursor: 'pointer', color: 'var(--muted)', fontSize: 11 }}>
+                      <input type="file" accept="image/*" multiple onChange={e => uploadImages(e.target.files)} style={{ display: 'none' }} />
+                      <span style={{ fontSize: 22 }}>{uploading ? '⏳' : '＋'}</span>
+                      {uploading ? 'آپلود…' : 'عکس'}
+                    </label>
+                  )}
+                </div>
+              </div>
+
+              {/* basic */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12 }}>
+                <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>عنوان فایل *</label><input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="مثلاً آپارتمان ۱۲۰ متری نوساز زعفرانیه" style={inputStyle} /></div>
+                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع ملک</label><select value={form.ptype} onChange={e => setForm({ ...form, ptype: e.target.value })} style={inputStyle}>{PTYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع معامله</label><select value={form.deal} onChange={e => setForm({ ...form, deal: e.target.value as 'sale' | 'rent' })} style={inputStyle}><option value="sale">فروش</option><option value="rent">اجاره/رهن</option></select></div>
+                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>منطقه</label><input value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} placeholder="مثلاً زعفرانیه" style={inputStyle} /></div>
+                <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>آدرس دقیق</label><input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} style={inputStyle} /></div>
+              </div>
+
+              {/* price */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12 }}>
+                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>{form.deal === 'rent' ? 'ودیعه/رهن (تومان)' : 'قیمت کل (تومان)'}</label><input value={form.price} onChange={e => setForm({ ...form, price: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                {form.deal === 'rent' && <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>اجاره ماهانه (تومان)</label><input value={form.rentMonthly} onChange={e => setForm({ ...form, rentMonthly: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>}
+              </div>
+
+              {/* specs */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 12 }}>
+                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>متراژ</label><input value={form.area} onChange={e => setForm({ ...form, area: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>تعداد خواب</label><input value={form.rooms} onChange={e => setForm({ ...form, rooms: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>طبقه</label><input value={form.floor} onChange={e => setForm({ ...form, floor: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>تعداد کل طبقات</label><input value={form.totalFloors} onChange={e => setForm({ ...form, totalFloors: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>سال ساخت</label><input value={form.yearBuilt} onChange={e => setForm({ ...form, yearBuilt: e.target.value.replace(/\D/g, '') })} placeholder="۱۴۰۲" style={inputStyle} /></div>
+                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع سند</label><input value={form.docType} onChange={e => setForm({ ...form, docType: e.target.value })} placeholder="تک‌برگ / منگوله‌دار" style={inputStyle} /></div>
+                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>تلفن تماس</label><input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} /></div>
+              </div>
+
+              {/* amenities */}
+              <div>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--muted)', marginBottom: 8 }}>امکانات</div>
+                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                  {([['parking', 'پارکینگ'], ['elevator', 'آسانسور'], ['storage', 'انباری'], ['balcony', 'بالکن'], ['furnished', 'مبله']] as const).map(([k, label]) => (
+                    <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={form[k]} onChange={e => setForm({ ...form, [k]: e.target.checked })} style={{ width: 16, height: 16, accentColor: 'var(--gold)', cursor: 'pointer' }} />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* description */}
+              <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>توضیحات</label><textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={4} placeholder="توضیحات کامل ملک، موقعیت، ویژگی‌های خاص…" style={{ ...inputStyle, resize: 'vertical' }} /></div>
+            </div>
+
+            {/* footer */}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', padding: '14px 20px', borderTop: '1px solid var(--line)', position: 'sticky', bottom: 0, background: 'var(--surface)', borderRadius: '0 0 16px 16px' }}>
+              <button onClick={() => setShowForm(false)} style={{ ...actionBtn, padding: '9px 20px' }}>انصراف</button>
+              <button disabled={busy || uploading || !form.title.trim()} onClick={saveListing} style={{ ...goldBtn, opacity: busy || uploading || !form.title.trim() ? .6 : 1 }}>{busy ? 'در حال ذخیره…' : editingId ? 'ذخیرهٔ تغییرات' : 'ثبت فایل'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

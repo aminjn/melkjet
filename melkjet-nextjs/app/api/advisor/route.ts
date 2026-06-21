@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import {
   advisorStats, listLeads, listListings, listAppts, listCommissions,
-  addLead, setLeadStage, deleteLead, addListing, setListingStatus, deleteListing,
+  addLead, setLeadStage, deleteLead, addListing, updateListing, setListingStatus, deleteListing,
   addAppt, setApptStatus, addCommission, deleteCommission, setCommissionStatus, updateAdvisorProfile,
 } from '@/app/lib/advisor-store'
 
@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
     case 'setLeadStage': { const l = setLeadStage(o, String(b.id), b.stage); return l ? NextResponse.json({ ok: true, lead: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'deleteLead': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); deleteLead(o, String(b.id)); return NextResponse.json({ ok: true })
     case 'addListing': return NextResponse.json({ ok: true, listing: addListing(o, b) })
+    case 'updateListing': { if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); const l = updateListing(o, String(b.id), b.patch || {}); return l ? NextResponse.json({ ok: true, listing: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'setListingStatus': { const l = setListingStatus(o, String(b.id), b.status); return l ? NextResponse.json({ ok: true, listing: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'deleteListing': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); deleteListing(o, String(b.id)); return NextResponse.json({ ok: true })
     case 'addAppt': if (!b.client || !b.date) return NextResponse.json({ error: 'مشتری و تاریخ الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, appt: addAppt(o, { client: String(b.client), listingTitle: b.listingTitle, date: String(b.date), type: b.type }) })
