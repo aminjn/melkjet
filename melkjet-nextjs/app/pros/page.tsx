@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import AssistantPanel from '@/app/components/AssistantPanel'
 import CrmTool, { CRM_VIEWS, type CrmView } from '@/app/components/tools/CrmTool'
+import MarketingTool, { MARKETING_VIEWS, type MarketingView } from '@/app/components/tools/MarketingTool'
 import LocationPicker from '@/app/components/LocationPicker'
 
 // درختِ جغرافیاییِ سایت (استان → شهر → منطقه → محله)
@@ -38,7 +39,7 @@ interface Stats {
 }
 interface AdvisorData { stats: Stats; leads: Lead[]; listings: Listing[]; appts: Appt[]; commissions: Commission[] }
 
-type View = 'dashboard' | 'assistant' | 'leads' | 'listings' | 'appts' | 'commissions' | 'settings'
+type View = 'dashboard' | 'assistant' | 'leads' | 'listings' | 'appts' | 'calendar' | 'commissions' | 'settings'
 
 // ════════ Helpers ════════
 const FONT = 'Vazirmatn, system-ui, sans-serif'
@@ -72,19 +73,41 @@ const inputStyle: React.CSSProperties = { padding: '9px 11px', borderRadius: 9, 
 const actionBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap' }
 const goldBtn: React.CSSProperties = { padding: '9px 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }
 
-const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد مشاور', assistant: 'دستیار هوشمند', leads: 'لیدها و پایپ‌لاین', listings: 'فایل‌های من', appts: 'قرارها و بازدیدها', commissions: 'کمیسیون', settings: 'تنظیمات' }
+const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد مشاور', assistant: 'دستیار هوشمند', leads: 'لیدها و پایپ‌لاین', listings: 'فایل‌های من', appts: 'قرارها و بازدیدها', calendar: 'تقویم', commissions: 'کمیسیون', settings: 'تنظیمات' }
 const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'leads' | 'appts' }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: '▦' },
   { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
   { id: 'leads', label: 'لیدها', icon: '◎', badge: 'leads' },
   { id: 'listings', label: 'فایل‌های من', icon: '◫' },
   { id: 'appts', label: 'قرارها', icon: '◉', badge: 'appts' },
+  { id: 'calendar', label: 'تقویم', icon: '🗓' },
   { id: 'commissions', label: 'کمیسیون', icon: '﷼' },
   { id: 'settings', label: 'تنظیمات', icon: '⛭' },
 ]
+
+// ── تقویم جلالی (بدون وابستگی) ──
+const J_MONTHS = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند']
+const J_WEEK = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه']
+const JF = new Intl.DateTimeFormat('en-US-u-ca-persian', { year: 'numeric', month: 'numeric', day: 'numeric' })
+function jParts(d: Date): { jy: number; jm: number; jd: number } {
+  const p = JF.formatToParts(d); const g = (t: string) => Number(p.find(x => x.type === t)?.value || 0)
+  return { jy: g('year'), jm: g('month'), jd: g('day') }
+}
+function firstOfJMonth(offset: number): Date {
+  let d = new Date(); const t = jParts(d)
+  d = new Date(d.getFullYear(), d.getMonth(), d.getDate() - (t.jd - 1))
+  let o = offset
+  while (o > 0) { const n = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 32); const p = jParts(n); d = new Date(n.getFullYear(), n.getMonth(), n.getDate() - (p.jd - 1)); o-- }
+  while (o < 0) { const n = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1); const p = jParts(n); d = new Date(n.getFullYear(), n.getMonth(), n.getDate() - (p.jd - 1)); o++ }
+  return d
+}
+function normJDate(s: string): string {
+  const latin = (s || '').replace(/[۰-۹]/g, ch => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(ch)))
+  const m = latin.match(/(\d{3,4})\D+(\d{1,2})\D+(\d{1,2})/)
+  return m ? `${Number(m[1])}-${Number(m[2])}-${Number(m[3])}` : ''
+}
 // ابزارهای جاسازی‌شده در پنل (داخل همین صفحه باز می‌شوند، نه جای دیگر)
 const NAV_LINKS = [
-  { href: '/marketing', label: 'مارکتینگ', icon: '◬' },
   { href: '/workflow', label: 'اتوماسیون', icon: '⛭' },
   { href: '/website-builder', label: 'وب‌سایت‌ساز', icon: '◳' },
 ]
@@ -107,8 +130,11 @@ export default function ProsPage() {
   // CRM جاسازی‌شده: وقتی مقدار دارد، محتوای CRM در همین پنل نمایش داده می‌شود
   const [crmView, setCrmView] = useState<CrmView | null>(null)
   const [crmOpen, setCrmOpen] = useState(false)
-  const goView = (v: View) => { setView(v); setCrmView(null) }
-  const openCrm = (v: CrmView) => { setCrmView(v); setCrmOpen(true) }
+  const [mktView, setMktView] = useState<MarketingView | null>(null)
+  const [mktOpen, setMktOpen] = useState(false)
+  const goView = (v: View) => { setView(v); setCrmView(null); setMktView(null) }
+  const openCrm = (v: CrmView) => { setCrmView(v); setMktView(null); setCrmOpen(true) }
+  const openMkt = (v: MarketingView) => { setMktView(v); setCrmView(null); setMktOpen(true) }
   const [data, setData] = useState<AdvisorData | null>(null)
   const [loading, setLoading] = useState(true)
   const [unauth, setUnauth] = useState(false)
@@ -124,6 +150,7 @@ export default function ProsPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [step, setStep] = useState(0)
+  const [calOffset, setCalOffset] = useState(0)
   const [geo, setGeo] = useState<GeoProvince[]>([])
   useEffect(() => { fetch('/api/geo', { cache: 'no-store' }).then(r => r.ok ? r.json() : { provinces: [] }).then(d => setGeo(d.provinces || [])).catch(() => {}) }, [])
 
@@ -236,7 +263,7 @@ export default function ProsPage() {
         </div>
         <nav style={{ padding: '10px 8px', flex: 1, overflowY: 'auto' }}>
           {NAV_ITEMS.map(item => {
-            const active = view === item.id && !crmView
+            const active = view === item.id && !crmView && !mktView
             const badge = item.badge === 'leads' ? stats.kpis.activeLeads : item.badge === 'appts' ? stats.kpis.upcomingAppts : 0
             return (
               <button key={item.id} onClick={() => goView(item.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: active ? 'var(--goldDim)' : 'transparent', color: active ? 'var(--gold)' : 'var(--muted)', fontWeight: active ? 700 : 500, fontSize: 14, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
@@ -264,6 +291,22 @@ export default function ProsPage() {
             )
           })}
 
+          {/* مارکتینگ — جاسازی‌شده با منوی آبشاری (مثل CRM) */}
+          <button onClick={() => { setMktOpen(o => !o); if (!mktView) openMkt('overview') }} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: mktView ? 'var(--goldDim)' : 'transparent', color: mktView ? 'var(--gold)' : 'var(--muted)', fontWeight: mktView ? 700 : 500, fontSize: 14, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
+            <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: mktView ? 1 : 0.7 }}>◬</span>
+            <span className="mjp-sidelabel" style={{ flex: 1 }}>مارکتینگ</span>
+            <span className="mjp-sidelabel" style={{ fontSize: 11, transition: 'transform .2s', transform: mktOpen ? 'rotate(90deg)' : 'none' }}>‹</span>
+          </button>
+          {mktOpen && MARKETING_VIEWS.map(mv => {
+            const on = mktView === mv.id
+            return (
+              <button key={mv.id} onClick={() => openMkt(mv.id)} className="mjp-sidelabel" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 9, padding: '8px 14px', paddingRight: 34, borderRadius: 10, border: 'none', cursor: 'pointer', background: on ? 'var(--goldDim)' : 'transparent', color: on ? 'var(--gold)' : 'var(--muted)', fontWeight: on ? 700 : 500, fontSize: 13, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
+                <span style={{ fontSize: 13, width: 16, textAlign: 'center', opacity: on ? 1 : 0.6 }}>{mv.icon}</span>
+                <span style={{ flex: 1 }}>{mv.label}</span>
+              </button>
+            )
+          })}
+
           {NAV_LINKS.map(l => (
             <a key={l.href} href={l.href} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, color: 'var(--muted)', textDecoration: 'none', fontWeight: 500, fontSize: 14, marginBottom: 2, fontFamily: FONT }}>
               <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: 0.7 }}>{l.icon}</span>
@@ -284,14 +327,14 @@ export default function ProsPage() {
       {/* MAIN */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 22px', borderBottom: '1px solid var(--line)', position: 'sticky', top: 0, background: 'var(--navbg)', backdropFilter: 'blur(18px)', zIndex: 20, flexWrap: 'wrap' }}>
-          <div style={{ fontWeight: 800, fontSize: 18 }}>{crmView ? `CRM · ${CRM_VIEWS.find(v => v.id === crmView)?.label || ''}` : VIEW_TITLES[view]}</div>
+          <div style={{ fontWeight: 800, fontSize: 18 }}>{crmView ? `CRM · ${CRM_VIEWS.find(v => v.id === crmView)?.label || ''}` : mktView ? `مارکتینگ · ${MARKETING_VIEWS.find(v => v.id === mktView)?.label || ''}` : VIEW_TITLES[view]}</div>
           <div style={{ flex: 1 }} />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="جستجوی لید، مشتری…" style={{ ...inputStyle, width: 220, maxWidth: '40vw' }} />
           <button onClick={() => goView('leads')} style={{ ...goldBtn, padding: '9px 16px' }}>+ لید جدید</button>
         </header>
 
         <main style={{ padding: 22, flex: 1, overflowY: 'auto' }}>
-          {crmView ? <CrmTool embedded view={crmView} onView={v => setCrmView(v)} /> : <>
+          {crmView ? <CrmTool embedded view={crmView} onView={v => setCrmView(v)} /> : mktView ? <MarketingTool embedded view={mktView} onView={v => setMktView(v)} /> : <>
           {/* DASHBOARD */}
           {view === 'dashboard' && <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
@@ -465,6 +508,51 @@ export default function ProsPage() {
             </div>
           </div>}
 
+          {/* CALENDAR */}
+          {view === 'calendar' && (() => {
+            const first = firstOfJMonth(calOffset)
+            const { jy, jm } = jParts(first)
+            const lead = (first.getDay() + 1) % 7 // ستونِ شنبه‌محور
+            const todayKey = (() => { const t = jParts(new Date()); return `${t.jy}-${t.jm}-${t.jd}` })()
+            // نگاشتِ تاریخ → قرارها
+            const byDate: Record<string, Appt[]> = {}
+            for (const a of appts) { const k = normJDate(a.date); if (k) (byDate[k] = byDate[k] || []).push(a) }
+            // سلول‌های ماه
+            const cells: ({ d: Date; jd: number } | null)[] = []
+            for (let i = 0; i < lead; i++) cells.push(null)
+            for (let dd = new Date(first); jParts(dd).jm === jm; dd = new Date(dd.getFullYear(), dd.getMonth(), dd.getDate() + 1)) cells.push({ d: new Date(dd), jd: jParts(dd).jd })
+            while (cells.length % 7 !== 0) cells.push(null)
+            return <div style={{ ...card, padding: 18 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ fontWeight: 800, fontSize: 16 }}>{J_MONTHS[jm - 1]} {fa(jy)}</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => setCalOffset(o => o - 1)} style={actionBtn}>→ ماه قبل</button>
+                  <button onClick={() => setCalOffset(0)} style={{ ...actionBtn, color: 'var(--gold)', borderColor: 'var(--gold)' }}>امروز</button>
+                  <button onClick={() => setCalOffset(o => o + 1)} style={actionBtn}>ماه بعد ←</button>
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 6 }}>
+                {J_WEEK.map(w => <div key={w} style={{ textAlign: 'center', fontSize: 11.5, color: 'var(--muted)', fontWeight: 700, padding: '4px 0' }}>{w}</div>)}
+                {cells.map((c, i) => {
+                  if (!c) return <div key={i} />
+                  const key = `${jy}-${jm}-${c.jd}`
+                  const dayAppts = byDate[key] || []
+                  const isToday = key === todayKey
+                  return (
+                    <div key={i} style={{ minHeight: 78, borderRadius: 10, border: `1px solid ${isToday ? 'var(--gold)' : 'var(--line)'}`, background: isToday ? 'var(--goldDim)' : 'var(--bg)', padding: 6, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: isToday ? 'var(--gold)' : 'var(--text)', textAlign: 'left' }}>{fa(c.jd)}</div>
+                      {dayAppts.slice(0, 3).map(a => (
+                        <div key={a.id} title={`${a.client} · ${APPT_LABEL[a.type]}`} style={{ fontSize: 9.5, lineHeight: 1.5, padding: '1px 5px', borderRadius: 5, background: 'color-mix(in srgb,var(--gold) 18%,transparent)', color: 'var(--gold)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.client}</div>
+                      ))}
+                      {dayAppts.length > 3 && <div style={{ fontSize: 9, color: 'var(--muted)' }}>+{fa(dayAppts.length - 3)}</div>}
+                    </div>
+                  )
+                })}
+              </div>
+              <div style={{ marginTop: 14, fontSize: 11.5, color: 'var(--faint)' }}>قرارهای ثبت‌شده در بخش «قرارها» روی همین تقویم نمایش داده می‌شوند.</div>
+            </div>
+          })()}
+
           {/* COMMISSIONS */}
           {view === 'commissions' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ ...card, padding: 18 }}>
@@ -550,7 +638,7 @@ export default function ProsPage() {
                 <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>آدرس دقیق</label><input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="خیابان، کوچه، پلاک…" style={inputStyle} /></div>
                 <div>
                   <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>موقعیت روی نقشه — روی محل ملک بزنید (محله خودکار تشخیص داده می‌شود)</label>
-                  <LocationPicker lat={form.lat} lng={form.lng} onPick={r => setForm(f => ({ ...f, lat: r.lat, lng: r.lng, neighborhood: r.neighbourhood || f.neighborhood, city: r.city && !f.city ? r.city : f.city }))} />
+                  <LocationPicker lat={form.lat} lng={form.lng} onPick={r => setForm(f => ({ ...f, lat: r.lat, lng: r.lng, neighborhood: r.neighbourhood || f.neighborhood, city: r.city && !f.city ? r.city : f.city, address: r.address || f.address }))} />
                 </div>
               </>}
 
