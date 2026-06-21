@@ -3,7 +3,7 @@ import { getSession } from '@/app/lib/session'
 import {
   advisorStats, listLeads, listListings, listAppts, listCommissions,
   addLead, setLeadStage, deleteLead, addListing, setListingStatus, deleteListing,
-  addAppt, setApptStatus, setCommissionStatus, updateAdvisorProfile,
+  addAppt, setApptStatus, addCommission, deleteCommission, setCommissionStatus, updateAdvisorProfile,
 } from '@/app/lib/advisor-store'
 
 // همهٔ دادهٔ پنل مشاور، مخصوص کاربرِ واردشده (per-profile).
@@ -28,6 +28,8 @@ export async function POST(req: NextRequest) {
     case 'deleteListing': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); deleteListing(o, String(b.id)); return NextResponse.json({ ok: true })
     case 'addAppt': if (!b.client || !b.date) return NextResponse.json({ error: 'مشتری و تاریخ الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, appt: addAppt(o, { client: String(b.client), listingTitle: b.listingTitle, date: String(b.date), type: b.type }) })
     case 'setApptStatus': { const x = setApptStatus(o, String(b.id), b.status); return x ? NextResponse.json({ ok: true, appt: x }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
+    case 'addCommission': if (!b.dealTitle) return NextResponse.json({ error: 'عنوان معامله الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, commission: addCommission(o, { dealTitle: String(b.dealTitle), amount: Number(b.amount) || 0, date: b.date }) })
+    case 'deleteCommission': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); deleteCommission(o, String(b.id)); return NextResponse.json({ ok: true })
     case 'setCommissionStatus': { const c = setCommissionStatus(o, String(b.id), b.status); return c ? NextResponse.json({ ok: true, commission: c }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'updateProfile': return NextResponse.json({ ok: true, profile: updateAdvisorProfile(o, b.patch || {}) })
     default: return NextResponse.json({ error: 'عملیات نامعتبر' }, { status: 400 })

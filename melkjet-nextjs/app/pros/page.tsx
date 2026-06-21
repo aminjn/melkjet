@@ -95,6 +95,7 @@ export default function ProsPage() {
   const [nl, setNl] = useState({ name: '', phone: '', need: '', budget: '', source: '' })
   const [nf, setNf] = useState({ title: '', ptype: '', location: '', price: '', deal: 'sale' })
   const [na, setNa] = useState({ client: '', listingTitle: '', date: '', type: 'visit' })
+  const [nc, setNc] = useState({ dealTitle: '', amount: '' })
   const [prof, setProf] = useState({ name: '', agency: '' })
 
   const refresh = useCallback(async () => {
@@ -358,23 +359,34 @@ export default function ProsPage() {
           </div>}
 
           {/* COMMISSIONS */}
-          {view === 'commissions' && <div style={{ ...card, padding: 18 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-              <div style={{ fontWeight: 800, fontSize: 15 }}>کمیسیون‌ها</div>
-              <div style={{ fontSize: 13, color: 'var(--muted)' }}>در انتظار: <b style={{ color: 'var(--gold)' }}>{money(stats.kpis.pendingCommission)}</b> · پرداخت‌شده: <b style={{ color: '#34d399' }}>{money(stats.kpis.paidCommission)}</b></div>
-            </div>
-            {commissions.length ? commissions.map(c => (
-              <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 700 }}>{c.dealTitle}</div>
-                  <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{c.date}</div>
-                </div>
-                <div style={{ fontWeight: 800, color: 'var(--gold)', fontSize: 14 }}>{money(c.amount)}</div>
-                {c.status === 'pending'
-                  ? <button onClick={() => post({ action: 'setCommissionStatus', id: c.id, status: 'paid' })} style={{ ...actionBtn, color: '#34d399', borderColor: '#34d399' }}>علامت پرداخت</button>
-                  : <Pill label="پرداخت‌شده" color="#34d399" />}
+          {view === 'commissions' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ ...card, padding: 18 }}>
+              {sectionTitle('ثبت کمیسیون')}
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div style={{ flex: '2 1 200px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>عنوان معامله</label><input value={nc.dealTitle} onChange={e => setNc({ ...nc, dealTitle: e.target.value })} placeholder="مثلاً فروش آپارتمان جردن" style={inputStyle} /></div>
+                <div style={{ flex: '1 1 150px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>مبلغ کمیسیون (تومان)</label><input value={nc.amount} onChange={e => setNc({ ...nc, amount: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                <button disabled={busy || !nc.dealTitle.trim()} onClick={async () => { if (await post({ action: 'addCommission', dealTitle: nc.dealTitle.trim(), amount: Number(nc.amount) || 0 })) setNc({ dealTitle: '', amount: '' }) }} style={goldBtn}>افزودن</button>
               </div>
-            )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>کمیسیونی ثبت نشده.</div>}
+            </div>
+            <div style={{ ...card, padding: 18 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ fontWeight: 800, fontSize: 15 }}>کمیسیون‌ها</div>
+                <div style={{ fontSize: 13, color: 'var(--muted)' }}>در انتظار: <b style={{ color: 'var(--gold)' }}>{money(stats.kpis.pendingCommission)}</b> · پرداخت‌شده: <b style={{ color: '#34d399' }}>{money(stats.kpis.paidCommission)}</b></div>
+              </div>
+              {commissions.length ? commissions.map(c => (
+                <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700 }}>{c.dealTitle}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{c.date}</div>
+                  </div>
+                  <div style={{ fontWeight: 800, color: 'var(--gold)', fontSize: 14 }}>{money(c.amount)}</div>
+                  {c.status === 'pending'
+                    ? <button onClick={() => post({ action: 'setCommissionStatus', id: c.id, status: 'paid' })} style={{ ...actionBtn, color: '#34d399', borderColor: '#34d399' }}>علامت پرداخت</button>
+                    : <Pill label="پرداخت‌شده" color="#34d399" />}
+                  <button onClick={() => post({ action: 'deleteCommission', id: c.id })} style={{ ...actionBtn, color: '#ef4444' }}>حذف</button>
+                </div>
+              )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>کمیسیونی ثبت نشده.</div>}
+            </div>
           </div>}
 
           {/* SETTINGS */}

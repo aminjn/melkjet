@@ -147,6 +147,12 @@ export function setApptStatus(o: string, aid: string, status: ApptStatus): Appt 
 }
 
 // ---- Commissions ----
+export function addCommission(o: string, input: { dealTitle: string; amount: number; date?: string }): Commission {
+  let c!: Commission
+  mutate(o, a => { c = { id: id('cm_'), dealTitle: String(input.dealTitle || 'معامله'), amount: Number(input.amount) || 0, status: 'pending', date: input.date || new Date().toLocaleDateString('fa-IR'), createdAt: Date.now() }; a.commissions.unshift(c) })
+  return c
+}
+export function deleteCommission(o: string, cid: string) { mutate(o, a => { a.commissions = a.commissions.filter(c => c.id !== cid) }) }
 export function setCommissionStatus(o: string, cid: string, status: CommStatus): Commission | null {
   let res: Commission | null = null
   mutate(o, a => { const c = a.commissions.find(x => x.id === cid); if (!c) return; c.status = status; res = c })
