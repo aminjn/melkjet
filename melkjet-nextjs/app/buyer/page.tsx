@@ -19,7 +19,7 @@ interface AiMsg { id: string; role: 'user' | 'assistant'; text: string; createdA
 type VerifyStatus = 'none' | 'pending' | 'verified'
 interface Profile {
   name: string; email?: string; bio?: string
-  budget?: number; prefType?: string; dealType?: Deal
+  budget?: number; prefType?: string; dealType?: 'sale' | 'rent' | 'both'
   rooms?: number; areaMin?: number; areaMax?: number; areas?: string
   verifyStatus?: VerifyStatus
 }
@@ -67,7 +67,7 @@ const inputStyle: React.CSSProperties = { padding: '9px 11px', borderRadius: 9, 
 const actionBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap' }
 
 const VIEW_TITLES: Record<View, string> = {
-  dashboard: 'پنل خریدار', ai: 'دستیار هوشمند خرید', chat: 'چت با صاحب آگهی',
+  dashboard: 'پنل کاربری', ai: 'دستیار هوشمند', chat: 'چت با صاحب آگهی',
   favorites: 'علاقه‌مندی‌ها', searches: 'جستجوهای ذخیره‌شده',
   viewings: 'بازدیدهای من', offers: 'پیشنهادهای من', messages: 'پیام‌ها', profile: 'پروفایل من', settings: 'تنظیمات',
 }
@@ -156,7 +156,7 @@ export default function BuyerPage() {
   const [newSearch, setNewSearch] = useState({ query: '', ptype: '', area: '', priceMax: '', alerts: true })
   const [newViewing, setNewViewing] = useState({ propertyTitle: '', advisor: '', date: '' })
   const [newOffer, setNewOffer] = useState({ propertyTitle: '', amount: '' })
-  const [prof, setProf] = useState({ name: '', email: '', bio: '', budget: '', prefType: '', dealType: 'sale' as Deal, rooms: '', areaMin: '', areaMax: '', areas: '' })
+  const [prof, setProf] = useState({ name: '', email: '', bio: '', budget: '', prefType: '', dealType: 'sale' as 'sale' | 'rent' | 'both', rooms: '', areaMin: '', areaMax: '', areas: '' })
 
   // دستیار هوشمند
   const [aiInput, setAiInput] = useState('')
@@ -174,7 +174,7 @@ export default function BuyerPage() {
       const d = await r.json()
       setData(d); setUnauth(false)
       const p = d.profile || d.stats.profile || {}
-      setProf({ name: p.name || '', email: p.email || '', bio: p.bio || '', budget: String(p.budget || ''), prefType: p.prefType || '', dealType: p.dealType === 'rent' ? 'rent' : 'sale', rooms: String(p.rooms || ''), areaMin: String(p.areaMin || ''), areaMax: String(p.areaMax || ''), areas: p.areas || '' })
+      setProf({ name: p.name || '', email: p.email || '', bio: p.bio || '', budget: String(p.budget || ''), prefType: p.prefType || '', dealType: p.dealType === 'rent' ? 'rent' : p.dealType === 'both' ? 'both' : 'sale', rooms: String(p.rooms || ''), areaMin: String(p.areaMin || ''), areaMax: String(p.areaMax || ''), areas: p.areas || '' })
     } catch {} finally { setLoading(false) }
   }, [])
   useEffect(() => { refresh() }, [refresh])
@@ -242,12 +242,12 @@ export default function BuyerPage() {
     } catch {} finally { setDrafting(false) }
   }
 
-  if (loading) return <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT, fontSize: 15 }}>در حال بارگذاری پنل خریدار…</div>
+  if (loading) return <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT, fontSize: 15 }}>در حال بارگذاری پنل کاربری…</div>
   if (unauth || !data) return (
     <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT }}>
       <div style={{ ...card, padding: '40px 44px', textAlign: 'center', maxWidth: 380 }}>
         <div style={{ fontSize: 40, marginBottom: 14 }}>🔒</div>
-        <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>برای دسترسی به پنل خریدار وارد شوید</div>
+        <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>برای دسترسی به پنل کاربری وارد شوید</div>
         <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 22 }}>این پنل فقط برای کاربران واردشده در دسترس است.</div>
         <a href="/auth" style={{ display: 'inline-block', padding: '10px 28px', borderRadius: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 14, textDecoration: 'none' }}>ورود به حساب</a>
       </div>
@@ -271,7 +271,7 @@ export default function BuyerPage() {
             <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 6px 18px -6px var(--gold)', flexShrink: 0 }}>
               <div style={{ width: 13, height: 13, background: 'var(--bg)', transform: 'rotate(45deg)', borderRadius: 3 }} />
             </div>
-            <div><div style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-0.5px' }}>ملک‌جت</div><div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>پنل خریدار</div></div>
+            <div><div style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-0.5px' }}>ملک‌جت</div><div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>پنل کاربری</div></div>
           </div>
         </div>
         <nav style={{ padding: '10px 8px', flex: 1, overflowY: 'auto' }}>
@@ -303,10 +303,10 @@ export default function BuyerPage() {
           </a>
         </nav>
         <div style={{ padding: '12px 16px', borderTop: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 34, height: 34, borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#16140f', flexShrink: 0 }}>{stats.profile.name.trim().charAt(0) || 'خ'}</div>
+          <div style={{ width: 34, height: 34, borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#16140f', flexShrink: 0 }}>{stats.profile.name.trim().charAt(0) || 'ک'}</div>
           <div className="mjb-sidelabel" style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{stats.profile.name}</div>
-            <div style={{ fontSize: 11, color: 'var(--muted)' }}>خریدار</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>کاربر عادی</div>
           </div>
           <button onClick={toggleTheme} title="تغییر تم" style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--line)', color: 'var(--text)', cursor: 'pointer', fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{theme === 'dark' ? '☀' : '☾'}</button>
         </div>
@@ -605,10 +605,10 @@ export default function BuyerPage() {
             return <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 760 }}>
               {/* header card */}
               <div style={{ ...card, padding: 22, display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
-                <div style={{ width: 72, height: 72, borderRadius: 18, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, fontWeight: 800, color: '#16140f', flexShrink: 0 }}>{(prof.name.trim()[0]) || 'خ'}</div>
+                <div style={{ width: 72, height: 72, borderRadius: 18, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, fontWeight: 800, color: '#16140f', flexShrink: 0 }}>{(prof.name.trim()[0]) || 'ک'}</div>
                 <div style={{ flex: 1, minWidth: 160 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                    <div style={{ fontWeight: 800, fontSize: 19 }}>{prof.name || 'خریدار'}</div>
+                    <div style={{ fontWeight: 800, fontSize: 19 }}>{prof.name || 'کاربر عادی'}</div>
                     <Pill label={VERIFY_LABEL[vs]} color={VERIFY_COLOR[vs]} />
                   </div>
                   <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 4, direction: 'ltr', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace' }}>{data.phone}</div>
@@ -635,7 +635,7 @@ export default function BuyerPage() {
               <div style={{ ...card, padding: 18 }}>
                 {sectionTitle('ترجیحات خرید')}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 12 }}>
-                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع معامله</label><select value={prof.dealType} onChange={e => setProf({ ...prof, dealType: e.target.value as Deal })} style={inputStyle}><option value="sale">خرید</option><option value="rent">اجاره/رهن</option></select></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع معامله</label><select value={prof.dealType} onChange={e => setProf({ ...prof, dealType: e.target.value as 'sale' | 'rent' | 'both' })} style={inputStyle}><option value="sale">خرید</option><option value="rent">اجاره/رهن</option><option value="both">خرید و اجاره</option></select></div>
                   <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع ملک</label><select value={prof.prefType} onChange={e => setProf({ ...prof, prefType: e.target.value })} style={inputStyle}><option value="">—</option>{PTYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
                   <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>تعداد خواب</label><input value={prof.rooms} onChange={e => setProf({ ...prof, rooms: e.target.value.replace(/\D/g, '') })} placeholder="۲" style={inputStyle} /></div>
                   <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>متراژ از</label><input value={prof.areaMin} onChange={e => setProf({ ...prof, areaMin: e.target.value.replace(/\D/g, '') })} placeholder="۷۰" style={inputStyle} /></div>

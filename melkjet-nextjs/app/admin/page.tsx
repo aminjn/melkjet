@@ -2791,7 +2791,7 @@ interface Role { id: string; name: string; dashboard: string; planId?: string; p
 interface PermDef { id: string; label: string }
 
 const DASHBOARD_OPTIONS: { value: string; label: string }[] = [
-  { value: '/buyer', label: 'خریدار' },
+  { value: '/buyer', label: 'کاربر عادی' },
   { value: '/owner', label: 'مالک' },
   { value: '/pros', label: 'مشاور' },
   { value: '/agency', label: 'آژانس' },

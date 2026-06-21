@@ -10,7 +10,7 @@ type OtpStep = 'enter-phone' | 'enter-code' | 'onboard'
 
 const ROLE_ICONS: Record<string, string> = { '/buyer': '🔑', '/owner': '🏠', '/pros': '🤝', '/agency': '🏢', '/builder': '🏗', '/materials': '🧱', '/legal': '⚖' }
 const FALLBACK_ROLES = [
-  { id: 'خریدار / مستأجر', name: 'خریدار / مستأجر', dashboard: '/buyer' },
+  { id: 'کاربر عادی', name: 'کاربر عادی', dashboard: '/buyer' },
   { id: 'فروشنده / مالک', name: 'فروشنده / مالک', dashboard: '/owner' },
   { id: 'مشاور املاک', name: 'مشاور املاک', dashboard: '/pros' },
   { id: 'سازنده / انبوه‌ساز', name: 'سازنده / انبوه‌ساز', dashboard: '/builder' },

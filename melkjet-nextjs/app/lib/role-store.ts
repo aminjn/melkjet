@@ -18,7 +18,18 @@ export interface Role {
 type DB = { roles: Role[] }
 function id() { return randomBytes(5).toString('hex') }
 function load(): DB {
-  if (existsSync(FILE)) { try { return JSON.parse(readFileSync(FILE, 'utf-8')) } catch {} }
+  if (existsSync(FILE)) {
+    try {
+      const db: DB = JSON.parse(readFileSync(FILE, 'utf-8'))
+      // مهاجرت: تغییر نام نقشِ «خریدار / مستأجر» به «کاربر عادی» در دادهٔ موجود
+      let migrated = false
+      for (const r of db.roles || []) {
+        if (r.name === 'خریدار / مستأجر') { r.name = 'کاربر عادی'; migrated = true }
+      }
+      if (migrated) save(db)
+      return db
+    } catch {}
+  }
   const db: DB = { roles: defaults() }; save(db); return db
 }
 function save(db: DB) { writeFileSync(FILE, JSON.stringify(db, null, 2), 'utf-8') }
@@ -43,7 +54,7 @@ function defaults(): Role[] {
   const mk = (name: string, dashboard: string, permissions: string[]): Role =>
     ({ id: id(), name, dashboard, permissions, builtin: true, active: true, createdAt: t })
   return [
-    mk('خریدار / مستأجر', '/buyer', ['content']),
+    mk('کاربر عادی', '/buyer', ['content']),
     mk('فروشنده / مالک', '/owner', ['listings', 'analytics']),
     mk('سرمایه‌گذار', '/owner', ['analytics']),
     mk('مشاور املاک', '/pros', ['listings', 'crm', 'content', 'website']),

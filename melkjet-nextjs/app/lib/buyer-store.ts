@@ -36,9 +36,10 @@ export type AiRole = 'user' | 'assistant'
 export interface AiMsg { id: string; role: AiRole; text: string; createdAt: number }
 
 export type VerifyStatus = 'none' | 'pending' | 'verified'
+export type PrefDeal = 'sale' | 'rent' | 'both'
 export interface BuyerProfile {
   name: string; email?: string; bio?: string
-  budget?: number; prefType?: string; dealType?: DealType
+  budget?: number; prefType?: string; dealType?: PrefDeal
   rooms?: number; areaMin?: number; areaMax?: number; areas?: string
   verifyStatus?: VerifyStatus
 }
