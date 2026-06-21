@@ -34,6 +34,8 @@ export interface Conversation {
 // ── دستیار هوشمند خرید (گفتگو با AI) ──
 export type AiRole = 'user' | 'assistant'
 export interface AiMsg { id: string; role: AiRole; text: string; createdAt: number }
+// هر گفتگوی دستیار هوشمند جداگانه ذخیره می‌شود تا کاربر بعداً مرور کند.
+export interface AiChat { id: string; title: string; messages: AiMsg[]; createdAt: number; updatedAt: number }
 
 export type VerifyStatus = 'none' | 'pending' | 'verified'
 export type PrefDeal = 'sale' | 'rent' | 'both'
@@ -67,7 +69,7 @@ export interface BuyerData {
   offers: BOffer[]
   messages: BMessage[]
   conversations: Conversation[]
-  aiMessages: AiMsg[]
+  aiChats: AiChat[]
   createdAt: number
 }
 
@@ -120,8 +122,8 @@ function seed(): BuyerData {
       ],
     },
   ]
-  const aiMessages: AiMsg[] = []
-  return { profile: { name: 'کاربر ملک‌جت', email: '', bio: '', budget: 10000000000, prefType: 'آپارتمان', dealType: 'sale', rooms: 2, areaMin: 70, areaMax: 130, areas: 'شمال تهران', verifyStatus: 'none' }, settings: defaultSettings(), saved, searches, viewings, offers, messages, conversations, aiMessages, createdAt: now }
+  const aiChats: AiChat[] = []
+  return { profile: { name: 'کاربر ملک‌جت', email: '', bio: '', budget: 10000000000, prefType: 'آپارتمان', dealType: 'sale', rooms: 2, areaMin: 70, areaMax: 130, areas: 'شمال تهران', verifyStatus: 'none' }, settings: defaultSettings(), saved, searches, viewings, offers, messages, conversations, aiChats, createdAt: now }
 }
 
 export function getBuyer(o: string): BuyerData {
@@ -131,11 +133,25 @@ export function getBuyer(o: string): BuyerData {
   // backfill برای دادهٔ قدیمی‌تر
   let dirty = false
   if (!Array.isArray(b.conversations)) { b.conversations = seed().conversations; dirty = true }
-  if (!Array.isArray(b.aiMessages)) { b.aiMessages = []; dirty = true }
+  if (!Array.isArray(b.aiChats)) {
+    // مهاجرت: تبدیلِ aiMessages تخت قدیمی به یک گفتگو
+    const legacy = (b as unknown as { aiMessages?: AiMsg[] }).aiMessages
+    if (Array.isArray(legacy) && legacy.length) {
+      const now = Date.now()
+      b.aiChats = [{ id: id('ac_'), title: chatTitleFrom(legacy), messages: legacy, createdAt: legacy[0]?.createdAt || now, updatedAt: now }]
+    } else { b.aiChats = [] }
+    delete (b as unknown as { aiMessages?: AiMsg[] }).aiMessages
+    dirty = true
+  }
   if (!b.settings) { b.settings = defaultSettings(); dirty = true }
   if (b.profile && b.profile.verifyStatus === undefined) { b.profile.verifyStatus = 'none'; dirty = true }
   if (dirty) save(db)
   return b
+}
+// عنوانِ گفتگو از اولین پیامِ کاربر
+function chatTitleFrom(messages: AiMsg[]): string {
+  const first = messages.find(m => m.role === 'user')?.text || 'گفتگوی جدید'
+  return first.trim().slice(0, 40) || 'گفتگوی جدید'
 }
 function mutate(o: string, fn: (b: BuyerData) => void) { const db = load(); if (!db.buyers[o]) db.buyers[o] = seed(); fn(db.buyers[o]); save(db); return db.buyers[o] }
 
@@ -253,14 +269,37 @@ export function upsertPropertyConversation(o: string, input: { propertyId: strin
   return c
 }
 
-// ---- دستیار هوشمند (AI) ----
-export function listAiMessages(o: string): AiMsg[] { return getBuyer(o).aiMessages }
-export function addAiMessage(o: string, role: AiRole, text: string): AiMsg {
-  let c!: AiMsg
-  mutate(o, b => { c = { id: id('ai_'), role, text, createdAt: Date.now() }; b.aiMessages.push(c) })
+// ---- دستیار هوشمند (AI) — چند گفتگوی جداگانه ----
+export function listAiChats(o: string): AiChat[] {
+  return [...getBuyer(o).aiChats].sort((a, b) => b.updatedAt - a.updatedAt)
+}
+export function getAiChat(o: string, chatId: string): AiChat | null {
+  return getBuyer(o).aiChats.find(c => c.id === chatId) || null
+}
+export function newAiChat(o: string): AiChat {
+  let c!: AiChat
+  mutate(o, b => { const now = Date.now(); c = { id: id('ac_'), title: 'گفتگوی جدید', messages: [], createdAt: now, updatedAt: now }; b.aiChats.unshift(c) })
   return c
 }
-export function clearAiMessages(o: string) { mutate(o, b => { b.aiMessages = [] }) }
+// پیام را به گفتگو اضافه می‌کند؛ اگر chatId نبود، گفتگوی جدید می‌سازد.
+export function addAiChatMessage(o: string, chatId: string | undefined, role: AiRole, text: string): AiChat {
+  let res!: AiChat
+  mutate(o, b => {
+    let c = chatId ? b.aiChats.find(x => x.id === chatId) : undefined
+    if (!c) { const now = Date.now(); c = { id: id('ac_'), title: 'گفتگوی جدید', messages: [], createdAt: now, updatedAt: now }; b.aiChats.unshift(c) }
+    c.messages.push({ id: id('ai_'), role, text, createdAt: Date.now() })
+    if (role === 'user' && (c.title === 'گفتگوی جدید' || !c.title)) c.title = text.trim().slice(0, 40) || 'گفتگوی جدید'
+    c.updatedAt = Date.now()
+    res = c
+  })
+  return res
+}
+export function renameAiChat(o: string, chatId: string, title: string): AiChat | null {
+  let res: AiChat | null = null
+  mutate(o, b => { const c = b.aiChats.find(x => x.id === chatId); if (!c) return; c.title = String(title).trim().slice(0, 60) || c.title; res = c })
+  return res
+}
+export function deleteAiChat(o: string, chatId: string) { mutate(o, b => { b.aiChats = b.aiChats.filter(c => c.id !== chatId) }) }
 
 export function listSaved(o: string) { return getBuyer(o).saved }
 export function listSearches(o: string) { return getBuyer(o).searches }

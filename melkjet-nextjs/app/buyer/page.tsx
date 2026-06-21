@@ -16,6 +16,7 @@ interface Message { id: string; from: string; propertyTitle?: string; text: stri
 interface ChatMsg { id: string; from: 'buyer' | 'owner'; text: string; ai?: boolean; createdAt: number }
 interface Conversation { id: string; ownerName: string; propertyTitle: string; messages: ChatMsg[]; createdAt: number; updatedAt: number }
 interface AiMsg { id: string; role: 'user' | 'assistant'; text: string; createdAt: number }
+interface AiChat { id: string; title: string; messages: AiMsg[]; createdAt: number; updatedAt: number }
 type VerifyStatus = 'none' | 'pending' | 'verified'
 interface Profile {
   name: string; email?: string; bio?: string
@@ -37,7 +38,7 @@ interface Stats {
   upcoming: Viewing[]
   recentMessages: Message[]
 }
-interface BuyerData { stats: Stats; profile: Profile; settings: Settings; phone: string; saved: Saved[]; searches: Search[]; viewings: Viewing[]; offers: Offer[]; messages: Message[]; conversations: Conversation[]; aiMessages: AiMsg[] }
+interface BuyerData { stats: Stats; profile: Profile; settings: Settings; phone: string; saved: Saved[]; searches: Search[]; viewings: Viewing[]; offers: Offer[]; messages: Message[]; conversations: Conversation[]; aiChats: AiChat[] }
 
 type View = 'dashboard' | 'ai' | 'chat' | 'favorites' | 'searches' | 'viewings' | 'offers' | 'messages' | 'profile' | 'settings'
 
@@ -158,9 +159,10 @@ export default function BuyerPage() {
   const [newOffer, setNewOffer] = useState({ propertyTitle: '', amount: '' })
   const [prof, setProf] = useState({ name: '', email: '', bio: '', budget: '', prefType: '', dealType: 'sale' as 'sale' | 'rent' | 'both', rooms: '', areaMin: '', areaMax: '', areas: '' })
 
-  // دستیار هوشمند
+  // دستیار هوشمند (چند گفتگو)
   const [aiInput, setAiInput] = useState('')
   const [aiSending, setAiSending] = useState(false)
+  const [activeAiChat, setActiveAiChat] = useState<string | null>(null)
   // چت با صاحب آگهی
   const [activeConv, setActiveConv] = useState<string | null>(null)
   const [chatInput, setChatInput] = useState('')
@@ -194,18 +196,24 @@ export default function BuyerPage() {
     if (theme === 'dark') { html.classList.add('light'); setTheme('light') } else { html.classList.remove('light'); setTheme('dark') }
   }
 
-  // ── دستیار هوشمند ──
+  // ── دستیار هوشمند (چند گفتگو) ──
   const askAi = async (text: string) => {
     const t = text.trim(); if (!t || aiSending) return
     setAiInput(''); setAiSending(true)
     try {
-      const r = await fetch('/api/buyer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'aiAsk', text: t }) })
+      const r = await fetch('/api/buyer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'aiAsk', chatId: activeAiChat || undefined, text: t }) })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) { alert(d.error || 'خطا'); return }
+      if (d.chat?.id) setActiveAiChat(d.chat.id)
       await refresh()
     } catch { alert('اتصال برقرار نشد') } finally { setAiSending(false) }
   }
-  const clearAi = async () => { if (!confirm('گفتگوی دستیار پاک شود؟')) return; await post({ action: 'aiClear' }) }
+  const newAiChat = () => { setActiveAiChat(null); setAiInput('') }
+  const deleteAiChat = async (chatId: string) => {
+    if (!confirm('این گفتگو حذف شود؟')) return
+    if (activeAiChat === chatId) setActiveAiChat(null)
+    await post({ action: 'aiDeleteChat', id: chatId })
+  }
 
   // ── تنظیمات ──
   const setSetting = async (key: string, value: boolean | string) => {
@@ -254,8 +262,10 @@ export default function BuyerPage() {
     </div>
   )
 
-  const { stats, saved, searches, viewings, offers, messages, conversations, aiMessages } = data
+  const { stats, saved, searches, viewings, offers, messages, conversations, aiChats } = data
   const currentConv = conversations.find(c => c.id === activeConv) || null
+  const currentAiChat = aiChats.find(c => c.id === activeAiChat) || null
+  const aiThread = currentAiChat?.messages || []
   const q = search.trim()
   const savedFiltered = q ? saved.filter(s => (s.title + s.location + s.ptype).includes(q)) : saved
   const sectionTitle = (t: string) => <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 12 }}>{t}</div>
@@ -387,46 +397,67 @@ export default function BuyerPage() {
             </div>
           </div>}
 
-          {/* ─── AI ASSISTANT ─── */}
-          {view === 'ai' && <div style={{ display: 'flex', flexDirection: 'column', gap: 14, height: '100%', maxWidth: 860, margin: '0 auto', width: '100%' }}>
-            <div style={{ ...card, padding: 18, display: 'flex', alignItems: 'center', gap: 12, background: 'linear-gradient(135deg, color-mix(in srgb,var(--gold) 16%,var(--surface)), var(--surface) 75%)', border: '1px solid color-mix(in srgb,var(--gold) 35%,transparent)' }}>
-              <div style={{ width: 44, height: 44, borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>✨</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 900, fontSize: 16 }}>دستیار هوشمند خرید ملک</div>
-                <div style={{ fontSize: 12, color: 'var(--muted)' }}>مشاور AI شخصیِ تو — بر اساس بودجه و سلیقه‌ات پاسخ می‌دهد</div>
+          {/* ─── AI ASSISTANT (multi-chat) ─── */}
+          {view === 'ai' && <div className="mjb-cols" style={{ display: 'flex', gap: 16, height: '100%' }}>
+            {/* chat history list */}
+            <div style={{ ...card, padding: 14, flex: '0 0 250px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <button onClick={newAiChat} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px', borderRadius: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 13.5, border: 'none', cursor: 'pointer', fontFamily: FONT }}>＋ گفتگوی جدید</button>
+              <div style={{ fontSize: 11.5, color: 'var(--faint)', padding: '2px 4px' }}>گفتگوهای گذشته</div>
+              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {aiChats.map(c => (
+                  <div key={c.id} onClick={() => setActiveAiChat(c.id)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 11px', borderRadius: 10, border: '1px solid var(--line)', background: activeAiChat === c.id ? 'var(--goldDim)' : 'var(--bg)', cursor: 'pointer' }}>
+                    <span style={{ fontSize: 13, flexShrink: 0 }}>✨</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: activeAiChat === c.id ? 'var(--gold)' : 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.title}</div>
+                      <div style={{ fontSize: 10.5, color: 'var(--faint)' }}>{faDate(c.updatedAt)} · {fa(c.messages.length)} پیام</div>
+                    </div>
+                    <button onClick={e => { e.stopPropagation(); deleteAiChat(c.id) }} title="حذف" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--faint)', fontSize: 14, flexShrink: 0, padding: 2 }}>×</button>
+                  </div>
+                ))}
+                {aiChats.length === 0 && <div style={{ color: 'var(--faint)', fontSize: 12, textAlign: 'center', padding: '16px 0' }}>هنوز گفتگویی نداری.</div>}
               </div>
-              {aiMessages.length > 0 && <button onClick={clearAi} style={actionBtn}>پاک کردن گفتگو</button>}
             </div>
 
-            <div style={{ ...card, padding: 18, flex: 1, minHeight: 320, display: 'flex', flexDirection: 'column', gap: 12, overflowY: 'auto' }}>
-              {aiMessages.length === 0 ? (
-                <div style={{ margin: 'auto', textAlign: 'center', maxWidth: 460 }}>
-                  <div style={{ fontSize: 38, marginBottom: 10 }}>🏡✨</div>
-                  <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 6 }}>چطور می‌تونم کمکت کنم؟</div>
-                  <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 18, lineHeight: 1.8 }}>یکی از پیشنهادهای زیر را بزن یا سؤالت را تایپ کن.</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {AI_SUGGESTIONS.map(s => (
-                      <button key={s} onClick={() => askAi(s)} disabled={aiSending} style={{ ...actionBtn, textAlign: 'right', padding: '11px 14px', background: 'var(--bg)', color: 'var(--text)', borderColor: 'color-mix(in srgb,var(--gold) 25%,transparent)' }}>{s}</button>
-                    ))}
-                  </div>
+            {/* active thread */}
+            <div style={{ ...card, padding: 0, flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 11, background: 'linear-gradient(135deg, color-mix(in srgb,var(--gold) 12%,var(--surface)), var(--surface) 80%)' }}>
+                <div style={{ width: 38, height: 38, borderRadius: 11, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, flexShrink: 0 }}>✨</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 800, fontSize: 14.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{currentAiChat ? currentAiChat.title : 'دستیار هوشمند ملک‌جت'}</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>مشاور AI شخصیِ تو — بر اساس بودجه و سلیقه‌ات</div>
                 </div>
-              ) : aiMessages.map(m => (
-                <div key={m.id} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-start' : 'flex-end' }}>
-                  <div style={{ maxWidth: '82%', padding: '11px 14px', borderRadius: 14, fontSize: 13.5, lineHeight: 1.85, whiteSpace: 'pre-wrap', ...(m.role === 'user'
-                    ? { background: 'var(--bg2)', border: '1px solid var(--line)', borderTopRightRadius: 4 }
-                    : { background: 'linear-gradient(135deg, color-mix(in srgb,var(--gold) 18%,var(--surface)), var(--surface))', border: '1px solid color-mix(in srgb,var(--gold) 30%,transparent)', borderTopLeftRadius: 4 }) }}>
-                    {m.role === 'assistant' && <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gold)', marginBottom: 5 }}>✨ دستیار هوشمند</div>}
-                    {m.text}
-                  </div>
-                </div>
-              ))}
-              {aiSending && <div style={{ alignSelf: 'flex-end', fontSize: 12.5, color: 'var(--gold)', padding: '6px 4px' }}>✨ در حال فکر کردن…</div>}
-            </div>
+              </div>
 
-            <form onSubmit={e => { e.preventDefault(); askAi(aiInput) }} style={{ display: 'flex', gap: 8 }}>
-              <input value={aiInput} onChange={e => setAiInput(e.target.value)} placeholder="سؤالت را بنویس…" style={{ ...inputStyle, flex: 1 }} />
-              <button type="submit" disabled={aiSending || !aiInput.trim()} style={{ padding: '9px 22px', borderRadius: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 14, border: 'none', cursor: aiSending ? 'default' : 'pointer', fontFamily: FONT, opacity: aiSending || !aiInput.trim() ? .6 : 1 }}>ارسال</button>
-            </form>
+              <div style={{ flex: 1, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 12, minHeight: 320 }}>
+                {aiThread.length === 0 ? (
+                  <div style={{ margin: 'auto', textAlign: 'center', maxWidth: 460 }}>
+                    <div style={{ fontSize: 38, marginBottom: 10 }}>🏡✨</div>
+                    <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 6 }}>چطور می‌تونم کمکت کنم؟</div>
+                    <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 18, lineHeight: 1.8 }}>یکی از پیشنهادهای زیر را بزن یا سؤالت را تایپ کن. هر گفتگو جداگانه ذخیره می‌شود.</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {AI_SUGGESTIONS.map(s => (
+                        <button key={s} onClick={() => askAi(s)} disabled={aiSending} style={{ ...actionBtn, textAlign: 'right', padding: '11px 14px', background: 'var(--bg)', color: 'var(--text)', borderColor: 'color-mix(in srgb,var(--gold) 25%,transparent)' }}>{s}</button>
+                      ))}
+                    </div>
+                  </div>
+                ) : aiThread.map(m => (
+                  <div key={m.id} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-start' : 'flex-end' }}>
+                    <div style={{ maxWidth: '82%', padding: '11px 14px', borderRadius: 14, fontSize: 13.5, lineHeight: 1.85, whiteSpace: 'pre-wrap', ...(m.role === 'user'
+                      ? { background: 'var(--bg2)', border: '1px solid var(--line)', borderTopRightRadius: 4 }
+                      : { background: 'linear-gradient(135deg, color-mix(in srgb,var(--gold) 18%,var(--surface)), var(--surface))', border: '1px solid color-mix(in srgb,var(--gold) 30%,transparent)', borderTopLeftRadius: 4 }) }}>
+                      {m.role === 'assistant' && <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gold)', marginBottom: 5 }}>✨ دستیار هوشمند</div>}
+                      {m.text}
+                    </div>
+                  </div>
+                ))}
+                {aiSending && <div style={{ alignSelf: 'flex-end', fontSize: 12.5, color: 'var(--gold)', padding: '6px 4px' }}>✨ در حال فکر کردن…</div>}
+              </div>
+
+              <form onSubmit={e => { e.preventDefault(); askAi(aiInput) }} style={{ padding: 14, borderTop: '1px solid var(--line)', display: 'flex', gap: 8 }}>
+                <input value={aiInput} onChange={e => setAiInput(e.target.value)} placeholder="سؤالت را بنویس…" style={{ ...inputStyle, flex: 1 }} />
+                <button type="submit" disabled={aiSending || !aiInput.trim()} style={{ padding: '9px 22px', borderRadius: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 14, border: 'none', cursor: aiSending ? 'default' : 'pointer', fontFamily: FONT, opacity: aiSending || !aiInput.trim() ? .6 : 1 }}>ارسال</button>
+              </form>
+            </div>
           </div>}
 
           {/* ─── CHAT WITH OWNER ─── */}

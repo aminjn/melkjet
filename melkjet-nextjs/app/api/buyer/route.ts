@@ -6,7 +6,7 @@ import {
   addViewing, setViewingStatus, addOffer, withdrawOffer, markMessageRead, markAllRead, updateBuyerProfile,
   getBuyerSettings, updateBuyerSettings, requestVerification,
   getBuyer, listConversations, startConversation, addChatMessage, getConversation,
-  upsertPropertyConversation, listAiMessages, addAiMessage, clearAiMessages,
+  upsertPropertyConversation, listAiChats, getAiChat, newAiChat, addAiChatMessage, renameAiChat, deleteAiChat,
 } from '@/app/lib/buyer-store'
 import { agentModel, chatCompleteSafe } from '@/app/lib/gapgpt'
 
@@ -60,7 +60,7 @@ export async function GET() {
     offers: listOffers(o),
     messages: listMessages(o),
     conversations: listConversations(o),
-    aiMessages: listAiMessages(o),
+    aiChats: listAiChats(o),
   })
 }
 
@@ -114,22 +114,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, conversation: getConversation(o, conv.id) })
     }
 
-    // ── دستیار هوشمند ──
+    // ── دستیار هوشمند (چند گفتگو) ──
     case 'aiAsk': {
       const text = String(b.text || '').trim()
       if (!text) return NextResponse.json({ error: 'پیام خالی است' }, { status: 400 })
-      addAiMessage(o, 'user', text)
-      const history = listAiMessages(o).slice(-10).map(m => ({ role: m.role, content: m.text }))
+      // پیامِ کاربر را در گفتگوی جاری (یا گفتگوی جدید) ثبت می‌کنیم
+      const chat = addAiChatMessage(o, b.chatId ? String(b.chatId) : undefined, 'user', text)
+      const history = chat.messages.slice(-12).map(m => ({ role: m.role, content: m.text }))
       const sys = {
         role: 'system',
-        content: `تو «دستیار هوشمند خرید ملکِ ملک‌جت» هستی؛ یک مشاور املاک خبره، صادق و فارسی‌زبان. به خریدار کمک می‌کنی ملک مناسب پیدا کند، قیمت منصفانه را تشخیص دهد، در مذاکره برنده شود و ریسک‌ها (سند، مجوز، کیفیت ساخت) را بشناسد. کوتاه، دقیق و کاربردی پاسخ بده؛ از تیتر و فهرست استفاده کن. اگر اطلاعاتِ لازم نیست، یک سؤالِ روشن‌کننده بپرس. مشخصاتِ این خریدار: ${buyerContext(o)}`,
+        content: `تو «دستیار هوشمند ملکِ ملک‌جت» هستی؛ یک مشاور املاک خبره، صادق و فارسی‌زبان. به کاربر کمک می‌کنی ملک مناسب (خرید یا اجاره) پیدا کند، قیمت منصفانه را تشخیص دهد، در مذاکره برنده شود و ریسک‌ها (سند، مجوز، کیفیت ساخت) را بشناسد. کوتاه، دقیق و کاربردی پاسخ بده؛ از تیتر و فهرست استفاده کن. اگر اطلاعاتِ لازم نیست، یک سؤالِ روشن‌کننده بپرس. مشخصاتِ این کاربر: ${buyerContext(o)}`,
       }
       const out = await aiSafe([sys, ...history])
       const answer = out || 'دستیار هوشمند فعلاً در دسترس نیست (کلید سرویس AI در پنل مدیریت تنظیم نشده). لطفاً بعداً تلاش کنید.'
-      const saved = addAiMessage(o, 'assistant', answer)
-      return NextResponse.json({ ok: true, reply: saved, aiMessages: listAiMessages(o), degraded: !out })
+      addAiChatMessage(o, chat.id, 'assistant', answer)
+      return NextResponse.json({ ok: true, chat: getAiChat(o, chat.id), chats: listAiChats(o), degraded: !out })
     }
-    case 'aiClear': clearAiMessages(o); return NextResponse.json({ ok: true })
+    case 'aiNewChat': { const c = newAiChat(o); return NextResponse.json({ ok: true, chat: c, chats: listAiChats(o) }) }
+    case 'aiRenameChat': { const c = renameAiChat(o, String(b.id), String(b.title || '')); return c ? NextResponse.json({ ok: true, chat: c }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
+    case 'aiDeleteChat': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); deleteAiChat(o, String(b.id)); return NextResponse.json({ ok: true, chats: listAiChats(o) })
     case 'aiDraft': {
       // پیشنهادِ متنِ پیام برای تماس با صاحب آگهی
       const title = String(b.propertyTitle || 'این ملک')
