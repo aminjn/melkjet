@@ -2812,6 +2812,16 @@ function RolesView() {
   const [editing, setEditing] = useState<string | null>(null)
   const [form, setForm] = useState<{ name: string; dashboard: string; planId: string; permissions: string[] }>({ name: '', dashboard: '/buyer', planId: '', permissions: [] })
 
+  // «مشاهدهٔ پنلِ نقش» (پیش‌نمایش با دادهٔ نمونه) — برای دیباگ بدون نیاز به کاربرِ واقعی.
+  const [previewing, setPreviewing] = useState<string | null>(null)
+  const previewRole = async (roleId: string) => {
+    setPreviewing(roleId)
+    const r = await fetch('/api/admin/impersonate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role: roleId }) })
+    const d = await r.json().catch(() => ({}))
+    if (r.ok && d.ok) { window.location.href = d.dashboard || '/' }
+    else { alert(d.error || 'ورود به پنل ناموفق بود'); setPreviewing(null) }
+  }
+
   const load = async () => {
     setLoading(true)
     const [rr, pr] = await Promise.all([
@@ -2927,6 +2937,7 @@ function RolesView() {
                       <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{role.active ? 'فعال' : 'غیرفعال'}</span>
                       <Toggle on={role.active} onChange={v => patch(role.id, { active: v })} />
                     </div>
+                    <button title="ورود به پنل این نقش با دادهٔ نمونه (دیباگ)" onClick={() => previewRole(role.id)} disabled={previewing === role.id} style={{ background: 'var(--goldDim)', border: '1px solid var(--gold)', color: 'var(--gold)', borderRadius: 8, padding: '5px 12px', cursor: previewing === role.id ? 'default' : 'pointer', fontFamily: 'inherit', fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap', opacity: previewing === role.id ? .6 : 1 }}>{previewing === role.id ? 'در حال ورود…' : '👁 مشاهدهٔ پنل'}</button>
                     <OutlineButton onClick={() => setEditing(editing === role.id ? null : role.id)} style={{ fontSize: 11.5, padding: '5px 12px' }}>{editing === role.id ? 'بستن' : 'ویرایش'}</OutlineButton>
                     <button title={role.builtin ? 'نقش پایه قابل حذف نیست' : 'حذف'} onClick={() => del(role)} disabled={role.builtin} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.35)', color: role.builtin ? 'var(--faint)' : '#e7674a', borderRadius: 8, padding: '5px 9px', cursor: role.builtin ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontSize: 13, opacity: role.builtin ? .5 : 1 }}>{role.builtin ? '🔒' : '×'}</button>
                   </div>
