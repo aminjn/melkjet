@@ -3,6 +3,7 @@ import './globals.css'
 import BottomNav from './components/BottomNav'
 import PWAInstall from './components/PWAInstall'
 import SessionKeeper from './components/SessionKeeper'
+import ImpersonationBar from './components/ImpersonationBar'
 
 export const metadata: Metadata = {
   title: 'ملک‌جت - اکوسیستم هوشمند املاک',
@@ -47,6 +48,7 @@ export default function RootLayout({
       <body style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
         <SessionKeeper />
         {children}
+        <ImpersonationBar />
         <BottomNav />
         <PWAInstall />
       </body>

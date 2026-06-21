@@ -2601,6 +2601,16 @@ function ProfilesView() {
     setDetailLoading(false)
   }
 
+  // «ورود به پنل کاربر» (impersonation): از این پس همهٔ داشبوردها دادهٔ این کاربر را نشان می‌دهند.
+  const [entering, setEntering] = useState(false)
+  const enterPanel = async (phone: string, dashboard: string) => {
+    setEntering(true)
+    const r = await fetch('/api/admin/impersonate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) })
+    const d = await r.json().catch(() => ({}))
+    if (r.ok && d.ok) { window.location.href = d.dashboard || dashboard || '/' }
+    else { alert(d.error || 'ورود به پنل ناموفق بود'); setEntering(false) }
+  }
+
   const filtered = rows.filter(u => {
     if (q.trim()) { const t = q.trim(); if (!(u.phone.includes(t) || (u.name || '').includes(t))) return false }
     if (roleFilter && u.role !== roleFilter) return false
@@ -2709,9 +2719,21 @@ function ProfilesView() {
                   <Badge label={`داشبورد: ${detail.account.dashboard}`} color="var(--gold)" />
                 </div>
 
-                <div style={{ fontSize: 12, color: 'var(--muted)', display: 'flex', gap: 18, marginBottom: 20 }}>
+                <div style={{ fontSize: 12, color: 'var(--muted)', display: 'flex', gap: 18, marginBottom: 16 }}>
                   <span>عضویت: {new Date(detail.account.createdAt).toLocaleDateString('fa-IR')}</span>
                   <span>آخرین ورود: {timeAgo(detail.account.lastLogin)}</span>
+                </div>
+
+                <button onClick={() => enterPanel(detail.account.phone, detail.account.dashboard)} disabled={entering} style={{
+                  width: '100%', padding: '12px 0', borderRadius: 12, fontWeight: 800, fontSize: 14.5,
+                  cursor: entering ? 'default' : 'pointer', border: 'none', marginBottom: 22,
+                  background: 'linear-gradient(135deg, var(--gold2), var(--gold))', color: '#1a1200',
+                  boxShadow: '0 6px 20px -8px var(--gold)', opacity: entering ? .6 : 1,
+                }}>
+                  {entering ? 'در حال ورود…' : `👁 ورود به پنل این کاربر (${detail.account.dashboard})`}
+                </button>
+                <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: -14, marginBottom: 20, lineHeight: 1.7 }}>
+                  با این گزینه دقیقاً همان چیزی را می‌بینید که این کاربر در پنل خود می‌بیند (برای دیباگ). یک نوار «خروج» پایین صفحه ظاهر می‌شود تا به ادمین برگردید.
                 </div>
 
                 {detail.kpis.length > 0 && (
