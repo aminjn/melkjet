@@ -18,7 +18,7 @@ const empty = (): Omit<Article, 'id' | 'author' | 'updatedAt'> & { id?: string }
 
 const DEFAULT_CATS = ['راهنمای خرید', 'راهنمای اجاره', 'تحلیل بازار', 'سرمایه‌گذاری', 'حقوقی', 'وام و تسهیلات', 'معماری و دکوراسیون', 'اخبار']
 
-export default function ArticleEditor({ compact }: { compact?: boolean }) {
+export default function ArticleEditor({ compact, author }: { compact?: boolean; author?: string }) {
   const [tab, setTab] = useState<'list' | 'edit'>('list')
   const [articles, setArticles] = useState<Article[]>([])
   const [f, setF] = useState(empty())
@@ -49,7 +49,7 @@ export default function ArticleEditor({ compact }: { compact?: boolean }) {
   const save = async (status: 'draft' | 'published') => {
     if (!f.title.trim() || !f.body.trim()) { setMsg('⚠ عنوان و متن مقاله الزامی است'); return }
     setBusy('save'); setMsg('')
-    const payload = { ...f, status }
+    const payload = { ...f, status, ...(author ? { author } : {}) }
     try {
       let res
       if (f.id) res = await fetch('/api/cms', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })

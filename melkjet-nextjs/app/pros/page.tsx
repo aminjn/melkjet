@@ -3,6 +3,9 @@ import { useState, useEffect, useCallback } from 'react'
 import AssistantPanel from '@/app/components/AssistantPanel'
 import CrmTool, { CRM_VIEWS, type CrmView } from '@/app/components/tools/CrmTool'
 import MarketingTool, { MARKETING_VIEWS, type MarketingView } from '@/app/components/tools/MarketingTool'
+import WorkflowTool from '@/app/components/tools/WorkflowTool'
+import WebsiteBuilderTool from '@/app/components/tools/WebsiteBuilderTool'
+import ArticleEditor from '@/app/components/ArticleEditor'
 import LocationPicker from '@/app/components/LocationPicker'
 
 // درختِ جغرافیاییِ سایت (استان → شهر → منطقه → محله)
@@ -39,7 +42,7 @@ interface Stats {
 }
 interface AdvisorData { stats: Stats; leads: Lead[]; listings: Listing[]; appts: Appt[]; commissions: Commission[] }
 
-type View = 'dashboard' | 'assistant' | 'leads' | 'listings' | 'appts' | 'calendar' | 'commissions' | 'settings'
+type View = 'dashboard' | 'assistant' | 'leads' | 'listings' | 'articles' | 'appts' | 'calendar' | 'commissions' | 'settings'
 
 // ════════ Helpers ════════
 const FONT = 'Vazirmatn, system-ui, sans-serif'
@@ -73,12 +76,13 @@ const inputStyle: React.CSSProperties = { padding: '9px 11px', borderRadius: 9, 
 const actionBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap' }
 const goldBtn: React.CSSProperties = { padding: '9px 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }
 
-const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد مشاور', assistant: 'دستیار هوشمند', leads: 'لیدها و پایپ‌لاین', listings: 'فایل‌های من', appts: 'قرارها و بازدیدها', calendar: 'تقویم', commissions: 'کمیسیون', settings: 'تنظیمات' }
+const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد مشاور', assistant: 'دستیار هوشمند', leads: 'لیدها و پایپ‌لاین', listings: 'فایل‌های من', articles: 'مقالات و وبلاگ', appts: 'قرارها و بازدیدها', calendar: 'تقویم', commissions: 'کمیسیون', settings: 'تنظیمات' }
 const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'leads' | 'appts' }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: '▦' },
   { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
   { id: 'leads', label: 'لیدها', icon: '◎', badge: 'leads' },
   { id: 'listings', label: 'فایل‌های من', icon: '◫' },
+  { id: 'articles', label: 'مقالات', icon: '✎' },
   { id: 'appts', label: 'قرارها', icon: '◉', badge: 'appts' },
   { id: 'calendar', label: 'تقویم', icon: '🗓' },
   { id: 'commissions', label: 'کمیسیون', icon: '﷼' },
@@ -106,11 +110,6 @@ function normJDate(s: string): string {
   const m = latin.match(/(\d{3,4})\D+(\d{1,2})\D+(\d{1,2})/)
   return m ? `${Number(m[1])}-${Number(m[2])}-${Number(m[3])}` : ''
 }
-// ابزارهای جاسازی‌شده در پنل (داخل همین صفحه باز می‌شوند، نه جای دیگر)
-const NAV_LINKS = [
-  { href: '/workflow', label: 'اتوماسیون', icon: '⛭' },
-  { href: '/website-builder', label: 'وب‌سایت‌ساز', icon: '◳' },
-]
 
 function Pill({ label, color }: { label: string; color: string }) {
   return <span style={{ fontSize: 11, fontWeight: 600, color, background: `color-mix(in srgb, ${color} 16%, transparent)`, padding: '3px 10px', borderRadius: 7, whiteSpace: 'nowrap' }}>{label}</span>
@@ -132,9 +131,11 @@ export default function ProsPage() {
   const [crmOpen, setCrmOpen] = useState(false)
   const [mktView, setMktView] = useState<MarketingView | null>(null)
   const [mktOpen, setMktOpen] = useState(false)
-  const goView = (v: View) => { setView(v); setCrmView(null); setMktView(null) }
-  const openCrm = (v: CrmView) => { setCrmView(v); setMktView(null); setCrmOpen(true) }
-  const openMkt = (v: MarketingView) => { setMktView(v); setCrmView(null); setMktOpen(true) }
+  const [embeddedTool, setEmbeddedTool] = useState<'workflow' | 'website' | null>(null)
+  const goView = (v: View) => { setView(v); setCrmView(null); setMktView(null); setEmbeddedTool(null) }
+  const openCrm = (v: CrmView) => { setCrmView(v); setMktView(null); setEmbeddedTool(null); setCrmOpen(true) }
+  const openMkt = (v: MarketingView) => { setMktView(v); setCrmView(null); setEmbeddedTool(null); setMktOpen(true) }
+  const openTool = (t: 'workflow' | 'website') => { setEmbeddedTool(t); setCrmView(null); setMktView(null) }
   const [data, setData] = useState<AdvisorData | null>(null)
   const [loading, setLoading] = useState(true)
   const [unauth, setUnauth] = useState(false)
@@ -263,7 +264,7 @@ export default function ProsPage() {
         </div>
         <nav style={{ padding: '10px 8px', flex: 1, overflowY: 'auto' }}>
           {NAV_ITEMS.map(item => {
-            const active = view === item.id && !crmView && !mktView
+            const active = view === item.id && !crmView && !mktView && !embeddedTool
             const badge = item.badge === 'leads' ? stats.kpis.activeLeads : item.badge === 'appts' ? stats.kpis.upcomingAppts : 0
             return (
               <button key={item.id} onClick={() => goView(item.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: active ? 'var(--goldDim)' : 'transparent', color: active ? 'var(--gold)' : 'var(--muted)', fontWeight: active ? 700 : 500, fontSize: 14, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
@@ -307,12 +308,16 @@ export default function ProsPage() {
             )
           })}
 
-          {NAV_LINKS.map(l => (
-            <a key={l.href} href={l.href} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, color: 'var(--muted)', textDecoration: 'none', fontWeight: 500, fontSize: 14, marginBottom: 2, fontFamily: FONT }}>
-              <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: 0.7 }}>{l.icon}</span>
-              <span className="mjp-sidelabel" style={{ flex: 1 }}>{l.label}</span>
-            </a>
-          ))}
+          {/* اتوماسیون و وب‌سایت‌ساز — داخل همین پنل باز می‌شوند */}
+          {([['workflow', '⛭', 'اتوماسیون'], ['website', '◳', 'وب‌سایت‌ساز']] as const).map(([t, icon, label]) => {
+            const on = embeddedTool === t
+            return (
+              <button key={t} onClick={() => openTool(t)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: on ? 'var(--goldDim)' : 'transparent', color: on ? 'var(--gold)' : 'var(--muted)', fontWeight: on ? 700 : 500, fontSize: 14, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
+                <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: on ? 1 : 0.7 }}>{icon}</span>
+                <span className="mjp-sidelabel" style={{ flex: 1 }}>{label}</span>
+              </button>
+            )
+          })}
         </nav>
         <div style={{ padding: '12px 16px', borderTop: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 34, height: 34, borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#16140f', flexShrink: 0 }}>{stats.profile.name.trim().charAt(0) || 'م'}</div>
@@ -327,14 +332,18 @@ export default function ProsPage() {
       {/* MAIN */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 22px', borderBottom: '1px solid var(--line)', position: 'sticky', top: 0, background: 'var(--navbg)', backdropFilter: 'blur(18px)', zIndex: 20, flexWrap: 'wrap' }}>
-          <div style={{ fontWeight: 800, fontSize: 18 }}>{crmView ? `CRM · ${CRM_VIEWS.find(v => v.id === crmView)?.label || ''}` : mktView ? `مارکتینگ · ${MARKETING_VIEWS.find(v => v.id === mktView)?.label || ''}` : VIEW_TITLES[view]}</div>
+          <div style={{ fontWeight: 800, fontSize: 18 }}>{crmView ? `CRM · ${CRM_VIEWS.find(v => v.id === crmView)?.label || ''}` : mktView ? `مارکتینگ · ${MARKETING_VIEWS.find(v => v.id === mktView)?.label || ''}` : embeddedTool === 'workflow' ? 'اتوماسیون' : embeddedTool === 'website' ? 'وب‌سایت‌ساز' : VIEW_TITLES[view]}</div>
           <div style={{ flex: 1 }} />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="جستجوی لید، مشتری…" style={{ ...inputStyle, width: 220, maxWidth: '40vw' }} />
           <button onClick={() => goView('leads')} style={{ ...goldBtn, padding: '9px 16px' }}>+ لید جدید</button>
         </header>
 
         <main style={{ padding: 22, flex: 1, overflowY: 'auto' }}>
-          {crmView ? <CrmTool embedded view={crmView} onView={v => setCrmView(v)} /> : mktView ? <MarketingTool embedded view={mktView} onView={v => setMktView(v)} /> : <>
+          {crmView ? <CrmTool embedded view={crmView} onView={v => setCrmView(v)} />
+            : mktView ? <MarketingTool embedded view={mktView} onView={v => setMktView(v)} />
+            : embeddedTool === 'workflow' ? <div style={{ height: 'calc(100vh - 130px)' }}><WorkflowTool embedded /></div>
+            : embeddedTool === 'website' ? <div style={{ height: 'calc(100vh - 130px)' }}><WebsiteBuilderTool embedded /></div>
+            : <>
           {/* DASHBOARD */}
           {view === 'dashboard' && <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
@@ -478,6 +487,16 @@ export default function ProsPage() {
               </div>
             ) : <div style={{ ...card, padding: 40, textAlign: 'center', color: 'var(--faint)', fontSize: 13 }}>هنوز فایلی ثبت نکرده‌ای — روی «افزودن فایل» بزن.</div>}
           </div>}
+
+          {/* ARTICLES (CMS) */}
+          {view === 'articles' && (
+            <div>
+              <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.7 }}>
+                مقاله‌ای که با نام شما («{stats.profile.name || 'مشاور'}») منتشر می‌شود، در صفحهٔ مقاله به‌صورت خودکار به آگهی‌های شما لینک می‌شود (سئو).
+              </div>
+              <ArticleEditor compact author={stats.profile.name || undefined} />
+            </div>
+          )}
 
           {/* APPOINTMENTS */}
           {view === 'appts' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
