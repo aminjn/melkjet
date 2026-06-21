@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
+import { addUserListing, deleteItem, getItemById } from './scraper-store'
 
 // استور پنل «مشاور املاک» — per-owner (هر کاربر فقط دادهٔ خودش).
 const DATA_FILE = join(process.cwd(), '.advisor-data.json')
@@ -20,6 +21,7 @@ export interface Listing {
   parking?: boolean; elevator?: boolean; storage?: boolean; balcony?: boolean; furnished?: boolean
   amenities?: string[]
   docType?: string; address?: string; phone?: string; description?: string; images?: string[]
+  published?: boolean; publicId?: string
 }
 export interface Appt { id: string; client: string; listingTitle?: string; date: string; type: ApptType; status: ApptStatus; createdAt: number }
 export interface Commission { id: string; dealTitle: string; amount: number; status: CommStatus; date: string; createdAt: number }
@@ -172,7 +174,44 @@ export function setListingStatus(o: string, fid: string, status: ListingStatus):
   mutate(o, a => { const l = a.listings.find(x => x.id === fid); if (!l) return; l.status = status; res = l })
   return res
 }
-export function deleteListing(o: string, fid: string) { mutate(o, a => { a.listings = a.listings.filter(l => l.id !== fid) }) }
+export function deleteListing(o: string, fid: string) { mutate(o, a => { const l = a.listings.find(x => x.id === fid); if (l?.publicId) deleteItem(l.publicId); a.listings = a.listings.filter(x => x.id !== fid) }) }
+
+// ---- انتشار عمومی روی سایت (آگهی پابلیک) ----
+function faNum(n?: number): string { return n ? n.toLocaleString('fa-IR') : '' }
+function publicPayload(l: Listing, advisorName: string) {
+  const price = l.deal === 'rent'
+    ? `ودیعه ${faNum(l.price)} تومان${l.rentMonthly ? ` · اجارهٔ ماهانه ${faNum(l.rentMonthly)} تومان` : ''}`
+    : `${faNum(l.price)} تومان`
+  const loc = [l.city, l.neighborhood].filter(Boolean).join('، ') || l.location || ''
+  const meta: Record<string, string> = {}
+  const put = (k: string, v?: string | number) => { if (v !== undefined && v !== '' && v !== 0) meta[k] = String(v) }
+  put('شهر', l.city); put('محله', l.neighborhood); put('نوع معامله', l.deal === 'rent' ? 'اجاره' : 'فروش')
+  put('نوع ملک', l.ptype); put('متراژ', l.area ? `${faNum(l.area)} متر` : ''); put('اتاق خواب', faNum(l.rooms))
+  put('طبقه', faNum(l.floor)); put('تعداد طبقات', faNum(l.totalFloors)); put('سال ساخت', faNum(l.yearBuilt))
+  put('جهت', l.facing); put('سند', l.docType)
+  if (l.amenities && l.amenities.length) meta['امکانات'] = l.amenities.join('، ')
+  if (l.images && l.images.length) meta['__gallery'] = l.images.join('\n')
+  return { title: l.title, price, location: loc, image: l.images?.[0], excerpt: l.description, phone: l.phone, owner: advisorName, meta }
+}
+export function publishListing(o: string, fid: string): Listing | null {
+  let res: Listing | null = null
+  mutate(o, a => {
+    const l = a.listings.find(x => x.id === fid); if (!l) return
+    if (l.publicId && getItemById(l.publicId)) deleteItem(l.publicId) // بازسازی برای اعمالِ تغییرات
+    const item = addUserListing(publicPayload(l, a.profile.name || 'مشاور'))
+    l.publicId = item.id; l.published = true; res = l
+  })
+  return res
+}
+export function unpublishListing(o: string, fid: string): Listing | null {
+  let res: Listing | null = null
+  mutate(o, a => {
+    const l = a.listings.find(x => x.id === fid); if (!l) return
+    if (l.publicId) deleteItem(l.publicId)
+    l.publicId = undefined; l.published = false; res = l
+  })
+  return res
+}
 
 // ---- Appointments ----
 export function addAppt(o: string, input: { client: string; listingTitle?: string; date: string; type?: ApptType }): Appt {

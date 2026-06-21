@@ -18,6 +18,7 @@ interface Listing {
   parking?: boolean; elevator?: boolean; storage?: boolean; balcony?: boolean; furnished?: boolean
   amenities?: string[]
   docType?: string; address?: string; phone?: string; description?: string; images?: string[]
+  published?: boolean; publicId?: string
 }
 interface Appt { id: string; client: string; listingTitle?: string; date: string; type: ApptType; status: ApptStatus; createdAt: number }
 interface Commission { id: string; dealTitle: string; amount: number; status: CommStatus; date: string; createdAt: number }
@@ -111,7 +112,7 @@ export default function ProsPage() {
   const [nl, setNl] = useState({ name: '', phone: '', need: '', budget: '', source: '' })
   const [na, setNa] = useState({ client: '', listingTitle: '', date: '', type: 'visit' })
   // فرمِ کاملِ فایل (پاپ‌آپ)
-  const emptyForm = { title: '', ptype: 'آپارتمان', deal: 'sale' as 'sale' | 'rent', city: '', neighborhood: '', location: '', address: '', facing: '', price: '', rentMonthly: '', area: '', rooms: '', floor: '', totalFloors: '', yearBuilt: '', docType: '', phone: '', description: '', amenities: [] as string[], images: [] as string[] }
+  const emptyForm = { title: '', ptype: 'آپارتمان', deal: 'sale' as 'sale' | 'rent', city: '', neighborhood: '', location: '', address: '', facing: '', price: '', rentMonthly: '', area: '', rooms: '', floor: '', totalFloors: '', yearBuilt: '', docType: '', phone: '', description: '', amenities: [] as string[], images: [] as string[], publish: false }
   const [form, setForm] = useState(emptyForm)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -119,7 +120,7 @@ export default function ProsPage() {
 
   const openAdd = () => { setForm(emptyForm); setEditingId(null); setShowForm(true) }
   const openEdit = (l: Listing) => {
-    setForm({ title: l.title, ptype: l.ptype, deal: l.deal, city: l.city || '', neighborhood: l.neighborhood || '', location: l.location, address: l.address || '', facing: l.facing || '', price: String(l.price || ''), rentMonthly: String(l.rentMonthly || ''), area: String(l.area || ''), rooms: String(l.rooms ?? ''), floor: String(l.floor || ''), totalFloors: String(l.totalFloors || ''), yearBuilt: String(l.yearBuilt || ''), docType: l.docType || '', phone: l.phone || '', description: l.description || '', amenities: l.amenities || [], images: l.images || [] })
+    setForm({ title: l.title, ptype: l.ptype, deal: l.deal, city: l.city || '', neighborhood: l.neighborhood || '', location: l.location, address: l.address || '', facing: l.facing || '', price: String(l.price || ''), rentMonthly: String(l.rentMonthly || ''), area: String(l.area || ''), rooms: String(l.rooms ?? ''), floor: String(l.floor || ''), totalFloors: String(l.totalFloors || ''), yearBuilt: String(l.yearBuilt || ''), docType: l.docType || '', phone: l.phone || '', description: l.description || '', amenities: l.amenities || [], images: l.images || [], publish: !!l.published })
     setEditingId(l.id); setShowForm(true)
   }
   const toggleAmenity = (a: string) => setForm(f => ({ ...f, amenities: f.amenities.includes(a) ? f.amenities.filter(x => x !== a) : [...f.amenities, a] }))
@@ -145,8 +146,21 @@ export default function ProsPage() {
       docType: form.docType, phone: form.phone, description: form.description,
       amenities: form.amenities, images: form.images,
     }
-    const ok = editingId ? await post({ action: 'updateListing', id: editingId, patch }) : await post({ action: 'addListing', ...patch })
-    if (ok) { setShowForm(false); setForm(emptyForm); setEditingId(null) }
+    setBusy(true)
+    try {
+      const H = { 'Content-Type': 'application/json' }
+      const r = await fetch('/api/advisor', { method: 'POST', headers: H, body: JSON.stringify(editingId ? { action: 'updateListing', id: editingId, patch } : { action: 'addListing', ...patch }) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { alert(d.error || 'خطا در ذخیره'); return }
+      const listingId: string | undefined = editingId || d.listing?.id
+      const wasPublished = editingId ? !!data?.listings.find(l => l.id === editingId)?.published : false
+      if (listingId) {
+        if (form.publish) await fetch('/api/advisor', { method: 'POST', headers: H, body: JSON.stringify({ action: 'publishListing', id: listingId }) })
+        else if (wasPublished) await fetch('/api/advisor', { method: 'POST', headers: H, body: JSON.stringify({ action: 'unpublishListing', id: listingId }) })
+      }
+      await refresh()
+      setShowForm(false); setForm(emptyForm); setEditingId(null)
+    } catch { alert('اتصال به سرور برقرار نشد') } finally { setBusy(false) }
   }
   const [nc, setNc] = useState({ dealTitle: '', amount: '' })
   const [prof, setProf] = useState({ name: '', agency: '' })
@@ -379,7 +393,10 @@ export default function ProsPage() {
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={l.images[0]} alt={l.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       ) : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--faint)', fontSize: 30 }}>🏠</div>}
-                      <span style={{ position: 'absolute', top: 8, right: 8 }}><Pill label={DEAL_LABEL[l.deal]} color={l.deal === 'sale' ? '#60a5fa' : '#2dd4bf'} /></span>
+                      <span style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 6 }}>
+                        <Pill label={DEAL_LABEL[l.deal]} color={l.deal === 'sale' ? '#60a5fa' : '#2dd4bf'} />
+                        {l.published && <Pill label="🌐 عمومی" color="#34d399" />}
+                      </span>
                       {l.images && l.images.length > 1 && <span style={{ position: 'absolute', bottom: 8, left: 8, background: 'rgba(0,0,0,.6)', color: '#fff', fontSize: 11, borderRadius: 7, padding: '2px 8px' }}>📷 {fa(l.images.length)}</span>}
                     </div>
                     <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 7, flex: 1 }}>
@@ -396,6 +413,7 @@ export default function ProsPage() {
                         <button onClick={() => openEdit(l)} style={actionBtn}>ویرایش</button>
                         <button onClick={() => { if (confirm('این فایل حذف شود؟')) post({ action: 'deleteListing', id: l.id }) }} style={{ ...actionBtn, color: '#ef4444' }}>حذف</button>
                       </div>
+                      {l.published && l.publicId && <a href={`/property/${l.publicId}`} target="_blank" rel="noreferrer" style={{ fontSize: 11.5, color: 'var(--gold)', textDecoration: 'none', textAlign: 'center' }}>🌐 مشاهده در سایت ↗</a>}
                     </div>
                   </div>
                 ))}
@@ -553,6 +571,15 @@ export default function ProsPage() {
 
               {/* description */}
               <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>توضیحات</label><textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={4} placeholder="توضیحات کامل ملک، موقعیت، ویژگی‌های خاص…" style={{ ...inputStyle, resize: 'vertical' }} /></div>
+
+              {/* publish public */}
+              <label style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderRadius: 12, cursor: 'pointer', background: form.publish ? 'var(--goldDim)' : 'var(--bg2)', border: `1px solid ${form.publish ? 'var(--gold)' : 'var(--line)'}` }}>
+                <input type="checkbox" checked={form.publish} onChange={e => setForm({ ...form, publish: e.target.checked })} style={{ width: 18, height: 18, accentColor: 'var(--gold)', cursor: 'pointer' }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: form.publish ? 'var(--gold)' : 'var(--text)' }}>🌐 انتشار عمومی روی سایت ملک‌جت</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2, lineHeight: 1.6 }}>این فایل به‌صورت یک آگهی عمومی در جستجوی سایت نمایش داده می‌شود. هر زمان می‌توانی از همین‌جا خاموشش کنی.</div>
+                </div>
+              </label>
             </div>
 
             {/* footer */}
