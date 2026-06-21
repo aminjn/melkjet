@@ -10,7 +10,7 @@ import ArticleEditor from '@/app/components/ArticleEditor'
 /* ─── Types ─────────────────────────────────────────────────── */
 type View =
   | 'overview' | 'scraper' | 'listings' | 'products' | 'geo' | 'moderation' | 'content' | 'studio' | 'articles' | 'categories' | 'crm' | 'api'
-  | 'reports' | 'plans' | 'promos' | 'discounts' | 'ads' | 'users' | 'roles' | 'connections'
+  | 'reports' | 'plans' | 'promos' | 'discounts' | 'ads' | 'users' | 'profiles' | 'roles' | 'connections'
   | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags'
 
 interface NavItem { id: View; icon: string; label: string; badge?: string; badgeColor?: string }
@@ -38,6 +38,7 @@ const sections: NavSection[] = [
     title: 'کاربران و دسترسی',
     items: [
       { id: 'users', icon: '◍', label: 'کاربران' },
+      { id: 'profiles', icon: '👁', label: 'همه پروفایل‌ها' },
       { id: 'roles', icon: '🛡', label: 'نقش‌ها و دسترسی' },
       { id: 'crm',   icon: '◈', label: 'CRM کاربران' },
     ],
@@ -86,6 +87,7 @@ const viewTitles: Record<View, string> = {
   products:   'مدیریت محصولات فروشگاه',
   categories: 'دسته‌بندی‌ها',
   crm:        'CRM و مدیریت لیدهای کاربران',
+  profiles:   'همه پروفایل‌ها',
   connections: 'اتصال‌ها و سرویس‌ها',
   geo:        'مدیریت مناطق و محله‌ها',
   moderation: 'تأیید آگهی با هوش مصنوعی',
@@ -2556,6 +2558,212 @@ function UsersView() {
   )
 }
 
+/* ─── همه پروفایل‌ها (مشاهدهٔ کاملِ سوپرادمین) ─────────────────── */
+interface ProfileRow {
+  phone: string; name: string; role: string; roleLabel: string; plan: string; planLabel: string
+  dashboard: string; onboarded: boolean; createdAt: number; lastLogin: number | null
+  activity: { tasks: number; leads: number; workflows: number; favorites: number }
+}
+interface ProfileDetail {
+  account: { phone: string; name: string; roleLabel: string; planLabel: string; onboarded: boolean; createdAt: number; lastLogin: number | null; dashboard: string }
+  kpis: { label: string; value: number; money?: boolean }[]
+  sections: { title: string; items: { primary: string; secondary?: string }[] }[]
+  activity: { tasks: number; leads: number; workflows: number; favorites: number }
+}
+
+function pfMoney(n: number): string {
+  if (n >= 1e9) return `${(n / 1e9).toLocaleString('fa-IR', { maximumFractionDigits: 1 })} میلیارد`
+  if (n >= 1e6) return `${Math.round(n / 1e6).toLocaleString('fa-IR')} میلیون`
+  return n.toLocaleString('fa-IR')
+}
+
+function ProfilesView() {
+  const [rows, setRows] = useState<ProfileRow[]>([])
+  const [roles, setRoles] = useState<IdName[]>([])
+  const [loading, setLoading] = useState(true)
+  const [q, setQ] = useState('')
+  const [roleFilter, setRoleFilter] = useState('')
+  const [detail, setDetail] = useState<ProfileDetail | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+
+  const load = async () => {
+    setLoading(true)
+    const r = await fetch('/api/admin/profiles')
+    if (r.ok) { const d = await r.json(); setRows(d.profiles || []); setRoles(d.roles || []) }
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  const open = async (phone: string) => {
+    setDetailLoading(true); setDetail(null)
+    const r = await fetch(`/api/admin/profiles?phone=${encodeURIComponent(phone)}`)
+    if (r.ok) setDetail(await r.json())
+    setDetailLoading(false)
+  }
+
+  const filtered = rows.filter(u => {
+    if (q.trim()) { const t = q.trim(); if (!(u.phone.includes(t) || (u.name || '').includes(t))) return false }
+    if (roleFilter && u.role !== roleFilter) return false
+    return true
+  })
+
+  const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '8px 11px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+  const total = rows.length
+  const withPlan = rows.filter(u => u.plan).length
+  const active30 = rows.filter(u => u.lastLogin && Date.now() - u.lastLogin < 30 * 86400000).length
+
+  const initial = (u: { name: string; phone: string }) => (u.name?.trim()?.[0]) || u.phone.slice(-2, -1) || '◍'
+  const avatarBg = (s: string) => {
+    let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360
+    return `linear-gradient(135deg, hsl(${h} 45% 42%), hsl(${(h + 40) % 360} 45% 30%))`
+  }
+
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <div className="mjsa-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 18 }}>
+        <KPI label="کل پروفایل‌ها" value={total.toLocaleString('fa-IR')} trend="همهٔ حساب‌ها" icon="👁" iconBg="var(--goldDim)" iconColor="var(--gold)" />
+        <KPI label="دارای پلن" value={withPlan.toLocaleString('fa-IR')} trend="اشتراک فعال" icon="◔" iconBg="rgba(138,123,216,.15)" iconColor="#a99bf0" />
+        <KPI label="فعال (۳۰ روز)" value={active30.toLocaleString('fa-IR')} trend="ورود اخیر" icon="✓" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" />
+        <KPI label="نقش‌دار" value={rows.filter(u => u.role).length.toLocaleString('fa-IR')} trend="نقش تخصیص‌یافته" icon="🛡" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" />
+      </div>
+
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <input style={{ ...inp, flex: 1, minWidth: 160 }} placeholder="جستجو با شماره یا نام…" value={q} onChange={e => setQ(e.target.value)} />
+          <select style={inp} value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
+            <option value="">همه نقش‌ها</option>
+            {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select>
+          <OutlineButton onClick={load}>بازخوانی</OutlineButton>
+        </div>
+        <div style={{ marginTop: 10, fontSize: 12.5, color: 'var(--muted)' }}>
+          {loading ? 'در حال بارگذاری…' : `${filtered.length.toLocaleString('fa-IR')} از ${total.toLocaleString('fa-IR')} پروفایل — روی هر کارت بزنید تا دادهٔ کاملش را ببینید.`}
+        </div>
+      </Card>
+
+      {filtered.length === 0 && !loading ? (
+        <Card><div style={{ color: 'var(--muted)', fontSize: 13, padding: '30px 0', textAlign: 'center' }}>پروفایلی یافت نشد.</div></Card>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
+          {filtered.map(u => (
+            <button key={u.phone} onClick={() => open(u.phone)} style={{
+              textAlign: 'right', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14,
+              padding: 16, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', flexDirection: 'column', gap: 12,
+              transition: 'border-color .15s',
+            }}
+              onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--gold)')}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--line)')}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 46, height: 46, borderRadius: 12, background: avatarBg(u.phone), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{initial(u)}</div>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14.5, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.name || 'بدون نام'}</div>
+                  <div style={{ fontSize: 12, color: 'var(--gold)', direction: 'ltr', textAlign: 'right', fontFamily: '"JetBrains Mono", monospace' }}>{u.phone}</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+                <Badge label={u.roleLabel} color="#5b9bd5" />
+                <Badge label={u.planLabel} color={u.plan ? '#a99bf0' : 'var(--faint)'} />
+                {u.onboarded ? <Badge label="تکمیل‌شده" color="#5fd98a" /> : <Badge label="جدید" color="#e7a44a" />}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 11.5, color: 'var(--muted)', borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+                <span>وظایف <b style={{ color: 'var(--text)' }}>{u.activity.tasks.toLocaleString('fa-IR')}</b></span>
+                <span>لیدها <b style={{ color: 'var(--text)' }}>{u.activity.leads.toLocaleString('fa-IR')}</b></span>
+                <span>اتوماسیون <b style={{ color: 'var(--text)' }}>{u.activity.workflows.toLocaleString('fa-IR')}</b></span>
+                <span>علاقه <b style={{ color: 'var(--text)' }}>{u.activity.favorites.toLocaleString('fa-IR')}</b></span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--faint)' }}>آخرین ورود: {timeAgo(u.lastLogin)}</div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {(detail || detailLoading) && (
+        <div onClick={() => { setDetail(null); setDetailLoading(false) }} style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 200,
+          display: 'flex', justifyContent: 'flex-start', animation: 'fade .2s ease',
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            width: 'min(540px, 94vw)', height: '100%', background: 'var(--bg)', borderLeft: '1px solid var(--line2)',
+            overflowY: 'auto', padding: '22px 22px 60px', boxShadow: '-10px 0 40px rgba(0,0,0,.4)',
+          }}>
+            {detailLoading || !detail ? (
+              <div style={{ color: 'var(--muted)', fontSize: 14, padding: '40px 0', textAlign: 'center' }}>در حال بارگذاری…</div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
+                  <div style={{ display: 'flex', gap: 13, alignItems: 'center' }}>
+                    <div style={{ width: 52, height: 52, borderRadius: 13, background: avatarBg(detail.account.phone), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 23, fontWeight: 800, color: '#fff' }}>{initial(detail.account)}</div>
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: 18, color: 'var(--text)' }}>{detail.account.name || 'بدون نام'}</div>
+                      <div style={{ fontSize: 13, color: 'var(--gold)', direction: 'ltr', textAlign: 'right', fontFamily: '"JetBrains Mono", monospace' }}>{detail.account.phone}</div>
+                    </div>
+                  </div>
+                  <button onClick={() => setDetail(null)} style={{ background: 'transparent', border: '1px solid var(--line2)', color: 'var(--muted)', borderRadius: 9, width: 32, height: 32, cursor: 'pointer', fontSize: 16 }}>✕</button>
+                </div>
+
+                <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 18 }}>
+                  <Badge label={detail.account.roleLabel} color="#5b9bd5" />
+                  <Badge label={detail.account.planLabel} color={detail.account.planLabel === 'بدون پلن' ? 'var(--faint)' : '#a99bf0'} />
+                  {detail.account.onboarded ? <Badge label="تکمیل‌شده" color="#5fd98a" /> : <Badge label="جدید" color="#e7a44a" />}
+                  <Badge label={`داشبورد: ${detail.account.dashboard}`} color="var(--gold)" />
+                </div>
+
+                <div style={{ fontSize: 12, color: 'var(--muted)', display: 'flex', gap: 18, marginBottom: 20 }}>
+                  <span>عضویت: {new Date(detail.account.createdAt).toLocaleDateString('fa-IR')}</span>
+                  <span>آخرین ورود: {timeAgo(detail.account.lastLogin)}</span>
+                </div>
+
+                {detail.kpis.length > 0 && (
+                  <>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--faint)', marginBottom: 10 }}>آمارِ نقشِ «{detail.account.roleLabel}»</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10, marginBottom: 22 }}>
+                      {detail.kpis.map((k, i) => (
+                        <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 11, padding: '12px 14px' }}>
+                          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 5 }}>{k.label}</div>
+                          <div style={{ fontSize: 19, fontWeight: 800, color: 'var(--gold)' }}>{k.money ? pfMoney(k.value) : k.value.toLocaleString('fa-IR')}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--faint)', marginBottom: 10 }}>فعالیتِ ابزارها</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, marginBottom: 22 }}>
+                  {[['وظایف CRM', detail.activity.tasks], ['لیدها', detail.activity.leads], ['اتوماسیون', detail.activity.workflows], ['علاقه‌مندی', detail.activity.favorites]].map(([l, v], i) => (
+                    <div key={i} style={{ background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--text)' }}>{(v as number).toLocaleString('fa-IR')}</div>
+                      <div style={{ fontSize: 10.5, color: 'var(--muted)', marginTop: 3 }}>{l}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {detail.sections.map((sec, si) => (
+                  <div key={si} style={{ marginBottom: 18 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--faint)', marginBottom: 10 }}>{sec.title}</div>
+                    {sec.items.length === 0 ? (
+                      <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>موردی نیست.</div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                        {sec.items.map((it, ii) => (
+                          <div key={ii} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, padding: '9px 12px', display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                            <span style={{ fontSize: 13, color: 'var(--text)', fontWeight: 600 }}>{it.primary}</span>
+                            {it.secondary && <span style={{ fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}>{it.secondary}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* ─── نقش‌ها و دسترسی ─────────────────────────────────────────── */
 interface Role { id: string; name: string; dashboard: string; planId?: string; permissions: string[]; builtin?: boolean; active: boolean; createdAt: number }
 interface PermDef { id: string; label: string }
@@ -3218,6 +3426,7 @@ export default function SuperAdminPage() {
       case 'articles':   return <ArticlesView />
       case 'api':        return <APIView />
       case 'users':      return <UsersView />
+      case 'profiles':   return <ProfilesView />
       case 'roles':      return <RolesView />
       case 'plans':      return <PlansView />
       case 'promos':     return <PromotionsView />
