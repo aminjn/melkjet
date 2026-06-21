@@ -4,6 +4,7 @@ import {
   buyerStats, listSaved, listSearches, listViewings, listOffers, listMessages,
   addSaved, removeSaved, addSearch, toggleSearchAlerts, deleteSearch,
   addViewing, setViewingStatus, addOffer, withdrawOffer, markMessageRead, markAllRead, updateBuyerProfile,
+  getBuyerSettings, updateBuyerSettings, requestVerification,
   getBuyer, listConversations, startConversation, addChatMessage, getConversation,
   upsertPropertyConversation, listAiMessages, addAiMessage, clearAiMessages,
 } from '@/app/lib/buyer-store'
@@ -50,6 +51,9 @@ export async function GET() {
   const o = s.phone
   return NextResponse.json({
     stats: buyerStats(o),
+    profile: getBuyer(o).profile,
+    settings: getBuyerSettings(o),
+    phone: s.phone,
     saved: listSaved(o),
     searches: listSearches(o),
     viewings: listViewings(o),
@@ -78,6 +82,8 @@ export async function POST(req: NextRequest) {
     case 'markMessageRead': { const m = markMessageRead(o, String(b.id)); return m ? NextResponse.json({ ok: true, message: m }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'markAllRead': markAllRead(o); return NextResponse.json({ ok: true })
     case 'updateProfile': return NextResponse.json({ ok: true, profile: updateBuyerProfile(o, b.patch || {}) })
+    case 'updateSettings': return NextResponse.json({ ok: true, settings: updateBuyerSettings(o, b.patch || {}) })
+    case 'requestVerification': return NextResponse.json({ ok: true, verifyStatus: requestVerification(o) })
 
     // ── چت با صاحب آگهی ──
     case 'startConversation': {

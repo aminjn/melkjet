@@ -16,6 +16,19 @@ interface Message { id: string; from: string; propertyTitle?: string; text: stri
 interface ChatMsg { id: string; from: 'buyer' | 'owner'; text: string; ai?: boolean; createdAt: number }
 interface Conversation { id: string; ownerName: string; propertyTitle: string; messages: ChatMsg[]; createdAt: number; updatedAt: number }
 interface AiMsg { id: string; role: 'user' | 'assistant'; text: string; createdAt: number }
+type VerifyStatus = 'none' | 'pending' | 'verified'
+interface Profile {
+  name: string; email?: string; bio?: string
+  budget?: number; prefType?: string; dealType?: Deal
+  rooms?: number; areaMin?: number; areaMax?: number; areas?: string
+  verifyStatus?: VerifyStatus
+}
+interface Settings {
+  notifyEmail: boolean; notifySms: boolean; notifyPush: boolean
+  alertNewMatch: boolean; alertPriceDrop: boolean; alertMessages: boolean; alertViewingReminder: boolean
+  showProfileToAdvisors: boolean; allowContact: boolean; weeklyDigest: boolean
+  language: 'fa' | 'en'
+}
 
 interface Stats {
   profile: { name: string; budget?: number; prefType?: string; areas?: string }
@@ -24,9 +37,9 @@ interface Stats {
   upcoming: Viewing[]
   recentMessages: Message[]
 }
-interface BuyerData { stats: Stats; saved: Saved[]; searches: Search[]; viewings: Viewing[]; offers: Offer[]; messages: Message[]; conversations: Conversation[]; aiMessages: AiMsg[] }
+interface BuyerData { stats: Stats; profile: Profile; settings: Settings; phone: string; saved: Saved[]; searches: Search[]; viewings: Viewing[]; offers: Offer[]; messages: Message[]; conversations: Conversation[]; aiMessages: AiMsg[] }
 
-type View = 'dashboard' | 'ai' | 'chat' | 'favorites' | 'searches' | 'viewings' | 'offers' | 'messages' | 'settings'
+type View = 'dashboard' | 'ai' | 'chat' | 'favorites' | 'searches' | 'viewings' | 'offers' | 'messages' | 'profile' | 'settings'
 
 // ════════════════════════════════════════════════════════
 //  Helpers
@@ -56,7 +69,7 @@ const actionBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 7, b
 const VIEW_TITLES: Record<View, string> = {
   dashboard: 'پنل خریدار', ai: 'دستیار هوشمند خرید', chat: 'چت با صاحب آگهی',
   favorites: 'علاقه‌مندی‌ها', searches: 'جستجوهای ذخیره‌شده',
-  viewings: 'بازدیدهای من', offers: 'پیشنهادهای من', messages: 'پیام‌ها', settings: 'تنظیمات',
+  viewings: 'بازدیدهای من', offers: 'پیشنهادهای من', messages: 'پیام‌ها', profile: 'پروفایل من', settings: 'تنظیمات',
 }
 const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'viewings' | 'offers' | 'messages'; ai?: boolean }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: '▦' },
@@ -67,8 +80,11 @@ const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'viewings' | '
   { id: 'viewings', label: 'بازدیدهای من', icon: '◉', badge: 'viewings' },
   { id: 'offers', label: 'پیشنهادهای من', icon: '◈', badge: 'offers' },
   { id: 'messages', label: 'پیام‌ها', icon: '✉', badge: 'messages' },
+  { id: 'profile', label: 'پروفایل من', icon: '◐' },
   { id: 'settings', label: 'تنظیمات', icon: '⛭' },
 ]
+const VERIFY_LABEL: Record<VerifyStatus, string> = { none: 'تأیید نشده', pending: 'در حال بررسی', verified: 'تأییدشده ✓' }
+const VERIFY_COLOR: Record<VerifyStatus, string> = { none: '#7a8fae', pending: '#f59e0b', verified: '#34d399' }
 // چیپ‌های پیشنهادیِ دستیار هوشمند
 const AI_SUGGESTIONS = [
   'قیمت منصفانهٔ آپارتمان ۹۰ متری سعادت‌آباد چقدره؟',
@@ -87,6 +103,24 @@ function Kpi({ label, value, sub, subColor }: { label: string; value: string; su
       <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 8 }}>{label}</div>
       <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.5px' }}>{value}</div>
       {sub && <div style={{ fontSize: 11.5, color: subColor || 'var(--muted)', marginTop: 4 }}>{sub}</div>}
+    </div>
+  )
+}
+function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button onClick={() => onChange(!on)} aria-pressed={on} style={{ width: 44, height: 25, borderRadius: 999, border: 'none', cursor: 'pointer', background: on ? 'var(--gold)' : 'var(--line2)', position: 'relative', transition: 'background .2s', flexShrink: 0 }}>
+      <span style={{ position: 'absolute', top: 3, width: 19, height: 19, borderRadius: '50%', background: '#fff', right: on ? 3 : 22, transition: 'right .2s', boxShadow: '0 1px 3px rgba(0,0,0,.3)' }} />
+    </button>
+  )
+}
+function SettingRow({ title, desc, on, onChange }: { title: string; desc?: string; on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--line)' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 600 }}>{title}</div>
+        {desc && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2, lineHeight: 1.6 }}>{desc}</div>}
+      </div>
+      <Toggle on={on} onChange={onChange} />
     </div>
   )
 }
@@ -122,7 +156,7 @@ export default function BuyerPage() {
   const [newSearch, setNewSearch] = useState({ query: '', ptype: '', area: '', priceMax: '', alerts: true })
   const [newViewing, setNewViewing] = useState({ propertyTitle: '', advisor: '', date: '' })
   const [newOffer, setNewOffer] = useState({ propertyTitle: '', amount: '' })
-  const [prof, setProf] = useState({ name: '', budget: '', prefType: '', areas: '' })
+  const [prof, setProf] = useState({ name: '', email: '', bio: '', budget: '', prefType: '', dealType: 'sale' as Deal, rooms: '', areaMin: '', areaMax: '', areas: '' })
 
   // دستیار هوشمند
   const [aiInput, setAiInput] = useState('')
@@ -139,7 +173,8 @@ export default function BuyerPage() {
       if (r.status === 401) { setUnauth(true); setLoading(false); return }
       const d = await r.json()
       setData(d); setUnauth(false)
-      setProf({ name: d.stats.profile.name || '', budget: String(d.stats.profile.budget || ''), prefType: d.stats.profile.prefType || '', areas: d.stats.profile.areas || '' })
+      const p = d.profile || d.stats.profile || {}
+      setProf({ name: p.name || '', email: p.email || '', bio: p.bio || '', budget: String(p.budget || ''), prefType: p.prefType || '', dealType: p.dealType === 'rent' ? 'rent' : 'sale', rooms: String(p.rooms || ''), areaMin: String(p.areaMin || ''), areaMax: String(p.areaMax || ''), areas: p.areas || '' })
     } catch {} finally { setLoading(false) }
   }, [])
   useEffect(() => { refresh() }, [refresh])
@@ -171,6 +206,19 @@ export default function BuyerPage() {
     } catch { alert('اتصال برقرار نشد') } finally { setAiSending(false) }
   }
   const clearAi = async () => { if (!confirm('گفتگوی دستیار پاک شود؟')) return; await post({ action: 'aiClear' }) }
+
+  // ── تنظیمات ──
+  const setSetting = async (key: string, value: boolean | string) => {
+    setData(d => d ? { ...d, settings: { ...d.settings, [key]: value } as Settings } : d) // optimistic
+    await fetch('/api/buyer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'updateSettings', patch: { [key]: value } }) }).catch(() => {})
+  }
+  const requestVerify = async () => { await post({ action: 'requestVerification' }) }
+  const logout = async () => {
+    if (!confirm('از حساب خارج می‌شوید؟')) return
+    try { localStorage.removeItem('mj_token') } catch {}
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
+    window.location.href = '/'
+  }
 
   // ── چت با صاحب آگهی ──
   const sendChat = async () => {
@@ -548,15 +596,102 @@ export default function BuyerPage() {
             )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>پیامی نداری.</div>}
           </div>}
 
+          {/* ─── PROFILE ─── */}
+          {view === 'profile' && (() => {
+            const vs: VerifyStatus = data.profile.verifyStatus || 'none'
+            const fields = [prof.name, prof.email, prof.bio, prof.budget, prof.prefType, prof.areas]
+            const filled = fields.filter(Boolean).length
+            const completeness = Math.round((filled / fields.length) * 100)
+            return <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 760 }}>
+              {/* header card */}
+              <div style={{ ...card, padding: 22, display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
+                <div style={{ width: 72, height: 72, borderRadius: 18, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, fontWeight: 800, color: '#16140f', flexShrink: 0 }}>{(prof.name.trim()[0]) || 'خ'}</div>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <div style={{ fontWeight: 800, fontSize: 19 }}>{prof.name || 'خریدار'}</div>
+                    <Pill label={VERIFY_LABEL[vs]} color={VERIFY_COLOR[vs]} />
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 4, direction: 'ltr', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace' }}>{data.phone}</div>
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: 'var(--muted)', marginBottom: 4 }}><span>تکمیل پروفایل</span><span style={{ color: 'var(--gold)', fontWeight: 700 }}>{fa(completeness)}٪</span></div>
+                    <div style={{ height: 7, borderRadius: 999, background: 'var(--line2)', overflow: 'hidden' }}><div style={{ width: `${completeness}%`, height: '100%', background: 'linear-gradient(90deg,var(--gold2),var(--gold))' }} /></div>
+                  </div>
+                </div>
+                {vs !== 'verified' && <button disabled={busy || vs === 'pending'} onClick={requestVerify} style={{ padding: '10px 18px', borderRadius: 10, background: vs === 'pending' ? 'var(--bg2)' : 'linear-gradient(135deg,var(--gold2),var(--gold))', color: vs === 'pending' ? 'var(--muted)' : '#16140f', fontWeight: 700, fontSize: 13, border: vs === 'pending' ? '1px solid var(--line)' : 'none', cursor: vs === 'pending' ? 'default' : 'pointer', fontFamily: FONT, whiteSpace: 'nowrap' }}>{vs === 'pending' ? 'در حال بررسی…' : '✓ تأیید هویت'}</button>}
+              </div>
+
+              {/* personal info */}
+              <div style={{ ...card, padding: 18 }}>
+                {sectionTitle('اطلاعات شخصی')}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12 }}>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نام و نام خانوادگی</label><input value={prof.name} onChange={e => setProf({ ...prof, name: e.target.value })} style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>ایمیل</label><input value={prof.email} onChange={e => setProf({ ...prof, email: e.target.value })} placeholder="example@mail.com" style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>شماره موبایل</label><input value={data.phone} disabled style={{ ...inputStyle, direction: 'ltr', textAlign: 'right', opacity: .6, cursor: 'not-allowed' }} /></div>
+                </div>
+                <div style={{ marginTop: 12 }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>دربارهٔ من</label><textarea value={prof.bio} onChange={e => setProf({ ...prof, bio: e.target.value })} rows={3} placeholder="مثلاً: به‌دنبال آپارتمان برای سکونت خانواده در شمال تهران هستم…" style={{ ...inputStyle, resize: 'vertical' }} /></div>
+              </div>
+
+              {/* search preferences */}
+              <div style={{ ...card, padding: 18 }}>
+                {sectionTitle('ترجیحات خرید')}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 12 }}>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع معامله</label><select value={prof.dealType} onChange={e => setProf({ ...prof, dealType: e.target.value as Deal })} style={inputStyle}><option value="sale">خرید</option><option value="rent">اجاره/رهن</option></select></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع ملک</label><select value={prof.prefType} onChange={e => setProf({ ...prof, prefType: e.target.value })} style={inputStyle}><option value="">—</option>{PTYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>تعداد خواب</label><input value={prof.rooms} onChange={e => setProf({ ...prof, rooms: e.target.value.replace(/\D/g, '') })} placeholder="۲" style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>متراژ از</label><input value={prof.areaMin} onChange={e => setProf({ ...prof, areaMin: e.target.value.replace(/\D/g, '') })} placeholder="۷۰" style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>متراژ تا</label><input value={prof.areaMax} onChange={e => setProf({ ...prof, areaMax: e.target.value.replace(/\D/g, '') })} placeholder="۱۳۰" style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>بودجه (تومان) {prof.budget && <span style={{ color: 'var(--gold)' }}>— {money(Number(prof.budget) || 0)}</span>}</label><input value={prof.budget} onChange={e => setProf({ ...prof, budget: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                  <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>مناطق موردنظر</label><input value={prof.areas} onChange={e => setProf({ ...prof, areas: e.target.value })} placeholder="مثلاً: زعفرانیه، سعادت‌آباد، ونک" style={inputStyle} /></div>
+                </div>
+              </div>
+
+              <button disabled={busy} onClick={() => post({ action: 'updateProfile', patch: { name: prof.name, email: prof.email, bio: prof.bio, budget: Number(prof.budget) || 0, prefType: prof.prefType, dealType: prof.dealType, rooms: Number(prof.rooms) || undefined, areaMin: Number(prof.areaMin) || undefined, areaMax: Number(prof.areaMax) || undefined, areas: prof.areas } })} style={{ alignSelf: 'flex-start', padding: '11px 30px', borderRadius: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 14, border: 'none', cursor: 'pointer', fontFamily: FONT }}>{busy ? 'در حال ذخیره…' : 'ذخیرهٔ پروفایل'}</button>
+            </div>
+          })()}
+
           {/* ─── SETTINGS ─── */}
-          {view === 'settings' && <div style={{ ...card, padding: 18, maxWidth: 480 }}>
-            {sectionTitle('تنظیمات خریدار')}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نام</label><input value={prof.name} onChange={e => setProf({ ...prof, name: e.target.value })} style={inputStyle} /></div>
-              <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>بودجه (تومان) {prof.budget && <span style={{ color: 'var(--gold)' }}>— {money(Number(prof.budget) || 0)}</span>}</label><input value={prof.budget} onChange={e => setProf({ ...prof, budget: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
-              <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع ملک موردنظر</label><select value={prof.prefType} onChange={e => setProf({ ...prof, prefType: e.target.value })} style={inputStyle}><option value="">—</option>{PTYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
-              <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>مناطق موردنظر</label><input value={prof.areas} onChange={e => setProf({ ...prof, areas: e.target.value })} style={inputStyle} /></div>
-              <button disabled={busy} onClick={() => post({ action: 'updateProfile', patch: { name: prof.name, budget: Number(prof.budget) || 0, prefType: prof.prefType, areas: prof.areas } })} style={{ alignSelf: 'flex-start', padding: '9px 22px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }}>ذخیره</button>
+          {view === 'settings' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 680 }}>
+            <div style={{ ...card, padding: 18 }}>
+              {sectionTitle('🔔 اعلان‌ها')}
+              <SettingRow title="اعلان ایمیلی" desc="دریافت خبرها و هشدارها از طریق ایمیل" on={data.settings.notifyEmail} onChange={v => setSetting('notifyEmail', v)} />
+              <SettingRow title="اعلان پیامکی" desc="دریافت هشدارهای مهم با پیامک" on={data.settings.notifySms} onChange={v => setSetting('notifySms', v)} />
+              <SettingRow title="اعلان درون‌برنامه‌ای (Push)" desc="نمایش اعلان روی موبایل و مرورگر" on={data.settings.notifyPush} onChange={v => setSetting('notifyPush', v)} />
+              <div style={{ borderBottom: 'none' }}><SettingRow title="خلاصهٔ هفتگی" desc="ایمیل خلاصهٔ بازار و ملک‌های جدید هر هفته" on={data.settings.weeklyDigest} onChange={v => setSetting('weeklyDigest', v)} /></div>
+            </div>
+
+            <div style={{ ...card, padding: 18 }}>
+              {sectionTitle('⚡ هشدارهای هوشمند')}
+              <SettingRow title="ملک جدید مطابق جستجوهای من" desc="وقتی ملکی مطابق سرچ ذخیره‌شده‌ات ثبت شود" on={data.settings.alertNewMatch} onChange={v => setSetting('alertNewMatch', v)} />
+              <SettingRow title="کاهش قیمت" desc="هنگام افت قیمت ملک‌های موردعلاقه‌ات" on={data.settings.alertPriceDrop} onChange={v => setSetting('alertPriceDrop', v)} />
+              <SettingRow title="پیام جدید" desc="پیام تازه از صاحب آگهی یا مشاور" on={data.settings.alertMessages} onChange={v => setSetting('alertMessages', v)} />
+              <SettingRow title="یادآوری بازدید" desc="یادآوری قبل از زمان بازدیدها" on={data.settings.alertViewingReminder} onChange={v => setSetting('alertViewingReminder', v)} />
+            </div>
+
+            <div style={{ ...card, padding: 18 }}>
+              {sectionTitle('🔒 حریم خصوصی')}
+              <SettingRow title="نمایش پروفایل به مشاوران" desc="مشاوران بتوانند پروفایل و ترجیحاتت را ببینند" on={data.settings.showProfileToAdvisors} onChange={v => setSetting('showProfileToAdvisors', v)} />
+              <SettingRow title="اجازهٔ تماس مستقیم" desc="مشاوران و فروشندگان بتوانند با تو تماس بگیرند" on={data.settings.allowContact} onChange={v => setSetting('allowContact', v)} />
+            </div>
+
+            <div style={{ ...card, padding: 18 }}>
+              {sectionTitle('⚙ عمومی')}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--line)' }}>
+                <div style={{ flex: 1 }}><div style={{ fontSize: 13.5, fontWeight: 600 }}>زبان</div></div>
+                <select value={data.settings.language} onChange={e => setSetting('language', e.target.value)} style={{ ...inputStyle, width: 140 }}><option value="fa">فارسی</option><option value="en">English</option></select>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0' }}>
+                <div style={{ flex: 1 }}><div style={{ fontSize: 13.5, fontWeight: 600 }}>حالت نمایش</div><div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>روشن / تاریک</div></div>
+                <button onClick={toggleTheme} style={{ ...actionBtn, padding: '8px 16px' }}>{theme === 'dark' ? '☀ روشن' : '☾ تاریک'}</button>
+              </div>
+            </div>
+
+            <div style={{ ...card, padding: 18, border: '1px solid color-mix(in srgb,#ef4444 35%,transparent)' }}>
+              {sectionTitle('🚪 حساب')}
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <button onClick={logout} style={{ ...actionBtn, color: '#ef4444', borderColor: 'color-mix(in srgb,#ef4444 35%,transparent)', padding: '9px 20px' }}>خروج از حساب</button>
+                <a href="/buyer" onClick={() => setView('profile')} style={{ ...actionBtn, textDecoration: 'none', color: 'var(--gold)', borderColor: 'color-mix(in srgb,var(--gold) 35%,transparent)', padding: '9px 20px' }}>ویرایش پروفایل</a>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 12, lineHeight: 1.8 }}>برای حذف کامل حساب با پشتیبانی تماس بگیر. تغییرات تنظیمات به‌صورت خودکار ذخیره می‌شوند.</div>
             </div>
           </div>}
         </main>

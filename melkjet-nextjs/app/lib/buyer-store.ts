@@ -35,8 +35,31 @@ export interface Conversation {
 export type AiRole = 'user' | 'assistant'
 export interface AiMsg { id: string; role: AiRole; text: string; createdAt: number }
 
+export type VerifyStatus = 'none' | 'pending' | 'verified'
+export interface BuyerProfile {
+  name: string; email?: string; bio?: string
+  budget?: number; prefType?: string; dealType?: DealType
+  rooms?: number; areaMin?: number; areaMax?: number; areas?: string
+  verifyStatus?: VerifyStatus
+}
+export interface BuyerSettings {
+  notifyEmail: boolean; notifySms: boolean; notifyPush: boolean
+  alertNewMatch: boolean; alertPriceDrop: boolean; alertMessages: boolean; alertViewingReminder: boolean
+  showProfileToAdvisors: boolean; allowContact: boolean; weeklyDigest: boolean
+  language: 'fa' | 'en'
+}
+function defaultSettings(): BuyerSettings {
+  return {
+    notifyEmail: true, notifySms: true, notifyPush: true,
+    alertNewMatch: true, alertPriceDrop: true, alertMessages: true, alertViewingReminder: true,
+    showProfileToAdvisors: true, allowContact: true, weeklyDigest: false,
+    language: 'fa',
+  }
+}
+
 export interface BuyerData {
-  profile: { name: string; budget?: number; prefType?: string; areas?: string }
+  profile: BuyerProfile
+  settings: BuyerSettings
   saved: SavedProperty[]
   searches: SavedSearch[]
   viewings: BViewing[]
@@ -97,7 +120,7 @@ function seed(): BuyerData {
     },
   ]
   const aiMessages: AiMsg[] = []
-  return { profile: { name: 'کاربر ملک‌جت', budget: 10000000000, prefType: 'آپارتمان', areas: 'شمال تهران' }, saved, searches, viewings, offers, messages, conversations, aiMessages, createdAt: now }
+  return { profile: { name: 'کاربر ملک‌جت', email: '', bio: '', budget: 10000000000, prefType: 'آپارتمان', dealType: 'sale', rooms: 2, areaMin: 70, areaMax: 130, areas: 'شمال تهران', verifyStatus: 'none' }, settings: defaultSettings(), saved, searches, viewings, offers, messages, conversations, aiMessages, createdAt: now }
 }
 
 export function getBuyer(o: string): BuyerData {
@@ -105,11 +128,12 @@ export function getBuyer(o: string): BuyerData {
   if (!db.buyers[o]) { db.buyers[o] = seed(); save(db) }
   const b = db.buyers[o]
   // backfill برای دادهٔ قدیمی‌تر
-  if (!Array.isArray(b.conversations) || !Array.isArray(b.aiMessages)) {
-    if (!Array.isArray(b.conversations)) b.conversations = seed().conversations
-    if (!Array.isArray(b.aiMessages)) b.aiMessages = []
-    save(db)
-  }
+  let dirty = false
+  if (!Array.isArray(b.conversations)) { b.conversations = seed().conversations; dirty = true }
+  if (!Array.isArray(b.aiMessages)) { b.aiMessages = []; dirty = true }
+  if (!b.settings) { b.settings = defaultSettings(); dirty = true }
+  if (b.profile && b.profile.verifyStatus === undefined) { b.profile.verifyStatus = 'none'; dirty = true }
+  if (dirty) save(db)
   return b
 }
 function mutate(o: string, fn: (b: BuyerData) => void) { const db = load(); if (!db.buyers[o]) db.buyers[o] = seed(); fn(db.buyers[o]); save(db); return db.buyers[o] }
@@ -242,6 +266,17 @@ export function listSearches(o: string) { return getBuyer(o).searches }
 export function listViewings(o: string) { return getBuyer(o).viewings }
 export function listOffers(o: string) { return getBuyer(o).offers }
 export function listMessages(o: string) { return getBuyer(o).messages }
-export function updateBuyerProfile(o: string, patch: Partial<BuyerData['profile']>) {
-  return mutate(o, b => { Object.assign(b.profile, patch) }).profile
+export function updateBuyerProfile(o: string, patch: Partial<BuyerProfile>) {
+  // verifyStatus از این مسیر تغییر نمی‌کند (فقط با requestVerification)
+  const clean = { ...patch }; delete (clean as { verifyStatus?: unknown }).verifyStatus
+  return mutate(o, b => { Object.assign(b.profile, clean) }).profile
+}
+export function getBuyerSettings(o: string): BuyerSettings { return getBuyer(o).settings }
+export function updateBuyerSettings(o: string, patch: Partial<BuyerSettings>): BuyerSettings {
+  return mutate(o, b => { Object.assign(b.settings, patch) }).settings
+}
+export function requestVerification(o: string): VerifyStatus {
+  let res: VerifyStatus = 'pending'
+  mutate(o, b => { if (b.profile.verifyStatus !== 'verified') b.profile.verifyStatus = 'pending'; res = b.profile.verifyStatus || 'pending' })
+  return res
 }
