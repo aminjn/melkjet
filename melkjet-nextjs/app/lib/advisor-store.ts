@@ -15,8 +15,10 @@ export interface Lead { id: string; name: string; phone?: string; need?: string;
 export interface Listing {
   id: string; title: string; ptype: string; location: string; price: number; deal: 'sale' | 'rent'; status: ListingStatus; createdAt: number
   // جزئیات کامل فایل (همه اختیاری برای سازگاری با دادهٔ قبلی)
+  city?: string; neighborhood?: string; facing?: string
   rentMonthly?: number; area?: number; rooms?: number; floor?: number; totalFloors?: number; yearBuilt?: number
   parking?: boolean; elevator?: boolean; storage?: boolean; balcony?: boolean; furnished?: boolean
+  amenities?: string[]
   docType?: string; address?: string; phone?: string; description?: string; images?: string[]
 }
 export interface Appt { id: string; client: string; listingTitle?: string; date: string; type: ApptType; status: ApptStatus; createdAt: number }
@@ -133,6 +135,9 @@ export function addListing(o: string, input: Partial<Listing>): Listing {
       id: id('f_'), title: String(input.title || 'فایل جدید'), ptype: String(input.ptype || 'آپارتمان'),
       location: String(input.location || ''), price: Number(input.price) || 0,
       deal: input.deal === 'rent' ? 'rent' : 'sale', status: 'active', createdAt: Date.now(),
+      city: input.city ? String(input.city) : undefined,
+      neighborhood: input.neighborhood ? String(input.neighborhood) : undefined,
+      facing: input.facing ? String(input.facing) : undefined,
       rentMonthly: input.rentMonthly ? Number(input.rentMonthly) : undefined,
       area: input.area ? Number(input.area) : undefined,
       rooms: input.rooms !== undefined ? Number(input.rooms) : undefined,
@@ -140,6 +145,7 @@ export function addListing(o: string, input: Partial<Listing>): Listing {
       totalFloors: input.totalFloors ? Number(input.totalFloors) : undefined,
       yearBuilt: input.yearBuilt ? Number(input.yearBuilt) : undefined,
       parking: !!input.parking, elevator: !!input.elevator, storage: !!input.storage, balcony: !!input.balcony, furnished: !!input.furnished,
+      amenities: Array.isArray(input.amenities) ? input.amenities.slice(0, 40).map(String) : [],
       docType: input.docType ? String(input.docType) : undefined,
       address: input.address ? String(input.address) : undefined,
       phone: input.phone ? String(input.phone) : undefined,
@@ -154,7 +160,7 @@ export function updateListing(o: string, fid: string, patch: Partial<Listing>): 
   let res: Listing | null = null
   mutate(o, a => {
     const l = a.listings.find(x => x.id === fid); if (!l) return
-    const allow: (keyof Listing)[] = ['title', 'ptype', 'location', 'price', 'deal', 'rentMonthly', 'area', 'rooms', 'floor', 'totalFloors', 'yearBuilt', 'parking', 'elevator', 'storage', 'balcony', 'furnished', 'docType', 'address', 'phone', 'description', 'images']
+    const allow: (keyof Listing)[] = ['title', 'ptype', 'location', 'price', 'deal', 'city', 'neighborhood', 'facing', 'rentMonthly', 'area', 'rooms', 'floor', 'totalFloors', 'yearBuilt', 'parking', 'elevator', 'storage', 'balcony', 'furnished', 'amenities', 'docType', 'address', 'phone', 'description', 'images']
     for (const k of allow) if (k in patch) (l as unknown as Record<string, unknown>)[k] = (patch as Record<string, unknown>)[k]
     res = l
   })

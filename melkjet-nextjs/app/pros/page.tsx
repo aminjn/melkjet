@@ -13,8 +13,10 @@ type CommStatus = 'pending' | 'paid'
 interface Lead { id: string; name: string; phone?: string; need?: string; budget?: string; stage: Stage; source?: string; note?: string; createdAt: number }
 interface Listing {
   id: string; title: string; ptype: string; location: string; price: number; deal: 'sale' | 'rent'; status: ListingStatus; createdAt: number
+  city?: string; neighborhood?: string; facing?: string
   rentMonthly?: number; area?: number; rooms?: number; floor?: number; totalFloors?: number; yearBuilt?: number
   parking?: boolean; elevator?: boolean; storage?: boolean; balcony?: boolean; furnished?: boolean
+  amenities?: string[]
   docType?: string; address?: string; phone?: string; description?: string; images?: string[]
 }
 interface Appt { id: string; client: string; listingTitle?: string; date: string; type: ApptType; status: ApptStatus; createdAt: number }
@@ -53,7 +55,10 @@ const APPTST_LABEL: Record<ApptStatus, string> = { scheduled: 'برنامه‌ر
 const APPTST_COLOR: Record<ApptStatus, string> = { scheduled: 'var(--gold)', done: '#34d399', canceled: '#7a8fae' }
 const APPT_STATUSES: ApptStatus[] = ['scheduled', 'done', 'canceled']
 const DEAL_LABEL = { sale: 'فروش', rent: 'اجاره' } as const
-const PTYPE_OPTIONS = ['آپارتمان', 'ویلا', 'زمین', 'مغازه', 'سایر']
+const PTYPE_OPTIONS = ['آپارتمان', 'ویلا', 'خانه/کلنگی', 'زمین', 'مغازه', 'دفتر/اداری', 'سوله/انبار', 'باغ', 'سایر']
+const FACING_OPTIONS = ['شمالی', 'جنوبی', 'شرقی', 'غربی', 'دوبر', 'سه‌بر']
+// همهٔ امکاناتِ یک آگهی (مثل دیوار)
+const AMENITIES = ['پارکینگ', 'آسانسور', 'انباری', 'بالکن', 'تراس', 'روف‌گاردن', 'مبله', 'آنتن مرکزی', 'آیفون تصویری', 'درب ریموت‌کنترل', 'کولر آبی', 'اسپلیت', 'پکیج', 'شوفاژ', 'گرمایش از کف', 'آبگرمکن', 'استخر', 'سونا', 'جکوزی', 'سالن اجتماعات', 'لابی', 'نگهبان/سرایدار', 'دوربین مداربسته', 'لاندری', 'اتاق مستر', 'کمد دیواری', 'کابینت MDF', 'آشپزخانه اپن', 'سرویس فرنگی', 'بازسازی‌شده']
 
 const card: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16 }
 const inputStyle: React.CSSProperties = { padding: '9px 11px', borderRadius: 9, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--text)', fontSize: 13, outline: 'none', fontFamily: FONT, width: '100%' }
@@ -106,7 +111,7 @@ export default function ProsPage() {
   const [nl, setNl] = useState({ name: '', phone: '', need: '', budget: '', source: '' })
   const [na, setNa] = useState({ client: '', listingTitle: '', date: '', type: 'visit' })
   // فرمِ کاملِ فایل (پاپ‌آپ)
-  const emptyForm = { title: '', ptype: 'آپارتمان', deal: 'sale' as 'sale' | 'rent', location: '', address: '', price: '', rentMonthly: '', area: '', rooms: '', floor: '', totalFloors: '', yearBuilt: '', docType: '', phone: '', description: '', parking: false, elevator: false, storage: false, balcony: false, furnished: false, images: [] as string[] }
+  const emptyForm = { title: '', ptype: 'آپارتمان', deal: 'sale' as 'sale' | 'rent', city: '', neighborhood: '', location: '', address: '', facing: '', price: '', rentMonthly: '', area: '', rooms: '', floor: '', totalFloors: '', yearBuilt: '', docType: '', phone: '', description: '', amenities: [] as string[], images: [] as string[] }
   const [form, setForm] = useState(emptyForm)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -114,9 +119,10 @@ export default function ProsPage() {
 
   const openAdd = () => { setForm(emptyForm); setEditingId(null); setShowForm(true) }
   const openEdit = (l: Listing) => {
-    setForm({ title: l.title, ptype: l.ptype, deal: l.deal, location: l.location, address: l.address || '', price: String(l.price || ''), rentMonthly: String(l.rentMonthly || ''), area: String(l.area || ''), rooms: String(l.rooms ?? ''), floor: String(l.floor || ''), totalFloors: String(l.totalFloors || ''), yearBuilt: String(l.yearBuilt || ''), docType: l.docType || '', phone: l.phone || '', description: l.description || '', parking: !!l.parking, elevator: !!l.elevator, storage: !!l.storage, balcony: !!l.balcony, furnished: !!l.furnished, images: l.images || [] })
+    setForm({ title: l.title, ptype: l.ptype, deal: l.deal, city: l.city || '', neighborhood: l.neighborhood || '', location: l.location, address: l.address || '', facing: l.facing || '', price: String(l.price || ''), rentMonthly: String(l.rentMonthly || ''), area: String(l.area || ''), rooms: String(l.rooms ?? ''), floor: String(l.floor || ''), totalFloors: String(l.totalFloors || ''), yearBuilt: String(l.yearBuilt || ''), docType: l.docType || '', phone: l.phone || '', description: l.description || '', amenities: l.amenities || [], images: l.images || [] })
     setEditingId(l.id); setShowForm(true)
   }
+  const toggleAmenity = (a: string) => setForm(f => ({ ...f, amenities: f.amenities.includes(a) ? f.amenities.filter(x => x !== a) : [...f.amenities, a] }))
   const uploadImages = async (files: FileList | null) => {
     if (!files || !files.length) return
     setUploading(true)
@@ -131,13 +137,13 @@ export default function ProsPage() {
   const saveListing = async () => {
     if (!form.title.trim()) { alert('عنوان فایل الزامی است'); return }
     const patch = {
-      title: form.title.trim(), ptype: form.ptype, deal: form.deal, location: form.location, address: form.address,
+      title: form.title.trim(), ptype: form.ptype, deal: form.deal,
+      city: form.city, neighborhood: form.neighborhood, location: form.location, address: form.address, facing: form.facing,
       price: Number(form.price) || 0, rentMonthly: Number(form.rentMonthly) || 0,
       area: Number(form.area) || 0, rooms: Number(form.rooms) || 0, floor: Number(form.floor) || 0,
       totalFloors: Number(form.totalFloors) || 0, yearBuilt: Number(form.yearBuilt) || 0,
       docType: form.docType, phone: form.phone, description: form.description,
-      parking: form.parking, elevator: form.elevator, storage: form.storage, balcony: form.balcony, furnished: form.furnished,
-      images: form.images,
+      amenities: form.amenities, images: form.images,
     }
     const ok = editingId ? await post({ action: 'updateListing', id: editingId, patch }) : await post({ action: 'addListing', ...patch })
     if (ok) { setShowForm(false); setForm(emptyForm); setEditingId(null) }
@@ -378,9 +384,9 @@ export default function ProsPage() {
                     </div>
                     <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 7, flex: 1 }}>
                       <div style={{ fontWeight: 700, fontSize: 14 }}>{l.title}</div>
-                      <div style={{ fontSize: 12, color: 'var(--muted)' }}>{l.ptype} · {l.location}</div>
+                      <div style={{ fontSize: 12, color: 'var(--muted)' }}>{l.ptype} · {[l.city, l.neighborhood].filter(Boolean).join('، ') || l.location || '—'}</div>
                       <div style={{ fontSize: 11.5, color: 'var(--muted)', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                        {l.area ? <span>{fa(l.area)}م</span> : null}{l.rooms ? <span>{fa(l.rooms)} خواب</span> : null}{l.floor ? <span>طبقه {fa(l.floor)}</span> : null}{l.yearBuilt ? <span>ساخت {fa(l.yearBuilt)}</span> : null}
+                        {l.area ? <span>{fa(l.area)}م</span> : null}{l.rooms ? <span>{fa(l.rooms)} خواب</span> : null}{l.floor ? <span>طبقه {fa(l.floor)}</span> : null}{l.yearBuilt ? <span>ساخت {fa(l.yearBuilt)}</span> : null}{l.amenities && l.amenities.length ? <span>✓ {fa(l.amenities.length)} امکانات</span> : null}
                       </div>
                       <div style={{ fontWeight: 800, color: 'var(--gold)', fontSize: 14 }}>{l.deal === 'rent' ? `ودیعه ${money(l.price)}${l.rentMonthly ? ` · اجاره ${money(l.rentMonthly)}` : ''}` : money(l.price)}</div>
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 'auto' }}>
@@ -508,7 +514,9 @@ export default function ProsPage() {
                 <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>عنوان فایل *</label><input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="مثلاً آپارتمان ۱۲۰ متری نوساز زعفرانیه" style={inputStyle} /></div>
                 <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع ملک</label><select value={form.ptype} onChange={e => setForm({ ...form, ptype: e.target.value })} style={inputStyle}>{PTYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
                 <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع معامله</label><select value={form.deal} onChange={e => setForm({ ...form, deal: e.target.value as 'sale' | 'rent' })} style={inputStyle}><option value="sale">فروش</option><option value="rent">اجاره/رهن</option></select></div>
-                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>منطقه</label><input value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} placeholder="مثلاً زعفرانیه" style={inputStyle} /></div>
+                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>شهر</label><input value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} placeholder="مثلاً تهران" style={inputStyle} /></div>
+                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>محله</label><input value={form.neighborhood} onChange={e => setForm({ ...form, neighborhood: e.target.value })} placeholder="مثلاً زعفرانیه" style={inputStyle} /></div>
+                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>منطقه/خیابان</label><input value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} placeholder="مثلاً منطقه ۱، خیابان…" style={inputStyle} /></div>
                 <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>آدرس دقیق</label><input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} style={inputStyle} /></div>
               </div>
 
@@ -526,19 +534,20 @@ export default function ProsPage() {
                 <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>تعداد کل طبقات</label><input value={form.totalFloors} onChange={e => setForm({ ...form, totalFloors: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
                 <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>سال ساخت</label><input value={form.yearBuilt} onChange={e => setForm({ ...form, yearBuilt: e.target.value.replace(/\D/g, '') })} placeholder="۱۴۰۲" style={inputStyle} /></div>
                 <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع سند</label><input value={form.docType} onChange={e => setForm({ ...form, docType: e.target.value })} placeholder="تک‌برگ / منگوله‌دار" style={inputStyle} /></div>
+                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>جهت ساختمان</label><select value={form.facing} onChange={e => setForm({ ...form, facing: e.target.value })} style={inputStyle}><option value="">—</option>{FACING_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
                 <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>تلفن تماس</label><input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} /></div>
               </div>
 
               {/* amenities */}
               <div>
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--muted)', marginBottom: 8 }}>امکانات</div>
-                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-                  {([['parking', 'پارکینگ'], ['elevator', 'آسانسور'], ['storage', 'انباری'], ['balcony', 'بالکن'], ['furnished', 'مبله']] as const).map(([k, label]) => (
-                    <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, cursor: 'pointer' }}>
-                      <input type="checkbox" checked={form[k]} onChange={e => setForm({ ...form, [k]: e.target.checked })} style={{ width: 16, height: 16, accentColor: 'var(--gold)', cursor: 'pointer' }} />
-                      {label}
-                    </label>
-                  ))}
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--muted)', marginBottom: 8 }}>امکانات ({fa(form.amenities.length)} انتخاب‌شده)</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {AMENITIES.map(a => {
+                    const on = form.amenities.includes(a)
+                    return (
+                      <button key={a} type="button" onClick={() => toggleAmenity(a)} style={{ padding: '6px 13px', borderRadius: 999, fontSize: 12.5, cursor: 'pointer', fontFamily: FONT, border: `1px solid ${on ? 'var(--gold)' : 'var(--line2)'}`, background: on ? 'var(--goldDim)' : 'transparent', color: on ? 'var(--gold)' : 'var(--muted)', fontWeight: on ? 700 : 500 }}>{on ? '✓ ' : ''}{a}</button>
+                    )
+                  })}
                 </div>
               </div>
 
