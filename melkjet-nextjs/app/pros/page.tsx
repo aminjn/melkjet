@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import AssistantPanel from '@/app/components/AssistantPanel'
+import CrmTool, { CRM_VIEWS, type CrmView } from '@/app/components/tools/CrmTool'
 
 // ════════ Types (mirror app/lib/advisor-store.ts) ════════
 type Stage = 'new' | 'contacted' | 'visit' | 'negotiation' | 'closed' | 'lost'
@@ -64,8 +65,8 @@ const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'leads' | 'app
   { id: 'commissions', label: 'کمیسیون', icon: '﷼' },
   { id: 'settings', label: 'تنظیمات', icon: '⛭' },
 ]
+// ابزارهای جاسازی‌شده در پنل (داخل همین صفحه باز می‌شوند، نه جای دیگر)
 const NAV_LINKS = [
-  { href: '/crm', label: 'CRM و مشتریان', icon: '◇' },
   { href: '/marketing', label: 'مارکتینگ', icon: '◬' },
   { href: '/workflow', label: 'اتوماسیون', icon: '⛭' },
   { href: '/website-builder', label: 'وب‌سایت‌ساز', icon: '◳' },
@@ -86,6 +87,11 @@ function Kpi({ label, value, sub, subColor }: { label: string; value: string; su
 
 export default function ProsPage() {
   const [view, setView] = useState<View>('dashboard')
+  // CRM جاسازی‌شده: وقتی مقدار دارد، محتوای CRM در همین پنل نمایش داده می‌شود
+  const [crmView, setCrmView] = useState<CrmView | null>(null)
+  const [crmOpen, setCrmOpen] = useState(false)
+  const goView = (v: View) => { setView(v); setCrmView(null) }
+  const openCrm = (v: CrmView) => { setCrmView(v); setCrmOpen(true) }
   const [data, setData] = useState<AdvisorData | null>(null)
   const [loading, setLoading] = useState(true)
   const [unauth, setUnauth] = useState(false)
@@ -154,10 +160,10 @@ export default function ProsPage() {
         </div>
         <nav style={{ padding: '10px 8px', flex: 1, overflowY: 'auto' }}>
           {NAV_ITEMS.map(item => {
-            const active = view === item.id
+            const active = view === item.id && !crmView
             const badge = item.badge === 'leads' ? stats.kpis.activeLeads : item.badge === 'appts' ? stats.kpis.upcomingAppts : 0
             return (
-              <button key={item.id} onClick={() => setView(item.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: active ? 'var(--goldDim)' : 'transparent', color: active ? 'var(--gold)' : 'var(--muted)', fontWeight: active ? 700 : 500, fontSize: 14, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
+              <button key={item.id} onClick={() => goView(item.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: active ? 'var(--goldDim)' : 'transparent', color: active ? 'var(--gold)' : 'var(--muted)', fontWeight: active ? 700 : 500, fontSize: 14, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
                 <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: active ? 1 : 0.7 }}>{item.icon}</span>
                 <span className="mjp-sidelabel" style={{ flex: 1 }}>{item.label}</span>
                 {item.badge && badge > 0 && <span style={{ background: active ? 'var(--gold)' : 'var(--line2)', color: active ? '#16140f' : 'var(--text)', borderRadius: 9, fontSize: 10, fontWeight: 700, padding: '1px 7px' }}>{fa(badge)}</span>}
@@ -165,6 +171,23 @@ export default function ProsPage() {
             )
           })}
           <div style={{ height: 1, background: 'var(--line)', margin: '10px 8px' }} />
+
+          {/* CRM — جاسازی‌شده با منوی آبشاری (داخل همین پنل باز می‌شود) */}
+          <button onClick={() => { setCrmOpen(o => !o); if (!crmView) openCrm('dashboard') }} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: crmView ? 'var(--goldDim)' : 'transparent', color: crmView ? 'var(--gold)' : 'var(--muted)', fontWeight: crmView ? 700 : 500, fontSize: 14, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
+            <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: crmView ? 1 : 0.7 }}>◇</span>
+            <span className="mjp-sidelabel" style={{ flex: 1 }}>CRM و مشتریان</span>
+            <span className="mjp-sidelabel" style={{ fontSize: 11, transition: 'transform .2s', transform: crmOpen ? 'rotate(90deg)' : 'none' }}>‹</span>
+          </button>
+          {crmOpen && CRM_VIEWS.map(cv => {
+            const on = crmView === cv.id
+            return (
+              <button key={cv.id} onClick={() => openCrm(cv.id)} className="mjp-sidelabel" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 9, padding: '8px 14px 8px 14px', paddingRight: 34, borderRadius: 10, border: 'none', cursor: 'pointer', background: on ? 'var(--goldDim)' : 'transparent', color: on ? 'var(--gold)' : 'var(--muted)', fontWeight: on ? 700 : 500, fontSize: 13, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
+                <span style={{ fontSize: 13, width: 16, textAlign: 'center', opacity: on ? 1 : 0.6 }}>{cv.icon}</span>
+                <span style={{ flex: 1 }}>{cv.label}</span>
+              </button>
+            )
+          })}
+
           {NAV_LINKS.map(l => (
             <a key={l.href} href={l.href} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, color: 'var(--muted)', textDecoration: 'none', fontWeight: 500, fontSize: 14, marginBottom: 2, fontFamily: FONT }}>
               <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: 0.7 }}>{l.icon}</span>
@@ -185,13 +208,14 @@ export default function ProsPage() {
       {/* MAIN */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 22px', borderBottom: '1px solid var(--line)', position: 'sticky', top: 0, background: 'var(--navbg)', backdropFilter: 'blur(18px)', zIndex: 20, flexWrap: 'wrap' }}>
-          <div style={{ fontWeight: 800, fontSize: 18 }}>{VIEW_TITLES[view]}</div>
+          <div style={{ fontWeight: 800, fontSize: 18 }}>{crmView ? `CRM · ${CRM_VIEWS.find(v => v.id === crmView)?.label || ''}` : VIEW_TITLES[view]}</div>
           <div style={{ flex: 1 }} />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="جستجوی لید، مشتری…" style={{ ...inputStyle, width: 220, maxWidth: '40vw' }} />
-          <button onClick={() => setView('leads')} style={{ ...goldBtn, padding: '9px 16px' }}>+ لید جدید</button>
+          <button onClick={() => goView('leads')} style={{ ...goldBtn, padding: '9px 16px' }}>+ لید جدید</button>
         </header>
 
         <main style={{ padding: 22, flex: 1, overflowY: 'auto' }}>
+          {crmView ? <CrmTool embedded view={crmView} onView={v => setCrmView(v)} /> : <>
           {/* DASHBOARD */}
           {view === 'dashboard' && <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
@@ -398,6 +422,7 @@ export default function ProsPage() {
               <button disabled={busy} onClick={() => post({ action: 'updateProfile', patch: { name: prof.name, agency: prof.agency } })} style={{ ...goldBtn, alignSelf: 'flex-start', padding: '9px 22px' }}>ذخیره</button>
             </div>
           </div>}
+          </>}
         </main>
       </div>
     </div>
