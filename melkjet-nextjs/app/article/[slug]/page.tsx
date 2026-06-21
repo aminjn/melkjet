@@ -59,6 +59,7 @@ export default function ArticlePage() {
   const [item, setItem] = useState<ContentItem | null>(null)
   const [loading, setLoading] = useState(true)
   const [related, setRelated] = useState<ContentItem[]>([])
+  const [authorListings, setAuthorListings] = useState<ContentItem[]>([])
 
   const [liked, setLiked] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -95,6 +96,18 @@ export default function ArticlePage() {
 
     return () => { alive = false }
   }, [slug])
+
+  // آگهی‌های همان نویسنده (برای اتصال مقاله ↔ آگهی و لینک داخلیِ سئو)
+  useEffect(() => {
+    const author = (item as { meta?: { author?: string } } | null)?.meta?.author
+    if (!author) { setAuthorListings([]); return }
+    let alive = true
+    fetch(`/api/content?type=listing&owner=${encodeURIComponent(author)}&limit=6`)
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((d) => { if (alive) setAuthorListings((d.items || []).slice(0, 6)) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [item])
 
   // counts are local-only (no backend exists for reactions)
   const baseLikes = 0
@@ -340,11 +353,11 @@ export default function ArticlePage() {
             {item.tags && item.tags.length > 0 && (
             <div style={{ display: 'flex', gap: 8, marginTop: 32, flexWrap: 'wrap' }}>
               {item.tags.map(t => (
-                <span key={t} style={{
-                  fontSize: 12, color: 'var(--muted)',
+                <Link key={t} href={`/search?q=${encodeURIComponent(t)}`} style={{
+                  fontSize: 12, color: 'var(--muted)', textDecoration: 'none',
                   background: 'var(--surface)', border: '1px solid var(--line)',
                   borderRadius: 999, padding: '5px 13px', cursor: 'pointer'
-                }}>#{t}</span>
+                }}>#{t}</Link>
               ))}
             </div>
             )}
@@ -475,6 +488,34 @@ export default function ArticlePage() {
                 ))}
               </div>
             </div>
+
+            {/* آگهی‌های همین نویسنده — اتصال مقاله به آگهی + لینک داخلیِ سئو */}
+            {authorListings.length > 0 && (
+            <div style={{ marginTop: 48 }}>
+              <h3 style={{ fontSize: 17, fontWeight: 800, color: 'var(--text)', margin: '0 0 6px' }}>
+                آگهی‌های {author || 'این نویسنده'} در ملک‌جت
+              </h3>
+              <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 18px' }}>ملک‌های ثبت‌شده توسط نویسندهٔ این مقاله — برای جزئیات روی هر آگهی بزنید.</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 14 }}>
+                {authorListings.map((l) => (
+                  <Link key={l.id} href={`/property/${l.id}`} style={{ display: 'block', textDecoration: 'none', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 15, overflow: 'hidden', transition: 'border-color 0.2s' }}
+                    onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.borderColor = 'var(--gold)'}
+                    onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.borderColor = 'var(--line)'}
+                  >
+                    <div style={{ height: 120, background: l.image ? `url(${l.image}) center/cover no-repeat` : gradientFor(l.id) }} />
+                    <div style={{ padding: '12px 14px' }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text)', lineHeight: 1.5, marginBottom: 5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{l.title}</div>
+                      {l.location && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 4 }}>📍 {l.location}</div>}
+                      {l.price && <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--gold)' }}>{l.price}</div>}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+              <div style={{ marginTop: 14 }}>
+                <Link href={`/search?q=${encodeURIComponent(author || '')}`} style={{ fontSize: 13, color: 'var(--gold)', textDecoration: 'none', fontWeight: 700 }}>مشاهدهٔ همهٔ آگهی‌های {author || 'این نویسنده'} ←</Link>
+              </div>
+            </div>
+            )}
 
             {/* Related articles */}
             {related.length > 0 && (
