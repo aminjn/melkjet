@@ -5,7 +5,7 @@ import {
   addSaved, removeSaved, addSearch, toggleSearchAlerts, deleteSearch,
   addViewing, setViewingStatus, addOffer, withdrawOffer, markMessageRead, markAllRead, updateBuyerProfile,
   getBuyer, listConversations, startConversation, addChatMessage, getConversation,
-  listAiMessages, addAiMessage, clearAiMessages,
+  upsertPropertyConversation, listAiMessages, addAiMessage, clearAiMessages,
 } from '@/app/lib/buyer-store'
 import { agentModel, chatCompleteSafe } from '@/app/lib/gapgpt'
 
@@ -86,6 +86,16 @@ export async function POST(req: NextRequest) {
       const reply = await ownerReply(String(b.propertyTitle), String(b.ownerName || 'صاحب آگهی'), [{ from: 'buyer', text: String(b.text) }])
       addChatMessage(o, c.id, 'owner', reply.text, reply.ai)
       return NextResponse.json({ ok: true, conversation: getConversation(o, c.id) })
+    }
+    case 'propertyChat': {
+      // از صفحهٔ آگهی: گفتگوی همان ملک را پیدا/ایجاد و پیام را ارسال می‌کند.
+      if (!b.propertyTitle || !b.text) return NextResponse.json({ error: 'ملک و متن پیام الزامی است' }, { status: 400 })
+      const conv = upsertPropertyConversation(o, { propertyId: String(b.propertyId || ''), ownerName: b.ownerName, propertyTitle: String(b.propertyTitle) })
+      addChatMessage(o, conv.id, 'buyer', String(b.text))
+      const fresh = getConversation(o, conv.id)!
+      const reply = await ownerReply(fresh.propertyTitle, fresh.ownerName, fresh.messages.map(m => ({ from: m.from, text: m.text })))
+      addChatMessage(o, conv.id, 'owner', reply.text, reply.ai)
+      return NextResponse.json({ ok: true, conversation: getConversation(o, conv.id) })
     }
     case 'sendChat': {
       if (!b.id || !b.text) return NextResponse.json({ error: 'گفتگو و متن الزامی است' }, { status: 400 })

@@ -29,7 +29,7 @@ export interface BMessage {
 export type ChatFrom = 'buyer' | 'owner'
 export interface ChatMsg { id: string; from: ChatFrom; text: string; ai?: boolean; createdAt: number }
 export interface Conversation {
-  id: string; ownerName: string; propertyTitle: string; messages: ChatMsg[]; createdAt: number; updatedAt: number
+  id: string; ownerName: string; propertyTitle: string; propertyId?: string; messages: ChatMsg[]; createdAt: number; updatedAt: number
 }
 // ── دستیار هوشمند خرید (گفتگو با AI) ──
 export type AiRole = 'user' | 'assistant'
@@ -211,6 +211,21 @@ export function addChatMessage(o: string, convId: string, from: ChatFrom, text: 
 }
 export function getConversation(o: string, convId: string): Conversation | null {
   return getBuyer(o).conversations.find(c => c.id === convId) || null
+}
+// از روی صفحهٔ آگهی: گفتگوی همان ملک را پیدا یا ایجاد می‌کند (بدون پیامِ اولیه).
+export function upsertPropertyConversation(o: string, input: { propertyId: string; ownerName?: string; propertyTitle: string }): Conversation {
+  let c!: Conversation
+  mutate(o, b => {
+    const existing = input.propertyId ? b.conversations.find(x => x.propertyId === input.propertyId) : null
+    if (existing) { c = existing; return }
+    const now = Date.now()
+    c = {
+      id: id('c_'), ownerName: String(input.ownerName || 'صاحب آگهی'), propertyTitle: String(input.propertyTitle || 'ملک'),
+      propertyId: input.propertyId || undefined, createdAt: now, updatedAt: now, messages: [],
+    }
+    b.conversations.unshift(c)
+  })
+  return c
 }
 
 // ---- دستیار هوشمند (AI) ----

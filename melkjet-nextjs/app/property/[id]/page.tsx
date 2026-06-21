@@ -75,6 +75,25 @@ export default function PropertyPage() {
   const [ask, setAsk] = useState('')
   const [askMsgs, setAskMsgs] = useState<{ role: 'user' | 'ai'; text: string }[]>([])
   const [asking, setAsking] = useState(false)
+  // چت با صاحب آگهی (در پنل خریدار هم ذخیره می‌شود)
+  const [ownerThread, setOwnerThread] = useState<{ from: 'buyer' | 'owner'; text: string; ai?: boolean }[]>([])
+  const [ownerInput, setOwnerInput] = useState('')
+  const [ownerBusy, setOwnerBusy] = useState(false)
+  const [chatNeedLogin, setChatNeedLogin] = useState(false)
+
+  const sendOwnerChat = async (q?: string) => {
+    const content = (q ?? ownerInput).trim()
+    if (!content || !item || ownerBusy) return
+    setOwnerInput(''); setOwnerBusy(true); setChatNeedLogin(false)
+    setOwnerThread(t => [...t, { from: 'buyer', text: content }])
+    try {
+      const r = await fetch('/api/buyer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'propertyChat', propertyId: item.id, propertyTitle: item.title, ownerName: item.owner || 'صاحب آگهی', text: content }) })
+      if (r.status === 401) { setChatNeedLogin(true); setOwnerThread(t => t.slice(0, -1)); setOwnerInput(content); return }
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || !d.conversation) { setOwnerThread(t => [...t, { from: 'owner', text: '⚠ ' + (d.error || 'خطا در ارسال') }]); return }
+      setOwnerThread(d.conversation.messages.map((m: { from: 'buyer' | 'owner'; text: string; ai?: boolean }) => ({ from: m.from, text: m.text, ai: m.ai })))
+    } catch { setOwnerThread(t => [...t, { from: 'owner', text: '⚠ خطا در ارتباط' }]) } finally { setOwnerBusy(false) }
+  }
 
   const sendAsk = async (q?: string) => {
     const content = (q ?? ask).trim()
@@ -379,6 +398,48 @@ export default function PropertyPage() {
                 ) : (
                   <button onClick={getContact} disabled={gettingPhone} style={{ width: '100%', padding: '13px', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', border: 'none', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, opacity: gettingPhone ? 0.6 : 1 }}>{gettingPhone ? 'در حال دریافت…' : 'دریافت اطلاعات تماس'}</button>
                 )}
+              </div>
+
+              {/* chat with owner — saved to buyer panel */}
+              <div style={{ ...card, border: '1px solid var(--gold)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
+                  <span style={{ width: 30, height: 30, borderRadius: 9, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16140f', fontWeight: 800 }}>💬</span>
+                  <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 13.5 }}>چت با صاحب آگهی</div><div style={{ fontSize: 11, color: 'var(--muted)' }}>{item.owner || 'صاحب آگهی'} · پاسخ سریع</div></div>
+                </div>
+
+                {ownerThread.length > 0 && (
+                  <div style={{ maxHeight: 240, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
+                    {ownerThread.map((m, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: m.from === 'buyer' ? 'flex-start' : 'flex-end' }}>
+                        <div style={{ maxWidth: '85%', padding: '8px 11px', borderRadius: 12, fontSize: 12.5, lineHeight: 1.7, whiteSpace: 'pre-wrap', ...(m.from === 'buyer'
+                          ? { background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', borderTopRightRadius: 4 }
+                          : { background: 'var(--bg2)', border: '1px solid var(--line)', borderTopLeftRadius: 4 }) }}>
+                          {m.text}
+                          {m.from === 'owner' && m.ai && <span style={{ display: 'block', fontSize: 9.5, color: 'var(--faint)', marginTop: 3 }}>✨ پاسخ خودکار</span>}
+                        </div>
+                      </div>
+                    ))}
+                    {ownerBusy && <div style={{ alignSelf: 'flex-end', fontSize: 11.5, color: 'var(--muted)' }}>در حال پاسخ…</div>}
+                  </div>
+                )}
+
+                {ownerThread.length === 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                    {['سلام، هنوز موجوده؟', 'امکان بازدید هست؟', 'قیمت قابل مذاکره است؟'].map(c => (
+                      <button key={c} onClick={() => sendOwnerChat(c)} disabled={ownerBusy} style={{ padding: '7px 11px', borderRadius: 999, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--muted)', fontFamily: 'inherit', fontSize: 12, cursor: 'pointer' }}>{c}</button>
+                    ))}
+                  </div>
+                )}
+
+                {chatNeedLogin ? (
+                  <a href={`/auth?next=/property/${item.id}`} style={{ display: 'block', textAlign: 'center', padding: '11px', borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--gold)', color: 'var(--gold)', textDecoration: 'none', fontWeight: 700, fontSize: 13 }}>برای چت با صاحب آگهی وارد شوید →</a>
+                ) : (
+                  <form onSubmit={e => { e.preventDefault(); sendOwnerChat() }} style={{ display: 'flex', gap: 7 }}>
+                    <input value={ownerInput} onChange={e => setOwnerInput(e.target.value)} placeholder="پیامت را بنویس…" style={{ flex: 1, padding: '9px 11px', borderRadius: 9, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--text)', fontSize: 12.5, outline: 'none', fontFamily: 'inherit' }} />
+                    <button type="submit" disabled={ownerBusy || !ownerInput.trim()} style={{ padding: '9px 16px', borderRadius: 9, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', border: 'none', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', opacity: ownerBusy || !ownerInput.trim() ? .6 : 1 }}>ارسال</button>
+                  </form>
+                )}
+                <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 8, textAlign: 'center' }}>این گفتگو در پنل خریدار شما هم ذخیره می‌شود · <a href="/buyer" style={{ color: 'var(--gold)' }}>مشاهده</a></div>
               </div>
 
               {/* originality badge */}
