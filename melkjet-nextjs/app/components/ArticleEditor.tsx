@@ -183,6 +183,30 @@ export default function ArticleEditor({ compact }: { compact?: boolean }) {
   // گسترش مقاله: زیرعنوان‌ها و بخش‌های جدید با عمق بیشتر به انتها اضافه می‌کند (برای رسیدن به طول بالا)
   const expandText = () => aiText('expand', 'این مقاله را گسترش بده: ۳ تا ۵ زیرعنوان و بخش جدید و مفیدِ مرتبط با همین موضوع بنویس که در متن فعلی نیامده (مثال، نکات تخصصی، اشتباهات رایج، مقایسه، چک‌لیست). فقط بخش‌های جدید را به Markdown بده (با تیتر ##)، تکراری ننویس.', t => { setF(p => ({ ...p, body: (p.body || '') + mdToHtml(t) })); setMsg('✓ مقاله گسترش یافت — برای طولانی‌تر شدن دوباره بزن') })
 
+  // لینک داخلی برای سئو: آگهی‌های مرتبط را پیدا و به انتهای مقاله به‌صورت لینک داخلی اضافه می‌کند
+  const genInternalLinks = async () => {
+    setBusy('links'); setMsg('')
+    try {
+      const r = await fetch('/api/content?type=listing&limit=80')
+      const d = await r.json().catch(() => ({ items: [] }))
+      const all: { id: string; title?: string; location?: string; meta?: Record<string, string> }[] = d.items || []
+      if (!all.length) { setMsg('⚠ هنوز آگهی‌ای برای لینک‌دادن وجود ندارد'); return }
+      const kw = (f.focusKeyword || f.title || '').trim()
+      const terms = kw.split(/\s+/).map(w => w.trim()).filter(w => w.length > 2)
+      const scored = all.map(it => {
+        const hay = `${it.title || ''} ${it.location || ''} ${it.meta ? Object.values(it.meta).join(' ') : ''}`
+        const score = terms.reduce((s, t) => s + (hay.includes(t) ? 1 : 0), 0)
+        return { it, score }
+      }).sort((a, b) => b.score - a.score)
+      const relevant = scored.filter(s => s.score > 0)
+      const picks = (relevant.length ? relevant : scored).slice(0, 5).map(s => s.it)
+      const esc = (x: string) => x.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      const html = `<h2>آگهی‌های مرتبط در ملک‌جت</h2><ul>${picks.map(p => `<li><a href="/property/${p.id}">${esc(p.title || 'مشاهدهٔ آگهی')}${p.location ? ` — ${esc(p.location)}` : ''}</a></li>`).join('')}</ul>`
+      setF(p => ({ ...p, body: (p.body || '') + html }))
+      setMsg(`✓ ${picks.length.toLocaleString('fa-IR')} لینک داخلی به آگهی‌ها اضافه شد`)
+    } catch { setMsg('⚠ خطا در دریافت آگهی‌ها') } finally { setBusy('') }
+  }
+
   // امتیاز سئو (متن HTML را برای شمارش کلمه پاک می‌کنیم)
   const seo = (() => {
     let score = 0; const tips: string[] = []
@@ -282,6 +306,7 @@ export default function ArticleEditor({ compact }: { compact?: boolean }) {
                 ['seo', '🎯 بهینه‌سازی کلمهٔ کلیدی', optimizeKeyword],
                 ['title', '✎ پیشنهاد عنوان', suggestTitle],
                 ['tags', '#️⃣ تولید برچسب', genTags],
+                ['links', '🔗 لینک داخلی به آگهی', genInternalLinks],
                 ['meta', '📝 چکیده و متا', genMeta],
                 ['grammar', '✓ ویرایش نگارشی', fixGrammar],
                 ['cover', '🖼 تصویر شاخص AI', genCover],
