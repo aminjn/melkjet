@@ -25,6 +25,16 @@ export interface BOffer {
 export interface BMessage {
   id: string; from: string; propertyTitle?: string; text: string; unread: boolean; createdAt: number
 }
+// ── چت با صاحب آگهی ──
+export type ChatFrom = 'buyer' | 'owner'
+export interface ChatMsg { id: string; from: ChatFrom; text: string; ai?: boolean; createdAt: number }
+export interface Conversation {
+  id: string; ownerName: string; propertyTitle: string; messages: ChatMsg[]; createdAt: number; updatedAt: number
+}
+// ── دستیار هوشمند خرید (گفتگو با AI) ──
+export type AiRole = 'user' | 'assistant'
+export interface AiMsg { id: string; role: AiRole; text: string; createdAt: number }
+
 export interface BuyerData {
   profile: { name: string; budget?: number; prefType?: string; areas?: string }
   saved: SavedProperty[]
@@ -32,6 +42,8 @@ export interface BuyerData {
   viewings: BViewing[]
   offers: BOffer[]
   messages: BMessage[]
+  conversations: Conversation[]
+  aiMessages: AiMsg[]
   createdAt: number
 }
 
@@ -65,11 +77,40 @@ function seed(): BuyerData {
     { id: id('m_'), from: 'مشاور رضایی', propertyTitle: 'آپارتمان ۲ خوابه جردن', text: 'مالک با قیمت پیشنهادی موافق نیست، گزینهٔ مشابه دارم.', unread: true, createdAt: now - 1 * day },
     { id: id('m_'), from: 'پشتیبانی ملک‌جت', text: 'سرچ ذخیره‌شدهٔ شما ۳ مورد جدید دارد.', unread: false, createdAt: now - 2 * day },
   ]
-  return { profile: { name: 'کاربر ملک‌جت', budget: 10000000000, prefType: 'آپارتمان', areas: 'شمال تهران' }, saved, searches, viewings, offers, messages, createdAt: now }
+  const conversations: Conversation[] = [
+    {
+      id: id('c_'), ownerName: 'مالک: آقای کریمی', propertyTitle: 'آپارتمان نوساز سعادت‌آباد',
+      createdAt: now - 1 * day, updatedAt: now - 0.3 * day,
+      messages: [
+        { id: id('cm_'), from: 'buyer', text: 'سلام، این واحد هنوز موجوده؟ امکان بازدید آخر هفته هست؟', createdAt: now - 1 * day },
+        { id: id('cm_'), from: 'owner', text: 'سلام، بله موجوده. پنجشنبه یا جمعه بعدازظهر می‌تونم هماهنگ کنم.', createdAt: now - 0.9 * day },
+        { id: id('cm_'), from: 'buyer', text: 'عالیه، قیمت نهایی‌تون چقدره؟ کمی انعطاف دارید؟', createdAt: now - 0.4 * day },
+        { id: id('cm_'), from: 'owner', text: 'قیمت ۸٫۵ میلیارده، برای خریدار جدی تا ۲۰۰ میلیون قابل مذاکره است.', createdAt: now - 0.3 * day },
+      ],
+    },
+    {
+      id: id('c_'), ownerName: 'مشاور رضایی', propertyTitle: 'آپارتمان ۲ خوابه جردن',
+      createdAt: now - 5 * day, updatedAt: now - 5 * day,
+      messages: [
+        { id: id('cm_'), from: 'buyer', text: 'سلام، طبقه و جهت نور این واحد چطوره؟', createdAt: now - 5 * day },
+      ],
+    },
+  ]
+  const aiMessages: AiMsg[] = []
+  return { profile: { name: 'کاربر ملک‌جت', budget: 10000000000, prefType: 'آپارتمان', areas: 'شمال تهران' }, saved, searches, viewings, offers, messages, conversations, aiMessages, createdAt: now }
 }
 
 export function getBuyer(o: string): BuyerData {
-  const db = load(); if (!db.buyers[o]) { db.buyers[o] = seed(); save(db) } return db.buyers[o]
+  const db = load()
+  if (!db.buyers[o]) { db.buyers[o] = seed(); save(db) }
+  const b = db.buyers[o]
+  // backfill برای دادهٔ قدیمی‌تر
+  if (!Array.isArray(b.conversations) || !Array.isArray(b.aiMessages)) {
+    if (!Array.isArray(b.conversations)) b.conversations = seed().conversations
+    if (!Array.isArray(b.aiMessages)) b.aiMessages = []
+    save(db)
+  }
+  return b
 }
 function mutate(o: string, fn: (b: BuyerData) => void) { const db = load(); if (!db.buyers[o]) db.buyers[o] = seed(); fn(db.buyers[o]); save(db); return db.buyers[o] }
 
@@ -141,6 +182,45 @@ export function markMessageRead(o: string, mid: string): BMessage | null {
   return res
 }
 export function markAllRead(o: string) { mutate(o, b => { b.messages.forEach(m => m.unread = false) }) }
+
+// ---- چت با صاحب آگهی ----
+export function listConversations(o: string): Conversation[] {
+  return [...getBuyer(o).conversations].sort((a, b) => b.updatedAt - a.updatedAt)
+}
+export function startConversation(o: string, input: { ownerName?: string; propertyTitle: string; text: string }): Conversation {
+  let c!: Conversation
+  mutate(o, b => {
+    const now = Date.now()
+    c = {
+      id: id('c_'), ownerName: String(input.ownerName || 'صاحب آگهی'), propertyTitle: String(input.propertyTitle || 'ملک'),
+      createdAt: now, updatedAt: now,
+      messages: [{ id: id('cm_'), from: 'buyer', text: String(input.text || ''), createdAt: now }],
+    }
+    b.conversations.unshift(c)
+  })
+  return c
+}
+export function addChatMessage(o: string, convId: string, from: ChatFrom, text: string, ai = false): Conversation | null {
+  let res: Conversation | null = null
+  mutate(o, b => {
+    const c = b.conversations.find(x => x.id === convId); if (!c) return
+    c.messages.push({ id: id('cm_'), from, text, ai: ai || undefined, createdAt: Date.now() })
+    c.updatedAt = Date.now(); res = c
+  })
+  return res
+}
+export function getConversation(o: string, convId: string): Conversation | null {
+  return getBuyer(o).conversations.find(c => c.id === convId) || null
+}
+
+// ---- دستیار هوشمند (AI) ----
+export function listAiMessages(o: string): AiMsg[] { return getBuyer(o).aiMessages }
+export function addAiMessage(o: string, role: AiRole, text: string): AiMsg {
+  let c!: AiMsg
+  mutate(o, b => { c = { id: id('ai_'), role, text, createdAt: Date.now() }; b.aiMessages.push(c) })
+  return c
+}
+export function clearAiMessages(o: string) { mutate(o, b => { b.aiMessages = [] }) }
 
 export function listSaved(o: string) { return getBuyer(o).saved }
 export function listSearches(o: string) { return getBuyer(o).searches }

@@ -13,6 +13,9 @@ interface Search { id: string; query: string; ptype?: string; area?: string; pri
 interface Viewing { id: string; propertyTitle: string; advisor?: string; date: string; status: ViewingStatus; createdAt: number }
 interface Offer { id: string; propertyTitle: string; amount: number; status: OfferStatus; createdAt: number }
 interface Message { id: string; from: string; propertyTitle?: string; text: string; unread: boolean; createdAt: number }
+interface ChatMsg { id: string; from: 'buyer' | 'owner'; text: string; ai?: boolean; createdAt: number }
+interface Conversation { id: string; ownerName: string; propertyTitle: string; messages: ChatMsg[]; createdAt: number; updatedAt: number }
+interface AiMsg { id: string; role: 'user' | 'assistant'; text: string; createdAt: number }
 
 interface Stats {
   profile: { name: string; budget?: number; prefType?: string; areas?: string }
@@ -21,9 +24,9 @@ interface Stats {
   upcoming: Viewing[]
   recentMessages: Message[]
 }
-interface BuyerData { stats: Stats; saved: Saved[]; searches: Search[]; viewings: Viewing[]; offers: Offer[]; messages: Message[] }
+interface BuyerData { stats: Stats; saved: Saved[]; searches: Search[]; viewings: Viewing[]; offers: Offer[]; messages: Message[]; conversations: Conversation[]; aiMessages: AiMsg[] }
 
-type View = 'dashboard' | 'favorites' | 'searches' | 'viewings' | 'offers' | 'messages' | 'settings'
+type View = 'dashboard' | 'ai' | 'chat' | 'favorites' | 'searches' | 'viewings' | 'offers' | 'messages' | 'settings'
 
 // ════════════════════════════════════════════════════════
 //  Helpers
@@ -51,17 +54,28 @@ const inputStyle: React.CSSProperties = { padding: '9px 11px', borderRadius: 9, 
 const actionBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap' }
 
 const VIEW_TITLES: Record<View, string> = {
-  dashboard: 'پنل خریدار', favorites: 'علاقه‌مندی‌ها', searches: 'جستجوهای ذخیره‌شده',
+  dashboard: 'پنل خریدار', ai: 'دستیار هوشمند خرید', chat: 'چت با صاحب آگهی',
+  favorites: 'علاقه‌مندی‌ها', searches: 'جستجوهای ذخیره‌شده',
   viewings: 'بازدیدهای من', offers: 'پیشنهادهای من', messages: 'پیام‌ها', settings: 'تنظیمات',
 }
-const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'viewings' | 'offers' | 'messages' }[] = [
+const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'viewings' | 'offers' | 'messages'; ai?: boolean }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: '▦' },
+  { id: 'ai', label: 'دستیار هوشمند', icon: '✨', ai: true },
+  { id: 'chat', label: 'چت با صاحب آگهی', icon: '💬' },
   { id: 'favorites', label: 'علاقه‌مندی‌ها', icon: '♥' },
   { id: 'searches', label: 'جستجوهای ذخیره‌شده', icon: '◍' },
   { id: 'viewings', label: 'بازدیدهای من', icon: '◉', badge: 'viewings' },
   { id: 'offers', label: 'پیشنهادهای من', icon: '◈', badge: 'offers' },
   { id: 'messages', label: 'پیام‌ها', icon: '✉', badge: 'messages' },
   { id: 'settings', label: 'تنظیمات', icon: '⛭' },
+]
+// چیپ‌های پیشنهادیِ دستیار هوشمند
+const AI_SUGGESTIONS = [
+  'قیمت منصفانهٔ آپارتمان ۹۰ متری سعادت‌آباد چقدره؟',
+  'با بودجه‌ام چه محله‌هایی پیشنهاد می‌دی؟',
+  'برای مذاکرهٔ قیمت چه نکاتی رو رعایت کنم؟',
+  'قبل از خرید چه مدارکی رو باید چک کنم؟',
+  'خرید بهتره یا اجاره با شرایط من؟',
 ]
 
 function Pill({ label, color }: { label: string; color: string }) {
@@ -110,6 +124,16 @@ export default function BuyerPage() {
   const [newOffer, setNewOffer] = useState({ propertyTitle: '', amount: '' })
   const [prof, setProf] = useState({ name: '', budget: '', prefType: '', areas: '' })
 
+  // دستیار هوشمند
+  const [aiInput, setAiInput] = useState('')
+  const [aiSending, setAiSending] = useState(false)
+  // چت با صاحب آگهی
+  const [activeConv, setActiveConv] = useState<string | null>(null)
+  const [chatInput, setChatInput] = useState('')
+  const [chatSending, setChatSending] = useState(false)
+  const [newConv, setNewConv] = useState({ ownerName: '', propertyTitle: '', text: '' })
+  const [drafting, setDrafting] = useState(false)
+
   const refresh = useCallback(async () => {
     try {
       const r = await fetch('/api/buyer')
@@ -136,6 +160,53 @@ export default function BuyerPage() {
     if (theme === 'dark') { html.classList.add('light'); setTheme('light') } else { html.classList.remove('light'); setTheme('dark') }
   }
 
+  // ── دستیار هوشمند ──
+  const askAi = async (text: string) => {
+    const t = text.trim(); if (!t || aiSending) return
+    setAiInput(''); setAiSending(true)
+    try {
+      const r = await fetch('/api/buyer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'aiAsk', text: t }) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { alert(d.error || 'خطا'); return }
+      await refresh()
+    } catch { alert('اتصال برقرار نشد') } finally { setAiSending(false) }
+  }
+  const clearAi = async () => { if (!confirm('گفتگوی دستیار پاک شود؟')) return; await post({ action: 'aiClear' }) }
+
+  // ── چت با صاحب آگهی ──
+  const sendChat = async () => {
+    const t = chatInput.trim(); if (!t || !activeConv || chatSending) return
+    setChatInput(''); setChatSending(true)
+    try {
+      const r = await fetch('/api/buyer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sendChat', id: activeConv, text: t }) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { alert(d.error || 'خطا'); return }
+      await refresh()
+    } catch { alert('اتصال برقرار نشد') } finally { setChatSending(false) }
+  }
+  const startConv = async () => {
+    if (!newConv.propertyTitle.trim() || !newConv.text.trim() || chatSending) return
+    setChatSending(true)
+    try {
+      const r = await fetch('/api/buyer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'startConversation', ownerName: newConv.ownerName.trim() || undefined, propertyTitle: newConv.propertyTitle.trim(), text: newConv.text.trim() }) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { alert(d.error || 'خطا'); return }
+      setNewConv({ ownerName: '', propertyTitle: '', text: '' })
+      await refresh()
+      if (d.conversation?.id) setActiveConv(d.conversation.id)
+    } catch { alert('اتصال برقرار نشد') } finally { setChatSending(false) }
+  }
+  const draftMessage = async (target: 'new' | 'reply') => {
+    if (drafting) return
+    setDrafting(true)
+    try {
+      const title = target === 'new' ? newConv.propertyTitle : (data?.conversations.find(c => c.id === activeConv)?.propertyTitle || '')
+      const r = await fetch('/api/buyer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'aiDraft', propertyTitle: title || 'این ملک' }) })
+      const d = await r.json().catch(() => ({}))
+      if (d.draft) { if (target === 'new') setNewConv(c => ({ ...c, text: d.draft })); else setChatInput(d.draft) }
+    } catch {} finally { setDrafting(false) }
+  }
+
   if (loading) return <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT, fontSize: 15 }}>در حال بارگذاری پنل خریدار…</div>
   if (unauth || !data) return (
     <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT }}>
@@ -148,7 +219,8 @@ export default function BuyerPage() {
     </div>
   )
 
-  const { stats, saved, searches, viewings, offers, messages } = data
+  const { stats, saved, searches, viewings, offers, messages, conversations, aiMessages } = data
+  const currentConv = conversations.find(c => c.id === activeConv) || null
   const q = search.trim()
   const savedFiltered = q ? saved.filter(s => (s.title + s.location + s.ptype).includes(q)) : saved
   const sectionTitle = (t: string) => <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 12 }}>{t}</div>
@@ -170,12 +242,22 @@ export default function BuyerPage() {
         <nav style={{ padding: '10px 8px', flex: 1, overflowY: 'auto' }}>
           {NAV_ITEMS.map(item => {
             const active = view === item.id
-            const badge = item.badge === 'viewings' ? stats.kpis.upcomingViewings : item.badge === 'offers' ? stats.kpis.pendingOffers : item.badge === 'messages' ? stats.kpis.unreadMessages : 0
+            const badge = item.badge === 'viewings' ? stats.kpis.upcomingViewings : item.badge === 'offers' ? stats.kpis.pendingOffers : item.badge === 'messages' ? stats.kpis.unreadMessages : item.id === 'chat' ? conversations.length : 0
+            // آیتمِ هوش مصنوعی همیشه پررنگ (گرادیان طلایی)
+            if (item.ai) {
+              return (
+                <button key={item.id} onClick={() => setView(item.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderRadius: 10, border: active ? '1px solid var(--gold)' : '1px solid transparent', cursor: 'pointer', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 14, textAlign: 'right', marginBottom: 6, fontFamily: FONT, boxShadow: '0 6px 18px -8px var(--gold)' }}>
+                  <span style={{ fontSize: 16, width: 18, textAlign: 'center' }}>{item.icon}</span>
+                  <span className="mjb-sidelabel" style={{ flex: 1 }}>{item.label}</span>
+                  <span className="mjb-sidelabel" style={{ fontSize: 9.5, fontWeight: 800, background: 'rgba(0,0,0,.18)', borderRadius: 6, padding: '2px 6px' }}>AI</span>
+                </button>
+              )
+            }
             return (
-              <button key={item.id} onClick={() => setView(item.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: active ? 'var(--goldDim)' : 'transparent', color: active ? 'var(--gold)' : 'var(--muted)', fontWeight: active ? 700 : 500, fontSize: 14, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
+              <button key={item.id} onClick={() => { setView(item.id); if (item.id === 'chat') setActiveConv(null) }} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: active ? 'var(--goldDim)' : 'transparent', color: active ? 'var(--gold)' : 'var(--muted)', fontWeight: active ? 700 : 500, fontSize: 14, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
                 <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: active ? 1 : 0.7 }}>{item.icon}</span>
                 <span className="mjb-sidelabel" style={{ flex: 1 }}>{item.label}</span>
-                {item.badge && badge > 0 && <span style={{ background: active ? 'var(--gold)' : 'var(--line2)', color: active ? '#16140f' : 'var(--text)', borderRadius: 9, fontSize: 10, fontWeight: 700, padding: '1px 7px' }}>{fa(badge)}</span>}
+                {badge > 0 && (item.badge || item.id === 'chat') && <span style={{ background: active ? 'var(--gold)' : 'var(--line2)', color: active ? '#16140f' : 'var(--text)', borderRadius: 9, fontSize: 10, fontWeight: 700, padding: '1px 7px' }}>{fa(badge)}</span>}
               </button>
             )
           })}
@@ -207,6 +289,29 @@ export default function BuyerPage() {
         <main style={{ padding: 22, flex: 1, overflowY: 'auto' }}>
           {/* ─── DASHBOARD ─── */}
           {view === 'dashboard' && <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {/* AI HERO */}
+            <div style={{ borderRadius: 18, padding: '22px 24px', background: 'linear-gradient(135deg, color-mix(in srgb,var(--gold) 22%,var(--surface)), var(--surface) 70%)', border: '1px solid color-mix(in srgb,var(--gold) 40%,transparent)', position: 'relative', overflow: 'hidden' }}>
+              <div style={{ position: 'absolute', left: -30, top: -30, width: 160, height: 160, borderRadius: '50%', background: 'radial-gradient(circle, color-mix(in srgb,var(--gold) 35%,transparent), transparent 70%)' }} />
+              <div style={{ position: 'relative' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                  <span style={{ fontSize: 24 }}>✨</span>
+                  <div style={{ fontWeight: 900, fontSize: 19 }}>دستیار هوشمند خرید ملک</div>
+                  <span style={{ fontSize: 10, fontWeight: 800, background: 'var(--gold)', color: '#16140f', borderRadius: 6, padding: '2px 8px' }}>AI</span>
+                </div>
+                <div style={{ fontSize: 13.5, color: 'var(--muted)', marginBottom: 16, lineHeight: 1.8, maxWidth: 560 }}>
+                  قیمت منصفانه، بهترین محله با بودجه‌ات، نکات مذاکره و چک‌لیست خرید — هر سؤالی داری از مشاور هوشمندِ ملک‌جت بپرس.
+                </div>
+                <form onSubmit={e => { e.preventDefault(); setView('ai'); askAi(aiInput) }} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <input value={aiInput} onChange={e => setAiInput(e.target.value)} placeholder="مثلاً: با ۸ میلیارد کجا آپارتمان بخرم؟" style={{ ...inputStyle, flex: '1 1 260px', background: 'var(--bg)' }} />
+                  <button type="submit" style={{ padding: '9px 22px', borderRadius: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 13.5, border: 'none', cursor: 'pointer', fontFamily: FONT, whiteSpace: 'nowrap' }}>بپرس از AI ✨</button>
+                </form>
+                <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 12 }}>
+                  {AI_SUGGESTIONS.slice(0, 3).map(s => (
+                    <button key={s} onClick={() => { setView('ai'); askAi(s) }} style={{ ...actionBtn, background: 'var(--bg)', borderColor: 'color-mix(in srgb,var(--gold) 30%,transparent)', color: 'var(--text)' }}>{s}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
               <Kpi label="علاقه‌مندی‌ها" value={fa(stats.kpis.savedCount)} />
               <Kpi label="جستجوهای ذخیره‌شده" value={fa(stats.kpis.searchCount)} />
@@ -244,6 +349,111 @@ export default function BuyerPage() {
                   <div style={{ fontSize: 11, color: 'var(--faint)', flexShrink: 0 }}>{faDate(m.createdAt)}</div>
                 </div>
               )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>پیامی نداری.</div>}
+            </div>
+          </div>}
+
+          {/* ─── AI ASSISTANT ─── */}
+          {view === 'ai' && <div style={{ display: 'flex', flexDirection: 'column', gap: 14, height: '100%', maxWidth: 860, margin: '0 auto', width: '100%' }}>
+            <div style={{ ...card, padding: 18, display: 'flex', alignItems: 'center', gap: 12, background: 'linear-gradient(135deg, color-mix(in srgb,var(--gold) 16%,var(--surface)), var(--surface) 75%)', border: '1px solid color-mix(in srgb,var(--gold) 35%,transparent)' }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>✨</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 900, fontSize: 16 }}>دستیار هوشمند خرید ملک</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>مشاور AI شخصیِ تو — بر اساس بودجه و سلیقه‌ات پاسخ می‌دهد</div>
+              </div>
+              {aiMessages.length > 0 && <button onClick={clearAi} style={actionBtn}>پاک کردن گفتگو</button>}
+            </div>
+
+            <div style={{ ...card, padding: 18, flex: 1, minHeight: 320, display: 'flex', flexDirection: 'column', gap: 12, overflowY: 'auto' }}>
+              {aiMessages.length === 0 ? (
+                <div style={{ margin: 'auto', textAlign: 'center', maxWidth: 460 }}>
+                  <div style={{ fontSize: 38, marginBottom: 10 }}>🏡✨</div>
+                  <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 6 }}>چطور می‌تونم کمکت کنم؟</div>
+                  <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 18, lineHeight: 1.8 }}>یکی از پیشنهادهای زیر را بزن یا سؤالت را تایپ کن.</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {AI_SUGGESTIONS.map(s => (
+                      <button key={s} onClick={() => askAi(s)} disabled={aiSending} style={{ ...actionBtn, textAlign: 'right', padding: '11px 14px', background: 'var(--bg)', color: 'var(--text)', borderColor: 'color-mix(in srgb,var(--gold) 25%,transparent)' }}>{s}</button>
+                    ))}
+                  </div>
+                </div>
+              ) : aiMessages.map(m => (
+                <div key={m.id} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-start' : 'flex-end' }}>
+                  <div style={{ maxWidth: '82%', padding: '11px 14px', borderRadius: 14, fontSize: 13.5, lineHeight: 1.85, whiteSpace: 'pre-wrap', ...(m.role === 'user'
+                    ? { background: 'var(--bg2)', border: '1px solid var(--line)', borderTopRightRadius: 4 }
+                    : { background: 'linear-gradient(135deg, color-mix(in srgb,var(--gold) 18%,var(--surface)), var(--surface))', border: '1px solid color-mix(in srgb,var(--gold) 30%,transparent)', borderTopLeftRadius: 4 }) }}>
+                    {m.role === 'assistant' && <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gold)', marginBottom: 5 }}>✨ دستیار هوشمند</div>}
+                    {m.text}
+                  </div>
+                </div>
+              ))}
+              {aiSending && <div style={{ alignSelf: 'flex-end', fontSize: 12.5, color: 'var(--gold)', padding: '6px 4px' }}>✨ در حال فکر کردن…</div>}
+            </div>
+
+            <form onSubmit={e => { e.preventDefault(); askAi(aiInput) }} style={{ display: 'flex', gap: 8 }}>
+              <input value={aiInput} onChange={e => setAiInput(e.target.value)} placeholder="سؤالت را بنویس…" style={{ ...inputStyle, flex: 1 }} />
+              <button type="submit" disabled={aiSending || !aiInput.trim()} style={{ padding: '9px 22px', borderRadius: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 14, border: 'none', cursor: aiSending ? 'default' : 'pointer', fontFamily: FONT, opacity: aiSending || !aiInput.trim() ? .6 : 1 }}>ارسال</button>
+            </form>
+          </div>}
+
+          {/* ─── CHAT WITH OWNER ─── */}
+          {view === 'chat' && <div className="mjb-cols" style={{ display: 'flex', gap: 16, height: '100%' }}>
+            {/* conversation list */}
+            <div style={{ ...card, padding: 14, flex: '0 0 280px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontWeight: 800, fontSize: 14, padding: '2px 4px' }}>گفتگوها</div>
+              <div style={{ ...card, padding: 12, background: 'var(--bg2)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--gold)' }}>گفتگوی جدید</div>
+                <input value={newConv.propertyTitle} onChange={e => setNewConv({ ...newConv, propertyTitle: e.target.value })} placeholder="عنوان ملک" style={{ ...inputStyle, fontSize: 12.5 }} />
+                <input value={newConv.ownerName} onChange={e => setNewConv({ ...newConv, ownerName: e.target.value })} placeholder="نام صاحب آگهی (اختیاری)" style={{ ...inputStyle, fontSize: 12.5 }} />
+                <textarea value={newConv.text} onChange={e => setNewConv({ ...newConv, text: e.target.value })} placeholder="متن پیام…" rows={2} style={{ ...inputStyle, fontSize: 12.5, resize: 'vertical' }} />
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button onClick={() => draftMessage('new')} disabled={drafting} title="پیشنهاد متن با هوش مصنوعی" style={{ ...actionBtn, color: 'var(--gold)', borderColor: 'color-mix(in srgb,var(--gold) 35%,transparent)' }}>{drafting ? '…' : '✨ پیشنهاد متن'}</button>
+                  <button onClick={startConv} disabled={chatSending || !newConv.propertyTitle.trim() || !newConv.text.trim()} style={{ flex: 1, padding: '7px 10px', borderRadius: 8, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 12.5, border: 'none', cursor: 'pointer', fontFamily: FONT }}>شروع</button>
+                </div>
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {conversations.map(c => (
+                  <button key={c.id} onClick={() => setActiveConv(c.id)} style={{ textAlign: 'right', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--line)', background: activeConv === c.id ? 'var(--goldDim)' : 'var(--bg)', cursor: 'pointer', fontFamily: FONT }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: activeConv === c.id ? 'var(--gold)' : 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.propertyTitle}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.ownerName} · {c.messages[c.messages.length - 1]?.text || ''}</div>
+                  </button>
+                ))}
+                {conversations.length === 0 && <div style={{ color: 'var(--faint)', fontSize: 12.5, textAlign: 'center', padding: '20px 0' }}>گفتگویی نداری.</div>}
+              </div>
+            </div>
+
+            {/* thread */}
+            <div style={{ ...card, padding: 0, flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+              {!currentConv ? (
+                <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--muted)', padding: 40 }}>
+                  <div style={{ fontSize: 38, marginBottom: 10 }}>💬</div>
+                  <div style={{ fontSize: 14 }}>یک گفتگو را انتخاب کن یا گفتگوی جدید بساز.</div>
+                </div>
+              ) : <>
+                <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, flexShrink: 0 }}>🏠</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 800, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{currentConv.propertyTitle}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{currentConv.ownerName}</div>
+                  </div>
+                </div>
+                <div style={{ flex: 1, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 280 }}>
+                  {currentConv.messages.map(m => (
+                    <div key={m.id} style={{ display: 'flex', justifyContent: m.from === 'buyer' ? 'flex-start' : 'flex-end' }}>
+                      <div style={{ maxWidth: '78%', padding: '10px 13px', borderRadius: 14, fontSize: 13.5, lineHeight: 1.8, whiteSpace: 'pre-wrap', ...(m.from === 'buyer'
+                        ? { background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', borderTopRightRadius: 4 }
+                        : { background: 'var(--bg2)', border: '1px solid var(--line)', borderTopLeftRadius: 4 }) }}>
+                        {m.text}
+                        {m.from === 'owner' && m.ai && <span style={{ display: 'block', fontSize: 10, color: 'var(--faint)', marginTop: 4 }}>✨ پاسخ خودکار</span>}
+                      </div>
+                    </div>
+                  ))}
+                  {chatSending && <div style={{ alignSelf: 'flex-end', fontSize: 12, color: 'var(--muted)', padding: '4px' }}>در حال پاسخ…</div>}
+                </div>
+                <form onSubmit={e => { e.preventDefault(); sendChat() }} style={{ padding: 14, borderTop: '1px solid var(--line)', display: 'flex', gap: 8 }}>
+                  <button type="button" onClick={() => draftMessage('reply')} disabled={drafting} title="پیشنهاد متن با هوش مصنوعی" style={{ ...actionBtn, color: 'var(--gold)', borderColor: 'color-mix(in srgb,var(--gold) 35%,transparent)', flexShrink: 0 }}>{drafting ? '…' : '✨'}</button>
+                  <input value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="پیامت را بنویس…" style={{ ...inputStyle, flex: 1 }} />
+                  <button type="submit" disabled={chatSending || !chatInput.trim()} style={{ padding: '9px 20px', borderRadius: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13.5, border: 'none', cursor: 'pointer', fontFamily: FONT, opacity: chatSending || !chatInput.trim() ? .6 : 1 }}>ارسال</button>
+                </form>
+              </>}
             </div>
           </div>}
 
