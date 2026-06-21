@@ -779,6 +779,46 @@ const SECTION_HINT: Record<ScrTab, string> = {
   price: 'قیمت/آمار بازار از هر منبع: صفحهٔ جدول قیمت را بدهید و فیلدها را نگاشت کنید (عنوان، قیمت، منطقه).',
 }
 
+function ZarinpalConfig() {
+  const [merchantId, setMerchantId] = useState('')
+  const [masked, setMasked] = useState('')
+  const [sandbox, setSandbox] = useState(false)
+  const [configured, setConfigured] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    fetch('/api/admin/zarinpal-config').then(r => r.ok ? r.json() : null).then(d => {
+      if (d) { setMasked(d.merchantId || ''); setSandbox(!!d.sandbox); setConfigured(!!d.configured) }
+    })
+  }, [])
+  const save = async () => {
+    setMsg('')
+    const r = await fetch('/api/admin/zarinpal-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ merchantId: merchantId || masked, sandbox }) })
+    const d = await r.json().catch(() => ({}))
+    if (r.ok) { setMsg('✓ ذخیره شد'); setConfigured(true) } else setMsg(d.error || 'خطا')
+  }
+  const inp = { flex: 1, minWidth: 220, direction: 'ltr' as const, textAlign: 'left' as const, background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+  return (
+    <Card style={{ marginBottom: 14 }}>
+      <div onClick={() => setOpen(!open)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
+        <div style={{ fontWeight: 700, fontSize: 14 }}>درگاه پرداخت زرین‌پال {configured ? <span style={{ color: '#5fd98a', fontSize: 12 }}>● تنظیم‌شده</span> : <span style={{ color: '#e7a14a', fontSize: 12 }}>● تنظیم نشده</span>}</div>
+        <span style={{ color: 'var(--muted)' }}>{open ? '▲' : '▼'}</span>
+      </div>
+      {open && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.8 }}>برای خرید/ارتقای پلن، مرچنت‌کدِ زرین‌پال را اینجا بگذار (از پنل زرین‌پال). برای تست، «سندباکس» را روشن کن.</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input value={merchantId} onChange={e => setMerchantId(e.target.value)} placeholder={masked || 'Merchant ID (xxxxxxxx-xxxx-…)'} style={inp} />
+            <label style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}><input type="checkbox" checked={sandbox} onChange={e => setSandbox(e.target.checked)} /> سندباکس</label>
+            <GoldButton onClick={save}>ذخیره</GoldButton>
+          </div>
+          {msg && <div style={{ marginTop: 8, fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</div>}
+        </div>
+      )}
+    </Card>
+  )
+}
+
 function ImgbbConfig() {
   const [key, setKey] = useState('')
   const [masked, setMasked] = useState('')
@@ -2009,6 +2049,7 @@ function ConnectionsView() {
       <NeshanConfig />
       <IPPanelConfig />
       <SmtpConfig />
+      <ZarinpalConfig />
       <ImgbbConfig />
       <DivarProxyConfig />
     </div>

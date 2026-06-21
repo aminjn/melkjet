@@ -266,12 +266,6 @@ const faqs = [
   },
 ]
 
-// Self-serve CTAs go to signup; sales/demo CTAs go to the contact/submit form.
-const SALES_CTAS = ['تماس با فروش', 'درخواست دمو']
-function ctaTarget(cta: string): string {
-  return SALES_CTAS.includes(cta) ? '/submit' : '/auth'
-}
-
 export default function PricingPage() {
   const router = useRouter()
   const [annual, setAnnual] = useState(false)
@@ -295,9 +289,50 @@ export default function PricingPage() {
 
   const cardPlans: CardPlan[] = livePlans ?? plans
 
+  // بنر نتیجهٔ پرداخت (پس از بازگشت از زرین‌پال)
+  const [payBanner, setPayBanner] = useState<{ ok: boolean; text: string } | null>(null)
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search)
+    const pay = sp.get('pay')
+    if (pay === 'success') setPayBanner({ ok: true, text: `✓ پرداخت موفق — پلن «${sp.get('plan') || ''}» فعال شد.` })
+    else if (pay === 'failed') setPayBanner({ ok: false, text: `پرداخت انجام نشد${sp.get('reason') ? ` — ${sp.get('reason')}` : ''}.` })
+  }, [])
+
+  // شروع خرید/ارتقای پلن
+  const buy = async (plan: CardPlan) => {
+    if (/تماس/.test(plan.cta)) { router.push('/contact'); return }
+    try {
+      const r = await fetch('/api/payment/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ planId: plan.id, annual }) })
+      const d = await r.json().catch(() => ({}))
+      if (r.status === 401 || d.needLogin) { router.push('/auth?next=/pricing'); return }
+      if (d.redirect) { window.location.href = d.redirect; return }
+      if (d.ok) { setPayBanner({ ok: true, text: '✓ پلن فعال شد.' }); window.scrollTo({ top: 0, behavior: 'smooth' }); return }
+      alert(d.error || 'خطا در شروع پرداخت')
+    } catch { alert('اتصال به سرور برقرار نشد') }
+  }
+
   return (
     <div dir="rtl" style={{ background: 'var(--bg)', minHeight: '100vh', color: 'var(--text)' }}>
       <Nav />
+
+      {payBanner && (
+        <div style={{ maxWidth: 1280, margin: '18px auto 0', padding: '0 24px' }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
+            background: payBanner.ok ? 'rgba(34,160,90,.12)' : 'rgba(200,60,60,.12)',
+            border: `1px solid ${payBanner.ok ? 'rgba(34,160,90,.5)' : 'rgba(200,60,60,.5)'}`,
+            borderRadius: 14, padding: '14px 18px',
+            color: payBanner.ok ? '#3ec27a' : '#e06a6a', fontSize: 14.5, fontWeight: 700,
+          }}>
+            <span>{payBanner.text}</span>
+            <button
+              onClick={() => setPayBanner(null)}
+              style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 18, lineHeight: 1, opacity: .7 }}
+              aria-label="بستن"
+            >✕</button>
+          </div>
+        </div>
+      )}
 
       {/* Hero */}
       <section style={{ textAlign: 'center', padding: '80px 24px 60px', position: 'relative', overflow: 'hidden' }}>
@@ -424,7 +459,7 @@ export default function PricingPage() {
               </div>
 
               <button
-                onClick={() => router.push(ctaTarget(plan.cta))}
+                onClick={() => buy(plan)}
                 style={{
                 width: '100%', padding: '12px 0', borderRadius: 12, fontWeight: 700,
                 fontSize: 15, cursor: 'pointer', border: '1px solid',

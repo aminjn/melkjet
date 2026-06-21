@@ -33,6 +33,14 @@ export function setProfile(phone: string, patch: { name?: string; role?: string 
 }
 
 // ── مدیریت کاربران از سوپرادمین ──
+// پلنِ کاربر را پس از پرداخت موفق تنظیم می‌کند (حساب را در صورت نبود می‌سازد).
+export function setPlan(phone: string, plan: string): Account {
+  const db = load()
+  if (!db[phone]) db[phone] = { phone, onboarded: false, createdAt: Date.now() }
+  db[phone].plan = plan || undefined
+  save(db); return db[phone]
+}
+
 export function adminUpdate(phone: string, patch: { name?: string; role?: string; plan?: string }): Account | null {
   const db = load(); const a = db[phone]; if (!a) return null
   if (patch.name !== undefined) a.name = String(patch.name).slice(0, 60)

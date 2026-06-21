@@ -49,6 +49,10 @@ export interface AdminData {
   imgbb?: {              // imgbb — میزبانی عکس روی i.ibb.co که سرورِ گپ می‌تواند فِچ کند
     apiKey: string
   }
+  zarinpal?: {           // درگاه پرداخت زرین‌پال (داخلی)
+    merchantId: string
+    sandbox?: boolean
+  }
   agentModels?: Record<string, { text?: string; image?: string }>  // per-agent model assignment
 }
 
