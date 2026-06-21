@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import AssistantPanel from '@/app/components/AssistantPanel'
 
 // ── Types (mirror app/lib/builder-store.ts API shape) ──
 type UnitStatus = 'sold' | 'reserved' | 'available'
@@ -16,7 +17,7 @@ interface Project {
 }
 interface ProjectSummary { id: string; name: string; location: string }
 
-type View = 'overview' | 'units' | 'sales' | 'investors' | 'reports'
+type View = 'overview' | 'assistant' | 'units' | 'sales' | 'investors' | 'reports'
 
 // ── Status visual maps ──
 const STATUS_COLOR: Record<UnitStatus, string> = {
@@ -58,6 +59,7 @@ function stats(p: Project | null) {
 
 const VIEW_TITLES: Record<View, string> = {
   overview: 'نمای کلی پروژه',
+  assistant: 'دستیار هوشمند',
   units: 'موجودی واحدها',
   sales: 'پیش‌فروش و فروش',
   investors: 'سرمایه‌گذاران',
@@ -66,6 +68,7 @@ const VIEW_TITLES: Record<View, string> = {
 
 const NAV_ITEMS: { id: View; label: string; icon: string }[] = [
   { id: 'overview', label: 'نمای کلی', icon: '▦' },
+  { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
   { id: 'units', label: 'موجودی واحدها', icon: '▤' },
   { id: 'sales', label: 'پیش‌فروش و فروش', icon: '◔' },
   { id: 'investors', label: 'سرمایه‌گذاران', icon: '◍' },
@@ -311,6 +314,11 @@ export default function BuilderPage() {
           ) : (
             <>
               {view === 'overview' && <OverviewView project={project} s={s} onMilestone={(mid, status) => post({ action: 'milestone', pid, mid, status })} busy={busy} />}
+              {view === 'assistant' && (
+                <div style={{ height: 'calc(100vh - 130px)' }}>
+                  <AssistantPanel panel="builder" title="دستیار هوشمند سازنده" subtitle="مشاور AI شخصیِ تو" suggestions={["استراتژی پیش‌فروش واحدها را بگو", "قیمت‌گذاری این پروژه را تحلیل کن", "متن بازاریابی برای پروژه بنویس", "چطور سرمایه‌گذار جذب کنم؟"]} />
+                </div>
+              )}
               {view === 'units' && <UnitsView project={project} post={post} pid={pid} busy={busy} />}
               {view === 'sales' && <SalesView project={project} s={s} />}
               {view === 'investors' && <InvestorsView project={project} post={post} pid={pid} busy={busy} />}

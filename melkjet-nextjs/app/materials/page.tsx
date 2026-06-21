@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
+import AssistantPanel from '@/app/components/AssistantPanel'
 
 // ════════════════════════════════════════════════════════
 //  Types (mirror app/lib/materials-store.ts API shape)
@@ -31,7 +32,7 @@ interface Stats {
 }
 interface MaterialsData { stats: Stats; products: Product[]; orders: Order[]; inquiries: Inquiry[] }
 
-type View = 'dashboard' | 'catalog' | 'orders' | 'inquiries' | 'settings'
+type View = 'dashboard' | 'assistant' | 'catalog' | 'orders' | 'inquiries' | 'settings'
 
 // ════════════════════════════════════════════════════════
 //  Formatting & status helpers
@@ -68,6 +69,7 @@ const inputStyle: React.CSSProperties = {
 
 const VIEW_TITLES: Record<View, string> = {
   dashboard: 'داشبورد فروش',
+  assistant: 'دستیار هوشمند',
   catalog: 'کاتالوگ محصولات',
   orders: 'سفارش‌ها',
   inquiries: 'استعلام‌ها',
@@ -76,6 +78,7 @@ const VIEW_TITLES: Record<View, string> = {
 
 const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'orders' | 'inquiries' }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: '▦' },
+  { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
   { id: 'catalog', label: 'کاتالوگ', icon: '◫' },
   { id: 'orders', label: 'سفارش‌ها', icon: '◈', badge: 'orders' },
   { id: 'inquiries', label: 'استعلام‌ها', icon: '◎', badge: 'inquiries' },
@@ -286,6 +289,11 @@ export default function MaterialsPage() {
         {/* Content */}
         <main style={{ flex: 1, padding: 24, overflow: 'auto' }}>
           {view === 'dashboard' && <DashboardView stats={stats} post={post} onAll={() => setView('orders')} />}
+          {view === 'assistant' && (
+            <div style={{ height: 'calc(100vh - 130px)' }}>
+              <AssistantPanel panel="materials" title="دستیار هوشمند فروشنده مصالح" subtitle="مشاور AI شخصیِ تو" suggestions={["قیمت‌گذاری این محصول را پیشنهاد بده", "پاسخ حرفه‌ای به استعلام مشتری بنویس", "چطور فروش این محصول را بیشتر کنم؟", "توضیحات فروش برای محصول بنویس"]} />
+            </div>
+          )}
           {view === 'catalog' && <CatalogView products={products} post={post} busy={busy} search={search} showAdd={showAdd} setShowAdd={setShowAdd} />}
           {view === 'orders' && <OrdersView orders={orders} post={post} busy={busy} search={search} />}
           {view === 'inquiries' && <InquiriesView inquiries={inquiries} post={post} busy={busy} search={search} />}

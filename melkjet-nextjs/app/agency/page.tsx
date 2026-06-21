@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
+import AssistantPanel from '@/app/components/AssistantPanel'
 
 // ════════ Types (mirror app/lib/agency-store.ts) ════════
 type Stage = 'new' | 'assigned' | 'visit' | 'negotiation' | 'closed' | 'lost'
@@ -19,7 +20,7 @@ interface Stats {
 }
 interface AgencyData { stats: Stats; agents: Agent[]; listings: Listing[]; leads: Lead[]; deals: Deal[] }
 
-type View = 'dashboard' | 'agents' | 'listings' | 'leads' | 'deals' | 'settings'
+type View = 'dashboard' | 'assistant' | 'agents' | 'listings' | 'leads' | 'deals' | 'settings'
 
 // ════════ Helpers ════════
 const FONT = 'Vazirmatn, system-ui, sans-serif'
@@ -46,9 +47,10 @@ const inputStyle: React.CSSProperties = { padding: '9px 11px', borderRadius: 9, 
 const actionBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap' }
 const goldBtn: React.CSSProperties = { padding: '9px 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }
 
-const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد آژانس', agents: 'مشاوران', listings: 'فایل‌های آژانس', leads: 'لیدها', deals: 'معاملات', settings: 'تنظیمات' }
+const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد آژانس', assistant: 'دستیار هوشمند', agents: 'مشاوران', listings: 'فایل‌های آژانس', leads: 'لیدها', deals: 'معاملات', settings: 'تنظیمات' }
 const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'agents' | 'leads' }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: '▦' },
+  { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
   { id: 'agents', label: 'مشاوران', icon: '☷', badge: 'agents' },
   { id: 'listings', label: 'فایل‌ها', icon: '◫' },
   { id: 'leads', label: 'لیدها', icon: '◎', badge: 'leads' },
@@ -245,6 +247,13 @@ export default function AgencyPage() {
               </div>
             </div>
           </div>}
+
+          {/* ASSISTANT */}
+          {view === 'assistant' && (
+            <div style={{ height: 'calc(100vh - 130px)' }}>
+              <AssistantPanel panel="agency" title="دستیار هوشمند آژانس" subtitle="مشاور AI شخصیِ تو" suggestions={["استراتژی بازاریابی این ماه را پیشنهاد بده", "چطور عملکرد تیم مشاوران را بهبود بدم؟", "یک گزارش کوتاه از وضعیت فروش بنویس", "لیدها را چطور بین مشاوران تقسیم کنم؟"]} />
+            </div>
+          )}
 
           {/* AGENTS */}
           {view === 'agents' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

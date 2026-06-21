@@ -21,10 +21,20 @@ function load(): DB {
   if (existsSync(FILE)) {
     try {
       const db: DB = JSON.parse(readFileSync(FILE, 'utf-8'))
-      // مهاجرت: تغییر نام نقشِ «خریدار / مستأجر» به «کاربر عادی» در دادهٔ موجود
       let migrated = false
+      // تغییر نام نقشِ «خریدار / مستأجر» به «کاربر عادی»
       for (const r of db.roles || []) {
         if (r.name === 'خریدار / مستأجر') { r.name = 'کاربر عادی'; migrated = true }
+      }
+      // ادغام: نقش‌های «فروشنده / مالک» و «سرمایه‌گذار» حذف می‌شوند (همه‌چیز در «کاربر عادی»/buyer)
+      const before = (db.roles || []).length
+      db.roles = (db.roles || []).filter(r => !(r.builtin && (r.name === 'فروشنده / مالک' || r.name === 'سرمایه‌گذار')))
+      if (db.roles.length !== before) migrated = true
+      // اطمینان از وجود نقشِ «کاربر عادی» با امکاناتِ یکپارچه
+      const buyerRole = db.roles.find(r => r.name === 'کاربر عادی')
+      if (buyerRole) {
+        for (const p of ['listings', 'analytics']) if (!buyerRole.permissions.includes(p)) { buyerRole.permissions.push(p); migrated = true }
+        if (buyerRole.dashboard !== '/buyer') { buyerRole.dashboard = '/buyer'; migrated = true }
       }
       if (migrated) save(db)
       return db
@@ -54,9 +64,7 @@ function defaults(): Role[] {
   const mk = (name: string, dashboard: string, permissions: string[]): Role =>
     ({ id: id(), name, dashboard, permissions, builtin: true, active: true, createdAt: t })
   return [
-    mk('کاربر عادی', '/buyer', ['content']),
-    mk('فروشنده / مالک', '/owner', ['listings', 'analytics']),
-    mk('سرمایه‌گذار', '/owner', ['analytics']),
+    mk('کاربر عادی', '/buyer', ['listings', 'content', 'analytics']),
     mk('مشاور املاک', '/pros', ['listings', 'crm', 'content', 'website']),
     mk('آژانس املاک', '/agency', ['listings', 'crm', 'marketing', 'website', 'content', 'analytics']),
     mk('سازنده / انبوه‌ساز', '/builder', ['units', 'investors', 'crm', 'marketing', 'website', 'analytics']),

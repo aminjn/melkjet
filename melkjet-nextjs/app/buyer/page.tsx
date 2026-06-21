@@ -17,6 +17,22 @@ interface ChatMsg { id: string; from: 'buyer' | 'owner'; text: string; ai?: bool
 interface Conversation { id: string; ownerName: string; propertyTitle: string; messages: ChatMsg[]; createdAt: number; updatedAt: number }
 interface AiMsg { id: string; role: 'user' | 'assistant'; text: string; createdAt: number }
 interface AiChat { id: string; title: string; messages: AiMsg[]; createdAt: number; updatedAt: number }
+
+// ── طرفِ فروشنده/مالک (ادغام‌شده در همین پنل) ──
+type OPropStatus = 'active' | 'sold' | 'rented' | 'draft'
+type OInqStatus = 'new' | 'contacted' | 'closed'
+type OOfferStatus = 'pending' | 'accepted' | 'rejected'
+interface OProperty { id: string; title: string; ptype: string; location: string; area: number; rooms: number; price: number; deal: Deal; status: OPropStatus; views: number; createdAt: number }
+interface OInquiry { id: string; propertyId: string; name: string; phone?: string; message?: string; status: OInqStatus; createdAt: number }
+interface OOffer { id: string; propertyId: string; buyer: string; phone?: string; amount: number; status: OOfferStatus; createdAt: number }
+interface OwnerData {
+  stats: { kpis: { activeCount: number; totalProps: number; newInquiries: number; upcomingViewings: number; pendingOffers: number; totalViews: number; portfolio: number } }
+  properties: OProperty[]; inquiries: OInquiry[]; offers: OOffer[]
+}
+const OPROP_STATUS_LABEL: Record<OPropStatus, string> = { active: 'فعال', sold: 'فروخته‌شده', rented: 'اجاره‌رفته', draft: 'پیش‌نویس' }
+const OPROP_STATUS_COLOR: Record<OPropStatus, string> = { active: '#34d399', sold: '#60a5fa', rented: '#2dd4bf', draft: '#7a8fae' }
+const OINQ_LABEL: Record<OInqStatus, string> = { new: 'جدید', contacted: 'پیگیری‌شده', closed: 'بسته' }
+const OINQ_COLOR: Record<OInqStatus, string> = { new: '#f59e0b', contacted: '#60a5fa', closed: '#7a8fae' }
 type VerifyStatus = 'none' | 'pending' | 'verified'
 interface Profile {
   name: string; email?: string; bio?: string
@@ -40,7 +56,7 @@ interface Stats {
 }
 interface BuyerData { stats: Stats; profile: Profile; settings: Settings; phone: string; saved: Saved[]; searches: Search[]; viewings: Viewing[]; offers: Offer[]; messages: Message[]; conversations: Conversation[]; aiChats: AiChat[] }
 
-type View = 'dashboard' | 'ai' | 'chat' | 'favorites' | 'searches' | 'viewings' | 'offers' | 'messages' | 'profile' | 'settings'
+type View = 'dashboard' | 'ai' | 'chat' | 'selling' | 'favorites' | 'searches' | 'viewings' | 'offers' | 'messages' | 'profile' | 'settings'
 
 // ════════════════════════════════════════════════════════
 //  Helpers
@@ -68,13 +84,14 @@ const inputStyle: React.CSSProperties = { padding: '9px 11px', borderRadius: 9, 
 const actionBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap' }
 
 const VIEW_TITLES: Record<View, string> = {
-  dashboard: 'پنل کاربری', ai: 'دستیار هوشمند', chat: 'چت با صاحب آگهی',
+  dashboard: 'پنل کاربری', ai: 'دستیار هوشمند', chat: 'چت با صاحب آگهی', selling: 'فروش و اجارهٔ من',
   favorites: 'علاقه‌مندی‌ها', searches: 'جستجوهای ذخیره‌شده',
   viewings: 'بازدیدهای من', offers: 'پیشنهادهای من', messages: 'پیام‌ها', profile: 'پروفایل من', settings: 'تنظیمات',
 }
 const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'viewings' | 'offers' | 'messages'; ai?: boolean }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: '▦' },
   { id: 'ai', label: 'دستیار هوشمند', icon: '✨', ai: true },
+  { id: 'selling', label: 'فروش و اجارهٔ من', icon: '🏠' },
   { id: 'chat', label: 'چت با صاحب آگهی', icon: '💬' },
   { id: 'favorites', label: 'علاقه‌مندی‌ها', icon: '♥' },
   { id: 'searches', label: 'جستجوهای ذخیره‌شده', icon: '◍' },
@@ -168,6 +185,13 @@ export default function BuyerPage() {
   const [chatInput, setChatInput] = useState('')
   const [chatSending, setChatSending] = useState(false)
   const [drafting, setDrafting] = useState(false)
+  // طرفِ فروش/اجاره (ادغام مالک)
+  const [owner, setOwner] = useState<OwnerData | null>(null)
+  const [newProp, setNewProp] = useState({ title: '', ptype: 'آپارتمان', location: '', area: '', rooms: '', price: '', deal: 'sale' as Deal })
+
+  const refreshOwner = useCallback(async () => {
+    try { const r = await fetch('/api/owner'); if (r.ok) setOwner(await r.json()) } catch {}
+  }, [])
 
   const refresh = useCallback(async () => {
     try {
@@ -179,7 +203,19 @@ export default function BuyerPage() {
       setProf({ name: p.name || '', email: p.email || '', bio: p.bio || '', budget: String(p.budget || ''), prefType: p.prefType || '', dealType: p.dealType === 'rent' ? 'rent' : p.dealType === 'both' ? 'both' : 'sale', rooms: String(p.rooms || ''), areaMin: String(p.areaMin || ''), areaMax: String(p.areaMax || ''), areas: p.areas || '' })
     } catch {} finally { setLoading(false) }
   }, [])
-  useEffect(() => { refresh() }, [refresh])
+  useEffect(() => { refresh(); refreshOwner() }, [refresh, refreshOwner])
+
+  // عملیاتِ سمتِ فروش/اجاره روی /api/owner
+  const ownerPost = useCallback(async (body: Record<string, unknown>): Promise<boolean> => {
+    setBusy(true)
+    try {
+      const r = await fetch('/api/owner', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { alert(d.error || 'خطا'); return false }
+      await refreshOwner(); return true
+    } catch { return false } finally { setBusy(false) }
+  }, [refreshOwner])
+  const ownerPropTitle = (pid: string) => owner?.properties.find(p => p.id === pid)?.title || 'ملک'
 
   const post = useCallback(async (body: Record<string, unknown>): Promise<boolean> => {
     setBusy(true)
@@ -514,6 +550,92 @@ export default function BuyerPage() {
                   <button type="submit" disabled={chatSending || !chatInput.trim()} style={{ padding: '9px 20px', borderRadius: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13.5, border: 'none', cursor: 'pointer', fontFamily: FONT, opacity: chatSending || !chatInput.trim() ? .6 : 1 }}>ارسال</button>
                 </form>
               </>}
+            </div>
+          </div>}
+
+          {/* ─── SELLING (my listings / inquiries / offers received) ─── */}
+          {view === 'selling' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+              <Kpi label="آگهی فعال" value={fa(owner?.stats.kpis.activeCount || 0)} />
+              <Kpi label="درخواست جدید" value={fa(owner?.stats.kpis.newInquiries || 0)} subColor="var(--gold)" sub={owner?.stats.kpis.newInquiries ? 'پاسخ بده' : undefined} />
+              <Kpi label="پیشنهاد در انتظار" value={fa(owner?.stats.kpis.pendingOffers || 0)} />
+              <Kpi label="کل بازدید آگهی‌ها" value={fa(owner?.stats.kpis.totalViews || 0)} />
+              <Kpi label="ارزش املاک من" value={money(owner?.stats.kpis.portfolio || 0)} />
+            </div>
+
+            {/* add property */}
+            <div style={{ ...card, padding: 18 }}>
+              {sectionTitle('ثبت ملک برای فروش یا اجاره')}
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div style={{ flex: '2 1 200px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>عنوان ملک</label><input value={newProp.title} onChange={e => setNewProp({ ...newProp, title: e.target.value })} placeholder="مثلاً آپارتمان ۹۰ متری سعادت‌آباد" style={inputStyle} /></div>
+                <div style={{ flex: '1 1 110px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع</label><select value={newProp.ptype} onChange={e => setNewProp({ ...newProp, ptype: e.target.value })} style={inputStyle}>{PTYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                <div style={{ flex: '1 1 110px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>معامله</label><select value={newProp.deal} onChange={e => setNewProp({ ...newProp, deal: e.target.value as Deal })} style={inputStyle}><option value="sale">فروش</option><option value="rent">اجاره</option></select></div>
+                <div style={{ flex: '1 1 130px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>منطقه</label><input value={newProp.location} onChange={e => setNewProp({ ...newProp, location: e.target.value })} style={inputStyle} /></div>
+                <div style={{ flex: '1 1 90px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>متراژ</label><input value={newProp.area} onChange={e => setNewProp({ ...newProp, area: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                <div style={{ flex: '1 1 80px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>خواب</label><input value={newProp.rooms} onChange={e => setNewProp({ ...newProp, rooms: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                <div style={{ flex: '1 1 150px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>{newProp.deal === 'rent' ? 'ودیعه (تومان)' : 'قیمت (تومان)'}</label><input value={newProp.price} onChange={e => setNewProp({ ...newProp, price: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                <button disabled={busy || !newProp.title.trim()} onClick={async () => { if (await ownerPost({ action: 'addProperty', title: newProp.title.trim(), ptype: newProp.ptype, location: newProp.location, area: Number(newProp.area) || 0, rooms: Number(newProp.rooms) || 0, price: Number(newProp.price) || 0, deal: newProp.deal })) setNewProp({ title: '', ptype: 'آپارتمان', location: '', area: '', rooms: '', price: '', deal: 'sale' }) }} style={{ padding: '9px 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }}>＋ ثبت ملک</button>
+              </div>
+            </div>
+
+            {/* my properties */}
+            <div style={{ ...card, padding: 18 }}>
+              {sectionTitle('ملک‌های من')}
+              {owner && owner.properties.length ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(250px,1fr))', gap: 12 }}>
+                {owner.properties.map(p => (
+                  <div key={p.id} style={{ ...card, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                      <div style={{ fontWeight: 700, fontSize: 13.5 }}>{p.title}</div>
+                      <Pill label={DEAL_LABEL[p.deal]} color={p.deal === 'sale' ? '#60a5fa' : '#2dd4bf'} />
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>{p.ptype} · {p.location} · {fa(p.area)}م{p.rooms ? ` · ${fa(p.rooms)} خواب` : ''}</div>
+                    <div style={{ fontWeight: 800, color: 'var(--gold)', fontSize: 14 }}>{p.deal === 'rent' ? 'ودیعه ' : ''}{money(p.price)}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--faint)' }}>👁 {fa(p.views)} بازدید</div>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
+                      <select value={p.status} onChange={e => ownerPost({ action: 'updateProperty', id: p.id, patch: { status: e.target.value } })} style={{ ...actionBtn, cursor: 'pointer', flex: 1 }}>
+                        {(['active', 'sold', 'rented', 'draft'] as OPropStatus[]).map(s => <option key={s} value={s}>{OPROP_STATUS_LABEL[s]}</option>)}
+                      </select>
+                      <button onClick={() => { if (confirm('این ملک حذف شود؟')) ownerPost({ action: 'deleteProperty', id: p.id }) }} style={{ ...actionBtn, color: '#ef4444', borderColor: 'color-mix(in srgb,#ef4444 30%,transparent)' }}>حذف</button>
+                    </div>
+                  </div>
+                ))}
+              </div> : <div style={{ color: 'var(--faint)', fontSize: 13, textAlign: 'center', padding: '24px 0' }}>هنوز ملکی برای فروش/اجاره ثبت نکرده‌ای.</div>}
+            </div>
+
+            {/* inquiries received */}
+            <div style={{ ...card, padding: 18 }}>
+              {sectionTitle('درخواست‌های دریافتی')}
+              {owner && owner.inquiries.length ? owner.inquiries.map(q => (
+                <div key={q.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700 }}>{q.name} <span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 12 }}>· {ownerPropTitle(q.propertyId)}</span></div>
+                    {q.message && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{q.message}</div>}
+                    {q.phone && <div style={{ fontSize: 11.5, color: 'var(--gold)', marginTop: 2, direction: 'ltr', textAlign: 'right' }}>{q.phone}</div>}
+                  </div>
+                  <Pill label={OINQ_LABEL[q.status]} color={OINQ_COLOR[q.status]} />
+                  <select value={q.status} onChange={e => ownerPost({ action: 'setInquiryStatus', id: q.id, status: e.target.value })} style={{ ...actionBtn, cursor: 'pointer' }}>
+                    {(['new', 'contacted', 'closed'] as OInqStatus[]).map(s => <option key={s} value={s}>{OINQ_LABEL[s]}</option>)}
+                  </select>
+                </div>
+              )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>درخواستی دریافت نکرده‌ای.</div>}
+            </div>
+
+            {/* offers received */}
+            <div style={{ ...card, padding: 18 }}>
+              {sectionTitle('پیشنهادهای دریافتی')}
+              {owner && owner.offers.length ? owner.offers.map(o => (
+                <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700 }}>{o.buyer} <span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 12 }}>· {ownerPropTitle(o.propertyId)}</span></div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gold)', fontWeight: 700, marginTop: 2 }}>{money(o.amount)}</div>
+                  </div>
+                  <Pill label={OFFER_LABEL[o.status]} color={OFFER_COLOR[o.status]} />
+                  {o.status === 'pending' && <>
+                    <button onClick={() => ownerPost({ action: 'setOfferStatus', id: o.id, status: 'accepted' })} style={{ ...actionBtn, color: '#34d399', borderColor: 'color-mix(in srgb,#34d399 35%,transparent)' }}>پذیرش</button>
+                    <button onClick={() => ownerPost({ action: 'setOfferStatus', id: o.id, status: 'rejected' })} style={{ ...actionBtn, color: '#ef4444', borderColor: 'color-mix(in srgb,#ef4444 30%,transparent)' }}>رد</button>
+                  </>}
+                </div>
+              )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>پیشنهادی دریافت نکرده‌ای.</div>}
             </div>
           </div>}
 
