@@ -1,635 +1,382 @@
 'use client'
-import { useState, useEffect } from 'react'
-import Link from 'next/link'
+import { useState, useEffect, useCallback } from 'react'
 
-type View = 'clients' | 'calendar' | 'tasks' | 'performance'
+// ════════ Types (mirror app/lib/advisor-store.ts) ════════
+type Stage = 'new' | 'contacted' | 'visit' | 'negotiation' | 'closed' | 'lost'
+type ListingStatus = 'active' | 'sold' | 'rented'
+type ApptType = 'visit' | 'meeting' | 'call'
+type ApptStatus = 'scheduled' | 'done' | 'canceled'
+type CommStatus = 'pending' | 'paid'
 
-// ── Client store types (mirrors app/lib/pros-store.ts) ──
-interface StoredClient {
-  id: string
-  name: string
-  phone?: string
-  need?: string
-  status?: string
-  createdAt: number
+interface Lead { id: string; name: string; phone?: string; need?: string; budget?: string; stage: Stage; source?: string; note?: string; createdAt: number }
+interface Listing { id: string; title: string; ptype: string; location: string; price: number; deal: 'sale' | 'rent'; status: ListingStatus; createdAt: number }
+interface Appt { id: string; client: string; listingTitle?: string; date: string; type: ApptType; status: ApptStatus; createdAt: number }
+interface Commission { id: string; dealTitle: string; amount: number; status: CommStatus; date: string; createdAt: number }
+interface Stats {
+  profile: { name: string; agency?: string }
+  kpis: { activeLeads: number; hotLeads: number; activeListings: number; upcomingAppts: number; pendingCommission: number; paidCommission: number; dealsThisMonth: number }
+  pipeline: { stage: Stage; count: number }[]
+  monthlyDeals: { month: string; count: number }[]
+  recentLeads: Lead[]
+  upcoming: Appt[]
 }
+interface AdvisorData { stats: Stats; leads: Lead[]; listings: Listing[]; appts: Appt[]; commissions: Commission[] }
 
-// ── Task store types (mirrors app/lib/pros-store.ts) ──
-type StorePriority = 'high' | 'medium' | 'low'
-interface StoredTask {
-  id: string
-  title: string
-  done: boolean
-  priority?: StorePriority
-  due?: string
-  createdAt: number
+type View = 'dashboard' | 'leads' | 'listings' | 'appts' | 'commissions' | 'settings'
+
+// ════════ Helpers ════════
+const FONT = 'Vazirmatn, system-ui, sans-serif'
+const fa = (n: number) => n.toLocaleString('fa-IR')
+function money(n: number): string {
+  if (!n) return '—'
+  if (n >= 1e9) return fa(Math.round((n / 1e9) * 10) / 10) + ' میلیارد'
+  if (n >= 1e6) return fa(Math.round(n / 1e6)) + ' میلیون'
+  return fa(n) + ' تومان'
 }
+const faDate = (ts: number) => { try { return new Date(ts).toLocaleDateString('fa-IR') } catch { return '' } }
 
-type TaskPriority = 'فوری' | 'عادی' | 'کم‌اهمیت'
+const STAGES: Stage[] = ['new', 'contacted', 'visit', 'negotiation', 'closed', 'lost']
+const STAGE_LABEL: Record<Stage, string> = { new: 'لید جدید', contacted: 'تماس‌گرفته', visit: 'بازدید', negotiation: 'مذاکره', closed: 'قرارداد', lost: 'ازدست‌رفته' }
+const STAGE_COLOR: Record<Stage, string> = { new: 'var(--gold)', contacted: '#60a5fa', visit: '#2dd4bf', negotiation: '#f59e0b', closed: '#34d399', lost: '#7a8fae' }
+const LIST_LABEL: Record<ListingStatus, string> = { active: 'فعال', sold: 'فروخته‌شده', rented: 'اجاره‌رفته' }
+const LIST_COLOR: Record<ListingStatus, string> = { active: '#34d399', sold: '#60a5fa', rented: '#2dd4bf' }
+const LIST_STATUSES: ListingStatus[] = ['active', 'sold', 'rented']
+const APPT_LABEL: Record<ApptType, string> = { visit: 'بازدید', meeting: 'جلسه', call: 'تماس' }
+const APPTST_LABEL: Record<ApptStatus, string> = { scheduled: 'برنامه‌ریزی‌شده', done: 'انجام‌شده', canceled: 'لغو' }
+const APPTST_COLOR: Record<ApptStatus, string> = { scheduled: 'var(--gold)', done: '#34d399', canceled: '#7a8fae' }
+const APPT_STATUSES: ApptStatus[] = ['scheduled', 'done', 'canceled']
+const DEAL_LABEL = { sale: 'فروش', rent: 'اجاره' } as const
+const PTYPE_OPTIONS = ['آپارتمان', 'ویلا', 'زمین', 'مغازه', 'سایر']
 
-// Persian <-> store priority mapping
-const faToStore: Record<TaskPriority, StorePriority> = { 'فوری': 'high', 'عادی': 'medium', 'کم‌اهمیت': 'low' }
-const storeToFa: Record<StorePriority, TaskPriority> = { high: 'فوری', medium: 'عادی', low: 'کم‌اهمیت' }
-const priorityColorMap: Record<TaskPriority, string> = { 'فوری': '#e05a5a', 'عادی': 'var(--gold)', 'کم‌اهمیت': '#5b9bd5' }
-function faPriority(p?: StorePriority): TaskPriority { return p ? storeToFa[p] : 'عادی' }
+const card: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16 }
+const inputStyle: React.CSSProperties = { padding: '9px 11px', borderRadius: 9, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--text)', fontSize: 13, outline: 'none', fontFamily: FONT, width: '100%' }
+const actionBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap' }
+const goldBtn: React.CSSProperties = { padding: '9px 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }
 
-const appointments = [
-  { day: 3, title: 'بازدید ملک با شیرین', time: '۱۰:۰۰', color: '#5b9bd5' },
-  { day: 7, title: 'جلسه مذاکره آرمان', time: '۱۴:۰۰', color: 'var(--gold)' },
-  { day: 10, title: 'امضای قرارداد نرگس', time: '۱۱:۰۰', color: '#5fd98a' },
-  { day: 14, title: 'بازدید پنت‌هاوس', time: '۱۵:۳۰', color: '#9b7ad0' },
-  { day: 17, title: 'جلسه هفتگی تیم', time: '۰۹:۰۰', color: '#e05a5a' },
-  { day: 21, title: 'مشاوره اولیه مشتری جدید', time: '۱۶:۰۰', color: '#5b9bd5' },
-  { day: 24, title: 'بازدید دفتر تجاری', time: '۱۰:۳۰', color: 'var(--gold)' },
-  { day: 28, title: 'پیگیری معامله بهروز', time: '۱۲:۰۰', color: '#5fd98a' },
+const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد مشاور', leads: 'لیدها و پایپ‌لاین', listings: 'فایل‌های من', appts: 'قرارها و بازدیدها', commissions: 'کمیسیون', settings: 'تنظیمات' }
+const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'leads' | 'appts' }[] = [
+  { id: 'dashboard', label: 'داشبورد', icon: '▦' },
+  { id: 'leads', label: 'لیدها', icon: '◎', badge: 'leads' },
+  { id: 'listings', label: 'فایل‌های من', icon: '◫' },
+  { id: 'appts', label: 'قرارها', icon: '◉', badge: 'appts' },
+  { id: 'commissions', label: 'کمیسیون', icon: '﷼' },
+  { id: 'settings', label: 'تنظیمات', icon: '⛭' },
+]
+const NAV_LINKS = [
+  { href: '/crm', label: 'CRM و مشتریان', icon: '◇' },
+  { href: '/marketing', label: 'مارکتینگ', icon: '◬' },
+  { href: '/workflow', label: 'اتوماسیون', icon: '⛭' },
+  { href: '/website-builder', label: 'وب‌سایت‌ساز', icon: '◳' },
 ]
 
-const monthlyCommissions = [
-  { month: 'دی', amount: 28 },
-  { month: 'بهمن', amount: 35 },
-  { month: 'اسفند', amount: 42 },
-  { month: 'فروردین', amount: 38 },
-  { month: 'اردیبهشت', amount: 55 },
-  { month: 'خرداد', amount: 48 },
-]
-
-const performanceKPIs = [
-  { l: 'معاملات این ماه', v: '۹', t: '+۳ نسبت به ماه قبل', tc: '#5fd98a', ic: '◎', bg: 'rgba(95,217,138,0.12)', c: '#5fd98a' },
-  { l: 'درآمد کمیسیون', v: '۴۸ م.ت', t: '↗ ۲۸٪ رشد', tc: 'var(--gold)', ic: '♛', bg: 'var(--goldDim)', c: 'var(--gold)' },
-  { l: 'مشتریان فعال', v: '۶', t: '۲ مشتری جدید', tc: '#5b9bd5', ic: '◈', bg: 'rgba(91,155,213,0.12)', c: '#5b9bd5' },
-  { l: 'نرخ تبدیل', v: '۱۸٪', t: '+۵٪ بهتر از میانگین', tc: '#5fd98a', ic: '◴', bg: 'rgba(95,217,138,0.12)', c: '#5fd98a' },
-]
-
-const navItems: { id: View; ic: string; l: string }[] = [
-  { id: 'clients', ic: '♛', l: 'مشتریان من' },
-  { id: 'calendar', ic: '◍', l: 'تقویم' },
-  { id: 'tasks', ic: '▦', l: 'وظایف' },
-  { id: 'performance', ic: '◎', l: 'عملکرد' },
-]
-
-const viewTitles: Record<View, string> = {
-  clients: 'مشتریان من',
-  calendar: 'تقویم کاری',
-  tasks: 'وظایف',
-  performance: 'عملکرد و کمیسیون',
+function Pill({ label, color }: { label: string; color: string }) {
+  return <span style={{ fontSize: 11, fontWeight: 600, color, background: `color-mix(in srgb, ${color} 16%, transparent)`, padding: '3px 10px', borderRadius: 7, whiteSpace: 'nowrap' }}>{label}</span>
+}
+function Kpi({ label, value, sub, subColor }: { label: string; value: string; sub?: string; subColor?: string }) {
+  return (
+    <div style={{ ...card, padding: '16px 18px', flex: '1 1 150px', minWidth: 150 }}>
+      <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 8 }}>{label}</div>
+      <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.5px' }}>{value}</div>
+      {sub && <div style={{ fontSize: 11.5, color: subColor || 'var(--muted)', marginTop: 4 }}>{sub}</div>}
+    </div>
+  )
 }
 
 export default function ProsPage() {
-  const [view, setView] = useState<View>('clients')
+  const [view, setView] = useState<View>('dashboard')
+  const [data, setData] = useState<AdvisorData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [unauth, setUnauth] = useState(false)
+  const [busy, setBusy] = useState(false)
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
-  const [tasks, setTasks] = useState<StoredTask[]>([])
-  const [taskFilter, setTaskFilter] = useState<'همه' | TaskPriority>('همه')
-  const [newTaskTitle, setNewTaskTitle] = useState('')
-  const [newTaskPriority, setNewTaskPriority] = useState<TaskPriority>('عادی')
-  const [newTaskDue, setNewTaskDue] = useState('')
-  const [clients, setClients] = useState<StoredClient[]>([])
+  const [search, setSearch] = useState('')
+  const [nl, setNl] = useState({ name: '', phone: '', need: '', budget: '', source: '' })
+  const [nf, setNf] = useState({ title: '', ptype: '', location: '', price: '', deal: 'sale' })
+  const [na, setNa] = useState({ client: '', listingTitle: '', date: '', type: 'visit' })
+  const [prof, setProf] = useState({ name: '', agency: '' })
 
-  // Load persisted tasks + clients on mount.
-  useEffect(() => {
-    fetch('/api/pros?kind=tasks')
-      .then(r => r.ok ? r.json() : { tasks: [] })
-      .then(d => setTasks(Array.isArray(d.tasks) ? d.tasks : []))
-      .catch(() => {})
-    fetch('/api/pros?kind=clients')
-      .then(r => r.ok ? r.json() : { clients: [] })
-      .then(d => setClients(Array.isArray(d.clients) ? d.clients : []))
-      .catch(() => {})
+  const refresh = useCallback(async () => {
+    try {
+      const r = await fetch('/api/advisor')
+      if (r.status === 401) { setUnauth(true); setLoading(false); return }
+      const d = await r.json(); setData(d); setUnauth(false)
+      setProf({ name: d.stats.profile.name || '', agency: d.stats.profile.agency || '' })
+    } catch {} finally { setLoading(false) }
   }, [])
+  useEffect(() => { refresh() }, [refresh])
 
-  const navStyle = (active: boolean): React.CSSProperties => ({
-    display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 11, border: 'none',
-    background: active ? 'var(--goldDim)' : 'transparent',
-    color: active ? 'var(--gold)' : 'var(--muted)',
-    fontFamily: 'inherit', fontSize: 13.5, fontWeight: active ? 700 : 500, cursor: 'pointer', width: '100%', textAlign: 'right' as const,
-  })
-
-  const th: React.CSSProperties = { padding: '11px 16px', fontSize: 11.5, fontWeight: 700, color: 'var(--muted)', textAlign: 'right' as const, background: 'var(--bg2)', borderBottom: '1px solid var(--line)' }
-  const td: React.CSSProperties = { padding: '13px 16px', fontSize: 13, color: 'var(--text)', borderTop: '1px solid var(--line)' }
-  const cardStyle: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 20 }
-  const smallBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 8, border: '1px solid var(--line)', background: 'var(--bg2)', color: 'var(--muted)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }
-  const goldBtn: React.CSSProperties = { padding: '9px 18px', borderRadius: 10, border: 'none', background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#1a1506', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }
-
-  const toggleTask = (id: string) => {
-    // optimistic
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, done: !t.done } : t))
-    fetch('/api/pros', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ kind: 'task', id }),
-    }).catch(() => {})
-  }
-
-  const deleteTask = (id: string) => {
-    setTasks(prev => prev.filter(t => t.id !== id))
-    fetch('/api/pros?kind=tasks&id=' + encodeURIComponent(id), { method: 'DELETE' }).catch(() => {})
-  }
-
-  const addTask = async () => {
-    const title = newTaskTitle.trim()
-    if (!title) return
-    const priority = faToStore[newTaskPriority]
-    const due = newTaskDue.trim()
-    setNewTaskTitle('')
-    setNewTaskDue('')
+  const post = useCallback(async (body: Record<string, unknown>): Promise<boolean> => {
+    setBusy(true)
     try {
-      const r = await fetch('/api/pros', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: 'task', title, priority, due: due || undefined }),
-      })
+      const r = await fetch('/api/advisor', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       const d = await r.json().catch(() => ({}))
-      if (d.task) setTasks(prev => [d.task as StoredTask, ...prev])
-    } catch {}
-  }
+      if (!r.ok) { alert(d.error || 'برای انجام این عملیات وارد شوید'); return false }
+      await refresh(); return true
+    } catch { return false } finally { setBusy(false) }
+  }, [refresh])
 
-  const filteredTasks = taskFilter === 'همه' ? tasks : tasks.filter(t => faPriority(t.priority) === taskFilter)
-  const sortedTasks = [...filteredTasks].sort((a, b) => {
-    const order: Record<TaskPriority, number> = { 'فوری': 0, 'عادی': 1, 'کم‌اهمیت': 2 }
-    return order[faPriority(a.priority)] - order[faPriority(b.priority)]
-  })
+  const toggleTheme = () => { const html = document.documentElement; if (theme === 'dark') { html.classList.add('light'); setTheme('light') } else { html.classList.remove('light'); setTheme('dark') } }
 
-  const doneCount = tasks.filter(t => t.done).length
+  if (loading) return <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT, fontSize: 15 }}>در حال بارگذاری پنل مشاور…</div>
+  if (unauth || !data) return (
+    <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT }}>
+      <div style={{ ...card, padding: '40px 44px', textAlign: 'center', maxWidth: 380 }}>
+        <div style={{ fontSize: 40, marginBottom: 14 }}>🔒</div>
+        <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>برای دسترسی به پنل مشاور وارد شوید</div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 22 }}>این پنل فقط برای کاربران واردشده در دسترس است.</div>
+        <a href="/auth" style={{ display: 'inline-block', padding: '10px 28px', borderRadius: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 14, textDecoration: 'none' }}>ورود به حساب</a>
+      </div>
+    </div>
+  )
 
-  // ── Client handlers ──
-  const addClient = async () => {
-    const name = (window.prompt('نام مشتری:') || '').trim()
-    if (!name) return
-    const phone = (window.prompt('شماره تماس (اختیاری):') || '').trim()
-    const need = (window.prompt('نیاز مشتری (اختیاری، مثلا خرید آپارتمان):') || '').trim()
-    try {
-      const r = await fetch('/api/pros', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: 'client', name, phone: phone || undefined, need: need || undefined, status: 'لید جدید' }),
-      })
-      const d = await r.json().catch(() => ({}))
-      if (d.client) setClients(prev => [d.client as StoredClient, ...prev])
-    } catch {}
-  }
-
-  const deleteClient = (id: string) => {
-    setClients(prev => prev.filter(c => c.id !== id))
-    fetch('/api/pros?kind=clients&id=' + encodeURIComponent(id), { method: 'DELETE' }).catch(() => {})
-  }
-
-  const activeDeals = clients.filter(c => c.status !== 'تکمیل شد').length
-  const closingThisWeek = clients.filter(c => c.status === 'قرارداد').length
-
-  // Calendar helpers
-  const dayHeaders = ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج']
-  const todayDay = 15
-  // day 1 starts on col index 2 (Wednesday = 'د'), offset = 2
-  const calOffset = 2
-  const totalCells = calOffset + 28
-  const calRows = Math.ceil(totalCells / 7)
-  const calCells = Array.from({ length: calRows * 7 }, (_, i) => {
-    const dayNum = i - calOffset + 1
-    return dayNum >= 1 && dayNum <= 28 ? dayNum : null
-  })
-  const appointmentByDay = new Map(appointments.map(a => [a.day, a]))
-  const todayAppts = appointments.filter(a => a.day === todayDay)
-
-  // Commission chart
-  const maxCommission = Math.max(...monthlyCommissions.map(m => m.amount))
-  const chartW = 600
-  const chartH = 160
-  const chartPadL = 10
-  const chartPadR = 10
-  const chartPadB = 30
-  const chartPadT = 20
-  const barW = 56
-  const barGap = (chartW - chartPadL - chartPadR - barW * 6) / 7
-  const midCommission = Math.round(maxCommission / 2)
-
-  const funnelData = [
-    { label: 'لید جدید', count: 24, pct: 100 },
-    { label: 'پیگیری', count: 18, pct: 75 },
-    { label: 'مذاکره', count: 12, pct: 50 },
-    { label: 'معامله نهایی', count: 6, pct: 25 },
-  ]
+  const { stats, leads, listings, appts, commissions } = data
+  const q = search.trim()
+  const leadsF = q ? leads.filter(l => (l.name + (l.need || '') + (l.phone || '')).includes(q)) : leads
+  const maxDeals = Math.max(1, ...stats.monthlyDeals.map(m => m.count))
+  const sectionTitle = (t: string) => <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 12 }}>{t}</div>
 
   return (
-    <div dir="rtl" style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: "'Vazirmatn', sans-serif" }}>
+    <div dir="rtl" style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: FONT }}>
+      <style>{`@media(max-width:760px){.mjp-side{width:60px!important}.mjp-sidelabel{display:none!important}.mjp-cols{flex-direction:column!important}}`}</style>
 
       {/* SIDEBAR */}
-      <aside className="mjpro-nav" style={{ width: 240, flexShrink: 0, position: 'sticky' as const, top: 0, height: '100vh', overflow: 'auto', background: 'var(--bg2)', borderLeft: '1px solid var(--line)', display: 'flex', flexDirection: 'column', padding: '18px 13px' }}>
-
-        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 11, textDecoration: 'none', color: 'var(--text)', padding: '6px 8px 16px' }}>
-          <span style={{ width: 34, height: 34, borderRadius: 10, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ width: 13, height: 13, background: 'var(--bg2)', transform: 'rotate(45deg)', borderRadius: 2, display: 'block' }}></span>
-          </span>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 16, letterSpacing: '-.5px' }}>ملک‌جت</div>
-            <div style={{ fontSize: 10.5, color: 'var(--gold)' }}>میز کار متخصصان</div>
+      <aside className="mjp-side" style={{ width: 232, flexShrink: 0, background: 'var(--bg2)', borderLeft: '1px solid var(--line)', position: 'sticky', top: 0, height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ padding: '20px 16px 16px', borderBottom: '1px solid var(--line)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 6px 18px -6px var(--gold)', flexShrink: 0 }}>
+              <div style={{ width: 13, height: 13, background: 'var(--bg)', transform: 'rotate(45deg)', borderRadius: 3 }} />
+            </div>
+            <div><div style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-0.5px' }}>ملک‌جت</div><div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>پنل مشاور</div></div>
           </div>
-        </Link>
-
-        <nav style={{ display: 'grid', gap: 3 }}>
-          {navItems.map(m => (
-            <button key={m.id} onClick={() => setView(m.id)} style={navStyle(view === m.id)}>
-              <span style={{ width: 22, textAlign: 'center' as const, fontSize: 15 }}>{m.ic}</span>
-              <span style={{ flex: 1, textAlign: 'right' as const }}>{m.l}</span>
-            </button>
+        </div>
+        <nav style={{ padding: '10px 8px', flex: 1, overflowY: 'auto' }}>
+          {NAV_ITEMS.map(item => {
+            const active = view === item.id
+            const badge = item.badge === 'leads' ? stats.kpis.activeLeads : item.badge === 'appts' ? stats.kpis.upcomingAppts : 0
+            return (
+              <button key={item.id} onClick={() => setView(item.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: active ? 'var(--goldDim)' : 'transparent', color: active ? 'var(--gold)' : 'var(--muted)', fontWeight: active ? 700 : 500, fontSize: 14, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
+                <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: active ? 1 : 0.7 }}>{item.icon}</span>
+                <span className="mjp-sidelabel" style={{ flex: 1 }}>{item.label}</span>
+                {item.badge && badge > 0 && <span style={{ background: active ? 'var(--gold)' : 'var(--line2)', color: active ? '#16140f' : 'var(--text)', borderRadius: 9, fontSize: 10, fontWeight: 700, padding: '1px 7px' }}>{fa(badge)}</span>}
+              </button>
+            )
+          })}
+          <div style={{ height: 1, background: 'var(--line)', margin: '10px 8px' }} />
+          {NAV_LINKS.map(l => (
+            <a key={l.href} href={l.href} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, color: 'var(--muted)', textDecoration: 'none', fontWeight: 500, fontSize: 14, marginBottom: 2, fontFamily: FONT }}>
+              <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: 0.7 }}>{l.icon}</span>
+              <span className="mjp-sidelabel" style={{ flex: 1 }}>{l.label}</span>
+            </a>
           ))}
-          <Link href="/content" style={{ display: 'flex', alignItems: 'center', padding: '10px 12px', borderRadius: 10, color: 'var(--gold)', textDecoration: 'none', fontSize: 13.5, fontWeight: 600, marginTop: 4, border: '1px solid rgba(212,175,55,0.25)' }}>
-            <span style={{ width: 22, textAlign: 'center', fontSize: 15 }}>✎</span>
-            <span style={{ flex: 1, textAlign: 'right' }}>مقالات و وبلاگ</span>
-          </Link>
-          <Link href="/website-builder" style={{ display: 'flex', alignItems: 'center', padding: '10px 12px', borderRadius: 10, color: 'var(--gold)', textDecoration: 'none', fontSize: 13.5, fontWeight: 600, marginTop: 4, border: '1px solid rgba(212,175,55,0.25)' }}>
-            <span style={{ width: 22, textAlign: 'center', fontSize: 15 }}>◳</span>
-            <span style={{ flex: 1, textAlign: 'right' }}>وب‌سایت من (سایت‌ساز)</span>
-          </Link>
         </nav>
-
-        <div style={{ flex: 1 }}></div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 6px 4px', borderTop: '1px solid var(--line)' }}>
-          <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg,#caa86a,#8a6f3e)', flexShrink: 0 }}></div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>امیر رضایی</div>
-            <div style={{ fontSize: 10.5, color: 'var(--muted)' }}>مشاور ارشد</div>
+        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#16140f', flexShrink: 0 }}>{stats.profile.name.trim().charAt(0) || 'م'}</div>
+          <div className="mjp-sidelabel" style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{stats.profile.name}</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>{stats.profile.agency || 'مشاور املاک'}</div>
           </div>
-          <button
-            onClick={() => { const n = theme === 'dark' ? 'light' : 'dark'; setTheme(n); document.documentElement.classList.toggle('light', n === 'light') }}
-            style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--text)', cursor: 'pointer', fontSize: 13 }}
-          >{theme === 'dark' ? '☀' : '☾'}</button>
+          <button onClick={toggleTheme} title="تغییر تم" style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--line)', color: 'var(--text)', cursor: 'pointer', fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{theme === 'dark' ? '☀' : '☾'}</button>
         </div>
       </aside>
 
       {/* MAIN */}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-
-        {/* HEADER */}
-        <header style={{ position: 'sticky' as const, top: 0, zIndex: 30, background: 'var(--navbg)', backdropFilter: 'blur(16px)', borderBottom: '1px solid var(--line)', padding: '0 24px', height: 62, display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)', letterSpacing: '-.4px' }}>{viewTitles[view]}</div>
-          <div style={{ flex: 1 }}></div>
-          <Link href="/agency" style={{ display: 'flex', alignItems: 'center', height: 36, padding: '0 14px', borderRadius: 10, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--text)', textDecoration: 'none', fontSize: 13, fontWeight: 600 }}>پنل آژانس</Link>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 22px', borderBottom: '1px solid var(--line)', position: 'sticky', top: 0, background: 'var(--navbg)', backdropFilter: 'blur(18px)', zIndex: 20, flexWrap: 'wrap' }}>
+          <div style={{ fontWeight: 800, fontSize: 18 }}>{VIEW_TITLES[view]}</div>
+          <div style={{ flex: 1 }} />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="جستجوی لید، مشتری…" style={{ ...inputStyle, width: 220, maxWidth: '40vw' }} />
+          <button onClick={() => setView('leads')} style={{ ...goldBtn, padding: '9px 16px' }}>+ لید جدید</button>
         </header>
 
-        {/* CONTENT */}
-        <main style={{ flex: 1, padding: 24, overflow: 'auto' }}>
-
-          {/* ══════════════ CLIENTS VIEW ══════════════ */}
-          {view === 'clients' && (
-            <div style={{ display: 'grid', gap: 20 }}>
-
-              {/* Summary chips */}
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                {[
-                  { label: 'کل مشتریان', value: clients.length, color: 'var(--text)', bg: 'var(--surface)' },
-                  { label: 'معاملات فعال', value: activeDeals, color: '#5b9bd5', bg: 'rgba(91,155,213,0.1)' },
-                  { label: 'بسته می‌شوند این هفته', value: closingThisWeek, color: '#5fd98a', bg: 'rgba(95,217,138,0.1)' },
-                ].map(chip => (
-                  <div key={chip.label} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 18px', borderRadius: 12, background: chip.bg, border: '1px solid var(--line)' }}>
-                    <span style={{ fontSize: 20, fontWeight: 800, color: chip.color }}>{chip.value}</span>
-                    <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{chip.label}</span>
+        <main style={{ padding: 22, flex: 1, overflowY: 'auto' }}>
+          {/* DASHBOARD */}
+          {view === 'dashboard' && <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+              <Kpi label="لیدهای فعال" value={fa(stats.kpis.activeLeads)} subColor="var(--gold)" sub={`${fa(stats.kpis.hotLeads)} داغ`} />
+              <Kpi label="فایل‌های فعال" value={fa(stats.kpis.activeListings)} />
+              <Kpi label="قرارهای پیش‌رو" value={fa(stats.kpis.upcomingAppts)} />
+              <Kpi label="معاملات این ماه" value={fa(stats.kpis.dealsThisMonth)} />
+              <Kpi label="کمیسیون در انتظار" value={money(stats.kpis.pendingCommission)} subColor="#34d399" sub={`${money(stats.kpis.paidCommission)} پرداخت‌شده`} />
+            </div>
+            {/* pipeline */}
+            <div style={{ ...card, padding: 18 }}>
+              {sectionTitle('پایپ‌لاین فروش')}
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {stats.pipeline.map(p => (
+                  <div key={p.stage} style={{ flex: '1 1 110px', minWidth: 110, background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 12, padding: '12px 14px' }}>
+                    <div style={{ fontSize: 11.5, color: STAGE_COLOR[p.stage], fontWeight: 700 }}>{STAGE_LABEL[p.stage]}</div>
+                    <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4 }}>{fa(p.count)}</div>
                   </div>
                 ))}
               </div>
-
-              {/* Clients table */}
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden' }}>
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
-                    <thead>
-                      <tr>
-                        <th style={th}>مشتری</th>
-                        <th style={th}>تلفن</th>
-                        <th style={th}>نیاز</th>
-                        <th style={th}>وضعیت</th>
-                        <th style={th}>عملیات</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {clients.length === 0 ? (
-                        <tr>
-                          <td style={{ ...td, textAlign: 'center' as const, color: 'var(--muted)', padding: '28px 16px' }} colSpan={5}>
-                            هنوز مشتری‌ای ثبت نشده — با دکمه «مشتری جدید» شروع کنید
-                          </td>
-                        </tr>
-                      ) : clients.map(c => (
-                        <tr key={c.id}>
-                          <td style={td}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                              <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg,#caa86a,#8a6f3e)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#fff', fontWeight: 700 }}>
-                                {c.name.charAt(0)}
-                              </div>
-                              <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{c.name}</span>
-                            </div>
-                          </td>
-                          <td style={{ ...td, fontSize: 12, color: 'var(--muted)', direction: 'ltr', textAlign: 'right' as const }}>{c.phone || '—'}</td>
-                          <td style={{ ...td, fontSize: 12 }}>{c.need || '—'}</td>
-                          <td style={td}>
-                            {c.status ? (
-                              <span style={{ padding: '4px 10px', borderRadius: 20, background: 'var(--goldDim)', color: 'var(--gold)', fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap', border: '1px solid var(--gold2)' }}>
-                                {c.status}
-                              </span>
-                            ) : <span style={{ color: 'var(--muted)' }}>—</span>}
-                          </td>
-                          <td style={td}>
-                            <div style={{ display: 'flex', gap: 6 }}>
-                              {c.phone ? (
-                                <a href={`tel:${c.phone}`} style={{ ...smallBtn, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>تماس</a>
-                              ) : (
-                                <span style={{ ...smallBtn, opacity: 0.5 }}>تماس</span>
-                              )}
-                              <button onClick={() => deleteClient(c.id)} style={smallBtn}>حذف</button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div>
-                <button onClick={addClient} style={goldBtn}>مشتری جدید +</button>
-              </div>
             </div>
-          )}
-
-          {/* ══════════════ CALENDAR VIEW ══════════════ */}
-          {view === 'calendar' && (
-            <div style={{ display: 'grid', gap: 20 }}>
-              <div style={{ ...cardStyle }}>
-                {/* Month header */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
-                  <button style={{ ...smallBtn, padding: '6px 12px', fontSize: 14 }}>‹</button>
-                  <div style={{ flex: 1, textAlign: 'center' as const, fontSize: 17, fontWeight: 800, color: 'var(--text)' }}>خرداد ۱۴۰۳</div>
-                  <button style={{ ...smallBtn, padding: '6px 12px', fontSize: 14 }}>›</button>
-                </div>
-
-                {/* Day headers */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 4, marginBottom: 6 }}>
-                  {dayHeaders.map(d => (
-                    <div key={d} style={{ textAlign: 'center' as const, fontSize: 12, fontWeight: 700, color: 'var(--muted)', padding: '6px 0' }}>{d}</div>
-                  ))}
-                </div>
-
-                {/* Calendar grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 4 }}>
-                  {calCells.map((dayNum, idx) => {
-                    const appt = dayNum ? appointmentByDay.get(dayNum) : undefined
-                    const isToday = dayNum === todayDay
-                    return (
-                      <div
-                        key={idx}
-                        style={{
-                          minHeight: 68,
-                          borderRadius: 9,
-                          border: appt ? `1px solid ${appt.color}55` : isToday ? '1px solid var(--gold)' : '1px solid var(--line)',
-                          background: isToday ? 'var(--goldDim)' : appt ? `${appt.color}0d` : 'var(--bg)',
-                          padding: '7px 8px',
-                          position: 'relative' as const,
-                        }}
-                      >
-                        {dayNum !== null && (
-                          <>
-                            <div style={{ fontSize: 12, fontWeight: isToday ? 800 : 500, color: isToday ? 'var(--gold)' : 'var(--text)', marginBottom: 4 }}>{dayNum}</div>
-                            {appt && (
-                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
-                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: appt.color, flexShrink: 0, marginTop: 3 }}></span>
-                                <div style={{ fontSize: 10, color: appt.color, lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>{appt.title}</div>
-                              </div>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Today's appointments */}
-              <div style={{ ...cardStyle }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--gold)', display: 'inline-block' }}></span>
-                  جلسات امروز
-                </div>
-                {todayAppts.length === 0 ? (
-                  <div style={{ fontSize: 13, color: 'var(--muted)' }}>جلسه‌ای برای امروز ثبت نشده</div>
-                ) : (
-                  <div style={{ display: 'grid', gap: 10 }}>
-                    {todayAppts.map(a => (
-                      <div key={a.day} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px', borderRadius: 12, background: `${a.color}12`, border: `1px solid ${a.color}33` }}>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: a.color, minWidth: 44 }}>{a.time}</span>
-                        <span style={{ width: 1, height: 28, background: `${a.color}55` }}></span>
-                        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{a.title}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ══════════════ TASKS VIEW ══════════════ */}
-          {view === 'tasks' && (
-            <div style={{ display: 'grid', gap: 18 }}>
-
-              {/* Add new task */}
-              <div style={{ ...cardStyle }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 12 }}>افزودن وظیفه جدید</div>
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  <input
-                    value={newTaskTitle}
-                    onChange={e => setNewTaskTitle(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && addTask()}
-                    placeholder="عنوان وظیفه..."
-                    style={{ flex: 1, minWidth: 200, padding: '9px 14px', borderRadius: 10, border: '1px solid var(--line)', background: 'var(--bg)', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }}
-                  />
-                  <select
-                    value={newTaskPriority}
-                    onChange={e => setNewTaskPriority(e.target.value as TaskPriority)}
-                    style={{ padding: '9px 12px', borderRadius: 10, border: '1px solid var(--line)', background: 'var(--bg)', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', cursor: 'pointer' }}
-                  >
-                    <option value="فوری">فوری</option>
-                    <option value="عادی">عادی</option>
-                    <option value="کم‌اهمیت">کم‌اهمیت</option>
-                  </select>
-                  <input
-                    value={newTaskDue}
-                    onChange={e => setNewTaskDue(e.target.value)}
-                    placeholder="تاریخ سررسید"
-                    style={{ width: 140, padding: '9px 14px', borderRadius: 10, border: '1px solid var(--line)', background: 'var(--bg)', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }}
-                  />
-                  <button onClick={addTask} style={goldBtn}>افزودن</button>
-                </div>
-              </div>
-
-              {/* Filter + count */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  {(['همه', 'فوری', 'عادی', 'کم‌اهمیت'] as const).map(f => (
-                    <button
-                      key={f}
-                      onClick={() => setTaskFilter(f)}
-                      style={{
-                        padding: '7px 16px', borderRadius: 20, border: '1px solid var(--line)', fontFamily: 'inherit', fontSize: 13, cursor: 'pointer',
-                        background: taskFilter === f ? 'var(--goldDim)' : 'var(--surface)',
-                        color: taskFilter === f ? 'var(--gold)' : 'var(--muted)',
-                        fontWeight: taskFilter === f ? 700 : 500,
-                      }}
-                    >{f}</button>
-                  ))}
-                </div>
-                <div style={{ fontSize: 13, color: 'var(--muted)' }}>
-                  <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{doneCount}</span> از <span style={{ fontWeight: 700 }}>{tasks.length}</span> وظیفه تکمیل شده
-                </div>
-              </div>
-
-              {/* Task list */}
-              <div style={{ display: 'grid', gap: 8 }}>
-                {sortedTasks.map(task => {
-                  const faPri = faPriority(task.priority)
-                  const priColor = priorityColorMap[faPri]
-                  return (
-                  <div
-                    key={task.id}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', borderRadius: 13,
-                      background: 'var(--surface)', border: `1px solid ${task.done ? 'var(--line)' : 'var(--line)'}`,
-                      opacity: task.done ? 0.6 : 1,
-                    }}
-                  >
-                    {/* Checkbox */}
-                    <div
-                      onClick={() => toggleTask(task.id)}
-                      style={{
-                        width: 20, height: 20, borderRadius: 6, flexShrink: 0, cursor: 'pointer',
-                        border: task.done ? 'none' : '2px solid var(--line)',
-                        background: task.done ? 'var(--gold)' : 'transparent',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}
-                    >
-                      {task.done && <span style={{ fontSize: 11, color: '#1a1506', fontWeight: 800 }}>✓</span>}
-                    </div>
-
-                    {/* Title */}
+            <div className="mjp-cols" style={{ display: 'flex', gap: 16 }}>
+              <div style={{ ...card, padding: 18, flex: 2, minWidth: 0 }}>
+                {sectionTitle('لیدهای اخیر')}
+                {stats.recentLeads.length ? stats.recentLeads.map(l => (
+                  <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13.5, fontWeight: 600, color: task.done ? 'var(--muted)' : 'var(--text)', textDecoration: task.done ? 'line-through' : 'none' }}>
-                        {task.title}
+                      <div style={{ fontSize: 13, fontWeight: 700 }}>{l.name}{l.phone ? <span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 12 }}> · {l.phone}</span> : ''}</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{l.need} {l.budget ? `· ${l.budget}` : ''}</div>
+                    </div>
+                    <Pill label={STAGE_LABEL[l.stage]} color={STAGE_COLOR[l.stage]} />
+                  </div>
+                )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>لیدی نداری.</div>}
+              </div>
+              <div style={{ ...card, padding: 18, flex: 1, minWidth: 0 }}>
+                {sectionTitle('معاملات ۶ ماهه')}
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 130, padding: '8px 0' }}>
+                  {stats.monthlyDeals.map((m, i) => {
+                    const last = i === stats.monthlyDeals.length - 1
+                    return (
+                      <div key={m.month} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                        <div style={{ fontSize: 10, color: 'var(--muted)' }}>{fa(m.count)}</div>
+                        <div style={{ width: '70%', height: `${(m.count / maxDeals) * 90}px`, minHeight: 4, borderRadius: 6, background: last ? 'linear-gradient(180deg,var(--gold),var(--gold2))' : 'var(--line2)' }} />
+                        <div style={{ fontSize: 9.5, color: 'var(--faint)' }}>{m.month}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+            <div style={{ ...card, padding: 18 }}>
+              {sectionTitle('قرارهای پیش‌رو')}
+              {stats.upcoming.length ? stats.upcoming.map(a => (
+                <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700 }}>{a.client} <span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 12 }}>· {APPT_LABEL[a.type]}</span></div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{a.listingTitle || '—'} · {a.date}</div>
+                  </div>
+                </div>
+              )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>قراری نداری.</div>}
+            </div>
+          </div>}
+
+          {/* LEADS */}
+          {view === 'leads' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ ...card, padding: 18 }}>
+              {sectionTitle('افزودن لید')}
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div style={{ flex: '1 1 140px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>نام</label><input value={nl.name} onChange={e => setNl({ ...nl, name: e.target.value })} style={inputStyle} /></div>
+                <div style={{ flex: '1 1 130px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>تلفن</label><input value={nl.phone} onChange={e => setNl({ ...nl, phone: e.target.value })} style={inputStyle} /></div>
+                <div style={{ flex: '2 1 180px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>نیاز</label><input value={nl.need} onChange={e => setNl({ ...nl, need: e.target.value })} placeholder="مثلاً آپارتمان ۲ خوابه" style={inputStyle} /></div>
+                <div style={{ flex: '1 1 120px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>بودجه</label><input value={nl.budget} onChange={e => setNl({ ...nl, budget: e.target.value })} style={inputStyle} /></div>
+                <button disabled={busy || !nl.name.trim()} onClick={async () => { if (await post({ action: 'addLead', name: nl.name.trim(), phone: nl.phone, need: nl.need, budget: nl.budget, source: nl.source })) setNl({ name: '', phone: '', need: '', budget: '', source: '' }) }} style={goldBtn}>افزودن</button>
+              </div>
+            </div>
+            <div style={{ ...card, padding: 18 }}>
+              {sectionTitle(`لیدها (${fa(leadsF.length)})`)}
+              {leadsF.length ? leadsF.map(l => (
+                <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700 }}>{l.name}{l.phone ? <span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 12 }}> · {l.phone}</span> : ''}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{l.need} {l.budget ? `· ${l.budget}` : ''} {l.source ? `· منبع: ${l.source}` : ''}</div>
+                  </div>
+                  <select value={l.stage} onChange={e => post({ action: 'setLeadStage', id: l.id, stage: e.target.value })} style={{ ...actionBtn, cursor: 'pointer', color: STAGE_COLOR[l.stage], borderColor: STAGE_COLOR[l.stage] }}>
+                    {STAGES.map(s => <option key={s} value={s} style={{ color: 'var(--text)' }}>{STAGE_LABEL[s]}</option>)}
+                  </select>
+                  <button onClick={() => post({ action: 'deleteLead', id: l.id })} style={{ ...actionBtn, color: '#ef4444' }}>حذف</button>
+                </div>
+              )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>لیدی نداری.</div>}
+            </div>
+          </div>}
+
+          {/* LISTINGS */}
+          {view === 'listings' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ ...card, padding: 18 }}>
+              {sectionTitle('افزودن فایل')}
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div style={{ flex: '2 1 180px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>عنوان</label><input value={nf.title} onChange={e => setNf({ ...nf, title: e.target.value })} style={inputStyle} /></div>
+                <div style={{ flex: '1 1 120px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع</label><select value={nf.ptype} onChange={e => setNf({ ...nf, ptype: e.target.value })} style={inputStyle}><option value="">—</option>{PTYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                <div style={{ flex: '1 1 120px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>منطقه</label><input value={nf.location} onChange={e => setNf({ ...nf, location: e.target.value })} style={inputStyle} /></div>
+                <div style={{ flex: '1 1 140px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>قیمت (تومان)</label><input value={nf.price} onChange={e => setNf({ ...nf, price: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                <div style={{ flex: '0 1 110px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>معامله</label><select value={nf.deal} onChange={e => setNf({ ...nf, deal: e.target.value })} style={inputStyle}><option value="sale">فروش</option><option value="rent">اجاره</option></select></div>
+                <button disabled={busy || !nf.title.trim()} onClick={async () => { if (await post({ action: 'addListing', title: nf.title.trim(), ptype: nf.ptype || 'آپارتمان', location: nf.location, price: Number(nf.price) || 0, deal: nf.deal })) setNf({ title: '', ptype: '', location: '', price: '', deal: 'sale' }) }} style={goldBtn}>افزودن</button>
+              </div>
+            </div>
+            <div style={{ ...card, padding: 18 }}>
+              {sectionTitle('فایل‌های من')}
+              {listings.length ? (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 12 }}>
+                  {listings.map(l => (
+                    <div key={l.id} style={{ ...card, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                        <div style={{ fontWeight: 700, fontSize: 14 }}>{l.title}</div>
+                        <Pill label={DEAL_LABEL[l.deal]} color={l.deal === 'sale' ? '#60a5fa' : '#2dd4bf'} />
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--muted)' }}>{l.ptype} · {l.location}</div>
+                      <div style={{ fontWeight: 800, color: 'var(--gold)', fontSize: 14 }}>{money(l.price)}</div>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <select value={l.status} onChange={e => post({ action: 'setListingStatus', id: l.id, status: e.target.value })} style={{ ...actionBtn, cursor: 'pointer', color: LIST_COLOR[l.status], borderColor: LIST_COLOR[l.status] }}>
+                          {LIST_STATUSES.map(s => <option key={s} value={s} style={{ color: 'var(--text)' }}>{LIST_LABEL[s]}</option>)}
+                        </select>
+                        <button onClick={() => post({ action: 'deleteListing', id: l.id })} style={{ ...actionBtn, color: '#ef4444' }}>حذف</button>
                       </div>
                     </div>
+                  ))}
+                </div>
+              ) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>فایلی نداری.</div>}
+            </div>
+          </div>}
 
-                    {/* Priority badge */}
-                    <span style={{ padding: '3px 10px', borderRadius: 20, background: `${priColor}1a`, color: priColor, fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                      {faPri}
-                    </span>
-
-                    {/* Due date */}
-                    {task.due && <span style={{ fontSize: 11.5, color: 'var(--faint)', whiteSpace: 'nowrap', flexShrink: 0 }}>{task.due}</span>}
-
-                    {/* Delete */}
-                    <button
-                      onClick={() => deleteTask(task.id)}
-                      style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid var(--line)', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    >✕</button>
-                  </div>
-                  )
-                })}
+          {/* APPOINTMENTS */}
+          {view === 'appts' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ ...card, padding: 18 }}>
+              {sectionTitle('قرار جدید')}
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div style={{ flex: '1 1 140px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>مشتری</label><input value={na.client} onChange={e => setNa({ ...na, client: e.target.value })} style={inputStyle} /></div>
+                <div style={{ flex: '2 1 180px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>ملک</label><input value={na.listingTitle} onChange={e => setNa({ ...na, listingTitle: e.target.value })} style={inputStyle} /></div>
+                <div style={{ flex: '0 1 110px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع</label><select value={na.type} onChange={e => setNa({ ...na, type: e.target.value })} style={inputStyle}><option value="visit">بازدید</option><option value="meeting">جلسه</option><option value="call">تماس</option></select></div>
+                <div style={{ flex: '1 1 120px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>تاریخ</label><input value={na.date} onChange={e => setNa({ ...na, date: e.target.value })} placeholder="۱۴۰۴/۰۴/۰۵" style={inputStyle} /></div>
+                <button disabled={busy || !na.client.trim() || !na.date.trim()} onClick={async () => { if (await post({ action: 'addAppt', client: na.client.trim(), listingTitle: na.listingTitle, date: na.date.trim(), type: na.type })) setNa({ client: '', listingTitle: '', date: '', type: 'visit' }) }} style={goldBtn}>افزودن</button>
               </div>
             </div>
-          )}
-
-          {/* ══════════════ PERFORMANCE VIEW ══════════════ */}
-          {view === 'performance' && (
-            <div style={{ display: 'grid', gap: 20 }}>
-
-              {/* KPI Cards */}
-              <div className="mjpro-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
-                {performanceKPIs.map(k => (
-                  <div key={k.l} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 12, color: 'var(--muted)' }}>{k.l}</span>
-                      <span style={{ width: 30, height: 30, borderRadius: 9, background: k.bg, color: k.c, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>{k.ic}</span>
-                    </div>
-                    <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--text)', marginTop: 12, letterSpacing: '-.5px' }}>{k.v}</div>
-                    <div style={{ fontSize: 11.5, color: k.tc, marginTop: 4 }}>{k.t}</div>
+            <div style={{ ...card, padding: 18 }}>
+              {sectionTitle('قرارها و بازدیدها')}
+              {appts.length ? appts.map(a => (
+                <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700 }}>{a.client} <span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 12 }}>· {APPT_LABEL[a.type]}</span></div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{a.listingTitle || '—'} · {a.date}</div>
                   </div>
-                ))}
-              </div>
-
-              {/* Commission chart */}
-              <div style={{ ...cardStyle }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>کمیسیون ماهانه</div>
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 16 }}>۶ ماه گذشته (م.ت)</div>
-                <svg viewBox={`0 0 ${chartW} ${chartH + chartPadB + chartPadT}`} style={{ width: '100%', height: 'auto', overflow: 'visible' }}>
-                  <defs>
-                    <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="var(--gold2)" />
-                      <stop offset="100%" stopColor="var(--gold)" />
-                    </linearGradient>
-                  </defs>
-                  {/* Gridlines */}
-                  {[maxCommission, midCommission].map((val, gi) => {
-                    const y = chartPadT + (1 - val / maxCommission) * chartH
-                    return (
-                      <g key={gi}>
-                        <line x1={chartPadL} y1={y} x2={chartW - chartPadR} y2={y} stroke="var(--line)" strokeWidth="1" strokeDasharray="4 4" />
-                        <text x={chartPadL} y={y - 4} fontSize="10" fill="var(--faint)" textAnchor="start">{val}</text>
-                      </g>
-                    )
-                  })}
-                  {/* Bars */}
-                  {monthlyCommissions.map((m, i) => {
-                    const barH = (m.amount / maxCommission) * chartH
-                    const x = chartPadL + barGap + i * (barW + barGap)
-                    const y = chartPadT + chartH - barH
-                    return (
-                      <g key={m.month}>
-                        <rect x={x} y={y} width={barW} height={barH} rx={6} fill="url(#barGrad)" opacity="0.9" />
-                        <text x={x + barW / 2} y={y - 6} textAnchor="middle" fontSize="11" fill="var(--gold)" fontWeight="700">{m.amount}</text>
-                        <text x={x + barW / 2} y={chartPadT + chartH + chartPadB - 8} textAnchor="middle" fontSize="11" fill="var(--muted)">{m.month}</text>
-                      </g>
-                    )
-                  })}
-                </svg>
-              </div>
-
-              {/* Funnel and ranking side by side */}
-              <div className="mjpro-2col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 18 }}>
-
-                {/* Conversion funnel */}
-                <div style={{ ...cardStyle }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>قیف تبدیل مشتریان</div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 18 }}>وضعیت پایپ‌لاین</div>
-                  <div style={{ display: 'grid', gap: 14 }}>
-                    {funnelData.map((f, i) => {
-                      const colors = ['var(--gold)', '#5b9bd5', '#9b7ad0', '#5fd98a']
-                      const c = colors[i]
-                      return (
-                        <div key={f.label}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 6 }}>
-                            <span style={{ color: 'var(--text)', fontWeight: 600 }}>{f.label}</span>
-                            <span style={{ color: c, fontWeight: 700 }}>{f.count} نفر · {f.pct}٪</span>
-                          </div>
-                          <div style={{ height: 10, borderRadius: 6, background: 'var(--bg2)', overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: `${f.pct}%`, background: c, borderRadius: 6 }}></div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
+                  <Pill label={APPTST_LABEL[a.status]} color={APPTST_COLOR[a.status]} />
+                  <select value={a.status} onChange={e => post({ action: 'setApptStatus', id: a.id, status: e.target.value })} style={{ ...actionBtn, cursor: 'pointer' }}>
+                    {APPT_STATUSES.map(s => <option key={s} value={s}>{APPTST_LABEL[s]}</option>)}
+                  </select>
                 </div>
-
-                {/* Monthly ranking */}
-                <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' as const }}>
-                  <div style={{ fontSize: 40, marginBottom: 12 }}>🏆</div>
-                  <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 8 }}>رتبه‌بندی این ماه</div>
-                  <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--gold)', letterSpacing: '-.5px', marginBottom: 4 }}>رتبه ۲</div>
-                  <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16 }}>از ۳۸ مشاور</div>
-                  <div style={{ padding: '10px 18px', borderRadius: 12, background: 'var(--goldDim)', border: '1px solid var(--gold2)' }}>
-                    <div style={{ fontSize: 13, color: 'var(--gold)', fontWeight: 700 }}>✦ آفرین! عملکرد عالی</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4 }}>تنها ۷ م.ت تا رتبه اول فاصله دارید</div>
-                  </div>
-                </div>
-              </div>
-
+              )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>قراری نداری.</div>}
             </div>
-          )}
+          </div>}
 
+          {/* COMMISSIONS */}
+          {view === 'commissions' && <div style={{ ...card, padding: 18 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+              <div style={{ fontWeight: 800, fontSize: 15 }}>کمیسیون‌ها</div>
+              <div style={{ fontSize: 13, color: 'var(--muted)' }}>در انتظار: <b style={{ color: 'var(--gold)' }}>{money(stats.kpis.pendingCommission)}</b> · پرداخت‌شده: <b style={{ color: '#34d399' }}>{money(stats.kpis.paidCommission)}</b></div>
+            </div>
+            {commissions.length ? commissions.map(c => (
+              <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 700 }}>{c.dealTitle}</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{c.date}</div>
+                </div>
+                <div style={{ fontWeight: 800, color: 'var(--gold)', fontSize: 14 }}>{money(c.amount)}</div>
+                {c.status === 'pending'
+                  ? <button onClick={() => post({ action: 'setCommissionStatus', id: c.id, status: 'paid' })} style={{ ...actionBtn, color: '#34d399', borderColor: '#34d399' }}>علامت پرداخت</button>
+                  : <Pill label="پرداخت‌شده" color="#34d399" />}
+              </div>
+            )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>کمیسیونی ثبت نشده.</div>}
+          </div>}
+
+          {/* SETTINGS */}
+          {view === 'settings' && <div style={{ ...card, padding: 18, maxWidth: 480 }}>
+            {sectionTitle('تنظیمات مشاور')}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نام</label><input value={prof.name} onChange={e => setProf({ ...prof, name: e.target.value })} style={inputStyle} /></div>
+              <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>آژانس/دفتر</label><input value={prof.agency} onChange={e => setProf({ ...prof, agency: e.target.value })} style={inputStyle} /></div>
+              <button disabled={busy} onClick={() => post({ action: 'updateProfile', patch: { name: prof.name, agency: prof.agency } })} style={{ ...goldBtn, alignSelf: 'flex-start', padding: '9px 22px' }}>ذخیره</button>
+            </div>
+          </div>}
         </main>
       </div>
     </div>
