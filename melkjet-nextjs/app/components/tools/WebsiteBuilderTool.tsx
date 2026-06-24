@@ -69,6 +69,11 @@ const BLOCK_DEFAULTS: Record<string, Record<string, any>> = {
     source: 'sample',
     count: 3,
   },
+  blog: {
+    heading: 'وبلاگ و مقالات',
+    source: 'mine',
+    count: 3,
+  },
   services: {
     heading: 'خدمات ما',
     items: [
@@ -155,6 +160,11 @@ const BLOCK_SCHEMA: Record<string, FieldSpec[]> = {
     { key: 'source', label: 'منبع', kind: 'enum', options: [{ value: 'sample', label: 'نمونه' }, { value: 'mine', label: 'آگهی‌های من' }] },
     { key: 'count', label: 'تعداد', kind: 'number' },
   ],
+  blog: [
+    { key: 'heading', label: 'عنوان', kind: 'text' },
+    { key: 'source', label: 'منبع', kind: 'enum', options: [{ value: 'mine', label: 'مقالات من' }, { value: 'sample', label: 'نمونه' }] },
+    { key: 'count', label: 'تعداد', kind: 'number' },
+  ],
   services: [
     { key: 'heading', label: 'عنوان', kind: 'text' },
     { key: 'items', label: 'خدمات', kind: 'list', itemFields: [{ key: 'icon', label: 'آیکن', kind: 'text' }, { key: 'title', label: 'عنوان', kind: 'text' }, { key: 'desc', label: 'توضیح', kind: 'textarea' }], newItem: () => ({ icon: '◇', title: 'خدمت جدید', desc: 'توضیح خدمت' }) },
@@ -198,6 +208,7 @@ const BLOCK_LIBRARY = [
   { type: 'hero', label: 'هیرو', icon: '◇' },
   { type: 'search', label: 'نوار جستجو', icon: '⌕' },
   { type: 'listings', label: 'آگهی‌های من', icon: '⌂' },
+  { type: 'blog', label: 'وبلاگ', icon: '✎' },
   { type: 'services', label: 'خدمات', icon: '◈' },
   { type: 'about', label: 'درباره ما', icon: '¶' },
   { type: 'stats', label: 'آمار', icon: '◔' },
@@ -408,6 +419,28 @@ function BlockBody({ block, primary }: { block: Block; primary: string }) {
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1510', marginBottom: 4 }}>آپارتمان لوکس</div>
                 <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>تهران، منطقه نمونه</div>
                 <div style={{ fontSize: 13, fontWeight: 800, color: primary }}>قیمت توافقی</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+  if (t === 'blog') {
+    const n = Math.max(1, Math.min(12, Number(p.count) || 3))
+    const grads = ['#15202d,#101828', '#251528,#1a0e1e', '#152825,#0e1a18', '#2d2215,#1e1a12', '#2d1515,#1e0e0e', '#1e2215,#141a10']
+    return (
+      <div style={{ background: '#fff', padding: '28px', direction: 'rtl' }}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: '#1a1510', marginBottom: 16 }}>{p.heading}</div>
+        {p.source === 'mine' ? <div style={{ fontSize: 11, color: primary, marginBottom: 12 }}>✎ مقالات منتشرشدهٔ شما اینجا نمایش داده می‌شوند</div> : null}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+          {Array.from({ length: n }).map((_, i) => (
+            <div key={i} style={{ background: '#f5f3ef', borderRadius: 10, overflow: 'hidden', border: '1px solid #eee' }}>
+              <div style={{ height: 80, background: `linear-gradient(135deg,${grads[i % grads.length]})` }} />
+              <div style={{ padding: '12px' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1510', marginBottom: 4 }}>عنوان مقاله</div>
+                <div style={{ fontSize: 11, color: '#888', lineHeight: 1.7, marginBottom: 8 }}>خلاصه‌ای کوتاه از مقاله در این بخش نمایش داده می‌شود.</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: primary }}>مطالعهٔ مقاله →</div>
               </div>
             </div>
           ))}

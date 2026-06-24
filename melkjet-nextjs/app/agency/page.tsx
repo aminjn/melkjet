@@ -5,6 +5,7 @@ import CrmTool, { CRM_VIEWS, type CrmView } from '@/app/components/tools/CrmTool
 import MarketingTool, { MARKETING_VIEWS, type MarketingView } from '@/app/components/tools/MarketingTool'
 import WorkflowTool, { WORKFLOW_VIEWS, type WorkflowView } from '@/app/components/tools/WorkflowTool'
 import WebsiteBuilderTool, { WEBSITE_VIEWS, type WebsiteView } from '@/app/components/tools/WebsiteBuilderTool'
+import ArticleEditor from '@/app/components/ArticleEditor'
 
 // ════════ Types (mirror app/lib/agency-store.ts) ════════
 type Stage = 'new' | 'assigned' | 'visit' | 'negotiation' | 'closed' | 'lost'
@@ -28,7 +29,7 @@ interface AgencyData { stats: Stats; agents: Agent[]; listings: Listing[]; leads
 interface LinkMember { advisorPhone: string; advisorName: string; agencyPhone: string; agencyName: string; since: number }
 interface LinkRequest { id: string; advisorPhone: string; advisorName: string; agencyPhone: string; agencyName: string; initiator: 'advisor' | 'agency'; status: string; createdAt: number }
 
-type View = 'dashboard' | 'assistant' | 'agents' | 'listings' | 'leads' | 'deals' | 'settings'
+type View = 'dashboard' | 'assistant' | 'articles' | 'agents' | 'listings' | 'leads' | 'deals' | 'settings'
 
 // ════════ Helpers ════════
 const FONT = 'Vazirmatn, system-ui, sans-serif'
@@ -55,10 +56,11 @@ const inputStyle: React.CSSProperties = { padding: '9px 11px', borderRadius: 9, 
 const actionBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap' }
 const goldBtn: React.CSSProperties = { padding: '9px 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }
 
-const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد آژانس', assistant: 'دستیار هوشمند', agents: 'مشاوران', listings: 'فایل‌های آژانس', leads: 'لیدها', deals: 'معاملات', settings: 'تنظیمات' }
+const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد آژانس', assistant: 'دستیار هوشمند', articles: 'مقالات و وبلاگ', agents: 'مشاوران', listings: 'فایل‌های آژانس', leads: 'لیدها', deals: 'معاملات', settings: 'تنظیمات' }
 const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'agents' | 'leads' }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: '▦' },
   { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
+  { id: 'articles', label: 'مقالات', icon: '✎' },
   { id: 'agents', label: 'مشاوران', icon: '☷', badge: 'agents' },
   { id: 'listings', label: 'فایل‌ها', icon: '◫' },
   { id: 'leads', label: 'لیدها', icon: '◎', badge: 'leads' },
@@ -96,6 +98,7 @@ export default function AgencyPage() {
   const openWf = (v: WorkflowView) => { clearTools(); setWfView(v); setWfOpen(true) }
   const openWb = (v: WebsiteView) => { clearTools(); setWbView(v); setWbOpen(true) }
   const [data, setData] = useState<AgencyData | null>(null)
+  const [myName, setMyName] = useState('')
   const [loading, setLoading] = useState(true)
   const [unauth, setUnauth] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -144,6 +147,7 @@ export default function AgencyPage() {
   }, [])
   useEffect(() => { refresh() }, [refresh])
   useEffect(() => { refreshLinks() }, [refreshLinks])
+  useEffect(() => { fetch('/api/auth/profile', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d?.account?.name) setMyName(d.account.name) }).catch(() => {}) }, [])
 
   const post = useCallback(async (body: Record<string, unknown>): Promise<boolean> => {
     setBusy(true)
@@ -359,6 +363,16 @@ export default function AgencyPage() {
           {view === 'assistant' && (
             <div style={{ height: 'calc(100vh - 130px)' }}>
               <AssistantPanel panel="agency" title="دستیار هوشمند آژانس" subtitle="مشاور AI شخصیِ تو" suggestions={["استراتژی بازاریابی این ماه را پیشنهاد بده", "چطور عملکرد تیم مشاوران را بهبود بدم؟", "یک گزارش کوتاه از وضعیت فروش بنویس", "لیدها را چطور بین مشاوران تقسیم کنم؟"]} />
+            </div>
+          )}
+
+          {/* ARTICLES (CMS) */}
+          {view === 'articles' && (
+            <div>
+              <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.7 }}>
+                مقاله‌ای که با نام شما منتشر می‌شود، در صفحهٔ مقاله به آگهی‌هایتان لینک می‌شود و می‌توانید آن را در «وبلاگ» وب‌سایت خود نمایش دهید (سئو خودکار: slug و عنوان در صورت تکراری‌بودن خودکار اصلاح می‌شوند).
+              </div>
+              <ArticleEditor compact author={myName || undefined} />
             </div>
           )}
 

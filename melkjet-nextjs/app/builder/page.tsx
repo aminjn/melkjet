@@ -5,6 +5,7 @@ import CrmTool, { CRM_VIEWS, type CrmView } from '@/app/components/tools/CrmTool
 import MarketingTool, { MARKETING_VIEWS, type MarketingView } from '@/app/components/tools/MarketingTool'
 import WorkflowTool, { WORKFLOW_VIEWS, type WorkflowView } from '@/app/components/tools/WorkflowTool'
 import WebsiteBuilderTool, { WEBSITE_VIEWS, type WebsiteView } from '@/app/components/tools/WebsiteBuilderTool'
+import ArticleEditor from '@/app/components/ArticleEditor'
 
 // ── Types (mirror app/lib/builder-store.ts API shape) ──
 type UnitStatus = 'sold' | 'reserved' | 'available'
@@ -20,7 +21,7 @@ interface Project {
 }
 interface ProjectSummary { id: string; name: string; location: string }
 
-type View = 'overview' | 'assistant' | 'units' | 'sales' | 'investors' | 'reports'
+type View = 'overview' | 'assistant' | 'articles' | 'units' | 'sales' | 'investors' | 'reports'
 
 // ── Status visual maps ──
 const STATUS_COLOR: Record<UnitStatus, string> = {
@@ -63,6 +64,7 @@ function stats(p: Project | null) {
 const VIEW_TITLES: Record<View, string> = {
   overview: 'نمای کلی پروژه',
   assistant: 'دستیار هوشمند',
+  articles: 'مقالات و وبلاگ',
   units: 'موجودی واحدها',
   sales: 'پیش‌فروش و فروش',
   investors: 'سرمایه‌گذاران',
@@ -72,6 +74,7 @@ const VIEW_TITLES: Record<View, string> = {
 const NAV_ITEMS: { id: View; label: string; icon: string }[] = [
   { id: 'overview', label: 'نمای کلی', icon: '▦' },
   { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
+  { id: 'articles', label: 'مقالات', icon: '✎' },
   { id: 'units', label: 'موجودی واحدها', icon: '▤' },
   { id: 'sales', label: 'پیش‌فروش و فروش', icon: '◔' },
   { id: 'investors', label: 'سرمایه‌گذاران', icon: '◍' },
@@ -100,6 +103,7 @@ export default function BuilderPage() {
   const [projects, setProjects] = useState<ProjectSummary[]>([])
   const [project, setProject] = useState<Project | null>(null)
   const [pid, setPid] = useState<string | null>(null)
+  const [myName, setMyName] = useState('')
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [switcherOpen, setSwitcherOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -123,6 +127,11 @@ export default function BuilderPage() {
         if (list[0]) { setPid(list[0].id); setProject(list[0]) }
       })
       .catch(() => {})
+  }, [])
+
+  // ── Fetch display name for article authorship ──
+  useEffect(() => {
+    fetch('/api/auth/profile', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d?.account?.name) setMyName(d.account.name) }).catch(() => {})
   }, [])
 
   // ── Generic POST then refresh current project ──
@@ -430,7 +439,14 @@ export default function BuilderPage() {
             : mktView ? <MarketingTool embedded view={mktView} onView={v => setMktView(v)} />
             : wfView ? <div style={{ height: 'calc(100vh - 130px)' }}><WorkflowTool embedded view={wfView} onView={v => setWfView(v)} /></div>
             : wbView ? <div style={{ height: 'calc(100vh - 130px)' }}><WebsiteBuilderTool embedded view={wbView} onView={v => setWbView(v)} /></div>
-            : !project ? (
+            : view === 'articles' ? (
+            <div>
+              <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.7 }}>
+                مقاله‌ای که با نام شما منتشر می‌شود، در صفحهٔ مقاله به آگهی‌هایتان لینک می‌شود و می‌توانید آن را در «وبلاگ» وب‌سایت خود نمایش دهید (سئو خودکار: slug و عنوان در صورت تکراری‌بودن خودکار اصلاح می‌شوند).
+              </div>
+              <ArticleEditor compact author={myName || undefined} />
+            </div>
+          ) : !project ? (
             <div style={{ textAlign: 'center', color: 'var(--muted)', padding: '80px 0', fontSize: 14 }}>در حال بارگذاری پروژه…</div>
           ) : (
             <>

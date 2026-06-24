@@ -5,6 +5,7 @@ import CrmTool, { CRM_VIEWS, type CrmView } from '@/app/components/tools/CrmTool
 import MarketingTool, { MARKETING_VIEWS, type MarketingView } from '@/app/components/tools/MarketingTool'
 import WorkflowTool, { WORKFLOW_VIEWS, type WorkflowView } from '@/app/components/tools/WorkflowTool'
 import WebsiteBuilderTool, { WEBSITE_VIEWS, type WebsiteView } from '@/app/components/tools/WebsiteBuilderTool'
+import ArticleEditor from '@/app/components/ArticleEditor'
 
 // ════════════════════════════════════════════════════════
 //  Types (mirror app/lib/materials-store.ts API shape)
@@ -36,7 +37,7 @@ interface Stats {
 }
 interface MaterialsData { stats: Stats; products: Product[]; orders: Order[]; inquiries: Inquiry[] }
 
-type View = 'dashboard' | 'assistant' | 'catalog' | 'orders' | 'inquiries' | 'settings'
+type View = 'dashboard' | 'assistant' | 'articles' | 'catalog' | 'orders' | 'inquiries' | 'settings'
 
 // ════════════════════════════════════════════════════════
 //  Formatting & status helpers
@@ -74,6 +75,7 @@ const inputStyle: React.CSSProperties = {
 const VIEW_TITLES: Record<View, string> = {
   dashboard: 'داشبورد فروش',
   assistant: 'دستیار هوشمند',
+  articles: 'مقالات و وبلاگ',
   catalog: 'کاتالوگ محصولات',
   orders: 'سفارش‌ها',
   inquiries: 'استعلام‌ها',
@@ -83,6 +85,7 @@ const VIEW_TITLES: Record<View, string> = {
 const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'orders' | 'inquiries' }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: '▦' },
   { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
+  { id: 'articles', label: 'مقالات', icon: '✎' },
   { id: 'catalog', label: 'کاتالوگ', icon: '◫' },
   { id: 'orders', label: 'سفارش‌ها', icon: '◈', badge: 'orders' },
   { id: 'inquiries', label: 'استعلام‌ها', icon: '◎', badge: 'inquiries' },
@@ -117,6 +120,7 @@ export default function MaterialsPage() {
   const openWf = (v: WorkflowView) => { clearTools(); setWfView(v); setWfOpen(true) }
   const openWb = (v: WebsiteView) => { clearTools(); setWbView(v); setWbOpen(true) }
   const [data, setData] = useState<MaterialsData | null>(null)
+  const [myName, setMyName] = useState('')
   const [loading, setLoading] = useState(true)
   const [unauth, setUnauth] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -134,6 +138,7 @@ export default function MaterialsPage() {
   }, [])
 
   useEffect(() => { refresh() }, [refresh])
+  useEffect(() => { fetch('/api/auth/profile', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d?.account?.name) setMyName(d.account.name) }).catch(() => {}) }, [])
 
   // POST mutation then refetch
   const post = useCallback(async (body: Record<string, unknown>): Promise<boolean> => {
@@ -405,6 +410,14 @@ export default function MaterialsPage() {
           {view === 'assistant' && (
             <div style={{ height: 'calc(100vh - 130px)' }}>
               <AssistantPanel panel="materials" title="دستیار هوشمند فروشنده مصالح" subtitle="مشاور AI شخصیِ تو" suggestions={["قیمت‌گذاری این محصول را پیشنهاد بده", "پاسخ حرفه‌ای به استعلام مشتری بنویس", "چطور فروش این محصول را بیشتر کنم؟", "توضیحات فروش برای محصول بنویس"]} />
+            </div>
+          )}
+          {view === 'articles' && (
+            <div>
+              <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.7 }}>
+                مقاله‌ای که با نام شما منتشر می‌شود، در صفحهٔ مقاله به آگهی‌هایتان لینک می‌شود و می‌توانید آن را در «وبلاگ» وب‌سایت خود نمایش دهید (سئو خودکار: slug و عنوان در صورت تکراری‌بودن خودکار اصلاح می‌شوند).
+              </div>
+              <ArticleEditor compact author={myName || undefined} />
             </div>
           )}
           {view === 'catalog' && <CatalogView products={products} post={post} busy={busy} search={search} showAdd={showAdd} setShowAdd={setShowAdd} />}

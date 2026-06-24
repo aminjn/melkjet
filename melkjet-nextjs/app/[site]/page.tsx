@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { getSite, getSitePage, type Site, type SitePage, type SiteBlock } from '@/app/lib/sites-store'
-import { listItems, type Item } from '@/app/lib/scraper-store'
+import { listItems, listArticles, type Item } from '@/app/lib/scraper-store'
 
 // Public renderer for builder-published sites living at melkjet.com/{slug}.
 // Existing static single-segment routes (search, owner, ...) take precedence;
@@ -40,6 +40,16 @@ function ownerListings(ownerName: string | undefined, count: number): Item[] {
   if (!want) return []
   return listItems('listing', { publicOnly: true })
     .filter(it => normOwner(it.owner || '') === want)
+    .slice(0, count)
+}
+
+// Owner articles: resolve the site owner's REAL published articles, matched the
+// same way as listings — normalised meta.author === normalised site ownerName.
+function ownerArticles(ownerName: string | undefined, count: number): Item[] {
+  const want = normOwner(ownerName || '')
+  if (!want) return []
+  return listArticles({ publishedOnly: true })
+    .filter(it => normOwner(it.meta?.author || '') === want)
     .slice(0, count)
 }
 
@@ -123,6 +133,72 @@ function ListingsBlock({ block, primary, ownerName }: { block: SiteBlock; primar
                 <div style={{ fontSize: 15, fontWeight: 700, color: '#1a1510', marginBottom: 6 }}>آپارتمان لوکس</div>
                 <div style={{ fontSize: 12, color: '#888', marginBottom: 10 }}>تهران، منطقه نمونه</div>
                 <div style={{ fontSize: 15, fontWeight: 800, color: primary }}>قیمت توافقی</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function BlogBlock({ block, primary, ownerName }: { block: SiteBlock; primary: string; ownerName?: string }) {
+  const props = p(block)
+  const n = Math.max(1, Math.min(12, Number(props.count) || 3))
+  const grads = ['#15202d,#101828', '#251528,#1a0e1e', '#152825,#0e1a18', '#2d2215,#1e1a12', '#2d1515,#1e0e0e', '#1e2215,#141a10']
+
+  // Real articles: pull the owner's own published articles.
+  if (props.source === 'mine') {
+    const items = ownerArticles(ownerName, n)
+    return (
+      <section id="blog" style={{ background: '#fff', padding: '56px 24px', direction: 'rtl' }}>
+        <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+          <h2 style={{ fontSize: 26, fontWeight: 800, color: '#1a1510', marginBottom: 18 }}>{props.heading}</h2>
+          {items.length === 0 ? (
+            <div style={{ background: '#f5f3ef', border: '1px dashed #ddd', borderRadius: 14, padding: '40px 24px', textAlign: 'center', color: '#888', fontSize: 14 }}>
+              هنوز مقالهٔ منتشرشده‌ای برای نمایش وجود ندارد.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 18 }}>
+              {items.map((it, i) => {
+                const slug = it.meta?.slug || it.id
+                const excerpt = it.meta?.summary || it.meta?.metaDescription || it.excerpt || ''
+                return (
+                  <a key={it.id} href={`/article/${slug}`} style={{ background: '#f5f3ef', borderRadius: 14, overflow: 'hidden', border: '1px solid #eee', textDecoration: 'none', display: 'block' }}>
+                    {it.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={it.image} alt="" style={{ width: '100%', height: 160, objectFit: 'cover', display: 'block' }} />
+                    ) : (
+                      <div style={{ height: 160, background: `linear-gradient(135deg,${grads[i % grads.length]})` }} />
+                    )}
+                    <div style={{ padding: 18 }}>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: '#1a1510', marginBottom: 8, lineHeight: 1.6 }}>{it.title}</div>
+                      {excerpt ? <p style={{ fontSize: 13, color: '#888', lineHeight: 1.9, margin: '0 0 14px', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{excerpt}</p> : null}
+                      <span style={{ fontSize: 13, fontWeight: 700, color: primary }}>مطالعهٔ مقاله →</span>
+                    </div>
+                  </a>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </section>
+    )
+  }
+
+  // Sample cards (source === 'sample' or unset).
+  return (
+    <section id="blog" style={{ background: '#fff', padding: '56px 24px', direction: 'rtl' }}>
+      <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+        <h2 style={{ fontSize: 26, fontWeight: 800, color: '#1a1510', marginBottom: 18 }}>{props.heading}</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 18 }}>
+          {Array.from({ length: n }).map((_, i) => (
+            <div key={i} style={{ background: '#f5f3ef', borderRadius: 14, overflow: 'hidden', border: '1px solid #eee' }}>
+              <div style={{ height: 160, background: `linear-gradient(135deg,${grads[i % grads.length]})` }} />
+              <div style={{ padding: 18 }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#1a1510', marginBottom: 8 }}>عنوان مقاله</div>
+                <p style={{ fontSize: 13, color: '#888', lineHeight: 1.9, margin: '0 0 14px' }}>خلاصه‌ای کوتاه از مقاله در این بخش نمایش داده می‌شود.</p>
+                <span style={{ fontSize: 13, fontWeight: 700, color: primary }}>مطالعهٔ مقاله →</span>
               </div>
             </div>
           ))}
@@ -298,6 +374,7 @@ function renderBlock(block: SiteBlock, primary: string, ownerName?: string) {
     case 'hero': return <HeroBlock key={block.id} block={block} primary={primary} />
     case 'search': return <SearchBlock key={block.id} block={block} primary={primary} />
     case 'listings': return <ListingsBlock key={block.id} block={block} primary={primary} ownerName={ownerName} />
+    case 'blog': return <BlogBlock key={block.id} block={block} primary={primary} ownerName={ownerName} />
     case 'services': return <ServicesBlock key={block.id} block={block} primary={primary} />
     case 'about': return <AboutBlock key={block.id} block={block} />
     case 'stats': return <StatsBlock key={block.id} block={block} primary={primary} />

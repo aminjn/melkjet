@@ -340,23 +340,38 @@ function uniqueSlug(db: DB, base: string, exceptId?: string): string {
   return candidate
 }
 
+// عنوانِ یکتا: اگر مقالهٔ دیگری دقیقاً همین عنوان را داشته باشد، یک پسوند شمارهٔ
+// فارسی اضافه می‌شود تا تگ <title> و سئو تکراری نشود (کاملاً خودکار).
+function uniqueTitle(db: DB, base: string, exceptId?: string): string {
+  const t = String(base || '').trim()
+  if (!t) return t
+  const norm = (x: string) => x.replace(/\s+/g, ' ').trim()
+  const taken = (tt: string) => db.items.some(i => i.type === 'article' && i.id !== exceptId && norm(i.title || '') === norm(tt))
+  if (!taken(t)) return t
+  let n = 2
+  let candidate = `${t} (${n.toLocaleString('fa-IR')})`
+  while (taken(candidate)) { n++; candidate = `${t} (${n.toLocaleString('fa-IR')})` }
+  return candidate
+}
+
 // Insert an editorial article. Published → public immediately; draft → hidden from lists.
 export function addArticle(raw: ArticleInput): Item {
   const db = load()
   const status = raw.status || 'published'
-  const slug = uniqueSlug(db, raw.slug || raw.title)
+  const title = uniqueTitle(db, raw.title)
+  const slug = uniqueSlug(db, raw.slug || title)
   const meta: Record<string, string> = {
     slug,
     cmsStatus: status,
     author: raw.author || raw.source || 'تحریریه ملک‌جت',
-    seoTitle: raw.seoTitle || raw.title,
+    seoTitle: raw.seoTitle || title,
     metaDescription: raw.metaDescription || (raw.excerpt || raw.body).slice(0, 160),
     focusKeyword: raw.focusKeyword || '',
     summary: raw.excerpt || raw.body.replace(/[#*_>`-]/g, '').slice(0, 200),
   }
   const item: Item = {
     id: id(), sourceId: 'cms', sourceName: raw.source || meta.author, type: 'article',
-    category: raw.category, title: raw.title, image: raw.image, excerpt: raw.body,
+    category: raw.category, title, image: raw.image, excerpt: raw.body,
     tags: raw.tags && raw.tags.length ? raw.tags : undefined,
     meta, scrapedAt: Date.now(), status: 'approved',
   }
@@ -370,7 +385,7 @@ export function updateArticle(itemId: string, patch: Partial<ArticleInput>): Ite
   const it = db.items.find(i => i.id === itemId && i.type === 'article')
   if (!it) return null
   const meta = { ...(it.meta || {}) }
-  if (patch.title !== undefined) it.title = patch.title
+  if (patch.title !== undefined) it.title = uniqueTitle(db, patch.title, itemId)
   if (patch.body !== undefined) { it.excerpt = patch.body; if (!patch.excerpt) meta.summary = patch.body.replace(/[#*_>`-]/g, '').slice(0, 200) }
   if (patch.excerpt !== undefined) meta.summary = patch.excerpt
   if (patch.image !== undefined) it.image = patch.image
