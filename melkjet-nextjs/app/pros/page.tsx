@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import AssistantPanel from '@/app/components/AssistantPanel'
 import MessagesPanel from '@/app/components/MessagesPanel'
 import NegotiationEngine from '@/app/components/NegotiationEngine'
+import DivarImport from '@/app/components/DivarImport'
 import CrmTool, { CRM_VIEWS, type CrmView } from '@/app/components/tools/CrmTool'
 import MarketingTool, { MARKETING_VIEWS, type MarketingView } from '@/app/components/tools/MarketingTool'
 import WorkflowTool, { WORKFLOW_VIEWS, type WorkflowView } from '@/app/components/tools/WorkflowTool'
@@ -970,113 +971,7 @@ export default function ProsPage() {
           </div>}
 
           {/* ───── DIVAR IMPORT ───── */}
-          {view === 'divar' && (() => {
-            const cfg = divarCfg
-            const SCHEDULES: { v: DivarConfig['schedule']; label: string }[] = [
-              { v: 'off', label: 'خاموش (دستی)' }, { v: 'hourly', label: 'هر ساعت' }, { v: '6h', label: 'هر ۶ ساعت' }, { v: 'daily', label: 'روزانه' },
-            ]
-            const faDate = (ts?: number) => ts ? new Date(ts).toLocaleString('fa-IR', { dateStyle: 'short', timeStyle: 'short' }) : '—'
-            return <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 720 }}>
-              <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>
-                آگهی‌های خود را از <b>دیوار</b> مستقیم به ملک‌جت بیاورید — عکس‌ها، قیمت، مشخصات و موقعیت خودکار خوانده می‌شوند.
-                محلهٔ آگهی هم خودکار با محله‌های موجودِ خودِ سایت تطبیق داده می‌شود (نیازی نیست محله را وارد کنید) و شما در همان محله به کاربران نشان داده می‌شوید.
-              </div>
-
-              {/* افزودن آگهی‌ها با لینک */}
-              <div style={{ ...card, padding: 16 }}>
-                <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>افزودن آگهی‌ها از دیوار</div>
-                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.9 }}>
-                  لینکِ <b>صفحهٔ اختصاصیِ خودتان در دیوار</b> (<span style={{ direction: 'ltr', display: 'inline-block' }}>divar.ir/pro/…</span>) را بچسبانید تا <b>همهٔ آگهی‌هایتان</b> یکجا و خودکار وارد شوند.
-                  <br />برای پیداکردن آن: در اپ دیوار → پروفایل/صفحهٔ اختصاصی → «اشتراک‌گذاری». (لینکِ تکیِ یک آگهی <span style={{ direction: 'ltr', display: 'inline-block' }}>divar.ir/v/…</span> هم پذیرفته می‌شود.)
-                </div>
-                <textarea value={divarUrl} onChange={e => setDivarUrl(e.target.value)} rows={3} placeholder={"https://divar.ir/pro/HLTCumBJ"} style={{ ...inputStyle, direction: 'ltr', textAlign: 'left', resize: 'vertical', fontFamily: 'inherit' }} />
-                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                  <button disabled={divarBusy || !divarUrl.trim()} onClick={async () => {
-                    const d = await divarPost({ action: 'importUrl', url: divarUrl.trim() })
-                    if (d?.ok) {
-                      setDivarUrl('')
-                      const parts: string[] = []
-                      if (d.imported) parts.push(`${(d.imported).toLocaleString('fa-IR')} آگهی جدید وارد شد`)
-                      if (d.updated) parts.push(`${(d.updated).toLocaleString('fa-IR')} آگهی به‌روزرسانی شد`)
-                      if (d.sold) parts.push(`${(d.sold).toLocaleString('fa-IR')} آگهی فروش/اجاره‌رفته شد`)
-                      if (d.failed) parts.push(`${(d.failed).toLocaleString('fa-IR')} ناموفق`)
-                      setDivarMsg('✓ ' + (parts.join(' · ') || 'انجام شد'))
-                      await refresh()
-                    }
-                  }} style={{ ...goldBtn, opacity: divarBusy ? 0.6 : 1 }}>{divarBusy ? 'در حال افزودن…' : 'افزودن'}</button>
-                </div>
-              </div>
-
-              {/* تنظیمات و همگام‌سازی خودکار */}
-              {cfg && <div style={{ ...card, padding: 16 }}>
-                <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>همگام‌سازی خودکار (کران‌جاب)</div>
-                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.8 }}>لینکِ <b>صفحهٔ اختصاصیِ خودتان در دیوار</b> (<span style={{ direction: 'ltr', display: 'inline-block' }}>divar.ir/pro/…</span>) را بگذارید تا در بازهٔ انتخابی، همهٔ آگهی‌هایتان خودکار به‌روز شوند. <span style={{ color: 'var(--faint)' }}>(به‌جایش می‌توانید لینکِ جستجو/نقشهٔ منطقه + نامتان در دیوار را بدهید.)</span></div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <div>
-                    <label style={{ fontSize: 12, color: 'var(--muted)' }}>لینکِ صفحهٔ اختصاصی (پرو) یا جستجو/نقشهٔ شما در دیوار</label>
-                    <input value={cfg.searchUrl} onChange={e => setDivarCfg({ ...cfg, searchUrl: e.target.value })} placeholder="https://divar.ir/pro/HLTCumBJ" style={{ ...inputStyle, direction: 'ltr', textAlign: 'left' }} />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 12, color: 'var(--muted)' }}>نام شما / آژانس‌تان در دیوار <span style={{ color: 'var(--faint)' }}>(فقط اگر لینکِ جستجو دادید)</span></label>
-                    <input value={cfg.divarName} onChange={e => setDivarCfg({ ...cfg, divarName: e.target.value })} placeholder="دقیقاً همان نامی که زیر آگهی‌های دیوار نمایش داده می‌شود" style={inputStyle} />
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10 }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--text)', cursor: 'pointer' }}>
-                      <input type="checkbox" checked={cfg.autoPublish} onChange={e => setDivarCfg({ ...cfg, autoPublish: e.target.checked })} /> انتشار خودکار روی سایت
-                    </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--text)', cursor: 'pointer' }}>
-                      <input type="checkbox" checked={cfg.autoNeighborhood} onChange={e => setDivarCfg({ ...cfg, autoNeighborhood: e.target.checked })} /> تشخیص خودکار محله از روی محله‌های سایت
-                    </label>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 12, color: 'var(--muted)' }}>هر چند وقت یک‌بار؟</label>
-                    <select value={cfg.schedule} onChange={e => setDivarCfg({ ...cfg, schedule: e.target.value as DivarConfig['schedule'] })} style={inputStyle}>
-                      {SCHEDULES.map(s => <option key={s.v} value={s.v}>{s.label}</option>)}
-                    </select>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <button disabled={divarBusy} onClick={async () => { await divarPost({ action: 'setConfig', divarName: cfg.divarName, searchUrl: cfg.searchUrl, schedule: cfg.schedule, autoPublish: cfg.autoPublish, autoNeighborhood: cfg.autoNeighborhood }); setDivarMsg('✓ تنظیمات ذخیره شد.') }} style={{ ...goldBtn, opacity: divarBusy ? 0.6 : 1 }}>ذخیرهٔ تنظیمات</button>
-                    <button disabled={divarBusy || !cfg.searchUrl.trim()} onClick={async () => {
-                      const d = await divarPost({ action: 'sync' })
-                      if (d) { setDivarMsg(d.ok ? `✓ همگام‌سازی شد — ${(d.imported || 0).toLocaleString('fa-IR')} جدید، ${(d.updated || 0).toLocaleString('fa-IR')} به‌روزرسانی${d.sold ? `، ${(d.sold).toLocaleString('fa-IR')} فروش/اجاره‌رفته` : ''} (از ${(d.scanned || 0).toLocaleString('fa-IR')} آگهی).` : (d.reason || 'همگام‌سازی ناموفق بود')); await refresh() }
-                    }} style={{ ...actionBtn, padding: '9px 18px', color: 'var(--gold)', borderColor: 'var(--gold)' }}>{divarBusy ? 'در حال همگام‌سازی…' : 'همگام‌سازی الان'}</button>
-                  </div>
-                  <div style={{ fontSize: 11.5, color: 'var(--muted)', display: 'flex', gap: 16, flexWrap: 'wrap', paddingTop: 4, borderTop: '1px solid var(--line)' }}>
-                    <span>آخرین اجرا: <b style={{ color: 'var(--text)' }}>{faDate(cfg.lastRun)}</b></span>
-                    {typeof cfg.lastCount === 'number' && <span>آخرین تعداد: <b style={{ color: 'var(--text)' }}>{cfg.lastCount.toLocaleString('fa-IR')}</b></span>}
-                    {cfg.lastError && <span style={{ color: '#ef4444' }}>خطا: {cfg.lastError}</span>}
-                  </div>
-                </div>
-              </div>}
-
-              {divarMsg && <div style={{ ...card, padding: '10px 14px', fontSize: 12.5, color: divarMsg.startsWith('✓') ? 'var(--gold)' : 'var(--muted)' }}>{divarMsg}</div>}
-
-              {/* آگهی‌های واردشده */}
-              {cfg && cfg.imports.length > 0 && <div style={{ ...card, padding: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
-                  <div style={{ fontWeight: 800, fontSize: 14 }}>آگهی‌های واردشده ({cfg.imports.length.toLocaleString('fa-IR')})</div>
-                  <button disabled={divarBusy} onClick={async () => {
-                    if (!confirm('همهٔ آگهی‌های واردشده از دیوار حذف شوند؟ (فایل‌ها و نسخهٔ منتشرشده پاک می‌شوند)')) return
-                    const d = await divarPost({ action: 'clearImports' })
-                    if (d?.ok) { setDivarMsg(`✓ ${(d.removed || 0).toLocaleString('fa-IR')} آگهیِ واردشده حذف شد.`); await refresh() }
-                  }} style={{ ...actionBtn, color: '#ef4444', borderColor: '#ef4444' }}>پاک‌کردن همهٔ واردشده‌ها</button>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {cfg.imports.map(im => (
-                    <div key={im.token} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--line)' }}>
-                      <span style={{ fontSize: 14 }}>{im.published ? '🟢' : '⚪'}</span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{im.title}</div>
-                        <div style={{ fontSize: 10.5, color: 'var(--faint)' }}>{faDate(im.at)} · {im.published ? 'منتشرشده' : 'پیش‌نویس'}</div>
-                      </div>
-                      <a href={im.url} target="_blank" rel="noreferrer" style={{ ...actionBtn, textDecoration: 'none' }}>دیوار ↗</a>
-                      <button disabled={divarBusy} onClick={() => divarPost({ action: 'removeImport', token: im.token })} style={{ ...actionBtn, color: '#ef4444' }}>حذف از فهرست</button>
-                    </div>
-                  ))}
-                </div>
-              </div>}
-            </div>
-          })()}
+          {view === 'divar' && <DivarImport onChange={refresh} />}
           </>}
         </main>
       </div>

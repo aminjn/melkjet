@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import AssistantPanel from '@/app/components/AssistantPanel'
 import MessagesPanel from '@/app/components/MessagesPanel'
 import NegotiationEngine from '@/app/components/NegotiationEngine'
+import DivarImport from '@/app/components/DivarImport'
 import JalaliDatePicker from '@/app/components/JalaliDatePicker'
 import NumberInput from '@/app/components/NumberInput'
 import CrmTool, { CRM_VIEWS, type CrmView } from '@/app/components/tools/CrmTool'
@@ -33,7 +34,7 @@ interface AgencyData { stats: Stats; agents: Agent[]; listings: Listing[]; leads
 interface LinkMember { advisorPhone: string; advisorName: string; agencyPhone: string; agencyName: string; since: number }
 interface LinkRequest { id: string; advisorPhone: string; advisorName: string; agencyPhone: string; agencyName: string; initiator: 'advisor' | 'agency'; status: string; createdAt: number }
 
-type View = 'dashboard' | 'assistant' | 'messages' | 'negotiation' | 'articles' | 'agents' | 'listings' | 'leads' | 'deals' | 'settings'
+type View = 'dashboard' | 'assistant' | 'messages' | 'negotiation' | 'divar' | 'articles' | 'agents' | 'listings' | 'leads' | 'deals' | 'settings'
 
 // ════════ Helpers ════════
 const FONT = 'Vazirmatn, system-ui, sans-serif'
@@ -60,12 +61,13 @@ const inputStyle: React.CSSProperties = { padding: '9px 11px', borderRadius: 9, 
 const actionBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap' }
 const goldBtn: React.CSSProperties = { padding: '9px 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }
 
-const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد آژانس', assistant: 'دستیار هوشمند', messages: 'پیام‌ها', negotiation: 'موتور مذاکره', articles: 'مقالات و وبلاگ', agents: 'مشاوران', listings: 'فایل‌های آژانس', leads: 'لیدها', deals: 'معاملات', settings: 'تنظیمات' }
+const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد آژانس', assistant: 'دستیار هوشمند', messages: 'پیام‌ها', negotiation: 'موتور مذاکره', divar: 'ایمپورت از دیوار', articles: 'مقالات و وبلاگ', agents: 'مشاوران', listings: 'فایل‌های آژانس', leads: 'لیدها', deals: 'معاملات', settings: 'تنظیمات' }
 const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'agents' | 'leads' }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: '▦' },
   { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
   { id: 'messages', label: 'پیام‌ها', icon: '💬' },
   { id: 'negotiation', label: 'موتور مذاکره', icon: '🤝' },
+  { id: 'divar', label: 'ایمپورت از دیوار', icon: '📥' },
   { id: 'articles', label: 'مقالات', icon: '✎' },
   { id: 'agents', label: 'مشاوران', icon: '☷', badge: 'agents' },
   { id: 'listings', label: 'فایل‌ها', icon: '◫' },
@@ -377,6 +379,9 @@ export default function AgencyPage() {
 
           {/* NEGOTIATION ENGINE — داخلِ همین پنل */}
           {view === 'negotiation' && <NegotiationEngine listings={listings.map(l => ({ id: l.id, title: l.title, price: l.price, deal: l.deal, location: l.location }))} />}
+
+          {/* ایمپورت از دیوار — مخصوص آژانس (آگهی‌ها با صاحبِ آژانس منتشر می‌شوند) */}
+          {view === 'divar' && <DivarImport onChange={refresh} entity="آژانس" />}
 
           {/* ARTICLES (CMS) */}
           {view === 'articles' && (
