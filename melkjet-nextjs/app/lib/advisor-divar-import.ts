@@ -1,4 +1,4 @@
-import { fetchDivarPost, divarToken, divarProfileSlug, fetchDivarProfileTokens } from './divar-post'
+import { fetchDivarPost, divarToken, divarProfileSlug, fetchDivarProfileTokens, type BrandPost } from './divar-post'
 import { addListing, publishListing, deleteListing, getAdvisor, updateAdvisorProfile, type Listing } from './advisor-store'
 import { findNeighborhoodInGeo } from './geo-store'
 import { getDivar, hasToken, recordImport, markRun, clearImports, type AdvisorDivar } from './advisor-divar-store'
@@ -25,8 +25,9 @@ function addAreaToProfile(o: string, neighborhood: string) {
   }
 }
 
-/** یک آگهیِ دیوار را (با توکن یا لینک) به‌عنوان فایلِ مشاور وارد می‌کند. */
-export async function importDivarToken(o: string, input: string): Promise<ImportResult> {
+/** یک آگهیِ دیوار را (با توکن یا لینک) به‌عنوان فایلِ مشاور وارد می‌کند.
+ *  hint: عنوان/تصویرِ واقعیِ آگهی از فهرستِ پروفایل (چون API تک‌آگهی گاهی عنوانِ دسته را می‌دهد). */
+export async function importDivarToken(o: string, input: string, hint?: BrandPost): Promise<ImportResult> {
   const token = divarToken(input)
   if (!token) return { ok: false, reason: 'لینک یا توکنِ دیوار معتبر نیست' }
   if (hasToken(o, token)) return { ok: true, skipped: true, reason: 'این آگهی قبلاً وارد شده', token }
@@ -34,7 +35,7 @@ export async function importDivarToken(o: string, input: string): Promise<Import
   const cfg = getDivar(o)
   let post
   try { post = await fetchDivarPost(token) } catch (e: any) { return { ok: false, reason: e?.message || 'اتصال به دیوار ناموفق بود', token } }
-  if (post.reason && !post.images.length && !post.title) {
+  if (post.reason && !post.images.length && !post.title && !hint?.title) {
     return { ok: false, reason: `آگهی از دیوار خوانده نشد (${post.reason})`, token }
   }
 
@@ -42,14 +43,18 @@ export async function importDivarToken(o: string, input: string): Promise<Import
   let matched: { province: string; city: string; district: string; neighborhood: string } | null = null
   try { matched = findNeighborhoodInGeo(post.city || '', post.neighborhood || '') } catch {}
 
+  // عنوانِ واقعیِ آگهی از hint (فهرستِ پروفایل) مقدّم بر post.title است که گاهی «املاک» می‌دهد.
+  const realTitle = (hint?.title && hint.title.trim()) || (post.title && post.title.trim() && post.title.trim() !== 'املاک' ? post.title.trim() : '') || 'آگهی واردشده از دیوار'
+  const images = (post.images && post.images.length) ? post.images : (hint?.image ? [hint.image] : [])
+
   const advisorPhone = getAdvisor(o).profile.phone || ''
   const listing = addListing(o, {
-    title: post.title || 'آگهی واردشده از دیوار',
+    title: realTitle,
     ptype: post.ptype || 'آپارتمان',
     deal: post.deal === 'rent' ? 'rent' : 'sale',
     price: post.price || 0,
     rentMonthly: post.rentMonthly || undefined,
-    location: post.location || '',
+    location: post.location || hint?.location || '',
     province: matched?.province || undefined,
     city: matched?.city || post.city || undefined,
     district: matched?.district || post.district || undefined,
@@ -58,10 +63,11 @@ export async function importDivarToken(o: string, input: string): Promise<Import
     lng: typeof post.lng === 'number' ? post.lng : undefined,
     area: post.area,
     rooms: post.rooms,
+    floor: post.floor,
     yearBuilt: post.yearBuilt,
     amenities: post.amenities,
     description: post.description,
-    images: post.images,
+    images,
     phone: advisorPhone || undefined,
   })
 
@@ -84,15 +90,16 @@ function normName(s: string): string {
 
 export interface SyncResult { ok: boolean; reason?: string; scanned: number; imported: number; skipped: number; tokens: string[] }
 
-// چند توکن را پشت‌سرهم وارد می‌کند (با حذفِ تکراری‌ها).
-async function importTokens(o: string, tokens: string[]): Promise<{ imported: number; skipped: number; tokens: string[] }> {
+// چند آگهی را پشت‌سرهم وارد می‌کند (با حذفِ تکراری‌ها) — hint برای عنوان/تصویرِ درست.
+async function importTokens(o: string, items: BrandPost[]): Promise<{ imported: number; skipped: number; tokens: string[] }> {
   let imported = 0, skipped = 0
   const done: string[] = []
-  for (const token of tokens) {
+  for (const it of items) {
+    const token = it.token
     if (!token) continue
     if (hasToken(o, token)) { skipped++; continue }
     try {
-      const res = await importDivarToken(o, token)
+      const res = await importDivarToken(o, token, it)
       if (res.ok && !res.skipped) { imported++; done.push(token) } else skipped++
     } catch { skipped++ }
   }
@@ -103,15 +110,15 @@ async function importTokens(o: string, tokens: string[]): Promise<{ imported: nu
 export async function importDivarProfile(o: string, url: string): Promise<SyncResult> {
   const slug = divarProfileSlug(url)
   if (!slug) return { ok: false, reason: 'لینک پروفایل دیوار معتبر نیست', scanned: 0, imported: 0, skipped: 0, tokens: [] }
-  const { tokens, reason } = await fetchDivarProfileTokens(slug)
-  if (!tokens.length) {
+  const { posts, reason } = await fetchDivarProfileTokens(slug)
+  if (!posts.length) {
     const msg = reason === 'unreachable' ? 'اتصال به دیوار ناموفق بود (پروکسی را بررسی کنید)' : 'آگهی‌ای در این پروفایل پیدا نشد — می‌توانید لینکِ تک‌تکِ آگهی‌ها را اضافه کنید'
     markRun(o, 0, msg)
     return { ok: false, reason: msg, scanned: 0, imported: 0, skipped: 0, tokens: [] }
   }
-  const r = await importTokens(o, tokens)
+  const r = await importTokens(o, posts)
   markRun(o, r.imported, '')
-  return { ok: true, scanned: tokens.length, ...r }
+  return { ok: true, scanned: posts.length, ...r }
 }
 
 /** ورودیِ یکپارچه: اگر لینکِ پروفایلِ پرو باشد همهٔ آگهی‌هایش، اگر لینکِ تک‌آگهی باشد همان یکی. */
@@ -174,7 +181,8 @@ export async function syncAdvisorDivar(o: string, cfgIn?: AdvisorDivar): Promise
     return owner && (owner === want || owner.includes(want) || want.includes(owner))
   })
 
-  const r = await importTokens(o, mine.map(x => divarToken(x.url || '') || '').filter(Boolean))
+  const items: BrandPost[] = mine.map(x => ({ token: divarToken(x.url || '') || '', title: x.title, price: x.price, location: x.location, image: x.image })).filter(it => it.token)
+  const r = await importTokens(o, items)
   markRun(o, r.imported, r.imported || mine.length ? '' : 'آگهیِ منطبقی با نامِ شما پیدا نشد')
   return { ok: true, scanned: rows.length, ...r }
 }

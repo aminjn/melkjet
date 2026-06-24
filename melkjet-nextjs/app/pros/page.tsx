@@ -584,7 +584,7 @@ export default function ProsPage() {
                       <div style={{ fontWeight: 700, fontSize: 14 }}>{l.title}</div>
                       <div style={{ fontSize: 12, color: 'var(--muted)' }}>{l.ptype} · {[l.city, l.neighborhood].filter(Boolean).join('، ') || l.location || '—'}</div>
                       <div style={{ fontSize: 11.5, color: 'var(--muted)', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                        {l.area ? <span>{fa(l.area)}م</span> : null}{l.rooms ? <span>{fa(l.rooms)} خواب</span> : null}{l.floor ? <span>طبقه {fa(l.floor)}</span> : null}{l.yearBuilt ? <span>ساخت {fa(l.yearBuilt)}</span> : null}{l.amenities && l.amenities.length ? <span>✓ {fa(l.amenities.length)} امکانات</span> : null}
+                        {l.area ? <span>{fa(l.area)}م</span> : null}{l.rooms ? <span>{fa(l.rooms)} خواب</span> : null}{l.floor ? <span>طبقه {fa(l.floor)}</span> : null}{l.yearBuilt ? <span>ساخت {fa(l.yearBuilt)}</span> : null}{l.deal !== 'rent' && l.price && l.area ? <span>هر متر {money(Math.round(l.price / l.area))}</span> : null}{l.amenities && l.amenities.length ? <span>✓ {fa(l.amenities.length)} امکانات</span> : null}
                       </div>
                       <div style={{ fontWeight: 800, color: 'var(--gold)', fontSize: 14 }}>{l.deal === 'rent' ? `ودیعه ${money(l.price)}${l.rentMonthly ? ` · اجاره ${money(l.rentMonthly)}` : ''}` : money(l.price)}</div>
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 'auto' }}>

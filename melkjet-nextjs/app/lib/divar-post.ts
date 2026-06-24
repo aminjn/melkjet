@@ -23,6 +23,7 @@ export interface DivarPost {
   rentMonthly?: number    // اجارهٔ ماهانه — تومان
   area?: number
   rooms?: number
+  floor?: number
   yearBuilt?: number
 }
 
@@ -62,10 +63,13 @@ function deepFindKey(node: any, key: string): any {
   return undefined
 }
 
-/** توکنِ همهٔ آگهی‌های یک پروفایلِ پرو/کسب‌وکارِ دیوار (divar.ir/pro/<slug>) را با endpointِ
- *  عمومیِ brand-landing استخراج می‌کند — با صفحه‌بندیِ last_item_identifier تا همهٔ آگهی‌ها. */
-export async function fetchDivarProfileTokens(slug: string): Promise<{ tokens: string[]; name?: string; reason?: string }> {
-  if (!slug) return { tokens: [], reason: 'bad_slug' }
+export interface BrandPost { token: string; title?: string; price?: string; location?: string; image?: string }
+
+/** آگهی‌های یک پروفایلِ پرو/کسب‌وکارِ دیوار (divar.ir/pro/<slug>) را با endpointِ عمومیِ
+ *  brand-landing استخراج می‌کند — با صفحه‌بندیِ last_item_identifier تا همهٔ آگهی‌ها.
+ *  عنوان/قیمت/تصویرِ هر آگهی هم از همین پاسخ برداشته می‌شود (دقیق‌تر از API تک‌آگهی). */
+export async function fetchDivarProfileTokens(slug: string): Promise<{ posts: BrandPost[]; name?: string; reason?: string }> {
+  if (!slug) return { posts: [], reason: 'bad_slug' }
   const proxyUrl = PROXY()
   const ENDPOINT = `https://api.divar.ir/v8/premium-user/web/business/brand-landing/${encodeURIComponent(slug)}`
   const headers = {
@@ -78,7 +82,7 @@ export async function fetchDivarProfileTokens(slug: string): Promise<{ tokens: s
     'x-standard-divar-error': 'true',
   }
 
-  const tokens = new Set<string>()
+  const posts = new Map<string, BrandPost>()
   let name: string | undefined
   let cursor = ''
   let any200 = false
@@ -94,36 +98,44 @@ export async function fetchDivarProfileTokens(slug: string): Promise<{ tokens: s
     any200 = true
 
     const raw = res.body || ''
-    const before = tokens.size
+    const before = posts.size
     let j: any = null
     try { j = JSON.parse(raw) } catch { /* پایین‌تر با regex */ }
 
     // آگهی‌ها در post_row_widget_list هستند؛ token می‌تواند _ و - داشته باشد (base64url).
     if (j && Array.isArray(j.post_row_widget_list)) {
       for (const w of j.post_row_widget_list) {
-        const t = w?.data?.action?.payload?.token || w?.data?.token
-        if (typeof t === 'string' && t && t !== slug) tokens.add(t)
+        const d = w?.data || {}
+        const t = d?.action?.payload?.token || d?.token
+        if (typeof t === 'string' && t && t !== slug && !posts.has(t)) {
+          posts.set(t, {
+            token: t,
+            title: typeof d.title === 'string' ? d.title.trim() : undefined,
+            price: typeof d.middle_description_text === 'string' ? d.middle_description_text.trim() : undefined,
+            location: typeof d.bottom_description_text === 'string' ? d.bottom_description_text.replace(/^\s*در\s*/, '').trim() : undefined,
+            image: typeof d.image_url === 'string' ? d.image_url : undefined,
+          })
+        }
       }
       if (!name) { const t = j.header_widget_list?.[0]?.data?.title; if (typeof t === 'string') name = t.trim() }
     } else {
       // پشتیبان: regex با charsetِ درست (شاملِ _ و -)
       let m: RegExpExecArray | null
       const re = /"token"\s*:\s*"([A-Za-z0-9_-]{6,14})"/g
-      while ((m = re.exec(raw))) { if (m[1] !== slug) tokens.add(m[1]) }
+      while ((m = re.exec(raw))) { if (m[1] !== slug && !posts.has(m[1])) posts.set(m[1], { token: m[1] }) }
     }
 
     // cursorِ صفحهٔ بعد: infinite_scroll_response.last_item_identifier
     const next = (j?.infinite_scroll_response?.last_item_identifier ?? deepFindKey(j, 'last_item_identifier'))
 
-    if (tokens.size === before) break                       // آگهیِ جدیدی نیامد → تمام
+    if (posts.size === before) break                       // آگهیِ جدیدی نیامد → تمام
     if (next === undefined || next === null || next === '' || String(next) === cursor) break  // صفحهٔ بعدی نیست
     cursor = String(next)
   }
 
-  tokens.delete(slug)
-  const list = Array.from(tokens).slice(0, 300)
-  if (!list.length) return { tokens: [], name, reason: reason || (any200 ? 'no_tokens' : 'unreachable') }
-  return { tokens: list, name }
+  const list = Array.from(posts.values()).slice(0, 300)
+  if (!list.length) return { posts: [], name, reason: reason || (any200 ? 'no_tokens' : 'unreachable') }
+  return { posts: list, name }
 }
 
 // واکشی جزئیات کامل یک آگهی دیوار (همهٔ عکس‌ها/مشخصات/توضیحات/مختصات) از طریق پروکسی.
@@ -233,9 +245,19 @@ export async function fetchDivarPost(token: string): Promise<DivarPost> {
     const roomsRaw = factVal('اتاق', 'تعداد اتاق', 'خواب')
     const rooms = roomsRaw.includes('بدون') ? 0 : (faToNum(roomsRaw) || undefined)
     const yearBuilt = faToNum(factVal('ساخت', 'سال ساخت', 'سن بنا')) || undefined
+    // طبقه: «۵ از ۸» → ۵ (اولین عدد)؛ «همکف» → ۰
+    const floorRaw = factVal('طبقه')
+    const floorDigits = floorRaw.replace(/[۰-۹]/g, ch => String(FA_DIGITS.indexOf(ch))).match(/\d+/)
+    const floor = floorRaw.includes('همکف') ? 0 : (floorDigits ? parseInt(floorDigits[0], 10) : undefined)
 
+    // عنوانِ آگهی: طولانی‌ترین مقدارِ «title» (اولین مقدار معمولاً نامِ دستهٔ «املاک» است).
     let title = ''
-    if (d) { const t = findFirst(d, 'title'); title = strOf(t).trim() }
+    if (d) {
+      const titles: string[] = []
+      const tw = (x: any) => { if (!x || typeof x !== 'object') return; if (typeof x.title === 'string' && x.title.trim()) titles.push(x.title.trim()); for (const k in x) tw(x[k]) }
+      tw(d)
+      title = titles.filter(t => t !== 'املاک').sort((a, b) => b.length - a.length)[0] || ''
+    }
     const city = d ? strOf(findFirst(d, 'city_persian')).trim() : ''
     const district = d ? strOf(findFirst(d, 'district_persian')).trim() : ''
     const neighborhood = (d ? (strOf(findFirst(d, 'neighborhood_persian')) || strOf(findFirst(d, 'neighbourhood_persian'))).trim() : '') || district
@@ -254,7 +276,7 @@ export async function fetchDivarPost(token: string): Promise<DivarPost> {
       deal: isRent ? 'rent' : 'sale',
       price: isRent ? faToNum(deposit) : faToNum(total),
       rentMonthly: isRent ? faToNum(monthly) : 0,
-      area, rooms, yearBuilt,
+      area, rooms, floor, yearBuilt,
     }
   } catch (e: any) {
     return { ...empty, reason: e?.message || 'error' }
