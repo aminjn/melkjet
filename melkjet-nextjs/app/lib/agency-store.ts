@@ -33,49 +33,19 @@ export const STAGES: Stage[] = ['new', 'assigned', 'visit', 'negotiation', 'clos
 const LISTING_STATUSES: ListingStatus[] = ['active', 'sold', 'rented']
 
 function seed(): AgencyData {
-  const now = Date.now(); const day = 86400000
-  const ag = (name: string, phone: string, deals: number, leads: number, commission: number): Agent =>
-    ({ id: id('a_'), name, phone, deals, leads, commission, active: true, createdAt: now })
-  const agents: Agent[] = [
-    ag('سمیرا نیک‌پور', '09120000010', 8, 24, 480000000),
-    ag('رضا کریمی', '09120000011', 5, 18, 300000000),
-    ag('مریم حسینی', '09120000012', 6, 21, 360000000),
-    ag('علی موسوی', '09120000013', 3, 12, 180000000),
-  ]
-  const an = (i: number) => agents[i].name
-  const li = (title: string, ptype: string, location: string, price: number, deal: 'sale' | 'rent', status: ListingStatus, agentIdx: number, ageDays: number): Listing =>
-    ({ id: id('f_'), title, ptype, location, price, deal, status, agent: an(agentIdx), createdAt: now - ageDays * day })
-  const listings: Listing[] = [
-    li('آپارتمان نوساز سعادت‌آباد', 'آپارتمان', 'سعادت‌آباد', 8500000000, 'sale', 'active', 0, 10),
-    li('ویلا باغ لواسان', 'ویلا', 'لواسان', 25000000000, 'sale', 'active', 1, 15),
-    li('آپارتمان اجاره‌ای ونک', 'آپارتمان', 'ونک', 2000000000, 'rent', 'active', 2, 5),
-    li('مغازه تجاری تجریش', 'مغازه', 'تجریش', 6000000000, 'sale', 'sold', 0, 40),
-    li('پنت‌هاوس فرشته', 'آپارتمان', 'فرشته', 45000000000, 'sale', 'active', 1, 8),
-  ]
-  const ld = (name: string, phone: string, need: string, budget: string, stage: Stage, agentIdx: number, ageDays: number): Lead =>
-    ({ id: id('l_'), name, phone, need, budget, stage, assignedTo: agentIdx >= 0 ? an(agentIdx) : undefined, createdAt: now - ageDays * day })
-  const leads: Lead[] = [
-    ld('کاربر اول', '09120000001', 'آپارتمان ۲ خوابه سعادت‌آباد', '۸ میلیارد', 'negotiation', 0, 1),
-    ld('کاربر دوم', '09120000002', 'ویلا لواسان', '۲۵ میلیارد', 'visit', 1, 2),
-    ld('کاربر سوم', '09120000003', 'اجاره ونک', 'رهن ۲ میلیارد', 'assigned', 2, 3),
-    ld('کاربر چهارم', '09120000004', 'پنت‌هاوس فرشته', '۴۵ میلیارد', 'new', -1, 0),
-  ]
-  const dl = (title: string, amount: number, agentIdx: number, date: string, ageDays: number): Deal =>
-    ({ id: id('d_'), title, amount, agent: an(agentIdx), date, createdAt: now - ageDays * day })
-  const deals: Deal[] = [
-    dl('فروش مغازه تجریش', 6000000000, 0, '۱۴۰۴/۰۲/۱۵', 40),
-    dl('اجاره آپارتمان جردن', 1800000000, 2, '۱۴۰۴/۰۳/۱۰', 12),
-    dl('فروش آپارتمان ولنجک', 12000000000, 1, '۱۴۰۴/۰۳/۲۰', 6),
-  ]
-  const monthlySales: MonthSale[] = [
-    { month: 'آذر', amount: 8000000000 }, { month: 'دی', amount: 12000000000 }, { month: 'بهمن', amount: 9000000000 },
-    { month: 'اسفند', amount: 15000000000 }, { month: 'فروردین', amount: 11000000000 }, { month: 'اردیبهشت', amount: 19800000000 },
-  ]
-  return { profile: { name: 'املاک برتر', branches: 'سعادت‌آباد، ونک' }, agents, listings, leads, deals, monthlySales, createdAt: now }
+  // حسابِ آژانس خالی شروع می‌شود — هیچ دادهٔ نمونه‌ای نیست؛ همه‌چیز واقعی است.
+  return { profile: { name: '', branches: '' }, agents: [], listings: [], leads: [], deals: [], monthlySales: [], createdAt: Date.now() }
+}
+// آیا این دادهٔ ذخیره‌شده همان نمونهٔ قدیمیِ دست‌نخورده است؟ (برای پاک‌سازیِ خودکار)
+function isLegacyDemo(d: AgencyData): boolean {
+  return d?.profile?.name === 'املاک برتر' && (d.agents || []).some(a => a.name === 'سمیرا نیک‌پور')
 }
 
 export function getAgency(o: string): AgencyData {
-  const db = load(); if (!db.agencies[o]) { db.agencies[o] = seed(); save(db) } return db.agencies[o]
+  const db = load()
+  if (!db.agencies[o]) { db.agencies[o] = seed(); save(db) }
+  else if (isLegacyDemo(db.agencies[o])) { db.agencies[o] = seed(); save(db) }   // پاک‌سازیِ خودکارِ دادهٔ نمونهٔ قدیمی
+  return db.agencies[o]
 }
 function mutate(o: string, fn: (a: AgencyData) => void) { const db = load(); if (!db.agencies[o]) db.agencies[o] = seed(); fn(db.agencies[o]); save(db); return db.agencies[o] }
 
