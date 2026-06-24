@@ -932,30 +932,34 @@ export default function ProsPage() {
 
               {/* افزودن یک آگهی با لینک */}
               <div style={{ ...card, padding: 16 }}>
-                <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>افزودن یک آگهی با لینک</div>
-                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 10 }}>لینک آگهی دیوار را بچسبانید (مثلاً https://divar.ir/v/…) و «افزودن» را بزنید.</div>
+                <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>افزودن با لینک</div>
+                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 10 }}>لینکِ یک آگهی (<span style={{ direction: 'ltr', display: 'inline-block' }}>divar.ir/v/…</span>) را برای افزودن همان آگهی، یا لینکِ <b>پروفایلِ پرو/کسب‌وکارتان</b> (<span style={{ direction: 'ltr', display: 'inline-block' }}>divar.ir/pro/…</span>) را برای افزودن <b>همهٔ آگهی‌هایتان</b> بچسبانید.</div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <input value={divarUrl} onChange={e => setDivarUrl(e.target.value)} placeholder="https://divar.ir/v/AbcXyz123" style={{ ...inputStyle, direction: 'ltr', textAlign: 'left', flex: 1, minWidth: 220 }} />
+                  <input value={divarUrl} onChange={e => setDivarUrl(e.target.value)} placeholder="https://divar.ir/pro/…  یا  https://divar.ir/v/…" style={{ ...inputStyle, direction: 'ltr', textAlign: 'left', flex: 1, minWidth: 220 }} />
                   <button disabled={divarBusy || !divarUrl.trim()} onClick={async () => {
                     const d = await divarPost({ action: 'importUrl', url: divarUrl.trim() })
-                    if (d?.ok) { setDivarUrl(''); setDivarMsg(d.skipped ? 'این آگهی قبلاً وارد شده بود.' : '✓ آگهی با موفقیت وارد و منتشر شد.'); await refresh() }
-                  }} style={{ ...goldBtn, opacity: divarBusy ? 0.6 : 1 }}>{divarBusy ? 'در حال افزودن…' : 'افزودن آگهی'}</button>
+                    if (d?.ok) {
+                      setDivarUrl('')
+                      if (d.profile) setDivarMsg(`✓ ${(d.imported || 0).toLocaleString('fa-IR')} آگهی از پروفایل شما وارد و منتشر شد${d.skipped ? ` (${(d.skipped).toLocaleString('fa-IR')} تکراری)` : ''}.`)
+                      else setDivarMsg(d.skippedOne ? 'این آگهی قبلاً وارد شده بود.' : '✓ آگهی با موفقیت وارد و منتشر شد.')
+                      await refresh()
+                    }
+                  }} style={{ ...goldBtn, opacity: divarBusy ? 0.6 : 1 }}>{divarBusy ? 'در حال افزودن…' : 'افزودن'}</button>
                 </div>
               </div>
 
               {/* تنظیمات و همگام‌سازی خودکار */}
               {cfg && <div style={{ ...card, padding: 16 }}>
                 <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>همگام‌سازی خودکار (کران‌جاب)</div>
-                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.7 }}>لینکِ صفحهٔ جستجو/نقشهٔ منطقه‌تان در دیوار را بدهید؛ سیستم در بازهٔ انتخابی، آگهی‌های منتشرشده با نام شما را خودکار وارد می‌کند.</div>
+                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.7 }}>لینکِ <b>پروفایلِ پرو/کسب‌وکارتان</b> در دیوار را بدهید تا در بازهٔ انتخابی، همهٔ آگهی‌هایتان خودکار به‌روز شوند. (می‌توانید لینکِ جستجو/نقشهٔ منطقه هم بدهید — در این حالت «نام شما در دیوار» الزامی است تا فقط آگهی‌های خودتان وارد شوند.)</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <div>
-                    <label style={{ fontSize: 12, color: 'var(--muted)' }}>نام شما / آژانس‌تان در دیوار</label>
-                    <input value={cfg.divarName} onChange={e => setDivarCfg({ ...cfg, divarName: e.target.value })} placeholder="دقیقاً همان نامی که در آگهی‌های دیوار نمایش داده می‌شود" style={inputStyle} />
-                    <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 4 }}>برای آنکه فقط آگهی‌های خودِ شما وارد شوند. اگر خالی بماند، همهٔ آگهی‌های آن جستجو وارد می‌شوند.</div>
+                    <label style={{ fontSize: 12, color: 'var(--muted)' }}>لینکِ پروفایلِ پرو یا جستجو/نقشهٔ شما در دیوار</label>
+                    <input value={cfg.searchUrl} onChange={e => setDivarCfg({ ...cfg, searchUrl: e.target.value })} placeholder="https://divar.ir/pro/…  یا  https://divar.ir/s/tehran/…" style={{ ...inputStyle, direction: 'ltr', textAlign: 'left' }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 12, color: 'var(--muted)' }}>لینک جستجو/نقشهٔ منطقهٔ شما در دیوار</label>
-                    <input value={cfg.searchUrl} onChange={e => setDivarCfg({ ...cfg, searchUrl: e.target.value })} placeholder="https://divar.ir/s/tehran/…" style={{ ...inputStyle, direction: 'ltr', textAlign: 'left' }} />
+                    <label style={{ fontSize: 12, color: 'var(--muted)' }}>نام شما / آژانس‌تان در دیوار <span style={{ color: 'var(--faint)' }}>(فقط برای لینکِ جستجو)</span></label>
+                    <input value={cfg.divarName} onChange={e => setDivarCfg({ ...cfg, divarName: e.target.value })} placeholder="دقیقاً همان نامی که در آگهی‌های دیوار نمایش داده می‌شود" style={inputStyle} />
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10 }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--text)', cursor: 'pointer' }}>
@@ -990,7 +994,14 @@ export default function ProsPage() {
 
               {/* آگهی‌های واردشده */}
               {cfg && cfg.imports.length > 0 && <div style={{ ...card, padding: 16 }}>
-                <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 10 }}>آگهی‌های واردشده ({cfg.imports.length.toLocaleString('fa-IR')})</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+                  <div style={{ fontWeight: 800, fontSize: 14 }}>آگهی‌های واردشده ({cfg.imports.length.toLocaleString('fa-IR')})</div>
+                  <button disabled={divarBusy} onClick={async () => {
+                    if (!confirm('همهٔ آگهی‌های واردشده از دیوار حذف شوند؟ (فایل‌ها و نسخهٔ منتشرشده پاک می‌شوند)')) return
+                    const d = await divarPost({ action: 'clearImports' })
+                    if (d?.ok) { setDivarMsg(`✓ ${(d.removed || 0).toLocaleString('fa-IR')} آگهیِ واردشده حذف شد.`); await refresh() }
+                  }} style={{ ...actionBtn, color: '#ef4444', borderColor: '#ef4444' }}>پاک‌کردن همهٔ واردشده‌ها</button>
+                </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {cfg.imports.map(im => (
                     <div key={im.token} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--line)' }}>

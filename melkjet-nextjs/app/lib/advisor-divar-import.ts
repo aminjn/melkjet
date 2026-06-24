@@ -1,7 +1,7 @@
-import { fetchDivarPost, divarToken } from './divar-post'
-import { addListing, publishListing, getAdvisor, updateAdvisorProfile, type Listing } from './advisor-store'
+import { fetchDivarPost, divarToken, divarProfileSlug, fetchDivarProfileTokens } from './divar-post'
+import { addListing, publishListing, deleteListing, getAdvisor, updateAdvisorProfile, type Listing } from './advisor-store'
 import { findNeighborhoodInGeo } from './geo-store'
-import { getDivar, hasToken, recordImport, markRun, type AdvisorDivar } from './advisor-divar-store'
+import { getDivar, hasToken, recordImport, markRun, clearImports, type AdvisorDivar } from './advisor-divar-store'
 import { scrapeDivar } from './divar'
 import type { Source } from './scraper-store'
 
@@ -84,11 +84,58 @@ function normName(s: string): string {
 
 export interface SyncResult { ok: boolean; reason?: string; scanned: number; imported: number; skipped: number; tokens: string[] }
 
-/** آگهی‌های منطقهٔ مشاور را از روی لینکِ جستجوی دیوار سینک می‌کند؛ فقط آگهی‌هایی که
- *  نامِ آگهی‌دهنده با «نام دیوار»‌ِ مشاور می‌خواند (در صورت تنظیم). نتیجه ثبت می‌شود. */
+// چند توکن را پشت‌سرهم وارد می‌کند (با حذفِ تکراری‌ها).
+async function importTokens(o: string, tokens: string[]): Promise<{ imported: number; skipped: number; tokens: string[] }> {
+  let imported = 0, skipped = 0
+  const done: string[] = []
+  for (const token of tokens) {
+    if (!token) continue
+    if (hasToken(o, token)) { skipped++; continue }
+    try {
+      const res = await importDivarToken(o, token)
+      if (res.ok && !res.skipped) { imported++; done.push(token) } else skipped++
+    } catch { skipped++ }
+  }
+  return { imported, skipped, tokens: done }
+}
+
+/** همهٔ آگهی‌های یک «پروفایلِ پرو/کسب‌وکارِ دیوار» را وارد می‌کند (لینکِ divar.ir/pro/<slug>). */
+export async function importDivarProfile(o: string, url: string): Promise<SyncResult> {
+  const slug = divarProfileSlug(url)
+  if (!slug) return { ok: false, reason: 'لینک پروفایل دیوار معتبر نیست', scanned: 0, imported: 0, skipped: 0, tokens: [] }
+  const { tokens, reason } = await fetchDivarProfileTokens(slug)
+  if (!tokens.length) {
+    const msg = reason === 'unreachable' ? 'اتصال به دیوار ناموفق بود (پروکسی را بررسی کنید)' : 'آگهی‌ای در این پروفایل پیدا نشد — می‌توانید لینکِ تک‌تکِ آگهی‌ها را اضافه کنید'
+    markRun(o, 0, msg)
+    return { ok: false, reason: msg, scanned: 0, imported: 0, skipped: 0, tokens: [] }
+  }
+  const r = await importTokens(o, tokens)
+  markRun(o, r.imported, '')
+  return { ok: true, scanned: tokens.length, ...r }
+}
+
+/** ورودیِ یکپارچه: اگر لینکِ پروفایلِ پرو باشد همهٔ آگهی‌هایش، اگر لینکِ تک‌آگهی باشد همان یکی. */
+export async function importDivarFromUrl(o: string, url: string): Promise<{ ok: boolean; reason?: string; profile?: boolean; imported?: number; skipped?: number; scanned?: number; skippedOne?: boolean; listing?: Listing }> {
+  if (divarProfileSlug(url)) {
+    const r = await importDivarProfile(o, url)
+    return { ok: r.ok, reason: r.reason, profile: true, imported: r.imported, skipped: r.skipped, scanned: r.scanned }
+  }
+  const r = await importDivarToken(o, url)
+  return { ok: r.ok, reason: r.reason, profile: false, skippedOne: !!r.skipped, listing: r.listing, imported: r.ok && !r.skipped ? 1 : 0 }
+}
+
+/** آگهی‌های مشاور را از روی لینکِ ذخیره‌شده سینک می‌کند: لینکِ پروفایلِ پرو → همهٔ آگهی‌های او؛
+ *  لینکِ جستجو/نقشه → آگهی‌هایی که نامِ آگهی‌دهنده با «نام دیوار»‌ِ مشاور می‌خواند (نام الزامی است). */
 export async function syncAdvisorDivar(o: string, cfgIn?: AdvisorDivar): Promise<SyncResult> {
   const cfg = cfgIn || getDivar(o)
-  if (!cfg.searchUrl) { markRun(o, 0, 'لینک جستجوی دیوار تنظیم نشده'); return { ok: false, reason: 'لینک جستجوی دیوار تنظیم نشده', scanned: 0, imported: 0, skipped: 0, tokens: [] } }
+  if (!cfg.searchUrl) { markRun(o, 0, 'لینک دیوار تنظیم نشده'); return { ok: false, reason: 'لینک دیوار تنظیم نشده', scanned: 0, imported: 0, skipped: 0, tokens: [] } }
+
+  // اگر لینکِ پروفایلِ پرو است، همهٔ آگهی‌های همان پروفایل (همگی متعلق به خودِ مشاور).
+  if (divarProfileSlug(cfg.searchUrl)) return importDivarProfile(o, cfg.searchUrl)
+
+  // لینکِ جستجو/نقشه: برای جلوگیری از ورودِ آگهی‌های دیگران، «نام دیوار» الزامی است.
+  const want = normName(cfg.divarName)
+  if (!want) { markRun(o, 0, 'برای همگام‌سازیِ جستجو، «نام شما در دیوار» را پر کنید (یا لینکِ پروفایلِ پرو بدهید)'); return { ok: false, reason: 'برای همگام‌سازیِ جستجو، «نام شما در دیوار» را پر کنید یا لینکِ پروفایلِ پرو بدهید', scanned: 0, imported: 0, skipped: 0, tokens: [] } }
 
   let rows
   try {
@@ -98,27 +145,22 @@ export async function syncAdvisorDivar(o: string, cfgIn?: AdvisorDivar): Promise
     return { ok: false, reason: e?.message || 'خطا در خواندن دیوار', scanned: 0, imported: 0, skipped: 0, tokens: [] }
   }
 
-  const want = normName(cfg.divarName)
   const mine = rows.filter(r => {
     if (!r.url) return false
-    if (!want) return true // اگر نام دیوار خالی است، همهٔ آگهی‌های همان جستجو/منطقه
     const owner = normName(r.owner || '')
     return owner && (owner === want || owner.includes(want) || want.includes(owner))
   })
 
-  let imported = 0, skipped = 0
-  const tokens: string[] = []
-  for (const r of mine) {
-    const token = divarToken(r.url || '')
-    if (!token) continue
-    if (hasToken(o, token)) { skipped++; continue }
-    try {
-      const res = await importDivarToken(o, token)
-      if (res.ok && !res.skipped) { imported++; tokens.push(token) }
-      else skipped++
-    } catch { skipped++ }
-  }
+  const r = await importTokens(o, mine.map(x => divarToken(x.url || '') || '').filter(Boolean))
+  markRun(o, r.imported, r.imported || mine.length ? '' : 'آگهیِ منطبقی با نامِ شما پیدا نشد')
+  return { ok: true, scanned: rows.length, ...r }
+}
 
-  markRun(o, imported, imported || mine.length ? '' : 'آگهیِ منطبقی پیدا نشد')
-  return { ok: true, scanned: rows.length, imported, skipped, tokens }
+/** همهٔ آگهی‌های واردشده از دیوار را پاک می‌کند (فایل + نسخهٔ عمومی) و فهرست را خالی می‌کند. */
+export function clearDivarImports(o: string): { removed: number } {
+  const imports = getDivar(o).imports
+  let removed = 0
+  for (const im of imports) { try { deleteListing(o, im.listingId); removed++ } catch {} }
+  clearImports(o)
+  return { removed }
 }

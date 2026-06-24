@@ -41,6 +41,55 @@ function faToNum(s?: string): number {
   return Number.isFinite(n) ? n : 0
 }
 
+const UA_BROWSER = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
+
+// تشخیصِ لینکِ پروفایلِ پرو/کسب‌وکارِ دیوار: divar.ir/pro/<slug> یا /businesses/<slug>
+export function divarProfileSlug(url?: string): string | null {
+  const m = (url || '').trim().match(/divar\.ir\/(?:pro|businesses|business)\/([A-Za-z0-9_-]+)/i)
+  return m ? m[1] : null
+}
+
+const PROXY = () => getAdminData().divar?.proxyUrl
+  || process.env.HTTPS_PROXY || process.env.https_proxy
+  || process.env.HTTP_PROXY || process.env.http_proxy || undefined
+
+/** توکنِ همهٔ آگهی‌های یک پروفایلِ پرو/کسب‌وکارِ دیوار را استخراج می‌کند.
+ *  چند مسیر را امتحان می‌کند (API و صفحهٔ HTML) و توکن‌ها را با regex بیرون می‌کشد. */
+export async function fetchDivarProfileTokens(slug: string): Promise<{ tokens: string[]; name?: string; reason?: string }> {
+  if (!slug) return { tokens: [], reason: 'bad_slug' }
+  const proxyUrl = PROXY()
+  const tokens = new Set<string>()
+  let name: string | undefined
+  let any200 = false
+
+  const grab = async (u: string) => {
+    try {
+      const res = await proxiedRequest(u, {
+        method: 'GET',
+        headers: { accept: 'application/json, text/html, */*', 'user-agent': UA_BROWSER, origin: 'https://divar.ir', referer: `https://divar.ir/pro/${slug}`, 'x-standard-divar-error': 'true' },
+        proxyUrl, timeout: 20000,
+      })
+      if (res.status !== 200) return
+      any200 = true
+      const body = res.body || ''
+      // توکن‌های آگهی از لینک‌های /v/<token> و فیلدهای "token":"..."
+      const patterns = [/\/v\/([A-Za-z0-9]{6,12})/g, /"token"\s*:\s*"([A-Za-z0-9]{6,12})"/g]
+      for (const re of patterns) { let m: RegExpExecArray | null; while ((m = re.exec(body))) tokens.add(m[1]) }
+      if (!name) { const nm = body.match(/"name"\s*:\s*"([^"]{2,60})"/); if (nm) name = nm[1] }
+    } catch { /* مسیر بعدی */ }
+  }
+
+  // ۱) APIِ پستِ کسب‌وکار (best-effort)  ۲) APIِ صفحهٔ کسب‌وکار  ۳) خودِ صفحهٔ HTML
+  await grab(`https://api.divar.ir/v8/posts-v2/web/business/${slug}`)
+  if (!tokens.size) await grab(`https://api.divar.ir/v8/web-business-page/${slug}`)
+  if (!tokens.size) await grab(`https://divar.ir/pro/${slug}`)
+
+  tokens.delete(slug)
+  const list = Array.from(tokens).slice(0, 100)
+  if (!list.length) return { tokens: [], name, reason: any200 ? 'no_tokens' : 'unreachable' }
+  return { tokens: list, name }
+}
+
 // واکشی جزئیات کامل یک آگهی دیوار (همهٔ عکس‌ها/مشخصات/توضیحات/مختصات) از طریق پروکسی.
 export async function fetchDivarPost(token: string): Promise<DivarPost> {
   const empty: DivarPost = { images: [], facts: [], amenities: [] }

@@ -72,6 +72,13 @@ export function removeImport(o: string, token: string) {
   db.advisors[o] = cur; save(db)
 }
 
+export function clearImports(o: string) {
+  const db = load()
+  const cur = db.advisors[o]; if (!cur) return
+  cur.imports = []
+  db.advisors[o] = cur; save(db)
+}
+
 export function markRun(o: string, count: number, error?: string) {
   const db = load()
   const cur = db.advisors[o] || seed()
