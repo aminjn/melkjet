@@ -31,6 +31,9 @@ export default function NegotiationEngine({ listings = [] }: { listings?: NegLis
   const [offer, setOffer] = useState(0)            // قیمتِ پیشنهادیِ خریدار (تومان، دقیق)
   const [ai, setAi] = useState<{ scenario: string; text: string }[]>([])
   const [loading, setLoading] = useState('')        // کلیدِ سناریوی در حالِ تولید، یا 'custom'
+  const [phone, setPhone] = useState('')             // شمارهٔ گیرندهٔ پیامکِ مذاکره
+  const [sending, setSending] = useState(-1)         // ایندکسِ پیامِ در حالِ ارسال
+  const [sendMsg, setSendMsg] = useState('')
 
   const val = Number(value) || 0
   const pct = val > 0 ? Math.round((offer / val) * 100) : 0
@@ -51,18 +54,27 @@ export default function NegotiationEngine({ listings = [] }: { listings?: NegLis
     setLoading(key)
     const p = val > 0 ? Math.round((ofr / val) * 100) : 0
     const a = acceptance(p)
-    const prompt = `تو یک مشاورِ املاکِ حرفه‌ای ایرانی هستی. یک پیامِ مذاکرهٔ مؤدبانه و قانع‌کننده به فارسیِ روان (بدون هیچ کلمهٔ انگلیسی) برای ارائهٔ پیشنهادِ خرید بنویس.
-سناریو: ${scenarioLabel}
-ملک: ${title || 'ملک موردنظر'}${location ? ` در ${location}` : ''}
-قیمتِ فروشنده: ${faMoney(val)}
-پیشنهادِ خریدار: ${faMoney(ofr)} (${p}٪)
-لحن متناسب با سناریو، کوتاه (۳ تا ۵ جمله)، با یک دلیلِ منطقی برای قیمت. اسم و شماره را جای خالی نگذار؛ ننویس [نام شما].`
     try {
-      const r = await fetch('/api/ai/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agent: 'chat', input: prompt }) })
+      // تولیدِ پیام بر اساسِ قواعدِ تنظیم‌شده در سوپرادمین (سمتِ سرور)
+      const r = await fetch('/api/negotiation/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scenario: scenarioLabel, title, location, sellerPrice: val, offer: ofr }) })
       const d = await r.json()
       const text = d.ok ? d.text : `⚠ ${d.error || 'خطا'}`
       setAi(prev => [{ scenario: `${scenarioLabel} · ${faMoney(ofr)} (${p}٪) · احتمالِ پذیرش ${a.label}`, text }, ...prev].slice(0, 4))
     } catch { setAi(prev => [{ scenario: scenarioLabel, text: '⚠ خطا در ارتباط با هوش مصنوعی' }, ...prev]) } finally { setLoading('') }
+  }
+
+  // ارسالِ پیامکِ مذاکره (مسیرِ سریعِ پترن، تنظیم‌شده در سوپرادمین)
+  const sendSms = async (idx: number, text: string) => {
+    if (sending >= 0) return
+    setSendMsg('')
+    const ph = toLatin(phone).replace(/\D/g, '')
+    if (!/^09\d{9}$/.test(ph)) { setSendMsg('⚠ شمارهٔ موبایلِ معتبر وارد کنید (۰۹...)'); return }
+    setSending(idx)
+    try {
+      const r = await fetch('/api/negotiation/send-sms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recipient: ph, message: text }) })
+      const d = await r.json()
+      setSendMsg(d.ok ? `✓ پیامک ارسال شد${typeof d.remaining === 'number' ? ` · اعتبارِ باقی‌مانده: ${d.remaining.toLocaleString('fa-IR')}` : ''}` : `⚠ ${d.error || 'خطا'}`)
+    } catch { setSendMsg('⚠ خطا در ارتباط با سرور') } finally { setSending(-1) }
   }
 
   const inp: React.CSSProperties = { width: '100%', padding: '10px 12px', borderRadius: 9, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--text)', fontSize: 13, outline: 'none', fontFamily: FONT }
@@ -147,11 +159,23 @@ export default function NegotiationEngine({ listings = [] }: { listings?: NegLis
       )}
 
       {/* پیام‌های تولیدشده */}
+      {ai.length > 0 && (
+        <div style={{ ...card, padding: 14, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <label style={{ ...lab, marginBottom: 0 }}>شمارهٔ گیرنده برای ارسالِ پیامک</label>
+          <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="۰۹۱۲۳۴۵۶۷۸۹" style={{ ...inp, width: 200, direction: 'ltr', textAlign: 'left' }} />
+          {sendMsg && <span style={{ fontSize: 12, color: sendMsg.startsWith('✓') ? '#22c55e' : '#ef4444' }}>{sendMsg}</span>}
+        </div>
+      )}
       {ai.map((m, i) => (
         <div key={i} style={{ ...card, border: '1px solid var(--gold)', padding: 14 }}>
           <div style={{ fontSize: 11.5, color: 'var(--gold)', fontWeight: 700, marginBottom: 8 }}>{m.scenario}</div>
           <div style={{ fontSize: 13, lineHeight: 2, whiteSpace: 'pre-wrap' }}>{m.text}</div>
-          {!m.text.startsWith('⚠') && <button onClick={() => navigator.clipboard?.writeText(m.text)} style={{ marginTop: 10, padding: '6px 14px', borderRadius: 8, background: 'transparent', border: '1px solid var(--line2)', color: 'var(--gold)', fontSize: 12, cursor: 'pointer', fontFamily: FONT }}>کپیِ پیام</button>}
+          {!m.text.startsWith('⚠') && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+              <button onClick={() => sendSms(i, m.text)} disabled={sending >= 0} style={{ padding: '7px 16px', borderRadius: 8, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 12, border: 'none', cursor: 'pointer', fontFamily: FONT, opacity: sending >= 0 ? 0.6 : 1 }}>{sending === i ? 'در حال ارسال…' : '✆ ارسالِ پیامک'}</button>
+              <button onClick={() => navigator.clipboard?.writeText(m.text)} style={{ padding: '7px 14px', borderRadius: 8, background: 'transparent', border: '1px solid var(--line2)', color: 'var(--gold)', fontSize: 12, cursor: 'pointer', fontFamily: FONT }}>کپیِ پیام</button>
+            </div>
+          )}
         </div>
       ))}
     </div>

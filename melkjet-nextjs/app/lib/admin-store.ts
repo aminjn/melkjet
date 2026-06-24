@@ -53,6 +53,11 @@ export interface AdminData {
     merchantId: string
     sandbox?: boolean
   }
+  negotiation?: {        // موتور مذاکره — قواعدِ تولیدِ پیام + پترنِ ارسالِ سریعِ پیامک
+    rules?: string       // قواعدی که هوش مصنوعی بر اساسِ آن‌ها پیامِ مذاکره را تولید می‌کند
+    pattern?: string     // کدِ پترنِ IPPanel برای ارسالِ سریعِ پیامک (اختیاری)
+    patternVar?: string  // نامِ متغیرِ پترن (پیش‌فرض: message)
+  }
   agentModels?: Record<string, { text?: string; image?: string }>  // per-agent model assignment
 }
 

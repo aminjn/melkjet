@@ -5,6 +5,7 @@ import PanelReturnBar from '@/app/components/PanelReturnBar'
 
 import ArticleEditor from '@/app/components/ArticleEditor'
 import ContactsBook from '@/app/components/ContactsBook'
+import CommCredit from '@/app/components/CommCredit'
 
 export type MarketingView = 'overview' | 'contacts' | 'email' | 'sms' | 'social' | 'articles' | 'reports'
 
@@ -457,6 +458,7 @@ export default function MarketingTool({ embedded = false, view: viewProp, onView
           {/* ── EMAIL ── */}
           {activeView === 'email' && (
             <div style={{ display: 'grid', gap: 18 }}>
+              <CommCredit channel="email" />
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <button
                   style={{
@@ -672,6 +674,7 @@ export default function MarketingTool({ embedded = false, view: viewProp, onView
           {/* ── SMS ── */}
           {activeView === 'sms' && (
             <div style={{ display: 'grid', gap: 18 }}>
+              <CommCredit channel="sms" />
               <div
                 style={{
                   display: 'grid',

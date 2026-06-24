@@ -2040,6 +2040,114 @@ function IPPanelConfig() {
   )
 }
 
+// ─── Negotiation engine (موتور مذاکره) — rules + fast SMS pattern ───────────
+function NegotiationConfig() {
+  const [f, setF] = useState({ rules: '', pattern: '', patternVar: 'message' })
+  const [msg, setMsg] = useState('')
+  useEffect(() => { fetch('/api/admin/negotiation-config').then(r => r.ok ? r.json() : null).then(d => { if (d) setF({ rules: d.rules || '', pattern: d.pattern || '', patternVar: d.patternVar || 'message' }) }) }, [])
+  const save = async () => {
+    setMsg('')
+    const r = await fetch('/api/admin/negotiation-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(f) })
+    const d = await r.json()
+    setMsg(r.ok ? '✓ ذخیره شد' : `⚠ ${d.error || 'خطا'}`)
+  }
+  const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
+  const lab: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', marginBottom: 5, display: 'block', fontWeight: 600 }
+  return (
+    <Card style={{ marginBottom: 14 }}>
+      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>موتور مذاکره (پیامک و قواعدِ هوش مصنوعی)</div>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.9 }}>
+        «قواعد» همان دستورالعملی است که هوش مصنوعی هنگامِ نوشتنِ پیامِ مذاکره رعایت می‌کند (لحن، طول، نکاتِ الزامی). برای ارسالِ <b>سریعِ</b> پیامک، در پنل IPPanel یک پترنِ تک‌متغیره بساز (مثلاً بدنهٔ پترن فقط <span style={{ direction: 'ltr', display: 'inline-block' }}>%message%</span> باشد) و کدِ آن را اینجا بگذار؛ اگر خالی بماند، پیامک از مسیرِ ارسالِ معمولی می‌رود.
+      </div>
+      <div style={{ marginBottom: 12 }}>
+        <label style={lab}>قواعدِ تولیدِ پیامِ مذاکره (برای هوش مصنوعی)</label>
+        <textarea value={f.rules} onChange={e => setF({ ...f, rules: e.target.value })} rows={5} placeholder={'مثلاً:\n- همیشه مؤدبانه و حرفه‌ای بنویس\n- حداکثر ۴ جمله\n- نامِ آژانس را ذکر کن\n- شمارهٔ تماس را در پایان نگذار'} style={{ ...inp, resize: 'vertical', lineHeight: 1.9 }} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }} className="mjsa-2col">
+        <div><label style={lab}>کدِ پترن IPPanel (اختیاری — ارسالِ سریع)</label><input style={inp} placeholder="مثلاً 123456" value={f.pattern} onChange={e => setF({ ...f, pattern: e.target.value })} /></div>
+        <div><label style={lab}>نامِ متغیرِ پترن</label><input style={inp} placeholder="message" value={f.patternVar} onChange={e => setF({ ...f, patternVar: e.target.value })} /></div>
+      </div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <GoldButton onClick={save}>ذخیره</GoldButton>
+        {msg && <span style={{ fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</span>}
+      </div>
+    </Card>
+  )
+}
+
+// ─── Communication packages (شارژِ پیامک/ایمیل) + orders ────────────────────
+type CPkg = { id: string; channel: 'sms' | 'email'; name: string; credits: number; price: number; active: boolean }
+type COrder = { id: string; owner: string; name: string; channel: string; credits: number; price: number; status: string; createdAt: number }
+function CommPackagesConfig() {
+  const [pkgs, setPkgs] = useState<CPkg[]>([])
+  const [orders, setOrders] = useState<COrder[]>([])
+  const [msg, setMsg] = useState('')
+  const load = () => fetch('/api/comm?admin=1').then(r => r.ok ? r.json() : null).then(d => { if (d) { setPkgs(d.packages || []); setOrders(d.orders || []) } })
+  useEffect(() => { load() }, [])
+  const addRow = () => setPkgs(p => [...p, { id: 'new_' + Math.round(p.length + 1), channel: 'sms', name: '', credits: 0, price: 0, active: true }])
+  const upd = (i: number, patch: Partial<CPkg>) => setPkgs(p => p.map((x, j) => j === i ? { ...x, ...patch } : x))
+  const del = (i: number) => setPkgs(p => p.filter((_, j) => j !== i))
+  const save = async () => {
+    setMsg('')
+    const r = await fetch('/api/comm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'savePackages', packages: pkgs }) })
+    const d = await r.json()
+    if (d.ok) { setPkgs(d.packages || pkgs); setMsg('✓ ذخیره شد') } else setMsg(`⚠ ${d.error || 'خطا'}`)
+  }
+  const orderAct = async (id: string, action: 'approveOrder' | 'rejectOrder') => {
+    const r = await fetch('/api/comm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, id }) })
+    const d = await r.json(); if (d.orders) setOrders(d.orders)
+  }
+  const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 8, padding: '7px 10px', color: 'var(--text)', fontSize: 12.5, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
+  const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
+  const pending = orders.filter(o => o.status === 'pending')
+  return (
+    <Card style={{ marginBottom: 14 }}>
+      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>پکیج‌های شارژِ پیامک و ایمیل</div>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.9 }}>
+        پکیج‌هایی که اینجا فعال کنی، در بخشِ «پیامک» و «کمپین ایمیلِ» مارکتینگِ کاربران نمایش داده می‌شوند و قابلِ تهیه‌اند. اگر هیچ پکیجِ فعالی نباشد، ارسال محدود نمی‌شود.
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+        {pkgs.length === 0 ? <div style={{ color: 'var(--muted)', fontSize: 13, padding: '8px 0' }}>پکیجی تعریف نشده.</div> : pkgs.map((p, i) => (
+          <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '90px 1fr 110px 130px 70px 36px', gap: 8, alignItems: 'center', background: 'var(--bg2)', borderRadius: 10, padding: 8 }} className="mjsa-pkg">
+            <select value={p.channel} onChange={e => upd(i, { channel: e.target.value as 'sms' | 'email' })} style={inp}><option value="sms">پیامک</option><option value="email">ایمیل</option></select>
+            <input style={inp} placeholder="نامِ پکیج" value={p.name} onChange={e => upd(i, { name: e.target.value })} />
+            <input style={inp} type="number" placeholder="تعداد" value={p.credits || ''} onChange={e => upd(i, { credits: Number(e.target.value) || 0 })} />
+            <input style={inp} type="number" placeholder="قیمت (تومان)" value={p.price || ''} onChange={e => upd(i, { price: Number(e.target.value) || 0 })} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--muted)', cursor: 'pointer' }}><input type="checkbox" checked={p.active} onChange={e => upd(i, { active: e.target.checked })} />فعال</label>
+            <button onClick={() => del(i)} style={{ fontSize: 14, padding: '4px', borderRadius: 8, border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>×</button>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 18 }}>
+        <OutlineButton onClick={addRow}>＋ پکیج</OutlineButton>
+        <GoldButton onClick={save}>ذخیرهٔ پکیج‌ها</GoldButton>
+        {msg && <span style={{ fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</span>}
+      </div>
+
+      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>سفارش‌های شارژ {pending.length > 0 && <span style={{ color: '#e7674a', fontSize: 12 }}>({fa(pending.length)} در انتظار)</span>}</div>
+      {orders.length === 0 ? <div style={{ color: 'var(--muted)', fontSize: 13 }}>سفارشی ثبت نشده.</div> : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {orders.slice(0, 20).map(o => (
+            <div key={o.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, background: 'var(--bg2)', borderRadius: 10, padding: '9px 12px', flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 12.5 }}>
+                <span style={{ fontWeight: 700 }}>{o.name}</span>
+                <span style={{ color: 'var(--muted)', marginInlineStart: 8, direction: 'ltr', display: 'inline-block' }}>{o.owner}</span>
+                <span style={{ color: 'var(--muted)', marginInlineStart: 8 }}>· {o.channel === 'sms' ? 'پیامک' : 'ایمیل'} · {fa(o.credits)} عدد · {fa(o.price)} تومان</span>
+              </div>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                {o.status === 'pending' ? <>
+                  <button onClick={() => orderAct(o.id, 'approveOrder')} style={{ fontSize: 11.5, padding: '4px 11px', borderRadius: 8, border: '1px solid #5fd98a', color: '#5fd98a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>تأیید و شارژ</button>
+                  <button onClick={() => orderAct(o.id, 'rejectOrder')} style={{ fontSize: 11.5, padding: '4px 11px', borderRadius: 8, border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>رد</button>
+                </> : <span style={{ fontSize: 11.5, fontWeight: 700, color: o.status === 'paid' ? '#5fd98a' : 'var(--faint)' }}>{o.status === 'paid' ? '✓ پرداخت‌شده' : 'رد‌شده'}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  )
+}
+
 // ─── Connections / integrations hub ────────────────────────────────────────
 function ConnectionsView() {
   return (
@@ -2050,6 +2158,8 @@ function ConnectionsView() {
       </Card>
       <NeshanConfig />
       <IPPanelConfig />
+      <CommPackagesConfig />
+      <NegotiationConfig />
       <SmtpConfig />
       <ZarinpalConfig />
       <ImgbbConfig />

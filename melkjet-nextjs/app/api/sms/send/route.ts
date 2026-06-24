@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { getAdminData } from '@/app/lib/admin-store'
 import { shecanRequest } from '@/app/lib/shecan-https'
+import { chargeSend } from '@/app/lib/comm-store'
 
 // ارسال پیامک انبوه بازاریابی از طریق سرویس داخلی IPPanel.
 // فرمت رسمی IPPanel: POST https://api2.ippanel.com/api/v1/sms/send/webservice/single
@@ -24,6 +25,10 @@ export async function POST(req: NextRequest) {
   if (!apiKey || !sender) {
     return NextResponse.json({ error: 'سرویس پیامک تنظیم نشده — در پنل سوپرادمین کلید و خط IPPanel را وارد کنید.' }, { status: 400 })
   }
+
+  // کسرِ اعتبارِ پیامک (اگر سیستمِ پکیج روشن باشد؛ سوپرادمین معاف)
+  const gate = chargeSend(s.phone, s.role, 'sms', recipients.length)
+  if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: 200 })
 
   try {
     const res = await shecanRequest('https://api2.ippanel.com/api/v1/sms/send/webservice/single', {

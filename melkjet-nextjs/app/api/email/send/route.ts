@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { getAdminData } from '@/app/lib/admin-store'
 import { sendMail } from '@/app/lib/smtp'
+import { chargeSend } from '@/app/lib/comm-store'
 
 // ارسال کمپین/ایمیل انبوه از طریق SMTP تنظیم‌شده در پنل.
 export async function POST(req: NextRequest) {
@@ -23,6 +24,10 @@ export async function POST(req: NextRequest) {
   if (!cfg?.host || !cfg?.user || !cfg?.pass) {
     return NextResponse.json({ error: 'سرویس ایمیل تنظیم نشده — در پنل سوپرادمین تنظیمات SMTP را وارد کنید.' }, { status: 400 })
   }
+
+  // کسرِ اعتبارِ ایمیل (اگر سیستمِ پکیج روشن باشد؛ سوپرادمین معاف)
+  const gate = chargeSend(s.phone, s.role, 'email', recipients.length)
+  if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: 200 })
 
   // متن ساده را به HTML سادهٔ راست‌چین تبدیل کن
   const html = `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;font-size:14px;line-height:1.9;color:#222">${bodyHtml.replace(/\n/g, '<br>')}</div>`
