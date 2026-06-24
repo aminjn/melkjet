@@ -124,15 +124,25 @@ export default function SearchPage() {
 function SearchPageInner() {
   const searchParams = useSearchParams()
   const initialQuery = searchParams.get('q') || ''
+  // نوعِ معامله از URL: ?type=rent|presale|mortgage|buy
+  const initialDeal = (() => {
+    const t = (searchParams.get('type') || '').toLowerCase()
+    if (t === 'rent' || t === 'اجاره') return 'اجاره'
+    if (t === 'presale' || t === 'pre-sale' || t === 'پیش‌فروش') return 'پیش‌فروش'
+    if (t === 'mortgage' || t === 'rahn' || t === 'رهن') return 'رهن'
+    return 'خرید'
+  })()
 
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [search, setSearch] = useState(initialQuery)
   const [searchTerm, setSearchTerm] = useState(initialQuery)
-  const [dealType, setDealType] = useState<string>('خرید')
+  const [dealType, setDealType] = useState<string>(initialDeal)
   const [beds, setBeds] = useState<string>('همه')
   const [maxPrice, setMaxPrice] = useState(PRICE_MAX)   // پیش‌فرض: بدون سقف (همه نشان داده شوند)
   const [checkedAmenities, setCheckedAmenities] = useState<string[]>([])   // هیچ فیلترِ پیش‌فرضی
   const [sortBy, setSortBy] = useState('پیشنهاد ملک‌جت')
+  // اگر URL عوض شد (ناوبری بین type=rent/presale/…) تبِ معامله را همگام کن
+  useEffect(() => { setDealType(initialDeal) }, [initialDeal])
   // منطقهٔ کاربر (از موقعیتِ تشخیص‌داده‌شده) — برای مرتب‌سازیِ نزدیک‌ترها
   const [userArea, setUserArea] = useState('')
   useEffect(() => {
