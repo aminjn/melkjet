@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { warmEnrichment } from '@/app/lib/enrich-warm'
+import { checkDuplicate, advisorScope } from '@/app/lib/duplicate-check'
 import {
   advisorStats, listLeads, listListings, listAppts, listCommissions,
   addLead, setLeadStage, deleteLead, addListing, updateListing, setListingStatus, deleteListing, publishListing, unpublishListing,
@@ -24,7 +25,15 @@ export async function POST(req: NextRequest) {
     case 'addLead': return NextResponse.json({ ok: true, lead: addLead(o, b) })
     case 'setLeadStage': { const l = setLeadStage(o, String(b.id), b.stage); return l ? NextResponse.json({ ok: true, lead: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'deleteLead': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); deleteLead(o, String(b.id)); return NextResponse.json({ ok: true })
-    case 'addListing': return NextResponse.json({ ok: true, listing: addListing(o, b) })
+    case 'addListing': {
+      const listing = addListing(o, b)
+      let duplicate: { id: string; title: string; ownerName: string } | undefined
+      try {
+        const dup = await checkDuplicate(advisorScope(o), { deal: listing.deal, title: listing.title, location: listing.location, neighborhood: listing.neighborhood, area: listing.area, price: listing.price, rooms: listing.rooms }, listing.id)
+        if (dup.isDuplicate) duplicate = dup.match
+      } catch { /* اخطارِ تکراری اختیاری است */ }
+      return NextResponse.json({ ok: true, listing, duplicate })
+    }
     case 'updateListing': { if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); const l = updateListing(o, String(b.id), b.patch || {}); return l ? NextResponse.json({ ok: true, listing: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'setListingStatus': { const l = setListingStatus(o, String(b.id), b.status); return l ? NextResponse.json({ ok: true, listing: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'deleteListing': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); deleteListing(o, String(b.id)); return NextResponse.json({ ok: true })

@@ -255,8 +255,10 @@ export default function ProsPage() {
       }
       await refresh()
       setShowForm(false); setForm(emptyForm); setEditingId(null)
+      if (d.duplicate) setDupWarn(`⚠ این فایل احتمالاً تکراری است با «${d.duplicate.title}»${d.duplicate.ownerName ? ` (ثبت‌شده توسط ${d.duplicate.ownerName})` : ''}. بررسی کنید قبلاً ثبت نشده باشد.`)
     } catch { alert('اتصال به سرور برقرار نشد') } finally { setBusy(false) }
   }
+  const [dupWarn, setDupWarn] = useState('')
   const [nc, setNc] = useState({ dealTitle: '', mode: 'amount' as 'amount' | 'percent', amount: '', percent: '', dealAmount: '' })
   const [prof, setProf] = useState({ name: '', agency: '', title: '', bio: '', phone: '', areas: '', experience: '', photo: '', specialties: [] as string[] })
   const [specInput, setSpecInput] = useState('')
@@ -975,6 +977,13 @@ export default function ProsPage() {
           </>}
         </main>
       </div>
+
+      {/* اخطارِ آگهیِ تکراری (تشخیصِ هوش مصنوعی) */}
+      {dupWarn && (
+        <div onClick={() => setDupWarn('')} style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 200, maxWidth: 540, background: 'linear-gradient(135deg,#3a2a12,#2a1f0e)', border: '1px solid #f59e0b', color: '#fde68a', padding: '13px 18px', borderRadius: 12, fontSize: 13, lineHeight: 1.9, cursor: 'pointer', boxShadow: '0 8px 30px rgba(0,0,0,.5)', fontFamily: FONT }}>
+          {dupWarn} <span style={{ color: '#f59e0b', fontWeight: 700 }}>(بستن)</span>
+        </div>
+      )}
 
       {/* ───── ADD/EDIT LISTING MODAL ───── */}
       {showForm && (

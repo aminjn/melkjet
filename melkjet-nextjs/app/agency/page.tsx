@@ -157,12 +157,14 @@ export default function AgencyPage() {
   useEffect(() => { refreshLinks() }, [refreshLinks])
   useEffect(() => { fetch('/api/auth/profile', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d?.account?.name) setMyName(d.account.name) }).catch(() => {}) }, [])
 
+  const [dupWarn, setDupWarn] = useState('')
   const post = useCallback(async (body: Record<string, unknown>): Promise<boolean> => {
     setBusy(true)
     try {
       const r = await fetch('/api/agency', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) { alert(d.error || 'برای انجام این عملیات وارد شوید'); return false }
+      if (d.duplicate) setDupWarn(`⚠ این فایل احتمالاً تکراری است با «${d.duplicate.title}»${d.duplicate.ownerName ? ` (${d.duplicate.ownerName})` : ''}. بررسی کنید قبلاً ثبت نشده باشد.`)
       await refresh(); return true
     } catch { return false } finally { setBusy(false) }
   }, [refresh])
@@ -586,6 +588,11 @@ export default function AgencyPage() {
           </>}
         </main>
       </div>
+      {dupWarn && (
+        <div onClick={() => setDupWarn('')} style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 200, maxWidth: 540, background: 'linear-gradient(135deg,#3a2a12,#2a1f0e)', border: '1px solid #f59e0b', color: '#fde68a', padding: '13px 18px', borderRadius: 12, fontSize: 13, lineHeight: 1.9, cursor: 'pointer', boxShadow: '0 8px 30px rgba(0,0,0,.5)', fontFamily: FONT }}>
+          {dupWarn} <span style={{ color: '#f59e0b', fontWeight: 700 }}>(بستن)</span>
+        </div>
+      )}
     </div>
   )
 }
