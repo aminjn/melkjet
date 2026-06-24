@@ -3,13 +3,23 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import PanelReturnBar from '@/app/components/PanelReturnBar';
 
-export type WorkflowView = 'builder';
+export type WorkflowView = 'list' | 'builder';
 
-// Sidebar nav entries (one per view). The standalone /workflow page has a single
-// view (the automation builder canvas), so there is exactly one entry.
+// Sidebar nav entries (one per view). A host panel can render these as a
+// cascading submenu — «اتوماسیون‌های من» (the saved list) and «سازندهٔ اتوماسیون»
+// (the builder canvas).
 export const WORKFLOW_VIEWS: { id: WorkflowView; label: string; icon: string }[] = [
-  { id: 'builder', icon: '⚡', label: 'سازنده اتوماسیون' },
+  { id: 'list', icon: '☰', label: 'اتوماسیون‌های من' },
+  { id: 'builder', icon: '⚡', label: 'سازندهٔ اتوماسیون' },
 ];
+
+// API shape for a saved workflow (mirrors app/lib/workflow-store.ts).
+interface SavedWorkflow {
+  id: string;
+  name: string;
+  nodes?: WorkflowNode[];
+  updatedAt?: number;
+}
 
 type NodeType = 'trigger' | 'action' | 'ai' | 'condition' | 'end';
 
@@ -158,8 +168,6 @@ export default function WorkflowTool({ embedded = false, view: viewProp, onView 
   const [internalView, setInternalView] = useState<WorkflowView>('builder');
   const activeView: WorkflowView = viewProp ?? internalView;
   const setActiveView = (v: WorkflowView) => { onView ? onView(v) : setInternalView(v); };
-  void activeView;
-  void setActiveView;
   const [nodes, setNodes] = useState<WorkflowNode[]>(INITIAL_NODES);
   const [selectedId, setSelectedId] = useState<string | null>('n1');
   const [isRunning, setIsRunning] = useState(false);
@@ -169,6 +177,9 @@ export default function WorkflowTool({ embedded = false, view: viewProp, onView 
   const [saving, setSaving] = useState(false);
   const [workflowId, setWorkflowId] = useState<string | null>(null);
   const [workflowName, setWorkflowName] = useState<string>('گردش کار جدید');
+  // Saved workflows for the «اتوماسیون‌های من» list view.
+  const [savedList, setSavedList] = useState<SavedWorkflow[]>([]);
+  const [listLoaded, setListLoaded] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const selectedNode = nodes.find((n) => n.id === selectedId) ?? null;
@@ -231,6 +242,44 @@ export default function WorkflowTool({ embedded = false, view: viewProp, onView 
     return () => { cancelled = true; };
   }, []);
 
+  // Fetch the saved-workflows list (used by the list view and after saving).
+  const refreshList = useCallback(async () => {
+    try {
+      const res = await fetch('/api/workflow');
+      if (!res.ok) { setListLoaded(true); return; }
+      const data = await res.json();
+      setSavedList(Array.isArray(data.workflows) ? data.workflows : []);
+    } catch {
+      /* ignore — keep current list */
+    } finally {
+      setListLoaded(true);
+    }
+  }, []);
+
+  // Load the list whenever the list view becomes active.
+  useEffect(() => {
+    if (activeView === 'list') refreshList();
+  }, [activeView, refreshList]);
+
+  // Load a saved workflow into the builder, then switch to it.
+  const loadWorkflow = useCallback((wf: SavedWorkflow) => {
+    setWorkflowId(wf.id);
+    setWorkflowName(wf.name);
+    if (Array.isArray(wf.nodes) && wf.nodes.length) setNodes(wf.nodes);
+    setSelectedId(null);
+    setActiveView('builder');
+  }, [setActiveView]);
+
+  // Start a fresh, blank workflow in the builder.
+  const newWorkflow = useCallback(() => {
+    setWorkflowId(null);
+    setWorkflowName('گردش کار جدید');
+    setNodes(INITIAL_NODES);
+    setSelectedId('n1');
+    setStatus('آماده');
+    setActiveView('builder');
+  }, [setActiveView]);
+
   const handleSave = useCallback(async () => {
     if (saving) return;
     setSaving(true);
@@ -255,13 +304,14 @@ export default function WorkflowTool({ embedded = false, view: viewProp, onView 
       if (data.workflow?.id) setWorkflowId(data.workflow.id);
       setSaved(true);
       setStatus('ذخیره شد ✓');
+      refreshList();
       setTimeout(() => setSaved(false), 2000);
     } catch {
       setStatus('خطا در اتصال');
     } finally {
       setSaving(false);
     }
-  }, [saving, workflowId, workflowName, nodes]);
+  }, [saving, workflowId, workflowName, nodes, refreshList]);
 
   const handleNodeClick = (id: string) => {
     setSelectedId(id);
@@ -287,6 +337,170 @@ export default function WorkflowTool({ embedded = false, view: viewProp, onView 
     if (!isRunning || activeNodeIndex < 0) return false;
     return NODE_ORDER[activeNodeIndex] === nodeId;
   };
+
+  // ===== LIST VIEW: «اتوماسیون‌های من» — saved workflows as cards. =====
+  const listContent = (
+    <div
+      style={{
+        flex: 1,
+        overflowY: 'auto',
+        padding: '24px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '20px',
+      }}
+    >
+      {/* Header + new button */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text)' }}>
+            اتوماسیون‌های من
+          </span>
+          <span style={{ fontSize: '13px', color: 'var(--muted)' }}>
+            {savedList.length} اتوماسیون
+          </span>
+        </div>
+        <button
+          onClick={newWorkflow}
+          style={{
+            padding: '9px 18px',
+            borderRadius: '10px',
+            border: 'none',
+            background: 'var(--gold)',
+            color: '#000',
+            cursor: 'pointer',
+            fontSize: '13px',
+            fontWeight: 700,
+            fontFamily: 'inherit',
+          }}
+        >
+          ＋ اتوماسیون جدید
+        </button>
+      </div>
+
+      {/* Empty state */}
+      {listLoaded && savedList.length === 0 ? (
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '14px',
+            padding: '48px 20px',
+            textAlign: 'center',
+            color: 'var(--muted)',
+          }}
+        >
+          <span style={{ fontSize: '40px', opacity: 0.6 }}>⚡</span>
+          <div style={{ fontSize: '14px' }}>هنوز اتوماسیونی ذخیره نشده است.</div>
+          <button
+            onClick={newWorkflow}
+            style={{
+              padding: '9px 18px',
+              borderRadius: '10px',
+              border: 'none',
+              background: 'var(--gold)',
+              color: '#000',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 700,
+              fontFamily: 'inherit',
+            }}
+          >
+            ＋ اتوماسیون جدید
+          </button>
+        </div>
+      ) : (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+            gap: '14px',
+          }}
+        >
+          {savedList.map((wf) => (
+            <div
+              key={wf.id}
+              onClick={() => loadWorkflow(wf)}
+              style={{
+                background: 'var(--surface)',
+                border: '1px solid var(--line)',
+                borderRadius: '12px',
+                padding: '16px',
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                transition: 'border-color 0.15s, box-shadow 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--gold)';
+                (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 14px rgba(0,0,0,0.18)';
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--line)';
+                (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '8px',
+                    background: 'var(--goldDim)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '15px',
+                    color: 'var(--gold)',
+                    flexShrink: 0,
+                  }}
+                >
+                  ⚡
+                </div>
+                <span
+                  style={{
+                    fontSize: '14px',
+                    fontWeight: 700,
+                    color: 'var(--text)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {wf.name || 'بدون نام'}
+                </span>
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  fontSize: '12px',
+                  color: 'var(--muted)',
+                }}
+              >
+                <span>{wf.nodes?.length ?? 0} گره</span>
+                {wf.updatedAt && (
+                  <span>{new Date(wf.updatedAt).toLocaleDateString('fa-IR')}</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   // The inner builder content (topbar + three-panel layout) — shared by both
   // standalone and embedded modes.
@@ -830,7 +1044,7 @@ export default function WorkflowTool({ embedded = false, view: viewProp, onView 
           overflow: 'hidden',
         }}
       >
-        {content}
+        {activeView === 'list' ? listContent : content}
       </div>
     );
   }

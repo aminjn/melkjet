@@ -3,8 +3,8 @@ import { useState, useEffect, useCallback } from 'react'
 import AssistantPanel from '@/app/components/AssistantPanel'
 import CrmTool, { CRM_VIEWS, type CrmView } from '@/app/components/tools/CrmTool'
 import MarketingTool, { MARKETING_VIEWS, type MarketingView } from '@/app/components/tools/MarketingTool'
-import WorkflowTool from '@/app/components/tools/WorkflowTool'
-import WebsiteBuilderTool from '@/app/components/tools/WebsiteBuilderTool'
+import WorkflowTool, { WORKFLOW_VIEWS, type WorkflowView } from '@/app/components/tools/WorkflowTool'
+import WebsiteBuilderTool, { WEBSITE_VIEWS, type WebsiteView } from '@/app/components/tools/WebsiteBuilderTool'
 import ArticleEditor from '@/app/components/ArticleEditor'
 import LocationPicker from '@/app/components/LocationPicker'
 
@@ -131,11 +131,16 @@ export default function ProsPage() {
   const [crmOpen, setCrmOpen] = useState(false)
   const [mktView, setMktView] = useState<MarketingView | null>(null)
   const [mktOpen, setMktOpen] = useState(false)
-  const [embeddedTool, setEmbeddedTool] = useState<'workflow' | 'website' | null>(null)
-  const goView = (v: View) => { setView(v); setCrmView(null); setMktView(null); setEmbeddedTool(null) }
-  const openCrm = (v: CrmView) => { setCrmView(v); setMktView(null); setEmbeddedTool(null); setCrmOpen(true) }
-  const openMkt = (v: MarketingView) => { setMktView(v); setCrmView(null); setEmbeddedTool(null); setMktOpen(true) }
-  const openTool = (t: 'workflow' | 'website') => { setEmbeddedTool(t); setCrmView(null); setMktView(null) }
+  const [wfView, setWfView] = useState<WorkflowView | null>(null)
+  const [wfOpen, setWfOpen] = useState(false)
+  const [wbView, setWbView] = useState<WebsiteView | null>(null)
+  const [wbOpen, setWbOpen] = useState(false)
+  const clearTools = () => { setCrmView(null); setMktView(null); setWfView(null); setWbView(null) }
+  const goView = (v: View) => { setView(v); clearTools() }
+  const openCrm = (v: CrmView) => { clearTools(); setCrmView(v); setCrmOpen(true) }
+  const openMkt = (v: MarketingView) => { clearTools(); setMktView(v); setMktOpen(true) }
+  const openWf = (v: WorkflowView) => { clearTools(); setWfView(v); setWfOpen(true) }
+  const openWb = (v: WebsiteView) => { clearTools(); setWbView(v); setWbOpen(true) }
   const [data, setData] = useState<AdvisorData | null>(null)
   const [loading, setLoading] = useState(true)
   const [unauth, setUnauth] = useState(false)
@@ -264,7 +269,7 @@ export default function ProsPage() {
         </div>
         <nav style={{ padding: '10px 8px', flex: 1, overflowY: 'auto' }}>
           {NAV_ITEMS.map(item => {
-            const active = view === item.id && !crmView && !mktView && !embeddedTool
+            const active = view === item.id && !crmView && !mktView && !wfView && !wbView
             const badge = item.badge === 'leads' ? stats.kpis.activeLeads : item.badge === 'appts' ? stats.kpis.upcomingAppts : 0
             return (
               <button key={item.id} onClick={() => goView(item.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: active ? 'var(--goldDim)' : 'transparent', color: active ? 'var(--gold)' : 'var(--muted)', fontWeight: active ? 700 : 500, fontSize: 14, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
@@ -308,13 +313,34 @@ export default function ProsPage() {
             )
           })}
 
-          {/* اتوماسیون و وب‌سایت‌ساز — داخل همین پنل باز می‌شوند */}
-          {([['workflow', '⛭', 'اتوماسیون'], ['website', '◳', 'وب‌سایت‌ساز']] as const).map(([t, icon, label]) => {
-            const on = embeddedTool === t
+          {/* اتوماسیون — منوی آبشاری، داخل همین پنل */}
+          <button onClick={() => { setWfOpen(o => !o); if (!wfView) openWf(WORKFLOW_VIEWS[0].id) }} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: wfView ? 'var(--goldDim)' : 'transparent', color: wfView ? 'var(--gold)' : 'var(--muted)', fontWeight: wfView ? 700 : 500, fontSize: 14, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
+            <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: wfView ? 1 : 0.7 }}>⛭</span>
+            <span className="mjp-sidelabel" style={{ flex: 1 }}>اتوماسیون</span>
+            <span className="mjp-sidelabel" style={{ fontSize: 11, transition: 'transform .2s', transform: wfOpen ? 'rotate(90deg)' : 'none' }}>‹</span>
+          </button>
+          {wfOpen && WORKFLOW_VIEWS.map(v => {
+            const on = wfView === v.id
             return (
-              <button key={t} onClick={() => openTool(t)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: on ? 'var(--goldDim)' : 'transparent', color: on ? 'var(--gold)' : 'var(--muted)', fontWeight: on ? 700 : 500, fontSize: 14, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
-                <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: on ? 1 : 0.7 }}>{icon}</span>
-                <span className="mjp-sidelabel" style={{ flex: 1 }}>{label}</span>
+              <button key={v.id} onClick={() => openWf(v.id)} className="mjp-sidelabel" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 9, padding: '8px 14px', paddingRight: 34, borderRadius: 10, border: 'none', cursor: 'pointer', background: on ? 'var(--goldDim)' : 'transparent', color: on ? 'var(--gold)' : 'var(--muted)', fontWeight: on ? 700 : 500, fontSize: 13, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
+                <span style={{ fontSize: 13, width: 16, textAlign: 'center', opacity: on ? 1 : 0.6 }}>{v.icon}</span>
+                <span style={{ flex: 1 }}>{v.label}</span>
+              </button>
+            )
+          })}
+
+          {/* وب‌سایت‌ساز — منوی آبشاری، داخل همین پنل */}
+          <button onClick={() => { setWbOpen(o => !o); if (!wbView) openWb(WEBSITE_VIEWS[0].id) }} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: wbView ? 'var(--goldDim)' : 'transparent', color: wbView ? 'var(--gold)' : 'var(--muted)', fontWeight: wbView ? 700 : 500, fontSize: 14, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
+            <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: wbView ? 1 : 0.7 }}>◳</span>
+            <span className="mjp-sidelabel" style={{ flex: 1 }}>وب‌سایت‌ساز</span>
+            <span className="mjp-sidelabel" style={{ fontSize: 11, transition: 'transform .2s', transform: wbOpen ? 'rotate(90deg)' : 'none' }}>‹</span>
+          </button>
+          {wbOpen && WEBSITE_VIEWS.map(v => {
+            const on = wbView === v.id
+            return (
+              <button key={v.id} onClick={() => openWb(v.id)} className="mjp-sidelabel" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 9, padding: '8px 14px', paddingRight: 34, borderRadius: 10, border: 'none', cursor: 'pointer', background: on ? 'var(--goldDim)' : 'transparent', color: on ? 'var(--gold)' : 'var(--muted)', fontWeight: on ? 700 : 500, fontSize: 13, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
+                <span style={{ fontSize: 13, width: 16, textAlign: 'center', opacity: on ? 1 : 0.6 }}>{v.icon}</span>
+                <span style={{ flex: 1 }}>{v.label}</span>
               </button>
             )
           })}
@@ -332,7 +358,7 @@ export default function ProsPage() {
       {/* MAIN */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 22px', borderBottom: '1px solid var(--line)', position: 'sticky', top: 0, background: 'var(--navbg)', backdropFilter: 'blur(18px)', zIndex: 20, flexWrap: 'wrap' }}>
-          <div style={{ fontWeight: 800, fontSize: 18 }}>{crmView ? `CRM · ${CRM_VIEWS.find(v => v.id === crmView)?.label || ''}` : mktView ? `مارکتینگ · ${MARKETING_VIEWS.find(v => v.id === mktView)?.label || ''}` : embeddedTool === 'workflow' ? 'اتوماسیون' : embeddedTool === 'website' ? 'وب‌سایت‌ساز' : VIEW_TITLES[view]}</div>
+          <div style={{ fontWeight: 800, fontSize: 18 }}>{crmView ? `CRM · ${CRM_VIEWS.find(v => v.id === crmView)?.label || ''}` : mktView ? `مارکتینگ · ${MARKETING_VIEWS.find(v => v.id === mktView)?.label || ''}` : wfView ? `اتوماسیون · ${WORKFLOW_VIEWS.find(v => v.id === wfView)?.label || ''}` : wbView ? `وب‌سایت‌ساز · ${WEBSITE_VIEWS.find(v => v.id === wbView)?.label || ''}` : VIEW_TITLES[view]}</div>
           <div style={{ flex: 1 }} />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="جستجوی لید، مشتری…" style={{ ...inputStyle, width: 220, maxWidth: '40vw' }} />
           <button onClick={() => goView('leads')} style={{ ...goldBtn, padding: '9px 16px' }}>+ لید جدید</button>
@@ -341,8 +367,8 @@ export default function ProsPage() {
         <main style={{ padding: 22, flex: 1, overflowY: 'auto' }}>
           {crmView ? <CrmTool embedded view={crmView} onView={v => setCrmView(v)} />
             : mktView ? <MarketingTool embedded view={mktView} onView={v => setMktView(v)} />
-            : embeddedTool === 'workflow' ? <div style={{ height: 'calc(100vh - 130px)' }}><WorkflowTool embedded /></div>
-            : embeddedTool === 'website' ? <div style={{ height: 'calc(100vh - 130px)' }}><WebsiteBuilderTool embedded /></div>
+            : wfView ? <div style={{ height: 'calc(100vh - 130px)' }}><WorkflowTool embedded view={wfView} onView={v => setWfView(v)} /></div>
+            : wbView ? <div style={{ height: 'calc(100vh - 130px)' }}><WebsiteBuilderTool embedded view={wbView} onView={v => setWbView(v)} /></div>
             : <>
           {/* DASHBOARD */}
           {view === 'dashboard' && <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>

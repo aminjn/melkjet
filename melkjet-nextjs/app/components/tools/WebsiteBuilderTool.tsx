@@ -2,11 +2,12 @@
 import { useState, useEffect } from 'react'
 import PanelReturnBar from '@/app/components/PanelReturnBar'
 
-export type WebsiteView = 'builder'
+export type WebsiteView = 'templates' | 'editor'
 
-// Sidebar nav entries (one per view). The website-builder is a single-view tool.
+// Sidebar nav entries (one per sub-view) — lets a host panel show a cascading submenu.
 export const WEBSITE_VIEWS: { id: WebsiteView; label: string; icon: string }[] = [
-  { id: 'builder', icon: '◳', label: 'وب‌سایت‌ساز' },
+  { id: 'templates', icon: '▦', label: 'قالب‌ها' },
+  { id: 'editor', icon: '◳', label: 'ویرایشگر' },
 ]
 
 type Device = 'desktop' | 'mobile' | 'tablet'
@@ -377,12 +378,10 @@ function TemplateThumb({ tpl }: { tpl: typeof STARTER_TEMPLATES[0] }) {
 }
 
 export default function WebsiteBuilderTool({ embedded = false, view: viewProp, onView }: { embedded?: boolean; view?: WebsiteView; onView?: (v: WebsiteView) => void }) {
-  const [internalView, setInternalView] = useState<WebsiteView>('builder')
+  // Default to 'editor' so standalone /website-builder stays pixel-identical (always the builder).
+  const [internalView, setInternalView] = useState<WebsiteView>('editor')
   const activeView: WebsiteView = viewProp ?? internalView
   const setActiveView = (v: WebsiteView) => { onView ? onView(v) : setInternalView(v) }
-  // Single-view tool: keep the controlled/uncontrolled wiring for parity with sibling tools.
-  void activeView
-  void setActiveView
 
   const [blocks, setBlocks] = useState<Block[]>([
     makeBlock('hero'),
@@ -1050,11 +1049,53 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
     </>
   )
 
-  // ===== EMBEDDED MODE: only the inner builder content (no PanelReturnBar / full-page wrapper). =====
+  // The «قالب‌ها» gallery view — a real, full-panel template picker (reuses STARTER_TEMPLATES,
+  // TemplateThumb, and the same profile-scoping as the in-builder popup). Picking a template
+  // applies it via loadTemplate(...) and jumps to the builder.
+  const templatesContent = (
+    <div style={{ flex: 1, overflowY: 'auto', direction: 'rtl' }}>
+      <div style={{ padding: '20px 22px 0' }}>
+        <div style={{ fontSize: 18, fontWeight: 900 }}>قالب‌های حرفه‌ای</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
+          {lockedProfile ? `قالب‌های مخصوص پروفایل ${lockedProfile}` : 'قالب‌های آماده'} — روی هر قالب بزنید تا اعمال شده و وارد ویرایشگر شوید
+        </div>
+      </div>
+
+      {/* فقط مهمان/ادمین می‌تواند پروفایل دیگری را مرور کند */}
+      {!lockedProfile && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '14px 22px 0' }}>
+          {PROFILE_GROUPS.map(pf => (
+            <button key={pf} onClick={() => setTplFilter(pf)} style={{ fontSize: 12, padding: '5px 12px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${tplFilter === pf ? 'var(--gold)' : 'var(--line)'}`, background: tplFilter === pf ? 'var(--goldDim)' : 'transparent', color: tplFilter === pf ? 'var(--gold)' : 'var(--muted)' }}>{pf}</button>
+          ))}
+        </div>
+      )}
+
+      <div className="mjwb-tplgrid" style={{ padding: 22, display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 }}>
+        {STARTER_TEMPLATES.filter(t => t.profile === tplFilter).map(tpl => (
+          <button
+            key={tpl.id}
+            onClick={() => { loadTemplate(tpl); setActiveView('editor') }}
+            className="mjwb-tplcard"
+            style={{ textAlign: 'right', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: 11, cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s' }}
+          >
+            <TemplateThumb tpl={tpl} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 10 }}>
+              <span style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--text)' }}>{tpl.name}</span>
+              <span style={{ fontSize: 9.5, color: 'var(--gold)', border: '1px solid rgba(212,175,55,.3)', borderRadius: 999, padding: '2px 8px', flexShrink: 0 }}>{tpl.profile}</span>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 3, lineHeight: 1.5 }}>{tpl.desc}</div>
+            <div style={{ marginTop: 9, textAlign: 'center', padding: '7px', borderRadius: 9, background: 'var(--goldDim)', color: 'var(--gold)', fontSize: 12, fontWeight: 800 }}>استفاده از این قالب</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+
+  // ===== EMBEDDED MODE: only the inner content for the current view (no PanelReturnBar / full-page wrapper). =====
   if (embedded) {
     return (
       <div dir="rtl" style={{ display: 'flex', flexDirection: 'column', color: 'var(--text)' }}>
-        {content}
+        {activeView === 'templates' ? templatesContent : content}
       </div>
     )
   }
