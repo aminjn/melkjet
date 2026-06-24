@@ -41,6 +41,7 @@ export default function NeighborhoodPage() {
   const [listingItems, setListingItems] = useState<ContentItem[]>([]);
   const [promotedListings, setPromotedListings] = useState<ContentItem[]>([]);
   const [advisorItems, setAdvisorItems] = useState<ContentItem[]>([]);
+  const [areaAdvisors, setAreaAdvisors] = useState<{ phone: string; name: string; title: string; photo: string; agency: string }[]>([]);
 
   useEffect(() => {
     let alive = true;
@@ -64,6 +65,12 @@ export default function NeighborhoodPage() {
     fetchContent('directory', undefined, 6).then((items) => {
       if (alive) setAdvisorItems(items.slice(0, 3));
     });
+
+    // مشاوران واقعیِ ثبت‌شده که این محله در «مناطق فعالیت»‌شان است
+    fetch(`/api/advisors/by-area?area=${encodeURIComponent(decoded)}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : { advisors: [] }))
+      .then((d) => { if (alive) setAreaAdvisors(d.advisors || []); })
+      .catch(() => {});
 
     fetch('/api/promotions?slot=neighborhood_featured', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : { items: [] }))
@@ -358,10 +365,23 @@ export default function NeighborhoodPage() {
               <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text)', margin: '0 0 0.3rem 0' }}>
                 مشاوران فعال در {neighborhoodName}
               </h3>
-              <p style={{ fontSize: '0.78rem', color: 'var(--muted)', margin: '0 0 1rem 0' }}>{advisorItems.length ? `${toFa(advisorItems.length)} مشاور تأییدشده` : 'مشاوران تأییدشده ملک‌جت'}</p>
+              <p style={{ fontSize: '0.78rem', color: 'var(--muted)', margin: '0 0 1rem 0' }}>{areaAdvisors.length ? `${toFa(areaAdvisors.length)} مشاورِ فعال در این محله` : advisorItems.length ? `${toFa(advisorItems.length)} مشاور تأییدشده` : 'مشاوران تأییدشده ملک‌جت'}</p>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginBottom: '1.25rem' }}>
-                {advisorItems.length === 0 ? (
+                {/* مشاوران واقعیِ ثبت‌شده در این محله */}
+                {areaAdvisors.map((adv) => (
+                  <Link key={adv.phone} href={`/profile/${adv.phone}`} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0.75rem', borderRadius: '8px', background: 'var(--bg2)', border: '1px solid var(--line)', textDecoration: 'none' }}>
+                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', overflow: 'hidden', background: gradientFor(adv.phone, 'avatar'), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.88rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                      {adv.photo ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={adv.photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (adv.name?.trim()?.[0] || '؟')}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{adv.name}</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{adv.title}{adv.agency ? ` · ${adv.agency}` : ''}</div>
+                    </div>
+                    <span style={{ color: 'var(--gold)', fontSize: '0.85rem', flexShrink: 0 }}>←</span>
+                  </Link>
+                ))}
+                {areaAdvisors.length === 0 && (advisorItems.length === 0 ? (
                   <div style={{ fontSize: '0.78rem', color: 'var(--muted)', textAlign: 'center', padding: '0.5rem 0' }}>مشاوری یافت نشد.</div>
                 ) : advisorItems.map((advisor) => (
                   <div key={advisor.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0.75rem', borderRadius: '8px', background: 'var(--bg2)', border: '1px solid var(--line)' }}>
@@ -378,7 +398,7 @@ export default function NeighborhoodPage() {
                       </div>
                     )}
                   </div>
-                ))}
+                )))}
               </div>
 
               <Link
