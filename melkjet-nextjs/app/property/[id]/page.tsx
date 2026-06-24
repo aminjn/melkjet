@@ -153,11 +153,22 @@ export default function PropertyPage() {
     const fromText = AMENITY_WORDS.filter(w => text.includes(w))
     return Array.from(new Set([...divarAmenities, ...fromText, ...aiAmenities]))
   })()
+  // مشخصاتِ نمایشی: ادغامِ متاهای کلیدیِ آگهی (طبقه، متراژ، …) با factهای غنی‌سازی.
+  const specKeys = ['متراژ', 'اتاق خواب', 'طبقه', 'تعداد طبقات', 'سال ساخت', 'جهت', 'سند', 'نوع ملک']
+  const metaSpecs = specKeys.map(k => ({ label: k, value: String(item?.meta?.[k] || '') })).filter(s => s.value)
+  const specLabels = new Set(metaSpecs.map(s => s.label))
+  const specs = [...metaSpecs, ...facts.filter(f => !specLabels.has(f.label) && f.value)]
+  // قیمت هر متر (فقط فروش) — مستقل از فرمتِ قیمت و ارقامِ فارسی.
   const perMeter = (() => {
-    const area = parseFloat((facts.find(f => f.label === 'متراژ')?.value || '').replace(/[^\d.]/g, ''))
-    const priceNum = parseFloat((item?.price || '').replace(/[^\d.]/g, ''))
-    if (area && priceNum && /میلیارد/.test(item?.price || '')) return `${toFa((priceNum * 1000 / area).toFixed(0))} میلیون / متر`
-    return ''
+    if (item?.meta?.['نوع معامله'] === 'اجاره') return ''
+    const toLatin = (s: string) => (s || '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+    const area = parseInt(toLatin(String(item?.meta?.['متراژ'] || facts.find(f => f.label === 'متراژ')?.value || '')).replace(/[^\d]/g, ''), 10)
+    const price = parseInt(toLatin(item?.price || '').replace(/[^\d]/g, ''), 10)
+    if (!area || !price) return ''
+    const pm = Math.round(price / area)
+    if (pm >= 1e9) return `${toFa((pm / 1e9).toFixed(1))} میلیارد / متر`
+    if (pm >= 1e6) return `${toFa(String(Math.round(pm / 1e6)))} میلیون / متر`
+    return `${toFa(String(pm))} تومان / متر`
   })()
 
   const getContact = async () => {
@@ -225,9 +236,15 @@ export default function PropertyPage() {
                 {item.location && <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 14, color: 'var(--muted)' }}>📍 {item.location}</div>}
               </div>
 
-              {facts.length > 0 && (
+              {specs.length > 0 && (
                 <div className="mjp-facts" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(110px,1fr))', gap: 12 }}>
-                  {facts.map(f => (
+                  {perMeter && (
+                    <div style={{ ...card, padding: '14px 10px', textAlign: 'center', borderRadius: 14, borderColor: 'var(--gold)' }}>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--gold)', wordBreak: 'break-word' }}>{perMeter}</div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>قیمت هر متر</div>
+                    </div>
+                  )}
+                  {specs.map(f => (
                     <div key={f.label} style={{ ...card, padding: '14px 10px', textAlign: 'center', borderRadius: 14 }}>
                       <div style={{ fontSize: 15.5, fontWeight: 800, wordBreak: 'break-word' }}>{f.value}</div>
                       <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{f.label}</div>

@@ -1,6 +1,7 @@
 import { fetchDivarPost, divarToken, divarProfileSlug, fetchDivarProfileTokens, type BrandPost } from './divar-post'
-import { addListing, updateListing, publishListing, unpublishListing, deleteListing, getAdvisor, updateAdvisorProfile, type Listing } from './advisor-store'
+import { addListing, updateListing, publishListing, unpublishListing, setListingStatus, deleteListing, getAdvisor, updateAdvisorProfile, type Listing } from './advisor-store'
 import { findNeighborhoodInGeo } from './geo-store'
+import { warmEnrichment } from './enrich-warm'
 import { getDivar, hasToken, recordImport, removeImport, markRun, clearImports, type AdvisorDivar } from './advisor-divar-store'
 import { scrapeDivar } from './divar'
 import type { Source } from './scraper-store'
@@ -84,7 +85,7 @@ export async function importDivarToken(o: string, input: string, hint?: BrandPos
       return importDivarToken(o, input, hint)
     }
     let published = updated.published || false
-    if (cfg.autoPublish) published = !!publishListing(o, existing.listingId)   // بازانتشار با دادهٔ تازه
+    if (cfg.autoPublish) { const pub = publishListing(o, existing.listingId); published = !!pub; if (pub?.publicId) warmEnrichment(pub.publicId) }   // بازانتشار + پیش‌گرم تحلیل
     recordImport(o, { token, listingId: existing.listingId, title: updated.title, url: `https://divar.ir/v/${token}`, at: existing.at, published })
     return { ok: true, updated: true, listing: updated, token }
   }
@@ -92,7 +93,7 @@ export async function importDivarToken(o: string, input: string, hint?: BrandPos
   // ── افزودنِ آگهیِ جدید ──
   const listing = addListing(o, payload)
   let published = false
-  if (cfg.autoPublish) published = !!publishListing(o, listing.id)
+  if (cfg.autoPublish) { const pub = publishListing(o, listing.id); published = !!pub; if (pub?.publicId) warmEnrichment(pub.publicId) }   // تحلیلِ AI در پس‌زمینه پیش‌گرم می‌شود
   recordImport(o, { token, listingId: listing.id, title: listing.title, url: `https://divar.ir/v/${token}`, at: Date.now(), published })
   return { ok: true, listing, token }
 }
@@ -101,7 +102,7 @@ function normName(s: string): string {
   return (s || '').replace(/‌/g, '').replace(/\s+/g, '').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim()
 }
 
-export interface SyncResult { ok: boolean; reason?: string; scanned: number; imported: number; updated: number; skipped: number; tokens: string[] }
+export interface SyncResult { ok: boolean; reason?: string; scanned: number; imported: number; updated: number; skipped: number; sold?: number; tokens: string[] }
 
 // چند آگهی را پشت‌سرهم وارد/به‌روزرسانی می‌کند — hint برای عنوان/تصویرِ درست.
 async function importTokens(o: string, items: BrandPost[]): Promise<{ imported: number; updated: number; skipped: number; tokens: string[] }> {
@@ -130,9 +131,30 @@ export async function importDivarProfile(o: string, url: string): Promise<SyncRe
     markRun(o, 0, msg)
     return { ok: false, reason: msg, scanned: 0, imported: 0, updated: 0, skipped: 0, tokens: [] }
   }
+  // آگهی‌هایی که قبلاً وارد شده بودند ولی دیگر در پروفایلِ دیوار نیستند = فروخته/اجاره‌رفته.
+  const liveTokens = new Set(posts.map(p => p.token))
+  const gone = getDivar(o).imports.filter(i => !liveTokens.has(i.token))
+
   const r = await importTokens(o, posts)
+  const sold = markGone(o, gone)
   markRun(o, r.imported, '')
-  return { ok: true, scanned: posts.length, ...r }
+  return { ok: true, scanned: posts.length, ...r, sold }
+}
+
+// آگهی‌هایی که از دیوار حذف شده‌اند را «فروش/اجاره رفته» علامت می‌زند و از سرچِ سایت برمی‌دارد.
+function markGone(o: string, gone: { token: string; listingId: string; title: string; url: string; at: number; published: boolean }[]): number {
+  if (!gone.length) return 0
+  const listings = getAdvisor(o).listings
+  let count = 0
+  for (const g of gone) {
+    const l = listings.find(x => x.id === g.listingId)
+    if (!l || l.status !== 'active') continue
+    setListingStatus(o, l.id, l.deal === 'rent' ? 'rented' : 'sold')
+    unpublishListing(o, l.id)   // از سرچِ سایت حذف می‌شود
+    recordImport(o, { ...g, published: false })
+    count++
+  }
+  return count
 }
 
 /** ورودیِ یکپارچه: اگر لینکِ پروفایلِ پرو باشد همهٔ آگهی‌هایش، اگر لینکِ تک‌آگهی باشد همان یکی. */
@@ -147,17 +169,17 @@ export async function importDivarFromUrl(o: string, url: string): Promise<{ ok: 
 
 /** چند ورودی را با هم پردازش می‌کند: کاربر می‌تواند چند لینکِ آگهی (هر کدام در یک خط یا
  *  جداشده با فاصله) یا یک لینکِ پروفایلِ پرو را بچسباند. همه وارد می‌شوند. */
-export async function importDivarInput(o: string, raw: string): Promise<{ ok: boolean; reason?: string; imported: number; updated: number; skipped: number; failed: number; profile: boolean }> {
+export async function importDivarInput(o: string, raw: string): Promise<{ ok: boolean; reason?: string; imported: number; updated: number; skipped: number; failed: number; sold: number; profile: boolean }> {
   const parts = Array.from(new Set(String(raw || '').split(/[\s,،]+/).map(s => s.trim()).filter(Boolean)))
-  if (!parts.length) return { ok: false, reason: 'لینکی وارد نشده', imported: 0, updated: 0, skipped: 0, failed: 0, profile: false }
+  if (!parts.length) return { ok: false, reason: 'لینکی وارد نشده', imported: 0, updated: 0, skipped: 0, failed: 0, sold: 0, profile: false }
 
-  let imported = 0, updated = 0, skipped = 0, failed = 0, profile = false
+  let imported = 0, updated = 0, skipped = 0, failed = 0, sold = 0, profile = false
   let firstErr = ''
   for (const part of parts) {
     if (divarProfileSlug(part)) {
       profile = true
       const r = await importDivarProfile(o, part)
-      if (r.ok) { imported += r.imported; updated += r.updated; skipped += r.skipped } else { failed++; firstErr = firstErr || (r.reason || '') }
+      if (r.ok) { imported += r.imported; updated += r.updated; skipped += r.skipped; sold += (r.sold || 0) } else { failed++; firstErr = firstErr || (r.reason || '') }
     } else {
       const r = await importDivarToken(o, part)
       if (r.ok && r.updated) updated++
@@ -166,7 +188,7 @@ export async function importDivarInput(o: string, raw: string): Promise<{ ok: bo
       else { failed++; firstErr = firstErr || (r.reason || '') }
     }
   }
-  return { ok: imported > 0 || updated > 0 || (failed === 0 && skipped > 0), reason: (imported || updated) ? '' : firstErr, imported, updated, skipped, failed, profile }
+  return { ok: imported > 0 || updated > 0 || sold > 0 || (failed === 0 && skipped > 0), reason: (imported || updated) ? '' : firstErr, imported, updated, skipped, failed, sold, profile }
 }
 
 /** آگهی‌های مشاور را از روی لینکِ ذخیره‌شده سینک می‌کند: لینکِ پروفایلِ پرو → همهٔ آگهی‌های او؛

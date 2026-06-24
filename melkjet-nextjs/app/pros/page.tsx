@@ -604,9 +604,16 @@ export default function ProsPage() {
                 {listings.map(l => (
                   <div key={l.id} style={{ ...card, overflow: 'hidden', display: 'flex', flexDirection: 'column', outline: selFiles.has(l.id) ? '2px solid var(--gold)' : 'none' }}>
                     <div style={{ position: 'relative', height: 150, background: 'var(--bg2)' }}>
-                      <label style={{ position: 'absolute', top: 8, left: 8, zIndex: 2, width: 26, height: 26, borderRadius: 7, background: 'rgba(20,18,14,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={e => e.stopPropagation()}>
+                      <label style={{ position: 'absolute', top: 8, left: 8, zIndex: 3, width: 26, height: 26, borderRadius: 7, background: 'rgba(20,18,14,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={e => e.stopPropagation()}>
                         <input type="checkbox" checked={selFiles.has(l.id)} onChange={() => toggleFile(l.id)} style={{ cursor: 'pointer' }} />
                       </label>
+                      {(l.status === 'sold' || l.status === 'rented') && (
+                        <div style={{ position: 'absolute', inset: 0, zIndex: 2, background: 'rgba(10,9,7,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(1px)' }}>
+                          <div style={{ transform: 'rotate(-9deg)', padding: '7px 22px', borderRadius: 10, background: l.status === 'sold' ? 'linear-gradient(135deg,#ef4444,#b91c1c)' : 'linear-gradient(135deg,#0ea5e9,#0369a1)', color: '#fff', fontWeight: 900, fontSize: 16, letterSpacing: '.5px', boxShadow: '0 6px 22px rgba(0,0,0,.5)', border: '2px solid rgba(255,255,255,.85)' }}>
+                            {l.status === 'sold' ? '✓ فروش رفت' : '✓ اجاره رفت'}
+                          </div>
+                        </div>
+                      )}
                       {l.images && l.images.length ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={l.images[0]} alt={l.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -983,6 +990,7 @@ export default function ProsPage() {
                       const parts: string[] = []
                       if (d.imported) parts.push(`${(d.imported).toLocaleString('fa-IR')} آگهی جدید وارد شد`)
                       if (d.updated) parts.push(`${(d.updated).toLocaleString('fa-IR')} آگهی به‌روزرسانی شد`)
+                      if (d.sold) parts.push(`${(d.sold).toLocaleString('fa-IR')} آگهی فروش/اجاره‌رفته شد`)
                       if (d.failed) parts.push(`${(d.failed).toLocaleString('fa-IR')} ناموفق`)
                       setDivarMsg('✓ ' + (parts.join(' · ') || 'انجام شد'))
                       await refresh()
@@ -1022,7 +1030,7 @@ export default function ProsPage() {
                     <button disabled={divarBusy} onClick={async () => { await divarPost({ action: 'setConfig', divarName: cfg.divarName, searchUrl: cfg.searchUrl, schedule: cfg.schedule, autoPublish: cfg.autoPublish, autoNeighborhood: cfg.autoNeighborhood }); setDivarMsg('✓ تنظیمات ذخیره شد.') }} style={{ ...goldBtn, opacity: divarBusy ? 0.6 : 1 }}>ذخیرهٔ تنظیمات</button>
                     <button disabled={divarBusy || !cfg.searchUrl.trim()} onClick={async () => {
                       const d = await divarPost({ action: 'sync' })
-                      if (d) { setDivarMsg(d.ok ? `✓ همگام‌سازی شد — ${(d.imported || 0).toLocaleString('fa-IR')} جدید، ${(d.updated || 0).toLocaleString('fa-IR')} به‌روزرسانی (از ${(d.scanned || 0).toLocaleString('fa-IR')} آگهی).` : (d.reason || 'همگام‌سازی ناموفق بود')); await refresh() }
+                      if (d) { setDivarMsg(d.ok ? `✓ همگام‌سازی شد — ${(d.imported || 0).toLocaleString('fa-IR')} جدید، ${(d.updated || 0).toLocaleString('fa-IR')} به‌روزرسانی${d.sold ? `، ${(d.sold).toLocaleString('fa-IR')} فروش/اجاره‌رفته` : ''} (از ${(d.scanned || 0).toLocaleString('fa-IR')} آگهی).` : (d.reason || 'همگام‌سازی ناموفق بود')); await refresh() }
                     }} style={{ ...actionBtn, padding: '9px 18px', color: 'var(--gold)', borderColor: 'var(--gold)' }}>{divarBusy ? 'در حال همگام‌سازی…' : 'همگام‌سازی الان'}</button>
                   </div>
                   <div style={{ fontSize: 11.5, color: 'var(--muted)', display: 'flex', gap: 16, flexWrap: 'wrap', paddingTop: 4, borderTop: '1px solid var(--line)' }}>
