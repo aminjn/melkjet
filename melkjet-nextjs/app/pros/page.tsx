@@ -92,7 +92,7 @@ const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'leads' | 'app
   { id: 'articles', label: 'مقالات', icon: '✎' },
   { id: 'appts', label: 'قرارها', icon: '◉', badge: 'appts' },
   { id: 'calendar', label: 'تقویم', icon: '🗓' },
-  { id: 'commissions', label: 'کمیسیون', icon: '﷼' },
+  { id: 'commissions', label: 'کمیسیون', icon: '💰' },
   { id: 'agency', label: 'آژانس من', icon: '🏢' },
   { id: 'settings', label: 'تنظیمات', icon: '⛭' },
 ]
@@ -653,11 +653,20 @@ export default function ProsPage() {
           {view === 'commissions' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ ...card, padding: 18 }}>
               {sectionTitle('ثبت کمیسیون')}
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                <div style={{ flex: '2 1 200px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>عنوان معامله</label><input value={nc.dealTitle} onChange={e => setNc({ ...nc, dealTitle: e.target.value })} placeholder="مثلاً فروش آپارتمان جردن" style={inputStyle} /></div>
-                <div style={{ flex: '1 1 150px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>مبلغ کمیسیون (تومان)</label><input value={nc.amount} onChange={e => setNc({ ...nc, amount: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
-                <button disabled={busy || !nc.dealTitle.trim()} onClick={async () => { if (await post({ action: 'addCommission', dealTitle: nc.dealTitle.trim(), amount: Number(nc.amount) || 0 })) setNc({ dealTitle: '', amount: '' }) }} style={goldBtn}>افزودن</button>
-              </div>
+              {leads.length === 0 ? (
+                <div style={{ fontSize: 13, color: 'var(--muted)', padding: '6px 0' }}>برای ثبت کمیسیون ابتدا باید یک لید/معامله در بخش «لیدها» اضافه کنید.</div>
+              ) : (
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <div style={{ flex: '2 1 220px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>معامله (از لیدها)</label>
+                    <select value={nc.dealTitle} onChange={e => setNc({ ...nc, dealTitle: e.target.value })} style={inputStyle}>
+                      <option value="">— انتخاب لید/معامله —</option>
+                      {leads.map(l => { const label = `${l.name}${l.need ? ' — ' + l.need : ''}`; return <option key={l.id} value={label}>{label}</option> })}
+                    </select>
+                  </div>
+                  <div style={{ flex: '1 1 150px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>مبلغ کمیسیون (تومان)</label><input value={nc.amount} onChange={e => setNc({ ...nc, amount: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                  <button disabled={busy || !nc.dealTitle.trim()} onClick={async () => { if (await post({ action: 'addCommission', dealTitle: nc.dealTitle.trim(), amount: Number(nc.amount) || 0 })) setNc({ dealTitle: '', amount: '' }) }} style={goldBtn}>افزودن</button>
+                </div>
+              )}
             </div>
             <div style={{ ...card, padding: 18 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>

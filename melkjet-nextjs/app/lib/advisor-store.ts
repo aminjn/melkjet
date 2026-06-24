@@ -47,48 +47,22 @@ export const STAGES: Stage[] = ['new', 'contacted', 'visit', 'negotiation', 'clo
 const LISTING_STATUSES: ListingStatus[] = ['active', 'sold', 'rented']
 const APPT_STATUSES: ApptStatus[] = ['scheduled', 'done', 'canceled']
 
+// حسابِ مشاور به‌صورت خالی شروع می‌شود — هیچ دادهٔ نمونه‌ای نیست؛ همه‌چیز واقعی و
+// همان است که مشاور خودش ثبت می‌کند.
 function seed(): AdvisorData {
-  const now = Date.now(); const day = 86400000
-  const lead = (name: string, phone: string, need: string, budget: string, stage: Stage, source: string, ageDays: number): Lead =>
-    ({ id: id('l_'), name, phone, need, budget, stage, source, createdAt: now - ageDays * day })
-  const leads: Lead[] = [
-    lead('علی محمدی', '09120000001', 'آپارتمان ۲ خوابه سعادت‌آباد', '۸ میلیارد', 'negotiation', 'سایت', 1),
-    lead('سارا احمدی', '09120000002', 'ویلا لواسان', '۲۵ میلیارد', 'visit', 'معرفی', 2),
-    lead('رضا کریمی', '09120000003', 'اجاره ونک', 'رهن ۲ میلیارد', 'contacted', 'دیوار', 3),
-    lead('مریم حسینی', '09120000004', 'آپارتمان جردن', '۱۱ میلیارد', 'new', 'سایت', 0),
-    lead('حسین رضوی', '09120000005', 'مغازه تجریش', '۶ میلیارد', 'new', 'تماس', 1),
-    lead('گروه آرتا', '09120000006', 'سرمایه‌گذاری برج', '۵۰ میلیارد', 'closed', 'معرفی', 20),
-  ]
-  const li = (title: string, ptype: string, location: string, price: number, deal: 'sale' | 'rent', status: ListingStatus, ageDays: number): Listing =>
-    ({ id: id('f_'), title, ptype, location, price, deal, status, createdAt: now - ageDays * day })
-  const listings: Listing[] = [
-    li('آپارتمان نوساز سعادت‌آباد', 'آپارتمان', 'سعادت‌آباد', 8500000000, 'sale', 'active', 10),
-    li('ویلا باغ لواسان', 'ویلا', 'لواسان', 25000000000, 'sale', 'active', 15),
-    li('آپارتمان اجاره‌ای ونک', 'آپارتمان', 'ونک', 2000000000, 'rent', 'active', 5),
-    li('مغازه تجاری تجریش', 'مغازه', 'تجریش', 6000000000, 'sale', 'sold', 40),
-  ]
-  const ap = (client: string, listingTitle: string, date: string, type: ApptType, status: ApptStatus, ageDays: number): Appt =>
-    ({ id: id('a_'), client, listingTitle, date, type, status, createdAt: now - ageDays * day })
-  const appts: Appt[] = [
-    ap('علی محمدی', 'آپارتمان نوساز سعادت‌آباد', '۱۴۰۴/۰۴/۰۲', 'visit', 'scheduled', 1),
-    ap('سارا احمدی', 'ویلا باغ لواسان', '۱۴۰۴/۰۴/۰۳', 'visit', 'scheduled', 1),
-    ap('رضا کریمی', 'آپارتمان اجاره‌ای ونک', '۱۴۰۴/۰۳/۲۹', 'meeting', 'done', 4),
-  ]
-  const cm = (dealTitle: string, amount: number, status: CommStatus, date: string, ageDays: number): Commission =>
-    ({ id: id('c_'), dealTitle, amount, status, date, createdAt: now - ageDays * day })
-  const commissions: Commission[] = [
-    cm('فروش مغازه تجریش', 120000000, 'paid', '۱۴۰۴/۰۲/۱۵', 40),
-    cm('فروش برج (گروه آرتا)', 500000000, 'pending', '۱۴۰۴/۰۳/۲۰', 10),
-  ]
-  const monthlyDeals: MonthDeals[] = [
-    { month: 'آذر', count: 2 }, { month: 'دی', count: 3 }, { month: 'بهمن', count: 2 },
-    { month: 'اسفند', count: 4 }, { month: 'فروردین', count: 3 }, { month: 'اردیبهشت', count: 5 },
-  ]
-  return { profile: { name: 'سمیرا نیک‌پور', agency: 'املاک برتر' }, leads, listings, appts, commissions, monthlyDeals, createdAt: now }
+  return { profile: { name: '', agency: '' }, leads: [], listings: [], appts: [], commissions: [], monthlyDeals: [], createdAt: Date.now() }
+}
+// آیا این دادهٔ ذخیره‌شده همان دادهٔ نمونهٔ قدیمیِ دست‌نخورده است؟ (برای پاک‌سازی خودکار)
+function isLegacyDemo(d: AdvisorData): boolean {
+  return d?.profile?.name === 'سمیرا نیک‌پور' && d?.profile?.agency === 'املاک برتر'
 }
 
 export function getAdvisor(o: string): AdvisorData {
-  const db = load(); if (!db.advisors[o]) { db.advisors[o] = seed(); save(db) } return db.advisors[o]
+  const db = load()
+  if (!db.advisors[o]) { db.advisors[o] = seed(); save(db) }
+  // پاک‌سازی خودکارِ دادهٔ نمونهٔ قدیمی (دست‌نخورده) → همه‌چیز واقعی شود
+  else if (isLegacyDemo(db.advisors[o])) { db.advisors[o] = seed(); save(db) }
+  return db.advisors[o]
 }
 function mutate(o: string, fn: (a: AdvisorData) => void) { const db = load(); if (!db.advisors[o]) db.advisors[o] = seed(); fn(db.advisors[o]); save(db); return db.advisors[o] }
 
