@@ -33,11 +33,18 @@ function parseBeds(text: string): number | null {
   return m ? parseInt(m[1], 10) : null
 }
 
+// سقفِ اسلایدرِ قیمت (میلیارد تومان). در این مقدار = «بدون سقف» (هیچ فیلتری اعمال نمی‌شود).
+const PRICE_MAX = 500
+
 function toProperty(it: ContentItem) {
   const h = seedNum(it.id)
   const enTitle = faToEn(it.title)
   const sizeMatch = enTitle.match(/(\d+)\s*متر/)
-  const priceNum = parseFloat(faToEn(it.price || '').replace(/[^\d.]/g, '')) || 0
+  // نرمال‌سازیِ قیمت به واحدِ «میلیارد تومان» تا با اسلایدرِ فیلتر هم‌مقیاس باشد
+  // (قیمت‌های واردشده از دیوار عددِ کامل‌اند مثل ۴۰۰٬۰۰۰٬۰۰۰٬۰۰۰، نه «۱۸ میلیارد»).
+  const rawPrice = parseFloat(faToEn(it.price || '').replace(/[^\d.]/g, '')) || 0
+  const ptxt = it.price || ''
+  const priceNum = /میلیارد/.test(ptxt) ? rawPrice : /میلیون/.test(ptxt) ? rawPrice / 1000 : rawPrice / 1e9
   const bedsNum = parseBeds(`${it.title} ${it.excerpt || ''}`)
   // Lowercased haystack of all text we can match search terms / amenities against.
   const searchText = [
@@ -113,8 +120,8 @@ function SearchPageInner() {
   const [searchTerm, setSearchTerm] = useState(initialQuery)
   const [dealType, setDealType] = useState<string>('خرید')
   const [beds, setBeds] = useState<string>('همه')
-  const [maxPrice, setMaxPrice] = useState(18)
-  const [checkedAmenities, setCheckedAmenities] = useState<string[]>(['آسانسور', 'پارکینگ'])
+  const [maxPrice, setMaxPrice] = useState(PRICE_MAX)   // پیش‌فرض: بدون سقف (همه نشان داده شوند)
+  const [checkedAmenities, setCheckedAmenities] = useState<string[]>([])   // هیچ فیلترِ پیش‌فرضی
   const [sortBy, setSortBy] = useState('پیشنهاد ملک‌جت')
   const [hoveredCard, setHoveredCard] = useState<string | null>(null)
   const [activePin, setActivePin] = useState<string | null>(null)
@@ -140,7 +147,7 @@ function SearchPageInner() {
   const filterCount =
     (dealType !== 'خرید' ? 1 : 0) +
     (beds !== 'همه' ? 1 : 0) +
-    (maxPrice !== 50 ? 1 : 0) +
+    (maxPrice < PRICE_MAX ? 1 : 0) +
     checkedAmenities.length
 
   // ─── Apply search + filters, then sort ───────────────────────
@@ -163,9 +170,8 @@ function SearchPageInner() {
       }
       // Bedrooms.
       if (beds !== 'همه' && !bedsButtonMatches(beds, p.bedsNum)) return false
-      // Max price (in billion-toman units, same scale as the slider). Items with
-      // an unparseable price (priceNum === 0) are kept.
-      if (p.priceNum > 0 && p.priceNum > maxPrice) return false
+      // حداکثر قیمت (میلیارد تومان) — فقط وقتی کاربر سقف گذاشته باشد (کمتر از PRICE_MAX).
+      if (maxPrice < PRICE_MAX && p.priceNum > 0 && p.priceNum > maxPrice) return false
       // Amenities: every checked amenity must appear in the item's text.
       for (const a of checkedAmenities) {
         if (!p.searchText.includes(a.toLowerCase())) {
@@ -367,16 +373,16 @@ function SearchPageInner() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontSize: 13, color: 'var(--muted)', whiteSpace: 'nowrap', fontWeight: 600 }}>حداکثر قیمت:</span>
                 <input
-                  type="range" min={2} max={50} step={1}
+                  type="range" min={1} max={PRICE_MAX} step={1}
                   value={maxPrice}
                   onChange={e => setMaxPrice(+e.target.value)}
                   style={{ width: 140, accentColor: 'var(--gold)', cursor: 'pointer' }}
                 />
                 <span style={{
-                  minWidth: 52, padding: '5px 10px', borderRadius: 8,
+                  minWidth: 64, padding: '5px 10px', borderRadius: 8,
                   background: 'var(--bg)', border: '1px solid var(--line2)',
                   color: 'var(--gold)', fontWeight: 700, fontSize: 13, textAlign: 'center',
-                }}>{maxPrice} م</span>
+                }}>{maxPrice >= PRICE_MAX ? 'بدون سقف' : `${maxPrice} میلیارد`}</span>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
