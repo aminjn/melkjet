@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
+import JalaliDatePicker from '@/app/components/JalaliDatePicker'
 
 // ════════════════════════════════════════════════════════
 //  Types (mirror app/lib/owner-store.ts API shape)
@@ -648,7 +649,7 @@ function ViewingsView({ viewings, properties, titleOf, post, busy, search }: {
             </select>
             <input placeholder="بازدیدکننده" value={form.visitor} onChange={e => setForm({ ...form, visitor: e.target.value })} style={inputStyle} />
             <input placeholder="تلفن" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} style={inputStyle} />
-            <input placeholder="تاریخ (مثلاً ۱۴۰۳/۰۴/۱۲)" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} style={inputStyle} />
+            <JalaliDatePicker value={form.date} onChange={d => setForm({ ...form, date: d })} placeholder="انتخاب تاریخ بازدید" />
             <button onClick={addViewing} disabled={busy} style={{
               padding: '9px 18px', borderRadius: 9, background: 'var(--gold)', border: 'none', color: '#16140f',
               fontWeight: 700, fontSize: 13, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1, fontFamily: FONT, whiteSpace: 'nowrap',

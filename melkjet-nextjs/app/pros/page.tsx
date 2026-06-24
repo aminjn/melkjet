@@ -7,6 +7,7 @@ import WorkflowTool, { WORKFLOW_VIEWS, type WorkflowView } from '@/app/component
 import WebsiteBuilderTool, { WEBSITE_VIEWS, type WebsiteView } from '@/app/components/tools/WebsiteBuilderTool'
 import ArticleEditor from '@/app/components/ArticleEditor'
 import LocationPicker from '@/app/components/LocationPicker'
+import JalaliDatePicker from '@/app/components/JalaliDatePicker'
 
 // درختِ جغرافیاییِ سایت (استان → شهر → منطقه → محله)
 interface GeoDistrict { id: string; name: string; neighborhoods: string[] }
@@ -582,7 +583,7 @@ export default function ProsPage() {
                 <div style={{ flex: '1 1 140px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>مشتری</label><input value={na.client} onChange={e => setNa({ ...na, client: e.target.value })} style={inputStyle} /></div>
                 <div style={{ flex: '2 1 180px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>ملک</label><input value={na.listingTitle} onChange={e => setNa({ ...na, listingTitle: e.target.value })} style={inputStyle} /></div>
                 <div style={{ flex: '0 1 110px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع</label><select value={na.type} onChange={e => setNa({ ...na, type: e.target.value })} style={inputStyle}><option value="visit">بازدید</option><option value="meeting">جلسه</option><option value="call">تماس</option></select></div>
-                <div style={{ flex: '1 1 120px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>تاریخ</label><input value={na.date} onChange={e => setNa({ ...na, date: e.target.value })} placeholder="۱۴۰۴/۰۴/۰۵" style={inputStyle} /></div>
+                <div style={{ flex: '1 1 150px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>تاریخ و ساعت</label><JalaliDatePicker value={na.date} onChange={d => setNa({ ...na, date: d })} withTime /></div>
                 <button disabled={busy || !na.client.trim() || !na.date.trim()} onClick={async () => { if (await post({ action: 'addAppt', client: na.client.trim(), listingTitle: na.listingTitle, date: na.date.trim(), type: na.type })) setNa({ client: '', listingTitle: '', date: '', type: 'visit' }) }} style={goldBtn}>افزودن</button>
               </div>
             </div>

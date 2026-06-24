@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
+import JalaliDatePicker from '@/app/components/JalaliDatePicker'
 
 // ════════════════════════════════════════════════════════
 //  Types (mirror app/lib/buyer-store.ts API shape)
@@ -685,7 +686,7 @@ export default function BuyerPage() {
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <div style={{ flex: '2 1 200px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>عنوان ملک</label><input value={newViewing.propertyTitle} onChange={e => setNewViewing({ ...newViewing, propertyTitle: e.target.value })} style={inputStyle} /></div>
                 <div style={{ flex: '1 1 140px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>مشاور/آژانس</label><input value={newViewing.advisor} onChange={e => setNewViewing({ ...newViewing, advisor: e.target.value })} style={inputStyle} /></div>
-                <div style={{ flex: '1 1 120px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>تاریخ</label><input value={newViewing.date} onChange={e => setNewViewing({ ...newViewing, date: e.target.value })} placeholder="۱۴۰۴/۰۴/۰۵" style={inputStyle} /></div>
+                <div style={{ flex: '1 1 150px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>تاریخ</label><JalaliDatePicker value={newViewing.date} onChange={d => setNewViewing({ ...newViewing, date: d })} /></div>
                 <button disabled={busy || !newViewing.propertyTitle.trim() || !newViewing.date.trim()} onClick={async () => { if (await post({ action: 'addViewing', propertyTitle: newViewing.propertyTitle.trim(), advisor: newViewing.advisor, date: newViewing.date.trim() })) setNewViewing({ propertyTitle: '', advisor: '', date: '' }) }} style={{ padding: '9px 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }}>رزرو</button>
               </div>
             </div>
