@@ -51,20 +51,7 @@ const stageColumns: { id: Stage; label: string; color: string }[] = [
 
 const navItems = CRM_VIEWS
 
-const salesData = [
-  { month: 'بهمن', value: 45, deals: 4 },
-  { month: 'اسفند', value: 62, deals: 5 },
-  { month: 'فروردین', value: 38, deals: 3 },
-  { month: 'اردیبهشت', value: 71, deals: 6 },
-  { month: 'خرداد', value: 85, deals: 7 },
-  { month: 'تیر', value: 58, deals: 5 },
-]
-
-const insights = [
-  { icon: '✦', text: 'لید «رضا موسوی» ۳ روز است بدون پاسخ. پیگیری کنید.' },
-  { icon: '◈', text: 'قیمت سعادت‌آباد ۴٪ این هفته رشد کرده. به لیدها اطلاع دهید.' },
-  { icon: '◰', text: '۲ ملک با بودجه لید «شیوا حیدری» منطبق است.' },
-]
+const J_MON = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند']
 
 const viewTitles: Record<CrmView, string> = {
   dashboard: 'داشبورد',
@@ -433,14 +420,6 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
     lastContact: (() => { try { return new Date(l.updatedAt).toLocaleDateString('fa-IR') } catch { return '—' } })(),
   }))
 
-  // Real growth sentence when available, else the original copy.
-  const insightsLive = insights.map(ins =>
-    ins.text.startsWith('قیمت سعادت‌آباد') && growth !== null
-      ? { ...ins, text: `قیمت سعادت‌آباد ${growth >= 0 ? '+' : ''}${growth}٪ تغییر کرده (بر اساس داده‌های واقعی). به لیدها اطلاع دهید.` }
-      : ins
-  )
-
-  const maxSales = Math.max(...salesData.map(d => d.value))
 
   // ───── Live, derived task collections (single source of truth) ─────
   const now = Date.now()
@@ -454,6 +433,25 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
   const todaysTasks = sortedTasks.filter(t => isToday(t))
   // per-stage lead breakdown for the dashboard
   const stageBreakdown = stageColumns.map(c => ({ ...c, count: leads.filter(l => l.stage === c.id).length }))
+
+  // ───── دادهٔ واقعیِ داشبورد (نه فیک): روند ۶ ماهِ لیدها + بینش‌های مبتنی بر دادهٔ واقعی ─────
+  const curJ = jParts(new Date())
+  const last6: { jy: number; jm: number }[] = []
+  for (let i = 5; i >= 0; i--) { let m = curJ.jm - i, y = curJ.jy; while (m <= 0) { m += 12; y-- } last6.push({ jy: y, jm: m }) }
+  const realSales = last6.map(p => {
+    const inM = leads.filter(l => { const lp = jParts(new Date(l.createdAt)); return lp.jy === p.jy && lp.jm === p.jm })
+    return { month: J_MON[p.jm - 1], value: inM.length, deals: inM.filter(l => l.stage === 'contract').length }
+  })
+  const maxSales = Math.max(1, ...realSales.map(d => d.value))
+  const hasSales = realSales.some(d => d.value > 0)
+
+  const realInsights: { icon: string; text: string }[] = []
+  const staleNew = leads.filter(l => l.stage === 'new' && (now - l.createdAt) > 3 * 86400000)
+  if (staleNew.length) realInsights.push({ icon: '✦', text: `${FA(staleNew.length)} لیدِ جدید بیش از ۳ روز بدون پیگیری مانده — تماس بگیرید.` })
+  if (overdueCount) realInsights.push({ icon: '◰', text: `${FA(overdueCount)} وظیفهٔ معوق دارید؛ هرچه زودتر رسیدگی کنید.` })
+  const contractCount = leads.filter(l => l.stage === 'contract').length
+  if (contractCount) realInsights.push({ icon: '✓', text: `${FA(contractCount)} لید به مرحلهٔ قرارداد رسیده است. آفرین!` })
+  if (growth !== null) realInsights.push({ icon: '◈', text: `رشد قیمتِ منطقه: ${growth >= 0 ? '+' : ''}${FA(growth)}٪ (دادهٔ واقعی). به لیدها اطلاع دهید.` })
 
   // Filtered + sorted list for the Tasks view
   const filteredTasks = sortedTasks.filter(t => {
@@ -544,13 +542,16 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
               padding: 24,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-                <h3 style={{ fontSize: 15, fontWeight: 700 }}>عملکرد فروش</h3>
+                <h3 style={{ fontSize: 15, fontWeight: 700 }}>روند لیدها</h3>
                 <span style={{ fontSize: 12, color: 'var(--muted)' }}>۶ ماه گذشته</span>
               </div>
+              {!hasSales ? (
+                <div style={{ height: 168, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--faint)', fontSize: 13, textAlign: 'center', lineHeight: 1.9 }}>هنوز لیدی ثبت نشده — با افزودنِ لید، روندِ ماهانه اینجا نمایش داده می‌شود.</div>
+              ) : (
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, height: 168, paddingTop: 32 }}>
-                {salesData.map((d, i) => {
+                {realSales.map((d, i) => {
                   const pct = (d.value / maxSales) * 100
-                  const isLast = i === salesData.length - 1
+                  const isLast = i === realSales.length - 1
                   return (
                     <div key={i} style={{
                       flex: 1,
@@ -561,7 +562,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
                       <span style={{
                         fontSize: 11, color: 'var(--gold)',
                         fontWeight: 700, opacity: isLast ? 1 : 0.65,
-                      }}>{d.deals}</span>
+                      }}>{FA(d.deals)}</span>
                       <div style={{
                         width: '100%',
                         height: `${pct}%`,
@@ -580,7 +581,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
                             fontSize: 10, fontWeight: 700,
                             padding: '2px 6px', borderRadius: 4,
                             whiteSpace: 'nowrap',
-                          }}>{d.value} م.ت</div>
+                          }}>{FA(d.value)} لید</div>
                         )}
                       </div>
                       <span style={{ fontSize: 11, color: 'var(--muted)' }}>{d.month}</span>
@@ -588,6 +589,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
                   )
                 })}
               </div>
+              )}
             </div>
 
             {/* AI Insights */}
@@ -602,7 +604,10 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
                 <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--gold)' }}>بینش‌های هوش مصنوعی</h3>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {insightsLive.map((ins, i) => (
+                {realInsights.length === 0 && (
+                  <div style={{ fontSize: 12, color: 'var(--faint)', lineHeight: 1.9, padding: '6px 2px' }}>فعلاً بینشی نیست. با افزودنِ لید و وظیفه، تحلیل‌های واقعی اینجا نمایش داده می‌شود.</div>
+                )}
+                {realInsights.map((ins, i) => (
                   <div key={i} style={{
                     padding: '12px 14px',
                     borderRadius: 10,

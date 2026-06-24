@@ -18,59 +18,43 @@ export const MARKETING_VIEWS: { id: MarketingView; label: string; icon: string }
 ]
 
 const kpis = [
-  { l: 'ایمیل ارسالی', v: '۴۸٬۲۰۰', t: '↗ ۲۲٪ نسبت به ماه قبل', tc: '#5fd98a', ic: '✉', bg: 'rgba(95,217,138,0.12)', c: '#5fd98a' },
-  { l: 'نرخ بازشدن', v: '۳۲٫۴٪', t: '↗ ۴٪ بهتر شد', tc: 'var(--gold)', ic: '◎', bg: 'var(--goldDim)', c: 'var(--gold)' },
-  { l: 'نرخ کلیک', v: '۸٫۷٪', t: '+۱٫۲٪ بهتر شد', tc: '#5b9bd5', ic: '◈', bg: 'rgba(91,155,213,0.12)', c: '#5b9bd5' },
-  { l: 'تبدیل‌ها', v: '۳۸۴', t: '↗ ۱۵٪ رشد', tc: '#5fd98a', ic: '◴', bg: 'rgba(95,217,138,0.12)', c: '#5fd98a' },
+  { l: 'ایمیل ارسالی', v: '۰', t: 'هنوز کمپینی ارسال نشده', tc: 'var(--muted)', ic: '✉', bg: 'rgba(95,217,138,0.12)', c: '#5fd98a' },
+  { l: 'نرخ بازشدن', v: '—', t: 'پس از ارسالِ کمپین', tc: 'var(--muted)', ic: '◎', bg: 'var(--goldDim)', c: 'var(--gold)' },
+  { l: 'نرخ کلیک', v: '—', t: 'پس از ارسالِ کمپین', tc: 'var(--muted)', ic: '◈', bg: 'rgba(91,155,213,0.12)', c: '#5b9bd5' },
+  { l: 'تبدیل‌ها', v: '۰', t: 'هنوز تبدیلی ثبت نشده', tc: 'var(--muted)', ic: '◴', bg: 'rgba(95,217,138,0.12)', c: '#5fd98a' },
 ]
 
-const weeklyOpen = [42, 58, 51, 67, 74, 62, 80, 88]
-const weeklyClick = [18, 24, 20, 30, 28, 25, 35, 40]
+const weeklyOpen: number[] = []
+const weeklyClick: number[] = []
 const weekDays = ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج', 'ش']
 
-const recentActivities = [
-  { text: "کمپین ایمیل 'بهترین آپارتمان‌های تهران' راه‌اندازی شد", time: '۲ ساعت پیش', ic: '✉', c: '#5fd98a' },
-  { text: '۱۲۰ کلیک جدید از کمپین پیامکی ثبت شد', time: '۵ ساعت پیش', ic: '✆', c: 'var(--gold)' },
-  { text: 'کمپین اینستاگرام ویلاهای لوکس شمال منتشر شد', time: 'دیروز', ic: '◈', c: '#5b9bd5' },
-  { text: 'گزارش هفتگی بازاریابی آماده است', time: 'دیروز', ic: '◎', c: '#9b7ad0' },
-  { text: 'لیست مخاطبان جدید با ۲٬۴۰۰ کاربر بارگذاری شد', time: '۲ روز پیش', ic: '◍', c: '#5fd98a' },
-]
+const recentActivities: { text: string; time: string; ic: string; c: string }[] = []
 
-const emailCampaigns = [
-  { name: 'بهترین آپارتمان‌های تهران', status: 'فعال', statusColor: '#5fd98a', recipients: '۱۲٬۵۰۰', openRate: '۳۴٪', clickRate: '۹٪', date: '۱۴۰۳/۰۳/۱۵' },
-  { name: 'فرصت‌های سرمایه‌گذاری', status: 'در حال ارسال', statusColor: 'var(--gold)', recipients: '۸٬۲۰۰', openRate: '۲۸٪', clickRate: '۷٪', date: '۱۴۰۳/۰۳/۱۸' },
-  { name: 'ویلاهای لوکس شمال', status: 'پیش‌نویس', statusColor: 'var(--muted)', recipients: '۵٬۰۰۰', openRate: '--', clickRate: '--', date: '۱۴۰۳/۰۳/۲۰' },
-  { name: 'آپارتمان‌های اجاره‌ای', status: 'تکمیل شد', statusColor: '#5b9bd5', recipients: '۱۵٬۳۰۰', openRate: '۳۱٪', clickRate: '۸٪', date: '۱۴۰۳/۰۳/۱۰' },
-  { name: 'خانه‌های نوساز', status: 'متوقف', statusColor: '#e05a5a', recipients: '۳٬۸۰۰', openRate: '۲۲٪', clickRate: '۵٪', date: '۱۴۰۳/۰۳/۰۵' },
-]
+const emailCampaigns: { name: string; status: string; statusColor: string; recipients: string; openRate: string; clickRate: string; date: string }[] = []
 
-const smsCampaigns = [
-  { name: 'اطلاع‌رسانی ملک جدید', status: 'ارسال شد', statusColor: '#5fd98a', recipients: '۸٬۴۰۰', delivered: 94, date: '۱۴۰۳/۰۳/۱۵' },
-  { name: 'پیشنهاد ویژه خرید', status: 'در صف', statusColor: 'var(--gold)', recipients: '۵٬۲۰۰', delivered: 0, date: '۱۴۰۳/۰۳/۲۲' },
-  { name: 'یادآوری جلسه مشاوره', status: 'ارسال شد', statusColor: '#5fd98a', recipients: '۱٬۱۵۰', delivered: 97, date: '۱۴۰۳/۰۳/۱۲' },
-]
+const smsCampaigns: { name: string; status: string; statusColor: string; recipients: string; delivered: number; date: string }[] = []
 
 const socialPlatforms = [
-  { name: 'اینستاگرام', ic: '◉', followers: '۱۲٬۴۰۰', engagement: 4.8, engStr: '۴٫۸٪', posts: '۴۸', color: '#e056a0' },
-  { name: 'لینکدین', ic: '◈', followers: '۳٬۸۰۰', engagement: 6.2, engStr: '۶٫۲٪', posts: '۲۲', color: '#5b9bd5' },
-  { name: 'توییتر', ic: '◆', followers: '۶٬۲۰۰', engagement: 3.1, engStr: '۳٫۱٪', posts: '۳۵', color: '#62aee8' },
+  { name: 'اینستاگرام', ic: '◉', followers: '۰', engagement: 0, engStr: '—', posts: '۰', color: '#e056a0' },
+  { name: 'لینکدین', ic: '◈', followers: '۰', engagement: 0, engStr: '—', posts: '۰', color: '#5b9bd5' },
+  { name: 'توییتر', ic: '◆', followers: '۰', engagement: 0, engStr: '—', posts: '۰', color: '#62aee8' },
 ]
 
 const scheduledDays = new Set([3, 7, 10, 14, 17, 21, 24, 28])
 const calDays = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه']
 
 const funnelSteps = [
-  { label: 'بازدید', value: 12400, pct: 100 },
-  { label: 'لید', value: 3200, pct: 25.8 },
-  { label: 'تماس', value: 840, pct: 6.8 },
-  { label: 'معامله', value: 192, pct: 1.55 },
+  { label: 'بازدید', value: 0, pct: 0 },
+  { label: 'لید', value: 0, pct: 0 },
+  { label: 'تماس', value: 0, pct: 0 },
+  { label: 'معامله', value: 0, pct: 0 },
 ]
 
 const roiCards = [
-  { label: 'بازگشت سرمایه بازاریابی', value: '۳۲۰٪', sub: 'به ازای هر ۱ تومان هزینه' },
-  { label: 'هزینه جذب لید', value: '۴۵٬۰۰۰ ت', sub: 'میانگین هزینه هر لید' },
-  { label: 'ارزش طول عمر مشتری', value: '۸٫۴ م.د', sub: 'میانگین ارزش هر مشتری' },
-  { label: 'نرخ تبدیل کلی', value: '۱٫۵۵٪', sub: 'از بازدید تا معامله' },
+  { label: 'بازگشت سرمایه بازاریابی', value: '—', sub: 'پس از ثبتِ هزینه و درآمد' },
+  { label: 'هزینه جذب لید', value: '—', sub: 'میانگین هزینه هر لید' },
+  { label: 'ارزش طول عمر مشتری', value: '—', sub: 'میانگین ارزش هر مشتری' },
+  { label: 'نرخ تبدیل کلی', value: '—', sub: 'از بازدید تا معامله' },
 ]
 
 const viewTitles: Record<MarketingView, string> = {
@@ -314,6 +298,9 @@ export default function MarketingTool({ embedded = false, view: viewProp, onView
                     </div>
                   </div>
                 </div>
+                {weeklyOpen.length === 0 ? (
+                  <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--faint)', fontSize: 13, textAlign: 'center', lineHeight: 1.9 }}>هنوز کمپینی ارسال نشده — پس از ارسال، نمودارِ عملکرد اینجا نمایش داده می‌شود.</div>
+                ) : (
                 <svg
                   viewBox={`0 0 ${svgW} ${svgH}`}
                   style={{ width: '100%', height: 180 }}
@@ -376,6 +363,7 @@ export default function MarketingTool({ embedded = false, view: viewProp, onView
                     )
                   })}
                 </svg>
+                )}
               </div>
 
               {/* Recent Activity */}
@@ -399,6 +387,9 @@ export default function MarketingTool({ embedded = false, view: viewProp, onView
                   آخرین فعالیت‌ها
                 </div>
                 <div style={{ padding: '4px 0' }}>
+                  {recentActivities.length === 0 && (
+                    <div style={{ padding: '22px 16px', textAlign: 'center', fontSize: 12.5, color: 'var(--faint)', lineHeight: 1.9 }}>هنوز فعالیتی ثبت نشده. پس از ارسالِ اولین کمپین، اینجا نمایش داده می‌شود.</div>
+                  )}
                   {recentActivities.map((a, i) => (
                     <div
                       key={i}
