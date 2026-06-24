@@ -3,7 +3,9 @@ import { useState } from 'react'
 import Link from 'next/link'
 import PanelReturnBar from '@/app/components/PanelReturnBar'
 
-export type MarketingView = 'overview' | 'email' | 'sms' | 'social' | 'reports'
+import ArticleEditor from '@/app/components/ArticleEditor'
+
+export type MarketingView = 'overview' | 'email' | 'sms' | 'social' | 'articles' | 'reports'
 
 // Sidebar nav entries (one per view). Persian labels/icons match the standalone /marketing sidebar.
 export const MARKETING_VIEWS: { id: MarketingView; label: string; icon: string }[] = [
@@ -11,6 +13,7 @@ export const MARKETING_VIEWS: { id: MarketingView; label: string; icon: string }
   { id: 'email', icon: '✉', label: 'کمپین ایمیل' },
   { id: 'sms', icon: '✆', label: 'پیامک' },
   { id: 'social', icon: '◈', label: 'شبکه اجتماعی' },
+  { id: 'articles', icon: '✎', label: 'مقالات' },
   { id: 'reports', icon: '◎', label: 'گزارش‌ها' },
 ]
 
@@ -75,6 +78,7 @@ const viewTitles: Record<MarketingView, string> = {
   email: 'کمپین‌های ایمیل',
   sms: 'کمپین‌های پیامکی',
   social: 'شبکه‌های اجتماعی',
+  articles: 'مقالات و وبلاگ',
   reports: 'گزارش‌های بازاریابی',
 }
 
@@ -216,6 +220,9 @@ export default function MarketingTool({ embedded = false, view: viewProp, onView
   // The per-view content blocks — shared by both standalone (<main>) and embedded modes.
   const content = (
     <>
+
+          {/* ── ARTICLES (مقالات) ── */}
+          {activeView === 'articles' && <ArticleEditor compact />}
 
           {/* ── OVERVIEW ── */}
           {activeView === 'overview' && (

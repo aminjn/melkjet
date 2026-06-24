@@ -105,7 +105,6 @@ const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'leads' | 'app
   { id: 'listings', label: 'فایل‌های من', icon: '◫' },
   { id: 'divar', label: 'ایمپورت از دیوار', icon: '📥' },
   { id: 'negotiation', label: 'موتور مذاکره', icon: '🤝' },
-  { id: 'articles', label: 'مقالات', icon: '✎' },
   { id: 'appts', label: 'قرارها', icon: '◉', badge: 'appts' },
   { id: 'calendar', label: 'تقویم', icon: '🗓' },
   { id: 'commissions', label: 'کمیسیون', icon: '💰' },
@@ -480,6 +479,7 @@ export default function ProsPage() {
               onBulkDelete={async ids => { for (const id of ids) await post({ action: 'deleteListing', id }) }}
               onBulkStatus={async (ids, status) => { for (const id of ids) await post({ action: 'setListingStatus', id, status }) }}
             />
+            : mktView === 'articles' ? <ArticleEditor compact author={stats.profile.name || undefined} />
             : mktView ? <MarketingTool embedded view={mktView} onView={v => setMktView(v)} />
             : wfView ? <div style={{ height: 'calc(100vh - 130px)' }}><WorkflowTool embedded view={wfView} onView={v => setWfView(v)} /></div>
             : wbView ? <div style={{ height: 'calc(100vh - 130px)' }}><WebsiteBuilderTool embedded view={wbView} onView={v => setWbView(v)} /></div>

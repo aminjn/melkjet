@@ -74,7 +74,6 @@ const VIEW_TITLES: Record<View, string> = {
 const NAV_ITEMS: { id: View; label: string; icon: string }[] = [
   { id: 'overview', label: 'نمای کلی', icon: '▦' },
   { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
-  { id: 'articles', label: 'مقالات', icon: '✎' },
   { id: 'units', label: 'موجودی واحدها', icon: '▤' },
   { id: 'sales', label: 'پیش‌فروش و فروش', icon: '◔' },
   { id: 'investors', label: 'سرمایه‌گذاران', icon: '◍' },
@@ -436,6 +435,7 @@ export default function BuilderPage() {
         {/* Content */}
         <main style={{ flex: 1, padding: 24, overflow: 'auto' }}>
           {crmView ? <CrmTool embedded view={crmView} onView={v => setCrmView(v)} />
+            : mktView === 'articles' ? <ArticleEditor compact author={myName || undefined} />
             : mktView ? <MarketingTool embedded view={mktView} onView={v => setMktView(v)} />
             : wfView ? <div style={{ height: 'calc(100vh - 130px)' }}><WorkflowTool embedded view={wfView} onView={v => setWfView(v)} /></div>
             : wbView ? <div style={{ height: 'calc(100vh - 130px)' }}><WebsiteBuilderTool embedded view={wbView} onView={v => setWbView(v)} /></div>

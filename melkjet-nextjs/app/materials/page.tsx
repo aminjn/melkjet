@@ -86,7 +86,6 @@ const VIEW_TITLES: Record<View, string> = {
 const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'orders' | 'inquiries' }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: '▦' },
   { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
-  { id: 'articles', label: 'مقالات', icon: '✎' },
   { id: 'catalog', label: 'کاتالوگ', icon: '◫' },
   { id: 'orders', label: 'سفارش‌ها', icon: '◈', badge: 'orders' },
   { id: 'inquiries', label: 'استعلام‌ها', icon: '◎', badge: 'inquiries' },
@@ -403,6 +402,7 @@ export default function MaterialsPage() {
         {/* Content */}
         <main style={{ flex: 1, padding: 24, overflow: 'auto' }}>
           {crmView ? <CrmTool embedded view={crmView} onView={v => setCrmView(v)} />
+            : mktView === 'articles' ? <ArticleEditor compact author={myName || undefined} />
             : mktView ? <MarketingTool embedded view={mktView} onView={v => setMktView(v)} />
             : wfView ? <div style={{ height: 'calc(100vh - 130px)' }}><WorkflowTool embedded view={wfView} onView={v => setWfView(v)} /></div>
             : wbView ? <div style={{ height: 'calc(100vh - 130px)' }}><WebsiteBuilderTool embedded view={wbView} onView={v => setWbView(v)} /></div>

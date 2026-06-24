@@ -68,7 +68,6 @@ const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'agents' | 'le
   { id: 'messages', label: 'پیام‌ها', icon: '💬' },
   { id: 'negotiation', label: 'موتور مذاکره', icon: '🤝' },
   { id: 'divar', label: 'ایمپورت از دیوار', icon: '📥' },
-  { id: 'articles', label: 'مقالات', icon: '✎' },
   { id: 'agents', label: 'مشاوران', icon: '☷', badge: 'agents' },
   { id: 'listings', label: 'فایل‌ها', icon: '◫' },
   { id: 'leads', label: 'لیدها', icon: '◎', badge: 'leads' },
@@ -306,6 +305,7 @@ export default function AgencyPage() {
 
         <main style={{ padding: 22, flex: 1, overflowY: 'auto' }}>
           {crmView ? <CrmTool embedded view={crmView} onView={v => setCrmView(v)} />
+            : mktView === 'articles' ? <ArticleEditor compact author={myName || undefined} />
             : mktView ? <MarketingTool embedded view={mktView} onView={v => setMktView(v)} />
             : wfView ? <div style={{ height: 'calc(100vh - 130px)' }}><WorkflowTool embedded view={wfView} onView={v => setWfView(v)} /></div>
             : wbView ? <div style={{ height: 'calc(100vh - 130px)' }}><WebsiteBuilderTool embedded view={wbView} onView={v => setWbView(v)} /></div>
