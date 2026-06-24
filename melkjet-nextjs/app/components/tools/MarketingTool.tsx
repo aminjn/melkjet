@@ -1,15 +1,17 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import PanelReturnBar from '@/app/components/PanelReturnBar'
 
 import ArticleEditor from '@/app/components/ArticleEditor'
+import ContactsBook from '@/app/components/ContactsBook'
 
-export type MarketingView = 'overview' | 'email' | 'sms' | 'social' | 'articles' | 'reports'
+export type MarketingView = 'overview' | 'contacts' | 'email' | 'sms' | 'social' | 'articles' | 'reports'
 
 // Sidebar nav entries (one per view). Persian labels/icons match the standalone /marketing sidebar.
 export const MARKETING_VIEWS: { id: MarketingView; label: string; icon: string }[] = [
   { id: 'overview', icon: '◍', label: 'داشبورد' },
+  { id: 'contacts', icon: '📒', label: 'دفترچه مخاطبین' },
   { id: 'email', icon: '✉', label: 'کمپین ایمیل' },
   { id: 'sms', icon: '✆', label: 'پیامک' },
   { id: 'social', icon: '◈', label: 'شبکه اجتماعی' },
@@ -59,6 +61,7 @@ const roiCards = [
 
 const viewTitles: Record<MarketingView, string> = {
   overview: 'داشبورد بازاریابی',
+  contacts: 'دفترچهٔ مخاطبین',
   email: 'کمپین‌های ایمیل',
   sms: 'کمپین‌های پیامکی',
   social: 'شبکه‌های اجتماعی',
@@ -125,6 +128,21 @@ export default function MarketingTool({ embedded = false, view: viewProp, onView
   const [smsSending, setSmsSending] = useState(false)
   const [smsResult, setSmsResult] = useState('')
   const [composing, setComposing] = useState('')
+  // گروه‌های دفترچهٔ مخاطبین — برای انتخابِ گیرندگانِ کمپین از دراپ‌داون
+  const [cbGroups, setCbGroups] = useState<string[]>([])
+  useEffect(() => { fetch('/api/contacts').then(r => r.ok ? r.json() : null).then(d => { if (d?.groups) setCbGroups(d.groups) }).catch(() => {}) }, [])
+  const fillFromContacts = async (channel: 'email' | 'sms', group: string) => {
+    if (!group) return
+    try {
+      const r = await fetch(`/api/contacts?recipients=${channel}&group=${encodeURIComponent(group)}`)
+      const d = await r.json(); const got: string[] = d.recipients || []
+      if (!got.length) { (channel === 'email' ? setEmailResult : setSmsResult)('⚠ در این گروه گیرنده‌ای برای این کانال نیست'); return }
+      const sep = channel === 'email' ? ', ' : '\n'
+      if (channel === 'email') setEmailTo(prev => (prev.trim() ? prev.replace(/[,\s]+$/, '') + sep : '') + got.join(sep))
+      else setSmsNumbers(prev => (prev.trim() ? prev.replace(/[,\s]+$/, '') + sep : '') + got.join(sep))
+    } catch {}
+  }
+  const cbSelectStyle: React.CSSProperties = { padding: '9px 11px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--gold)', color: 'var(--gold)', fontSize: 12.5, fontFamily: 'inherit', cursor: 'pointer', maxWidth: 240 }
 
   // نوشتن متن کمپین با هوش مصنوعی
   const composeAi = async (kind: 'sms' | 'email') => {
@@ -207,6 +225,9 @@ export default function MarketingTool({ embedded = false, view: viewProp, onView
 
           {/* ── ARTICLES (مقالات) ── */}
           {activeView === 'articles' && <ArticleEditor compact />}
+
+          {/* ── CONTACTS (دفترچه مخاطبین) ── */}
+          {activeView === 'contacts' && <ContactsBook />}
 
           {/* ── OVERVIEW ── */}
           {activeView === 'overview' && (
@@ -573,6 +594,11 @@ export default function MarketingTool({ embedded = false, view: viewProp, onView
                     >
                       گیرندگان (ایمیل‌ها با کاما/فاصله جدا شوند)
                     </label>
+                    <select defaultValue="" onChange={e => { if (e.target.value) { fillFromContacts('email', e.target.value); e.target.value = '' } }} style={{ ...cbSelectStyle, marginBottom: 8, width: '100%', maxWidth: '100%' }}>
+                      <option value="">📒 افزودن از دفترچهٔ مخاطبین…</option>
+                      <option value="__all">همهٔ مخاطبینِ ایمیلی</option>
+                      {cbGroups.map(g => <option key={g} value={g}>گروه: {g}</option>)}
+                    </select>
                     <input
                       value={emailTo}
                       onChange={(e) => setEmailTo(e.target.value)}
@@ -775,6 +801,11 @@ export default function MarketingTool({ embedded = false, view: viewProp, onView
                     >
                       شماره‌های هدف
                     </label>
+                    <select defaultValue="" onChange={e => { if (e.target.value) { fillFromContacts('sms', e.target.value); e.target.value = '' } }} style={{ ...cbSelectStyle, marginBottom: 8, width: '100%', maxWidth: '100%' }}>
+                      <option value="">📒 افزودن از دفترچهٔ مخاطبین…</option>
+                      <option value="__all">همهٔ مخاطبینِ پیامکی</option>
+                      {cbGroups.map(g => <option key={g} value={g}>گروه: {g}</option>)}
+                    </select>
                     <textarea
                       value={smsNumbers}
                       onChange={(e) => setSmsNumbers(e.target.value)}
