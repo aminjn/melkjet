@@ -104,6 +104,16 @@ export function setLeadStage(o: string, lid: string, stage: Stage): Lead | null 
   mutate(o, a => { const l = a.leads.find(x => x.id === lid); if (!l) return; l.stage = stage; res = l })
   return res
 }
+export function updateLead(o: string, lid: string, patch: Partial<Lead>): Lead | null {
+  let res: Lead | null = null
+  mutate(o, a => {
+    const l = a.leads.find(x => x.id === lid); if (!l) return
+    const allow: (keyof Lead)[] = ['name', 'phone', 'need', 'budget', 'source', 'note', 'stage']
+    for (const k of allow) if (k in patch) (l as unknown as Record<string, unknown>)[k] = (patch as Record<string, unknown>)[k]
+    res = l
+  })
+  return res
+}
 export function deleteLead(o: string, lid: string) { mutate(o, a => { a.leads = a.leads.filter(l => l.id !== lid) }) }
 
 // ---- Listings ----

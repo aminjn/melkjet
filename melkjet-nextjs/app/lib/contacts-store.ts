@@ -1,7 +1,9 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
-import { listLeads } from './leads-store'
+import { listLeads as crmLeads } from './leads-store'
+import { listLeads as advisorLeads } from './advisor-store'
+import { listLeads as agencyLeads } from './agency-store'
 
 // «دفترچهٔ مخاطبین» مارکتینگ — per-owner. هر مخاطب: نام، موبایل، ایمیل، گروه‌ها،
 // و این‌که برای ایمیل‌مارکتینگ و/یا پیامک استفاده شود. منبعِ گیرندگانِ کمپین‌ها.
@@ -88,12 +90,16 @@ export function bulkAddContacts(o: string, rows: { name?: string; phone?: string
   return { added, skipped }
 }
 
-// افزودنِ همهٔ لیدهای کاربر (شماره/نام) به دفترچه — گروهِ «لیدها»
+// افزودنِ همهٔ لیدهای کاربر به دفترچه — از همهٔ منابعِ لید (CRM، مشاور، آژانس) — گروهِ «لیدها»
 export function importFromLeads(o: string): { added: number } {
   let added = 0
-  for (const l of listLeads(o)) {
-    if (!normPhone(l.phone) && !isEmail(normEmail((l as { email?: string }).email))) continue
-    addContact(o, { name: l.name, phone: l.phone, email: (l as { email?: string }).email, groups: ['لیدها'] }); added++
+  const all: { name?: string; phone?: string; email?: string }[] = []
+  try { for (const l of crmLeads(o)) all.push({ name: l.name, phone: l.phone, email: (l as { email?: string }).email }) } catch {}
+  try { for (const l of advisorLeads(o)) all.push({ name: l.name, phone: l.phone, email: (l as { email?: string }).email }) } catch {}
+  try { for (const l of agencyLeads(o)) all.push({ name: l.name, phone: l.phone, email: (l as { email?: string }).email }) } catch {}
+  for (const l of all) {
+    if (!normPhone(l.phone) && !isEmail(normEmail(l.email))) continue
+    addContact(o, { name: l.name, phone: l.phone, email: l.email, groups: ['لیدها'] }); added++
   }
   return { added }
 }

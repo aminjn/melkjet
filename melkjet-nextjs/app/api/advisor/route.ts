@@ -4,7 +4,7 @@ import { warmEnrichment } from '@/app/lib/enrich-warm'
 import { checkDuplicate, advisorScope } from '@/app/lib/duplicate-check'
 import {
   advisorStats, listLeads, listListings, listAppts, listCommissions,
-  addLead, setLeadStage, deleteLead, addListing, updateListing, setListingStatus, deleteListing, publishListing, unpublishListing,
+  addLead, updateLead, setLeadStage, deleteLead, addListing, updateListing, setListingStatus, deleteListing, publishListing, unpublishListing,
   addAppt, setApptStatus, addCommission, deleteCommission, setCommissionStatus, updateAdvisorProfile,
 } from '@/app/lib/advisor-store'
 
@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({} as any))
   switch (b.action as string) {
     case 'addLead': return NextResponse.json({ ok: true, lead: addLead(o, b) })
+    case 'updateLead': { if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); const l = updateLead(o, String(b.id), b.patch || {}); return l ? NextResponse.json({ ok: true, lead: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'setLeadStage': { const l = setLeadStage(o, String(b.id), b.stage); return l ? NextResponse.json({ ok: true, lead: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'deleteLead': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); deleteLead(o, String(b.id)); return NextResponse.json({ ok: true })
     case 'addListing': {

@@ -67,6 +67,13 @@ interface AgencyLinkData { role: string; membership: AgencyMembership | null; re
 // ════════ Helpers ════════
 const FONT = 'Vazirmatn, system-ui, sans-serif'
 const fa = (n: number) => n.toLocaleString('fa-IR')
+// بودجه: اگر عدد بود با جداکننده + «تومان»، وگرنه همان متن
+const fmtBudget = (b?: string) => {
+  const s = String(b || '').trim(); if (!s) return ''
+  if (!/^[\d۰-۹,٬\s]+$/.test(s)) return s
+  const n = Number(s.replace(/[^\d۰-۹]/g, '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))))
+  return n ? `${n.toLocaleString('fa-IR')} تومان` : s
+}
 function money(n: number): string {
   if (!n) return '—'
   if (n >= 1e9) return fa(Math.round((n / 1e9) * 10) / 10) + ' میلیارد'
@@ -171,6 +178,9 @@ export default function ProsPage() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [search, setSearch] = useState('')
   const [nl, setNl] = useState({ name: '', phone: '', need: '', budget: '', source: '' })
+  const [editLeadId, setEditLeadId] = useState<string | null>(null)
+  const startEditLead = (l: Lead) => { setEditLeadId(l.id); setNl({ name: l.name, phone: l.phone || '', need: l.need || '', budget: l.budget || '', source: l.source || '' }) }
+  const cancelEditLead = () => { setEditLeadId(null); setNl({ name: '', phone: '', need: '', budget: '', source: '' }) }
   const [na, setNa] = useState({ client: '', listingTitle: '', date: '', type: 'visit' })
   // فرمِ کاملِ فایل (پاپ‌آپ)
   const emptyForm = { title: '', ptype: 'آپارتمان', deal: 'sale' as 'sale' | 'rent', province: '', city: '', district: '', neighborhood: '', location: '', address: '', lat: null as number | null, lng: null as number | null, facing: '', price: '', rentMonthly: '', area: '', rooms: '', floor: '', totalFloors: '', yearBuilt: '', docType: '', phone: '', description: '', amenities: [] as string[], images: [] as string[], publish: false }
@@ -512,7 +522,7 @@ export default function ProsPage() {
                   <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 700 }}>{l.name}{l.phone ? <span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 12 }}> · {l.phone}</span> : ''}</div>
-                      <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{l.need} {l.budget ? `· ${l.budget}` : ''}</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{l.need} {l.budget ? `· ${fmtBudget(l.budget)}` : ''}</div>
                     </div>
                     <Pill label={STAGE_LABEL[l.stage]} color={STAGE_COLOR[l.stage]} />
                   </div>
@@ -563,13 +573,19 @@ export default function ProsPage() {
           {/* LEADS */}
           {view === 'leads' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ ...card, padding: 18 }}>
-              {sectionTitle('افزودن لید')}
+              {sectionTitle(editLeadId ? 'ویرایش لید' : 'افزودن لید')}
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <div style={{ flex: '1 1 140px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>نام</label><input value={nl.name} onChange={e => setNl({ ...nl, name: e.target.value })} style={inputStyle} /></div>
-                <div style={{ flex: '1 1 130px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>تلفن</label><input value={nl.phone} onChange={e => setNl({ ...nl, phone: e.target.value })} style={inputStyle} /></div>
+                <div style={{ flex: '1 1 130px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>تلفن</label><input value={nl.phone} onChange={e => setNl({ ...nl, phone: e.target.value })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} /></div>
                 <div style={{ flex: '2 1 180px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>نیاز</label><input value={nl.need} onChange={e => setNl({ ...nl, need: e.target.value })} placeholder="مثلاً آپارتمان ۲ خوابه" style={inputStyle} /></div>
-                <div style={{ flex: '1 1 120px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>بودجه</label><input value={nl.budget} onChange={e => setNl({ ...nl, budget: e.target.value })} style={inputStyle} /></div>
-                <button disabled={busy || !nl.name.trim()} onClick={async () => { if (await post({ action: 'addLead', name: nl.name.trim(), phone: nl.phone, need: nl.need, budget: nl.budget, source: nl.source })) setNl({ name: '', phone: '', need: '', budget: '', source: '' }) }} style={goldBtn}>افزودن</button>
+                <div style={{ flex: '1 1 130px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>بودجه (تومان)</label><NumberInput value={nl.budget} onChange={v => setNl({ ...nl, budget: v })} style={inputStyle} /></div>
+                <button disabled={busy || !nl.name.trim()} onClick={async () => {
+                  const ok = editLeadId
+                    ? await post({ action: 'updateLead', id: editLeadId, patch: { name: nl.name.trim(), phone: nl.phone, need: nl.need, budget: nl.budget, source: nl.source } })
+                    : await post({ action: 'addLead', name: nl.name.trim(), phone: nl.phone, need: nl.need, budget: nl.budget, source: nl.source })
+                  if (ok) cancelEditLead()
+                }} style={goldBtn}>{editLeadId ? 'ذخیره' : 'افزودن'}</button>
+                {editLeadId && <button onClick={cancelEditLead} style={actionBtn}>لغو</button>}
               </div>
             </div>
             <div style={{ ...card, padding: 18 }}>
@@ -578,11 +594,12 @@ export default function ProsPage() {
                 <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 700 }}>{l.name}{l.phone ? <span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 12 }}> · {l.phone}</span> : ''}</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{l.need} {l.budget ? `· ${l.budget}` : ''} {l.source ? `· منبع: ${l.source}` : ''}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{l.need} {l.budget ? `· بودجه: ${fmtBudget(l.budget)}` : ''} {l.source ? `· منبع: ${l.source}` : ''}</div>
                   </div>
                   <select value={l.stage} onChange={e => post({ action: 'setLeadStage', id: l.id, stage: e.target.value })} style={{ ...actionBtn, cursor: 'pointer', color: STAGE_COLOR[l.stage], borderColor: STAGE_COLOR[l.stage] }}>
                     {STAGES.map(s => <option key={s} value={s} style={{ color: 'var(--text)' }}>{STAGE_LABEL[s]}</option>)}
                   </select>
+                  <button onClick={() => startEditLead(l)} style={actionBtn}>ویرایش</button>
                   <button onClick={() => post({ action: 'deleteLead', id: l.id })} style={{ ...actionBtn, color: '#ef4444' }}>حذف</button>
                 </div>
               )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>لیدی نداری.</div>}
