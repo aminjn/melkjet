@@ -794,12 +794,12 @@ export default function ProfilePage() {
   const params = useParams()
   const urlId = (params?.id as string) || 'advisor'
 
-  // A numeric id is a real advisor (phone). Branch to the live, data-driven page.
-  if (/^\d+$/.test(urlId)) {
-    return <RealAdvisorProfile phone={urlId} />
+  // یک شناسهٔ نقشِ شناخته‌شده (advisor/agency/…) = صفحهٔ نمونهٔ نقش.
+  // هر چیز دیگری (شمارهٔ تلفنِ مشاور یا کلیدِ پیش‌نمایشِ نقش) = پروفایلِ واقعیِ مشاور.
+  if (urlId in profiles) {
+    return <RoleTemplateProfile urlId={urlId} />
   }
-
-  return <RoleTemplateProfile urlId={urlId} />
+  return <RealAdvisorProfile phone={urlId} />
 }
 
 // ─── Role template profile (fallback: /profile/advisor, /profile/agency, …) ─────

@@ -167,6 +167,7 @@ export default function ProsPage() {
   const [step, setStep] = useState(0)
   const [calOffset, setCalOffset] = useState(0)
   const [geo, setGeo] = useState<GeoProvince[]>([])
+  const [areaSel, setAreaSel] = useState({ province: '', city: '', district: '', neighborhood: '' })
   useEffect(() => { fetch('/api/geo', { cache: 'no-store' }).then(r => r.ok ? r.json() : { provinces: [] }).then(d => setGeo(d.provinces || [])).catch(() => {}) }, [])
 
   const openAdd = () => { setForm(emptyForm); setEditingId(null); setStep(0); setShowForm(true) }
@@ -302,6 +303,13 @@ export default function ProsPage() {
   // درختِ جغرافیایی برای فرمِ افزودن فایل
   const gProvince = geo.find(p => p.name === form.province)
   const gCity = gProvince?.cities.find(c => c.name === form.city)
+  // درختِ جغرافیایی برای «مناطق فعالیتِ» پروفایل (جدا از فرم فایل)
+  const aProv = geo.find(p => p.name === areaSel.province)
+  const aCity = aProv?.cities.find(c => c.name === areaSel.city)
+  const aDist = aCity?.districts.find(d => d.name === areaSel.district)
+  const areaList = prof.areas ? prof.areas.split('،').map(s => s.trim()).filter(Boolean) : []
+  const addArea = (name: string) => { const n = name.trim(); if (n && !areaList.includes(n)) setProf({ ...prof, areas: [...areaList, n].join('، ') }) }
+  const removeArea = (name: string) => setProf({ ...prof, areas: areaList.filter(x => x !== name).join('، ') })
   const gDistrict = gCity?.districts.find(d => d.name === form.district)
   const STEPS = ['نوع ملک', 'موقعیت و نقشه', 'مشخصات', 'امکانات و عکس']
 
@@ -826,16 +834,35 @@ export default function ProsPage() {
                 </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نام</label><input value={prof.name} onChange={e => setProf({ ...prof, name: e.target.value })} style={inputStyle} /></div>
-                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>آژانس/دفتر</label><input value={prof.agency} onChange={e => setProf({ ...prof, agency: e.target.value })} style={inputStyle} /></div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نام و نام خانوادگی</label><input value={prof.name} onChange={e => setProf({ ...prof, name: e.target.value })} placeholder="مثلاً امین نائینی" style={inputStyle} /></div>
                 <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>عنوان شغلی</label><input value={prof.title} onChange={e => setProf({ ...prof, title: e.target.value })} placeholder="مثلاً مشاور ارشد املاک" style={inputStyle} /></div>
-                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>تلفن تماس</label><input value={prof.phone} onChange={e => setProf({ ...prof, phone: e.target.value })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} /></div>
               </div>
+              {/* آژانس — خودکار از عضویت (اگر عضو آژانسی باشید) */}
+              {agencyData?.membership && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderRadius: 9, background: 'var(--goldDim)', border: '1px solid var(--gold)', fontSize: 12.5 }}>
+                  <span>🏢</span><span style={{ color: 'var(--muted)' }}>آژانس شما:</span><b style={{ color: 'var(--gold)' }}>{agencyData.membership.agencyName}</b>
+                  <span style={{ flex: 1 }} /><span style={{ fontSize: 11, color: 'var(--faint)' }}>از «آژانس من» قابل تغییر است</span>
+                </div>
+              )}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>مناطق فعالیت</label><input value={prof.areas} onChange={e => setProf({ ...prof, areas: e.target.value })} placeholder="مثلاً زعفرانیه، فرمانیه" style={inputStyle} /></div>
+                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>تلفن تماس</label><input value={prof.phone} onChange={e => setProf({ ...prof, phone: e.target.value })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} /></div>
                 <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>سابقه</label><input value={prof.experience} onChange={e => setProf({ ...prof, experience: e.target.value })} placeholder="مثلاً ۸ سال" style={inputStyle} /></div>
+              </div>
+              {/* مناطق فعالیت — از لیست استان/شهر/محلهٔ سایت (برای نمایش مشاور در همان محله‌ها) */}
+              <div>
+                <label style={{ fontSize: 12, color: 'var(--muted)' }}>مناطق فعالیت (محله‌ها)</label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 8, marginTop: 6 }}>
+                  <select value={areaSel.province} onChange={e => setAreaSel({ province: e.target.value, city: '', district: '', neighborhood: '' })} style={inputStyle}><option value="">استان…</option>{geo.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}</select>
+                  <select value={areaSel.city} onChange={e => setAreaSel({ ...areaSel, city: e.target.value, district: '', neighborhood: '' })} disabled={!areaSel.province} style={inputStyle}><option value="">شهر…</option>{(aProv?.cities || []).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select>
+                  <select value={areaSel.district} onChange={e => setAreaSel({ ...areaSel, district: e.target.value, neighborhood: '' })} disabled={!areaSel.city} style={inputStyle}><option value="">منطقه…</option>{(aCity?.districts || []).map(d => <option key={d.id} value={d.name}>{d.name}</option>)}</select>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <select value={areaSel.neighborhood} onChange={e => setAreaSel({ ...areaSel, neighborhood: e.target.value })} disabled={!areaSel.district} style={{ ...inputStyle, flex: 1 }}><option value="">محله…</option>{(aDist?.neighborhoods || []).map(n => <option key={n} value={n}>{n}</option>)}</select>
+                    <button onClick={() => { if (areaSel.neighborhood) { addArea(areaSel.neighborhood); setAreaSel({ ...areaSel, neighborhood: '' }) } }} disabled={!areaSel.neighborhood} style={{ ...actionBtn, color: 'var(--gold)', borderColor: 'var(--gold)', flexShrink: 0 }}>افزودن</button>
+                  </div>
+                </div>
+                {areaList.length > 0 && <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 8 }}>
+                  {areaList.map(a => <span key={a} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 11px', borderRadius: 999, fontSize: 12.5, background: 'var(--goldDim)', color: 'var(--gold)', fontWeight: 600 }}>📍 {a}<button onClick={() => removeArea(a)} style={{ background: 'transparent', border: 'none', color: 'var(--gold)', cursor: 'pointer', fontSize: 13, padding: 0 }}>✕</button></span>)}
+                </div>}
               </div>
               <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>دربارهٔ من</label><textarea value={prof.bio} onChange={e => setProf({ ...prof, bio: e.target.value })} rows={4} placeholder="معرفی کوتاه از خودتان…" style={{ ...inputStyle, resize: 'vertical' }} /></div>
               {/* تخصص‌ها — chips */}
@@ -858,7 +885,7 @@ export default function ProsPage() {
                   />
                 </div>
               </div>
-              <button disabled={busy} onClick={() => post({ action: 'updateProfile', patch: { name: prof.name, agency: prof.agency, title: prof.title, bio: prof.bio, phone: prof.phone, areas: prof.areas, experience: prof.experience, photo: prof.photo, specialties: prof.specialties } })} style={{ ...goldBtn, alignSelf: 'flex-start', padding: '9px 22px' }}>{busy ? 'در حال ذخیره…' : 'ذخیره'}</button>
+              <button disabled={busy} onClick={() => post({ action: 'updateProfile', patch: { name: prof.name, title: prof.title, bio: prof.bio, phone: prof.phone, areas: prof.areas, experience: prof.experience, photo: prof.photo, specialties: prof.specialties } })} style={{ ...goldBtn, alignSelf: 'flex-start', padding: '9px 22px' }}>{busy ? 'در حال ذخیره…' : 'ذخیره'}</button>
             </div>
           </div>}
           </>}

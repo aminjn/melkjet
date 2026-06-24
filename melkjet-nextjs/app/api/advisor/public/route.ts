@@ -8,13 +8,15 @@ import { listItems } from '@/app/lib/scraper-store'
 function normOwner(s: string) { return (s || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase() }
 
 export async function GET(req: NextRequest) {
-  const phone = (new URL(req.url).searchParams.get('phone') || '').replace(/\D/g, '')
-  if (!phone) return NextResponse.json({ error: 'شماره الزامی است' }, { status: 400 })
-  const acc = getAccount(phone)
-  if (!acc) return NextResponse.json({ error: 'مشاور یافت نشد' }, { status: 404 })
+  // شناسه می‌تواند شمارهٔ تلفنِ مشاور یا کلیدِ مالکِ advisor-store باشد (مثل پیش‌نمایش نقش).
+  const phone = (new URL(req.url).searchParams.get('phone') || '').trim()
+  if (!phone) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
 
   const a = getAdvisor(phone)
   const p = a.profile
+  // اگر مشاور هنوز هیچ اطلاعاتِ واقعی‌ای ثبت نکرده، پروفایلِ عمومی وجود ندارد.
+  const acc = getAccount(phone)
+  if (!(p.name || '').trim()) return NextResponse.json({ error: 'مشاور یافت نشد' }, { status: 404 })
   const stats = advisorStats(phone).kpis
   const membership = getAdvisorMembership(phone)
 
@@ -29,7 +31,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     phone,
-    name: p.name || acc.name || 'مشاور املاک',
+    name: p.name || acc?.name || 'مشاور املاک',
     title: p.title || 'مشاور املاک',
     bio: p.bio || '',
     contactPhone: p.phone || '',
