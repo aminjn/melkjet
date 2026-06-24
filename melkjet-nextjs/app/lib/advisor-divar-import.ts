@@ -124,6 +124,29 @@ export async function importDivarFromUrl(o: string, url: string): Promise<{ ok: 
   return { ok: r.ok, reason: r.reason, profile: false, skippedOne: !!r.skipped, listing: r.listing, imported: r.ok && !r.skipped ? 1 : 0 }
 }
 
+/** چند ورودی را با هم پردازش می‌کند: کاربر می‌تواند چند لینکِ آگهی (هر کدام در یک خط یا
+ *  جداشده با فاصله) یا یک لینکِ پروفایلِ پرو را بچسباند. همه وارد می‌شوند. */
+export async function importDivarInput(o: string, raw: string): Promise<{ ok: boolean; reason?: string; imported: number; skipped: number; failed: number; profile: boolean }> {
+  const parts = Array.from(new Set(String(raw || '').split(/[\s,،]+/).map(s => s.trim()).filter(Boolean)))
+  if (!parts.length) return { ok: false, reason: 'لینکی وارد نشده', imported: 0, skipped: 0, failed: 0, profile: false }
+
+  let imported = 0, skipped = 0, failed = 0, profile = false
+  let firstErr = ''
+  for (const part of parts) {
+    if (divarProfileSlug(part)) {
+      profile = true
+      const r = await importDivarProfile(o, part)
+      if (r.ok) { imported += r.imported; skipped += r.skipped } else { failed++; firstErr = firstErr || (r.reason || '') }
+    } else {
+      const r = await importDivarToken(o, part)
+      if (r.ok && !r.skipped) imported++
+      else if (r.ok && r.skipped) skipped++
+      else { failed++; firstErr = firstErr || (r.reason || '') }
+    }
+  }
+  return { ok: imported > 0 || (failed === 0 && skipped > 0), reason: imported ? '' : firstErr, imported, skipped, failed, profile }
+}
+
 /** آگهی‌های مشاور را از روی لینکِ ذخیره‌شده سینک می‌کند: لینکِ پروفایلِ پرو → همهٔ آگهی‌های او؛
  *  لینکِ جستجو/نقشه → آگهی‌هایی که نامِ آگهی‌دهنده با «نام دیوار»‌ِ مشاور می‌خواند (نام الزامی است). */
 export async function syncAdvisorDivar(o: string, cfgIn?: AdvisorDivar): Promise<SyncResult> {

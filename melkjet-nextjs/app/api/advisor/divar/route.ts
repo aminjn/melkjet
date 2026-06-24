@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { getDivar, updateDivarConfig, removeImport } from '@/app/lib/advisor-divar-store'
-import { importDivarFromUrl, syncAdvisorDivar, clearDivarImports } from '@/app/lib/advisor-divar-import'
+import { importDivarInput, syncAdvisorDivar, clearDivarImports } from '@/app/lib/advisor-divar-import'
 import { ensureCronStarted } from '@/app/lib/cron-runner'
 
 // پنل «ایمپورت از دیوار» مخصوص هر مشاور (per-profile).
@@ -22,9 +22,9 @@ export async function POST(req: NextRequest) {
   switch (b.action as string) {
     case 'importUrl': {
       if (!b.url) return NextResponse.json({ error: 'لینک الزامی است' }, { status: 400 })
-      const r = await importDivarFromUrl(o, String(b.url))
+      const r = await importDivarInput(o, String(b.url))
       if (!r.ok) return NextResponse.json({ error: r.reason || 'ایمپورت ناموفق بود' }, { status: 400 })
-      return NextResponse.json({ ok: true, profile: !!r.profile, imported: r.imported || 0, skipped: r.skipped || 0, scanned: r.scanned || 0, skippedOne: !!r.skippedOne, listing: r.listing, config: getDivar(o) })
+      return NextResponse.json({ ok: true, profile: r.profile, imported: r.imported, skipped: r.skipped, failed: r.failed, config: getDivar(o) })
     }
     case 'clearImports': {
       const r = clearDivarImports(o)

@@ -930,18 +930,24 @@ export default function ProsPage() {
                 محلهٔ آگهی هم خودکار با محله‌های موجودِ خودِ سایت تطبیق داده می‌شود (نیازی نیست محله را وارد کنید) و شما در همان محله به کاربران نشان داده می‌شوید.
               </div>
 
-              {/* افزودن یک آگهی با لینک */}
+              {/* افزودن آگهی‌ها با لینک (یک یا چند تا) */}
               <div style={{ ...card, padding: 16 }}>
-                <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>افزودن با لینک</div>
-                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 10 }}>لینکِ یک آگهی (<span style={{ direction: 'ltr', display: 'inline-block' }}>divar.ir/v/…</span>) را برای افزودن همان آگهی، یا لینکِ <b>پروفایلِ پرو/کسب‌وکارتان</b> (<span style={{ direction: 'ltr', display: 'inline-block' }}>divar.ir/pro/…</span>) را برای افزودن <b>همهٔ آگهی‌هایتان</b> بچسبانید.</div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <input value={divarUrl} onChange={e => setDivarUrl(e.target.value)} placeholder="https://divar.ir/pro/…  یا  https://divar.ir/v/…" style={{ ...inputStyle, direction: 'ltr', textAlign: 'left', flex: 1, minWidth: 220 }} />
+                <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>افزودن آگهی‌ها با لینک</div>
+                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.8 }}>
+                  لینکِ آگهی‌هایتان را از دیوار کپی کنید (هر آگهی → دکمهٔ «اشتراک‌گذاری/کپی لینک» → چیزی شبیه <span style={{ direction: 'ltr', display: 'inline-block' }}>divar.ir/v/…</span>) و اینجا بچسبانید.
+                  می‌توانید <b>چند لینک را با هم</b> (هر کدام در یک خط) بچسبانید تا همه یکجا وارد شوند.
+                </div>
+                <textarea value={divarUrl} onChange={e => setDivarUrl(e.target.value)} rows={4} placeholder={"https://divar.ir/v/AbcXyz123\nhttps://divar.ir/v/QwErTy456\n…"} style={{ ...inputStyle, direction: 'ltr', textAlign: 'left', resize: 'vertical', fontFamily: 'inherit' }} />
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                   <button disabled={divarBusy || !divarUrl.trim()} onClick={async () => {
                     const d = await divarPost({ action: 'importUrl', url: divarUrl.trim() })
                     if (d?.ok) {
                       setDivarUrl('')
-                      if (d.profile) setDivarMsg(`✓ ${(d.imported || 0).toLocaleString('fa-IR')} آگهی از پروفایل شما وارد و منتشر شد${d.skipped ? ` (${(d.skipped).toLocaleString('fa-IR')} تکراری)` : ''}.`)
-                      else setDivarMsg(d.skippedOne ? 'این آگهی قبلاً وارد شده بود.' : '✓ آگهی با موفقیت وارد و منتشر شد.')
+                      const parts: string[] = []
+                      if (d.imported) parts.push(`${(d.imported).toLocaleString('fa-IR')} آگهی وارد و منتشر شد`)
+                      if (d.skipped) parts.push(`${(d.skipped).toLocaleString('fa-IR')} تکراری`)
+                      if (d.failed) parts.push(`${(d.failed).toLocaleString('fa-IR')} ناموفق`)
+                      setDivarMsg('✓ ' + (parts.join(' · ') || 'انجام شد'))
                       await refresh()
                     }
                   }} style={{ ...goldBtn, opacity: divarBusy ? 0.6 : 1 }}>{divarBusy ? 'در حال افزودن…' : 'افزودن'}</button>
@@ -951,15 +957,15 @@ export default function ProsPage() {
               {/* تنظیمات و همگام‌سازی خودکار */}
               {cfg && <div style={{ ...card, padding: 16 }}>
                 <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>همگام‌سازی خودکار (کران‌جاب)</div>
-                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.7 }}>لینکِ <b>پروفایلِ پرو/کسب‌وکارتان</b> در دیوار را بدهید تا در بازهٔ انتخابی، همهٔ آگهی‌هایتان خودکار به‌روز شوند. (می‌توانید لینکِ جستجو/نقشهٔ منطقه هم بدهید — در این حالت «نام شما در دیوار» الزامی است تا فقط آگهی‌های خودتان وارد شوند.)</div>
+                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.8 }}>لینکِ <b>صفحهٔ جستجو/نقشهٔ منطقه‌تان</b> در دیوار را بدهید و <b>نام خودتان در دیوار</b> را بنویسید؛ سیستم در بازهٔ انتخابی، آگهی‌هایی که با نامِ شما در آن منطقه منتشر شده‌اند را خودکار وارد می‌کند. <span style={{ color: 'var(--faint)' }}>(برای نتیجهٔ کامل‌تر، لینک‌های آگهی‌ها را از بخش بالا هم می‌توانید یکجا اضافه کنید.)</span></div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <div>
-                    <label style={{ fontSize: 12, color: 'var(--muted)' }}>لینکِ پروفایلِ پرو یا جستجو/نقشهٔ شما در دیوار</label>
-                    <input value={cfg.searchUrl} onChange={e => setDivarCfg({ ...cfg, searchUrl: e.target.value })} placeholder="https://divar.ir/pro/…  یا  https://divar.ir/s/tehran/…" style={{ ...inputStyle, direction: 'ltr', textAlign: 'left' }} />
+                    <label style={{ fontSize: 12, color: 'var(--muted)' }}>لینکِ جستجو/نقشهٔ منطقهٔ شما در دیوار</label>
+                    <input value={cfg.searchUrl} onChange={e => setDivarCfg({ ...cfg, searchUrl: e.target.value })} placeholder="https://divar.ir/s/tehran/buy-apartment/saadat-abad" style={{ ...inputStyle, direction: 'ltr', textAlign: 'left' }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 12, color: 'var(--muted)' }}>نام شما / آژانس‌تان در دیوار <span style={{ color: 'var(--faint)' }}>(فقط برای لینکِ جستجو)</span></label>
-                    <input value={cfg.divarName} onChange={e => setDivarCfg({ ...cfg, divarName: e.target.value })} placeholder="دقیقاً همان نامی که در آگهی‌های دیوار نمایش داده می‌شود" style={inputStyle} />
+                    <label style={{ fontSize: 12, color: 'var(--muted)' }}>نام شما / آژانس‌تان در دیوار <span style={{ color: 'var(--faint)' }}>(الزامی)</span></label>
+                    <input value={cfg.divarName} onChange={e => setDivarCfg({ ...cfg, divarName: e.target.value })} placeholder="دقیقاً همان نامی که زیر آگهی‌های دیوار نمایش داده می‌شود" style={inputStyle} />
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10 }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--text)', cursor: 'pointer' }}>
