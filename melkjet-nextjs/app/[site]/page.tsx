@@ -41,9 +41,12 @@ function ownerListings(ownerName: string | undefined, ownerPhone: string | undef
   const want = normOwner(ownerName || '')
   const phone = (ownerPhone || '').trim()
   if (!want && !phone) return []
-  return listItems('listing', { publicOnly: true })
-    .filter(it => (phone && it.meta?.__ownerPhone === phone) || (!!want && normOwner(it.owner || '') === want))
-    .slice(0, count)
+  const all = listItems('listing', { publicOnly: true })
+  // معیارِ مطمئن: شمارهٔ حساب (هنگام انتشار مهر می‌خورد). فقط اگر هیچ آگهیِ مهرخورده‌ای
+  // نبود، به‌عنوان جایگزین با نام تطبیق می‌دهیم — تا آگهی‌های سراسریِ سایت نشت نکنند.
+  let mine = phone ? all.filter(it => it.meta?.__ownerPhone === phone) : []
+  if (mine.length === 0 && want) mine = all.filter(it => !it.meta?.__ownerPhone && normOwner(it.owner || '') === want)
+  return mine.slice(0, count)
 }
 
 // Owner articles: resolve the site owner's REAL published articles, matched the

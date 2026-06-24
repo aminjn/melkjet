@@ -926,8 +926,8 @@ export default function ProsPage() {
             const faDate = (ts?: number) => ts ? new Date(ts).toLocaleString('fa-IR', { dateStyle: 'short', timeStyle: 'short' }) : '—'
             return <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 720 }}>
               <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>
-                آگهی‌های خود را از <b>دیوار</b> مستقیم به ملک‌جت بیاورید — عکس‌ها، قیمت، مشخصات و موقعیت خودکار خوانده می‌شوند،
-                محله‌اش هم خودکار به لیست محله‌های سایت اضافه می‌شود و شما در همان محله به کاربران نشان داده می‌شوید.
+                آگهی‌های خود را از <b>دیوار</b> مستقیم به ملک‌جت بیاورید — عکس‌ها، قیمت، مشخصات و موقعیت خودکار خوانده می‌شوند.
+                محلهٔ آگهی هم خودکار با محله‌های موجودِ خودِ سایت تطبیق داده می‌شود (نیازی نیست محله را وارد کنید) و شما در همان محله به کاربران نشان داده می‌شوید.
               </div>
 
               {/* افزودن یک آگهی با لینک */}
@@ -962,7 +962,7 @@ export default function ProsPage() {
                       <input type="checkbox" checked={cfg.autoPublish} onChange={e => setDivarCfg({ ...cfg, autoPublish: e.target.checked })} /> انتشار خودکار روی سایت
                     </label>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--text)', cursor: 'pointer' }}>
-                      <input type="checkbox" checked={cfg.autoNeighborhood} onChange={e => setDivarCfg({ ...cfg, autoNeighborhood: e.target.checked })} /> ساخت خودکار محله‌ها
+                      <input type="checkbox" checked={cfg.autoNeighborhood} onChange={e => setDivarCfg({ ...cfg, autoNeighborhood: e.target.checked })} /> تشخیص خودکار محله از روی محله‌های سایت
                     </label>
                   </div>
                   <div>

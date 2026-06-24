@@ -20,14 +20,14 @@ export async function GET(req: NextRequest) {
   const stats = advisorStats(phone).kpis
   const membership = getAdvisorMembership(phone)
 
-  // آگهی‌های عمومیِ منتشرشدهٔ این مشاور (بر اساس نام آگهی‌دهنده)
+  // آگهی‌های عمومیِ این مشاور — فقط فایل‌های خودِ او، نه آگهی‌های سراسریِ سایت.
+  // معیارِ مطمئن: شمارهٔ حسابِ مالک (هنگام انتشار روی آگهی مهر می‌خورد). فقط اگر هیچ
+  // آگهیِ مهرخورده‌ای نبود، به‌عنوان جایگزین با نامِ نمایشی تطبیق می‌دهیم (دادهٔ قدیمی).
+  const all = listItems('listing', { publicOnly: true })
   const want = normOwner(p.name || '')
-  const listings = want
-    ? listItems('listing', { publicOnly: true })
-      .filter(it => normOwner(it.owner || '') === want)
-      .slice(0, 12)
-      .map(it => ({ id: it.id, title: it.title, price: it.price, location: it.location, image: it.image }))
-    : []
+  let mine = all.filter(it => it.meta?.__ownerPhone === phone)
+  if (mine.length === 0 && want) mine = all.filter(it => !it.meta?.__ownerPhone && normOwner(it.owner || '') === want)
+  const listings = mine.slice(0, 12).map(it => ({ id: it.id, title: it.title, price: it.price, location: it.location, image: it.image }))
 
   return NextResponse.json({
     phone,

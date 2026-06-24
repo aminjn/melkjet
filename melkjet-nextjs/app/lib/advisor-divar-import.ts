@@ -1,6 +1,6 @@
 import { fetchDivarPost, divarToken } from './divar-post'
 import { addListing, publishListing, getAdvisor, updateAdvisorProfile, type Listing } from './advisor-store'
-import { ensureNeighborhoodByName } from './geo-store'
+import { findNeighborhoodInGeo } from './geo-store'
 import { getDivar, hasToken, recordImport, markRun, type AdvisorDivar } from './advisor-divar-store'
 import { scrapeDivar } from './divar'
 import type { Source } from './scraper-store'
@@ -38,6 +38,10 @@ export async function importDivarToken(o: string, input: string): Promise<Import
     return { ok: false, reason: `آگهی از دیوار خوانده نشد (${post.reason})`, token }
   }
 
+  // محلهٔ دیوار را به محله‌های موجودِ سایتِ خودمان نگاشت کن (هیچ محلهٔ جدیدی ساخته نمی‌شود).
+  let matched: { province: string; city: string; district: string; neighborhood: string } | null = null
+  try { matched = findNeighborhoodInGeo(post.city || '', post.neighborhood || '') } catch {}
+
   const advisorPhone = getAdvisor(o).profile.phone || ''
   const listing = addListing(o, {
     title: post.title || 'آگهی واردشده از دیوار',
@@ -46,9 +50,10 @@ export async function importDivarToken(o: string, input: string): Promise<Import
     price: post.price || 0,
     rentMonthly: post.rentMonthly || undefined,
     location: post.location || '',
-    city: post.city || undefined,
-    neighborhood: post.neighborhood || undefined,
-    district: post.district || undefined,
+    province: matched?.province || undefined,
+    city: matched?.city || post.city || undefined,
+    district: matched?.district || post.district || undefined,
+    neighborhood: matched?.neighborhood || post.neighborhood || undefined,
     lat: typeof post.lat === 'number' ? post.lat : undefined,
     lng: typeof post.lng === 'number' ? post.lng : undefined,
     area: post.area,
@@ -60,11 +65,8 @@ export async function importDivarToken(o: string, input: string): Promise<Import
     phone: advisorPhone || undefined,
   })
 
-  // محله را خودکار بساز و به مناطقِ مشاور اضافه کن
-  if (cfg.autoNeighborhood && post.city && post.neighborhood) {
-    try { ensureNeighborhoodByName(post.city, post.neighborhood, post.district) } catch {}
-    addAreaToProfile(o, post.neighborhood)
-  }
+  // فقط اگر محلهٔ دیوار با یکی از محله‌های موجودِ سایت خواند، آن را به مناطقِ مشاور اضافه کن.
+  if (cfg.autoNeighborhood && matched) addAreaToProfile(o, matched.neighborhood)
 
   let published = false
   if (cfg.autoPublish) {
