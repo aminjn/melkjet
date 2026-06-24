@@ -28,11 +28,13 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
 
   // Pages: prefer body.pages; fall back to a legacy single body.blocks array.
-  let pages: { slug?: string; title?: string; blocks: any[] }[] | undefined
+  let pages: { slug?: string; title?: string; blocks: any[]; inMenu?: boolean; menuLabel?: string }[] | undefined
   if (Array.isArray(body.pages)) {
-    pages = body.pages.map((pg: { slug?: string; title?: string; blocks?: any[] }) => ({
+    pages = body.pages.map((pg: { slug?: string; title?: string; blocks?: any[]; inMenu?: boolean; menuLabel?: string }) => ({
       slug: pg.slug ? String(pg.slug) : undefined,
       title: pg.title ? String(pg.title) : undefined,
+      inMenu: pg.inMenu !== false,
+      menuLabel: pg.menuLabel ? String(pg.menuLabel) : undefined,
       blocks: Array.isArray(pg.blocks) ? pg.blocks.map(normIncomingBlock) : [],
     }))
   } else if (Array.isArray(body.blocks)) {

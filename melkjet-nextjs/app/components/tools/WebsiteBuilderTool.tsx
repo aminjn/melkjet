@@ -24,6 +24,8 @@ interface Page {
   slug: string
   title: string
   blocks: Block[]
+  inMenu?: boolean      // در منوی سایت نمایش داده شود (پیش‌فرض true)
+  menuLabel?: string    // عنوان دلخواه در منو (پیش‌فرض = title)
 }
 
 // Make a url-safe slug (mirrors sites-store.sanitizeSlug).
@@ -699,6 +701,8 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
           setPages(s.pages.map((pg: any, i: number) => ({
             slug: i === 0 ? 'home' : slugify(pg.slug || '') || `page-${i}`,
             title: String(pg.title || '') || (i === 0 ? 'صفحه اصلی' : `صفحه ${i + 1}`),
+            inMenu: pg.inMenu !== false,
+            menuLabel: pg.menuLabel ? String(pg.menuLabel) : undefined,
             blocks: Array.isArray(pg.blocks) ? pg.blocks.map(migrateBlock) : [],
           })))
           setActivePage(0)
@@ -838,10 +842,18 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
   const addPage = () => {
     const idx = pages.length
     const slugVal = uniquePageSlug(`page-${idx + 1}`, -1)
-    const newPage: Page = { slug: slugVal, title: 'صفحه جدید', blocks: [makeBlock('hero')] }
+    const newPage: Page = { slug: slugVal, title: 'صفحه جدید', blocks: [makeBlock('hero')], inMenu: true }
     setPages(prev => [...prev, newPage])
     setActivePage(idx)
     setSelectedBlock(null)
+  }
+
+  // جابه‌جایی ترتیب صفحه (و در نتیجه ترتیب منو) — صفحهٔ خانه ثابت می‌ماند.
+  const movePage = (idx: number, dir: -1 | 1) => {
+    const next = idx + dir
+    if (idx === 0 || next <= 0 || next >= pages.length) return
+    setPages(prev => { const arr = [...prev];[arr[idx], arr[next]] = [arr[next], arr[idx]]; return arr })
+    setActivePage(a => a === idx ? next : a === next ? idx : a)
   }
 
   const selectPage = (idx: number) => {
@@ -880,6 +892,8 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
         pages: pages.map(pg => ({
           slug: pg.slug,
           title: pg.title,
+          inMenu: pg.inMenu !== false,
+          menuLabel: pg.menuLabel || undefined,
           blocks: pg.blocks.map(b => ({ id: b.id, type: b.type, props: b.props })),
         })),
       }),
@@ -1065,6 +1079,20 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
           alignItems: device !== 'desktop' ? 'center' : 'stretch',
           padding: device !== 'desktop' ? '20px' : 0,
         }}>
+          {/* PAGE TABS — مدیریت سریع و واضحِ صفحات سایت */}
+          <div style={{ position: 'sticky', top: 0, zIndex: 5, alignSelf: 'stretch', display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', background: 'var(--bg2)', borderBottom: '1px solid var(--line)', overflowX: 'auto' }}>
+            <span style={{ fontSize: 11, color: 'var(--muted)', flexShrink: 0, marginLeft: 2 }}>صفحات سایت:</span>
+            {pages.map((pg, idx) => (
+              <button key={idx} onClick={() => { setActivePage(idx); setSelectedBlock(null) }} title={`/${slug}${idx === 0 ? '' : '/' + pg.slug}`} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8, border: `1px solid ${activePage === idx ? 'var(--gold)' : 'var(--line)'}`, background: activePage === idx ? 'var(--goldDim)' : 'var(--surface)', color: activePage === idx ? 'var(--gold)' : 'var(--text)', fontWeight: activePage === idx ? 700 : 500, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                {idx === 0 && <span style={{ fontSize: 11 }}>⌂</span>}
+                {pg.title || 'صفحه'}
+                {pg.inMenu === false && <span title="در منو نیست" style={{ fontSize: 9, opacity: 0.6 }}>(مخفی)</span>}
+              </button>
+            ))}
+            <button onClick={addPage} title="افزودن صفحهٔ جدید به سایت" style={{ padding: '6px 12px', borderRadius: 8, border: '1px dashed var(--gold)', background: 'transparent', color: 'var(--gold)', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', flexShrink: 0 }}>＋ صفحهٔ جدید</button>
+            <span style={{ flex: 1 }} />
+            <button onClick={() => setActiveTab('pages')} title="تنظیمات صفحات و منو" style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--muted)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', flexShrink: 0 }}>⚙ مدیریت صفحات و منو</button>
+          </div>
           <div style={{
             width: canvasWidth,
             minHeight: '100%',
@@ -1393,7 +1421,10 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
             {/* Pages Tab — REAL pages: select-to-edit, rename, delete, add */}
             {activeTab === 'pages' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>صفحات سایت</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>صفحات و منوی سایت</div>
+                <div style={{ fontSize: 10.5, color: 'var(--faint)', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px', lineHeight: 1.8 }}>
+                  هر صفحه را اینجا اضافه/ویرایش کن. صفحاتی که «نمایش در منو» دارند، در نوار منوی بالای سایتِ منتشرشده به‌صورت لینک می‌آیند. ترتیب صفحات = ترتیب منو.
+                </div>
                 {pages.map((page, idx) => {
                   const isActive = idx === activePage
                   const isHome = idx === 0
@@ -1429,7 +1460,24 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
                               </div>
                             </div>
                           )}
-                          <div style={{ fontSize: 10, color: 'var(--faint)' }}>{page.blocks.length} بلوک</div>
+                          {/* menu config */}
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, color: 'var(--text)', cursor: 'pointer', padding: '4px 0' }}>
+                            <input type="checkbox" checked={page.inMenu !== false} onChange={e => setPages(prev => prev.map((p, i) => i === idx ? { ...p, inMenu: e.target.checked } : p))} style={{ width: 15, height: 15, accentColor: 'var(--gold)', cursor: 'pointer' }} />
+                            نمایش در منوی سایت
+                          </label>
+                          {page.inMenu !== false && (
+                            <div>
+                              <label style={{ fontSize: 10, color: 'var(--faint)', display: 'block', marginBottom: 3 }}>عنوان در منو (اختیاری)</label>
+                              <input value={page.menuLabel ?? ''} onChange={e => setPages(prev => prev.map((p, i) => i === idx ? { ...p, menuLabel: e.target.value } : p))} placeholder={page.title} style={INSPECTOR_INPUT} />
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ fontSize: 10, color: 'var(--faint)', flex: 1 }}>{page.blocks.length} بلوک</div>
+                            {!isHome && <>
+                              <button onClick={() => movePage(idx, -1)} disabled={idx <= 1} title="بالاتر در منو" style={{ padding: '5px 9px', borderRadius: 7, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--muted)', cursor: idx <= 1 ? 'default' : 'pointer', fontSize: 11, opacity: idx <= 1 ? 0.4 : 1 }}>▲</button>
+                              <button onClick={() => movePage(idx, 1)} disabled={idx >= pages.length - 1} title="پایین‌تر در منو" style={{ padding: '5px 9px', borderRadius: 7, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--muted)', cursor: idx >= pages.length - 1 ? 'default' : 'pointer', fontSize: 11, opacity: idx >= pages.length - 1 ? 0.4 : 1 }}>▼</button>
+                            </>}
+                          </div>
                           {!isHome && (
                             <button
                               onClick={() => deletePage(idx)}

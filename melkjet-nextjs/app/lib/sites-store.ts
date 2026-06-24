@@ -31,6 +31,8 @@ export interface SitePage {
   slug: string
   title: string
   blocks: SiteBlock[]
+  inMenu?: boolean      // در منوی سایت نمایش داده شود (پیش‌فرض true)
+  menuLabel?: string    // عنوان دلخواه در منو
 }
 
 export interface Site {
@@ -93,6 +95,8 @@ function migrateSite(site: any): Site {
     pages = site.pages.map((pg: any, i: number) => ({
       slug: i === 0 ? 'home' : (sanitizeSlug(pg?.slug || '') || `page-${i}`),
       title: String(pg?.title || '').trim() || (i === 0 ? 'خانه' : `صفحه ${i + 1}`),
+      inMenu: pg?.inMenu !== false,
+      menuLabel: pg?.menuLabel ? String(pg.menuLabel) : undefined,
       blocks: Array.isArray(pg?.blocks) ? pg.blocks.map(normalizeBlock) : [],
     }))
   } else {
@@ -138,7 +142,7 @@ export function getSitePage(site: Site, pageSlug: string): SitePage {
   return site.pages.find(p => p.slug === want) || site.pages[0]
 }
 
-interface SavePageInput { slug?: string; title?: string; blocks?: any[] }
+interface SavePageInput { slug?: string; title?: string; blocks?: any[]; inMenu?: boolean; menuLabel?: string }
 
 export function saveSite(input: {
   slug?: string
@@ -182,6 +186,8 @@ export function saveSite(input: {
     return {
       slug: candidate,
       title: String(pg?.title || '').trim() || (i === 0 ? 'خانه' : `صفحه ${i + 1}`),
+      inMenu: (pg as { inMenu?: boolean })?.inMenu !== false,
+      menuLabel: (pg as { menuLabel?: string })?.menuLabel ? String((pg as { menuLabel?: string }).menuLabel) : undefined,
       blocks: Array.isArray(pg?.blocks) ? pg.blocks.map(normalizeBlock) : [],
     }
   })

@@ -316,22 +316,31 @@ function renderBlock(block: SiteBlock, primary: string, ownerName?: string) {
 }
 
 // Top nav listing every page of the site, themed. Home → /{slug}, others → /{slug}/{pageSlug}.
+// صفحاتی که باید در منو بیایند: خانه همیشه + هر صفحه‌ای که inMenu !== false
+function menuPages(site: Site): { slug: string; label: string; home: boolean }[] {
+  return site.pages
+    .map((pg, i) => ({ slug: pg.slug, label: pg.menuLabel || pg.title, home: i === 0, inMenu: i === 0 || pg.inMenu !== false }))
+    .filter(p => p.inMenu)
+    .map(({ slug, label, home }) => ({ slug, label, home }))
+}
+
 function SiteNav({ site, primary, currentSlug }: { site: Site; primary: string; currentSlug: string }) {
+  const items = menuPages(site)
   return (
     <nav style={{ background: '#fff', borderBottom: '1px solid #eee', padding: '0 24px', direction: 'rtl', position: 'sticky', top: 0, zIndex: 50 }}>
       <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 18, height: 58, flexWrap: 'wrap' }}>
         <a href={`/${site.slug}`} style={{ fontSize: 17, fontWeight: 900, color: '#1a1510', textDecoration: 'none', marginLeft: 'auto' }}>{site.title}</a>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {site.pages.map((pg, i) => {
-            const href = i === 0 ? `/${site.slug}` : `/${site.slug}/${pg.slug}`
-            const active = pg.slug === currentSlug
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          {items.map(it => {
+            const href = it.home ? `/${site.slug}` : `/${site.slug}/${it.slug}`
+            const active = it.slug === currentSlug
             return (
-              <a key={pg.slug} href={href} style={{
+              <a key={it.slug} href={href} style={{
                 fontSize: 13.5, fontWeight: active ? 800 : 600, textDecoration: 'none',
                 color: active ? '#fff' : '#444',
                 background: active ? primary : 'transparent',
                 padding: '7px 14px', borderRadius: 9,
-              }}>{pg.title}</a>
+              }}>{it.label}</a>
             )
           })}
         </div>
@@ -346,7 +355,7 @@ export function SiteShell({ site, page }: { site: Site; page: SitePage }) {
   const primary = site.theme?.primary || '#c9a84c'
   return (
     <main style={{ minHeight: '100vh', background: '#fff', fontFamily: 'Vazirmatn, Tahoma, sans-serif' }}>
-      {site.pages.length > 1 && <SiteNav site={site} primary={primary} currentSlug={page.slug} />}
+      {menuPages(site).length > 1 && <SiteNav site={site} primary={primary} currentSlug={page.slug} />}
       {page.blocks.map(block => renderBlock(block, primary, site.ownerName))}
     </main>
   )
