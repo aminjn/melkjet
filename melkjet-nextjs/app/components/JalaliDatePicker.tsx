@@ -25,8 +25,8 @@ function firstOfJMonth(offset: number): Date {
   return d
 }
 
-export default function JalaliDatePicker({ value, onChange, placeholder = 'انتخاب تاریخ', withTime = false, style }:
-  { value?: string; onChange: (display: string) => void; placeholder?: string; withTime?: boolean; style?: React.CSSProperties }) {
+export default function JalaliDatePicker({ value, onChange, onPickTs, placeholder = 'انتخاب تاریخ', withTime = false, style }:
+  { value?: string; onChange: (display: string) => void; onPickTs?: (ts: number) => void; placeholder?: string; withTime?: boolean; style?: React.CSSProperties }) {
   const [open, setOpen] = useState(false)
   const [offset, setOffset] = useState(0)
   const [time, setTime] = useState('')
@@ -54,6 +54,7 @@ export default function JalaliDatePicker({ value, onChange, placeholder = 'ان�
     const j = jParts(d)
     const ds = `${fa(j.jy)}/${pad(j.jm)}/${pad(j.jd)}`
     onChange(withTime && t ? `${ds} ${t}` : ds)
+    if (onPickTs) { const [hh, mm] = (t || '00:00').split(':').map(Number); onPickTs(new Date(d.getFullYear(), d.getMonth(), d.getDate(), hh || 0, mm || 0, 0, 0).getTime()) }
     if (!withTime) setOpen(false)
   }
 

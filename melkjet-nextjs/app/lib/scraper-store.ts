@@ -322,6 +322,7 @@ export interface ArticleInput {
   title: string; body: string; excerpt?: string; image?: string; category?: string
   tags?: string[]; slug?: string; seoTitle?: string; metaDescription?: string
   focusKeyword?: string; status?: 'draft' | 'published'; author?: string; source?: string
+  publishAt?: number   // زمان‌بندیِ انتشار (epoch ms)؛ اگر در آینده باشد، مقاله «زمان‌بندی‌شده» می‌شود
 }
 
 export function slugify(s: string): string {
@@ -357,12 +358,15 @@ function uniqueTitle(db: DB, base: string, exceptId?: string): string {
 // Insert an editorial article. Published → public immediately; draft → hidden from lists.
 export function addArticle(raw: ArticleInput): Item {
   const db = load()
-  const status = raw.status || 'published'
+  // اگر زمان‌بندی در آینده باشد، وضعیت «scheduled» می‌شود تا کران در زمانش منتشرش کند.
+  const scheduled = !!raw.publishAt && raw.publishAt > Date.now()
+  const status = scheduled ? 'scheduled' : (raw.status || 'published')
   const title = uniqueTitle(db, raw.title)
   const slug = uniqueSlug(db, raw.slug || title)
   const meta: Record<string, string> = {
     slug,
     cmsStatus: status,
+    ...(scheduled ? { publishAt: String(raw.publishAt) } : {}),
     author: raw.author || raw.source || 'تحریریه ملک‌جت',
     seoTitle: raw.seoTitle || title,
     metaDescription: raw.metaDescription || (raw.excerpt || raw.body).slice(0, 160),
@@ -396,18 +400,34 @@ export function updateArticle(itemId: string, patch: Partial<ArticleInput>): Ite
   if (patch.metaDescription !== undefined) meta.metaDescription = patch.metaDescription
   if (patch.focusKeyword !== undefined) meta.focusKeyword = patch.focusKeyword
   if (patch.author !== undefined) { meta.author = patch.author; it.sourceName = patch.author }
-  if (patch.status !== undefined) meta.cmsStatus = patch.status
+  // زمان‌بندی: اگر publishAt در آینده داده شد → scheduled؛ اگر منتشر شد → publishAt پاک می‌شود.
+  if (patch.publishAt !== undefined && patch.publishAt > Date.now()) { meta.cmsStatus = 'scheduled'; meta.publishAt = String(patch.publishAt) }
+  else if (patch.status !== undefined) { meta.cmsStatus = patch.status; if (patch.status === 'published' || patch.status === 'draft') delete meta.publishAt }
   it.meta = meta
   it.edited = true
   save(db)
   return it
 }
 
-// All article items (newest first), optionally only published.
+// All article items (newest first). publishedOnly → فقط «published» (نه پیش‌نویس، نه زمان‌بندی‌شده).
 export function listArticles(opts?: { publishedOnly?: boolean }): Item[] {
   return load().items
-    .filter(i => i.type === 'article' && (!opts?.publishedOnly || i.meta?.cmsStatus !== 'draft'))
+    .filter(i => i.type === 'article' && (!opts?.publishedOnly || (i.meta?.cmsStatus !== 'draft' && i.meta?.cmsStatus !== 'scheduled')))
     .sort((a, b) => b.scrapedAt - a.scrapedAt)
+}
+
+// مقالاتِ زمان‌بندی‌شده‌ای که زمانشان رسیده را منتشر می‌کند (برای کران). تعداد را برمی‌گرداند.
+export function publishDueArticles(): number {
+  const db = load()
+  const now = Date.now()
+  let n = 0
+  for (const it of db.items) {
+    if (it.type !== 'article' || it.meta?.cmsStatus !== 'scheduled') continue
+    const at = Number(it.meta?.publishAt || 0)
+    if (at && at <= now) { it.meta!.cmsStatus = 'published'; delete it.meta!.publishAt; n++ }
+  }
+  if (n) save(db)
+  return n
 }
 
 export function getArticleBySlug(slug: string): Item | null {

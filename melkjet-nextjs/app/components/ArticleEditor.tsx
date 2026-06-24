@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { mdToHtml } from '@/app/lib/markdown'
 import RichEditor from '@/app/components/RichEditor'
 import ImageUpload from '@/app/components/ImageUpload'
+import JalaliDatePicker from '@/app/components/JalaliDatePicker'
 
 // ویرایشگر مقالهٔ شبیه وردپرس: لیست مقالات + ویرایشگر کامل با سئو، برچسب،
 // دسته، تصویر شاخص، پیش‌نویس/انتشار و تولید با هوش مصنوعی (انسان‌نما).
@@ -46,17 +47,21 @@ export default function ArticleEditor({ compact, author }: { compact?: boolean; 
   }
   const slugFromTitle = () => { if (!f.slug && f.title) set('slug', f.title.trim().replace(/\s+/g, '-').slice(0, 70)) }
 
-  const save = async (status: 'draft' | 'published') => {
+  const [schedTs, setSchedTs] = useState<number | null>(null)
+  const [schedStr, setSchedStr] = useState('')
+
+  const save = async (status: 'draft' | 'published', publishAt?: number) => {
     if (!f.title.trim() || !f.body.trim()) { setMsg('⚠ عنوان و متن مقاله الزامی است'); return }
+    if (publishAt && publishAt <= Date.now()) { setMsg('⚠ زمانِ زمان‌بندی باید در آینده باشد'); return }
     setBusy('save'); setMsg('')
-    const payload = { ...f, status, ...(author ? { author } : {}) }
+    const payload = { ...f, status, ...(author ? { author } : {}), ...(publishAt ? { publishAt } : {}) }
     try {
       let res
       if (f.id) res = await fetch('/api/cms', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       else res = await fetch('/api/cms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const d = await res.json()
       if (!res.ok || d.error) { setMsg('⚠ ' + (d.error || 'خطا')); return }
-      setF({ ...d.article }); setMsg(status === 'published' ? '✓ منتشر شد' : '✓ پیش‌نویس ذخیره شد'); load()
+      setF({ ...d.article }); setMsg(publishAt ? `✓ برای ${schedStr} زمان‌بندی شد` : status === 'published' ? '✓ منتشر شد' : '✓ پیش‌نویس ذخیره شد'); load()
     } catch { setMsg('⚠ خطا در ارتباط') } finally { setBusy('') }
   }
 
@@ -266,7 +271,12 @@ export default function ArticleEditor({ compact, author }: { compact?: boolean; 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 10, flexWrap: 'wrap' }}>
         <button onClick={() => { setTab('list'); load() }} style={{ background: 'transparent', border: '1px solid var(--line2)', color: 'var(--muted)', borderRadius: 9, padding: '7px 14px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>→ همهٔ مقالات</button>
         {msg && <span style={{ fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7a14a' }}>{msg}</span>}
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* زمان‌بندیِ انتشار */}
+          <div style={{ width: 168 }}>
+            <JalaliDatePicker value={schedStr} withTime placeholder="زمان‌بندی انتشار" onChange={setSchedStr} onPickTs={setSchedTs} style={{ fontSize: 12, padding: '8px 10px' }} />
+          </div>
+          <button onClick={() => schedTs ? save('published', schedTs) : setMsg('⚠ ابتدا تاریخ و ساعتِ انتشار را انتخاب کنید')} disabled={!!busy} style={{ padding: '9px 14px', borderRadius: 10, border: '1px solid var(--gold)', background: 'var(--goldDim)', color: 'var(--gold)', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', opacity: busy ? .6 : 1 }}>⏰ زمان‌بندی</button>
           <button onClick={() => save('draft')} disabled={!!busy} style={{ padding: '9px 16px', borderRadius: 10, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--text)', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', opacity: busy ? .6 : 1 }}>ذخیرهٔ پیش‌نویس</button>
           <button onClick={() => save('published')} disabled={!!busy} style={{ padding: '9px 20px', borderRadius: 10, border: 'none', background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', opacity: busy ? .6 : 1 }}>{busy === 'save' ? 'در حال ذخیره…' : (f.status === 'published' ? 'به‌روزرسانی' : 'انتشار')}</button>
         </div>
