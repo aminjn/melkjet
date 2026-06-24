@@ -930,14 +930,14 @@ export default function ProsPage() {
                 محلهٔ آگهی هم خودکار با محله‌های موجودِ خودِ سایت تطبیق داده می‌شود (نیازی نیست محله را وارد کنید) و شما در همان محله به کاربران نشان داده می‌شوید.
               </div>
 
-              {/* افزودن آگهی‌ها با لینک (یک یا چند تا) */}
+              {/* افزودن آگهی‌ها با لینک */}
               <div style={{ ...card, padding: 16 }}>
-                <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>افزودن آگهی‌ها با لینک</div>
-                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.8 }}>
-                  لینکِ آگهی‌هایتان را از دیوار کپی کنید (هر آگهی → دکمهٔ «اشتراک‌گذاری/کپی لینک» → چیزی شبیه <span style={{ direction: 'ltr', display: 'inline-block' }}>divar.ir/v/…</span>) و اینجا بچسبانید.
-                  می‌توانید <b>چند لینک را با هم</b> (هر کدام در یک خط) بچسبانید تا همه یکجا وارد شوند.
+                <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>افزودن آگهی‌ها از دیوار</div>
+                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.9 }}>
+                  لینکِ <b>صفحهٔ اختصاصیِ خودتان در دیوار</b> (<span style={{ direction: 'ltr', display: 'inline-block' }}>divar.ir/pro/…</span>) را بچسبانید تا <b>همهٔ آگهی‌هایتان</b> یکجا و خودکار وارد شوند.
+                  <br />برای پیداکردن آن: در اپ دیوار → پروفایل/صفحهٔ اختصاصی → «اشتراک‌گذاری». (لینکِ تکیِ یک آگهی <span style={{ direction: 'ltr', display: 'inline-block' }}>divar.ir/v/…</span> هم پذیرفته می‌شود.)
                 </div>
-                <textarea value={divarUrl} onChange={e => setDivarUrl(e.target.value)} rows={4} placeholder={"https://divar.ir/v/AbcXyz123\nhttps://divar.ir/v/QwErTy456\n…"} style={{ ...inputStyle, direction: 'ltr', textAlign: 'left', resize: 'vertical', fontFamily: 'inherit' }} />
+                <textarea value={divarUrl} onChange={e => setDivarUrl(e.target.value)} rows={3} placeholder={"https://divar.ir/pro/HLTCumBJ"} style={{ ...inputStyle, direction: 'ltr', textAlign: 'left', resize: 'vertical', fontFamily: 'inherit' }} />
                 <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                   <button disabled={divarBusy || !divarUrl.trim()} onClick={async () => {
                     const d = await divarPost({ action: 'importUrl', url: divarUrl.trim() })
@@ -957,14 +957,14 @@ export default function ProsPage() {
               {/* تنظیمات و همگام‌سازی خودکار */}
               {cfg && <div style={{ ...card, padding: 16 }}>
                 <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>همگام‌سازی خودکار (کران‌جاب)</div>
-                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.8 }}>لینکِ <b>صفحهٔ جستجو/نقشهٔ منطقه‌تان</b> در دیوار را بدهید و <b>نام خودتان در دیوار</b> را بنویسید؛ سیستم در بازهٔ انتخابی، آگهی‌هایی که با نامِ شما در آن منطقه منتشر شده‌اند را خودکار وارد می‌کند. <span style={{ color: 'var(--faint)' }}>(برای نتیجهٔ کامل‌تر، لینک‌های آگهی‌ها را از بخش بالا هم می‌توانید یکجا اضافه کنید.)</span></div>
+                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.8 }}>لینکِ <b>صفحهٔ اختصاصیِ خودتان در دیوار</b> (<span style={{ direction: 'ltr', display: 'inline-block' }}>divar.ir/pro/…</span>) را بگذارید تا در بازهٔ انتخابی، همهٔ آگهی‌هایتان خودکار به‌روز شوند. <span style={{ color: 'var(--faint)' }}>(به‌جایش می‌توانید لینکِ جستجو/نقشهٔ منطقه + نامتان در دیوار را بدهید.)</span></div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <div>
-                    <label style={{ fontSize: 12, color: 'var(--muted)' }}>لینکِ جستجو/نقشهٔ منطقهٔ شما در دیوار</label>
-                    <input value={cfg.searchUrl} onChange={e => setDivarCfg({ ...cfg, searchUrl: e.target.value })} placeholder="https://divar.ir/s/tehran/buy-apartment/saadat-abad" style={{ ...inputStyle, direction: 'ltr', textAlign: 'left' }} />
+                    <label style={{ fontSize: 12, color: 'var(--muted)' }}>لینکِ صفحهٔ اختصاصی (پرو) یا جستجو/نقشهٔ شما در دیوار</label>
+                    <input value={cfg.searchUrl} onChange={e => setDivarCfg({ ...cfg, searchUrl: e.target.value })} placeholder="https://divar.ir/pro/HLTCumBJ" style={{ ...inputStyle, direction: 'ltr', textAlign: 'left' }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 12, color: 'var(--muted)' }}>نام شما / آژانس‌تان در دیوار <span style={{ color: 'var(--faint)' }}>(الزامی)</span></label>
+                    <label style={{ fontSize: 12, color: 'var(--muted)' }}>نام شما / آژانس‌تان در دیوار <span style={{ color: 'var(--faint)' }}>(فقط اگر لینکِ جستجو دادید)</span></label>
                     <input value={cfg.divarName} onChange={e => setDivarCfg({ ...cfg, divarName: e.target.value })} placeholder="دقیقاً همان نامی که زیر آگهی‌های دیوار نمایش داده می‌شود" style={inputStyle} />
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10 }}>

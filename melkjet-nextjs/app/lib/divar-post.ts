@@ -53,40 +53,76 @@ const PROXY = () => getAdminData().divar?.proxyUrl
   || process.env.HTTPS_PROXY || process.env.https_proxy
   || process.env.HTTP_PROXY || process.env.http_proxy || undefined
 
-/** توکنِ همهٔ آگهی‌های یک پروفایلِ پرو/کسب‌وکارِ دیوار را استخراج می‌کند.
- *  چند مسیر را امتحان می‌کند (API و صفحهٔ HTML) و توکن‌ها را با regex بیرون می‌کشد. */
+// اولین مقدارِ یک کلید در عمقِ JSON (برای پیداکردنِ cursorِ صفحهٔ بعد).
+function deepFindKey(node: any, key: string): any {
+  if (!node || typeof node !== 'object') return undefined
+  if (Array.isArray(node)) { for (const x of node) { const r = deepFindKey(x, key); if (r !== undefined) return r } return undefined }
+  if (node[key] !== undefined && node[key] !== null && node[key] !== '') return node[key]
+  for (const k of Object.keys(node)) { const r = deepFindKey(node[k], key); if (r !== undefined) return r }
+  return undefined
+}
+
+/** توکنِ همهٔ آگهی‌های یک پروفایلِ پرو/کسب‌وکارِ دیوار (divar.ir/pro/<slug>) را با endpointِ
+ *  عمومیِ brand-landing استخراج می‌کند — با صفحه‌بندیِ last_item_identifier تا همهٔ آگهی‌ها. */
 export async function fetchDivarProfileTokens(slug: string): Promise<{ tokens: string[]; name?: string; reason?: string }> {
   if (!slug) return { tokens: [], reason: 'bad_slug' }
   const proxyUrl = PROXY()
-  const tokens = new Set<string>()
-  let name: string | undefined
-  let any200 = false
-
-  const grab = async (u: string) => {
-    try {
-      const res = await proxiedRequest(u, {
-        method: 'GET',
-        headers: { accept: 'application/json, text/html, */*', 'user-agent': UA_BROWSER, origin: 'https://divar.ir', referer: `https://divar.ir/pro/${slug}`, 'x-standard-divar-error': 'true' },
-        proxyUrl, timeout: 20000,
-      })
-      if (res.status !== 200) return
-      any200 = true
-      const body = res.body || ''
-      // توکن‌های آگهی از لینک‌های /v/<token> و فیلدهای "token":"..."
-      const patterns = [/\/v\/([A-Za-z0-9]{6,12})/g, /"token"\s*:\s*"([A-Za-z0-9]{6,12})"/g]
-      for (const re of patterns) { let m: RegExpExecArray | null; while ((m = re.exec(body))) tokens.add(m[1]) }
-      if (!name) { const nm = body.match(/"name"\s*:\s*"([^"]{2,60})"/); if (nm) name = nm[1] }
-    } catch { /* مسیر بعدی */ }
+  const ENDPOINT = `https://api.divar.ir/v8/premium-user/web/business/brand-landing/${encodeURIComponent(slug)}`
+  const headers = {
+    'content-type': 'application/json',
+    accept: 'application/json, text/plain, */*',
+    'user-agent': UA_BROWSER,
+    origin: 'https://divar.ir',
+    referer: `https://divar.ir/pro/${slug}`,
+    'x-screen-size': '1280x720',
+    'x-standard-divar-error': 'true',
   }
 
-  // ۱) APIِ پستِ کسب‌وکار (best-effort)  ۲) APIِ صفحهٔ کسب‌وکار  ۳) خودِ صفحهٔ HTML
-  await grab(`https://api.divar.ir/v8/posts-v2/web/business/${slug}`)
-  if (!tokens.size) await grab(`https://api.divar.ir/v8/web-business-page/${slug}`)
-  if (!tokens.size) await grab(`https://divar.ir/pro/${slug}`)
+  const tokens = new Set<string>()
+  let name: string | undefined
+  let cursor = ''
+  let any200 = false
+  let reason: string | undefined
+
+  for (let page = 0; page < 40; page++) {
+    const body = JSON.stringify({ request_data: { brand_token: slug, tracker_session_id: '' }, specification: { last_item_identifier: cursor } })
+    let res
+    try {
+      res = await proxiedRequest(ENDPOINT, { method: 'POST', headers, body, proxyUrl, timeout: 20000 })
+    } catch { reason = reason || 'unreachable'; break }
+    if (res.status !== 200) { if (page === 0) reason = `http_${res.status}`; break }
+    any200 = true
+
+    const raw = res.body || ''
+    const before = tokens.size
+    let j: any = null
+    try { j = JSON.parse(raw) } catch { /* پایین‌تر با regex */ }
+
+    // آگهی‌ها در post_row_widget_list هستند؛ token می‌تواند _ و - داشته باشد (base64url).
+    if (j && Array.isArray(j.post_row_widget_list)) {
+      for (const w of j.post_row_widget_list) {
+        const t = w?.data?.action?.payload?.token || w?.data?.token
+        if (typeof t === 'string' && t && t !== slug) tokens.add(t)
+      }
+      if (!name) { const t = j.header_widget_list?.[0]?.data?.title; if (typeof t === 'string') name = t.trim() }
+    } else {
+      // پشتیبان: regex با charsetِ درست (شاملِ _ و -)
+      let m: RegExpExecArray | null
+      const re = /"token"\s*:\s*"([A-Za-z0-9_-]{6,14})"/g
+      while ((m = re.exec(raw))) { if (m[1] !== slug) tokens.add(m[1]) }
+    }
+
+    // cursorِ صفحهٔ بعد: infinite_scroll_response.last_item_identifier
+    const next = (j?.infinite_scroll_response?.last_item_identifier ?? deepFindKey(j, 'last_item_identifier'))
+
+    if (tokens.size === before) break                       // آگهیِ جدیدی نیامد → تمام
+    if (next === undefined || next === null || next === '' || String(next) === cursor) break  // صفحهٔ بعدی نیست
+    cursor = String(next)
+  }
 
   tokens.delete(slug)
-  const list = Array.from(tokens).slice(0, 100)
-  if (!list.length) return { tokens: [], name, reason: any200 ? 'no_tokens' : 'unreachable' }
+  const list = Array.from(tokens).slice(0, 300)
+  if (!list.length) return { tokens: [], name, reason: reason || (any200 ? 'no_tokens' : 'unreachable') }
   return { tokens: list, name }
 }
 
