@@ -14,12 +14,13 @@ export const CRM_VIEWS: { id: CrmView; label: string; icon: string }[] = [
   { id: 'calendar', icon: '◫', label: 'تقویم' },
 ]
 
-// Mirrors app/lib/crm-store.ts Task (the API shape). `time` is derived from due/createdAt for display.
+// Mirrors app/lib/crm-store.ts Task (the API shape). `dueTs` is the epoch ms of the due moment.
 interface Task {
   id: string
   done: boolean
   title: string
   due?: string
+  dueTs?: number
   priority?: 'high' | 'medium' | 'low'
   createdAt: number
 }
@@ -50,13 +51,6 @@ const stageColumns: { id: Stage; label: string; color: string }[] = [
 
 const navItems = CRM_VIEWS
 
-const kpis = [
-  { label: 'لیدهای فعال', value: '۲۴', change: '+۳', changeDir: 'up', icon: '◈' },
-  { label: 'معاملات ماه', value: '۷', change: '+۲', changeDir: 'up', icon: '◰' },
-  { label: 'درآمد ماه', value: '۸۵ م.ت', change: '+۱۲٪', changeDir: 'up', icon: '◴' },
-  { label: 'نرخ تبدیل', value: '۲۹٪', change: '-۲٪', changeDir: 'down', icon: '◫' },
-]
-
 const salesData = [
   { month: 'بهمن', value: 45, deals: 4 },
   { month: 'اسفند', value: 62, deals: 5 },
@@ -72,36 +66,48 @@ const insights = [
   { icon: '◰', text: '۲ ملک با بودجه لید «شیوا حیدری» منطبق است.' },
 ]
 
-const recentLeads = [
-  { name: 'رضا موسوی', need: 'خرید · سعادت‌آباد', budget: '۲۰ میلیارد', status: 'داغ', statusColor: '#e74c3c', lastContact: '۳ روز پیش' },
-  { name: 'شیوا حیدری', need: 'اجاره · ونک', budget: '۱۵ م.ت', status: 'گرم', statusColor: '#e7a14a', lastContact: 'دیروز' },
-  { name: 'کاوه اسدی', need: 'خرید · جردن', budget: '۱۵ میلیارد', status: 'سرد', statusColor: '#7a8fae', lastContact: 'هفته پیش' },
-  { name: 'نیلوفر رشیدی', need: 'پیش‌فروش · شهرک غرب', budget: '۱۸ میلیارد', status: 'گرم', statusColor: '#e7a14a', lastContact: 'امروز' },
-]
-
-const todayTasksData = [
-  { done: false, text: 'تماس با رضا موسوی برای پیگیری', time: '۱۰:۰۰' },
-  { done: true, text: 'ارسال قرارداد به خانواده احمدی', time: '۱۱:۳۰' },
-  { done: false, text: 'بازدید ملک سعادت‌آباد با شیوا حیدری', time: '۱۴:۰۰' },
-  { done: false, text: 'تنظیم آگهی جدید برج آرین', time: '۱۶:۳۰' },
-]
-
-const weekDays = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه']
-const weekDates = ['۱۵', '۱۶', '۱۷', '۱۸', '۱۹', '۲۰', '۲۱']
-const calendarEvents = [
-  { day: 0, time: '۱۰:۰۰', title: 'بازدید سعادت‌آباد', duration: 1.5, color: 'var(--gold)' },
-  { day: 1, time: '۱۱:۳۰', title: 'جلسه با خانواده احمدی', duration: 1, color: '#7a8fae' },
-  { day: 2, time: '۱۴:۰۰', title: 'بازدید پنت‌هاوس', duration: 2, color: '#5fd98a' },
-  { day: 3, time: '۱۰:۰۰', title: 'تماس با رضا موسوی', duration: 0.5, color: '#e7a14a' },
-  { day: 4, time: '۱۶:۰۰', title: 'امضای قرارداد', duration: 1, color: '#e74c3c' },
-]
-
 const viewTitles: Record<CrmView, string> = {
   dashboard: 'داشبورد',
   listings: 'فایل‌های ملکی',
   pipeline: 'پایپ‌لاین CRM',
   tasks: 'وظایف',
-  calendar: 'تقویم هفتگی',
+  calendar: 'تقویم',
+}
+
+// ── تقویم جلالی (بدون وابستگی) — مثل app/pros/page.tsx ──
+const J_MONTHS = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند']
+const J_WEEK = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه']
+const JF = new Intl.DateTimeFormat('en-US-u-ca-persian', { year: 'numeric', month: 'numeric', day: 'numeric' })
+function jParts(d: Date): { jy: number; jm: number; jd: number } {
+  const p = JF.formatToParts(d); const g = (t: string) => Number(p.find(x => x.type === t)?.value || 0)
+  return { jy: g('year'), jm: g('month'), jd: g('day') }
+}
+// First Gregorian Date of the Jalali month that is `offset` months from this month.
+function firstOfJMonth(offset: number): Date {
+  let d = new Date(); const t = jParts(d)
+  d = new Date(d.getFullYear(), d.getMonth(), d.getDate() - (t.jd - 1))
+  let o = offset
+  while (o > 0) { const n = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 32); const p = jParts(n); d = new Date(n.getFullYear(), n.getMonth(), n.getDate() - (p.jd - 1)); o-- }
+  while (o < 0) { const n = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1); const p = jParts(n); d = new Date(n.getFullYear(), n.getMonth(), n.getDate() - (p.jd - 1)); o++ }
+  return d
+}
+// Build the leading-blank + day cells of a Jalali month (cells hold real Gregorian Dates).
+function jMonthCells(offset: number): { first: Date; jy: number; jm: number; cells: (Date | null)[] } {
+  const first = firstOfJMonth(offset)
+  const { jy, jm } = jParts(first)
+  const lead = (first.getDay() + 1) % 7 // شنبه‌محور
+  const cells: (Date | null)[] = []
+  for (let i = 0; i < lead; i++) cells.push(null)
+  for (let dd = new Date(first); jParts(dd).jm === jm; dd = new Date(dd.getFullYear(), dd.getMonth(), dd.getDate() + 1)) cells.push(new Date(dd))
+  while (cells.length % 7 !== 0) cells.push(null)
+  return { first, jy, jm, cells }
+}
+const FA = (n: number) => n.toLocaleString('fa-IR')
+const pad2 = (n: number) => (n < 10 ? '0' + n : '' + n)
+// Display label «jY/jM/jD HH:MM» in Persian digits from a Gregorian Date.
+function jDateTimeLabel(d: Date): string {
+  const { jy, jm, jd } = jParts(d)
+  return `${FA(jy)}/${FA(jm).padStart(2, '۰')}/${FA(jd).padStart(2, '۰')} ${FA(d.getHours()).padStart(2, '۰')}:${FA(d.getMinutes()).padStart(2, '۰')}`
 }
 
 function getInitials(name: string) {
@@ -120,28 +126,81 @@ function getGradient(name: string) {
   return avatarGradients[name.charCodeAt(0) % avatarGradients.length]
 }
 
-const persianDigits = '۰۱۲۳۴۵۶۷۸۹'
-
-function persianToLatin(str: string) {
-  return str.split('').map(c => {
-    const idx = persianDigits.indexOf(c)
-    return idx >= 0 ? String(idx) : c
-  }).join('')
-}
-
-function timeToMinutesFrom9(timeStr: string) {
-  const latin = persianToLatin(timeStr)
-  const [h, m] = latin.split(':').map(Number)
-  return (h - 9) * 60 + (m || 0)
-}
-
 const priorityColor: Record<string, string> = { high: '#e74c3c', medium: '#e7a14a', low: '#5fd98a' }
-const calendarHours = Array.from({ length: 10 }, (_, i) => i + 9)
+const priorityLabel: Record<string, string> = { high: 'بالا', medium: 'متوسط', low: 'پایین' }
+const PRIORITIES: ('high' | 'medium' | 'low')[] = ['high', 'medium', 'low']
 
 // Display label for a task's time: its due text, else creation date.
 function taskTimeLabel(t: Task): string {
   if (t.due) return t.due
   try { return new Date(t.createdAt).toLocaleDateString('fa-IR') } catch { return 'بدون زمان' }
+}
+
+const FONT = 'Vazirmatn, system-ui, sans-serif'
+
+// Sort key: tasks with a dueTs come first (ascending); those without go last.
+function dueSortKey(t: Task): number {
+  return typeof t.dueTs === 'number' ? t.dueTs : Number.MAX_SAFE_INTEGER
+}
+
+// ───── Jalali date+time picker popover ─────
+// Builds the month grid FROM Gregorian Dates (no Jalali→Gregorian conversion).
+// On day click, combines the cell's real Gregorian Date with the chosen HH:MM.
+function JalaliDateTimePicker({ value, onPick, onClose }: { value?: number; onPick: (ts: number, label: string) => void; onClose: () => void }) {
+  const base = typeof value === 'number' ? new Date(value) : new Date()
+  const [offset, setOffset] = useState(0)
+  const [time, setTime] = useState(`${pad2(base.getHours())}:${pad2(base.getMinutes())}`)
+  const { jy, jm, cells } = jMonthCells(offset)
+  const todayKey = (() => { const t = jParts(new Date()); return `${t.jy}-${t.jm}-${t.jd}` })()
+  const selKey = typeof value === 'number' ? (() => { const t = jParts(new Date(value)); return `${t.jy}-${t.jm}-${t.jd}` })() : ''
+  const navBtn: React.CSSProperties = { padding: '5px 10px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--text)', cursor: 'pointer', fontSize: 12, fontFamily: FONT }
+  const choose = (d: Date) => {
+    const [h, m] = time.split(':').map(Number)
+    const picked = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h || 0, m || 0, 0, 0)
+    onPick(picked.getTime(), jDateTimeLabel(picked))
+  }
+  return (
+    <div onClick={e => e.stopPropagation()} style={{
+      position: 'absolute', zIndex: 60, top: 'calc(100% + 6px)', right: 0,
+      width: 290, background: 'var(--surface)', border: '1px solid var(--gold)',
+      borderRadius: 12, padding: 12, boxShadow: '0 16px 40px -16px rgba(0,0,0,0.6)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <div style={{ fontSize: 13, fontWeight: 800 }}>{J_MONTHS[jm - 1]} {FA(jy)}</div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button onClick={() => setOffset(o => o - 1)} style={navBtn}>→ قبل</button>
+          <button onClick={() => setOffset(0)} style={{ ...navBtn, color: 'var(--gold)', borderColor: 'var(--gold)' }}>امروز</button>
+          <button onClick={() => setOffset(o => o + 1)} style={navBtn}>بعد ←</button>
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 3 }}>
+        {J_WEEK.map(w => <div key={w} style={{ textAlign: 'center', fontSize: 10, color: 'var(--muted)', fontWeight: 700, padding: '2px 0' }}>{w[0]}</div>)}
+        {cells.map((d, i) => {
+          if (!d) return <div key={i} />
+          const p = jParts(d)
+          const key = `${p.jy}-${p.jm}-${p.jd}`
+          const isToday = key === todayKey
+          const isSel = key === selKey
+          return (
+            <button key={i} onClick={() => choose(d)} style={{
+              aspectRatio: '1', borderRadius: 7, cursor: 'pointer', fontFamily: FONT, fontSize: 12, fontWeight: isToday || isSel ? 800 : 500,
+              border: `1px solid ${isSel ? 'var(--gold)' : isToday ? 'var(--gold)' : 'var(--line)'}`,
+              background: isSel ? 'var(--gold)' : isToday ? 'var(--goldDim)' : 'var(--bg)',
+              color: isSel ? '#16140f' : isToday ? 'var(--gold)' : 'var(--text)',
+            }}>{FA(p.jd)}</button>
+          )
+        })}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+        <span style={{ fontSize: 12, color: 'var(--muted)' }}>ساعت</span>
+        <input type="time" value={time} onChange={e => setTime(e.target.value)} style={{
+          flex: 1, padding: '6px 10px', borderRadius: 8, background: 'var(--bg)', border: '1px solid var(--line)',
+          color: 'var(--text)', fontSize: 13, outline: 'none', fontFamily: FONT, direction: 'ltr',
+        }} />
+        <button onClick={onClose} style={{ ...navBtn, color: 'var(--muted)' }}>بستن</button>
+      </div>
+    </div>
+  )
 }
 
 export default function CrmTool({ embedded = false, view: viewProp, onView }: { embedded?: boolean; view?: CrmView; onView?: (v: CrmView) => void }) {
@@ -150,8 +209,17 @@ export default function CrmTool({ embedded = false, view: viewProp, onView }: { 
   const setActiveView = (v: CrmView) => { onView ? onView(v) : setInternalView(v) }
   const [tasks, setTasks] = useState<Task[]>([])
   const [newTaskText, setNewTaskText] = useState('')
+  const [newTaskPriority, setNewTaskPriority] = useState<'high' | 'medium' | 'low'>('medium')
+  const [newTaskDueTs, setNewTaskDueTs] = useState<number | null>(null)
+  const [newTaskDue, setNewTaskDue] = useState<string>('')
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [taskFilter, setTaskFilter] = useState<'all' | 'today' | 'overdue' | 'done'>('all')
+  // id of the task whose inline due/priority editor (date picker) is open.
+  const [editingDueId, setEditingDueId] = useState<string | null>(null)
+  // calendar view month offset + selected day key.
+  const [calOffset, setCalOffset] = useState(0)
+  const [calSelKey, setCalSelKey] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [todayTasks, setTodayTasks] = useState(todayTasksData)
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
 
   // Real scraped listings for the "فایل‌ها" view.
@@ -222,18 +290,35 @@ export default function CrmTool({ embedded = false, view: viewProp, onView }: { 
   const addTask = async () => {
     const title = newTaskText.trim()
     if (!title) return
+    const priority = newTaskPriority
+    const dueTs = newTaskDueTs
+    const due = newTaskDue
     setNewTaskText('')
+    setNewTaskPriority('medium')
+    setNewTaskDueTs(null)
+    setNewTaskDue('')
+    setPickerOpen(false)
     try {
       const r = await fetch('/api/crm/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, priority: 'medium' }),
+        body: JSON.stringify({ title, priority, ...(dueTs !== null ? { due, dueTs } : {}) }),
       })
       if (r.ok) {
         const { task } = await r.json()
         if (task) setTasks(prev => [task, ...prev])
       }
     } catch {}
+  }
+
+  // Inline edit of a task's priority and/or due — PATCH with the editable fields.
+  const patchTask = (id: string, patch: { priority?: 'high' | 'medium' | 'low'; due?: string; dueTs?: number }) => {
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t))
+    fetch('/api/crm/tasks', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, ...patch }),
+    }).catch(() => {})
   }
 
   const toggleTask = (id: string) => {
@@ -321,16 +406,14 @@ export default function CrmTool({ embedded = false, view: viewProp, onView }: { 
     contract: { status: 'قرارداد', color: '#5fd98a' },
     lost: { status: 'از دست‌رفته', color: '#7a8fae' },
   }
-  const recentLeadsLive = leads.length > 0
-    ? leads.slice(0, 5).map(l => ({
-        name: l.name,
-        need: l.need || '—',
-        budget: l.budget || '—',
-        status: stageMeta[l.stage].status,
-        statusColor: stageMeta[l.stage].color,
-        lastContact: (() => { try { return new Date(l.updatedAt).toLocaleDateString('fa-IR') } catch { return '—' } })(),
-      }))
-    : recentLeads
+  const recentLeadsLive = leads.slice(0, 5).map(l => ({
+    name: l.name,
+    need: l.need || '—',
+    budget: l.budget || '—',
+    status: stageMeta[l.stage].status,
+    statusColor: stageMeta[l.stage].color,
+    lastContact: (() => { try { return new Date(l.updatedAt).toLocaleDateString('fa-IR') } catch { return '—' } })(),
+  }))
 
   // Real growth sentence when available, else the original copy.
   const insightsLive = insights.map(ins =>
@@ -341,6 +424,27 @@ export default function CrmTool({ embedded = false, view: viewProp, onView }: { 
 
   const maxSales = Math.max(...salesData.map(d => d.value))
 
+  // ───── Live, derived task collections (single source of truth) ─────
+  const now = Date.now()
+  const todayKeyG = (() => { const t = jParts(new Date()); return `${t.jy}-${t.jm}-${t.jd}` })()
+  const isToday = (t: Task) => typeof t.dueTs === 'number' && (() => { const p = jParts(new Date(t.dueTs)); return `${p.jy}-${p.jm}-${p.jd}` === todayKeyG })()
+  const isOverdue = (t: Task) => !t.done && typeof t.dueTs === 'number' && t.dueTs < now
+  const openCount = tasks.filter(t => !t.done).length
+  const todayCount = tasks.filter(t => !t.done && isToday(t)).length
+  const overdueCount = tasks.filter(isOverdue).length
+  const sortedTasks = [...tasks].sort((a, b) => dueSortKey(a) - dueSortKey(b))
+  const todaysTasks = sortedTasks.filter(t => isToday(t))
+  // per-stage lead breakdown for the dashboard
+  const stageBreakdown = stageColumns.map(c => ({ ...c, count: leads.filter(l => l.stage === c.id).length }))
+
+  // Filtered + sorted list for the Tasks view
+  const filteredTasks = sortedTasks.filter(t => {
+    if (taskFilter === 'today') return isToday(t)
+    if (taskFilter === 'overdue') return isOverdue(t)
+    if (taskFilter === 'done') return t.done
+    return true
+  })
+
   // The per-view content blocks — shared by both standalone (<main>) and embedded modes.
   const content = (
     <>
@@ -348,9 +452,14 @@ export default function CrmTool({ embedded = false, view: viewProp, onView }: { 
       {activeView === 'dashboard' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
-          {/* KPI Cards */}
+          {/* KPI Cards — real numbers from live data */}
           <div className="mjc-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-            {kpis.map((kpi, i) => (
+            {[
+              { label: 'وظایف باز', value: openCount, sub: `${FA(todayCount)} امروز`, subColor: 'var(--gold)', icon: '✓' },
+              { label: 'معوق', value: overdueCount, sub: overdueCount > 0 ? 'نیاز به پیگیری' : 'بدون معوقه', subColor: overdueCount > 0 ? '#e74c3c' : '#5fd98a', icon: '◴' },
+              { label: 'کل لیدها', value: leads.length, sub: `${FA(stageBreakdown.find(s => s.id === 'contract')?.count || 0)} قرارداد`, subColor: '#5fd98a', icon: '◈' },
+              { label: 'فایل‌های ملکی', value: listings.length, sub: growth !== null ? `رشد منطقه ${growth >= 0 ? '+' : ''}${FA(growth)}٪` : 'فایل فعال', subColor: 'var(--gold)', icon: '◰' },
+            ].map((kpi, i) => (
               <div key={i} style={{
                 background: 'var(--surface)',
                 border: '1px solid var(--line)',
@@ -373,19 +482,37 @@ export default function CrmTool({ embedded = false, view: viewProp, onView }: { 
                     fontSize: 14, color: 'var(--gold)',
                   }}>{kpi.icon}</span>
                 </div>
-                <div style={{ fontSize: 28, fontWeight: 800, marginBottom: 10, letterSpacing: '-0.5px' }}>{kpi.value}</div>
+                <div style={{ fontSize: 28, fontWeight: 800, marginBottom: 10, letterSpacing: '-0.5px' }}>{FA(kpi.value)}</div>
                 <div style={{
                   display: 'inline-flex', alignItems: 'center', gap: 4,
-                  fontSize: 12, fontWeight: 600,
-                  color: kpi.changeDir === 'up' ? '#5fd98a' : '#e74c3c',
-                  background: kpi.changeDir === 'up' ? 'rgba(95,217,138,0.12)' : 'rgba(231,76,60,0.12)',
+                  fontSize: 12, fontWeight: 600, color: kpi.subColor,
+                  background: 'var(--bg)', border: '1px solid var(--line)',
                   padding: '3px 8px', borderRadius: 6,
                 }}>
-                  <span>{kpi.changeDir === 'up' ? '↑' : '↓'}</span>
-                  <span>{kpi.change} این ماه</span>
+                  <span>{kpi.sub}</span>
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* Per-stage lead breakdown */}
+          <div style={{
+            background: 'var(--surface)', border: '1px solid var(--line)',
+            borderRadius: 16, padding: 20,
+          }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>پایپ‌لاین لیدها</h3>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {stageBreakdown.map(s => (
+                <div key={s.id} style={{
+                  flex: '1 1 120px', minWidth: 120, background: 'var(--bg)',
+                  border: '1px solid var(--line)', borderRadius: 12, padding: '12px 14px',
+                  borderTop: `3px solid ${s.color}`,
+                }}>
+                  <div style={{ fontSize: 11.5, color: s.color, fontWeight: 700 }}>{s.label}</div>
+                  <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4 }}>{FA(s.count)}</div>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Bar Chart + AI Insights */}
@@ -497,6 +624,9 @@ export default function CrmTool({ embedded = false, view: viewProp, onView }: { 
                 >مشاهده همه ←</button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {recentLeadsLive.length === 0 && (
+                  <div style={{ fontSize: 12.5, color: 'var(--faint)', textAlign: 'center', padding: '18px 0' }}>هنوز لیدی ثبت نشده است.</div>
+                )}
                 {recentLeadsLive.map((lead, i) => (
                   <div key={i} style={{
                     display: 'flex', alignItems: 'center', gap: 12,
@@ -544,13 +674,16 @@ export default function CrmTool({ embedded = false, view: viewProp, onView }: { 
                   fontSize: 11, background: 'var(--goldDim)',
                   color: 'var(--gold)', padding: '2px 8px',
                   borderRadius: 6, fontWeight: 600,
-                }}>{todayTasks.filter(t => !t.done).length} باقی‌مانده</span>
+                }}>{FA(todaysTasks.filter(t => !t.done).length)} باقی‌مانده</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {todayTasks.map((task, i) => (
+                {todaysTasks.length === 0 && (
+                  <div style={{ fontSize: 12.5, color: 'var(--faint)', textAlign: 'center', padding: '18px 0' }}>وظیفه‌ای برای امروز ندارید.</div>
+                )}
+                {todaysTasks.map(task => (
                   <div
-                    key={i}
-                    onClick={() => setTodayTasks(prev => prev.map((t, j) => j === i ? { ...t, done: !t.done } : t))}
+                    key={task.id}
+                    onClick={() => toggleTask(task.id)}
                     style={{
                       display: 'flex', alignItems: 'flex-start', gap: 10,
                       padding: '10px 12px',
@@ -572,15 +705,19 @@ export default function CrmTool({ embedded = false, view: viewProp, onView }: { 
                     }}>
                       {task.done && <span style={{ color: '#16140f', fontSize: 11, fontWeight: 900 }}>✓</span>}
                     </div>
-                    <div style={{ flex: 1 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{
                         fontSize: 12, fontWeight: 500,
                         textDecoration: task.done ? 'line-through' : 'none',
                         color: task.done ? 'var(--muted)' : 'var(--text)',
                         lineHeight: 1.5,
-                      }}>{task.text}</div>
-                      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{task.time}</div>
+                      }}>{task.title}</div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{task.due || '—'}</div>
                     </div>
+                    <span style={{
+                      width: 8, height: 8, borderRadius: '50%', marginTop: 5, flexShrink: 0,
+                      background: priorityColor[task.priority || 'medium'], display: 'inline-block',
+                    }} />
                   </div>
                 ))}
               </div>
@@ -818,229 +955,283 @@ export default function CrmTool({ embedded = false, view: viewProp, onView }: { 
 
       {/* ==================== TASKS ==================== */}
       {activeView === 'tasks' && (
-        <div style={{ maxWidth: 720 }}>
+        <div style={{ maxWidth: 760 }}>
 
-          {/* Add Task */}
+          {/* Add Task — title + Jalali date/time picker + priority */}
           <div style={{
-            display: 'flex', gap: 10, marginBottom: 20,
+            marginBottom: 20,
             background: 'var(--surface)',
             border: '1px solid var(--line)',
             borderRadius: 14, padding: 14,
           }}>
-            <input
-              value={newTaskText}
-              onChange={e => setNewTaskText(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && addTask()}
-              placeholder="وظیفه جدید اضافه کنید..."
-              style={{
-                flex: 1, padding: '8px 12px',
-                borderRadius: 10, background: 'var(--bg)',
-                border: '1px solid var(--line)', color: 'var(--text)',
-                fontSize: 13, outline: 'none',
-                fontFamily: 'Vazirmatn, system-ui, sans-serif',
-              }}
-            />
-            <button
-              onClick={addTask}
-              style={{
-                padding: '8px 20px', borderRadius: 10,
-                background: 'var(--gold)', border: 'none',
-                color: '#16140f', fontWeight: 700, fontSize: 13,
-                cursor: 'pointer', fontFamily: 'Vazirmatn, system-ui, sans-serif',
-              }}
-            >+ افزودن</button>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <input
+                value={newTaskText}
+                onChange={e => setNewTaskText(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addTask()}
+                placeholder="عنوان وظیفه جدید…"
+                style={{
+                  flex: '2 1 200px', padding: '8px 12px',
+                  borderRadius: 10, background: 'var(--bg)',
+                  border: '1px solid var(--line)', color: 'var(--text)',
+                  fontSize: 13, outline: 'none', fontFamily: FONT,
+                }}
+              />
+              {/* Date/time popover trigger */}
+              <div style={{ position: 'relative', flex: '1 1 160px' }}>
+                <button
+                  onClick={() => setPickerOpen(o => !o)}
+                  style={{
+                    width: '100%', padding: '8px 12px', borderRadius: 10,
+                    background: 'var(--bg)', border: `1px solid ${newTaskDueTs !== null ? 'var(--gold)' : 'var(--line)'}`,
+                    color: newTaskDueTs !== null ? 'var(--gold)' : 'var(--muted)', cursor: 'pointer',
+                    fontSize: 12.5, fontFamily: FONT, textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  }}
+                >📅 {newTaskDue || 'انتخاب تاریخ و ساعت'}</button>
+                {pickerOpen && (
+                  <JalaliDateTimePicker
+                    value={newTaskDueTs ?? undefined}
+                    onPick={(ts, label) => { setNewTaskDueTs(ts); setNewTaskDue(label); setPickerOpen(false) }}
+                    onClose={() => setPickerOpen(false)}
+                  />
+                )}
+              </div>
+              <select
+                value={newTaskPriority}
+                onChange={e => setNewTaskPriority(e.target.value as 'high' | 'medium' | 'low')}
+                style={{
+                  flex: '0 1 110px', padding: '8px 10px', borderRadius: 10,
+                  background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--text)',
+                  fontSize: 12.5, outline: 'none', fontFamily: FONT, cursor: 'pointer',
+                }}
+              >
+                {PRIORITIES.map(p => <option key={p} value={p}>اولویت {priorityLabel[p]}</option>)}
+              </select>
+              <button
+                onClick={addTask}
+                disabled={!newTaskText.trim()}
+                style={{
+                  padding: '8px 20px', borderRadius: 10,
+                  background: 'var(--gold)', border: 'none',
+                  color: '#16140f', fontWeight: 700, fontSize: 13,
+                  cursor: newTaskText.trim() ? 'pointer' : 'default', opacity: newTaskText.trim() ? 1 : 0.5,
+                  fontFamily: FONT,
+                }}
+              >+ افزودن</button>
+            </div>
           </div>
 
-          {/* Stats row */}
-          <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-            {[
-              { label: 'کل', count: tasks.length, color: 'var(--text)' },
-              { label: 'انجام‌شده', count: tasks.filter(t => t.done).length, color: '#5fd98a' },
-              { label: 'باقی‌مانده', count: tasks.filter(t => !t.done).length, color: '#e7a14a' },
-            ].map((s, i) => (
-              <div key={i} style={{
-                flex: 1, padding: '12px 16px',
-                background: 'var(--surface)',
-                border: '1px solid var(--line)',
-                borderRadius: 10, textAlign: 'center',
-              }}>
-                <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.count}</div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{s.label}</div>
-              </div>
-            ))}
+          {/* Filter chips */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+            {([
+              { id: 'all', label: 'همه', count: tasks.length },
+              { id: 'today', label: 'امروز', count: tasks.filter(t => isToday(t)).length },
+              { id: 'overdue', label: 'معوق', count: overdueCount },
+              { id: 'done', label: 'انجام‌شده', count: tasks.filter(t => t.done).length },
+            ] as const).map(chip => {
+              const on = taskFilter === chip.id
+              return (
+                <button key={chip.id} onClick={() => setTaskFilter(chip.id)} style={{
+                  padding: '7px 14px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, fontSize: 12.5,
+                  fontWeight: on ? 700 : 500,
+                  border: `1px solid ${on ? 'var(--gold)' : 'var(--line)'}`,
+                  background: on ? 'var(--goldDim)' : 'var(--surface)',
+                  color: on ? 'var(--gold)' : 'var(--muted)',
+                }}>{chip.label} ({FA(chip.count)})</button>
+              )
+            })}
           </div>
 
           {/* Task List */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {tasks.map(task => (
-              <div
-                key={task.id}
-                onClick={() => toggleTask(task.id)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 12,
-                  padding: '14px 16px',
-                  background: 'var(--surface)',
-                  border: '1px solid var(--line)',
-                  borderRadius: 12,
-                  cursor: 'pointer',
-                  opacity: task.done ? 0.65 : 1,
-                  transition: 'opacity 0.2s',
-                }}
-              >
-                <div style={{
-                  width: 20, height: 20, borderRadius: 6,
-                  border: task.done ? '2px solid #5fd98a' : '2px solid var(--line2)',
-                  background: task.done ? '#5fd98a' : 'transparent',
-                  flexShrink: 0,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  transition: 'all 0.15s',
-                }}>
-                  {task.done && <span style={{ color: '#16140f', fontSize: 12, fontWeight: 900, lineHeight: 1 }}>✓</span>}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{
-                    fontSize: 14, fontWeight: 500,
-                    textDecoration: task.done ? 'line-through' : 'none',
-                  }}>{task.title}</div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                  <span style={{
-                    fontSize: 11, color: 'var(--muted)',
-                    background: 'var(--bg)',
-                    padding: '3px 10px', borderRadius: 6,
-                    border: '1px solid var(--line)',
-                  }}>{taskTimeLabel(task)}</span>
-                  <span style={{
-                    width: 8, height: 8, borderRadius: '50%',
-                    background: priorityColor[task.priority || 'medium'],
-                    display: 'inline-block',
-                    boxShadow: `0 0 6px ${priorityColor[task.priority || 'medium']}88`,
-                  }} />
-                  <button
-                    onClick={e => { e.stopPropagation(); deleteTask(task.id) }}
-                    title="حذف"
-                    style={{
-                      width: 24, height: 24, borderRadius: 6,
-                      background: 'var(--bg)', border: '1px solid var(--line)',
-                      color: 'var(--muted)', cursor: 'pointer', fontSize: 13, lineHeight: 1,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontFamily: 'Vazirmatn, system-ui, sans-serif',
-                    }}
-                  >×</button>
-                </div>
+            {filteredTasks.length === 0 && (
+              <div style={{
+                padding: '32px 20px', textAlign: 'center', fontSize: 13, color: 'var(--faint)',
+                background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12,
+              }}>
+                {taskFilter === 'all' ? 'هنوز وظیفه‌ای ثبت نشده است.' : 'وظیفه‌ای در این دسته نیست.'}
               </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ==================== CALENDAR ==================== */}
-      {activeView === 'calendar' && (
-        <div className="mjc-cal" style={{
-          background: 'var(--surface)',
-          border: '1px solid var(--line)',
-          borderRadius: 16,
-          overflow: 'hidden',
-        }}>
-          {/* Calendar toolbar */}
-          <div style={{
-            padding: '16px 20px',
-            borderBottom: '1px solid var(--line)',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          }}>
-            <h3 style={{ fontSize: 15, fontWeight: 700 }}>هفته جاری — خرداد ۱۴۰۴</h3>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button style={{
-                padding: '6px 14px', borderRadius: 8,
-                background: 'var(--bg)', border: '1px solid var(--line)',
-                color: 'var(--text)', fontSize: 13, cursor: 'pointer',
-                fontFamily: 'Vazirmatn, system-ui, sans-serif',
-              }}>← قبلی</button>
-              <button style={{
-                padding: '6px 14px', borderRadius: 8,
-                background: 'var(--goldDim)', border: '1px solid var(--gold)',
-                color: 'var(--gold)', fontSize: 13, cursor: 'pointer', fontWeight: 600,
-                fontFamily: 'Vazirmatn, system-ui, sans-serif',
-              }}>امروز</button>
-              <button style={{
-                padding: '6px 14px', borderRadius: 8,
-                background: 'var(--bg)', border: '1px solid var(--line)',
-                color: 'var(--text)', fontSize: 13, cursor: 'pointer',
-                fontFamily: 'Vazirmatn, system-ui, sans-serif',
-              }}>بعدی →</button>
-            </div>
-          </div>
-
-          <div className="mjc-cal-inner" style={{ display: 'flex' }}>
-            {/* Time axis */}
-            <div style={{ width: 56, flexShrink: 0, borderLeft: '1px solid var(--line)', paddingTop: 48 }}>
-              {calendarHours.map(h => (
-                <div key={h} style={{
-                  height: 60,
-                  display: 'flex', alignItems: 'flex-start',
-                  justifyContent: 'flex-end',
-                  paddingLeft: 8, paddingTop: 4,
-                  fontSize: 11, color: 'var(--faint)',
-                }}>{h}:۰۰</div>
-              ))}
-            </div>
-
-            {/* Day columns */}
-            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
-              {weekDays.map((day, di) => (
-                <div key={di} style={{
-                  borderLeft: di < weekDays.length - 1 ? '1px solid var(--line)' : 'none',
-                }}>
-                  {/* Day header */}
-                  <div style={{
-                    height: 48,
-                    display: 'flex', flexDirection: 'column',
-                    alignItems: 'center', justifyContent: 'center',
-                    borderBottom: '1px solid var(--line)',
-                    background: di === 0 ? 'var(--goldDim)' : 'transparent',
-                  }}>
-                    <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 500 }}>{day}</div>
-                    <div style={{
-                      fontSize: 15, fontWeight: 700, marginTop: 2,
-                      color: di === 0 ? 'var(--gold)' : 'var(--text)',
-                    }}>{weekDates[di]}</div>
+            )}
+            {filteredTasks.map(task => {
+              const overdue = isOverdue(task)
+              const pr = task.priority || 'medium'
+              return (
+                <div
+                  key={task.id}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '14px 16px',
+                    background: 'var(--surface)',
+                    border: `1px solid ${overdue ? 'rgba(231,76,60,0.45)' : 'var(--line)'}`,
+                    borderRadius: 12,
+                    opacity: task.done ? 0.65 : 1,
+                    position: 'relative',
+                  }}
+                >
+                  <div
+                    onClick={() => toggleTask(task.id)}
+                    style={{
+                      width: 20, height: 20, borderRadius: 6,
+                      border: task.done ? '2px solid #5fd98a' : '2px solid var(--line2)',
+                      background: task.done ? '#5fd98a' : 'transparent',
+                      flexShrink: 0, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                    {task.done && <span style={{ color: '#16140f', fontSize: 12, fontWeight: 900, lineHeight: 1 }}>✓</span>}
                   </div>
-
-                  {/* Hour grid + events */}
-                  <div style={{ position: 'relative' }}>
-                    {calendarHours.map(h => (
-                      <div key={h} style={{
-                        height: 60,
-                        borderBottom: '1px solid var(--line)',
-                      }} />
-                    ))}
-                    {calendarEvents.filter(ev => ev.day === di).map((ev, ei) => {
-                      const topPx = timeToMinutesFrom9(ev.time)
-                      const heightPx = ev.duration * 60
-                      return (
-                        <div key={ei} style={{
-                          position: 'absolute',
-                          top: topPx,
-                          left: 3, right: 3,
-                          height: Math.max(heightPx - 4, 28),
-                          background: `${ev.color}22`,
-                          border: `1px solid ${ev.color}66`,
-                          borderRadius: 6,
-                          padding: '4px 6px',
-                          overflow: 'hidden',
-                        }}>
-                          <div style={{ fontSize: 10, fontWeight: 700, color: ev.color, lineHeight: 1.4 }}>{ev.time}</div>
-                          <div style={{ fontSize: 10, color: 'var(--text)', lineHeight: 1.4, marginTop: 1 }}>{ev.title}</div>
-                        </div>
-                      )
-                    })}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: 14, fontWeight: 500,
+                      textDecoration: task.done ? 'line-through' : 'none',
+                    }}>{task.title}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 5, flexWrap: 'wrap' }}>
+                      <span style={{
+                        fontSize: 11, color: overdue ? '#e74c3c' : 'var(--muted)',
+                        background: 'var(--bg)', padding: '3px 9px', borderRadius: 6, border: '1px solid var(--line)',
+                      }}>{taskTimeLabel(task)}</span>
+                      {overdue && (
+                        <span style={{ fontSize: 10.5, fontWeight: 700, color: '#e74c3c', background: 'rgba(231,76,60,0.14)', padding: '3px 8px', borderRadius: 6 }}>معوق</span>
+                      )}
+                      <span style={{
+                        fontSize: 10.5, fontWeight: 700, color: priorityColor[pr],
+                        background: `${priorityColor[pr]}22`, padding: '3px 8px', borderRadius: 6,
+                      }}>{priorityLabel[pr]}</span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    {/* inline priority edit */}
+                    <select
+                      value={pr}
+                      onChange={e => patchTask(task.id, { priority: e.target.value as 'high' | 'medium' | 'low' })}
+                      title="اولویت"
+                      style={{
+                        padding: '5px 6px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)',
+                        color: 'var(--text)', fontSize: 11, outline: 'none', fontFamily: FONT, cursor: 'pointer',
+                      }}
+                    >
+                      {PRIORITIES.map(p => <option key={p} value={p}>{priorityLabel[p]}</option>)}
+                    </select>
+                    {/* inline due edit (reopen the picker) */}
+                    <div style={{ position: 'relative' }}>
+                      <button
+                        onClick={() => setEditingDueId(id => id === task.id ? null : task.id)}
+                        title="ویرایش تاریخ"
+                        style={{
+                          width: 28, height: 28, borderRadius: 7,
+                          background: editingDueId === task.id ? 'var(--goldDim)' : 'var(--bg)',
+                          border: `1px solid ${editingDueId === task.id ? 'var(--gold)' : 'var(--line)'}`,
+                          color: editingDueId === task.id ? 'var(--gold)' : 'var(--muted)', cursor: 'pointer', fontSize: 13,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT,
+                        }}
+                      >📅</button>
+                      {editingDueId === task.id && (
+                        <JalaliDateTimePicker
+                          value={task.dueTs ?? undefined}
+                          onPick={(ts, label) => { patchTask(task.id, { dueTs: ts, due: label }); setEditingDueId(null) }}
+                          onClose={() => setEditingDueId(null)}
+                        />
+                      )}
+                    </div>
+                    <button
+                      onClick={() => deleteTask(task.id)}
+                      title="حذف"
+                      style={{
+                        width: 28, height: 28, borderRadius: 7,
+                        background: 'var(--bg)', border: '1px solid var(--line)',
+                        color: 'var(--muted)', cursor: 'pointer', fontSize: 13, lineHeight: 1,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT,
+                      }}
+                    >×</button>
                   </div>
                 </div>
-              ))}
-            </div>
+              )
+            })}
           </div>
         </div>
       )}
+
+      {/* ==================== CALENDAR (real Jalali month grid) ==================== */}
+      {activeView === 'calendar' && (() => {
+        const { jy, jm, cells } = jMonthCells(calOffset)
+        const todayK = todayKeyG
+        // tasksByDay: jalali day-key → tasks due that day
+        const byDay: Record<string, Task[]> = {}
+        for (const t of tasks) {
+          if (typeof t.dueTs !== 'number') continue
+          const p = jParts(new Date(t.dueTs))
+          const k = `${p.jy}-${p.jm}-${p.jd}`
+          ;(byDay[k] = byDay[k] || []).push(t)
+        }
+        const selDayTasks = (calSelKey && byDay[calSelKey] ? byDay[calSelKey] : []).sort((a, b) => dueSortKey(a) - dueSortKey(b))
+        return (
+          <div className="mjc-cal" style={{
+            background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 800 }}>{J_MONTHS[jm - 1]} {FA(jy)}</h3>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setCalOffset(o => o - 1)} style={{ padding: '6px 14px', borderRadius: 8, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--text)', fontSize: 13, cursor: 'pointer', fontFamily: FONT }}>→ ماه قبل</button>
+                <button onClick={() => { setCalOffset(0); setCalSelKey(null) }} style={{ padding: '6px 14px', borderRadius: 8, background: 'var(--goldDim)', border: '1px solid var(--gold)', color: 'var(--gold)', fontSize: 13, cursor: 'pointer', fontWeight: 600, fontFamily: FONT }}>امروز</button>
+                <button onClick={() => setCalOffset(o => o + 1)} style={{ padding: '6px 14px', borderRadius: 8, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--text)', fontSize: 13, cursor: 'pointer', fontFamily: FONT }}>ماه بعد ←</button>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 6 }}>
+              {J_WEEK.map(w => <div key={w} style={{ textAlign: 'center', fontSize: 11.5, color: 'var(--muted)', fontWeight: 700, padding: '4px 0' }}>{w}</div>)}
+              {cells.map((d, i) => {
+                if (!d) return <div key={i} />
+                const p = jParts(d)
+                const key = `${p.jy}-${p.jm}-${p.jd}`
+                const dayTasks = (byDay[key] || []).sort((a, b) => dueSortKey(a) - dueSortKey(b))
+                const isT = key === todayK
+                const isSel = key === calSelKey
+                return (
+                  <div
+                    key={i}
+                    onClick={() => setCalSelKey(isSel ? null : key)}
+                    style={{
+                      minHeight: 84, borderRadius: 10, cursor: 'pointer',
+                      border: `1px solid ${isSel ? 'var(--gold)' : isT ? 'var(--gold)' : 'var(--line)'}`,
+                      background: isSel ? 'rgba(201,168,76,0.18)' : isT ? 'var(--goldDim)' : 'var(--bg)',
+                      padding: 6, display: 'flex', flexDirection: 'column', gap: 3,
+                    }}
+                  >
+                    <div style={{ fontSize: 12, fontWeight: 700, color: isT ? 'var(--gold)' : 'var(--text)', textAlign: 'left' }}>{FA(p.jd)}</div>
+                    {dayTasks.slice(0, 3).map(t => (
+                      <div key={t.id} title={t.title} style={{
+                        fontSize: 9.5, lineHeight: 1.5, padding: '1px 5px', borderRadius: 5,
+                        background: `${priorityColor[t.priority || 'medium']}22`, color: priorityColor[t.priority || 'medium'],
+                        textDecoration: t.done ? 'line-through' : 'none',
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      }}>{t.title}</div>
+                    ))}
+                    {dayTasks.length > 3 && <div style={{ fontSize: 9, color: 'var(--muted)' }}>+{FA(dayTasks.length - 3)}</div>}
+                  </div>
+                )
+              })}
+            </div>
+            {/* Selected-day task list */}
+            {calSelKey && (
+              <div style={{ marginTop: 16, borderTop: '1px solid var(--line)', paddingTop: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>وظایف این روز</div>
+                {selDayTasks.length === 0 ? (
+                  <div style={{ fontSize: 12.5, color: 'var(--faint)' }}>وظیفه‌ای برای این روز ثبت نشده.</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {selDayTasks.map(t => (
+                      <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 10, opacity: t.done ? 0.6 : 1 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: priorityColor[t.priority || 'medium'], flexShrink: 0 }} />
+                        <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 500, textDecoration: t.done ? 'line-through' : 'none' }}>{t.title}</div>
+                        <span style={{ fontSize: 11, color: 'var(--muted)' }}>{t.due || '—'}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            <div style={{ marginTop: 14, fontSize: 11.5, color: 'var(--faint)' }}>وظایف دارای تاریخ روی همین تقویم نمایش داده می‌شوند. روی هر روز بزنید تا فهرست آن را ببینید.</div>
+          </div>
+        )
+      })()}
     </>
   )
 

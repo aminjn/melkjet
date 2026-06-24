@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { listTasks, addTask, toggleTask, deleteTask, type Priority } from '@/app/lib/crm-store'
+import { listTasks, addTask, toggleTask, deleteTask, updateTask, type Priority } from '@/app/lib/crm-store'
 import { getSession } from '@/app/lib/session'
 
 // Persistent CRM task store, scoped per-user by session phone.
@@ -17,7 +17,8 @@ export async function POST(req: NextRequest) {
   if (!title) return NextResponse.json({ error: 'عنوان وظیفه خالی است' }, { status: 400 })
   const priority = (['high', 'medium', 'low'] as const).includes(body.priority) ? body.priority as Priority : undefined
   const due = body.due ? String(body.due) : undefined
-  const task = addTask(session.phone, { title, priority, due })
+  const dueTs = typeof body.dueTs === 'number' && isFinite(body.dueTs) ? body.dueTs : undefined
+  const task = addTask(session.phone, { title, priority, due, dueTs })
   return NextResponse.json({ task })
 }
 
@@ -27,6 +28,20 @@ export async function PATCH(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
   const id = String(body.id || '')
   if (!id) return NextResponse.json({ error: 'شناسه نامعتبر' }, { status: 400 })
+  // If the body carries any editable field, apply it via updateTask; otherwise toggle (back-compat).
+  const hasPatch = ['title', 'priority', 'due', 'dueTs', 'done'].some(k => body[k] !== undefined)
+  if (hasPatch) {
+    const priority = (['high', 'medium', 'low'] as const).includes(body.priority) ? body.priority as Priority : undefined
+    const task = updateTask(session.phone, id, {
+      title: body.title !== undefined ? String(body.title) : undefined,
+      priority,
+      due: body.due !== undefined ? String(body.due) : undefined,
+      dueTs: typeof body.dueTs === 'number' && isFinite(body.dueTs) ? body.dueTs : undefined,
+      done: typeof body.done === 'boolean' ? body.done : undefined,
+    })
+    if (!task) return NextResponse.json({ error: 'یافت نشد' }, { status: 404 })
+    return NextResponse.json({ task })
+  }
   toggleTask(session.phone, id)
   return NextResponse.json({ ok: true })
 }

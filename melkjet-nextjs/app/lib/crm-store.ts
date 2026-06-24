@@ -14,6 +14,7 @@ export interface Task {
   done: boolean
   priority?: Priority
   due?: string
+  dueTs?: number
   owner?: string
   createdAt: number
 }
@@ -39,7 +40,7 @@ export function listTasks(owner: string): Task[] {
     .sort((a, b) => b.createdAt - a.createdAt)
 }
 
-export function addTask(owner: string, input: { title: string; priority?: Priority; due?: string }): Task {
+export function addTask(owner: string, input: { title: string; priority?: Priority; due?: string; dueTs?: number }): Task {
   const db = load()
   const task: Task = {
     id: id(),
@@ -47,12 +48,30 @@ export function addTask(owner: string, input: { title: string; priority?: Priori
     done: false,
     priority: input.priority,
     due: input.due,
+    dueTs: typeof input.dueTs === 'number' ? input.dueTs : undefined,
     owner,
     createdAt: Date.now(),
   }
   db.tasks.unshift(task)
   save(db)
   return task
+}
+
+export function updateTask(
+  owner: string,
+  taskId: string,
+  patch: { title?: string; priority?: Priority; due?: string; dueTs?: number; done?: boolean }
+): Task | null {
+  const db = load()
+  const t = db.tasks.find(x => x.id === taskId && x.owner === owner)
+  if (!t) return null
+  if (patch.title !== undefined) t.title = String(patch.title).trim()
+  if (patch.priority !== undefined) t.priority = patch.priority
+  if (patch.due !== undefined) t.due = patch.due
+  if (patch.dueTs !== undefined) t.dueTs = patch.dueTs
+  if (patch.done !== undefined) t.done = patch.done
+  save(db)
+  return t
 }
 
 export function toggleTask(owner: string, taskId: string): void {
