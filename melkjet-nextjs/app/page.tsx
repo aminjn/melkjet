@@ -61,8 +61,17 @@ const materials = [
   { l: 'سرمایش و گرمایش', ic: '❄', bg: 'rgba(155,122,208,0.15)', color: '#9b7ad0' },
 ]
 
-function sizeFromTitle(title: string): string {
-  const m = title.match(/(\d+)\s*متر/)
+const faToEnDigits = (s: string) => (s || '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+function sizeFromItem(it: ContentItem): string {
+  const fromMeta = faToEnDigits(it.meta?.['متراژ'] || '').match(/(\d+)/)
+  if (fromMeta) return fromMeta[1]
+  const m = faToEnDigits(it.title).match(/(\d+)\s*متر/)
+  return m ? m[1] : '—'
+}
+function bedsFromItem(it: ContentItem): string {
+  const fromMeta = faToEnDigits(it.meta?.['اتاق خواب'] || '').match(/(\d+)/)
+  if (fromMeta) return fromMeta[1]
+  const m = faToEnDigits(`${it.title} ${it.excerpt || ''}`).match(/(\d+)\s*(?:خواب|خوابه)/)
   return m ? m[1] : '—'
 }
 
@@ -132,8 +141,8 @@ export default function Home() {
         title: it.title,
         location: it.location || 'نامشخص',
         price: it.price || '—',
-        size: sizeFromTitle(it.title),
-        beds: '—',
+        size: sizeFromItem(it),
+        beds: bedsFromItem(it),
         year: undefined as string | undefined,
         tag: promotedIds.has(it.id) ? 'ویژه' : ((it.tags && it.tags[0]) || it.category || 'ویژه'),
         score: 80 + (i % 19),

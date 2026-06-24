@@ -45,21 +45,30 @@ function toProperty(it: ContentItem) {
   const rawPrice = parseFloat(faToEn(it.price || '').replace(/[^\d.]/g, '')) || 0
   const ptxt = it.price || ''
   const priceNum = /میلیارد/.test(ptxt) ? rawPrice : /میلیون/.test(ptxt) ? rawPrice / 1000 : rawPrice / 1e9
-  const bedsNum = parseBeds(`${it.title} ${it.excerpt || ''}`)
+  const bedsNum = parseBeds(`${it.title} ${it.excerpt || ''} ${it.meta?.['اتاق خواب'] || ''}`)
   // Lowercased haystack of all text we can match search terms / amenities against.
   const searchText = [
     it.title, it.location, it.excerpt,
     it.category, ...(it.tags || []),
   ].filter(Boolean).join(' ').toLowerCase()
+  // نوعِ معامله — قطعی از متا، سپس از قیمت/عنوان. تا هر آگهی فقط جای خودش بیاید.
+  const dealTxt = `${it.price || ''} ${it.title || ''} ${it.category || ''} ${it.meta?.['نوع معامله'] || ''} ${(it.tags || []).join(' ')}`
+  const deal: 'sale' | 'rent' | 'presale' =
+    /پیش[‌\s]?فروش/.test(dealTxt) ? 'presale'
+      : (it.meta?.['نوع معامله'] === 'اجاره' || /اجاره|رهن|ودیعه/.test(dealTxt)) ? 'rent'
+        : 'sale'
+  // متراژ از متا (مطمئن‌تر از عنوان)
+  const sizeMeta = faToEn(it.meta?.['متراژ'] || '').match(/(\d+)/)
   return {
     id: it.id,
+    deal,
     title: it.title,
     location: it.location || 'نامشخص',
     price: it.price || '—',
     priceNum,
     beds: bedsNum != null ? toPersianDigits(bedsNum) : '—',
     bedsNum,
-    size: sizeMatch ? sizeMatch[1] : '—',
+    size: sizeMeta ? sizeMeta[1] : (sizeMatch ? sizeMatch[1] : '—'),
     year: '—',
     tag: '',
     score: 80 + (h % 19),
@@ -159,15 +168,9 @@ function SearchPageInner() {
         const hay = `${p.title} ${p.location}`.toLowerCase()
         if (!hay.includes(term) && !p.searchText.includes(term)) return false
       }
-      // Deal type: only filter when the item declares a deal type (category/text);
-      // tolerant — items without that info pass through.
-      if (dealType !== 'خرید') {
-        const dealHay = `${p.category} ${p.searchText}`
-        if (dealHay.includes('خرید') || dealHay.includes('اجاره') ||
-            dealHay.includes('رهن') || dealHay.includes('پیش‌فروش')) {
-          if (!dealHay.includes(dealType)) return false
-        }
-      }
+      // نوعِ معامله: هر آگهی فقط در تبِ خودش — خرید=فروش، اجاره/رهن=اجاره، پیش‌فروش=پیش‌فروش.
+      const tabDeal = dealType === 'پیش‌فروش' ? 'presale' : (dealType === 'اجاره' || dealType === 'رهن') ? 'rent' : 'sale'
+      if (p.deal !== tabDeal) return false
       // Bedrooms.
       if (beds !== 'همه' && !bedsButtonMatches(beds, p.bedsNum)) return false
       // حداکثر قیمت (میلیارد تومان) — فقط وقتی کاربر سقف گذاشته باشد (کمتر از PRICE_MAX).

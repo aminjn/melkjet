@@ -14,6 +14,8 @@ export interface ContentItem {
   phone?: string
   rating?: string
   tags?: string[]
+  owner?: string
+  meta?: Record<string, string>
   scrapedAt: number
   status: string
 }
