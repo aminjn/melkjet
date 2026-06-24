@@ -66,7 +66,7 @@ const BLOCK_DEFAULTS: Record<string, Record<string, any>> = {
   },
   listings: {
     heading: 'آگهی‌های من',
-    source: 'sample',
+    source: 'mine',
     count: 3,
   },
   blog: {
@@ -372,7 +372,7 @@ void migrateBlock
 
 // Real, props-driven render of a block — shared by canvas previews. The public
 // page (app/[site]/page.tsx) mirrors this exact markup as a clean page.
-function BlockBody({ block, primary }: { block: Block; primary: string }) {
+function BlockBody({ block, primary, myListings }: { block: Block; primary: string; myListings?: { title: string; location?: string; price?: string; image?: string }[] }) {
   const p = block.props || {}
   const t = block.type
   const btn = (text: string) => (
@@ -407,12 +407,26 @@ function BlockBody({ block, primary }: { block: Block; primary: string }) {
   if (t === 'listings') {
     const n = Math.max(1, Math.min(12, Number(p.count) || 3))
     const grads = ['#2d2215,#1e1a12', '#1e2215,#141a10', '#15202d,#101828', '#251528,#1a0e1e', '#152825,#0e1a18', '#2d1515,#1e0e0e']
+    const mine = p.source !== 'sample'   // پیش‌فرض «آگهی‌های من»
+    const real = mine ? (myListings || []).slice(0, n) : []
     return (
       <div style={{ background: '#fff', padding: '28px', direction: 'rtl' }}>
         <div style={{ fontSize: 18, fontWeight: 800, color: '#1a1510', marginBottom: 16 }}>{p.heading}</div>
-        {p.source === 'mine' ? <div style={{ fontSize: 11, color: primary, marginBottom: 12 }}>↻ این بخش آگهی‌های ثبت‌شدهٔ شما را نمایش می‌دهد</div> : null}
+        {mine ? <div style={{ fontSize: 11, color: primary, marginBottom: 12 }}>↻ آگهی‌های واقعیِ ثبت‌شدهٔ شما{real.length ? '' : ' (هنوز آگهی منتشرشده‌ای ندارید)'}</div> : null}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
-          {Array.from({ length: n }).map((_, i) => (
+          {(mine && real.length ? real.map((it, i) => (
+            <div key={i} style={{ background: '#f5f3ef', borderRadius: 10, overflow: 'hidden', border: '1px solid #eee' }}>
+              {it.image
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={it.image} alt="" style={{ width: '100%', height: 80, objectFit: 'cover', display: 'block' }} />
+                : <div style={{ height: 80, background: `linear-gradient(135deg,${grads[i % grads.length]})` }} />}
+              <div style={{ padding: '12px' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1510', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.title}</div>
+                <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>{it.location || 'موقعیت نامشخص'}</div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: primary }}>{it.price || 'قیمت توافقی'}</div>
+              </div>
+            </div>
+          )) : Array.from({ length: n }).map((_, i) => (
             <div key={i} style={{ background: '#f5f3ef', borderRadius: 10, overflow: 'hidden', border: '1px solid #eee' }}>
               <div style={{ height: 80, background: `linear-gradient(135deg,${grads[i % grads.length]})` }} />
               <div style={{ padding: '12px' }}>
@@ -421,7 +435,7 @@ function BlockBody({ block, primary }: { block: Block; primary: string }) {
                 <div style={{ fontSize: 13, fontWeight: 800, color: primary }}>قیمت توافقی</div>
               </div>
             </div>
-          ))}
+          )))}
         </div>
       </div>
     )
@@ -585,7 +599,7 @@ function BlockBody({ block, primary }: { block: Block; primary: string }) {
   )
 }
 
-function BlockPreview({ block, primary, selected, onSelect, onUp, onDown, onDelete }: {
+function BlockPreview({ block, primary, selected, onSelect, onUp, onDown, onDelete, myListings }: {
   block: Block
   primary: string
   selected: boolean
@@ -593,6 +607,7 @@ function BlockPreview({ block, primary, selected, onSelect, onUp, onDown, onDele
   onUp: () => void
   onDown: () => void
   onDelete: () => void
+  myListings?: { title: string; location?: string; price?: string; image?: string }[]
 }) {
   const [hovered, setHovered] = useState(false)
   const showControls = hovered || selected
@@ -624,7 +639,7 @@ function BlockPreview({ block, primary, selected, onSelect, onUp, onDown, onDele
           <button onClick={e => { e.stopPropagation(); onDelete() }} style={{ width: 22, height: 22, borderRadius: 5, border: 'none', background: 'rgba(220,60,60,0.55)', color: '#fff', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
         </div>
       )}
-      <BlockBody block={block} primary={primary} />
+      <BlockBody block={block} primary={primary} myListings={myListings} />
     </div>
   )
 }
@@ -684,6 +699,7 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
       : pg))
   }
   const [ownerName, setOwnerName] = useState('')
+  const [myListings, setMyListings] = useState<{ title: string; location?: string; price?: string; image?: string }[]>([])
   const [selectedBlock, setSelectedBlock] = useState<number | null>(null)
   const [tplFilter, setTplFilter] = useState('عمومی')
   // پروفایل قفل‌شده بر اساس نقش کاربر؛ null یعنی مهمان/ادمین (می‌تواند همه را ببیند)
@@ -720,6 +736,21 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
       .catch(() => { /* در صورت خطا روی پیش‌فرض «عمومی» می‌ماند */ })
     return () => { cancelled = true }
   }, [])
+
+  // آگهی‌های واقعیِ منتشرشدهٔ کاربر — برای پیش‌نمایشِ زندهٔ بلوک «آگهی‌های من».
+  useEffect(() => {
+    if (!ownerName) { setMyListings([]); return }
+    let cancelled = false
+    fetch(`/api/content?type=listing&owner=${encodeURIComponent(ownerName)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (cancelled || !data) return
+        const items = Array.isArray(data.items) ? data.items : (Array.isArray(data) ? data : [])
+        setMyListings(items.slice(0, 12).map((it: any) => ({ title: String(it.title || ''), location: it.location, price: it.price, image: it.image })))
+      })
+      .catch(() => { /* پیش‌نمایش روی کارت‌های نمونه می‌ماند */ })
+    return () => { cancelled = true }
+  }, [ownerName])
 
   // On mount, load the user's existing saved site (by the default slug) and
   // populate the real pages if it already exists.
@@ -1171,6 +1202,7 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
                     onUp={() => moveBlock(block.id, -1)}
                     onDown={() => moveBlock(block.id, 1)}
                     onDelete={() => deleteBlock(block.id)}
+                    myListings={myListings}
                   />
                 ))
               )}

@@ -44,7 +44,15 @@ interface Stats {
 }
 interface AdvisorData { stats: Stats; leads: Lead[]; listings: Listing[]; appts: Appt[]; commissions: Commission[] }
 
-type View = 'dashboard' | 'assistant' | 'leads' | 'listings' | 'articles' | 'appts' | 'calendar' | 'commissions' | 'agency' | 'settings'
+type View = 'dashboard' | 'assistant' | 'leads' | 'listings' | 'divar' | 'articles' | 'appts' | 'calendar' | 'commissions' | 'agency' | 'settings'
+
+interface DivarImport { token: string; listingId: string; title: string; url: string; at: number; published: boolean }
+interface DivarConfig {
+  divarName: string; searchUrl: string; schedule: 'off' | 'hourly' | '6h' | 'daily'
+  autoPublish: boolean; autoNeighborhood: boolean
+  lastRun?: number; lastCount?: number; lastError?: string
+  imports: DivarImport[]
+}
 
 // ════════ Agency-link types (mirror /api/agency-link) ════════
 interface AgencyMembership { advisorPhone: string; advisorName: string; agencyPhone: string; agencyName: string; since: number }
@@ -84,12 +92,13 @@ const inputStyle: React.CSSProperties = { padding: '9px 11px', borderRadius: 9, 
 const actionBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap' }
 const goldBtn: React.CSSProperties = { padding: '9px 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }
 
-const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد مشاور', assistant: 'دستیار هوشمند', leads: 'لیدها و پایپ‌لاین', listings: 'فایل‌های من', articles: 'مقالات و وبلاگ', appts: 'قرارها و بازدیدها', calendar: 'تقویم', commissions: 'کمیسیون', agency: 'آژانس من', settings: 'تنظیمات' }
+const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد مشاور', assistant: 'دستیار هوشمند', leads: 'لیدها و پایپ‌لاین', listings: 'فایل‌های من', divar: 'ایمپورت از دیوار', articles: 'مقالات و وبلاگ', appts: 'قرارها و بازدیدها', calendar: 'تقویم', commissions: 'کمیسیون', agency: 'آژانس من', settings: 'تنظیمات' }
 const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'leads' | 'appts' }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: '▦' },
   { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
   { id: 'leads', label: 'لیدها', icon: '◎', badge: 'leads' },
   { id: 'listings', label: 'فایل‌های من', icon: '◫' },
+  { id: 'divar', label: 'ایمپورت از دیوار', icon: '📥' },
   { id: 'articles', label: 'مقالات', icon: '✎' },
   { id: 'appts', label: 'قرارها', icon: '◉', badge: 'appts' },
   { id: 'calendar', label: 'تقویم', icon: '🗓' },
@@ -169,6 +178,25 @@ export default function ProsPage() {
   const [geo, setGeo] = useState<GeoProvince[]>([])
   const [areaSel, setAreaSel] = useState({ province: '', city: '', district: '', neighborhood: '' })
   useEffect(() => { fetch('/api/geo', { cache: 'no-store' }).then(r => r.ok ? r.json() : { provinces: [] }).then(d => setGeo(d.provinces || [])).catch(() => {}) }, [])
+  // ── ایمپورت از دیوار ──
+  const [divarCfg, setDivarCfg] = useState<DivarConfig | null>(null)
+  const [divarUrl, setDivarUrl] = useState('')
+  const [divarBusy, setDivarBusy] = useState(false)
+  const [divarMsg, setDivarMsg] = useState('')
+  const refreshDivar = useCallback(async () => {
+    try { const r = await fetch('/api/advisor/divar', { cache: 'no-store' }); if (r.ok) { const d = await r.json(); setDivarCfg(d.config) } } catch {}
+  }, [])
+  useEffect(() => { refreshDivar() }, [refreshDivar])
+  const divarPost = useCallback(async (body: Record<string, unknown>): Promise<any> => {
+    setDivarBusy(true); setDivarMsg('')
+    try {
+      const r = await fetch('/api/advisor/divar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { setDivarMsg(d.error || 'عملیات ناموفق بود'); return null }
+      if (d.config) setDivarCfg(d.config)
+      return d
+    } catch { setDivarMsg('اتصال به سرور برقرار نشد'); return null } finally { setDivarBusy(false) }
+  }, [])
 
   const openAdd = () => { setForm(emptyForm); setEditingId(null); setStep(0); setShowForm(true) }
   const openEdit = (l: Listing) => {
@@ -888,6 +916,97 @@ export default function ProsPage() {
               <button disabled={busy} onClick={() => post({ action: 'updateProfile', patch: { name: prof.name, title: prof.title, bio: prof.bio, phone: prof.phone, areas: prof.areas, experience: prof.experience, photo: prof.photo, specialties: prof.specialties } })} style={{ ...goldBtn, alignSelf: 'flex-start', padding: '9px 22px' }}>{busy ? 'در حال ذخیره…' : 'ذخیره'}</button>
             </div>
           </div>}
+
+          {/* ───── DIVAR IMPORT ───── */}
+          {view === 'divar' && (() => {
+            const cfg = divarCfg
+            const SCHEDULES: { v: DivarConfig['schedule']; label: string }[] = [
+              { v: 'off', label: 'خاموش (دستی)' }, { v: 'hourly', label: 'هر ساعت' }, { v: '6h', label: 'هر ۶ ساعت' }, { v: 'daily', label: 'روزانه' },
+            ]
+            const faDate = (ts?: number) => ts ? new Date(ts).toLocaleString('fa-IR', { dateStyle: 'short', timeStyle: 'short' }) : '—'
+            return <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 720 }}>
+              <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>
+                آگهی‌های خود را از <b>دیوار</b> مستقیم به ملک‌جت بیاورید — عکس‌ها، قیمت، مشخصات و موقعیت خودکار خوانده می‌شوند،
+                محله‌اش هم خودکار به لیست محله‌های سایت اضافه می‌شود و شما در همان محله به کاربران نشان داده می‌شوید.
+              </div>
+
+              {/* افزودن یک آگهی با لینک */}
+              <div style={{ ...card, padding: 16 }}>
+                <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>افزودن یک آگهی با لینک</div>
+                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 10 }}>لینک آگهی دیوار را بچسبانید (مثلاً https://divar.ir/v/…) و «افزودن» را بزنید.</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <input value={divarUrl} onChange={e => setDivarUrl(e.target.value)} placeholder="https://divar.ir/v/AbcXyz123" style={{ ...inputStyle, direction: 'ltr', textAlign: 'left', flex: 1, minWidth: 220 }} />
+                  <button disabled={divarBusy || !divarUrl.trim()} onClick={async () => {
+                    const d = await divarPost({ action: 'importUrl', url: divarUrl.trim() })
+                    if (d?.ok) { setDivarUrl(''); setDivarMsg(d.skipped ? 'این آگهی قبلاً وارد شده بود.' : '✓ آگهی با موفقیت وارد و منتشر شد.'); await refresh() }
+                  }} style={{ ...goldBtn, opacity: divarBusy ? 0.6 : 1 }}>{divarBusy ? 'در حال افزودن…' : 'افزودن آگهی'}</button>
+                </div>
+              </div>
+
+              {/* تنظیمات و همگام‌سازی خودکار */}
+              {cfg && <div style={{ ...card, padding: 16 }}>
+                <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>همگام‌سازی خودکار (کران‌جاب)</div>
+                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.7 }}>لینکِ صفحهٔ جستجو/نقشهٔ منطقه‌تان در دیوار را بدهید؛ سیستم در بازهٔ انتخابی، آگهی‌های منتشرشده با نام شما را خودکار وارد می‌کند.</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div>
+                    <label style={{ fontSize: 12, color: 'var(--muted)' }}>نام شما / آژانس‌تان در دیوار</label>
+                    <input value={cfg.divarName} onChange={e => setDivarCfg({ ...cfg, divarName: e.target.value })} placeholder="دقیقاً همان نامی که در آگهی‌های دیوار نمایش داده می‌شود" style={inputStyle} />
+                    <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 4 }}>برای آنکه فقط آگهی‌های خودِ شما وارد شوند. اگر خالی بماند، همهٔ آگهی‌های آن جستجو وارد می‌شوند.</div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, color: 'var(--muted)' }}>لینک جستجو/نقشهٔ منطقهٔ شما در دیوار</label>
+                    <input value={cfg.searchUrl} onChange={e => setDivarCfg({ ...cfg, searchUrl: e.target.value })} placeholder="https://divar.ir/s/tehran/…" style={{ ...inputStyle, direction: 'ltr', textAlign: 'left' }} />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--text)', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={cfg.autoPublish} onChange={e => setDivarCfg({ ...cfg, autoPublish: e.target.checked })} /> انتشار خودکار روی سایت
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--text)', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={cfg.autoNeighborhood} onChange={e => setDivarCfg({ ...cfg, autoNeighborhood: e.target.checked })} /> ساخت خودکار محله‌ها
+                    </label>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, color: 'var(--muted)' }}>هر چند وقت یک‌بار؟</label>
+                    <select value={cfg.schedule} onChange={e => setDivarCfg({ ...cfg, schedule: e.target.value as DivarConfig['schedule'] })} style={inputStyle}>
+                      {SCHEDULES.map(s => <option key={s.v} value={s.v}>{s.label}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button disabled={divarBusy} onClick={async () => { await divarPost({ action: 'setConfig', divarName: cfg.divarName, searchUrl: cfg.searchUrl, schedule: cfg.schedule, autoPublish: cfg.autoPublish, autoNeighborhood: cfg.autoNeighborhood }); setDivarMsg('✓ تنظیمات ذخیره شد.') }} style={{ ...goldBtn, opacity: divarBusy ? 0.6 : 1 }}>ذخیرهٔ تنظیمات</button>
+                    <button disabled={divarBusy || !cfg.searchUrl.trim()} onClick={async () => {
+                      const d = await divarPost({ action: 'sync' })
+                      if (d) { setDivarMsg(d.ok ? `✓ همگام‌سازی شد — ${(d.imported || 0).toLocaleString('fa-IR')} آگهی جدید از ${(d.scanned || 0).toLocaleString('fa-IR')} آگهیِ بررسی‌شده.` : (d.reason || 'همگام‌سازی ناموفق بود')); await refresh() }
+                    }} style={{ ...actionBtn, padding: '9px 18px', color: 'var(--gold)', borderColor: 'var(--gold)' }}>{divarBusy ? 'در حال همگام‌سازی…' : 'همگام‌سازی الان'}</button>
+                  </div>
+                  <div style={{ fontSize: 11.5, color: 'var(--muted)', display: 'flex', gap: 16, flexWrap: 'wrap', paddingTop: 4, borderTop: '1px solid var(--line)' }}>
+                    <span>آخرین اجرا: <b style={{ color: 'var(--text)' }}>{faDate(cfg.lastRun)}</b></span>
+                    {typeof cfg.lastCount === 'number' && <span>آخرین تعداد: <b style={{ color: 'var(--text)' }}>{cfg.lastCount.toLocaleString('fa-IR')}</b></span>}
+                    {cfg.lastError && <span style={{ color: '#ef4444' }}>خطا: {cfg.lastError}</span>}
+                  </div>
+                </div>
+              </div>}
+
+              {divarMsg && <div style={{ ...card, padding: '10px 14px', fontSize: 12.5, color: divarMsg.startsWith('✓') ? 'var(--gold)' : 'var(--muted)' }}>{divarMsg}</div>}
+
+              {/* آگهی‌های واردشده */}
+              {cfg && cfg.imports.length > 0 && <div style={{ ...card, padding: 16 }}>
+                <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 10 }}>آگهی‌های واردشده ({cfg.imports.length.toLocaleString('fa-IR')})</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {cfg.imports.map(im => (
+                    <div key={im.token} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--line)' }}>
+                      <span style={{ fontSize: 14 }}>{im.published ? '🟢' : '⚪'}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{im.title}</div>
+                        <div style={{ fontSize: 10.5, color: 'var(--faint)' }}>{faDate(im.at)} · {im.published ? 'منتشرشده' : 'پیش‌نویس'}</div>
+                      </div>
+                      <a href={im.url} target="_blank" rel="noreferrer" style={{ ...actionBtn, textDecoration: 'none' }}>دیوار ↗</a>
+                      <button disabled={divarBusy} onClick={() => divarPost({ action: 'removeImport', token: im.token })} style={{ ...actionBtn, color: '#ef4444' }}>حذف از فهرست</button>
+                    </div>
+                  ))}
+                </div>
+              </div>}
+            </div>
+          })()}
           </>}
         </main>
       </div>

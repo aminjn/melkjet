@@ -160,6 +160,59 @@ export function addNeighborhood(pid: string, cid: string, did: string, name: str
   if (dist && !dist.neighborhoods.includes(name)) dist.neighborhoods.push(name)
   save(db); return db.provinces
 }
+// تطبیق نام (حذف ZWNJ + فاصله‌ها + یکسان‌سازی ی/ک)
+function normName(s: string): string {
+  return (s || '').replace(/‌/g, '').replace(/\s+/g, '').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim()
+}
+
+// محله را بر اساس نامِ شهر (و در صورت وجود نام منطقه) خودکار اضافه می‌کند —
+// برای ایمپورت دیوار. اگر شهر پیدا نشد و provinceName داده شده باشد، شهر را هم می‌سازد.
+// خروجی: نام استان/شهر/منطقه‌ای که محله در آن ثبت شد، یا null اگر شهر قابل تشخیص نبود.
+export function ensureNeighborhoodByName(
+  cityName: string,
+  neighborhoodName: string,
+  districtName?: string,
+  provinceName?: string,
+): { province: string; city: string; district: string; neighborhood: string } | null {
+  const nb = (neighborhoodName || '').trim()
+  const cityN = normName(cityName)
+  if (!nb || !cityN) return null
+  const db = load()
+
+  // شهر را در همهٔ استان‌ها پیدا کن
+  let prov: Province | undefined
+  let city: City | undefined
+  for (const p of db.provinces) {
+    const found = p.cities.find(c => normName(c.name) === cityN || normName(c.name).includes(cityN) || cityN.includes(normName(c.name)))
+    if (found) { prov = p; city = found; break }
+  }
+  // اگر شهر نبود، در صورت داشتن نام استان آن را بساز
+  if (!city) {
+    if (provinceName) {
+      const pN = normName(provinceName)
+      prov = db.provinces.find(p => normName(p.name) === pN || normName(p.name).includes(pN) || pN.includes(normName(p.name)))
+      if (!prov) { prov = { id: id(), name: provinceName.trim(), cities: [] }; db.provinces.push(prov) }
+      city = { id: id(), name: cityName.trim(), districts: [] }
+      prov.cities.push(city)
+    } else { return null }
+  }
+  if (!prov || !city) return null
+
+  // منطقه: اگر نام منطقه داده شده و موجود است همان، وگرنه منطقهٔ اول، وگرنه «مرکزی»
+  let dist: District | undefined
+  if (districtName) {
+    const dN = normName(districtName)
+    dist = city.districts.find(d => normName(d.name) === dN || normName(d.name).includes(dN) || dN.includes(normName(d.name)))
+    if (!dist) { dist = { id: id(), name: districtName.trim(), neighborhoods: [] }; city.districts.push(dist) }
+  }
+  if (!dist) dist = city.districts[0]
+  if (!dist) { dist = { id: id(), name: 'مرکزی', neighborhoods: [] }; city.districts.push(dist) }
+
+  if (!dist.neighborhoods.some(n => normName(n) === normName(nb))) dist.neighborhoods.push(nb)
+  save(db)
+  return { province: prov.name, city: city.name, district: dist.name, neighborhood: nb }
+}
+
 export function renameNode(level: 'province' | 'city' | 'district', ids: { pid: string; cid?: string; did?: string }, name: string) {
   const db = load()
   if (level === 'province') { const n = findProvince(db, ids.pid); if (n) n.name = name }

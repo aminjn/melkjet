@@ -35,11 +35,14 @@ function normOwner(s: string): string {
   return (s || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase()
 }
 
-function ownerListings(ownerName: string | undefined, count: number): Item[] {
+// تطبیق آگهی‌ها با مالک سایت: اول با شمارهٔ حساب (مطمئن، مستقل از نام)، سپس
+// به‌عنوان جایگزین با نامِ نمایشیِ نرمال‌شده.
+function ownerListings(ownerName: string | undefined, ownerPhone: string | undefined, count: number): Item[] {
   const want = normOwner(ownerName || '')
-  if (!want) return []
+  const phone = (ownerPhone || '').trim()
+  if (!want && !phone) return []
   return listItems('listing', { publicOnly: true })
-    .filter(it => normOwner(it.owner || '') === want)
+    .filter(it => (phone && it.meta?.__ownerPhone === phone) || (!!want && normOwner(it.owner || '') === want))
     .slice(0, count)
 }
 
@@ -80,14 +83,15 @@ function SearchBlock({ block, primary }: { block: SiteBlock; primary: string }) 
   )
 }
 
-function ListingsBlock({ block, primary, ownerName }: { block: SiteBlock; primary: string; ownerName?: string }) {
+function ListingsBlock({ block, primary, ownerName, ownerPhone }: { block: SiteBlock; primary: string; ownerName?: string; ownerPhone?: string }) {
   const props = p(block)
   const n = Math.max(1, Math.min(12, Number(props.count) || 6))
   const grads = ['#2d2215,#1e1a12', '#1e2215,#141a10', '#15202d,#101828', '#251528,#1a0e1e', '#152825,#0e1a18', '#2d1515,#1e0e0e']
 
-  // Real listings: pull the owner's own published listings.
-  if (props.source === 'mine') {
-    const items = ownerListings(ownerName, n)
+  // Real listings: pull the owner's own published listings. پیش‌فرض هم «آگهی‌های من»
+  // است مگر صراحتاً «نمونه» انتخاب شده باشد.
+  if (props.source !== 'sample') {
+    const items = ownerListings(ownerName, ownerPhone, n)
     return (
       <section id="listings" style={{ background: '#fff', padding: '56px 24px', direction: 'rtl' }}>
         <div style={{ maxWidth: 1000, margin: '0 auto' }}>
@@ -369,11 +373,11 @@ function FooterBlock({ block, primary }: { block: SiteBlock; primary: string }) 
 }
 
 // Render one block. `ownerName` powers the real «آگهی‌های من» listings.
-function renderBlock(block: SiteBlock, primary: string, ownerName?: string) {
+function renderBlock(block: SiteBlock, primary: string, ownerName?: string, ownerPhone?: string) {
   switch (block.type) {
     case 'hero': return <HeroBlock key={block.id} block={block} primary={primary} />
     case 'search': return <SearchBlock key={block.id} block={block} primary={primary} />
-    case 'listings': return <ListingsBlock key={block.id} block={block} primary={primary} ownerName={ownerName} />
+    case 'listings': return <ListingsBlock key={block.id} block={block} primary={primary} ownerName={ownerName} ownerPhone={ownerPhone} />
     case 'blog': return <BlogBlock key={block.id} block={block} primary={primary} ownerName={ownerName} />
     case 'services': return <ServicesBlock key={block.id} block={block} primary={primary} />
     case 'about': return <AboutBlock key={block.id} block={block} />
@@ -433,7 +437,7 @@ export function SiteShell({ site, page }: { site: Site; page: SitePage }) {
   return (
     <main style={{ minHeight: '100vh', background: '#fff', fontFamily: 'Vazirmatn, Tahoma, sans-serif' }}>
       {menuPages(site).length > 1 && <SiteNav site={site} primary={primary} currentSlug={page.slug} />}
-      {page.blocks.map(block => renderBlock(block, primary, site.ownerName))}
+      {page.blocks.map(block => renderBlock(block, primary, site.ownerName, site.owner))}
     </main>
   )
 }

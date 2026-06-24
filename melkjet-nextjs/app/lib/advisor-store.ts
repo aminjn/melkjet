@@ -157,7 +157,7 @@ export function deleteListing(o: string, fid: string) { mutate(o, a => { const l
 
 // ---- انتشار عمومی روی سایت (آگهی پابلیک) ----
 function faNum(n?: number): string { return n ? n.toLocaleString('fa-IR') : '' }
-function publicPayload(l: Listing, advisorName: string) {
+function publicPayload(l: Listing, advisorName: string, ownerPhone?: string) {
   const price = l.deal === 'rent'
     ? `ودیعه ${faNum(l.price)} تومان${l.rentMonthly ? ` · اجارهٔ ماهانه ${faNum(l.rentMonthly)} تومان` : ''}`
     : `${faNum(l.price)} تومان`
@@ -172,6 +172,8 @@ function publicPayload(l: Listing, advisorName: string) {
   if (l.amenities && l.amenities.length) meta['امکانات'] = l.amenities.join('، ')
   if (l.images && l.images.length) meta['__gallery'] = l.images.join('\n')
   if (typeof l.lat === 'number' && typeof l.lng === 'number') { meta['__lat'] = String(l.lat); meta['__lng'] = String(l.lng) }
+  // شناسهٔ مالک (شمارهٔ حساب) برای تطبیقِ مطمئنِ «آگهی‌های من» در سایت‌ساز — مستقل از نام
+  if (ownerPhone) meta['__ownerPhone'] = ownerPhone
   return { title: l.title, price, location: loc, image: l.images?.[0], excerpt: l.description, phone: l.phone, owner: advisorName, meta }
 }
 export function publishListing(o: string, fid: string): Listing | null {
@@ -179,7 +181,7 @@ export function publishListing(o: string, fid: string): Listing | null {
   mutate(o, a => {
     const l = a.listings.find(x => x.id === fid); if (!l) return
     if (l.publicId && getItemById(l.publicId)) deleteItem(l.publicId) // بازسازی برای اعمالِ تغییرات
-    const item = addUserListing(publicPayload(l, a.profile.name || 'مشاور'))
+    const item = addUserListing(publicPayload(l, a.profile.name || 'مشاور', o))
     l.publicId = item.id; l.published = true; res = l
   })
   return res

@@ -11,11 +11,34 @@ export interface DivarPost {
   lat?: number
   lng?: number
   reason?: string
+  // فیلدهای ساخت‌یافته برای ایمپورت به‌عنوان فایلِ مشاور (همگی اختیاری):
+  title?: string
+  city?: string
+  district?: string
+  neighborhood?: string
+  location?: string
+  deal?: 'sale' | 'rent'
+  ptype?: string
+  price?: number          // قیمت کل (فروش) یا ودیعه (اجاره) — تومان
+  rentMonthly?: number    // اجارهٔ ماهانه — تومان
+  area?: number
+  rooms?: number
+  yearBuilt?: number
 }
 
 export function divarToken(url?: string): string | null {
   const m = (url || '').match(/divar\.ir\/v\/([A-Za-z0-9_-]+)/)
-  return m ? m[1] : null
+  if (m) return m[1]
+  const s = (url || '').trim()
+  return /^[A-Za-z0-9_-]{4,20}$/.test(s) ? s : null
+}
+
+const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹'
+function faToNum(s?: string): number {
+  if (!s) return 0
+  const latin = String(s).replace(/[۰-۹]/g, d => String(FA_DIGITS.indexOf(d)))
+  const n = parseInt(latin.replace(/[^\d]/g, ''), 10)
+  return Number.isFinite(n) ? n : 0
 }
 
 // واکشی جزئیات کامل یک آگهی دیوار (همهٔ عکس‌ها/مشخصات/توضیحات/مختصات) از طریق پروکسی.
@@ -115,7 +138,39 @@ export async function fetchDivarPost(token: string): Promise<DivarPost> {
     const facts = order.filter(l => factsMap[l]).map(l => ({ label: l, value: factsMap[l] }))
     const amenities = Array.from(amenitySet)
 
-    return { images, description, facts, amenities, lat, lng }
+    // ── فیلدهای ساخت‌یافته برای ایمپورت ──
+    const factVal = (...keys: string[]) => { for (const k of keys) if (factsMap[k]) return factsMap[k]; return '' }
+    const deposit = factVal('ودیعه')
+    const monthly = factVal('اجارهٔ ماهانه', 'اجاره')
+    const total = factVal('قیمت کل (تومان)', 'قیمت کل', 'قیمت')
+    const isRent = !!(deposit || monthly) && !total
+    const area = faToNum(factVal('متراژ')) || undefined
+    const roomsRaw = factVal('اتاق', 'تعداد اتاق', 'خواب')
+    const rooms = roomsRaw.includes('بدون') ? 0 : (faToNum(roomsRaw) || undefined)
+    const yearBuilt = faToNum(factVal('ساخت', 'سال ساخت', 'سن بنا')) || undefined
+
+    let title = ''
+    if (d) { const t = findFirst(d, 'title'); title = strOf(t).trim() }
+    const city = d ? strOf(findFirst(d, 'city_persian')).trim() : ''
+    const district = d ? strOf(findFirst(d, 'district_persian')).trim() : ''
+    const neighborhood = (d ? (strOf(findFirst(d, 'neighborhood_persian')) || strOf(findFirst(d, 'neighbourhood_persian'))).trim() : '') || district
+    const cat = d ? strOf(findFirst(d, 'category')).trim() : ''
+    let ptype = 'آپارتمان'
+    const blob = cat + ' ' + title
+    if (/اداری|دفتر/.test(blob)) ptype = 'اداری'
+    else if (/مغازه|تجاری/.test(blob)) ptype = 'تجاری'
+    else if (/ویلا|خانه|کلنگی/.test(blob)) ptype = 'ویلا/خانه'
+    else if (/زمین/.test(blob)) ptype = 'زمین'
+
+    return {
+      images, description, facts, amenities, lat, lng,
+      title, city, district, neighborhood, ptype,
+      location: [city, neighborhood].filter(Boolean).join('، '),
+      deal: isRent ? 'rent' : 'sale',
+      price: isRent ? faToNum(deposit) : faToNum(total),
+      rentMonthly: isRent ? faToNum(monthly) : 0,
+      area, rooms, yearBuilt,
+    }
   } catch (e: any) {
     return { ...empty, reason: e?.message || 'error' }
   }
