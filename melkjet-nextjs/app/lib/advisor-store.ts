@@ -23,6 +23,8 @@ export interface Listing {
   amenities?: string[]
   docType?: string; address?: string; phone?: string; description?: string; images?: string[]
   published?: boolean; publicId?: string
+  // اتصال فایل به لیدها: یک لیدِ فروشنده + چند لیدِ خریدار (برای CRM)
+  sellerLeadId?: string; buyerLeadIds?: string[]
 }
 export interface Appt { id: string; client: string; listingTitle?: string; date: string; type: ApptType; status: ApptStatus; createdAt: number }
 export interface Commission { id: string; dealTitle: string; amount: number; status: CommStatus; date: string; createdAt: number; percent?: number; dealAmount?: number }
@@ -141,7 +143,7 @@ export function updateListing(o: string, fid: string, patch: Partial<Listing>): 
   let res: Listing | null = null
   mutate(o, a => {
     const l = a.listings.find(x => x.id === fid); if (!l) return
-    const allow: (keyof Listing)[] = ['title', 'ptype', 'location', 'price', 'deal', 'city', 'neighborhood', 'province', 'district', 'lat', 'lng', 'facing', 'rentMonthly', 'area', 'rooms', 'floor', 'totalFloors', 'yearBuilt', 'parking', 'elevator', 'storage', 'balcony', 'furnished', 'amenities', 'docType', 'address', 'phone', 'description', 'images']
+    const allow: (keyof Listing)[] = ['title', 'ptype', 'location', 'price', 'deal', 'city', 'neighborhood', 'province', 'district', 'lat', 'lng', 'facing', 'rentMonthly', 'area', 'rooms', 'floor', 'totalFloors', 'yearBuilt', 'parking', 'elevator', 'storage', 'balcony', 'furnished', 'amenities', 'docType', 'address', 'phone', 'description', 'images', 'sellerLeadId', 'buyerLeadIds']
     for (const k of allow) if (k in patch) (l as unknown as Record<string, unknown>)[k] = (patch as Record<string, unknown>)[k]
     res = l
   })

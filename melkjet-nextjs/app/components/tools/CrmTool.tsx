@@ -203,21 +203,25 @@ function JalaliDateTimePicker({ value, onPick, onClose }: { value?: number; onPi
   )
 }
 
-export interface CrmOwnListing { id: string; title: string; priceText: string; status: string; location?: string; published?: boolean; publicId?: string }
+export interface CrmOwnListing { id: string; title: string; priceText: string; status: string; location?: string; published?: boolean; publicId?: string; sellerLeadId?: string; buyerLeadIds?: string[] }
+export interface CrmLeadRef { id: string; name: string }
 
-export default function CrmTool({ embedded = false, view: viewProp, onView, ownListings, onAddListing, onEditListing, onDeleteListing, onSetListingStatus, onBulkDelete, onBulkStatus }: {
+export default function CrmTool({ embedded = false, view: viewProp, onView, ownListings, leads: leadRefs, onAddListing, onEditListing, onDeleteListing, onSetListingStatus, onBulkDelete, onBulkStatus, onLinkLeads }: {
   embedded?: boolean; view?: CrmView; onView?: (v: CrmView) => void
   // وقتی این‌ها داده شوند، نمای «فایل‌ها» فایل‌های واقعیِ خودِ کاربر را نشان می‌دهد (نه آگهی‌های سراسری).
   ownListings?: CrmOwnListing[]
+  leads?: CrmLeadRef[]
   onAddListing?: () => void
   onEditListing?: (id: string) => void
   onDeleteListing?: (id: string) => void
   onSetListingStatus?: (id: string, status: string) => void
   onBulkDelete?: (ids: string[]) => void
   onBulkStatus?: (ids: string[], status: string) => void
+  onLinkLeads?: (listingId: string, sellerLeadId: string, buyerLeadIds: string[]) => void
 }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const toggleSel = (id: string) => setSelectedIds(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const [leadOpen, setLeadOpen] = useState<string | null>(null)   // id فایلی که پنلِ اتصالِ لید بازست
   const [internalView, setInternalView] = useState<CrmView>('dashboard')
   const activeView: CrmView = viewProp ?? internalView
   const setActiveView = (v: CrmView) => { onView ? onView(v) : setInternalView(v) }
@@ -770,33 +774,65 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
               )}
 
               {/* Header */}
-              <div className="mjc-row" style={{ display: 'grid', gridTemplateColumns: '28px 2fr 130px 150px 160px', padding: '11px 20px', background: 'var(--bg2)', borderBottom: '1px solid var(--line)', alignItems: 'center' }}>
+              <div className="mjc-row" style={{ display: 'grid', gridTemplateColumns: '28px 2fr 120px 130px 180px', padding: '11px 20px', background: 'var(--bg2)', borderBottom: '1px solid var(--line)', alignItems: 'center' }}>
                 <input type="checkbox" checked={allSel} onChange={() => setSelectedIds(allSel ? new Set() : new Set(ids))} />
                 {['ملک', 'وضعیت', 'قیمت', 'عملیات'].map((h, i) => <div key={i} style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>{h}</div>)}
               </div>
 
               {ownListings.length === 0 && <div style={{ padding: '28px 20px', textAlign: 'center', fontSize: 13, color: 'var(--muted)' }}>هنوز فایلی ثبت نکرده‌اید.</div>}
 
-              {ownListings.map((l, i) => (
-                <div key={l.id} className="mjc-row" style={{ display: 'grid', gridTemplateColumns: '28px 2fr 130px 150px 160px', padding: '12px 20px', borderBottom: i < ownListings.length - 1 ? '1px solid var(--line)' : 'none', background: selectedIds.has(l.id) ? 'var(--goldDim)' : (i % 2 === 1 ? 'rgba(255,255,255,0.018)' : 'transparent'), alignItems: 'center' }}>
-                  <input type="checkbox" checked={selectedIds.has(l.id)} onChange={() => toggleSel(l.id)} />
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.title}</div>
-                    {l.location && <div style={{ fontSize: 11, color: 'var(--muted)' }}>{l.location}</div>}
+              {ownListings.map((l, i) => {
+                const buyerCount = (l.buyerLeadIds || []).length
+                const open = leadOpen === l.id
+                const all = leadRefs || []
+                return (
+                <div key={l.id} style={{ borderBottom: i < ownListings.length - 1 ? '1px solid var(--line)' : 'none', background: selectedIds.has(l.id) ? 'var(--goldDim)' : (i % 2 === 1 ? 'rgba(255,255,255,0.018)' : 'transparent') }}>
+                  <div className="mjc-row" style={{ display: 'grid', gridTemplateColumns: '28px 2fr 120px 130px 180px', padding: '12px 20px', alignItems: 'center' }}>
+                    <input type="checkbox" checked={selectedIds.has(l.id)} onChange={() => toggleSel(l.id)} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.title}</div>
+                      {l.location && <div style={{ fontSize: 11, color: 'var(--muted)' }}>{l.location}</div>}
+                    </div>
+                    <div>
+                      <select value={l.status} onChange={e => onSetListingStatus?.(l.id, e.target.value)} style={{ fontSize: 11.5, fontWeight: 600, color: STAT_COLOR[l.status] || 'var(--text)', background: 'var(--bg)', border: `1px solid ${STAT_COLOR[l.status] || 'var(--line)'}`, borderRadius: 7, padding: '4px 8px', fontFamily: 'inherit', cursor: 'pointer' }}>
+                        {['active', 'sold', 'rented'].map(s => <option key={s} value={s} style={{ color: 'var(--text)' }}>{STAT_LABEL[s]}</option>)}
+                      </select>
+                    </div>
+                    <div style={{ fontSize: 12.5, fontWeight: 600 }}>{l.priceText || '—'}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <button onClick={() => setLeadOpen(open ? null : l.id)} style={{ padding: '5px 9px', borderRadius: 7, background: open ? 'var(--goldDim)' : 'var(--bg)', border: `1px solid ${open || l.sellerLeadId || buyerCount ? 'var(--gold)' : 'var(--line)'}`, color: 'var(--gold)', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>🔗 لیدها{(l.sellerLeadId ? 1 : 0) + buyerCount > 0 ? ` (${((l.sellerLeadId ? 1 : 0) + buyerCount).toLocaleString('fa-IR')})` : ''}</button>
+                      <button onClick={() => onEditListing?.(l.id)} style={{ padding: '5px 9px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>ویرایش</button>
+                      <button onClick={() => { if (confirm('این فایل حذف شود؟')) onDeleteListing?.(l.id) }} style={{ padding: '5px 9px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: '#ef4444', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>حذف</button>
+                      {l.published && l.publicId && <a href={`/property/${l.publicId}`} target="_blank" rel="noreferrer" style={{ fontSize: 11.5, color: 'var(--gold)', textDecoration: 'none' }}>↗</a>}
+                    </div>
                   </div>
-                  <div>
-                    <select value={l.status} onChange={e => onSetListingStatus?.(l.id, e.target.value)} style={{ fontSize: 11.5, fontWeight: 600, color: STAT_COLOR[l.status] || 'var(--text)', background: 'var(--bg)', border: `1px solid ${STAT_COLOR[l.status] || 'var(--line)'}`, borderRadius: 7, padding: '4px 8px', fontFamily: 'inherit', cursor: 'pointer' }}>
-                      {['active', 'sold', 'rented'].map(s => <option key={s} value={s} style={{ color: 'var(--text)' }}>{STAT_LABEL[s]}</option>)}
-                    </select>
-                  </div>
-                  <div style={{ fontSize: 12.5, fontWeight: 600 }}>{l.priceText || '—'}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <button onClick={() => onEditListing?.(l.id)} style={{ padding: '5px 11px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>ویرایش</button>
-                    <button onClick={() => { if (confirm('این فایل حذف شود؟')) onDeleteListing?.(l.id) }} style={{ padding: '5px 11px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: '#ef4444', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>حذف</button>
-                    {l.published && l.publicId && <a href={`/property/${l.publicId}`} target="_blank" rel="noreferrer" style={{ fontSize: 11.5, color: 'var(--gold)', textDecoration: 'none' }}>↗</a>}
-                  </div>
+                  {/* پنلِ اتصالِ لیدها: یک لیدِ فروشنده + چند لیدِ خریدار */}
+                  {open && (
+                    <div style={{ padding: '6px 20px 16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {all.length === 0 ? <div style={{ fontSize: 12, color: 'var(--muted)' }}>هنوز لیدی ندارید — از بخش «لیدها» اضافه کنید.</div> : <>
+                        <div>
+                          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>لیدِ فروشنده (یک نفر)</div>
+                          <select value={l.sellerLeadId || ''} onChange={e => onLinkLeads?.(l.id, e.target.value, l.buyerLeadIds || [])} style={{ width: '100%', maxWidth: 320, padding: '8px 10px', borderRadius: 8, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--text)', fontSize: 12.5, fontFamily: 'inherit' }}>
+                            <option value="">— بدون لیدِ فروشنده —</option>
+                            {all.map(ld => <option key={ld.id} value={ld.id}>{ld.name}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>لیدهای خریدار (چند نفر)</div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                            {all.map(ld => {
+                              const on = (l.buyerLeadIds || []).includes(ld.id)
+                              return (
+                                <button key={ld.id} onClick={() => { const cur = l.buyerLeadIds || []; const next = on ? cur.filter(x => x !== ld.id) : [...cur, ld.id]; onLinkLeads?.(l.id, l.sellerLeadId || '', next) }} style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${on ? 'var(--gold)' : 'var(--line)'}`, background: on ? 'var(--goldDim)' : 'var(--bg)', color: on ? 'var(--gold)' : 'var(--muted)', fontWeight: on ? 700 : 500 }}>{on ? '✓ ' : ''}{ld.name}</button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </>}
+                    </div>
+                  )}
                 </div>
-              ))}
+              )})}
             </div>
           )
         })()

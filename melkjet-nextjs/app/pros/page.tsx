@@ -33,6 +33,7 @@ interface Listing {
   amenities?: string[]
   docType?: string; address?: string; phone?: string; description?: string; images?: string[]
   published?: boolean; publicId?: string
+  sellerLeadId?: string; buyerLeadIds?: string[]
 }
 interface Appt { id: string; client: string; listingTitle?: string; date: string; type: ApptType; status: ApptStatus; createdAt: number }
 interface Commission { id: string; dealTitle: string; amount: number; status: CommStatus; date: string; createdAt: number; percent?: number; dealAmount?: number }
@@ -466,11 +467,13 @@ export default function ProsPage() {
 
         <main style={{ padding: 22, flex: 1, overflowY: 'auto' }}>
           {crmView ? <CrmTool embedded view={crmView} onView={v => setCrmView(v)}
-              ownListings={listings.map(l => ({ id: l.id, title: l.title, priceText: l.deal === 'rent' ? `ودیعه ${money(l.price)}${l.rentMonthly ? ` · اجاره ${money(l.rentMonthly)}` : ''}` : money(l.price), status: l.status, location: [l.city, l.neighborhood].filter(Boolean).join('، ') || l.location, published: l.published, publicId: l.publicId }))}
+              ownListings={listings.map(l => ({ id: l.id, title: l.title, priceText: l.deal === 'rent' ? `ودیعه ${money(l.price)}${l.rentMonthly ? ` · اجاره ${money(l.rentMonthly)}` : ''}` : money(l.price), status: l.status, location: [l.city, l.neighborhood].filter(Boolean).join('، ') || l.location, published: l.published, publicId: l.publicId, sellerLeadId: l.sellerLeadId, buyerLeadIds: l.buyerLeadIds }))}
+              leads={leads.map(ld => ({ id: ld.id, name: `${ld.name}${ld.need ? ' — ' + ld.need : ''}` }))}
               onAddListing={openAdd}
               onEditListing={id => { const l = listings.find(x => x.id === id); if (l) openEdit(l) }}
               onDeleteListing={id => post({ action: 'deleteListing', id })}
               onSetListingStatus={(id, status) => post({ action: 'setListingStatus', id, status })}
+              onLinkLeads={(id, sellerLeadId, buyerLeadIds) => post({ action: 'updateListing', id, patch: { sellerLeadId, buyerLeadIds } })}
               onBulkDelete={async ids => { for (const id of ids) await post({ action: 'deleteListing', id }) }}
               onBulkStatus={async (ids, status) => { for (const id of ids) await post({ action: 'setListingStatus', id, status }) }}
             />
