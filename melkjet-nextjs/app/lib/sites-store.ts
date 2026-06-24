@@ -9,7 +9,11 @@ const DATA_FILE = join(process.cwd(), '.sites-data.json')
 export interface SiteBlock {
   id: number
   type: string
-  heading: string
+  // Rich, per-type editable content. Always an object; legacy reads may also
+  // carry a top-level `heading` which is migrated into props on read.
+  props: Record<string, unknown>
+  // back-compat: old stored blocks only had a `heading`
+  heading?: string
 }
 
 export interface SiteSeo {
@@ -17,13 +21,30 @@ export interface SiteSeo {
   description: string
 }
 
+export interface SiteTheme {
+  primary: string
+  font?: string
+}
+
 export interface Site {
   slug: string
   title: string
   blocks: SiteBlock[]
   seo: SiteSeo
+  theme?: SiteTheme
   createdAt: number
   updatedAt: number
+}
+
+// Normalise a block read from disk: ensure `props` exists, migrating any legacy
+// top-level `heading` into props.heading so old sites keep rendering.
+export function normalizeBlock(b: any): SiteBlock {
+  const props: Record<string, unknown> =
+    b && typeof b.props === 'object' && b.props ? { ...b.props } : {}
+  if ((props.heading === undefined || props.heading === null) && b && typeof b.heading === 'string') {
+    props.heading = b.heading
+  }
+  return { id: Number(b?.id) || 0, type: String(b?.type || ''), props }
 }
 
 interface DB { sites: Site[] }
@@ -60,7 +81,10 @@ export function listSites(): Site[] {
 export function getSite(slug: string): Site | null {
   const s = sanitizeSlug(slug)
   if (!s) return null
-  return load().sites.find(site => site.slug === s) ?? null
+  const site = load().sites.find(site => site.slug === s) ?? null
+  if (!site) return null
+  // Migrate legacy block shapes on read.
+  return { ...site, blocks: Array.isArray(site.blocks) ? site.blocks.map(normalizeBlock) : [] }
 }
 
 export function saveSite(input: {
@@ -68,6 +92,7 @@ export function saveSite(input: {
   title: string
   blocks: SiteBlock[]
   seo?: Partial<SiteSeo>
+  theme?: Partial<SiteTheme>
 }): Site {
   const db = load()
   // Derive slug: explicit slug → title → random.
@@ -77,13 +102,18 @@ export function saveSite(input: {
 
   const now = Date.now()
   const existing = db.sites.find(site => site.slug === slug)
+  const primary = String(input.theme?.primary || '').trim()
   const site: Site = {
     slug,
     title: String(input.title || '').trim() || 'سایت بدون عنوان',
-    blocks: Array.isArray(input.blocks) ? input.blocks : [],
+    blocks: Array.isArray(input.blocks) ? input.blocks.map(normalizeBlock) : [],
     seo: {
       title: String(input.seo?.title || '').trim(),
       description: String(input.seo?.description || '').trim(),
+    },
+    theme: {
+      primary: /^#[0-9a-fA-F]{3,8}$/.test(primary) ? primary : '#c9a84c',
+      ...(input.theme?.font ? { font: String(input.theme.font) } : {}),
     },
     createdAt: existing ? existing.createdAt : now,
     updatedAt: now,

@@ -16,12 +16,17 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   const body = await req.json().catch(() => ({}))
   const blocks: SiteBlock[] = Array.isArray(body.blocks)
-    ? body.blocks.map((b: { id: number; type: string; heading: string }) => ({
+    ? body.blocks.map((b: { id: number; type: string; props?: Record<string, unknown>; heading?: string }) => ({
         id: Number(b.id),
         type: String(b.type || ''),
-        heading: String(b.heading || ''),
+        props: (b.props && typeof b.props === 'object')
+          ? b.props
+          : (typeof b.heading === 'string' ? { heading: b.heading } : {}),
       }))
     : []
+  const theme = body.theme && typeof body.theme === 'object'
+    ? { primary: String(body.theme.primary || ''), font: body.theme.font ? String(body.theme.font) : undefined }
+    : undefined
   const site = saveSite({
     slug: body.slug ? String(body.slug) : undefined,
     title: String(body.title || ''),
@@ -30,6 +35,7 @@ export async function POST(req: NextRequest) {
       title: String(body.seo?.title || ''),
       description: String(body.seo?.description || ''),
     },
+    theme,
   })
   return NextResponse.json({ ok: true, slug: site.slug, url: '/' + site.slug })
 }

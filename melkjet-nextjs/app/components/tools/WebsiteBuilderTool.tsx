@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type CSSProperties } from 'react'
 import PanelReturnBar from '@/app/components/PanelReturnBar'
 
 export type WebsiteView = 'templates' | 'editor'
@@ -16,7 +16,163 @@ type ActiveTab = 'seo' | 'settings' | 'pages'
 interface Block {
   id: number
   type: string
-  heading: string
+  props: Record<string, any>
+}
+
+interface Theme {
+  primary: string
+  font?: string
+}
+
+const DEFAULT_THEME: Theme = { primary: '#c9a84c' }
+
+// Shared inspector input style (inline + CSS vars, RTL).
+const INSPECTOR_INPUT: CSSProperties = { width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, color: 'var(--text)', fontSize: 12, outline: 'none', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit' }
+const LIST_BTN: CSSProperties = { width: 22, height: 22, borderRadius: 5, border: '1px solid var(--line)', background: 'var(--bg2)', color: 'var(--muted)', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' }
+
+// ── Per-type defaults: a fresh block looks real out of the box ──────────────
+const BLOCK_DEFAULTS: Record<string, Record<string, any>> = {
+  hero: {
+    heading: 'بهترین ملک را با ما بیابید',
+    subheading: 'مشاور املاک حرفه‌ای با بیش از ۱۰ سال تجربه',
+    buttonText: 'مشاهده ملک‌ها',
+    buttonLink: '#listings',
+    align: 'center',
+    bg: 'linear-gradient(140deg,#1a1510,#2d2215,#1a1510)',
+    textColor: '#ffffff',
+  },
+  search: {
+    heading: 'جستجوی ملک',
+    placeholder: 'منطقه، شهر یا محله را وارد کنید...',
+  },
+  listings: {
+    heading: 'آگهی‌های من',
+    source: 'sample',
+    count: 3,
+  },
+  services: {
+    heading: 'خدمات ما',
+    items: [
+      { icon: '◇', title: 'خرید ملک', desc: 'مشاوره تخصصی برای خرید بهترین ملک' },
+      { icon: '⌂', title: 'اجاره', desc: 'گزینه‌های متنوع اجاره مسکونی و تجاری' },
+      { icon: '◈', title: 'مشاوره', desc: 'مشاوره رایگان سرمایه‌گذاری ملکی' },
+    ],
+  },
+  about: {
+    heading: 'درباره ما',
+    text: 'ما با سال‌ها تجربه در حوزه املاک، همراه شما در مسیر خرید، فروش و اجاره ملک هستیم. تیم حرفه‌ای ما با ارائه مشاوره تخصصی، بهترین گزینه‌ها را متناسب با نیاز شما پیشنهاد می‌دهد.',
+    image: '',
+  },
+  stats: {
+    items: [
+      { value: '۵۰۰+', label: 'ملک فروخته' },
+      { value: '۱۲', label: 'سال تجربه' },
+      { value: '۲۰۰', label: 'مشتری راضی' },
+      { value: '۹۸٪', label: 'رضایت' },
+    ],
+  },
+  gallery: {
+    heading: 'گالری تصاویر',
+    images: [],
+  },
+  testimonials: {
+    heading: 'نظرات مشتریان',
+    items: [
+      { name: 'علی رضایی', text: 'تجربه‌ای عالی و حرفه‌ای داشتم. کاملاً راضی هستم.', rating: 5 },
+      { name: 'مریم احمدی', text: 'برخورد بسیار خوب و مشاوره دقیق. پیشنهاد می‌کنم.', rating: 5 },
+    ],
+  },
+  cta: {
+    heading: 'همین امروز با ما تماس بگیرید',
+    subheading: 'کارشناسان ما آماده پاسخگویی هستند',
+    buttonText: 'تماس با ما',
+    buttonLink: '#contact',
+    bg: 'linear-gradient(135deg,#2d2215,#1a1510)',
+  },
+  contact: {
+    heading: 'فرم تماس',
+    phone: '۰۲۱-۱۲۳۴۵۶۷۸',
+    email: 'info@example.com',
+    address: 'تهران، ایران',
+  },
+  footer: {
+    text: 'ملک‌جت',
+    links: [
+      { label: 'خانه', href: '#' },
+      { label: 'آگهی‌ها', href: '#listings' },
+      { label: 'درباره ما', href: '#about' },
+      { label: 'تماس', href: '#contact' },
+    ],
+  },
+}
+
+// Field kinds for the inspector. order matters for layout.
+type FieldKind = 'text' | 'textarea' | 'color' | 'number' | 'enum' | 'image' | 'list'
+interface FieldSpec {
+  key: string
+  label: string
+  kind: FieldKind
+  options?: { value: string; label: string }[] // enum
+  itemFields?: { key: string; label: string; kind: 'text' | 'textarea' | 'number' | 'image' }[] // list
+  newItem?: () => any // list (object row, or a string for image lists)
+}
+
+const BLOCK_SCHEMA: Record<string, FieldSpec[]> = {
+  hero: [
+    { key: 'heading', label: 'عنوان', kind: 'text' },
+    { key: 'subheading', label: 'زیرعنوان', kind: 'textarea' },
+    { key: 'buttonText', label: 'متن دکمه', kind: 'text' },
+    { key: 'buttonLink', label: 'لینک دکمه', kind: 'text' },
+    { key: 'align', label: 'چیدمان', kind: 'enum', options: [{ value: 'center', label: 'وسط' }, { value: 'right', label: 'راست‌چین' }] },
+    { key: 'bg', label: 'پس‌زمینه (CSS)', kind: 'text' },
+    { key: 'textColor', label: 'رنگ متن', kind: 'color' },
+  ],
+  search: [
+    { key: 'heading', label: 'عنوان', kind: 'text' },
+    { key: 'placeholder', label: 'متن راهنما', kind: 'text' },
+  ],
+  listings: [
+    { key: 'heading', label: 'عنوان', kind: 'text' },
+    { key: 'source', label: 'منبع', kind: 'enum', options: [{ value: 'sample', label: 'نمونه' }, { value: 'mine', label: 'آگهی‌های من' }] },
+    { key: 'count', label: 'تعداد', kind: 'number' },
+  ],
+  services: [
+    { key: 'heading', label: 'عنوان', kind: 'text' },
+    { key: 'items', label: 'خدمات', kind: 'list', itemFields: [{ key: 'icon', label: 'آیکن', kind: 'text' }, { key: 'title', label: 'عنوان', kind: 'text' }, { key: 'desc', label: 'توضیح', kind: 'textarea' }], newItem: () => ({ icon: '◇', title: 'خدمت جدید', desc: 'توضیح خدمت' }) },
+  ],
+  about: [
+    { key: 'heading', label: 'عنوان', kind: 'text' },
+    { key: 'text', label: 'متن', kind: 'textarea' },
+    { key: 'image', label: 'تصویر', kind: 'image' },
+  ],
+  stats: [
+    { key: 'items', label: 'آمار', kind: 'list', itemFields: [{ key: 'value', label: 'مقدار', kind: 'text' }, { key: 'label', label: 'برچسب', kind: 'text' }], newItem: () => ({ value: '۰', label: 'آمار جدید' }) },
+  ],
+  gallery: [
+    { key: 'heading', label: 'عنوان', kind: 'text' },
+    { key: 'images', label: 'تصاویر', kind: 'list', itemFields: [{ key: '', label: 'تصویر', kind: 'image' }], newItem: () => '' },
+  ],
+  testimonials: [
+    { key: 'heading', label: 'عنوان', kind: 'text' },
+    { key: 'items', label: 'نظرات', kind: 'list', itemFields: [{ key: 'name', label: 'نام', kind: 'text' }, { key: 'text', label: 'متن', kind: 'textarea' }, { key: 'rating', label: 'امتیاز (۱-۵)', kind: 'number' }], newItem: () => ({ name: 'مشتری جدید', text: 'متن نظر', rating: 5 }) },
+  ],
+  cta: [
+    { key: 'heading', label: 'عنوان', kind: 'text' },
+    { key: 'subheading', label: 'زیرعنوان', kind: 'textarea' },
+    { key: 'buttonText', label: 'متن دکمه', kind: 'text' },
+    { key: 'buttonLink', label: 'لینک دکمه', kind: 'text' },
+    { key: 'bg', label: 'پس‌زمینه (CSS)', kind: 'text' },
+  ],
+  contact: [
+    { key: 'heading', label: 'عنوان', kind: 'text' },
+    { key: 'phone', label: 'تلفن', kind: 'text' },
+    { key: 'email', label: 'ایمیل', kind: 'text' },
+    { key: 'address', label: 'آدرس', kind: 'text' },
+  ],
+  footer: [
+    { key: 'text', label: 'نام / متن', kind: 'text' },
+    { key: 'links', label: 'لینک‌ها', kind: 'list', itemFields: [{ key: 'label', label: 'برچسب', kind: 'text' }, { key: 'href', label: 'آدرس', kind: 'text' }], newItem: () => ({ label: 'لینک جدید', href: '#' }) },
+  ],
 }
 
 const BLOCK_LIBRARY = [
@@ -35,15 +191,26 @@ const BLOCK_LIBRARY = [
 
 const PROFILE_GROUPS = ['مشاور', 'آژانس', 'سازنده', 'فروشگاه', 'سرمایه‌گذار', 'حقوقی', 'عمومی'] as const
 
-// پالت گرافیکی هر پروفایل (گرادیان + آیکن) برای پیش‌نمای جذاب قالب‌ها
-const PROFILE_VISUAL: Record<string, { grad: string; icon: string }> = {
-  'مشاور': { grad: 'linear-gradient(135deg,#1e3a8a,#3b82f6)', icon: '🏢' },
-  'آژانس': { grad: 'linear-gradient(135deg,#0f766e,#14b8a6)', icon: '🤝' },
-  'سازنده': { grad: 'linear-gradient(135deg,#b45309,#f59e0b)', icon: '🏗️' },
-  'فروشگاه': { grad: 'linear-gradient(135deg,#7c3aed,#ec4899)', icon: '🛒' },
-  'سرمایه‌گذار': { grad: 'linear-gradient(135deg,#065f46,#10b981)', icon: '📈' },
-  'حقوقی': { grad: 'linear-gradient(135deg,#334155,#64748b)', icon: '⚖️' },
-  'عمومی': { grad: 'linear-gradient(135deg,#a16207,#d4af37)', icon: '✨' },
+// رنگ تم (primary) و گرادیان هیرو هر پروفایل — قالب‌ها را واقعاً متمایز می‌کند
+const PROFILE_THEME: Record<string, { primary: string; heroBg: string }> = {
+  'مشاور': { primary: '#3b82f6', heroBg: 'linear-gradient(140deg,#0f1f3a,#1e3a8a,#0f1f3a)' },
+  'آژانس': { primary: '#14b8a6', heroBg: 'linear-gradient(140deg,#06302c,#0f766e,#06302c)' },
+  'سازنده': { primary: '#f59e0b', heroBg: 'linear-gradient(140deg,#2a1a05,#b45309,#2a1a05)' },
+  'فروشگاه': { primary: '#ec4899', heroBg: 'linear-gradient(140deg,#2a0d2a,#7c3aed,#2a0d2a)' },
+  'سرمایه‌گذار': { primary: '#10b981', heroBg: 'linear-gradient(140deg,#052b1e,#065f46,#052b1e)' },
+  'حقوقی': { primary: '#64748b', heroBg: 'linear-gradient(140deg,#15202b,#334155,#15202b)' },
+  'عمومی': { primary: '#c9a84c', heroBg: 'linear-gradient(140deg,#1a1510,#2d2215,#1a1510)' },
+}
+
+// متن هیروی متمایز برای اولین قالب هر پروفایل (تا قالب‌ها واقعاً فرق کنند)
+const PROFILE_HERO_COPY: Record<string, { heading: string; subheading: string; buttonText: string }> = {
+  'مشاور': { heading: 'مشاور املاک مورد اعتماد شما', subheading: 'بیش از ۱۰ سال تجربه در خرید، فروش و اجاره ملک', buttonText: 'مشاهده فایل‌ها' },
+  'آژانس': { heading: 'آژانس املاک پیشرو', subheading: 'تیمی حرفه‌ای برای تمام نیازهای ملکی شما', buttonText: 'خدمات ما' },
+  'سازنده': { heading: 'پروژه‌های ساختمانی لوکس', subheading: 'ساخت و پیش‌فروش واحدهای مسکونی و تجاری', buttonText: 'مشاهده پروژه‌ها' },
+  'فروشگاه': { heading: 'فروشگاه مصالح ساختمانی', subheading: 'بهترین کیفیت با مناسب‌ترین قیمت', buttonText: 'مشاهده محصولات' },
+  'سرمایه‌گذار': { heading: 'سرمایه‌گذاری هوشمند در املاک', subheading: 'بازده تضمین‌شده با فرصت‌های منتخب', buttonText: 'فرصت‌های سرمایه‌گذاری' },
+  'حقوقی': { heading: 'مشاوره حقوقی تخصصی املاک', subheading: 'وکالت و تنظیم قراردادهای ملکی', buttonText: 'دریافت مشاوره' },
+  'عمومی': { heading: 'بهترین ملک را با ما بیابید', subheading: 'مشاور املاک حرفه‌ای با بیش از ۱۰ سال تجربه', buttonText: 'مشاهده ملک‌ها' },
 }
 
 // نگاشت مسیر داشبورد کاربر به گروه پروفایل قالب‌ها
@@ -144,28 +311,231 @@ const STARTER_TEMPLATES = [
   { id: 'gen-10', name: 'صفحهٔ حرفه‌ای', profile: 'عمومی', blocks: ['hero', 'stats', 'services', 'about', 'contact', 'footer'], desc: 'هیرو، آمار، خدمات، درباره، تماس' },
 ]
 
-const DEFAULT_HEADINGS: Record<string, string> = {
-  hero: 'بهترین ملک را با ما بیابید',
-  search: 'جستجوی ملک',
-  listings: 'آگهی‌های من',
-  services: 'خدمات ما',
-  about: 'درباره ما',
-  stats: 'آمار و ارقام',
-  gallery: 'گالری تصاویر',
-  testimonials: 'نظرات مشتریان',
-  cta: 'همین امروز با ما تماس بگیرید',
-  contact: 'فرم تماس',
-  footer: 'ملک‌جت',
-}
-
 let nextId = 1
 
-function makeBlock(type: string): Block {
-  return { id: nextId++, type, heading: DEFAULT_HEADINGS[type] || type }
+// Deep-clone the defaults so each block owns its props (objects/arrays aren't shared).
+function cloneDefaults(type: string): Record<string, any> {
+  const d = BLOCK_DEFAULTS[type]
+  if (!d) return { heading: type }
+  return JSON.parse(JSON.stringify(d))
 }
 
-function BlockPreview({ block, selected, onSelect, onUp, onDown, onDelete }: {
+function makeBlock(type: string, preset?: Record<string, any>): Block {
+  const props = cloneDefaults(type)
+  if (preset) Object.assign(props, JSON.parse(JSON.stringify(preset)))
+  return { id: nextId++, type, props }
+}
+
+// Migrate any legacy/stored block (top-level `heading` only, or already-rich
+// props) into the current props shape, filling in any missing defaults.
+function migrateBlock(b: any): Block {
+  if (b && b.props && typeof b.props === 'object') {
+    return { id: Number(b.id) || nextId++, type: String(b.type || ''), props: { ...cloneDefaults(b.type), ...b.props } }
+  }
+  const props = cloneDefaults(String(b?.type || ''))
+  if (typeof b?.heading === 'string') props.heading = b.heading
+  return { id: Number(b?.id) || nextId++, type: String(b?.type || ''), props }
+}
+// keep a reference so the migration helper is part of the module surface even
+// when the builder boots from in-memory defaults.
+void migrateBlock
+
+// Real, props-driven render of a block — shared by canvas previews. The public
+// page (app/[site]/page.tsx) mirrors this exact markup as a clean page.
+function BlockBody({ block, primary }: { block: Block; primary: string }) {
+  const p = block.props || {}
+  const t = block.type
+  const btn = (text: string) => (
+    <span style={{ display: 'inline-block', padding: '9px 24px', background: primary, borderRadius: 8, fontSize: 13, fontWeight: 700, color: '#fff' }}>{text}</span>
+  )
+
+  if (t === 'hero') {
+    const align = p.align === 'right' ? 'right' : 'center'
+    return (
+      <div style={{ background: p.bg || 'linear-gradient(140deg,#1a1510,#2d2215,#1a1510)', padding: '52px 28px', textAlign: align as any, direction: 'rtl' }}>
+        <div style={{ fontSize: 26, fontWeight: 900, color: p.textColor || '#fff', marginBottom: 10, letterSpacing: '-0.5px' }}>{p.heading}</div>
+        <div style={{ fontSize: 14, color: p.textColor ? p.textColor : '#fff', opacity: 0.6, marginBottom: 22 }}>{p.subheading}</div>
+        {p.buttonText ? btn(p.buttonText) : null}
+      </div>
+    )
+  }
+  if (t === 'search') {
+    return (
+      <div style={{ background: '#f5f3ef', padding: '24px 28px', direction: 'rtl' }}>
+        {p.heading ? <div style={{ fontSize: 15, fontWeight: 700, color: '#2a2215', marginBottom: 14 }}>{p.heading}</div> : null}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ flex: 1, height: 42, background: '#fff', border: '1px solid #ddd', borderRadius: 8, display: 'flex', alignItems: 'center', padding: '0 14px' }}>
+            <span style={{ fontSize: 13, color: '#aaa' }}>{p.placeholder}</span>
+          </div>
+          <div style={{ padding: '0 22px', height: 42, background: primary, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>جستجو</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+  if (t === 'listings') {
+    const n = Math.max(1, Math.min(12, Number(p.count) || 3))
+    const grads = ['#2d2215,#1e1a12', '#1e2215,#141a10', '#15202d,#101828', '#251528,#1a0e1e', '#152825,#0e1a18', '#2d1515,#1e0e0e']
+    return (
+      <div style={{ background: '#fff', padding: '28px', direction: 'rtl' }}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: '#1a1510', marginBottom: 16 }}>{p.heading}</div>
+        {p.source === 'mine' ? <div style={{ fontSize: 11, color: primary, marginBottom: 12 }}>↻ این بخش آگهی‌های ثبت‌شدهٔ شما را نمایش می‌دهد</div> : null}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+          {Array.from({ length: n }).map((_, i) => (
+            <div key={i} style={{ background: '#f5f3ef', borderRadius: 10, overflow: 'hidden', border: '1px solid #eee' }}>
+              <div style={{ height: 80, background: `linear-gradient(135deg,${grads[i % grads.length]})` }} />
+              <div style={{ padding: '12px' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1510', marginBottom: 4 }}>آپارتمان لوکس</div>
+                <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>تهران، منطقه نمونه</div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: primary }}>قیمت توافقی</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+  if (t === 'services') {
+    const items: any[] = Array.isArray(p.items) ? p.items : []
+    return (
+      <div style={{ background: '#faf9f7', padding: '28px', direction: 'rtl' }}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: '#1a1510', marginBottom: 16, textAlign: 'center' }}>{p.heading}</div>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(items.length || 1, 4)},1fr)`, gap: 12 }}>
+          {items.map((s, i) => (
+            <div key={i} style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: '18px 12px', textAlign: 'center' }}>
+              <div style={{ fontSize: 26, marginBottom: 8, color: primary }}>{s.icon}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1510', marginBottom: 5 }}>{s.title}</div>
+              <div style={{ fontSize: 11, color: '#888', lineHeight: 1.7 }}>{s.desc}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+  if (t === 'about') {
+    return (
+      <div style={{ background: '#fff', padding: '28px', direction: 'rtl', display: 'flex', gap: 22, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 260px' }}>
+          <div style={{ fontSize: 18, fontWeight: 800, color: '#1a1510', marginBottom: 12 }}>{p.heading}</div>
+          <p style={{ fontSize: 13, lineHeight: 2, color: '#555', margin: 0 }}>{p.text}</p>
+        </div>
+        {p.image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={p.image} alt="" style={{ flex: '0 0 200px', width: 200, height: 150, objectFit: 'cover', borderRadius: 12 }} />
+        ) : (
+          <div style={{ flex: '0 0 200px', width: 200, height: 150, background: 'linear-gradient(135deg,#2d2215,#1a1510)', borderRadius: 12 }} />
+        )}
+      </div>
+    )
+  }
+  if (t === 'stats') {
+    const items: any[] = Array.isArray(p.items) ? p.items : []
+    return (
+      <div style={{ background: '#f5f3ef', padding: '28px', direction: 'rtl' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(items.length || 1, 4)},1fr)`, gap: 12 }}>
+          {items.map((s, i) => (
+            <div key={i} style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: '18px 8px', textAlign: 'center' }}>
+              <div style={{ fontSize: 22, fontWeight: 900, color: primary, marginBottom: 5 }}>{s.value}</div>
+              <div style={{ fontSize: 11, color: '#888' }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+  if (t === 'gallery') {
+    const imgs: string[] = Array.isArray(p.images) ? p.images.filter(Boolean) : []
+    return (
+      <div style={{ background: '#fff', padding: '28px', direction: 'rtl' }}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: '#1a1510', marginBottom: 14 }}>{p.heading}</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+          {(imgs.length ? imgs : ['', '', '', '']).map((src, i) => src ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img key={i} src={src} alt="" style={{ width: '100%', height: 90, objectFit: 'cover', borderRadius: 8 }} />
+          ) : (
+            <div key={i} style={{ height: 90, background: 'linear-gradient(135deg,#2d2215,#1a1510)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ fontSize: 22, color: 'rgba(255,255,255,0.18)' }}>▥</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+  if (t === 'testimonials') {
+    const items: any[] = Array.isArray(p.items) ? p.items : []
+    return (
+      <div style={{ background: '#faf9f7', padding: '28px', direction: 'rtl' }}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: '#1a1510', marginBottom: 16, textAlign: 'center' }}>{p.heading}</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12 }}>
+          {items.map((s, i) => (
+            <div key={i} style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: '16px' }}>
+              <div style={{ color: primary, marginBottom: 8, fontSize: 14 }}>{'★'.repeat(Math.max(0, Math.min(5, Number(s.rating) || 5)))}</div>
+              <p style={{ fontSize: 12, color: '#555', lineHeight: 1.9, margin: '0 0 10px' }}>{s.text}</p>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#1a1510' }}>{s.name}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+  if (t === 'cta') {
+    return (
+      <div style={{ background: p.bg || 'linear-gradient(135deg,#2d2215,#1a1510)', padding: '40px 28px', textAlign: 'center', direction: 'rtl' }}>
+        <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 8 }}>{p.heading}</div>
+        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', marginBottom: 20 }}>{p.subheading}</div>
+        {p.buttonText ? btn(p.buttonText) : null}
+      </div>
+    )
+  }
+  if (t === 'contact') {
+    return (
+      <div style={{ background: '#fff', padding: '28px', direction: 'rtl' }}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: '#1a1510', marginBottom: 16 }}>{p.heading}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+          {p.phone ? <div style={{ fontSize: 13, color: '#555' }}>☏ {p.phone}</div> : null}
+          {p.email ? <div style={{ fontSize: 13, color: '#555', direction: 'ltr', textAlign: 'right' }}>✉ {p.email}</div> : null}
+          {p.address ? <div style={{ fontSize: 13, color: '#555' }}>⌂ {p.address}</div> : null}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+          <div style={{ height: 38, background: '#f5f3ef', border: '1px solid #ddd', borderRadius: 7 }} />
+          <div style={{ height: 38, background: '#f5f3ef', border: '1px solid #ddd', borderRadius: 7 }} />
+        </div>
+        <div style={{ height: 70, background: '#f5f3ef', border: '1px solid #ddd', borderRadius: 7, marginBottom: 10 }} />
+        {btn('ارسال پیام')}
+      </div>
+    )
+  }
+  if (t === 'footer') {
+    const links: any[] = Array.isArray(p.links) ? p.links : []
+    return (
+      <div style={{ background: '#0d0b08', padding: '28px', direction: 'rtl' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 20, marginBottom: 16 }}>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: primary, marginBottom: 10 }}>{p.text}</div>
+            <div style={{ fontSize: 12, color: '#777', lineHeight: 1.9 }}>همراه شما در خرید و فروش ملک.</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#999', marginBottom: 10 }}>لینک‌های سریع</div>
+            {links.map((l, i) => <div key={i} style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>{l.label}</div>)}
+          </div>
+        </div>
+        <div style={{ borderTop: '1px solid #1a1510', paddingTop: 12, textAlign: 'center' }}>
+          <span style={{ fontSize: 10, color: '#444' }}>© ۱۴۰۴ — تمامی حقوق محفوظ است</span>
+        </div>
+      </div>
+    )
+  }
+  return (
+    <div style={{ background: '#fff', padding: '24px', direction: 'rtl' }}>
+      <div style={{ fontSize: 16, fontWeight: 800, color: '#1a1510' }}>{p.heading || t}</div>
+    </div>
+  )
+}
+
+function BlockPreview({ block, primary, selected, onSelect, onUp, onDown, onDelete }: {
   block: Block
+  primary: string
   selected: boolean
   onSelect: () => void
   onUp: () => void
@@ -202,151 +572,15 @@ function BlockPreview({ block, selected, onSelect, onUp, onDown, onDelete }: {
           <button onClick={e => { e.stopPropagation(); onDelete() }} style={{ width: 22, height: 22, borderRadius: 5, border: 'none', background: 'rgba(220,60,60,0.55)', color: '#fff', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
         </div>
       )}
-
-      {block.type === 'hero' && (
-        <div style={{ background: 'linear-gradient(140deg,#1a1510,#2d2215,#1a1510)', padding: '44px 24px', textAlign: 'center', direction: 'rtl' }}>
-          <div style={{ fontSize: 20, fontWeight: 900, color: '#fff', marginBottom: 8, letterSpacing: '-0.5px' }}>{block.heading}</div>
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 18 }}>مشاور املاک حرفه‌ای با بیش از ۱۰ سال تجربه</div>
-          <span style={{ display: 'inline-block', padding: '8px 22px', background: 'linear-gradient(135deg,#b8922a,#c9a84c)', borderRadius: 8, fontSize: 12, fontWeight: 700, color: '#16140f' }}>مشاهده ملک‌ها</span>
-        </div>
-      )}
-      {block.type === 'search' && (
-        <div style={{ background: '#f5f3ef', padding: '20px 24px', direction: 'rtl' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#2a2215', marginBottom: 12 }}>{block.heading}</div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <div style={{ flex: 1, height: 36, background: '#fff', border: '1px solid #ddd', borderRadius: 8, display: 'flex', alignItems: 'center', padding: '0 12px' }}>
-              <span style={{ fontSize: 11, color: '#aaa' }}>منطقه، شهر یا محله را وارد کنید...</span>
-            </div>
-            <div style={{ width: 80, height: 36, background: 'linear-gradient(135deg,#b8922a,#c9a84c)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#16140f' }}>جستجو</span>
-            </div>
-          </div>
-        </div>
-      )}
-      {block.type === 'listings' && (
-        <div style={{ background: '#fff', padding: '20px 24px', direction: 'rtl' }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: '#1a1510', marginBottom: 14 }}>{block.heading}</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
-            {[['#2d2215','#1e1a12'],['#1e2215','#141a10'],['#15202d','#101828']].map(([from,to], i) => (
-              <div key={i} style={{ background: '#f5f3ef', borderRadius: 10, overflow: 'hidden', border: '1px solid #eee' }}>
-                <div style={{ height: 70, background: `linear-gradient(135deg,${from},${to})` }} />
-                <div style={{ padding: '10px' }}>
-                  <div style={{ height: 8, background: '#e0ddd8', borderRadius: 3, marginBottom: 5, width: '80%' }} />
-                  <div style={{ height: 6, background: '#e0ddd8', borderRadius: 3, width: '55%', marginBottom: 8 }} />
-                  <div style={{ height: 10, background: 'rgba(201,168,76,0.25)', borderRadius: 3, width: '45%' }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      {block.type === 'services' && (
-        <div style={{ background: '#faf9f7', padding: '20px 24px', direction: 'rtl' }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: '#1a1510', marginBottom: 14, textAlign: 'center' }}>{block.heading}</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
-            {[['خرید ملک','◇'],['اجاره','⌂'],['مشاوره','◈']].map(([s,icon]) => (
-              <div key={s} style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: '14px 10px', textAlign: 'center' }}>
-                <div style={{ fontSize: 20, marginBottom: 6, color: '#c9a84c' }}>{icon}</div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#1a1510' }}>{s}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      {block.type === 'about' && (
-        <div style={{ background: '#fff', padding: '22px 24px', direction: 'rtl' }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: '#1a1510', marginBottom: 12 }}>{block.heading}</div>
-          {[85, 65, 75, 50, 80].map((w, i) => (
-            <div key={i} style={{ height: 7, background: '#ece9e4', borderRadius: 3, marginBottom: 7, width: `${w}%` }} />
-          ))}
-        </div>
-      )}
-      {block.type === 'stats' && (
-        <div style={{ background: '#f5f3ef', padding: '20px 24px', direction: 'rtl' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
-            {[['۵۰۰+','ملک فروخته'],['۱۲','سال تجربه'],['۲۰۰','مشتری راضی'],['۹۸٪','رضایت']].map(([num,lbl]) => (
-              <div key={lbl} style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: '12px 8px', textAlign: 'center' }}>
-                <div style={{ fontSize: 16, fontWeight: 900, color: '#c9a84c', marginBottom: 4 }}>{num}</div>
-                <div style={{ fontSize: 10, color: '#888' }}>{lbl}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      {block.type === 'gallery' && (
-        <div style={{ background: '#fff', padding: '20px 24px', direction: 'rtl' }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: '#1a1510', marginBottom: 12 }}>{block.heading}</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }}>
-            {[['#2d2215','#1a1510'],['#1e2530','#141c25'],['#252015','#1a1a0d'],['#201528','#150e1e']].map(([from,to], i) => (
-              <div key={i} style={{ height: 64, background: `linear-gradient(135deg,${from},${to})`, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontSize: 18, color: 'rgba(255,255,255,0.18)' }}>▥</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      {block.type === 'testimonials' && (
-        <div style={{ background: '#faf9f7', padding: '20px 24px', direction: 'rtl' }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: '#1a1510', marginBottom: 12, textAlign: 'center' }}>{block.heading}</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10 }}>
-            {[['علی رضایی','خرید آپارتمان در نیاوران'],['مریم احمدی','اجاره ویلا در شمال']].map(([name,desc]) => (
-              <div key={name} style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: '12px' }}>
-                <div style={{ fontSize: 16, color: '#c9a84c', marginBottom: 6 }}>❝</div>
-                <div style={{ height: 6, background: '#ece9e4', borderRadius: 3, marginBottom: 5, width: '90%' }} />
-                <div style={{ height: 6, background: '#ece9e4', borderRadius: 3, marginBottom: 10, width: '70%' }} />
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#1a1510' }}>{name}</div>
-                <div style={{ fontSize: 9, color: '#aaa' }}>{desc}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      {block.type === 'cta' && (
-        <div style={{ background: 'linear-gradient(135deg,#2d2215,#1a1510)', padding: '30px 24px', textAlign: 'center', direction: 'rtl' }}>
-          <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', marginBottom: 6 }}>{block.heading}</div>
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', marginBottom: 18 }}>کارشناسان ما آماده پاسخگویی هستند</div>
-          <span style={{ display: 'inline-block', padding: '8px 24px', background: 'linear-gradient(135deg,#b8922a,#c9a84c)', borderRadius: 8, fontSize: 12, fontWeight: 700, color: '#16140f' }}>تماس با ما</span>
-        </div>
-      )}
-      {block.type === 'contact' && (
-        <div style={{ background: '#fff', padding: '20px 24px', direction: 'rtl' }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: '#1a1510', marginBottom: 14 }}>{block.heading}</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-            <div style={{ height: 32, background: '#f5f3ef', border: '1px solid #ddd', borderRadius: 7 }} />
-            <div style={{ height: 32, background: '#f5f3ef', border: '1px solid #ddd', borderRadius: 7 }} />
-          </div>
-          <div style={{ height: 64, background: '#f5f3ef', border: '1px solid #ddd', borderRadius: 7, marginBottom: 10 }} />
-          <div style={{ width: 90, height: 30, background: 'linear-gradient(135deg,#b8922a,#c9a84c)', borderRadius: 7 }} />
-        </div>
-      )}
-      {block.type === 'footer' && (
-        <div style={{ background: '#0d0b08', padding: '22px 24px', direction: 'rtl' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 14 }}>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 800, color: '#c9a84c', marginBottom: 8 }}>{block.heading}</div>
-              {[60,50,45].map((w,i) => <div key={i} style={{ height: 5, background: '#2a2218', borderRadius: 2, marginBottom: 5, width: `${w}%` }} />)}
-            </div>
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#555', marginBottom: 8 }}>لینک‌های سریع</div>
-              {['خانه','آگهی‌ها','درباره ما','تماس'].map(l => <div key={l} style={{ fontSize: 10, color: '#444', marginBottom: 5 }}>{l}</div>)}
-            </div>
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#555', marginBottom: 8 }}>اطلاعات تماس</div>
-              {[55,65,50].map((w,i) => <div key={i} style={{ height: 5, background: '#2a2218', borderRadius: 2, marginBottom: 5, width: `${w}%` }} />)}
-            </div>
-          </div>
-          <div style={{ borderTop: '1px solid #1a1510', paddingTop: 10, textAlign: 'center' }}>
-            <span style={{ fontSize: 9, color: '#333' }}>© ۱۴۰۴ — تمامی حقوق محفوظ است</span>
-          </div>
-        </div>
-      )}
+      <BlockBody block={block} primary={primary} />
     </div>
   )
 }
 
 // پیش‌نمای مینیاتوری و حرفه‌ای یک قالب: یک ماکت واقعی از سایت بر اساس بلوک‌هایش
 function TemplateThumb({ tpl }: { tpl: typeof STARTER_TEMPLATES[0] }) {
-  const v = PROFILE_VISUAL[tpl.profile] || PROFILE_VISUAL['عمومی']
+  const th = PROFILE_THEME[tpl.profile] || PROFILE_THEME['عمومی']
+  const v = { grad: th.heroBg, primary: th.primary }
   const block = (b: string, i: number) => {
     switch (b) {
       case 'hero': return <div key={i} style={{ background: v.grad, padding: '16px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
@@ -357,8 +591,8 @@ function TemplateThumb({ tpl }: { tpl: typeof STARTER_TEMPLATES[0] }) {
       case 'search': return <div key={i} style={{ padding: '9px 12px', background: '#fff' }}><div style={{ height: 11, background: '#f0f0f2', border: '1px solid #e4e4e7', borderRadius: 6 }} /></div>
       case 'listings': return <div key={i} style={{ padding: '9px 12px', background: '#fff', display: 'flex', gap: 6 }}>{[0, 1, 2].map(k => <div key={k} style={{ flex: 1 }}><div style={{ height: 24, background: '#e7e7ea', borderRadius: 4, marginBottom: 4 }} /><div style={{ height: 3, width: '80%', background: '#dcdce0', borderRadius: 2, marginBottom: 3 }} /><div style={{ height: 3, width: '55%', background: '#e6e6ea', borderRadius: 2 }} /></div>)}</div>
       case 'gallery': return <div key={i} style={{ padding: '9px 12px', background: '#fff', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 4 }}>{[0, 1, 2, 3].map(k => <div key={k} style={{ height: 22, background: '#e3e3e7', borderRadius: 3 }} />)}</div>
-      case 'services': return <div key={i} style={{ padding: '9px 12px', background: '#faf9f7', display: 'flex', gap: 6 }}>{[0, 1, 2].map(k => <div key={k} style={{ flex: 1, padding: 7, background: '#fff', border: '1px solid #eee', borderRadius: 5, textAlign: 'center' }}><div style={{ width: 11, height: 11, borderRadius: 3, background: v.grad, margin: '0 auto 5px' }} /><div style={{ height: 3, width: '70%', background: '#ddd', borderRadius: 2, margin: '0 auto' }} /></div>)}</div>
-      case 'stats': return <div key={i} style={{ padding: '11px 12px', background: '#f5f4f1', display: 'flex', justifyContent: 'space-around' }}>{[0, 1, 2, 3].map(k => <div key={k} style={{ textAlign: 'center' }}><div style={{ height: 8, width: 20, background: '#caa94a', borderRadius: 2, marginBottom: 3 }} /><div style={{ height: 3, width: 26, background: '#ccc', borderRadius: 2 }} /></div>)}</div>
+      case 'services': return <div key={i} style={{ padding: '9px 12px', background: '#faf9f7', display: 'flex', gap: 6 }}>{[0, 1, 2].map(k => <div key={k} style={{ flex: 1, padding: 7, background: '#fff', border: '1px solid #eee', borderRadius: 5, textAlign: 'center' }}><div style={{ width: 11, height: 11, borderRadius: 3, background: v.primary, margin: '0 auto 5px' }} /><div style={{ height: 3, width: '70%', background: '#ddd', borderRadius: 2, margin: '0 auto' }} /></div>)}</div>
+      case 'stats': return <div key={i} style={{ padding: '11px 12px', background: '#f5f4f1', display: 'flex', justifyContent: 'space-around' }}>{[0, 1, 2, 3].map(k => <div key={k} style={{ textAlign: 'center' }}><div style={{ height: 8, width: 20, background: v.primary, borderRadius: 2, marginBottom: 3 }} /><div style={{ height: 3, width: 26, background: '#ccc', borderRadius: 2 }} /></div>)}</div>
       case 'about': return <div key={i} style={{ padding: '9px 12px', background: '#fff', display: 'flex', gap: 8, alignItems: 'center' }}><div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>{[90, 80, 70, 50].map((w, k) => <div key={k} style={{ height: 3, width: `${w}%`, background: '#dcdce0', borderRadius: 2 }} />)}</div><div style={{ width: 44, height: 34, background: '#e7e7ea', borderRadius: 5 }} /></div>
       case 'testimonials': return <div key={i} style={{ padding: '9px 12px', background: '#faf9f7' }}><div style={{ padding: 8, background: '#fff', border: '1px solid #eee', borderRadius: 6 }}>{[85, 65].map((w, k) => <div key={k} style={{ height: 3, width: `${w}%`, background: '#dadade', borderRadius: 2, marginBottom: 4 }} />)}<div style={{ height: 6, width: 28, background: '#e3e3e7', borderRadius: 3, marginTop: 5 }} /></div></div>
       case 'cta': return <div key={i} style={{ padding: '14px 12px', background: v.grad, display: 'flex', justifyContent: 'center' }}><div style={{ height: 10, width: '32%', background: '#fff', borderRadius: 5 }} /></div>
@@ -404,13 +638,14 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
   const [publishing, setPublishing] = useState(false)
   const [publishError, setPublishError] = useState('')
   const [history, setHistory] = useState<Block[][]>([])
+  const [theme, setTheme] = useState<Theme>({ ...DEFAULT_THEME })
+  const [uploadingKey, setUploadingKey] = useState<string | null>(null)
   const [pages, setPages] = useState([
     { id: 'home', label: 'صفحه اصلی', active: true },
     { id: 'listings', label: 'فایل‌ها / محصولات', active: false },
     { id: 'about', label: 'درباره ما', active: false },
     { id: 'contact', label: 'تماس', active: false },
   ])
-  const [blockHeadingEdit, setBlockHeadingEdit] = useState('')
 
   // اسکوپ خودکار قالب‌ها بر اساس نقش کاربر واردشده
   useEffect(() => {
@@ -435,13 +670,23 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
     const nb = makeBlock(type)
     setBlocks(prev => [...prev, nb])
     setSelectedBlock(nb.id)
-    setBlockHeadingEdit(nb.heading)
     setActiveTab('settings')
   }
 
   const loadTemplate = (tpl: typeof STARTER_TEMPLATES[0]) => {
     pushHistory(blocks)
-    const nb = tpl.blocks.map(t => makeBlock(t))
+    const th = PROFILE_THEME[tpl.profile] || PROFILE_THEME['عمومی']
+    const copy = PROFILE_HERO_COPY[tpl.profile] || PROFILE_HERO_COPY['عمومی']
+    // Apply the template's theme so each preset really looks distinct.
+    setTheme({ primary: th.primary })
+    const nb = tpl.blocks.map(type => {
+      // Per-template presets: distinct hero copy + hero/cta bg matching the theme.
+      let preset: Record<string, any> | undefined
+      if (type === 'hero') preset = { heading: copy.heading, subheading: copy.subheading, buttonText: copy.buttonText, bg: th.heroBg }
+      else if (type === 'cta') preset = { bg: th.heroBg }
+      else if (type === 'footer') preset = { text: tpl.name }
+      return makeBlock(type, preset)
+    })
     setBlocks(nb)
     setSelectedBlock(null)
   }
@@ -471,8 +716,58 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
     setHistory(h => h.slice(0, -1))
   }
 
-  const updateBlockHeading = (id: number, heading: string) => {
-    setBlocks(prev => prev.map(b => b.id === id ? { ...b, heading } : b))
+  // Immutable prop update for a block.
+  const updateProp = (id: number, key: string, value: any) => {
+    setBlocks(prev => prev.map(b => b.id === id ? { ...b, props: { ...b.props, [key]: value } } : b))
+  }
+
+  // List-prop helpers (services.items, gallery.images, testimonials.items, footer.links).
+  const updateListItem = (id: number, key: string, index: number, value: any) => {
+    setBlocks(prev => prev.map(b => {
+      if (b.id !== id) return b
+      const arr = Array.isArray(b.props[key]) ? [...b.props[key]] : []
+      arr[index] = value
+      return { ...b, props: { ...b.props, [key]: arr } }
+    }))
+  }
+  const updateListItemField = (id: number, key: string, index: number, field: string, value: any) => {
+    setBlocks(prev => prev.map(b => {
+      if (b.id !== id) return b
+      const arr = Array.isArray(b.props[key]) ? b.props[key].map((x: any) => ({ ...x })) : []
+      arr[index] = { ...arr[index], [field]: value }
+      return { ...b, props: { ...b.props, [key]: arr } }
+    }))
+  }
+  const addListItem = (id: number, key: string, item: any) => {
+    setBlocks(prev => prev.map(b => {
+      if (b.id !== id) return b
+      const arr = Array.isArray(b.props[key]) ? [...b.props[key]] : []
+      arr.push(item)
+      return { ...b, props: { ...b.props, [key]: arr } }
+    }))
+  }
+  const removeListItem = (id: number, key: string, index: number) => {
+    setBlocks(prev => prev.map(b => {
+      if (b.id !== id) return b
+      const arr = Array.isArray(b.props[key]) ? b.props[key].filter((_: any, i: number) => i !== index) : []
+      return { ...b, props: { ...b.props, [key]: arr } }
+    }))
+  }
+  const moveListItem = (id: number, key: string, index: number, dir: -1 | 1) => {
+    setBlocks(prev => prev.map(b => {
+      if (b.id !== id) return b
+      const arr = Array.isArray(b.props[key]) ? [...b.props[key]] : []
+      const next = index + dir
+      if (next < 0 || next >= arr.length) return b
+      ;[arr[index], arr[next]] = [arr[next], arr[index]]
+      return { ...b, props: { ...b.props, [key]: arr } }
+    }))
+  }
+
+  // Upload a single file to /api/media and return its url (mirrors app/pros uploadImages).
+  const uploadFile = async (file: File): Promise<string | null> => {
+    const fd = new FormData(); fd.append('file', file)
+    try { const r = await fetch('/api/media', { method: 'POST', body: fd }); const d = await r.json(); return d.url || null } catch { return null }
   }
 
   const selectedBlockObj = blocks.find(b => b.id === selectedBlock) || null
@@ -491,8 +786,9 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
       body: JSON.stringify({
         slug,
         title: seoTitle,
-        blocks: blocks.map(b => ({ id: b.id, type: b.type, heading: b.heading })),
+        blocks: blocks.map(b => ({ id: b.id, type: b.type, props: b.props })),
         seo: { title: seoTitle, description: seoDesc },
+        theme,
       }),
     })
     if (!res.ok) return null
@@ -712,10 +1008,10 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
                   <BlockPreview
                     key={block.id}
                     block={block}
+                    primary={theme.primary}
                     selected={selectedBlock === block.id}
                     onSelect={() => {
                       setSelectedBlock(block.id)
-                      setBlockHeadingEdit(block.heading)
                       setActiveTab('settings')
                     }}
                     onUp={() => moveBlock(block.id, -1)}
@@ -812,6 +1108,19 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
                 </div>
 
                 <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, padding: '12px 14px' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', marginBottom: 10 }}>رنگ اصلی سایت (تم)</div>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 10 }}>
+                    <input type="color" value={theme.primary} onChange={e => setTheme(t => ({ ...t, primary: e.target.value }))} style={{ width: 44, height: 36, border: '1px solid var(--line)', borderRadius: 8, background: 'var(--bg2)', cursor: 'pointer', padding: 2 }} />
+                    <input value={theme.primary} onChange={e => setTheme(t => ({ ...t, primary: e.target.value }))} style={{ ...INSPECTOR_INPUT, flex: 1, direction: 'ltr' }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {['#c9a84c', '#3b82f6', '#14b8a6', '#f59e0b', '#ec4899', '#10b981', '#64748b', '#e05050'].map(c => (
+                      <button key={c} onClick={() => setTheme(t => ({ ...t, primary: c }))} style={{ width: 26, height: 26, borderRadius: 7, background: c, border: theme.primary === c ? '2px solid var(--text)' : '2px solid var(--line)', cursor: 'pointer', flexShrink: 0 }} />
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, padding: '12px 14px' }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', marginBottom: 10 }}>بررسی‌های سئو</div>
                   {[
                     'رندرینگ سمت سرور (SSR)',
@@ -838,53 +1147,122 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
                       ویرایش: {BLOCK_LIBRARY.find(b => b.type === selectedBlockObj.type)?.label}
                     </div>
 
-                    <div>
-                      <label style={{ fontSize: 11, color: 'var(--muted)', display: 'block', marginBottom: 5 }}>عنوان بلوک</label>
-                      <input
-                        value={blockHeadingEdit}
-                        onChange={e => {
-                          setBlockHeadingEdit(e.target.value)
-                          updateBlockHeading(selectedBlockObj.id, e.target.value)
-                        }}
-                        style={{ width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, color: 'var(--text)', fontSize: 12, outline: 'none', boxSizing: 'border-box' }}
-                      />
-                    </div>
+                    {(BLOCK_SCHEMA[selectedBlockObj.type] || []).map(field => {
+                      const id = selectedBlockObj.id
+                      const val = selectedBlockObj.props[field.key]
+                      // ── scalar fields ──
+                      if (field.kind === 'text' || field.kind === 'enum' || field.kind === 'number' || field.kind === 'textarea' || field.kind === 'color') {
+                        return (
+                          <div key={field.key}>
+                            <label style={{ fontSize: 11, color: 'var(--muted)', display: 'block', marginBottom: 5 }}>{field.label}</label>
+                            {field.kind === 'textarea' ? (
+                              <textarea value={val ?? ''} onChange={e => updateProp(id, field.key, e.target.value)} rows={3} style={INSPECTOR_INPUT} />
+                            ) : field.kind === 'enum' ? (
+                              <select value={val ?? ''} onChange={e => updateProp(id, field.key, e.target.value)} style={INSPECTOR_INPUT}>
+                                {field.options!.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                              </select>
+                            ) : field.kind === 'number' ? (
+                              <input type="number" value={val ?? 0} onChange={e => updateProp(id, field.key, Number(e.target.value))} style={INSPECTOR_INPUT} />
+                            ) : field.kind === 'color' ? (
+                              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                <input type="color" value={(typeof val === 'string' && val.startsWith('#')) ? val : '#ffffff'} onChange={e => updateProp(id, field.key, e.target.value)} style={{ width: 40, height: 32, border: '1px solid var(--line)', borderRadius: 8, background: 'var(--surface)', cursor: 'pointer', padding: 2 }} />
+                                <input value={val ?? ''} onChange={e => updateProp(id, field.key, e.target.value)} style={{ ...INSPECTOR_INPUT, flex: 1 }} />
+                              </div>
+                            ) : (
+                              <input value={val ?? ''} onChange={e => updateProp(id, field.key, e.target.value)} style={INSPECTOR_INPUT} />
+                            )}
+                          </div>
+                        )
+                      }
+                      // ── single image field (about.image) ──
+                      if (field.kind === 'image') {
+                        const ukey = `${id}:${field.key}`
+                        return (
+                          <div key={field.key}>
+                            <label style={{ fontSize: 11, color: 'var(--muted)', display: 'block', marginBottom: 5 }}>{field.label}</label>
+                            {val ? (
+                              <div style={{ position: 'relative', marginBottom: 6 }}>
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={val} alt="" style={{ width: '100%', height: 100, objectFit: 'cover', borderRadius: 8 }} />
+                                <button onClick={() => updateProp(id, field.key, '')} style={{ position: 'absolute', top: 4, left: 4, width: 22, height: 22, borderRadius: 6, border: 'none', background: 'rgba(0,0,0,.65)', color: '#fff', cursor: 'pointer', fontSize: 12 }}>✕</button>
+                              </div>
+                            ) : null}
+                            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px', borderRadius: 8, border: '1px dashed var(--line2)', color: 'var(--muted)', cursor: 'pointer', fontSize: 11 }}>
+                              <input type="file" accept="image/*" style={{ display: 'none' }} onChange={async e => {
+                                const f = e.target.files?.[0]; if (!f) return
+                                setUploadingKey(ukey)
+                                const url = await uploadFile(f)
+                                if (url) updateProp(id, field.key, url)
+                                setUploadingKey(null)
+                              }} />
+                              <span>{uploadingKey === ukey ? '⏳ آپلود…' : '＋ آپلود تصویر'}</span>
+                            </label>
+                          </div>
+                        )
+                      }
+                      // ── list fields ──
+                      if (field.kind === 'list') {
+                        const arr: any[] = Array.isArray(val) ? val : []
+                        const isImageList = field.itemFields && field.itemFields.length === 1 && field.itemFields[0].kind === 'image' && field.itemFields[0].key === ''
+                        return (
+                          <div key={field.key}>
+                            <label style={{ fontSize: 11, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>{field.label}</label>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              {arr.map((item, idx) => (
+                                <div key={idx} style={{ border: '1px solid var(--line)', borderRadius: 9, padding: 8, background: 'var(--surface)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                  <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                                    <button onClick={() => moveListItem(id, field.key, idx, -1)} style={LIST_BTN}>▲</button>
+                                    <button onClick={() => moveListItem(id, field.key, idx, 1)} style={LIST_BTN}>▼</button>
+                                    <button onClick={() => removeListItem(id, field.key, idx)} style={{ ...LIST_BTN, color: '#e05050' }}>×</button>
+                                  </div>
+                                  {isImageList ? (
+                                    <div>
+                                      {item ? (
+                                        <div style={{ position: 'relative' }}>
+                                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                                          <img src={item} alt="" style={{ width: '100%', height: 80, objectFit: 'cover', borderRadius: 6 }} />
+                                        </div>
+                                      ) : (
+                                        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px', borderRadius: 6, border: '1px dashed var(--line2)', color: 'var(--muted)', cursor: 'pointer', fontSize: 11 }}>
+                                          <input type="file" accept="image/*" style={{ display: 'none' }} onChange={async e => {
+                                            const f = e.target.files?.[0]; if (!f) return
+                                            const ukey = `${id}:${field.key}:${idx}`
+                                            setUploadingKey(ukey)
+                                            const url = await uploadFile(f)
+                                            if (url) updateListItem(id, field.key, idx, url)
+                                            setUploadingKey(null)
+                                          }} />
+                                          <span>{uploadingKey === `${id}:${field.key}:${idx}` ? '⏳ آپلود…' : '＋ آپلود'}</span>
+                                        </label>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    field.itemFields!.map(f => (
+                                      <div key={f.key}>
+                                        <label style={{ fontSize: 10, color: 'var(--faint)', display: 'block', marginBottom: 3 }}>{f.label}</label>
+                                        {f.kind === 'textarea' ? (
+                                          <textarea value={item?.[f.key] ?? ''} onChange={e => updateListItemField(id, field.key, idx, f.key, e.target.value)} rows={2} style={INSPECTOR_INPUT} />
+                                        ) : f.kind === 'number' ? (
+                                          <input type="number" value={item?.[f.key] ?? 0} onChange={e => updateListItemField(id, field.key, idx, f.key, Number(e.target.value))} style={INSPECTOR_INPUT} />
+                                        ) : (
+                                          <input value={item?.[f.key] ?? ''} onChange={e => updateListItemField(id, field.key, idx, f.key, e.target.value)} style={INSPECTOR_INPUT} />
+                                        )}
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              ))}
+                              <button onClick={() => addListItem(id, field.key, field.newItem ? field.newItem() : {})} style={{ padding: '8px', borderRadius: 8, border: '1px dashed var(--line)', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>＋ افزودن</button>
+                            </div>
+                          </div>
+                        )
+                      }
+                      return null
+                    })}
 
-                    <div>
-                      <label style={{ fontSize: 11, color: 'var(--muted)', display: 'block', marginBottom: 8 }}>رنگ پس‌زمینه</label>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {['#1a1510', '#f5f3ef', '#ffffff', '#0d0b08', '#2d2215', '#1e2530'].map(c => (
-                          <div key={c} style={{ width: 28, height: 28, borderRadius: 7, background: c, border: '2px solid var(--line)', cursor: 'pointer', flexShrink: 0 }} />
-                        ))}
-                      </div>
-                    </div>
-
-                    {selectedBlockObj.type === 'hero' && (
-                      <>
-                        <div>
-                          <label style={{ fontSize: 11, color: 'var(--muted)', display: 'block', marginBottom: 5 }}>زیرعنوان</label>
-                          <input
-                            defaultValue="مشاور املاک حرفه‌ای با بیش از ۱۰ سال تجربه"
-                            style={{ width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, color: 'var(--text)', fontSize: 12, outline: 'none', boxSizing: 'border-box' }}
-                          />
-                        </div>
-                        <div>
-                          <label style={{ fontSize: 11, color: 'var(--muted)', display: 'block', marginBottom: 5 }}>متن دکمه</label>
-                          <input
-                            defaultValue="مشاهده ملک‌ها"
-                            style={{ width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, color: 'var(--text)', fontSize: 12, outline: 'none', boxSizing: 'border-box' }}
-                          />
-                        </div>
-                      </>
-                    )}
-
-                    {selectedBlockObj.type === 'cta' && (
-                      <div>
-                        <label style={{ fontSize: 11, color: 'var(--muted)', display: 'block', marginBottom: 5 }}>متن دکمه</label>
-                        <input
-                          defaultValue="تماس با ما"
-                          style={{ width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, color: 'var(--text)', fontSize: 12, outline: 'none', boxSizing: 'border-box' }}
-                        />
+                    {selectedBlockObj.type === 'listings' && selectedBlockObj.props.source === 'mine' && (
+                      <div style={{ fontSize: 10.5, color: 'var(--muted)', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px', lineHeight: 1.7 }}>
+                        این بلوک هنگام انتشار، آگهی‌های ثبت‌شدهٔ شما را نمایش می‌دهد.
                       </div>
                     )}
 
