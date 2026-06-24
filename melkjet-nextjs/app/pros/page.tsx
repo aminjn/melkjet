@@ -217,6 +217,14 @@ export default function ProsPage() {
     setForm(f => ({ ...f, images: [...f.images, ...urls].slice(0, 12) }))
     setUploading(false)
   }
+  // انتخابِ دسته‌ایِ فایل‌ها در «فایل‌های من»
+  const [selFiles, setSelFiles] = useState<Set<string>>(new Set())
+  const toggleFile = (id: string) => setSelFiles(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const bulkFiles = async (action: 'delete' | 'status', status?: string) => {
+    const ids = [...selFiles]
+    for (const id of ids) await post(action === 'delete' ? { action: 'deleteListing', id } : { action: 'setListingStatus', id, status })
+    setSelFiles(new Set())
+  }
   const saveListing = async () => {
     if (!form.title.trim()) { alert('عنوان فایل الزامی است'); return }
     const patch = {
@@ -575,14 +583,30 @@ export default function ProsPage() {
             <div style={{ ...card, padding: 18 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                 <div style={{ fontWeight: 800, fontSize: 15 }}>فایل‌های من ({fa(listings.length)})</div>
-                <button onClick={openAdd} style={goldBtn}>＋ افزودن فایل</button>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  {listings.length > 0 && <button onClick={() => setSelFiles(selFiles.size === listings.length ? new Set() : new Set(listings.map(l => l.id)))} style={actionBtn}>{selFiles.size === listings.length ? 'لغو انتخاب' : 'انتخاب همه'}</button>}
+                  <button onClick={openAdd} style={goldBtn}>＋ افزودن فایل</button>
+                </div>
               </div>
+              {selFiles.size > 0 && (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
+                  <b style={{ color: 'var(--gold)', fontSize: 12.5 }}>{fa(selFiles.size)} انتخاب‌شده</b>
+                  <span style={{ flex: 1 }} />
+                  <select onChange={e => { if (e.target.value) { bulkFiles('status', e.target.value); e.target.value = '' } }} defaultValue="" style={{ ...inputStyle, width: 'auto', padding: '6px 10px' }}>
+                    <option value="">تغییر وضعیت…</option><option value="active">فعال</option><option value="sold">فروخته‌شده</option><option value="rented">اجاره‌رفته</option>
+                  </select>
+                  <button onClick={() => { if (confirm(`${fa(selFiles.size)} فایل حذف شود؟`)) bulkFiles('delete') }} style={{ ...actionBtn, color: '#ef4444', borderColor: '#ef4444' }}>حذف انتخاب‌شده‌ها</button>
+                </div>
+              )}
             </div>
             {listings.length ? (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 14 }}>
                 {listings.map(l => (
-                  <div key={l.id} style={{ ...card, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                  <div key={l.id} style={{ ...card, overflow: 'hidden', display: 'flex', flexDirection: 'column', outline: selFiles.has(l.id) ? '2px solid var(--gold)' : 'none' }}>
                     <div style={{ position: 'relative', height: 150, background: 'var(--bg2)' }}>
+                      <label style={{ position: 'absolute', top: 8, left: 8, zIndex: 2, width: 26, height: 26, borderRadius: 7, background: 'rgba(20,18,14,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={e => e.stopPropagation()}>
+                        <input type="checkbox" checked={selFiles.has(l.id)} onChange={() => toggleFile(l.id)} style={{ cursor: 'pointer' }} />
+                      </label>
                       {l.images && l.images.length ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={l.images[0]} alt={l.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
