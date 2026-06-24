@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listContacts, listGroups, addContact, updateContact, deleteContact, bulkAddContacts, importFromLeads, recipientsForGroup } from '@/app/lib/contacts-store'
+import { listContacts, listGroups, addContact, updateContact, deleteContact, bulkAddContacts, importFromLeads, recipientsForGroup, addGroup, deleteGroup, assignGroup } from '@/app/lib/contacts-store'
 
 // دفترچهٔ مخاطبینِ مارکتینگ (per-profile).
 export async function GET(req: NextRequest) {
@@ -24,8 +24,11 @@ export async function POST(req: NextRequest) {
     case 'add': return NextResponse.json({ ok: true, contact: addContact(o, b) })
     case 'update': { if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); const c = updateContact(o, String(b.id), b.patch || {}); return c ? NextResponse.json({ ok: true, contact: c }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'delete': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); deleteContact(o, String(b.id)); return NextResponse.json({ ok: true })
-    case 'bulk': { const rows = Array.isArray(b.rows) ? b.rows : []; const r = bulkAddContacts(o, rows, Array.isArray(b.groups) ? b.groups : []); return NextResponse.json({ ok: true, ...r }) }
-    case 'fromLeads': return NextResponse.json({ ok: true, ...importFromLeads(o) })
+    case 'bulk': { const rows = Array.isArray(b.rows) ? b.rows : []; const r = bulkAddContacts(o, rows, Array.isArray(b.groups) ? b.groups : (b.group ? [String(b.group)] : [])); return NextResponse.json({ ok: true, ...r, groups: listGroups(o) }) }
+    case 'fromLeads': { const r = importFromLeads(o, b.group ? String(b.group) : undefined); return NextResponse.json({ ok: true, ...r, groups: listGroups(o) }) }
+    case 'addGroup': if (!b.name) return NextResponse.json({ error: 'نام گروه الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, groups: addGroup(o, String(b.name)) })
+    case 'deleteGroup': if (!b.name) return NextResponse.json({ error: 'نام گروه الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, groups: deleteGroup(o, String(b.name)) })
+    case 'assignGroup': { const ids = Array.isArray(b.ids) ? b.ids.map(String) : []; if (!ids.length || !b.group) return NextResponse.json({ error: 'مخاطب و گروه الزامی است' }, { status: 400 }); assignGroup(o, ids, String(b.group), b.add !== false); return NextResponse.json({ ok: true, groups: listGroups(o) }) }
     default: return NextResponse.json({ error: 'عملیات نامعتبر' }, { status: 400 })
   }
 }
