@@ -2,11 +2,13 @@
 
 import { useState, useEffect, useMemo, Suspense } from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import Nav from '@/app/components/Nav'
 import BannerSlot from '@/app/components/BannerSlot'
+import NeshanMap, { type MapPoint } from '@/app/components/NeshanMap'
 import { fetchContent, gradientFor, type ContentItem } from '@/app/lib/content-display'
 import { readLoc } from '@/app/components/LocationDetector'
+import { PROPERTY_KINDS } from '@/app/lib/taxonomy'
 
 function seedNum(s: string): number {
   let h = 0
@@ -14,833 +16,401 @@ function seedNum(s: string): number {
   return Math.abs(h)
 }
 
-// Map Persian/Arabic-Indic digits to ASCII so we can parse numbers from titles/prices.
 const FA_DIGITS: Record<string, string> = {
-  '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
-  '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
-  '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
-  '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
+  '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4', '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
+  '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4', '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
 }
-function faToEn(s: string): string {
-  return s.replace(/[۰-۹٠-٩]/g, d => FA_DIGITS[d] ?? d)
-}
-function toPersianDigits(n: number | string): string {
-  return String(n).replace(/[0-9]/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d])
-}
+function faToEn(s: string): string { return (s || '').replace(/[۰-۹٠-٩]/g, d => FA_DIGITS[d] ?? d) }
+function toPersianDigits(n: number | string): string { return String(n).replace(/[0-9]/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d]) }
+function faNum(n: number): string { return (Number(n) || 0).toLocaleString('fa-IR') }
 
-// Detect bedroom count from text like "۲ خواب" / "2 خوابه".
-function parseBeds(text: string): number | null {
-  const m = faToEn(text).match(/(\d+)\s*خواب/)
-  return m ? parseInt(m[1], 10) : null
-}
+function firstInt(s?: string): number | null { const m = faToEn(s || '').match(/(\d{1,4})/); return m ? parseInt(m[1], 10) : null }
 
-// سقفِ اسلایدرِ قیمت (میلیارد تومان). در این مقدار = «بدون سقف» (هیچ فیلتری اعمال نمی‌شود).
-const PRICE_MAX = 500
+// همهٔ امکاناتِ قابلِ تشخیص (برای فیلتر + تشخیصِ متن)
+const AMENITY_ALL = ['آسانسور', 'پارکینگ', 'انباری', 'بالکن', 'تراس', 'مبله', 'روف گاردن', 'استخر', 'سونا', 'جکوزی', 'لابی', 'سند تک‌برگ', 'بازسازی', 'نوساز']
+const AMENITY_FILTER = ['آسانسور', 'پارکینگ', 'انباری', 'بالکن', 'تراس', 'مبله', 'روف گاردن', 'استخر', 'لابی', 'نوساز']
+const PRICE_MAX = 500 // سقفِ اسلایدر (میلیارد تومان)؛ این مقدار = «بدون سقف»
+
+// واحدِ ملک (آپارتمان/ویلا/…) را از متن تشخیص می‌دهد
+function detectKind(text: string): string {
+  for (const k of PROPERTY_KINDS) {
+    for (const seg of k.split('/')) { if (seg && text.includes(seg)) return k }
+  }
+  return ''
+}
 
 function toProperty(it: ContentItem) {
   const h = seedNum(it.id)
   const enTitle = faToEn(it.title)
-  const sizeMatch = enTitle.match(/(\d+)\s*متر/)
-  // نرمال‌سازیِ قیمت به واحدِ «میلیارد تومان» تا با اسلایدرِ فیلتر هم‌مقیاس باشد
-  // (قیمت‌های واردشده از دیوار عددِ کامل‌اند مثل ۴۰۰٬۰۰۰٬۰۰۰٬۰۰۰، نه «۱۸ میلیارد»).
   const rawPrice = parseFloat(faToEn(it.price || '').replace(/[^\d.]/g, '')) || 0
   const ptxt = it.price || ''
   const priceNum = /میلیارد/.test(ptxt) ? rawPrice : /میلیون/.test(ptxt) ? rawPrice / 1000 : rawPrice / 1e9
-  const bedsNum = parseBeds(`${it.title} ${it.excerpt || ''} ${it.meta?.['اتاق خواب'] || ''}`)
-  // Lowercased haystack of all text we can match search terms / amenities against.
-  const searchText = [
-    it.title, it.location, it.excerpt,
-    it.category, ...(it.tags || []),
-  ].filter(Boolean).join(' ').toLowerCase()
-  // نوعِ معامله — قطعی از متا، سپس از قیمت/عنوان. تا هر آگهی فقط جای خودش بیاید.
+  const bedsNum = (() => { const m = faToEn(`${it.title} ${it.excerpt || ''} ${it.meta?.['اتاق خواب'] || ''}`).match(/(\d+)\s*خواب/); return m ? parseInt(m[1], 10) : null })()
+  const searchText = [it.title, it.location, it.excerpt, it.category, ...(it.tags || [])].filter(Boolean).join(' ').toLowerCase()
   const dealTxt = `${it.price || ''} ${it.title || ''} ${it.category || ''} ${it.meta?.['نوع معامله'] || ''} ${(it.tags || []).join(' ')}`
   const deal: 'sale' | 'rent' | 'presale' =
     /پیش[‌\s]?فروش/.test(dealTxt) ? 'presale'
       : (it.meta?.['نوع معامله'] === 'اجاره' || /اجاره|رهن|ودیعه/.test(dealTxt)) ? 'rent'
         : 'sale'
-  // متراژ از متا (مطمئن‌تر از عنوان)
-  const sizeMeta = faToEn(it.meta?.['متراژ'] || '').match(/(\d+)/)
+  const areaNum = firstInt(it.meta?.['متراژ']) ?? (enTitle.match(/(\d+)\s*متر/) ? parseInt(enTitle.match(/(\d+)\s*متر/)![1], 10) : 0)
+  const floorNum = firstInt(it.meta?.['طبقه'])
+  const yearNum = (() => { const y = firstInt(it.meta?.['سال ساخت']) ?? firstInt(it.meta?.['ساخت']); return y && y > 50 ? y : 0 })()
+  const kind = detectKind(`${it.title} ${it.category || ''} ${it.meta?.['نوع ملک'] || ''}`)
+  const lat = Number(it.meta?.['__lat']) || undefined
+  const lng = Number(it.meta?.['__lng']) || undefined
   return {
-    id: it.id,
-    deal,
-    title: it.title,
-    location: it.location || 'نامشخص',
-    price: it.price || '—',
-    priceNum,
-    beds: bedsNum != null ? toPersianDigits(bedsNum) : '—',
-    bedsNum,
-    size: sizeMeta ? sizeMeta[1] : (sizeMatch ? sizeMatch[1] : '—'),
-    year: '—',
-    tag: '',
-    score: 80 + (h % 19),
-    img: it.image ? '' : gradientFor(it.title),
-    image: it.image,
-    url: it.url,
-    category: it.category || '',
-    searchText,
-    pinX: 12 + (h % 74),
-    pinY: 16 + ((h >> 3) % 66),
-    pinColor: ['var(--gold)', '#e7674a', '#5fd98a'][h % 3],
+    id: it.id, deal, title: it.title, location: it.location || 'نامشخص',
+    price: it.price || '—', priceNum,
+    beds: bedsNum != null ? toPersianDigits(bedsNum) : '—', bedsNum,
+    size: areaNum ? toPersianDigits(areaNum) : '—', areaNum,
+    floorNum, yearNum, kind, lat, lng,
+    year: yearNum ? toPersianDigits(yearNum) : '—',
+    tag: '', score: 80 + (h % 19),
+    img: it.image ? '' : gradientFor(it.title), image: it.image, url: it.url,
+    category: it.category || '', searchText,
   }
 }
-
-const tagColors: Record<string, { bg: string; color: string; border: string }> = {
-  ویژه:        { bg: 'rgba(201,168,76,0.18)',  color: '#c9a84c', border: 'rgba(201,168,76,0.45)' },
-  لوکس:        { bg: 'rgba(160,100,220,0.18)', color: '#c07eed', border: 'rgba(160,100,220,0.45)' },
-  فرصت:        { bg: 'rgba(60,180,100,0.18)',  color: '#4ec97a', border: 'rgba(60,180,100,0.45)' },
-  اقتصادی:    { bg: 'rgba(60,180,230,0.15)',  color: '#4ec4e8', border: 'rgba(60,180,230,0.4)' },
-  'پیشنهاد AI': { bg: 'rgba(80,140,255,0.15)',  color: '#6ea8ff', border: 'rgba(80,140,255,0.4)' },
-}
-
-const aiTags = [
-  { label: 'نوع', value: 'آپارتمان' },
-  { label: 'متراژ', value: '~۱۳۰ متر' },
-  { label: 'منطقه', value: 'سعادت‌آباد' },
-  { label: 'بودجه', value: 'زیر ۱۸ م.د' },
-  { label: 'امکانات', value: 'آسانسور، پارکینگ' },
-]
-
-const amenitiesOptions = ['آسانسور', 'پارکینگ', 'انباری', 'بالکن']
-
-// Persian bed-button label (۱، ۲، ۳، +۴) → numeric predicate.
-function bedsButtonMatches(label: string, bedsNum: number | null): boolean {
-  if (label === 'همه') return true
-  if (bedsNum == null) return true // tolerant: unknown bed count is never excluded
-  if (label === '+۴') return bedsNum >= 4
-  const n = parseInt(faToEn(label), 10)
-  return Number.isNaN(n) ? true : bedsNum === n
-}
-
 type PropertyT = ReturnType<typeof toProperty>
 
+// ─── تشخیصِ واقعیِ پارامترها از متنِ جستجو (نه فیک) ───────────────────────────
+interface Parsed { kind: string; area: string; sizeNum: number; budgetMax: number; beds: number | null; amenities: string[]; deal: string; tokens: string[] }
+const STOP = new Set(['در', 'با', 'و', 'زیر', 'تا', 'حدود', 'حداکثر', 'سقف', 'متری', 'متر', 'میلیارد', 'میلیون', 'تومان', 'خواب', 'خوابه', 'نزدیک', 'حوالی', 'منطقه', 'محله', 'یک', 'دو', 'سه', 'چهار', 'برای', 'فروش', 'اجاره', 'رهن', 'پیش‌فروش', 'پیش'])
+function parseQuery(raw: string): Parsed {
+  const t = faToEn(raw)
+  const out: Parsed = { kind: '', area: '', sizeNum: 0, budgetMax: 0, beds: null, amenities: [], deal: '', tokens: [] }
+  if (!raw.trim()) return out
+  if (/پیش[‌\s]?فروش/.test(raw)) out.deal = 'presale'
+  else if (/اجاره|رهن|ودیعه/.test(raw)) out.deal = 'rent'
+  out.kind = detectKind(raw)
+  const sm = t.match(/(\d{2,4})\s*متر/); if (sm) out.sizeNum = parseInt(sm[1], 10)
+  const bm = t.match(/(\d+)\s*خواب/); if (bm) out.beds = parseInt(bm[1], 10)
+  const bg = t.match(/(?:زیر|تا|حداکثر|سقف)\s*([\d.]+)\s*(میلیارد|میلیون)?/)
+  if (bg) { const n = parseFloat(bg[1]); out.budgetMax = /میلیون/.test(bg[2] || '') ? n / 1000 : n }
+  for (const a of AMENITY_ALL) if (raw.includes(a)) out.amenities.push(a)
+  const am = raw.match(/در\s+([^\d،,]+?)(?:\s+(?:زیر|با|تا|حدود|حداکثر)|،|$)/)
+  if (am) out.area = am[1].replace(/‌/g, ' ').trim()
+  // توکن‌های باقی‌مانده (مثلِ نامِ محله/برج) برای جستجوی متنی
+  const consumed = new Set<string>([...out.amenities, ...(out.area ? out.area.split(/\s+/) : []), ...(out.kind ? out.kind.split('/') : [])])
+  for (const w of raw.split(/[\s،,]+/)) {
+    const word = w.trim()
+    if (word.length < 2 || STOP.has(word) || consumed.has(word) || /^\d/.test(faToEn(word))) continue
+    out.tokens.push(word)
+  }
+  return out
+}
+
+function bedsMatch(target: number | null, bedsNum: number | null): boolean {
+  if (target == null) return true
+  if (bedsNum == null) return true
+  if (target >= 4) return bedsNum >= 4
+  return bedsNum === target
+}
+
 export default function SearchPage() {
-  return (
-    <Suspense fallback={null}>
-      <SearchPageInner />
-    </Suspense>
-  )
+  return <Suspense fallback={null}><SearchPageInner /></Suspense>
 }
 
 function SearchPageInner() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const initialQuery = searchParams.get('q') || ''
-  // نوعِ معامله از URL: ?type=rent|presale|mortgage|buy
-  const initialDeal = (() => {
-    const t = (searchParams.get('type') || '').toLowerCase()
-    if (t === 'rent' || t === 'اجاره') return 'اجاره'
-    if (t === 'presale' || t === 'pre-sale' || t === 'پیش‌فروش') return 'پیش‌فروش'
-    if (t === 'mortgage' || t === 'rahn' || t === 'رهن') return 'رهن'
-    return 'خرید'
-  })()
+  const typeParam = (searchParams.get('type') || '').toLowerCase()
+  // تبِ معامله مستقیماً از URL خوانده می‌شود (منبعِ واحدِ حقیقت) — رفعِ باگِ ناوبریِ منو
+  const dealType = typeParam === 'rent' || typeParam === 'اجاره' ? 'اجاره'
+    : typeParam === 'presale' || typeParam === 'pre-sale' || typeParam === 'پیش‌فروش' ? 'پیش‌فروش'
+      : typeParam === 'mortgage' || typeParam === 'rahn' || typeParam === 'رهن' ? 'رهن'
+        : 'خرید'
+  const goDeal = (label: string) => {
+    const slug = label === 'اجاره' ? 'rent' : label === 'پیش‌فروش' ? 'presale' : label === 'رهن' ? 'mortgage' : ''
+    router.replace('/search' + (slug ? `?type=${slug}` : ''), { scroll: false })
+  }
 
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [search, setSearch] = useState(initialQuery)
   const [searchTerm, setSearchTerm] = useState(initialQuery)
-  const [dealType, setDealType] = useState<string>(initialDeal)
   const [beds, setBeds] = useState<string>('همه')
-  const [maxPrice, setMaxPrice] = useState(PRICE_MAX)   // پیش‌فرض: بدون سقف (همه نشان داده شوند)
-  const [checkedAmenities, setCheckedAmenities] = useState<string[]>([])   // هیچ فیلترِ پیش‌فرضی
+  const [kind, setKind] = useState('')
+  const [priceMin, setPriceMin] = useState(0)
+  const [priceMax, setPriceMax] = useState(PRICE_MAX)
+  const [areaMin, setAreaMin] = useState(0)
+  const [areaMax, setAreaMax] = useState(0)
+  const [floorMin, setFloorMin] = useState(0)
+  const [yearMin, setYearMin] = useState(0)
+  const [checkedAmenities, setCheckedAmenities] = useState<string[]>([])
   const [sortBy, setSortBy] = useState('پیشنهاد ملک‌جت')
-  // اگر URL عوض شد (ناوبری بین type=rent/presale/…) تبِ معامله را همگام کن
-  useEffect(() => { setDealType(initialDeal) }, [initialDeal])
-  // منطقهٔ کاربر (از موقعیتِ تشخیص‌داده‌شده) — برای مرتب‌سازیِ نزدیک‌ترها
+
   const [userArea, setUserArea] = useState('')
+  const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null)
   useEffect(() => {
-    const upd = () => { const l = readLoc(); setUserArea(l?.neighborhood || l?.city || '') }
+    const upd = () => { const l = readLoc(); setUserArea(l?.neighborhood || l?.city || ''); if (l?.lat && l?.lng) setUserLoc({ lat: l.lat, lng: l.lng }) }
     upd(); window.addEventListener('mj-loc-updated', upd)
     return () => window.removeEventListener('mj-loc-updated', upd)
   }, [])
+
   const [hoveredCard, setHoveredCard] = useState<string | null>(null)
-  const [activePin, setActivePin] = useState<string | null>(null)
   const [properties, setProperties] = useState<PropertyT[]>([])
   const [promoted, setPromoted] = useState<PropertyT[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let alive = true
-    fetchContent('listing', undefined, 60).then((d) => {
-      if (alive) { setProperties(d.map(toProperty)); setLoading(false) }
-    })
-    fetch('/api/promotions?slot=search_top', { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : { items: [] }))
-      .then((d) => { if (alive) setPromoted(((d.items || []) as ContentItem[]).map(toProperty)) })
-      .catch(() => {})
+    fetchContent('listing', undefined, 80).then((d) => { if (alive) { setProperties(d.map(toProperty)); setLoading(false) } })
+    fetch('/api/promotions?slot=search_top', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : { items: [] })).then((d) => { if (alive) setPromoted(((d.items || []) as ContentItem[]).map(toProperty)) }).catch(() => {})
     return () => { alive = false }
   }, [])
 
-  const toggleAmenity = (a: string) =>
-    setCheckedAmenities(prev => prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a])
+  const toggleAmenity = (a: string) => setCheckedAmenities(prev => prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a])
+  const parsed = useMemo(() => parseQuery(searchTerm), [searchTerm])
 
-  const filterCount =
-    (dealType !== 'خرید' ? 1 : 0) +
-    (beds !== 'همه' ? 1 : 0) +
-    (maxPrice < PRICE_MAX ? 1 : 0) +
-    checkedAmenities.length
+  // مقادیرِ مؤثرِ فیلتر: فیلترِ دستی اولویت دارد، وگرنه از تشخیصِ متن
+  const fKind = kind || parsed.kind || ''
+  const fBeds = beds !== 'همه' ? parseInt(faToEn(beds), 10) : parsed.beds
+  const fBudgetMax = priceMax < PRICE_MAX ? priceMax : (parsed.budgetMax || 0)
+  const fSizeMin = areaMin > 0 ? areaMin : (parsed.sizeNum ? Math.floor(parsed.sizeNum * 0.8) : 0)
+  const fSizeMax = areaMax > 0 ? areaMax : (parsed.sizeNum ? Math.ceil(parsed.sizeNum * 1.2) : 0)
+  const fAmen = useMemo(() => Array.from(new Set([...checkedAmenities, ...parsed.amenities])), [checkedAmenities, parsed.amenities])
+  const fAreaName = parsed.area || ''
 
-  // ─── Apply search + filters, then sort ───────────────────────
+  const activeFilterCount =
+    (dealType !== 'خرید' ? 1 : 0) + (kind ? 1 : 0) + (beds !== 'همه' ? 1 : 0) +
+    (priceMin > 0 ? 1 : 0) + (priceMax < PRICE_MAX ? 1 : 0) + (areaMin > 0 ? 1 : 0) + (areaMax > 0 ? 1 : 0) +
+    (floorMin > 0 ? 1 : 0) + (yearMin > 0 ? 1 : 0) + checkedAmenities.length
+
   const filteredProperties = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase()
+    const tabDeal = dealType === 'پیش‌فروش' ? 'presale' : (dealType === 'اجاره' || dealType === 'رهن') ? 'rent' : 'sale'
+    const areaName = fAreaName.toLowerCase()
     return properties.filter(p => {
-      // Free-text search: match title + location (case-insensitive).
-      if (term) {
-        const hay = `${p.title} ${p.location}`.toLowerCase()
-        if (!hay.includes(term) && !p.searchText.includes(term)) return false
-      }
-      // نوعِ معامله: هر آگهی فقط در تبِ خودش — خرید=فروش، اجاره/رهن=اجاره، پیش‌فروش=پیش‌فروش.
-      const tabDeal = dealType === 'پیش‌فروش' ? 'presale' : (dealType === 'اجاره' || dealType === 'رهن') ? 'rent' : 'sale'
       if (p.deal !== tabDeal) return false
-      // Bedrooms.
-      if (beds !== 'همه' && !bedsButtonMatches(beds, p.bedsNum)) return false
-      // حداکثر قیمت (میلیارد تومان) — فقط وقتی کاربر سقف گذاشته باشد (کمتر از PRICE_MAX).
-      if (maxPrice < PRICE_MAX && p.priceNum > 0 && p.priceNum > maxPrice) return false
-      // Amenities: every checked amenity must appear in the item's text.
-      for (const a of checkedAmenities) {
-        if (!p.searchText.includes(a.toLowerCase())) {
-          // tolerant — only exclude if the item has descriptive text to match against
-          if (p.searchText.trim()) return false
-        }
+      if (fKind && p.kind && p.kind !== fKind) {
+        // اگر واحدِ تشخیص‌داده‌شده فرق دارد، رد کن (اگر واحدِ آگهی نامشخص است، تحمل کن)
+        return false
       }
+      if (!bedsMatch(fBeds ?? null, p.bedsNum)) return false
+      if (priceMin > 0 && p.priceNum > 0 && p.priceNum < priceMin) return false
+      if (fBudgetMax > 0 && p.priceNum > 0 && p.priceNum > fBudgetMax) return false
+      if (fSizeMin > 0 && p.areaNum > 0 && p.areaNum < fSizeMin) return false
+      if (fSizeMax > 0 && p.areaNum > 0 && p.areaNum > fSizeMax) return false
+      if (floorMin > 0 && p.floorNum != null && p.floorNum < floorMin) return false
+      if (yearMin > 0 && p.yearNum > 0 && p.yearNum < yearMin) return false
+      for (const a of fAmen) { if (p.searchText.trim() && !p.searchText.includes(a.toLowerCase())) return false }
+      if (areaName) { const hay = `${p.location} ${p.searchText}`.toLowerCase(); if (!hay.includes(areaName)) return false }
+      for (const tok of parsed.tokens) { const hay = `${p.title} ${p.location} ${p.searchText}`.toLowerCase(); if (!hay.includes(tok.toLowerCase())) return false }
       return true
     })
-  }, [properties, searchTerm, dealType, beds, maxPrice, checkedAmenities])
+  }, [properties, dealType, fKind, fBeds, priceMin, fBudgetMax, fSizeMin, fSizeMax, floorMin, yearMin, fAmen, fAreaName, parsed.tokens])
 
   const sortedProperties = useMemo(() => {
     const ar = userArea.replace(/‌/g, '').trim()
     const nearby = (p: { location: string }) => ar ? p.location.replace(/‌/g, '').includes(ar) : false
     return [...filteredProperties].sort((a, b) => {
       if (sortBy === 'ارزان‌ترین') return a.priceNum - b.priceNum
-      if (sortBy === 'گران‌ترین')  return b.priceNum - a.priceNum
-      if (sortBy === 'جدیدترین')  return parseInt(b.year) - parseInt(a.year)
-      // پیش‌فرض: آگهی‌های منطقهٔ کاربر اول، سپس امتیاز
+      if (sortBy === 'گران‌ترین') return b.priceNum - a.priceNum
+      if (sortBy === 'جدیدترین') return (b.yearNum || 0) - (a.yearNum || 0)
       const an = nearby(a), bn = nearby(b)
       if (an !== bn) return an ? -1 : 1
       return b.score - a.score
     })
   }, [filteredProperties, sortBy, userArea])
 
-  // Promoted listings lead the results (dedup by id).
   const shownProperties = useMemo(() => {
-    const promotedIds = new Set(promoted.map(p => p.id))
-    return [...promoted, ...sortedProperties.filter(p => !promotedIds.has(p.id))]
-  }, [promoted, sortedProperties])
+    const ids = new Set(promoted.map(p => p.id))
+    return [...promoted.filter(p => p.deal === (dealType === 'پیش‌فروش' ? 'presale' : (dealType === 'اجاره' || dealType === 'رهن') ? 'rent' : 'sale')), ...sortedProperties.filter(p => !ids.has(p.id))]
+  }, [promoted, sortedProperties, dealType])
   const promotedIdSet = useMemo(() => new Set(promoted.map(p => p.id)), [promoted])
 
-  const activeProperty = [...promoted, ...properties].find(
-    p => p.id === hoveredCard || p.id === activePin
-  )
+  // نقاطِ نقشه — فقط آگهی‌هایی که مختصاتِ واقعی دارند
+  const mapPoints: MapPoint[] = useMemo(() =>
+    shownProperties.filter(p => p.lat && p.lng).map(p => ({ id: p.id, lat: p.lat!, lng: p.lng!, title: p.title, price: p.price + ' تومان' })),
+    [shownProperties])
+
+  // چیپ‌های تشخیصِ AI — فقط مواردِ واقعاً تشخیص‌داده‌شده
+  const aiChips = useMemo(() => {
+    const c: { label: string; value: string }[] = []
+    if (parsed.kind) c.push({ label: 'نوع', value: parsed.kind })
+    if (parsed.area) c.push({ label: 'منطقه', value: parsed.area })
+    if (parsed.sizeNum) c.push({ label: 'متراژ', value: `~${toPersianDigits(parsed.sizeNum)} متر` })
+    if (parsed.budgetMax) c.push({ label: 'بودجه', value: `زیر ${faNum(parsed.budgetMax)} میلیارد` })
+    if (parsed.beds != null) c.push({ label: 'خواب', value: `${toPersianDigits(parsed.beds)} خوابه` })
+    if (parsed.amenities.length) c.push({ label: 'امکانات', value: parsed.amenities.join('، ') })
+    return c
+  }, [parsed])
+
+  const resetFilters = () => { setKind(''); setBeds('همه'); setPriceMin(0); setPriceMax(PRICE_MAX); setAreaMin(0); setAreaMax(0); setFloorMin(0); setYearMin(0); setCheckedAmenities([]) }
+
+  const numInput: React.CSSProperties = { width: 92, height: 36, padding: '0 10px', borderRadius: 9, background: 'var(--bg)', border: '1px solid var(--line2)', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', textAlign: 'center' }
+  const lab: React.CSSProperties = { fontSize: 13, color: 'var(--muted)', whiteSpace: 'nowrap', fontWeight: 600 }
 
   return (
-    <div
-      dir="rtl"
-      style={{
-        minHeight: '100vh',
-        background: 'var(--bg)',
-        color: 'var(--text)',
-        fontFamily: "'Vazirmatn', system-ui, sans-serif",
-      }}
-    >
+    <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: "'Vazirmatn', system-ui, sans-serif" }}>
       <Nav />
 
-      {/* ─── Sticky Search + Filter Bar ─────────────────────────── */}
-      <div
-        style={{
-          position: 'sticky',
-          top: 68,
-          zIndex: 40,
-          background: 'var(--bg2)',
-          borderBottom: '1px solid var(--line)',
-        }}
-      >
-        {/* Search row */}
+      <div style={{ position: 'sticky', top: 68, zIndex: 40, background: 'var(--bg2)', borderBottom: '1px solid var(--line)' }}>
         <div className="mjs-filterbar" style={{ maxWidth: 1280, margin: '0 auto', padding: '14px 24px', display: 'flex', gap: 10, alignItems: 'center' }}>
-          {/* Search input */}
           <div style={{ flex: 1, position: 'relative' }}>
-            <span style={{
-              position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)',
-              color: 'var(--gold)', fontSize: 16, pointerEvents: 'none', zIndex: 1,
-            }}>✦</span>
+            <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--gold)', fontSize: 16, pointerEvents: 'none', zIndex: 1 }}>✦</span>
             <input
               value={search}
               onChange={e => { setSearch(e.target.value); setSearchTerm(e.target.value) }}
               onKeyDown={e => { if (e.key === 'Enter') setSearchTerm(search) }}
               placeholder="آپارتمان ۱۳۰ متری در سعادت‌آباد زیر ۱۸ میلیارد با آسانسور و پارکینگ"
-              style={{
-                width: '100%', height: 48,
-                paddingRight: 42, paddingLeft: 110,
-                background: 'var(--surface)',
-                border: '1.5px solid var(--gold)',
-                borderRadius: 12,
-                color: 'var(--text)',
-                fontSize: 14,
-                outline: 'none',
-                boxShadow: '0 0 0 3px rgba(201,168,76,0.10)',
-                textAlign: 'right',
-                fontFamily: 'inherit',
-              }}
+              style={{ width: '100%', height: 48, paddingRight: 42, paddingLeft: 16, background: 'var(--surface)', border: '1.5px solid var(--gold)', borderRadius: 12, color: 'var(--text)', fontSize: 14, outline: 'none', boxShadow: '0 0 0 3px rgba(201,168,76,0.10)', textAlign: 'right', fontFamily: 'inherit' }}
             />
-            <div style={{
-              position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)',
-              background: 'var(--goldDim)',
-              color: 'var(--gold)',
-              border: '1px solid var(--gold)',
-              borderRadius: 8,
-              padding: '4px 9px',
-              fontSize: 11.5,
-              fontWeight: 700,
-              whiteSpace: 'nowrap',
-              cursor: 'default',
-            }}>تفسیر AI ✦</div>
           </div>
 
-          {/* Filter button with count badge */}
-          <button
-            onClick={() => setFiltersOpen(o => !o)}
-            style={{
-              height: 48, padding: '0 16px', borderRadius: 12,
-              background: filtersOpen ? 'var(--goldDim)' : 'var(--surface)',
-              border: `1px solid ${filtersOpen ? 'var(--gold)' : 'var(--line2)'}`,
-              color: filtersOpen ? 'var(--gold)' : 'var(--text)',
-              cursor: 'pointer', fontSize: 13.5, fontWeight: 600,
-              display: 'flex', alignItems: 'center', gap: 7,
-              whiteSpace: 'nowrap', fontFamily: 'inherit',
-              transition: 'all 0.18s',
-            }}
-          >
-            <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-              <path d="M2 4h12M4 8h8M6 12h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
+          <button onClick={() => setFiltersOpen(o => !o)} style={{ height: 48, padding: '0 16px', borderRadius: 12, background: filtersOpen ? 'var(--goldDim)' : 'var(--surface)', border: `1px solid ${filtersOpen ? 'var(--gold)' : 'var(--line2)'}`, color: filtersOpen ? 'var(--gold)' : 'var(--text)', cursor: 'pointer', fontSize: 13.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap', fontFamily: 'inherit' }}>
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M2 4h12M4 8h8M6 12h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
             فیلترها
-            {filterCount > 0 && (
-              <span style={{
-                minWidth: 18, height: 18, borderRadius: 9,
-                background: 'var(--gold)', color: '#16140f',
-                fontSize: 10.5, fontWeight: 800,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                padding: '0 4px',
-              }}>{filterCount}</span>
-            )}
+            {activeFilterCount > 0 && <span style={{ minWidth: 18, height: 18, borderRadius: 9, background: 'var(--gold)', color: '#16140f', fontSize: 10.5, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{toPersianDigits(activeFilterCount)}</span>}
           </button>
 
-          {/* Sort dropdown */}
-          <select
-            value={sortBy}
-            onChange={e => setSortBy(e.target.value)}
-            style={{
-              height: 48, padding: '0 12px', borderRadius: 12,
-              background: 'var(--surface)', border: '1px solid var(--line2)',
-              color: 'var(--text)', fontSize: 13.5,
-              cursor: 'pointer', outline: 'none', fontFamily: 'inherit',
-            }}
-          >
-            <option>پیشنهاد ملک‌جت</option>
-            <option>ارزان‌ترین</option>
-            <option>گران‌ترین</option>
-            <option>جدیدترین</option>
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ height: 48, padding: '0 12px', borderRadius: 12, background: 'var(--surface)', border: '1px solid var(--line2)', color: 'var(--text)', fontSize: 13.5, cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }}>
+            <option>پیشنهاد ملک‌جت</option><option>ارزان‌ترین</option><option>گران‌ترین</option><option>جدیدترین</option>
           </select>
         </div>
 
-        {/* AI Tags Row */}
-        <div style={{
-          maxWidth: 1280, margin: '0 auto',
-          padding: '0 24px 12px',
-          display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center',
-        }}>
-          <span style={{ fontSize: 11.5, color: 'var(--faint)', marginLeft: 4 }}>تشخیص AI:</span>
-          {aiTags.map(tag => (
-            <span
-              key={tag.label}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-                padding: '4px 11px', borderRadius: 999,
-                background: 'var(--goldDim)',
-                border: '1px solid rgba(201,168,76,0.28)',
-                fontSize: 12.5, color: 'var(--text)',
-              }}
-            >
-              <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{tag.label}:</span>
-              <span style={{ color: 'var(--muted)' }}>{tag.label === 'منطقه' && userArea ? userArea : tag.value}</span>
-            </span>
-          ))}
-        </div>
+        {/* چیپ‌های تشخیص AI — فقط وقتی چیزی واقعاً از متن تشخیص داده شده */}
+        {aiChips.length > 0 && (
+          <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 12px', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ fontSize: 11.5, color: 'var(--faint)', marginLeft: 4 }}>تشخیص هوشمند:</span>
+            {aiChips.map(tag => (
+              <span key={tag.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 11px', borderRadius: 999, background: 'var(--goldDim)', border: '1px solid rgba(201,168,76,0.28)', fontSize: 12.5, color: 'var(--text)' }}>
+                <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{tag.label}:</span>
+                <span style={{ color: 'var(--muted)' }}>{tag.value}</span>
+              </span>
+            ))}
+          </div>
+        )}
 
-        {/* ─── Filter Drawer (collapsible) ─────────────── */}
-        <div style={{
-          maxHeight: filtersOpen ? 260 : 0,
-          overflow: 'hidden',
-          transition: 'max-height 0.32s cubic-bezier(0.4,0,0.2,1)',
-          borderTop: filtersOpen ? '1px solid var(--line)' : 'none',
-          background: 'var(--surface)',
-        }}>
-          <div style={{ maxWidth: 1280, margin: '0 auto', padding: '20px 24px 20px', display: 'flex', flexDirection: 'column', gap: 18 }}>
-
-            {/* Row 1: Deal type */}
+        {/* کشوی فیلترها */}
+        <div style={{ maxHeight: filtersOpen ? 520 : 0, overflow: 'hidden', transition: 'max-height 0.32s cubic-bezier(0.4,0,0.2,1)', borderTop: filtersOpen ? '1px solid var(--line)' : 'none', background: 'var(--surface)' }}>
+          <div style={{ maxWidth: 1280, margin: '0 auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* نوع معامله + نوع ملک */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 13, color: 'var(--muted)', whiteSpace: 'nowrap', fontWeight: 600 }}>نوع معامله:</span>
+              <span style={lab}>نوع معامله:</span>
               <div style={{ display: 'flex', gap: 6 }}>
                 {['خرید', 'اجاره', 'رهن', 'پیش‌فروش'].map(type => (
-                  <button
-                    key={type}
-                    onClick={() => setDealType(type)}
-                    style={{
-                      padding: '7px 16px', borderRadius: 10,
-                      border: `1px solid ${dealType === type ? 'var(--gold)' : 'var(--line2)'}`,
-                      background: dealType === type ? 'var(--goldDim)' : 'transparent',
-                      color: dealType === type ? 'var(--gold)' : 'var(--muted)',
-                      cursor: 'pointer', fontSize: 13, fontWeight: 600,
-                      fontFamily: 'inherit', transition: 'all 0.15s',
-                    }}
-                  >{type}</button>
+                  <button key={type} onClick={() => goDeal(type)} style={{ padding: '7px 16px', borderRadius: 10, border: `1px solid ${dealType === type ? 'var(--gold)' : 'var(--line2)'}`, background: dealType === type ? 'var(--goldDim)' : 'transparent', color: dealType === type ? 'var(--gold)' : 'var(--muted)', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>{type}</button>
                 ))}
+              </div>
+              <span style={{ ...lab, marginInlineStart: 12 }}>نوع ملک:</span>
+              <select value={kind} onChange={e => setKind(e.target.value)} style={{ height: 36, padding: '0 12px', borderRadius: 9, background: 'var(--bg)', border: '1px solid var(--line2)', color: 'var(--text)', fontSize: 13, cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }}>
+                <option value="">همه</option>
+                {PROPERTY_KINDS.map(k => <option key={k} value={k}>{k}</option>)}
+              </select>
+            </div>
+
+            {/* قیمت + متراژ */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={lab}>قیمت (میلیارد تومان):</span>
+                <input type="number" min={0} placeholder="از" value={priceMin || ''} onChange={e => setPriceMin(Math.max(0, +e.target.value || 0))} style={numInput} />
+                <span style={{ color: 'var(--faint)' }}>تا</span>
+                <input type="number" min={0} placeholder="بدون سقف" value={priceMax < PRICE_MAX ? priceMax : ''} onChange={e => { const v = +e.target.value || 0; setPriceMax(v > 0 ? v : PRICE_MAX) }} style={{ ...numInput, width: 104 }} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={lab}>متراژ (متر):</span>
+                <input type="number" min={0} placeholder="از" value={areaMin || ''} onChange={e => setAreaMin(Math.max(0, +e.target.value || 0))} style={numInput} />
+                <span style={{ color: 'var(--faint)' }}>تا</span>
+                <input type="number" min={0} placeholder="تا" value={areaMax || ''} onChange={e => setAreaMax(Math.max(0, +e.target.value || 0))} style={numInput} />
               </div>
             </div>
 
-            {/* Row 2: Price slider + Beds */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 28, flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 13, color: 'var(--muted)', whiteSpace: 'nowrap', fontWeight: 600 }}>حداکثر قیمت:</span>
-                <input
-                  type="range" min={1} max={PRICE_MAX} step={1}
-                  value={maxPrice}
-                  onChange={e => setMaxPrice(+e.target.value)}
-                  style={{ width: 140, accentColor: 'var(--gold)', cursor: 'pointer' }}
-                />
-                <span style={{
-                  minWidth: 64, padding: '5px 10px', borderRadius: 8,
-                  background: 'var(--bg)', border: '1px solid var(--line2)',
-                  color: 'var(--gold)', fontWeight: 700, fontSize: 13, textAlign: 'center',
-                }}>{maxPrice >= PRICE_MAX ? 'بدون سقف' : `${maxPrice} میلیارد`}</span>
-              </div>
-
+            {/* خواب + طبقه + سال ساخت */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 13, color: 'var(--muted)', whiteSpace: 'nowrap', fontWeight: 600 }}>تعداد خواب:</span>
+                <span style={lab}>تعداد خواب:</span>
                 <div style={{ display: 'flex', gap: 5 }}>
                   {['همه', '۱', '۲', '۳', '+۴'].map(b => (
-                    <button
-                      key={b}
-                      onClick={() => setBeds(b)}
-                      style={{
-                        width: 38, height: 36, borderRadius: 9,
-                        border: `1px solid ${beds === b ? 'var(--gold)' : 'var(--line2)'}`,
-                        background: beds === b ? 'var(--goldDim)' : 'transparent',
-                        color: beds === b ? 'var(--gold)' : 'var(--muted)',
-                        cursor: 'pointer', fontSize: 12.5, fontWeight: 600,
-                        fontFamily: 'inherit', transition: 'all 0.15s',
-                      }}
-                    >{b}</button>
+                    <button key={b} onClick={() => setBeds(b)} style={{ width: 38, height: 36, borderRadius: 9, border: `1px solid ${beds === b ? 'var(--gold)' : 'var(--line2)'}`, background: beds === b ? 'var(--goldDim)' : 'transparent', color: beds === b ? 'var(--gold)' : 'var(--muted)', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit' }}>{b}</button>
                   ))}
                 </div>
               </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={lab}>حداقل طبقه:</span>
+                <input type="number" min={0} placeholder="—" value={floorMin || ''} onChange={e => setFloorMin(Math.max(0, +e.target.value || 0))} style={numInput} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={lab}>ساخت از سال:</span>
+                <input type="number" min={0} placeholder="مثلاً ۱۳۹۵" value={yearMin || ''} onChange={e => setYearMin(Math.max(0, +e.target.value || 0))} style={{ ...numInput, width: 110 }} />
+              </div>
             </div>
 
-            {/* Row 3: Amenities */}
+            {/* امکانات */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 600 }}>امکانات:</span>
-              {amenitiesOptions.map(a => (
-                <label
-                  key={a}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    padding: '6px 13px', borderRadius: 9, cursor: 'pointer',
-                    border: `1px solid ${checkedAmenities.includes(a) ? 'var(--gold)' : 'var(--line2)'}`,
-                    background: checkedAmenities.includes(a) ? 'var(--goldDim)' : 'transparent',
-                    color: checkedAmenities.includes(a) ? 'var(--gold)' : 'var(--muted)',
-                    fontSize: 13, fontWeight: 500, transition: 'all 0.15s',
-                    userSelect: 'none',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={checkedAmenities.includes(a)}
-                    onChange={() => toggleAmenity(a)}
-                    style={{ accentColor: 'var(--gold)', cursor: 'pointer' }}
-                  />
+              <span style={lab}>امکانات:</span>
+              {AMENITY_FILTER.map(a => (
+                <label key={a} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px', borderRadius: 9, cursor: 'pointer', border: `1px solid ${checkedAmenities.includes(a) ? 'var(--gold)' : 'var(--line2)'}`, background: checkedAmenities.includes(a) ? 'var(--goldDim)' : 'transparent', color: checkedAmenities.includes(a) ? 'var(--gold)' : 'var(--muted)', fontSize: 13, fontWeight: 500, userSelect: 'none' }}>
+                  <input type="checkbox" checked={checkedAmenities.includes(a)} onChange={() => toggleAmenity(a)} style={{ accentColor: 'var(--gold)', cursor: 'pointer' }} />
                   {a}
                 </label>
               ))}
+              {activeFilterCount > 0 && <button onClick={resetFilters} style={{ marginInlineStart: 'auto', padding: '6px 14px', borderRadius: 9, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--muted)', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>پاک‌کردن فیلترها</button>}
             </div>
           </div>
         </div>
       </div>
 
-      {/* ─── Main Content (split layout) ────────────────────────── */}
-      <div className="mjs-grid" style={{
-        maxWidth: 1280, margin: '0 auto', padding: '0 24px 48px',
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
-        gap: 0,
-        alignItems: 'start',
-        minHeight: 'calc(100vh - 200px)',
-      }}>
-
-        {/* ── RIGHT: Results List ──────────────────────────── */}
+      {/* محتوای اصلی */}
+      <div className="mjs-grid" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 48px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, alignItems: 'start', minHeight: 'calc(100vh - 200px)' }}>
         <div style={{ paddingTop: 20, paddingLeft: 12 }}>
-          {/* Result count + sort label */}
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            marginBottom: 18,
-          }}>
-            <div style={{ fontSize: 14, color: 'var(--muted)' }}>
-              <span style={{ color: 'var(--gold)', fontWeight: 800, fontSize: 16 }}>{toPersianDigits(shownProperties.length)}</span>
-              {' '}ملک پیدا شد
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--faint)' }}>
-              مرتب‌سازی: <span style={{ color: 'var(--muted)' }}>{sortBy}</span>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+            <div style={{ fontSize: 14, color: 'var(--muted)' }}><span style={{ color: 'var(--gold)', fontWeight: 800, fontSize: 16 }}>{toPersianDigits(shownProperties.length)}</span> ملک پیدا شد</div>
+            <div style={{ fontSize: 13, color: 'var(--faint)' }}>مرتب‌سازی: <span style={{ color: 'var(--muted)' }}>{sortBy}</span></div>
           </div>
 
-          {/* loading / empty */}
           {(loading || shownProperties.length === 0) && (
             <div style={{ padding: '60px 24px', textAlign: 'center', color: 'var(--muted)', fontSize: 14, lineHeight: 1.9 }}>
-              {loading ? 'در حال بارگذاری آگهی‌ها…'
-                : properties.length === 0 ? 'هنوز آگهی‌ای ثبت نشده.'
-                : `هیچ آگهی${dealType === 'اجاره' ? 'ِ اجاره‌ای' : dealType === 'رهن' ? 'ِ رهنی' : dealType === 'پیش‌فروش' ? 'ِ پیش‌فروشی' : 'ِ فروشی'} با این فیلترها پیدا نشد. برای دیدنِ بقیه، نوع معامله (خرید/اجاره/پیش‌فروش) را عوض کنید.`}
+              {loading ? 'در حال بارگذاری آگهی‌ها…' : properties.length === 0 ? 'هنوز آگهی‌ای ثبت نشده.' : `هیچ آگهی${dealType === 'اجاره' ? 'ِ اجاره‌ای' : dealType === 'رهن' ? 'ِ رهنی' : dealType === 'پیش‌فروش' ? 'ِ پیش‌فروشی' : 'ِ فروشی'} با این فیلترها پیدا نشد.`}
             </div>
           )}
 
-          {/* 2-column card grid */}
           <div className="mjs-cards" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             {shownProperties.map((p, index) => {
-              const tc = tagColors[p.tag] || tagColors['ویژه']
               const isHov = hoveredCard === p.id
               const isPromoted = promotedIdSet.has(p.id)
-
-              // Insert a real ad banner slot after index 3 (admin-managed; renders nothing if empty)
               const cards = []
-              if (index === 3) {
-                cards.push(
-                  <div key="promo" style={{ gridColumn: '1 / -1' }}>
-                    <BannerSlot placement="search" />
-                  </div>
-                )
-              }
-
+              if (index === 3) cards.push(<div key="promo" style={{ gridColumn: '1 / -1' }}><BannerSlot placement="search" /></div>)
               cards.push(
-                <div
-                  key={p.id}
-                  onMouseEnter={() => setHoveredCard(p.id)}
-                  onMouseLeave={() => setHoveredCard(null)}
-                  style={{
-                    borderRadius: 14,
-                    border: `1px solid ${isHov ? 'var(--gold)' : 'var(--line)'}`,
-                    background: 'var(--surface)',
-                    overflow: 'hidden',
-                    cursor: 'pointer',
-                    transition: 'transform 0.18s, box-shadow 0.18s, border-color 0.18s',
-                    transform: isHov ? 'translateY(-4px)' : 'none',
-                    boxShadow: isHov
-                      ? '0 12px 40px -12px rgba(201,168,76,0.22)'
-                      : '0 2px 10px -4px rgba(0,0,0,0.3)',
-                  }}
-                >
+                <div key={p.id} onMouseEnter={() => setHoveredCard(p.id)} onMouseLeave={() => setHoveredCard(null)} style={{ borderRadius: 14, border: `1px solid ${isHov ? 'var(--gold)' : 'var(--line)'}`, background: 'var(--surface)', overflow: 'hidden', cursor: 'pointer', transition: 'transform 0.18s, box-shadow 0.18s, border-color 0.18s', transform: isHov ? 'translateY(-4px)' : 'none', boxShadow: isHov ? '0 12px 40px -12px rgba(201,168,76,0.22)' : '0 2px 10px -4px rgba(0,0,0,0.3)' }}>
                   <Link href={`/property/${p.id}`} style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}>
-                    {/* Image placeholder */}
                     <div style={{ height: 156, background: p.image ? `center/cover no-repeat url(${p.image})` : p.img, position: 'relative' }}>
-                      {/* Diagonal texture */}
-                      <div style={{
-                        position: 'absolute', inset: 0,
-                        backgroundImage: 'repeating-linear-gradient(135deg,transparent,transparent 9px,rgba(255,255,255,0.022) 9px,rgba(255,255,255,0.022) 10px)',
-                      }}/>
-                      {/* Bottom gradient */}
-                      <div style={{
-                        position: 'absolute', bottom: 0, left: 0, right: 0, height: 64,
-                        background: 'linear-gradient(to top,rgba(0,0,0,0.5),transparent)',
-                      }}/>
-                      {/* AI score badge */}
-                      <div style={{
-                        position: 'absolute', top: 10, right: 10,
-                        background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(8px)',
-                        color: 'var(--gold2)', borderRadius: 8,
-                        padding: '4px 8px', fontSize: 11.5, fontWeight: 700,
-                        border: '1px solid rgba(201,168,76,0.3)',
-                        display: 'flex', alignItems: 'center', gap: 3,
-                      }}>
-                        ✦ {p.score}
-                      </div>
-                      {/* Tag chip / promoted badge */}
-                      {isPromoted ? (
-                        <div style={{
-                          position: 'absolute', top: 10, left: 10,
-                          background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f',
-                          borderRadius: 8, padding: '4px 9px',
-                          fontSize: 11.5, fontWeight: 800,
-                        }}>★ ویژه</div>
-                      ) : p.tag && (
-                        <div style={{
-                          position: 'absolute', top: 10, left: 10,
-                          background: tc.bg, color: tc.color,
-                          border: `1px solid ${tc.border}`,
-                          borderRadius: 8, padding: '4px 9px',
-                          fontSize: 11.5, fontWeight: 700,
-                        }}>{p.tag}</div>
-                      )}
+                      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 64, background: 'linear-gradient(to top,rgba(0,0,0,0.5),transparent)' }} />
+                      <div style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(8px)', color: 'var(--gold2)', borderRadius: 8, padding: '4px 8px', fontSize: 11.5, fontWeight: 700, border: '1px solid rgba(201,168,76,0.3)', display: 'flex', alignItems: 'center', gap: 3 }}>✦ {toPersianDigits(p.score)}</div>
+                      {isPromoted && <div style={{ position: 'absolute', top: 10, left: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', borderRadius: 8, padding: '4px 9px', fontSize: 11.5, fontWeight: 800 }}>★ ویژه</div>}
                     </div>
-
-                    {/* Card body */}
                     <div style={{ padding: '13px 14px 15px' }}>
-                      <div style={{ fontSize: 14.5, fontWeight: 700, lineHeight: 1.4, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {p.title}
-                      </div>
+                      <div style={{ fontSize: 14.5, fontWeight: 700, lineHeight: 1.4, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.title}</div>
                       <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 3 }}>
-                        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0 }}>
-                          <path d="M6 1a3.5 3.5 0 0 1 3.5 3.5C9.5 7.5 6 11 6 11S2.5 7.5 2.5 4.5A3.5 3.5 0 0 1 6 1z" stroke="currentColor" strokeWidth="1.2"/>
-                          <circle cx="6" cy="4.5" r="1.2" fill="currentColor"/>
-                        </svg>
+                        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0 }}><path d="M6 1a3.5 3.5 0 0 1 3.5 3.5C9.5 7.5 6 11 6 11S2.5 7.5 2.5 4.5A3.5 3.5 0 0 1 6 1z" stroke="currentColor" strokeWidth="1.2" /><circle cx="6" cy="4.5" r="1.2" fill="currentColor" /></svg>
                         {p.location}
                       </div>
-                      <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--gold)', marginBottom: 10 }}>
-                        {p.price}
-                        <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--muted)', marginRight: 4 }}>تومان</span>
-                      </div>
-                      {/* Stats row */}
-                      <div style={{
-                        display: 'flex', gap: 8, alignItems: 'center',
-                        paddingTop: 10, borderTop: '1px solid var(--line)',
-                        fontSize: 12, color: 'var(--muted)',
-                      }}>
-                        <span>{p.size} م²</span>
-                        <span style={{ color: 'var(--faint)' }}>·</span>
-                        <span>{p.beds} خواب</span>
-                        <span style={{ color: 'var(--faint)' }}>·</span>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--gold)', marginBottom: 10 }}>{p.price}<span style={{ fontSize: 11, fontWeight: 500, color: 'var(--muted)', marginRight: 4 }}>تومان</span></div>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', paddingTop: 10, borderTop: '1px solid var(--line)', fontSize: 12, color: 'var(--muted)' }}>
+                        <span>{p.size} م²</span><span style={{ color: 'var(--faint)' }}>·</span>
+                        <span>{p.beds} خواب</span><span style={{ color: 'var(--faint)' }}>·</span>
                         <span>ساخت {p.year}</span>
-                        <div style={{ flex: 1 }}/>
-                        <span style={{
-                          color: 'var(--gold)', fontSize: 11.5, fontWeight: 600,
-                          display: 'flex', alignItems: 'center', gap: 2,
-                        }}>مشاهده ←</span>
+                        <div style={{ flex: 1 }} />
+                        <span style={{ color: 'var(--gold)', fontSize: 11.5, fontWeight: 600 }}>مشاهده ←</span>
                       </div>
                     </div>
                   </Link>
                 </div>
               )
-
               return cards
             })}
           </div>
         </div>
 
-        {/* ── LEFT: Sticky Map ─────────────────────────────── */}
-        <MapPanelDesktop
-          properties={shownProperties}
-          hoveredCard={hoveredCard}
-          activePin={activePin}
-          setActivePin={setActivePin}
-          activeProperty={activeProperty ?? null}
-        />
-      </div>
-    </div>
-  )
-}
-
-type Property = {
-  id: string; title: string; location: string; price: string; priceNum: number;
-  beds: string; size: string; year: string; tag: string; score: number;
-  img: string; pinX: number; pinY: number; pinColor: string;
-}
-
-function MapPanelDesktop({
-  properties,
-  hoveredCard,
-  activePin,
-  setActivePin,
-  activeProperty,
-}: {
-  properties: Property[]
-  hoveredCard: string | null
-  activePin: string | null
-  setActivePin: (id: string | null) => void
-  activeProperty: Property | null
-}) {
-  return (
-    <div
-      style={{
-        position: 'sticky',
-        top: 88,
-        height: 'calc(100vh - 108px)',
-        paddingTop: 20,
-        paddingRight: 12,
-      }}
-      className="map-panel mjs-map"
-    >
-      <style>{`
-        @media (max-width: 768px) { .map-panel { display: none !important; } }
-      `}</style>
-
-      <div style={{
-        position: 'relative',
-        width: '100%',
-        height: '100%',
-        borderRadius: 16,
-        overflow: 'hidden',
-        border: '1px solid var(--line)',
-        background: '#0a0908',
-      }}>
-        {/* SVG map background */}
-        <svg
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
-          preserveAspectRatio="none"
-          viewBox="0 0 650 800"
-        >
-          {/* Diagonal texture lines */}
-          <defs>
-            <pattern id="diag" width="24" height="24" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-              <line x1="0" y1="0" x2="0" y2="24" stroke="rgba(255,255,255,0.028)" strokeWidth="1"/>
-            </pattern>
-          </defs>
-          <rect width="650" height="800" fill="url(#diag)"/>
-
-          {/* Major roads */}
-          <path d="M0,310 Q163,290 325,270 Q488,250 650,240" fill="none" stroke="rgba(255,255,255,0.075)" strokeWidth="11"/>
-          <path d="M0,310 Q163,290 325,270 Q488,250 650,240" fill="none" stroke="rgba(255,255,255,0.03)" strokeWidth="22"/>
-          <path d="M210,0 Q230,200 245,400 Q260,600 265,800" fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="9"/>
-          <path d="M210,0 Q230,200 245,400 Q260,600 265,800" fill="none" stroke="rgba(255,255,255,0.025)" strokeWidth="20"/>
-
-          {/* Secondary roads */}
-          <path d="M0,490 Q162,468 310,450 Q480,432 650,420" fill="none" stroke="rgba(255,255,255,0.045)" strokeWidth="5"/>
-          <path d="M110,0 Q120,240 125,480 Q130,640 135,800" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="4"/>
-          <path d="M490,0 Q500,200 510,400 Q515,600 520,800" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="4"/>
-          <path d="M0,160 Q200,152 400,148 Q540,144 650,140" fill="none" stroke="rgba(255,255,255,0.035)" strokeWidth="3"/>
-          <path d="M0,630 Q220,618 400,608 Q540,600 650,594" fill="none" stroke="rgba(255,255,255,0.035)" strokeWidth="3"/>
-
-          {/* District blocks */}
-          <rect x="140" y="120" width="140" height="90" rx="7" fill="rgba(255,255,255,0.012)" stroke="rgba(255,255,255,0.045)" strokeWidth="1"/>
-          <rect x="360" y="300" width="160" height="100" rx="7" fill="rgba(255,255,255,0.012)" stroke="rgba(255,255,255,0.045)" strokeWidth="1"/>
-          <rect x="40" y="380" width="120" height="80" rx="7" fill="rgba(255,255,255,0.012)" stroke="rgba(255,255,255,0.045)" strokeWidth="1"/>
-          <rect x="280" y="500" width="130" height="70" rx="7" fill="rgba(255,255,255,0.012)" stroke="rgba(255,255,255,0.03)" strokeWidth="1"/>
-          <rect x="450" y="160" width="110" height="85" rx="7" fill="rgba(255,255,255,0.012)" stroke="rgba(255,255,255,0.03)" strokeWidth="1"/>
-
-          {/* Subtle area fills */}
-          <ellipse cx="200" cy="220" rx="100" ry="60" fill="rgba(201,168,76,0.015)"/>
-          <ellipse cx="420" cy="400" rx="80" ry="50" fill="rgba(100,160,255,0.012)"/>
-        </svg>
-
-        {/* Map header label */}
-        <div style={{
-          position: 'absolute', top: 14, right: 14,
-          background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(10px)',
-          borderRadius: 9, padding: '6px 12px',
-          fontSize: 12, color: 'var(--muted)',
-          border: '1px solid var(--line)',
-          display: 'flex', alignItems: 'center', gap: 5,
-          zIndex: 10,
-        }}>
-          <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
-            <path d="M6 1a3.5 3.5 0 0 1 3.5 3.5C9.5 7.5 6 11 6 11S2.5 7.5 2.5 4.5A3.5 3.5 0 0 1 6 1z" stroke="currentColor" strokeWidth="1.3"/>
-          </svg>
-          تهران — سعادت‌آباد و اطراف
-        </div>
-
-        {/* Price pins */}
-        {properties.map(p => {
-          const isActive = hoveredCard === p.id || activePin === p.id
-          return (
-            <button
-              key={p.id}
-              onMouseEnter={() => setActivePin(p.id)}
-              onMouseLeave={() => setActivePin(null)}
-              style={{
-                position: 'absolute',
-                right: `${p.pinX}%`,
-                top: `${p.pinY}%`,
-                transform: `translate(50%,-50%) scale(${isActive ? 1.15 : 1})`,
-                padding: '5px 11px',
-                borderRadius: 20,
-                background: isActive
-                  ? 'linear-gradient(140deg,var(--gold2),var(--gold))'
-                  : 'rgba(10,9,8,0.88)',
-                border: `2px solid ${isActive ? 'var(--gold2)' : p.pinColor}`,
-                color: isActive ? '#16140f' : '#f0ede6',
-                fontSize: 12, fontWeight: 700,
-                cursor: 'pointer',
-                boxShadow: isActive
-                  ? '0 4px 20px -4px rgba(201,168,76,0.6)'
-                  : `0 2px 14px -4px rgba(0,0,0,0.7)`,
-                transition: 'all 0.18s cubic-bezier(0.4,0,0.2,1)',
-                zIndex: isActive ? 20 : 10,
-                backdropFilter: 'blur(6px)',
-                whiteSpace: 'nowrap',
-                fontFamily: 'inherit',
-              }}
-            >
-              {p.price}
-            </button>
-          )
-        })}
-
-        {/* Price legend */}
-        <div style={{
-          position: 'absolute',
-          bottom: activeProperty ? 128 : 16,
-          left: 14,
-          background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(10px)',
-          borderRadius: 10, padding: '11px 14px',
-          border: '1px solid var(--line)',
-          transition: 'bottom 0.25s ease',
-          zIndex: 10,
-        }}>
-          <div style={{ fontSize: 11, color: 'var(--faint)', fontWeight: 700, marginBottom: 9 }}>
-            نقشه حرارتی قیمت
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 5 }}>
-            <div style={{
-              width: 80, height: 6, borderRadius: 3,
-              background: 'linear-gradient(to left, #e7674a, #c9a84c, #5fd98a)',
-            }}/>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'var(--faint)' }}>
-            <span style={{ color: '#5fd98a' }}>ارزان</span>
-            <span style={{ color: '#e7674a' }}>گران</span>
-          </div>
-        </div>
-
-        {/* Hover popup */}
-        {activeProperty && (
-          <div style={{
-            position: 'absolute', bottom: 16, left: 14, right: 14,
-            background: 'rgba(10,9,8,0.95)', backdropFilter: 'blur(16px)',
-            borderRadius: 13, border: '1px solid var(--line2)',
-            boxShadow: '0 -8px 36px -12px rgba(0,0,0,0.6)',
-            overflow: 'hidden',
-            animation: 'drop 0.22s ease both',
-            zIndex: 30,
-          }}>
-            <div style={{ display: 'flex', gap: 0 }}>
-              <div style={{
-                width: 80, minHeight: 76,
-                background: activeProperty.img, flexShrink: 0,
-              }}/>
-              <div style={{ padding: '11px 13px', flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 13, lineHeight: 1.4, marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {activeProperty.title}
-                </div>
-                <div style={{ color: 'var(--muted)', fontSize: 11.5, marginBottom: 8 }}>
-                  {activeProperty.location}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ fontWeight: 800, fontSize: 13.5, color: 'var(--gold)' }}>
-                    {activeProperty.price}
-                  </span>
-                  <span style={{
-                    background: 'var(--goldDim)', color: 'var(--gold)',
-                    borderRadius: 7, padding: '3px 8px', fontSize: 11, fontWeight: 700,
-                    border: '1px solid rgba(201,168,76,0.25)',
-                  }}>✦ {activeProperty.score}</span>
-                </div>
-              </div>
-              <div style={{ padding: '10px 10px 10px 0', display: 'flex', alignItems: 'center' }}>
-                <Link
-                  href={`/property/${activeProperty.id}`}
-                  style={{
-                    width: 34, height: 34, borderRadius: 9,
-                    background: 'linear-gradient(140deg,var(--gold2),var(--gold))',
-                    color: '#16140f', textDecoration: 'none',
-                    fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    flexShrink: 0, fontWeight: 700,
-                  }}
-                >‹</Link>
-              </div>
+        {/* نقشهٔ واقعیِ نشان */}
+        <div className="map-panel mjs-map" style={{ position: 'sticky', top: 88, height: 'calc(100vh - 108px)', paddingTop: 20, paddingRight: 12 }}>
+          <style>{`@media (max-width: 768px) { .map-panel { display: none !important; } }`}</style>
+          <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+            <NeshanMap points={mapPoints} center={userLoc || undefined} onSelect={(id) => { window.location.href = `/property/${id}` }} />
+            <div style={{ position: 'absolute', top: 14, right: 14, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)', borderRadius: 9, padding: '6px 12px', fontSize: 12, color: '#f0ede6', border: '1px solid rgba(255,255,255,.12)', zIndex: 500, pointerEvents: 'none' }}>
+              {mapPoints.length > 0 ? `${toPersianDigits(mapPoints.length)} ملک روی نقشه` : 'نقشهٔ منطقه'}
             </div>
           </div>
-        )}
+        </div>
       </div>
     </div>
   )
