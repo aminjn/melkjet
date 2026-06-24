@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
+import NumberInput from '@/app/components/NumberInput'
 import AssistantPanel from '@/app/components/AssistantPanel'
 import CrmTool, { CRM_VIEWS, type CrmView } from '@/app/components/tools/CrmTool'
 import MarketingTool, { MARKETING_VIEWS, type MarketingView } from '@/app/components/tools/MarketingTool'
@@ -632,7 +633,7 @@ function CatalogView({ products, post, busy, search, showAdd, setShowAdd }: {
             <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} style={{ ...inputStyle, cursor: 'pointer' }}>
               {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
-            <input placeholder="قیمت (تومان)" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} style={inputStyle} />
+            <NumberInput placeholder="قیمت (تومان)" value={form.price} onChange={v => setForm({ ...form, price: v })} style={inputStyle} />
             <select value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} style={{ ...inputStyle, cursor: 'pointer' }}>
               {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
             </select>

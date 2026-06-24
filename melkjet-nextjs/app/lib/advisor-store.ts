@@ -25,7 +25,7 @@ export interface Listing {
   published?: boolean; publicId?: string
 }
 export interface Appt { id: string; client: string; listingTitle?: string; date: string; type: ApptType; status: ApptStatus; createdAt: number }
-export interface Commission { id: string; dealTitle: string; amount: number; status: CommStatus; date: string; createdAt: number }
+export interface Commission { id: string; dealTitle: string; amount: number; status: CommStatus; date: string; createdAt: number; percent?: number; dealAmount?: number }
 export interface MonthDeals { month: string; count: number }
 
 export interface AdvisorData {
@@ -208,9 +208,16 @@ export function setApptStatus(o: string, aid: string, status: ApptStatus): Appt 
 }
 
 // ---- Commissions ----
-export function addCommission(o: string, input: { dealTitle: string; amount: number; date?: string }): Commission {
+export function addCommission(o: string, input: { dealTitle: string; amount: number; date?: string; percent?: number; dealAmount?: number }): Commission {
   let c!: Commission
-  mutate(o, a => { c = { id: id('cm_'), dealTitle: String(input.dealTitle || 'معامله'), amount: Number(input.amount) || 0, status: 'pending', date: input.date || new Date().toLocaleDateString('fa-IR'), createdAt: Date.now() }; a.commissions.unshift(c) })
+  mutate(o, a => {
+    const percent = input.percent ? Number(input.percent) : undefined
+    const dealAmount = input.dealAmount ? Number(input.dealAmount) : undefined
+    // اگر درصد و مبلغ معامله داده شده باشد، خودِ کمیسیون محاسبه می‌شود
+    const amount = (percent && dealAmount) ? Math.round(dealAmount * percent / 100) : (Number(input.amount) || 0)
+    c = { id: id('cm_'), dealTitle: String(input.dealTitle || 'معامله'), amount, status: 'pending', date: input.date || new Date().toLocaleDateString('fa-IR'), createdAt: Date.now(), percent, dealAmount }
+    a.commissions.unshift(c)
+  })
   return c
 }
 export function deleteCommission(o: string, cid: string) { mutate(o, a => { a.commissions = a.commissions.filter(c => c.id !== cid) }) }

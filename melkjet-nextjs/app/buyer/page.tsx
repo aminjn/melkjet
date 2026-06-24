@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import JalaliDatePicker from '@/app/components/JalaliDatePicker'
+import NumberInput from '@/app/components/NumberInput'
 
 // ════════════════════════════════════════════════════════
 //  Types (mirror app/lib/buyer-store.ts API shape)
@@ -574,7 +575,7 @@ export default function BuyerPage() {
                 <div style={{ flex: '1 1 130px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>منطقه</label><input value={newProp.location} onChange={e => setNewProp({ ...newProp, location: e.target.value })} style={inputStyle} /></div>
                 <div style={{ flex: '1 1 90px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>متراژ</label><input value={newProp.area} onChange={e => setNewProp({ ...newProp, area: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
                 <div style={{ flex: '1 1 80px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>خواب</label><input value={newProp.rooms} onChange={e => setNewProp({ ...newProp, rooms: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
-                <div style={{ flex: '1 1 150px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>{newProp.deal === 'rent' ? 'ودیعه (تومان)' : 'قیمت (تومان)'}</label><input value={newProp.price} onChange={e => setNewProp({ ...newProp, price: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                <div style={{ flex: '1 1 150px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>{newProp.deal === 'rent' ? 'ودیعه (تومان)' : 'قیمت (تومان)'}</label><NumberInput value={newProp.price} onChange={v => setNewProp({ ...newProp, price: v })} style={inputStyle} /></div>
                 <button disabled={busy || !newProp.title.trim()} onClick={async () => { if (await ownerPost({ action: 'addProperty', title: newProp.title.trim(), ptype: newProp.ptype, location: newProp.location, area: Number(newProp.area) || 0, rooms: Number(newProp.rooms) || 0, price: Number(newProp.price) || 0, deal: newProp.deal })) setNewProp({ title: '', ptype: 'آپارتمان', location: '', area: '', rooms: '', price: '', deal: 'sale' }) }} style={{ padding: '9px 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }}>＋ ثبت ملک</button>
               </div>
             </div>
@@ -657,7 +658,7 @@ export default function BuyerPage() {
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <div style={{ flex: '2 1 200px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>عبارت جستجو</label><input value={newSearch.query} onChange={e => setNewSearch({ ...newSearch, query: e.target.value })} placeholder="مثلاً آپارتمان ۲ خوابه شمال تهران" style={inputStyle} /></div>
                 <div style={{ flex: '1 1 120px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>منطقه</label><input value={newSearch.area} onChange={e => setNewSearch({ ...newSearch, area: e.target.value })} style={inputStyle} /></div>
-                <div style={{ flex: '1 1 130px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>حداکثر قیمت (تومان)</label><input value={newSearch.priceMax} onChange={e => setNewSearch({ ...newSearch, priceMax: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                <div style={{ flex: '1 1 130px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>حداکثر قیمت (تومان)</label><NumberInput value={newSearch.priceMax} onChange={v => setNewSearch({ ...newSearch, priceMax: v })} style={inputStyle} /></div>
                 <label style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, padding: '9px 0' }}><input type="checkbox" checked={newSearch.alerts} onChange={e => setNewSearch({ ...newSearch, alerts: e.target.checked })} /> هشدار</label>
                 <button disabled={busy || !newSearch.query.trim()} onClick={async () => { if (await post({ action: 'addSearch', query: newSearch.query.trim(), area: newSearch.area, priceMax: Number(newSearch.priceMax) || undefined, alerts: newSearch.alerts })) setNewSearch({ query: '', ptype: '', area: '', priceMax: '', alerts: true }) }} style={{ padding: '9px 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }}>ذخیره</button>
               </div>
@@ -713,7 +714,7 @@ export default function BuyerPage() {
               {sectionTitle('ثبت پیشنهاد')}
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <div style={{ flex: '2 1 200px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>عنوان ملک</label><input value={newOffer.propertyTitle} onChange={e => setNewOffer({ ...newOffer, propertyTitle: e.target.value })} style={inputStyle} /></div>
-                <div style={{ flex: '1 1 160px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>مبلغ پیشنهادی (تومان)</label><input value={newOffer.amount} onChange={e => setNewOffer({ ...newOffer, amount: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                <div style={{ flex: '1 1 160px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>مبلغ پیشنهادی (تومان)</label><NumberInput value={newOffer.amount} onChange={v => setNewOffer({ ...newOffer, amount: v })} style={inputStyle} /></div>
                 <button disabled={busy || !newOffer.propertyTitle.trim()} onClick={async () => { if (await post({ action: 'addOffer', propertyTitle: newOffer.propertyTitle.trim(), amount: Number(newOffer.amount) || 0 })) setNewOffer({ propertyTitle: '', amount: '' }) }} style={{ padding: '9px 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }}>ثبت</button>
               </div>
             </div>
@@ -794,7 +795,7 @@ export default function BuyerPage() {
                   <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>تعداد خواب</label><input value={prof.rooms} onChange={e => setProf({ ...prof, rooms: e.target.value.replace(/\D/g, '') })} placeholder="۲" style={inputStyle} /></div>
                   <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>متراژ از</label><input value={prof.areaMin} onChange={e => setProf({ ...prof, areaMin: e.target.value.replace(/\D/g, '') })} placeholder="۷۰" style={inputStyle} /></div>
                   <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>متراژ تا</label><input value={prof.areaMax} onChange={e => setProf({ ...prof, areaMax: e.target.value.replace(/\D/g, '') })} placeholder="۱۳۰" style={inputStyle} /></div>
-                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>بودجه (تومان) {prof.budget && <span style={{ color: 'var(--gold)' }}>— {money(Number(prof.budget) || 0)}</span>}</label><input value={prof.budget} onChange={e => setProf({ ...prof, budget: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>بودجه (تومان) {prof.budget && <span style={{ color: 'var(--gold)' }}>— {money(Number(prof.budget) || 0)}</span>}</label><NumberInput value={prof.budget} onChange={v => setProf({ ...prof, budget: v })} style={inputStyle} /></div>
                   <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>مناطق موردنظر</label><input value={prof.areas} onChange={e => setProf({ ...prof, areas: e.target.value })} placeholder="مثلاً: زعفرانیه، سعادت‌آباد، ونک" style={inputStyle} /></div>
                 </div>
               </div>

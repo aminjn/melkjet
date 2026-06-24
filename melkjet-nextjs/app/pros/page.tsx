@@ -8,6 +8,7 @@ import WebsiteBuilderTool, { WEBSITE_VIEWS, type WebsiteView } from '@/app/compo
 import ArticleEditor from '@/app/components/ArticleEditor'
 import LocationPicker from '@/app/components/LocationPicker'
 import JalaliDatePicker from '@/app/components/JalaliDatePicker'
+import NumberInput from '@/app/components/NumberInput'
 
 // درختِ جغرافیاییِ سایت (استان → شهر → منطقه → محله)
 interface GeoDistrict { id: string; name: string; neighborhoods: string[] }
@@ -32,7 +33,7 @@ interface Listing {
   published?: boolean; publicId?: string
 }
 interface Appt { id: string; client: string; listingTitle?: string; date: string; type: ApptType; status: ApptStatus; createdAt: number }
-interface Commission { id: string; dealTitle: string; amount: number; status: CommStatus; date: string; createdAt: number }
+interface Commission { id: string; dealTitle: string; amount: number; status: CommStatus; date: string; createdAt: number; percent?: number; dealAmount?: number }
 interface Stats {
   profile: { name: string; agency?: string; title?: string; bio?: string; phone?: string; areas?: string; experience?: string; photo?: string; specialties?: string[] }
   kpis: { activeLeads: number; hotLeads: number; activeListings: number; upcomingAppts: number; pendingCommission: number; paidCommission: number; dealsThisMonth: number }
@@ -213,7 +214,7 @@ export default function ProsPage() {
       setShowForm(false); setForm(emptyForm); setEditingId(null)
     } catch { alert('اتصال به سرور برقرار نشد') } finally { setBusy(false) }
   }
-  const [nc, setNc] = useState({ dealTitle: '', amount: '' })
+  const [nc, setNc] = useState({ dealTitle: '', mode: 'amount' as 'amount' | 'percent', amount: '', percent: '', dealAmount: '' })
   const [prof, setProf] = useState({ name: '', agency: '', title: '', bio: '', phone: '', areas: '', experience: '', photo: '', specialties: [] as string[] })
   const [specInput, setSpecInput] = useState('')
   const [myPhone, setMyPhone] = useState('')
@@ -655,18 +656,40 @@ export default function ProsPage() {
               {sectionTitle('ثبت کمیسیون')}
               {leads.length === 0 ? (
                 <div style={{ fontSize: 13, color: 'var(--muted)', padding: '6px 0' }}>برای ثبت کمیسیون ابتدا باید یک لید/معامله در بخش «لیدها» اضافه کنید.</div>
-              ) : (
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                  <div style={{ flex: '2 1 220px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>معامله (از لیدها)</label>
-                    <select value={nc.dealTitle} onChange={e => setNc({ ...nc, dealTitle: e.target.value })} style={inputStyle}>
-                      <option value="">— انتخاب لید/معامله —</option>
-                      {leads.map(l => { const label = `${l.name}${l.need ? ' — ' + l.need : ''}`; return <option key={l.id} value={label}>{label}</option> })}
-                    </select>
+              ) : (() => {
+                const computed = nc.mode === 'percent' ? Math.round((Number(nc.dealAmount) || 0) * (Number(nc.percent) || 0) / 100) : (Number(nc.amount) || 0)
+                return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                    <div style={{ flex: '2 1 220px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>معامله (از لیدها)</label>
+                      <select value={nc.dealTitle} onChange={e => setNc({ ...nc, dealTitle: e.target.value })} style={inputStyle}>
+                        <option value="">— انتخاب لید/معامله —</option>
+                        {leads.map(l => { const label = `${l.name}${l.need ? ' — ' + l.need : ''}`; return <option key={l.id} value={label}>{label}</option> })}
+                      </select>
+                    </div>
+                    {/* toggle: درصد / مبلغ ثابت */}
+                    <div style={{ display: 'inline-flex', borderRadius: 9, border: '1px solid var(--line2)', overflow: 'hidden' }}>
+                      {(['amount', 'percent'] as const).map(m => (
+                        <button key={m} onClick={() => setNc({ ...nc, mode: m })} style={{ padding: '9px 16px', border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 12.5, fontWeight: nc.mode === m ? 700 : 500, background: nc.mode === m ? 'var(--gold)' : 'transparent', color: nc.mode === m ? '#16140f' : 'var(--muted)' }}>{m === 'amount' ? 'مبلغ ثابت' : 'درصدی'}</button>
+                      ))}
+                    </div>
                   </div>
-                  <div style={{ flex: '1 1 150px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>مبلغ کمیسیون (تومان)</label><input value={nc.amount} onChange={e => setNc({ ...nc, amount: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
-                  <button disabled={busy || !nc.dealTitle.trim()} onClick={async () => { if (await post({ action: 'addCommission', dealTitle: nc.dealTitle.trim(), amount: Number(nc.amount) || 0 })) setNc({ dealTitle: '', amount: '' }) }} style={goldBtn}>افزودن</button>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                    {nc.mode === 'amount' ? (
+                      <div style={{ flex: '1 1 200px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>مبلغ کمیسیون (تومان)</label><NumberInput value={nc.amount} onChange={v => setNc({ ...nc, amount: v })} style={inputStyle} /></div>
+                    ) : <>
+                      <div style={{ flex: '1 1 160px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>مبلغ معامله (تومان)</label><NumberInput value={nc.dealAmount} onChange={v => setNc({ ...nc, dealAmount: v })} style={inputStyle} /></div>
+                      <div style={{ flex: '0 1 110px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>درصد کمیسیون</label><input value={nc.percent} onChange={e => setNc({ ...nc, percent: e.target.value.replace(/[^\d.]/g, '') })} placeholder="مثلاً ۲" style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} /></div>
+                      <div style={{ flex: '1 1 150px', fontSize: 12, color: 'var(--muted)', paddingBottom: 9 }}>کمیسیون: <b style={{ color: 'var(--gold)' }}>{money(computed)}</b></div>
+                    </>}
+                    <button disabled={busy || !nc.dealTitle.trim() || computed <= 0} onClick={async () => {
+                      const ok = await post({ action: 'addCommission', dealTitle: nc.dealTitle.trim(), amount: nc.mode === 'amount' ? (Number(nc.amount) || 0) : 0, percent: nc.mode === 'percent' ? (Number(nc.percent) || 0) : undefined, dealAmount: nc.mode === 'percent' ? (Number(nc.dealAmount) || 0) : undefined })
+                      if (ok) setNc({ dealTitle: '', mode: nc.mode, amount: '', percent: '', dealAmount: '' })
+                    }} style={goldBtn}>افزودن</button>
+                  </div>
                 </div>
-              )}
+                )
+              })()}
             </div>
             <div style={{ ...card, padding: 18 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
@@ -677,7 +700,7 @@ export default function ProsPage() {
                 <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 700 }}>{c.dealTitle}</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{c.date}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{c.date}{c.percent ? ` · ${fa(c.percent)}٪ از ${money(c.dealAmount || 0)}` : ''}</div>
                   </div>
                   <div style={{ fontWeight: 800, color: 'var(--gold)', fontSize: 14 }}>{money(c.amount)}</div>
                   {c.status === 'pending'
@@ -890,8 +913,8 @@ export default function ProsPage() {
               {/* STEP 2 — specs */}
               {step === 2 && <>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>{form.deal === 'rent' ? 'ودیعه/رهن (تومان)' : 'قیمت کل (تومان)'}</label><input value={form.price} onChange={e => setForm({ ...form, price: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
-                  {form.deal === 'rent' ? <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>اجاره ماهانه (تومان)</label><input value={form.rentMonthly} onChange={e => setForm({ ...form, rentMonthly: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div> : <div />}
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>{form.deal === 'rent' ? 'ودیعه/رهن (تومان)' : 'قیمت کل (تومان)'}</label><NumberInput value={form.price} onChange={v => setForm({ ...form, price: v })} style={inputStyle} /></div>
+                  {form.deal === 'rent' ? <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>اجاره ماهانه (تومان)</label><NumberInput value={form.rentMonthly} onChange={v => setForm({ ...form, rentMonthly: v })} style={inputStyle} /></div> : <div />}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(110px,1fr))', gap: 12 }}>
                   <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>متراژ</label><input value={form.area} onChange={e => setForm({ ...form, area: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>

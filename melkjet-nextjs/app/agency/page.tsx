@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import AssistantPanel from '@/app/components/AssistantPanel'
 import JalaliDatePicker from '@/app/components/JalaliDatePicker'
+import NumberInput from '@/app/components/NumberInput'
 import CrmTool, { CRM_VIEWS, type CrmView } from '@/app/components/tools/CrmTool'
 import MarketingTool, { MARKETING_VIEWS, type MarketingView } from '@/app/components/tools/MarketingTool'
 import WorkflowTool, { WORKFLOW_VIEWS, type WorkflowView } from '@/app/components/tools/WorkflowTool'
@@ -541,7 +542,7 @@ export default function AgencyPage() {
               {sectionTitle('ثبت معامله')}
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <div style={{ flex: '2 1 180px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>عنوان معامله</label><input value={nd.title} onChange={e => setNd({ ...nd, title: e.target.value })} style={inputStyle} /></div>
-                <div style={{ flex: '1 1 150px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>مبلغ (تومان)</label><input value={nd.amount} onChange={e => setNd({ ...nd, amount: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                <div style={{ flex: '1 1 150px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>مبلغ (تومان)</label><NumberInput value={nd.amount} onChange={v => setNd({ ...nd, amount: v })} style={inputStyle} /></div>
                 <div style={{ flex: '1 1 130px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>مشاور</label>{agentSelect(nd.agent, v => setNd({ ...nd, agent: v }))}</div>
                 <div style={{ flex: '1 1 150px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>تاریخ</label><JalaliDatePicker value={nd.date} onChange={d => setNd({ ...nd, date: d })} /></div>
                 <button disabled={busy || !nd.title.trim() || !nd.agent} onClick={async () => { if (await post({ action: 'addDeal', title: nd.title.trim(), amount: Number(nd.amount) || 0, agent: nd.agent, date: nd.date })) setNd({ title: '', amount: '', agent: '', date: '' }) }} style={goldBtn}>ثبت</button>

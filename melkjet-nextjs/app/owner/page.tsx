@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import JalaliDatePicker from '@/app/components/JalaliDatePicker'
+import NumberInput from '@/app/components/NumberInput'
 
 // ════════════════════════════════════════════════════════
 //  Types (mirror app/lib/owner-store.ts API shape)
@@ -470,7 +471,7 @@ function PropertiesView({ properties, post, busy, search, showAdd, setShowAdd }:
             <input placeholder="موقعیت" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} style={inputStyle} />
             <input placeholder="متراژ" value={form.area} onChange={e => setForm({ ...form, area: e.target.value })} style={inputStyle} />
             <input placeholder="خواب" value={form.rooms} onChange={e => setForm({ ...form, rooms: e.target.value })} style={inputStyle} />
-            <input placeholder="قیمت (تومان)" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} style={inputStyle} />
+            <NumberInput placeholder="قیمت (تومان)" value={form.price} onChange={v => setForm({ ...form, price: v })} style={inputStyle} />
             <select value={form.deal} onChange={e => setForm({ ...form, deal: e.target.value as Deal })} style={{ ...inputStyle, cursor: 'pointer' }}>
               <option value="sale">فروش</option>
               <option value="rent">اجاره</option>
