@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
       if (!b.url) return NextResponse.json({ error: 'لینک الزامی است' }, { status: 400 })
       const r = await importDivarInput(o, String(b.url))
       if (!r.ok) return NextResponse.json({ error: r.reason || 'ایمپورت ناموفق بود' }, { status: 400 })
-      return NextResponse.json({ ok: true, profile: r.profile, imported: r.imported, skipped: r.skipped, failed: r.failed, config: getDivar(o) })
+      return NextResponse.json({ ok: true, profile: r.profile, imported: r.imported, updated: r.updated, skipped: r.skipped, failed: r.failed, config: getDivar(o) })
     }
     case 'clearImports': {
       const r = clearDivarImports(o)

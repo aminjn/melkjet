@@ -203,7 +203,21 @@ function JalaliDateTimePicker({ value, onPick, onClose }: { value?: number; onPi
   )
 }
 
-export default function CrmTool({ embedded = false, view: viewProp, onView }: { embedded?: boolean; view?: CrmView; onView?: (v: CrmView) => void }) {
+export interface CrmOwnListing { id: string; title: string; priceText: string; status: string; location?: string; published?: boolean; publicId?: string }
+
+export default function CrmTool({ embedded = false, view: viewProp, onView, ownListings, onAddListing, onEditListing, onDeleteListing, onSetListingStatus, onBulkDelete, onBulkStatus }: {
+  embedded?: boolean; view?: CrmView; onView?: (v: CrmView) => void
+  // وقتی این‌ها داده شوند، نمای «فایل‌ها» فایل‌های واقعیِ خودِ کاربر را نشان می‌دهد (نه آگهی‌های سراسری).
+  ownListings?: CrmOwnListing[]
+  onAddListing?: () => void
+  onEditListing?: (id: string) => void
+  onDeleteListing?: (id: string) => void
+  onSetListingStatus?: (id: string, status: string) => void
+  onBulkDelete?: (ids: string[]) => void
+  onBulkStatus?: (ids: string[], status: string) => void
+}) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const toggleSel = (id: string) => setSelectedIds(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
   const [internalView, setInternalView] = useState<CrmView>('dashboard')
   const activeView: CrmView = viewProp ?? internalView
   const setActiveView = (v: CrmView) => { onView ? onView(v) : setInternalView(v) }
@@ -458,7 +472,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView }: { 
               { label: 'وظایف باز', value: openCount, sub: `${FA(todayCount)} امروز`, subColor: 'var(--gold)', icon: '✓' },
               { label: 'معوق', value: overdueCount, sub: overdueCount > 0 ? 'نیاز به پیگیری' : 'بدون معوقه', subColor: overdueCount > 0 ? '#e74c3c' : '#5fd98a', icon: '◴' },
               { label: 'کل لیدها', value: leads.length, sub: `${FA(stageBreakdown.find(s => s.id === 'contract')?.count || 0)} قرارداد`, subColor: '#5fd98a', icon: '◈' },
-              { label: 'فایل‌های ملکی', value: listings.length, sub: growth !== null ? `رشد منطقه ${growth >= 0 ? '+' : ''}${FA(growth)}٪` : 'فایل فعال', subColor: 'var(--gold)', icon: '◰' },
+              { label: 'فایل‌های ملکی', value: ownListings ? ownListings.length : listings.length, sub: growth !== null ? `رشد منطقه ${growth >= 0 ? '+' : ''}${FA(growth)}٪` : 'فایل فعال', subColor: 'var(--gold)', icon: '◰' },
             ].map((kpi, i) => (
               <div key={i} style={{
                 background: 'var(--surface)',
@@ -727,87 +741,71 @@ export default function CrmTool({ embedded = false, view: viewProp, onView }: { 
       )}
 
       {/* ==================== LISTINGS ==================== */}
-      {activeView === 'listings' && (
-        <div className="mjc-table" style={{
-          background: 'var(--surface)',
-          border: '1px solid var(--line)',
-          borderRadius: 16,
-          overflow: 'hidden',
-        }}>
-          <div style={{
-            padding: '18px 20px',
-            borderBottom: '1px solid var(--line)',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          }}>
-            <h3 style={{ fontSize: 15, fontWeight: 700 }}>فایل‌های ملکی من</h3>
-            <button style={{
-              padding: '8px 16px', borderRadius: 10,
-              background: 'var(--gold)', border: 'none',
-              color: '#16140f', fontSize: 13, fontWeight: 700,
-              cursor: 'pointer', fontFamily: 'Vazirmatn, system-ui, sans-serif',
-            }}>+ افزودن فایل</button>
-          </div>
-
-          {/* Table Header */}
-          <div className="mjc-row" style={{
-            display: 'grid',
-            gridTemplateColumns: '2fr 120px 150px 80px 1fr',
-            padding: '11px 20px',
-            background: 'var(--bg2)',
-            borderBottom: '1px solid var(--line)',
-          }}>
-            {['ملک', 'وضعیت', 'قیمت', 'بازدید', 'پیشنهاد هوش مصنوعی'].map((h, i) => (
-              <div key={i} style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>{h}</div>
-            ))}
-          </div>
-
-          {listingsLoaded && listings.length === 0 && (
-            <div style={{ padding: '28px 20px', textAlign: 'center', fontSize: 13, color: 'var(--muted)' }}>
-              هنوز فایلی ثبت نشده است.
-            </div>
-          )}
-
-          {listings.map((item, i) => {
-            const active = item.status !== 'rejected' && item.status !== 'duplicate'
-            const statusLabel = active ? 'فعال' : 'بایگانی'
-            const statusColor = active ? '#5fd98a' : 'var(--faint)'
-            const suggestion = item.location || item.sourceName || '—'
-            return (
-              <div
-                key={item.id}
-                className="mjc-row"
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '2fr 120px 150px 80px 1fr',
-                  padding: '14px 20px',
-                  borderBottom: i < listings.length - 1 ? '1px solid var(--line)' : 'none',
-                  background: i % 2 === 1 ? 'rgba(255,255,255,0.018)' : 'transparent',
-                  alignItems: 'center',
-                }}
-              >
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{item.title}</div>
-                <div>
-                  <span style={{
-                    fontSize: 11, fontWeight: 600,
-                    color: statusColor,
-                    background: `${statusColor}22`,
-                    padding: '3px 10px', borderRadius: 6,
-                  }}>{statusLabel}</span>
-                </div>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{item.price || '—'}</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ fontSize: 12, color: 'var(--muted)' }}>{item.rating ? '★' : '👁'}</span>
-                  <span style={{ fontSize: 13 }}>{item.rating || '—'}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ color: 'var(--gold)', fontSize: 13 }}>✦</span>
-                  <span style={{ fontSize: 12, color: 'var(--muted)' }}>{suggestion}</span>
-                </div>
+      {activeView === 'listings' && (ownListings
+        // ── فایل‌های واقعیِ خودِ کاربر (قابلِ ویرایش/حذف/انتخابِ دسته‌ای) ──
+        ? (() => {
+          const STAT_LABEL: Record<string, string> = { active: 'فعال', sold: 'فروخته‌شده', rented: 'اجاره‌رفته' }
+          const STAT_COLOR: Record<string, string> = { active: '#5fd98a', sold: 'var(--faint)', rented: 'var(--faint)' }
+          const ids = ownListings.map(l => l.id)
+          const allSel = ids.length > 0 && ids.every(id => selectedIds.has(id))
+          const selCount = ids.filter(id => selectedIds.has(id)).length
+          return (
+            <div className="mjc-table" style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden' }}>
+              <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                <h3 style={{ fontSize: 15, fontWeight: 700 }}>فایل‌های ملکی من ({ownListings.length.toLocaleString('fa-IR')})</h3>
+                <button onClick={() => onAddListing?.()} style={{ padding: '8px 16px', borderRadius: 10, background: 'var(--gold)', border: 'none', color: '#16140f', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'Vazirmatn, system-ui, sans-serif' }}>+ افزودن فایل</button>
               </div>
-            )
-          })}
-        </div>
-      )}
+
+              {/* نوار عملیاتِ دسته‌ای */}
+              {selCount > 0 && (
+                <div style={{ padding: '10px 20px', background: 'var(--goldDim)', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 12.5 }}>
+                  <b style={{ color: 'var(--gold)' }}>{selCount.toLocaleString('fa-IR')} انتخاب‌شده</b>
+                  <span style={{ flex: 1 }} />
+                  <select onChange={e => { if (e.target.value) { onBulkStatus?.([...selectedIds].filter(id => ids.includes(id)), e.target.value); setSelectedIds(new Set()) } e.target.value = '' }} defaultValue="" style={{ padding: '6px 10px', borderRadius: 8, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--text)', fontSize: 12, fontFamily: 'inherit' }}>
+                    <option value="">تغییر وضعیت…</option>
+                    <option value="active">فعال</option><option value="sold">فروخته‌شده</option><option value="rented">اجاره‌رفته</option>
+                  </select>
+                  <button onClick={() => { if (confirm(`${selCount} فایل حذف شود؟`)) { onBulkDelete?.([...selectedIds].filter(id => ids.includes(id))); setSelectedIds(new Set()) } }} style={{ padding: '6px 12px', borderRadius: 8, background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>حذف انتخاب‌شده‌ها</button>
+                </div>
+              )}
+
+              {/* Header */}
+              <div className="mjc-row" style={{ display: 'grid', gridTemplateColumns: '28px 2fr 130px 150px 160px', padding: '11px 20px', background: 'var(--bg2)', borderBottom: '1px solid var(--line)', alignItems: 'center' }}>
+                <input type="checkbox" checked={allSel} onChange={() => setSelectedIds(allSel ? new Set() : new Set(ids))} />
+                {['ملک', 'وضعیت', 'قیمت', 'عملیات'].map((h, i) => <div key={i} style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>{h}</div>)}
+              </div>
+
+              {ownListings.length === 0 && <div style={{ padding: '28px 20px', textAlign: 'center', fontSize: 13, color: 'var(--muted)' }}>هنوز فایلی ثبت نکرده‌اید.</div>}
+
+              {ownListings.map((l, i) => (
+                <div key={l.id} className="mjc-row" style={{ display: 'grid', gridTemplateColumns: '28px 2fr 130px 150px 160px', padding: '12px 20px', borderBottom: i < ownListings.length - 1 ? '1px solid var(--line)' : 'none', background: selectedIds.has(l.id) ? 'var(--goldDim)' : (i % 2 === 1 ? 'rgba(255,255,255,0.018)' : 'transparent'), alignItems: 'center' }}>
+                  <input type="checkbox" checked={selectedIds.has(l.id)} onChange={() => toggleSel(l.id)} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.title}</div>
+                    {l.location && <div style={{ fontSize: 11, color: 'var(--muted)' }}>{l.location}</div>}
+                  </div>
+                  <div>
+                    <select value={l.status} onChange={e => onSetListingStatus?.(l.id, e.target.value)} style={{ fontSize: 11.5, fontWeight: 600, color: STAT_COLOR[l.status] || 'var(--text)', background: 'var(--bg)', border: `1px solid ${STAT_COLOR[l.status] || 'var(--line)'}`, borderRadius: 7, padding: '4px 8px', fontFamily: 'inherit', cursor: 'pointer' }}>
+                      {['active', 'sold', 'rented'].map(s => <option key={s} value={s} style={{ color: 'var(--text)' }}>{STAT_LABEL[s]}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ fontSize: 12.5, fontWeight: 600 }}>{l.priceText || '—'}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <button onClick={() => onEditListing?.(l.id)} style={{ padding: '5px 11px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>ویرایش</button>
+                    <button onClick={() => { if (confirm('این فایل حذف شود؟')) onDeleteListing?.(l.id) }} style={{ padding: '5px 11px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: '#ef4444', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>حذف</button>
+                    {l.published && l.publicId && <a href={`/property/${l.publicId}`} target="_blank" rel="noreferrer" style={{ fontSize: 11.5, color: 'var(--gold)', textDecoration: 'none' }}>↗</a>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        })()
+        // ── حالتِ پیش‌فرض (بدون ownListings): پیام راهنما به‌جای نشت‌دادنِ آگهی‌های سراسری ──
+        : (
+          <div className="mjc-table" style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: '28px 20px', textAlign: 'center', fontSize: 13, color: 'var(--muted)' }}>
+            فایل‌های شما در این بخش نمایش داده می‌شوند.
+          </div>
+        ))}
 
       {/* ==================== PIPELINE ==================== */}
       {activeView === 'pipeline' && (

@@ -453,7 +453,15 @@ export default function ProsPage() {
         </header>
 
         <main style={{ padding: 22, flex: 1, overflowY: 'auto' }}>
-          {crmView ? <CrmTool embedded view={crmView} onView={v => setCrmView(v)} />
+          {crmView ? <CrmTool embedded view={crmView} onView={v => setCrmView(v)}
+              ownListings={listings.map(l => ({ id: l.id, title: l.title, priceText: l.deal === 'rent' ? `ودیعه ${money(l.price)}${l.rentMonthly ? ` · اجاره ${money(l.rentMonthly)}` : ''}` : money(l.price), status: l.status, location: [l.city, l.neighborhood].filter(Boolean).join('، ') || l.location, published: l.published, publicId: l.publicId }))}
+              onAddListing={openAdd}
+              onEditListing={id => { const l = listings.find(x => x.id === id); if (l) openEdit(l) }}
+              onDeleteListing={id => post({ action: 'deleteListing', id })}
+              onSetListingStatus={(id, status) => post({ action: 'setListingStatus', id, status })}
+              onBulkDelete={async ids => { for (const id of ids) await post({ action: 'deleteListing', id }) }}
+              onBulkStatus={async (ids, status) => { for (const id of ids) await post({ action: 'setListingStatus', id, status }) }}
+            />
             : mktView ? <MarketingTool embedded view={mktView} onView={v => setMktView(v)} />
             : wfView ? <div style={{ height: 'calc(100vh - 130px)' }}><WorkflowTool embedded view={wfView} onView={v => setWfView(v)} /></div>
             : wbView ? <div style={{ height: 'calc(100vh - 130px)' }}><WebsiteBuilderTool embedded view={wbView} onView={v => setWbView(v)} /></div>
@@ -944,8 +952,8 @@ export default function ProsPage() {
                     if (d?.ok) {
                       setDivarUrl('')
                       const parts: string[] = []
-                      if (d.imported) parts.push(`${(d.imported).toLocaleString('fa-IR')} آگهی وارد و منتشر شد`)
-                      if (d.skipped) parts.push(`${(d.skipped).toLocaleString('fa-IR')} تکراری`)
+                      if (d.imported) parts.push(`${(d.imported).toLocaleString('fa-IR')} آگهی جدید وارد شد`)
+                      if (d.updated) parts.push(`${(d.updated).toLocaleString('fa-IR')} آگهی به‌روزرسانی شد`)
                       if (d.failed) parts.push(`${(d.failed).toLocaleString('fa-IR')} ناموفق`)
                       setDivarMsg('✓ ' + (parts.join(' · ') || 'انجام شد'))
                       await refresh()
@@ -985,7 +993,7 @@ export default function ProsPage() {
                     <button disabled={divarBusy} onClick={async () => { await divarPost({ action: 'setConfig', divarName: cfg.divarName, searchUrl: cfg.searchUrl, schedule: cfg.schedule, autoPublish: cfg.autoPublish, autoNeighborhood: cfg.autoNeighborhood }); setDivarMsg('✓ تنظیمات ذخیره شد.') }} style={{ ...goldBtn, opacity: divarBusy ? 0.6 : 1 }}>ذخیرهٔ تنظیمات</button>
                     <button disabled={divarBusy || !cfg.searchUrl.trim()} onClick={async () => {
                       const d = await divarPost({ action: 'sync' })
-                      if (d) { setDivarMsg(d.ok ? `✓ همگام‌سازی شد — ${(d.imported || 0).toLocaleString('fa-IR')} آگهی جدید از ${(d.scanned || 0).toLocaleString('fa-IR')} آگهیِ بررسی‌شده.` : (d.reason || 'همگام‌سازی ناموفق بود')); await refresh() }
+                      if (d) { setDivarMsg(d.ok ? `✓ همگام‌سازی شد — ${(d.imported || 0).toLocaleString('fa-IR')} جدید، ${(d.updated || 0).toLocaleString('fa-IR')} به‌روزرسانی (از ${(d.scanned || 0).toLocaleString('fa-IR')} آگهی).` : (d.reason || 'همگام‌سازی ناموفق بود')); await refresh() }
                     }} style={{ ...actionBtn, padding: '9px 18px', color: 'var(--gold)', borderColor: 'var(--gold)' }}>{divarBusy ? 'در حال همگام‌سازی…' : 'همگام‌سازی الان'}</button>
                   </div>
                   <div style={{ fontSize: 11.5, color: 'var(--muted)', display: 'flex', gap: 16, flexWrap: 'wrap', paddingTop: 4, borderTop: '1px solid var(--line)' }}>
