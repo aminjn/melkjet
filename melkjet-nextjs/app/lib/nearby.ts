@@ -11,6 +11,22 @@ async function neshanGet(url: string, key: string, timeout = 8000): Promise<{ st
   return { status: r.status, json }
 }
 
+// مختصات → شهر/محله (با Neshan reverse). برای تشخیصِ خودکارِ منطقهٔ کاربر.
+export async function reverseGeocode(lat: number, lng: number): Promise<{ city?: string; neighborhood?: string; address?: string } | null> {
+  const nz = getAdminData().neshan
+  const key = nz?.serviceKey || nz?.mapKey
+  if (!key) return null
+  try {
+    const { status, json } = await neshanGet(`https://api.neshan.org/v5/reverse?lat=${lat}&lng=${lng}`, key)
+    if (status !== 200 || !json) return null
+    return {
+      city: json.city || json.county || undefined,
+      neighborhood: json.neighbourhood || json.neighborhood || undefined,
+      address: json.formatted_address || undefined,
+    }
+  } catch { return null }
+}
+
 const CATEGORIES: { type: string; term: string }[] = [
   { type: 'مترو', term: 'ایستگاه مترو' },
   { type: 'بیمارستان', term: 'بیمارستان' },

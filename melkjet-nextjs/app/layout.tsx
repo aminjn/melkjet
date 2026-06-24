@@ -4,6 +4,7 @@ import BottomNav from './components/BottomNav'
 import PWAInstall from './components/PWAInstall'
 import SessionKeeper from './components/SessionKeeper'
 import ImpersonationBar from './components/ImpersonationBar'
+import LocationDetector from './components/LocationDetector'
 
 export const metadata: Metadata = {
   title: 'ملک‌جت - اکوسیستم هوشمند املاک',
@@ -47,6 +48,7 @@ export default function RootLayout({
       </head>
       <body style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
         <SessionKeeper />
+        <LocationDetector />
         {children}
         <ImpersonationBar />
         <BottomNav />

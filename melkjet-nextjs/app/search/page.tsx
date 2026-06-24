@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import Nav from '@/app/components/Nav'
 import BannerSlot from '@/app/components/BannerSlot'
 import { fetchContent, gradientFor, type ContentItem } from '@/app/lib/content-display'
+import { readLoc } from '@/app/components/LocationDetector'
 
 function seedNum(s: string): number {
   let h = 0
@@ -132,6 +133,13 @@ function SearchPageInner() {
   const [maxPrice, setMaxPrice] = useState(PRICE_MAX)   // پیش‌فرض: بدون سقف (همه نشان داده شوند)
   const [checkedAmenities, setCheckedAmenities] = useState<string[]>([])   // هیچ فیلترِ پیش‌فرضی
   const [sortBy, setSortBy] = useState('پیشنهاد ملک‌جت')
+  // منطقهٔ کاربر (از موقعیتِ تشخیص‌داده‌شده) — برای مرتب‌سازیِ نزدیک‌ترها
+  const [userArea, setUserArea] = useState('')
+  useEffect(() => {
+    const upd = () => { const l = readLoc(); setUserArea(l?.neighborhood || l?.city || '') }
+    upd(); window.addEventListener('mj-loc-updated', upd)
+    return () => window.removeEventListener('mj-loc-updated', upd)
+  }, [])
   const [hoveredCard, setHoveredCard] = useState<string | null>(null)
   const [activePin, setActivePin] = useState<string | null>(null)
   const [properties, setProperties] = useState<PropertyT[]>([])
@@ -187,13 +195,18 @@ function SearchPageInner() {
   }, [properties, searchTerm, dealType, beds, maxPrice, checkedAmenities])
 
   const sortedProperties = useMemo(() => {
+    const ar = userArea.replace(/‌/g, '').trim()
+    const nearby = (p: { location: string }) => ar ? p.location.replace(/‌/g, '').includes(ar) : false
     return [...filteredProperties].sort((a, b) => {
       if (sortBy === 'ارزان‌ترین') return a.priceNum - b.priceNum
       if (sortBy === 'گران‌ترین')  return b.priceNum - a.priceNum
       if (sortBy === 'جدیدترین')  return parseInt(b.year) - parseInt(a.year)
+      // پیش‌فرض: آگهی‌های منطقهٔ کاربر اول، سپس امتیاز
+      const an = nearby(a), bn = nearby(b)
+      if (an !== bn) return an ? -1 : 1
       return b.score - a.score
     })
-  }, [filteredProperties, sortBy])
+  }, [filteredProperties, sortBy, userArea])
 
   // Promoted listings lead the results (dedup by id).
   const shownProperties = useMemo(() => {
@@ -335,7 +348,7 @@ function SearchPageInner() {
               }}
             >
               <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{tag.label}:</span>
-              <span style={{ color: 'var(--muted)' }}>{tag.value}</span>
+              <span style={{ color: 'var(--muted)' }}>{tag.label === 'منطقه' && userArea ? userArea : tag.value}</span>
             </span>
           ))}
         </div>
