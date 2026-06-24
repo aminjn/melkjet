@@ -11,7 +11,7 @@ import ArticleEditor from '@/app/components/ArticleEditor'
 type View =
   | 'overview' | 'scraper' | 'listings' | 'products' | 'geo' | 'moderation' | 'content' | 'studio' | 'articles' | 'categories' | 'crm' | 'api'
   | 'reports' | 'plans' | 'promos' | 'discounts' | 'ads' | 'users' | 'profiles' | 'roles' | 'connections'
-  | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags'
+  | 'tracker' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags'
 
 interface NavItem { id: View; icon: string; label: string; badge?: string; badgeColor?: string }
 interface NavSection { title: string; items: NavItem[] }
@@ -50,6 +50,7 @@ const sections: NavSection[] = [
       { id: 'promos', icon: '★', label: 'پروموت و ویژه‌سازی' },
       { id: 'discounts', icon: '٪', label: 'کدهای تخفیف' },
       { id: 'ads',    icon: '▤', label: 'تبلیغات بنری' },
+      { id: 'tracker', icon: '🎯', label: 'ترکر و پیامک هدفمند' },
     ],
   },
   {
@@ -102,6 +103,7 @@ const viewTitles: Record<View, string> = {
   ads:        'تبلیغات بنری',
   users:      'کاربران',
   roles:      'نقش‌ها و دسترسی',
+  tracker:    'ترکر و پیامک هدفمند',
   settings:   'تنظیمات کامل پلتفرم',
   health:     'سلامت سیستم',
   servers:    'مدیریت سرورها',
@@ -2075,6 +2077,79 @@ function NegotiationConfig() {
   )
 }
 
+// ─── Tracker + targeted retargeting SMS ────────────────────────────────────
+function TrackerConfig() {
+  const [f, setF] = useState({ enabled: false, template: '', pattern: '', patternVar: 'message', delayMin: 2, throttleHours: 6, paths: '' })
+  const [st, setSt] = useState<any>(null)
+  const [msg, setMsg] = useState('')
+  const load = () => fetch('/api/admin/tracker-config').then(r => r.ok ? r.json() : null).then(d => { if (d) { setF({ enabled: !!d.enabled, template: d.template || '', pattern: d.pattern || '', patternVar: d.patternVar || 'message', delayMin: d.delayMin ?? 2, throttleHours: d.throttleHours ?? 6, paths: d.paths || '' }); setSt(d.stats) } })
+  useEffect(() => { load() }, [])
+  const save = async () => { setMsg(''); const r = await fetch('/api/admin/tracker-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(f) }); const d = await r.json(); setMsg(r.ok ? '✓ ذخیره شد' : `⚠ ${d.error || 'خطا'}`); if (r.ok) load() }
+  const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
+  const lab: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', marginBottom: 5, display: 'block', fontWeight: 600 }
+  const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <Card style={{ marginBottom: 14, background: 'linear-gradient(120deg, rgba(212,175,55,.1), transparent 60%), var(--surface)', borderColor: 'rgba(201,168,76,.4)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 24 }}>🎯</span>
+          <div><div style={{ fontWeight: 900, fontSize: 17 }}>ترکر و پیامک هدفمند</div><div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3, lineHeight: 1.8 }}>هر بازدیدکننده با کوکیِ دائمی دنبال می‌شود؛ پس از لاگین، شماره‌اش به آن وصل می‌شود. وقتی صفحه‌ای (آگهی، پروفایل، …) را ببیند، پیامکِ هدفمند با متنِ همان موضوع برایش ارسال می‌شود — سریع، از طریقِ پترن.</div></div>
+        </div>
+      </Card>
+
+      {st && (
+        <div className="mjsa-4col" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 14 }}>
+          {[['بازدیدکننده‌ها', st.total], ['شناخته‌شده (شماره‌دار)', st.identified], ['در صفِ ارسال', st.pending], ['پیامکِ ارسال‌شده', st.sent]].map(([l, v]: any) => (
+            <Card key={l}><div style={{ fontSize: 12, color: 'var(--muted)' }}>{l}</div><div style={{ fontSize: 24, fontWeight: 900, color: 'var(--gold)', marginTop: 6 }}>{fa(v)}</div></Card>
+          ))}
+        </div>
+      )}
+
+      <Card style={{ marginBottom: 14 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 700, marginBottom: 14, cursor: 'pointer' }}>
+          <input type="checkbox" checked={f.enabled} onChange={e => setF({ ...f, enabled: e.target.checked })} style={{ width: 18, height: 18 }} />
+          ارسالِ پیامکِ هدفمند فعال باشد
+        </label>
+        <div style={{ marginBottom: 12 }}>
+          <label style={lab}>قالبِ پیام — متغیرها: <span style={{ direction: 'ltr', display: 'inline-block' }}>%title%</span> (عنوانِ صفحه/آگهی) و <span style={{ direction: 'ltr', display: 'inline-block' }}>%url%</span></label>
+          <textarea value={f.template} onChange={e => setF({ ...f, template: e.target.value })} rows={3} style={{ ...inp, resize: 'vertical', lineHeight: 1.9 }} placeholder="سلام👋 «%title%» را در ملک‌جت دیدید و مشتاقانه منتظرِ شما هستیم." />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }} className="mjsa-2col">
+          <div><label style={lab}>کدِ پترن IPPanel (اختیاری — ارسالِ سریع)</label><input style={inp} placeholder="مثلاً 123456" value={f.pattern} onChange={e => setF({ ...f, pattern: e.target.value })} /></div>
+          <div><label style={lab}>نامِ متغیرِ پترن</label><input style={inp} placeholder="message" value={f.patternVar} onChange={e => setF({ ...f, patternVar: e.target.value })} /></div>
+          <div><label style={lab}>تأخیر تا ارسال (دقیقه)</label><input style={inp} type="number" value={f.delayMin} onChange={e => setF({ ...f, delayMin: Number(e.target.value) || 0 })} /></div>
+          <div><label style={lab}>حداقل فاصلهٔ دو پیامک برای یک کاربر (ساعت)</label><input style={inp} type="number" value={f.throttleHours} onChange={e => setF({ ...f, throttleHours: Number(e.target.value) || 0 })} /></div>
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <label style={lab}>مسیرهای فعال‌کننده (هر خط یک پیشوند — خالی = همهٔ صفحاتِ عمومی)</label>
+          <textarea value={f.paths} onChange={e => setF({ ...f, paths: e.target.value })} rows={3} style={{ ...inp, resize: 'vertical', direction: 'ltr', textAlign: 'left' }} placeholder={'/property\n/project\n/profile\n/neighborhood'} />
+        </div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <GoldButton onClick={save}>ذخیره</GoldButton>
+          {msg && <span style={{ fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</span>}
+        </div>
+      </Card>
+
+      {st?.recent?.length > 0 && (
+        <Card>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>آخرین بازدیدکننده‌ها</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {st.recent.map((v: any) => (
+              <div key={v.vid} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, background: 'var(--bg2)', borderRadius: 9, padding: '8px 11px', flexWrap: 'wrap' }}>
+                <div style={{ fontSize: 12.5, minWidth: 0, flex: 1 }}>
+                  <span style={{ color: v.phone ? '#5fd98a' : 'var(--faint)', fontWeight: 700, direction: 'ltr', display: 'inline-block' }}>{v.phone || `ناشناس‌${v.vid}`}</span>
+                  <span style={{ color: 'var(--muted)', marginInlineStart: 8 }}>· {v.lastTitle || '—'}</span>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--faint)' }}>{fa(v.events)} بازدید{v.sentCount ? ` · ${fa(v.sentCount)} پیامک` : ''}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+    </div>
+  )
+}
+
 // ─── Communication packages (شارژِ پیامک/ایمیل) + orders ────────────────────
 type CPkg = { id: string; channel: 'sms' | 'email' | 'token'; name: string; credits: number; price: number; active: boolean }
 type COrder = { id: string; owner: string; kind?: string; name: string; channel?: string; credits?: number; planId?: string; price: number; status: string; createdAt: number }
@@ -3589,6 +3664,7 @@ export default function SuperAdminPage() {
       case 'profiles':   return <ProfilesView />
       case 'roles':      return <RolesView />
       case 'plans':      return <PlansView />
+      case 'tracker':    return <TrackerConfig />
       case 'promos':     return <PromotionsView />
       case 'discounts':  return <PromosView />
       case 'ads':        return <AdsView />

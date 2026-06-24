@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyOTP } from '@/app/lib/otp-store'
 import { createSession, SESSION_COOKIE, SUPER_ADMIN_PHONE } from '@/app/lib/session'
 import { ensureAccount, dashForRole } from '@/app/lib/account-store'
+import { linkPhone } from '@/app/lib/tracker-store'
 
 export async function POST(req: NextRequest) {
   const { phone, code } = await req.json()
@@ -13,6 +14,9 @@ export async function POST(req: NextRequest) {
   if (result === 'invalid') return NextResponse.json({ error: 'کد اشتباه است' }, { status: 400 })
 
   const token = await createSession(phone)
+  // اتصالِ شمارهٔ کاربر به کوکیِ دائمیِ ترکر (mj_vid) — برای پیامکِ هدفمندِ بعدی
+  const vid = req.cookies.get('mj_vid')?.value || ''
+  if (vid && vid.length >= 8) { try { linkPhone(vid, phone) } catch {} }
   const isSuper = phone === SUPER_ADMIN_PHONE
   const role = isSuper ? 'super_admin' : 'user'
   const { account, isNew } = ensureAccount(phone)

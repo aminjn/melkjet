@@ -58,6 +58,15 @@ export interface AdminData {
     pattern?: string     // کدِ پترنِ IPPanel برای ارسالِ سریعِ پیامک (اختیاری)
     patternVar?: string  // نامِ متغیرِ پترن (پیش‌فرض: message)
   }
+  tracker?: {            // ترکر + پیامکِ هدفمندِ بازاریابی مجدد
+    enabled?: boolean    // فعال/غیرفعال
+    template?: string    // قالبِ پیام — متغیرها: %title% %url%
+    pattern?: string     // کدِ پترنِ IPPanel برای ارسالِ سریع (اختیاری)
+    patternVar?: string  // نامِ متغیرِ پترن (پیش‌فرض: message)
+    delayMin?: number    // تأخیر تا ارسال (دقیقه) — پس از بازدید
+    throttleHours?: number // حداقل فاصلهٔ دو پیامک برای یک کاربر (ساعت)
+    paths?: string       // پیشوندهای مسیر که پیامک را فعال می‌کنند (هر خط یکی؛ خالی=همهٔ صفحات عمومی)
+  }
   agentModels?: Record<string, { text?: string; image?: string }>  // per-agent model assignment
 }
 

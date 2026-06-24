@@ -1,6 +1,7 @@
 import { listDueAdvisors } from './advisor-divar-store'
 import { syncAdvisorDivar } from './advisor-divar-import'
 import { publishDueArticles } from './scraper-store'
+import { processTrackerQueue } from './tracker-sender'
 
 // زمان‌بندِ سبک و بدونِ وابستگی برای سینکِ خودکارِ دیوار. روی سرورِ همیشه‌روشنِ
 // pm2 با یک setInterval اجرا می‌شود؛ یک قفلِ global از اجرای موازی/تکراری جلوگیری می‌کند.
@@ -19,6 +20,7 @@ async function tick(): Promise<{ due: number; synced: number }> {
   let due: { phone: string; cfg: any }[] = []
   try {
     try { publishDueArticles() } catch { /* مقالاتِ زمان‌بندی‌شده */ }
+    try { await processTrackerQueue(Date.now()) } catch { /* صفِ پیامکِ هدفمندِ ترکر */ }
     due = listDueAdvisors(Date.now())
     for (const { phone, cfg } of due) {
       try { await syncAdvisorDivar(phone, cfg); synced++ } catch { /* خطای یک مشاور بقیه را متوقف نکند */ }

@@ -5,6 +5,7 @@ import PWAInstall from './components/PWAInstall'
 import SessionKeeper from './components/SessionKeeper'
 import ImpersonationBar from './components/ImpersonationBar'
 import LocationDetector from './components/LocationDetector'
+import Tracker from './components/Tracker'
 
 export const metadata: Metadata = {
   title: 'ملک‌جت - اکوسیستم هوشمند املاک',
@@ -49,6 +50,7 @@ export default function RootLayout({
       <body style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
         <SessionKeeper />
         <LocationDetector />
+        <Tracker />
         {children}
         <ImpersonationBar />
         <BottomNav />
