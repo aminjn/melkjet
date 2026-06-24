@@ -1,7 +1,10 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import Link from 'next/link'
 import AssistantPanel from '@/app/components/AssistantPanel'
+import CrmTool, { CRM_VIEWS, type CrmView } from '@/app/components/tools/CrmTool'
+import MarketingTool, { MARKETING_VIEWS, type MarketingView } from '@/app/components/tools/MarketingTool'
+import WorkflowTool, { WORKFLOW_VIEWS, type WorkflowView } from '@/app/components/tools/WorkflowTool'
+import WebsiteBuilderTool, { WEBSITE_VIEWS, type WebsiteView } from '@/app/components/tools/WebsiteBuilderTool'
 
 // ── Types (mirror app/lib/builder-store.ts API shape) ──
 type UnitStatus = 'sold' | 'reserved' | 'available'
@@ -74,18 +77,26 @@ const NAV_ITEMS: { id: View; label: string; icon: string }[] = [
   { id: 'investors', label: 'سرمایه‌گذاران', icon: '◍' },
   { id: 'reports', label: 'گزارش‌ها', icon: '◳' },
 ]
-const NAV_LINKS: { href: string; label: string; icon: string }[] = [
-  { href: '/crm', label: 'CRM و مشتریان', icon: '◇' },
-  { href: '/marketing', label: 'مارکتینگ', icon: '◈' },
-  { href: '/workflow', label: 'اتوماسیون', icon: '⛭' },
-  { href: '/website-builder', label: 'وب‌سایت‌ساز', icon: '◳' },
-]
-
 const FONT = 'Vazirmatn, system-ui, sans-serif'
 const card: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16 }
 
 export default function BuilderPage() {
   const [view, setView] = useState<View>('overview')
+  // ابزارهای جاسازی‌شده: وقتی مقدار دارند، محتوای ابزار در همین پنل نمایش داده می‌شود
+  const [crmView, setCrmView] = useState<CrmView | null>(null)
+  const [crmOpen, setCrmOpen] = useState(false)
+  const [mktView, setMktView] = useState<MarketingView | null>(null)
+  const [mktOpen, setMktOpen] = useState(false)
+  const [wfView, setWfView] = useState<WorkflowView | null>(null)
+  const [wfOpen, setWfOpen] = useState(false)
+  const [wbView, setWbView] = useState<WebsiteView | null>(null)
+  const [wbOpen, setWbOpen] = useState(false)
+  const clearTools = () => { setCrmView(null); setMktView(null); setWfView(null); setWbView(null) }
+  const goView = (v: View) => { setView(v); clearTools() }
+  const openCrm = (v: CrmView) => { clearTools(); setCrmView(v); setCrmOpen(true) }
+  const openMkt = (v: MarketingView) => { clearTools(); setMktView(v); setMktOpen(true) }
+  const openWf = (v: WorkflowView) => { clearTools(); setWfView(v); setWfOpen(true) }
+  const openWb = (v: WebsiteView) => { clearTools(); setWbView(v); setWbOpen(true) }
   const [projects, setProjects] = useState<ProjectSummary[]>([])
   const [project, setProject] = useState<Project | null>(null)
   const [pid, setPid] = useState<string | null>(null)
@@ -195,9 +206,9 @@ export default function BuilderPage() {
         {/* Nav */}
         <nav style={{ padding: '10px 8px', flex: 1, overflowY: 'auto' }}>
           {NAV_ITEMS.map(item => {
-            const active = view === item.id
+            const active = view === item.id && !crmView && !mktView && !wfView && !wbView
             return (
-              <button key={item.id} onClick={() => setView(item.id)} style={{
+              <button key={item.id} onClick={() => goView(item.id)} style={{
                 width: '100%', display: 'flex', alignItems: 'center', gap: 10,
                 padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer',
                 background: active ? 'var(--goldDim)' : 'transparent',
@@ -212,16 +223,122 @@ export default function BuilderPage() {
             )
           })}
           <div style={{ height: 1, background: 'var(--line)', margin: '10px 8px' }} />
-          {NAV_LINKS.map(l => (
-            <Link key={l.href} href={l.href} style={{
-              width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-              padding: '10px 14px', borderRadius: 10, color: 'var(--muted)', textDecoration: 'none',
-              fontWeight: 500, fontSize: 14, marginBottom: 2, fontFamily: FONT,
-            }}>
-              <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: 0.7 }}>{l.icon}</span>
-              <span className="mjb-sidelabel" style={{ flex: 1 }}>{l.label}</span>
-            </Link>
-          ))}
+
+          {/* CRM — جاسازی‌شده با منوی آبشاری (داخل همین پنل باز می‌شود) */}
+          <button onClick={() => { setCrmOpen(o => !o); if (!crmView) openCrm('dashboard') }} style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+            padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer',
+            background: crmView ? 'var(--goldDim)' : 'transparent',
+            color: crmView ? 'var(--gold)' : 'var(--muted)',
+            fontWeight: crmView ? 700 : 500, fontSize: 14, textAlign: 'right',
+            marginBottom: 2, fontFamily: FONT, transition: 'all 0.15s',
+          }}>
+            <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: crmView ? 1 : 0.7 }}>◇</span>
+            <span className="mjb-sidelabel" style={{ flex: 1 }}>CRM و مشتریان</span>
+            <span className="mjb-sidelabel" style={{ fontSize: 11, transition: 'transform .2s', transform: crmOpen ? 'rotate(90deg)' : 'none' }}>‹</span>
+          </button>
+          {crmOpen && CRM_VIEWS.map(cv => {
+            const on = crmView === cv.id
+            return (
+              <button key={cv.id} onClick={() => openCrm(cv.id)} className="mjb-sidelabel" style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+                padding: '8px 14px', paddingRight: 34, borderRadius: 10, border: 'none', cursor: 'pointer',
+                background: on ? 'var(--goldDim)' : 'transparent',
+                color: on ? 'var(--gold)' : 'var(--muted)',
+                fontWeight: on ? 700 : 500, fontSize: 13, textAlign: 'right', marginBottom: 2, fontFamily: FONT,
+              }}>
+                <span style={{ fontSize: 13, width: 16, textAlign: 'center', opacity: on ? 1 : 0.6 }}>{cv.icon}</span>
+                <span style={{ flex: 1 }}>{cv.label}</span>
+              </button>
+            )
+          })}
+
+          {/* مارکتینگ — جاسازی‌شده با منوی آبشاری (مثل CRM) */}
+          <button onClick={() => { setMktOpen(o => !o); if (!mktView) openMkt('overview') }} style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+            padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer',
+            background: mktView ? 'var(--goldDim)' : 'transparent',
+            color: mktView ? 'var(--gold)' : 'var(--muted)',
+            fontWeight: mktView ? 700 : 500, fontSize: 14, textAlign: 'right',
+            marginBottom: 2, fontFamily: FONT, transition: 'all 0.15s',
+          }}>
+            <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: mktView ? 1 : 0.7 }}>◬</span>
+            <span className="mjb-sidelabel" style={{ flex: 1 }}>مارکتینگ</span>
+            <span className="mjb-sidelabel" style={{ fontSize: 11, transition: 'transform .2s', transform: mktOpen ? 'rotate(90deg)' : 'none' }}>‹</span>
+          </button>
+          {mktOpen && MARKETING_VIEWS.map(mv => {
+            const on = mktView === mv.id
+            return (
+              <button key={mv.id} onClick={() => openMkt(mv.id)} className="mjb-sidelabel" style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+                padding: '8px 14px', paddingRight: 34, borderRadius: 10, border: 'none', cursor: 'pointer',
+                background: on ? 'var(--goldDim)' : 'transparent',
+                color: on ? 'var(--gold)' : 'var(--muted)',
+                fontWeight: on ? 700 : 500, fontSize: 13, textAlign: 'right', marginBottom: 2, fontFamily: FONT,
+              }}>
+                <span style={{ fontSize: 13, width: 16, textAlign: 'center', opacity: on ? 1 : 0.6 }}>{mv.icon}</span>
+                <span style={{ flex: 1 }}>{mv.label}</span>
+              </button>
+            )
+          })}
+
+          {/* اتوماسیون — منوی آبشاری، داخل همین پنل */}
+          <button onClick={() => { setWfOpen(o => !o); if (!wfView) openWf(WORKFLOW_VIEWS[0].id) }} style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+            padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer',
+            background: wfView ? 'var(--goldDim)' : 'transparent',
+            color: wfView ? 'var(--gold)' : 'var(--muted)',
+            fontWeight: wfView ? 700 : 500, fontSize: 14, textAlign: 'right',
+            marginBottom: 2, fontFamily: FONT, transition: 'all 0.15s',
+          }}>
+            <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: wfView ? 1 : 0.7 }}>⛭</span>
+            <span className="mjb-sidelabel" style={{ flex: 1 }}>اتوماسیون</span>
+            <span className="mjb-sidelabel" style={{ fontSize: 11, transition: 'transform .2s', transform: wfOpen ? 'rotate(90deg)' : 'none' }}>‹</span>
+          </button>
+          {wfOpen && WORKFLOW_VIEWS.map(v => {
+            const on = wfView === v.id
+            return (
+              <button key={v.id} onClick={() => openWf(v.id)} className="mjb-sidelabel" style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+                padding: '8px 14px', paddingRight: 34, borderRadius: 10, border: 'none', cursor: 'pointer',
+                background: on ? 'var(--goldDim)' : 'transparent',
+                color: on ? 'var(--gold)' : 'var(--muted)',
+                fontWeight: on ? 700 : 500, fontSize: 13, textAlign: 'right', marginBottom: 2, fontFamily: FONT,
+              }}>
+                <span style={{ fontSize: 13, width: 16, textAlign: 'center', opacity: on ? 1 : 0.6 }}>{v.icon}</span>
+                <span style={{ flex: 1 }}>{v.label}</span>
+              </button>
+            )
+          })}
+
+          {/* وب‌سایت‌ساز — منوی آبشاری، داخل همین پنل */}
+          <button onClick={() => { setWbOpen(o => !o); if (!wbView) openWb(WEBSITE_VIEWS[0].id) }} style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+            padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer',
+            background: wbView ? 'var(--goldDim)' : 'transparent',
+            color: wbView ? 'var(--gold)' : 'var(--muted)',
+            fontWeight: wbView ? 700 : 500, fontSize: 14, textAlign: 'right',
+            marginBottom: 2, fontFamily: FONT, transition: 'all 0.15s',
+          }}>
+            <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: wbView ? 1 : 0.7 }}>◳</span>
+            <span className="mjb-sidelabel" style={{ flex: 1 }}>وب‌سایت‌ساز</span>
+            <span className="mjb-sidelabel" style={{ fontSize: 11, transition: 'transform .2s', transform: wbOpen ? 'rotate(90deg)' : 'none' }}>‹</span>
+          </button>
+          {wbOpen && WEBSITE_VIEWS.map(v => {
+            const on = wbView === v.id
+            return (
+              <button key={v.id} onClick={() => openWb(v.id)} className="mjb-sidelabel" style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+                padding: '8px 14px', paddingRight: 34, borderRadius: 10, border: 'none', cursor: 'pointer',
+                background: on ? 'var(--goldDim)' : 'transparent',
+                color: on ? 'var(--gold)' : 'var(--muted)',
+                fontWeight: on ? 700 : 500, fontSize: 13, textAlign: 'right', marginBottom: 2, fontFamily: FONT,
+              }}>
+                <span style={{ fontSize: 13, width: 16, textAlign: 'center', opacity: on ? 1 : 0.6 }}>{v.icon}</span>
+                <span style={{ flex: 1 }}>{v.label}</span>
+              </button>
+            )
+          })}
         </nav>
 
         {/* Build progress card */}
@@ -262,7 +379,7 @@ export default function BuilderPage() {
           borderBottom: '1px solid var(--line)', padding: '0 24px', height: 64,
           display: 'flex', alignItems: 'center', gap: 16,
         }}>
-          <h2 style={{ fontSize: 17, fontWeight: 700, flex: 1 }}>{VIEW_TITLES[view]}</h2>
+          <h2 style={{ fontSize: 17, fontWeight: 700, flex: 1 }}>{crmView ? `CRM · ${CRM_VIEWS.find(v => v.id === crmView)?.label || ''}` : mktView ? `مارکتینگ · ${MARKETING_VIEWS.find(v => v.id === mktView)?.label || ''}` : wfView ? `اتوماسیون · ${WORKFLOW_VIEWS.find(v => v.id === wfView)?.label || ''}` : wbView ? `وب‌سایت‌ساز · ${WEBSITE_VIEWS.find(v => v.id === wbView)?.label || ''}` : VIEW_TITLES[view]}</h2>
 
           {/* Project switcher */}
           <div style={{ position: 'relative' }}>
@@ -309,7 +426,11 @@ export default function BuilderPage() {
 
         {/* Content */}
         <main style={{ flex: 1, padding: 24, overflow: 'auto' }}>
-          {!project ? (
+          {crmView ? <CrmTool embedded view={crmView} onView={v => setCrmView(v)} />
+            : mktView ? <MarketingTool embedded view={mktView} onView={v => setMktView(v)} />
+            : wfView ? <div style={{ height: 'calc(100vh - 130px)' }}><WorkflowTool embedded view={wfView} onView={v => setWfView(v)} /></div>
+            : wbView ? <div style={{ height: 'calc(100vh - 130px)' }}><WebsiteBuilderTool embedded view={wbView} onView={v => setWbView(v)} /></div>
+            : !project ? (
             <div style={{ textAlign: 'center', color: 'var(--muted)', padding: '80px 0', fontSize: 14 }}>در حال بارگذاری پروژه…</div>
           ) : (
             <>
