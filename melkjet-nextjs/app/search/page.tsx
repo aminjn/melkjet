@@ -490,8 +490,10 @@ function SearchPageInner() {
 
           {/* loading / empty */}
           {(loading || shownProperties.length === 0) && (
-            <div style={{ padding: '60px 24px', textAlign: 'center', color: 'var(--muted)', fontSize: 14 }}>
-              {loading ? 'در حال بارگذاری آگهی‌ها…' : 'هنوز آگهی‌ای ثبت نشده. از پنل مدیریت، منبع اسکرپ اضافه و اجرا کنید.'}
+            <div style={{ padding: '60px 24px', textAlign: 'center', color: 'var(--muted)', fontSize: 14, lineHeight: 1.9 }}>
+              {loading ? 'در حال بارگذاری آگهی‌ها…'
+                : properties.length === 0 ? 'هنوز آگهی‌ای ثبت نشده.'
+                : `هیچ آگهی${dealType === 'اجاره' ? 'ِ اجاره‌ای' : dealType === 'رهن' ? 'ِ رهنی' : dealType === 'پیش‌فروش' ? 'ِ پیش‌فروشی' : 'ِ فروشی'} با این فیلترها پیدا نشد. برای دیدنِ بقیه، نوع معامله (خرید/اجاره/پیش‌فروش) را عوض کنید.`}
             </div>
           )}
 
