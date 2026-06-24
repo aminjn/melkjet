@@ -76,23 +76,26 @@ export default function PropertyPage() {
   const [askMsgs, setAskMsgs] = useState<{ role: 'user' | 'ai'; text: string }[]>([])
   const [asking, setAsking] = useState(false)
   // چت با صاحب آگهی (در پنل خریدار هم ذخیره می‌شود)
-  const [ownerThread, setOwnerThread] = useState<{ from: 'buyer' | 'owner'; text: string; ai?: boolean }[]>([])
+  const [ownerThread, setOwnerThread] = useState<{ from: 'buyer' | 'owner'; text: string }[]>([])
   const [ownerInput, setOwnerInput] = useState('')
   const [ownerBusy, setOwnerBusy] = useState(false)
+  const [ownerSent, setOwnerSent] = useState('')
   const [chatNeedLogin, setChatNeedLogin] = useState(false)
 
   const sendOwnerChat = async (q?: string) => {
     const content = (q ?? ownerInput).trim()
     if (!content || !item || ownerBusy) return
-    setOwnerInput(''); setOwnerBusy(true); setChatNeedLogin(false)
-    setOwnerThread(t => [...t, { from: 'buyer', text: content }])
+    const ownerPhone = String((item.meta as Record<string, string> | undefined)?.__ownerPhone || '').trim()
+    setOwnerBusy(true); setChatNeedLogin(false); setOwnerSent('')
     try {
-      const r = await fetch('/api/buyer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'propertyChat', propertyId: item.id, propertyTitle: item.title, ownerName: item.owner || 'صاحب آگهی', text: content }) })
-      if (r.status === 401) { setChatNeedLogin(true); setOwnerThread(t => t.slice(0, -1)); setOwnerInput(content); return }
+      const r = await fetch('/api/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'start', listingId: item.id, listingTitle: item.title, ownerPhone, ownerName: item.owner || 'صاحب آگهی', text: content }) })
+      if (r.status === 401) { setChatNeedLogin(true); setOwnerInput(content); return }
       const d = await r.json().catch(() => ({}))
-      if (!r.ok || !d.conversation) { setOwnerThread(t => [...t, { from: 'owner', text: '⚠ ' + (d.error || 'خطا در ارسال') }]); return }
-      setOwnerThread(d.conversation.messages.map((m: { from: 'buyer' | 'owner'; text: string; ai?: boolean }) => ({ from: m.from, text: m.text, ai: m.ai })))
-    } catch { setOwnerThread(t => [...t, { from: 'owner', text: '⚠ خطا در ارتباط' }]) } finally { setOwnerBusy(false) }
+      if (!r.ok) { setOwnerSent('⚠ ' + (d.error || 'ارسال نشد')); return }
+      setOwnerInput('')
+      setOwnerThread(t => [...t, { from: 'buyer', text: content }])
+      setOwnerSent('✓ پیام شما برای صاحب آگهی ارسال شد. پاسخ را در پنل کاربری‌تان، بخش «گفتگوها» می‌بینید.')
+    } catch { setOwnerSent('⚠ خطا در ارتباط') } finally { setOwnerBusy(false) }
   }
 
   const sendAsk = async (q?: string) => {
@@ -409,24 +412,21 @@ export default function PropertyPage() {
               <div style={{ ...card, border: '1px solid var(--gold)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
                   <span style={{ width: 30, height: 30, borderRadius: 9, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16140f', fontWeight: 800 }}>💬</span>
-                  <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 13.5 }}>چت با صاحب آگهی</div><div style={{ fontSize: 11, color: 'var(--muted)' }}>{item.owner || 'صاحب آگهی'} · پاسخ سریع</div></div>
+                  <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 13.5 }}>چت با صاحب آگهی</div><div style={{ fontSize: 11, color: 'var(--muted)' }}>{item.owner || 'صاحب آگهی'} · پاسخِ شخصِ آگهی‌دهنده</div></div>
                 </div>
 
                 {ownerThread.length > 0 && (
                   <div style={{ maxHeight: 240, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
                     {ownerThread.map((m, i) => (
-                      <div key={i} style={{ display: 'flex', justifyContent: m.from === 'buyer' ? 'flex-start' : 'flex-end' }}>
-                        <div style={{ maxWidth: '85%', padding: '8px 11px', borderRadius: 12, fontSize: 12.5, lineHeight: 1.7, whiteSpace: 'pre-wrap', ...(m.from === 'buyer'
-                          ? { background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', borderTopRightRadius: 4 }
-                          : { background: 'var(--bg2)', border: '1px solid var(--line)', borderTopLeftRadius: 4 }) }}>
+                      <div key={i} style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                        <div style={{ maxWidth: '85%', padding: '8px 11px', borderRadius: 12, fontSize: 12.5, lineHeight: 1.7, whiteSpace: 'pre-wrap', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', borderTopRightRadius: 4 }}>
                           {m.text}
-                          {m.from === 'owner' && m.ai && <span style={{ display: 'block', fontSize: 9.5, color: 'var(--faint)', marginTop: 3 }}>✨ پاسخ خودکار</span>}
                         </div>
                       </div>
                     ))}
-                    {ownerBusy && <div style={{ alignSelf: 'flex-end', fontSize: 11.5, color: 'var(--muted)' }}>در حال پاسخ…</div>}
                   </div>
                 )}
+                {ownerSent && <div style={{ fontSize: 11.5, color: ownerSent.startsWith('✓') ? 'var(--gold)' : '#ef4444', marginBottom: 10, lineHeight: 1.7 }}>{ownerSent}</div>}
 
                 {ownerThread.length === 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>

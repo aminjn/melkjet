@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import JalaliDatePicker from '@/app/components/JalaliDatePicker'
 import NumberInput from '@/app/components/NumberInput'
+import MessagesPanel from '@/app/components/MessagesPanel'
 
 // ════════════════════════════════════════════════════════
 //  Types (mirror app/lib/buyer-store.ts API shape)
@@ -499,61 +500,7 @@ export default function BuyerPage() {
           </div>}
 
           {/* ─── CHAT WITH OWNER ─── */}
-          {view === 'chat' && <div className="mjb-cols" style={{ display: 'flex', gap: 16, height: '100%' }}>
-            {/* conversation list */}
-            <div style={{ ...card, padding: 14, flex: '0 0 280px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ fontWeight: 800, fontSize: 14, padding: '2px 4px' }}>گفتگوها</div>
-              <a href="/search" style={{ ...card, padding: '12px 14px', background: 'var(--bg2)', borderColor: 'color-mix(in srgb,var(--gold) 30%,transparent)', textDecoration: 'none', color: 'var(--text)', display: 'block' }}>
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--gold)', marginBottom: 4 }}>💬 شروع گفتگوی جدید</div>
-                <div style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.7 }}>برای چت با صاحب یک ملک، وارد صفحهٔ آگهی شو و روی «چت با صاحب آگهی» بزن — گفتگو همین‌جا ذخیره می‌شود.</div>
-              </a>
-              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {conversations.map(c => (
-                  <button key={c.id} onClick={() => setActiveConv(c.id)} style={{ textAlign: 'right', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--line)', background: activeConv === c.id ? 'var(--goldDim)' : 'var(--bg)', cursor: 'pointer', fontFamily: FONT }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: activeConv === c.id ? 'var(--gold)' : 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.propertyTitle}</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.ownerName} · {c.messages[c.messages.length - 1]?.text || ''}</div>
-                  </button>
-                ))}
-                {conversations.length === 0 && <div style={{ color: 'var(--faint)', fontSize: 12.5, textAlign: 'center', padding: '20px 0' }}>هنوز گفتگویی نداری — از صفحهٔ یک آگهی شروع کن.</div>}
-              </div>
-            </div>
-
-            {/* thread */}
-            <div style={{ ...card, padding: 0, flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-              {!currentConv ? (
-                <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--muted)', padding: 40 }}>
-                  <div style={{ fontSize: 38, marginBottom: 10 }}>💬</div>
-                  <div style={{ fontSize: 14 }}>یک گفتگو را انتخاب کن یا گفتگوی جدید بساز.</div>
-                </div>
-              ) : <>
-                <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 10, background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, flexShrink: 0 }}>🏠</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 800, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{currentConv.propertyTitle}</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{currentConv.ownerName}</div>
-                  </div>
-                </div>
-                <div style={{ flex: 1, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 280 }}>
-                  {currentConv.messages.map(m => (
-                    <div key={m.id} style={{ display: 'flex', justifyContent: m.from === 'buyer' ? 'flex-start' : 'flex-end' }}>
-                      <div style={{ maxWidth: '78%', padding: '10px 13px', borderRadius: 14, fontSize: 13.5, lineHeight: 1.8, whiteSpace: 'pre-wrap', ...(m.from === 'buyer'
-                        ? { background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', borderTopRightRadius: 4 }
-                        : { background: 'var(--bg2)', border: '1px solid var(--line)', borderTopLeftRadius: 4 }) }}>
-                        {m.text}
-                        {m.from === 'owner' && m.ai && <span style={{ display: 'block', fontSize: 10, color: 'var(--faint)', marginTop: 4 }}>✨ پاسخ خودکار</span>}
-                      </div>
-                    </div>
-                  ))}
-                  {chatSending && <div style={{ alignSelf: 'flex-end', fontSize: 12, color: 'var(--muted)', padding: '4px' }}>در حال پاسخ…</div>}
-                </div>
-                <form onSubmit={e => { e.preventDefault(); sendChat() }} style={{ padding: 14, borderTop: '1px solid var(--line)', display: 'flex', gap: 8 }}>
-                  <button type="button" onClick={draftReply} disabled={drafting} title="پیشنهاد متن با هوش مصنوعی" style={{ ...actionBtn, color: 'var(--gold)', borderColor: 'color-mix(in srgb,var(--gold) 35%,transparent)', flexShrink: 0 }}>{drafting ? '…' : '✨'}</button>
-                  <input value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="پیامت را بنویس…" style={{ ...inputStyle, flex: 1 }} />
-                  <button type="submit" disabled={chatSending || !chatInput.trim()} style={{ padding: '9px 20px', borderRadius: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13.5, border: 'none', cursor: 'pointer', fontFamily: FONT, opacity: chatSending || !chatInput.trim() ? .6 : 1 }}>ارسال</button>
-                </form>
-              </>}
-            </div>
-          </div>}
+          {view === 'chat' && <div style={{ height: '100%' }}><MessagesPanel role="buyer" /></div>}
 
           {/* ─── SELLING (my listings / inquiries / offers received) ─── */}
           {view === 'selling' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

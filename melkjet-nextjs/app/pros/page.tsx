@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import AssistantPanel from '@/app/components/AssistantPanel'
+import MessagesPanel from '@/app/components/MessagesPanel'
 import CrmTool, { CRM_VIEWS, type CrmView } from '@/app/components/tools/CrmTool'
 import MarketingTool, { MARKETING_VIEWS, type MarketingView } from '@/app/components/tools/MarketingTool'
 import WorkflowTool, { WORKFLOW_VIEWS, type WorkflowView } from '@/app/components/tools/WorkflowTool'
@@ -44,7 +45,7 @@ interface Stats {
 }
 interface AdvisorData { stats: Stats; leads: Lead[]; listings: Listing[]; appts: Appt[]; commissions: Commission[] }
 
-type View = 'dashboard' | 'assistant' | 'leads' | 'listings' | 'divar' | 'articles' | 'appts' | 'calendar' | 'commissions' | 'agency' | 'settings'
+type View = 'dashboard' | 'assistant' | 'messages' | 'leads' | 'listings' | 'divar' | 'articles' | 'appts' | 'calendar' | 'commissions' | 'agency' | 'settings'
 
 interface DivarImport { token: string; listingId: string; title: string; url: string; at: number; published: boolean }
 interface DivarConfig {
@@ -92,10 +93,11 @@ const inputStyle: React.CSSProperties = { padding: '9px 11px', borderRadius: 9, 
 const actionBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap' }
 const goldBtn: React.CSSProperties = { padding: '9px 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }
 
-const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد مشاور', assistant: 'دستیار هوشمند', leads: 'لیدها و پایپ‌لاین', listings: 'فایل‌های من', divar: 'ایمپورت از دیوار', articles: 'مقالات و وبلاگ', appts: 'قرارها و بازدیدها', calendar: 'تقویم', commissions: 'کمیسیون', agency: 'آژانس من', settings: 'تنظیمات' }
+const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد مشاور', assistant: 'دستیار هوشمند', messages: 'پیام‌ها', leads: 'لیدها و پایپ‌لاین', listings: 'فایل‌های من', divar: 'ایمپورت از دیوار', articles: 'مقالات و وبلاگ', appts: 'قرارها و بازدیدها', calendar: 'تقویم', commissions: 'کمیسیون', agency: 'آژانس من', settings: 'تنظیمات' }
 const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'leads' | 'appts' }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: '▦' },
   { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
+  { id: 'messages', label: 'پیام‌ها', icon: '💬' },
   { id: 'leads', label: 'لیدها', icon: '◎', badge: 'leads' },
   { id: 'listings', label: 'فایل‌های من', icon: '◫' },
   { id: 'divar', label: 'ایمپورت از دیوار', icon: '📥' },
@@ -535,6 +537,9 @@ export default function ProsPage() {
               <AssistantPanel panel="pros" title="دستیار هوشمند مشاور" subtitle="مشاور AI شخصیِ تو" suggestions={["یک پیام پیگیری حرفه‌ای برای لید بنویس", "قیمت منطقهٔ … را تحلیل کن", "اسکریپت مذاکره برای فروش بده", "چطور این لید را به معامله برسانم؟"]} />
             </div>
           )}
+
+          {/* MESSAGES — گفتگوی واقعی با خریدارانِ آگهی‌های شما */}
+          {view === 'messages' && <MessagesPanel role="owner" />}
 
           {/* LEADS */}
           {view === 'leads' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
