@@ -19,6 +19,23 @@ interface Block {
   props: Record<string, any>
 }
 
+// A real page: its own slug, title and block list. pages[0] is the home page.
+interface Page {
+  slug: string
+  title: string
+  blocks: Block[]
+}
+
+// Make a url-safe slug (mirrors sites-store.sanitizeSlug).
+function slugify(raw: string): string {
+  return String(raw || '')
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
 interface Theme {
   primary: string
   font?: string
@@ -617,11 +634,21 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
   const activeView: WebsiteView = viewProp ?? internalView
   const setActiveView = (v: WebsiteView) => { onView ? onView(v) : setInternalView(v) }
 
-  const [blocks, setBlocks] = useState<Block[]>([
-    makeBlock('hero'),
-    makeBlock('search'),
-    makeBlock('listings'),
+  // REAL pages: the editor edits the ACTIVE page's blocks. pages[0] is home.
+  const [pages, setPages] = useState<Page[]>([
+    { slug: 'home', title: 'صفحه اصلی', blocks: [makeBlock('hero'), makeBlock('search'), makeBlock('listings')] },
   ])
+  const [activePage, setActivePage] = useState(0)
+
+  // `blocks` / `setBlocks` reflect & write the ACTIVE page, so every block op
+  // (add/select/inspector/reorder/delete/template) applies to it transparently.
+  const blocks: Block[] = pages[activePage]?.blocks ?? []
+  const setBlocks = (updater: Block[] | ((prev: Block[]) => Block[])) => {
+    setPages(prev => prev.map((pg, i) => i === activePage
+      ? { ...pg, blocks: typeof updater === 'function' ? (updater as (p: Block[]) => Block[])(pg.blocks) : updater }
+      : pg))
+  }
+  const [ownerName, setOwnerName] = useState('')
   const [selectedBlock, setSelectedBlock] = useState<number | null>(null)
   const [tplFilter, setTplFilter] = useState('عمومی')
   // پروفایل قفل‌شده بر اساس نقش کاربر؛ null یعنی مهمان/ادمین (می‌تواند همه را ببیند)
@@ -640,14 +667,8 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
   const [history, setHistory] = useState<Block[][]>([])
   const [theme, setTheme] = useState<Theme>({ ...DEFAULT_THEME })
   const [uploadingKey, setUploadingKey] = useState<string | null>(null)
-  const [pages, setPages] = useState([
-    { id: 'home', label: 'صفحه اصلی', active: true },
-    { id: 'listings', label: 'فایل‌ها / محصولات', active: false },
-    { id: 'about', label: 'درباره ما', active: false },
-    { id: 'contact', label: 'تماس', active: false },
-  ])
 
-  // اسکوپ خودکار قالب‌ها بر اساس نقش کاربر واردشده
+  // اسکوپ خودکار قالب‌ها بر اساس نقش کاربر واردشده + نام کاربر (برای «آگهی‌های من»)
   useEffect(() => {
     let cancelled = false
     fetch('/api/auth/profile')
@@ -658,9 +679,39 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
         // ادمین/داشبورد ناشناخته → قفل نمی‌شود تا بتواند همه را مرور کند.
         const mapped = DASH_TO_PROFILE[data.dash as string]
         if (mapped) { setTplFilter(mapped); setLockedProfile(mapped) }
+        // نام نمایشی کاربر — برای تطبیق آگهی‌های منتشرشده در بلوک «آگهی‌های من».
+        if (data.account?.name) setOwnerName(String(data.account.name))
       })
       .catch(() => { /* در صورت خطا روی پیش‌فرض «عمومی» می‌ماند */ })
     return () => { cancelled = true }
+  }, [])
+
+  // On mount, load the user's existing saved site (by the default slug) and
+  // populate the real pages if it already exists.
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/sites?slug=${encodeURIComponent(slug)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (cancelled || !data?.site) return
+        const s = data.site
+        if (Array.isArray(s.pages) && s.pages.length) {
+          setPages(s.pages.map((pg: any, i: number) => ({
+            slug: i === 0 ? 'home' : slugify(pg.slug || '') || `page-${i}`,
+            title: String(pg.title || '') || (i === 0 ? 'صفحه اصلی' : `صفحه ${i + 1}`),
+            blocks: Array.isArray(pg.blocks) ? pg.blocks.map(migrateBlock) : [],
+          })))
+          setActivePage(0)
+          setSelectedBlock(null)
+        }
+        if (s.theme?.primary) setTheme({ primary: String(s.theme.primary), ...(s.theme.font ? { font: String(s.theme.font) } : {}) })
+        if (s.seo?.title) setSeoTitle(String(s.seo.title))
+        if (s.seo?.description) setSeoDesc(String(s.seo.description))
+        if (s.ownerName) setOwnerName(String(s.ownerName))
+      })
+      .catch(() => { /* no saved site yet — keep the starter page */ })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const pushHistory = (b: Block[]) => setHistory(h => [...h.slice(-19), b])
@@ -774,8 +825,45 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
 
   const canvasWidth: string | number = device === 'mobile' ? 375 : device === 'tablet' ? 768 : '100%'
 
+  // ── Page management (real pages) ───────────────────────────────────────────
+  // Ensure a slug is url-safe and unique within the site (skipping `skipIdx`).
+  const uniquePageSlug = (raw: string, skipIdx: number): string => {
+    let base = slugify(raw) || 'page'
+    let candidate = base
+    let n = 2
+    while (pages.some((pg, i) => i !== skipIdx && pg.slug === candidate)) { candidate = `${base}-${n++}` }
+    return candidate
+  }
+
   const addPage = () => {
-    setPages(prev => [...prev, { id: `page_${Date.now()}`, label: 'صفحه جدید', active: false }])
+    const idx = pages.length
+    const slugVal = uniquePageSlug(`page-${idx + 1}`, -1)
+    const newPage: Page = { slug: slugVal, title: 'صفحه جدید', blocks: [makeBlock('hero')] }
+    setPages(prev => [...prev, newPage])
+    setActivePage(idx)
+    setSelectedBlock(null)
+  }
+
+  const selectPage = (idx: number) => {
+    setActivePage(idx)
+    setSelectedBlock(null)
+  }
+
+  const renamePage = (idx: number, title: string, rawSlug: string) => {
+    setPages(prev => prev.map((pg, i) => {
+      if (i !== idx) return pg
+      // pages[0] is always the home page — its slug stays 'home'.
+      const slugVal = idx === 0 ? 'home' : uniquePageSlug(rawSlug || title, idx)
+      return { ...pg, title, slug: slugVal }
+    }))
+  }
+
+  const deletePage = (idx: number) => {
+    // Never delete the last page or the home page (pages[0]).
+    if (pages.length <= 1 || idx === 0) return
+    setPages(prev => prev.filter((_, i) => i !== idx))
+    setActivePage(a => (a >= idx ? Math.max(0, a - 1) : a))
+    setSelectedBlock(null)
   }
 
   // Persist the current site (draft). Returns the server-resolved slug, or null on failure.
@@ -786,9 +874,14 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
       body: JSON.stringify({
         slug,
         title: seoTitle,
-        blocks: blocks.map(b => ({ id: b.id, type: b.type, props: b.props })),
-        seo: { title: seoTitle, description: seoDesc },
         theme,
+        ownerName,
+        seo: { title: seoTitle, description: seoDesc },
+        pages: pages.map(pg => ({
+          slug: pg.slug,
+          title: pg.title,
+          blocks: pg.blocks.map(b => ({ id: b.id, type: b.type, props: b.props })),
+        })),
       }),
     })
     if (!res.ok) return null
@@ -1297,26 +1390,57 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
               </div>
             )}
 
-            {/* Pages Tab */}
+            {/* Pages Tab — REAL pages: select-to-edit, rename, delete, add */}
             {activeTab === 'pages' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', marginBottom: 4 }}>صفحات سایت</div>
-                {pages.map((page, idx) => (
-                  <div
-                    key={page.id}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '10px 12px', borderRadius: 10,
-                      background: idx === 0 ? 'var(--goldDim)' : 'var(--surface)',
-                      border: `1px solid ${idx === 0 ? 'var(--gold)' : 'var(--line)'}`,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <span style={{ fontSize: 12, color: idx === 0 ? 'var(--gold)' : 'var(--faint)' }}>◰</span>
-                    <span style={{ fontSize: 12, fontWeight: idx === 0 ? 700 : 400, color: idx === 0 ? 'var(--gold)' : 'var(--text)' }}>{page.label}</span>
-                    {idx === 0 && <span style={{ marginRight: 'auto', fontSize: 9, color: 'var(--gold)', background: 'rgba(201,168,76,0.2)', padding: '2px 7px', borderRadius: 10 }}>فعال</span>}
-                  </div>
-                ))}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>صفحات سایت</div>
+                {pages.map((page, idx) => {
+                  const isActive = idx === activePage
+                  const isHome = idx === 0
+                  return (
+                    <div
+                      key={idx}
+                      style={{
+                        borderRadius: 10,
+                        background: isActive ? 'var(--goldDim)' : 'var(--surface)',
+                        border: `1px solid ${isActive ? 'var(--gold)' : 'var(--line)'}`,
+                        padding: 10,
+                        display: 'flex', flexDirection: 'column', gap: 8,
+                      }}
+                    >
+                      <div onClick={() => selectPage(idx)} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                        <span style={{ fontSize: 12, color: isActive ? 'var(--gold)' : 'var(--faint)' }}>{isHome ? '⌂' : '◰'}</span>
+                        <span style={{ fontSize: 12.5, fontWeight: isActive ? 800 : 600, color: isActive ? 'var(--gold)' : 'var(--text)', flex: 1 }}>{page.title}</span>
+                        {isHome && <span style={{ fontSize: 9, color: 'var(--gold)', background: 'rgba(201,168,76,0.2)', padding: '2px 7px', borderRadius: 10 }}>خانه</span>}
+                        {isActive && !isHome && <span style={{ fontSize: 9, color: 'var(--gold)', background: 'rgba(201,168,76,0.2)', padding: '2px 7px', borderRadius: 10 }}>فعال</span>}
+                      </div>
+                      {isActive && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          <div>
+                            <label style={{ fontSize: 10, color: 'var(--faint)', display: 'block', marginBottom: 3 }}>عنوان صفحه</label>
+                            <input value={page.title} onChange={e => renamePage(idx, e.target.value, page.slug)} style={INSPECTOR_INPUT} />
+                          </div>
+                          {!isHome && (
+                            <div>
+                              <label style={{ fontSize: 10, color: 'var(--faint)', display: 'block', marginBottom: 3 }}>آدرس صفحه (slug)</label>
+                              <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--line)', borderRadius: 8, overflow: 'hidden', background: 'var(--surface)', direction: 'ltr' }}>
+                                <span style={{ padding: '8px 8px', background: 'var(--bg)', borderRight: '1px solid var(--line)', fontSize: 9.5, color: 'var(--faint)', flexShrink: 0 }}>/{slug}/</span>
+                                <input value={page.slug} onChange={e => renamePage(idx, page.title, e.target.value)} style={{ flex: 1, padding: '8px 8px', background: 'transparent', border: 'none', color: 'var(--text)', fontSize: 12, outline: 'none', direction: 'ltr' }} />
+                              </div>
+                            </div>
+                          )}
+                          <div style={{ fontSize: 10, color: 'var(--faint)' }}>{page.blocks.length} بلوک</div>
+                          {!isHome && (
+                            <button
+                              onClick={() => deletePage(idx)}
+                              style={{ padding: '7px', borderRadius: 8, border: '1px solid rgba(220,60,60,0.4)', background: 'rgba(220,60,60,0.08)', color: '#e05050', cursor: 'pointer', fontSize: 11.5, fontWeight: 700 }}
+                            >× حذف صفحه</button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
                 <button
                   onClick={addPage}
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px', borderRadius: 10, border: '1px dashed var(--line)', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontWeight: 700, marginTop: 4 }}

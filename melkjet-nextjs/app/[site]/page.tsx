@@ -1,10 +1,12 @@
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
-import { getSite, type Site, type SiteBlock } from '@/app/lib/sites-store'
+import { getSite, getSitePage, type Site, type SitePage, type SiteBlock } from '@/app/lib/sites-store'
+import { listItems, type Item } from '@/app/lib/scraper-store'
 
 // Public renderer for builder-published sites living at melkjet.com/{slug}.
 // Existing static single-segment routes (search, owner, ...) take precedence;
-// this dynamic segment only catches unknown single-segment paths.
+// this dynamic segment only catches unknown single-segment paths. Sub-pages live
+// at /{slug}/{pageSlug} (app/[site]/[page]/page.tsx) and reuse the helpers here.
 //
 // Rendering mirrors the builder's BlockBody (app/components/tools/WebsiteBuilderTool.tsx),
 // reading each block's `props` and the site `theme.primary`.
@@ -16,14 +18,29 @@ export async function generateMetadata(
   const site = getSite(slug)
   if (!site) return {}
   return {
-    title: site.seo.title || site.title,
-    description: site.seo.description || undefined,
+    title: site.seo?.title || site.title,
+    description: site.seo?.description || undefined,
   }
 }
 
 // Helper: read a prop with fallback.
 function p(block: SiteBlock): Record<string, any> {
   return (block.props || {}) as Record<string, any>
+}
+
+// ── Owner listings: resolve the site owner's REAL published listings ──────────
+// Mirrors the article↔listing owner match (app/api/content/route.ts): normalise
+// whitespace + lowercase and compare for equality against item.owner.
+function normOwner(s: string): string {
+  return (s || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase()
+}
+
+function ownerListings(ownerName: string | undefined, count: number): Item[] {
+  const want = normOwner(ownerName || '')
+  if (!want) return []
+  return listItems('listing', { publicOnly: true })
+    .filter(it => normOwner(it.owner || '') === want)
+    .slice(0, count)
 }
 
 function HeroBlock({ block, primary }: { block: SiteBlock; primary: string }) {
@@ -53,15 +70,51 @@ function SearchBlock({ block, primary }: { block: SiteBlock; primary: string }) 
   )
 }
 
-function ListingsBlock({ block, primary }: { block: SiteBlock; primary: string }) {
+function ListingsBlock({ block, primary, ownerName }: { block: SiteBlock; primary: string; ownerName?: string }) {
   const props = p(block)
-  const n = Math.max(1, Math.min(12, Number(props.count) || 3))
+  const n = Math.max(1, Math.min(12, Number(props.count) || 6))
   const grads = ['#2d2215,#1e1a12', '#1e2215,#141a10', '#15202d,#101828', '#251528,#1a0e1e', '#152825,#0e1a18', '#2d1515,#1e0e0e']
+
+  // Real listings: pull the owner's own published listings.
+  if (props.source === 'mine') {
+    const items = ownerListings(ownerName, n)
+    return (
+      <section id="listings" style={{ background: '#fff', padding: '56px 24px', direction: 'rtl' }}>
+        <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+          <h2 style={{ fontSize: 26, fontWeight: 800, color: '#1a1510', marginBottom: 18 }}>{props.heading}</h2>
+          {items.length === 0 ? (
+            <div style={{ background: '#f5f3ef', border: '1px dashed #ddd', borderRadius: 14, padding: '40px 24px', textAlign: 'center', color: '#888', fontSize: 14 }}>
+              هنوز آگهی منتشرشده‌ای برای نمایش وجود ندارد.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 18 }}>
+              {items.map((it, i) => (
+                <a key={it.id} href={`/property/${it.id}`} style={{ background: '#f5f3ef', borderRadius: 14, overflow: 'hidden', border: '1px solid #eee', textDecoration: 'none', display: 'block' }}>
+                  {it.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={it.image} alt="" style={{ width: '100%', height: 150, objectFit: 'cover', display: 'block' }} />
+                  ) : (
+                    <div style={{ height: 150, background: `linear-gradient(135deg,${grads[i % grads.length]})` }} />
+                  )}
+                  <div style={{ padding: 16 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: '#1a1510', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.title}</div>
+                    <div style={{ fontSize: 12, color: '#888', marginBottom: 10 }}>{it.location || 'موقعیت نامشخص'}</div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: primary }}>{it.price || 'قیمت توافقی'}</div>
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+    )
+  }
+
+  // Sample cards (source === 'sample' or unset).
   return (
     <section id="listings" style={{ background: '#fff', padding: '56px 24px', direction: 'rtl' }}>
       <div style={{ maxWidth: 1000, margin: '0 auto' }}>
-        <h2 style={{ fontSize: 26, fontWeight: 800, color: '#1a1510', marginBottom: 8 }}>{props.heading}</h2>
-        {props.source === 'mine' ? <p style={{ fontSize: 13, color: primary, marginBottom: 18 }}>این بخش آگهی‌های ثبت‌شدهٔ شما را نمایش می‌دهد.</p> : <div style={{ marginBottom: 18 }} />}
+        <h2 style={{ fontSize: 26, fontWeight: 800, color: '#1a1510', marginBottom: 18 }}>{props.heading}</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 18 }}>
           {Array.from({ length: n }).map((_, i) => (
             <div key={i} style={{ background: '#f5f3ef', borderRadius: 14, overflow: 'hidden', border: '1px solid #eee' }}>
@@ -239,11 +292,12 @@ function FooterBlock({ block, primary }: { block: SiteBlock; primary: string }) 
   )
 }
 
-function renderBlock(block: SiteBlock, primary: string) {
+// Render one block. `ownerName` powers the real «آگهی‌های من» listings.
+function renderBlock(block: SiteBlock, primary: string, ownerName?: string) {
   switch (block.type) {
     case 'hero': return <HeroBlock key={block.id} block={block} primary={primary} />
     case 'search': return <SearchBlock key={block.id} block={block} primary={primary} />
-    case 'listings': return <ListingsBlock key={block.id} block={block} primary={primary} />
+    case 'listings': return <ListingsBlock key={block.id} block={block} primary={primary} ownerName={ownerName} />
     case 'services': return <ServicesBlock key={block.id} block={block} primary={primary} />
     case 'about': return <AboutBlock key={block.id} block={block} />
     case 'stats': return <StatsBlock key={block.id} block={block} primary={primary} />
@@ -261,6 +315,43 @@ function renderBlock(block: SiteBlock, primary: string) {
   }
 }
 
+// Top nav listing every page of the site, themed. Home → /{slug}, others → /{slug}/{pageSlug}.
+function SiteNav({ site, primary, currentSlug }: { site: Site; primary: string; currentSlug: string }) {
+  return (
+    <nav style={{ background: '#fff', borderBottom: '1px solid #eee', padding: '0 24px', direction: 'rtl', position: 'sticky', top: 0, zIndex: 50 }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 18, height: 58, flexWrap: 'wrap' }}>
+        <a href={`/${site.slug}`} style={{ fontSize: 17, fontWeight: 900, color: '#1a1510', textDecoration: 'none', marginLeft: 'auto' }}>{site.title}</a>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {site.pages.map((pg, i) => {
+            const href = i === 0 ? `/${site.slug}` : `/${site.slug}/${pg.slug}`
+            const active = pg.slug === currentSlug
+            return (
+              <a key={pg.slug} href={href} style={{
+                fontSize: 13.5, fontWeight: active ? 800 : 600, textDecoration: 'none',
+                color: active ? '#fff' : '#444',
+                background: active ? primary : 'transparent',
+                padding: '7px 14px', borderRadius: 9,
+              }}>{pg.title}</a>
+            )
+          })}
+        </div>
+      </div>
+    </nav>
+  )
+}
+
+// Shared full-site shell: nav + the given page's blocks. Used by both the home
+// route and the [page] sub-route so there's a single source of truth.
+export function SiteShell({ site, page }: { site: Site; page: SitePage }) {
+  const primary = site.theme?.primary || '#c9a84c'
+  return (
+    <main style={{ minHeight: '100vh', background: '#fff', fontFamily: 'Vazirmatn, Tahoma, sans-serif' }}>
+      {site.pages.length > 1 && <SiteNav site={site} primary={primary} currentSlug={page.slug} />}
+      {page.blocks.map(block => renderBlock(block, primary, site.ownerName))}
+    </main>
+  )
+}
+
 export default async function PublishedSitePage(
   { params }: { params: Promise<{ site: string }> }
 ) {
@@ -268,11 +359,6 @@ export default async function PublishedSitePage(
   const site: Site | null = getSite(slug)
   if (!site) notFound()
 
-  const primary = site.theme?.primary || '#c9a84c'
-
-  return (
-    <main style={{ minHeight: '100vh', background: '#fff', fontFamily: 'Vazirmatn, Tahoma, sans-serif' }}>
-      {site.blocks.map(block => renderBlock(block, primary))}
-    </main>
-  )
+  const home = getSitePage(site, 'home')
+  return <SiteShell site={site} page={home} />
 }
