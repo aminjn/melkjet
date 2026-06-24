@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import ThemeToggle from './ThemeToggle'
+import CitySelector from './CitySelector'
 
 // نام داشبورد هر مسیر برای نمایش در دکمهٔ «داشبورد من»
 const DASH_LABEL: Record<string, string> = {
@@ -59,6 +60,9 @@ export default function Nav() {
           </span>
           <span style={{ fontWeight: 800, fontSize: 20, letterSpacing: '-.5px' }}>ملک‌جت</span>
         </Link>
+
+        {/* City selector — همهٔ صفحاتِ پابلیک اول شهر را مشخص می‌کنند */}
+        <CitySelector />
 
         {/* Desktop links */}
         <div className="mj-nav-links mj-navlinks mjs-navlinks" style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 14.5, fontWeight: 500 }}>

@@ -8,6 +8,7 @@ import BannerSlot from '@/app/components/BannerSlot'
 import NeshanMap, { type MapPoint } from '@/app/components/NeshanMap'
 import { fetchContent, gradientFor, type ContentItem } from '@/app/lib/content-display'
 import { readLoc } from '@/app/components/LocationDetector'
+import { readCity } from '@/app/components/CitySelector'
 import { PROPERTY_KINDS } from '@/app/lib/taxonomy'
 
 function seedNum(s: string): number {
@@ -139,12 +140,21 @@ function SearchPageInner() {
   const [checkedAmenities, setCheckedAmenities] = useState<string[]>([])
   const [sortBy, setSortBy] = useState('پیشنهاد ملک‌جت')
 
+  // سوابقِ کاربر/موقعیتِ لحظه‌ای: محلهٔ کاربر + شهرِ انتخابی (یا تشخیص‌داده‌شده)
   const [userArea, setUserArea] = useState('')
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null)
+  const [selectedCity, setSelectedCity] = useState('')
   useEffect(() => {
-    const upd = () => { const l = readLoc(); setUserArea(l?.neighborhood || l?.city || ''); if (l?.lat && l?.lng) setUserLoc({ lat: l.lat, lng: l.lng }) }
-    upd(); window.addEventListener('mj-loc-updated', upd)
-    return () => window.removeEventListener('mj-loc-updated', upd)
+    const upd = () => {
+      const l = readLoc()
+      setUserArea(l?.neighborhood || '')
+      if (l?.lat && l?.lng) setUserLoc({ lat: l.lat, lng: l.lng })
+      setSelectedCity(readCity())
+    }
+    upd()
+    window.addEventListener('mj-loc-updated', upd)
+    window.addEventListener('mj-city-updated', upd)
+    return () => { window.removeEventListener('mj-loc-updated', upd); window.removeEventListener('mj-city-updated', upd) }
   }, [])
 
   const [hoveredCard, setHoveredCard] = useState<string | null>(null)
@@ -199,10 +209,30 @@ function SearchPageInner() {
     })
   }, [properties, dealType, fKind, fBeds, priceMin, fBudgetMax, fSizeMin, fSizeMax, floorMin, yearMin, fAmen, fAreaName, parsed.tokens])
 
+  // ─── فیلترِ هوشمندِ پیش‌فرض (سوابق/موقعیت) با fallback ───────────────────────
+  // اولویت: محلهٔ کاربر → شهرِ کاربر → اگر ملکی نبود، فیلترِ مکان برداشته می‌شود و
+  // همهٔ موارد در همان دسته نشان داده می‌شوند (منطقِ موردِ نظرِ کاربر).
+  const scoped = useMemo(() => {
+    const norm = (s: string) => (s || '').replace(/‌/g, '').replace(/\s/g, '').toLowerCase()
+    const base = filteredProperties
+    const city = selectedCity
+    const area = parsed.area ? '' : userArea   // اگر کاربر صراحتاً محله‌ای جست‌وجو کرده، محلهٔ خانه را اعمال نکن
+    const inCity = (p: PropertyT) => city ? norm(p.location).includes(norm(city)) : true
+    const inArea = (p: PropertyT) => area ? norm(p.location).includes(norm(area)) : true
+    if (city) {
+      const c = base.filter(inCity)
+      if (!c.length) return { list: base, note: city }          // ملکی در شهرِ کاربر نبود → همه را نشان بده
+      if (area) { const a = c.filter(inArea); return { list: a.length ? a : c, note: '' } }
+      return { list: c, note: '' }
+    }
+    if (area) { const a = base.filter(inArea); return a.length ? { list: a, note: '' } : { list: base, note: area } }
+    return { list: base, note: '' }
+  }, [filteredProperties, selectedCity, userArea, parsed.area])
+
   const sortedProperties = useMemo(() => {
     const ar = userArea.replace(/‌/g, '').trim()
     const nearby = (p: { location: string }) => ar ? p.location.replace(/‌/g, '').includes(ar) : false
-    return [...filteredProperties].sort((a, b) => {
+    return [...scoped.list].sort((a, b) => {
       if (sortBy === 'ارزان‌ترین') return a.priceNum - b.priceNum
       if (sortBy === 'گران‌ترین') return b.priceNum - a.priceNum
       if (sortBy === 'جدیدترین') return (b.yearNum || 0) - (a.yearNum || 0)
@@ -210,7 +240,7 @@ function SearchPageInner() {
       if (an !== bn) return an ? -1 : 1
       return b.score - a.score
     })
-  }, [filteredProperties, sortBy, userArea])
+  }, [scoped, sortBy, userArea])
 
   const shownProperties = useMemo(() => {
     const ids = new Set(promoted.map(p => p.id))
@@ -353,8 +383,14 @@ function SearchPageInner() {
       {/* محتوای اصلی */}
       <div className="mjs-grid" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 48px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, alignItems: 'start', minHeight: 'calc(100vh - 200px)' }}>
         <div style={{ paddingTop: 20, paddingLeft: 12 }}>
+          {scoped.note && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--goldDim)', border: '1px solid rgba(201,168,76,0.3)', borderRadius: 12, padding: '11px 14px', marginBottom: 16, fontSize: 12.5, color: 'var(--text)', lineHeight: 1.8 }}>
+              <span style={{ fontSize: 15 }}>✦</span>
+              <span>در «<b style={{ color: 'var(--gold)' }}>{scoped.note}</b>» ملکی در این دسته پیدا نشد؛ برای همین فیلترِ مکان برداشته شد و همهٔ موارد نمایش داده می‌شوند.</span>
+            </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-            <div style={{ fontSize: 14, color: 'var(--muted)' }}><span style={{ color: 'var(--gold)', fontWeight: 800, fontSize: 16 }}>{toPersianDigits(shownProperties.length)}</span> ملک پیدا شد</div>
+            <div style={{ fontSize: 14, color: 'var(--muted)' }}><span style={{ color: 'var(--gold)', fontWeight: 800, fontSize: 16 }}>{toPersianDigits(shownProperties.length)}</span> ملک پیدا شد{selectedCity && !scoped.note ? <span style={{ color: 'var(--faint)' }}> · {selectedCity}</span> : ''}</div>
             <div style={{ fontSize: 13, color: 'var(--faint)' }}>مرتب‌سازی: <span style={{ color: 'var(--muted)' }}>{sortBy}</span></div>
           </div>
 

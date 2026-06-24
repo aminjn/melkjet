@@ -23,6 +23,11 @@ export default function LocationDetector() {
         const d = await r.json()
         const val = JSON.stringify({ city: d.city || '', neighborhood: d.neighborhood || '', lat: latitude, lng: longitude, at: Date.now() })
         document.cookie = `mj_loc=${encodeURIComponent(val)};path=/;max-age=${30 * 86400};SameSite=Lax`
+        // بارِ اول: اگر کاربر هنوز شهری انتخاب نکرده، شهرِ تشخیص‌داده‌شده را پیش‌فرض بگذار
+        if (d.city && !/(?:^|; )mj_city=[^;]+/.test(document.cookie)) {
+          document.cookie = `mj_city=${encodeURIComponent(d.city)};path=/;max-age=${365 * 86400};SameSite=Lax`
+          window.dispatchEvent(new CustomEvent('mj-city-updated'))
+        }
         window.dispatchEvent(new CustomEvent('mj-loc-updated'))
       } catch { /* بی‌سروصدا */ }
     }
