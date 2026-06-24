@@ -32,6 +32,17 @@ interface Profile {
   similarProfiles: SimilarProfile[];
 }
 
+// ─── Real advisor (public API) ─────────────────────────────────────────────────
+
+interface AdvisorListing { id: string; title: string; price?: string; location?: string; image?: string }
+interface AdvisorPublic {
+  phone: string; name: string; title: string; bio: string; contactPhone: string;
+  areas: string; experience: string; photo: string; specialties: string[];
+  agency: { name: string; phone: string } | null;
+  stats: { activeListings: number; deals: number; totalListings: number };
+  listings: AdvisorListing[];
+}
+
 // ─── Static Data ──────────────────────────────────────────────────────────────
 
 const roleTabs: { id: RoleId; label: string; ic: string }[] = [
@@ -535,11 +546,265 @@ const waNumber = (s?: string): string => {
   return d.startsWith('0') ? '98' + d.slice(1) : d
 }
 
+// ─── Shared visual shell helpers ────────────────────────────────────────────────
+
+// The page-level CSS-var theme, reused by both the real and template profiles.
+const themeVars: React.CSSProperties = {
+  '--bg': '#0d0d0f', '--bg2': '#141417', '--surface': '#18181c',
+  '--navbg': 'rgba(13,13,15,0.72)', '--line': 'rgba(255,255,255,0.08)',
+  '--line2': 'rgba(255,255,255,0.14)', '--text': '#f2f1ee',
+  '--muted': '#9a9a98', '--faint': '#6a6a68',
+  '--gold': '#c9a96a', '--gold2': '#e0c489', '--goldDim': 'rgba(201,169,106,0.12)',
+  minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)',
+  fontFamily: "'Vazirmatn', system-ui, sans-serif",
+} as React.CSSProperties
+
+const fa = (n: number) => n.toLocaleString('fa-IR')
+const heroGradients = [
+  'linear-gradient(135deg,#caa86a,#8a6f3e)', 'linear-gradient(135deg,#7a8fae,#465a78)',
+  'linear-gradient(135deg,#9b7ad0,#5e4488)', 'linear-gradient(135deg,#7aa88f,#476e58)',
+  'linear-gradient(135deg,#c97a9a,#7a4458)', 'linear-gradient(135deg,#5b9bd5,#2f5f8a)',
+]
+const cardGradients = [
+  'linear-gradient(135deg,#3a3530,#211e1b)', 'linear-gradient(135deg,#33303a,#1d1b22)',
+  'linear-gradient(135deg,#2f3a34,#1b211e)', 'linear-gradient(135deg,#2c343a,#1a1f23)',
+  'linear-gradient(135deg,#34323c,#1e1d23)', 'linear-gradient(135deg,#3a3630,#221f1b)',
+]
+
+// ─── Real advisor profile page (id = phone) ─────────────────────────────────────
+
+function RealAdvisorProfile({ phone }: { phone: string }) {
+  const [data, setData] = useState<AdvisorPublic | null>(null)
+  const [status, setStatus] = useState<'loading' | 'ok' | 'error'>('loading')
+
+  useEffect(() => {
+    let alive = true
+    setStatus('loading')
+    setData(null)
+    fetch(`/api/advisor/public?phone=${encodeURIComponent(phone)}`)
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error('not-found'))))
+      .then(d => { if (alive) { setData(d as AdvisorPublic); setStatus('ok') } })
+      .catch(() => { if (alive) setStatus('error') })
+    return () => { alive = false }
+  }, [phone])
+
+  const card: React.CSSProperties = {
+    background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 22,
+  }
+
+  // ── Loading state ──
+  if (status === 'loading') {
+    return (
+      <div dir="rtl" style={themeVars}>
+        <Nav />
+        <main style={{ maxWidth: 1100, margin: '0 auto', padding: '60px 22px 120px' }}>
+          <div style={{ ...card, display: 'flex', alignItems: 'center', gap: 18, marginBottom: 18 }}>
+            <div style={{ width: 96, height: 96, borderRadius: 24, background: 'var(--bg2)', flexShrink: 0 }} />
+            <div style={{ flex: 1, display: 'grid', gap: 10 }}>
+              <div style={{ height: 22, width: '40%', borderRadius: 8, background: 'var(--bg2)' }} />
+              <div style={{ height: 14, width: '60%', borderRadius: 7, background: 'var(--bg2)' }} />
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 18 }}>
+            {[0, 1, 2].map(i => <div key={i} style={{ ...card, height: 78 }} />)}
+          </div>
+          <div style={{ ...card, height: 160 }} />
+          <div style={{ textAlign: 'center', marginTop: 30, fontSize: 13, color: 'var(--muted)' }}>در حال بارگذاری پروفایل…</div>
+        </main>
+        <Footer />
+      </div>
+    )
+  }
+
+  // ── Not-found / error state ──
+  if (status === 'error' || !data) {
+    return (
+      <div dir="rtl" style={themeVars}>
+        <Nav />
+        <main style={{ maxWidth: 640, margin: '0 auto', padding: '90px 22px 140px', textAlign: 'center' }}>
+          <div style={{ fontSize: 54, marginBottom: 14 }}>🔍</div>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--text)', margin: '0 0 10px' }}>این پروفایل یافت نشد</h1>
+          <p style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 2, margin: '0 0 26px' }}>
+            مشاوری با این شناسه پیدا نشد یا حساب آن غیرفعال است.
+          </p>
+          <a href="/" style={{ display: 'inline-block', padding: '12px 26px', borderRadius: 13, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 14, textDecoration: 'none' }}>بازگشت به خانه</a>
+        </main>
+        <Footer />
+      </div>
+    )
+  }
+
+  // ── Success ──
+  const initial = (data.name || '').trim().charAt(0) || 'م'
+  const heroAv = heroGradients[(initial.charCodeAt(0) || 0) % heroGradients.length]
+  const metaChips = [data.areas, data.experience].filter(Boolean) as string[]
+  const stats = [
+    { v: data.stats.activeListings, l: 'آگهی فعال' },
+    { v: data.stats.deals, l: 'معاملات' },
+    { v: data.stats.totalListings, l: 'کل آگهی‌ها' },
+  ]
+
+  return (
+    <div dir="rtl" style={themeVars}>
+      <Nav />
+      <main style={{ maxWidth: 1100, margin: '0 auto', padding: '0 22px 90px' }}>
+
+        {/* Hero / header */}
+        <div style={{ position: 'relative', marginTop: 20, borderRadius: 22, overflow: 'hidden', border: '1px solid var(--line)' }}>
+          <div style={{ height: 150, background: 'linear-gradient(120deg,#2a2620,#3a3530)', position: 'relative' }}>
+            <div style={{ position: 'absolute', inset: 0, backgroundImage: 'repeating-linear-gradient(135deg,transparent,transparent 11px,rgba(255,255,255,0.03) 11px,rgba(255,255,255,0.03) 12px)' }} />
+          </div>
+          <div className="mjpp-hero" style={{ display: 'flex', alignItems: 'flex-end', gap: 20, padding: '0 26px 22px', marginTop: -44, position: 'relative', flexWrap: 'wrap' }}>
+            <div style={{
+              width: 96, height: 96, borderRadius: 24, flexShrink: 0,
+              background: data.photo ? `center/cover no-repeat url(${data.photo})` : heroAv,
+              border: '4px solid var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontSize: 34, fontWeight: 800,
+            }}>{data.photo ? '' : initial}</div>
+            <div style={{ flex: 1, minWidth: 0, paddingBottom: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
+                <h1 style={{ fontSize: 'clamp(20px,2.8vw,26px)', fontWeight: 800, color: 'var(--text)', margin: 0 }}>{data.name}</h1>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5, fontWeight: 700, color: '#5fd98a', background: 'rgba(95,217,138,0.12)', border: '1px solid rgba(95,217,138,0.4)', borderRadius: 999, padding: '3px 10px' }}>✓ تأییدشده</span>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--gold)', background: 'var(--goldDim)', border: '1px solid var(--gold)', borderRadius: 999, padding: '3px 11px' }}>{data.title}</span>
+              </div>
+              {/* meta chips + agency badge */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+                {data.agency && (
+                  <a href={`/profile/${data.agency.phone}`} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 700,
+                    color: 'var(--gold2)', background: 'var(--goldDim)', border: '1px solid var(--gold)',
+                    borderRadius: 999, padding: '5px 13px', textDecoration: 'none',
+                  }}>🏢 عضو آژانس {data.agency.name}</a>
+                )}
+                {metaChips.map((m, i) => (
+                  <span key={i} style={{ fontSize: 12, color: 'var(--muted)', background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 999, padding: '5px 12px' }}>
+                    {i === 0 ? '📍 ' : '🕒 '}{m}
+                  </span>
+                ))}
+              </div>
+            </div>
+            {data.contactPhone && (
+              <div style={{ display: 'flex', gap: 9, flexShrink: 0, paddingBottom: 4, flexWrap: 'wrap' }}>
+                <a href={`tel:${data.contactPhone.replace(/\D/g, '')}`} style={{ height: 42, display: 'inline-flex', alignItems: 'center', padding: '0 22px', border: 'none', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13.5, textDecoration: 'none' }}>☎ تماس</a>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Stats row */}
+        <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+          {stats.map((s, i) => (
+            <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: '16px 18px', textAlign: 'center' }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--gold)' }}>{fa(s.v)}</div>
+              <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 5 }}>{s.l}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* About */}
+        {data.bio && (
+          <section style={{ ...card, marginTop: 20 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)', marginBottom: 12 }}>درباره</div>
+            <p style={{ fontSize: 13.5, color: 'var(--muted)', lineHeight: 2, margin: 0 }}>{data.bio}</p>
+          </section>
+        )}
+
+        {/* Specialties */}
+        {data.specialties.length > 0 && (
+          <section style={{ ...card, marginTop: 16 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)', marginBottom: 14 }}>تخصص‌ها</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {data.specialties.map((s, i) => (
+                <span key={i} style={{ padding: '6px 13px', borderRadius: 999, border: '1px solid var(--line2)', fontSize: 12.5, color: 'var(--text)', background: 'var(--bg2)' }}>{s}</span>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Listings */}
+        <section style={{ ...card, marginTop: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)' }}>آگهی‌های {data.name}</div>
+            {data.listings.length > 0 && <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{fa(data.listings.length)} آگهی</span>}
+          </div>
+          {data.listings.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '34px 0', color: 'var(--muted)' }}>
+              <div style={{ fontSize: 34, marginBottom: 10 }}>🏠</div>
+              <div style={{ fontSize: 13.5 }}>در حال حاضر آگهی فعالی ثبت نشده است.</div>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 14 }}>
+              {data.listings.map((it, i) => (
+                <a key={it.id} href={`/property/${it.id}`} style={{ borderRadius: 14, overflow: 'hidden', border: '1px solid var(--line)', textDecoration: 'none', display: 'block', background: 'var(--bg2)' }}>
+                  <div style={{ height: 120, background: it.image ? `center/cover no-repeat url(${it.image})` : cardGradients[i % cardGradients.length], position: 'relative' }}>
+                    {!it.image && <div style={{ position: 'absolute', inset: 0, backgroundImage: 'repeating-linear-gradient(135deg,transparent,transparent 8px,rgba(255,255,255,0.03) 8px,rgba(255,255,255,0.03) 9px)' }} />}
+                  </div>
+                  <div style={{ padding: '12px 13px' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.title}</div>
+                    {it.location && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 5 }}>📍 {it.location}</div>}
+                    {it.price && <div style={{ fontSize: 12.5, color: 'var(--gold)', fontWeight: 700, marginTop: 6 }}>{it.price}</div>}
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Contact */}
+        <section style={{ ...card, marginTop: 16 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)', marginBottom: 14 }}>تماس</div>
+          <div style={{ display: 'grid', gap: 12 }}>
+            {data.contactPhone && (
+              <a href={`tel:${data.contactPhone.replace(/\D/g, '')}`} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 12, padding: '13px 16px', textDecoration: 'none' }}>
+                <span style={{ width: 36, height: 36, flexShrink: 0, borderRadius: 10, background: 'var(--goldDim)', color: 'var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>☎</span>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>تماس مستقیم</div>
+                  <div style={{ fontSize: 13.5, color: 'var(--text)', direction: 'ltr', textAlign: 'right', fontWeight: 700 }}>{data.contactPhone}</div>
+                </div>
+              </a>
+            )}
+            {data.agency && (
+              <a href={`/profile/${data.agency.phone}`} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 12, padding: '13px 16px', textDecoration: 'none' }}>
+                <span style={{ width: 36, height: 36, flexShrink: 0, borderRadius: 10, background: 'var(--goldDim)', color: 'var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>🏢</span>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>آژانس</div>
+                  <div style={{ fontSize: 13.5, color: 'var(--text)', fontWeight: 700 }}>{data.agency.name}</div>
+                </div>
+              </a>
+            )}
+            {!data.contactPhone && !data.agency && (
+              <div style={{ fontSize: 13, color: 'var(--muted)', padding: '6px 2px' }}>اطلاعات تماسی ثبت نشده است.</div>
+            )}
+          </div>
+        </section>
+
+      </main>
+
+      {/* FAB */}
+      <a href="/" aria-label="home" style={{ position: 'fixed', bottom: 22, left: 22, zIndex: 60, width: 52, height: 52, borderRadius: 16, textDecoration: 'none', background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 19, fontWeight: 800, boxShadow: '0 14px 34px -10px var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✦</a>
+
+      <Footer />
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ProfilePage() {
   const params = useParams()
   const urlId = (params?.id as string) || 'advisor'
+
+  // A numeric id is a real advisor (phone). Branch to the live, data-driven page.
+  if (/^\d+$/.test(urlId)) {
+    return <RealAdvisorProfile phone={urlId} />
+  }
+
+  return <RoleTemplateProfile urlId={urlId} />
+}
+
+// ─── Role template profile (fallback: /profile/advisor, /profile/agency, …) ─────
+
+function RoleTemplateProfile({ urlId }: { urlId: string }) {
   const validId = (urlId in profiles ? urlId : 'advisor') as RoleId
 
   const [activeRole, setActiveRole] = useState<RoleId>(validId)

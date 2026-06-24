@@ -29,7 +29,7 @@ export interface Commission { id: string; dealTitle: string; amount: number; sta
 export interface MonthDeals { month: string; count: number }
 
 export interface AdvisorData {
-  profile: { name: string; agency?: string }
+  profile: { name: string; agency?: string; title?: string; bio?: string; phone?: string; areas?: string; experience?: string; photo?: string; specialties?: string[] }
   leads: Lead[]
   listings: Listing[]
   appts: Appt[]

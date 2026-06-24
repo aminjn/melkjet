@@ -33,7 +33,7 @@ interface Listing {
 interface Appt { id: string; client: string; listingTitle?: string; date: string; type: ApptType; status: ApptStatus; createdAt: number }
 interface Commission { id: string; dealTitle: string; amount: number; status: CommStatus; date: string; createdAt: number }
 interface Stats {
-  profile: { name: string; agency?: string }
+  profile: { name: string; agency?: string; title?: string; bio?: string; phone?: string; areas?: string; experience?: string; photo?: string; specialties?: string[] }
   kpis: { activeLeads: number; hotLeads: number; activeListings: number; upcomingAppts: number; pendingCommission: number; paidCommission: number; dealsThisMonth: number }
   pipeline: { stage: Stage; count: number }[]
   monthlyDeals: { month: string; count: number }[]
@@ -42,7 +42,13 @@ interface Stats {
 }
 interface AdvisorData { stats: Stats; leads: Lead[]; listings: Listing[]; appts: Appt[]; commissions: Commission[] }
 
-type View = 'dashboard' | 'assistant' | 'leads' | 'listings' | 'articles' | 'appts' | 'calendar' | 'commissions' | 'settings'
+type View = 'dashboard' | 'assistant' | 'leads' | 'listings' | 'articles' | 'appts' | 'calendar' | 'commissions' | 'agency' | 'settings'
+
+// ════════ Agency-link types (mirror /api/agency-link) ════════
+interface AgencyMembership { advisorPhone: string; advisorName: string; agencyPhone: string; agencyName: string; since: number }
+interface AgencyRequest { id: string; advisorPhone: string; advisorName: string; agencyPhone: string; agencyName: string; initiator: 'advisor' | 'agency'; status: string; createdAt: number }
+interface AgencyOption { phone: string; name: string; branches?: string }
+interface AgencyLinkData { role: string; membership: AgencyMembership | null; requests: AgencyRequest[]; agencies: AgencyOption[] }
 
 // ════════ Helpers ════════
 const FONT = 'Vazirmatn, system-ui, sans-serif'
@@ -76,7 +82,7 @@ const inputStyle: React.CSSProperties = { padding: '9px 11px', borderRadius: 9, 
 const actionBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap' }
 const goldBtn: React.CSSProperties = { padding: '9px 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }
 
-const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد مشاور', assistant: 'دستیار هوشمند', leads: 'لیدها و پایپ‌لاین', listings: 'فایل‌های من', articles: 'مقالات و وبلاگ', appts: 'قرارها و بازدیدها', calendar: 'تقویم', commissions: 'کمیسیون', settings: 'تنظیمات' }
+const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد مشاور', assistant: 'دستیار هوشمند', leads: 'لیدها و پایپ‌لاین', listings: 'فایل‌های من', articles: 'مقالات و وبلاگ', appts: 'قرارها و بازدیدها', calendar: 'تقویم', commissions: 'کمیسیون', agency: 'آژانس من', settings: 'تنظیمات' }
 const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'leads' | 'appts' }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: '▦' },
   { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
@@ -86,6 +92,7 @@ const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'leads' | 'app
   { id: 'appts', label: 'قرارها', icon: '◉', badge: 'appts' },
   { id: 'calendar', label: 'تقویم', icon: '🗓' },
   { id: 'commissions', label: 'کمیسیون', icon: '﷼' },
+  { id: 'agency', label: 'آژانس من', icon: '🏢' },
   { id: 'settings', label: 'تنظیمات', icon: '⛭' },
 ]
 
@@ -206,14 +213,57 @@ export default function ProsPage() {
     } catch { alert('اتصال به سرور برقرار نشد') } finally { setBusy(false) }
   }
   const [nc, setNc] = useState({ dealTitle: '', amount: '' })
-  const [prof, setProf] = useState({ name: '', agency: '' })
+  const [prof, setProf] = useState({ name: '', agency: '', title: '', bio: '', phone: '', areas: '', experience: '', photo: '', specialties: [] as string[] })
+  const [specInput, setSpecInput] = useState('')
+  const [myPhone, setMyPhone] = useState('')
+  const [profUploading, setProfUploading] = useState(false)
+  // ── آژانس من ──
+  const [agencyData, setAgencyData] = useState<AgencyLinkData | null>(null)
+  const [agencySearch, setAgencySearch] = useState('')
+
+  const refreshAgency = useCallback(async () => {
+    try {
+      const r = await fetch('/api/agency-link', { cache: 'no-store' })
+      if (!r.ok) { setAgencyData(null); return }
+      const d = await r.json(); setAgencyData(d)
+    } catch { setAgencyData(null) }
+  }, [])
+  useEffect(() => { refreshAgency() }, [refreshAgency])
+  useEffect(() => {
+    fetch('/api/auth/profile', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d?.phone) setMyPhone(d.phone) }).catch(() => {})
+  }, [])
+
+  const agencyPost = useCallback(async (body: Record<string, unknown>) => {
+    setBusy(true)
+    try {
+      const r = await fetch('/api/agency-link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { alert(d.error || 'انجام عملیات ناموفق بود'); return false }
+      await refreshAgency(); return true
+    } catch { return false } finally { setBusy(false) }
+  }, [refreshAgency])
+
+  const uploadProfilePhoto = async (files: FileList | null) => {
+    if (!files || !files.length) return
+    setProfUploading(true)
+    const fd = new FormData(); fd.append('file', files[0])
+    try { const r = await fetch('/api/media', { method: 'POST', body: fd }); const d = await r.json(); if (d.url) setProf(p => ({ ...p, photo: d.url })) } catch {}
+    setProfUploading(false)
+  }
+  const addSpecialty = (raw: string) => {
+    const v = raw.trim()
+    if (!v) return
+    setProf(p => p.specialties.includes(v) ? p : { ...p, specialties: [...p.specialties, v] })
+    setSpecInput('')
+  }
 
   const refresh = useCallback(async () => {
     try {
       const r = await fetch('/api/advisor')
       if (r.status === 401) { setUnauth(true); setLoading(false); return }
       const d = await r.json(); setData(d); setUnauth(false)
-      setProf({ name: d.stats.profile.name || '', agency: d.stats.profile.agency || '' })
+      const p = d.stats.profile || {}
+      setProf({ name: p.name || '', agency: p.agency || '', title: p.title || '', bio: p.bio || '', phone: p.phone || '', areas: p.areas || '', experience: p.experience || '', photo: p.photo || '', specialties: Array.isArray(p.specialties) ? p.specialties : [] })
     } catch {} finally { setLoading(false) }
   }, [])
   useEffect(() => { refresh() }, [refresh])
@@ -629,13 +679,153 @@ export default function ProsPage() {
             </div>
           </div>}
 
+          {/* AGENCY — آژانس من */}
+          {view === 'agency' && (() => {
+            const md = agencyData
+            const membership = md?.membership || null
+            const requests = md?.requests || []
+            const agencies = md?.agencies || []
+            const invites = requests.filter(r => r.initiator === 'agency' && r.status === 'pending')
+            const outgoing = requests.filter(r => r.initiator === 'advisor' && r.status === 'pending')
+            const pendingPhones = new Set(outgoing.map(r => r.agencyPhone))
+            const aq = agencySearch.trim()
+            const agenciesF = aq ? agencies.filter(a => (a.name + ' ' + (a.branches || '')).includes(aq)) : agencies
+            return <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 720 }}>
+              <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.7 }}>
+                با عضویت در یک آژانس، نام آژانس روی پروفایل عمومی شما نمایش داده می‌شود و فایل‌های شما به آژانس متصل می‌شوند.
+              </div>
+
+              {/* عضویت فعلی */}
+              {membership ? (
+                <div style={{ ...card, padding: 18, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: 28 }}>🏢</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>آژانس شما</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, marginTop: 2 }}>{membership.agencyName}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 2 }}>عضو از {faDate(membership.since)}</div>
+                  </div>
+                  <button disabled={busy} onClick={() => { if (confirm('از این آژانس خارج می‌شوید؟')) agencyPost({ action: 'leave' }) }} style={{ ...actionBtn, color: '#ef4444', borderColor: '#ef4444', padding: '8px 16px' }}>خروج از آژانس</button>
+                </div>
+              ) : (
+                <div style={{ ...card, padding: '16px 18px', fontSize: 13, color: 'var(--muted)' }}>هنوز عضو هیچ آژانسی نیستید. از فهرست زیر یک آژانس انتخاب و درخواست عضویت ارسال کنید.</div>
+              )}
+
+              {/* دعوت‌های دریافتی */}
+              {invites.length > 0 && (
+                <div style={{ ...card, padding: 18 }}>
+                  {sectionTitle('دعوت‌های دریافتی')}
+                  {invites.map(r => (
+                    <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 700 }}>{r.agencyName}</div>
+                        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>شما را به عضویت دعوت کرده است · {faDate(r.createdAt)}</div>
+                      </div>
+                      <button disabled={busy} onClick={() => agencyPost({ action: 'respond', id: r.id, accept: true })} style={{ ...actionBtn, color: '#34d399', borderColor: '#34d399' }}>پذیرش</button>
+                      <button disabled={busy} onClick={() => agencyPost({ action: 'respond', id: r.id, accept: false })} style={{ ...actionBtn, color: '#ef4444' }}>رد</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* درخواست‌های ارسالی */}
+              {outgoing.length > 0 && (
+                <div style={{ ...card, padding: 18 }}>
+                  {sectionTitle('درخواست‌های ارسالی')}
+                  {outgoing.map(r => (
+                    <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 700 }}>در انتظار تأیید آژانس {r.agencyName}</div>
+                        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{faDate(r.createdAt)}</div>
+                      </div>
+                      <Pill label="در انتظار" color="var(--gold)" />
+                      <button disabled={busy} onClick={() => agencyPost({ action: 'cancel', id: r.id })} style={{ ...actionBtn, color: '#ef4444' }}>لغو</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* فهرست آژانس‌ها */}
+              {!membership && (
+                <div style={{ ...card, padding: 18 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+                    <div style={{ fontWeight: 800, fontSize: 15 }}>آژانس‌ها ({fa(agencies.length)})</div>
+                    <input value={agencySearch} onChange={e => setAgencySearch(e.target.value)} placeholder="جستجوی آژانس…" style={{ ...inputStyle, width: 220, maxWidth: '50vw' }} />
+                  </div>
+                  {agenciesF.length ? agenciesF.map(a => {
+                    const pending = pendingPhones.has(a.phone)
+                    return (
+                      <div key={a.phone} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13.5, fontWeight: 700 }}>{a.name}</div>
+                          {a.branches && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{a.branches}</div>}
+                        </div>
+                        <button disabled={busy || pending} onClick={() => agencyPost({ action: 'requestJoin', agencyPhone: a.phone })} style={{ ...goldBtn, padding: '7px 16px', opacity: pending ? 0.5 : 1, cursor: pending ? 'default' : 'pointer' }}>{pending ? 'ارسال‌شده' : 'درخواست عضویت'}</button>
+                      </div>
+                    )
+                  }) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>{aq ? 'آژانسی با این نام پیدا نشد.' : 'فعلاً آژانسی برای نمایش وجود ندارد.'}</div>}
+                </div>
+              )}
+            </div>
+          })()}
+
           {/* SETTINGS */}
-          {view === 'settings' && <div style={{ ...card, padding: 18, maxWidth: 480 }}>
-            {sectionTitle('تنظیمات مشاور')}
+          {view === 'settings' && <div style={{ ...card, padding: 18, maxWidth: 560 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+              <div style={{ fontWeight: 800, fontSize: 15 }}>پروفایل عمومی مشاور</div>
+              {myPhone && <a href={`/profile/${myPhone}`} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: 'var(--gold)', textDecoration: 'none' }}>مشاهدهٔ پروفایل عمومی ↗</a>}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.7 }}>این اطلاعات روی صفحهٔ عمومی شما نمایش داده می‌شود.</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نام</label><input value={prof.name} onChange={e => setProf({ ...prof, name: e.target.value })} style={inputStyle} /></div>
-              <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>آژانس/دفتر</label><input value={prof.agency} onChange={e => setProf({ ...prof, agency: e.target.value })} style={inputStyle} /></div>
-              <button disabled={busy} onClick={() => post({ action: 'updateProfile', patch: { name: prof.name, agency: prof.agency } })} style={{ ...goldBtn, alignSelf: 'flex-start', padding: '9px 22px' }}>ذخیره</button>
+              {/* عکس پروفایل */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div style={{ width: 72, height: 72, borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--line)', background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {prof.photo
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={prof.photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <span style={{ fontSize: 26, color: 'var(--faint)' }}>👤</span>}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ ...actionBtn, cursor: 'pointer', display: 'inline-block' }}>
+                    <input type="file" accept="image/*" onChange={e => uploadProfilePhoto(e.target.files)} style={{ display: 'none' }} />
+                    {profUploading ? 'در حال آپلود…' : 'انتخاب عکس'}
+                  </label>
+                  {prof.photo && <button onClick={() => setProf({ ...prof, photo: '' })} style={{ ...actionBtn, color: '#ef4444' }}>حذف عکس</button>}
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نام</label><input value={prof.name} onChange={e => setProf({ ...prof, name: e.target.value })} style={inputStyle} /></div>
+                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>آژانس/دفتر</label><input value={prof.agency} onChange={e => setProf({ ...prof, agency: e.target.value })} style={inputStyle} /></div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>عنوان شغلی</label><input value={prof.title} onChange={e => setProf({ ...prof, title: e.target.value })} placeholder="مثلاً مشاور ارشد املاک" style={inputStyle} /></div>
+                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>تلفن تماس</label><input value={prof.phone} onChange={e => setProf({ ...prof, phone: e.target.value })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} /></div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>مناطق فعالیت</label><input value={prof.areas} onChange={e => setProf({ ...prof, areas: e.target.value })} placeholder="مثلاً زعفرانیه، فرمانیه" style={inputStyle} /></div>
+                <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>سابقه</label><input value={prof.experience} onChange={e => setProf({ ...prof, experience: e.target.value })} placeholder="مثلاً ۸ سال" style={inputStyle} /></div>
+              </div>
+              <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>دربارهٔ من</label><textarea value={prof.bio} onChange={e => setProf({ ...prof, bio: e.target.value })} rows={4} placeholder="معرفی کوتاه از خودتان…" style={{ ...inputStyle, resize: 'vertical' }} /></div>
+              {/* تخصص‌ها — chips */}
+              <div>
+                <label style={{ fontSize: 12, color: 'var(--muted)' }}>تخصص‌ها</label>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 6 }}>
+                  {prof.specialties.map(s => (
+                    <span key={s} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 11px', borderRadius: 999, fontSize: 12.5, background: 'var(--goldDim)', color: 'var(--gold)', fontWeight: 600 }}>
+                      {s}
+                      <button onClick={() => setProf(p => ({ ...p, specialties: p.specialties.filter(x => x !== s) }))} style={{ background: 'transparent', border: 'none', color: 'var(--gold)', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: 0 }}>✕</button>
+                    </span>
+                  ))}
+                  <input
+                    value={specInput}
+                    onChange={e => setSpecInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addSpecialty(specInput.replace(/,$/, '')) } }}
+                    onBlur={() => addSpecialty(specInput)}
+                    placeholder="افزودن… (Enter یا ،)"
+                    style={{ ...inputStyle, width: 180, flex: '0 1 180px' }}
+                  />
+                </div>
+              </div>
+              <button disabled={busy} onClick={() => post({ action: 'updateProfile', patch: { name: prof.name, agency: prof.agency, title: prof.title, bio: prof.bio, phone: prof.phone, areas: prof.areas, experience: prof.experience, photo: prof.photo, specialties: prof.specialties } })} style={{ ...goldBtn, alignSelf: 'flex-start', padding: '9px 22px' }}>{busy ? 'در حال ذخیره…' : 'ذخیره'}</button>
             </div>
           </div>}
           </>}

@@ -24,6 +24,10 @@ interface Stats {
 }
 interface AgencyData { stats: Stats; agents: Agent[]; listings: Listing[]; leads: Lead[]; deals: Deal[] }
 
+// عضویت واقعی مشاور↔آژانس (mirror app/lib/agency-link-store.ts)
+interface LinkMember { advisorPhone: string; advisorName: string; agencyPhone: string; agencyName: string; since: number }
+interface LinkRequest { id: string; advisorPhone: string; advisorName: string; agencyPhone: string; agencyName: string; initiator: 'advisor' | 'agency'; status: string; createdAt: number }
+
 type View = 'dashboard' | 'assistant' | 'agents' | 'listings' | 'leads' | 'deals' | 'settings'
 
 // ════════ Helpers ════════
@@ -102,6 +106,33 @@ export default function AgencyPage() {
   const [nl, setNl] = useState({ name: '', phone: '', need: '', budget: '' })
   const [nd, setNd] = useState({ title: '', amount: '', agent: '', date: '' })
   const [prof, setProf] = useState({ name: '', branches: '' })
+  // عضویت واقعی مشاوران (advisor↔agency)
+  const [members, setMembers] = useState<LinkMember[]>([])
+  const [linkReqs, setLinkReqs] = useState<LinkRequest[]>([])
+  const [invitePhone, setInvitePhone] = useState('')
+  const [linkBusy, setLinkBusy] = useState(false)
+
+  const refreshLinks = useCallback(async () => {
+    try {
+      const r = await fetch('/api/agency-link')
+      if (!r.ok) return
+      const d = await r.json().catch(() => ({}))
+      if (d.role === 'agency') {
+        setMembers(Array.isArray(d.members) ? d.members : [])
+        setLinkReqs(Array.isArray(d.requests) ? d.requests : [])
+      }
+    } catch {}
+  }, [])
+
+  const postLink = useCallback(async (body: Record<string, unknown>): Promise<boolean> => {
+    setLinkBusy(true)
+    try {
+      const r = await fetch('/api/agency-link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || d.error) { alert(d.error || 'خطا در انجام عملیات'); if (!r.ok) return false }
+      await refreshLinks(); return !d.error
+    } catch { return false } finally { setLinkBusy(false) }
+  }, [refreshLinks])
 
   const refresh = useCallback(async () => {
     try {
@@ -112,6 +143,7 @@ export default function AgencyPage() {
     } catch {} finally { setLoading(false) }
   }, [])
   useEffect(() => { refresh() }, [refresh])
+  useEffect(() => { refreshLinks() }, [refreshLinks])
 
   const post = useCallback(async (body: Record<string, unknown>): Promise<boolean> => {
     setBusy(true)
@@ -331,7 +363,75 @@ export default function AgencyPage() {
           )}
 
           {/* AGENTS */}
-          {view === 'agents' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {view === 'agents' && (() => {
+            const joinReqs = linkReqs.filter(r => r.initiator === 'advisor')
+            const outInvites = linkReqs.filter(r => r.initiator === 'agency')
+            return <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+            {/* ١. درخواست‌های عضویت (مشاوران متقاضیِ پیوستن) */}
+            {joinReqs.length > 0 && (
+              <div style={{ ...card, padding: 18 }}>
+                {sectionTitle(`درخواست‌های عضویت (${fa(joinReqs.length)})`)}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {joinReqs.map(r => (
+                    <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
+                      <div style={{ flex: 1, minWidth: 160 }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 700 }}>{r.advisorName}</div>
+                        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{r.advisorPhone}</div>
+                      </div>
+                      <button disabled={linkBusy} onClick={() => postLink({ action: 'respond', id: r.id, accept: true })} style={{ ...goldBtn, padding: '7px 16px' }}>پذیرش</button>
+                      <button disabled={linkBusy} onClick={() => postLink({ action: 'respond', id: r.id, accept: false })} style={{ ...actionBtn, color: '#ef4444' }}>رد</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ٢. افزودن/دعوت مشاور (بر اساس شماره) + دعوت‌های در انتظار */}
+            <div style={{ ...card, padding: 18 }}>
+              {sectionTitle('افزودن/دعوت مشاور')}
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div style={{ flex: '1 1 200px' }}>
+                  <label style={{ fontSize: 12, color: 'var(--muted)' }}>شماره موبایل مشاور</label>
+                  <input value={invitePhone} onChange={e => setInvitePhone(e.target.value)} placeholder="09xxxxxxxxx" inputMode="numeric" style={inputStyle} />
+                </div>
+                <button disabled={linkBusy || !invitePhone.trim()} onClick={async () => { if (await postLink({ action: 'invite', advisorPhone: invitePhone.trim() })) setInvitePhone('') }} style={goldBtn}>دعوت</button>
+              </div>
+              {outInvites.length > 0 && (
+                <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {outInvites.map(r => (
+                    <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderTop: '1px solid var(--line)', flexWrap: 'wrap' }}>
+                      <div style={{ flex: 1, minWidth: 160, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Pill label="در انتظار" color="#f59e0b" />
+                        <span style={{ fontSize: 13, fontWeight: 600 }}>در انتظار پاسخِ {r.advisorName}</span>
+                        <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{r.advisorPhone}</span>
+                      </div>
+                      <button disabled={linkBusy} onClick={() => postLink({ action: 'cancel', id: r.id })} style={{ ...actionBtn, color: '#ef4444' }}>لغو</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* ٣. مشاوران آژانس (اعضای واقعی) */}
+            <div style={{ ...card, padding: 18 }}>
+              {sectionTitle(`مشاوران آژانس (${fa(members.length)})`)}
+              {members.length ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {members.map(m => (
+                    <div key={m.advisorPhone} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 13, flexShrink: 0 }}>{m.advisorName.charAt(0)}</div>
+                      <div style={{ flex: 1, minWidth: 150 }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 700 }}>{m.advisorName}</div>
+                        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{m.advisorPhone} · عضو از {new Date(m.since).toLocaleDateString('fa-IR')}</div>
+                      </div>
+                      <button disabled={linkBusy} onClick={() => postLink({ action: 'remove', advisorPhone: m.advisorPhone })} style={{ ...actionBtn, color: '#ef4444' }}>حذف</button>
+                    </div>
+                  ))}
+                </div>
+              ) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>هنوز مشاوری به آژانس نپیوسته است.</div>}
+            </div>
+
             <div style={{ ...card, padding: 18 }}>
               {sectionTitle('افزودن مشاور')}
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
@@ -359,7 +459,8 @@ export default function AgencyPage() {
                 ))}
               </div>
             </div>
-          </div>}
+          </div>
+          })()}
 
           {/* LISTINGS */}
           {view === 'listings' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
