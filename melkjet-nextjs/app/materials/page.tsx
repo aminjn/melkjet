@@ -7,6 +7,7 @@ import MarketingTool, { MARKETING_VIEWS, type MarketingView } from '@/app/compon
 import WorkflowTool, { WORKFLOW_VIEWS, type WorkflowView } from '@/app/components/tools/WorkflowTool'
 import WebsiteBuilderTool, { WEBSITE_VIEWS, type WebsiteView } from '@/app/components/tools/WebsiteBuilderTool'
 import ArticleEditor from '@/app/components/ArticleEditor'
+import PlansPanel from '@/app/components/PlansPanel'
 
 // ════════════════════════════════════════════════════════
 //  Types (mirror app/lib/materials-store.ts API shape)
@@ -38,7 +39,7 @@ interface Stats {
 }
 interface MaterialsData { stats: Stats; products: Product[]; orders: Order[]; inquiries: Inquiry[] }
 
-type View = 'dashboard' | 'assistant' | 'articles' | 'catalog' | 'orders' | 'inquiries' | 'settings'
+type View = 'dashboard' | 'assistant' | 'articles' | 'catalog' | 'orders' | 'inquiries' | 'plans' | 'settings'
 
 // ════════════════════════════════════════════════════════
 //  Formatting & status helpers
@@ -80,6 +81,7 @@ const VIEW_TITLES: Record<View, string> = {
   catalog: 'کاتالوگ محصولات',
   orders: 'سفارش‌ها',
   inquiries: 'استعلام‌ها',
+  plans: 'پلن‌ها و اشتراک',
   settings: 'تنظیمات',
 }
 
@@ -89,6 +91,7 @@ const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'orders' | 'in
   { id: 'catalog', label: 'کاتالوگ', icon: '◫' },
   { id: 'orders', label: 'سفارش‌ها', icon: '◈', badge: 'orders' },
   { id: 'inquiries', label: 'استعلام‌ها', icon: '◎', badge: 'inquiries' },
+  { id: 'plans', label: 'پلن‌ها و اشتراک', icon: '👑' },
 ]
 function StatusPill({ st }: { st: OrderStatus }) {
   const c = STATUS_COLOR[st]
@@ -424,6 +427,7 @@ export default function MaterialsPage() {
           {view === 'catalog' && <CatalogView products={products} post={post} busy={busy} search={search} showAdd={showAdd} setShowAdd={setShowAdd} />}
           {view === 'orders' && <OrdersView orders={orders} post={post} busy={busy} search={search} />}
           {view === 'inquiries' && <InquiriesView inquiries={inquiries} post={post} busy={busy} search={search} />}
+          {view === 'plans' && <PlansPanel dashboard="/materials" />}
           {view === 'settings' && <SettingsView profile={stats.profile} post={post} busy={busy} />}
             </>}
         </main>

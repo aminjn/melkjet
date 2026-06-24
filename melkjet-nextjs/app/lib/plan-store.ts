@@ -17,6 +17,8 @@ export interface Plan {
   cta?: string
   order: number
   active: boolean
+  roleId?: string       // نقشی که این پلن برای آن است (خالی = عمومی، برای همه)
+  badge?: string        // برچسبِ کوچک روی کارت (مثلاً «محبوب»)
   createdAt: number
 }
 
@@ -124,6 +126,8 @@ export interface PlanInput {
   cta?: string
   order?: number
   active?: boolean
+  roleId?: string
+  badge?: string
 }
 
 export function addPlan(input: PlanInput): Plan {
@@ -140,6 +144,8 @@ export function addPlan(input: PlanInput): Plan {
     cta: input.cta ? String(input.cta) : undefined,
     order: input.order != null ? Number(input.order) : maxOrder + 1,
     active: input.active !== false,
+    roleId: input.roleId ? String(input.roleId) : undefined,
+    badge: input.badge ? String(input.badge) : undefined,
     createdAt: Date.now(),
   }
   db.plans.push(plan)
@@ -162,6 +168,8 @@ export function updatePlan(id: string, patch: PlanPatch): Plan | null {
   if (patch.cta !== undefined) p.cta = patch.cta ? String(patch.cta) : undefined
   if (patch.order !== undefined) p.order = Number(patch.order) || 0
   if (patch.active !== undefined) p.active = !!patch.active
+  if (patch.roleId !== undefined) p.roleId = patch.roleId ? String(patch.roleId) : undefined
+  if (patch.badge !== undefined) p.badge = patch.badge ? String(patch.badge) : undefined
   save(db)
   return p
 }

@@ -1,16 +1,18 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
+import { setPlan } from './account-store'
 
-// استورِ ارتباطات (پیامک/ایمیل): پکیج‌های شارژ + اعتبارِ هر کاربر + سفارش‌ها.
+// استورِ ارتباطات/خرید: پکیج‌های شارژ (پیامک/ایمیل/توکن) + اشتراکِ پلن + اعتبارِ هر کاربر + سفارش‌ها.
 // پکیج‌ها سراسری‌اند و سوپرادمین می‌سازد؛ اعتبار و سفارش‌ها per-owner (شمارهٔ کاربر).
 const DATA_FILE = join(process.cwd(), '.comm-data.json')
 
-export type Channel = 'sms' | 'email'
+export type Channel = 'sms' | 'email' | 'token'
 export interface CommPackage { id: string; channel: Channel; name: string; credits: number; price: number; active: boolean; createdAt: number }
-export interface Credit { sms: number; email: number }
+export interface Credit { sms: number; email: number; token: number }
 export type OrderStatus = 'pending' | 'paid' | 'rejected'
-export interface CommOrder { id: string; owner: string; packageId: string; name: string; channel: Channel; credits: number; price: number; status: OrderStatus; createdAt: number; paidAt?: number }
+export type OrderKind = 'package' | 'plan'
+export interface CommOrder { id: string; owner: string; kind: OrderKind; name: string; price: number; status: OrderStatus; createdAt: number; paidAt?: number; packageId?: string; channel?: Channel; credits?: number; planId?: string }
 
 interface DB { packages: CommPackage[]; credits: Record<string, Credit>; orders: CommOrder[] }
 
@@ -28,7 +30,7 @@ export function setPackages(rows: Partial<CommPackage>[]): CommPackage[] {
   const db = load()
   db.packages = (rows || []).map(r => ({
     id: r.id && String(r.id).startsWith('pk_') ? String(r.id) : id('pk_'),
-    channel: r.channel === 'email' ? 'email' : 'sms',
+    channel: (r.channel === 'email' || r.channel === 'token') ? r.channel : 'sms',
     name: String(r.name || '').trim() || 'پکیج',
     credits: Math.max(0, Math.round(Number(r.credits) || 0)),
     price: Math.max(0, Math.round(Number(r.price) || 0)),
@@ -47,11 +49,11 @@ export function monetizationOn(channel: Channel): boolean {
 // ---- Credit ----
 export function getCredit(owner: string): Credit {
   const c = load().credits[owner]
-  return { sms: Number(c?.sms) || 0, email: Number(c?.email) || 0 }
+  return { sms: Number(c?.sms) || 0, email: Number(c?.email) || 0, token: Number(c?.token) || 0 }
 }
 export function grantCredit(owner: string, channel: Channel, amount: number) {
   const db = load()
-  const c = db.credits[owner] || { sms: 0, email: 0 }
+  const c = db.credits[owner] || { sms: 0, email: 0, token: 0 }
   c[channel] = Math.max(0, (Number(c[channel]) || 0) + Math.round(amount))
   db.credits[owner] = c
   save(db)
@@ -63,7 +65,7 @@ export function chargeSend(owner: string, role: string, channel: Channel, count:
   if (role === 'super_admin') return { ok: true }
   if (!monetizationOn(channel)) return { ok: true }
   const db = load()
-  const c = db.credits[owner] || { sms: 0, email: 0 }
+  const c = db.credits[owner] || { sms: 0, email: 0, token: 0 }
   const have = Number(c[channel]) || 0
   if (have < count) return { ok: false, error: `اعتبارِ ${channel === 'sms' ? 'پیامک' : 'ایمیل'} کافی نیست (${have} باقی‌مانده، ${count} نیاز). از همین صفحه پکیج تهیه کنید.`, remaining: have }
   c[channel] = have - count
@@ -77,7 +79,15 @@ export function createOrder(owner: string, packageId: string): { ok: boolean; er
   const db = load()
   const pk = db.packages.find(p => p.id === packageId && p.active)
   if (!pk) return { ok: false, error: 'پکیج یافت نشد' }
-  const order: CommOrder = { id: id('ord_'), owner, packageId: pk.id, name: pk.name, channel: pk.channel, credits: pk.credits, price: pk.price, status: 'pending', createdAt: Date.now() }
+  const order: CommOrder = { id: id('ord_'), owner, kind: 'package', packageId: pk.id, name: pk.name, channel: pk.channel, credits: pk.credits, price: pk.price, status: 'pending', createdAt: Date.now() }
+  db.orders.unshift(order)
+  save(db)
+  return { ok: true, order }
+}
+// سفارشِ اشتراکِ پلن — پس از تأییدِ سوپرادمین، پلنِ حساب تنظیم می‌شود.
+export function createPlanOrder(owner: string, planId: string, planName: string, price: number): { ok: boolean; order?: CommOrder } {
+  const db = load()
+  const order: CommOrder = { id: id('ord_'), owner, kind: 'plan', planId, name: planName || 'اشتراک', price: Math.max(0, Math.round(Number(price) || 0)), status: 'pending', createdAt: Date.now() }
   db.orders.unshift(order)
   save(db)
   return { ok: true, order }
@@ -93,9 +103,14 @@ export function approveOrder(orderId: string): { ok: boolean; error?: string } {
   if (!o) return { ok: false, error: 'سفارش یافت نشد' }
   if (o.status === 'paid') return { ok: true }
   o.status = 'paid'; o.paidAt = Date.now()
-  const c = db.credits[o.owner] || { sms: 0, email: 0 }
-  c[o.channel] = (Number(c[o.channel]) || 0) + o.credits
-  db.credits[o.owner] = c
+  if (o.kind === 'plan') {
+    // اشتراک: پلنِ حسابِ کاربر را تنظیم کن
+    if (o.planId) try { setPlan(o.owner, o.planId) } catch {}
+  } else if (o.channel) {
+    const c = db.credits[o.owner] || { sms: 0, email: 0, token: 0 }
+    c[o.channel] = (Number(c[o.channel]) || 0) + (Number(o.credits) || 0)
+    db.credits[o.owner] = c
+  }
   save(db)
   return { ok: true }
 }

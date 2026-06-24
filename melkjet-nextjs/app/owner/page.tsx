@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import JalaliDatePicker from '@/app/components/JalaliDatePicker'
 import NumberInput from '@/app/components/NumberInput'
+import PlansPanel from '@/app/components/PlansPanel'
 
 // ════════════════════════════════════════════════════════
 //  Types (mirror app/lib/owner-store.ts API shape)
@@ -35,7 +36,7 @@ interface Stats {
 }
 interface OwnerData { stats: Stats; properties: Property[]; inquiries: Inquiry[]; viewings: Viewing[]; offers: Offer[] }
 
-type View = 'dashboard' | 'properties' | 'inquiries' | 'viewings' | 'offers' | 'settings'
+type View = 'dashboard' | 'properties' | 'inquiries' | 'viewings' | 'offers' | 'plans' | 'settings'
 
 // ════════════════════════════════════════════════════════
 //  Formatting & status helpers
@@ -85,6 +86,7 @@ const VIEW_TITLES: Record<View, string> = {
   inquiries: 'استعلام‌ها',
   viewings: 'بازدیدها',
   offers: 'پیشنهادها',
+  plans: 'پلن‌ها',
   settings: 'تنظیمات',
 }
 
@@ -94,6 +96,7 @@ const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'inquiries' | 
   { id: 'inquiries', label: 'استعلام‌ها', icon: '◎', badge: 'inquiries' },
   { id: 'viewings', label: 'بازدیدها', icon: '◉', badge: 'viewings' },
   { id: 'offers', label: 'پیشنهادها', icon: '◈', badge: 'offers' },
+  { id: 'plans', label: 'پلن‌ها', icon: '👑' },
   { id: 'settings', label: 'تنظیمات', icon: '⛭' },
 ]
 const NAV_LINKS: { href: string; label: string; icon: string }[] = [
@@ -286,6 +289,7 @@ export default function OwnerPage() {
           {view === 'inquiries' && <InquiriesView inquiries={inquiries} properties={properties} titleOf={titleOf} post={post} busy={busy} search={search} />}
           {view === 'viewings' && <ViewingsView viewings={viewings} properties={properties} titleOf={titleOf} post={post} busy={busy} search={search} />}
           {view === 'offers' && <OffersView offers={offers} titleOf={titleOf} post={post} busy={busy} search={search} />}
+          {view === 'plans' && <PlansPanel dashboard="/owner" channels={['token']} />}
           {view === 'settings' && <SettingsView profile={stats.profile} post={post} busy={busy} />}
         </main>
       </div>

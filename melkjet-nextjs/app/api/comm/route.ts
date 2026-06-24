@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listPackages, setPackages, getCredit, grantCredit, createOrder, listOrders, approveOrder, rejectOrder } from '@/app/lib/comm-store'
+import { listPackages, setPackages, getCredit, grantCredit, createOrder, createPlanOrder, listOrders, approveOrder, rejectOrder } from '@/app/lib/comm-store'
+import { listActive } from '@/app/lib/plan-store'
 
 // ارتباطات: پکیج‌های شارژ + اعتبارِ کاربر + سفارش‌ها.
 export async function GET(req: NextRequest) {
@@ -28,6 +29,14 @@ export async function POST(req: NextRequest) {
     if (!b.packageId) return NextResponse.json({ error: 'پکیج را انتخاب کنید' }, { status: 400 })
     const r = createOrder(s.phone, String(b.packageId))
     return r.ok ? NextResponse.json({ ok: true, order: r.order }) : NextResponse.json({ error: r.error }, { status: 400 })
+  }
+  if (act === 'orderPlan') {
+    const pl = listActive().find(p => p.id === String(b.planId || ''))
+    if (!pl) return NextResponse.json({ error: 'پلن یافت نشد' }, { status: 400 })
+    const yearly = b.period === 'yearly'
+    const price = yearly ? pl.priceYearly : pl.priceMonthly
+    const r = createPlanOrder(s.phone, pl.id, `${pl.name}${yearly ? ' (سالانه)' : ''}`, price)
+    return NextResponse.json({ ok: true, order: r.order })
   }
 
   // عملیاتِ سوپرادمین

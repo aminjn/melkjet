@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import JalaliDatePicker from '@/app/components/JalaliDatePicker'
 import NumberInput from '@/app/components/NumberInput'
 import MessagesPanel from '@/app/components/MessagesPanel'
+import PlansPanel from '@/app/components/PlansPanel'
 
 // ════════════════════════════════════════════════════════
 //  Types (mirror app/lib/buyer-store.ts API shape)
@@ -59,7 +60,7 @@ interface Stats {
 }
 interface BuyerData { stats: Stats; profile: Profile; settings: Settings; phone: string; saved: Saved[]; searches: Search[]; viewings: Viewing[]; offers: Offer[]; messages: Message[]; conversations: Conversation[]; aiChats: AiChat[] }
 
-type View = 'dashboard' | 'ai' | 'chat' | 'selling' | 'favorites' | 'searches' | 'viewings' | 'offers' | 'messages' | 'profile' | 'settings'
+type View = 'dashboard' | 'ai' | 'chat' | 'selling' | 'favorites' | 'searches' | 'viewings' | 'offers' | 'messages' | 'plans' | 'profile' | 'settings'
 
 // ════════════════════════════════════════════════════════
 //  Helpers
@@ -89,7 +90,7 @@ const actionBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 7, b
 const VIEW_TITLES: Record<View, string> = {
   dashboard: 'پنل کاربری', ai: 'دستیار هوشمند', chat: 'چت با صاحب آگهی', selling: 'فروش و اجارهٔ من',
   favorites: 'علاقه‌مندی‌ها', searches: 'جستجوهای ذخیره‌شده',
-  viewings: 'بازدیدهای من', offers: 'پیشنهادهای من', messages: 'پیام‌ها', profile: 'پروفایل من', settings: 'تنظیمات',
+  viewings: 'بازدیدهای من', offers: 'پیشنهادهای من', messages: 'پیام‌ها', plans: 'پلن‌ها', profile: 'پروفایل من', settings: 'تنظیمات',
 }
 const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'viewings' | 'offers' | 'messages'; ai?: boolean }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: '▦' },
@@ -101,6 +102,7 @@ const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'viewings' | '
   { id: 'viewings', label: 'بازدیدهای من', icon: '◉', badge: 'viewings' },
   { id: 'offers', label: 'پیشنهادهای من', icon: '◈', badge: 'offers' },
   { id: 'messages', label: 'پیام‌ها', icon: '✉', badge: 'messages' },
+  { id: 'plans', label: 'پلن‌ها', icon: '👑' },
   { id: 'profile', label: 'پروفایل من', icon: '◐' },
   { id: 'settings', label: 'تنظیمات', icon: '⛭' },
 ]
@@ -697,6 +699,9 @@ export default function BuyerPage() {
               </div>
             )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>پیامی نداری.</div>}
           </div>}
+
+          {/* ─── PLANS ─── */}
+          {view === 'plans' && <PlansPanel dashboard="/buyer" channels={['token']} />}
 
           {/* ─── PROFILE ─── */}
           {view === 'profile' && (() => {

@@ -2076,8 +2076,8 @@ function NegotiationConfig() {
 }
 
 // ─── Communication packages (شارژِ پیامک/ایمیل) + orders ────────────────────
-type CPkg = { id: string; channel: 'sms' | 'email'; name: string; credits: number; price: number; active: boolean }
-type COrder = { id: string; owner: string; name: string; channel: string; credits: number; price: number; status: string; createdAt: number }
+type CPkg = { id: string; channel: 'sms' | 'email' | 'token'; name: string; credits: number; price: number; active: boolean }
+type COrder = { id: string; owner: string; kind?: string; name: string; channel?: string; credits?: number; planId?: string; price: number; status: string; createdAt: number }
 function CommPackagesConfig() {
   const [pkgs, setPkgs] = useState<CPkg[]>([])
   const [orders, setOrders] = useState<COrder[]>([])
@@ -2109,7 +2109,7 @@ function CommPackagesConfig() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
         {pkgs.length === 0 ? <div style={{ color: 'var(--muted)', fontSize: 13, padding: '8px 0' }}>پکیجی تعریف نشده.</div> : pkgs.map((p, i) => (
           <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '90px 1fr 110px 130px 70px 36px', gap: 8, alignItems: 'center', background: 'var(--bg2)', borderRadius: 10, padding: 8 }} className="mjsa-pkg">
-            <select value={p.channel} onChange={e => upd(i, { channel: e.target.value as 'sms' | 'email' })} style={inp}><option value="sms">پیامک</option><option value="email">ایمیل</option></select>
+            <select value={p.channel} onChange={e => upd(i, { channel: e.target.value as 'sms' | 'email' | 'token' })} style={inp}><option value="sms">پیامک</option><option value="email">ایمیل</option><option value="token">توکن AI</option></select>
             <input style={inp} placeholder="نامِ پکیج" value={p.name} onChange={e => upd(i, { name: e.target.value })} />
             <input style={inp} type="number" placeholder="تعداد" value={p.credits || ''} onChange={e => upd(i, { credits: Number(e.target.value) || 0 })} />
             <input style={inp} type="number" placeholder="قیمت (تومان)" value={p.price || ''} onChange={e => upd(i, { price: Number(e.target.value) || 0 })} />
@@ -2132,7 +2132,7 @@ function CommPackagesConfig() {
               <div style={{ fontSize: 12.5 }}>
                 <span style={{ fontWeight: 700 }}>{o.name}</span>
                 <span style={{ color: 'var(--muted)', marginInlineStart: 8, direction: 'ltr', display: 'inline-block' }}>{o.owner}</span>
-                <span style={{ color: 'var(--muted)', marginInlineStart: 8 }}>· {o.channel === 'sms' ? 'پیامک' : 'ایمیل'} · {fa(o.credits)} عدد · {fa(o.price)} تومان</span>
+                <span style={{ color: 'var(--muted)', marginInlineStart: 8 }}>· {o.kind === 'plan' ? 'اشتراک' : (o.channel === 'sms' ? 'پیامک' : o.channel === 'token' ? 'توکن' : 'ایمیل')}{o.kind !== 'plan' ? ` · ${fa(o.credits || 0)} عدد` : ''} · {fa(o.price)} تومان</span>
               </div>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 {o.status === 'pending' ? <>
@@ -2158,7 +2158,6 @@ function ConnectionsView() {
       </Card>
       <NeshanConfig />
       <IPPanelConfig />
-      <CommPackagesConfig />
       <NegotiationConfig />
       <SmtpConfig />
       <ZarinpalConfig />
@@ -3094,49 +3093,66 @@ function RolesView() {
 
 function PlansView() {
   const [plans, setPlans] = useState<any[]>([])
+  const [roles, setRoles] = useState<{ id: string; name: string }[]>([])
   const [show, setShow] = useState(false)
-  const [f, setF] = useState({ name: '', priceMonthly: '', priceYearly: '', features: '', highlighted: false, cta: '', active: true })
+  const [f, setF] = useState({ name: '', priceMonthly: '', priceYearly: '', features: '', highlighted: false, cta: '', badge: '', roleId: '', active: true })
   const load = () => fetch('/api/admin/plans').then(r => r.ok ? r.json() : { plans: [] }).then(d => setPlans(d.plans || []))
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(); fetch('/api/admin/roles').then(r => r.ok ? r.json() : null).then(d => { if (d?.roles) setRoles(d.roles.map((x: any) => ({ id: x.id, name: x.name }))) }) }, [])
+  const roleName = (rid?: string) => rid ? (roles.find(r => r.id === rid)?.name || '—') : 'عمومی (همه)'
   const create = async () => {
     if (!f.name.trim()) return
-    await fetch('/api/admin/plans', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: f.name, priceMonthly: Number(f.priceMonthly) || 0, priceYearly: Number(f.priceYearly) || 0, features: f.features.split('\n').map(x => x.trim()).filter(Boolean), highlighted: f.highlighted, cta: f.cta, active: f.active }) })
-    setF({ name: '', priceMonthly: '', priceYearly: '', features: '', highlighted: false, cta: '', active: true }); setShow(false); load()
+    await fetch('/api/admin/plans', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: f.name, priceMonthly: Number(f.priceMonthly) || 0, priceYearly: Number(f.priceYearly) || 0, features: f.features.split('\n').map(x => x.trim()).filter(Boolean), highlighted: f.highlighted, cta: f.cta, badge: f.badge, roleId: f.roleId, active: f.active }) })
+    setF({ name: '', priceMonthly: '', priceYearly: '', features: '', highlighted: false, cta: '', badge: '', roleId: '', active: true }); setShow(false); load()
   }
   const patch = async (id: string, p: any) => { await fetch('/api/admin/plans', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...p }) }); load() }
   const del = async (id: string) => { if (!confirm('این پلن حذف شود؟')) return; await fetch(`/api/admin/plans?id=${id}`, { method: 'DELETE' }); load() }
-  const editPlan = (p: any) => { const name = prompt('نام پلن:', p.name); if (name === null) return; const pm = prompt('قیمت ماهانه (تومان):', String(p.priceMonthly)); const py = prompt('قیمت سالانه (تومان):', String(p.priceYearly)); const feats = prompt('ویژگی‌ها (هر خط یک مورد):', (p.features || []).join('\n')); patch(p.id, { name, priceMonthly: Number(pm) || p.priceMonthly, priceYearly: Number(py) || p.priceYearly, features: (feats ?? (p.features || []).join('\n')).split('\n').map((x: string) => x.trim()).filter(Boolean) }) }
+  const editPlan = (p: any) => { const name = prompt('نام پلن:', p.name); if (name === null) return; const pm = prompt('قیمت ماهانه (تومان):', String(p.priceMonthly)); const py = prompt('قیمت سالانه (تومان):', String(p.priceYearly)); const feats = prompt('ویژگی‌ها (هر خط یک مورد):', (p.features || []).join('\n')); const badge = prompt('برچسب (مثلاً محبوب — خالی=بدون برچسب):', p.badge || ''); patch(p.id, { name, priceMonthly: Number(pm) || p.priceMonthly, priceYearly: Number(py) || p.priceYearly, badge: badge ?? p.badge, features: (feats ?? (p.features || []).join('\n')).split('\n').map((x: string) => x.trim()).filter(Boolean) }) }
   const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '9px 11px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
+  const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
   return (
     <div style={{ animation: 'fade .35s ease' }}>
-      <Card style={{ marginBottom: 14 }}>
+      <Card style={{ marginBottom: 14, background: 'linear-gradient(120deg, rgba(212,175,55,.1), transparent 60%), var(--surface)', borderColor: 'rgba(201,168,76,.4)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-          <div><div style={{ fontWeight: 800, fontSize: 16 }}>پلن‌ها و اشتراک</div><div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3 }}>این پلن‌ها در صفحهٔ قیمت‌گذاری عمومی نمایش داده می‌شوند.</div></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 26 }}>👑</span>
+            <div><div style={{ fontWeight: 900, fontSize: 18 }}>پلن‌ها و اشتراک</div><div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3 }}>پلن‌ها را بساز و به نقش‌ها نسبت بده؛ به هر کاربر، پلن‌های نقشِ خودش + پلن‌های عمومی نمایش داده می‌شود. بسته‌های پیامک/ایمیل/توکن در پایینِ همین صفحه مدیریت می‌شوند.</div></div>
+          </div>
           <GoldButton onClick={() => setShow(s => !s)}>{show ? 'بستن' : '＋ پلن جدید'}</GoldButton>
         </div>
         {show && (
           <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }} className="mjsa-2col">
             <input style={inp} placeholder="نام پلن *" value={f.name} onChange={e => setF({ ...f, name: e.target.value })} />
-            <input style={inp} placeholder="عنوان دکمه (مثلاً شروع رایگان)" value={f.cta} onChange={e => setF({ ...f, cta: e.target.value })} />
+            <input style={inp} placeholder="عنوان دکمه (مثلاً تهیهٔ اشتراک)" value={f.cta} onChange={e => setF({ ...f, cta: e.target.value })} />
             <input style={inp} placeholder="قیمت ماهانه (تومان)" value={f.priceMonthly} onChange={e => setF({ ...f, priceMonthly: e.target.value })} />
             <input style={inp} placeholder="قیمت سالانه (تومان)" value={f.priceYearly} onChange={e => setF({ ...f, priceYearly: e.target.value })} />
+            <select style={inp} value={f.roleId} onChange={e => setF({ ...f, roleId: e.target.value })}>
+              <option value="">نقش: عمومی (برای همه)</option>
+              {roles.map(r => <option key={r.id} value={r.id}>نقش: {r.name}</option>)}
+            </select>
+            <input style={inp} placeholder="برچسب (مثلاً محبوب — اختیاری)" value={f.badge} onChange={e => setF({ ...f, badge: e.target.value })} />
             <textarea style={{ ...inp, gridColumn: '1 / -1', height: 80, resize: 'none' }} placeholder="ویژگی‌ها (هر خط یک مورد)" value={f.features} onChange={e => setF({ ...f, features: e.target.value })} />
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}><input type="checkbox" checked={f.highlighted} onChange={e => setF({ ...f, highlighted: e.target.checked })} /> پلن ویژه (محبوب)</label>
             <div><GoldButton onClick={create}>ثبت پلن</GoldButton></div>
           </div>
         )}
       </Card>
-      <div className="mjsa-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <div className="mjsa-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18 }}>
         {plans.map(p => (
-          <Card key={p.id} style={{ borderColor: p.highlighted ? 'rgba(201,168,76,.3)' : 'var(--line2)', opacity: p.active ? 1 : .55 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <span style={{ fontSize: 16, fontWeight: 800 }}>{p.name} {p.highlighted && <span style={{ fontSize: 11, color: 'var(--gold)' }}>★ محبوب</span>}</span>
-              <div style={{ textAlign: 'left' }}><span style={{ fontSize: 17, fontWeight: 800, color: 'var(--gold)' }}>{(p.priceMonthly || 0).toLocaleString('fa-IR')}</span><span style={{ fontSize: 11, color: 'var(--faint)' }}> ت/ماه</span></div>
+          <Card key={p.id} style={{ position: 'relative', borderColor: p.highlighted ? 'var(--gold)' : 'var(--line2)', boxShadow: p.highlighted ? '0 10px 30px -14px rgba(212,175,55,.5)' : 'none', background: p.highlighted ? 'linear-gradient(160deg, rgba(212,175,55,.08), var(--surface) 60%)' : 'var(--surface)', opacity: p.active ? 1 : .55 }}>
+            {(p.badge || p.highlighted) && <span style={{ position: 'absolute', top: 14, insetInlineStart: 14, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 10.5, fontWeight: 800, borderRadius: 999, padding: '3px 11px' }}>{p.badge || 'محبوب'}</span>}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontSize: 16.5, fontWeight: 900 }}>{p.name}</span>
+              <div style={{ textAlign: 'left' }}><span style={{ fontSize: 18, fontWeight: 900, color: 'var(--gold)' }}>{fa(p.priceMonthly)}</span><span style={{ fontSize: 11, color: 'var(--faint)' }}> ت/ماه</span><div style={{ fontSize: 11, color: 'var(--faint)' }}>{fa(p.priceYearly)} ت/سال</div></div>
             </div>
+            <div style={{ fontSize: 11.5, color: 'var(--gold)', marginBottom: 10 }}>● {roleName(p.roleId)}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
               {(p.features || []).map((x: string) => <div key={x} style={{ fontSize: 12.5, color: 'var(--muted)' }}>✓ {x}</div>)}
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <select value={p.roleId || ''} onChange={e => patch(p.id, { roleId: e.target.value })} style={{ ...inp, width: 'auto', flex: 1, minWidth: 130, fontSize: 12, padding: '6px 9px' }}>
+                <option value="">عمومی (همه)</option>
+                {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
               <OutlineButton onClick={() => editPlan(p)} style={{ fontSize: 12, padding: '6px 12px' }}>ویرایش</OutlineButton>
               <OutlineButton onClick={() => patch(p.id, { active: !p.active })} style={{ fontSize: 12, padding: '6px 12px' }}>{p.active ? 'غیرفعال' : 'فعال'}</OutlineButton>
               <button onClick={() => del(p.id)} style={{ fontSize: 12, padding: '6px 12px', borderRadius: 9, border: '1px solid rgba(231,103,74,.3)', color: '#e7674a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>حذف</button>
@@ -3145,6 +3161,7 @@ function PlansView() {
         ))}
         {plans.length === 0 && <Card><div style={{ color: 'var(--muted)', fontSize: 13 }}>پلنی نیست.</div></Card>}
       </div>
+      <CommPackagesConfig />
     </div>
   )
 }

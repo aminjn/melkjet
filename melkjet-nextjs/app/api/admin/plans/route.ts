@@ -32,6 +32,8 @@ export async function POST(req: NextRequest) {
     cta: b.cta ? String(b.cta) : undefined,
     order: b.order != null && b.order !== '' ? Number(b.order) : undefined,
     active: b.active !== undefined ? !!b.active : undefined,
+    roleId: b.roleId ? String(b.roleId) : undefined,
+    badge: b.badge ? String(b.badge) : undefined,
   })
   return NextResponse.json({ plan })
 }
