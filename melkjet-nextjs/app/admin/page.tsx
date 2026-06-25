@@ -2704,17 +2704,22 @@ function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete }: { user: 
             ))}
           </div>
 
-          {/* هویتِ تأییدشدهٔ شاهکار */}
-          {user.nationalId && (
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: 14 }}>
-              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 10 }}>هویتِ تأییدشده <span style={{ color: '#5fd98a', fontSize: 11 }}>✓ شاهکار</span></div>
+          {/* هویتِ شاهکار — همیشه نمایش، با وضعیتِ احراز */}
+          <div style={{ background: 'var(--surface)', border: `1px solid ${user.identityVerifiedAt ? 'rgba(95,217,138,.35)' : 'var(--line)'}`, borderRadius: 12, padding: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 800 }}>هویتِ سامانهٔ شاهکار</div>
+              {user.identityVerifiedAt
+                ? <span style={{ fontSize: 11.5, fontWeight: 700, color: '#5fd98a', background: 'rgba(95,217,138,.12)', border: '1px solid rgba(95,217,138,.4)', borderRadius: 999, padding: '3px 11px' }}>✓ احراز شده</span>
+                : <span style={{ fontSize: 11.5, fontWeight: 700, color: '#e7894a', background: 'rgba(231,137,74,.12)', border: '1px solid rgba(231,137,74,.4)', borderRadius: 999, padding: '3px 11px' }}>⏳ احراز نشده</span>}
+            </div>
+            {user.nationalId ? (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12.5 }}>
-                {[['کد ملی', user.nationalId, true], ['نام پدر', user.fatherName, false], ['جنسیت', user.gender === 'male' ? 'مرد' : user.gender === 'female' ? 'زن' : user.gender, false], ['تاریخ تولد', user.birthDate, true], ['محل تولد', user.birthPlace, false]].filter(x => x[1]).map(([l, v, ltr]: any) => (
+                {[['نام', user.name, false], ['کد ملی', user.nationalId, true], ['نام پدر', user.fatherName, false], ['جنسیت', user.gender === 'male' ? 'مرد' : user.gender === 'female' ? 'زن' : user.gender, false], ['تاریخ تولد', user.birthDate, true], ['محل تولد', user.birthPlace, false]].filter(x => x[1]).map(([l, v, ltr]: any) => (
                   <div key={l} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, background: 'var(--bg2)', borderRadius: 8, padding: '7px 10px' }}><span style={{ color: 'var(--muted)' }}>{l}</span><span style={{ fontWeight: 700, direction: ltr ? 'ltr' : 'rtl' }}>{v}</span></div>
                 ))}
               </div>
-            </div>
-          )}
+            ) : <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.9 }}>این کاربر هنوز هویتش را با شاهکار تأیید نکرده است. وقتی خودش وارد شود و احراز کند (با احرازِ فعالِ شاهکار)، نام، کد ملی، نام پدر، جنسیت و تاریخ/محلِ تولد این‌جا خودکار پر می‌شود.</div>}
+          </div>
 
           {/* پروفایلِ کاملِ کسب‌وکار */}
           {detail?.profile && (() => {
@@ -2946,6 +2951,7 @@ function UsersView() {
                   <th style={th}>مخاطب</th>
                   <th style={th}>نقش</th>
                   <th style={th}>پلن</th>
+                  <th style={{ ...th, textAlign: 'center' }}>احراز هویت</th>
                   <th style={{ ...th, textAlign: 'center' }}>فعالیت (آگهی/لید/وظیفه)</th>
                   <th style={{ ...th, textAlign: 'center' }}>مصرفِ توکن</th>
                   <th style={th}>اعتبار (پ/ا/ت)</th>
@@ -2970,6 +2976,9 @@ function UsersView() {
                       </td>
                       <td style={td}><select style={{ ...cellSel, color: m.c, borderColor: m.c + '66' }} value={u.role || ''} onChange={e => patchOne(u.phone, { role: e.target.value })}><option value="">— بدون نقش</option>{roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></td>
                       <td style={td}><select style={{ ...cellSel, color: u.plan ? '#a99bf0' : 'var(--muted)' }} value={u.plan || ''} onChange={e => patchOne(u.phone, { plan: e.target.value })}><option value="">بدون پلن</option>{plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></td>
+                      <td style={{ ...td, textAlign: 'center' }}>{u.identityVerifiedAt
+                        ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, fontWeight: 700, color: '#5fd98a', background: 'rgba(95,217,138,.12)', border: '1px solid rgba(95,217,138,.4)', borderRadius: 999, padding: '3px 10px' }}>✓ احراز شده</span>
+                        : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, fontWeight: 700, color: '#e7894a', background: 'rgba(231,137,74,.12)', border: '1px solid rgba(231,137,74,.4)', borderRadius: 999, padding: '3px 10px' }}>⏳ احراز نشده</span>}</td>
                       <td style={{ ...td, textAlign: 'center', fontSize: 12.5, fontWeight: 700 }}><span style={{ color: u.listings ? 'var(--gold)' : 'var(--faint)' }}>{(u.listings || 0).toLocaleString('fa-IR')}</span><span style={{ color: 'var(--faint)' }}> / </span><span style={{ color: u.leads ? '#5fd98a' : 'var(--faint)' }}>{(u.leads || 0).toLocaleString('fa-IR')}</span><span style={{ color: 'var(--faint)' }}> / </span><span style={{ color: u.tasks ? '#5b9bd5' : 'var(--faint)' }}>{(u.tasks || 0).toLocaleString('fa-IR')}</span></td>
                       <td style={{ ...td, textAlign: 'center', fontSize: 12.5, fontWeight: 700, color: u.tokenUsed ? '#a99bf0' : 'var(--faint)' }}>{(u.tokenUsed || 0).toLocaleString('fa-IR')}</td>
                       <td style={{ ...td, fontSize: 11.5, color: 'var(--muted)', direction: 'ltr', textAlign: 'right' }}>{(u.credit?.sms || 0).toLocaleString('fa-IR')}/{(u.credit?.email || 0).toLocaleString('fa-IR')}/{(u.credit?.token || 0).toLocaleString('fa-IR')}</td>
