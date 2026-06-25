@@ -23,7 +23,28 @@ export interface SiteSeo {
 
 export interface SiteTheme {
   primary: string
+  secondary?: string   // رنگِ تیره/مکمل (بخش‌های تیره، فوتر، گرادیانِ هیرو)
+  bg?: string          // پس‌زمینهٔ صفحه
+  surface?: string     // پس‌زمینهٔ بخش‌ها/کارت‌های جایگزین
+  text?: string        // رنگِ متنِ بدنه
+  heading?: string     // رنگِ عنوان‌ها
   font?: string
+}
+
+const HEX = /^#[0-9a-fA-F]{3,8}$/
+function pickColor(v: any, fallback: string): string { const s = String(v || '').trim(); return HEX.test(s) ? s : fallback }
+// پالتِ کاملِ تم را از دادهٔ خام می‌سازد (با مقادیرِ پیش‌فرض).
+function normTheme(t: any): SiteTheme {
+  const o = t && typeof t === 'object' ? t : {}
+  return {
+    primary: pickColor(o.primary, '#c9a84c'),
+    secondary: pickColor(o.secondary, '#1a1510'),
+    bg: pickColor(o.bg, '#ffffff'),
+    surface: pickColor(o.surface, '#fbfaf8'),
+    text: pickColor(o.text, '#4a4338'),
+    heading: pickColor(o.heading, '#15110b'),
+    ...(o.font ? { font: String(o.font) } : {}),
+  }
 }
 
 // A single page of a site. pages[0] is always the home page.
@@ -112,9 +133,7 @@ function migrateSite(site: any): Site {
     title: String(site?.title || '').trim() || 'سایت بدون عنوان',
     owner: site?.owner ? String(site.owner) : undefined,
     ownerName: site?.ownerName ? String(site.ownerName) : undefined,
-    theme: site?.theme && typeof site.theme === 'object'
-      ? { primary: String(site.theme.primary || '#c9a84c'), ...(site.theme.font ? { font: String(site.theme.font) } : {}) }
-      : undefined,
+    theme: site?.theme && typeof site.theme === 'object' ? normTheme(site.theme) : undefined,
     pages,
     seo: site?.seo && typeof site.seo === 'object'
       ? { title: String(site.seo.title || ''), description: String(site.seo.description || '') }
@@ -201,10 +220,7 @@ export function saveSite(input: {
     title: String(input.title || '').trim() || 'سایت بدون عنوان',
     owner: input.owner ? String(input.owner) : (existing?.owner),
     ownerName: input.ownerName !== undefined ? String(input.ownerName).trim() : (existing?.ownerName),
-    theme: {
-      primary: /^#[0-9a-fA-F]{3,8}$/.test(primary) ? primary : '#c9a84c',
-      ...(input.theme?.font ? { font: String(input.theme.font) } : {}),
-    },
+    theme: normTheme({ ...input.theme, primary: HEX.test(primary) ? primary : (input.theme?.primary || '#c9a84c') }),
     pages,
     seo: {
       title: String(input.seo?.title || '').trim(),

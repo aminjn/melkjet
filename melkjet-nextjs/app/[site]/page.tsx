@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { getSite, getSitePage, type Site, type SitePage, type SiteBlock } from '@/app/lib/sites-store'
 import { listItems, listArticles, type Item } from '@/app/lib/scraper-store'
 import { getTeamMembers, type TeamMember } from '@/app/lib/team-members'
+import ListingsSlider from './ListingsSlider'
 
 // Public renderer for builder-published sites living at melkjet.com/{slug}.
 // Existing static single-segment routes (search, owner, ...) take precedence;
@@ -61,9 +62,11 @@ function ownerArticles(ownerName: string | undefined, count: number): Item[] {
 }
 
 // ── Shared visual primitives ──────────────────────────────────────────────────
-const INK = '#15110b'
-const MUTED = '#6b6256'
-const SURFACE = '#fbfaf8'
+// رنگ‌ها از متغیرهای CSS خوانده می‌شوند تا با پالتِ تمِ سایت بازرنگ شوند (SiteShell
+// روی <main> این متغیرها را از theme می‌ست می‌کند).
+const INK = 'var(--mjs-heading)'
+const MUTED = 'var(--mjs-muted)'
+const SURFACE = 'var(--mjs-surface)'
 const CARD_SHADOW = '0 10px 34px -22px rgba(20,16,10,.55), 0 2px 8px -4px rgba(20,16,10,.10)'
 const SECTION_PAD = 'clamp(56px,8vw,96px) clamp(20px,5vw,24px)'
 
@@ -96,7 +99,7 @@ function HeroBlock({ block, primary }: { block: SiteBlock; primary: string }) {
   const align = props.align === 'right' ? 'right' : 'center'
   const textColor = props.textColor || '#fff'
   // Layered overlay over the chosen bg so any image/gradient stays legible.
-  const baseBg = props.bg || `linear-gradient(135deg, ${primary}, #1a1510 70%)`
+  const baseBg = props.bg || 'linear-gradient(135deg, var(--mjs-primary), var(--mjs-secondary) 70%)'
   const bg = `linear-gradient(180deg, rgba(12,9,6,.30), rgba(12,9,6,.62)), ${baseBg}`
   return (
     <section id="hero" style={{
@@ -141,10 +144,10 @@ function SearchBlock({ block, primary }: { block: SiteBlock; primary: string }) 
       <div style={{ maxWidth: 980, margin: '0 auto' }}>
         {props.heading ? <h2 style={{ fontSize: 'clamp(18px,2.4vw,22px)', fontWeight: 800, color: INK, marginBottom: 16 }}>{props.heading}</h2> : null}
         <div className="mjs-search-row" style={{
-          display: 'flex', gap: 12, background: '#fff', padding: 10, borderRadius: 18,
+          display: 'flex', gap: 12, background: 'var(--mjs-bg)', padding: 10, borderRadius: 18,
           boxShadow: CARD_SHADOW, border: '1px solid #efe9df',
         }}>
-          <div style={{ flex: 1, minHeight: 52, background: '#fff', borderRadius: 12, display: 'flex', alignItems: 'center', padding: '0 18px', color: '#a9a195', fontSize: 15 }}>
+          <div style={{ flex: 1, minHeight: 52, background: 'var(--mjs-bg)', borderRadius: 12, display: 'flex', alignItems: 'center', padding: '0 18px', color: '#a9a195', fontSize: 15 }}>
             <span style={{ marginLeft: 10, opacity: .7 }}>🔍</span>{props.placeholder}
           </div>
           <div className="mjs-btn" style={{ padding: '0 34px', minHeight: 52, background: primary, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 800, color: '#fff', boxShadow: `0 10px 26px -12px ${primary}` }}>جستجو</div>
@@ -160,7 +163,7 @@ function MediaCard({ href, image, gradient, children }: {
 }) {
   return (
     <a href={href} className="mjs-card" style={{
-      background: '#fff', borderRadius: 18, overflow: 'hidden', border: '1px solid #efe9df',
+      background: 'var(--mjs-bg)', borderRadius: 18, overflow: 'hidden', border: '1px solid #efe9df',
       textDecoration: 'none', display: 'block', boxShadow: CARD_SHADOW,
     }}>
       {image ? (
@@ -176,28 +179,26 @@ function MediaCard({ href, image, gradient, children }: {
 
 function ListingsBlock({ block, primary, ownerName, ownerPhone }: { block: SiteBlock; primary: string; ownerName?: string; ownerPhone?: string }) {
   const props = p(block)
-  const n = Math.max(1, Math.min(12, Number(props.count) || 6))
-  const grads = ['#2d2215,#1e1a12', '#1e2215,#141a10', '#15202d,#101828', '#251528,#1a0e1e', '#152825,#0e1a18', '#2d1515,#1e0e0e']
-
-  const cardInner = (it: Item, _i: number) => (
-    <>
-      <div style={{ fontSize: 16, fontWeight: 800, color: INK, marginBottom: 7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.title}</div>
-      <div style={{ fontSize: 13, color: MUTED, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 5 }}>
-        <span style={{ opacity: .7 }}>📍</span>{it.location || 'موقعیت نامشخص'}
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f2ede4', paddingTop: 12 }}>
-        <span style={{ fontSize: 17, fontWeight: 900, color: primary }}>{it.price || 'قیمت توافقی'}</span>
-        <span style={{ fontSize: 12.5, fontWeight: 700, color: MUTED }}>مشاهده ←</span>
-      </div>
-    </>
-  )
+  // total = تعداد آگهی‌های بارگذاری‌شده (پیش‌فرض ۹)؛ count به‌عنوان جایگزینِ legacy.
+  const total = Math.max(1, Math.min(48, Number(props.total) || Number(props.count) || 9))
+  const perSlide = Math.max(1, Math.min(6, Number(props.perSlide) || 3))
+  const showCategories = props.showCategories !== 'no'
 
   // Real listings: pull the owner's own published listings. پیش‌فرض هم «آگهی‌های من»
   // است مگر صراحتاً «نمونه» انتخاب شده باشد.
   if (props.source !== 'sample') {
-    const items = ownerListings(ownerName, ownerPhone, n)
+    const items = ownerListings(ownerName, ownerPhone, total)
+    // دسته‌بندی‌های متمایزِ غیرخالی به ترتیبِ اولین مشاهده.
+    const categories: string[] = []
+    for (const it of items) {
+      const c = (it.category || '').trim()
+      if (c && !categories.includes(c)) categories.push(c)
+    }
+    const sliderItems = items.map(it => ({
+      id: it.id, title: it.title, location: it.location, price: it.price, image: it.image, category: (it.category || '').trim(),
+    }))
     return (
-      <section id="listings" style={{ background: '#fff', padding: SECTION_PAD, direction: 'rtl' }}>
+      <section id="listings" style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
           <SectionHeading primary={primary}>{props.heading}</SectionHeading>
           {items.length === 0 ? (
@@ -205,37 +206,40 @@ function ListingsBlock({ block, primary, ownerName, ownerPhone }: { block: SiteB
               هنوز آگهی منتشرشده‌ای برای نمایش وجود ندارد.
             </div>
           ) : (
-            <div className="mjs-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 24 }}>
-              {items.map((it, i) => (
-                <MediaCard key={it.id} href={`/property/${it.id}`} image={it.image} gradient={grads[i % grads.length]}>{cardInner(it, i)}</MediaCard>
-              ))}
-            </div>
+            <ListingsSlider
+              items={sliderItems}
+              categories={categories}
+              perSlide={perSlide}
+              primary={primary}
+              showCategories={showCategories}
+            />
           )}
         </div>
       </section>
     )
   }
 
-  // Sample cards (source === 'sample' or unset).
+  // Sample cards (source === 'sample') — همان استایلِ اسلایدر با کارت‌های نمونه.
+  const sampleCats = ['آپارتمان', 'ویلا', 'تجاری']
+  const sampleItems = Array.from({ length: total }).map((_, i) => ({
+    id: `sample-${i}`,
+    title: 'آپارتمان لوکس',
+    location: 'تهران، منطقه نمونه',
+    price: 'قیمت توافقی',
+    image: undefined,
+    category: sampleCats[i % sampleCats.length],
+  }))
   return (
-    <section id="listings" style={{ background: '#fff', padding: SECTION_PAD, direction: 'rtl' }}>
+    <section id="listings" style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <SectionHeading primary={primary}>{props.heading}</SectionHeading>
-        <div className="mjs-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 24 }}>
-          {Array.from({ length: n }).map((_, i) => (
-            <div key={i} className="mjs-card" style={{ background: '#fff', borderRadius: 18, overflow: 'hidden', border: '1px solid #efe9df', boxShadow: CARD_SHADOW }}>
-              <div style={{ height: 190, background: `linear-gradient(135deg,${grads[i % grads.length]})` }} />
-              <div style={{ padding: 20 }}>
-                <div style={{ fontSize: 16, fontWeight: 800, color: INK, marginBottom: 7 }}>آپارتمان لوکس</div>
-                <div style={{ fontSize: 13, color: MUTED, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ opacity: .7 }}>📍</span>تهران، منطقه نمونه</div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f2ede4', paddingTop: 12 }}>
-                  <span style={{ fontSize: 17, fontWeight: 900, color: primary }}>قیمت توافقی</span>
-                  <span style={{ fontSize: 12.5, fontWeight: 700, color: MUTED }}>مشاهده ←</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+        <ListingsSlider
+          items={sampleItems}
+          categories={showCategories ? sampleCats : []}
+          perSlide={perSlide}
+          primary={primary}
+          showCategories={showCategories}
+        />
       </div>
     </section>
   )
@@ -254,7 +258,7 @@ function BlogBlock({ block, primary, ownerName }: { block: SiteBlock; primary: s
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
           <SectionHeading primary={primary}>{props.heading}</SectionHeading>
           {items.length === 0 ? (
-            <div style={{ background: '#fff', border: '1px dashed #ddd4c5', borderRadius: 18, padding: '52px 24px', textAlign: 'center', color: '#9b9285', fontSize: 14.5 }}>
+            <div style={{ background: 'var(--mjs-bg)', border: '1px dashed #ddd4c5', borderRadius: 18, padding: '52px 24px', textAlign: 'center', color: '#9b9285', fontSize: 14.5 }}>
               هنوز مقالهٔ منتشرشده‌ای برای نمایش وجود ندارد.
             </div>
           ) : (
@@ -284,7 +288,7 @@ function BlogBlock({ block, primary, ownerName }: { block: SiteBlock; primary: s
         <SectionHeading primary={primary}>{props.heading}</SectionHeading>
         <div className="mjs-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 24 }}>
           {Array.from({ length: n }).map((_, i) => (
-            <div key={i} className="mjs-card" style={{ background: '#fff', borderRadius: 18, overflow: 'hidden', border: '1px solid #efe9df', boxShadow: CARD_SHADOW }}>
+            <div key={i} className="mjs-card" style={{ background: 'var(--mjs-bg)', borderRadius: 18, overflow: 'hidden', border: '1px solid #efe9df', boxShadow: CARD_SHADOW }}>
               <div style={{ height: 190, background: `linear-gradient(135deg,${grads[i % grads.length]})` }} />
               <div style={{ padding: 20 }}>
                 <div style={{ fontSize: 17, fontWeight: 800, color: INK, marginBottom: 10 }}>عنوان مقاله</div>
@@ -303,7 +307,7 @@ function ServicesBlock({ block, primary }: { block: SiteBlock; primary: string }
   const props = p(block)
   const items: any[] = Array.isArray(props.items) ? props.items : []
   return (
-    <section style={{ background: '#fff', padding: SECTION_PAD, direction: 'rtl' }}>
+    <section style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <SectionHeading primary={primary} center>{props.heading}</SectionHeading>
         <div className="mjs-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(230px,1fr))', gap: 24 }}>
@@ -331,13 +335,13 @@ function AboutBlock({ block, primary }: { block: SiteBlock; primary: string }) {
       <div className="mjs-about" style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', gap: 'clamp(28px,5vw,56px)', alignItems: 'center', flexWrap: 'wrap' }}>
         <div style={{ flex: '1 1 340px' }}>
           <SectionHeading primary={primary}>{props.heading}</SectionHeading>
-          <p style={{ fontSize: 'clamp(15px,1.7vw,16.5px)', lineHeight: 2.1, color: '#4a4338', margin: 0 }}>{props.text}</p>
+          <p style={{ fontSize: 'clamp(15px,1.7vw,16.5px)', lineHeight: 2.1, color: 'var(--mjs-text)', margin: 0 }}>{props.text}</p>
         </div>
         {props.image ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={props.image} alt="" style={{ flex: '1 1 340px', width: '100%', maxWidth: 440, height: 320, objectFit: 'cover', borderRadius: 22, boxShadow: CARD_SHADOW }} />
         ) : (
-          <div style={{ flex: '1 1 340px', width: '100%', maxWidth: 440, height: 320, background: `linear-gradient(135deg,${primary},#1a1510)`, borderRadius: 22, boxShadow: CARD_SHADOW }} />
+          <div style={{ flex: '1 1 340px', width: '100%', maxWidth: 440, height: 320, background: 'linear-gradient(135deg,var(--mjs-primary),var(--mjs-secondary))', borderRadius: 22, boxShadow: CARD_SHADOW }} />
         )}
       </div>
     </section>
@@ -365,7 +369,7 @@ function GalleryBlock({ block, primary }: { block: SiteBlock; primary: string })
   const props = p(block)
   const imgs: string[] = Array.isArray(props.images) ? props.images.filter(Boolean) : []
   return (
-    <section style={{ background: '#fff', padding: SECTION_PAD, direction: 'rtl' }}>
+    <section style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <SectionHeading primary={primary}>{props.heading}</SectionHeading>
         <div className="mjs-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 18 }}>
@@ -395,9 +399,9 @@ function TestimonialsBlock({ block, primary }: { block: SiteBlock; primary: stri
             const rating = Math.max(0, Math.min(5, Number(s.rating) || 5))
             const initial = (s.name || '?').toString().trim().charAt(0)
             return (
-              <div key={i} className="mjs-card" style={{ background: '#fff', border: '1px solid #efe9df', borderRadius: 18, padding: 26, boxShadow: CARD_SHADOW }}>
+              <div key={i} className="mjs-card" style={{ background: 'var(--mjs-bg)', border: '1px solid #efe9df', borderRadius: 18, padding: 26, boxShadow: CARD_SHADOW }}>
                 <div style={{ fontSize: 40, lineHeight: 0.6, color: `${primary}55`, fontWeight: 900, marginBottom: 8 }}>”</div>
-                <p style={{ fontSize: 15, lineHeight: 2, color: '#4a4338', margin: '0 0 18px' }}>{s.text}</p>
+                <p style={{ fontSize: 15, lineHeight: 2, color: 'var(--mjs-text)', margin: '0 0 18px' }}>{s.text}</p>
                 <div style={{ color: primary, marginBottom: 16, fontSize: 15, letterSpacing: 2 }}>
                   {'★'.repeat(rating)}<span style={{ color: '#e3dccf' }}>{'★'.repeat(5 - rating)}</span>
                 </div>
@@ -416,7 +420,7 @@ function TestimonialsBlock({ block, primary }: { block: SiteBlock; primary: stri
 
 function CtaBlock({ block, primary }: { block: SiteBlock; primary: string }) {
   const props = p(block)
-  const baseBg = props.bg || `linear-gradient(135deg, ${primary}, #1a1510 75%)`
+  const baseBg = props.bg || 'linear-gradient(135deg, var(--mjs-primary), var(--mjs-secondary) 75%)'
   const bg = `linear-gradient(180deg, rgba(12,9,6,.20), rgba(12,9,6,.45)), ${baseBg}`
   return (
     <section style={{ background: bg, backgroundSize: 'cover', backgroundPosition: 'center', padding: 'clamp(60px,9vw,100px) clamp(20px,5vw,24px)', textAlign: 'center', direction: 'rtl' }}>
@@ -434,11 +438,11 @@ function ContactBlock({ block, primary }: { block: SiteBlock; primary: string })
   const Row = ({ icon, children, ltr }: { icon: string; children: React.ReactNode; ltr?: boolean }) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
       <div style={{ flex: '0 0 auto', width: 44, height: 44, borderRadius: 12, background: `${primary}1f`, color: primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>{icon}</div>
-      <div style={{ fontSize: 15, color: '#4a4338', fontWeight: 600, direction: ltr ? 'ltr' : 'rtl', textAlign: 'right', flex: 1 }}>{children}</div>
+      <div style={{ fontSize: 15, color: 'var(--mjs-text)', fontWeight: 600, direction: ltr ? 'ltr' : 'rtl', textAlign: 'right', flex: 1 }}>{children}</div>
     </div>
   )
   return (
-    <section id="contact" style={{ background: '#fff', padding: SECTION_PAD, direction: 'rtl' }}>
+    <section id="contact" style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 760, margin: '0 auto' }}>
         <SectionHeading primary={primary}>{props.heading}</SectionHeading>
         <div className="mjs-card" style={{ background: SURFACE, border: '1px solid #efe9df', borderRadius: 22, padding: 'clamp(24px,4vw,36px)', boxShadow: CARD_SHADOW }}>
@@ -448,10 +452,10 @@ function ContactBlock({ block, primary }: { block: SiteBlock; primary: string })
             {props.address ? <Row icon="📍">{props.address}</Row> : null}
           </div>
           <div className="mjs-contact-fields" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-            <input placeholder="نام" style={{ minHeight: 50, background: '#fff', border: '1px solid #e6ddcd', borderRadius: 12, padding: '0 16px', fontSize: 14.5, fontFamily: 'inherit' }} />
-            <input placeholder="شماره تماس" style={{ minHeight: 50, background: '#fff', border: '1px solid #e6ddcd', borderRadius: 12, padding: '0 16px', fontSize: 14.5, fontFamily: 'inherit' }} />
+            <input placeholder="نام" style={{ minHeight: 50, background: 'var(--mjs-bg)', border: '1px solid #e6ddcd', borderRadius: 12, padding: '0 16px', fontSize: 14.5, fontFamily: 'inherit' }} />
+            <input placeholder="شماره تماس" style={{ minHeight: 50, background: 'var(--mjs-bg)', border: '1px solid #e6ddcd', borderRadius: 12, padding: '0 16px', fontSize: 14.5, fontFamily: 'inherit' }} />
           </div>
-          <textarea placeholder="پیام شما" style={{ width: '100%', minHeight: 120, background: '#fff', border: '1px solid #e6ddcd', borderRadius: 12, padding: 16, fontSize: 14.5, marginBottom: 18, boxSizing: 'border-box', fontFamily: 'inherit', resize: 'vertical' }} />
+          <textarea placeholder="پیام شما" style={{ width: '100%', minHeight: 120, background: 'var(--mjs-bg)', border: '1px solid #e6ddcd', borderRadius: 12, padding: 16, fontSize: 14.5, marginBottom: 18, boxSizing: 'border-box', fontFamily: 'inherit', resize: 'vertical' }} />
           <button className="mjs-btn" style={{ padding: '14px 38px', background: primary, borderRadius: 12, border: 'none', fontSize: 15, fontWeight: 800, color: '#fff', cursor: 'pointer', boxShadow: `0 12px 30px -14px ${primary}`, fontFamily: 'inherit' }}>ارسال پیام</button>
         </div>
       </div>
@@ -459,26 +463,101 @@ function ContactBlock({ block, primary }: { block: SiteBlock; primary: string })
   )
 }
 
-function FooterBlock({ block, primary }: { block: SiteBlock; primary: string }) {
+// ── Rich multi-column footer ──────────────────────────────────────────────────
+// پسوندِ تیرهٔ برند (var(--mjs-secondary)): برند + توضیح، ستون‌های لینک، تماس و
+// شبکه‌های اجتماعی در گریدِ واکنش‌گرا، با ردیفِ کپی‌رایت در پایین. سازگار با propهای legacy.
+type FooterLink = { label: string; href: string }
+type FooterColumn = { title: string; links: FooterLink[] }
+
+function FooterBlock({ block, primary, ownerName }: { block: SiteBlock; primary: string; ownerName?: string }) {
   const props = p(block)
-  const links: any[] = Array.isArray(props.links) ? props.links : []
+
+  const brand: string = String(props.brand || props.text || ownerName || 'ملک‌جت').trim() || 'ملک‌جت'
+  const about: string = String(props.about || 'همراه شما در خرید و فروش ملک.').trim()
+  const copyright: string = String(props.copyright || '© ۱۴۰۴ — تمامی حقوق محفوظ است').trim()
+
+  // ستون‌ها: props.columns ← اگر نبود، propی legacyِ links به‌عنوان یک ستونِ «دسترسی سریع».
+  let columns: FooterColumn[] = Array.isArray(props.columns)
+    ? (props.columns as any[])
+        .map(c => ({ title: String(c?.title || '').trim(), links: Array.isArray(c?.links) ? (c.links as any[]).map(l => ({ label: String(l?.label || ''), href: String(l?.href || '#') })) : [] }))
+        .filter(c => c.title || c.links.length)
+        .slice(0, 4)
+    : []
+  if (columns.length === 0 && Array.isArray(props.links) && props.links.length) {
+    columns = [{ title: 'دسترسی سریع', links: (props.links as any[]).map(l => ({ label: String(l?.label || ''), href: String(l?.href || '#') })) }]
+  }
+
+  const phone = String(props.phone || '').trim()
+  const email = String(props.email || '').trim()
+  const address = String(props.address || '').trim()
+  const hasContact = !!(phone || email || address)
+
+  // شبکه‌های اجتماعی: هم از props.social (شیء) و هم از فیلدهای مسطحِ ویرایشگر خوانده می‌شود.
+  const socialObj = (props.social && typeof props.social === 'object' ? props.social : {}) as Record<string, string>
+  const social: Record<string, string> = {
+    instagram: socialObj.instagram || props.instagram,
+    telegram: socialObj.telegram || props.telegram,
+    whatsapp: socialObj.whatsapp || props.whatsapp,
+    linkedin: socialObj.linkedin || props.linkedin,
+  }
+  const socialItems: { key: string; glyph: string; href: string; label: string }[] = []
+  const sv = (v: any) => String(v || '').trim()
+  if (sv(social.instagram)) socialItems.push({ key: 'instagram', glyph: 'IG', href: sv(social.instagram), label: 'اینستاگرام' })
+  if (sv(social.telegram)) socialItems.push({ key: 'telegram', glyph: 'TG', href: sv(social.telegram), label: 'تلگرام' })
+  if (sv(social.whatsapp)) socialItems.push({ key: 'whatsapp', glyph: 'WA', href: sv(social.whatsapp), label: 'واتساپ' })
+  if (sv(social.linkedin)) socialItems.push({ key: 'linkedin', glyph: 'in', href: sv(social.linkedin), label: 'لینکدین' })
+
+  const ContactRow = ({ icon, children, ltr }: { icon: string; children: React.ReactNode; ltr?: boolean }) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 11 }}>
+      <span style={{ flex: '0 0 auto', width: 30, height: 30, borderRadius: 9, background: `${primary}26`, color: primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>{icon}</span>
+      <span style={{ fontSize: 13.5, color: '#b6ac9c', direction: ltr ? 'ltr' : 'rtl', textAlign: 'right', flex: 1 }}>{children}</span>
+    </div>
+  )
+
   return (
-    <footer style={{ background: '#0d0b08', padding: 'clamp(48px,7vw,72px) clamp(20px,5vw,24px) 32px', direction: 'rtl' }}>
+    <footer style={{ background: 'var(--mjs-secondary)', padding: 'clamp(48px,7vw,72px) clamp(20px,5vw,24px) 32px', direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 36, marginBottom: 36 }}>
+        <div className="mjs-footer-grid" style={{ display: 'grid', gridTemplateColumns: '1.5fr repeat(auto-fit,minmax(160px,1fr))', gap: 'clamp(28px,5vw,44px)', marginBottom: 38, alignItems: 'start' }}>
+          {/* برند + توضیح + شبکه‌های اجتماعی */}
           <div>
-            <div style={{ fontSize: 22, fontWeight: 900, color: primary, marginBottom: 14, letterSpacing: '-0.4px' }}>{props.text}</div>
-            <p style={{ fontSize: 14, color: '#8a8073', lineHeight: 2, maxWidth: 320 }}>همراه شما در خرید و فروش ملک.</p>
+            <div style={{ fontSize: 22, fontWeight: 900, color: primary, marginBottom: 14, letterSpacing: '-0.4px' }}>{brand}</div>
+            {about ? <p style={{ fontSize: 14, color: '#9b9183', lineHeight: 2, maxWidth: 340, margin: '0 0 18px' }}>{about}</p> : null}
+            {socialItems.length > 0 ? (
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {socialItems.map(s => (
+                  <a key={s.key} href={s.href} target="_blank" rel="noreferrer" aria-label={s.label} title={s.label} className="mjs-fsocial" style={{
+                    width: 38, height: 38, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 12.5, fontWeight: 800, color: '#cfc6b6', background: 'rgba(255,255,255,.07)',
+                    border: '1px solid rgba(255,255,255,.12)', textDecoration: 'none',
+                  }}>{s.glyph}</a>
+                ))}
+              </div>
+            ) : null}
           </div>
-          <div>
-            <div style={{ fontSize: 13.5, fontWeight: 800, color: '#a9a08f', marginBottom: 16, letterSpacing: '.3px' }}>لینک‌های سریع</div>
-            {links.map((l, i) => (
-              <a key={i} href={l.href || '#'} className="mjs-flink" style={{ display: 'block', fontSize: 14, color: '#8a8073', marginBottom: 11, textDecoration: 'none' }}>{l.label}</a>
-            ))}
-          </div>
+
+          {/* ستون‌های لینک */}
+          {columns.map((col, ci) => (
+            <div key={ci}>
+              <div style={{ fontSize: 13.5, fontWeight: 800, color: '#c2b8a6', marginBottom: 16, letterSpacing: '.3px' }}>{col.title}</div>
+              {col.links.map((l, i) => (
+                <a key={i} href={l.href || '#'} className="mjs-flink" style={{ display: 'block', fontSize: 14, color: '#8a8073', marginBottom: 11, textDecoration: 'none' }}>{l.label}</a>
+              ))}
+            </div>
+          ))}
+
+          {/* تماس */}
+          {hasContact ? (
+            <div>
+              <div style={{ fontSize: 13.5, fontWeight: 800, color: '#c2b8a6', marginBottom: 16, letterSpacing: '.3px' }}>تماس</div>
+              {phone ? <ContactRow icon="☎" ltr>{phone}</ContactRow> : null}
+              {email ? <ContactRow icon="✉" ltr>{email}</ContactRow> : null}
+              {address ? <ContactRow icon="📍">{address}</ContactRow> : null}
+            </div>
+          ) : null}
         </div>
-        <div style={{ borderTop: '1px solid #221b12', paddingTop: 22, textAlign: 'center' }}>
-          <span style={{ fontSize: 12.5, color: '#5a5145' }}>© ۱۴۰۴ — تمامی حقوق محفوظ است</span>
+
+        <div style={{ borderTop: '1px solid rgba(255,255,255,.10)', paddingTop: 22, textAlign: 'center' }}>
+          <span style={{ fontSize: 12.5, color: '#7a7062' }}>{copyright}</span>
         </div>
       </div>
     </footer>
@@ -495,9 +574,9 @@ export function TeamMemberCard({ m, primary, showSites, showPhone }: { m: TeamMe
   if (m.activeListings > 0) info.push({ icon: '🏠', label: 'آگهیِ فعال', value: `${m.activeListings.toLocaleString('fa-IR')} مورد` })
   if (showPhone && m.phone) info.push({ icon: '☎', label: 'تماس', value: m.phone })
   return (
-    <div className="mjs-card" style={{ background: '#fff', border: '1px solid #efe9df', borderRadius: 22, overflow: 'hidden', boxShadow: CARD_SHADOW, textAlign: 'center', display: 'flex', flexDirection: 'column' }}>
+    <div className="mjs-card" style={{ background: 'var(--mjs-bg)', border: '1px solid #efe9df', borderRadius: 22, overflow: 'hidden', boxShadow: CARD_SHADOW, textAlign: 'center', display: 'flex', flexDirection: 'column' }}>
       {/* نوارِ رنگیِ بالا */}
-      <div style={{ height: 76, background: `linear-gradient(135deg, ${primary}, #1a1510)` }} />
+      <div style={{ height: 76, background: 'linear-gradient(135deg, var(--mjs-primary), var(--mjs-secondary))' }} />
       <div style={{ padding: '0 20px 22px', marginTop: -52, display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
         {m.photo ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -545,7 +624,7 @@ function TeamBlock({ block, primary, ownerPhone }: { block: SiteBlock; primary: 
   let people = ownerPhone ? getTeamMembers(ownerPhone) : []
   if (sel) people = people.filter(m => sel.includes(m.phone))
   return (
-    <section id="team" style={{ background: '#fff', padding: SECTION_PAD, direction: 'rtl' }}>
+    <section id="team" style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <SectionHeading primary={primary} center sub={props.subheading || undefined}>{props.heading || 'مشاوران ما'}</SectionHeading>
         {people.length === 0 ? (
@@ -575,10 +654,10 @@ function renderBlock(block: SiteBlock, primary: string, ownerName?: string, owne
     case 'testimonials': return <TestimonialsBlock key={block.id} block={block} primary={primary} />
     case 'cta': return <CtaBlock key={block.id} block={block} primary={primary} />
     case 'contact': return <ContactBlock key={block.id} block={block} primary={primary} />
-    case 'footer': return <FooterBlock key={block.id} block={block} primary={primary} />
+    case 'footer': return <FooterBlock key={block.id} block={block} primary={primary} ownerName={ownerName} />
     default:
       return (
-        <section key={block.id} style={{ background: '#fff', padding: '32px 24px', direction: 'rtl' }}>
+        <section key={block.id} style={{ background: 'var(--mjs-bg)', padding: '32px 24px', direction: 'rtl' }}>
           <h2 style={{ fontSize: 22, fontWeight: 800, color: INK }}>{p(block).heading || block.type}</h2>
         </section>
       )
@@ -607,7 +686,7 @@ function SiteNav({ site, primary, currentSlug }: { site: Site; primary: string; 
             return (
               <a key={it.slug} href={href} className="mjs-navlink" style={{
                 fontSize: 14, fontWeight: active ? 800 : 600, textDecoration: 'none',
-                color: active ? '#fff' : '#4a4338',
+                color: active ? '#fff' : 'var(--mjs-text)',
                 background: active ? primary : 'transparent',
                 padding: '9px 16px', borderRadius: 10,
               }}>{it.label}</a>
@@ -622,9 +701,27 @@ function SiteNav({ site, primary, currentSlug }: { site: Site; primary: string; 
 // Shared full-site shell: nav + the given page's blocks. Used by both the home
 // route and the [page] sub-route so there's a single source of truth.
 export function SiteShell({ site, page }: { site: Site; page: SitePage }) {
-  const primary = site.theme?.primary || '#c9a84c'
+  // پالتِ کاملِ تم را یک‌بار با مقادیرِ پیش‌فرض حل می‌کنیم؛ کلِ سایت از همین متغیرهای CSS
+  // (روی <main>) بازرنگ می‌شود.
+  const t = site.theme
+  const primary = t?.primary || '#c9a84c'
+  const secondary = t?.secondary || '#1a1510'
+  const bg = t?.bg || '#ffffff'
+  const surface = t?.surface || '#fbfaf8'
+  const text = t?.text || '#4a4338'
+  const heading = t?.heading || '#15110b'
+  const fontFamily = (t?.font ? `${t.font}, ` : '') + 'Vazirmatn, Tahoma, sans-serif'
+  const cssVars = {
+    '--mjs-primary': primary,
+    '--mjs-secondary': secondary,
+    '--mjs-bg': bg,
+    '--mjs-surface': surface,
+    '--mjs-text': text,
+    '--mjs-heading': heading,
+    '--mjs-muted': text, // متنِ بدنه در برابرِ عنوان‌ها نقشِ «خاموش/muted» را بازی می‌کند.
+  } as React.CSSProperties
   return (
-    <main style={{ minHeight: '100vh', background: '#fff', fontFamily: 'Vazirmatn, Tahoma, sans-serif' }}>
+    <main style={{ minHeight: '100vh', background: 'var(--mjs-bg)', color: 'var(--mjs-text)', fontFamily, ...cssVars }}>
       <style>{`
         .mjs-card{transition:transform .22s ease, box-shadow .22s ease}
         .mjs-card:hover{transform:translateY(-5px);box-shadow:0 22px 50px -24px rgba(20,16,10,.55),0 6px 16px -8px rgba(20,16,10,.18)}
@@ -634,6 +731,8 @@ export function SiteShell({ site, page }: { site: Site; page: SitePage }) {
         .mjs-navlink:hover{background:${primary}1f;color:${primary}}
         .mjs-flink{transition:color .18s ease, padding .18s ease}
         .mjs-flink:hover{color:${primary};padding-right:5px}
+        .mjs-fsocial{transition:transform .18s ease, background .18s ease, color .18s ease, border-color .18s ease}
+        .mjs-fsocial:hover{transform:translateY(-2px);background:${primary};color:#fff;border-color:${primary}}
         .mjs-gallery-img{transition:transform .25s ease}
         .mjs-gallery-img:hover{transform:scale(1.03)}
         @media(max-width:680px){
@@ -641,6 +740,7 @@ export function SiteShell({ site, page }: { site: Site; page: SitePage }) {
           .mjs-search-row{flex-direction:column !important}
           .mjs-contact-fields{grid-template-columns:1fr !important}
           .mjs-about{flex-direction:column !important}
+          .mjs-footer-grid{grid-template-columns:1fr !important}
         }
       `}</style>
       {menuPages(site).length > 1 && <SiteNav site={site} primary={primary} currentSlug={page.slug} />}

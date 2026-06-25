@@ -40,10 +40,38 @@ function slugify(raw: string): string {
 
 interface Theme {
   primary: string
+  secondary?: string
+  bg?: string
+  surface?: string
+  text?: string
+  heading?: string
   font?: string
 }
 
-const DEFAULT_THEME: Theme = { primary: '#c9a84c' }
+const DEFAULT_THEME: Theme = { primary: '#c9a84c', secondary: '#1a1510', bg: '#ffffff', surface: '#fbfaf8', text: '#4a4338', heading: '#15110b' }
+
+// پالت‌های آمادهٔ کاملِ سایت — تا قالب‌ها واقعاً متفاوت دیده شوند و کاربر یک‌کلیک تمِ کامل بگذارد.
+const SITE_PALETTES: { name: string; t: Required<Omit<Theme, 'font'>> }[] = [
+  { name: 'طلایی کلاسیک', t: { primary: '#c9a84c', secondary: '#1a1510', bg: '#ffffff', surface: '#faf8f3', text: '#4a4338', heading: '#15110b' } },
+  { name: 'آبی حرفه‌ای', t: { primary: '#2563eb', secondary: '#0f1f3a', bg: '#ffffff', surface: '#f3f6fc', text: '#3f4654', heading: '#0f1b30' } },
+  { name: 'سبز اعتماد', t: { primary: '#0f9d76', secondary: '#06302c', bg: '#ffffff', surface: '#f0faf6', text: '#3c4a45', heading: '#0c241d' } },
+  { name: 'مشکی لوکس', t: { primary: '#d4af37', secondary: '#0c0c0e', bg: '#0f0f12', surface: '#17171c', text: '#c9c6c1', heading: '#ffffff' } },
+  { name: 'بنفش سلطنتی', t: { primary: '#7c3aed', secondary: '#1e1033', bg: '#ffffff', surface: '#f6f3fd', text: '#443a55', heading: '#1c1230' } },
+  { name: 'نارنجی گرم', t: { primary: '#ea580c', secondary: '#2a1505', bg: '#ffffff', surface: '#fdf5ef', text: '#4d4338', heading: '#26160a' } },
+  { name: 'فیروزه‌ای', t: { primary: '#0891b2', secondary: '#0a2a33', bg: '#ffffff', surface: '#eef9fc', text: '#3a4a4e', heading: '#0c2229' } },
+  { name: 'صورتی مدرن', t: { primary: '#db2777', secondary: '#2a0d1f', bg: '#ffffff', surface: '#fdf2f8', text: '#4d3a44', heading: '#2a0d1f' } },
+  { name: 'سرمه‌ای شب', t: { primary: '#60a5fa', secondary: '#0b1220', bg: '#0d1424', surface: '#141d31', text: '#b9c2d4', heading: '#ffffff' } },
+  { name: 'زمرد تیره', t: { primary: '#34d399', secondary: '#06231a', bg: '#0b1a15', surface: '#10241d', text: '#aebfb7', heading: '#ffffff' } },
+  { name: 'قرمز شرابی', t: { primary: '#be123c', secondary: '#2a0810', bg: '#ffffff', surface: '#fdf2f4', text: '#4d3a3f', heading: '#26090f' } },
+  { name: 'خاکستری شیک', t: { primary: '#475569', secondary: '#1e293b', bg: '#ffffff', surface: '#f4f6f8', text: '#475569', heading: '#1e293b' } },
+]
+
+// پالتِ هر قالب بر اساسِ شمارهٔ آن — تا قالب‌های یک پروفایل، هرکدام رنگِ متفاوت داشته باشند.
+function templatePalette(tpl: { id: string }): Required<Omit<Theme, 'font'>> {
+  const m = /(\d+)\s*$/.exec(tpl.id)
+  const n = m ? parseInt(m[1], 10) : 0
+  return SITE_PALETTES[n % SITE_PALETTES.length].t
+}
 
 // Shared inspector input style (inline + CSS vars, RTL).
 const INSPECTOR_INPUT: CSSProperties = { width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, color: 'var(--text)', fontSize: 12, outline: 'none', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit' }
@@ -67,6 +95,9 @@ const BLOCK_DEFAULTS: Record<string, Record<string, any>> = {
   listings: {
     heading: 'آگهی‌های من',
     source: 'mine',
+    total: 9,
+    perSlide: 3,
+    showCategories: 'yes',
     count: 3,
   },
   blog: {
@@ -126,13 +157,24 @@ const BLOCK_DEFAULTS: Record<string, Record<string, any>> = {
     address: 'تهران، ایران',
   },
   footer: {
-    text: 'ملک‌جت',
+    brand: 'ملک‌جت',
+    about: 'مشاور املاک حرفه‌ای؛ همراهِ شما در خرید، فروش و اجارهٔ ملک با مشاورهٔ تخصصی و فایل‌های به‌روز.',
     links: [
       { label: 'خانه', href: '#' },
       { label: 'آگهی‌ها', href: '#listings' },
       { label: 'درباره ما', href: '#about' },
       { label: 'تماس', href: '#contact' },
     ],
+    phone: '۰۲۱-۱۲۳۴۵۶۷۸',
+    email: 'info@example.com',
+    address: 'تهران، خیابان ولیعصر',
+    instagram: '',
+    telegram: '',
+    whatsapp: '',
+    linkedin: '',
+    copyright: '© ۱۴۰۴ — تمامی حقوق محفوظ است',
+    // back-compat
+    text: 'ملک‌جت',
   },
 }
 
@@ -164,7 +206,9 @@ const BLOCK_SCHEMA: Record<string, FieldSpec[]> = {
   listings: [
     { key: 'heading', label: 'عنوان', kind: 'text' },
     { key: 'source', label: 'منبع', kind: 'enum', options: [{ value: 'sample', label: 'نمونه' }, { value: 'mine', label: 'آگهی‌های من' }] },
-    { key: 'count', label: 'تعداد', kind: 'number' },
+    { key: 'total', label: 'تعدادِ کلِ آگهی', kind: 'number' },
+    { key: 'perSlide', label: 'تعداد در هر اسلاید', kind: 'number' },
+    { key: 'showCategories', label: 'نمایشِ دسته‌بندی‌ها', kind: 'enum', options: [{ value: 'yes', label: 'نمایش' }, { value: 'no', label: 'بدون دسته' }] },
   ],
   blog: [
     { key: 'heading', label: 'عنوان', kind: 'text' },
@@ -211,8 +255,17 @@ const BLOCK_SCHEMA: Record<string, FieldSpec[]> = {
     { key: 'address', label: 'آدرس', kind: 'text' },
   ],
   footer: [
-    { key: 'text', label: 'نام / متن', kind: 'text' },
-    { key: 'links', label: 'لینک‌ها', kind: 'list', itemFields: [{ key: 'label', label: 'برچسب', kind: 'text' }, { key: 'href', label: 'آدرس', kind: 'text' }], newItem: () => ({ label: 'لینک جدید', href: '#' }) },
+    { key: 'brand', label: 'نامِ برند', kind: 'text' },
+    { key: 'about', label: 'معرفیِ کوتاه', kind: 'textarea' },
+    { key: 'links', label: 'لینک‌های سریع', kind: 'list', itemFields: [{ key: 'label', label: 'برچسب', kind: 'text' }, { key: 'href', label: 'آدرس', kind: 'text' }], newItem: () => ({ label: 'لینک جدید', href: '#' }) },
+    { key: 'phone', label: 'تلفن', kind: 'text' },
+    { key: 'email', label: 'ایمیل', kind: 'text' },
+    { key: 'address', label: 'آدرس', kind: 'text' },
+    { key: 'instagram', label: 'اینستاگرام (آدرس/آی‌دی)', kind: 'text' },
+    { key: 'telegram', label: 'تلگرام', kind: 'text' },
+    { key: 'whatsapp', label: 'واتساپ', kind: 'text' },
+    { key: 'linkedin', label: 'لینکدین', kind: 'text' },
+    { key: 'copyright', label: 'متنِ کپی‌رایت', kind: 'text' },
   ],
 }
 
@@ -387,7 +440,7 @@ void migrateBlock
 // page (app/[site]/page.tsx) mirrors this exact markup as a clean page.
 type TeamMemberLite = { phone: string; name: string; photo: string; title: string; specialties: string[]; areas: string; experience: string; activeListings: number; slug: string }
 
-function BlockBody({ block, primary, myListings, teamMembers }: { block: Block; primary: string; myListings?: { title: string; location?: string; price?: string; image?: string }[]; teamMembers?: TeamMemberLite[] }) {
+function BlockBody({ block, primary, myListings, teamMembers }: { block: Block; primary: string; myListings?: { title: string; location?: string; price?: string; image?: string; category?: string }[]; teamMembers?: TeamMemberLite[] }) {
   const p = block.props || {}
   const t = block.type
   const btn = (text: string) => (
@@ -420,37 +473,51 @@ function BlockBody({ block, primary, myListings, teamMembers }: { block: Block; 
     )
   }
   if (t === 'listings') {
-    const n = Math.max(1, Math.min(12, Number(p.count) || 3))
+    const total = Math.max(1, Math.min(24, Number(p.total) || Number(p.count) || 9))
+    const perSlide = Math.max(1, Math.min(5, Number(p.perSlide) || 3))
+    const showCats = p.showCategories !== 'no'
     const grads = ['#2d2215,#1e1a12', '#1e2215,#141a10', '#15202d,#101828', '#251528,#1a0e1e', '#152825,#0e1a18', '#2d1515,#1e0e0e']
     const mine = p.source !== 'sample'   // پیش‌فرض «آگهی‌های من»
-    const real = mine ? (myListings || []).slice(0, n) : []
+    const real = mine ? (myListings || []).slice(0, total) : []
+    const cats = Array.from(new Set((mine ? real : []).map(it => it.category).filter(Boolean))) as string[]
+    const cards = mine && real.length
+      ? real.map((it, i) => ({ title: it.title, location: it.location || 'موقعیت نامشخص', price: it.price || 'قیمت توافقی', image: it.image, grad: grads[i % grads.length] }))
+      : Array.from({ length: Math.max(perSlide + 1, 4) }).map((_, i) => ({ title: 'آپارتمان لوکس', location: 'تهران، منطقه نمونه', price: 'قیمت توافقی', image: undefined as string | undefined, grad: grads[i % grads.length] }))
+    const cardW = `calc((100% - ${(perSlide - 1) * 12}px) / ${perSlide})`
     return (
       <div style={{ background: '#fff', padding: '28px', direction: 'rtl' }}>
-        <div style={{ fontSize: 18, fontWeight: 800, color: '#1a1510', marginBottom: 16 }}>{p.heading}</div>
-        {mine ? <div style={{ fontSize: 11, color: primary, marginBottom: 12 }}>↻ آگهی‌های واقعیِ ثبت‌شدهٔ شما{real.length ? '' : ' (هنوز آگهی منتشرشده‌ای ندارید)'}</div> : null}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
-          {(mine && real.length ? real.map((it, i) => (
-            <div key={i} style={{ background: '#f5f3ef', borderRadius: 10, overflow: 'hidden', border: '1px solid #eee' }}>
-              {it.image
-                // eslint-disable-next-line @next/next/no-img-element
-                ? <img src={it.image} alt="" style={{ width: '100%', height: 80, objectFit: 'cover', display: 'block' }} />
-                : <div style={{ height: 80, background: `linear-gradient(135deg,${grads[i % grads.length]})` }} />}
-              <div style={{ padding: '12px' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1510', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.title}</div>
-                <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>{it.location || 'موقعیت نامشخص'}</div>
-                <div style={{ fontSize: 13, fontWeight: 800, color: primary }}>{it.price || 'قیمت توافقی'}</div>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 6 }}>
+          <div style={{ fontSize: 18, fontWeight: 800, color: '#1a1510' }}>{p.heading}</div>
+          <span style={{ fontSize: 10.5, color: '#aaa' }}>اسلایدر · {perSlide.toLocaleString('fa-IR')} در هر نما</span>
+        </div>
+        {mine ? <div style={{ fontSize: 11, color: primary, marginBottom: 10 }}>↻ آگهی‌های واقعیِ ثبت‌شدهٔ شما{real.length ? '' : ' (هنوز آگهی منتشرشده‌ای ندارید)'}</div> : null}
+        {showCats && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: primary, borderRadius: 999, padding: '4px 12px' }}>همه</span>
+            {(cats.length ? cats : (mine ? [] : ['آپارتمان', 'ویلا', 'تجاری'])).slice(0, 6).map(c => (
+              <span key={c} style={{ fontSize: 11, fontWeight: 600, color: '#555', background: '#f3f1ec', border: '1px solid #e6e2d8', borderRadius: 999, padding: '4px 12px' }}>{c}</span>
+            ))}
+          </div>
+        )}
+        <div style={{ position: 'relative' }}>
+          <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 6 }}>
+            {cards.map((it, i) => (
+              <div key={i} style={{ flex: `0 0 ${cardW}`, minWidth: 130, background: '#f5f3ef', borderRadius: 12, overflow: 'hidden', border: '1px solid #eee' }}>
+                {it.image
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={it.image} alt="" style={{ width: '100%', height: 84, objectFit: 'cover', display: 'block' }} />
+                  : <div style={{ height: 84, background: `linear-gradient(135deg,${it.grad})` }} />}
+                <div style={{ padding: '11px' }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1a1510', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.title}</div>
+                  <div style={{ fontSize: 10.5, color: '#888', marginBottom: 7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.location}</div>
+                  <div style={{ fontSize: 12.5, fontWeight: 800, color: primary }}>{it.price}</div>
+                </div>
               </div>
-            </div>
-          )) : Array.from({ length: n }).map((_, i) => (
-            <div key={i} style={{ background: '#f5f3ef', borderRadius: 10, overflow: 'hidden', border: '1px solid #eee' }}>
-              <div style={{ height: 80, background: `linear-gradient(135deg,${grads[i % grads.length]})` }} />
-              <div style={{ padding: '12px' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1510', marginBottom: 4 }}>آپارتمان لوکس</div>
-                <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>تهران، منطقه نمونه</div>
-                <div style={{ fontSize: 13, fontWeight: 800, color: primary }}>قیمت توافقی</div>
-              </div>
-            </div>
-          )))}
+            ))}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 8 }}>
+            {Array.from({ length: Math.max(1, Math.ceil(cards.length / perSlide)) }).slice(0, 6).map((_, i) => <span key={i} style={{ width: i === 0 ? 16 : 6, height: 6, borderRadius: 999, background: i === 0 ? primary : '#ddd' }} />)}
+          </div>
         </div>
       </div>
     )
@@ -640,20 +707,28 @@ function BlockBody({ block, primary, myListings, teamMembers }: { block: Block; 
   }
   if (t === 'footer') {
     const links: any[] = Array.isArray(p.links) ? p.links : []
+    const brand = p.brand || p.text || 'برندِ شما'
+    const socials: [string, string][] = [['IG', p.instagram], ['TG', p.telegram], ['WA', p.whatsapp], ['in', p.linkedin]].filter(x => x[1]) as [string, string][]
+    const contacts: [string, string][] = [['☎', p.phone], ['✉', p.email], ['📍', p.address]].filter(x => x[1]) as [string, string][]
     return (
-      <div style={{ background: '#0d0b08', padding: '28px', direction: 'rtl' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 20, marginBottom: 16 }}>
+      <div style={{ background: '#0d0b08', padding: '28px', direction: 'rtl', color: '#aaa' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 18, marginBottom: 16 }}>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: primary, marginBottom: 10 }}>{p.text}</div>
-            <div style={{ fontSize: 12, color: '#777', lineHeight: 1.9 }}>همراه شما در خرید و فروش ملک.</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: primary, marginBottom: 8 }}>{brand}</div>
+            <div style={{ fontSize: 11.5, color: '#888', lineHeight: 1.9 }}>{p.about || 'معرفیِ کوتاهِ کسب‌وکار.'}</div>
+            {socials.length > 0 && <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>{socials.map(([g], i) => <span key={i} style={{ width: 26, height: 26, borderRadius: '50%', background: '#1a1712', color: primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>{g}</span>)}</div>}
           </div>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#999', marginBottom: 10 }}>لینک‌های سریع</div>
-            {links.map((l, i) => <div key={i} style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>{l.label}</div>)}
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#ddd', marginBottom: 10 }}>لینک‌های سریع</div>
+            {links.length ? links.map((l, i) => <div key={i} style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>{l.label}</div>) : <div style={{ fontSize: 11, color: '#555' }}>—</div>}
+          </div>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#ddd', marginBottom: 10 }}>تماس</div>
+            {contacts.length ? contacts.map(([ic, v], i) => <div key={i} style={{ fontSize: 11.5, color: '#888', marginBottom: 6, display: 'flex', gap: 6, direction: ic === '☎' || ic === '✉' ? 'ltr' as const : 'rtl' as const, justifyContent: 'flex-end' }}><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v}</span><span>{ic}</span></div>) : <div style={{ fontSize: 11, color: '#555' }}>—</div>}
           </div>
         </div>
-        <div style={{ borderTop: '1px solid #1a1510', paddingTop: 12, textAlign: 'center' }}>
-          <span style={{ fontSize: 10, color: '#444' }}>© ۱۴۰۴ — تمامی حقوق محفوظ است</span>
+        <div style={{ borderTop: '1px solid #1f1a14', paddingTop: 12, textAlign: 'center' }}>
+          <span style={{ fontSize: 10, color: '#555' }}>{p.copyright || '© ۱۴۰۴ — تمامی حقوق محفوظ است'}</span>
         </div>
       </div>
     )
@@ -673,7 +748,7 @@ function BlockPreview({ block, primary, selected, onSelect, onUp, onDown, onDele
   onUp: () => void
   onDown: () => void
   onDelete: () => void
-  myListings?: { title: string; location?: string; price?: string; image?: string }[]
+  myListings?: { title: string; location?: string; price?: string; image?: string; category?: string }[]
   teamMembers?: TeamMemberLite[]
   enableDrag?: boolean
   isDragging?: boolean
@@ -733,8 +808,8 @@ function BlockPreview({ block, primary, selected, onSelect, onUp, onDown, onDele
 
 // پیش‌نمای مینیاتوری و حرفه‌ای یک قالب: یک ماکت واقعی از سایت بر اساس بلوک‌هایش
 function TemplateThumb({ tpl }: { tpl: typeof STARTER_TEMPLATES[0] }) {
-  const th = PROFILE_THEME[tpl.profile] || PROFILE_THEME['عمومی']
-  const v = { grad: th.heroBg, primary: th.primary }
+  const pal = templatePalette(tpl)
+  const v = { grad: `linear-gradient(135deg, ${pal.primary}, ${pal.secondary} 72%)`, primary: pal.primary, bg: pal.bg, surface: pal.surface }
   const block = (b: string, i: number) => {
     switch (b) {
       case 'hero': return <div key={i} style={{ background: v.grad, padding: '16px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
@@ -787,7 +862,7 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
       : pg))
   }
   const [ownerName, setOwnerName] = useState('')
-  const [myListings, setMyListings] = useState<{ title: string; location?: string; price?: string; image?: string }[]>([])
+  const [myListings, setMyListings] = useState<{ title: string; location?: string; price?: string; image?: string; category?: string }[]>([])
   const [teamMembers, setTeamMembers] = useState<TeamMemberLite[]>([])
   const [selectedBlock, setSelectedBlock] = useState<number | null>(null)
   const [tplFilter, setTplFilter] = useState('عمومی')
@@ -849,7 +924,7 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
       .then(data => {
         if (cancelled || !data) return
         const items = Array.isArray(data.items) ? data.items : (Array.isArray(data) ? data : [])
-        setMyListings(items.slice(0, 12).map((it: any) => ({ title: String(it.title || ''), location: it.location, price: it.price, image: it.image })))
+        setMyListings(items.slice(0, 12).map((it: any) => ({ title: String(it.title || ''), location: it.location, price: it.price, image: it.image, category: it.category })))
       })
       .catch(() => { /* پیش‌نمایش روی کارت‌های نمونه می‌ماند */ })
     return () => { cancelled = true }
@@ -885,7 +960,7 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
           setActivePage(0)
           setSelectedBlock(null)
         }
-        if (s.theme?.primary) setTheme({ primary: String(s.theme.primary), ...(s.theme.font ? { font: String(s.theme.font) } : {}) })
+        if (s.theme?.primary) setTheme({ ...DEFAULT_THEME, ...s.theme })
         if (s.seo?.title) setSeoTitle(String(s.seo.title))
         if (s.seo?.description) setSeoDesc(String(s.seo.description))
         if (s.ownerName) setOwnerName(String(s.ownerName))
@@ -908,16 +983,16 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
 
   const loadTemplate = (tpl: typeof STARTER_TEMPLATES[0]) => {
     pushHistory(blocks)
-    const th = PROFILE_THEME[tpl.profile] || PROFILE_THEME['عمومی']
+    const pal = templatePalette(tpl)
     const copy = PROFILE_HERO_COPY[tpl.profile] || PROFILE_HERO_COPY['عمومی']
-    // Apply the template's theme so each preset really looks distinct.
-    setTheme({ primary: th.primary })
+    const heroBg = `linear-gradient(135deg, ${pal.primary}, ${pal.secondary} 72%)`
+    // هر قالب، پالتِ کاملِ خودش را می‌گذارد تا واقعاً متمایز دیده شود.
+    setTheme({ ...pal })
     const nb = tpl.blocks.map(type => {
-      // Per-template presets: distinct hero copy + hero/cta bg matching the theme.
       let preset: Record<string, any> | undefined
-      if (type === 'hero') preset = { heading: copy.heading, subheading: copy.subheading, buttonText: copy.buttonText, bg: th.heroBg }
-      else if (type === 'cta') preset = { bg: th.heroBg }
-      else if (type === 'footer') preset = { text: tpl.name }
+      if (type === 'hero') preset = { heading: copy.heading, subheading: copy.subheading, buttonText: copy.buttonText, bg: heroBg }
+      else if (type === 'cta') preset = { bg: heroBg }
+      else if (type === 'footer') preset = { brand: tpl.name }
       return makeBlock(type, preset)
     })
     setBlocks(nb)
@@ -1322,7 +1397,8 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
           <div style={{
             width: canvasWidth,
             minHeight: '100%',
-            background: '#fff',
+            background: theme.bg || '#fff',
+            color: theme.text || '#15110b',
             boxShadow: device !== 'desktop' ? '0 8px 40px rgba(0,0,0,0.45)' : 'none',
             borderRadius: device !== 'desktop' ? 16 : 0,
             overflow: 'hidden',
@@ -1474,14 +1550,37 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
                 </div>
 
                 <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, padding: '12px 14px' }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', marginBottom: 10 }}>رنگ اصلی سایت (تم)</div>
-                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 10 }}>
-                    <input type="color" value={theme.primary} onChange={e => setTheme(t => ({ ...t, primary: e.target.value }))} style={{ width: 44, height: 36, border: '1px solid var(--line)', borderRadius: 8, background: 'var(--bg2)', cursor: 'pointer', padding: 2 }} />
-                    <input value={theme.primary} onChange={e => setTheme(t => ({ ...t, primary: e.target.value }))} style={{ ...INSPECTOR_INPUT, flex: 1, direction: 'ltr' }} />
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', marginBottom: 10 }}>پالتِ آمادهٔ سایت</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 7, marginBottom: 14 }}>
+                    {SITE_PALETTES.map(pl => {
+                      const active = theme.primary === pl.t.primary && theme.bg === pl.t.bg
+                      return (
+                        <button key={pl.name} onClick={() => setTheme(t => ({ ...pl.t, ...(t.font ? { font: t.font } : {}) }))} title={pl.name} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 8px', borderRadius: 9, border: `1.5px solid ${active ? 'var(--gold)' : 'var(--line)'}`, background: active ? 'var(--goldDim)' : 'var(--bg2)', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'right' }}>
+                          <span style={{ display: 'flex', flexShrink: 0, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--line2)' }}>
+                            <span style={{ width: 13, height: 22, background: pl.t.bg }} />
+                            <span style={{ width: 13, height: 22, background: pl.t.primary }} />
+                            <span style={{ width: 13, height: 22, background: pl.t.secondary }} />
+                          </span>
+                          <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pl.name}</span>
+                        </button>
+                      )
+                    })}
                   </div>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    {['#c9a84c', '#3b82f6', '#14b8a6', '#f59e0b', '#ec4899', '#10b981', '#64748b', '#e05050'].map(c => (
-                      <button key={c} onClick={() => setTheme(t => ({ ...t, primary: c }))} style={{ width: 26, height: 26, borderRadius: 7, background: c, border: theme.primary === c ? '2px solid var(--text)' : '2px solid var(--line)', cursor: 'pointer', flexShrink: 0 }} />
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', marginBottom: 8 }}>رنگ‌های سفارشی</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {([
+                      ['primary', 'رنگِ اصلی (تأکید)'],
+                      ['secondary', 'رنگِ تیره/مکمل'],
+                      ['bg', 'پس‌زمینهٔ صفحه'],
+                      ['surface', 'پس‌زمینهٔ بخش‌ها'],
+                      ['heading', 'رنگِ عنوان‌ها'],
+                      ['text', 'رنگِ متن'],
+                    ] as [keyof Theme, string][]).map(([k, label]) => (
+                      <div key={k} style={{ display: 'flex', gap: 9, alignItems: 'center' }}>
+                        <input type="color" value={String(theme[k] || '#000000')} onChange={e => setTheme(t => ({ ...t, [k]: e.target.value }))} style={{ width: 36, height: 30, border: '1px solid var(--line)', borderRadius: 7, background: 'var(--bg2)', cursor: 'pointer', padding: 2, flexShrink: 0 }} />
+                        <span style={{ fontSize: 11.5, color: 'var(--text)', flex: 1 }}>{label}</span>
+                        <input value={String(theme[k] || '')} onChange={e => setTheme(t => ({ ...t, [k]: e.target.value }))} style={{ ...INSPECTOR_INPUT, width: 86, flex: '0 0 auto', direction: 'ltr', padding: '5px 8px' }} />
+                      </div>
                     ))}
                   </div>
                 </div>
