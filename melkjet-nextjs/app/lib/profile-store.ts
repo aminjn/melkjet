@@ -33,7 +33,6 @@ export interface BusinessProfile {
   services: string[]                    // خدمات
   areas: string[]                       // مناطقِ فعالیت
   social: { instagram?: string; telegram?: string; whatsapp?: string; eitaa?: string; linkedin?: string }
-  websiteSlug: string                   // آدرسِ سایتِ ساخته‌شده با سایت‌ساز (melkjet.com/{slug})
   updatedAt: number
 }
 
@@ -46,13 +45,8 @@ export function emptyProfile(): BusinessProfile {
     kind: 'business', displayName: '', businessName: '', businessType: '', licenseNumber: '', legalNationalId: '', economicCode: '',
     establishedYear: '', employees: '', tagline: '', about: '', logo: '', cover: '', landline: '', contactPhone: '', email: '', website: '',
     province: '', city: '', neighborhood: '', address: '', postalCode: '', workHours: '', specialties: [], services: [], areas: [],
-    social: {}, websiteSlug: '', updatedAt: 0,
+    social: {}, updatedAt: 0,
   }
-}
-
-// آدرسِ سایت‌ساز را امن می‌کند (هم‌قاعده با sites-store): فقط a-z0-9 و خط‌فاصله.
-export function sanitizeSiteSlug(raw: string): string {
-  return String(raw || '').toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60)
 }
 
 export function getProfile(phone: string): BusinessProfile { return { ...emptyProfile(), ...(load()[phone] || {}) } }
@@ -95,7 +89,6 @@ export function saveProfile(phone: string, patch: Partial<BusinessProfile>): Bus
       instagram: str(patch.social?.instagram, 120), telegram: str(patch.social?.telegram, 120),
       whatsapp: str(patch.social?.whatsapp, 30), eitaa: str(patch.social?.eitaa, 120), linkedin: str(patch.social?.linkedin, 160),
     } : cur.social,
-    websiteSlug: patch.websiteSlug !== undefined ? sanitizeSiteSlug(patch.websiteSlug) : cur.websiteSlug,
     updatedAt: Date.now(),
   }
   db[phone] = p; save(db)

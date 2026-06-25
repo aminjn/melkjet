@@ -148,25 +148,6 @@ export default function BusinessProfileForm() {
         </div>
       </Section>
 
-      {/* تنظیماتِ سایت‌ساز */}
-      <Section title="آدرسِ سایت (سایت‌ساز)" icon="🔗">
-        <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.9, marginBottom: 12 }}>
-          اگر با <a href="/website-builder" style={{ color: 'var(--gold)', fontWeight: 700 }}>سایت‌سازِ ملک‌جت</a> یک سایت ساخته‌اید، نشانیِ آن را این‌جا وارد کنید. این نشانی در پروفایلِ عمومیِ شما و — اگر مشاورِ یک آژانس باشید — زیرِ عکسِ شما در سایتِ آژانس نمایش داده می‌شود.
-        </div>
-        <Field label="نشانیِ سایت (slug)">
-          <div style={{ display: 'flex', alignItems: 'stretch', gap: 0, direction: 'ltr' }}>
-            <span style={{ display: 'flex', alignItems: 'center', padding: '0 12px', background: 'var(--bg2)', border: '1px solid var(--line2)', borderInlineEnd: 'none', borderRadius: '0 10px 10px 0', color: 'var(--faint)', fontSize: 12.5, whiteSpace: 'nowrap' }}>melkjet.com/</span>
-            <input value={p.websiteSlug || ''} onChange={e => set('websiteSlug', e.target.value.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''))} placeholder="my-agency" style={{ ...inp, borderRadius: '10px 0 0 10px', direction: 'ltr', textAlign: 'left', flex: 1 }} />
-          </div>
-        </Field>
-        {p.websiteSlug ? (
-          <div style={{ marginTop: 10, fontSize: 12.5 }}>
-            <span style={{ color: 'var(--muted)' }}>پیش‌نمایشِ نشانی: </span>
-            <a href={`/${p.websiteSlug}`} target="_blank" rel="noreferrer" style={{ color: 'var(--gold)', fontWeight: 700, direction: 'ltr', display: 'inline-block' }}>melkjet.com/{p.websiteSlug} ↗</a>
-          </div>
-        ) : null}
-      </Section>
-
       <div style={{ position: 'sticky', bottom: 0, display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, boxShadow: '0 -6px 20px -10px rgba(0,0,0,.4)' }}>
         <button onClick={save} disabled={saving} style={{ padding: '11px 28px', borderRadius: 11, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 14, border: 'none', cursor: 'pointer', fontFamily: FONT, opacity: saving ? 0.6 : 1 }}>{saving ? 'در حال ذخیره…' : 'ذخیرهٔ پروفایل'}</button>
         {msg && <span style={{ fontSize: 13, fontWeight: 600, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</span>}

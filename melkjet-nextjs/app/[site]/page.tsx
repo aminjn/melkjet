@@ -2,9 +2,7 @@ import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { getSite, getSitePage, type Site, type SitePage, type SiteBlock } from '@/app/lib/sites-store'
 import { listItems, listArticles, type Item } from '@/app/lib/scraper-store'
-import { listAgencyMembers } from '@/app/lib/agency-link-store'
-import { getAdvisor } from '@/app/lib/advisor-store'
-import { getProfile } from '@/app/lib/profile-store'
+import { getTeamMembers, type TeamMember } from '@/app/lib/team-members'
 
 // Public renderer for builder-published sites living at melkjet.com/{slug}.
 // Existing static single-segment routes (search, owner, ...) take precedence;
@@ -487,24 +485,65 @@ function FooterBlock({ block, primary }: { block: SiteBlock; primary: string }) 
   )
 }
 
-// ── Team / advisors block: نمایشِ مشاورانِ عضوِ آژانس با عکسِ پروفایل ─────────
-// اعضا از رابطهٔ واقعیِ «مشاور↔آژانس» (agency-link) خوانده می‌شوند؛ عکس از پروفایلِ
-// مشاور (advisor-store) یا لوگوی کسب‌وکار، و لینکِ سایت از websiteSlug در پروفایل.
-function memberInfo(phone: string, fallbackName: string): { phone: string; name: string; photo: string; title: string; slug: string } {
-  let photo = '', title = '', name = fallbackName
-  try { const ad = getAdvisor(phone).profile; if (ad) { if (ad.photo) photo = ad.photo; if (ad.title) title = ad.title; if (ad.name) name = ad.name } } catch {}
-  const prof = getProfile(phone)
-  if (!photo) photo = prof.logo || ''
-  if (!title) title = prof.businessType || prof.tagline || ''
-  return { phone, name: name || 'مشاور', photo, title, slug: prof.websiteSlug || '' }
+// ── Team / advisors block: کارتِ زیبای مشاورانِ عضوِ آژانس با تخصص و اطلاعاتِ مفید ──
+// اعضا از رابطهٔ واقعیِ «مشاور↔آژانس» خوانده و کامل می‌شوند (team-members). مشاوری که
+// در props.members انتخاب شده باشد نمایش داده می‌شود؛ اگر چیزی انتخاب نشده، همه.
+export function TeamMemberCard({ m, primary, showSites, showPhone }: { m: TeamMember; primary: string; showSites: boolean; showPhone: boolean }) {
+  const info: { icon: string; label: string; value: string }[] = []
+  if (m.areas) info.push({ icon: '📍', label: 'مناطقِ کاری', value: m.areas })
+  if (m.experience) info.push({ icon: '⏳', label: 'سابقه', value: m.experience })
+  if (m.activeListings > 0) info.push({ icon: '🏠', label: 'آگهیِ فعال', value: `${m.activeListings.toLocaleString('fa-IR')} مورد` })
+  if (showPhone && m.phone) info.push({ icon: '☎', label: 'تماس', value: m.phone })
+  return (
+    <div className="mjs-card" style={{ background: '#fff', border: '1px solid #efe9df', borderRadius: 22, overflow: 'hidden', boxShadow: CARD_SHADOW, textAlign: 'center', display: 'flex', flexDirection: 'column' }}>
+      {/* نوارِ رنگیِ بالا */}
+      <div style={{ height: 76, background: `linear-gradient(135deg, ${primary}, #1a1510)` }} />
+      <div style={{ padding: '0 20px 22px', marginTop: -52, display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
+        {m.photo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={m.photo} alt={m.name} style={{ width: 96, height: 96, borderRadius: '50%', objectFit: 'cover', display: 'block', border: '4px solid #fff', boxShadow: `0 0 0 2px ${primary}, 0 8px 20px -8px rgba(0,0,0,.4)` }} />
+        ) : (
+          <div style={{ width: 96, height: 96, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${primary}22`, color: primary, fontSize: 36, fontWeight: 900, border: '4px solid #fff', boxShadow: `0 0 0 2px ${primary}` }}>{(m.name || '?').trim().charAt(0)}</div>
+        )}
+        <div style={{ fontSize: 18, fontWeight: 900, color: INK, marginTop: 12 }}>{m.name}</div>
+        {m.title ? <div style={{ fontSize: 13, color: primary, fontWeight: 700, marginTop: 4 }}>{m.title}</div> : null}
+        {/* چیپ‌های تخصص */}
+        {m.specialties.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', marginTop: 12 }}>
+            {m.specialties.slice(0, 3).map((s, i) => (
+              <span key={i} style={{ fontSize: 11.5, fontWeight: 600, color: primary, background: `${primary}14`, border: `1px solid ${primary}33`, borderRadius: 999, padding: '3px 11px' }}>{s}</span>
+            ))}
+          </div>
+        )}
+        {/* اطلاعاتِ مفید */}
+        {info.length > 0 && (
+          <div style={{ width: '100%', marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'right' }}>
+            {info.map((r, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 9, background: SURFACE, border: '1px solid #f0ebe2', borderRadius: 11, padding: '8px 11px' }}>
+                <span style={{ width: 26, height: 26, borderRadius: 8, background: `${primary}14`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>{r.icon}</span>
+                <span style={{ fontSize: 11.5, color: MUTED, flexShrink: 0 }}>{r.label}:</span>
+                <span style={{ fontSize: 12.5, color: INK, fontWeight: 700, marginInlineStart: 'auto', direction: r.icon === '☎' ? 'ltr' : 'rtl', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.value}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {/* دکمه‌ها */}
+        <div style={{ display: 'flex', gap: 8, marginTop: 'auto', paddingTop: 18, width: '100%' }}>
+          {showSites && m.slug ? <a href={`/${m.slug}`} target="_blank" rel="noreferrer" className="mjs-btn" style={{ flex: 1, fontSize: 13, fontWeight: 800, color: '#fff', background: primary, borderRadius: 12, padding: '10px 8px', textDecoration: 'none', boxShadow: `0 10px 22px -12px ${primary}` }}>وب‌سایتِ من ↗</a> : null}
+          {showPhone && m.phone ? <a href={`tel:${m.phone}`} style={{ flex: showSites && m.slug ? '0 0 auto' : 1, fontSize: 13, fontWeight: 800, color: primary, background: `${primary}12`, border: `1px solid ${primary}33`, borderRadius: 12, padding: '10px 16px', textDecoration: 'none' }}>☎ تماس</a> : null}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function TeamBlock({ block, primary, ownerPhone }: { block: SiteBlock; primary: string; ownerPhone?: string }) {
   const props = p(block)
   const showSites = props.showSites !== 'no'
   const showPhone = props.showPhone !== 'no'
-  const members = ownerPhone ? listAgencyMembers(ownerPhone) : []
-  const people = members.map(m => memberInfo(m.advisorPhone, m.advisorName))
+  const sel = Array.isArray(props.members) ? (props.members as string[]) : null
+  let people = ownerPhone ? getTeamMembers(ownerPhone) : []
+  if (sel) people = people.filter(m => sel.includes(m.phone))
   return (
     <section id="team" style={{ background: '#fff', padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
@@ -512,23 +551,8 @@ function TeamBlock({ block, primary, ownerPhone }: { block: SiteBlock; primary: 
         {people.length === 0 ? (
           <div style={{ background: SURFACE, border: '1px dashed #ddd4c5', borderRadius: 18, padding: '52px 24px', textAlign: 'center', color: '#9b9285', fontSize: 14.5 }}>هنوز مشاوری به این آژانس متصل نشده است.</div>
         ) : (
-          <div className="mjs-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 24 }}>
-            {people.map(m => (
-              <div key={m.phone} className="mjs-card" style={{ background: '#fff', border: '1px solid #efe9df', borderRadius: 20, padding: '32px 20px', textAlign: 'center', boxShadow: CARD_SHADOW }}>
-                {m.photo ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={m.photo} alt={m.name} style={{ width: 104, height: 104, borderRadius: '50%', objectFit: 'cover', margin: '0 auto 16px', display: 'block', border: `4px solid ${primary}22`, boxShadow: `0 0 0 2px ${primary}` }} />
-                ) : (
-                  <div style={{ width: 104, height: 104, borderRadius: '50%', margin: '0 auto 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${primary}22`, color: primary, fontSize: 38, fontWeight: 900, boxShadow: `0 0 0 2px ${primary}` }}>{(m.name || '?').trim().charAt(0)}</div>
-                )}
-                <div style={{ fontSize: 17, fontWeight: 800, color: INK }}>{m.name}</div>
-                {m.title ? <div style={{ fontSize: 13, color: MUTED, marginTop: 5 }}>{m.title}</div> : null}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 18, alignItems: 'center' }}>
-                  {showPhone && m.phone ? <a href={`tel:${m.phone}`} style={{ fontSize: 13, color: MUTED, textDecoration: 'none', direction: 'ltr', fontWeight: 600 }}>☎ {m.phone}</a> : null}
-                  {showSites && m.slug ? <a href={`/${m.slug}`} target="_blank" rel="noreferrer" className="mjs-btn" style={{ display: 'inline-block', fontSize: 13, fontWeight: 700, color: '#fff', background: primary, borderRadius: 999, padding: '8px 20px', textDecoration: 'none' }}>وب‌سایتِ من ↗</a> : null}
-                </div>
-              </div>
-            ))}
+          <div className="mjs-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 24 }}>
+            {people.map(m => <TeamMemberCard key={m.phone} m={m} primary={primary} showSites={showSites} showPhone={showPhone} />)}
           </div>
         )}
       </div>

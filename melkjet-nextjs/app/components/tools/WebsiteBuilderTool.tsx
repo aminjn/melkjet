@@ -385,7 +385,9 @@ void migrateBlock
 
 // Real, props-driven render of a block — shared by canvas previews. The public
 // page (app/[site]/page.tsx) mirrors this exact markup as a clean page.
-function BlockBody({ block, primary, myListings }: { block: Block; primary: string; myListings?: { title: string; location?: string; price?: string; image?: string }[] }) {
+type TeamMemberLite = { phone: string; name: string; photo: string; title: string; specialties: string[]; areas: string; experience: string; activeListings: number; slug: string }
+
+function BlockBody({ block, primary, myListings, teamMembers }: { block: Block; primary: string; myListings?: { title: string; location?: string; price?: string; image?: string }[]; teamMembers?: TeamMemberLite[] }) {
   const p = block.props || {}
   const t = block.type
   const btn = (text: string) => (
@@ -509,20 +511,53 @@ function BlockBody({ block, primary, myListings }: { block: Block; primary: stri
     )
   }
   if (t === 'team') {
+    const showSites = p.showSites !== 'no'
+    const showPhone = p.showPhone !== 'no'
+    const sel: string[] | null = Array.isArray(p.members) ? p.members : null
+    let people = (teamMembers || [])
+    if (sel) people = people.filter(m => sel.includes(m.phone))
     return (
-      <div style={{ background: '#faf9f7', padding: '40px 28px', direction: 'rtl', textAlign: 'center' }}>
-        <div style={{ fontSize: 20, fontWeight: 800, color: '#1a1510', marginBottom: p.subheading ? 4 : 20 }}>{p.heading || 'مشاوران ما'}</div>
-        {p.subheading ? <div style={{ fontSize: 13, color: '#888', marginBottom: 22 }}>{p.subheading}</div> : null}
-        <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap' }}>
-          {[0, 1, 2].map(k => (
-            <div key={k} style={{ background: '#fff', border: '1px solid #eee', borderRadius: 16, padding: '20px 14px', width: 150, boxShadow: '0 6px 22px -16px rgba(0,0,0,.5)' }}>
-              <div style={{ width: 64, height: 64, borderRadius: '50%', margin: '0 auto 12px', background: `${primary}22`, border: `3px solid ${primary}` }} />
-              <div style={{ height: 9, width: '70%', background: '#e3e3e7', borderRadius: 4, margin: '0 auto 6px' }} />
-              <div style={{ height: 6, width: '45%', background: '#eee', borderRadius: 3, margin: '0 auto 12px' }} />
-              {p.showSites !== 'no' ? <div style={{ height: 22, width: '80%', borderRadius: 999, background: primary, margin: '0 auto', opacity: .85 }} /> : null}
-            </div>
-          ))}
-        </div>
+      <div style={{ background: '#faf9f7', padding: '44px 28px', direction: 'rtl', textAlign: 'center' }}>
+        <div style={{ fontSize: 22, fontWeight: 900, color: '#1a1510', marginBottom: 6 }}>{p.heading || 'مشاوران ما'}</div>
+        <div style={{ height: 4, width: 50, borderRadius: 999, background: primary, margin: '0 auto 8px' }} />
+        {p.subheading ? <div style={{ fontSize: 13.5, color: '#888', marginBottom: 24 }}>{p.subheading}</div> : <div style={{ height: 16 }} />}
+        {people.length === 0 ? (
+          <div style={{ background: '#fff', border: '1px dashed #ddd', borderRadius: 16, padding: '34px 20px', color: '#999', fontSize: 13.5, maxWidth: 460, margin: '0 auto', lineHeight: 1.9 }}>
+            مشاورانِ عضوِ آژانسِ شما این‌جا نمایش داده می‌شوند.<br />
+            <span style={{ fontSize: 12 }}>برای افزودنِ مشاور، از پنل «مشاوران/آژانسِ من» دعوت کنید.</span>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: 18, justifyContent: 'center', flexWrap: 'wrap' }}>
+            {people.slice(0, 4).map(m => {
+              const chips = (m.specialties || []).slice(0, 2)
+              const rows: [string, string][] = []
+              if (m.areas) rows.push(['📍', m.areas])
+              if (m.experience) rows.push(['⏳', m.experience])
+              if (m.activeListings > 0) rows.push(['🏠', `${m.activeListings.toLocaleString('fa-IR')} آگهی`])
+              return (
+                <div key={m.phone} style={{ background: '#fff', border: '1px solid #eee', borderRadius: 18, width: 210, boxShadow: '0 10px 28px -18px rgba(0,0,0,.5)', overflow: 'hidden', textAlign: 'center' }}>
+                  <div style={{ height: 56, background: `linear-gradient(135deg,${primary},#1a1510)` }} />
+                  <div style={{ padding: '0 14px 16px', marginTop: -40 }}>
+                    {m.photo
+                      // eslint-disable-next-line @next/next/no-img-element
+                      ? <img src={m.photo} alt={m.name} style={{ width: 76, height: 76, borderRadius: '50%', objectFit: 'cover', border: '3px solid #fff', boxShadow: `0 0 0 2px ${primary}` }} />
+                      : <div style={{ width: 76, height: 76, borderRadius: '50%', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${primary}22`, color: primary, fontSize: 28, fontWeight: 900, border: '3px solid #fff', boxShadow: `0 0 0 2px ${primary}` }}>{(m.name || '?').trim().charAt(0)}</div>}
+                    <div style={{ fontSize: 15, fontWeight: 800, color: '#1a1510', marginTop: 10 }}>{m.name}</div>
+                    {m.title ? <div style={{ fontSize: 11.5, color: primary, fontWeight: 700, marginTop: 3 }}>{m.title}</div> : null}
+                    {chips.length > 0 && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'center', marginTop: 9 }}>{chips.map((s, i) => <span key={i} style={{ fontSize: 10, fontWeight: 600, color: primary, background: `${primary}14`, border: `1px solid ${primary}30`, borderRadius: 999, padding: '2px 8px' }}>{s}</span>)}</div>}
+                    {rows.length > 0 && <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 4, textAlign: 'right' }}>{rows.map(([ic, v], i) => <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#555', background: '#faf9f7', borderRadius: 8, padding: '4px 8px' }}><span>{ic}</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v}</span></div>)}</div>}
+                    {(showSites && m.slug) || (showPhone && m.phone) ? (
+                      <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
+                        {showSites && m.slug ? <span style={{ flex: 1, fontSize: 11.5, fontWeight: 700, color: '#fff', background: primary, borderRadius: 9, padding: '7px 6px' }}>وب‌سایت ↗</span> : null}
+                        {showPhone && m.phone ? <span style={{ flex: showSites && m.slug ? '0 0 auto' : 1, fontSize: 11.5, fontWeight: 700, color: primary, background: `${primary}12`, border: `1px solid ${primary}30`, borderRadius: 9, padding: '7px 12px' }}>☎ تماس</span> : null}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     )
   }
@@ -630,7 +665,7 @@ function BlockBody({ block, primary, myListings }: { block: Block; primary: stri
   )
 }
 
-function BlockPreview({ block, primary, selected, onSelect, onUp, onDown, onDelete, myListings, enableDrag, isDragging, isDragOver, onDragStartBlock, onDragEnterBlock, onDropBlock, onDragEndBlock, bigControls }: {
+function BlockPreview({ block, primary, selected, onSelect, onUp, onDown, onDelete, myListings, teamMembers, enableDrag, isDragging, isDragOver, onDragStartBlock, onDragEnterBlock, onDropBlock, onDragEndBlock, bigControls }: {
   block: Block
   primary: string
   selected: boolean
@@ -639,6 +674,7 @@ function BlockPreview({ block, primary, selected, onSelect, onUp, onDown, onDele
   onDown: () => void
   onDelete: () => void
   myListings?: { title: string; location?: string; price?: string; image?: string }[]
+  teamMembers?: TeamMemberLite[]
   enableDrag?: boolean
   isDragging?: boolean
   isDragOver?: boolean
@@ -690,7 +726,7 @@ function BlockPreview({ block, primary, selected, onSelect, onUp, onDown, onDele
           <button title="حذف" onClick={e => { e.stopPropagation(); onDelete() }} style={{ ...ctrlBtn, background: 'rgba(220,60,60,0.6)' }}>×</button>
         </div>
       )}
-      <BlockBody block={block} primary={primary} myListings={myListings} />
+      <BlockBody block={block} primary={primary} myListings={myListings} teamMembers={teamMembers} />
     </div>
   )
 }
@@ -752,6 +788,7 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
   }
   const [ownerName, setOwnerName] = useState('')
   const [myListings, setMyListings] = useState<{ title: string; location?: string; price?: string; image?: string }[]>([])
+  const [teamMembers, setTeamMembers] = useState<TeamMemberLite[]>([])
   const [selectedBlock, setSelectedBlock] = useState<number | null>(null)
   const [tplFilter, setTplFilter] = useState('عمومی')
   // پروفایل قفل‌شده بر اساس نقش کاربر؛ null یعنی مهمان/ادمین (می‌تواند همه را ببیند)
@@ -817,6 +854,16 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
       .catch(() => { /* پیش‌نمایش روی کارت‌های نمونه می‌ماند */ })
     return () => { cancelled = true }
   }, [ownerName])
+
+  // اعضای تیمِ آژانس — برای پیش‌نمایشِ زندهٔ بلوک «تیم مشاوران» و انتخابِ مشاوران.
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/website/team')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (!cancelled && d && Array.isArray(d.members)) setTeamMembers(d.members) })
+      .catch(() => { /* بدونِ عضو می‌ماند */ })
+    return () => { cancelled = true }
+  }, [])
 
   // On mount, load the user's existing saved site (by the default slug) and
   // populate the real pages if it already exists.
@@ -1320,6 +1367,7 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
                     onDown={() => moveBlock(block.id, 1)}
                     onDelete={() => deleteBlock(block.id)}
                     myListings={myListings}
+                    teamMembers={teamMembers}
                     enableDrag={!isMobile}
                     bigControls={isMobile}
                     isDragging={dragId === block.id}
@@ -1589,6 +1637,44 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
                         این بلوک هنگام انتشار، آگهی‌های ثبت‌شدهٔ شما را نمایش می‌دهد.
                       </div>
                     )}
+
+                    {selectedBlockObj.type === 'team' && (() => {
+                      const raw = (selectedBlockObj.props as any).members
+                      const explicit = Array.isArray(raw)
+                      const id = selectedBlockObj.id
+                      const checkedAll = !explicit
+                      const isChecked = (ph: string) => explicit ? raw.includes(ph) : true
+                      const toggle = (ph: string) => {
+                        const base: string[] = explicit ? [...raw] : teamMembers.map(m => m.phone)
+                        const next = base.includes(ph) ? base.filter(x => x !== ph) : [...base, ph]
+                        updateProp(id, 'members', next)
+                      }
+                      return (
+                        <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, padding: 10 }}>
+                          <div style={{ fontSize: 11.5, fontWeight: 700, marginBottom: 8 }}>انتخابِ مشاوران</div>
+                          {teamMembers.length === 0 ? (
+                            <div style={{ fontSize: 10.5, color: 'var(--muted)', lineHeight: 1.8 }}>هنوز مشاوری به آژانسِ شما متصل نیست. از پنل «مشاوران/آژانسِ من» مشاور دعوت کنید؛ سپس این‌جا برای نمایش انتخابشان کنید.</div>
+                          ) : (
+                            <>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
+                                {teamMembers.map(m => (
+                                  <label key={m.phone} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '5px 6px', borderRadius: 7, background: isChecked(m.phone) ? 'var(--goldDim)' : 'transparent' }}>
+                                    <input type="checkbox" checked={isChecked(m.phone)} onChange={() => toggle(m.phone)} style={{ width: 15, height: 15, accentColor: 'var(--gold)' }} />
+                                    {m.photo
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      ? <img src={m.photo} alt="" style={{ width: 24, height: 24, borderRadius: '50%', objectFit: 'cover' }} />
+                                      : <span style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: 'var(--gold)' }}>{(m.name || '?').charAt(0)}</span>}
+                                    <span style={{ fontSize: 12, fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</span>
+                                    {m.title ? <span style={{ fontSize: 10, color: 'var(--muted)' }}>{m.title}</span> : null}
+                                  </label>
+                                ))}
+                              </div>
+                              <div style={{ fontSize: 10, color: 'var(--faint)', marginTop: 8, lineHeight: 1.7 }}>{checkedAll ? 'همهٔ مشاوران نمایش داده می‌شوند.' : `${(raw as string[]).length.toLocaleString('fa-IR')} مشاور انتخاب شده.`} عکس و تخصصِ هر مشاور از پروفایلِ خودش گرفته می‌شود.</div>
+                            </>
+                          )}
+                        </div>
+                      )
+                    })()}
 
                     <div style={{ height: 1, background: 'var(--line)' }} />
 
