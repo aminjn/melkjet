@@ -163,6 +163,10 @@ function SearchPageInner() {
     window.addEventListener('mj-city-updated', upd)
     return () => { window.removeEventListener('mj-loc-updated', upd); window.removeEventListener('mj-city-updated', upd) }
   }, [])
+  // سوابقِ کاربر (از ترکر): محله‌ای که بیشترین بازدید را داشته → اولویتِ نمایش
+  const [histArea, setHistArea] = useState('')
+  useEffect(() => { fetch('/api/track/prefs').then(r => r.ok ? r.json() : null).then(d => { if (d?.neighborhood) setHistArea(d.neighborhood) }).catch(() => {}) }, [])
+  const prefArea = histArea || userArea   // سوابق > موقعیتِ لحظه‌ای
 
   const [hoveredCard, setHoveredCard] = useState<string | null>(null)
   const [properties, setProperties] = useState<PropertyT[]>([])
@@ -216,28 +220,26 @@ function SearchPageInner() {
     })
   }, [properties, dealType, fKind, fBeds, priceMin, fBudgetMax, fSizeMin, fSizeMax, floorMin, yearMin, fAmen, fAreaName, parsed.tokens])
 
-  // ─── فیلترِ هوشمندِ پیش‌فرض (سوابق/موقعیت) با fallback ───────────────────────
-  // اولویت: محلهٔ کاربر → شهرِ کاربر → اگر ملکی نبود، فیلترِ مکان برداشته می‌شود و
-  // همهٔ موارد در همان دسته نشان داده می‌شوند (منطقِ موردِ نظرِ کاربر).
+  // ─── فیلترِ هوشمندِ مکان ──────────────────────────────────────────────────
+  // شهر = فیلترِ قطعی (اگر آگهی نبود، خالی نشان می‌دهد؛ هیچ‌وقت آگهیِ شهرِ دیگر را نشان نمی‌دهد).
+  // محله (سوابق/موقعیت) = اولویتِ نرم داخلِ همان شهر؛ اگر در آن محله نبود، به سطحِ شهر برمی‌گردد.
   const scoped = useMemo(() => {
     const norm = (s: string) => (s || '').replace(/‌/g, '').replace(/\s/g, '').toLowerCase()
     const base = filteredProperties
     const city = selectedCity
-    const area = parsed.area ? '' : userArea   // اگر کاربر صراحتاً محله‌ای جست‌وجو کرده، محلهٔ خانه را اعمال نکن
-    const inCity = (p: PropertyT) => city ? norm(p.location).includes(norm(city)) : true
+    const area = parsed.area ? '' : prefArea
     const inArea = (p: PropertyT) => area ? norm(p.location).includes(norm(area)) : true
     if (city) {
-      const c = base.filter(inCity)
-      if (!c.length) return { list: base, note: city }          // ملکی در شهرِ کاربر نبود → همه را نشان بده
-      if (area) { const a = c.filter(inArea); return { list: a.length ? a : c, note: '' } }
-      return { list: c, note: '' }
+      const inCity = base.filter(p => norm(p.location).includes(norm(city)))
+      if (area) { const a = inCity.filter(inArea); return { list: a.length ? a : inCity } }
+      return { list: inCity }   // خالی = واقعاً خالی (بدونِ fallbackِ بین‌شهری)
     }
-    if (area) { const a = base.filter(inArea); return a.length ? { list: a, note: '' } : { list: base, note: area } }
-    return { list: base, note: '' }
-  }, [filteredProperties, selectedCity, userArea, parsed.area])
+    if (area) { const a = base.filter(inArea); return { list: a.length ? a : base } }
+    return { list: base }
+  }, [filteredProperties, selectedCity, prefArea, parsed.area])
 
   const sortedProperties = useMemo(() => {
-    const ar = userArea.replace(/‌/g, '').trim()
+    const ar = prefArea.replace(/‌/g, '').trim()
     const nearby = (p: { location: string }) => ar ? p.location.replace(/‌/g, '').includes(ar) : false
     return [...scoped.list].sort((a, b) => {
       if (sortBy === 'ارزان‌ترین') return a.priceNum - b.priceNum
@@ -247,12 +249,17 @@ function SearchPageInner() {
       if (an !== bn) return an ? -1 : 1
       return b.score - a.score
     })
-  }, [scoped, sortBy, userArea])
+  }, [scoped, sortBy, prefArea])
 
   const shownProperties = useMemo(() => {
     const ids = new Set(promoted.map(p => p.id))
-    return [...promoted.filter(p => p.deal === (dealType === 'پیش‌فروش' ? 'presale' : (dealType === 'اجاره' || dealType === 'رهن') ? 'rent' : 'sale')), ...sortedProperties.filter(p => !ids.has(p.id))]
-  }, [promoted, sortedProperties, dealType])
+    const tab = dealType === 'پیش‌فروش' ? 'presale' : (dealType === 'اجاره' || dealType === 'رهن') ? 'rent' : 'sale'
+    const norm = (s: string) => (s || '').replace(/‌/g, '').replace(/\s/g, '').toLowerCase()
+    // آگهی‌های ویژه هم به فیلترِ قطعیِ شهر احترام می‌گذارند (نباید آگهیِ شهرِ دیگر نشت کند)
+    const cityOk = (p: PropertyT) => !selectedCity || norm(p.location).includes(norm(selectedCity))
+    const promo = promoted.filter(p => p.deal === tab && cityOk(p))
+    return [...promo, ...sortedProperties.filter(p => !ids.has(p.id))]
+  }, [promoted, sortedProperties, dealType, selectedCity])
   const promotedIdSet = useMemo(() => new Set(promoted.map(p => p.id)), [promoted])
 
   // نقاطِ نقشه — فقط آگهی‌هایی که مختصاتِ واقعی دارند
@@ -414,20 +421,17 @@ function SearchPageInner() {
       {/* محتوای اصلی */}
       <div className="mjs-grid" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 48px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, alignItems: 'start', minHeight: 'calc(100vh - 200px)' }}>
         <div style={{ paddingTop: 20, paddingLeft: 12 }}>
-          {scoped.note && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--goldDim)', border: '1px solid rgba(201,168,76,0.3)', borderRadius: 12, padding: '11px 14px', marginBottom: 16, fontSize: 12.5, color: 'var(--text)', lineHeight: 1.8 }}>
-              <span style={{ fontSize: 15 }}>✦</span>
-              <span>در «<b style={{ color: 'var(--gold)' }}>{scoped.note}</b>» ملکی در این دسته پیدا نشد؛ برای همین فیلترِ مکان برداشته شد و همهٔ موارد نمایش داده می‌شوند.</span>
-            </div>
-          )}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-            <div style={{ fontSize: 14, color: 'var(--muted)' }}><span style={{ color: 'var(--gold)', fontWeight: 800, fontSize: 16 }}>{toPersianDigits(shownProperties.length)}</span> ملک پیدا شد{selectedCity && !scoped.note ? <span style={{ color: 'var(--faint)' }}> · {selectedCity}</span> : ''}</div>
+            <div style={{ fontSize: 14, color: 'var(--muted)' }}><span style={{ color: 'var(--gold)', fontWeight: 800, fontSize: 16 }}>{toPersianDigits(shownProperties.length)}</span> ملک پیدا شد{selectedCity ? <span style={{ color: 'var(--faint)' }}> · {selectedCity}</span> : ''}</div>
             <div style={{ fontSize: 13, color: 'var(--faint)' }}>مرتب‌سازی: <span style={{ color: 'var(--muted)' }}>{sortBy}</span></div>
           </div>
 
           {(loading || shownProperties.length === 0) && (
             <div style={{ padding: '60px 24px', textAlign: 'center', color: 'var(--muted)', fontSize: 14, lineHeight: 1.9 }}>
-              {loading ? 'در حال بارگذاری آگهی‌ها…' : properties.length === 0 ? 'هنوز آگهی‌ای ثبت نشده.' : `هیچ آگهی${dealType === 'اجاره' ? 'ِ اجاره‌ای' : dealType === 'رهن' ? 'ِ رهنی' : dealType === 'پیش‌فروش' ? 'ِ پیش‌فروشی' : 'ِ فروشی'} با این فیلترها پیدا نشد.`}
+              {loading ? 'در حال بارگذاری آگهی‌ها…'
+                : properties.length === 0 ? 'هنوز آگهی‌ای ثبت نشده.'
+                  : selectedCity ? `هنوز آگهی${dealType === 'اجاره' ? 'ِ اجاره‌ای' : dealType === 'رهن' ? 'ِ رهنی' : dealType === 'پیش‌فروش' ? 'ِ پیش‌فروشی' : 'ِ فروشی'} در «${selectedCity}» ثبت نشده است. می‌توانید شهرِ دیگری انتخاب کنید.`
+                    : `هیچ آگهی${dealType === 'اجاره' ? 'ِ اجاره‌ای' : dealType === 'رهن' ? 'ِ رهنی' : dealType === 'پیش‌فروش' ? 'ِ پیش‌فروشی' : 'ِ فروشی'} با این فیلترها پیدا نشد.`}
             </div>
           )}
 
