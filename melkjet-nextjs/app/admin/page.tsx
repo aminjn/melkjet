@@ -2602,6 +2602,103 @@ function APIView() {
 interface Account { phone: string; name?: string; role?: string; plan?: string; onboarded: boolean; createdAt: number; lastLogin?: number }
 interface IdName { id: string; name: string }
 
+const RMETA: Record<string, { c: string; ic: string }> = {
+  '/buyer': { c: '#5b9bd5', ic: '🔑' }, '/owner': { c: '#5fd98a', ic: '🏠' }, '/pros': { c: '#c9a84c', ic: '🤝' },
+  '/agency': { c: '#a99bf0', ic: '🏢' }, '/builder': { c: '#e7894a', ic: '🏗' }, '/materials': { c: '#4ec4e8', ic: '🧱' }, '/legal': { c: '#e0719a', ic: '⚖' }, '': { c: '#8a8a8a', ic: '○' },
+}
+function uInitials(name?: string, phone?: string) { const n = (name || '').trim(); if (n) { const p = n.split(/\s+/); return (p[0]?.[0] || '') + (p[1]?.[0] || '') } return (phone || '').slice(-2) }
+function UAvatar({ name, phone, dash, size = 40 }: { name?: string; phone?: string; dash?: string; size?: number }) {
+  const m = RMETA[dash || ''] || RMETA['']
+  return <div style={{ width: size, height: size, borderRadius: '50%', background: `linear-gradient(135deg,${m.c},${m.c}88)`, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: size * 0.36, flexShrink: 0, boxShadow: `0 4px 12px -4px ${m.c}99` }}>{uInitials(name, phone)}</div>
+}
+function UChip({ label, color, icon }: { label: string; color: string; icon?: string }) {
+  return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 700, color, background: color + '22', border: `1px solid ${color}55`, borderRadius: 999, padding: '3px 10px', whiteSpace: 'nowrap' }}>{icon && <span style={{ fontSize: 11 }}>{icon}</span>}{label}</span>
+}
+
+// کشوی جزئیاتِ کاملِ یک کاربر — KPIها، فعالیتِ نقش، اعتبار/مصرف، ویرایشِ سریع
+function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete }: { user: any; roles: IdName[]; plans: IdName[]; onClose: () => void; onPatch: (phone: string, patch: any) => void; onDelete: (phone: string) => void }) {
+  const [detail, setDetail] = useState<any>(null)
+  const [edit, setEdit] = useState({ name: user.name || '', role: user.role || '', plan: user.plan || '' })
+  const [saved, setSaved] = useState(false)
+  useEffect(() => { fetch(`/api/admin/profiles?phone=${encodeURIComponent(user.phone)}`).then(r => r.ok ? r.json() : null).then(setDetail).catch(() => {}) }, [user.phone])
+  useEffect(() => { const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }; window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey) }, [onClose])
+  const m = RMETA[user.dashboard || ''] || RMETA['']
+  const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
+  const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '9px 11px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
+  const lab: React.CSSProperties = { fontSize: 11.5, color: 'var(--muted)', marginBottom: 5, display: 'block', fontWeight: 600 }
+  const save = () => { onPatch(user.phone, edit); setSaved(true); setTimeout(() => setSaved(false), 1500) }
+  return (
+    <div dir="rtl" onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1500, background: 'rgba(0,0,0,.55)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'flex-start', animation: 'fade .2s ease' }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 540, maxWidth: '94vw', height: '100%', overflowY: 'auto', background: 'var(--bg)', borderInlineEnd: '1px solid var(--line2)', boxShadow: '0 0 60px -10px rgba(0,0,0,.6)', animation: 'slideIn .28s cubic-bezier(.2,.8,.2,1)' }}>
+        <style>{`@keyframes slideIn{from{transform:translateX(-30px);opacity:.6}to{transform:none;opacity:1}}`}</style>
+        {/* header */}
+        <div style={{ position: 'relative', padding: '24px 22px', background: `linear-gradient(135deg,${m.c}22,transparent 70%), var(--surface)`, borderBottom: '1px solid var(--line)' }}>
+          <button onClick={onClose} style={{ position: 'absolute', top: 16, insetInlineStart: 16, width: 32, height: 32, borderRadius: 9, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', cursor: 'pointer', fontSize: 16 }}>×</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <UAvatar name={user.name} phone={user.phone} dash={user.dashboard} size={58} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 18, fontWeight: 900 }}>{user.name || 'بدون نام'}</div>
+              <div style={{ fontSize: 13, color: 'var(--gold)', direction: 'ltr', fontFamily: '"JetBrains Mono", monospace' }}>{user.phone}</div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                <UChip label={user.roleName || 'بدون نقش'} color={m.c} icon={m.ic} />
+                <UChip label={user.planName || 'بدون پلن'} color="#a99bf0" icon="👑" />
+                {user.dashboard && <a href={user.dashboard} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: 'var(--muted)', textDecoration: 'none', border: '1px solid var(--line2)', borderRadius: 999, padding: '3px 10px' }}>پنل ↗</a>}
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 16, marginTop: 14, fontSize: 11.5, color: 'var(--muted)' }}>
+            <span>عضویت: {timeAgo(user.createdAt || null)}</span><span>·</span><span>آخرین ورود: {timeAgo(user.lastLogin || null)}</span><span>·</span><span>{user.onboarded ? 'تکمیل‌شده' : 'جدید'}</span>
+          </div>
+        </div>
+
+        <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 18 }}>
+          {/* KPI cards from profile detail */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+            {[['آگهی', user.listings], ['لید', user.leads], ['وظیفه', user.tasks], ['مصرف توکن', user.tokenUsed], ['اعتبار پیامک', user.credit?.sms], ['اعتبار توکن', user.credit?.token]].map(([l, v]: any) => (
+              <div key={l} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: 13 }}><div style={{ fontSize: 11, color: 'var(--muted)' }}>{l}</div><div style={{ fontSize: 20, fontWeight: 900, color: 'var(--gold)', marginTop: 4 }}>{fa(v || 0)}</div></div>
+            ))}
+          </div>
+
+          {/* role-specific KPIs */}
+          {detail?.kpis?.length > 0 && (
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>عملکردِ نقش ({detail.account?.roleLabel})</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 8 }}>
+                {detail.kpis.map((k: any, i: number) => <div key={i} style={{ background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ fontSize: 12, color: 'var(--muted)' }}>{k.label}</span><span style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>{k.money ? pfMoney(k.value) : fa(k.value)}</span></div>)}
+              </div>
+            </div>
+          )}
+
+          {/* activity sections */}
+          {detail?.sections?.map((s: any, i: number) => s.items?.length > 0 && (
+            <div key={i}>
+              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>{s.title}</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {s.items.slice(0, 6).map((it: any, j: number) => <div key={j} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 9, padding: '9px 12px', display: 'flex', justifyContent: 'space-between', gap: 10 }}><span style={{ fontSize: 12.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.primary}</span>{it.secondary && <span style={{ fontSize: 11.5, color: 'var(--muted)', whiteSpace: 'nowrap' }}>{it.secondary}</span>}</div>)}
+              </div>
+            </div>
+          ))}
+
+          {/* quick edit */}
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--gold)', borderRadius: 14, padding: 16 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 800, marginBottom: 12 }}>ویرایشِ سریع</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+              <div style={{ gridColumn: '1 / -1' }}><label style={lab}>نام</label><input style={inp} value={edit.name} onChange={e => setEdit({ ...edit, name: e.target.value })} /></div>
+              <div><label style={lab}>نقش</label><select style={inp} value={edit.role} onChange={e => setEdit({ ...edit, role: e.target.value })}><option value="">— بدون نقش</option>{roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></div>
+              <div><label style={lab}>پلن</label><select style={inp} value={edit.plan} onChange={e => setEdit({ ...edit, plan: e.target.value })}><option value="">بدون پلن</option>{plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+            </div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <GoldButton onClick={save}>ذخیرهٔ تغییرات</GoldButton>
+              <button onClick={() => { onDelete(user.phone); onClose() }} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.4)', color: '#e7674a', borderRadius: 10, padding: '9px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>حذفِ کاربر</button>
+              {saved && <span style={{ fontSize: 12.5, color: '#5fd98a' }}>✓ ذخیره شد</span>}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function UsersView() {
   const [users, setUsers] = useState<any[]>([])
   const [roles, setRoles] = useState<IdName[]>([])
@@ -2611,9 +2708,10 @@ function UsersView() {
   const [nf, setNf] = useState({ phone: '', name: '', role: '', plan: '' })
   const [createMsg, setCreateMsg] = useState('')
   const [q, setQ] = useState('')
-  const [roleFilter, setRoleFilter] = useState('')   // '' = همه
-  const [planFilter, setPlanFilter] = useState('')   // '' = همه ، '__none' = بدون پلن
+  const [roleFilter, setRoleFilter] = useState('')
+  const [planFilter, setPlanFilter] = useState('')
   const [sel, setSel] = useState<Set<string>>(new Set())
+  const [viewUser, setViewUser] = useState<any>(null)
 
   const load = async () => {
     setLoading(true)
@@ -2625,7 +2723,9 @@ function UsersView() {
 
   const patchOne = async (phone: string, patch: { name?: string; role?: string; plan?: string }) => {
     setUsers(us => us.map(u => u.phone === phone ? { ...u, ...patch, onboarded: patch.role !== undefined ? true : u.onboarded } : u))
+    if (viewUser?.phone === phone) setViewUser((v: any) => ({ ...v, ...patch }))
     await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, patch }) })
+    load()
   }
   const delOne = async (phone: string) => {
     if (!confirm(`کاربر ${phone} حذف شود؟`)) return
@@ -2652,27 +2752,12 @@ function UsersView() {
   const allVisibleSelected = filtered.length > 0 && filtered.every(u => sel.has(u.phone))
   const selectAll = () => setSel(allVisibleSelected ? new Set() : new Set(filtered.map(u => u.phone)))
 
-  const bulkRole = async () => {
+  const bulkAssign = async (patch: { role?: string } | { plan?: string }) => {
     if (!sel.size) return
-    const opts = ['', ...roles.map(r => r.id)]
-    const labels = ['— بدون نقش', ...roles.map(r => r.name)]
-    const choice = prompt(`نقش جدید برای ${sel.size} کاربر:\n${labels.map((l, i) => `${i}) ${l}`).join('\n')}\n\nشمارهٔ گزینه را وارد کنید:`)
-    if (choice === null) return
-    const i = Number(choice); if (Number.isNaN(i) || i < 0 || i >= opts.length) return
-    const role = opts[i]; const phones = [...sel]
-    setUsers(us => us.map(u => sel.has(u.phone) ? { ...u, role: role || undefined, onboarded: true } : u)); setSel(new Set())
-    await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phones, patch: { role } }) })
-  }
-  const bulkPlan = async () => {
-    if (!sel.size) return
-    const opts = ['', ...plans.map(p => p.id)]
-    const labels = ['— بدون پلن', ...plans.map(p => p.name)]
-    const choice = prompt(`پلن جدید برای ${sel.size} کاربر:\n${labels.map((l, i) => `${i}) ${l}`).join('\n')}\n\nشمارهٔ گزینه را وارد کنید:`)
-    if (choice === null) return
-    const i = Number(choice); if (Number.isNaN(i) || i < 0 || i >= opts.length) return
-    const plan = opts[i]; const phones = [...sel]
-    setUsers(us => us.map(u => sel.has(u.phone) ? { ...u, plan: plan || undefined } : u)); setSel(new Set())
-    await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phones, patch: { plan } }) })
+    const phones = [...sel]
+    setUsers(us => us.map(u => sel.has(u.phone) ? { ...u, ...patch } : u))
+    await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phones, patch }) })
+    load()
   }
   const bulkDel = async () => {
     if (!sel.size || !confirm(`${sel.size} کاربر حذف شود؟`)) return
@@ -2682,37 +2767,29 @@ function UsersView() {
   }
 
   const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '8px 11px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
-  const cellSel: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 8, padding: '5px 8px', color: 'var(--text)', fontSize: 12.5, fontFamily: 'inherit', outline: 'none', maxWidth: 150 }
-  const th: React.CSSProperties = { textAlign: 'right', fontSize: 11.5, fontWeight: 700, color: 'var(--faint)', padding: '0 10px 10px', whiteSpace: 'nowrap' }
-  const td: React.CSSProperties = { padding: '10px', fontSize: 13, color: 'var(--text)', borderTop: '1px solid var(--line)', verticalAlign: 'middle' }
+  const cellSel: React.CSSProperties = { background: 'transparent', border: '1px solid var(--line2)', borderRadius: 999, padding: '4px 10px', color: 'var(--text)', fontSize: 12, fontFamily: 'inherit', outline: 'none', cursor: 'pointer', maxWidth: 150 }
+  const th: React.CSSProperties = { textAlign: 'right', fontSize: 11, fontWeight: 700, color: 'var(--faint)', padding: '0 12px 11px', whiteSpace: 'nowrap' }
+  const td: React.CSSProperties = { padding: '11px 12px', fontSize: 13, color: 'var(--text)', borderTop: '1px solid var(--line)', verticalAlign: 'middle' }
 
   const total = users.length
   const onboardedCount = users.filter(u => u.onboarded).length
   const withRole = users.filter(u => u.role).length
+  const withPlan = users.filter(u => u.plan).length
 
   return (
     <div style={{ animation: 'fade .35s ease' }}>
-      {/* KPI */}
       <div className="mjsa-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 18 }}>
         <KPI label="کل کاربران" value={total.toLocaleString('fa-IR')} trend="حساب‌های ثبت‌شده" icon="◍" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" />
-        <KPI label="تکمیل‌شده (onboarded)" value={onboardedCount.toLocaleString('fa-IR')} trend="پروفایل کامل" icon="✓" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" />
+        <KPI label="تکمیل‌شده" value={onboardedCount.toLocaleString('fa-IR')} trend="پروفایل کامل" icon="✓" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" />
         <KPI label="نقش‌دار" value={withRole.toLocaleString('fa-IR')} trend="نقش تخصیص‌یافته" icon="🛡" iconBg="var(--goldDim)" iconColor="var(--gold)" />
-        <KPI label="بدون نقش" value={(total - withRole).toLocaleString('fa-IR')} trend="در انتظار تخصیص" icon="○" iconBg="rgba(231,103,74,.15)" iconColor="#e7674a" />
+        <KPI label="مشترکِ پلن" value={withPlan.toLocaleString('fa-IR')} trend="دارای اشتراکِ فعال" icon="👑" iconBg="rgba(169,155,240,.15)" iconColor="#a99bf0" />
       </div>
 
-      {/* Toolbar */}
       <Card style={{ marginBottom: 14 }}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <input style={{ ...inp, flex: 1, minWidth: 160 }} placeholder="جستجو با شماره یا نام…" value={q} onChange={e => setQ(e.target.value)} />
-          <select style={inp} value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
-            <option value="">همه نقش‌ها</option>
-            {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-          </select>
-          <select style={inp} value={planFilter} onChange={e => setPlanFilter(e.target.value)}>
-            <option value="">همه پلن‌ها</option>
-            <option value="__none">بدون پلن</option>
-            {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+          <select style={inp} value={roleFilter} onChange={e => setRoleFilter(e.target.value)}><option value="">همه نقش‌ها</option>{roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select>
+          <select style={inp} value={planFilter} onChange={e => setPlanFilter(e.target.value)}><option value="">همه پلن‌ها</option><option value="__none">بدون پلن</option>{plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
           <OutlineButton onClick={load}>بازخوانی</OutlineButton>
           <GoldButton onClick={() => setCreating(c => !c)}>{creating ? 'بستن' : '＋ کاربر جدید'}</GoldButton>
         </div>
@@ -2726,75 +2803,74 @@ function UsersView() {
             {createMsg && <span style={{ fontSize: 12.5, color: '#e7674a' }}>{createMsg}</span>}
           </div>
         )}
-        <div style={{ marginTop: 10, fontSize: 12.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ marginTop: 10, fontSize: 12.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <span>{loading ? 'در حال بارگذاری…' : `${filtered.length.toLocaleString('fa-IR')} از ${total.toLocaleString('fa-IR')} کاربر`}</span>
           {sel.size > 0 && <>
             <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{sel.size.toLocaleString('fa-IR')} انتخاب‌شده:</span>
-            <button onClick={bulkRole} style={{ background: 'transparent', border: '1px solid var(--gold)', color: 'var(--gold)', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>تغییر نقش</button>
-            <button onClick={bulkPlan} style={{ background: 'transparent', border: '1px solid #8a7bd8', color: '#a99bf0', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>تغییر پلن</button>
+            <select style={{ ...inp, padding: '5px 10px', fontSize: 12 }} value="" onChange={e => { if (e.target.value !== '') bulkAssign({ role: e.target.value === '__none' ? '' : e.target.value }) }}><option value="">تخصیصِ نقش…</option><option value="__none">— بدون نقش</option>{roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select>
+            <select style={{ ...inp, padding: '5px 10px', fontSize: 12 }} value="" onChange={e => { if (e.target.value !== '') bulkAssign({ plan: e.target.value === '__none' ? '' : e.target.value }) }}><option value="">تخصیصِ پلن…</option><option value="__none">— بدون پلن</option>{plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
             <button onClick={bulkDel} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.4)', color: '#e7674a', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>حذف</button>
           </>}
         </div>
       </Card>
 
-      {/* Table */}
       <Card>
         {filtered.length === 0 && !loading ? (
           <div style={{ color: 'var(--muted)', fontSize: 13, padding: '30px 0', textAlign: 'center' }}>کاربری یافت نشد. فیلترها را تغییر دهید.</div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 880 }}>
               <thead>
                 <tr>
                   <th style={{ ...th, width: 30 }}><input type="checkbox" checked={allVisibleSelected} onChange={selectAll} style={{ width: 16, height: 16, accentColor: 'var(--gold)', cursor: 'pointer' }} /></th>
-                  <th style={th}>نام</th>
-                  <th style={th}>شماره</th>
+                  <th style={th}>مخاطب</th>
                   <th style={th}>نقش</th>
                   <th style={th}>پلن</th>
-                  <th style={th}>آگهی</th>
-                  <th style={th}>اعتبار (پیامک/ایمیل/توکن)</th>
-                  <th style={th}>مصرفِ توکن</th>
-                  <th style={th}>وضعیت</th>
+                  <th style={{ ...th, textAlign: 'center' }}>فعالیت (آگهی/لید/وظیفه)</th>
+                  <th style={{ ...th, textAlign: 'center' }}>مصرفِ توکن</th>
+                  <th style={th}>اعتبار (پ/ا/ت)</th>
                   <th style={th}>آخرین ورود</th>
-                  <th style={{ ...th, textAlign: 'center' }}>حذف</th>
+                  <th style={{ ...th, textAlign: 'center' }}>عملیات</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(u => (
-                  <tr key={u.phone} style={{ background: sel.has(u.phone) ? 'var(--goldDim)' : 'transparent' }}>
-                    <td style={td}><input type="checkbox" checked={sel.has(u.phone)} onChange={() => toggleSel(u.phone)} style={{ width: 16, height: 16, accentColor: 'var(--gold)', cursor: 'pointer' }} /></td>
-                    <td style={{ ...td, fontWeight: 600 }}>{u.name || '—'}</td>
-                    <td style={{ ...td, direction: 'ltr', textAlign: 'right', fontFamily: '"JetBrains Mono", monospace', color: 'var(--gold)' }}>{u.phone}</td>
-                    <td style={td}>
-                      <select style={cellSel} value={u.role || ''} onChange={e => patchOne(u.phone, { role: e.target.value })}>
-                        <option value="">— بدون نقش</option>
-                        {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                      </select>
-                    </td>
-                    <td style={td}>
-                      <select style={cellSel} value={u.plan || ''} onChange={e => patchOne(u.phone, { plan: e.target.value })}>
-                        <option value="">بدون پلن</option>
-                        {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                      </select>
-                    </td>
-                    <td style={{ ...td, fontWeight: 700, color: u.listings ? 'var(--gold)' : 'var(--faint)' }}>{(u.listings || 0).toLocaleString('fa-IR')}</td>
-                    <td style={{ ...td, fontSize: 12, color: 'var(--muted)', direction: 'ltr', textAlign: 'right' }}>{(u.credit?.sms || 0).toLocaleString('fa-IR')} / {(u.credit?.email || 0).toLocaleString('fa-IR')} / {(u.credit?.token || 0).toLocaleString('fa-IR')}</td>
-                    <td style={{ ...td, fontSize: 12.5, fontWeight: 700, color: u.tokenUsed ? '#a99bf0' : 'var(--faint)' }}>{(u.tokenUsed || 0).toLocaleString('fa-IR')}</td>
-                    <td style={td}>{u.onboarded ? <Badge label="تکمیل‌شده" color="#5fd98a" /> : <Badge label="جدید" color="#5b9bd5" />}</td>
-                    <td style={{ ...td, color: 'var(--muted)', fontSize: 12 }}>{timeAgo(u.lastLogin || null)}</td>
-                    <td style={{ ...td, textAlign: 'center' }}>
-                      <button title="حذف" onClick={() => delOne(u.phone)} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', borderRadius: 8, padding: '4px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>×</button>
-                    </td>
-                  </tr>
-                ))}
+                {filtered.map(u => {
+                  const m = RMETA[u.dashboard || ''] || RMETA['']
+                  return (
+                    <tr key={u.phone} style={{ background: sel.has(u.phone) ? 'var(--goldDim)' : 'transparent', transition: 'background .15s' }}>
+                      <td style={td}><input type="checkbox" checked={sel.has(u.phone)} onChange={() => toggleSel(u.phone)} style={{ width: 16, height: 16, accentColor: 'var(--gold)', cursor: 'pointer' }} /></td>
+                      <td style={td}>
+                        <div onClick={() => setViewUser(u)} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                          <UAvatar name={u.name} phone={u.phone} dash={u.dashboard} size={38} />
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 700, fontSize: 13.5 }}>{u.name || 'بدون نام'}</div>
+                            <div style={{ fontSize: 11.5, color: 'var(--gold)', direction: 'ltr', textAlign: 'right', fontFamily: '"JetBrains Mono", monospace' }}>{u.phone}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td style={td}><select style={{ ...cellSel, color: m.c, borderColor: m.c + '66' }} value={u.role || ''} onChange={e => patchOne(u.phone, { role: e.target.value })}><option value="">— بدون نقش</option>{roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></td>
+                      <td style={td}><select style={{ ...cellSel, color: u.plan ? '#a99bf0' : 'var(--muted)' }} value={u.plan || ''} onChange={e => patchOne(u.phone, { plan: e.target.value })}><option value="">بدون پلن</option>{plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></td>
+                      <td style={{ ...td, textAlign: 'center', fontSize: 12.5, fontWeight: 700 }}><span style={{ color: u.listings ? 'var(--gold)' : 'var(--faint)' }}>{(u.listings || 0).toLocaleString('fa-IR')}</span><span style={{ color: 'var(--faint)' }}> / </span><span style={{ color: u.leads ? '#5fd98a' : 'var(--faint)' }}>{(u.leads || 0).toLocaleString('fa-IR')}</span><span style={{ color: 'var(--faint)' }}> / </span><span style={{ color: u.tasks ? '#5b9bd5' : 'var(--faint)' }}>{(u.tasks || 0).toLocaleString('fa-IR')}</span></td>
+                      <td style={{ ...td, textAlign: 'center', fontSize: 12.5, fontWeight: 700, color: u.tokenUsed ? '#a99bf0' : 'var(--faint)' }}>{(u.tokenUsed || 0).toLocaleString('fa-IR')}</td>
+                      <td style={{ ...td, fontSize: 11.5, color: 'var(--muted)', direction: 'ltr', textAlign: 'right' }}>{(u.credit?.sms || 0).toLocaleString('fa-IR')}/{(u.credit?.email || 0).toLocaleString('fa-IR')}/{(u.credit?.token || 0).toLocaleString('fa-IR')}</td>
+                      <td style={{ ...td, color: 'var(--muted)', fontSize: 12 }}>{timeAgo(u.lastLogin || null)}</td>
+                      <td style={{ ...td, textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        <button title="مشاهدهٔ کامل" onClick={() => setViewUser(u)} style={{ background: 'var(--goldDim)', border: '1px solid var(--gold)', color: 'var(--gold)', borderRadius: 8, padding: '4px 11px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 700, marginInlineEnd: 6 }}>مشاهده</button>
+                        <button title="حذف" onClick={() => delOne(u.phone)} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', borderRadius: 8, padding: '4px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>×</button>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
         )}
         <div style={{ marginTop: 12, fontSize: 11.5, color: 'var(--faint)', lineHeight: 1.8 }}>
-          نقش و پلن هر کاربر را می‌توانید مستقیم از همین جدول تغییر دهید. نقش‌ها و دسترسی‌ها در بخش «نقش‌ها و دسترسی» تعریف می‌شوند.
+          روی «مشاهده» یا آواتارِ هر کاربر بزن تا پروفایلِ کاملش (فعالیت، اعتبار، مصرفِ توکن) باز شود. نقش و پلن را مستقیم از جدول یا کشوی جزئیات تغییر بده.
         </div>
       </Card>
+
+      {viewUser && <UserDrawer user={viewUser} roles={roles} plans={plans} onClose={() => setViewUser(null)} onPatch={patchOne} onDelete={delOne} />}
     </div>
   )
 }
