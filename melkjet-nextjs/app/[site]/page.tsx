@@ -807,6 +807,15 @@ export function SiteShell({ site, page }: { site: Site; page: SitePage }) {
   const text = t?.text || '#4a4338'
   const heading = t?.heading || '#15110b'
   const fontFamily = (t?.font ? `${t.font}, ` : '') + 'Vazirmatn, Tahoma, sans-serif'
+  // بارگذاریِ فونتِ انتخابیِ کاربر (وزیرمتن به‌صورتِ سراسری بارگذاری شده است).
+  const FONT_IMPORTS: Record<string, string> = {
+    'Lalezar': 'Lalezar',
+    'Markazi Text': 'Markazi+Text:wght@400;500;600;700',
+    'Gulzar': 'Gulzar',
+    'Noto Naskh Arabic': 'Noto+Naskh+Arabic:wght@400;500;700',
+  }
+  const famParam = t?.font ? FONT_IMPORTS[t.font] : ''
+  const fontImport = famParam ? `@import url('https://fonts.googleapis.com/css2?family=${famParam}&display=swap');\n` : ''
   const cssVars = {
     '--mjs-primary': primary,
     '--mjs-secondary': secondary,
@@ -818,7 +827,7 @@ export function SiteShell({ site, page }: { site: Site; page: SitePage }) {
   } as React.CSSProperties
   return (
     <main style={{ minHeight: '100vh', background: 'var(--mjs-bg)', color: 'var(--mjs-text)', fontFamily, ...cssVars }}>
-      <style>{`
+      <style>{fontImport + `
         .mjs-card{transition:transform .22s ease, box-shadow .22s ease}
         .mjs-card:hover{transform:translateY(-5px);box-shadow:0 22px 50px -24px rgba(20,16,10,.55),0 6px 16px -8px rgba(20,16,10,.18)}
         .mjs-btn{transition:transform .18s ease, box-shadow .18s ease, opacity .18s ease}

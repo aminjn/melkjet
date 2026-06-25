@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useState, useEffect, useCallback } from 'react'
 
 const CARD_SHADOW = '0 10px 34px -22px rgba(20,16,10,.55), 0 2px 8px -4px rgba(20,16,10,.10)'
 
@@ -16,6 +16,19 @@ export default function GallerySlider({
   const rowRef = useRef<HTMLDivElement | null>(null)
   const imgs = (images || []).filter(Boolean)
   const per = Math.max(1, Math.min(6, Number(perSlide) || 3))
+
+  // لایت‌باکس (نمایشِ تمام‌صفحه)
+  const [open, setOpen] = useState<number | null>(null)
+  const close = useCallback(() => setOpen(null), [])
+  const step = useCallback((d: 1 | -1) => setOpen(o => (o == null ? o : (o + d + imgs.length) % imgs.length)), [imgs.length])
+  useEffect(() => {
+    if (open == null) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); else if (e.key === 'ArrowRight') step(-1); else if (e.key === 'ArrowLeft') step(1) }
+    window.addEventListener('keydown', onKey)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prevOverflow }
+  }, [open, close, step])
 
   const scrollByPage = (dir: 1 | -1) => {
     const el = rowRef.current
@@ -79,7 +92,7 @@ export default function GallerySlider({
               }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={src} alt="" style={{ width: '100%', height: 240, objectFit: 'cover', display: 'block' }} />
+              <img src={src} alt="" onClick={() => setOpen(i)} style={{ width: '100%', height: 240, objectFit: 'cover', display: 'block', cursor: 'zoom-in' }} />
             </div>
           ))}
         </div>
@@ -95,6 +108,22 @@ export default function GallerySlider({
           }}
         >›</button>
       </div>
+
+      {/* لایت‌باکس */}
+      {open != null && imgs[open] && (
+        <div onClick={close} style={{ position: 'fixed', inset: 0, zIndex: 4000, background: 'rgba(8,7,6,.94)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4vh 16px', direction: 'rtl' }}>
+          <button aria-label="بستن" onClick={close} style={{ position: 'absolute', top: 16, insetInlineStart: 16, width: 44, height: 44, borderRadius: '50%', border: '1px solid rgba(255,255,255,.25)', background: 'rgba(255,255,255,.08)', color: '#fff', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+          {imgs.length > 1 && (
+            <>
+              <button aria-label="بعدی" onClick={e => { e.stopPropagation(); step(1) }} style={{ position: 'absolute', insetInlineEnd: 14, top: '50%', transform: 'translateY(-50%)', width: 50, height: 50, borderRadius: '50%', border: '1px solid rgba(255,255,255,.25)', background: 'rgba(255,255,255,.08)', color: '#fff', fontSize: 26, cursor: 'pointer', lineHeight: 1 }}>›</button>
+              <button aria-label="قبلی" onClick={e => { e.stopPropagation(); step(-1) }} style={{ position: 'absolute', insetInlineStart: 14, top: '50%', transform: 'translateY(-50%)', width: 50, height: 50, borderRadius: '50%', border: '1px solid rgba(255,255,255,.25)', background: 'rgba(255,255,255,.08)', color: '#fff', fontSize: 26, cursor: 'pointer', lineHeight: 1 }}>‹</button>
+            </>
+          )}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={imgs[open]} alt="" onClick={e => e.stopPropagation()} style={{ maxWidth: '92vw', maxHeight: '88vh', objectFit: 'contain', borderRadius: 12, boxShadow: '0 20px 70px rgba(0,0,0,.6)' }} />
+          {imgs.length > 1 && <div style={{ position: 'absolute', bottom: 18, left: 0, right: 0, textAlign: 'center', color: 'rgba(255,255,255,.8)', fontSize: 13, fontWeight: 600 }}>{(open + 1).toLocaleString('fa-IR')} / {imgs.length.toLocaleString('fa-IR')}</div>}
+        </div>
+      )}
     </div>
   )
 }

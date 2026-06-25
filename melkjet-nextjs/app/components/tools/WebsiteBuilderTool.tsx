@@ -11,7 +11,7 @@ export const WEBSITE_VIEWS: { id: WebsiteView; label: string; icon: string }[] =
 ]
 
 type Device = 'desktop' | 'mobile' | 'tablet'
-type ActiveTab = 'seo' | 'settings' | 'pages'
+type ActiveTab = 'seo' | 'settings' | 'pages' | 'reviews'
 
 interface Block {
   id: number
@@ -64,6 +64,15 @@ const SITE_PALETTES: { name: string; t: Required<Omit<Theme, 'font'>> }[] = [
   { name: 'زمرد تیره', t: { primary: '#34d399', secondary: '#06231a', bg: '#0b1a15', surface: '#10241d', text: '#aebfb7', heading: '#ffffff' } },
   { name: 'قرمز شرابی', t: { primary: '#be123c', secondary: '#2a0810', bg: '#ffffff', surface: '#fdf2f4', text: '#4d3a3f', heading: '#26090f' } },
   { name: 'خاکستری شیک', t: { primary: '#475569', secondary: '#1e293b', bg: '#ffffff', surface: '#f4f6f8', text: '#475569', heading: '#1e293b' } },
+]
+
+// فونت‌های قابلِ انتخابِ سایت (روی سایتِ منتشرشده با Google Fonts بارگذاری می‌شوند).
+const FONT_OPTIONS: { value: string; label: string; importParam?: string }[] = [
+  { value: '', label: 'وزیرمتن (پیش‌فرض)' },
+  { value: 'Markazi Text', label: 'مرکزی (Markazi)', importParam: 'Markazi+Text:wght@400;500;600;700' },
+  { value: 'Gulzar', label: 'گلزار (Gulzar)', importParam: 'Gulzar' },
+  { value: 'Noto Naskh Arabic', label: 'نسخ (Naskh)', importParam: 'Noto+Naskh+Arabic:wght@400;500;700' },
+  { value: 'Lalezar', label: 'لاله‌زار (نمایشی)', importParam: 'Lalezar' },
 ]
 
 // پالتِ هر قالب بر اساسِ شمارهٔ آن — تا قالب‌های یک پروفایل، هرکدام رنگِ متفاوت داشته باشند.
@@ -1050,6 +1059,40 @@ function TemplateThumb({ tpl }: { tpl: typeof STARTER_TEMPLATES[0] }) {
   )
 }
 
+// مدیریتِ نظراتِ واقعیِ ثبت‌شده روی سایت — تأیید/عدم‌نمایش/حذف.
+function ReviewsManager() {
+  const [reviews, setReviews] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const load = () => { setLoading(true); fetch('/api/reviews').then(r => r.ok ? r.json() : null).then(d => setReviews(Array.isArray(d?.reviews) ? d.reviews : [])).catch(() => {}).finally(() => setLoading(false)) }
+  useEffect(() => { load() }, [])
+  const patch = async (body: any) => { await fetch('/api/reviews', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); load() }
+  const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>نظراتِ ثبت‌شده ({fa(reviews.length)})</div>
+        <button onClick={load} style={{ fontSize: 11, color: 'var(--gold)', background: 'var(--goldDim)', border: '1px solid var(--gold)', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>↻ بازخوانی</button>
+      </div>
+      {loading ? <div style={{ fontSize: 12, color: 'var(--muted)', padding: 14, textAlign: 'center' }}>در حال بارگذاری…</div>
+        : reviews.length === 0 ? <div style={{ fontSize: 12, color: 'var(--muted)', background: 'var(--surface)', border: '1px dashed var(--line2)', borderRadius: 10, padding: '20px 14px', textAlign: 'center', lineHeight: 1.9 }}>هنوز نظری ثبت نشده است. وقتی بازدیدکننده‌ها از طریقِ بلوکِ «نظرات مشتریان» نظر ثبت کنند، این‌جا برای مدیریت نمایش داده می‌شوند.</div>
+        : reviews.map(r => (
+          <div key={r.id} style={{ background: 'var(--surface)', border: `1px solid ${r.approved ? 'var(--line)' : 'rgba(231,137,74,.4)'}`, borderRadius: 10, padding: 11 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span style={{ fontSize: 12.5, fontWeight: 800 }}>{r.name}</span>
+              <span style={{ color: 'var(--gold)', fontSize: 12 }}>{'★'.repeat(Math.max(0, Math.min(5, Number(r.rating) || 5)))}</span>
+              <span style={{ marginInlineStart: 'auto', fontSize: 10, fontWeight: 700, color: r.approved ? '#5fd98a' : '#e7894a' }}>{r.approved ? 'نمایش' : 'مخفی'}</span>
+            </div>
+            <div style={{ fontSize: 11.5, color: 'var(--text)', lineHeight: 1.9, marginBottom: 9 }}>{r.text}</div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={() => patch({ id: r.id, approved: !r.approved })} style={{ flex: 1, fontSize: 11, fontWeight: 700, padding: '6px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)' }}>{r.approved ? '🚫 مخفی کن' : '✓ نمایش بده'}</button>
+              <button onClick={() => { if (confirm('این نظر حذف شود؟')) patch({ id: r.id, delete: true }) }} style={{ fontSize: 11, fontWeight: 700, padding: '6px 12px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', border: '1px solid rgba(231,103,74,.4)', background: 'transparent', color: '#e7674a' }}>حذف</button>
+            </div>
+          </div>
+        ))}
+    </div>
+  )
+}
+
 export default function WebsiteBuilderTool({ embedded = false, view: viewProp, onView }: { embedded?: boolean; view?: WebsiteView; onView?: (v: WebsiteView) => void }) {
   // Default to 'editor' so standalone /website-builder stays pixel-identical (always the builder).
   const [internalView, setInternalView] = useState<WebsiteView>('editor')
@@ -1635,11 +1678,13 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
             minHeight: '100%',
             background: theme.bg || '#fff',
             color: theme.text || '#15110b',
+            fontFamily: (theme.font ? `'${theme.font}', ` : '') + 'Vazirmatn, Tahoma, sans-serif',
             boxShadow: device !== 'desktop' ? '0 8px 40px rgba(0,0,0,0.45)' : 'none',
             borderRadius: device !== 'desktop' ? 16 : 0,
             overflow: 'hidden',
             flexShrink: 0,
           }}>
+            {(() => { const f = FONT_OPTIONS.find(x => x.value === theme.font); return f?.importParam ? <style>{`@import url('https://fonts.googleapis.com/css2?family=${f.importParam}&display=swap');`}</style> : null })()}
             {/* Browser chrome */}
             <div style={{ background: 'var(--bg2)', borderBottom: '1px solid var(--line)', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8, position: 'sticky', top: 0, zIndex: 5 }}>
               <div style={{ display: 'flex', gap: 5 }}>
@@ -1730,6 +1775,7 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
               ['seo', 'سئو'],
               ['settings', 'تنظیمات بلوک'],
               ['pages', 'صفحات'],
+              ['reviews', 'نظرات'],
             ] as [ActiveTab, string][]).map(([t, label]) => (
               <button
                 key={t}
@@ -1836,6 +1882,12 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
                       </div>
                     ))}
                   </div>
+                  <div style={{ height: 1, background: 'var(--line)', margin: '12px 0' }} />
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', marginBottom: 8 }}>فونتِ سایت</div>
+                  <select value={theme.font || ''} onChange={e => setTheme(t => ({ ...t, font: e.target.value || undefined }))} style={{ ...INSPECTOR_INPUT, cursor: 'pointer' }}>
+                    {FONT_OPTIONS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                  </select>
+                  <div style={{ fontSize: 10, color: 'var(--faint)', marginTop: 6, lineHeight: 1.7 }}>فونت روی سایتِ منتشرشده اعمال می‌شود.</div>
                 </div>
 
                 <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, padding: '12px 14px' }}>
@@ -2058,6 +2110,9 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
                 )}
               </div>
             )}
+
+            {/* Reviews Tab — مدیریتِ نظراتِ واقعیِ ثبت‌شده */}
+            {activeTab === 'reviews' && <ReviewsManager />}
 
             {/* Pages Tab — REAL pages: select-to-edit, rename, delete, add */}
             {activeTab === 'pages' && (
