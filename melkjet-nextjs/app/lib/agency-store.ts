@@ -1,9 +1,18 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
+import { getProfile, saveProfile } from './profile-store'
+import { getAccount } from './account-store'
 
 // استور پنل «آژانس املاک» — per-owner (هر کاربر فقط دادهٔ خودش).
 const DATA_FILE = join(process.cwd(), '.agency-data.json')
+
+// نامِ نمایشیِ آژانس: نامِ کسب‌وکار (پروفایل) → نامِ تنظیماتِ آژانس → نامِ حساب (شخصی، آخرین چاره)
+export function resolveAgencyName(phone: string, storedName?: string): string {
+  try { const bp = getProfile(phone); const n = (bp.businessName || bp.displayName || '').trim(); if (n) return n } catch {}
+  const s = (storedName || '').trim(); if (s) return s
+  return getAccount(phone)?.name || ''
+}
 
 export type Stage = 'new' | 'assigned' | 'visit' | 'negotiation' | 'closed' | 'lost'
 export type ListingStatus = 'active' | 'sold' | 'rented'
@@ -62,7 +71,7 @@ export function agencyStats(o: string) {
   const dealsThisMonth = a.deals.filter(d => Date.now() - d.createdAt < 31 * 86400000).length
   const topAgents = [...a.agents].sort((x, y) => y.deals - x.deals).slice(0, 4)
   return {
-    profile: a.profile,
+    profile: { ...a.profile, name: resolveAgencyName(o, a.profile.name) },
     kpis: {
       activeAgents: activeAgents.length, totalAgents: a.agents.length, activeListings: activeListings.length,
       openLeads: openLeads.length, dealsThisMonth, monthSales: thisMonth, monthChange, totalCommission,
@@ -137,5 +146,8 @@ export function listListings(o: string) { return getAgency(o).listings }
 export function listLeads(o: string) { return getAgency(o).leads }
 export function listDeals(o: string) { return getAgency(o).deals }
 export function updateAgencyProfile(o: string, patch: Partial<AgencyData['profile']>) {
-  return mutate(o, a => { Object.assign(a.profile, patch) }).profile
+  const res = mutate(o, a => { Object.assign(a.profile, patch) }).profile
+  // نامِ آژانس را با نامِ کسب‌وکارِ پروفایل هم‌گام کن تا همه‌جا (لینکِ مشاوران، پروفایلِ عمومی) یکی باشد
+  if (patch.name !== undefined && String(patch.name).trim()) { try { saveProfile(o, { businessName: String(patch.name).trim() }) } catch {} }
+  return res
 }

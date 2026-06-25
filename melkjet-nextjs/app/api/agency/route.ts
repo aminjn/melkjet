@@ -3,7 +3,7 @@ import { getSession } from '@/app/lib/session'
 import {
   agencyStats, listAgents, listListings, listLeads, listDeals, getAgency,
   addAgent, toggleAgent, deleteAgent, addListing, setListingStatus, assignListing, deleteListing,
-  addLead, assignLead, setLeadStage, deleteLead, addDeal, updateAgencyProfile,
+  addLead, assignLead, setLeadStage, deleteLead, addDeal, updateAgencyProfile, resolveAgencyName,
 } from '@/app/lib/agency-store'
 import { checkDuplicate, advisorScope } from '@/app/lib/duplicate-check'
 
@@ -29,9 +29,10 @@ export async function POST(req: NextRequest) {
       let duplicate: { id: string; title: string; ownerName: string } | undefined
       try {
         const ag = getAgency(o)
+        const agName = resolveAgencyName(o, ag.profile?.name) || 'آژانس'
         const scope = [
           ...advisorScope(o),
-          ...ag.listings.filter(x => x.id !== listing.id).map(x => ({ id: x.id, ownerName: ag.profile?.name || 'آژانس', deal: x.deal, title: x.title, location: x.location, price: x.price })),
+          ...ag.listings.filter(x => x.id !== listing.id).map(x => ({ id: x.id, ownerName: agName, deal: x.deal, title: x.title, location: x.location, price: x.price })),
         ]
         const dup = await checkDuplicate(scope, { deal: listing.deal, title: listing.title, location: listing.location, price: listing.price }, listing.id)
         if (dup.isDuplicate) duplicate = dup.match

@@ -4,6 +4,7 @@ import { randomBytes } from 'crypto'
 import { listAccounts, getAccount, dashForRole } from './account-store'
 import { getAgency } from './agency-store'
 import { getAdvisor } from './advisor-store'
+import { getProfile } from './profile-store'
 
 // رابطهٔ «مشاور ↔ آژانس»: درخواست عضویت (دوطرفه) + عضویت.
 // هر مشاور حداکثر در یک آژانس عضو است. کلیدها = شمارهٔ تلفن (phone).
@@ -29,14 +30,30 @@ function uid(p = '') { return p + randomBytes(5).toString('hex') }
 function load(): DB { if (existsSync(FILE)) { try { const d = JSON.parse(readFileSync(FILE, 'utf-8')); return { requests: d.requests || [], memberships: d.memberships || [] } } catch {} } return { requests: [], memberships: [] } }
 function save(db: DB) { writeFileSync(FILE, JSON.stringify(db, null, 2)) }
 
-// نام نمایشیِ یک حساب بر اساس نقشش
+// نامِ کسب‌وکار از پروفایلِ کاربر (نامِ آژانس/برند) — منبعِ اصلیِ نامِ آژانس
+function bizName(phone: string): string {
+  try { const bp = getProfile(phone); const n = (bp.businessName || bp.displayName || '').trim(); if (n) return n } catch {}
+  return ''
+}
+// نامِ نمایشیِ مشاور: نامِ پروفایلِ مشاور → نامِ نمایشیِ کسب‌وکار → نامِ حساب (شخصی)
 function advisorNameOf(phone: string): string {
-  try { const n = getAdvisor(phone).profile.name; if (n) return n } catch {}
+  try { const n = (getAdvisor(phone).profile.name || '').trim(); if (n) return n } catch {}
+  const b = bizName(phone); if (b) return b
   return getAccount(phone)?.name || phone
 }
+// نامِ نمایشیِ آژانس: نامِ کسب‌وکار (آژانس) → نامِ تنظیماتِ آژانس → نامِ حساب (شخصی، فقط آخرین چاره)
 function agencyNameOf(phone: string): string {
-  try { const n = getAgency(phone).profile.name; if (n) return n } catch {}
+  const b = bizName(phone); if (b) return b
+  try { const n = (getAgency(phone).profile.name || '').trim(); if (n) return n } catch {}
   return getAccount(phone)?.name || phone
+}
+// نام‌ها در رکوردهای ذخیره‌شده، لحظهٔ ساخت اسنپ‌شات شده‌اند؛ هنگامِ خواندن دوباره و زنده حساب می‌کنیم
+// تا همه‌جا نامِ درست (نامِ آژانس) نمایش داده شود — حتی برای رکوردهای قدیمی.
+function freshMembership(m: Membership): Membership {
+  return { ...m, advisorName: advisorNameOf(m.advisorPhone), agencyName: agencyNameOf(m.agencyPhone) }
+}
+function freshRequest(r: LinkRequest): LinkRequest {
+  return { ...r, advisorName: advisorNameOf(r.advisorPhone), agencyName: agencyNameOf(r.agencyPhone) }
 }
 
 // همهٔ آژانس‌های ثبت‌شده (حساب‌هایی که داشبوردشان /agency است)
@@ -47,16 +64,17 @@ export function listAgencies(): { phone: string; name: string; branches?: string
 }
 
 export function getAdvisorMembership(advisorPhone: string): Membership | null {
-  return load().memberships.find(m => m.advisorPhone === advisorPhone) || null
+  const m = load().memberships.find(m => m.advisorPhone === advisorPhone)
+  return m ? freshMembership(m) : null
 }
 export function listAgencyMembers(agencyPhone: string): Membership[] {
-  return load().memberships.filter(m => m.agencyPhone === agencyPhone).sort((a, b) => b.since - a.since)
+  return load().memberships.filter(m => m.agencyPhone === agencyPhone).sort((a, b) => b.since - a.since).map(freshMembership)
 }
 export function requestsForAdvisor(advisorPhone: string): LinkRequest[] {
-  return load().requests.filter(r => r.advisorPhone === advisorPhone && r.status === 'pending').sort((a, b) => b.createdAt - a.createdAt)
+  return load().requests.filter(r => r.advisorPhone === advisorPhone && r.status === 'pending').sort((a, b) => b.createdAt - a.createdAt).map(freshRequest)
 }
 export function requestsForAgency(agencyPhone: string): LinkRequest[] {
-  return load().requests.filter(r => r.agencyPhone === agencyPhone && r.status === 'pending').sort((a, b) => b.createdAt - a.createdAt)
+  return load().requests.filter(r => r.agencyPhone === agencyPhone && r.status === 'pending').sort((a, b) => b.createdAt - a.createdAt).map(freshRequest)
 }
 
 // مشاور برای یک آژانس درخواست عضویت می‌فرستد
