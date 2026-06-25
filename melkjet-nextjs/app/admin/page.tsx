@@ -2716,6 +2716,45 @@ function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete }: { user: 
             </div>
           )}
 
+          {/* پروفایلِ کاملِ کسب‌وکار */}
+          {detail?.profile && (() => {
+            const pr = detail.profile
+            const filled = (...keys: string[]) => keys.map(k => [k, pr[k]]).filter(([, v]) => v && (Array.isArray(v) ? v.length : true))
+            const LBL: Record<string, string> = { kind: 'نوع', businessName: 'نامِ کسب‌وکار', displayName: 'نامِ نمایشی', businessType: 'نوعِ فعالیت', licenseNumber: 'پروانه/جواز', legalNationalId: 'شناسهٔ ملی', economicCode: 'کدِ اقتصادی', establishedYear: 'سالِ تأسیس', employees: 'پرسنل', contactPhone: 'تماسِ نمایشی', landline: 'تلفنِ ثابت', email: 'ایمیل', website: 'وب‌سایت', province: 'استان', city: 'شهر', neighborhood: 'محله', postalCode: 'کدِ پستی', workHours: 'ساعاتِ کاری' }
+            const rows = filled('kind', 'businessName', 'displayName', 'businessType', 'licenseNumber', 'legalNationalId', 'economicCode', 'establishedYear', 'employees', 'contactPhone', 'landline', 'email', 'website', 'province', 'city', 'neighborhood', 'postalCode', 'workHours')
+            const social = pr.social || {}
+            const hasSocial = social.instagram || social.telegram || social.whatsapp || social.eitaa || social.linkedin
+            const empty = rows.length === 0 && !pr.about && !pr.tagline && !pr.specialties?.length
+            return (
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: 13, fontWeight: 800 }}>پروفایلِ کسب‌وکار</div>
+                  <span style={{ fontSize: 11.5, color: 'var(--gold)', fontWeight: 700 }}>تکمیل: {fa(detail.completeness || 0)}٪</span>
+                </div>
+                {empty ? <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>کاربر هنوز پروفایلش را کامل نکرده است.</div> : (
+                  <>
+                    {(pr.logo || pr.businessName || pr.tagline) && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                        {pr.logo && <img src={pr.logo} alt="" style={{ width: 48, height: 48, borderRadius: 10, objectFit: 'cover', border: '1px solid var(--line2)' }} />}
+                        <div><div style={{ fontSize: 14, fontWeight: 800 }}>{pr.businessName || pr.displayName || '—'}</div>{pr.tagline && <div style={{ fontSize: 12, color: 'var(--muted)' }}>{pr.tagline}</div>}</div>
+                      </div>
+                    )}
+                    {rows.length > 0 && (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12.5, marginBottom: pr.about || pr.specialties?.length ? 12 : 0 }}>
+                        {rows.map(([k, v]: any) => <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, background: 'var(--bg2)', borderRadius: 8, padding: '7px 10px' }}><span style={{ color: 'var(--muted)' }}>{LBL[k] || k}</span><span style={{ fontWeight: 700, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>{k === 'kind' ? (v === 'business' ? 'کسب‌وکار' : 'شخصی') : String(v)}</span></div>)}
+                      </div>
+                    )}
+                    {pr.about && <div style={{ fontSize: 12.5, color: 'var(--text)', lineHeight: 1.9, background: 'var(--bg2)', borderRadius: 8, padding: '9px 11px', marginBottom: 10 }}>{pr.about}</div>}
+                    {[['تخصص‌ها', pr.specialties], ['خدمات', pr.services], ['مناطق', pr.areas]].filter(([, a]: any) => a?.length).map(([t, a]: any) => (
+                      <div key={t} style={{ marginBottom: 8 }}><span style={{ fontSize: 11.5, color: 'var(--muted)', marginInlineEnd: 6 }}>{t}:</span>{a.map((x: string) => <span key={x} style={{ display: 'inline-block', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 999, padding: '2px 9px', fontSize: 11.5, margin: '0 3px 4px' }}>{x}</span>)}</div>
+                    ))}
+                    {hasSocial && <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 6, fontSize: 11.5, color: 'var(--muted)', direction: 'ltr' }}>{social.instagram && <span>📷 {social.instagram}</span>}{social.telegram && <span>✈ {social.telegram}</span>}{social.whatsapp && <span>💬 {social.whatsapp}</span>}{social.eitaa && <span>📨 {social.eitaa}</span>}</div>}
+                  </>
+                )}
+              </div>
+            )
+          })()}
+
           {/* role-specific KPIs */}
           {detail?.kpis?.length > 0 && (
             <div>

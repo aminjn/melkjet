@@ -13,6 +13,8 @@ import { advisorStats } from '@/app/lib/advisor-store'
 import { agencyStats } from '@/app/lib/agency-store'
 import { getShop } from '@/app/lib/materials-store'
 
+import { getProfile, completeness } from '@/app/lib/profile-store'
+
 async function guard() { const s = await getSession(); return s && s.role === 'super_admin' }
 
 // فعالیتِ واقعی (بدون seed) که در همهٔ نقش‌ها مشترک است.
@@ -132,12 +134,17 @@ export async function GET(req: NextRequest) {
     // اگر استورِ نقش خطا داد، فقط فعالیت عمومی را نشان می‌دهیم.
   }
 
+  const profile = getProfile(phone)
   return NextResponse.json({
     account: {
       phone: acct.phone, name: acct.name || '', role: acct.role || '', roleLabel: roleLabel(acct.role),
       plan: acct.plan || '', planLabel: planLabel(acct.plan), onboarded: acct.onboarded,
       createdAt: acct.createdAt, lastLogin: acct.lastLogin || null, dashboard,
+      // هویتِ رسمیِ شاهکار
+      identityVerifiedAt: acct.identityVerifiedAt || null, nationalId: acct.nationalId || '',
+      fatherName: acct.fatherName || '', gender: acct.gender || '', birthDate: acct.birthDate || '', birthPlace: acct.birthPlace || '',
     },
+    profile, completeness: completeness(profile),
     kpis,
     sections,
     activity: commonActivity(phone),
