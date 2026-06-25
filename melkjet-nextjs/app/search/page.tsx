@@ -25,6 +25,15 @@ function toPersianDigits(n: number | string): string { return String(n).replace(
 function faNum(n: number): string { return (Number(n) || 0).toLocaleString('fa-IR') }
 
 function firstInt(s?: string): number | null { const m = faToEn(s || '').match(/(\d{1,4})/); return m ? parseInt(m[1], 10) : null }
+// برچسبِ کوتاهِ قیمت روی نقشه: خرید/فروش بر اساسِ «میلیارد»، اجاره بر اساسِ «میلیون» (فارسی، بدونِ صفرِ اضافه)
+function pinPrice(deal: string, priceB: number): string {
+  if (!(priceB > 0)) return '—'
+  if (deal === 'rent') {
+    if (priceB >= 1) return `${faNum(Math.round(priceB * 10) / 10)} میلیارد`
+    return `${toPersianDigits(Math.round(priceB * 1000))} میلیون`
+  }
+  return priceB >= 50 ? `${toPersianDigits(Math.round(priceB))} میلیارد` : `${faNum(Math.round(priceB * 10) / 10)} میلیارد`
+}
 
 // همهٔ امکاناتِ قابلِ تشخیص (برای فیلتر + تشخیصِ متن)
 const AMENITY_ALL = ['آسانسور', 'پارکینگ', 'انباری', 'بالکن', 'تراس', 'مبله', 'روف گاردن', 'استخر', 'سونا', 'جکوزی', 'لابی', 'سند تک‌برگ', 'بازسازی', 'نوساز']
@@ -211,6 +220,7 @@ function SearchPageInner() {
   const filteredProperties = useMemo(() => {
     const tabDeal = dealType === 'پیش‌فروش' ? 'presale' : (dealType === 'اجاره' || dealType === 'رهن') ? 'rent' : 'sale'
     const areaName = fAreaName.toLowerCase()
+    const hasStructure = !!(parsed.kind || parsed.area || parsed.sizeNum || parsed.budgetMax || parsed.beds != null || parsed.amenities.length)
     return properties.filter(p => {
       if (p.deal !== tabDeal) return false
       if (fKind && p.kind && p.kind !== fKind) {
@@ -226,7 +236,12 @@ function SearchPageInner() {
       if (yearMin > 0 && p.yearNum > 0 && p.yearNum < yearMin) return false
       for (const a of fAmen) { if (p.searchText.trim() && !p.searchText.includes(a.toLowerCase())) return false }
       if (areaName) { const hay = `${p.location} ${p.searchText}`.toLowerCase(); if (!hay.includes(areaName)) return false }
-      for (const tok of parsed.tokens) { const hay = `${p.title} ${p.location} ${p.searchText}`.toLowerCase(); if (!hay.includes(tok.toLowerCase())) return false }
+      // جستجوی متنیِ نرم: فقط وقتی کوئری هیچ ساختاری ندارد، حداقل یکی از واژه‌ها باید بخورد
+      // (نه «همه»). این‌طوری یک واژهٔ اشتباه، کلِ نتیجه را خالی نمی‌کند.
+      if (parsed.tokens.length && !hasStructure) {
+        const hay = `${p.title} ${p.location} ${p.searchText}`.toLowerCase()
+        if (!parsed.tokens.some(t => hay.includes(t.toLowerCase()))) return false
+      }
       return true
     })
   }, [properties, dealType, fKind, fBeds, priceMin, fBudgetMax, fSizeMin, fSizeMax, floorMin, yearMin, fAmen, fAreaName, parsed.tokens])
@@ -317,9 +332,9 @@ function SearchPageInner() {
     return () => { alive = false }
   }, [needGeocode])
 
-  // پین‌ها (با jitterِ کوچک تا آگهی‌های هم‌محله روی هم نیفتند)
+  // پین‌ها — مختصاتِ دقیقِ آگهی (از دیوار) یا geocodeِ محله (با jitterِ کوچک)؛ برچسبِ کوتاهِ فارسی
   const pins = useMemo(() => {
-    const out: { id: string; lat: number; lng: number; price: string }[] = []
+    const out: { id: string; lat: number; lng: number; label: string }[] = []
     for (const p of shownProperties.slice(0, 40)) {
       let lat = p.lat, lng = p.lng
       if (!(lat && lng)) {
@@ -331,7 +346,7 @@ function SearchPageInner() {
           lng = c.lng + ((((h >> 10) % 1000) / 1000 - 0.5) * 0.005)
         }
       }
-      if (lat && lng) out.push({ id: p.id, lat, lng, price: p.price })
+      if (lat && lng) out.push({ id: p.id, lat, lng, label: pinPrice(p.deal, p.priceNum) })
     }
     return out
   }, [shownProperties, locCoords, selectedCity])
@@ -607,7 +622,7 @@ function NotifyBar({ count, criteria }: { count: number; criteria: Criteria }) {
   )
 }
 
-// تبدیلِ مختصات به پیکسلِ Web-Mercator (هم‌راستا با نقشهٔ استاتیکِ نشان)
+// تبدیلِ مختصات ↔ پیکسلِ Web-Mercator (هم‌راستا با نقشهٔ استاتیکِ نشان)
 function project(lat: number, lng: number, zoom: number) {
   const s = 256 * Math.pow(2, zoom)
   const x = ((lng + 180) / 360) * s
@@ -615,14 +630,26 @@ function project(lat: number, lng: number, zoom: number) {
   const y = (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * s
   return { x, y }
 }
+function unproject(x: number, y: number, zoom: number) {
+  const s = 256 * Math.pow(2, zoom)
+  const lng = (x / s) * 360 - 180
+  const n = Math.PI - (2 * Math.PI * y) / s
+  const lat = (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)))
+  return { lat, lng }
+}
+const clampZoom = (z: number) => Math.max(11, Math.min(18, z))
 
-// نقشهٔ استاتیکِ نشان + پین‌های قابلِ کلیکِ آگهی‌ها (overlay دقیق با تصویرِ نقشه)
+// نقشهٔ تعاملیِ نشان (زوم + جابه‌جایی) با پین‌های قیمتِ آگهی‌ها — مثلِ دیوار
 type MapView = { center: { lat: number; lng: number }; zoom: number } | null
-function SearchMap({ view, pins, city }: { view: MapView; pins: { id: string; lat: number; lng: number; price: string }[]; city: string }) {
+function SearchMap({ view, pins, city }: { view: MapView; pins: { id: string; lat: number; lng: number; label: string }[]; city: string }) {
   const ref = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
+  const [iv, setIv] = useState<MapView>(view)
+  const [off, setOff] = useState({ x: 0, y: 0 })
   const [err, setErr] = useState(false)
   const [active, setActive] = useState<string | null>(null)
+  const drag = useRef<{ x: number; y: number; moved: boolean } | null>(null)
+  const movedRef = useRef(false)
 
   useEffect(() => {
     const el = ref.current; if (!el) return
@@ -631,36 +658,79 @@ function SearchMap({ view, pins, city }: { view: MapView; pins: { id: string; la
     const ro = new ResizeObserver(measure); ro.observe(el)
     return () => ro.disconnect()
   }, [])
-  useEffect(() => { setErr(false) }, [view?.center.lat, view?.center.lng, view?.zoom, size.w, size.h])
+  // با تغییرِ جستجو/شهر، نمای داخلی را به نمای جدید برگردان
+  useEffect(() => { if (view) setIv(view) }, [view?.center.lat, view?.center.lng, view?.zoom])
+  useEffect(() => { setErr(false) }, [iv?.center.lat, iv?.center.lng, iv?.zoom, size.w, size.h])
 
-  const ready = view && size.w > 0 && size.h > 0
-  const src = ready ? `/api/geo/static-map?lat=${view!.center.lat.toFixed(5)}&lng=${view!.center.lng.toFixed(5)}&w=${size.w}&h=${size.h}&zoom=${view!.zoom}` : ''
-  // محاسبهٔ پیکسلِ هر پین نسبت به مرکزِ نقشه
-  const placed = (ready && !err) ? pins.map(p => {
-    const pp = project(p.lat, p.lng, view!.zoom), pc = project(view!.center.lat, view!.center.lng, view!.zoom)
-    return { ...p, x: size.w / 2 + (pp.x - pc.x), y: size.h / 2 + (pp.y - pc.y) }
-  }).filter(p => p.x >= 4 && p.x <= size.w - 4 && p.y >= 4 && p.y <= size.h - 4) : []
+  const ready = iv && size.w > 0 && size.h > 0
+  const src = ready ? `/api/geo/static-map?lat=${iv!.center.lat.toFixed(5)}&lng=${iv!.center.lng.toFixed(5)}&w=${size.w}&h=${size.h}&zoom=${iv!.zoom}` : ''
+
+  // پیکسلِ هر پین + جداسازی (declutter) تا روی هم نیفتند
+  const placed = useMemo(() => {
+    if (!ready || err) return [] as { id: string; label: string; x: number; y: number }[]
+    const pc = project(iv!.center.lat, iv!.center.lng, iv!.zoom)
+    const arr = pins.map(p => { const pp = project(p.lat, p.lng, iv!.zoom); return { id: p.id, label: p.label, x: size.w / 2 + (pp.x - pc.x), y: size.h / 2 + (pp.y - pc.y) } })
+      .filter(p => p.x >= 0 && p.x <= size.w && p.y >= 6 && p.y <= size.h - 6)
+    const PW = 62, PH = 26, out: { id: string; label: string; x: number; y: number }[] = []
+    for (const p of arr) {
+      let y = p.y, t = 0
+      while (t < 10 && out.some(q => Math.abs(q.x - p.x) < PW && Math.abs(q.y - y) < PH)) { y += PH; t++ }
+      out.push({ ...p, y: Math.min(y, size.h - 6) })
+    }
+    return out
+  }, [pins, iv, size, err, ready])
+
+  const pt = (e: React.MouseEvent | React.TouchEvent) => {
+    const t = 'touches' in e ? e.touches[0] : (e as React.MouseEvent)
+    return { x: t.clientX, y: t.clientY }
+  }
+  const onDown = (e: React.MouseEvent | React.TouchEvent) => { const p = pt(e); drag.current = { x: p.x, y: p.y, moved: false }; movedRef.current = false; setActive(null) }
+  const onMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!drag.current) return
+    const p = pt(e); const dx = p.x - drag.current.x, dy = p.y - drag.current.y
+    if (Math.abs(dx) + Math.abs(dy) > 3) { drag.current.moved = true; movedRef.current = true }
+    setOff({ x: dx, y: dy })
+  }
+  const onUp = () => {
+    if (!drag.current || !iv) { drag.current = null; setOff({ x: 0, y: 0 }); return }
+    const { moved } = drag.current
+    const o = off; drag.current = null
+    if (!moved) { setOff({ x: 0, y: 0 }); return }
+    const pc = project(iv.center.lat, iv.center.lng, iv.zoom)
+    const nc = unproject(pc.x - o.x, pc.y - o.y, iv.zoom)
+    setIv({ center: nc, zoom: iv.zoom }); setOff({ x: 0, y: 0 })
+  }
+  const zoomBy = (d: number) => setIv(v => v ? { center: v.center, zoom: clampZoom(v.zoom + d) } : v)
 
   return (
-    <div ref={ref} style={{ position: 'relative', width: '100%', height: '100%', borderRadius: 16, overflow: 'hidden', border: '1px solid var(--line)', background: 'var(--bg2)' }}>
-      {src && !err ? (
-        <img src={src} alt="نقشهٔ منطقه" onError={() => setErr(true)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }} />
-      ) : (
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: 'var(--muted)', fontSize: 13, padding: 24, lineHeight: 1.9 }}>
-          {err ? 'نقشه به «کلید نقشهٔ نشان» (web.…) نیاز دارد — پنل سوپرادمین → اتصال‌ها → نشان → کلید نقشه' : 'برای نمایشِ نقشه، موقعیتِ شما یا مختصاتِ آگهی‌ها لازم است.'}
-        </div>
-      )}
+    <div ref={ref} onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp} onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp}
+      style={{ position: 'relative', width: '100%', height: '100%', borderRadius: 16, overflow: 'hidden', border: '1px solid var(--line)', background: 'var(--bg2)', cursor: drag.current ? 'grabbing' : 'grab', userSelect: 'none', touchAction: 'none' }}>
+      <div style={{ position: 'absolute', inset: 0, transform: `translate(${off.x}px,${off.y}px)` }}>
+        {src && !err ? (
+          <img src={src} alt="نقشهٔ منطقه" draggable={false} onError={() => setErr(true)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', pointerEvents: 'none' }} />
+        ) : (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: 'var(--muted)', fontSize: 13, padding: 24, lineHeight: 1.9 }}>
+            {err ? 'نقشه به «کلید نقشهٔ نشان» (web.…) نیاز دارد — پنل سوپرادمین → اتصال‌ها → نشان → کلید نقشه' : 'برای نمایشِ نقشه، موقعیتِ شما یا مختصاتِ آگهی‌ها لازم است.'}
+          </div>
+        )}
+        {/* پین‌های قیمت */}
+        {placed.map(p => {
+          const on = active === p.id
+          return (
+            <a key={p.id} href={`/property/${p.id}`} onClick={e => { if (movedRef.current) e.preventDefault() }} onMouseEnter={() => setActive(p.id)} onMouseLeave={() => setActive(null)}
+              style={{ position: 'absolute', left: `${(p.x / size.w) * 100}%`, top: `${(p.y / size.h) * 100}%`, transform: `translate(-50%,-50%) scale(${on ? 1.12 : 1})`, padding: '4px 9px', borderRadius: 14, background: on ? 'linear-gradient(140deg,var(--gold2),var(--gold))' : 'rgba(10,9,8,0.92)', border: `1.5px solid ${on ? 'var(--gold2)' : 'var(--gold)'}`, color: on ? '#16140f' : '#f0ede6', fontSize: 11, fontWeight: 800, textDecoration: 'none', whiteSpace: 'nowrap', cursor: 'pointer', boxShadow: '0 2px 10px -3px rgba(0,0,0,.7)', zIndex: on ? 20 : 10, fontFamily: 'inherit' }}>
+              {p.label}
+            </a>
+          )
+        })}
+      </div>
 
-      {/* پین‌های قیمتِ آگهی‌ها */}
-      {placed.map(p => {
-        const on = active === p.id
-        return (
-          <a key={p.id} href={`/property/${p.id}`} onMouseEnter={() => setActive(p.id)} onMouseLeave={() => setActive(null)}
-            style={{ position: 'absolute', left: `${(p.x / size.w) * 100}%`, top: `${(p.y / size.h) * 100}%`, transform: `translate(-50%,-50%) scale(${on ? 1.12 : 1})`, padding: '4px 10px', borderRadius: 20, background: on ? 'linear-gradient(140deg,var(--gold2),var(--gold))' : 'rgba(10,9,8,0.9)', border: `2px solid ${on ? 'var(--gold2)' : 'var(--gold)'}`, color: on ? '#16140f' : '#f0ede6', fontSize: 11.5, fontWeight: 800, textDecoration: 'none', whiteSpace: 'nowrap', cursor: 'pointer', boxShadow: '0 2px 12px -3px rgba(0,0,0,.7)', zIndex: on ? 20 : 10, fontFamily: 'inherit' }}>
-            {p.price}
-          </a>
-        )
-      })}
+      {/* کنترلِ زوم */}
+      <div style={{ position: 'absolute', insetInlineStart: 12, top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', gap: 6, zIndex: 30 }}>
+        {[['+', 1], ['−', -1]].map(([s, d]) => (
+          <button key={s as string} onClick={() => zoomBy(d as number)} style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid var(--line2)', background: 'rgba(10,9,8,0.85)', color: '#f0ede6', fontSize: 20, fontWeight: 700, cursor: 'pointer', lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{s}</button>
+        ))}
+      </div>
 
       <div style={{ position: 'absolute', top: 14, right: 14, background: 'rgba(0,0,0,0.62)', backdropFilter: 'blur(10px)', borderRadius: 9, padding: '6px 12px', fontSize: 12, color: '#f0ede6', border: '1px solid rgba(255,255,255,.12)', pointerEvents: 'none', zIndex: 30 }}>
         {placed.length > 0 ? `${placed.length.toLocaleString('fa-IR')} ملک روی نقشه` : (city ? `نقشهٔ ${city}` : 'نقشهٔ منطقه')}
