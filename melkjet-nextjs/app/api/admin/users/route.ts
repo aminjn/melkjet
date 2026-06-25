@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listAccounts, adminUpdate, deleteAccount, bulkUpdate, bulkDelete, createAccount } from '@/app/lib/account-store'
-import { saveProfile } from '@/app/lib/profile-store'
+import { listAccounts, adminUpdate, deleteAccount, bulkUpdate, bulkDelete, createAccount, setSuspended } from '@/app/lib/account-store'
+import { saveProfile, getProfile, completeness } from '@/app/lib/profile-store'
 import { listRoles, dashForRoleId } from '@/app/lib/role-store'
 import { listPlans } from '@/app/lib/plan-store'
 import { getCredit, getTokenUsage } from '@/app/lib/comm-store'
@@ -28,7 +28,7 @@ export async function GET() {
     let leads = 0, tasks = 0
     try { leads = listLeads(a.phone).length } catch {}
     try { tasks = listTasks(a.phone).length } catch {}
-    return { ...a, roleName: roleNameOf(a.role), planName: planNameOf(a.plan), dashboard: dashForRoleId(a.role), listings: listingCounts[a.phone] || 0, leads, tasks, credit, tokenUsed: getTokenUsage(a.phone) }
+    return { ...a, roleName: roleNameOf(a.role), planName: planNameOf(a.plan), dashboard: dashForRoleId(a.role), listings: listingCounts[a.phone] || 0, leads, tasks, credit, tokenUsed: getTokenUsage(a.phone), profileCompletion: completeness(getProfile(a.phone)) }
   })
   return NextResponse.json({ users, roles, plans })
 }
@@ -49,6 +49,7 @@ export async function PATCH(req: NextRequest) {
   // عملیات دسته‌جمعی
   if (Array.isArray(b.phones)) { bulkUpdate(b.phones, b.patch || {}); return NextResponse.json({ ok: true }) }
   if (!b.phone) return NextResponse.json({ error: 'شماره الزامی است' }, { status: 400 })
+  if (b.suspend !== undefined) { setSuspended(String(b.phone), !!b.suspend); return NextResponse.json({ ok: true }) }
   const a = adminUpdate(b.phone, b.patch || {})
   if (!a) return NextResponse.json({ error: 'کاربر یافت نشد' }, { status: 404 })
   return NextResponse.json({ ok: true, user: a })

@@ -2252,6 +2252,42 @@ function AlertsConfig() {
   )
 }
 
+// ─── Profile-completion gate (auto warn + suspend) ─────────────────────────
+function ProfileGateConfig() {
+  const [f, setF] = useState({ enabled: false, minPercent: 70, graceDays: 3, pattern: '', patternVar: 'message' })
+  const [msg, setMsg] = useState('')
+  const [run, setRun] = useState('')
+  useEffect(() => { fetch('/api/admin/profile-gate-config').then(r => r.ok ? r.json() : null).then(d => { if (d) setF({ enabled: !!d.enabled, minPercent: d.minPercent ?? 70, graceDays: d.graceDays ?? 3, pattern: d.pattern || '', patternVar: d.patternVar || 'message' }) }) }, [])
+  const save = async () => { setMsg(''); const r = await fetch('/api/admin/profile-gate-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(f) }); const d = await r.json(); setMsg(r.ok ? '✓ ذخیره شد' : `⚠ ${d.error || 'خطا'}`) }
+  const runNow = async () => { setRun('در حال اجرا…'); try { const r = await fetch('/api/admin/profile-gate-config?run=1', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...f, run: true }) }); const d = await r.json(); setRun(r.ok && d.result ? `✓ بررسی‌شده: ${(d.result.checked || 0).toLocaleString('fa-IR')} · هشدار: ${(d.result.warned || 0).toLocaleString('fa-IR')} · معلق: ${(d.result.suspended || 0).toLocaleString('fa-IR')}` : `⚠ ${d.error || 'خطا'}`) } catch { setRun('⚠ خطا در اجرا') } }
+  const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
+  const lab: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', marginBottom: 5, display: 'block', fontWeight: 600 }
+  return (
+    <Card style={{ marginBottom: 14 }}>
+      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>سامانهٔ تکمیلِ پروفایل (هشدار و تعلیقِ خودکار) {f.enabled && <span style={{ color: '#5fd98a', fontSize: 12 }}>● فعال</span>}</div>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.9 }}>
+        به‌صورتِ خودکار (هر ۵ دقیقه) پروفایل‌های ناقصِ کسب‌وکار را پیدا می‌کند: ابتدا پیامکِ هشدار می‌فرستد که «اگر ظرفِ {f.graceDays.toLocaleString('fa-IR')} روز تکمیل نکنی پنل معلق می‌شود»، و اگر بعدِ مهلت همچنان زیرِ {f.minPercent.toLocaleString('fa-IR')}٪ بود، پنل را معلق می‌کند. با تکمیلِ پروفایل، تعلیق خودکار رفع می‌شود. (کاربرانِ عادی/خریدار مشمول نیستند.)
+      </div>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13.5, fontWeight: 700, marginBottom: 14, cursor: 'pointer' }}>
+        <input type="checkbox" checked={f.enabled} onChange={e => setF({ ...f, enabled: e.target.checked })} style={{ width: 18, height: 18 }} /> سامانهٔ هشدار و تعلیقِ خودکار فعال باشد
+      </label>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }} className="mjsa-2col">
+        <div><label style={lab}>حداقلِ تکمیلِ لازم (٪)</label><input style={inp} type="number" min={0} max={100} value={f.minPercent} onChange={e => setF({ ...f, minPercent: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })} /></div>
+        <div><label style={lab}>مهلتِ تکمیل پس از هشدار (روز)</label><input style={inp} type="number" min={0} value={f.graceDays} onChange={e => setF({ ...f, graceDays: Math.max(0, Number(e.target.value) || 0) })} /></div>
+        <div><label style={lab}>کدِ پترن IPPanel (اختیاری)</label><input style={{ ...inp, direction: 'ltr', textAlign: 'left' }} placeholder="مثلاً 123456" value={f.pattern} onChange={e => setF({ ...f, pattern: e.target.value })} /></div>
+        <div><label style={lab}>نامِ متغیرِ پترن</label><input style={{ ...inp, direction: 'ltr', textAlign: 'left' }} placeholder="message" value={f.patternVar} onChange={e => setF({ ...f, patternVar: e.target.value })} /></div>
+      </div>
+      <div style={{ fontSize: 11.5, color: 'var(--faint)', marginBottom: 12, lineHeight: 1.8 }}>اگر کدِ پترن خالی بماند، متنِ هشدار با پیامکِ معمولیِ IPPanel ارسال می‌شود. متغیرِ پترن باید همان نامِ متغیرِ متنِ پیام در پترنِ شما باشد.</div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <GoldButton onClick={save}>ذخیره</GoldButton>
+        <OutlineButton onClick={runNow}>اجرای فوریِ بررسی</OutlineButton>
+        {msg && <span style={{ fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</span>}
+        {run && <span style={{ fontSize: 12.5, color: run.startsWith('✓') ? '#5fd98a' : 'var(--muted)' }}>{run}</span>}
+      </div>
+    </Card>
+  )
+}
+
 // ─── Shahkar identity (Pod.ir) ──────────────────────────────────────────────
 function PodiumConfig() {
   const [f, setF] = useState({ token: '', idKey: '', matchKey: '', idProduct: '46659320', matchProduct: '46645324', enabled: false })
@@ -2308,6 +2344,7 @@ function ConnectionsView() {
       <NeshanConfig />
       <IPPanelConfig />
       <AlertsConfig />
+      <ProfileGateConfig />
       <NegotiationConfig />
       <SmtpConfig />
       <ZarinpalConfig />
@@ -2661,7 +2698,7 @@ function UChip({ label, color, icon }: { label: string; color: string; icon?: st
 }
 
 // کشوی جزئیاتِ کاملِ یک کاربر — KPIها، فعالیتِ نقش، اعتبار/مصرف، ویرایشِ سریع
-function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete }: { user: any; roles: IdName[]; plans: IdName[]; onClose: () => void; onPatch: (phone: string, patch: any) => void; onDelete: (phone: string) => void }) {
+function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete, onSuspend }: { user: any; roles: IdName[]; plans: IdName[]; onClose: () => void; onPatch: (phone: string, patch: any) => void; onDelete: (phone: string) => void; onSuspend: (phone: string, suspend: boolean) => void }) {
   const [detail, setDetail] = useState<any>(null)
   const [edit, setEdit] = useState({ name: user.name || '', role: user.role || '', plan: user.plan || '' })
   const [saved, setSaved] = useState(false)
@@ -2687,6 +2724,7 @@ function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete }: { user: 
               <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
                 <UChip label={user.roleName || 'بدون نقش'} color={m.c} icon={m.ic} />
                 <UChip label={user.planName || 'بدون پلن'} color="#a99bf0" icon="👑" />
+                {user.suspended && <UChip label="معلق" color="#e7674a" icon="⛔" />}
                 {user.dashboard && <a href={user.dashboard} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: 'var(--muted)', textDecoration: 'none', border: '1px solid var(--line2)', borderRadius: 999, padding: '3px 10px' }}>پنل ↗</a>}
               </div>
             </div>
@@ -2791,6 +2829,9 @@ function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete }: { user: 
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <GoldButton onClick={save}>ذخیرهٔ تغییرات</GoldButton>
               <button onClick={async () => { const r = await fetch('/api/admin/impersonate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: user.phone }) }); const d = await r.json(); if (d.ok) window.location.href = d.dashboard || '/buyer'; else alert(d.error || 'خطا') }} style={{ background: 'var(--goldDim)', border: '1px solid var(--gold)', color: 'var(--gold)', borderRadius: 10, padding: '9px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 700 }}>↪ ورود به محیطِ کاربر</button>
+              {user.suspended
+                ? <button onClick={() => onSuspend(user.phone, false)} style={{ background: 'rgba(95,217,138,.12)', border: '1px solid rgba(95,217,138,.45)', color: '#5fd98a', borderRadius: 10, padding: '9px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 700 }}>✓ رفعِ تعلیق</button>
+                : <button onClick={() => { if (confirm(`پنلِ ${user.name || user.phone} معلق شود؟`)) onSuspend(user.phone, true) }} style={{ background: 'transparent', border: '1px solid rgba(231,137,74,.45)', color: '#e7894a', borderRadius: 10, padding: '9px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>⛔ تعلیقِ پنل</button>}
               <button onClick={() => { onDelete(user.phone); onClose() }} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.4)', color: '#e7674a', borderRadius: 10, padding: '9px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>حذفِ کاربر</button>
               {saved && <span style={{ fontSize: 12.5, color: '#5fd98a' }}>✓ ذخیره شد</span>}
             </div>
@@ -2874,6 +2915,12 @@ function UsersView() {
     setUsers(us => us.filter(u => u.phone !== phone)); setSel(s => { const n = new Set(s); n.delete(phone); return n })
     await fetch(`/api/admin/users?phone=${encodeURIComponent(phone)}`, { method: 'DELETE' })
   }
+  const suspendOne = async (phone: string, suspend: boolean) => {
+    setUsers(us => us.map(u => u.phone === phone ? { ...u, suspended: suspend } : u))
+    if (viewUser?.phone === phone) setViewUser((v: any) => ({ ...v, suspended: suspend }))
+    await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, suspend }) })
+    load()
+  }
 
   const filtered = users.filter(u => {
     if (q.trim()) { const t = q.trim(); if (!(u.phone.includes(t) || (u.name || '').includes(t))) return false }
@@ -2952,6 +2999,7 @@ function UsersView() {
                   <th style={th}>نقش</th>
                   <th style={th}>پلن</th>
                   <th style={{ ...th, textAlign: 'center' }}>احراز هویت</th>
+                  <th style={{ ...th, textAlign: 'center' }}>تکمیلِ پروفایل</th>
                   <th style={{ ...th, textAlign: 'center' }}>فعالیت (آگهی/لید/وظیفه)</th>
                   <th style={{ ...th, textAlign: 'center' }}>مصرفِ توکن</th>
                   <th style={th}>اعتبار (پ/ا/ت)</th>
@@ -2979,6 +3027,15 @@ function UsersView() {
                       <td style={{ ...td, textAlign: 'center' }}>{u.identityVerifiedAt
                         ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, fontWeight: 700, color: '#5fd98a', background: 'rgba(95,217,138,.12)', border: '1px solid rgba(95,217,138,.4)', borderRadius: 999, padding: '3px 10px' }}>✓ احراز شده</span>
                         : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, fontWeight: 700, color: '#e7894a', background: 'rgba(231,137,74,.12)', border: '1px solid rgba(231,137,74,.4)', borderRadius: 999, padding: '3px 10px' }}>⏳ احراز نشده</span>}</td>
+                      <td style={{ ...td, textAlign: 'center' }}>{(() => { const pc = Math.round(u.profileCompletion || 0); const col = u.suspended ? '#e7674a' : pc >= 70 ? '#5fd98a' : pc >= 40 ? 'var(--gold)' : '#e7894a'; return (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 92 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}>
+                            <div style={{ flex: 1, height: 6, borderRadius: 999, background: 'var(--bg2)', overflow: 'hidden' }}><div style={{ width: `${pc}%`, height: '100%', background: col, borderRadius: 999, transition: 'width .3s' }} /></div>
+                            <span style={{ fontSize: 11.5, fontWeight: 800, color: col, minWidth: 30 }}>{pc.toLocaleString('fa-IR')}٪</span>
+                          </div>
+                          {u.suspended && <span style={{ fontSize: 10.5, fontWeight: 700, color: '#e7674a', background: 'rgba(231,103,74,.12)', border: '1px solid rgba(231,103,74,.4)', borderRadius: 999, padding: '1px 8px' }}>⛔ معلق</span>}
+                        </div>
+                      ) })()}</td>
                       <td style={{ ...td, textAlign: 'center', fontSize: 12.5, fontWeight: 700 }}><span style={{ color: u.listings ? 'var(--gold)' : 'var(--faint)' }}>{(u.listings || 0).toLocaleString('fa-IR')}</span><span style={{ color: 'var(--faint)' }}> / </span><span style={{ color: u.leads ? '#5fd98a' : 'var(--faint)' }}>{(u.leads || 0).toLocaleString('fa-IR')}</span><span style={{ color: 'var(--faint)' }}> / </span><span style={{ color: u.tasks ? '#5b9bd5' : 'var(--faint)' }}>{(u.tasks || 0).toLocaleString('fa-IR')}</span></td>
                       <td style={{ ...td, textAlign: 'center', fontSize: 12.5, fontWeight: 700, color: u.tokenUsed ? '#a99bf0' : 'var(--faint)' }}>{(u.tokenUsed || 0).toLocaleString('fa-IR')}</td>
                       <td style={{ ...td, fontSize: 11.5, color: 'var(--muted)', direction: 'ltr', textAlign: 'right' }}>{(u.credit?.sms || 0).toLocaleString('fa-IR')}/{(u.credit?.email || 0).toLocaleString('fa-IR')}/{(u.credit?.token || 0).toLocaleString('fa-IR')}</td>
@@ -2999,7 +3056,7 @@ function UsersView() {
         </div>
       </Card>
 
-      {viewUser && <UserDrawer user={viewUser} roles={roles} plans={plans} onClose={() => setViewUser(null)} onPatch={patchOne} onDelete={delOne} />}
+      {viewUser && <UserDrawer user={viewUser} roles={roles} plans={plans} onClose={() => setViewUser(null)} onPatch={patchOne} onDelete={delOne} onSuspend={suspendOne} />}
       {creating && <CreateUserPopup roles={roles} plans={plans} onClose={() => setCreating(false)} onCreated={load} />}
     </div>
   )

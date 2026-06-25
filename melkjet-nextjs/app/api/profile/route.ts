@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { getAccount } from '@/app/lib/account-store'
+import { getAccount, setSuspended } from '@/app/lib/account-store'
 import { getProfile, saveProfile, completeness } from '@/app/lib/profile-store'
+import { getAdminData } from '@/app/lib/admin-store'
 
 // پروفایلِ کاملِ کاربر/کسب‌وکار + هویتِ تأییدشدهٔ شاهکار (فقط‌خواندنی).
 export async function GET() {
@@ -27,5 +28,9 @@ export async function POST(req: NextRequest) {
   if (!s) return NextResponse.json({ error: 'برای ذخیره وارد شوید' }, { status: 401 })
   const b = await req.json().catch(() => ({}))
   const profile = saveProfile(s.phone, b.profile || b)
-  return NextResponse.json({ ok: true, profile, completeness: completeness(profile) })
+  const pct = completeness(profile)
+  // اگر به حدِ تکمیلِ لازم رسید، رفعِ تعلیق
+  const min = getAdminData().profileGate?.minPercent ?? 70
+  if (pct >= min) { const a = getAccount(s.phone); if (a?.suspended || a?.profileWarnAt) setSuspended(s.phone, false) }
+  return NextResponse.json({ ok: true, profile, completeness: pct })
 }

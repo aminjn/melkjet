@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { getAccount, setProfile, dashForRole, isValidRole } from '@/app/lib/account-store'
+import { getProfile, completeness } from '@/app/lib/profile-store'
 
 // حساب کاربری فعلی
 export async function GET() {
@@ -9,7 +10,8 @@ export async function GET() {
   const a = getAccount(s.phone)
   const isSuper = s.role === 'super_admin'
   const dash = isSuper ? '/admin' : dashForRole(a?.role)
-  return NextResponse.json({ account: a, phone: s.phone, role: s.role, dash })
+  const profileCompletion = completeness(getProfile(s.phone))
+  return NextResponse.json({ account: a, phone: s.phone, role: s.role, dash, name: a?.name || '', suspended: !!a?.suspended, profileCompletion })
 }
 
 // تکمیل پروفایل (آنبوردینگ): نام + نقش

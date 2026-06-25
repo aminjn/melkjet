@@ -72,6 +72,13 @@ export interface AdminData {
     url?: string
     enabled?: boolean    // اگر روشن باشد، ثبت‌نامِ کاربرِ جدید نیازمندِ تأییدِ شاهکار است
   }
+  profileGate?: {        // سامانهٔ خودکارِ تکمیلِ پروفایل: هشدارِ پیامکی + تعلیقِ پنل
+    enabled?: boolean
+    minPercent?: number  // حداقلِ درصدِ تکمیل (پیش‌فرض ۷۰)
+    graceDays?: number   // مهلتِ تکمیل پس از هشدار (پیش‌فرض ۳ روز)
+    pattern?: string     // کدِ پترنِ IPPanel (اختیاری)
+    patternVar?: string
+  }
   alerts?: {             // هشدارِ «آگهی جدید اومد خبرم کن» — پیامک با پترن
     enabled?: boolean
     pattern?: string     // کدِ پترنِ IPPanel (اختیاری)

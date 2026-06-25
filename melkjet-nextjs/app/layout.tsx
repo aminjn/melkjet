@@ -7,6 +7,7 @@ import ImpersonationBar from './components/ImpersonationBar'
 import LocationDetector from './components/LocationDetector'
 import Tracker from './components/Tracker'
 import AuthModal from './components/AuthModal'
+import SuspensionGate from './components/SuspensionGate'
 
 export const metadata: Metadata = {
   title: 'ملک‌جت - اکوسیستم هوشمند املاک',
@@ -55,6 +56,7 @@ export default function RootLayout({
         {children}
         <ImpersonationBar />
         <AuthModal />
+        <SuspensionGate />
         <BottomNav />
         <PWAInstall />
       </body>

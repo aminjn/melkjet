@@ -8,6 +8,8 @@ export interface Account {
   phone: string; name?: string; role?: string; plan?: string; onboarded: boolean; createdAt: number; lastLogin?: number
   // هویتِ تأییدشدهٔ شاهکار (پس از تأیید غیرقابلِ‌تغییر است)
   nationalId?: string; firstName?: string; lastName?: string; gender?: string; fatherName?: string; birthDate?: string; birthPlace?: string; idNumber?: string; idSerial?: string; birthPlaceCode?: string; identityVerifiedAt?: number
+  // تعلیقِ پنل به‌خاطرِ پروفایلِ ناقص
+  suspended?: boolean; profileWarnAt?: number
 }
 type Idy = { nationalId: string; firstName?: string; lastName?: string; gender?: string; fatherName?: string; birthDate?: string; birthPlace?: string; idNumber?: string; idSerial?: string; birthPlaceCode?: string }
 type DB = Record<string, Account>
@@ -101,6 +103,8 @@ export function adminUpdate(phone: string, patch: { name?: string; role?: string
   if (patch.plan !== undefined) a.plan = String(patch.plan) || undefined
   save(db); return a
 }
+export function setSuspended(phone: string, val: boolean) { const db = load(); const a = db[phone]; if (a) { a.suspended = val || undefined; if (!val) a.profileWarnAt = undefined; save(db) } }
+export function setProfileWarn(phone: string, ts: number | undefined) { const db = load(); const a = db[phone]; if (a) { a.profileWarnAt = ts; save(db) } }
 export function deleteAccount(phone: string) { const db = load(); delete db[phone]; save(db) }
 export function bulkUpdate(phones: string[], patch: { role?: string; plan?: string }) {
   const db = load()
