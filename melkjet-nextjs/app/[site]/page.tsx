@@ -220,62 +220,33 @@ function ListingsBlock({ block, primary, ownerName, ownerPhone }: { block: SiteB
   const perSlide = Math.max(1, Math.min(6, Number(props.perSlide) || 3))
   const showCategories = props.showCategories !== 'no'
 
-  // Real listings: pull the owner's own published listings. پیش‌فرض هم «آگهی‌های من»
-  // است مگر صراحتاً «نمونه» انتخاب شده باشد.
-  if (props.source !== 'sample') {
-    const items = ownerListings(ownerName, ownerPhone, total)
-    // دسته‌بندی‌های متمایزِ غیرخالی به ترتیبِ اولین مشاهده.
-    const categories: string[] = []
-    for (const it of items) {
-      const c = (it.category || '').trim()
-      if (c && !categories.includes(c)) categories.push(c)
-    }
-    const sliderItems = items.map(it => ({
-      id: it.id, title: it.title, location: it.location, price: it.price, image: it.image, category: (it.category || '').trim(),
-    }))
-    return (
-      <section id="listings" style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-          <SectionHeading primary={primary}>{props.heading}</SectionHeading>
-          {items.length === 0 ? (
-            <div style={{ background: SURFACE, border: '1px dashed #ddd4c5', borderRadius: 18, padding: '52px 24px', textAlign: 'center', color: '#9b9285', fontSize: 14.5 }}>
-              هنوز آگهی منتشرشده‌ای برای نمایش وجود ندارد.
-            </div>
-          ) : (
-            <ListingsSlider
-              items={sliderItems}
-              categories={categories}
-              perSlide={perSlide}
-              primary={primary}
-              showCategories={showCategories}
-            />
-          )}
-        </div>
-      </section>
-    )
+  // فقط آگهی‌های واقعیِ منتشرشدهٔ مالک — هیچ دادهٔ نمونه/فیک. در نبودِ آگهی، حالتِ خالی.
+  const items = ownerListings(ownerName, ownerPhone, total)
+  const categories: string[] = []
+  for (const it of items) {
+    const c = (it.category || '').trim()
+    if (c && !categories.includes(c)) categories.push(c)
   }
-
-  // Sample cards (source === 'sample') — همان استایلِ اسلایدر با کارت‌های نمونه.
-  const sampleCats = ['آپارتمان', 'ویلا', 'تجاری']
-  const sampleItems = Array.from({ length: total }).map((_, i) => ({
-    id: `sample-${i}`,
-    title: 'آپارتمان لوکس',
-    location: 'تهران، منطقه نمونه',
-    price: 'قیمت توافقی',
-    image: undefined,
-    category: sampleCats[i % sampleCats.length],
+  const sliderItems = items.map(it => ({
+    id: it.id, title: it.title, location: it.location, price: it.price, image: it.image, category: (it.category || '').trim(),
   }))
   return (
     <section id="listings" style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <SectionHeading primary={primary}>{props.heading}</SectionHeading>
-        <ListingsSlider
-          items={sampleItems}
-          categories={showCategories ? sampleCats : []}
-          perSlide={perSlide}
-          primary={primary}
-          showCategories={showCategories}
-        />
+        {items.length === 0 ? (
+          <div style={{ background: SURFACE, border: '1px dashed #ddd4c5', borderRadius: 18, padding: '52px 24px', textAlign: 'center', color: '#9b9285', fontSize: 14.5 }}>
+            هنوز آگهی منتشرشده‌ای برای نمایش وجود ندارد.
+          </div>
+        ) : (
+          <ListingsSlider
+            items={sliderItems}
+            categories={categories}
+            perSlide={perSlide}
+            primary={primary}
+            showCategories={showCategories}
+          />
+        )}
       </div>
     </section>
   )
@@ -286,106 +257,64 @@ function BlogBlock({ block, primary, ownerName }: { block: SiteBlock; primary: s
   const n = Math.max(1, Math.min(12, Number(props.count) || 3))
   const grads = ['#15202d,#101828', '#251528,#1a0e1e', '#152825,#0e1a18', '#2d2215,#1e1a12', '#2d1515,#1e0e0e', '#1e2215,#141a10']
 
-  // Real articles: pull the owner's own published articles.
-  if (props.source === 'mine') {
-    const items = ownerArticles(ownerName, n)
-    return (
-      <section id="blog" style={{ background: SURFACE, padding: SECTION_PAD, direction: 'rtl' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-          <SectionHeading primary={primary}>{props.heading}</SectionHeading>
-          {items.length === 0 ? (
-            <div style={{ background: 'var(--mjs-bg)', border: '1px dashed #ddd4c5', borderRadius: 18, padding: '52px 24px', textAlign: 'center', color: '#9b9285', fontSize: 14.5 }}>
-              هنوز مقالهٔ منتشرشده‌ای برای نمایش وجود ندارد.
-            </div>
-          ) : (
-            <div className="mjs-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 24 }}>
-              {items.map((it, i) => {
-                const slug = it.meta?.slug || it.id
-                const excerpt = it.meta?.summary || it.meta?.metaDescription || it.excerpt || ''
-                const cat = (it.category || it.meta?.category || '').trim()
-                const author = (it.meta?.author || '').trim()
-                const date = (it.meta?.date || it.meta?.publishedAt || '').trim()
-                const meta = [author, date].filter(Boolean).join(' · ')
-                return (
-                  <MediaCard key={it.id} href={`/article/${slug}`} image={it.image} gradient={grads[i % grads.length]}>
-                    {cat ? (
-                      <span style={{ display: 'inline-block', fontSize: 11.5, fontWeight: 700, color: primary, background: `${primary}14`, border: `1px solid ${primary}33`, borderRadius: 999, padding: '3px 11px', marginBottom: 12 }}>{cat}</span>
-                    ) : null}
-                    <div style={{ fontSize: 17, fontWeight: 800, color: INK, marginBottom: 10, lineHeight: 1.6, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{it.title}</div>
-                    {excerpt ? <p style={{ fontSize: 13.5, color: MUTED, lineHeight: 1.95, margin: '0 0 16px', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{excerpt}</p> : null}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderTop: '1px solid #f2ede4', paddingTop: 14 }}>
-                      {meta ? <span style={{ fontSize: 12, color: MUTED }}>{meta}</span> : <span />}
-                      <span style={{ fontSize: 13.5, fontWeight: 800, color: primary }}>ادامه مطلب →</span>
-                    </div>
-                  </MediaCard>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      </section>
-    )
-  }
-
-  // Sample cards (source === 'sample' or unset).
+  // فقط مقاله‌های واقعیِ منتشرشدهٔ مالک — هیچ دادهٔ نمونه. در نبودِ مقاله، حالتِ خالی.
+  const items = ownerArticles(ownerName, n)
   return (
     <section id="blog" style={{ background: SURFACE, padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <SectionHeading primary={primary}>{props.heading}</SectionHeading>
-        <div className="mjs-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 24 }}>
-          {Array.from({ length: n }).map((_, i) => (
-            <div key={i} className="mjs-card" style={{ background: 'var(--mjs-bg)', borderRadius: 18, overflow: 'hidden', border: '1px solid #efe9df', boxShadow: CARD_SHADOW }}>
-              <div style={{ height: 190, background: `linear-gradient(135deg,${grads[i % grads.length]})` }} />
-              <div style={{ padding: 20 }}>
-                <div style={{ fontSize: 17, fontWeight: 800, color: INK, marginBottom: 10 }}>عنوان مقاله</div>
-                <p style={{ fontSize: 13.5, color: MUTED, lineHeight: 1.95, margin: '0 0 16px' }}>خلاصه‌ای کوتاه از مقاله در این بخش نمایش داده می‌شود.</p>
-                <span style={{ fontSize: 13.5, fontWeight: 800, color: primary }}>مطالعهٔ مقاله →</span>
-              </div>
-            </div>
-          ))}
-        </div>
+        {items.length === 0 ? (
+          <div style={{ background: 'var(--mjs-bg)', border: '1px dashed #ddd4c5', borderRadius: 18, padding: '52px 24px', textAlign: 'center', color: '#9b9285', fontSize: 14.5 }}>
+            هنوز مقالهٔ منتشرشده‌ای برای نمایش وجود ندارد.
+          </div>
+        ) : (
+          <div className="mjs-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 24 }}>
+            {items.map((it, i) => {
+              const slug = it.meta?.slug || it.id
+              const excerpt = it.meta?.summary || it.meta?.metaDescription || it.excerpt || ''
+              const cat = (it.category || it.meta?.category || '').trim()
+              const author = (it.meta?.author || '').trim()
+              const date = (it.meta?.date || it.meta?.publishedAt || '').trim()
+              const meta = [author, date].filter(Boolean).join(' · ')
+              return (
+                <MediaCard key={it.id} href={`/article/${slug}`} image={it.image} gradient={grads[i % grads.length]}>
+                  {cat ? (
+                    <span style={{ display: 'inline-block', fontSize: 11.5, fontWeight: 700, color: primary, background: `${primary}14`, border: `1px solid ${primary}33`, borderRadius: 999, padding: '3px 11px', marginBottom: 12 }}>{cat}</span>
+                  ) : null}
+                  <div style={{ fontSize: 17, fontWeight: 800, color: INK, marginBottom: 10, lineHeight: 1.6, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{it.title}</div>
+                  {excerpt ? <p style={{ fontSize: 13.5, color: MUTED, lineHeight: 1.95, margin: '0 0 16px', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{excerpt}</p> : null}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderTop: '1px solid #f2ede4', paddingTop: 14 }}>
+                    {meta ? <span style={{ fontSize: 12, color: MUTED }}>{meta}</span> : <span />}
+                    <span style={{ fontSize: 13.5, fontWeight: 800, color: primary }}>ادامه مطلب →</span>
+                  </div>
+                </MediaCard>
+              )
+            })}
+          </div>
+        )}
       </div>
     </section>
   )
 }
 
-// صفحهٔ کاملِ وبلاگ: مقاله‌ها را روی سرور بارگذاری و دسته‌ها را استخراج می‌کند، سپس
-// به مؤلفهٔ کلاینتِ BlogFull (فیلتر + جستجو + ساید‌بار) پاس می‌دهد.
-function sampleBlogArticles(): BlogArticle[] {
-  const cats = ['بازار مسکن', 'خرید و فروش', 'رهن و اجاره', 'سرمایه‌گذاری']
-  return Array.from({ length: 9 }).map((_, i) => ({
-    id: `sample-${i}`,
-    slug: `sample-${i}`,
-    title: 'عنوان نمونهٔ مقاله',
-    excerpt: 'خلاصه‌ای کوتاه از مقاله در این بخش نمایش داده می‌شود تا ظاهرِ صفحه مشخص باشد.',
-    category: cats[i % cats.length],
-    author: 'تحریریه',
-  }))
-}
-
+// صفحهٔ کاملِ وبلاگ: فقط مقاله‌های واقعیِ منتشرشده را بارگذاری می‌کند (هیچ دادهٔ نمونه)؛
+// دسته‌ها را استخراج و به مؤلفهٔ کلاینتِ BlogFull (فیلتر + جستجو + ساید‌بار) پاس می‌دهد.
 function BlogFullBlock({ block, primary, ownerName }: { block: SiteBlock; primary: string; ownerName?: string }) {
   const props = p(block)
   const heading = props.heading || 'وبلاگ'
   const sidebar: 'yes' | 'no' = props.sidebar === 'no' ? 'no' : 'yes'
 
-  let articles: BlogArticle[]
-  if (props.source === 'sample') {
-    articles = sampleBlogArticles()
-  } else {
-    const items = ownerArticles(ownerName, 24)
-    articles = items.length
-      ? items.map(it => ({
-          id: it.id,
-          slug: it.meta?.slug || it.id,
-          title: it.title,
-          excerpt: it.meta?.summary || it.meta?.metaDescription || it.excerpt || '',
-          image: it.image,
-          category: (it.category || it.meta?.category || '').trim() || undefined,
-          author: (it.meta?.author || '').trim() || undefined,
-          date: (it.meta?.date || it.meta?.publishedAt || '').trim() || undefined,
-        }))
-      : sampleBlogArticles()
-  }
+  const items = ownerArticles(ownerName, 24)
+  const articles: BlogArticle[] = items.map(it => ({
+    id: it.id,
+    slug: it.meta?.slug || it.id,
+    title: it.title,
+    excerpt: it.meta?.summary || it.meta?.metaDescription || it.excerpt || '',
+    image: it.image,
+    category: (it.category || it.meta?.category || '').trim() || undefined,
+    author: (it.meta?.author || '').trim() || undefined,
+    date: (it.meta?.date || it.meta?.publishedAt || '').trim() || undefined,
+  }))
 
   // دسته‌های متمایزِ غیرخالی به ترتیبِ اولین مشاهده.
   const categories: string[] = []

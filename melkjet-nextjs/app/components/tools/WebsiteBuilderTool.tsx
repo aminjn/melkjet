@@ -231,19 +231,16 @@ const BLOCK_SCHEMA: Record<string, FieldSpec[]> = {
   ],
   listings: [
     { key: 'heading', label: 'عنوان', kind: 'text' },
-    { key: 'source', label: 'منبع', kind: 'enum', options: [{ value: 'sample', label: 'نمونه' }, { value: 'mine', label: 'آگهی‌های من' }] },
     { key: 'total', label: 'تعدادِ کلِ آگهی', kind: 'number' },
     { key: 'perSlide', label: 'تعداد در هر اسلاید', kind: 'number' },
     { key: 'showCategories', label: 'نمایشِ دسته‌بندی‌ها', kind: 'enum', options: [{ value: 'yes', label: 'نمایش' }, { value: 'no', label: 'بدون دسته' }] },
   ],
   blog: [
     { key: 'heading', label: 'عنوان', kind: 'text' },
-    { key: 'source', label: 'منبع', kind: 'enum', options: [{ value: 'mine', label: 'مقالات من' }, { value: 'sample', label: 'نمونه' }] },
     { key: 'count', label: 'تعداد', kind: 'number' },
   ],
   blogfull: [
     { key: 'heading', label: 'عنوان', kind: 'text' },
-    { key: 'source', label: 'منبع', kind: 'enum', options: [{ value: 'mine', label: 'مقالات من' }, { value: 'sample', label: 'نمونه' }] },
     { key: 'sidebar', label: 'ساید‌بار', kind: 'enum', options: [{ value: 'yes', label: 'نمایش' }, { value: 'no', label: 'بدون ساید‌بار' }] },
   ],
   services: [

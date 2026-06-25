@@ -99,6 +99,16 @@ export default function BlogFull({
     color: 'var(--mjs-text)',
   }
 
+  // بدونِ مقالهٔ واقعی → حالتِ خالی (هیچ دادهٔ نمونه نمایش داده نمی‌شود).
+  if (!articles.length) {
+    return (
+      <div style={{ background: 'var(--mjs-bg)', border: '1px dashed #ddd4c5', borderRadius: 18, padding: '64px 24px', textAlign: 'center', color: '#9b9285', fontSize: 15, lineHeight: 2 }}>
+        <div style={{ fontSize: 40, opacity: .3, marginBottom: 10 }}>🗞</div>
+        هنوز مقاله‌ای منتشر نشده است.
+      </div>
+    )
+  }
+
   return (
     <div>
       <style>{`
