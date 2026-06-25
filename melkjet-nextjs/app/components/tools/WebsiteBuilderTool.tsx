@@ -149,6 +149,8 @@ const BLOCK_DEFAULTS: Record<string, Record<string, any>> = {
   },
   testimonials: {
     heading: 'نظرات مشتریان',
+    showReal: 'yes',
+    allowSubmit: 'yes',
     items: [
       { name: 'علی رضایی', text: 'تجربه‌ای عالی و حرفه‌ای داشتم. کاملاً راضی هستم.', rating: 5 },
       { name: 'مریم احمدی', text: 'برخورد بسیار خوب و مشاوره دقیق. پیشنهاد می‌کنم.', rating: 5 },
@@ -261,7 +263,9 @@ const BLOCK_SCHEMA: Record<string, FieldSpec[]> = {
   ],
   testimonials: [
     { key: 'heading', label: 'عنوان', kind: 'text' },
-    { key: 'items', label: 'نظرات', kind: 'list', itemFields: [{ key: 'name', label: 'نام', kind: 'text' }, { key: 'text', label: 'متن', kind: 'textarea' }, { key: 'rating', label: 'امتیاز (۱-۵)', kind: 'number' }], newItem: () => ({ name: 'مشتری جدید', text: 'متن نظر', rating: 5 }) },
+    { key: 'showReal', label: 'نمایشِ نظراتِ واقعیِ ثبت‌شده', kind: 'enum', options: [{ value: 'yes', label: 'نمایش' }, { value: 'no', label: 'فقط نظراتِ دستی' }] },
+    { key: 'allowSubmit', label: 'فرمِ ثبتِ نظر برای بازدیدکننده', kind: 'enum', options: [{ value: 'yes', label: 'فعال' }, { value: 'no', label: 'غیرفعال' }] },
+    { key: 'items', label: 'نظراتِ دستی', kind: 'list', itemFields: [{ key: 'name', label: 'نام', kind: 'text' }, { key: 'text', label: 'متن', kind: 'textarea' }, { key: 'rating', label: 'امتیاز (۱-۵)', kind: 'number' }], newItem: () => ({ name: 'مشتری جدید', text: 'متن نظر', rating: 5 }) },
   ],
   cta: [
     { key: 'heading', label: 'عنوان', kind: 'text' },
@@ -428,6 +432,107 @@ const STARTER_TEMPLATES = [
   { id: 'gen-08', name: 'صفحهٔ رویداد', profile: 'عمومی', blocks: ['hero', 'about', 'gallery', 'cta', 'contact', 'footer'], desc: 'هیرو، درباره، گالری، اقدام، تماس' },
   { id: 'gen-09', name: 'صفحهٔ خدمات', profile: 'عمومی', blocks: ['hero', 'services', 'testimonials', 'cta', 'footer'], desc: 'هیرو، خدمات، نظرات، اقدام' },
   { id: 'gen-10', name: 'صفحهٔ حرفه‌ای', profile: 'عمومی', blocks: ['hero', 'stats', 'services', 'about', 'contact', 'footer'], desc: 'هیرو، آمار، خدمات، درباره، تماس' },
+]
+
+// ── قالب‌های صفحه (per-page) — برای ساختِ صفحاتِ مختلف با دسته‌بندی ──────────────
+// هر دسته‌بندی ≥۱۰ قالب دارد. هنگامِ «صفحهٔ جدید»، کاربر یکی را انتخاب می‌کند.
+const PAGE_TEMPLATE_GROUPS: { key: string; label: string; icon: string; pageTitle: string; items: { name: string; blocks: string[] }[] }[] = [
+  { key: 'home', label: 'صفحهٔ اصلی', icon: '⌂', pageTitle: 'صفحهٔ اصلی', items: [
+    { name: 'هومِ کلاسیک', blocks: ['hero', 'search', 'listings', 'services', 'testimonials', 'footer'] },
+    { name: 'هومِ مدرن', blocks: ['hero', 'stats', 'listings', 'about', 'cta', 'footer'] },
+    { name: 'هومِ تصویری', blocks: ['hero', 'gallery', 'services', 'testimonials', 'contact', 'footer'] },
+    { name: 'هومِ جستجو', blocks: ['hero', 'search', 'listings', 'cta', 'footer'] },
+    { name: 'هومِ کامل', blocks: ['hero', 'services', 'stats', 'listings', 'team', 'testimonials', 'footer'] },
+    { name: 'هومِ آژانس', blocks: ['hero', 'services', 'listings', 'team', 'contact', 'footer'] },
+    { name: 'هومِ لوکس', blocks: ['hero', 'about', 'gallery', 'listings', 'cta', 'footer'] },
+    { name: 'هومِ تک‌برگ', blocks: ['hero', 'services', 'about', 'testimonials', 'contact', 'footer'] },
+    { name: 'هومِ فروش', blocks: ['hero', 'listings', 'stats', 'cta', 'contact', 'footer'] },
+    { name: 'هومِ معرفی', blocks: ['hero', 'about', 'services', 'gallery', 'footer'] },
+  ] },
+  { key: 'about', label: 'دربارهٔ ما', icon: '¶', pageTitle: 'دربارهٔ ما', items: [
+    { name: 'دربارهٔ ساده', blocks: ['hero', 'about', 'contact', 'footer'] },
+    { name: 'دربارهٔ تیمی', blocks: ['hero', 'about', 'team', 'footer'] },
+    { name: 'دربارهٔ آماری', blocks: ['hero', 'about', 'stats', 'testimonials', 'footer'] },
+    { name: 'دربارهٔ کامل', blocks: ['hero', 'about', 'stats', 'team', 'services', 'footer'] },
+    { name: 'دربارهٔ تصویری', blocks: ['hero', 'about', 'gallery', 'cta', 'footer'] },
+    { name: 'دربارهٔ خدمات', blocks: ['hero', 'about', 'services', 'contact', 'footer'] },
+    { name: 'دربارهٔ معتبر', blocks: ['hero', 'about', 'stats', 'testimonials', 'cta', 'footer'] },
+    { name: 'دربارهٔ برند', blocks: ['about', 'gallery', 'team', 'contact', 'footer'] },
+    { name: 'دربارهٔ لوکس', blocks: ['hero', 'about', 'services', 'gallery', 'testimonials', 'footer'] },
+    { name: 'دربارهٔ تماس', blocks: ['hero', 'about', 'team', 'cta', 'contact', 'footer'] },
+  ] },
+  { key: 'contact', label: 'ارتباط با ما', icon: '✉', pageTitle: 'ارتباط با ما', items: [
+    { name: 'تماسِ ساده', blocks: ['hero', 'contact', 'footer'] },
+    { name: 'تماس و معرفی', blocks: ['hero', 'contact', 'about', 'footer'] },
+    { name: 'تماس و خدمات', blocks: ['hero', 'services', 'contact', 'footer'] },
+    { name: 'تماسِ کامل', blocks: ['hero', 'about', 'contact', 'cta', 'footer'] },
+    { name: 'تماسِ سریع', blocks: ['contact', 'cta', 'footer'] },
+    { name: 'تماس و تیم', blocks: ['hero', 'team', 'contact', 'footer'] },
+    { name: 'تماس و آمار', blocks: ['hero', 'stats', 'contact', 'footer'] },
+    { name: 'تماس و نظرات', blocks: ['hero', 'testimonials', 'contact', 'footer'] },
+    { name: 'تماسِ حرفه‌ای', blocks: ['hero', 'services', 'about', 'contact', 'footer'] },
+    { name: 'تماس و گالری', blocks: ['hero', 'gallery', 'contact', 'footer'] },
+  ] },
+  { key: 'blog', label: 'وبلاگ', icon: '🗞', pageTitle: 'وبلاگ', items: [
+    { name: 'وبلاگِ کامل', blocks: ['blogfull', 'footer'] },
+    { name: 'وبلاگ با هیرو', blocks: ['hero', 'blogfull', 'footer'] },
+    { name: 'وبلاگ و خلاصه', blocks: ['hero', 'blog', 'blogfull', 'footer'] },
+    { name: 'وبلاگِ مینیمال', blocks: ['blogfull'] },
+    { name: 'وبلاگ و تماس', blocks: ['hero', 'blogfull', 'contact', 'footer'] },
+    { name: 'وبلاگ و خبرنامه', blocks: ['hero', 'blogfull', 'cta', 'footer'] },
+    { name: 'وبلاگِ تصویری', blocks: ['hero', 'gallery', 'blogfull', 'footer'] },
+    { name: 'وبلاگ و خدمات', blocks: ['hero', 'blogfull', 'services', 'footer'] },
+    { name: 'وبلاگِ مجله‌ای', blocks: ['blog', 'blogfull', 'cta', 'footer'] },
+    { name: 'وبلاگ و درباره', blocks: ['hero', 'blogfull', 'about', 'footer'] },
+  ] },
+  { key: 'listings', label: 'آگهی‌ها', icon: '⌂', pageTitle: 'آگهی‌ها', items: [
+    { name: 'آگهی‌هایِ کامل', blocks: ['hero', 'search', 'listings', 'footer'] },
+    { name: 'آگهی با فیلتر', blocks: ['hero', 'search', 'listings', 'cta', 'footer'] },
+    { name: 'آگهیِ ساده', blocks: ['hero', 'listings', 'footer'] },
+    { name: 'آگهی و خدمات', blocks: ['hero', 'listings', 'services', 'contact', 'footer'] },
+    { name: 'آگهی و آمار', blocks: ['hero', 'stats', 'listings', 'footer'] },
+    { name: 'آگهی و تیم', blocks: ['hero', 'listings', 'team', 'contact', 'footer'] },
+    { name: 'آگهیِ لوکس', blocks: ['hero', 'search', 'listings', 'testimonials', 'footer'] },
+    { name: 'آگهی و درباره', blocks: ['hero', 'listings', 'about', 'cta', 'footer'] },
+    { name: 'آگهیِ جامع', blocks: ['hero', 'search', 'listings', 'gallery', 'contact', 'footer'] },
+    { name: 'آگهی و تماس', blocks: ['hero', 'listings', 'contact', 'footer'] },
+  ] },
+  { key: 'services', label: 'خدمات', icon: '◈', pageTitle: 'خدمات', items: [
+    { name: 'خدماتِ ساده', blocks: ['hero', 'services', 'footer'] },
+    { name: 'خدمات و آمار', blocks: ['hero', 'services', 'stats', 'footer'] },
+    { name: 'خدماتِ کامل', blocks: ['hero', 'services', 'about', 'testimonials', 'contact', 'footer'] },
+    { name: 'خدمات و اقدام', blocks: ['hero', 'services', 'cta', 'footer'] },
+    { name: 'خدمات و گالری', blocks: ['hero', 'services', 'gallery', 'contact', 'footer'] },
+    { name: 'خدمات و تیم', blocks: ['hero', 'services', 'team', 'footer'] },
+    { name: 'خدماتِ حرفه‌ای', blocks: ['hero', 'services', 'stats', 'testimonials', 'cta', 'footer'] },
+    { name: 'خدمات و تماس', blocks: ['hero', 'services', 'contact', 'footer'] },
+    { name: 'خدماتِ لوکس', blocks: ['hero', 'about', 'services', 'gallery', 'footer'] },
+    { name: 'خدمات و نظرات', blocks: ['hero', 'services', 'testimonials', 'footer'] },
+  ] },
+  { key: 'gallery', label: 'گالری و پروژه‌ها', icon: '▥', pageTitle: 'گالری', items: [
+    { name: 'گالریِ ساده', blocks: ['hero', 'gallery', 'footer'] },
+    { name: 'گالری و آمار', blocks: ['hero', 'gallery', 'stats', 'footer'] },
+    { name: 'پروژه‌هایِ لوکس', blocks: ['hero', 'gallery', 'services', 'testimonials', 'contact', 'footer'] },
+    { name: 'گالری و درباره', blocks: ['hero', 'about', 'gallery', 'cta', 'footer'] },
+    { name: 'گالری و اقدام', blocks: ['hero', 'gallery', 'cta', 'footer'] },
+    { name: 'گالری و تماس', blocks: ['hero', 'gallery', 'contact', 'footer'] },
+    { name: 'گالریِ کامل', blocks: ['hero', 'gallery', 'stats', 'about', 'footer'] },
+    { name: 'گالری و تیم', blocks: ['hero', 'gallery', 'team', 'contact', 'footer'] },
+    { name: 'پروژه و خدمات', blocks: ['hero', 'gallery', 'services', 'cta', 'footer'] },
+    { name: 'گالریِ معتبر', blocks: ['hero', 'stats', 'gallery', 'testimonials', 'footer'] },
+  ] },
+  { key: 'team', label: 'تیم و مشاوران', icon: '☺', pageTitle: 'تیمِ ما', items: [
+    { name: 'تیمِ ساده', blocks: ['hero', 'team', 'footer'] },
+    { name: 'تیم و درباره', blocks: ['hero', 'about', 'team', 'footer'] },
+    { name: 'تیمِ کامل', blocks: ['hero', 'team', 'stats', 'testimonials', 'contact', 'footer'] },
+    { name: 'تیم و خدمات', blocks: ['hero', 'team', 'services', 'footer'] },
+    { name: 'تیم و تماس', blocks: ['hero', 'team', 'contact', 'footer'] },
+    { name: 'تیمِ حرفه‌ای', blocks: ['hero', 'about', 'team', 'stats', 'cta', 'footer'] },
+    { name: 'تیم و گالری', blocks: ['hero', 'team', 'gallery', 'footer'] },
+    { name: 'تیم و نظرات', blocks: ['hero', 'team', 'testimonials', 'contact', 'footer'] },
+    { name: 'تیمِ لوکس', blocks: ['hero', 'team', 'services', 'gallery', 'footer'] },
+    { name: 'تیم و اقدام', blocks: ['hero', 'team', 'cta', 'contact', 'footer'] },
+  ] },
 ]
 
 let nextId = 1
@@ -748,18 +853,35 @@ function BlockBody({ block, primary, myListings, teamMembers }: { block: Block; 
   }
   if (t === 'testimonials') {
     const items: any[] = Array.isArray(p.items) ? p.items : []
+    const showReal = p.showReal !== 'no'
+    const allowSubmit = p.allowSubmit !== 'no'
     return (
       <div style={{ background: '#faf9f7', padding: '28px', direction: 'rtl' }}>
-        <div style={{ fontSize: 18, fontWeight: 800, color: '#1a1510', marginBottom: 16, textAlign: 'center' }}>{p.heading}</div>
+        <div style={{ fontSize: 18, fontWeight: 800, color: '#1a1510', marginBottom: showReal ? 4 : 16, textAlign: 'center' }}>{p.heading}</div>
+        {showReal ? <div style={{ fontSize: 11, color: primary, textAlign: 'center', marginBottom: 16 }}>★ نظراتِ واقعیِ ثبت‌شدهٔ مشتریان هم این‌جا نمایش داده می‌شوند</div> : null}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12 }}>
           {items.map((s, i) => (
-            <div key={i} style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: '16px' }}>
+            <div key={i} style={{ background: '#fff', border: '1px solid #eee', borderRadius: 12, padding: '16px' }}>
               <div style={{ color: primary, marginBottom: 8, fontSize: 14 }}>{'★'.repeat(Math.max(0, Math.min(5, Number(s.rating) || 5)))}</div>
               <p style={{ fontSize: 12, color: '#555', lineHeight: 1.9, margin: '0 0 10px' }}>{s.text}</p>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#1a1510' }}>{s.name}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 26, height: 26, borderRadius: '50%', background: `${primary}22`, color: primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800 }}>{(s.name || '?').charAt(0)}</span>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#1a1510' }}>{s.name}</div>
+              </div>
             </div>
           ))}
         </div>
+        {allowSubmit && (
+          <div style={{ marginTop: 16, background: '#fff', border: `1px dashed ${primary}`, borderRadius: 12, padding: '14px 16px' }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: '#1a1510', marginBottom: 8 }}>ثبتِ نظرِ شما</div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <div style={{ flex: 1, height: 30, background: '#f4f3ef', borderRadius: 7 }} />
+              <div style={{ color: primary, fontSize: 15, alignSelf: 'center' }}>★★★★★</div>
+            </div>
+            <div style={{ height: 44, background: '#f4f3ef', borderRadius: 7, marginBottom: 8 }} />
+            <div style={{ display: 'inline-block', padding: '7px 18px', background: primary, color: '#fff', borderRadius: 8, fontSize: 12, fontWeight: 700 }}>ارسالِ نظر</div>
+          </div>
+        )}
       </div>
     )
   }
@@ -912,6 +1034,8 @@ function TemplateThumb({ tpl }: { tpl: typeof STARTER_TEMPLATES[0] }) {
       case 'testimonials': return <div key={i} style={{ padding: '9px 12px', background: '#faf9f7' }}><div style={{ padding: 8, background: '#fff', border: '1px solid #eee', borderRadius: 6 }}>{[85, 65].map((w, k) => <div key={k} style={{ height: 3, width: `${w}%`, background: '#dadade', borderRadius: 2, marginBottom: 4 }} />)}<div style={{ height: 6, width: 28, background: '#e3e3e7', borderRadius: 3, marginTop: 5 }} /></div></div>
       case 'cta': return <div key={i} style={{ padding: '14px 12px', background: v.grad, display: 'flex', justifyContent: 'center' }}><div style={{ height: 10, width: '32%', background: '#fff', borderRadius: 5 }} /></div>
       case 'contact': return <div key={i} style={{ padding: '9px 12px', background: '#fff', display: 'flex', flexDirection: 'column', gap: 5 }}>{[100, 100, 60].map((w, k) => <div key={k} style={{ height: 9, width: `${w}%`, background: '#f1f1f3', border: '1px solid #e6e6e6', borderRadius: 3 }} />)}</div>
+      case 'blog': return <div key={i} style={{ padding: '9px 12px', background: '#fff', display: 'flex', gap: 6 }}>{[0, 1, 2].map(k => <div key={k} style={{ flex: 1 }}><div style={{ height: 20, background: '#e7e7ea', borderRadius: 4, marginBottom: 4 }} /><div style={{ height: 3, width: '85%', background: '#dcdce0', borderRadius: 2, marginBottom: 3 }} /><div style={{ height: 3, width: '60%', background: '#ededf0', borderRadius: 2 }} /></div>)}</div>
+      case 'blogfull': return <div key={i} style={{ padding: '9px 12px', background: '#faf9f7', display: 'flex', gap: 6, flexDirection: 'row-reverse' }}><div style={{ flex: '0 0 26px', display: 'flex', flexDirection: 'column', gap: 3 }}>{[0, 1, 2].map(k => <div key={k} style={{ height: 4, background: k === 0 ? v.primary : '#e0e0e4', borderRadius: 2 }} />)}</div><div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>{[0, 1, 2, 3].map(k => <div key={k}><div style={{ height: 16, background: '#e7e7ea', borderRadius: 3, marginBottom: 2 }} /><div style={{ height: 2.5, width: '80%', background: '#dcdce0', borderRadius: 2 }} /></div>)}</div></div>
       case 'footer': return <div key={i} style={{ padding: '11px 12px', background: '#1a1a1f', display: 'flex', justifyContent: 'space-between' }}>{[0, 1, 2].map(k => <div key={k} style={{ height: 3, width: 32, background: '#3a3a42', borderRadius: 2 }} />)}</div>
       default: return null
     }
@@ -954,6 +1078,8 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
   // پروفایل قفل‌شده بر اساس نقش کاربر؛ null یعنی مهمان/ادمین (می‌تواند همه را ببیند)
   const [lockedProfile, setLockedProfile] = useState<string | null>(null)
   const [tplModal, setTplModal] = useState(false)
+  const [pageTplModal, setPageTplModal] = useState(false)
+  const [pageTplGroup, setPageTplGroup] = useState(PAGE_TEMPLATE_GROUPS[0].key)
   const [device, setDevice] = useState<Device>('desktop')
   const [activeTab, setActiveTab] = useState<ActiveTab>('seo')
   const [seoTitle, setSeoTitle] = useState('آژانس ملکی نمونه | خرید و فروش ملک')
@@ -1233,6 +1359,25 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
     setSelectedBlock(null)
   }
 
+  // ساختِ صفحهٔ جدید از قالبِ صفحه (با بلوک‌ها + پیش‌تنظیماتِ متناسب با تمِ فعلی).
+  const createPageFromTemplate = (blocks: string[], title: string) => {
+    const idx = pages.length
+    const heroBg = `linear-gradient(135deg, ${theme.primary}, ${theme.secondary || '#1a1510'} 72%)`
+    const brand = (seoTitle || '').split('|')[0]?.trim() || title
+    const nb = blocks.map(type => {
+      let preset: Record<string, any> | undefined
+      if (type === 'hero') preset = { heading: title, subheading: '', bg: heroBg }
+      else if (type === 'cta') preset = { bg: heroBg }
+      else if (type === 'footer') preset = { brand }
+      return makeBlock(type, preset)
+    })
+    const slugVal = uniquePageSlug(slugify(title) || `page-${idx + 1}`, -1)
+    setPages(prev => [...prev, { slug: slugVal, title, blocks: nb, inMenu: true }])
+    setActivePage(idx)
+    setSelectedBlock(null)
+    setPageTplModal(false)
+  }
+
   // جابه‌جایی ترتیب صفحه (و در نتیجه ترتیب منو) — صفحهٔ خانه ثابت می‌ماند.
   const movePage = (idx: number, dir: -1 | 1) => {
     const next = idx + dir
@@ -1481,7 +1626,7 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
                 {pg.inMenu === false && <span title="در منو نیست" style={{ fontSize: 9, opacity: 0.6 }}>(مخفی)</span>}
               </button>
             ))}
-            <button onClick={addPage} title="افزودن صفحهٔ جدید به سایت" style={{ padding: '6px 12px', borderRadius: 8, border: '1px dashed var(--gold)', background: 'transparent', color: 'var(--gold)', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', flexShrink: 0 }}>＋ صفحهٔ جدید</button>
+            <button onClick={() => setPageTplModal(true)} title="افزودن صفحهٔ جدید از قالب" style={{ padding: '6px 12px', borderRadius: 8, border: '1px dashed var(--gold)', background: 'transparent', color: 'var(--gold)', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', flexShrink: 0 }}>＋ صفحهٔ جدید</button>
             <span style={{ flex: 1 }} />
             <button onClick={() => setActiveTab('pages')} title="تنظیمات صفحات و منو" style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--muted)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', flexShrink: 0 }}>⚙ مدیریت صفحات و منو</button>
           </div>
@@ -1510,11 +1655,17 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
             {/* منوی سایت (همیشه روی همهٔ صفحات نمایش داده می‌شود) */}
             <div style={{ direction: 'rtl', background: theme.bg || '#fff', borderBottom: `1px solid ${theme.surface || '#eee'}`, padding: '12px 22px', display: 'flex', alignItems: 'center', gap: 14, position: 'relative' }}>
               <div style={{ fontSize: 16, fontWeight: 900, color: theme.heading || '#15110b', marginInlineEnd: 'auto' }}>{seoTitle?.split('|')[0]?.trim() || 'برندِ شما'}</div>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {pages.filter((pg, i) => i === 0 || pg.inMenu !== false).map((pg, i) => (
-                  <span key={pg.slug} style={{ fontSize: 12.5, fontWeight: i === activePage ? 800 : 600, color: i === activePage ? '#fff' : (theme.text || '#555'), background: i === activePage ? theme.primary : 'transparent', padding: '6px 13px', borderRadius: 8 }}>{i === 0 ? '⌂ ' : ''}{pg.menuLabel || pg.title}</span>
-                ))}
-              </div>
+              {device === 'mobile' ? (
+                <div style={{ width: 34, height: 30, borderRadius: 8, border: `1px solid ${theme.surface || '#eee'}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3 }} title="منوی همبرگری (موبایل)">
+                  {[0, 1, 2].map(k => <span key={k} style={{ width: 16, height: 2, borderRadius: 2, background: theme.heading || '#15110b' }} />)}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {pages.filter((pg, i) => i === 0 || pg.inMenu !== false).map((pg, i) => (
+                    <span key={pg.slug} style={{ fontSize: 12.5, fontWeight: i === activePage ? 800 : 600, color: i === activePage ? '#fff' : (theme.text || '#555'), background: i === activePage ? theme.primary : 'transparent', padding: '6px 13px', borderRadius: 8 }}>{i === 0 ? '⌂ ' : ''}{pg.menuLabel || pg.title}</span>
+                  ))}
+                </div>
+              )}
               <span style={{ position: 'absolute', top: 4, insetInlineStart: 8, fontSize: 9, color: 'var(--faint)' }}>منوی سایت</span>
             </div>
 
@@ -1980,10 +2131,10 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
                   )
                 })}
                 <button
-                  onClick={addPage}
+                  onClick={() => setPageTplModal(true)}
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px', borderRadius: 10, border: '1px dashed var(--line)', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontWeight: 700, marginTop: 4 }}
                 >
-                  <span>+</span><span>صفحه جدید</span>
+                  <span>+</span><span>صفحهٔ جدید از قالب</span>
                 </button>
               </div>
             )}
@@ -2098,6 +2249,51 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
           </div>
         </div>
       )}
+
+      {/* پاپ‌آپِ قالبِ صفحه — برای «صفحهٔ جدید» با دسته‌بندی (درباره، تماس، وبلاگ، آگهی‌ها، …) */}
+      {pageTplModal && (() => {
+        const group = PAGE_TEMPLATE_GROUPS.find(g => g.key === pageTplGroup) || PAGE_TEMPLATE_GROUPS[0]
+        return (
+          <div onClick={() => setPageTplModal(false)} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,.62)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '4vh 14px', overflowY: 'auto' }}>
+            <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 1000, background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 18, overflow: 'hidden', boxShadow: '0 30px 80px -20px rgba(0,0,0,.6)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '16px 22px', borderBottom: '1px solid var(--line)', position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 2 }}>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 800 }}>افزودنِ صفحهٔ جدید</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 3 }}>نوعِ صفحه را انتخاب و سپس یک قالب بزنید — هر دسته بیش از ۱۰ قالب دارد</div>
+                </div>
+                <button onClick={() => setPageTplModal(false)} style={{ flexShrink: 0, width: 36, height: 36, borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--text)', cursor: 'pointer', fontSize: 16, fontFamily: 'inherit' }}>✕</button>
+              </div>
+
+              {/* دسته‌بندیِ صفحات */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '12px 22px 0' }}>
+                {PAGE_TEMPLATE_GROUPS.map(g => (
+                  <button key={g.key} onClick={() => setPageTplGroup(g.key)} style={{ fontSize: 12, padding: '6px 13px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5, border: `1px solid ${pageTplGroup === g.key ? 'var(--gold)' : 'var(--line)'}`, background: pageTplGroup === g.key ? 'var(--goldDim)' : 'transparent', color: pageTplGroup === g.key ? 'var(--gold)' : 'var(--muted)' }}><span>{g.icon}</span>{g.label}</button>
+                ))}
+              </div>
+
+              <div className="mjwb-tplgrid" style={{ padding: 22, display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 }}>
+                {/* صفحهٔ خالی */}
+                <button onClick={() => createPageFromTemplate(['hero', 'footer'], group.pageTitle)} className="mjwb-tplcard" style={{ textAlign: 'center', background: 'var(--surface)', border: '1px dashed var(--line2)', borderRadius: 14, padding: 11, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 180, gap: 8 }}>
+                  <span style={{ fontSize: 30, opacity: .5 }}>＋</span>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)' }}>صفحهٔ خالی</span>
+                  <span style={{ fontSize: 10.5, color: 'var(--faint)' }}>از صفر بسازید</span>
+                </button>
+                {group.items.map((pt, i) => {
+                  const tplLike = { id: `pg-${group.key}-${i + 1}`, name: pt.name, profile: 'عمومی', blocks: pt.blocks, desc: '' } as typeof STARTER_TEMPLATES[0]
+                  return (
+                    <button key={i} onClick={() => createPageFromTemplate(pt.blocks, group.pageTitle)} className="mjwb-tplcard" style={{ textAlign: 'right', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: 11, cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s' }}>
+                      <TemplateThumb tpl={tplLike} />
+                      <div style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--text)', marginTop: 10 }}>{pt.name}</div>
+                      <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 3, lineHeight: 1.6 }}>{pt.blocks.map(b => BLOCK_LIBRARY.find(x => x.type === b)?.label || b).join(' · ')}</div>
+                      <div style={{ marginTop: 9, textAlign: 'center', padding: '7px', borderRadius: 9, background: 'var(--goldDim)', color: 'var(--gold)', fontSize: 12, fontWeight: 800 }}>ساختِ این صفحه</div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </>
   )
 

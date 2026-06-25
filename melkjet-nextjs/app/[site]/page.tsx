@@ -3,10 +3,13 @@ import type { Metadata } from 'next'
 import { getSite, getSitePage, type Site, type SitePage, type SiteBlock } from '@/app/lib/sites-store'
 import { listItems, listArticles, type Item } from '@/app/lib/scraper-store'
 import { getTeamMembers, type TeamMember } from '@/app/lib/team-members'
+import { listReviews } from '@/app/lib/reviews-store'
 import ListingsSlider from './ListingsSlider'
 import HeroSlider from './HeroSlider'
 import GallerySlider from './GallerySlider'
 import BlogFull, { type BlogArticle } from './BlogFull'
+import NavBar from './NavBar'
+import ReviewForm from './ReviewForm'
 
 // Public renderer for builder-published sites living at melkjet.com/{slug}.
 // Existing static single-segment routes (search, owner, ...) take precedence;
@@ -478,32 +481,53 @@ function GalleryBlock({ block, primary }: { block: SiteBlock; primary: string })
   )
 }
 
-function TestimonialsBlock({ block, primary }: { block: SiteBlock; primary: string }) {
+function TestimonialsBlock({ block, primary, ownerPhone, slug }: { block: SiteBlock; primary: string; ownerPhone?: string; slug?: string }) {
   const props = p(block)
-  const items: any[] = Array.isArray(props.items) ? props.items : []
+  const showReal = props.showReal !== 'no'
+  const allowSubmit = props.allowSubmit !== 'no'
+
+  // نظراتِ دستی (props.items) + نظراتِ واقعیِ ثبت‌شده برای مالکِ سایت.
+  type Quote = { name: string; text: string; rating: number }
+  const manual: Quote[] = (Array.isArray(props.items) ? props.items : []).map((s: any) => ({
+    name: String(s?.name || '').trim(),
+    text: String(s?.text || ''),
+    rating: Math.max(0, Math.min(5, Number(s?.rating) || 5)),
+  }))
+  const real: Quote[] = (showReal && ownerPhone)
+    ? listReviews(ownerPhone).map(r => ({ name: r.name, text: r.text, rating: Math.max(0, Math.min(5, Number(r.rating) || 5)) }))
+    : []
+  // دستی‌ها اول، سپس واقعی‌ها.
+  const quotes: Quote[] = [...manual, ...real]
+
   return (
     <section style={{ background: SURFACE, padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <SectionHeading primary={primary} center>{props.heading}</SectionHeading>
-        <div className="mjs-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(290px,1fr))', gap: 24 }}>
-          {items.map((s, i) => {
-            const rating = Math.max(0, Math.min(5, Number(s.rating) || 5))
-            const initial = (s.name || '?').toString().trim().charAt(0)
-            return (
-              <div key={i} className="mjs-card" style={{ background: 'var(--mjs-bg)', border: '1px solid #efe9df', borderRadius: 18, padding: 26, boxShadow: CARD_SHADOW }}>
-                <div style={{ fontSize: 40, lineHeight: 0.6, color: `${primary}55`, fontWeight: 900, marginBottom: 8 }}>”</div>
-                <p style={{ fontSize: 15, lineHeight: 2, color: 'var(--mjs-text)', margin: '0 0 18px' }}>{s.text}</p>
-                <div style={{ color: primary, marginBottom: 16, fontSize: 15, letterSpacing: 2 }}>
-                  {'★'.repeat(rating)}<span style={{ color: '#e3dccf' }}>{'★'.repeat(5 - rating)}</span>
+        {quotes.length > 0 ? (
+          <div className="mjs-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(290px,1fr))', gap: 24 }}>
+            {quotes.map((s, i) => {
+              const rating = Math.max(0, Math.min(5, Number(s.rating) || 5))
+              const initial = (s.name || '?').toString().trim().charAt(0) || '?'
+              return (
+                <div key={i} className="mjs-card" style={{ background: 'var(--mjs-bg)', border: '1px solid #efe9df', borderRadius: 18, padding: 26, boxShadow: CARD_SHADOW }}>
+                  <div style={{ fontSize: 40, lineHeight: 0.6, color: `${primary}55`, fontWeight: 900, marginBottom: 8 }}>”</div>
+                  <p style={{ fontSize: 15, lineHeight: 2, color: 'var(--mjs-text)', margin: '0 0 18px' }}>{s.text}</p>
+                  <div style={{ color: primary, marginBottom: 16, fontSize: 15, letterSpacing: 2 }}>
+                    {'★'.repeat(rating)}<span style={{ color: '#e3dccf' }}>{'★'.repeat(5 - rating)}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, borderTop: '1px solid #f2ede4', paddingTop: 16 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: '50%', background: `${primary}1f`, color: primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 800 }}>{initial}</div>
+                    <div style={{ fontSize: 14.5, fontWeight: 800, color: INK }}>{s.name}</div>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, borderTop: '1px solid #f2ede4', paddingTop: 16 }}>
-                  <div style={{ width: 44, height: 44, borderRadius: '50%', background: `${primary}1f`, color: primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 800 }}>{initial}</div>
-                  <div style={{ fontSize: 14.5, fontWeight: 800, color: INK }}>{s.name}</div>
-                </div>
-              </div>
-            )
-          })}
-        </div>
+              )
+            })}
+          </div>
+        ) : (allowSubmit && slug) ? (
+          <div style={{ textAlign: 'center', color: '#9b9285', fontSize: 14.5 }}>اولین نظر را شما ثبت کنید.</div>
+        ) : null}
+
+        {allowSubmit && slug ? <ReviewForm slug={slug} primary={primary} /> : null}
       </div>
     </section>
   )
@@ -731,7 +755,7 @@ function TeamBlock({ block, primary, ownerPhone }: { block: SiteBlock; primary: 
 }
 
 // Render one block. `ownerName` powers the real «آگهی‌های من» listings.
-function renderBlock(block: SiteBlock, primary: string, ownerName?: string, ownerPhone?: string) {
+function renderBlock(block: SiteBlock, primary: string, ownerName?: string, ownerPhone?: string, slug?: string) {
   switch (block.type) {
     case 'hero': return <HeroBlock key={block.id} block={block} primary={primary} />
     case 'search': return <SearchBlock key={block.id} block={block} primary={primary} />
@@ -743,7 +767,7 @@ function renderBlock(block: SiteBlock, primary: string, ownerName?: string, owne
     case 'team': return <TeamBlock key={block.id} block={block} primary={primary} ownerPhone={ownerPhone} />
     case 'stats': return <StatsBlock key={block.id} block={block} primary={primary} />
     case 'gallery': return <GalleryBlock key={block.id} block={block} primary={primary} />
-    case 'testimonials': return <TestimonialsBlock key={block.id} block={block} primary={primary} />
+    case 'testimonials': return <TestimonialsBlock key={block.id} block={block} primary={primary} ownerPhone={ownerPhone} slug={slug} />
     case 'cta': return <CtaBlock key={block.id} block={block} primary={primary} />
     case 'contact': return <ContactBlock key={block.id} block={block} primary={primary} />
     case 'footer': return <FooterBlock key={block.id} block={block} primary={primary} ownerName={ownerName} />
@@ -765,34 +789,9 @@ function menuPages(site: Site): { slug: string; label: string; home: boolean }[]
     .map(({ slug, label, home }) => ({ slug, label, home }))
 }
 
+// رپرِ نازکِ سازگار: ناوبری به مؤلفهٔ کلاینتِ NavBar واگذار می‌شود (همبرگرِ موبایل).
 function SiteNav({ site, primary, currentSlug }: { site: Site; primary: string; currentSlug: string }) {
-  const items = menuPages(site)
-  return (
-    <nav className="mjs-nav" style={{
-      background: 'color-mix(in srgb, var(--mjs-bg) 86%, transparent)', backdropFilter: 'blur(10px)',
-      borderBottom: '1px solid color-mix(in srgb, var(--mjs-text) 12%, transparent)',
-      padding: '0 clamp(16px,4vw,24px)', direction: 'rtl', position: 'sticky', top: 0, zIndex: 50,
-      boxShadow: '0 6px 24px -22px rgba(20,16,10,.7)',
-    }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 18, minHeight: 64 }}>
-        <a href={`/${site.slug}`} style={{ fontSize: 19, fontWeight: 900, color: 'var(--mjs-heading)', textDecoration: 'none', marginLeft: 'auto', letterSpacing: '-0.4px', flex: '0 0 auto' }}>{site.title}</a>
-        <div className="mjs-nav-items" style={{ display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto', flex: '1 1 auto', justifyContent: 'flex-start' }}>
-          {items.map(it => {
-            const href = it.home ? `/${site.slug}` : `/${site.slug}/${it.slug}`
-            const active = it.slug === currentSlug
-            return (
-              <a key={it.slug} href={href} className="mjs-navlink" style={{
-                fontSize: 14, fontWeight: active ? 800 : 600, textDecoration: 'none', whiteSpace: 'nowrap',
-                color: active ? '#fff' : 'var(--mjs-text)',
-                background: active ? primary : 'transparent',
-                padding: '9px 16px', borderRadius: 10,
-              }}>{it.label}</a>
-            )
-          })}
-        </div>
-      </div>
-    </nav>
-  )
+  return <NavBar brand={site.title} items={menuPages(site)} currentSlug={currentSlug} siteSlug={site.slug} primary={primary} />
 }
 
 // Shared full-site shell: nav + the given page's blocks. Used by both the home
@@ -842,8 +841,8 @@ export function SiteShell({ site, page }: { site: Site; page: SitePage }) {
           .mjs-footer-grid{grid-template-columns:1fr !important}
         }
       `}</style>
-      <SiteNav site={site} primary={primary} currentSlug={page.slug} />
-      {page.blocks.map(block => renderBlock(block, primary, site.ownerName, site.owner))}
+      <NavBar brand={site.title} items={menuPages(site)} currentSlug={page.slug} siteSlug={site.slug} primary={primary} />
+      {page.blocks.map(block => renderBlock(block, primary, site.ownerName, site.owner, site.slug))}
     </main>
   )
 }

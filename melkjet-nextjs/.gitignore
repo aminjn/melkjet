@@ -79,3 +79,5 @@ next-env.d.ts
 .listing-stats-data.json
 .pending-reg-data.json
 .profile-data.json
+
+.reviews-data.json
