@@ -10,7 +10,7 @@ export type Stage = 'new' | 'contacted' | 'visit' | 'negotiation' | 'closed' | '
 export type ListingStatus = 'active' | 'sold' | 'rented'
 export type ApptType = 'visit' | 'meeting' | 'call'
 export type ApptStatus = 'scheduled' | 'done' | 'canceled'
-export type CommStatus = 'pending' | 'paid'
+export type CommStatus = 'pending' | 'paid' | 'canceled'
 
 export interface Lead { id: string; name: string; phone?: string; need?: string; budget?: string; stage: Stage; source?: string; note?: string; createdAt: number }
 export interface Listing {
@@ -235,6 +235,12 @@ export function addCommission(o: string, input: { dealTitle: string; amount: num
   return c
 }
 export function deleteCommission(o: string, cid: string) { mutate(o, a => { a.commissions = a.commissions.filter(c => c.id !== cid) }) }
+// مبلغِ نهاییِ کمیسیون را ویرایش می‌کند (مثلاً وقتی معامله محقق شد و مبلغِ واقعی مشخص شد).
+export function setCommissionAmount(o: string, cid: string, amount: number): Commission | null {
+  let res: Commission | null = null
+  mutate(o, a => { const c = a.commissions.find(x => x.id === cid); if (!c) return; c.amount = Math.max(0, Math.round(Number(amount) || 0)); res = c })
+  return res
+}
 export function setCommissionStatus(o: string, cid: string, status: CommStatus): Commission | null {
   let res: Commission | null = null
   mutate(o, a => { const c = a.commissions.find(x => x.id === cid); if (!c) return; c.status = status; res = c })

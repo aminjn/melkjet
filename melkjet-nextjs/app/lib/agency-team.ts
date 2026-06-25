@@ -12,7 +12,8 @@ export interface AgencyAdvisorRow {
   photo: string
   listings: AgencyAdvisorListing[]
   counts: { total: number; active: number; sold: number; rented: number }
-  advisorCommission: number   // کلِ کمیسیونِ گزارش‌شدهٔ مشاور
+  leads: { total: number; open: number; recent: { name: string; need: string; stage: string }[] }
+  advisorCommission: number   // کلِ کمیسیونِ گزارش‌شدهٔ مشاور (محقق‌نشده‌ها حذف)
   paidCommission: number
   pendingCommission: number
   closedCount: number         // معاملاتِ بسته‌شده (فروخته/اجاره‌رفته)
@@ -32,7 +33,7 @@ function lastMonths(n: number): { key: string; label: string }[] {
   return out
 }
 
-export function agencyAdvisorFiles(agencyPhone: string): { rows: AgencyAdvisorRow[]; totals: { listings: number; active: number; sold: number; rented: number; advisorCommission: number; agencyCut: number }; income: MonthPoint[] } {
+export function agencyAdvisorFiles(agencyPhone: string): { rows: AgencyAdvisorRow[]; totals: { listings: number; active: number; sold: number; rented: number; leads: number; advisorCommission: number; agencyCut: number }; income: MonthPoint[] } {
   const cfg = getCommissionConfig(agencyPhone)
   const frame = lastMonths(6)
   const overall: Record<string, { amount: number; deals: number }> = {}
@@ -43,21 +44,31 @@ export function agencyAdvisorFiles(agencyPhone: string): { rows: AgencyAdvisorRo
     const value = per ? per.value : cfg.defaultValue
     let listings: AgencyAdvisorListing[] = []
     let advisorCommission = 0, paidCommission = 0, pendingCommission = 0, dealCount = 0
+    let leadsTotal = 0, leadsOpen = 0
+    let leadRecent: { name: string; need: string; stage: string }[] = []
     const perMonth: Record<string, { amount: number; deals: number }> = {}
     try {
       const ad = getAdvisor(phone)
       listings = (ad.listings || []).map(l => ({ id: l.id, title: l.title, location: l.location, price: l.price, deal: l.deal, status: l.status, ptype: l.ptype, createdAt: l.createdAt }))
         .sort((a, b) => b.createdAt - a.createdAt)
+      const ls = (ad.leads || [])
+      leadsTotal = ls.length
+      leadsOpen = ls.filter(l => l.stage !== 'closed' && l.stage !== 'lost').length
+      leadRecent = [...ls].sort((a, b) => b.createdAt - a.createdAt).slice(0, 6).map(l => ({ name: l.name, need: l.need || '', stage: l.stage }))
       for (const c of (ad.commissions || [])) {
+        if (c.status === 'canceled') continue   // محقق‌نشده → در محاسبه نمی‌آید
         const amt = c.amount || 0
-        advisorCommission += amt; if (c.status === 'paid') paidCommission += amt; else pendingCommission += amt
-        dealCount++
-        const cut = mode === 'percent' ? Math.round(amt * value / 100) : value
-        const k = monthKey(c.createdAt || Date.now())
-        if (!perMonth[k]) perMonth[k] = { amount: 0, deals: 0 }
-        perMonth[k].amount += cut; perMonth[k].deals += 1
-        if (!overall[k]) overall[k] = { amount: 0, deals: 0 }
-        overall[k].amount += cut; overall[k].deals += 1
+        advisorCommission += amt
+        if (c.status === 'paid') {
+          // فقط معاملاتِ محقق‌شده (پرداخت/بسته) سهمِ آژانس می‌سازند
+          paidCommission += amt; dealCount++
+          const cut = mode === 'percent' ? Math.round(amt * value / 100) : value
+          const k = monthKey(c.createdAt || Date.now())
+          if (!perMonth[k]) perMonth[k] = { amount: 0, deals: 0 }
+          perMonth[k].amount += cut; perMonth[k].deals += 1
+          if (!overall[k]) overall[k] = { amount: 0, deals: 0 }
+          overall[k].amount += cut; overall[k].deals += 1
+        } else pendingCommission += amt
       }
     } catch {}
     const counts = {
@@ -67,20 +78,22 @@ export function agencyAdvisorFiles(agencyPhone: string): { rows: AgencyAdvisorRo
       rented: listings.filter(l => l.status === 'rented').length,
     }
     const closedCount = counts.sold + counts.rented
-    const agencyCut = mode === 'percent' ? Math.round(advisorCommission * value / 100) : Math.round(value * dealCount)
+    // سهمِ آژانس فقط از کمیسیونِ محقق‌شده (paid) محاسبه می‌شود
+    const agencyCut = mode === 'percent' ? Math.round(paidCommission * value / 100) : Math.round(value * dealCount)
     const monthly: MonthPoint[] = frame.map(f => ({ key: f.key, label: f.label, amount: perMonth[f.key]?.amount || 0, deals: perMonth[f.key]?.deals || 0 }))
     let photo = ''
     try { const pr = getProfile(phone); photo = pr.logo || '' } catch {}
-    return { advisorPhone: phone, advisorName: m.advisorName, photo, listings, counts, advisorCommission, paidCommission, pendingCommission, closedCount, dealCount, monthly, rate: { mode, value, isDefault: !per }, agencyCut }
+    return { advisorPhone: phone, advisorName: m.advisorName, photo, listings, counts, leads: { total: leadsTotal, open: leadsOpen, recent: leadRecent }, advisorCommission, paidCommission, pendingCommission, closedCount, dealCount, monthly, rate: { mode, value, isDefault: !per }, agencyCut }
   })
   const totals = rows.reduce((t, r) => ({
     listings: t.listings + r.counts.total,
     active: t.active + r.counts.active,
     sold: t.sold + r.counts.sold,
     rented: t.rented + r.counts.rented,
+    leads: t.leads + r.leads.total,
     advisorCommission: t.advisorCommission + r.advisorCommission,
     agencyCut: t.agencyCut + r.agencyCut,
-  }), { listings: 0, active: 0, sold: 0, rented: 0, advisorCommission: 0, agencyCut: 0 })
+  }), { listings: 0, active: 0, sold: 0, rented: 0, leads: 0, advisorCommission: 0, agencyCut: 0 })
   const income: MonthPoint[] = frame.map(f => ({ key: f.key, label: f.label, amount: overall[f.key]?.amount || 0, deals: overall[f.key]?.deals || 0 }))
   return { rows, totals, income }
 }

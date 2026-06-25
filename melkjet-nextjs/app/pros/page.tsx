@@ -25,7 +25,7 @@ type Stage = 'new' | 'contacted' | 'visit' | 'negotiation' | 'closed' | 'lost'
 type ListingStatus = 'active' | 'sold' | 'rented'
 type ApptType = 'visit' | 'meeting' | 'call'
 type ApptStatus = 'scheduled' | 'done' | 'canceled'
-type CommStatus = 'pending' | 'paid'
+type CommStatus = 'pending' | 'paid' | 'canceled'
 
 interface Lead { id: string; name: string; phone?: string; need?: string; budget?: string; stage: Stage; source?: string; note?: string; createdAt: number }
 interface Listing {
@@ -272,7 +272,8 @@ export default function ProsPage() {
     } catch { alert('اتصال به سرور برقرار نشد') } finally { setBusy(false) }
   }
   const [dupWarn, setDupWarn] = useState('')
-  const [nc, setNc] = useState({ dealTitle: '', mode: 'amount' as 'amount' | 'percent', amount: '', percent: '', dealAmount: '' })
+  const [nc, setNc] = useState({ leadId: '', dealTitle: '', mode: 'amount' as 'amount' | 'percent', amount: '', percent: '', dealAmount: '' })
+  const [commAmt, setCommAmt] = useState<Record<string, string>>({})
   const [prof, setProf] = useState({ name: '', agency: '', title: '', bio: '', phone: '', areas: '', experience: '', photo: '', specialties: [] as string[] })
   const [specInput, setSpecInput] = useState('')
   const [myPhone, setMyPhone] = useState('')
@@ -775,9 +776,15 @@ export default function ProsPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                     <div style={{ flex: '2 1 220px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>معامله (از لیدها)</label>
-                      <select value={nc.dealTitle} onChange={e => setNc({ ...nc, dealTitle: e.target.value })} style={inputStyle}>
+                      <select value={nc.leadId} onChange={e => {
+                        const l = leads.find(x => x.id === e.target.value)
+                        const label = l ? `${l.name}${l.need ? ' — ' + l.need : ''}` : ''
+                        // مبلغِ معامله را خودکار از بودجهٔ لید پر کن (برای محاسبهٔ درصدی)
+                        const budget = (l?.budget || '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[^0-9]/g, '')
+                        setNc({ ...nc, leadId: e.target.value, dealTitle: label, dealAmount: budget || nc.dealAmount })
+                      }} style={inputStyle}>
                         <option value="">— انتخاب لید/معامله —</option>
-                        {leads.map(l => { const label = `${l.name}${l.need ? ' — ' + l.need : ''}`; return <option key={l.id} value={label}>{label}</option> })}
+                        {leads.map(l => { const label = `${l.name}${l.need ? ' — ' + l.need : ''}`; return <option key={l.id} value={l.id}>{label}</option> })}
                       </select>
                     </div>
                     {/* toggle: درصد / مبلغ ثابت */}
@@ -797,7 +804,7 @@ export default function ProsPage() {
                     </>}
                     <button disabled={busy || !nc.dealTitle.trim() || computed <= 0} onClick={async () => {
                       const ok = await post({ action: 'addCommission', dealTitle: nc.dealTitle.trim(), amount: nc.mode === 'amount' ? (Number(nc.amount) || 0) : 0, percent: nc.mode === 'percent' ? (Number(nc.percent) || 0) : undefined, dealAmount: nc.mode === 'percent' ? (Number(nc.dealAmount) || 0) : undefined })
-                      if (ok) setNc({ dealTitle: '', mode: nc.mode, amount: '', percent: '', dealAmount: '' })
+                      if (ok) setNc({ leadId: '', dealTitle: '', mode: nc.mode, amount: '', percent: '', dealAmount: '' })
                     }} style={goldBtn}>افزودن</button>
                   </div>
                 </div>
@@ -809,19 +816,32 @@ export default function ProsPage() {
                 <div style={{ fontWeight: 800, fontSize: 15 }}>کمیسیون‌ها</div>
                 <div style={{ fontSize: 13, color: 'var(--muted)' }}>در انتظار: <b style={{ color: 'var(--gold)' }}>{money(stats.kpis.pendingCommission)}</b> · پرداخت‌شده: <b style={{ color: '#34d399' }}>{money(stats.kpis.paidCommission)}</b></div>
               </div>
-              {commissions.length ? commissions.map(c => (
-                <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)' }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
+              {commissions.length ? commissions.map(c => {
+                const cColor = c.status === 'paid' ? '#34d399' : c.status === 'canceled' ? '#ef4444' : 'var(--gold)'
+                const amtVal = commAmt[c.id] ?? String(c.amount)
+                const dirty = (Number(amtVal) || 0) !== c.amount
+                return (
+                <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
+                  <div style={{ flex: '1 1 180px', minWidth: 0 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 700 }}>{c.dealTitle}</div>
                     <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{c.date}{c.percent ? ` · ${fa(c.percent)}٪ از ${money(c.dealAmount || 0)}` : ''}</div>
                   </div>
-                  <div style={{ fontWeight: 800, color: 'var(--gold)', fontSize: 14 }}>{money(c.amount)}</div>
-                  {c.status === 'pending'
-                    ? <button onClick={() => post({ action: 'setCommissionStatus', id: c.id, status: 'paid' })} style={{ ...actionBtn, color: '#34d399', borderColor: '#34d399' }}>علامت پرداخت</button>
-                    : <Pill label="پرداخت‌شده" color="#34d399" />}
+                  {/* مبلغِ نهایی — قابلِ ویرایش */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ fontSize: 10.5, color: 'var(--faint)' }}>مبلغِ نهایی</span>
+                    <input value={amtVal} onChange={e => setCommAmt({ ...commAmt, [c.id]: e.target.value.replace(/[^0-9]/g, '') })} style={{ ...inputStyle, width: 120, direction: 'ltr', textAlign: 'right', padding: '6px 9px', fontSize: 12, fontWeight: 700, color: 'var(--gold)' }} />
+                    {dirty && <button onClick={() => post({ action: 'setCommissionAmount', id: c.id, amount: Number(amtVal) || 0 })} style={{ ...actionBtn, color: 'var(--gold)', borderColor: 'var(--gold)', padding: '5px 9px' }}>✓</button>}
+                  </div>
+                  {/* وضعیت: محقق شد / محقق نشد / در انتظار */}
+                  <select value={c.status} onChange={e => post({ action: 'setCommissionStatus', id: c.id, status: e.target.value })} style={{ ...actionBtn, cursor: 'pointer', color: cColor, borderColor: cColor }}>
+                    <option value="pending" style={{ color: 'var(--text)' }}>در انتظار</option>
+                    <option value="paid" style={{ color: 'var(--text)' }}>محقق شد ✓</option>
+                    <option value="canceled" style={{ color: 'var(--text)' }}>محقق نشد ✕</option>
+                  </select>
                   <button onClick={() => post({ action: 'deleteCommission', id: c.id })} style={{ ...actionBtn, color: '#ef4444' }}>حذف</button>
                 </div>
-              )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>کمیسیونی ثبت نشده.</div>}
+                )
+              }) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>کمیسیونی ثبت نشده.</div>}
             </div>
           </div>}
 

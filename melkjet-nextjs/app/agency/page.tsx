@@ -33,8 +33,9 @@ interface Stats {
 type CommMode = 'percent' | 'amount'
 interface MonthPoint { key: string; label: string; amount: number; deals: number }
 interface AdvisorFileItem { id: string; title: string; location: string; price: number; deal: 'sale' | 'rent'; status: 'active' | 'sold' | 'rented'; ptype: string; createdAt: number }
-interface AdvisorRow { advisorPhone: string; advisorName: string; photo: string; listings: AdvisorFileItem[]; counts: { total: number; active: number; sold: number; rented: number }; advisorCommission: number; paidCommission: number; pendingCommission: number; closedCount: number; dealCount: number; monthly: MonthPoint[]; rate: { mode: CommMode; value: number; isDefault: boolean }; agencyCut: number }
-interface AdvisorFiles { rows: AdvisorRow[]; totals: { listings: number; active: number; sold: number; rented: number; advisorCommission: number; agencyCut: number }; income: MonthPoint[] }
+interface AdvisorLeadInfo { total: number; open: number; recent: { name: string; need: string; stage: string }[] }
+interface AdvisorRow { advisorPhone: string; advisorName: string; photo: string; listings: AdvisorFileItem[]; counts: { total: number; active: number; sold: number; rented: number }; leads: AdvisorLeadInfo; advisorCommission: number; paidCommission: number; pendingCommission: number; closedCount: number; dealCount: number; monthly: MonthPoint[]; rate: { mode: CommMode; value: number; isDefault: boolean }; agencyCut: number }
+interface AdvisorFiles { rows: AdvisorRow[]; totals: { listings: number; active: number; sold: number; rented: number; leads: number; advisorCommission: number; agencyCut: number }; income: MonthPoint[] }
 interface CommissionCfg { defaultMode: CommMode; defaultValue: number; perAgent: Record<string, { mode: CommMode; value: number }> }
 interface AgencyData { stats: Stats; agents: Agent[]; listings: Listing[]; leads: Lead[]; deals: Deal[]; advisorFiles?: AdvisorFiles; commission?: CommissionCfg }
 
@@ -552,14 +553,14 @@ export default function AgencyPage() {
             const dealLabel = (d: string) => d === 'sale' ? 'فروش' : 'اجاره'
             const badge = (label: string, color?: string) => <span style={{ fontSize: 11, fontWeight: 700, color: color || 'var(--muted)', background: color ? color + '1f' : 'var(--bg)', border: `1px solid ${color ? color + '55' : 'var(--line)'}`, borderRadius: 999, padding: '3px 10px', whiteSpace: 'nowrap' }}>{label}</span>
             const exportCsv = () => {
-              const head = ['مشاور', 'شماره', 'کل فایل', 'فعال', 'فروخته', 'اجاره‌رفته', 'کمیسیون مشاور (تومان)', 'پرداختی', 'معوق', 'نرخ آژانس', 'سهم آژانس (تومان)']
+              const head = ['مشاور', 'شماره', 'لیدها', 'لید باز', 'کل فایل', 'فعال', 'فروخته', 'اجاره‌رفته', 'کمیسیون محقق‌شده (تومان)', 'پرداختی', 'معوق', 'نرخ آژانس', 'سهم آژانس (تومان)']
               const q = (v: any) => `"${String(v).replace(/"/g, '""')}"`
               const lines = [head.map(q).join(',')]
               for (const r of rows) {
                 const rate = r.rate.mode === 'percent' ? `${r.rate.value}٪` : `${r.rate.value} هر معامله`
-                lines.push([r.advisorName, r.advisorPhone, r.counts.total, r.counts.active, r.counts.sold, r.counts.rented, r.advisorCommission, r.paidCommission, r.pendingCommission, rate, r.agencyCut].map(q).join(','))
+                lines.push([r.advisorName, r.advisorPhone, r.leads.total, r.leads.open, r.counts.total, r.counts.active, r.counts.sold, r.counts.rented, r.advisorCommission, r.paidCommission, r.pendingCommission, rate, r.agencyCut].map(q).join(','))
               }
-              if (t) lines.push(['جمع', '', t.listings, t.active, t.sold, t.rented, t.advisorCommission, '', '', '', t.agencyCut].map(q).join(','))
+              if (t) lines.push(['جمع', '', t.leads, '', t.listings, t.active, t.sold, t.rented, t.advisorCommission, '', '', '', t.agencyCut].map(q).join(','))
               const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' })
               const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `agency-commission-report.csv`; a.click(); URL.revokeObjectURL(url)
             }
@@ -571,8 +572,8 @@ export default function AgencyPage() {
               <div className="mjg-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12 }}>
                 <Kpi label="کلِ فایل‌ها" value={fa(t?.listings || 0)} />
                 <Kpi label="فعال" value={fa(t?.active || 0)} />
-                <Kpi label="فروخته/اجاره‌رفته" value={fa((t?.sold || 0) + (t?.rented || 0))} />
-                <Kpi label="کمیسیونِ مشاوران" value={money(t?.advisorCommission || 0)} />
+                <Kpi label="لیدهای مشاوران" value={fa(t?.leads || 0)} />
+                <Kpi label="کمیسیونِ محقق‌شده" value={money(t?.advisorCommission || 0)} />
                 <Kpi label="سهمِ آژانس" value={money(t?.agencyCut || 0)} />
               </div>
 
@@ -615,7 +616,8 @@ export default function AgencyPage() {
                         <div style={{ fontSize: 11.5, color: 'var(--gold)', direction: 'ltr', textAlign: 'right', fontFamily: '"JetBrains Mono", monospace' }}>{r.advisorPhone}</div>
                       </div>
                       <div style={{ display: 'flex', gap: 6, marginInlineStart: 'auto', flexWrap: 'wrap' }}>
-                        {badge(`کل ${fa(r.counts.total)}`)}
+                        {badge(`${fa(r.leads.total)} لید`, '#60a5fa')}
+                        {badge(`فایل ${fa(r.counts.total)}`)}
                         {badge(`فعال ${fa(r.counts.active)}`, LIST_COLOR.active)}
                         {badge(`فروخته ${fa(r.counts.sold)}`, LIST_COLOR.sold)}
                         {badge(`اجاره ${fa(r.counts.rented)}`, LIST_COLOR.rented)}
@@ -641,6 +643,23 @@ export default function AgencyPage() {
                         {!r.rate.isDefault && <button disabled={busy} onClick={() => { setCommEdit(prev => { const n = { ...prev }; delete n[r.advisorPhone]; return n }); post({ action: 'clearAgentCommission', advisorPhone: r.advisorPhone }) }} style={actionBtn}>پیش‌فرض</button>}
                       </div>
                     </div>
+
+                    {/* لیدهای این مشاور (از پنلِ خودش) */}
+                    {r.leads.total > 0 && (
+                      <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line)' }}>
+                        <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--muted)', marginBottom: 8 }}>لیدهای این مشاور <span style={{ color: 'var(--faint)', fontWeight: 400 }}>({fa(r.leads.open)} باز از {fa(r.leads.total)})</span></div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                          {r.leads.recent.map((l, i) => (
+                            <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 9, padding: '5px 10px' }}>
+                              <span style={{ width: 7, height: 7, borderRadius: '50%', background: STAGE_COLOR[l.stage as Stage] || 'var(--muted)' }} />
+                              <span style={{ fontWeight: 700 }}>{l.name}</span>
+                              {l.need ? <span style={{ color: 'var(--muted)' }}>· {l.need}</span> : null}
+                              <span style={{ color: 'var(--faint)' }}>· {STAGE_LABEL[l.stage as Stage] || l.stage}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {/* نمودارِ درآمدِ آژانس از این مشاور (۶ ماهِ اخیر) */}
                     {r.monthly.some(p => p.amount > 0) && (

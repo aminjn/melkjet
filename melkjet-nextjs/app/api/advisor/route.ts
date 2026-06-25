@@ -5,7 +5,7 @@ import { checkDuplicate, advisorScope } from '@/app/lib/duplicate-check'
 import {
   advisorStats, listLeads, listListings, listAppts, listCommissions,
   addLead, updateLead, setLeadStage, deleteLead, addListing, updateListing, setListingStatus, deleteListing, publishListing, unpublishListing,
-  addAppt, setApptStatus, addCommission, deleteCommission, setCommissionStatus, updateAdvisorProfile,
+  addAppt, setApptStatus, addCommission, deleteCommission, setCommissionStatus, setCommissionAmount, updateAdvisorProfile,
 } from '@/app/lib/advisor-store'
 
 // همهٔ دادهٔ پنل مشاور، مخصوص کاربرِ واردشده (per-profile).
@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
     case 'addCommission': if (!b.dealTitle) return NextResponse.json({ error: 'عنوان معامله الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, commission: addCommission(o, { dealTitle: String(b.dealTitle), amount: Number(b.amount) || 0, date: b.date, percent: Number(b.percent) || undefined, dealAmount: Number(b.dealAmount) || undefined }) })
     case 'deleteCommission': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); deleteCommission(o, String(b.id)); return NextResponse.json({ ok: true })
     case 'setCommissionStatus': { const c = setCommissionStatus(o, String(b.id), b.status); return c ? NextResponse.json({ ok: true, commission: c }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
+    case 'setCommissionAmount': { const c = setCommissionAmount(o, String(b.id), Number(b.amount) || 0); return c ? NextResponse.json({ ok: true, commission: c }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'updateProfile': return NextResponse.json({ ok: true, profile: updateAdvisorProfile(o, b.patch || {}) })
     default: return NextResponse.json({ error: 'عملیات نامعتبر' }, { status: 400 })
   }
