@@ -499,6 +499,12 @@ function SearchPageInner() {
       {/* محتوای اصلی */}
       <div className="mjs-grid" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 48px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, alignItems: 'start', minHeight: 'calc(100vh - 200px)' }}>
         <div style={{ paddingTop: 20, paddingLeft: 12 }}>
+          {/* نقشه روی موبایل (مثلِ دیوار) — بالای نتایج */}
+          <div className="mjs-map-mobile" style={{ height: 300, marginBottom: 14 }}>
+            <SearchMap view={mapView} pins={pins} city={mapArea || selectedCity || userArea} />
+          </div>
+          {/* «آگهی جدید اومد خبرم کن» */}
+          <NotifyBar count={shownProperties.length} criteria={{ city: selectedCity, area: mapArea || prefArea, deal: (dealType === 'پیش‌فروش' ? 'presale' : (dealType === 'اجاره' || dealType === 'رهن') ? 'rent' : 'sale'), kind: fKind, priceMax: fBudgetMax }} />
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
             <div style={{ fontSize: 14, color: 'var(--muted)' }}><span style={{ color: 'var(--gold)', fontWeight: 800, fontSize: 16 }}>{toPersianDigits(shownProperties.length)}</span> ملک پیدا شد{selectedCity ? <span style={{ color: 'var(--faint)' }}> · {selectedCity}</span> : ''}</div>
             <div style={{ fontSize: 13, color: 'var(--faint)' }}>مرتب‌سازی: <span style={{ color: 'var(--muted)' }}>{sortBy}</span></div>
@@ -556,6 +562,47 @@ function SearchPageInner() {
           <SearchMap view={mapView} pins={pins} city={mapArea || selectedCity || userArea} />
         </div>
       </div>
+    </div>
+  )
+}
+
+// «آگهی جدید اومد خبرم کن» — ذخیرهٔ جستجو + خبرِ آگهیِ جدید در گفتگوها و پیامک
+type Criteria = { city: string; area: string; deal: 'sale' | 'rent' | 'presale'; kind: string; priceMax: number }
+function NotifyBar({ count, criteria }: { count: number; criteria: Criteria }) {
+  const sig = [criteria.city || '', criteria.area || '', criteria.deal, criteria.kind || '', criteria.priceMax || 0].join('|')
+  const [on, setOn] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  useEffect(() => {
+    let alive = true
+    fetch('/api/saved-search').then(r => r.ok ? r.json() : null).then(d => { if (alive && d?.searches) setOn(d.searches.some((s: any) => s.sig === sig)) }).catch(() => {})
+    return () => { alive = false }
+  }, [sig])
+  const toggle = async () => {
+    if (busy) return
+    setBusy(true); setMsg('')
+    const next = !on
+    try {
+      const r = await fetch('/api/saved-search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: next ? 'add' : 'remove', city: criteria.city, area: criteria.area, deal: criteria.deal, kind: criteria.kind, priceMax: criteria.priceMax, label: [criteria.area, criteria.city].filter(Boolean).join('، ') }) })
+      const d = await r.json()
+      if (r.status === 401) { setMsg('برای فعال‌کردنِ هشدار وارد شوید…'); setTimeout(() => { window.location.href = '/auth' }, 900); return }
+      if (d.ok) { setOn(next); setMsg(next ? '✓ از این پس آگهیِ جدیدِ مطابق را در گفتگوها و پیامک خبر می‌دهیم.' : 'هشدار خاموش شد.') }
+      else setMsg(d.error || 'خطا')
+    } catch { setMsg('خطا در ارتباط') } finally { setBusy(false) }
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: '13px 16px', marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span style={{ fontSize: 18 }}>🔔</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 800 }}>آگهی جدید اومد خبرم کن</div>
+          <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{count > 0 ? `${count.toLocaleString('fa-IR')} ملک در این محدوده — ` : ''}با آمدنِ آگهیِ جدید، در گفتگوها و پیامک خبرت می‌کنیم.</div>
+        </div>
+        <button onClick={toggle} disabled={busy} aria-label="toggle" style={{ position: 'relative', width: 48, height: 28, borderRadius: 999, border: 'none', cursor: 'pointer', background: on ? 'linear-gradient(135deg,var(--gold2),var(--gold))' : 'var(--line2)', transition: 'background .2s', flexShrink: 0, opacity: busy ? 0.6 : 1 }}>
+          <span style={{ position: 'absolute', top: 3, insetInlineStart: on ? 23 : 3, width: 22, height: 22, borderRadius: '50%', background: '#fff', transition: 'inset-inline-start .2s', boxShadow: '0 1px 3px rgba(0,0,0,.3)' }} />
+        </button>
+      </div>
+      {msg && <div style={{ fontSize: 11.5, color: msg.startsWith('✓') ? '#5fd98a' : 'var(--gold)' }}>{msg}</div>}
     </div>
   )
 }

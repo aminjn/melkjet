@@ -58,6 +58,11 @@ export interface AdminData {
     pattern?: string     // کدِ پترنِ IPPanel برای ارسالِ سریعِ پیامک (اختیاری)
     patternVar?: string  // نامِ متغیرِ پترن (پیش‌فرض: message)
   }
+  alerts?: {             // هشدارِ «آگهی جدید اومد خبرم کن» — پیامک با پترن
+    enabled?: boolean
+    pattern?: string     // کدِ پترنِ IPPanel (اختیاری)
+    patternVar?: string  // نامِ متغیرِ پترن (پیش‌فرض: message)
+  }
   tracker?: {            // ترکر + پیامکِ هدفمندِ بازاریابی مجدد
     enabled?: boolean    // فعال/غیرفعال
     template?: string    // قالبِ پیام — متغیرها: %title% %url%

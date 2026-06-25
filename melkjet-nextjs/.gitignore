@@ -74,3 +74,4 @@ next-env.d.ts
 .contacts-data.json
 .comm-data.json
 .tracker-data.json
+.saved-search-data.json

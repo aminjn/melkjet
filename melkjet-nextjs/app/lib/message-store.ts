@@ -82,6 +82,23 @@ export function listForOwner(phone: string): Conversation[] {
   return load().conversations.filter(c => c.ownerPhone === phone).sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
+// پیامِ سیستمی از «ملک‌جت» به کاربر (مثلِ هشدارِ آگهیِ جدید). کاربر آن را در گفتگوها می‌بیند.
+const SYS_PHONE = 'melkjet-system'
+export function pushSystemMessage(buyerPhone: string, buyerName: string, text: string): Conversation {
+  const db = load()
+  let conv = db.conversations.find(c => c.buyerPhone === buyerPhone && c.ownerPhone === SYS_PHONE)
+  const now = Date.now()
+  if (!conv) {
+    conv = { id: id(), listingId: '__alerts__', listingTitle: 'اعلان‌های ملک‌جت', buyerPhone, buyerName, ownerPhone: SYS_PHONE, ownerName: 'ملک‌جت', messages: [], buyerUnread: 0, ownerUnread: 0, createdAt: now, updatedAt: now }
+    db.conversations.unshift(conv)
+  }
+  conv.messages.push({ from: 'owner', text, at: now })
+  conv.buyerUnread += 1
+  conv.updatedAt = now
+  save(db)
+  return conv
+}
+
 export function markRead(convId: string, phone: string) {
   const db = load()
   const conv = db.conversations.find(c => c.id === convId)

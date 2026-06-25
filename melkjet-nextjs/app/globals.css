@@ -105,7 +105,8 @@ body {
 @media(max-width:540px){.mj-feat-grid{grid-template-columns:1fr!important}}
 
 /* Search */
-@media(max-width:1040px){.mjs-map{display:none!important}.mjs-grid{grid-template-columns:1fr!important}.mjs-navlinks{display:none!important}}
+.mjs-map-mobile{display:none}
+@media(max-width:1040px){.mjs-map{display:none!important}.mjs-grid{grid-template-columns:1fr!important}.mjs-navlinks{display:none!important}.mjs-map-mobile{display:block!important}}
 @media(max-width:640px){.mjs-cards{grid-template-columns:1fr!important}.mjs-filterbar{flex-wrap:wrap!important}}
 
 /* Property */

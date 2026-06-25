@@ -2223,6 +2223,35 @@ function CommPackagesConfig() {
   )
 }
 
+// ─── New-listing alerts («آگهی جدید اومد خبرم کن») ──────────────────────────
+function AlertsConfig() {
+  const [f, setF] = useState({ enabled: false, pattern: '', patternVar: 'message' })
+  const [msg, setMsg] = useState('')
+  useEffect(() => { fetch('/api/admin/alerts-config').then(r => r.ok ? r.json() : null).then(d => { if (d) setF({ enabled: !!d.enabled, pattern: d.pattern || '', patternVar: d.patternVar || 'message' }) }) }, [])
+  const save = async () => { setMsg(''); const r = await fetch('/api/admin/alerts-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(f) }); const d = await r.json(); setMsg(r.ok ? '✓ ذخیره شد' : `⚠ ${d.error || 'خطا'}`) }
+  const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
+  const lab: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', marginBottom: 5, display: 'block', fontWeight: 600 }
+  return (
+    <Card style={{ marginBottom: 14 }}>
+      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>هشدارِ آگهیِ جدید («خبرم کن»)</div>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.9 }}>
+        وقتی کاربر روی «آگهی جدید اومد خبرم کن» می‌زند، جستجویش ذخیره می‌شود و با آمدنِ آگهیِ جدیدِ منطبق، یک پیام در «گفتگوها» از طرفِ ملک‌جت می‌گیرد. اگر اینجا فعال کنی، یک پیامک هم (با پترنِ سریع) برایش می‌رود.
+      </div>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13.5, fontWeight: 700, marginBottom: 12, cursor: 'pointer' }}>
+        <input type="checkbox" checked={f.enabled} onChange={e => setF({ ...f, enabled: e.target.checked })} style={{ width: 18, height: 18 }} /> ارسالِ پیامکِ هشدار فعال باشد
+      </label>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }} className="mjsa-2col">
+        <div><label style={lab}>کدِ پترن IPPanel (اختیاری)</label><input style={inp} placeholder="مثلاً 123456" value={f.pattern} onChange={e => setF({ ...f, pattern: e.target.value })} /></div>
+        <div><label style={lab}>نامِ متغیرِ پترن</label><input style={inp} placeholder="message" value={f.patternVar} onChange={e => setF({ ...f, patternVar: e.target.value })} /></div>
+      </div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <GoldButton onClick={save}>ذخیره</GoldButton>
+        {msg && <span style={{ fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</span>}
+      </div>
+    </Card>
+  )
+}
+
 // ─── Connections / integrations hub ────────────────────────────────────────
 function ConnectionsView() {
   return (
@@ -2233,6 +2262,7 @@ function ConnectionsView() {
       </Card>
       <NeshanConfig />
       <IPPanelConfig />
+      <AlertsConfig />
       <NegotiationConfig />
       <SmtpConfig />
       <ZarinpalConfig />
