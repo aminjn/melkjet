@@ -2,10 +2,9 @@
 
 import { useState, useEffect, useMemo, Suspense } from 'react'
 import Link from 'next/link'
-import { useSearchParams, useRouter } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import Nav from '@/app/components/Nav'
 import BannerSlot from '@/app/components/BannerSlot'
-import NeshanMap, { type MapPoint } from '@/app/components/NeshanMap'
 import { fetchContent, gradientFor, type ContentItem } from '@/app/lib/content-display'
 import { readLoc } from '@/app/components/LocationDetector'
 import { readCity } from '@/app/components/CitySelector'
@@ -30,7 +29,13 @@ function firstInt(s?: string): number | null { const m = faToEn(s || '').match(/
 // همهٔ امکاناتِ قابلِ تشخیص (برای فیلتر + تشخیصِ متن)
 const AMENITY_ALL = ['آسانسور', 'پارکینگ', 'انباری', 'بالکن', 'تراس', 'مبله', 'روف گاردن', 'استخر', 'سونا', 'جکوزی', 'لابی', 'سند تک‌برگ', 'بازسازی', 'نوساز']
 const AMENITY_FILTER = ['آسانسور', 'پارکینگ', 'انباری', 'بالکن', 'تراس', 'مبله', 'روف گاردن', 'استخر', 'لابی', 'نوساز']
-const PRICE_MAX = 500 // سقفِ اسلایدر (میلیارد تومان)؛ این مقدار = «بدون سقف»
+const PRICE_MAX = 500 // «بدون سقف»
+// گزینه‌های آمادهٔ فیلتر (دراپ‌داون — کاربر تایپ نمی‌کند)
+const PRICE_OPTS = [0.5, 1, 2, 3, 5, 7, 10, 15, 20, 30, 50, 70, 100, 200, 300]
+const AREA_OPTS = [40, 50, 60, 75, 90, 100, 120, 150, 180, 200, 250, 300, 400, 500]
+const FLOOR_OPTS = [1, 2, 3, 4, 5, 6, 8, 10, 15, 20]
+const YEAR_OPTS = Array.from({ length: 30 }, (_, i) => 1404 - i) // ۱۴۰۴ تا ۱۳۷۵
+const priceLabel = (n: number) => n < 1 ? `${(n * 1000).toLocaleString('fa-IR')} میلیون` : `${n.toLocaleString('fa-IR')} میلیارد`
 
 // واحدِ ملک (آپارتمان/ویلا/…) را از متن تشخیص می‌دهد
 function detectKind(text: string): string {
@@ -113,17 +118,19 @@ export default function SearchPage() {
 
 function SearchPageInner() {
   const searchParams = useSearchParams()
-  const router = useRouter()
   const initialQuery = searchParams.get('q') || ''
   const typeParam = (searchParams.get('type') || '').toLowerCase()
-  // تبِ معامله مستقیماً از URL خوانده می‌شود (منبعِ واحدِ حقیقت) — رفعِ باگِ ناوبریِ منو
-  const dealType = typeParam === 'rent' || typeParam === 'اجاره' ? 'اجاره'
-    : typeParam === 'presale' || typeParam === 'pre-sale' || typeParam === 'پیش‌فروش' ? 'پیش‌فروش'
-      : typeParam === 'mortgage' || typeParam === 'rahn' || typeParam === 'رهن' ? 'رهن'
-        : 'خرید'
+  const dealFromParam = (t: string) => t === 'rent' || t === 'اجاره' ? 'اجاره'
+    : t === 'presale' || t === 'pre-sale' || t === 'پیش‌فروش' ? 'پیش‌فروش'
+      : t === 'mortgage' || t === 'rahn' || t === 'رهن' ? 'رهن' : 'خرید'
+  // تبِ معامله = state (منبعِ واحدِ حقیقت برای فیلتر). از URL مقداردهیِ اولیه می‌شود،
+  // با کلیکِ تب فوراً عوض می‌شود (state) و آدرس‌بار هم با replaceState همگام می‌شود.
+  const [dealType, setDealType] = useState<string>(dealFromParam(typeParam))
+  useEffect(() => { setDealType(dealFromParam(typeParam)) }, [typeParam])
   const goDeal = (label: string) => {
+    setDealType(label)
     const slug = label === 'اجاره' ? 'rent' : label === 'پیش‌فروش' ? 'presale' : label === 'رهن' ? 'mortgage' : ''
-    router.replace('/search' + (slug ? `?type=${slug}` : ''), { scroll: false })
+    try { window.history.replaceState(null, '', '/search' + (slug ? `?type=${slug}` : '')) } catch {}
   }
 
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -249,9 +256,15 @@ function SearchPageInner() {
   const promotedIdSet = useMemo(() => new Set(promoted.map(p => p.id)), [promoted])
 
   // نقاطِ نقشه — فقط آگهی‌هایی که مختصاتِ واقعی دارند
-  const mapPoints: MapPoint[] = useMemo(() =>
-    shownProperties.filter(p => p.lat && p.lng).map(p => ({ id: p.id, lat: p.lat!, lng: p.lng!, title: p.title, price: p.price + ' تومان' })),
+  const mapPoints = useMemo(() =>
+    shownProperties.filter(p => p.lat && p.lng).map(p => ({ lat: p.lat!, lng: p.lng! })),
     [shownProperties])
+  // آدرسِ تصویرِ نقشهٔ استاتیکِ نشان (مطمئن): نقاطِ آگهی‌ها یا مرکزِ موقعیتِ کاربر
+  const mapSrc = useMemo(() => {
+    if (mapPoints.length) { const pts = mapPoints.slice(0, 25).map(p => `${p.lat},${p.lng}`).join(';'); return `/api/geo/static-map?pts=${pts}&w=720&h=1000&zoom=${mapPoints.length > 1 ? 12 : 15}` }
+    if (userLoc) return `/api/geo/static-map?lat=${userLoc.lat}&lng=${userLoc.lng}&w=720&h=1000&zoom=12`
+    return ''
+  }, [mapPoints, userLoc])
 
   // چیپ‌های تشخیصِ AI — فقط مواردِ واقعاً تشخیص‌داده‌شده
   const aiChips = useMemo(() => {
@@ -267,7 +280,7 @@ function SearchPageInner() {
 
   const resetFilters = () => { setKind(''); setBeds('همه'); setPriceMin(0); setPriceMax(PRICE_MAX); setAreaMin(0); setAreaMax(0); setFloorMin(0); setYearMin(0); setCheckedAmenities([]) }
 
-  const numInput: React.CSSProperties = { width: 92, height: 36, padding: '0 10px', borderRadius: 9, background: 'var(--bg)', border: '1px solid var(--line2)', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', textAlign: 'center' }
+  const selInput: React.CSSProperties = { height: 36, padding: '0 10px', borderRadius: 9, background: 'var(--bg)', border: '1px solid var(--line2)', color: 'var(--text)', fontSize: 12.5, fontFamily: 'inherit', outline: 'none', cursor: 'pointer' }
   const lab: React.CSSProperties = { fontSize: 13, color: 'var(--muted)', whiteSpace: 'nowrap', fontWeight: 600 }
 
   return (
@@ -329,19 +342,31 @@ function SearchPageInner() {
               </select>
             </div>
 
-            {/* قیمت + متراژ */}
+            {/* قیمت + متراژ — دراپ‌داون (بدون تایپ) */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={lab}>قیمت (میلیارد تومان):</span>
-                <input type="number" min={0} placeholder="از" value={priceMin || ''} onChange={e => setPriceMin(Math.max(0, +e.target.value || 0))} style={numInput} />
+                <span style={lab}>قیمت:</span>
+                <select value={priceMin || ''} onChange={e => setPriceMin(+e.target.value || 0)} style={selInput}>
+                  <option value="">از (حداقل)</option>
+                  {PRICE_OPTS.map(v => <option key={v} value={v}>از {priceLabel(v)}</option>)}
+                </select>
                 <span style={{ color: 'var(--faint)' }}>تا</span>
-                <input type="number" min={0} placeholder="بدون سقف" value={priceMax < PRICE_MAX ? priceMax : ''} onChange={e => { const v = +e.target.value || 0; setPriceMax(v > 0 ? v : PRICE_MAX) }} style={{ ...numInput, width: 104 }} />
+                <select value={priceMax < PRICE_MAX ? priceMax : ''} onChange={e => { const v = +e.target.value || 0; setPriceMax(v > 0 ? v : PRICE_MAX) }} style={selInput}>
+                  <option value="">بدون سقف</option>
+                  {PRICE_OPTS.map(v => <option key={v} value={v}>تا {priceLabel(v)}</option>)}
+                </select>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={lab}>متراژ (متر):</span>
-                <input type="number" min={0} placeholder="از" value={areaMin || ''} onChange={e => setAreaMin(Math.max(0, +e.target.value || 0))} style={numInput} />
+                <span style={lab}>متراژ:</span>
+                <select value={areaMin || ''} onChange={e => setAreaMin(+e.target.value || 0)} style={selInput}>
+                  <option value="">از (حداقل)</option>
+                  {AREA_OPTS.map(v => <option key={v} value={v}>از {toPersianDigits(v)} متر</option>)}
+                </select>
                 <span style={{ color: 'var(--faint)' }}>تا</span>
-                <input type="number" min={0} placeholder="تا" value={areaMax || ''} onChange={e => setAreaMax(Math.max(0, +e.target.value || 0))} style={numInput} />
+                <select value={areaMax || ''} onChange={e => setAreaMax(+e.target.value || 0)} style={selInput}>
+                  <option value="">تا (حداکثر)</option>
+                  {AREA_OPTS.map(v => <option key={v} value={v}>تا {toPersianDigits(v)} متر</option>)}
+                </select>
               </div>
             </div>
 
@@ -357,11 +382,17 @@ function SearchPageInner() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={lab}>حداقل طبقه:</span>
-                <input type="number" min={0} placeholder="—" value={floorMin || ''} onChange={e => setFloorMin(Math.max(0, +e.target.value || 0))} style={numInput} />
+                <select value={floorMin || ''} onChange={e => setFloorMin(+e.target.value || 0)} style={selInput}>
+                  <option value="">همه</option>
+                  {FLOOR_OPTS.map(v => <option key={v} value={v}>طبقه {toPersianDigits(v)} به بالا</option>)}
+                </select>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={lab}>ساخت از سال:</span>
-                <input type="number" min={0} placeholder="مثلاً ۱۳۹۵" value={yearMin || ''} onChange={e => setYearMin(Math.max(0, +e.target.value || 0))} style={{ ...numInput, width: 110 }} />
+                <select value={yearMin || ''} onChange={e => setYearMin(+e.target.value || 0)} style={selInput}>
+                  <option value="">همه</option>
+                  {YEAR_OPTS.map(v => <option key={v} value={v}>{toPersianDigits(v)} به بعد</option>)}
+                </select>
               </div>
             </div>
 
@@ -440,13 +471,27 @@ function SearchPageInner() {
         {/* نقشهٔ واقعیِ نشان */}
         <div className="map-panel mjs-map" style={{ position: 'sticky', top: 88, height: 'calc(100vh - 108px)', paddingTop: 20, paddingRight: 12 }}>
           <style>{`@media (max-width: 768px) { .map-panel { display: none !important; } }`}</style>
-          <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-            <NeshanMap points={mapPoints} center={userLoc || undefined} onSelect={(id) => { window.location.href = `/property/${id}` }} />
-            <div style={{ position: 'absolute', top: 14, right: 14, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)', borderRadius: 9, padding: '6px 12px', fontSize: 12, color: '#f0ede6', border: '1px solid rgba(255,255,255,.12)', zIndex: 500, pointerEvents: 'none' }}>
-              {mapPoints.length > 0 ? `${toPersianDigits(mapPoints.length)} ملک روی نقشه` : 'نقشهٔ منطقه'}
-            </div>
-          </div>
+          <SearchMap src={mapSrc} count={mapPoints.length} city={selectedCity || userArea} />
         </div>
+      </div>
+    </div>
+  )
+}
+
+// نقشهٔ استاتیکِ نشان (مطمئن) — نمای منطقه با مارکرِ آگهی‌ها
+function SearchMap({ src, count, city }: { src: string; count: number; city: string }) {
+  const [err, setErr] = useState(false)
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%', borderRadius: 16, overflow: 'hidden', border: '1px solid var(--line)', background: 'var(--bg2)' }}>
+      {src && !err ? (
+        <img src={src} alt="نقشهٔ منطقه" onError={() => setErr(true)} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+      ) : (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: 'var(--muted)', fontSize: 13, padding: 24, lineHeight: 1.9 }}>
+          {err ? 'نقشه به «کلید نقشهٔ نشان» (web.…) نیاز دارد — پنل سوپرادمین → اتصال‌ها → نشان → کلید نقشه' : 'برای نمایشِ نقشه، موقعیتِ شما یا مختصاتِ آگهی‌ها لازم است.'}
+        </div>
+      )}
+      <div style={{ position: 'absolute', top: 14, right: 14, background: 'rgba(0,0,0,0.62)', backdropFilter: 'blur(10px)', borderRadius: 9, padding: '6px 12px', fontSize: 12, color: '#f0ede6', border: '1px solid rgba(255,255,255,.12)', pointerEvents: 'none' }}>
+        {count > 0 ? `${count.toLocaleString('fa-IR')} ملک روی نقشه` : (city ? `نقشهٔ ${city}` : 'نقشهٔ منطقه')}
       </div>
     </div>
   )
