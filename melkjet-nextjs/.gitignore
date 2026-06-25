@@ -78,3 +78,4 @@ next-env.d.ts
 .push-data.json
 .listing-stats-data.json
 .pending-reg-data.json
+.profile-data.json

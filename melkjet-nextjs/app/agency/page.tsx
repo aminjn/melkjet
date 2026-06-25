@@ -12,6 +12,7 @@ import WorkflowTool, { WORKFLOW_VIEWS, type WorkflowView } from '@/app/component
 import WebsiteBuilderTool, { WEBSITE_VIEWS, type WebsiteView } from '@/app/components/tools/WebsiteBuilderTool'
 import ArticleEditor from '@/app/components/ArticleEditor'
 import PlansPanel from '@/app/components/PlansPanel'
+import BusinessProfileForm from '@/app/components/BusinessProfileForm'
 
 // ════════ Types (mirror app/lib/agency-store.ts) ════════
 type Stage = 'new' | 'assigned' | 'visit' | 'negotiation' | 'closed' | 'lost'
@@ -35,7 +36,7 @@ interface AgencyData { stats: Stats; agents: Agent[]; listings: Listing[]; leads
 interface LinkMember { advisorPhone: string; advisorName: string; agencyPhone: string; agencyName: string; since: number }
 interface LinkRequest { id: string; advisorPhone: string; advisorName: string; agencyPhone: string; agencyName: string; initiator: 'advisor' | 'agency'; status: string; createdAt: number }
 
-type View = 'dashboard' | 'assistant' | 'messages' | 'negotiation' | 'divar' | 'articles' | 'agents' | 'listings' | 'leads' | 'deals' | 'plans' | 'settings'
+type View = 'dashboard' | 'assistant' | 'messages' | 'negotiation' | 'divar' | 'articles' | 'agents' | 'listings' | 'leads' | 'deals' | 'plans' | 'profile' | 'settings'
 
 // ════════ Helpers ════════
 const FONT = 'Vazirmatn, system-ui, sans-serif'
@@ -62,7 +63,7 @@ const inputStyle: React.CSSProperties = { padding: '9px 11px', borderRadius: 9, 
 const actionBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap' }
 const goldBtn: React.CSSProperties = { padding: '9px 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }
 
-const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد آژانس', assistant: 'دستیار هوشمند', messages: 'پیام‌ها', negotiation: 'موتور مذاکره', divar: 'ایمپورت از دیوار', articles: 'مقالات و وبلاگ', agents: 'مشاوران', listings: 'فایل‌های آژانس', leads: 'لیدها', deals: 'معاملات', plans: 'پلن‌ها و اشتراک', settings: 'تنظیمات' }
+const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد آژانس', assistant: 'دستیار هوشمند', messages: 'پیام‌ها', negotiation: 'موتور مذاکره', divar: 'ایمپورت از دیوار', articles: 'مقالات و وبلاگ', agents: 'مشاوران', listings: 'فایل‌های آژانس', leads: 'لیدها', deals: 'معاملات', plans: 'پلن‌ها و اشتراک', profile: 'پروفایل', settings: 'تنظیمات' }
 const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'agents' | 'leads' }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: '▦' },
   { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
@@ -74,6 +75,7 @@ const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'agents' | 'le
   { id: 'leads', label: 'لیدها', icon: '◎', badge: 'leads' },
   { id: 'deals', label: 'معاملات', icon: '﷼' },
   { id: 'plans', label: 'پلن‌ها و اشتراک', icon: '👑' },
+  { id: 'profile', label: 'پروفایل', icon: '🪪' },
   { id: 'settings', label: 'تنظیمات', icon: '⛭' },
 ]
 function Pill({ label, color }: { label: string; color: string }) {
@@ -580,6 +582,9 @@ export default function AgencyPage() {
 
           {/* PLANS */}
           {view === 'plans' && <PlansPanel dashboard="/agency" />}
+
+          {/* PROFILE */}
+          {view === 'profile' && <BusinessProfileForm />}
 
           {/* SETTINGS */}
           {view === 'settings' && <div style={{ ...card, padding: 18, maxWidth: 480 }}>

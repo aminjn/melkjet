@@ -13,6 +13,7 @@ import PlansPanel from '@/app/components/PlansPanel'
 import LocationPicker from '@/app/components/LocationPicker'
 import JalaliDatePicker from '@/app/components/JalaliDatePicker'
 import NumberInput from '@/app/components/NumberInput'
+import BusinessProfileForm from '@/app/components/BusinessProfileForm'
 
 // درختِ جغرافیاییِ سایت (استان → شهر → منطقه → محله)
 interface GeoDistrict { id: string; name: string; neighborhoods: string[] }
@@ -49,7 +50,7 @@ interface Stats {
 }
 interface AdvisorData { stats: Stats; leads: Lead[]; listings: Listing[]; appts: Appt[]; commissions: Commission[] }
 
-type View = 'dashboard' | 'assistant' | 'messages' | 'leads' | 'listings' | 'divar' | 'negotiation' | 'articles' | 'appts' | 'calendar' | 'commissions' | 'agency' | 'plans' | 'settings'
+type View = 'dashboard' | 'assistant' | 'messages' | 'leads' | 'listings' | 'divar' | 'negotiation' | 'articles' | 'appts' | 'calendar' | 'commissions' | 'agency' | 'plans' | 'profile' | 'settings'
 
 interface DivarImport { token: string; listingId: string; title: string; url: string; at: number; published: boolean }
 interface DivarConfig {
@@ -104,7 +105,7 @@ const inputStyle: React.CSSProperties = { padding: '9px 11px', borderRadius: 9, 
 const actionBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap' }
 const goldBtn: React.CSSProperties = { padding: '9px 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }
 
-const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد مشاور', assistant: 'دستیار هوشمند', messages: 'پیام‌ها', leads: 'لیدها و پایپ‌لاین', listings: 'فایل‌های من', divar: 'ایمپورت از دیوار', negotiation: 'موتور مذاکره', articles: 'مقالات و وبلاگ', appts: 'قرارها و بازدیدها', calendar: 'تقویم', commissions: 'کمیسیون', agency: 'آژانس من', plans: 'پلن‌ها و اشتراک', settings: 'تنظیمات' }
+const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد مشاور', assistant: 'دستیار هوشمند', messages: 'پیام‌ها', leads: 'لیدها و پایپ‌لاین', listings: 'فایل‌های من', divar: 'ایمپورت از دیوار', negotiation: 'موتور مذاکره', articles: 'مقالات و وبلاگ', appts: 'قرارها و بازدیدها', calendar: 'تقویم', commissions: 'کمیسیون', agency: 'آژانس من', plans: 'پلن‌ها و اشتراک', profile: 'پروفایل', settings: 'تنظیمات' }
 const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'leads' | 'appts' }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: '▦' },
   { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
@@ -118,6 +119,7 @@ const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'leads' | 'app
   { id: 'commissions', label: 'کمیسیون', icon: '💰' },
   { id: 'agency', label: 'آژانس من', icon: '🏢' },
   { id: 'plans', label: 'پلن‌ها و اشتراک', icon: '👑' },
+  { id: 'profile', label: 'پروفایل', icon: '🪪' },
   { id: 'settings', label: 'تنظیمات', icon: '⛭' },
 ]
 
@@ -913,6 +915,9 @@ export default function ProsPage() {
 
           {/* PLANS */}
           {view === 'plans' && <PlansPanel dashboard="/pros" />}
+
+          {/* PROFILE */}
+          {view === 'profile' && <BusinessProfileForm />}
 
           {/* SETTINGS */}
           {view === 'settings' && <div style={{ ...card, padding: 18, maxWidth: 560 }}>
