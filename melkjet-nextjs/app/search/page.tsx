@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, Suspense } from 'react'
+import { useState, useEffect, useMemo, useRef, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import Nav from '@/app/components/Nav'
@@ -273,18 +273,13 @@ function SearchPageInner() {
   }, [promoted, sortedProperties, dealType, selectedCity])
   const promotedIdSet = useMemo(() => new Set(promoted.map(p => p.id)), [promoted])
 
-  // نقاطِ نقشه — فقط آگهی‌هایی که مختصاتِ واقعی دارند
-  const mapPoints = useMemo(() =>
-    shownProperties.filter(p => p.lat && p.lng).map(p => ({ lat: p.lat!, lng: p.lng! })),
-    [shownProperties])
-  // پرتکرارترین محلهٔ آگهی‌های نمایش‌داده‌شده (فقط از آگهی‌های واقعیِ همین شهر؛ بدونِ fallback به سابقهٔ شهرِ دیگر)
+  // پرتکرارترین محلهٔ آگهی‌های نمایش‌داده‌شده (برای مرکزِ نقشه وقتی هیچ پینی نیست)
   const mapArea = useMemo(() => {
     const counts: Record<string, number> = {}
     for (const p of shownProperties.slice(0, 40)) { const n = (p.location || '').split(/[،,]/)[0].trim(); if (n && n !== 'نامشخص') counts[n] = (counts[n] || 0) + 1 }
     return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || ''
   }, [shownProperties])
-  // مرکزِ نقشه: محلهٔ آگهی‌ها + شهر؛ اگر آگهی نبود، خودِ شهر (نقشهٔ شهر همیشه لود می‌شود).
-  // کشِ سمتِ کلاینت تا نقشهٔ هر شهر فقط یک‌بار geocode شود.
+  // مرکزِ نقشهٔ شهر/محله (geocode، با کش) — برای حالتی که آگهی مختصات ندارد
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null)
   useEffect(() => {
     const q = [mapArea, selectedCity].filter(Boolean).join(' ').trim()
@@ -297,13 +292,64 @@ function SearchPageInner() {
     }).catch(() => {})
     return () => { alive = false }
   }, [mapArea, selectedCity])
-  // آدرسِ تصویرِ نقشهٔ استاتیکِ نشان (مطمئن): مارکرِ آگهی‌ها، یا مرکزِ محلهٔ آگهی‌ها
-  const mapSrc = useMemo(() => {
-    if (mapPoints.length) { const pts = mapPoints.slice(0, 25).map(p => `${p.lat},${p.lng}`).join(';'); return `/api/geo/static-map?pts=${pts}&w=720&h=1000&zoom=${mapPoints.length > 1 ? 13 : 15}` }
-    const c = mapCenter || userLoc
-    if (c) return `/api/geo/static-map?lat=${c.lat}&lng=${c.lng}&w=720&h=1000&zoom=14`
-    return ''
-  }, [mapPoints, mapCenter, userLoc])
+
+  // ── پین‌کردنِ آگهی‌ها روی نقشه: مختصاتِ هر آگهی را از متا یا با geocodeِ محله‌اش می‌گیریم ──
+  const [locCoords, setLocCoords] = useState<Record<string, { lat: number; lng: number }>>({})
+  const needGeocode = useMemo(() => {
+    const set = new Set<string>()
+    for (const p of shownProperties.slice(0, 40)) { if (!(p.lat && p.lng) && p.location && p.location !== 'نامشخص') set.add(`${p.location.split(/[،,]/)[0].trim()} ${selectedCity || ''}`.trim()) }
+    return Array.from(set)
+  }, [shownProperties, selectedCity])
+  useEffect(() => {
+    const todo = needGeocode.filter(q => !GEO_CACHE.has(q))
+    const fromCache: Record<string, { lat: number; lng: number }> = {}
+    for (const q of needGeocode) { const c = GEO_CACHE.get(q); if (c) fromCache[q] = c }
+    if (Object.keys(fromCache).length) setLocCoords(prev => ({ ...prev, ...fromCache }))
+    if (!todo.length) return
+    let alive = true
+    fetch('/api/geo/geocode-batch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ queries: todo }) })
+      .then(r => r.ok ? r.json() : null).then(d => {
+        if (!alive || !d?.results) return
+        const add: Record<string, { lat: number; lng: number }> = {}
+        for (const [q, c] of Object.entries(d.results)) { if (c) { GEO_CACHE.set(q, c as any); add[q] = c as any } else GEO_CACHE.set(q, null as any) }
+        if (Object.keys(add).length) setLocCoords(prev => ({ ...prev, ...add }))
+      }).catch(() => {})
+    return () => { alive = false }
+  }, [needGeocode])
+
+  // پین‌ها (با jitterِ کوچک تا آگهی‌های هم‌محله روی هم نیفتند)
+  const pins = useMemo(() => {
+    const out: { id: string; lat: number; lng: number; price: string }[] = []
+    for (const p of shownProperties.slice(0, 40)) {
+      let lat = p.lat, lng = p.lng
+      if (!(lat && lng)) {
+        const key = `${(p.location || '').split(/[،,]/)[0].trim()} ${selectedCity || ''}`.trim()
+        const c = locCoords[key] || GEO_CACHE.get(key)
+        if (c) {
+          const h = seedNum(p.id)
+          lat = c.lat + (((h % 1000) / 1000 - 0.5) * 0.005)
+          lng = c.lng + ((((h >> 10) % 1000) / 1000 - 0.5) * 0.005)
+        }
+      }
+      if (lat && lng) out.push({ id: p.id, lat, lng, price: p.price })
+    }
+    return out
+  }, [shownProperties, locCoords, selectedCity])
+
+  // نمای نقشه (مرکز + زوم) — متناسب با گسترهٔ پین‌ها، وگرنه مرکزِ شهر/محله
+  const mapView = useMemo(() => {
+    if (pins.length) {
+      const lats = pins.map(p => p.lat), lngs = pins.map(p => p.lng)
+      const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLng = Math.min(...lngs), maxLng = Math.max(...lngs)
+      const center = { lat: (minLat + maxLat) / 2, lng: (minLng + maxLng) / 2 }
+      const span = Math.max(maxLat - minLat, maxLng - minLng, 0.004)
+      const zoom = Math.max(11, Math.min(15, Math.floor(Math.log2(360 / span)) - 1))
+      return { center, zoom }
+    }
+    if (mapCenter) return { center: mapCenter, zoom: 13 }
+    if (userLoc) return { center: userLoc, zoom: 12 }
+    return null
+  }, [pins, mapCenter, userLoc])
 
   // چیپ‌های تشخیصِ AI — فقط مواردِ واقعاً تشخیص‌داده‌شده
   const aiChips = useMemo(() => {
@@ -507,27 +553,70 @@ function SearchPageInner() {
         {/* نقشهٔ واقعیِ نشان */}
         <div className="map-panel mjs-map" style={{ position: 'sticky', top: 88, height: 'calc(100vh - 108px)', paddingTop: 20, paddingRight: 12 }}>
           <style>{`@media (max-width: 768px) { .map-panel { display: none !important; } }`}</style>
-          <SearchMap src={mapSrc} count={mapPoints.length} city={mapArea || selectedCity || userArea} />
+          <SearchMap view={mapView} pins={pins} city={mapArea || selectedCity || userArea} />
         </div>
       </div>
     </div>
   )
 }
 
-// نقشهٔ استاتیکِ نشان (مطمئن) — نمای منطقه با مارکرِ آگهی‌ها
-function SearchMap({ src, count, city }: { src: string; count: number; city: string }) {
+// تبدیلِ مختصات به پیکسلِ Web-Mercator (هم‌راستا با نقشهٔ استاتیکِ نشان)
+function project(lat: number, lng: number, zoom: number) {
+  const s = 256 * Math.pow(2, zoom)
+  const x = ((lng + 180) / 360) * s
+  const sin = Math.sin((lat * Math.PI) / 180)
+  const y = (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * s
+  return { x, y }
+}
+
+// نقشهٔ استاتیکِ نشان + پین‌های قابلِ کلیکِ آگهی‌ها (overlay دقیق با تصویرِ نقشه)
+type MapView = { center: { lat: number; lng: number }; zoom: number } | null
+function SearchMap({ view, pins, city }: { view: MapView; pins: { id: string; lat: number; lng: number; price: string }[]; city: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [size, setSize] = useState({ w: 0, h: 0 })
   const [err, setErr] = useState(false)
+  const [active, setActive] = useState<string | null>(null)
+
+  useEffect(() => {
+    const el = ref.current; if (!el) return
+    const measure = () => { const r = el.getBoundingClientRect(); setSize({ w: Math.min(1000, Math.round(r.width / 10) * 10), h: Math.min(1000, Math.round(r.height / 10) * 10) }) }
+    measure()
+    const ro = new ResizeObserver(measure); ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  useEffect(() => { setErr(false) }, [view?.center.lat, view?.center.lng, view?.zoom, size.w, size.h])
+
+  const ready = view && size.w > 0 && size.h > 0
+  const src = ready ? `/api/geo/static-map?lat=${view!.center.lat.toFixed(5)}&lng=${view!.center.lng.toFixed(5)}&w=${size.w}&h=${size.h}&zoom=${view!.zoom}` : ''
+  // محاسبهٔ پیکسلِ هر پین نسبت به مرکزِ نقشه
+  const placed = (ready && !err) ? pins.map(p => {
+    const pp = project(p.lat, p.lng, view!.zoom), pc = project(view!.center.lat, view!.center.lng, view!.zoom)
+    return { ...p, x: size.w / 2 + (pp.x - pc.x), y: size.h / 2 + (pp.y - pc.y) }
+  }).filter(p => p.x >= 4 && p.x <= size.w - 4 && p.y >= 4 && p.y <= size.h - 4) : []
+
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', borderRadius: 16, overflow: 'hidden', border: '1px solid var(--line)', background: 'var(--bg2)' }}>
+    <div ref={ref} style={{ position: 'relative', width: '100%', height: '100%', borderRadius: 16, overflow: 'hidden', border: '1px solid var(--line)', background: 'var(--bg2)' }}>
       {src && !err ? (
-        <img src={src} alt="نقشهٔ منطقه" onError={() => setErr(true)} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        <img src={src} alt="نقشهٔ منطقه" onError={() => setErr(true)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }} />
       ) : (
         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: 'var(--muted)', fontSize: 13, padding: 24, lineHeight: 1.9 }}>
           {err ? 'نقشه به «کلید نقشهٔ نشان» (web.…) نیاز دارد — پنل سوپرادمین → اتصال‌ها → نشان → کلید نقشه' : 'برای نمایشِ نقشه، موقعیتِ شما یا مختصاتِ آگهی‌ها لازم است.'}
         </div>
       )}
-      <div style={{ position: 'absolute', top: 14, right: 14, background: 'rgba(0,0,0,0.62)', backdropFilter: 'blur(10px)', borderRadius: 9, padding: '6px 12px', fontSize: 12, color: '#f0ede6', border: '1px solid rgba(255,255,255,.12)', pointerEvents: 'none' }}>
-        {count > 0 ? `${count.toLocaleString('fa-IR')} ملک روی نقشه` : (city ? `نقشهٔ ${city}` : 'نقشهٔ منطقه')}
+
+      {/* پین‌های قیمتِ آگهی‌ها */}
+      {placed.map(p => {
+        const on = active === p.id
+        return (
+          <a key={p.id} href={`/property/${p.id}`} onMouseEnter={() => setActive(p.id)} onMouseLeave={() => setActive(null)}
+            style={{ position: 'absolute', left: `${(p.x / size.w) * 100}%`, top: `${(p.y / size.h) * 100}%`, transform: `translate(-50%,-50%) scale(${on ? 1.12 : 1})`, padding: '4px 10px', borderRadius: 20, background: on ? 'linear-gradient(140deg,var(--gold2),var(--gold))' : 'rgba(10,9,8,0.9)', border: `2px solid ${on ? 'var(--gold2)' : 'var(--gold)'}`, color: on ? '#16140f' : '#f0ede6', fontSize: 11.5, fontWeight: 800, textDecoration: 'none', whiteSpace: 'nowrap', cursor: 'pointer', boxShadow: '0 2px 12px -3px rgba(0,0,0,.7)', zIndex: on ? 20 : 10, fontFamily: 'inherit' }}>
+            {p.price}
+          </a>
+        )
+      })}
+
+      <div style={{ position: 'absolute', top: 14, right: 14, background: 'rgba(0,0,0,0.62)', backdropFilter: 'blur(10px)', borderRadius: 9, padding: '6px 12px', fontSize: 12, color: '#f0ede6', border: '1px solid rgba(255,255,255,.12)', pointerEvents: 'none', zIndex: 30 }}>
+        {placed.length > 0 ? `${placed.length.toLocaleString('fa-IR')} ملک روی نقشه` : (city ? `نقشهٔ ${city}` : 'نقشهٔ منطقه')}
       </div>
     </div>
   )
