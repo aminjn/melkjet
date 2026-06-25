@@ -30,13 +30,18 @@ interface Stats {
   recentLeads: Lead[]
   recentDeals: Deal[]
 }
-interface AgencyData { stats: Stats; agents: Agent[]; listings: Listing[]; leads: Lead[]; deals: Deal[] }
+type CommMode = 'percent' | 'amount'
+interface AdvisorFileItem { id: string; title: string; location: string; price: number; deal: 'sale' | 'rent'; status: 'active' | 'sold' | 'rented'; ptype: string; createdAt: number }
+interface AdvisorRow { advisorPhone: string; advisorName: string; photo: string; listings: AdvisorFileItem[]; counts: { total: number; active: number; sold: number; rented: number }; advisorCommission: number; paidCommission: number; pendingCommission: number; closedCount: number; rate: { mode: CommMode; value: number; isDefault: boolean }; agencyCut: number }
+interface AdvisorFiles { rows: AdvisorRow[]; totals: { listings: number; active: number; sold: number; rented: number; advisorCommission: number; agencyCut: number } }
+interface CommissionCfg { defaultMode: CommMode; defaultValue: number; perAgent: Record<string, { mode: CommMode; value: number }> }
+interface AgencyData { stats: Stats; agents: Agent[]; listings: Listing[]; leads: Lead[]; deals: Deal[]; advisorFiles?: AdvisorFiles; commission?: CommissionCfg }
 
 // عضویت واقعی مشاور↔آژانس (mirror app/lib/agency-link-store.ts)
 interface LinkMember { advisorPhone: string; advisorName: string; agencyPhone: string; agencyName: string; since: number }
 interface LinkRequest { id: string; advisorPhone: string; advisorName: string; agencyPhone: string; agencyName: string; initiator: 'advisor' | 'agency'; status: string; createdAt: number }
 
-type View = 'dashboard' | 'assistant' | 'messages' | 'negotiation' | 'divar' | 'articles' | 'agents' | 'listings' | 'leads' | 'deals' | 'plans' | 'profile' | 'settings'
+type View = 'dashboard' | 'assistant' | 'messages' | 'negotiation' | 'divar' | 'articles' | 'agents' | 'advisorfiles' | 'listings' | 'leads' | 'deals' | 'plans' | 'profile' | 'settings'
 
 // ════════ Helpers ════════
 const FONT = 'Vazirmatn, system-ui, sans-serif'
@@ -63,7 +68,7 @@ const inputStyle: React.CSSProperties = { padding: '9px 11px', borderRadius: 9, 
 const actionBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap' }
 const goldBtn: React.CSSProperties = { padding: '9px 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }
 
-const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد آژانس', assistant: 'دستیار هوشمند', messages: 'پیام‌ها', negotiation: 'موتور مذاکره', divar: 'ایمپورت از دیوار', articles: 'مقالات و وبلاگ', agents: 'مشاوران', listings: 'فایل‌های آژانس', leads: 'لیدها', deals: 'معاملات', plans: 'پلن‌ها و اشتراک', profile: 'پروفایل', settings: 'تنظیمات' }
+const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد آژانس', assistant: 'دستیار هوشمند', messages: 'پیام‌ها', negotiation: 'موتور مذاکره', divar: 'ایمپورت از دیوار', articles: 'مقالات و وبلاگ', agents: 'مشاوران', advisorfiles: 'فایل‌ها و کمیسیونِ مشاوران', listings: 'فایل‌های آژانس', leads: 'لیدها', deals: 'معاملات', plans: 'پلن‌ها و اشتراک', profile: 'پروفایل', settings: 'تنظیمات' }
 const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'agents' | 'leads' }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: '▦' },
   { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
@@ -71,6 +76,7 @@ const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'agents' | 'le
   { id: 'negotiation', label: 'موتور مذاکره', icon: '🤝' },
   { id: 'divar', label: 'ایمپورت از دیوار', icon: '📥' },
   { id: 'agents', label: 'مشاوران', icon: '☷', badge: 'agents' },
+  { id: 'advisorfiles', label: 'فایل‌های مشاوران', icon: '🗂' },
   { id: 'listings', label: 'فایل‌ها', icon: '◫' },
   { id: 'leads', label: 'لیدها', icon: '◎', badge: 'leads' },
   { id: 'deals', label: 'معاملات', icon: '﷼' },
@@ -120,6 +126,9 @@ export default function AgencyPage() {
   const [nl, setNl] = useState({ name: '', phone: '', need: '', budget: '' })
   const [nd, setNd] = useState({ title: '', amount: '', agent: '', date: '' })
   const [prof, setProf] = useState({ name: '', branches: '' })
+  // ویرایشِ نرخِ کمیسیون (پیش‌فرض + per-advisor)
+  const [defComm, setDefComm] = useState<{ mode: CommMode; value: string }>({ mode: 'percent', value: '30' })
+  const [commEdit, setCommEdit] = useState<Record<string, { mode: CommMode; value: string }>>({})
   // عضویت واقعی مشاوران (advisor↔agency)
   const [members, setMembers] = useState<LinkMember[]>([])
   const [linkReqs, setLinkReqs] = useState<LinkRequest[]>([])
@@ -157,6 +166,8 @@ export default function AgencyPage() {
     } catch {} finally { setLoading(false) }
   }, [])
   useEffect(() => { refresh() }, [refresh])
+  // مقادیرِ نرخِ پیش‌فرض را با دادهٔ سرور هم‌گام کن
+  useEffect(() => { const c = data?.commission; if (c) setDefComm({ mode: c.defaultMode, value: String(c.defaultValue) }) }, [data?.commission?.defaultMode, data?.commission?.defaultValue])
   useEffect(() => { refreshLinks() }, [refreshLinks])
   useEffect(() => { fetch('/api/auth/profile', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d?.account?.name) setMyName(d.account.name) }).catch(() => {}) }, [])
 
@@ -498,6 +509,105 @@ export default function AgencyPage() {
               </div>
             </div>
           </div>
+          })()}
+
+          {/* ADVISOR FILES — فایل‌ها و کمیسیونِ مشاوران (از پنلِ خودِ مشاوران) */}
+          {view === 'advisorfiles' && (() => {
+            const af = data.advisorFiles
+            const rows = af?.rows || []
+            const t = af?.totals
+            const dealLabel = (d: string) => d === 'sale' ? 'فروش' : 'اجاره'
+            const badge = (label: string, color?: string) => <span style={{ fontSize: 11, fontWeight: 700, color: color || 'var(--muted)', background: color ? color + '1f' : 'var(--bg)', border: `1px solid ${color ? color + '55' : 'var(--line)'}`, borderRadius: 999, padding: '3px 10px', whiteSpace: 'nowrap' }}>{label}</span>
+            return <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.9 }}>این بخش فایل‌ها و کمیسیونِ مشاورانِ عضوِ آژانس را مستقیماً از پنلِ خودِ مشاوران نمایش می‌دهد و به‌روز است.</div>
+              <div className="mjg-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12 }}>
+                <Kpi label="کلِ فایل‌ها" value={fa(t?.listings || 0)} />
+                <Kpi label="فعال" value={fa(t?.active || 0)} />
+                <Kpi label="فروخته/اجاره‌رفته" value={fa((t?.sold || 0) + (t?.rented || 0))} />
+                <Kpi label="کمیسیونِ مشاوران" value={money(t?.advisorCommission || 0)} />
+                <Kpi label="سهمِ آژانس" value={money(t?.agencyCut || 0)} />
+              </div>
+
+              <div style={{ ...card, padding: 18 }}>
+                {sectionTitle('سهمِ پیش‌فرضِ آژانس از مشاوران')}
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                  <div style={{ flex: '1 1 200px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع</label><select value={defComm.mode} onChange={e => setDefComm({ ...defComm, mode: e.target.value as CommMode })} style={inputStyle}><option value="percent">درصدی از کمیسیونِ مشاور</option><option value="amount">مبلغِ ثابت به‌ازای هر معامله</option></select></div>
+                  <div style={{ flex: '1 1 140px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>{defComm.mode === 'percent' ? 'درصد (٪)' : 'مبلغ (تومان)'}</label><input value={defComm.value} onChange={e => setDefComm({ ...defComm, value: e.target.value.replace(/[^0-9]/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} /></div>
+                  <button disabled={busy} onClick={() => post({ action: 'setDefaultCommission', mode: defComm.mode, value: Number(defComm.value) || 0 })} style={goldBtn}>ذخیره</button>
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 8 }}>این نرخ برای مشاورانی که نرخِ اختصاصی ندارند اعمال می‌شود.</div>
+              </div>
+
+              {rows.length === 0 ? (
+                <div style={{ ...card, padding: 24, color: 'var(--faint)', textAlign: 'center', fontSize: 13.5 }}>هنوز مشاوری به آژانس متصل نیست. از بخشِ «مشاوران» مشاور دعوت کنید.</div>
+              ) : rows.map(r => {
+                const edit = commEdit[r.advisorPhone] || { mode: r.rate.mode, value: String(r.rate.value) }
+                const setEdit = (e: { mode: CommMode; value: string }) => setCommEdit(prev => ({ ...prev, [r.advisorPhone]: e }))
+                return (
+                  <div key={r.advisorPhone} style={{ ...card, padding: 0, overflow: 'hidden' }}>
+                    {/* هدرِ مشاور */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
+                      {r.photo
+                        // eslint-disable-next-line @next/next/no-img-element
+                        ? <img src={r.photo} alt="" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                        : <span style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--goldDim)', color: 'var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, flexShrink: 0 }}>{(r.advisorName || '?').trim().charAt(0)}</span>}
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 800, fontSize: 14.5 }}>{r.advisorName}</div>
+                        <div style={{ fontSize: 11.5, color: 'var(--gold)', direction: 'ltr', textAlign: 'right', fontFamily: '"JetBrains Mono", monospace' }}>{r.advisorPhone}</div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, marginInlineStart: 'auto', flexWrap: 'wrap' }}>
+                        {badge(`کل ${fa(r.counts.total)}`)}
+                        {badge(`فعال ${fa(r.counts.active)}`, LIST_COLOR.active)}
+                        {badge(`فروخته ${fa(r.counts.sold)}`, LIST_COLOR.sold)}
+                        {badge(`اجاره ${fa(r.counts.rented)}`, LIST_COLOR.rented)}
+                      </div>
+                    </div>
+
+                    {/* کمیسیون */}
+                    <div style={{ display: 'flex', gap: 18, padding: '12px 16px', borderBottom: '1px solid var(--line)', flexWrap: 'wrap', alignItems: 'flex-end', background: 'var(--bg)' }}>
+                      <div>
+                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>کمیسیونِ مشاور</div>
+                        <div style={{ fontSize: 16, fontWeight: 800 }}>{money(r.advisorCommission)}</div>
+                        <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 2 }}>پرداختی {money(r.paidCommission)} · معوق {money(r.pendingCommission)}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>سهمِ آژانس {r.rate.isDefault ? '(پیش‌فرض)' : ''}</div>
+                        <div style={{ fontSize: 16, fontWeight: 900, color: 'var(--gold)' }}>{money(r.agencyCut)}</div>
+                        <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 2 }}>{r.rate.mode === 'percent' ? `${fa(r.rate.value)}٪ از کمیسیون` : `${money(r.rate.value)} × ${fa(r.closedCount)} معامله`}</div>
+                      </div>
+                      <div style={{ marginInlineStart: 'auto', display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                        <div><label style={{ fontSize: 10.5, color: 'var(--muted)', display: 'block', marginBottom: 3 }}>نرخِ این مشاور</label><select value={edit.mode} onChange={e => setEdit({ ...edit, mode: e.target.value as CommMode })} style={{ ...inputStyle, width: 'auto', padding: '6px 9px', fontSize: 12 }}><option value="percent">درصدی</option><option value="amount">مبلغی</option></select></div>
+                        <input value={edit.value} onChange={e => setEdit({ ...edit, value: e.target.value.replace(/[^0-9]/g, '') })} style={{ ...inputStyle, width: 90, direction: 'ltr', textAlign: 'right', padding: '6px 9px', fontSize: 12 }} />
+                        <button disabled={busy} onClick={() => post({ action: 'setAgentCommission', advisorPhone: r.advisorPhone, mode: edit.mode, value: Number(edit.value) || 0 })} style={{ ...goldBtn, padding: '7px 14px', fontSize: 12 }}>ذخیره</button>
+                        {!r.rate.isDefault && <button disabled={busy} onClick={() => { setCommEdit(prev => { const n = { ...prev }; delete n[r.advisorPhone]; return n }); post({ action: 'clearAgentCommission', advisorPhone: r.advisorPhone }) }} style={actionBtn}>پیش‌فرض</button>}
+                      </div>
+                    </div>
+
+                    {/* فایل‌ها */}
+                    <div style={{ padding: '10px 16px' }}>
+                      {r.listings.length === 0 ? (
+                        <div style={{ fontSize: 12.5, color: 'var(--faint)', padding: '8px 0' }}>این مشاور هنوز فایلی ثبت نکرده است.</div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {r.listings.map(l => (
+                            <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 11px', background: 'var(--bg)', borderRadius: 9, flexWrap: 'wrap' }}>
+                              <span style={{ width: 8, height: 8, borderRadius: '50%', background: LIST_COLOR[l.status], flexShrink: 0 }} />
+                              <div style={{ flex: '1 1 150px', minWidth: 0 }}>
+                                <div style={{ fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.title}</div>
+                                <div style={{ fontSize: 11, color: 'var(--muted)' }}>{l.ptype}{l.location ? ` · ${l.location}` : ''}</div>
+                              </div>
+                              <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{dealLabel(l.deal)}</span>
+                              <span style={{ fontSize: 13, fontWeight: 800 }}>{money(l.price)}</span>
+                              {badge(LIST_LABEL[l.status], LIST_COLOR[l.status])}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           })()}
 
           {/* LISTINGS */}

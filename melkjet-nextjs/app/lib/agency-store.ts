@@ -22,6 +22,8 @@ export interface Listing { id: string; title: string; ptype: string; location: s
 export interface Lead { id: string; name: string; phone?: string; need?: string; budget?: string; stage: Stage; assignedTo?: string; createdAt: number }
 export interface Deal { id: string; title: string; amount: number; agent: string; date: string; createdAt: number }
 export interface MonthSale { month: string; amount: number }
+export type CommMode = 'percent' | 'amount'
+export interface CommissionConfig { defaultMode: CommMode; defaultValue: number; perAgent: Record<string, { mode: CommMode; value: number }> }
 
 export interface AgencyData {
   profile: { name: string; branches?: string }
@@ -30,6 +32,7 @@ export interface AgencyData {
   leads: Lead[]
   deals: Deal[]
   monthlySales: MonthSale[]
+  commission?: CommissionConfig   // سهمِ آژانس از کمیسیونِ مشاوران (پیش‌فرض + per-advisor)
   createdAt: number
 }
 
@@ -43,7 +46,26 @@ const LISTING_STATUSES: ListingStatus[] = ['active', 'sold', 'rented']
 
 function seed(): AgencyData {
   // حسابِ آژانس خالی شروع می‌شود — هیچ دادهٔ نمونه‌ای نیست؛ همه‌چیز واقعی است.
-  return { profile: { name: '', branches: '' }, agents: [], listings: [], leads: [], deals: [], monthlySales: [], createdAt: Date.now() }
+  return { profile: { name: '', branches: '' }, agents: [], listings: [], leads: [], deals: [], monthlySales: [], commission: { defaultMode: 'percent', defaultValue: 30, perAgent: {} }, createdAt: Date.now() }
+}
+
+// ── پیکربندیِ کمیسیونِ آژانس از مشاوران ──────────────────────────────────────
+export function getCommissionConfig(o: string): CommissionConfig {
+  const c = getAgency(o).commission
+  return { defaultMode: c?.defaultMode || 'percent', defaultValue: c?.defaultValue ?? 30, perAgent: c?.perAgent || {} }
+}
+export function setDefaultCommission(o: string, mode: CommMode, value: number): CommissionConfig {
+  const m: CommMode = mode === 'amount' ? 'amount' : 'percent'
+  const v = Math.max(0, Number(value) || 0)
+  return mutate(o, a => { a.commission = { ...getCommissionConfig(o), defaultMode: m, defaultValue: v } }).commission!
+}
+export function setAgentCommission(o: string, advisorPhone: string, mode: CommMode, value: number): CommissionConfig {
+  const m: CommMode = mode === 'amount' ? 'amount' : 'percent'
+  const v = Math.max(0, Number(value) || 0)
+  return mutate(o, a => { const cur = getCommissionConfig(o); a.commission = { ...cur, perAgent: { ...cur.perAgent, [String(advisorPhone)]: { mode: m, value: v } } } }).commission!
+}
+export function clearAgentCommission(o: string, advisorPhone: string): CommissionConfig {
+  return mutate(o, a => { const cur = getCommissionConfig(o); const pa = { ...cur.perAgent }; delete pa[String(advisorPhone)]; a.commission = { ...cur, perAgent: pa } }).commission!
 }
 // آیا این دادهٔ ذخیره‌شده همان نمونهٔ قدیمیِ دست‌نخورده است؟ (برای پاک‌سازیِ خودکار)
 function isLegacyDemo(d: AgencyData): boolean {

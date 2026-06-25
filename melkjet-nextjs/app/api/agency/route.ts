@@ -4,7 +4,9 @@ import {
   agencyStats, listAgents, listListings, listLeads, listDeals, getAgency,
   addAgent, toggleAgent, deleteAgent, addListing, setListingStatus, assignListing, deleteListing,
   addLead, assignLead, setLeadStage, deleteLead, addDeal, updateAgencyProfile, resolveAgencyName,
+  getCommissionConfig, setDefaultCommission, setAgentCommission, clearAgentCommission,
 } from '@/app/lib/agency-store'
+import { agencyAdvisorFiles } from '@/app/lib/agency-team'
 import { checkDuplicate, advisorScope } from '@/app/lib/duplicate-check'
 
 // همهٔ دادهٔ پنل آژانس، مخصوص کاربرِ واردشده (per-profile).
@@ -12,7 +14,10 @@ export async function GET() {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای مشاهده وارد شوید' }, { status: 401 })
   const o = s.phone
-  return NextResponse.json({ stats: agencyStats(o), agents: listAgents(o), listings: listListings(o), leads: listLeads(o), deals: listDeals(o) })
+  return NextResponse.json({
+    stats: agencyStats(o), agents: listAgents(o), listings: listListings(o), leads: listLeads(o), deals: listDeals(o),
+    advisorFiles: agencyAdvisorFiles(o), commission: getCommissionConfig(o),
+  }, { headers: { 'Cache-Control': 'no-store, private' } })
 }
 
 export async function POST(req: NextRequest) {
@@ -48,6 +53,9 @@ export async function POST(req: NextRequest) {
     case 'deleteLead': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); deleteLead(o, String(b.id)); return NextResponse.json({ ok: true })
     case 'addDeal': if (!b.title || !b.agent) return NextResponse.json({ error: 'عنوان و مشاور الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, deal: addDeal(o, { title: String(b.title), amount: Number(b.amount) || 0, agent: String(b.agent), date: String(b.date || '') }) })
     case 'updateProfile': return NextResponse.json({ ok: true, profile: updateAgencyProfile(o, b.patch || {}) })
+    case 'setDefaultCommission': return NextResponse.json({ ok: true, commission: setDefaultCommission(o, b.mode, Number(b.value) || 0) })
+    case 'setAgentCommission': if (!b.advisorPhone) return NextResponse.json({ error: 'مشاور الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, commission: setAgentCommission(o, String(b.advisorPhone), b.mode, Number(b.value) || 0) })
+    case 'clearAgentCommission': if (!b.advisorPhone) return NextResponse.json({ error: 'مشاور الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, commission: clearAgentCommission(o, String(b.advisorPhone)) })
     default: return NextResponse.json({ error: 'عملیات نامعتبر' }, { status: 400 })
   }
 }
