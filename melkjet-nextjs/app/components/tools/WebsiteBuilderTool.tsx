@@ -508,6 +508,24 @@ function BlockBody({ block, primary, myListings }: { block: Block; primary: stri
       </div>
     )
   }
+  if (t === 'team') {
+    return (
+      <div style={{ background: '#faf9f7', padding: '40px 28px', direction: 'rtl', textAlign: 'center' }}>
+        <div style={{ fontSize: 20, fontWeight: 800, color: '#1a1510', marginBottom: p.subheading ? 4 : 20 }}>{p.heading || 'مشاوران ما'}</div>
+        {p.subheading ? <div style={{ fontSize: 13, color: '#888', marginBottom: 22 }}>{p.subheading}</div> : null}
+        <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap' }}>
+          {[0, 1, 2].map(k => (
+            <div key={k} style={{ background: '#fff', border: '1px solid #eee', borderRadius: 16, padding: '20px 14px', width: 150, boxShadow: '0 6px 22px -16px rgba(0,0,0,.5)' }}>
+              <div style={{ width: 64, height: 64, borderRadius: '50%', margin: '0 auto 12px', background: `${primary}22`, border: `3px solid ${primary}` }} />
+              <div style={{ height: 9, width: '70%', background: '#e3e3e7', borderRadius: 4, margin: '0 auto 6px' }} />
+              <div style={{ height: 6, width: '45%', background: '#eee', borderRadius: 3, margin: '0 auto 12px' }} />
+              {p.showSites !== 'no' ? <div style={{ height: 22, width: '80%', borderRadius: 999, background: primary, margin: '0 auto', opacity: .85 }} /> : null}
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
   if (t === 'stats') {
     const items: any[] = Array.isArray(p.items) ? p.items : []
     return (
@@ -612,7 +630,7 @@ function BlockBody({ block, primary, myListings }: { block: Block; primary: stri
   )
 }
 
-function BlockPreview({ block, primary, selected, onSelect, onUp, onDown, onDelete, myListings }: {
+function BlockPreview({ block, primary, selected, onSelect, onUp, onDown, onDelete, myListings, enableDrag, isDragging, isDragOver, onDragStartBlock, onDragEnterBlock, onDropBlock, onDragEndBlock, bigControls }: {
   block: Block
   primary: string
   selected: boolean
@@ -621,12 +639,29 @@ function BlockPreview({ block, primary, selected, onSelect, onUp, onDown, onDele
   onDown: () => void
   onDelete: () => void
   myListings?: { title: string; location?: string; price?: string; image?: string }[]
+  enableDrag?: boolean
+  isDragging?: boolean
+  isDragOver?: boolean
+  onDragStartBlock?: () => void
+  onDragEnterBlock?: () => void
+  onDropBlock?: () => void
+  onDragEndBlock?: () => void
+  bigControls?: boolean
 }) {
   const [hovered, setHovered] = useState(false)
   const showControls = hovered || selected
+  const btn = bigControls ? 30 : 22
+  const ctrlBtn: React.CSSProperties = { width: btn, height: btn, borderRadius: 6, border: 'none', color: '#fff', cursor: 'pointer', fontSize: bigControls ? 14 : 11, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }
 
   return (
     <div
+      className="mjwb-blockwrap"
+      draggable={enableDrag}
+      onDragStart={e => { if (!enableDrag) return; e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', String(block.id)) } catch {}; onDragStartBlock?.() }}
+      onDragOver={e => { if (enableDrag) e.preventDefault() }}
+      onDragEnter={e => { if (!enableDrag) return; e.preventDefault(); onDragEnterBlock?.() }}
+      onDrop={e => { if (!enableDrag) return; e.preventDefault(); onDropBlock?.() }}
+      onDragEnd={() => onDragEndBlock?.()}
       onClick={onSelect}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -634,7 +669,9 @@ function BlockPreview({ block, primary, selected, onSelect, onUp, onDown, onDele
         position: 'relative',
         border: selected ? '2px solid var(--gold)' : '2px solid transparent',
         cursor: 'pointer',
-        transition: 'border-color .15s',
+        transition: 'border-color .15s, box-shadow .12s, opacity .12s',
+        opacity: isDragging ? 0.4 : 1,
+        boxShadow: isDragOver ? 'inset 0 4px 0 0 var(--gold)' : 'none',
       }}
     >
       {showControls && (
@@ -642,14 +679,15 @@ function BlockPreview({ block, primary, selected, onSelect, onUp, onDown, onDele
           position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
           display: 'flex', alignItems: 'center',
           background: selected ? 'var(--gold)' : 'rgba(0,0,0,0.78)',
-          padding: '4px 10px', gap: 6,
+          padding: bigControls ? '6px 10px' : '4px 10px', gap: 6,
         }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: selected ? '#16140f' : '#fff', flex: 1 }}>
+          {enableDrag && <span title="برای جابه‌جایی بکشید" style={{ cursor: 'grab', color: selected ? '#16140f' : '#fff', fontSize: 14, lineHeight: 1, opacity: 0.8, flexShrink: 0 }}>⠿</span>}
+          <span style={{ fontSize: bigControls ? 12.5 : 11, fontWeight: 700, color: selected ? '#16140f' : '#fff', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {BLOCK_LIBRARY.find(b => b.type === block.type)?.label || block.type}
           </span>
-          <button onClick={e => { e.stopPropagation(); onUp() }} style={{ width: 22, height: 22, borderRadius: 5, border: 'none', background: 'rgba(255,255,255,0.2)', color: '#fff', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>▲</button>
-          <button onClick={e => { e.stopPropagation(); onDown() }} style={{ width: 22, height: 22, borderRadius: 5, border: 'none', background: 'rgba(255,255,255,0.2)', color: '#fff', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>▼</button>
-          <button onClick={e => { e.stopPropagation(); onDelete() }} style={{ width: 22, height: 22, borderRadius: 5, border: 'none', background: 'rgba(220,60,60,0.55)', color: '#fff', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+          <button title="بالا" onClick={e => { e.stopPropagation(); onUp() }} style={{ ...ctrlBtn, background: 'rgba(255,255,255,0.22)' }}>▲</button>
+          <button title="پایین" onClick={e => { e.stopPropagation(); onDown() }} style={{ ...ctrlBtn, background: 'rgba(255,255,255,0.22)' }}>▼</button>
+          <button title="حذف" onClick={e => { e.stopPropagation(); onDelete() }} style={{ ...ctrlBtn, background: 'rgba(220,60,60,0.6)' }}>×</button>
         </div>
       )}
       <BlockBody block={block} primary={primary} myListings={myListings} />
@@ -732,6 +770,20 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
   const [history, setHistory] = useState<Block[][]>([])
   const [theme, setTheme] = useState<Theme>({ ...DEFAULT_THEME })
   const [uploadingKey, setUploadingKey] = useState<string | null>(null)
+  // کشیدن‌ورها کردنِ بلوک‌ها (دسکتاپ) + شیت‌های موبایل + کشیدنِ کارت‌های فهرست
+  const [dragId, setDragId] = useState<number | null>(null)
+  const [dragOverId, setDragOverId] = useState<number | null>(null)
+  const [isMobile, setIsMobile] = useState(false)
+  const [mobileSheet, setMobileSheet] = useState<'none' | 'lib' | 'insp'>('none')
+  const [listDrag, setListDrag] = useState<{ key: string; idx: number } | null>(null)
+  const [listDragOver, setListDragOver] = useState<{ key: string; idx: number } | null>(null)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return
+    const mq = window.matchMedia('(max-width: 1000px)')
+    const on = () => setIsMobile(mq.matches)
+    on(); mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [])
 
   // اسکوپ خودکار قالب‌ها بر اساس نقش کاربر واردشده + نام کاربر (برای «آگهی‌های من»)
   useEffect(() => {
@@ -804,6 +856,7 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
     setBlocks(prev => [...prev, nb])
     setSelectedBlock(nb.id)
     setActiveTab('settings')
+    if (isMobile) setMobileSheet('insp')
   }
 
   const loadTemplate = (tpl: typeof STARTER_TEMPLATES[0]) => {
@@ -841,6 +894,36 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
       ;[arr[idx], arr[next]] = [arr[next], arr[idx]]
       return arr
     })
+  }
+
+  // جابه‌جاییِ بلوک با کشیدن‌ورها کردن: بلوکِ مبدأ را پیشِ بلوکِ مقصد می‌نشاند.
+  const reorderBlocks = (fromId: number, toId: number) => {
+    if (fromId === toId) return
+    pushHistory(blocks)
+    setBlocks(prev => {
+      const from = prev.findIndex(b => b.id === fromId)
+      const to = prev.findIndex(b => b.id === toId)
+      if (from < 0 || to < 0) return prev
+      const arr = [...prev]
+      const [moved] = arr.splice(from, 1)
+      arr.splice(to, 0, moved)
+      return arr
+    })
+    setDragId(null); setDragOverId(null)
+  }
+
+  // جابه‌جاییِ کارت‌های یک فهرست (خدمات/نظرات/گالری/تیم) با کشیدن‌ورها کردن.
+  const reorderListItem = (id: number, key: string, from: number, to: number) => {
+    if (from === to) return
+    setBlocks(prev => prev.map(b => {
+      if (b.id !== id) return b
+      const arr = Array.isArray(b.props[key]) ? [...b.props[key]] : []
+      if (from < 0 || from >= arr.length || to < 0 || to >= arr.length) return b
+      const [m] = arr.splice(from, 1)
+      arr.splice(to, 0, m)
+      return { ...b, props: { ...b.props, [key]: arr } }
+    }))
+    setListDrag(null); setListDragOver(null)
   }
 
   const undo = () => {
@@ -906,6 +989,17 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
   const selectedBlockObj = blocks.find(b => b.id === selectedBlock) || null
 
   const canvasWidth: string | number = device === 'mobile' ? 375 : device === 'tablet' ? 768 : '100%'
+
+  // در موبایل، پنل‌های کناری به «شیتِ کشویی از پایین» تبدیل می‌شوند.
+  const sheetStyle = (open: boolean): React.CSSProperties => ({
+    position: 'fixed', left: 0, right: 0, bottom: 0, top: 'auto', width: 'auto',
+    height: '76vh', maxHeight: '76vh', zIndex: 320,
+    borderRadius: '20px 20px 0 0', borderLeft: 'none', borderRight: 'none',
+    borderTop: '1px solid var(--line2)', boxShadow: '0 -16px 50px rgba(0,0,0,.55)',
+    transform: open ? 'translateY(0)' : 'translateY(110%)',
+    transition: 'transform .3s cubic-bezier(.2,.85,.25,1)',
+    paddingBottom: 'env(safe-area-inset-bottom)',
+  })
 
   // ── Page management (real pages) ───────────────────────────────────────────
   // Ensure a slug is url-safe and unique within the site (skipping `skipIdx`).
@@ -1108,7 +1202,14 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
         <div className="mjwb-lib" style={{
           width: 230, flexShrink: 0, borderLeft: '1px solid var(--line)',
           background: 'var(--bg2)', overflowY: 'auto', padding: '16px 0',
+          ...(isMobile ? sheetStyle(mobileSheet === 'lib') : {}),
         }}>
+          {isMobile && (
+            <div style={{ position: 'sticky', top: 0, zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--bg2)', borderBottom: '1px solid var(--line)', marginBottom: 6 }}>
+              <span style={{ fontSize: 14, fontWeight: 800 }}>افزودنِ بخش</span>
+              <button onClick={() => setMobileSheet('none')} style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--text)', fontSize: 17, cursor: 'pointer' }}>×</button>
+            </div>
+          )}
           <div style={{ padding: '0 14px', marginBottom: 4 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', marginBottom: 8 }}>شروع سریع</div>
             <button
@@ -1151,7 +1252,7 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
         </div>
 
         {/* CENTER - Canvas */}
-        <div style={{
+        <div className="mjwb-canvaswrap" style={{
           flex: 1, background: 'var(--bg)', overflowY: 'auto', overflowX: 'auto',
           display: 'flex', flexDirection: 'column',
           alignItems: device !== 'desktop' ? 'center' : 'stretch',
@@ -1198,9 +1299,10 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
                 <div style={{ height: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 14 }}>
                   <div style={{ fontSize: 44, opacity: 0.15 }}>◈</div>
                   <div style={{ fontSize: 14, color: 'var(--faint)', textAlign: 'center', lineHeight: 1.8 }}>
-                    از پنل سمت راست یک قالب انتخاب کنید<br />
-                    <span style={{ fontSize: 12 }}>یا بلوک‌ها را یکی یکی اضافه نمایید</span>
+                    یک قالبِ آماده انتخاب کنید<br />
+                    <span style={{ fontSize: 12 }}>یا بخش‌ها را یکی‌یکی اضافه نمایید — سپس با کشیدن جابه‌جا کنید</span>
                   </div>
+                  {isMobile && <button onClick={() => setMobileSheet('lib')} style={{ marginTop: 4, padding: '11px 22px', borderRadius: 11, border: 'none', background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 13.5, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>＋ افزودنِ بخش</button>}
                 </div>
               ) : (
                 blocks.map(block => (
@@ -1212,11 +1314,20 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
                     onSelect={() => {
                       setSelectedBlock(block.id)
                       setActiveTab('settings')
+                      if (isMobile) setMobileSheet('insp')
                     }}
                     onUp={() => moveBlock(block.id, -1)}
                     onDown={() => moveBlock(block.id, 1)}
                     onDelete={() => deleteBlock(block.id)}
                     myListings={myListings}
+                    enableDrag={!isMobile}
+                    bigControls={isMobile}
+                    isDragging={dragId === block.id}
+                    isDragOver={dragOverId === block.id && dragId !== block.id}
+                    onDragStartBlock={() => setDragId(block.id)}
+                    onDragEnterBlock={() => { if (dragId !== null && dragId !== block.id) setDragOverId(block.id) }}
+                    onDropBlock={() => { if (dragId !== null) reorderBlocks(dragId, block.id) }}
+                    onDragEndBlock={() => { setDragId(null); setDragOverId(null) }}
                   />
                 ))
               )}
@@ -1228,7 +1339,14 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
         <div className="mjwb-insp" style={{
           width: 288, flexShrink: 0, borderRight: '1px solid var(--line)',
           background: 'var(--bg2)', display: 'flex', flexDirection: 'column',
+          ...(isMobile ? sheetStyle(mobileSheet === 'insp') : {}),
         }}>
+          {isMobile && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--line)', flexShrink: 0 }}>
+              <span style={{ fontSize: 14, fontWeight: 800 }}>ویرایش و تنظیمات</span>
+              <button onClick={() => setMobileSheet('none')} style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--text)', fontSize: 17, cursor: 'pointer' }}>×</button>
+            </div>
+          )}
           {/* Tabs */}
           <div style={{ display: 'flex', borderBottom: '1px solid var(--line)', flexShrink: 0 }}>
             {([
@@ -1409,8 +1527,14 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
                             <label style={{ fontSize: 11, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>{field.label}</label>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                               {arr.map((item, idx) => (
-                                <div key={idx} style={{ border: '1px solid var(--line)', borderRadius: 9, padding: 8, background: 'var(--surface)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                  <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                                <div key={idx}
+                                  onDragOver={e => { if (listDrag && listDrag.key === field.key) e.preventDefault() }}
+                                  onDragEnter={e => { if (listDrag && listDrag.key === field.key && listDrag.idx !== idx) { e.preventDefault(); setListDragOver({ key: field.key, idx }) } }}
+                                  onDrop={e => { if (listDrag && listDrag.key === field.key) { e.preventDefault(); reorderListItem(id, field.key, listDrag.idx, idx) } }}
+                                  style={{ border: `1px solid ${listDragOver && listDragOver.key === field.key && listDragOver.idx === idx ? 'var(--gold)' : 'var(--line)'}`, borderRadius: 9, padding: 8, background: 'var(--surface)', display: 'flex', flexDirection: 'column', gap: 6, opacity: listDrag && listDrag.key === field.key && listDrag.idx === idx ? 0.4 : 1, transition: 'border-color .12s, opacity .12s' }}>
+                                  <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                                    <span draggable onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', String(idx)) } catch {}; setListDrag({ key: field.key, idx }) }} onDragEnd={() => { setListDrag(null); setListDragOver(null) }} title="برای جابه‌جایی بکشید" style={{ cursor: 'grab', color: 'var(--faint)', fontSize: 14, lineHeight: 1, padding: '0 2px' }}>⠿</span>
+                                    <span style={{ flex: 1 }} />
                                     <button onClick={() => moveListItem(id, field.key, idx, -1)} style={LIST_BTN}>▲</button>
                                     <button onClick={() => moveListItem(id, field.key, idx, 1)} style={LIST_BTN}>▼</button>
                                     <button onClick={() => removeListItem(id, field.key, idx)} style={{ ...LIST_BTN, color: '#e05050' }}>×</button>
@@ -1579,6 +1703,18 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
           </div>
         </div>
       </div>
+
+      {/* MOBILE: backdrop + bottom action bar (پنل‌ها به‌صورتِ شیتِ کشویی) */}
+      {isMobile && mobileSheet !== 'none' && (
+        <div onClick={() => setMobileSheet('none')} style={{ position: 'fixed', inset: 0, zIndex: 310, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(2px)' }} />
+      )}
+      {isMobile && mobileSheet === 'none' && (
+        <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 300, display: 'flex', gap: 8, padding: '10px 12px calc(10px + env(safe-area-inset-bottom))', background: 'var(--navbg)', borderTop: '1px solid var(--line2)', boxShadow: '0 -8px 30px rgba(0,0,0,.4)', backdropFilter: 'blur(20px)' }}>
+          <button className="mjwb-mbtn" onClick={() => setMobileSheet('lib')} style={{ flex: 1, padding: '11px 8px', borderRadius: 12, border: 'none', background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 13, fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer', transition: 'transform .1s' }}>＋ بخش‌ها</button>
+          <button className="mjwb-mbtn" onClick={() => setTplModal(true)} style={{ flex: 1, padding: '11px 8px', borderRadius: 12, border: '1px solid var(--gold)', background: 'var(--goldDim)', color: 'var(--gold)', fontSize: 13, fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer', transition: 'transform .1s' }}>▦ قالب‌ها</button>
+          <button className="mjwb-mbtn" onClick={() => { setActiveTab(selectedBlock ? 'settings' : 'pages'); setMobileSheet('insp') }} style={{ flex: 1, padding: '11px 8px', borderRadius: 12, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--text)', fontSize: 13, fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer', transition: 'transform .1s' }}>✎ ویرایش</button>
+        </div>
+      )}
 
       {/* PUBLISH SUCCESS MODAL */}
       {publishSuccess && (

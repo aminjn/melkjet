@@ -176,8 +176,11 @@ body {
 /* Workflow */
 @media(max-width:1080px){.mjw-palette{display:none!important}.mjw-config{display:none!important}}
 
-/* Website Builder */
-@media(max-width:1000px){.mjwb-lib{display:none!important}.mjwb-insp{display:none!important}}
+/* Website Builder — on mobile the side panels become slide-up bottom sheets (driven by JS), so we no longer hide them. */
+.mjwb-dragging{opacity:.4}
+.mjwb-blockwrap{transition:box-shadow .12s}
+.mjwb-mbtn:active{transform:scale(.96)}
+@media(max-width:1000px){.mjwb-canvaswrap{padding-bottom:74px!important}}
 
 /* Content */
 @media(max-width:920px){.mjcon-nav{display:none!important}.mjcon-2col{grid-template-columns:1fr!important}}
