@@ -6,7 +6,8 @@ import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
 
 type Tab = 'phone' | 'email'
-type OtpStep = 'enter-phone' | 'enter-code' | 'onboard'
+type OtpStep = 'enter-phone' | 'shahkar' | 'enter-code' | 'onboard'
+const faToEn = (v: string) => (v || '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
 
 const ROLE_ICONS: Record<string, string> = { '/buyer': '🔑', '/owner': '🏠', '/pros': '🤝', '/agency': '🏢', '/builder': '🏗', '/materials': '🧱', '/legal': '⚖' }
 const FALLBACK_ROLES = [
@@ -26,6 +27,9 @@ export default function AuthPage() {
   const [code, setCode] = useState('')
   const [devCode, setDevCode] = useState('') // وقتی پیامک تنظیم نشده، کد را اینجا نشان می‌دهیم
   const [countdown, setCountdown] = useState(0)
+  // شاهکار
+  const [nid, setNid] = useState(''); const [by, setBy] = useState(''); const [bm, setBm] = useState(''); const [bd, setBd] = useState('')
+  const [nameVerified, setNameVerified] = useState(false)
 
   // Onboarding state (new users)
   const [name, setName] = useState('')
@@ -50,26 +54,34 @@ export default function AuthPage() {
 
   async function sendOTP() {
     setError('')
-    if (!/^09[0-9]{9}$/.test(phone)) {
-      setError('شماره موبایل معتبر نیست — مثال: 09123456789')
-      return
-    }
+    if (!/^09[0-9]{9}$/.test(phone)) { setError('شماره موبایل معتبر نیست — مثال: 09123456789'); return }
     setLoading(true)
     try {
-      const res = await fetch('/api/auth/send-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone }),
-      })
+      const res = await fetch('/api/auth/phone-start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) })
       const data = await res.json()
-      // برخی خطاهای سرویس پیامک با وضعیت ۲۰۰ و فیلد error برمی‌گردند
-      if (!res.ok || data.error) { setError(data.error || 'خطا در ارسال پیامک'); return }
-      setOtpStep('enter-code')
-      setCode(data.code || '')           // اگر کد آزمایشی آمد، خودکار پر می‌شود
-      setDevCode(data.dev ? (data.code || '') : '')
-      startCountdown()
+      if (!res.ok || data.error) { setError(data.error || 'خطا'); return }
+      if (data.needsShahkar) { setOtpStep('shahkar'); return }  // کاربرِ جدید/تأییدنشده → احرازِ شاهکار
+      setOtpStep('enter-code'); setCode(data.code || ''); setDevCode(data.dev ? (data.code || '') : ''); startCountdown()
     } catch { setError('خطا در اتصال به سرور') }
     finally { setLoading(false) }
+  }
+  async function submitShahkar() {
+    setError('')
+    const y = faToEn(by).replace(/\D/g, ''), m = faToEn(bm).replace(/\D/g, ''), d = faToEn(bd).replace(/\D/g, '')
+    if (y.length !== 4 || !m || !d) { setError('تاریخ تولدِ شمسی را کامل وارد کنید.'); return }
+    const jbd = y + m.padStart(2, '0') + d.padStart(2, '0')
+    setLoading(true)
+    try {
+      const res = await fetch('/api/auth/shahkar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, nationalCode: nid, jBirthDate: jbd }) })
+      const data = await res.json()
+      if (!res.ok || data.error) { setError(data.error || 'خطا در تأییدِ هویت'); return }
+      setName(data.name || ''); setNameVerified(true)
+      setOtpStep('enter-code'); setCode(data.code || ''); setDevCode(data.dev ? (data.code || '') : ''); startCountdown()
+    } catch { setError('خطا در اتصال به سرور') } finally { setLoading(false) }
+  }
+  async function resendCode() {
+    setError('')
+    try { const r = await fetch('/api/auth/send-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) }); const d = await r.json(); if (d.dev) setDevCode(d.code || ''); startCountdown() } catch {}
   }
 
   async function verifyOTP() {
@@ -86,7 +98,7 @@ export default function AuthPage() {
       if (!res.ok) { setError(data.error || 'کد اشتباه است'); return }
       if (data.token) { try { localStorage.setItem('mj_token', data.token) } catch {} }
       if (data.role === 'super_admin') { router.push('/admin'); return }
-      if (data.needsOnboarding) { setOtpStep('onboard'); return }   // کاربر جدید → تکمیل پروفایل
+      if (data.needsOnboarding) { if (data.name) setName(data.name); if (data.nameVerified) setNameVerified(true); setOtpStep('onboard'); return }   // کاربر جدید → تکمیل پروفایل
       router.push(data.redirect || '/buyer')
     } catch { setError('خطا در اتصال به سرور') }
     finally { setLoading(false) }
@@ -230,8 +242,19 @@ export default function AuthPage() {
                     </div>
                     {error && <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 9, background: 'rgba(220,53,69,.1)', border: '1px solid rgba(220,53,69,.25)', color: '#e25563', fontSize: 13 }}>{error}</div>}
                     <button onClick={sendOTP} disabled={loading} style={btnStyle}>
-                      {loading ? 'در حال ارسال...' : 'ارسال کد تایید'}
+                      {loading ? 'در حال بررسی...' : 'ادامه'}
                     </button>
+                  </>
+                ) : otpStep === 'shahkar' ? (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                      <button onClick={() => { setOtpStep('enter-phone'); setError('') }} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 22, padding: 0 }}>←</button>
+                      <div><p style={{ fontSize: 14, color: 'var(--text)', margin: 0, fontWeight: 700 }}>تأییدِ هویت (سامانهٔ شاهکار)</p><p style={{ fontSize: 12, color: 'var(--faint)', margin: '3px 0 0' }}>برای ثبت‌نام، هویتت با ثبت‌احوال و شاهکار راستی‌آزمایی می‌شود.</p></div>
+                    </div>
+                    <div style={fieldStyle}><label style={labelStyle}>کد ملی</label><input type="tel" inputMode="numeric" placeholder="کد ملی ۱۰ رقمی" value={nid} onChange={e => setNid(e.target.value.replace(/\D/g, '').slice(0, 10))} style={{ ...inputStyle, textAlign: 'center', letterSpacing: 2 }} autoFocus /></div>
+                    <div style={fieldStyle}><label style={labelStyle}>تاریخ تولد (شمسی)</label><div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 8 }}><input type="tel" inputMode="numeric" placeholder="سال ۱۳۷۰" value={by} onChange={e => setBy(e.target.value.replace(/\D/g, '').slice(0, 4))} style={{ ...inputStyle, textAlign: 'center' }} /><input type="tel" inputMode="numeric" placeholder="ماه" value={bm} onChange={e => setBm(e.target.value.replace(/\D/g, '').slice(0, 2))} style={{ ...inputStyle, textAlign: 'center' }} /><input type="tel" inputMode="numeric" placeholder="روز" value={bd} onChange={e => setBd(e.target.value.replace(/\D/g, '').slice(0, 2))} style={{ ...inputStyle, textAlign: 'center' }} /></div></div>
+                    {error && <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 9, background: 'rgba(220,53,69,.1)', border: '1px solid rgba(220,53,69,.25)', color: '#e25563', fontSize: 13 }}>{error}</div>}
+                    <button onClick={submitShahkar} disabled={loading} style={btnStyle}>{loading ? 'در حال راستی‌آزمایی...' : 'تأیید هویت و دریافت کد'}</button>
                   </>
                 ) : otpStep === 'enter-code' ? (
                   <>
@@ -268,7 +291,7 @@ export default function AuthPage() {
                     <div style={{ textAlign: 'center', marginTop: 14, fontSize: 13, color: 'var(--muted)' }}>
                       {countdown > 0
                         ? <span>ارسال مجدد پس از {countdown} ثانیه</span>
-                        : <button onClick={sendOTP} style={{ background: 'none', border: 'none', color: 'var(--gold)', cursor: 'pointer', fontSize: 13, fontWeight: 700, textDecoration: 'underline' }}>ارسال مجدد کد</button>
+                        : <button onClick={resendCode} style={{ background: 'none', border: 'none', color: 'var(--gold)', cursor: 'pointer', fontSize: 13, fontWeight: 700, textDecoration: 'underline' }}>ارسال مجدد کد</button>
                       }
                     </div>
                   </>
@@ -280,8 +303,8 @@ export default function AuthPage() {
                       <p style={{ fontSize: 12.5, color: 'var(--faint)', margin: 0 }}>برای تکمیل ثبت‌نام، نام و نقشت را انتخاب کن.</p>
                     </div>
                     <div style={fieldStyle}>
-                      <label style={labelStyle}>نام و نام خانوادگی</label>
-                      <input value={name} onChange={e => setName(e.target.value)} placeholder="مثلاً علی رضایی" style={inputStyle} autoFocus />
+                      <label style={labelStyle}>نام و نام خانوادگی {nameVerified && <span style={{ color: '#5fd98a', fontSize: 11 }}>✓ تأییدشده با شاهکار</span>}</label>
+                      <input value={name} onChange={e => setName(e.target.value)} readOnly={nameVerified} placeholder="مثلاً علی رضایی" style={{ ...inputStyle, opacity: nameVerified ? 0.85 : 1 }} autoFocus={!nameVerified} />
                     </div>
                     <div style={fieldStyle}>
                       <label style={labelStyle}>نقش شما در ملک‌جت</label>

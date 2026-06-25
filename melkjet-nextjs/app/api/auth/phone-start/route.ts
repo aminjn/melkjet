@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAccount } from '@/app/lib/account-store'
 import { SUPER_ADMIN_PHONE } from '@/app/lib/session'
-import { getAdminData } from '@/app/lib/admin-store'
+import { podConfigured } from '@/app/lib/podium'
 import { sendOtpSms } from '@/app/lib/send-otp'
 
 // قدمِ ۱: شماره.
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   if (!phone || !/^09[0-9]{9}$/.test(phone)) return NextResponse.json({ error: 'شماره موبایل معتبر نیست' }, { status: 400 })
 
   const isSuper = phone === SUPER_ADMIN_PHONE
-  const shahkarOn = !!getAdminData().podium?.enabled
+  const shahkarOn = podConfigured()   // به‌محضِ وجودِ کلیدهای شاهکار، احراز اجباری است
   const acc = getAccount(phone)
   const verified = !!acc?.identityVerifiedAt
 

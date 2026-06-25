@@ -5,7 +5,7 @@ import { ensureAccount, dashForRole, getAccount, createVerifiedAccount, applyIde
 import { linkPhone } from '@/app/lib/tracker-store'
 import { attachPhone } from '@/app/lib/push-store'
 import { getPending, deletePending } from '@/app/lib/pending-reg-store'
-import { getAdminData } from '@/app/lib/admin-store'
+import { podConfigured } from '@/app/lib/podium'
 
 export async function POST(req: NextRequest) {
   const { phone, code } = await req.json()
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
 
   const isSuper = phone === SUPER_ADMIN_PHONE
   const role = isSuper ? 'super_admin' : 'user'
-  const shahkarOn = !!getAdminData().podium?.enabled
+  const shahkarOn = podConfigured()
   // ── تعیین/ساختِ حساب ──
   let account; let isNew = false
   if (isSuper) { const r = ensureAccount(phone); account = r.account; isNew = r.isNew }
