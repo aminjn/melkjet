@@ -31,9 +31,10 @@ interface Stats {
   recentDeals: Deal[]
 }
 type CommMode = 'percent' | 'amount'
+interface MonthPoint { key: string; label: string; amount: number; deals: number }
 interface AdvisorFileItem { id: string; title: string; location: string; price: number; deal: 'sale' | 'rent'; status: 'active' | 'sold' | 'rented'; ptype: string; createdAt: number }
-interface AdvisorRow { advisorPhone: string; advisorName: string; photo: string; listings: AdvisorFileItem[]; counts: { total: number; active: number; sold: number; rented: number }; advisorCommission: number; paidCommission: number; pendingCommission: number; closedCount: number; rate: { mode: CommMode; value: number; isDefault: boolean }; agencyCut: number }
-interface AdvisorFiles { rows: AdvisorRow[]; totals: { listings: number; active: number; sold: number; rented: number; advisorCommission: number; agencyCut: number } }
+interface AdvisorRow { advisorPhone: string; advisorName: string; photo: string; listings: AdvisorFileItem[]; counts: { total: number; active: number; sold: number; rented: number }; advisorCommission: number; paidCommission: number; pendingCommission: number; closedCount: number; dealCount: number; monthly: MonthPoint[]; rate: { mode: CommMode; value: number; isDefault: boolean }; agencyCut: number }
+interface AdvisorFiles { rows: AdvisorRow[]; totals: { listings: number; active: number; sold: number; rented: number; advisorCommission: number; agencyCut: number }; income: MonthPoint[] }
 interface CommissionCfg { defaultMode: CommMode; defaultValue: number; perAgent: Record<string, { mode: CommMode; value: number }> }
 interface AgencyData { stats: Stats; agents: Agent[]; listings: Listing[]; leads: Lead[]; deals: Deal[]; advisorFiles?: AdvisorFiles; commission?: CommissionCfg }
 
@@ -93,6 +94,24 @@ function Kpi({ label, value, sub, subColor }: { label: string; value: string; su
       <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 8 }}>{label}</div>
       <div style={{ fontSize: 25, fontWeight: 800, letterSpacing: '-0.5px' }}>{value}</div>
       {sub && <div style={{ fontSize: 11.5, color: subColor || 'var(--muted)', marginTop: 4 }}>{sub}</div>}
+    </div>
+  )
+}
+// نمودارِ میله‌ایِ درآمدِ ماهانه (سهمِ آژانس از کمیسیون)
+function IncomeBars({ points, height = 96 }: { points: MonthPoint[]; height?: number }) {
+  const max = Math.max(1, ...points.map(p => p.amount))
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height }}>
+      {points.map(p => {
+        const h = Math.max(3, Math.round((p.amount / max) * (height - 34)))
+        return (
+          <div key={p.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 0, height: '100%', justifyContent: 'flex-end' }}>
+            <div style={{ fontSize: 9.5, color: 'var(--muted)', whiteSpace: 'nowrap', fontWeight: 700 }}>{p.amount ? money(p.amount) : ''}</div>
+            <div title={`${p.label}: ${money(p.amount)} · ${fa(p.deals)} معامله`} style={{ width: '100%', maxWidth: 38, height: h, background: p.amount ? 'linear-gradient(180deg,var(--gold2),var(--gold))' : 'var(--line)', borderRadius: 6 }} />
+            <div style={{ fontSize: 9.5, color: 'var(--faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{p.label}</div>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -538,6 +557,17 @@ export default function AgencyPage() {
                 <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 8 }}>این نرخ برای مشاورانی که نرخِ اختصاصی ندارند اعمال می‌شود.</div>
               </div>
 
+              {/* نمودارِ درآمدِ آژانس از کمیسیونِ مشاوران (۶ ماهِ اخیر) */}
+              {af?.income && af.income.length > 0 && (
+                <div style={{ ...card, padding: 18 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 14 }}>
+                    {sectionTitle('درآمدِ آژانس از کمیسیونِ مشاوران (۶ ماهِ اخیر)')}
+                    <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--gold)' }}>{money(af.income.reduce((s, p) => s + p.amount, 0))}</span>
+                  </div>
+                  <IncomeBars points={af.income} />
+                </div>
+              )}
+
               {rows.length === 0 ? (
                 <div style={{ ...card, padding: 24, color: 'var(--faint)', textAlign: 'center', fontSize: 13.5 }}>هنوز مشاوری به آژانس متصل نیست. از بخشِ «مشاوران» مشاور دعوت کنید.</div>
               ) : rows.map(r => {
@@ -573,7 +603,7 @@ export default function AgencyPage() {
                       <div>
                         <div style={{ fontSize: 11, color: 'var(--muted)' }}>سهمِ آژانس {r.rate.isDefault ? '(پیش‌فرض)' : ''}</div>
                         <div style={{ fontSize: 16, fontWeight: 900, color: 'var(--gold)' }}>{money(r.agencyCut)}</div>
-                        <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 2 }}>{r.rate.mode === 'percent' ? `${fa(r.rate.value)}٪ از کمیسیون` : `${money(r.rate.value)} × ${fa(r.closedCount)} معامله`}</div>
+                        <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 2 }}>{r.rate.mode === 'percent' ? `${fa(r.rate.value)}٪ از کمیسیون` : `${money(r.rate.value)} × ${fa(r.dealCount)} معامله`}</div>
                       </div>
                       <div style={{ marginInlineStart: 'auto', display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                         <div><label style={{ fontSize: 10.5, color: 'var(--muted)', display: 'block', marginBottom: 3 }}>نرخِ این مشاور</label><select value={edit.mode} onChange={e => setEdit({ ...edit, mode: e.target.value as CommMode })} style={{ ...inputStyle, width: 'auto', padding: '6px 9px', fontSize: 12 }}><option value="percent">درصدی</option><option value="amount">مبلغی</option></select></div>
@@ -582,6 +612,14 @@ export default function AgencyPage() {
                         {!r.rate.isDefault && <button disabled={busy} onClick={() => { setCommEdit(prev => { const n = { ...prev }; delete n[r.advisorPhone]; return n }); post({ action: 'clearAgentCommission', advisorPhone: r.advisorPhone }) }} style={actionBtn}>پیش‌فرض</button>}
                       </div>
                     </div>
+
+                    {/* نمودارِ درآمدِ آژانس از این مشاور (۶ ماهِ اخیر) */}
+                    {r.monthly.some(p => p.amount > 0) && (
+                      <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line)' }}>
+                        <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--muted)', marginBottom: 10 }}>درآمدِ آژانس از این مشاور (۶ ماهِ اخیر)</div>
+                        <IncomeBars points={r.monthly} height={84} />
+                      </div>
+                    )}
 
                     {/* فایل‌ها */}
                     <div style={{ padding: '10px 16px' }}>
