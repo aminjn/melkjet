@@ -41,6 +41,17 @@ export function setPlan(phone: string, plan: string): Account {
   save(db); return db[phone]
 }
 
+// ساختِ کاربر توسطِ سوپرادمین (دستی)
+export function createAccount(phone: string, patch: { name?: string; role?: string; plan?: string }): { ok: boolean; error?: string; account?: Account } {
+  const p = String(phone).replace(/\D/g, '')
+  if (!/^09\d{9}$/.test(p)) return { ok: false, error: 'شمارهٔ موبایل معتبر نیست (۰۹...)' }
+  const db = load()
+  if (db[p]) return { ok: false, error: 'این کاربر از قبل وجود دارد' }
+  db[p] = { phone: p, name: patch.name ? String(patch.name).slice(0, 60) : undefined, role: patch.role || undefined, plan: patch.plan || undefined, onboarded: !!patch.role, createdAt: Date.now() }
+  save(db)
+  return { ok: true, account: db[p] }
+}
+
 export function adminUpdate(phone: string, patch: { name?: string; role?: string; plan?: string }): Account | null {
   const db = load(); const a = db[phone]; if (!a) return null
   if (patch.name !== undefined) a.name = String(patch.name).slice(0, 60)

@@ -1,16 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listAccounts, adminUpdate, deleteAccount, bulkUpdate, bulkDelete } from '@/app/lib/account-store'
-import { listRoles } from '@/app/lib/role-store'
+import { listAccounts, adminUpdate, deleteAccount, bulkUpdate, bulkDelete, createAccount } from '@/app/lib/account-store'
+import { listRoles, dashForRoleId } from '@/app/lib/role-store'
 import { listPlans } from '@/app/lib/plan-store'
+import { getCredit } from '@/app/lib/comm-store'
+import { listItems } from '@/app/lib/scraper-store'
 
 async function guard() { const s = await getSession(); return s && s.role === 'super_admin' }
 
 export async function GET() {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
-  const roles = listRoles().map(r => ({ id: r.id, name: r.name }))
-  const plans = listPlans().map(p => ({ id: p.id, name: p.name }))
-  return NextResponse.json({ users: listAccounts(), roles, plans })
+  const roleList = listRoles()
+  const roles = roleList.map(r => ({ id: r.id, name: r.name }))
+  const planList = listPlans()
+  const plans = planList.map(p => ({ id: p.id, name: p.name }))
+  const roleNameOf = (rid?: string) => { if (!rid) return ''; const r = roleList.find(x => x.id === rid || x.name === rid); return r?.name || rid }
+  const planNameOf = (pid?: string) => { if (!pid) return ''; const p = planList.find(x => x.id === pid); return p?.name || pid }
+  // شمارشِ آگهیِ هر مالک
+  const listingCounts: Record<string, number> = {}
+  for (const it of listItems('listing')) { const ph = String(it.meta?.__ownerPhone || ''); if (ph) listingCounts[ph] = (listingCounts[ph] || 0) + 1 }
+  // اطلاعاتِ کامل‌ترِ هر کاربر بر اساسِ پروفایلش
+  const users = listAccounts().map(a => {
+    const credit = getCredit(a.phone)
+    return { ...a, roleName: roleNameOf(a.role), planName: planNameOf(a.plan), dashboard: dashForRoleId(a.role), listings: listingCounts[a.phone] || 0, credit }
+  })
+  return NextResponse.json({ users, roles, plans })
+}
+
+export async function POST(req: NextRequest) {
+  if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  const b = await req.json().catch(() => ({}))
+  const r = createAccount(String(b.phone || ''), { name: b.name, role: b.role, plan: b.plan })
+  return r.ok ? NextResponse.json({ ok: true, user: r.account }) : NextResponse.json({ error: r.error }, { status: 400 })
 }
 
 export async function PATCH(req: NextRequest) {

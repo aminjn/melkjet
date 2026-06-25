@@ -19,6 +19,7 @@ export interface Plan {
   active: boolean
   roleId?: string       // نقشی که این پلن برای آن است (خالی = عمومی، برای همه)
   badge?: string        // برچسبِ کوچک روی کارت (مثلاً «محبوب»)
+  permissions?: string[] // ماژول‌ها/دسترسی‌هایی که این پلن باز می‌کند (از PERMISSIONS)
   createdAt: number
 }
 
@@ -128,6 +129,7 @@ export interface PlanInput {
   active?: boolean
   roleId?: string
   badge?: string
+  permissions?: string[]
 }
 
 export function addPlan(input: PlanInput): Plan {
@@ -146,6 +148,7 @@ export function addPlan(input: PlanInput): Plan {
     active: input.active !== false,
     roleId: input.roleId ? String(input.roleId) : undefined,
     badge: input.badge ? String(input.badge) : undefined,
+    permissions: Array.isArray(input.permissions) ? input.permissions.map(String) : [],
     createdAt: Date.now(),
   }
   db.plans.push(plan)
@@ -170,6 +173,7 @@ export function updatePlan(id: string, patch: PlanPatch): Plan | null {
   if (patch.active !== undefined) p.active = !!patch.active
   if (patch.roleId !== undefined) p.roleId = patch.roleId ? String(patch.roleId) : undefined
   if (patch.badge !== undefined) p.badge = patch.badge ? String(patch.badge) : undefined
+  if (patch.permissions !== undefined) p.permissions = Array.isArray(patch.permissions) ? patch.permissions.map(String) : []
   save(db)
   return p
 }

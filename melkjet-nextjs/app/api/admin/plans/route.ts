@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
     active: b.active !== undefined ? !!b.active : undefined,
     roleId: b.roleId ? String(b.roleId) : undefined,
     badge: b.badge ? String(b.badge) : undefined,
+    permissions: Array.isArray(b.permissions) ? b.permissions.map((x: unknown) => String(x)) : undefined,
   })
   return NextResponse.json({ plan })
 }

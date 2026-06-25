@@ -2603,10 +2603,13 @@ interface Account { phone: string; name?: string; role?: string; plan?: string; 
 interface IdName { id: string; name: string }
 
 function UsersView() {
-  const [users, setUsers] = useState<Account[]>([])
+  const [users, setUsers] = useState<any[]>([])
   const [roles, setRoles] = useState<IdName[]>([])
   const [plans, setPlans] = useState<IdName[]>([])
   const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
+  const [nf, setNf] = useState({ phone: '', name: '', role: '', plan: '' })
+  const [createMsg, setCreateMsg] = useState('')
   const [q, setQ] = useState('')
   const [roleFilter, setRoleFilter] = useState('')   // '' = همه
   const [planFilter, setPlanFilter] = useState('')   // '' = همه ، '__none' = بدون پلن
@@ -2628,6 +2631,13 @@ function UsersView() {
     if (!confirm(`کاربر ${phone} حذف شود؟`)) return
     setUsers(us => us.filter(u => u.phone !== phone)); setSel(s => { const n = new Set(s); n.delete(phone); return n })
     await fetch(`/api/admin/users?phone=${encodeURIComponent(phone)}`, { method: 'DELETE' })
+  }
+  const createUser = async () => {
+    setCreateMsg('')
+    const r = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nf) })
+    const d = await r.json()
+    if (r.ok) { setNf({ phone: '', name: '', role: '', plan: '' }); setCreating(false); load() }
+    else setCreateMsg(d.error || 'خطا')
   }
 
   const filtered = users.filter(u => {
@@ -2704,7 +2714,18 @@ function UsersView() {
             {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           <OutlineButton onClick={load}>بازخوانی</OutlineButton>
+          <GoldButton onClick={() => setCreating(c => !c)}>{creating ? 'بستن' : '＋ کاربر جدید'}</GoldButton>
         </div>
+        {creating && (
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input style={{ ...inp, width: 150, direction: 'ltr', textAlign: 'right' }} placeholder="۰۹۱۲۳۴۵۶۷۸۹" value={nf.phone} onChange={e => setNf({ ...nf, phone: e.target.value.replace(/\D/g, '').slice(0, 11) })} />
+            <input style={{ ...inp, width: 160 }} placeholder="نام و نام خانوادگی" value={nf.name} onChange={e => setNf({ ...nf, name: e.target.value })} />
+            <select style={inp} value={nf.role} onChange={e => setNf({ ...nf, role: e.target.value })}><option value="">— بدون نقش</option>{roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select>
+            <select style={inp} value={nf.plan} onChange={e => setNf({ ...nf, plan: e.target.value })}><option value="">بدون پلن</option>{plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+            <GoldButton onClick={createUser}>ثبت کاربر</GoldButton>
+            {createMsg && <span style={{ fontSize: 12.5, color: '#e7674a' }}>{createMsg}</span>}
+          </div>
+        )}
         <div style={{ marginTop: 10, fontSize: 12.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <span>{loading ? 'در حال بارگذاری…' : `${filtered.length.toLocaleString('fa-IR')} از ${total.toLocaleString('fa-IR')} کاربر`}</span>
           {sel.size > 0 && <>
@@ -2730,6 +2751,8 @@ function UsersView() {
                   <th style={th}>شماره</th>
                   <th style={th}>نقش</th>
                   <th style={th}>پلن</th>
+                  <th style={th}>آگهی</th>
+                  <th style={th}>اعتبار (پیامک/ایمیل/توکن)</th>
                   <th style={th}>وضعیت</th>
                   <th style={th}>آخرین ورود</th>
                   <th style={{ ...th, textAlign: 'center' }}>حذف</th>
@@ -2753,6 +2776,8 @@ function UsersView() {
                         {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                       </select>
                     </td>
+                    <td style={{ ...td, fontWeight: 700, color: u.listings ? 'var(--gold)' : 'var(--faint)' }}>{(u.listings || 0).toLocaleString('fa-IR')}</td>
+                    <td style={{ ...td, fontSize: 12, color: 'var(--muted)', direction: 'ltr', textAlign: 'right' }}>{(u.credit?.sms || 0).toLocaleString('fa-IR')} / {(u.credit?.email || 0).toLocaleString('fa-IR')} / {(u.credit?.token || 0).toLocaleString('fa-IR')}</td>
                     <td style={td}>{u.onboarded ? <Badge label="تکمیل‌شده" color="#5fd98a" /> : <Badge label="جدید" color="#5b9bd5" />}</td>
                     <td style={{ ...td, color: 'var(--muted)', fontSize: 12 }}>{timeAgo(u.lastLogin || null)}</td>
                     <td style={{ ...td, textAlign: 'center' }}>
@@ -3196,69 +3221,112 @@ function RolesView() {
   )
 }
 
+// فرمِ ساخت/ویرایشِ پلن — کامل و آسان (نه prompt). انتخابِ نقش ⇒ ماژول‌های همان نقش می‌آیند.
+function PlanForm({ initial, roles, perms, onSave, onClose }: { initial: any; roles: any[]; perms: { id: string; label: string }[]; onSave: (payload: any) => void; onClose: () => void }) {
+  const [f, setF] = useState<any>(() => ({ name: '', priceMonthly: '', priceYearly: '', roleId: '', badge: '', cta: '', highlighted: false, active: true, permissions: [], extra: '', ...initial }))
+  const role = roles.find(r => r.id === f.roleId)
+  const availPerms = f.roleId ? perms.filter(p => (role?.permissions || []).includes(p.id)) : perms
+  const permLabel = (id: string) => perms.find(p => p.id === id)?.label || id
+  const togglePerm = (id: string) => setF((s: any) => ({ ...s, permissions: s.permissions.includes(id) ? s.permissions.filter((x: string) => x !== id) : [...s.permissions, id] }))
+  const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '9px 11px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
+  const lab: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', marginBottom: 5, display: 'block', fontWeight: 600 }
+  const save = () => {
+    if (!f.name.trim()) return
+    const moduleLabels = f.permissions.map(permLabel)
+    const extraLines = String(f.extra || '').split('\n').map((x: string) => x.trim()).filter(Boolean)
+    onSave({ name: f.name.trim(), priceMonthly: Number(f.priceMonthly) || 0, priceYearly: Number(f.priceYearly) || 0, roleId: f.roleId || '', badge: f.badge || '', cta: f.cta || '', highlighted: !!f.highlighted, active: f.active !== false, permissions: f.permissions, features: [...moduleLabels, ...extraLines] })
+  }
+  return (
+    <div style={{ background: 'var(--bg2)', border: '1px solid var(--gold)', borderRadius: 14, padding: 16, marginBottom: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }} className="mjsa-2col">
+        <div><label style={lab}>نام پلن *</label><input style={inp} value={f.name} onChange={e => setF({ ...f, name: e.target.value })} placeholder="مثلاً پرو" /></div>
+        <div><label style={lab}>عنوان دکمه</label><input style={inp} value={f.cta} onChange={e => setF({ ...f, cta: e.target.value })} placeholder="تهیهٔ اشتراک" /></div>
+        <div><label style={lab}>قیمت ماهانه (تومان)</label><input style={inp} type="number" value={f.priceMonthly} onChange={e => setF({ ...f, priceMonthly: e.target.value })} /></div>
+        <div><label style={lab}>قیمت سالانه (تومان)</label><input style={inp} type="number" value={f.priceYearly} onChange={e => setF({ ...f, priceYearly: e.target.value })} /></div>
+        <div><label style={lab}>برای نقش</label>
+          <select style={inp} value={f.roleId} onChange={e => setF({ ...f, roleId: e.target.value, permissions: [] })}>
+            <option value="">عمومی (برای همه)</option>
+            {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select>
+        </div>
+        <div><label style={lab}>برچسب (اختیاری)</label><input style={inp} value={f.badge} onChange={e => setF({ ...f, badge: e.target.value })} placeholder="مثلاً محبوب" /></div>
+      </div>
+      <label style={lab}>ماژول‌ها و امکاناتِ این پلن {f.roleId ? '(از ماژول‌های همین نقش)' : '(همهٔ ماژول‌ها)'}</label>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(190px,1fr))', gap: 8, marginBottom: 12 }}>
+        {availPerms.length === 0 ? <div style={{ fontSize: 12, color: 'var(--faint)' }}>این نقش ماژولی ندارد.</div> : availPerms.map(p => {
+          const on = f.permissions.includes(p.id)
+          return <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: on ? 'var(--goldDim)' : 'var(--surface)', border: `1px solid ${on ? 'var(--gold)' : 'var(--line2)'}`, borderRadius: 9, padding: '8px 10px', cursor: 'pointer', fontSize: 12.5, color: on ? 'var(--gold)' : 'var(--text)' }}><input type="checkbox" checked={on} onChange={() => togglePerm(p.id)} style={{ width: 15, height: 15, accentColor: 'var(--gold)', cursor: 'pointer' }} />{p.label}</label>
+        })}
+      </div>
+      <label style={lab}>ویژگی‌های متنیِ اضافه (هر خط یک مورد — کنارِ ماژول‌ها در متنِ پلن نمایش داده می‌شود)</label>
+      <textarea style={{ ...inp, height: 70, resize: 'vertical', marginBottom: 12 }} value={f.extra} onChange={e => setF({ ...f, extra: e.target.value })} placeholder={'پشتیبانی تلفنی اولویت‌دار\nآگهی ویژه در نتایج'} />
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}><input type="checkbox" checked={f.highlighted} onChange={e => setF({ ...f, highlighted: e.target.checked })} /> پلن ویژه (محبوب)</label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}><input type="checkbox" checked={f.active} onChange={e => setF({ ...f, active: e.target.checked })} /> فعال</label>
+        <span style={{ flex: 1 }} />
+        <OutlineButton onClick={onClose} style={{ fontSize: 12.5, padding: '7px 14px' }}>انصراف</OutlineButton>
+        <GoldButton onClick={save}>ذخیره</GoldButton>
+      </div>
+    </div>
+  )
+}
+
 function PlansView() {
   const [plans, setPlans] = useState<any[]>([])
-  const [roles, setRoles] = useState<{ id: string; name: string }[]>([])
-  const [show, setShow] = useState(false)
-  const [f, setF] = useState({ name: '', priceMonthly: '', priceYearly: '', features: '', highlighted: false, cta: '', badge: '', roleId: '', active: true })
+  const [roles, setRoles] = useState<any[]>([])
+  const [perms, setPerms] = useState<{ id: string; label: string }[]>([])
+  const [accounts, setAccounts] = useState<any[]>([])
+  const [creating, setCreating] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const load = () => fetch('/api/admin/plans').then(r => r.ok ? r.json() : { plans: [] }).then(d => setPlans(d.plans || []))
-  useEffect(() => { load(); fetch('/api/admin/roles').then(r => r.ok ? r.json() : null).then(d => { if (d?.roles) setRoles(d.roles.map((x: any) => ({ id: x.id, name: x.name }))) }) }, [])
+  useEffect(() => {
+    load()
+    fetch('/api/admin/roles').then(r => r.ok ? r.json() : null).then(d => { if (d?.roles) setRoles(d.roles); if (d?.permissions) setPerms(d.permissions) })
+    fetch('/api/admin/users').then(r => r.ok ? r.json() : null).then(d => { if (d?.users) setAccounts(d.users) }).catch(() => {})
+  }, [])
   const roleName = (rid?: string) => rid ? (roles.find(r => r.id === rid)?.name || '—') : 'عمومی (همه)'
-  const create = async () => {
-    if (!f.name.trim()) return
-    await fetch('/api/admin/plans', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: f.name, priceMonthly: Number(f.priceMonthly) || 0, priceYearly: Number(f.priceYearly) || 0, features: f.features.split('\n').map(x => x.trim()).filter(Boolean), highlighted: f.highlighted, cta: f.cta, badge: f.badge, roleId: f.roleId, active: f.active }) })
-    setF({ name: '', priceMonthly: '', priceYearly: '', features: '', highlighted: false, cta: '', badge: '', roleId: '', active: true }); setShow(false); load()
-  }
-  const patch = async (id: string, p: any) => { await fetch('/api/admin/plans', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...p }) }); load() }
+  const subCount = (pid: string) => accounts.filter(a => a.plan === pid).length
+  const create = async (payload: any) => { await fetch('/api/admin/plans', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); setCreating(false); load() }
+  const patch = async (id: string, p: any) => { await fetch('/api/admin/plans', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...p }) }); setEditingId(null); load() }
   const del = async (id: string) => { if (!confirm('این پلن حذف شود؟')) return; await fetch(`/api/admin/plans?id=${id}`, { method: 'DELETE' }); load() }
-  const editPlan = (p: any) => { const name = prompt('نام پلن:', p.name); if (name === null) return; const pm = prompt('قیمت ماهانه (تومان):', String(p.priceMonthly)); const py = prompt('قیمت سالانه (تومان):', String(p.priceYearly)); const feats = prompt('ویژگی‌ها (هر خط یک مورد):', (p.features || []).join('\n')); const badge = prompt('برچسب (مثلاً محبوب — خالی=بدون برچسب):', p.badge || ''); patch(p.id, { name, priceMonthly: Number(pm) || p.priceMonthly, priceYearly: Number(py) || p.priceYearly, badge: badge ?? p.badge, features: (feats ?? (p.features || []).join('\n')).split('\n').map((x: string) => x.trim()).filter(Boolean) }) }
   const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '9px 11px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
   const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
+  const editInitial = (p: any) => {
+    const moduleLabels = new Set((p.permissions || []).map((id: string) => perms.find(x => x.id === id)?.label || id))
+    return { name: p.name, priceMonthly: String(p.priceMonthly || ''), priceYearly: String(p.priceYearly || ''), roleId: p.roleId || '', badge: p.badge || '', cta: p.cta || '', highlighted: !!p.highlighted, active: p.active !== false, permissions: p.permissions || [], extra: (p.features || []).filter((x: string) => !moduleLabels.has(x)).join('\n') }
+  }
   return (
     <div style={{ animation: 'fade .35s ease' }}>
       <Card style={{ marginBottom: 14, background: 'linear-gradient(120deg, rgba(212,175,55,.1), transparent 60%), var(--surface)', borderColor: 'rgba(201,168,76,.4)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 26 }}>👑</span>
-            <div><div style={{ fontWeight: 900, fontSize: 18 }}>پلن‌ها و اشتراک</div><div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3 }}>پلن‌ها را بساز و به نقش‌ها نسبت بده؛ به هر کاربر، پلن‌های نقشِ خودش + پلن‌های عمومی نمایش داده می‌شود. بسته‌های پیامک/ایمیل/توکن در پایینِ همین صفحه مدیریت می‌شوند.</div></div>
+            <div><div style={{ fontWeight: 900, fontSize: 18 }}>پلن‌ها و اشتراک</div><div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3 }}>پلن بساز و به نقش نسبت بده؛ با انتخابِ نقش، ماژول‌های همان نقش می‌آید تا انتخاب کنی. وقتی کاربری بخرد، پلن به حسابش وصل می‌شود و در «مشترکین» شمرده می‌شود.</div></div>
           </div>
-          <GoldButton onClick={() => setShow(s => !s)}>{show ? 'بستن' : '＋ پلن جدید'}</GoldButton>
+          <GoldButton onClick={() => { setCreating(c => !c); setEditingId(null) }}>{creating ? 'بستن' : '＋ پلن جدید'}</GoldButton>
         </div>
-        {show && (
-          <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }} className="mjsa-2col">
-            <input style={inp} placeholder="نام پلن *" value={f.name} onChange={e => setF({ ...f, name: e.target.value })} />
-            <input style={inp} placeholder="عنوان دکمه (مثلاً تهیهٔ اشتراک)" value={f.cta} onChange={e => setF({ ...f, cta: e.target.value })} />
-            <input style={inp} placeholder="قیمت ماهانه (تومان)" value={f.priceMonthly} onChange={e => setF({ ...f, priceMonthly: e.target.value })} />
-            <input style={inp} placeholder="قیمت سالانه (تومان)" value={f.priceYearly} onChange={e => setF({ ...f, priceYearly: e.target.value })} />
-            <select style={inp} value={f.roleId} onChange={e => setF({ ...f, roleId: e.target.value })}>
-              <option value="">نقش: عمومی (برای همه)</option>
-              {roles.map(r => <option key={r.id} value={r.id}>نقش: {r.name}</option>)}
-            </select>
-            <input style={inp} placeholder="برچسب (مثلاً محبوب — اختیاری)" value={f.badge} onChange={e => setF({ ...f, badge: e.target.value })} />
-            <textarea style={{ ...inp, gridColumn: '1 / -1', height: 80, resize: 'none' }} placeholder="ویژگی‌ها (هر خط یک مورد)" value={f.features} onChange={e => setF({ ...f, features: e.target.value })} />
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}><input type="checkbox" checked={f.highlighted} onChange={e => setF({ ...f, highlighted: e.target.checked })} /> پلن ویژه (محبوب)</label>
-            <div><GoldButton onClick={create}>ثبت پلن</GoldButton></div>
-          </div>
-        )}
+        {creating && <div style={{ marginTop: 14 }}><PlanForm initial={{}} roles={roles} perms={perms} onSave={create} onClose={() => setCreating(false)} /></div>}
       </Card>
+
+      {editingId && (() => { const p = plans.find(x => x.id === editingId); return p ? <PlanForm key={editingId} initial={editInitial(p)} roles={roles} perms={perms} onSave={pl => patch(editingId, pl)} onClose={() => setEditingId(null)} /> : null })()}
+
       <div className="mjsa-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18 }}>
         {plans.map(p => (
-          <Card key={p.id} style={{ position: 'relative', borderColor: p.highlighted ? 'var(--gold)' : 'var(--line2)', boxShadow: p.highlighted ? '0 10px 30px -14px rgba(212,175,55,.5)' : 'none', background: p.highlighted ? 'linear-gradient(160deg, rgba(212,175,55,.08), var(--surface) 60%)' : 'var(--surface)', opacity: p.active ? 1 : .55 }}>
+          <Card key={p.id} style={{ position: 'relative', borderColor: editingId === p.id ? 'var(--gold)' : (p.highlighted ? 'var(--gold)' : 'var(--line2)'), boxShadow: p.highlighted ? '0 10px 30px -14px rgba(212,175,55,.5)' : 'none', background: p.highlighted ? 'linear-gradient(160deg, rgba(212,175,55,.08), var(--surface) 60%)' : 'var(--surface)', opacity: p.active ? 1 : .55 }}>
             {(p.badge || p.highlighted) && <span style={{ position: 'absolute', top: 14, insetInlineStart: 14, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 10.5, fontWeight: 800, borderRadius: 999, padding: '3px 11px' }}>{p.badge || 'محبوب'}</span>}
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
               <span style={{ fontSize: 16.5, fontWeight: 900 }}>{p.name}</span>
               <div style={{ textAlign: 'left' }}><span style={{ fontSize: 18, fontWeight: 900, color: 'var(--gold)' }}>{fa(p.priceMonthly)}</span><span style={{ fontSize: 11, color: 'var(--faint)' }}> ت/ماه</span><div style={{ fontSize: 11, color: 'var(--faint)' }}>{fa(p.priceYearly)} ت/سال</div></div>
             </div>
-            <div style={{ fontSize: 11.5, color: 'var(--gold)', marginBottom: 10 }}>● {roleName(p.roleId)}</div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11.5, color: 'var(--gold)' }}>● {roleName(p.roleId)}</span>
+              <span style={{ fontSize: 11, color: 'var(--muted)', background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 999, padding: '2px 10px' }}>{fa(subCount(p.id))} مشترک</span>
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
               {(p.features || []).map((x: string) => <div key={x} style={{ fontSize: 12.5, color: 'var(--muted)' }}>✓ {x}</div>)}
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-              <select value={p.roleId || ''} onChange={e => patch(p.id, { roleId: e.target.value })} style={{ ...inp, width: 'auto', flex: 1, minWidth: 130, fontSize: 12, padding: '6px 9px' }}>
-                <option value="">عمومی (همه)</option>
-                {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-              </select>
-              <OutlineButton onClick={() => editPlan(p)} style={{ fontSize: 12, padding: '6px 12px' }}>ویرایش</OutlineButton>
+              <GoldButton onClick={() => { setEditingId(p.id); setCreating(false) }} style={{ fontSize: 12, padding: '6px 14px' }}>ویرایش</GoldButton>
               <OutlineButton onClick={() => patch(p.id, { active: !p.active })} style={{ fontSize: 12, padding: '6px 12px' }}>{p.active ? 'غیرفعال' : 'فعال'}</OutlineButton>
               <button onClick={() => del(p.id)} style={{ fontSize: 12, padding: '6px 12px', borderRadius: 9, border: '1px solid rgba(231,103,74,.3)', color: '#e7674a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>حذف</button>
             </div>
