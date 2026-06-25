@@ -4,6 +4,9 @@ import { getSite, getSitePage, type Site, type SitePage, type SiteBlock } from '
 import { listItems, listArticles, type Item } from '@/app/lib/scraper-store'
 import { getTeamMembers, type TeamMember } from '@/app/lib/team-members'
 import ListingsSlider from './ListingsSlider'
+import HeroSlider from './HeroSlider'
+import GallerySlider from './GallerySlider'
+import BlogFull, { type BlogArticle } from './BlogFull'
 
 // Public renderer for builder-published sites living at melkjet.com/{slug}.
 // Existing static single-segment routes (search, owner, ...) take precedence;
@@ -98,16 +101,46 @@ function HeroBlock({ block, primary }: { block: SiteBlock; primary: string }) {
   const props = p(block)
   const align = props.align === 'right' ? 'right' : 'center'
   const textColor = props.textColor || '#fff'
-  // Layered overlay over the chosen bg so any image/gradient stays legible.
-  const baseBg = props.bg || 'linear-gradient(135deg, var(--mjs-primary), var(--mjs-secondary) 70%)'
-  const bg = `linear-gradient(180deg, rgba(12,9,6,.30), rgba(12,9,6,.62)), ${baseBg}`
+  const overlay: 'dark' | 'light' | 'none' =
+    props.overlay === 'light' ? 'light' : props.overlay === 'none' ? 'none' : 'dark'
+  const tall = props.height === 'tall'
+
+  // منبعِ تصاویرِ اسلایدشو (اگر ≥۲ باشد یک لایهٔ پس‌زمینهٔ کلاینت با محو-تدریجی رندر می‌شود).
+  const images: string[] = Array.isArray(props.images) ? props.images.filter(Boolean) : []
+  const useSlider = images.length >= 2
+
+  // پس‌زمینهٔ ثابت: image → props.bg → گرادیانِ تم.
+  const image: string = typeof props.image === 'string' ? props.image.trim() : ''
+  const baseBg = image
+    ? `url(${image})`
+    : (props.bg || 'linear-gradient(135deg, var(--mjs-primary), var(--mjs-secondary) 70%)')
+
+  // گرادیانِ روکش برای خوانایی، بسته به overlay.
+  const overlayGrad =
+    overlay === 'dark'
+      ? 'linear-gradient(180deg, rgba(12,9,6,.38), rgba(12,9,6,.70))'
+      : overlay === 'light'
+        ? 'linear-gradient(180deg, rgba(255,255,255,.30), rgba(255,255,255,.55))'
+        : ''
+
+  // وقتی اسلایدر فعال است، روکش داخلِ HeroSlider اعمال می‌شود؛ پس‌زمینهٔ section خنثی می‌ماند.
+  const sectionBg = useSlider
+    ? 'var(--mjs-secondary)'
+    : (overlayGrad ? `${overlayGrad}, ${baseBg}` : baseBg)
+
+  const minHeight = tall ? 'clamp(440px,80vh,720px)' : undefined
+  const padY = tall ? 'clamp(96px,16vw,160px)' : 'clamp(72px,13vw,140px)'
+
   return (
     <section id="hero" style={{
-      position: 'relative', background: bg, backgroundSize: 'cover', backgroundPosition: 'center',
-      padding: 'clamp(72px,13vw,140px) clamp(20px,5vw,24px)', direction: 'rtl', overflow: 'hidden',
+      position: 'relative', background: sectionBg, backgroundSize: 'cover', backgroundPosition: 'center',
+      padding: `${padY} clamp(20px,5vw,24px)`, direction: 'rtl', overflow: 'hidden',
+      minHeight, display: 'flex', alignItems: 'center',
     }}>
+      {useSlider ? <HeroSlider images={images} overlay={overlay} interval={5000} /> : null}
       <div style={{
-        maxWidth: 1000, margin: '0 auto', textAlign: align as any,
+        position: 'relative', zIndex: 1,
+        maxWidth: 1000, margin: '0 auto', width: '100%', textAlign: align as any,
         display: 'flex', flexDirection: 'column', alignItems: align === 'center' ? 'center' : 'flex-start',
       }}>
         <span className="mjs-hero-badge" style={{
@@ -266,11 +299,21 @@ function BlogBlock({ block, primary, ownerName }: { block: SiteBlock; primary: s
               {items.map((it, i) => {
                 const slug = it.meta?.slug || it.id
                 const excerpt = it.meta?.summary || it.meta?.metaDescription || it.excerpt || ''
+                const cat = (it.category || it.meta?.category || '').trim()
+                const author = (it.meta?.author || '').trim()
+                const date = (it.meta?.date || it.meta?.publishedAt || '').trim()
+                const meta = [author, date].filter(Boolean).join(' · ')
                 return (
                   <MediaCard key={it.id} href={`/article/${slug}`} image={it.image} gradient={grads[i % grads.length]}>
-                    <div style={{ fontSize: 17, fontWeight: 800, color: INK, marginBottom: 10, lineHeight: 1.6 }}>{it.title}</div>
+                    {cat ? (
+                      <span style={{ display: 'inline-block', fontSize: 11.5, fontWeight: 700, color: primary, background: `${primary}14`, border: `1px solid ${primary}33`, borderRadius: 999, padding: '3px 11px', marginBottom: 12 }}>{cat}</span>
+                    ) : null}
+                    <div style={{ fontSize: 17, fontWeight: 800, color: INK, marginBottom: 10, lineHeight: 1.6, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{it.title}</div>
                     {excerpt ? <p style={{ fontSize: 13.5, color: MUTED, lineHeight: 1.95, margin: '0 0 16px', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{excerpt}</p> : null}
-                    <span style={{ fontSize: 13.5, fontWeight: 800, color: primary }}>مطالعهٔ مقاله →</span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderTop: '1px solid #f2ede4', paddingTop: 14 }}>
+                      {meta ? <span style={{ fontSize: 12, color: MUTED }}>{meta}</span> : <span />}
+                      <span style={{ fontSize: 13.5, fontWeight: 800, color: primary }}>ادامه مطلب →</span>
+                    </div>
                   </MediaCard>
                 )
               })}
@@ -298,6 +341,61 @@ function BlogBlock({ block, primary, ownerName }: { block: SiteBlock; primary: s
             </div>
           ))}
         </div>
+      </div>
+    </section>
+  )
+}
+
+// صفحهٔ کاملِ وبلاگ: مقاله‌ها را روی سرور بارگذاری و دسته‌ها را استخراج می‌کند، سپس
+// به مؤلفهٔ کلاینتِ BlogFull (فیلتر + جستجو + ساید‌بار) پاس می‌دهد.
+function sampleBlogArticles(): BlogArticle[] {
+  const cats = ['بازار مسکن', 'خرید و فروش', 'رهن و اجاره', 'سرمایه‌گذاری']
+  return Array.from({ length: 9 }).map((_, i) => ({
+    id: `sample-${i}`,
+    slug: `sample-${i}`,
+    title: 'عنوان نمونهٔ مقاله',
+    excerpt: 'خلاصه‌ای کوتاه از مقاله در این بخش نمایش داده می‌شود تا ظاهرِ صفحه مشخص باشد.',
+    category: cats[i % cats.length],
+    author: 'تحریریه',
+  }))
+}
+
+function BlogFullBlock({ block, primary, ownerName }: { block: SiteBlock; primary: string; ownerName?: string }) {
+  const props = p(block)
+  const heading = props.heading || 'وبلاگ'
+  const sidebar: 'yes' | 'no' = props.sidebar === 'no' ? 'no' : 'yes'
+
+  let articles: BlogArticle[]
+  if (props.source === 'sample') {
+    articles = sampleBlogArticles()
+  } else {
+    const items = ownerArticles(ownerName, 24)
+    articles = items.length
+      ? items.map(it => ({
+          id: it.id,
+          slug: it.meta?.slug || it.id,
+          title: it.title,
+          excerpt: it.meta?.summary || it.meta?.metaDescription || it.excerpt || '',
+          image: it.image,
+          category: (it.category || it.meta?.category || '').trim() || undefined,
+          author: (it.meta?.author || '').trim() || undefined,
+          date: (it.meta?.date || it.meta?.publishedAt || '').trim() || undefined,
+        }))
+      : sampleBlogArticles()
+  }
+
+  // دسته‌های متمایزِ غیرخالی به ترتیبِ اولین مشاهده.
+  const categories: string[] = []
+  for (const a of articles) {
+    const c = (a.category || '').trim()
+    if (c && !categories.includes(c)) categories.push(c)
+  }
+
+  return (
+    <section id="blog" style={{ background: SURFACE, padding: SECTION_PAD, direction: 'rtl' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+        <SectionHeading primary={primary}>{heading}</SectionHeading>
+        <BlogFull articles={articles} categories={categories} sidebar={sidebar} primary={primary} />
       </div>
     </section>
   )
@@ -368,20 +466,13 @@ function StatsBlock({ block, primary }: { block: SiteBlock; primary: string }) {
 function GalleryBlock({ block, primary }: { block: SiteBlock; primary: string }) {
   const props = p(block)
   const imgs: string[] = Array.isArray(props.images) ? props.images.filter(Boolean) : []
+  const total = Math.max(1, Math.min(48, Number(props.total) || 9))
+  const perSlide = Math.max(1, Math.min(6, Number(props.perSlide) || 3))
   return (
     <section style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <SectionHeading primary={primary}>{props.heading}</SectionHeading>
-        <div className="mjs-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 18 }}>
-          {(imgs.length ? imgs : ['', '', '', '']).map((src, i) => src ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={i} src={src} alt="" className="mjs-gallery-img" style={{ width: '100%', height: 220, objectFit: 'cover', borderRadius: 16, boxShadow: CARD_SHADOW, display: 'block' }} />
-          ) : (
-            <div key={i} style={{ height: 220, background: 'linear-gradient(135deg,#2d2215,#1a1510)', borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ fontSize: 30, color: 'rgba(255,255,255,0.18)' }}>▥</span>
-            </div>
-          ))}
-        </div>
+        <GallerySlider images={imgs.slice(0, total)} perSlide={perSlide} primary={primary} />
       </div>
     </section>
   )
@@ -646,6 +737,7 @@ function renderBlock(block: SiteBlock, primary: string, ownerName?: string, owne
     case 'search': return <SearchBlock key={block.id} block={block} primary={primary} />
     case 'listings': return <ListingsBlock key={block.id} block={block} primary={primary} ownerName={ownerName} ownerPhone={ownerPhone} />
     case 'blog': return <BlogBlock key={block.id} block={block} primary={primary} ownerName={ownerName} />
+    case 'blogfull': return <BlogFullBlock key={block.id} block={block} primary={primary} ownerName={ownerName} />
     case 'services': return <ServicesBlock key={block.id} block={block} primary={primary} />
     case 'about': return <AboutBlock key={block.id} block={block} primary={primary} />
     case 'team': return <TeamBlock key={block.id} block={block} primary={primary} ownerPhone={ownerPhone} />
@@ -676,16 +768,21 @@ function menuPages(site: Site): { slug: string; label: string; home: boolean }[]
 function SiteNav({ site, primary, currentSlug }: { site: Site; primary: string; currentSlug: string }) {
   const items = menuPages(site)
   return (
-    <nav style={{ background: 'rgba(255,255,255,.88)', backdropFilter: 'blur(10px)', borderBottom: '1px solid #f0ebe1', padding: '0 clamp(16px,4vw,24px)', direction: 'rtl', position: 'sticky', top: 0, zIndex: 50 }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 18, minHeight: 64, flexWrap: 'wrap' }}>
-        <a href={`/${site.slug}`} style={{ fontSize: 19, fontWeight: 900, color: INK, textDecoration: 'none', marginLeft: 'auto', letterSpacing: '-0.4px' }}>{site.title}</a>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+    <nav className="mjs-nav" style={{
+      background: 'color-mix(in srgb, var(--mjs-bg) 86%, transparent)', backdropFilter: 'blur(10px)',
+      borderBottom: '1px solid color-mix(in srgb, var(--mjs-text) 12%, transparent)',
+      padding: '0 clamp(16px,4vw,24px)', direction: 'rtl', position: 'sticky', top: 0, zIndex: 50,
+      boxShadow: '0 6px 24px -22px rgba(20,16,10,.7)',
+    }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 18, minHeight: 64 }}>
+        <a href={`/${site.slug}`} style={{ fontSize: 19, fontWeight: 900, color: 'var(--mjs-heading)', textDecoration: 'none', marginLeft: 'auto', letterSpacing: '-0.4px', flex: '0 0 auto' }}>{site.title}</a>
+        <div className="mjs-nav-items" style={{ display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto', flex: '1 1 auto', justifyContent: 'flex-start' }}>
           {items.map(it => {
             const href = it.home ? `/${site.slug}` : `/${site.slug}/${it.slug}`
             const active = it.slug === currentSlug
             return (
               <a key={it.slug} href={href} className="mjs-navlink" style={{
-                fontSize: 14, fontWeight: active ? 800 : 600, textDecoration: 'none',
+                fontSize: 14, fontWeight: active ? 800 : 600, textDecoration: 'none', whiteSpace: 'nowrap',
                 color: active ? '#fff' : 'var(--mjs-text)',
                 background: active ? primary : 'transparent',
                 padding: '9px 16px', borderRadius: 10,
@@ -735,6 +832,8 @@ export function SiteShell({ site, page }: { site: Site; page: SitePage }) {
         .mjs-fsocial:hover{transform:translateY(-2px);background:${primary};color:#fff;border-color:${primary}}
         .mjs-gallery-img{transition:transform .25s ease}
         .mjs-gallery-img:hover{transform:scale(1.03)}
+        .mjs-nav-items{scrollbar-width:none}
+        .mjs-nav-items::-webkit-scrollbar{display:none}
         @media(max-width:680px){
           .mjs-grid-3,.mjs-grid-4{grid-template-columns:1fr !important}
           .mjs-search-row{flex-direction:column !important}
@@ -743,7 +842,7 @@ export function SiteShell({ site, page }: { site: Site; page: SitePage }) {
           .mjs-footer-grid{grid-template-columns:1fr !important}
         }
       `}</style>
-      {menuPages(site).length > 1 && <SiteNav site={site} primary={primary} currentSlug={page.slug} />}
+      <SiteNav site={site} primary={primary} currentSlug={page.slug} />
       {page.blocks.map(block => renderBlock(block, primary, site.ownerName, site.owner))}
     </main>
   )

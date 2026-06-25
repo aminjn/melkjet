@@ -87,6 +87,10 @@ const BLOCK_DEFAULTS: Record<string, Record<string, any>> = {
     align: 'center',
     bg: 'linear-gradient(140deg,#1a1510,#2d2215,#1a1510)',
     textColor: '#ffffff',
+    image: '',
+    images: [],
+    overlay: 'dark',
+    height: 'normal',
   },
   search: {
     heading: 'جستجوی ملک',
@@ -104,6 +108,11 @@ const BLOCK_DEFAULTS: Record<string, Record<string, any>> = {
     heading: 'وبلاگ و مقالات',
     source: 'mine',
     count: 3,
+  },
+  blogfull: {
+    heading: 'وبلاگ',
+    source: 'mine',
+    sidebar: 'yes',
   },
   services: {
     heading: 'خدمات ما',
@@ -135,6 +144,8 @@ const BLOCK_DEFAULTS: Record<string, Record<string, any>> = {
   gallery: {
     heading: 'گالری تصاویر',
     images: [],
+    total: 9,
+    perSlide: 3,
   },
   testimonials: {
     heading: 'نظرات مشتریان',
@@ -195,6 +206,10 @@ const BLOCK_SCHEMA: Record<string, FieldSpec[]> = {
     { key: 'subheading', label: 'زیرعنوان', kind: 'textarea' },
     { key: 'buttonText', label: 'متن دکمه', kind: 'text' },
     { key: 'buttonLink', label: 'لینک دکمه', kind: 'text' },
+    { key: 'image', label: 'تصویرِ پس‌زمینه', kind: 'image' },
+    { key: 'images', label: 'اسلایدرِ تصاویرِ پس‌زمینه', kind: 'list', itemFields: [{ key: '', label: 'تصویر', kind: 'image' }], newItem: () => '' },
+    { key: 'overlay', label: 'لایهٔ تیرگی روی تصویر', kind: 'enum', options: [{ value: 'dark', label: 'تیره' }, { value: 'light', label: 'روشن' }, { value: 'none', label: 'بدون' }] },
+    { key: 'height', label: 'ارتفاع', kind: 'enum', options: [{ value: 'normal', label: 'معمولی' }, { value: 'tall', label: 'بلند' }] },
     { key: 'align', label: 'چیدمان', kind: 'enum', options: [{ value: 'center', label: 'وسط' }, { value: 'right', label: 'راست‌چین' }] },
     { key: 'bg', label: 'پس‌زمینه (CSS)', kind: 'text' },
     { key: 'textColor', label: 'رنگ متن', kind: 'color' },
@@ -214,6 +229,11 @@ const BLOCK_SCHEMA: Record<string, FieldSpec[]> = {
     { key: 'heading', label: 'عنوان', kind: 'text' },
     { key: 'source', label: 'منبع', kind: 'enum', options: [{ value: 'mine', label: 'مقالات من' }, { value: 'sample', label: 'نمونه' }] },
     { key: 'count', label: 'تعداد', kind: 'number' },
+  ],
+  blogfull: [
+    { key: 'heading', label: 'عنوان', kind: 'text' },
+    { key: 'source', label: 'منبع', kind: 'enum', options: [{ value: 'mine', label: 'مقالات من' }, { value: 'sample', label: 'نمونه' }] },
+    { key: 'sidebar', label: 'ساید‌بار', kind: 'enum', options: [{ value: 'yes', label: 'نمایش' }, { value: 'no', label: 'بدون ساید‌بار' }] },
   ],
   services: [
     { key: 'heading', label: 'عنوان', kind: 'text' },
@@ -236,6 +256,8 @@ const BLOCK_SCHEMA: Record<string, FieldSpec[]> = {
   gallery: [
     { key: 'heading', label: 'عنوان', kind: 'text' },
     { key: 'images', label: 'تصاویر', kind: 'list', itemFields: [{ key: '', label: 'تصویر', kind: 'image' }], newItem: () => '' },
+    { key: 'total', label: 'تعدادِ کلِ تصاویر', kind: 'number' },
+    { key: 'perSlide', label: 'تعداد در هر اسلاید', kind: 'number' },
   ],
   testimonials: [
     { key: 'heading', label: 'عنوان', kind: 'text' },
@@ -273,7 +295,8 @@ const BLOCK_LIBRARY = [
   { type: 'hero', label: 'هیرو', icon: '◇' },
   { type: 'search', label: 'نوار جستجو', icon: '⌕' },
   { type: 'listings', label: 'آگهی‌های من', icon: '⌂' },
-  { type: 'blog', label: 'وبلاگ', icon: '✎' },
+  { type: 'blog', label: 'وبلاگ (خلاصه)', icon: '✎' },
+  { type: 'blogfull', label: 'صفحهٔ وبلاگ', icon: '🗞' },
   { type: 'services', label: 'خدمات', icon: '◈' },
   { type: 'about', label: 'درباره ما', icon: '¶' },
   { type: 'team', label: 'تیم مشاوران', icon: '☺' },
@@ -324,11 +347,11 @@ const DASH_TO_PROFILE: Record<string, string> = {
 const STARTER_TEMPLATES = [
   // ───────── مشاور (۱۰) ─────────
   { id: 'pro-01', name: 'مشاور کلاسیک', profile: 'مشاور', blocks: ['hero', 'listings', 'testimonials', 'contact', 'footer'], desc: 'هیرو، فایل‌ها، نظرات، تماس' },
-  { id: 'pro-02', name: 'مشاور مدرن', profile: 'مشاور', blocks: ['hero', 'stats', 'listings', 'about', 'footer'], desc: 'هیرو، آمار، فایل‌ها، درباره' },
+  { id: 'pro-02', name: 'مشاور مدرن', profile: 'مشاور', blocks: ['hero', 'stats', 'listings', 'about', 'footer'], desc: 'هیرو، آمار، فایل‌ها، درباره', blogPage: true },
   { id: 'pro-03', name: 'مشاور حرفه‌ای', profile: 'مشاور', blocks: ['hero', 'gallery', 'services', 'cta', 'contact', 'footer'], desc: 'هیرو، گالری، خدمات، اقدام، تماس' },
   { id: 'pro-04', name: 'مشاور لوکس', profile: 'مشاور', blocks: ['hero', 'about', 'listings', 'testimonials', 'cta', 'footer'], desc: 'هیرو، معرفی، فایل‌ها، نظرات' },
   { id: 'pro-05', name: 'مشاور جستجو‌محور', profile: 'مشاور', blocks: ['hero', 'search', 'listings', 'contact', 'footer'], desc: 'هیرو، جستجو، فایل‌ها، تماس' },
-  { id: 'pro-06', name: 'مشاور کامل', profile: 'مشاور', blocks: ['hero', 'services', 'stats', 'listings', 'testimonials', 'footer'], desc: 'هیرو، خدمات، آمار، فایل‌ها، نظرات' },
+  { id: 'pro-06', name: 'مشاور کامل', profile: 'مشاور', blocks: ['hero', 'services', 'stats', 'listings', 'testimonials', 'footer'], desc: 'هیرو، خدمات، آمار، فایل‌ها، نظرات', blogPage: true },
   { id: 'pro-07', name: 'مشاور تک‌برگ', profile: 'مشاور', blocks: ['hero', 'listings', 'about', 'cta', 'footer'], desc: 'هیرو، فایل‌ها، درباره، اقدام' },
   { id: 'pro-08', name: 'مشاور تصویری', profile: 'مشاور', blocks: ['hero', 'gallery', 'listings', 'testimonials', 'contact', 'footer'], desc: 'هیرو، گالری، فایل‌ها، نظرات، تماس' },
   { id: 'pro-09', name: 'مشاور معتبر', profile: 'مشاور', blocks: ['hero', 'about', 'stats', 'services', 'contact', 'footer'], desc: 'هیرو، درباره، آمار، خدمات، تماس' },
@@ -338,13 +361,13 @@ const STARTER_TEMPLATES = [
   { id: 'agc-01', name: 'آژانس جامع', profile: 'آژانس', blocks: ['hero', 'services', 'listings', 'team', 'contact', 'footer'], desc: 'هیرو، خدمات، فایل‌ها، تیم، تماس' },
   { id: 'agc-02', name: 'آژانس لوکس', profile: 'آژانس', blocks: ['hero', 'gallery', 'services', 'testimonials', 'contact', 'footer'], desc: 'هیرو، گالری، خدمات، نظرات' },
   { id: 'agc-03', name: 'آژانس مدرن', profile: 'آژانس', blocks: ['hero', 'search', 'listings', 'stats', 'cta', 'footer'], desc: 'هیرو، جستجو، فایل‌ها، آمار، اقدام' },
-  { id: 'agc-04', name: 'آژانس حرفه‌ای', profile: 'آژانس', blocks: ['hero', 'about', 'services', 'stats', 'testimonials', 'footer'], desc: 'هیرو، درباره، خدمات، آمار، نظرات' },
+  { id: 'agc-04', name: 'آژانس حرفه‌ای', profile: 'آژانس', blocks: ['hero', 'about', 'services', 'stats', 'testimonials', 'footer'], desc: 'هیرو، درباره، خدمات، آمار، نظرات', blogPage: true },
   { id: 'agc-05', name: 'آژانس برتر', profile: 'آژانس', blocks: ['hero', 'stats', 'listings', 'testimonials', 'contact', 'footer'], desc: 'هیرو، آمار، فایل‌ها، نظرات، تماس' },
   { id: 'agc-06', name: 'آژانس تیمی', profile: 'آژانس', blocks: ['hero', 'team', 'gallery', 'services', 'contact', 'footer'], desc: 'هیرو، تیم، گالری، خدمات، تماس' },
   { id: 'agc-07', name: 'آژانس کامل', profile: 'آژانس', blocks: ['hero', 'search', 'services', 'listings', 'testimonials', 'footer'], desc: 'هیرو، جستجو، خدمات، فایل‌ها، نظرات' },
   { id: 'agc-08', name: 'آژانس فروش', profile: 'آژانس', blocks: ['hero', 'listings', 'cta', 'contact', 'footer'], desc: 'هیرو، فایل‌ها، اقدام، تماس' },
   { id: 'agc-09', name: 'آژانس معتبر', profile: 'آژانس', blocks: ['hero', 'services', 'stats', 'gallery', 'cta', 'footer'], desc: 'هیرو، خدمات، آمار، گالری، اقدام' },
-  { id: 'agc-10', name: 'آژانس بین‌المللی', profile: 'آژانس', blocks: ['hero', 'about', 'listings', 'services', 'testimonials', 'contact', 'footer'], desc: 'هیرو، درباره، فایل‌ها، خدمات، نظرات، تماس' },
+  { id: 'agc-10', name: 'آژانس بین‌المللی', profile: 'آژانس', blocks: ['hero', 'about', 'listings', 'services', 'testimonials', 'contact', 'footer'], desc: 'هیرو، درباره، فایل‌ها، خدمات، نظرات، تماس', blogPage: true },
 
   // ───────── سازنده (۱۰) ─────────
   { id: 'bld-01', name: 'پیش‌فروش پروژه', profile: 'سازنده', blocks: ['hero', 'gallery', 'stats', 'contact', 'footer'], desc: 'هیرو، گالری پروژه، آمار، فرم' },
@@ -354,7 +377,7 @@ const STARTER_TEMPLATES = [
   { id: 'bld-05', name: 'سازندهٔ مدرن', profile: 'سازنده', blocks: ['hero', 'stats', 'gallery', 'about', 'contact', 'footer'], desc: 'هیرو، آمار، گالری، درباره، تماس' },
   { id: 'bld-06', name: 'برج مسکونی', profile: 'سازنده', blocks: ['hero', 'about', 'gallery', 'stats', 'cta', 'footer'], desc: 'هیرو، معرفی، گالری، آمار، اقدام' },
   { id: 'bld-07', name: 'مجتمع تجاری', profile: 'سازنده', blocks: ['hero', 'gallery', 'services', 'stats', 'contact', 'footer'], desc: 'هیرو، گالری، خدمات، آمار، تماس' },
-  { id: 'bld-08', name: 'سازندهٔ کامل', profile: 'سازنده', blocks: ['hero', 'about', 'gallery', 'stats', 'testimonials', 'cta', 'footer'], desc: 'هیرو، درباره، گالری، آمار، نظرات' },
+  { id: 'bld-08', name: 'سازندهٔ کامل', profile: 'سازنده', blocks: ['hero', 'about', 'gallery', 'stats', 'testimonials', 'cta', 'footer'], desc: 'هیرو، درباره، گالری، آمار، نظرات', blogPage: true },
   { id: 'bld-09', name: 'پروژهٔ نمونه', profile: 'سازنده', blocks: ['hero', 'gallery', 'about', 'cta', 'footer'], desc: 'هیرو، گالری، درباره، اقدام' },
   { id: 'bld-10', name: 'سازندهٔ معتبر', profile: 'سازنده', blocks: ['hero', 'stats', 'about', 'gallery', 'services', 'footer'], desc: 'هیرو، آمار، درباره، گالری، خدمات' },
 
@@ -362,7 +385,7 @@ const STARTER_TEMPLATES = [
   { id: 'shp-01', name: 'فروشگاه مصالح', profile: 'فروشگاه', blocks: ['hero', 'search', 'services', 'testimonials', 'contact', 'footer'], desc: 'هیرو، جستجو، دسته‌ها، نظرات' },
   { id: 'shp-02', name: 'فروشگاه آنلاین', profile: 'فروشگاه', blocks: ['hero', 'search', 'listings', 'services', 'footer'], desc: 'هیرو، جستجو، محصولات، دسته‌ها' },
   { id: 'shp-03', name: 'فروشگاه مدرن', profile: 'فروشگاه', blocks: ['hero', 'search', 'services', 'gallery', 'cta', 'footer'], desc: 'هیرو، جستجو، دسته‌ها، گالری، اقدام' },
-  { id: 'shp-04', name: 'فروشگاه کامل', profile: 'فروشگاه', blocks: ['hero', 'search', 'services', 'stats', 'testimonials', 'footer'], desc: 'هیرو، جستجو، دسته‌ها، آمار، نظرات' },
+  { id: 'shp-04', name: 'فروشگاه کامل', profile: 'فروشگاه', blocks: ['hero', 'search', 'services', 'stats', 'testimonials', 'footer'], desc: 'هیرو، جستجو، دسته‌ها، آمار، نظرات', blogPage: true },
   { id: 'shp-05', name: 'فروشگاه تخصصی', profile: 'فروشگاه', blocks: ['hero', 'search', 'listings', 'testimonials', 'contact', 'footer'], desc: 'هیرو، جستجو، محصولات، نظرات، تماس' },
   { id: 'shp-06', name: 'فروشگاه ابزار', profile: 'فروشگاه', blocks: ['hero', 'search', 'services', 'about', 'cta', 'footer'], desc: 'هیرو، جستجو، دسته‌ها، درباره، اقدام' },
   { id: 'shp-07', name: 'فروشگاه دکوراسیون', profile: 'فروشگاه', blocks: ['hero', 'gallery', 'search', 'services', 'contact', 'footer'], desc: 'هیرو، گالری، جستجو، دسته‌ها، تماس' },
@@ -376,7 +399,7 @@ const STARTER_TEMPLATES = [
   { id: 'inv-03', name: 'فرصت سرمایه‌گذاری', profile: 'سرمایه‌گذار', blocks: ['hero', 'listings', 'stats', 'testimonials', 'contact', 'footer'], desc: 'هیرو، فرصت‌ها، آمار، نظرات، تماس' },
   { id: 'inv-04', name: 'پرتفوی ملکی', profile: 'سرمایه‌گذار', blocks: ['hero', 'stats', 'gallery', 'cta', 'footer'], desc: 'هیرو، آمار، گالری، اقدام' },
   { id: 'inv-05', name: 'بازده تضمینی', profile: 'سرمایه‌گذار', blocks: ['hero', 'stats', 'services', 'about', 'contact', 'footer'], desc: 'هیرو، آمار، خدمات، درباره، تماس' },
-  { id: 'inv-06', name: 'سرمایه‌گذاری مدرن', profile: 'سرمایه‌گذار', blocks: ['hero', 'about', 'stats', 'listings', 'cta', 'footer'], desc: 'هیرو، درباره، آمار، فرصت‌ها، اقدام' },
+  { id: 'inv-06', name: 'سرمایه‌گذاری مدرن', profile: 'سرمایه‌گذار', blocks: ['hero', 'about', 'stats', 'listings', 'cta', 'footer'], desc: 'هیرو، درباره، آمار، فرصت‌ها، اقدام', blogPage: true },
   { id: 'inv-07', name: 'سرمایه‌گذاری امن', profile: 'سرمایه‌گذار', blocks: ['hero', 'stats', 'testimonials', 'cta', 'contact', 'footer'], desc: 'هیرو، آمار، نظرات، اقدام، تماس' },
   { id: 'inv-08', name: 'پروژهٔ سرمایه‌گذاری', profile: 'سرمایه‌گذار', blocks: ['hero', 'gallery', 'stats', 'listings', 'cta', 'footer'], desc: 'هیرو، گالری، آمار، فرصت‌ها، اقدام' },
   { id: 'inv-09', name: 'سرمایه‌گذاری کامل', profile: 'سرمایه‌گذار', blocks: ['hero', 'stats', 'services', 'listings', 'testimonials', 'footer'], desc: 'هیرو، آمار، خدمات، فرصت‌ها، نظرات' },
@@ -391,7 +414,7 @@ const STARTER_TEMPLATES = [
   { id: 'lgl-06', name: 'حقوقی معتبر', profile: 'حقوقی', blocks: ['hero', 'services', 'stats', 'testimonials', 'footer'], desc: 'هیرو، خدمات، آمار، نظرات' },
   { id: 'lgl-07', name: 'قراردادهای ملکی', profile: 'حقوقی', blocks: ['hero', 'about', 'services', 'testimonials', 'cta', 'footer'], desc: 'هیرو، درباره، خدمات، نظرات، اقدام' },
   { id: 'lgl-08', name: 'مشاوره تخصصی', profile: 'حقوقی', blocks: ['hero', 'services', 'about', 'stats', 'cta', 'footer'], desc: 'هیرو، خدمات، درباره، آمار، اقدام' },
-  { id: 'lgl-09', name: 'حقوقی کامل', profile: 'حقوقی', blocks: ['hero', 'services', 'testimonials', 'about', 'contact', 'footer'], desc: 'هیرو، خدمات، نظرات، درباره، تماس' },
+  { id: 'lgl-09', name: 'حقوقی کامل', profile: 'حقوقی', blocks: ['hero', 'services', 'testimonials', 'about', 'contact', 'footer'], desc: 'هیرو، خدمات، نظرات، درباره، تماس', blogPage: true },
   { id: 'lgl-10', name: 'دفتر اسناد', profile: 'حقوقی', blocks: ['hero', 'about', 'services', 'gallery', 'contact', 'footer'], desc: 'هیرو، درباره، خدمات، گالری، تماس' },
 
   // ───────── عمومی (۱۰) ─────────
@@ -400,7 +423,7 @@ const STARTER_TEMPLATES = [
   { id: 'gen-03', name: 'معرفی کسب‌وکار', profile: 'عمومی', blocks: ['hero', 'services', 'about', 'cta', 'footer'], desc: 'هیرو، خدمات، درباره، اقدام' },
   { id: 'gen-04', name: 'پرتال جستجو', profile: 'عمومی', blocks: ['hero', 'search', 'listings', 'contact', 'footer'], desc: 'هیرو، جستجو، فایل‌ها، تماس' },
   { id: 'gen-05', name: 'نمونه‌کار', profile: 'عمومی', blocks: ['hero', 'gallery', 'about', 'cta', 'footer'], desc: 'هیرو، گالری، درباره، اقدام' },
-  { id: 'gen-06', name: 'صفحهٔ کامل', profile: 'عمومی', blocks: ['hero', 'services', 'stats', 'testimonials', 'contact', 'footer'], desc: 'هیرو، خدمات، آمار، نظرات، تماس' },
+  { id: 'gen-06', name: 'صفحهٔ کامل', profile: 'عمومی', blocks: ['hero', 'services', 'stats', 'testimonials', 'contact', 'footer'], desc: 'هیرو، خدمات، آمار، نظرات، تماس', blogPage: true },
   { id: 'gen-07', name: 'صفحهٔ شرکتی', profile: 'عمومی', blocks: ['hero', 'about', 'services', 'gallery', 'contact', 'footer'], desc: 'هیرو، درباره، خدمات، گالری، تماس' },
   { id: 'gen-08', name: 'صفحهٔ رویداد', profile: 'عمومی', blocks: ['hero', 'about', 'gallery', 'cta', 'contact', 'footer'], desc: 'هیرو، درباره، گالری، اقدام، تماس' },
   { id: 'gen-09', name: 'صفحهٔ خدمات', profile: 'عمومی', blocks: ['hero', 'services', 'testimonials', 'cta', 'footer'], desc: 'هیرو، خدمات، نظرات، اقدام' },
@@ -449,10 +472,20 @@ function BlockBody({ block, primary, myListings, teamMembers }: { block: Block; 
 
   if (t === 'hero') {
     const align = p.align === 'right' ? 'right' : 'center'
+    const imgs: string[] = Array.isArray(p.images) ? p.images.filter(Boolean) : []
+    const slider = imgs.length > 1
+    const firstImg = imgs[0] || p.image || ''
+    const ov = p.overlay === 'none' ? 'rgba(0,0,0,0)' : p.overlay === 'light' ? 'rgba(0,0,0,.18)' : 'rgba(0,0,0,.5)'
+    const baseBg = firstImg
+      ? `linear-gradient(${ov},${ov}), url(${firstImg}) center/cover`
+      : (p.bg || `linear-gradient(140deg, ${primary}, #1a1510)`)
+    const tall = p.height === 'tall'
     return (
-      <div style={{ background: p.bg || 'linear-gradient(140deg,#1a1510,#2d2215,#1a1510)', padding: '52px 28px', textAlign: align as any, direction: 'rtl' }}>
-        <div style={{ fontSize: 26, fontWeight: 900, color: p.textColor || '#fff', marginBottom: 10, letterSpacing: '-0.5px' }}>{p.heading}</div>
-        <div style={{ fontSize: 14, color: p.textColor ? p.textColor : '#fff', opacity: 0.6, marginBottom: 22 }}>{p.subheading}</div>
+      <div style={{ position: 'relative', background: baseBg, padding: tall ? '110px 28px' : '64px 28px', textAlign: align as any, direction: 'rtl', overflow: 'hidden' }}>
+        {slider && <span style={{ position: 'absolute', top: 10, insetInlineStart: 10, fontSize: 10, fontWeight: 700, color: '#fff', background: 'rgba(0,0,0,.45)', borderRadius: 999, padding: '3px 10px' }}>⟳ اسلایدرِ {imgs.length.toLocaleString('fa-IR')} تصویری</span>}
+        <div style={{ display: 'inline-block', fontSize: 10.5, fontWeight: 700, color: '#fff', background: 'rgba(255,255,255,.16)', border: '1px solid rgba(255,255,255,.25)', padding: '4px 12px', borderRadius: 999, marginBottom: 14 }}>املاک و مستغلات</div>
+        <div style={{ fontSize: 28, fontWeight: 900, color: p.textColor || '#fff', marginBottom: 10, letterSpacing: '-0.5px' }}>{p.heading}</div>
+        <div style={{ fontSize: 14, color: p.textColor || '#fff', opacity: 0.82, marginBottom: 22, maxWidth: 520, marginInline: align === 'center' ? 'auto' : undefined }}>{p.subheading}</div>
         {p.buttonText ? btn(p.buttonText) : null}
       </div>
     )
@@ -529,18 +562,60 @@ function BlockBody({ block, primary, myListings, teamMembers }: { block: Block; 
       <div style={{ background: '#fff', padding: '28px', direction: 'rtl' }}>
         <div style={{ fontSize: 18, fontWeight: 800, color: '#1a1510', marginBottom: 16 }}>{p.heading}</div>
         {p.source === 'mine' ? <div style={{ fontSize: 11, color: primary, marginBottom: 12 }}>✎ مقالات منتشرشدهٔ شما اینجا نمایش داده می‌شوند</div> : null}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
           {Array.from({ length: n }).map((_, i) => (
-            <div key={i} style={{ background: '#f5f3ef', borderRadius: 10, overflow: 'hidden', border: '1px solid #eee' }}>
-              <div style={{ height: 80, background: `linear-gradient(135deg,${grads[i % grads.length]})` }} />
-              <div style={{ padding: '12px' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1510', marginBottom: 4 }}>عنوان مقاله</div>
-                <div style={{ fontSize: 11, color: '#888', lineHeight: 1.7, marginBottom: 8 }}>خلاصه‌ای کوتاه از مقاله در این بخش نمایش داده می‌شود.</div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: primary }}>مطالعهٔ مقاله →</div>
+            <div key={i} style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', border: '1px solid #eee', boxShadow: '0 8px 22px -16px rgba(0,0,0,.5)' }}>
+              <div style={{ height: 92, background: `linear-gradient(135deg,${grads[i % grads.length]})`, position: 'relative' }}>
+                <span style={{ position: 'absolute', top: 8, insetInlineStart: 8, fontSize: 9.5, fontWeight: 700, color: '#fff', background: primary, borderRadius: 999, padding: '2px 9px' }}>دسته</span>
+              </div>
+              <div style={{ padding: '13px' }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: '#1a1510', marginBottom: 5 }}>عنوان مقاله</div>
+                <div style={{ fontSize: 11, color: '#888', lineHeight: 1.8, marginBottom: 9 }}>خلاصه‌ای کوتاه از مقاله…</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: primary }}>ادامه →</span>
+                  <span style={{ fontSize: 10, color: '#aaa' }}>۱۴۰۴/۰۱/۰۱</span>
+                </div>
               </div>
             </div>
           ))}
         </div>
+      </div>
+    )
+  }
+  if (t === 'blogfull') {
+    const withSidebar = p.sidebar !== 'no'
+    return (
+      <div style={{ background: '#faf9f7', padding: '28px', direction: 'rtl' }}>
+        <div style={{ fontSize: 20, fontWeight: 900, color: '#1a1510', marginBottom: 4 }}>{p.heading || 'وبلاگ'}</div>
+        <div style={{ height: 4, width: 48, borderRadius: 999, background: primary, marginBottom: 16 }} />
+        <div style={{ display: 'flex', gap: 16, flexDirection: 'row-reverse' }}>
+          {withSidebar && (
+            <div style={{ flex: '0 0 150px' }}>
+              <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 12, padding: 12, marginBottom: 12 }}>
+                <div style={{ height: 9, background: '#eee', borderRadius: 5, marginBottom: 8 }} />
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#555', marginBottom: 8 }}>دسته‌بندی‌ها</div>
+                {['همه', 'خرید', 'فروش', 'اجاره'].map((c, i) => <div key={c} style={{ fontSize: 11, color: i === 0 ? primary : '#888', fontWeight: i === 0 ? 700 : 500, padding: '4px 0', borderBottom: '1px solid #f3f1ec' }}>{c}</div>)}
+              </div>
+              <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 12, padding: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#555', marginBottom: 8 }}>آخرین مطالب</div>
+                {[0, 1, 2].map(i => <div key={i} style={{ display: 'flex', gap: 7, marginBottom: 8 }}><div style={{ width: 30, height: 30, borderRadius: 6, background: `linear-gradient(135deg,${primary},#1a1510)`, flexShrink: 0 }} /><div style={{ flex: 1 }}><div style={{ height: 5, background: '#e7e7ea', borderRadius: 3, marginBottom: 4 }} /><div style={{ height: 4, width: '60%', background: '#f0f0f2', borderRadius: 3 }} /></div></div>)}
+              </div>
+            </div>
+          )}
+          <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12 }}>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} style={{ background: '#fff', border: '1px solid #eee', borderRadius: 12, overflow: 'hidden', boxShadow: '0 8px 22px -16px rgba(0,0,0,.5)' }}>
+                <div style={{ height: 74, background: `linear-gradient(135deg,#2d2215,#1a1510)` }} />
+                <div style={{ padding: 11 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 800, color: '#1a1510', marginBottom: 4 }}>عنوان مقاله</div>
+                  <div style={{ fontSize: 10.5, color: '#888', lineHeight: 1.7, marginBottom: 7 }}>خلاصه‌ای کوتاه…</div>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: primary }}>ادامه →</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ fontSize: 10.5, color: primary, marginTop: 12 }}>✎ صفحهٔ کاملِ وبلاگ با فیلتر و ساید‌بار — مقالاتِ منتشرشدهٔ شما هنگامِ انتشار نمایش داده می‌شوند.</div>
       </div>
     )
   }
@@ -644,19 +719,29 @@ function BlockBody({ block, primary, myListings, teamMembers }: { block: Block; 
     )
   }
   if (t === 'gallery') {
-    const imgs: string[] = Array.isArray(p.images) ? p.images.filter(Boolean) : []
+    const total = Math.max(1, Math.min(40, Number(p.total) || 9))
+    const perSlide = Math.max(1, Math.min(6, Number(p.perSlide) || 3))
+    const imgs: string[] = (Array.isArray(p.images) ? p.images.filter(Boolean) : []).slice(0, total)
+    const cells = imgs.length ? imgs : ['', '', '', '']
+    const cardW = `calc((100% - ${(perSlide - 1) * 10}px) / ${perSlide})`
     return (
       <div style={{ background: '#fff', padding: '28px', direction: 'rtl' }}>
-        <div style={{ fontSize: 18, fontWeight: 800, color: '#1a1510', marginBottom: 14 }}>{p.heading}</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
-          {(imgs.length ? imgs : ['', '', '', '']).map((src, i) => src ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={i} src={src} alt="" style={{ width: '100%', height: 90, objectFit: 'cover', borderRadius: 8 }} />
-          ) : (
-            <div key={i} style={{ height: 90, background: 'linear-gradient(135deg,#2d2215,#1a1510)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ fontSize: 22, color: 'rgba(255,255,255,0.18)' }}>▥</span>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
+          <div style={{ fontSize: 18, fontWeight: 800, color: '#1a1510' }}>{p.heading}</div>
+          <span style={{ fontSize: 10.5, color: '#aaa' }}>اسلایدر · {perSlide.toLocaleString('fa-IR')} در هر نما</span>
+        </div>
+        <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6 }}>
+          {cells.map((src, i) => (
+            <div key={i} style={{ flex: `0 0 ${cardW}`, minWidth: 110 }}>
+              {src
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={src} alt="" style={{ width: '100%', height: 110, objectFit: 'cover', borderRadius: 10, display: 'block' }} />
+                : <div style={{ height: 110, background: `linear-gradient(135deg,${primary},#1a1510)`, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontSize: 22, color: 'rgba(255,255,255,0.22)' }}>▥</span></div>}
             </div>
           ))}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 8 }}>
+          {Array.from({ length: Math.max(1, Math.ceil(cells.length / perSlide)) }).slice(0, 6).map((_, i) => <span key={i} style={{ width: i === 0 ? 16 : 6, height: 6, borderRadius: 999, background: i === 0 ? primary : '#ddd' }} />)}
         </div>
       </div>
     )
@@ -995,7 +1080,13 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
       else if (type === 'footer') preset = { brand: tpl.name }
       return makeBlock(type, preset)
     })
-    setBlocks(nb)
+    // قالب‌هایی که صفحهٔ وبلاگ دارند → یک صفحهٔ «وبلاگ» با بلوکِ کاملِ وبلاگ (فیلتر + ساید‌بار)
+    const newPages: Page[] = [{ slug: 'home', title: 'صفحه اصلی', blocks: nb }]
+    if ((tpl as any).blogPage) {
+      newPages.push({ slug: 'blog', title: 'وبلاگ', inMenu: true, blocks: [makeBlock('blogfull', { heading: 'وبلاگ' }), makeBlock('footer', { brand: tpl.name })] })
+    }
+    setPages(newPages)
+    setActivePage(0)
     setSelectedBlock(null)
   }
 
@@ -1414,6 +1505,17 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
               <div style={{ flex: 1, background: 'var(--surface)', borderRadius: 6, padding: '4px 10px', fontSize: 10, color: 'var(--faint)', textAlign: 'center', direction: 'ltr' }}>
                 https://melkjet.com/{slug}
               </div>
+            </div>
+
+            {/* منوی سایت (همیشه روی همهٔ صفحات نمایش داده می‌شود) */}
+            <div style={{ direction: 'rtl', background: theme.bg || '#fff', borderBottom: `1px solid ${theme.surface || '#eee'}`, padding: '12px 22px', display: 'flex', alignItems: 'center', gap: 14, position: 'relative' }}>
+              <div style={{ fontSize: 16, fontWeight: 900, color: theme.heading || '#15110b', marginInlineEnd: 'auto' }}>{seoTitle?.split('|')[0]?.trim() || 'برندِ شما'}</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {pages.filter((pg, i) => i === 0 || pg.inMenu !== false).map((pg, i) => (
+                  <span key={pg.slug} style={{ fontSize: 12.5, fontWeight: i === activePage ? 800 : 600, color: i === activePage ? '#fff' : (theme.text || '#555'), background: i === activePage ? theme.primary : 'transparent', padding: '6px 13px', borderRadius: 8 }}>{i === 0 ? '⌂ ' : ''}{pg.menuLabel || pg.title}</span>
+                ))}
+              </div>
+              <span style={{ position: 'absolute', top: 4, insetInlineStart: 8, fontSize: 9, color: 'var(--faint)' }}>منوی سایت</span>
             </div>
 
             {/* Canvas blocks */}
