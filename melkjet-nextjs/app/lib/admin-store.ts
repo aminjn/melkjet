@@ -63,6 +63,15 @@ export interface AdminData {
     privateKeyPem: string
     subject?: string
   }
+  podium?: {             // احرازِ هویتِ شاهکار (Pod.ir) — استعلامِ ثبت‌احوال + تطبیقِ موبایل↔کدملی
+    token?: string
+    idKey?: string       // GET_IDENTITY_INFO_API_KEY
+    matchKey?: string    // MATCH_NATIONAL_ID_AND_PHONE_NUMBER_API_KEY
+    idProduct?: string
+    matchProduct?: string
+    url?: string
+    enabled?: boolean    // اگر روشن باشد، ثبت‌نامِ کاربرِ جدید نیازمندِ تأییدِ شاهکار است
+  }
   alerts?: {             // هشدارِ «آگهی جدید اومد خبرم کن» — پیامک با پترن
     enabled?: boolean
     pattern?: string     // کدِ پترنِ IPPanel (اختیاری)

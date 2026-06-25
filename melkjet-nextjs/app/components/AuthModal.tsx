@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation'
 // پس از ورودِ موفق: رویدادِ «mj-auth-success» را می‌فرستد و بسته می‌شود (روی همان صفحه می‌ماند).
 
 type Tab = 'phone' | 'email'
-type OtpStep = 'enter-phone' | 'enter-code' | 'onboard'
+type OtpStep = 'enter-phone' | 'shahkar' | 'enter-code' | 'onboard'
+const faToEn = (v: string) => (v || '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
 const ROLE_ICONS: Record<string, string> = { '/buyer': '🔑', '/owner': '🏠', '/pros': '🤝', '/agency': '🏢', '/builder': '🏗', '/materials': '🧱', '/legal': '⚖' }
 const FALLBACK_ROLES = [
   { id: 'کاربر عادی', name: 'کاربر عادی', dashboard: '/buyer' },
@@ -26,6 +27,10 @@ export default function AuthModal() {
   const [devCode, setDevCode] = useState('')
   const [countdown, setCountdown] = useState(0)
   const [name, setName] = useState('')
+  const [nameVerified, setNameVerified] = useState(false)
+  // شاهکار
+  const [nid, setNid] = useState('')
+  const [by, setBy] = useState(''); const [bm, setBm] = useState(''); const [bd, setBd] = useState('')
   const [selectedRole, setSelectedRole] = useState('')
   const [roles, setRoles] = useState(FALLBACK_ROLES)
   const [email, setEmail] = useState('')
@@ -34,7 +39,7 @@ export default function AuthModal() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    const onOpen = (e: Event) => { setReason((e as CustomEvent).detail?.reason || ''); setOpen(true); setError(''); setOtpStep('enter-phone'); setTab('phone') }
+    const onOpen = (e: Event) => { setReason((e as CustomEvent).detail?.reason || ''); setOpen(true); setError(''); setOtpStep('enter-phone'); setTab('phone'); setCode(''); setNameVerified(false); setNid(''); setBy(''); setBm(''); setBd('') }
     window.addEventListener('mj-open-auth', onOpen)
     return () => window.removeEventListener('mj-open-auth', onOpen)
   }, [])
@@ -54,11 +59,30 @@ export default function AuthModal() {
     setError(''); if (!/^09[0-9]{9}$/.test(phone)) { setError('شماره موبایل معتبر نیست — مثال: 09123456789'); return }
     setLoading(true)
     try {
-      const res = await fetch('/api/auth/send-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) })
+      const res = await fetch('/api/auth/phone-start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) })
       const data = await res.json()
-      if (!res.ok || data.error) { setError(data.error || 'خطا در ارسال پیامک'); return }
+      if (!res.ok || data.error) { setError(data.error || 'خطا'); return }
+      if (data.needsShahkar) { setOtpStep('shahkar'); return }  // کاربرِ جدید → تأییدِ هویتِ شاهکار
       setOtpStep('enter-code'); setCode(data.code || ''); setDevCode(data.dev ? (data.code || '') : ''); startCountdown()
     } catch { setError('خطا در اتصال به سرور') } finally { setLoading(false) }
+  }
+  async function submitShahkar() {
+    setError('')
+    const y = faToEn(by).replace(/\D/g, ''), m = faToEn(bm).replace(/\D/g, ''), d = faToEn(bd).replace(/\D/g, '')
+    if (y.length !== 4 || !m || !d) { setError('تاریخ تولدِ شمسی را کامل وارد کنید (سال/ماه/روز).'); return }
+    const jbd = y + m.padStart(2, '0') + d.padStart(2, '0')
+    setLoading(true)
+    try {
+      const res = await fetch('/api/auth/shahkar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, nationalCode: nid, jBirthDate: jbd }) })
+      const data = await res.json()
+      if (!res.ok || data.error) { setError(data.error || 'خطا در تأییدِ هویت'); return }
+      setName(data.name || ''); setNameVerified(true)
+      setOtpStep('enter-code'); setCode(data.code || ''); setDevCode(data.dev ? (data.code || '') : ''); startCountdown()
+    } catch { setError('خطا در اتصال به سرور') } finally { setLoading(false) }
+  }
+  async function resend() {
+    setError('')
+    try { const r = await fetch('/api/auth/send-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) }); const d = await r.json(); if (d.dev) setDevCode(d.code || ''); startCountdown() } catch {}
   }
   async function verifyOTP() {
     setError(''); if (code.length !== 6) { setError('کد ۶ رقمی را وارد کنید'); return }
@@ -69,7 +93,7 @@ export default function AuthModal() {
       if (!res.ok) { setError(data.error || 'کد اشتباه است'); return }
       if (data.token) { try { localStorage.setItem('mj_token', data.token) } catch {} }
       if (data.role === 'super_admin') { setOpen(false); router.push('/admin'); return }
-      if (data.needsOnboarding) { setOtpStep('onboard'); return }
+      if (data.needsOnboarding) { if (data.name) setName(data.name); if (data.nameVerified) setNameVerified(true); setOtpStep('onboard'); return }
       success()
     } catch { setError('خطا در اتصال به سرور') } finally { setLoading(false) }
   }
@@ -132,7 +156,29 @@ export default function AuthModal() {
                 <p style={{ fontSize: 12, color: 'var(--faint)', marginTop: 8 }}>کد تایید ۶ رقمی به این شماره ارسال می‌شود</p>
               </div>
               {errBox}
-              <button onClick={sendOTP} disabled={loading} style={btn}>{loading ? 'در حال ارسال…' : 'ارسال کد تایید'}</button>
+              <button onClick={sendOTP} disabled={loading} style={btn}>{loading ? 'در حال بررسی…' : 'ادامه'}</button>
+            </>
+          )}
+          {tab === 'phone' && otpStep === 'shahkar' && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <button onClick={() => { setOtpStep('enter-phone'); setError('') }} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 22 }}>←</button>
+                <div><p style={{ fontSize: 13, color: 'var(--text)', margin: 0, fontWeight: 700 }}>تأییدِ هویت (سامانهٔ شاهکار)</p><p style={{ fontSize: 11.5, color: 'var(--faint)', margin: '3px 0 0' }}>برای ثبت‌نام، هویتت با ثبت‌احوال و شاهکار راستی‌آزمایی می‌شود.</p></div>
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={lab}>کد ملی</label>
+                <input type="tel" inputMode="numeric" placeholder="کد ملی ۱۰ رقمی" value={nid} onChange={e => setNid(e.target.value.replace(/\D/g, '').slice(0, 10))} style={{ ...inp, textAlign: 'center', letterSpacing: 2 }} autoFocus />
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <label style={lab}>تاریخ تولد (شمسی)</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 8 }}>
+                  <input type="tel" inputMode="numeric" placeholder="سال ۱۳۷۰" value={by} onChange={e => setBy(e.target.value.replace(/\D/g, '').slice(0, 4))} style={{ ...inp, textAlign: 'center' }} />
+                  <input type="tel" inputMode="numeric" placeholder="ماه" value={bm} onChange={e => setBm(e.target.value.replace(/\D/g, '').slice(0, 2))} style={{ ...inp, textAlign: 'center' }} />
+                  <input type="tel" inputMode="numeric" placeholder="روز" value={bd} onChange={e => setBd(e.target.value.replace(/\D/g, '').slice(0, 2))} style={{ ...inp, textAlign: 'center' }} />
+                </div>
+              </div>
+              {errBox}
+              <button onClick={submitShahkar} disabled={loading} style={btn}>{loading ? 'در حال راستی‌آزمایی…' : 'تأیید هویت و دریافت کد'}</button>
             </>
           )}
           {tab === 'phone' && otpStep === 'enter-code' && (
@@ -148,13 +194,13 @@ export default function AuthModal() {
               </div>
               {errBox}
               <button onClick={verifyOTP} disabled={loading} style={btn}>{loading ? 'در حال تایید…' : 'تایید و ورود'}</button>
-              <div style={{ textAlign: 'center', marginTop: 14, fontSize: 13, color: 'var(--muted)' }}>{countdown > 0 ? <span>ارسال مجدد پس از {countdown} ثانیه</span> : <button onClick={sendOTP} style={{ background: 'none', border: 'none', color: 'var(--gold)', cursor: 'pointer', fontSize: 13, fontWeight: 700, textDecoration: 'underline' }}>ارسال مجدد کد</button>}</div>
+              <div style={{ textAlign: 'center', marginTop: 14, fontSize: 13, color: 'var(--muted)' }}>{countdown > 0 ? <span>ارسال مجدد پس از {countdown} ثانیه</span> : <button onClick={resend} style={{ background: 'none', border: 'none', color: 'var(--gold)', cursor: 'pointer', fontSize: 13, fontWeight: 700, textDecoration: 'underline' }}>ارسال مجدد کد</button>}</div>
             </>
           )}
           {tab === 'phone' && otpStep === 'onboard' && (
             <>
               <div style={{ marginBottom: 16 }}><p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 4px' }}>به ملک‌جت خوش آمدی! 🎉</p><p style={{ fontSize: 12.5, color: 'var(--faint)', margin: 0 }}>نام و نقشت را انتخاب کن.</p></div>
-              <div style={{ marginBottom: 16 }}><label style={lab}>نام و نام خانوادگی</label><input value={name} onChange={e => setName(e.target.value)} placeholder="مثلاً علی رضایی" style={{ ...inp, direction: 'rtl', textAlign: 'right' }} autoFocus /></div>
+              <div style={{ marginBottom: 16 }}><label style={lab}>نام و نام خانوادگی {nameVerified && <span style={{ color: '#5fd98a', fontSize: 11 }}>✓ تأییدشده با شاهکار</span>}</label><input value={name} onChange={e => setName(e.target.value)} readOnly={nameVerified} placeholder="مثلاً علی رضایی" style={{ ...inp, direction: 'rtl', textAlign: 'right', opacity: nameVerified ? 0.8 : 1 }} autoFocus={!nameVerified} /></div>
               <div style={{ marginBottom: 16 }}>
                 <label style={lab}>نقش شما</label>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>

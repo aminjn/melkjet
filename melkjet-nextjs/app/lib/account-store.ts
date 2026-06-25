@@ -4,7 +4,11 @@ import { dashForRoleId, listRoles } from './role-store'
 
 const FILE = join(process.cwd(), '.account-data.json')
 
-export interface Account { phone: string; name?: string; role?: string; plan?: string; onboarded: boolean; createdAt: number; lastLogin?: number }
+export interface Account {
+  phone: string; name?: string; role?: string; plan?: string; onboarded: boolean; createdAt: number; lastLogin?: number
+  // هویتِ تأییدشدهٔ شاهکار (پس از تأیید غیرقابلِ‌تغییر است)
+  nationalId?: string; firstName?: string; lastName?: string; gender?: string; fatherName?: string; birthDate?: string; birthPlace?: string; identityVerifiedAt?: number
+}
 type DB = Record<string, Account>
 
 function load(): DB { if (existsSync(FILE)) { try { return JSON.parse(readFileSync(FILE, 'utf-8')) } catch {} } return {} }
@@ -50,6 +54,23 @@ export function createAccount(phone: string, patch: { name?: string; role?: stri
   db[p] = { phone: p, name: patch.name ? String(patch.name).slice(0, 60) : undefined, role: patch.role || undefined, plan: patch.plan || undefined, onboarded: !!patch.role, createdAt: Date.now() }
   save(db)
   return { ok: true, account: db[p] }
+}
+
+export function accountExists(phone: string): boolean { return !!load()[phone] }
+export function accountByNationalId(nid: string): Account | null { if (!nid) return null; return Object.values(load()).find(a => a.nationalId === nid) || null }
+export function touchLogin(phone: string) { const db = load(); if (db[phone]) { db[phone].lastLogin = Date.now(); save(db) } }
+
+// ساختِ حساب با هویتِ تأییدشدهٔ شاهکار (نام از ثبت‌احوال؛ نقش هنوز انتخاب نشده ⇒ onboarded:false)
+export function createVerifiedAccount(phone: string, idy: { nationalId: string; firstName?: string; lastName?: string; gender?: string; fatherName?: string; birthDate?: string; birthPlace?: string }): Account {
+  const db = load()
+  const full = `${idy.firstName || ''} ${idy.lastName || ''}`.trim()
+  const a: Account = {
+    phone, name: full || undefined, onboarded: false, createdAt: Date.now(), lastLogin: Date.now(),
+    nationalId: idy.nationalId, firstName: idy.firstName, lastName: idy.lastName, gender: idy.gender,
+    fatherName: idy.fatherName, birthDate: idy.birthDate, birthPlace: idy.birthPlace, identityVerifiedAt: Date.now(),
+  }
+  db[phone] = a; save(db)
+  return a
 }
 
 export function adminUpdate(phone: string, patch: { name?: string; role?: string; plan?: string }): Account | null {

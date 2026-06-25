@@ -2252,6 +2252,50 @@ function AlertsConfig() {
   )
 }
 
+// ─── Shahkar identity (Pod.ir) ──────────────────────────────────────────────
+function PodiumConfig() {
+  const [f, setF] = useState({ token: '', idKey: '', matchKey: '', idProduct: '46659320', matchProduct: '46645324', enabled: false })
+  const [masked, setMasked] = useState({ token: '', idKey: '', matchKey: '' })
+  const [st, setSt] = useState<{ configured: boolean; missing: string[] } | null>(null)
+  const [msg, setMsg] = useState('')
+  const load = () => fetch('/api/admin/podium-config').then(r => r.ok ? r.json() : null).then(d => { if (d) { setMasked({ token: d.token, idKey: d.idKey, matchKey: d.matchKey }); setF(p => ({ ...p, idProduct: d.idProduct, matchProduct: d.matchProduct, enabled: d.enabled })); setSt({ configured: d.configured, missing: d.missing }) } })
+  useEffect(() => { load() }, [])
+  const save = async () => {
+    setMsg('')
+    const payload: any = { idProduct: f.idProduct, matchProduct: f.matchProduct, enabled: f.enabled }
+    if (f.token.trim()) payload.token = f.token.trim()
+    if (f.idKey.trim()) payload.idKey = f.idKey.trim()
+    if (f.matchKey.trim()) payload.matchKey = f.matchKey.trim()
+    const r = await fetch('/api/admin/podium-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    const d = await r.json(); setMsg(r.ok ? '✓ ذخیره شد' : `⚠ ${d.error || 'خطا'}`); setF(p => ({ ...p, token: '', idKey: '', matchKey: '' })); load()
+  }
+  const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', direction: 'ltr', textAlign: 'left' }
+  const lab: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', marginBottom: 5, display: 'block', fontWeight: 600 }
+  return (
+    <Card style={{ marginBottom: 14 }}>
+      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>احرازِ هویتِ شاهکار (Pod.ir) {st?.configured && <span style={{ color: '#5fd98a', fontSize: 12 }}>● پیکربندی‌شده</span>}</div>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.9 }}>
+        با روشن‌بودن، ثبت‌نامِ کاربرِ جدید نیازمندِ تأییدِ هویت است: استعلامِ ثبت‌احوال (کد ملی + تاریخ تولدِ شمسی) و تطبیقِ شاهکار (موبایل ↔ کد ملی). کلیدها را از پنل Pod.ir بگیر و اینجا بگذار (یا در env سرور). پیامکِ کد همچنان از IPPanel می‌رود.
+      </div>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13.5, fontWeight: 700, marginBottom: 14, cursor: 'pointer' }}>
+        <input type="checkbox" checked={f.enabled} onChange={e => setF({ ...f, enabled: e.target.checked })} style={{ width: 18, height: 18 }} /> احرازِ هویتِ شاهکار برای ثبت‌نام فعال باشد
+      </label>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }} className="mjsa-2col">
+        <div style={{ gridColumn: '1 / -1' }}><label style={lab}>PODIUM_TOKEN {masked.token && <span style={{ color: 'var(--faint)' }}>({masked.token})</span>}</label><input style={inp} placeholder={masked.token || 'توکنِ پادیوم'} value={f.token} onChange={e => setF({ ...f, token: e.target.value })} /></div>
+        <div><label style={lab}>GET_IDENTITY_INFO_API_KEY {masked.idKey && <span style={{ color: 'var(--faint)' }}>({masked.idKey})</span>}</label><input style={inp} placeholder={masked.idKey || 'کلیدِ استعلامِ هویت'} value={f.idKey} onChange={e => setF({ ...f, idKey: e.target.value })} /></div>
+        <div><label style={lab}>MATCH…_API_KEY {masked.matchKey && <span style={{ color: 'var(--faint)' }}>({masked.matchKey})</span>}</label><input style={inp} placeholder={masked.matchKey || 'کلیدِ تطبیقِ شاهکار'} value={f.matchKey} onChange={e => setF({ ...f, matchKey: e.target.value })} /></div>
+        <div><label style={lab}>POD_IDENTITY_PRODUCT_ID</label><input style={inp} value={f.idProduct} onChange={e => setF({ ...f, idProduct: e.target.value })} /></div>
+        <div><label style={lab}>POD_MATCH_PRODUCT_ID</label><input style={inp} value={f.matchProduct} onChange={e => setF({ ...f, matchProduct: e.target.value })} /></div>
+      </div>
+      {st && !st.configured && st.missing.length > 0 && <div style={{ fontSize: 12, color: '#e7674a', marginBottom: 10 }}>کلیدهای نیامده: {st.missing.join('، ')}</div>}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <GoldButton onClick={save}>ذخیره</GoldButton>
+        {msg && <span style={{ fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</span>}
+      </div>
+    </Card>
+  )
+}
+
 // ─── Connections / integrations hub ────────────────────────────────────────
 function ConnectionsView() {
   return (
@@ -2260,6 +2304,7 @@ function ConnectionsView() {
         <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>اتصال‌ها و سرویس‌ها</div>
         <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>همهٔ سرویس‌های بیرونی از اینجا تنظیم می‌شوند: نقشه (نشان)، پیامک (IPPanel)، ایمیل (SMTP) و پروکسی دیوار. کلید هوش مصنوعی و تخصیص مدل‌ها در «API و مدل‌های AI» است.</div>
       </Card>
+      <PodiumConfig />
       <NeshanConfig />
       <IPPanelConfig />
       <AlertsConfig />
@@ -2658,6 +2703,18 @@ function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete }: { user: 
               <div key={l} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: 13 }}><div style={{ fontSize: 11, color: 'var(--muted)' }}>{l}</div><div style={{ fontSize: 20, fontWeight: 900, color: 'var(--gold)', marginTop: 4 }}>{fa(v || 0)}</div></div>
             ))}
           </div>
+
+          {/* هویتِ تأییدشدهٔ شاهکار */}
+          {user.nationalId && (
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: 14 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 10 }}>هویتِ تأییدشده <span style={{ color: '#5fd98a', fontSize: 11 }}>✓ شاهکار</span></div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12.5 }}>
+                {[['کد ملی', user.nationalId, true], ['نام پدر', user.fatherName, false], ['جنسیت', user.gender === 'male' ? 'مرد' : user.gender === 'female' ? 'زن' : user.gender, false], ['تاریخ تولد', user.birthDate, true], ['محل تولد', user.birthPlace, false]].filter(x => x[1]).map(([l, v, ltr]: any) => (
+                  <div key={l} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, background: 'var(--bg2)', borderRadius: 8, padding: '7px 10px' }}><span style={{ color: 'var(--muted)' }}>{l}</span><span style={{ fontWeight: 700, direction: ltr ? 'ltr' : 'rtl' }}>{v}</span></div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* role-specific KPIs */}
           {detail?.kpis?.length > 0 && (
