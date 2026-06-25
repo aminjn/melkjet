@@ -2744,8 +2744,9 @@ function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete }: { user: 
               <div><label style={lab}>نقش</label><select style={inp} value={edit.role} onChange={e => setEdit({ ...edit, role: e.target.value })}><option value="">— بدون نقش</option>{roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></div>
               <div><label style={lab}>پلن</label><select style={inp} value={edit.plan} onChange={e => setEdit({ ...edit, plan: e.target.value })}><option value="">بدون پلن</option>{plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
             </div>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <GoldButton onClick={save}>ذخیرهٔ تغییرات</GoldButton>
+              <button onClick={async () => { const r = await fetch('/api/admin/impersonate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: user.phone }) }); const d = await r.json(); if (d.ok) window.location.href = d.dashboard || '/buyer'; else alert(d.error || 'خطا') }} style={{ background: 'var(--goldDim)', border: '1px solid var(--gold)', color: 'var(--gold)', borderRadius: 10, padding: '9px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 700 }}>↪ ورود به محیطِ کاربر</button>
               <button onClick={() => { onDelete(user.phone); onClose() }} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.4)', color: '#e7674a', borderRadius: 10, padding: '9px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>حذفِ کاربر</button>
               {saved && <span style={{ fontSize: 12.5, color: '#5fd98a' }}>✓ ذخیره شد</span>}
             </div>
@@ -2900,7 +2901,7 @@ function UsersView() {
                         <div onClick={() => setViewUser(u)} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
                           <UAvatar name={u.name} phone={u.phone} dash={u.dashboard} size={38} />
                           <div style={{ minWidth: 0 }}>
-                            <div style={{ fontWeight: 700, fontSize: 13.5 }}>{u.name || 'بدون نام'}</div>
+                            <div style={{ fontWeight: 700, fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 5 }}>{u.name || 'بدون نام'}{u.identityVerifiedAt ? <span title="احراز هویت‌شده با شاهکار" style={{ color: '#5fd98a', fontSize: 11 }}>✓</span> : <span title="احراز هویت نشده" style={{ color: 'var(--faint)', fontSize: 10 }}>⏳</span>}</div>
                             <div style={{ fontSize: 11.5, color: 'var(--gold)', direction: 'ltr', textAlign: 'right', fontFamily: '"JetBrains Mono", monospace' }}>{u.phone}</div>
                           </div>
                         </div>

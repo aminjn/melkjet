@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { accountExists, accountByNationalId } from '@/app/lib/account-store'
+import { getAccount, accountByNationalId } from '@/app/lib/account-store'
 import { getIdentity, shahkarMatch, isValidNationalId, podConfigured, podMissing } from '@/app/lib/podium'
 import { upsertPending } from '@/app/lib/pending-reg-store'
 import { sendOtpSms } from '@/app/lib/send-otp'
@@ -17,8 +17,11 @@ export async function POST(req: NextRequest) {
   const jbd = faToEn(String(b.jBirthDate || '')).replace(/[^0-9]/g, '')
   if (jbd.length !== 8) return NextResponse.json({ error: 'تاریخ تولد (شمسی) را کامل وارد کنید: مثل ۱۳۷۰/۰۱/۰۱' }, { status: 400 })
 
-  if (accountExists(phone)) return NextResponse.json({ error: 'این شماره قبلاً ثبت شده؛ از گزینهٔ ورود استفاده کنید.' }, { status: 400 })
-  if (accountByNationalId(nid)) return NextResponse.json({ error: 'با این کد ملی و شماره‌ای دیگر قبلاً ثبت‌نام شده؛ با همان شماره وارد شوید.' }, { status: 400 })
+  // حسابِ تأییدشده دیگر نیازی به احراز ندارد؛ حسابِ تأییدنشده (ساختهٔ سوپرادمین) مجاز است احراز کند.
+  const existing = getAccount(phone)
+  if (existing?.identityVerifiedAt) return NextResponse.json({ error: 'این حساب قبلاً تأیید شده؛ از گزینهٔ ورود استفاده کنید.' }, { status: 400 })
+  const dup = accountByNationalId(nid)
+  if (dup && dup.phone !== phone) return NextResponse.json({ error: 'با این کد ملی و شماره‌ای دیگر قبلاً ثبت‌نام شده؛ با همان شماره وارد شوید.' }, { status: 400 })
 
   if (!podConfigured()) return NextResponse.json({ error: 'سرویسِ احرازِ هویت پیکربندی نشده: ' + podMissing().join('، ') }, { status: 400 })
 

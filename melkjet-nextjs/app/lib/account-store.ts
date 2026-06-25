@@ -73,6 +73,17 @@ export function createVerifiedAccount(phone: string, idy: { nationalId: string; 
   return a
 }
 
+// اعمالِ هویتِ تأییدشده روی حسابِ موجود (مثلاً حسابی که سوپرادمین ساخته و کاربر در اولین ورود احراز می‌کند)
+export function applyIdentity(phone: string, idy: { nationalId: string; firstName?: string; lastName?: string; gender?: string; fatherName?: string; birthDate?: string; birthPlace?: string }): Account | null {
+  const db = load(); const a = db[phone]; if (!a) return null
+  const full = `${idy.firstName || ''} ${idy.lastName || ''}`.trim()
+  if (full) a.name = full
+  a.nationalId = idy.nationalId; a.firstName = idy.firstName; a.lastName = idy.lastName; a.gender = idy.gender
+  a.fatherName = idy.fatherName; a.birthDate = idy.birthDate; a.birthPlace = idy.birthPlace
+  a.identityVerifiedAt = Date.now(); a.lastLogin = Date.now()
+  save(db); return a
+}
+
 export function adminUpdate(phone: string, patch: { name?: string; role?: string; plan?: string }): Account | null {
   const db = load(); const a = db[phone]; if (!a) return null
   if (patch.name !== undefined) a.name = String(patch.name).slice(0, 60)

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyOTP } from '@/app/lib/otp-store'
 import { createSession, SESSION_COOKIE, SUPER_ADMIN_PHONE } from '@/app/lib/session'
-import { ensureAccount, dashForRole, accountExists, getAccount, createVerifiedAccount, touchLogin } from '@/app/lib/account-store'
+import { ensureAccount, dashForRole, getAccount, createVerifiedAccount, applyIdentity, touchLogin } from '@/app/lib/account-store'
 import { linkPhone } from '@/app/lib/tracker-store'
 import { attachPhone } from '@/app/lib/push-store'
 import { getPending, deletePending } from '@/app/lib/pending-reg-store'
@@ -18,16 +18,25 @@ export async function POST(req: NextRequest) {
 
   const isSuper = phone === SUPER_ADMIN_PHONE
   const role = isSuper ? 'super_admin' : 'user'
-  // ── تعیین/ساختِ حساب: کاربرِ موجود، یا هویتِ تأییدشدهٔ شاهکار، یا (اگر شاهکار خاموش) ثبت‌نامِ ساده ──
+  const shahkarOn = !!getAdminData().podium?.enabled
+  // ── تعیین/ساختِ حساب ──
   let account; let isNew = false
-  if (accountExists(phone)) { account = getAccount(phone)!; touchLogin(phone) }
-  else if (isSuper) { const r = ensureAccount(phone); account = r.account; isNew = r.isNew }
+  if (isSuper) { const r = ensureAccount(phone); account = r.account; isNew = r.isNew }
   else {
     const pending = getPending(phone)
-    if (pending && pending.matched) { account = createVerifiedAccount(phone, pending); deletePending(phone); isNew = true }
-    else if (!getAdminData().podium?.enabled) { const r = ensureAccount(phone); account = r.account; isNew = r.isNew }
+    const existing = getAccount(phone)
+    if (pending && pending.matched) {
+      // هویتِ تأییدشده: روی حسابِ موجود اعمال کن، یا حسابِ جدید بساز
+      account = existing ? applyIdentity(phone, pending) : createVerifiedAccount(phone, pending)
+      deletePending(phone); if (!existing) isNew = true
+    } else if (existing) {
+      // بدونِ pending: حسابِ تأییدشده یا (شاهکار خاموش) ⇒ ورود؛ وگرنه فعال نمی‌شود
+      if (existing.identityVerifiedAt || !shahkarOn) { account = existing; touchLogin(phone) }
+      else return NextResponse.json({ error: 'برای فعال‌سازیِ حساب، ابتدا هویتِ خود را با شاهکار تأیید کنید.' }, { status: 400 })
+    } else if (!shahkarOn) { const r = ensureAccount(phone); account = r.account; isNew = r.isNew }
     else return NextResponse.json({ error: 'ابتدا هویتِ خود را با شاهکار تأیید کنید.' }, { status: 400 })
   }
+  if (!account) return NextResponse.json({ error: 'خطا در ساختِ حساب؛ دوباره تلاش کنید.' }, { status: 500 })
 
   const token = await createSession(phone)
   // اتصالِ شمارهٔ کاربر به کوکیِ دائمیِ ترکر (mj_vid) — برای پیامکِ هدفمندِ بعدی
