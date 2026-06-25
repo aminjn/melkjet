@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { listAccounts, adminUpdate, deleteAccount, bulkUpdate, bulkDelete, createAccount } from '@/app/lib/account-store'
+import { saveProfile } from '@/app/lib/profile-store'
 import { listRoles, dashForRoleId } from '@/app/lib/role-store'
 import { listPlans } from '@/app/lib/plan-store'
 import { getCredit, getTokenUsage } from '@/app/lib/comm-store'
@@ -35,8 +36,11 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const b = await req.json().catch(() => ({}))
-  const r = createAccount(String(b.phone || ''), { name: b.name, role: b.role, plan: b.plan })
-  return r.ok ? NextResponse.json({ ok: true, user: r.account }) : NextResponse.json({ error: r.error }, { status: 400 })
+  const r = createAccount(String(b.phone || ''), { name: b.name, role: b.role, plan: b.plan, identity: b.identity, verified: !!b.verified })
+  if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 })
+  // پروفایلِ کسب‌وکار (اگر همان لحظه وارد شده باشد)
+  if (b.profile && r.account) { try { saveProfile(r.account.phone, b.profile) } catch {} }
+  return NextResponse.json({ ok: true, user: r.account })
 }
 
 export async function PATCH(req: NextRequest) {

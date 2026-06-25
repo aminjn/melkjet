@@ -45,13 +45,20 @@ export function setPlan(phone: string, plan: string): Account {
   save(db); return db[phone]
 }
 
-// ساختِ کاربر توسطِ سوپرادمین (دستی)
-export function createAccount(phone: string, patch: { name?: string; role?: string; plan?: string }): { ok: boolean; error?: string; account?: Account } {
+// ساختِ کاربر توسطِ سوپرادمین (دستی) — با هویتِ شاهکار (اختیاری) و وضعیتِ تأیید
+export function createAccount(phone: string, patch: { name?: string; role?: string; plan?: string; identity?: { nationalId: string; firstName?: string; lastName?: string; gender?: string; fatherName?: string; birthDate?: string; birthPlace?: string }; verified?: boolean }): { ok: boolean; error?: string; account?: Account } {
   const p = String(phone).replace(/\D/g, '')
   if (!/^09\d{9}$/.test(p)) return { ok: false, error: 'شمارهٔ موبایل معتبر نیست (۰۹...)' }
   const db = load()
   if (db[p]) return { ok: false, error: 'این کاربر از قبل وجود دارد' }
-  db[p] = { phone: p, name: patch.name ? String(patch.name).slice(0, 60) : undefined, role: patch.role || undefined, plan: patch.plan || undefined, onboarded: !!patch.role, createdAt: Date.now() }
+  const idy = patch.identity
+  const full = idy ? `${idy.firstName || ''} ${idy.lastName || ''}`.trim() : ''
+  const nm = full || (patch.name ? String(patch.name).slice(0, 60) : '')
+  db[p] = {
+    phone: p, name: nm || undefined, role: patch.role || undefined, plan: patch.plan || undefined, onboarded: !!patch.role, createdAt: Date.now(),
+    ...(idy ? { nationalId: idy.nationalId, firstName: idy.firstName, lastName: idy.lastName, gender: idy.gender, fatherName: idy.fatherName, birthDate: idy.birthDate, birthPlace: idy.birthPlace } : {}),
+    ...(patch.verified && idy ? { identityVerifiedAt: Date.now() } : {}),
+  }
   save(db)
   return { ok: true, account: db[p] }
 }

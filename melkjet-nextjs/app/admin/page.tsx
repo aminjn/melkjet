@@ -2796,14 +2796,54 @@ function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete }: { user: 
   )
 }
 
+// پاپ‌آپِ سادهٔ ساختِ کاربر — فقط شماره (و نقش/پلنِ اختیاری). بقیه در اولین ورودِ خودِ کاربر با شاهکار خودکار پر می‌شود.
+function CreateUserPopup({ roles, plans, onClose, onCreated }: { roles: IdName[]; plans: IdName[]; onClose: () => void; onCreated: () => void }) {
+  const [phone, setPhone] = useState(''); const [role, setRole] = useState(''); const [plan, setPlan] = useState('')
+  const [busy, setBusy] = useState(false); const [error, setError] = useState('')
+  const inp: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '11px 13px', color: 'var(--text)', fontSize: 13.5, fontFamily: 'inherit', outline: 'none' }
+  const lab: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', marginBottom: 6, display: 'block', fontWeight: 600 }
+  const submit = async () => {
+    setError(''); if (!/^09\d{9}$/.test(phone)) { setError('شمارهٔ موبایلِ معتبر وارد کنید (۰۹...)'); return }
+    setBusy(true)
+    try {
+      const r = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, role, plan }) })
+      const d = await r.json()
+      if (!r.ok || d.error) { setError(d.error || 'خطا در ثبت'); return }
+      onCreated(); onClose()
+    } catch { setError('خطا در ارتباط') } finally { setBusy(false) }
+  }
+  return (
+    <div dir="rtl" onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1600, background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, animation: 'fade .2s ease', fontFamily: 'inherit' }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 440, maxWidth: '95vw', background: 'var(--surface)', borderRadius: 18, border: '1px solid var(--line2)', boxShadow: '0 30px 80px -20px rgba(0,0,0,.7)', overflow: 'hidden' }}>
+        <div style={{ padding: '20px 22px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 16, fontWeight: 900 }}>ساختِ کاربرِ جدید</div>
+          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', cursor: 'pointer', fontSize: 16 }}>×</button>
+        </div>
+        <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.9, background: 'var(--bg2)', borderRadius: 10, padding: '10px 12px' }}>فقط شمارهٔ موبایل را وارد کنید. <b>اطلاعاتِ هویتی و پروفایلِ کاربر، در اولین ورودِ خودش با احرازِ شاهکار به‌صورتِ خودکار کامل می‌شود.</b></div>
+          <div><label style={lab}>شماره موبایل *</label><input style={{ ...inp, direction: 'ltr', textAlign: 'right' }} placeholder="۰۹۱۲۳۴۵۶۷۸۹" value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))} autoFocus /></div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div><label style={lab}>نقش (اختیاری)</label><select style={inp} value={role} onChange={e => setRole(e.target.value)}><option value="">— بدون نقش</option>{roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></div>
+            <div><label style={lab}>پلن (اختیاری)</label><select style={inp} value={plan} onChange={e => setPlan(e.target.value)}><option value="">بدون پلن</option>{plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+          </div>
+          {error && <div style={{ fontSize: 12.5, color: '#e7674a' }}>{error}</div>}
+        </div>
+        <div style={{ padding: '16px 22px', borderTop: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ flex: 1 }} />
+          <OutlineButton onClick={onClose}>انصراف</OutlineButton>
+          <GoldButton onClick={submit}>{busy ? 'در حال ثبت…' : 'ثبتِ کاربر'}</GoldButton>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function UsersView() {
   const [users, setUsers] = useState<any[]>([])
   const [roles, setRoles] = useState<IdName[]>([])
   const [plans, setPlans] = useState<IdName[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
-  const [nf, setNf] = useState({ phone: '', name: '', role: '', plan: '' })
-  const [createMsg, setCreateMsg] = useState('')
   const [q, setQ] = useState('')
   const [roleFilter, setRoleFilter] = useState('')
   const [planFilter, setPlanFilter] = useState('')
@@ -2828,13 +2868,6 @@ function UsersView() {
     if (!confirm(`کاربر ${phone} حذف شود؟`)) return
     setUsers(us => us.filter(u => u.phone !== phone)); setSel(s => { const n = new Set(s); n.delete(phone); return n })
     await fetch(`/api/admin/users?phone=${encodeURIComponent(phone)}`, { method: 'DELETE' })
-  }
-  const createUser = async () => {
-    setCreateMsg('')
-    const r = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nf) })
-    const d = await r.json()
-    if (r.ok) { setNf({ phone: '', name: '', role: '', plan: '' }); setCreating(false); load() }
-    else setCreateMsg(d.error || 'خطا')
   }
 
   const filtered = users.filter(u => {
@@ -2888,18 +2921,8 @@ function UsersView() {
           <select style={inp} value={roleFilter} onChange={e => setRoleFilter(e.target.value)}><option value="">همه نقش‌ها</option>{roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select>
           <select style={inp} value={planFilter} onChange={e => setPlanFilter(e.target.value)}><option value="">همه پلن‌ها</option><option value="__none">بدون پلن</option>{plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
           <OutlineButton onClick={load}>بازخوانی</OutlineButton>
-          <GoldButton onClick={() => setCreating(c => !c)}>{creating ? 'بستن' : '＋ کاربر جدید'}</GoldButton>
+          <GoldButton onClick={() => setCreating(true)}>＋ کاربر جدید</GoldButton>
         </div>
-        {creating && (
-          <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            <input style={{ ...inp, width: 150, direction: 'ltr', textAlign: 'right' }} placeholder="۰۹۱۲۳۴۵۶۷۸۹" value={nf.phone} onChange={e => setNf({ ...nf, phone: e.target.value.replace(/\D/g, '').slice(0, 11) })} />
-            <input style={{ ...inp, width: 160 }} placeholder="نام و نام خانوادگی" value={nf.name} onChange={e => setNf({ ...nf, name: e.target.value })} />
-            <select style={inp} value={nf.role} onChange={e => setNf({ ...nf, role: e.target.value })}><option value="">— بدون نقش</option>{roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select>
-            <select style={inp} value={nf.plan} onChange={e => setNf({ ...nf, plan: e.target.value })}><option value="">بدون پلن</option>{plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
-            <GoldButton onClick={createUser}>ثبت کاربر</GoldButton>
-            {createMsg && <span style={{ fontSize: 12.5, color: '#e7674a' }}>{createMsg}</span>}
-          </div>
-        )}
         <div style={{ marginTop: 10, fontSize: 12.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <span>{loading ? 'در حال بارگذاری…' : `${filtered.length.toLocaleString('fa-IR')} از ${total.toLocaleString('fa-IR')} کاربر`}</span>
           {sel.size > 0 && <>
@@ -2968,6 +2991,7 @@ function UsersView() {
       </Card>
 
       {viewUser && <UserDrawer user={viewUser} roles={roles} plans={plans} onClose={() => setViewUser(null)} onPatch={patchOne} onDelete={delOne} />}
+      {creating && <CreateUserPopup roles={roles} plans={plans} onClose={() => setCreating(false)} onCreated={load} />}
     </div>
   )
 }
