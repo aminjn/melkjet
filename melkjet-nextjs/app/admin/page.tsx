@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { DEAL_TYPES, PROPERTY_KINDS, PROVINCES, citiesOf, neighborhoodsOf } from '@/app/lib/taxonomy'
 import { DIVAR_CATEGORIES, DIVAR_CITIES } from '@/app/lib/divar-meta'
 import { AGENTS, categorizeModel, CATEGORY_LABEL, FALLBACK_MODELS, DEFAULT_GAP_BASE, type ModelCategory } from '@/app/lib/ai-agents'
+import { buildIdentityRows } from '@/app/lib/identity-labels'
 import PlanStudio from '@/app/components/PlanStudio'
 import ImageUpload from '@/app/components/ImageUpload'
 import ArticleEditor from '@/app/components/ArticleEditor'
@@ -2698,7 +2699,22 @@ function UChip({ label, color, icon }: { label: string; color: string; icon?: st
 }
 
 // کشوی جزئیاتِ کاملِ یک کاربر — KPIها، فعالیتِ نقش، اعتبار/مصرف، ویرایشِ سریع
-function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete, onSuspend }: { user: any; roles: IdName[]; plans: IdName[]; onClose: () => void; onPatch: (phone: string, patch: any) => void; onDelete: (phone: string) => void; onSuspend: (phone: string, suspend: boolean) => void }) {
+// دکمهٔ بازخوانیِ هویت از شاهکار (پُرکردنِ همهٔ فیلدها برای کاربرِ احرازشده)
+function RefetchIdentityBtn({ phone, onDone }: { phone: string; onDone: (acc: any) => void }) {
+  const [busy, setBusy] = useState(false)
+  const run = async () => {
+    setBusy(true)
+    try {
+      const r = await fetch('/api/admin/shahkar-refetch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) })
+      const d = await r.json()
+      if (r.ok && d.account) onDone(d.account)
+      else alert(d.error || 'بازخوانی ناموفق بود')
+    } catch { alert('خطا در ارتباط') } finally { setBusy(false) }
+  }
+  return <button onClick={run} disabled={busy} title="بازخوانیِ همهٔ فیلدها از سامانهٔ شاهکار" style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold)', background: 'var(--goldDim)', border: '1px solid var(--gold)', borderRadius: 999, padding: '3px 11px', cursor: busy ? 'default' : 'pointer', fontFamily: 'inherit', opacity: busy ? 0.6 : 1 }}>{busy ? '… بازخوانی' : '↻ بازخوانی از شاهکار'}</button>
+}
+
+function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete, onSuspend, onAccountUpdate }: { user: any; roles: IdName[]; plans: IdName[]; onClose: () => void; onPatch: (phone: string, patch: any) => void; onDelete: (phone: string) => void; onSuspend: (phone: string, suspend: boolean) => void; onAccountUpdate: (acc: any) => void }) {
   const [detail, setDetail] = useState<any>(null)
   const [edit, setEdit] = useState({ name: user.name || '', role: user.role || '', plan: user.plan || '' })
   const [saved, setSaved] = useState(false)
@@ -2742,22 +2758,30 @@ function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete, onSuspend 
             ))}
           </div>
 
-          {/* هویتِ شاهکار — همیشه نمایش، با وضعیتِ احراز */}
-          <div style={{ background: 'var(--surface)', border: `1px solid ${user.identityVerifiedAt ? 'rgba(95,217,138,.35)' : 'var(--line)'}`, borderRadius: 12, padding: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-              <div style={{ fontSize: 13, fontWeight: 800 }}>هویتِ سامانهٔ شاهکار</div>
-              {user.identityVerifiedAt
-                ? <span style={{ fontSize: 11.5, fontWeight: 700, color: '#5fd98a', background: 'rgba(95,217,138,.12)', border: '1px solid rgba(95,217,138,.4)', borderRadius: 999, padding: '3px 11px' }}>✓ احراز شده</span>
-                : <span style={{ fontSize: 11.5, fontWeight: 700, color: '#e7894a', background: 'rgba(231,137,74,.12)', border: '1px solid rgba(231,137,74,.4)', borderRadius: 999, padding: '3px 11px' }}>⏳ احراز نشده</span>}
-            </div>
-            {user.nationalId ? (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12.5 }}>
-                {[['نام', user.name, false], ['کد ملی', user.nationalId, true], ['نام پدر', user.fatherName, false], ['جنسیت', user.gender === 'male' ? 'مرد' : user.gender === 'female' ? 'زن' : user.gender, false], ['تاریخ تولد', user.birthDate, true], ['محل تولد', user.birthPlace, false], ['شمارهٔ شناسنامه', user.idNumber, true], ['سری و سریال', user.idSerial, true]].filter(x => x[1]).map(([l, v, ltr]: any) => (
-                  <div key={l} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, background: 'var(--bg2)', borderRadius: 8, padding: '7px 10px' }}><span style={{ color: 'var(--muted)' }}>{l}</span><span style={{ fontWeight: 700, direction: ltr ? 'ltr' : 'rtl' }}>{v}</span></div>
-                ))}
+          {/* هویتِ شاهکار — همهٔ فیلدهای برگشتی از سامانه */}
+          {(() => {
+            const idRows = buildIdentityRows(user)
+            return (
+              <div style={{ background: 'var(--surface)', border: `1px solid ${user.identityVerifiedAt ? 'rgba(95,217,138,.35)' : 'var(--line)'}`, borderRadius: 12, padding: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                  <div style={{ fontSize: 13, fontWeight: 800 }}>هویتِ سامانهٔ شاهکار {idRows.length > 0 && <span style={{ fontSize: 11, color: 'var(--faint)', fontWeight: 600 }}>({idRows.length.toLocaleString('fa-IR')} فیلد)</span>}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {user.identityVerifiedAt
+                      ? <span style={{ fontSize: 11.5, fontWeight: 700, color: '#5fd98a', background: 'rgba(95,217,138,.12)', border: '1px solid rgba(95,217,138,.4)', borderRadius: 999, padding: '3px 11px' }}>✓ احراز شده</span>
+                      : <span style={{ fontSize: 11.5, fontWeight: 700, color: '#e7894a', background: 'rgba(231,137,74,.12)', border: '1px solid rgba(231,137,74,.4)', borderRadius: 999, padding: '3px 11px' }}>⏳ احراز نشده</span>}
+                    {user.nationalId && <RefetchIdentityBtn phone={user.phone} onDone={onAccountUpdate} />}
+                  </div>
+                </div>
+                {idRows.length > 0 ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12.5 }} className="mjsa-idgrid">
+                    {idRows.map(r => (
+                      <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, background: 'var(--bg2)', borderRadius: 8, padding: '7px 10px' }}><span style={{ color: 'var(--muted)', whiteSpace: 'nowrap' }}>{r.label}</span><span style={{ fontWeight: 700, direction: r.ltr ? 'ltr' : 'rtl', textAlign: r.ltr ? 'left' : 'right', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.value}</span></div>
+                    ))}
+                  </div>
+                ) : <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.9 }}>این کاربر هنوز هویتش را با شاهکار تأیید نکرده است. وقتی خودش وارد شود و احراز کند (با احرازِ فعالِ شاهکار)، همهٔ فیلدهای هویتی این‌جا خودکار پر می‌شود.</div>}
               </div>
-            ) : <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.9 }}>این کاربر هنوز هویتش را با شاهکار تأیید نکرده است. وقتی خودش وارد شود و احراز کند (با احرازِ فعالِ شاهکار)، نام، کد ملی، نام پدر، جنسیت و تاریخ/محلِ تولد این‌جا خودکار پر می‌شود.</div>}
-          </div>
+            )
+          })()}
 
           {/* پروفایلِ کاملِ کسب‌وکار */}
           {detail?.profile && (() => {
@@ -3056,7 +3080,7 @@ function UsersView() {
         </div>
       </Card>
 
-      {viewUser && <UserDrawer user={viewUser} roles={roles} plans={plans} onClose={() => setViewUser(null)} onPatch={patchOne} onDelete={delOne} onSuspend={suspendOne} />}
+      {viewUser && <UserDrawer user={viewUser} roles={roles} plans={plans} onClose={() => setViewUser(null)} onPatch={patchOne} onDelete={delOne} onSuspend={suspendOne} onAccountUpdate={(acc) => { setViewUser((v: any) => ({ ...v, ...acc })); setUsers(us => us.map(u => u.phone === acc.phone ? { ...u, ...acc } : u)) }} />}
       {creating && <CreateUserPopup roles={roles} plans={plans} onClose={() => setCreating(false)} onCreated={load} />}
     </div>
   )

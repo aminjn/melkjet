@@ -42,6 +42,8 @@ export interface Identity {
   nationalCode: string; firstName: string; lastName: string
   fatherName?: string; gender?: string; birthPlace?: string; birthDate?: string
   idNumber?: string; idSerial?: string; birthPlaceCode?: string
+  fullName?: string; issuancePlace?: string; issuancePlaceCode?: string; officeCode?: string
+  // کلِ پاسخِ هویتیِ شاهکار — تا هیچ فیلدی از دست نرود
   raw?: Record<string, unknown>
 }
 
@@ -65,6 +67,10 @@ export async function getIdentity(nationalCode: string, jBirthDate: string): Pro
         idNumber: i.identificationNumber != null ? String(i.identificationNumber) : '',
         idSerial: [i.identificationSerialCode, i.identificationSerialNumber != null ? String(i.identificationSerialNumber) : ''].filter(Boolean).join(' '),
         birthPlaceCode: i.birthPlaceCode != null ? String(i.birthPlaceCode) : '',
+        fullName: i.fullName || `${i.firstName || ''} ${i.lastName || ''}`.trim(),
+        issuancePlace: i.issuancePlace || i.issuingPlace || '',
+        issuancePlaceCode: i.issuancePlaceCode != null ? String(i.issuancePlaceCode) : (i.issuingPlaceCode != null ? String(i.issuingPlaceCode) : ''),
+        officeCode: i.officeCode != null ? String(i.officeCode) : '',
         raw: i as Record<string, unknown>,
       },
     }

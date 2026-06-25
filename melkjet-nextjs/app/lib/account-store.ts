@@ -7,11 +7,22 @@ const FILE = join(process.cwd(), '.account-data.json')
 export interface Account {
   phone: string; name?: string; role?: string; plan?: string; onboarded: boolean; createdAt: number; lastLogin?: number
   // هویتِ تأییدشدهٔ شاهکار (پس از تأیید غیرقابلِ‌تغییر است)
-  nationalId?: string; firstName?: string; lastName?: string; gender?: string; fatherName?: string; birthDate?: string; birthPlace?: string; idNumber?: string; idSerial?: string; birthPlaceCode?: string; identityVerifiedAt?: number
+  nationalId?: string; firstName?: string; lastName?: string; gender?: string; fatherName?: string; birthDate?: string; birthPlace?: string; idNumber?: string; idSerial?: string; birthPlaceCode?: string; fullName?: string; issuancePlace?: string; issuancePlaceCode?: string; officeCode?: string; identityVerifiedAt?: number
+  // کلِ پاسخِ هویتیِ شاهکار — تا هیچ فیلدی از دست نرود
+  identityRaw?: Record<string, unknown>
   // تعلیقِ پنل به‌خاطرِ پروفایلِ ناقص
   suspended?: boolean; profileWarnAt?: number
 }
-type Idy = { nationalId: string; firstName?: string; lastName?: string; gender?: string; fatherName?: string; birthDate?: string; birthPlace?: string; idNumber?: string; idSerial?: string; birthPlaceCode?: string }
+type Idy = { nationalId: string; firstName?: string; lastName?: string; gender?: string; fatherName?: string; birthDate?: string; birthPlace?: string; idNumber?: string; idSerial?: string; birthPlaceCode?: string; fullName?: string; issuancePlace?: string; issuancePlaceCode?: string; officeCode?: string; raw?: Record<string, unknown> }
+
+// همهٔ فیلدهای هویتی را روی یک حساب می‌نشاند (مشترک بینِ ساخت/اعمال)
+function assignIdentity(a: Account, idy: Idy) {
+  a.nationalId = idy.nationalId; a.firstName = idy.firstName; a.lastName = idy.lastName; a.gender = idy.gender
+  a.fatherName = idy.fatherName; a.birthDate = idy.birthDate; a.birthPlace = idy.birthPlace
+  a.idNumber = idy.idNumber; a.idSerial = idy.idSerial; a.birthPlaceCode = idy.birthPlaceCode
+  a.fullName = idy.fullName; a.issuancePlace = idy.issuancePlace; a.issuancePlaceCode = idy.issuancePlaceCode; a.officeCode = idy.officeCode
+  if (idy.raw && typeof idy.raw === 'object') a.identityRaw = idy.raw
+}
 type DB = Record<string, Account>
 
 function load(): DB { if (existsSync(FILE)) { try { return JSON.parse(readFileSync(FILE, 'utf-8')) } catch {} } return {} }
@@ -57,11 +68,9 @@ export function createAccount(phone: string, patch: { name?: string; role?: stri
   const idy = patch.identity
   const full = idy ? `${idy.firstName || ''} ${idy.lastName || ''}`.trim() : ''
   const nm = full || (patch.name ? String(patch.name).slice(0, 60) : '')
-  db[p] = {
-    phone: p, name: nm || undefined, role: patch.role || undefined, plan: patch.plan || undefined, onboarded: !!patch.role, createdAt: Date.now(),
-    ...(idy ? { nationalId: idy.nationalId, firstName: idy.firstName, lastName: idy.lastName, gender: idy.gender, fatherName: idy.fatherName, birthDate: idy.birthDate, birthPlace: idy.birthPlace, idNumber: idy.idNumber, idSerial: idy.idSerial, birthPlaceCode: idy.birthPlaceCode } : {}),
-    ...(patch.verified && idy ? { identityVerifiedAt: Date.now() } : {}),
-  }
+  const a: Account = { phone: p, name: nm || undefined, role: patch.role || undefined, plan: patch.plan || undefined, onboarded: !!patch.role, createdAt: Date.now() }
+  if (idy) { assignIdentity(a, idy); if (patch.verified) a.identityVerifiedAt = Date.now() }
+  db[p] = a
   save(db)
   return { ok: true, account: db[p] }
 }
@@ -74,12 +83,8 @@ export function touchLogin(phone: string) { const db = load(); if (db[phone]) { 
 export function createVerifiedAccount(phone: string, idy: Idy): Account {
   const db = load()
   const full = `${idy.firstName || ''} ${idy.lastName || ''}`.trim()
-  const a: Account = {
-    phone, name: full || undefined, onboarded: false, createdAt: Date.now(), lastLogin: Date.now(),
-    nationalId: idy.nationalId, firstName: idy.firstName, lastName: idy.lastName, gender: idy.gender,
-    fatherName: idy.fatherName, birthDate: idy.birthDate, birthPlace: idy.birthPlace,
-    idNumber: idy.idNumber, idSerial: idy.idSerial, birthPlaceCode: idy.birthPlaceCode, identityVerifiedAt: Date.now(),
-  }
+  const a: Account = { phone, name: full || undefined, onboarded: false, createdAt: Date.now(), lastLogin: Date.now(), identityVerifiedAt: Date.now() }
+  assignIdentity(a, idy)
   db[phone] = a; save(db)
   return a
 }
@@ -89,10 +94,16 @@ export function applyIdentity(phone: string, idy: Idy): Account | null {
   const db = load(); const a = db[phone]; if (!a) return null
   const full = `${idy.firstName || ''} ${idy.lastName || ''}`.trim()
   if (full) a.name = full
-  a.nationalId = idy.nationalId; a.firstName = idy.firstName; a.lastName = idy.lastName; a.gender = idy.gender
-  a.fatherName = idy.fatherName; a.birthDate = idy.birthDate; a.birthPlace = idy.birthPlace
-  a.idNumber = idy.idNumber; a.idSerial = idy.idSerial; a.birthPlaceCode = idy.birthPlaceCode
+  assignIdentity(a, idy)
   a.identityVerifiedAt = Date.now(); a.lastLogin = Date.now()
+  save(db); return a
+}
+
+// بازخوانیِ هویت از شاهکار برای حسابِ احرازشدهٔ موجود (پُرکردنِ همهٔ فیلدها بدونِ تغییرِ نقش/نام).
+export function refreshIdentity(phone: string, idy: Idy): Account | null {
+  const db = load(); const a = db[phone]; if (!a) return null
+  assignIdentity(a, idy)
+  if (!a.identityVerifiedAt) a.identityVerifiedAt = Date.now()
   save(db); return a
 }
 

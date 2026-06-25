@@ -8,6 +8,8 @@ export interface PendingReg {
   phone: string; nationalId: string; firstName?: string; lastName?: string
   gender?: string; fatherName?: string; birthDate?: string; birthPlace?: string
   idNumber?: string; idSerial?: string; birthPlaceCode?: string
+  fullName?: string; issuancePlace?: string; issuancePlaceCode?: string; officeCode?: string
+  raw?: Record<string, unknown>
   matched: boolean; createdAt: number
 }
 type DB = Record<string, PendingReg>
