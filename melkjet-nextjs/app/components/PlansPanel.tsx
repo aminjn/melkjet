@@ -19,12 +19,13 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
   const [plans, setPlans] = useState<Plan[]>([])
   const [packages, setPackages] = useState<Pkg[]>([])
   const [credit, setCredit] = useState<Record<string, number>>({ sms: 0, email: 0, token: 0 })
+  const [tokenUsed, setTokenUsed] = useState(0)
   const [orders, setOrders] = useState<Order[]>([])
   const [period, setPeriod] = useState<'monthly' | 'yearly'>('monthly')
   const [busy, setBusy] = useState('')
   const [msg, setMsg] = useState('')
 
-  const loadComm = () => fetch('/api/comm').then(r => r.ok ? r.json() : null).then(d => { if (d) { setCredit(d.credit || { sms: 0, email: 0, token: 0 }); setOrders(d.orders || []) } }).catch(() => {})
+  const loadComm = () => fetch('/api/comm').then(r => r.ok ? r.json() : null).then(d => { if (d) { setCredit(d.credit || { sms: 0, email: 0, token: 0 }); setOrders(d.orders || []); setTokenUsed(d.tokenUsed || 0) } }).catch(() => {})
   const load = () => {
     fetch(`/api/plans?dashboard=${encodeURIComponent(dashboard)}`).then(r => r.ok ? r.json() : null).then(d => {
       if (!d) return
@@ -123,7 +124,7 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
                 <span style={{ fontSize: 22 }}>{meta.icon}</span>
                 <div>
                   <div style={{ fontSize: 14.5, fontWeight: 800 }}>{meta.buyLabel}</div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>بسته‌های قابلِ تهیه برای شارژِ {meta.label}</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>بسته‌های قابلِ تهیه برای شارژِ {meta.label}{ch === 'token' && tokenUsed > 0 ? ` · تاکنون ${fa(tokenUsed)} توکن مصرف شده` : ''}</div>
                 </div>
               </div>
               <div style={{ background: 'var(--goldDim)', border: '1px solid var(--gold)', borderRadius: 999, padding: '7px 16px', fontSize: 14.5, fontWeight: 900, color: 'var(--gold)' }}>{fa(credit[ch] || 0)} <span style={{ fontSize: 11, fontWeight: 600 }}>{meta.unit}</span></div>

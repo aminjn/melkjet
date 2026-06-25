@@ -14,10 +14,10 @@ export type OrderStatus = 'pending' | 'paid' | 'rejected'
 export type OrderKind = 'package' | 'plan'
 export interface CommOrder { id: string; owner: string; kind: OrderKind; name: string; price: number; status: OrderStatus; createdAt: number; paidAt?: number; packageId?: string; channel?: Channel; credits?: number; planId?: string }
 
-interface DB { packages: CommPackage[]; credits: Record<string, Credit>; orders: CommOrder[] }
+interface DB { packages: CommPackage[]; credits: Record<string, Credit>; orders: CommOrder[]; usage?: Record<string, { token: number }> }
 
 function id(p = '') { return p + randomBytes(5).toString('hex') }
-function load(): DB { if (existsSync(DATA_FILE)) { try { const d = JSON.parse(readFileSync(DATA_FILE, 'utf-8')); return { packages: d.packages || [], credits: d.credits || {}, orders: d.orders || [] } } catch {} } return { packages: [], credits: {}, orders: [] } }
+function load(): DB { if (existsSync(DATA_FILE)) { try { const d = JSON.parse(readFileSync(DATA_FILE, 'utf-8')); return { packages: d.packages || [], credits: d.credits || {}, orders: d.orders || [], usage: d.usage || {} } } catch {} } return { packages: [], credits: {}, orders: [], usage: {} } }
 function save(db: DB) { writeFileSync(DATA_FILE, JSON.stringify(db, null, 2), 'utf-8') }
 
 // ---- Packages (super-admin) ----
@@ -72,6 +72,29 @@ export function chargeSend(owner: string, role: string, channel: Channel, count:
   db.credits[owner] = c
   save(db)
   return { ok: true, remaining: c[channel] }
+}
+
+// ---- Token usage (مصرفِ توکنِ AI per-user) ----
+export function getTokenUsage(owner: string): number { return Number(load().usage?.[owner]?.token) || 0 }
+// آیا کاربر می‌تواند از AI استفاده کند؟ (اگر بستهٔ توکن فعال باشد و اعتبارش صفر باشد، نه)
+export function canUseToken(owner: string, role: string): boolean {
+  if (role === 'super_admin') return true
+  if (!monetizationOn('token')) return true
+  return getCredit(owner).token > 0
+}
+// ثبتِ مصرف + کسر از اعتبار (اگر بستهٔ توکن فعال باشد)
+export function recordToken(owner: string, role: string, tokens: number) {
+  const n = Math.max(0, Math.round(tokens))
+  if (!owner || !n) return
+  const db = load()
+  if (!db.usage) db.usage = {}
+  db.usage[owner] = { token: (Number(db.usage[owner]?.token) || 0) + n }
+  if (role !== 'super_admin' && monetizationOn('token')) {
+    const c = db.credits[owner] || { sms: 0, email: 0, token: 0 }
+    c.token = Math.max(0, (Number(c.token) || 0) - n)
+    db.credits[owner] = c
+  }
+  save(db)
 }
 
 // ---- Orders ----

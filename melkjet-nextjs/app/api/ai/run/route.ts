@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { chatCompleteSafe, generateImage, agentModel } from '@/app/lib/gapgpt'
+import { chatCompleteUsage, generateImage, agentModel } from '@/app/lib/gapgpt'
+import { getSession } from '@/app/lib/session'
+import { canUseToken, recordToken } from '@/app/lib/comm-store'
 
 // System prompts per agent — defines what each agent does
 const SYSTEMS: Record<string, string> = {
@@ -22,12 +24,20 @@ export async function POST(req: NextRequest) {
   const textModel = agentModel(agent, 'text')
   if (!textModel) return NextResponse.json({ error: `مدلی به ایجنت «${agent}» تخصیص داده نشده — از پنل API و مدل‌های AI انتخاب کن` }, { status: 400 })
 
+  // محدودیتِ توکن: اگر بستهٔ توکن فعال باشد و اعتبارِ کاربر صفر باشد، اجازه نده
+  const sess = await getSession()
+  if (sess && !canUseToken(sess.phone, sess.role)) {
+    return NextResponse.json({ error: 'اعتبارِ توکنِ هوش مصنوعی شما تمام شده — از بخش «پلن‌ها و اشتراک» توکن تهیه کنید.' }, { status: 402 })
+  }
+
   try {
     const system = SYSTEMS[agent] || SYSTEMS.chat
-    const text = await chatCompleteSafe(textModel, [
+    const { text, tokens } = await chatCompleteUsage(textModel, [
       { role: 'system', content: system },
       { role: 'user', content: input },
     ])
+    // ثبتِ مصرفِ توکن برای کاربر (توکنِ واقعی از API؛ اگر نبود، تخمین از طولِ متن)
+    if (sess) { const used = tokens || Math.ceil((input.length + (text || '').length) / 3); recordToken(sess.phone, sess.role, used) }
 
     let imageUrl: string | undefined
     if (wantImage) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listPackages, setPackages, getCredit, grantCredit, createOrder, createPlanOrder, listOrders, approveOrder, rejectOrder } from '@/app/lib/comm-store'
+import { listPackages, setPackages, getCredit, grantCredit, createOrder, createPlanOrder, listOrders, approveOrder, rejectOrder, getTokenUsage } from '@/app/lib/comm-store'
 import { listActive } from '@/app/lib/plan-store'
 
 // ارتباطات: پکیج‌های شارژ + اعتبارِ کاربر + سفارش‌ها.
@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ packages: listPackages(false), orders: listOrders() }, { headers: { 'Cache-Control': 'no-store' } })
   }
   // نمای کاربر: پکیج‌های فعال + اعتبارِ خودش + سفارش‌های خودش
-  return NextResponse.json({ packages: listPackages(true), credit: getCredit(s.phone), orders: listOrders(s.phone) }, { headers: { 'Cache-Control': 'no-store' } })
+  return NextResponse.json({ packages: listPackages(true), credit: getCredit(s.phone), orders: listOrders(s.phone), tokenUsed: getTokenUsage(s.phone) }, { headers: { 'Cache-Control': 'no-store' } })
 }
 
 export async function POST(req: NextRequest) {

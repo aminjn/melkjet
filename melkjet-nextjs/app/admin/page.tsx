@@ -2753,6 +2753,7 @@ function UsersView() {
                   <th style={th}>پلن</th>
                   <th style={th}>آگهی</th>
                   <th style={th}>اعتبار (پیامک/ایمیل/توکن)</th>
+                  <th style={th}>مصرفِ توکن</th>
                   <th style={th}>وضعیت</th>
                   <th style={th}>آخرین ورود</th>
                   <th style={{ ...th, textAlign: 'center' }}>حذف</th>
@@ -2778,6 +2779,7 @@ function UsersView() {
                     </td>
                     <td style={{ ...td, fontWeight: 700, color: u.listings ? 'var(--gold)' : 'var(--faint)' }}>{(u.listings || 0).toLocaleString('fa-IR')}</td>
                     <td style={{ ...td, fontSize: 12, color: 'var(--muted)', direction: 'ltr', textAlign: 'right' }}>{(u.credit?.sms || 0).toLocaleString('fa-IR')} / {(u.credit?.email || 0).toLocaleString('fa-IR')} / {(u.credit?.token || 0).toLocaleString('fa-IR')}</td>
+                    <td style={{ ...td, fontSize: 12.5, fontWeight: 700, color: u.tokenUsed ? '#a99bf0' : 'var(--faint)' }}>{(u.tokenUsed || 0).toLocaleString('fa-IR')}</td>
                     <td style={td}>{u.onboarded ? <Badge label="تکمیل‌شده" color="#5fd98a" /> : <Badge label="جدید" color="#5b9bd5" />}</td>
                     <td style={{ ...td, color: 'var(--muted)', fontSize: 12 }}>{timeAgo(u.lastLogin || null)}</td>
                     <td style={{ ...td, textAlign: 'center' }}>

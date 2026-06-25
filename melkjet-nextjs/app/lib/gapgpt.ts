@@ -59,6 +59,23 @@ export async function chatCompleteSafe(model: string, messages: { role: string; 
   }
 }
 
+// مثلِ chatCompleteSafe ولی تعدادِ توکنِ مصرف‌شده را هم برمی‌گرداند (برای محاسبهٔ مصرفِ کاربر)
+async function chatCompleteRaw(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number } = {}): Promise<{ text: string; tokens: number }> {
+  const { base, key } = cfg()
+  const res = await gapHttp(`${base}/chat/completions`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', Authorization: `Bearer ${key}`, accept: 'application/json' },
+    body: JSON.stringify({ model, messages, temperature: opts.temperature ?? 0.7, max_tokens: opts.max_tokens }),
+  }, 90000)
+  if (res.status !== 200) throw new Error(`گپ HTTP ${res.status}: ${res.body.slice(0, 300)}`)
+  const d = JSON.parse(res.body)
+  return { text: d.choices?.[0]?.message?.content || '', tokens: Number(d.usage?.total_tokens) || 0 }
+}
+export async function chatCompleteUsage(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number } = {}): Promise<{ text: string; tokens: number }> {
+  try { return await chatCompleteRaw(model, messages, opts) }
+  catch (e) { if (model !== 'gpt-4o-mini') return await chatCompleteRaw('gpt-4o-mini', messages, opts); throw e }
+}
+
 export async function generateImage(model: string, prompt: string, size = '1024x1024'): Promise<string> {
   const { base, key } = cfg()
   const res = await gapHttp(`${base}/images/generations`, {

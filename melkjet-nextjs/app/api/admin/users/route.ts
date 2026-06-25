@@ -3,7 +3,7 @@ import { getSession } from '@/app/lib/session'
 import { listAccounts, adminUpdate, deleteAccount, bulkUpdate, bulkDelete, createAccount } from '@/app/lib/account-store'
 import { listRoles, dashForRoleId } from '@/app/lib/role-store'
 import { listPlans } from '@/app/lib/plan-store'
-import { getCredit } from '@/app/lib/comm-store'
+import { getCredit, getTokenUsage } from '@/app/lib/comm-store'
 import { listItems } from '@/app/lib/scraper-store'
 
 async function guard() { const s = await getSession(); return s && s.role === 'super_admin' }
@@ -22,7 +22,7 @@ export async function GET() {
   // اطلاعاتِ کامل‌ترِ هر کاربر بر اساسِ پروفایلش
   const users = listAccounts().map(a => {
     const credit = getCredit(a.phone)
-    return { ...a, roleName: roleNameOf(a.role), planName: planNameOf(a.plan), dashboard: dashForRoleId(a.role), listings: listingCounts[a.phone] || 0, credit }
+    return { ...a, roleName: roleNameOf(a.role), planName: planNameOf(a.plan), dashboard: dashForRoleId(a.role), listings: listingCounts[a.phone] || 0, credit, tokenUsed: getTokenUsage(a.phone) }
   })
   return NextResponse.json({ users, roles, plans })
 }
