@@ -36,6 +36,8 @@ const AREA_OPTS = [40, 50, 60, 75, 90, 100, 120, 150, 180, 200, 250, 300, 400, 5
 const FLOOR_OPTS = [1, 2, 3, 4, 5, 6, 8, 10, 15, 20]
 const YEAR_OPTS = Array.from({ length: 30 }, (_, i) => 1404 - i) // ۱۴۰۴ تا ۱۳۷۵
 const priceLabel = (n: number) => n < 1 ? `${(n * 1000).toLocaleString('fa-IR')} میلیون` : `${n.toLocaleString('fa-IR')} میلیارد`
+// کشِ سمتِ کلاینتِ مختصاتِ هر شهر/محله — تا نقشهٔ هر شهر فقط یک‌بار geocode شود
+const GEO_CACHE = new Map<string, { lat: number; lng: number }>()
 
 // واحدِ ملک (آپارتمان/ویلا/…) را از متن تشخیص می‌دهد
 function detectKind(text: string): string {
@@ -275,20 +277,24 @@ function SearchPageInner() {
   const mapPoints = useMemo(() =>
     shownProperties.filter(p => p.lat && p.lng).map(p => ({ lat: p.lat!, lng: p.lng! })),
     [shownProperties])
-  // پرتکرارترین محلهٔ آگهی‌های نمایش‌داده‌شده → نقشه روی همان‌جا متمرکز شود
+  // پرتکرارترین محلهٔ آگهی‌های نمایش‌داده‌شده (فقط از آگهی‌های واقعیِ همین شهر؛ بدونِ fallback به سابقهٔ شهرِ دیگر)
   const mapArea = useMemo(() => {
     const counts: Record<string, number> = {}
     for (const p of shownProperties.slice(0, 40)) { const n = (p.location || '').split(/[،,]/)[0].trim(); if (n && n !== 'نامشخص') counts[n] = (counts[n] || 0) + 1 }
-    const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0]
-    return top || prefArea || ''
-  }, [shownProperties, prefArea])
-  // مرکزِ نقشه را با geocode محلهٔ آگهی‌ها به‌دست می‌آوریم (نشان)
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || ''
+  }, [shownProperties])
+  // مرکزِ نقشه: محلهٔ آگهی‌ها + شهر؛ اگر آگهی نبود، خودِ شهر (نقشهٔ شهر همیشه لود می‌شود).
+  // کشِ سمتِ کلاینت تا نقشهٔ هر شهر فقط یک‌بار geocode شود.
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null)
   useEffect(() => {
     const q = [mapArea, selectedCity].filter(Boolean).join(' ').trim()
     if (!q) { setMapCenter(null); return }
+    const cached = GEO_CACHE.get(q)
+    if (cached) { setMapCenter(cached); return }
     let alive = true
-    fetch(`/api/geo/geocode?q=${encodeURIComponent(q)}`).then(r => r.ok ? r.json() : null).then(d => { if (alive && d?.lat) setMapCenter({ lat: d.lat, lng: d.lng }) }).catch(() => {})
+    fetch(`/api/geo/geocode?q=${encodeURIComponent(q)}`).then(r => r.ok ? r.json() : null).then(d => {
+      if (alive && d?.lat) { const c = { lat: d.lat, lng: d.lng }; GEO_CACHE.set(q, c); setMapCenter(c) }
+    }).catch(() => {})
     return () => { alive = false }
   }, [mapArea, selectedCity])
   // آدرسِ تصویرِ نقشهٔ استاتیکِ نشان (مطمئن): مارکرِ آگهی‌ها، یا مرکزِ محلهٔ آگهی‌ها
