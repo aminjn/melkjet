@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { getAdminData, saveAdminData } from '@/app/lib/admin-store'
+import { countAll } from '@/app/lib/push-store'
 
 // تنظیماتِ هشدارِ «آگهی جدید اومد خبرم کن» (سوپرادمین): پترنِ پیامک.
 export async function GET() {
   const s = await getSession()
   if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const a = getAdminData().alerts || {}
-  return NextResponse.json({ enabled: !!a.enabled, pattern: a.pattern || '', patternVar: a.patternVar || 'message' })
+  return NextResponse.json({ enabled: !!a.enabled, pattern: a.pattern || '', patternVar: a.patternVar || 'message', pushSubscribers: countAll() })
 }
 
 export async function POST(req: NextRequest) {

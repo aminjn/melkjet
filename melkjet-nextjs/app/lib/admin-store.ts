@@ -58,6 +58,11 @@ export interface AdminData {
     pattern?: string     // کدِ پترنِ IPPanel برای ارسالِ سریعِ پیامک (اختیاری)
     patternVar?: string  // نامِ متغیرِ پترن (پیش‌فرض: message)
   }
+  webpush?: {            // کلیدهای VAPID برای پوش‌نوتیفیکیشنِ مرورگری (یک‌بار خودکار ساخته می‌شوند)
+    publicKey: string
+    privateKeyPem: string
+    subject?: string
+  }
   alerts?: {             // هشدارِ «آگهی جدید اومد خبرم کن» — پیامک با پترن
     enabled?: boolean
     pattern?: string     // کدِ پترنِ IPPanel (اختیاری)

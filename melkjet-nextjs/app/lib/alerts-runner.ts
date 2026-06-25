@@ -5,6 +5,8 @@ import { pushSystemMessage } from './message-store'
 import { getAdminData } from './admin-store'
 import { shecanRequest } from './shecan-https'
 import { PROPERTY_KINDS } from './taxonomy'
+import { listForPhone, removeByEndpoint } from './push-store'
+import { sendPush } from './web-push'
 
 const norm = (s: string) => (s || '').replace(/‌/g, '').replace(/\s/g, '').toLowerCase()
 const toLatin = (s: string) => (s || '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
@@ -75,6 +77,15 @@ export async function processSavedSearches(now = Date.now()): Promise<{ searches
         try { pushSystemMessage(s.owner, name, txt) } catch {}
       }
       await sendSms(s.owner, s.label)
+      // پوش‌نوتیفیکیشن (حتی اگر اپ بسته باشد)
+      const top = fresh[0]
+      const subs = listForPhone(s.owner)
+      for (const sub of subs) {
+        try {
+          const st = await sendPush(sub, { title: 'آگهیِ جدید در ملک‌جت 🏠', body: `«${top.title}»${s.label ? ` در ${s.label}` : ''} مطابقِ جستجوی شما اضافه شد`, url: `/property/${top.id}`, tag: 'mj-alert' })
+          if (st === 404 || st === 410) removeByEndpoint(sub.endpoint)
+        } catch { /* بی‌صدا */ }
+      }
       notified++
     }
     setLastCheck(s.id, now)

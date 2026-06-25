@@ -601,7 +601,11 @@ function NotifyBar({ count, criteria }: { count: number; criteria: Criteria }) {
       const r = await fetch('/api/saved-search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: next ? 'add' : 'remove', city: criteria.city, area: criteria.area, deal: criteria.deal, kind: criteria.kind, priceMax: criteria.priceMax, label: [criteria.area, criteria.city].filter(Boolean).join('، ') }) })
       const d = await r.json()
       if (r.status === 401) { setMsg('برای فعال‌کردنِ هشدار وارد شوید…'); setTimeout(() => { window.location.href = '/auth' }, 900); return }
-      if (d.ok) { setOn(next); setMsg(next ? '✓ از این پس آگهیِ جدیدِ مطابق را در گفتگوها و پیامک خبر می‌دهیم.' : 'هشدار خاموش شد.') }
+      if (d.ok) {
+        setOn(next)
+        if (next) { import('@/app/lib/push-client').then(m => m.ensurePushSubscribed(true)).catch(() => {}) }
+        setMsg(next ? '✓ از این پس آگهیِ جدید را با نوتیفیکیشن، گفتگو و پیامک خبر می‌دهیم.' : 'هشدار خاموش شد.')
+      }
       else setMsg(d.error || 'خطا')
     } catch { setMsg('خطا در ارتباط') } finally { setBusy(false) }
   }

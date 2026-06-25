@@ -12,7 +12,9 @@ export default function PWAInstall() {
 
   useEffect(() => {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {})
+      navigator.serviceWorker.register('/sw.js')
+        .then(() => { import('@/app/lib/push-client').then(m => m.ensurePushSubscribed(false)).catch(() => {}) })
+        .catch(() => {})
     }
 
     if (window.matchMedia('(display-mode: standalone)').matches) return
