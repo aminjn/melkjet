@@ -353,6 +353,7 @@ export default function AgencyPage() {
               <Kpi label="لیدهای باز" value={fa(stats.kpis.openLeads)} />
               <Kpi label="معاملات این ماه" value={fa(stats.kpis.dealsThisMonth)} />
               <Kpi label="فروش این ماه" value={money(stats.kpis.monthSales)} subColor={stats.kpis.monthChange >= 0 ? '#34d399' : '#ef4444'} sub={`${stats.kpis.monthChange >= 0 ? '+' : ''}${fa(stats.kpis.monthChange)}٪`} />
+              <Kpi label="درآمد از کمیسیونِ مشاوران" value={money(data.advisorFiles?.totals.agencyCut || 0)} sub="سهمِ تجمیعیِ آژانس" subColor="var(--gold)" />
             </div>
             <div className="mjg-cols" style={{ display: 'flex', gap: 16 }}>
               <div style={{ ...card, padding: 18, flex: 1, minWidth: 0 }}>
@@ -382,6 +383,19 @@ export default function AgencyPage() {
                 <div style={{ fontSize: 11, color: 'var(--faint)', textAlign: 'center' }}>ارقام به میلیارد تومان</div>
               </div>
             </div>
+            {/* درآمدِ آژانس از کمیسیونِ مشاوران — قابلِ رویت در داشبورد + لینکِ گزارشِ کامل */}
+            {data.advisorFiles && data.advisorFiles.income.length > 0 && (
+              <div style={{ ...card, padding: 18 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+                  {sectionTitle('درآمدِ آژانس از کمیسیونِ مشاوران (۶ ماه)')}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--gold)' }}>{money(data.advisorFiles.income.reduce((s, p) => s + p.amount, 0))}</span>
+                    <button onClick={() => goView('advisorfiles')} style={{ ...actionBtn, color: 'var(--gold)', borderColor: 'var(--gold)' }}>گزارشِ کامل ←</button>
+                  </div>
+                </div>
+                <IncomeBars points={data.advisorFiles.income} height={130} />
+              </div>
+            )}
             <div className="mjg-cols" style={{ display: 'flex', gap: 16 }}>
               <div style={{ ...card, padding: 18, flex: 1, minWidth: 0 }}>
                 {sectionTitle('لیدهای اخیر')}
@@ -537,8 +551,23 @@ export default function AgencyPage() {
             const t = af?.totals
             const dealLabel = (d: string) => d === 'sale' ? 'فروش' : 'اجاره'
             const badge = (label: string, color?: string) => <span style={{ fontSize: 11, fontWeight: 700, color: color || 'var(--muted)', background: color ? color + '1f' : 'var(--bg)', border: `1px solid ${color ? color + '55' : 'var(--line)'}`, borderRadius: 999, padding: '3px 10px', whiteSpace: 'nowrap' }}>{label}</span>
+            const exportCsv = () => {
+              const head = ['مشاور', 'شماره', 'کل فایل', 'فعال', 'فروخته', 'اجاره‌رفته', 'کمیسیون مشاور (تومان)', 'پرداختی', 'معوق', 'نرخ آژانس', 'سهم آژانس (تومان)']
+              const q = (v: any) => `"${String(v).replace(/"/g, '""')}"`
+              const lines = [head.map(q).join(',')]
+              for (const r of rows) {
+                const rate = r.rate.mode === 'percent' ? `${r.rate.value}٪` : `${r.rate.value} هر معامله`
+                lines.push([r.advisorName, r.advisorPhone, r.counts.total, r.counts.active, r.counts.sold, r.counts.rented, r.advisorCommission, r.paidCommission, r.pendingCommission, rate, r.agencyCut].map(q).join(','))
+              }
+              if (t) lines.push(['جمع', '', t.listings, t.active, t.sold, t.rented, t.advisorCommission, '', '', '', t.agencyCut].map(q).join(','))
+              const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' })
+              const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `agency-commission-report.csv`; a.click(); URL.revokeObjectURL(url)
+            }
             return <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.9 }}>این بخش فایل‌ها و کمیسیونِ مشاورانِ عضوِ آژانس را مستقیماً از پنلِ خودِ مشاوران نمایش می‌دهد و به‌روز است.</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.9, flex: 1, minWidth: 200 }}>این بخش فایل‌ها و کمیسیونِ مشاورانِ عضوِ آژانس را مستقیماً از پنلِ خودِ مشاوران نمایش می‌دهد و به‌روز است.</div>
+                {rows.length > 0 && <button onClick={exportCsv} style={{ ...actionBtn, color: 'var(--gold)', borderColor: 'var(--gold)', padding: '8px 14px' }}>⬇ خروجیِ گزارش (CSV)</button>}
+              </div>
               <div className="mjg-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12 }}>
                 <Kpi label="کلِ فایل‌ها" value={fa(t?.listings || 0)} />
                 <Kpi label="فعال" value={fa(t?.active || 0)} />
