@@ -7,6 +7,7 @@ const DATA_FILE = join(process.cwd(), '.pending-reg-data.json')
 export interface PendingReg {
   phone: string; nationalId: string; firstName?: string; lastName?: string
   gender?: string; fatherName?: string; birthDate?: string; birthPlace?: string
+  idNumber?: string; idSerial?: string; birthPlaceCode?: string
   matched: boolean; createdAt: number
 }
 type DB = Record<string, PendingReg>

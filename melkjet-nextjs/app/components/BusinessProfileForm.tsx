@@ -80,7 +80,7 @@ export default function BusinessProfileForm() {
           <>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(95,217,138,.12)', border: '1px solid rgba(95,217,138,.4)', color: '#5fd98a', borderRadius: 999, padding: '5px 14px', fontSize: 12.5, fontWeight: 700, marginBottom: 14 }}>✓ هویتِ شما با سامانهٔ شاهکار تأیید شده است</div>
             <div style={grid} className="mjpf-grid">
-              {[['نام و نام خانوادگی', identity.name], ['کد ملی', identity.nationalId, true], ['نام پدر', identity.fatherName], ['جنسیت', identity.gender === 'male' ? 'مرد' : identity.gender === 'female' ? 'زن' : identity.gender], ['تاریخ تولد', identity.birthDate, true], ['محل تولد', identity.birthPlace]].filter(x => x[1]).map(([l, v, ltr]: any) => (
+              {[['نام و نام خانوادگی', identity.name], ['کد ملی', identity.nationalId, true], ['نام پدر', identity.fatherName], ['جنسیت', identity.gender === 'male' ? 'مرد' : identity.gender === 'female' ? 'زن' : identity.gender], ['تاریخ تولد', identity.birthDate, true], ['محل تولد', identity.birthPlace], ['شمارهٔ شناسنامه', identity.idNumber, true], ['سری و سریالِ شناسنامه', identity.idSerial, true]].filter(x => x[1]).map(([l, v, ltr]: any) => (
                 <Field key={l} label={l}><input value={v} readOnly style={{ ...inp, opacity: 0.85, direction: ltr ? 'ltr' : 'rtl', textAlign: ltr ? 'left' : 'right' }} /></Field>
               ))}
             </div>

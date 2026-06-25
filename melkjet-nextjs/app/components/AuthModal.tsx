@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 
 // پاپ‌آپِ ورود/ثبت‌نام — سراسری. با رویدادِ window «mj-open-auth» باز می‌شود.
@@ -31,6 +31,7 @@ export default function AuthModal() {
   // شاهکار
   const [nid, setNid] = useState('')
   const [by, setBy] = useState(''); const [bm, setBm] = useState(''); const [bd, setBd] = useState('')
+  const yRef = useRef<HTMLInputElement>(null); const mRef = useRef<HTMLInputElement>(null); const dRef = useRef<HTMLInputElement>(null)
   const [selectedRole, setSelectedRole] = useState('')
   const [roles, setRoles] = useState(FALLBACK_ROLES)
   const [email, setEmail] = useState('')
@@ -167,14 +168,14 @@ export default function AuthModal() {
               </div>
               <div style={{ marginBottom: 14 }}>
                 <label style={lab}>کد ملی</label>
-                <input type="tel" inputMode="numeric" placeholder="کد ملی ۱۰ رقمی" value={nid} onChange={e => setNid(e.target.value.replace(/\D/g, '').slice(0, 10))} style={{ ...inp, textAlign: 'center', letterSpacing: 2 }} autoFocus />
+                <input type="tel" inputMode="numeric" placeholder="کد ملی ۱۰ رقمی" value={nid} onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 10); setNid(v); if (v.length === 10) yRef.current?.focus() }} style={{ ...inp, textAlign: 'center', letterSpacing: 2 }} autoFocus />
               </div>
               <div style={{ marginBottom: 16 }}>
-                <label style={lab}>تاریخ تولد (شمسی)</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 8 }}>
-                  <input type="tel" inputMode="numeric" placeholder="سال ۱۳۷۰" value={by} onChange={e => setBy(e.target.value.replace(/\D/g, '').slice(0, 4))} style={{ ...inp, textAlign: 'center' }} />
-                  <input type="tel" inputMode="numeric" placeholder="ماه" value={bm} onChange={e => setBm(e.target.value.replace(/\D/g, '').slice(0, 2))} style={{ ...inp, textAlign: 'center' }} />
-                  <input type="tel" inputMode="numeric" placeholder="روز" value={bd} onChange={e => setBd(e.target.value.replace(/\D/g, '').slice(0, 2))} style={{ ...inp, textAlign: 'center' }} />
+                <label style={lab}>تاریخ تولد (شمسی) — سال / ماه / روز</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 8, direction: 'ltr' }}>
+                  <input ref={yRef} type="tel" inputMode="numeric" placeholder="سال ۱۳۷۰" value={by} onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 4); setBy(v); if (v.length === 4) mRef.current?.focus() }} style={{ ...inp, textAlign: 'center' }} />
+                  <input ref={mRef} type="tel" inputMode="numeric" placeholder="ماه" value={bm} onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 2); setBm(v); if (v.length === 2) dRef.current?.focus() }} style={{ ...inp, textAlign: 'center' }} />
+                  <input ref={dRef} type="tel" inputMode="numeric" placeholder="روز" value={bd} onChange={e => setBd(e.target.value.replace(/\D/g, '').slice(0, 2))} style={{ ...inp, textAlign: 'center' }} />
                 </div>
               </div>
               {errBox}

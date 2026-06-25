@@ -24,5 +24,5 @@ export async function POST(req: NextRequest) {
   if (/^09\d{9}$/.test(phone)) { const m = await shahkarMatch(nid, phone); matched = m.ok ? m.matched : null }
 
   const i = idn.identity
-  return NextResponse.json({ ok: true, matched, identity: { nationalId: nid, firstName: i.firstName, lastName: i.lastName, gender: i.gender, fatherName: i.fatherName, birthDate: i.birthDate || jbd, birthPlace: i.birthPlace } })
+  return NextResponse.json({ ok: true, matched, identity: { nationalId: nid, firstName: i.firstName, lastName: i.lastName, gender: i.gender, fatherName: i.fatherName, birthDate: i.birthDate || jbd, birthPlace: i.birthPlace, idNumber: i.idNumber, idSerial: i.idSerial, birthPlaceCode: i.birthPlaceCode } })
 }

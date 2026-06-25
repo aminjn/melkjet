@@ -15,6 +15,7 @@ export async function GET() {
       verified: !!a?.identityVerifiedAt, name: a?.name || '', nationalId: a?.nationalId || '',
       firstName: a?.firstName || '', lastName: a?.lastName || '', fatherName: a?.fatherName || '',
       gender: a?.gender || '', birthDate: a?.birthDate || '', birthPlace: a?.birthPlace || '',
+      idNumber: a?.idNumber || '', idSerial: a?.idSerial || '', birthPlaceCode: a?.birthPlaceCode || '',
     },
     role: a?.role || '', plan: a?.plan || '',
     profile, completeness: completeness(profile),

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
@@ -30,6 +30,7 @@ export default function AuthPage() {
   // شاهکار
   const [nid, setNid] = useState(''); const [by, setBy] = useState(''); const [bm, setBm] = useState(''); const [bd, setBd] = useState('')
   const [nameVerified, setNameVerified] = useState(false)
+  const yRef = useRef<HTMLInputElement>(null); const mRef = useRef<HTMLInputElement>(null); const dRef = useRef<HTMLInputElement>(null)
 
   // Onboarding state (new users)
   const [name, setName] = useState('')
@@ -251,8 +252,8 @@ export default function AuthPage() {
                       <button onClick={() => { setOtpStep('enter-phone'); setError('') }} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 22, padding: 0 }}>←</button>
                       <div><p style={{ fontSize: 14, color: 'var(--text)', margin: 0, fontWeight: 700 }}>تأییدِ هویت (سامانهٔ شاهکار)</p><p style={{ fontSize: 12, color: 'var(--faint)', margin: '3px 0 0' }}>برای ثبت‌نام، هویتت با ثبت‌احوال و شاهکار راستی‌آزمایی می‌شود.</p></div>
                     </div>
-                    <div style={fieldStyle}><label style={labelStyle}>کد ملی</label><input type="tel" inputMode="numeric" placeholder="کد ملی ۱۰ رقمی" value={nid} onChange={e => setNid(e.target.value.replace(/\D/g, '').slice(0, 10))} style={{ ...inputStyle, textAlign: 'center', letterSpacing: 2 }} autoFocus /></div>
-                    <div style={fieldStyle}><label style={labelStyle}>تاریخ تولد (شمسی)</label><div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 8 }}><input type="tel" inputMode="numeric" placeholder="سال ۱۳۷۰" value={by} onChange={e => setBy(e.target.value.replace(/\D/g, '').slice(0, 4))} style={{ ...inputStyle, textAlign: 'center' }} /><input type="tel" inputMode="numeric" placeholder="ماه" value={bm} onChange={e => setBm(e.target.value.replace(/\D/g, '').slice(0, 2))} style={{ ...inputStyle, textAlign: 'center' }} /><input type="tel" inputMode="numeric" placeholder="روز" value={bd} onChange={e => setBd(e.target.value.replace(/\D/g, '').slice(0, 2))} style={{ ...inputStyle, textAlign: 'center' }} /></div></div>
+                    <div style={fieldStyle}><label style={labelStyle}>کد ملی</label><input type="tel" inputMode="numeric" placeholder="کد ملی ۱۰ رقمی" value={nid} onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 10); setNid(v); if (v.length === 10) yRef.current?.focus() }} style={{ ...inputStyle, textAlign: 'center', letterSpacing: 2 }} autoFocus /></div>
+                    <div style={fieldStyle}><label style={labelStyle}>تاریخ تولد (شمسی) — سال / ماه / روز</label><div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 8, direction: 'ltr' }}><input ref={yRef} type="tel" inputMode="numeric" placeholder="سال ۱۳۷۰" value={by} onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 4); setBy(v); if (v.length === 4) mRef.current?.focus() }} style={{ ...inputStyle, textAlign: 'center' }} /><input ref={mRef} type="tel" inputMode="numeric" placeholder="ماه" value={bm} onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 2); setBm(v); if (v.length === 2) dRef.current?.focus() }} style={{ ...inputStyle, textAlign: 'center' }} /><input ref={dRef} type="tel" inputMode="numeric" placeholder="روز" value={bd} onChange={e => setBd(e.target.value.replace(/\D/g, '').slice(0, 2))} style={{ ...inputStyle, textAlign: 'center' }} /></div></div>
                     {error && <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 9, background: 'rgba(220,53,69,.1)', border: '1px solid rgba(220,53,69,.25)', color: '#e25563', fontSize: 13 }}>{error}</div>}
                     <button onClick={submitShahkar} disabled={loading} style={btnStyle}>{loading ? 'در حال راستی‌آزمایی...' : 'تأیید هویت و دریافت کد'}</button>
                   </>

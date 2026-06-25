@@ -2714,7 +2714,7 @@ function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete }: { user: 
             </div>
             {user.nationalId ? (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12.5 }}>
-                {[['نام', user.name, false], ['کد ملی', user.nationalId, true], ['نام پدر', user.fatherName, false], ['جنسیت', user.gender === 'male' ? 'مرد' : user.gender === 'female' ? 'زن' : user.gender, false], ['تاریخ تولد', user.birthDate, true], ['محل تولد', user.birthPlace, false]].filter(x => x[1]).map(([l, v, ltr]: any) => (
+                {[['نام', user.name, false], ['کد ملی', user.nationalId, true], ['نام پدر', user.fatherName, false], ['جنسیت', user.gender === 'male' ? 'مرد' : user.gender === 'female' ? 'زن' : user.gender, false], ['تاریخ تولد', user.birthDate, true], ['محل تولد', user.birthPlace, false], ['شمارهٔ شناسنامه', user.idNumber, true], ['سری و سریال', user.idSerial, true]].filter(x => x[1]).map(([l, v, ltr]: any) => (
                   <div key={l} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, background: 'var(--bg2)', borderRadius: 8, padding: '7px 10px' }}><span style={{ color: 'var(--muted)' }}>{l}</span><span style={{ fontWeight: 700, direction: ltr ? 'ltr' : 'rtl' }}>{v}</span></div>
                 ))}
               </div>

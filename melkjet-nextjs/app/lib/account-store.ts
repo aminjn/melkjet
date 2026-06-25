@@ -7,8 +7,9 @@ const FILE = join(process.cwd(), '.account-data.json')
 export interface Account {
   phone: string; name?: string; role?: string; plan?: string; onboarded: boolean; createdAt: number; lastLogin?: number
   // هویتِ تأییدشدهٔ شاهکار (پس از تأیید غیرقابلِ‌تغییر است)
-  nationalId?: string; firstName?: string; lastName?: string; gender?: string; fatherName?: string; birthDate?: string; birthPlace?: string; identityVerifiedAt?: number
+  nationalId?: string; firstName?: string; lastName?: string; gender?: string; fatherName?: string; birthDate?: string; birthPlace?: string; idNumber?: string; idSerial?: string; birthPlaceCode?: string; identityVerifiedAt?: number
 }
+type Idy = { nationalId: string; firstName?: string; lastName?: string; gender?: string; fatherName?: string; birthDate?: string; birthPlace?: string; idNumber?: string; idSerial?: string; birthPlaceCode?: string }
 type DB = Record<string, Account>
 
 function load(): DB { if (existsSync(FILE)) { try { return JSON.parse(readFileSync(FILE, 'utf-8')) } catch {} } return {} }
@@ -46,7 +47,7 @@ export function setPlan(phone: string, plan: string): Account {
 }
 
 // ساختِ کاربر توسطِ سوپرادمین (دستی) — با هویتِ شاهکار (اختیاری) و وضعیتِ تأیید
-export function createAccount(phone: string, patch: { name?: string; role?: string; plan?: string; identity?: { nationalId: string; firstName?: string; lastName?: string; gender?: string; fatherName?: string; birthDate?: string; birthPlace?: string }; verified?: boolean }): { ok: boolean; error?: string; account?: Account } {
+export function createAccount(phone: string, patch: { name?: string; role?: string; plan?: string; identity?: Idy; verified?: boolean }): { ok: boolean; error?: string; account?: Account } {
   const p = String(phone).replace(/\D/g, '')
   if (!/^09\d{9}$/.test(p)) return { ok: false, error: 'شمارهٔ موبایل معتبر نیست (۰۹...)' }
   const db = load()
@@ -56,7 +57,7 @@ export function createAccount(phone: string, patch: { name?: string; role?: stri
   const nm = full || (patch.name ? String(patch.name).slice(0, 60) : '')
   db[p] = {
     phone: p, name: nm || undefined, role: patch.role || undefined, plan: patch.plan || undefined, onboarded: !!patch.role, createdAt: Date.now(),
-    ...(idy ? { nationalId: idy.nationalId, firstName: idy.firstName, lastName: idy.lastName, gender: idy.gender, fatherName: idy.fatherName, birthDate: idy.birthDate, birthPlace: idy.birthPlace } : {}),
+    ...(idy ? { nationalId: idy.nationalId, firstName: idy.firstName, lastName: idy.lastName, gender: idy.gender, fatherName: idy.fatherName, birthDate: idy.birthDate, birthPlace: idy.birthPlace, idNumber: idy.idNumber, idSerial: idy.idSerial, birthPlaceCode: idy.birthPlaceCode } : {}),
     ...(patch.verified && idy ? { identityVerifiedAt: Date.now() } : {}),
   }
   save(db)
@@ -68,25 +69,27 @@ export function accountByNationalId(nid: string): Account | null { if (!nid) ret
 export function touchLogin(phone: string) { const db = load(); if (db[phone]) { db[phone].lastLogin = Date.now(); save(db) } }
 
 // ساختِ حساب با هویتِ تأییدشدهٔ شاهکار (نام از ثبت‌احوال؛ نقش هنوز انتخاب نشده ⇒ onboarded:false)
-export function createVerifiedAccount(phone: string, idy: { nationalId: string; firstName?: string; lastName?: string; gender?: string; fatherName?: string; birthDate?: string; birthPlace?: string }): Account {
+export function createVerifiedAccount(phone: string, idy: Idy): Account {
   const db = load()
   const full = `${idy.firstName || ''} ${idy.lastName || ''}`.trim()
   const a: Account = {
     phone, name: full || undefined, onboarded: false, createdAt: Date.now(), lastLogin: Date.now(),
     nationalId: idy.nationalId, firstName: idy.firstName, lastName: idy.lastName, gender: idy.gender,
-    fatherName: idy.fatherName, birthDate: idy.birthDate, birthPlace: idy.birthPlace, identityVerifiedAt: Date.now(),
+    fatherName: idy.fatherName, birthDate: idy.birthDate, birthPlace: idy.birthPlace,
+    idNumber: idy.idNumber, idSerial: idy.idSerial, birthPlaceCode: idy.birthPlaceCode, identityVerifiedAt: Date.now(),
   }
   db[phone] = a; save(db)
   return a
 }
 
 // اعمالِ هویتِ تأییدشده روی حسابِ موجود (مثلاً حسابی که سوپرادمین ساخته و کاربر در اولین ورود احراز می‌کند)
-export function applyIdentity(phone: string, idy: { nationalId: string; firstName?: string; lastName?: string; gender?: string; fatherName?: string; birthDate?: string; birthPlace?: string }): Account | null {
+export function applyIdentity(phone: string, idy: Idy): Account | null {
   const db = load(); const a = db[phone]; if (!a) return null
   const full = `${idy.firstName || ''} ${idy.lastName || ''}`.trim()
   if (full) a.name = full
   a.nationalId = idy.nationalId; a.firstName = idy.firstName; a.lastName = idy.lastName; a.gender = idy.gender
   a.fatherName = idy.fatherName; a.birthDate = idy.birthDate; a.birthPlace = idy.birthPlace
+  a.idNumber = idy.idNumber; a.idSerial = idy.idSerial; a.birthPlaceCode = idy.birthPlaceCode
   a.identityVerifiedAt = Date.now(); a.lastLogin = Date.now()
   save(db); return a
 }

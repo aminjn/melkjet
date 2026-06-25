@@ -143,6 +143,7 @@ export async function GET(req: NextRequest) {
       // هویتِ رسمیِ شاهکار
       identityVerifiedAt: acct.identityVerifiedAt || null, nationalId: acct.nationalId || '',
       fatherName: acct.fatherName || '', gender: acct.gender || '', birthDate: acct.birthDate || '', birthPlace: acct.birthPlace || '',
+      idNumber: acct.idNumber || '', idSerial: acct.idSerial || '',
     },
     profile, completeness: completeness(profile),
     kpis,

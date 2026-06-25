@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
   if (!m.matched) return NextResponse.json({ error: 'این شماره موبایل به نامِ این کد ملی نیست؛ با شماره‌ای که به نامِ خودتان است اقدام کنید.' }, { status: 400 })
 
   const i = idn.identity
-  upsertPending({ phone, nationalId: nid, firstName: i.firstName, lastName: i.lastName, gender: i.gender, fatherName: i.fatherName, birthDate: i.birthDate || jbd, birthPlace: i.birthPlace, matched: true, createdAt: Date.now() })
+  upsertPending({ phone, nationalId: nid, firstName: i.firstName, lastName: i.lastName, gender: i.gender, fatherName: i.fatherName, birthDate: i.birthDate || jbd, birthPlace: i.birthPlace, idNumber: i.idNumber, idSerial: i.idSerial, birthPlaceCode: i.birthPlaceCode, matched: true, createdAt: Date.now() })
 
   const sent = await sendOtpSms(phone)
   if (!sent.ok) return NextResponse.json({ error: sent.error }, { status: 200 })

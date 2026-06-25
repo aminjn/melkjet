@@ -41,6 +41,7 @@ async function callPodium(payload: unknown): Promise<{ hasError?: boolean; messa
 export interface Identity {
   nationalCode: string; firstName: string; lastName: string
   fatherName?: string; gender?: string; birthPlace?: string; birthDate?: string
+  idNumber?: string; idSerial?: string; birthPlaceCode?: string
   raw?: Record<string, unknown>
 }
 
@@ -61,6 +62,9 @@ export async function getIdentity(nationalCode: string, jBirthDate: string): Pro
         firstName: i.firstName || '', lastName: i.lastName || '',
         fatherName: i.fatherName || '', gender: String(i.gender || '').toLowerCase(),
         birthPlace: i.birthPlace || '', birthDate: String(i.birthDate || jBirthDate || ''),
+        idNumber: i.identificationNumber != null ? String(i.identificationNumber) : '',
+        idSerial: [i.identificationSerialCode, i.identificationSerialNumber != null ? String(i.identificationSerialNumber) : ''].filter(Boolean).join(' '),
+        birthPlaceCode: i.birthPlaceCode != null ? String(i.birthPlaceCode) : '',
         raw: i as Record<string, unknown>,
       },
     }
