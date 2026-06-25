@@ -87,6 +87,12 @@ const BLOCK_DEFAULTS: Record<string, Record<string, any>> = {
     text: 'ما با سال‌ها تجربه در حوزه املاک، همراه شما در مسیر خرید، فروش و اجاره ملک هستیم. تیم حرفه‌ای ما با ارائه مشاوره تخصصی، بهترین گزینه‌ها را متناسب با نیاز شما پیشنهاد می‌دهد.',
     image: '',
   },
+  team: {
+    heading: 'مشاوران ما',
+    subheading: 'تیمِ حرفه‌ایِ مشاورانِ ما در کنارِ شما',
+    showSites: 'yes',   // نمایشِ لینکِ سایتِ شخصیِ هر مشاور زیرِ عکسش
+    showPhone: 'yes',
+  },
   stats: {
     items: [
       { value: '۵۰۰+', label: 'ملک فروخته' },
@@ -174,6 +180,12 @@ const BLOCK_SCHEMA: Record<string, FieldSpec[]> = {
     { key: 'text', label: 'متن', kind: 'textarea' },
     { key: 'image', label: 'تصویر', kind: 'image' },
   ],
+  team: [
+    { key: 'heading', label: 'عنوان', kind: 'text' },
+    { key: 'subheading', label: 'زیرعنوان', kind: 'textarea' },
+    { key: 'showSites', label: 'نمایشِ لینکِ سایتِ مشاور', kind: 'enum', options: [{ value: 'yes', label: 'نمایش' }, { value: 'no', label: 'عدم نمایش' }] },
+    { key: 'showPhone', label: 'نمایشِ شمارهٔ تماس', kind: 'enum', options: [{ value: 'yes', label: 'نمایش' }, { value: 'no', label: 'عدم نمایش' }] },
+  ],
   stats: [
     { key: 'items', label: 'آمار', kind: 'list', itemFields: [{ key: 'value', label: 'مقدار', kind: 'text' }, { key: 'label', label: 'برچسب', kind: 'text' }], newItem: () => ({ value: '۰', label: 'آمار جدید' }) },
   ],
@@ -211,6 +223,7 @@ const BLOCK_LIBRARY = [
   { type: 'blog', label: 'وبلاگ', icon: '✎' },
   { type: 'services', label: 'خدمات', icon: '◈' },
   { type: 'about', label: 'درباره ما', icon: '¶' },
+  { type: 'team', label: 'تیم مشاوران', icon: '☺' },
   { type: 'stats', label: 'آمار', icon: '◔' },
   { type: 'gallery', label: 'گالری', icon: '▥' },
   { type: 'testimonials', label: 'نظرات مشتریان', icon: '❝' },
@@ -269,12 +282,12 @@ const STARTER_TEMPLATES = [
   { id: 'pro-10', name: 'مشاور سریع', profile: 'مشاور', blocks: ['hero', 'search', 'services', 'testimonials', 'cta', 'footer'], desc: 'هیرو، جستجو، خدمات، نظرات، اقدام' },
 
   // ───────── آژانس (۱۰) ─────────
-  { id: 'agc-01', name: 'آژانس جامع', profile: 'آژانس', blocks: ['hero', 'services', 'listings', 'about', 'contact', 'footer'], desc: 'هیرو، خدمات، فایل‌ها، تیم، تماس' },
+  { id: 'agc-01', name: 'آژانس جامع', profile: 'آژانس', blocks: ['hero', 'services', 'listings', 'team', 'contact', 'footer'], desc: 'هیرو، خدمات، فایل‌ها، تیم، تماس' },
   { id: 'agc-02', name: 'آژانس لوکس', profile: 'آژانس', blocks: ['hero', 'gallery', 'services', 'testimonials', 'contact', 'footer'], desc: 'هیرو، گالری، خدمات، نظرات' },
   { id: 'agc-03', name: 'آژانس مدرن', profile: 'آژانس', blocks: ['hero', 'search', 'listings', 'stats', 'cta', 'footer'], desc: 'هیرو، جستجو، فایل‌ها، آمار، اقدام' },
   { id: 'agc-04', name: 'آژانس حرفه‌ای', profile: 'آژانس', blocks: ['hero', 'about', 'services', 'stats', 'testimonials', 'footer'], desc: 'هیرو، درباره، خدمات، آمار، نظرات' },
   { id: 'agc-05', name: 'آژانس برتر', profile: 'آژانس', blocks: ['hero', 'stats', 'listings', 'testimonials', 'contact', 'footer'], desc: 'هیرو، آمار، فایل‌ها، نظرات، تماس' },
-  { id: 'agc-06', name: 'آژانس تیمی', profile: 'آژانس', blocks: ['hero', 'about', 'gallery', 'services', 'contact', 'footer'], desc: 'هیرو، تیم، گالری، خدمات، تماس' },
+  { id: 'agc-06', name: 'آژانس تیمی', profile: 'آژانس', blocks: ['hero', 'team', 'gallery', 'services', 'contact', 'footer'], desc: 'هیرو، تیم، گالری، خدمات، تماس' },
   { id: 'agc-07', name: 'آژانس کامل', profile: 'آژانس', blocks: ['hero', 'search', 'services', 'listings', 'testimonials', 'footer'], desc: 'هیرو، جستجو، خدمات، فایل‌ها، نظرات' },
   { id: 'agc-08', name: 'آژانس فروش', profile: 'آژانس', blocks: ['hero', 'listings', 'cta', 'contact', 'footer'], desc: 'هیرو، فایل‌ها، اقدام، تماس' },
   { id: 'agc-09', name: 'آژانس معتبر', profile: 'آژانس', blocks: ['hero', 'services', 'stats', 'gallery', 'cta', 'footer'], desc: 'هیرو، خدمات، آمار، گالری، اقدام' },
@@ -661,6 +674,7 @@ function TemplateThumb({ tpl }: { tpl: typeof STARTER_TEMPLATES[0] }) {
       case 'services': return <div key={i} style={{ padding: '9px 12px', background: '#faf9f7', display: 'flex', gap: 6 }}>{[0, 1, 2].map(k => <div key={k} style={{ flex: 1, padding: 7, background: '#fff', border: '1px solid #eee', borderRadius: 5, textAlign: 'center' }}><div style={{ width: 11, height: 11, borderRadius: 3, background: v.primary, margin: '0 auto 5px' }} /><div style={{ height: 3, width: '70%', background: '#ddd', borderRadius: 2, margin: '0 auto' }} /></div>)}</div>
       case 'stats': return <div key={i} style={{ padding: '11px 12px', background: '#f5f4f1', display: 'flex', justifyContent: 'space-around' }}>{[0, 1, 2, 3].map(k => <div key={k} style={{ textAlign: 'center' }}><div style={{ height: 8, width: 20, background: v.primary, borderRadius: 2, marginBottom: 3 }} /><div style={{ height: 3, width: 26, background: '#ccc', borderRadius: 2 }} /></div>)}</div>
       case 'about': return <div key={i} style={{ padding: '9px 12px', background: '#fff', display: 'flex', gap: 8, alignItems: 'center' }}><div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>{[90, 80, 70, 50].map((w, k) => <div key={k} style={{ height: 3, width: `${w}%`, background: '#dcdce0', borderRadius: 2 }} />)}</div><div style={{ width: 44, height: 34, background: '#e7e7ea', borderRadius: 5 }} /></div>
+      case 'team': return <div key={i} style={{ padding: '10px 12px', background: '#fff', display: 'flex', gap: 10, justifyContent: 'center' }}>{[0, 1, 2, 3].map(k => <div key={k} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}><div style={{ width: 22, height: 22, borderRadius: '50%', background: '#e3e3e7', border: `1.5px solid ${v.primary}` }} /><div style={{ height: 3, width: 22, background: '#dcdce0', borderRadius: 2 }} /><div style={{ height: 2.5, width: 16, background: v.primary, borderRadius: 2, opacity: .7 }} /></div>)}</div>
       case 'testimonials': return <div key={i} style={{ padding: '9px 12px', background: '#faf9f7' }}><div style={{ padding: 8, background: '#fff', border: '1px solid #eee', borderRadius: 6 }}>{[85, 65].map((w, k) => <div key={k} style={{ height: 3, width: `${w}%`, background: '#dadade', borderRadius: 2, marginBottom: 4 }} />)}<div style={{ height: 6, width: 28, background: '#e3e3e7', borderRadius: 3, marginTop: 5 }} /></div></div>
       case 'cta': return <div key={i} style={{ padding: '14px 12px', background: v.grad, display: 'flex', justifyContent: 'center' }}><div style={{ height: 10, width: '32%', background: '#fff', borderRadius: 5 }} /></div>
       case 'contact': return <div key={i} style={{ padding: '9px 12px', background: '#fff', display: 'flex', flexDirection: 'column', gap: 5 }}>{[100, 100, 60].map((w, k) => <div key={k} style={{ height: 9, width: `${w}%`, background: '#f1f1f3', border: '1px solid #e6e6e6', borderRadius: 3 }} />)}</div>

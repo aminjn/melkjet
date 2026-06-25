@@ -2,6 +2,9 @@ import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { getSite, getSitePage, type Site, type SitePage, type SiteBlock } from '@/app/lib/sites-store'
 import { listItems, listArticles, type Item } from '@/app/lib/scraper-store'
+import { listAgencyMembers } from '@/app/lib/agency-link-store'
+import { getAdvisor } from '@/app/lib/advisor-store'
+import { getProfile } from '@/app/lib/profile-store'
 
 // Public renderer for builder-published sites living at melkjet.com/{slug}.
 // Existing static single-segment routes (search, owner, ...) take precedence;
@@ -375,6 +378,56 @@ function FooterBlock({ block, primary }: { block: SiteBlock; primary: string }) 
   )
 }
 
+// ── Team / advisors block: نمایشِ مشاورانِ عضوِ آژانس با عکسِ پروفایل ─────────
+// اعضا از رابطهٔ واقعیِ «مشاور↔آژانس» (agency-link) خوانده می‌شوند؛ عکس از پروفایلِ
+// مشاور (advisor-store) یا لوگوی کسب‌وکار، و لینکِ سایت از websiteSlug در پروفایل.
+function memberInfo(phone: string, fallbackName: string): { phone: string; name: string; photo: string; title: string; slug: string } {
+  let photo = '', title = '', name = fallbackName
+  try { const ad = getAdvisor(phone).profile; if (ad) { if (ad.photo) photo = ad.photo; if (ad.title) title = ad.title; if (ad.name) name = ad.name } } catch {}
+  const prof = getProfile(phone)
+  if (!photo) photo = prof.logo || ''
+  if (!title) title = prof.businessType || prof.tagline || ''
+  return { phone, name: name || 'مشاور', photo, title, slug: prof.websiteSlug || '' }
+}
+
+function TeamBlock({ block, primary, ownerPhone }: { block: SiteBlock; primary: string; ownerPhone?: string }) {
+  const props = p(block)
+  const showSites = props.showSites !== 'no'
+  const showPhone = props.showPhone !== 'no'
+  const members = ownerPhone ? listAgencyMembers(ownerPhone) : []
+  const people = members.map(m => memberInfo(m.advisorPhone, m.advisorName))
+  return (
+    <section id="team" style={{ background: '#faf9f7', padding: '56px 24px', direction: 'rtl' }}>
+      <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+        <h2 style={{ fontSize: 26, fontWeight: 800, color: '#1a1510', marginBottom: props.subheading ? 6 : 22, textAlign: 'center' }}>{props.heading || 'مشاوران ما'}</h2>
+        {props.subheading ? <p style={{ fontSize: 14.5, color: '#888', textAlign: 'center', marginBottom: 26 }}>{props.subheading}</p> : null}
+        {people.length === 0 ? (
+          <div style={{ background: '#fff', border: '1px dashed #ddd', borderRadius: 14, padding: '40px 24px', textAlign: 'center', color: '#999', fontSize: 14 }}>هنوز مشاوری به این آژانس متصل نشده است.</div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 20 }}>
+            {people.map(m => (
+              <div key={m.phone} style={{ background: '#fff', border: '1px solid #eee', borderRadius: 16, padding: '24px 16px', textAlign: 'center', boxShadow: '0 6px 22px -16px rgba(0,0,0,.5)' }}>
+                {m.photo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={m.photo} alt={m.name} style={{ width: 92, height: 92, borderRadius: '50%', objectFit: 'cover', margin: '0 auto 14px', display: 'block', border: `3px solid ${primary}` }} />
+                ) : (
+                  <div style={{ width: 92, height: 92, borderRadius: '50%', margin: '0 auto 14px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${primary}22`, color: primary, fontSize: 34, fontWeight: 800, border: `3px solid ${primary}` }}>{(m.name || '?').trim().charAt(0)}</div>
+                )}
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#1a1510' }}>{m.name}</div>
+                {m.title ? <div style={{ fontSize: 12.5, color: '#888', marginTop: 4 }}>{m.title}</div> : null}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 14, alignItems: 'center' }}>
+                  {showPhone && m.phone ? <a href={`tel:${m.phone}`} style={{ fontSize: 12.5, color: '#555', textDecoration: 'none', direction: 'ltr' }}>☎ {m.phone}</a> : null}
+                  {showSites && m.slug ? <a href={`/${m.slug}`} target="_blank" rel="noreferrer" style={{ display: 'inline-block', fontSize: 12.5, fontWeight: 700, color: '#fff', background: primary, borderRadius: 999, padding: '6px 16px', textDecoration: 'none' }}>وب‌سایتِ من ↗</a> : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
 // Render one block. `ownerName` powers the real «آگهی‌های من» listings.
 function renderBlock(block: SiteBlock, primary: string, ownerName?: string, ownerPhone?: string) {
   switch (block.type) {
@@ -384,6 +437,7 @@ function renderBlock(block: SiteBlock, primary: string, ownerName?: string, owne
     case 'blog': return <BlogBlock key={block.id} block={block} primary={primary} ownerName={ownerName} />
     case 'services': return <ServicesBlock key={block.id} block={block} primary={primary} />
     case 'about': return <AboutBlock key={block.id} block={block} />
+    case 'team': return <TeamBlock key={block.id} block={block} primary={primary} ownerPhone={ownerPhone} />
     case 'stats': return <StatsBlock key={block.id} block={block} primary={primary} />
     case 'gallery': return <GalleryBlock key={block.id} block={block} />
     case 'testimonials': return <TestimonialsBlock key={block.id} block={block} primary={primary} />
