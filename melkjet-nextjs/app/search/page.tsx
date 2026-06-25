@@ -127,6 +127,15 @@ function SearchPageInner() {
   // با کلیکِ تب فوراً عوض می‌شود (state) و آدرس‌بار هم با replaceState همگام می‌شود.
   const [dealType, setDealType] = useState<string>(dealFromParam(typeParam))
   useEffect(() => { setDealType(dealFromParam(typeParam)) }, [typeParam])
+  // رویدادِ کلیکِ تبِ معامله از نوارِ بالا (تضمینِ عوض‌شدنِ تب وقتی همین‌حالا روی /search هستیم)
+  useEffect(() => {
+    const onDeal = (e: Event) => {
+      const slug = (e as CustomEvent).detail as string
+      setDealType(slug === 'rent' ? 'اجاره' : slug === 'presale' ? 'پیش‌فروش' : slug === 'mortgage' ? 'رهن' : 'خرید')
+    }
+    window.addEventListener('mj-deal', onDeal)
+    return () => window.removeEventListener('mj-deal', onDeal)
+  }, [])
   const goDeal = (label: string) => {
     setDealType(label)
     const slug = label === 'اجاره' ? 'rent' : label === 'پیش‌فروش' ? 'presale' : label === 'رهن' ? 'mortgage' : ''
@@ -266,12 +275,29 @@ function SearchPageInner() {
   const mapPoints = useMemo(() =>
     shownProperties.filter(p => p.lat && p.lng).map(p => ({ lat: p.lat!, lng: p.lng! })),
     [shownProperties])
-  // آدرسِ تصویرِ نقشهٔ استاتیکِ نشان (مطمئن): نقاطِ آگهی‌ها یا مرکزِ موقعیتِ کاربر
+  // پرتکرارترین محلهٔ آگهی‌های نمایش‌داده‌شده → نقشه روی همان‌جا متمرکز شود
+  const mapArea = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const p of shownProperties.slice(0, 40)) { const n = (p.location || '').split(/[،,]/)[0].trim(); if (n && n !== 'نامشخص') counts[n] = (counts[n] || 0) + 1 }
+    const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0]
+    return top || prefArea || ''
+  }, [shownProperties, prefArea])
+  // مرکزِ نقشه را با geocode محلهٔ آگهی‌ها به‌دست می‌آوریم (نشان)
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null)
+  useEffect(() => {
+    const q = [mapArea, selectedCity].filter(Boolean).join(' ').trim()
+    if (!q) { setMapCenter(null); return }
+    let alive = true
+    fetch(`/api/geo/geocode?q=${encodeURIComponent(q)}`).then(r => r.ok ? r.json() : null).then(d => { if (alive && d?.lat) setMapCenter({ lat: d.lat, lng: d.lng }) }).catch(() => {})
+    return () => { alive = false }
+  }, [mapArea, selectedCity])
+  // آدرسِ تصویرِ نقشهٔ استاتیکِ نشان (مطمئن): مارکرِ آگهی‌ها، یا مرکزِ محلهٔ آگهی‌ها
   const mapSrc = useMemo(() => {
-    if (mapPoints.length) { const pts = mapPoints.slice(0, 25).map(p => `${p.lat},${p.lng}`).join(';'); return `/api/geo/static-map?pts=${pts}&w=720&h=1000&zoom=${mapPoints.length > 1 ? 12 : 15}` }
-    if (userLoc) return `/api/geo/static-map?lat=${userLoc.lat}&lng=${userLoc.lng}&w=720&h=1000&zoom=12`
+    if (mapPoints.length) { const pts = mapPoints.slice(0, 25).map(p => `${p.lat},${p.lng}`).join(';'); return `/api/geo/static-map?pts=${pts}&w=720&h=1000&zoom=${mapPoints.length > 1 ? 13 : 15}` }
+    const c = mapCenter || userLoc
+    if (c) return `/api/geo/static-map?lat=${c.lat}&lng=${c.lng}&w=720&h=1000&zoom=14`
     return ''
-  }, [mapPoints, userLoc])
+  }, [mapPoints, mapCenter, userLoc])
 
   // چیپ‌های تشخیصِ AI — فقط مواردِ واقعاً تشخیص‌داده‌شده
   const aiChips = useMemo(() => {
@@ -475,7 +501,7 @@ function SearchPageInner() {
         {/* نقشهٔ واقعیِ نشان */}
         <div className="map-panel mjs-map" style={{ position: 'sticky', top: 88, height: 'calc(100vh - 108px)', paddingTop: 20, paddingRight: 12 }}>
           <style>{`@media (max-width: 768px) { .map-panel { display: none !important; } }`}</style>
-          <SearchMap src={mapSrc} count={mapPoints.length} city={selectedCity || userArea} />
+          <SearchMap src={mapSrc} count={mapPoints.length} city={mapArea || selectedCity || userArea} />
         </div>
       </div>
     </div>

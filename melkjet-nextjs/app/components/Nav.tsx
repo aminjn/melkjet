@@ -12,14 +12,17 @@ const DASH_LABEL: Record<string, string> = {
 }
 
 const navLinks = [
-  { href: '/search', label: 'خرید' },
-  { href: '/search?type=rent', label: 'اجاره' },
-  { href: '/search?type=presale', label: 'پیش‌فروش' },
+  { href: '/search', label: 'خرید', deal: 'buy' },
+  { href: '/search?type=rent', label: 'اجاره', deal: 'rent' },
+  { href: '/search?type=presale', label: 'پیش‌فروش', deal: 'presale' },
   { href: '/directory', label: 'مشاوران' },
   { href: '/store', label: 'فروشگاه' },
   { href: '/neighborhood/tehran', label: 'تحلیل بازار' },
   { href: '/blog', label: 'بلاگ' },
 ]
+// با کلیکِ تبِ معامله، یک رویداد هم می‌فرستیم تا اگر همین‌حالا روی /search هستیم،
+// تب فوراً عوض شود (مستقل از واکنشِ کندِ useSearchParams).
+function dealClick(deal?: string) { if (deal && typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('mj-deal', { detail: deal })) }
 
 export default function Nav() {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -67,7 +70,7 @@ export default function Nav() {
         {/* Desktop links */}
         <div className="mj-nav-links mj-navlinks mjs-navlinks" style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 14.5, fontWeight: 500 }}>
           {navLinks.map(l => (
-            <Link key={l.href} href={l.href} style={{ padding: '9px 13px', borderRadius: 9, color: 'var(--muted)', textDecoration: 'none' }}>{l.label}</Link>
+            <Link key={l.href} href={l.href} onClick={() => dealClick(l.deal)} style={{ padding: '9px 13px', borderRadius: 9, color: 'var(--muted)', textDecoration: 'none' }}>{l.label}</Link>
           ))}
         </div>
 
@@ -109,7 +112,7 @@ export default function Nav() {
         <div style={{ background: 'var(--navbg)', borderTop: '1px solid var(--line)', padding: '12px 20px 20px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {navLinks.map(l => (
-              <Link key={l.href} href={l.href} onClick={() => setMenuOpen(false)} style={{ padding: '12px 14px', borderRadius: 10, color: 'var(--text)', textDecoration: 'none', fontSize: 15, fontWeight: 600 }}>{l.label}</Link>
+              <Link key={l.href} href={l.href} onClick={() => { dealClick(l.deal); setMenuOpen(false) }} style={{ padding: '12px 14px', borderRadius: 10, color: 'var(--text)', textDecoration: 'none', fontSize: 15, fontWeight: 600 }}>{l.label}</Link>
             ))}
             <div style={{ height: 1, background: 'var(--line)', margin: '8px 0' }} />
             {me ? (
