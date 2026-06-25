@@ -44,9 +44,9 @@ export default function RootLayout({
       <head>
         {/* Theme init — runs before render to prevent flash of wrong theme */}
         <script dangerouslySetInnerHTML={{__html:`(function(){try{var t=localStorage.getItem('melkjet-theme');if(t==='light')document.documentElement.classList.add('light')}catch(e){}})()`}}/>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+        {/* فونت‌ها کاملاً لوکال‌اند (public/fonts) — هیچ وابستگی به گوگل. @font-face در globals.css */}
+        <link rel="preload" href="/fonts/Vazirmatn-Regular.woff2" as="font" type="font/woff2" crossOrigin="" />
+        <link rel="preload" href="/fonts/Vazirmatn-Bold.woff2" as="font" type="font/woff2" crossOrigin="" />
         <link rel="apple-touch-icon" href="/icon-192.png" />
       </head>
       <body style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>

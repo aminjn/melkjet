@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { addReview, listReviews, deleteReview, setReviewApproved } from '@/app/lib/reviews-store'
+import { addReview, listReviews, deleteReview, setReviewApproved, applyReviewModeration } from '@/app/lib/reviews-store'
 import { getSite } from '@/app/lib/sites-store'
+import { moderateReview } from '@/app/lib/moderation'
 
 // نظرِ سایت را به مالکِ آن (از روی slug) نسبت می‌دهد تا شمارهٔ مالک در صفحه لو نرود.
 function ownerOfSlug(slug: string): string {
@@ -29,7 +30,19 @@ export async function POST(req: NextRequest) {
   if (!owner) return NextResponse.json({ error: 'سایت یافت نشد' }, { status: 404 })
   const r = addReview(owner, { name: b.name, text: b.text, rating: b.rating })
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 })
-  return NextResponse.json({ ok: true, review: { name: r.review!.name, text: r.review!.text, rating: r.review!.rating } })
+  // ممیزیِ هوش مصنوعی: تأیید/رد. در صورتِ نبودِ مدل → در انتظارِ تأییدِ دستیِ مالک می‌ماند.
+  let published = false
+  try {
+    const v = await moderateReview(r.review!.name, r.review!.text)
+    applyReviewModeration(r.review!.id, v.verdict === 'approve', v.reason)
+    published = v.verdict === 'approve'
+  } catch { /* در انتظارِ بررسیِ دستی */ }
+  return NextResponse.json({
+    ok: true,
+    published,
+    message: published ? 'نظرِ شما ثبت و منتشر شد. سپاسگزاریم!' : 'نظرِ شما ثبت شد و پس از بررسی نمایش داده می‌شود. سپاسگزاریم!',
+    review: { name: r.review!.name, text: r.review!.text, rating: r.review!.rating },
+  })
 }
 
 // مدیریتِ نظرات توسطِ مالک (حذف/تأیید).

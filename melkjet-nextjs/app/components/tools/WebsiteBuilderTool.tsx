@@ -66,13 +66,13 @@ const SITE_PALETTES: { name: string; t: Required<Omit<Theme, 'font'>> }[] = [
   { name: 'خاکستری شیک', t: { primary: '#475569', secondary: '#1e293b', bg: '#ffffff', surface: '#f4f6f8', text: '#475569', heading: '#1e293b' } },
 ]
 
-// فونت‌های قابلِ انتخابِ سایت (روی سایتِ منتشرشده با Google Fonts بارگذاری می‌شوند).
-const FONT_OPTIONS: { value: string; label: string; importParam?: string }[] = [
+// فونت‌های قابلِ انتخابِ سایت — همگی لوکال (@font-face در globals.css). بدونِ گوگل.
+const FONT_OPTIONS: { value: string; label: string }[] = [
   { value: '', label: 'وزیرمتن (پیش‌فرض)' },
-  { value: 'Markazi Text', label: 'مرکزی (Markazi)', importParam: 'Markazi+Text:wght@400;500;600;700' },
-  { value: 'Gulzar', label: 'گلزار (Gulzar)', importParam: 'Gulzar' },
-  { value: 'Noto Naskh Arabic', label: 'نسخ (Naskh)', importParam: 'Noto+Naskh+Arabic:wght@400;500;700' },
-  { value: 'Lalezar', label: 'لاله‌زار (نمایشی)', importParam: 'Lalezar' },
+  { value: 'Markazi Text', label: 'مرکزی (Markazi)' },
+  { value: 'Gulzar', label: 'گلزار (Gulzar)' },
+  { value: 'Noto Naskh Arabic', label: 'نسخ (Naskh)' },
+  { value: 'Lalezar', label: 'لاله‌زار (نمایشی)' },
 ]
 
 // پالتِ هر قالب بر اساسِ شمارهٔ آن — تا قالب‌های یک پروفایل، هرکدام رنگِ متفاوت داشته باشند.
@@ -1080,9 +1080,10 @@ function ReviewsManager() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
               <span style={{ fontSize: 12.5, fontWeight: 800 }}>{r.name}</span>
               <span style={{ color: 'var(--gold)', fontSize: 12 }}>{'★'.repeat(Math.max(0, Math.min(5, Number(r.rating) || 5)))}</span>
-              <span style={{ marginInlineStart: 'auto', fontSize: 10, fontWeight: 700, color: r.approved ? '#5fd98a' : '#e7894a' }}>{r.approved ? 'نمایش' : 'مخفی'}</span>
+              <span style={{ marginInlineStart: 'auto', fontSize: 10, fontWeight: 700, color: r.approved ? '#5fd98a' : '#e7894a' }}>{r.approved ? 'نمایش' : (r.moderated ? 'ردِ هوش مصنوعی' : 'در انتظارِ بررسی')}</span>
             </div>
-            <div style={{ fontSize: 11.5, color: 'var(--text)', lineHeight: 1.9, marginBottom: 9 }}>{r.text}</div>
+            <div style={{ fontSize: 11.5, color: 'var(--text)', lineHeight: 1.9, marginBottom: r.reason ? 6 : 9 }}>{r.text}</div>
+            {r.reason ? <div style={{ fontSize: 10, color: 'var(--muted)', background: 'var(--bg2)', borderRadius: 6, padding: '5px 8px', marginBottom: 9 }}>🤖 {r.reason}</div> : null}
             <div style={{ display: 'flex', gap: 6 }}>
               <button onClick={() => patch({ id: r.id, approved: !r.approved })} style={{ flex: 1, fontSize: 11, fontWeight: 700, padding: '6px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)' }}>{r.approved ? '🚫 مخفی کن' : '✓ نمایش بده'}</button>
               <button onClick={() => { if (confirm('این نظر حذف شود؟')) patch({ id: r.id, delete: true }) }} style={{ fontSize: 11, fontWeight: 700, padding: '6px 12px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', border: '1px solid rgba(231,103,74,.4)', background: 'transparent', color: '#e7674a' }}>حذف</button>
@@ -1684,7 +1685,6 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
             overflow: 'hidden',
             flexShrink: 0,
           }}>
-            {(() => { const f = FONT_OPTIONS.find(x => x.value === theme.font); return f?.importParam ? <style>{`@import url('https://fonts.googleapis.com/css2?family=${f.importParam}&display=swap');`}</style> : null })()}
             {/* Browser chrome */}
             <div style={{ background: 'var(--bg2)', borderBottom: '1px solid var(--line)', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8, position: 'sticky', top: 0, zIndex: 5 }}>
               <div style={{ display: 'flex', gap: 5 }}>

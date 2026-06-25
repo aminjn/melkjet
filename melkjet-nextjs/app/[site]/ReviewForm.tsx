@@ -14,6 +14,7 @@ export default function ReviewForm({ slug, primary }: { slug: string; primary: s
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
+  const [doneMsg, setDoneMsg] = useState('')
 
   const inputStyle: React.CSSProperties = {
     minHeight: 48, background: 'var(--mjs-bg)', border: '1px solid #e6ddcd', borderRadius: 12,
@@ -35,6 +36,7 @@ export default function ReviewForm({ slug, primary }: { slug: string; primary: s
       if (!res.ok || data?.error) {
         setError(data?.error || 'ثبتِ نظر ناموفق بود. دوباره تلاش کنید.')
       } else {
+        setDoneMsg(String(data?.message || 'نظرِ شما ثبت شد و پس از بررسی نمایش داده می‌شود.'))
         setDone(true)
       }
     } catch {
@@ -52,7 +54,7 @@ export default function ReviewForm({ slug, primary }: { slug: string; primary: s
       }}>
         <div style={{ fontSize: 40, marginBottom: 10 }}>✅</div>
         <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--mjs-heading)', marginBottom: 8 }}>سپاس از شما!</div>
-        <p style={{ fontSize: 14, color: 'var(--mjs-muted)', lineHeight: 1.9, margin: 0 }}>نظرِ شما ثبت شد و روی سایت نمایش داده می‌شود.</p>
+        <p style={{ fontSize: 14, color: 'var(--mjs-muted)', lineHeight: 1.9, margin: 0 }}>{doneMsg || 'نظرِ شما ثبت شد و پس از بررسی نمایش داده می‌شود.'}</p>
       </div>
     )
   }

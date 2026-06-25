@@ -14,6 +14,8 @@ export interface Review {
   rating: number        // ۱..۵
   createdAt: number
   approved: boolean      // نمایش روی سایت
+  moderated?: boolean    // آیا هوش مصنوعی بررسی کرده
+  reason?: string        // علتِ تأیید/رد
 }
 type DB = { reviews: Review[] }
 
@@ -33,9 +35,15 @@ export function addReview(ownerPhone: string, input: { name?: string; text?: str
   const db = load()
   // ضدِ اسپامِ ساده: یک نظر با همان نام و متن تکراری نباشد
   if (db.reviews.some(r => r.ownerPhone === phone && r.name === name && r.text === text)) return { ok: false, error: 'این نظر قبلاً ثبت شده است' }
-  const review: Review = { id: 'rv_' + randomBytes(5).toString('hex'), ownerPhone: phone, name, text, rating: clampRating(input.rating), createdAt: Date.now(), approved: true }
+  // پیش‌فرض: در انتظارِ ممیزی (approved=false) تا هوش مصنوعی/مالک تأیید کند.
+  const review: Review = { id: 'rv_' + randomBytes(5).toString('hex'), ownerPhone: phone, name, text, rating: clampRating(input.rating), createdAt: Date.now(), approved: false }
   db.reviews.unshift(review); save(db)
   return { ok: true, review }
+}
+
+// نتیجهٔ ممیزیِ هوش مصنوعی را روی نظر اعمال می‌کند.
+export function applyReviewModeration(id: string, approved: boolean, reason: string) {
+  const db = load(); const r = db.reviews.find(x => x.id === id); if (r) { r.approved = approved; r.moderated = true; r.reason = reason; save(db) }
 }
 
 // نظراتِ یک کسب‌وکار (پیش‌فرض: فقط تأییدشده‌ها).

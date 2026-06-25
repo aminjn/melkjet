@@ -62,3 +62,28 @@ export async function moderatePending(max = 300): Promise<{ moderated: number; r
   setModerationBatch(results.map(r => ({ id: r.id, status: r.status, reason: r.reason, score: r.score })))
   return { moderated: results.length, results }
 }
+
+// ── ممیزیِ هوش مصنوعیِ نظراتِ مشتریان ───────────────────────────────────────────
+const REVIEW_SYS = `تو ناظرِ نظراتِ کاربران در یک سایتِ املاک هستی. نظرِ ثبت‌شده را بررسی کن و فقط یک JSON معتبر برگردان:
+{"verdict":"approve|reject","reason":"علتِ کوتاهِ فارسی (یک جمله)"}
+approve = نظرِ واقعی، محترمانه و مرتبط با کسب‌وکار/خدمات.
+reject = توهین/فحاشی، تبلیغ یا اسپم، شمارهٔ تماس یا لینک، محتوای نامرتبط، یا متنِ بی‌معنی/تکراری.
+همیشه reason را پر کن.`
+
+// نتیجهٔ ممیزیِ یک نظر. اگر مدلی تنظیم نشده باشد → 'review' (در انتظارِ تأییدِ دستی).
+export async function moderateReview(name: string, text: string): Promise<{ verdict: 'approve' | 'reject' | 'review'; reason: string }> {
+  const model = moderationModel()
+  if (!model) return { verdict: 'review', reason: 'هوش مصنوعی تنظیم نشده؛ در انتظارِ بررسی' }
+  try {
+    const out = await chatCompleteSafe(model, [
+      { role: 'system', content: REVIEW_SYS },
+      { role: 'user', content: `نام: ${String(name || '').slice(0, 60)}\nمتنِ نظر: ${String(text || '').slice(0, 600)}` },
+    ], { temperature: 0.1, max_tokens: 90 })
+    let t = out; const m = t.match(/\{[\s\S]*\}/); if (m) t = m[0]
+    const d = JSON.parse(t)
+    const v = d.verdict === 'approve' ? 'approve' : d.verdict === 'reject' ? 'reject' : 'review'
+    return { verdict: v, reason: String(d.reason || '').slice(0, 200) }
+  } catch (e: any) {
+    return { verdict: 'review', reason: e?.message || 'خطای ممیزی؛ در انتظارِ بررسی' }
+  }
+}
