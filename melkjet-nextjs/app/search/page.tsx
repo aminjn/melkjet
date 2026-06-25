@@ -8,6 +8,7 @@ import BannerSlot from '@/app/components/BannerSlot'
 import { fetchContent, gradientFor, type ContentItem } from '@/app/lib/content-display'
 import { readLoc } from '@/app/components/LocationDetector'
 import { readCity } from '@/app/components/CitySelector'
+import { openAuth } from '@/app/components/AuthModal'
 import { PROPERTY_KINDS } from '@/app/lib/taxonomy'
 
 function seedNum(s: string): number {
@@ -600,7 +601,7 @@ function NotifyBar({ count, criteria }: { count: number; criteria: Criteria }) {
     try {
       const r = await fetch('/api/saved-search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: next ? 'add' : 'remove', city: criteria.city, area: criteria.area, deal: criteria.deal, kind: criteria.kind, priceMax: criteria.priceMax, label: [criteria.area, criteria.city].filter(Boolean).join('، ') }) })
       const d = await r.json()
-      if (r.status === 401) { setMsg('برای فعال‌کردنِ هشدار وارد شوید…'); setTimeout(() => { window.location.href = '/auth' }, 900); return }
+      if (r.status === 401) { setMsg('برای فعال‌کردنِ هشدار وارد شوید…'); openAuth('برای دریافتِ هشدارِ آگهیِ جدید وارد شوید'); return }
       if (d.ok) {
         setOn(next)
         if (next) { import('@/app/lib/push-client').then(m => m.ensurePushSubscribed(true)).catch(() => {}) }

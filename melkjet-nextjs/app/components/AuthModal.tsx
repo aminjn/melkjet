@@ -80,7 +80,7 @@ export default function AuthModal() {
       const res = await fetch('/api/auth/profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim(), role: selectedRole }) })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'خطا'); return }
-      setOpen(false); router.push(data.redirect || '/buyer')
+      success() // روی همان صفحه می‌ماند؛ کاربر به جایی که بود برمی‌گردد
     } catch { setError('خطا در اتصال به سرور') } finally { setLoading(false) }
   }
   async function loginEmail() {
