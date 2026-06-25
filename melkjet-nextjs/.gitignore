@@ -76,3 +76,4 @@ next-env.d.ts
 .tracker-data.json
 .saved-search-data.json
 .push-data.json
+.listing-stats-data.json

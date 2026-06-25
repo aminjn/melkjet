@@ -4,6 +4,7 @@ import JalaliDatePicker from '@/app/components/JalaliDatePicker'
 import NumberInput from '@/app/components/NumberInput'
 import MessagesPanel from '@/app/components/MessagesPanel'
 import PlansPanel from '@/app/components/PlansPanel'
+import ListingReports from '@/app/components/ListingReports'
 
 // ════════════════════════════════════════════════════════
 //  Types (mirror app/lib/buyer-store.ts API shape)
@@ -506,6 +507,7 @@ export default function BuyerPage() {
 
           {/* ─── SELLING (my listings / inquiries / offers received) ─── */}
           {view === 'selling' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <ListingReports />
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
               <Kpi label="آگهی فعال" value={fa(owner?.stats.kpis.activeCount || 0)} />
               <Kpi label="درخواست جدید" value={fa(owner?.stats.kpis.newInquiries || 0)} subColor="var(--gold)" sub={owner?.stats.kpis.newInquiries ? 'پاسخ بده' : undefined} />

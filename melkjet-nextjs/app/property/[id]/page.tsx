@@ -1,9 +1,10 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import Nav from '@/app/components/Nav'
 import PropertyMap from '@/app/components/PropertyMap'
+import { openAuth } from '@/app/components/AuthModal'
 
 interface Item {
   id: string; type: string; category?: string; title: string; price?: string
@@ -71,6 +72,9 @@ export default function PropertyPage() {
   const [similar, setSimilar] = useState<Item[]>([])
   const [phone, setPhone] = useState<string | null>(null)
   const [gettingPhone, setGettingPhone] = useState(false)
+  const [loggedIn, setLoggedIn] = useState<boolean | null>(null)
+  const [revealed, setRevealed] = useState(false)
+  const pendingReveal = useRef(false)
   const [loan, setLoan] = useState(5_000_000_000)
   const [ask, setAsk] = useState('')
   const [askMsgs, setAskMsgs] = useState<{ role: 'user' | 'ai'; text: string }[]>([])
@@ -116,6 +120,8 @@ export default function PropertyPage() {
       const it: Item | null = d.item
       setItem(it); setLoading(false)
       if (!it) return
+      // ثبتِ بازدید (باز شدنِ آگهی) — برای گزارشِ صاحبِ آگهی
+      try { fetch('/api/listing-stats', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'view', id: it.id }) }).catch(() => {}) } catch {}
       // گالری و موقعیتِ آگهیِ ثبت‌شده توسط کاربر/مشاور (در meta ذخیره شده)
       const g = it.meta?.['__gallery']
       if (g) { const imgs = g.split(/[\n,]+/).map(s => s.trim()).filter(Boolean); if (imgs.length) setGallery(imgs) }
@@ -171,13 +177,37 @@ export default function PropertyPage() {
     return `${toFa(String(pm))} تومان / متر`
   })()
 
-  const getContact = async () => {
-    if (!item || gettingPhone) return
+  // وضعیتِ ورود (برای محدودکردنِ نمایشِ شماره)
+  useEffect(() => { fetch('/api/auth/profile').then(r => r.ok ? r.json() : null).then(d => setLoggedIn(!!(d && d.phone))).catch(() => setLoggedIn(false)) }, [])
+
+  // واکشیِ شمارهٔ آگهی‌های دیوار (پس از احرازِ ورود)
+  const fetchDivarPhone = async () => {
+    if (!item) return
     const m = (item.url || '').match(/divar\.ir\/v\/([A-Za-z0-9_-]+)/); if (!m) return
     setGettingPhone(true)
     try { const r = await fetch(`/api/divar/contact?token=${m[1]}`); const d = await r.json(); setPhone(d.phone || 'شماره در دسترس نیست') }
     catch { setPhone('خطا') } finally { setGettingPhone(false) }
   }
+
+  const doReveal = async () => {
+    if (!item) return
+    setRevealed(true)
+    try { await fetch('/api/listing-stats', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'contact', id: item.id }) }) } catch {}
+    if (!item.phone) fetchDivarPhone()
+  }
+  // نمایشِ اطلاعات تماس — فقط برای کاربرِ واردشده؛ کلیک ثبت و به صاحبِ آگهی گزارش می‌شود
+  const revealContact = () => {
+    if (!item) return
+    if (!loggedIn) { pendingReveal.current = true; openAuth('برای دیدن اطلاعات تماس، وارد شوید'); return }
+    doReveal()
+  }
+  // پس از ورودِ موفق از پاپ‌آپ، اگر کاربر منتظرِ شماره بود، نمایش بده
+  useEffect(() => {
+    const onAuth = () => { setLoggedIn(true); if (pendingReveal.current) { pendingReveal.current = false; doReveal() } }
+    window.addEventListener('mj-auth-success', onAuth)
+    return () => window.removeEventListener('mj-auth-success', onAuth)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item])
 
   const card: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 22 }
   const monthly = (() => { const r = 0.18 / 12, n = 240; return loan * r * Math.pow(1 + r, n) / (Math.pow(1 + r, n) - 1) })()
@@ -416,12 +446,21 @@ export default function PropertyPage() {
                   </div>
                 )}
                 <div style={{ fontSize: 11.5, color: 'var(--faint)', marginBottom: 14 }}>منبع: {item.sourceName} · {timeAgo(item.scrapedAt)}</div>
-                {(item.phone || (phone && /^\d/.test(phone))) ? (
-                  <a href={`tel:${item.phone || phone}`} style={{ display: 'block', textAlign: 'center', padding: '13px', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontWeight: 800 }}>☎ تماس — {item.phone || phone}</a>
-                ) : phone ? (
+                {revealed && (item.phone || (phone && /^\d/.test(phone))) ? (
+                  <a href={`tel:${item.phone || phone}`} style={{ display: 'block', textAlign: 'center', padding: '13px', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontWeight: 800, direction: 'ltr' }}>☎ تماس — {item.phone || phone}</a>
+                ) : revealed && gettingPhone ? (
+                  <div style={{ textAlign: 'center', padding: '13px', borderRadius: 12, background: 'var(--bg2)', color: 'var(--muted)', fontSize: 13 }}>در حال دریافت شماره…</div>
+                ) : revealed && phone ? (
                   <div style={{ textAlign: 'center', padding: '13px', borderRadius: 12, background: 'var(--bg2)', color: 'var(--muted)', fontSize: 13 }}>{phone}</div>
                 ) : (
-                  <button onClick={getContact} disabled={gettingPhone} style={{ width: '100%', padding: '13px', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', border: 'none', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, opacity: gettingPhone ? 0.6 : 1 }}>{gettingPhone ? 'در حال دریافت…' : 'دریافت اطلاعات تماس'}</button>
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', borderRadius: 12, background: 'var(--bg2)', border: '1px dashed var(--line2)', marginBottom: 10 }}>
+                      <span style={{ fontSize: 16 }}>☎</span>
+                      <span style={{ fontSize: 18, fontWeight: 800, letterSpacing: 2, color: 'var(--muted)', direction: 'ltr', filter: 'blur(0.5px)' }}>۰۹•• ••• ••••</span>
+                      <span style={{ marginInlineStart: 'auto', fontSize: 11.5, color: 'var(--faint)' }}>{loggedIn ? 'برای نمایش کلیک کنید' : 'برای دیدن، وارد شوید'}</span>
+                    </div>
+                    <button onClick={revealContact} disabled={gettingPhone} style={{ width: '100%', padding: '13px', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', border: 'none', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, opacity: gettingPhone ? 0.6 : 1 }}>نمایش اطلاعات تماس</button>
+                  </>
                 )}
               </div>
 

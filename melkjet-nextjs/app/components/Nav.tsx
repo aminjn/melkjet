@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import ThemeToggle from './ThemeToggle'
 import CitySelector from './CitySelector'
+import { openAuth } from './AuthModal'
 
 // نام داشبورد هر مسیر برای نمایش در دکمهٔ «داشبورد من»
 const DASH_LABEL: Record<string, string> = {
@@ -31,11 +32,10 @@ export default function Nav() {
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/auth/profile')
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (!cancelled) setMe(d && d.phone ? { dash: d.dash || '/buyer' } : null) })
-      .catch(() => { if (!cancelled) setMe(null) })
-    return () => { cancelled = true }
+    const loadMe = () => fetch('/api/auth/profile').then(r => r.ok ? r.json() : null).then(d => { if (!cancelled) setMe(d && d.phone ? { dash: d.dash || '/buyer' } : null) }).catch(() => { if (!cancelled) setMe(null) })
+    loadMe()
+    window.addEventListener('mj-auth-success', loadMe)
+    return () => { cancelled = true; window.removeEventListener('mj-auth-success', loadMe) }
   }, [])
 
   const logout = async () => {
@@ -86,7 +86,7 @@ export default function Nav() {
             </>
           ) : (
             <>
-              <Link href="/auth" style={{ padding: '0 16px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, border: '1px solid var(--line2)', color: 'var(--text)', textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>ورود</Link>
+              <button onClick={() => openAuth()} style={{ padding: '0 16px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--text)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, fontWeight: 600 }}>ورود</button>
               <Link href="/submit" style={{ padding: '0 18px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontSize: 14, fontWeight: 700 }}>ثبت آگهی</Link>
             </>
           )}
@@ -122,7 +122,7 @@ export default function Nav() {
               </>
             ) : (
               <>
-                <Link href="/auth" onClick={() => setMenuOpen(false)} style={{ padding: '12px 14px', borderRadius: 10, color: 'var(--text)', textDecoration: 'none', fontSize: 15, fontWeight: 600 }}>ورود / ثبت‌نام</Link>
+                <button onClick={() => { setMenuOpen(false); openAuth() }} style={{ padding: '12px 14px', borderRadius: 10, color: 'var(--text)', background: 'transparent', border: 'none', textAlign: 'right', cursor: 'pointer', fontFamily: 'inherit', fontSize: 15, fontWeight: 600 }}>ورود / ثبت‌نام</button>
                 <Link href="/submit" onClick={() => setMenuOpen(false)} style={{ display: 'block', textAlign: 'center', padding: '13px', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontSize: 15, fontWeight: 700, marginTop: 4 }}>+ ثبت آگهی</Link>
               </>
             )}

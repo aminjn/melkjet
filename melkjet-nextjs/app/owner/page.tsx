@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import JalaliDatePicker from '@/app/components/JalaliDatePicker'
 import NumberInput from '@/app/components/NumberInput'
 import PlansPanel from '@/app/components/PlansPanel'
+import ListingReports from '@/app/components/ListingReports'
 
 // ════════════════════════════════════════════════════════
 //  Types (mirror app/lib/owner-store.ts API shape)
@@ -285,7 +286,7 @@ export default function OwnerPage() {
         {/* Content */}
         <main style={{ flex: 1, padding: 24, overflow: 'auto' }}>
           {view === 'dashboard' && <DashboardView stats={stats} titleOf={titleOf} post={post} onViewings={() => setView('viewings')} onInquiries={() => setView('inquiries')} />}
-          {view === 'properties' && <PropertiesView properties={properties} post={post} busy={busy} search={search} showAdd={showAdd} setShowAdd={setShowAdd} />}
+          {view === 'properties' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}><ListingReports /><PropertiesView properties={properties} post={post} busy={busy} search={search} showAdd={showAdd} setShowAdd={setShowAdd} /></div>}
           {view === 'inquiries' && <InquiriesView inquiries={inquiries} properties={properties} titleOf={titleOf} post={post} busy={busy} search={search} />}
           {view === 'viewings' && <ViewingsView viewings={viewings} properties={properties} titleOf={titleOf} post={post} busy={busy} search={search} />}
           {view === 'offers' && <OffersView offers={offers} titleOf={titleOf} post={post} busy={busy} search={search} />}

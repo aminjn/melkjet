@@ -6,6 +6,7 @@ import SessionKeeper from './components/SessionKeeper'
 import ImpersonationBar from './components/ImpersonationBar'
 import LocationDetector from './components/LocationDetector'
 import Tracker from './components/Tracker'
+import AuthModal from './components/AuthModal'
 
 export const metadata: Metadata = {
   title: 'ملک‌جت - اکوسیستم هوشمند املاک',
@@ -53,6 +54,7 @@ export default function RootLayout({
         <Tracker />
         {children}
         <ImpersonationBar />
+        <AuthModal />
         <BottomNav />
         <PWAInstall />
       </body>
