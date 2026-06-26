@@ -130,6 +130,8 @@ export default function OwnerPage() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [search, setSearch] = useState('')
   const [showAdd, setShowAdd] = useState(false)
+  const [navOpen, setNavOpen] = useState(false)   // کشوی منوی موبایل
+  const goView = (v: View) => { setView(v); setNavOpen(false) }
 
   const refresh = useCallback(async () => {
     try {
@@ -192,8 +194,11 @@ export default function OwnerPage() {
   return (
     <div dir="rtl" style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: FONT }}>
 
+      {/* OVERLAY موبایل (پشتِ کشو) */}
+      <div className={`mjo-overlay${navOpen ? ' mjo-open' : ''}`} onClick={() => setNavOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 125 }} />
+
       {/* ════════════ SIDEBAR ════════════ */}
-      <aside className="mjo-side" style={{
+      <aside className={`mjo-side${navOpen ? ' mjo-open' : ''}`} style={{
         width: 232, flexShrink: 0, background: 'var(--bg2)', borderLeft: '1px solid var(--line)',
         position: 'sticky', top: 0, height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
@@ -221,7 +226,7 @@ export default function OwnerPage() {
               : item.badge === 'viewings' ? stats.kpis.upcomingViewings
                 : item.badge === 'offers' ? stats.kpis.pendingOffers : 0
             return (
-              <button key={item.id} onClick={() => setView(item.id)} style={{
+              <button key={item.id} onClick={() => goView(item.id)} style={{
                 width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10,
                 border: 'none', cursor: 'pointer', background: active ? 'var(--goldDim)' : 'transparent',
                 color: active ? 'var(--gold)' : 'var(--muted)', fontWeight: active ? 700 : 500, fontSize: 14,
@@ -237,7 +242,7 @@ export default function OwnerPage() {
           })}
           <div style={{ height: 1, background: 'var(--line)', margin: '10px 8px' }} />
           {NAV_LINKS.map(l => (
-            <a key={l.href} href={l.href} style={{
+            <a key={l.href} href={l.href} onClick={() => setNavOpen(false)} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10,
               color: 'var(--muted)', textDecoration: 'none', fontWeight: 500, fontSize: 14, marginBottom: 2, fontFamily: FONT,
             }}>
@@ -277,6 +282,7 @@ export default function OwnerPage() {
           borderBottom: '1px solid var(--line)', padding: '0 24px', minHeight: 64,
           display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
         }}>
+          <button className="mjo-burger" aria-label="منو" onClick={() => setNavOpen(true)} style={{ width: 42, height: 42, borderRadius: 11, border: '1px solid var(--line)', background: 'var(--bg2)', color: 'var(--gold)', fontSize: 20, cursor: 'pointer', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontFamily: FONT }}>☰</button>
           <h2 style={{ fontSize: 17, fontWeight: 700, flexShrink: 0 }}>{VIEW_TITLES[view]}</h2>
           <input
             value={search} onChange={e => setSearch(e.target.value)}
@@ -292,7 +298,7 @@ export default function OwnerPage() {
 
         {/* Content */}
         <main style={{ flex: 1, padding: 24, overflow: 'auto' }}>
-          {view === 'dashboard' && <DashboardView stats={stats} titleOf={titleOf} post={post} onViewings={() => setView('viewings')} onInquiries={() => setView('inquiries')} />}
+          {view === 'dashboard' && <DashboardView stats={stats} titleOf={titleOf} post={post} onViewings={() => goView('viewings')} onInquiries={() => goView('inquiries')} />}
           {view === 'properties' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}><ListingReports /><PropertiesView properties={properties} post={post} busy={busy} search={search} showAdd={showAdd} setShowAdd={setShowAdd} /></div>}
           {view === 'inquiries' && <InquiriesView inquiries={inquiries} properties={properties} titleOf={titleOf} post={post} busy={busy} search={search} />}
           {view === 'viewings' && <ViewingsView viewings={viewings} properties={properties} titleOf={titleOf} post={post} busy={busy} search={search} />}
@@ -304,7 +310,15 @@ export default function OwnerPage() {
       </div>
 
       <style>{`
-        @media(max-width:820px){ .mjo-side{ width:62px!important } .mjo-sidelabel{ display:none!important } }
+        .mjo-burger{display:none}
+        .mjo-overlay{display:none}
+        @media(max-width:760px){
+          .mjo-cols{flex-direction:column!important}
+          .mjo-side{position:fixed!important;right:0;top:0;height:100vh!important;width:82vw!important;max-width:300px;z-index:130;transform:translateX(105%);transition:transform .26s ease;box-shadow:-12px 0 40px -12px rgba(0,0,0,.6)}
+          .mjo-side.mjo-open{transform:translateX(0)}
+          .mjo-burger{display:inline-flex!important}
+          .mjo-overlay.mjo-open{display:block}
+        }
         @media(max-width:1000px){ .mjo-grid4{ grid-template-columns:repeat(2,1fr)!important } .mjo-grid2{ grid-template-columns:1fr!important } }
         @media(max-width:680px){ .mjo-grid4{ grid-template-columns:1fr!important } .mjo-form{ grid-template-columns:1fr!important } }
         @media(max-width:600px){ .mjo-search{ order:3; max-width:none!important; flex-basis:100%!important; margin:0 0 10px!important } }

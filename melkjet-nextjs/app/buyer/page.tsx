@@ -172,6 +172,7 @@ function PropCard({ p, onRemove }: { p: Saved; onRemove: () => void }) {
 // ════════════════════════════════════════════════════════
 export default function BuyerPage() {
   const [view, setView] = useState<View>('dashboard')
+  const [navOpen, setNavOpen] = useState(false)   // کشوی منوی موبایل
   const [data, setData] = useState<BuyerData | null>(null)
   const [loading, setLoading] = useState(true)
   const [unauth, setUnauth] = useState(false)
@@ -316,10 +317,23 @@ export default function BuyerPage() {
 
   return (
     <div dir="rtl" style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: FONT }}>
-      <style>{`@media(max-width:760px){.mjb-side{width:60px!important}.mjb-sidelabel{display:none!important}.mjb-cols{flex-direction:column!important}}`}</style>
+      <style>{`
+        .mjb-burger{display:none}
+        .mjb-overlay{display:none}
+        @media(max-width:760px){
+          .mjb-cols{flex-direction:column!important}
+          .mjb-side{position:fixed!important;right:0;top:0;height:100vh!important;width:82vw!important;max-width:300px;z-index:130;transform:translateX(105%);transition:transform .26s ease;box-shadow:-12px 0 40px -12px rgba(0,0,0,.6)}
+          .mjb-side.mjb-open{transform:translateX(0)}
+          .mjb-burger{display:inline-flex!important}
+          .mjb-overlay.mjb-open{display:block}
+        }
+      `}</style>
+
+      {/* OVERLAY موبایل (پشتِ کشو) */}
+      <div className={`mjb-overlay${navOpen ? ' mjb-open' : ''}`} onClick={() => setNavOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 125 }} />
 
       {/* SIDEBAR */}
-      <aside className="mjb-side" style={{ width: 232, flexShrink: 0, background: 'var(--bg2)', borderLeft: '1px solid var(--line)', position: 'sticky', top: 0, height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <aside className={`mjb-side${navOpen ? ' mjb-open' : ''}`} style={{ width: 232, flexShrink: 0, background: 'var(--bg2)', borderLeft: '1px solid var(--line)', position: 'sticky', top: 0, height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '20px 16px 16px', borderBottom: '1px solid var(--line)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 6px 18px -6px var(--gold)', flexShrink: 0 }}>
@@ -335,7 +349,7 @@ export default function BuyerPage() {
             // آیتمِ هوش مصنوعی همیشه پررنگ (گرادیان طلایی)
             if (item.ai) {
               return (
-                <button key={item.id} onClick={() => setView(item.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderRadius: 10, border: active ? '1px solid var(--gold)' : '1px solid transparent', cursor: 'pointer', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 14, textAlign: 'right', marginBottom: 6, fontFamily: FONT, boxShadow: '0 6px 18px -8px var(--gold)' }}>
+                <button key={item.id} onClick={() => { setView(item.id); setNavOpen(false) }} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderRadius: 10, border: active ? '1px solid var(--gold)' : '1px solid transparent', cursor: 'pointer', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 14, textAlign: 'right', marginBottom: 6, fontFamily: FONT, boxShadow: '0 6px 18px -8px var(--gold)' }}>
                   <span style={{ fontSize: 16, width: 18, textAlign: 'center' }}>{item.icon}</span>
                   <span className="mjb-sidelabel" style={{ flex: 1 }}>{item.label}</span>
                   <span className="mjb-sidelabel" style={{ fontSize: 9.5, fontWeight: 800, background: 'rgba(0,0,0,.18)', borderRadius: 6, padding: '2px 6px' }}>AI</span>
@@ -343,7 +357,7 @@ export default function BuyerPage() {
               )
             }
             return (
-              <button key={item.id} onClick={() => { setView(item.id); if (item.id === 'chat') setActiveConv(null) }} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: active ? 'var(--goldDim)' : 'transparent', color: active ? 'var(--gold)' : 'var(--muted)', fontWeight: active ? 700 : 500, fontSize: 14, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
+              <button key={item.id} onClick={() => { setView(item.id); if (item.id === 'chat') setActiveConv(null); setNavOpen(false) }} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: active ? 'var(--goldDim)' : 'transparent', color: active ? 'var(--gold)' : 'var(--muted)', fontWeight: active ? 700 : 500, fontSize: 14, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
                 <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: active ? 1 : 0.7 }}>{item.icon}</span>
                 <span className="mjb-sidelabel" style={{ flex: 1 }}>{item.label}</span>
                 {badge > 0 && (item.badge || item.id === 'chat') && <span style={{ background: active ? 'var(--gold)' : 'var(--line2)', color: active ? '#16140f' : 'var(--text)', borderRadius: 9, fontSize: 10, fontWeight: 700, padding: '1px 7px' }}>{fa(badge)}</span>}
@@ -370,6 +384,7 @@ export default function BuyerPage() {
       {/* MAIN */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 22px', borderBottom: '1px solid var(--line)', position: 'sticky', top: 0, background: 'var(--navbg)', backdropFilter: 'blur(18px)', zIndex: 20, flexWrap: 'wrap' }}>
+          <button className="mjb-burger" aria-label="منو" onClick={() => setNavOpen(true)} style={{ width: 42, height: 42, borderRadius: 11, border: '1px solid var(--line)', background: 'var(--bg2)', color: 'var(--gold)', fontSize: 20, cursor: 'pointer', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontFamily: FONT }}>☰</button>
           <div style={{ fontWeight: 800, fontSize: 18 }}>{VIEW_TITLES[view]}</div>
           <div style={{ flex: 1 }} />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="جستجو در علاقه‌مندی‌ها…" style={{ ...inputStyle, width: 220, maxWidth: '40vw' }} />

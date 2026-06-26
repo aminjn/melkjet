@@ -119,8 +119,9 @@ export default function MaterialsPage() {
   const [wfOpen, setWfOpen] = useState(false)
   const [wbView, setWbView] = useState<WebsiteView | null>(null)
   const [wbOpen, setWbOpen] = useState(false)
+  const [navOpen, setNavOpen] = useState(false)   // کشوی منوی موبایل
   const clearTools = () => { setCrmView(null); setMktView(null); setWfView(null); setWbView(null) }
-  const goView = (v: View) => { setView(v); clearTools() }
+  const goView = (v: View) => { setView(v); clearTools(); setNavOpen(false) }
   const openCrm = (v: CrmView) => { clearTools(); setCrmView(v); setCrmOpen(true) }
   const openMkt = (v: MarketingView) => { clearTools(); setMktView(v); setMktOpen(true) }
   const openWf = (v: WorkflowView) => { clearTools(); setWfView(v); setWfOpen(true) }
@@ -196,8 +197,11 @@ export default function MaterialsPage() {
   return (
     <div dir="rtl" style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: FONT }}>
 
+      {/* OVERLAY موبایل (پشتِ کشو) */}
+      <div className={`mjm-overlay${navOpen ? ' mjm-open' : ''}`} onClick={() => setNavOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 125 }} />
+
       {/* ════════════ SIDEBAR ════════════ */}
-      <aside className="mjm-side" style={{
+      <aside className={`mjm-side${navOpen ? ' mjm-open' : ''}`} style={{
         width: 232, flexShrink: 0, background: 'var(--bg2)', borderLeft: '1px solid var(--line)',
         position: 'sticky', top: 0, height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
@@ -396,6 +400,7 @@ export default function MaterialsPage() {
           borderBottom: '1px solid var(--line)', padding: '0 24px', minHeight: 64,
           display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
         }}>
+          <button className="mjm-burger" aria-label="منو" onClick={() => setNavOpen(true)} style={{ width: 42, height: 42, borderRadius: 11, border: '1px solid var(--line)', background: 'var(--bg2)', color: 'var(--gold)', fontSize: 20, cursor: 'pointer', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontFamily: FONT }}>☰</button>
           <h2 style={{ fontSize: 17, fontWeight: 700, flexShrink: 0 }}>{crmView ? `CRM · ${CRM_VIEWS.find(v => v.id === crmView)?.label || ''}` : mktView ? `مارکتینگ · ${MARKETING_VIEWS.find(v => v.id === mktView)?.label || ''}` : wfView ? `اتوماسیون · ${WORKFLOW_VIEWS.find(v => v.id === wfView)?.label || ''}` : wbView ? `وب‌سایت‌ساز · ${WEBSITE_VIEWS.find(v => v.id === wbView)?.label || ''}` : VIEW_TITLES[view]}</h2>
           <input
             value={search} onChange={e => setSearch(e.target.value)}
@@ -442,7 +447,15 @@ export default function MaterialsPage() {
       </div>
 
       <style>{`
-        @media(max-width:820px){ .mjm-side{ width:62px!important } .mjm-sidelabel{ display:none!important } }
+        .mjm-burger{display:none}
+        .mjm-overlay{display:none}
+        @media(max-width:760px){
+          /* کشوی موبایل: منوی کامل با برچسب از سمتِ راست بازشو */
+          .mjm-side{position:fixed!important;right:0;top:0;height:100vh!important;width:82vw!important;max-width:300px;z-index:130;transform:translateX(105%);transition:transform .26s ease;box-shadow:-12px 0 40px -12px rgba(0,0,0,.6)}
+          .mjm-side.mjm-open{transform:translateX(0)}
+          .mjm-burger{display:inline-flex!important}
+          .mjm-overlay.mjm-open{display:block}
+        }
         @media(max-width:1000px){ .mjm-grid4{ grid-template-columns:repeat(2,1fr)!important } .mjm-grid2{ grid-template-columns:1fr!important } }
         @media(max-width:680px){ .mjm-grid4{ grid-template-columns:1fr!important } .mjm-form{ grid-template-columns:1fr!important } }
         @media(max-width:600px){ .mjm-search{ order:3; max-width:none!important; flex-basis:100%!important; margin:0 0 10px!important } }

@@ -99,8 +99,9 @@ export default function BuilderPage() {
   const [wfOpen, setWfOpen] = useState(false)
   const [wbView, setWbView] = useState<WebsiteView | null>(null)
   const [wbOpen, setWbOpen] = useState(false)
+  const [navOpen, setNavOpen] = useState(false)   // کشوی منوی موبایل
   const clearTools = () => { setCrmView(null); setMktView(null); setWfView(null); setWbView(null) }
-  const goView = (v: View) => { setView(v); clearTools() }
+  const goView = (v: View) => { setView(v); clearTools(); setNavOpen(false) }
   const openCrm = (v: CrmView) => { clearTools(); setCrmView(v); setCrmOpen(true) }
   const openMkt = (v: MarketingView) => { clearTools(); setMktView(v); setMktOpen(true) }
   const openWf = (v: WorkflowView) => { clearTools(); setWfView(v); setWfOpen(true) }
@@ -194,8 +195,11 @@ export default function BuilderPage() {
   return (
     <div dir="rtl" style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: FONT }}>
 
+      {/* OVERLAY موبایل (پشتِ کشو) */}
+      <div className={`mjb-overlay${navOpen ? ' mjb-open' : ''}`} onClick={() => setNavOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 125 }} />
+
       {/* ════════════ SIDEBAR ════════════ */}
-      <aside className="mjb-side" style={{
+      <aside className={`mjb-side${navOpen ? ' mjb-open' : ''}`} style={{
         width: 230, flexShrink: 0, background: 'var(--bg2)', borderLeft: '1px solid var(--line)',
         position: 'sticky', top: 0, height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
@@ -397,6 +401,7 @@ export default function BuilderPage() {
           borderBottom: '1px solid var(--line)', padding: '0 24px', height: 64,
           display: 'flex', alignItems: 'center', gap: 16,
         }}>
+          <button className="mjb-burger" aria-label="منو" onClick={() => setNavOpen(true)} style={{ width: 42, height: 42, borderRadius: 11, border: '1px solid var(--line)', background: 'var(--bg2)', color: 'var(--gold)', fontSize: 20, cursor: 'pointer', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontFamily: FONT }}>☰</button>
           <h2 style={{ fontSize: 17, fontWeight: 700, flex: 1 }}>{crmView ? `CRM · ${CRM_VIEWS.find(v => v.id === crmView)?.label || ''}` : mktView ? `مارکتینگ · ${MARKETING_VIEWS.find(v => v.id === mktView)?.label || ''}` : wfView ? `اتوماسیون · ${WORKFLOW_VIEWS.find(v => v.id === wfView)?.label || ''}` : wbView ? `وب‌سایت‌ساز · ${WEBSITE_VIEWS.find(v => v.id === wbView)?.label || ''}` : VIEW_TITLES[view]}</h2>
 
           {/* Project switcher */}
@@ -481,7 +486,15 @@ export default function BuilderPage() {
 
       <style>{`
         @keyframes mjbpulse { 0%,100% { box-shadow: 0 0 0 0 rgba(201,168,76,0.5); } 50% { box-shadow: 0 0 0 6px rgba(201,168,76,0); } }
-        @media(max-width:760px){ .mjb-side{ width:62px!important } .mjb-sidelabel{ display:none!important } }
+        .mjb-burger{display:none}
+        .mjb-overlay{display:none}
+        @media(max-width:760px){
+          /* کشوی موبایل: منوی کامل با برچسب از سمتِ راست بازشو */
+          .mjb-side{position:fixed!important;right:0;top:0;height:100vh!important;width:82vw!important;max-width:300px;z-index:130;transform:translateX(105%);transition:transform .26s ease;box-shadow:-12px 0 40px -12px rgba(0,0,0,.6)}
+          .mjb-side.mjb-open{transform:translateX(0)}
+          .mjb-burger{display:inline-flex!important}
+          .mjb-overlay.mjb-open{display:block}
+        }
       `}</style>
     </div>
   )
