@@ -78,14 +78,18 @@ const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'agents' | 'le
   { id: 'negotiation', label: 'موتور مذاکره', icon: '🤝' },
   { id: 'divar', label: 'ایمپورت از دیوار', icon: '📥' },
   { id: 'agents', label: 'مشاوران', icon: '☷', badge: 'agents' },
-  { id: 'advisorfiles', label: 'فایل‌های مشاوران', icon: '🗂' },
-  { id: 'listings', label: 'فایل‌ها', icon: '◫' },
-  { id: 'leads', label: 'لیدها', icon: '◎', badge: 'leads' },
-  { id: 'deals', label: 'معاملات', icon: '﷼' },
   { id: 'plans', label: 'پلن‌ها و اشتراک', icon: '👑' },
   { id: 'profile', label: 'پروفایل', icon: '🪪' },
   { id: 'settings', label: 'تنظیمات', icon: '⛭' },
 ]
+// زیرمنوهای «CRM و مشتریان» — لید/فایل/معاملات/کمیسیون همگی این‌جا (نه بیرونِ CRM).
+const AGENCY_CRM_VIEWS: { id: View; label: string; icon: string }[] = [
+  { id: 'listings', label: 'فایل‌های آژانس', icon: '◫' },
+  { id: 'leads', label: 'لیدهای آژانس', icon: '◎' },
+  { id: 'deals', label: 'معاملاتِ آژانس', icon: '﷼' },
+  { id: 'advisorfiles', label: 'فایل‌ها و کمیسیونِ مشاوران', icon: '🗂' },
+]
+const AGENCY_CRM_IDS: View[] = ['listings', 'leads', 'deals', 'advisorfiles']
 function Pill({ label, color }: { label: string; color: string }) {
   return <span style={{ fontSize: 11, fontWeight: 600, color, background: `color-mix(in srgb, ${color} 16%, transparent)`, padding: '3px 10px', borderRadius: 7, whiteSpace: 'nowrap' }}>{label}</span>
 }
@@ -129,7 +133,7 @@ export default function AgencyPage() {
   const [wbView, setWbView] = useState<WebsiteView | null>(null)
   const [wbOpen, setWbOpen] = useState(false)
   const clearTools = () => { setCrmView(null); setMktView(null); setWfView(null); setWbView(null) }
-  const goView = (v: View) => { setView(v); clearTools() }
+  const goView = (v: View) => { setView(v); clearTools(); if (AGENCY_CRM_IDS.includes(v)) setCrmOpen(true) }
   const openCrm = (v: CrmView) => { clearTools(); setCrmView(v); setCrmOpen(true) }
   const openMkt = (v: MarketingView) => { clearTools(); setMktView(v); setMktOpen(true) }
   const openWf = (v: WorkflowView) => { clearTools(); setWfView(v); setWfOpen(true) }
@@ -149,6 +153,12 @@ export default function AgencyPage() {
   // ویرایشِ نرخِ کمیسیون (پیش‌فرض + per-advisor)
   const [defComm, setDefComm] = useState<{ mode: CommMode; value: string }>({ mode: 'percent', value: '30' })
   const [commEdit, setCommEdit] = useState<Record<string, { mode: CommMode; value: string }>>({})
+  // فیلتر و مرتب‌سازیِ «فایل‌های مشاوران»
+  const [afQuery, setAfQuery] = useState('')
+  const [afSort, setAfSort] = useState<'cut' | 'name' | 'files' | 'leads' | 'commission'>('cut')
+  // فیلتر و مرتب‌سازیِ «فایل‌های آژانس»
+  const [lstStatus, setLstStatus] = useState<'all' | 'active' | 'sold' | 'rented'>('all')
+  const [lstSort, setLstSort] = useState<'new' | 'priceDesc' | 'priceAsc'>('new')
   // عضویت واقعی مشاوران (advisor↔agency)
   const [members, setMembers] = useState<LinkMember[]>([])
   const [linkReqs, setLinkReqs] = useState<LinkRequest[]>([])
@@ -219,7 +229,11 @@ export default function AgencyPage() {
 
   const { stats, agents, listings, leads, deals } = data
   const q = search.trim()
-  const listingsF = q ? listings.filter(l => (l.title + l.location + (l.agent || '')).includes(q)) : listings
+  const listingsF = listings
+    .filter(l => !q || (l.title + l.location + (l.agent || '')).includes(q))
+    .filter(l => lstStatus === 'all' || l.status === lstStatus)
+    .slice()
+    .sort((a, b) => lstSort === 'priceDesc' ? b.price - a.price : lstSort === 'priceAsc' ? a.price - b.price : b.createdAt - a.createdAt)
   const activeAgentNames = agents.filter(a => a.active).map(a => a.name)
   const maxSales = Math.max(1, ...stats.monthlySales.map(m => m.amount))
   const sectionTitle = (t: string) => <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 12 }}>{t}</div>
@@ -255,21 +269,39 @@ export default function AgencyPage() {
           })}
           <div style={{ height: 1, background: 'var(--line)', margin: '10px 8px' }} />
 
-          {/* CRM — جاسازی‌شده با منوی آبشاری (داخل همین پنل باز می‌شود) */}
-          <button onClick={() => { setCrmOpen(o => !o); if (!crmView) openCrm('dashboard') }} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: crmView ? 'var(--goldDim)' : 'transparent', color: crmView ? 'var(--gold)' : 'var(--muted)', fontWeight: crmView ? 700 : 500, fontSize: 14, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
-            <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: crmView ? 1 : 0.7 }}>◇</span>
-            <span className="mjg-sidelabel" style={{ flex: 1 }}>CRM و مشتریان</span>
-            <span className="mjg-sidelabel" style={{ fontSize: 11, transition: 'transform .2s', transform: crmOpen ? 'rotate(90deg)' : 'none' }}>‹</span>
-          </button>
-          {crmOpen && CRM_VIEWS.map(cv => {
-            const on = crmView === cv.id
-            return (
-              <button key={cv.id} onClick={() => openCrm(cv.id)} className="mjg-sidelabel" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 9, padding: '8px 14px 8px 14px', paddingRight: 34, borderRadius: 10, border: 'none', cursor: 'pointer', background: on ? 'var(--goldDim)' : 'transparent', color: on ? 'var(--gold)' : 'var(--muted)', fontWeight: on ? 700 : 500, fontSize: 13, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
-                <span style={{ fontSize: 13, width: 16, textAlign: 'center', opacity: on ? 1 : 0.6 }}>{cv.icon}</span>
-                <span style={{ flex: 1 }}>{cv.label}</span>
+          {/* CRM و مشتریان — لید/فایل/معاملات/کمیسیون + ابزارِ CRM، همگی این‌جا */}
+          {(() => {
+            const crmGroupActive = !!crmView || AGENCY_CRM_IDS.includes(view)
+            return <>
+              <button onClick={() => setCrmOpen(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: crmGroupActive ? 'var(--goldDim)' : 'transparent', color: crmGroupActive ? 'var(--gold)' : 'var(--muted)', fontWeight: crmGroupActive ? 700 : 500, fontSize: 14, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
+                <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: crmGroupActive ? 1 : 0.7 }}>◇</span>
+                <span className="mjg-sidelabel" style={{ flex: 1 }}>CRM و مشتریان</span>
+                <span className="mjg-sidelabel" style={{ fontSize: 11, transition: 'transform .2s', transform: crmOpen ? 'rotate(90deg)' : 'none' }}>‹</span>
               </button>
-            )
-          })}
+              {crmOpen && <>
+                {/* داده‌های آژانس و مشاوران */}
+                {AGENCY_CRM_VIEWS.map(cv => {
+                  const on = view === cv.id && !crmView
+                  return (
+                    <button key={cv.id} onClick={() => goView(cv.id)} className="mjg-sidelabel" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 9, padding: '8px 14px', paddingRight: 34, borderRadius: 10, border: 'none', cursor: 'pointer', background: on ? 'var(--goldDim)' : 'transparent', color: on ? 'var(--gold)' : 'var(--muted)', fontWeight: on ? 700 : 500, fontSize: 13, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
+                      <span style={{ fontSize: 13, width: 16, textAlign: 'center', opacity: on ? 1 : 0.6 }}>{cv.icon}</span>
+                      <span style={{ flex: 1 }}>{cv.label}</span>
+                    </button>
+                  )
+                })}
+                <div className="mjg-sidelabel" style={{ fontSize: 10, color: 'var(--faint)', padding: '6px 14px 2px 34px', fontWeight: 700 }}>ابزارِ CRM پیشرفته</div>
+                {CRM_VIEWS.map(cv => {
+                  const on = crmView === cv.id
+                  return (
+                    <button key={cv.id} onClick={() => openCrm(cv.id)} className="mjg-sidelabel" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 9, padding: '8px 14px', paddingRight: 34, borderRadius: 10, border: 'none', cursor: 'pointer', background: on ? 'var(--goldDim)' : 'transparent', color: on ? 'var(--gold)' : 'var(--muted)', fontWeight: on ? 700 : 500, fontSize: 13, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
+                      <span style={{ fontSize: 13, width: 16, textAlign: 'center', opacity: on ? 1 : 0.6 }}>{cv.icon}</span>
+                      <span style={{ flex: 1 }}>{cv.label}</span>
+                    </button>
+                  )
+                })}
+              </>}
+            </>
+          })()}
 
           {/* مارکتینگ — جاسازی‌شده با منوی آبشاری (مثل CRM) */}
           <button onClick={() => { setMktOpen(o => !o); if (!mktView) openMkt('overview') }} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: mktView ? 'var(--goldDim)' : 'transparent', color: mktView ? 'var(--gold)' : 'var(--muted)', fontWeight: mktView ? 700 : 500, fontSize: 14, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
@@ -548,7 +580,15 @@ export default function AgencyPage() {
           {/* ADVISOR FILES — فایل‌ها و کمیسیونِ مشاوران (از پنلِ خودِ مشاوران) */}
           {view === 'advisorfiles' && (() => {
             const af = data.advisorFiles
-            const rows = af?.rows || []
+            const allRows = af?.rows || []
+            const aq = afQuery.trim()
+            const rows = allRows
+              .filter(r => !aq || r.advisorName.includes(aq) || r.advisorPhone.includes(aq))
+              .sort((a, b) => afSort === 'name' ? a.advisorName.localeCompare(b.advisorName, 'fa')
+                : afSort === 'files' ? b.counts.total - a.counts.total
+                : afSort === 'leads' ? b.leads.total - a.leads.total
+                : afSort === 'commission' ? b.advisorCommission - a.advisorCommission
+                : b.agencyCut - a.agencyCut)
             const t = af?.totals
             const dealLabel = (d: string) => d === 'sale' ? 'فروش' : 'اجاره'
             const badge = (label: string, color?: string) => <span style={{ fontSize: 11, fontWeight: 700, color: color || 'var(--muted)', background: color ? color + '1f' : 'var(--bg)', border: `1px solid ${color ? color + '55' : 'var(--line)'}`, borderRadius: 999, padding: '3px 10px', whiteSpace: 'nowrap' }}>{label}</span>
@@ -556,7 +596,7 @@ export default function AgencyPage() {
               const head = ['مشاور', 'شماره', 'لیدها', 'لید باز', 'کل فایل', 'فعال', 'فروخته', 'اجاره‌رفته', 'کمیسیون محقق‌شده (تومان)', 'پرداختی', 'معوق', 'نرخ آژانس', 'سهم آژانس (تومان)']
               const q = (v: any) => `"${String(v).replace(/"/g, '""')}"`
               const lines = [head.map(q).join(',')]
-              for (const r of rows) {
+              for (const r of allRows) {
                 const rate = r.rate.mode === 'percent' ? `${r.rate.value}٪` : `${r.rate.value} هر معامله`
                 lines.push([r.advisorName, r.advisorPhone, r.leads.total, r.leads.open, r.counts.total, r.counts.active, r.counts.sold, r.counts.rented, r.advisorCommission, r.paidCommission, r.pendingCommission, rate, r.agencyCut].map(q).join(','))
               }
@@ -567,8 +607,22 @@ export default function AgencyPage() {
             return <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                 <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.9, flex: 1, minWidth: 200 }}>این بخش فایل‌ها و کمیسیونِ مشاورانِ عضوِ آژانس را مستقیماً از پنلِ خودِ مشاوران نمایش می‌دهد و به‌روز است.</div>
-                {rows.length > 0 && <button onClick={exportCsv} style={{ ...actionBtn, color: 'var(--gold)', borderColor: 'var(--gold)', padding: '8px 14px' }}>⬇ خروجیِ گزارش (CSV)</button>}
+                {allRows.length > 0 && <button onClick={exportCsv} style={{ ...actionBtn, color: 'var(--gold)', borderColor: 'var(--gold)', padding: '8px 14px' }}>⬇ خروجیِ گزارش (CSV)</button>}
               </div>
+              {allRows.length > 0 && (
+                <div style={{ ...card, padding: '12px 14px', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <input value={afQuery} onChange={e => setAfQuery(e.target.value)} placeholder="جستجوی مشاور (نام یا شماره)…" style={{ ...inputStyle, flex: '1 1 200px', width: 'auto' }} />
+                  <span style={{ fontSize: 12, color: 'var(--muted)' }}>مرتب‌سازی:</span>
+                  <select value={afSort} onChange={e => setAfSort(e.target.value as any)} style={{ ...inputStyle, width: 'auto' }}>
+                    <option value="cut">سهمِ آژانس</option>
+                    <option value="commission">کمیسیونِ مشاور</option>
+                    <option value="files">تعدادِ فایل</option>
+                    <option value="leads">تعدادِ لید</option>
+                    <option value="name">نام</option>
+                  </select>
+                  <span style={{ fontSize: 11.5, color: 'var(--faint)' }}>{fa(rows.length)} از {fa(allRows.length)} مشاور</span>
+                </div>
+              )}
               <div className="mjg-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12 }}>
                 <Kpi label="کلِ فایل‌ها" value={fa(t?.listings || 0)} />
                 <Kpi label="فعال" value={fa(t?.active || 0)} />
@@ -599,7 +653,7 @@ export default function AgencyPage() {
               )}
 
               {rows.length === 0 ? (
-                <div style={{ ...card, padding: 24, color: 'var(--faint)', textAlign: 'center', fontSize: 13.5 }}>هنوز مشاوری به آژانس متصل نیست. از بخشِ «مشاوران» مشاور دعوت کنید.</div>
+                <div style={{ ...card, padding: 24, color: 'var(--faint)', textAlign: 'center', fontSize: 13.5 }}>{allRows.length === 0 ? 'هنوز مشاوری به آژانس متصل نیست. از بخشِ «مشاوران» مشاور دعوت کنید.' : 'مشاوری با این فیلتر یافت نشد.'}</div>
               ) : rows.map(r => {
                 const edit = commEdit[r.advisorPhone] || { mode: r.rate.mode, value: String(r.rate.value) }
                 const setEdit = (e: { mode: CommMode; value: string }) => setCommEdit(prev => ({ ...prev, [r.advisorPhone]: e }))
@@ -711,7 +765,13 @@ export default function AgencyPage() {
               </div>
             </div>
             <div style={{ ...card, padding: 18 }}>
-              {sectionTitle(`فایل‌ها (${fa(listingsF.length)})`)}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+                {sectionTitle(`فایل‌ها (${fa(listingsF.length)})`)}
+                <div style={{ display: 'flex', gap: 8, marginInlineStart: 'auto', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <select value={lstStatus} onChange={e => setLstStatus(e.target.value as any)} style={{ ...inputStyle, width: 'auto', padding: '6px 10px' }}><option value="all">همهٔ وضعیت‌ها</option><option value="active">فعال</option><option value="sold">فروخته‌شده</option><option value="rented">اجاره‌رفته</option></select>
+                  <select value={lstSort} onChange={e => setLstSort(e.target.value as any)} style={{ ...inputStyle, width: 'auto', padding: '6px 10px' }}><option value="new">جدیدترین</option><option value="priceDesc">گران‌ترین</option><option value="priceAsc">ارزان‌ترین</option></select>
+                </div>
+              </div>
               {listingsF.length ? listingsF.map(l => (
                 <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
                   <div style={{ flex: 1, minWidth: 160 }}>
