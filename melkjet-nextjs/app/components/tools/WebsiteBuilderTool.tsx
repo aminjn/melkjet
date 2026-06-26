@@ -125,6 +125,7 @@ const BLOCK_DEFAULTS: Record<string, Record<string, any>> = {
   },
   services: {
     heading: 'خدمات ما',
+    perSlide: 3,
     items: [
       { icon: '◇', title: 'خرید ملک', desc: 'مشاوره تخصصی برای خرید بهترین ملک' },
       { icon: '⌂', title: 'اجاره', desc: 'گزینه‌های متنوع اجاره مسکونی و تجاری' },
@@ -245,6 +246,7 @@ const BLOCK_SCHEMA: Record<string, FieldSpec[]> = {
   ],
   services: [
     { key: 'heading', label: 'عنوان', kind: 'text' },
+    { key: 'perSlide', label: 'تعداد در هر اسلاید', kind: 'number' },
     { key: 'items', label: 'خدمات', kind: 'list', itemFields: [{ key: 'icon', label: 'آیکن', kind: 'text' }, { key: 'title', label: 'عنوان', kind: 'text' }, { key: 'desc', label: 'توضیح', kind: 'textarea' }], newItem: () => ({ icon: '◇', title: 'خدمت جدید', desc: 'توضیح خدمت' }) },
   ],
   about: [
@@ -1277,8 +1279,28 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
       else if (type === 'blogfull') preset = { heading: opts?.heading ?? 'وبلاگ' }
       return makeBlock(type, preset)
     }
-    // صفحهٔ اصلی از بلوک‌هایِ خودِ قالب ساخته می‌شود.
-    const homeBlocks = tpl.blocks.map(type => build(type))
+    // ── صفحهٔ اصلیِ حرفه‌ای و کامل، متناسب با پروفایل ──
+    // هر سایت باید روی صفحهٔ اصلی «آنچه ارائه می‌دهد» را به‌صورتِ اسلایدر نشان دهد:
+    // مشاور/آژانس/فروشگاه/سرمایه‌گذار → آگهی‌ها (listings)، سازنده → پروژه‌ها (gallery)،
+    // حقوقی → خدمات. این بلوک حتماً روی صفحهٔ اصلی قرار می‌گیرد.
+    const offeringsType = tpl.profile === 'سازنده' ? 'gallery' : tpl.profile === 'حقوقی' ? 'services' : 'listings'
+    // بلوک‌های متمایزِ خودِ قالب (درباره/تیم و…) که در ترکیبِ پایه نیستند، حفظ می‌شوند تا تنوع بماند.
+    const baseTypes = ['hero', 'footer', 'cta', 'listings', 'gallery', 'services', 'stats', 'testimonials', 'search']
+    const distinct = tpl.blocks.filter(b => !baseTypes.includes(b))
+    const hasSearch = tpl.blocks.includes('search')
+    const homeOrder = [
+      'hero',
+      ...(hasSearch ? ['search'] : []),
+      offeringsType,
+      ...distinct,
+      'services',
+      'stats',
+      'testimonials',
+      'cta',
+      'footer',
+    ]
+    const homeTypes = Array.from(new Set(homeOrder))
+    const homeBlocks = homeTypes.map(type => build(type))
     const newPages: Page[] = [{ slug: 'home', title: 'صفحه اصلی', blocks: homeBlocks }]
     // صفحاتِ کاملِ سایت، متناسب با پروفایلِ قالب (درباره، فایل‌ها، خدمات، تیم، وبلاگ، تماس…).
     for (const spec of profilePageSpec(tpl.profile)) {

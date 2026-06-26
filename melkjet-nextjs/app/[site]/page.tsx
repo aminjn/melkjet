@@ -5,6 +5,7 @@ import { listItems, listArticles, type Item } from '@/app/lib/scraper-store'
 import { getTeamMembers, type TeamMember } from '@/app/lib/team-members'
 import { listReviews } from '@/app/lib/reviews-store'
 import ListingsSlider from './ListingsSlider'
+import ServicesSlider from './ServicesSlider'
 import HeroSlider from './HeroSlider'
 import GallerySlider from './GallerySlider'
 import BlogFull, { type BlogArticle } from './BlogFull'
@@ -336,23 +337,17 @@ function BlogFullBlock({ block, primary, ownerName }: { block: SiteBlock; primar
 function ServicesBlock({ block, primary }: { block: SiteBlock; primary: string }) {
   const props = p(block)
   const items: any[] = Array.isArray(props.items) ? props.items : []
+  const perSlide = Math.max(1, Math.min(4, Number(props.perSlide) || 3))
   return (
     <section style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <SectionHeading primary={primary} center>{props.heading}</SectionHeading>
-        <div className="mjs-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(230px,1fr))', gap: 24 }}>
-          {items.map((s, i) => (
-            <div key={i} className="mjs-card" style={{ background: SURFACE, border: '1px solid #efe9df', borderRadius: 18, padding: '34px 22px', textAlign: 'center', boxShadow: CARD_SHADOW }}>
-              <div style={{
-                width: 72, height: 72, borderRadius: '50%', margin: '0 auto 18px',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 32, color: primary, background: `${primary}1f`,
-              }}>{s.icon}</div>
-              <div style={{ fontSize: 17, fontWeight: 800, color: INK, marginBottom: 10 }}>{s.title}</div>
-              <div style={{ fontSize: 14, color: MUTED, lineHeight: 1.9 }}>{s.desc}</div>
-            </div>
-          ))}
-        </div>
+        {items.length > 0 && (
+          <div style={{ textAlign: 'center', color: MUTED, fontSize: 13, marginTop: -10, marginBottom: 24 }}>
+            {items.length.toLocaleString('fa-IR')} مورد · {perSlide.toLocaleString('fa-IR')} در هر نما
+          </div>
+        )}
+        <ServicesSlider items={items} perSlide={perSlide} primary={primary} />
       </div>
     </section>
   )
@@ -749,6 +744,8 @@ export function SiteShell({ site, page }: { site: Site; page: SitePage }) {
   return (
     <main style={{ minHeight: '100vh', background: 'var(--mjs-bg)', color: 'var(--mjs-text)', fontFamily, ...cssVars }}>
       <style>{`
+        /* ناوبریِ موبایلِ ملک‌جت روی سایتِ منتشرشده دیده نشود — هر سایت منوی خودش را دارد. */
+        .mj-bottom-nav{display:none !important}
         .mjs-card{transition:transform .22s ease, box-shadow .22s ease}
         .mjs-card:hover{transform:translateY(-5px);box-shadow:0 22px 50px -24px rgba(20,16,10,.55),0 6px 16px -8px rgba(20,16,10,.18)}
         .mjs-btn{transition:transform .18s ease, box-shadow .18s ease, opacity .18s ease}
