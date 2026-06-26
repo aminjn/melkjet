@@ -189,11 +189,16 @@ export default function PropertyPage() {
     catch { setPhone('خطا') } finally { setGettingPhone(false) }
   }
 
+  // شمارهٔ تماسِ آگهی: شمارهٔ خودِ آگهی، وگرنه شمارهٔ حسابِ صاحبِ آگهی (مشاور/مالک).
+  const ownerAccountPhone = String((item?.meta as Record<string, string> | undefined)?.__ownerPhone || '').trim()
+  const contactPhone = (item?.phone && String(item.phone).trim()) || ownerAccountPhone || ''
+
   const doReveal = async () => {
     if (!item) return
     setRevealed(true)
     try { await fetch('/api/listing-stats', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'contact', id: item.id }) }) } catch {}
-    if (!item.phone) fetchDivarPhone()
+    // اگر شماره‌ای روی آگهی/حساب نیست ولی لینکِ دیوار دارد، شماره را از دیوار بگیر.
+    if (!contactPhone && (item.url || '').includes('divar.ir/v/')) fetchDivarPhone()
   }
   // نمایشِ اطلاعات تماس — فقط برای کاربرِ واردشده؛ کلیک ثبت و به صاحبِ آگهی گزارش می‌شود
   const revealContact = () => {
@@ -446,12 +451,14 @@ export default function PropertyPage() {
                   </div>
                 )}
                 <div style={{ fontSize: 11.5, color: 'var(--faint)', marginBottom: 14 }}>منبع: {item.sourceName} · {timeAgo(item.scrapedAt)}</div>
-                {revealed && (item.phone || (phone && /^\d/.test(phone))) ? (
-                  <a href={`tel:${item.phone || phone}`} style={{ display: 'block', textAlign: 'center', padding: '13px', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontWeight: 800, direction: 'ltr' }}>☎ تماس — {item.phone || phone}</a>
+                {revealed && (contactPhone || (phone && /^\d/.test(phone))) ? (
+                  <a href={`tel:${contactPhone || phone}`} style={{ display: 'block', textAlign: 'center', padding: '13px', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontWeight: 800, direction: 'ltr' }}>☎ تماس — {contactPhone || phone}</a>
                 ) : revealed && gettingPhone ? (
                   <div style={{ textAlign: 'center', padding: '13px', borderRadius: 12, background: 'var(--bg2)', color: 'var(--muted)', fontSize: 13 }}>در حال دریافت شماره…</div>
                 ) : revealed && phone ? (
                   <div style={{ textAlign: 'center', padding: '13px', borderRadius: 12, background: 'var(--bg2)', color: 'var(--muted)', fontSize: 13 }}>{phone}</div>
+                ) : revealed ? (
+                  <div style={{ textAlign: 'center', padding: '13px', borderRadius: 12, background: 'var(--bg2)', color: 'var(--muted)', fontSize: 13 }}>شمارهٔ تماسی برای این آگهی ثبت نشده — از «چت با صاحب آگهی» استفاده کنید.</div>
                 ) : (
                   <>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', borderRadius: 12, background: 'var(--bg2)', border: '1px dashed var(--line2)', marginBottom: 10 }}>
