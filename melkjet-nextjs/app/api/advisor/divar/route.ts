@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { getDivar, updateDivarConfig, removeImport } from '@/app/lib/advisor-divar-store'
+import { getDivar, updateDivarConfig, removeImport, addSource, updateSource, removeSource, getSource, markSourceRun } from '@/app/lib/advisor-divar-store'
 import { importDivarInput, syncAdvisorDivar, clearDivarImports } from '@/app/lib/advisor-divar-import'
 import { ensureCronStarted } from '@/app/lib/cron-runner'
 
@@ -45,6 +45,30 @@ export async function POST(req: NextRequest) {
       if (!b.token) return NextResponse.json({ error: 'توکن الزامی است' }, { status: 400 })
       removeImport(o, String(b.token))
       return NextResponse.json({ ok: true, config: getDivar(o) })
+    }
+    // ── منابعِ متعددِ اسکرپ ──
+    case 'addSource': {
+      addSource(o, { name: b.name, searchUrl: b.searchUrl, divarName: b.divarName, schedule: b.schedule, autoPublish: b.autoPublish, autoNeighborhood: b.autoNeighborhood })
+      return NextResponse.json({ ok: true, config: getDivar(o) })
+    }
+    case 'updateSource': {
+      if (!b.id) return NextResponse.json({ error: 'شناسهٔ منبع الزامی است' }, { status: 400 })
+      updateSource(o, String(b.id), { name: b.name, searchUrl: b.searchUrl, divarName: b.divarName, schedule: b.schedule, autoPublish: b.autoPublish, autoNeighborhood: b.autoNeighborhood })
+      return NextResponse.json({ ok: true, config: getDivar(o) })
+    }
+    case 'removeSource': {
+      if (!b.id) return NextResponse.json({ error: 'شناسهٔ منبع الزامی است' }, { status: 400 })
+      removeSource(o, String(b.id))
+      return NextResponse.json({ ok: true, config: getDivar(o) })
+    }
+    case 'syncSource': {
+      const src = getSource(o, String(b.id))
+      if (!src) return NextResponse.json({ error: 'منبع یافت نشد' }, { status: 404 })
+      if (!src.searchUrl.trim()) return NextResponse.json({ error: 'لینکِ این منبع خالی است' }, { status: 400 })
+      const base = getDivar(o)
+      const r = await syncAdvisorDivar(o, { ...base, searchUrl: src.searchUrl, divarName: src.divarName, autoPublish: src.autoPublish, autoNeighborhood: src.autoNeighborhood, schedule: src.schedule })
+      markSourceRun(o, src.id, r.imported || 0, r.ok ? '' : (r.reason || 'خطا'))
+      return NextResponse.json({ ...r, config: getDivar(o) })
     }
     default:
       return NextResponse.json({ error: 'عملیات نامعتبر' }, { status: 400 })

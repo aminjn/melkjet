@@ -529,7 +529,7 @@ export default function AgencyPage() {
           {view === 'messages' && <MessagesPanel role="owner" />}
 
           {/* NEGOTIATION ENGINE — داخلِ همین پنل */}
-          {view === 'negotiation' && <NegotiationEngine listings={listings.map(l => ({ id: l.id, title: l.title, price: l.price, deal: l.deal, location: l.location }))} />}
+          {view === 'negotiation' && <NegotiationEngine listings={listingsUnified.map(l => ({ id: l.key, title: `${l.title}${l.agency ? '' : ' — ' + l.owner}`, price: l.price, deal: l.deal, location: l.location }))} />}
 
           {/* ایمپورت از دیوار — مخصوص آژانس (آگهی‌ها با صاحبِ آژانس منتشر می‌شوند) */}
           {view === 'divar' && <DivarImport onChange={refresh} entity="آژانس" />}

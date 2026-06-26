@@ -5,11 +5,14 @@ import { useCallback, useEffect, useState } from 'react'
 // (هر کاربر فقط دادهٔ خودش). onChange بعد از ایمپورت/سینک برای رفرشِ فایل‌های والد.
 
 const FONT = 'Vazirmatn, system-ui, sans-serif'
+type Sched = 'off' | 'hourly' | '6h' | 'daily'
 interface DImport { token: string; listingId: string; title: string; url: string; at: number; published: boolean }
+interface DSource { id: string; name: string; searchUrl: string; divarName: string; schedule: Sched; autoPublish: boolean; autoNeighborhood: boolean; lastRun?: number; lastCount?: number; lastError?: string; createdAt: number }
 interface DivarConfig {
-  divarName: string; searchUrl: string; schedule: 'off' | 'hourly' | '6h' | 'daily'
+  divarName: string; searchUrl: string; schedule: Sched
   autoPublish: boolean; autoNeighborhood: boolean
   lastRun?: number; lastCount?: number; lastError?: string
+  sources: DSource[]
   imports: DImport[]
 }
 const card: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16 }
@@ -75,46 +78,54 @@ export default function DivarImport({ onChange, entity = 'شما' }: { onChange?
         </div>
       </div>
 
-      {/* همگام‌سازی خودکار */}
+      {/* اسکرپ‌ها (منابعِ متعدد) — هرکدام جدا، ذخیره‌شده و قابلِ همگام‌سازیِ مستقل */}
       {cfg && <div style={{ ...card, padding: 16 }}>
-        <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>همگام‌سازی خودکار (کران‌جاب)</div>
-        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.8 }}>لینکِ <b>صفحهٔ اختصاصی (پرو)</b> را بگذارید تا در بازهٔ انتخابی همهٔ آگهی‌ها خودکار به‌روز شوند. <span style={{ color: 'var(--faint)' }}>(به‌جایش لینکِ جستجو/نقشه + نام در دیوار هم می‌شود.)</span></div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div>
-            <label style={{ fontSize: 12, color: 'var(--muted)' }}>لینکِ صفحهٔ اختصاصی (پرو) یا جستجو/نقشه در دیوار</label>
-            <input value={cfg.searchUrl} onChange={e => setCfg({ ...cfg, searchUrl: e.target.value })} placeholder="https://divar.ir/pro/HLTCumBJ" style={{ ...inp, direction: 'ltr', textAlign: 'left' }} />
-          </div>
-          <div>
-            <label style={{ fontSize: 12, color: 'var(--muted)' }}>نام در دیوار <span style={{ color: 'var(--faint)' }}>(فقط اگر لینکِ جستجو دادید)</span></label>
-            <input value={cfg.divarName} onChange={e => setCfg({ ...cfg, divarName: e.target.value })} placeholder="دقیقاً همان نامی که زیر آگهی‌ها نمایش داده می‌شود" style={inp} />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--text)', cursor: 'pointer' }}>
-              <input type="checkbox" checked={cfg.autoPublish} onChange={e => setCfg({ ...cfg, autoPublish: e.target.checked })} /> انتشار خودکار روی سایت
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--text)', cursor: 'pointer' }}>
-              <input type="checkbox" checked={cfg.autoNeighborhood} onChange={e => setCfg({ ...cfg, autoNeighborhood: e.target.checked })} /> تشخیص خودکار محله
-            </label>
-          </div>
-          <div>
-            <label style={{ fontSize: 12, color: 'var(--muted)' }}>هر چند وقت یک‌بار؟</label>
-            <select value={cfg.schedule} onChange={e => setCfg({ ...cfg, schedule: e.target.value as DivarConfig['schedule'] })} style={inp}>
-              {SCHEDULES.map(s => <option key={s.v} value={s.v}>{s.label}</option>)}
-            </select>
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button disabled={busy} onClick={async () => { await post({ action: 'setConfig', divarName: cfg.divarName, searchUrl: cfg.searchUrl, schedule: cfg.schedule, autoPublish: cfg.autoPublish, autoNeighborhood: cfg.autoNeighborhood }); setMsg('✓ تنظیمات ذخیره شد.') }} style={{ ...gold, opacity: busy ? 0.6 : 1 }}>ذخیرهٔ تنظیمات</button>
-            <button disabled={busy || !cfg.searchUrl.trim()} onClick={async () => {
-              const d = await post({ action: 'sync' })
-              if (d) { setMsg(d.ok ? `✓ همگام‌سازی شد — ${(d.imported || 0).toLocaleString('fa-IR')} جدید، ${(d.updated || 0).toLocaleString('fa-IR')} به‌روزرسانی${d.sold ? `، ${(d.sold).toLocaleString('fa-IR')} فروش/اجاره‌رفته` : ''} (از ${(d.scanned || 0).toLocaleString('fa-IR')} آگهی).` : (d.reason || 'همگام‌سازی ناموفق بود')); onChange?.() }
-            }} style={{ ...act, padding: '9px 18px', color: 'var(--gold)', borderColor: 'var(--gold)' }}>{busy ? 'در حال همگام‌سازی…' : 'همگام‌سازی الان'}</button>
-          </div>
-          <div style={{ fontSize: 11.5, color: 'var(--muted)', display: 'flex', gap: 16, flexWrap: 'wrap', paddingTop: 4, borderTop: '1px solid var(--line)' }}>
-            <span>آخرین اجرا: <b style={{ color: 'var(--text)' }}>{faDate(cfg.lastRun)}</b></span>
-            {typeof cfg.lastCount === 'number' && <span>آخرین تعداد: <b style={{ color: 'var(--text)' }}>{cfg.lastCount.toLocaleString('fa-IR')}</b></span>}
-            {cfg.lastError && <span style={{ color: '#ef4444' }}>خطا: {cfg.lastError}</span>}
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
+          <div style={{ fontWeight: 800, fontSize: 14 }}>اسکرپ‌ها (همگام‌سازیِ خودکار) — {cfg.sources.length.toLocaleString('fa-IR')}</div>
+          <button disabled={busy} onClick={async () => { const d = await post({ action: 'addSource', name: 'اسکرپِ جدید' }); if (d?.ok) setMsg('✓ اسکرپِ جدید اضافه شد. لینک و تنظیماتش را پر کنید.') }} style={{ ...gold, padding: '7px 14px' }}>＋ افزودنِ اسکرپ</button>
         </div>
+        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.8 }}>برای هر دفتر/منطقه یک اسکرپِ جدا بسازید؛ هرکدام لینک، زمان‌بندی و نتیجهٔ خودش را دارد و جدا ذخیره می‌شود.</div>
+        {cfg.sources.length === 0 ? (
+          <div style={{ fontSize: 12.5, color: 'var(--faint)', background: 'var(--bg2)', border: '1px dashed var(--line)', borderRadius: 10, padding: '18px 14px', textAlign: 'center' }}>هنوز اسکرپی نساخته‌اید. روی «＋ افزودنِ اسکرپ» بزنید.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {cfg.sources.map(src => {
+              const set = (patch: Partial<DSource>) => setCfg(c => c ? { ...c, sources: c.sources.map(x => x.id === src.id ? { ...x, ...patch } : x) } : c)
+              return (
+                <div key={src.id} style={{ ...card, background: 'var(--bg2)', padding: 14 }}>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
+                    <input value={src.name} onChange={e => set({ name: e.target.value })} placeholder="نامِ اسکرپ" style={{ ...inp, flex: '1 1 160px', width: 'auto', fontWeight: 700 }} />
+                    <button disabled={busy} onClick={async () => { if (confirm('این اسکرپ حذف شود؟')) { await post({ action: 'removeSource', id: src.id }) } }} style={{ ...act, color: '#ef4444', borderColor: 'rgba(231,103,74,.4)' }}>حذفِ اسکرپ</button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>لینکِ صفحهٔ اختصاصی (پرو) یا جستجو/نقشه</label><input value={src.searchUrl} onChange={e => set({ searchUrl: e.target.value })} placeholder="https://divar.ir/pro/HLTCumBJ" style={{ ...inp, direction: 'ltr', textAlign: 'left' }} /></div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10 }}>
+                      <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نام در دیوار (برای جستجو)</label><input value={src.divarName} onChange={e => set({ divarName: e.target.value })} placeholder="نامِ زیرِ آگهی‌ها" style={inp} /></div>
+                      <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>زمان‌بندی</label><select value={src.schedule} onChange={e => set({ schedule: e.target.value as Sched })} style={inp}>{SCHEDULES.map(s => <option key={s.v} value={s.v}>{s.label}</option>)}</select></div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" checked={src.autoPublish} onChange={e => set({ autoPublish: e.target.checked })} /> انتشار خودکار</label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" checked={src.autoNeighborhood} onChange={e => set({ autoNeighborhood: e.target.checked })} /> تشخیص خودکار محله</label>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button disabled={busy} onClick={async () => { await post({ action: 'updateSource', id: src.id, name: src.name, searchUrl: src.searchUrl, divarName: src.divarName, schedule: src.schedule, autoPublish: src.autoPublish, autoNeighborhood: src.autoNeighborhood }); setMsg('✓ اسکرپ ذخیره شد.') }} style={{ ...gold, padding: '8px 16px' }}>ذخیره</button>
+                      <button disabled={busy || !src.searchUrl.trim()} onClick={async () => {
+                        await post({ action: 'updateSource', id: src.id, name: src.name, searchUrl: src.searchUrl, divarName: src.divarName, schedule: src.schedule, autoPublish: src.autoPublish, autoNeighborhood: src.autoNeighborhood })
+                        const d = await post({ action: 'syncSource', id: src.id })
+                        if (d) { setMsg(d.ok ? `✓ «${src.name}» همگام شد — ${(d.imported || 0).toLocaleString('fa-IR')} جدید، ${(d.updated || 0).toLocaleString('fa-IR')} به‌روزرسانی (از ${(d.scanned || 0).toLocaleString('fa-IR')} آگهی).` : (d.reason || 'همگام‌سازی ناموفق بود')); onChange?.() }
+                      }} style={{ ...act, padding: '8px 16px', color: 'var(--gold)', borderColor: 'var(--gold)' }}>{busy ? 'در حال همگام‌سازی…' : 'همگام‌سازیِ این اسکرپ'}</button>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', gap: 16, flexWrap: 'wrap', paddingTop: 6, borderTop: '1px solid var(--line)' }}>
+                      <span>آخرین اجرا: <b style={{ color: 'var(--text)' }}>{faDate(src.lastRun)}</b></span>
+                      {typeof src.lastCount === 'number' && <span>آخرین نتیجه: <b style={{ color: 'var(--text)' }}>{src.lastCount.toLocaleString('fa-IR')} آگهی</b></span>}
+                      {src.lastError && <span style={{ color: '#ef4444' }}>خطا: {src.lastError}</span>}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>}
 
       {msg && <div style={{ ...card, padding: '10px 14px', fontSize: 12.5, color: msg.startsWith('✓') ? 'var(--gold)' : 'var(--muted)' }}>{msg}</div>}

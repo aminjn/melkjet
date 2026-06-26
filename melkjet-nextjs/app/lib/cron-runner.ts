@@ -1,4 +1,4 @@
-import { listDueAdvisors } from './advisor-divar-store'
+import { listDueSources, getDivar, markSourceRun } from './advisor-divar-store'
 import { syncAdvisorDivar } from './advisor-divar-import'
 import { publishDueArticles } from './scraper-store'
 import { processTrackerQueue } from './tracker-sender'
@@ -19,15 +19,20 @@ async function tick(): Promise<{ due: number; synced: number }> {
   if (!g || g.running) return { due: 0, synced: 0 }
   g.running = true
   let synced = 0
-  let due: { phone: string; cfg: any }[] = []
+  let due: { phone: string; source: any }[] = []
   try {
     try { publishDueArticles() } catch { /* مقالاتِ زمان‌بندی‌شده */ }
     try { await processTrackerQueue(Date.now()) } catch { /* صفِ پیامکِ هدفمندِ ترکر */ }
     try { await processSavedSearches(Date.now()) } catch { /* هشدارِ آگهیِ جدید */ }
     try { await processProfileGate(Date.now()) } catch { /* سامانهٔ تکمیلِ پروفایل */ }
-    due = listDueAdvisors(Date.now())
-    for (const { phone, cfg } of due) {
-      try { await syncAdvisorDivar(phone, cfg); synced++ } catch { /* خطای یک مشاور بقیه را متوقف نکند */ }
+    due = listDueSources(Date.now())
+    for (const { phone, source } of due) {
+      try {
+        const base = getDivar(phone)
+        const r = await syncAdvisorDivar(phone, { ...base, searchUrl: source.searchUrl, divarName: source.divarName, autoPublish: source.autoPublish, autoNeighborhood: source.autoNeighborhood, schedule: source.schedule })
+        markSourceRun(phone, source.id, r.imported || 0, r.ok ? '' : (r.reason || 'خطا'))
+        synced++
+      } catch { /* خطای یک منبع بقیه را متوقف نکند */ }
     }
   } finally { g.running = false }
   return { due: due.length, synced }
