@@ -145,12 +145,13 @@ export default function AgencyPage() {
   const [wfOpen, setWfOpen] = useState(false)
   const [wbView, setWbView] = useState<WebsiteView | null>(null)
   const [wbOpen, setWbOpen] = useState(false)
+  const [navOpen, setNavOpen] = useState(false)   // کشوی منوی موبایل
   const clearTools = () => { setCrmView(null); setMktView(null); setWfView(null); setWbView(null) }
-  const goView = (v: View) => { setView(v); clearTools(); if (AGENCY_CRM_IDS.includes(v)) setCrmOpen(true) }
-  const openCrm = (v: CrmView) => { clearTools(); setCrmView(v); setCrmOpen(true) }
-  const openMkt = (v: MarketingView) => { clearTools(); setMktView(v); setMktOpen(true) }
-  const openWf = (v: WorkflowView) => { clearTools(); setWfView(v); setWfOpen(true) }
-  const openWb = (v: WebsiteView) => { clearTools(); setWbView(v); setWbOpen(true) }
+  const goView = (v: View) => { setView(v); clearTools(); if (AGENCY_CRM_IDS.includes(v)) setCrmOpen(true); setNavOpen(false) }
+  const openCrm = (v: CrmView) => { clearTools(); setCrmView(v); setCrmOpen(true); setNavOpen(false) }
+  const openMkt = (v: MarketingView) => { clearTools(); setMktView(v); setMktOpen(true); setNavOpen(false) }
+  const openWf = (v: WorkflowView) => { clearTools(); setWfView(v); setWfOpen(true); setNavOpen(false) }
+  const openWb = (v: WebsiteView) => { clearTools(); setWbView(v); setWbOpen(true); setNavOpen(false) }
   const [data, setData] = useState<AgencyData | null>(null)
   const [myName, setMyName] = useState('')
   const [loading, setLoading] = useState(true)
@@ -320,10 +321,23 @@ export default function AgencyPage() {
 
   return (
     <div dir="rtl" style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: FONT }}>
-      <style>{`@media(max-width:760px){.mjg-side{width:60px!important}.mjg-sidelabel{display:none!important}.mjg-cols{flex-direction:column!important}}`}</style>
+      <style>{`
+        .mjg-burger{display:none}
+        .mjg-overlay{display:none}
+        @media(max-width:760px){
+          .mjg-cols{flex-direction:column!important}
+          .mjg-side{position:fixed!important;right:0;top:0;height:100vh!important;width:82vw!important;max-width:300px;z-index:130;transform:translateX(105%);transition:transform .26s ease;box-shadow:-12px 0 40px -12px rgba(0,0,0,.6)}
+          .mjg-side.mjg-open{transform:translateX(0)}
+          .mjg-burger{display:inline-flex!important}
+          .mjg-overlay.mjg-open{display:block}
+        }
+      `}</style>
+
+      {/* OVERLAY موبایل (پشتِ کشو) */}
+      <div className={`mjg-overlay${navOpen ? ' mjg-open' : ''}`} onClick={() => setNavOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 125 }} />
 
       {/* SIDEBAR */}
-      <aside className="mjg-side" style={{ width: 232, flexShrink: 0, background: 'var(--bg2)', borderLeft: '1px solid var(--line)', position: 'sticky', top: 0, height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <aside className={`mjg-side${navOpen ? ' mjg-open' : ''}`} style={{ width: 232, flexShrink: 0, background: 'var(--bg2)', borderLeft: '1px solid var(--line)', position: 'sticky', top: 0, height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '20px 16px 16px', borderBottom: '1px solid var(--line)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 6px 18px -6px var(--gold)', flexShrink: 0 }}>
@@ -431,7 +445,8 @@ export default function AgencyPage() {
 
       {/* MAIN */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 22px', borderBottom: '1px solid var(--line)', position: 'sticky', top: 0, background: 'var(--navbg)', backdropFilter: 'blur(18px)', zIndex: 20, flexWrap: 'wrap' }}>
+        <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', borderBottom: '1px solid var(--line)', position: 'sticky', top: 0, background: 'var(--navbg)', backdropFilter: 'blur(18px)', zIndex: 20, flexWrap: 'wrap' }}>
+          <button className="mjg-burger" aria-label="منو" onClick={() => setNavOpen(true)} style={{ width: 42, height: 42, borderRadius: 11, border: '1px solid var(--line)', background: 'var(--bg2)', color: 'var(--gold)', fontSize: 20, cursor: 'pointer', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontFamily: FONT }}>☰</button>
           <div style={{ fontWeight: 800, fontSize: 18 }}>{crmView ? `CRM · ${CRM_VIEWS.find(v => v.id === crmView)?.label || ''}` : mktView ? `مارکتینگ · ${MARKETING_VIEWS.find(v => v.id === mktView)?.label || ''}` : wfView ? `اتوماسیون · ${WORKFLOW_VIEWS.find(v => v.id === wfView)?.label || ''}` : wbView ? `وب‌سایت‌ساز · ${WEBSITE_VIEWS.find(v => v.id === wbView)?.label || ''}` : VIEW_TITLES[view]}</div>
           <div style={{ flex: 1 }} />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="جستجوی فایل، مشاور…" style={{ ...inputStyle, width: 220, maxWidth: '40vw' }} />
