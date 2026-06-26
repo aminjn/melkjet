@@ -18,7 +18,15 @@ export type Stage = 'new' | 'assigned' | 'visit' | 'negotiation' | 'closed' | 'l
 export type ListingStatus = 'active' | 'sold' | 'rented'
 
 export interface Agent { id: string; name: string; phone?: string; deals: number; leads: number; commission: number; active: boolean; createdAt: number }
-export interface Listing { id: string; title: string; ptype: string; location: string; price: number; deal: 'sale' | 'rent'; status: ListingStatus; agent?: string; createdAt: number }
+export interface Listing {
+  id: string; title: string; ptype: string; location: string; price: number; deal: 'sale' | 'rent'; status: ListingStatus; agent?: string; createdAt: number
+  // مشخصاتِ کاملِ فایل (مثلِ پنل مشاور) — همه اختیاری
+  province?: string; city?: string; district?: string; neighborhood?: string; address?: string
+  rentMonthly?: number; area?: number; rooms?: number; floor?: number; totalFloors?: number; yearBuilt?: number
+  facing?: string; docType?: string; phone?: string; description?: string
+  parking?: boolean; elevator?: boolean; storage?: boolean; balcony?: boolean; furnished?: boolean
+  amenities?: string[]; images?: string[]
+}
 export interface Lead { id: string; name: string; phone?: string; need?: string; budget?: string; stage: Stage; assignedTo?: string; createdAt: number }
 export interface Deal { id: string; title: string; amount: number; agent: string; date: string; createdAt: number }
 export interface MonthSale { month: string; amount: number }
@@ -119,9 +127,23 @@ export function toggleAgent(o: string, gid: string): Agent | null {
 export function deleteAgent(o: string, gid: string) { mutate(o, a => { a.agents = a.agents.filter(g => g.id !== gid) }) }
 
 // ---- Listings ----
+const num = (v: any) => (v === undefined || v === null || v === '') ? undefined : (Number(v) || undefined)
 export function addListing(o: string, input: Partial<Listing>): Listing {
   let c!: Listing
-  mutate(o, a => { c = { id: id('f_'), title: String(input.title || 'فایل'), ptype: String(input.ptype || 'آپارتمان'), location: String(input.location || ''), price: Number(input.price) || 0, deal: input.deal === 'rent' ? 'rent' : 'sale', status: 'active', agent: input.agent, createdAt: Date.now() }; a.listings.unshift(c) })
+  // موقعیتِ خوانا را از استان/شهر/محله می‌سازد اگر location خالی باشد.
+  const loc = String(input.location || '') || [input.neighborhood, input.district, input.city].filter(Boolean).join('، ')
+  mutate(o, a => {
+    c = {
+      id: id('f_'), title: String(input.title || 'فایل'), ptype: String(input.ptype || 'آپارتمان'), location: loc,
+      price: Number(input.price) || 0, deal: input.deal === 'rent' ? 'rent' : 'sale', status: 'active', agent: input.agent, createdAt: Date.now(),
+      province: input.province || undefined, city: input.city || undefined, district: input.district || undefined, neighborhood: input.neighborhood || undefined, address: input.address || undefined,
+      rentMonthly: num(input.rentMonthly), area: num(input.area), rooms: num(input.rooms), floor: num(input.floor), totalFloors: num(input.totalFloors), yearBuilt: num(input.yearBuilt),
+      facing: input.facing || undefined, docType: input.docType || undefined, phone: input.phone || undefined, description: input.description || undefined,
+      parking: !!input.parking, elevator: !!input.elevator, storage: !!input.storage, balcony: !!input.balcony, furnished: !!input.furnished,
+      amenities: Array.isArray(input.amenities) ? input.amenities : undefined, images: Array.isArray(input.images) ? input.images : undefined,
+    }
+    a.listings.unshift(c)
+  })
   return c
 }
 export function setListingStatus(o: string, fid: string, status: ListingStatus): Listing | null {

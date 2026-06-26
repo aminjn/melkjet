@@ -6,6 +6,8 @@ import NegotiationEngine from '@/app/components/NegotiationEngine'
 import DivarImport from '@/app/components/DivarImport'
 import JalaliDatePicker from '@/app/components/JalaliDatePicker'
 import NumberInput from '@/app/components/NumberInput'
+import ImageUpload from '@/app/components/ImageUpload'
+import { PROVINCES, citiesOf, neighborhoodsOf } from '@/app/lib/taxonomy'
 import CrmTool, { CRM_VIEWS, type CrmView } from '@/app/components/tools/CrmTool'
 import MarketingTool, { MARKETING_VIEWS, type MarketingView } from '@/app/components/tools/MarketingTool'
 import WorkflowTool, { WORKFLOW_VIEWS, type WorkflowView } from '@/app/components/tools/WorkflowTool'
@@ -36,7 +38,8 @@ interface AdvisorFileItem { id: string; title: string; location: string; price: 
 interface AdvisorLeadInfo { total: number; open: number; recent: { name: string; need: string; stage: string }[] }
 interface AdvisorLeadItem { name: string; need: string; budget: string; phone: string; stage: string; createdAt: number }
 interface AdvisorCommItem { dealTitle: string; amount: number; status: string; date: string; createdAt: number }
-interface AdvisorRow { advisorPhone: string; advisorName: string; photo: string; listings: AdvisorFileItem[]; counts: { total: number; active: number; sold: number; rented: number }; leads: AdvisorLeadInfo; leadsList: AdvisorLeadItem[]; commissions: AdvisorCommItem[]; advisorCommission: number; paidCommission: number; pendingCommission: number; closedCount: number; dealCount: number; monthly: MonthPoint[]; rate: { mode: CommMode; value: number; isDefault: boolean }; agencyCut: number }
+interface AdvisorApptItem { client: string; listingTitle: string; date: string; type: string; status: string; createdAt: number }
+interface AdvisorRow { advisorPhone: string; advisorName: string; photo: string; listings: AdvisorFileItem[]; counts: { total: number; active: number; sold: number; rented: number }; leads: AdvisorLeadInfo; leadsList: AdvisorLeadItem[]; commissions: AdvisorCommItem[]; appts: AdvisorApptItem[]; advisorCommission: number; paidCommission: number; pendingCommission: number; closedCount: number; dealCount: number; monthly: MonthPoint[]; rate: { mode: CommMode; value: number; isDefault: boolean }; agencyCut: number }
 interface AdvisorFiles { rows: AdvisorRow[]; totals: { listings: number; active: number; sold: number; rented: number; leads: number; advisorCommission: number; agencyCut: number }; income: MonthPoint[] }
 interface CommissionCfg { defaultMode: CommMode; defaultValue: number; perAgent: Record<string, { mode: CommMode; value: number }> }
 interface AgencyData { stats: Stats; agents: Agent[]; listings: Listing[]; leads: Lead[]; deals: Deal[]; advisorFiles?: AdvisorFiles; commission?: CommissionCfg }
@@ -45,7 +48,7 @@ interface AgencyData { stats: Stats; agents: Agent[]; listings: Listing[]; leads
 interface LinkMember { advisorPhone: string; advisorName: string; agencyPhone: string; agencyName: string; since: number }
 interface LinkRequest { id: string; advisorPhone: string; advisorName: string; agencyPhone: string; agencyName: string; initiator: 'advisor' | 'agency'; status: string; createdAt: number }
 
-type View = 'dashboard' | 'assistant' | 'messages' | 'negotiation' | 'divar' | 'articles' | 'agents' | 'advisorfiles' | 'listings' | 'leads' | 'deals' | 'plans' | 'profile' | 'settings'
+type View = 'dashboard' | 'assistant' | 'messages' | 'negotiation' | 'divar' | 'articles' | 'agents' | 'advisorfiles' | 'listings' | 'leads' | 'pipeline' | 'deals' | 'appts' | 'calendar' | 'plans' | 'profile' | 'settings'
 
 // ════════ Helpers ════════
 const FONT = 'Vazirmatn, system-ui, sans-serif'
@@ -65,14 +68,19 @@ const LIST_LABEL: Record<ListingStatus, string> = { active: 'فعال', sold: '�
 const LIST_COLOR: Record<ListingStatus, string> = { active: '#34d399', sold: '#60a5fa', rented: '#2dd4bf' }
 const LIST_STATUSES: ListingStatus[] = ['active', 'sold', 'rented']
 const DEAL_LABEL = { sale: 'فروش', rent: 'اجاره' } as const
-const PTYPE_OPTIONS = ['آپارتمان', 'ویلا', 'زمین', 'مغازه', 'سایر']
+const PTYPE_OPTIONS = ['آپارتمان', 'ویلا', 'زمین', 'مغازه', 'دفتر کار', 'کلنگی', 'سایر']
+const FACING_OPTIONS = ['شمالی', 'جنوبی', 'شرقی', 'غربی', 'دونبش', 'سه‌نبش']
+const AMENITIES: { key: 'parking' | 'elevator' | 'storage' | 'balcony' | 'furnished'; label: string }[] = [
+  { key: 'parking', label: 'پارکینگ' }, { key: 'elevator', label: 'آسانسور' }, { key: 'storage', label: 'انباری' }, { key: 'balcony', label: 'بالکن' }, { key: 'furnished', label: 'مبله' },
+]
+const emptyFileForm = { title: '', ptype: 'آپارتمان', deal: 'sale' as 'sale' | 'rent', province: '', city: '', district: '', neighborhood: '', address: '', price: '', rentMonthly: '', area: '', rooms: '', floor: '', totalFloors: '', yearBuilt: '', facing: '', docType: '', phone: '', description: '', parking: false, elevator: false, storage: false, balcony: false, furnished: false, images: [] as string[] }
 
 const card: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16 }
 const inputStyle: React.CSSProperties = { padding: '9px 11px', borderRadius: 9, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--text)', fontSize: 13, outline: 'none', fontFamily: FONT, width: '100%' }
 const actionBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap' }
 const goldBtn: React.CSSProperties = { padding: '9px 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }
 
-const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد آژانس', assistant: 'دستیار هوشمند', messages: 'پیام‌ها', negotiation: 'موتور مذاکره', divar: 'ایمپورت از دیوار', articles: 'مقالات و وبلاگ', agents: 'مشاوران', advisorfiles: 'کمیسیون و گزارش', listings: 'فایل‌ها (آژانس و مشاوران)', leads: 'لیدها (آژانس و مشاوران)', deals: 'معاملات (آژانس و مشاوران)', plans: 'پلن‌ها و اشتراک', profile: 'پروفایل', settings: 'تنظیمات' }
+const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد آژانس', assistant: 'دستیار هوشمند', messages: 'پیام‌ها', negotiation: 'موتور مذاکره', divar: 'ایمپورت از دیوار', articles: 'مقالات و وبلاگ', agents: 'مشاوران', advisorfiles: 'گزارشِ آژانس و مشاوران', listings: 'فایل‌ها (آژانس و مشاوران)', leads: 'لیدها (آژانس و مشاوران)', pipeline: 'پایپ‌لاینِ کلی', deals: 'معاملات (آژانس و مشاوران)', appts: 'وظایف و قرارها', calendar: 'تقویمِ همه', plans: 'پلن‌ها و اشتراک', profile: 'پروفایل', settings: 'تنظیمات' }
 const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'agents' | 'leads' }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: '▦' },
   { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
@@ -88,10 +96,13 @@ const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'agents' | 'le
 const AGENCY_CRM_VIEWS: { id: View; label: string; icon: string }[] = [
   { id: 'listings', label: 'فایل‌ها', icon: '◫' },
   { id: 'leads', label: 'لیدها', icon: '◎' },
+  { id: 'pipeline', label: 'پایپ‌لاین', icon: '☰' },
   { id: 'deals', label: 'معاملات', icon: '﷼' },
-  { id: 'advisorfiles', label: 'کمیسیون و گزارش', icon: '🗂' },
+  { id: 'appts', label: 'وظایف و قرارها', icon: '✓' },
+  { id: 'calendar', label: 'تقویم', icon: '📅' },
+  { id: 'advisorfiles', label: 'گزارش و کمیسیون', icon: '🗂' },
 ]
-const AGENCY_CRM_IDS: View[] = ['listings', 'leads', 'deals', 'advisorfiles']
+const AGENCY_CRM_IDS: View[] = ['listings', 'leads', 'pipeline', 'deals', 'appts', 'calendar', 'advisorfiles']
 function Pill({ label, color }: { label: string; color: string }) {
   return <span style={{ fontSize: 11, fontWeight: 600, color, background: `color-mix(in srgb, ${color} 16%, transparent)`, padding: '3px 10px', borderRadius: 7, whiteSpace: 'nowrap' }}>{label}</span>
 }
@@ -148,7 +159,9 @@ export default function AgencyPage() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [search, setSearch] = useState('')
   const [ng, setNg] = useState({ name: '', phone: '' })
-  const [nf, setNf] = useState({ title: '', ptype: '', location: '', price: '', deal: 'sale', agent: '' })
+  // فرمِ کاملِ افزودنِ فایل (مثلِ پنل مشاور)
+  const [fileModal, setFileModal] = useState(false)
+  const [ff, setFf] = useState({ ...emptyFileForm })
   const [nl, setNl] = useState({ name: '', phone: '', need: '', budget: '' })
   const [nd, setNd] = useState({ title: '', amount: '', agent: '', date: '' })
   const [prof, setProf] = useState({ name: '', branches: '' })
@@ -217,6 +230,19 @@ export default function AgencyPage() {
     } catch { return false } finally { setBusy(false) }
   }, [refresh])
 
+  const submitFile = async () => {
+    if (busy || !ff.title.trim()) return
+    const ok = await post({
+      action: 'addListing', title: ff.title.trim(), ptype: ff.ptype, deal: ff.deal,
+      province: ff.province, city: ff.city, district: ff.district, neighborhood: ff.neighborhood, address: ff.address,
+      price: Number(ff.price) || 0, rentMonthly: ff.rentMonthly, area: ff.area, rooms: ff.rooms, floor: ff.floor, totalFloors: ff.totalFloors, yearBuilt: ff.yearBuilt,
+      facing: ff.facing, docType: ff.docType, phone: ff.phone, description: ff.description,
+      parking: ff.parking, elevator: ff.elevator, storage: ff.storage, balcony: ff.balcony, furnished: ff.furnished,
+      images: ff.images.filter(Boolean),
+    })
+    if (ok) { setFileModal(false); setFf({ ...emptyFileForm }) }
+  }
+
   const toggleTheme = () => { const html = document.documentElement; if (theme === 'dark') { html.classList.add('light'); setTheme('light') } else { html.classList.remove('light'); setTheme('dark') } }
 
   if (loading) return <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT, fontSize: 15 }}>در حال بارگذاری پنل آژانس…</div>
@@ -269,6 +295,11 @@ export default function AgencyPage() {
     ...(af?.rows || []).flatMap(r => r.commissions.map((c, i) => ({ key: 'm_' + r.advisorPhone + '_' + i, id: '', title: c.dealTitle, amount: c.amount, who: r.advisorName, date: c.date, status: c.status, owner: r.advisorName, ownerKey: r.advisorPhone, agency: false, createdAt: c.createdAt }))),
   ]
   const dealsF = dealsUnified.filter(d => !q || (d.title + d.owner).includes(q)).filter(d => ownerOk(d.ownerKey)).sort((a, b) => b.createdAt - a.createdAt)
+
+  // ── وظایف/قرارهای همهٔ مشاوران ──
+  type UAppt = { key: string; client: string; listingTitle: string; date: string; type: string; status: string; owner: string; ownerKey: string; createdAt: number }
+  const apptsUnified: UAppt[] = (af?.rows || []).flatMap(r => r.appts.map((x, i) => ({ key: 'ap_' + r.advisorPhone + '_' + i, client: x.client, listingTitle: x.listingTitle, date: x.date, type: x.type, status: x.status, owner: r.advisorName, ownerKey: r.advisorPhone, createdAt: x.createdAt })))
+  const apptsF = apptsUnified.filter(a => !q || (a.client + a.owner + a.listingTitle).includes(q)).filter(a => ownerOk(a.ownerKey)).sort((a, b) => b.createdAt - a.createdAt)
 
   // نوارِ فیلترِ «منتسب» (مشترک بینِ بخش‌ها)
   const ownerFilterBar = (
@@ -330,16 +361,6 @@ export default function AgencyPage() {
                   const on = view === cv.id && !crmView
                   return (
                     <button key={cv.id} onClick={() => goView(cv.id)} className="mjg-sidelabel" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 9, padding: '8px 14px', paddingRight: 34, borderRadius: 10, border: 'none', cursor: 'pointer', background: on ? 'var(--goldDim)' : 'transparent', color: on ? 'var(--gold)' : 'var(--muted)', fontWeight: on ? 700 : 500, fontSize: 13, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
-                      <span style={{ fontSize: 13, width: 16, textAlign: 'center', opacity: on ? 1 : 0.6 }}>{cv.icon}</span>
-                      <span style={{ flex: 1 }}>{cv.label}</span>
-                    </button>
-                  )
-                })}
-                <div className="mjg-sidelabel" style={{ fontSize: 10, color: 'var(--faint)', padding: '6px 14px 2px 34px', fontWeight: 700 }}>ابزارِ CRM پیشرفته</div>
-                {CRM_VIEWS.map(cv => {
-                  const on = crmView === cv.id
-                  return (
-                    <button key={cv.id} onClick={() => openCrm(cv.id)} className="mjg-sidelabel" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 9, padding: '8px 14px', paddingRight: 34, borderRadius: 10, border: 'none', cursor: 'pointer', background: on ? 'var(--goldDim)' : 'transparent', color: on ? 'var(--gold)' : 'var(--muted)', fontWeight: on ? 700 : 500, fontSize: 13, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
                       <span style={{ fontSize: 13, width: 16, textAlign: 'center', opacity: on ? 1 : 0.6 }}>{cv.icon}</span>
                       <span style={{ flex: 1 }}>{cv.label}</span>
                     </button>
@@ -759,17 +780,12 @@ export default function AgencyPage() {
 
           {/* LISTINGS */}
           {view === 'listings' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ ...card, padding: 18 }}>
-              {sectionTitle('افزودن فایل')}
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                <div style={{ flex: '2 1 170px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>عنوان</label><input value={nf.title} onChange={e => setNf({ ...nf, title: e.target.value })} style={inputStyle} /></div>
-                <div style={{ flex: '1 1 110px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع</label><select value={nf.ptype} onChange={e => setNf({ ...nf, ptype: e.target.value })} style={inputStyle}><option value="">—</option>{PTYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
-                <div style={{ flex: '1 1 110px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>منطقه</label><input value={nf.location} onChange={e => setNf({ ...nf, location: e.target.value })} style={inputStyle} /></div>
-                <div style={{ flex: '1 1 130px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>قیمت (تومان)</label><NumberInput value={nf.price} onChange={v => setNf({ ...nf, price: v })} style={inputStyle} /></div>
-                <div style={{ flex: '0 1 100px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>معامله</label><select value={nf.deal} onChange={e => setNf({ ...nf, deal: e.target.value })} style={inputStyle}><option value="sale">فروش</option><option value="rent">اجاره</option></select></div>
-                <div style={{ flex: '1 1 130px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>مشاور</label>{agentSelect(nf.agent, v => setNf({ ...nf, agent: v }))}</div>
-                <button disabled={busy || !nf.title.trim()} onClick={async () => { if (await post({ action: 'addListing', title: nf.title.trim(), ptype: nf.ptype || 'آپارتمان', location: nf.location, price: Number(nf.price) || 0, deal: nf.deal, agent: nf.agent })) setNf({ title: '', ptype: '', location: '', price: '', deal: 'sale', agent: '' }) }} style={goldBtn}>افزودن</button>
+            <div style={{ ...card, padding: 18, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 180 }}>
+                <div style={{ fontWeight: 800, fontSize: 15 }}>افزودنِ فایلِ جدید</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>فرمِ کامل با مشخصات، موقعیت، امکانات و تصاویر — مثلِ پنل مشاور.</div>
               </div>
+              <button onClick={() => { setFf({ ...emptyFileForm }); setFileModal(true) }} style={goldBtn}>＋ افزودن فایل</button>
             </div>
             <div style={{ ...card, padding: 18 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
@@ -865,6 +881,86 @@ export default function AgencyPage() {
             </div>
           </div>}
 
+          {/* PIPELINE — کلی (آژانس + همهٔ مشاوران) */}
+          {view === 'pipeline' && <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>پایپ‌لاینِ کلیِ لیدها — آژانس و همهٔ مشاوران یکجا.</div>
+              <div style={{ marginInlineStart: 'auto' }}>{ownerFilterBar}</div>
+            </div>
+            <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8 }}>
+              {STAGES.map(s => {
+                const col = leadsUnified.filter(l => l.stage === s).filter(l => ownerOk(l.ownerKey))
+                return (
+                  <div key={s} style={{ flex: '0 0 230px', minWidth: 230, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingInlineStart: 6 }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 800, color: STAGE_COLOR[s] }}>{STAGE_LABEL[s]}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', background: 'var(--bg)', borderRadius: 999, padding: '2px 9px' }}>{fa(col.length)}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 460, overflowY: 'auto' }}>
+                      {col.length ? col.map(l => (
+                        <div key={l.key} style={{ background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 9, padding: '9px 11px' }}>
+                          <div style={{ fontSize: 12.5, fontWeight: 700 }}>{l.name}</div>
+                          {l.need ? <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{l.need}</div> : null}
+                          <div style={{ marginTop: 6 }}>{ownerBadge(l.agency, l.owner)}</div>
+                        </div>
+                      )) : <div style={{ fontSize: 11, color: 'var(--faint)', textAlign: 'center', padding: '14px 0' }}>—</div>}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>}
+
+          {/* APPTS / TASKS — وظایف و قرارهای همهٔ مشاوران */}
+          {view === 'appts' && <div style={{ ...card, padding: 18 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+              {sectionTitle(`وظایف و قرارها (${fa(apptsF.length)})`)}
+              <div style={{ marginInlineStart: 'auto' }}>{ownerFilterBar}</div>
+            </div>
+            {apptsF.length ? apptsF.map(a => {
+              const tl = a.type === 'visit' ? 'بازدید' : a.type === 'meeting' ? 'جلسه' : a.type === 'call' ? 'تماس' : a.type
+              const sc = a.status === 'done' ? '#34d399' : a.status === 'canceled' ? '#ef4444' : 'var(--gold)'
+              const sl = a.status === 'done' ? 'انجام‌شده' : a.status === 'canceled' ? 'لغو' : 'برنامه‌ریزی‌شده'
+              return (
+                <div key={a.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>{a.client} {ownerBadge(false, a.owner)}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{tl}{a.listingTitle ? ` · ${a.listingTitle}` : ''} · {a.date}</div>
+                  </div>
+                  <Pill label={sl} color={sc} />
+                </div>
+              )
+            }) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>قرار/وظیفه‌ای برای مشاوران ثبت نشده است.</div>}
+          </div>}
+
+          {/* CALENDAR — تقویمِ همه (قرارها بر اساسِ تاریخ) */}
+          {view === 'calendar' && <div style={{ ...card, padding: 18 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+              {sectionTitle('تقویمِ همهٔ مشاوران')}
+              <div style={{ marginInlineStart: 'auto' }}>{ownerFilterBar}</div>
+            </div>
+            {(() => {
+              const groups: Record<string, UAppt[]> = {}
+              for (const a of apptsF) { const k = a.date || '—'; (groups[k] = groups[k] || []).push(a) }
+              const keys = Object.keys(groups)
+              return keys.length ? keys.map(k => (
+                <div key={k} style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--gold)', marginBottom: 8, borderBottom: '1px solid var(--line)', paddingBottom: 6 }}>📅 {k}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {groups[k].map(a => {
+                      const tl = a.type === 'visit' ? 'بازدید' : a.type === 'meeting' ? 'جلسه' : a.type === 'call' ? 'تماس' : a.type
+                      return <div key={a.key} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg)', borderRadius: 9, padding: '8px 11px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 12.5, fontWeight: 700 }}>{a.client}</span>
+                        <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{tl}{a.listingTitle ? ` · ${a.listingTitle}` : ''}</span>
+                        <span style={{ marginInlineStart: 'auto' }}>{ownerBadge(false, a.owner)}</span>
+                      </div>
+                    })}
+                  </div>
+                </div>
+              )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>قراری در تقویم نیست.</div>
+            })()}
+          </div>}
+
           {/* PLANS */}
           {view === 'plans' && <PlansPanel dashboard="/agency" />}
 
@@ -883,6 +979,78 @@ export default function AgencyPage() {
           </>}
         </main>
       </div>
+
+      {/* مودالِ افزودنِ فایلِ کامل — مثلِ پنل مشاور */}
+      {fileModal && (
+        <div onClick={() => setFileModal(false)} dir="rtl" style={{ position: 'fixed', inset: 0, zIndex: 1500, background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '4vh 14px', overflowY: 'auto', fontFamily: FONT }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 720, background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden', boxShadow: '0 30px 80px -20px rgba(0,0,0,.7)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--line)', position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 2 }}>
+              <div style={{ fontWeight: 800, fontSize: 16 }}>افزودنِ فایلِ جدید</div>
+              <button onClick={() => setFileModal(false)} style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--text)', cursor: 'pointer', fontSize: 16 }}>✕</button>
+            </div>
+            <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 18 }}>
+              {/* نوع */}
+              <div>
+                <div style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--gold)', marginBottom: 10 }}>نوعِ ملک و معامله</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 10 }}>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>عنوان فایل *</label><input value={ff.title} onChange={e => setFf({ ...ff, title: e.target.value })} placeholder="مثلاً آپارتمان ۱۲۰ متری نوساز" style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع ملک</label><select value={ff.ptype} onChange={e => setFf({ ...ff, ptype: e.target.value })} style={inputStyle}>{PTYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>معامله</label><select value={ff.deal} onChange={e => setFf({ ...ff, deal: e.target.value as 'sale' | 'rent' })} style={inputStyle}><option value="sale">فروش</option><option value="rent">اجاره/رهن</option></select></div>
+                </div>
+              </div>
+              {/* موقعیت */}
+              <div>
+                <div style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--gold)', marginBottom: 10 }}>موقعیت</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 10 }}>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>استان</label><select value={ff.province} onChange={e => setFf({ ...ff, province: e.target.value, city: '', neighborhood: '' })} style={inputStyle}><option value="">انتخاب…</option>{PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>شهر</label><select value={ff.city} onChange={e => setFf({ ...ff, city: e.target.value, neighborhood: '' })} disabled={!ff.province} style={inputStyle}><option value="">انتخاب…</option>{citiesOf(ff.province).map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>محله</label><select value={ff.neighborhood} onChange={e => setFf({ ...ff, neighborhood: e.target.value })} disabled={!ff.city} style={inputStyle}><option value="">انتخاب…</option>{neighborhoodsOf(ff.city).map(n => <option key={n} value={n}>{n}</option>)}</select></div>
+                </div>
+                <div style={{ marginTop: 10 }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>آدرسِ دقیق</label><input value={ff.address} onChange={e => setFf({ ...ff, address: e.target.value })} placeholder="خیابان، کوچه، پلاک…" style={inputStyle} /></div>
+              </div>
+              {/* مشخصات */}
+              <div>
+                <div style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--gold)', marginBottom: 10 }}>مشخصات و قیمت</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 10 }}>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>{ff.deal === 'rent' ? 'ودیعه (تومان)' : 'قیمت کل (تومان)'}</label><NumberInput value={ff.price} onChange={v => setFf({ ...ff, price: v })} style={inputStyle} /></div>
+                  {ff.deal === 'rent' && <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>اجاره ماهانه</label><NumberInput value={ff.rentMonthly} onChange={v => setFf({ ...ff, rentMonthly: v })} style={inputStyle} /></div>}
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>متراژ</label><input value={ff.area} onChange={e => setFf({ ...ff, area: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>خواب</label><input value={ff.rooms} onChange={e => setFf({ ...ff, rooms: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>طبقه</label><input value={ff.floor} onChange={e => setFf({ ...ff, floor: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>کل طبقات</label><input value={ff.totalFloors} onChange={e => setFf({ ...ff, totalFloors: e.target.value.replace(/\D/g, '') })} style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>سال ساخت</label><input value={ff.yearBuilt} onChange={e => setFf({ ...ff, yearBuilt: e.target.value.replace(/\D/g, '') })} placeholder="۱۴۰۲" style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>جهت</label><select value={ff.facing} onChange={e => setFf({ ...ff, facing: e.target.value })} style={inputStyle}><option value="">—</option>{FACING_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع سند</label><input value={ff.docType} onChange={e => setFf({ ...ff, docType: e.target.value })} placeholder="تک‌برگ" style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>تلفن تماس</label><input value={ff.phone} onChange={e => setFf({ ...ff, phone: e.target.value })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} /></div>
+                </div>
+              </div>
+              {/* امکانات */}
+              <div>
+                <div style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--gold)', marginBottom: 10 }}>امکانات</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {AMENITIES.map(a => (
+                    <button key={a.key} onClick={() => setFf({ ...ff, [a.key]: !ff[a.key] } as typeof ff)} style={{ padding: '7px 14px', borderRadius: 9, cursor: 'pointer', fontFamily: FONT, fontSize: 12.5, fontWeight: 700, border: `1px solid ${ff[a.key] ? 'var(--gold)' : 'var(--line2)'}`, background: ff[a.key] ? 'var(--goldDim)' : 'transparent', color: ff[a.key] ? 'var(--gold)' : 'var(--muted)' }}>{ff[a.key] ? '✓ ' : ''}{a.label}</button>
+                  ))}
+                </div>
+              </div>
+              {/* تصاویر */}
+              <div>
+                <div style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--gold)', marginBottom: 10 }}>تصاویر</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(130px,1fr))', gap: 10 }}>
+                  {ff.images.map((img, i) => <ImageUpload key={i} value={img} onChange={v => setFf(f => { const arr = [...f.images]; if (v) arr[i] = v; else arr.splice(i, 1); return { ...f, images: arr } })} height={90} />)}
+                  <ImageUpload value="" onChange={v => { if (v) setFf(f => ({ ...f, images: [...f.images, v] })) }} height={90} label="افزودن تصویر" />
+                </div>
+              </div>
+              {/* توضیحات */}
+              <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>توضیحات</label><textarea value={ff.description} onChange={e => setFf({ ...ff, description: e.target.value })} rows={3} style={{ ...inputStyle, resize: 'vertical' }} /></div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '14px 20px', borderTop: '1px solid var(--line)', position: 'sticky', bottom: 0, background: 'var(--bg2)' }}>
+              <button onClick={() => setFileModal(false)} style={{ ...actionBtn, padding: '9px 18px' }}>انصراف</button>
+              <button disabled={busy || !ff.title.trim()} onClick={submitFile} style={goldBtn}>{busy ? 'در حال ثبت…' : 'ثبتِ فایل'}</button>
+            </div>
+          </div>
+        </div>
+      )}
       {dupWarn && (
         <div onClick={() => setDupWarn('')} style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 200, maxWidth: 540, background: 'linear-gradient(135deg,#3a2a12,#2a1f0e)', border: '1px solid #f59e0b', color: '#fde68a', padding: '13px 18px', borderRadius: 12, fontSize: 13, lineHeight: 1.9, cursor: 'pointer', boxShadow: '0 8px 30px rgba(0,0,0,.5)', fontFamily: FONT }}>
           {dupWarn} <span style={{ color: '#f59e0b', fontWeight: 700 }}>(بستن)</span>
