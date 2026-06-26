@@ -440,6 +440,34 @@ const STARTER_TEMPLATES = [
   { id: 'gen-10', name: 'صفحهٔ حرفه‌ای', profile: 'عمومی', blocks: ['hero', 'stats', 'services', 'about', 'contact', 'footer'], desc: 'هیرو، آمار، خدمات، درباره، تماس' },
 ]
 
+// ── سایتِ کامل (multi-page) — هر قالبِ اصلی یک وبسایتِ کامل با همهٔ صفحات می‌سازد ──
+// متناسب با پروفایل، صفحاتِ عمومیِ آماده (درباره، فایل‌ها/پروژه‌ها/محصولات، خدمات،
+// تیم، وبلاگ، تماس) با هیرو + محتوا + فوتر ساخته می‌شوند تا کاربر یک سایتِ کاملِ
+// چندصفحه‌ای تحویل بگیرد، نه فقط یک صفحهٔ تک‌برگ.
+interface PageSpec { slug: string; title: string; menuLabel: string; blocks: string[]; heroHeading: string; heroSub: string }
+function profilePageSpec(profile: string): PageSpec[] {
+  const about: PageSpec = { slug: 'about', title: 'درباره ما', menuLabel: 'درباره ما', blocks: ['hero', 'about', 'stats', 'cta', 'footer'], heroHeading: 'درباره ما', heroSub: 'با ما و مسیرِ حرفه‌ای‌مان بیشتر آشنا شوید' }
+  const aboutTeam: PageSpec = { slug: 'about', title: 'درباره ما', menuLabel: 'درباره ما', blocks: ['hero', 'about', 'stats', 'team', 'cta', 'footer'], heroHeading: 'درباره ما', heroSub: 'تیمِ حرفه‌ای و ارزش‌هایِ ما' }
+  const services: PageSpec = { slug: 'services', title: 'خدمات', menuLabel: 'خدمات', blocks: ['hero', 'services', 'testimonials', 'cta', 'footer'], heroHeading: 'خدماتِ ما', heroSub: 'آنچه برای شما انجام می‌دهیم' }
+  const blog: PageSpec = { slug: 'blog', title: 'وبلاگ', menuLabel: 'وبلاگ', blocks: ['blogfull', 'footer'], heroHeading: 'وبلاگ', heroSub: 'تازه‌ترین مقالات و اخبار' }
+  const contact: PageSpec = { slug: 'contact', title: 'تماس با ما', menuLabel: 'تماس', blocks: ['hero', 'contact', 'footer'], heroHeading: 'تماس با ما', heroSub: 'برای مشاوره و هماهنگی با ما در ارتباط باشید' }
+  const listings: PageSpec = { slug: 'listings', title: 'فایل‌ها', menuLabel: 'فایل‌ها', blocks: ['hero', 'search', 'listings', 'footer'], heroHeading: 'فایل‌های ملکی', heroSub: 'جدیدترین فایل‌های خرید، فروش و اجاره' }
+  const team: PageSpec = { slug: 'team', title: 'تیم ما', menuLabel: 'تیم ما', blocks: ['hero', 'team', 'cta', 'footer'], heroHeading: 'تیمِ مشاوران', heroSub: 'با مشاورانِ خبرهٔ ما آشنا شوید' }
+  const projects: PageSpec = { slug: 'projects', title: 'پروژه‌ها', menuLabel: 'پروژه‌ها', blocks: ['hero', 'gallery', 'stats', 'cta', 'footer'], heroHeading: 'پروژه‌های ما', heroSub: 'نمونه‌کارها و پروژه‌های در حالِ ساخت' }
+  const products: PageSpec = { slug: 'products', title: 'محصولات', menuLabel: 'محصولات', blocks: ['hero', 'search', 'listings', 'footer'], heroHeading: 'محصولات', heroSub: 'کاتالوگِ کاملِ محصولاتِ ما' }
+  const categories: PageSpec = { slug: 'services', title: 'دسته‌بندی‌ها', menuLabel: 'دسته‌بندی‌ها', blocks: ['hero', 'services', 'testimonials', 'cta', 'footer'], heroHeading: 'دسته‌بندی‌ها', heroSub: 'محصولات را بر اساسِ دسته‌بندی ببینید' }
+  const opportunities: PageSpec = { slug: 'opportunities', title: 'فرصت‌ها', menuLabel: 'فرصت‌ها', blocks: ['hero', 'stats', 'listings', 'cta', 'footer'], heroHeading: 'فرصت‌های سرمایه‌گذاری', heroSub: 'بازده و فرصت‌هایِ منتخبِ ملکی' }
+  switch (profile) {
+    case 'مشاور': return [about, listings, services, blog, contact]
+    case 'آژانس': return [aboutTeam, listings, services, team, blog, contact]
+    case 'سازنده': return [about, projects, services, blog, contact]
+    case 'فروشگاه': return [about, products, categories, blog, contact]
+    case 'سرمایه‌گذار': return [about, opportunities, services, blog, contact]
+    case 'حقوقی': return [about, services, blog, contact]
+    default: return [about, services, blog, contact]
+  }
+}
+
 // ── قالب‌های صفحه (per-page) — برای ساختِ صفحاتِ مختلف با دسته‌بندی ──────────────
 // هر دسته‌بندی ≥۱۰ قالب دارد. هنگامِ «صفحهٔ جدید»، کاربر یکی را انتخاب می‌کند.
 const PAGE_TEMPLATE_GROUPS: { key: string; label: string; icon: string; pageTitle: string; items: { name: string; blocks: string[] }[] }[] = [
@@ -1240,17 +1268,22 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
     const heroBg = `linear-gradient(135deg, ${pal.primary}, ${pal.secondary} 72%)`
     // هر قالب، پالتِ کاملِ خودش را می‌گذارد تا واقعاً متمایز دیده شود.
     setTheme({ ...pal })
-    const nb = tpl.blocks.map(type => {
+    // بلوک‌سازِ مشترک: هیرو/cta/footer پیش‌فرضِ متناسب می‌گیرند.
+    const build = (type: string, opts?: { heading?: string; sub?: string; btn?: string }) => {
       let preset: Record<string, any> | undefined
-      if (type === 'hero') preset = { heading: copy.heading, subheading: copy.subheading, buttonText: copy.buttonText, bg: heroBg }
+      if (type === 'hero') preset = { heading: opts?.heading ?? copy.heading, subheading: opts?.sub ?? copy.subheading, buttonText: opts?.btn ?? copy.buttonText, bg: heroBg }
       else if (type === 'cta') preset = { bg: heroBg }
       else if (type === 'footer') preset = { brand: tpl.name }
+      else if (type === 'blogfull') preset = { heading: opts?.heading ?? 'وبلاگ' }
       return makeBlock(type, preset)
-    })
-    // قالب‌هایی که صفحهٔ وبلاگ دارند → یک صفحهٔ «وبلاگ» با بلوکِ کاملِ وبلاگ (فیلتر + ساید‌بار)
-    const newPages: Page[] = [{ slug: 'home', title: 'صفحه اصلی', blocks: nb }]
-    if ((tpl as any).blogPage) {
-      newPages.push({ slug: 'blog', title: 'وبلاگ', inMenu: true, blocks: [makeBlock('blogfull', { heading: 'وبلاگ' }), makeBlock('footer', { brand: tpl.name })] })
+    }
+    // صفحهٔ اصلی از بلوک‌هایِ خودِ قالب ساخته می‌شود.
+    const homeBlocks = tpl.blocks.map(type => build(type))
+    const newPages: Page[] = [{ slug: 'home', title: 'صفحه اصلی', blocks: homeBlocks }]
+    // صفحاتِ کاملِ سایت، متناسب با پروفایلِ قالب (درباره، فایل‌ها، خدمات، تیم، وبلاگ، تماس…).
+    for (const spec of profilePageSpec(tpl.profile)) {
+      const pageBlocks = spec.blocks.map(type => build(type, { heading: spec.heroHeading, sub: spec.heroSub, btn: 'تماس با ما' }))
+      newPages.push({ slug: spec.slug, title: spec.title, inMenu: true, menuLabel: spec.menuLabel, blocks: pageBlocks })
     }
     setPages(newPages)
     setActivePage(0)
