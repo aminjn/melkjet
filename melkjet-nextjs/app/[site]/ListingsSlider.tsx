@@ -52,6 +52,7 @@ export default function ListingsSlider({
         .mjs-slide-card:hover{transform:translateY(-5px);box-shadow:0 22px 50px -24px rgba(20,16,10,.55),0 6px 16px -8px rgba(20,16,10,.18)}
         .mjs-slider-arrow{transition:transform .18s ease, opacity .18s ease, background .18s ease}
         .mjs-slider-arrow:hover{transform:translateY(-2px);opacity:.92}
+        @media(max-width:680px){.mjs-slide-card{flex-basis:86% !important;min-width:86% !important}}
       `}</style>
 
       {showCategories && categories.length > 0 ? (

@@ -60,6 +60,7 @@ export default function GallerySlider({
         .mjs-gal-item:hover{transform:translateY(-4px);box-shadow:0 22px 50px -24px rgba(20,16,10,.55),0 6px 16px -8px rgba(20,16,10,.18)}
         .mjs-gal-arrow{transition:transform .18s ease, opacity .18s ease}
         .mjs-gal-arrow:hover{transform:translateY(-2px);opacity:.92}
+        @media(max-width:680px){.mjs-gal-item{flex-basis:82% !important;min-width:82% !important}}
       `}</style>
       <div style={{ position: 'relative', display: 'flex', alignItems: 'stretch', gap: 10 }}>
         <button
