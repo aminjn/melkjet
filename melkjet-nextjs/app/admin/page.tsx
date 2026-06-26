@@ -33,6 +33,7 @@ const sections: NavSection[] = [
       { id: 'products',    icon: '◰',  label: 'مدیریت محصولات' },
       { id: 'moderation',  icon: '✓',  label: 'تأیید آگهی AI',     badge: '32',    badgeColor: '#e7674a' },
       { id: 'scraper',     icon: '⛏',  label: 'موتور اسکرپی',     badge: 'زنده',  badgeColor: '#5fd98a' },
+      { id: 'studio',      icon: '◳',  label: 'استودیو پلان و ۳بعدی', badge: 'AI', badgeColor: '#c9a84c' },
     ],
   },
   {
