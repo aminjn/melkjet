@@ -2594,6 +2594,20 @@ function APIView() {
       setTestMsg(d.ok ? `✓ اتصال موفق — پاسخ: «${d.text}»` : `✕ خطا: ${d.error}`)
     } catch { setTestMsg('✕ خطا در ارتباط') }
   }
+  // تستِ واقعیِ تولید تصویر با مدلِ StudioAgent (یا gpt-image-1) — برای راستی‌آزماییِ پلان/۳بعدی
+  const [imgTestMsg, setImgTestMsg] = useState('')
+  const [imgTestUrl, setImgTestUrl] = useState('')
+  const [imgTesting, setImgTesting] = useState(false)
+  const testImage = async () => {
+    const m = assign['studio']?.image || assign['content']?.image || 'gpt-image-1'
+    setImgTesting(true); setImgTestMsg(`در حال ساختِ تصویرِ تست با «${m}»… (تا ۶۰ ثانیه)`); setImgTestUrl('')
+    try {
+      const r = await fetch('/api/admin/ai/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'image', model: m }) })
+      const d = await r.json()
+      if (d.ok && d.image) { setImgTestMsg(`✓ تولید تصویر موفق با «${d.model}»`); setImgTestUrl(d.image) }
+      else setImgTestMsg(`✕ خطا با «${d.model || m}»: ${d.error || 'خروجی خالی'}`)
+    } catch { setImgTestMsg('✕ خطا در ارتباط با سرور') } finally { setImgTesting(false) }
+  }
 
   const setAgentModel = async (agentId: string, slot: 'text' | 'image', model: string) => {
     setAssign(a => ({ ...a, [agentId]: { ...a[agentId], [slot]: model } }))
@@ -2640,11 +2654,21 @@ function APIView() {
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <GoldButton onClick={saveConfig}>ذخیره و اتصال</GoldButton>
           <OutlineButton onClick={loadModels}>{loadingModels ? 'در حال دریافت…' : '↻ دریافت لیست مدل‌ها'}</OutlineButton>
-          <OutlineButton onClick={testConn}>⚡ تست اتصال</OutlineButton>
+          <OutlineButton onClick={testConn}>⚡ تست اتصال (متن)</OutlineButton>
+          <OutlineButton onClick={testImage}>{imgTesting ? '⏳ در حال ساخت…' : '🖼 تست تولید تصویر'}</OutlineButton>
           {testMsg && <span style={{ fontSize: 12.5, color: testMsg.startsWith('✓') ? '#5fd98a' : testMsg.startsWith('✕') ? '#e7674a' : 'var(--muted)' }}>{testMsg}</span>}
-          {modelsSource && <span style={{ fontSize: 12, color: modelsSource === 'live' ? '#5fd98a' : 'var(--muted)' }}>{modelsSource === 'live' ? `✓ ${models.length} مدل زنده از گپ` : `لیست پیش‌فرض (${models.length} مدل) — کلید را ذخیره کن تا لیست زنده بیاید`}</span>}
+          {modelsSource && <span style={{ fontSize: 12, color: modelsSource === 'live' ? '#5fd98a' : 'var(--muted)' }}>{modelsSource === 'live' ? `✓ ${models.length} مدل زنده` : `لیست پیش‌فرض (${models.length} مدل) — کلید را ذخیره کن تا لیست زنده بیاید`}</span>}
           {msg && <span style={{ fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</span>}
         </div>
+        {imgTestMsg && (
+          <div style={{ marginTop: 12, display: 'flex', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12.5, color: imgTestMsg.startsWith('✓') ? '#5fd98a' : imgTestMsg.startsWith('✕') ? '#e7674a' : 'var(--muted)' }}>{imgTestMsg}</span>
+            {imgTestUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={imgTestUrl} alt="تصویر تست" style={{ width: 220, height: 220, objectFit: 'cover', borderRadius: 12, border: '1px solid var(--line2)' }} />
+            )}
+          </div>
+        )}
       </Card>
 
       {/* Agents → models */}
