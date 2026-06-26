@@ -4023,6 +4023,7 @@ function SimpleView({ title }: { title: string }) {
 /* ─── Main SuperAdmin Page ───────────────────────────────────── */
 export default function SuperAdminPage() {
   const [active, setActive] = useState<View>('overview')
+  const [navOpen, setNavOpen] = useState(false)   // کشوی منوی موبایل
   const [now, setNow] = useState('')
 
   useEffect(() => {
@@ -4069,8 +4070,11 @@ export default function SuperAdminPage() {
   return (
     <div style={{ display: 'flex', height: '100vh', background: 'var(--bg)', overflow: 'hidden', direction: 'rtl' }}>
 
+      {/* OVERLAY موبایل (پشتِ کشو) */}
+      <div className={`mjsa-overlay${navOpen ? ' mjsa-open' : ''}`} onClick={() => setNavOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 125 }} />
+
       {/* ── Sidebar ─────────────────────────────────────────── */}
-      <aside className="mjsa-side" style={{
+      <aside className={`mjsa-side${navOpen ? ' mjsa-open' : ''}`} style={{
         width: 248, flexShrink: 0, background: 'var(--bg2)', borderLeft: '1px solid var(--line)',
         display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden'
       }}>
@@ -4095,7 +4099,7 @@ export default function SuperAdminPage() {
               {sec.items.map(item => (
                 <button
                   key={item.id}
-                  onClick={() => setActive(item.id)}
+                  onClick={() => { setActive(item.id); setNavOpen(false) }}
                   style={{
                     width: '100%',
                     background: active === item.id ? 'rgba(231,103,74,0.12)' : 'transparent',
@@ -4137,8 +4141,9 @@ export default function SuperAdminPage() {
         {/* Topbar */}
         <header style={{
           height: 60, flexShrink: 0, background: 'var(--navbg)', borderBottom: '1px solid var(--line)',
-          backdropFilter: 'blur(18px)', display: 'flex', alignItems: 'center', padding: '0 28px', gap: 16
+          backdropFilter: 'blur(18px)', display: 'flex', alignItems: 'center', padding: '0 18px', gap: 12
         }}>
+          <button className="mjsa-burger" aria-label="منو" onClick={() => setNavOpen(true)} style={{ width: 42, height: 42, borderRadius: 11, border: '1px solid var(--line)', background: 'var(--bg2)', color: 'var(--gold)', fontSize: 20, cursor: 'pointer', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontFamily: 'inherit' }}>☰</button>
           <div style={{ flex: 1 }}>
             <h1 style={{ fontSize: 17, fontWeight: 800, color: 'var(--text)', margin: 0 }}>{viewTitles[active]}</h1>
           </div>
@@ -4176,6 +4181,15 @@ export default function SuperAdminPage() {
         aside::-webkit-scrollbar-thumb { background: rgba(140,140,140,.15); border-radius: 8px; }
         main::-webkit-scrollbar { width: 6px; }
         main::-webkit-scrollbar-thumb { background: rgba(140,140,140,.22); border-radius: 8px; }
+        /* کشوی منوی موبایلِ ادمین */
+        .mjsa-burger{display:none}
+        .mjsa-overlay{display:none}
+        @media(max-width:860px){
+          .mjsa-side{position:fixed!important;right:0;top:0;height:100vh!important;width:84vw!important;max-width:310px;z-index:130;transform:translateX(105%);transition:transform .26s ease;box-shadow:-12px 0 40px -12px rgba(0,0,0,.6)}
+          .mjsa-side.mjsa-open{transform:translateX(0)}
+          .mjsa-burger{display:inline-flex!important}
+          .mjsa-overlay.mjsa-open{display:block}
+        }
       `}</style>
     </div>
   )
