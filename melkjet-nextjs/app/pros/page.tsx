@@ -50,7 +50,7 @@ interface Stats {
 }
 interface AdvisorData { stats: Stats; leads: Lead[]; listings: Listing[]; appts: Appt[]; commissions: Commission[] }
 
-type View = 'dashboard' | 'assistant' | 'messages' | 'reports' | 'leads' | 'listings' | 'divar' | 'negotiation' | 'articles' | 'appts' | 'calendar' | 'commissions' | 'agency' | 'plans' | 'profile' | 'settings'
+type View = 'dashboard' | 'assistant' | 'messages' | 'reports' | 'leads' | 'customers' | 'listings' | 'divar' | 'negotiation' | 'articles' | 'appts' | 'calendar' | 'commissions' | 'agency' | 'plans' | 'profile' | 'settings'
 
 interface DivarImport { token: string; listingId: string; title: string; url: string; at: number; published: boolean }
 interface DivarConfig {
@@ -207,7 +207,7 @@ const inputStyle: React.CSSProperties = { padding: '9px 11px', borderRadius: 9, 
 const actionBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap' }
 const goldBtn: React.CSSProperties = { padding: '9px 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }
 
-const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد مشاور', assistant: 'دستیار هوشمند', messages: 'پیام‌ها', reports: 'گزارش‌ها', leads: 'لیدها و پایپ‌لاین', listings: 'فایل‌های من', divar: 'ایمپورت از دیوار', negotiation: 'موتور مذاکره', articles: 'مقالات و وبلاگ', appts: 'قرارها و بازدیدها', calendar: 'تقویم', commissions: 'کمیسیون', agency: 'آژانس من', plans: 'پلن‌ها و اشتراک', profile: 'پروفایل', settings: 'تنظیمات' }
+const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد مشاور', assistant: 'دستیار هوشمند', messages: 'پیام‌ها', reports: 'گزارش‌ها', leads: 'لیدها و پایپ‌لاین', customers: 'مشتریان', listings: 'فایل‌های من', divar: 'ایمپورت از دیوار', negotiation: 'موتور مذاکره', articles: 'مقالات و وبلاگ', appts: 'قرارها و بازدیدها', calendar: 'تقویم', commissions: 'کمیسیون', agency: 'آژانس من', plans: 'پلن‌ها و اشتراک', profile: 'پروفایل', settings: 'تنظیمات' }
 const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'leads' | 'appts' }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: '▦' },
   { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
@@ -225,6 +225,7 @@ const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'leads' | 'app
 const CRM_GROUP: { id: View; label: string; icon: string; badge?: 'leads' | 'appts' }[] = [
   { id: 'listings', label: 'فایل‌ها', icon: '◫' },
   { id: 'leads', label: 'لیدها و پایپ‌لاین', icon: '◎', badge: 'leads' },
+  { id: 'customers', label: 'مشتریان', icon: '★' },
   { id: 'appts', label: 'قرارها و بازدیدها', icon: '◉', badge: 'appts' },
   { id: 'calendar', label: 'تقویم', icon: '🗓' },
   { id: 'commissions', label: 'کمیسیون', icon: '💰' },
@@ -726,9 +727,9 @@ export default function ProsPage() {
             <div style={{ ...card, padding: 18 }}>
               {sectionTitle(`لیدها (${fa(leadsF.length)})`)}
               {leadsF.length ? leadsF.map(l => (
-                <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)' }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 700 }}>{l.name}{l.phone ? <span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 12 }}> · {l.phone}</span> : ''}</div>
+                <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)', opacity: l.stage === 'lost' ? 0.55 : 1, flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 140 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>{l.name}{l.phone ? <span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 12 }}> · {l.phone}</span> : ''}{l.stage === 'closed' && <span style={{ fontSize: 10.5, fontWeight: 700, color: '#16140f', background: '#34d399', borderRadius: 6, padding: '1px 7px' }}>★ تبدیل به مشتری</span>}</div>
                     <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{l.need} {l.budget ? `· بودجه: ${fmtBudget(l.budget)}` : ''} {l.source ? `· منبع: ${l.source}` : ''}</div>
                   </div>
                   <select value={l.stage} onChange={e => post({ action: 'setLeadStage', id: l.id, stage: e.target.value })} style={{ ...actionBtn, cursor: 'pointer', color: STAGE_COLOR[l.stage], borderColor: STAGE_COLOR[l.stage] }}>
@@ -740,6 +741,39 @@ export default function ProsPage() {
               )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>لیدی نداری.</div>}
             </div>
           </div>}
+
+          {/* CUSTOMERS — مشتریان = لیدهایی که به «قرارداد» رسیده‌اند (تبدیل‌شده) */}
+          {view === 'customers' && (() => {
+            const customers = leadsF.filter(l => l.stage === 'closed')
+            const totalBudget = customers.reduce((s, l) => s + (Number(String(l.budget || '').replace(/[^\d۰-۹]/g, '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))) || 0), 0)
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                  <div style={{ ...card, padding: 16, flex: '1 1 160px' }}><div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 8 }}>کل مشتریان</div><div style={{ fontSize: 26, fontWeight: 900, color: 'var(--gold)' }}>{fa(customers.length)}</div></div>
+                  <div style={{ ...card, padding: 16, flex: '1 1 160px' }}><div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 8 }}>مجموع بودجهٔ معاملات</div><div style={{ fontSize: 22, fontWeight: 900, color: '#34d399' }}>{money(totalBudget)}</div></div>
+                  <div style={{ ...card, padding: 16, flex: '1 1 160px' }}><div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 8 }}>نرخ تبدیل لید</div><div style={{ fontSize: 22, fontWeight: 900 }}>{leads.length ? fa(Math.round((leads.filter(l => l.stage === 'closed').length / leads.length) * 100)) : '۰'}٪</div></div>
+                </div>
+                <div style={{ ...card, padding: 18 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
+                    {sectionTitle(`مشتریان (${fa(customers.length)})`)}
+                    <div style={{ fontSize: 11.5, color: 'var(--faint)' }}>مشتری = لیدی که مرحله‌اش «قرارداد» شده</div>
+                  </div>
+                  {customers.length ? customers.map(l => (
+                    <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 0', borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
+                      <span style={{ width: 38, height: 38, borderRadius: '50%', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, flexShrink: 0 }}>{l.name.slice(0, 1)}</span>
+                      <div style={{ flex: 1, minWidth: 140 }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>{l.name}<span style={{ fontSize: 10.5, fontWeight: 700, color: '#16140f', background: '#34d399', borderRadius: 6, padding: '1px 7px' }}>★ مشتری</span></div>
+                        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{l.need || 'بدون شرح نیاز'} {l.budget ? `· بودجه: ${fmtBudget(l.budget)}` : ''} {l.source ? `· منبع: ${l.source}` : ''}</div>
+                      </div>
+                      {l.phone && <a href={`tel:${l.phone}`} style={{ ...actionBtn, textDecoration: 'none', color: 'var(--gold)', borderColor: 'var(--gold)', direction: 'ltr' }}>☎ {l.phone}</a>}
+                      <button onClick={() => post({ action: 'setLeadStage', id: l.id, stage: 'negotiation' })} style={actionBtn}>بازگرداندن به لید</button>
+                      <button onClick={() => startEditLead(l)} style={actionBtn}>ویرایش</button>
+                    </div>
+                  )) : <div style={{ color: 'var(--faint)', fontSize: 13, padding: '24px 0', textAlign: 'center', background: 'var(--bg2)', borderRadius: 12, border: '1px dashed var(--line)' }}>هنوز لیدی به مشتری تبدیل نشده — وقتی مرحلهٔ یک لید را «قرارداد» کنید، اینجا به‌عنوان مشتری نمایش داده می‌شود.</div>}
+                </div>
+              </div>
+            )
+          })()}
 
           {/* LISTINGS */}
           {view === 'listings' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
