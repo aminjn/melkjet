@@ -85,7 +85,11 @@ export async function generateImage(model: string, prompt: string, size = '1024x
   }, 120000)
   if (res.status !== 200) throw new Error(`گپ تصویر HTTP ${res.status}: ${res.body.slice(0, 300)}`)
   const d = JSON.parse(res.body)
-  return d.data?.[0]?.url || d.data?.[0]?.b64_json || ''
+  const first = d.data?.[0] || {}
+  // مدل‌هایی مثلِ gpt-image-1 خروجی را به‌صورتِ b64_json می‌دهند (بدون url) — به data URL تبدیل می‌کنیم.
+  if (first.url) return first.url as string
+  if (first.b64_json) return `data:image/png;base64,${first.b64_json}`
+  return ''
 }
 
 // تحلیل تصویر (چندوجهی): تصاویر را همراه یک پرامپت متنی به مدل بینایی می‌دهد.
@@ -121,8 +125,9 @@ export async function chatVisionSafe(model: string | undefined, prompt: string, 
   throw lastErr || new Error('هیچ مدل بینایی پاسخ نداد')
 }
 
-// مدل‌های تصویرِ رایج و معتبر روی گپ‌جی‌پی‌تی برای fallback.
-const IMAGE_FALLBACKS = ['dall-e-3', 'gpt-image-1', 'dall-e-2', 'flux']
+// مدل‌های تصویرِ رایج و معتبر برای fallback — gpt-image-1 (کیفیت و دنبال‌کردنِ دستور
+// بهتر، موجود روی avalai) مقدم؛ سپس dall-e-3 و flux.
+const IMAGE_FALLBACKS = ['gpt-image-1', 'dall-e-3', 'flux', 'dall-e-2']
 
 // مثل generateImage ولی اگر مدلِ انتخابی نامعتبر بود (۴۰۴/خطای آپ‌استریم)، خودکار
 // مدل‌های تصویرِ معتبر را امتحان می‌کند تا قابلیت با تنظیمِ اشتباهِ مدل از کار نیفتد.

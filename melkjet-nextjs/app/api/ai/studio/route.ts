@@ -108,11 +108,20 @@ export async function POST(req: NextRequest) {
 
     if (parsed && Array.isArray(parsed.rooms) && parsed.rooms.length) {
       const planUrl = svgDataUrl(renderFloorPlanSVG(parsed, area, 'پلان وضع موجود'))
-      const renderUrl = svgDataUrl(renderIsoSVG(parsed, area, 'نمای سه‌بعدی'))
+      // رندرِ سه‌بعدی: اگر مدلِ تولیدِ تصویر تخصیص داده شده، یک رندرِ واقع‌گرایانه می‌سازیم؛
+      // وگرنه به نمای ایزومتریکِ SVG برمی‌گردیم.
+      let renderUrl = svgDataUrl(renderIsoSVG(parsed, area, 'نمای سه‌بعدی'))
+      let renderReal = false
+      const imgModelPhoto = agentModel('studio', 'image') || agentModel('content', 'image')
+      if (imgModelPhoto) {
+        const roomsList = parsed.rooms.map(r => r.name).filter(Boolean).join(', ')
+        const renderPrompt = `3D isometric dollhouse cutaway render of a real residential apartment, about ${area} square meters, containing exactly these rooms in their real relative layout: ${roomsList}. Realistic furniture and materials matching each room's function, soft natural daylight, architectural visualization, top-down isometric angle, clean and high quality. No text labels.`
+        try { const r = await generateImageSafe(imgModelPhoto, renderPrompt); if (r.url) { renderUrl = r.url; renderReal = true } } catch { /* به SVG برمی‌گردیم */ }
+      }
       const description = String(parsed.summaryFa || '').trim()
         || `این واحد شامل ${parsed.rooms.map(r => r.name).filter(Boolean).join('، ')} است که از روی عکس‌ها بازسازی شده است.`
       // layout را هم برمی‌گردانیم تا در ویرایشگرِ آفلاین قابل‌اصلاح باشد
-      return NextResponse.json({ ok: true, mode: 'photo', description, planUrl, renderUrl, svg: true, layout: { cols: parsed.cols, rows: parsed.rows, rooms: parsed.rooms } })
+      return NextResponse.json({ ok: true, mode: 'photo', description, planUrl, renderUrl, svg: !renderReal, layout: { cols: parsed.cols, rows: parsed.rows, rooms: parsed.rooms } })
     }
 
     // تحلیل عکس در دسترس نبود → به‌جای ارورِ خالی، نقشهٔ تقریبی از روی نام فضاها بساز.
