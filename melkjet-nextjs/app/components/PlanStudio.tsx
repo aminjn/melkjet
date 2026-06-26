@@ -131,6 +131,7 @@ export default function PlanStudio({ compact }: { compact?: boolean }) {
   })
 
   return (
+   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
     <div style={{ display: 'grid', gridTemplateColumns: compact ? '1fr' : '1fr 1fr', gap: 16 }} className="mj-studio">
       {/* INPUT */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -193,6 +194,11 @@ export default function PlanStudio({ compact }: { compact?: boolean }) {
             background: 'transparent', border: '1px solid var(--gold)', color: 'var(--gold)', fontWeight: 700, fontSize: 13, fontFamily: 'inherit', opacity: aiBusy ? .6 : 1,
           }}>{aiBusy ? '⏳ در حال تحلیل…' : '🤖 پیش‌نویس هوشمند از روی عکس (وقتی اینترنت هست)'}</button>
           {aiMsg && <div style={{ marginTop: 8, fontSize: 11.5, color: aiMsg.startsWith('✓') ? '#5fd98a' : 'var(--muted)', lineHeight: 1.7 }}>{aiMsg}</div>}
+          <button onClick={generate} disabled={busy} style={{
+            width: '100%', marginTop: 8, padding: '12px', borderRadius: 12, cursor: busy ? 'default' : 'pointer',
+            background: 'rgba(212,175,55,.10)', border: '1px solid var(--gold)', color: 'var(--gold)', fontWeight: 800, fontSize: 13.5, fontFamily: 'inherit', opacity: busy ? .6 : 1,
+          }}>{busy ? '⏳ در حال ساخت…' : '🎨 ساخت پلانِ ۲بعدی + رندرِ ۳بعدی با AI'}</button>
+          <div style={{ marginTop: 6, fontSize: 11, color: 'var(--faint)', lineHeight: 1.7 }}>خروجیِ تصویریِ هوش مصنوعی (نیاز به اینترنت + مدلِ تصویرِ StudioAgent). برای ویرایشِ دستی از «ساخت / ویرایش پلان» استفاده کن.</div>
         </div>
       </div>
 
@@ -213,6 +219,23 @@ export default function PlanStudio({ compact }: { compact?: boolean }) {
         )}
       </div>
     </div>
+
+    {/* خروجیِ هوش مصنوعی: پلان ۲بعدی + رندرِ ۳بعدی */}
+    {(busy || out || err) && (
+      <div style={{ ...card }}>
+        <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 10 }}>خروجیِ هوش مصنوعی (پلان ۲بعدی و رندرِ ۳بعدی)</div>
+        {busy && <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 10 }}>⏳ {progress || 'در حال ساخت…'} (ممکن است تا یک دقیقه طول بکشد)</div>}
+        {err && <div style={{ fontSize: 12.5, color: '#e7674a', marginBottom: 10 }}>✕ {err}</div>}
+        {out?.description && <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.9, marginBottom: 14 }}>{out.description}</div>}
+        {(out?.planUrl || out?.renderUrl) && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 14 }}>
+            {out?.planUrl && <Figure title="پلان ۲بعدی" url={out.planUrl} />}
+            {out?.renderUrl && <Figure title="رندر ۳بعدی" url={out.renderUrl} />}
+          </div>
+        )}
+      </div>
+    )}
+   </div>
   )
 }
 

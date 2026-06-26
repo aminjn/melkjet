@@ -134,31 +134,36 @@ export default function PlanEditor({ labels, area, initial }: { labels: string[]
 
   useEffect(() => { refreshPlans() }, [refreshPlans])
 
+  // درگ با گوش‌دادنِ سراسری روی window (مطمئن‌تر از pointer-capture: حتی اگر موس سریع
+  // از روی اتاق خارج شود، حرکت تا رهاکردنِ کلیک ادامه دارد).
   const onDown = (e: React.PointerEvent, id: string, mode: 'move' | 'resize') => {
     if (doorMode) return
     e.preventDefault(); e.stopPropagation()
     const room = rooms.find(r => r.id === id); if (!room || !gridRef.current) return
     snapshot()
     const rect = gridRef.current.getBoundingClientRect()
-    drag.current = { id, mode, sx: e.clientX, sy: e.clientY, ox: room.x, oy: room.y, ow: room.w, oh: room.h, cw: rect.width / cols, ch: rect.height / rows, moved: false }
+    const d = { id, mode, sx: e.clientX, sy: e.clientY, ox: room.x, oy: room.y, ow: room.w, oh: room.h, cw: rect.width / cols, ch: rect.height / rows, moved: false }
+    drag.current = d
     setSel(id)
-    try { gridRef.current.setPointerCapture(e.pointerId) } catch {}
-  }
-  const onMove = (e: React.PointerEvent) => {
-    const d = drag.current; if (!d) return
-    const dx = Math.round((e.clientX - d.sx) / d.cw), dy = Math.round((e.clientY - d.sy) / d.ch)
-    if (dx || dy) d.moved = true
-    setRooms(rs => rs.map(r => {
-      if (r.id !== d.id) return r
-      if (d.mode === 'move') return { ...r, x: clamp(d.ox + dx, 0, cols - r.w), y: clamp(d.oy + dy, 0, rows - r.h) }
-      return { ...r, w: clamp(d.ow + dx, 1, cols - r.x), h: clamp(d.oh + dy, 1, rows - r.y) }
-    }))
-  }
-  const onUp = () => {
-    const d = drag.current
-    // اگر حرکتی نشد، عکسِ بی‌مورد را از تاریخچه پاک کن
-    if (d && !d.moved) setPast(p => p.slice(0, -1))
-    drag.current = null
+    const move = (ev: PointerEvent) => {
+      const dx = Math.round((ev.clientX - d.sx) / d.cw), dy = Math.round((ev.clientY - d.sy) / d.ch)
+      if (dx || dy) d.moved = true
+      setRooms(rs => rs.map(r => {
+        if (r.id !== d.id) return r
+        if (d.mode === 'move') return { ...r, x: clamp(d.ox + dx, 0, cols - r.w), y: clamp(d.oy + dy, 0, rows - r.h) }
+        return { ...r, w: clamp(d.ow + dx, 1, cols - r.x), h: clamp(d.oh + dy, 1, rows - r.y) }
+      }))
+    }
+    const up = () => {
+      if (!d.moved) setPast(p => p.slice(0, -1))   // اگر حرکتی نشد، عکسِ بی‌مورد را از تاریخچه پاک کن
+      drag.current = null
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
   }
 
   // افزودنِ در: روی نزدیک‌ترین لبهٔ سلولِ کلیک‌شده یک در می‌گذارد.
@@ -352,8 +357,6 @@ export default function PlanEditor({ labels, area, initial }: { labels: string[]
       {/* بوم نقشه */}
       <div
         ref={gridRef}
-        onPointerMove={onMove}
-        onPointerUp={onUp}
         onPointerDown={e => { if (doorMode) { onCanvasClick(e) } else { setSel(null) } }}
         style={{
           direction: 'ltr', position: 'relative', width: '100%', aspectRatio: `${cols} / ${rows}`,
