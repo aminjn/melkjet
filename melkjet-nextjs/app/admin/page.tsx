@@ -2609,6 +2609,20 @@ function APIView() {
       else setImgTestMsg(`✕ خطا با «${d.model || m}»: ${d.error || 'خروجی خالی'}`)
     } catch { setImgTestMsg('✕ خطا در ارتباط با سرور') } finally { setImgTesting(false) }
   }
+  // تستِ تولید ویدئو (async) — برای راستی‌آزماییِ مدلِ ویدئوی avalai پیش از وصل به استودیو
+  const [vidTestMsg, setVidTestMsg] = useState('')
+  const [vidTestUrl, setVidTestUrl] = useState('')
+  const [vidTesting, setVidTesting] = useState(false)
+  const [vidModel, setVidModel] = useState('')
+  const testVideo = async () => {
+    setVidTesting(true); setVidTestMsg(`در حال ساختِ ویدئوی تست${vidModel ? ` با «${vidModel}»` : ' (مدل خودکار)'}… ممکن است تا چند دقیقه طول بکشد.`); setVidTestUrl('')
+    try {
+      const r = await fetch('/api/admin/ai/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'video', model: vidModel.trim() || undefined }) })
+      const d = await r.json()
+      if (d.ok && d.video) { setVidTestMsg(`✓ تولید ویدئو موفق با «${d.model}»`); setVidTestUrl(d.video) }
+      else setVidTestMsg(`✕ خطا با «${d.model || vidModel || 'auto'}»: ${d.error || 'خروجی خالی'}`)
+    } catch { setVidTestMsg('✕ خطا در ارتباط با سرور') } finally { setVidTesting(false) }
+  }
 
   const setAgentModel = async (agentId: string, slot: 'text' | 'image', model: string) => {
     setAssign(a => ({ ...a, [agentId]: { ...a[agentId], [slot]: model } }))
@@ -2670,6 +2684,18 @@ function APIView() {
             )}
           </div>
         )}
+        {/* تستِ ویدئو (Sora/Veo/Runway) — برای راستی‌آزماییِ مدلِ ویدئو پیش از وصل به استودیو */}
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+          <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 8 }}>تستِ تولیدِ ویدئو (برای قابلیتِ واک‌ترِ استودیو). نامِ مدلِ ویدئو را از لیستت بگذار (مثلاً <span style={{ direction: 'ltr', display: 'inline-block' }}>sora-2</span>) یا خالی بگذار تا خودکار امتحان شود.</div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input value={vidModel} onChange={e => setVidModel(e.target.value)} placeholder="مدلِ ویدئو (اختیاری)" style={{ direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', width: 220 }} />
+            <OutlineButton onClick={testVideo}>{vidTesting ? '⏳ در حال ساخت…' : '🎬 تست تولید ویدئو'}</OutlineButton>
+            {vidTestMsg && <span style={{ fontSize: 12.5, color: vidTestMsg.startsWith('✓') ? '#5fd98a' : vidTestMsg.startsWith('✕') ? '#e7674a' : 'var(--muted)' }}>{vidTestMsg}</span>}
+          </div>
+          {vidTestUrl && (
+            <video src={vidTestUrl} controls autoPlay loop muted style={{ marginTop: 12, width: 320, maxWidth: '100%', borderRadius: 12, border: '1px solid var(--line2)' }} />
+          )}
+        </div>
       </Card>
 
       {/* Agents → models */}

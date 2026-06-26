@@ -1,12 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { chatComplete, generateImage } from '@/app/lib/gapgpt'
+import { generateVideo } from '@/app/lib/ai-video'
 
-// تستِ واقعیِ اتصال به سرویسِ AI (avalai/گپ) — متن یا تصویر — تا ادمین مدل را راستی‌آزمایی کند.
+export const runtime = 'nodejs'
+export const maxDuration = 300
+
+// تستِ واقعیِ اتصال به سرویسِ AI (avalai/گپ) — متن یا تصویر یا ویدئو — تا ادمین مدل را راستی‌آزمایی کند.
 export async function POST(req: NextRequest) {
   const s = await getSession()
   if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const { model, kind } = await req.json().catch(() => ({}))
+
+  if (kind === 'video') {
+    try {
+      const { url, model: used } = await generateVideo('A slow, smooth cinematic camera move through a bright modern living room, architectural walkthrough, realistic.', { model: model && String(model), seconds: 5 })
+      return NextResponse.json({ ok: true, model: used, video: url })
+    } catch (e: any) {
+      return NextResponse.json({ ok: false, model: model || 'auto', error: e?.message || 'خطا' }, { status: 200 })
+    }
+  }
 
   if (kind === 'image') {
     const m = (model && String(model)) || 'gpt-image-1'
