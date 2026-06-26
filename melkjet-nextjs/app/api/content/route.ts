@@ -13,8 +13,13 @@ export async function GET(req: NextRequest) {
   let items = listItems(valid ? type : undefined, { category, publicOnly: true })
   // پیش‌نویس‌های CMS نباید در فهرست عمومی بیایند
   items = items.filter(i => !(i.type === 'article' && i.meta?.cmsStatus === 'draft'))
-  // فیلتر بر اساس آگهی‌دهنده/نویسنده (برای لینک داخلیِ مقاله ↔ آگهی‌های همان شخص)
-  if (owner) { const n = owner.toLocaleLowerCase(); items = items.filter(i => (i.owner || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase() === n) }
+  // فیلتر بر اساس آگهی‌دهنده/نویسنده. مقاله‌ها نویسنده را در meta.author نگه می‌دارند
+  // (نه i.owner)، پس هر دو را تطبیق می‌دهیم تا مثلِ سایتِ منتشرشده، مقالاتِ مشاور دیده شوند.
+  if (owner) {
+    const norm = (s: string) => (s || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase()
+    const n = norm(owner)
+    items = items.filter(i => norm(i.owner || '') === n || norm(i.meta?.author || '') === n)
+  }
   // featured first, then newest
   items.sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0) || b.scrapedAt - a.scrapedAt)
   return NextResponse.json({ items: items.slice(0, limit), total: items.length })

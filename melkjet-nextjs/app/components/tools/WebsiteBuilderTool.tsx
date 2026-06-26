@@ -603,8 +603,9 @@ void migrateBlock
 // Real, props-driven render of a block — shared by canvas previews. The public
 // page (app/[site]/page.tsx) mirrors this exact markup as a clean page.
 type TeamMemberLite = { phone: string; name: string; photo: string; title: string; specialties: string[]; areas: string; experience: string; activeListings: number; slug: string }
+type ArticleLite = { title: string; excerpt?: string; image?: string; category?: string; date?: string }
 
-function BlockBody({ block, primary, myListings, teamMembers }: { block: Block; primary: string; myListings?: { title: string; location?: string; price?: string; image?: string; category?: string }[]; teamMembers?: TeamMemberLite[] }) {
+function BlockBody({ block, primary, myListings, myArticles, teamMembers }: { block: Block; primary: string; myListings?: { title: string; location?: string; price?: string; image?: string; category?: string }[]; myArticles?: ArticleLite[]; teamMembers?: TeamMemberLite[] }) {
   const p = block.props || {}
   const t = block.type
   const btn = (text: string) => (
@@ -699,22 +700,24 @@ function BlockBody({ block, primary, myListings, teamMembers }: { block: Block; 
   if (t === 'blog') {
     const n = Math.max(1, Math.min(12, Number(p.count) || 3))
     const grads = ['#15202d,#101828', '#251528,#1a0e1e', '#152825,#0e1a18', '#2d2215,#1e1a12', '#2d1515,#1e0e0e', '#1e2215,#141a10']
+    const real = (myArticles || []).slice(0, n)
+    const cards = real.length ? real : Array.from({ length: n }).map(() => null)
     return (
       <div style={{ background: '#fff', padding: '28px', direction: 'rtl' }}>
         <div style={{ fontSize: 18, fontWeight: 800, color: '#1a1510', marginBottom: 16 }}>{p.heading}</div>
-        {p.source === 'mine' ? <div style={{ fontSize: 11, color: primary, marginBottom: 12 }}>✎ مقالات منتشرشدهٔ شما اینجا نمایش داده می‌شوند</div> : null}
+        {real.length ? <div style={{ fontSize: 11, color: primary, marginBottom: 12 }}>✎ {real.length.toLocaleString('fa-IR')} مقالهٔ منتشرشدهٔ شما</div> : <div style={{ fontSize: 11, color: primary, marginBottom: 12 }}>✎ مقالات منتشرشدهٔ شما اینجا نمایش داده می‌شوند</div>}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
-          {Array.from({ length: n }).map((_, i) => (
+          {cards.map((a, i) => (
             <div key={i} style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', border: '1px solid #eee', boxShadow: '0 8px 22px -16px rgba(0,0,0,.5)' }}>
-              <div style={{ height: 92, background: `linear-gradient(135deg,${grads[i % grads.length]})`, position: 'relative' }}>
-                <span style={{ position: 'absolute', top: 8, insetInlineStart: 8, fontSize: 9.5, fontWeight: 700, color: '#fff', background: primary, borderRadius: 999, padding: '2px 9px' }}>دسته</span>
+              <div style={{ height: 92, background: a?.image ? `center/cover no-repeat url(${a.image})` : `linear-gradient(135deg,${grads[i % grads.length]})`, position: 'relative' }}>
+                {(a?.category || !a) && <span style={{ position: 'absolute', top: 8, insetInlineStart: 8, fontSize: 9.5, fontWeight: 700, color: '#fff', background: primary, borderRadius: 999, padding: '2px 9px' }}>{a?.category || 'دسته'}</span>}
               </div>
               <div style={{ padding: '13px' }}>
-                <div style={{ fontSize: 13, fontWeight: 800, color: '#1a1510', marginBottom: 5 }}>عنوان مقاله</div>
-                <div style={{ fontSize: 11, color: '#888', lineHeight: 1.8, marginBottom: 9 }}>خلاصه‌ای کوتاه از مقاله…</div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: '#1a1510', marginBottom: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a?.title || 'عنوان مقاله'}</div>
+                <div style={{ fontSize: 11, color: '#888', lineHeight: 1.8, marginBottom: 9, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{a?.excerpt || 'خلاصه‌ای کوتاه از مقاله…'}</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: primary }}>ادامه →</span>
-                  <span style={{ fontSize: 10, color: '#aaa' }}>۱۴۰۴/۰۱/۰۱</span>
+                  <span style={{ fontSize: 10, color: '#aaa' }}>{a?.date || '۱۴۰۴/۰۱/۰۱'}</span>
                 </div>
               </div>
             </div>
@@ -744,19 +747,19 @@ function BlockBody({ block, primary, myListings, teamMembers }: { block: Block; 
             </div>
           )}
           <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12 }}>
-            {Array.from({ length: 4 }).map((_, i) => (
+            {(((myArticles || []).length ? (myArticles || []).slice(0, 6) : Array.from({ length: 4 }).map(() => null)) as (ArticleLite | null)[]).map((a, i) => (
               <div key={i} style={{ background: '#fff', border: '1px solid #eee', borderRadius: 12, overflow: 'hidden', boxShadow: '0 8px 22px -16px rgba(0,0,0,.5)' }}>
-                <div style={{ height: 74, background: `linear-gradient(135deg,#2d2215,#1a1510)` }} />
+                <div style={{ height: 74, background: a?.image ? `center/cover no-repeat url(${a.image})` : `linear-gradient(135deg,#2d2215,#1a1510)` }} />
                 <div style={{ padding: 11 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 800, color: '#1a1510', marginBottom: 4 }}>عنوان مقاله</div>
-                  <div style={{ fontSize: 10.5, color: '#888', lineHeight: 1.7, marginBottom: 7 }}>خلاصه‌ای کوتاه…</div>
+                  <div style={{ fontSize: 12.5, fontWeight: 800, color: '#1a1510', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a?.title || 'عنوان مقاله'}</div>
+                  <div style={{ fontSize: 10.5, color: '#888', lineHeight: 1.7, marginBottom: 7, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{a?.excerpt || 'خلاصه‌ای کوتاه…'}</div>
                   <span style={{ fontSize: 11, fontWeight: 700, color: primary }}>ادامه →</span>
                 </div>
               </div>
             ))}
           </div>
         </div>
-        <div style={{ fontSize: 10.5, color: primary, marginTop: 12 }}>✎ صفحهٔ کاملِ وبلاگ با فیلتر و ساید‌بار — مقالاتِ منتشرشدهٔ شما هنگامِ انتشار نمایش داده می‌شوند.</div>
+        <div style={{ fontSize: 10.5, color: primary, marginTop: 12 }}>{(myArticles || []).length ? `✎ ${(myArticles || []).length.toLocaleString('fa-IR')} مقالهٔ منتشرشدهٔ شما در این صفحه نمایش داده می‌شود.` : '✎ صفحهٔ کاملِ وبلاگ با فیلتر و ساید‌بار — مقالاتِ منتشرشدهٔ شما هنگامِ انتشار نمایش داده می‌شوند.'}</div>
       </div>
     )
   }
@@ -983,7 +986,7 @@ function BlockBody({ block, primary, myListings, teamMembers }: { block: Block; 
   )
 }
 
-function BlockPreview({ block, primary, selected, onSelect, onUp, onDown, onDelete, myListings, teamMembers, enableDrag, isDragging, isDragOver, onDragStartBlock, onDragEnterBlock, onDropBlock, onDragEndBlock, bigControls }: {
+function BlockPreview({ block, primary, selected, onSelect, onUp, onDown, onDelete, myListings, myArticles, teamMembers, enableDrag, isDragging, isDragOver, onDragStartBlock, onDragEnterBlock, onDropBlock, onDragEndBlock, bigControls }: {
   block: Block
   primary: string
   selected: boolean
@@ -991,6 +994,7 @@ function BlockPreview({ block, primary, selected, onSelect, onUp, onDown, onDele
   onUp: () => void
   onDown: () => void
   onDelete: () => void
+  myArticles?: ArticleLite[]
   myListings?: { title: string; location?: string; price?: string; image?: string; category?: string }[]
   teamMembers?: TeamMemberLite[]
   enableDrag?: boolean
@@ -1044,7 +1048,7 @@ function BlockPreview({ block, primary, selected, onSelect, onUp, onDown, onDele
           <button title="حذف" onClick={e => { e.stopPropagation(); onDelete() }} style={{ ...ctrlBtn, background: 'rgba(220,60,60,0.6)' }}>×</button>
         </div>
       )}
-      <BlockBody block={block} primary={primary} myListings={myListings} teamMembers={teamMembers} />
+      <BlockBody block={block} primary={primary} myListings={myListings} myArticles={myArticles} teamMembers={teamMembers} />
     </div>
   )
 }
@@ -1143,6 +1147,7 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
   }
   const [ownerName, setOwnerName] = useState('')
   const [myListings, setMyListings] = useState<{ title: string; location?: string; price?: string; image?: string; category?: string }[]>([])
+  const [myArticles, setMyArticles] = useState<ArticleLite[]>([])
   const [teamMembers, setTeamMembers] = useState<TeamMemberLite[]>([])
   const [selectedBlock, setSelectedBlock] = useState<number | null>(null)
   const [tplFilter, setTplFilter] = useState('عمومی')
@@ -1207,6 +1212,26 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
         if (cancelled || !data) return
         const items = Array.isArray(data.items) ? data.items : (Array.isArray(data) ? data : [])
         setMyListings(items.slice(0, 12).map((it: any) => ({ title: String(it.title || ''), location: it.location, price: it.price, image: it.image, category: it.category })))
+      })
+      .catch(() => { /* پیش‌نمایش روی کارت‌های نمونه می‌ماند */ })
+    return () => { cancelled = true }
+  }, [ownerName])
+
+  // مقالاتِ واقعیِ منتشرشدهٔ کاربر — برای پیش‌نمایشِ زندهٔ بلوک «وبلاگ» (مثلِ سایتِ منتشرشده).
+  useEffect(() => {
+    if (!ownerName) { setMyArticles([]); return }
+    let cancelled = false
+    fetch(`/api/content?type=article&owner=${encodeURIComponent(ownerName)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (cancelled || !data) return
+        const items = Array.isArray(data.items) ? data.items : (Array.isArray(data) ? data : [])
+        setMyArticles(items.slice(0, 12).map((it: any) => ({
+          title: String(it.title || ''),
+          excerpt: String(it.excerpt || it.meta?.summary || it.meta?.excerpt || ''),
+          image: it.image, category: it.category,
+          date: it.scrapedAt ? new Date(it.scrapedAt).toLocaleDateString('fa-IR') : '',
+        })))
       })
       .catch(() => { /* پیش‌نمایش روی کارت‌های نمونه می‌ماند */ })
     return () => { cancelled = true }
@@ -1793,6 +1818,7 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
                     onDown={() => moveBlock(block.id, 1)}
                     onDelete={() => deleteBlock(block.id)}
                     myListings={myListings}
+                    myArticles={myArticles}
                     teamMembers={teamMembers}
                     enableDrag={!isMobile}
                     bigControls={isMobile}
