@@ -57,23 +57,21 @@ export async function POST(req: NextRequest) {
   // ===== حالت بازسازی وضع موجود (وقتی عکس داریم) =====
   if (photos.length && visionModel) {
     const labels = photos.map(p => p.label).join('، ')
-    // گپ نه base64 می‌پذیرد و نه هاست‌های ایرانی را می‌گیرد؛ عکس‌ها را روی imgbb (i.ibb.co
-    // که گپ می‌تواند بخواندش) آپلود می‌کنیم. آپلود از طریق پروکسیِ سرور به api.imgbb.com.
+    // avalai (مثلِ OpenAI) عکسِ base64/data-url را مستقیم در image_url می‌پذیرد، پس
+    // عکس‌ها را مستقیم می‌فرستیم — بدونِ نیاز به imgbb. اگر imgbb تنظیم شده باشد، به‌عنوان
+    // پشتیبان عکس‌ها را به https تبدیل می‌کنیم (برای سرویس‌هایی که data-url نمی‌پذیرند).
     const admin = getAdminData()
     const imgbbKey = admin.imgbb?.apiKey
     const proxyUrl = admin.divar?.proxyUrl
-    const b64s = photos.slice(0, 4).map(p => {
-      const ci = p.image.indexOf(',')
-      return ci > 0 ? p.image.slice(ci + 1) : ''
-    }).filter(Boolean)
-    let imgs: string[] = []
+    // پیش‌فرض: همان data-urlهای آپلودیِ کاربر (تا ۴ عکس).
+    let imgs: string[] = photos.slice(0, 4).map(p => p.image).filter(s => s.startsWith('data:'))
     let uploadErr = ''
     if (imgbbKey) {
+      const b64s = photos.slice(0, 4).map(p => { const ci = p.image.indexOf(','); return ci > 0 ? p.image.slice(ci + 1) : '' }).filter(Boolean)
       const uploaded = await Promise.allSettled(b64s.map(b => uploadToImgbb(imgbbKey, b, proxyUrl)))
-      imgs = uploaded.filter(r => r.status === 'fulfilled').map(r => (r as PromiseFulfilledResult<string>).value)
+      const hosted = uploaded.filter(r => r.status === 'fulfilled').map(r => (r as PromiseFulfilledResult<string>).value)
+      if (hosted.length) imgs = hosted   // ترجیحاً https؛ وگرنه data-url می‌ماند
       uploadErr = (uploaded.find(r => r.status === 'rejected') as PromiseRejectedResult | undefined)?.reason?.message || ''
-    } else {
-      uploadErr = 'no_imgbb'
     }
     const visionPrompt =
       `These photos show the rooms of ONE existing unit (~${area} m²; room labels: ${labels}). Reconstruct its AS-BUILT floor plan as a SCHEMATIC GRID — do NOT design or improve anything, only reflect what's really there.\n` +
@@ -89,11 +87,9 @@ export async function POST(req: NextRequest) {
         raw = (await chatVisionSafe(visionModel, visionPrompt, imgs, { max_tokens: 900, timeout: 40000 })).text
       } catch (e: any) { visionErr = e?.message || 'خطای نامشخص' }
     } else {
-      // آپلودِ عکس‌ها روی imgbb ناموفق/تنظیم‌نشده → بدون تحلیل عکس ادامه نده
-      visionErr = uploadErr === 'no_imgbb'
-        ? 'کلید imgbb تنظیم نشده (پنل → اتصال‌ها → imgbb) تا عکس‌ها برای تحلیل آپلود شوند'
-        : `آپلودِ عکس‌ها روی imgbb ناموفق بود: ${uploadErr.slice(0, 150)}`
+      visionErr = 'هیچ عکسِ معتبری برای تحلیل دریافت نشد'
     }
+    void uploadErr
 
     let parsed = extractJson(raw) as PlanLayout | null
     // تلاش دوم: اگر مدل پاسخ داد ولی JSON معتبر نبود، با یک مدل متنی به قالب JSON تبدیلش کن
