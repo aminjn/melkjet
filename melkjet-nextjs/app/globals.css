@@ -214,6 +214,10 @@ body {
 @media(max-width:760px){
   table{display:block;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap}
 }
+/* ناحیهٔ لمسیِ راحت‌تر روی موبایل برای دکمه‌ها و فیلدها (چک‌باکس/رادیو مستثنا) */
+@media(max-width:760px){
+  button, select, input:not([type=checkbox]):not([type=radio]):not([type=range]){min-height:40px}
+}
 
 /* Admin agents 3-col */
 @media(max-width:760px){.mjsa-agents{grid-template-columns:1fr 1fr!important}.mjsa-agentrow{grid-template-columns:1fr!important}}
