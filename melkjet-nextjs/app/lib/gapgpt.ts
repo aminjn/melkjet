@@ -2,14 +2,38 @@ import { getAdminData } from './admin-store'
 import { DEFAULT_GAP_BASE } from './ai-agents'
 import { shecanRequest } from './shecan-https'
 
-function cfg() {
-  const g = getAdminData().gapgpt
-  if (!g?.apiKey) throw new Error('کلید API گپ‌جی‌پی‌تی تنظیم نشده است (پنل → API و مدل‌های AI)')
+// تنظیماتِ یک provider را برمی‌گرداند. اگر providerId داده شده و موجود باشد، همان؛ وگرنه
+// ارائه‌دهندهٔ پیش‌فرض (گپ = gapgpt). شناسه‌های 'gap'/'default' هم به پیش‌فرض اشاره می‌کنند.
+function providerCfg(providerId?: string) {
+  const a = getAdminData()
+  if (providerId && providerId !== 'gap' && providerId !== 'default') {
+    const p = a.providers?.[providerId]
+    if (p?.apiKey) return { base: (p.baseUrl || DEFAULT_GAP_BASE).replace(/\/$/, ''), key: p.apiKey }
+  }
+  const g = a.gapgpt
+  if (!g?.apiKey) throw new Error('کلید API تنظیم نشده است (پنل → API و مدل‌های AI)')
   return { base: (g.baseUrl || DEFAULT_GAP_BASE).replace(/\/$/, ''), key: g.apiKey }
 }
+function cfg(provider?: string) { return providerCfg(provider) }
 
 export function agentModel(agentId: string, slot: 'text' | 'image' = 'text'): string | undefined {
   return getAdminData().agentModels?.[agentId]?.[slot]
+}
+
+// provider تخصیص‌داده‌شده به یک اسلاتِ ایجنت (خالی = پیش‌فرض/گپ).
+export function agentProvider(agentId: string, slot: 'text' | 'image' = 'text'): string | undefined {
+  const a = getAdminData().agentModels?.[agentId]
+  return slot === 'image' ? a?.imageProvider : a?.textProvider
+}
+
+// از یک فهرستِ اولویتِ (ایجنت، اسلات)، اولین مدلِ تخصیص‌داده‌شده را همراه provider‌اش برمی‌گرداند.
+export function resolveAgent(prefs: [string, 'text' | 'image'][]): { model?: string; provider?: string } {
+  const am = getAdminData().agentModels || {}
+  for (const [id, slot] of prefs) {
+    const m = am[id]?.[slot]
+    if (m) return { model: m, provider: slot === 'image' ? am[id]?.imageProvider : am[id]?.textProvider }
+  }
+  return {}
 }
 
 // GapGPT is a DOMESTIC service — always direct, NEVER via the (foreign) proxy,
@@ -25,8 +49,8 @@ async function gapHttp(url: string, init: { method: string; headers: Record<stri
   }
 }
 
-export async function listModels(): Promise<string[]> {
-  const { base, key } = cfg()
+export async function listModels(provider?: string): Promise<string[]> {
+  const { base, key } = cfg(provider)
   const res = await gapHttp(`${base}/models`, { method: 'GET', headers: { Authorization: `Bearer ${key}`, accept: 'application/json' } }, 15000)
   if (res.status !== 200) throw new Error(`HTTP ${res.status}`)
   const d = JSON.parse(res.body)
@@ -34,8 +58,8 @@ export async function listModels(): Promise<string[]> {
   return ids.sort()
 }
 
-export async function chatComplete(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number } = {}): Promise<string> {
-  const { base, key } = cfg()
+export async function chatComplete(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number } = {}, provider?: string): Promise<string> {
+  const { base, key } = cfg(provider)
   const res = await gapHttp(`${base}/chat/completions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', Authorization: `Bearer ${key}`, accept: 'application/json' },
@@ -48,20 +72,20 @@ export async function chatComplete(model: string, messages: { role: string; cont
 
 // Like chatComplete, but if the chosen model fails (e.g. 503/unavailable on
 // GapGPT), retry once with a known-good cheap model so the feature still works.
-export async function chatCompleteSafe(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number } = {}): Promise<string> {
+export async function chatCompleteSafe(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number } = {}, provider?: string): Promise<string> {
   try {
-    return await chatComplete(model, messages, opts)
+    return await chatComplete(model, messages, opts, provider)
   } catch (e) {
     if (model !== 'gpt-4o-mini') {
-      return await chatComplete('gpt-4o-mini', messages, opts)
+      return await chatComplete('gpt-4o-mini', messages, opts, provider)
     }
     throw e
   }
 }
 
 // مثلِ chatCompleteSafe ولی تعدادِ توکنِ مصرف‌شده را هم برمی‌گرداند (برای محاسبهٔ مصرفِ کاربر)
-async function chatCompleteRaw(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number } = {}): Promise<{ text: string; tokens: number }> {
-  const { base, key } = cfg()
+async function chatCompleteRaw(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number } = {}, provider?: string): Promise<{ text: string; tokens: number }> {
+  const { base, key } = cfg(provider)
   const res = await gapHttp(`${base}/chat/completions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', Authorization: `Bearer ${key}`, accept: 'application/json' },
@@ -71,13 +95,13 @@ async function chatCompleteRaw(model: string, messages: { role: string; content:
   const d = JSON.parse(res.body)
   return { text: d.choices?.[0]?.message?.content || '', tokens: Number(d.usage?.total_tokens) || 0 }
 }
-export async function chatCompleteUsage(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number } = {}): Promise<{ text: string; tokens: number }> {
-  try { return await chatCompleteRaw(model, messages, opts) }
-  catch (e) { if (model !== 'gpt-4o-mini') return await chatCompleteRaw('gpt-4o-mini', messages, opts); throw e }
+export async function chatCompleteUsage(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number } = {}, provider?: string): Promise<{ text: string; tokens: number }> {
+  try { return await chatCompleteRaw(model, messages, opts, provider) }
+  catch (e) { if (model !== 'gpt-4o-mini') return await chatCompleteRaw('gpt-4o-mini', messages, opts, provider); throw e }
 }
 
-export async function generateImage(model: string, prompt: string, size = '1024x1024'): Promise<string> {
-  const { base, key } = cfg()
+export async function generateImage(model: string, prompt: string, size = '1024x1024', provider?: string): Promise<string> {
+  const { base, key } = cfg(provider)
   const res = await gapHttp(`${base}/images/generations`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', Authorization: `Bearer ${key}`, accept: 'application/json' },
@@ -94,8 +118,8 @@ export async function generateImage(model: string, prompt: string, size = '1024x
 
 // تحلیل تصویر (چندوجهی): تصاویر را همراه یک پرامپت متنی به مدل بینایی می‌دهد.
 // images آرایه‌ای از data URL یا URL تصویر است (فرمت OpenAI vision).
-export async function chatVision(model: string, prompt: string, images: string[], opts: { max_tokens?: number; timeout?: number } = {}): Promise<string> {
-  const { base, key } = cfg()
+export async function chatVision(model: string, prompt: string, images: string[], opts: { max_tokens?: number; timeout?: number } = {}, provider?: string): Promise<string> {
+  const { base, key } = cfg(provider)
   const content: any[] = [{ type: 'text', text: prompt }]
   for (const img of images.slice(0, 8)) if (img) content.push({ type: 'image_url', image_url: { url: img } })
   const res = await gapHttp(`${base}/chat/completions`, {
@@ -112,13 +136,13 @@ export async function chatVision(model: string, prompt: string, images: string[]
 // کوتاه نگه داشته‌ایم تا مجموع زمان از حد تایم‌اوت پراکسی رد نشود.
 const VISION_FALLBACKS = ['gpt-4o', 'gpt-4o-mini']
 
-export async function chatVisionSafe(model: string | undefined, prompt: string, images: string[], opts: { max_tokens?: number; timeout?: number } = {}): Promise<{ text: string; model: string }> {
+export async function chatVisionSafe(model: string | undefined, prompt: string, images: string[], opts: { max_tokens?: number; timeout?: number } = {}, provider?: string): Promise<{ text: string; model: string }> {
   const candidates: string[] = []
   for (const m of [model, ...VISION_FALLBACKS]) if (m && !candidates.includes(m)) candidates.push(m)
   let lastErr: any = null
   for (const m of candidates) {
     try {
-      const text = await chatVision(m, prompt, images, opts)
+      const text = await chatVision(m, prompt, images, opts, provider)
       if (text && text.trim()) return { text, model: m }
     } catch (e) { lastErr = e }
   }
@@ -131,13 +155,13 @@ const IMAGE_FALLBACKS = ['gpt-image-1', 'dall-e-3', 'flux', 'dall-e-2']
 
 // مثل generateImage ولی اگر مدلِ انتخابی نامعتبر بود (۴۰۴/خطای آپ‌استریم)، خودکار
 // مدل‌های تصویرِ معتبر را امتحان می‌کند تا قابلیت با تنظیمِ اشتباهِ مدل از کار نیفتد.
-export async function generateImageSafe(model: string | undefined, prompt: string, size = '1024x1024'): Promise<{ url: string; model: string }> {
+export async function generateImageSafe(model: string | undefined, prompt: string, size = '1024x1024', provider?: string): Promise<{ url: string; model: string }> {
   const candidates: string[] = []
   for (const m of [model, ...IMAGE_FALLBACKS]) if (m && !candidates.includes(m)) candidates.push(m)
   let lastErr: any = null
   for (const m of candidates) {
     try {
-      const url = await generateImage(m, prompt, size)
+      const url = await generateImage(m, prompt, size, provider)
       if (url) return { url, model: m }
     } catch (e) { lastErr = e }
   }

@@ -2560,13 +2560,27 @@ function APIView() {
   const [masked, setMasked] = useState('')
   const [models, setModels] = useState<string[]>(FALLBACK_MODELS)
   const [modelsSource, setModelsSource] = useState('')
-  const [assign, setAssign] = useState<Record<string, { text?: string; image?: string }>>({})
+  const [assign, setAssign] = useState<Record<string, { text?: string; image?: string; textProvider?: string; imageProvider?: string }>>({})
   const [msg, setMsg] = useState('')
   const [loadingModels, setLoadingModels] = useState(false)
+  // ارائه‌دهنده‌های اضافی (مثلِ aval) + مدل‌هایشان
+  const [providers, setProviders] = useState<Record<string, { label?: string; baseUrl: string; configured: boolean; masked: string }>>({})
+  const [provModels, setProvModels] = useState<Record<string, string[]>>({})
+  const [pId, setPId] = useState('aval')
+  const [pBase, setPBase] = useState('https://api.avalai.ir/v1')
+  const [pKey, setPKey] = useState('')
+  const [pMsg, setPMsg] = useState('')
 
+  const loadProviderModels = async (id: string) => {
+    try { const r = await fetch(`/api/admin/ai/models?provider=${encodeURIComponent(id)}`); if (r.ok) { const d = await r.json(); setProvModels(m => ({ ...m, [id]: d.models || [] })) } } catch {}
+  }
   const loadConfig = async () => {
     const r = await fetch('/api/admin/ai/config')
-    if (r.ok) { const d = await r.json(); setBaseUrl(d.baseUrl); setMasked(d.masked) }
+    if (r.ok) {
+      const d = await r.json(); setBaseUrl(d.baseUrl); setMasked(d.masked)
+      const provs = d.providers || {}; setProviders(provs)
+      for (const id of Object.keys(provs)) if (provs[id].configured) loadProviderModels(id)
+    }
   }
   const loadAgents = async () => {
     const r = await fetch('/api/admin/ai/agents')
@@ -2585,6 +2599,21 @@ function APIView() {
     const r = await fetch('/api/admin/ai/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ baseUrl, apiKey }) })
     if (r.ok) { setMsg('✓ ذخیره شد'); setApiKey(''); await loadConfig(); await loadModels() } else setMsg('خطا در ذخیره')
   }
+  const saveProvider = async () => {
+    const id = pId.trim(); if (!id) { setPMsg('شناسهٔ ارائه‌دهنده الزامی است'); return }
+    setPMsg('در حال ذخیره…')
+    const r = await fetch('/api/admin/ai/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ providerId: id, label: id, baseUrl: pBase, apiKey: pKey }) })
+    if (r.ok) { setPMsg('✓ ذخیره شد'); setPKey(''); await loadConfig(); await loadProviderModels(id) } else setPMsg('خطا در ذخیره')
+  }
+  // مدل‌های دردسترس برای یک اسلات، بر اساسِ provider انتخاب‌شده
+  const modelsFor = (providerId?: string) => (providerId && provModels[providerId]?.length ? provModels[providerId] : models)
+  const setAgentProvider = async (agentId: string, slot: 'text' | 'image', providerId: string) => {
+    const key = slot === 'image' ? 'imageProvider' : 'textProvider'
+    setAssign(a => ({ ...a, [agentId]: { ...a[agentId], [key]: providerId } }))
+    await fetch('/api/admin/ai/agents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agentId, [key]: providerId }) })
+  }
+  const provOptions = ['', ...Object.keys(providers)]
+  const provLabel = (id?: string) => !id ? 'گپ (پیش‌فرض)' : (providers[id]?.label || id)
 
   const [testMsg, setTestMsg] = useState('')
   const testConn = async () => {
@@ -2603,7 +2632,7 @@ function APIView() {
     const m = assign['studio']?.image || assign['content']?.image || 'gpt-image-1'
     setImgTesting(true); setImgTestMsg(`در حال ساختِ تصویرِ تست با «${m}»… (تا ۶۰ ثانیه)`); setImgTestUrl('')
     try {
-      const r = await fetch('/api/admin/ai/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'image', model: m }) })
+      const r = await fetch('/api/admin/ai/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'image', model: m, provider: assign['studio']?.imageProvider || assign['content']?.imageProvider || '' }) })
       const d = await r.json()
       if (d.ok && d.image) { setImgTestMsg(`✓ تولید تصویر موفق با «${d.model}»`); setImgTestUrl(d.image) }
       else setImgTestMsg(`✕ خطا با «${d.model || m}»: ${d.error || 'خروجی خالی'}`)
@@ -2617,7 +2646,7 @@ function APIView() {
   const testVideo = async () => {
     setVidTesting(true); setVidTestMsg(`در حال ساختِ ویدئوی تست${vidModel ? ` با «${vidModel}»` : ' (مدل خودکار)'}… ممکن است تا چند دقیقه طول بکشد.`); setVidTestUrl('')
     try {
-      const r = await fetch('/api/admin/ai/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'video', model: vidModel.trim() || undefined }) })
+      const r = await fetch('/api/admin/ai/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'video', model: vidModel.trim() || undefined, provider: assign['studio']?.imageProvider || '' }) })
       const d = await r.json()
       if (d.ok && d.video) { setVidTestMsg(`✓ تولید ویدئو موفق با «${d.model}»`); setVidTestUrl(d.video) }
       else setVidTestMsg(`✕ خطا با «${d.model || vidModel || 'auto'}»: ${d.error || 'خروجی خالی'}`)
@@ -2698,13 +2727,42 @@ function APIView() {
         </div>
       </Card>
 
+      {/* ارائه‌دهنده‌های اضافی (مثل aval) */}
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>ارائه‌دهنده‌های اضافی (چند-API)</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.8 }}>پیش‌فرضِ همهٔ ایجنت‌ها «گپ» (بالا) است. اینجا می‌توانی ارائه‌دهندهٔ دیگری (مثلِ <b>aval</b>) اضافه کنی و در جدولِ پایین، هر ایجنت را به آن وصل کنی. هر دو سازگار با OpenAI‌اند.</div>
+        {Object.keys(providers).length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+            {Object.entries(providers).map(([id, p]) => (
+              <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: 'var(--bg2)', borderRadius: 10, padding: '8px 12px' }}>
+                <span style={{ fontWeight: 800, fontSize: 13, color: 'var(--gold)' }}>{p.label || id}</span>
+                <span style={{ fontSize: 11, color: 'var(--muted)', direction: 'ltr' }}>{p.baseUrl}</span>
+                <span style={{ fontSize: 11, color: p.configured ? '#5fd98a' : '#e7674a' }}>{p.configured ? `کلید ✓ ${p.masked}` : 'بدون کلید'}</span>
+                {provModels[id]?.length ? <span style={{ fontSize: 11, color: '#5fd98a' }}>{provModels[id].length} مدل</span> : null}
+                <button onClick={() => loadProviderModels(id)} style={{ ...(undefined as any), padding: '4px 10px', borderRadius: 7, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: 11.5, fontFamily: 'inherit' }}>↻ مدل‌ها</button>
+                <button onClick={async () => { if (confirm(`ارائه‌دهندهٔ «${id}» حذف شود؟`)) { await fetch('/api/admin/ai/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ removeProvider: id }) }); loadConfig() } }} style={{ marginInlineStart: 'auto', padding: '4px 10px', borderRadius: 7, border: '1px solid rgba(231,103,74,.4)', background: 'transparent', color: '#e7674a', cursor: 'pointer', fontSize: 11.5, fontFamily: 'inherit' }}>حذف</button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10, marginBottom: 10 }} className="mjsa-2col">
+          <div><label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 5 }}>شناسه (مثلاً aval)</label><input value={pId} onChange={e => setPId(e.target.value)} style={{ width: '100%', direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }} /></div>
+          <div><label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 5 }}>Base URL</label><input value={pBase} onChange={e => setPBase(e.target.value)} style={{ width: '100%', direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }} /></div>
+          <div><label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 5 }}>API Key</label><input value={pKey} onChange={e => setPKey(e.target.value)} type="password" placeholder="sk-…" style={{ width: '100%', direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }} /></div>
+        </div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <GoldButton onClick={saveProvider}>ذخیرهٔ ارائه‌دهنده</GoldButton>
+          {pMsg && <span style={{ fontSize: 12.5, color: pMsg.startsWith('✓') ? '#5fd98a' : 'var(--muted)' }}>{pMsg}</span>}
+        </div>
+      </Card>
+
       {/* Agents → models */}
       <Card>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, flexWrap: 'wrap', gap: 8 }}>
           <div style={{ fontWeight: 700, fontSize: 14 }}>تخصیص مدل به ایجنت‌ها ({AGENTS.length})</div>
           <GoldButton onClick={autoAssign} style={{ fontSize: 12.5, padding: '7px 14px' }}>🎯 تخصیص خودکار مدل پیشنهادی</GoldButton>
         </div>
-        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 16 }}>برای هر ایجنت مدل را از لیست گپ انتخاب کن. ایجنت‌های متن+تصویر (مثل تولید محتوا) دو مدل می‌گیرند.</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 16 }}>برای هر ایجنت، ارائه‌دهنده (گپ یا aval) و مدل را انتخاب کن. ایجنت‌های متن+تصویر (مثل استودیو) دو مدل می‌گیرند.</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {AGENTS.map(ag => (
             <div key={ag.id} style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 14px', display: 'grid', gridTemplateColumns: '1.1fr 1fr 1fr', gap: 12, alignItems: 'center' }} className="mjsa-agentrow">
@@ -2714,13 +2772,27 @@ function APIView() {
               </div>
               <div>
                 <div style={{ fontSize: 11, color: 'var(--faint)', marginBottom: 3 }}>{(ag.id === 'image' || ag.id === 'fraud') ? 'مدل بینایی (چندوجهی)' : 'مدل متن/چت'}</div>
-                <ModelSelect models={models} value={assign[ag.id]?.text || ''} onChange={v => setAgentModel(ag.id, 'text', v)} />
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {provOptions.length > 1 && (
+                    <select value={assign[ag.id]?.textProvider || ''} onChange={e => setAgentProvider(ag.id, 'text', e.target.value)} style={{ flex: '0 0 auto', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 8, padding: '7px 8px', color: 'var(--text)', fontSize: 11.5, fontFamily: 'inherit', cursor: 'pointer', maxWidth: 90 }}>
+                      {provOptions.map(p => <option key={p || 'gap'} value={p}>{provLabel(p)}</option>)}
+                    </select>
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}><ModelSelect models={modelsFor(assign[ag.id]?.textProvider)} value={assign[ag.id]?.text || ''} onChange={v => setAgentModel(ag.id, 'text', v)} /></div>
+                </div>
               </div>
               <div>
                 {ag.needs === 'both' ? (
                   <>
                     <div style={{ fontSize: 11, color: 'var(--gold)', marginBottom: 3 }}>مدل تصویر</div>
-                    <ModelSelect models={models} value={assign[ag.id]?.image || ''} onChange={v => setAgentModel(ag.id, 'image', v)} only="image" />
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {provOptions.length > 1 && (
+                        <select value={assign[ag.id]?.imageProvider || ''} onChange={e => setAgentProvider(ag.id, 'image', e.target.value)} style={{ flex: '0 0 auto', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 8, padding: '7px 8px', color: 'var(--text)', fontSize: 11.5, fontFamily: 'inherit', cursor: 'pointer', maxWidth: 90 }}>
+                          {provOptions.map(p => <option key={p || 'gap'} value={p}>{provLabel(p)}</option>)}
+                        </select>
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}><ModelSelect models={modelsFor(assign[ag.id]?.imageProvider)} value={assign[ag.id]?.image || ''} onChange={v => setAgentModel(ag.id, 'image', v)} only="image" /></div>
+                    </div>
                   </>
                 ) : <div style={{ fontSize: 11, color: 'var(--faint)' }}>—</div>}
               </div>

@@ -15,13 +15,16 @@ export async function GET() {
 // POST { agentId, text?, image? }  — assign models to one agent
 export async function POST(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
-  const { agentId, text, image } = await req.json()
+  const { agentId, text, image, textProvider, imageProvider } = await req.json()
   if (!agentId) return NextResponse.json({ error: 'شناسهٔ ایجنت الزامی است' }, { status: 400 })
   const data = getAdminData()
   data.agentModels = data.agentModels || {}
+  const cur = data.agentModels[agentId] || {}
   data.agentModels[agentId] = {
-    text: text != null ? String(text) : data.agentModels[agentId]?.text,
-    image: image != null ? String(image) : data.agentModels[agentId]?.image,
+    text: text != null ? String(text) : cur.text,
+    image: image != null ? String(image) : cur.image,
+    textProvider: textProvider != null ? (String(textProvider) || undefined) : cur.textProvider,
+    imageProvider: imageProvider != null ? (String(imageProvider) || undefined) : cur.imageProvider,
   }
   saveAdminData(data)
   return NextResponse.json({ ok: true, agentModels: data.agentModels })

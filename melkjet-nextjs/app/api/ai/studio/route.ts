@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { chatCompleteSafe, chatVisionSafe, generateImageSafe, agentModel } from '@/app/lib/gapgpt'
+import { chatCompleteSafe, chatVisionSafe, generateImageSafe, resolveAgent } from '@/app/lib/gapgpt'
 import { renderFloorPlanSVG, renderIsoSVG, svgDataUrl, type PlanLayout, type PlanRoom } from '@/app/lib/floorplan-svg'
 import { uploadToImgbb } from '@/app/lib/img-host'
 import { getAdminData } from '@/app/lib/admin-store'
@@ -52,12 +52,13 @@ export async function POST(req: NextRequest) {
     ? b.photos.filter((p: any) => p && typeof p.image === 'string' && p.image.startsWith('data:')).slice(0, 8)
     : []
 
-  const visionModel = agentModel('studio', 'text') || agentModel('image', 'text') || agentModel('content', 'text') || agentModel('chat', 'text')
+  const { model: visionModel, provider: visionProvider } = resolveAgent([['studio', 'text'], ['image', 'text'], ['content', 'text'], ['chat', 'text']])
+  const { model: imgModelG, provider: imgProviderG } = resolveAgent([['studio', 'image'], ['content', 'image']])
 
   // ===== رندرِ ۳بعدی از روی نقشهٔ ویرایش‌شدهٔ کاربر (تا ۳بعدی با ۲بعدیِ اصلاح‌شده بخوانَد) =====
   const layout = b.layout && Array.isArray(b.layout.rooms) && b.layout.rooms.length ? b.layout : null
   if (b.mode === 'render' && layout) {
-    const imgModel = agentModel('studio', 'image') || agentModel('content', 'image')
+    const imgModel = imgModelG
     if (!imgModel) return NextResponse.json({ error: 'برای رندرِ ۳بعدی، به StudioAgent یک «مدل تولید تصویر» بده (پنل → API و مدل‌های AI).' }, { status: 400 })
     const cols = Number(layout.cols) || 4, rows = Number(layout.rows) || 4
     const enType = (t: string) => (({ kitchen: 'kitchen', living: 'living room', bedroom: 'bedroom', bathroom: 'bathroom', hall: 'hallway/entrance', balcony: 'balcony', dining: 'dining area', office: 'home office' } as Record<string, string>)[t] || 'room')
@@ -70,7 +71,7 @@ export async function POST(req: NextRequest) {
     }).join('; ')
     const prompt = `3D isometric dollhouse cutaway render of a ${area} square meter residential apartment, viewed from above at a 45° isometric angle, no roof. The floor plan MUST match this exact room arrangement (grid ${cols}×${rows}, top-down): ${desc}. Put dividing walls between rooms, furnish each room realistically for its function, soft natural daylight, architectural visualization, photorealistic, clean, NO text and NO labels.`
     try {
-      const r = await generateImageSafe(imgModel, prompt, '1024x1024')
+      const r = await generateImageSafe(imgModel, prompt, '1024x1024', imgProviderG)
       return NextResponse.json({ ok: true, renderUrl: r.url, model: r.model })
     } catch (e: any) {
       return NextResponse.json({ error: e?.message || 'خطا در ساختِ رندرِ ۳بعدی' }, { status: 200 })
@@ -107,7 +108,7 @@ export async function POST(req: NextRequest) {
     let raw = '', visionErr = ''
     if (imgs.length) {
       try {
-        raw = (await chatVisionSafe(visionModel, visionPrompt, imgs, { max_tokens: 900, timeout: 40000 })).text
+        raw = (await chatVisionSafe(visionModel, visionPrompt, imgs, { max_tokens: 900, timeout: 40000 }, visionProvider)).text
       } catch (e: any) { visionErr = e?.message || 'خطای نامشخص' }
     } else {
       visionErr = 'هیچ عکسِ معتبری برای تحلیل دریافت نشد'
@@ -118,9 +119,9 @@ export async function POST(req: NextRequest) {
     // تلاش دوم: اگر مدل پاسخ داد ولی JSON معتبر نبود، با یک مدل متنی به قالب JSON تبدیلش کن
     if (raw && !(parsed && Array.isArray(parsed.rooms) && parsed.rooms.length)) {
       try {
-        const fixed = await chatCompleteSafe(visionModel, [
+        const fixed = await chatCompleteSafe(visionModel || 'gpt-4o-mini', [
           { role: 'user', content: `این تحلیل را فقط به همین JSON تبدیل کن و چیز دیگری ننویس:\n{"cols":N,"rows":N,"rooms":[{"name","type","x","y","w","h"}],"summaryFa":""}\nتحلیل:\n${raw.slice(0, 2000)}` },
-        ], { max_tokens: 700 })
+        ], { max_tokens: 700 }, visionProvider)
         parsed = extractJson(fixed) as PlanLayout | null
       } catch { /* ادامه به خطای زیر */ }
     }
@@ -131,11 +132,10 @@ export async function POST(req: NextRequest) {
       // وگرنه به نمای ایزومتریکِ SVG برمی‌گردیم.
       let renderUrl = svgDataUrl(renderIsoSVG(parsed, area, 'نمای سه‌بعدی'))
       let renderReal = false
-      const imgModelPhoto = agentModel('studio', 'image') || agentModel('content', 'image')
-      if (imgModelPhoto) {
+      if (imgModelG) {
         const roomsList = parsed.rooms.map(r => r.name).filter(Boolean).join(', ')
         const renderPrompt = `3D isometric dollhouse cutaway render of a real residential apartment, about ${area} square meters, containing exactly these rooms in their real relative layout: ${roomsList}. Realistic furniture and materials matching each room's function, soft natural daylight, architectural visualization, top-down isometric angle, clean and high quality. No text labels.`
-        try { const r = await generateImageSafe(imgModelPhoto, renderPrompt); if (r.url) { renderUrl = r.url; renderReal = true } } catch { /* به SVG برمی‌گردیم */ }
+        try { const r = await generateImageSafe(imgModelG, renderPrompt, '1024x1024', imgProviderG); if (r.url) { renderUrl = r.url; renderReal = true } } catch { /* به SVG برمی‌گردیم */ }
       }
       const description = String(parsed.summaryFa || '').trim()
         || `این واحد شامل ${parsed.rooms.map(r => r.name).filter(Boolean).join('، ')} است که از روی عکس‌ها بازسازی شده است.`
@@ -162,8 +162,8 @@ export async function POST(req: NextRequest) {
   }
 
   // ===== حالت پارامتری (بدون عکس) — با مدل تصویر یک پلان نمونه می‌سازد =====
-  const textModel = agentModel('studio', 'text') || agentModel('content', 'text') || agentModel('chat', 'text')
-  const imgModel = agentModel('studio', 'image') || agentModel('content', 'image')
+  const textModel = visionModel
+  const imgModel = imgModelG
   if (!imgModel) {
     return NextResponse.json({ error: 'برای ساخت پلان بدون عکس، به StudioAgent یک «مدل تولید تصویر» تخصیص بده — یا چند عکس از فضا اضافه کن تا از روی عکس بازسازی شود.' }, { status: 400 })
   }
@@ -176,13 +176,13 @@ export async function POST(req: NextRequest) {
     ? chatCompleteSafe(textModel, [
         { role: 'system', content: 'تو معمار داخلی هستی. بر اساس پارامترها چیدمان منطقی فضاها و توزیع متراژ را در ۳ تا ۴ جملهٔ فارسی توضیح بده. کوتاه و کاربردی.' },
         { role: 'user', content: `متراژ کل: ${area} مترمربع\nتعداد خواب: ${bedrooms}\nسبک: ${style}\nپلان ${openPlan ? 'اوپن' : 'بسته'}\nفضاها: ${roomsFa}` },
-      ], { max_tokens: 400 }).catch(() => '')
+      ], { max_tokens: 400 }, visionProvider).catch(() => '')
     : Promise.resolve('')
 
   const [descRes, planRes, renderRes] = await Promise.allSettled([
     descTask,
-    generateImageSafe(imgModel, planPrompt),
-    generateImageSafe(imgModel, renderPrompt),
+    generateImageSafe(imgModel, planPrompt, '1024x1024', imgProviderG),
+    generateImageSafe(imgModel, renderPrompt, '1024x1024', imgProviderG),
   ])
   const description = descRes.status === 'fulfilled' ? (descRes.value || '') : ''
   const planUrl = planRes.status === 'fulfilled' ? planRes.value.url : ''

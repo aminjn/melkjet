@@ -35,10 +35,13 @@ export interface AdminData {
   divar?: {
     proxyUrl?: string    // HTTP proxy used to reach api.divar.ir from the server
   }
-  gapgpt?: {
+  gapgpt?: {              // ارائه‌دهندهٔ پیش‌فرض (گپ) — همهٔ ایجنت‌ها مگر آن‌ها که provider خاص دارند
     baseUrl: string      // e.g. https://api.gapgpt.app/v1
     apiKey: string
   }
+  // ارائه‌دهنده‌های اضافیِ سازگار با OpenAI (مثلِ aval). کلید = شناسهٔ provider (مثلاً 'aval').
+  // هر ایجنت می‌تواند با textProvider/imageProvider یکی از این‌ها را به‌جای پیش‌فرض استفاده کند.
+  providers?: Record<string, { label?: string; baseUrl: string; apiKey: string }>
   arvan?: {              // پاس‌انبان آروان (S3) — (برای بینایی گپ جواب نداد؛ نگه‌داری شده)
     endpoint: string
     bucket: string
@@ -93,7 +96,8 @@ export interface AdminData {
     throttleHours?: number // حداقل فاصلهٔ دو پیامک برای یک کاربر (ساعت)
     paths?: string       // پیشوندهای مسیر که پیامک را فعال می‌کنند (هر خط یکی؛ خالی=همهٔ صفحات عمومی)
   }
-  agentModels?: Record<string, { text?: string; image?: string }>  // per-agent model assignment
+  // تخصیصِ مدل به‌ازای هر ایجنت + (اختیاری) provider به‌ازای هر اسلات. provider خالی = پیش‌فرض (گپ).
+  agentModels?: Record<string, { text?: string; image?: string; textProvider?: string; imageProvider?: string }>
 }
 
 export function getAdminData(): AdminData {

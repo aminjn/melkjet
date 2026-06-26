@@ -5,8 +5,13 @@ import { shecanRequest } from './shecan-https'
 // تولیدِ ویدئو با سرویسِ AI سازگارِ OpenAI (avalai): الگوی async — ثبتِ کار، سپس
 // poll تا آماده‌شدن. هم متن‌به‌ویدئو و هم عکس‌به‌ویدئو (image-to-video) را پوشش می‌دهد.
 
-function cfg() {
-  const g = getAdminData().gapgpt
+function cfg(providerId?: string) {
+  const a = getAdminData()
+  if (providerId && providerId !== 'gap' && providerId !== 'default') {
+    const p = a.providers?.[providerId]
+    if (p?.apiKey) return { base: (p.baseUrl || DEFAULT_GAP_BASE).replace(/\/$/, ''), key: p.apiKey }
+  }
+  const g = a.gapgpt
   if (!g?.apiKey) throw new Error('کلید API تنظیم نشده است (پنل → API و مدل‌های AI)')
   return { base: (g.baseUrl || DEFAULT_GAP_BASE).replace(/\/$/, ''), key: g.apiKey }
 }
@@ -67,11 +72,11 @@ async function pollVideo(base: string, key: string, id: string): Promise<string>
   throw new Error('زمانِ ساختِ ویدئو طولانی شد (تایم‌اوت). دوباره تلاش کنید یا مدلِ سریع‌تری انتخاب کنید.')
 }
 
-export interface VideoOpts { model?: string; imageUrl?: string; seconds?: number; size?: string }
+export interface VideoOpts { model?: string; imageUrl?: string; seconds?: number; size?: string; provider?: string }
 
 /** یک ویدئو می‌سازد. اگر imageUrl بدهی، عکس‌به‌ویدئو (واک‌تر)؛ وگرنه متن‌به‌ویدئو. */
 export async function generateVideo(prompt: string, opts: VideoOpts = {}): Promise<{ url: string; model: string }> {
-  const { base, key } = cfg()
+  const { base, key } = cfg(opts.provider)
   const headers = { 'content-type': 'application/json', Authorization: `Bearer ${key}`, accept: 'application/json' }
   const seconds = String(opts.seconds || 5)
   const size = opts.size || '1280x720'
