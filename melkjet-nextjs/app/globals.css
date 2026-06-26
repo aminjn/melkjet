@@ -210,6 +210,10 @@ body {
 
 /* CRM chart 2-col, table scroll, calendar scroll */
 @media(max-width:760px){.mjc-2col{grid-template-columns:1fr!important}.mjc-table{overflow-x:auto!important}.mjc-row{min-width:560px!important}.mjc-cal{overflow-x:auto!important}.mjc-cal-inner{min-width:560px!important}}
+/* جدول‌های داده روی موبایل به‌جای شکستنِ صفحه، افقی اسکرول می‌شوند */
+@media(max-width:760px){
+  table{display:block;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap}
+}
 
 /* Admin agents 3-col */
 @media(max-width:760px){.mjsa-agents{grid-template-columns:1fr 1fr!important}.mjsa-agentrow{grid-template-columns:1fr!important}}
