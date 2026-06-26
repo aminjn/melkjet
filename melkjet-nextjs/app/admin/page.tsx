@@ -4149,10 +4149,10 @@ export default function SuperAdminPage() {
           </div>
 
           {/* Live clock */}
-          <div style={{ fontSize: 13, color: 'var(--muted)', fontFamily: '"JetBrains Mono", monospace', letterSpacing: '.5px' }}>{now}</div>
+          <div className="mjsa-tb-hide" style={{ fontSize: 13, color: 'var(--muted)', fontFamily: '"JetBrains Mono", monospace', letterSpacing: '.5px' }}>{now}</div>
 
           {/* System status badge */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'rgba(95,217,138,.12)', borderRadius: 999, padding: '6px 12px', border: '1px solid rgba(95,217,138,.25)' }}>
+          <div className="mjsa-tb-hide" style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'rgba(95,217,138,.12)', borderRadius: 999, padding: '6px 12px', border: '1px solid rgba(95,217,138,.25)' }}>
             <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#5fd98a', animation: 'pulse 2s infinite', boxShadow: '0 0 6px #5fd98a', display: 'inline-block' }} />
             <span style={{ fontSize: 12.5, fontWeight: 700, color: '#5fd98a' }}>همه سیستم‌ها عملیاتی</span>
           </div>
@@ -4184,6 +4184,7 @@ export default function SuperAdminPage() {
         /* کشوی منوی موبایلِ ادمین */
         .mjsa-burger{display:none}
         .mjsa-overlay{display:none}
+        @media(max-width:760px){.mjsa-tb-hide{display:none!important}}
         @media(max-width:860px){
           .mjsa-side{position:fixed!important;right:0;top:0;height:100vh!important;width:84vw!important;max-width:310px;z-index:130;transform:translateX(105%);transition:transform .26s ease;box-shadow:-12px 0 40px -12px rgba(0,0,0,.6)}
           .mjsa-side.mjsa-open{transform:translateX(0)}

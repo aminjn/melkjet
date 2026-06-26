@@ -128,10 +128,8 @@ body {
 @media(max-width:980px){.mjp-grid{grid-template-columns:1fr!important}.mjp-side{position:static!important}.mjp-navlinks{display:none!important}}
 @media(max-width:640px){.mjp-thumbs{display:none!important}.mjp-facts{grid-template-columns:repeat(2,1fr)!important}.mjp-scores{grid-template-columns:repeat(2,1fr)!important}}
 
-/* Agency / Builder / Materials / Marketing */
+/* Agency / Builder / Materials / Marketing — سایدبار حالا کشوی موبایل است (در خودِ پنل) */
 @media(max-width:920px){
-  .mjg-side,.mju-side,.mjm-side,.mjk-side{width:62px!important;padding:14px 8px!important}
-  .mjg-sidelabel,.mju-sidelabel,.mjm-sidelabel,.mjk-sidelabel{display:none!important}
   .mjg-kpi,.mju-kpi,.mjm-kpi,.mjk-kpi{grid-template-columns:repeat(2,1fr)!important}
   .mjg-2col,.mju-2col,.mjm-2col,.mjk-2col{grid-template-columns:1fr!important}
 }
@@ -140,8 +138,8 @@ body {
 @media(max-width:1024px){.mjc-dash{grid-template-columns:1fr!important}.mjc-kanban{overflow-x:auto!important;display:flex!important;gap:12px!important}}
 @media(max-width:760px){.mjc-side{width:64px!important;padding:14px 8px!important}.mjc-sidelabel{display:none!important}.mjc-kpi{grid-template-columns:repeat(2,1fr)!important}}
 
-/* Admin (SuperAdmin) */
-@media(max-width:980px){.mjsa-side{width:60px!important;padding:14px 7px!important}.mjsa-sidelabel{display:none!important}.mjsa-kpi{grid-template-columns:repeat(2,1fr)!important}.mjsa-2col{grid-template-columns:1fr!important}}
+/* Admin (SuperAdmin) — سایدبار حالا کشوی موبایل است (در خودِ پنل) */
+@media(max-width:980px){.mjsa-kpi{grid-template-columns:repeat(2,1fr)!important}.mjsa-2col{grid-template-columns:1fr!important}}
 
 /* Buyer */
 @media(max-width:980px){.mjb-grid{grid-template-columns:1fr!important}}

@@ -57,8 +57,12 @@ const tabs = [
   },
 ]
 
+// مسیرهای داشبورد/پنل — ناوبریِ پایینِ عمومی نباید آنجا دیده شود.
+const PANEL_ROUTES = ['/admin', '/agency', '/pros', '/builder', '/materials', '/owner', '/buyer', '/legal', '/crm', '/marketing', '/workflow', '/website-builder', '/content', '/plan-ai']
+
 export default function BottomNav() {
   const path = usePathname()
+  if (PANEL_ROUTES.some(r => path === r || path.startsWith(r + '/'))) return null
 
   return (
     <nav
