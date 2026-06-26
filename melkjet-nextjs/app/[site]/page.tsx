@@ -5,6 +5,7 @@ import { listItems, listArticles, type Item } from '@/app/lib/scraper-store'
 import { getTeamMembers, type TeamMember } from '@/app/lib/team-members'
 import { listReviews } from '@/app/lib/reviews-store'
 import ListingsSlider from './ListingsSlider'
+import SiteListings, { type SiteListing } from './SiteListings'
 import ServicesSlider from './ServicesSlider'
 import HeroSlider from './HeroSlider'
 import GallerySlider from './GallerySlider'
@@ -329,6 +330,44 @@ function BlogFullBlock({ block, primary, ownerName }: { block: SiteBlock; primar
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         <SectionHeading primary={primary}>{heading}</SectionHeading>
         <BlogFull articles={articles} categories={categories} sidebar={sidebar} primary={primary} />
+      </div>
+    </section>
+  )
+}
+
+// تبدیلِ رقمِ فارسی به لاتین و استخراجِ عدد.
+function faDigits(s: string): number {
+  const latin = String(s || '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+  const n = parseInt(latin.replace(/[^\d]/g, ''), 10)
+  return Number.isFinite(n) ? n : 0
+}
+
+// «آگهی‌ها با جستجو و فیلتر» — مثلِ صفحهٔ اصلیِ آگهی‌ها: گریدِ کامل + فیلتر + جستجو.
+function SearchListBlock({ block, primary, ownerName, ownerPhone }: { block: SiteBlock; primary: string; ownerName?: string; ownerPhone?: string }) {
+  const props = p(block)
+  const total = Math.max(1, Math.min(300, Number(props.total) || 60))
+  const items: SiteListing[] = ownerListings(ownerName, ownerPhone, total).map(it => {
+    const m = (it.meta || {}) as Record<string, string>
+    const deal: 'sale' | 'rent' = m['نوع معامله'] === 'اجاره' ? 'rent' : 'sale'
+    return {
+      id: it.id, title: it.title, location: it.location, price: it.price, image: it.image, category: (it.category || '').trim(),
+      deal, ptype: (m['نوع ملک'] || '').trim(),
+      city: (m['شهر'] || '').trim(), neighborhood: (m['محله'] || m['منطقه'] || '').trim(),
+      rooms: faDigits(m['اتاق خواب'] || ''), area: faDigits(m['متراژ'] || ''),
+      priceNum: faDigits(it.price || ''),
+    }
+  })
+  return (
+    <section id="listings" style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <SectionHeading primary={primary}>{props.heading}</SectionHeading>
+        {items.length === 0 ? (
+          <div style={{ background: SURFACE, border: '1px dashed #ddd4c5', borderRadius: 18, padding: '52px 24px', textAlign: 'center', color: '#9b9285', fontSize: 14.5 }}>
+            هنوز آگهی منتشرشده‌ای برای نمایش وجود ندارد.
+          </div>
+        ) : (
+          <SiteListings items={items} primary={primary} />
+        )}
       </div>
     </section>
   )
@@ -684,6 +723,7 @@ function renderBlock(block: SiteBlock, primary: string, ownerName?: string, owne
     case 'hero': return <HeroBlock key={block.id} block={block} primary={primary} />
     case 'search': return <SearchBlock key={block.id} block={block} primary={primary} />
     case 'listings': return <ListingsBlock key={block.id} block={block} primary={primary} ownerName={ownerName} ownerPhone={ownerPhone} />
+    case 'searchlist': return <SearchListBlock key={block.id} block={block} primary={primary} ownerName={ownerName} ownerPhone={ownerPhone} />
     case 'blog': return <BlogBlock key={block.id} block={block} primary={primary} ownerName={ownerName} />
     case 'blogfull': return <BlogFullBlock key={block.id} block={block} primary={primary} ownerName={ownerName} />
     case 'services': return <ServicesBlock key={block.id} block={block} primary={primary} />

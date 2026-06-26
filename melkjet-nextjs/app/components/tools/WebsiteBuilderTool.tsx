@@ -113,6 +113,10 @@ const BLOCK_DEFAULTS: Record<string, Record<string, any>> = {
     showCategories: 'yes',
     count: 3,
   },
+  searchlist: {
+    heading: 'جستجوی آگهی‌ها',
+    total: 60,
+  },
   blog: {
     heading: 'وبلاگ و مقالات',
     source: 'mine',
@@ -236,6 +240,10 @@ const BLOCK_SCHEMA: Record<string, FieldSpec[]> = {
     { key: 'perSlide', label: 'تعداد در هر اسلاید', kind: 'number' },
     { key: 'showCategories', label: 'نمایشِ دسته‌بندی‌ها', kind: 'enum', options: [{ value: 'yes', label: 'نمایش' }, { value: 'no', label: 'بدون دسته' }] },
   ],
+  searchlist: [
+    { key: 'heading', label: 'عنوان', kind: 'text' },
+    { key: 'total', label: 'تعدادِ کلِ آگهی', kind: 'number' },
+  ],
   blog: [
     { key: 'heading', label: 'عنوان', kind: 'text' },
     { key: 'count', label: 'تعداد', kind: 'number' },
@@ -306,6 +314,7 @@ const BLOCK_SCHEMA: Record<string, FieldSpec[]> = {
 const BLOCK_LIBRARY = [
   { type: 'hero', label: 'هیرو', icon: '◇' },
   { type: 'search', label: 'نوار جستجو', icon: '⌕' },
+  { type: 'searchlist', label: 'آگهی‌ها (جستجو و فیلتر)', icon: '🔍' },
   { type: 'listings', label: 'آگهی‌های من', icon: '⌂' },
   { type: 'blog', label: 'وبلاگ (خلاصه)', icon: '✎' },
   { type: 'blogfull', label: 'صفحهٔ وبلاگ', icon: '🗞' },
@@ -453,12 +462,12 @@ function profilePageSpec(profile: string): PageSpec[] {
   const services: PageSpec = { slug: 'services', title: 'خدمات', menuLabel: 'خدمات', blocks: ['hero', 'services', 'testimonials', 'cta', 'footer'], heroHeading: 'خدماتِ ما', heroSub: 'آنچه برای شما انجام می‌دهیم' }
   const blog: PageSpec = { slug: 'blog', title: 'وبلاگ', menuLabel: 'وبلاگ', blocks: ['blogfull', 'footer'], heroHeading: 'وبلاگ', heroSub: 'تازه‌ترین مقالات و اخبار' }
   const contact: PageSpec = { slug: 'contact', title: 'تماس با ما', menuLabel: 'تماس', blocks: ['hero', 'contact', 'footer'], heroHeading: 'تماس با ما', heroSub: 'برای مشاوره و هماهنگی با ما در ارتباط باشید' }
-  const listings: PageSpec = { slug: 'listings', title: 'فایل‌ها', menuLabel: 'فایل‌ها', blocks: ['hero', 'search', 'listings', 'footer'], heroHeading: 'فایل‌های ملکی', heroSub: 'جدیدترین فایل‌های خرید، فروش و اجاره' }
+  const listings: PageSpec = { slug: 'listings', title: 'فایل‌ها', menuLabel: 'فایل‌ها', blocks: ['hero', 'searchlist', 'footer'], heroHeading: 'فایل‌های ملکی', heroSub: 'جدیدترین فایل‌های خرید، فروش و اجاره' }
   const team: PageSpec = { slug: 'team', title: 'تیم ما', menuLabel: 'تیم ما', blocks: ['hero', 'team', 'cta', 'footer'], heroHeading: 'تیمِ مشاوران', heroSub: 'با مشاورانِ خبرهٔ ما آشنا شوید' }
   const projects: PageSpec = { slug: 'projects', title: 'پروژه‌ها', menuLabel: 'پروژه‌ها', blocks: ['hero', 'gallery', 'stats', 'cta', 'footer'], heroHeading: 'پروژه‌های ما', heroSub: 'نمونه‌کارها و پروژه‌های در حالِ ساخت' }
-  const products: PageSpec = { slug: 'products', title: 'محصولات', menuLabel: 'محصولات', blocks: ['hero', 'search', 'listings', 'footer'], heroHeading: 'محصولات', heroSub: 'کاتالوگِ کاملِ محصولاتِ ما' }
+  const products: PageSpec = { slug: 'products', title: 'محصولات', menuLabel: 'محصولات', blocks: ['hero', 'searchlist', 'footer'], heroHeading: 'محصولات', heroSub: 'کاتالوگِ کاملِ محصولاتِ ما' }
   const categories: PageSpec = { slug: 'services', title: 'دسته‌بندی‌ها', menuLabel: 'دسته‌بندی‌ها', blocks: ['hero', 'services', 'testimonials', 'cta', 'footer'], heroHeading: 'دسته‌بندی‌ها', heroSub: 'محصولات را بر اساسِ دسته‌بندی ببینید' }
-  const opportunities: PageSpec = { slug: 'opportunities', title: 'فرصت‌ها', menuLabel: 'فرصت‌ها', blocks: ['hero', 'stats', 'listings', 'cta', 'footer'], heroHeading: 'فرصت‌های سرمایه‌گذاری', heroSub: 'بازده و فرصت‌هایِ منتخبِ ملکی' }
+  const opportunities: PageSpec = { slug: 'opportunities', title: 'فرصت‌ها', menuLabel: 'فرصت‌ها', blocks: ['hero', 'stats', 'searchlist', 'cta', 'footer'], heroHeading: 'فرصت‌های سرمایه‌گذاری', heroSub: 'بازده و فرصت‌هایِ منتخبِ ملکی' }
   switch (profile) {
     case 'مشاور': return [about, listings, services, blog, contact]
     case 'آژانس': return [aboutTeam, listings, services, team, blog, contact]
@@ -644,6 +653,35 @@ function BlockBody({ block, primary, myListings, myArticles, teamMembers }: { bl
             <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>جستجو</span>
           </div>
         </div>
+      </div>
+    )
+  }
+  if (t === 'searchlist') {
+    const grads = ['#2d2215,#1e1a12', '#1e2215,#141a10', '#15202d,#101828', '#251528,#1a0e1e', '#152825,#0e1a18', '#2d1515,#1e0e0e']
+    const real = myListings || []
+    const cards = (real.length ? real.slice(0, 6) : Array.from({ length: 6 }).map(() => null)) as ({ title?: string; location?: string; price?: string; image?: string } | null)[]
+    return (
+      <div style={{ background: '#faf9f7', padding: '24px 28px', direction: 'rtl' }}>
+        {p.heading ? <div style={{ fontSize: 18, fontWeight: 800, color: '#1a1510', marginBottom: 14 }}>{p.heading}</div> : null}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+          <div style={{ flex: 1, height: 40, background: '#fff', border: '1px solid #e6ddcd', borderRadius: 10, display: 'flex', alignItems: 'center', padding: '0 12px' }}><span style={{ fontSize: 12.5, color: '#aaa' }}>جستجو در عنوان، موقعیت، نوع ملک…</span></div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+          {['همهٔ معاملات', 'نوع ملک', 'شهر', 'محله', 'تعداد خواب', 'مرتب‌سازی'].map(f => <div key={f} style={{ fontSize: 11.5, color: '#666', background: '#fff', border: '1px solid #e6ddcd', borderRadius: 8, padding: '7px 12px' }}>{f} ▾</div>)}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+          {cards.map((c, i) => (
+            <div key={i} style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', border: '1px solid #eee', boxShadow: '0 8px 22px -16px rgba(0,0,0,.5)' }}>
+              <div style={{ height: 80, background: c?.image ? `center/cover no-repeat url(${c.image})` : `linear-gradient(135deg,${grads[i % grads.length]})` }} />
+              <div style={{ padding: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 800, color: '#1a1510', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c?.title || 'عنوان آگهی'}</div>
+                <div style={{ fontSize: 10, color: '#888' }}>{c?.location || 'موقعیت'}</div>
+                <div style={{ fontSize: 12, fontWeight: 800, color: primary, marginTop: 6 }}>{c?.price || 'قیمت'}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: 10.5, color: primary, marginTop: 10 }}>{real.length ? `🔍 صفحهٔ کاملِ جستجو و فیلتر — ${real.length.toLocaleString('fa-IR')} آگهیِ منتشرشدهٔ شما` : '🔍 صفحهٔ کاملِ جستجو و فیلترِ آگهی‌ها — آگهی‌های منتشرشدهٔ شما اینجا با فیلتر نمایش داده می‌شوند.'}</div>
       </div>
     )
   }
