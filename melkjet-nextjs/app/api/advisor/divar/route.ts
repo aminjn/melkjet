@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
   const o = s.phone
   const b = await req.json().catch(() => ({} as any))
 
+  try {
   switch (b.action as string) {
     case 'importUrl': {
       if (!b.url) return NextResponse.json({ error: 'لینک الزامی است' }, { status: 400 })
@@ -72,5 +73,8 @@ export async function POST(req: NextRequest) {
     }
     default:
       return NextResponse.json({ error: 'عملیات نامعتبر' }, { status: 400 })
+  }
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message || 'خطای داخلیِ سرور هنگامِ خواندن از دیوار' }, { status: 500 })
   }
 }

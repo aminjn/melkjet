@@ -133,6 +133,26 @@ export async function fetchDivarProfileTokens(slug: string): Promise<{ posts: Br
     cursor = String(next)
   }
 
+  // Fallback: اگر APIِ brand-landing چیزی نداد (تغییرِ ساختار/۴۰۳)، صفحهٔ HTMLِ پروِ عمومی را
+  // می‌خوانیم و توکن‌ها را از JSONِ جاسازی‌شده (__NEXT_DATA__) درمی‌آوریم.
+  if (!posts.size) {
+    try {
+      const res = await proxiedRequest(`https://divar.ir/pro/${encodeURIComponent(slug)}`, {
+        method: 'GET',
+        headers: { accept: 'text/html,application/xhtml+xml', 'user-agent': UA_BROWSER, referer: 'https://divar.ir/' },
+        proxyUrl, timeout: 20000,
+      })
+      if (res.status === 200) {
+        const html = res.body || ''
+        any200 = true
+        const re = /"token"\s*:\s*"([A-Za-z0-9_-]{6,16})"/g
+        let m: RegExpExecArray | null
+        while ((m = re.exec(html))) { if (m[1] !== slug && !posts.has(m[1])) posts.set(m[1], { token: m[1] }) }
+        if (!name) { const nm = html.match(/"name"\s*:\s*"([^"]{2,60})"/); if (nm) name = nm[1] }
+      } else if (!reason) reason = `http_${res.status}`
+    } catch { if (!reason) reason = 'unreachable' }
+  }
+
   const list = Array.from(posts.values()).slice(0, 300)
   if (!list.length) return { posts: [], name, reason: reason || (any200 ? 'no_tokens' : 'unreachable') }
   return { posts: list, name }

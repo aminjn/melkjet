@@ -26,8 +26,8 @@ export default function DivarImport({ onChange, entity = 'شما' }: { onChange?
   const [url, setUrl] = useState('')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
-  const [editId, setEditId] = useState<string | null>(null)   // کدام اسکرپ بازِ ویرایش است
-  const [openImports, setOpenImports] = useState<Record<string, boolean>>({})  // فهرستِ آگهی‌های هر اسکرپ باز است؟
+  const [selId, setSelId] = useState<string | null>(null)   // اسکرپِ انتخاب‌شده برای ویرایش
+  const [showFiles, setShowFiles] = useState(false)
 
   const refresh = useCallback(async () => {
     try { const r = await fetch('/api/advisor/divar', { cache: 'no-store' }); if (r.ok) { const d = await r.json(); setCfg(d.config) } } catch {}
@@ -50,46 +50,44 @@ export default function DivarImport({ onChange, entity = 'شما' }: { onChange?
     { v: 'off', label: 'خاموش (دستی)' }, { v: 'hourly', label: 'هر ساعت' }, { v: '6h', label: 'هر ۶ ساعت' }, { v: 'daily', label: 'روزانه' },
   ]
 
-  // آگهی‌های هر اسکرپ + آگهی‌های دستی (بدونِ اسکرپ)
+  const sources = cfg?.sources || []
+  const selSrc = sources.find(s => s.id === selId) || sources[0] || null
   const importsOf = (sid: string) => (cfg?.imports || []).filter(i => i.sourceId === sid)
-  const sourceIds = new Set((cfg?.sources || []).map(s => s.id))
+  const sourceIds = new Set(sources.map(s => s.id))
   const manualImports = (cfg?.imports || []).filter(i => !i.sourceId || !sourceIds.has(i.sourceId))
 
-  // ذخیرهٔ تنظیماتِ یک اسکرپ
+  const setLocal = (id: string, patch: Partial<DSource>) => setCfg(c => c ? { ...c, sources: c.sources.map(x => x.id === id ? { ...x, ...patch } : x) } : c)
   const saveSource = async (src: DSource) => post({ action: 'updateSource', id: src.id, name: src.name, searchUrl: src.searchUrl, divarName: src.divarName, schedule: src.schedule, autoPublish: src.autoPublish, autoNeighborhood: src.autoNeighborhood })
 
-  // همگام‌سازیِ یک اسکرپ → آگهی‌ها مستقیم به «فایل‌های من» اضافه می‌شوند
   const syncSource = async (src: DSource) => {
     await saveSource(src)
     const d = await post({ action: 'syncSource', id: src.id })
     if (d) {
       if (d.ok) {
         const added = d.imported || 0, upd = d.updated || 0, sold = d.sold || 0
-        const parts: string[] = []
-        parts.push(`${added.toLocaleString('fa-IR')} فایلِ جدید به «فایل‌های من» اضافه شد`)
+        const parts: string[] = [`${added.toLocaleString('fa-IR')} فایلِ جدید به «فایل‌های من» اضافه شد`]
         if (upd) parts.push(`${upd.toLocaleString('fa-IR')} فایل به‌روزرسانی شد`)
         if (sold) parts.push(`${sold.toLocaleString('fa-IR')} فروش/اجاره‌رفته`)
         setMsg('✓ «' + src.name + '»: ' + parts.join(' · ') + ` (از ${(d.scanned || 0).toLocaleString('fa-IR')} آگهیِ اسکن‌شده).`)
-        setOpenImports(o => ({ ...o, [src.id]: true }))
+        setShowFiles(true)
         onChange?.()
       } else setMsg(d.reason || 'همگام‌سازی ناموفق بود')
     }
   }
 
-  const setLocal = (id: string, patch: Partial<DSource>) => setCfg(c => c ? { ...c, sources: c.sources.map(x => x.id === id ? { ...x, ...patch } : x) } : c)
-
   return (
-    <div dir="rtl" style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 760, fontFamily: FONT }}>
+    <div dir="rtl" style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 920, fontFamily: FONT }}>
       <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>
         آگهی‌های {entity} را از <b>دیوار</b> مستقیم به ملک‌جت بیاورید — عکس‌ها، قیمت، مشخصات و موقعیت خودکار خوانده می‌شوند و
-        به‌صورت <b>فایلِ واقعی در «فایل‌های من»</b> ساخته و منتشر می‌شوند. محلهٔ آگهی هم خودکار با محله‌های موجودِ سایت تطبیق می‌خورد.
+        به‌صورت <b>فایلِ واقعی در «فایل‌های من»</b> ساخته و منتشر می‌شوند. <b>یک لینک می‌تواند آگهی‌هایی از چند محله داشته باشد</b>؛ محلهٔ
+        هر آگهی خودکار تشخیص داده و در محلهٔ درستِ سایت جای‌گذاری می‌شود.
       </div>
 
       {/* افزودنِ سریع با لینک (دستی، یک‌بار) */}
       <div style={{ ...card, padding: 16 }}>
         <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>افزودنِ سریعِ آگهی (یک‌بار)</div>
         <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.9 }}>
-          لینکِ <b>صفحهٔ اختصاصیِ {entity} در دیوار</b> (<span style={{ direction: 'ltr', display: 'inline-block' }}>divar.ir/pro/…</span>) یا لینکِ تکِ آگهی (<span style={{ direction: 'ltr', display: 'inline-block' }}>divar.ir/v/…</span>) را بچسبانید. برای <b>همگام‌سازیِ خودکارِ همیشگی</b>، در بخشِ پایین یک «اسکرپ» بسازید.
+          لینکِ <b>صفحهٔ پروی خودتان در دیوار</b> (<span style={{ direction: 'ltr', display: 'inline-block' }}>divar.ir/pro/…</span>) یا لینکِ تکِ آگهی (<span style={{ direction: 'ltr', display: 'inline-block' }}>divar.ir/v/…</span>) را بچسبانید. برای <b>همگام‌سازیِ خودکارِ همیشگی</b>، در بخشِ پایین یک «اسکرپ» بسازید.
         </div>
         <textarea value={url} onChange={e => setUrl(e.target.value)} rows={2} placeholder={"https://divar.ir/pro/HLTCumBJ"} style={{ ...inp, direction: 'ltr', textAlign: 'left', resize: 'vertical', fontFamily: 'inherit' }} />
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
@@ -111,81 +109,98 @@ export default function DivarImport({ onChange, entity = 'شما' }: { onChange?
 
       {msg && <div style={{ ...card, padding: '10px 14px', fontSize: 12.5, lineHeight: 1.7, color: msg.startsWith('✓') ? 'var(--gold)' : '#ef4444' }}>{msg}</div>}
 
-      {/* اسکرپ‌ها — هرکدام جدا، ذخیره‌شده، قابلِ ویرایش/حذف، با آگهی‌های خودش */}
+      {/* اسکرپ‌ها — فهرستِ سمتِ چپ + ویرایشگرِ سمتِ راست */}
       {cfg && <div style={{ ...card, padding: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
-          <div style={{ fontWeight: 800, fontSize: 14 }}>اسکرپ‌های ذخیره‌شده — {cfg.sources.length.toLocaleString('fa-IR')}</div>
-          <button disabled={busy} onClick={async () => { const d = await post({ action: 'addSource', name: 'اسکرپِ جدید' }); if (d?.ok) { const last = d.config?.sources?.[d.config.sources.length - 1]; if (last) setEditId(last.id); setMsg('✓ اسکرپِ جدید ساخته شد. لینک و نامِ آن را پر کرده و ذخیره کنید.') } }} style={{ ...gold, padding: '7px 14px' }}>＋ اسکرپِ جدید</button>
+          <div style={{ fontWeight: 800, fontSize: 14 }}>اسکرپ‌های ذخیره‌شده — {sources.length.toLocaleString('fa-IR')}</div>
+          <button disabled={busy} onClick={async () => { const d = await post({ action: 'addSource', name: 'اسکرپِ جدید' }); if (d?.ok) { const last = d.config?.sources?.[d.config.sources.length - 1]; if (last) { setSelId(last.id); setShowFiles(false) } setMsg('✓ اسکرپِ جدید ساخته شد. لینکِ صفحهٔ پرو را بگذارید و ذخیره/همگام‌سازی کنید.') } }} style={{ ...gold, padding: '7px 14px' }}>＋ اسکرپِ جدید</button>
         </div>
-        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.8 }}>برای هر دفتر/منطقه/جستجو یک اسکرپِ جدا بسازید. هرکدام لینک، زمان‌بندی و آگهی‌های خودش را دارد و جدا ذخیره می‌شود. با «همگام‌سازی»، آگهی‌ها مستقیم به «فایل‌های من» می‌روند.</div>
-        {cfg.sources.length === 0 ? (
+        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.8 }}>
+          معمولاً <b>یک اسکرپ کافی است</b>: لینکِ صفحهٔ پروی خودتان را بگذارید تا همهٔ آگهی‌ها (از هر محله) خودکار وارد شوند. فقط اگر چند لینکِ
+          جستجوی متفاوت دارید، اسکرپِ جداگانه بسازید. هر اسکرپ، لینک و آگهی‌های خودش را جدا ذخیره می‌کند.
+        </div>
+
+        {sources.length === 0 ? (
           <div style={{ fontSize: 12.5, color: 'var(--faint)', background: 'var(--bg2)', border: '1px dashed var(--line)', borderRadius: 10, padding: '18px 14px', textAlign: 'center' }}>هنوز اسکرپی نساخته‌اید. روی «＋ اسکرپِ جدید» بزنید.</div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {cfg.sources.map(src => {
-              const editing = editId === src.id
-              const mine = importsOf(src.id)
-              const showImports = !!openImports[src.id]
-              return (
-                <div key={src.id} style={{ ...card, background: 'var(--bg2)', padding: 14 }}>
-                  {/* ── خلاصهٔ اسکرپ ── */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                    <div style={{ flex: '1 1 200px', minWidth: 0 }}>
-                      <div style={{ fontWeight: 800, fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
-                        {src.name}
-                        <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--muted)', background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 6, padding: '1px 7px' }}>{SCHED_LABEL[src.schedule]}</span>
-                        {mine.length > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--gold)', background: 'rgba(212,175,90,.12)', borderRadius: 6, padding: '1px 7px' }}>{mine.length.toLocaleString('fa-IR')} فایل</span>}
+          <div className="divar-twopane" style={{ display: 'flex', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            {/* ویرایشگرِ اسکرپِ انتخاب‌شده (سمتِ راست) */}
+            <div style={{ flex: '1 1 360px', minWidth: 280, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {selSrc ? (() => {
+                const src = selSrc
+                const mine = importsOf(src.id)
+                return (
+                  <div style={{ ...card, background: 'var(--bg2)', padding: 14 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
+                      <div style={{ fontWeight: 800, fontSize: 13.5 }}>ویرایشِ اسکرپ</div>
+                      <button disabled={busy} onClick={async () => { if (confirm(`اسکرپ «${src.name}» حذف شود؟ (فایل‌های واردشده باقی می‌مانند)`)) { await post({ action: 'removeSource', id: src.id }); setSelId(null) } }} style={{ ...act, color: '#ef4444', borderColor: 'rgba(231,103,74,.4)' }}>حذفِ اسکرپ</button>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نامِ اسکرپ</label><input value={src.name} onChange={e => setLocal(src.id, { name: e.target.value })} placeholder="مثلاً آگهی‌های دفترِ ما" style={{ ...inp, fontWeight: 700 }} /></div>
+                      <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>لینکِ صفحهٔ پروی شما در دیوار (یا جستجو/نقشه)</label><input value={src.searchUrl} onChange={e => setLocal(src.id, { searchUrl: e.target.value })} placeholder="https://divar.ir/pro/HLTCumBJ" style={{ ...inp, direction: 'ltr', textAlign: 'left' }} /></div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 10 }}>
+                        <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نام در دیوار (فقط لینکِ جستجو/نقشه)</label><input value={src.divarName} onChange={e => setLocal(src.id, { divarName: e.target.value })} placeholder="—" style={inp} /></div>
+                        <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>همگام‌سازیِ خودکار</label><select value={src.schedule} onChange={e => setLocal(src.id, { schedule: e.target.value as Sched })} style={inp}>{SCHEDULES.map(s => <option key={s.v} value={s.v}>{s.label}</option>)}</select></div>
                       </div>
-                      <div style={{ fontSize: 10.5, color: 'var(--faint)', direction: 'ltr', textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>{src.searchUrl || '— لینک تنظیم نشده —'}</div>
-                    </div>
-                    <button disabled={busy || !src.searchUrl.trim()} onClick={() => syncSource(src)} style={{ ...gold, padding: '7px 14px' }}>{busy ? '…' : 'همگام‌سازی'}</button>
-                    <button disabled={busy} onClick={() => setEditId(editing ? null : src.id)} style={act}>{editing ? 'بستن' : 'ویرایش'}</button>
-                    <button disabled={busy} onClick={async () => { if (confirm(`اسکرپ «${src.name}» حذف شود؟ (فایل‌های واردشده در «فایل‌های من» باقی می‌مانند)`)) { await post({ action: 'removeSource', id: src.id }); if (editId === src.id) setEditId(null) } }} style={{ ...act, color: '#ef4444', borderColor: 'rgba(231,103,74,.4)' }}>حذف</button>
-                  </div>
-
-                  {/* خطِ وضعیت */}
-                  <div style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--line)' }}>
-                    <span>آخرین اجرا: <b style={{ color: 'var(--text)' }}>{faDate(src.lastRun)}</b></span>
-                    {typeof src.lastCount === 'number' && src.lastRun && <span>آخرین نتیجه: <b style={{ color: 'var(--text)' }}>{src.lastCount.toLocaleString('fa-IR')} جدید</b></span>}
-                    {src.lastError && <span style={{ color: '#ef4444' }}>خطا: {src.lastError}</span>}
-                    {mine.length > 0 && <button onClick={() => setOpenImports(o => ({ ...o, [src.id]: !o[src.id] }))} style={{ ...act, padding: '2px 10px', marginRight: 'auto' }}>{showImports ? 'بستنِ فایل‌ها ▲' : `نمایشِ ${mine.length.toLocaleString('fa-IR')} فایلِ این اسکرپ ▼`}</button>}
-                  </div>
-
-                  {/* ── فرمِ ویرایش ── */}
-                  {editing && <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
-                    <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نامِ اسکرپ</label><input value={src.name} onChange={e => setLocal(src.id, { name: e.target.value })} placeholder="مثلاً دفترِ سعادت‌آباد" style={{ ...inp, fontWeight: 700 }} /></div>
-                    <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>لینکِ صفحهٔ اختصاصی (پرو) یا جستجو/نقشه</label><input value={src.searchUrl} onChange={e => setLocal(src.id, { searchUrl: e.target.value })} placeholder="https://divar.ir/pro/HLTCumBJ" style={{ ...inp, direction: 'ltr', textAlign: 'left' }} /></div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10 }}>
-                      <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>نام در دیوار (فقط برای لینکِ جستجو/نقشه)</label><input value={src.divarName} onChange={e => setLocal(src.id, { divarName: e.target.value })} placeholder="نامِ زیرِ آگهی‌ها" style={inp} /></div>
-                      <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>زمان‌بندیِ خودکار</label><select value={src.schedule} onChange={e => setLocal(src.id, { schedule: e.target.value as Sched })} style={inp}>{SCHEDULES.map(s => <option key={s.v} value={s.v}>{s.label}</option>)}</select></div>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10 }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" checked={src.autoPublish} onChange={e => setLocal(src.id, { autoPublish: e.target.checked })} /> انتشار خودکار روی سایت</label>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" checked={src.autoNeighborhood} onChange={e => setLocal(src.id, { autoNeighborhood: e.target.checked })} /> تشخیصِ خودکارِ محله</label>
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      <button disabled={busy} onClick={async () => { await saveSource(src); setMsg('✓ اسکرپ ذخیره شد.'); setEditId(null) }} style={{ ...gold, padding: '8px 16px' }}>ذخیرهٔ اسکرپ</button>
-                      <button disabled={busy || !src.searchUrl.trim()} onClick={() => syncSource(src)} style={{ ...act, padding: '8px 16px', color: 'var(--gold)', borderColor: 'var(--gold)' }}>ذخیره و همگام‌سازی الان</button>
-                    </div>
-                  </div>}
-
-                  {/* ── آگهی‌های این اسکرپ ── */}
-                  {showImports && mine.length > 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
-                    {mine.map(im => (
-                      <div key={im.token} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 9, background: 'var(--surface)', border: '1px solid var(--line)' }}>
-                        <span style={{ fontSize: 13 }}>{im.published ? '🟢' : '⚪'}</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{im.title}</div>
-                          <div style={{ fontSize: 10, color: 'var(--faint)' }}>{faDate(im.at)} · {im.published ? 'منتشرشده' : 'پیش‌نویس'}</div>
-                        </div>
-                        <a href={im.url} target="_blank" rel="noreferrer" style={{ ...act, textDecoration: 'none', padding: '4px 10px' }}>دیوار ↗</a>
-                        <button disabled={busy} onClick={() => post({ action: 'removeImport', token: im.token })} style={{ ...act, color: '#ef4444', padding: '4px 10px' }}>حذف</button>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10 }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" checked={src.autoPublish} onChange={e => setLocal(src.id, { autoPublish: e.target.checked })} /> انتشار خودکار روی سایت</label>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" checked={src.autoNeighborhood} onChange={e => setLocal(src.id, { autoNeighborhood: e.target.checked })} /> تشخیصِ خودکارِ محله</label>
                       </div>
-                    ))}
-                  </div>}
-                </div>
-              )
-            })}
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button disabled={busy} onClick={async () => { await saveSource(src); setMsg('✓ اسکرپ ذخیره شد.') }} style={{ ...gold, padding: '8px 16px' }}>ذخیرهٔ اسکرپ</button>
+                        <button disabled={busy || !src.searchUrl.trim()} onClick={() => syncSource(src)} style={{ ...act, padding: '8px 16px', color: 'var(--gold)', borderColor: 'var(--gold)' }}>{busy ? 'در حال همگام‌سازی…' : 'ذخیره و همگام‌سازی الان'}</button>
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', gap: 16, flexWrap: 'wrap', paddingTop: 8, borderTop: '1px solid var(--line)' }}>
+                        <span>آخرین اجرا: <b style={{ color: 'var(--text)' }}>{faDate(src.lastRun)}</b></span>
+                        {mine.length > 0 && <button onClick={() => setShowFiles(s => !s)} style={{ ...act, padding: '2px 10px', marginRight: 'auto' }}>{showFiles ? 'بستنِ فایل‌ها ▲' : `${mine.length.toLocaleString('fa-IR')} فایلِ این اسکرپ ▼`}</button>}
+                      </div>
+                      {src.lastError && <div style={{ fontSize: 11, color: '#ef4444' }}>خطا: {src.lastError}</div>}
+
+                      {showFiles && mine.length > 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 10, borderTop: '1px solid var(--line)' }}>
+                        {mine.map(im => (
+                          <div key={im.token} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 9, background: 'var(--surface)', border: '1px solid var(--line)' }}>
+                            <span style={{ fontSize: 13 }}>{im.published ? '🟢' : '⚪'}</span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{im.title}</div>
+                              <div style={{ fontSize: 10, color: 'var(--faint)' }}>{faDate(im.at)} · {im.published ? 'منتشرشده' : 'پیش‌نویس'}</div>
+                            </div>
+                            <a href={im.url} target="_blank" rel="noreferrer" style={{ ...act, textDecoration: 'none', padding: '4px 10px' }}>دیوار ↗</a>
+                            <button disabled={busy} onClick={() => post({ action: 'removeImport', token: im.token })} style={{ ...act, color: '#ef4444', padding: '4px 10px' }}>حذف</button>
+                          </div>
+                        ))}
+                      </div>}
+                    </div>
+                  </div>
+                )
+              })() : (
+                <div style={{ fontSize: 12.5, color: 'var(--faint)', background: 'var(--bg2)', border: '1px dashed var(--line)', borderRadius: 10, padding: '30px 14px', textAlign: 'center' }}>یک اسکرپ را از فهرستِ کنار انتخاب کنید.</div>
+              )}
+            </div>
+
+            {/* فهرستِ اسکرپ‌های ذخیره‌شده (سمتِ چپ) */}
+            <div style={{ flex: '1 1 240px', minWidth: 220, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ fontSize: 11.5, color: 'var(--faint)', fontWeight: 700 }}>فهرستِ اسکرپ‌ها</div>
+              {sources.map(s => {
+                const on = selSrc?.id === s.id
+                const cnt = importsOf(s.id).length
+                return (
+                  <button key={s.id} onClick={() => { setSelId(s.id); setShowFiles(false) }} style={{
+                    textAlign: 'right', cursor: 'pointer', borderRadius: 12, padding: '11px 12px', fontFamily: FONT,
+                    background: on ? 'rgba(212,175,90,.12)' : 'var(--bg2)',
+                    border: on ? '1px solid var(--gold)' : '1px solid var(--line)',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                      <span style={{ fontWeight: 800, fontSize: 13, color: on ? 'var(--gold)' : 'var(--text)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 6, padding: '1px 6px' }}>{SCHED_LABEL[s.schedule]}</span>
+                    </div>
+                    <div style={{ fontSize: 10.5, color: 'var(--faint)', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                      <span>{cnt > 0 ? `${cnt.toLocaleString('fa-IR')} فایل` : 'بدون فایل'}</span>
+                      <span>· {s.lastRun ? faDate(s.lastRun) : 'اجرا نشده'}</span>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
           </div>
         )}
       </div>}

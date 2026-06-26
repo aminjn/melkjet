@@ -127,7 +127,11 @@ export async function importDivarProfile(o: string, url: string, sourceId?: stri
   if (!slug) return { ok: false, reason: 'لینک پروفایل دیوار معتبر نیست', scanned: 0, imported: 0, updated: 0, skipped: 0, tokens: [] }
   const { posts, reason } = await fetchDivarProfileTokens(slug)
   if (!posts.length) {
-    const msg = reason === 'unreachable' ? 'اتصال به دیوار ناموفق بود (پروکسی را بررسی کنید)' : 'آگهی‌ای در این پروفایل پیدا نشد — می‌توانید لینکِ تک‌تکِ آگهی‌ها را اضافه کنید'
+    const msg = reason === 'unreachable'
+      ? 'اتصال به دیوار برقرار نشد — پروکسیِ دیوار را در ادمین → «اتصال‌ها» بررسی کنید'
+      : reason && reason.startsWith('http_')
+        ? `دیوار پاسخِ خطای ${reason.replace('http_', '')} داد — لینک را بررسی کنید یا کمی بعد دوباره تلاش کنید`
+        : 'آگهی‌ای در این پروفایل خوانده نشد — لینکِ صفحهٔ پروی خودتان را بررسی کنید یا آگهی‌ها را تکی اضافه کنید'
     markRun(o, 0, msg)
     return { ok: false, reason: msg, scanned: 0, imported: 0, updated: 0, skipped: 0, tokens: [] }
   }
