@@ -13,6 +13,8 @@ export interface AgencyAdvisorRow {
   listings: AgencyAdvisorListing[]
   counts: { total: number; active: number; sold: number; rented: number }
   leads: { total: number; open: number; recent: { name: string; need: string; stage: string }[] }
+  leadsList: { name: string; need: string; budget: string; phone: string; stage: string; createdAt: number }[]
+  commissions: { dealTitle: string; amount: number; status: string; date: string; createdAt: number }[]
   advisorCommission: number   // کلِ کمیسیونِ گزارش‌شدهٔ مشاور (محقق‌نشده‌ها حذف)
   paidCommission: number
   pendingCommission: number
@@ -46,6 +48,8 @@ export function agencyAdvisorFiles(agencyPhone: string): { rows: AgencyAdvisorRo
     let advisorCommission = 0, paidCommission = 0, pendingCommission = 0, dealCount = 0
     let leadsTotal = 0, leadsOpen = 0
     let leadRecent: { name: string; need: string; stage: string }[] = []
+    let leadsList: AgencyAdvisorRow['leadsList'] = []
+    let commissions: AgencyAdvisorRow['commissions'] = []
     const perMonth: Record<string, { amount: number; deals: number }> = {}
     try {
       const ad = getAdvisor(phone)
@@ -55,6 +59,8 @@ export function agencyAdvisorFiles(agencyPhone: string): { rows: AgencyAdvisorRo
       leadsTotal = ls.length
       leadsOpen = ls.filter(l => l.stage !== 'closed' && l.stage !== 'lost').length
       leadRecent = [...ls].sort((a, b) => b.createdAt - a.createdAt).slice(0, 6).map(l => ({ name: l.name, need: l.need || '', stage: l.stage }))
+      leadsList = [...ls].sort((a, b) => b.createdAt - a.createdAt).map(l => ({ name: l.name, need: l.need || '', budget: l.budget || '', phone: l.phone || '', stage: l.stage, createdAt: l.createdAt }))
+      commissions = [...(ad.commissions || [])].sort((a, b) => b.createdAt - a.createdAt).map(c => ({ dealTitle: c.dealTitle, amount: c.amount, status: c.status, date: c.date, createdAt: c.createdAt }))
       for (const c of (ad.commissions || [])) {
         if (c.status === 'canceled') continue   // محقق‌نشده → در محاسبه نمی‌آید
         const amt = c.amount || 0
@@ -83,7 +89,7 @@ export function agencyAdvisorFiles(agencyPhone: string): { rows: AgencyAdvisorRo
     const monthly: MonthPoint[] = frame.map(f => ({ key: f.key, label: f.label, amount: perMonth[f.key]?.amount || 0, deals: perMonth[f.key]?.deals || 0 }))
     let photo = ''
     try { const pr = getProfile(phone); photo = pr.logo || '' } catch {}
-    return { advisorPhone: phone, advisorName: m.advisorName, photo, listings, counts, leads: { total: leadsTotal, open: leadsOpen, recent: leadRecent }, advisorCommission, paidCommission, pendingCommission, closedCount, dealCount, monthly, rate: { mode, value, isDefault: !per }, agencyCut }
+    return { advisorPhone: phone, advisorName: m.advisorName, photo, listings, counts, leads: { total: leadsTotal, open: leadsOpen, recent: leadRecent }, leadsList, commissions, advisorCommission, paidCommission, pendingCommission, closedCount, dealCount, monthly, rate: { mode, value, isDefault: !per }, agencyCut }
   })
   const totals = rows.reduce((t, r) => ({
     listings: t.listings + r.counts.total,

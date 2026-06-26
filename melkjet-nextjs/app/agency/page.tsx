@@ -34,7 +34,9 @@ type CommMode = 'percent' | 'amount'
 interface MonthPoint { key: string; label: string; amount: number; deals: number }
 interface AdvisorFileItem { id: string; title: string; location: string; price: number; deal: 'sale' | 'rent'; status: 'active' | 'sold' | 'rented'; ptype: string; createdAt: number }
 interface AdvisorLeadInfo { total: number; open: number; recent: { name: string; need: string; stage: string }[] }
-interface AdvisorRow { advisorPhone: string; advisorName: string; photo: string; listings: AdvisorFileItem[]; counts: { total: number; active: number; sold: number; rented: number }; leads: AdvisorLeadInfo; advisorCommission: number; paidCommission: number; pendingCommission: number; closedCount: number; dealCount: number; monthly: MonthPoint[]; rate: { mode: CommMode; value: number; isDefault: boolean }; agencyCut: number }
+interface AdvisorLeadItem { name: string; need: string; budget: string; phone: string; stage: string; createdAt: number }
+interface AdvisorCommItem { dealTitle: string; amount: number; status: string; date: string; createdAt: number }
+interface AdvisorRow { advisorPhone: string; advisorName: string; photo: string; listings: AdvisorFileItem[]; counts: { total: number; active: number; sold: number; rented: number }; leads: AdvisorLeadInfo; leadsList: AdvisorLeadItem[]; commissions: AdvisorCommItem[]; advisorCommission: number; paidCommission: number; pendingCommission: number; closedCount: number; dealCount: number; monthly: MonthPoint[]; rate: { mode: CommMode; value: number; isDefault: boolean }; agencyCut: number }
 interface AdvisorFiles { rows: AdvisorRow[]; totals: { listings: number; active: number; sold: number; rented: number; leads: number; advisorCommission: number; agencyCut: number }; income: MonthPoint[] }
 interface CommissionCfg { defaultMode: CommMode; defaultValue: number; perAgent: Record<string, { mode: CommMode; value: number }> }
 interface AgencyData { stats: Stats; agents: Agent[]; listings: Listing[]; leads: Lead[]; deals: Deal[]; advisorFiles?: AdvisorFiles; commission?: CommissionCfg }
@@ -70,7 +72,7 @@ const inputStyle: React.CSSProperties = { padding: '9px 11px', borderRadius: 9, 
 const actionBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap' }
 const goldBtn: React.CSSProperties = { padding: '9px 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }
 
-const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد آژانس', assistant: 'دستیار هوشمند', messages: 'پیام‌ها', negotiation: 'موتور مذاکره', divar: 'ایمپورت از دیوار', articles: 'مقالات و وبلاگ', agents: 'مشاوران', advisorfiles: 'فایل‌ها و کمیسیونِ مشاوران', listings: 'فایل‌های آژانس', leads: 'لیدها', deals: 'معاملات', plans: 'پلن‌ها و اشتراک', profile: 'پروفایل', settings: 'تنظیمات' }
+const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد آژانس', assistant: 'دستیار هوشمند', messages: 'پیام‌ها', negotiation: 'موتور مذاکره', divar: 'ایمپورت از دیوار', articles: 'مقالات و وبلاگ', agents: 'مشاوران', advisorfiles: 'کمیسیون و گزارش', listings: 'فایل‌ها (آژانس و مشاوران)', leads: 'لیدها (آژانس و مشاوران)', deals: 'معاملات (آژانس و مشاوران)', plans: 'پلن‌ها و اشتراک', profile: 'پروفایل', settings: 'تنظیمات' }
 const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'agents' | 'leads' }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: '▦' },
   { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
@@ -84,10 +86,10 @@ const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'agents' | 'le
 ]
 // زیرمنوهای «CRM و مشتریان» — لید/فایل/معاملات/کمیسیون همگی این‌جا (نه بیرونِ CRM).
 const AGENCY_CRM_VIEWS: { id: View; label: string; icon: string }[] = [
-  { id: 'listings', label: 'فایل‌های آژانس', icon: '◫' },
-  { id: 'leads', label: 'لیدهای آژانس', icon: '◎' },
-  { id: 'deals', label: 'معاملاتِ آژانس', icon: '﷼' },
-  { id: 'advisorfiles', label: 'فایل‌ها و کمیسیونِ مشاوران', icon: '🗂' },
+  { id: 'listings', label: 'فایل‌ها', icon: '◫' },
+  { id: 'leads', label: 'لیدها', icon: '◎' },
+  { id: 'deals', label: 'معاملات', icon: '﷼' },
+  { id: 'advisorfiles', label: 'کمیسیون و گزارش', icon: '🗂' },
 ]
 const AGENCY_CRM_IDS: View[] = ['listings', 'leads', 'deals', 'advisorfiles']
 function Pill({ label, color }: { label: string; color: string }) {
@@ -156,9 +158,11 @@ export default function AgencyPage() {
   // فیلتر و مرتب‌سازیِ «فایل‌های مشاوران»
   const [afQuery, setAfQuery] = useState('')
   const [afSort, setAfSort] = useState<'cut' | 'name' | 'files' | 'leads' | 'commission'>('cut')
-  // فیلتر و مرتب‌سازیِ «فایل‌های آژانس»
+  // فیلتر و مرتب‌سازیِ «فایل‌ها/لیدها/معاملات» (یکجا، آژانس + مشاوران)
   const [lstStatus, setLstStatus] = useState<'all' | 'active' | 'sold' | 'rented'>('all')
   const [lstSort, setLstSort] = useState<'new' | 'priceDesc' | 'priceAsc'>('new')
+  const [ownerF, setOwnerF] = useState<string>('all')   // 'all' | 'agency' | advisorPhone
+  const [leadStageF, setLeadStageF] = useState<string>('all')
   // عضویت واقعی مشاوران (advisor↔agency)
   const [members, setMembers] = useState<LinkMember[]>([])
   const [linkReqs, setLinkReqs] = useState<LinkRequest[]>([])
@@ -229,11 +233,53 @@ export default function AgencyPage() {
 
   const { stats, agents, listings, leads, deals } = data
   const q = search.trim()
-  const listingsF = listings
-    .filter(l => !q || (l.title + l.location + (l.agent || '')).includes(q))
+  const af = data.advisorFiles
+  const agencyName = stats.profile.name || 'آژانس'
+  const advisorOpts = (af?.rows || []).map(r => ({ phone: r.advisorPhone, name: r.advisorName }))
+  const ownerOk = (key: string) => ownerF === 'all' || ownerF === key
+
+  // ── فایل‌ها (یکجا): آگهیِ آژانس + همهٔ مشاوران، با ستونِ «منتسب» ──
+  type UListing = { key: string; id: string; title: string; ptype: string; location: string; price: number; deal: 'sale' | 'rent'; status: 'active' | 'sold' | 'rented'; owner: string; ownerKey: string; agency: boolean; createdAt: number }
+  const listingsUnified: UListing[] = [
+    ...listings.map(l => ({ key: 'a_' + l.id, id: l.id, title: l.title, ptype: l.ptype, location: l.location, price: l.price, deal: l.deal, status: l.status, owner: agencyName, ownerKey: 'agency', agency: true, createdAt: l.createdAt })),
+    ...(af?.rows || []).flatMap(r => r.listings.map(l => ({ key: 'm_' + r.advisorPhone + '_' + l.id, id: l.id, title: l.title, ptype: l.ptype, location: l.location, price: l.price, deal: l.deal, status: l.status, owner: r.advisorName, ownerKey: r.advisorPhone, agency: false, createdAt: l.createdAt }))),
+  ]
+  const listingsF = listingsUnified
+    .filter(l => !q || (l.title + l.location + l.owner).includes(q))
     .filter(l => lstStatus === 'all' || l.status === lstStatus)
-    .slice()
+    .filter(l => ownerOk(l.ownerKey))
     .sort((a, b) => lstSort === 'priceDesc' ? b.price - a.price : lstSort === 'priceAsc' ? a.price - b.price : b.createdAt - a.createdAt)
+
+  // ── لیدها (یکجا): لیدِ آژانس + همهٔ مشاوران ──
+  type ULead = { key: string; id: string; name: string; need: string; budget: string; phone: string; stage: string; owner: string; ownerKey: string; agency: boolean; assignedTo?: string; createdAt: number }
+  const leadsUnified: ULead[] = [
+    ...leads.map(l => ({ key: 'a_' + l.id, id: l.id, name: l.name, need: l.need || '', budget: l.budget || '', phone: l.phone || '', stage: l.stage as string, owner: agencyName, ownerKey: 'agency', agency: true, assignedTo: l.assignedTo, createdAt: l.createdAt })),
+    ...(af?.rows || []).flatMap(r => r.leadsList.map((l, i) => ({ key: 'm_' + r.advisorPhone + '_' + i, id: '', name: l.name, need: l.need, budget: l.budget, phone: l.phone, stage: l.stage, owner: r.advisorName, ownerKey: r.advisorPhone, agency: false, createdAt: l.createdAt }))),
+  ]
+  const leadsF = leadsUnified
+    .filter(l => !q || (l.name + l.need + l.owner + (l.phone || '')).includes(q))
+    .filter(l => leadStageF === 'all' || l.stage === leadStageF)
+    .filter(l => ownerOk(l.ownerKey))
+    .sort((a, b) => b.createdAt - a.createdAt)
+
+  // ── معاملات (یکجا): معاملاتِ آژانس + کمیسیون‌های مشاوران (به‌عنوان معامله) ──
+  type UDeal = { key: string; id: string; title: string; amount: number; who: string; date: string; status: string; owner: string; ownerKey: string; agency: boolean; createdAt: number }
+  const dealsUnified: UDeal[] = [
+    ...deals.map(d => ({ key: 'a_' + d.id, id: d.id, title: d.title, amount: d.amount, who: d.agent || '', date: d.date, status: '', owner: agencyName, ownerKey: 'agency', agency: true, createdAt: d.createdAt })),
+    ...(af?.rows || []).flatMap(r => r.commissions.map((c, i) => ({ key: 'm_' + r.advisorPhone + '_' + i, id: '', title: c.dealTitle, amount: c.amount, who: r.advisorName, date: c.date, status: c.status, owner: r.advisorName, ownerKey: r.advisorPhone, agency: false, createdAt: c.createdAt }))),
+  ]
+  const dealsF = dealsUnified.filter(d => !q || (d.title + d.owner).includes(q)).filter(d => ownerOk(d.ownerKey)).sort((a, b) => b.createdAt - a.createdAt)
+
+  // نوارِ فیلترِ «منتسب» (مشترک بینِ بخش‌ها)
+  const ownerFilterBar = (
+    <select value={ownerF} onChange={e => setOwnerF(e.target.value)} style={{ ...inputStyle, width: 'auto', padding: '6px 10px' }}>
+      <option value="all">منتسب: همه</option>
+      <option value="agency">آژانس</option>
+      {advisorOpts.map(a => <option key={a.phone} value={a.phone}>{a.name}</option>)}
+    </select>
+  )
+  const ownerBadge = (agency: boolean, owner: string) => <span style={{ fontSize: 10.5, fontWeight: 700, color: agency ? 'var(--gold)' : '#60a5fa', background: agency ? 'var(--goldDim)' : 'rgba(96,165,250,.14)', border: `1px solid ${agency ? 'var(--gold)' : '#60a5fa55'}`, borderRadius: 999, padding: '2px 9px', whiteSpace: 'nowrap' }}>{agency ? '🏢 ' : '👤 '}{owner}</span>
+
   const activeAgentNames = agents.filter(a => a.active).map(a => a.name)
   const maxSales = Math.max(1, ...stats.monthlySales.map(m => m.amount))
   const sectionTitle = (t: string) => <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 12 }}>{t}</div>
@@ -590,7 +636,6 @@ export default function AgencyPage() {
                 : afSort === 'commission' ? b.advisorCommission - a.advisorCommission
                 : b.agencyCut - a.agencyCut)
             const t = af?.totals
-            const dealLabel = (d: string) => d === 'sale' ? 'فروش' : 'اجاره'
             const badge = (label: string, color?: string) => <span style={{ fontSize: 11, fontWeight: 700, color: color || 'var(--muted)', background: color ? color + '1f' : 'var(--bg)', border: `1px solid ${color ? color + '55' : 'var(--line)'}`, borderRadius: 999, padding: '3px 10px', whiteSpace: 'nowrap' }}>{label}</span>
             const exportCsv = () => {
               const head = ['مشاور', 'شماره', 'لیدها', 'لید باز', 'کل فایل', 'فعال', 'فروخته', 'اجاره‌رفته', 'کمیسیون محقق‌شده (تومان)', 'پرداختی', 'معوق', 'نرخ آژانس', 'سهم آژانس (تومان)']
@@ -698,51 +743,13 @@ export default function AgencyPage() {
                       </div>
                     </div>
 
-                    {/* لیدهای این مشاور (از پنلِ خودش) */}
-                    {r.leads.total > 0 && (
-                      <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line)' }}>
-                        <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--muted)', marginBottom: 8 }}>لیدهای این مشاور <span style={{ color: 'var(--faint)', fontWeight: 400 }}>({fa(r.leads.open)} باز از {fa(r.leads.total)})</span></div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                          {r.leads.recent.map((l, i) => (
-                            <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 9, padding: '5px 10px' }}>
-                              <span style={{ width: 7, height: 7, borderRadius: '50%', background: STAGE_COLOR[l.stage as Stage] || 'var(--muted)' }} />
-                              <span style={{ fontWeight: 700 }}>{l.name}</span>
-                              {l.need ? <span style={{ color: 'var(--muted)' }}>· {l.need}</span> : null}
-                              <span style={{ color: 'var(--faint)' }}>· {STAGE_LABEL[l.stage as Stage] || l.stage}</span>
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* نمودارِ درآمدِ آژانس از این مشاور (۶ ماهِ اخیر) */}
-                    {r.monthly.some(p => p.amount > 0) && (
-                      <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line)' }}>
+                    {/* خلاصهٔ فایل/لید (جزئیات در بخشِ «فایل‌ها» و «لیدها») + نمودارِ درآمد */}
+                    <div style={{ padding: '12px 16px' }}>
+                      <div style={{ fontSize: 11.5, color: 'var(--faint)', marginBottom: r.monthly.some(p => p.amount > 0) ? 10 : 0, lineHeight: 1.9 }}>{fa(r.counts.total)} فایل ({fa(r.counts.active)} فعال) · {fa(r.leads.total)} لید · جزئیاتِ کامل در بخش‌های «فایل‌ها» و «لیدها».</div>
+                      {r.monthly.some(p => p.amount > 0) && (<>
                         <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--muted)', marginBottom: 10 }}>درآمدِ آژانس از این مشاور (۶ ماهِ اخیر)</div>
                         <IncomeBars points={r.monthly} height={84} />
-                      </div>
-                    )}
-
-                    {/* فایل‌ها */}
-                    <div style={{ padding: '10px 16px' }}>
-                      {r.listings.length === 0 ? (
-                        <div style={{ fontSize: 12.5, color: 'var(--faint)', padding: '8px 0' }}>این مشاور هنوز فایلی ثبت نکرده است.</div>
-                      ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                          {r.listings.map(l => (
-                            <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 11px', background: 'var(--bg)', borderRadius: 9, flexWrap: 'wrap' }}>
-                              <span style={{ width: 8, height: 8, borderRadius: '50%', background: LIST_COLOR[l.status], flexShrink: 0 }} />
-                              <div style={{ flex: '1 1 150px', minWidth: 0 }}>
-                                <div style={{ fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.title}</div>
-                                <div style={{ fontSize: 11, color: 'var(--muted)' }}>{l.ptype}{l.location ? ` · ${l.location}` : ''}</div>
-                              </div>
-                              <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{dealLabel(l.deal)}</span>
-                              <span style={{ fontSize: 13, fontWeight: 800 }}>{money(l.price)}</span>
-                              {badge(LIST_LABEL[l.status], LIST_COLOR[l.status])}
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      </>)}
                     </div>
                   </div>
                 )
@@ -768,21 +775,23 @@ export default function AgencyPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
                 {sectionTitle(`فایل‌ها (${fa(listingsF.length)})`)}
                 <div style={{ display: 'flex', gap: 8, marginInlineStart: 'auto', flexWrap: 'wrap', alignItems: 'center' }}>
+                  {ownerFilterBar}
                   <select value={lstStatus} onChange={e => setLstStatus(e.target.value as any)} style={{ ...inputStyle, width: 'auto', padding: '6px 10px' }}><option value="all">همهٔ وضعیت‌ها</option><option value="active">فعال</option><option value="sold">فروخته‌شده</option><option value="rented">اجاره‌رفته</option></select>
                   <select value={lstSort} onChange={e => setLstSort(e.target.value as any)} style={{ ...inputStyle, width: 'auto', padding: '6px 10px' }}><option value="new">جدیدترین</option><option value="priceDesc">گران‌ترین</option><option value="priceAsc">ارزان‌ترین</option></select>
                 </div>
               </div>
               {listingsF.length ? listingsF.map(l => (
-                <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
+                <div key={l.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
                   <div style={{ flex: 1, minWidth: 160 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 700 }}>{l.title} <Pill label={DEAL_LABEL[l.deal]} color={l.deal === 'sale' ? '#60a5fa' : '#2dd4bf'} /></div>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>{l.title} <Pill label={DEAL_LABEL[l.deal]} color={l.deal === 'sale' ? '#60a5fa' : '#2dd4bf'} /> {ownerBadge(l.agency, l.owner)}</div>
                     <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{l.ptype} · {l.location} · {money(l.price)}</div>
                   </div>
-                  <select value={l.agent || ''} onChange={e => post({ action: 'assignListing', id: l.id, agent: e.target.value })} style={{ ...actionBtn, cursor: 'pointer' }}><option value="">— مشاور —</option>{activeAgentNames.map(n => <option key={n} value={n}>{n}</option>)}</select>
-                  <select value={l.status} onChange={e => post({ action: 'setListingStatus', id: l.id, status: e.target.value })} style={{ ...actionBtn, cursor: 'pointer', color: LIST_COLOR[l.status], borderColor: LIST_COLOR[l.status] }}>{LIST_STATUSES.map(s => <option key={s} value={s} style={{ color: 'var(--text)' }}>{LIST_LABEL[s]}</option>)}</select>
-                  <button onClick={() => post({ action: 'deleteListing', id: l.id })} style={{ ...actionBtn, color: '#ef4444' }}>حذف</button>
+                  {l.agency ? <>
+                    <select value={l.status} onChange={e => post({ action: 'setListingStatus', id: l.id, status: e.target.value })} style={{ ...actionBtn, cursor: 'pointer', color: LIST_COLOR[l.status], borderColor: LIST_COLOR[l.status] }}>{LIST_STATUSES.map(s => <option key={s} value={s} style={{ color: 'var(--text)' }}>{LIST_LABEL[s]}</option>)}</select>
+                    <button onClick={() => post({ action: 'deleteListing', id: l.id })} style={{ ...actionBtn, color: '#ef4444' }}>حذف</button>
+                  </> : <Pill label={LIST_LABEL[l.status]} color={LIST_COLOR[l.status]} />}
                 </div>
-              )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>فایلی نداری.</div>}
+              )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>فایلی با این فیلتر نیست.</div>}
             </div>
           </div>}
 
@@ -799,18 +808,26 @@ export default function AgencyPage() {
               </div>
             </div>
             <div style={{ ...card, padding: 18 }}>
-              {sectionTitle('لیدها')}
-              {leads.length ? leads.map(l => (
-                <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1, minWidth: 150 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 700 }}>{l.name}{l.phone ? <span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 12 }}> · {l.phone}</span> : ''}</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{l.need} {l.budget ? `· ${l.budget}` : ''}</div>
-                  </div>
-                  <select value={l.assignedTo || ''} onChange={e => post({ action: 'assignLead', id: l.id, agent: e.target.value })} style={{ ...actionBtn, cursor: 'pointer' }}><option value="">تخصیص به…</option>{activeAgentNames.map(n => <option key={n} value={n}>{n}</option>)}</select>
-                  <select value={l.stage} onChange={e => post({ action: 'setLeadStage', id: l.id, stage: e.target.value })} style={{ ...actionBtn, cursor: 'pointer', color: STAGE_COLOR[l.stage], borderColor: STAGE_COLOR[l.stage] }}>{STAGES.map(s => <option key={s} value={s} style={{ color: 'var(--text)' }}>{STAGE_LABEL[s]}</option>)}</select>
-                  <button onClick={() => post({ action: 'deleteLead', id: l.id })} style={{ ...actionBtn, color: '#ef4444' }}>حذف</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+                {sectionTitle(`لیدها (${fa(leadsF.length)})`)}
+                <div style={{ display: 'flex', gap: 8, marginInlineStart: 'auto', flexWrap: 'wrap', alignItems: 'center' }}>
+                  {ownerFilterBar}
+                  <select value={leadStageF} onChange={e => setLeadStageF(e.target.value)} style={{ ...inputStyle, width: 'auto', padding: '6px 10px' }}><option value="all">همهٔ مراحل</option>{STAGES.map(s => <option key={s} value={s}>{STAGE_LABEL[s]}</option>)}</select>
                 </div>
-              )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>لیدی نداری.</div>}
+              </div>
+              {leadsF.length ? leadsF.map(l => (
+                <div key={l.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 150 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>{l.name}{l.phone ? <span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 12 }}> · {l.phone}</span> : ''} {ownerBadge(l.agency, l.owner)}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{l.need} {l.budget ? `· بودجه: ${money(Number((l.budget || '').replace(/[^0-9]/g, '')) || 0)}` : ''}</div>
+                  </div>
+                  {l.agency ? <>
+                    <select value={l.assignedTo || ''} onChange={e => post({ action: 'assignLead', id: l.id, agent: e.target.value })} style={{ ...actionBtn, cursor: 'pointer' }}><option value="">تخصیص به…</option>{activeAgentNames.map(n => <option key={n} value={n}>{n}</option>)}</select>
+                    <select value={l.stage} onChange={e => post({ action: 'setLeadStage', id: l.id, stage: e.target.value })} style={{ ...actionBtn, cursor: 'pointer', color: STAGE_COLOR[l.stage as Stage], borderColor: STAGE_COLOR[l.stage as Stage] }}>{STAGES.map(s => <option key={s} value={s} style={{ color: 'var(--text)' }}>{STAGE_LABEL[s]}</option>)}</select>
+                    <button onClick={() => post({ action: 'deleteLead', id: l.id })} style={{ ...actionBtn, color: '#ef4444' }}>حذف</button>
+                  </> : <Pill label={STAGE_LABEL[l.stage as Stage] || l.stage} color={STAGE_COLOR[l.stage as Stage] || 'var(--muted)'} />}
+                </div>
+              )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>لیدی با این فیلتر نیست.</div>}
             </div>
           </div>}
 
@@ -827,13 +844,24 @@ export default function AgencyPage() {
               </div>
             </div>
             <div style={{ ...card, padding: 18 }}>
-              {sectionTitle('معاملات')}
-              {deals.length ? deals.map(d => (
-                <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)' }}>
-                  <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700 }}>{d.title}</div><div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{d.agent} · {d.date || faDate(d.createdAt)}</div></div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+                {sectionTitle(`معاملات (${fa(dealsF.length)})`)}
+                <div style={{ marginInlineStart: 'auto' }}>{ownerFilterBar}</div>
+              </div>
+              {dealsF.length ? dealsF.map(d => {
+                const cl = d.status === 'paid' ? '#34d399' : d.status === 'canceled' ? '#ef4444' : d.status === 'pending' ? 'var(--gold)' : ''
+                const cLabel = d.status === 'paid' ? 'محقق‌شده' : d.status === 'canceled' ? 'محقق نشد' : d.status === 'pending' ? 'در انتظار' : ''
+                return (
+                <div key={d.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>{d.title} {ownerBadge(d.agency, d.owner)}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{d.who ? `${d.who} · ` : ''}{d.date || faDate(d.createdAt)}{cLabel ? ` · ${d.agency ? 'معاملهٔ آژانس' : 'کمیسیون'}` : ''}</div>
+                  </div>
+                  {cl && <Pill label={cLabel} color={cl} />}
                   <div style={{ fontWeight: 800, color: 'var(--gold)', fontSize: 14 }}>{money(d.amount)}</div>
                 </div>
-              )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>معامله‌ای نداری.</div>}
+                )
+              }) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>معامله‌ای با این فیلتر نیست.</div>}
             </div>
           </div>}
 
