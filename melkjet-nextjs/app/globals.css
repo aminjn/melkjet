@@ -196,6 +196,8 @@ body {
 .mjwb-blockwrap{transition:box-shadow .12s}
 .mjwb-mbtn:active{transform:scale(.96)}
 @media(max-width:1000px){.mjwb-canvaswrap{padding-bottom:74px!important}}
+/* روی موبایل آیتم‌های غیرضروریِ نوارِ بالا پنهان می‌شوند تا «ذخیره» و «انتشار» همیشه دیده شوند */
+@media(max-width:1000px){.mjwb-tb-hide{display:none!important}}
 
 /* Content */
 @media(max-width:920px){.mjcon-nav{display:none!important}.mjcon-2col{grid-template-columns:1fr!important}}

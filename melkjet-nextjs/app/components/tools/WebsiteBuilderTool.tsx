@@ -1603,13 +1603,14 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
           <div style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <span style={{ width: 11, height: 11, background: 'var(--bg)', transform: 'rotate(45deg)', borderRadius: 2, display: 'block' }} />
           </div>
-          <div>
+          <div className="mjwb-tb-hide">
             <div style={{ fontSize: 13, fontWeight: 800, lineHeight: 1.1 }}>وب‌سایت‌ساز ملک‌جت</div>
             <div style={{ fontSize: 10, color: 'var(--muted)', direction: 'ltr', lineHeight: 1.3 }}>melkjet.com/{slug}</div>
           </div>
         </div>
 
         <button
+          className="mjwb-tb-hide"
           onClick={() => setTplModal(true)}
           style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 9, border: '1px solid var(--gold)', background: 'var(--goldDim)', color: 'var(--gold)', cursor: 'pointer', fontSize: 12.5, fontWeight: 800, fontFamily: 'inherit', flexShrink: 0 }}
         >
@@ -1620,7 +1621,7 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
         <div style={{ flex: 1 }} />
 
         {/* Device toggle */}
-        <div style={{ display: 'flex', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 9, padding: 3, gap: 2 }}>
+        <div className="mjwb-tb-hide" style={{ display: 'flex', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 9, padding: 3, gap: 2 }}>
           {([
             ['desktop', '▭', 'دسکتاپ'],
             ['tablet', '▯', 'تبلت'],
@@ -1643,14 +1644,15 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
           ))}
         </div>
 
-        <div style={{ width: 1, height: 24, background: 'var(--line)', flexShrink: 0 }} />
+        <div className="mjwb-tb-hide" style={{ width: 1, height: 24, background: 'var(--line)', flexShrink: 0 }} />
 
         <button
+          className="mjwb-tb-hide"
           onClick={undo}
           disabled={history.length === 0}
           style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid var(--line)', background: 'transparent', color: history.length > 0 ? 'var(--text)' : 'var(--faint)', cursor: history.length > 0 ? 'pointer' : 'default', fontSize: 12, fontWeight: 600 }}
         >↩ واگرد</button>
-        <button style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid var(--line)', background: 'transparent', color: 'var(--faint)', cursor: 'default', fontSize: 12, fontWeight: 600 }}>
+        <button className="mjwb-tb-hide" style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid var(--line)', background: 'transparent', color: 'var(--faint)', cursor: 'default', fontSize: 12, fontWeight: 600 }}>
           ↪ بازگرد
         </button>
 
