@@ -60,7 +60,13 @@ export default function GallerySlider({
         .mjs-gal-item:hover{transform:translateY(-4px);box-shadow:0 22px 50px -24px rgba(20,16,10,.55),0 6px 16px -8px rgba(20,16,10,.18)}
         .mjs-gal-arrow{transition:transform .18s ease, opacity .18s ease}
         .mjs-gal-arrow:hover{transform:translateY(-2px);opacity:.92}
-        @media(max-width:680px){.mjs-gal-item{flex-basis:82% !important;min-width:82% !important}}
+        /* موبایل: گریدِ دوستونیِ عکس‌ها به‌جای اسکرولِ افقی (مثلِ گالریِ سایت‌های بزرگ) */
+        @media(max-width:680px){
+          .mjs-gal-arrow{display:none !important}
+          .mjs-gal-row{display:grid !important;grid-template-columns:1fr 1fr !important;gap:10px !important;overflow:visible !important}
+          .mjs-gal-item{min-width:0 !important}
+          .mjs-gal-item img{height:150px !important}
+        }
       `}</style>
       <div style={{ position: 'relative', display: 'flex', alignItems: 'stretch', gap: 10 }}>
         <button

@@ -52,7 +52,12 @@ export default function ListingsSlider({
         .mjs-slide-card:hover{transform:translateY(-5px);box-shadow:0 22px 50px -24px rgba(20,16,10,.55),0 6px 16px -8px rgba(20,16,10,.18)}
         .mjs-slider-arrow{transition:transform .18s ease, opacity .18s ease, background .18s ease}
         .mjs-slider-arrow:hover{transform:translateY(-2px);opacity:.92}
-        @media(max-width:680px){.mjs-slide-card{flex-basis:86% !important;min-width:86% !important}}
+        /* موبایل: مثلِ سایت‌های بزرگِ ملکی، کارت‌های تمام‌عرضِ عمودی به‌جای اسکرولِ افقی */
+        @media(max-width:680px){
+          .mjs-slider-arrow{display:none !important}
+          .mjs-slider-row{display:grid !important;grid-template-columns:1fr !important;gap:16px !important;overflow:visible !important}
+          .mjs-slide-card{min-width:0 !important;width:100% !important;flex-basis:auto !important}
+        }
       `}</style>
 
       {showCategories && categories.length > 0 ? (

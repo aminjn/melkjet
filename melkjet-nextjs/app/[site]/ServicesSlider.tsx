@@ -36,7 +36,12 @@ export default function ServicesSlider({
         .mjs-srv-card:hover{transform:translateY(-5px);box-shadow:0 22px 50px -24px rgba(20,16,10,.55),0 6px 16px -8px rgba(20,16,10,.18)}
         .mjs-srv-arrow{transition:transform .18s ease, opacity .18s ease}
         .mjs-srv-arrow:hover{transform:translateY(-2px);opacity:.92}
-        @media(max-width:680px){.mjs-srv-card{flex-basis:84% !important;min-width:84% !important}}
+        /* موبایل: کارت‌های خدماتِ روی‌هم (عمودی) به‌جای اسکرولِ افقی */
+        @media(max-width:680px){
+          .mjs-srv-arrow{display:none !important}
+          .mjs-srv-row{display:grid !important;grid-template-columns:1fr !important;gap:14px !important;overflow:visible !important}
+          .mjs-srv-card{min-width:0 !important}
+        }
       `}</style>
 
       <div style={{ position: 'relative', display: 'flex', alignItems: 'stretch', gap: 10 }}>
