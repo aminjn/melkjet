@@ -90,6 +90,9 @@ function ReportsView({ stats }: { stats: Stats }) {
   const [rows, setRows] = useState<ListingStatRow[]>([])
   const [totals, setTotals] = useState({ views: 0, contacts: 0 })
   const [loading, setLoading] = useState(true)
+  const [q, setQ] = useState('')
+  const [sortBy, setSortBy] = useState<'eng' | 'views' | 'contacts' | 'recent'>('eng')
+  const [onlyContacted, setOnlyContacted] = useState(false)
   useEffect(() => {
     let on = true
     setLoading(true)
@@ -103,6 +106,16 @@ function ReportsView({ stats }: { stats: Stats }) {
 
   const cardS: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 16 }
   const maxEng = Math.max(1, ...rows.map(r => r.views + r.contacts))
+  const nq = q.trim().toLocaleLowerCase()
+  const shown = rows
+    .filter(r => !onlyContacted || r.contacts > 0)
+    .filter(r => !nq || `${r.title} ${r.location}`.toLocaleLowerCase().includes(nq))
+    .sort((a, b) =>
+      sortBy === 'views' ? b.views - a.views
+        : sortBy === 'contacts' ? b.contacts - a.contacts
+          : sortBy === 'recent' ? (b.lastView || 0) - (a.lastView || 0)
+            : (b.views + b.contacts * 3) - (a.views + a.contacts * 3))
+  const selStyle: React.CSSProperties = { padding: '9px 11px', borderRadius: 10, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--text)', fontSize: 13, fontFamily: FONT, outline: 'none' }
   const kpi = (label: string, value: string, color = 'var(--text)', sub?: string) => (
     <div style={{ ...cardS, minWidth: 150, flex: '1 1 150px' }}>
       <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 8 }}>{label}</div>
@@ -123,17 +136,28 @@ function ReportsView({ stats }: { stats: Stats }) {
       </div>
 
       <div style={cardS}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
           <div style={{ fontWeight: 800, fontSize: 15 }}>عملکردِ آگهی‌ها (بازدید و تماس)</div>
-          <div style={{ fontSize: 11.5, color: 'var(--faint)' }}>مرتب بر اساسِ بیشترین تعامل</div>
+          <div style={{ fontSize: 11.5, color: 'var(--faint)' }}>{fa(shown.length)} آگهی</div>
+        </div>
+        {/* فیلتر و مرتب‌سازی — موبایل‌پسند (تمام‌عرض و wrap) */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="جستجوی عنوان یا موقعیت…" style={{ ...selStyle, flex: '1 1 180px', minWidth: 0 }} />
+          <select value={sortBy} onChange={e => setSortBy(e.target.value as typeof sortBy)} style={{ ...selStyle, flex: '1 1 150px' }}>
+            <option value="eng">بیشترین تعامل</option>
+            <option value="views">بیشترین بازدید</option>
+            <option value="contacts">بیشترین تماس</option>
+            <option value="recent">جدیدترین بازدید</option>
+          </select>
+          <button onClick={() => setOnlyContacted(o => !o)} style={{ ...selStyle, cursor: 'pointer', fontWeight: 700, flex: '0 0 auto', color: onlyContacted ? '#16140f' : 'var(--muted)', background: onlyContacted ? 'var(--gold)' : 'var(--bg)', borderColor: onlyContacted ? 'var(--gold)' : 'var(--line)' }}>فقط دارای تماس</button>
         </div>
         {loading ? (
           <div style={{ color: 'var(--muted)', fontSize: 13, padding: '24px 0', textAlign: 'center' }}>در حال بارگذاری…</div>
-        ) : rows.length === 0 ? (
-          <div style={{ color: 'var(--faint)', fontSize: 13.5, padding: '30px 0', textAlign: 'center', background: 'var(--bg2)', borderRadius: 12, border: '1px dashed var(--line)' }}>هنوز آگهیِ منتشرشده‌ای ندارید یا آماری ثبت نشده است.</div>
+        ) : shown.length === 0 ? (
+          <div style={{ color: 'var(--faint)', fontSize: 13.5, padding: '30px 0', textAlign: 'center', background: 'var(--bg2)', borderRadius: 12, border: '1px dashed var(--line)' }}>{rows.length === 0 ? 'هنوز آگهیِ منتشرشده‌ای ندارید یا آماری ثبت نشده است.' : 'موردی با این فیلتر پیدا نشد.'}</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {rows.map(r => {
+            {shown.map(r => {
               const eng = r.views + r.contacts
               return (
                 <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 12, background: 'var(--bg2)', border: '1px solid var(--line)' }}>
@@ -253,12 +277,13 @@ export default function ProsPage() {
   const [wfOpen, setWfOpen] = useState(false)
   const [wbView, setWbView] = useState<WebsiteView | null>(null)
   const [wbOpen, setWbOpen] = useState(false)
+  const [navOpen, setNavOpen] = useState(false)   // کشوی منوی موبایل
   const clearTools = () => { setCrmView(null); setMktView(null); setWfView(null); setWbView(null) }
-  const goView = (v: View) => { setView(v); clearTools(); if (CRM_GROUP_IDS.includes(v)) setCrmOpen(true) }
+  const goView = (v: View) => { setView(v); clearTools(); if (CRM_GROUP_IDS.includes(v)) setCrmOpen(true); setNavOpen(false) }
   const crmGroupActive = CRM_GROUP_IDS.includes(view) && !crmView && !mktView && !wfView && !wbView
-  const openMkt = (v: MarketingView) => { clearTools(); setMktView(v); setMktOpen(true) }
-  const openWf = (v: WorkflowView) => { clearTools(); setWfView(v); setWfOpen(true) }
-  const openWb = (v: WebsiteView) => { clearTools(); setWbView(v); setWbOpen(true) }
+  const openMkt = (v: MarketingView) => { clearTools(); setMktView(v); setMktOpen(true); setNavOpen(false) }
+  const openWf = (v: WorkflowView) => { clearTools(); setWfView(v); setWfOpen(true); setNavOpen(false) }
+  const openWb = (v: WebsiteView) => { clearTools(); setWbView(v); setWbOpen(true); setNavOpen(false) }
   const [data, setData] = useState<AdvisorData | null>(null)
   const [loading, setLoading] = useState(true)
   const [unauth, setUnauth] = useState(false)
@@ -457,10 +482,24 @@ export default function ProsPage() {
 
   return (
     <div dir="rtl" style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: FONT }}>
-      <style>{`@media(max-width:760px){.mjp-side{width:60px!important}.mjp-sidelabel{display:none!important}.mjp-cols{flex-direction:column!important}}`}</style>
+      <style>{`
+        .mjp-burger{display:none}
+        .mjp-overlay{display:none}
+        @media(max-width:760px){
+          .mjp-cols{flex-direction:column!important}
+          /* کشوی موبایل: منوی کامل با برچسب از سمتِ راست بازشو */
+          .mjp-side{position:fixed!important;right:0;top:0;height:100vh!important;width:82vw!important;max-width:300px;z-index:130;transform:translateX(105%);transition:transform .26s ease;box-shadow:-12px 0 40px -12px rgba(0,0,0,.6)}
+          .mjp-side.mjp-open{transform:translateX(0)}
+          .mjp-burger{display:inline-flex!important}
+          .mjp-overlay.mjp-open{display:block}
+        }
+      `}</style>
+
+      {/* OVERLAY موبایل (پشتِ کشو) */}
+      <div className={`mjp-overlay${navOpen ? ' mjp-open' : ''}`} onClick={() => setNavOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 125 }} />
 
       {/* SIDEBAR */}
-      <aside className="mjp-side" style={{ width: 232, flexShrink: 0, background: 'var(--bg2)', borderLeft: '1px solid var(--line)', position: 'sticky', top: 0, height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <aside className={`mjp-side${navOpen ? ' mjp-open' : ''}`} style={{ width: 232, flexShrink: 0, background: 'var(--bg2)', borderLeft: '1px solid var(--line)', position: 'sticky', top: 0, height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '20px 16px 16px', borderBottom: '1px solid var(--line)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 6px 18px -6px var(--gold)', flexShrink: 0 }}>
@@ -562,7 +601,8 @@ export default function ProsPage() {
 
       {/* MAIN */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 22px', borderBottom: '1px solid var(--line)', position: 'sticky', top: 0, background: 'var(--navbg)', backdropFilter: 'blur(18px)', zIndex: 20, flexWrap: 'wrap' }}>
+        <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', borderBottom: '1px solid var(--line)', position: 'sticky', top: 0, background: 'var(--navbg)', backdropFilter: 'blur(18px)', zIndex: 20, flexWrap: 'wrap' }}>
+          <button className="mjp-burger" aria-label="منو" onClick={() => setNavOpen(true)} style={{ width: 42, height: 42, borderRadius: 11, border: '1px solid var(--line)', background: 'var(--bg2)', color: 'var(--gold)', fontSize: 20, cursor: 'pointer', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontFamily: FONT }}>☰</button>
           <div style={{ fontWeight: 800, fontSize: 18 }}>{crmView ? `CRM · ${CRM_VIEWS.find(v => v.id === crmView)?.label || ''}` : mktView ? `مارکتینگ · ${MARKETING_VIEWS.find(v => v.id === mktView)?.label || ''}` : wfView ? `اتوماسیون · ${WORKFLOW_VIEWS.find(v => v.id === wfView)?.label || ''}` : wbView ? `وب‌سایت‌ساز · ${WEBSITE_VIEWS.find(v => v.id === wbView)?.label || ''}` : VIEW_TITLES[view]}</div>
           <div style={{ flex: 1 }} />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="جستجوی لید، مشتری…" style={{ ...inputStyle, width: 220, maxWidth: '40vw' }} />
