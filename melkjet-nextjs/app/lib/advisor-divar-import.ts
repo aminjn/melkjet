@@ -29,7 +29,7 @@ function addAreaToProfile(o: string, neighborhood: string) {
 
 /** یک آگهیِ دیوار را (با توکن یا لینک) به‌عنوان فایلِ مشاور وارد می‌کند.
  *  hint: عنوان/تصویرِ واقعیِ آگهی از فهرستِ پروفایل (چون API تک‌آگهی گاهی عنوانِ دسته را می‌دهد). */
-export async function importDivarToken(o: string, input: string, hint?: BrandPost): Promise<ImportResult> {
+export async function importDivarToken(o: string, input: string, hint?: BrandPost, sourceId?: string): Promise<ImportResult> {
   const token = divarToken(input)
   if (!token) return { ok: false, reason: 'لینک یا توکنِ دیوار معتبر نیست' }
   // اگر قبلاً وارد شده، به‌جای رد کردن، با دادهٔ تازهٔ دیوار به‌روزرسانی می‌شود.
@@ -82,11 +82,11 @@ export async function importDivarToken(o: string, input: string, hint?: BrandPos
     if (!updated) {
       // فایل حذف شده بوده — دوباره به‌عنوان جدید اضافه کن
       removeImport(o, token)
-      return importDivarToken(o, input, hint)
+      return importDivarToken(o, input, hint, sourceId)
     }
     let published = updated.published || false
     if (cfg.autoPublish) { const pub = publishListing(o, existing.listingId); published = !!pub; if (pub?.publicId) warmEnrichment(pub.publicId) }   // بازانتشار + پیش‌گرم تحلیل
-    recordImport(o, { token, listingId: existing.listingId, title: updated.title, url: `https://divar.ir/v/${token}`, at: existing.at, published })
+    recordImport(o, { token, listingId: existing.listingId, title: updated.title, url: `https://divar.ir/v/${token}`, at: existing.at, published, sourceId: sourceId || existing.sourceId })
     return { ok: true, updated: true, listing: updated, token }
   }
 
@@ -94,7 +94,7 @@ export async function importDivarToken(o: string, input: string, hint?: BrandPos
   const listing = addListing(o, payload)
   let published = false
   if (cfg.autoPublish) { const pub = publishListing(o, listing.id); published = !!pub; if (pub?.publicId) warmEnrichment(pub.publicId) }   // تحلیلِ AI در پس‌زمینه پیش‌گرم می‌شود
-  recordImport(o, { token, listingId: listing.id, title: listing.title, url: `https://divar.ir/v/${token}`, at: Date.now(), published })
+  recordImport(o, { token, listingId: listing.id, title: listing.title, url: `https://divar.ir/v/${token}`, at: Date.now(), published, sourceId })
   return { ok: true, listing, token }
 }
 
@@ -105,14 +105,14 @@ function normName(s: string): string {
 export interface SyncResult { ok: boolean; reason?: string; scanned: number; imported: number; updated: number; skipped: number; sold?: number; tokens: string[] }
 
 // چند آگهی را پشت‌سرهم وارد/به‌روزرسانی می‌کند — hint برای عنوان/تصویرِ درست.
-async function importTokens(o: string, items: BrandPost[]): Promise<{ imported: number; updated: number; skipped: number; tokens: string[] }> {
+async function importTokens(o: string, items: BrandPost[], sourceId?: string): Promise<{ imported: number; updated: number; skipped: number; tokens: string[] }> {
   let imported = 0, updated = 0, skipped = 0
   const done: string[] = []
   for (const it of items) {
     const token = it.token
     if (!token) continue
     try {
-      const res = await importDivarToken(o, token, it)   // موجود را به‌روز می‌کند، جدید را اضافه
+      const res = await importDivarToken(o, token, it, sourceId)   // موجود را به‌روز می‌کند، جدید را اضافه
       if (res.ok && res.updated) { updated++ }
       else if (res.ok && !res.skipped) { imported++; done.push(token) }
       else skipped++
@@ -122,7 +122,7 @@ async function importTokens(o: string, items: BrandPost[]): Promise<{ imported: 
 }
 
 /** همهٔ آگهی‌های یک «پروفایلِ پرو/کسب‌وکارِ دیوار» را وارد می‌کند (لینکِ divar.ir/pro/<slug>). */
-export async function importDivarProfile(o: string, url: string): Promise<SyncResult> {
+export async function importDivarProfile(o: string, url: string, sourceId?: string): Promise<SyncResult> {
   const slug = divarProfileSlug(url)
   if (!slug) return { ok: false, reason: 'لینک پروفایل دیوار معتبر نیست', scanned: 0, imported: 0, updated: 0, skipped: 0, tokens: [] }
   const { posts, reason } = await fetchDivarProfileTokens(slug)
@@ -132,10 +132,11 @@ export async function importDivarProfile(o: string, url: string): Promise<SyncRe
     return { ok: false, reason: msg, scanned: 0, imported: 0, updated: 0, skipped: 0, tokens: [] }
   }
   // آگهی‌هایی که قبلاً وارد شده بودند ولی دیگر در پروفایلِ دیوار نیستند = فروخته/اجاره‌رفته.
+  // فقط در محدودهٔ همین اسکرپ (اگر sourceId داده شده) تا اسکرپ‌های دیگر دست‌نخورده بمانند.
   const liveTokens = new Set(posts.map(p => p.token))
-  const gone = getDivar(o).imports.filter(i => !liveTokens.has(i.token))
+  const gone = getDivar(o).imports.filter(i => !liveTokens.has(i.token) && (sourceId ? i.sourceId === sourceId : true))
 
-  const r = await importTokens(o, posts)
+  const r = await importTokens(o, posts, sourceId)
   const sold = markGone(o, gone)
   markRun(o, r.imported, '')
   return { ok: true, scanned: posts.length, ...r, sold }
@@ -193,12 +194,12 @@ export async function importDivarInput(o: string, raw: string): Promise<{ ok: bo
 
 /** آگهی‌های مشاور را از روی لینکِ ذخیره‌شده سینک می‌کند: لینکِ پروفایلِ پرو → همهٔ آگهی‌های او؛
  *  لینکِ جستجو/نقشه → آگهی‌هایی که نامِ آگهی‌دهنده با «نام دیوار»‌ِ مشاور می‌خواند (نام الزامی است). */
-export async function syncAdvisorDivar(o: string, cfgIn?: AdvisorDivar): Promise<SyncResult> {
+export async function syncAdvisorDivar(o: string, cfgIn?: AdvisorDivar, sourceId?: string): Promise<SyncResult> {
   const cfg = cfgIn || getDivar(o)
   if (!cfg.searchUrl) { markRun(o, 0, 'لینک دیوار تنظیم نشده'); return { ok: false, reason: 'لینک دیوار تنظیم نشده', scanned: 0, imported: 0, updated: 0, skipped: 0, tokens: [] } }
 
   // اگر لینکِ پروفایلِ پرو است، همهٔ آگهی‌های همان پروفایل (همگی متعلق به خودِ مشاور).
-  if (divarProfileSlug(cfg.searchUrl)) return importDivarProfile(o, cfg.searchUrl)
+  if (divarProfileSlug(cfg.searchUrl)) return importDivarProfile(o, cfg.searchUrl, sourceId)
 
   // لینکِ جستجو/نقشه: برای جلوگیری از ورودِ آگهی‌های دیگران، «نام دیوار» الزامی است.
   const want = normName(cfg.divarName)
@@ -219,7 +220,7 @@ export async function syncAdvisorDivar(o: string, cfgIn?: AdvisorDivar): Promise
   })
 
   const items: BrandPost[] = mine.map(x => ({ token: divarToken(x.url || '') || '', title: x.title, price: x.price, location: x.location, image: x.image })).filter(it => it.token)
-  const r = await importTokens(o, items)
+  const r = await importTokens(o, items, sourceId)
   markRun(o, r.imported, r.imported || mine.length ? '' : 'آگهیِ منطبقی با نامِ شما پیدا نشد')
   return { ok: true, scanned: rows.length, ...r }
 }

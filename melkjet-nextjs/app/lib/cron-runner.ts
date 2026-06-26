@@ -29,7 +29,7 @@ async function tick(): Promise<{ due: number; synced: number }> {
     for (const { phone, source } of due) {
       try {
         const base = getDivar(phone)
-        const r = await syncAdvisorDivar(phone, { ...base, searchUrl: source.searchUrl, divarName: source.divarName, autoPublish: source.autoPublish, autoNeighborhood: source.autoNeighborhood, schedule: source.schedule })
+        const r = await syncAdvisorDivar(phone, { ...base, searchUrl: source.searchUrl, divarName: source.divarName, autoPublish: source.autoPublish, autoNeighborhood: source.autoNeighborhood, schedule: source.schedule }, source.id)
         markSourceRun(phone, source.id, r.imported || 0, r.ok ? '' : (r.reason || 'خطا'))
         synced++
       } catch { /* خطای یک منبع بقیه را متوقف نکند */ }

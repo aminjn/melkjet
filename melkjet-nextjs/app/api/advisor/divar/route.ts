@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
       if (!src) return NextResponse.json({ error: 'منبع یافت نشد' }, { status: 404 })
       if (!src.searchUrl.trim()) return NextResponse.json({ error: 'لینکِ این منبع خالی است' }, { status: 400 })
       const base = getDivar(o)
-      const r = await syncAdvisorDivar(o, { ...base, searchUrl: src.searchUrl, divarName: src.divarName, autoPublish: src.autoPublish, autoNeighborhood: src.autoNeighborhood, schedule: src.schedule })
+      const r = await syncAdvisorDivar(o, { ...base, searchUrl: src.searchUrl, divarName: src.divarName, autoPublish: src.autoPublish, autoNeighborhood: src.autoNeighborhood, schedule: src.schedule }, src.id)
       markSourceRun(o, src.id, r.imported || 0, r.ok ? '' : (r.reason || 'خطا'))
       return NextResponse.json({ ...r, config: getDivar(o) })
     }

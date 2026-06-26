@@ -13,6 +13,7 @@ export interface ImportedPost {
   url: string
   at: number
   published: boolean
+  sourceId?: string    // کدام اسکرپ این آگهی را آورد (خالی = افزودنِ دستی)
 }
 
 // یک «اسکرپ» (منبع) — کاربر می‌تواند چند منبعِ مستقل بسازد، هرکدام ذخیره و جدا.
