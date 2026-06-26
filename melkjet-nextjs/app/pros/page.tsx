@@ -50,7 +50,7 @@ interface Stats {
 }
 interface AdvisorData { stats: Stats; leads: Lead[]; listings: Listing[]; appts: Appt[]; commissions: Commission[] }
 
-type View = 'dashboard' | 'assistant' | 'messages' | 'leads' | 'listings' | 'divar' | 'negotiation' | 'articles' | 'appts' | 'calendar' | 'commissions' | 'agency' | 'plans' | 'profile' | 'settings'
+type View = 'dashboard' | 'assistant' | 'messages' | 'reports' | 'leads' | 'listings' | 'divar' | 'negotiation' | 'articles' | 'appts' | 'calendar' | 'commissions' | 'agency' | 'plans' | 'profile' | 'settings'
 
 interface DivarImport { token: string; listingId: string; title: string; url: string; at: number; published: boolean }
 interface DivarConfig {
@@ -84,6 +84,84 @@ function money(n: number): string {
 }
 const faDate = (ts: number) => { try { return new Date(ts).toLocaleDateString('fa-IR') } catch { return '' } }
 
+// گزارشِ مشاور: بازدید/تماسِ هر آگهی (واقعی) + خلاصهٔ CRM.
+interface ListingStatRow { id: string; title: string; location: string; price: string; image?: string; views: number; contacts: number; lastView?: number }
+function ReportsView({ stats }: { stats: Stats }) {
+  const [rows, setRows] = useState<ListingStatRow[]>([])
+  const [totals, setTotals] = useState({ views: 0, contacts: 0 })
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    let on = true
+    setLoading(true)
+    fetch('/api/listing-stats?mine=1', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : { listings: [], totals: { views: 0, contacts: 0 } })
+      .then(d => { if (on) { setRows(d.listings || []); setTotals(d.totals || { views: 0, contacts: 0 }) } })
+      .catch(() => {})
+      .finally(() => { if (on) setLoading(false) })
+    return () => { on = false }
+  }, [])
+
+  const cardS: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 16 }
+  const maxEng = Math.max(1, ...rows.map(r => r.views + r.contacts))
+  const kpi = (label: string, value: string, color = 'var(--text)', sub?: string) => (
+    <div style={{ ...cardS, minWidth: 150, flex: '1 1 150px' }}>
+      <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 8 }}>{label}</div>
+      <div style={{ fontSize: 26, fontWeight: 900, color, letterSpacing: '-0.5px' }}>{value}</div>
+      {sub && <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 4 }}>{sub}</div>}
+    </div>
+  )
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        {kpi('کل بازدید آگهی‌ها', fa(totals.views), 'var(--gold)')}
+        {kpi('کلیکِ «اطلاعات تماس»', fa(totals.contacts), '#34d399', 'تعداد دفعاتی که شماره‌تان درخواست شد')}
+        {kpi('فایل‌های فعال', fa(stats.kpis.activeListings))}
+        {kpi('لیدهای فعال', fa(stats.kpis.activeLeads), 'var(--gold)', `${fa(stats.kpis.hotLeads)} داغ`)}
+        {kpi('معاملات این ماه', fa(stats.kpis.dealsThisMonth))}
+        {kpi('کمیسیون پرداخت‌شده', money(stats.kpis.paidCommission), '#34d399', `${money(stats.kpis.pendingCommission)} در انتظار`)}
+      </div>
+
+      <div style={cardS}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+          <div style={{ fontWeight: 800, fontSize: 15 }}>عملکردِ آگهی‌ها (بازدید و تماس)</div>
+          <div style={{ fontSize: 11.5, color: 'var(--faint)' }}>مرتب بر اساسِ بیشترین تعامل</div>
+        </div>
+        {loading ? (
+          <div style={{ color: 'var(--muted)', fontSize: 13, padding: '24px 0', textAlign: 'center' }}>در حال بارگذاری…</div>
+        ) : rows.length === 0 ? (
+          <div style={{ color: 'var(--faint)', fontSize: 13.5, padding: '30px 0', textAlign: 'center', background: 'var(--bg2)', borderRadius: 12, border: '1px dashed var(--line)' }}>هنوز آگهیِ منتشرشده‌ای ندارید یا آماری ثبت نشده است.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {rows.map(r => {
+              const eng = r.views + r.contacts
+              return (
+                <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 12, background: 'var(--bg2)', border: '1px solid var(--line)' }}>
+                  {r.image
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={r.image} alt="" style={{ width: 46, height: 46, borderRadius: 9, objectFit: 'cover', flexShrink: 0 }} />
+                    : <div style={{ width: 46, height: 46, borderRadius: 9, background: 'var(--line2)', flexShrink: 0 }} />}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</div>
+                    <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 2 }}>{r.location || '—'}{r.lastView ? ` · آخرین بازدید: ${faDate(r.lastView)}` : ''}</div>
+                    <div style={{ height: 4, borderRadius: 3, background: 'var(--line2)', marginTop: 7, overflow: 'hidden' }}>
+                      <div style={{ width: `${Math.round((eng / maxEng) * 100)}%`, height: '100%', background: 'linear-gradient(90deg,var(--gold2),var(--gold))' }} />
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 16, flexShrink: 0, textAlign: 'center' }}>
+                    <div><div style={{ fontSize: 16, fontWeight: 800, color: 'var(--gold)' }}>{fa(r.views)}</div><div style={{ fontSize: 10, color: 'var(--muted)' }}>بازدید</div></div>
+                    <div><div style={{ fontSize: 16, fontWeight: 800, color: '#34d399' }}>{fa(r.contacts)}</div><div style={{ fontSize: 10, color: 'var(--muted)' }}>تماس</div></div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 const STAGES: Stage[] = ['new', 'contacted', 'visit', 'negotiation', 'closed', 'lost']
 const STAGE_LABEL: Record<Stage, string> = { new: 'لید جدید', contacted: 'تماس‌گرفته', visit: 'بازدید', negotiation: 'مذاکره', closed: 'قرارداد', lost: 'ازدست‌رفته' }
 const STAGE_COLOR: Record<Stage, string> = { new: 'var(--gold)', contacted: '#60a5fa', visit: '#2dd4bf', negotiation: '#f59e0b', closed: '#34d399', lost: '#7a8fae' }
@@ -105,23 +183,29 @@ const inputStyle: React.CSSProperties = { padding: '9px 11px', borderRadius: 9, 
 const actionBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap' }
 const goldBtn: React.CSSProperties = { padding: '9px 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }
 
-const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد مشاور', assistant: 'دستیار هوشمند', messages: 'پیام‌ها', leads: 'لیدها و پایپ‌لاین', listings: 'فایل‌های من', divar: 'ایمپورت از دیوار', negotiation: 'موتور مذاکره', articles: 'مقالات و وبلاگ', appts: 'قرارها و بازدیدها', calendar: 'تقویم', commissions: 'کمیسیون', agency: 'آژانس من', plans: 'پلن‌ها و اشتراک', profile: 'پروفایل', settings: 'تنظیمات' }
+const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد مشاور', assistant: 'دستیار هوشمند', messages: 'پیام‌ها', reports: 'گزارش‌ها', leads: 'لیدها و پایپ‌لاین', listings: 'فایل‌های من', divar: 'ایمپورت از دیوار', negotiation: 'موتور مذاکره', articles: 'مقالات و وبلاگ', appts: 'قرارها و بازدیدها', calendar: 'تقویم', commissions: 'کمیسیون', agency: 'آژانس من', plans: 'پلن‌ها و اشتراک', profile: 'پروفایل', settings: 'تنظیمات' }
 const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'leads' | 'appts' }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: '▦' },
   { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
   { id: 'messages', label: 'پیام‌ها', icon: '💬' },
-  { id: 'leads', label: 'لیدها', icon: '◎', badge: 'leads' },
-  { id: 'listings', label: 'فایل‌های من', icon: '◫' },
+  { id: 'reports', label: 'گزارش‌ها', icon: '📊' },
   { id: 'divar', label: 'ایمپورت از دیوار', icon: '📥' },
   { id: 'negotiation', label: 'موتور مذاکره', icon: '🤝' },
-  { id: 'appts', label: 'قرارها', icon: '◉', badge: 'appts' },
-  { id: 'calendar', label: 'تقویم', icon: '🗓' },
-  { id: 'commissions', label: 'کمیسیون', icon: '💰' },
   { id: 'agency', label: 'آژانس من', icon: '🏢' },
   { id: 'plans', label: 'پلن‌ها و اشتراک', icon: '👑' },
   { id: 'profile', label: 'پروفایل', icon: '🪪' },
   { id: 'settings', label: 'تنظیمات', icon: '⛭' },
 ]
+
+// «CRM و مشتریان» — همهٔ موارد مرتبط با CRM در یک گروهِ آبشاری زیرِ هم.
+const CRM_GROUP: { id: View; label: string; icon: string; badge?: 'leads' | 'appts' }[] = [
+  { id: 'listings', label: 'فایل‌ها', icon: '◫' },
+  { id: 'leads', label: 'لیدها و پایپ‌لاین', icon: '◎', badge: 'leads' },
+  { id: 'appts', label: 'قرارها و بازدیدها', icon: '◉', badge: 'appts' },
+  { id: 'calendar', label: 'تقویم', icon: '🗓' },
+  { id: 'commissions', label: 'کمیسیون', icon: '💰' },
+]
+const CRM_GROUP_IDS = CRM_GROUP.map(x => x.id)
 
 // ── تقویم جلالی (بدون وابستگی) ──
 const J_MONTHS = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند']
@@ -170,8 +254,8 @@ export default function ProsPage() {
   const [wbView, setWbView] = useState<WebsiteView | null>(null)
   const [wbOpen, setWbOpen] = useState(false)
   const clearTools = () => { setCrmView(null); setMktView(null); setWfView(null); setWbView(null) }
-  const goView = (v: View) => { setView(v); clearTools() }
-  const openCrm = (v: CrmView) => { clearTools(); setCrmView(v); setCrmOpen(true) }
+  const goView = (v: View) => { setView(v); clearTools(); if (CRM_GROUP_IDS.includes(v)) setCrmOpen(true) }
+  const crmGroupActive = CRM_GROUP_IDS.includes(view) && !crmView && !mktView && !wfView && !wbView
   const openMkt = (v: MarketingView) => { clearTools(); setMktView(v); setMktOpen(true) }
   const openWf = (v: WorkflowView) => { clearTools(); setWfView(v); setWfOpen(true) }
   const openWb = (v: WebsiteView) => { clearTools(); setWbView(v); setWbOpen(true) }
@@ -399,18 +483,20 @@ export default function ProsPage() {
           })}
           <div style={{ height: 1, background: 'var(--line)', margin: '10px 8px' }} />
 
-          {/* CRM — جاسازی‌شده با منوی آبشاری (داخل همین پنل باز می‌شود) */}
-          <button onClick={() => { setCrmOpen(o => !o); if (!crmView) openCrm('dashboard') }} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: crmView ? 'var(--goldDim)' : 'transparent', color: crmView ? 'var(--gold)' : 'var(--muted)', fontWeight: crmView ? 700 : 500, fontSize: 14, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
-            <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: crmView ? 1 : 0.7 }}>◇</span>
+          {/* CRM و مشتریان — گروهِ آبشاریِ موارد CRM (فایل‌ها/لیدها/قرارها/تقویم/کمیسیون) */}
+          <button onClick={() => setCrmOpen(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: crmGroupActive ? 'var(--goldDim)' : 'transparent', color: crmGroupActive ? 'var(--gold)' : 'var(--muted)', fontWeight: crmGroupActive ? 700 : 500, fontSize: 14, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
+            <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: crmGroupActive ? 1 : 0.7 }}>◇</span>
             <span className="mjp-sidelabel" style={{ flex: 1 }}>CRM و مشتریان</span>
             <span className="mjp-sidelabel" style={{ fontSize: 11, transition: 'transform .2s', transform: crmOpen ? 'rotate(90deg)' : 'none' }}>‹</span>
           </button>
-          {crmOpen && CRM_VIEWS.map(cv => {
-            const on = crmView === cv.id
+          {(crmOpen || crmGroupActive) && CRM_GROUP.map(cv => {
+            const on = view === cv.id && !crmView && !mktView && !wfView && !wbView
+            const badge = cv.badge === 'leads' ? stats.kpis.activeLeads : cv.badge === 'appts' ? stats.kpis.upcomingAppts : 0
             return (
-              <button key={cv.id} onClick={() => openCrm(cv.id)} className="mjp-sidelabel" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 9, padding: '8px 14px 8px 14px', paddingRight: 34, borderRadius: 10, border: 'none', cursor: 'pointer', background: on ? 'var(--goldDim)' : 'transparent', color: on ? 'var(--gold)' : 'var(--muted)', fontWeight: on ? 700 : 500, fontSize: 13, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
+              <button key={cv.id} onClick={() => goView(cv.id)} className="mjp-sidelabel" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 9, padding: '8px 14px 8px 14px', paddingRight: 34, borderRadius: 10, border: 'none', cursor: 'pointer', background: on ? 'var(--goldDim)' : 'transparent', color: on ? 'var(--gold)' : 'var(--muted)', fontWeight: on ? 700 : 500, fontSize: 13, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
                 <span style={{ fontSize: 13, width: 16, textAlign: 'center', opacity: on ? 1 : 0.6 }}>{cv.icon}</span>
                 <span style={{ flex: 1 }}>{cv.label}</span>
+                {cv.badge && badge > 0 && <span style={{ background: on ? 'var(--gold)' : 'var(--line2)', color: on ? '#16140f' : 'var(--text)', borderRadius: 9, fontSize: 10, fontWeight: 700, padding: '1px 7px' }}>{fa(badge)}</span>}
               </button>
             )
           })}
@@ -572,6 +658,9 @@ export default function ProsPage() {
 
           {/* MESSAGES — گفتگوی واقعی با خریدارانِ آگهی‌های شما */}
           {view === 'messages' && <MessagesPanel role="owner" />}
+
+          {/* REPORTS — گزارشِ بازدید/تماسِ آگهی‌ها + خلاصهٔ CRM */}
+          {view === 'reports' && <ReportsView stats={stats} />}
 
           {/* NEGOTIATION ENGINE — داخلِ همین پنل */}
           {view === 'negotiation' && <NegotiationEngine listings={listings.map(l => ({ id: l.id, title: l.title, price: l.price, deal: l.deal, location: [l.city, l.neighborhood].filter(Boolean).join('، ') || l.location }))} />}
