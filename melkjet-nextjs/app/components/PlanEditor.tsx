@@ -52,6 +52,23 @@ export default function PlanEditor({ labels, area, initial }: { labels: string[]
   const [showList, setShowList] = useState(false)
   const [plans, setPlans] = useState<SavedPlan[]>([])
   const [busy, setBusy] = useState(false)
+  // رندرِ ۳بعدی از روی نقشهٔ فعلی (اصلاح‌شده) — تا ۳بعدی با ۲بعدیِ تو بخوانَد
+  const [render3d, setRender3d] = useState('')
+  const [renderBusy, setRenderBusy] = useState(false)
+  const [renderMsg, setRenderMsg] = useState('')
+  const make3d = async () => {
+    if (renderBusy || !rooms.length) return
+    setRenderBusy(true); setRenderMsg('در حال ساختِ رندرِ ۳بعدی از روی نقشه… (تا یک دقیقه)'); setRender3d('')
+    try {
+      const r = await fetch('/api/ai/studio', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'render', area, layout: { cols, rows, rooms: rooms.map(rm => ({ name: rm.name, type: rm.type, x: rm.x, y: rm.y, w: rm.w, h: rm.h })) } }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (d?.ok && d.renderUrl) { setRender3d(d.renderUrl); setRenderMsg('') }
+      else setRenderMsg(d?.error || 'ساختِ رندر ناموفق بود؛ دوباره تلاش کنید.')
+    } catch { setRenderMsg('اتصال به سرور برقرار نشد.') } finally { setRenderBusy(false) }
+  }
 
   useEffect(() => {
     // اگر پیش‌نویسِ AI آمده، از همان شروع کن؛ وگرنه از روی برچسب فضاها بساز.
@@ -318,6 +335,7 @@ export default function PlanEditor({ labels, area, initial }: { labels: string[]
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
           <button onClick={savePlan} disabled={busy} style={{ ...btnDis(busy), color: 'var(--gold)', borderColor: 'var(--gold)' }}>💾 ذخیره</button>
           <button onClick={openList} style={btn}>📂 پلان‌های من</button>
+          <button onClick={make3d} disabled={renderBusy || !rooms.length} style={{ ...btnDis(renderBusy || !rooms.length), background: 'rgba(212,175,55,.10)', color: 'var(--gold)', borderColor: 'var(--gold)', fontWeight: 700 }}>{renderBusy ? '⏳ رندر…' : '🎨 رندرِ ۳بعدی از این نقشه'}</button>
           {saveMsg && <span style={{ fontSize: 11.5, color: saveMsg.includes('✓') ? '#5fd98a' : 'var(--muted)' }}>{saveMsg}</span>}
         </div>
       )}
@@ -420,8 +438,25 @@ export default function PlanEditor({ labels, area, initial }: { labels: string[]
         ))}
       </div>
 
+      {/* رندرِ ۳بعدیِ ساخته‌شده از روی همین نقشه */}
+      {(renderBusy || render3d || renderMsg) && (
+        <div style={{ border: '1px solid var(--line2)', borderRadius: 14, padding: 14, background: 'var(--bg2)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+            <span style={{ fontWeight: 800, fontSize: 13.5 }}>رندرِ ۳بعدی از روی این نقشه</span>
+            {render3d && <a href={render3d} download="melkjet-3d.png" target="_blank" rel="noreferrer" style={{ fontSize: 11.5, color: 'var(--gold)', textDecoration: 'none' }}>دانلود ↓</a>}
+          </div>
+          {renderBusy && <div style={{ fontSize: 12, color: 'var(--muted)' }}>⏳ {renderMsg}</div>}
+          {!renderBusy && renderMsg && <div style={{ fontSize: 12, color: '#e7674a' }}>✕ {renderMsg}</div>}
+          {render3d && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={render3d} alt="رندر سه‌بعدی" style={{ width: '100%', borderRadius: 12, border: '1px solid var(--line)', display: 'block' }} />
+          )}
+          <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 8, lineHeight: 1.7 }}>نکته: نقشهٔ ۲بعدی را با درگ اصلاح کن، بعد این دکمه را بزن تا رندرِ ۳بعدی با چیدمانِ تو هماهنگ ساخته شود.</div>
+        </div>
+      )}
+
       <div style={{ fontSize: 11, color: 'var(--faint)', textAlign: 'center', lineHeight: 1.7 }}>
-        نقشه کاملاً آفلاین و روی دستگاه خودت ساخته می‌شود — بدون نیاز به اینترنت یا هوش مصنوعی. متراژ کل: {fa(area)} متر مربع.
+        نقشه کاملاً آفلاین و روی دستگاه خودت ساخته می‌شود؛ رندرِ ۳بعدی نیاز به اینترنت + مدلِ تصویر دارد. متراژ کل: {fa(area)} متر مربع.
       </div>
     </div>
   )

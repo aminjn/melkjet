@@ -54,6 +54,29 @@ export async function POST(req: NextRequest) {
 
   const visionModel = agentModel('studio', 'text') || agentModel('image', 'text') || agentModel('content', 'text') || agentModel('chat', 'text')
 
+  // ===== رندرِ ۳بعدی از روی نقشهٔ ویرایش‌شدهٔ کاربر (تا ۳بعدی با ۲بعدیِ اصلاح‌شده بخوانَد) =====
+  const layout = b.layout && Array.isArray(b.layout.rooms) && b.layout.rooms.length ? b.layout : null
+  if (b.mode === 'render' && layout) {
+    const imgModel = agentModel('studio', 'image') || agentModel('content', 'image')
+    if (!imgModel) return NextResponse.json({ error: 'برای رندرِ ۳بعدی، به StudioAgent یک «مدل تولید تصویر» بده (پنل → API و مدل‌های AI).' }, { status: 400 })
+    const cols = Number(layout.cols) || 4, rows = Number(layout.rows) || 4
+    const enType = (t: string) => (({ kitchen: 'kitchen', living: 'living room', bedroom: 'bedroom', bathroom: 'bathroom', hall: 'hallway/entrance', balcony: 'balcony', dining: 'dining area', office: 'home office' } as Record<string, string>)[t] || 'room')
+    const desc = layout.rooms.map((r: any) => {
+      const cx = (Number(r.x) + Number(r.w) / 2) / cols, cy = (Number(r.y) + Number(r.h) / 2) / rows
+      const hpos = cx < 0.34 ? 'left' : cx > 0.66 ? 'right' : 'center'
+      const vpos = cy < 0.34 ? 'top' : cy > 0.66 ? 'bottom' : 'middle'
+      const big = (Number(r.w) * Number(r.h)) / (cols * rows) >= 0.25 ? 'large ' : ''
+      return `${big}${enType(r.type)} at the ${vpos}-${hpos}`
+    }).join('; ')
+    const prompt = `3D isometric dollhouse cutaway render of a ${area} square meter residential apartment, viewed from above at a 45° isometric angle, no roof. The floor plan MUST match this exact room arrangement (grid ${cols}×${rows}, top-down): ${desc}. Put dividing walls between rooms, furnish each room realistically for its function, soft natural daylight, architectural visualization, photorealistic, clean, NO text and NO labels.`
+    try {
+      const r = await generateImageSafe(imgModel, prompt, '1024x1024')
+      return NextResponse.json({ ok: true, renderUrl: r.url, model: r.model })
+    } catch (e: any) {
+      return NextResponse.json({ error: e?.message || 'خطا در ساختِ رندرِ ۳بعدی' }, { status: 200 })
+    }
+  }
+
   // ===== حالت بازسازی وضع موجود (وقتی عکس داریم) =====
   if (photos.length && visionModel) {
     const labels = photos.map(p => p.label).join('، ')
