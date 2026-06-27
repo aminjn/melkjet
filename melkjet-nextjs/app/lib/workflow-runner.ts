@@ -1,13 +1,14 @@
 import { allWorkflows, type Workflow, type WorkflowNode } from './workflow-store'
-import { getAdvisor, addAppt, setLeadStage } from './advisor-store'
+import { getAdvisor, addAppt, setLeadStage, updateLead } from './advisor-store'
 import { sendServiceSms } from './sms'
 import { getWfState, setWfState } from './workflow-runner-store'
+import { chatCompleteSafe, resolveAgent } from './gapgpt'
 
 // موتورِ اجرای اتوماسیون. هر گردش‌کارِ «فعال» را با تریگرِ آن می‌سنجد و اکشن‌های متصل را
 // روی رویدادهای جدید (لید/قرارِ تازه) اجرا می‌کند. تنها رویدادهای جدید (بعد از فعال‌سازی)
 // پردازش می‌شوند و هر رویداد فقط یک‌بار (با مجموعهٔ done) اجرا می‌شود.
 
-interface Ctx { id: string; leadId?: string; phone?: string; name?: string; need?: string; budget?: string }
+interface Ctx { id: string; leadId?: string; phone?: string; name?: string; need?: string; budget?: string; ai?: string }
 
 function nextNodes(wf: Workflow, fromId: string): WorkflowNode[] {
   return wf.connections.filter(c => c.from === fromId).map(c => wf.nodes.find(n => n.id === c.to)).filter(Boolean) as WorkflowNode[]
@@ -18,14 +19,56 @@ function interpolate(tpl: string, ctx: Ctx): string {
     .replace(/\{\s*(نام|name)\s*\}/g, ctx.name || 'مشتری')
     .replace(/\{\s*(نیاز|need)\s*\}/g, ctx.need || '')
     .replace(/\{\s*(بودجه|budget)\s*\}/g, ctx.budget || '')
+    .replace(/\{\s*(تحلیل|ai)\s*\}/g, ctx.ai || '')
 }
 
-// از یک گره، اکشن‌های پاییندست را به‌ترتیب اجرا می‌کند (شرط/AI فعلاً عبوری‌اند).
+const num = (s?: string) => { const n = parseInt(String(s || '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[^\d]/g, ''), 10); return Number.isFinite(n) ? n : 0 }
+
+// شرط را می‌سنجد: اگر برقرار بود true (ادامه)، وگرنه false (توقفِ این شاخه).
+function evalCondition(node: WorkflowNode, ctx: Ctx): boolean {
+  const op = node.config?.operator || ''
+  const val = node.config?.value || ''
+  const fieldHint = (node.config?.field || '') + ' ' + node.label
+  const isBudget = /بودجه|قیمت/.test(fieldHint)
+  const isRegion = /منطقه|محله|شهر|مکان/.test(fieldHint)
+  if (isBudget) {
+    const a = num(ctx.budget), b = num(val)
+    if (!b) return true   // مقدارِ مرجع تنظیم نشده → مانع نشو
+    if (/کوچک|کمتر|</.test(op)) return a < b
+    if (/برابر|=/.test(op)) return a === b
+    return a > b   // پیش‌فرض: بزرگ‌تر از
+  }
+  if (isRegion) {
+    const hay = `${ctx.need || ''} ${ctx.name || ''}`
+    return val ? hay.includes(val) : true
+  }
+  return true   // شرطِ ناشناخته → عبوری
+}
+
+// از یک گره، شاخهٔ پاییندست را اجرا می‌کند: شرط شاخه را می‌بندد، AI تحلیل می‌سازد.
 async function runFrom(owner: string, wf: Workflow, fromNode: WorkflowNode, ctx: Ctx, depth = 0) {
   if (depth > 20) return
   for (const node of nextNodes(wf, fromNode.id)) {
     try {
-      if (node.type === 'action') {
+      if (node.type === 'condition') {
+        if (!evalCondition(node, ctx)) continue   // شرط برقرار نیست → این شاخه را نرو
+      } else if (node.type === 'ai') {
+        const { model } = resolveAgent([['lead', 'text'], ['content', 'text'], ['chat', 'text']])
+        const task = node.config?.prompt
+          || (node.label.includes('قیمت') ? 'بر اساس نیاز و بودجه، یک بازهٔ قیمتِ پیشنهادی و یک جملهٔ مذاکره بده.'
+            : node.label.includes('ملک') ? 'یک توضیحِ کوتاه و جذاب برای ملکِ متناسب با این نیاز بنویس.'
+              : 'این لید را در ۲ جمله تحلیل کن و یک اقدامِ بعدی پیشنهاد بده.')
+        try {
+          const out = await chatCompleteSafe(model || 'gpt-4o-mini', [
+            { role: 'system', content: 'تو دستیارِ فروشِ املاک هستی. کوتاه، فارسی و کاربردی پاسخ بده.' },
+            { role: 'user', content: `${task}\nنام: ${ctx.name || '-'}\nنیاز: ${ctx.need || '-'}\nبودجه: ${ctx.budget || '-'}` },
+          ], { max_tokens: 220 })
+          if (out && out.trim()) {
+            ctx.ai = out.trim()
+            if (ctx.leadId) updateLead(owner, ctx.leadId, { note: `🤖 ${ctx.ai}` })
+          }
+        } catch { /* AI در دسترس نبود → بدونِ تحلیل ادامه بده */ }
+      } else if (node.type === 'action') {
         if (node.label.includes('پیام')) {                       // ارسال پیام (پیامک به لید)
           const msg = interpolate(node.config?.template || node.config?.message || `سلام${ctx.name ? ' ' + ctx.name : ''}، از ملک‌جت با شما تماس می‌گیریم.`, ctx)
           if (ctx.phone) await sendServiceSms(ctx.phone, msg, 'اتوماسیون ملک‌جت')
@@ -35,10 +78,9 @@ async function runFrom(owner: string, wf: Workflow, fromNode: WorkflowNode, ctx:
           if (ctx.leadId) setLeadStage(owner, ctx.leadId, 'contacted')
         }
       } else if (node.type === 'end') {                          // پایان: بستن لید / تبدیل به مشتری
-        if (ctx.leadId) setLeadStage(owner, ctx.leadId, node.label.includes('مشتری') ? 'closed' : (node.label.includes('بستن') ? 'closed' : 'closed'))
+        if (ctx.leadId) setLeadStage(owner, ctx.leadId, 'closed')
       }
-      // condition / ai → عبوری (در MVP بدونِ شرط‌گذاری ادامه می‌دهیم)
-    } catch { /* اکشنِ خطادار، بقیه را متوقف نکند */ }
+    } catch { /* گرهِ خطادار، بقیه را متوقف نکند */ }
     await runFrom(owner, wf, node, ctx, depth + 1)
   }
 }
