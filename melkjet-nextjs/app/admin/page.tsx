@@ -2093,7 +2093,7 @@ function OutreachCampaign() {
         {msg && <span style={{ fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : 'var(--muted)' }}>{msg}</span>}
       </div>
       {d?.sample?.length ? <div style={{ fontSize: 11.5, color: 'var(--faint)', lineHeight: 1.9 }}>نمونه: {d.sample.map(s => `${s.name} (${s.phone})`).join('، ')}</div> : null}
-      <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 10, lineHeight: 1.8 }}>متنِ پترنِ دعوت (در «سرویس پیامک» بالا کدش را بگذار، متغیر <span style={{ direction: 'ltr', display: 'inline-block' }}>name</span>):<br />«%name% گرامی، آگهی‌های شما به‌صورت خودکار در ملک‌جت نمایش داده می‌شود. برای پنلِ اختصاصی و امکاناتِ بیشتر در melkjet.com ثبت‌نام کنید.»</div>
+      <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 10, lineHeight: 1.8 }}>متنِ پترنِ دعوت (در «سرویس پیامک» بالا کدش را بگذار، متغیر <span style={{ direction: 'ltr', display: 'inline-block' }}>name</span>):<br />«%name% گرامی، آگهی‌های شما رایگان و خودکار در ملک‌جت منتشر می‌شود! پنل اختصاصی، وب‌سایت‌ساز، CRM و دستیار هوش مصنوعی — همگی رایگان. همین حالا ثبت‌نام کنید: melkjet.com»</div>
     </Card>
   )
 }
@@ -2105,7 +2105,7 @@ function SmsView() {
     { ch: 'هشدار آگهی جدید', v: 'message', text: 'ملک‌جت\nآگهی جدید مطابق جستجوی شما در %message% اضافه شد. در پنل ببینید.' },
     { ch: 'تکمیل پروفایل', v: 'message', text: 'کاربر گرامی ملک‌جت، وضعیت پروفایل کسب‌وکار شما: %message%. برای رفع، وارد پنل شوید.' },
     { ch: 'اتوماسیون گردش‌کار', v: 'name', text: 'سلام %name%، کارشناسِ ملک‌جت به‌زودی با شما تماس می‌گیرد. با تشکر.' },
-    { ch: 'دعوت مالکانِ آگهی', v: 'name', text: '%name% گرامی، آگهی‌های شما به‌صورت خودکار در ملک‌جت نمایش داده می‌شود. برای پنلِ اختصاصی و امکاناتِ بیشتر در melkjet.com ثبت‌نام کنید.' },
+    { ch: 'دعوت مالکانِ آگهی', v: 'name', text: '%name% گرامی، آگهی‌های شما رایگان و خودکار در ملک‌جت منتشر می‌شود! پنل اختصاصی، وب‌سایت‌ساز، CRM و دستیار هوش مصنوعی — همگی رایگان. همین حالا ثبت‌نام کنید: melkjet.com' },
   ]
   return (
     <div style={{ animation: 'fade .35s ease' }}>

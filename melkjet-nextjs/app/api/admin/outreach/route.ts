@@ -25,7 +25,7 @@ function targets(onlyNew = false) {
 
 // متنِ پیش‌فرضِ دعوت (برای حالتِ متنِ آزاد/bulk).
 function inviteText(name: string): string {
-  return `${name} گرامی، آگهی‌های شما به‌صورت خودکار و رایگان در «ملک‌جت» نمایش داده می‌شود. برای دریافتِ پنلِ اختصاصی، وب‌سایت‌ساز، CRM و امکانات بیشتر، در melkjet.com ثبت‌نام کنید.`
+  return `${name} گرامی، آگهی‌های شما رایگان و خودکار در ملک‌جت منتشر می‌شود! پنل اختصاصی، وب‌سایت‌ساز، CRM و دستیار هوش مصنوعی — همگی رایگان. همین حالا ثبت‌نام کنید: melkjet.com`
 }
 
 export async function GET(req: NextRequest) {
