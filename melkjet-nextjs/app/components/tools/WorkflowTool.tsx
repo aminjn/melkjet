@@ -49,7 +49,7 @@ const BLOCK_CATEGORIES = [
     label: 'اقدام',
     type: 'action' as NodeType,
     color: '#3b82f6',
-    items: ['ارسال پیام', 'ایجاد وظیفه', 'بروزرسانی CRM'],
+    items: ['ارسال پیام', 'ارسال ایمیل', 'ایجاد وظیفه', 'بروزرسانی CRM'],
   },
   {
     label: 'هوش مصنوعی',
@@ -90,11 +90,12 @@ const NODE_TYPE_LABELS: Record<NodeType, string> = {
 const CONFIG_FIELDS: Record<NodeType, { key: string; label: string; placeholder: string }[]> = {
   trigger: [
     { key: 'source', label: 'منبع لید', placeholder: 'مثال: وب‌سایت، تلگرام' },
-    { key: 'filter', label: 'فیلتر اولیه', placeholder: 'مثال: تهران، بالای ۵۰۰ میلیون' },
+    { key: 'filter', label: 'فیلتر / مرحلهٔ هدف', placeholder: 'تغییر وضعیت: مرحلهٔ هدف مثل «قرارداد» — خالی = هر تغییر' },
   ],
   action: [
-    { key: 'delay', label: 'تأخیر (دقیقه)', placeholder: 'مثال: ۱۵' },
-    { key: 'template', label: 'قالب پیام', placeholder: 'متن پیام را وارد کنید' },
+    { key: 'template', label: 'متنِ پیام/ایمیل', placeholder: 'متن را وارد کنید — {نام}، {نیاز}، {بودجه}، {تحلیل}' },
+    { key: 'subject', label: 'موضوعِ ایمیل (فقط اکشنِ ایمیل)', placeholder: 'مثال: لید جدید' },
+    { key: 'email', label: 'گیرندهٔ ایمیل (فقط اکشنِ ایمیل)', placeholder: 'name@site.com — خالی = ایمیلِ پروفایلِ شما' },
     { key: 'assignee', label: 'مسئول', placeholder: 'نام مشاور' },
   ],
   ai: [
