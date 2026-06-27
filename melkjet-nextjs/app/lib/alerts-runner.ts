@@ -51,7 +51,7 @@ async function sendSms(phone: string, label: string) {
   const patternVar = (admin.alerts.patternVar || 'message').trim() || 'message'
   try {
     let url: string, body: any
-    if (patternCode) { url = 'https://api2.ippanel.com/api/v1/sms/pattern/normal/send'; body = { code: patternCode, sender, recipient, variable: { [patternVar]: label || 'ملک‌جت' } } }
+    if (patternCode) { url = 'https://api2.ippanel.com/api/v1/sms/pattern/normal/send'; body = { code: patternCode, sender, recipient, variable: { [patternVar]: text } } }
     else { url = 'https://api2.ippanel.com/api/v1/sms/send/webservice/single'; body = { sender, recipient: [recipient], message: text, description: { summary: 'هشدار آگهی ملک‌جت', count_recipient: '1' } } }
     await shecanRequest(url, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: apiKey, accept: 'application/json' }, body: JSON.stringify(body), timeout: 20000 })
   } catch { /* بی‌صدا */ }

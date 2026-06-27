@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { getAccount, setProfile, dashForRole, isValidRole } from '@/app/lib/account-store'
 import { getProfile, completeness } from '@/app/lib/profile-store'
+import { ensureCronStarted } from '@/app/lib/cron-runner'
 
 // حساب کاربری فعلی
 export async function GET() {
+  ensureCronStarted()   // اطمینان از روشن‌بودنِ زمان‌بندِ اتوماسیون (پیامکِ خودکار، هشدار، تکمیل پروفایل)
   const s = await getSession()
   if (!s) return NextResponse.json({ account: null }, { status: 401 })
   const a = getAccount(s.phone)
