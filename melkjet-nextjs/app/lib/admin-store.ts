@@ -20,6 +20,8 @@ export interface AdminData {
     sender: string
     pattern: string
     patternVar?: string   // نام متغیر کد در پترن IPPanel (پیش‌فرض: code)
+    automationPattern?: string  // (اختیاری) پترنِ متغیرِ آزاد برای پیامکِ اتوماسیون؛ خالی = متنِ آزاد bulk
+    automationVar?: string      // نامِ متغیرِ آن پترن (پیش‌فرض: message)
   }
   smtp?: {
     host: string

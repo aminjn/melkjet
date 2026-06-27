@@ -5,7 +5,8 @@ import { dashForRoleId } from './role-store'
 import { shecanRequest } from './shecan-https'
 import { SUPER_ADMIN_PHONE } from './session'
 
-async function sendGateSms(phone: string, text: string, cfg: any) {
+// fullText برای حالتِ آزاد (خطِ تبلیغاتی)؛ varValue مقدارِ کوتاهِ متغیرِ پترن (خطِ خدماتی).
+async function sendGateSms(phone: string, fullText: string, varValue: string, cfg: any) {
   const admin = getAdminData()
   const apiKey = process.env.IPPANEL_API_KEY || admin.ippanel?.apiKey
   const sender = process.env.IPPANEL_SENDER || admin.ippanel?.sender
@@ -16,8 +17,8 @@ async function sendGateSms(phone: string, text: string, cfg: any) {
   const patternVar = (cfg.patternVar || 'message').trim() || 'message'
   try {
     let url: string, body: any
-    if (patternCode) { url = 'https://api2.ippanel.com/api/v1/sms/pattern/normal/send'; body = { code: patternCode, sender, recipient, variable: { [patternVar]: text } } }
-    else { url = 'https://api2.ippanel.com/api/v1/sms/send/webservice/single'; body = { sender, recipient: [recipient], message: text, description: { summary: 'تکمیل پروفایل ملک‌جت', count_recipient: '1' } } }
+    if (patternCode) { url = 'https://api2.ippanel.com/api/v1/sms/pattern/normal/send'; body = { code: patternCode, sender, recipient, variable: { [patternVar]: varValue } } }
+    else { url = 'https://api2.ippanel.com/api/v1/sms/send/webservice/single'; body = { sender, recipient: [recipient], message: fullText, description: { summary: 'تکمیل پروفایل ملک‌جت', count_recipient: '1' } } }
     await shecanRequest(url, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: apiKey, accept: 'application/json' }, body: JSON.stringify(body), timeout: 20000 })
   } catch { /* بی‌صدا */ }
 }
@@ -40,11 +41,11 @@ export async function processProfileGate(now = Date.now()): Promise<{ checked: n
     }
     if (!a.profileWarnAt) {
       setProfileWarn(a.phone, now)
-      await sendGateSms(a.phone, `کاربرِ گرامیِ ملک‌جت، پروفایلِ کسب‌وکارِ شما ناقص است (${Math.round(pct)}٪). لطفاً ظرفِ ${cfg.graceDays ?? 3} روز آن را کامل کنید، در غیرِ این صورت پنلِ شما معلق می‌شود.`, cfg)
+      await sendGateSms(a.phone, `کاربرِ گرامیِ ملک‌جت، پروفایلِ کسب‌وکارِ شما ناقص است (${Math.round(pct)}٪). لطفاً ظرفِ ${cfg.graceDays ?? 3} روز آن را کامل کنید، در غیرِ این صورت پنلِ شما معلق می‌شود.`, `ناقص ${Math.round(pct)} درصد`, cfg)
       warned++
     } else if (!a.suspended && now - a.profileWarnAt > graceMs) {
       setSuspended(a.phone, true)
-      await sendGateSms(a.phone, 'پنلِ شما به‌دلیلِ تکمیل‌نشدنِ پروفایل معلق شد. برای رفعِ تعلیق، وارد پنل شوید و پروفایلِ کسب‌وکار را کامل کنید.', cfg)
+      await sendGateSms(a.phone, 'پنلِ شما به‌دلیلِ تکمیل‌نشدنِ پروفایل معلق شد. برای رفعِ تعلیق، وارد پنل شوید و پروفایلِ کسب‌وکار را کامل کنید.', 'معلق به‌دلیلِ نقصِ پروفایل', cfg)
       suspended++
     }
   }
