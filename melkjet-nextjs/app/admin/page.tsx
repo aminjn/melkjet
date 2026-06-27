@@ -2009,13 +2009,13 @@ function ModelSelect({ models, value, onChange, only }: { models: string[]; valu
 
 // ─── IPPanel SMS config ───────────────────────────────────────────────────
 function IPPanelConfig() {
-  const [f, setF] = useState({ apiKey: '', sender: '', pattern: '', patternVar: 'code' })
+  const [f, setF] = useState({ apiKey: '', sender: '', pattern: '', patternVar: 'code', automationPattern: '', automationVar: 'name' })
   const [masked, setMasked] = useState('')
   const [msg, setMsg] = useState('')
-  useEffect(() => { fetch('/api/admin/ippanel-config').then(r => r.ok ? r.json() : null).then(d => { if (d) { setMasked(d.apiKey || ''); setF(p => ({ ...p, sender: d.sender || '', pattern: d.pattern || '', patternVar: d.patternVar || 'code' })) } }) }, [])
+  useEffect(() => { fetch('/api/admin/ippanel-config').then(r => r.ok ? r.json() : null).then(d => { if (d) { setMasked(d.apiKey || ''); setF(p => ({ ...p, sender: d.sender || '', pattern: d.pattern || '', patternVar: d.patternVar || 'code', automationPattern: d.automationPattern || '', automationVar: d.automationVar || 'name' })) } }) }, [])
   const save = async () => {
     setMsg('')
-    const payload: any = { sender: f.sender, pattern: f.pattern, patternVar: f.patternVar }
+    const payload: any = { sender: f.sender, pattern: f.pattern, patternVar: f.patternVar, automationPattern: f.automationPattern, automationVar: f.automationVar }
     if (f.apiKey.trim()) payload.apiKey = f.apiKey.trim()
     const r = await fetch('/api/admin/ippanel-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     const d = await r.json()
@@ -2035,7 +2035,10 @@ function IPPanelConfig() {
         <div><label style={lab}>خط ارسال (Sender)</label><input style={inp} placeholder="3000xxxx یا +98..." value={f.sender} onChange={e => setF({ ...f, sender: e.target.value })} /></div>
         <div><label style={lab}>کد پترن (برای OTP)</label><input style={inp} placeholder="مثلاً 123456" value={f.pattern} onChange={e => setF({ ...f, pattern: e.target.value })} /></div>
         <div><label style={lab}>نام متغیر پترن</label><input style={inp} placeholder="code" value={f.patternVar} onChange={e => setF({ ...f, patternVar: e.target.value })} /></div>
+        <div><label style={lab}>کد پترنِ اتوماسیون (خطِ خدماتی)</label><input style={inp} placeholder="کدِ پترنِ پیامکِ اتوماسیون" value={f.automationPattern} onChange={e => setF({ ...f, automationPattern: e.target.value })} /></div>
+        <div><label style={lab}>نام متغیرِ پترنِ اتوماسیون</label><input style={inp} placeholder="name" value={f.automationVar} onChange={e => setF({ ...f, automationVar: e.target.value })} /></div>
       </div>
+      <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: -4, marginBottom: 10, lineHeight: 1.8 }}>پترنِ اتوماسیون برای پیامکِ گردش‌کار روی خطِ خدماتی است (متنِ ثابت + متغیرِ کوتاهِ نام). اگر خالی بماند و خطِ تبلیغاتی داشته باشی، متنِ آزاد فرستاده می‌شود.</div>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
         <GoldButton onClick={save}>ذخیره</GoldButton>
         {msg && <span style={{ fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</span>}

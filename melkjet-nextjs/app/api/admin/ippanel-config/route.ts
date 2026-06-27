@@ -13,6 +13,8 @@ export async function GET() {
     sender: data.ippanel?.sender || '',
     pattern: data.ippanel?.pattern || '',
     patternVar: data.ippanel?.patternVar || 'code',
+    automationPattern: data.ippanel?.automationPattern || '',
+    automationVar: data.ippanel?.automationVar || 'name',
     configured: !!data.ippanel?.apiKey,
   })
 }
@@ -31,12 +33,14 @@ export async function POST(req: NextRequest) {
   const sender = b.sender !== undefined ? String(b.sender) : cur.sender
   const pattern = b.pattern !== undefined ? String(b.pattern) : cur.pattern
   const patternVar = (b.patternVar ? String(b.patternVar) : (cur.patternVar || 'code')).trim() || 'code'
+  const automationPattern = b.automationPattern !== undefined ? String(b.automationPattern) : (cur.automationPattern || '')
+  const automationVar = (b.automationVar ? String(b.automationVar) : (cur.automationVar || 'name')).trim() || 'name'
 
   if (!apiKey || !sender) {
     return NextResponse.json({ error: 'کلید API و خط ارسال الزامی است' }, { status: 400 })
   }
 
-  data.ippanel = { apiKey, sender, pattern, patternVar }
+  data.ippanel = { apiKey, sender, pattern, patternVar, automationPattern, automationVar }
   saveAdminData(data)
   return NextResponse.json({ ok: true })
 }

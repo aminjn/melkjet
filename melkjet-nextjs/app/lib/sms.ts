@@ -5,21 +5,23 @@ import { shecanRequest } from './shecan-https'
 // چون متنِ دلخواه نمی‌تواند پترنِ ثابتِ تأییدشده باشد، با endpointِ متنِ آزاد (bulk) فرستاده
 // می‌شود؛ پس برای کارکرد به «خطِ تبلیغاتی» (یا خطی با مجوزِ متنِ آزاد) نیاز است. اگر ادمین
 // یک «پترنِ اتوماسیون» با متغیرِ آزاد ثبت کرده باشد، از آن استفاده می‌شود.
-export async function sendServiceSms(phone: string, text: string, summary = 'اتوماسیون ملک‌جت'): Promise<{ ok: boolean; error?: string }> {
+// text: متنِ کامل (برای خطِ تبلیغاتی/bulk). varValue: مقدارِ کوتاهِ متغیرِ پترنِ اتوماسیون
+// (مثلاً نامِ گیرنده) برای خطِ خدماتی. اگر automationPattern تنظیم باشد، پترن استفاده می‌شود.
+export async function sendServiceSms(phone: string, text: string, summary = 'اتوماسیون ملک‌جت', varValue?: string): Promise<{ ok: boolean; error?: string }> {
   const a = getAdminData()
   const apiKey = process.env.IPPANEL_API_KEY || a.ippanel?.apiKey
   const sender = process.env.IPPANEL_SENDER || a.ippanel?.sender
   if (!apiKey || !sender) return { ok: false, error: 'پیامک پیکربندی نشده' }
   const recipient = String(phone).replace(/\D/g, '')
   if (!/^09\d{9}$/.test(recipient)) return { ok: false, error: 'شمارهٔ نامعتبر' }
-  // پترنِ اختیاریِ اتوماسیون (اگر کاربر یکی با متغیرِ آزاد ثبت کرده باشد)
+  // پترنِ اختیاریِ اتوماسیون (خطِ خدماتی) — متغیرِ کوچک؛ خالی = متنِ آزادِ bulk (خطِ تبلیغاتی)
   const patternCode = (a.ippanel?.automationPattern || '').trim()
-  const patternVar = (a.ippanel?.automationVar || 'message').trim() || 'message'
+  const patternVar = (a.ippanel?.automationVar || 'name').trim() || 'name'
   try {
     let url: string, body: any
     if (patternCode) {
       url = 'https://api2.ippanel.com/api/v1/sms/pattern/normal/send'
-      body = { code: patternCode, sender, recipient, variable: { [patternVar]: text } }
+      body = { code: patternCode, sender, recipient, variable: { [patternVar]: (varValue || text).slice(0, 60) } }
     } else {
       url = 'https://api2.ippanel.com/api/v1/sms/send/webservice/single'
       body = { sender, recipient: [recipient], message: text, description: { summary, count_recipient: '1' } }

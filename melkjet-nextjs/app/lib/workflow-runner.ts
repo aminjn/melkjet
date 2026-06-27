@@ -85,7 +85,7 @@ async function runFrom(owner: string, wf: Workflow, fromNode: WorkflowNode, ctx:
       } else if (node.type === 'action') {
         if (node.label.includes('پیام')) {                       // ارسال پیام (پیامک به لید)
           const msg = interpolate(node.config?.template || node.config?.message || `سلام${ctx.name ? ' ' + ctx.name : ''}، از ملک‌جت با شما تماس می‌گیریم.`, ctx)
-          if (ctx.phone) await sendServiceSms(ctx.phone, msg, 'اتوماسیون ملک‌جت')
+          if (ctx.phone) await sendServiceSms(ctx.phone, msg, 'اتوماسیون ملک‌جت', ctx.name || 'مشتری')
         } else if (node.label.includes('ایمیل')) {               // ارسال ایمیل (به گیرندهٔ نود یا ایمیلِ پروفایل)
           const body = interpolate(node.config?.template || node.config?.message || `لیدِ جدید: ${ctx.name || ''} (${ctx.need || ''}) بودجه ${ctx.budget || '-'}${ctx.ai ? '\n\nتحلیل: ' + ctx.ai : ''}`, ctx)
           await sendActionEmail(owner, node.config?.email || '', node.config?.subject || 'اعلان اتوماسیون ملک‌جت', body)
