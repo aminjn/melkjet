@@ -52,7 +52,6 @@ const sections: NavSection[] = [
       { id: 'promos', icon: '★', label: 'پروموت و ویژه‌سازی' },
       { id: 'discounts', icon: '٪', label: 'کدهای تخفیف' },
       { id: 'ads',    icon: '▤', label: 'تبلیغات بنری' },
-      { id: 'tracker', icon: '🎯', label: 'ترکر و پیامک هدفمند' },
       { id: 'sms', icon: '✉', label: 'پیامک و الگوها', badge: 'SMS', badgeColor: '#5fd98a' },
     ],
   },
@@ -2109,7 +2108,15 @@ function SmsView() {
   ]
   return (
     <div style={{ animation: 'fade .35s ease' }}>
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>پیامک و الگوها</div>
+        <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>همهٔ تنظیماتِ پیامک یکجا: اتصالِ IPPanel و کدهای پترن، هشدارِ آگهی، تکمیل پروفایل، موتورِ مذاکره، ترکر، و کمپینِ دعوتِ مالکانِ آگهی.</div>
+      </Card>
       <IPPanelConfig />
+      <AlertsConfig />
+      <ProfileGateConfig />
+      <NegotiationConfig />
+      <TrackerConfig />
       <OutreachCampaign />
       <Card>
         <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>متنِ پیشنهادیِ الگوها (برای ثبت در IPPanel)</div>
@@ -2426,14 +2433,10 @@ function ConnectionsView() {
     <div style={{ animation: 'fade .35s ease' }}>
       <Card style={{ marginBottom: 14 }}>
         <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>اتصال‌ها و سرویس‌ها</div>
-        <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>همهٔ سرویس‌های بیرونی از اینجا تنظیم می‌شوند: نقشه (نشان)، پیامک (IPPanel)، ایمیل (SMTP) و پروکسی دیوار. کلید هوش مصنوعی و تخصیص مدل‌ها در «API و مدل‌های AI» است.</div>
+        <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>سرویس‌های بیرونی: نقشه (نشان)، ایمیل (SMTP)، پرداخت و پروکسی دیوار. تنظیماتِ <b>پیامک و الگوها</b> (IPPanel، هشدار، تکمیل پروفایل، مذاکره، ترکر، دعوت) همگی در منوی «پیامک و الگوها» یکجا هستند. کلید هوش مصنوعی در «API و مدل‌های AI».</div>
       </Card>
       <PodiumConfig />
       <NeshanConfig />
-      <IPPanelConfig />
-      <AlertsConfig />
-      <ProfileGateConfig />
-      <NegotiationConfig />
       <SmtpConfig />
       <ZarinpalConfig />
       <ImgbbConfig />
