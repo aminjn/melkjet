@@ -26,6 +26,7 @@ export interface Workflow {
   nodes: WorkflowNode[]
   connections: WorkflowConnection[]
   owner?: string
+  enabled?: boolean   // تا فعال نشود، اتوماسیون اجرا نمی‌شود (پیش‌فرض: خاموش)
   updatedAt: number
 }
 
@@ -54,11 +55,15 @@ export function getWorkflow(owner: string, workflowId: string): Workflow | null 
   return load().workflows.find(w => w.id === workflowId && w.owner === owner) ?? null
 }
 
+// همهٔ گردش‌کارها (برای موتورِ اجرا) — مستقل از مالک.
+export function allWorkflows(): Workflow[] { return load().workflows }
+
 export function saveWorkflow(owner: string, input: {
   id?: string
   name: string
   nodes: WorkflowNode[]
   connections: WorkflowConnection[]
+  enabled?: boolean
 }): Workflow {
   const db = load()
   const existing = input.id && input.id.trim()
@@ -70,6 +75,7 @@ export function saveWorkflow(owner: string, input: {
     nodes: Array.isArray(input.nodes) ? input.nodes : [],
     connections: Array.isArray(input.connections) ? input.connections : [],
     owner,
+    enabled: input.enabled !== undefined ? !!input.enabled : (existing?.enabled ?? false),
     updatedAt: Date.now(),
   }
   if (existing) {

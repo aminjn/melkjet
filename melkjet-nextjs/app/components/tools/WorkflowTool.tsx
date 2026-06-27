@@ -18,6 +18,7 @@ interface SavedWorkflow {
   id: string;
   name: string;
   nodes?: WorkflowNode[];
+  enabled?: boolean;
   updatedAt?: number;
 }
 
@@ -177,6 +178,7 @@ export default function WorkflowTool({ embedded = false, view: viewProp, onView 
   const [saving, setSaving] = useState(false);
   const [workflowId, setWorkflowId] = useState<string | null>(null);
   const [workflowName, setWorkflowName] = useState<string>('گردش کار جدید');
+  const [enabled, setEnabled] = useState(false);   // اتوماسیون فعال است؟
   // Saved workflows for the «اتوماسیون‌های من» list view.
   const [savedList, setSavedList] = useState<SavedWorkflow[]>([]);
   const [listLoaded, setListLoaded] = useState(false);
@@ -265,6 +267,7 @@ export default function WorkflowTool({ embedded = false, view: viewProp, onView 
   const loadWorkflow = useCallback((wf: SavedWorkflow) => {
     setWorkflowId(wf.id);
     setWorkflowName(wf.name);
+    setEnabled(!!wf.enabled);
     if (Array.isArray(wf.nodes) && wf.nodes.length) setNodes(wf.nodes);
     setSelectedId(null);
     setActiveView('builder');
@@ -274,6 +277,7 @@ export default function WorkflowTool({ embedded = false, view: viewProp, onView 
   const newWorkflow = useCallback(() => {
     setWorkflowId(null);
     setWorkflowName('گردش کار جدید');
+    setEnabled(false);
     setNodes(INITIAL_NODES);
     setSelectedId('n1');
     setStatus('آماده');
@@ -293,6 +297,7 @@ export default function WorkflowTool({ embedded = false, view: viewProp, onView 
           name: workflowName,
           nodes,
           connections: CONNECTIONS,
+          enabled,
         }),
       });
       if (!res.ok) {
@@ -311,7 +316,7 @@ export default function WorkflowTool({ embedded = false, view: viewProp, onView 
     } finally {
       setSaving(false);
     }
-  }, [saving, workflowId, workflowName, nodes, refreshList]);
+  }, [saving, workflowId, workflowName, nodes, enabled, refreshList]);
 
   const handleNodeClick = (id: string) => {
     setSelectedId(id);
@@ -523,6 +528,19 @@ export default function WorkflowTool({ embedded = false, view: viewProp, onView 
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {/* فعال‌سازیِ اتوماسیون — تا روشن نشود اجرا نمی‌شود */}
+          <button
+            onClick={() => setEnabled(v => !v)}
+            title="با روشن‌بودن، این اتوماسیون روی رویدادهای جدید اجرا می‌شود"
+            style={{
+              padding: '7px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 700,
+              border: `1px solid ${enabled ? '#22c55e' : 'var(--line)'}`,
+              background: enabled ? 'rgba(34,197,94,.14)' : 'var(--surface)',
+              color: enabled ? '#22c55e' : 'var(--muted)', transition: 'all .2s', whiteSpace: 'nowrap',
+            }}
+          >
+            {enabled ? '● فعال' : '○ غیرفعال'}
+          </button>
           <button
             onClick={handleSave}
             disabled={saving}

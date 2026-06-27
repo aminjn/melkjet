@@ -4,6 +4,7 @@ import { publishDueArticles } from './scraper-store'
 import { processTrackerQueue } from './tracker-sender'
 import { processSavedSearches } from './alerts-runner'
 import { processProfileGate } from './profile-gate-runner'
+import { processWorkflows } from './workflow-runner'
 
 // زمان‌بندِ سبک و بدونِ وابستگی برای سینکِ خودکارِ دیوار. روی سرورِ همیشه‌روشنِ
 // pm2 با یک setInterval اجرا می‌شود؛ یک قفلِ global از اجرای موازی/تکراری جلوگیری می‌کند.
@@ -25,6 +26,7 @@ async function tick(): Promise<{ due: number; synced: number }> {
     try { await processTrackerQueue(Date.now()) } catch { /* صفِ پیامکِ هدفمندِ ترکر */ }
     try { await processSavedSearches(Date.now()) } catch { /* هشدارِ آگهیِ جدید */ }
     try { await processProfileGate(Date.now()) } catch { /* سامانهٔ تکمیلِ پروفایل */ }
+    try { await processWorkflows(Date.now()) } catch { /* موتورِ اتوماسیونِ گردش‌کار */ }
     due = listDueSources(Date.now())
     for (const { phone, source } of due) {
       try {

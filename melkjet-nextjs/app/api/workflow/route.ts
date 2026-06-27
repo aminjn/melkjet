@@ -6,6 +6,7 @@ import {
   removeWorkflow,
 } from '@/app/lib/workflow-store'
 import { getSession } from '@/app/lib/session'
+import { resetWfState } from '@/app/lib/workflow-runner-store'
 
 // Persistent workflow store, scoped per-user by session phone.
 export async function GET(req: NextRequest) {
@@ -24,12 +25,16 @@ export async function POST(req: NextRequest) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   const body = await req.json().catch(() => ({}))
+  const wasEnabled = body.id ? !!getWorkflow(session.phone, String(body.id))?.enabled : false
   const workflow = saveWorkflow(session.phone, {
     id: body.id ? String(body.id) : undefined,
     name: String(body.name || ''),
     nodes: Array.isArray(body.nodes) ? body.nodes : [],
     connections: Array.isArray(body.connections) ? body.connections : [],
+    enabled: body.enabled !== undefined ? !!body.enabled : undefined,
   })
+  // با فعال‌سازی (خاموش→روشن)، وضعیتِ اجرا ریست می‌شود تا فقط رویدادهای بعد از این لحظه شلیک کنند.
+  if (workflow.enabled && !wasEnabled) resetWfState(workflow.id, Date.now())
   return NextResponse.json({ workflow })
 }
 
