@@ -12,7 +12,7 @@ import ArticleEditor from '@/app/components/ArticleEditor'
 type View =
   | 'overview' | 'scraper' | 'listings' | 'products' | 'geo' | 'moderation' | 'content' | 'studio' | 'articles' | 'categories' | 'crm' | 'api'
   | 'reports' | 'plans' | 'promos' | 'discounts' | 'ads' | 'users' | 'profiles' | 'roles' | 'connections'
-  | 'tracker' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags'
+  | 'tracker' | 'sms' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags'
 
 interface NavItem { id: View; icon: string; label: string; badge?: string; badgeColor?: string }
 interface NavSection { title: string; items: NavItem[] }
@@ -53,6 +53,7 @@ const sections: NavSection[] = [
       { id: 'discounts', icon: '٪', label: 'کدهای تخفیف' },
       { id: 'ads',    icon: '▤', label: 'تبلیغات بنری' },
       { id: 'tracker', icon: '🎯', label: 'ترکر و پیامک هدفمند' },
+      { id: 'sms', icon: '✉', label: 'پیامک و الگوها', badge: 'SMS', badgeColor: '#5fd98a' },
     ],
   },
   {
@@ -106,6 +107,7 @@ const viewTitles: Record<View, string> = {
   users:      'کاربران',
   roles:      'نقش‌ها و دسترسی',
   tracker:    'ترکر و پیامک هدفمند',
+  sms:        'پیامک و الگوها',
   settings:   'تنظیمات کامل پلتفرم',
   health:     'سلامت سیستم',
   servers:    'مدیریت سرورها',
@@ -2009,13 +2011,13 @@ function ModelSelect({ models, value, onChange, only }: { models: string[]; valu
 
 // ─── IPPanel SMS config ───────────────────────────────────────────────────
 function IPPanelConfig() {
-  const [f, setF] = useState({ apiKey: '', sender: '', pattern: '', patternVar: 'code', automationPattern: '', automationVar: 'name' })
+  const [f, setF] = useState({ apiKey: '', sender: '', pattern: '', patternVar: 'code', automationPattern: '', automationVar: 'name', outreachPattern: '', outreachVar: 'name' })
   const [masked, setMasked] = useState('')
   const [msg, setMsg] = useState('')
-  useEffect(() => { fetch('/api/admin/ippanel-config').then(r => r.ok ? r.json() : null).then(d => { if (d) { setMasked(d.apiKey || ''); setF(p => ({ ...p, sender: d.sender || '', pattern: d.pattern || '', patternVar: d.patternVar || 'code', automationPattern: d.automationPattern || '', automationVar: d.automationVar || 'name' })) } }) }, [])
+  useEffect(() => { fetch('/api/admin/ippanel-config').then(r => r.ok ? r.json() : null).then(d => { if (d) { setMasked(d.apiKey || ''); setF(p => ({ ...p, sender: d.sender || '', pattern: d.pattern || '', patternVar: d.patternVar || 'code', automationPattern: d.automationPattern || '', automationVar: d.automationVar || 'name', outreachPattern: d.outreachPattern || '', outreachVar: d.outreachVar || 'name' })) } }) }, [])
   const save = async () => {
     setMsg('')
-    const payload: any = { sender: f.sender, pattern: f.pattern, patternVar: f.patternVar, automationPattern: f.automationPattern, automationVar: f.automationVar }
+    const payload: any = { sender: f.sender, pattern: f.pattern, patternVar: f.patternVar, automationPattern: f.automationPattern, automationVar: f.automationVar, outreachPattern: f.outreachPattern, outreachVar: f.outreachVar }
     if (f.apiKey.trim()) payload.apiKey = f.apiKey.trim()
     const r = await fetch('/api/admin/ippanel-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     const d = await r.json()
@@ -2037,13 +2039,94 @@ function IPPanelConfig() {
         <div><label style={lab}>نام متغیر پترن</label><input style={inp} placeholder="code" value={f.patternVar} onChange={e => setF({ ...f, patternVar: e.target.value })} /></div>
         <div><label style={lab}>کد پترنِ اتوماسیون (خطِ خدماتی)</label><input style={inp} placeholder="کدِ پترنِ پیامکِ اتوماسیون" value={f.automationPattern} onChange={e => setF({ ...f, automationPattern: e.target.value })} /></div>
         <div><label style={lab}>نام متغیرِ پترنِ اتوماسیون</label><input style={inp} placeholder="name" value={f.automationVar} onChange={e => setF({ ...f, automationVar: e.target.value })} /></div>
+        <div><label style={lab}>کد پترنِ دعوت (مالکانِ آگهی)</label><input style={inp} placeholder="کدِ پترنِ دعوت/ثبت‌نام" value={f.outreachPattern} onChange={e => setF({ ...f, outreachPattern: e.target.value })} /></div>
+        <div><label style={lab}>نام متغیرِ پترنِ دعوت</label><input style={inp} placeholder="name" value={f.outreachVar} onChange={e => setF({ ...f, outreachVar: e.target.value })} /></div>
       </div>
-      <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: -4, marginBottom: 10, lineHeight: 1.8 }}>پترنِ اتوماسیون برای پیامکِ گردش‌کار روی خطِ خدماتی است (متنِ ثابت + متغیرِ کوتاهِ نام). اگر خالی بماند و خطِ تبلیغاتی داشته باشی، متنِ آزاد فرستاده می‌شود.</div>
+      <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: -4, marginBottom: 10, lineHeight: 1.8 }}>پترنِ اتوماسیون و دعوت برای خطِ خدماتی‌اند (متنِ ثابت + متغیرِ کوتاهِ نام). اگر خالی بمانند و خطِ تبلیغاتی داشته باشی، متنِ آزاد فرستاده می‌شود.</div>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
         <GoldButton onClick={save}>ذخیره</GoldButton>
         {msg && <span style={{ fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</span>}
       </div>
     </Card>
+  )
+}
+
+// ─── دعوتِ صاحبانِ آگهی (مارکتینگ): پیامک به حساب‌هایی که سوپرادمین ساخته ──────────
+function OutreachCampaign() {
+  const [d, setD] = useState<{ totalOwners: number; invited: number; pending: number; sample: { name: string; phone: string }[] } | null>(null)
+  const [onlyNew, setOnlyNew] = useState(true)
+  const [limit, setLimit] = useState('50')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const load = (on = onlyNew) => fetch(`/api/admin/outreach?onlyNew=${on ? '1' : '0'}`).then(r => r.ok ? r.json() : null).then(x => { if (x) setD(x) }).catch(() => {})
+  useEffect(() => { load() }, [onlyNew])  // eslint-disable-line react-hooks/exhaustive-deps
+  const send = async () => {
+    if (busy) return
+    const n = Math.min(Number(limit) || 50, d?.pending || 0)
+    if (!n) { setMsg('موردی برای ارسال نیست'); return }
+    if (!confirm(`به ${n.toLocaleString('fa-IR')} نفر پیامکِ دعوت ارسال شود؟`)) return
+    setBusy(true); setMsg('در حال ارسال…')
+    try {
+      const r = await fetch('/api/admin/outreach', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ limit: Number(limit) || 50, onlyNew }) })
+      const x = await r.json()
+      setMsg(x.ok ? `✓ ${(x.sent || 0).toLocaleString('fa-IR')} پیامک ارسال شد${x.failed ? ` · ${x.failed} ناموفق` : ''}` : (x.error || 'خطا'))
+      load()
+    } catch { setMsg('خطا در ارتباط با سرور') } finally { setBusy(false) }
+  }
+  const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', width: 90 }
+  return (
+    <Card style={{ marginBottom: 14 }}>
+      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>دعوتِ صاحبانِ آگهی (مارکتینگ)</div>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.9 }}>
+        به مشاوران/املاک‌هایی که برایشان پنل ساخته‌ای و شمارهٔ موبایلِ معتبر دارند، پیامکِ دعوت/معرفی می‌فرستد («آگهی‌هایت خودکار در ملک‌جت می‌آید — بیا ثبت‌نام کن»). هر شماره فقط <b>یک‌بار</b> دعوت می‌شود.
+      </div>
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 14 }}>
+        <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 16px', minWidth: 120 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>کل حساب‌های هدف</div><div style={{ fontSize: 22, fontWeight: 900 }}>{d ? d.totalOwners.toLocaleString('fa-IR') : '—'}</div></div>
+        <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 16px', minWidth: 120 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>دعوت‌شده تاکنون</div><div style={{ fontSize: 22, fontWeight: 900, color: '#5fd98a' }}>{d ? d.invited.toLocaleString('fa-IR') : '—'}</div></div>
+        <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 16px', minWidth: 120 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>در انتظارِ دعوت</div><div style={{ fontSize: 22, fontWeight: 900, color: 'var(--gold)' }}>{d ? d.pending.toLocaleString('fa-IR') : '—'}</div></div>
+      </div>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" checked={onlyNew} onChange={e => setOnlyNew(e.target.checked)} /> فقط حساب‌هایی که هنوز وارد نشده‌اند</label>
+        <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>تعداد در این ارسال:</span>
+        <input value={limit} onChange={e => setLimit(e.target.value.replace(/\D/g, ''))} style={inp} />
+        <GoldButton onClick={send} disabled={busy}>{busy ? 'در حال ارسال…' : '📣 ارسالِ دعوت'}</GoldButton>
+        {msg && <span style={{ fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : 'var(--muted)' }}>{msg}</span>}
+      </div>
+      {d?.sample?.length ? <div style={{ fontSize: 11.5, color: 'var(--faint)', lineHeight: 1.9 }}>نمونه: {d.sample.map(s => `${s.name} (${s.phone})`).join('، ')}</div> : null}
+      <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 10, lineHeight: 1.8 }}>متنِ پترنِ دعوت (در «سرویس پیامک» بالا کدش را بگذار، متغیر <span style={{ direction: 'ltr', display: 'inline-block' }}>name</span>):<br />«%name% گرامی، آگهی‌های شما به‌صورت خودکار در ملک‌جت نمایش داده می‌شود. برای پنلِ اختصاصی و امکاناتِ بیشتر در melkjet.com ثبت‌نام کنید.»</div>
+    </Card>
+  )
+}
+
+// ─── بخشِ یکپارچهٔ «پیامک و الگوها» ─────────────────────────────────────────
+function SmsView() {
+  const rec: { ch: string; v: string; text: string }[] = [
+    { ch: 'کد ورود (OTP)', v: 'code', text: 'کاربر گرامی، کد ورود شما به ملک‌جت %code% می‌باشد.' },
+    { ch: 'هشدار آگهی جدید', v: 'message', text: 'ملک‌جت\nآگهی جدید مطابق جستجوی شما در %message% اضافه شد. در پنل ببینید.' },
+    { ch: 'تکمیل پروفایل', v: 'message', text: 'کاربر گرامی ملک‌جت، وضعیت پروفایل کسب‌وکار شما: %message%. برای رفع، وارد پنل شوید.' },
+    { ch: 'اتوماسیون گردش‌کار', v: 'name', text: 'سلام %name%، کارشناسِ ملک‌جت به‌زودی با شما تماس می‌گیرد. با تشکر.' },
+    { ch: 'دعوت مالکانِ آگهی', v: 'name', text: '%name% گرامی، آگهی‌های شما به‌صورت خودکار در ملک‌جت نمایش داده می‌شود. برای پنلِ اختصاصی و امکاناتِ بیشتر در melkjet.com ثبت‌نام کنید.' },
+  ]
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <IPPanelConfig />
+      <OutreachCampaign />
+      <Card>
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>متنِ پیشنهادیِ الگوها (برای ثبت در IPPanel)</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.9 }}>روی خطِ خدماتی، هر الگو باید «متنِ ثابت + متغیرِ کوتاه» باشد. این متن‌ها قابلِ‌تأیید‌اند. کدِ هر پترن را در فیلدِ مربوطه‌اش (بالا یا در بخشِ هشدارها/تکمیل پروفایل) بگذار.</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {rec.map(r => (
+            <div key={r.ch} style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                <span style={{ fontWeight: 800, fontSize: 13 }}>{r.ch}</span>
+                <span style={{ fontSize: 11, color: 'var(--gold)', background: 'var(--goldDim)', borderRadius: 6, padding: '1px 8px', direction: 'ltr' }}>متغیر: {r.v}</span>
+              </div>
+              <div style={{ fontSize: 12.5, color: 'var(--text)', lineHeight: 1.9, whiteSpace: 'pre-wrap' }}>{r.text}</div>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
   )
 }
 
@@ -4179,6 +4262,7 @@ export default function SuperAdminPage() {
       case 'roles':      return <RolesView />
       case 'plans':      return <PlansView />
       case 'tracker':    return <TrackerConfig />
+      case 'sms':        return <SmsView />
       case 'promos':     return <PromotionsView />
       case 'discounts':  return <PromosView />
       case 'ads':        return <AdsView />
