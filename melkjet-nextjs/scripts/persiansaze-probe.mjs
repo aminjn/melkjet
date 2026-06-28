@@ -417,18 +417,30 @@ async function tokenMode() {
       const txt = await r.text().catch(() => '')
       const ct = r.headers.get('content-type') || ''
       console.log(`\n${opts.method || 'GET'} ${url}\n   → ${r.status} | ${ct} | ${txt.length}b`)
-      if (r.status >= 200 && r.status < 300 && /json/.test(ct)) console.log('   نمونه:', snippet(txt, 700))
-      else if (txt && !/json/.test(ct)) console.log('   (غیرِJSON):', snippet(txt.replace(/<[^>]+>/g, ' '), 160))
+      if (r.status >= 200 && r.status < 300 && /json/.test(ct)) console.log('   نمونه:', snippet(txt, 800))
+      else if (txt) console.log('   پاسخ:', snippet(txt.replace(/<[^>]+>/g, ' '), 300))
       return { status: r.status, ct, txt }
     } catch (e) { console.log(`\nGET ${url}\n   → خطا: ${e.message}`); return { status: 0 } }
   }
   console.log('\n── تأییدِ توکن (حساب) ──')
   await hit(`${rest}/api/user/v1/Account/Detail`)
-  console.log('\n── لیستِ پروژه‌ها (endpointِ واقعی) ──')
-  const list = await hit(`${rest}/api/user/v1/Project/Filter?limit=3&offset=0`)
-  // اگر لیست آمد، شناسهٔ اولین پروژه را برای تستِ جزئیات/تماس بردار
+  console.log('\n── لیستِ پروژه‌ها (امتحانِ GET و POST با بدنه‌های مختلف) ──')
+  const filterUrl = `${rest}/api/user/v1/Project/Filter?limit=3&offset=0`
+  const jh = { 'Content-Type': 'application/json' }
+  let list = await hit(filterUrl) // GET
+  const variants = [
+    { method: 'POST', headers: jh, body: '{}' },
+    { method: 'POST', headers: jh, body: JSON.stringify({ limit: 3, offset: 0 }) },
+    { method: 'POST', headers: jh, body: JSON.stringify({ filters: [], sorts: [], limit: 3, offset: 0 }) },
+    { method: 'POST', headers: jh, body: JSON.stringify({ pageSize: 3, pageNumber: 1 }) },
+  ]
+  for (const v of variants) {
+    if (list.status >= 200 && list.status < 300 && list.txt.length > 50) break
+    list = await hit(filterUrl, v)
+  }
+  // شناسهٔ اولین پروژه را برای تستِ جزئیات/تماس بردار
   let pid = ''
-  try { const j = JSON.parse(list.txt); const arr = Array.isArray(j) ? j : (j.items || j.data || j.result || j.list || []); pid = String(arr?.[0]?.id || arr?.[0]?.projectId || arr?.[0]?.code || '') } catch {}
+  try { const j = JSON.parse(list.txt); const arr = Array.isArray(j) ? j : (j.items || j.data || j.result || j.list || j.projects || []); pid = String(arr?.[0]?.id || arr?.[0]?.projectId || arr?.[0]?.code || '') } catch {}
   console.log('\n── جزئیات/تماسِ یک پروژه (شناسه:', pid || '—', ') ──')
   if (pid) {
     for (const p of [
