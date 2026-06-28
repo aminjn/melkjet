@@ -28,6 +28,14 @@ const LOGIN_CANDIDATES = [
   'https://panel.persiansaze.com/',
 ]
 
+// fetch با تایم‌اوت (تا اگر سایت جواب نداد، گیر نکنیم)
+async function fetchT(url, opts = {}, ms = 15000) {
+  const ac = new AbortController()
+  const t = setTimeout(() => ac.abort(), ms)
+  try { return await fetch(url, { ...opts, signal: ac.signal }) }
+  finally { clearTimeout(t) }
+}
+
 // ── ابزارِ ساده برای کوکی و پارسِ HTML بدونِ وابستگی ──────────────────────
 const jar = new Map()
 function storeCookies(res) {
@@ -99,7 +107,7 @@ async function main() {
   let loginUrl = '', loginHtml = '', loginRes = null
   for (const u of LOGIN_CANDIDATES) {
     try {
-      const r = await fetch(u, { headers: hdr(), redirect: 'follow' })
+      const r = await fetchT(u, { headers: hdr(), redirect: 'follow' })
       const body = await r.text()
       console.log(`\nGET ${u} → HTTP ${r.status} | ${r.headers.get('content-type') || ''} | ${body.length}b`)
       storeCookies(r)
@@ -143,7 +151,7 @@ async function main() {
 
   let postRes, postBody = ''
   try {
-    postRes = await fetch(postUrl, {
+    postRes = await fetchT(postUrl, {
       method: 'POST',
       headers: hdr({ 'Content-Type': 'application/x-www-form-urlencoded', 'Origin': new URL(loginUrl).origin, 'Referer': loginUrl }),
       body: new URLSearchParams(payload).toString(),
@@ -165,7 +173,7 @@ async function main() {
   if (loc) {
     const dash = abs(postUrl, loc)
     try {
-      const r = await fetch(dash, { headers: hdr(), redirect: 'follow' })
+      const r = await fetchT(dash, { headers: hdr(), redirect: 'follow' })
       const b = await r.text(); storeCookies(r)
       console.log(`\nGET داشبورد ${dash} → HTTP ${r.status} | ${r.headers.get('content-type')} | ${b.length}b`)
       // لینک‌های داخلِ داشبورد (برای یافتنِ صفحهٔ لیستِ سازنده‌ها)
@@ -177,7 +185,7 @@ async function main() {
   // ── ۳) نمونهٔ صفحهٔ دیتا ──────────────────────────────────────────────
   if (LIST_URL) {
     try {
-      const r = await fetch(LIST_URL, { headers: hdr(), redirect: 'follow' })
+      const r = await fetchT(LIST_URL, { headers: hdr(), redirect: 'follow' })
       const ct = r.headers.get('content-type') || ''
       const b = await r.text()
       console.log(`\n── صفحهٔ دیتا ${LIST_URL} → HTTP ${r.status} | ${ct} | ${b.length}b ──`)
