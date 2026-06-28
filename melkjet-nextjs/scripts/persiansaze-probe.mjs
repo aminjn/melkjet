@@ -9,6 +9,8 @@
 //
 // خروجی را کامل برایم بفرست (یوزر/پسورد در خروجی چاپ نمی‌شود).
 
+import crypto from 'node:crypto'
+
 const USER = process.env.PS_USER || ''
 const PASS = process.env.PS_PASS || ''
 const LIST_URL = process.argv[2] || ''
@@ -137,6 +139,10 @@ async function discoverOidc() {
       if (forms.length) break
     } catch (e) { /* بعدی */ }
   }
+  // اگر ROPC نبود و کردِنشیال داریم، ورودِ کاملِ code+PKCE را امتحان کن
+  if (USER && PASS && !(disc?.grant_types_supported || []).includes('password')) {
+    await tryOidcCodeFlow()
+  }
 }
 
 // ورودِ مستقیم با پسورد (Resource Owner Password Credentials).
@@ -154,6 +160,132 @@ async function tryRopc(tokenEndpoint) {
     } catch (e) { console.log('  خطا:', e.message) }
   }
   return null
+}
+
+// ── ورودِ کاملِ Authorization Code + PKCE (فرمِ موبایل/پسوردِ Identity Server) ──
+// jarِ هاست‌محور (کوکیِ هر دامنه جدا)
+const jars = new Map()
+function jarFor(host) { if (!jars.has(host)) jars.set(host, new Map()); return jars.get(host) }
+function storeCk(res, urlStr) {
+  const host = new URL(urlStr).host
+  const j = jarFor(host)
+  const sc = (typeof res.headers.getSetCookie === 'function') ? res.headers.getSetCookie() : []
+  for (const line of sc) { const [pair] = line.split(';'); const i = pair.indexOf('='); if (i > 0) j.set(pair.slice(0, i).trim(), pair.slice(i + 1).trim()) }
+}
+function ckHeader(urlStr) { const j = jars.get(new URL(urlStr).host); return j ? [...j.entries()].map(([k, v]) => `${k}=${v}`).join('; ') : '' }
+function H(urlStr, extra = {}) { const h = { ...BASE_HEADERS, ...extra }; const c = ckHeader(urlStr); if (c) h.Cookie = c; return h }
+
+// دنبال‌کردنِ دستیِ ریدایرکت‌ها با ذخیرهٔ کوکیِ هر هاست؛ تا رسیدن به code= یا یک صفحهٔ غیرِریدایرکت.
+async function follow(startUrl, opts = {}, maxHops = 8) {
+  let url = startUrl, method = opts.method || 'GET', body = opts.body, hops = 0
+  while (hops++ < maxHops) {
+    const res = await fetchT(url, { method, body, headers: H(url, opts.headers || {}), redirect: 'manual' }, 20000)
+    storeCk(res, url)
+    const loc = res.headers.get('location')
+    if (res.status >= 300 && res.status < 400 && loc) {
+      const next = new URL(loc, url).toString()
+      // اگر کد در آدرسِ بازگشتی بود، همان‌جا بایست
+      if (/[?#&]code=/.test(next)) return { res, url: next, body: '', code: new URL(next).searchParams.get('code') }
+      url = next; method = 'GET'; body = undefined
+      continue
+    }
+    const text = await res.text().catch(() => '')
+    return { res, url, body: text, code: null }
+  }
+  return { res: null, url, body: '', code: null }
+}
+
+async function tryOidcCodeFlow() {
+  const authority = (Object.values(ENV).find(v => /id\.persiansaze|identity/i.test(v)) || 'https://id.persiansaze.com').replace(/\/$/, '')
+  const clientId = ENV.REACT_APP_CLIENT_ID || 'PSC'
+  const redirectUri = ENV.REACT_APP_REDIRECT_URI || 'https://my.persiansaze.com'
+  const verifier = crypto.randomBytes(32).toString('base64url')
+  const challenge = crypto.createHash('sha256').update(verifier).digest('base64url')
+  const state = crypto.randomBytes(16).toString('hex'), nonce = crypto.randomBytes(16).toString('hex')
+  console.log('\n── ورودِ Authorization Code + PKCE ──')
+  console.log(`   authority=${authority}  client_id=${clientId}  redirect_uri=${redirectUri}`)
+
+  // ۱) شروعِ authorize → ریدایرکت به صفحهٔ /login
+  const authUrl = `${authority}/connect/authorize?` + new URLSearchParams({
+    client_id: clientId, redirect_uri: redirectUri, response_type: 'code',
+    scope: 'openid profile offline_access', state, nonce,
+    code_challenge: challenge, code_challenge_method: 'S256',
+  }).toString()
+  const a = await follow(authUrl)
+  console.log(`   authorize → رسیدیم به: ${a.url.slice(0, 90)}… (HTTP ${a.res?.status})`)
+  if (a.code) { console.log('   (بدونِ لاگین کد گرفتیم؟ احتمالاً نشستِ قبلی)'); return await exchange(a.code) }
+
+  // ۲) صفحهٔ لاگین → استخراجِ فرم و توکنِ antiforgery
+  const loginPageUrl = a.url
+  const forms = parseForms(a.body)
+  const form = forms.find(f => f.inputs.some(i => i.type === 'password')) || forms[0]
+  if (!form) { console.log('   ⚠ فرمِ لاگین پیدا نشد. نمونهٔ صفحه:', snippet(a.body, 400)); return null }
+  const payload = {}
+  for (const inp of form.inputs) if (inp.name) payload[inp.name] = inp.value || ''
+  // نام‌فیلدهای موبایل/پسورد را پر کن
+  const userKey = Object.keys(payload).find(k => /mobile|username|user|phone/i.test(k)) || '_model.MobileNumber'
+  const passKey = Object.keys(payload).find(k => /password/i.test(k)) || '_model.Password'
+  payload[userKey] = USER; payload[passKey] = PASS
+  if (!('_handler' in payload)) payload['_handler'] = 'password-login'
+  const postUrl = new URL(form.action || loginPageUrl, loginPageUrl).toString()
+  // ReturnUrl را از آدرسِ صفحهٔ لاگین حفظ کن
+  const ru = new URL(loginPageUrl).searchParams.get('ReturnUrl') || new URL(loginPageUrl).searchParams.get('returnUrl')
+  const postFull = ru && !/ReturnUrl/i.test(postUrl) ? `${postUrl}?ReturnUrl=${encodeURIComponent(ru)}` : postUrl
+  console.log(`   POST لاگین → ${postFull.slice(0, 90)}  (user="${userKey}", pass="${passKey}", فیلدها: ${Object.keys(payload).join(',')})`)
+
+  const p = await follow(postFull, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: authority, Referer: loginPageUrl },
+    body: new URLSearchParams(payload).toString(),
+  })
+  console.log(`   نتیجهٔ لاگین: HTTP ${p.res?.status} | رسیدیم به: ${p.url.slice(0, 90)}…`)
+  if (p.code) return await exchange(p.code, verifier, authority, clientId, redirectUri)
+  // اگر صفحهٔ لاگین دوباره آمد، یعنی خطا (پسورد/کپچا)
+  if (/login/i.test(p.url) || /password|captcha|recaptcha|نامعتبر|اشتباه/i.test(p.body)) {
+    console.log('   ✗ لاگین ناموفق. نشانه‌ها در پاسخ:', snippet(p.body.replace(/<[^>]+>/g, ' '), 300))
+    if (/captcha/i.test(p.body)) console.log('   ⚠ به‌نظر reCAPTCHA لازم است.')
+  }
+  return null
+
+  async function exchange(code, ver = verifier, auth = authority, cid = clientId, ruri = redirectUri) {
+    console.log('\n   ── تبادلِ کد با توکن ──')
+    const r = await fetchT(`${auth}/connect/token`, {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+      body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: ruri, client_id: cid, code_verifier: ver }).toString(),
+    }, 15000)
+    const txt = await r.text()
+    console.log(`   POST /connect/token → ${r.status} | ${snippet(txt, 200)}`)
+    if (r.status === 200 && /access_token/.test(txt)) {
+      const tok = JSON.parse(txt)
+      console.log('   ✓✓✓ ورود کامل موفق! access_token گرفتیم (طول:', (tok.access_token || '').length, '، refresh_token:', tok.refresh_token ? 'دارد ✓' : 'ندارد', ')')
+      await testApi(tok.access_token)
+      return tok
+    }
+    console.log('   ✗ تبادلِ توکن ناموفق.')
+    return null
+  }
+}
+
+// تستِ چند endpointِ دیتا با access_token تا ببینیم خروجی چیست.
+async function testApi(accessToken) {
+  const bases = { rest: ENV.REACT_APP_PSC_URL || 'https://my.persiansaze.com/rest', mgmt: ENV.REACT_APP_MANAGEMENT_URL || 'https://management.persiansaze.com' }
+  const tries = [
+    [bases.rest, '/api/v1/Account/Profile'],
+    [bases.mgmt, '/api/v1/Account/Profile'],
+    [bases.rest, '/api/v1/Account'],
+    [bases.rest, '/project'],
+    [bases.mgmt, '/project'],
+  ]
+  console.log('\n   ── تستِ APIِ دیتا با توکن ──')
+  for (const [base, path] of tries) {
+    const url = base.replace(/\/$/, '') + path
+    try {
+      const r = await fetchT(url, { headers: { ...BASE_HEADERS, Authorization: `Bearer ${accessToken}`, Accept: 'application/json' } }, 15000)
+      const txt = await r.text().catch(() => '')
+      console.log(`   GET ${url} → ${r.status} | ${r.headers.get('content-type')} | ${txt.length}b`)
+      if (r.status >= 200 && r.status < 300) console.log('       نمونه:', snippet(txt, 400))
+    } catch (e) { console.log(`   GET ${url} → خطا: ${e.message}`) }
+  }
 }
 async function discoverSpaApi(loginUrl, scripts) {
   const origin = new URL(loginUrl).origin
@@ -282,8 +414,6 @@ async function main() {
   if (forms.length === 0 || spa.markers.some(m => /SPA|Next|Nuxt/.test(m))) {
     await discoverSpaApi(loginUrl, spa.scripts)
     await discoverOidc()
-    if (!USER || !PASS) { console.log('\nℹ بعد از پیدا شدنِ endpointِ لاگین، با کردِنشیال دوباره اجرا می‌کنیم.'); return }
-    await tryJsonLogin(loginUrl)
     return
   }
 
