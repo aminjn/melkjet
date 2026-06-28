@@ -43,6 +43,31 @@ export function siteBase(): string {
   return (getAdminData().shortener?.siteBase || 'https://melkjet.com').replace(/\/$/, '')
 }
 
+// نامِ متغیرِ «لینک» در پترن‌ها (اگر ادمین تنظیم کرده باشد). اگر تنظیم باشد، یعنی همهٔ
+// پترن‌های لینک‌دار باید این placeholder را داشته باشند و لینکِ کوتاه در آن می‌رود.
+export function linkVarName(): string | null {
+  const v = (getAdminData().ippanel?.linkVar || '').trim()
+  return v || null
+}
+
+// یک URL را در گزارش ثبت + با nxal کوتاه می‌کند و خودِ لینکِ کوتاه (رشته) را برمی‌گرداند.
+// برای پر کردنِ متغیرِ %link% در پترن‌های خطِ خدماتی. اگر کوتاه‌کننده نباشد، همان لینکِ بلند.
+export async function trackAndShorten(url: string, opts: { channel: string; phone?: string; title?: string }): Promise<string> {
+  if (!getAdminData().shortener?.apiKey || !url) return url
+  const { createLink, setLinkMeta } = await import('./tracker-links-store')
+  try {
+    const link = createLink({ dest: url, title: opts.title, phone: opts.phone, channel: opts.channel })
+    const sh = await shortenUrl(url)
+    if (sh) { setLinkMeta(link.code, { shortUrl: sh.shortUrl, linkId: sh.id }); return sh.shortUrl }
+  } catch { /* همان لینکِ بلند */ }
+  return url
+}
+
+// اولین لینکِ http(s) داخلِ یک متن (یا undefined).
+export function firstUrl(text?: string): string | undefined {
+  return (String(text || '').match(/https?:\/\/[^\s"'<>]+/) || [])[0]
+}
+
 // هر لینکِ http(s) داخلِ متن را با nxal کوتاه می‌کند، در گزارش ثبت و در متن جایگزین می‌کند.
 // اگر کوتاه‌کننده تنظیم نشده باشد، متن بدونِ تغییر برمی‌گردد. برای همهٔ کانال‌های پیامکی.
 export async function shortenLinksInText(text: string, opts: { channel: string; phone?: string; title?: string }): Promise<string> {

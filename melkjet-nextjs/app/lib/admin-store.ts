@@ -24,6 +24,8 @@ export interface AdminData {
     automationVar?: string      // نامِ متغیرِ آن پترن (پیش‌فرض: message)
     outreachPattern?: string    // پترنِ دعوتِ صاحبانِ آگهیِ اسکرپ‌شده (متغیرِ نام)
     outreachVar?: string        // نامِ متغیرِ پترنِ دعوت (پیش‌فرض: name)
+    linkVar?: string            // نامِ متغیرِ «لینک» در پترن‌ها (مثلاً link)؛ اگر تنظیم شود،
+                                // در هر پترنِ لینک‌دار، لینکِ کوتاه‌شده در این متغیر فرستاده می‌شود
   }
   smtp?: {
     host: string

@@ -31,8 +31,12 @@ export async function POST(req: NextRequest) {
     let url: string, body: any
     if (patternCode) {
       // مسیرِ پترن (ارسالِ سریعِ خدماتی)
+      const { linkVarName, trackAndShorten, firstUrl, siteBase } = await import('@/app/lib/shortener')
+      const variable: any = { [patternVar]: text }
+      const lv = linkVarName()
+      if (lv) { const u = firstUrl(text); variable[lv] = u ? await trackAndShorten(u, { channel: 'negotiation', phone: recipient }) : siteBase() }
       url = 'https://api2.ippanel.com/api/v1/sms/pattern/normal/send'
-      body = { code: patternCode, sender, recipient, variable: { [patternVar]: text } }
+      body = { code: patternCode, sender, recipient, variable }
     } else {
       const { shortenLinksInText } = await import('@/app/lib/shortener')
       const msg = await shortenLinksInText(text, { channel: 'negotiation', phone: recipient })

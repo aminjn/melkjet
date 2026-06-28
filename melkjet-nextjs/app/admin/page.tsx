@@ -2011,13 +2011,13 @@ function ModelSelect({ models, value, onChange, only }: { models: string[]; valu
 
 // ─── IPPanel SMS config ───────────────────────────────────────────────────
 function IPPanelConfig() {
-  const [f, setF] = useState({ apiKey: '', sender: '', pattern: '', patternVar: 'code', automationPattern: '', automationVar: 'name', outreachPattern: '', outreachVar: 'name' })
+  const [f, setF] = useState({ apiKey: '', sender: '', pattern: '', patternVar: 'code', automationPattern: '', automationVar: 'name', outreachPattern: '', outreachVar: 'name', linkVar: '' })
   const [masked, setMasked] = useState('')
   const [msg, setMsg] = useState('')
-  useEffect(() => { fetch('/api/admin/ippanel-config').then(r => r.ok ? r.json() : null).then(d => { if (d) { setMasked(d.apiKey || ''); setF(p => ({ ...p, sender: d.sender || '', pattern: d.pattern || '', patternVar: d.patternVar || 'code', automationPattern: d.automationPattern || '', automationVar: d.automationVar || 'name', outreachPattern: d.outreachPattern || '', outreachVar: d.outreachVar || 'name' })) } }) }, [])
+  useEffect(() => { fetch('/api/admin/ippanel-config').then(r => r.ok ? r.json() : null).then(d => { if (d) { setMasked(d.apiKey || ''); setF(p => ({ ...p, sender: d.sender || '', pattern: d.pattern || '', patternVar: d.patternVar || 'code', automationPattern: d.automationPattern || '', automationVar: d.automationVar || 'name', outreachPattern: d.outreachPattern || '', outreachVar: d.outreachVar || 'name', linkVar: d.linkVar || '' })) } }) }, [])
   const save = async () => {
     setMsg('')
-    const payload: any = { sender: f.sender, pattern: f.pattern, patternVar: f.patternVar, automationPattern: f.automationPattern, automationVar: f.automationVar, outreachPattern: f.outreachPattern, outreachVar: f.outreachVar }
+    const payload: any = { sender: f.sender, pattern: f.pattern, patternVar: f.patternVar, automationPattern: f.automationPattern, automationVar: f.automationVar, outreachPattern: f.outreachPattern, outreachVar: f.outreachVar, linkVar: f.linkVar }
     if (f.apiKey.trim()) payload.apiKey = f.apiKey.trim()
     const r = await fetch('/api/admin/ippanel-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     const d = await r.json()
@@ -2041,8 +2041,17 @@ function IPPanelConfig() {
         <div><label style={lab}>نام متغیرِ پترنِ اتوماسیون</label><input style={inp} placeholder="name" value={f.automationVar} onChange={e => setF({ ...f, automationVar: e.target.value })} /></div>
         <div><label style={lab}>کد پترنِ دعوت (مالکانِ آگهی)</label><input style={inp} placeholder="کدِ پترنِ دعوت/ثبت‌نام" value={f.outreachPattern} onChange={e => setF({ ...f, outreachPattern: e.target.value })} /></div>
         <div><label style={lab}>نام متغیرِ پترنِ دعوت</label><input style={inp} placeholder="name" value={f.outreachVar} onChange={e => setF({ ...f, outreachVar: e.target.value })} /></div>
+        <div style={{ gridColumn: '1 / -1' }}><label style={lab}>نام متغیرِ لینک در پترن‌ها (مثلاً link) — برای کوتاه‌کنندهٔ لینک</label><input style={inp} placeholder="link" value={f.linkVar} onChange={e => setF({ ...f, linkVar: e.target.value })} /></div>
       </div>
       <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: -4, marginBottom: 10, lineHeight: 1.8 }}>پترنِ اتوماسیون و دعوت برای خطِ خدماتی‌اند (متنِ ثابت + متغیرِ کوتاهِ نام). اگر خالی بمانند و خطِ تبلیغاتی داشته باشی، متنِ آزاد فرستاده می‌شود.</div>
+      <div style={{ fontSize: 11.5, color: 'var(--text)', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '10px 13px', marginBottom: 12, lineHeight: 2 }}>
+        <b>🔗 کوتاه‌کنندهٔ لینک داخلِ پترن‌ها:</b> چون خطِ خدماتی متنِ ثابت می‌خواهد، لینک باید یک <b>متغیرِ جدا</b> در پترن باشد. کافی است:
+        <br />۱) در پنل IPPanel هر پترنی که می‌خواهی لینک داشته باشد را با یک متغیرِ <span style={{ direction: 'ltr', display: 'inline-block' }}>%link%</span> دوباره بساز/ویرایش کن.
+        <br />۲) همان نام (<span style={{ direction: 'ltr', display: 'inline-block' }}>link</span>) را در کادرِ «نام متغیرِ لینک» بالا بگذار.
+        <br />از این به بعد ملک‌جت لینکِ واقعی را با nxal کوتاه می‌کند و در متغیرِ <span style={{ direction: 'ltr', display: 'inline-block' }}>%link%</span> می‌فرستد و کلیکِ هر گیرنده را در «ترکر» می‌بینی.
+        <br /><span style={{ color: 'var(--faint)' }}>نمونهٔ بدنهٔ پترن:</span> «%name% عزیز، آگهیِ شما در ملک‌جت: %link%»
+        <br /><span style={{ color: 'var(--gold)' }}>توجه:</span> اگر «نام متغیرِ لینک» را پر کنی، هر پترنِ لینک‌دار (اتوماسیون، دعوت، مذاکره، هشدار، تکمیل پروفایل، ترکر) <b>باید</b> %link% داشته باشد؛ پترنِ OTP نیازی به آن ندارد.
+      </div>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
         <GoldButton onClick={save}>ذخیره</GoldButton>
         {msg && <span style={{ fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</span>}

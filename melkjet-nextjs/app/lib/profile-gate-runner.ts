@@ -17,7 +17,7 @@ async function sendGateSms(phone: string, fullText: string, varValue: string, cf
   const patternVar = (cfg.patternVar || 'message').trim() || 'message'
   try {
     let url: string, body: any
-    if (patternCode) { url = 'https://api2.ippanel.com/api/v1/sms/pattern/normal/send'; body = { code: patternCode, sender, recipient, variable: { [patternVar]: varValue } } }
+    if (patternCode) { const { linkVarName, trackAndShorten, firstUrl, siteBase } = await import('./shortener'); const variable: any = { [patternVar]: varValue }; const lv = linkVarName(); if (lv) { const u = firstUrl(fullText); variable[lv] = u ? await trackAndShorten(u, { channel: 'alert', phone: recipient }) : siteBase() } url = 'https://api2.ippanel.com/api/v1/sms/pattern/normal/send'; body = { code: patternCode, sender, recipient, variable } }
     else { const { shortenLinksInText } = await import('./shortener'); const msg = await shortenLinksInText(fullText, { channel: 'alert', phone: recipient }); url = 'https://api2.ippanel.com/api/v1/sms/send/webservice/single'; body = { sender, recipient: [recipient], message: msg, description: { summary: 'تکمیل پروفایل ملک‌جت', count_recipient: '1' } } }
     await shecanRequest(url, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: apiKey, accept: 'application/json' }, body: JSON.stringify(body), timeout: 20000 })
   } catch { /* بی‌صدا */ }

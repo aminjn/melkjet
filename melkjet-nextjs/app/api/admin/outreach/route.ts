@@ -5,7 +5,7 @@ import { listAccounts } from '@/app/lib/account-store'
 import { dashForRoleId } from '@/app/lib/role-store'
 import { invitedSet, markInvited, invitedCount } from '@/app/lib/outreach-store'
 import { shecanRequest } from '@/app/lib/shecan-https'
-import { shortenLinksInText } from '@/app/lib/shortener'
+import { shortenLinksInText, linkVarName, trackAndShorten, siteBase } from '@/app/lib/shortener'
 import { SUPER_ADMIN_PHONE } from '@/app/lib/session'
 
 export const runtime = 'nodejs'
@@ -57,7 +57,12 @@ export async function POST(req: NextRequest) {
   for (const o of pending) {
     try {
       let url: string, body: any
-      if (patternCode) { url = 'https://api2.ippanel.com/api/v1/sms/pattern/normal/send'; body = { code: patternCode, sender, recipient: o.phone, variable: { [patternVar]: o.name } } }
+      if (patternCode) {
+        const variable: any = { [patternVar]: o.name }
+        const lv = linkVarName()
+        if (lv) variable[lv] = await trackAndShorten(siteBase(), { channel: 'outreach', phone: o.phone, title: o.name })
+        url = 'https://api2.ippanel.com/api/v1/sms/pattern/normal/send'; body = { code: patternCode, sender, recipient: o.phone, variable }
+      }
       else { const msg = await shortenLinksInText(inviteText(o.name), { channel: 'outreach', phone: o.phone, title: o.name }); url = 'https://api2.ippanel.com/api/v1/sms/send/webservice/single'; body = { sender, recipient: [o.phone], message: msg, description: { summary: 'دعوت ملک‌جت', count_recipient: '1' } } }
       const res = await shecanRequest(url, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: apiKey, accept: 'application/json' }, body: JSON.stringify(body), timeout: 20000 })
       if (res.status >= 200 && res.status < 300) { markInvited(o.phone); sent++ } else failed++
