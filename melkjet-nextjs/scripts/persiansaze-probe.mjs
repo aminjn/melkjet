@@ -410,7 +410,24 @@ async function tokenMode() {
   const mgmt = (ENV.REACT_APP_MANAGEMENT_URL || 'https://management.persiansaze.com').replace(/\/$/, '')
   console.log('═══════════ پروبِ پرشین سازه — حالتِ توکن ═══════════')
   console.log('طولِ توکن:', TOKEN.length)
-  const auth = { ...BASE_HEADERS, 'Accept-Language': 'en-US,en;q=0.9', Authorization: `Bearer ${TOKEN}`, Accept: 'application/json', Origin: 'https://my.persiansaze.com', Referer: 'https://my.persiansaze.com/', did: DID, 'api-version': '1.0' }
+  // اثرانگشتِ کاملِ مرورگر (WAFِ openresty رویِ POST این‌ها را چک می‌کند)
+  const auth = {
+    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1',
+    'Accept': 'application/json',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Authorization': `Bearer ${TOKEN}`,
+    'Origin': 'https://my.persiansaze.com',
+    'Referer': 'https://my.persiansaze.com/',
+    'did': DID,
+    'sec-ch-ua': '"Google Chrome";v="149", "Chromium";v="149", "Not)A;Brand";v="24"',
+    'sec-ch-ua-mobile': '?1',
+    'sec-ch-ua-platform': '"iOS"',
+    'sec-fetch-dest': 'empty',
+    'sec-fetch-mode': 'cors',
+    'sec-fetch-site': 'same-origin',
+    'priority': 'u=1, i',
+    ...(process.env.PS_COOKIE ? { Cookie: process.env.PS_COOKIE } : {}),
+  }
   async function hit(url, opts = {}) {
     try {
       const r = await fetchT(url, { headers: auth, ...opts }, 20000)
