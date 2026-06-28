@@ -410,7 +410,7 @@ async function tokenMode() {
   const mgmt = (ENV.REACT_APP_MANAGEMENT_URL || 'https://management.persiansaze.com').replace(/\/$/, '')
   console.log('═══════════ پروبِ پرشین سازه — حالتِ توکن ═══════════')
   console.log('طولِ توکن:', TOKEN.length)
-  const auth = { ...BASE_HEADERS, Authorization: `Bearer ${TOKEN}`, Accept: 'application/json', Origin: 'https://my.persiansaze.com', Referer: 'https://my.persiansaze.com/', did: DID }
+  const auth = { ...BASE_HEADERS, 'Accept-Language': 'en-US,en;q=0.9', Authorization: `Bearer ${TOKEN}`, Accept: 'application/json', Origin: 'https://my.persiansaze.com', Referer: 'https://my.persiansaze.com/', did: DID, 'api-version': '1.0' }
   async function hit(url, opts = {}) {
     try {
       const r = await fetchT(url, { headers: auth, ...opts }, 20000)
@@ -425,7 +425,7 @@ async function tokenMode() {
   console.log('\n── تأییدِ توکن (حساب) ──')
   await hit(`${rest}/api/user/v1/Account/Detail`)
   console.log('\n── لیستِ پروژه‌ها (امتحانِ GET و POST با بدنه‌های مختلف) ──')
-  const filterUrl = `${rest}/api/user/v1/Project/Filter?limit=3&offset=0`
+  const filterUrl = `${rest}/api/user/v1/Project/Filter?limit=20&offset=0`
   const jh = { 'Content-Type': 'application/json' }
   let list = await hit(filterUrl) // GET
   const variants = [
