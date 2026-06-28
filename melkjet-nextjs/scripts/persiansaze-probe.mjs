@@ -107,9 +107,10 @@ async function main() {
   let loginUrl = '', loginHtml = '', loginRes = null
   for (const u of LOGIN_CANDIDATES) {
     try {
+      process.stdout.write(`\n→ GET ${u} ...`)
       const r = await fetchT(u, { headers: hdr(), redirect: 'follow' })
       const body = await r.text()
-      console.log(`\nGET ${u} → HTTP ${r.status} | ${r.headers.get('content-type') || ''} | ${body.length}b`)
+      console.log(` HTTP ${r.status} | ${r.headers.get('content-type') || ''} | ${body.length}b`)
       storeCookies(r)
       if (r.status === 200 && body.length > 200) { loginUrl = r.url || u; loginHtml = body; loginRes = r; break }
     } catch (e) { console.log(`\nGET ${u} → خطا: ${e.message}`) }
@@ -205,4 +206,10 @@ async function main() {
   console.log('\n═══════════ پایان ═══════════')
 }
 
-main().catch(e => console.error('خطای کلی:', e))
+// نگهبان: اگر بیش از ۹۰ ثانیه طول کشید، با پیام خارج شو (تا هیچ‌وقت بی‌صدا گیر نکند)
+const watchdog = setTimeout(() => { console.error('\n⏱ بیش از ۹۰ ثانیه طول کشید — خروجِ اجباری.'); process.exit(2) }, 90000)
+watchdog.unref?.()
+
+main()
+  .then(() => { clearTimeout(watchdog); process.exit(0) })
+  .catch(e => { clearTimeout(watchdog); console.error('خطای کلی:', e); process.exit(1) })
