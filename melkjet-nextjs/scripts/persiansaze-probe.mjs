@@ -99,6 +99,96 @@ function abs(base, url) {
   try { return new URL(url, base).toString() } catch { return url }
 }
 
+// API را که React صدا می‌زند، از env.js و bundleهای JS کشف کن.
+let API_BASE = ''
+const API_PATHS = new Set()
+async function discoverSpaApi(loginUrl, scripts) {
+  const origin = new URL(loginUrl).origin
+  console.log('\n── کشفِ API از فایل‌های SPA ──')
+  // env.js (معمولاً آدرسِ پایهٔ API اینجاست)
+  const sources = ['./env.js', './config.js', '/env.js', ...scripts]
+  const fetched = new Set()
+  for (const s of sources) {
+    const url = abs(loginUrl, s)
+    if (fetched.has(url)) continue
+    fetched.add(url)
+    try {
+      process.stdout.write(`→ ${url} ...`)
+      const r = await fetchT(url, { headers: hdr() }, 20000)
+      const js = await r.text()
+      console.log(` ${r.status} | ${js.length}b`)
+      if (r.status !== 200) continue
+      // env.js کوچک است → کاملش را چاپ کن
+      if (/env|config/i.test(s) && js.length < 2000) console.log('   محتوا:', snippet(js, 1200))
+      // آدرس‌های کاملِ http (به‌جز خودِ سایت/فونت/سی‌دی‌ان)
+      for (const m of js.matchAll(/https?:\/\/[a-zA-Z0-9_.\-]+(?:\/[a-zA-Z0-9_./\-]*)?/g)) {
+        const u = m[0]
+        if (/persiansaze|api|back|service|panel/i.test(u) && !/\.(png|jpg|svg|css|woff|gif)/i.test(u)) {
+          if (/api|back|service/i.test(u) && !API_BASE) API_BASE = u.replace(/\/$/, '')
+          API_PATHS.add(u)
+        }
+      }
+      // مسیرهای نسبیِ API ("/api/...", "/auth/login", ...)
+      for (const m of js.matchAll(/["'`](\/(?:api|auth|user|users|account|login|otp|verify|token|build|saze|project|projects|porozhe|karfarma|list|search|panel|v1|v2)[a-zA-Z0-9_./\-]*)["'`]/gi)) {
+        API_PATHS.add(m[1])
+      }
+    } catch (e) { console.log(` خطا: ${e.message}`) }
+  }
+  console.log('\nآدرسِ پایهٔ API (حدس):', API_BASE || '— (در خروجیِ env.js بالا بگرد)')
+  const paths = [...API_PATHS].sort()
+  console.log('مسیرها/آدرس‌های یافت‌شده:')
+  for (const p of paths.slice(0, 60)) console.log('   ', p)
+  if (paths.length > 60) console.log(`   … و ${paths.length - 60} مورد دیگر`)
+}
+
+// تلاش برای ورودِ JSON به endpointهای محتمل با شماره‌موبایل/پسورد.
+async function tryJsonLogin(loginUrl) {
+  const origin = new URL(loginUrl).origin
+  const bases = [API_BASE, origin, origin + '/api', origin + '/api/v1'].filter(Boolean)
+  const loginPaths = [...new Set([...API_PATHS].filter(p => /login|signin|auth|token/i.test(p)))]
+  const tryPaths = loginPaths.length ? loginPaths : ['/api/login', '/api/auth/login', '/api/v1/auth/login', '/login', '/auth/login']
+  // ترکیب‌های مختلفِ نامِ فیلد
+  const bodies = [
+    { username: USER, password: PASS },
+    { mobile: USER, password: PASS },
+    { phone: USER, password: PASS },
+    { email: USER, password: PASS },
+    { user: USER, pass: PASS },
+  ]
+  console.log('\n── تلاش برای ورودِ JSON ──')
+  for (const base of bases) {
+    for (const p of tryPaths) {
+      const url = p.startsWith('http') ? p : (base.replace(/\/$/, '') + (p.startsWith('/') ? p : '/' + p))
+      for (const body of bodies) {
+        try {
+          const r = await fetchT(url, {
+            method: 'POST',
+            headers: hdr({ 'Content-Type': 'application/json', 'Accept': 'application/json', 'Origin': origin, 'Referer': loginUrl }),
+            body: JSON.stringify(body), redirect: 'manual',
+          }, 15000)
+          const txt = await r.text().catch(() => '')
+          const ct = r.headers.get('content-type') || ''
+          const sc = storeCookies(r)
+          // فقط نتایجِ جالب را چاپ کن (نه 404/405)
+          if (r.status !== 404 && r.status !== 405) {
+            const field = Object.keys(body).filter(k => k !== 'password' && k !== 'pass')[0]
+            console.log(`\nPOST ${url}  [${field}=موبایل] → HTTP ${r.status} | ${ct} | ${txt.length}b | کوکی: ${sc.map(c => c.split(';')[0]).join(',') || '—'}`)
+            console.log('   پاسخ:', snippet(txt, 500))
+            // اگر توکن/کوکی گرفتیم، ورود موفق بوده
+            if (r.status >= 200 && r.status < 300 && (/token|access|jwt/i.test(txt) || sc.length)) {
+              console.log('   ✓✓ به‌نظر ورودِ موفق! این endpoint و این فیلدها درست‌اند.')
+              return { url, field, body: Object.keys(body) }
+            }
+          }
+        } catch (e) { /* بی‌صدا برو سراغِ بعدی */ }
+      }
+    }
+  }
+  console.log('\n⚠ ورودِ خودکار جواب نداد. احتمالاً endpoint یا نامِ فیلدها فرق دارد یا OTP لازم است.')
+  console.log('   لطفاً در مرورگر وارد شو و از تب Network، درخواستِ login را (URL + بدنهٔ JSON + پاسخ) بفرست.')
+  return null
+}
+
 async function main() {
   console.log('═══════════ پروبِ پرشین سازه ═══════════')
   console.log('Node:', process.version, '| creds:', USER ? 'داده‌شده' : 'خالی')
@@ -129,13 +219,21 @@ async function main() {
   })
   console.log('کوکی‌های اولیه:', [...jar.keys()].join(', ') || '—')
 
+  // ── اگر SPA بود، API را از env.js و bundleها کشف کن ───────────────────
+  if (forms.length === 0 || spa.markers.some(m => /SPA|Next|Nuxt/.test(m))) {
+    await discoverSpaApi(loginUrl, spa.scripts)
+    if (!USER || !PASS) { console.log('\nℹ بعد از پیدا شدنِ endpointِ لاگین، با کردِنشیال دوباره اجرا می‌کنیم.'); return }
+    await tryJsonLogin(loginUrl)
+    return
+  }
+
   if (!USER || !PASS) {
     console.log('\nℹ برای تستِ ورود، PS_USER و PS_PASS را ست کن و دوباره اجرا کن.')
     console.log('\n── نمونهٔ HTMLِ صفحهٔ ورود (۸۰۰ کاراکتر) ──\n', snippet(loginHtml, 800))
     return
   }
 
-  // ── ۲) تلاش برای ورود ────────────────────────────────────────────────
+  // ── ۲) تلاش برای ورود (فرمِ HTML) ─────────────────────────────────────
   // فرمی که اینپوتِ password دارد را انتخاب کن
   const loginForm = forms.find(f => f.inputs.some(i => i.type === 'password')) || forms[0]
   if (!loginForm) { console.log('\n⚠ فرمِ ورودی پیدا نشد — احتمالاً SPA است؛ تب Network مرورگر را بفرست.'); return }
