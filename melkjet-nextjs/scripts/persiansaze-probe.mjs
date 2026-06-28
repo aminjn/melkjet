@@ -59,6 +59,13 @@ function hdr(extra = {}) {
 }
 function snippet(s, n = 1200) { return (s || '').replace(/\s+/g, ' ').slice(0, n) }
 
+// decodeِ entityهای HTML (مهم برای action که &amp; دارد)
+function htmlDecode(s) {
+  return String(s || '')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#0?39;|&#x27;/gi, "'").replace(/&nbsp;/g, ' ')
+}
+
 // استخراجِ فرم‌ها و اینپوت‌ها از HTML
 function parseForms(html) {
   const forms = []
@@ -66,7 +73,7 @@ function parseForms(html) {
   let m
   while ((m = formRe.exec(html))) {
     const attrs = m[1], inner = m[2]
-    const action = (attrs.match(/action\s*=\s*["']([^"']*)["']/i) || [])[1] || ''
+    const action = htmlDecode((attrs.match(/action\s*=\s*["']([^"']*)["']/i) || [])[1] || '')
     const method = ((attrs.match(/method\s*=\s*["']([^"']*)["']/i) || [])[1] || 'GET').toUpperCase()
     const inputs = []
     const inRe = /<(input|select|textarea)\b([^>]*)>/gi
@@ -75,9 +82,9 @@ function parseForms(html) {
       const a = im[2]
       inputs.push({
         tag: im[1].toLowerCase(),
-        name: (a.match(/name\s*=\s*["']([^"']*)["']/i) || [])[1] || '',
+        name: htmlDecode((a.match(/name\s*=\s*["']([^"']*)["']/i) || [])[1] || ''),
         type: (a.match(/type\s*=\s*["']([^"']*)["']/i) || [])[1] || '',
-        value: (a.match(/value\s*=\s*["']([^"']*)["']/i) || [])[1] || '',
+        value: htmlDecode((a.match(/value\s*=\s*["']([^"']*)["']/i) || [])[1] || ''),
         id: (a.match(/id\s*=\s*["']([^"']*)["']/i) || [])[1] || '',
         placeholder: (a.match(/placeholder\s*=\s*["']([^"']*)["']/i) || [])[1] || '',
       })
@@ -238,13 +245,28 @@ async function tryOidcCodeFlow() {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: authority, Referer: loginPageUrl },
     body: new URLSearchParams(payload).toString(),
   })
-  console.log(`   نتیجهٔ لاگین: HTTP ${p.res?.status} | رسیدیم به: ${p.url.slice(0, 90)}…`)
+  console.log(`   نتیجهٔ لاگین: HTTP ${p.res?.status} | رسیدیم به: ${p.url.slice(0, 110)}…`)
   if (p.code) return await exchange(p.code, verifier, authority, clientId, redirectUri)
-  // اگر صفحهٔ لاگین دوباره آمد، یعنی خطا (پسورد/کپچا)
-  if (/login/i.test(p.url) || /password|captcha|recaptcha|نامعتبر|اشتباه/i.test(p.body)) {
-    console.log('   ✗ لاگین ناموفق. نشانه‌ها در پاسخ:', snippet(p.body.replace(/<[^>]+>/g, ' '), 300))
-    if (/captcha/i.test(p.body)) console.log('   ⚠ به‌نظر reCAPTCHA لازم است.')
+  // صفحهٔ لاگین دوباره آمد → خطا. پیامِ خطای واقعی را استخراج کن.
+  const body = p.body || ''
+  // بلوک‌های خطا (validation-summary / text-danger / alert)
+  const errs = []
+  for (const m of body.matchAll(/<(?:div|span|p|li)[^>]*class\s*=\s*["'][^"']*(?:validation|danger|error|alert)[^"']*["'][^>]*>([\s\S]*?)<\/(?:div|span|p|li)>/gi)) {
+    const t = htmlDecode(m[1].replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim()
+    if (t) errs.push(t)
   }
+  console.log('   ✗ لاگین ناموفق.')
+  if (errs.length) console.log('   پیامِ خطا:', [...new Set(errs)].join(' | ').slice(0, 400))
+  else console.log('   (پیامِ خطای صریحی پیدا نشد)')
+  // آیا ویجتِ reCAPTCHA واقعاً در صفحه رندر شده؟
+  const hasWidget = /class\s*=\s*["'][^"']*g-recaptcha/i.test(body) || /grecaptcha\.(render|execute)/i.test(body)
+  const onlyScript = /recaptcha\/api\.js/i.test(body)
+  console.log(`   reCAPTCHA: ویجت=${hasWidget ? 'بله ⚠' : 'خیر'}  اسکریپت=${onlyScript ? 'بله' : 'خیر'}`)
+  // آیا فیلدِ کپچا در فرمِ بازگشتی هست؟
+  const f2 = (parseForms(body)[0] || { inputs: [] })
+  const capField = f2.inputs.find(i => /captcha|recaptcha/i.test(i.name))
+  if (capField) console.log('   ⚠ فیلدِ کپچا در فرم:', capField.name, '→ احتمالاً اجباری است.')
+  console.log('   نمونهٔ متنِ صفحه:', snippet(body.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<[^>]+>/g, ' '), 300))
   return null
 
   async function exchange(code, ver = verifier, auth = authority, cid = clientId, ruri = redirectUri) {
