@@ -2,13 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { getAdminData, saveAdminData } from '@/app/lib/admin-store'
 import { stats } from '@/app/lib/tracker-store'
+import { listLinks, linkStats } from '@/app/lib/tracker-links-store'
 
-const DEFAULT_TEMPLATE = 'سلام👋 «%title%» را در ملک‌جت دیدید و مشتاقانه منتظرِ شما هستیم. برای پیگیری همین حالا اقدام کنید.'
+const DEFAULT_TEMPLATE = 'سلام👋 «%title%» را در ملک‌جت دیدید و مشتاقانه منتظرِ شما هستیم. برای پیگیری همین حالا اقدام کنید: %url%'
 
 export async function GET() {
   const s = await getSession()
   if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
-  const t = getAdminData().tracker || {}
+  const d = getAdminData()
+  const t = d.tracker || {}
+  const sh = d.shortener
   return NextResponse.json({
     enabled: !!t.enabled,
     template: t.template || DEFAULT_TEMPLATE,
@@ -18,6 +21,9 @@ export async function GET() {
     throttleHours: t.throttleHours ?? 6,
     paths: t.paths || '',
     stats: stats(),
+    shortener: { configured: !!sh?.apiKey, masked: sh?.apiKey ? '***' + sh.apiKey.slice(-4) : '', siteBase: sh?.siteBase || 'https://melkjet.com', domain: sh?.domain || '' },
+    links: listLinks(100),
+    linkStats: linkStats(),
   })
 }
 
@@ -35,6 +41,16 @@ export async function POST(req: NextRequest) {
     delayMin: b.delayMin !== undefined ? Math.max(0, Math.round(Number(b.delayMin) || 0)) : (cur.delayMin ?? 2),
     throttleHours: b.throttleHours !== undefined ? Math.max(0, Math.round(Number(b.throttleHours) || 0)) : (cur.throttleHours ?? 6),
     paths: b.paths !== undefined ? String(b.paths) : (cur.paths || ''),
+  }
+  // تنظیماتِ کوتاه‌کنندهٔ لینک (nxal)
+  if (b.shortenerKey !== undefined || b.siteBase !== undefined || b.shortenerDomain !== undefined) {
+    const shCur = data.shortener || { apiKey: '' }
+    data.shortener = {
+      apiKey: (b.shortenerKey && !String(b.shortenerKey).startsWith('***')) ? String(b.shortenerKey).trim() : shCur.apiKey,
+      baseUrl: shCur.baseUrl,
+      domain: b.shortenerDomain !== undefined ? String(b.shortenerDomain).trim() : shCur.domain,
+      siteBase: b.siteBase !== undefined ? String(b.siteBase).trim() : shCur.siteBase,
+    }
   }
   saveAdminData(data)
   return NextResponse.json({ ok: true })

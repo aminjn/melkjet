@@ -2174,10 +2174,13 @@ function NegotiationConfig() {
 
 // ─── Tracker + targeted retargeting SMS ────────────────────────────────────
 function TrackerConfig() {
-  const [f, setF] = useState({ enabled: false, template: '', pattern: '', patternVar: 'message', delayMin: 2, throttleHours: 6, paths: '' })
+  const [f, setF] = useState({ enabled: false, template: '', pattern: '', patternVar: 'message', delayMin: 2, throttleHours: 6, paths: '', shortenerKey: '', siteBase: '', shortenerDomain: '' })
   const [st, setSt] = useState<any>(null)
+  const [shMasked, setShMasked] = useState('')
+  const [links, setLinks] = useState<any[]>([])
+  const [linkSt, setLinkSt] = useState<any>(null)
   const [msg, setMsg] = useState('')
-  const load = () => fetch('/api/admin/tracker-config').then(r => r.ok ? r.json() : null).then(d => { if (d) { setF({ enabled: !!d.enabled, template: d.template || '', pattern: d.pattern || '', patternVar: d.patternVar || 'message', delayMin: d.delayMin ?? 2, throttleHours: d.throttleHours ?? 6, paths: d.paths || '' }); setSt(d.stats) } })
+  const load = () => fetch('/api/admin/tracker-config').then(r => r.ok ? r.json() : null).then(d => { if (d) { setF(p => ({ ...p, enabled: !!d.enabled, template: d.template || '', pattern: d.pattern || '', patternVar: d.patternVar || 'message', delayMin: d.delayMin ?? 2, throttleHours: d.throttleHours ?? 6, paths: d.paths || '', shortenerKey: '', siteBase: d.shortener?.siteBase || 'https://melkjet.com', shortenerDomain: d.shortener?.domain || '' })); setSt(d.stats); setShMasked(d.shortener?.masked || ''); setLinks(d.links || []); setLinkSt(d.linkStats) } })
   useEffect(() => { load() }, [])
   const save = async () => { setMsg(''); const r = await fetch('/api/admin/tracker-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(f) }); const d = await r.json(); setMsg(r.ok ? '✓ ذخیره شد' : `⚠ ${d.error || 'خطا'}`); if (r.ok) load() }
   const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
@@ -2223,6 +2226,52 @@ function TrackerConfig() {
           <GoldButton onClick={save}>ذخیره</GoldButton>
           {msg && <span style={{ fontSize: 12.5, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</span>}
         </div>
+      </Card>
+
+      {/* کوتاه‌کنندهٔ لینک (nxal) — برای ارسالِ لینکِ آگهی و شمارشِ کلیک */}
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>کوتاه‌کنندهٔ لینک (nxal) {shMasked && <span style={{ color: '#5fd98a', fontSize: 12 }}>● تنظیم‌شده ({shMasked})</span>}</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.9 }}>برای اینکه لینکِ آگهی در پیامک کوتاه شود و کلیک‌ها شمرده شوند، کلیدِ API نوال (nxal.ir) را بگذار. لینکِ ارسالی به ریدایرکتِ شمارندهٔ ما اشاره می‌کند، پس آمارِ کلیک کاملاً اینجا دیده می‌شود.</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }} className="mjsa-2col">
+          <div style={{ gridColumn: '1 / -1' }}><label style={lab}>کلیدِ API نوال {shMasked && <span style={{ color: 'var(--faint)' }}>(برای تغییر، مقدار جدید بزن)</span>}</label><input style={inp} placeholder={shMasked || 'nxal_xxxxxxxx'} value={f.shortenerKey} onChange={e => setF({ ...f, shortenerKey: e.target.value })} /></div>
+          <div><label style={lab}>آدرسِ پایهٔ سایتِ ما (برای لینکِ شمارنده)</label><input style={{ ...inp, direction: 'ltr', textAlign: 'left' }} placeholder="https://melkjet.com" value={f.siteBase} onChange={e => setF({ ...f, siteBase: e.target.value })} /></div>
+          <div><label style={lab}>دامنهٔ کوتاه (اختیاری)</label><input style={{ ...inp, direction: 'ltr', textAlign: 'left' }} placeholder="nx.al" value={f.shortenerDomain} onChange={e => setF({ ...f, shortenerDomain: e.target.value })} /></div>
+        </div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12 }}>
+          <GoldButton onClick={save}>ذخیره</GoldButton>
+          {linkSt && <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{fa(linkSt.total)} لینک · {fa(linkSt.clicked)} کلیک‌خورده · مجموع {fa(linkSt.clicks)} کلیک</span>}
+        </div>
+      </Card>
+
+      {/* گزارشِ کلیکِ لینک‌ها */}
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ fontWeight: 700, fontSize: 14 }}>گزارشِ کلیکِ لینک‌ها ({fa(links.length)})</div>
+          <button onClick={load} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit' }}>↻ به‌روزرسانی</button>
+        </div>
+        {links.length === 0 ? (
+          <div style={{ fontSize: 12.5, color: 'var(--faint)', padding: '18px 0', textAlign: 'center' }}>هنوز لینکی ارسال نشده است.</div>
+        ) : (
+          <div className="mjc-table" style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 560 }}>
+              <thead><tr style={{ color: 'var(--muted)', textAlign: 'right' }}>
+                <th style={{ padding: '8px 6px', fontWeight: 600 }}>آگهی</th><th style={{ padding: '8px 6px', fontWeight: 600 }}>گیرنده</th><th style={{ padding: '8px 6px', fontWeight: 600 }}>لینکِ کوتاه</th><th style={{ padding: '8px 6px', fontWeight: 600 }}>کلیک</th><th style={{ padding: '8px 6px', fontWeight: 600 }}>آخرین کلیک</th><th style={{ padding: '8px 6px', fontWeight: 600 }}>وضعیت</th>
+              </tr></thead>
+              <tbody>
+                {links.map((l: any) => (
+                  <tr key={l.code} style={{ borderTop: '1px solid var(--line)' }}>
+                    <td style={{ padding: '8px 6px', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.title || l.dest}</td>
+                    <td style={{ padding: '8px 6px', direction: 'ltr' }}>{l.phone || '—'}</td>
+                    <td style={{ padding: '8px 6px', direction: 'ltr' }}>{l.shortUrl ? <a href={l.shortUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--gold)' }}>{l.shortUrl.replace(/^https?:\/\//, '')}</a> : `…/go/${l.code}`}</td>
+                    <td style={{ padding: '8px 6px', fontWeight: 800, color: l.clicks > 0 ? '#5fd98a' : 'var(--faint)' }}>{fa(l.clicks)}</td>
+                    <td style={{ padding: '8px 6px', color: 'var(--muted)' }}>{l.lastClickAt ? new Date(l.lastClickAt).toLocaleString('fa-IR', { dateStyle: 'short', timeStyle: 'short' }) : '—'}</td>
+                    <td style={{ padding: '8px 6px' }}>{l.clicks > 0 ? <span style={{ color: '#5fd98a' }}>کلیک‌شده</span> : <span style={{ color: 'var(--faint)' }}>کلیک‌نشده</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
 
       {st?.recent?.length > 0 && (

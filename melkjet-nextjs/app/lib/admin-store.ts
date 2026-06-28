@@ -46,6 +46,8 @@ export interface AdminData {
   // ارائه‌دهنده‌های اضافیِ سازگار با OpenAI (مثلِ aval). کلید = شناسهٔ provider (مثلاً 'aval').
   // هر ایجنت می‌تواند با textProvider/imageProvider یکی از این‌ها را به‌جای پیش‌فرض استفاده کند.
   providers?: Record<string, { label?: string; baseUrl: string; apiKey: string }>
+  // کوتاه‌کنندهٔ لینک (nxal) برای پیامکِ ترکر — لینکِ آگهی کوتاه و کلیک‌ها شمرده می‌شوند.
+  shortener?: { apiKey: string; baseUrl?: string; domain?: string; siteBase?: string }
   arvan?: {              // پاس‌انبان آروان (S3) — (برای بینایی گپ جواب نداد؛ نگه‌داری شده)
     endpoint: string
     bucket: string
