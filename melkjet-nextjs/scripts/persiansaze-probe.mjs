@@ -102,6 +102,59 @@ function abs(base, url) {
 // API را که React صدا می‌زند، از env.js و bundleهای JS کشف کن.
 let API_BASE = ''
 const API_PATHS = new Set()
+const ENV = {}
+
+// سندِ OIDC و صفحهٔ ورودِ Identity Server را بررسی کن.
+async function discoverOidc() {
+  const authority = (Object.values(ENV).find(v => /id\.persiansaze|identity|sso/i.test(v)) || 'https://id.persiansaze.com').replace(/\/$/, '')
+  console.log('\n── بررسیِ OIDC روی', authority, '──')
+  let disc = null
+  try {
+    const r = await fetchT(authority + '/.well-known/openid-configuration', { headers: hdr({ Accept: 'application/json' }) }, 15000)
+    const txt = await r.text()
+    console.log(`GET .well-known/openid-configuration → ${r.status} | ${txt.length}b`)
+    if (r.status === 200) { try { disc = JSON.parse(txt) } catch {} }
+  } catch (e) { console.log('  خطا:', e.message) }
+  if (disc) {
+    console.log('  token_endpoint:', disc.token_endpoint)
+    console.log('  authorization_endpoint:', disc.authorization_endpoint)
+    console.log('  grant_types_supported:', (disc.grant_types_supported || []).join(', '))
+    console.log('  scopes_supported:', (disc.scopes_supported || []).join(', '))
+    const hasRopc = (disc.grant_types_supported || []).includes('password')
+    console.log('  ⇒ ورود مستقیم با پسورد (ROPC):', hasRopc ? 'پشتیبانی می‌شود ✓' : 'پشتیبانی نمی‌شود ✗ (باید از صفحهٔ ورود برویم)')
+    if (hasRopc && USER && PASS) await tryRopc(disc.token_endpoint)
+  }
+  // صفحهٔ ورودِ Identity Server (معمولاً HTMLِ سروری با توکنِ antiforgery)
+  for (const lp of ['/Account/Login', '/account/login', '/Identity/Account/Login', '/login']) {
+    try {
+      const r = await fetchT(authority + lp, { headers: hdr() }, 15000)
+      if (r.status === 404) continue
+      const html = await r.text(); storeCookies(r)
+      console.log(`\nGET ${authority}${lp} → ${r.status} | ${r.headers.get('content-type')} | ${html.length}b`)
+      const forms = parseForms(html)
+      console.log(`  فرم‌ها: ${forms.length}`)
+      forms.forEach((f, i) => { console.log(`   فرم#${i}: ${f.method} action="${f.action}"`); f.inputs.forEach(inp => console.log(`      - name="${inp.name}" type="${inp.type}" ${inp.value ? `value="${inp.value.slice(0, 24)}…"` : ''}`)) })
+      if (forms.length) break
+    } catch (e) { /* بعدی */ }
+  }
+}
+
+// ورودِ مستقیم با پسورد (Resource Owner Password Credentials).
+async function tryRopc(tokenEndpoint) {
+  const clientId = Object.entries(ENV).find(([k]) => /CLIENT_ID/i.test(k))?.[1] || 'js' || 'react'
+  console.log('\n── تلاش ROPC با client_id =', clientId, '──')
+  const scopes = ['openid profile', 'openid profile api', 'openid profile offline_access', 'openid profile api offline_access']
+  for (const scope of scopes) {
+    const form = new URLSearchParams({ grant_type: 'password', client_id: clientId, username: USER, password: PASS, scope })
+    try {
+      const r = await fetchT(tokenEndpoint, { method: 'POST', headers: hdr({ 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' }), body: form.toString() }, 15000)
+      const txt = await r.text()
+      console.log(`POST token [scope="${scope}"] → ${r.status} | ${snippet(txt, 300)}`)
+      if (r.status === 200 && /access_token/.test(txt)) { console.log('  ✓✓ توکن گرفته شد! ROPC کار می‌کند.'); return JSON.parse(txt) }
+    } catch (e) { console.log('  خطا:', e.message) }
+  }
+  return null
+}
 async function discoverSpaApi(loginUrl, scripts) {
   const origin = new URL(loginUrl).origin
   console.log('\n── کشفِ API از فایل‌های SPA ──')
@@ -118,8 +171,14 @@ async function discoverSpaApi(loginUrl, scripts) {
       const js = await r.text()
       console.log(` ${r.status} | ${js.length}b`)
       if (r.status !== 200) continue
-      // env.js کوچک است → کاملش را چاپ کن
-      if (/env|config/i.test(s) && js.length < 2000) console.log('   محتوا:', snippet(js, 1200))
+      // env.js را کامل چاپ کن (client_id و آدرس‌های پایه اینجاست) — مگر اینکه HTMLِ SPA باشد
+      if (/env\.js/i.test(s) && !/<!doctype/i.test(js)) {
+        console.log('   ── محتوای کاملِ env.js ──\n' + js + '\n   ──────────')
+        // مقادیرِ کلیدی را استخراج کن
+        for (const m of js.matchAll(/["']?([A-Z0-9_]*(?:CLIENT_ID|AUTHORITY|API|REST|MANAGEMENT|IDENTITY|SCOPE|BASE_URL|REDIRECT)[A-Z0-9_]*)["']?\s*[:=]\s*["']([^"']+)["']/gi)) {
+          ENV[m[1]] = m[2]
+        }
+      }
       // آدرس‌های کاملِ http (به‌جز خودِ سایت/فونت/سی‌دی‌ان)
       for (const m of js.matchAll(/https?:\/\/[a-zA-Z0-9_.\-]+(?:\/[a-zA-Z0-9_./\-]*)?/g)) {
         const u = m[0]
@@ -222,6 +281,7 @@ async function main() {
   // ── اگر SPA بود، API را از env.js و bundleها کشف کن ───────────────────
   if (forms.length === 0 || spa.markers.some(m => /SPA|Next|Nuxt/.test(m))) {
     await discoverSpaApi(loginUrl, spa.scripts)
+    await discoverOidc()
     if (!USER || !PASS) { console.log('\nℹ بعد از پیدا شدنِ endpointِ لاگین، با کردِنشیال دوباره اجرا می‌کنیم.'); return }
     await tryJsonLogin(loginUrl)
     return
