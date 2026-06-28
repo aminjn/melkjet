@@ -13,6 +13,7 @@ import crypto from 'node:crypto'
 
 const USER = process.env.PS_USER || ''
 const PASS = process.env.PS_PASS || ''
+const TOKEN = process.env.PS_TOKEN || ''
 const LIST_URL = process.argv[2] || ''
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
@@ -402,7 +403,42 @@ async function tryJsonLogin(loginUrl) {
   return null
 }
 
+// حالتِ توکن: با access_tokenِ گرفته‌شده از مرورگر، API دیتا را کاوش کن.
+async function tokenMode() {
+  const rest = (ENV.REACT_APP_PSC_URL || 'https://my.persiansaze.com/rest').replace(/\/$/, '')
+  const mgmt = (ENV.REACT_APP_MANAGEMENT_URL || 'https://management.persiansaze.com').replace(/\/$/, '')
+  console.log('═══════════ پروبِ پرشین سازه — حالتِ توکن ═══════════')
+  console.log('طولِ توکن:', TOKEN.length)
+  const auth = { ...BASE_HEADERS, Authorization: `Bearer ${TOKEN}`, Accept: 'application/json' }
+  async function hit(url, opts = {}) {
+    try {
+      const r = await fetchT(url, { headers: auth, ...opts }, 20000)
+      const txt = await r.text().catch(() => '')
+      const ct = r.headers.get('content-type') || ''
+      console.log(`\n${opts.method || 'GET'} ${url}\n   → ${r.status} | ${ct} | ${txt.length}b`)
+      if (r.status >= 200 && r.status < 300 && /json/.test(ct)) console.log('   نمونه:', snippet(txt, 700))
+      else if (txt && !/json/.test(ct)) console.log('   (غیرِJSON):', snippet(txt.replace(/<[^>]+>/g, ' '), 160))
+      return { status: r.status, ct, txt }
+    } catch (e) { console.log(`\nGET ${url}\n   → خطا: ${e.message}`); return { status: 0 } }
+  }
+  console.log('\n── تأییدِ توکن (پروفایل) ──')
+  await hit(`${rest}/api/v1/Account/Profile`)
+  await hit(`${mgmt}/api/v1/Account/Profile`)
+  console.log('\n── کاوشِ لیستِ پروژه‌ها/سازنده‌ها ──')
+  const candidates = [
+    `${rest}/api/v1/project`, `${rest}/api/v1/projects`, `${rest}/project`, `${rest}/projects`,
+    `${rest}/api/v1/project/search`, `${rest}/api/v1/projects/search`,
+    `${rest}/api/v1/building`, `${rest}/api/v1/buildings`,
+    `${mgmt}/api/v1/project`, `${mgmt}/api/v1/projects`, `${mgmt}/project`,
+    `${rest}/api/v1/project?page=1&pageSize=5`, `${rest}/api/v1/projects?page=1&size=5`,
+  ]
+  for (const u of candidates) await hit(u)
+  if (LIST_URL) { console.log('\n── آدرسِ داده‌شده ──'); await hit(LIST_URL) }
+  console.log('\nℹ اگر هیچ‌کدام دیتا نداد، در مرورگر صفحهٔ لیست را باز کن، از تب Network آدرسِ XHR را کپی کن و به‌عنوان آرگومان بده.')
+}
+
 async function main() {
+  if (TOKEN) { await tokenMode(); return }
   console.log('═══════════ پروبِ پرشین سازه ═══════════')
   console.log('Node:', process.version, '| creds:', USER ? 'داده‌شده' : 'خالی')
 
