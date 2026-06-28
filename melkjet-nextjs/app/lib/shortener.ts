@@ -1,26 +1,44 @@
 import { getAdminData } from './admin-store'
 import { shecanRequest } from './shecan-https'
 
-// کوتاه‌کردنِ لینک با سرویسِ nxal (https://nxal.ir). کلید در هدرِ X-Api-Key.
-// در صورتِ نبودِ کلید یا خطا، null برمی‌گرداند (تماس‌گیرنده به لینکِ بلند برمی‌گردد).
-export async function shortenUrl(longUrl: string): Promise<string | null> {
+function cfg() {
   const c = getAdminData().shortener
   if (!c?.apiKey) return null
-  const base = (c.baseUrl || 'https://nxal.ir').replace(/\/$/, '')
+  return { key: c.apiKey, base: (c.baseUrl || 'https://nxal.ir').replace(/\/$/, ''), domain: c.domain }
+}
+
+// کوتاه‌کردنِ لینک با nxal — id را هم برمی‌گرداند تا بعداً آمارش گرفته شود.
+export async function shortenUrl(longUrl: string): Promise<{ shortUrl: string; id: string } | null> {
+  const c = cfg(); if (!c) return null
   try {
-    const res = await shecanRequest(`${base}/api/v1/shorten`, {
+    const res = await shecanRequest(`${c.base}/api/v1/shorten`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Api-Key': c.apiKey, accept: 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Api-Key': c.key, accept: 'application/json' },
       body: JSON.stringify({ url: longUrl, domain: c.domain || undefined, utmSource: 'sms' }),
       timeout: 15000,
     })
     if (res.status < 200 || res.status >= 300) return null
     const d = JSON.parse(res.body)
-    return d?.success && d?.data?.shortUrl ? String(d.data.shortUrl) : null
+    if (d?.success && d?.data?.shortUrl) return { shortUrl: String(d.data.shortUrl), id: String(d.data.id || '') }
+    return null
   } catch { return null }
 }
 
-// آدرسِ پایهٔ سایتِ ما برای ساختِ لینکِ ریدایرکتِ شمارنده (پیش‌فرض melkjet.com).
+// آمارِ کلیکِ یک لینک از nxal.
+export async function getNxalStats(id: string): Promise<{ clicks: number; uniqueClicks: number; lastClickedAt?: string } | null> {
+  const c = cfg(); if (!c || !id) return null
+  try {
+    const res = await shecanRequest(`${c.base}/api/v1/links/${encodeURIComponent(id)}`, {
+      method: 'GET', headers: { 'X-Api-Key': c.key, accept: 'application/json' }, timeout: 15000,
+    })
+    if (res.status < 200 || res.status >= 300) return null
+    const d = JSON.parse(res.body)
+    if (!d?.success || !d?.data) return null
+    return { clicks: Number(d.data.clicks) || 0, uniqueClicks: Number(d.data.uniqueClicks) || 0, lastClickedAt: d.data.lastClickedAt }
+  } catch { return null }
+}
+
+// آدرسِ پایهٔ سایتِ ما (برای لینکِ ریدایرکتِ اختیاری).
 export function siteBase(): string {
   return (getAdminData().shortener?.siteBase || 'https://melkjet.com').replace(/\/$/, '')
 }

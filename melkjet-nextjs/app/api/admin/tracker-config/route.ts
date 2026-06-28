@@ -2,13 +2,25 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { getAdminData, saveAdminData } from '@/app/lib/admin-store'
 import { stats } from '@/app/lib/tracker-store'
-import { listLinks, linkStats } from '@/app/lib/tracker-links-store'
+import { listLinks, linkStats, applyStats } from '@/app/lib/tracker-links-store'
+import { getNxalStats } from '@/app/lib/shortener'
+
+export const runtime = 'nodejs'
+export const maxDuration = 120
 
 const DEFAULT_TEMPLATE = 'سلام👋 «%title%» را در ملک‌جت دیدید و مشتاقانه منتظرِ شما هستیم. برای پیگیری همین حالا اقدام کنید: %url%'
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const s = await getSession()
   if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  // با ?refresh=1 آمارِ کلیکِ لینک‌ها از nxal به‌روزرسانی می‌شود.
+  if (new URL(req.url).searchParams.get('refresh') === '1') {
+    for (const l of listLinks(60)) {
+      if (!l.linkId) continue
+      const st = await getNxalStats(l.linkId)
+      if (st) applyStats(l.code, st)
+    }
+  }
   const d = getAdminData()
   const t = d.tracker || {}
   const sh = d.shortener

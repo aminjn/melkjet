@@ -2,8 +2,8 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
 
-// لینک‌های ردیابیِ پیامکِ ترکر: هر لینک به ریدایرکتِ خودمان (/go/<code>) اشاره می‌کند
-// تا کلیک شمرده شود؛ سپس به مقصدِ واقعی می‌رود. nxal فقط نمایشِ کوتاه را می‌دهد.
+// لینک‌های ردیابیِ پیامکِ ترکر. آمارِ کلیک از خودِ nxal گرفته می‌شود (linkId)؛
+// لینکِ ریدایرکتِ داخلی (/go/<code>) هم به‌عنوانِ پشتیبان نگه داشته می‌شود.
 const FILE = join(process.cwd(), '.tracker-links-data.json')
 
 export interface TLink {
@@ -12,7 +12,9 @@ export interface TLink {
   title?: string
   phone?: string        // گیرندهٔ پیامک
   shortUrl?: string     // لینکِ کوتاهِ nxal
+  linkId?: string       // شناسهٔ لینک در nxal (برای دریافتِ آمار)
   clicks: number
+  uniqueClicks?: number
   lastClickAt?: number
   createdAt: number
 }
@@ -30,9 +32,20 @@ export function createLink(input: { dest: string; title?: string; phone?: string
   save(db)
   return l
 }
-export function setShort(code: string, shortUrl: string) {
-  const db = load(); const l = db.links.find(x => x.code === code); if (l) { l.shortUrl = shortUrl; save(db) }
+export function setLinkMeta(code: string, meta: { shortUrl?: string; linkId?: string }) {
+  const db = load(); const l = db.links.find(x => x.code === code); if (!l) return
+  if (meta.shortUrl !== undefined) l.shortUrl = meta.shortUrl
+  if (meta.linkId !== undefined) l.linkId = meta.linkId
+  save(db)
 }
+// آمارِ گرفته‌شده از nxal را روی رکورد می‌نشاند.
+export function applyStats(code: string, s: { clicks: number; uniqueClicks?: number; lastClickedAt?: string }) {
+  const db = load(); const l = db.links.find(x => x.code === code); if (!l) return
+  l.clicks = s.clicks; if (s.uniqueClicks !== undefined) l.uniqueClicks = s.uniqueClicks
+  if (s.lastClickedAt) { const t = Date.parse(s.lastClickedAt); if (!Number.isNaN(t)) l.lastClickAt = t }
+  save(db)
+}
+// ریدایرکتِ داخلی (پشتیبان) — اگر کسی /go/<code> را باز کند.
 export function recordClick(code: string): string | null {
   const db = load(); const l = db.links.find(x => x.code === code); if (!l) return null
   l.clicks++; l.lastClickAt = Date.now(); save(db)

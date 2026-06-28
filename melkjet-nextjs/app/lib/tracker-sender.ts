@@ -1,8 +1,8 @@
 import { getAdminData } from './admin-store'
 import { listDuePending, markSent } from './tracker-store'
 import { shecanRequest } from './shecan-https'
-import { shortenUrl, siteBase } from './shortener'
-import { createLink, setShort } from './tracker-links-store'
+import { shortenUrl } from './shortener'
+import { createLink, setLinkMeta } from './tracker-links-store'
 
 // صفِ پیامکِ هدفمندِ ترکر را پردازش می‌کند (توسطِ cron هر چند دقیقه).
 // ارسالِ سریع از مسیرِ پترن (اگر تنظیم شده)، وگرنه ارسالِ تکیِ معمولی.
@@ -22,16 +22,16 @@ export async function processTrackerQueue(now = Date.now()): Promise<{ due: numb
   for (const { vid, phone, pending } of due) {
     const recipient = String(phone).replace(/\D/g, '')
     if (!/^09\d{9}$/.test(recipient)) { markSent(vid, false); continue }
-    // لینکِ آگهی را به ریدایرکتِ شمارنده + کوتاهِ nxal تبدیل کن تا کلیک‌ها گزارش شوند.
+    // لینکِ آگهی را با nxal کوتاه کن (id برای آمار ذخیره می‌شود) و در پیام جایگزین کن.
     let message = pending.message
     if (pending.url && /^https?:\/\//.test(pending.url)) {
       try {
         const link = createLink({ dest: pending.url, title: pending.title, phone: recipient })
-        const goUrl = `${siteBase()}/go/${link.code}`
-        const short = await shortenUrl(goUrl)
-        const finalUrl = short || goUrl
-        if (short) setShort(link.code, short)
-        message = message.includes(pending.url) ? message.split(pending.url).join(finalUrl) : `${message} ${finalUrl}`
+        const sh = await shortenUrl(pending.url)
+        if (sh) {
+          setLinkMeta(link.code, { shortUrl: sh.shortUrl, linkId: sh.id })
+          message = message.includes(pending.url) ? message.split(pending.url).join(sh.shortUrl) : `${message} ${sh.shortUrl}`
+        }
       } catch { /* اگر کوتاه‌کننده در دسترس نبود، همان پیام را بفرست */ }
     }
     try {

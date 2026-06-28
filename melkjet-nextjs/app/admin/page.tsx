@@ -2180,7 +2180,8 @@ function TrackerConfig() {
   const [links, setLinks] = useState<any[]>([])
   const [linkSt, setLinkSt] = useState<any>(null)
   const [msg, setMsg] = useState('')
-  const load = () => fetch('/api/admin/tracker-config').then(r => r.ok ? r.json() : null).then(d => { if (d) { setF(p => ({ ...p, enabled: !!d.enabled, template: d.template || '', pattern: d.pattern || '', patternVar: d.patternVar || 'message', delayMin: d.delayMin ?? 2, throttleHours: d.throttleHours ?? 6, paths: d.paths || '', shortenerKey: '', siteBase: d.shortener?.siteBase || 'https://melkjet.com', shortenerDomain: d.shortener?.domain || '' })); setSt(d.stats); setShMasked(d.shortener?.masked || ''); setLinks(d.links || []); setLinkSt(d.linkStats) } })
+  const [refreshing, setRefreshing] = useState(false)
+  const load = (refresh = false) => { if (refresh) setRefreshing(true); return fetch('/api/admin/tracker-config' + (refresh ? '?refresh=1' : '')).then(r => r.ok ? r.json() : null).then(d => { if (d) { setF(p => ({ ...p, enabled: !!d.enabled, template: d.template || '', pattern: d.pattern || '', patternVar: d.patternVar || 'message', delayMin: d.delayMin ?? 2, throttleHours: d.throttleHours ?? 6, paths: d.paths || '', shortenerKey: '', siteBase: d.shortener?.siteBase || 'https://melkjet.com', shortenerDomain: d.shortener?.domain || '' })); setSt(d.stats); setShMasked(d.shortener?.masked || ''); setLinks(d.links || []); setLinkSt(d.linkStats) } }).finally(() => setRefreshing(false)) }
   useEffect(() => { load() }, [])
   const save = async () => { setMsg(''); const r = await fetch('/api/admin/tracker-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(f) }); const d = await r.json(); setMsg(r.ok ? '✓ ذخیره شد' : `⚠ ${d.error || 'خطا'}`); if (r.ok) load() }
   const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
@@ -2247,7 +2248,7 @@ function TrackerConfig() {
       <Card style={{ marginBottom: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
           <div style={{ fontWeight: 700, fontSize: 14 }}>گزارشِ کلیکِ لینک‌ها ({fa(links.length)})</div>
-          <button onClick={load} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit' }}>↻ به‌روزرسانی</button>
+          <button onClick={() => load(true)} disabled={refreshing} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--muted)', cursor: refreshing ? 'default' : 'pointer', fontSize: 12, fontFamily: 'inherit' }}>{refreshing ? '⏳ در حال دریافت آمار…' : '↻ به‌روزرسانیِ آمار از nxal'}</button>
         </div>
         {links.length === 0 ? (
           <div style={{ fontSize: 12.5, color: 'var(--faint)', padding: '18px 0', textAlign: 'center' }}>هنوز لینکی ارسال نشده است.</div>
