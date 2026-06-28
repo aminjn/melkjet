@@ -14,6 +14,7 @@ import crypto from 'node:crypto'
 const USER = process.env.PS_USER || ''
 const PASS = process.env.PS_PASS || ''
 const TOKEN = process.env.PS_TOKEN || ''
+const DID = process.env.PS_DID || 'ZXFCLKGXBHGXAZXBVEGKDDPNDDIJAIZK'
 const LIST_URL = process.argv[2] || ''
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
@@ -409,7 +410,7 @@ async function tokenMode() {
   const mgmt = (ENV.REACT_APP_MANAGEMENT_URL || 'https://management.persiansaze.com').replace(/\/$/, '')
   console.log('═══════════ پروبِ پرشین سازه — حالتِ توکن ═══════════')
   console.log('طولِ توکن:', TOKEN.length)
-  const auth = { ...BASE_HEADERS, Authorization: `Bearer ${TOKEN}`, Accept: 'application/json' }
+  const auth = { ...BASE_HEADERS, Authorization: `Bearer ${TOKEN}`, Accept: 'application/json', Origin: 'https://my.persiansaze.com', Referer: 'https://my.persiansaze.com/', did: DID }
   async function hit(url, opts = {}) {
     try {
       const r = await fetchT(url, { headers: auth, ...opts }, 20000)
@@ -421,20 +422,26 @@ async function tokenMode() {
       return { status: r.status, ct, txt }
     } catch (e) { console.log(`\nGET ${url}\n   → خطا: ${e.message}`); return { status: 0 } }
   }
-  console.log('\n── تأییدِ توکن (پروفایل) ──')
-  await hit(`${rest}/api/v1/Account/Profile`)
-  await hit(`${mgmt}/api/v1/Account/Profile`)
-  console.log('\n── کاوشِ لیستِ پروژه‌ها/سازنده‌ها ──')
-  const candidates = [
-    `${rest}/api/v1/project`, `${rest}/api/v1/projects`, `${rest}/project`, `${rest}/projects`,
-    `${rest}/api/v1/project/search`, `${rest}/api/v1/projects/search`,
-    `${rest}/api/v1/building`, `${rest}/api/v1/buildings`,
-    `${mgmt}/api/v1/project`, `${mgmt}/api/v1/projects`, `${mgmt}/project`,
-    `${rest}/api/v1/project?page=1&pageSize=5`, `${rest}/api/v1/projects?page=1&size=5`,
-  ]
-  for (const u of candidates) await hit(u)
+  console.log('\n── تأییدِ توکن (حساب) ──')
+  await hit(`${rest}/api/user/v1/Account/Detail`)
+  console.log('\n── لیستِ پروژه‌ها (endpointِ واقعی) ──')
+  const list = await hit(`${rest}/api/user/v1/Project/Filter?limit=3&offset=0`)
+  // اگر لیست آمد، شناسهٔ اولین پروژه را برای تستِ جزئیات/تماس بردار
+  let pid = ''
+  try { const j = JSON.parse(list.txt); const arr = Array.isArray(j) ? j : (j.items || j.data || j.result || j.list || []); pid = String(arr?.[0]?.id || arr?.[0]?.projectId || arr?.[0]?.code || '') } catch {}
+  console.log('\n── جزئیات/تماسِ یک پروژه (شناسه:', pid || '—', ') ──')
+  if (pid) {
+    for (const p of [
+      `/api/user/v1/Project/${pid}`,
+      `/api/user/v1/Project/Detail/${pid}`,
+      `/api/user/v1/Project/${pid}/Contact`,
+      `/api/user/v1/Project/${pid}/Phone`,
+      `/api/user/v1/Project/Related/Entities?projectId=${pid}`,
+      `/api/user/v1/Project/Contact/${pid}`,
+    ]) await hit(`${rest}${p}`)
+  }
   if (LIST_URL) { console.log('\n── آدرسِ داده‌شده ──'); await hit(LIST_URL) }
-  console.log('\nℹ اگر هیچ‌کدام دیتا نداد، در مرورگر صفحهٔ لیست را باز کن، از تب Network آدرسِ XHR را کپی کن و به‌عنوان آرگومان بده.')
+  console.log('\nℹ اگر تماس نیامد، در مرورگر روی آیکنِ 👤 بزن و آدرسِ آن درخواست را به‌عنوان آرگومان بده.')
 }
 
 async function main() {
