@@ -424,23 +424,23 @@ async function tokenMode() {
   }
   console.log('\n── تأییدِ توکن (حساب) ──')
   await hit(`${rest}/api/user/v1/Account/Detail`)
-  console.log('\n── لیستِ پروژه‌ها (امتحانِ GET و POST با بدنه‌های مختلف) ──')
-  const filterUrl = `${rest}/api/user/v1/Project/Filter?limit=20&offset=0`
-  const jh = { 'Content-Type': 'application/json' }
-  let list = await hit(filterUrl) // GET
-  const variants = [
-    { method: 'POST', headers: jh, body: '{}' },
-    { method: 'POST', headers: jh, body: JSON.stringify({ limit: 3, offset: 0 }) },
-    { method: 'POST', headers: jh, body: JSON.stringify({ filters: [], sorts: [], limit: 3, offset: 0 }) },
-    { method: 'POST', headers: jh, body: JSON.stringify({ pageSize: 3, pageNumber: 1 }) },
-  ]
-  for (const v of variants) {
-    if (list.status >= 200 && list.status < 300 && list.txt.length > 50) break
-    list = await hit(filterUrl, v)
+  console.log('\n── لیستِ پروژه‌ها (POST با بدنهٔ واقعی) ──')
+  const filterUrl = `${rest}/api/user/v1/Project/Filter?limit=5&offset=0`
+  const filterBody = {
+    term: '', searchType: 'Project', type: 'All', onlyWithConstructor: true,
+    cityIds: [], regionIds: [], folderIds: [], lastPhaseUpdateDateType: null,
+    phaseIds: [], structureTypeIds: [], subRegionIds: [], subscriptionTypes: [], usageTypesIds: [],
   }
-  // شناسهٔ اولین پروژه را برای تستِ جزئیات/تماس بردار
+  const list = await hit(filterUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(filterBody) })
+  // ساختارِ کاملِ اولین پروژه را چاپ کن
   let pid = ''
-  try { const j = JSON.parse(list.txt); const arr = Array.isArray(j) ? j : (j.items || j.data || j.result || j.list || j.projects || []); pid = String(arr?.[0]?.id || arr?.[0]?.projectId || arr?.[0]?.code || '') } catch {}
+  try {
+    const j = JSON.parse(list.txt)
+    const arr = Array.isArray(j) ? j : (j.items || j.data || j.result || j.list || j.projects || j.value || [])
+    console.log(`\n   تعدادِ کل (اگر باشد): ${j.totalCount ?? j.total ?? j.count ?? '—'} | در این صفحه: ${arr.length}`)
+    if (arr[0]) console.log('   ساختارِ کاملِ پروژهٔ اول:\n', JSON.stringify(arr[0], null, 1).slice(0, 1800))
+    pid = String(arr?.[0]?.id || arr?.[0]?.projectId || arr?.[0]?.code || '')
+  } catch (e) { console.log('   خطا در پارس:', e.message) }
   console.log('\n── جزئیات/تماسِ یک پروژه (شناسه:', pid || '—', ') ──')
   if (pid) {
     for (const p of [
