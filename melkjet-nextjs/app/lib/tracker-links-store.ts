@@ -11,6 +11,7 @@ export interface TLink {
   dest: string          // مقصدِ واقعی (آگهی)
   title?: string
   phone?: string        // گیرندهٔ پیامک
+  channel?: string      // کانال: tracker | automation | outreach | alert | …
   shortUrl?: string     // لینکِ کوتاهِ nxal
   linkId?: string       // شناسهٔ لینک در nxal (برای دریافتِ آمار)
   clicks: number
@@ -24,9 +25,9 @@ function load(): DB { if (existsSync(FILE)) { try { return JSON.parse(readFileSy
 function save(db: DB) { writeFileSync(FILE, JSON.stringify(db)) }
 function code() { return randomBytes(5).toString('base64url').replace(/[^A-Za-z0-9]/g, '').slice(0, 7) || randomBytes(4).toString('hex') }
 
-export function createLink(input: { dest: string; title?: string; phone?: string }): TLink {
+export function createLink(input: { dest: string; title?: string; phone?: string; channel?: string }): TLink {
   const db = load()
-  const l: TLink = { code: code(), dest: input.dest, title: input.title, phone: input.phone, clicks: 0, createdAt: Date.now() }
+  const l: TLink = { code: code(), dest: input.dest, title: input.title, phone: input.phone, channel: input.channel, clicks: 0, createdAt: Date.now() }
   db.links.unshift(l)
   db.links = db.links.slice(0, 5000)
   save(db)

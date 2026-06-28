@@ -42,3 +42,21 @@ export async function getNxalStats(id: string): Promise<{ clicks: number; unique
 export function siteBase(): string {
   return (getAdminData().shortener?.siteBase || 'https://melkjet.com').replace(/\/$/, '')
 }
+
+// هر لینکِ http(s) داخلِ متن را با nxal کوتاه می‌کند، در گزارش ثبت و در متن جایگزین می‌کند.
+// اگر کوتاه‌کننده تنظیم نشده باشد، متن بدونِ تغییر برمی‌گردد. برای همهٔ کانال‌های پیامکی.
+export async function shortenLinksInText(text: string, opts: { channel: string; phone?: string; title?: string }): Promise<string> {
+  if (!getAdminData().shortener?.apiKey || !text) return text
+  // import پویا برای پرهیز از وابستگیِ حلقوی بینِ shortener و tracker-links-store
+  const { createLink, setLinkMeta } = await import('./tracker-links-store')
+  const urls = Array.from(new Set(text.match(/https?:\/\/[^\s"'<>]+/g) || []))
+  let out = text
+  for (const u of urls.slice(0, 5)) {
+    try {
+      const link = createLink({ dest: u, title: opts.title, phone: opts.phone, channel: opts.channel })
+      const sh = await shortenUrl(u)
+      if (sh) { setLinkMeta(link.code, { shortUrl: sh.shortUrl, linkId: sh.id }); out = out.split(u).join(sh.shortUrl) }
+    } catch { /* همان لینکِ بلند می‌ماند */ }
+  }
+  return out
+}

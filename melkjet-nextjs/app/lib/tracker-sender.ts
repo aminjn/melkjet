@@ -26,7 +26,7 @@ export async function processTrackerQueue(now = Date.now()): Promise<{ due: numb
     let message = pending.message
     if (pending.url && /^https?:\/\//.test(pending.url)) {
       try {
-        const link = createLink({ dest: pending.url, title: pending.title, phone: recipient })
+        const link = createLink({ dest: pending.url, title: pending.title, phone: recipient, channel: 'tracker' })
         const sh = await shortenUrl(pending.url)
         if (sh) {
           setLinkMeta(link.code, { shortUrl: sh.shortUrl, linkId: sh.id })

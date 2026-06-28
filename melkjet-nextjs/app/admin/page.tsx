@@ -2256,19 +2256,22 @@ function TrackerConfig() {
           <div className="mjc-table" style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 560 }}>
               <thead><tr style={{ color: 'var(--muted)', textAlign: 'right' }}>
-                <th style={{ padding: '8px 6px', fontWeight: 600 }}>آگهی</th><th style={{ padding: '8px 6px', fontWeight: 600 }}>گیرنده</th><th style={{ padding: '8px 6px', fontWeight: 600 }}>لینکِ کوتاه</th><th style={{ padding: '8px 6px', fontWeight: 600 }}>کلیک</th><th style={{ padding: '8px 6px', fontWeight: 600 }}>آخرین کلیک</th><th style={{ padding: '8px 6px', fontWeight: 600 }}>وضعیت</th>
+                <th style={{ padding: '8px 6px', fontWeight: 600 }}>عنوان</th><th style={{ padding: '8px 6px', fontWeight: 600 }}>کانال</th><th style={{ padding: '8px 6px', fontWeight: 600 }}>گیرنده</th><th style={{ padding: '8px 6px', fontWeight: 600 }}>لینکِ کوتاه</th><th style={{ padding: '8px 6px', fontWeight: 600 }}>کلیک</th><th style={{ padding: '8px 6px', fontWeight: 600 }}>آخرین کلیک</th><th style={{ padding: '8px 6px', fontWeight: 600 }}>وضعیت</th>
               </tr></thead>
               <tbody>
-                {links.map((l: any) => (
+                {links.map((l: any) => {
+                  const chLabel: Record<string, string> = { tracker: 'ترکر', automation: 'اتوماسیون', outreach: 'دعوت', alert: 'هشدار', campaign: 'کمپین', negotiation: 'مذاکره' }
+                  return (
                   <tr key={l.code} style={{ borderTop: '1px solid var(--line)' }}>
-                    <td style={{ padding: '8px 6px', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.title || l.dest}</td>
+                    <td style={{ padding: '8px 6px', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.title || l.dest}</td>
+                    <td style={{ padding: '8px 6px' }}><span style={{ fontSize: 11, color: 'var(--gold)', background: 'var(--goldDim)', borderRadius: 6, padding: '1px 7px' }}>{chLabel[l.channel] || l.channel || '—'}</span></td>
                     <td style={{ padding: '8px 6px', direction: 'ltr' }}>{l.phone || '—'}</td>
                     <td style={{ padding: '8px 6px', direction: 'ltr' }}>{l.shortUrl ? <a href={l.shortUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--gold)' }}>{l.shortUrl.replace(/^https?:\/\//, '')}</a> : `…/go/${l.code}`}</td>
                     <td style={{ padding: '8px 6px', fontWeight: 800, color: l.clicks > 0 ? '#5fd98a' : 'var(--faint)' }}>{fa(l.clicks)}</td>
                     <td style={{ padding: '8px 6px', color: 'var(--muted)' }}>{l.lastClickAt ? new Date(l.lastClickAt).toLocaleString('fa-IR', { dateStyle: 'short', timeStyle: 'short' }) : '—'}</td>
                     <td style={{ padding: '8px 6px' }}>{l.clicks > 0 ? <span style={{ color: '#5fd98a' }}>کلیک‌شده</span> : <span style={{ color: 'var(--faint)' }}>کلیک‌نشده</span>}</td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
           </div>

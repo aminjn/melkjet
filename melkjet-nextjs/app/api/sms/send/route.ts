@@ -30,6 +30,10 @@ export async function POST(req: NextRequest) {
   const gate = chargeSend(s.phone, s.role, 'sms', recipients.length)
   if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: 200 })
 
+  // لینک‌های داخلِ متن را کوتاه و ردگیری کن (انبوه = آمارِ تجمیعی، بدون شمارهٔ خاص)
+  const { shortenLinksInText } = await import('@/app/lib/shortener')
+  const message = await shortenLinksInText(text, { channel: 'campaign' })
+
   try {
     const res = await shecanRequest('https://api2.ippanel.com/api/v1/sms/send/webservice/single', {
       method: 'POST',
@@ -37,7 +41,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         sender,
         recipient: recipients,
-        message: text,
+        message,
         description: { summary: 'کمپین ملک‌جت', count_recipient: String(recipients.length) },
       }),
       timeout: 20000,

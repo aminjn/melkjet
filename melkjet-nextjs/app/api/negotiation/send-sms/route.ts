@@ -34,8 +34,10 @@ export async function POST(req: NextRequest) {
       url = 'https://api2.ippanel.com/api/v1/sms/pattern/normal/send'
       body = { code: patternCode, sender, recipient, variable: { [patternVar]: text } }
     } else {
+      const { shortenLinksInText } = await import('@/app/lib/shortener')
+      const msg = await shortenLinksInText(text, { channel: 'negotiation', phone: recipient })
       url = 'https://api2.ippanel.com/api/v1/sms/send/webservice/single'
-      body = { sender, recipient: [recipient], message: text, description: { summary: 'موتور مذاکره ملک‌جت', count_recipient: '1' } }
+      body = { sender, recipient: [recipient], message: msg, description: { summary: 'موتور مذاکره ملک‌جت', count_recipient: '1' } }
     }
     const res = await shecanRequest(url, {
       method: 'POST',
