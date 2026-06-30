@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { getDivar, updateDivarConfig, removeImport, addSource, updateSource, removeSource, getSource } from '@/app/lib/advisor-divar-store'
 import { importDivarInput, startBackgroundSync, clearDivarImports } from '@/app/lib/advisor-divar-import'
-import { getJob } from '@/app/lib/advisor-divar-job'
+import { getJob, getJobNormalized } from '@/app/lib/advisor-divar-job'
 import { ensureCronStarted } from '@/app/lib/cron-runner'
 
 // پنل «ایمپورت از دیوار» مخصوص هر مشاور (per-profile).
@@ -10,7 +10,7 @@ export async function GET() {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای مشاهده وارد شوید' }, { status: 401 })
   ensureCronStarted()
-  return NextResponse.json({ config: getDivar(s.phone), job: getJob(s.phone) }, { headers: { 'Cache-Control': 'no-store' } })
+  return NextResponse.json({ config: getDivar(s.phone), job: getJobNormalized(s.phone) }, { headers: { 'Cache-Control': 'no-store' } })
 }
 
 export async function POST(req: NextRequest) {
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, ...r, job: getJob(o), config: getDivar(o) })
     }
     case 'jobStatus': {
-      return NextResponse.json({ ok: true, job: getJob(o) })
+      return NextResponse.json({ ok: true, job: getJobNormalized(o) })
     }
     case 'setConfig': {
       const cfg = updateDivarConfig(o, {

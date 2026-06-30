@@ -116,9 +116,16 @@ async function importTokens(o: string, items: BrandPost[], sourceId?: string, on
     const token = it.token
     if (token) {
       // یک‌بار تلاشِ مجدد در صورتِ خطای گذرای پروکسی/دیوار (تا یک آگهیِ تکی کلِ کار را خراب نکند).
+      // هر آگهی سقفِ ۲۵ ثانیه زمان دارد؛ اگر پروکسی/دیوار هنگ کرد، رد می‌شود تا کل کار قفل نشود.
       let res: any = null
       for (let attempt = 0; attempt < 2; attempt++) {
-        try { res = await importDivarToken(o, token, it, sourceId); if (res && (res.ok || res.skipped)) break } catch { res = null }
+        try {
+          res = await Promise.race([
+            importDivarToken(o, token, it, sourceId),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 25000)),
+          ])
+          if (res && (res.ok || res.skipped)) break
+        } catch { res = null }
         if (attempt === 0) await new Promise(r => setTimeout(r, 600))
       }
       if (res && res.ok && res.updated) { updated++ }
@@ -245,11 +252,11 @@ export async function syncAdvisorDivar(o: string, cfgIn?: AdvisorDivar, sourceId
 export function startBackgroundSync(o: string, cfgIn?: AdvisorDivar, sourceId?: string, label?: string): { started: boolean; alreadyRunning?: boolean } {
   const cur = getJob(o)
   if (cur.running && !isStale(cur)) return { started: false, alreadyRunning: true }
-  setJob(o, { running: true, total: 0, done: 0, imported: 0, updated: 0, skipped: 0, failed: 0, sold: 0, error: '', label: label || 'همگام‌سازیِ دیوار', startedAt: Date.now(), finishedAt: undefined })
+  setJob(o, { running: true, total: 0, done: 0, imported: 0, updated: 0, skipped: 0, failed: 0, sold: 0, error: '', label: label || 'همگام‌سازیِ دیوار', startedAt: Date.now(), lastProgressAt: Date.now(), finishedAt: undefined })
   // عمداً await نمی‌کنیم — در پس‌زمینهٔ همین ورکر تا تهِ کار اجرا می‌شود.
   ;(async () => {
     try {
-      const onProgress = (done: number, total: number) => setJob(o, { done, total })
+      const onProgress = (done: number, total: number) => setJob(o, { done, total, lastProgressAt: Date.now() })
       const r = await syncAdvisorDivar(o, cfgIn, sourceId, onProgress)
       if (sourceId) markSourceRun(o, sourceId, r.imported || 0, r.ok ? '' : (r.reason || 'خطا'))
       setJob(o, { running: false, finishedAt: Date.now(), imported: r.imported || 0, updated: r.updated || 0, skipped: r.skipped || 0, sold: r.sold || 0, error: r.ok ? '' : (r.reason || 'همگام‌سازی ناموفق بود') })
