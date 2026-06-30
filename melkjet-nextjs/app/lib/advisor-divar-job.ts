@@ -23,7 +23,12 @@ export function setJob(o: string, patch: Partial<DivarJob>): DivarJob {
 export function isStale(j: DivarJob): boolean {
   if (!j.running) return false
   const last = j.lastProgressAt || j.startedAt || 0
-  return !!last && Date.now() - last > 3 * 60 * 1000
+  if (!last) return true   // «در حال اجرا» ولی بدونِ هیچ زمان = حتماً کهنه
+  return Date.now() - last > 3 * 60 * 1000
+}
+// توقفِ دستیِ کار (دکمهٔ «توقف» یا شروعِ مجدد).
+export function stopJob(o: string): DivarJob {
+  return setJob(o, { running: false, finishedAt: Date.now(), error: 'به‌صورتِ دستی متوقف شد.' })
 }
 // نسخهٔ نرمال‌شده برای نمایش/تصمیم: کارِ کهنه را «متوقف» اعلام می‌کند.
 export function getJobNormalized(o: string): DivarJob {

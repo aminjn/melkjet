@@ -138,7 +138,10 @@ export default function DivarImport({ onChange, entity = 'شما' }: { onChange?
           <div style={{ height: 7, borderRadius: 999, background: 'var(--line)', overflow: 'hidden' }}>
             <div style={{ height: '100%', borderRadius: 999, width: job.total ? `${Math.round(((job.done || 0) / job.total) * 100)}%` : '15%', background: 'linear-gradient(90deg,var(--gold2),var(--gold))', transition: 'width .4s ease' }} />
           </div>
-          <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 7 }}>می‌توانید این صفحه را ببندید — همگام‌سازی روی سرور تا پایان ادامه می‌یابد و فایل‌ها به «فایل‌های من» اضافه می‌شوند.</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, color: 'var(--faint)' }}>می‌توانید این صفحه را ببندید — همگام‌سازی روی سرور تا پایان ادامه می‌یابد.</span>
+            <button onClick={async () => { const d = await post({ action: 'stopJob' }); if (d?.job) { setJob(d.job); setMsg('همگام‌سازی متوقف شد. می‌توانید دوباره شروع کنید.') } }} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.4)', color: '#e7674a', borderRadius: 9, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>توقف و شروعِ مجدد</button>
+          </div>
         </div>
       )}
       {msg && <div style={{ ...card, padding: '10px 14px', fontSize: 12.5, lineHeight: 1.7, color: msg.startsWith('✓') || msg.startsWith('⏳') ? 'var(--gold)' : '#ef4444' }}>{msg}</div>}
