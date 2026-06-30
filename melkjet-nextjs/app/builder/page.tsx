@@ -10,6 +10,7 @@ import PlansPanel from '@/app/components/PlansPanel'
 import BusinessProfileForm from '@/app/components/BusinessProfileForm'
 import BuilderPublicView from './BuilderPublicView'
 import BuilderContactsView from './BuilderContactsView'
+import BuilderProjectsView from './BuilderProjectsView'
 
 // ── Types (mirror app/lib/builder-store.ts API shape) ──
 type UnitStatus = 'sold' | 'reserved' | 'available'
@@ -30,7 +31,7 @@ interface Project {
 }
 interface ProjectSummary { id: string; name: string; location: string }
 
-type View = 'overview' | 'assistant' | 'articles' | 'units' | 'sales' | 'investors' | 'reports' | 'plans' | 'profile' | 'public' | 'contacts'
+type View = 'overview' | 'projects' | 'assistant' | 'articles' | 'units' | 'sales' | 'investors' | 'reports' | 'plans' | 'profile' | 'public' | 'contacts'
 
 // ── Status visual maps ──
 const STATUS_COLOR: Record<UnitStatus, string> = {
@@ -72,6 +73,7 @@ function stats(p: Project | null) {
 
 const VIEW_TITLES: Record<View, string> = {
   overview: 'نمای کلی پروژه',
+  projects: 'پروژه‌ها',
   assistant: 'دستیار هوشمند',
   articles: 'مقالات و وبلاگ',
   units: 'موجودی واحدها',
@@ -86,6 +88,7 @@ const VIEW_TITLES: Record<View, string> = {
 
 const NAV_ITEMS: { id: View; label: string; icon: string }[] = [
   { id: 'overview', label: 'نمای کلی', icon: '▦' },
+  { id: 'projects', label: 'پروژه‌ها', icon: '🏗' },
   { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
   { id: 'units', label: 'موجودی واحدها', icon: '▤' },
   { id: 'sales', label: 'پیش‌فروش و فروش', icon: '◔' },
@@ -476,6 +479,8 @@ export default function BuilderPage() {
             <PlansPanel dashboard="/builder" />
           ) : view === 'profile' ? (
             <BusinessProfileForm />
+          ) : view === 'projects' ? (
+            <BuilderProjectsView />
           ) : view === 'public' ? (
             <BuilderPublicView />
           ) : view === 'contacts' ? (

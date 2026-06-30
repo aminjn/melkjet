@@ -17,6 +17,8 @@ interface ViewProject {
   floors: number; subFloors: number; units: number; residentialArea: number; groundArea: number; avgArea: number
   perFloor: { floor: number; count: number }[]
   lat: number | null; lng: number | null
+  amenities: string[]; plans: { label: string; url: string }[]; usage?: string
+  priceText?: string; salesProgress?: number
   builder: { id: string; name: string; hasPhone: boolean; projectCount: number; regions: string[] }
   similar: { hashId: string; address: string; region: string; photo: string; builderName: string }[]
 }
@@ -43,7 +45,7 @@ function RiskGauge({ score, color }: { score: number; color: string }) {
 
 export default function ProjectView({ p }: { p: ViewProject }) {
   const [activeImg, setActiveImg] = useState(0)
-  const [lightbox, setLightbox] = useState(false)
+  const [lightboxSrc, setLightboxSrc] = useState('')
   const [intel, setIntel] = useState<Intel | null>(null)
   const [intelLoading, setIntelLoading] = useState(true)
 
@@ -132,7 +134,7 @@ export default function ProjectView({ p }: { p: ViewProject }) {
           {/* Gallery */}
           {p.photos.length > 0 && (
             <section style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 20, overflow: 'hidden' }}>
-              <div style={{ height: 320, position: 'relative', cursor: 'zoom-in' }} onClick={() => setLightbox(true)}>
+              <div style={{ height: 320, position: 'relative', cursor: 'zoom-in' }} onClick={() => setLightboxSrc(cover)}>
                 <img src={cover} alt={p.title} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
               </div>
               {p.photos.length > 1 && (
@@ -217,6 +219,36 @@ export default function ProjectView({ p }: { p: ViewProject }) {
             </section>
           )}
 
+          {/* Plans (نقشه/پلانِ طبقات — آپلودِ سازنده، چند سبک) */}
+          {p.plans.length > 0 && (
+            <section style={card}>
+              <div style={h}>نقشهٔ پلان</div>
+              <div className="mjpr-units" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12 }}>
+                {p.plans.map((pl, i) => (
+                  <div key={i} style={{ border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden', cursor: 'zoom-in' }} onClick={() => setLightboxSrc(pl.url)}>
+                    <img src={pl.url} alt={pl.label} loading="lazy" style={{ width: '100%', height: 180, objectFit: 'contain', background: 'var(--bg2)', display: 'block' }} />
+                    <div style={{ padding: '8px 12px', fontSize: 12.5, fontWeight: 700, textAlign: 'center' }}>{pl.label}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Amenities (امکانات — ورودیِ سازنده) */}
+          {p.amenities.length > 0 && (
+            <section style={card}>
+              <div style={h}>امکانات و تجهیزات</div>
+              <div className="mjpr-units" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px,1fr))', gap: 10 }}>
+                {p.amenities.map((a, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '11px 13px', border: '1px solid var(--line)', borderRadius: 12, background: 'var(--bg2)' }}>
+                    <span style={{ color: 'var(--gold)', flexShrink: 0 }}>✓</span>
+                    <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{a}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* Nearby / access (real Neshan) */}
           <section style={card}>
             <div style={{ ...h, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -286,6 +318,13 @@ export default function ProjectView({ p }: { p: ViewProject }) {
         <div style={{ display: 'grid', gap: 16, position: 'sticky', top: 80 }}>
           {/* Contact builder CTA */}
           <div style={{ background: 'var(--surface)', border: '1px solid var(--gold)', borderRadius: 20, padding: 22 }}>
+            {p.priceText && (
+              <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid var(--line)' }}>
+                <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>قیمت از</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--gold)', marginTop: 2 }}>{p.priceText}</div>
+                {p.salesProgress != null && <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 4 }}>پیشرفتِ فروش: {fa(p.salesProgress)}٪</div>}
+              </div>
+            )}
             <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 6 }}>سازندهٔ پروژه</div>
             <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--text)', marginBottom: 4 }}>{p.builder.name}</div>
             <div style={{ fontSize: 12, color: 'var(--faint)', marginBottom: 18 }}>{faNum(p.builder.projectCount)} پروژه{p.builder.regions.length ? ` · ${p.builder.regions[0]}` : ''}</div>
@@ -299,6 +338,7 @@ export default function ProjectView({ p }: { p: ViewProject }) {
             <div style={{ display: 'grid', gap: 9 }}>
               {[
                 ['منطقه', p.region || '—'],
+                ...(p.usage ? [['کاربری', p.usage]] as [string, string][] : []),
                 ['مرحلهٔ ساخت', p.phase || '—'],
                 ['طبقاتِ روی‌زمین', p.floors ? faNum(p.floors) : '—'],
                 ...(p.subFloors ? [['طبقاتِ زیرزمین', faNum(p.subFloors)]] as [string, string][] : []),
@@ -340,10 +380,10 @@ export default function ProjectView({ p }: { p: ViewProject }) {
       </main>
 
       {/* Lightbox */}
-      {lightbox && cover && (
-        <div onClick={() => setLightbox(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.93)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <img src={cover} alt="" style={{ maxWidth: '94vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8 }} />
-          <button onClick={e => { e.stopPropagation(); setLightbox(false) }} style={{ position: 'fixed', top: 18, insetInlineEnd: 18, background: 'rgba(255,255,255,.12)', color: '#fff', border: 'none', width: 42, height: 42, borderRadius: 21, fontSize: 24, cursor: 'pointer' }}>×</button>
+      {lightboxSrc && (
+        <div onClick={() => setLightboxSrc('')} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.93)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <img src={lightboxSrc} alt="" style={{ maxWidth: '94vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8 }} />
+          <button onClick={e => { e.stopPropagation(); setLightboxSrc('') }} style={{ position: 'fixed', top: 18, insetInlineEnd: 18, background: 'rgba(255,255,255,.12)', color: '#fff', border: 'none', width: 42, height: 42, borderRadius: 21, fontSize: 24, cursor: 'pointer' }}>×</button>
         </div>
       )}
 

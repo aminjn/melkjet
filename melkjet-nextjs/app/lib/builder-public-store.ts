@@ -10,19 +10,23 @@ function id() { return randomBytes(6).toString('hex') }
 
 export type ProjStatus = 'presale' | 'building' | 'delivered'
 export const STATUS_LABEL: Record<ProjStatus, string> = { presale: 'پیش‌فروش', building: 'در حال ساخت', delivered: 'تحویل‌شده' }
+// نردبانِ مراحلِ ساخت — یکسان در همهٔ سایت (پنل، پروفایل، صفحهٔ پروژه).
+export const STAGE_LADDER = ['پی و اسکلت', 'سفت‌کاری', 'گچ و خاک', 'نازک‌کاری', 'تأسیسات', 'تحویل']
 
-// متادیتای عمومیِ یک پروژهٔ پرشین سازه (روی hashId می‌نشیند).
-export interface ProjMeta {
-  status?: ProjStatus; deliveryDate?: string; priceText?: string
-  salesProgress?: number; description?: string; areaRange?: string
+export interface Plan { label: string; url: string }
+// فیلدهای غنی‌سازیِ یک پروژه (هم برای پروژهٔ پرشین سازه به‌صورتِ override، هم پروژهٔ دستی).
+export interface ProjEnrich {
+  status?: ProjStatus; stage?: string; deliveryDate?: string; priceText?: string
+  salesProgress?: number; description?: string; areaRange?: string; usage?: string
+  units?: number; floors?: number
+  amenities?: string[]; photos?: string[]; plans?: Plan[]
   published?: boolean; isPast?: boolean
 }
+// متادیتای عمومیِ یک پروژهٔ پرشین سازه (روی hashId می‌نشیند).
+export type ProjMeta = ProjEnrich
 // پروژه‌ای که سازنده دستی تعریف می‌کند (خارج از پرشین سازه).
-export interface ManualProject {
-  id: string; name: string; location: string; status: ProjStatus
-  deliveryDate?: string; units?: number; areaRange?: string; priceText?: string
-  salesProgress?: number; description?: string; photos?: string[]
-  published?: boolean; isPast?: boolean; createdAt: number
+export interface ManualProject extends ProjEnrich {
+  id: string; name: string; location: string; status: ProjStatus; createdAt: number
 }
 export interface Review { id: string; name: string; rating: number; text: string; projectName?: string; phone?: string; at: number }
 
@@ -56,27 +60,46 @@ export function setVerified(builderId: string, v: boolean) { const db = load(); 
 export function setProjMeta(builderId: string, hashId: string, patch: ProjMeta): ProjMeta {
   const db = load(); const e = ent(db, String(builderId))
   if (!e.projMeta) e.projMeta = {}
-  e.projMeta[hashId] = { ...e.projMeta[hashId], ...patch }
+  e.projMeta[hashId] = { ...e.projMeta[hashId], ...cleanEnrich(patch) }
   save(db); return e.projMeta[hashId]
 }
+// یک پروژهٔ دستی را در همهٔ سازنده‌ها پیدا می‌کند (برای صفحهٔ عمومیِ پروژه).
+export function findManual(mid: string): { builderId: string; project: ManualProject } | null {
+  const db = load()
+  for (const [bid, e] of Object.entries(db)) {
+    const m = (e.manual || []).find(x => x.id === mid)
+    if (m) return { builderId: bid, project: m }
+  }
+  return null
+}
 
+function cleanEnrich(d: any): Partial<ProjEnrich> {
+  const out: any = {}
+  for (const k of ['status', 'stage', 'deliveryDate', 'priceText', 'description', 'areaRange', 'usage'] as const) if (k in d) out[k] = d[k]
+  if ('units' in d) out.units = Number(d.units) || undefined
+  if ('floors' in d) out.floors = Number(d.floors) || undefined
+  if ('salesProgress' in d && d.salesProgress != null && d.salesProgress !== '') out.salesProgress = Math.max(0, Math.min(100, Number(d.salesProgress)))
+  if (Array.isArray(d.amenities)) out.amenities = d.amenities.map((x: any) => String(x).slice(0, 40)).filter(Boolean).slice(0, 20)
+  if (Array.isArray(d.photos)) out.photos = d.photos.filter((x: any) => typeof x === 'string').slice(0, 20)
+  if (Array.isArray(d.plans)) out.plans = d.plans.filter((x: any) => x && x.url).map((x: any) => ({ label: String(x.label || 'پلان').slice(0, 30), url: String(x.url) })).slice(0, 12)
+  if ('published' in d) out.published = !!d.published
+  if ('isPast' in d) out.isPast = !!d.isPast
+  return out
+}
 export function addManual(builderId: string, data: Partial<ManualProject>): ManualProject {
   const db = load(); const e = ent(db, String(builderId)); if (!e.manual) e.manual = []
   const m: ManualProject = {
     id: id(), name: String(data.name || 'پروژهٔ جدید').slice(0, 80), location: String(data.location || '').slice(0, 80),
-    status: (data.status as ProjStatus) || 'building', deliveryDate: data.deliveryDate, units: Number(data.units) || undefined,
-    areaRange: data.areaRange, priceText: data.priceText, salesProgress: data.salesProgress != null ? Math.max(0, Math.min(100, Number(data.salesProgress))) : undefined,
-    description: data.description, photos: Array.isArray(data.photos) ? data.photos.slice(0, 12) : [], published: data.published !== false,
-    isPast: !!data.isPast, createdAt: Date.now(),
+    status: (data.status as ProjStatus) || 'building', createdAt: Date.now(),
+    ...cleanEnrich({ published: true, ...data }),
   }
   e.manual.unshift(m); save(db); return m
 }
 export function updateManual(builderId: string, mid: string, patch: Partial<ManualProject>): ManualProject | null {
   const db = load(); const e = ent(db, String(builderId)); const m = (e.manual || []).find(x => x.id === mid); if (!m) return null
-  for (const k of ['name', 'location', 'status', 'deliveryDate', 'units', 'areaRange', 'priceText', 'description', 'published', 'isPast', 'photos'] as const) {
-    if (k in patch) (m as any)[k] = (patch as any)[k]
-  }
-  if (patch.salesProgress != null) m.salesProgress = Math.max(0, Math.min(100, Number(patch.salesProgress)))
+  if ('name' in patch) m.name = String(patch.name).slice(0, 80)
+  if ('location' in patch) m.location = String(patch.location).slice(0, 80)
+  Object.assign(m, cleanEnrich(patch))
   save(db); return m
 }
 export function deleteManual(builderId: string, mid: string) { const db = load(); const e = ent(db, String(builderId)); if (e.manual) { e.manual = e.manual.filter(x => x.id !== mid); save(db) } }

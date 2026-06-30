@@ -58,7 +58,7 @@ export function assembleBuilderProfile(id: string): BuilderProfile | null {
     .filter(m => m.published !== false)
     .map(m => ({
       card: {
-        key: m.id, manual: true, name: m.name, location: m.location,
+        key: m.id, hashId: m.id, manual: true, name: m.name, location: m.location,
         status: m.status, statusLabel: STATUS_LABEL[m.status],
         deliveryDate: m.deliveryDate, units: m.units, areaRange: m.areaRange, priceText: m.priceText,
         salesProgress: m.salesProgress, description: m.description, photo: (m.photos && m.photos[0]) || '',
