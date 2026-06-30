@@ -25,8 +25,17 @@ export default async function ProjectPage({ params }: { params: Promise<{ hashId
     <>
       <Nav />
       <main style={{ maxWidth: 1000, margin: '0 auto', padding: '24px 16px 60px' }}>
-        {/* عکس */}
-        {p.photo?.imageUrl || p.photo?.imageThumbnailUrl ? (
+        {/* عکس‌ها */}
+        {(p.photos && p.photos.length) ? (
+          <div>
+            <img src={p.photos[0]} alt={p.address || ''} style={{ width: '100%', maxHeight: 380, objectFit: 'cover', borderRadius: 16 }} />
+            {p.photos.length > 1 && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8, marginTop: 8 }}>
+                {p.photos.slice(1).map((ph, i) => <a key={i} href={ph} target="_blank" rel="noreferrer"><img src={ph} alt="" style={{ width: '100%', height: 90, objectFit: 'cover', borderRadius: 10 }} /></a>)}
+              </div>
+            )}
+          </div>
+        ) : (p.photo?.imageUrl || p.photo?.imageThumbnailUrl) ? (
           <img src={p.photo.imageUrl || p.photo.imageThumbnailUrl} alt={p.address || ''} style={{ width: '100%', maxHeight: 380, objectFit: 'cover', borderRadius: 16 }} />
         ) : null}
 

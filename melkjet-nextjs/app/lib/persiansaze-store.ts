@@ -61,6 +61,7 @@ export interface PSProject {
   latitude?: number; longitude?: number
   lastUpdateDate?: string; phaseLastUpdateDate?: string
   photo?: { imageUrl?: string; imageThumbnailUrl?: string }
+  photos?: string[]
   hasAvailableConstructor?: boolean
 }
 
@@ -88,7 +89,7 @@ export interface PSProfile {
 
 export interface PSReveals {
   meta?: { availableCount?: number | null; lastRevealAt?: string; revealedTotal?: number }
-  items?: Record<string, { constructorId: number; name?: string; phones?: string[]; hasDup?: boolean; receptor?: string; revealedAt?: string }>
+  items?: Record<string, { constructorId: number; name?: string; phones?: string[]; hasDup?: boolean; receptor?: string; revealedAt?: string; photos?: string[] }>
 }
 export function getReveals(): PSReveals {
   return readCached<PSReveals>(REVEALS_FILE, { meta: {}, items: {} })
@@ -169,7 +170,7 @@ export function rebuildProfiles(): { created: number; updated: number; total: nu
     for (const ph of rv.phones || []) b.phones.add(ph)
     if (rv.name && !b.name) b.name = rv.name
     const proj = byHash.get(hash)
-    if (proj) { b.projects.push(proj); if (proj.regionId) b.regions.add(proj.regionId) }
+    if (proj) { if (rv.photos?.length) proj.photos = rv.photos; b.projects.push(proj); if (proj.regionId) b.regions.add(proj.regionId) }
   }
   const out: Record<string, any> = {}
   for (const b of byCons.values()) out[b.id] = { id: b.id, name: b.name, phones: [...b.phones], projects: b.projects, regions: [...b.regions], projectCount: b.projects.length, revealedAt: b.revealedAt }

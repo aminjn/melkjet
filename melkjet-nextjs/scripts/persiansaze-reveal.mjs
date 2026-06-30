@@ -62,7 +62,7 @@ function buildProfiles(reveals, projects) {
     for (const ph of rv.phones || []) b.phones.add(ph)
     if (rv.name && !b.name) b.name = rv.name
     const proj = byHash.get(hash)
-    if (proj) { b.projects.push(proj); if (proj.regionId) b.regions.add(proj.regionId) }
+    if (proj) { if (rv.photos?.length) proj.photos = rv.photos; b.projects.push(proj); if (proj.regionId) b.regions.add(proj.regionId) }
   }
   const profiles = {}
   for (const b of byCons.values()) {
@@ -91,6 +91,23 @@ async function main() {
   log('✓ ورود موفق.')
 
   const reveal = (hash) => api(page, `/rest/api/user/v1/Project/${hash}/Constructor`, { method: 'POST', body: '{}' })
+  // همهٔ عکس‌های یک پروژه از جزئیاتِ آن (GET، رایگان/فقط‌خواندن).
+  const fetchPhotos = async (hash) => {
+    try { const r = await api(page, `/rest/api/user/v1/Project/${hash}`); return (r.json?.photos || []).map(x => x.imageUrl || x.imageThumbnailUrl).filter(Boolean) } catch { return [] }
+  }
+
+  // backfill: برای reveal‌های قبلی که عکس ندارند، عکس‌ها را بگیر (رایگان).
+  {
+    let bf = 0
+    for (const [hash, rv] of Object.entries(reveals.items)) {
+      if (rv.photos?.length) continue
+      const photos = await fetchPhotos(hash)
+      if (photos.length) { rv.photos = photos; bf++ }
+      await page.waitForTimeout(120)
+      if (bf >= 400) break
+    }
+    if (bf) { log(`عکسِ ${bf} پروژهٔ قبلی گرفته شد (backfill).`); fs.writeFileSync(REVEALS_FILE, JSON.stringify(reveals)) }
+  }
   // محدودهٔ دسترسی: فقط شهر/منطقه را سخت فیلتر می‌کنیم (قطعی). مرحله را از پیش رد نمی‌کنیم —
   // هر مرحله را امتحان می‌کنیم و اگر مرحله‌ای واقعاً بسته بود، بعد از چند ردِ پیاپی یاد می‌گیریم.
   let scope = null
@@ -131,6 +148,7 @@ async function main() {
         reveals.items[proj.hashId] = {
           constructorId: c.id, name: c.name || '', phones: c.mobileNumbers || [],
           hasDup: !!j.hasVisitedProjectsFromSameConstructor, receptor: proj.receptor || '', revealedAt: new Date().toISOString(),
+          photos: await fetchPhotos(proj.hashId),
         }
         if (j.hasVisitedProjectsFromSameConstructor) dup++
         got++; consecDenied = 0

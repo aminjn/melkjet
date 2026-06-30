@@ -547,7 +547,7 @@ function OverviewView({ project, s, onMilestone, busy }: {
   const soldPct = s.total ? Math.round((s.sold / s.total) * 100) : 0
 
   const kpis = [
-    { label: 'درآمد پیش‌فروش', value: billions(s.revenue), unit: 'م.ت', sub: '+۱۳٪ این فصل', dot: '#60a5fa' },
+    { label: 'درآمد فروش', value: billions(s.revenue), unit: 'م.ت', sub: s.sold ? `از ${fa(s.sold)} واحدِ فروخته‌شده` : 'هنوز فروشی ثبت نشده', dot: '#60a5fa' },
     { label: 'موجود', value: fa(s.available), unit: 'واحد', sub: 'آماده فروش', dot: 'var(--gold)' },
     { label: 'رزرو', value: fa(s.reserved), unit: 'واحد', sub: 'در انتظار تکمیل', dot: '#f59e0b' },
     { label: 'واحد فروخته‌شده', value: fa(s.sold), unit: '', sub: `از ${fa(s.total)} واحد`, dot: '#34d399' },
@@ -584,6 +584,20 @@ function OverviewView({ project, s, onMilestone, busy }: {
             {src.lat != null && src.lng != null && (
               <a href={`https://www.google.com/maps?q=${src.lat},${src.lng}`} target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginTop: 14, fontSize: 12.5, color: 'var(--gold)', textDecoration: 'none' }}>📍 مشاهده روی نقشه</a>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* گالریِ همهٔ تصاویرِ پروژه */}
+      {src && (src.photos?.length || 0) > 1 && (
+        <div style={{ ...card, padding: 16 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>تصاویرِ پروژه ({fa(src.photos!.length)})</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
+            {src.photos!.map((ph, i) => (
+              <a key={i} href={ph} target="_blank" rel="noreferrer" style={{ display: 'block' }}>
+                <img src={ph} alt={`عکس ${i + 1}`} style={{ width: '100%', height: 130, objectFit: 'cover', borderRadius: 10 }} />
+              </a>
+            ))}
           </div>
         </div>
       )}

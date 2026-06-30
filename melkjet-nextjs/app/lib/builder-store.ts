@@ -25,7 +25,7 @@ function id() { return randomBytes(6).toString('hex') }
 
 // per-owner: هر سازنده پروژه‌های خودش را دارد (کلید = شمارهٔ مالک). بدونِ دیتای دمو.
 // با هر تغییرِ منطقِ واردکردن، IMPORT_VERSION را بالا ببر تا همه خودکار دوباره وارد شوند (بدونِ rmِ دستی).
-const IMPORT_VERSION = 3
+const IMPORT_VERSION = 4
 type OwnerData = { projects: Project[]; imported?: boolean; importVersion?: number }
 type DB = Record<string, OwnerData>
 function load(): DB { if (existsSync(FILE)) { try { return JSON.parse(readFileSync(FILE, 'utf-8')) } catch {} } return {} }
@@ -104,13 +104,21 @@ export async function ensureImported(owner: string): Promise<void> {
       for (const pr of prof.projects || []) {
         const label = phaseLabel(pr)
         const { milestones, progress } = milestonesForPhase(label)
-        // واحدها خالی می‌مانند تا سازنده فروشِ واقعیِ خودش را ثبت کند (بدونِ دیتای ساختگی).
+        // واحدها از تعدادِ طبقه/واحدِ واقعیِ ساختمان ساخته می‌شوند (همه «موجود»، بدونِ خریدارِ ساختگی) تا سازنده بفروشد.
+        const totalUnits = Math.max(0, Math.min(500, Number(pr.units) || 0))
+        const floors = Math.max(1, Number(pr.floors) || 1)
+        const perFloor = Math.max(1, Math.round(totalUnits / floors) || 1)
+        const avgArea = totalUnits ? Math.round((Number(pr.residentialArea) || 0) / totalUnits) : 0
+        const units: Unit[] = []
+        for (let i = 0; i < totalUnits; i++) { const fl = Math.floor(i / perFloor) + 1; units.push({ id: id(), number: `${fl}-${(i % perFloor) + 1}`, floor: fl, area: avgArea, price: 0, status: 'available' }) }
+        // همهٔ عکس‌ها: اگر در reveal جمع شده (photos)، همان؛ وگرنه عکسِ لیست.
+        const photos: string[] = (pr as any).photos?.length ? (pr as any).photos : (pr.photo?.imageUrl ? [pr.photo.imageUrl] : (pr.photo?.imageThumbnailUrl ? [pr.photo.imageThumbnailUrl] : []))
         const source: ProjectSource = {
-          hashId: pr.hashId, photos: pr.photo?.imageUrl ? [pr.photo.imageUrl] : (pr.photo?.imageThumbnailUrl ? [pr.photo.imageThumbnailUrl] : []),
+          hashId: pr.hashId, photos,
           address: pr.address, region: regionLabel(pr), phase: label,
           lat: pr.latitude, lng: pr.longitude, groundArea: pr.groundArea, residentialArea: pr.residentialArea, floors: pr.floors, totalUnits: pr.units,
         }
-        projects.push({ id: id(), name: (pr.address || 'پروژه').slice(0, 70), location: regionLabel(pr) || '', phase: label || '—', progress, units: [], investors: [], milestones, monthlySales: [], createdAt: Date.now(), source })
+        projects.push({ id: id(), name: (pr.address || 'پروژه').slice(0, 70), location: regionLabel(pr) || '', phase: label || '—', progress, units, investors: [], milestones, monthlySales: [], createdAt: Date.now(), source })
       }
     }
   } catch { /* اگر پرشین سازه در دسترس نبود، خالی */ }
