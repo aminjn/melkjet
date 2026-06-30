@@ -29,28 +29,38 @@ export interface Forecast {
   method: string; confidence: 'high' | 'medium' | 'low'; samples: number; forecastNext: number
 }
 
-// fallbackAvg = قیمتِ هر مترِ خودِ همین ملک (وقتی دادهٔ محله نداریم) تا نمودار همیشه ساخته شود.
+// نمودار باید «همیشه» ساخته شود. به‌همین‌خاطر:
+//   • سطحِ قیمتِ ماهِ جاری (baseAvg) = محلهٔ خاص ← قیمتِ همین ملک ← شهر ← کلِ بازار.
+//     (پس برای ملکِ گران‌قیمتِ نیاوران، میانگینِ کلِ شهر آن را کم‌برآورد نمی‌کند.)
+//   • نرخِ رشد فقط از «شکلِ» بهترین سریِ روندِ واقعی (محله ← شهر ← کشور) تخمین زده می‌شود،
+//     نه از سطحِ مطلقِ آن؛ پس روندِ بازار رعایت می‌شود ولی قیمتِ پایه مخصوصِ همین ملک می‌ماند.
+// fallbackAvg = قیمتِ هر مترِ خودِ همین ملک (price/area) وقتی دادهٔ محله نداریم.
 export function neighbourhoodForecast(city: string, district: string, fallbackAvg?: number): Forecast | null {
-  const stats = neighbourhoodStats(city, district)
-  const ys = (stats?.trend || []).map(t => t.avg).filter(v => v > 0)
-  const samples = ys.length
-  const baseHint = (stats && stats.avg) ? stats.avg : (fallbackAvg && fallbackAvg > 0 ? fallbackAvg : 0)
-  if (!baseHint) return null
-  const usingFallback = !(stats && stats.avg)
+  const districtStats = (city || district) ? neighbourhoodStats(city, district) : null
+  const cityStats = city ? neighbourhoodStats(city, '') : null
+  const natStats = neighbourhoodStats('', '')
+
+  // مبنای سطحِ قیمتِ «ماهِ جاری»: خاص‌ترین دادهٔ موجود، بعد قیمتِ همین ملک، بعد عام‌تر.
+  const baseAvg = (districtStats?.avg) || (fallbackAvg && fallbackAvg > 0 ? fallbackAvg : 0) || (cityStats?.avg) || (natStats?.avg) || 0
+  if (!baseAvg) return null
+  const haveDistrict = !!districtStats?.avg
+
+  // بهترین سریِ روند برای تخمینِ نرخِ رشد (خاص → عام)، با حداقل ۳ نقطه.
+  const trendSeries = [districtStats, cityStats, natStats]
+    .map(s => (s?.trend || []).map(t => t.avg).filter(v => v > 0))
+    .find(a => a.length >= 3) || []
+  const samples = trendSeries.length
 
   let monthlyGrowth = 0, method = '', confidence: Forecast['confidence'] = 'low'
-  let baseAvg = baseHint                                  // مبنا = میانگینِ فعلیِ واقعی یا قیمتِ همین ملک
   if (samples >= 3) {
-    monthlyGrowth = Math.exp(slopeOf(ys.map(v => Math.log(v)))) - 1   // رشدِ درصدیِ ماهانه
-    baseAvg = ys[ys.length - 1]
-    method = `رگرسیون روی ${samples} ماه دادهٔ واقعیِ محله`
+    monthlyGrowth = Math.exp(slopeOf(trendSeries.map(v => Math.log(v)))) - 1   // رشدِ درصدیِ ماهانه
+    const scope = haveDistrict ? 'محله' : (cityStats?.avg ? 'شهر' : 'بازار')
+    method = `رگرسیون روی ${samples} ماه دادهٔ واقعیِ ${scope}`
     confidence = samples >= 5 ? 'high' : 'medium'
-  } else if (samples === 2) {
-    monthlyGrowth = ys[1] / ys[0] - 1; baseAvg = ys[1]
-    method = 'روند دو نقطهٔ دادهٔ واقعی'; confidence = 'low'
   } else {
     monthlyGrowth = 0.012   // پیش‌فرضِ محتاطانه (~۱۵٪ سالانه) وقتی تاریخچهٔ کافی نیست
-    method = usingFallback ? 'تخمینِ پایه (بر اساسِ قیمتِ همین ملک)' : 'تخمینِ پایه (تاریخچهٔ محدود)'; confidence = 'low'
+    method = haveDistrict ? 'تخمینِ پایه (تاریخچهٔ محدودِ محله)' : 'تخمینِ پایه (بر اساسِ قیمتِ همین ملک و روندِ بازار)'
+    confidence = 'low'
   }
   monthlyGrowth = Math.max(-0.05, Math.min(0.06, monthlyGrowth))     // محدودهٔ منطقیِ ماهانه
   const yearGrowth = Math.pow(1 + monthlyGrowth, 12) - 1

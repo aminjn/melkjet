@@ -50,6 +50,14 @@ const priceLabel = (n: number) => n < 1 ? `${(n * 1000).toLocaleString('fa-IR')}
 // کشِ سمتِ کلاینتِ مختصاتِ هر شهر/محله — تا نقشهٔ هر شهر فقط یک‌بار geocode شود
 const GEO_CACHE = new Map<string, { lat: number; lng: number }>()
 
+// فاصلهٔ هاورساین (کیلومتر) بینِ دو نقطهٔ مختصات — برای فیلترِ «نزدیکِ من».
+function haversineKm(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const R = 6371, toR = Math.PI / 180
+  const dLat = (bLat - aLat) * toR, dLng = (bLng - aLng) * toR
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(aLat * toR) * Math.cos(bLat * toR) * Math.sin(dLng / 2) ** 2
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)))
+}
+
 // واحدِ ملک (آپارتمان/ویلا/…) را از متن تشخیص می‌دهد
 function detectKind(text: string): string {
   for (const k of PROPERTY_KINDS) {
@@ -169,6 +177,7 @@ function SearchPageInner() {
   const [checkedAmenities, setCheckedAmenities] = useState<string[]>([])
   const [sortBy, setSortBy] = useState('پیشنهاد ملک‌جت')
   const [hood, setHood] = useState('')   // فیلترِ محله (انتخابِ کاربر)
+  const [nearMe, setNearMe] = useState(true)   // «نزدیکِ من» — فقط آگهی‌های محدودهٔ کاربر (GPS)
 
   // سوابقِ کاربر/موقعیتِ لحظه‌ای: محلهٔ کاربر + شهرِ انتخابی (یا تشخیص‌داده‌شده)
   const [userArea, setUserArea] = useState('')
@@ -262,14 +271,31 @@ function SearchPageInner() {
     const area = hood || (parsed.area ? '' : prefArea)
     const hard = !!hood
     const inArea = (p: PropertyT) => area ? norm(p.location).includes(norm(area)) : true
+    // «نزدیکِ من» فعال است وقتی: GPS داریم، شهرِ انتخابی با شهرِ کاربر یکی است،
+    // کاربر محله/مکانِ خاصی نخواسته، و خودش خاموشش نکرده.
+    const gpsCityOk = !city || !userCity || norm(city) === norm(userCity) || norm(userCity).includes(norm(city)) || norm(city).includes(norm(userCity))
+    const gpsActive = !!userLoc && gpsCityOk && nearMe && !hood && !parsed.area
+    // فقط آگهی‌های محدودهٔ کاربر را نگه می‌دارد (شعاعِ تطبیقی)، مرتب بر اساسِ فاصله.
+    const applyNear = (list: PropertyT[]): { list: PropertyT[]; near: boolean } => {
+      if (!gpsActive || !userLoc) return { list, near: false }
+      const withD = list.map(p => ({
+        p,
+        d: (p.lat && p.lng) ? haversineKm(userLoc.lat, userLoc.lng, p.lat, p.lng)
+          : (userArea && norm(p.location).includes(norm(userArea)) ? 0.8 : Infinity),
+      }))
+      let near = withD.filter(x => isFinite(x.d))
+      for (const r of [3, 6, 10, 15, 25]) { const f = withD.filter(x => x.d <= r); if (f.length >= 8) { near = f; break } }
+      if (!near.length) return { list, near: false }   // هیچ آگهیِ مختصات‌دار نبود → کلِ شهر
+      return { list: near.sort((a, b) => a.d - b.d).map(x => x.p), near: true }
+    }
     if (city) {
       const inCity = base.filter(p => norm(p.location).includes(norm(city)))
-      if (area) { const a = inCity.filter(inArea); return { list: hard ? a : (a.length ? a : inCity) } }
-      return { list: inCity }   // خالی = واقعاً خالی (بدونِ fallbackِ بین‌شهری)
+      if (area) { const a = inCity.filter(inArea); return { list: hard ? a : (a.length ? a : inCity), near: false } }
+      return applyNear(inCity)   // خالی = واقعاً خالی (بدونِ fallbackِ بین‌شهری)
     }
-    if (area) { const a = base.filter(inArea); return { list: hard ? a : (a.length ? a : base) } }
-    return { list: base }
-  }, [filteredProperties, selectedCity, prefArea, parsed.area, hood])
+    if (area) { const a = base.filter(inArea); return { list: hard ? a : (a.length ? a : base), near: false } }
+    return applyNear(base)
+  }, [filteredProperties, selectedCity, prefArea, parsed.area, hood, userLoc, userCity, userArea, nearMe])
 
   // گزینه‌های محله از روی آگهی‌های همان شهر (محله‌هایی که واقعاً آگهی دارند).
   const hoodOptions = useMemo(() => {
@@ -376,7 +402,8 @@ function SearchPageInner() {
     // مگر اینکه عمداً شهرِ دیگری انتخاب کرده باشد.
     const norm = (s: string) => (s || '').replace(/‌/g, '').replace(/\s/g, '')
     const gpsCityOk = !selectedCity || !userCity || norm(selectedCity) === norm(userCity) || norm(userCity).includes(norm(selectedCity)) || norm(selectedCity).includes(norm(userCity))
-    if (userLoc && gpsCityOk) return { center: userLoc, zoom: 14 }   // سطحِ محله
+    // فقط وقتی «نزدیکِ من» روشن است روی موقعیتِ کاربر زوم کن؛ خاموش = نمای کلِ شهر.
+    if (userLoc && gpsCityOk && nearMe) return { center: userLoc, zoom: 14 }   // سطحِ محله
     if (pins.length) {
       const lats = pins.map(p => p.lat), lngs = pins.map(p => p.lng)
       const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLng = Math.min(...lngs), maxLng = Math.max(...lngs)
@@ -388,7 +415,7 @@ function SearchPageInner() {
     if (mapCenter) return { center: mapCenter, zoom: 13 }
     if (userLoc) return { center: userLoc, zoom: 13 }
     return null
-  }, [pins, mapCenter, userLoc, selectedCity, userCity])
+  }, [pins, mapCenter, userLoc, selectedCity, userCity, nearMe])
 
   // چیپ‌های تشخیصِ AI — فقط مواردِ واقعاً تشخیص‌داده‌شده
   const aiChips = useMemo(() => {
@@ -430,6 +457,13 @@ function SearchPageInner() {
             {activeFilterCount > 0 && <span style={{ minWidth: 18, height: 18, borderRadius: 9, background: 'var(--gold)', color: '#16140f', fontSize: 10.5, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{toPersianDigits(activeFilterCount)}</span>}
           </button>
 
+          {/* «نزدیکِ من» — وقتی GPS داریم و کاربر محله‌ای نخواسته؛ روشن = فقط محدودهٔ کاربر */}
+          {userLoc && !hood && !parsed.area && (
+            <button onClick={() => setNearMe(v => !v)} title={nearMe ? 'فقط آگهی‌های نزدیکِ شما — برای دیدنِ کلِ شهر بزنید' : 'نمایشِ آگهی‌های نزدیکِ موقعیتِ شما'}
+              style={{ height: 48, padding: '0 14px', borderRadius: 12, display: 'flex', alignItems: 'center', gap: 6, background: nearMe ? 'var(--goldDim)' : 'var(--surface)', border: `1px solid ${nearMe ? 'var(--gold)' : 'var(--line2)'}`, color: nearMe ? 'var(--gold)' : 'var(--text)', fontSize: 13.5, cursor: 'pointer', fontFamily: 'inherit', fontWeight: nearMe ? 700 : 400, whiteSpace: 'nowrap' }}>
+              <span>📍</span>{nearMe ? `نزدیکِ من${userArea ? ` · ${userArea}` : ''}` : 'نزدیکِ من'}
+            </button>
+          )}
           {hoodOptions.length > 0 && (
             <select value={hood} onChange={e => setHood(e.target.value)} title="فیلترِ محله" style={{ height: 48, padding: '0 12px', borderRadius: 12, background: hood ? 'var(--goldDim)' : 'var(--surface)', border: `1px solid ${hood ? 'var(--gold)' : 'var(--line2)'}`, color: hood ? 'var(--gold)' : 'var(--text)', fontSize: 13.5, cursor: 'pointer', outline: 'none', fontFamily: 'inherit', fontWeight: hood ? 700 : 400 }}>
               <option value="">همهٔ محله‌ها</option>
