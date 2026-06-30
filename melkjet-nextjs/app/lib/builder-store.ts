@@ -25,7 +25,7 @@ function id() { return randomBytes(6).toString('hex') }
 
 // per-owner: هر سازنده پروژه‌های خودش را دارد (کلید = شمارهٔ مالک). بدونِ دیتای دمو.
 // با هر تغییرِ منطقِ واردکردن، IMPORT_VERSION را بالا ببر تا همه خودکار دوباره وارد شوند (بدونِ rmِ دستی).
-const IMPORT_VERSION = 4
+const IMPORT_VERSION = 5
 type OwnerData = { projects: Project[]; imported?: boolean; importVersion?: number }
 type DB = Record<string, OwnerData>
 function load(): DB { if (existsSync(FILE)) { try { return JSON.parse(readFileSync(FILE, 'utf-8')) } catch {} } return {} }
@@ -107,10 +107,15 @@ export async function ensureImported(owner: string): Promise<void> {
         // واحدها از تعدادِ طبقه/واحدِ واقعیِ ساختمان ساخته می‌شوند (همه «موجود»، بدونِ خریدارِ ساختگی) تا سازنده بفروشد.
         const totalUnits = Math.max(0, Math.min(500, Number(pr.units) || 0))
         const floors = Math.max(1, Number(pr.floors) || 1)
-        const perFloor = Math.max(1, Math.round(totalUnits / floors) || 1)
         const avgArea = totalUnits ? Math.round((Number(pr.residentialArea) || 0) / totalUnits) : 0
+        // واحدها را روی طبقاتِ واقعی پخش کن (هیچ‌وقت بیشتر از تعدادِ طبقاتِ ساختمان نشود).
         const units: Unit[] = []
-        for (let i = 0; i < totalUnits; i++) { const fl = Math.floor(i / perFloor) + 1; units.push({ id: id(), number: `${fl}-${(i % perFloor) + 1}`, floor: fl, area: avgArea, price: 0, status: 'available' }) }
+        const perFloorCount: Record<number, number> = {}
+        for (let i = 0; i < totalUnits; i++) {
+          const fl = (i % floors) + 1
+          perFloorCount[fl] = (perFloorCount[fl] || 0) + 1
+          units.push({ id: id(), number: `${fl}-${perFloorCount[fl]}`, floor: fl, area: avgArea, price: 0, status: 'available' })
+        }
         // همهٔ عکس‌ها: اگر در reveal جمع شده (photos)، همان؛ وگرنه عکسِ لیست.
         const photos: string[] = (pr as any).photos?.length ? (pr as any).photos : (pr.photo?.imageUrl ? [pr.photo.imageUrl] : (pr.photo?.imageThumbnailUrl ? [pr.photo.imageThumbnailUrl] : []))
         const source: ProjectSource = {

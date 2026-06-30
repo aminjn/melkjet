@@ -381,10 +381,10 @@ export default function BuilderPage() {
           <div style={{
             width: 34, height: 34, borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))',
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#16140f', flexShrink: 0,
-          }}>آ</div>
+          }}>{(myName || 'س').charAt(0)}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>گروه آرین</div>
-            <div style={{ fontSize: 11, color: 'var(--muted)' }}>انبوه‌ساز</div>
+            <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{myName || 'پنلِ سازنده'}</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>سازنده / انبوه‌ساز</div>
           </div>
           <button onClick={toggleTheme} title="تغییر تم" style={{
             width: 32, height: 32, borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--line)',
