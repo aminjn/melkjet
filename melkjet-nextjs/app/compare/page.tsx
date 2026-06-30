@@ -1,6 +1,8 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import Nav from '../components/Nav'
+import Footer from '../components/Footer'
 import { type CompareEntry, readCompare, onCompareChange, removeCompare, clearCompare } from '../lib/compare'
 
 const fa = (n: number | string) => String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d])
@@ -51,11 +53,7 @@ export default function ComparePage() {
       minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: "'Vazirmatn', system-ui, sans-serif",
     } as React.CSSProperties}>
 
-      {/* Top bar */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderBottom: '1px solid var(--line)' }}>
-        <div style={{ fontSize: 18, fontWeight: 900 }}>◆ ملک‌جت</div>
-        <Link href="/sazandeha" style={{ fontSize: 13.5, color: 'var(--muted)', textDecoration: 'none' }}>› بازگشت</Link>
-      </div>
+      <Nav />
 
       <main style={{ maxWidth: 1200, margin: '0 auto', padding: '26px 20px 80px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 12, marginBottom: 22 }}>
@@ -125,6 +123,7 @@ export default function ComparePage() {
           </>
         )}
       </main>
+      <Footer />
     </div>
   )
 }

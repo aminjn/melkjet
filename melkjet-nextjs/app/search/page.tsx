@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import Nav from '@/app/components/Nav'
 import BannerSlot from '@/app/components/BannerSlot'
+import CompareButton from '@/app/components/CompareButton'
 import { fetchContent, gradientFor, type ContentItem } from '@/app/lib/content-display'
 import { readLoc } from '@/app/components/LocationDetector'
 import { readCity } from '@/app/components/CitySelector'
@@ -561,6 +562,7 @@ function SearchPageInner() {
                         <span>{p.beds} خواب</span><span style={{ color: 'var(--faint)' }}>·</span>
                         <span>ساخت {p.year}</span>
                         <div style={{ flex: 1 }} />
+                        <CompareButton entry={{ kind: 'item', id: String(p.id), title: p.title, photo: p.image, subtitle: p.location }} />
                         <span style={{ color: 'var(--gold)', fontSize: 11.5, fontWeight: 600 }}>مشاهده ←</span>
                       </div>
                     </div>

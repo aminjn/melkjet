@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import Nav from '@/app/components/Nav'
 import PropertyMap from '@/app/components/PropertyMap'
+import CompareButton from '@/app/components/CompareButton'
 import { openAuth } from '@/app/components/AuthModal'
 
 interface Item {
@@ -469,6 +470,11 @@ export default function PropertyPage() {
                     <button onClick={revealContact} disabled={gettingPhone} style={{ width: '100%', padding: '13px', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', border: 'none', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, opacity: gettingPhone ? 0.6 : 1 }}>نمایش اطلاعات تماس</button>
                   </>
                 )}
+              </div>
+
+              {/* compare */}
+              <div style={card}>
+                <CompareButton variant="full" entry={{ kind: 'item', id: String(item.id), title: item.title, photo: (item.image && (String(item.image).startsWith('http') || String(item.image).startsWith('/'))) ? item.image : undefined, subtitle: item.location }} />
               </div>
 
               {/* chat with owner — saved to buyer panel */}
