@@ -28,11 +28,39 @@ export default function DivarImport({ onChange, entity = 'شما' }: { onChange?
   const [msg, setMsg] = useState('')
   const [selId, setSelId] = useState<string | null>(null)   // اسکرپِ انتخاب‌شده برای ویرایش
   const [showFiles, setShowFiles] = useState(false)
+  const [job, setJob] = useState<any>(null)                 // وضعیتِ همگام‌سازیِ پس‌زمینه
 
   const refresh = useCallback(async () => {
-    try { const r = await fetch('/api/advisor/divar', { cache: 'no-store' }); if (r.ok) { const d = await r.json(); setCfg(d.config) } } catch {}
+    try { const r = await fetch('/api/advisor/divar', { cache: 'no-store' }); if (r.ok) { const d = await r.json(); setCfg(d.config); setJob(d.job || null) } } catch {}
   }, [])
   useEffect(() => { refresh() }, [refresh])
+
+  const finalMsg = (j: any): string => {
+    if (j?.error) return '⚠ ' + j.error
+    const parts: string[] = []
+    if (j?.imported) parts.push(`${(j.imported).toLocaleString('fa-IR')} فایلِ جدید به «فایل‌های من» اضافه شد`)
+    if (j?.updated) parts.push(`${(j.updated).toLocaleString('fa-IR')} فایل به‌روزرسانی شد`)
+    if (j?.sold) parts.push(`${(j.sold).toLocaleString('fa-IR')} فروش/اجاره‌رفته`)
+    if (j?.skipped) parts.push(`${(j.skipped).toLocaleString('fa-IR')} ردشده`)
+    return '✓ همگام‌سازی کامل شد — ' + (parts.join(' · ') || 'تغییری نبود')
+  }
+
+  // تا وقتی کارِ پس‌زمینه در حال اجراست، پیشرفت را بپا (مستقل از باز/بسته بودنِ صفحه روی سرور).
+  useEffect(() => {
+    if (!job?.running) return
+    const t = setInterval(async () => {
+      try {
+        const r = await fetch('/api/advisor/divar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'jobStatus' }) })
+        const d = await r.json().catch(() => ({}))
+        if (d?.ok) {
+          setJob(d.job)
+          if (!d.job.running) { clearInterval(t); setMsg(finalMsg(d.job)); setShowFiles(true); refresh(); onChange?.() }
+        }
+      } catch {}
+    }, 2500)
+    return () => clearInterval(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job?.running])
 
   const post = useCallback(async (body: Record<string, unknown>): Promise<any> => {
     setBusy(true); setMsg('')
@@ -62,17 +90,10 @@ export default function DivarImport({ onChange, entity = 'شما' }: { onChange?
   const syncSource = async (src: DSource) => {
     await saveSource(src)
     const d = await post({ action: 'syncSource', id: src.id })
-    if (d) {
-      if (d.ok) {
-        const added = d.imported || 0, upd = d.updated || 0, sold = d.sold || 0
-        const parts: string[] = [`${added.toLocaleString('fa-IR')} فایلِ جدید به «فایل‌های من» اضافه شد`]
-        if (upd) parts.push(`${upd.toLocaleString('fa-IR')} فایل به‌روزرسانی شد`)
-        if (sold) parts.push(`${sold.toLocaleString('fa-IR')} فروش/اجاره‌رفته`)
-        setMsg('✓ «' + src.name + '»: ' + parts.join(' · ') + ` (از ${(d.scanned || 0).toLocaleString('fa-IR')} آگهیِ اسکن‌شده).`)
-        setShowFiles(true)
-        onChange?.()
-      } else setMsg(d.reason || 'همگام‌سازی ناموفق بود')
-    }
+    if (!d) return
+    if (d.alreadyRunning) { setMsg('یک همگام‌سازی همین‌حالا در حال اجراست — تا پایان صبر کنید.') }
+    else { setMsg('⏳ همگام‌سازی شروع شد — در پس‌زمینه تا پایان ادامه می‌یابد، حتی اگر صفحه را ببندید.') }
+    if (d.job) setJob(d.job)   // شروعِ پایشِ پیشرفت
   }
 
   return (
@@ -107,7 +128,20 @@ export default function DivarImport({ onChange, entity = 'شما' }: { onChange?
         </div>
       </div>
 
-      {msg && <div style={{ ...card, padding: '10px 14px', fontSize: 12.5, lineHeight: 1.7, color: msg.startsWith('✓') ? 'var(--gold)' : '#ef4444' }}>{msg}</div>}
+      {/* نوارِ پیشرفتِ همگام‌سازیِ پس‌زمینه */}
+      {job?.running && (
+        <div style={{ ...card, padding: '12px 14px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>
+            <span style={{ color: 'var(--gold)' }}>⏳ {job.label || 'همگام‌سازیِ دیوار'} در حال اجرا…</span>
+            <span style={{ color: 'var(--muted)' }}>{job.total ? `${(job.done || 0).toLocaleString('fa-IR')} از ${(job.total).toLocaleString('fa-IR')}` : 'در حالِ خواندنِ فهرست…'}</span>
+          </div>
+          <div style={{ height: 7, borderRadius: 999, background: 'var(--line)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', borderRadius: 999, width: job.total ? `${Math.round(((job.done || 0) / job.total) * 100)}%` : '15%', background: 'linear-gradient(90deg,var(--gold2),var(--gold))', transition: 'width .4s ease' }} />
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 7 }}>می‌توانید این صفحه را ببندید — همگام‌سازی روی سرور تا پایان ادامه می‌یابد و فایل‌ها به «فایل‌های من» اضافه می‌شوند.</div>
+        </div>
+      )}
+      {msg && <div style={{ ...card, padding: '10px 14px', fontSize: 12.5, lineHeight: 1.7, color: msg.startsWith('✓') || msg.startsWith('⏳') ? 'var(--gold)' : '#ef4444' }}>{msg}</div>}
 
       {/* اسکرپ‌ها — فهرستِ سمتِ چپ + ویرایشگرِ سمتِ راست */}
       {cfg && <div style={{ ...card, padding: 16 }}>
@@ -148,7 +182,7 @@ export default function DivarImport({ onChange, entity = 'شما' }: { onChange?
                       </div>
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                         <button disabled={busy} onClick={async () => { await saveSource(src); setMsg('✓ اسکرپ ذخیره شد.') }} style={{ ...gold, padding: '8px 16px' }}>ذخیرهٔ اسکرپ</button>
-                        <button disabled={busy || !src.searchUrl.trim()} onClick={() => syncSource(src)} style={{ ...act, padding: '8px 16px', color: 'var(--gold)', borderColor: 'var(--gold)' }}>{busy ? 'در حال همگام‌سازی…' : 'ذخیره و همگام‌سازی الان'}</button>
+                        <button disabled={busy || job?.running || !src.searchUrl.trim()} onClick={() => syncSource(src)} style={{ ...act, padding: '8px 16px', color: 'var(--gold)', borderColor: 'var(--gold)' }}>{job?.running ? 'در حال همگام‌سازی…' : 'ذخیره و همگام‌سازی الان'}</button>
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', gap: 16, flexWrap: 'wrap', paddingTop: 8, borderTop: '1px solid var(--line)' }}>
                         <span>آخرین اجرا: <b style={{ color: 'var(--text)' }}>{faDate(src.lastRun)}</b></span>

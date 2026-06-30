@@ -2,7 +2,8 @@ import { fetchDivarPost, divarToken, divarProfileSlug, fetchDivarProfileTokens, 
 import { addListing, updateListing, publishListing, unpublishListing, setListingStatus, deleteListing, getAdvisor, updateAdvisorProfile, type Listing } from './advisor-store'
 import { findNeighborhoodInGeo } from './geo-store'
 import { warmEnrichment } from './enrich-warm'
-import { getDivar, hasToken, recordImport, removeImport, markRun, clearImports, type AdvisorDivar } from './advisor-divar-store'
+import { getDivar, hasToken, recordImport, removeImport, markRun, markSourceRun, clearImports, type AdvisorDivar } from './advisor-divar-store'
+import { getJob, setJob, isStale } from './advisor-divar-job'
 import { scrapeDivar } from './divar'
 import type { Source } from './scraper-store'
 
@@ -105,24 +106,32 @@ function normName(s: string): string {
 export interface SyncResult { ok: boolean; reason?: string; scanned: number; imported: number; updated: number; skipped: number; sold?: number; tokens: string[] }
 
 // چند آگهی را پشت‌سرهم وارد/به‌روزرسانی می‌کند — hint برای عنوان/تصویرِ درست.
-async function importTokens(o: string, items: BrandPost[], sourceId?: string): Promise<{ imported: number; updated: number; skipped: number; tokens: string[] }> {
+async function importTokens(o: string, items: BrandPost[], sourceId?: string, onProgress?: (done: number, total: number) => void): Promise<{ imported: number; updated: number; skipped: number; tokens: string[] }> {
   let imported = 0, updated = 0, skipped = 0
   const done: string[] = []
+  const total = items.length
+  let i = 0
   for (const it of items) {
+    i++
     const token = it.token
-    if (!token) continue
-    try {
-      const res = await importDivarToken(o, token, it, sourceId)   // موجود را به‌روز می‌کند، جدید را اضافه
-      if (res.ok && res.updated) { updated++ }
-      else if (res.ok && !res.skipped) { imported++; done.push(token) }
+    if (token) {
+      // یک‌بار تلاشِ مجدد در صورتِ خطای گذرای پروکسی/دیوار (تا یک آگهیِ تکی کلِ کار را خراب نکند).
+      let res: any = null
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try { res = await importDivarToken(o, token, it, sourceId); if (res && (res.ok || res.skipped)) break } catch { res = null }
+        if (attempt === 0) await new Promise(r => setTimeout(r, 600))
+      }
+      if (res && res.ok && res.updated) { updated++ }
+      else if (res && res.ok && !res.skipped) { imported++; done.push(token) }
       else skipped++
-    } catch { skipped++ }
+    }
+    try { onProgress?.(i, total) } catch {}
   }
   return { imported, updated, skipped, tokens: done }
 }
 
 /** همهٔ آگهی‌های یک «پروفایلِ پرو/کسب‌وکارِ دیوار» را وارد می‌کند (لینکِ divar.ir/pro/<slug>). */
-export async function importDivarProfile(o: string, url: string, sourceId?: string): Promise<SyncResult> {
+export async function importDivarProfile(o: string, url: string, sourceId?: string, onProgress?: (done: number, total: number) => void): Promise<SyncResult> {
   const slug = divarProfileSlug(url)
   if (!slug) return { ok: false, reason: 'لینک پروفایل دیوار معتبر نیست', scanned: 0, imported: 0, updated: 0, skipped: 0, tokens: [] }
   const { posts, reason } = await fetchDivarProfileTokens(slug)
@@ -140,7 +149,8 @@ export async function importDivarProfile(o: string, url: string, sourceId?: stri
   const liveTokens = new Set(posts.map(p => p.token))
   const gone = getDivar(o).imports.filter(i => !liveTokens.has(i.token) && (sourceId ? i.sourceId === sourceId : true))
 
-  const r = await importTokens(o, posts, sourceId)
+  onProgress?.(0, posts.length)
+  const r = await importTokens(o, posts, sourceId, onProgress)
   const sold = markGone(o, gone)
   markRun(o, r.imported, '')
   return { ok: true, scanned: posts.length, ...r, sold }
@@ -198,12 +208,12 @@ export async function importDivarInput(o: string, raw: string): Promise<{ ok: bo
 
 /** آگهی‌های مشاور را از روی لینکِ ذخیره‌شده سینک می‌کند: لینکِ پروفایلِ پرو → همهٔ آگهی‌های او؛
  *  لینکِ جستجو/نقشه → آگهی‌هایی که نامِ آگهی‌دهنده با «نام دیوار»‌ِ مشاور می‌خواند (نام الزامی است). */
-export async function syncAdvisorDivar(o: string, cfgIn?: AdvisorDivar, sourceId?: string): Promise<SyncResult> {
+export async function syncAdvisorDivar(o: string, cfgIn?: AdvisorDivar, sourceId?: string, onProgress?: (done: number, total: number) => void): Promise<SyncResult> {
   const cfg = cfgIn || getDivar(o)
   if (!cfg.searchUrl) { markRun(o, 0, 'لینک دیوار تنظیم نشده'); return { ok: false, reason: 'لینک دیوار تنظیم نشده', scanned: 0, imported: 0, updated: 0, skipped: 0, tokens: [] } }
 
   // اگر لینکِ پروفایلِ پرو است، همهٔ آگهی‌های همان پروفایل (همگی متعلق به خودِ مشاور).
-  if (divarProfileSlug(cfg.searchUrl)) return importDivarProfile(o, cfg.searchUrl, sourceId)
+  if (divarProfileSlug(cfg.searchUrl)) return importDivarProfile(o, cfg.searchUrl, sourceId, onProgress)
 
   // لینکِ جستجو/نقشه: برای جلوگیری از ورودِ آگهی‌های دیگران، «نام دیوار» الزامی است.
   const want = normName(cfg.divarName)
@@ -224,9 +234,30 @@ export async function syncAdvisorDivar(o: string, cfgIn?: AdvisorDivar, sourceId
   })
 
   const items: BrandPost[] = mine.map(x => ({ token: divarToken(x.url || '') || '', title: x.title, price: x.price, location: x.location, image: x.image })).filter(it => it.token)
-  const r = await importTokens(o, items, sourceId)
+  onProgress?.(0, items.length)
+  const r = await importTokens(o, items, sourceId, onProgress)
   markRun(o, r.imported, r.imported || mine.length ? '' : 'آگهیِ منطبقی با نامِ شما پیدا نشد')
   return { ok: true, scanned: rows.length, ...r }
+}
+
+// ── همگام‌سازیِ پس‌زمینه: کار را شروع می‌کند و بلافاصله برمی‌گردد؛ تا پایان ادامه می‌یابد
+//    حتی اگر کاربر صفحه را ببندد. پیشرفت در فایلِ jobها ذخیره می‌شود تا UI بپاید. ─────
+export function startBackgroundSync(o: string, cfgIn?: AdvisorDivar, sourceId?: string, label?: string): { started: boolean; alreadyRunning?: boolean } {
+  const cur = getJob(o)
+  if (cur.running && !isStale(cur)) return { started: false, alreadyRunning: true }
+  setJob(o, { running: true, total: 0, done: 0, imported: 0, updated: 0, skipped: 0, failed: 0, sold: 0, error: '', label: label || 'همگام‌سازیِ دیوار', startedAt: Date.now(), finishedAt: undefined })
+  // عمداً await نمی‌کنیم — در پس‌زمینهٔ همین ورکر تا تهِ کار اجرا می‌شود.
+  ;(async () => {
+    try {
+      const onProgress = (done: number, total: number) => setJob(o, { done, total })
+      const r = await syncAdvisorDivar(o, cfgIn, sourceId, onProgress)
+      if (sourceId) markSourceRun(o, sourceId, r.imported || 0, r.ok ? '' : (r.reason || 'خطا'))
+      setJob(o, { running: false, finishedAt: Date.now(), imported: r.imported || 0, updated: r.updated || 0, skipped: r.skipped || 0, sold: r.sold || 0, error: r.ok ? '' : (r.reason || 'همگام‌سازی ناموفق بود') })
+    } catch (e: any) {
+      setJob(o, { running: false, finishedAt: Date.now(), error: e?.message || 'خطای داخلی هنگامِ همگام‌سازی' })
+    }
+  })()
+  return { started: true }
 }
 
 /** همهٔ آگهی‌های واردشده از دیوار را پاک می‌کند (فایل + نسخهٔ عمومی) و فهرست را خالی می‌کند. */

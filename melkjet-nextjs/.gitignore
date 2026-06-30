@@ -92,3 +92,4 @@ next-env.d.ts
 .builder-public-data.json
 .contact-log-data.json
 .ticket-data.json
+.advisor-divar-jobs.json

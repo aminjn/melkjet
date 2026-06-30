@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { getDivar, updateDivarConfig, removeImport, addSource, updateSource, removeSource, getSource, markSourceRun } from '@/app/lib/advisor-divar-store'
-import { importDivarInput, syncAdvisorDivar, clearDivarImports } from '@/app/lib/advisor-divar-import'
+import { getDivar, updateDivarConfig, removeImport, addSource, updateSource, removeSource, getSource } from '@/app/lib/advisor-divar-store'
+import { importDivarInput, startBackgroundSync, clearDivarImports } from '@/app/lib/advisor-divar-import'
+import { getJob } from '@/app/lib/advisor-divar-job'
 import { ensureCronStarted } from '@/app/lib/cron-runner'
 
 // پنل «ایمپورت از دیوار» مخصوص هر مشاور (per-profile).
@@ -9,7 +10,7 @@ export async function GET() {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای مشاهده وارد شوید' }, { status: 401 })
   ensureCronStarted()
-  return NextResponse.json({ config: getDivar(s.phone) }, { headers: { 'Cache-Control': 'no-store' } })
+  return NextResponse.json({ config: getDivar(s.phone), job: getJob(s.phone) }, { headers: { 'Cache-Control': 'no-store' } })
 }
 
 export async function POST(req: NextRequest) {
@@ -32,8 +33,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, removed: r.removed, config: getDivar(o) })
     }
     case 'sync': {
-      const r = await syncAdvisorDivar(o)
-      return NextResponse.json({ ...r, config: getDivar(o) })
+      // در پس‌زمینه اجرا می‌شود و تا پایان ادامه می‌یابد حتی اگر کاربر صفحه را ببندد.
+      const r = startBackgroundSync(o, undefined, undefined, 'همگام‌سازیِ دیوار')
+      return NextResponse.json({ ok: true, ...r, job: getJob(o), config: getDivar(o) })
+    }
+    case 'jobStatus': {
+      return NextResponse.json({ ok: true, job: getJob(o) })
     }
     case 'setConfig': {
       const cfg = updateDivarConfig(o, {
@@ -67,9 +72,8 @@ export async function POST(req: NextRequest) {
       if (!src) return NextResponse.json({ error: 'منبع یافت نشد' }, { status: 404 })
       if (!src.searchUrl.trim()) return NextResponse.json({ error: 'لینکِ این منبع خالی است' }, { status: 400 })
       const base = getDivar(o)
-      const r = await syncAdvisorDivar(o, { ...base, searchUrl: src.searchUrl, divarName: src.divarName, autoPublish: src.autoPublish, autoNeighborhood: src.autoNeighborhood, schedule: src.schedule }, src.id)
-      markSourceRun(o, src.id, r.imported || 0, r.ok ? '' : (r.reason || 'خطا'))
-      return NextResponse.json({ ...r, config: getDivar(o) })
+      const r = startBackgroundSync(o, { ...base, searchUrl: src.searchUrl, divarName: src.divarName, autoPublish: src.autoPublish, autoNeighborhood: src.autoNeighborhood, schedule: src.schedule }, src.id, src.name || 'همگام‌سازیِ منبع')
+      return NextResponse.json({ ok: true, ...r, job: getJob(o), config: getDivar(o) })
     }
     default:
       return NextResponse.json({ error: 'عملیات نامعتبر' }, { status: 400 })
