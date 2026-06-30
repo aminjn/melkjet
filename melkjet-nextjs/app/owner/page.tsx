@@ -5,6 +5,7 @@ import NumberInput from '@/app/components/NumberInput'
 import PlansPanel from '@/app/components/PlansPanel'
 import ListingReports from '@/app/components/ListingReports'
 import BusinessProfileForm from '@/app/components/BusinessProfileForm'
+import SupportPanel from '@/app/components/SupportPanel'
 
 // ════════════════════════════════════════════════════════
 //  Types (mirror app/lib/owner-store.ts API shape)
@@ -38,7 +39,7 @@ interface Stats {
 }
 interface OwnerData { stats: Stats; properties: Property[]; inquiries: Inquiry[]; viewings: Viewing[]; offers: Offer[] }
 
-type View = 'dashboard' | 'properties' | 'inquiries' | 'viewings' | 'offers' | 'plans' | 'profile' | 'settings'
+type View = 'dashboard' | 'properties' | 'inquiries' | 'viewings' | 'offers' | 'plans' | 'profile' | 'settings' | 'support'
 
 // ════════════════════════════════════════════════════════
 //  Formatting & status helpers
@@ -91,6 +92,7 @@ const VIEW_TITLES: Record<View, string> = {
   plans: 'پلن‌ها',
   profile: 'پروفایل',
   settings: 'تنظیمات',
+  support: 'پشتیبانی',
 }
 
 const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'inquiries' | 'viewings' | 'offers' }[] = [
@@ -102,6 +104,7 @@ const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'inquiries' | 
   { id: 'plans', label: 'پلن‌ها', icon: '👑' },
   { id: 'profile', label: 'پروفایل', icon: '🪪' },
   { id: 'settings', label: 'تنظیمات', icon: '⛭' },
+  { id: 'support', label: 'پشتیبانی', icon: '🛟' },
 ]
 const NAV_LINKS: { href: string; label: string; icon: string }[] = [
   { href: '/crm', label: 'CRM و مشتریان', icon: '◇' },
@@ -306,6 +309,7 @@ export default function OwnerPage() {
           {view === 'plans' && <PlansPanel dashboard="/owner" channels={['token']} />}
           {view === 'profile' && <BusinessProfileForm />}
           {view === 'settings' && <SettingsView profile={stats.profile} post={post} busy={busy} />}
+          {view === 'support' && <SupportPanel panel="owner" />}
         </main>
       </div>
 

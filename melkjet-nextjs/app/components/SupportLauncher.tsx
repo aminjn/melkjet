@@ -3,8 +3,9 @@ import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import SupportPanel from './SupportPanel'
 
-// دکمهٔ پشتیبانیِ شناور در همهٔ پنل‌ها (یک‌جا، تو در تو نیست). با کلیک، کشوی تیکت‌ها باز می‌شود.
-const PANEL_ROUTES = ['/builder', '/materials', '/owner', '/buyer', '/pros', '/agency', '/crm', '/marketing', '/workflow', '/website-builder']
+// دکمهٔ پشتیبانیِ شناور فقط در ابزارها (که آیتمِ منوی پشتیبانی ندارند). پنل‌های اصلی خودشان
+// «پشتیبانی» را در منو دارند، پس این‌جا تکرار نمی‌شود.
+const PANEL_ROUTES = ['/crm', '/marketing', '/workflow', '/website-builder']
 
 export default function SupportLauncher() {
   const pathname = usePathname() || ''

@@ -14,6 +14,7 @@ import LocationPicker from '@/app/components/LocationPicker'
 import JalaliDatePicker from '@/app/components/JalaliDatePicker'
 import NumberInput from '@/app/components/NumberInput'
 import BusinessProfileForm from '@/app/components/BusinessProfileForm'
+import SupportPanel from '@/app/components/SupportPanel'
 
 // درختِ جغرافیاییِ سایت (استان → شهر → منطقه → محله)
 interface GeoDistrict { id: string; name: string; neighborhoods: string[] }
@@ -50,7 +51,7 @@ interface Stats {
 }
 interface AdvisorData { stats: Stats; leads: Lead[]; listings: Listing[]; appts: Appt[]; commissions: Commission[] }
 
-type View = 'dashboard' | 'assistant' | 'messages' | 'reports' | 'leads' | 'customers' | 'listings' | 'divar' | 'negotiation' | 'articles' | 'appts' | 'calendar' | 'commissions' | 'agency' | 'plans' | 'profile' | 'settings'
+type View = 'dashboard' | 'assistant' | 'messages' | 'reports' | 'leads' | 'customers' | 'listings' | 'divar' | 'negotiation' | 'articles' | 'appts' | 'calendar' | 'commissions' | 'agency' | 'plans' | 'profile' | 'settings' | 'support'
 
 interface DivarImport { token: string; listingId: string; title: string; url: string; at: number; published: boolean }
 interface DivarConfig {
@@ -207,7 +208,7 @@ const inputStyle: React.CSSProperties = { padding: '9px 11px', borderRadius: 9, 
 const actionBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap' }
 const goldBtn: React.CSSProperties = { padding: '9px 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }
 
-const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد مشاور', assistant: 'دستیار هوشمند', messages: 'پیام‌ها', reports: 'گزارش‌ها', leads: 'لیدها و پایپ‌لاین', customers: 'مشتریان', listings: 'فایل‌های من', divar: 'ایمپورت از دیوار', negotiation: 'موتور مذاکره', articles: 'مقالات و وبلاگ', appts: 'قرارها و بازدیدها', calendar: 'تقویم', commissions: 'کمیسیون', agency: 'آژانس من', plans: 'پلن‌ها و اشتراک', profile: 'پروفایل', settings: 'تنظیمات' }
+const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد مشاور', assistant: 'دستیار هوشمند', messages: 'پیام‌ها', reports: 'گزارش‌ها', leads: 'لیدها و پایپ‌لاین', customers: 'مشتریان', listings: 'فایل‌های من', divar: 'ایمپورت از دیوار', negotiation: 'موتور مذاکره', articles: 'مقالات و وبلاگ', appts: 'قرارها و بازدیدها', calendar: 'تقویم', commissions: 'کمیسیون', agency: 'آژانس من', plans: 'پلن‌ها و اشتراک', profile: 'پروفایل', settings: 'تنظیمات', support: 'پشتیبانی' }
 const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'leads' | 'appts' }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: '▦' },
   { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
@@ -219,6 +220,7 @@ const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'leads' | 'app
   { id: 'plans', label: 'پلن‌ها و اشتراک', icon: '👑' },
   { id: 'profile', label: 'پروفایل', icon: '🪪' },
   { id: 'settings', label: 'تنظیمات', icon: '⛭' },
+  { id: 'support', label: 'پشتیبانی', icon: '🛟' },
 ]
 
 // «CRM و مشتریان» — همهٔ موارد مرتبط با CRM در یک گروهِ آبشاری زیرِ هم.
@@ -1185,6 +1187,7 @@ export default function ProsPage() {
 
           {/* ───── DIVAR IMPORT ───── */}
           {view === 'divar' && <DivarImport onChange={refresh} />}
+          {view === 'support' && <SupportPanel panel="pros" />}
           </>}
         </main>
       </div>

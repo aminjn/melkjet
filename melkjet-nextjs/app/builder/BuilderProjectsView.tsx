@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import ImageUpload from '../components/ImageUpload'
+import LiveScore from '../components/LiveScore'
 
 // مدیریتِ پروژه‌ها در پنلِ سازنده — یک‌جا، یکپارچه: پروژه‌های پایگاه (با override) و
 // پروژه‌های دستی. هر پروژه: مرحلهٔ ساخت (نردبانِ یکسانِ سایت)، وضعیت، عکس، پلان (چند سبک)،
@@ -188,6 +189,15 @@ function ProjectForm({ isManual, initial, title, psPhase, onSave, onDelete, busy
           </div>
         </div>
       </div>
+
+      {/* امتیاز و تحلیلِ زندهٔ پروژه */}
+      <LiveScore kind="project" ready={!isManual || !!f.name.trim()} data={{
+        'نام': f.name, 'موقعیت': f.location, 'کاربری': f.usage, 'مرحلهٔ ساخت': f.stage,
+        'تعداد واحد': f.units, 'طبقات': f.floors, 'بازهٔ متراژ': f.areaRange, 'قیمت': f.priceText,
+        'پیشرفتِ فروش': f.salesProgress !== '' && f.salesProgress != null ? `${f.salesProgress}٪` : '',
+        'توضیح': f.description,
+        'تعداد امکانات': String((f.amenities || []).length), 'تعداد عکس': String((f.photos || []).length), 'تعداد پلان': String((f.plans || []).length),
+      }} />
 
       <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}>
         <label style={{ display: 'flex', gap: 7, alignItems: 'center', fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" checked={f.published} onChange={e => set('published', e.target.checked)} /> نمایشِ عمومی</label>

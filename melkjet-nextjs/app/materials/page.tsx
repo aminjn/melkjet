@@ -9,6 +9,7 @@ import WebsiteBuilderTool, { WEBSITE_VIEWS, type WebsiteView } from '@/app/compo
 import ArticleEditor from '@/app/components/ArticleEditor'
 import PlansPanel from '@/app/components/PlansPanel'
 import BusinessProfileForm from '@/app/components/BusinessProfileForm'
+import SupportPanel from '@/app/components/SupportPanel'
 
 // ════════════════════════════════════════════════════════
 //  Types (mirror app/lib/materials-store.ts API shape)
@@ -40,7 +41,7 @@ interface Stats {
 }
 interface MaterialsData { stats: Stats; products: Product[]; orders: Order[]; inquiries: Inquiry[] }
 
-type View = 'dashboard' | 'assistant' | 'articles' | 'catalog' | 'orders' | 'inquiries' | 'plans' | 'profile' | 'settings'
+type View = 'dashboard' | 'assistant' | 'articles' | 'catalog' | 'orders' | 'inquiries' | 'plans' | 'profile' | 'settings' | 'support'
 
 // ════════════════════════════════════════════════════════
 //  Formatting & status helpers
@@ -85,6 +86,7 @@ const VIEW_TITLES: Record<View, string> = {
   plans: 'پلن‌ها و اشتراک',
   profile: 'پروفایل',
   settings: 'تنظیمات',
+  support: 'پشتیبانی',
 }
 
 const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'orders' | 'inquiries' }[] = [
@@ -95,6 +97,7 @@ const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'orders' | 'in
   { id: 'inquiries', label: 'استعلام‌ها', icon: '◎', badge: 'inquiries' },
   { id: 'plans', label: 'پلن‌ها و اشتراک', icon: '👑' },
   { id: 'profile', label: 'پروفایل', icon: '🪪' },
+  { id: 'support', label: 'پشتیبانی', icon: '🛟' },
 ]
 function StatusPill({ st }: { st: OrderStatus }) {
   const c = STATUS_COLOR[st]
@@ -442,6 +445,7 @@ export default function MaterialsPage() {
           {view === 'plans' && <PlansPanel dashboard="/materials" />}
           {view === 'profile' && <BusinessProfileForm />}
           {view === 'settings' && <SettingsView profile={stats.profile} post={post} busy={busy} />}
+          {view === 'support' && <SupportPanel panel="materials" />}
             </>}
         </main>
       </div>

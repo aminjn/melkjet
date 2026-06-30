@@ -6,6 +6,7 @@ import MessagesPanel from '@/app/components/MessagesPanel'
 import PlansPanel from '@/app/components/PlansPanel'
 import ListingReports from '@/app/components/ListingReports'
 import BusinessProfileForm from '@/app/components/BusinessProfileForm'
+import SupportPanel from '@/app/components/SupportPanel'
 
 // ════════════════════════════════════════════════════════
 //  Types (mirror app/lib/buyer-store.ts API shape)
@@ -62,7 +63,7 @@ interface Stats {
 }
 interface BuyerData { stats: Stats; profile: Profile; settings: Settings; phone: string; saved: Saved[]; searches: Search[]; viewings: Viewing[]; offers: Offer[]; messages: Message[]; conversations: Conversation[]; aiChats: AiChat[] }
 
-type View = 'dashboard' | 'ai' | 'chat' | 'selling' | 'favorites' | 'searches' | 'viewings' | 'offers' | 'messages' | 'plans' | 'profile' | 'bizprofile' | 'settings'
+type View = 'dashboard' | 'ai' | 'chat' | 'selling' | 'favorites' | 'searches' | 'viewings' | 'offers' | 'messages' | 'plans' | 'profile' | 'bizprofile' | 'settings' | 'support'
 
 // ════════════════════════════════════════════════════════
 //  Helpers
@@ -92,7 +93,7 @@ const actionBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 7, b
 const VIEW_TITLES: Record<View, string> = {
   dashboard: 'پنل کاربری', ai: 'دستیار هوشمند', chat: 'چت با صاحب آگهی', selling: 'فروش و اجارهٔ من',
   favorites: 'علاقه‌مندی‌ها', searches: 'جستجوهای ذخیره‌شده',
-  viewings: 'بازدیدهای من', offers: 'پیشنهادهای من', messages: 'پیام‌ها', plans: 'پلن‌ها', profile: 'پروفایل من', bizprofile: 'پروفایل', settings: 'تنظیمات',
+  viewings: 'بازدیدهای من', offers: 'پیشنهادهای من', messages: 'پیام‌ها', plans: 'پلن‌ها', profile: 'پروفایل من', bizprofile: 'پروفایل', settings: 'تنظیمات', support: 'پشتیبانی',
 }
 const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'viewings' | 'offers' | 'messages'; ai?: boolean }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: '▦' },
@@ -108,6 +109,7 @@ const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'viewings' | '
   { id: 'profile', label: 'پروفایل من', icon: '◐' },
   { id: 'bizprofile', label: 'پروفایل', icon: '🪪' },
   { id: 'settings', label: 'تنظیمات', icon: '⛭' },
+  { id: 'support', label: 'پشتیبانی', icon: '🛟' },
 ]
 const VERIFY_LABEL: Record<VerifyStatus, string> = { none: 'تأیید نشده', pending: 'در حال بررسی', verified: 'تأییدشده ✓' }
 const VERIFY_COLOR: Record<VerifyStatus, string> = { none: '#7a8fae', pending: '#f59e0b', verified: '#34d399' }
@@ -824,6 +826,9 @@ export default function BuyerPage() {
               <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 12, lineHeight: 1.8 }}>برای حذف کامل حساب با پشتیبانی تماس بگیر. تغییرات تنظیمات به‌صورت خودکار ذخیره می‌شوند.</div>
             </div>
           </div>}
+
+          {/* ─── SUPPORT ─── */}
+          {view === 'support' && <SupportPanel panel="buyer" />}
         </main>
       </div>
     </div>

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import Nav from '@/app/components/Nav';
 import Footer from '@/app/components/Footer';
 import LocationPicker from '@/app/components/LocationPicker';
+import LiveScore from '@/app/components/LiveScore';
 
 interface GeoDistrict { id: string; name: string; neighborhoods: string[] }
 interface GeoCity { id: string; name: string; districts: GeoDistrict[] }
@@ -577,6 +578,21 @@ export default function SubmitPage() {
         <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 32 }}>اطلاعات ملک خود را در چند مرحله وارد کنید.</p>
         {progressBar}
         {STEP_CONTENT[step - 1]}
+        {/* امتیاز و تحلیلِ زندهٔ آگهی هنگامِ ثبت */}
+        <div style={{ marginTop: 18 }}>
+          <LiveScore kind="listing" ready={!!form.title.trim()} data={{
+            'عنوان': form.title, 'نوع معامله': form.dealType, 'نوع ملک': form.propertyType,
+            'شهر': form.city, 'محله': form.neighborhood || form.district, 'آدرس': form.address,
+            'متراژ': form.area, 'اتاق خواب': form.rooms, 'طبقه': form.floor, 'تعداد طبقات': form.totalFloors,
+            'سن بنا': form.buildingAge,
+            'پارکینگ': form.parking === 'yes' ? 'دارد' : form.parking === 'no' ? 'ندارد' : '',
+            'آسانسور': form.elevator === 'yes' ? 'دارد' : form.elevator === 'no' ? 'ندارد' : '',
+            'انباری': form.storage === 'yes' ? 'دارد' : form.storage === 'no' ? 'ندارد' : '',
+            'قیمت': form.totalPrice || [form.deposit && `ودیعه ${form.deposit}`, form.rent && `اجاره ${form.rent}`].filter(Boolean).join(' · '),
+            'توضیحات': aiDescription || '',
+            'تعداد عکس': String(form.images.filter(Boolean).length),
+          }} />
+        </div>
         {/* Bottom Navigation */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
           <button

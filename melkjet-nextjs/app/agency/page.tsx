@@ -15,6 +15,7 @@ import WebsiteBuilderTool, { WEBSITE_VIEWS, type WebsiteView } from '@/app/compo
 import ArticleEditor from '@/app/components/ArticleEditor'
 import PlansPanel from '@/app/components/PlansPanel'
 import BusinessProfileForm from '@/app/components/BusinessProfileForm'
+import SupportPanel from '@/app/components/SupportPanel'
 
 // ════════ Types (mirror app/lib/agency-store.ts) ════════
 type Stage = 'new' | 'assigned' | 'visit' | 'negotiation' | 'closed' | 'lost'
@@ -48,7 +49,7 @@ interface AgencyData { stats: Stats; agents: Agent[]; listings: Listing[]; leads
 interface LinkMember { advisorPhone: string; advisorName: string; agencyPhone: string; agencyName: string; since: number }
 interface LinkRequest { id: string; advisorPhone: string; advisorName: string; agencyPhone: string; agencyName: string; initiator: 'advisor' | 'agency'; status: string; createdAt: number }
 
-type View = 'dashboard' | 'assistant' | 'messages' | 'negotiation' | 'divar' | 'articles' | 'agents' | 'advisorfiles' | 'listings' | 'leads' | 'pipeline' | 'deals' | 'appts' | 'calendar' | 'plans' | 'profile' | 'settings'
+type View = 'dashboard' | 'assistant' | 'messages' | 'negotiation' | 'divar' | 'articles' | 'agents' | 'advisorfiles' | 'listings' | 'leads' | 'pipeline' | 'deals' | 'appts' | 'calendar' | 'plans' | 'profile' | 'settings' | 'support'
 
 // ════════ Helpers ════════
 const FONT = 'Vazirmatn, system-ui, sans-serif'
@@ -80,7 +81,7 @@ const inputStyle: React.CSSProperties = { padding: '9px 11px', borderRadius: 9, 
 const actionBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap' }
 const goldBtn: React.CSSProperties = { padding: '9px 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }
 
-const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد آژانس', assistant: 'دستیار هوشمند', messages: 'پیام‌ها', negotiation: 'موتور مذاکره', divar: 'ایمپورت از دیوار', articles: 'مقالات و وبلاگ', agents: 'مشاوران', advisorfiles: 'گزارشِ آژانس و مشاوران', listings: 'فایل‌ها (آژانس و مشاوران)', leads: 'لیدها (آژانس و مشاوران)', pipeline: 'پایپ‌لاینِ کلی', deals: 'معاملات (آژانس و مشاوران)', appts: 'وظایف و قرارها', calendar: 'تقویمِ همه', plans: 'پلن‌ها و اشتراک', profile: 'پروفایل', settings: 'تنظیمات' }
+const VIEW_TITLES: Record<View, string> = { dashboard: 'داشبورد آژانس', assistant: 'دستیار هوشمند', messages: 'پیام‌ها', negotiation: 'موتور مذاکره', divar: 'ایمپورت از دیوار', articles: 'مقالات و وبلاگ', agents: 'مشاوران', advisorfiles: 'گزارشِ آژانس و مشاوران', listings: 'فایل‌ها (آژانس و مشاوران)', leads: 'لیدها (آژانس و مشاوران)', pipeline: 'پایپ‌لاینِ کلی', deals: 'معاملات (آژانس و مشاوران)', appts: 'وظایف و قرارها', calendar: 'تقویمِ همه', plans: 'پلن‌ها و اشتراک', profile: 'پروفایل', settings: 'تنظیمات', support: 'پشتیبانی' }
 const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'agents' | 'leads' }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: '▦' },
   { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
@@ -91,6 +92,7 @@ const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'agents' | 'le
   { id: 'plans', label: 'پلن‌ها و اشتراک', icon: '👑' },
   { id: 'profile', label: 'پروفایل', icon: '🪪' },
   { id: 'settings', label: 'تنظیمات', icon: '⛭' },
+  { id: 'support', label: 'پشتیبانی', icon: '🛟' },
 ]
 // زیرمنوهای «CRM و مشتریان» — لید/فایل/معاملات/کمیسیون همگی این‌جا (نه بیرونِ CRM).
 const AGENCY_CRM_VIEWS: { id: View; label: string; icon: string }[] = [
@@ -991,6 +993,7 @@ export default function AgencyPage() {
               <button disabled={busy} onClick={() => post({ action: 'updateProfile', patch: { name: prof.name, branches: prof.branches } })} style={{ ...goldBtn, alignSelf: 'flex-start', padding: '9px 22px' }}>ذخیره</button>
             </div>
           </div>}
+          {view === 'support' && <SupportPanel panel="agency" />}
           </>}
         </main>
       </div>
