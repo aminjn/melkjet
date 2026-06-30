@@ -62,6 +62,24 @@ export function updateMilestone(owner: string, pid: string, mid: string, status:
   const m = p.milestones.find(x => x.id === mid); if (m) { m.status = status; save(db) }
 }
 
+// نردبانِ مراحلِ ساخت (مطابقِ مراحلِ پرشین سازه). مرحلهٔ فعلیِ پروژه = «در حال انجام».
+const PHASE_LADDER = ['پی و اسکلت', 'سفت‌کاری', 'گچ و خاک', 'نازک‌کاری', 'تأسیسات', 'تحویل']
+function milestonesForPhase(label: string): { milestones: Milestone[]; progress: number } {
+  let idx = PHASE_LADDER.findIndex(s => label && (label.includes(s) || s.includes(label)))
+  if (idx < 0) {
+    if (/اسکلت|پی|فونداسیون|گود/.test(label)) idx = 0
+    else if (/سفت/.test(label)) idx = 1
+    else if (/گچ|خاک/.test(label)) idx = 2
+    else if (/نازک/.test(label)) idx = 3
+    else if (/تأسیسات|تاسیسات|مکانیک|برق/.test(label)) idx = 4
+    else if (/تحویل|نما|پایان|اتمام/.test(label)) idx = 5
+    else idx = 2
+  }
+  const milestones: Milestone[] = PHASE_LADDER.map((name, i) => ({ id: id(), name, status: i < idx ? 'done' : i === idx ? 'active' : 'pending' }))
+  const progress = Math.round((idx / (PHASE_LADDER.length - 1)) * 100)
+  return { milestones, progress }
+}
+
 // یک‌بار: پروژه‌های پرشین سازهٔ این سازنده (مطابقتِ شماره) را به پنلِ خودش وارد می‌کند.
 // واحدها از تعدادِ طبقه/واحدِ واقعی ساخته می‌شوند (همه «موجود»، بدونِ خریدارِ فیک) تا
 // سازنده خودش بفروشد. اگر سازنده‌ای در پرشین سازه نباشد، خالی می‌ماند.
@@ -81,7 +99,9 @@ export async function ensureImported(owner: string): Promise<void> {
         const avgArea = totalUnits ? Math.round((Number(pr.residentialArea) || 0) / totalUnits) : 0
         const units: Unit[] = []
         for (let i = 0; i < totalUnits; i++) { const fl = Math.floor(i / perFloor) + 1; units.push({ id: id(), number: `${fl}-${(i % perFloor) + 1}`, floor: fl, area: avgArea, price: 0, status: 'available' }) }
-        projects.push({ id: id(), name: (pr.address || 'پروژه').slice(0, 70), location: [regionLabel(pr), phaseLabel(pr)].filter(Boolean).join(' · '), phase: phaseLabel(pr) || '—', progress: 0, units, investors: [], milestones: [], monthlySales: [], createdAt: Date.now() })
+        const label = phaseLabel(pr)
+        const { milestones, progress } = milestonesForPhase(label)
+        projects.push({ id: id(), name: (pr.address || 'پروژه').slice(0, 70), location: regionLabel(pr) || '', phase: label || '—', progress, units, investors: [], milestones, monthlySales: [], createdAt: Date.now() })
       }
     }
   } catch { /* اگر پرشین سازه در دسترس نبود، خالی */ }
