@@ -8,6 +8,7 @@ import WebsiteBuilderTool, { WEBSITE_VIEWS, type WebsiteView } from '@/app/compo
 import ArticleEditor from '@/app/components/ArticleEditor'
 import PlansPanel from '@/app/components/PlansPanel'
 import BusinessProfileForm from '@/app/components/BusinessProfileForm'
+import BuilderPublicView from './BuilderPublicView'
 
 // ── Types (mirror app/lib/builder-store.ts API shape) ──
 type UnitStatus = 'sold' | 'reserved' | 'available'
@@ -28,7 +29,7 @@ interface Project {
 }
 interface ProjectSummary { id: string; name: string; location: string }
 
-type View = 'overview' | 'assistant' | 'articles' | 'units' | 'sales' | 'investors' | 'reports' | 'plans' | 'profile'
+type View = 'overview' | 'assistant' | 'articles' | 'units' | 'sales' | 'investors' | 'reports' | 'plans' | 'profile' | 'public'
 
 // ── Status visual maps ──
 const STATUS_COLOR: Record<UnitStatus, string> = {
@@ -78,6 +79,7 @@ const VIEW_TITLES: Record<View, string> = {
   reports: 'گزارش‌ها',
   plans: 'پلن‌ها و اشتراک',
   profile: 'پروفایل',
+  public: 'پروفایلِ عمومی',
 }
 
 const NAV_ITEMS: { id: View; label: string; icon: string }[] = [
@@ -87,6 +89,7 @@ const NAV_ITEMS: { id: View; label: string; icon: string }[] = [
   { id: 'sales', label: 'پیش‌فروش و فروش', icon: '◔' },
   { id: 'investors', label: 'سرمایه‌گذاران', icon: '◍' },
   { id: 'reports', label: 'گزارش‌ها', icon: '◳' },
+  { id: 'public', label: 'پروفایلِ عمومی', icon: '🌐' },
   { id: 'plans', label: 'پلن‌ها و اشتراک', icon: '👑' },
   { id: 'profile', label: 'پروفایل', icon: '🪪' },
 ]
@@ -470,6 +473,8 @@ export default function BuilderPage() {
             <PlansPanel dashboard="/builder" />
           ) : view === 'profile' ? (
             <BusinessProfileForm />
+          ) : view === 'public' ? (
+            <BuilderPublicView />
           ) : !project ? (
             <div style={{ textAlign: 'center', color: 'var(--muted)', padding: '80px 0', fontSize: 14 }}>در حال بارگذاری پروژه…</div>
           ) : (

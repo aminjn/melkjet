@@ -208,6 +208,15 @@ export function listProfiles(opts: { search?: string; withPhone?: boolean; page?
 
 export function getProfile(id: string): PSProfile | null { return getProfiles()[String(id)] || null }
 
+// شناسهٔ سازنده (constructor.id) را از روی شمارهٔ حسابِ ملک‌جت پیدا می‌کند — پلِ بینِ
+// حسابِ سازنده (login phone) و پروفایلِ عمومیِ پرشین سازه.
+export function builderIdForPhone(phone: string): string | null {
+  const norm = String(phone).replace(/\D/g, '')
+  if (!norm) return null
+  const prof = Object.values(getProfiles()).find(p => (p.phones || []).some(ph => String(ph).replace(/\D/g, '') === norm))
+  return prof?.id || null
+}
+
 // ─── دادهٔ صفحاتِ عمومی (فهرستِ پروژه‌ها به تفکیکِ منطقه + صفحهٔ هر پروژه) ──────
 export interface PublicProject extends PSProject { builderId: string; builderName: string }
 
