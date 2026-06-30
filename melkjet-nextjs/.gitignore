@@ -83,3 +83,7 @@ next-env.d.ts
 .reviews-data.json
 .persiansaze-data.json
 .persiansaze-config.json
+.persiansaze-meta.json
+.persiansaze-profiles.json
+.persiansaze-reveals.json
+.ps-enrich-data.json

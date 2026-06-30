@@ -222,6 +222,90 @@ export function publicProject(hashId: string): { project: PSProject; builder: PS
   return null
 }
 
+// ─── فهرستِ تختِ همهٔ پروژه‌های عمومی (با سازنده) — کش‌شده بر mtimeِ پروفایل‌ها ──
+function publicFlat(): PublicProject[] {
+  return derived('publicFlat', PROFILES_FILE, () => {
+    const out: PublicProject[] = []
+    for (const b of Object.values(getProfiles())) {
+      for (const pr of b.projects || []) out.push({ ...pr, builderId: b.id, builderName: b.name })
+    }
+    return out
+  })
+}
+
+// نقطهٔ نقشه برای یک پروژه (یا null اگر مختصاتِ معتبر نداشت).
+function toPoint(p: PublicProject): { id: string; lat: number; lng: number; title?: string; price?: string } | null {
+  const lat = Number(p.latitude), lng = Number(p.longitude)
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) < 0.1 || Math.abs(lng) < 0.1) return null
+  return { id: p.hashId, lat, lng, title: p.address || p.builderName || '', price: regionLabel(p) || undefined }
+}
+
+export interface PublicFacets {
+  regions: { value: string; count: number }[]
+  phases: { value: number; label: string; count: number }[]
+  area: { min: number; max: number }
+  total: number
+}
+// فاستِ فیلترها از کلِ مجموعه (همیشه همهٔ گزینه‌ها نشان داده می‌شوند).
+export function publicFacets(): PublicFacets {
+  return derived('publicFacets', PROFILES_FILE, () => {
+    const all = publicFlat()
+    const regions = new Map<string, number>()
+    const phases = new Map<number, number>()
+    let amin = Infinity, amax = 0
+    for (const p of all) {
+      const r = regionLabel(p) || 'سایر'
+      regions.set(r, (regions.get(r) || 0) + 1)
+      if (p.phaseId) phases.set(p.phaseId, (phases.get(p.phaseId) || 0) + 1)
+      const a = Number(p.residentialArea) || 0
+      if (a > 0) { amin = Math.min(amin, a); amax = Math.max(amax, a) }
+    }
+    return {
+      regions: [...regions.entries()].map(([value, count]) => ({ value, count })).sort((a, b) => b.count - a.count),
+      phases: [...phases.entries()].map(([value, count]) => ({ value, label: PHASE_NAMES[value] || `مرحله ${value}`, count })).sort((a, b) => b.count - a.count),
+      area: { min: Number.isFinite(amin) ? Math.floor(amin) : 0, max: Math.ceil(amax) },
+      total: all.length,
+    }
+  })
+}
+
+export interface PublicQueryOpts {
+  region?: string; phase?: number; floorsMin?: number; unitsMin?: number
+  areaMin?: number; areaMax?: number; search?: string; withPhoto?: boolean
+  sort?: 'area' | 'units' | 'recent'; page?: number; pageSize?: number
+}
+// فیلترِ کاملِ پروژه‌های عمومی: منطقه/مرحله/طبقات/واحد/متراژ/جستجو + مرتب‌سازی + صفحه‌بندی.
+// همراهِ نقاطِ نقشهٔ کلِ نتیجهٔ فیلتر (سقف‌دار) تا پین‌ها با لیست هماهنگ باشند.
+export function publicQuery(opts: PublicQueryOpts = {}) {
+  const all = publicFlat()
+  const q = (opts.search || '').trim()
+  let rows = all.filter(p => {
+    if (opts.region && (regionLabel(p) || 'سایر') !== opts.region) return false
+    if (opts.phase && p.phaseId !== opts.phase) return false
+    if (opts.floorsMin && (Number(p.floors) || 0) < opts.floorsMin) return false
+    if (opts.unitsMin && (Number(p.units) || 0) < opts.unitsMin) return false
+    const area = Number(p.residentialArea) || 0
+    if (opts.areaMin && area < opts.areaMin) return false
+    if (opts.areaMax && area > 0 && area > opts.areaMax) return false
+    if (opts.withPhoto && !(p.photo?.imageThumbnailUrl || p.photo?.imageUrl || (p.photos && p.photos.length))) return false
+    if (q && !((p.address || '').includes(q) || (p.builderName || '').includes(q))) return false
+    return true
+  })
+  const hasPhoto = (p: PublicProject) => !!(p.photo?.imageThumbnailUrl || p.photo?.imageUrl || (p.photos && p.photos.length))
+  if (opts.sort === 'area') rows.sort((a, b) => (Number(b.residentialArea) || 0) - (Number(a.residentialArea) || 0))
+  else if (opts.sort === 'units') rows.sort((a, b) => (Number(b.units) || 0) - (Number(a.units) || 0))
+  else if (opts.sort === 'recent') rows.sort((a, b) => String(b.lastUpdateDate || '').localeCompare(String(a.lastUpdateDate || '')))
+  else rows.sort((a, b) => (hasPhoto(b) ? 1 : 0) - (hasPhoto(a) ? 1 : 0) || (Number(b.residentialArea) || 0) - (Number(a.residentialArea) || 0))
+
+  const total = rows.length
+  const page = Math.max(1, opts.page || 1), pageSize = Math.min(120, opts.pageSize || 24)
+  const items = rows.slice((page - 1) * pageSize, page * pageSize)
+  // نقاطِ نقشه برای کلِ نتیجهٔ فیلتر (سقفِ ۳۰۰۰ برای کارایی).
+  const points: { id: string; lat: number; lng: number; title?: string; price?: string }[] = []
+  for (const p of rows) { const pt = toPoint(p); if (pt) { points.push(pt); if (points.length >= 3000) break } }
+  return { total, page, pageSize, items, points }
+}
+
 export function profileStats() {
   const all = Object.values(getProfiles())
   const reveals = getReveals()
