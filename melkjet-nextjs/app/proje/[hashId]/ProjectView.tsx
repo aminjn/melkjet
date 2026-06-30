@@ -4,6 +4,7 @@ import Link from 'next/link'
 import Nav from '../../components/Nav'
 import Footer from '../../components/Footer'
 import StaticMap from '../../components/StaticMap'
+import RevealPhone from '../../components/RevealPhone'
 
 const fa = (n: number | string) => String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d])
 const faNum = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
@@ -15,7 +16,7 @@ interface ViewProject {
   floors: number; subFloors: number; units: number; residentialArea: number; groundArea: number; avgArea: number
   perFloor: { floor: number; count: number }[]
   lat: number | null; lng: number | null
-  builder: { id: string; name: string; phone: string; projectCount: number; regions: string[] }
+  builder: { id: string; name: string; hasPhone: boolean; projectCount: number; regions: string[] }
   similar: { hashId: string; address: string; region: string; photo: string; builderName: string }[]
 }
 interface Intel {
@@ -287,7 +288,7 @@ export default function ProjectView({ p }: { p: ViewProject }) {
             <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 6 }}>سازندهٔ پروژه</div>
             <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--text)', marginBottom: 4 }}>{p.builder.name}</div>
             <div style={{ fontSize: 12, color: 'var(--faint)', marginBottom: 18 }}>{faNum(p.builder.projectCount)} پروژه{p.builder.regions.length ? ` · ${p.builder.regions[0]}` : ''}</div>
-            {p.builder.phone && <a href={`tel:${p.builder.phone}`} style={{ display: 'block', textAlign: 'center', width: '100%', boxSizing: 'border-box', padding: '14px', borderRadius: 13, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 15, textDecoration: 'none', direction: 'ltr', marginBottom: 9 }}>☎ {p.builder.phone}</a>}
+            {p.builder.hasPhone && <div style={{ marginBottom: 9 }}><RevealPhone builderId={p.builder.id} projectHashId={p.hashId} projectName={p.title} label="نمایشِ شمارهٔ سازنده" /></div>}
             <button onClick={() => { setModalOpen(true); setReqSent(false) }} style={{ width: '100%', padding: '12px', borderRadius: 13, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--text)', fontFamily: 'inherit', fontWeight: 600, fontSize: 13.5, cursor: 'pointer' }}>درخواستِ بازدید / تماس</button>
           </div>
 

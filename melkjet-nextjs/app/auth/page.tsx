@@ -8,6 +8,8 @@ import Footer from '@/app/components/Footer'
 type Tab = 'phone' | 'email'
 type OtpStep = 'enter-phone' | 'shahkar' | 'enter-code' | 'onboard'
 const faToEn = (v: string) => (v || '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+// مقصدِ بازگشت بعد از ورود (مثلِ صفحه‌ای که برای دیدنِ شماره، کاربر را به ورود فرستاد).
+const nextParam = (): string | null => { try { const n = new URLSearchParams(window.location.search).get('next'); return n && n.startsWith('/') ? n : null } catch { return null } }
 
 const ROLE_ICONS: Record<string, string> = { '/buyer': '🔑', '/owner': '🏠', '/pros': '🤝', '/agency': '🏢', '/builder': '🏗', '/materials': '🧱', '/legal': '⚖' }
 const FALLBACK_ROLES = [
@@ -100,7 +102,7 @@ export default function AuthPage() {
       if (data.token) { try { localStorage.setItem('mj_token', data.token) } catch {} }
       if (data.role === 'super_admin') { router.push('/admin'); return }
       if (data.needsOnboarding) { if (data.name) setName(data.name); if (data.nameVerified) setNameVerified(true); setOtpStep('onboard'); return }   // کاربر جدید → تکمیل پروفایل
-      router.push(data.redirect || '/buyer')
+      router.push(nextParam() || data.redirect || '/buyer')
     } catch { setError('خطا در اتصال به سرور') }
     finally { setLoading(false) }
   }
@@ -117,7 +119,7 @@ export default function AuthPage() {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'خطا'); return }
-      router.push(data.redirect || '/buyer')
+      router.push(nextParam() || data.redirect || '/buyer')
     } catch { setError('خطا در اتصال به سرور') }
     finally { setLoading(false) }
   }
@@ -135,7 +137,7 @@ export default function AuthPage() {
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'ایمیل یا رمز اشتباه است'); return }
       if (data.token) { try { localStorage.setItem('mj_token', data.token) } catch {} }
-      router.push(data.role === 'super_admin' ? '/admin' : (data.redirect || '/buyer'))
+      router.push(data.role === 'super_admin' ? '/admin' : (nextParam() || data.redirect || '/buyer'))
     } catch { setError('خطا در اتصال به سرور') }
     finally { setLoading(false) }
   }

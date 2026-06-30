@@ -89,3 +89,4 @@ next-env.d.ts
 .persiansaze-phases.json
 .ps-enrich-data.json
 .builder-public-data.json
+.contact-log-data.json

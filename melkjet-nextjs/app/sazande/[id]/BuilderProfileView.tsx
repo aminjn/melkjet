@@ -1,6 +1,9 @@
 'use client'
 import { useState } from 'react'
 import Link from 'next/link'
+import Nav from '../../components/Nav'
+import Footer from '../../components/Footer'
+import RevealPhone from '../../components/RevealPhone'
 
 const fa = (n: number | string) => String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d])
 const faNum = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
@@ -14,7 +17,7 @@ interface ProjectCard {
 interface Review { id: string; name: string; rating: number; text: string; projectName?: string; at: number }
 interface Profile {
   id: string; name: string; verified: boolean; tagline: string; sinceYear: string; experienceYears: number | null
-  about: string; website: string; officeAddress: string; phone: string; tags: string[]; activeRegionsText: string
+  about: string; website: string; officeAddress: string; phone: string; hasPhone: boolean; tags: string[]; activeRegionsText: string
   followers: number; rating: number; reviewsCount: number; unitsDelivered: number; activeCount: number
   current: ProjectCard[]; past: ProjectCard[]; reviews: Review[]
 }
@@ -87,15 +90,7 @@ export default function BuilderProfileView({ profile, initialFollowing, loggedIn
       minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: "'Vazirmatn', system-ui, sans-serif",
     } as React.CSSProperties}>
 
-      {/* Top bar */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 22px', borderBottom: '1px solid var(--line)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {profile.phone
-            ? <a href={`tel:${profile.phone}`} style={{ background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 13.5, padding: '10px 18px', borderRadius: 12, textDecoration: 'none' }}>تماس با سازنده</a>
-            : <button onClick={() => setTab('about')} style={{ background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 13.5, padding: '10px 18px', borderRadius: 12, border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>تماس با سازنده</button>}
-        </div>
-        <Link href="/sazandeha" style={{ fontSize: 13.5, color: 'var(--muted)', textDecoration: 'none' }}>پروژه‌ها ›</Link>
-      </div>
+      <Nav />
 
       {/* Hero */}
       <div style={{ position: 'relative', height: 230, background: 'linear-gradient(120deg,#1c1a14,#0d0d0f 70%)', overflow: 'hidden' }}>
@@ -106,7 +101,10 @@ export default function BuilderProfileView({ profile, initialFollowing, loggedIn
       <main style={{ maxWidth: 1180, margin: '0 auto', padding: '0 22px 80px' }}>
         {/* Header (overlaps hero) */}
         <div style={{ marginTop: -70, position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 18, flexWrap: 'wrap' }}>
-          <button onClick={toggleFollow} disabled={busy} style={{ marginTop: 78, order: 3, marginInlineStart: 'auto', background: following ? 'transparent' : 'linear-gradient(140deg,var(--gold2),var(--gold))', color: following ? 'var(--gold)' : '#16140f', border: following ? '1px solid var(--gold)' : 'none', fontWeight: 800, fontSize: 14, padding: '11px 22px', borderRadius: 13, cursor: 'pointer', fontFamily: 'inherit' }}>{following ? '✓ دنبال می‌کنید' : 'دنبال‌کردن'}</button>
+          <div style={{ marginTop: 78, order: 3, marginInlineStart: 'auto', display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            {profile.hasPhone && <div style={{ minWidth: 190 }}><RevealPhone builderId={profile.id} label="تماس با سازنده" /></div>}
+            <button onClick={toggleFollow} disabled={busy} style={{ background: following ? 'transparent' : 'var(--bg2)', color: following ? 'var(--gold)' : 'var(--text)', border: `1px solid ${following ? 'var(--gold)' : 'var(--line2)'}`, fontWeight: 800, fontSize: 14, padding: '11px 22px', borderRadius: 13, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>{following ? '✓ دنبال می‌کنید' : '+ دنبال‌کردن'}</button>
+          </div>
           <div style={{ order: 2, flex: 1, minWidth: 220, textAlign: 'right', paddingTop: 78 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'flex-start', flexDirection: 'row-reverse', flexWrap: 'wrap' }}>
               <h1 style={{ margin: 0, fontSize: 'clamp(20px,3vw,30px)', fontWeight: 900 }}>{profile.name}</h1>
@@ -184,7 +182,8 @@ export default function BuilderProfileView({ profile, initialFollowing, loggedIn
         </div>
       </main>
 
-      <style>{`@media(max-width:680px){.bp-kpis{grid-template-columns:repeat(2,1fr)!important}.bp-projects{grid-template-columns:1fr!important}}`}</style>
+      <style>{`@media(max-width:680px){.bp-kpis{grid-template-columns:repeat(2,1fr)!important}.bp-projects{grid-template-columns:1fr!important}.bp-about{grid-template-columns:1fr!important}}`}</style>
+      <Footer />
     </div>
   )
 }
@@ -264,7 +263,7 @@ function PastCard({ p }: { p: ProjectCard }) {
 }
 
 function AboutTab({ profile }: { profile: Profile }) {
-  const hasContact = profile.phone || profile.officeAddress || profile.website
+  const hasContact = profile.hasPhone || profile.officeAddress || profile.website
   const hasAbout = profile.about || profile.tags.length
   if (!hasContact && !hasAbout) return <Empty text="اطلاعاتِ معرفیِ این سازنده هنوز تکمیل نشده است." />
   return (
@@ -286,7 +285,12 @@ function AboutTab({ profile }: { profile: Profile }) {
         <section style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 22 }}>
           <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 16, textAlign: 'right' }}>اطلاعاتِ تماس</div>
           <div style={{ display: 'grid', gap: 14 }}>
-            {profile.phone && <ContactRow icon="☎" label="تلفن" value={profile.phone} ltr href={`tel:${profile.phone}`} />}
+            {profile.hasPhone && (
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--faint)', marginBottom: 8, textAlign: 'right' }}>تلفنِ تماس</div>
+                <RevealPhone builderId={profile.id} variant="ghost" />
+              </div>
+            )}
             {profile.officeAddress && <ContactRow icon="⚲" label="دفترِ مرکزی" value={profile.officeAddress} />}
             {profile.website && <ContactRow icon="🌐" label="وب‌سایت" value={profile.website} ltr href={profile.website.startsWith('http') ? profile.website : `https://${profile.website}`} />}
           </div>

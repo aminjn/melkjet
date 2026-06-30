@@ -4,6 +4,7 @@ import { listProjects, getProject, addProject, updateProject, addUnit, updateUni
 import { builderIdForPhone, getProfile, regionLabel, phaseLabel } from '@/app/lib/persiansaze-store'
 import { getPublic, patchPublic, setProjMeta, addManual, updateManual, deleteManual } from '@/app/lib/builder-public-store'
 import { assembleBuilderProfile } from '@/app/lib/builder-profile'
+import { getContacts } from '@/app/lib/contact-log-store'
 
 // میز کار سازنده — per-owner: هر سازنده پروژه‌های خودش (شامل واردشده از پرشین سازه) را می‌بیند.
 export async function GET(req: NextRequest) {
@@ -13,6 +14,13 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const pid = url.searchParams.get('id')
   if (pid) return NextResponse.json({ project: getProject(s.phone, pid) })
+
+  // گزارشِ تماس‌ها (کاربرانی که شمارهٔ این سازنده را دیده‌اند).
+  if (url.searchParams.get('contacts') === '1') {
+    const builderId = builderIdForPhone(s.phone)
+    if (!builderId) return NextResponse.json({ ok: true, linked: false, contacts: [] })
+    return NextResponse.json({ ok: true, linked: true, contacts: getContacts(builderId) })
+  }
 
   // دادهٔ ویرایشِ پروفایلِ عمومی (تب «پروفایلِ عمومی» در پنل).
   if (url.searchParams.get('public') === '1') {

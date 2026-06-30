@@ -21,5 +21,7 @@ export default async function SazandeProfile({ params }: { params: Promise<{ id:
     )
   }
   const s = await getSession()
-  return <BuilderProfileView profile={profile} initialFollowing={s ? isFollowing(id, s.phone) : false} loggedIn={!!s} />
+  // شماره هرگز در payloadِ اولیه به مرورگر نمی‌رود؛ فقط با ورود از /api/contact-reveal می‌آید.
+  const safe = { ...profile, hasPhone: !!profile.phone, phone: '' }
+  return <BuilderProfileView profile={safe} initialFollowing={s ? isFollowing(id, s.phone) : false} loggedIn={!!s} />
 }

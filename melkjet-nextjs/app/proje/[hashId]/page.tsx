@@ -81,7 +81,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ hashId
     builder: {
       id: builder.id,
       name: builder.name || 'سازنده',
-      phone: (builder.phones || [])[0] || '',
+      hasPhone: !!(builder.phones || [])[0],
       projectCount: builder.projectCount,
       regions: (builder.regions || []).map(rid => regionLabel({ cityId: 1, regionId: rid })).filter(Boolean).slice(0, 6),
     },
