@@ -1505,7 +1505,7 @@ function ScraperView() {
 
 // ─── پرشین سازه (سازنده‌ها) — builder profiles scraped from external site ────
 interface PSProject {
-  hashId: string; address?: string; receptor?: string; cityId?: number; regionId?: number; subRegionId?: number; phaseId?: number; usageTypeId?: number; structureTypeId?: number; groundArea?: number; residentialArea?: number; floors?: number; subFloors?: number; units?: number; latitude?: number; longitude?: number; lastUpdateDate?: string; photo?: { imageUrl?: string; imageThumbnailUrl?: string }; hasAvailableConstructor?: boolean
+  hashId: string; address?: string; receptor?: string; cityId?: number; regionId?: number; subRegionId?: number; phaseId?: number; usageTypeId?: number; structureTypeId?: number; groundArea?: number; residentialArea?: number; floors?: number; subFloors?: number; units?: number; latitude?: number; longitude?: number; lastUpdateDate?: string; photo?: { imageUrl?: string; imageThumbnailUrl?: string }; hasAvailableConstructor?: boolean; regionLabel?: string; phaseLabel?: string
 }
 interface PSProfile { id: string; name: string; phone?: string; phoneRevealedAt?: string; projectCount: number; regions: number[]; projects: PSProject[] }
 interface PSConfig { user: string; pass: string; hasPass: boolean; enabled: boolean; channel: string; limit: number; weeklyQuota: number; lastScrapeAt?: string }
@@ -1514,7 +1514,7 @@ interface PSState {
   running: boolean
   revealing: boolean
   data: { lastSync?: string; totalProjects: number; totalBuilders: number }
-  profiles: { builders: number; withPhone: number; projects: number; revealedProjects?: number; pendingProjects?: number; quotaAvailable?: number | null; lastRevealAt?: string }
+  profiles: { builders: number; withPhone: number; projects: number; revealedProjects?: number; pendingProjects?: number; quotaAvailable?: number | null; lastRevealAt?: string; accounts?: number }
   log: string
   revealLog: string
 }
@@ -1531,6 +1531,7 @@ function PersianSazeView() {
   const [scrapeMsg, setScrapeMsg] = useState('')
   const [rebuildMsg, setRebuildMsg] = useState('')
   const [revealMsg, setRevealMsg] = useState('')
+  const [acctMsg, setAcctMsg] = useState('')
 
   // profiles list
   const [rows, setRows] = useState<PSProfile[]>([])
@@ -1612,6 +1613,14 @@ function PersianSazeView() {
     loadStatus()
   }
 
+  const createAccounts = async () => {
+    setAcctMsg('در حال ساخت…')
+    const r = await fetch('/api/admin/persiansaze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create-accounts' }) })
+    const d = await r.json().catch(() => ({}))
+    setAcctMsg(d.ok ? `✓ ${fa(d.created)} حساب ساخته شد · ${fa(d.skipped)} تکراری · ${fa(d.noPhone)} بی‌شماره` : `⚠ ${d.error || 'خطا'}`)
+    loadStatus()
+  }
+
   const openDetail = async (name: string) => {
     setDetail(null); setDetailLoading(true)
     const r = await fetch(`/api/admin/persiansaze?view=profile&id=${encodeURIComponent(name)}`)
@@ -1659,15 +1668,18 @@ function PersianSazeView() {
           <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 16px', minWidth: 120 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>شماره‌دار</div><div style={{ fontSize: 22, fontWeight: 900, color: '#5fd98a' }}>{st ? fa(st.profiles.withPhone) : '—'}</div></div>
           <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 16px', minWidth: 120 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>سهمیهٔ باقی‌مانده</div><div style={{ fontSize: 22, fontWeight: 900, color: '#5fd98a' }}>{st?.profiles.quotaAvailable != null ? fa(st.profiles.quotaAvailable) : '—'}<span style={{ fontSize: 12, color: 'var(--faint)', fontWeight: 600 }}> / ۵۰۰</span></div></div>
           <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 16px', minWidth: 120 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>در انتظارِ شماره</div><div style={{ fontSize: 22, fontWeight: 900, color: 'var(--gold)' }}>{st?.profiles.pendingProjects != null ? fa(st.profiles.pendingProjects) : '—'}</div></div>
+          <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 16px', minWidth: 120 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>حسابِ سازنده</div><div style={{ fontSize: 22, fontWeight: 900, color: '#5fd98a' }}>{st?.profiles.accounts != null ? fa(st.profiles.accounts) : '—'}</div></div>
           <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 16px', minWidth: 140 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>آخرین اسکرپ</div><div style={{ fontSize: 13.5, fontWeight: 700, marginTop: 6 }}>{st ? fmtDate(st.data.lastSync) : '—'}</div></div>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
           <GoldButton onClick={startScrape} disabled={running}>{running ? 'در حال اجرا…' : '🔄 شروع اسکرپ'}</GoldButton>
           <GoldButton onClick={startReveal} disabled={!!st?.revealing}>{st?.revealing ? 'در حال گرفتنِ شماره…' : '📞 گرفتنِ شماره‌ها (تا سقفِ هفتگی)'}</GoldButton>
           <OutlineButton onClick={rebuild}>بازسازی پروفایل‌ها</OutlineButton>
+          <OutlineButton onClick={createAccounts}>👤 ساختِ حسابِ سازنده</OutlineButton>
           {scrapeMsg && <span style={{ fontSize: 12.5, color: scrapeMsg.startsWith('✓') ? '#5fd98a' : 'var(--muted)' }}>{scrapeMsg}</span>}
           {revealMsg && <span style={{ fontSize: 12.5, color: revealMsg.startsWith('✓') ? '#5fd98a' : 'var(--muted)' }}>{revealMsg}</span>}
           {rebuildMsg && <span style={{ fontSize: 12.5, color: rebuildMsg.startsWith('✓') ? '#5fd98a' : 'var(--muted)' }}>{rebuildMsg}</span>}
+          {acctMsg && <span style={{ fontSize: 12.5, color: acctMsg.startsWith('✓') ? '#5fd98a' : 'var(--muted)' }}>{acctMsg}</span>}
         </div>
         <div style={{ fontSize: 11.5, color: 'var(--faint)', marginBottom: 10, lineHeight: 1.8 }}>«گرفتنِ شماره‌ها» هر بار تا سقفِ هفتگی (۵۰۰) شمارهٔ سازنده‌های جدید را می‌گیرد و به پروفایل‌ها وصل می‌کند. سهمیه که تمام شد، هفتهٔ بعد ادامه می‌دهد (با کرونِ خودکار). شماره‌گرفتنِ تکراری از سهمیه کم نمی‌کند.</div>
         {st?.log && <pre style={{ dir: 'ltr', direction: 'ltr', fontSize: 11, maxHeight: 160, overflow: 'auto', background: 'var(--bg2)', whiteSpace: 'pre-wrap', borderRadius: 10, padding: 12, margin: '0 0 10px', color: 'var(--muted)', border: '1px solid var(--line2)' } as React.CSSProperties}>{st.log}</pre>}
@@ -1739,7 +1751,7 @@ function PersianSazeView() {
                         {p.photo?.imageThumbnailUrl ? <img src={p.photo.imageThumbnailUrl} alt="" style={{ width: 90, height: 68, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} /> : <div style={{ width: 90, height: 68, borderRadius: 8, background: 'var(--line)', flexShrink: 0 }} />}
                         <div style={{ minWidth: 0, flex: 1 }}>
                           <div style={{ fontSize: 12.5, fontWeight: 700, lineHeight: 1.6 }}>{p.address || '—'}</div>
-                          {p.regionId != null && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 3 }}>{regionLabel(p.regionId)}</div>}
+                          <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 3 }}>{p.regionLabel || (p.regionId != null ? regionLabel(p.regionId) : '')}{p.phaseLabel ? ` · ${p.phaseLabel}` : ''}</div>
                         </div>
                       </div>
                       <div style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.9 }}>

@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import {
   getConfigMasked, saveConfig, getConfig, getData, rebuildProfiles,
-  listProfiles, getProfile, profileStats,
+  listProfiles, getProfile, profileStats, createBuilderAccounts, regionLabel, phaseLabel,
 } from '@/app/lib/persiansaze-store'
 
 export const runtime = 'nodejs'
@@ -49,7 +49,10 @@ export async function GET(req: NextRequest) {
   }
   if (view === 'profile') {
     const p = getProfile(url.searchParams.get('id') || '')
-    return p ? NextResponse.json(p) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 })
+    if (!p) return NextResponse.json({ error: 'یافت نشد' }, { status: 404 })
+    // پروژه‌ها را با نامِ منطقه/مرحله غنی کن
+    const projects = (p.projects || []).map(pr => ({ ...pr, regionLabel: regionLabel(pr), phaseLabel: phaseLabel(pr) }))
+    return NextResponse.json({ ...p, projects })
   }
   const data = getData()
   let log = '', revealLog = ''
@@ -100,6 +103,11 @@ export async function POST(req: NextRequest) {
 
   if (action === 'rebuild-profiles') {
     const r = rebuildProfiles()
+    return NextResponse.json({ ok: true, ...r })
+  }
+
+  if (action === 'create-accounts') {
+    const r = createBuilderAccounts()
     return NextResponse.json({ ok: true, ...r })
   }
 

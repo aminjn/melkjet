@@ -1,5 +1,7 @@
 import fs from 'fs'
 import path from 'path'
+import { createAccount, accountExists } from './account-store'
+import { listRoles } from './role-store'
 
 // ─── پرشین سازه: کانفیگِ اسکرپ + دادهٔ اسکرپ‌شده + پروفایلِ سازنده‌ها ───────────
 // دو فایلِ gitignore در ریشهٔ اپ:
@@ -163,5 +165,40 @@ export function profileStats() {
     pendingProjects: Math.max(0, totalProjects - revealedProjects),
     quotaAvailable: reveals.meta?.availableCount ?? null,
     lastRevealAt: reveals.meta?.lastRevealAt,
+    accounts: builderAccountCount(),
   }
+}
+
+// ─── ساختِ حسابِ سازنده در ملک‌جت از پروفایل‌های شماره‌دار ───────────────────
+export function builderRoleId(): string | null {
+  const r = listRoles(true).find(r => r.dashboard === '/builder')
+  return r?.id || null
+}
+// شمارهٔ تلفنِ معتبرِ موبایلِ یک پروفایل (اولین ۰۹...).
+function profilePhone(p: PSProfile): string | null {
+  for (const ph of p.phones || []) { const n = String(ph).replace(/\D/g, ''); if (/^09\d{9}$/.test(n)) return n }
+  return null
+}
+// چند حسابِ سازنده از پروفایل‌ها قابلِ ساخت است / ساخته شده.
+export function builderAccountCount(): number {
+  let exist = 0
+  for (const p of Object.values(getProfiles())) { const ph = profilePhone(p); if (ph && accountExists(ph)) exist++ }
+  return exist
+}
+// برای هر سازندهٔ شماره‌دار، یک حسابِ ملک‌جت (نقشِ سازنده) می‌سازد — تکراری‌ها رد می‌شوند.
+export function createBuilderAccounts(): { created: number; skipped: number; noPhone: number; total: number } {
+  const roleId = builderRoleId() || undefined
+  const profiles = Object.values(getProfiles())
+  let created = 0, skipped = 0, noPhone = 0
+  const seen = new Set<string>()
+  for (const p of profiles) {
+    const phone = profilePhone(p)
+    if (!phone) { noPhone++; continue }
+    if (seen.has(phone)) { skipped++; continue }
+    seen.add(phone)
+    if (accountExists(phone)) { skipped++; continue }
+    const r = createAccount(phone, { name: p.name || undefined, role: roleId })
+    if (r.ok) created++; else skipped++
+  }
+  return { created, skipped, noPhone, total: profiles.length }
 }
