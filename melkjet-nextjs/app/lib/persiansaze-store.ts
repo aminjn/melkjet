@@ -14,6 +14,31 @@ const META_FILE = path.join(process.cwd(), '.persiansaze-meta.json')
 const PROFILES_FILE = path.join(process.cwd(), '.persiansaze-profiles.json')
 const REVEALS_FILE = path.join(process.cwd(), '.persiansaze-reveals.json')
 
+// ─── کشِ مبتنی‌بر mtime: فایل فقط وقتی روی دیسک تغییر کند دوباره پارس می‌شود ──────
+// (statSync ارزان است؛ پارسِ JSON فقط یک‌بار به‌ازای هر نسخهٔ فایل). برای مقیاسِ بالا حیاتی.
+const _fileCache = new Map<string, { mtime: number; data: unknown }>()
+function readCached<T>(file: string, fallback: T): T {
+  try {
+    const mtime = fs.statSync(file).mtimeMs
+    const hit = _fileCache.get(file)
+    if (hit && hit.mtime === mtime) return hit.data as T
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'))
+    _fileCache.set(file, { mtime, data })
+    return data as T
+  } catch { return fallback }
+}
+// کشِ نتایجِ مشتق (مثلِ پروفایلِ ترنسفورم‌شده یا گروه‌بندیِ منطقه‌ها) به‌ازای mtimeِ منبع.
+const _derivedCache = new Map<string, { key: string; data: unknown }>()
+function derived<T>(name: string, file: string, compute: () => T): T {
+  let mtime = 0; try { mtime = fs.statSync(file).mtimeMs } catch {}
+  const key = String(mtime)
+  const hit = _derivedCache.get(name)
+  if (hit && hit.key === key) return hit.data as T
+  const data = compute()
+  _derivedCache.set(name, { key, data })
+  return data
+}
+
 export interface PSConfig {
   user: string
   pass: string
@@ -66,15 +91,14 @@ export interface PSReveals {
   items?: Record<string, { constructorId: number; name?: string; phones?: string[]; hasDup?: boolean; receptor?: string; revealedAt?: string }>
 }
 export function getReveals(): PSReveals {
-  try { return JSON.parse(fs.readFileSync(REVEALS_FILE, 'utf8')) } catch { return { meta: {}, items: {} } }
+  return readCached<PSReveals>(REVEALS_FILE, { meta: {}, items: {} })
 }
 
 // ─── خواندن/نوشتنِ کانفیگ ───────────────────────────────────────────────────
 const DEFAULT_CONFIG: PSConfig = { user: '', pass: '', enabled: false, channel: 'chrome', limit: 20, weeklyQuota: 500 }
 
 export function getConfig(): PSConfig {
-  try { return { ...DEFAULT_CONFIG, ...JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')) } }
-  catch { return { ...DEFAULT_CONFIG } }
+  return { ...DEFAULT_CONFIG, ...readCached<Partial<PSConfig>>(CONFIG_FILE, {}) }
 }
 export function saveConfig(patch: Partial<PSConfig>): PSConfig {
   const next = { ...getConfig(), ...patch }
@@ -90,12 +114,13 @@ export function getConfigMasked() {
 // ─── خواندنِ دادهٔ اسکرپ‌شده ─────────────────────────────────────────────────
 // هشدار: فایلِ بزرگ (ده‌ها مگابایت). فقط در موتورِ reveal/rebuild استفاده شود، نه مسیرهای پرتکرار.
 export function getData(): PSData {
-  try { return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')) } catch { return {} }
+  return readCached<PSData>(DATA_FILE, {})
 }
 
 // متادیتای سبک (شمارش‌ها) — بدونِ پارسِ فایلِ بزرگ. اگر نبود، یک‌بار از دیتا ساخته و کش می‌شود.
 export function getMeta(): { lastSync?: string; totalProjects: number; totalBuilders: number } {
-  try { const m = JSON.parse(fs.readFileSync(META_FILE, 'utf8')); if (typeof m.totalProjects === 'number') return m } catch {}
+  const m = readCached<any>(META_FILE, null)
+  if (m && typeof m.totalProjects === 'number') return m
   // self-heal: یک‌بار از فایلِ بزرگ بخوان و متای کوچک را بنویس
   const d = getData()
   const meta = { lastSync: d.lastSync, totalProjects: (d.projects || []).length || d.totalProjects || 0, totalBuilders: (d.builders || []).length || d.totalBuilders || 0 }
@@ -120,12 +145,15 @@ export function phaseLabel(p: { phaseId?: number }): string {
 // ─── پروفایلِ سازنده‌ها (کلید: constructor.id) ──────────────────────────────
 // پروفایل‌ها را موتورِ reveal در .persiansaze-profiles.json می‌نویسد. این‌جا فقط می‌خوانیم.
 export function getProfiles(): Record<string, PSProfile> {
-  const raw: Record<string, any> = (() => { try { return JSON.parse(fs.readFileSync(PROFILES_FILE, 'utf8')) } catch { return {} } })()
-  const out: Record<string, PSProfile> = {}
-  for (const [id, p] of Object.entries(raw)) {
-    out[id] = { id, name: p.name || '', phones: p.phones || (p.phone ? [p.phone] : []), phone: (p.phones && p.phones[0]) || p.phone, projectCount: p.projectCount || (p.projects || []).length, projects: p.projects || [], regions: p.regions || [], revealedAt: p.revealedAt }
-  }
-  return out
+  // ترنسفورمِ پروفایل‌ها فقط وقتی فایل تغییر کند انجام می‌شود (کشِ mtime).
+  return derived('profiles', PROFILES_FILE, () => {
+    const raw = readCached<Record<string, any>>(PROFILES_FILE, {})
+    const out: Record<string, PSProfile> = {}
+    for (const [id, p] of Object.entries(raw)) {
+      out[id] = { id, name: p.name || '', phones: p.phones || (p.phone ? [p.phone] : []), phone: (p.phones && p.phones[0]) || p.phone, projectCount: p.projectCount || (p.projects || []).length, projects: p.projects || [], regions: p.regions || [], revealedAt: p.revealedAt }
+    }
+    return out
+  })
 }
 
 // از reveals (که موتور نوشته) پروفایل‌ها را بازسازی می‌کند — کلید: constructor.id.
@@ -167,19 +195,21 @@ export function getProfile(id: string): PSProfile | null { return getProfiles()[
 // ─── دادهٔ صفحاتِ عمومی (فهرستِ پروژه‌ها به تفکیکِ منطقه + صفحهٔ هر پروژه) ──────
 export interface PublicProject extends PSProject { builderId: string; builderName: string }
 
-// همهٔ پروژه‌های سازنده‌های شماره‌دار، گروه‌بندی‌شده بر اساسِ منطقه.
+// همهٔ پروژه‌های سازنده‌های شماره‌دار، گروه‌بندی‌شده بر اساسِ منطقه (کش‌شده بر mtime).
 export function publicProjectsByRegion(perRegion = 120): { region: string; count: number; projects: PublicProject[] }[] {
-  const groups = new Map<string, PublicProject[]>()
-  for (const b of Object.values(getProfiles())) {
-    for (const pr of b.projects || []) {
-      const region = regionLabel(pr) || 'سایر'
-      if (!groups.has(region)) groups.set(region, [])
-      groups.get(region)!.push({ ...pr, builderId: b.id, builderName: b.name })
+  return derived('byRegion', PROFILES_FILE, () => {
+    const groups = new Map<string, PublicProject[]>()
+    for (const b of Object.values(getProfiles())) {
+      for (const pr of b.projects || []) {
+        const region = regionLabel(pr) || 'سایر'
+        if (!groups.has(region)) groups.set(region, [])
+        groups.get(region)!.push({ ...pr, builderId: b.id, builderName: b.name })
+      }
     }
-  }
-  return [...groups.entries()]
-    .map(([region, projects]) => ({ region, count: projects.length, projects: projects.slice(0, perRegion) }))
-    .sort((a, b) => b.count - a.count)
+    return [...groups.entries()]
+      .map(([region, projects]) => ({ region, count: projects.length, projects: projects.slice(0, perRegion) }))
+      .sort((a, b) => b.count - a.count)
+  })
 }
 
 // یک پروژه (بر اساسِ hashId) + سازنده‌اش + سایرِ پروژه‌های همان سازنده.
