@@ -171,12 +171,14 @@ function SearchPageInner() {
 
   // سوابقِ کاربر/موقعیتِ لحظه‌ای: محلهٔ کاربر + شهرِ انتخابی (یا تشخیص‌داده‌شده)
   const [userArea, setUserArea] = useState('')
+  const [userCity, setUserCity] = useState('')
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null)
   const [selectedCity, setSelectedCity] = useState('')
   useEffect(() => {
     const upd = () => {
       const l = readLoc()
       setUserArea(l?.neighborhood || '')
+      setUserCity(l?.city || '')
       if (l?.lat && l?.lng) setUserLoc({ lat: l.lat, lng: l.lng })
       setSelectedCity(readCity())
     }
@@ -355,6 +357,11 @@ function SearchPageInner() {
 
   // نمای نقشه (مرکز + زوم) — متناسب با گسترهٔ پین‌ها، وگرنه مرکزِ شهر/محله
   const mapView = useMemo(() => {
+    // اولویتِ اول: موقعیتِ واقعیِ کاربر (GPS) — محدودهٔ نزدیکِ خودش را نشان بده (نه کلِ شهر)،
+    // مگر اینکه عمداً شهرِ دیگری انتخاب کرده باشد.
+    const norm = (s: string) => (s || '').replace(/‌/g, '').replace(/\s/g, '')
+    const gpsCityOk = !selectedCity || !userCity || norm(selectedCity) === norm(userCity) || norm(userCity).includes(norm(selectedCity)) || norm(selectedCity).includes(norm(userCity))
+    if (userLoc && gpsCityOk) return { center: userLoc, zoom: 14 }   // سطحِ محله
     if (pins.length) {
       const lats = pins.map(p => p.lat), lngs = pins.map(p => p.lng)
       const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLng = Math.min(...lngs), maxLng = Math.max(...lngs)
@@ -364,9 +371,9 @@ function SearchPageInner() {
       return { center, zoom }
     }
     if (mapCenter) return { center: mapCenter, zoom: 13 }
-    if (userLoc) return { center: userLoc, zoom: 12 }
+    if (userLoc) return { center: userLoc, zoom: 13 }
     return null
-  }, [pins, mapCenter, userLoc])
+  }, [pins, mapCenter, userLoc, selectedCity, userCity])
 
   // چیپ‌های تشخیصِ AI — فقط مواردِ واقعاً تشخیص‌داده‌شده
   const aiChips = useMemo(() => {
