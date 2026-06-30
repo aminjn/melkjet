@@ -10,7 +10,7 @@ import ArticleEditor from '@/app/components/ArticleEditor'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 type View =
-  | 'overview' | 'scraper' | 'listings' | 'products' | 'geo' | 'moderation' | 'content' | 'studio' | 'articles' | 'categories' | 'crm' | 'api'
+  | 'overview' | 'scraper' | 'persiansaze' | 'listings' | 'products' | 'geo' | 'moderation' | 'content' | 'studio' | 'articles' | 'categories' | 'crm' | 'api'
   | 'reports' | 'plans' | 'promos' | 'discounts' | 'ads' | 'users' | 'profiles' | 'roles' | 'connections'
   | 'tracker' | 'sms' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags'
 
@@ -33,6 +33,7 @@ const sections: NavSection[] = [
       { id: 'products',    icon: '◰',  label: 'مدیریت محصولات' },
       { id: 'moderation',  icon: '✓',  label: 'تأیید آگهی AI',     badge: '32',    badgeColor: '#e7674a' },
       { id: 'scraper',     icon: '⛏',  label: 'موتور اسکرپی',     badge: 'زنده',  badgeColor: '#5fd98a' },
+      { id: 'persiansaze', icon: '🏗', label: 'سازنده‌ها (پرشین سازه)', badge: 'NEW', badgeColor: '#c9a84c' },
       { id: 'studio',      icon: '◳',  label: 'استودیو پلان و ۳بعدی', badge: 'AI', badgeColor: '#c9a84c' },
     ],
   },
@@ -87,6 +88,7 @@ const sections: NavSection[] = [
 const viewTitles: Record<View, string> = {
   overview:   'نمای کلی سیستم',
   scraper:    'موتور اسکرپی هوشمند',
+  persiansaze: 'سازنده‌ها (پرشین سازه)',
   listings:   'مدیریت آگهی‌ها و محتوا',
   products:   'مدیریت محصولات فروشگاه',
   categories: 'دسته‌بندی‌ها',
@@ -1494,6 +1496,243 @@ function ScraperView() {
                 <OutlineButton onClick={() => setModal(false)}>انصراف</OutlineButton>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── پرشین سازه (سازنده‌ها) — builder profiles scraped from external site ────
+interface PSProject {
+  hashId: string; address?: string; receptor?: string; cityId?: number; regionId?: number; subRegionId?: number; phaseId?: number; usageTypeId?: number; structureTypeId?: number; groundArea?: number; residentialArea?: number; floors?: number; subFloors?: number; units?: number; latitude?: number; longitude?: number; lastUpdateDate?: string; photo?: { imageUrl?: string; imageThumbnailUrl?: string }; hasAvailableConstructor?: boolean
+}
+interface PSProfile { id: string; name: string; phone?: string; phoneRevealedAt?: string; projectCount: number; regions: number[]; projects: PSProject[] }
+interface PSConfig { user: string; pass: string; hasPass: boolean; enabled: boolean; channel: string; limit: number; weeklyQuota: number; lastScrapeAt?: string }
+interface PSState {
+  config: PSConfig
+  running: boolean
+  data: { lastSync?: string; totalProjects: number; totalBuilders: number }
+  profiles: { builders: number; withPhone: number; projects: number }
+  log: string
+}
+
+function PersianSazeView() {
+  const [st, setSt] = useState<PSState | null>(null)
+  const [pass, setPass] = useState('')
+  const [user, setUser] = useState('')
+  const [limit, setLimit] = useState('100')
+  const [quota, setQuota] = useState('500')
+  const [enabled, setEnabled] = useState(false)
+  const [cfgMsg, setCfgMsg] = useState('')
+  const [scrapeMsg, setScrapeMsg] = useState('')
+  const [rebuildMsg, setRebuildMsg] = useState('')
+
+  // profiles list
+  const [rows, setRows] = useState<PSProfile[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const [q, setQ] = useState('')
+  const [onlyPhone, setOnlyPhone] = useState(false)
+  const [detail, setDetail] = useState<PSProfile | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+
+  const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
+  const lab: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', marginBottom: 5, display: 'block', fontWeight: 600 }
+  const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
+  const fmtDate = (d?: string) => d ? new Date(d).toLocaleString('fa-IR', { dateStyle: 'short', timeStyle: 'short' }) : '—'
+  const regionLabel = (r: number) => (r > 100 && r < 123) ? ('منطقه ' + (r - 100)) : ('م' + r)
+
+  const loadStatus = () => fetch('/api/admin/persiansaze').then(r => r.ok ? r.json() : null).then((d: PSState | null) => {
+    if (d) {
+      setSt(d)
+      setUser(p => p || d.config.user || '')
+      setLimit(p => (p && p !== '100') ? p : String(d.config.limit || 100))
+      setQuota(p => (p && p !== '500') ? p : String(d.config.weeklyQuota || 500))
+      setEnabled(d.config.enabled)
+    }
+  }).catch(() => {})
+
+  const loadProfiles = (pg = page, query = q, phone = onlyPhone) => {
+    const qs = `view=profiles&q=${encodeURIComponent(query)}&withPhone=${phone ? '1' : '0'}&page=${pg}`
+    fetch(`/api/admin/persiansaze?${qs}`).then(r => r.ok ? r.json() : null).then((d: { total: number; page: number; pageSize: number; rows: PSProfile[] } | null) => {
+      if (d) { setRows(d.rows || []); setTotal(d.total || 0); setPage(d.page || 1); setPageSize(d.pageSize || 20) }
+    }).catch(() => {})
+  }
+
+  useEffect(() => { loadStatus(); loadProfiles(1) }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // poll while running
+  useEffect(() => {
+    if (!st?.running) return
+    const t = setInterval(() => loadStatus(), 4000)
+    return () => clearInterval(t)
+  }, [st?.running])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  const saveConfig = async () => {
+    setCfgMsg('')
+    const payload: any = { action: 'save-config', user, channel: 'chrome', limit: Number(limit) || 100, weeklyQuota: Number(quota) || 500, enabled }
+    if (pass && pass !== '********') payload.pass = pass
+    const r = await fetch('/api/admin/persiansaze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    const d = await r.json().catch(() => ({}))
+    setCfgMsg(r.ok ? '✓ ذخیره شد' : `⚠ ${d.error || 'خطا'}`)
+    if (r.ok) { setPass(''); loadStatus() }
+  }
+
+  const startScrape = async () => {
+    setScrapeMsg('در حال شروع…')
+    const r = await fetch('/api/admin/persiansaze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'scrape' }) })
+    const d = await r.json().catch(() => ({}))
+    setScrapeMsg(r.ok ? '✓ اسکرپ شروع شد' : `⚠ ${d.error || 'خطا'}`)
+    loadStatus()
+  }
+
+  const rebuild = async () => {
+    setRebuildMsg('در حال بازسازی…')
+    const r = await fetch('/api/admin/persiansaze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'rebuild-profiles' }) })
+    const d = await r.json().catch(() => ({}))
+    setRebuildMsg(d.ok ? `✓ ${fa(d.created)} ساخته · ${fa(d.updated)} به‌روز · ${fa(d.total)} کل` : `⚠ ${d.error || 'خطا'}`)
+    loadStatus(); loadProfiles()
+  }
+
+  const openDetail = async (name: string) => {
+    setDetail(null); setDetailLoading(true)
+    const r = await fetch(`/api/admin/persiansaze?view=profile&id=${encodeURIComponent(name)}`)
+    const d = r.ok ? await r.json() : null
+    setDetail(d); setDetailLoading(false)
+  }
+
+  const running = !!st?.running
+  const pages = Math.max(1, Math.ceil(total / (pageSize || 20)))
+
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <Card style={{ marginBottom: 14, background: 'linear-gradient(120deg, rgba(212,175,55,.1), transparent 60%), var(--surface)', borderColor: 'rgba(201,168,76,.4)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 24 }}>🏗</span>
+          <div><div style={{ fontWeight: 900, fontSize: 17 }}>سازنده‌ها (پرشین سازه)</div><div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3, lineHeight: 1.8 }}>پروفایلِ سازنده‌ها از پرشین سازه — پروژه‌ها، شماره‌ها و منطقه‌ها به‌صورتِ خودکار اسکرپ و یکپارچه می‌شوند.</div></div>
+        </div>
+      </Card>
+
+      {/* Card 1 — config */}
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>پیکربندی</div>
+        <div style={{ fontSize: 11.5, color: 'var(--faint)', marginBottom: 14, lineHeight: 1.9 }}>یوزر/پسوردِ حسابِ پرشین سازه‌ات را وارد کن. اسکرپر با مرورگرِ پنهان خودش لاگین می‌کند و دیتا را می‌کشد — کاملاً خودکار.</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }} className="mjsa-2col">
+          <div><label style={lab}>شماره موبایلِ پرشین سازه</label><input style={{ ...inp, direction: 'ltr', textAlign: 'left' }} placeholder="09xxxxxxxxx" value={user} onChange={e => setUser(e.target.value)} /></div>
+          <div><label style={lab}>رمز عبور {st?.config.hasPass && <span style={{ color: 'var(--faint)' }}>(برای تغییر، مقدار جدید بزن)</span>}</label><input style={{ ...inp, direction: 'ltr', textAlign: 'left' }} type="password" placeholder={st?.config.hasPass ? '********' : 'رمز عبور'} value={pass} onChange={e => setPass(e.target.value)} /></div>
+          <div><label style={lab}>اندازهٔ هر صفحه</label><input style={inp} type="number" placeholder="100" value={limit} onChange={e => setLimit(e.target.value)} /></div>
+          <div><label style={lab}>سقفِ شمارهٔ هفتگی</label><input style={inp} type="number" placeholder="500" value={quota} onChange={e => setQuota(e.target.value)} /></div>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}><input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} style={{ width: 16, height: 16 }} /> فعال</label>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <GoldButton onClick={saveConfig}>ذخیره</GoldButton>
+          {cfgMsg && <span style={{ fontSize: 12.5, color: cfgMsg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{cfgMsg}</span>}
+        </div>
+      </Card>
+
+      {/* Card 2 — status & run */}
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 14 }}>وضعیت و اجرا</div>
+        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 14 }}>
+          <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 16px', minWidth: 120 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>پروژه‌ها</div><div style={{ fontSize: 22, fontWeight: 900 }}>{st ? fa(st.data.totalProjects) : '—'}</div></div>
+          <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 16px', minWidth: 120 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>سازنده‌های یکتا</div><div style={{ fontSize: 22, fontWeight: 900, color: 'var(--gold)' }}>{st ? fa(st.data.totalBuilders) : '—'}</div></div>
+          <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 16px', minWidth: 120 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>شماره‌دار</div><div style={{ fontSize: 22, fontWeight: 900, color: '#5fd98a' }}>{st ? fa(st.profiles.withPhone) : '—'}</div></div>
+          <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 16px', minWidth: 140 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>آخرین اسکرپ</div><div style={{ fontSize: 13.5, fontWeight: 700, marginTop: 6 }}>{st ? fmtDate(st.data.lastSync) : '—'}</div></div>
+        </div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+          <GoldButton onClick={startScrape} disabled={running}>{running ? 'در حال اجرا…' : '🔄 شروع اسکرپ'}</GoldButton>
+          <OutlineButton onClick={rebuild}>بازسازی پروفایل‌ها</OutlineButton>
+          {scrapeMsg && <span style={{ fontSize: 12.5, color: scrapeMsg.startsWith('✓') ? '#5fd98a' : 'var(--muted)' }}>{scrapeMsg}</span>}
+          {rebuildMsg && <span style={{ fontSize: 12.5, color: rebuildMsg.startsWith('✓') ? '#5fd98a' : 'var(--muted)' }}>{rebuildMsg}</span>}
+        </div>
+        {st?.log && <pre style={{ dir: 'ltr', direction: 'ltr', fontSize: 11, maxHeight: 200, overflow: 'auto', background: 'var(--bg2)', whiteSpace: 'pre-wrap', borderRadius: 10, padding: 12, margin: 0, color: 'var(--muted)', border: '1px solid var(--line2)' } as React.CSSProperties}>{st.log}</pre>}
+      </Card>
+
+      {/* Card 3 — profiles list */}
+      <Card>
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>پروفایلِ سازنده‌ها</div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
+          <input style={{ ...inp, width: 240 }} placeholder="جستجوی نامِ سازنده…" value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') loadProfiles(1, q, onlyPhone) }} />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" checked={onlyPhone} onChange={e => { setOnlyPhone(e.target.checked); loadProfiles(1, q, e.target.checked) }} /> فقط شماره‌دار</label>
+          <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{fa(total)} سازنده</span>
+        </div>
+        {rows.length === 0 ? (
+          <div style={{ fontSize: 12.5, color: 'var(--faint)', padding: '18px 0', textAlign: 'center' }}>سازنده‌ای یافت نشد.</div>
+        ) : (
+          <div className="mjc-table" style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 600 }}>
+              <thead><tr style={{ color: 'var(--muted)', textAlign: 'right' }}>
+                <th style={{ padding: '8px 6px', fontWeight: 600 }}>نام سازنده</th>
+                <th style={{ padding: '8px 6px', fontWeight: 600 }}>تعداد پروژه</th>
+                <th style={{ padding: '8px 6px', fontWeight: 600 }}>شماره موبایل</th>
+                <th style={{ padding: '8px 6px', fontWeight: 600 }}>منطقه‌ها</th>
+                <th style={{ padding: '8px 6px', fontWeight: 600 }}></th>
+              </tr></thead>
+              <tbody>
+                {rows.map(b => (
+                  <tr key={b.id} style={{ borderTop: '1px solid var(--line)' }}>
+                    <td style={{ padding: '8px 6px', fontWeight: 700 }}>{b.name}</td>
+                    <td style={{ padding: '8px 6px' }}>{fa(b.projectCount)}</td>
+                    <td style={{ padding: '8px 6px', direction: 'ltr', textAlign: 'right' }}>{b.phone ? <span style={{ color: '#5fd98a', direction: 'ltr', display: 'inline-block' }}>{b.phone}</span> : <span style={{ color: 'var(--faint)' }}>—</span>}</td>
+                    <td style={{ padding: '8px 6px', color: 'var(--muted)' }}>{(b.regions || []).slice(0, 4).map(r => regionLabel(r)).join('، ') || '—'}</td>
+                    <td style={{ padding: '8px 6px' }}><button onClick={() => openDetail(b.name)} style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--gold)', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit' }}>مشاهده</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {total > 0 && (
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'center', marginTop: 14 }}>
+            <button onClick={() => { if (page > 1) loadProfiles(page - 1) }} disabled={page <= 1} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid var(--line2)', background: 'transparent', color: page <= 1 ? 'var(--faint)' : 'var(--text)', cursor: page <= 1 ? 'default' : 'pointer', fontSize: 12.5, fontFamily: 'inherit' }}>قبلی</button>
+            <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>صفحهٔ {fa(page)} از {fa(pages)}</span>
+            <button onClick={() => { if (page < pages) loadProfiles(page + 1) }} disabled={page >= pages} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid var(--line2)', background: 'transparent', color: page >= pages ? 'var(--faint)' : 'var(--text)', cursor: page >= pages ? 'default' : 'pointer', fontSize: 12.5, fontFamily: 'inherit' }}>بعدی</button>
+          </div>
+        )}
+      </Card>
+
+      {/* detail overlay */}
+      {(detail || detailLoading) && (
+        <div onClick={() => { setDetail(null); setDetailLoading(false) }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 20, overflowY: 'auto', zIndex: 60 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 22, maxWidth: 920, width: '100%', marginTop: 20 }}>
+            {detailLoading && !detail ? (
+              <div style={{ fontSize: 13, color: 'var(--muted)', padding: '24px 0', textAlign: 'center' }}>در حال بارگذاری…</div>
+            ) : detail ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 4 }}>
+                  <div>
+                    <div style={{ fontWeight: 900, fontSize: 18 }}>{detail.name}</div>
+                    <div style={{ fontSize: 13, marginTop: 6 }}>{detail.phone ? <span style={{ color: '#5fd98a', direction: 'ltr', display: 'inline-block' }}>{detail.phone}</span> : <span style={{ color: 'var(--faint)' }}>بدون شماره</span>} · {fa(detail.projectCount)} پروژه</div>
+                  </div>
+                  <button onClick={() => { setDetail(null); setDetailLoading(false) }} style={{ fontSize: 18, padding: '4px 10px', borderRadius: 8, border: '1px solid var(--line2)', color: 'var(--muted)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>×</button>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 16 }}>
+                  {(detail.projects || []).map(p => (
+                    <div key={p.hashId} style={{ background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 12, padding: 12, width: 280, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ display: 'flex', gap: 10 }}>
+                        {p.photo?.imageThumbnailUrl ? <img src={p.photo.imageThumbnailUrl} alt="" style={{ width: 90, height: 68, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} /> : <div style={{ width: 90, height: 68, borderRadius: 8, background: 'var(--line)', flexShrink: 0 }} />}
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontSize: 12.5, fontWeight: 700, lineHeight: 1.6 }}>{p.address || '—'}</div>
+                          {p.regionId != null && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 3 }}>{regionLabel(p.regionId)}</div>}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.9 }}>
+                        متراژ {fa(p.groundArea || 0)} / زیربنا {fa(p.residentialArea || 0)}<br />
+                        {fa(p.floors || 0)} طبقه / {fa(p.units || 0)} واحد
+                      </div>
+                      {p.latitude != null && p.longitude != null && (
+                        <a href={`https://www.google.com/maps?q=${p.latitude},${p.longitude}`} target="_blank" rel="noreferrer" style={{ fontSize: 11.5, color: 'var(--gold)' }}>📍 نقشه</a>
+                      )}
+                    </div>
+                  ))}
+                  {(!detail.projects || detail.projects.length === 0) && <div style={{ fontSize: 12.5, color: 'var(--faint)', padding: '12px 0' }}>پروژه‌ای ثبت نشده.</div>}
+                </div>
+              </>
+            ) : null}
           </div>
         </div>
       )}
@@ -4311,6 +4550,7 @@ export default function SuperAdminPage() {
     switch (active) {
       case 'overview':   return <OverviewView />
       case 'scraper':    return <ScraperView />
+      case 'persiansaze': return <PersianSazeView />
       case 'listings':   return <ListingsView />
       case 'products':   return <ProductsView />
       case 'categories': return <CategoriesView />
