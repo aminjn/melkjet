@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { bulkCreate, listAccounts } from './account-store'
 import { listRoles } from './role-store'
-import { districtFromAddress } from './geo-store'
+import { districtFromAddress, neighbourhoodFromAddress } from './geo-store'
 
 // ─── پرشین سازه: کانفیگِ اسکرپ + دادهٔ اسکرپ‌شده + پروفایلِ سازنده‌ها ───────────
 // دو فایلِ gitignore در ریشهٔ اپ:
@@ -142,6 +142,14 @@ function regionNames(): Record<number, string> {
 }
 const toFaDigits = (n: number | string) => String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d])
 const _regionMemo = new Map<string, string>()  // address → districtِ کش‌شده (برای مقیاسِ بالا)
+const _hoodMemo = new Map<string, string>()     // address → محلهٔ کش‌شده
+// محلهٔ یک پروژه از روی آدرس (فقط تهران فعلاً).
+export function hoodOf(p: { cityId?: number; address?: string }): string {
+  if (p.cityId !== 1 || !p.address) return ''
+  let h = _hoodMemo.get(p.address)
+  if (h === undefined) { h = neighbourhoodFromAddress('تهران', p.address) || ''; _hoodMemo.set(p.address, h) }
+  return h
+}
 // نامِ منطقه — یکپارچه با سیستمِ مناطقِ خودِ سایت (geo-store):
 //   ۱) نامِ ذخیره‌شدهٔ پرشین سازه، ۲) تشخیص از روی آدرس (همان منطقِ آگهی‌ها)،
 //   ۳) فرمولِ regionId برای مناطقِ ۱..۲۲ تهران، ۴) «تهران»/خالی. کدِ خام هرگز نشان داده نمی‌شود.
@@ -311,6 +319,7 @@ function regionOrder(label: string): number {
 
 export interface PublicFacets {
   regions: { value: string; count: number }[]
+  hoods: { value: string; count: number }[]
   phases: { value: number; label: string; count: number }[]
   area: { min: number; max: number }
   total: number
@@ -320,11 +329,13 @@ export function publicFacets(): PublicFacets {
   return derived('publicFacets', PROFILES_FILE, () => {
     const all = publicFlat()
     const regions = new Map<string, number>()
+    const hoods = new Map<string, number>()
     const phases = new Map<number, number>()
     let amin = Infinity, amax = 0
     for (const p of all) {
       const r = regionLabel(p) || 'سایر'
       regions.set(r, (regions.get(r) || 0) + 1)
+      const h = hoodOf(p); if (h) hoods.set(h, (hoods.get(h) || 0) + 1)
       if (p.phaseId) phases.set(p.phaseId, (phases.get(p.phaseId) || 0) + 1)
       const a = Number(p.residentialArea) || 0
       if (a > 0) { amin = Math.min(amin, a); amax = Math.max(amax, a) }
@@ -332,6 +343,7 @@ export function publicFacets(): PublicFacets {
     return {
       // مناطقِ تهران از ۱ به بعد مرتب می‌شوند؛ «تهران/سایر» و شهرهای دیگر بعد از آن‌ها.
       regions: [...regions.entries()].map(([value, count]) => ({ value, count })).sort((a, b) => regionOrder(a.value) - regionOrder(b.value) || b.count - a.count),
+      hoods: [...hoods.entries()].map(([value, count]) => ({ value, count })).sort((a, b) => b.count - a.count).slice(0, 60),
       // فقط مرحله‌هایی که نامِ واقعی دارند در فیلتر می‌آیند (کدِ خام نمایش داده نمی‌شود).
       phases: [...phases.entries()].map(([value, count]) => ({ value, label: phaseLabel({ phaseId: value }), count })).filter(p => p.label).sort((a, b) => b.count - a.count),
       area: { min: Number.isFinite(amin) ? Math.floor(amin) : 0, max: Math.ceil(amax) },
@@ -341,7 +353,7 @@ export function publicFacets(): PublicFacets {
 }
 
 export interface PublicQueryOpts {
-  city?: string; region?: string; phase?: number; floorsMin?: number; unitsMin?: number
+  city?: string; region?: string; hood?: string; phase?: number; floorsMin?: number; unitsMin?: number
   areaMin?: number; areaMax?: number; search?: string; withPhoto?: boolean
   sort?: 'area' | 'units' | 'recent'; page?: number; pageSize?: number
 }
@@ -355,6 +367,7 @@ export function publicQuery(opts: PublicQueryOpts = {}) {
   let rows = all.filter(p => {
     if (opts.city && cityNameOf(p) !== opts.city) return false   // فیلترِ شهرِ سراسریِ سایت
     if (opts.region && (regionLabel(p) || 'سایر') !== opts.region) return false
+    if (opts.hood && hoodOf(p) !== opts.hood) return false        // فیلترِ محله
     if (opts.phase && p.phaseId !== opts.phase) return false
     if (opts.floorsMin && (Number(p.floors) || 0) < opts.floorsMin) return false
     if (opts.unitsMin && (Number(p.units) || 0) < opts.unitsMin) return false

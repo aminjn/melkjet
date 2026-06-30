@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
   const res = publicQuery({
     city: u.get('city') || undefined,
     region: u.get('region') || undefined,
+    hood: u.get('hood') || undefined,
     phase: num('phase'),
     floorsMin: num('floorsMin'),
     unitsMin: num('unitsMin'),

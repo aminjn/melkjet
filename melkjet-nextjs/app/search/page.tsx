@@ -168,6 +168,7 @@ function SearchPageInner() {
   const [yearMin, setYearMin] = useState(0)
   const [checkedAmenities, setCheckedAmenities] = useState<string[]>([])
   const [sortBy, setSortBy] = useState('پیشنهاد ملک‌جت')
+  const [hood, setHood] = useState('')   // فیلترِ محله (انتخابِ کاربر)
 
   // سوابقِ کاربر/موقعیتِ لحظه‌ای: محلهٔ کاربر + شهرِ انتخابی (یا تشخیص‌داده‌شده)
   const [userArea, setUserArea] = useState('')
@@ -257,16 +258,30 @@ function SearchPageInner() {
     const norm = (s: string) => (s || '').replace(/‌/g, '').replace(/\s/g, '').toLowerCase()
     const base = filteredProperties
     const city = selectedCity
-    const area = parsed.area ? '' : prefArea
+    // محلهٔ انتخابیِ کاربر = فیلترِ قطعی؛ وگرنه محلهٔ سوابق/موقعیت = اولویتِ نرم.
+    const area = hood || (parsed.area ? '' : prefArea)
+    const hard = !!hood
     const inArea = (p: PropertyT) => area ? norm(p.location).includes(norm(area)) : true
     if (city) {
       const inCity = base.filter(p => norm(p.location).includes(norm(city)))
-      if (area) { const a = inCity.filter(inArea); return { list: a.length ? a : inCity } }
+      if (area) { const a = inCity.filter(inArea); return { list: hard ? a : (a.length ? a : inCity) } }
       return { list: inCity }   // خالی = واقعاً خالی (بدونِ fallbackِ بین‌شهری)
     }
-    if (area) { const a = base.filter(inArea); return { list: a.length ? a : base } }
+    if (area) { const a = base.filter(inArea); return { list: hard ? a : (a.length ? a : base) } }
     return { list: base }
-  }, [filteredProperties, selectedCity, prefArea, parsed.area])
+  }, [filteredProperties, selectedCity, prefArea, parsed.area, hood])
+
+  // گزینه‌های محله از روی آگهی‌های همان شهر (محله‌هایی که واقعاً آگهی دارند).
+  const hoodOptions = useMemo(() => {
+    const norm = (s: string) => (s || '').replace(/‌/g, '').replace(/\s/g, '')
+    const counts = new Map<string, number>()
+    for (const p of filteredProperties) {
+      if (selectedCity && !norm(p.location).includes(norm(selectedCity))) continue
+      const h = (p.location || '').split(/[،,]/)[0].trim()
+      if (h && h !== 'نامشخص' && (!selectedCity || norm(h) !== norm(selectedCity))) counts.set(h, (counts.get(h) || 0) + 1)
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 40).map(([h, c]) => ({ h, c }))
+  }, [filteredProperties, selectedCity])
 
   const sortedProperties = useMemo(() => {
     const ar = prefArea.replace(/‌/g, '').trim()
@@ -387,7 +402,7 @@ function SearchPageInner() {
     return c
   }, [parsed])
 
-  const resetFilters = () => { setKind(''); setBeds('همه'); setPriceMin(0); setPriceMax(PRICE_MAX); setAreaMin(0); setAreaMax(0); setFloorMin(0); setYearMin(0); setCheckedAmenities([]) }
+  const resetFilters = () => { setKind(''); setBeds('همه'); setPriceMin(0); setPriceMax(PRICE_MAX); setAreaMin(0); setAreaMax(0); setFloorMin(0); setYearMin(0); setCheckedAmenities([]); setHood('') }
 
   const selInput: React.CSSProperties = { height: 36, padding: '0 10px', borderRadius: 9, background: 'var(--bg)', border: '1px solid var(--line2)', color: 'var(--text)', fontSize: 12.5, fontFamily: 'inherit', outline: 'none', cursor: 'pointer' }
   const lab: React.CSSProperties = { fontSize: 13, color: 'var(--muted)', whiteSpace: 'nowrap', fontWeight: 600 }
@@ -415,6 +430,12 @@ function SearchPageInner() {
             {activeFilterCount > 0 && <span style={{ minWidth: 18, height: 18, borderRadius: 9, background: 'var(--gold)', color: '#16140f', fontSize: 10.5, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{toPersianDigits(activeFilterCount)}</span>}
           </button>
 
+          {hoodOptions.length > 0 && (
+            <select value={hood} onChange={e => setHood(e.target.value)} title="فیلترِ محله" style={{ height: 48, padding: '0 12px', borderRadius: 12, background: hood ? 'var(--goldDim)' : 'var(--surface)', border: `1px solid ${hood ? 'var(--gold)' : 'var(--line2)'}`, color: hood ? 'var(--gold)' : 'var(--text)', fontSize: 13.5, cursor: 'pointer', outline: 'none', fontFamily: 'inherit', fontWeight: hood ? 700 : 400 }}>
+              <option value="">همهٔ محله‌ها</option>
+              {hoodOptions.map(o => <option key={o.h} value={o.h}>{o.h} ({toPersianDigits(o.c)})</option>)}
+            </select>
+          )}
           <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ height: 48, padding: '0 12px', borderRadius: 12, background: 'var(--surface)', border: '1px solid var(--line2)', color: 'var(--text)', fontSize: 13.5, cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }}>
             <option>پیشنهاد ملک‌جت</option><option>ارزان‌ترین</option><option>گران‌ترین</option><option>جدیدترین</option>
           </select>

@@ -231,6 +231,34 @@ export function districtFromAddress(cityName: string, address: string): string |
   return null
 }
 
+// اندیسِ نامِ محله‌ها (normNb → نامِ نمایشیِ محله) — برای فیلترِ محله.
+const _cityNameIdx = new Map<string, { key: string; map: Map<string, string> }>()
+function cityNeighborhoodNameIndex(cityName: string): Map<string, string> {
+  const want = normName(cityName)
+  let mtime = 0; try { mtime = statSync(DATA_FILE).mtimeMs } catch {}
+  const key = String(mtime)
+  const hit = _cityNameIdx.get(want)
+  if (hit && hit.key === key) return hit.map
+  const db = load()
+  const map = new Map<string, string>()
+  for (const p of db.provinces) for (const c of p.cities) {
+    if (normName(c.name) !== want) continue
+    for (const d of c.districts) for (const nb of d.neighborhoods) { const k = normName(nb); if (k && !map.has(k)) map.set(k, nb) }
+  }
+  _cityNameIdx.set(want, { key, map })
+  return map
+}
+// نامِ محلهٔ استانداردِ سایت را از آدرس پیدا می‌کند (یا null).
+export function neighbourhoodFromAddress(cityName: string, address: string): string | null {
+  if (!address) return null
+  const idx = cityNeighborhoodNameIndex(cityName)
+  if (!idx.size) return null
+  const tokens = address.split(/[-،,()\/\n]/).map(t => normName(t)).filter(Boolean)
+  for (const t of tokens) { const n = idx.get(t); if (n) return n }
+  for (const t of tokens) for (const [k, n] of idx) { if (k.length >= 3 && (t.includes(k) || k.includes(t))) return n }
+  return null
+}
+
 export function renameNode(level: 'province' | 'city' | 'district', ids: { pid: string; cid?: string; did?: string }, name: string) {
   const db = load()
   if (level === 'province') { const n = findProvince(db, ids.pid); if (n) n.name = name }

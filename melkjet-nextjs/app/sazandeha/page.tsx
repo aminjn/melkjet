@@ -20,6 +20,7 @@ interface Item {
 }
 interface Facets {
   regions: { value: string; count: number }[]
+  hoods: { value: string; count: number }[]
   phases: { value: number; label: string; count: number }[]
   area: { min: number; max: number }
   total: number
@@ -38,6 +39,7 @@ export default function Sazandeha() {
   // فیلترها
   const [search, setSearch] = useState('')
   const [region, setRegion] = useState('')
+  const [hood, setHood] = useState('')
   const [phase, setPhase] = useState('')
   const [floorsMin, setFloorsMin] = useState('')
   const [unitsMin, setUnitsMin] = useState('')
@@ -62,6 +64,7 @@ export default function Sazandeha() {
     if (city) p.set('city', city)
     if (search.trim()) p.set('search', search.trim())
     if (region) p.set('region', region)
+    if (hood) p.set('hood', hood)
     if (phase) p.set('phase', phase)
     if (floorsMin) p.set('floorsMin', floorsMin)
     if (unitsMin) p.set('unitsMin', unitsMin)
@@ -70,7 +73,7 @@ export default function Sazandeha() {
     if (withPhoto) p.set('withPhoto', '1')
     if (sort) p.set('sort', sort)
     return p.toString()
-  }, [city, search, region, phase, floorsMin, unitsMin, areaMin, areaMax, withPhoto, sort])
+  }, [city, search, region, hood, phase, floorsMin, unitsMin, areaMin, areaMax, withPhoto, sort])
 
   // بارگذاریِ صفحهٔ ۱ هنگامِ تغییرِ فیلتر (با debounce برای جستجو)
   useEffect(() => {
@@ -97,9 +100,9 @@ export default function Sazandeha() {
   }
 
   function reset() {
-    setSearch(''); setRegion(''); setPhase(''); setFloorsMin(''); setUnitsMin(''); setAreaMin(''); setAreaMax(''); setWithPhoto(false); setSort('')
+    setSearch(''); setRegion(''); setHood(''); setPhase(''); setFloorsMin(''); setUnitsMin(''); setAreaMin(''); setAreaMax(''); setWithPhoto(false); setSort('')
   }
-  const activeCount = [search.trim(), region, phase, floorsMin, unitsMin, areaMin, areaMax, withPhoto ? '1' : '', sort].filter(Boolean).length
+  const activeCount = [search.trim(), region, hood, phase, floorsMin, unitsMin, areaMin, areaMax, withPhoto ? '1' : '', sort].filter(Boolean).length
 
   const inputStyle: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit' }
   const labelStyle: React.CSSProperties = { fontSize: 11.5, color: 'var(--muted)', fontWeight: 700, marginBottom: 6, display: 'block' }
@@ -113,6 +116,15 @@ export default function Sazandeha() {
           {facets?.regions.map(r => <option key={r.value} value={r.value}>{r.value} ({fa(r.count)})</option>)}
         </select>
       </div>
+      {!!facets?.hoods?.length && (
+        <div>
+          <label style={labelStyle}>محله</label>
+          <select value={hood} onChange={e => setHood(e.target.value)} style={inputStyle}>
+            <option value="">همهٔ محله‌ها</option>
+            {facets.hoods.map(h => <option key={h.value} value={h.value}>{h.value} ({fa(h.count)})</option>)}
+          </select>
+        </div>
+      )}
       <div>
         <label style={labelStyle}>مرحلهٔ ساخت</label>
         <select value={phase} onChange={e => setPhase(e.target.value)} style={inputStyle}>
