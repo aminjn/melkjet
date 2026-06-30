@@ -114,17 +114,20 @@ async function main() {
   const all = []
   const seen = new Set()
   let offset = 0, pageNo = 0, empty = 0
+  let limit = cfg.limit
   try {
     while (true) {
       pageNo++
-      const { status, results } = await fetchPage(page, offset, cfg.limit)
+      const { status, results } = await fetchPage(page, offset, limit)
+      // سرور limit بزرگ را با ۴۰۰ رد می‌کند → خودکار به ۲۰ برگرد و همان offset را دوباره بزن
+      if (status === 400 && limit > 20) { log(`limit=${limit} رد شد (۴۰۰)؛ بازگشت به ۲۰.`); limit = 20; pageNo--; continue }
       if (status !== 200) { log(`صفحهٔ ${pageNo}: HTTP ${status} — توقف.`); break }
       if (!results.length) { empty++; if (empty >= 2) { log('پایانِ لیست.'); break } }
       else empty = 0
       for (const p of results) { if (p.hashId && !seen.has(p.hashId)) { seen.add(p.hashId); all.push(p) } }
-      if (pageNo % 10 === 0 || results.length < cfg.limit) log(`صفحهٔ ${pageNo} | offset ${offset} | تا اینجا ${all.length} پروژه`)
+      if (pageNo % 10 === 0 || results.length < limit) log(`صفحهٔ ${pageNo} | offset ${offset} | تا اینجا ${all.length} پروژه`)
       // پیشرویِ مقاوم: بر اساسِ تعدادِ واقعیِ نتایج (اگر سرور limit را محدود کرد، چیزی جا نمی‌ماند)
-      offset += results.length || cfg.limit
+      offset += results.length || limit
       if (cfg.maxPages && pageNo >= cfg.maxPages) { log(`به سقفِ ${cfg.maxPages} صفحه رسید.`); break }
       await page.waitForTimeout(150) // ملایم
     }

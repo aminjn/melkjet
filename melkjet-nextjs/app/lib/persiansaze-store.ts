@@ -59,7 +59,7 @@ export interface PSProfile {
 }
 
 // ─── خواندن/نوشتنِ کانفیگ ───────────────────────────────────────────────────
-const DEFAULT_CONFIG: PSConfig = { user: '', pass: '', enabled: false, channel: 'chrome', limit: 100, weeklyQuota: 500 }
+const DEFAULT_CONFIG: PSConfig = { user: '', pass: '', enabled: false, channel: 'chrome', limit: 20, weeklyQuota: 500 }
 
 export function getConfig(): PSConfig {
   try { return { ...DEFAULT_CONFIG, ...JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')) } }

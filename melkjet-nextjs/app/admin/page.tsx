@@ -1521,9 +1521,10 @@ function PersianSazeView() {
   const [st, setSt] = useState<PSState | null>(null)
   const [pass, setPass] = useState('')
   const [user, setUser] = useState('')
-  const [limit, setLimit] = useState('100')
+  const [limit, setLimit] = useState('20')
   const [quota, setQuota] = useState('500')
   const [enabled, setEnabled] = useState(false)
+  const inited = useRef(false)
   const [cfgMsg, setCfgMsg] = useState('')
   const [scrapeMsg, setScrapeMsg] = useState('')
   const [rebuildMsg, setRebuildMsg] = useState('')
@@ -1547,10 +1548,14 @@ function PersianSazeView() {
   const loadStatus = () => fetch('/api/admin/persiansaze').then(r => r.ok ? r.json() : null).then((d: PSState | null) => {
     if (d) {
       setSt(d)
-      setUser(p => p || d.config.user || '')
-      setLimit(p => (p && p !== '100') ? p : String(d.config.limit || 100))
-      setQuota(p => (p && p !== '500') ? p : String(d.config.weeklyQuota || 500))
-      setEnabled(d.config.enabled)
+      // مقادیرِ فرم را فقط یک‌بار از کانفیگِ ذخیره‌شده پر کن (تا ویرایشِ کاربر پاک نشود)
+      if (!inited.current) {
+        inited.current = true
+        setUser(d.config.user || '')
+        setLimit(String(d.config.limit || 20))
+        setQuota(String(d.config.weeklyQuota || 500))
+        setEnabled(!!d.config.enabled)
+      }
     }
   }).catch(() => {})
 
@@ -1572,7 +1577,7 @@ function PersianSazeView() {
 
   const saveConfig = async () => {
     setCfgMsg('')
-    const payload: any = { action: 'save-config', user, channel: 'chrome', limit: Number(limit) || 100, weeklyQuota: Number(quota) || 500, enabled }
+    const payload: any = { action: 'save-config', user, channel: 'chrome', limit: Number(limit) || 20, weeklyQuota: Number(quota) || 500, enabled }
     if (pass && pass !== '********') payload.pass = pass
     const r = await fetch('/api/admin/persiansaze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     const d = await r.json().catch(() => ({}))
