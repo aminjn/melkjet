@@ -22,5 +22,7 @@ export async function GET(req: NextRequest) {
   }
   // featured first, then newest
   items.sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0) || b.scrapedAt - a.scrapedAt)
-  return NextResponse.json({ items: items.slice(0, limit), total: items.length })
+  // شماره هرگز در فهرستِ عمومی نمی‌رود؛ فقط با ورود از /api/listing-reveal دیده و ثبت می‌شود.
+  const safe = items.slice(0, limit).map(it => { const { phone, ...rest } = it as any; return { ...rest, hasPhone: !!(phone || (it as any).meta?.__ownerPhone) } })
+  return NextResponse.json({ items: safe, total: items.length })
 }

@@ -12,6 +12,7 @@ export interface ContentItem {
   url?: string
   excerpt?: string
   phone?: string
+  hasPhone?: boolean
   rating?: string
   tags?: string[]
   owner?: string

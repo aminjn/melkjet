@@ -34,7 +34,8 @@ export async function GET(req: NextRequest) {
     name: p.name || acc?.name || 'مشاور املاک',
     title: p.title || 'مشاور املاک',
     bio: p.bio || '',
-    contactPhone: p.phone || '',
+    contactPhone: '',            // شماره فقط با ورود از /api/listing-reveal دیده و ثبت می‌شود
+    hasPhone: !!(p.phone),
     areas: p.areas || '',
     experience: p.experience || '',
     photo: p.photo || '',

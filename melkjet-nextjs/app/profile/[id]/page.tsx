@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import Nav from '../../components/Nav'
 import Footer from '../../components/Footer'
+import RevealContact from '../../components/RevealContact'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -36,7 +37,7 @@ interface Profile {
 
 interface AdvisorListing { id: string; title: string; price?: string; location?: string; image?: string }
 interface AdvisorPublic {
-  phone: string; name: string; title: string; bio: string; contactPhone: string;
+  phone: string; name: string; title: string; bio: string; contactPhone: string; hasPhone?: boolean;
   areas: string; experience: string; photo: string; specialties: string[];
   agency: { name: string; phone: string } | null;
   stats: { activeListings: number; deals: number; totalListings: number };
@@ -683,9 +684,9 @@ function RealAdvisorProfile({ phone }: { phone: string }) {
                 ))}
               </div>
             </div>
-            {data.contactPhone && (
+            {data.hasPhone && (
               <div style={{ display: 'flex', gap: 9, flexShrink: 0, paddingBottom: 4, flexWrap: 'wrap' }}>
-                <a href={`tel:${data.contactPhone.replace(/\D/g, '')}`} style={{ height: 42, display: 'inline-flex', alignItems: 'center', padding: '0 22px', border: 'none', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13.5, textDecoration: 'none' }}>☎ تماس</a>
+                <RevealContact kind="advisor" id={phone} label="تماس" />
               </div>
             )}
           </div>
@@ -754,14 +755,14 @@ function RealAdvisorProfile({ phone }: { phone: string }) {
         <section style={{ ...card, marginTop: 16 }}>
           <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)', marginBottom: 14 }}>تماس</div>
           <div style={{ display: 'grid', gap: 12 }}>
-            {data.contactPhone && (
-              <a href={`tel:${data.contactPhone.replace(/\D/g, '')}`} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 12, padding: '13px 16px', textDecoration: 'none' }}>
+            {data.hasPhone && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 12, padding: '13px 16px' }}>
                 <span style={{ width: 36, height: 36, flexShrink: 0, borderRadius: 10, background: 'var(--goldDim)', color: 'var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>☎</span>
-                <div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>تماس مستقیم</div>
-                  <div style={{ fontSize: 13.5, color: 'var(--text)', direction: 'ltr', textAlign: 'right', fontWeight: 700 }}>{data.contactPhone}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>تماس مستقیم</div>
+                  <RevealContact kind="advisor" id={phone} compact label="نمایشِ شماره" />
                 </div>
-              </a>
+              </div>
             )}
             {data.agency && (
               <a href={`/profile/${data.agency.phone}`} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 12, padding: '13px 16px', textDecoration: 'none' }}>
@@ -772,7 +773,7 @@ function RealAdvisorProfile({ phone }: { phone: string }) {
                 </div>
               </a>
             )}
-            {!data.contactPhone && !data.agency && (
+            {!data.hasPhone && !data.agency && (
               <div style={{ fontSize: 13, color: 'var(--muted)', padding: '6px 2px' }}>اطلاعات تماسی ثبت نشده است.</div>
             )}
           </div>

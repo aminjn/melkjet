@@ -2,6 +2,7 @@
 
 import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
+import RevealContact from '@/app/components/RevealContact'
 import { useState, useEffect } from 'react'
 import { fetchContent, gradientFor, initialsFor, type ContentItem } from '@/app/lib/content-display'
 
@@ -24,6 +25,7 @@ function toProfessional(it: ContentItem) {
     avatarGradient: gradientFor(it.title, 'avatar'),
     url: it.url,
     phone: it.phone,
+    hasPhone: it.hasPhone,
   }
 }
 
@@ -440,6 +442,7 @@ type Professional = {
   avatarGradient: string
   url?: string
   phone?: string
+  hasPhone?: boolean
 }
 
 function ProfessionalCard({ pro }: { pro: Professional }) {
@@ -623,18 +626,10 @@ function ProfessionalCard({ pro }: { pro: Professional }) {
           </span>
         </div>
 
-        {/* Phone */}
-        {pro.phone && (
-          <div
-            style={{
-              fontSize: '0.8rem',
-              color: 'var(--muted)',
-              marginBottom: '12px',
-              direction: 'ltr',
-              textAlign: 'right',
-            }}
-          >
-            ☎ {pro.phone}
+        {/* Phone — login-gated reveal + contact report */}
+        {pro.hasPhone && (
+          <div style={{ marginBottom: '12px' }} onClick={e => e.stopPropagation()}>
+            <RevealContact kind="item" id={String(pro.id)} compact label="نمایشِ شماره" />
           </div>
         )}
 
