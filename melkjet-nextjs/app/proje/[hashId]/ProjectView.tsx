@@ -6,6 +6,7 @@ import Footer from '../../components/Footer'
 import StaticMap from '../../components/StaticMap'
 import NeshanMap from '../../components/NeshanMap'
 import RevealPhone from '../../components/RevealPhone'
+import CompareButton from '../../components/CompareButton'
 
 const fa = (n: number | string) => String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d])
 const faNum = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
@@ -329,7 +330,8 @@ export default function ProjectView({ p }: { p: ViewProject }) {
             <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--text)', marginBottom: 4 }}>{p.builder.name}</div>
             <div style={{ fontSize: 12, color: 'var(--faint)', marginBottom: 18 }}>{faNum(p.builder.projectCount)} پروژه{p.builder.regions.length ? ` · ${p.builder.regions[0]}` : ''}</div>
             {p.builder.hasPhone && <div style={{ marginBottom: 9 }}><RevealPhone builderId={p.builder.id} projectHashId={p.hashId} projectName={p.title} label="نمایشِ شمارهٔ سازنده" /></div>}
-            <button onClick={() => { setModalOpen(true); setReqSent(false) }} style={{ width: '100%', padding: '12px', borderRadius: 13, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--text)', fontFamily: 'inherit', fontWeight: 600, fontSize: 13.5, cursor: 'pointer' }}>درخواستِ بازدید / تماس</button>
+            <button onClick={() => { setModalOpen(true); setReqSent(false) }} style={{ width: '100%', padding: '12px', borderRadius: 13, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--text)', fontFamily: 'inherit', fontWeight: 600, fontSize: 13.5, cursor: 'pointer', marginBottom: 9 }}>درخواستِ بازدید / تماس</button>
+            <CompareButton variant="full" entry={{ kind: 'project', id: p.hashId, title: p.title, photo: p.photos[0], subtitle: p.region }} />
           </div>
 
           {/* Specs */}

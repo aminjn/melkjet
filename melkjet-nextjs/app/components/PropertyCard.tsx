@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import CompareButton from './CompareButton'
 
 interface PropertyCardProps {
   id?: string | number
@@ -41,11 +42,14 @@ export default function PropertyCard({ id = '1', title, location, price, size, b
         <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--gold)', letterSpacing: '-.3px' }}>{price}</div>
         <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', marginTop: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</div>
         <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>{location}</div>
-        <div style={{ display: 'flex', gap: 14, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)', fontSize: 12.5, color: 'var(--muted)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)', fontSize: 12.5, color: 'var(--muted)' }}>
           <span>{size} متر</span>
           <span style={{ color: 'var(--faint)' }}>·</span>
           <span>{beds} خواب</span>
           {year && <><span style={{ color: 'var(--faint)' }}>·</span><span>ساخت {year}</span></>}
+          <span style={{ marginInlineStart: 'auto' }}>
+            <CompareButton entry={{ kind: 'item', id: String(id), title, photo: (img && (img.startsWith('http') || img.startsWith('/'))) ? img : undefined, subtitle: location }} />
+          </span>
         </div>
       </div>
     </Link>

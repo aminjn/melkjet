@@ -6,6 +6,7 @@ import Footer from '../components/Footer'
 import StaticMap from '../components/StaticMap'
 import NeshanMap from '../components/NeshanMap'
 import { readCity } from '../components/CitySelector'
+import CompareButton from '../components/CompareButton'
 
 interface MapPoint { id: string; lat: number; lng: number; title?: string; price?: string }
 const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
@@ -193,9 +194,12 @@ export default function Sazandeha() {
                   {items.map(p => (
                     <Link key={p.hashId} href={`/proje/${p.hashId}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                       <article style={{ background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 14, overflow: 'hidden', height: '100%', display: 'flex', flexDirection: 'column' }}>
-                        {p.photo?.imageThumbnailUrl || p.photo?.imageUrl ? (
-                          <img src={p.photo.imageThumbnailUrl || p.photo.imageUrl} alt="" loading="lazy" style={{ width: '100%', height: 150, objectFit: 'cover' }} />
-                        ) : <div style={{ width: '100%', height: 150, background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, color: 'var(--faint)' }}>🏗</div>}
+                        <div style={{ position: 'relative' }}>
+                          {p.photo?.imageThumbnailUrl || p.photo?.imageUrl ? (
+                            <img src={p.photo.imageThumbnailUrl || p.photo.imageUrl} alt="" loading="lazy" style={{ width: '100%', height: 150, objectFit: 'cover', display: 'block' }} />
+                          ) : <div style={{ width: '100%', height: 150, background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, color: 'var(--faint)' }}>🏗</div>}
+                          <CompareButton variant="overlay" entry={{ kind: 'project', id: p.hashId, title: p.address, photo: p.photo?.imageThumbnailUrl || p.photo?.imageUrl, subtitle: p.region }} />
+                        </div>
                         <div style={{ padding: 12, flex: 1, display: 'flex', flexDirection: 'column' }}>
                           <div style={{ fontSize: 12.5, fontWeight: 700, lineHeight: 1.7, minHeight: 42, overflow: 'hidden' }}>{p.address || '—'}</div>
                           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '8px 0' }}>
