@@ -44,6 +44,9 @@ async function tick(): Promise<{ due: number; synced: number }> {
 }
 
 export function ensureCronStarted() {
+  // در cluster mode فقط instance صفر کرون را اجرا کند (وگرنه چند Chrome/کرون موازی راه می‌افتد).
+  const inst = process.env.NODE_APP_INSTANCE
+  if (inst !== undefined && inst !== '0') return
   if (typeof globalThis.__mjCron === 'undefined') globalThis.__mjCron = { started: false, running: false }
   const g = globalThis.__mjCron!
   if (g.started) return
