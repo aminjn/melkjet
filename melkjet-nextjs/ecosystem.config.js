@@ -31,6 +31,8 @@ function instance(port, idx) {
       PORT: String(port),
       // فقط اینستنسِ صفر کرون را اجرا می‌کند.
       NODE_APP_INSTANCE: String(idx),
+      // اینستنسِ صفر همهٔ این پورت‌ها را گرم می‌کند تا هیچ اینستنسی سرد نماند.
+      WARM_PORTS: '3000,3001,3002,3003',
     },
     autorestart: true,
     max_memory_restart: '1200M',

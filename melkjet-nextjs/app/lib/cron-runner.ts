@@ -43,14 +43,19 @@ async function tick(): Promise<{ due: number; synced: number }> {
   return { due: due.length, synced }
 }
 
-// گرم‌کردنِ همهٔ instanceهای cluster بعد از بوت/ری‌استارت (اولین رندرِ هر صفحه سنگین است؛
-// با چند ping به localhost، load-balancer به‌نوبت همهٔ instanceها را گرم می‌کند تا
-// هیچ کاربری به instanceِ سرد نخورد و صفحهٔ اصلی ۸-۱۰ ثانیه‌ای نشود).
+// گرم‌کردنِ همهٔ instanceها بعد از بوت/ری‌استارت. هر اینستنس روی پورتِ جدا اجرا می‌شود
+// (۳۰۰۰..۳۰۰۳ پشتِ nginx) و کشِ سنگینِ خودش را دارد (پرشین‌سازه/بازار/محله). پس باید
+// «همهٔ پورت‌ها» را مستقیم ping کنیم تا هیچ اینستنسی سرد نماند و کاربر به اینستنسِ سرد نخورد.
+// لیستِ پورت‌ها از WARM_PORTS (در ecosystem.config.js) خوانده می‌شود؛ اگر نبود فقط پورتِ خودش.
 async function warmUp(rounds = 4) {
-  const port = process.env.PORT || 3000
-  const paths = ['/', '/search', '/pricing', '/store', '/blog']
+  const ports = (process.env.WARM_PORTS || String(process.env.PORT || 3000)).split(',').map(s => s.trim()).filter(Boolean)
+  // صفحاتِ پربازدید + APIهای سنگین که کشِ درون‌حافظه‌ای را می‌سازند.
+  const paths = ['/', '/search', '/sazandeha', '/market', '/store', '/blog',
+    '/api/public/projects?facets=1', '/api/content?type=listing&limit=80', '/api/market/overview']
   for (let r = 0; r < rounds; r++) {
-    for (const p of paths) { try { await fetch(`http://127.0.0.1:${port}${p}`, { cache: 'no-store' }) } catch {} }
+    for (const port of ports) {
+      for (const p of paths) { try { await fetch(`http://127.0.0.1:${port}${p}`, { cache: 'no-store' }) } catch {} }
+    }
   }
 }
 
