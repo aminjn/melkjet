@@ -76,6 +76,21 @@ export function createAccount(phone: string, patch: { name?: string; role?: stri
 }
 
 export function accountExists(phone: string): boolean { return !!load()[phone] }
+
+// ساختِ دسته‌ایِ حساب‌ها (یک‌بار خواندن/نوشتن) — برای واردکردنِ انبوه (مثلِ سازنده‌های پرشین سازه).
+export function bulkCreate(rows: { phone: string; name?: string; role?: string }[]): { created: number; skipped: number; invalid: number } {
+  const db = load()
+  let created = 0, skipped = 0, invalid = 0
+  for (const r of rows) {
+    const p = String(r.phone).replace(/\D/g, '')
+    if (!/^09\d{9}$/.test(p)) { invalid++; continue }
+    if (db[p]) { skipped++; continue }
+    db[p] = { phone: p, name: r.name ? String(r.name).slice(0, 60) : undefined, role: r.role || undefined, onboarded: !!r.role, createdAt: Date.now() }
+    created++
+  }
+  if (created) save(db)
+  return { created, skipped, invalid }
+}
 export function accountByNationalId(nid: string): Account | null { if (!nid) return null; return Object.values(load()).find(a => a.nationalId === nid) || null }
 export function touchLogin(phone: string) { const db = load(); if (db[phone]) { db[phone].lastLogin = Date.now(); save(db) } }
 

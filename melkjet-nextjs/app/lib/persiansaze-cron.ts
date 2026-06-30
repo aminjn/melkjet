@@ -1,12 +1,14 @@
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { getConfig, getReveals, getData } from './persiansaze-store'
+import { getConfig, getReveals, getData, createBuilderAccounts } from './persiansaze-store'
 
 // کرونِ هفتگیِ پرشین سازه: وقتی سهمیه ریست شد (یا باقی‌مانده > ۰)، خودکار
 // موتورِ گرفتنِ شماره را در پس‌زمینه اجرا می‌کند. توسطِ cron-runner صدا زده می‌شود.
 const REVEAL_LOG = path.join(process.cwd(), '.persiansaze-reveal.log')
 const REVEAL_LOCK = path.join(process.cwd(), '.persiansaze-reveal.lock')
+const PROFILES_FILE = path.join(process.cwd(), '.persiansaze-profiles.json')
+const ACCT_SYNC = path.join(process.cwd(), '.persiansaze-accounts.sync')
 const WEEK = 6.5 * 24 * 3600 * 1000
 
 function alive(file: string): boolean {
@@ -34,6 +36,20 @@ export function maybeRunReveal(now = Date.now()): boolean {
     })
     fs.writeFileSync(REVEAL_LOCK, String(child.pid))
     child.unref()
+    return true
+  } catch { return false }
+}
+
+// پس از هر بار به‌روزشدنِ پروفایل‌ها (یعنی بعدِ هر reveal)، حساب‌های سازنده را خودکار می‌سازد.
+export function maybeCreateAccounts(): boolean {
+  const cfg = getConfig()
+  if (!cfg.enabled) return false
+  try {
+    const mtime = fs.statSync(PROFILES_FILE).mtimeMs
+    let last = 0; try { last = Number(fs.readFileSync(ACCT_SYNC, 'utf8')) || 0 } catch {}
+    if (mtime <= last) return false // پروفایل‌ها از آخرین ساختِ حساب تغییری نکرده‌اند
+    createBuilderAccounts()
+    fs.writeFileSync(ACCT_SYNC, String(mtime))
     return true
   } catch { return false }
 }

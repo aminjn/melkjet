@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { createAccount, accountExists } from './account-store'
+import { bulkCreate, listAccounts } from './account-store'
 import { listRoles } from './role-store'
 
 // ─── پرشین سازه: کانفیگِ اسکرپ + دادهٔ اسکرپ‌شده + پروفایلِ سازنده‌ها ───────────
@@ -179,26 +179,20 @@ function profilePhone(p: PSProfile): string | null {
   for (const ph of p.phones || []) { const n = String(ph).replace(/\D/g, ''); if (/^09\d{9}$/.test(n)) return n }
   return null
 }
-// چند حسابِ سازنده از پروفایل‌ها قابلِ ساخت است / ساخته شده.
+// چند حسابِ سازنده از پروفایل‌ها ساخته شده (با یک‌بار خواندنِ حساب‌ها).
 export function builderAccountCount(): number {
+  const phones = new Set(listAccounts().map(a => a.phone))
   let exist = 0
-  for (const p of Object.values(getProfiles())) { const ph = profilePhone(p); if (ph && accountExists(ph)) exist++ }
+  for (const p of Object.values(getProfiles())) { const ph = profilePhone(p); if (ph && phones.has(ph)) exist++ }
   return exist
 }
-// برای هر سازندهٔ شماره‌دار، یک حسابِ ملک‌جت (نقشِ سازنده) می‌سازد — تکراری‌ها رد می‌شوند.
+// برای هر سازندهٔ شماره‌دار، یک حسابِ ملک‌جت (نقشِ سازنده) می‌سازد — تکراری‌ها رد می‌شوند (دسته‌ای).
 export function createBuilderAccounts(): { created: number; skipped: number; noPhone: number; total: number } {
   const roleId = builderRoleId() || undefined
   const profiles = Object.values(getProfiles())
-  let created = 0, skipped = 0, noPhone = 0
-  const seen = new Set<string>()
-  for (const p of profiles) {
-    const phone = profilePhone(p)
-    if (!phone) { noPhone++; continue }
-    if (seen.has(phone)) { skipped++; continue }
-    seen.add(phone)
-    if (accountExists(phone)) { skipped++; continue }
-    const r = createAccount(phone, { name: p.name || undefined, role: roleId })
-    if (r.ok) created++; else skipped++
-  }
-  return { created, skipped, noPhone, total: profiles.length }
+  const rows: { phone: string; name?: string; role?: string }[] = []
+  let noPhone = 0
+  for (const p of profiles) { const phone = profilePhone(p); if (!phone) { noPhone++; continue } rows.push({ phone, name: p.name || undefined, role: roleId }) }
+  const r = bulkCreate(rows)
+  return { created: r.created, skipped: r.skipped + r.invalid, noPhone, total: profiles.length }
 }

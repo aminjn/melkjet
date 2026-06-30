@@ -5,7 +5,7 @@ import { processTrackerQueue } from './tracker-sender'
 import { processSavedSearches } from './alerts-runner'
 import { processProfileGate } from './profile-gate-runner'
 import { processWorkflows } from './workflow-runner'
-import { maybeRunReveal } from './persiansaze-cron'
+import { maybeRunReveal, maybeCreateAccounts } from './persiansaze-cron'
 
 // زمان‌بندِ سبک و بدونِ وابستگی برای سینکِ خودکارِ دیوار. روی سرورِ همیشه‌روشنِ
 // pm2 با یک setInterval اجرا می‌شود؛ یک قفلِ global از اجرای موازی/تکراری جلوگیری می‌کند.
@@ -29,6 +29,7 @@ async function tick(): Promise<{ due: number; synced: number }> {
     try { await processProfileGate(Date.now()) } catch { /* سامانهٔ تکمیلِ پروفایل */ }
     try { await processWorkflows(Date.now()) } catch { /* موتورِ اتوماسیونِ گردش‌کار */ }
     try { maybeRunReveal(Date.now()) } catch { /* گرفتنِ هفتگیِ شمارهٔ سازنده‌های پرشین سازه */ }
+    try { maybeCreateAccounts() } catch { /* ساختِ خودکارِ حسابِ سازنده پس از به‌روزشدنِ پروفایل‌ها */ }
     due = listDueSources(Date.now())
     for (const { phone, source } of due) {
       try {
