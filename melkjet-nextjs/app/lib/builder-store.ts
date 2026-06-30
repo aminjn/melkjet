@@ -24,7 +24,9 @@ export interface Project {
 function id() { return randomBytes(6).toString('hex') }
 
 // per-owner: هر سازنده پروژه‌های خودش را دارد (کلید = شمارهٔ مالک). بدونِ دیتای دمو.
-type OwnerData = { projects: Project[]; imported?: boolean }
+// با هر تغییرِ منطقِ واردکردن، IMPORT_VERSION را بالا ببر تا همه خودکار دوباره وارد شوند (بدونِ rmِ دستی).
+const IMPORT_VERSION = 3
+type OwnerData = { projects: Project[]; imported?: boolean; importVersion?: number }
 type DB = Record<string, OwnerData>
 function load(): DB { if (existsSync(FILE)) { try { return JSON.parse(readFileSync(FILE, 'utf-8')) } catch {} } return {} }
 function save(db: DB) { writeFileSync(FILE, JSON.stringify(db), 'utf-8') }
@@ -91,7 +93,8 @@ function milestonesForPhase(label: string): { milestones: Milestone[]; progress:
 // سازنده خودش بفروشد. اگر سازنده‌ای در پرشین سازه نباشد، خالی می‌ماند.
 export async function ensureImported(owner: string): Promise<void> {
   const db = load()
-  if (db[owner]?.imported) return
+  // اگر با نسخهٔ فعلیِ منطقِ import واردشده، رد کن؛ وگرنه دوباره وارد کن (خودکار، بدونِ rm).
+  if (db[owner]?.importVersion === IMPORT_VERSION) return
   let projects: Project[] = []
   try {
     const { getProfiles, regionLabel, phaseLabel } = await import('./persiansaze-store')
@@ -111,7 +114,7 @@ export async function ensureImported(owner: string): Promise<void> {
       }
     }
   } catch { /* اگر پرشین سازه در دسترس نبود، خالی */ }
-  db[owner] = { projects, imported: true }
+  db[owner] = { projects, imported: true, importVersion: IMPORT_VERSION }
   save(db)
 }
 
