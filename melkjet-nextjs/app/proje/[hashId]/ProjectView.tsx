@@ -4,6 +4,7 @@ import Link from 'next/link'
 import Nav from '../../components/Nav'
 import Footer from '../../components/Footer'
 import StaticMap from '../../components/StaticMap'
+import NeshanMap from '../../components/NeshanMap'
 import RevealPhone from '../../components/RevealPhone'
 
 const fa = (n: number | string) => String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d])
@@ -299,7 +300,8 @@ export default function ProjectView({ p }: { p: ViewProject }) {
               {[
                 ['منطقه', p.region || '—'],
                 ['مرحلهٔ ساخت', p.phase || '—'],
-                ['طبقات', p.floors ? faNum(p.floors) : '—'],
+                ['طبقاتِ روی‌زمین', p.floors ? faNum(p.floors) : '—'],
+                ...(p.subFloors ? [['طبقاتِ زیرزمین', faNum(p.subFloors)]] as [string, string][] : []),
                 ['تعداد واحد', p.units ? faNum(p.units) : '—'],
                 ['زیربنا', p.residentialArea ? `${faNum(p.residentialArea)} م²` : '—'],
                 ['متراژ زمین', p.groundArea ? `${faNum(p.groundArea)} م²` : '—'],
@@ -316,7 +318,10 @@ export default function ProjectView({ p }: { p: ViewProject }) {
           {/* Map */}
           <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 16 }}>
             <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>موقعیتِ مکانی</div>
-            <StaticMap points={p.lat != null && p.lng != null ? [{ lat: Number(p.lat), lng: Number(p.lng) }] : []} aspect={1.5} />
+            {p.lat != null && p.lng != null
+              ? <NeshanMap points={[{ id: p.hashId, lat: Number(p.lat), lng: Number(p.lng), title: p.title }]} center={{ lat: Number(p.lat), lng: Number(p.lng) }} zoom={15} height={200}
+                  fallback={<StaticMap points={[{ lat: Number(p.lat), lng: Number(p.lng) }]} aspect={1.5} />} />
+              : <StaticMap points={[]} aspect={1.5} />}
             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>📍 {p.region}</div>
           </div>
 

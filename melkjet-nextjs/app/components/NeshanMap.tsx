@@ -28,7 +28,7 @@ function loadSdk(): Promise<any> {
 }
 
 export default function NeshanMap({
-  points = [], center, zoom = 13, height = '100%', onSelect, theme,
+  points = [], center, zoom = 13, height = '100%', onSelect, theme, fallback,
 }: {
   points?: MapPoint[]
   center?: { lat: number; lng: number }
@@ -36,6 +36,7 @@ export default function NeshanMap({
   height?: number | string
   onSelect?: (id: string) => void
   theme?: 'day' | 'night'
+  fallback?: React.ReactNode   // اگر SDK بارگذاری نشد، این نمایش داده می‌شود (مثلِ نقشهٔ استاتیک)
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const mapRef = useRef<any>(null)
@@ -92,6 +93,8 @@ export default function NeshanMap({
   }, [points, center?.lat, center?.lng])
 
   if (err) {
+    // اگر SDKِ تعاملی بارگذاری نشد، به نقشهٔ استاتیک (که مطمئن است) برگرد.
+    if (fallback) return <>{fallback}</>
     return (
       <div style={{ width: '100%', height, borderRadius: 16, border: '1px solid var(--line)', background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: 13, textAlign: 'center', padding: 20 }}>
         {err === 'no-key' ? 'نقشه به «کلیدِ نقشهٔ نشان» (web.…) نیاز دارد — پنل سوپرادمین → اتصال‌ها → نشان → کلید نقشه' : 'بارگذاریِ نقشه ناموفق بود.'}

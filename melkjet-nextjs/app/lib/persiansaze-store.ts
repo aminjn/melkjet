@@ -55,6 +55,7 @@ export interface PSProject {
   address?: string
   receptor?: string        // نامِ سازنده/کارفرما
   cityId?: number; regionId?: number; subRegionId?: number
+  regionName?: string; subRegionName?: string
   phaseId?: number; phaseName?: string; usageTypeId?: number; structureTypeId?: number
   groundArea?: number; residentialArea?: number
   floors?: number; subFloors?: number; units?: number
@@ -89,7 +90,7 @@ export interface PSProfile {
 
 export interface PSReveals {
   meta?: { availableCount?: number | null; lastRevealAt?: string; revealedTotal?: number }
-  items?: Record<string, { constructorId: number; name?: string; phones?: string[]; hasDup?: boolean; receptor?: string; revealedAt?: string; photos?: string[]; detail?: { address?: string; latitude?: number; longitude?: number; floors?: number; subFloors?: number; units?: number; groundArea?: number; residentialArea?: number; phaseId?: number; phaseName?: string } }>
+  items?: Record<string, { constructorId: number; name?: string; phones?: string[]; hasDup?: boolean; receptor?: string; revealedAt?: string; photos?: string[]; detail?: { address?: string; latitude?: number; longitude?: number; floors?: number; subFloors?: number; units?: number; groundArea?: number; residentialArea?: number; phaseId?: number; phaseName?: string; regionId?: number; regionName?: string; subRegionName?: string } }>
 }
 export function getReveals(): PSReveals {
   return readCached<PSReveals>(REVEALS_FILE, { meta: {}, items: {} })
@@ -130,9 +131,21 @@ export function getMeta(): { lastSync?: string; totalProjects: number; totalBuil
 }
 
 // ─── کمک‌ها: نامِ منطقه/مرحله ───────────────────────────────────────────────
-export function regionLabel(p: { cityId?: number; regionId?: number }): string {
-  if (p.cityId === 1 && p.regionId && p.regionId > 100 && p.regionId < 123) return `تهران، منطقه ${p.regionId - 100}`
-  if (p.regionId) return `منطقه ${p.regionId}`
+const REGIONS_FILE = path.join(process.cwd(), '.persiansaze-regions.json')
+// نگاشتِ regionId→name که worker از پرشین سازه ذخیره کرده (کشِ mtime).
+function regionNames(): Record<number, string> {
+  const file = readCached<Record<string, string>>(REGIONS_FILE, {})
+  const out: Record<number, string> = {}
+  for (const [k, v] of Object.entries(file || {})) if (v) out[Number(k)] = String(v)
+  return out
+}
+export function regionLabel(p: { cityId?: number; regionId?: number; regionName?: string }): string {
+  const nm = p.regionName || (p.regionId ? regionNames()[p.regionId] : '')
+  if (nm) return /تهران/.test(nm) || p.cityId !== 1 ? nm : `تهران، ${nm}`
+  // مناطقِ شهرداریِ تهران: regionId 101..122 = منطقه ۱..۲۲ (قطعی).
+  if (p.cityId === 1 && p.regionId && p.regionId > 100 && p.regionId <= 122) return `تهران، منطقه ${p.regionId - 100}`
+  // ناشناخته: کدِ خام را نشان نده. تهران → «تهران»؛ بقیه → خالی (تا re-revealِ بعدی نام بیاید).
+  if (p.cityId === 1) return 'تهران'
   return ''
 }
 // نگاشتِ مرحله‌های ساخت (از روی UIِ پرشین سازه؛ قابلِ تکمیل).
@@ -196,6 +209,8 @@ export function rebuildProfiles(): { created: number; updated: number; total: nu
         if (d.residentialArea != null) proj.residentialArea = d.residentialArea
         if (d.phaseId != null) proj.phaseId = d.phaseId
         if (d.phaseName) proj.phaseName = d.phaseName
+        if (d.regionName) proj.regionName = d.regionName
+        if (d.subRegionName) proj.subRegionName = d.subRegionName
       }
       b.projects.push(proj); if (proj.regionId) b.regions.add(proj.regionId)
     }

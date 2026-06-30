@@ -4,6 +4,7 @@ import Link from 'next/link'
 import Nav from '../components/Nav'
 import Footer from '../components/Footer'
 import StaticMap from '../components/StaticMap'
+import NeshanMap from '../components/NeshanMap'
 
 interface MapPoint { id: string; lat: number; lng: number; title?: string; price?: string }
 const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
@@ -161,11 +162,12 @@ export default function Sazandeha() {
           </button>
         </div>
 
-        {/* نقشه با پینِ نتایجِ فیلتر — کلیک روی پین = صفحهٔ پروژه */}
+        {/* نقشهٔ تعاملی (زوم/جابه‌جایی) با پینِ نتایج — اگر SDK بارگذاری نشد، نقشهٔ استاتیک */}
         {showMap && (
           <div style={{ marginBottom: 18 }}>
-            <StaticMap points={points.map(p => ({ id: p.id, lat: p.lat, lng: p.lng }))} aspect={2.4} onSelect={(id) => { window.location.href = `/proje/${id}` }} />
-            <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 6 }}>{fa(Math.min(points.length, 60))} پروژه از {fa(points.length)} نتیجه روی نقشه · روی هر پین بزنید تا صفحهٔ پروژه باز شود</div>
+            <NeshanMap points={points} height={460} onSelect={(id) => { window.location.href = `/proje/${id}` }}
+              fallback={<StaticMap points={points.map(p => ({ id: p.id, lat: p.lat, lng: p.lng }))} aspect={2.4} onSelect={(id) => { window.location.href = `/proje/${id}` }} />} />
+            <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 6 }}>{fa(points.length)} پروژه روی نقشه · روی هر پین بزنید تا صفحهٔ پروژه باز شود</div>
           </div>
         )}
 

@@ -17,6 +17,7 @@ const DATA_FILE = path.join(CWD, '.persiansaze-data.json')
 const REVEALS_FILE = path.join(CWD, '.persiansaze-reveals.json')
 const PROFILES_FILE = path.join(CWD, '.persiansaze-profiles.json')
 const PHASES_FILE = path.join(CWD, '.persiansaze-phases.json')
+const REGIONS_FILE = path.join(CWD, '.persiansaze-regions.json')
 
 const log = (...a) => console.log(new Date().toLocaleTimeString('en-GB'), ...a)
 function readJson(f, d) { try { return JSON.parse(fs.readFileSync(f, 'utf8')) } catch { return d } }
@@ -78,6 +79,8 @@ function buildProfiles(reveals, projects) {
         if (d.residentialArea != null) proj.residentialArea = d.residentialArea
         if (d.phaseId != null) proj.phaseId = d.phaseId
         if (d.phaseName) proj.phaseName = d.phaseName
+        if (d.regionName) proj.regionName = d.regionName
+        if (d.subRegionName) proj.subRegionName = d.subRegionName
       }
       b.projects.push(proj); if (proj.regionId) b.regions.add(proj.regionId)
     }
@@ -124,6 +127,9 @@ async function main() {
         groundArea: j.groundArea, residentialArea: j.residentialArea,
         phaseId: j.phaseId,
         phaseName: j.phaseName || j.phaseTitle || j.phase?.name || j.phase?.title || j.phaseFa || '',
+        regionId: j.regionId,
+        regionName: j.regionName || j.region?.name || j.region?.title || j.regionTitle || '',
+        subRegionName: j.subRegionName || j.subRegion?.name || '',
       }
     } catch { return { photos: [] } }
   }
@@ -216,6 +222,15 @@ async function main() {
   }
   fs.writeFileSync(PHASES_FILE, JSON.stringify(phasesMap))
   log(`نگاشتِ مرحله‌ها: ${Object.keys(phasesMap).length} مرحله شناخته شد.`)
+
+  // نگاشتِ نامِ منطقه‌ها (regionId→name) از جزئیات — تا «منطقه ۱۲۳» با نامِ واقعی نشان داده شود.
+  const regionsMap = readJson(REGIONS_FILE, {})
+  for (const rv of Object.values(reveals.items)) {
+    const d = rv.detail
+    if (d && d.regionId != null && d.regionName) regionsMap[d.regionId] = d.regionName
+  }
+  fs.writeFileSync(REGIONS_FILE, JSON.stringify(regionsMap))
+  log(`نگاشتِ منطقه‌ها: ${Object.keys(regionsMap).length} منطقه شناخته شد.`)
 
   console.log('\n═══════════ نتیجه ═══════════')
   console.log(`شمارهٔ گرفته‌شده در این اجرا: ${got}  (تکراری: ${dup}، خارج‌محدوده‌ردشده: ${skipped}، AccessDenied: ${denied})`)

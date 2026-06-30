@@ -43,14 +43,18 @@ export default async function ProjectPage({ params }: { params: Promise<{ hashId
   const photos: string[] = (p.photos && p.photos.length) ? p.photos : (p.photo?.imageUrl ? [p.photo.imageUrl] : (p.photo?.imageThumbnailUrl ? [p.photo.imageThumbnailUrl] : []))
 
   // واحدها بر طبقاتِ واقعی (مشتق از تعدادِ طبقه/واحدِ واقعی — بدونِ قیمت/خوابِ ساختگی).
-  const floors = Math.max(1, Number(p.floors) || 1)
+  // طبقاتِ پرشین سازه «کل» است (شاملِ زیرزمین). طبقاتِ روی‌زمین = کل − زیرزمین.
+  const totalFloors = Math.max(1, Number(p.floors) || 1)
+  const subFloors = Math.max(0, Number(p.subFloors) || 0)
+  const aboveGround = subFloors > 0 && subFloors < totalFloors ? totalFloors - subFloors : totalFloors
   const totalUnits = Math.max(0, Number(p.units) || 0)
   const avgArea = totalUnits ? Math.round((Number(p.residentialArea) || 0) / totalUnits) : 0
+  // واحدها روی طبقاتِ روی‌زمین پخش می‌شوند (نه طبقهٔ زیرزمین).
   const perFloor: { floor: number; count: number }[] = []
   if (totalUnits) {
     const counts: Record<number, number> = {}
-    for (let i = 0; i < totalUnits; i++) { const fl = (i % floors) + 1; counts[fl] = (counts[fl] || 0) + 1 }
-    for (let f = 1; f <= floors; f++) if (counts[f]) perFloor.push({ floor: f, count: counts[f] })
+    for (let i = 0; i < totalUnits; i++) { const fl = (i % aboveGround) + 1; counts[fl] = (counts[fl] || 0) + 1 }
+    for (let f = 1; f <= aboveGround; f++) if (counts[f]) perFloor.push({ floor: f, count: counts[f] })
   }
 
   // پروژه‌های مشابه: ابتدا سایرِ پروژه‌های همین سازنده، سپس هم‌منطقه (سازندهٔ دیگر).
@@ -69,8 +73,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ hashId
     milestones,
     statusLabel: phase || 'در حال ساخت',
     photos,
-    floors: Number(p.floors) || 0,
-    subFloors: Number(p.subFloors) || 0,
+    floors: aboveGround,
+    subFloors,
     units: totalUnits,
     residentialArea: Number(p.residentialArea) || 0,
     groundArea: Number(p.groundArea) || 0,
