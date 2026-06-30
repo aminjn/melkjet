@@ -130,6 +130,11 @@ export default function DirectoryPage() {
   const [loading, setLoading] = useState(true)
   const [categoryList, setCategoryList] = useState<string[]>(DEFAULT_CATS)
 
+  // دستهٔ انتخابی از پارامترِ آدرس (?category=) — تا لینک‌های منوی «متخصصان» مستقیم باز شوند.
+  useEffect(() => {
+    try { const c = new URLSearchParams(window.location.search).get('category'); if (c) setActiveCategory(c) } catch {}
+  }, [])
+
   useEffect(() => {
     fetch('/api/content/categories', { cache: 'no-store' })
       .then(r => r.ok ? r.json() : { categories: [] })

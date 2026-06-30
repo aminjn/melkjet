@@ -84,17 +84,20 @@ export function valueScore(thisPpm: number, avgPpm: number): number {
 }
 
 // Market overview: top neighbourhoods by avg price/m² and listing counts.
-export function marketOverview() {
-  const recs = records()
+function normCity(s: string): string { return (s || '').replace(/‌/g, '').replace(/\s+/g, '').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim() }
+export function marketOverview(city?: string) {
+  let recs = records()
+  if (city) { const c = normCity(city); recs = recs.filter(r => { const rc = normCity(r.city); return rc === c || rc.includes(c) || c.includes(rc) }) }
   const byKey: Record<string, number[]> = {}
   for (const r of recs) {
     const k = `${r.district || '—'}|${r.city || '—'}`
     ;(byKey[k] = byKey[k] || []).push(r.ppm)
   }
   const rows = Object.entries(byKey).map(([k, vals]) => {
-    const [district, city] = k.split('|')
+    const [district, c] = k.split('|')
     const a = agg(vals)!
-    return { district, city, count: a.count, avg: a.avg, median: a.median, min: a.min, max: a.max }
+    return { district, city: c, count: a.count, avg: a.avg, median: a.median, min: a.min, max: a.max }
   }).sort((a, b) => b.count - a.count)
-  return { totalSaleListings: recs.length, neighbourhoods: rows.length, rows: rows.slice(0, 60) }
+  const cityAvg = recs.length ? Math.round(recs.reduce((s, r) => s + r.ppm, 0) / recs.length) : 0
+  return { totalSaleListings: recs.length, neighbourhoods: rows.length, cityAvg, rows: rows.slice(0, 80) }
 }
