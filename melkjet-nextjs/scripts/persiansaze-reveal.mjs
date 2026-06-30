@@ -90,12 +90,37 @@ async function main() {
   const { browser, page } = session
   log('✓ ورود موفق.')
 
-  let got = 0, dup = 0, fail = 0, available = null
+  const reveal = (hash) => api(page, `/rest/api/user/v1/Project/${hash}/Constructor`, { method: 'POST', body: '{}' })
+  // محدودهٔ دسترسیِ اشتراک: پروژه فقط اگر شهر/منطقه/مرحله‌اش در محدوده باشد قابلِ گرفتن است.
+  let scope = null
+  const inScope = (p) => {
+    if (!scope) return true
+    if (scope.cityIds?.length && !scope.cityIds.includes(p.cityId)) return false
+    if (scope.regionIds?.length && !scope.regionIds.includes(p.regionId)) return false
+    if (scope.phaseIds?.length && !scope.phaseIds.includes(p.phaseId)) return false
+    return true
+  }
+
+  let got = 0, dup = 0, denied = 0, skipped = 0, available = null, consecDenied = 0
   const cap = cfg.maxReveals || Infinity
+  // محدوده و سهمیه را از یک پروژهٔ قبلاً‌گرفته‌شده (رایگان) یا 44511088 بخوان
+  try {
+    const probeHash = Object.keys(reveals.items)[0] || '44511088'
+    const pr = await reveal(probeHash)
+    if (pr.json?.updatedAccess) {
+      const ua = pr.json.updatedAccess
+      scope = { cityIds: ua.cityIds || [], regionIds: ua.regionIds || [], phaseIds: ua.phaseIds || [] }
+      available = ua.viewCounter?.availableCount ?? available
+      log(`محدودهٔ دسترسی: شهر=${JSON.stringify(scope.cityIds)} منطقه=${JSON.stringify(scope.regionIds)} مرحله=${JSON.stringify(scope.phaseIds)} | سهمیهٔ باقی‌مانده=${available ?? '?'}`)
+    }
+  } catch { /* بی‌خیال، بدونِ scope ادامه می‌دهیم */ }
+
   try {
     for (const proj of pending) {
       if (got >= cap) { log(`به سقفِ ${cap} رسید.`); break }
-      const r = await api(page, `/rest/api/user/v1/Project/${proj.hashId}/Constructor`, { method: 'POST', body: '{}' })
+      if (available != null && available <= 0) { log('سهمیهٔ هفتگی تمام شد.'); break }
+      if (!inScope(proj)) { skipped++; continue } // خارج از محدوده — بدونِ مصرفِ سهمیه رد کن
+      const r = await reveal(proj.hashId)
       const j = r.json
       if (r.status === 200 && j && j.status === 'NoError' && j.constructor) {
         const c = j.constructor
@@ -104,18 +129,16 @@ async function main() {
           hasDup: !!j.hasVisitedProjectsFromSameConstructor, receptor: proj.receptor || '', revealedAt: new Date().toISOString(),
         }
         if (j.hasVisitedProjectsFromSameConstructor) dup++
-        got++
+        got++; consecDenied = 0
         available = j.updatedAccess?.viewCounter?.availableCount ?? available
-        if (got % 25 === 0) log(`گرفته‌شده ${got} | سهمیهٔ باقی‌مانده ${available ?? '?'} | تکراری ${dup}`)
-        if (available != null && available <= 0) { log('سهمیهٔ هفتگی تمام شد.'); break }
+        if (got % 25 === 0) { log(`گرفته‌شده ${got} | سهمیهٔ باقی‌مانده ${available ?? '?'} | تکراری ${dup} | ردشده(محدوده) ${skipped}`); fs.writeFileSync(REVEALS_FILE, JSON.stringify({ ...reveals, meta: { availableCount: available, lastRevealAt: new Date().toISOString(), revealedTotal: Object.keys(reveals.items).length } })) }
       } else {
-        fail++
-        // پیامِ خطا (مثلاً اتمامِ سهمیه یا عدمِ دسترسی)
-        const st = j?.status || j?.errors?.[0]?.code || r.status
-        if (/limit|quota|exceed|access/i.test(String(st)) || r.status === 403) { log(`توقف به‌خاطرِ دسترسی/سهمیه: ${st}`); break }
-        if (fail >= 10) { log('۱۰ خطای پیاپی — توقف.'); break }
+        // AccessDenied = خارج از محدوده → رد کن و ادامه بده (متوقف نشو)
+        denied++; consecDenied++
+        // اگر روی پروژه‌های ظاهراً درون‌محدوده هم پشتِ‌سرِ‌هم رد می‌خوریم، احتمالاً سهمیه تمام شده
+        if (consecDenied >= 40) { log(`۴۰ ردِ پیاپی — احتمالاً سهمیه تمام شده یا محدوده تنگ است. توقف.`); break }
       }
-      await page.waitForTimeout(350)
+      await page.waitForTimeout(300)
     }
   } catch (e) { log('خطا:', e.message) }
   await browser.close()
@@ -126,7 +149,7 @@ async function main() {
   fs.writeFileSync(PROFILES_FILE, JSON.stringify(profiles))
 
   console.log('\n═══════════ نتیجه ═══════════')
-  console.log(`شمارهٔ گرفته‌شده در این اجرا: ${got}  (تکراری: ${dup}، ناموفق: ${fail})`)
+  console.log(`شمارهٔ گرفته‌شده در این اجرا: ${got}  (تکراری: ${dup}، خارج‌محدوده‌ردشده: ${skipped}، AccessDenied: ${denied})`)
   console.log(`کل گرفته‌شده: ${reveals.meta.revealedTotal}`)
   console.log(`سهمیهٔ باقی‌مانده: ${available ?? '?'} از ۵۰۰`)
   console.log(`پروفایلِ سازنده (یکتا با شناسه): ${Object.keys(profiles).length}`)
