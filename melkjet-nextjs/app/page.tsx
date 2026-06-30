@@ -2,12 +2,15 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import Nav from './components/Nav'
 import Footer from './components/Footer'
-import AIAssistant from './components/AIAssistant'
 import PropertyCard from './components/PropertyCard'
-import BannerSlot from './components/BannerSlot'
 import { fetchContent, gradientFor, initialsFor, type ContentItem } from './lib/content-display'
+
+// ویجت‌های فقط‌کلاینتی را lazy و بدونِ SSR بارگذاری کن تا رندرِ اولِ صفحهٔ اصلی سبک بماند.
+const AIAssistant = dynamic(() => import('./components/AIAssistant'), { ssr: false })
+const BannerSlot = dynamic(() => import('./components/BannerSlot'), { ssr: false })
 
 const featured = [
   { id: '1', title: 'آپارتمان لوکس نوساز', location: 'سعادت‌آباد، تهران', price: '۱۷٫۸ میلیارد', size: '۱۴۰', beds: '۳', year: '۱۴۰۲', tag: 'ویژه', score: 96, img: 'linear-gradient(135deg,#3a3530,#211e1b)' },

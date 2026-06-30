@@ -43,6 +43,17 @@ async function tick(): Promise<{ due: number; synced: number }> {
   return { due: due.length, synced }
 }
 
+// گرم‌کردنِ همهٔ instanceهای cluster بعد از بوت/ری‌استارت (اولین رندرِ هر صفحه سنگین است؛
+// با چند ping به localhost، load-balancer به‌نوبت همهٔ instanceها را گرم می‌کند تا
+// هیچ کاربری به instanceِ سرد نخورد و صفحهٔ اصلی ۸-۱۰ ثانیه‌ای نشود).
+async function warmUp(rounds = 4) {
+  const port = process.env.PORT || 3000
+  const paths = ['/', '/search', '/pricing', '/store', '/blog']
+  for (let r = 0; r < rounds; r++) {
+    for (const p of paths) { try { await fetch(`http://127.0.0.1:${port}${p}`, { cache: 'no-store' }) } catch {} }
+  }
+}
+
 export function ensureCronStarted() {
   // در cluster mode فقط instance صفر کرون را اجرا کند (وگرنه چند Chrome/کرون موازی راه می‌افتد).
   const inst = process.env.NODE_APP_INSTANCE
@@ -51,8 +62,10 @@ export function ensureCronStarted() {
   const g = globalThis.__mjCron!
   if (g.started) return
   g.started = true
-  setTimeout(() => { tick().catch(() => {}) }, 30_000)         // کمی بعد از بوت
+  setTimeout(() => { warmUp(6).catch(() => {}) }, 8_000)        // گرم‌کردنِ همهٔ instanceها پس از بوت
+  setTimeout(() => { tick().catch(() => {}) }, 30_000)          // کمی بعد از بوت
   setInterval(() => { tick().catch(() => {}) }, TICK_MS)
+  setInterval(() => { warmUp(1).catch(() => {}) }, 90_000)      // نگه‌داشتنِ گرمی (هر ۹۰ ثانیه)
 }
 
 // اجرای فوریِ یک چرخه (برای تریگرِ دستی/خارجی).
