@@ -143,6 +143,8 @@ async function main() {
     builders,
   }
   fs.writeFileSync(DATA_FILE, JSON.stringify(out))
+  // متادیتای سبک تا اپ برای شمارش‌ها فایلِ بزرگ را پارس نکند (جلوگیری از کندیِ سایت)
+  try { fs.writeFileSync(path.join(CWD, '.persiansaze-meta.json'), JSON.stringify({ lastSync: out.lastSync, totalProjects: out.totalProjects, totalBuilders: out.totalBuilders })) } catch {}
   const secs = Math.round((Date.now() - t0) / 1000)
   console.log('\n═══════════ نتیجه ═══════════')
   console.log(`پروژه‌ها: ${all.length.toLocaleString('en-US')}`)

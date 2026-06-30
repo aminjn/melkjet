@@ -10,6 +10,7 @@ import { listRoles } from './role-store'
 
 const CONFIG_FILE = path.join(process.cwd(), '.persiansaze-config.json')
 const DATA_FILE = path.join(process.cwd(), '.persiansaze-data.json')
+const META_FILE = path.join(process.cwd(), '.persiansaze-meta.json')
 const PROFILES_FILE = path.join(process.cwd(), '.persiansaze-profiles.json')
 const REVEALS_FILE = path.join(process.cwd(), '.persiansaze-reveals.json')
 
@@ -87,8 +88,19 @@ export function getConfigMasked() {
 }
 
 // ─── خواندنِ دادهٔ اسکرپ‌شده ─────────────────────────────────────────────────
+// هشدار: فایلِ بزرگ (ده‌ها مگابایت). فقط در موتورِ reveal/rebuild استفاده شود، نه مسیرهای پرتکرار.
 export function getData(): PSData {
   try { return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')) } catch { return {} }
+}
+
+// متادیتای سبک (شمارش‌ها) — بدونِ پارسِ فایلِ بزرگ. اگر نبود، یک‌بار از دیتا ساخته و کش می‌شود.
+export function getMeta(): { lastSync?: string; totalProjects: number; totalBuilders: number } {
+  try { const m = JSON.parse(fs.readFileSync(META_FILE, 'utf8')); if (typeof m.totalProjects === 'number') return m } catch {}
+  // self-heal: یک‌بار از فایلِ بزرگ بخوان و متای کوچک را بنویس
+  const d = getData()
+  const meta = { lastSync: d.lastSync, totalProjects: (d.projects || []).length || d.totalProjects || 0, totalBuilders: (d.builders || []).length || d.totalBuilders || 0 }
+  try { fs.writeFileSync(META_FILE, JSON.stringify(meta)) } catch {}
+  return meta
 }
 
 // ─── کمک‌ها: نامِ منطقه/مرحله ───────────────────────────────────────────────
@@ -156,7 +168,7 @@ export function profileStats() {
   const all = Object.values(getProfiles())
   const reveals = getReveals()
   const revealedProjects = Object.keys(reveals.items || {}).length
-  const totalProjects = (getData().projects || []).length
+  const totalProjects = getMeta().totalProjects
   return {
     builders: all.length,
     withPhone: all.filter(p => (p.phones || []).length > 0).length,

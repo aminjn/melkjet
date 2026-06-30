@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import {
-  getConfigMasked, saveConfig, getConfig, getData, rebuildProfiles,
+  getConfigMasked, saveConfig, getConfig, getMeta, rebuildProfiles,
   listProfiles, getProfile, profileStats, createBuilderAccounts, regionLabel, phaseLabel,
 } from '@/app/lib/persiansaze-store'
 
@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
     const projects = (p.projects || []).map(pr => ({ ...pr, regionLabel: regionLabel(pr), phaseLabel: phaseLabel(pr) }))
     return NextResponse.json({ ...p, projects })
   }
-  const data = getData()
+  const meta = getMeta()
   let log = '', revealLog = ''
   try { log = fs.readFileSync(LOG_FILE, 'utf8').slice(-1500) } catch {}
   try { revealLog = fs.readFileSync(REVEAL_LOG, 'utf8').slice(-1500) } catch {}
@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
     config: getConfigMasked(),
     running: isRunning(),
     revealing: isRevealing(),
-    data: { lastSync: data.lastSync, totalProjects: data.totalProjects || 0, totalBuilders: data.totalBuilders || 0 },
+    data: { lastSync: meta.lastSync, totalProjects: meta.totalProjects || 0, totalBuilders: meta.totalBuilders || 0 },
     profiles: profileStats(),
     log,
     revealLog,

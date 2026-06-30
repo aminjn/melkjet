@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { getConfig, getReveals, getData, createBuilderAccounts } from './persiansaze-store'
+import { getConfig, getReveals, getMeta, createBuilderAccounts } from './persiansaze-store'
 
 // کرونِ هفتگیِ پرشین سازه: وقتی سهمیه ریست شد (یا باقی‌مانده > ۰)، خودکار
 // موتورِ گرفتنِ شماره را در پس‌زمینه اجرا می‌کند. توسطِ cron-runner صدا زده می‌شود.
@@ -31,8 +31,7 @@ export function maybeRunReveal(now = Date.now()): boolean {
   const resume = typeof avail === 'number' && avail > 0 && (gotLast == null || gotLast > 0) && now - last >= 12 * 3600 * 1000
   const due = !last || (now - last >= WEEK) || resume
   if (!due) return false
-  const projects = getData().projects || []
-  const pending = projects.length - Object.keys(reveals.items || {}).length
+  const pending = getMeta().totalProjects - Object.keys(reveals.items || {}).length
   if (pending <= 0) return false
   try {
     const out = fs.openSync(REVEAL_LOG, 'w')
