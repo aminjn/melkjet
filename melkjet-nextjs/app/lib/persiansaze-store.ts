@@ -9,6 +9,7 @@ import path from 'path'
 const CONFIG_FILE = path.join(process.cwd(), '.persiansaze-config.json')
 const DATA_FILE = path.join(process.cwd(), '.persiansaze-data.json')
 const PROFILES_FILE = path.join(process.cwd(), '.persiansaze-profiles.json')
+const REVEALS_FILE = path.join(process.cwd(), '.persiansaze-reveals.json')
 
 export interface PSConfig {
   user: string
@@ -45,17 +46,24 @@ export interface PSData {
   builders?: PSBuilder[]
 }
 
-// پروفایلِ سازنده که در ملک‌جت ساخته/نگه‌داری می‌شود (با شماره و پروژه‌ها).
+// پروفایلِ سازنده — کلید: constructor.id (سازندهٔ واقعی که شماره با او می‌آید).
 export interface PSProfile {
-  id: string              // برابرِ نامِ سازنده (نرمال‌شده)
-  name: string
-  phone?: string          // پس از گرفتنِ شماره پر می‌شود
-  phoneRevealedAt?: string
+  id: string              // constructor.id
+  name: string            // نامِ واقعیِ سازنده
+  phones: string[]        // شماره‌های موبایل
+  phone?: string          // شمارهٔ اول (برای UI)
   projectCount: number
   projects: PSProject[]   // همهٔ پروژه‌های این سازنده
   regions: number[]
-  createdAt: string
-  updatedAt: string
+  revealedAt?: string
+}
+
+export interface PSReveals {
+  meta?: { availableCount?: number | null; lastRevealAt?: string; revealedTotal?: number }
+  items?: Record<string, { constructorId: number; name?: string; phones?: string[]; hasDup?: boolean; receptor?: string; revealedAt?: string }>
+}
+export function getReveals(): PSReveals {
+  try { return JSON.parse(fs.readFileSync(REVEALS_FILE, 'utf8')) } catch { return { meta: {}, items: {} } }
 }
 
 // ─── خواندن/نوشتنِ کانفیگ ───────────────────────────────────────────────────
@@ -95,69 +103,65 @@ export function phaseLabel(p: { phaseId?: number }): string {
   return (p.phaseId && PHASE_NAMES[p.phaseId]) || (p.phaseId ? `مرحله ${p.phaseId}` : '')
 }
 
-// ─── پروفایلِ سازنده‌ها ──────────────────────────────────────────────────────
-function normId(name: string) { return name.trim().replace(/\s+/g, ' ') }
-
+// ─── پروفایلِ سازنده‌ها (کلید: constructor.id) ──────────────────────────────
+// پروفایل‌ها را موتورِ reveal در .persiansaze-profiles.json می‌نویسد. این‌جا فقط می‌خوانیم.
 export function getProfiles(): Record<string, PSProfile> {
-  try { return JSON.parse(fs.readFileSync(PROFILES_FILE, 'utf8')) } catch { return {} }
+  const raw: Record<string, any> = (() => { try { return JSON.parse(fs.readFileSync(PROFILES_FILE, 'utf8')) } catch { return {} } })()
+  const out: Record<string, PSProfile> = {}
+  for (const [id, p] of Object.entries(raw)) {
+    out[id] = { id, name: p.name || '', phones: p.phones || (p.phone ? [p.phone] : []), phone: (p.phones && p.phones[0]) || p.phone, projectCount: p.projectCount || (p.projects || []).length, projects: p.projects || [], regions: p.regions || [], revealedAt: p.revealedAt }
+  }
+  return out
 }
-function saveProfiles(p: Record<string, PSProfile>) { fs.writeFileSync(PROFILES_FILE, JSON.stringify(p)) }
 
-// از دادهٔ اسکرپ‌شده، پروفایلِ هر سازنده را می‌سازد/به‌روزرسانی می‌کند (شماره را حفظ می‌کند).
+// از reveals (که موتور نوشته) پروفایل‌ها را بازسازی می‌کند — کلید: constructor.id.
 export function rebuildProfiles(): { created: number; updated: number; total: number } {
-  const data = getData()
-  const projects = data.projects || []
-  const byBuilder = new Map<string, PSProject[]>()
-  for (const p of projects) {
-    const name = normId(p.receptor || '')
-    if (!name) continue
-    if (!byBuilder.has(name)) byBuilder.set(name, [])
-    byBuilder.get(name)!.push(p)
+  const projects = getData().projects || []
+  const byHash = new Map(projects.map(p => [p.hashId, p]))
+  const reveals = getReveals()
+  const byCons = new Map<string, { id: string; name: string; phones: Set<string>; projects: PSProject[]; regions: Set<number>; revealedAt?: string }>()
+  for (const [hash, rv] of Object.entries(reveals.items || {})) {
+    const cid = String(rv.constructorId)
+    if (!byCons.has(cid)) byCons.set(cid, { id: cid, name: rv.name || '', phones: new Set(), projects: [], regions: new Set(), revealedAt: rv.revealedAt })
+    const b = byCons.get(cid)!
+    for (const ph of rv.phones || []) b.phones.add(ph)
+    if (rv.name && !b.name) b.name = rv.name
+    const proj = byHash.get(hash)
+    if (proj) { b.projects.push(proj); if (proj.regionId) b.regions.add(proj.regionId) }
   }
-  const existing = getProfiles()
-  const now = new Date().toISOString()
-  let created = 0, updated = 0
-  for (const [name, projs] of byBuilder) {
-    const id = name
-    const regions = [...new Set(projs.map(p => p.regionId).filter(Boolean) as number[])]
-    if (existing[id]) {
-      existing[id] = { ...existing[id], name, projectCount: projs.length, projects: projs, regions, updatedAt: now }
-      updated++
-    } else {
-      existing[id] = { id, name, projectCount: projs.length, projects: projs, regions, createdAt: now, updatedAt: now }
-      created++
-    }
-  }
-  saveProfiles(existing)
-  return { created, updated, total: Object.keys(existing).length }
+  const out: Record<string, any> = {}
+  for (const b of byCons.values()) out[b.id] = { id: b.id, name: b.name, phones: [...b.phones], projects: b.projects, regions: [...b.regions], projectCount: b.projects.length, revealedAt: b.revealedAt }
+  fs.writeFileSync(PROFILES_FILE, JSON.stringify(out))
+  return { created: Object.keys(out).length, updated: 0, total: Object.keys(out).length }
 }
 
-// شمارهٔ یک سازنده را ثبت می‌کند (پس از گرفتن از پرشین سازه).
-export function setProfilePhone(id: string, phone: string) {
-  const all = getProfiles()
-  if (all[normId(id)]) { all[normId(id)].phone = phone; all[normId(id)].phoneRevealedAt = new Date().toISOString(); saveProfiles(all) }
-}
-
-// لیستِ پروفایل‌ها با جستجو/صفحه‌بندی برای UI.
+// لیستِ پروفایل‌ها با جستجو (نام یا شماره) و صفحه‌بندی برای UI.
 export function listProfiles(opts: { search?: string; withPhone?: boolean; page?: number; pageSize?: number } = {}) {
   const all = Object.values(getProfiles())
   const q = (opts.search || '').trim()
   let rows = all
-  if (q) rows = rows.filter(p => p.name.includes(q))
-  if (opts.withPhone) rows = rows.filter(p => !!p.phone)
+  if (q) rows = rows.filter(p => p.name.includes(q) || (p.phones || []).some(ph => ph.includes(q)))
+  if (opts.withPhone) rows = rows.filter(p => (p.phones || []).length > 0)
   rows.sort((a, b) => b.projectCount - a.projectCount)
   const total = rows.length
   const page = Math.max(1, opts.page || 1), pageSize = opts.pageSize || 30
   return { total, page, pageSize, rows: rows.slice((page - 1) * pageSize, page * pageSize) }
 }
 
-export function getProfile(id: string): PSProfile | null { return getProfiles()[normId(id)] || null }
+export function getProfile(id: string): PSProfile | null { return getProfiles()[String(id)] || null }
 
 export function profileStats() {
   const all = Object.values(getProfiles())
+  const reveals = getReveals()
+  const revealedProjects = Object.keys(reveals.items || {}).length
+  const totalProjects = (getData().projects || []).length
   return {
     builders: all.length,
-    withPhone: all.filter(p => p.phone).length,
+    withPhone: all.filter(p => (p.phones || []).length > 0).length,
     projects: all.reduce((s, p) => s + p.projectCount, 0),
+    revealedProjects,
+    pendingProjects: Math.max(0, totalProjects - revealedProjects),
+    quotaAvailable: reveals.meta?.availableCount ?? null,
+    lastRevealAt: reveals.meta?.lastRevealAt,
   }
 }
