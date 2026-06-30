@@ -16,53 +16,77 @@ export interface Project {
 }
 
 function id() { return randomBytes(6).toString('hex') }
-function load(): { projects: Project[] } {
-  if (existsSync(FILE)) { try { return JSON.parse(readFileSync(FILE, 'utf-8')) } catch {} }
-  // بدونِ دیتای دمو — داشبورد از ابتدا خالی است تا کاربر پروژهٔ واقعیِ خودش را بسازد.
-  const db = { projects: [] as Project[] }
-  save(db); return db
-}
-function save(db: { projects: Project[] }) { writeFileSync(FILE, JSON.stringify(db, null, 2), 'utf-8') }
 
-export function listProjects(): Project[] { return load().projects }
-export function getProject(pid: string): Project | null { return load().projects.find(p => p.id === pid) || null }
+// per-owner: هر سازنده پروژه‌های خودش را دارد (کلید = شمارهٔ مالک). بدونِ دیتای دمو.
+type OwnerData = { projects: Project[]; imported?: boolean }
+type DB = Record<string, OwnerData>
+function load(): DB { if (existsSync(FILE)) { try { return JSON.parse(readFileSync(FILE, 'utf-8')) } catch {} } return {} }
+function save(db: DB) { writeFileSync(FILE, JSON.stringify(db), 'utf-8') }
+function ownerOf(db: DB, owner: string): OwnerData { if (!db[owner]) db[owner] = { projects: [] }; return db[owner] }
 
-export function addProject(name: string, location: string): Project {
-  const db = load()
+export function listProjects(owner: string): Project[] { return load()[owner]?.projects || [] }
+export function getProject(owner: string, pid: string): Project | null { return (load()[owner]?.projects || []).find(p => p.id === pid) || null }
+
+export function addProject(owner: string, name: string, location: string): Project {
+  const db = load(); const o = ownerOf(db, owner)
   const p: Project = { id: id(), name, location, phase: 'فاز ۱', progress: 0, units: [], investors: [], milestones: [], monthlySales: [], createdAt: Date.now() }
-  db.projects.unshift(p); save(db); return p
+  o.projects.unshift(p); save(db); return p
 }
-export function updateProject(pid: string, patch: Partial<Pick<Project, 'name' | 'location' | 'phase' | 'progress'>>): Project | null {
-  const db = load(); const p = db.projects.find(x => x.id === pid); if (!p) return null
+export function updateProject(owner: string, pid: string, patch: Partial<Pick<Project, 'name' | 'location' | 'phase' | 'progress'>>): Project | null {
+  const db = load(); const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return null
   Object.assign(p, patch); save(db); return p
 }
-
-export function addUnit(pid: string, u: Omit<Unit, 'id'>): Unit | null {
-  const db = load(); const p = db.projects.find(x => x.id === pid); if (!p) return null
+export function addUnit(owner: string, pid: string, u: Omit<Unit, 'id'>): Unit | null {
+  const db = load(); const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return null
   const unit: Unit = { ...u, id: id() }; p.units.push(unit); save(db); return unit
 }
-export function updateUnit(pid: string, uid: string, patch: Partial<Unit>): Unit | null {
-  const db = load(); const p = db.projects.find(x => x.id === pid); if (!p) return null
+export function updateUnit(owner: string, pid: string, uid: string, patch: Partial<Unit>): Unit | null {
+  const db = load(); const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return null
   const u = p.units.find(x => x.id === uid); if (!u) return null
   Object.assign(u, patch); save(db); return u
 }
-export function deleteUnit(pid: string, uid: string) {
-  const db = load(); const p = db.projects.find(x => x.id === pid); if (!p) return
+export function deleteUnit(owner: string, pid: string, uid: string) {
+  const db = load(); const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return
   p.units = p.units.filter(x => x.id !== uid); save(db)
 }
-
-export function addInvestor(pid: string, inv: Omit<Investor, 'id'>): Investor | null {
-  const db = load(); const p = db.projects.find(x => x.id === pid); if (!p) return null
+export function addInvestor(owner: string, pid: string, inv: Omit<Investor, 'id'>): Investor | null {
+  const db = load(); const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return null
   const v: Investor = { ...inv, id: id() }; p.investors.unshift(v); save(db); return v
 }
-export function deleteInvestor(pid: string, vid: string) {
-  const db = load(); const p = db.projects.find(x => x.id === pid); if (!p) return
+export function deleteInvestor(owner: string, pid: string, vid: string) {
+  const db = load(); const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return
   p.investors = p.investors.filter(x => x.id !== vid); save(db)
 }
-
-export function updateMilestone(pid: string, mid: string, status: Milestone['status']) {
-  const db = load(); const p = db.projects.find(x => x.id === pid); if (!p) return
+export function updateMilestone(owner: string, pid: string, mid: string, status: Milestone['status']) {
+  const db = load(); const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return
   const m = p.milestones.find(x => x.id === mid); if (m) { m.status = status; save(db) }
+}
+
+// یک‌بار: پروژه‌های پرشین سازهٔ این سازنده (مطابقتِ شماره) را به پنلِ خودش وارد می‌کند.
+// واحدها از تعدادِ طبقه/واحدِ واقعی ساخته می‌شوند (همه «موجود»، بدونِ خریدارِ فیک) تا
+// سازنده خودش بفروشد. اگر سازنده‌ای در پرشین سازه نباشد، خالی می‌ماند.
+export async function ensureImported(owner: string): Promise<void> {
+  const db = load()
+  if (db[owner]?.imported) return
+  let projects: Project[] = []
+  try {
+    const { getProfiles, regionLabel, phaseLabel } = await import('./persiansaze-store')
+    const norm = String(owner).replace(/\D/g, '')
+    const prof = Object.values(getProfiles()).find(p => (p.phones || []).some(ph => String(ph).replace(/\D/g, '') === norm))
+    if (prof) {
+      for (const pr of prof.projects || []) {
+        const totalUnits = Math.max(0, Math.min(500, Number(pr.units) || 0))
+        const floors = Math.max(1, Number(pr.floors) || 1)
+        const perFloor = Math.max(1, Math.round(totalUnits / floors) || 1)
+        const avgArea = totalUnits ? Math.round((Number(pr.residentialArea) || 0) / totalUnits) : 0
+        const units: Unit[] = []
+        for (let i = 0; i < totalUnits; i++) { const fl = Math.floor(i / perFloor) + 1; units.push({ id: id(), number: `${fl}-${(i % perFloor) + 1}`, floor: fl, area: avgArea, price: 0, status: 'available' }) }
+        projects.push({ id: id(), name: (pr.address || 'پروژه').slice(0, 70), location: [regionLabel(pr), phaseLabel(pr)].filter(Boolean).join(' · '), phase: phaseLabel(pr) || '—', progress: 0, units, investors: [], milestones: [], monthlySales: [], createdAt: Date.now() })
+      }
+    }
+  } catch { /* اگر پرشین سازه در دسترس نبود، خالی */ }
+  db[owner] = { projects, imported: true }
+  save(db)
 }
 
 // آمار محاسبه‌شده برای داشبورد
