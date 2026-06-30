@@ -11,6 +11,7 @@ import BusinessProfileForm from '@/app/components/BusinessProfileForm'
 import BuilderPublicView from './BuilderPublicView'
 import BuilderContactsView from './BuilderContactsView'
 import BuilderProjectsView from './BuilderProjectsView'
+import SupportPanel from '@/app/components/SupportPanel'
 
 // ── Types (mirror app/lib/builder-store.ts API shape) ──
 type UnitStatus = 'sold' | 'reserved' | 'available'
@@ -31,7 +32,7 @@ interface Project {
 }
 interface ProjectSummary { id: string; name: string; location: string }
 
-type View = 'overview' | 'projects' | 'assistant' | 'articles' | 'units' | 'sales' | 'investors' | 'reports' | 'plans' | 'profile' | 'public' | 'contacts'
+type View = 'overview' | 'projects' | 'assistant' | 'articles' | 'units' | 'sales' | 'investors' | 'reports' | 'plans' | 'profile' | 'public' | 'contacts' | 'support'
 
 // ── Status visual maps ──
 const STATUS_COLOR: Record<UnitStatus, string> = {
@@ -84,6 +85,7 @@ const VIEW_TITLES: Record<View, string> = {
   profile: 'پروفایل',
   public: 'پروفایلِ عمومی',
   contacts: 'گزارشِ تماس‌ها',
+  support: 'پشتیبانی',
 }
 
 const NAV_ITEMS: { id: View; label: string; icon: string }[] = [
@@ -98,6 +100,7 @@ const NAV_ITEMS: { id: View; label: string; icon: string }[] = [
   { id: 'contacts', label: 'گزارشِ تماس‌ها', icon: '📞' },
   { id: 'plans', label: 'پلن‌ها و اشتراک', icon: '👑' },
   { id: 'profile', label: 'پروفایل', icon: '🪪' },
+  { id: 'support', label: 'پشتیبانی', icon: '🛟' },
 ]
 const FONT = 'Vazirmatn, system-ui, sans-serif'
 const card: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16 }
@@ -485,6 +488,8 @@ export default function BuilderPage() {
             <BuilderPublicView />
           ) : view === 'contacts' ? (
             <BuilderContactsView />
+          ) : view === 'support' ? (
+            <SupportPanel panel="builder" />
           ) : !project ? (
             <div style={{ textAlign: 'center', color: 'var(--muted)', padding: '80px 0', fontSize: 14 }}>در حال بارگذاری پروژه…</div>
           ) : (

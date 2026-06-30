@@ -7,12 +7,13 @@ import { buildIdentityRows } from '@/app/lib/identity-labels'
 import PlanStudio from '@/app/components/PlanStudio'
 import ImageUpload from '@/app/components/ImageUpload'
 import ArticleEditor from '@/app/components/ArticleEditor'
+import AdminSupportView from './AdminSupportView'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 type View =
   | 'overview' | 'scraper' | 'persiansaze' | 'listings' | 'products' | 'geo' | 'moderation' | 'content' | 'studio' | 'articles' | 'categories' | 'crm' | 'api'
   | 'reports' | 'plans' | 'promos' | 'discounts' | 'ads' | 'users' | 'profiles' | 'roles' | 'connections'
-  | 'tracker' | 'sms' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags'
+  | 'tracker' | 'sms' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags' | 'support'
 
 interface NavItem { id: View; icon: string; label: string; badge?: string; badgeColor?: string }
 interface NavSection { title: string; items: NavItem[] }
@@ -44,6 +45,7 @@ const sections: NavSection[] = [
       { id: 'profiles', icon: '👁', label: 'همه پروفایل‌ها' },
       { id: 'roles', icon: '🛡', label: 'نقش‌ها و دسترسی' },
       { id: 'crm',   icon: '◈', label: 'CRM کاربران' },
+      { id: 'support', icon: '🛟', label: 'پشتیبانی' },
     ],
   },
   {
@@ -86,6 +88,7 @@ const sections: NavSection[] = [
 ]
 
 const viewTitles: Record<View, string> = {
+  support:    'پشتیبانی — تیکت‌ها',
   overview:   'نمای کلی سیستم',
   scraper:    'موتور اسکرپی هوشمند',
   persiansaze: 'سازنده‌ها (پرشین سازه)',
@@ -4573,6 +4576,12 @@ export default function SuperAdminPage() {
   const [active, setActive] = useState<View>('overview')
   const [navOpen, setNavOpen] = useState(false)   // کشوی منوی موبایل
   const [now, setNow] = useState('')
+  const [supportUnread, setSupportUnread] = useState(0)   // نوتیفِ تیکت‌های پاسخ‌نداده
+
+  useEffect(() => {
+    const poll = () => fetch('/api/admin/support?count=1', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d?.ok) setSupportUnread(d.unread || 0) }).catch(() => {})
+    poll(); const id = setInterval(poll, 30000); return () => clearInterval(id)
+  }, [active])
 
   useEffect(() => {
     const tick = () => setNow(new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
@@ -4586,6 +4595,7 @@ export default function SuperAdminPage() {
       case 'overview':   return <OverviewView />
       case 'scraper':    return <ScraperView />
       case 'persiansaze': return <PersianSazeView />
+      case 'support':    return <AdminSupportView />
       case 'listings':   return <ListingsView />
       case 'products':   return <ProductsView />
       case 'categories': return <CategoriesView />
@@ -4667,7 +4677,9 @@ export default function SuperAdminPage() {
                 >
                   <span style={{ fontSize: 15, width: 20, textAlign: 'center', flexShrink: 0, color: active === item.id ? '#e7674a' : 'var(--faint)' }}>{item.icon}</span>
                   <span className="mjsa-sidelabel" style={{ flex: 1 }}>{item.label}</span>
-                  {item.badge && <Badge label={item.badge} color={item.badgeColor ?? '#5fd98a'} />}
+                  {item.id === 'support' && supportUnread > 0
+                    ? <Badge label={supportUnread.toLocaleString('fa-IR')} color="#e7674a" />
+                    : item.badge && <Badge label={item.badge} color={item.badgeColor ?? '#5fd98a'} />}
                 </button>
               ))}
             </div>
