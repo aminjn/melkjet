@@ -161,11 +161,11 @@ export default function Sazandeha() {
           </button>
         </div>
 
-        {/* نقشه (نمای جغرافیاییِ نتایجِ فیلتر — تا ۲۵ پین) */}
+        {/* نقشه با پینِ نتایجِ فیلتر — کلیک روی پین = صفحهٔ پروژه */}
         {showMap && (
           <div style={{ marginBottom: 18 }}>
-            <StaticMap points={points.map(p => ({ lat: p.lat, lng: p.lng }))} height={420} />
-            <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 6 }}>نمای موقعیتِ {fa(Math.min(points.length, 25))} پروژه از {fa(points.length)} نتیجه روی نقشه · برای جزئیات روی کارتِ پروژه در فهرستِ پایین بزنید</div>
+            <StaticMap points={points.map(p => ({ id: p.id, lat: p.lat, lng: p.lng }))} aspect={2.4} onSelect={(id) => { window.location.href = `/proje/${id}` }} />
+            <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 6 }}>{fa(Math.min(points.length, 60))} پروژه از {fa(points.length)} نتیجه روی نقشه · روی هر پین بزنید تا صفحهٔ پروژه باز شود</div>
           </div>
         )}
 

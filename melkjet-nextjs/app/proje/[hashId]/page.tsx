@@ -64,7 +64,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ hashId
     hashId: p.hashId,
     title: p.address || 'پروژه',
     region,
-    phase: phase || '—',
+    phase,
     progress,
     milestones,
     statusLabel: phase || 'در حال ساخت',

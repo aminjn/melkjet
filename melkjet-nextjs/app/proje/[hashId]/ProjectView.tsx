@@ -49,6 +49,7 @@ export default function ProjectView({ p }: { p: ViewProject }) {
   const [reqName, setReqName] = useState('')
   const [reqPhone, setReqPhone] = useState('')
   const [reqSent, setReqSent] = useState(false)
+  const [selectedUnit, setSelectedUnit] = useState('')
 
   useEffect(() => {
     let dead = false
@@ -69,7 +70,7 @@ export default function ProjectView({ p }: { p: ViewProject }) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title: `درخواست بازدید/تماس — ${p.title}`,
-        description: [`پروژه: ${p.title}`, `سازنده: ${p.builder.name}`, `کدِ پروژه: ${p.hashId}`, `نام: ${reqName || '—'}`].filter(Boolean).join('\n'),
+        description: [`پروژه: ${p.title}`, `سازنده: ${p.builder.name}`, `کدِ پروژه: ${p.hashId}`, selectedUnit && `واحدِ انتخابی: ${selectedUnit}`, `نام: ${reqName || '—'}`].filter(Boolean).join('\n'),
         phone: reqPhone || undefined, owner: reqName || undefined,
       }),
     }).catch(() => {})
@@ -184,7 +185,7 @@ export default function ProjectView({ p }: { p: ViewProject }) {
           <section style={card}>
             <div style={h}>پیشرفتِ ساخت</div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <span style={{ fontSize: 13, color: 'var(--muted)' }}>مرحلهٔ فعلی: {p.phase}</span>
+              <span style={{ fontSize: 13, color: 'var(--muted)' }}>مرحلهٔ فعلی: {p.phase || '—'}</span>
               <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--gold)' }}>{fa(p.progress)}٪</span>
             </div>
             <div style={{ height: 8, borderRadius: 999, background: 'var(--line)', marginBottom: 24 }}>
@@ -201,24 +202,16 @@ export default function ProjectView({ p }: { p: ViewProject }) {
             </div>
           </section>
 
-          {/* Units & floors (real, derived) */}
-          {p.units > 0 && (
+          {/* Units & floors — selectable grid */}
+          {p.units > 0 && p.perFloor.length > 0 && (
             <section style={card}>
-              <div style={h}>واحدها و طبقات</div>
-              <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginBottom: 16, fontSize: 13 }}>
-                <span style={{ color: 'var(--muted)' }}>کلِ واحدها: <strong style={{ color: 'var(--text)' }}>{faNum(p.units)}</strong></span>
-                <span style={{ color: 'var(--muted)' }}>طبقات: <strong style={{ color: 'var(--text)' }}>{faNum(p.floors)}</strong></span>
-                {p.avgArea > 0 && <span style={{ color: 'var(--muted)' }}>میانگینِ متراژِ هر واحد: <strong style={{ color: 'var(--gold)' }}>{faNum(p.avgArea)} م²</strong></span>}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
+                <div style={h as any}>انتخابِ واحد</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>{faNum(p.units)} واحد در {faNum(p.floors)} طبقه{p.avgArea ? ` · میانگین ${faNum(p.avgArea)} م²` : ''}</div>
               </div>
-              <div className="mjpr-units" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px,1fr))', gap: 10 }}>
-                {p.perFloor.slice(0, 30).map((f) => (
-                  <div key={f.floor} style={{ padding: '11px 13px', border: '1px solid var(--line)', borderRadius: 12, background: 'var(--bg2)' }}>
-                    <div style={{ fontSize: 13, fontWeight: 700 }}>طبقهٔ {faNum(f.floor)}</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4 }}>{faNum(f.count)} واحد{p.avgArea ? ` · ~${faNum(p.avgArea)} م²` : ''}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 12 }}>توزیعِ واحدها بر اساسِ تعدادِ طبقه و واحدِ واقعیِ پروژه برآورد شده است.</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>طبقه و واحدِ موردِنظر را انتخاب کنید تا در «درخواستِ بازدید» ثبت شود.</div>
+              <UnitGrid perFloor={p.perFloor} avgArea={p.avgArea} selected={selectedUnit} onSelect={setSelectedUnit} />
+              <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 12 }}>توزیعِ واحدها بر اساسِ تعدادِ طبقه و واحدِ واقعیِ پروژه برآورد شده است؛ موجودیِ نهایی را سازنده تأیید می‌کند.</div>
             </section>
           )}
 
@@ -322,7 +315,7 @@ export default function ProjectView({ p }: { p: ViewProject }) {
           {/* Map */}
           <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 16 }}>
             <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>موقعیتِ مکانی</div>
-            <StaticMap points={p.lat != null && p.lng != null ? [{ lat: Number(p.lat), lng: Number(p.lng) }] : []} height={180} />
+            <StaticMap points={p.lat != null && p.lng != null ? [{ lat: Number(p.lat), lng: Number(p.lng) }] : []} aspect={1.5} />
             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>📍 {p.region}</div>
           </div>
 
@@ -337,19 +330,6 @@ export default function ProjectView({ p }: { p: ViewProject }) {
             </div>
           )}
 
-          {/* Trust */}
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>اطلاعاتِ راستی‌آزمایی‌شده</div>
-            {[
-              ['✓', 'دادهٔ واقعیِ پروژه از پایگاهِ سازنده‌ها', '#5fd98a'],
-              ['✓', `${fa(p.photos.length)} عکسِ واقعی از محل`, '#5fd98a'],
-              ['✦', 'موقعیت و دسترسی‌ها با نقشهٔ نشان', 'var(--gold)'],
-            ].map((b, i) => (
-              <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'center', fontSize: 12.5, color: 'var(--muted)', marginBottom: 8 }}>
-                <span style={{ color: b[2], fontWeight: 700, flexShrink: 0 }}>{b[0]}</span>{b[1]}
-              </div>
-            ))}
-          </div>
         </div>
       </main>
 
@@ -394,3 +374,52 @@ export default function ProjectView({ p }: { p: ViewProject }) {
     </div>
   )
 }
+
+// شبکهٔ انتخابِ واحد — هر سلول یک واحد (طبقه-شماره)، قابلِ انتخاب. همه «موجود» (وضعیتِ
+// فروش را سازنده مشخص می‌کند؛ چیزی فیک رنگ نمی‌شود).
+function UnitGrid({ perFloor, avgArea, selected, onSelect }: { perFloor: { floor: number; count: number }[]; avgArea: number; selected: string; onSelect: (u: string) => void }) {
+  const maxFloor = perFloor.reduce((m, f) => Math.max(m, f.floor), 0)
+  const ranges: { label: string; lo: number; hi: number }[] = []
+  if (maxFloor > 6) for (let lo = 1; lo <= maxFloor; lo += 6) ranges.push({ label: `${fa(lo)}-${fa(Math.min(lo + 5, maxFloor))}`, lo, hi: Math.min(lo + 5, maxFloor) })
+  const [range, setRange] = useState<{ lo: number; hi: number } | null>(null)
+  const floors = perFloor.filter(f => !range || (f.floor >= range.lo && f.floor <= range.hi))
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 12, fontSize: 11.5, color: 'var(--muted)' }}>
+        <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}><span style={{ width: 12, height: 12, borderRadius: 3, background: 'rgba(95,217,138,0.22)', border: '1px solid rgba(95,217,138,0.6)' }} /> موجود</span>
+        <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}><span style={{ width: 12, height: 12, borderRadius: 3, background: 'var(--goldDim)', border: '1px solid var(--gold)' }} /> انتخابِ شما</span>
+      </div>
+      {ranges.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+          <button onClick={() => setRange(null)} style={chipBtn(!range)}>همه</button>
+          {ranges.map(r => <button key={r.lo} onClick={() => setRange({ lo: r.lo, hi: r.hi })} style={chipBtn(!!range && range.lo === r.lo)}>{r.label}</button>)}
+        </div>
+      )}
+      <div style={{ display: 'grid', gap: 8, maxHeight: 360, overflowY: 'auto' }}>
+        {floors.map(f => (
+          <div key={f.floor} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 56, flexShrink: 0, fontSize: 11.5, color: 'var(--muted)', textAlign: 'left' }}>طبقهٔ {fa(f.floor)}</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {Array.from({ length: Math.min(f.count, 40) }, (_, i) => {
+                const label = `${fa(f.floor)}-${fa(i + 1)}`
+                const sel = selected === label
+                return (
+                  <button key={i} onClick={() => onSelect(sel ? '' : label)} title={avgArea ? `~${avgArea} م²` : undefined} style={{
+                    minWidth: 46, padding: '7px 4px', borderRadius: 7, fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                    background: sel ? 'var(--goldDim)' : 'rgba(95,217,138,0.14)',
+                    border: `1px solid ${sel ? 'var(--gold)' : 'rgba(95,217,138,0.5)'}`,
+                    color: sel ? 'var(--gold)' : '#8fd9a8',
+                  }}>{label}</button>
+                )
+              })}
+              {f.count > 40 && <span style={{ fontSize: 11, color: 'var(--faint)', alignSelf: 'center' }}>+{fa(f.count - 40)}</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+      {selected && <div style={{ marginTop: 14, fontSize: 13, color: 'var(--text)', background: 'var(--goldDim)', border: '1px solid var(--gold)', borderRadius: 10, padding: '10px 14px' }}>واحدِ انتخابی: <strong style={{ color: 'var(--gold)' }}>{selected}</strong>{avgArea ? ` · ~${faNum(avgArea)} م²` : ''}</div>}
+    </div>
+  )
+}
+const chipBtn = (on: boolean): React.CSSProperties => ({ background: on ? 'var(--gold)' : 'var(--bg2)', color: on ? '#16140f' : 'var(--muted)', border: `1px solid ${on ? 'var(--gold)' : 'var(--line)'}`, borderRadius: 9, padding: '7px 14px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' })

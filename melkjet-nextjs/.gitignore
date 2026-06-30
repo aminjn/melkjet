@@ -86,4 +86,6 @@ next-env.d.ts
 .persiansaze-meta.json
 .persiansaze-profiles.json
 .persiansaze-reveals.json
+.persiansaze-phases.json
 .ps-enrich-data.json
+.builder-public-data.json

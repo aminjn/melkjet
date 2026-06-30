@@ -16,6 +16,7 @@ const CONFIG_FILE = path.join(CWD, '.persiansaze-config.json')
 const DATA_FILE = path.join(CWD, '.persiansaze-data.json')
 const REVEALS_FILE = path.join(CWD, '.persiansaze-reveals.json')
 const PROFILES_FILE = path.join(CWD, '.persiansaze-profiles.json')
+const PHASES_FILE = path.join(CWD, '.persiansaze-phases.json')
 
 const log = (...a) => console.log(new Date().toLocaleTimeString('en-GB'), ...a)
 function readJson(f, d) { try { return JSON.parse(fs.readFileSync(f, 'utf8')) } catch { return d } }
@@ -76,6 +77,7 @@ function buildProfiles(reveals, projects) {
         if (d.groundArea != null) proj.groundArea = d.groundArea
         if (d.residentialArea != null) proj.residentialArea = d.residentialArea
         if (d.phaseId != null) proj.phaseId = d.phaseId
+        if (d.phaseName) proj.phaseName = d.phaseName
       }
       b.projects.push(proj); if (proj.regionId) b.regions.add(proj.regionId)
     }
@@ -121,6 +123,7 @@ async function main() {
         floors: j.floors, subFloors: j.subFloors, units: j.units,
         groundArea: j.groundArea, residentialArea: j.residentialArea,
         phaseId: j.phaseId,
+        phaseName: j.phaseName || j.phaseTitle || j.phase?.name || j.phase?.title || j.phaseFa || '',
       }
     } catch { return { photos: [] } }
   }
@@ -204,6 +207,15 @@ async function main() {
   fs.writeFileSync(REVEALS_FILE, JSON.stringify(reveals))
   const profiles = buildProfiles(reveals, projects)
   fs.writeFileSync(PROFILES_FILE, JSON.stringify(profiles))
+
+  // نگاشتِ نامِ مرحله‌ها (phaseId→name) از جزئیاتِ گرفته‌شده — تا سایت نامِ واقعی نشان دهد.
+  const phasesMap = readJson(PHASES_FILE, {})
+  for (const rv of Object.values(reveals.items)) {
+    const d = rv.detail
+    if (d && d.phaseId != null && d.phaseName) phasesMap[d.phaseId] = d.phaseName
+  }
+  fs.writeFileSync(PHASES_FILE, JSON.stringify(phasesMap))
+  log(`نگاشتِ مرحله‌ها: ${Object.keys(phasesMap).length} مرحله شناخته شد.`)
 
   console.log('\n═══════════ نتیجه ═══════════')
   console.log(`شمارهٔ گرفته‌شده در این اجرا: ${got}  (تکراری: ${dup}، خارج‌محدوده‌ردشده: ${skipped}، AccessDenied: ${denied})`)

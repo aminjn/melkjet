@@ -55,7 +55,7 @@ export interface PSProject {
   address?: string
   receptor?: string        // نامِ سازنده/کارفرما
   cityId?: number; regionId?: number; subRegionId?: number
-  phaseId?: number; usageTypeId?: number; structureTypeId?: number
+  phaseId?: number; phaseName?: string; usageTypeId?: number; structureTypeId?: number
   groundArea?: number; residentialArea?: number
   floors?: number; subFloors?: number; units?: number
   latitude?: number; longitude?: number
@@ -89,7 +89,7 @@ export interface PSProfile {
 
 export interface PSReveals {
   meta?: { availableCount?: number | null; lastRevealAt?: string; revealedTotal?: number }
-  items?: Record<string, { constructorId: number; name?: string; phones?: string[]; hasDup?: boolean; receptor?: string; revealedAt?: string; photos?: string[]; detail?: { address?: string; latitude?: number; longitude?: number; floors?: number; subFloors?: number; units?: number; groundArea?: number; residentialArea?: number; phaseId?: number } }>
+  items?: Record<string, { constructorId: number; name?: string; phones?: string[]; hasDup?: boolean; receptor?: string; revealedAt?: string; photos?: string[]; detail?: { address?: string; latitude?: number; longitude?: number; floors?: number; subFloors?: number; units?: number; groundArea?: number; residentialArea?: number; phaseId?: number; phaseName?: string } }>
 }
 export function getReveals(): PSReveals {
   return readCached<PSReveals>(REVEALS_FILE, { meta: {}, items: {} })
@@ -136,11 +136,23 @@ export function regionLabel(p: { cityId?: number; regionId?: number }): string {
   return ''
 }
 // نگاشتِ مرحله‌های ساخت (از روی UIِ پرشین سازه؛ قابلِ تکمیل).
-export const PHASE_NAMES: Record<number, string> = {
+const PHASE_NAMES_STATIC: Record<number, string> = {
   2006: 'گچ و خاک', 2007: 'سفت‌کاری', 2008: 'ابتدای نازک‌کاری', 2016: 'نازک‌کاری',
 }
-export function phaseLabel(p: { phaseId?: number }): string {
-  return (p.phaseId && PHASE_NAMES[p.phaseId]) || (p.phaseId ? `مرحله ${p.phaseId}` : '')
+const PHASES_FILE = path.join(process.cwd(), '.persiansaze-phases.json')
+// نگاشتِ کاملِ مرحله‌ها: ثابت + هرچه از فایلِ phases (که probe/worker می‌نویسد) آمده.
+export function phaseNames(): Record<number, string> {
+  const file = readCached<Record<string, string>>(PHASES_FILE, {})
+  const out: Record<number, string> = { ...PHASE_NAMES_STATIC }
+  for (const [k, v] of Object.entries(file || {})) if (v) out[Number(k)] = String(v)
+  return out
+}
+export const PHASE_NAMES = PHASE_NAMES_STATIC
+// نامِ مرحله: اول نامِ ذخیره‌شدهٔ خودِ پروژه، سپس نگاشت. اگر ناشناخته بود «خالی»
+// برمی‌گردانیم (کدِ خامِ «مرحله ۲۰۰۵» هرگز به کاربر نشان داده نمی‌شود).
+export function phaseLabel(p: { phaseId?: number; phaseName?: string }): string {
+  if (p.phaseName) return p.phaseName
+  return (p.phaseId && phaseNames()[p.phaseId]) || ''
 }
 
 // ─── پروفایلِ سازنده‌ها (کلید: constructor.id) ──────────────────────────────
@@ -183,6 +195,7 @@ export function rebuildProfiles(): { created: number; updated: number; total: nu
         if (d.groundArea != null) proj.groundArea = d.groundArea
         if (d.residentialArea != null) proj.residentialArea = d.residentialArea
         if (d.phaseId != null) proj.phaseId = d.phaseId
+        if (d.phaseName) proj.phaseName = d.phaseName
       }
       b.projects.push(proj); if (proj.regionId) b.regions.add(proj.regionId)
     }
@@ -286,7 +299,8 @@ export function publicFacets(): PublicFacets {
     }
     return {
       regions: [...regions.entries()].map(([value, count]) => ({ value, count })).sort((a, b) => b.count - a.count),
-      phases: [...phases.entries()].map(([value, count]) => ({ value, label: PHASE_NAMES[value] || `مرحله ${value}`, count })).sort((a, b) => b.count - a.count),
+      // فقط مرحله‌هایی که نامِ واقعی دارند در فیلتر می‌آیند (کدِ خام نمایش داده نمی‌شود).
+      phases: [...phases.entries()].map(([value, count]) => ({ value, label: phaseLabel({ phaseId: value }), count })).filter(p => p.label).sort((a, b) => b.count - a.count),
       area: { min: Number.isFinite(amin) ? Math.floor(amin) : 0, max: Math.ceil(amax) },
       total: all.length,
     }

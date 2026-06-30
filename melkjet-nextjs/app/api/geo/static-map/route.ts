@@ -38,7 +38,9 @@ export async function GET(req: NextRequest) {
   const zoom = clamp(parseInt(sp.get('zoom') || (markers.length > 1 ? '12' : '15'), 10) || 14, 3, 18)
   const w = clamp(parseInt(sp.get('w') || '720', 10) || 720, 100, 1000)
   const h = clamp(parseInt(sp.get('h') || '320', 10) || 320, 100, 1000)
-  const markerStr = markers.map(m => `&marker=red,${m[0]},${m[1]}`).join('')
+  // نشانِ استاتیک یک مارکر روی «center» می‌گذارد (marker=COLOR). برای تک‌نقطه، center
+  // همان نقطه است ⇒ پین دقیقاً روی ملک. (پینِ چندتایی را نقشهٔ تعاملی می‌زند.)
+  const markerStr = markers.length ? '&marker=red' : ''
   const url = `https://api.neshan.org/v4/static?key=${encodeURIComponent(key)}&type=standard-night&zoom=${zoom}&center=${center}&width=${w}&height=${h}${markerStr}`
 
   try {
