@@ -143,6 +143,11 @@ export default function PropertyPage() {
         if (e.amenities?.length) setDivarAmenities(e.amenities)
         if (e.geo) setGeo(e.geo)
         if (e.nearby?.length) setNearby(e.nearby)
+        // اگر دسترسی‌ها در کش نبود ولی مختصات داریم، همان‌جا با نشان (فاصله/زمانِ واقعی) بساز.
+        else {
+          const g = e.geo || (mlat && mlng ? { lat: mlat, lng: mlng } : null)
+          if (g) fetch(`/api/geo/nearby?lat=${g.lat}&lng=${g.lng}`).then(r => r.ok ? r.json() : null).then((d: any) => { if (d?.nearby?.length) setNearby(d.nearby) }).catch(() => {})
+        }
         if (e.description) setItem(p => p ? { ...p, excerpt: e.description } : p)
         if (e.analysis) {
           setAnalysis(e.analysis)

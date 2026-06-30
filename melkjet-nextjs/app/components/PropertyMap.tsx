@@ -1,19 +1,21 @@
 'use client'
-import { useState } from 'react'
+import NeshanMap from './NeshanMap'
+import StaticMap from './StaticMap'
 
-// نقشهٔ تکیِ ملک — نقشهٔ استاتیکِ نشان (مطمئن از داخلِ ایران). با کلیک، نشانِ تعاملی باز می‌شود.
+// نقشهٔ تکیِ ملک — تعاملی و زوم‌شو (نشان)، و اگر SDK بارگذاری نشد، نقشهٔ استاتیکِ پین‌دار.
+// پین دقیقاً روی مختصاتِ ملک می‌نشیند.
 export default function PropertyMap({ lat, lng }: { lat: number; lng: number }) {
-  const [err, setErr] = useState(false)
-  if (err) {
-    return (
-      <div style={{ width: '100%', height: 200, borderRadius: 14, border: '1px solid var(--line)', background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: 13, textAlign: 'center', padding: 16 }}>
-        نقشه به «کلید نقشهٔ نشان» (web.…) نیاز دارد — پنل سوپرادمین → اتصال‌ها → نشان → کلید نقشه
-      </div>
-    )
-  }
+  const ok = Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) > 0.1
+  if (!ok) return (
+    <div style={{ width: '100%', height: 200, borderRadius: 14, border: '1px solid var(--line)', background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: 13 }}>موقعیتِ دقیق ثبت نشده است.</div>
+  )
   return (
-    <a href={`https://neshan.org/maps/@${lat},${lng},16z`} target="_blank" rel="noreferrer" style={{ display: 'block', borderRadius: 14, overflow: 'hidden', border: '1px solid var(--line)' }}>
-      <img src={`/api/geo/static-map?lat=${lat}&lng=${lng}`} alt="نقشه" style={{ width: '100%', height: 'auto', display: 'block' }} onError={() => setErr(true)} />
-    </a>
+    <NeshanMap
+      points={[{ id: 'p', lat, lng }]}
+      center={{ lat, lng }}
+      zoom={16}
+      height={280}
+      fallback={<StaticMap points={[{ lat, lng }]} aspect={1.9} />}
+    />
   )
 }
