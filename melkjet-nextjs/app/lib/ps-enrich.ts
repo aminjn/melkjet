@@ -1,20 +1,23 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { chatCompleteSafe, agentModel, agentProvider } from './gapgpt'
+import { computeNearby } from './nearby'
 
-// ─── غنی‌سازیِ AI برای صفحهٔ عمومیِ پروژه (دسترسی‌ها، امکاناتِ محله، توضیح) ──────
-// فقط یک‌بار به‌ازای هر پروژه محاسبه و در .ps-enrich-data.json کش می‌شود (gitignored).
-// ورودیِ AI فقط آدرس/منطقهٔ واقعیِ پروژه است؛ چیزی فیک ساخته نمی‌شود — اگر AI در
-// دسترس نبود، بخش خالی می‌ماند (به‌جای دادهٔ ساختگی).
+// ─── هوشِ صفحهٔ عمومیِ پروژه: دسترسی‌های واقعی (نشان) + تحلیلِ سرمایه‌گذاری (AI) ──
+// همه‌چیز یک‌بار به‌ازای هر پروژه محاسبه و در .ps-enrich-data.json کش می‌شود (gitignored).
+// دسترسی‌ها از سرویسِ نشان (مختصاتِ واقعی، فاصله/زمانِ واقعی) می‌آید — نه حدسِ AI.
+// تحلیلِ سرمایه‌گذاری از AI با ورودیِ مشخصاتِ واقعیِ پروژه ساخته می‌شود.
 
 const FILE = join(process.cwd(), '.ps-enrich-data.json')
-const ENRICH_V = 1
+const ENRICH_V = 3
 
+export interface PSAnalysis { summary: string; risk: number; riskLabel: string; points: string[] }
 export interface PSEnrich {
   v?: number
-  access?: string[]                 // دسترسی‌ها (مترو، بزرگراه، خیابان اصلی، BRT…)
-  amenities?: { icon?: string; label: string }[]  // امکاناتِ اطرافِ محله
-  description?: string              // توضیحِ کوتاهِ موقعیتِ محله
+  nearby?: { type?: string; name?: string; time: string; meters?: number }[]
+  nearbyNote?: string
+  analysis?: PSAnalysis
+  description?: string
   at?: number
 }
 
@@ -24,46 +27,80 @@ function save(db: DB) { try { writeFileSync(FILE, JSON.stringify(db), 'utf-8') }
 
 export function getPSEnrich(hashId: string): PSEnrich | null {
   const e = load()[hashId]
-  return e && e.v === ENRICH_V ? e : null
+  return e && e.v === ENRICH_V && e.analysis ? e : null
 }
 
 function stripFence(s: string): string {
+  const m = s.match(/\{[\s\S]*\}/); if (m) return m[0]
   return s.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim()
 }
 
-// غنی‌سازیِ یک پروژه را تضمین می‌کند (از کش یا با تولیدِ تازه).
-export async function ensurePSEnrich(hashId: string, ctx: { address?: string; region?: string }): Promise<PSEnrich> {
+export interface PSEnrichCtx {
+  address?: string; region?: string; lat?: number | null; lng?: number | null
+  phase?: string; progress?: number; floors?: number; units?: number
+  residentialArea?: number; groundArea?: number; builderName?: string; builderProjects?: number
+}
+
+// تحلیلِ سرمایه‌گذاریِ AI از مشخصاتِ واقعیِ پروژه.
+async function aiAnalysis(ctx: PSEnrichCtx): Promise<{ analysis?: PSAnalysis; description?: string }> {
+  const model = agentModel('pricing', 'text') || agentModel('summary', 'text') || agentModel('content', 'text') || 'gpt-4o-mini'
+  const provider = agentProvider('pricing', 'text') || agentProvider('summary', 'text')
+  const facts = [
+    ctx.region && `منطقه: ${ctx.region}`,
+    ctx.address && `آدرس: ${ctx.address}`,
+    ctx.phase && `مرحلهٔ ساخت: ${ctx.phase}`,
+    ctx.progress != null && `پیشرفتِ فیزیکی: حدود ${ctx.progress}٪`,
+    ctx.floors && `تعداد طبقات: ${ctx.floors}`,
+    ctx.units && `تعداد واحد: ${ctx.units}`,
+    ctx.residentialArea && `زیربنا: ${ctx.residentialArea} متر مربع`,
+    ctx.groundArea && `متراژ زمین: ${ctx.groundArea} متر مربع`,
+    ctx.builderName && `سازنده: ${ctx.builderName}${ctx.builderProjects ? ` (${ctx.builderProjects} پروژه)` : ''}`,
+  ].filter(Boolean).join('\n')
+  const sys = 'تو یک تحلیل‌گرِ ارشدِ سرمایه‌گذاریِ املاک در ایران هستی. بر اساسِ مشخصاتِ واقعیِ یک پروژهٔ ساختمانی، یک تحلیلِ کوتاهِ سرمایه‌گذاری به فارسی می‌دهی. واقع‌بین باش و فقط بر پایهٔ همین داده‌ها و دانشِ عمومیِ بازارِ منطقه قضاوت کن. خروجی فقط JSON باشد.'
+  const user = `مشخصاتِ پروژه:
+${facts}
+
+یک JSON بساز:
+{
+  "summary": "یک پاراگرافِ ۲ تا ۳ جمله‌ایِ تحلیلِ سرمایه‌گذاری دربارهٔ موقعیت، مرحلهٔ ساخت و جذابیتِ این پروژه برای خرید/سرمایه‌گذاری",
+  "risk": عددِ صحیحِ ۰ تا ۱۰۰ (امتیازِ جذابیتِ سرمایه‌گذاری؛ بالاتر = کم‌ریسک‌تر و بهتر),
+  "riskLabel": "ریسک پایین" یا "ریسک متوسط" یا "ریسک بالا",
+  "points": ["۳ تا ۴ نکتهٔ کوتاهِ کلیدی برای سرمایه‌گذار، مثل وضعیتِ منطقه، مرحلهٔ ساخت، اندازهٔ پروژه"],
+  "description": "یک جملهٔ کوتاه دربارهٔ موقعیتِ محله"
+}
+فقط JSON خروجی بده.`
+  try {
+    const raw = await chatCompleteSafe(model, [{ role: 'system', content: sys }, { role: 'user', content: user }], { temperature: 0.5, max_tokens: 700 }, provider)
+    const p = JSON.parse(stripFence(raw))
+    const risk = Math.max(0, Math.min(100, Math.round(Number(p.risk) || 0)))
+    const analysis: PSAnalysis = {
+      summary: String(p.summary || '').slice(0, 600),
+      risk: risk || 60,
+      riskLabel: String(p.riskLabel || (risk >= 70 ? 'ریسک پایین' : risk >= 45 ? 'ریسک متوسط' : 'ریسک بالا')).slice(0, 20),
+      points: Array.isArray(p.points) ? p.points.filter((x: any) => typeof x === 'string').map((x: string) => x.slice(0, 90)).slice(0, 5) : [],
+    }
+    return { analysis, description: typeof p.description === 'string' ? p.description.slice(0, 300) : '' }
+  } catch { return {} }
+}
+
+// همهٔ هوشِ پروژه (دسترسی‌ها + تحلیل) را تضمین می‌کند (از کش یا تازه).
+export async function ensurePSIntel(hashId: string, ctx: PSEnrichCtx): Promise<PSEnrich> {
   const cached = getPSEnrich(hashId)
   if (cached) return cached
 
-  const region = ctx.region || ''
-  const address = ctx.address || ''
-  if (!region && !address) { const empty = { v: ENRICH_V, at: Date.now(), access: [], amenities: [], description: '' }; const db = load(); db[hashId] = empty; save(db); return empty }
-
-  const model = agentModel('search', 'text') || agentModel('summary', 'text') || 'gpt-4o-mini'
-  const provider = agentProvider('search', 'text') || agentProvider('summary', 'text')
-  const sys = 'تو یک کارشناسِ املاک و آشنا به جغرافیای شهری ایران هستی. بر اساسِ آدرس و منطقهٔ یک پروژهٔ ساختمانی، اطلاعاتِ موقعیتِ مکانی را به فارسی و فقط به‌صورتِ JSON می‌دهی. هیچ متنِ اضافه‌ای ننویس.'
-  const user = `برای این پروژه در «${region}${address ? '، ' + address : ''}» یک JSON بساز با این کلیدها:
-{
-  "access": ["نزدیک‌ترین دسترسی‌های حمل‌ونقل و راه‌ها مثل ایستگاه مترو، خط BRT، بزرگراه‌ها و خیابان‌های اصلیِ این منطقه (۳ تا ۶ مورد، کوتاه)"],
-  "amenities": [{"icon":"یک ایموجی","label":"یک امکانِ شاخصِ اطرافِ این محله مثل مرکز خرید، بیمارستان، پارک، مدرسه (۳ تا ۶ مورد)"}],
-  "description": "یک پاراگرافِ کوتاهِ ۱ تا ۲ جمله‌ای دربارهٔ موقعیت و ویژگیِ این محله"
-}
-فقط دربارهٔ مواردی بنویس که واقعاً برای این منطقه شناخته‌شده‌اند. اگر دربارهٔ آدرسِ دقیق مطمئن نیستی، در سطحِ منطقه بنویس. فقط JSON خروجی بده.`
-
-  try {
-    const raw = await chatCompleteSafe(model, [{ role: 'system', content: sys }, { role: 'user', content: user }], { temperature: 0.4, max_tokens: 600 }, provider)
-    const parsed = JSON.parse(stripFence(raw))
-    const out: PSEnrich = {
-      v: ENRICH_V, at: Date.now(),
-      access: Array.isArray(parsed.access) ? parsed.access.filter((x: any) => typeof x === 'string').slice(0, 8) : [],
-      amenities: Array.isArray(parsed.amenities) ? parsed.amenities.filter((x: any) => x && x.label).map((x: any) => ({ icon: String(x.icon || '📍').slice(0, 3), label: String(x.label).slice(0, 60) })).slice(0, 8) : [],
-      description: typeof parsed.description === 'string' ? parsed.description.slice(0, 400) : '',
-    }
-    const db = load(); db[hashId] = out; save(db)
-    return out
-  } catch {
-    // در صورتِ خطا، خالی (بدونِ کش‌کردنِ خطا تا دفعهٔ بعد دوباره تلاش شود)
-    return { v: ENRICH_V, at: Date.now(), access: [], amenities: [], description: '' }
+  // دسترسی‌های واقعی از نشان (اگر مختصات داشت)
+  let nearby: PSEnrich['nearby'] = []
+  let nearbyNote: string | undefined
+  const lat = Number(ctx.lat), lng = Number(ctx.lng)
+  if (Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) > 0.1) {
+    try { const r = await computeNearby(lat, lng); nearby = r.nearby; nearbyNote = r.note } catch {}
   }
+
+  // تحلیلِ سرمایه‌گذاریِ AI
+  const { analysis, description } = await aiAnalysis(ctx)
+
+  const out: PSEnrich = { v: ENRICH_V, at: Date.now(), nearby, nearbyNote, analysis: analysis || { summary: '', risk: 60, riskLabel: 'ریسک متوسط', points: [] }, description: description || '' }
+  // فقط وقتی تحلیل واقعاً ساخته شد کش کن (تا در صورتِ نبودِ AI دفعهٔ بعد دوباره تلاش شود)
+  if (analysis) { const db = load(); db[hashId] = out; save(db) }
+  return out
 }

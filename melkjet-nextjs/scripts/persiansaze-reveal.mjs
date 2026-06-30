@@ -62,7 +62,23 @@ function buildProfiles(reveals, projects) {
     for (const ph of rv.phones || []) b.phones.add(ph)
     if (rv.name && !b.name) b.name = rv.name
     const proj = byHash.get(hash)
-    if (proj) { if (rv.photos?.length) proj.photos = rv.photos; b.projects.push(proj); if (proj.regionId) b.regions.add(proj.regionId) }
+    if (proj) {
+      if (rv.photos?.length) proj.photos = rv.photos
+      // جزئیاتِ کامل (آدرسِ کامل، مختصات، متراژ، طبقات) جایگزینِ دادهٔ بُریدهٔ لیست می‌شود.
+      const d = rv.detail
+      if (d) {
+        if (d.address) proj.address = d.address
+        if (d.latitude != null) proj.latitude = d.latitude
+        if (d.longitude != null) proj.longitude = d.longitude
+        if (d.floors != null) proj.floors = d.floors
+        if (d.subFloors != null) proj.subFloors = d.subFloors
+        if (d.units != null) proj.units = d.units
+        if (d.groundArea != null) proj.groundArea = d.groundArea
+        if (d.residentialArea != null) proj.residentialArea = d.residentialArea
+        if (d.phaseId != null) proj.phaseId = d.phaseId
+      }
+      b.projects.push(proj); if (proj.regionId) b.regions.add(proj.regionId)
+    }
   }
   const profiles = {}
   for (const b of byCons.values()) {
@@ -91,22 +107,37 @@ async function main() {
   log('✓ ورود موفق.')
 
   const reveal = (hash) => api(page, `/rest/api/user/v1/Project/${hash}/Constructor`, { method: 'POST', body: '{}' })
-  // همهٔ عکس‌های یک پروژه از جزئیاتِ آن (GET، رایگان/فقط‌خواندن).
-  const fetchPhotos = async (hash) => {
-    try { const r = await api(page, `/rest/api/user/v1/Project/${hash}`); return (r.json?.photos || []).map(x => x.imageUrl || x.imageThumbnailUrl).filter(Boolean) } catch { return [] }
+  // جزئیاتِ کاملِ یک پروژه از endpointِ Detail (GET، رایگان/فقط‌خواندن): عکس‌ها + آدرسِ
+  // کامل (لیست، آدرس را با «...» می‌بُرد ولی Detail کامل است) + مختصات/متراژ/طبقات.
+  const fetchDetail = async (hash) => {
+    try {
+      const r = await api(page, `/rest/api/user/v1/Project/${hash}`)
+      const j = r.json || {}
+      const photos = (j.photos || []).map(x => x.imageUrl || x.imageThumbnailUrl).filter(Boolean)
+      return {
+        photos,
+        address: j.address || '',
+        latitude: j.latitude, longitude: j.longitude,
+        floors: j.floors, subFloors: j.subFloors, units: j.units,
+        groundArea: j.groundArea, residentialArea: j.residentialArea,
+        phaseId: j.phaseId,
+      }
+    } catch { return { photos: [] } }
   }
 
-  // backfill: برای reveal‌های قبلی که عکس ندارند، عکس‌ها را بگیر (رایگان).
+  // backfill: برای reveal‌های قبلی که عکس یا آدرسِ کامل ندارند، جزئیات را بگیر (رایگان).
   {
     let bf = 0
     for (const [hash, rv] of Object.entries(reveals.items)) {
-      if (rv.photos?.length) continue
-      const photos = await fetchPhotos(hash)
-      if (photos.length) { rv.photos = photos; bf++ }
+      if (rv.photos?.length && rv.detail?.address) continue
+      const d = await fetchDetail(hash)
+      if (d.photos?.length) rv.photos = d.photos
+      if (d.address || d.latitude != null) rv.detail = d
+      if (d.photos?.length || d.address) bf++
       await page.waitForTimeout(120)
-      if (bf >= 400) break
+      if (bf >= 600) break
     }
-    if (bf) { log(`عکسِ ${bf} پروژهٔ قبلی گرفته شد (backfill).`); fs.writeFileSync(REVEALS_FILE, JSON.stringify(reveals)) }
+    if (bf) { log(`جزئیاتِ ${bf} پروژهٔ قبلی گرفته شد (backfill: عکس + آدرسِ کامل).`); fs.writeFileSync(REVEALS_FILE, JSON.stringify(reveals)) }
   }
   // محدودهٔ دسترسی: فقط شهر/منطقه را سخت فیلتر می‌کنیم (قطعی). مرحله را از پیش رد نمی‌کنیم —
   // هر مرحله را امتحان می‌کنیم و اگر مرحله‌ای واقعاً بسته بود، بعد از چند ردِ پیاپی یاد می‌گیریم.
@@ -145,10 +176,11 @@ async function main() {
       const j = r.json
       if (r.status === 200 && j && j.status === 'NoError' && j.constructor) {
         const c = j.constructor
+        const detail = await fetchDetail(proj.hashId)
         reveals.items[proj.hashId] = {
           constructorId: c.id, name: c.name || '', phones: c.mobileNumbers || [],
           hasDup: !!j.hasVisitedProjectsFromSameConstructor, receptor: proj.receptor || '', revealedAt: new Date().toISOString(),
-          photos: await fetchPhotos(proj.hashId),
+          photos: detail.photos || [], detail: (detail.address || detail.latitude != null) ? detail : undefined,
         }
         if (j.hasVisitedProjectsFromSameConstructor) dup++
         got++; consecDenied = 0

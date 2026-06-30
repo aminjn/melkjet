@@ -1,12 +1,11 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import dynamic from 'next/dynamic'
 import Nav from '../components/Nav'
 import Footer from '../components/Footer'
-import type { MapPoint } from '../components/NeshanMap'
+import StaticMap from '../components/StaticMap'
 
-const NeshanMap = dynamic(() => import('../components/NeshanMap'), { ssr: false })
+interface MapPoint { id: string; lat: number; lng: number; title?: string; price?: string }
 const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
 
 interface Item {
@@ -162,11 +161,11 @@ export default function Sazandeha() {
           </button>
         </div>
 
-        {/* نقشه */}
+        {/* نقشه (نمای جغرافیاییِ نتایجِ فیلتر — تا ۲۵ پین) */}
         {showMap && (
-          <div style={{ marginBottom: 18, height: 420 }}>
-            <NeshanMap points={points} height={420} onSelect={(id) => { window.location.href = `/proje/${id}` }} />
-            <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 6 }}>{fa(points.length)} پروژه روی نقشه · روی پین بزنید تا صفحهٔ پروژه باز شود</div>
+          <div style={{ marginBottom: 18 }}>
+            <StaticMap points={points.map(p => ({ lat: p.lat, lng: p.lng }))} height={420} />
+            <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 6 }}>نمای موقعیتِ {fa(Math.min(points.length, 25))} پروژه از {fa(points.length)} نتیجه روی نقشه · برای جزئیات روی کارتِ پروژه در فهرستِ پایین بزنید</div>
           </div>
         )}
 

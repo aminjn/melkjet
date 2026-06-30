@@ -89,7 +89,7 @@ export interface PSProfile {
 
 export interface PSReveals {
   meta?: { availableCount?: number | null; lastRevealAt?: string; revealedTotal?: number }
-  items?: Record<string, { constructorId: number; name?: string; phones?: string[]; hasDup?: boolean; receptor?: string; revealedAt?: string; photos?: string[] }>
+  items?: Record<string, { constructorId: number; name?: string; phones?: string[]; hasDup?: boolean; receptor?: string; revealedAt?: string; photos?: string[]; detail?: { address?: string; latitude?: number; longitude?: number; floors?: number; subFloors?: number; units?: number; groundArea?: number; residentialArea?: number; phaseId?: number } }>
 }
 export function getReveals(): PSReveals {
   return readCached<PSReveals>(REVEALS_FILE, { meta: {}, items: {} })
@@ -170,7 +170,22 @@ export function rebuildProfiles(): { created: number; updated: number; total: nu
     for (const ph of rv.phones || []) b.phones.add(ph)
     if (rv.name && !b.name) b.name = rv.name
     const proj = byHash.get(hash)
-    if (proj) { if (rv.photos?.length) proj.photos = rv.photos; b.projects.push(proj); if (proj.regionId) b.regions.add(proj.regionId) }
+    if (proj) {
+      if (rv.photos?.length) proj.photos = rv.photos
+      const d = rv.detail
+      if (d) {
+        if (d.address) proj.address = d.address
+        if (d.latitude != null) proj.latitude = d.latitude
+        if (d.longitude != null) proj.longitude = d.longitude
+        if (d.floors != null) proj.floors = d.floors
+        if (d.subFloors != null) proj.subFloors = d.subFloors
+        if (d.units != null) proj.units = d.units
+        if (d.groundArea != null) proj.groundArea = d.groundArea
+        if (d.residentialArea != null) proj.residentialArea = d.residentialArea
+        if (d.phaseId != null) proj.phaseId = d.phaseId
+      }
+      b.projects.push(proj); if (proj.regionId) b.regions.add(proj.regionId)
+    }
   }
   const out: Record<string, any> = {}
   for (const b of byCons.values()) out[b.id] = { id: b.id, name: b.name, phones: [...b.phones], projects: b.projects, regions: [...b.regions], projectCount: b.projects.length, revealedAt: b.revealedAt }
