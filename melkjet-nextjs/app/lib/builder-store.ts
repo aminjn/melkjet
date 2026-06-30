@@ -18,45 +18,11 @@ export interface Project {
 function id() { return randomBytes(6).toString('hex') }
 function load(): { projects: Project[] } {
   if (existsSync(FILE)) { try { return JSON.parse(readFileSync(FILE, 'utf-8')) } catch {} }
-  const db = { projects: [seedProject()] }
+  // بدونِ دیتای دمو — داشبورد از ابتدا خالی است تا کاربر پروژهٔ واقعیِ خودش را بسازد.
+  const db = { projects: [] as Project[] }
   save(db); return db
 }
 function save(db: { projects: Project[] }) { writeFileSync(FILE, JSON.stringify(db, null, 2), 'utf-8') }
-
-// پروژهٔ نمونهٔ واقعی تا داشبورد از ابتدا مثل طرح پر باشد
-function seedProject(): Project {
-  const units: Unit[] = []
-  const total = 182, sold = 142, reserved = 24
-  const buyers = ['احمدی', 'رضایی', 'کریمی', 'موسوی', 'حیدری', 'صادقی', 'اسدی', 'رشیدی', 'نوری', 'کاظمی']
-  for (let i = 0; i < total; i++) {
-    const floor = Math.floor(i / 6) + 1
-    const area = 95 + (i % 5) * 25
-    const price = Math.round((area * (90 + floor * 1.5)) * 1e6)
-    const status: UnitStatus = i < sold ? 'sold' : i < sold + reserved ? 'reserved' : 'available'
-    units.push({ id: id(), number: `${floor}-${(i % 6) + 1}`, floor, area, price, status, buyer: status === 'sold' ? buyers[i % buyers.length] : undefined })
-  }
-  return {
-    id: id(), name: 'برج آرین', location: 'تهران، سعادت‌آباد', phase: 'فاز ۲', progress: 68,
-    units,
-    investors: [
-      { id: id(), name: 'گروه سرمایه‌گذاری پاسارگاد', phone: '۰۲۱۸۸۸۸', amount: 480e9, units: 24 },
-      { id: id(), name: 'هلدینگ ساختمانی مهستان', phone: '۰۲۱۷۷۷۷', amount: 320e9, units: 16 },
-      { id: id(), name: 'صندوق زمین و ساختمان آرمان', amount: 210e9, units: 10 },
-    ],
-    milestones: [
-      { id: id(), name: 'پی و اسکلت', status: 'done', date: 'بهار ۱۴۰۴' },
-      { id: id(), name: 'سفت‌کاری', status: 'done', date: 'تکمیل' },
-      { id: id(), name: 'نازک‌کاری', status: 'active', date: 'در حال انجام' },
-      { id: id(), name: 'تأسیسات', status: 'pending', date: 'تابستان ۱۴۰۵' },
-      { id: id(), name: 'تحویل', status: 'pending', date: 'پاییز ۱۴۰۵' },
-    ],
-    monthlySales: [
-      { month: 'مهر', count: 18 }, { month: 'آبان', count: 22 }, { month: 'آذر', count: 16 },
-      { month: 'دی', count: 28 }, { month: 'بهمن', count: 34 }, { month: 'اسفند', count: 24 },
-    ],
-    createdAt: Date.now(),
-  }
-}
 
 export function listProjects(): Project[] { return load().projects }
 export function getProject(pid: string): Project | null { return load().projects.find(p => p.id === pid) || null }
