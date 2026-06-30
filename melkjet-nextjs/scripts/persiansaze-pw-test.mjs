@@ -57,16 +57,15 @@ async function main() {
     const submitBtn = (await submit.count()) ? submit.first() : page.locator('button[type="submit"]').first()
     await submitBtn.click()
 
-    // تا ۴۵ ثانیه منتظرِ ورود (ریدایرکت به پنل یا ظاهرشدنِ توکن) بمان
+    // منتظرِ ظهورِ خودِ توکن بمان (اپ باید code را به توکن تبدیل و ذخیره کند) — تا ۴۵ ثانیه
     let ok = false
     for (let i = 0; i < 45; i++) {
       await page.waitForTimeout(1000)
-      if (/my\.persiansaze\.com/.test(page.url())) { ok = true; break }
       const has = await page.evaluate(() => { const a = { ...localStorage, ...sessionStorage }; return Object.keys(a).some(k => /oidc\.user/i.test(k)) }).catch(() => false)
       if (has) { ok = true; break }
     }
-    console.log('   آدرسِ بعدِ ورود:', page.url(), ok ? '(ورود انجام شد)' : '(هنوز روی لاگین)')
-    await page.waitForTimeout(2000)
+    console.log('   آدرسِ بعدِ ورود:', page.url(), ok ? '(توکن ذخیره شد ✓)' : '(توکن هنوز نیامد)')
+    await page.waitForTimeout(1500)
 
     const token = await page.evaluate(() => {
       const a = { ...localStorage, ...sessionStorage }
