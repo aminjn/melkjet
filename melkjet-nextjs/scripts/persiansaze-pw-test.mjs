@@ -21,7 +21,9 @@ const FILTER_BODY = {
 async function main() {
   console.log('═══════════ تستِ Playwright پرشین سازه ═══════════')
   if (!USER || !PASS) { console.log('⚠ PS_USER و PS_PASS را ست کن.'); return }
-  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'] })
+  const launchOpts = { headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'] }
+  if (process.env.PS_CHROME) { launchOpts.executablePath = process.env.PS_CHROME; console.log('کروم:', process.env.PS_CHROME) }
+  const browser = await chromium.launch(launchOpts)
   const ctx = await browser.newContext({ userAgent: UA, viewport: { width: 430, height: 932 }, locale: 'fa-IR' })
   const page = await ctx.newPage()
   page.setDefaultTimeout(45000)
