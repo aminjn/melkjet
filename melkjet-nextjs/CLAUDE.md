@@ -138,3 +138,31 @@ purchase) and **runtime plan-gating enforcement** inside dashboards.
 1. All work is pushed to git (`origin/main`). A fresh session starts from the repo + this file.
 2. Resume by: pick the next pending panel, ask the user for its screenshot, then follow the
    per-panel process above. Keep committing after each batch so nothing is ever lost.
+
+---
+
+## پرشین سازه (اسکرپِ سازنده‌ها) — DONE & how it works
+External builder database (my.persiansaze.com). **Login is Blazor SPA + OIDC + reCAPTCHA-less
+mobile/password.** We drive it with **headless Google Chrome (Playwright)** — the only path that
+works (VPS can't download playwright/snap chromium; installed via `dl.google.com` .deb →
+`google-chrome-stable`, launched with `channel:'chrome'`). API calls run **inside the page
+context** (`page.evaluate(fetch)`) so HTTP/2 + token + did headers are automatic (Node fetch =
+HTTP/1.1 → WAF 401; only HTTP/2 works).
+- **Account**: 09122862184 (password login; subscription scope = city 1 / phases 2005,2006,2016).
+- **Endpoints**: list = `POST /rest/api/user/v1/Project/Filter?limit=20&offset=N` body
+  `{term:"",searchType:"Project",type:"All",onlyWithConstructor:true,cityIds:[],...}` (limit>20 → 400).
+  reveal/phone = `POST /rest/api/user/v1/Project/{hashId}/Constructor` body `{}` →
+  `{constructor:{id,name,mobileNumbers[]}, updatedAccess.viewCounter.availableCount, hasVisitedProjectsFromSameConstructor, status}`.
+- **Quota**: 500 reveals/week (per subscription tier). Re-revealing an already-revealed project is
+  FREE. constructor.id only known AFTER reveal (no free builder lookup — can't bypass the cap).
+  AccessDenied = project out of subscription scope (city/phase), NOT quota → skip, don't stop.
+- **Scripts** (run on server, creds via `.persiansaze-config.json` or env PS_USER/PS_PASS/PS_CHANNEL=chrome):
+  `ps-lib.mjs` (shared login+api), `persiansaze-scrape.mjs` (full project list → `.persiansaze-data.json`),
+  `persiansaze-reveal.mjs` (phones, quota+scope aware → `.persiansaze-reveals.json` + builds
+  `.persiansaze-profiles.json` keyed by constructor.id). Probes: persiansaze-probe/project/quota-test/discover-reveal.
+- **Store**: `app/lib/persiansaze-store.ts` (config, data, reveals, profiles-by-constructorId, stats+quota).
+- **API**: `app/api/admin/persiansaze/route.ts` (GET status/profiles/profile; POST save-config/scrape/reveal/rebuild-profiles — scrape & reveal spawn the scripts in background with lock files).
+- **Admin UI**: `PersianSazeView` in `app/admin/page.tsx`, nav id `persiansaze` («سازنده‌ها (پرشین سازه)»).
+  Current data: 19,879 projects, 16,150 unique receptors. Profiles built per real constructor.id with name+phone+projects.
+- **PENDING**: weekly cron auto-reveal (cron-runner) + create MelkJet سازنده accounts from revealed
+  builders (name+phone) + region/phase name lookups (regionId-100=Tehran district for city 1).
