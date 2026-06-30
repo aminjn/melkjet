@@ -4,7 +4,7 @@
 
 ## Deploy Command (ALWAYS use this exact path)
 ```bash
-cd /var/www/melkjet/melkjet-nextjs && git pull && npm run build && pm2 restart melkjet
+cd /var/www/melkjet/melkjet-nextjs && git pull && npm run build && pm2 reload ecosystem.config.js
 ```
 After deploy, **purge the Arvan CDN cache** (panel → CDN → clear cache) — otherwise
 the CDN serves stale HTML pointing at old CSS/JS chunks and the whole site looks
@@ -13,10 +13,22 @@ unstyled ("گرافیک ریخت"). next.config sets `no-cache` on HTML + `immut
 Quick check after deploy: Ctrl+Shift+R — if styling returns, it was the cache.
 
 ## Server
-- VPS: 185.206.95.40 (Arvan Cloud)
+- VPS: 185.206.95.40 (Arvan Cloud) — **4 vCPU / 8 GB RAM / 25 GB SSD**
+  (the hostname `1-vcpu-2-gb` is stale/misleading; `free -h && nproc` confirm 4/8).
 - Path: /var/www/melkjet/melkjet-nextjs
-- Process: pm2 process named "melkjet"
+- Process: **4 pm2 fork instances** named "melkjet" on ports 3000–3003, behind
+  nginx load-balancer (`docs/nginx-loadbalance.conf`). Config: `ecosystem.config.js`.
+  Start once: `pm2 start ecosystem.config.js && pm2 save`. Deploy: `pm2 reload ecosystem.config.js`.
 - Domain: melkjet.com (Arvan CDN handles HTTPS)
+
+### ⚠️ NEVER use pm2 cluster mode with `next start`
+`next start` binds the PORT itself instead of using pm2's shared cluster socket,
+so all cluster workers fight over port 3000 → `EADDRINUSE` → infinite crash-loop
+(↺ in the hundreds of thousands, 100% CPU, static chunks return 500 `ERR_ABORTED`).
+Use **fork mode, one port per instance** (ecosystem.config.js) + nginx upstream.
+Only NODE_APP_INSTANCE=0 runs cron/Chrome (cron-runner.ts) so scraping stays single.
+If you ever see chunk 500s + huge ↺: `pm2 delete melkjet; pm2 kill; pkill -9 -f next-server;`
+then `pm2 start ecosystem.config.js`.
 
 ## Stack
 - Next.js 16.2.9 (App Router) — use `proxy.ts` not `middleware.ts`, function named `proxy` not `middleware`
