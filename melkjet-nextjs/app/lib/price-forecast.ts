@@ -29,14 +29,17 @@ export interface Forecast {
   method: string; confidence: 'high' | 'medium' | 'low'; samples: number; forecastNext: number
 }
 
-export function neighbourhoodForecast(city: string, district: string): Forecast | null {
+// fallbackAvg = قیمتِ هر مترِ خودِ همین ملک (وقتی دادهٔ محله نداریم) تا نمودار همیشه ساخته شود.
+export function neighbourhoodForecast(city: string, district: string, fallbackAvg?: number): Forecast | null {
   const stats = neighbourhoodStats(city, district)
-  if (!stats || !stats.avg) return null
-  const ys = (stats.trend || []).map(t => t.avg).filter(v => v > 0)
+  const ys = (stats?.trend || []).map(t => t.avg).filter(v => v > 0)
   const samples = ys.length
+  const baseHint = (stats && stats.avg) ? stats.avg : (fallbackAvg && fallbackAvg > 0 ? fallbackAvg : 0)
+  if (!baseHint) return null
+  const usingFallback = !(stats && stats.avg)
 
   let monthlyGrowth = 0, method = '', confidence: Forecast['confidence'] = 'low'
-  let baseAvg = stats.avg                                  // مبنا = میانگینِ فعلیِ واقعی
+  let baseAvg = baseHint                                  // مبنا = میانگینِ فعلیِ واقعی یا قیمتِ همین ملک
   if (samples >= 3) {
     monthlyGrowth = Math.exp(slopeOf(ys.map(v => Math.log(v)))) - 1   // رشدِ درصدیِ ماهانه
     baseAvg = ys[ys.length - 1]
@@ -47,7 +50,7 @@ export function neighbourhoodForecast(city: string, district: string): Forecast 
     method = 'روند دو نقطهٔ دادهٔ واقعی'; confidence = 'low'
   } else {
     monthlyGrowth = 0.012   // پیش‌فرضِ محتاطانه (~۱۵٪ سالانه) وقتی تاریخچهٔ کافی نیست
-    method = 'تخمینِ پایه (تاریخچهٔ محدود)'; confidence = 'low'
+    method = usingFallback ? 'تخمینِ پایه (بر اساسِ قیمتِ همین ملک)' : 'تخمینِ پایه (تاریخچهٔ محدود)'; confidence = 'low'
   }
   monthlyGrowth = Math.max(-0.05, Math.min(0.06, monthlyGrowth))     // محدودهٔ منطقیِ ماهانه
   const yearGrowth = Math.pow(1 + monthlyGrowth, 12) - 1

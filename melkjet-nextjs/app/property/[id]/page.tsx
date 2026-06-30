@@ -133,8 +133,8 @@ export default function PropertyPage() {
       // real market stats (price/m² of the neighbourhood, from our scraped data)
       const mq = new URLSearchParams({ city: it.meta?.['شهر'] || '', district: it.meta?.['محله'] || '', price: it.price || '', title: it.title || '' })
       fetch(`/api/market/stats?${mq}`).then(r => r.ok ? r.json() : null).then(setMarket).catch(() => {})
-      // پیش‌بینیِ قیمت (مدلِ رگرسیونیِ یادگیریِ ماشین روی دادهٔ واقعی)
-      const fq = new URLSearchParams({ city: it.meta?.['شهر'] || '', district: it.meta?.['محله'] || it.location || '' })
+      // پیش‌بینیِ قیمت (مدلِ رگرسیونیِ یادگیریِ ماشین روی دادهٔ واقعی؛ اگر دادهٔ محله نبود، قیمتِ همین ملک مبنا)
+      const fq = new URLSearchParams({ city: it.meta?.['شهر'] || '', district: it.meta?.['محله'] || it.location || '', price: it.price || '', area: it.meta?.['متراژ'] || '', title: it.title || '' })
       fetch(`/api/market/forecast?${fq}`).then(r => r.ok ? r.json() : null).then(d => setForecast(d?.forecast || null)).catch(() => {})
       // similar (same category, exclude self)
       fetch(`/api/content?type=listing&limit=12`).then(r => r.ok ? r.json() : { items: [] }).then(s => {
