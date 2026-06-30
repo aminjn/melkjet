@@ -98,6 +98,8 @@ async function main() {
     if (!scope) return true
     if (scope.cityIds?.length && !scope.cityIds.includes(p.cityId)) return false
     if (scope.regionIds?.length && !scope.regionIds.includes(p.regionId)) return false
+    // مرحله‌ها هم محدودند (تأییدشده). از phaseIdsِ اشتراک استفاده کن تا وقت روی مرحله‌های بسته هدر نرود.
+    if (scope.phaseIds?.length && !scope.phaseIds.includes(p.phaseId)) return false
     return true
   }
   const blockedPhases = new Set(), phaseDenied = {}, phaseOk = new Set()
