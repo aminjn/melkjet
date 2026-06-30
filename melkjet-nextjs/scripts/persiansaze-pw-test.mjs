@@ -34,22 +34,39 @@ async function main() {
     // به صفحهٔ ورودِ id.persiansaze.com ریدایرکت می‌شود (Blazor)
     await page.waitForURL(/id\.persiansaze\.com\/login/, { timeout: 60000 }).catch(() => {})
     console.log('   آدرسِ فعلی:', page.url())
+    // صبر تا مدارِ Blazor (WebSocket) وصل شود
+    await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {})
+    await page.waitForTimeout(2500)
 
-    console.log('→ پر کردنِ فرمِ ورود…')
-    const mobile = page.locator('input[name="_model.MobileNumber"], input[placeholder*="موبایل"]').first()
+    console.log('→ پر کردنِ فرمِ ورود (با commit از طریقِ Tab برای Blazor)…')
+    const mobile = page.locator('input[name="_model.MobileNumber"], input[placeholder*="موبایل"], input[type="tel"]').first()
     await mobile.waitFor({ state: 'visible', timeout: 30000 })
-    await mobile.click(); await mobile.fill(''); await mobile.type(USER, { delay: 40 })
+    await mobile.click()
+    await mobile.pressSequentially(USER, { delay: 80 })
+    await mobile.press('Tab')                 // commitِ مقدار در Blazor
+    await page.waitForTimeout(400)
     const pass = page.locator('input[type="password"], input[name="_model.Password"]').first()
-    await pass.click(); await pass.fill(''); await pass.type(PASS, { delay: 40 })
+    await pass.click()
+    await pass.pressSequentially(PASS, { delay: 80 })
+    await pass.press('Tab')
+    await page.waitForTimeout(800)
 
     console.log('→ زدنِ دکمهٔ ورود…')
-    await Promise.all([
-      page.waitForURL(/my\.persiansaze\.com/, { timeout: 60000 }).catch(() => {}),
-      page.locator('button:has-text("ورود"), button[type="submit"]').first().click(),
-    ])
-    // کمی صبر تا توکن در storage بنشیند
-    await page.waitForTimeout(4000)
-    console.log('   آدرسِ بعدِ ورود:', page.url())
+    // دقیقاً دکمهٔ «ورود» (نه لینکِ «ورود با رمز یکبار مصرف»)
+    const submit = page.getByRole('button', { name: 'ورود', exact: true })
+    const submitBtn = (await submit.count()) ? submit.first() : page.locator('button[type="submit"]').first()
+    await submitBtn.click()
+
+    // تا ۴۵ ثانیه منتظرِ ورود (ریدایرکت به پنل یا ظاهرشدنِ توکن) بمان
+    let ok = false
+    for (let i = 0; i < 45; i++) {
+      await page.waitForTimeout(1000)
+      if (/my\.persiansaze\.com/.test(page.url())) { ok = true; break }
+      const has = await page.evaluate(() => { const a = { ...localStorage, ...sessionStorage }; return Object.keys(a).some(k => /oidc\.user/i.test(k)) }).catch(() => false)
+      if (has) { ok = true; break }
+    }
+    console.log('   آدرسِ بعدِ ورود:', page.url(), ok ? '(ورود انجام شد)' : '(هنوز روی لاگین)')
+    await page.waitForTimeout(2000)
 
     const token = await page.evaluate(() => {
       const a = { ...localStorage, ...sessionStorage }
