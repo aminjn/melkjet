@@ -69,6 +69,8 @@ export default function PropertyPage() {
   const [nearby, setNearby] = useState<{ type?: string; name?: string; time: string }[]>([])
   const [analysis, setAnalysis] = useState<Analysis | null>(null)
   const [market, setMarket] = useState<{ stats: { avg: number; count: number; trend: { month: string; avg: number }[] } | null; value?: number } | null>(null)
+  const [forecast, setForecast] = useState<{ points: { label: string; value: number; kind: string }[]; currentAvg: number; yearGrowthPct: number; monthlyGrowthPct: number; method: string; confidence: string; samples: number } | null>(null)
+  const [selMonth, setSelMonth] = useState<number | null>(null)
   const [aiError, setAiError] = useState('')
   const [similar, setSimilar] = useState<Item[]>([])
   const [phone, setPhone] = useState<string | null>(null)
@@ -131,6 +133,9 @@ export default function PropertyPage() {
       // real market stats (price/m² of the neighbourhood, from our scraped data)
       const mq = new URLSearchParams({ city: it.meta?.['شهر'] || '', district: it.meta?.['محله'] || '', price: it.price || '', title: it.title || '' })
       fetch(`/api/market/stats?${mq}`).then(r => r.ok ? r.json() : null).then(setMarket).catch(() => {})
+      // پیش‌بینیِ قیمت (مدلِ رگرسیونیِ یادگیریِ ماشین روی دادهٔ واقعی)
+      const fq = new URLSearchParams({ city: it.meta?.['شهر'] || '', district: it.meta?.['محله'] || it.location || '' })
+      fetch(`/api/market/forecast?${fq}`).then(r => r.ok ? r.json() : null).then(d => setForecast(d?.forecast || null)).catch(() => {})
       // similar (same category, exclude self)
       fetch(`/api/content?type=listing&limit=12`).then(r => r.ok ? r.json() : { items: [] }).then(s => {
         setSimilar((s.items || []).filter((x: Item) => x.id !== it.id).slice(0, 3))
@@ -349,35 +354,51 @@ export default function PropertyPage() {
                 </div>
               )}
 
-              {/* price trend — real market data if we have ≥3 months, else AI estimate */}
-              {(() => {
-                const real = market?.stats?.trend && market.stats.trend.length >= 3
-                const labels = real ? market!.stats!.trend.map(t => t.month.split('-')[1] + '/' + t.month.split('-')[0].slice(2)) : MONTHS
-                const values = real ? market!.stats!.trend.map(t => t.avg) : (analysis?.priceTrend?.values || [])
-                if (!values.length) return null
-                const max = Math.max(...values)
+              {/* روند و پیش‌بینیِ قیمت — مدلِ رگرسیونی روی دادهٔ واقعیِ محله، با ماهِ جاری و ۳ ماه پیش‌بینی */}
+              {forecast && forecast.points.length > 0 && (() => {
+                const pts = forecast.points
+                const max = Math.max(...pts.map(p => p.value)) || 1
+                const sel = selMonth != null ? pts[selMonth] : null
+                const growthPos = forecast.yearGrowthPct >= 0
+                const confLabel = forecast.confidence === 'high' ? 'دقتِ بالا' : forecast.confidence === 'medium' ? 'دقتِ متوسط' : 'دقتِ پایه'
                 return (
                   <div style={card}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
                       <div>
-                        <div style={{ fontSize: 14, fontWeight: 700 }}>روند قیمت {real ? '' : 'در ۱۲ ماه'}</div>
+                        <div style={{ fontSize: 14, fontWeight: 700 }}>روند و پیش‌بینیِ قیمت</div>
                         <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>میانگین قیمت هر متر در {item.meta?.['محله'] || item.location}</div>
                       </div>
                       <div style={{ textAlign: 'left' }}>
-                        {real ? <div style={{ color: '#5fd98a', fontWeight: 700, fontSize: 12 }}>✓ از {toFa(market!.stats!.count)} آگهی واقعی</div>
-                          : analysis?.priceTrend && <><div style={{ color: '#5fd98a', fontWeight: 700, fontSize: 13 }}>↗ {analysis.priceTrend.yearGrowth} رشد سالانه</div><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>تخمین AI · {analysis.priceTrend.forecast}</div></>}
+                        <div style={{ color: growthPos ? '#5fd98a' : '#ef4444', fontWeight: 700, fontSize: 13 }}>{growthPos ? '↗' : '↘'} {toFa(Math.abs(Math.round(forecast.yearGrowthPct)))}٪ رشدِ سالانه (پیش‌بینی)</div>
+                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>مدلِ یادگیریِ ماشین · {confLabel}</div>
                       </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 140 }}>
-                      {values.map((v, i) => {
-                        const last = i === values.length - 1
+                    {/* مقدارِ ماهِ انتخاب‌شده */}
+                    <div style={{ fontSize: 12.5, marginBottom: 10, minHeight: 18, color: 'var(--muted)' }}>
+                      {sel ? <span><b style={{ color: 'var(--gold)' }}>{sel.label}</b>: {toFa(Math.round(sel.value / 1e6))} م.ت/متر{sel.kind === 'forecast' ? ' (پیش‌بینی)' : sel.kind === 'current' ? ' (ماهِ جاری)' : ''}</span> : 'روی هر ماه بزنید تا قیمتِ آن را ببینید.'}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 5, height: 140 }}>
+                      {pts.map((p, i) => {
+                        const isCur = p.kind === 'current'
+                        const isFc = p.kind === 'forecast'
+                        const on = selMonth === i
                         return (
-                          <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                            <div title={real ? `${Math.round(v / 1e6)} م.ت/متر` : ''} style={{ width: '100%', height: `${(v / max) * 110}px`, borderRadius: 6, background: last ? 'linear-gradient(180deg,var(--gold2),var(--gold))' : 'var(--goldDim)', border: last ? '1px solid var(--gold)' : 'none' }} />
-                            <span style={{ fontSize: 9, color: 'var(--faint)' }}>{labels[i]}</span>
-                          </div>
+                          <button key={i} onClick={() => setSelMonth(on ? null : i)} title={`${p.label}: ${Math.round(p.value / 1e6)} م.ت/متر`} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>
+                            <div style={{
+                              width: '100%', height: `${Math.max(6, (p.value / max) * 110)}px`, borderRadius: 6,
+                              background: isCur ? 'linear-gradient(180deg,var(--gold2),var(--gold))' : isFc ? 'repeating-linear-gradient(45deg,var(--goldDim),var(--goldDim) 5px,transparent 5px,transparent 9px)' : 'var(--goldDim)',
+                              border: on ? '2px solid var(--gold)' : isCur ? '1px solid var(--gold)' : isFc ? '1px dashed var(--line2)' : 'none',
+                            }} />
+                            <span style={{ fontSize: 9, color: isCur ? 'var(--gold)' : 'var(--faint)', fontWeight: isCur ? 700 : 400 }}>{p.label}</span>
+                          </button>
                         )
                       })}
+                    </div>
+                    <div style={{ display: 'flex', gap: 14, marginTop: 12, fontSize: 11, color: 'var(--faint)', flexWrap: 'wrap' }}>
+                      <span style={{ display: 'flex', gap: 5, alignItems: 'center' }}><span style={{ width: 11, height: 11, borderRadius: 3, background: 'var(--goldDim)' }} /> روند</span>
+                      <span style={{ display: 'flex', gap: 5, alignItems: 'center' }}><span style={{ width: 11, height: 11, borderRadius: 3, background: 'var(--gold)' }} /> ماهِ جاری</span>
+                      <span style={{ display: 'flex', gap: 5, alignItems: 'center' }}><span style={{ width: 11, height: 11, borderRadius: 3, background: 'repeating-linear-gradient(45deg,var(--goldDim),var(--goldDim) 3px,transparent 3px,transparent 6px)', border: '1px dashed var(--line2)' }} /> پیش‌بینی</span>
+                      <span style={{ marginInlineStart: 'auto' }}>{forecast.method}</span>
                     </div>
                   </div>
                 )
