@@ -99,20 +99,15 @@ export async function ensureImported(owner: string): Promise<void> {
     const prof = Object.values(getProfiles()).find(p => (p.phones || []).some(ph => String(ph).replace(/\D/g, '') === norm))
     if (prof) {
       for (const pr of prof.projects || []) {
-        const totalUnits = Math.max(0, Math.min(500, Number(pr.units) || 0))
-        const floors = Math.max(1, Number(pr.floors) || 1)
-        const perFloor = Math.max(1, Math.round(totalUnits / floors) || 1)
-        const avgArea = totalUnits ? Math.round((Number(pr.residentialArea) || 0) / totalUnits) : 0
-        const units: Unit[] = []
-        for (let i = 0; i < totalUnits; i++) { const fl = Math.floor(i / perFloor) + 1; units.push({ id: id(), number: `${fl}-${(i % perFloor) + 1}`, floor: fl, area: avgArea, price: 0, status: 'available' }) }
         const label = phaseLabel(pr)
         const { milestones, progress } = milestonesForPhase(label)
+        // واحدها خالی می‌مانند تا سازنده فروشِ واقعیِ خودش را ثبت کند (بدونِ دیتای ساختگی).
         const source: ProjectSource = {
           hashId: pr.hashId, photos: pr.photo?.imageUrl ? [pr.photo.imageUrl] : (pr.photo?.imageThumbnailUrl ? [pr.photo.imageThumbnailUrl] : []),
           address: pr.address, region: regionLabel(pr), phase: label,
           lat: pr.latitude, lng: pr.longitude, groundArea: pr.groundArea, residentialArea: pr.residentialArea, floors: pr.floors, totalUnits: pr.units,
         }
-        projects.push({ id: id(), name: (pr.address || 'پروژه').slice(0, 70), location: regionLabel(pr) || '', phase: label || '—', progress, units, investors: [], milestones, monthlySales: [], createdAt: Date.now(), source })
+        projects.push({ id: id(), name: (pr.address || 'پروژه').slice(0, 70), location: regionLabel(pr) || '', phase: label || '—', progress, units: [], investors: [], milestones, monthlySales: [], createdAt: Date.now(), source })
       }
     }
   } catch { /* اگر پرشین سازه در دسترس نبود، خالی */ }

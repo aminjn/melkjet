@@ -15,11 +15,16 @@ interface Unit { id: string; number: string; floor: number; area: number; price:
 interface Investor { id: string; name: string; phone?: string; amount: number; units?: number }
 type MilestoneStatus = 'done' | 'active' | 'pending'
 interface Milestone { id: string; name: string; status: MilestoneStatus; date?: string }
+interface ProjectSource {
+  hashId?: string; photos?: string[]; address?: string; region?: string; phase?: string
+  lat?: number; lng?: number; groundArea?: number; residentialArea?: number; floors?: number; totalUnits?: number
+}
 interface Project {
   id: string; name: string; location: string; phase: string; progress: number
   units: Unit[]; investors: Investor[]; milestones: Milestone[]
   monthlySales: { month: string; count: number }[]
   createdAt: number
+  source?: ProjectSource
 }
 interface ProjectSummary { id: string; name: string; location: string }
 
@@ -555,8 +560,34 @@ function OverviewView({ project, s, onMilestone, busy }: {
   }
   const activeIdx = project.milestones.findIndex(m => m.status === 'active')
 
+  const src = project.source
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* مشخصاتِ واقعیِ پروژه (از بانکِ اطلاعاتِ ساختمان) — عکس + اطلاعات + کدِ راستی‌آزمایی */}
+      {src && (
+        <div style={{ ...card, padding: 0, overflow: 'hidden', display: 'flex', flexWrap: 'wrap' }}>
+          {(src.photos && src.photos[0]) && (
+            <img src={src.photos[0]} alt={src.address || ''} style={{ width: 320, maxWidth: '100%', height: 220, objectFit: 'cover', flexShrink: 0 }} />
+          )}
+          <div style={{ flex: 1, minWidth: 260, padding: 20 }}>
+            <div style={{ fontSize: 11.5, color: 'var(--gold)', fontWeight: 700 }}>مشخصاتِ پروژه</div>
+            <div style={{ fontSize: 17, fontWeight: 800, marginTop: 6, lineHeight: 1.7 }}>{src.address || project.name}</div>
+            <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 6 }}>
+              {src.region}{src.phase ? ` · مرحله: ${src.phase}` : ''}
+              {src.hashId && <span style={{ marginInlineStart: 10, color: 'var(--faint)' }}>کد: <span style={{ direction: 'ltr', display: 'inline-block' }}>{src.hashId}</span></span>}
+            </div>
+            <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginTop: 14 }}>
+              {[['متراژ زمین', `${fa(src.groundArea || 0)} م²`], ['زیربنا', `${fa(src.residentialArea || 0)} م²`], ['طبقات', fa(src.floors || 0)], ['واحدها', fa(src.totalUnits || 0)]].map(([l, v]) => (
+                <div key={l}><div style={{ fontSize: 11, color: 'var(--muted)' }}>{l}</div><div style={{ fontSize: 15, fontWeight: 700, marginTop: 2 }}>{v}</div></div>
+              ))}
+            </div>
+            {src.lat != null && src.lng != null && (
+              <a href={`https://www.google.com/maps?q=${src.lat},${src.lng}`} target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginTop: 14, fontSize: 12.5, color: 'var(--gold)', textDecoration: 'none' }}>📍 مشاهده روی نقشه</a>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* KPI cards */}
       <div className="mjb-grid4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
         {kpis.map(k => (
