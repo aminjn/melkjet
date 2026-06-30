@@ -70,6 +70,26 @@ async function main() {
       console.log('   ', r.text.slice(0, 200))
     }
   }
+  // POST Constructor = گرفتنِ سازنده/شماره (چون GET آن ۴۰۵ داد، متد POST است)
+  console.log('\n── POST Constructor (گرفتنِ شماره) ──')
+  for (const body of ['{}', '', JSON.stringify({ projectHashId: HASH })]) {
+    const r = await page.evaluate(async ({ path, body }) => {
+      const a = { ...localStorage, ...sessionStorage }
+      const k = Object.keys(a).find(k => /oidc\.user/i.test(k))
+      const token = k ? JSON.parse(a[k]).access_token : ''
+      const did = a['did'] || a['deviceId'] || ''
+      const headers = { accept: 'application/json', 'content-type': 'application/json', authorization: 'Bearer ' + token }
+      if (did) headers['did'] = did
+      const opt = { method: 'POST', headers }
+      if (body) opt.body = body
+      const res = await fetch(path, opt)
+      return { status: res.status, text: await res.text() }
+    }, { path: `/rest/api/user/v1/Project/${HASH}/Constructor`, body })
+    console.log(`POST .../Constructor  body=${body || '(خالی)'} → ${r.status}`)
+    let pretty = r.text; try { pretty = JSON.stringify(JSON.parse(r.text), null, 1) } catch {}
+    console.log('   ', pretty.slice(0, 1200))
+    if (r.status >= 200 && r.status < 300) break
+  }
   await browser.close()
   console.log('\n═══════════ پایان ═══════════')
 }
