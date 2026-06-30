@@ -341,16 +341,19 @@ export function publicFacets(): PublicFacets {
 }
 
 export interface PublicQueryOpts {
-  region?: string; phase?: number; floorsMin?: number; unitsMin?: number
+  city?: string; region?: string; phase?: number; floorsMin?: number; unitsMin?: number
   areaMin?: number; areaMax?: number; search?: string; withPhoto?: boolean
   sort?: 'area' | 'units' | 'recent'; page?: number; pageSize?: number
 }
+// نامِ شهرِ پروژه (فعلاً فقط تهران در داده هست؛ بقیه با افزودنِ شهرها پر می‌شود).
+export function cityNameOf(p: { cityId?: number }): string { return p.cityId === 1 ? 'تهران' : '' }
 // فیلترِ کاملِ پروژه‌های عمومی: منطقه/مرحله/طبقات/واحد/متراژ/جستجو + مرتب‌سازی + صفحه‌بندی.
 // همراهِ نقاطِ نقشهٔ کلِ نتیجهٔ فیلتر (سقف‌دار) تا پین‌ها با لیست هماهنگ باشند.
 export function publicQuery(opts: PublicQueryOpts = {}) {
   const all = publicFlat()
   const q = (opts.search || '').trim()
   let rows = all.filter(p => {
+    if (opts.city && cityNameOf(p) !== opts.city) return false   // فیلترِ شهرِ سراسریِ سایت
     if (opts.region && (regionLabel(p) || 'سایر') !== opts.region) return false
     if (opts.phase && p.phaseId !== opts.phase) return false
     if (opts.floorsMin && (Number(p.floors) || 0) < opts.floorsMin) return false
@@ -370,7 +373,8 @@ export function publicQuery(opts: PublicQueryOpts = {}) {
 
   const total = rows.length
   const page = Math.max(1, opts.page || 1), pageSize = Math.min(120, opts.pageSize || 24)
-  const items = rows.slice((page - 1) * pageSize, page * pageSize)
+  // برچسبِ منطقه/شهر را سمتِ سرور می‌سازیم تا کلاینت دیگر «منطقه ۱۲۳»ی خام نسازد.
+  const items = rows.slice((page - 1) * pageSize, page * pageSize).map(p => ({ ...p, region: regionLabel(p), city: cityNameOf(p) }))
   // نقاطِ نقشه برای کلِ نتیجهٔ فیلتر (سقفِ ۳۰۰۰ برای کارایی).
   const points: { id: string; lat: number; lng: number; title?: string; price?: string }[] = []
   for (const p of rows) { const pt = toPoint(p); if (pt) { points.push(pt); if (points.length >= 3000) break } }

@@ -5,12 +5,14 @@ import Nav from '../components/Nav'
 import Footer from '../components/Footer'
 import StaticMap from '../components/StaticMap'
 import NeshanMap from '../components/NeshanMap'
+import { readCity } from '../components/CitySelector'
 
 interface MapPoint { id: string; lat: number; lng: number; title?: string; price?: string }
 const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
 
 interface Item {
   hashId: string; address?: string; builderId: string; builderName: string
+  region?: string; city?: string
   regionId?: number; cityId?: number; phaseId?: number; floors?: number; units?: number
   residentialArea?: number; groundArea?: number; latitude?: number; longitude?: number
   photo?: { imageUrl?: string; imageThumbnailUrl?: string }
@@ -21,8 +23,6 @@ interface Facets {
   area: { min: number; max: number }
   total: number
 }
-
-const regionLabel = (p: Item) => (p.cityId === 1 && p.regionId && p.regionId > 100 && p.regionId < 123) ? `تهران، منطقه ${p.regionId - 100}` : (p.regionId ? `منطقه ${p.regionId}` : '')
 
 export default function Sazandeha() {
   const [facets, setFacets] = useState<Facets | null>(null)
@@ -44,11 +44,21 @@ export default function Sazandeha() {
   const [areaMax, setAreaMax] = useState('')
   const [withPhoto, setWithPhoto] = useState(false)
   const [sort, setSort] = useState('')
+  const [city, setCity] = useState('')
 
   const debTimer = useRef<any>(null)
 
+  // شهرِ انتخابیِ سراسریِ سایت — با تغییرش، فهرست هم عوض می‌شود.
+  useEffect(() => {
+    setCity(readCity())
+    const upd = () => setCity(readCity())
+    window.addEventListener('mj-city-updated', upd)
+    return () => window.removeEventListener('mj-city-updated', upd)
+  }, [])
+
   const qs = useMemo(() => {
     const p = new URLSearchParams()
+    if (city) p.set('city', city)
     if (search.trim()) p.set('search', search.trim())
     if (region) p.set('region', region)
     if (phase) p.set('phase', phase)
@@ -59,7 +69,7 @@ export default function Sazandeha() {
     if (withPhoto) p.set('withPhoto', '1')
     if (sort) p.set('sort', sort)
     return p.toString()
-  }, [search, region, phase, floorsMin, unitsMin, areaMin, areaMax, withPhoto, sort])
+  }, [city, search, region, phase, floorsMin, unitsMin, areaMin, areaMax, withPhoto, sort])
 
   // بارگذاریِ صفحهٔ ۱ هنگامِ تغییرِ فیلتر (با debounce برای جستجو)
   useEffect(() => {
@@ -177,7 +187,7 @@ export default function Sazandeha() {
             {/* لیست */}
             <section>
               {items.length === 0 && !loading ? (
-                <div style={{ color: 'var(--faint)', padding: '40px 0', textAlign: 'center' }}>پروژه‌ای با این فیلترها پیدا نشد.</div>
+                <div style={{ color: 'var(--faint)', padding: '40px 0', textAlign: 'center' }}>{city && city !== 'تهران' ? `هنوز پروژه‌ای در ${city} ثبت نشده است.` : 'پروژه‌ای با این فیلترها پیدا نشد.'}</div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 14 }}>
                   {items.map(p => (
@@ -193,7 +203,7 @@ export default function Sazandeha() {
                             {!!p.units && <span style={chip}>{fa(p.units)} واحد</span>}
                             {!!p.residentialArea && <span style={chip}>{fa(p.residentialArea)} م²</span>}
                           </div>
-                          <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 'auto' }}>📍 {regionLabel(p) || '—'}</div>
+                          <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 'auto' }}>📍 {p.region || '—'}</div>
                           <div style={{ fontSize: 11.5, color: 'var(--gold)', marginTop: 4, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>🏗 {p.builderName || 'سازنده'}</div>
                         </div>
                       </article>

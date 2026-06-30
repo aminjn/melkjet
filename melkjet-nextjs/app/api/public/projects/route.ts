@@ -8,6 +8,7 @@ export async function GET(req: NextRequest) {
   const u = new URL(req.url).searchParams
   const num = (k: string) => { const v = Number(u.get(k)); return Number.isFinite(v) && v > 0 ? v : undefined }
   const res = publicQuery({
+    city: u.get('city') || undefined,
     region: u.get('region') || undefined,
     phase: num('phase'),
     floorsMin: num('floorsMin'),
