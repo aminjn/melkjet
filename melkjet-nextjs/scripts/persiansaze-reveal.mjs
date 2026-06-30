@@ -150,7 +150,7 @@ async function main() {
   } catch (e) { log('خطا:', e.message) }
   await browser.close()
 
-  reveals.meta = { availableCount: available, lastRevealAt: new Date().toISOString(), revealedTotal: Object.keys(reveals.items).length }
+  reveals.meta = { availableCount: available, lastRevealAt: new Date().toISOString(), revealedTotal: Object.keys(reveals.items).length, gotLast: got }
   fs.writeFileSync(REVEALS_FILE, JSON.stringify(reveals))
   const profiles = buildProfiles(reveals, projects)
   fs.writeFileSync(PROFILES_FILE, JSON.stringify(profiles))
