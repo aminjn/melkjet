@@ -123,9 +123,10 @@ async function main() {
       else empty = 0
       for (const p of results) { if (p.hashId && !seen.has(p.hashId)) { seen.add(p.hashId); all.push(p) } }
       if (pageNo % 10 === 0 || results.length < cfg.limit) log(`صفحهٔ ${pageNo} | offset ${offset} | تا اینجا ${all.length} پروژه`)
-      offset += cfg.limit
+      // پیشرویِ مقاوم: بر اساسِ تعدادِ واقعیِ نتایج (اگر سرور limit را محدود کرد، چیزی جا نمی‌ماند)
+      offset += results.length || cfg.limit
       if (cfg.maxPages && pageNo >= cfg.maxPages) { log(`به سقفِ ${cfg.maxPages} صفحه رسید.`); break }
-      await page.waitForTimeout(300) // ملایم
+      await page.waitForTimeout(150) // ملایم
     }
   } catch (e) { log('خطا حینِ کشیدن:', e.message) }
   await browser.close()
