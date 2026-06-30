@@ -14,29 +14,26 @@ async function guard() { const s = await getSession(); return s && s.role === 's
 
 const LOG_FILE = path.join(process.cwd(), '.persiansaze-scrape.log')
 const LOCK_FILE = path.join(process.cwd(), '.persiansaze-scrape.lock')
+const REVEAL_LOG = path.join(process.cwd(), '.persiansaze-reveal.log')
+const REVEAL_LOCK = path.join(process.cwd(), '.persiansaze-reveal.lock')
 
-function isRunning(): boolean {
-  try {
-    const pid = Number(fs.readFileSync(LOCK_FILE, 'utf8'))
-    if (!pid) return false
-    process.kill(pid, 0) // بدونِ کشتن، فقط بررسیِ زنده‌بودن
-    return true
-  } catch { return false }
+function pidAlive(file: string): boolean {
+  try { const pid = Number(fs.readFileSync(file, 'utf8')); if (!pid) return false; process.kill(pid, 0); return true } catch { return false }
 }
+function isRunning(): boolean { return pidAlive(LOCK_FILE) }
+function isRevealing(): boolean { return pidAlive(REVEAL_LOCK) }
 
-// اسکریپتِ اسکرپ را در پس‌زمینه اجرا می‌کند (لاگین + کشیدن + بازسازیِ پروفایل‌ها).
-function startScrape() {
+// یک اسکریپتِ پرشین سازه را در پس‌زمینه اجرا می‌کند.
+function startJob(script: string, logFile: string, lockFile: string, extraEnv: Record<string, string> = {}) {
   const cfg = getConfig()
-  const script = path.join(process.cwd(), 'scripts', 'persiansaze-scrape.mjs')
-  const out = fs.openSync(LOG_FILE, 'w')
-  const child = spawn(process.execPath, [script], {
+  const out = fs.openSync(logFile, 'w')
+  const child = spawn(process.execPath, [path.join(process.cwd(), 'scripts', script)], {
     detached: true,
     stdio: ['ignore', out, out],
-    env: { ...process.env, PS_USER: cfg.user, PS_PASS: cfg.pass, PS_CHANNEL: cfg.channel || 'chrome', PS_LIMIT: String(cfg.limit || 100) },
+    env: { ...process.env, PS_USER: cfg.user, PS_PASS: cfg.pass, PS_CHANNEL: cfg.channel || 'chrome', PS_LIMIT: String(cfg.limit || 20), ...extraEnv },
   })
-  fs.writeFileSync(LOCK_FILE, String(child.pid))
+  fs.writeFileSync(lockFile, String(child.pid))
   child.unref()
-  saveConfig({ lastScrapeAt: new Date().toISOString(), lastError: '' })
 }
 
 export async function GET(req: NextRequest) {
@@ -55,14 +52,17 @@ export async function GET(req: NextRequest) {
     return p ? NextResponse.json(p) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 })
   }
   const data = getData()
-  let log = ''
+  let log = '', revealLog = ''
   try { log = fs.readFileSync(LOG_FILE, 'utf8').slice(-1500) } catch {}
+  try { revealLog = fs.readFileSync(REVEAL_LOG, 'utf8').slice(-1500) } catch {}
   return NextResponse.json({
     config: getConfigMasked(),
     running: isRunning(),
+    revealing: isRevealing(),
     data: { lastSync: data.lastSync, totalProjects: data.totalProjects || 0, totalBuilders: data.totalBuilders || 0 },
     profiles: profileStats(),
     log,
+    revealLog,
   })
 }
 
@@ -83,8 +83,19 @@ export async function POST(req: NextRequest) {
     const cfg = getConfig()
     if (!cfg.user || !cfg.pass) return NextResponse.json({ error: 'یوزر/پسوردِ پرشین سازه را اول ذخیره کن' }, { status: 400 })
     if (isRunning()) return NextResponse.json({ error: 'اسکرپ در حال اجراست' }, { status: 409 })
-    startScrape()
+    startJob('persiansaze-scrape.mjs', LOG_FILE, LOCK_FILE)
+    saveConfig({ lastScrapeAt: new Date().toISOString(), lastError: '' })
     return NextResponse.json({ ok: true, message: 'اسکرپ شروع شد (در پس‌زمینه).' })
+  }
+
+  if (action === 'reveal') {
+    const cfg = getConfig()
+    if (!cfg.user || !cfg.pass) return NextResponse.json({ error: 'یوزر/پسوردِ پرشین سازه را اول ذخیره کن' }, { status: 400 })
+    if (isRevealing()) return NextResponse.json({ error: 'گرفتنِ شماره در حال اجراست' }, { status: 409 })
+    const extra: Record<string, string> = {}
+    if (b.max) extra.PS_MAX_REVEALS = String(Math.max(1, Math.min(500, Number(b.max) || 0)))
+    startJob('persiansaze-reveal.mjs', REVEAL_LOG, REVEAL_LOCK, extra)
+    return NextResponse.json({ ok: true, message: 'گرفتنِ شماره‌ها شروع شد (در پس‌زمینه).' })
   }
 
   if (action === 'rebuild-profiles') {

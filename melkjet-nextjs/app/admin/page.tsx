@@ -1512,9 +1512,11 @@ interface PSConfig { user: string; pass: string; hasPass: boolean; enabled: bool
 interface PSState {
   config: PSConfig
   running: boolean
+  revealing: boolean
   data: { lastSync?: string; totalProjects: number; totalBuilders: number }
-  profiles: { builders: number; withPhone: number; projects: number }
+  profiles: { builders: number; withPhone: number; projects: number; revealedProjects?: number; pendingProjects?: number; quotaAvailable?: number | null; lastRevealAt?: string }
   log: string
+  revealLog: string
 }
 
 function PersianSazeView() {
@@ -1528,6 +1530,7 @@ function PersianSazeView() {
   const [cfgMsg, setCfgMsg] = useState('')
   const [scrapeMsg, setScrapeMsg] = useState('')
   const [rebuildMsg, setRebuildMsg] = useState('')
+  const [revealMsg, setRevealMsg] = useState('')
 
   // profiles list
   const [rows, setRows] = useState<PSProfile[]>([])
@@ -1568,12 +1571,12 @@ function PersianSazeView() {
 
   useEffect(() => { loadStatus(); loadProfiles(1) }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // poll while running
+  // poll while running (scrape) or revealing (phone)
   useEffect(() => {
-    if (!st?.running) return
+    if (!st?.running && !st?.revealing) return
     const t = setInterval(() => loadStatus(), 4000)
     return () => clearInterval(t)
-  }, [st?.running])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [st?.running, st?.revealing])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveConfig = async () => {
     setCfgMsg('')
@@ -1599,6 +1602,14 @@ function PersianSazeView() {
     const d = await r.json().catch(() => ({}))
     setRebuildMsg(d.ok ? `✓ ${fa(d.created)} ساخته · ${fa(d.updated)} به‌روز · ${fa(d.total)} کل` : `⚠ ${d.error || 'خطا'}`)
     loadStatus(); loadProfiles()
+  }
+
+  const startReveal = async () => {
+    setRevealMsg('در حال شروع…')
+    const r = await fetch('/api/admin/persiansaze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'reveal' }) })
+    const d = await r.json().catch(() => ({}))
+    setRevealMsg(r.ok ? '✓ گرفتنِ شماره‌ها شروع شد' : `⚠ ${d.error || 'خطا'}`)
+    loadStatus()
   }
 
   const openDetail = async (name: string) => {
@@ -1646,15 +1657,21 @@ function PersianSazeView() {
           <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 16px', minWidth: 120 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>پروژه‌ها</div><div style={{ fontSize: 22, fontWeight: 900 }}>{st ? fa(st.data.totalProjects) : '—'}</div></div>
           <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 16px', minWidth: 120 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>سازنده‌های یکتا</div><div style={{ fontSize: 22, fontWeight: 900, color: 'var(--gold)' }}>{st ? fa(st.data.totalBuilders) : '—'}</div></div>
           <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 16px', minWidth: 120 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>شماره‌دار</div><div style={{ fontSize: 22, fontWeight: 900, color: '#5fd98a' }}>{st ? fa(st.profiles.withPhone) : '—'}</div></div>
+          <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 16px', minWidth: 120 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>سهمیهٔ باقی‌مانده</div><div style={{ fontSize: 22, fontWeight: 900, color: '#5fd98a' }}>{st?.profiles.quotaAvailable != null ? fa(st.profiles.quotaAvailable) : '—'}<span style={{ fontSize: 12, color: 'var(--faint)', fontWeight: 600 }}> / ۵۰۰</span></div></div>
+          <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 16px', minWidth: 120 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>در انتظارِ شماره</div><div style={{ fontSize: 22, fontWeight: 900, color: 'var(--gold)' }}>{st?.profiles.pendingProjects != null ? fa(st.profiles.pendingProjects) : '—'}</div></div>
           <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: '12px 16px', minWidth: 140 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>آخرین اسکرپ</div><div style={{ fontSize: 13.5, fontWeight: 700, marginTop: 6 }}>{st ? fmtDate(st.data.lastSync) : '—'}</div></div>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
           <GoldButton onClick={startScrape} disabled={running}>{running ? 'در حال اجرا…' : '🔄 شروع اسکرپ'}</GoldButton>
+          <GoldButton onClick={startReveal} disabled={!!st?.revealing}>{st?.revealing ? 'در حال گرفتنِ شماره…' : '📞 گرفتنِ شماره‌ها (تا سقفِ هفتگی)'}</GoldButton>
           <OutlineButton onClick={rebuild}>بازسازی پروفایل‌ها</OutlineButton>
           {scrapeMsg && <span style={{ fontSize: 12.5, color: scrapeMsg.startsWith('✓') ? '#5fd98a' : 'var(--muted)' }}>{scrapeMsg}</span>}
+          {revealMsg && <span style={{ fontSize: 12.5, color: revealMsg.startsWith('✓') ? '#5fd98a' : 'var(--muted)' }}>{revealMsg}</span>}
           {rebuildMsg && <span style={{ fontSize: 12.5, color: rebuildMsg.startsWith('✓') ? '#5fd98a' : 'var(--muted)' }}>{rebuildMsg}</span>}
         </div>
-        {st?.log && <pre style={{ dir: 'ltr', direction: 'ltr', fontSize: 11, maxHeight: 200, overflow: 'auto', background: 'var(--bg2)', whiteSpace: 'pre-wrap', borderRadius: 10, padding: 12, margin: 0, color: 'var(--muted)', border: '1px solid var(--line2)' } as React.CSSProperties}>{st.log}</pre>}
+        <div style={{ fontSize: 11.5, color: 'var(--faint)', marginBottom: 10, lineHeight: 1.8 }}>«گرفتنِ شماره‌ها» هر بار تا سقفِ هفتگی (۵۰۰) شمارهٔ سازنده‌های جدید را می‌گیرد و به پروفایل‌ها وصل می‌کند. سهمیه که تمام شد، هفتهٔ بعد ادامه می‌دهد (با کرونِ خودکار). شماره‌گرفتنِ تکراری از سهمیه کم نمی‌کند.</div>
+        {st?.log && <pre style={{ dir: 'ltr', direction: 'ltr', fontSize: 11, maxHeight: 160, overflow: 'auto', background: 'var(--bg2)', whiteSpace: 'pre-wrap', borderRadius: 10, padding: 12, margin: '0 0 10px', color: 'var(--muted)', border: '1px solid var(--line2)' } as React.CSSProperties}>{st.log}</pre>}
+        {st?.revealLog && <pre style={{ dir: 'ltr', direction: 'ltr', fontSize: 11, maxHeight: 160, overflow: 'auto', background: 'var(--bg2)', whiteSpace: 'pre-wrap', borderRadius: 10, padding: 12, margin: 0, color: 'var(--muted)', border: '1px solid var(--line2)' } as React.CSSProperties}>{st.revealLog}</pre>}
       </Card>
 
       {/* Card 3 — profiles list */}
