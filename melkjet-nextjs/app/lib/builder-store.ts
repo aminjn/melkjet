@@ -8,11 +8,17 @@ export type UnitStatus = 'sold' | 'reserved' | 'available'
 export interface Unit { id: string; number: string; floor: number; area: number; price: number; status: UnitStatus; buyer?: string }
 export interface Investor { id: string; name: string; phone?: string; amount: number; units?: number }
 export interface Milestone { id: string; name: string; status: 'done' | 'active' | 'pending'; date?: string }
+// متادیتای واقعیِ پرشین سازه (عکس‌ها، آدرس، مختصات…) که روی پروژهٔ واردشده می‌نشیند.
+export interface ProjectSource {
+  hashId?: string; photos?: string[]; address?: string; region?: string; phase?: string
+  lat?: number; lng?: number; groundArea?: number; residentialArea?: number; floors?: number; totalUnits?: number
+}
 export interface Project {
   id: string; name: string; location: string; phase: string; progress: number
   units: Unit[]; investors: Investor[]; milestones: Milestone[]
   monthlySales: { month: string; count: number }[]
   createdAt: number
+  source?: ProjectSource
 }
 
 function id() { return randomBytes(6).toString('hex') }
@@ -101,7 +107,12 @@ export async function ensureImported(owner: string): Promise<void> {
         for (let i = 0; i < totalUnits; i++) { const fl = Math.floor(i / perFloor) + 1; units.push({ id: id(), number: `${fl}-${(i % perFloor) + 1}`, floor: fl, area: avgArea, price: 0, status: 'available' }) }
         const label = phaseLabel(pr)
         const { milestones, progress } = milestonesForPhase(label)
-        projects.push({ id: id(), name: (pr.address || 'پروژه').slice(0, 70), location: regionLabel(pr) || '', phase: label || '—', progress, units, investors: [], milestones, monthlySales: [], createdAt: Date.now() })
+        const source: ProjectSource = {
+          hashId: pr.hashId, photos: pr.photo?.imageUrl ? [pr.photo.imageUrl] : (pr.photo?.imageThumbnailUrl ? [pr.photo.imageThumbnailUrl] : []),
+          address: pr.address, region: regionLabel(pr), phase: label,
+          lat: pr.latitude, lng: pr.longitude, groundArea: pr.groundArea, residentialArea: pr.residentialArea, floors: pr.floors, totalUnits: pr.units,
+        }
+        projects.push({ id: id(), name: (pr.address || 'پروژه').slice(0, 70), location: regionLabel(pr) || '', phase: label || '—', progress, units, investors: [], milestones, monthlySales: [], createdAt: Date.now(), source })
       }
     }
   } catch { /* اگر پرشین سازه در دسترس نبود، خالی */ }

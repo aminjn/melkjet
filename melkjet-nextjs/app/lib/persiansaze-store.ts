@@ -164,6 +164,33 @@ export function listProfiles(opts: { search?: string; withPhone?: boolean; page?
 
 export function getProfile(id: string): PSProfile | null { return getProfiles()[String(id)] || null }
 
+// ─── دادهٔ صفحاتِ عمومی (فهرستِ پروژه‌ها به تفکیکِ منطقه + صفحهٔ هر پروژه) ──────
+export interface PublicProject extends PSProject { builderId: string; builderName: string }
+
+// همهٔ پروژه‌های سازنده‌های شماره‌دار، گروه‌بندی‌شده بر اساسِ منطقه.
+export function publicProjectsByRegion(perRegion = 120): { region: string; count: number; projects: PublicProject[] }[] {
+  const groups = new Map<string, PublicProject[]>()
+  for (const b of Object.values(getProfiles())) {
+    for (const pr of b.projects || []) {
+      const region = regionLabel(pr) || 'سایر'
+      if (!groups.has(region)) groups.set(region, [])
+      groups.get(region)!.push({ ...pr, builderId: b.id, builderName: b.name })
+    }
+  }
+  return [...groups.entries()]
+    .map(([region, projects]) => ({ region, count: projects.length, projects: projects.slice(0, perRegion) }))
+    .sort((a, b) => b.count - a.count)
+}
+
+// یک پروژه (بر اساسِ hashId) + سازنده‌اش + سایرِ پروژه‌های همان سازنده.
+export function publicProject(hashId: string): { project: PSProject; builder: PSProfile; others: PSProject[] } | null {
+  for (const b of Object.values(getProfiles())) {
+    const project = (b.projects || []).find(p => p.hashId === hashId)
+    if (project) return { project, builder: b, others: (b.projects || []).filter(p => p.hashId !== hashId) }
+  }
+  return null
+}
+
 export function profileStats() {
   const all = Object.values(getProfiles())
   const reveals = getReveals()
