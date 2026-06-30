@@ -84,10 +84,14 @@ async function main() {
 
     console.log('\n→ کشیدنِ لیستِ پروژه‌ها از داخلِ همان نشست (HTTP/2 + همهٔ هدرها خودکار)…')
     const res = await page.evaluate(async (body) => {
+      const a = { ...localStorage, ...sessionStorage }
+      const k = Object.keys(a).find(k => /oidc\.user/i.test(k))
+      const token = k ? JSON.parse(a[k]).access_token : ''
+      const did = a['did'] || a['deviceId'] || ''
+      const headers = { 'content-type': 'application/json', accept: 'application/json', authorization: 'Bearer ' + token }
+      if (did) headers['did'] = did
       const r = await fetch('/rest/api/user/v1/Project/Filter?limit=3&offset=0', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify(body),
+        method: 'POST', headers, body: JSON.stringify(body),
       })
       return { status: r.status, text: (await r.text()).slice(0, 1600) }
     }, FILTER_BODY)
