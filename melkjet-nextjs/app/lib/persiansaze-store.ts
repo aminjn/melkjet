@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { bulkCreate, listAccounts } from './account-store'
 import { listRoles } from './role-store'
+import { districtFromAddress } from './geo-store'
 
 // ─── پرشین سازه: کانفیگِ اسکرپ + دادهٔ اسکرپ‌شده + پروفایلِ سازنده‌ها ───────────
 // دو فایلِ gitignore در ریشهٔ اپ:
@@ -139,12 +140,20 @@ function regionNames(): Record<number, string> {
   for (const [k, v] of Object.entries(file || {})) if (v) out[Number(k)] = String(v)
   return out
 }
-export function regionLabel(p: { cityId?: number; regionId?: number; regionName?: string }): string {
+const toFaDigits = (n: number | string) => String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d])
+const _regionMemo = new Map<string, string>()  // address → districtِ کش‌شده (برای مقیاسِ بالا)
+// نامِ منطقه — یکپارچه با سیستمِ مناطقِ خودِ سایت (geo-store):
+//   ۱) نامِ ذخیره‌شدهٔ پرشین سازه، ۲) تشخیص از روی آدرس (همان منطقِ آگهی‌ها)،
+//   ۳) فرمولِ regionId برای مناطقِ ۱..۲۲ تهران، ۴) «تهران»/خالی. کدِ خام هرگز نشان داده نمی‌شود.
+export function regionLabel(p: { cityId?: number; regionId?: number; regionName?: string; address?: string }): string {
   const nm = p.regionName || (p.regionId ? regionNames()[p.regionId] : '')
   if (nm) return /تهران/.test(nm) || p.cityId !== 1 ? nm : `تهران، ${nm}`
-  // مناطقِ شهرداریِ تهران: regionId 101..122 = منطقه ۱..۲۲ (قطعی).
-  if (p.cityId === 1 && p.regionId && p.regionId > 100 && p.regionId <= 122) return `تهران، منطقه ${p.regionId - 100}`
-  // ناشناخته: کدِ خام را نشان نده. تهران → «تهران»؛ بقیه → خالی (تا re-revealِ بعدی نام بیاید).
+  if (p.cityId === 1 && p.address) {
+    let d = _regionMemo.get(p.address)
+    if (d === undefined) { d = districtFromAddress('تهران', p.address) || ''; _regionMemo.set(p.address, d) }
+    if (d) return `تهران، ${d}`
+  }
+  if (p.cityId === 1 && p.regionId && p.regionId > 100 && p.regionId <= 122) return `تهران، منطقه ${toFaDigits(p.regionId - 100)}`
   if (p.cityId === 1) return 'تهران'
   return ''
 }
@@ -292,6 +301,14 @@ function toPoint(p: PublicProject): { id: string; lat: number; lng: number; titl
   return { id: p.hashId, lat, lng, title: p.address || p.builderName || '', price: regionLabel(p) || undefined }
 }
 
+// ترتیبِ منطقه برای مرتب‌سازی: شمارهٔ منطقهٔ تهران (۱..۲۲)، سپس بقیه.
+function regionOrder(label: string): number {
+  const m = label.match(/منطقه\s*([\d۰-۹]+)/)
+  if (m) { const n = parseInt(m[1].replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))), 10); if (n) return n }
+  if (label === 'تهران') return 900
+  return 800
+}
+
 export interface PublicFacets {
   regions: { value: string; count: number }[]
   phases: { value: number; label: string; count: number }[]
@@ -313,7 +330,8 @@ export function publicFacets(): PublicFacets {
       if (a > 0) { amin = Math.min(amin, a); amax = Math.max(amax, a) }
     }
     return {
-      regions: [...regions.entries()].map(([value, count]) => ({ value, count })).sort((a, b) => b.count - a.count),
+      // مناطقِ تهران از ۱ به بعد مرتب می‌شوند؛ «تهران/سایر» و شهرهای دیگر بعد از آن‌ها.
+      regions: [...regions.entries()].map(([value, count]) => ({ value, count })).sort((a, b) => regionOrder(a.value) - regionOrder(b.value) || b.count - a.count),
       // فقط مرحله‌هایی که نامِ واقعی دارند در فیلتر می‌آیند (کدِ خام نمایش داده نمی‌شود).
       phases: [...phases.entries()].map(([value, count]) => ({ value, label: phaseLabel({ phaseId: value }), count })).filter(p => p.label).sort((a, b) => b.count - a.count),
       area: { min: Number.isFinite(amin) ? Math.floor(amin) : 0, max: Math.ceil(amax) },

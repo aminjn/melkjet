@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, statSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
 
@@ -197,6 +197,38 @@ export function findNeighborhoodInGeo(
     }
   }
   return exact || fuzzy
+}
+
+// ─── تشخیصِ منطقه از روی آدرس (همان منطقِ آگهی‌ها) ───────────────────────────
+// آدرس را به اجزا می‌شکند و اولین محله/منطقه‌ای را که با جدولِ مناطقِ خودِ سایت می‌خورد
+// برمی‌گرداند. اندیسِ محله‌ها از یک شهر فقط یک‌بار ساخته و بر mtime کش می‌شود.
+const _cityIdx = new Map<string, { key: string; map: Map<string, string> }>()
+function cityNeighborhoodIndex(cityName: string): Map<string, string> {
+  const want = normName(cityName)
+  let mtime = 0; try { mtime = statSync(DATA_FILE).mtimeMs } catch {}
+  const key = String(mtime)
+  const hit = _cityIdx.get(want)
+  if (hit && hit.key === key) return hit.map
+  const db = load()
+  const map = new Map<string, string>()
+  for (const p of db.provinces) for (const c of p.cities) {
+    if (normName(c.name) !== want) continue
+    for (const d of c.districts) for (const nb of d.neighborhoods) {
+      const k = normName(nb); if (k && !map.has(k)) map.set(k, d.name)
+    }
+  }
+  _cityIdx.set(want, { key, map })
+  return map
+}
+// از آدرسِ یک ملک، نامِ منطقهٔ استانداردِ سایت را پیدا می‌کند (یا null).
+export function districtFromAddress(cityName: string, address: string): string | null {
+  if (!address) return null
+  const idx = cityNeighborhoodIndex(cityName)
+  if (!idx.size) return null
+  const tokens = address.split(/[-،,()\/\n]/).map(t => normName(t)).filter(Boolean)
+  for (const t of tokens) { const d = idx.get(t); if (d) return d }       // تطابقِ دقیقِ جزء
+  for (const t of tokens) for (const [k, d] of idx) { if (k.length >= 3 && (t.includes(k) || k.includes(t))) return d }  // تطابقِ نسبی
+  return null
 }
 
 export function renameNode(level: 'province' | 'city' | 'district', ids: { pid: string; cid?: string; did?: string }, name: string) {
