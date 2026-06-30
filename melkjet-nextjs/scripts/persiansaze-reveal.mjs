@@ -91,15 +91,16 @@ async function main() {
   log('✓ ورود موفق.')
 
   const reveal = (hash) => api(page, `/rest/api/user/v1/Project/${hash}/Constructor`, { method: 'POST', body: '{}' })
-  // محدودهٔ دسترسیِ اشتراک: پروژه فقط اگر شهر/منطقه/مرحله‌اش در محدوده باشد قابلِ گرفتن است.
+  // محدودهٔ دسترسی: فقط شهر/منطقه را سخت فیلتر می‌کنیم (قطعی). مرحله را از پیش رد نمی‌کنیم —
+  // هر مرحله را امتحان می‌کنیم و اگر مرحله‌ای واقعاً بسته بود، بعد از چند ردِ پیاپی یاد می‌گیریم.
   let scope = null
   const inScope = (p) => {
     if (!scope) return true
     if (scope.cityIds?.length && !scope.cityIds.includes(p.cityId)) return false
     if (scope.regionIds?.length && !scope.regionIds.includes(p.regionId)) return false
-    if (scope.phaseIds?.length && !scope.phaseIds.includes(p.phaseId)) return false
     return true
   }
+  const blockedPhases = new Set(), phaseDenied = {}, phaseOk = new Set()
 
   let got = 0, dup = 0, denied = 0, skipped = 0, available = null, consecDenied = 0
   const cap = cfg.maxReveals || Infinity
@@ -119,7 +120,8 @@ async function main() {
     for (const proj of pending) {
       if (got >= cap) { log(`به سقفِ ${cap} رسید.`); break }
       if (available != null && available <= 0) { log('سهمیهٔ هفتگی تمام شد.'); break }
-      if (!inScope(proj)) { skipped++; continue } // خارج از محدوده — بدونِ مصرفِ سهمیه رد کن
+      if (!inScope(proj)) { skipped++; continue } // خارج از شهر/منطقهٔ مجاز — بدونِ مصرفِ سهمیه رد کن
+      if (blockedPhases.has(proj.phaseId)) { skipped++; continue } // مرحله‌ای که یاد گرفتیم بسته است
       const r = await reveal(proj.hashId)
       const j = r.json
       if (r.status === 200 && j && j.status === 'NoError' && j.constructor) {
@@ -130,13 +132,16 @@ async function main() {
         }
         if (j.hasVisitedProjectsFromSameConstructor) dup++
         got++; consecDenied = 0
+        if (proj.phaseId) phaseOk.add(proj.phaseId)
         available = j.updatedAccess?.viewCounter?.availableCount ?? available
         if (got % 25 === 0) { log(`گرفته‌شده ${got} | سهمیهٔ باقی‌مانده ${available ?? '?'} | تکراری ${dup} | ردشده(محدوده) ${skipped}`); fs.writeFileSync(REVEALS_FILE, JSON.stringify({ ...reveals, meta: { availableCount: available, lastRevealAt: new Date().toISOString(), revealedTotal: Object.keys(reveals.items).length } })) }
       } else {
-        // AccessDenied = خارج از محدوده → رد کن و ادامه بده (متوقف نشو)
+        // AccessDenied → رد کن و ادامه بده. یادگیریِ مرحله‌های بسته:
         denied++; consecDenied++
-        // اگر روی پروژه‌های ظاهراً درون‌محدوده هم پشتِ‌سرِ‌هم رد می‌خوریم، احتمالاً سهمیه تمام شده
-        if (consecDenied >= 40) { log(`۴۰ ردِ پیاپی — احتمالاً سهمیه تمام شده یا محدوده تنگ است. توقف.`); break }
+        const ph = proj.phaseId
+        if (ph) { phaseDenied[ph] = (phaseDenied[ph] || 0) + 1; if (phaseDenied[ph] >= 8 && !phaseOk.has(ph)) { blockedPhases.add(ph); log(`مرحلهٔ ${ph} بسته است (۸ ردِ پیاپی) — از این به بعد ردش می‌کنم.`) } }
+        // اگر روی همه‌چیز پشتِ‌سرِ‌هم رد می‌خوریم، احتمالاً سهمیه تمام شده
+        if (consecDenied >= 60) { log(`۶۰ ردِ پیاپی — احتمالاً سهمیه تمام شده. توقف.`); break }
       }
       await page.waitForTimeout(300)
     }
