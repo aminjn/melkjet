@@ -4,8 +4,10 @@ import { randomBytes } from 'crypto'
 
 const FILE = join(process.cwd(), '.builder-data.json')
 
-export type UnitStatus = 'sold' | 'reserved' | 'available'
-export interface Unit { id: string; number: string; floor: number; area: number; price: number; status: UnitStatus; buyer?: string }
+// available=موجود برای فروش، reserved=رزرو، sold=فروخته‌شده (داخل/خارجِ سایت)،
+// owner=سهمِ مالکِ زمین/مشارکت (فروشِ سازنده نیست و در پابلیک غیرقابلِ‌فروش است).
+export type UnitStatus = 'sold' | 'reserved' | 'available' | 'owner'
+export interface Unit { id: string; number: string; floor: number; area: number; price: number; status: UnitStatus; buyer?: string; soldVia?: 'site' | 'offline' }
 export interface Investor { id: string; name: string; phone?: string; amount: number; units?: number }
 export interface Milestone { id: string; name: string; status: 'done' | 'active' | 'pending'; date?: string }
 // متادیتای واقعیِ پرشین سازه (عکس‌ها، آدرس، مختصات…) که روی پروژهٔ واردشده می‌نشیند.
@@ -34,6 +36,31 @@ function ownerOf(db: DB, owner: string): OwnerData { if (!db[owner]) db[owner] =
 
 export function listProjects(owner: string): Project[] { return load()[owner]?.projects || [] }
 export function getProject(owner: string, pid: string): Project | null { return (load()[owner]?.projects || []).find(p => p.id === pid) || null }
+
+// واحدهای واقعیِ یک پروژهٔ پابلیک (بر اساسِ hashIdِ پرشین سازه) — از موجودیِ سازنده، اگر ثبت کرده باشد.
+// خروجی: نگاشتِ «شمارهٔ واحد» → وضعیت، تا صفحهٔ عمومی موجود/رزرو/فروخته/مشارکت را درست نشان دهد.
+export function unitStatusesForHash(hashId: string): { byNumber: Record<string, UnitStatus>; counts: Record<UnitStatus, number> } | null {
+  const db = load()
+  for (const owner of Object.keys(db)) {
+    const p = (db[owner].projects || []).find(x => x.source?.hashId === hashId)
+    if (p && p.units.length) {
+      const byNumber: Record<string, UnitStatus> = {}
+      const counts: Record<UnitStatus, number> = { available: 0, reserved: 0, sold: 0, owner: 0 }
+      for (const u of p.units) { byNumber[u.number] = u.status; counts[u.status]++ }
+      return { byNumber, counts }
+    }
+  }
+  return null
+}
+// واحدِ یک پروژه را با hashId + شمارهٔ واحد، «رزرو» می‌کند (درخواستِ خریدِ داخلِ سایت).
+export function reserveUnitByHash(hashId: string, unitNumber: string, buyer?: string): boolean {
+  const db = load()
+  for (const owner of Object.keys(db)) {
+    const p = (db[owner].projects || []).find(x => x.source?.hashId === hashId)
+    if (p) { const u = p.units.find(x => x.number === unitNumber); if (u && u.status === 'available') { u.status = 'reserved'; if (buyer) u.buyer = buyer; u.soldVia = 'site'; save(db); return true } return false }
+  }
+  return false
+}
 
 export function addProject(owner: string, name: string, location: string): Project {
   const db = load(); const o = ownerOf(db, owner)

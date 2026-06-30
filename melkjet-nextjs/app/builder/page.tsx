@@ -14,8 +14,8 @@ import BuilderProjectsView from './BuilderProjectsView'
 import SupportPanel from '@/app/components/SupportPanel'
 
 // ── Types (mirror app/lib/builder-store.ts API shape) ──
-type UnitStatus = 'sold' | 'reserved' | 'available'
-interface Unit { id: string; number: string; floor: number; area: number; price: number; status: UnitStatus; buyer?: string }
+type UnitStatus = 'sold' | 'reserved' | 'available' | 'owner'
+interface Unit { id: string; number: string; floor: number; area: number; price: number; status: UnitStatus; buyer?: string; soldVia?: 'site' | 'offline' }
 interface Investor { id: string; name: string; phone?: string; amount: number; units?: number }
 type MilestoneStatus = 'done' | 'active' | 'pending'
 interface Milestone { id: string; name: string; status: MilestoneStatus; date?: string }
@@ -39,11 +39,13 @@ const STATUS_COLOR: Record<UnitStatus, string> = {
   sold: '#34d399',
   reserved: 'var(--gold)',
   available: '#7a8fae',
+  owner: '#9a7ad0',
 }
 const STATUS_LABEL: Record<UnitStatus, string> = {
   sold: 'فروخته‌شده',
   reserved: 'رزرو',
   available: 'موجود',
+  owner: 'سهمِ مالک/مشارکت',
 }
 
 // ── Formatting helpers ──
@@ -61,13 +63,14 @@ function billions(tomans: number): string {
 }
 
 function stats(p: Project | null) {
-  if (!p) return { total: 0, sold: 0, reserved: 0, available: 0, revenue: 0 }
+  if (!p) return { total: 0, sold: 0, reserved: 0, available: 0, owner: 0, revenue: 0 }
   const sold = p.units.filter(u => u.status === 'sold')
   return {
     total: p.units.length,
     sold: sold.length,
     reserved: p.units.filter(u => u.status === 'reserved').length,
     available: p.units.filter(u => u.status === 'available').length,
+    owner: p.units.filter(u => u.status === 'owner').length,
     revenue: sold.reduce((a, u) => a + u.price, 0),
   }
 }
@@ -779,6 +782,7 @@ function UnitsView({ project, post, pid, busy }: {
             <option value="available">موجود</option>
             <option value="reserved">رزرو</option>
             <option value="sold">فروخته‌شده</option>
+            <option value="owner">سهمِ مالک/مشارکت</option>
           </select>
           <button onClick={addUnit} disabled={busy} style={{
             padding: '9px 18px', borderRadius: 9, background: 'var(--gold)', border: 'none', color: '#16140f',
@@ -789,7 +793,7 @@ function UnitsView({ project, post, pid, busy }: {
 
       {/* Filter chips */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        {([['all', 'همه'], ['sold', 'فروخته'], ['reserved', 'رزرو'], ['available', 'موجود']] as [typeof filter, string][]).map(([f, label]) => (
+        {([['all', 'همه'], ['available', 'موجود'], ['reserved', 'رزرو'], ['sold', 'فروخته'], ['owner', 'مشارکت/مالک']] as [typeof filter, string][]).map(([f, label]) => (
           <button key={f} onClick={() => { setFilter(f); setLimit(120) }} style={{
             padding: '7px 16px', borderRadius: 99, fontSize: 13, cursor: 'pointer', fontFamily: FONT,
             border: '1px solid ' + (filter === f ? 'var(--gold)' : 'var(--line)'),
@@ -822,6 +826,7 @@ function UnitsView({ project, post, pid, busy }: {
                   <option value="available">موجود</option>
                   <option value="reserved">رزرو</option>
                   <option value="sold">فروخته‌شده</option>
+                  <option value="owner">سهمِ مالک/مشارکت</option>
                 </select>
                 <button onClick={() => post({ action: 'deleteUnit', pid, uid: u.id })} disabled={busy} title="حذف" style={{
                   width: 26, height: 26, borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)',

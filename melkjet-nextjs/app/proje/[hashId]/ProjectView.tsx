@@ -17,6 +17,7 @@ interface ViewProject {
   statusLabel: string; photos: string[]
   floors: number; subFloors: number; units: number; residentialArea: number; groundArea: number; avgArea: number
   perFloor: { floor: number; count: number }[]
+  unitStatus?: Record<string, string> | null; unitCounts?: Record<string, number> | null
   lat: number | null; lng: number | null
   amenities: string[]; plans: { label: string; url: string }[]; usage?: string
   priceText?: string; salesProgress?: number
@@ -79,6 +80,8 @@ export default function ProjectView({ p }: { p: ViewProject }) {
         phone: reqPhone || undefined, owner: reqName || undefined,
       }),
     }).catch(() => {})
+    // ثبت در گزارشِ تماس‌های سازنده (با واحدِ انتخابی، اگر باشد)
+    fetch('/api/unit-request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ builderId: p.builder.id, projectHash: p.hashId, projectName: p.title, unit: selectedUnit || undefined, name: reqName, phone: reqPhone }) }).catch(() => {})
     setReqSent(true)
   }
 
@@ -215,7 +218,7 @@ export default function ProjectView({ p }: { p: ViewProject }) {
                 <div style={{ fontSize: 12, color: 'var(--muted)' }}>{faNum(p.units)} واحد در {faNum(p.floors)} طبقه{p.avgArea ? ` · میانگین ${faNum(p.avgArea)} م²` : ''}</div>
               </div>
               <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>طبقه و واحدِ موردِنظر را انتخاب کنید تا در «درخواستِ بازدید» ثبت شود.</div>
-              <UnitGrid perFloor={p.perFloor} avgArea={p.avgArea} selected={selectedUnit} onSelect={setSelectedUnit} />
+              <UnitGrid perFloor={p.perFloor} avgArea={p.avgArea} selected={selectedUnit} onSelect={setSelectedUnit} statusMap={p.unitStatus || null} />
               <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 12 }}>توزیعِ واحدها بر اساسِ تعدادِ طبقه و واحدِ واقعیِ پروژه برآورد شده است؛ موجودیِ نهایی را سازنده تأیید می‌کند.</div>
             </section>
           )}
@@ -423,20 +426,28 @@ export default function ProjectView({ p }: { p: ViewProject }) {
   )
 }
 
-// شبکهٔ انتخابِ واحد — هر سلول یک واحد (طبقه-شماره)، قابلِ انتخاب. همه «موجود» (وضعیتِ
-// فروش را سازنده مشخص می‌کند؛ چیزی فیک رنگ نمی‌شود).
-function UnitGrid({ perFloor, avgArea, selected, onSelect }: { perFloor: { floor: number; count: number }[]; avgArea: number; selected: string; onSelect: (u: string) => void }) {
+// شبکهٔ انتخابِ واحد — هر سلول یک واحد (طبقه-شماره). اگر سازنده موجودیِ واقعی ثبت کرده باشد،
+// وضعیتِ واقعی (موجود/رزرو/فروخته/مشارکت) نشان داده می‌شود؛ وگرنه همه «موجود».
+type USt = 'available' | 'reserved' | 'sold' | 'owner'
+const U_STYLE: Record<USt, { bg: string; bd: string; fg: string; label: string }> = {
+  available: { bg: 'rgba(95,217,138,0.14)', bd: 'rgba(95,217,138,0.5)', fg: '#8fd9a8', label: 'موجود' },
+  reserved: { bg: 'var(--goldDim)', bd: 'rgba(201,169,106,0.6)', fg: 'var(--gold)', label: 'رزرو' },
+  sold: { bg: 'rgba(231,103,74,0.14)', bd: 'rgba(231,103,74,0.5)', fg: '#e7674a', label: 'فروخته' },
+  owner: { bg: 'rgba(154,122,208,0.14)', bd: 'rgba(154,122,208,0.5)', fg: '#b69ae0', label: 'مشارکت/مالک' },
+}
+function UnitGrid({ perFloor, avgArea, selected, onSelect, statusMap }: { perFloor: { floor: number; count: number }[]; avgArea: number; selected: string; onSelect: (u: string) => void; statusMap: Record<string, string> | null }) {
   const maxFloor = perFloor.reduce((m, f) => Math.max(m, f.floor), 0)
   const ranges: { label: string; lo: number; hi: number }[] = []
   if (maxFloor > 6) for (let lo = 1; lo <= maxFloor; lo += 6) ranges.push({ label: `${fa(lo)}-${fa(Math.min(lo + 5, maxFloor))}`, lo, hi: Math.min(lo + 5, maxFloor) })
   const [range, setRange] = useState<{ lo: number; hi: number } | null>(null)
   const floors = perFloor.filter(f => !range || (f.floor >= range.lo && f.floor <= range.hi))
+  const legend: USt[] = statusMap ? ['available', 'reserved', 'sold', 'owner'] : ['available']
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 12, fontSize: 11.5, color: 'var(--muted)' }}>
-        <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}><span style={{ width: 12, height: 12, borderRadius: 3, background: 'rgba(95,217,138,0.22)', border: '1px solid rgba(95,217,138,0.6)' }} /> موجود</span>
-        <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}><span style={{ width: 12, height: 12, borderRadius: 3, background: 'var(--goldDim)', border: '1px solid var(--gold)' }} /> انتخابِ شما</span>
+      <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 12, fontSize: 11.5, color: 'var(--muted)', flexWrap: 'wrap' }}>
+        {legend.map(s => <span key={s} style={{ display: 'flex', gap: 6, alignItems: 'center' }}><span style={{ width: 12, height: 12, borderRadius: 3, background: U_STYLE[s].bg, border: `1px solid ${U_STYLE[s].bd}` }} /> {U_STYLE[s].label}</span>)}
+        <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}><span style={{ width: 12, height: 12, borderRadius: 3, background: 'var(--gold)' }} /> انتخابِ شما</span>
       </div>
       {ranges.length > 0 && (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
@@ -450,14 +461,19 @@ function UnitGrid({ perFloor, avgArea, selected, onSelect }: { perFloor: { floor
             <div style={{ width: 56, flexShrink: 0, fontSize: 11.5, color: 'var(--muted)', textAlign: 'left' }}>طبقهٔ {fa(f.floor)}</div>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {Array.from({ length: Math.min(f.count, 40) }, (_, i) => {
+                const numKey = `${f.floor}-${i + 1}`               // کلیدِ لاتین (هم‌راستا با شمارهٔ واحدِ سازنده)
                 const label = `${fa(f.floor)}-${fa(i + 1)}`
+                const st = ((statusMap?.[numKey] as USt) || 'available')
                 const sel = selected === label
+                const clickable = st === 'available'
+                const sty = U_STYLE[st]
                 return (
-                  <button key={i} onClick={() => onSelect(sel ? '' : label)} title={avgArea ? `~${avgArea} م²` : undefined} style={{
-                    minWidth: 46, padding: '7px 4px', borderRadius: 7, fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-                    background: sel ? 'var(--goldDim)' : 'rgba(95,217,138,0.14)',
-                    border: `1px solid ${sel ? 'var(--gold)' : 'rgba(95,217,138,0.5)'}`,
-                    color: sel ? 'var(--gold)' : '#8fd9a8',
+                  <button key={i} onClick={() => clickable && onSelect(sel ? '' : label)} disabled={!clickable} title={st !== 'available' ? sty.label : (avgArea ? `~${avgArea} م²` : undefined)} style={{
+                    minWidth: 46, padding: '7px 4px', borderRadius: 7, fontSize: 11.5, fontWeight: 700, cursor: clickable ? 'pointer' : 'not-allowed', fontFamily: 'inherit',
+                    background: sel ? 'var(--gold)' : sty.bg,
+                    border: `1px solid ${sel ? 'var(--gold)' : sty.bd}`,
+                    color: sel ? '#16140f' : sty.fg,
+                    opacity: clickable || sel ? 1 : 0.7,
                   }}>{label}</button>
                 )
               })}
@@ -466,7 +482,7 @@ function UnitGrid({ perFloor, avgArea, selected, onSelect }: { perFloor: { floor
           </div>
         ))}
       </div>
-      {selected && <div style={{ marginTop: 14, fontSize: 13, color: 'var(--text)', background: 'var(--goldDim)', border: '1px solid var(--gold)', borderRadius: 10, padding: '10px 14px' }}>واحدِ انتخابی: <strong style={{ color: 'var(--gold)' }}>{selected}</strong>{avgArea ? ` · ~${faNum(avgArea)} م²` : ''}</div>}
+      {selected && <div style={{ marginTop: 14, fontSize: 13, color: 'var(--text)', background: 'var(--goldDim)', border: '1px solid var(--gold)', borderRadius: 10, padding: '10px 14px' }}>واحدِ انتخابی: <strong style={{ color: 'var(--gold)' }}>{selected}</strong>{avgArea ? ` · ~${faNum(avgArea)} م²` : ''} — برای رزرو، «درخواستِ بازدید/رزرو» را ثبت کنید.</div>}
     </div>
   )
 }

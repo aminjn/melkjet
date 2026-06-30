@@ -2,6 +2,7 @@ import Nav from '../../components/Nav'
 import Footer from '../../components/Footer'
 import { publicProject, publicQuery, regionLabel, phaseLabel, getProfile } from '../../lib/persiansaze-store'
 import { getPublic, findManual, STATUS_LABEL } from '../../lib/builder-public-store'
+import { unitStatusesForHash } from '../../lib/builder-store'
 import ProjectView from './ProjectView'
 
 export const dynamic = 'force-dynamic'
@@ -82,9 +83,13 @@ export default async function ProjectPage({ params }: { params: Promise<{ hashId
 
   const statusLabel = (enrich.status && STATUS_LABEL[enrich.status as keyof typeof STATUS_LABEL]) || phase || 'در حال ساخت'
 
+  // وضعیتِ واقعیِ واحدها از موجودیِ سازنده (اگر ثبت کرده باشد) — موجود/رزرو/فروخته/مشارکت.
+  const realUnits = ps ? unitStatusesForHash(hashId) : null
+
   const view = {
     hashId, title, region, phase, progress, milestones, statusLabel, photos,
     floors: aboveGround, subFloors, units, residentialArea, groundArea, avgArea, perFloor,
+    unitStatus: realUnits?.byNumber || null, unitCounts: realUnits?.counts || null,
     lat, lng, usage,
     amenities: enrich.amenities || [], plans: enrich.plans || [],
     priceText: enrich.priceText, salesProgress: enrich.salesProgress,
