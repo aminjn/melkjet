@@ -241,8 +241,11 @@ async function runSitemap(cfg: ScraperConfig) {
   const flush = () => { if (batch.length) { const r = upsertScraped(batch.splice(0)); added += r.added; updated += r.updated } }
   const CONC = 5
   let idx = 0
+  let stop = false
+  // پرچمِ توقف را هر ۳ ثانیه (نه هر تکرار) از فایل بخوان تا فشارِ I/O/CPU کم شود.
+  const stopWatch = setInterval(() => { if (!loadJob().running) stop = true }, 3000)
   async function worker() {
-    while (loadJob().running && idx < urls.length) {
+    while (!stop && idx < urls.length) {
       const u = urls[idx++]
       const r = await fetchText(u, 15000)
       done++
@@ -272,6 +275,7 @@ async function runSitemap(cfg: ScraperConfig) {
     }
   }
   await Promise.all(Array.from({ length: CONC }, () => worker()))
+  clearInterval(stopWatch)
   flush()
   patch({ done, added, updated })
   if (hits === 0) throw new Error(`${urls.length.toLocaleString('fa-IR')} صفحه بررسی شد ولی صفحهٔ محصولی با Schema/OG یافت نشد. احتمالاً لینک‌های نقشهٔ سایت محصول نیستند — با «تست» بررسی می‌کنیم.`)

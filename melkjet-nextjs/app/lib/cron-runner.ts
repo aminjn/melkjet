@@ -47,15 +47,13 @@ async function tick(): Promise<{ due: number; synced: number }> {
 // (۳۰۰۰..۳۰۰۳ پشتِ nginx) و کشِ سنگینِ خودش را دارد (پرشین‌سازه/بازار/محله). پس باید
 // «همهٔ پورت‌ها» را مستقیم ping کنیم تا هیچ اینستنسی سرد نماند و کاربر به اینستنسِ سرد نخورد.
 // لیستِ پورت‌ها از WARM_PORTS (در ecosystem.config.js) خوانده می‌شود؛ اگر نبود فقط پورتِ خودش.
-async function warmUp(rounds = 4) {
+// گرم‌کردنِ سبک — فقط چند صفحهٔ اصلی، یک‌بار پس از بوت. (APIهای سنگین را گرم نمی‌کنیم؛
+// آن‌ها با اولین ترافیکِ واقعی کش می‌شوند. گرم‌کردنِ مکررِ APIهای ۱۹هزار-پروژه‌ای CPU را می‌سوزاند.)
+async function warmUp() {
   const ports = (process.env.WARM_PORTS || String(process.env.PORT || 3000)).split(',').map(s => s.trim()).filter(Boolean)
-  // صفحاتِ پربازدید + APIهای سنگین که کشِ درون‌حافظه‌ای را می‌سازند.
-  const paths = ['/', '/search', '/sazandeha', '/market', '/store', '/blog',
-    '/api/public/projects?facets=1', '/api/content?type=listing&limit=80', '/api/market/overview']
-  for (let r = 0; r < rounds; r++) {
-    for (const port of ports) {
-      for (const p of paths) { try { await fetch(`http://127.0.0.1:${port}${p}`, { cache: 'no-store' }) } catch {} }
-    }
+  const paths = ['/', '/search', '/sazandeha']
+  for (const port of ports) {
+    for (const p of paths) { try { await fetch(`http://127.0.0.1:${port}${p}`, { cache: 'no-store' }) } catch {} }
   }
 }
 
@@ -67,10 +65,10 @@ export function ensureCronStarted() {
   const g = globalThis.__mjCron!
   if (g.started) return
   g.started = true
-  setTimeout(() => { warmUp(6).catch(() => {}) }, 8_000)        // گرم‌کردنِ همهٔ instanceها پس از بوت
+  setTimeout(() => { warmUp().catch(() => {}) }, 8_000)         // یک‌بار گرم‌کردنِ سبک پس از بوت
   setTimeout(() => { tick().catch(() => {}) }, 30_000)          // کمی بعد از بوت
   setInterval(() => { tick().catch(() => {}) }, TICK_MS)
-  setInterval(() => { warmUp(1).catch(() => {}) }, 90_000)      // نگه‌داشتنِ گرمی (هر ۹۰ ثانیه)
+  // بدونِ حلقهٔ گرم‌کردنِ مکرر — منبعِ اصلیِ مصرفِ بی‌مورد CPU بود.
 }
 
 // اجرای فوریِ یک چرخه (برای تریگرِ دستی/خارجی).
