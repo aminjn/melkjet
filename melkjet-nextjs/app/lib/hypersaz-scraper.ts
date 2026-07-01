@@ -213,32 +213,35 @@ async function runWp(cfg: ScraperConfig) {
 async function collectSitemapUrls(base: string, cap: number): Promise<{ urls: string[]; productSpecific: boolean }> {
   const urls = new Set<string>()
   let text = ''
-  for (const s of ['/sitemap_index.xml', '/sitemap.xml', '/wp-sitemap.xml', '/product-sitemap.xml']) {
+  for (const s of ['/sitemap.xml', '/sitemap_index.xml', '/wp-sitemap.xml', '/product-sitemap.xml']) {
     const r = await fetchText(base + s, 15000)
     if (r.ok && /<(sitemapindex|urlset)/i.test(r.text)) { text = r.text; break }
   }
   if (!text) return { urls: [], productSpecific: false }
-  const locsOf = (t: string) => [...t.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map(m => m[1].replace(/&amp;/g, '&'))
-  const locs = locsOf(text)
+  const locsOf = (t: string) => [...t.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map(m => m[1].replace(/&amp;/g, '&').trim())
+  const topLocs = locsOf(text)
+  // زیرنقشه = هر loc که به .xml ختم شود — چه <sitemapindex> استاندارد، چه <urlset>ی که
+  // مثلِ هایپرساز فایل‌های نقشهٔ فرعی (…-product.xml) را به‌صورتِ <url> فهرست کرده.
+  const subSitemaps = topLocs.filter(l => /\.xml(\?.*)?$/i.test(l))
   let productSpecific = false
-  if (/<urlset/i.test(text) && !/<sitemapindex/i.test(text)) {
-    for (const l of locs) { urls.add(l); if (urls.size >= cap) break }
-    productSpecific = /product|shop|store|kala|mahsul/i.test(text.slice(0, 500)) // احتمالاً همان نقشهٔ محصول
-  } else {
-    // index → زیرنقشه‌های «محصول» را ترجیح بده؛ اگر نبود، همه به‌جز پست/برگه.
-    let subs = locs.filter(l => /product/i.test(l))
+  if (subSitemaps.length) {
+    let subs = subSitemaps.filter(l => /product|kala|mahsul|shop/i.test(l))   // زیرنقشه‌های محصول
     if (subs.length) productSpecific = true
-    else subs = locs.filter(l => !/(post|page|category|tag|author|user)[-_]?sitemap/i.test(l))
-    if (!subs.length) subs = locs
+    else subs = subSitemaps.filter(l => !/(static|page|category|cat|tag|author|user|post|blog)/i.test(l))
+    if (!subs.length) subs = subSitemaps
     for (const sm of subs) {
       if (urls.size >= cap) break
       const r = await fetchText(sm, 15000)
       if (!r.ok) continue
-      for (const u of locsOf(r.text)) { urls.add(u); if (urls.size >= cap) break }
+      for (const u of locsOf(r.text)) { if (!/\.xml(\?.*)?$/i.test(u)) { urls.add(u); if (urls.size >= cap) break } }
     }
+  } else {
+    // urlsetِ واقعی (لینکِ صفحات)
+    for (const u of topLocs) { urls.add(u); if (urls.size >= cap) break }
+    productSpecific = /product|kala|mahsul|shop/i.test(text)
   }
   const all = [...urls]
-  const prod = all.filter(u => /\/product\/|\/products\/|\/kala\/|\/shop\/|\/mahsul|\/mahsulat/i.test(u))
+  const prod = all.filter(u => /\/product\/|\/products\/|\/kala\/|\/shop\/|mahsul/i.test(u))
   if (prod.length) return { urls: prod.slice(0, cap), productSpecific: true }
   return { urls: all.slice(0, cap), productSpecific }
 }
