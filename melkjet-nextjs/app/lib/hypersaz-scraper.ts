@@ -113,7 +113,7 @@ function ogImage(html: string): string { const m = html.match(/<meta[^>]+propert
 
 // ── تستِ اتصال / تشخیصِ پلتفرم ──
 export interface Probe { name: string; url: string; ok: boolean; status: number; note: string }
-export async function testConnection(): Promise<{ base: string; platform: string; probes: Probe[]; recommend: ScraperConfig['strategy']; sample?: any }> {
+export async function testConnection(): Promise<{ base: string; platform: string; probes: Probe[]; recommend: ScraperConfig['strategy']; sample?: any; smUrl?: string; sitemapType?: string; sitemapLocs?: string[]; subSample?: string[] }> {
   const cfg = getConfig(); const base = cfg.baseUrl
   const probes: Probe[] = []
   let recommend: ScraperConfig['strategy'] = 'html'
@@ -150,7 +150,22 @@ export async function testConnection(): Promise<{ base: string; platform: string
   // نقشهٔ سایت که باشد، اسکرپ ممکن است — از هر صفحهٔ محصول با آبشارِ Schema→OG→HTML استخراج می‌کنیم.
   if (recommend !== 'wp') { if (smUrl) recommend = 'sitemap'; else if (storeOk) recommend = 'wp' }
   const platform = wpOk || storeOk || isWp ? 'وردپرس/ووکامرس' : (smUrl ? 'دارای نقشهٔ سایت' : 'نامشخص (نیاز به سِلکتورِ HTML)')
-  return { base, platform, probes, recommend, sample }
+
+  // ── نمونهٔ محتوای نقشهٔ سایت (برای عیب‌یابیِ ساختار) ──
+  let sitemapType = '', sitemapLocs: string[] = [], subSample: string[] = []
+  if (smUrl) {
+    const r = await fetchText(smUrl, 12000)
+    if (r.ok) {
+      const isIndex = /<sitemapindex/i.test(r.text)
+      sitemapType = isIndex ? 'ایندکس (زیرنقشه‌ها)' : 'urlset (لینکِ صفحات)'
+      sitemapLocs = [...r.text.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map(m => m[1]).slice(0, 12)
+      if (isIndex && sitemapLocs[0]) {
+        const sub = await fetchText(sitemapLocs[0].replace(/&amp;/g, '&'), 12000)
+        if (sub.ok) subSample = [...sub.text.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map(m => m[1]).slice(0, 8)
+      }
+    }
+  }
+  return { base, platform, probes, recommend, sample, smUrl, sitemapType, sitemapLocs, subSample }
 }
 
 // ── استراتژی‌ها ──

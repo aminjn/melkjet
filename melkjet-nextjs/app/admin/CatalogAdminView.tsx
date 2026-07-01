@@ -263,7 +263,7 @@ interface Probe { name: string; url: string; ok: boolean; status: number; note: 
 function ScrapePanel({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [cfg, setCfg] = useState<any>({ baseUrl: 'https://www.hypersaz.com', strategy: 'auto', maxProducts: 3000 })
   const [job, setJob] = useState<any>(null)
-  const [report, setReport] = useState<{ platform: string; probes: Probe[]; recommend: string } | null>(null)
+  const [report, setReport] = useState<{ platform: string; probes: Probe[]; recommend: string; smUrl?: string; sitemapType?: string; sitemapLocs?: string[]; subSample?: string[] } | null>(null)
   const [testing, setTesting] = useState(false)
   const [savedMsg, setSavedMsg] = useState('')
 
@@ -318,6 +318,15 @@ function ScrapePanel({ onClose, onDone }: { onClose: () => void; onDone: () => v
             </div>
           ))}
           {report.recommend !== 'html' && <button onClick={() => setCfg({ ...cfg, strategy: report.recommend })} style={{ ...ghost, marginTop: 8, fontSize: 12 }}>استفاده از روشِ پیشنهادی ({report.recommend})</button>}
+          {report.smUrl && (
+            <div style={{ marginTop: 10, borderTop: '1px solid var(--line)', paddingTop: 8 }}>
+              <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 5 }}>نقشهٔ سایت: <b dir="ltr">{report.smUrl}</b> — نوع: {report.sitemapType}</div>
+              <div style={{ fontSize: 10.5, color: 'var(--faint)', direction: 'ltr', textAlign: 'left', wordBreak: 'break-all', lineHeight: 1.7, maxHeight: 130, overflowY: 'auto', background: 'var(--bg)', borderRadius: 6, padding: 8 }}>
+                {(report.sitemapLocs || []).map((l, i) => <div key={i}>{l}</div>)}
+                {(report.subSample || []).length ? <><div style={{ color: 'var(--gold)', marginTop: 6 }}>— نمونهٔ داخلِ اولین زیرنقشه —</div>{(report.subSample || []).map((l, i) => <div key={'s' + i}>{l}</div>)}</> : null}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
