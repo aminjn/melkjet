@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { hasCap } from '@/app/lib/account-store'
-import { getJob, stopJob, startBackgroundScrape } from '@/app/lib/hypersaz-scraper'
+import { getJob, stopJob, startBackgroundScrape, getConfig, setConfig, testConnection } from '@/app/lib/hypersaz-scraper'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,13 +14,17 @@ async function guard() {
 
 export async function GET() {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
-  return NextResponse.json({ ok: true, job: getJob() }, { headers: { 'Cache-Control': 'no-store' } })
+  return NextResponse.json({ ok: true, job: getJob(), config: getConfig() }, { headers: { 'Cache-Control': 'no-store' } })
 }
 
 export async function POST(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const b = await req.json().catch(() => ({} as any))
-  if (b.action === 'start') { const r = startBackgroundScrape(); return NextResponse.json({ ok: true, ...r, job: getJob() }) }
-  if (b.action === 'stop') { return NextResponse.json({ ok: true, job: stopJob() }) }
-  return NextResponse.json({ error: 'عملیاتِ نامعتبر' }, { status: 400 })
+  switch (b.action) {
+    case 'start': { const r = startBackgroundScrape(); return NextResponse.json({ ok: true, ...r, job: getJob() }) }
+    case 'stop': return NextResponse.json({ ok: true, job: stopJob() })
+    case 'setConfig': return NextResponse.json({ ok: true, config: setConfig(b.config || {}) })
+    case 'test': { try { const report = await testConnection(); return NextResponse.json({ ok: true, report }) } catch (e: any) { return NextResponse.json({ error: e?.message || 'خطا در تست' }, { status: 500 }) } }
+    default: return NextResponse.json({ error: 'عملیاتِ نامعتبر' }, { status: 400 })
+  }
 }

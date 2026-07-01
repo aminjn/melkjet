@@ -2,113 +2,278 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { upsertScraped, type CatalogSpec } from './catalog-store'
 
-// موتورِ اسکرپِ hypersaz.com → کاتالوگِ مرجع.
-// استراتژیِ اصلی: WooCommerce Store API (اکثرِ فروشگاه‌های وردپرسیِ ایرانی) — JSON تمیز،
-// بدونِ نیاز به پارسِ HTML. اگر در دسترس نبود، خطا برمی‌گرداند تا selectorها روی سرور تنظیم شود.
-const BASE = process.env.HYPERSAZ_BASE || 'https://www.hypersaz.com'
+// موتورِ اسکرپِ فروشگاه (پیش‌فرض hypersaz.com) → کاتالوگِ مرجع.
+// چند-استراتژی با تشخیصِ خودکار: (۱) WordPress REST v2، (۲) نقشهٔ سایت + JSON-LD،
+// (۳) HTML با سِلکتورهای قابلِ‌تنظیم. «تستِ اتصال» پلتفرم را تشخیص می‌دهد.
+const CFG_FILE = join(process.cwd(), '.hypersaz-config.json')
 const JOB_FILE = join(process.cwd(), '.hypersaz-job.json')
 
+export interface ScraperConfig {
+  baseUrl: string
+  strategy: 'auto' | 'wp' | 'sitemap' | 'html'
+  maxProducts: number
+  // سِلکتورهای HTML (برای استراتژیِ html وقتی سایت WP نیست)
+  productLinkSel?: string   // مثلاً a.product-title  (لینکِ صفحهٔ محصول)
+  nameSel?: string
+  priceSel?: string
+  imageSel?: string
+  categorySel?: string
+}
+const DEFAULT_CFG: ScraperConfig = { baseUrl: 'https://www.hypersaz.com', strategy: 'auto', maxProducts: 3000 }
+
+export function getConfig(): ScraperConfig {
+  if (existsSync(CFG_FILE)) { try { return { ...DEFAULT_CFG, ...JSON.parse(readFileSync(CFG_FILE, 'utf-8')) } } catch {} }
+  return { ...DEFAULT_CFG }
+}
+export function setConfig(patch: Partial<ScraperConfig>): ScraperConfig {
+  const cur = getConfig()
+  const next: ScraperConfig = {
+    ...cur,
+    baseUrl: patch.baseUrl !== undefined ? String(patch.baseUrl).replace(/\/+$/, '') : cur.baseUrl,
+    strategy: (['auto', 'wp', 'sitemap', 'html'] as const).includes(patch.strategy as any) ? patch.strategy as any : cur.strategy,
+    maxProducts: patch.maxProducts !== undefined ? Math.max(50, Math.min(20000, Number(patch.maxProducts) || cur.maxProducts)) : cur.maxProducts,
+    productLinkSel: patch.productLinkSel !== undefined ? String(patch.productLinkSel) : cur.productLinkSel,
+    nameSel: patch.nameSel !== undefined ? String(patch.nameSel) : cur.nameSel,
+    priceSel: patch.priceSel !== undefined ? String(patch.priceSel) : cur.priceSel,
+    imageSel: patch.imageSel !== undefined ? String(patch.imageSel) : cur.imageSel,
+    categorySel: patch.categorySel !== undefined ? String(patch.categorySel) : cur.categorySel,
+  }
+  writeFileSync(CFG_FILE, JSON.stringify(next, null, 2)); return next
+}
+
+// ── وضعیتِ کار ──
 export interface ScrapeJob {
   running: boolean; total: number; done: number; added: number; updated: number; categories: number
-  label?: string; error?: string; startedAt?: number; finishedAt?: number; lastProgressAt?: number
+  label?: string; error?: string; strategy?: string; startedAt?: number; finishedAt?: number; lastProgressAt?: number
 }
 const EMPTY: ScrapeJob = { running: false, total: 0, done: 0, added: 0, updated: 0, categories: 0 }
-
 function loadJob(): ScrapeJob { if (existsSync(JOB_FILE)) { try { return { ...EMPTY, ...JSON.parse(readFileSync(JOB_FILE, 'utf-8')) } } catch {} } return { ...EMPTY } }
 function saveJob(j: ScrapeJob) { try { writeFileSync(JOB_FILE, JSON.stringify(j)) } catch {} }
 export function getJob(): ScrapeJob {
   const j = loadJob()
-  // اگر بیش از ۳ دقیقه پیشرفتی نبوده، کهنه است.
-  if (j.running) { const last = j.lastProgressAt || j.startedAt || 0; if (!last || Date.now() - last > 3 * 60 * 1000) { j.running = false; j.error = j.error || 'اسکرپ متوقف شد (هنگ یا ری‌استارت).'; saveJob(j) } }
+  if (j.running) { const last = j.lastProgressAt || j.startedAt || 0; if (!last || Date.now() - last > 4 * 60 * 1000) { j.running = false; j.error = j.error || 'اسکرپ متوقف شد (هنگ یا ری‌استارتِ سرور).'; saveJob(j) } }
   return j
 }
 export function stopJob(): ScrapeJob { const j = loadJob(); j.running = false; j.finishedAt = Date.now(); j.error = 'به‌صورتِ دستی متوقف شد.'; saveJob(j); return j }
 function patch(p: Partial<ScrapeJob>) { const j = { ...loadJob(), ...p, lastProgressAt: Date.now() }; saveJob(j); return j }
 
-const UA = 'Mozilla/5.0 (compatible; MelkjetBot/1.0)'
-async function getJson(url: string, timeoutMs = 20000): Promise<any> {
-  const ac = new AbortController()
-  const t = setTimeout(() => ac.abort(), timeoutMs)
+// ── ابزارِ شبکه ──
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
+async function fetchText(url: string, timeoutMs = 20000): Promise<{ ok: boolean; status: number; text: string; ct: string }> {
+  const ac = new AbortController(); const t = setTimeout(() => ac.abort(), timeoutMs)
   try {
-    const r = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: ac.signal, cache: 'no-store' as any })
-    if (!r.ok) throw new Error(`HTTP ${r.status}`)
-    const total = Number(r.headers.get('x-wp-totalpages') || r.headers.get('X-WP-TotalPages') || 0)
-    const data = await r.json()
-    return { data, totalPages: total }
-  } finally { clearTimeout(t) }
+    const r = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'text/html,application/xhtml+xml,application/json,application/xml;q=0.9,*/*;q=0.8', 'Accept-Language': 'fa,en;q=0.8' }, signal: ac.signal, redirect: 'follow', cache: 'no-store' as any })
+    const ct = r.headers.get('content-type') || ''
+    const text = await r.text()
+    return { ok: r.ok, status: r.status, text, ct }
+  } catch (e: any) { return { ok: false, status: 0, text: '', ct: '', ...({ err: e?.message } as any) } }
+  finally { clearTimeout(t) }
+}
+async function fetchJson(url: string, timeoutMs = 20000): Promise<{ ok: boolean; status: number; data: any }> {
+  const r = await fetchText(url, timeoutMs)
+  if (!r.ok) return { ok: false, status: r.status, data: null }
+  try { return { ok: true, status: r.status, data: JSON.parse(r.text) } } catch { return { ok: false, status: r.status, data: null } }
+}
+function stripHtml(s: string): string { return (s || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&[a-z#0-9]+;/g, ' ').replace(/\s+/g, ' ').trim() }
+function abs(base: string, u: string): string { try { return new URL(u, base).href } catch { return u } }
+
+// استخراجِ همهٔ بلوک‌های JSON-LD از HTML
+function jsonLdBlocks(html: string): any[] {
+  const out: any[] = []
+  const re = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi
+  let m: RegExpExecArray | null
+  while ((m = re.exec(html))) { try { const j = JSON.parse(m[1].trim()); out.push(j) } catch {} }
+  return out
+}
+function findProductLd(html: string): any | null {
+  for (const b of jsonLdBlocks(html)) {
+    const arr = Array.isArray(b) ? b : (b['@graph'] ? b['@graph'] : [b])
+    for (const node of arr) {
+      const t = node && node['@type']
+      if (t === 'Product' || (Array.isArray(t) && t.includes('Product'))) return node
+    }
+  }
+  return null
+}
+function categoryFromLd(html: string): string {
+  for (const b of jsonLdBlocks(html)) {
+    const arr = Array.isArray(b) ? b : (b['@graph'] ? b['@graph'] : [b])
+    for (const node of arr) {
+      const t = node && node['@type']
+      if (t === 'BreadcrumbList' || (Array.isArray(t) && t.includes('BreadcrumbList'))) {
+        const items = node.itemListElement || []
+        // یکی‌مانده‌به‌آخر معمولاً دستهٔ محصول است
+        if (items.length >= 2) { const it = items[items.length - 2]; const name = it?.name || it?.item?.name; if (name) return String(name) }
+      }
+    }
+  }
+  return ''
+}
+function ogImage(html: string): string { const m = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i); return m ? m[1] : '' }
+
+// ── تستِ اتصال / تشخیصِ پلتفرم ──
+export interface Probe { name: string; url: string; ok: boolean; status: number; note: string }
+export async function testConnection(): Promise<{ base: string; platform: string; probes: Probe[]; recommend: ScraperConfig['strategy']; sample?: any }> {
+  const cfg = getConfig(); const base = cfg.baseUrl
+  const probes: Probe[] = []
+  let recommend: ScraperConfig['strategy'] = 'html'
+  let sample: any
+
+  // ۱) صفحهٔ اصلی — تشخیصِ WordPress/WooCommerce + نقشهٔ سایت
+  const home = await fetchText(base + '/')
+  const isWp = /wp-content|wp-json|woocommerce/i.test(home.text)
+  probes.push({ name: 'صفحهٔ اصلی', url: base + '/', ok: home.ok, status: home.status, note: home.ok ? (isWp ? 'وردپرس/ووکامرس شناسایی شد' : 'وردپرس شناسایی نشد') : 'در دسترس نیست' })
+
+  // ۲) WordPress REST v2 product
+  const wp = await fetchJson(base + '/wp-json/wp/v2/product?per_page=1')
+  const wpOk = wp.ok && Array.isArray(wp.data) && wp.data.length > 0
+  probes.push({ name: 'WordPress REST (product)', url: base + '/wp-json/wp/v2/product?per_page=1', ok: wpOk, status: wp.status, note: wpOk ? 'کار می‌کند ✓' : (wp.status === 404 ? 'یافت نشد (۴۰۴)' : `ناموفق (${wp.status})`) })
+  if (wpOk) { recommend = 'wp'; sample = { name: wp.data[0]?.title?.rendered } }
+
+  // ۳) WooCommerce Store API
+  const store = await fetchJson(base + '/wp-json/wc/store/v1/products?per_page=1')
+  const storeOk = store.ok && Array.isArray(store.data) && store.data.length > 0
+  probes.push({ name: 'WooCommerce Store API', url: base + '/wp-json/wc/store/v1/products?per_page=1', ok: storeOk, status: store.status, note: storeOk ? 'کار می‌کند ✓' : (store.status === 404 ? 'یافت نشد (۴۰۴)' : `ناموفق (${store.status})`) })
+
+  // ۴) نقشهٔ سایت
+  let smUrl = ''
+  for (const p of ['/sitemap_index.xml', '/sitemap.xml', '/product-sitemap.xml', '/wp-sitemap.xml']) {
+    const r = await fetchText(base + p, 12000)
+    if (r.ok && /<(sitemapindex|urlset)/i.test(r.text)) { smUrl = base + p; probes.push({ name: 'نقشهٔ سایت', url: base + p, ok: true, status: r.status, note: 'یافت شد ✓' }); break }
+  }
+  if (!smUrl) probes.push({ name: 'نقشهٔ سایت', url: base + '/sitemap.xml', ok: false, status: 0, note: 'یافت نشد' })
+
+  // ۵) JSON-LD روی صفحهٔ اصلی (نشانهٔ اینکه صفحاتِ محصول Schema دارند)
+  const hasLd = home.ok && /application\/ld\+json/i.test(home.text)
+  probes.push({ name: 'JSON-LD (Schema)', url: base + '/', ok: hasLd, status: home.status, note: hasLd ? 'موجود ✓ (اسکرپ با نقشهٔ سایت ممکن است)' : 'یافت نشد' })
+
+  if (recommend !== 'wp') { if (smUrl && hasLd) recommend = 'sitemap'; else if (storeOk) recommend = 'wp' }
+  const platform = wpOk || storeOk || isWp ? 'وردپرس/ووکامرس' : (smUrl ? 'دارای نقشهٔ سایت' : 'نامشخص (نیاز به سِلکتورِ HTML)')
+  return { base, platform, probes, recommend, sample }
 }
 
-function stripHtml(s: string): string { return (s || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&[a-z]+;/g, ' ').replace(/\s+/g, ' ').trim() }
-
-// از attributes/short_description مشخصاتِ فنی بساز (WooCommerce Store API: attributes[]).
-function specsFrom(prod: any): CatalogSpec[] {
+// ── استراتژی‌ها ──
+function specsFromWp(p: any): CatalogSpec[] {
   const out: CatalogSpec[] = []
-  const attrs = Array.isArray(prod.attributes) ? prod.attributes : []
-  for (const a of attrs) {
-    const key = String(a.name || '').trim()
-    const vals = Array.isArray(a.terms) ? a.terms.map((t: any) => t.name).filter(Boolean).join('، ') : ''
-    if (key && vals) out.push({ key: key.slice(0, 60), value: vals.slice(0, 120) })
+  const meta = p.meta || {}
+  for (const k of Object.keys(meta)) { const v = meta[k]; if (typeof v === 'string' && v && !k.startsWith('_')) out.push({ key: k.slice(0, 60), value: v.slice(0, 120) }) }
+  return out.slice(0, 12)
+}
+async function runWp(cfg: ScraperConfig) {
+  const base = cfg.baseUrl
+  // دسته‌ها
+  const catMap = new Map<number, string>()
+  for (let p = 1; p <= 20; p++) {
+    const r = await fetchJson(`${base}/wp-json/wp/v2/product_cat?per_page=100&page=${p}`)
+    if (!r.ok || !Array.isArray(r.data) || !r.data.length) break
+    for (const c of r.data) catMap.set(c.id, stripHtml(c.name || ''))
+    patch({ categories: catMap.size })
+    if (r.data.length < 100) break
   }
-  return out.slice(0, 20)
+  // محصولات
+  let page = 1, added = 0, updated = 0, done = 0
+  while (loadJob().running) {
+    const r = await fetchJson(`${base}/wp-json/wp/v2/product?per_page=50&page=${page}&_embed`)
+    if (!r.ok || !Array.isArray(r.data) || !r.data.length) break
+    const items = r.data.map((p: any) => {
+      const catIds: number[] = Array.isArray(p.product_cat) ? p.product_cat : []
+      const catName = catIds.map(id => catMap.get(id)).find(Boolean) || (p._embedded?.['wp:term']?.flat?.().find((t: any) => t?.taxonomy === 'product_cat')?.name) || 'دسته‌بندی‌نشده'
+      const img = p._embedded?.['wp:featuredmedia']?.[0]?.source_url || ''
+      return {
+        name: stripHtml(p.title?.rendered || ''), categoryName: stripHtml(catName),
+        image: img || undefined, description: stripHtml(p.excerpt?.rendered || p.content?.rendered || '').slice(0, 800),
+        specs: specsFromWp(p), externalId: String(p.id || ''), externalUrl: p.link ? String(p.link) : undefined,
+      }
+    }).filter((x: any) => x.name)
+    const res = upsertScraped(items); added += res.added; updated += res.updated
+    done += r.data.length
+    patch({ added, updated, done, total: Math.max(done + 50, loadJob().total) })
+    if (r.data.length < 50 || done >= cfg.maxProducts) break
+    page++
+  }
+  return { added, updated }
 }
 
-// اجرای واقعیِ اسکرپ (WooCommerce Store API). صفحه‌به‌صفحه محصولات را می‌آورد.
-async function run() {
-  patch({ running: true, done: 0, added: 0, updated: 0, categories: 0, error: undefined, startedAt: Date.now(), finishedAt: undefined, label: 'خواندنِ دسته‌بندی‌ها' })
-  try {
-    // دسته‌بندی‌ها (برای شمارش/نگاشت نام)
-    const catMap = new Map<number, string>()
-    try {
-      const { data: cats } = await getJson(`${BASE}/wp-json/wc/store/v1/products/categories?per_page=100`)
-      if (Array.isArray(cats)) for (const c of cats) catMap.set(c.id, String(c.name || '').trim())
-      patch({ categories: catMap.size })
-    } catch { /* دسته‌ها بعداً از خودِ محصول ساخته می‌شوند */ }
-
-    // محصولات صفحه‌به‌صفحه
-    let page = 1, totalPages = 1
-    const first = await getJson(`${BASE}/wp-json/wc/store/v1/products?per_page=50&page=1`)
-    if (!Array.isArray(first.data)) throw new Error('پاسخِ Store API نامعتبر است — احتمالاً سایت WooCommerce نیست یا مسیر فرق دارد.')
-    totalPages = Math.max(1, first.totalPages || 1)
-    patch({ total: totalPages * 50, label: 'اسکرپِ محصولات' })
-
-    const ingest = async (list: any[]) => {
-      const items = list.map((p: any) => {
-        const catName = (Array.isArray(p.categories) && p.categories[0]?.name) ? String(p.categories[0].name) : (catMap.get((Array.isArray(p.categories) && p.categories[0]?.id) || 0) || 'دسته‌بندی‌نشده')
-        return {
-          name: String(p.name || '').trim(),
-          categoryName: catName,
-          image: (Array.isArray(p.images) && p.images[0]?.src) ? String(p.images[0].src) : undefined,
-          description: stripHtml(p.short_description || p.description || '').slice(0, 800),
-          specs: specsFrom(p),
-          externalId: String(p.id || ''),
-          externalUrl: p.permalink ? String(p.permalink) : undefined,
+async function collectSitemapUrls(base: string, cap: number): Promise<string[]> {
+  const urls = new Set<string>()
+  const seeds = ['/sitemap_index.xml', '/product-sitemap.xml', '/sitemap.xml', '/wp-sitemap.xml']
+  const subSitemaps: string[] = []
+  for (const s of seeds) {
+    const r = await fetchText(base + s, 15000)
+    if (!r.ok) continue
+    const locs = [...r.text.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map(m => m[1])
+    if (/<sitemapindex/i.test(r.text)) { for (const l of locs) if (/product|shop|store|kala|mahsul/i.test(l) || locs.length <= 6) subSitemaps.push(l) }
+    else if (/<urlset/i.test(r.text)) { for (const l of locs) urls.add(l) }
+    if (urls.size || subSitemaps.length) break
+  }
+  for (const sm of subSitemaps) {
+    if (urls.size >= cap) break
+    const r = await fetchText(sm, 15000)
+    if (!r.ok) continue
+    for (const m of r.text.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)) { urls.add(m[1]); if (urls.size >= cap) break }
+  }
+  // فیلترِ لینک‌های محصول (heuristic) اگر مسیرِ مشخصی دارند
+  const all = [...urls]
+  const prod = all.filter(u => /\/product\/|\/products\/|\/kala\/|\/shop\/|\/mahsul/i.test(u))
+  return (prod.length ? prod : all).slice(0, cap)
+}
+async function runSitemap(cfg: ScraperConfig) {
+  const base = cfg.baseUrl
+  patch({ label: 'خواندنِ نقشهٔ سایت' })
+  const urls = await collectSitemapUrls(base, cfg.maxProducts)
+  patch({ total: urls.length, label: 'اسکرپِ صفحاتِ محصول' })
+  let added = 0, updated = 0, done = 0
+  const batch: any[] = []
+  const flush = () => { if (batch.length) { const r = upsertScraped(batch.splice(0)); added += r.added; updated += r.updated } }
+  // همزمانیِ محدود
+  const CONC = 4
+  let idx = 0
+  async function worker() {
+    while (loadJob().running && idx < urls.length) {
+      const u = urls[idx++]
+      const r = await fetchText(u, 15000)
+      done++
+      if (r.ok && /application\/ld\+json/i.test(r.text)) {
+        const ld = findProductLd(r.text)
+        if (ld && ld.name) {
+          const image = (Array.isArray(ld.image) ? ld.image[0] : ld.image) || ogImage(r.text)
+          batch.push({
+            name: stripHtml(String(ld.name)),
+            categoryName: categoryFromLd(r.text) || (ld.category ? String(ld.category) : 'دسته‌بندی‌نشده'),
+            image: image ? abs(base, String(typeof image === 'object' ? image.url : image)) : undefined,
+            description: stripHtml(String(ld.description || '')).slice(0, 800),
+            brand: ld.brand ? String(ld.brand.name || ld.brand) : undefined,
+            externalId: (u.match(/(\d+)(?:\/?$)/)?.[1]) || undefined, externalUrl: u,
+          })
         }
-      }).filter(x => x.name)
-      const res = upsertScraped(items)
-      const j = loadJob()
-      patch({ added: j.added + res.added, updated: j.updated + res.updated })
+      }
+      if (batch.length >= 20) flush()
+      if (done % 5 === 0) patch({ done, added, updated })
     }
+  }
+  await Promise.all(Array.from({ length: CONC }, () => worker()))
+  flush()
+  patch({ done, added, updated })
+  return { added, updated }
+}
 
-    await ingest(first.data)
-    patch({ done: 50 })
-
-    for (page = 2; page <= totalPages; page++) {
-      if (!loadJob().running) break   // توقفِ دستی
-      try {
-        const { data } = await getJson(`${BASE}/wp-json/wc/store/v1/products?per_page=50&page=${page}`)
-        if (Array.isArray(data) && data.length) await ingest(data)
-      } catch { /* یک صفحهٔ خطادار کلِ کار را متوقف نکند */ }
-      patch({ done: page * 50 })
-    }
-
-    const fin = loadJob()
-    patch({ running: false, finishedAt: Date.now(), total: fin.done, label: 'پایان' })
+async function run() {
+  const cfg = getConfig()
+  patch({ running: true, done: 0, added: 0, updated: 0, categories: 0, error: undefined, startedAt: Date.now(), finishedAt: undefined, label: 'تشخیصِ پلتفرم', strategy: cfg.strategy })
+  try {
+    let strat = cfg.strategy
+    if (strat === 'auto') { const t = await testConnection(); strat = t.recommend; patch({ strategy: strat, label: `استراتژی: ${strat}` }) }
+    let res = { added: 0, updated: 0 }
+    if (strat === 'wp') res = await runWp(cfg)
+    else if (strat === 'sitemap') res = await runSitemap(cfg)
+    else throw new Error('این سایت با REST/نقشهٔ سایت اسکرپ نشد. لطفاً «تستِ اتصال» را بزنید و در صورت نیاز استراتژیِ HTML را با سِلکتورها تنظیم کنید.')
+    if (res.added === 0 && res.updated === 0) throw new Error('هیچ محصولی یافت نشد — «تستِ اتصال» را بزنید تا پلتفرم مشخص شود.')
+    patch({ running: false, finishedAt: Date.now(), label: 'پایان' })
   } catch (e: any) {
-    patch({ running: false, finishedAt: Date.now(), error: e?.message || 'خطا در اسکرپِ هایپرساز' })
+    patch({ running: false, finishedAt: Date.now(), error: e?.message || 'خطا در اسکرپ' })
   }
 }
 
-// شروعِ پس‌زمینه (fire-and-forget). فقط اگر کاری در حال اجرا نیست.
 export function startBackgroundScrape(): { started: boolean } {
   const j = getJob()
   if (j.running) return { started: false }
