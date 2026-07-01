@@ -19,6 +19,10 @@ Quick check after deploy: Ctrl+Shift+R — if styling returns, it was the cache.
 - Process: **4 pm2 fork instances** named "melkjet" on ports 3000–3003, behind
   nginx load-balancer (`docs/nginx-loadbalance.conf`). Config: `ecosystem.config.js`.
   Start once: `pm2 start ecosystem.config.js && pm2 save`. Deploy: `pm2 reload ecosystem.config.js`.
+  **Instance 0 (port 3000) is the cron/Chrome worker** (NODE_APP_INSTANCE=0 runs the
+  persiansaze scrape via headless Chrome, which blocks its event loop for seconds) — so
+  nginx marks 3000 as `backup` (out of the user rotation). User traffic → 3001/3002/3003.
+  Instance 0 warms the other three (WARM_PORTS env) so they never serve cold.
 - Domain: melkjet.com (Arvan CDN handles HTTPS)
 
 ### ⚠️ NEVER use pm2 cluster mode with `next start`
