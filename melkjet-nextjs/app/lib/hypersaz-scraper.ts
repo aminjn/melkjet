@@ -273,7 +273,7 @@ async function runSitemap(cfg: ScraperConfig) {
   let added = 0, updated = 0, done = 0, hits = 0
   const batch: any[] = []
   const flush = () => { if (batch.length) { const r = upsertScraped(batch.splice(0)); added += r.added; updated += r.updated } }
-  const CONC = 5
+  const CONC = 8   // همزمانیِ بیشتر برای سرعت (fetchِ سبک است، نه کروم)
   let idx = 0
   let stop = false
   const stopWatch = setInterval(() => { if (!loadJob().running) stop = true }, 3000)

@@ -271,7 +271,8 @@ function ScrapePanel({ onClose, onDone }: { onClose: () => void; onDone: () => v
     fetch('/api/admin/catalog/scrape').then(r => r.ok ? r.json() : null).then(d => { if (d) { setJob(d.job); if (d.config) setCfg((c: any) => ({ ...c, ...d.config })) } }).catch(() => {})
   }, [])
   useEffect(() => { poll(); const t = setInterval(poll, 2500); return () => clearInterval(t) }, [poll])
-  useEffect(() => { if (job && !job.running && (job.added || 0) + (job.updated || 0) > 0) onDone() }, [job?.running]) // eslint-disable-line
+  // لیستِ کاتالوگ را زنده به‌روز کن (هر بار که تعدادِ کالاها تغییر کرد) تا محصولاتِ اسکرپ‌شده بلافاصله دیده شوند.
+  useEffect(() => { if (job && (job.added || 0) + (job.updated || 0) > 0) onDone() }, [job?.added, job?.updated, job?.running]) // eslint-disable-line
 
   const act = async (body: any) => { const r = await fetch('/api/admin/catalog/scrape', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); return r.ok ? r.json() : null }
   const saveCfg = async () => { await act({ action: 'setConfig', config: cfg }); setSavedMsg('ذخیره شد ✓'); setTimeout(() => setSavedMsg(''), 2000) }
