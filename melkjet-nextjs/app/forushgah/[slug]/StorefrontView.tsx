@@ -11,7 +11,7 @@ interface Spec { key: string; value: string }
 interface PProduct {
   id: string; name: string; category: string; price: number; unit: string; stock: number; sold: number
   brand?: string; origin?: string; description?: string; images?: string[]; specs?: Spec[]; tags?: string[]
-  minOrder?: number; discountPct?: number; deliveryDays?: number; warranty?: string; featured?: boolean
+  minOrder?: number; discountPct?: number; deliveryDays?: number; warranty?: string; featured?: boolean; catalogId?: string
 }
 interface PShop {
   slug: string; name: string; tagline: string; about: string; logo: string; cover: string; rating: number
@@ -268,6 +268,7 @@ function ProductModal({ p, shop, onClose }: { p: PProduct; shop: PShop; onClose:
             </div>
           )}
           {p.tags && p.tags.length > 0 && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{p.tags.map(t => <span key={t} style={chip}>{t}</span>)}</div>}
+          {p.catalogId && <a href={`/mahsul/${p.catalogId}`} style={{ fontSize: 12.5, color: 'var(--gold)', textDecoration: 'none', border: '1px solid var(--line2)', borderRadius: 9, padding: '9px 14px', textAlign: 'center' }}>📊 صفحهٔ کامل، نمودارِ قیمت و مقایسهٔ فروشندگان ↗</a>}
           <InquiryBox slug={shop.slug} product={p.name} unit={p.unit} />
           <RevealPhone slug={shop.slug} disabled={!shop.hasPhone} block />
         </div>

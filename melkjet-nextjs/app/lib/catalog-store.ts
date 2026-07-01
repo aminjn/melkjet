@@ -85,6 +85,19 @@ export function listProducts(opts?: { categoryId?: string; search?: string; acti
   return ps.slice().sort((a, b) => b.createdAt - a.createdAt)
 }
 export function getProduct(pid: string): CatalogProduct | null { return load().products.find(p => p.id === pid) || null }
+// مسیرِ دسته (والد→…→برگ) برای نمایشِ breadcrumb در صفحهٔ محصول.
+export function categoryBreadcrumb(categoryId: string): { id: string; name: string }[] {
+  const cats = load().categories
+  const out: { id: string; name: string }[] = []
+  let cur = cats.find(c => c.id === categoryId)
+  let guard = 0
+  while (cur && guard++ < 6) { out.unshift({ id: cur.id, name: cur.name }); cur = cur.parentId ? cats.find(c => c.id === cur!.parentId) : undefined }
+  return out
+}
+// چند محصولِ مرتبط (هم‌دسته) برای بخشِ «محصولاتِ مشابه».
+export function relatedProducts(categoryId: string, excludeId: string, n = 8): CatalogProduct[] {
+  return load().products.filter(p => p.active && p.categoryId === categoryId && p.id !== excludeId).slice(0, n)
+}
 export function addProduct(input: any): CatalogProduct {
   const db = load()
   const c = cleanProduct(input)

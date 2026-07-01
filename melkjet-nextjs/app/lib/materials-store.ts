@@ -204,6 +204,26 @@ export function addPublicInquiry(slug: string, input: { customer: string; produc
 
 function normName(s: string): string { return (s || '').replace(/‌/g, '').replace(/\s+/g, ' ').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim() }
 
+// فروشندگانِ یک کالای مرجع (کاتالوگ) — برای صفحهٔ محصولِ عمومی و مقایسهٔ قیمت.
+export function sellersOfCatalog(catalogId: string) {
+  const db = load()
+  const out: { slug: string; name: string; logo: string; city: string; rating: number; price: number; discountPct: number; stock: number; unit: string }[] = []
+  for (const [owner, shop] of Object.entries(db.shops)) {
+    if (!shop.slug) continue
+    for (const p of shop.products) {
+      if (!p.active || p.catalogId !== catalogId) continue
+      const prof = getProfile(owner)
+      out.push({
+        slug: shop.slug, name: prof.businessName || shop.profile.name || 'فروشگاه مصالح',
+        logo: prof.logo || '', city: prof.city || '', rating: shop.profile.rating || 0,
+        price: Math.round(p.price * (1 - (p.discountPct || 0) / 100)), discountPct: p.discountPct || 0,
+        stock: p.stock, unit: p.unit,
+      })
+    }
+  }
+  return out.sort((a, b) => a.price - b.price)
+}
+
 // ── دایرکتوریِ عمومیِ همهٔ فروشگاه‌های مصالح (برای دیده‌شدنِ کامل) ──
 export function listPublicShops(opts?: { city?: string; category?: string; search?: string }) {
   const db = load()
