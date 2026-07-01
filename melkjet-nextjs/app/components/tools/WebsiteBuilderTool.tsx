@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, type CSSProperties } from 'react'
+import { useState, useEffect, useRef, type CSSProperties } from 'react'
 import PanelReturnBar from '@/app/components/PanelReturnBar'
 
 export type WebsiteView = 'templates' | 'editor'
@@ -1305,14 +1305,19 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
 
   // On mount, load the user's existing saved site (by the default slug) and
   // populate the real pages if it already exists.
+  const [savedSiteChecked, setSavedSiteChecked] = useState(false)
+  const [hadSavedSite, setHadSavedSite] = useState(false)
+  const autoTplRef = useRef(false)
   useEffect(() => {
     let cancelled = false
     fetch(`/api/sites?slug=${encodeURIComponent(slug)}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (cancelled || !data?.site) return
+        if (cancelled) return
+        if (!data?.site) { setSavedSiteChecked(true); return }
         const s = data.site
         if (Array.isArray(s.pages) && s.pages.length) {
+          setHadSavedSite(true)
           setPages(s.pages.map((pg: any, i: number) => ({
             slug: i === 0 ? 'home' : slugify(pg.slug || '') || `page-${i}`,
             title: String(pg.title || '') || (i === 0 ? 'صفحه اصلی' : `صفحه ${i + 1}`),
@@ -1327,11 +1332,22 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
         if (s.seo?.title) setSeoTitle(String(s.seo.title))
         if (s.seo?.description) setSeoDesc(String(s.seo.description))
         if (s.ownerName) setOwnerName(String(s.ownerName))
+        setSavedSiteChecked(true)
       })
-      .catch(() => { /* no saved site yet — keep the starter page */ })
+      .catch(() => { setSavedSiteChecked(true) /* no saved site yet — keep the starter page */ })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // اگر کاربر سایتِ ذخیره‌شده ندارد و پروفایلش مشخص است (مثلِ فروشگاه)، قالبِ پیش‌فرضِ همان
+  // پروفایل خودکار اعمال می‌شود تا پیش‌نمایش با صنفِ او بخواند (نه قالبِ آژانسِ املاک).
+  useEffect(() => {
+    if (autoTplRef.current) return
+    if (!lockedProfile || !savedSiteChecked || hadSavedSite) return
+    const tpl = STARTER_TEMPLATES.find(t => t.profile === lockedProfile)
+    if (tpl) { autoTplRef.current = true; loadTemplate(tpl) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lockedProfile, savedSiteChecked, hadSavedSite])
 
   const pushHistory = (b: Block[]) => setHistory(h => [...h.slice(-19), b])
 
@@ -1364,12 +1380,25 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
     // هر سایت باید روی صفحهٔ اصلی «آنچه ارائه می‌دهد» را به‌صورتِ اسلایدر نشان دهد:
     // مشاور/آژانس/فروشگاه/سرمایه‌گذار → آگهی‌ها (listings)، سازنده → پروژه‌ها (gallery)،
     // حقوقی → خدمات. این بلوک حتماً روی صفحهٔ اصلی قرار می‌گیرد.
-    const offeringsType = tpl.profile === 'سازنده' ? 'gallery' : tpl.profile === 'حقوقی' ? 'services' : 'listings'
+    // آنچه هر پروفایل روی صفحهٔ اصلی نشان می‌دهد: فروشگاه → کاتالوگِ مصالح، سازنده → پروژه‌ها،
+    // حقوقی → خدمات، بقیه → آگهی‌ها.
+    const offeringsType = tpl.profile === 'فروشگاه' ? 'catalog' : tpl.profile === 'سازنده' ? 'gallery' : tpl.profile === 'حقوقی' ? 'services' : 'listings'
+    const isShop = tpl.profile === 'فروشگاه'
     // بلوک‌های متمایزِ خودِ قالب (درباره/تیم و…) که در ترکیبِ پایه نیستند، حفظ می‌شوند تا تنوع بماند.
-    const baseTypes = ['hero', 'footer', 'cta', 'listings', 'gallery', 'services', 'stats', 'testimonials', 'search']
+    const baseTypes = ['hero', 'footer', 'cta', 'listings', 'gallery', 'services', 'stats', 'testimonials', 'search', 'catalog', 'pricelist']
     const distinct = tpl.blocks.filter(b => !baseTypes.includes(b))
-    const hasSearch = tpl.blocks.includes('search')
-    const homeOrder = [
+    const hasSearch = tpl.blocks.includes('search') && !isShop
+    // برای فروشگاه: کاتالوگ + نرخِ روز محور است (نه آگهی/جستجوی ملک).
+    const homeOrder = isShop ? [
+      'hero',
+      'catalog',
+      ...(tpl.blocks.includes('pricelist') ? ['pricelist'] : []),
+      ...distinct,
+      'services',
+      'testimonials',
+      'cta',
+      'footer',
+    ] : [
       'hero',
       ...(hasSearch ? ['search'] : []),
       offeringsType,
