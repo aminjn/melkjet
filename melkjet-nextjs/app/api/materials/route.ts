@@ -51,7 +51,8 @@ export async function POST(req: NextRequest) {
     }
     case 'addOrder': {
       if (!b.customer) return NextResponse.json({ error: 'نام مشتری الزامی است' }, { status: 400 })
-      return NextResponse.json({ ok: true, order: addOrder(owner, { customer: String(b.customer), items: Number(b.items) || 1, amount: Number(b.amount) || 0, status: b.status }) })
+      const lines = Array.isArray(b.lines) ? b.lines.map((l: any) => ({ productId: String(l.productId || ''), qty: Number(l.qty) || 0 })).filter((l: any) => l.productId && l.qty > 0) : undefined
+      return NextResponse.json({ ok: true, order: addOrder(owner, { customer: String(b.customer), items: b.items != null ? Number(b.items) : undefined, amount: b.amount != null ? Number(b.amount) : undefined, status: b.status, lines }) })
     }
     case 'setOrderStatus': {
       if (!b.id || !b.status) return NextResponse.json({ error: 'شناسه و وضعیت الزامی است' }, { status: 400 })

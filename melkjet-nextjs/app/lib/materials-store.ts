@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
+import { getAccount } from './account-store'
 
 // Per-owner (per-profile) store for the «بازار مصالح» seller dashboard.
 // Mirrors the file-based persistence style of builder-store.ts / crm-store.ts.
@@ -43,21 +44,20 @@ export interface Inquiry {
   createdAt: number
 }
 
-export interface MonthSale { month: string; amount: number } // مبلغ تومان
+export interface MonthSale { month: string; amount: number } // مبلغ تومان (محاسبه‌شده از سفارش‌ها)
 
 export interface Shop {
   profile: { name: string; rating: number }
   products: Product[]
   orders: Order[]
   inquiries: Inquiry[]
-  monthlySales: MonthSale[]
   createdAt: number
 }
 
 interface DB { shops: Record<string, Shop> }
 
 function id(p = '') { return p + randomBytes(5).toString('hex') }
-function orderId() { return 'ORD-' + (8400 + Math.floor(Math.random() * 600)) }
+function orderId() { return 'ORD-' + randomBytes(3).toString('hex').toUpperCase() }
 
 function load(): DB {
   if (existsSync(DATA_FILE)) {
@@ -69,69 +69,56 @@ function save(db: DB) { writeFileSync(DATA_FILE, JSON.stringify(db, null, 2)) }
 
 const ORDER_STATUSES: OrderStatus[] = ['pending', 'preparing', 'shipped', 'delivered', 'canceled']
 
-// دادهٔ نمونهٔ اولیه برای هر فروشگاه جدید تا داشبورد خالی نباشد (مثل seed سازنده).
-function seedShop(): Shop {
-  const now = Date.now()
-  const day = 86400000
-  const p = (name: string, category: string, price: number, unit: string, stock: number, threshold: number, sold: number): Product =>
-    ({ id: id('p_'), name, category, price, unit, stock, threshold, sold, active: true, createdAt: now })
-  const products: Product[] = [
-    p('میلگرد آجدار ۱۶', 'آهن و میلگرد', 38000000, 'تن', 1.2, 5, 142),
-    p('تیرآهن ۱۴', 'آهن و میلگرد', 42000000, 'شاخه', 64, 20, 88),
-    p('نبشی ۱۰', 'آهن و میلگرد', 31000000, 'تن', 18, 8, 51),
-    p('سیمان تیپ ۲ کیسه‌ای', 'سیمان و گچ', 95000, 'کیسه', 80, 200, 4200),
-    p('گچ سفیدکاری', 'سیمان و گچ', 60000, 'کیسه', 540, 150, 1600),
-    p('پودر سنگ', 'سیمان و گچ', 45000, 'کیسه', 320, 100, 900),
-    p('کاشی ۶۰×۶۰ کرم', 'کاشی و سرامیک', 320000, 'متر', 40, 100, 920),
-    p('سرامیک کف طوسی', 'کاشی و سرامیک', 280000, 'متر', 760, 200, 680),
-    p('کاشی دیوار سفید', 'کاشی و سرامیک', 240000, 'متر', 410, 150, 530),
-    p('شیر اهرمی روشویی', 'شیرآلات', 1800000, 'عدد', 120, 40, 310),
-    p('شیر مخلوط آشپزخانه', 'شیرآلات', 2400000, 'عدد', 86, 30, 240),
-    p('شیر توالت', 'شیرآلات', 1500000, 'عدد', 150, 40, 180),
-  ]
-  const o = (cust: string, items: number, amount: number, status: OrderStatus, ageDays: number): Order =>
-    ({ id: orderId(), customer: cust, items, amount, status, createdAt: now - ageDays * day })
-  const orders: Order[] = [
-    o('گروه آرین', 3, 84000000, 'shipped', 1),
-    o('پیمانکاری دلتا', 7, 142000000, 'preparing', 2),
-    o('مجتمع نگین', 2, 36000000, 'delivered', 4),
-    o('ساختمانی پارس', 5, 98000000, 'pending', 6),
-    o('عمران شهر', 4, 61000000, 'shipped', 8),
-    o('برج‌سازان البرز', 6, 120000000, 'delivered', 11),
-    o('پیمانکاری دلتا', 2, 28000000, 'preparing', 13),
-  ]
-  const inq = (cust: string, product: string, qty: string): Inquiry =>
-    ({ id: id('q_'), customer: cust, product, qty, status: 'new', createdAt: now })
-  const inquiries: Inquiry[] = [
-    inq('شرکت عمران پارس', 'سیمان تیپ ۲', '۵۰۰ تن'),
-    inq('پیمانکاری دلتا', 'میلگرد آجدار ۱۶', '۲۰ تن'),
-    inq('مجتمع نگین', 'کاشی ۶۰×۶۰', '۳۰۰ متر'),
-    inq('ساختمانی پارس', 'شیرآلات', '۴۰ عدد'),
-    inq('گروه آرین', 'گچ سفیدکاری', '۲۰۰ کیسه'),
-  ]
-  const monthlySales: MonthSale[] = [
-    { month: 'آذر', amount: 480000000 },
-    { month: 'دی', amount: 500000000 },
-    { month: 'بهمن', amount: 520000000 },
-    { month: 'اسفند', amount: 560000000 },
-    { month: 'فروردین', amount: 517000000 },
-    { month: 'اردیبهشت', amount: 610000000 },
-  ]
-  return { profile: { name: 'بازار مصالح کیان', rating: 4.8 }, products, orders, inquiries, monthlySales, createdAt: now }
+// فروشگاهِ خالی — بدونِ هیچ دادهٔ نمونه/فیک. نامِ فروشگاه از حسابِ کاربر خوانده می‌شود.
+function emptyShop(owner: string): Shop {
+  const acc = getAccount(owner)
+  return { profile: { name: acc?.name || '', rating: 0 }, products: [], orders: [], inquiries: [], createdAt: Date.now() }
 }
 
 export function getShop(owner: string): Shop {
   const db = load()
-  if (!db.shops[owner]) { db.shops[owner] = seedShop(); save(db) }
-  return db.shops[owner]
+  if (!db.shops[owner]) { db.shops[owner] = emptyShop(owner); save(db) }
+  const s = db.shops[owner]
+  // نامِ فروشگاه اگر خالی بود از حسابِ کاربر پر شود (بدونِ ذخیرهٔ اجباری).
+  if (!s.profile.name) { const acc = getAccount(owner); if (acc?.name) s.profile.name = acc.name }
+  return s
 }
 
 function mutate(owner: string, fn: (s: Shop) => void) {
   const db = load()
-  if (!db.shops[owner]) db.shops[owner] = seedShop()
+  if (!db.shops[owner]) db.shops[owner] = emptyShop(owner)
   fn(db.shops[owner])
   save(db)
   return db.shops[owner]
+}
+
+// ماه/سالِ شمسیِ یک زمان‌مُهر (برای گروه‌بندیِ فروش بر اساسِ ماه).
+const FA_MONTHS = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند']
+function faYearMonth(ts: number): { y: number; m: number } {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US-u-ca-persian-nu-latn', { year: 'numeric', month: 'numeric' }).formatToParts(new Date(ts))
+    return { y: Number(parts.find(p => p.type === 'year')?.value) || 0, m: Number(parts.find(p => p.type === 'month')?.value) || 1 }
+  } catch { return { y: 0, m: 1 } }
+}
+// نمودارِ فروشِ ۶ ماهه — از مبلغِ واقعیِ سفارش‌ها (به‌جز لغوشده‌ها) گروه‌بندی‌شده بر اساسِ ماهِ شمسی.
+function computeMonthlySales(orders: Order[]): MonthSale[] {
+  const now = faYearMonth(Date.now())
+  const buckets: MonthSale[] = []
+  const keyOf = (y: number, m: number) => y * 12 + (m - 1)
+  const sums: Record<number, number> = {}
+  for (const o of orders) {
+    if (o.status === 'canceled') continue
+    const ym = faYearMonth(o.createdAt)
+    if (!ym.y) continue
+    sums[keyOf(ym.y, ym.m)] = (sums[keyOf(ym.y, ym.m)] || 0) + (o.amount || 0)
+  }
+  const curKey = keyOf(now.y, now.m)
+  for (let off = 5; off >= 0; off--) {
+    const k = curKey - off
+    const m = ((k % 12) + 12) % 12
+    buckets.push({ month: FA_MONTHS[m], amount: sums[k] || 0 })
+  }
+  return buckets
 }
 
 // ---- آمار داشبورد (محاسبه‌شده، نه ثابت) ----
@@ -151,7 +138,7 @@ export function shopStats(owner: string) {
     .map(([label, rev]) => ({ label, pct: Math.round((rev / totalCat) * 100) }))
     .sort((a, b) => b.pct - a.pct)
 
-  const months = s.monthlySales
+  const months = computeMonthlySales(s.orders)
   const thisMonth = months.length ? months[months.length - 1].amount : 0
   const prevMonth = months.length > 1 ? months[months.length - 2].amount : 0
   const monthChange = prevMonth ? Math.round(((thisMonth - prevMonth) / prevMonth) * 100) : 0
@@ -210,10 +197,27 @@ export function restock(owner: string, productId: string, qty: number): Product 
 }
 
 // ---- سفارش‌ها ----
-export function addOrder(owner: string, input: { customer: string; items: number; amount: number; status?: OrderStatus }): Order {
+// ثبتِ سفارش. اگر «lines» (اقلامِ محصول) داده شود، موجودی کم و «فروخته‌شده» زیاد می‌شود
+// و مبلغ از قیمتِ محصول×تعداد محاسبه می‌گردد — پس نمودارِ فروش/دسته‌ها همه واقعی می‌شوند.
+export function addOrder(owner: string, input: { customer: string; items?: number; amount?: number; status?: OrderStatus; lines?: { productId: string; qty: number }[] }): Order {
   let created!: Order
   mutate(owner, s => {
-    created = { id: orderId(), customer: input.customer, items: input.items, amount: input.amount, status: input.status && ORDER_STATUSES.includes(input.status) ? input.status : 'pending', createdAt: Date.now() }
+    let amount = input.amount || 0
+    let items = input.items || 0
+    if (input.lines && input.lines.length) {
+      amount = 0; items = 0
+      for (const ln of input.lines) {
+        const p = s.products.find(x => x.id === ln.productId)
+        const qty = Math.max(0, Number(ln.qty) || 0)
+        if (!p || qty <= 0) continue
+        amount += p.price * qty
+        items += 1
+        p.stock = Math.max(0, p.stock - qty)
+        p.sold += qty
+      }
+      if (input.amount) amount = input.amount   // اگر مبلغ دستی داده شده، همان ملاک است
+    }
+    created = { id: orderId(), customer: input.customer, items: items || 1, amount, status: input.status && ORDER_STATUSES.includes(input.status) ? input.status : 'pending', createdAt: Date.now() }
     s.orders.unshift(created)
   })
   return created

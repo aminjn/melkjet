@@ -369,7 +369,7 @@ export default function MaterialsPage() {
             <span style={{ fontSize: 12, fontWeight: 700, color: '#34d399' }}>فروشگاه فعال</span>
           </div>
           <div className="mjm-sidelabel" style={{ fontSize: 12, color: 'var(--muted)' }}>
-            امتیاز تأمین‌کننده: <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{fa(stats.profile.rating)} ★</span>
+            امتیاز تأمین‌کننده: <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{stats.profile.rating > 0 ? `${fa(stats.profile.rating)} ★` : 'بدون امتیاز'}</span>
           </div>
         </div>
 
@@ -440,8 +440,8 @@ export default function MaterialsPage() {
             </div>
           )}
           {view === 'catalog' && <CatalogView products={products} post={post} busy={busy} search={search} showAdd={showAdd} setShowAdd={setShowAdd} />}
-          {view === 'orders' && <OrdersView orders={orders} post={post} busy={busy} search={search} />}
-          {view === 'inquiries' && <InquiriesView inquiries={inquiries} post={post} busy={busy} search={search} />}
+          {view === 'orders' && <OrdersView orders={orders} products={products} post={post} busy={busy} search={search} />}
+          {view === 'inquiries' && <InquiriesView inquiries={inquiries} products={products} post={post} busy={busy} search={search} />}
           {view === 'plans' && <PlansPanel dashboard="/materials" />}
           {view === 'profile' && <BusinessProfileForm />}
           {view === 'settings' && <SettingsView profile={stats.profile} post={post} busy={busy} />}
@@ -722,14 +722,67 @@ const actionBtn: React.CSSProperties = {
 // ════════════════════════════════════════════════════════
 //  ORDERS
 // ════════════════════════════════════════════════════════
-function OrdersView({ orders, post, busy, search }: {
-  orders: Order[]; post: (b: Record<string, unknown>) => Promise<boolean>; busy: boolean; search: string
+function OrdersView({ orders, products, post, busy, search }: {
+  orders: Order[]; products: Product[]; post: (b: Record<string, unknown>) => Promise<boolean>; busy: boolean; search: string
 }) {
   const q = search.trim()
   const sorted = [...orders].sort((a, b) => b.createdAt - a.createdAt)
   const filtered = q ? sorted.filter(o => o.customer.includes(q) || o.id.includes(q)) : sorted
 
+  const [showAdd, setShowAdd] = useState(false)
+  const [customer, setCustomer] = useState('')
+  const [status, setStatus] = useState<OrderStatus>('pending')
+  const [lines, setLines] = useState<{ productId: string; qty: string }[]>([{ productId: '', qty: '' }])
+  const activeProducts = products.filter(p => p.active)
+  const estTotal = lines.reduce((sum, ln) => { const p = products.find(x => x.id === ln.productId); return sum + (p ? p.price * (Number(ln.qty) || 0) : 0) }, 0)
+
+  const submit = async () => {
+    if (!customer.trim()) { alert('نام مشتری را وارد کنید'); return }
+    const validLines = lines.filter(l => l.productId && Number(l.qty) > 0).map(l => ({ productId: l.productId, qty: Number(l.qty) }))
+    if (!validLines.length) { alert('حداقل یک محصول و تعداد را انتخاب کنید'); return }
+    const ok = await post({ action: 'addOrder', customer: customer.trim(), status, lines: validLines })
+    if (ok) { setCustomer(''); setStatus('pending'); setLines([{ productId: '', qty: '' }]); setShowAdd(false) }
+  }
+  const setLine = (i: number, patch: Partial<{ productId: string; qty: string }>) => setLines(ls => ls.map((l, j) => j === i ? { ...l, ...patch } : l))
+
   return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button onClick={() => setShowAdd(!showAdd)} style={{ padding: '9px 18px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: FONT }}>{showAdd ? '× بستن' : '+ ثبت سفارش'}</button>
+      </div>
+      {showAdd && (
+        <div style={{ ...card, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>＋ ثبت سفارشِ جدید</div>
+          {activeProducts.length === 0
+            ? <div style={{ fontSize: 13, color: 'var(--muted)' }}>ابتدا در «کاتالوگ محصولات» محصول اضافه کنید تا بتوانید سفارش ثبت کنید.</div>
+            : <>
+              <input placeholder="نام مشتری / پیمانکار" value={customer} onChange={e => setCustomer(e.target.value)} style={inputStyle} />
+              {lines.map((ln, i) => {
+                const p = products.find(x => x.id === ln.productId)
+                return (
+                  <div key={i} className="mjm-form" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto auto', gap: 10, alignItems: 'center' }}>
+                    <select value={ln.productId} onChange={e => setLine(i, { productId: e.target.value })} style={{ ...inputStyle, cursor: 'pointer' }}>
+                      <option value="">— انتخاب محصول —</option>
+                      {activeProducts.map(pr => <option key={pr.id} value={pr.id}>{pr.name} (موجودی {fa(pr.stock)} {pr.unit})</option>)}
+                    </select>
+                    <NumberInput placeholder={p ? `تعداد (${p.unit})` : 'تعداد'} value={ln.qty} onChange={v => setLine(i, { qty: v })} style={inputStyle} />
+                    <div style={{ fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap', minWidth: 70 }}>{p && Number(ln.qty) > 0 ? mt(p.price * Number(ln.qty)) : ''}</div>
+                    <button onClick={() => setLines(ls => ls.length > 1 ? ls.filter((_, j) => j !== i) : ls)} title="حذف قلم" style={{ ...actionBtn, color: '#f87171', width: 30, padding: 0 }}>×</button>
+                  </div>
+                )
+              })}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <button onClick={() => setLines(ls => [...ls, { productId: '', qty: '' }])} style={{ ...actionBtn, color: 'var(--gold)', borderColor: 'var(--gold)' }}>+ قلم دیگر</button>
+                <select value={status} onChange={e => setStatus(e.target.value as OrderStatus)} style={{ ...inputStyle, width: 'auto', cursor: 'pointer' }}>
+                  {ORDER_STATUSES.map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+                </select>
+                <span style={{ marginInlineStart: 'auto', fontSize: 14, fontWeight: 700 }}>جمع: {mt(estTotal)}</span>
+                <button onClick={submit} disabled={busy} style={{ padding: '9px 22px', borderRadius: 9, background: 'var(--gold)', border: 'none', color: '#16140f', fontWeight: 700, fontSize: 13, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1, fontFamily: FONT }}>ثبت سفارش</button>
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>با ثبتِ سفارش، موجودیِ محصولات کم و آمارِ فروش/دسته‌ها به‌روز می‌شود.</div>
+            </>}
+        </div>
+      )}
     <div style={{ ...card, overflow: 'hidden' }}>
       <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--line)', fontSize: 15, fontWeight: 700 }}>
         لیست سفارش‌ها ({fa(filtered.length)})
@@ -761,14 +814,15 @@ function OrdersView({ orders, post, busy, search }: {
         ))}
       </div>
     </div>
+    </div>
   )
 }
 
 // ════════════════════════════════════════════════════════
 //  INQUIRIES
 // ════════════════════════════════════════════════════════
-function InquiriesView({ inquiries, post, busy, search }: {
-  inquiries: Inquiry[]; post: (b: Record<string, unknown>) => Promise<boolean>; busy: boolean; search: string
+function InquiriesView({ inquiries, products, post, busy, search }: {
+  inquiries: Inquiry[]; products: Product[]; post: (b: Record<string, unknown>) => Promise<boolean>; busy: boolean; search: string
 }) {
   const q = search.trim()
   const filtered = q ? inquiries.filter(x => x.customer.includes(q) || x.product.includes(q)) : inquiries
@@ -779,11 +833,37 @@ function InquiriesView({ inquiries, post, busy, search }: {
     await post({ action: 'answerInquiry', id: x.id, reply: reply.trim() })
   }
 
-  if (filtered.length === 0) {
-    return <div style={{ ...card, padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>استعلامی یافت نشد</div>
+  const [showAdd, setShowAdd] = useState(false)
+  const [form, setForm] = useState({ customer: '', product: '', qty: '', note: '' })
+  const submit = async () => {
+    if (!form.customer.trim() || !form.product.trim()) { alert('نام مشتری و محصول الزامی است'); return }
+    const ok = await post({ action: 'addInquiry', customer: form.customer.trim(), product: form.product.trim(), qty: form.qty.trim(), note: form.note.trim() || undefined })
+    if (ok) { setForm({ customer: '', product: '', qty: '', note: '' }); setShowAdd(false) }
   }
 
   return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button onClick={() => setShowAdd(!showAdd)} style={{ padding: '9px 18px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: FONT }}>{showAdd ? '× بستن' : '+ ثبت استعلام'}</button>
+      </div>
+      {showAdd && (
+        <div style={{ ...card, padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>＋ ثبت استعلامِ مشتری</div>
+          <div className="mjm-form" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.2fr 0.8fr', gap: 10 }}>
+            <input placeholder="نام مشتری" value={form.customer} onChange={e => setForm({ ...form, customer: e.target.value })} style={inputStyle} />
+            <input placeholder="محصولِ موردنظر" value={form.product} onChange={e => setForm({ ...form, product: e.target.value })} list="mjm-prodlist" style={inputStyle} />
+            <input placeholder="مقدار (مثلاً ۵۰۰ تن)" value={form.qty} onChange={e => setForm({ ...form, qty: e.target.value })} style={inputStyle} />
+          </div>
+          <datalist id="mjm-prodlist">{products.map(p => <option key={p.id} value={p.name} />)}</datalist>
+          <input placeholder="توضیح (اختیاری)" value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} style={inputStyle} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button onClick={submit} disabled={busy} style={{ padding: '9px 22px', borderRadius: 9, background: 'var(--gold)', border: 'none', color: '#16140f', fontWeight: 700, fontSize: 13, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1, fontFamily: FONT }}>ثبت استعلام</button>
+          </div>
+        </div>
+      )}
+      {filtered.length === 0 ? (
+        <div style={{ ...card, padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>استعلامی ثبت نشده است</div>
+      ) : (
     <div className="mjm-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
       {filtered.map(x => {
         const isNew = x.status === 'new'
@@ -811,6 +891,8 @@ function InquiriesView({ inquiries, post, busy, search }: {
         )
       })}
     </div>
+      )}
+    </div>
   )
 }
 
@@ -835,7 +917,7 @@ function SettingsView({ profile, post, busy }: {
       <input value={name} onChange={e => setName(e.target.value)} style={{ ...inputStyle, marginBottom: 18 }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 22 }}>
         <span style={{ fontSize: 12, color: 'var(--muted)' }}>امتیاز تأمین‌کننده:</span>
-        <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--gold)' }}>{fa(profile.rating)} ★</span>
+        <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--gold)' }}>{profile.rating > 0 ? `${fa(profile.rating)} ★` : 'بدون امتیاز'}</span>
       </div>
       <button onClick={save} disabled={busy} style={{
         padding: '10px 26px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))',
