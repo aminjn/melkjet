@@ -135,6 +135,15 @@ export function getShop(owner: string): Shop {
   return s
 }
 
+// خواندنیِ فقط‌خواندنی برای سایتِ منتشرشده (بدونِ ساختِ فروشگاهِ جدید).
+export function shopProductsOf(owner: string): { products: Product[]; slug: string; name: string } | null {
+  const db = load()
+  const shop = db.shops[owner]
+  if (!shop) return null
+  const p = getProfile(owner)
+  return { products: shop.products.filter(x => x.active), slug: shop.slug || '', name: p.businessName || shop.profile.name || 'فروشگاه مصالح' }
+}
+
 // یافتنِ فروشگاه از روی slug عمومی → مالک (شمارهٔ تلفن) و فروشگاه.
 export function shopBySlug(slug: string): { owner: string; shop: Shop } | null {
   const db = load()

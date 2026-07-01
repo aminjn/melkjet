@@ -105,6 +105,13 @@ const BLOCK_DEFAULTS: Record<string, Record<string, any>> = {
     heading: 'جستجوی ملک',
     placeholder: 'منطقه، شهر یا محله را وارد کنید...',
   },
+  catalog: {
+    heading: 'محصولات ما',
+    count: 12,
+  },
+  pricelist: {
+    heading: 'نرخِ روزِ محصولات',
+  },
   listings: {
     heading: 'آگهی‌های من',
     source: 'mine',
@@ -234,6 +241,13 @@ const BLOCK_SCHEMA: Record<string, FieldSpec[]> = {
     { key: 'heading', label: 'عنوان', kind: 'text' },
     { key: 'placeholder', label: 'متن راهنما', kind: 'text' },
   ],
+  catalog: [
+    { key: 'heading', label: 'عنوان', kind: 'text' },
+    { key: 'count', label: 'تعدادِ محصولِ نمایشی', kind: 'number' },
+  ],
+  pricelist: [
+    { key: 'heading', label: 'عنوان', kind: 'text' },
+  ],
   listings: [
     { key: 'heading', label: 'عنوان', kind: 'text' },
     { key: 'total', label: 'تعدادِ کلِ آگهی', kind: 'number' },
@@ -313,6 +327,8 @@ const BLOCK_SCHEMA: Record<string, FieldSpec[]> = {
 
 const BLOCK_LIBRARY = [
   { type: 'hero', label: 'هیرو', icon: '◇' },
+  { type: 'catalog', label: 'کاتالوگ محصولات', icon: '🧱' },
+  { type: 'pricelist', label: 'نرخِ روز (جدول قیمت)', icon: '📊' },
   { type: 'search', label: 'نوار جستجو', icon: '⌕' },
   { type: 'searchlist', label: 'آگهی‌ها (جستجو و فیلتر)', icon: '🔍' },
   { type: 'listings', label: 'آگهی‌های من', icon: '⌂' },
@@ -403,16 +419,16 @@ const STARTER_TEMPLATES = [
   { id: 'bld-10', name: 'سازندهٔ معتبر', profile: 'سازنده', blocks: ['hero', 'stats', 'about', 'gallery', 'services', 'footer'], desc: 'هیرو، آمار، درباره، گالری، خدمات' },
 
   // ───────── فروشگاه (۱۰) ─────────
-  { id: 'shp-01', name: 'فروشگاه مصالح', profile: 'فروشگاه', blocks: ['hero', 'search', 'services', 'testimonials', 'contact', 'footer'], desc: 'هیرو، جستجو، دسته‌ها، نظرات' },
-  { id: 'shp-02', name: 'فروشگاه آنلاین', profile: 'فروشگاه', blocks: ['hero', 'search', 'listings', 'services', 'footer'], desc: 'هیرو، جستجو، محصولات، دسته‌ها' },
-  { id: 'shp-03', name: 'فروشگاه مدرن', profile: 'فروشگاه', blocks: ['hero', 'search', 'services', 'gallery', 'cta', 'footer'], desc: 'هیرو، جستجو، دسته‌ها، گالری، اقدام' },
-  { id: 'shp-04', name: 'فروشگاه کامل', profile: 'فروشگاه', blocks: ['hero', 'search', 'services', 'stats', 'testimonials', 'footer'], desc: 'هیرو، جستجو، دسته‌ها، آمار، نظرات', blogPage: true },
-  { id: 'shp-05', name: 'فروشگاه تخصصی', profile: 'فروشگاه', blocks: ['hero', 'search', 'listings', 'testimonials', 'contact', 'footer'], desc: 'هیرو، جستجو، محصولات، نظرات، تماس' },
-  { id: 'shp-06', name: 'فروشگاه ابزار', profile: 'فروشگاه', blocks: ['hero', 'search', 'services', 'about', 'cta', 'footer'], desc: 'هیرو، جستجو، دسته‌ها، درباره، اقدام' },
-  { id: 'shp-07', name: 'فروشگاه دکوراسیون', profile: 'فروشگاه', blocks: ['hero', 'gallery', 'search', 'services', 'contact', 'footer'], desc: 'هیرو، گالری، جستجو، دسته‌ها، تماس' },
-  { id: 'shp-08', name: 'فروشگاه عمده', profile: 'فروشگاه', blocks: ['hero', 'search', 'services', 'stats', 'contact', 'footer'], desc: 'هیرو، جستجو، دسته‌ها، آمار، تماس' },
-  { id: 'shp-09', name: 'فروشگاه برتر', profile: 'فروشگاه', blocks: ['hero', 'search', 'listings', 'services', 'cta', 'footer'], desc: 'هیرو، جستجو، محصولات، دسته‌ها، اقدام' },
-  { id: 'shp-10', name: 'فروشگاه نمونه', profile: 'فروشگاه', blocks: ['hero', 'search', 'about', 'services', 'testimonials', 'footer'], desc: 'هیرو، جستجو، درباره، دسته‌ها، نظرات' },
+  { id: 'shp-01', name: 'فروشگاه مصالح', profile: 'فروشگاه', blocks: ['hero', 'catalog', 'services', 'testimonials', 'contact', 'footer'], desc: 'هیرو، کاتالوگ، دسته‌ها، نظرات، تماس' },
+  { id: 'shp-02', name: 'فروشگاه آنلاین', profile: 'فروشگاه', blocks: ['hero', 'catalog', 'pricelist', 'about', 'footer'], desc: 'هیرو، کاتالوگ، نرخِ روز، درباره' },
+  { id: 'shp-03', name: 'فروشگاه مدرن', profile: 'فروشگاه', blocks: ['hero', 'catalog', 'services', 'gallery', 'cta', 'footer'], desc: 'هیرو، کاتالوگ، دسته‌ها، گالری، اقدام' },
+  { id: 'shp-04', name: 'فروشگاه کامل', profile: 'فروشگاه', blocks: ['hero', 'catalog', 'pricelist', 'stats', 'testimonials', 'footer'], desc: 'هیرو، کاتالوگ، نرخِ روز، آمار، نظرات', blogPage: true },
+  { id: 'shp-05', name: 'فروشگاه تخصصی', profile: 'فروشگاه', blocks: ['hero', 'catalog', 'about', 'testimonials', 'contact', 'footer'], desc: 'هیرو، کاتالوگ، درباره، نظرات، تماس' },
+  { id: 'shp-06', name: 'فروشگاه ابزار', profile: 'فروشگاه', blocks: ['hero', 'catalog', 'services', 'about', 'cta', 'footer'], desc: 'هیرو، کاتالوگ، دسته‌ها، درباره، اقدام' },
+  { id: 'shp-07', name: 'فروشگاه دکوراسیون', profile: 'فروشگاه', blocks: ['hero', 'gallery', 'catalog', 'services', 'contact', 'footer'], desc: 'هیرو، گالری، کاتالوگ، دسته‌ها، تماس' },
+  { id: 'shp-08', name: 'فروشگاه عمده', profile: 'فروشگاه', blocks: ['hero', 'pricelist', 'catalog', 'stats', 'contact', 'footer'], desc: 'هیرو، نرخِ روز، کاتالوگ، آمار، تماس' },
+  { id: 'shp-09', name: 'فروشگاه برتر', profile: 'فروشگاه', blocks: ['hero', 'catalog', 'services', 'pricelist', 'cta', 'footer'], desc: 'هیرو، کاتالوگ، دسته‌ها، نرخِ روز، اقدام' },
+  { id: 'shp-10', name: 'فروشگاه نمونه', profile: 'فروشگاه', blocks: ['hero', 'catalog', 'about', 'services', 'testimonials', 'footer'], desc: 'هیرو، کاتالوگ، درباره، دسته‌ها، نظرات' },
 
   // ───────── سرمایه‌گذار (۱۰) ─────────
   { id: 'inv-01', name: 'سرمایه‌گذاری', profile: 'سرمایه‌گذار', blocks: ['hero', 'stats', 'listings', 'cta', 'contact', 'footer'], desc: 'هیرو، آمار بازده، فرصت‌ها، اقدام' },
@@ -465,8 +481,8 @@ function profilePageSpec(profile: string): PageSpec[] {
   const listings: PageSpec = { slug: 'listings', title: 'فایل‌ها', menuLabel: 'فایل‌ها', blocks: ['hero', 'searchlist', 'footer'], heroHeading: 'فایل‌های ملکی', heroSub: 'جدیدترین فایل‌های خرید، فروش و اجاره' }
   const team: PageSpec = { slug: 'team', title: 'تیم ما', menuLabel: 'تیم ما', blocks: ['hero', 'team', 'cta', 'footer'], heroHeading: 'تیمِ مشاوران', heroSub: 'با مشاورانِ خبرهٔ ما آشنا شوید' }
   const projects: PageSpec = { slug: 'projects', title: 'پروژه‌ها', menuLabel: 'پروژه‌ها', blocks: ['hero', 'gallery', 'stats', 'cta', 'footer'], heroHeading: 'پروژه‌های ما', heroSub: 'نمونه‌کارها و پروژه‌های در حالِ ساخت' }
-  const products: PageSpec = { slug: 'products', title: 'محصولات', menuLabel: 'محصولات', blocks: ['hero', 'searchlist', 'footer'], heroHeading: 'محصولات', heroSub: 'کاتالوگِ کاملِ محصولاتِ ما' }
-  const categories: PageSpec = { slug: 'services', title: 'دسته‌بندی‌ها', menuLabel: 'دسته‌بندی‌ها', blocks: ['hero', 'services', 'testimonials', 'cta', 'footer'], heroHeading: 'دسته‌بندی‌ها', heroSub: 'محصولات را بر اساسِ دسته‌بندی ببینید' }
+  const products: PageSpec = { slug: 'products', title: 'محصولات', menuLabel: 'محصولات', blocks: ['hero', 'catalog', 'pricelist', 'footer'], heroHeading: 'محصولات', heroSub: 'کاتالوگِ کاملِ محصولاتِ ما' }
+  const categories: PageSpec = { slug: 'prices', title: 'نرخِ روز', menuLabel: 'نرخِ روز', blocks: ['hero', 'pricelist', 'cta', 'footer'], heroHeading: 'نرخِ روزِ مصالح', heroSub: 'قیمتِ به‌روزِ محصولاتِ ما' }
   const opportunities: PageSpec = { slug: 'opportunities', title: 'فرصت‌ها', menuLabel: 'فرصت‌ها', blocks: ['hero', 'stats', 'searchlist', 'cta', 'footer'], heroHeading: 'فرصت‌های سرمایه‌گذاری', heroSub: 'بازده و فرصت‌هایِ منتخبِ ملکی' }
   switch (profile) {
     case 'مشاور': return [about, listings, services, blog, contact]
@@ -1103,6 +1119,8 @@ function TemplateThumb({ tpl }: { tpl: typeof STARTER_TEMPLATES[0] }) {
         <div style={{ height: 10, width: '26%', background: '#fff', borderRadius: 5, marginTop: 4 }} />
       </div>
       case 'search': return <div key={i} style={{ padding: '9px 12px', background: '#fff' }}><div style={{ height: 11, background: '#f0f0f2', border: '1px solid #e4e4e7', borderRadius: 6 }} /></div>
+      case 'catalog': return <div key={i} style={{ padding: '9px 12px', background: '#fff', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 5 }}>{[0, 1, 2, 3, 4, 5].map(k => <div key={k}><div style={{ height: 20, background: `${v.primary}22`, borderRadius: 4, marginBottom: 3, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9 }}>🧱</div><div style={{ height: 3, width: '75%', background: '#dcdce0', borderRadius: 2, marginBottom: 2 }} /><div style={{ height: 3, width: '45%', background: v.primary, borderRadius: 2, opacity: .8 }} /></div>)}</div>
+      case 'pricelist': return <div key={i} style={{ padding: '9px 12px', background: '#faf9f7' }}>{[0, 1, 2, 3].map(k => <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderTop: k ? '1px solid #eee' : 'none' }}><div style={{ height: 3, width: '40%', background: '#d5d5da', borderRadius: 2 }} /><div style={{ height: 4, width: '22%', background: v.primary, borderRadius: 2, opacity: .8 }} /></div>)}</div>
       case 'listings': return <div key={i} style={{ padding: '9px 12px', background: '#fff', display: 'flex', gap: 6 }}>{[0, 1, 2].map(k => <div key={k} style={{ flex: 1 }}><div style={{ height: 24, background: '#e7e7ea', borderRadius: 4, marginBottom: 4 }} /><div style={{ height: 3, width: '80%', background: '#dcdce0', borderRadius: 2, marginBottom: 3 }} /><div style={{ height: 3, width: '55%', background: '#e6e6ea', borderRadius: 2 }} /></div>)}</div>
       case 'gallery': return <div key={i} style={{ padding: '9px 12px', background: '#fff', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 4 }}>{[0, 1, 2, 3].map(k => <div key={k} style={{ height: 22, background: '#e3e3e7', borderRadius: 3 }} />)}</div>
       case 'services': return <div key={i} style={{ padding: '9px 12px', background: '#faf9f7', display: 'flex', gap: 6 }}>{[0, 1, 2].map(k => <div key={k} style={{ flex: 1, padding: 7, background: '#fff', border: '1px solid #eee', borderRadius: 5, textAlign: 'center' }}><div style={{ width: 11, height: 11, borderRadius: 3, background: v.primary, margin: '0 auto 5px' }} /><div style={{ height: 3, width: '70%', background: '#ddd', borderRadius: 2, margin: '0 auto' }} /></div>)}</div>

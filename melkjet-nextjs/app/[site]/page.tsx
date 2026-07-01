@@ -4,6 +4,7 @@ import { getSite, getSitePage, type Site, type SitePage, type SiteBlock } from '
 import { listItems, listArticles, type Item } from '@/app/lib/scraper-store'
 import { getTeamMembers, type TeamMember } from '@/app/lib/team-members'
 import { listReviews } from '@/app/lib/reviews-store'
+import { shopProductsOf } from '@/app/lib/materials-store'
 import ListingsSlider from './ListingsSlider'
 import SiteListings, { type SiteListing } from './SiteListings'
 import ServicesSlider from './ServicesSlider'
@@ -718,8 +719,86 @@ function TeamBlock({ block, primary, ownerPhone }: { block: SiteBlock; primary: 
 }
 
 // Render one block. `ownerName` powers the real «آگهی‌های من» listings.
+// ── کاتالوگِ محصولاتِ مصالح (واقعی، از پنلِ فروشندهٔ همین سایت) ──
+function CatalogBlock({ block, primary, ownerPhone }: { block: SiteBlock; primary: string; ownerPhone?: string }) {
+  const props = p(block)
+  const data = ownerPhone ? shopProductsOf(ownerPhone) : null
+  const count = Math.max(3, Math.min(24, Number(props.count) || 12))
+  const products = (data?.products || []).slice(0, count)
+  const fa = (n: number) => n.toLocaleString('fa-IR')
+  const money = (t: number) => t >= 1e9 ? `${fa(Math.round(t / 1e8) / 10)} میلیارد` : t >= 1e6 ? `${fa(Math.round(t / 1e5) / 10)} میلیون` : fa(t)
+  return (
+    <section id="catalog" style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <SectionHeading primary={primary} center>{props.heading || 'محصولات ما'}</SectionHeading>
+        {products.length === 0 ? (
+          <div style={{ textAlign: 'center', color: MUTED, fontSize: 14, padding: 24 }}>محصولی برای نمایش ثبت نشده است.</div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(210px,1fr))', gap: 18, marginTop: 24 }}>
+            {products.map(pr => {
+              const price = Math.round(pr.price * (1 - (pr.discountPct || 0) / 100))
+              const img = pr.images?.[0]
+              const href = data?.slug ? `/forushgah/${data.slug}` : undefined
+              const Card: any = href ? 'a' : 'div'
+              return (
+                <Card key={pr.id} {...(href ? { href } : {})} style={{ background: SURFACE, border: '1px solid rgba(0,0,0,0.08)', borderRadius: 16, overflow: 'hidden', textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column', boxShadow: CARD_SHADOW }}>
+                  <div style={{ height: 150, background: img ? `center/cover no-repeat url(${img})` : `linear-gradient(135deg,${primary}22,${primary}05)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30 }}>{!img && '🧱'}</div>
+                  <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: INK, lineHeight: 1.6 }}>{pr.name}</div>
+                    {pr.brand && <div style={{ fontSize: 11.5, color: MUTED }}>{pr.brand}</div>}
+                    <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                      <span style={{ fontSize: 16, fontWeight: 800, color: primary }}>{money(price)}</span>
+                      <span style={{ fontSize: 11, color: MUTED }}>تومان/{pr.unit}</span>
+                    </div>
+                  </div>
+                </Card>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+// ── نرخِ روزِ محصولاتِ فروشنده (جدولِ قیمت) ──
+function PriceListBlock({ block, primary, ownerPhone }: { block: SiteBlock; primary: string; ownerPhone?: string }) {
+  const props = p(block)
+  const data = ownerPhone ? shopProductsOf(ownerPhone) : null
+  const rows = (data?.products || []).slice(0, 40)
+  const fa = (n: number) => n.toLocaleString('fa-IR')
+  return (
+    <section id="pricelist" style={{ background: SURFACE, padding: SECTION_PAD, direction: 'rtl' }}>
+      <div style={{ maxWidth: 900, margin: '0 auto' }}>
+        <SectionHeading primary={primary} center>{props.heading || 'نرخِ روزِ محصولات'}</SectionHeading>
+        {rows.length === 0 ? (
+          <div style={{ textAlign: 'center', color: MUTED, fontSize: 14, padding: 24 }}>قیمتی ثبت نشده است.</div>
+        ) : (
+          <div style={{ marginTop: 24, background: 'var(--mjs-bg)', borderRadius: 16, overflow: 'hidden', boxShadow: CARD_SHADOW }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', padding: '12px 18px', background: `${primary}12`, fontSize: 13, fontWeight: 800, color: INK }}>
+              <div>کالا</div><div>واحد</div><div style={{ textAlign: 'left' }}>قیمت (تومان)</div>
+            </div>
+            {rows.map((pr, i) => {
+              const price = Math.round(pr.price * (1 - (pr.discountPct || 0) / 100))
+              return (
+                <div key={pr.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', padding: '12px 18px', borderTop: '1px solid rgba(0,0,0,0.06)', fontSize: 13.5, alignItems: 'center' }}>
+                  <div style={{ fontWeight: 700, color: INK }}>{pr.name}{pr.brand && <span style={{ color: MUTED, fontWeight: 400 }}> · {pr.brand}</span>}</div>
+                  <div style={{ color: MUTED }}>{pr.unit}</div>
+                  <div style={{ textAlign: 'left', fontWeight: 800, color: primary }}>{fa(price)}</div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
 function renderBlock(block: SiteBlock, primary: string, ownerName?: string, ownerPhone?: string, slug?: string) {
   switch (block.type) {
+    case 'catalog': return <CatalogBlock key={block.id} block={block} primary={primary} ownerPhone={ownerPhone} />
+    case 'pricelist': return <PriceListBlock key={block.id} block={block} primary={primary} ownerPhone={ownerPhone} />
     case 'hero': return <HeroBlock key={block.id} block={block} primary={primary} />
     case 'search': return <SearchBlock key={block.id} block={block} primary={primary} />
     case 'listings': return <ListingsBlock key={block.id} block={block} primary={primary} ownerName={ownerName} ownerPhone={ownerPhone} />
