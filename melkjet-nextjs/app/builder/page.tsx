@@ -11,6 +11,7 @@ import BusinessProfileForm from '@/app/components/BusinessProfileForm'
 import BuilderPublicView from './BuilderPublicView'
 import BuilderContactsView from './BuilderContactsView'
 import BuilderProjectsView from './BuilderProjectsView'
+import MaterialsSupplyView from './MaterialsSupplyView'
 import SupportPanel from '@/app/components/SupportPanel'
 
 // ── Types (mirror app/lib/builder-store.ts API shape) ──
@@ -32,7 +33,7 @@ interface Project {
 }
 interface ProjectSummary { id: string; name: string; location: string }
 
-type View = 'overview' | 'projects' | 'assistant' | 'articles' | 'units' | 'sales' | 'investors' | 'reports' | 'plans' | 'profile' | 'public' | 'contacts' | 'support'
+type View = 'overview' | 'projects' | 'assistant' | 'articles' | 'units' | 'sales' | 'investors' | 'reports' | 'plans' | 'profile' | 'public' | 'contacts' | 'materials' | 'support'
 
 // ── Status visual maps ──
 const STATUS_COLOR: Record<UnitStatus, string> = {
@@ -88,6 +89,7 @@ const VIEW_TITLES: Record<View, string> = {
   profile: 'پروفایل',
   public: 'پروفایلِ عمومی',
   contacts: 'گزارشِ تماس‌ها',
+  materials: 'تأمینِ مصالح',
   support: 'پشتیبانی',
 }
 
@@ -101,6 +103,7 @@ const NAV_ITEMS: { id: View; label: string; icon: string }[] = [
   { id: 'reports', label: 'گزارش‌ها', icon: '◳' },
   { id: 'public', label: 'پروفایلِ عمومی', icon: '🌐' },
   { id: 'contacts', label: 'گزارشِ تماس‌ها', icon: '📞' },
+  { id: 'materials', label: 'تأمینِ مصالح', icon: '🧱' },
   { id: 'plans', label: 'پلن‌ها و اشتراک', icon: '👑' },
   { id: 'profile', label: 'پروفایل', icon: '🪪' },
   { id: 'support', label: 'پشتیبانی', icon: '🛟' },
@@ -491,6 +494,8 @@ export default function BuilderPage() {
             <BuilderPublicView />
           ) : view === 'contacts' ? (
             <BuilderContactsView />
+          ) : view === 'materials' ? (
+            <MaterialsSupplyView />
           ) : view === 'support' ? (
             <SupportPanel panel="builder" />
           ) : !project ? (

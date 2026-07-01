@@ -476,6 +476,29 @@ export default function MaterialsPage() {
 // ════════════════════════════════════════════════════════
 //  DASHBOARD
 // ════════════════════════════════════════════════════════
+// بنرِ ویترینِ عمومی — لینک + کپیِ آدرس برای اشتراک‌گذاری.
+function StorefrontBanner({ slug }: { slug: string }) {
+  const [copied, setCopied] = useState(false)
+  const path = `/forushgah/${slug}`
+  const copy = () => {
+    const url = (typeof window !== 'undefined' ? window.location.origin : '') + path
+    navigator.clipboard?.writeText(url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) }).catch(() => {})
+  }
+  return (
+    <div style={{ ...card, padding: 16, background: 'linear-gradient(120deg,var(--goldDim),transparent)', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+      <div style={{ fontSize: 26 }}>🏪</div>
+      <div style={{ flex: 1, minWidth: 200 }}>
+        <div style={{ fontSize: 14, fontWeight: 800 }}>ویترینِ عمومیِ فروشگاهِ شما فعال است</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3, direction: 'ltr', textAlign: 'right' }}>melkjet.com{path}</div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <a href={path} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: '#16140f', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', textDecoration: 'none', borderRadius: 9, padding: '8px 16px', fontWeight: 700, fontFamily: FONT }}>مشاهدهٔ ویترین ↗</a>
+        <button onClick={copy} style={{ fontSize: 12.5, color: 'var(--gold)', background: 'transparent', border: '1px solid var(--gold)', borderRadius: 9, padding: '8px 14px', cursor: 'pointer', fontFamily: FONT }}>{copied ? '✓ کپی شد' : '🔗 کپیِ لینک'}</button>
+      </div>
+    </div>
+  )
+}
+
 function DashboardView({ stats, post, onAll }: {
   stats: Stats; post: (b: Record<string, unknown>) => Promise<boolean>; onAll: () => void
 }) {
@@ -499,6 +522,8 @@ function DashboardView({ stats, post, onAll }: {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* Storefront banner */}
+      {stats.slug && <StorefrontBanner slug={stats.slug} />}
       {/* KPI cards */}
       <div className="mjm-grid4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
         {kpis.map(c => (
