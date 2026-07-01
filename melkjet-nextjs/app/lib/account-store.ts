@@ -12,6 +12,8 @@ export interface Account {
   identityRaw?: Record<string, unknown>
   // تعلیقِ پنل به‌خاطرِ پروفایلِ ناقص
   suspended?: boolean; profileWarnAt?: number
+  // دسترسی‌های ویژه که سوپرادمین می‌دهد (مثلِ 'catalog' برای مدیریتِ کاتالوگ و اسکرپِ هایپرساز)
+  caps?: string[]
 }
 type Idy = { nationalId: string; firstName?: string; lastName?: string; gender?: string; fatherName?: string; birthDate?: string; birthPlace?: string; idNumber?: string; idSerial?: string; birthPlaceCode?: string; fullName?: string; issuancePlace?: string; issuancePlaceCode?: string; officeCode?: string; raw?: Record<string, unknown> }
 
@@ -29,6 +31,18 @@ function load(): DB { if (existsSync(FILE)) { try { return JSON.parse(readFileSy
 function save(db: DB) { writeFileSync(FILE, JSON.stringify(db, null, 2), 'utf-8') }
 
 export function getAccount(phone: string): Account | null { return load()[phone] || null }
+
+// دسترسی‌های ویژه (caps) که سوپرادمین به کاربر می‌دهد.
+export function hasCap(phone: string, cap: string): boolean {
+  const a = load()[phone]
+  return !!a?.caps?.includes(cap)
+}
+export function setCap(phone: string, cap: string, on: boolean): Account | null {
+  const db = load(); const a = db[phone]; if (!a) return null
+  const caps = new Set(a.caps || [])
+  if (on) caps.add(cap); else caps.delete(cap)
+  a.caps = [...caps]; save(db); return a
+}
 
 // اولین ورود → حساب ساخته می‌شود (onboarded:false تا نقش/نام تکمیل شود)
 export function ensureAccount(phone: string): { account: Account; isNew: boolean } {

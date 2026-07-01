@@ -23,7 +23,7 @@ interface Product {
   id: string; name: string; category: string; price: number; unit: string
   stock: number; threshold: number; sold: number; active: boolean; createdAt: number
   brand?: string; origin?: string; description?: string; images?: string[]; specs?: ProductSpec[]
-  tags?: string[]; minOrder?: number; discountPct?: number; deliveryDays?: number; warranty?: string; featured?: boolean
+  tags?: string[]; minOrder?: number; discountPct?: number; deliveryDays?: number; warranty?: string; featured?: boolean; catalogId?: string
 }
 interface Order { id: string; customer: string; items: number; amount: number; status: OrderStatus; createdAt: number }
 interface Inquiry { id: string; customer: string; product: string; qty: string; note?: string; status: InquiryStatus; reply?: string; createdAt: number }
@@ -730,6 +730,28 @@ function ProductEditor({ product, post, onClose }: { product: Product | null; po
   const [aiErr, setAiErr] = useState('')
   const set = (k: string, v: any) => setF(s => ({ ...s, [k]: v }))
 
+  // کاتالوگِ مرجع — مصالح‌فروش از این لیست انتخاب می‌کند (اگر کالایی موجود باشد).
+  const [catalog, setCatalog] = useState<{ categories: { id: string; name: string }[]; products: any[] } | null>(null)
+  const [catalogId, setCatalogId] = useState(product?.catalogId || '')
+  const [picking, setPicking] = useState(false)
+  const [pickSearch, setPickSearch] = useState('')
+  const [pickCat, setPickCat] = useState('')
+  const locked = !!catalogId
+  useEffect(() => {
+    if (product) return   // ویرایشِ محصولِ موجود: پیکر لازم نیست
+    fetch('/api/catalog').then(r => r.ok ? r.json() : null).then(d => {
+      if (d?.ok) { setCatalog({ categories: d.categories || [], products: d.products || [] }); if ((d.products || []).length) setPicking(true) }
+    }).catch(() => {})
+  }, [product])
+  const pickProduct = (cp: any) => {
+    setCatalogId(cp.id)
+    setF(s => ({ ...s, name: cp.name || '', category: (catalog?.categories.find(c => c.id === cp.categoryId)?.name) || s.category, unit: cp.unit || s.unit, brand: cp.brand || '', description: cp.description || '' }))
+    if (cp.image) setImages(im => im.length ? im : [cp.image])
+    if (Array.isArray(cp.specs) && cp.specs.length) setSpecs(cp.specs)
+    if (Array.isArray(cp.tags) && cp.tags.length) setTags(cp.tags.join('، '))
+    setPicking(false)
+  }
+
   const aiCall = async (action: 'describe' | 'specs' | 'tags' | 'price') => {
     if (!f.name.trim()) { setAiErr('ابتدا نامِ محصول را وارد کنید'); return }
     setAi({ what: action }); setAiErr('')
@@ -758,6 +780,7 @@ function ProductEditor({ product, post, onClose }: { product: Product | null; po
       tags: tags.split(/[،,\n]+/).map(t => t.trim()).filter(Boolean),
     }
     if (f.threshold.trim() !== '') patch.threshold = Number(f.threshold) || 0
+    if (catalogId) patch.catalogId = catalogId
     const ok = product
       ? await post({ action: 'updateProduct', id: product.id, patch })
       : await post({ action: 'addProduct', ...patch })
@@ -770,6 +793,43 @@ function ProductEditor({ product, post, onClose }: { product: Product | null; po
   )
   const lab: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', fontWeight: 600, marginBottom: 5, display: 'block' }
 
+  // ── مرحلهٔ انتخاب از کاتالوگِ مرجع (فقط برای محصولِ جدید، وقتی کاتالوگ کالا دارد) ──
+  if (picking && catalog) {
+    const q = pickSearch.trim()
+    const list = catalog.products.filter((p: any) => (!pickCat || p.categoryId === pickCat) && (!q || (p.name || '').includes(q) || (p.brand || '').includes(q)))
+    return (
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', backdropFilter: 'blur(3px)' }}>
+        <div onClick={e => e.stopPropagation()} style={{ ...card, maxWidth: 720, width: '100%', margin: '20px 0', padding: 22 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <div style={{ fontSize: 16, fontWeight: 800 }}>انتخابِ کالا از کاتالوگ</div>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 24, cursor: 'pointer', lineHeight: 1 }}>×</button>
+          </div>
+          <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 14 }}>برای یکدستیِ نام و دسته، کالا را از کاتالوگِ مرجع انتخاب کنید؛ سپس قیمت و موجودیِ خودتان را وارد می‌کنید.</div>
+          <input placeholder="جستجوی کالا…" value={pickSearch} onChange={e => setPickSearch(e.target.value)} style={{ ...inputStyle, marginBottom: 10 }} />
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+            <button onClick={() => setPickCat('')} style={pickChip(pickCat === '')}>همه</button>
+            {catalog.categories.map(c => <button key={c.id} onClick={() => setPickCat(c.id)} style={pickChip(pickCat === c.id)}>{c.name}</button>)}
+          </div>
+          {list.length === 0 ? (
+            <div style={{ padding: 30, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>کالایی یافت نشد.</div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 10, maxHeight: 440, overflowY: 'auto' }}>
+              {list.map((cp: any) => (
+                <button key={cp.id} onClick={() => pickProduct(cp)} style={{ ...card, padding: 0, overflow: 'hidden', textAlign: 'right', cursor: 'pointer', display: 'flex', flexDirection: 'column', fontFamily: FONT }}>
+                  <div style={{ height: 100, background: cp.image ? `center/cover no-repeat url(${cp.image})` : 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>{!cp.image && '🧱'}</div>
+                  <div style={{ padding: 10 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.5 }}>{cp.name}</div>
+                    {cp.brand && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>{cp.brand}</div>}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', backdropFilter: 'blur(3px)' }}>
       <div onClick={e => e.stopPropagation()} style={{ ...card, maxWidth: 780, width: '100%', margin: '20px 0', padding: 22 }}>
@@ -777,6 +837,14 @@ function ProductEditor({ product, post, onClose }: { product: Product | null; po
           <div style={{ fontSize: 16, fontWeight: 800 }}>{product ? 'ویرایشِ محصول' : 'محصولِ جدید'}</div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 24, cursor: 'pointer', lineHeight: 1 }}>×</button>
         </div>
+
+        {locked && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--goldDim)', border: '1px solid var(--gold)', borderRadius: 10, padding: '10px 14px', marginBottom: 16 }}>
+            <span style={{ fontSize: 18 }}>🧱</span>
+            <div style={{ flex: 1, fontSize: 12.5 }}>کالا از کاتالوگِ مرجع انتخاب شده: <b>{f.name}</b>. نام و مشخصاتِ پایه قفل است؛ فقط قیمت/موجودی/تخفیف را تنظیم کنید.</div>
+            {!product && catalog && catalog.products.length > 0 && <button onClick={() => setPicking(true)} style={{ fontSize: 11.5, color: 'var(--gold)', border: '1px solid var(--gold)', background: 'transparent', borderRadius: 8, padding: '5px 10px', cursor: 'pointer', fontFamily: FONT, whiteSpace: 'nowrap' }}>تغییرِ کالا</button>}
+          </div>
+        )}
 
         {/* گالریِ تصاویر */}
         <label style={lab}>تصاویرِ محصول (تا ۶ عدد)</label>
@@ -789,10 +857,10 @@ function ProductEditor({ product, post, onClose }: { product: Product | null; po
 
         {/* فیلدهای اصلی */}
         <div className="mjm-form" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-          <div style={{ gridColumn: '1 / -1' }}><label style={lab}>نامِ محصول *</label><input value={f.name} onChange={e => set('name', e.target.value)} placeholder="مثلاً میلگرد آجدار ۱۶ ذوب‌آهن" style={inputStyle} /></div>
-          <div><label style={lab}>دسته</label><input value={f.category} onChange={e => set('category', e.target.value)} list="mjm-cats" style={inputStyle} /><datalist id="mjm-cats">{CATEGORY_OPTIONS.map(c => <option key={c} value={c} />)}</datalist></div>
-          <div><label style={lab}>واحدِ فروش</label><select value={f.unit} onChange={e => set('unit', e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>{UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}</select></div>
-          <div><label style={lab}>برند / تولیدکننده</label><input value={f.brand} onChange={e => set('brand', e.target.value)} style={inputStyle} /></div>
+          <div style={{ gridColumn: '1 / -1' }}><label style={lab}>نامِ محصول *</label><input value={f.name} onChange={e => set('name', e.target.value)} readOnly={locked} placeholder="مثلاً میلگرد آجدار ۱۶ ذوب‌آهن" style={{ ...inputStyle, ...(locked ? lockedStyle : {}) }} /></div>
+          <div><label style={lab}>دسته</label><input value={f.category} onChange={e => set('category', e.target.value)} readOnly={locked} list="mjm-cats" style={{ ...inputStyle, ...(locked ? lockedStyle : {}) }} /><datalist id="mjm-cats">{CATEGORY_OPTIONS.map(c => <option key={c} value={c} />)}</datalist></div>
+          <div><label style={lab}>واحدِ فروش</label><select value={f.unit} onChange={e => set('unit', e.target.value)} disabled={locked} style={{ ...inputStyle, cursor: 'pointer', ...(locked ? lockedStyle : {}) }}>{UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}</select></div>
+          <div><label style={lab}>برند / تولیدکننده</label><input value={f.brand} onChange={e => set('brand', e.target.value)} readOnly={locked} style={{ ...inputStyle, ...(locked ? lockedStyle : {}) }} /></div>
           <div><label style={lab}>کشور/محلِ ساخت</label><input value={f.origin} onChange={e => set('origin', e.target.value)} style={inputStyle} /></div>
           <div><label style={{ ...lab, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span>قیمت (تومان/{f.unit})</span>{aiBtn('price', 'پیشنهادِ قیمت')}</label><NumberInput value={f.price} onChange={v => set('price', v)} style={inputStyle} /></div>
           <div><label style={lab}>درصدِ تخفیف</label><NumberInput value={f.discountPct} onChange={v => set('discountPct', v)} placeholder="0" style={inputStyle} /></div>
@@ -804,11 +872,11 @@ function ProductEditor({ product, post, onClose }: { product: Product | null; po
         </div>
 
         {/* توضیحات + AI */}
-        <label style={{ ...lab, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span>توضیحاتِ محصول</span>{aiBtn('describe', 'نوشتن با AI')}</label>
-        <textarea value={f.description} onChange={e => set('description', e.target.value)} rows={4} placeholder="کاربرد، مزیت‌ها، کیفیت و مناسب برای چه پروژه‌هایی…" style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.9, marginBottom: 14 }} />
+        <label style={{ ...lab, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span>توضیحاتِ محصول</span>{!locked && aiBtn('describe', 'نوشتن با AI')}</label>
+        <textarea value={f.description} onChange={e => set('description', e.target.value)} readOnly={locked} rows={4} placeholder="کاربرد، مزیت‌ها، کیفیت و مناسب برای چه پروژه‌هایی…" style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.9, marginBottom: 14, ...(locked ? lockedStyle : {}) }} />
 
         {/* مشخصاتِ فنی + AI */}
-        <label style={{ ...lab, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span>مشخصاتِ فنی</span>{aiBtn('specs', 'پیشنهادِ مشخصات')}</label>
+        <label style={{ ...lab, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span>مشخصاتِ فنی</span>{!locked && aiBtn('specs', 'پیشنهادِ مشخصات')}</label>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
           {specs.map((sp, i) => (
             <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr auto', gap: 8 }}>
@@ -845,6 +913,10 @@ const actionBtn: React.CSSProperties = {
   padding: '5px 12px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)',
   color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap',
 }
+function pickChip(active: boolean): React.CSSProperties {
+  return { padding: '6px 13px', borderRadius: 999, border: `1px solid ${active ? 'var(--gold)' : 'var(--line2)'}`, background: active ? 'var(--goldDim)' : 'transparent', color: active ? 'var(--gold)' : 'var(--muted)', fontSize: 12, fontWeight: active ? 700 : 400, cursor: 'pointer', fontFamily: FONT }
+}
+const lockedStyle: React.CSSProperties = { opacity: 0.7, cursor: 'not-allowed', background: 'var(--bg2)' }
 
 // ════════════════════════════════════════════════════════
 //  ORDERS

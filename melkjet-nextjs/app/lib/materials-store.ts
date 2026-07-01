@@ -3,6 +3,7 @@ import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { getAccount } from './account-store'
 import { getProfile } from './profile-store'
+import { getProduct as getCatalogProduct, listCategories as listCatalogCategories } from './catalog-store'
 
 // Per-owner (per-profile) store for the «بازار مصالح» seller dashboard.
 // Mirrors the file-based persistence style of builder-store.ts / crm-store.ts.
@@ -37,6 +38,7 @@ export interface Product {
   deliveryDays?: number   // زمانِ تحویل (روز)
   warranty?: string       // گارانتی/ضمانت
   featured?: boolean      // نمایشِ ویژه در ویترین
+  catalogId?: string      // ارجاع به کالای مرجعِ کاتالوگ (برای یکدستیِ نام/دسته)
 }
 
 function cleanProductPatch(input: any): Partial<Product> {
@@ -351,18 +353,38 @@ export function addProduct(owner: string, input: any): Product {
   let created!: Product
   mutate(owner, s => {
     const c = cleanProductPatch(input)
+    // اگر از کاتالوگِ مرجع انتخاب شده، مشخصاتِ پایه (نام/دسته/برند/مشخصات/توضیح/عکس) از همان
+    // کالای مرجع می‌آید تا نام و دسته یکدست بماند؛ فروشنده فقط قیمت/موجودی/تخفیف را می‌دهد.
+    let catalogId: string | undefined
+    let base: Partial<Product> = {}
+    if (input.catalogId) {
+      const cp = getCatalogProduct(String(input.catalogId))
+      if (cp) {
+        catalogId = cp.id
+        base = {
+          name: cp.name, category: catNameOf(cp.categoryId), unit: cp.unit || c.unit || 'عدد',
+          brand: cp.brand, description: cp.description, specs: cp.specs, tags: cp.tags,
+          images: (c.images && c.images.length) ? c.images : (cp.image ? [cp.image] : []),
+        }
+      }
+    }
     const stock = c.stock ?? 0
     created = {
-      id: id('p_'), name: c.name || '', category: c.category || 'سایر', price: c.price ?? 0,
-      unit: c.unit || 'عدد', stock, threshold: c.threshold ?? Math.max(1, Math.round(stock * 0.15)),
+      id: id('p_'),
+      name: base.name || c.name || '', category: base.category || c.category || 'سایر', price: c.price ?? 0,
+      unit: base.unit || c.unit || 'عدد', stock, threshold: c.threshold ?? Math.max(1, Math.round(stock * 0.15)),
       sold: 0, active: c.active ?? true, createdAt: Date.now(),
-      brand: c.brand, origin: c.origin, description: c.description, images: c.images, specs: c.specs,
-      tags: c.tags, minOrder: c.minOrder, discountPct: c.discountPct, deliveryDays: c.deliveryDays,
-      warranty: c.warranty, featured: c.featured,
+      brand: base.brand ?? c.brand, origin: c.origin, description: base.description ?? c.description,
+      images: base.images ?? c.images, specs: base.specs ?? c.specs, tags: base.tags ?? c.tags,
+      minOrder: c.minOrder, discountPct: c.discountPct, deliveryDays: c.deliveryDays,
+      warranty: c.warranty, featured: c.featured, catalogId,
     }
     s.products.unshift(created)
   })
   return created
+}
+function catNameOf(categoryId: string): string {
+  return listCatalogCategories().find(c => c.id === categoryId)?.name || 'سایر'
 }
 export function updateProduct(owner: string, productId: string, patch: any): Product | null {
   let result: Product | null = null

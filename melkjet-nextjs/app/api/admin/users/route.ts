@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listAccounts, adminUpdate, deleteAccount, bulkUpdate, bulkDelete, createAccount, setSuspended } from '@/app/lib/account-store'
+import { listAccounts, adminUpdate, deleteAccount, bulkUpdate, bulkDelete, createAccount, setSuspended, setCap } from '@/app/lib/account-store'
 import { saveProfile, getProfile, completeness } from '@/app/lib/profile-store'
 import { listRoles, dashForRoleId } from '@/app/lib/role-store'
 import { listPlans } from '@/app/lib/plan-store'
@@ -50,6 +50,8 @@ export async function PATCH(req: NextRequest) {
   if (Array.isArray(b.phones)) { bulkUpdate(b.phones, b.patch || {}); return NextResponse.json({ ok: true }) }
   if (!b.phone) return NextResponse.json({ error: 'شماره الزامی است' }, { status: 400 })
   if (b.suspend !== undefined) { setSuspended(String(b.phone), !!b.suspend); return NextResponse.json({ ok: true }) }
+  // دادن/گرفتنِ دسترسیِ ویژه (مثلِ 'catalog' برای مدیریتِ کاتالوگ و اسکرپِ هایپرساز)
+  if (b.cap) { const a = setCap(String(b.phone), String(b.cap), !!b.on); if (!a) return NextResponse.json({ error: 'کاربر یافت نشد' }, { status: 404 }); return NextResponse.json({ ok: true, user: a }) }
   const a = adminUpdate(b.phone, b.patch || {})
   if (!a) return NextResponse.json({ error: 'کاربر یافت نشد' }, { status: 404 })
   return NextResponse.json({ ok: true, user: a })

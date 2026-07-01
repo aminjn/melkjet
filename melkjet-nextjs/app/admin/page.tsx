@@ -8,10 +8,11 @@ import PlanStudio from '@/app/components/PlanStudio'
 import ImageUpload from '@/app/components/ImageUpload'
 import ArticleEditor from '@/app/components/ArticleEditor'
 import AdminSupportView from './AdminSupportView'
+import CatalogAdminView from './CatalogAdminView'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 type View =
-  | 'overview' | 'scraper' | 'persiansaze' | 'listings' | 'products' | 'geo' | 'moderation' | 'content' | 'studio' | 'articles' | 'categories' | 'crm' | 'api'
+  | 'overview' | 'scraper' | 'persiansaze' | 'listings' | 'products' | 'catalog' | 'geo' | 'moderation' | 'content' | 'studio' | 'articles' | 'categories' | 'crm' | 'api'
   | 'reports' | 'plans' | 'promos' | 'discounts' | 'ads' | 'users' | 'profiles' | 'roles' | 'connections'
   | 'tracker' | 'sms' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags' | 'support'
 
@@ -32,6 +33,7 @@ const sections: NavSection[] = [
     items: [
       { id: 'listings',    icon: '▤',  label: 'مدیریت آگهی‌ها' },
       { id: 'products',    icon: '◰',  label: 'مدیریت محصولات' },
+      { id: 'catalog',     icon: '🧱', label: 'کاتالوگِ مصالح',   badge: 'NEW', badgeColor: '#c9a84c' },
       { id: 'moderation',  icon: '✓',  label: 'تأیید آگهی AI',     badge: '32',    badgeColor: '#e7674a' },
       { id: 'scraper',     icon: '⛏',  label: 'موتور اسکرپی',     badge: 'زنده',  badgeColor: '#5fd98a' },
       { id: 'persiansaze', icon: '🏗', label: 'سازنده‌ها (پرشین سازه)', badge: 'NEW', badgeColor: '#c9a84c' },
@@ -91,6 +93,7 @@ const viewTitles: Record<View, string> = {
   support:    'پشتیبانی — تیکت‌ها',
   overview:   'نمای کلی سیستم',
   scraper:    'موتور اسکرپی هوشمند',
+  catalog:    'کاتالوگِ مرجعِ مصالح',
   persiansaze: 'سازنده‌ها (پرشین سازه)',
   listings:   'مدیریت آگهی‌ها و محتوا',
   products:   'مدیریت محصولات فروشگاه',
@@ -3407,6 +3410,12 @@ function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete, onSuspend,
               {user.suspended
                 ? <button onClick={() => onSuspend(user.phone, false)} style={{ background: 'rgba(95,217,138,.12)', border: '1px solid rgba(95,217,138,.45)', color: '#5fd98a', borderRadius: 10, padding: '9px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 700 }}>✓ رفعِ تعلیق</button>
                 : <button onClick={() => { if (confirm(`پنلِ ${user.name || user.phone} معلق شود؟`)) onSuspend(user.phone, true) }} style={{ background: 'transparent', border: '1px solid rgba(231,137,74,.45)', color: '#e7894a', borderRadius: 10, padding: '9px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>⛔ تعلیقِ پنل</button>}
+              {(() => { const has = Array.isArray(user.caps) && user.caps.includes('catalog'); return (
+                <button onClick={async () => { const on = !has; await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: user.phone, cap: 'catalog', on }) }); onAccountUpdate({ phone: user.phone, caps: on ? [...(user.caps || []), 'catalog'] : (user.caps || []).filter((c: string) => c !== 'catalog') }) }}
+                  style={{ background: has ? 'rgba(95,217,138,.12)' : 'transparent', border: `1px solid ${has ? 'rgba(95,217,138,.45)' : 'var(--gold)'}`, color: has ? '#5fd98a' : 'var(--gold)', borderRadius: 10, padding: '9px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: has ? 700 : 400 }}>
+                  🧱 {has ? 'دسترسیِ کاتالوگ: فعال — لغو' : 'دادنِ دسترسیِ کاتالوگ/اسکرپ'}
+                </button>
+              ) })()}
               <button onClick={() => { onDelete(user.phone); onClose() }} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.4)', color: '#e7674a', borderRadius: 10, padding: '9px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>حذفِ کاربر</button>
               {saved && <span style={{ fontSize: 12.5, color: '#5fd98a' }}>✓ ذخیره شد</span>}
             </div>
@@ -4598,6 +4607,7 @@ export default function SuperAdminPage() {
       case 'support':    return <AdminSupportView />
       case 'listings':   return <ListingsView />
       case 'products':   return <ProductsView />
+      case 'catalog':    return <CatalogAdminView />
       case 'categories': return <CategoriesView />
       case 'crm':        return <CrmAdminView />
       case 'connections': return <ConnectionsView />

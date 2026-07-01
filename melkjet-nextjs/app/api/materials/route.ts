@@ -29,8 +29,10 @@ export async function POST(req: NextRequest) {
 
   switch (action) {
     case 'addProduct': {
-      if (!b.name || !b.category || !b.unit) return NextResponse.json({ error: 'نام، دسته و واحد الزامی است' }, { status: 400 })
-      return NextResponse.json({ ok: true, product: addProduct(owner, { name: String(b.name), category: String(b.category), price: Number(b.price) || 0, unit: String(b.unit), stock: Number(b.stock) || 0, threshold: b.threshold != null ? Number(b.threshold) : undefined }) })
+      // یا از کاتالوگِ مرجع انتخاب شده (catalogId) یا دستی با نام. بقیهٔ فیلدها در store پاک‌سازی می‌شوند.
+      if (!b.catalogId && !b.name) return NextResponse.json({ error: 'کالا را از کاتالوگ انتخاب کنید یا نام را وارد کنید' }, { status: 400 })
+      const { action: _a, ...fields } = b
+      return NextResponse.json({ ok: true, product: addProduct(owner, fields) })
     }
     case 'updateProduct': {
       if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })

@@ -93,3 +93,6 @@ next-env.d.ts
 .contact-log-data.json
 .ticket-data.json
 .advisor-divar-jobs.json
+
+.catalog-data.json
+.hypersaz-job.json
