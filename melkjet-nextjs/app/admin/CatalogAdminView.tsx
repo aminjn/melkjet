@@ -266,6 +266,9 @@ function ScrapePanel({ onClose, onDone }: { onClose: () => void; onDone: () => v
   const [report, setReport] = useState<{ platform: string; probes: Probe[]; recommend: string; smUrl?: string; sitemapType?: string; sitemapLocs?: string[]; subSample?: string[] } | null>(null)
   const [testing, setTesting] = useState(false)
   const [savedMsg, setSavedMsg] = useState('')
+  const [inspectUrl, setInspectUrl] = useState('')
+  const [inspectRes, setInspectRes] = useState<any>(null)
+  const [inspecting, setInspecting] = useState(false)
 
   const poll = useCallback(() => {
     fetch('/api/admin/catalog/scrape').then(r => r.ok ? r.json() : null).then(d => { if (d) { setJob(d.job); if (d.config) setCfg((c: any) => ({ ...c, ...d.config })) } }).catch(() => {})
@@ -347,6 +350,20 @@ function ScrapePanel({ onClose, onDone }: { onClose: () => void; onDone: () => v
         {running
           ? <button onClick={stop} style={{ ...gold, flex: 1, background: '#e7674a', color: '#fff' }}>توقف</button>
           : <button onClick={start} style={{ ...gold, flex: 1 }}>شروعِ اسکرپ</button>}
+      </div>
+
+      {/* بررسیِ یک صفحهٔ محصول — برای بهبودِ استخراجِ عکس/مشخصات */}
+      <div style={{ marginTop: 14, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>بررسیِ یک صفحهٔ محصول (برای عیب‌یابیِ استخراج):</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input value={inspectUrl} onChange={e => setInspectUrl(e.target.value)} placeholder="آدرسِ یک صفحهٔ محصولِ هایپرساز" dir="ltr" style={{ ...inp, flex: 1 }} />
+          <button onClick={async () => { setInspecting(true); setInspectRes(null); const d = await act({ action: 'inspect', url: inspectUrl }); setInspectRes(d?.inspect || { error: d?.error }); setInspecting(false) }} disabled={inspecting || !inspectUrl.trim()} style={ghost}>{inspecting ? '…' : 'بررسی'}</button>
+        </div>
+        {inspectRes && (
+          <div style={{ marginTop: 8, background: 'var(--bg)', borderRadius: 8, padding: 10, fontSize: 11, direction: 'ltr', textAlign: 'left', maxHeight: 260, overflowY: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: 'var(--muted)', fontFamily: 'monospace' }}>
+            {JSON.stringify(inspectRes, null, 2)}
+          </div>
+        )}
       </div>
       <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 10, lineHeight: 1.8 }}>
         ابتدا «تستِ اتصال» را بزنید تا پلتفرمِ سایت مشخص شود؛ سپس روشِ پیشنهادی را انتخاب و «شروعِ اسکرپ» را بزنید. اسکرپ در پس‌زمینه اجرا می‌شود و می‌توانید صفحه را ببندید.

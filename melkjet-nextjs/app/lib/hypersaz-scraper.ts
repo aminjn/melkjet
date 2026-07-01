@@ -254,10 +254,33 @@ function htmlName(html: string): string {
   if (t) return stripHtml(t[1]).split(/[|–—\-]/)[0].trim()
   return ''
 }
+const BAD_IMG = /logo|icon|placeholder|sprite|banner|no-?image|default|avatar|blank/i
 function firstImg(html: string, base: string): string {
-  const og = ogImage(html); if (og) return abs(base, og)
-  const m = html.match(/<img[^>]+src=["']([^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/i)
-  return m ? abs(base, m[1]) : ''
+  // عکسِ واقعیِ محصول را ترجیح بده؛ لوگو/آیکون/بنر را رد کن. (og:image در هایپرساز لوگوست.)
+  const imgs = [...html.matchAll(/<img[^>]+>/gi)].map(t => t[0])
+  for (const tag of imgs) {
+    const src = (tag.match(/\bsrc=["']([^"']+)["']/i) || tag.match(/\bdata-src=["']([^"']+)["']/i))?.[1]
+    if (!src || !/\.(jpg|jpeg|png|webp)/i.test(src)) continue
+    if (BAD_IMG.test(src) || BAD_IMG.test(tag)) continue
+    return abs(base, src)
+  }
+  const og = ogImage(html)
+  if (og && !BAD_IMG.test(og)) return abs(base, og)
+  return ''
+}
+// جدولِ مشخصاتِ فنی: هر ردیفِ دوستونیِ <tr><td>عنوان</td><td>مقدار</td></tr> (یا th/dt-dd).
+function tableSpecs(html: string): CatalogSpec[] {
+  const out: CatalogSpec[] = []
+  const seen = new Set<string>()
+  const add = (k: string, v: string) => { k = stripHtml(k); v = stripHtml(v); if (k && v && k.length <= 40 && v.length <= 200 && !seen.has(k)) { seen.add(k); out.push({ key: k, value: v }) } }
+  for (const tr of html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)) {
+    const cells = [...tr[1].matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)].map(c => c[1])
+    if (cells.length === 2) add(cells[0], cells[1])
+  }
+  // الگوی dt/dd
+  const dts = [...html.matchAll(/<dt[^>]*>([\s\S]*?)<\/dt>\s*<dd[^>]*>([\s\S]*?)<\/dd>/gi)]
+  for (const d of dts) add(d[1], d[2])
+  return out.slice(0, 30)
 }
 function ogMeta(html: string, prop: string): string {
   const m = html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']+)["']`, 'i'))
@@ -292,14 +315,23 @@ async function runSitemap(cfg: ScraperConfig) {
           const name = stripHtml(String(ld?.name || '')) || htmlName(r.text)
           if (name && name.length > 1) {
             hits++
+            // عکس: اول عکسِ واقعیِ محصول از HTML (لوگو رد شود)، بعد JSON-LD.
             const ldImg = ld ? (Array.isArray(ld.image) ? ld.image[0] : ld.image) : ''
-            const image = (typeof ldImg === 'object' ? ldImg?.url : ldImg) || firstImg(r.text, base)
+            const ldImgUrl = (typeof ldImg === 'object' ? ldImg?.url : ldImg) || ''
+            const htmlImg = firstImg(r.text, base)
+            const image = htmlImg || (ldImgUrl && !BAD_IMG.test(String(ldImgUrl)) ? abs(base, String(ldImgUrl)) : '')
+            // مشخصاتِ فنی: جدولِ ویژگی‌های صفحه + هر چیزی از JSON-LD.
+            const specs = tableSpecs(r.text)
+            // برند از مشخصات (تولیدکننده/برند/مبدا) یا JSON-LD.
+            const brandSpec = specs.find(s => /تولید\s*کننده|^برند|مبدا\s*برند|سازنده/.test(s.key))?.value
+            const brand = (ld?.brand ? String(ld.brand.name || ld.brand) : '') || brandSpec || undefined
             batch.push({
               name,
               categoryName: categoryFromLd(r.text) || (ld?.category ? String(ld.category) : 'دسته‌بندی‌نشده'),
-              image: image ? abs(base, String(image)) : undefined,
-              description: stripHtml(String(ld?.description || ogMeta(r.text, 'og:description') || ogMeta(r.text, 'description') || '')).slice(0, 800),
-              brand: ld?.brand ? String(ld.brand.name || ld.brand) : undefined,
+              image: image || undefined,
+              description: stripHtml(String(ld?.description || ogMeta(r.text, 'og:description') || '')).slice(0, 800),
+              brand,
+              specs: specs.length ? specs : undefined,
               externalId: (u.match(/(\d+)(?:\/?$)/)?.[1]) || undefined, externalUrl: u,
             })
           }
@@ -331,6 +363,29 @@ async function run() {
   } catch (e: any) {
     patch({ running: false, finishedAt: Date.now(), error: e?.message || 'خطا در اسکرپ' })
   }
+}
+
+// بررسیِ یک صفحهٔ محصول — برای عیب‌یابیِ استخراج (چه چیزی درمی‌آید + نمونهٔ HTML).
+export async function inspectProduct(url: string) {
+  const r = await fetchText(url, 20000)
+  if (!r.ok) return { ok: false, status: r.status }
+  const html = r.text
+  const origin = (() => { try { return new URL(url).origin } catch { return getConfig().baseUrl } })()
+  const specs = tableSpecs(html)
+  const extracted = {
+    name: (findProductLd(html)?.name && stripHtml(String(findProductLd(html)!.name))) || htmlName(html),
+    image: firstImg(html, origin),
+    ogImage: ogImage(html),
+    specsCount: specs.length,
+    specs: specs.slice(0, 20),
+    description: stripHtml(ogMeta(html, 'og:description') || '').slice(0, 300),
+    ldTypes: jsonLdBlocks(html).flatMap(b => (Array.isArray(b) ? b : (b['@graph'] || [b]))).map((n: any) => n?.['@type']).filter(Boolean).slice(0, 10),
+  }
+  const idx = html.search(/ویژگی|مشخصات|مبدا\s*برند|تولید\s*کننده|جنس/)
+  const snippet = (idx >= 0 ? html.slice(Math.max(0, idx - 300), idx + 2600) : html.slice(0, 2500))
+    .replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '').replace(/\s+/g, ' ').slice(0, 3500)
+  const imgTags = [...html.matchAll(/<img[^>]+>/gi)].slice(0, 15).map(m => m[0].replace(/\s+/g, ' ').slice(0, 180))
+  return { ok: true, extracted, snippet, imgTags }
 }
 
 export function startBackgroundScrape(): { started: boolean } {
