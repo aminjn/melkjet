@@ -380,6 +380,11 @@ const DASH_TO_PROFILE: Record<string, string> = {
   '/legal': 'حقوقی',
   '/crm': 'مشاور',
 }
+// slugِ پیش‌فرضِ صنفی — تا هر صنف سایتِ نمونهٔ خودش را ببیند (نه سایتِ مشترکِ آژانس).
+const PROFILE_SLUG: Record<string, string> = {
+  'مشاور': 'advisor-sample', 'آژانس': 'agency-sample', 'سازنده': 'builder-sample',
+  'فروشگاه': 'shop-sample', 'سرمایه‌گذار': 'investor-sample', 'حقوقی': 'legal-sample', 'عمومی': 'my-site',
+}
 
 const STARTER_TEMPLATES = [
   // ───────── مشاور (۱۰) ─────────
@@ -1240,22 +1245,52 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
     return () => mq.removeEventListener('change', on)
   }, [])
 
-  // اسکوپ خودکار قالب‌ها بر اساس نقش کاربر واردشده + نام کاربر (برای «آگهی‌های من»)
+  // نقشِ کاربر → قالب‌های قفل‌شدهٔ همان صنف + بارگذاریِ «سایتِ خودِ کاربر» (نه سایتِ مشترک).
+  const [savedSiteChecked, setSavedSiteChecked] = useState(false)
+  const [hadSavedSite, setHadSavedSite] = useState(false)
+  const autoTplRef = useRef(false)
   useEffect(() => {
     let cancelled = false
     fetch('/api/auth/profile')
       .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (cancelled || !data) return
-        // اگر نقش کاربر به یک پروفایل مشخص نگاشت شود، فقط همان را می‌بیند (قفل).
-        // ادمین/داشبورد ناشناخته → قفل نمی‌شود تا بتواند همه را مرور کند.
-        const mapped = DASH_TO_PROFILE[data.dash as string]
+      .then(prof => {
+        if (cancelled) { setSavedSiteChecked(true); return }
+        const mapped = prof?.dash ? DASH_TO_PROFILE[prof.dash as string] : undefined
         if (mapped) { setTplFilter(mapped); setLockedProfile(mapped) }
-        // نام نمایشی کاربر — برای تطبیق آگهی‌های منتشرشده در بلوک «آگهی‌های من».
-        if (data.account?.name) setOwnerName(String(data.account.name))
+        if (prof?.account?.name) setOwnerName(String(prof.account.name))
+        const phone = prof?.phone ? String(prof.phone) : ''
+        // slugِ پیش‌فرضِ صنفی تا هر صنف سایتِ نمونهٔ خودش را ببیند.
+        const wantSlug = (mapped && PROFILE_SLUG[mapped]) || slug
+        setSlug(wantSlug)
+        // فقط سایتی بارگذاری می‌شود که «مالِ خودِ کاربر» است؛ وگرنه قالبِ پیش‌فرضِ صنف اعمال می‌شود.
+        fetch(`/api/sites?slug=${encodeURIComponent(wantSlug)}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(data => {
+            if (cancelled) return
+            const s = data?.site
+            const mine = s && Array.isArray(s.pages) && s.pages.length && s.owner && phone && String(s.owner) === phone
+            if (mine) {
+              setHadSavedSite(true)
+              setPages(s.pages.map((pg: any, i: number) => ({
+                slug: i === 0 ? 'home' : slugify(pg.slug || '') || `page-${i}`,
+                title: String(pg.title || '') || (i === 0 ? 'صفحه اصلی' : `صفحه ${i + 1}`),
+                inMenu: pg.inMenu !== false,
+                menuLabel: pg.menuLabel ? String(pg.menuLabel) : undefined,
+                blocks: Array.isArray(pg.blocks) ? pg.blocks.map(migrateBlock) : [],
+              })))
+              setActivePage(0); setSelectedBlock(null)
+              if (s.theme?.primary) setTheme({ ...DEFAULT_THEME, ...s.theme })
+              if (s.seo?.title) setSeoTitle(String(s.seo.title))
+              if (s.seo?.description) setSeoDesc(String(s.seo.description))
+              if (s.ownerName) setOwnerName(String(s.ownerName))
+            }
+            setSavedSiteChecked(true)
+          })
+          .catch(() => setSavedSiteChecked(true))
       })
-      .catch(() => { /* در صورت خطا روی پیش‌فرض «عمومی» می‌ماند */ })
+      .catch(() => setSavedSiteChecked(true))
     return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // آگهی‌های واقعیِ منتشرشدهٔ کاربر — برای پیش‌نمایشِ زندهٔ بلوک «آگهی‌های من».
@@ -1301,42 +1336,6 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
       .then(d => { if (!cancelled && d && Array.isArray(d.members)) setTeamMembers(d.members) })
       .catch(() => { /* بدونِ عضو می‌ماند */ })
     return () => { cancelled = true }
-  }, [])
-
-  // On mount, load the user's existing saved site (by the default slug) and
-  // populate the real pages if it already exists.
-  const [savedSiteChecked, setSavedSiteChecked] = useState(false)
-  const [hadSavedSite, setHadSavedSite] = useState(false)
-  const autoTplRef = useRef(false)
-  useEffect(() => {
-    let cancelled = false
-    fetch(`/api/sites?slug=${encodeURIComponent(slug)}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (cancelled) return
-        if (!data?.site) { setSavedSiteChecked(true); return }
-        const s = data.site
-        if (Array.isArray(s.pages) && s.pages.length) {
-          setHadSavedSite(true)
-          setPages(s.pages.map((pg: any, i: number) => ({
-            slug: i === 0 ? 'home' : slugify(pg.slug || '') || `page-${i}`,
-            title: String(pg.title || '') || (i === 0 ? 'صفحه اصلی' : `صفحه ${i + 1}`),
-            inMenu: pg.inMenu !== false,
-            menuLabel: pg.menuLabel ? String(pg.menuLabel) : undefined,
-            blocks: Array.isArray(pg.blocks) ? pg.blocks.map(migrateBlock) : [],
-          })))
-          setActivePage(0)
-          setSelectedBlock(null)
-        }
-        if (s.theme?.primary) setTheme({ ...DEFAULT_THEME, ...s.theme })
-        if (s.seo?.title) setSeoTitle(String(s.seo.title))
-        if (s.seo?.description) setSeoDesc(String(s.seo.description))
-        if (s.ownerName) setOwnerName(String(s.ownerName))
-        setSavedSiteChecked(true)
-      })
-      .catch(() => { setSavedSiteChecked(true) /* no saved site yet — keep the starter page */ })
-    return () => { cancelled = true }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // اگر کاربر سایتِ ذخیره‌شده ندارد و پروفایلش مشخص است (مثلِ فروشگاه)، قالبِ پیش‌فرضِ همان
