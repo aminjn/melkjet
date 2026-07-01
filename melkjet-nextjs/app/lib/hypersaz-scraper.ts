@@ -12,14 +12,15 @@ export interface ScraperConfig {
   baseUrl: string
   strategy: 'auto' | 'wp' | 'sitemap' | 'html'
   maxProducts: number
+  // زمان‌بندیِ خودکار
+  schedule: 'off' | 'daily' | 'weekly'
+  scheduleHour: number   // ساعتِ اجرا (۰..۲۳ به وقتِ تهران)
+  lastAutoAt?: number    // زمانِ آخرین اجرای خودکار
   // سِلکتورهای HTML (برای استراتژیِ html وقتی سایت WP نیست)
-  productLinkSel?: string   // مثلاً a.product-title  (لینکِ صفحهٔ محصول)
-  nameSel?: string
-  priceSel?: string
-  imageSel?: string
-  categorySel?: string
+  productLinkSel?: string
+  nameSel?: string; priceSel?: string; imageSel?: string; categorySel?: string
 }
-const DEFAULT_CFG: ScraperConfig = { baseUrl: 'https://www.hypersaz.com', strategy: 'auto', maxProducts: 3000 }
+const DEFAULT_CFG: ScraperConfig = { baseUrl: 'https://www.hypersaz.com', strategy: 'auto', maxProducts: 3000, schedule: 'off', scheduleHour: 3 }
 
 export function getConfig(): ScraperConfig {
   if (existsSync(CFG_FILE)) { try { return { ...DEFAULT_CFG, ...JSON.parse(readFileSync(CFG_FILE, 'utf-8')) } } catch {} }
@@ -32,6 +33,9 @@ export function setConfig(patch: Partial<ScraperConfig>): ScraperConfig {
     baseUrl: patch.baseUrl !== undefined ? String(patch.baseUrl).replace(/\/+$/, '') : cur.baseUrl,
     strategy: (['auto', 'wp', 'sitemap', 'html'] as const).includes(patch.strategy as any) ? patch.strategy as any : cur.strategy,
     maxProducts: patch.maxProducts !== undefined ? Math.max(50, Math.min(20000, Number(patch.maxProducts) || cur.maxProducts)) : cur.maxProducts,
+    schedule: (['off', 'daily', 'weekly'] as const).includes(patch.schedule as any) ? patch.schedule as any : cur.schedule,
+    scheduleHour: patch.scheduleHour !== undefined ? Math.max(0, Math.min(23, Number(patch.scheduleHour) || 0)) : cur.scheduleHour,
+    lastAutoAt: patch.lastAutoAt !== undefined ? Number(patch.lastAutoAt) : cur.lastAutoAt,
     productLinkSel: patch.productLinkSel !== undefined ? String(patch.productLinkSel) : cur.productLinkSel,
     nameSel: patch.nameSel !== undefined ? String(patch.nameSel) : cur.nameSel,
     priceSel: patch.priceSel !== undefined ? String(patch.priceSel) : cur.priceSel,
@@ -443,4 +447,22 @@ export function startBackgroundScrape(): { started: boolean } {
   patch({ running: true, startedAt: Date.now(), error: undefined })
   run().catch(err => patch({ running: false, error: String(err?.message || err) }))
   return { started: true }
+}
+
+// ساعتِ فعلی به وقتِ تهران
+function tehranHour(now: number): number {
+  try { return Number(new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Tehran' }).format(new Date(now))) % 24 } catch { return new Date(now).getHours() }
+}
+// اجرای خودکارِ زمان‌بندی‌شده — از کرون فراخوانی می‌شود (فقط اینستنسِ صفر).
+export function maybeAutoScrape(now = Date.now()): boolean {
+  const cfg = getConfig()
+  if (cfg.schedule === 'off') return false
+  if (getJob().running) return false
+  const interval = cfg.schedule === 'weekly' ? 6.8 * 24 * 3600 * 1000 : 22 * 3600 * 1000
+  const last = cfg.lastAutoAt || 0
+  if (now - last < interval) return false        // هنوز زمانش نرسیده
+  if (tehranHour(now) !== cfg.scheduleHour) return false  // فقط در ساعتِ تعیین‌شده
+  setConfig({ lastAutoAt: now })
+  startBackgroundScrape()
+  return true
 }

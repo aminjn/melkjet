@@ -276,7 +276,7 @@ function ProductEditor({ product, cats, defaultCat, post, busy, onClose }: { pro
 // ── پنلِ اسکرپ + تنظیمات + تستِ اتصال ──
 interface Probe { name: string; url: string; ok: boolean; status: number; note: string }
 function ScrapePanel({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-  const [cfg, setCfg] = useState<any>({ baseUrl: 'https://www.hypersaz.com', strategy: 'auto', maxProducts: 3000 })
+  const [cfg, setCfg] = useState<any>({ baseUrl: 'https://www.hypersaz.com', strategy: 'auto', maxProducts: 3000, schedule: 'off', scheduleHour: 3 })
   const [job, setJob] = useState<any>(null)
   const [report, setReport] = useState<{ platform: string; probes: Probe[]; recommend: string; smUrl?: string; sitemapType?: string; sitemapLocs?: string[]; subSample?: string[] } | null>(null)
   const [testing, setTesting] = useState(false)
@@ -321,6 +321,24 @@ function ScrapePanel({ onClose, onDone }: { onClose: () => void; onDone: () => v
           <input value={cfg.maxProducts} onChange={e => setCfg({ ...cfg, maxProducts: Number(e.target.value) || 0 })} style={inp} />
         </div>
       </div>
+      {/* زمان‌بندیِ خودکار */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+        <div>
+          <label style={lab}>اسکرپِ خودکار</label>
+          <select value={cfg.schedule} onChange={e => setCfg({ ...cfg, schedule: e.target.value })} style={{ ...inp, cursor: 'pointer' }}>
+            <option value="off">خاموش (فقط دستی)</option>
+            <option value="daily">روزانه</option>
+            <option value="weekly">هفتگی</option>
+          </select>
+        </div>
+        <div>
+          <label style={lab}>ساعتِ اجرا (۰ تا ۲۳ به وقتِ تهران)</label>
+          <select value={cfg.scheduleHour} onChange={e => setCfg({ ...cfg, scheduleHour: Number(e.target.value) })} disabled={cfg.schedule === 'off'} style={{ ...inp, cursor: 'pointer', opacity: cfg.schedule === 'off' ? 0.5 : 1 }}>
+            {Array.from({ length: 24 }).map((_, h) => <option key={h} value={h}>{h.toLocaleString('fa-IR')}:۰۰</option>)}
+          </select>
+        </div>
+      </div>
+      {cfg.schedule !== 'off' && <div style={{ fontSize: 11.5, color: '#5fd98a', marginBottom: 10 }}>✓ به‌صورتِ {cfg.schedule === 'daily' ? 'روزانه' : 'هفتگی'} ساعتِ {Number(cfg.scheduleHour).toLocaleString('fa-IR')} خودکار اسکرپ می‌شود و همه‌چیز آپدیت + کالای جدید اضافه می‌شود. (پس از تغییر، «ذخیرهٔ تنظیمات» را بزنید.)</div>}
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
         <button onClick={test} disabled={testing} style={{ ...ghost, border: '1px solid var(--gold)', color: 'var(--gold)' }}>{testing ? 'در حال تست…' : '🔍 تستِ اتصال'}</button>
         <button onClick={saveCfg} style={ghost}>ذخیرهٔ تنظیمات</button>

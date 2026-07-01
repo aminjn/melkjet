@@ -79,7 +79,7 @@ export default function ProductPageView({ product, breadcrumb, sellers, related 
               <PriceTrendBadge points={ph} />
             </div>
             <PriceChart points={ph} />
-            <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 8 }}>قیمتِ مرجع (ریال) بر اساسِ دادهٔ تأمین‌کننده. برای قیمتِ خرید به فروشندگانِ زیر مراجعه کنید.</div>
+            <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 8 }}>قیمتِ مرجع (تومان) بر اساسِ دادهٔ تأمین‌کننده. برای قیمتِ خرید به فروشندگانِ زیر مراجعه کنید.</div>
           </section>
         )}
 
@@ -184,7 +184,7 @@ function PriceChart({ points }: { points: PricePoint[] }) {
   return (
     <div style={{ position: 'relative' }}>
       <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 6, minHeight: 18 }}>
-        <b style={{ color: 'var(--gold)' }}>{points[active].date}</b>: {fa(points[active].price)} ریال
+        <b style={{ color: 'var(--gold)' }}>{points[active].date}</b>: {money(Math.round(points[active].price / 10))} تومان
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: '100%', height: 200, display: 'block' }}>
         <defs>
@@ -204,7 +204,7 @@ function PriceChart({ points }: { points: PricePoint[] }) {
       </svg>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'var(--faint)', marginTop: 4 }}>
         <span>{points[0].date}</span>
-        <span>کمترین {money(min / 10)} ت · بیشترین {money(max / 10)} ت</span>
+        <span>کمترین {money(Math.round(min / 10))} · بیشترین {money(Math.round(max / 10))} تومان</span>
         <span>{points[points.length - 1].date}</span>
       </div>
     </div>

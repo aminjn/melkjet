@@ -187,6 +187,25 @@ function ensureCategoryInDb(db: DB, name: string): CatalogCategory {
   db.categories.push(c); return c
 }
 
+// نرخِ مرجعِ کالاها (از دادهٔ اسکرپ‌شده) — قیمتِ آخر + روند + اسپارک‌لاین، همه به تومان.
+export function referencePriceIndex(opts?: { category?: string; search?: string }) {
+  const db = load()
+  const catName = (id: string) => db.categories.find(c => c.id === id)?.name || ''
+  const toToman = (rial: number) => Math.round(rial / 10)
+  let rows = db.products.filter(p => p.active && p.priceHistory && p.priceHistory.length > 0).map(p => {
+    const ph = p.priceHistory!
+    const last = toToman(ph[ph.length - 1].price)
+    const first = toToman(ph[0].price)
+    const changePct = first ? Math.round(((last - first) / first) * 100) : 0
+    return { id: p.id, name: p.name, image: p.image || '', brand: p.brand || '', category: catName(p.categoryId), unit: p.unit || '', price: last, changePct, spark: ph.slice(-14).map(x => toToman(x.price)), updatedAt: ph[ph.length - 1].date }
+  })
+  if (opts?.category && opts.category !== 'همه') { const g = norm(opts.category); rows = rows.filter(r => norm(r.category).includes(g)) }
+  if (opts?.search) { const q = norm(opts.search); rows = rows.filter(r => norm(r.name).includes(q) || norm(r.brand).includes(q)) }
+  rows.sort((a, b) => norm(a.category).localeCompare(norm(b.category)) || b.price - a.price)
+  const categories = Array.from(new Set(db.products.filter(p => p.active && p.priceHistory?.length).map(p => catName(p.categoryId)).filter(Boolean)))
+  return { rows: rows.slice(0, 600), categories, count: rows.length }
+}
+
 export function catalogStats() {
   const db = load()
   return { categories: db.categories.length, products: db.products.length, hypersaz: db.products.filter(p => p.source === 'hypersaz').length, manual: db.products.filter(p => p.source === 'manual').length }
