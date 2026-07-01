@@ -10,6 +10,7 @@ import ArticleEditor from '@/app/components/ArticleEditor'
 import PlansPanel from '@/app/components/PlansPanel'
 import BusinessProfileForm from '@/app/components/BusinessProfileForm'
 import SupportPanel from '@/app/components/SupportPanel'
+import ImageUpload from '@/app/components/ImageUpload'
 
 // ════════════════════════════════════════════════════════
 //  Types (mirror app/lib/materials-store.ts API shape)
@@ -17,9 +18,12 @@ import SupportPanel from '@/app/components/SupportPanel'
 type OrderStatus = 'pending' | 'preparing' | 'shipped' | 'delivered' | 'canceled'
 type InquiryStatus = 'new' | 'answered'
 
+interface ProductSpec { key: string; value: string }
 interface Product {
   id: string; name: string; category: string; price: number; unit: string
   stock: number; threshold: number; sold: number; active: boolean; createdAt: number
+  brand?: string; origin?: string; description?: string; images?: string[]; specs?: ProductSpec[]
+  tags?: string[]; minOrder?: number; discountPct?: number; deliveryDays?: number; warranty?: string; featured?: boolean
 }
 interface Order { id: string; customer: string; items: number; amount: number; status: OrderStatus; createdAt: number }
 interface Inquiry { id: string; customer: string; product: string; qty: string; note?: string; status: InquiryStatus; reply?: string; createdAt: number }
@@ -29,6 +33,7 @@ interface Category { label: string; pct: number }
 
 interface Stats {
   profile: { name: string; rating: number }
+  slug: string
   kpis: {
     activeProducts: number; lowStockCount: number; newInquiries: number
     activeOrders: number; awaitingShip: number; thisMonthSales: number; monthChange: number
@@ -439,7 +444,7 @@ export default function MaterialsPage() {
               <ArticleEditor compact author={myName || undefined} />
             </div>
           )}
-          {view === 'catalog' && <CatalogView products={products} post={post} busy={busy} search={search} showAdd={showAdd} setShowAdd={setShowAdd} />}
+          {view === 'catalog' && <CatalogView products={products} post={post} busy={busy} search={search} showAdd={showAdd} setShowAdd={setShowAdd} storefrontUrl={stats.slug ? `/forushgah/${stats.slug}` : ''} />}
           {view === 'orders' && <OrdersView orders={orders} products={products} post={post} busy={busy} search={search} />}
           {view === 'inquiries' && <InquiriesView inquiries={inquiries} products={products} post={post} busy={busy} search={search} />}
           {view === 'plans' && <PlansPanel dashboard="/materials" />}
@@ -603,34 +608,17 @@ function DashboardView({ stats, post, onAll }: {
 // ════════════════════════════════════════════════════════
 //  CATALOG
 // ════════════════════════════════════════════════════════
-function CatalogView({ products, post, busy, search, showAdd, setShowAdd }: {
+function CatalogView({ products, post, busy, search, showAdd, setShowAdd, storefrontUrl }: {
   products: Product[]; post: (b: Record<string, unknown>) => Promise<boolean>; busy: boolean
-  search: string; showAdd: boolean; setShowAdd: (v: boolean) => void
+  search: string; showAdd: boolean; setShowAdd: (v: boolean) => void; storefrontUrl: string
 }) {
-  const [form, setForm] = useState({ name: '', category: CATEGORY_OPTIONS[0], price: '', unit: UNIT_OPTIONS[0], stock: '' })
+  const [editing, setEditing] = useState<Product | 'new' | null>(null)
+  // دکمهٔ «+ محصول» در نوارِ بالای پنل هم editor را باز می‌کند.
+  useEffect(() => { if (showAdd) { setEditing('new'); setShowAdd(false) } }, [showAdd, setShowAdd])
 
   const q = search.trim()
-  const filtered = q ? products.filter(p => p.name.includes(q) || p.category.includes(q)) : products
+  const filtered = q ? products.filter(p => p.name.includes(q) || p.category.includes(q) || (p.brand || '').includes(q)) : products
 
-  const addProduct = async () => {
-    if (!form.name.trim()) { alert('نام محصول را وارد کنید'); return }
-    const ok = await post({
-      action: 'addProduct', name: form.name.trim(), category: form.category,
-      price: Number(form.price) || 0, unit: form.unit, stock: Number(form.stock) || 0,
-    })
-    if (ok) { setForm({ name: '', category: CATEGORY_OPTIONS[0], price: '', unit: UNIT_OPTIONS[0], stock: '' }); setShowAdd(false) }
-  }
-
-  const editProduct = async (p: Product) => {
-    const priceRaw = window.prompt(`قیمت جدید «${p.name}» (تومان):`, String(p.price))
-    if (priceRaw == null) return
-    const stockRaw = window.prompt(`موجودی جدید (${p.unit}):`, String(p.stock))
-    if (stockRaw == null) return
-    const patch: Record<string, number> = {}
-    if (priceRaw.trim() !== '') patch.price = Number(priceRaw) || 0
-    if (stockRaw.trim() !== '') patch.stock = Number(stockRaw) || 0
-    await post({ action: 'updateProduct', id: p.id, patch })
-  }
   const restockProduct = async (p: Product) => {
     const raw = window.prompt(`مقدار تأمین برای «${p.name}» (${p.unit}):`, '')
     if (raw == null) return
@@ -645,69 +633,183 @@ function CatalogView({ products, post, busy, search, showAdd, setShowAdd }: {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* Add product toggle */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <button onClick={() => setShowAdd(!showAdd)} style={{
-          padding: '9px 18px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))',
-          color: '#16140f', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: FONT,
-        }}>{showAdd ? '× بستن' : '+ محصول جدید'}</button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        {storefrontUrl
+          ? <a href={storefrontUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: 'var(--gold)', textDecoration: 'none', border: '1px solid var(--gold)', borderRadius: 9, padding: '8px 14px' }}>🏪 مشاهدهٔ ویترینِ عمومی ↗</a>
+          : <span />}
+        <button onClick={() => setEditing('new')} style={{ padding: '9px 18px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: FONT }}>+ محصول جدید</button>
       </div>
-
-      {/* Add form */}
-      {showAdd && (
-        <div style={{ ...card, padding: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>＋ محصول جدید</div>
-          <div className="mjm-form" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1.2fr 1fr 0.9fr 0.9fr auto', gap: 10, alignItems: 'center' }}>
-            <input placeholder="نام محصول" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} style={inputStyle} />
-            <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} style={{ ...inputStyle, cursor: 'pointer' }}>
-              {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <NumberInput placeholder="قیمت (تومان)" value={form.price} onChange={v => setForm({ ...form, price: v })} style={inputStyle} />
-            <select value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} style={{ ...inputStyle, cursor: 'pointer' }}>
-              {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
-            </select>
-            <input placeholder="موجودی" value={form.stock} onChange={e => setForm({ ...form, stock: e.target.value })} style={inputStyle} />
-            <button onClick={addProduct} disabled={busy} style={{
-              padding: '9px 18px', borderRadius: 9, background: 'var(--gold)', border: 'none', color: '#16140f',
-              fontWeight: 700, fontSize: 13, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1, fontFamily: FONT, whiteSpace: 'nowrap',
-            }}>افزودن</button>
-          </div>
-        </div>
-      )}
 
       {/* Products table */}
       <div style={{ ...card, overflow: 'hidden' }}>
-        <div className="mjm-prow" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1.1fr 1.3fr 0.9fr 0.7fr 0.7fr 1.4fr', padding: '12px 18px', background: 'var(--bg2)', borderBottom: '1px solid var(--line)', fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>
-          <div>نام</div><div>دسته</div><div>قیمت</div><div>موجودی</div><div>فروخته</div><div>فعال</div><div style={{ textAlign: 'left' }}>عملیات</div>
+        <div className="mjm-prow" style={{ display: 'grid', gridTemplateColumns: '2.3fr 1.1fr 1.3fr 0.9fr 0.7fr 0.7fr 1.4fr', padding: '12px 18px', background: 'var(--bg2)', borderBottom: '1px solid var(--line)', fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>
+          <div>محصول</div><div>دسته</div><div>قیمت</div><div>موجودی</div><div>فروخته</div><div>فعال</div><div style={{ textAlign: 'left' }}>عملیات</div>
         </div>
-        <div style={{ maxHeight: 560, overflowY: 'auto' }}>
+        <div style={{ maxHeight: 600, overflowY: 'auto' }}>
           {filtered.length === 0 ? (
-            <div style={{ padding: 28, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>محصولی یافت نشد</div>
+            <div style={{ padding: 28, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>محصولی نیست — «+ محصول جدید» را بزنید.</div>
           ) : filtered.map((p, i) => {
             const low = p.stock <= p.threshold
+            const disc = (p.discountPct || 0) > 0
             return (
-              <div key={p.id} className="mjm-prow" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1.1fr 1.3fr 0.9fr 0.7fr 0.7fr 1.4fr', padding: '12px 18px', borderBottom: i < filtered.length - 1 ? '1px solid var(--line)' : 'none', fontSize: 13, alignItems: 'center' }}>
-                <div style={{ fontWeight: 600 }}>{p.name}</div>
+              <div key={p.id} className="mjm-prow" style={{ display: 'grid', gridTemplateColumns: '2.3fr 1.1fr 1.3fr 0.9fr 0.7fr 0.7fr 1.4fr', padding: '12px 18px', borderBottom: i < filtered.length - 1 ? '1px solid var(--line)' : 'none', fontSize: 13, alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                  <div style={{ width: 42, height: 42, borderRadius: 8, flexShrink: 0, background: p.images?.[0] ? `center/cover no-repeat url(${p.images[0]})` : 'var(--bg2)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>{!p.images?.[0] && '🧱'}</div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {p.featured && <span title="ویژه" style={{ color: 'var(--gold)' }}>★</span>}{p.name}
+                    </div>
+                    {p.brand && <div style={{ fontSize: 11, color: 'var(--muted)' }}>{p.brand}</div>}
+                  </div>
+                </div>
                 <div style={{ color: 'var(--muted)' }}>{p.category}</div>
-                <div style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{fa(p.price)} <span style={{ color: 'var(--muted)', fontWeight: 400 }}>تومان/{p.unit}</span></div>
+                <div style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{fa(p.price)} <span style={{ color: 'var(--muted)', fontWeight: 400 }}>ت/{p.unit}</span>{disc && <span style={{ color: '#e7674a', fontSize: 11, marginInlineStart: 4 }}>٪{fa(p.discountPct!)}</span>}</div>
                 <div style={{ fontWeight: 700, color: low ? '#f87171' : 'var(--text)' }}>{fa(p.stock)} {p.unit}</div>
                 <div style={{ color: 'var(--muted)' }}>{fa(p.sold)}</div>
                 <div>
-                  <button onClick={() => post({ action: 'updateProduct', id: p.id, patch: { active: !p.active } })} disabled={busy} style={{
-                    width: 40, height: 22, borderRadius: 99, border: 'none', cursor: busy ? 'default' : 'pointer', position: 'relative',
-                    background: p.active ? 'var(--gold)' : 'var(--line2)', transition: 'background 0.2s', padding: 0,
-                  }}>
+                  <button onClick={() => post({ action: 'updateProduct', id: p.id, patch: { active: !p.active } })} disabled={busy} style={{ width: 40, height: 22, borderRadius: 99, border: 'none', cursor: busy ? 'default' : 'pointer', position: 'relative', background: p.active ? 'var(--gold)' : 'var(--line2)', transition: 'background 0.2s', padding: 0 }}>
                     <span style={{ position: 'absolute', top: 2, insetInlineStart: p.active ? 2 : 20, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'inset-inline-start 0.2s' }} />
                   </button>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
-                  <button onClick={() => editProduct(p)} disabled={busy} style={actionBtn}>ویرایش</button>
+                  <button onClick={() => setEditing(p)} disabled={busy} style={actionBtn}>ویرایش</button>
                   <button onClick={() => restockProduct(p)} disabled={busy} style={{ ...actionBtn, color: 'var(--gold)', borderColor: 'var(--gold)' }}>تأمین</button>
                   <button onClick={() => removeProduct(p)} disabled={busy} title="حذف" style={{ ...actionBtn, color: '#f87171', borderColor: 'var(--line)', width: 28, padding: 0 }}>×</button>
                 </div>
               </div>
             )
           })}
+        </div>
+      </div>
+
+      {editing && <ProductEditor product={editing === 'new' ? null : editing} post={post} onClose={() => setEditing(null)} />}
+    </div>
+  )
+}
+
+// ── ویرایشگرِ کاملِ محصول (با آپلودِ گالری، مشخصاتِ فنی، و دستیارِ هوش مصنوعی) ──
+function ProductEditor({ product, post, onClose }: { product: Product | null; post: (b: Record<string, unknown>) => Promise<boolean>; onClose: () => void }) {
+  const [f, setF] = useState({
+    name: product?.name || '', category: product?.category || CATEGORY_OPTIONS[0], unit: product?.unit || UNIT_OPTIONS[0],
+    price: product ? String(product.price) : '', stock: product ? String(product.stock) : '', threshold: product?.threshold != null ? String(product.threshold) : '',
+    brand: product?.brand || '', origin: product?.origin || '', description: product?.description || '',
+    minOrder: product?.minOrder != null ? String(product.minOrder) : '', discountPct: product?.discountPct != null ? String(product.discountPct) : '',
+    deliveryDays: product?.deliveryDays != null ? String(product.deliveryDays) : '', warranty: product?.warranty || '',
+    featured: !!product?.featured, active: product ? product.active : true,
+  })
+  const [images, setImages] = useState<string[]>(product?.images || [])
+  const [specs, setSpecs] = useState<ProductSpec[]>(product?.specs && product.specs.length ? product.specs : [{ key: '', value: '' }])
+  const [tags, setTags] = useState((product?.tags || []).join('، '))
+  const [saving, setSaving] = useState(false)
+  const [ai, setAi] = useState<{ what: string } | null>(null)
+  const [aiErr, setAiErr] = useState('')
+  const set = (k: string, v: any) => setF(s => ({ ...s, [k]: v }))
+
+  const aiCall = async (action: 'describe' | 'specs' | 'tags' | 'price') => {
+    if (!f.name.trim()) { setAiErr('ابتدا نامِ محصول را وارد کنید'); return }
+    setAi({ what: action }); setAiErr('')
+    try {
+      const r = await fetch('/api/materials/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, name: f.name, category: f.category, brand: f.brand, origin: f.origin, unit: f.unit, specs: specs.filter(s => s.key && s.value) }) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || d.error) { setAiErr(d.error || 'خطا در دستیار'); return }
+      if (action === 'describe' && d.description) set('description', d.description)
+      if (action === 'specs' && Array.isArray(d.specs)) setSpecs(d.specs.length ? d.specs : specs)
+      if (action === 'tags' && Array.isArray(d.tags)) setTags(d.tags.join('، '))
+      if (action === 'price' && (d.min || d.max)) { set('price', String(Math.round((d.min + d.max) / 2 || d.max || d.min))); setAiErr(`پیشنهادِ بازار: ${d.min.toLocaleString('fa-IR')} تا ${d.max.toLocaleString('fa-IR')} تومان${d.note ? ` — ${d.note}` : ''}`) }
+    } catch { setAiErr('خطا در ارتباط با دستیار') } finally { setAi(null) }
+  }
+
+  const save = async () => {
+    if (!f.name.trim()) { alert('نامِ محصول الزامی است'); return }
+    setSaving(true)
+    const patch: Record<string, unknown> = {
+      name: f.name.trim(), category: f.category, unit: f.unit,
+      price: Number(f.price) || 0, stock: Number(f.stock) || 0,
+      brand: f.brand.trim(), origin: f.origin.trim(), description: f.description.trim(),
+      warranty: f.warranty.trim(), minOrder: Number(f.minOrder) || 0, discountPct: Number(f.discountPct) || 0,
+      deliveryDays: Number(f.deliveryDays) || 0, featured: f.featured, active: f.active,
+      images: images.filter(Boolean),
+      specs: specs.filter(s => s.key.trim() && s.value.trim()),
+      tags: tags.split(/[،,\n]+/).map(t => t.trim()).filter(Boolean),
+    }
+    if (f.threshold.trim() !== '') patch.threshold = Number(f.threshold) || 0
+    const ok = product
+      ? await post({ action: 'updateProduct', id: product.id, patch })
+      : await post({ action: 'addProduct', ...patch })
+    setSaving(false)
+    if (ok) onClose()
+  }
+
+  const aiBtn = (action: 'describe' | 'specs' | 'tags' | 'price', label: string) => (
+    <button type="button" onClick={() => aiCall(action)} disabled={!!ai} style={{ fontSize: 11.5, color: 'var(--gold)', border: '1px solid var(--gold)', background: 'transparent', borderRadius: 8, padding: '4px 10px', cursor: ai ? 'default' : 'pointer', fontFamily: FONT, opacity: ai ? 0.6 : 1, whiteSpace: 'nowrap' }}>{ai?.what === action ? '⏳ …' : `✦ ${label}`}</button>
+  )
+  const lab: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', fontWeight: 600, marginBottom: 5, display: 'block' }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', backdropFilter: 'blur(3px)' }}>
+      <div onClick={e => e.stopPropagation()} style={{ ...card, maxWidth: 780, width: '100%', margin: '20px 0', padding: 22 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+          <div style={{ fontSize: 16, fontWeight: 800 }}>{product ? 'ویرایشِ محصول' : 'محصولِ جدید'}</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 24, cursor: 'pointer', lineHeight: 1 }}>×</button>
+        </div>
+
+        {/* گالریِ تصاویر */}
+        <label style={lab}>تصاویرِ محصول (تا ۶ عدد)</label>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: 10, marginBottom: 18 }}>
+          {images.map((im, i) => (
+            <ImageUpload key={i} value={im} height={92} onChange={v => setImages(imgs => v ? imgs.map((x, j) => j === i ? v : x) : imgs.filter((_, j) => j !== i))} />
+          ))}
+          {images.length < 6 && <ImageUpload value="" height={92} onChange={v => { if (v) setImages(imgs => [...imgs, v]) }} />}
+        </div>
+
+        {/* فیلدهای اصلی */}
+        <div className="mjm-form" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+          <div style={{ gridColumn: '1 / -1' }}><label style={lab}>نامِ محصول *</label><input value={f.name} onChange={e => set('name', e.target.value)} placeholder="مثلاً میلگرد آجدار ۱۶ ذوب‌آهن" style={inputStyle} /></div>
+          <div><label style={lab}>دسته</label><input value={f.category} onChange={e => set('category', e.target.value)} list="mjm-cats" style={inputStyle} /><datalist id="mjm-cats">{CATEGORY_OPTIONS.map(c => <option key={c} value={c} />)}</datalist></div>
+          <div><label style={lab}>واحدِ فروش</label><select value={f.unit} onChange={e => set('unit', e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>{UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}</select></div>
+          <div><label style={lab}>برند / تولیدکننده</label><input value={f.brand} onChange={e => set('brand', e.target.value)} style={inputStyle} /></div>
+          <div><label style={lab}>کشور/محلِ ساخت</label><input value={f.origin} onChange={e => set('origin', e.target.value)} style={inputStyle} /></div>
+          <div><label style={{ ...lab, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span>قیمت (تومان/{f.unit})</span>{aiBtn('price', 'پیشنهادِ قیمت')}</label><NumberInput value={f.price} onChange={v => set('price', v)} style={inputStyle} /></div>
+          <div><label style={lab}>درصدِ تخفیف</label><NumberInput value={f.discountPct} onChange={v => set('discountPct', v)} placeholder="0" style={inputStyle} /></div>
+          <div><label style={lab}>موجودی ({f.unit})</label><NumberInput value={f.stock} onChange={v => set('stock', v)} style={inputStyle} /></div>
+          <div><label style={lab}>حداقلِ سفارش ({f.unit})</label><NumberInput value={f.minOrder} onChange={v => set('minOrder', v)} placeholder="0" style={inputStyle} /></div>
+          <div><label style={lab}>آستانهٔ هشدارِ موجودی</label><NumberInput value={f.threshold} onChange={v => set('threshold', v)} placeholder="خودکار" style={inputStyle} /></div>
+          <div><label style={lab}>زمانِ تحویل (روز)</label><NumberInput value={f.deliveryDays} onChange={v => set('deliveryDays', v)} placeholder="0" style={inputStyle} /></div>
+          <div style={{ gridColumn: '1 / -1' }}><label style={lab}>گارانتی / ضمانت</label><input value={f.warranty} onChange={e => set('warranty', e.target.value)} placeholder="مثلاً ضمانتِ اصالت و کیفیت" style={inputStyle} /></div>
+        </div>
+
+        {/* توضیحات + AI */}
+        <label style={{ ...lab, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span>توضیحاتِ محصول</span>{aiBtn('describe', 'نوشتن با AI')}</label>
+        <textarea value={f.description} onChange={e => set('description', e.target.value)} rows={4} placeholder="کاربرد، مزیت‌ها، کیفیت و مناسب برای چه پروژه‌هایی…" style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.9, marginBottom: 14 }} />
+
+        {/* مشخصاتِ فنی + AI */}
+        <label style={{ ...lab, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span>مشخصاتِ فنی</span>{aiBtn('specs', 'پیشنهادِ مشخصات')}</label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+          {specs.map((sp, i) => (
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr auto', gap: 8 }}>
+              <input value={sp.key} onChange={e => setSpecs(ss => ss.map((x, j) => j === i ? { ...x, key: e.target.value } : x))} placeholder="عنوان (مثلاً استاندارد)" style={inputStyle} />
+              <input value={sp.value} onChange={e => setSpecs(ss => ss.map((x, j) => j === i ? { ...x, value: e.target.value } : x))} placeholder="مقدار (مثلاً A3 / استاندارد ملی)" style={inputStyle} />
+              <button onClick={() => setSpecs(ss => ss.length > 1 ? ss.filter((_, j) => j !== i) : [{ key: '', value: '' }])} style={{ ...actionBtn, color: '#f87171', width: 34, padding: 0 }}>×</button>
+            </div>
+          ))}
+          <button onClick={() => setSpecs(ss => [...ss, { key: '', value: '' }])} style={{ ...actionBtn, color: 'var(--gold)', borderColor: 'var(--gold)', alignSelf: 'flex-start' }}>+ مشخصهٔ دیگر</button>
+        </div>
+
+        {/* برچسب‌ها + AI */}
+        <label style={{ ...lab, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span>برچسب‌ها (با ویرگول جدا کنید)</span>{aiBtn('tags', 'پیشنهادِ برچسب')}</label>
+        <input value={tags} onChange={e => setTags(e.target.value)} placeholder="میلگرد، آجدار، ذوب‌آهن، A3" style={{ ...inputStyle, marginBottom: 14 }} />
+
+        {/* سوییچ‌ها */}
+        <div style={{ display: 'flex', gap: 20, marginBottom: 8, flexWrap: 'wrap' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}><input type="checkbox" checked={f.featured} onChange={e => set('featured', e.target.checked)} /> محصولِ ویژه در ویترین</label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}><input type="checkbox" checked={f.active} onChange={e => set('active', e.target.checked)} /> نمایش در فروشگاه (فعال)</label>
+        </div>
+
+        {aiErr && <div style={{ fontSize: 12, color: aiErr.includes('پیشنهاد') ? 'var(--gold)' : '#f87171', marginBottom: 10 }}>{aiErr}</div>}
+
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8, borderTop: '1px solid var(--line)', paddingTop: 16 }}>
+          <button onClick={onClose} style={{ padding: '10px 20px', borderRadius: 10, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--muted)', fontSize: 13.5, cursor: 'pointer', fontFamily: FONT }}>انصراف</button>
+          <button onClick={save} disabled={saving} style={{ padding: '10px 26px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 13.5, fontWeight: 700, cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.6 : 1, fontFamily: FONT }}>{saving ? 'در حال ذخیره…' : (product ? 'ذخیرهٔ تغییرات' : 'ثبتِ محصول')}</button>
         </div>
       </div>
     </div>

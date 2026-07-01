@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { getAccount } from './account-store'
+import { getProfile } from './profile-store'
 
 // Per-owner (per-profile) store for the «بازار مصالح» seller dashboard.
 // Mirrors the file-based persistence style of builder-store.ts / crm-store.ts.
@@ -10,6 +11,8 @@ const DATA_FILE = join(process.cwd(), '.materials-data.json')
 
 export type OrderStatus = 'pending' | 'preparing' | 'shipped' | 'delivered' | 'canceled'
 export type InquiryStatus = 'new' | 'answered'
+
+export interface ProductSpec { key: string; value: string }
 
 export interface Product {
   id: string
@@ -22,6 +25,41 @@ export interface Product {
   sold: number       // تعداد فروخته‌شده (برای دسته‌های پرفروش)
   active: boolean
   createdAt: number
+  // ── مشخصاتِ کاملِ فروشگاهی (همه اختیاری، سازگار با دادهٔ قدیمی) ──
+  brand?: string         // برند / تولیدکننده
+  origin?: string        // کشور/محلِ ساخت
+  description?: string    // توضیحاتِ کامل
+  images?: string[]       // گالریِ تصاویر
+  specs?: ProductSpec[]   // مشخصاتِ فنی (کلید/مقدار)
+  tags?: string[]         // برچسب‌ها
+  minOrder?: number       // حداقلِ سفارش (به واحد)
+  discountPct?: number    // درصدِ تخفیف
+  deliveryDays?: number   // زمانِ تحویل (روز)
+  warranty?: string       // گارانتی/ضمانت
+  featured?: boolean      // نمایشِ ویژه در ویترین
+}
+
+function cleanProductPatch(input: any): Partial<Product> {
+  const out: any = {}
+  if (input.name !== undefined) out.name = String(input.name).slice(0, 160)
+  if (input.category !== undefined) out.category = String(input.category).slice(0, 80)
+  if (input.unit !== undefined) out.unit = String(input.unit).slice(0, 24)
+  if (input.price !== undefined) out.price = Math.max(0, Number(input.price) || 0)
+  if (input.stock !== undefined) out.stock = Math.max(0, Number(input.stock) || 0)
+  if (input.threshold !== undefined) out.threshold = Math.max(0, Number(input.threshold) || 0)
+  if (input.minOrder !== undefined) out.minOrder = Math.max(0, Number(input.minOrder) || 0)
+  if (input.discountPct !== undefined) out.discountPct = Math.max(0, Math.min(90, Number(input.discountPct) || 0))
+  if (input.deliveryDays !== undefined) out.deliveryDays = Math.max(0, Number(input.deliveryDays) || 0)
+  if (input.brand !== undefined) out.brand = String(input.brand).slice(0, 80)
+  if (input.origin !== undefined) out.origin = String(input.origin).slice(0, 80)
+  if (input.warranty !== undefined) out.warranty = String(input.warranty).slice(0, 120)
+  if (input.description !== undefined) out.description = String(input.description).slice(0, 4000)
+  if (input.featured !== undefined) out.featured = !!input.featured
+  if (input.active !== undefined) out.active = !!input.active
+  if (Array.isArray(input.images)) out.images = input.images.slice(0, 12).map((s: any) => String(s).slice(0, 100000))
+  if (Array.isArray(input.tags)) out.tags = input.tags.slice(0, 20).map((s: any) => String(s).slice(0, 40)).filter(Boolean)
+  if (Array.isArray(input.specs)) out.specs = input.specs.slice(0, 40).map((s: any) => ({ key: String(s.key || '').slice(0, 60), value: String(s.value || '').slice(0, 120) })).filter((s: ProductSpec) => s.key && s.value)
+  return out
 }
 
 export interface Order {
@@ -51,6 +89,7 @@ export interface Shop {
   products: Product[]
   orders: Order[]
   inquiries: Inquiry[]
+  slug?: string        // شناسهٔ عمومیِ ویترین (/forushgah/[slug])
   createdAt: number
 }
 
@@ -75,13 +114,81 @@ function emptyShop(owner: string): Shop {
   return { profile: { name: acc?.name || '', rating: 0 }, products: [], orders: [], inquiries: [], createdAt: Date.now() }
 }
 
+function makeSlug(owner: string, db: DB): string {
+  const taken = new Set(Object.values(db.shops).map(x => x.slug).filter(Boolean) as string[])
+  // پایه از نامِ فروشگاه (لاتین/فارسی) یا «shop»؛ در صورتِ تکراری‌بودن پسوندِ کوتاه.
+  const base = 'shop'
+  let slug = base + '-' + randomBytes(3).toString('hex')
+  while (taken.has(slug)) slug = base + '-' + randomBytes(3).toString('hex')
+  return slug
+}
+
 export function getShop(owner: string): Shop {
   const db = load()
-  if (!db.shops[owner]) { db.shops[owner] = emptyShop(owner); save(db) }
+  let changed = false
+  if (!db.shops[owner]) { db.shops[owner] = emptyShop(owner); changed = true }
   const s = db.shops[owner]
+  if (!s.slug) { s.slug = makeSlug(owner, db); changed = true }
   // نامِ فروشگاه اگر خالی بود از حسابِ کاربر پر شود (بدونِ ذخیرهٔ اجباری).
   if (!s.profile.name) { const acc = getAccount(owner); if (acc?.name) s.profile.name = acc.name }
+  if (changed) save(db)
   return s
+}
+
+// یافتنِ فروشگاه از روی slug عمومی → مالک (شمارهٔ تلفن) و فروشگاه.
+export function shopBySlug(slug: string): { owner: string; shop: Shop } | null {
+  const db = load()
+  for (const [owner, shop] of Object.entries(db.shops)) {
+    if (shop.slug === slug) return { owner, shop }
+  }
+  return null
+}
+
+// دادهٔ عمومیِ ویترین: برندینگ از profile-store + محصولاتِ فعال + امتیاز. بدونِ شماره تلفن.
+export function publicShop(slug: string) {
+  const found = shopBySlug(slug)
+  if (!found) return null
+  const { owner, shop } = found
+  const p = getProfile(owner)
+  const name = p.businessName || shop.profile.name || p.displayName || 'فروشگاه مصالح'
+  return {
+    slug,
+    name,
+    tagline: p.tagline || '',
+    about: p.about || '',
+    logo: p.logo || '',
+    cover: p.cover || '',
+    rating: shop.profile.rating || 0,
+    city: p.city || '',
+    province: p.province || '',
+    address: p.address || '',
+    workHours: p.workHours || '',
+    website: p.website || '',
+    email: p.email || '',
+    social: p.social || {},
+    specialties: p.specialties || [],
+    services: p.services || [],
+    areas: p.areas || [],
+    establishedYear: p.establishedYear || '',
+    hasPhone: !!(p.contactPhone || p.landline || owner),
+    productCount: shop.products.filter(x => x.active).length,
+    products: shop.products.filter(x => x.active),
+  }
+}
+
+// شمارهٔ تماسِ عمومیِ فروشنده (فقط پس از ورودِ کاربر فراخوانی می‌شود).
+export function shopPhone(slug: string): string | null {
+  const found = shopBySlug(slug)
+  if (!found) return null
+  const p = getProfile(found.owner)
+  return p.contactPhone || p.landline || found.owner || null
+}
+
+// استعلامِ عمومی از سمتِ خریدار روی ویترین → به پنلِ فروشنده اضافه می‌شود.
+export function addPublicInquiry(slug: string, input: { customer: string; product: string; qty: string; note?: string }): Inquiry | null {
+  const found = shopBySlug(slug)
+  if (!found) return null
+  return addInquiry(found.owner, input)
 }
 
 function mutate(owner: string, fn: (s: Shop) => void) {
@@ -146,6 +253,7 @@ export function shopStats(owner: string) {
 
   return {
     profile: s.profile,
+    slug: s.slug || '',
     kpis: {
       activeProducts: activeProducts.length,
       lowStockCount: lowStock.length,
@@ -164,20 +272,29 @@ export function shopStats(owner: string) {
 }
 
 // ---- محصولات ----
-export function addProduct(owner: string, input: { name: string; category: string; price: number; unit: string; stock: number; threshold?: number }): Product {
+export function addProduct(owner: string, input: any): Product {
   let created!: Product
   mutate(owner, s => {
-    created = { id: id('p_'), name: input.name, category: input.category, price: input.price, unit: input.unit, stock: input.stock, threshold: input.threshold ?? Math.max(1, Math.round(input.stock * 0.15)), sold: 0, active: true, createdAt: Date.now() }
+    const c = cleanProductPatch(input)
+    const stock = c.stock ?? 0
+    created = {
+      id: id('p_'), name: c.name || '', category: c.category || 'سایر', price: c.price ?? 0,
+      unit: c.unit || 'عدد', stock, threshold: c.threshold ?? Math.max(1, Math.round(stock * 0.15)),
+      sold: 0, active: c.active ?? true, createdAt: Date.now(),
+      brand: c.brand, origin: c.origin, description: c.description, images: c.images, specs: c.specs,
+      tags: c.tags, minOrder: c.minOrder, discountPct: c.discountPct, deliveryDays: c.deliveryDays,
+      warranty: c.warranty, featured: c.featured,
+    }
     s.products.unshift(created)
   })
   return created
 }
-export function updateProduct(owner: string, productId: string, patch: Partial<Omit<Product, 'id' | 'createdAt'>>): Product | null {
+export function updateProduct(owner: string, productId: string, patch: any): Product | null {
   let result: Product | null = null
   mutate(owner, s => {
     const p = s.products.find(x => x.id === productId)
     if (!p) return
-    Object.assign(p, patch)
+    Object.assign(p, cleanProductPatch(patch))
     result = p
   })
   return result
