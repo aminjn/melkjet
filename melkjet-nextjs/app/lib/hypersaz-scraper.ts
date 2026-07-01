@@ -196,55 +196,75 @@ async function runWp(cfg: ScraperConfig) {
 
 async function collectSitemapUrls(base: string, cap: number): Promise<string[]> {
   const urls = new Set<string>()
-  const seeds = ['/sitemap_index.xml', '/product-sitemap.xml', '/sitemap.xml', '/wp-sitemap.xml']
-  const subSitemaps: string[] = []
-  for (const s of seeds) {
+  // ۱) یک نقشهٔ سایت (index یا urlset) پیدا کن
+  let text = '', found = ''
+  for (const s of ['/sitemap_index.xml', '/sitemap.xml', '/wp-sitemap.xml', '/product-sitemap.xml']) {
     const r = await fetchText(base + s, 15000)
-    if (!r.ok) continue
-    const locs = [...r.text.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map(m => m[1])
-    if (/<sitemapindex/i.test(r.text)) { for (const l of locs) if (/product|shop|store|kala|mahsul/i.test(l) || locs.length <= 6) subSitemaps.push(l) }
-    else if (/<urlset/i.test(r.text)) { for (const l of locs) urls.add(l) }
-    if (urls.size || subSitemaps.length) break
+    if (r.ok && /<(sitemapindex|urlset)/i.test(r.text)) { text = r.text; found = base + s; break }
   }
-  for (const sm of subSitemaps) {
-    if (urls.size >= cap) break
-    const r = await fetchText(sm, 15000)
-    if (!r.ok) continue
-    for (const m of r.text.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)) { urls.add(m[1]); if (urls.size >= cap) break }
+  if (!text) return []
+  const locsOf = (t: string) => [...t.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map(m => m[1].replace(/&amp;/g, '&'))
+  const locs = locsOf(text)
+  if (/<urlset/i.test(text) && !/<sitemapindex/i.test(text)) {
+    // نقشهٔ سایتِ مستقیم (احتمالاً همان product-sitemap)
+    for (const l of locs) { urls.add(l); if (urls.size >= cap) break }
+  } else {
+    // index → زیرنقشه‌های «محصول» را ترجیح بده؛ اگر نبود، همه را بخوان.
+    let subs = locs.filter(l => /product/i.test(l))
+    if (!subs.length) subs = locs.filter(l => !/(post|page|category|tag|author|user)[-_]?sitemap/i.test(l))
+    if (!subs.length) subs = locs
+    for (const sm of subs) {
+      if (urls.size >= cap) break
+      const r = await fetchText(sm, 15000)
+      if (!r.ok) continue
+      for (const u of locsOf(r.text)) { urls.add(u); if (urls.size >= cap) break }
+    }
   }
-  // فیلترِ لینک‌های محصول (heuristic) اگر مسیرِ مشخصی دارند
   const all = [...urls]
-  const prod = all.filter(u => /\/product\/|\/products\/|\/kala\/|\/shop\/|\/mahsul/i.test(u))
+  // اگر زیرنقشهٔ محصول را گرفته باشیم همه محصول‌اند؛ وگرنه با مسیر فیلتر کن.
+  const prod = all.filter(u => /\/product\/|\/products\/|\/kala\/|\/shop\/|\/mahsul|\/mahsulat/i.test(u))
   return (prod.length ? prod : all).slice(0, cap)
+}
+function ogMeta(html: string, prop: string): string {
+  const m = html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']+)["']`, 'i'))
+    || html.match(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${prop}["']`, 'i'))
+  return m ? m[1].trim() : ''
 }
 async function runSitemap(cfg: ScraperConfig) {
   const base = cfg.baseUrl
   patch({ label: 'خواندنِ نقشهٔ سایت' })
   const urls = await collectSitemapUrls(base, cfg.maxProducts)
-  patch({ total: urls.length, label: 'اسکرپِ صفحاتِ محصول' })
-  let added = 0, updated = 0, done = 0
+  if (urls.length === 0) throw new Error('در نقشهٔ سایت هیچ لینکی پیدا نشد — «تستِ اتصال» را بزنید یا آدرسِ سایت را بررسی کنید.')
+  patch({ total: urls.length, label: `اسکرپِ ${urls.length.toLocaleString('fa-IR')} صفحه` })
+  let added = 0, updated = 0, done = 0, hits = 0
   const batch: any[] = []
   const flush = () => { if (batch.length) { const r = upsertScraped(batch.splice(0)); added += r.added; updated += r.updated } }
-  // همزمانیِ محدود
-  const CONC = 4
+  const CONC = 5
   let idx = 0
   async function worker() {
     while (loadJob().running && idx < urls.length) {
       const u = urls[idx++]
       const r = await fetchText(u, 15000)
       done++
-      if (r.ok && /application\/ld\+json/i.test(r.text)) {
+      if (r.ok && r.text) {
         const ld = findProductLd(r.text)
-        if (ld && ld.name) {
-          const image = (Array.isArray(ld.image) ? ld.image[0] : ld.image) || ogImage(r.text)
-          batch.push({
-            name: stripHtml(String(ld.name)),
-            categoryName: categoryFromLd(r.text) || (ld.category ? String(ld.category) : 'دسته‌بندی‌نشده'),
-            image: image ? abs(base, String(typeof image === 'object' ? image.url : image)) : undefined,
-            description: stripHtml(String(ld.description || '')).slice(0, 800),
-            brand: ld.brand ? String(ld.brand.name || ld.brand) : undefined,
-            externalId: (u.match(/(\d+)(?:\/?$)/)?.[1]) || undefined, externalUrl: u,
-          })
+        const ogType = ogMeta(r.text, 'og:type')
+        const isProduct = !!ld || /product/i.test(ogType)
+        if (isProduct) {
+          const name = stripHtml(String(ld?.name || ogMeta(r.text, 'og:title') || ''))
+          if (name) {
+            hits++
+            const ldImg = ld ? (Array.isArray(ld.image) ? ld.image[0] : ld.image) : ''
+            const image = (typeof ldImg === 'object' ? ldImg?.url : ldImg) || ogImage(r.text)
+            batch.push({
+              name,
+              categoryName: categoryFromLd(r.text) || (ld?.category ? String(ld.category) : 'دسته‌بندی‌نشده'),
+              image: image ? abs(base, String(image)) : undefined,
+              description: stripHtml(String(ld?.description || ogMeta(r.text, 'og:description') || '')).slice(0, 800),
+              brand: ld?.brand ? String(ld.brand.name || ld.brand) : undefined,
+              externalId: (u.match(/(\d+)(?:\/?$)/)?.[1]) || undefined, externalUrl: u,
+            })
+          }
         }
       }
       if (batch.length >= 20) flush()
@@ -254,6 +274,7 @@ async function runSitemap(cfg: ScraperConfig) {
   await Promise.all(Array.from({ length: CONC }, () => worker()))
   flush()
   patch({ done, added, updated })
+  if (hits === 0) throw new Error(`${urls.length.toLocaleString('fa-IR')} صفحه بررسی شد ولی صفحهٔ محصولی با Schema/OG یافت نشد. احتمالاً لینک‌های نقشهٔ سایت محصول نیستند — با «تست» بررسی می‌کنیم.`)
   return { added, updated }
 }
 
