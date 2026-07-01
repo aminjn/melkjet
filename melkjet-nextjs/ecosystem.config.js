@@ -19,7 +19,9 @@ const CWD = '/var/www/melkjet/melkjet-nextjs'
 
 function instance(port, idx) {
   return {
-    name: 'melkjet',
+    // نامِ یکتا برای هر اینستنس — وگرنه pm2 با نام‌های تکراری در هر reload/start
+    // چند اینستنسِ جدید «اضافه» می‌کند (به‌جای جایگزینی) و ده‌ها فرایندِ موازی جمع می‌شود.
+    name: `melkjet-${port}`,
     cwd: CWD,
     // مستقیم به باینریِ next اشاره می‌کنیم (نه npm) تا یک لایه فرایندِ اضافه نباشد.
     script: 'node_modules/next/dist/bin/next',

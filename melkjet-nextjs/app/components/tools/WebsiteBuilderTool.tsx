@@ -706,6 +706,62 @@ function BlockBody({ block, primary, myListings, myArticles, teamMembers }: { bl
       </div>
     )
   }
+  if (t === 'catalog') {
+    const SAMPLE = [
+      { name: 'میلگرد آجدار ۱۶', brand: 'ذوب‌آهن اصفهان', price: '۳۸٬۰۰۰٬۰۰۰', unit: 'تن' },
+      { name: 'سیمان تیپ ۲', brand: 'سیمان تهران', price: '۹۵٬۰۰۰', unit: 'کیسه' },
+      { name: 'کاشی ۶۰×۶۰ کرم', brand: 'کاشی مرجان', price: '۳۲۰٬۰۰۰', unit: 'متر' },
+      { name: 'تیرآهن ۱۴', brand: 'فولاد اهواز', price: '۴۲٬۰۰۰٬۰۰۰', unit: 'شاخه' },
+      { name: 'گچ سفیدکاری', brand: 'گچ سمنان', price: '۶۰٬۰۰۰', unit: 'کیسه' },
+      { name: 'شیر اهرمی روشویی', brand: 'قهرمان', price: '۱٬۸۰۰٬۰۰۰', unit: 'عدد' },
+    ]
+    const grads = ['#2d2215,#1e1a12', '#1e2215,#141a10', '#15202d,#101828', '#251528,#1a0e1e', '#152825,#0e1a18', '#2d1515,#1e0e0e']
+    const count = Math.max(3, Math.min(12, Number(p.count) || 6))
+    const items = Array.from({ length: count }).map((_, i) => SAMPLE[i % SAMPLE.length])
+    return (
+      <div style={{ background: '#fff', padding: '28px', direction: 'rtl' }}>
+        <div style={{ fontSize: 19, fontWeight: 800, color: '#1a1510', textAlign: 'center', marginBottom: 18 }}>{p.heading || 'محصولات ما'}</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 14 }}>
+          {items.map((it, i) => (
+            <div key={i} style={{ background: '#f7f5f1', borderRadius: 12, overflow: 'hidden', border: '1px solid #eee' }}>
+              <div style={{ height: 88, background: `linear-gradient(135deg,${grads[i % grads.length]})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>🧱</div>
+              <div style={{ padding: 11 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1a1510', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.name}</div>
+                <div style={{ fontSize: 10.5, color: '#999', marginBottom: 7 }}>{it.brand}</div>
+                <div style={{ fontSize: 12.5, fontWeight: 800, color: primary }}>{it.price} <span style={{ fontSize: 10, color: '#999', fontWeight: 400 }}>تومان/{it.unit}</span></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+  if (t === 'pricelist') {
+    const ROWS = [
+      { name: 'میلگرد آجدار ۱۶ · ذوب‌آهن', unit: 'تن', price: '۳۸٬۰۰۰٬۰۰۰' },
+      { name: 'تیرآهن ۱۴ · فولاد اهواز', unit: 'شاخه', price: '۴۲٬۰۰۰٬۰۰۰' },
+      { name: 'سیمان تیپ ۲ · تهران', unit: 'کیسه', price: '۹۵٬۰۰۰' },
+      { name: 'کاشی ۶۰×۶۰ · مرجان', unit: 'متر', price: '۳۲۰٬۰۰۰' },
+      { name: 'گچ سفیدکاری · سمنان', unit: 'کیسه', price: '۶۰٬۰۰۰' },
+    ]
+    return (
+      <div style={{ background: '#faf9f7', padding: '28px', direction: 'rtl' }}>
+        <div style={{ fontSize: 19, fontWeight: 800, color: '#1a1510', textAlign: 'center', marginBottom: 18 }}>{p.heading || 'نرخِ روزِ محصولات'}</div>
+        <div style={{ maxWidth: 560, margin: '0 auto', background: '#fff', borderRadius: 12, overflow: 'hidden', border: '1px solid #eee' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', padding: '11px 16px', background: `${primary}14`, fontSize: 12.5, fontWeight: 800, color: '#1a1510' }}>
+            <div>کالا</div><div>واحد</div><div style={{ textAlign: 'left' }}>قیمت (تومان)</div>
+          </div>
+          {ROWS.map((r, i) => (
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', padding: '11px 16px', borderTop: '1px solid #f0efe9', fontSize: 12.5, alignItems: 'center' }}>
+              <div style={{ fontWeight: 600, color: '#1a1510' }}>{r.name}</div>
+              <div style={{ color: '#888' }}>{r.unit}</div>
+              <div style={{ textAlign: 'left', fontWeight: 800, color: primary }}>{r.price}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
   if (t === 'listings') {
     const total = Math.max(1, Math.min(24, Number(p.total) || Number(p.count) || 9))
     const perSlide = Math.max(1, Math.min(5, Number(p.perSlide) || 3))
@@ -1186,7 +1242,7 @@ function ReviewsManager() {
   )
 }
 
-export default function WebsiteBuilderTool({ embedded = false, view: viewProp, onView }: { embedded?: boolean; view?: WebsiteView; onView?: (v: WebsiteView) => void }) {
+export default function WebsiteBuilderTool({ embedded = false, view: viewProp, onView, profile: profileProp }: { embedded?: boolean; view?: WebsiteView; onView?: (v: WebsiteView) => void; profile?: string }) {
   // Default to 'editor' so standalone /website-builder stays pixel-identical (always the builder).
   const [internalView, setInternalView] = useState<WebsiteView>('editor')
   const activeView: WebsiteView = viewProp ?? internalView
@@ -1255,7 +1311,9 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
       .then(r => r.ok ? r.json() : null)
       .then(prof => {
         if (cancelled) { setSavedSiteChecked(true); return }
-        const mapped = prof?.dash ? DASH_TO_PROFILE[prof.dash as string] : undefined
+        // profileِ پنلِ میزبان (مثلِ «فروشگاه» برای پنلِ مصالح) قطعی است — چون کاربر ممکن
+        // است سوپرادمینِ درحالِ‌پیش‌نمایش باشد و dashش /admin برگردد.
+        const mapped = profileProp || (prof?.dash ? DASH_TO_PROFILE[prof.dash as string] : undefined)
         if (mapped) { setTplFilter(mapped); setLockedProfile(mapped) }
         if (prof?.account?.name) setOwnerName(String(prof.account.name))
         const phone = prof?.phone ? String(prof.phone) : ''

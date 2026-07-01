@@ -476,7 +476,7 @@ export default function BuilderPage() {
             : mktView === 'articles' ? <ArticleEditor compact author={myName || undefined} />
             : mktView ? <MarketingTool embedded view={mktView} onView={v => setMktView(v)} />
             : wfView ? <div style={{ height: 'calc(100vh - 130px)' }}><WorkflowTool embedded view={wfView} onView={v => setWfView(v)} /></div>
-            : wbView ? <div style={{ height: 'calc(100vh - 130px)' }}><WebsiteBuilderTool embedded view={wbView} onView={v => setWbView(v)} /></div>
+            : wbView ? <div style={{ height: 'calc(100vh - 130px)' }}><WebsiteBuilderTool embedded profile="سازنده" view={wbView} onView={v => setWbView(v)} /></div>
             : view === 'articles' ? (
             <div>
               <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.7 }}>

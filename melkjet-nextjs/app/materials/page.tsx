@@ -428,7 +428,7 @@ export default function MaterialsPage() {
             : mktView === 'articles' ? <ArticleEditor compact author={myName || undefined} />
             : mktView ? <MarketingTool embedded view={mktView} onView={v => setMktView(v)} />
             : wfView ? <div style={{ height: 'calc(100vh - 130px)' }}><WorkflowTool embedded view={wfView} onView={v => setWfView(v)} /></div>
-            : wbView ? <div style={{ height: 'calc(100vh - 130px)' }}><WebsiteBuilderTool embedded view={wbView} onView={v => setWbView(v)} /></div>
+            : wbView ? <div style={{ height: 'calc(100vh - 130px)' }}><WebsiteBuilderTool embedded profile="فروشگاه" view={wbView} onView={v => setWbView(v)} /></div>
             : <>
           {view === 'dashboard' && <DashboardView stats={stats} post={post} onAll={() => setView('orders')} />}
           {view === 'assistant' && (

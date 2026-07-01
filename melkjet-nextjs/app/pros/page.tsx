@@ -627,7 +627,7 @@ export default function ProsPage() {
             : mktView === 'articles' ? <ArticleEditor compact author={stats.profile.name || undefined} />
             : mktView ? <MarketingTool embedded view={mktView} onView={v => setMktView(v)} />
             : wfView ? <div style={{ height: 'calc(100vh - 130px)' }}><WorkflowTool embedded view={wfView} onView={v => setWfView(v)} /></div>
-            : wbView ? <div style={{ height: 'calc(100vh - 130px)' }}><WebsiteBuilderTool embedded view={wbView} onView={v => setWbView(v)} /></div>
+            : wbView ? <div style={{ height: 'calc(100vh - 130px)' }}><WebsiteBuilderTool embedded profile="مشاور" view={wbView} onView={v => setWbView(v)} /></div>
             : <>
           {/* DASHBOARD */}
           {view === 'dashboard' && <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
