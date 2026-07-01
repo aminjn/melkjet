@@ -103,12 +103,42 @@ export function updateProduct(pid: string, patch: any): CatalogProduct | null {
 export function deleteProduct(pid: string) { const db = load(); db.products = db.products.filter(p => p.id !== pid); save(db) }
 
 // ادغامِ نتیجهٔ اسکرپ: بر اساسِ externalId (source=hypersaz) به‌روزرسانی یا افزودن.
-export function upsertScraped(items: { name: string; categoryName: string; brand?: string; unit?: string; image?: string; description?: string; specs?: CatalogSpec[]; priceHistory?: PricePoint[]; externalId?: string; externalUrl?: string }[]): { added: number; updated: number } {
+// مسیرِ دسته‌ها را سلسله‌مراتبی می‌سازد (والد→زیردسته) و عمیق‌ترین دسته را برمی‌گرداند.
+function ensureCategoryPathInDb(db: DB, path: string[]): CatalogCategory | null {
+  let parentId: string | undefined = undefined
+  let cat: CatalogCategory | null = null
+  for (const rawName of path) {
+    const name = String(rawName).trim(); if (!name) continue
+    const n = norm(name)
+    let found = db.categories.find(c => norm(c.name) === n && (c.parentId || '') === (parentId || ''))
+    if (!found) { found = { id: id('c_'), name: name.slice(0, 80), parentId, order: db.categories.length, active: true, createdAt: Date.now() }; db.categories.push(found) }
+    parentId = found.id; cat = found
+  }
+  return cat
+}
+
+// پاک‌کردنِ دسته‌جمعی — «scraped» فقط اسکرپ‌شده‌ها، «all» همه‌چیز.
+export function clearCatalog(scope: 'scraped' | 'all'): { products: number; categories: number } {
+  const db = load()
+  const pBefore = db.products.length, cBefore = db.categories.length
+  if (scope === 'all') { db.products = []; db.categories = [] }
+  else {
+    db.products = db.products.filter(p => p.source !== 'hypersaz')
+    // دسته‌هایی که دیگر نه محصولی دارند نه زیردسته‌ای، حذف شوند.
+    const usedCat = new Set(db.products.map(p => p.categoryId))
+    const hasChild = new Set(db.categories.filter(c => c.parentId).map(c => c.parentId!))
+    db.categories = db.categories.filter(c => usedCat.has(c.id) || hasChild.has(c.id))
+  }
+  save(db)
+  return { products: pBefore - db.products.length, categories: cBefore - db.categories.length }
+}
+
+export function upsertScraped(items: { name: string; categoryName?: string; categoryPath?: string[]; brand?: string; unit?: string; image?: string; description?: string; specs?: CatalogSpec[]; priceHistory?: PricePoint[]; externalId?: string; externalUrl?: string }[]): { added: number; updated: number } {
   let added = 0, updated = 0
   const db = load()
   for (const it of items) {
     if (!it.name) continue
-    const cat = ensureCategoryInDb(db, it.categoryName || 'دسته‌بندی‌نشده')
+    const cat = (it.categoryPath && it.categoryPath.length ? ensureCategoryPathInDb(db, it.categoryPath) : null) || ensureCategoryInDb(db, it.categoryName || 'دسته‌بندی‌نشده')
     const ext = it.externalId ? String(it.externalId) : ''
     let existing = ext ? db.products.find(p => p.source === 'hypersaz' && p.externalId === ext) : undefined
     if (!existing) existing = db.products.find(p => p.source === 'hypersaz' && norm(p.name) === norm(it.name))

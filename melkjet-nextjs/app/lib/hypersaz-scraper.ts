@@ -95,19 +95,28 @@ function findProductLd(html: string): any | null {
   }
   return null
 }
-function categoryFromLd(html: string): string {
+// کلِ مسیرِ دسته از breadcrumb: [صفحه اصلی, والد, زیردسته, نامِ محصول] → [والد, زیردسته]
+function categoryPathFromLd(html: string, productName?: string): string[] {
   for (const b of jsonLdBlocks(html)) {
     const arr = Array.isArray(b) ? b : (b['@graph'] ? b['@graph'] : [b])
     for (const node of arr) {
       const t = node && node['@type']
       if (t === 'BreadcrumbList' || (Array.isArray(t) && t.includes('BreadcrumbList'))) {
-        const items = node.itemListElement || []
-        // یکی‌مانده‌به‌آخر معمولاً دستهٔ محصول است
-        if (items.length >= 2) { const it = items[items.length - 2]; const name = it?.name || it?.item?.name; if (name) return String(name) }
+        let names = (node.itemListElement || []).map((it: any) => String(it?.name || it?.item?.name || '').trim()).filter(Boolean)
+        // حذفِ «صفحه اصلی/خانه» از ابتدا
+        if (names.length && /^(صفحه اصلی|خانه|home|فروشگاه)$/i.test(names[0])) names = names.slice(1)
+        // حذفِ نامِ محصول از انتها
+        const nName = (s: string) => s.replace(/‌/g, '').replace(/\s+/g, ' ').trim()
+        if (names.length && productName && nName(names[names.length - 1]) === nName(productName)) names = names.slice(0, -1)
+        return names.filter(Boolean).slice(0, 4)
       }
     }
   }
-  return ''
+  return []
+}
+function categoryFromLd(html: string): string {
+  const p = categoryPathFromLd(html)
+  return p.length ? p[p.length - 1] : ''
 }
 function ogImage(html: string): string { const m = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i); return m ? m[1] : '' }
 
@@ -362,9 +371,11 @@ async function runSitemap(cfg: ScraperConfig) {
             const og = ogMeta(r.text, 'og:description')
             const description = other || (og && !/خرید آنلاین انواع/.test(og) ? og : '')
             const priceHistory = priceHistoryOf(r.text)
+            const catPath = categoryPathFromLd(r.text, name)
             batch.push({
               name,
-              categoryName: categoryFromLd(r.text) || (ld?.category ? String(ld.category) : 'دسته‌بندی‌نشده'),
+              categoryPath: catPath.length ? catPath : undefined,
+              categoryName: catPath[catPath.length - 1] || (ld?.category ? String(ld.category) : 'دسته‌بندی‌نشده'),
               image: image || undefined,
               description: stripHtml(description).slice(0, 800),
               brand,
@@ -414,7 +425,7 @@ export async function inspectProduct(url: string) {
   const extracted = {
     name: (findProductLd(html)?.name && stripHtml(String(findProductLd(html)!.name))) || htmlName(html),
     image: productImg(html, origin),
-    category: categoryFromLd(html),
+    categoryPath: categoryPathFromLd(html, (findProductLd(html)?.name && stripHtml(String(findProductLd(html)!.name))) || htmlName(html)),
     specsCount: specs.length,
     specs: specs.slice(0, 25),
     priceHistoryCount: ph.length,

@@ -25,6 +25,7 @@ export default function CatalogAdminView() {
   const [catModal, setCatModal] = useState<{ mode: 'add' | 'edit'; cat?: Cat; parentId?: string } | null>(null)
   const [confirmDel, setConfirmDel] = useState<{ kind: 'cat' | 'prod'; id: string; name: string } | null>(null)
   const [scrape, setScrape] = useState(false)
+  const [clearScope, setClearScope] = useState<'scraped' | 'all' | null>(null)
   const [busy, setBusy] = useState(false)
   const [toast, setToast] = useState('')
 
@@ -65,6 +66,7 @@ export default function CatalogAdminView() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {stats && stats.products > 0 && <button onClick={() => setClearScope('scraped')} style={{ ...ghost, border: '1px solid #e7674a', color: '#f87171' }}>🗑 پاک‌کردنِ دسته‌جمعی</button>}
           <button onClick={() => setScrape(true)} style={{ ...ghost, border: '1px solid var(--gold)', color: 'var(--gold)', fontWeight: 700 }}>⛏ اسکرپ و تنظیمات</button>
           <button onClick={() => setEditing('new')} style={gold}>+ کالای جدید</button>
         </div>
@@ -78,14 +80,15 @@ export default function CatalogAdminView() {
             <button onClick={() => setCatModal({ mode: 'add' })} style={{ fontSize: 12, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: FONT }}>+ دستهٔ اصلی</button>
           </div>
           <button onClick={() => setActiveCat('')} style={catBtn(activeCat === '', 0)}>همهٔ کالاها</button>
-          {roots.map(c => (
-            <div key={c.id}>
-              <CatRow c={c} depth={0} active={activeCat === c.id} onSelect={() => setActiveCat(c.id)} onAddSub={() => setCatModal({ mode: 'add', parentId: c.id })} onEdit={() => setCatModal({ mode: 'edit', cat: c })} onDel={() => setConfirmDel({ kind: 'cat', id: c.id, name: c.name })} />
-              {childrenOf(c.id).map(ch => (
-                <CatRow key={ch.id} c={ch} depth={1} active={activeCat === ch.id} onSelect={() => setActiveCat(ch.id)} onAddSub={() => setCatModal({ mode: 'add', parentId: ch.id })} onEdit={() => setCatModal({ mode: 'edit', cat: ch })} onDel={() => setConfirmDel({ kind: 'cat', id: ch.id, name: ch.name })} />
-              ))}
-            </div>
-          ))}
+          {(() => {
+            const node = (c: Cat, depth: number): React.ReactNode => (
+              <div key={c.id}>
+                <CatRow c={c} depth={depth} active={activeCat === c.id} onSelect={() => setActiveCat(c.id)} onAddSub={() => setCatModal({ mode: 'add', parentId: c.id })} onEdit={() => setCatModal({ mode: 'edit', cat: c })} onDel={() => setConfirmDel({ kind: 'cat', id: c.id, name: c.name })} />
+                {depth < 3 && childrenOf(c.id).map(ch => node(ch, depth + 1))}
+              </div>
+            )
+            return roots.map(c => node(c, 0))
+          })()}
           {cats.length === 0 && <div style={{ fontSize: 12, color: 'var(--muted)', padding: 8 }}>دسته‌ای نیست — «+ دستهٔ اصلی».</div>}
         </div>
 
@@ -121,6 +124,17 @@ export default function CatalogAdminView() {
       {editing && <ProductEditor product={editing === 'new' ? null : editing} cats={cats} defaultCat={activeCat} post={post} busy={busy} onClose={() => setEditing(null)} />}
       {catModal && <CategoryModal state={catModal} cats={cats} post={post} busy={busy} onClose={() => setCatModal(null)} />}
       {scrape && <ScrapePanel onClose={() => setScrape(false)} onDone={load} />}
+      {clearScope && (
+        <Overlay onClose={() => setClearScope(null)} max={440}>
+          <Head title="پاک‌کردنِ دسته‌جمعی" onClose={() => setClearScope(null)} />
+          <div style={{ fontSize: 13.5, lineHeight: 1.9, marginBottom: 16 }}>چه چیزی پاک شود؟ این عملیات بازگشت‌ناپذیر است.</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 18 }}>
+            <button onClick={async () => { const r = await post({ action: 'clearCatalog', scope: 'scraped' }); if (r) { setClearScope(null); setActiveCat('') } }} disabled={busy} style={{ ...ghost, textAlign: 'right', padding: '12px 14px' }}>🗑 فقط محصولاتِ <b>اسکرپ‌شده</b> (هایپرساز) + دسته‌های خالی — کالاهای دستی می‌مانند</button>
+            <button onClick={async () => { const r = await post({ action: 'clearCatalog', scope: 'all' }); if (r) { setClearScope(null); setActiveCat('') } }} disabled={busy} style={{ ...ghost, textAlign: 'right', padding: '12px 14px', border: '1px solid #e7674a', color: '#f87171' }}>⚠ <b>همهٔ</b> کالاها و دسته‌بندی‌ها (اسکرپ‌شده + دستی)</button>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}><button onClick={() => setClearScope(null)} style={ghost}>انصراف</button></div>
+        </Overlay>
+      )}
       {confirmDel && <ConfirmModal text={confirmDel.kind === 'cat' ? `حذفِ دستهٔ «${confirmDel.name}» و همهٔ کالاها/زیردسته‌هایش؟` : `حذفِ «${confirmDel.name}»؟`} busy={busy} onClose={() => setConfirmDel(null)} onConfirm={async () => { await post({ action: confirmDel.kind === 'cat' ? 'deleteCategory' : 'deleteProduct', id: confirmDel.id }); setConfirmDel(null) }} />}
     </div>
   )
@@ -130,7 +144,7 @@ function CatRow({ c, depth, active, onSelect, onAddSub, onEdit, onDel }: { c: Ca
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
       <button onClick={onSelect} style={{ ...catBtn(active, depth), flex: 1 }}>{depth ? '↳ ' : ''}{c.name}</button>
-      {depth === 0 && <button onClick={onAddSub} title="زیردسته" style={miniBtn}>＋</button>}
+      {depth < 3 && <button onClick={onAddSub} title="زیردسته" style={miniBtn}>＋</button>}
       <button onClick={onEdit} title="ویرایش" style={miniBtn}>✎</button>
       <button onClick={onDel} title="حذف" style={{ ...miniBtn, color: '#f87171' }}>×</button>
     </div>
