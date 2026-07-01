@@ -143,11 +143,12 @@ export async function testConnection(): Promise<{ base: string; platform: string
   }
   if (!smUrl) probes.push({ name: 'نقشهٔ سایت', url: base + '/sitemap.xml', ok: false, status: 0, note: 'یافت نشد' })
 
-  // ۵) JSON-LD روی صفحهٔ اصلی (نشانهٔ اینکه صفحاتِ محصول Schema دارند)
+  // ۵) JSON-LD روی صفحهٔ اصلی (فقط جهتِ اطلاع؛ Schema معمولاً روی صفحاتِ محصول است نه خانه)
   const hasLd = home.ok && /application\/ld\+json/i.test(home.text)
-  probes.push({ name: 'JSON-LD (Schema)', url: base + '/', ok: hasLd, status: home.status, note: hasLd ? 'موجود ✓ (اسکرپ با نقشهٔ سایت ممکن است)' : 'یافت نشد' })
+  probes.push({ name: 'JSON-LD (Schema)', url: base + '/', ok: hasLd, status: home.status, note: hasLd ? 'در صفحهٔ اصلی موجود ✓' : 'در صفحهٔ اصلی نیست (روی صفحاتِ محصول بررسی می‌شود)' })
 
-  if (recommend !== 'wp') { if (smUrl && hasLd) recommend = 'sitemap'; else if (storeOk) recommend = 'wp' }
+  // نقشهٔ سایت که باشد، اسکرپ ممکن است — از هر صفحهٔ محصول با آبشارِ Schema→OG→HTML استخراج می‌کنیم.
+  if (recommend !== 'wp') { if (smUrl) recommend = 'sitemap'; else if (storeOk) recommend = 'wp' }
   const platform = wpOk || storeOk || isWp ? 'وردپرس/ووکامرس' : (smUrl ? 'دارای نقشهٔ سایت' : 'نامشخص (نیاز به سِلکتورِ HTML)')
   return { base, platform, probes, recommend, sample }
 }
@@ -194,24 +195,25 @@ async function runWp(cfg: ScraperConfig) {
   return { added, updated }
 }
 
-async function collectSitemapUrls(base: string, cap: number): Promise<string[]> {
+async function collectSitemapUrls(base: string, cap: number): Promise<{ urls: string[]; productSpecific: boolean }> {
   const urls = new Set<string>()
-  // ۱) یک نقشهٔ سایت (index یا urlset) پیدا کن
-  let text = '', found = ''
+  let text = ''
   for (const s of ['/sitemap_index.xml', '/sitemap.xml', '/wp-sitemap.xml', '/product-sitemap.xml']) {
     const r = await fetchText(base + s, 15000)
-    if (r.ok && /<(sitemapindex|urlset)/i.test(r.text)) { text = r.text; found = base + s; break }
+    if (r.ok && /<(sitemapindex|urlset)/i.test(r.text)) { text = r.text; break }
   }
-  if (!text) return []
+  if (!text) return { urls: [], productSpecific: false }
   const locsOf = (t: string) => [...t.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map(m => m[1].replace(/&amp;/g, '&'))
   const locs = locsOf(text)
+  let productSpecific = false
   if (/<urlset/i.test(text) && !/<sitemapindex/i.test(text)) {
-    // نقشهٔ سایتِ مستقیم (احتمالاً همان product-sitemap)
     for (const l of locs) { urls.add(l); if (urls.size >= cap) break }
+    productSpecific = /product|shop|store|kala|mahsul/i.test(text.slice(0, 500)) // احتمالاً همان نقشهٔ محصول
   } else {
-    // index → زیرنقشه‌های «محصول» را ترجیح بده؛ اگر نبود، همه را بخوان.
+    // index → زیرنقشه‌های «محصول» را ترجیح بده؛ اگر نبود، همه به‌جز پست/برگه.
     let subs = locs.filter(l => /product/i.test(l))
-    if (!subs.length) subs = locs.filter(l => !/(post|page|category|tag|author|user)[-_]?sitemap/i.test(l))
+    if (subs.length) productSpecific = true
+    else subs = locs.filter(l => !/(post|page|category|tag|author|user)[-_]?sitemap/i.test(l))
     if (!subs.length) subs = locs
     for (const sm of subs) {
       if (urls.size >= cap) break
@@ -221,9 +223,23 @@ async function collectSitemapUrls(base: string, cap: number): Promise<string[]> 
     }
   }
   const all = [...urls]
-  // اگر زیرنقشهٔ محصول را گرفته باشیم همه محصول‌اند؛ وگرنه با مسیر فیلتر کن.
   const prod = all.filter(u => /\/product\/|\/products\/|\/kala\/|\/shop\/|\/mahsul|\/mahsulat/i.test(u))
-  return (prod.length ? prod : all).slice(0, cap)
+  if (prod.length) return { urls: prod.slice(0, cap), productSpecific: true }
+  return { urls: all.slice(0, cap), productSpecific }
+}
+// نامِ محصول از HTMLِ ساده (h1 → og:title → title)
+function htmlName(html: string): string {
+  const h1 = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)
+  if (h1) { const n = stripHtml(h1[1]); if (n) return n }
+  const og = ogMeta(html, 'og:title'); if (og) return og
+  const t = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
+  if (t) return stripHtml(t[1]).split(/[|–—\-]/)[0].trim()
+  return ''
+}
+function firstImg(html: string, base: string): string {
+  const og = ogImage(html); if (og) return abs(base, og)
+  const m = html.match(/<img[^>]+src=["']([^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/i)
+  return m ? abs(base, m[1]) : ''
 }
 function ogMeta(html: string, prop: string): string {
   const m = html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']+)["']`, 'i'))
@@ -233,7 +249,7 @@ function ogMeta(html: string, prop: string): string {
 async function runSitemap(cfg: ScraperConfig) {
   const base = cfg.baseUrl
   patch({ label: 'خواندنِ نقشهٔ سایت' })
-  const urls = await collectSitemapUrls(base, cfg.maxProducts)
+  const { urls, productSpecific } = await collectSitemapUrls(base, cfg.maxProducts)
   if (urls.length === 0) throw new Error('در نقشهٔ سایت هیچ لینکی پیدا نشد — «تستِ اتصال» را بزنید یا آدرسِ سایت را بررسی کنید.')
   patch({ total: urls.length, label: `اسکرپِ ${urls.length.toLocaleString('fa-IR')} صفحه` })
   let added = 0, updated = 0, done = 0, hits = 0
@@ -242,7 +258,6 @@ async function runSitemap(cfg: ScraperConfig) {
   const CONC = 5
   let idx = 0
   let stop = false
-  // پرچمِ توقف را هر ۳ ثانیه (نه هر تکرار) از فایل بخوان تا فشارِ I/O/CPU کم شود.
   const stopWatch = setInterval(() => { if (!loadJob().running) stop = true }, 3000)
   async function worker() {
     while (!stop && idx < urls.length) {
@@ -252,18 +267,20 @@ async function runSitemap(cfg: ScraperConfig) {
       if (r.ok && r.text) {
         const ld = findProductLd(r.text)
         const ogType = ogMeta(r.text, 'og:type')
-        const isProduct = !!ld || /product/i.test(ogType)
+        // اگر لینک از نقشهٔ محصول آمده، همه محصول‌اند؛ وگرنه فقط صفحاتِ دارای Schema/OG-product.
+        const isProduct = productSpecific || !!ld || /product/i.test(ogType)
         if (isProduct) {
-          const name = stripHtml(String(ld?.name || ogMeta(r.text, 'og:title') || ''))
-          if (name) {
+          // آبشارِ استخراج: JSON-LD → OG → HTMLِ ساده (h1/عنوان)
+          const name = stripHtml(String(ld?.name || '')) || htmlName(r.text)
+          if (name && name.length > 1) {
             hits++
             const ldImg = ld ? (Array.isArray(ld.image) ? ld.image[0] : ld.image) : ''
-            const image = (typeof ldImg === 'object' ? ldImg?.url : ldImg) || ogImage(r.text)
+            const image = (typeof ldImg === 'object' ? ldImg?.url : ldImg) || firstImg(r.text, base)
             batch.push({
               name,
               categoryName: categoryFromLd(r.text) || (ld?.category ? String(ld.category) : 'دسته‌بندی‌نشده'),
               image: image ? abs(base, String(image)) : undefined,
-              description: stripHtml(String(ld?.description || ogMeta(r.text, 'og:description') || '')).slice(0, 800),
+              description: stripHtml(String(ld?.description || ogMeta(r.text, 'og:description') || ogMeta(r.text, 'description') || '')).slice(0, 800),
               brand: ld?.brand ? String(ld.brand.name || ld.brand) : undefined,
               externalId: (u.match(/(\d+)(?:\/?$)/)?.[1]) || undefined, externalUrl: u,
             })
@@ -290,8 +307,7 @@ async function run() {
     if (strat === 'auto') { const t = await testConnection(); strat = t.recommend; patch({ strategy: strat, label: `استراتژی: ${strat}` }) }
     let res = { added: 0, updated: 0 }
     if (strat === 'wp') res = await runWp(cfg)
-    else if (strat === 'sitemap') res = await runSitemap(cfg)
-    else throw new Error('این سایت با REST/نقشهٔ سایت اسکرپ نشد. لطفاً «تستِ اتصال» را بزنید و در صورت نیاز استراتژیِ HTML را با سِلکتورها تنظیم کنید.')
+    else res = await runSitemap(cfg)   // sitemap و html هر دو از کرالِ نقشهٔ سایت + آبشارِ استخراج استفاده می‌کنند
     if (res.added === 0 && res.updated === 0) throw new Error('هیچ محصولی یافت نشد — «تستِ اتصال» را بزنید تا پلتفرم مشخص شود.')
     patch({ running: false, finishedAt: Date.now(), label: 'پایان' })
   } catch (e: any) {
