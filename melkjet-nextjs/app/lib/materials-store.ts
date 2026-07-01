@@ -191,6 +191,72 @@ export function addPublicInquiry(slug: string, input: { customer: string; produc
   return addInquiry(found.owner, input)
 }
 
+function normName(s: string): string { return (s || '').replace(/‌/g, '').replace(/\s+/g, ' ').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim() }
+
+// ── دایرکتوریِ عمومیِ همهٔ فروشگاه‌های مصالح (برای دیده‌شدنِ کامل) ──
+export function listPublicShops(opts?: { city?: string; category?: string; search?: string }) {
+  const db = load()
+  const out: any[] = []
+  for (const [owner, shop] of Object.entries(db.shops)) {
+    if (!shop.slug) continue
+    const active = shop.products.filter(p => p.active)
+    const prof = getProfile(owner)
+    const name = prof.businessName || shop.profile.name || prof.displayName || ''
+    if (active.length === 0 && !name) continue   // فروشگاهِ کاملاً خالی را نشان نده
+    const categories = Array.from(new Set(active.map(x => x.category).filter(Boolean)))
+    out.push({
+      slug: shop.slug, name: name || 'فروشگاه مصالح', tagline: prof.tagline || '',
+      logo: prof.logo || '', cover: prof.cover || '', city: prof.city || '', province: prof.province || '',
+      rating: shop.profile.rating || 0, productCount: active.length, categories,
+      minPrice: active.length ? Math.min(...active.map(p => Math.round(p.price * (1 - (p.discountPct || 0) / 100))).filter(Boolean)) : 0,
+    })
+  }
+  let rows = out
+  if (opts?.city) { const c = normName(opts.city); rows = rows.filter(r => normName(r.city).includes(c) || c.includes(normName(r.city))) }
+  if (opts?.category) { const g = normName(opts.category); rows = rows.filter(r => r.categories.some((x: string) => normName(x).includes(g))) }
+  if (opts?.search) { const q = normName(opts.search); rows = rows.filter(r => normName(r.name).includes(q) || r.categories.some((x: string) => normName(x).includes(q))) }
+  return rows.sort((a, b) => b.productCount - a.productCount || b.rating - a.rating)
+}
+
+export function publicShopFacets() {
+  const rows = listPublicShops()
+  const cities = Array.from(new Set(rows.map(r => r.city).filter(Boolean)))
+  const cats = new Map<string, number>()
+  for (const r of rows) for (const c of r.categories) cats.set(c, (cats.get(c) || 0) + 1)
+  return { cities, categories: [...cats.entries()].sort((a, b) => b[1] - a[1]).map(([label, count]) => ({ label, count })), shopCount: rows.length }
+}
+
+// ── نرخِ روزِ مصالح: تجمیعِ قیمتِ محصولاتِ فعالِ همهٔ فروشگاه‌ها بر اساسِ نامِ کالا ──
+export function materialPriceIndex(opts?: { category?: string; search?: string }) {
+  const db = load()
+  const byKey = new Map<string, { name: string; category: string; unit: string; prices: number[]; sellers: Set<string>; lastAt: number }>()
+  for (const [owner, shop] of Object.entries(db.shops)) {
+    for (const p of shop.products) {
+      const price = Math.round(p.price * (1 - (p.discountPct || 0) / 100))
+      if (!p.active || price <= 0) continue
+      const key = normName(p.name) + '|' + normName(p.unit)
+      const e = byKey.get(key) || { name: p.name, category: p.category || 'سایر', unit: p.unit || '', prices: [], sellers: new Set<string>(), lastAt: 0 }
+      e.prices.push(price); e.sellers.add(owner); e.lastAt = Math.max(e.lastAt, p.createdAt || 0)
+      byKey.set(key, e)
+    }
+  }
+  let rows = [...byKey.values()].map(e => {
+    const sorted = [...e.prices].sort((a, b) => a - b)
+    return {
+      name: e.name, category: e.category, unit: e.unit,
+      min: sorted[0], max: sorted[sorted.length - 1],
+      median: sorted[Math.floor(sorted.length / 2)],
+      avg: Math.round(e.prices.reduce((a, b) => a + b, 0) / e.prices.length),
+      sellers: e.sellers.size, count: e.prices.length, lastAt: e.lastAt,
+    }
+  })
+  if (opts?.category && opts.category !== 'همه') { const g = normName(opts.category); rows = rows.filter(r => normName(r.category).includes(g)) }
+  if (opts?.search) { const q = normName(opts.search); rows = rows.filter(r => normName(r.name).includes(q)) }
+  rows.sort((a, b) => b.sellers - a.sellers || b.count - a.count)
+  const categories = Array.from(new Set([...byKey.values()].map(e => e.category)))
+  return { rows, categories, updatedAt: rows.reduce((m, r) => Math.max(m, r.lastAt), 0) }
+}
+
 function mutate(owner: string, fn: (s: Shop) => void) {
   const db = load()
   if (!db.shops[owner]) db.shops[owner] = emptyShop(owner)
