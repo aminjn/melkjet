@@ -8,11 +8,12 @@ import { randomBytes } from 'crypto'
 const FILE = join(process.cwd(), '.catalog-data.json')
 
 export interface CatalogSpec { key: string; value: string }
+export interface PricePoint { date: string; price: number }
 export interface CatalogCategory { id: string; name: string; parentId?: string; order: number; active: boolean; createdAt: number }
 export interface CatalogProduct {
   id: string; categoryId: string; name: string
   brand?: string; unit?: string; image?: string; description?: string
-  specs?: CatalogSpec[]; tags?: string[]
+  specs?: CatalogSpec[]; tags?: string[]; priceHistory?: PricePoint[]
   source: 'manual' | 'hypersaz'; externalId?: string; externalUrl?: string
   active: boolean; createdAt: number
 }
@@ -102,7 +103,7 @@ export function updateProduct(pid: string, patch: any): CatalogProduct | null {
 export function deleteProduct(pid: string) { const db = load(); db.products = db.products.filter(p => p.id !== pid); save(db) }
 
 // ادغامِ نتیجهٔ اسکرپ: بر اساسِ externalId (source=hypersaz) به‌روزرسانی یا افزودن.
-export function upsertScraped(items: { name: string; categoryName: string; brand?: string; unit?: string; image?: string; description?: string; specs?: CatalogSpec[]; externalId?: string; externalUrl?: string }[]): { added: number; updated: number } {
+export function upsertScraped(items: { name: string; categoryName: string; brand?: string; unit?: string; image?: string; description?: string; specs?: CatalogSpec[]; priceHistory?: PricePoint[]; externalId?: string; externalUrl?: string }[]): { added: number; updated: number } {
   let added = 0, updated = 0
   const db = load()
   for (const it of items) {
@@ -118,13 +119,15 @@ export function upsertScraped(items: { name: string; categoryName: string; brand
       if (it.image) existing.image = it.image.slice(0, 100000)
       if (it.description) existing.description = it.description.slice(0, 4000)
       if (it.specs?.length) existing.specs = it.specs.slice(0, 40)
+      if (it.priceHistory?.length) existing.priceHistory = it.priceHistory.slice(0, 40)
       if (it.externalUrl) existing.externalUrl = it.externalUrl
       updated++
     } else {
       db.products.unshift({
         id: id('cp_'), categoryId: cat.id, name: it.name.slice(0, 160), brand: it.brand?.slice(0, 80),
         unit: it.unit?.slice(0, 24), image: it.image?.slice(0, 100000), description: it.description?.slice(0, 4000),
-        specs: it.specs?.slice(0, 40), source: 'hypersaz', externalId: ext || undefined, externalUrl: it.externalUrl,
+        specs: it.specs?.slice(0, 40), priceHistory: it.priceHistory?.slice(0, 40),
+        source: 'hypersaz', externalId: ext || undefined, externalUrl: it.externalUrl,
         active: true, createdAt: Date.now(),
       })
       added++

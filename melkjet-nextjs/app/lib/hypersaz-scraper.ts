@@ -268,6 +268,44 @@ function firstImg(html: string, base: string): string {
   if (og && !BAD_IMG.test(og)) return abs(base, og)
   return ''
 }
+// عکسِ محصولِ هایپرساز: <img class="xzoom" src="app/...jpg"> (عکس‌های محصول در پوشهٔ app/).
+function productImg(html: string, base: string): string {
+  const xz = html.match(/<img[^>]*class=["'][^"']*xzoom[^"']*["'][^>]*\bsrc=["']([^"']+)["']/i)
+    || html.match(/<img[^>]*\bsrc=["'](app\/[^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/i)
+  if (xz && xz[1]) return abs(base, xz[1])
+  return firstImg(html, base)   // fallbackِ عمومی
+}
+// مشخصاتِ هایپرساز: <div class="prodAttributes"><ul><li><p>عنوان: مقدار</p></li>…
+function listSpecs(html: string): CatalogSpec[] {
+  const out: CatalogSpec[] = []
+  const seen = new Set<string>()
+  const block = html.match(/<div[^>]*class=["'][^"']*prodAttributes[^"']*["'][^>]*>([\s\S]*?)<\/div>/i)?.[1] || ''
+  const scope = block || html
+  for (const li of scope.matchAll(/<li[^>]*>\s*(?:<p[^>]*>)?([\s\S]*?)(?:<\/p>)?\s*<\/li>/gi)) {
+    const txt = stripHtml(li[1])
+    const m = txt.match(/^(.{1,40}?)\s*[:：]\s*(.+)$/)
+    if (m) { const k = m[1].trim(), v = m[2].trim(); if (k && v && v.length <= 300 && !seen.has(k)) { seen.add(k); out.push({ key: k, value: v }) } }
+  }
+  return out.slice(0, 30)
+}
+function allSpecs(html: string): CatalogSpec[] {
+  const li = listSpecs(html)
+  return li.length ? li : tableSpecs(html)
+}
+// نمودارِ تغییرِ قیمت (Highcharts): آرایهٔ تاریخ‌ها (categories) + قیمت‌ها (data).
+export interface PricePoint { date: string; price: number }
+function priceHistoryOf(html: string): PricePoint[] {
+  const dataM = html.match(/data\s*:\s*\[\s*([\d.,\s]+?)\s*\]/i)
+  if (!dataM) return []
+  const prices = dataM[1].split(',').map(s => Number(s.trim())).filter(n => n > 1000)
+  if (prices.length < 2) return []
+  const catM = html.match(/categories\s*:\s*\[([^\]]*)\]/i)
+  const dates = catM ? catM[1].split(',').map(s => s.replace(/['"]/g, '').trim()).filter(Boolean) : []
+  const out: PricePoint[] = []
+  const n = dates.length ? Math.min(prices.length, dates.length) : prices.length
+  for (let i = 0; i < n; i++) out.push({ date: dates[i] || '', price: prices[i] })
+  return out.slice(-30)
+}
 // جدولِ مشخصاتِ فنی: هر ردیفِ دوستونیِ <tr><td>عنوان</td><td>مقدار</td></tr> (یا th/dt-dd).
 function tableSpecs(html: string): CatalogSpec[] {
   const out: CatalogSpec[] = []
@@ -315,24 +353,24 @@ async function runSitemap(cfg: ScraperConfig) {
           const name = stripHtml(String(ld?.name || '')) || htmlName(r.text)
           if (name && name.length > 1) {
             hits++
-            // عکس: اول عکسِ واقعیِ محصول از HTML (لوگو رد شود)، بعد JSON-LD.
-            const ldImg = ld ? (Array.isArray(ld.image) ? ld.image[0] : ld.image) : ''
-            const ldImgUrl = (typeof ldImg === 'object' ? ldImg?.url : ldImg) || ''
-            const htmlImg = firstImg(r.text, base)
-            const image = htmlImg || (ldImgUrl && !BAD_IMG.test(String(ldImgUrl)) ? abs(base, String(ldImgUrl)) : '')
-            // مشخصاتِ فنی: جدولِ ویژگی‌های صفحه + هر چیزی از JSON-LD.
-            const specs = tableSpecs(r.text)
-            // برند از مشخصات (تولیدکننده/برند/مبدا) یا JSON-LD.
-            const brandSpec = specs.find(s => /تولید\s*کننده|^برند|مبدا\s*برند|سازنده/.test(s.key))?.value
-            const brand = (ld?.brand ? String(ld.brand.name || ld.brand) : '') || brandSpec || undefined
+            const image = productImg(r.text, base)   // عکسِ واقعیِ محصول (xzoom / app/…)
+            const specs = allSpecs(r.text)            // مشخصاتِ ویژگی‌ها
+            const brand = specs.find(s => /تولید\s*کننده|^برند|مبدا\s*برند|سازنده/.test(s.key))?.value
+              || (ld?.brand ? String(ld.brand.name || ld.brand) : undefined)
+            // توضیحات: «سایر توضیحات» از مشخصات، وگرنه og:description اگر عمومی نبود.
+            const other = specs.find(s => /سایر\s*توضیحات|توضیحات/.test(s.key))?.value
+            const og = ogMeta(r.text, 'og:description')
+            const description = other || (og && !/خرید آنلاین انواع/.test(og) ? og : '')
+            const priceHistory = priceHistoryOf(r.text)
             batch.push({
               name,
               categoryName: categoryFromLd(r.text) || (ld?.category ? String(ld.category) : 'دسته‌بندی‌نشده'),
               image: image || undefined,
-              description: stripHtml(String(ld?.description || ogMeta(r.text, 'og:description') || '')).slice(0, 800),
+              description: stripHtml(description).slice(0, 800),
               brand,
               specs: specs.length ? specs : undefined,
-              externalId: (u.match(/(\d+)(?:\/?$)/)?.[1]) || undefined, externalUrl: u,
+              priceHistory: priceHistory.length ? priceHistory : undefined,
+              externalId: (u.match(/id=([\w-]+)/)?.[1]) || (u.match(/(\d{4,})/)?.[1]) || undefined, externalUrl: u,
             })
           }
         }
@@ -371,21 +409,21 @@ export async function inspectProduct(url: string) {
   if (!r.ok) return { ok: false, status: r.status }
   const html = r.text
   const origin = (() => { try { return new URL(url).origin } catch { return getConfig().baseUrl } })()
-  const specs = tableSpecs(html)
+  const specs = allSpecs(html)
+  const ph = priceHistoryOf(html)
   const extracted = {
     name: (findProductLd(html)?.name && stripHtml(String(findProductLd(html)!.name))) || htmlName(html),
-    image: firstImg(html, origin),
-    ogImage: ogImage(html),
+    image: productImg(html, origin),
+    category: categoryFromLd(html),
     specsCount: specs.length,
-    specs: specs.slice(0, 20),
-    description: stripHtml(ogMeta(html, 'og:description') || '').slice(0, 300),
-    ldTypes: jsonLdBlocks(html).flatMap(b => (Array.isArray(b) ? b : (b['@graph'] || [b]))).map((n: any) => n?.['@type']).filter(Boolean).slice(0, 10),
+    specs: specs.slice(0, 25),
+    priceHistoryCount: ph.length,
+    priceHistory: ph.slice(0, 6),
   }
-  const idx = html.search(/ویژگی|مشخصات|مبدا\s*برند|تولید\s*کننده|جنس/)
-  const snippet = (idx >= 0 ? html.slice(Math.max(0, idx - 300), idx + 2600) : html.slice(0, 2500))
-    .replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '').replace(/\s+/g, ' ').slice(0, 3500)
-  const imgTags = [...html.matchAll(/<img[^>]+>/gi)].slice(0, 15).map(m => m[0].replace(/\s+/g, ' ').slice(0, 180))
-  return { ok: true, extracted, snippet, imgTags }
+  // نمونهٔ اسکریپتِ نمودار (برای تنظیمِ استخراجِ قیمت اگر لازم شد)
+  const ci = html.search(/Highcharts|series\s*:|نمودار/i)
+  const chartSnippet = ci >= 0 ? html.slice(ci, ci + 900).replace(/\s+/g, ' ') : ''
+  return { ok: true, extracted, chartSnippet }
 }
 
 export function startBackgroundScrape(): { started: boolean } {
