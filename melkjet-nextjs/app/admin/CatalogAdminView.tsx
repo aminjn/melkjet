@@ -26,6 +26,7 @@ export default function CatalogAdminView() {
   const [catModal, setCatModal] = useState<{ mode: 'add' | 'edit'; cat?: Cat; parentId?: string } | null>(null)
   const [confirmDel, setConfirmDel] = useState<{ kind: 'cat' | 'prod'; id: string; name: string } | null>(null)
   const [scrape, setScrape] = useState(false)
+  const [imgEdit, setImgEdit] = useState<Prod | null>(null)
   const [bulkOpen, setBulkOpen] = useState(false)
   const [enrich, setEnrich] = useState<{ total: number; needing: number } | null>(null)
   const [busy, setBusy] = useState(false)
@@ -144,7 +145,7 @@ export default function CatalogAdminView() {
               ) : prods.map((p, i) => (
                 <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '2.4fr 1fr 0.8fr 1fr', padding: '10px 16px', borderTop: i ? '1px solid var(--line)' : 'none', fontSize: 13, alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                    <div style={{ width: 38, height: 38, borderRadius: 8, flexShrink: 0, background: p.image ? `center/cover no-repeat url(${p.image})` : 'var(--bg2)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>{!p.image && '🧱'}</div>
+                    <button onClick={() => setImgEdit(p)} title="تغییرِ تصویرِ کالا" style={{ width: 38, height: 38, borderRadius: 8, flexShrink: 0, background: p.image ? `center/cover no-repeat url(${p.image})` : 'var(--bg2)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, cursor: 'pointer', padding: 0, position: 'relative' }}>{!p.image && '🧱'}<span style={{ position: 'absolute', bottom: -2, insetInlineEnd: -2, fontSize: 8, background: 'var(--gold)', color: '#16140f', borderRadius: 4, padding: '0 2px', lineHeight: 1.4 }}>✎</span></button>
                     <div style={{ minWidth: 0 }}><div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</div>{p.brand && <div style={{ fontSize: 11, color: 'var(--muted)' }}>{p.brand}</div>}</div>
                   </div>
                   <div style={{ color: 'var(--muted)', fontSize: 12 }}>{cats.find(c => c.id === p.categoryId)?.name || '—'}</div>
@@ -164,6 +165,7 @@ export default function CatalogAdminView() {
       {editing && <ProductEditor product={editing === 'new' ? null : editing} cats={cats} defaultCat={activeCat} post={post} busy={busy} onClose={() => setEditing(null)} />}
       {catModal && <CategoryModal state={catModal} cats={cats} post={post} busy={busy} onClose={() => setCatModal(null)} />}
       {scrape && <ScrapePanel onClose={() => setScrape(false)} onDone={load} />}
+      {imgEdit && <QuickImageModal product={imgEdit} post={post} busy={busy} onClose={() => setImgEdit(null)} />}
       {bulkOpen && <BulkDeleteModal cats={cats} onClose={() => setBulkOpen(false)} onDone={() => { setActiveCat(''); load() }} />}
       {confirmDel && <ConfirmModal text={confirmDel.kind === 'cat' ? `حذفِ دستهٔ «${confirmDel.name}» و همهٔ کالاها/زیردسته‌هایش؟` : `حذفِ «${confirmDel.name}»؟`} busy={busy} onClose={() => setConfirmDel(null)} onConfirm={async () => { await post({ action: confirmDel.kind === 'cat' ? 'deleteCategory' : 'deleteProduct', id: confirmDel.id }); setConfirmDel(null) }} />}
     </div>
@@ -270,6 +272,57 @@ function BulkDeleteModal({ cats, onClose, onDone }: { cats: Cat[]; onClose: () =
         {!confirm
           ? <button onClick={() => setConfirm(true)} disabled={!count} style={{ ...gold, background: count ? '#e7674a' : 'var(--line2)', color: '#fff', cursor: count ? 'pointer' : 'default' }}>حذفِ {count ? fa(count) : ''} محصول</button>
           : <button onClick={del} disabled={busy} style={{ ...gold, background: '#e7674a', color: '#fff' }}>{busy ? '…' : `مطمئنم، حذف کن (${fa(count || 0)})`}</button>}
+      </div>
+    </Overlay>
+  )
+}
+
+// ── تغییرِ سریعِ تصویرِ یک کالا: آپلود / ساختِ AI / حذف / پاک‌کردنِ عکسِ مشترک از همه ──
+function QuickImageModal({ product, post, busy, onClose }: { product: Prod; post: (b: any) => Promise<boolean>; busy: boolean; onClose: () => void }) {
+  const [image, setImage] = useState(product.image || '')
+  const [genBusy, setGenBusy] = useState(false)
+  const [shared, setShared] = useState<number | null>(null)
+  const [msg, setMsg] = useState('')
+  useEffect(() => {
+    if (!product.image) { setShared(null); return }
+    fetch('/api/admin/catalog', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'imageUsage', id: product.id }) })
+      .then(r => r.json()).then(d => setShared(typeof d?.count === 'number' ? d.count : null)).catch(() => {})
+  }, [product.id, product.image])
+  const genAi = async () => {
+    setGenBusy(true); setMsg('در حال ساختِ تصویر با AI…')
+    try {
+      const r = await fetch('/api/admin/catalog', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'genProductImage', id: product.id }) })
+      const d = await r.json().catch(() => ({}))
+      if (d?.ok && d.image) { setImage(d.image); setMsg('✓ تصویر ساخته و ذخیره شد.') } else setMsg(d?.error || 'خطا در ساختِ تصویر')
+    } finally { setGenBusy(false) }
+  }
+  const clearShared = async () => {
+    if (!product.image) return
+    setMsg('در حال پاک‌کردن از همهٔ محصولات…')
+    const r = await fetch('/api/admin/catalog', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'clearSharedImage', url: product.image }) })
+    const d = await r.json().catch(() => ({}))
+    setImage(''); setShared(0); setMsg(`✓ این تصویر از ${fa(d?.cleared || 0)} محصول پاک شد. حالا «عکسِ دسته‌ها با AI» را بزنید.`)
+  }
+  const save = async () => { const ok = await post({ action: 'updateProduct', id: product.id, patch: { image } }); if (ok) onClose() }
+  return (
+    <Overlay onClose={onClose} max={420}>
+      <Head title="تصویرِ کالا" onClose={onClose} />
+      <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.7 }}>{product.name}</div>
+      <div style={{ maxWidth: 240, margin: '0 auto 14px' }}><ImageUpload value={image} onChange={setImage} height={170} /></div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+        <button onClick={genAi} disabled={genBusy} style={{ ...ghost, border: '1px solid var(--gold)', color: 'var(--gold)' }}>{genBusy ? 'در حال ساخت…' : '🎨 ساختِ تصویر با AI'}</button>
+        {image && <button onClick={() => setImage('')} style={{ ...ghost, color: '#f87171' }}>حذفِ تصویر</button>}
+      </div>
+      {shared !== null && shared > 1 && (
+        <div style={{ background: '#3a1a15', border: '1px solid #e7674a', borderRadius: 10, padding: '10px 12px', marginBottom: 12, fontSize: 12.5, lineHeight: 1.8 }}>
+          این تصویر روی <b>{fa(shared)}</b> محصولِ دیگر هم هست (احتمالاً عکسِ اشتباهِ اسکرپ‌شده مثلِ بنر/عکسِ شخص).
+          <button onClick={clearShared} style={{ ...ghost, color: '#f87171', border: '1px solid #e7674a', marginTop: 8, display: 'block' }}>🗑 پاک‌کردنِ این عکس از همهٔ {fa(shared)} محصول</button>
+        </div>
+      )}
+      {msg && <div style={{ fontSize: 12, color: '#5fd98a', marginBottom: 12 }}>{msg}</div>}
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', borderTop: '1px solid var(--line)', paddingTop: 14 }}>
+        <button onClick={onClose} style={ghost}>بستن</button>
+        <button onClick={save} disabled={busy} style={gold}>{busy ? '…' : 'ذخیره'}</button>
       </div>
     </Overlay>
   )

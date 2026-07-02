@@ -131,6 +131,18 @@ export function updateProduct(pid: string, patch: any): CatalogProduct | null {
 }
 export function deleteProduct(pid: string) { const db = load(); db.products = db.products.filter(p => p.id !== pid); save(db) }
 
+// ── مدیریتِ تصویر ──
+// شمارشِ استفادهٔ یک URLِ تصویر (برای تشخیصِ عکسِ اشتباهِ مشترک مثلِ بنر/عکسِ شخص).
+export function countImageUsage(url: string): number { if (!url) return 0; return load().products.filter(p => p.image === url).length }
+// پاک‌کردنِ یک تصویرِ مشخص از همهٔ محصولات + دسته‌ها (تا دوباره پخش نشود).
+export function clearImageEverywhere(url: string): number {
+  if (!url) return 0
+  const db = load(); let n = 0
+  for (const p of db.products) if (p.image === url) { p.image = undefined; n++ }
+  for (const c of db.categories) if (c.image === url) c.image = undefined
+  if (n) save(db); return n
+}
+
 // ── تکمیلِ AI: محصولاتِ اسکرپ‌شده‌ای که توضیحات یا مشخصاتِ فنیِ کافی ندارند ──
 function lacksText(p: CatalogProduct) { return (!p.description || p.description.trim().length < 20) || !(p.specs && p.specs.length >= 2) }
 export function productsNeedingEnrich(source?: string, limit = 0): CatalogProduct[] {

@@ -4,6 +4,7 @@ import {
   listCategories, addCategory, updateCategory, deleteCategory,
   listProducts, addProduct, updateProduct, deleteProduct, catalogStats, clearCatalog,
   categoriesNeedingImage, setCategoryImage, bulkDeleteQuery, bulkDeleteProducts, enrichStats,
+  getProduct, countImageUsage, clearImageEverywhere,
 } from '@/app/lib/catalog-store'
 import { hasCap } from '@/app/lib/account-store'
 import { generateImage, agentModel, agentProvider } from '@/app/lib/gapgpt'
@@ -77,13 +78,33 @@ export async function POST(req: NextRequest) {
       let generated = 0, applied = 0
       for (const c of batch) {
         try {
-          const prompt = `Realistic professional product photo of Iranian construction/building material category "${c.name}", clean white studio background, high quality, centered, no text, no watermark.`
+          const prompt = `Realistic professional product photo of Iranian construction/building material category "${c.name}", isolated on clean white studio background, centered, sharp, high quality, no people, no person, no human, no hands, no text, no watermark, no logo.`
           const url = await generateImage(model, prompt, '1024x1024', provider)
           if (url) { applied += setCategoryImage(c.id, url); generated++ }
         } catch { /* یکی خطا داد، بقیه ادامه */ }
       }
       return NextResponse.json({ ok: true, generated, applied, remaining: Math.max(0, need.length - batch.length) })
     }
+    case 'genProductImage': {
+      // تولیدِ عکسِ AI برای یک کالای مشخص (جایگزینیِ عکسِ اشتباه).
+      const model = agentModel('content', 'image') || agentModel('studio', 'image')
+      if (!model) return NextResponse.json({ error: 'به ایجنتِ ContentAgent یک مدلِ تصویر بدهید (پنل → API و مدل‌های AI).' }, { status: 400 })
+      const provider = agentProvider('content', 'image') || agentProvider('studio', 'image')
+      const p = getProduct(String(b.id)); if (!p) return NextResponse.json({ error: 'کالا یافت نشد' }, { status: 404 })
+      const cat = listCategories().find(c => c.id === p.categoryId)?.name || ''
+      const prompt = `Realistic professional product photo of Iranian construction/building material "${p.name}"${cat ? ` (category ${cat})` : ''}, isolated on clean white studio background, centered, sharp, high detail, no people, no person, no human, no hands, no text, no watermark, no logo.`
+      try {
+        const url = await generateImage(model, prompt, '1024x1024', provider)
+        if (!url) return NextResponse.json({ error: 'تصویری تولید نشد' }, { status: 500 })
+        return NextResponse.json({ ok: true, image: url, product: updateProduct(String(b.id), { image: url }) })
+      } catch (e: any) { return NextResponse.json({ error: e?.message || 'خطا در تولیدِ تصویر' }, { status: 500 }) }
+    }
+    case 'imageUsage': {
+      const p = getProduct(String(b.id))
+      return NextResponse.json({ ok: true, image: p?.image || '', count: countImageUsage(p?.image || '') })
+    }
+    case 'clearSharedImage':
+      return NextResponse.json({ ok: true, cleared: clearImageEverywhere(String(b.url || '')) })
     default:
       return NextResponse.json({ error: 'عملیاتِ نامعتبر' }, { status: 400 })
   }

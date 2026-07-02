@@ -206,7 +206,9 @@ function normName(s: string): string { return (s || '').replace(/‌/g, '').repl
 function priceTableProducts(html: string, url: string, base: string) {
   const catPath = categoryPathFromLd(html)
   const category = catPath[catPath.length - 1] || stripHtml(ogMeta(html, 'og:title')).replace(/^قیمت\s+/, '').split(/[|(]/)[0].trim() || 'آهن‌آلات'
-  const image = firstImg(html, base) || undefined
+  // صفحاتِ جدولِ قیمت (آهن‌آنلاین) عکسِ تک‌محصول ندارند؛ firstImg بنر/عکسِ پشتیبان را می‌گیرد،
+  // پس عکس نمی‌گذاریم تا با «عکسِ دسته‌ها با AI» پُر شود.
+  const image = undefined as string | undefined
   const items: any[] = []
   // هر صفحه ممکن است چند جدولِ کارخانه داشته باشد (پروفیل تهران، پروفیل اصفهان…). همه را بگیر.
   const tableRe = /<table[\s\S]*?<\/table>/gi
