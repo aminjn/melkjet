@@ -427,15 +427,20 @@ export function upsertScraped(items: { name: string; categoryName?: string; cate
         const kept = (existing.specs || []).filter(s => !inKeys.has(norm(s.key)))
         existing.specs = sanitizeSpecs([...incoming, ...kept].slice(0, 40))
       } else existing.specs = sanitizeSpecs(existing.specs)
-      // انباشتِ تاریخچهٔ قیمت: نقطهٔ جدید فقط اگر با آخرین نقطه فرق داشته باشد → نمودار به‌مرور ساخته می‌شود
+      // تاریخچهٔ قیمت: اگر نمودارِ کاملِ صفحهٔ محصول آمد (≥۲ نقطه) جایگزین کن؛
+      // وگرنه نقطهٔ روزانهٔ جدولِ دسته را انباشته کن تا نمودار به‌مرور ساخته شود.
       if (it.priceHistory?.length) {
-        const cur = existing.priceHistory || []
-        for (const pt of it.priceHistory) {
-          if (!pt || !(pt.price > 0)) continue
-          const last = cur[cur.length - 1]
-          if (!last || last.date !== pt.date || last.price !== pt.price) cur.push({ date: pt.date || '', price: pt.price })
+        if (it.priceHistory.length >= 2 && it.priceHistory.length >= (existing.priceHistory?.length || 0)) {
+          existing.priceHistory = it.priceHistory.slice(-90)
+        } else {
+          const cur = existing.priceHistory || []
+          for (const pt of it.priceHistory) {
+            if (!pt || !(pt.price > 0)) continue
+            const last = cur[cur.length - 1]
+            if (!last || last.date !== pt.date || last.price !== pt.price) cur.push({ date: pt.date || '', price: pt.price })
+          }
+          existing.priceHistory = cur.slice(-90)
         }
-        existing.priceHistory = cur.slice(-60)
       }
       if (it.externalUrl) existing.externalUrl = it.externalUrl
       updated++

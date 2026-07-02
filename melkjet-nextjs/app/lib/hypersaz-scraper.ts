@@ -173,21 +173,30 @@ function tableSpecs(html: string): CatalogSpec[] {
 }
 function allSpecs(html: string): CatalogSpec[] { const li = listSpecs(html); return li.length ? li : tableSpecs(html) }
 export interface PricePoint { date: string; price: number }
-// جدولِ «تاریخچهٔ قیمت» در HTML (سطر: تاریخِ شمسی + عددِ قیمت)
+// ارقامِ فارسی/عربی → لاتین
+function faNum(s: string): string {
+  return (s || '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+}
+// جدولِ «تاریخچهٔ قیمت» در HTML (آهن‌آنلاین): سرستون «تاریخ | قیمت (تومان)». ارقام فارسی؛
+// سلولِ قیمت گاهی </td> ندارد؛ قیمت به تومان است (به ریال تبدیل می‌شود).
 function historyTable(html: string): PricePoint[] {
   let best: PricePoint[] = []
   for (const t of html.matchAll(/<table[\s\S]*?<\/table>/gi)) {
-    const rows = [...t[0].matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)]
+    const tbl = t[0]
+    if (!/تاریخ/.test(tbl) || !/قیمت/.test(tbl)) continue           // باید جدولِ تاریخچه باشد
+    if (/سایز|ضخامت|table_price|نمودار|آلیاژ/.test(tbl)) continue    // نه جدولِ محصولاتِ صفحهٔ دسته
+    const toRial = /تومان/.test(tbl) ? 10 : 1
     const tmp: PricePoint[] = []
-    for (const r of rows) {
-      const cells = [...r[1].matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)].map(c => stripHtml(c[1]))
-      const date = cells.find(c => /\d{3,4}\/\d{1,2}\/\d{1,2}/.test(c)) || ''
-      const price = cells.map(c => Number(c.replace(/[^\d]/g, ''))).find(n => n > 1000) || 0
-      if (date && price) tmp.push({ date: date.match(/\d{3,4}\/\d{1,2}\/\d{1,2}/)![0], price })
+    for (const r of tbl.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)) {
+      const cells = r[1].split(/<td[^>]*>/i).slice(1).map(s => faNum(stripHtml(s.replace(/<\/td>[\s\S]*$/i, '')).trim()))
+      const dateCell = cells.find(c => /\d{3,4}\/\d{1,2}\/\d{1,2}/.test(c)); if (!dateCell) continue
+      const date = dateCell.match(/\d{3,4}\/\d{1,2}\/\d{1,2}/)![0]
+      const price = cells.filter(c => !/\//.test(c)).map(c => Number(c.replace(/[^\d]/g, ''))).find(n => n > 10000) || 0
+      if (price) tmp.push({ date, price: price * toRial })
     }
     if (tmp.length >= 2 && tmp.length > best.length) best = tmp
   }
-  return best
+  return best.reverse()   // صفحه نزولی (جدید→قدیم) است → صعودی کن
 }
 function priceHistoryOf(html: string): PricePoint[] {
   // ۱) جدولِ تاریخچهٔ قیمت (آهن‌آنلاین آن را در HTML دارد)
@@ -238,7 +247,10 @@ function extractProduct(html: string, url: string, base: string) {
     categoryName: catPath[catPath.length - 1] || (ld?.category ? String(ld.category) : 'دسته‌بندی‌نشده'),
     image: image || undefined, description: stripHtml(description).slice(0, 800), brand,
     specs: specs.length ? specs : undefined, priceHistory: priceHistory.length ? priceHistory : undefined,
-    externalId: (url.match(/id=([\w-]+)/)?.[1]) || (url.match(/(\d{4,})/)?.[1]) || undefined, externalUrl: url,
+    // صفحهٔ محصولِ آهن‌آنلاین (دارای تاریخچهٔ قیمت): externalId هم‌نام با ردیفِ جدولِ دسته
+    // (data-name) تا ادغام شوند و نمودار روی همان محصول بنشیند.
+    externalId: priceHistory.length >= 2 ? `ahan-${normName(name).replace(/\s+/g, '-').slice(0, 70)}` : ((url.match(/id=([\w-]+)/)?.[1]) || (url.match(/(\d{4,})/)?.[1]) || undefined),
+    externalUrl: url,
   }
 }
 
@@ -274,9 +286,12 @@ function priceTableProducts(html: string, url: string, base: string) {
       const priceAttr = rowHtml.match(/data-price=["'](\d+)["']/)
       const price = priceAttr ? Number(priceAttr[1]) : 0   // ریال
       if (!price) continue
-      // لینکِ صفحهٔ خودِ محصول (اگر در ردیف باشد) — برای منبع + اسکرپِ نمودارِ بلندمدت در آینده
+      // لینکِ صفحهٔ خودِ محصول (اگر در ردیف باشد)
       const linkM = rowHtml.match(/<a[^>]+href=["']([^"'#]+)["']/i)
       const rowUrl = linkM && !/tel:|mailto:|javascript:/i.test(linkM[1]) ? abs(base, linkM[1]) : url
+      // نامِ کاملِ محصول از سلولِ نمودار (data-name) — کلیدِ ادغام با صفحهٔ اختصاصیِ محصول (که نمودار دارد)
+      const dnm = rowHtml.match(/data-name=["']([^"']+)["']/i)
+      const dataName = dnm ? stripHtml(dnm[1]).trim() : ''
       const cells = [...rowHtml.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(m => stripHtml(m[1]))
       const specs: CatalogSpec[] = []
       let dateCell = ''
@@ -298,7 +313,8 @@ function priceTableProducts(html: string, url: string, base: string) {
         name, categoryPath: catPath.length ? catPath : undefined, categoryName: category,
         image, specs: specs.length ? specs : undefined, brand: factory || undefined,
         priceHistory: [{ date: dateCell || '', price }],
-        externalId: `ahan-${normName(name).replace(/\s+/g, '-').slice(0, 70)}`, externalUrl: rowUrl,
+        // externalId بر پایهٔ data-name (هم‌نام با صفحهٔ محصول) تا نمودار روی همین محصول بنشیند
+        externalId: `ahan-${normName(dataName || name).replace(/\s+/g, '-').slice(0, 70)}`, externalUrl: rowUrl,
       })
     }
   }
