@@ -9,7 +9,7 @@ const FILE = join(process.cwd(), '.catalog-data.json')
 
 export interface CatalogSpec { key: string; value: string }
 export interface PricePoint { date: string; price: number }
-export interface CatalogCategory { id: string; name: string; parentId?: string; order: number; active: boolean; createdAt: number }
+export interface CatalogCategory { id: string; name: string; parentId?: string; order: number; active: boolean; createdAt: number; image?: string }
 export interface CatalogProduct {
   id: string; categoryId: string; name: string
   brand?: string; unit?: string; image?: string; description?: string
@@ -86,6 +86,21 @@ export function listProducts(opts?: { categoryId?: string; search?: string; acti
   return ps.slice().sort((a, b) => b.createdAt - a.createdAt)
 }
 export function getProduct(pid: string): CatalogProduct | null { return load().products.find(p => p.id === pid) || null }
+
+// ── عکسِ دسته (تولیدِ AI برای کالاهایِ بدونِ عکس مثلِ آهن‌آنلاین) ──
+// دسته‌هایی که محصولِ بدونِ عکس دارند و خودشان هم عکسِ AI ندارند.
+export function categoriesNeedingImage(): CatalogCategory[] {
+  const db = load()
+  const noImgCats = new Set(db.products.filter(p => p.active && !p.image).map(p => p.categoryId))
+  return db.categories.filter(c => noImgCats.has(c.id) && !c.image)
+}
+// عکسِ تولیدشده را روی دسته می‌نشاند و به همهٔ محصولاتِ بدونِ عکسِ همان دسته می‌دهد.
+export function setCategoryImage(categoryId: string, url: string): number {
+  const db = load(); const cat = db.categories.find(c => c.id === categoryId); if (!cat) return 0
+  cat.image = url; let n = 0
+  for (const p of db.products) if (p.categoryId === categoryId && !p.image) { p.image = url; n++ }
+  save(db); return n
+}
 // مسیرِ دسته (والد→…→برگ) برای نمایشِ breadcrumb در صفحهٔ محصول.
 export function categoryBreadcrumb(categoryId: string): { id: string; name: string }[] {
   const cats = load().categories
@@ -171,7 +186,7 @@ export function upsertScraped(items: { name: string; categoryName?: string; cate
     } else {
       db.products.unshift({
         id: id('cp_'), categoryId: cat.id, name: it.name.slice(0, 160), brand: it.brand?.slice(0, 80),
-        unit: it.unit?.slice(0, 24), image: it.image?.slice(0, 100000), description: it.description?.slice(0, 4000),
+        unit: it.unit?.slice(0, 24), image: it.image?.slice(0, 100000) || cat.image, description: it.description?.slice(0, 4000),
         specs: it.specs?.slice(0, 40), priceHistory: it.priceHistory?.slice(0, 40),
         source, externalId: ext || undefined, externalUrl: it.externalUrl,
         active: true, createdAt: Date.now(),

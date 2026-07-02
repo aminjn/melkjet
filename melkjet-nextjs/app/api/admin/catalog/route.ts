@@ -3,8 +3,10 @@ import { getSession } from '@/app/lib/session'
 import {
   listCategories, addCategory, updateCategory, deleteCategory,
   listProducts, addProduct, updateProduct, deleteProduct, catalogStats, clearCatalog,
+  categoriesNeedingImage, setCategoryImage,
 } from '@/app/lib/catalog-store'
 import { hasCap } from '@/app/lib/account-store'
+import { generateImage, agentModel, agentProvider } from '@/app/lib/gapgpt'
 
 // مدیریتِ کاتالوگِ مرجع — سوپرادمین یا کاربرِ دارای دسترسیِ «catalog».
 async function guard() {
@@ -53,7 +55,24 @@ export async function POST(req: NextRequest) {
       if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
       deleteProduct(String(b.id)); return NextResponse.json({ ok: true })
     case 'clearCatalog':
-      return NextResponse.json({ ok: true, cleared: clearCatalog(b.scope === 'all' ? 'all' : 'scraped') })
+      return NextResponse.json({ ok: true, cleared: clearCatalog(b.scope === 'all' ? 'all' : (b.scope || 'scraped')) })
+    case 'genImages': {
+      // تولیدِ عکسِ AI برای دسته‌هایِ بدونِ عکس (هر بار چند تا؛ UI تا پایان تکرار می‌کند).
+      const model = agentModel('content', 'image') || agentModel('studio', 'image')
+      if (!model) return NextResponse.json({ error: 'به ایجنتِ ContentAgent یک مدلِ تصویر بدهید (پنل → API و مدل‌های AI).' }, { status: 400 })
+      const provider = agentProvider('content', 'image') || agentProvider('studio', 'image')
+      const need = categoriesNeedingImage()
+      const batch = need.slice(0, 4)
+      let generated = 0, applied = 0
+      for (const c of batch) {
+        try {
+          const prompt = `Realistic professional product photo of Iranian construction/building material category "${c.name}", clean white studio background, high quality, centered, no text, no watermark.`
+          const url = await generateImage(model, prompt, '1024x1024', provider)
+          if (url) { applied += setCategoryImage(c.id, url); generated++ }
+        } catch { /* یکی خطا داد، بقیه ادامه */ }
+      }
+      return NextResponse.json({ ok: true, generated, applied, remaining: Math.max(0, need.length - batch.length) })
+    }
     default:
       return NextResponse.json({ error: 'عملیاتِ نامعتبر' }, { status: 400 })
   }

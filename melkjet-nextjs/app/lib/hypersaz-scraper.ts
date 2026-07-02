@@ -317,7 +317,8 @@ async function collectSitemapUrls(base: string, cap: number): Promise<{ urls: st
     if (r.ok && /<(sitemapindex|urlset)/i.test(r.text)) { text = r.text; break }
   }
   if (!text) return { urls: [], productSpecific: false }
-  const isXml = (l: string) => /\.xml(\?.*)?$/i.test(l) || /\/(sitemap|index)[^/]*$/i.test(l)
+  // زیرنقشه = هر loc که .xml داشته باشد (حتی با اسلشِ انتهایی مثلِ آهن‌آنلاین: …/index.xml/) یا مسیرِ /sitemap/
+  const isXml = (l: string) => /\.xml(\/|\?|$)/i.test(l) || /\/sitemap\//i.test(l)
   const locsOf = (t: string) => [...t.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map(m => m[1].replace(/&amp;/g, '&').trim())
   const topLocs = locsOf(text)
   const topXml = topLocs.filter(isXml)

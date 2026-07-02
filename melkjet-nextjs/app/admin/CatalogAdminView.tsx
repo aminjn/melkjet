@@ -40,6 +40,23 @@ export default function CatalogAdminView() {
   }, [activeCat, search])
   useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t) }, [load])
 
+  const [genMsg, setGenMsg] = useState('')
+  const genImages = async () => {
+    if (genMsg) return
+    setGenMsg('در حال تولیدِ عکس با AI…')
+    let total = 0
+    for (let guard = 0; guard < 60; guard++) {
+      const r = await fetch('/api/admin/catalog', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'genImages' }) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || d.error) { setGenMsg(d.error || 'خطا در تولیدِ عکس'); setTimeout(() => setGenMsg(''), 4000); return }
+      total += d.generated || 0
+      setGenMsg(`تولیدِ عکس: ${total.toLocaleString('fa-IR')} دسته انجام شد${d.remaining ? ` · ${Number(d.remaining).toLocaleString('fa-IR')} باقی‌مانده…` : ''}`)
+      load()
+      if (!d.remaining || (d.generated || 0) === 0) break
+    }
+    setGenMsg(`✓ تمام شد — ${total.toLocaleString('fa-IR')} عکسِ دسته ساخته شد.`); setTimeout(() => setGenMsg(''), 4000)
+  }
+
   const post = async (body: any): Promise<boolean> => {
     setBusy(true)
     try {
@@ -57,6 +74,7 @@ export default function CatalogAdminView() {
   return (
     <div style={{ fontFamily: FONT }}>
       {toast && <div style={{ position: 'fixed', top: 20, insetInlineStart: '50%', transform: 'translateX(-50%)', background: '#3a1a15', border: '1px solid #e7674a', color: '#ffb4a0', padding: '10px 18px', borderRadius: 10, zIndex: 300, fontSize: 13 }}>{toast}</div>}
+      {genMsg && <div style={{ position: 'fixed', top: 20, insetInlineStart: '50%', transform: 'translateX(-50%)', background: 'var(--goldDim)', border: '1px solid var(--gold)', color: 'var(--gold)', padding: '10px 18px', borderRadius: 10, zIndex: 300, fontSize: 13 }}>{genMsg}</div>}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
         <div>
@@ -67,6 +85,7 @@ export default function CatalogAdminView() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {stats && stats.products > 0 && <button onClick={genImages} disabled={!!genMsg} style={{ ...ghost, border: '1px solid var(--gold)', color: 'var(--gold)' }}>🎨 عکسِ دسته‌ها با AI</button>}
           {stats && stats.products > 0 && <button onClick={() => setClearScope('scraped')} style={{ ...ghost, border: '1px solid #e7674a', color: '#f87171' }}>🗑 پاک‌کردنِ دسته‌جمعی</button>}
           <button onClick={() => setScrape(true)} style={{ ...ghost, border: '1px solid var(--gold)', color: 'var(--gold)', fontWeight: 700 }}>⛏ اسکرپ و تنظیمات</button>
           <button onClick={() => setEditing('new')} style={gold}>+ کالای جدید</button>
