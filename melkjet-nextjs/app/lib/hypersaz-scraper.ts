@@ -198,6 +198,45 @@ function extractProduct(html: string, url: string, base: string) {
   }
 }
 
+// ── جدولِ قیمت (مثلِ آهن‌آنلاین): هر ردیف = یک محصول با data-price (ریال) ──
+function normName(s: string): string { return (s || '').replace(/‌/g, '').replace(/\s+/g, ' ').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim() }
+function priceTableProducts(html: string, url: string, base: string) {
+  // جدولی که ردیف‌هایش data-price دارند را پیدا کن.
+  let table = ''
+  for (const t of html.match(/<table[\s\S]*?<\/table>/gi) || []) { if (/data-price|table_price|product-price/i.test(t)) { table = t; break } }
+  if (!table) return []
+  const headHtml = table.match(/<thead[\s\S]*?<\/thead>/i)?.[0] || table.match(/<tr[\s\S]*?<\/tr>/i)?.[0] || ''
+  const headers = [...headHtml.matchAll(/<th[^>]*>([\s\S]*?)<\/th>/gi)].map(m => stripHtml(m[1]))
+  const catPath = categoryPathFromLd(html)
+  const category = catPath[catPath.length - 1] || stripHtml(ogMeta(html, 'og:title')).replace(/^قیمت\s+/, '').split(/[|(]/)[0].trim() || 'آهن‌آلات'
+  const image = firstImg(html, base) || undefined
+  const bodyHtml = table.match(/<tbody[\s\S]*?<\/tbody>/i)?.[0] || table
+  const items: any[] = []
+  for (const row of bodyHtml.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)) {
+    const rowHtml = row[1]
+    const priceAttr = rowHtml.match(/data-price=["'](\d+)["']/)
+    const price = priceAttr ? Number(priceAttr[1]) : 0   // ریال
+    if (!price) continue
+    const cells = [...rowHtml.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(m => stripHtml(m[1]))
+    const specs: CatalogSpec[] = []
+    let dateCell = ''
+    for (let i = 0; i < cells.length; i++) {
+      const k = (headers[i] || '').trim(); const v = cells[i]
+      if (/\d{3,4}\/\d{1,2}\/\d{1,2}/.test(v)) { dateCell = v; continue }
+      if (k && v && !/قیمت|نمودار|price|عملیات/i.test(k) && v.length < 40 && !/^\d[\d,]{4,}$/.test(v)) specs.push({ key: k, value: v })
+    }
+    const distinct = specs.filter(s => /سایز|ابعاد|ضخامت|طول|قطر|شاخه|حالت|گرید|استاندارد|برند|نوع|وزن|حالت/.test(s.key)).slice(0, 3).map(s => s.value)
+    const name = [category, ...distinct].join(' ').replace(/\s+/g, ' ').trim()
+    if (!name || name === category && !distinct.length) continue
+    items.push({
+      name, categoryPath: catPath.length ? catPath : undefined, categoryName: category,
+      image, specs: specs.length ? specs : undefined,
+      priceHistory: [{ date: dateCell || '', price }], externalId: `ahan-${normName(name).replace(/\s+/g, '-').slice(0, 60)}`, externalUrl: url,
+    })
+  }
+  return items
+}
+
 // ── تستِ اتصال / تشخیصِ پلتفرم ──
 export interface Probe { name: string; url: string; ok: boolean; status: number; note: string }
 export async function testConnection(source: string) {
@@ -324,8 +363,13 @@ async function runSitemap(source: string, cfg: ScraperConfig) {
       const r = await fetchText(u, 15000)
       done++
       if (r.ok && r.text) {
-        const isProduct = productSpecific || !!findProductLd(r.text) || /product/i.test(ogMeta(r.text, 'og:type'))
-        if (isProduct) { const it = extractProduct(r.text, u, base); if (it) { hits++; batch.push(it) } }
+        // اول جدولِ قیمت (آهن‌آنلاین): هر ردیف یک محصول. وگرنه صفحهٔ تک‌محصول.
+        const tableItems = priceTableProducts(r.text, u, base)
+        if (tableItems.length) { hits += tableItems.length; batch.push(...tableItems) }
+        else {
+          const isProduct = productSpecific || !!findProductLd(r.text) || /product/i.test(ogMeta(r.text, 'og:type'))
+          if (isProduct) { const it = extractProduct(r.text, u, base); if (it) { hits++; batch.push(it) } }
+        }
       }
       if (batch.length >= 20) flush()
       if (done % 5 === 0) patch(source, { done, added, updated })
@@ -358,12 +402,15 @@ export async function inspectProduct(source: string, url: string) {
   const html = r.text
   const origin = (() => { try { return new URL(url).origin } catch { return getConfig(source).baseUrl } })()
   const specs = allSpecs(html); const ph = priceHistoryOf(html)
+  const tableItems = priceTableProducts(html, url, origin)
   const extracted = {
     name: (findProductLd(html)?.name && stripHtml(String(findProductLd(html)!.name))) || htmlName(html),
     image: productImg(html, origin),
     categoryPath: categoryPathFromLd(html, (findProductLd(html)?.name && stripHtml(String(findProductLd(html)!.name))) || htmlName(html)),
     specsCount: specs.length, specs: specs.slice(0, 25),
     priceHistoryCount: ph.length, priceHistory: ph.slice(0, 6),
+    // برای سایت‌های جدولِ قیمت (آهن‌آنلاین): تعدادِ ردیف‌ها + نمونه
+    priceTableRows: tableItems.length, priceTableSample: tableItems.slice(0, 4),
   }
   const ci = html.search(/Highcharts|series\s*:|نمودار/i)
   const chartSnippet = ci >= 0 ? html.slice(ci, ci + 900).replace(/\s+/g, ' ') : ''
