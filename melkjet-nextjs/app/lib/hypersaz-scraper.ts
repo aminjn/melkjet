@@ -233,13 +233,18 @@ function priceTableProducts(html: string, url: string, base: string) {
       const priceAttr = rowHtml.match(/data-price=["'](\d+)["']/)
       const price = priceAttr ? Number(priceAttr[1]) : 0   // ریال
       if (!price) continue
+      // لینکِ صفحهٔ خودِ محصول (اگر در ردیف باشد) — برای منبع + اسکرپِ نمودارِ بلندمدت در آینده
+      const linkM = rowHtml.match(/<a[^>]+href=["']([^"'#]+)["']/i)
+      const rowUrl = linkM && !/tel:|mailto:|javascript:/i.test(linkM[1]) ? abs(base, linkM[1]) : url
       const cells = [...rowHtml.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(m => stripHtml(m[1]))
       const specs: CatalogSpec[] = []
       let dateCell = ''
+      const BAD = /قیمت|نمودار|price|عملیات|نوسان|تغییر|تاریخ|date|تومان|ریال|درصد/i
       for (let i = 0; i < cells.length; i++) {
         const k = (headers[i] || '').trim(); const v = cells[i]
         if (/\d{3,4}\/\d{1,2}\/\d{1,2}/.test(v)) { dateCell = v; continue }
-        if (k && v && !/قیمت|نمودار|price|عملیات|نوسان|تغییر/i.test(k) && v.length < 40 && !/^\d[\d,]{4,}$/.test(v)) specs.push({ key: k, value: v })
+        // نه کلید و نه مقدار نباید ستونِ قیمت/تاریخ/نمودار باشد (وگرنه «تاریخ: قیمت (تومان)» ثبت می‌شد)
+        if (k && v && !BAD.test(k) && !BAD.test(v) && v.length < 40 && !/^\d[\d,]{4,}$/.test(v)) specs.push({ key: k, value: v })
       }
       if (factory) specs.push({ key: 'کارخانه', value: factory })
       const specVal = (re: RegExp) => specs.find(s => re.test(s.key))?.value || ''
@@ -252,7 +257,7 @@ function priceTableProducts(html: string, url: string, base: string) {
         name, categoryPath: catPath.length ? catPath : undefined, categoryName: category,
         image, specs: specs.length ? specs : undefined, brand: factory || undefined,
         priceHistory: [{ date: dateCell || '', price }],
-        externalId: `ahan-${normName(name).replace(/\s+/g, '-').slice(0, 70)}`, externalUrl: url,
+        externalId: `ahan-${normName(name).replace(/\s+/g, '-').slice(0, 70)}`, externalUrl: rowUrl,
       })
     }
   }

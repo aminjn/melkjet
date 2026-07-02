@@ -16,14 +16,17 @@ function parseJson(text: string): any {
 
 async function enrichOne(model: string, provider: string | undefined, p: CatalogProduct): Promise<boolean> {
   const existing = (p.specs || []).map(s => `${s.key}: ${s.value}`).join('، ')
-  const prompt = `تو کارشناسِ فروشِ مصالحِ ساختمانی هستی. برای محصولِ زیر یک «توضیحِ حرفه‌ایِ فارسیِ ۲ تا ۴ جمله‌ای» و «مشخصاتِ فنیِ کلیدی» بنویس (واقع‌بینانه بر اساسِ نامِ محصول؛ چیزی از خودت جعل نکن که مطمئن نیستی).
+  const prompt = `تو کارشناسِ فروشِ مصالحِ ساختمانی هستی. برای محصولِ زیر بنویس:
+۱) یک «توضیحِ حرفه‌ایِ فارسیِ ۳ تا ۵ جمله‌ای» شاملِ ویژگی‌ها، کاربرد و نکاتِ خرید.
+۲) «مشخصاتِ فنیِ کامل» — حداقل ۵ و حداکثر ۸ مورد. از میانِ این کلیدها آن‌هایی که از نامِ محصول منطقی استنتاج می‌شوند را بیاور: جنس، استاندارد، حالت/شکل، سایز/ابعاد، قطر، ضخامت، طول، وزنِ تقریبی، رده/گرید، آنالیز، کاربرد، محلِ تولید/کارخانه، بسته‌بندی.
+واقع‌بینانه باش؛ چیزی که مطمئن نیستی را ننویس، ولی تا جای ممکن کامل و مفید بنویس.
 نام: ${p.name}
 ${p.brand ? `برند/کارخانه: ${p.brand}\n` : ''}دسته: ${catName(p.categoryId)}
-${existing ? `مشخصاتِ موجود: ${existing}\n` : ''}
-فقط و فقط یک JSON برگردان، بدونِ هیچ متنِ اضافه:
-{"description":"...","specs":[{"key":"جنس","value":"..."},{"key":"کاربرد","value":"..."}]}`
+${existing ? `مشخصاتِ موجود (تکرار نکن): ${existing}\n` : ''}
+فقط و فقط یک JSON برگردان، بدونِ هیچ متنِ اضافه، بدونِ کلیدِ «قیمت» یا «تاریخ»:
+{"description":"...","specs":[{"key":"جنس","value":"..."},{"key":"استاندارد","value":"..."},{"key":"کاربرد","value":"..."}]}`
   let out = ''
-  try { out = await chatCompleteSafe(model, [{ role: 'user', content: prompt }], { temperature: 0.5, max_tokens: 500 }, provider) } catch { return false }
+  try { out = await chatCompleteSafe(model, [{ role: 'user', content: prompt }], { temperature: 0.5, max_tokens: 700 }, provider) } catch { return false }
   const j = parseJson(out); if (!j) return false
   const specs = Array.isArray(j.specs) ? j.specs.filter((s: any) => s && s.key && s.value) : []
   return setProductEnrichment(p.id, { description: typeof j.description === 'string' ? j.description : undefined, specs })

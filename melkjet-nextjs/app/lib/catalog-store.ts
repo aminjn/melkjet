@@ -27,6 +27,13 @@ function load(): DB {
 }
 function save(db: DB) { try { writeFileSync(FILE, JSON.stringify(db)) } catch {} }
 function norm(s: string) { return (s || '').replace(/‌/g, '').replace(/\s+/g, ' ').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim() }
+// مشخصاتِ زبالهٔ اسکرپ (سرستونِ قیمت/تاریخ/نمودار که اشتباهی مشخصه ثبت شده‌اند)
+const SPEC_BAD = /قیمت|نمودار|عملیات|نوسان|تغییر|تاریخ|price|date|تومان|ریال|درصد/i
+export function sanitizeSpecs(specs?: CatalogSpec[]): CatalogSpec[] | undefined {
+  if (!specs || !specs.length) return specs
+  const out = specs.filter(s => s && s.key && s.value && !SPEC_BAD.test(s.key) && !SPEC_BAD.test(s.value))
+  return out.length ? out : undefined
+}
 
 // ── دسته‌بندی‌ها ──
 export function listCategories(activeOnly = false): CatalogCategory[] {
@@ -75,7 +82,7 @@ function cleanProduct(input: any): Partial<CatalogProduct> {
   if (input.externalUrl !== undefined) out.externalUrl = String(input.externalUrl).slice(0, 400)
   if (input.active !== undefined) out.active = !!input.active
   if (Array.isArray(input.tags)) out.tags = input.tags.slice(0, 20).map((s: any) => String(s).slice(0, 40)).filter(Boolean)
-  if (Array.isArray(input.specs)) out.specs = input.specs.slice(0, 40).map((s: any) => ({ key: String(s.key || '').slice(0, 60), value: String(s.value || '').slice(0, 120) })).filter((s: CatalogSpec) => s.key && s.value)
+  if (Array.isArray(input.specs)) out.specs = sanitizeSpecs(input.specs.slice(0, 40).map((s: any) => ({ key: String(s.key || '').slice(0, 60), value: String(s.value || '').slice(0, 120) })).filter((s: CatalogSpec) => s.key && s.value)) || []
   return out
 }
 export function listProducts(opts?: { categoryId?: string; search?: string; activeOnly?: boolean }): CatalogProduct[] {
@@ -85,7 +92,11 @@ export function listProducts(opts?: { categoryId?: string; search?: string; acti
   if (opts?.search) { const q = norm(opts.search); ps = ps.filter(p => norm(p.name).includes(q) || norm(p.brand || '').includes(q)) }
   return ps.slice().sort((a, b) => b.createdAt - a.createdAt)
 }
-export function getProduct(pid: string): CatalogProduct | null { return load().products.find(p => p.id === pid) || null }
+export function getProduct(pid: string): CatalogProduct | null {
+  const p = load().products.find(p => p.id === pid) || null
+  if (p) p.specs = sanitizeSpecs(p.specs)   // پاک‌سازیِ مشخصاتِ زباله هنگامِ نمایش (بدونِ تغییرِ فایل)
+  return p
+}
 
 // ── عکسِ دسته (تولیدِ AI برای کالاهایِ بدونِ عکس مثلِ آهن‌آنلاین) ──
 // دسته‌هایی که محصولِ بدونِ عکس دارند و خودشان هم عکسِ AI ندارند.
@@ -144,7 +155,8 @@ export function clearImageEverywhere(url: string): number {
 }
 
 // ── تکمیلِ AI: محصولاتِ اسکرپ‌شده‌ای که توضیحات یا مشخصاتِ فنیِ کافی ندارند ──
-function lacksText(p: CatalogProduct) { return (!p.description || p.description.trim().length < 20) || !(p.specs && p.specs.length >= 2) }
+function specCount(p: CatalogProduct) { return (sanitizeSpecs(p.specs) || []).length }
+function lacksText(p: CatalogProduct) { return (!p.description || p.description.trim().length < 20) || specCount(p) < 3 }
 export function productsNeedingEnrich(source?: string, limit = 0): CatalogProduct[] {
   const db = load()
   const rows = db.products.filter(p => p.active && (source ? p.source === source : p.source !== 'manual') && lacksText(p))
@@ -155,12 +167,13 @@ export function setProductEnrichment(pid: string, patch: { description?: string;
   const db = load(); const p = db.products.find(x => x.id === pid); if (!p) return false
   let changed = false
   if (patch.description && (!p.description || p.description.trim().length < 20)) { p.description = String(patch.description).slice(0, 4000); changed = true }
-  if (patch.specs?.length && !(p.specs && p.specs.length >= 2)) {
-    const clean = patch.specs.slice(0, 40).map(s => ({ key: String(s.key || '').slice(0, 60), value: String(s.value || '').slice(0, 120) })).filter(s => s.key && s.value)
-    const existing = p.specs || []; const keys = new Set(existing.map(s => norm(s.key)))
+  const existing = sanitizeSpecs(p.specs) || []
+  if (patch.specs?.length && existing.length < 6) {
+    const clean = (sanitizeSpecs(patch.specs.slice(0, 40).map(s => ({ key: String(s.key || '').slice(0, 60), value: String(s.value || '').slice(0, 120) }))) || []).filter(s => s.key && s.value)
+    const keys = new Set(existing.map(s => norm(s.key)))
     const merged = [...existing, ...clean.filter(s => !keys.has(norm(s.key)))].slice(0, 40)
-    if (merged.length) { p.specs = merged; changed = true }
-  }
+    if (merged.length > existing.length) { p.specs = merged; changed = true }
+  } else if (existing.length !== (p.specs || []).length) { p.specs = existing; changed = true }
   if (changed) save(db)
   return changed
 }
@@ -254,15 +267,30 @@ export function upsertScraped(items: { name: string; categoryName?: string; cate
       if (it.unit) existing.unit = it.unit.slice(0, 24)
       if (it.image) existing.image = it.image.slice(0, 100000)
       if (it.description) existing.description = it.description.slice(0, 4000)
-      if (it.specs?.length) existing.specs = it.specs.slice(0, 40)
-      if (it.priceHistory?.length) existing.priceHistory = it.priceHistory.slice(0, 40)
+      // ادغامِ مشخصات: مقادیرِ اسکرپ‌شده تازه‌سازی می‌شوند ولی مشخصاتِ AI (جنس/کاربرد/…) حفظ می‌شود
+      if (it.specs?.length) {
+        const incoming = sanitizeSpecs(it.specs) || []
+        const inKeys = new Set(incoming.map(s => norm(s.key)))
+        const kept = (existing.specs || []).filter(s => !inKeys.has(norm(s.key)))
+        existing.specs = sanitizeSpecs([...incoming, ...kept].slice(0, 40))
+      } else existing.specs = sanitizeSpecs(existing.specs)
+      // انباشتِ تاریخچهٔ قیمت: نقطهٔ جدید فقط اگر با آخرین نقطه فرق داشته باشد → نمودار به‌مرور ساخته می‌شود
+      if (it.priceHistory?.length) {
+        const cur = existing.priceHistory || []
+        for (const pt of it.priceHistory) {
+          if (!pt || !(pt.price > 0)) continue
+          const last = cur[cur.length - 1]
+          if (!last || last.date !== pt.date || last.price !== pt.price) cur.push({ date: pt.date || '', price: pt.price })
+        }
+        existing.priceHistory = cur.slice(-60)
+      }
       if (it.externalUrl) existing.externalUrl = it.externalUrl
       updated++
     } else {
       db.products.unshift({
         id: id('cp_'), categoryId: cat.id, name: it.name.slice(0, 160), brand: it.brand?.slice(0, 80),
         unit: it.unit?.slice(0, 24), image: it.image?.slice(0, 100000) || cat.image, description: it.description?.slice(0, 4000),
-        specs: it.specs?.slice(0, 40), priceHistory: it.priceHistory?.slice(0, 40),
+        specs: sanitizeSpecs(it.specs?.slice(0, 40)), priceHistory: it.priceHistory?.slice(0, 40),
         source, externalId: ext || undefined, externalUrl: it.externalUrl,
         active: true, createdAt: Date.now(),
       })

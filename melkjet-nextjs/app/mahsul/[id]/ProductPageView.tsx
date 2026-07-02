@@ -19,6 +19,8 @@ const card: React.CSSProperties = { background: 'var(--surface)', border: '1px s
 export default function ProductPageView({ product, breadcrumb, sellers, related }: { product: Product; breadcrumb: { id: string; name: string }[]; sellers: Seller[]; related: Rel[] }) {
   const ph = (product.priceHistory || []).filter(p => p.price > 0)
   const best = sellers.length ? sellers[0] : null
+  const refPrice = ph.length ? Math.round(ph[ph.length - 1].price / 10) : 0   // آخرین نرخِ مرجع (تومان)
+  const refDate = ph.length ? ph[ph.length - 1].date : ''
   return (
     <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: FONT }}>
       <Nav />
@@ -50,6 +52,17 @@ export default function ProductPageView({ product, breadcrumb, sellers, related 
                     <span style={{ fontSize: 13, color: 'var(--muted)' }}>تومان / {best.unit || product.unit}</span>
                   </div>
                   <a href="#sellers" style={{ display: 'inline-block', marginTop: 10, fontSize: 13, color: 'var(--gold)', textDecoration: 'none', border: '1px solid var(--gold)', borderRadius: 9, padding: '8px 16px' }}>مقایسهٔ {fa(sellers.length)} فروشنده ↓</a>
+                </>
+              ) : refPrice > 0 ? (
+                <>
+                  <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>نرخِ مرجع{refDate ? ` · ${refDate}` : ''}</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 26, fontWeight: 800, color: 'var(--gold)' }}>{money(refPrice)}</span>
+                    <span style={{ fontSize: 13, color: 'var(--muted)' }}>تومان{product.unit ? ` / ${product.unit}` : ''}</span>
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 8, lineHeight: 1.9 }}>هنوز فروشنده‌ای این کالا را عرضه نکرده است.
+                    <Link href="/forushgaha" style={{ color: 'var(--gold)', textDecoration: 'none', marginInlineStart: 6 }}>فروشگاه‌های مصالح ↗</Link>
+                  </div>
                 </>
               ) : (
                 <div style={{ fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.9 }}>
