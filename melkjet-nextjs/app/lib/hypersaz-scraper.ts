@@ -111,8 +111,8 @@ function categoryPathFromLd(html: string, productName?: string): string[] {
       if (t === 'BreadcrumbList' || (Array.isArray(t) && t.includes('BreadcrumbList'))) {
         let names = (node.itemListElement || []).map((it: any) => String(it?.name || it?.item?.name || '').trim()).filter(Boolean)
         const nName = (s: string) => s.replace(/‌/g, '').replace(/\s+/g, ' ').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim()
-        // نامِ سایت/منبع و آیتم‌های زباله را از مسیرِ دسته حذف کن (نباید در پابلیک دیده شوند)
-        const JUNK = /^(صفحه\s*اصلی|خانه|home|فروشگاه|آهن\s*آنلاین|هایپرساز|ahanonline|hypersaz|قیمت\s*روز|قیمت\s*آهن(\s*آلات)?|لیست\s*قیمت|بلاگ|وبلاگ|مقالات|اخبار|دسته\s*بندی(\s*ها)?)$/i
+        // نامِ سایت/منبع و آیتم‌های محتوایی/زباله را از مسیرِ دسته حذف کن (نباید در پابلیک دیده شوند)
+        const JUNK = /^(صفحه\s*اصلی|خانه|home|فروشگاه|محصولات|همه\s*محصولات|آهن\s*آنلاین|هایپرساز|ahanonline|hypersaz|قیمت\s*روز|قیمت\s*آهن(\s*آلات)?|لیست\s*قیمت|بلاگ|وبلاگ|مقالات?|مجله|اخبار|فیلم|ویدی?و|آموزش|درباره|تماس|blog|news|magazine|video|about|contact|دسته\s*بندی(\s*ها)?)$/i
         names = names.filter((n: string) => !JUNK.test(nName(n)))
         if (names.length && productName && nName(names[names.length - 1]) === nName(productName)) names = names.slice(0, -1)
         return names.filter(Boolean).slice(0, 4)
@@ -182,17 +182,24 @@ function priceHistoryOf(html: string): PricePoint[] {
   for (let i = 0; i < n; i++) out.push({ date: dates[i] || '', price: prices[i] })
   return out.slice(-30)
 }
+// آدرس/نامِ صفحاتِ محتوایی (مقاله/مجله/فیلم/درباره…) که نباید محصول شوند
+const CONTENT_URL = /\/(blog|news|magazine|mag|articles?|videos?|film|about(-us)?|contact|faq|cart|checkout|account|login|register|tags?|author)(\/|$|\?)|\/(مجله|بلاگ|اخبار|آموزش|درباره|تماس)(\/|$)/i
+const ARTICLE_NAME = /(^|\s|«)(چیست|چگونه|چطور|جدیدترین|معرفی|نحوهٔ?|روشِ?|بررسی|مقایسهٔ?|آشنایی|راهنمای\s*خرید|همه\s*چیز\s*درباره)(\s|$|»)|مجله|بلاگ|فیلم\s*های|ویدی?و|آموزش/i
 function extractProduct(html: string, url: string, base: string) {
+  if (CONTENT_URL.test(decodeURIComponent(url))) return null   // صفحهٔ محتوایی، نه محصول
   const ld = findProductLd(html)
   const name = stripHtml(String(ld?.name || '')) || htmlName(html)
-  if (!name || name.length < 2) return null
+  if (!name || name.length < 2 || ARTICLE_NAME.test(name)) return null
   const image = productImg(html, base)
   const specs = allSpecs(html)
+  const priceHistory = priceHistoryOf(html)
+  // فقط صفحه‌ای که واقعاً محصول است (Schema محصول، مشخصات، قیمت یا دکمهٔ خرید) — نه مقاله/صفحهٔ عمومی
+  const hasCommerce = !!ld || specs.length > 0 || priceHistory.length > 0 || /data-price|افزودن\s*به\s*سبد|add[-_]?to[-_]?cart|ريال|تومان/i.test(html)
+  if (!hasCommerce) return null
   const brand = specs.find(s => /تولید\s*کننده|^برند|مبدا\s*برند|سازنده/.test(s.key))?.value || (ld?.brand ? String(ld.brand.name || ld.brand) : undefined)
   const other = specs.find(s => /سایر\s*توضیحات|توضیحات/.test(s.key))?.value
   const og = ogMeta(html, 'og:description')
   const description = other || (og && !/خرید آنلاین انواع/.test(og) ? og : '')
-  const priceHistory = priceHistoryOf(html)
   const catPath = categoryPathFromLd(html, name)
   return {
     name, categoryPath: catPath.length ? catPath : undefined,
@@ -355,7 +362,7 @@ async function collectSitemapUrls(base: string, cap: number): Promise<{ urls: st
   if (topXml.length) {
     // زیرنقشه‌های «محصول» و «دستهٔ محصول» را بگیر (صفحاتِ دسته مثلِ آهن‌آنلاین جدولِ قیمت دارند).
     // پست/برگه/برچسب/misc را کنار بگذار.
-    let seeds = topXml.filter(l => !/(misc|posts?|\/pages?\/|tag|author|user|blog|comment)/i.test(l))
+    let seeds = topXml.filter(l => !/(misc|posts?|\/pages?\/|tag|author|user|blog|comment|news|magazine|\bmag\b|video|film|about|contact|faq|مجله|اخبار|آموزش)/i.test(l))
     if (!seeds.length) seeds = topXml
     // صفحاتِ «دسته/product-category» اول (چون جدولِ قیمتِ کامل دارند) تا در سقفِ تعداد اول بیایند.
     seeds = seeds.sort((a, b) => (/categor/i.test(b) ? 1 : 0) - (/categor/i.test(a) ? 1 : 0))
@@ -373,7 +380,8 @@ async function collectSitemapUrls(base: string, cap: number): Promise<{ urls: st
     for (const u of topLocs) { urls.add(u); if (urls.size >= cap) break }
     productSpecific = /product|kala|mahsul|shop|ahan/i.test(text)
   }
-  const all = [...urls]
+  const dec = (u: string) => { try { return decodeURIComponent(u) } catch { return u } }
+  const all = [...urls].filter(u => !CONTENT_URL.test(dec(u)))   // صفحاتِ مجله/بلاگ/فیلم را کنار بگذار
   const prod = all.filter(u => /\/product\/|\/products\/|\/product-category\/|\/category\/|\/kala\/|\/shop\/|mahsul|\/p\//i.test(u))
   if (prod.length) return { urls: prod.slice(0, cap), productSpecific: true }
   return { urls: all.slice(0, cap), productSpecific }
