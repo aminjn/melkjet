@@ -4402,9 +4402,10 @@ function AiCostView() {
   const setModel = (i: number, patch: any) => setC({ ...c, models: c.models.map((m: any, j: number) => j === i ? { ...m, ...patch } : m) })
   const setUnit = (k: string, v: string) => setC({ ...c, unitTokens: { ...c.unitTokens, [k]: Number(v) || 0 } })
   const ref = c.models.find((m: any) => m.id === c.referenceModelId) || c.models[0]
-  // قیمتِ فروشِ هر توکن (تومان) = هزینهٔ خروجیِ مدلِ مرجع ÷ 1e6 × نرخِ دلار × ضریب
-  const sellPerToken = ref ? ((ref.outUsd || ref.inUsd) / 1e6) * c.usdToman * (1 + (Number(c.profitPercent) || 0) / 100) : 0
-  const costTomanPerM = (m: any) => (m.outUsd || m.inUsd) * c.usdToman   // هزینهٔ خامِ هر ۱M توکنِ خروجی (تومان)
+  const basisUsd = (m: any) => { const inU = Number(m.inUsd) || 0, outU = Number(m.outUsd) || 0; return c.costBasis === 'sum' ? inU + outU : c.costBasis === 'avg' ? (inU + outU) / 2 : (outU || inU) }
+  // قیمتِ فروشِ هر توکن (تومان) = هزینهٔ مدلِ مرجع (طبقِ مبنا) ÷ 1e6 × نرخِ دلار × (۱ + سود٪)
+  const sellPerToken = ref ? (basisUsd(ref) / 1e6) * c.usdToman * (1 + (Number(c.profitPercent) || 0) / 100) : 0
+  const costTomanPerM = (m: any) => basisUsd(m) * c.usdToman   // هزینهٔ هر ۱M توکن طبقِ مبنای انتخابی (تومان)
   const UNIT_LABEL: Record<string, string> = { image: 'هر تصویرِ AI', render3d: 'هر رندرِ سه‌بعدی', divarImport: 'هر ایمپورتِ دیوار', contactReveal: 'هر تماسِ آشکارشده', sms: 'هر پیامک', email: 'هر ایمیل' }
   return (
     <div style={{ animation: 'fade .35s ease' }}>
@@ -4425,6 +4426,13 @@ function AiCostView() {
             <div><label style={lab}>نرخِ دلار (تومان)</label><input style={inp} type="number" value={c.usdToman} onChange={e => setC({ ...c, usdToman: Number(e.target.value) || 0 })} /></div>
             <div><label style={lab}>درصدِ سود (٪)</label><input style={inp} type="number" value={c.profitPercent} onChange={e => setC({ ...c, profitPercent: Number(e.target.value) || 0 })} placeholder="مثلاً ۱۰۰" /></div>
             <div><label style={lab}>گِردکردنِ قیمت (تومان)</label><input style={inp} type="number" value={c.roundTo} onChange={e => setC({ ...c, roundTo: Number(e.target.value) || 1000 })} /></div>
+            <div style={{ gridColumn: '1 / -1' }}><label style={lab}>مبنای هزینه (ورودی + خروجی)</label>
+              <select style={inp} value={c.costBasis} onChange={e => setC({ ...c, costBasis: e.target.value })}>
+                <option value="sum">مجموعِ ورودی + خروجی (امن‌ترین)</option>
+                <option value="avg">میانگینِ ورودی و خروجی (واقع‌بینانه)</option>
+                <option value="output">فقط خروجی</option>
+              </select>
+            </div>
             <div style={{ gridColumn: '1 / -1' }}><label style={lab}>مدلِ مرجع (قیمتِ توکن از رویش حساب می‌شود)</label>
               <select style={inp} value={c.referenceModelId} onChange={e => setC({ ...c, referenceModelId: e.target.value })}>
                 {c.models.filter((m: any) => m.type === 'text').map((m: any) => <option key={m.id} value={m.id}>{m.label} ({m.provider})</option>)}
@@ -4433,7 +4441,7 @@ function AiCostView() {
           </div>
           <div style={{ marginTop: 12, background: 'var(--goldDim)', border: '1px solid var(--gold)', borderRadius: 10, padding: '12px 14px', fontSize: 13, lineHeight: 2 }}>
             قیمتِ فروشِ هر توکن: <b style={{ color: 'var(--gold)' }}>{sellPerToken.toLocaleString('fa-IR', { maximumFractionDigits: 3 })} تومان</b><br />
-            هزینهٔ خامِ هر ۱٬۰۰۰ توکنِ خروجیِ مدلِ مرجع: <b>{fa((costTomanPerM(ref) / 1000))} تومان</b><br />
+            هزینهٔ خامِ هر ۱٬۰۰۰ توکنِ مدلِ مرجع (طبقِ مبنا): <b>{fa((costTomanPerM(ref) / 1000))} تومان</b><br />
             پیشنهادِ قیمتِ بستهٔ ۱۰۰٬۰۰۰ توکن: <b style={{ color: 'var(--gold)' }}>{fa(sellPerToken * 100000)} تومان</b>
           </div>
           <button onClick={() => save(true)} style={{ marginTop: 12, width: '100%', padding: '11px', borderRadius: 11, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 13.5, cursor: 'pointer', fontFamily: 'inherit' }}>💾 ذخیره و اعمالِ خودکارِ قیمت روی بسته‌های توکن</button>

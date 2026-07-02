@@ -12,6 +12,7 @@ export interface CostConfig {
   markup: number          // (قدیمی) ضریبِ سود — با profitPercent جایگزین شد
   profitPercent: number   // درصدِ سود (۱۰۰ = دو برابرِ هزینه)
   roundTo: number         // گِردکردنِ قیمتِ بسته (مثلاً ۱۰۰۰ تومان)
+  costBasis: 'output' | 'avg' | 'sum'  // مبنای هزینه: فقط خروجی / میانگینِ ورودی و خروجی / مجموع
   referenceModelId: string // مدلی که قیمتِ فروشِ توکن از رویش حساب می‌شود
   unitTokens: Record<string, number> // مصرفِ توکنِ هر عملیاتِ غیرمتنی (تصویر/رندر/ایمپورت/تماس)
   models: ModelCost[]
@@ -45,7 +46,7 @@ function seedModels(): ModelCost[] {
 }
 function defaults(): CostConfig {
   return {
-    usdToman: 700000, markup: 2, profitPercent: 100, roundTo: 1000, referenceModelId: 'gapgpt-qwen-3.6',
+    usdToman: 700000, markup: 2, profitPercent: 100, roundTo: 1000, costBasis: 'sum', referenceModelId: 'gapgpt-qwen-3.6',
     unitTokens: { image: 2000, render3d: 20000, divarImport: 1000, contactReveal: 5000, sms: 500, email: 200 },
     models: seedModels(), autoSync: true, autoReprice: true, lastSyncAt: 0, v: SEED_V,
   }
@@ -68,6 +69,7 @@ export function setCostConfig(patch: Partial<CostConfig>): CostConfig {
   if (patch.markup !== undefined) c.markup = Math.max(1, Number(patch.markup) || 1)
   if (patch.profitPercent !== undefined) c.profitPercent = Math.max(0, Number(patch.profitPercent) || 0)
   if (patch.roundTo !== undefined) c.roundTo = Math.max(1, Number(patch.roundTo) || 1)
+  if (patch.costBasis !== undefined) c.costBasis = (['output', 'avg', 'sum'] as const).includes(patch.costBasis as any) ? patch.costBasis as any : c.costBasis
   if (patch.autoSync !== undefined) c.autoSync = !!patch.autoSync
   if (patch.autoReprice !== undefined) c.autoReprice = !!patch.autoReprice
   if (patch.referenceModelId !== undefined) c.referenceModelId = String(patch.referenceModelId)
@@ -114,11 +116,18 @@ export async function maybeAutoSyncCost(now = Date.now()): Promise<boolean> {
   return true
 }
 
-// قیمتِ فروشِ هر توکن (تومان) = هزینهٔ خروجیِ مدلِ مرجع × نرخِ دلار × (۱ + درصدِ سود/۱۰۰).
+// هزینهٔ هر ۱میلیون توکنِ یک مدل ($) بر اساسِ مبنای انتخابی (خروجی/میانگین/مجموعِ ورودی+خروجی).
+export function modelCostPerMUsd(m: { inUsd: number; outUsd: number }, basis: 'output' | 'avg' | 'sum'): number {
+  const inU = Number(m.inUsd) || 0, outU = Number(m.outUsd) || 0
+  if (basis === 'sum') return inU + outU
+  if (basis === 'avg') return (inU + outU) / 2
+  return outU || inU
+}
+// قیمتِ فروشِ هر توکن (تومان) = هزینهٔ مدلِ مرجع (طبقِ مبنا) × نرخِ دلار × (۱ + درصدِ سود/۱۰۰).
 export function tokenSellPriceToman(): number {
   const c = load()
   const m = c.models.find(x => x.id === c.referenceModelId) || c.models[0]
   if (!m) return 0
-  const costPerTokenUsd = (m.outUsd || m.inUsd) / 1_000_000
+  const costPerTokenUsd = modelCostPerMUsd(m, c.costBasis || 'sum') / 1_000_000
   return costPerTokenUsd * c.usdToman * (1 + (Number(c.profitPercent) || 0) / 100)
 }
