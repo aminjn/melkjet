@@ -14,7 +14,7 @@ import CatalogAdminView from './CatalogAdminView'
 type View =
   | 'overview' | 'scraper' | 'persiansaze' | 'listings' | 'products' | 'catalog' | 'geo' | 'moderation' | 'content' | 'studio' | 'articles' | 'categories' | 'crm' | 'api'
   | 'reports' | 'plans' | 'promos' | 'discounts' | 'ads' | 'users' | 'profiles' | 'roles' | 'connections'
-  | 'tracker' | 'sms' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags' | 'support' | 'payment'
+  | 'tracker' | 'sms' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags' | 'support' | 'payment' | 'aicost'
 
 interface NavItem { id: View; icon: string; label: string; badge?: string; badgeColor?: string }
 interface NavSection { title: string; items: NavItem[] }
@@ -55,6 +55,7 @@ const sections: NavSection[] = [
     items: [
       { id: 'plans',  icon: '◔', label: 'پلن‌ها' },
       { id: 'payment', icon: '💳', label: 'درگاه‌های پرداخت', badge: 'NEW', badgeColor: '#c9a84c' },
+      { id: 'aicost', icon: '🧮', label: 'هزینه و قیمتِ AI', badge: 'NEW', badgeColor: '#c9a84c' },
       { id: 'promos', icon: '★', label: 'پروموت و ویژه‌سازی' },
       { id: 'discounts', icon: '٪', label: 'کدهای تخفیف' },
       { id: 'ads',    icon: '▤', label: 'تبلیغات بنری' },
@@ -111,6 +112,7 @@ const viewTitles: Record<View, string> = {
   reports:    'گزارش‌ها و تحلیل داده',
   plans:      'پلن‌ها و اشتراک‌ها',
   payment:    'درگاه‌های پرداخت',
+  aicost:     'هزینه و قیمت‌گذاریِ AI',
   promos:     'پروموت و ویژه‌سازی',
   discounts:  'کدهای تخفیف',
   ads:        'تبلیغات بنری',
@@ -4314,6 +4316,90 @@ function PaymentView() {
   )
 }
 
+// ─── هزینهٔ واقعیِ AI + نرخِ تبدیل → قیمتِ فروشِ توکن ─────────────────────────
+function AiCostView() {
+  const [c, setC] = useState<any>(null)
+  const [saved, setSaved] = useState('')
+  const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '8px 10px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
+  const lab: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', marginBottom: 5, display: 'block', fontWeight: 600 }
+  const load = () => fetch('/api/admin/ai-cost').then(r => r.ok ? r.json() : null).then(d => { if (d) setC(d) }).catch(() => {})
+  useEffect(() => { load() }, [])
+  const save = async () => { const r = await fetch('/api/admin/ai-cost', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(c) }); const d = await r.json().catch(() => ({})); if (d?.ok) setC(d); setSaved('ذخیره شد ✓'); setTimeout(() => setSaved(''), 2000) }
+  const fa = (n: number) => Math.round(Number(n) || 0).toLocaleString('fa-IR')
+  if (!c) return <div style={{ color: 'var(--muted)', fontSize: 13 }}>در حال بارگذاری…</div>
+  const setModel = (i: number, patch: any) => setC({ ...c, models: c.models.map((m: any, j: number) => j === i ? { ...m, ...patch } : m) })
+  const setUnit = (k: string, v: string) => setC({ ...c, unitTokens: { ...c.unitTokens, [k]: Number(v) || 0 } })
+  const ref = c.models.find((m: any) => m.id === c.referenceModelId) || c.models[0]
+  // قیمتِ فروشِ هر توکن (تومان) = هزینهٔ خروجیِ مدلِ مرجع ÷ 1e6 × نرخِ دلار × ضریب
+  const sellPerToken = ref ? ((ref.outUsd || ref.inUsd) / 1e6) * c.usdToman * c.markup : 0
+  const costTomanPerM = (m: any) => (m.outUsd || m.inUsd) * c.usdToman   // هزینهٔ خامِ هر ۱M توکنِ خروجی (تومان)
+  const UNIT_LABEL: Record<string, string> = { image: 'هر تصویرِ AI', render3d: 'هر رندرِ سه‌بعدی', divarImport: 'هر ایمپورتِ دیوار', contactReveal: 'هر تماسِ آشکارشده', sms: 'هر پیامک', email: 'هر ایمیل' }
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <Card style={{ marginBottom: 14, background: 'linear-gradient(120deg, rgba(212,175,55,.1), transparent 60%), var(--surface)', borderColor: 'rgba(201,168,76,.4)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 26 }}>🧮</span>
+            <div><div style={{ fontWeight: 900, fontSize: 18 }}>هزینه و قیمت‌گذاریِ AI</div><div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3 }}>هزینهٔ واقعیِ مدل‌ها (از تأمین‌کننده) + نرخِ دلار و ضریبِ سود → قیمتِ فروشِ توکن خودکار حساب می‌شود.</div></div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>{saved && <span style={{ fontSize: 12, color: '#5fd98a' }}>{saved}</span>}<GoldButton onClick={save}>ذخیره</GoldButton></div>
+        </div>
+      </Card>
+
+      <div className="mjsa-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+        <Card>
+          <div style={{ fontSize: 13.5, fontWeight: 800, marginBottom: 12 }}>نرخِ تبدیل</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div><label style={lab}>نرخِ دلار (تومان)</label><input style={inp} type="number" value={c.usdToman} onChange={e => setC({ ...c, usdToman: Number(e.target.value) || 0 })} /></div>
+            <div><label style={lab}>ضریبِ سود (مثلاً ۲)</label><input style={inp} type="number" step="0.1" value={c.markup} onChange={e => setC({ ...c, markup: Number(e.target.value) || 1 })} /></div>
+            <div style={{ gridColumn: '1 / -1' }}><label style={lab}>مدلِ مرجع (قیمتِ توکن از رویش حساب می‌شود)</label>
+              <select style={inp} value={c.referenceModelId} onChange={e => setC({ ...c, referenceModelId: e.target.value })}>
+                {c.models.filter((m: any) => m.type === 'text').map((m: any) => <option key={m.id} value={m.id}>{m.label} ({m.provider})</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ marginTop: 12, background: 'var(--goldDim)', border: '1px solid var(--gold)', borderRadius: 10, padding: '12px 14px', fontSize: 13, lineHeight: 2 }}>
+            قیمتِ فروشِ هر توکن: <b style={{ color: 'var(--gold)' }}>{sellPerToken.toLocaleString('fa-IR', { maximumFractionDigits: 3 })} تومان</b><br />
+            هزینهٔ خامِ هر ۱٬۰۰۰ توکنِ خروجیِ مدلِ مرجع: <b>{fa((costTomanPerM(ref) / 1000))} تومان</b><br />
+            پیشنهادِ قیمتِ بستهٔ ۱۰۰٬۰۰۰ توکن: <b style={{ color: 'var(--gold)' }}>{fa(sellPerToken * 100000)} تومان</b>
+          </div>
+        </Card>
+        <Card>
+          <div style={{ fontSize: 13.5, fontWeight: 800, marginBottom: 12 }}>مصرفِ توکنِ عملیاتِ غیرمتنی</div>
+          <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 10 }}>هر عملیات چند توکن از اعتبارِ کاربر کم کند (در حالتِ Scale). هزینهٔ تومانیِ هرکدام کنارش نمایش داده می‌شود.</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {Object.keys(c.unitTokens).map(k => (
+              <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 12.5, flex: 1 }}>{UNIT_LABEL[k] || k}</span>
+                <input style={{ ...inp, width: 90 }} type="number" value={c.unitTokens[k]} onChange={e => setUnit(k, e.target.value)} />
+                <span style={{ fontSize: 11.5, color: 'var(--gold)', width: 90, textAlign: 'left' }}>{fa(c.unitTokens[k] * sellPerToken)} ت</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      <Card>
+        <div style={{ fontSize: 13.5, fontWeight: 800, marginBottom: 12 }}>هزینهٔ مدل‌ها ($ به‌ازای هر ۱میلیون توکن — تصویری: به‌ازای هر تصویر/۱M)</div>
+        <div style={{ maxHeight: 460, overflowY: 'auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 0.8fr 0.8fr 1fr', gap: 8, padding: '6px 8px', fontSize: 11.5, fontWeight: 700, color: 'var(--muted)', position: 'sticky', top: 0, background: 'var(--surface)' }}>
+            <div>مدل</div><div>تأمین‌کننده</div><div>ورودی $</div><div>خروجی $</div><div>هزینهٔ ۱M (تومان)</div>
+          </div>
+          {c.models.map((m: any, i: number) => (
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 0.8fr 0.8fr 1fr', gap: 8, padding: '5px 8px', alignItems: 'center', borderTop: '1px solid var(--line)', fontSize: 12 }}>
+              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.label}{m.type === 'image' ? ' 🖼' : ''}</span>
+              <span style={{ color: 'var(--muted)', fontSize: 11 }}>{m.provider}</span>
+              <input style={{ ...inp, padding: '5px 6px' }} type="number" step="0.01" value={m.inUsd} onChange={e => setModel(i, { inUsd: Number(e.target.value) || 0 })} />
+              <input style={{ ...inp, padding: '5px 6px' }} type="number" step="0.01" value={m.outUsd} onChange={e => setModel(i, { outUsd: Number(e.target.value) || 0 })} />
+              <span style={{ color: 'var(--gold)', fontSize: 11.5 }}>{fa(costTomanPerM(m))}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  )
+}
+
 // ─── Promotions / featuring across the site ────────────────────────────────
 function SlotPromoter({ slot, promos, onChange }: { slot: any; promos: any[]; onChange: () => void }) {
   const [q, setQ] = useState('')
@@ -4748,6 +4834,7 @@ export default function SuperAdminPage() {
       case 'roles':      return <RolesView />
       case 'plans':      return <PlansView />
       case 'payment':    return <PaymentView />
+      case 'aicost':     return <AiCostView />
       case 'tracker':    return <TrackerConfig />
       case 'sms':        return <SmsView />
       case 'promos':     return <PromotionsView />
