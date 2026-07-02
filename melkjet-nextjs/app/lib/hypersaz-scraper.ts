@@ -517,11 +517,18 @@ export async function inspectProduct(source: string, url: string) {
     // برای سایت‌های جدولِ قیمت (آهن‌آنلاین): تعدادِ ردیف‌ها + نمونه
     priceTableRows: tableItems.length, priceTableSample: tableItems.slice(0, 4),
   }
-  const ci = html.search(/Highcharts|series\s*:|نمودار/i)
-  const chartSnippet = ci >= 0 ? html.slice(ci, ci + 900).replace(/\s+/g, ' ') : ''
+  const ci = html.search(/Highcharts|ApexCharts|series\s*:|categories\s*:|نمودار|تاریخچه/i)
+  const chartSnippet = ci >= 0 ? html.slice(ci, ci + 1400).replace(/\s+/g, ' ') : ''
   const si = html.search(/ویژگی|مشخصات|مبدا\s*برند|قیمت|price/i)
   const snippet = (si >= 0 ? html.slice(Math.max(0, si - 200), si + 2200) : html.slice(0, 2200)).replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '').replace(/\s+/g, ' ').slice(0, 3000)
-  return { ok: true, extracted, chartSnippet, snippet }
+  // ── تشخیصِ نمودار/تاریخچه ──
+  const firstRow = html.match(/<tr[^>]*>(?:(?!<\/tr>)[\s\S])*?data-price(?:(?!<\/tr>)[\s\S])*?<\/tr>/i)
+  const firstRowHtml = firstRow ? firstRow[0].replace(/\s+/g, ' ').slice(0, 900) : ''
+  const productLinks = [...new Set([...html.matchAll(/href=["']([^"']*\/product\/[^"']+)["']/gi)].map(m => m[1]))].slice(0, 6)
+  const histRows = historyTable(html).length
+  // آدرسِ احتمالیِ AJAXِ نمودار (اگر باشد)
+  const ajax = [...new Set([...html.matchAll(/["'](\/[^"']*(?:chart|price-?history|history|nemodar|ajax)[^"']*)["']/gi)].map(m => m[1]))].slice(0, 6)
+  return { ok: true, extracted, historyRows: histRows, productLinks, ajaxHints: ajax, firstRowHtml, chartSnippet, snippet }
 }
 
 export function startBackgroundScrape(source: string): { started: boolean } {
