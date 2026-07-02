@@ -27,6 +27,9 @@ function load(): DB {
 }
 function save(db: DB) { try { writeFileSync(FILE, JSON.stringify(db)) } catch {} }
 function norm(s: string) { return (s || '').replace(/‌/g, '').replace(/\s+/g, ' ').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim() }
+// دسته‌هایی که در واقع نامِ سایت/منبع یا آیتمِ زبالهٔ breadcrumb هستند و نباید دسته باشند
+const JUNK_CAT = /^(صفحه\s*اصلی|خانه|home|فروشگاه|آهن\s*آنلاین|هایپرساز|ahanonline|hypersaz|قیمت\s*روز|قیمت\s*آهن(\s*آلات)?|لیست\s*قیمت|بلاگ|وبلاگ|مقالات|اخبار|دسته\s*بندی(\s*ها)?)$/i
+export function isJunkCategory(name: string): boolean { return JUNK_CAT.test(norm(name)) }
 // مشخصاتِ زبالهٔ اسکرپ (سرستونِ قیمت/تاریخ/نمودار که اشتباهی مشخصه ثبت شده‌اند)
 const SPEC_BAD = /قیمت|نمودار|عملیات|نوسان|تغییر|تاریخ|price|date|تومان|ریال|درصد/i
 export function sanitizeSpecs(specs?: CatalogSpec[]): CatalogSpec[] | undefined {
@@ -146,7 +149,7 @@ export function categoryBreadcrumb(categoryId: string): { id: string; name: stri
   const out: { id: string; name: string }[] = []
   let cur = cats.find(c => c.id === categoryId)
   let guard = 0
-  while (cur && guard++ < 6) { out.unshift({ id: cur.id, name: cur.name }); cur = cur.parentId ? cats.find(c => c.id === cur!.parentId) : undefined }
+  while (cur && guard++ < 6) { if (!JUNK_CAT.test(norm(cur.name))) out.unshift({ id: cur.id, name: cur.name }); cur = cur.parentId ? cats.find(c => c.id === cur!.parentId) : undefined }
   return out
 }
 // چند محصولِ مرتبط (هم‌دسته) برای بخشِ «محصولاتِ مشابه».
@@ -280,6 +283,25 @@ export function clearCatalog(scope: string): { products: number; categories: num
   return { products: pBefore - db.products.length, categories: cBefore - db.categories.length }
 }
 
+// حذفِ دسته‌های «نامِ سایت/منبع» (مثلِ «آهن آنلاین») از سلسله‌مراتب: بچه‌هایشان بالا می‌روند،
+// محصولاتِ مستقیم‌شان به «دسته‌بندی‌نشده» منتقل می‌شوند. یک‌بار تا حالتِ پایدار اجرا می‌شود.
+export function pruneSourceCategories(): number {
+  const db = load()
+  let removed = 0, guard = 0
+  while (guard++ < 6) {
+    const bad = db.categories.filter(c => JUNK_CAT.test(norm(c.name)))
+    if (!bad.length) break
+    const badIds = new Set(bad.map(c => c.id))
+    const parentOf = new Map(bad.map(c => [c.id, c.parentId]))
+    for (const c of db.categories) if (c.parentId && badIds.has(c.parentId)) c.parentId = parentOf.get(c.parentId) || undefined
+    for (const p of db.products) if (badIds.has(p.categoryId)) p.categoryId = ensureCategoryInDb(db, 'دسته‌بندی‌نشده').id
+    db.categories = db.categories.filter(c => !badIds.has(c.id))
+    removed += bad.length
+  }
+  if (removed) save(db)
+  return removed
+}
+
 export function upsertScraped(items: { name: string; categoryName?: string; categoryPath?: string[]; brand?: string; unit?: string; image?: string; description?: string; specs?: CatalogSpec[]; priceHistory?: PricePoint[]; externalId?: string; externalUrl?: string }[], source = 'hypersaz'): { added: number; updated: number } {
   let added = 0, updated = 0
   const db = load()
@@ -395,7 +417,7 @@ export function publicCatalogFacets() {
   const childrenTree = (pid: string): any[] => db.categories.filter(c => c.parentId === pid && (catCount.get(c.id) || 0) > 0)
     .sort((a, b) => (catCount.get(b.id) || 0) - (catCount.get(a.id) || 0))
     .map(c => ({ ...mk(c), children: childrenTree(c.id) }))
-  const tree = db.categories.filter(c => !c.parentId && (catCount.get(c.id) || 0) > 0)
+  const tree = db.categories.filter(c => !c.parentId && (catCount.get(c.id) || 0) > 0 && !JUNK_CAT.test(norm(c.name)))
     .sort((a, b) => (catCount.get(b.id) || 0) - (catCount.get(a.id) || 0))
     .map(c => ({ ...mk(c), children: childrenTree(c.id) }))
   const roots = tree.map(({ children, ...r }) => r)   // سازگاریِ عقب‌رو (چیپ‌های تخت)

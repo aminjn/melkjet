@@ -4,7 +4,7 @@ import {
   listCategories, addCategory, updateCategory, deleteCategory,
   listProducts, addProduct, updateProduct, deleteProduct, catalogStats, clearCatalog,
   categoriesNeedingImage, setCategoryImage, bulkDeleteQuery, bulkDeleteProducts, enrichStats,
-  getProduct, countImageUsage, clearImageEverywhere, imageGenTargets, applyCategoryImage,
+  getProduct, countImageUsage, clearImageEverywhere, imageGenTargets, applyCategoryImage, pruneSourceCategories,
 } from '@/app/lib/catalog-store'
 import { hasCap } from '@/app/lib/account-store'
 import { generateImage, agentModel, agentProvider } from '@/app/lib/gapgpt'
@@ -20,6 +20,7 @@ async function guard() {
 
 export async function GET(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  pruneSourceCategories()   // پاک‌سازیِ یک‌بارهٔ دسته‌های نامِ منبع (مثلِ «آهن آنلاین») اگر مانده باشند
   const u = req.nextUrl.searchParams
   const cats = listCategories()
   const catId = u.get('categoryId') || undefined

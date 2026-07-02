@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
-import { upsertScraped, type CatalogSpec } from './catalog-store'
+import { upsertScraped, pruneSourceCategories, type CatalogSpec } from './catalog-store'
 import { enrichCatalogBatch } from './catalog-enrich'
 
 // موتورِ اسکرپِ چند-منبعی → کاتالوگِ مرجع. هر منبع (هایپرساز/آهن‌آنلاین/…) تنظیمات،
@@ -110,8 +110,10 @@ function categoryPathFromLd(html: string, productName?: string): string[] {
       const t = node && node['@type']
       if (t === 'BreadcrumbList' || (Array.isArray(t) && t.includes('BreadcrumbList'))) {
         let names = (node.itemListElement || []).map((it: any) => String(it?.name || it?.item?.name || '').trim()).filter(Boolean)
-        if (names.length && /^(صفحه اصلی|خانه|home|فروشگاه)$/i.test(names[0])) names = names.slice(1)
-        const nName = (s: string) => s.replace(/‌/g, '').replace(/\s+/g, ' ').trim()
+        const nName = (s: string) => s.replace(/‌/g, '').replace(/\s+/g, ' ').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim()
+        // نامِ سایت/منبع و آیتم‌های زباله را از مسیرِ دسته حذف کن (نباید در پابلیک دیده شوند)
+        const JUNK = /^(صفحه\s*اصلی|خانه|home|فروشگاه|آهن\s*آنلاین|هایپرساز|ahanonline|hypersaz|قیمت\s*روز|قیمت\s*آهن(\s*آلات)?|لیست\s*قیمت|بلاگ|وبلاگ|مقالات|اخبار|دسته\s*بندی(\s*ها)?)$/i
+        names = names.filter((n: string) => !JUNK.test(nName(n)))
         if (names.length && productName && nName(names[names.length - 1]) === nName(productName)) names = names.slice(0, -1)
         return names.filter(Boolean).slice(0, 4)
       }
@@ -420,6 +422,7 @@ async function run(source: string) {
     if (strat === 'wp') res = await runWp(source, cfg)
     else res = await runSitemap(source, cfg)
     if (res.added === 0 && res.updated === 0) throw new Error('هیچ محصولی یافت نشد — «تستِ اتصال» را بزنید.')
+    pruneSourceCategories()   // دسته‌های نامِ منبع (آهن آنلاین/هایپرساز) نباید در سلسله‌مراتب بمانند
     // تکمیلِ توضیحات/مشخصاتِ فنیِ محصولاتِ بدونِ توضیح با AI (فقط جاهای خالی، یک‌بار)
     if (getConfig(source).aiEnrich !== false) {
       patch(source, { label: 'تکمیلِ توضیحات/مشخصات با AI' })
