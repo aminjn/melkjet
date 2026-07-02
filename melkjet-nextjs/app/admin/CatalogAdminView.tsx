@@ -521,7 +521,7 @@ interface Probe { name: string; url: string; ok: boolean; status: number; note: 
 function ScrapePanel({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [source, setSource] = useState('hypersaz')
   const [sources, setSources] = useState<{ id: string; label: string }[]>([{ id: 'hypersaz', label: 'هایپرساز' }, { id: 'ahanonline', label: 'آهن‌آنلاین' }])
-  const [cfg, setCfg] = useState<any>({ baseUrl: '', strategy: 'auto', maxProducts: 3000, schedule: 'off', scheduleHour: 3, aiEnrich: true })
+  const [cfg, setCfg] = useState<any>({ baseUrl: '', strategy: 'auto', maxProducts: 3000, schedule: 'off', scheduleHour: 3, aiEnrich: true, fetchCharts: true })
   const [job, setJob] = useState<any>(null)
   const [report, setReport] = useState<{ platform: string; probes: Probe[]; recommend: string; smUrl?: string; sitemapType?: string; sitemapLocs?: string[]; subSample?: string[] } | null>(null)
   const [testing, setTesting] = useState(false)
@@ -600,6 +600,10 @@ function ScrapePanel({ onClose, onDone }: { onClose: () => void; onDone: () => v
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, cursor: 'pointer', marginBottom: 12, lineHeight: 1.7 }}>
         <input type="checkbox" checked={cfg.aiEnrich !== false} onChange={e => setCfg({ ...cfg, aiEnrich: e.target.checked })} />
         <span>تکمیلِ خودکارِ توضیحات و مشخصاتِ فنی با AI برای محصولاتِ بدونِ توضیح (پس از اسکرپ، فقط یک‌بار برای هر محصول)</span>
+      </label>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, cursor: 'pointer', marginBottom: 12, lineHeight: 1.7 }}>
+        <input type="checkbox" checked={cfg.fetchCharts !== false} onChange={e => setCfg({ ...cfg, fetchCharts: e.target.checked })} />
+        <span>واکشیِ نمودارِ قیمت از صفحهٔ اختصاصیِ هر محصول (تاریخچهٔ قیمت — پس از اسکرپ، فقط برای محصولاتِ بدونِ نمودار)</span>
       </label>
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
         <button onClick={test} disabled={testing} style={{ ...ghost, border: '1px solid var(--gold)', color: 'var(--gold)' }}>{testing ? 'در حال تست…' : '🔍 تستِ اتصال'}</button>

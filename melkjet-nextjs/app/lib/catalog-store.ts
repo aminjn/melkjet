@@ -262,6 +262,31 @@ export function setProductEnrichment(pid: string, patch: { description?: string;
   if (changed) save(db)
   return changed
 }
+// ── تاریخچهٔ قیمت (نمودار): محصولاتی که صفحهٔ اختصاصی دارند ولی هنوز نمودار (≥۲ نقطه) ندارند ──
+export function productsNeedingChart(source: string, limit = 0): { id: string; url: string }[] {
+  const db = load()
+  const rows = db.products.filter(p => p.active && p.source === source && (p.externalUrl && /\/product\//i.test(p.externalUrl)) && !(p.priceHistory && p.priceHistory.length >= 2))
+    .map(p => ({ id: p.id, url: p.externalUrl! }))
+  return limit > 0 ? rows.slice(0, limit) : rows
+}
+// جای‌گذاریِ تاریخچهٔ قیمتِ نمودار (با نرمال‌سازیِ واحد نسبت به آخرین قیمتِ ریالیِ موجود).
+export function setProductPriceHistory(pid: string, points: PricePoint[]): boolean {
+  if (!points || points.length < 2) return false
+  const db = load(); const p = db.products.find(x => x.id === pid); if (!p) return false
+  let pts = points.filter(x => x && x.price > 0)
+  const existingLast = p.priceHistory?.length ? p.priceHistory[p.priceHistory.length - 1].price : 0
+  if (existingLast > 0) {
+    const ratio = pts[pts.length - 1].price / existingLast
+    if (ratio > 0.05 && ratio < 0.2) pts = pts.map(x => ({ date: x.date, price: x.price * 10 })) // تومان → ریال
+  }
+  if (pts.length >= 2 && pts.length >= (p.priceHistory?.length || 0)) { p.priceHistory = pts.slice(-60); save(db); return true }
+  return false
+}
+export function chartStats(source: string): { total: number; needing: number } {
+  const db = load()
+  const rows = db.products.filter(p => p.active && p.source === source && p.externalUrl && /\/product\//i.test(p.externalUrl))
+  return { total: rows.length, needing: rows.filter(p => !(p.priceHistory && p.priceHistory.length >= 2)).length }
+}
 export function enrichStats(source?: string): { total: number; needing: number } {
   const db = load()
   const scraped = db.products.filter(p => p.active && (source ? p.source === source : p.source !== 'manual'))

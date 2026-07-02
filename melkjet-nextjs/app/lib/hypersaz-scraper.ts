@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
-import { upsertScraped, pruneSourceCategories, type CatalogSpec } from './catalog-store'
+import { upsertScraped, pruneSourceCategories, productsNeedingChart, setProductPriceHistory, type CatalogSpec } from './catalog-store'
 import { enrichCatalogBatch } from './catalog-enrich'
 
 // موتورِ اسکرپِ چند-منبعی → کاتالوگِ مرجع. هر منبع (هایپرساز/آهن‌آنلاین/…) تنظیمات،
@@ -23,10 +23,11 @@ export interface ScraperConfig {
   scheduleHour: number
   lastAutoAt?: number
   aiEnrich?: boolean   // تکمیلِ خودکارِ توضیحات/مشخصات با AI پس از اسکرپ
+  fetchCharts?: boolean   // واکشیِ نمودارِ قیمت از صفحهٔ اختصاصیِ هر محصول
   productLinkSel?: string; nameSel?: string; priceSel?: string; imageSel?: string; categorySel?: string
 }
 function defaultCfg(source: string): ScraperConfig {
-  return { baseUrl: SOURCES.find(s => s.id === source)?.base || '', strategy: 'auto', maxProducts: 3000, schedule: 'off', scheduleHour: 3, aiEnrich: true }
+  return { baseUrl: SOURCES.find(s => s.id === source)?.base || '', strategy: 'auto', maxProducts: 3000, schedule: 'off', scheduleHour: 3, aiEnrich: true, fetchCharts: true }
 }
 export function getConfig(source: string): ScraperConfig {
   const f = cfgFile(source)
@@ -44,6 +45,7 @@ export function setConfig(source: string, patchIn: Partial<ScraperConfig>): Scra
     scheduleHour: patchIn.scheduleHour !== undefined ? Math.max(0, Math.min(23, Number(patchIn.scheduleHour) || 0)) : cur.scheduleHour,
     lastAutoAt: patchIn.lastAutoAt !== undefined ? Number(patchIn.lastAutoAt) : cur.lastAutoAt,
     aiEnrich: patchIn.aiEnrich !== undefined ? !!patchIn.aiEnrich : cur.aiEnrich,
+    fetchCharts: patchIn.fetchCharts !== undefined ? !!patchIn.fetchCharts : cur.fetchCharts,
     productLinkSel: patchIn.productLinkSel !== undefined ? String(patchIn.productLinkSel) : cur.productLinkSel,
     nameSel: patchIn.nameSel !== undefined ? String(patchIn.nameSel) : cur.nameSel,
     priceSel: patchIn.priceSel !== undefined ? String(patchIn.priceSel) : cur.priceSel,
@@ -171,16 +173,45 @@ function tableSpecs(html: string): CatalogSpec[] {
 }
 function allSpecs(html: string): CatalogSpec[] { const li = listSpecs(html); return li.length ? li : tableSpecs(html) }
 export interface PricePoint { date: string; price: number }
+// جدولِ «تاریخچهٔ قیمت» در HTML (سطر: تاریخِ شمسی + عددِ قیمت)
+function historyTable(html: string): PricePoint[] {
+  let best: PricePoint[] = []
+  for (const t of html.matchAll(/<table[\s\S]*?<\/table>/gi)) {
+    const rows = [...t[0].matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)]
+    const tmp: PricePoint[] = []
+    for (const r of rows) {
+      const cells = [...r[1].matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)].map(c => stripHtml(c[1]))
+      const date = cells.find(c => /\d{3,4}\/\d{1,2}\/\d{1,2}/.test(c)) || ''
+      const price = cells.map(c => Number(c.replace(/[^\d]/g, ''))).find(n => n > 1000) || 0
+      if (date && price) tmp.push({ date: date.match(/\d{3,4}\/\d{1,2}\/\d{1,2}/)![0], price })
+    }
+    if (tmp.length >= 2 && tmp.length > best.length) best = tmp
+  }
+  return best
+}
 function priceHistoryOf(html: string): PricePoint[] {
-  const dataM = html.match(/data\s*:\s*\[\s*([\d.,\s]+?)\s*\]/i)
-  if (!dataM) return []
-  const prices = dataM[1].split(',').map(s => Number(s.trim())).filter(n => n > 1000)
+  // ۱) جدولِ تاریخچهٔ قیمت (آهن‌آنلاین آن را در HTML دارد)
+  const ht = historyTable(html)
+  if (ht.length >= 2) return ht.slice(-60)
+  // ۲) نمودار: بلوک‌های data:[...] (Highcharts) — آن که بیشترین اعدادِ قیمت‌گونه دارد
+  let prices: number[] = []
+  for (const m of html.matchAll(/data\s*:\s*\[([\d.,\seE+-]+?)\]/gi)) {
+    const nums = m[1].split(',').map(s => Number(s.trim())).filter(n => Number.isFinite(n) && n > 1000)
+    if (nums.length >= 2 && nums.length > prices.length) prices = nums
+  }
+  // ۳) ApexCharts / زوجِ [x,y]
+  if (prices.length < 2) {
+    for (const m of html.matchAll(/\[\s*(?:\[[^\]]*\]\s*,?\s*){2,}\]/g)) {
+      const ys = [...m[0].matchAll(/\[\s*[\d.eE+-]+\s*,\s*([\d.eE+-]+)\s*\]/g)].map(p => Number(p[1])).filter(n => n > 1000)
+      if (ys.length >= 2 && ys.length > prices.length) prices = ys
+    }
+  }
   if (prices.length < 2) return []
   const catM = html.match(/categories\s*:\s*\[([^\]]*)\]/i)
   const dates = catM ? catM[1].split(',').map(s => s.replace(/['"]/g, '').trim()).filter(Boolean) : []
   const out: PricePoint[] = []; const n = dates.length ? Math.min(prices.length, dates.length) : prices.length
   for (let i = 0; i < n; i++) out.push({ date: dates[i] || '', price: prices[i] })
-  return out.slice(-30)
+  return out.slice(-60)
 }
 // آدرس/نامِ صفحاتِ محتوایی (مقاله/مجله/فیلم/درباره…) که نباید محصول شوند
 const CONTENT_URL = /\/(blog|news|magazine|mag|articles?|videos?|film|about(-us)?|contact|faq|cart|checkout|account|login|register|tags?|author)(\/|$|\?)|\/(مجله|بلاگ|اخبار|آموزش|درباره|تماس)(\/|$)/i
@@ -432,6 +463,26 @@ async function run(source: string) {
     else res = await runSitemap(source, cfg)
     if (res.added === 0 && res.updated === 0) throw new Error('هیچ محصولی یافت نشد — «تستِ اتصال» را بزنید.')
     pruneSourceCategories()   // دسته‌های نامِ منبع (آهن آنلاین/هایپرساز) نباید در سلسله‌مراتب بمانند
+    // واکشیِ نمودارِ قیمت از صفحهٔ اختصاصیِ هر محصول (تاریخچهٔ قیمت)
+    if (getConfig(source).fetchCharts !== false) {
+      const need = productsNeedingChart(source, cfg.maxProducts)
+      if (need.length) {
+        patch(source, { label: `واکشیِ نمودارِ قیمت (${need.length.toLocaleString('fa-IR')} محصول)` })
+        let ci = 0, charted = 0, stopC = false
+        const watch = setInterval(() => { if (!loadJob(source).running) stopC = true }, 3000)
+        async function cw() {
+          while (!stopC && ci < need.length) {
+            const it = need[ci++]
+            const r = await fetchText(it.url, 15000)
+            if (r.ok && r.text) { const ph = priceHistoryOf(r.text); if (ph.length >= 2 && setProductPriceHistory(it.id, ph)) charted++ }
+            if (ci % 10 === 0) patch(source, { label: `نمودارِ قیمت: ${charted.toLocaleString('fa-IR')} از ${ci.toLocaleString('fa-IR')} محصول` })
+          }
+        }
+        await Promise.all(Array.from({ length: 6 }, () => cw()))
+        clearInterval(watch)
+        patch(source, { label: `✓ نمودارِ قیمت برای ${charted.toLocaleString('fa-IR')} محصول` })
+      }
+    }
     // تکمیلِ توضیحات/مشخصاتِ فنیِ محصولاتِ بدونِ توضیح با AI (فقط جاهای خالی، یک‌بار)
     if (getConfig(source).aiEnrich !== false) {
       patch(source, { label: 'تکمیلِ توضیحات/مشخصات با AI' })
