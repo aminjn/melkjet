@@ -212,6 +212,22 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
   const [internalView, setInternalView] = useState<CrmView>('dashboard')
   const activeView: CrmView = viewProp ?? internalView
   const setActiveView = (v: CrmView) => { onView ? onView(v) : setInternalView(v) }
+
+  // ── سازگاریِ CRM با نوعِ پروفایل (مصالح/املاک/عمومی) ──
+  const [ctx, setCtx] = useState<'materials' | 'realestate' | 'generic'>('generic')
+  useEffect(() => { fetch('/api/auth/profile').then(r => r.ok ? r.json() : null).then(d => { const dash = d?.dash || ''; setCtx(dash === '/materials' ? 'materials' : (dash === '/pros' || dash === '/agency') ? 'realestate' : 'generic') }).catch(() => {}) }, [])
+  const isMat = ctx === 'materials'
+  const stages: { id: Stage; label: string; color: string }[] = isMat ? [
+    { id: 'new', label: 'استعلامِ جدید', color: '#7a8fae' },
+    { id: 'review', label: 'پیش‌فاکتور', color: '#e7a14a' },
+    { id: 'offered', label: 'مذاکره', color: 'var(--gold)' },
+    { id: 'contract', label: 'سفارشِ قطعی', color: '#5fd98a' },
+    { id: 'lost', label: 'لغوشده', color: '#e74c3c' },
+  ] : stageColumns
+  const MAT_VIEW: Record<CrmView, string> = { dashboard: 'داشبورد', listings: 'مشتریان', pipeline: 'قیفِ فروش', tasks: 'کارها و پیگیری', calendar: 'تقویم' }
+  const viewLabel = (v: CrmView) => isMat ? MAT_VIEW[v] : (CRM_VIEWS.find(x => x.id === v)?.label || v)
+  const needLabel = isMat ? 'محصولِ موردنیاز' : 'نیاز'
+  const budgetLabel = isMat ? 'مبلغِ سفارش' : 'بودجه'
   const [tasks, setTasks] = useState<Task[]>([])
   const [newTaskText, setNewTaskText] = useState('')
   const [newTaskPriority, setNewTaskPriority] = useState<'high' | 'medium' | 'low'>('medium')
@@ -341,24 +357,17 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
     fetch('/api/crm/tasks?id=' + encodeURIComponent(id), { method: 'DELETE' }).catch(() => {})
   }
 
-  // Create a lead via a simple prompt flow, then refresh from state.
-  const addLead = async () => {
-    const name = window.prompt('نام لید:')?.trim()
-    if (!name) return
-    const need = window.prompt('نیاز (مثلاً خرید · سعادت‌آباد):')?.trim() || undefined
-    const budget = window.prompt('بودجه (مثلاً ۲۰ میلیارد):')?.trim() || undefined
-    const phone = window.prompt('تلفن:')?.trim() || undefined
+  // فرمِ افزودنِ مشتری/لید — مودالِ کامل (نه prompt)
+  const [leadForm, setLeadForm] = useState<{ name: string; phone: string; need: string; budget: string; stage: Stage; note: string } | null>(null)
+  const addLead = () => setLeadForm({ name: '', phone: '', need: '', budget: '', stage: 'new', note: '' })
+  const submitLead = async () => {
+    if (!leadForm || !leadForm.name.trim()) return
+    const body = { name: leadForm.name.trim(), phone: leadForm.phone.trim() || undefined, need: leadForm.need.trim() || undefined, budget: leadForm.budget.trim() || undefined, stage: leadForm.stage, note: leadForm.note.trim() || undefined }
     try {
-      const r = await fetch('/api/crm/leads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, need, budget, phone }),
-      })
-      if (r.ok) {
-        const { lead } = await r.json()
-        if (lead) setLeads(prev => [lead, ...prev])
-      }
+      const r = await fetch('/api/crm/leads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      if (r.ok) { const { lead } = await r.json(); if (lead) setLeads(prev => [lead, ...prev]) }
     } catch {}
+    setLeadForm(null)
   }
 
   // Move a lead to a new stage (optimistic) and PATCH the backend.
@@ -373,8 +382,8 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
 
   // Shift a lead one column left/right in the pipeline order.
   const shiftLead = (lead: Lead, dir: -1 | 1) => {
-    const idx = stageColumns.findIndex(c => c.id === lead.stage)
-    const next = stageColumns[idx + dir]
+    const idx = stages.findIndex(c => c.id === lead.stage)
+    const next = stages[idx + dir]
     if (next) moveLead(lead.id, next.id)
   }
 
@@ -432,7 +441,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
   const sortedTasks = [...tasks].sort((a, b) => dueSortKey(a) - dueSortKey(b))
   const todaysTasks = sortedTasks.filter(t => isToday(t))
   // per-stage lead breakdown for the dashboard
-  const stageBreakdown = stageColumns.map(c => ({ ...c, count: leads.filter(l => l.stage === c.id).length }))
+  const stageBreakdown = stages.map(c => ({ ...c, count: leads.filter(l => l.stage === c.id).length }))
 
   // ───── دادهٔ واقعیِ داشبورد (نه فیک): روند ۶ ماهِ لیدها + بینش‌های مبتنی بر دادهٔ واقعی ─────
   const curJ = jParts(new Date())
@@ -750,7 +759,37 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
       )}
 
       {/* ==================== LISTINGS ==================== */}
-      {activeView === 'listings' && (ownListings
+      {/* ── مشتریانِ مصالح‌فروش (جدولِ کامل به‌جای «فایل‌های ملکی») ── */}
+      {activeView === 'listings' && isMat && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
+            <div style={{ fontSize: 13, color: 'var(--muted)' }}>{leads.length.toLocaleString('fa-IR')} مشتری — پیمانکار، سازنده، مغازه‌دار یا مصرف‌کننده.</div>
+            <button onClick={addLead} style={{ padding: '8px 16px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'Vazirmatn, system-ui, sans-serif' }}>＋ مشتریِ جدید</button>
+          </div>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1.2fr 1fr 1fr 40px', gap: 8, padding: '11px 16px', background: 'var(--bg2)', borderBottom: '1px solid var(--line)', fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>
+              <div>نام</div><div>تلفن</div><div>محصولِ موردنیاز</div><div>مبلغ</div><div>مرحله</div><div></div>
+            </div>
+            <div style={{ maxHeight: 560, overflowY: 'auto' }}>
+              {leads.length === 0 ? <div style={{ padding: 28, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>هنوز مشتری‌ای ثبت نشده — «مشتریِ جدید».</div> : leads.map((l, i) => (
+                <div key={l.id} style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1.2fr 1fr 1fr 40px', gap: 8, padding: '11px 16px', borderTop: i ? '1px solid var(--line)' : 'none', fontSize: 13, alignItems: 'center' }}>
+                  <div style={{ fontWeight: 600 }}>{l.name}{l.note ? <div style={{ fontSize: 11, color: 'var(--faint)' }}>{l.note}</div> : null}</div>
+                  <div dir="ltr" style={{ color: 'var(--muted)', fontSize: 12, textAlign: 'right' }}>{l.phone || '—'}</div>
+                  <div style={{ color: 'var(--muted)', fontSize: 12 }}>{l.need || '—'}</div>
+                  <div style={{ color: 'var(--gold)', fontWeight: 700, fontSize: 12 }}>{l.budget || '—'}</div>
+                  <div>
+                    <select value={l.stage} onChange={e => moveLead(l.id, e.target.value as Stage)} style={{ background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 8, padding: '4px 8px', color: 'var(--text)', fontSize: 11.5, fontFamily: 'inherit', cursor: 'pointer' }}>
+                      {stages.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                    </select>
+                  </div>
+                  <button onClick={() => deleteLead(l.id)} title="حذف" style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', borderRadius: 8, padding: '3px 8px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>×</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+      {activeView === 'listings' && !isMat && (ownListings
         // ── فایل‌های واقعیِ خودِ کاربر (قابلِ ویرایش/حذف/انتخابِ دسته‌ای) ──
         ? (() => {
           const STAT_LABEL: Record<string, string> = { active: 'فعال', sold: 'فروخته‌شده', rented: 'اجاره‌رفته' }
@@ -853,7 +892,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
         <div>
           {/* Pipeline toolbar */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <span style={{ fontSize: 13, color: 'var(--muted)' }}>{leads.length} لید در پایپ‌لاین</span>
+            <span style={{ fontSize: 13, color: 'var(--muted)' }}>{leads.length.toLocaleString('fa-IR')} {isMat ? 'مشتری در قیفِ فروش' : 'لید در پایپ‌لاین'}</span>
             <button
               onClick={addLead}
               style={{
@@ -862,11 +901,11 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
                 color: '#16140f', fontSize: 13, fontWeight: 700,
                 cursor: 'pointer', fontFamily: 'Vazirmatn, system-ui, sans-serif',
               }}
-            >＋ لید جدید</button>
+            >＋ {isMat ? 'مشتریِ جدید' : 'لید جدید'}</button>
           </div>
 
           <div className="mjc-kanban" style={{ display: 'flex', gap: 14, overflowX: 'auto', paddingBottom: 8 }}>
-            {stageColumns.map((col, colIdx) => {
+            {stages.map((col, colIdx) => {
               const colLeads = leads.filter(l => l.stage === col.id)
               return (
               <div key={col.id} style={{ flex: '0 0 260px', display: 'flex', flexDirection: 'column' }}>
@@ -966,17 +1005,17 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
                             fontFamily: 'Vazirmatn, system-ui, sans-serif', cursor: 'pointer',
                           }}
                         >
-                          {stageColumns.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                          {stages.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                         </select>
                         <button
                           onClick={() => shiftLead(card, 1)}
-                          disabled={colIdx === stageColumns.length - 1}
+                          disabled={colIdx === stages.length - 1}
                           title="مرحله بعد"
                           style={{
                             width: 26, height: 26, borderRadius: 7,
                             background: 'var(--bg)', border: '1px solid var(--line)',
-                            color: 'var(--text)', cursor: colIdx === stageColumns.length - 1 ? 'default' : 'pointer',
-                            opacity: colIdx === stageColumns.length - 1 ? 0.4 : 1, fontSize: 13, lineHeight: 1,
+                            color: 'var(--text)', cursor: colIdx === stages.length - 1 ? 'default' : 'pointer',
+                            opacity: colIdx === stages.length - 1 ? 0.4 : 1, fontSize: 13, lineHeight: 1,
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             fontFamily: 'Vazirmatn, system-ui, sans-serif',
                           }}
@@ -1348,12 +1387,39 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
     </div>
   )
 
+  const F = 'Vazirmatn, system-ui, sans-serif'
+  const mInp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '9px 11px', color: 'var(--text)', fontSize: 13, fontFamily: F, outline: 'none', boxSizing: 'border-box' }
+  const mLab: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', marginBottom: 5, display: 'block', fontWeight: 600 }
+  const leadModal = leadForm && (
+    <div onClick={() => setLeadForm(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.72)', zIndex: 400, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', fontFamily: F }}>
+      <div onClick={e => e.stopPropagation()} dir="rtl" style={{ background: 'var(--surface)', border: '1px solid var(--gold)', borderRadius: 16, maxWidth: 440, width: '100%', margin: '30px 0', padding: 22 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <div style={{ fontSize: 16, fontWeight: 900 }}>{isMat ? 'مشتریِ جدید' : 'لیدِ جدید'}</div>
+          <button onClick={() => setLeadForm(null)} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 22, cursor: 'pointer' }}>×</button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ gridColumn: '1 / -1' }}><label style={mLab}>نام *</label><input style={mInp} value={leadForm.name} autoFocus onChange={e => setLeadForm({ ...leadForm, name: e.target.value })} placeholder={isMat ? 'مثلاً پیمانکاری آریا' : 'نامِ لید'} /></div>
+          <div><label style={mLab}>تلفن</label><input style={{ ...mInp, direction: 'ltr', textAlign: 'left' }} value={leadForm.phone} onChange={e => setLeadForm({ ...leadForm, phone: e.target.value })} /></div>
+          <div><label style={mLab}>مرحله</label><select style={{ ...mInp, cursor: 'pointer' }} value={leadForm.stage} onChange={e => setLeadForm({ ...leadForm, stage: e.target.value as Stage })}>{stages.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
+          <div><label style={mLab}>{needLabel}</label><input style={mInp} value={leadForm.need} onChange={e => setLeadForm({ ...leadForm, need: e.target.value })} placeholder={isMat ? 'مثلاً میلگرد ۱۶، ۵ تن' : 'خرید · سعادت‌آباد'} /></div>
+          <div><label style={mLab}>{budgetLabel}</label><input style={mInp} value={leadForm.budget} onChange={e => setLeadForm({ ...leadForm, budget: e.target.value })} placeholder={isMat ? 'مثلاً ۱۲۰ میلیون' : '۲۰ میلیارد'} /></div>
+          <div style={{ gridColumn: '1 / -1' }}><label style={mLab}>یادداشت</label><textarea style={{ ...mInp, resize: 'vertical', minHeight: 60 }} value={leadForm.note} onChange={e => setLeadForm({ ...leadForm, note: e.target.value })} placeholder={isMat ? 'نوعِ مشتری (پیمانکار/سازنده/…)، شرایطِ پرداخت، …' : 'یادداشت'} /></div>
+        </div>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
+          <button onClick={() => setLeadForm(null)} style={{ padding: '9px 16px', borderRadius: 10, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--muted)', fontSize: 13, cursor: 'pointer', fontFamily: F }}>انصراف</button>
+          <button onClick={submitLead} disabled={!leadForm.name.trim()} style={{ padding: '9px 20px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: F, opacity: leadForm.name.trim() ? 1 : 0.5 }}>ذخیره</button>
+        </div>
+      </div>
+    </div>
+  )
+
   // ===== EMBEDDED MODE: only the inner content area (no sidebar/header/return-bar/full-page). =====
   if (embedded) {
     return (
       <div dir="rtl" style={{ color: 'var(--text)', fontFamily: 'Vazirmatn, system-ui, sans-serif' }}>
         {content}
         {aiModal}
+        {leadModal}
       </div>
     )
   }
@@ -1424,7 +1490,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
                 }}
               >
                 <span style={{ fontSize: 16, opacity: isActive ? 1 : 0.7 }}>{item.icon}</span>
-                <span className="mjc-sidelabel" style={{ flex: 1 }}>{item.label}</span>
+                <span className="mjc-sidelabel" style={{ flex: 1 }}>{viewLabel(item.id)}</span>
                 {isActive && (
                   <span style={{
                     width: 5, height: 5,
@@ -1514,7 +1580,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
           alignItems: 'center',
           gap: 16,
         }}>
-          <h2 style={{ fontSize: 16, fontWeight: 700, flex: 1 }}>{viewTitles[activeView]}</h2>
+          <h2 style={{ fontSize: 16, fontWeight: 700, flex: 1 }}>{viewLabel(activeView)}</h2>
           <input
             placeholder="جستجو..."
             value={searchQuery}
@@ -1554,6 +1620,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
       </div>
 
       {aiModal}
+      {leadModal}
     </div>
   )
 }
