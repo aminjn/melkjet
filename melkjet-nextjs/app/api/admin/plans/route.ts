@@ -33,8 +33,11 @@ export async function POST(req: NextRequest) {
     order: b.order != null && b.order !== '' ? Number(b.order) : undefined,
     active: b.active !== undefined ? !!b.active : undefined,
     roleId: b.roleId ? String(b.roleId) : undefined,
+    dashboard: b.dashboard ? String(b.dashboard) : undefined,
     badge: b.badge ? String(b.badge) : undefined,
     permissions: Array.isArray(b.permissions) ? b.permissions.map((x: unknown) => String(x)) : undefined,
+    quotas: b.quotas && typeof b.quotas === 'object' ? b.quotas : undefined,
+    aiCredits: b.aiCredits != null && b.aiCredits !== '' ? Number(b.aiCredits) : undefined,
   })
   return NextResponse.json({ plan })
 }

@@ -4072,7 +4072,10 @@ function RolesView() {
 
 // فرمِ ساخت/ویرایشِ پلن — کامل و آسان (نه prompt). انتخابِ نقش ⇒ ماژول‌های همان نقش می‌آیند.
 function PlanForm({ initial, roles, perms, onSave, onClose }: { initial: any; roles: any[]; perms: { id: string; label: string }[]; onSave: (payload: any) => void; onClose: () => void }) {
-  const [f, setF] = useState<any>(() => ({ name: '', priceMonthly: '', priceYearly: '', roleId: '', badge: '', cta: '', highlighted: false, active: true, permissions: [], extra: '', ...initial }))
+  const [f, setF] = useState<any>(() => ({ name: '', priceMonthly: '', priceYearly: '', roleId: '', dashboard: '', badge: '', cta: '', highlighted: false, active: true, permissions: [], quotas: {}, aiCredits: '', extra: '', ...initial }))
+  const QKEYS: [string, string][] = [['listings', 'آگهی'], ['files', 'فایل'], ['properties', 'ملک'], ['projects', 'پروژه'], ['units', 'واحد'], ['investors', 'سرمایه‌گذار'], ['leads', 'لید'], ['crmCustomers', 'مشتری CRM'], ['contacts', 'مخاطب'], ['agents', 'مشاور'], ['products', 'محصول'], ['aiRequests', 'درخواست AI'], ['contentGen', 'تولید محتوا'], ['aiImages', 'تصویر AI'], ['savedSearches', 'جستجوی ذخیره'], ['chats', 'چت'], ['divarImports', 'ایمپورت دیوار'], ['sites', 'سایت'], ['sitePages', 'صفحهٔ سایت'], ['sms', 'پیامک'], ['email', 'ایمیل'], ['campaigns', 'کمپین'], ['automations', 'اتوماسیون'], ['contactReveals', 'تماس آشکار']]
+  const DASHES: [string, string][] = [['', '— بدون داشبورد —'], ['/buyer', 'کاربر عادی'], ['/owner', 'مالک'], ['/pros', 'مشاور'], ['/agency', 'آژانس'], ['/builder', 'سازنده'], ['/materials', 'مصالح'], ['/legal', 'حقوقی']]
+  const setQ = (k: string, v: string) => setF((s: any) => ({ ...s, quotas: { ...s.quotas, [k]: v } }))
   const role = roles.find(r => r.id === f.roleId)
   const availPerms = f.roleId ? perms.filter(p => (role?.permissions || []).includes(p.id)) : perms
   const permLabel = (id: string) => perms.find(p => p.id === id)?.label || id
@@ -4083,7 +4086,7 @@ function PlanForm({ initial, roles, perms, onSave, onClose }: { initial: any; ro
     if (!f.name.trim()) return
     const moduleLabels = f.permissions.map(permLabel)
     const extraLines = String(f.extra || '').split('\n').map((x: string) => x.trim()).filter(Boolean)
-    onSave({ name: f.name.trim(), priceMonthly: Number(f.priceMonthly) || 0, priceYearly: Number(f.priceYearly) || 0, roleId: f.roleId || '', badge: f.badge || '', cta: f.cta || '', highlighted: !!f.highlighted, active: f.active !== false, permissions: f.permissions, features: [...moduleLabels, ...extraLines] })
+    onSave({ name: f.name.trim(), priceMonthly: Number(f.priceMonthly) || 0, priceYearly: Number(f.priceYearly) || 0, roleId: f.roleId || '', dashboard: f.dashboard || '', badge: f.badge || '', cta: f.cta || '', highlighted: !!f.highlighted, active: f.active !== false, permissions: f.permissions, quotas: f.quotas || {}, aiCredits: Number(f.aiCredits) || 0, features: [...moduleLabels, ...extraLines] })
   }
   return (
     <div style={{ background: 'var(--bg2)', border: '1px solid var(--gold)', borderRadius: 14, padding: 16, marginBottom: 14 }}>
@@ -4099,6 +4102,21 @@ function PlanForm({ initial, roles, perms, onSave, onClose }: { initial: any; ro
           </select>
         </div>
         <div><label style={lab}>برچسب (اختیاری)</label><input style={inp} value={f.badge} onChange={e => setF({ ...f, badge: e.target.value })} placeholder="مثلاً محبوب" /></div>
+        <div><label style={lab}>داشبوردِ هدف</label>
+          <select style={inp} value={f.dashboard} onChange={e => setF({ ...f, dashboard: e.target.value })}>
+            {DASHES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </div>
+        <div><label style={lab}>اعتبارِ AIِ ماهانه (توکن)</label><input style={inp} type="number" value={f.aiCredits} onChange={e => setF({ ...f, aiCredits: e.target.value })} placeholder="مثلاً ۲۰۰۰۰" /></div>
+      </div>
+      <label style={lab}>سقفِ مصرف (Quotas) — خالی = بدونِ محدودیت، <b>−۱ = نامحدود</b></label>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 8, marginBottom: 12 }}>
+        {QKEYS.map(([k, l]) => (
+          <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 11.5, color: 'var(--muted)', flex: 1, whiteSpace: 'nowrap' }}>{l}</span>
+            <input style={{ ...inp, width: 62, padding: '6px 7px', textAlign: 'center' }} type="number" value={f.quotas?.[k] ?? ''} onChange={e => setQ(k, e.target.value)} placeholder="—" />
+          </div>
+        ))}
       </div>
       <label style={lab}>ماژول‌ها و امکاناتِ این پلن {f.roleId ? '(از ماژول‌های همین نقش)' : '(همهٔ ماژول‌ها)'}</label>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(190px,1fr))', gap: 8, marginBottom: 12 }}>
@@ -4142,7 +4160,7 @@ function PlansView() {
   const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
   const editInitial = (p: any) => {
     const moduleLabels = new Set((p.permissions || []).map((id: string) => perms.find(x => x.id === id)?.label || id))
-    return { name: p.name, priceMonthly: String(p.priceMonthly || ''), priceYearly: String(p.priceYearly || ''), roleId: p.roleId || '', badge: p.badge || '', cta: p.cta || '', highlighted: !!p.highlighted, active: p.active !== false, permissions: p.permissions || [], extra: (p.features || []).filter((x: string) => !moduleLabels.has(x)).join('\n') }
+    return { name: p.name, priceMonthly: String(p.priceMonthly || ''), priceYearly: String(p.priceYearly || ''), roleId: p.roleId || '', dashboard: p.dashboard || '', badge: p.badge || '', cta: p.cta || '', highlighted: !!p.highlighted, active: p.active !== false, permissions: p.permissions || [], quotas: p.quotas || {}, aiCredits: String(p.aiCredits || ''), extra: (p.features || []).filter((x: string) => !moduleLabels.has(x)).join('\n') }
   }
   return (
     <div style={{ animation: 'fade .35s ease' }}>

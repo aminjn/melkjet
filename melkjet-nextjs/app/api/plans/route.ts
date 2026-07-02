@@ -13,7 +13,8 @@ export async function GET(req: NextRequest) {
   if (dashboard) {
     const role = roleByDashboard(dashboard)
     const rid = role?.id
-    plans = plans.filter(p => !p.roleId || p.roleId === rid)
+    // پلن‌های این داشبورد/نقش + پلن‌های عمومی (بدونِ نقش و داشبورد)
+    plans = plans.filter(p => p.dashboard === dashboard || (rid && p.roleId === rid) || (!p.roleId && !p.dashboard))
   }
   const s = await getSession()
   const credit = s ? getCredit(s.phone) : null

@@ -68,7 +68,10 @@ export interface Item {
   moderatedAt?: number
   scrapedAt: number
   status: ItemStatus
+  expiresAt?: number              // آگهی‌های کاربر ۳۰ روزه‌اند و منقضی می‌شوند
 }
+export const LISTING_TTL = 30 * 24 * 3600 * 1000   // ۳۰ روز
+export function isExpired(it: Item, now = Date.now()): boolean { return !!it.expiresAt && it.expiresAt < now }
 
 // Fields an admin may edit on a stored item
 export type EditableItem = Partial<Pick<Item, 'title' | 'price' | 'location' | 'image' | 'url' | 'excerpt' | 'phone' | 'category' | 'status' | 'featured'>>
@@ -172,7 +175,7 @@ export function listItems(type?: SourceType, opts?: { category?: string; publicO
   const db = load()
   let items = type ? db.items.filter(i => i.type === type) : db.items
   if (opts?.category) items = items.filter(i => i.category === opts.category)
-  if (opts?.publicOnly) items = items.filter(i => i.status !== 'rejected' && i.status !== 'duplicate')
+  if (opts?.publicOnly) { const now = Date.now(); items = items.filter(i => i.status !== 'rejected' && i.status !== 'duplicate' && !isExpired(i, now)) }
   return items.sort((a, b) => b.scrapedAt - a.scrapedAt)
 }
 
@@ -309,11 +312,21 @@ export function addUserListing(raw: {
     title: raw.title, price: raw.price, location: raw.location, image: raw.image,
     excerpt: raw.excerpt, phone: raw.phone, owner: raw.owner, url: raw.url, ownerId,
     meta: raw.meta && Object.keys(raw.meta).length ? raw.meta : undefined,
-    scrapedAt: Date.now(), status: 'pending',
+    scrapedAt: Date.now(), status: 'pending', expiresAt: Date.now() + LISTING_TTL,
   }
   db.items.unshift(item)
   save(db)
   return item
+}
+// تمدیدِ آگهی برای ۳۰ روزِ دیگر
+export function renewListing(itemId: string): Item | null {
+  const db = load(); const it = db.items.find(i => i.id === itemId); if (!it) return null
+  it.expiresAt = Date.now() + LISTING_TTL; save(db); return it
+}
+// شمارشِ آگهی‌های فعالِ (منقضی‌نشدهٔ) یک کاربر — برای سقفِ پلن
+export function countActiveListingsOf(ownerId: string): number {
+  const now = Date.now()
+  return load().items.filter(i => i.type === 'listing' && i.ownerId === ownerId && i.status !== 'rejected' && !isExpired(i, now)).length
 }
 
 // ── Articles (CMS) ──────────────────────────────────────────────────────────
