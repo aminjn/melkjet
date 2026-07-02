@@ -2622,18 +2622,34 @@ function CommPackagesConfig() {
       <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.9 }}>
         بسته‌هایی که اینجا فعال کنی، در بخشِ «پلن‌ها و اشتراک»ِ همهٔ پروفایل‌ها (توکنِ هوشِ مصنوعی، پیامک، ایمیل) نمایش داده می‌شوند و قابلِ تهیه‌اند.
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
-        {pkgs.length === 0 ? <div style={{ color: 'var(--muted)', fontSize: 13, padding: '8px 0' }}>پکیجی تعریف نشده.</div> : pkgs.map((p, i) => (
-          <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '90px 1fr 110px 130px 70px 36px', gap: 8, alignItems: 'center', background: 'var(--bg2)', borderRadius: 10, padding: 8 }} className="mjsa-pkg">
-            <select value={p.channel} onChange={e => upd(i, { channel: e.target.value as 'sms' | 'email' | 'token' })} style={inp}><option value="sms">پیامک</option><option value="email">ایمیل</option><option value="token">توکن AI</option></select>
-            <input style={inp} placeholder="نامِ پکیج" value={p.name} onChange={e => upd(i, { name: e.target.value })} />
-            <input style={inp} type="number" placeholder="تعداد" value={p.credits || ''} onChange={e => upd(i, { credits: Number(e.target.value) || 0 })} />
-            <input style={inp} type="number" placeholder="قیمت (تومان)" value={p.price || ''} onChange={e => upd(i, { price: Number(e.target.value) || 0 })} />
-            <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--muted)', cursor: 'pointer' }}><input type="checkbox" checked={p.active} onChange={e => upd(i, { active: e.target.checked })} />فعال</label>
-            <button onClick={() => del(i)} style={{ fontSize: 14, padding: '4px', borderRadius: 8, border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>×</button>
-          </div>
-        ))}
-      </div>
+      {pkgs.length === 0 ? <div style={{ color: 'var(--muted)', fontSize: 13, padding: '8px 0', marginBottom: 12 }}>پکیجی تعریف نشده.</div> : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 12 }}>
+          {([['token', '🪙 توکنِ هوش مصنوعی', 'توکن'], ['sms', '✆ پیامک', 'پیامک'], ['email', '✉ ایمیل', 'ایمیل']] as const).map(([ch, title, unit]) => {
+            const rows = pkgs.map((p, i) => ({ p, i })).filter(x => x.p.channel === ch).sort((a, b) => a.p.price - b.p.price)
+            if (!rows.length) return null
+            return (
+              <div key={ch}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--gold)', marginBottom: 8 }}>{title} <span style={{ fontSize: 11, color: 'var(--faint)', fontWeight: 400 }}>({fa(rows.length)} بسته)</span></div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 150px 64px 34px', gap: 8, padding: '0 8px', fontSize: 11, color: 'var(--muted)', fontWeight: 700 }}>
+                    <div>نامِ بسته</div><div>تعدادِ {unit}</div><div>قیمت (تومان)</div><div>فعال</div><div></div>
+                  </div>
+                  {rows.map(({ p, i }) => (
+                    <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '1fr 130px 150px 64px 34px', gap: 8, alignItems: 'center', background: 'var(--bg2)', borderRadius: 10, padding: 8 }} className="mjsa-pkg">
+                      <input style={inp} placeholder={`نامِ بسته (مثلاً ۵۰٬۰۰۰ ${unit})`} value={p.name} onChange={e => upd(i, { name: e.target.value })} />
+                      <input style={inp} type="number" placeholder="تعداد" value={p.credits || ''} onChange={e => upd(i, { credits: Number(e.target.value) || 0 })} />
+                      <input style={inp} type="number" placeholder="قیمت" value={p.price || ''} onChange={e => upd(i, { price: Number(e.target.value) || 0 })} />
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--muted)', cursor: 'pointer' }}><input type="checkbox" checked={p.active} onChange={e => upd(i, { active: e.target.checked })} />فعال</label>
+                      <button onClick={() => del(i)} title="حذف" style={{ fontSize: 14, padding: '4px', borderRadius: 8, border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>×</button>
+                    </div>
+                  ))}
+                  <button onClick={() => setPkgs(pp => [...pp, { id: 'new_' + Date.now(), channel: ch, name: '', credits: 0, price: 0, active: true }])} style={{ alignSelf: 'flex-start', fontSize: 11.5, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: '2px 8px' }}>＋ افزودنِ بستهٔ {unit}</button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 18 }}>
         <OutlineButton onClick={addRow}>＋ پکیج</OutlineButton>
         <GoldButton onClick={save}>ذخیرهٔ پکیج‌ها</GoldButton>
