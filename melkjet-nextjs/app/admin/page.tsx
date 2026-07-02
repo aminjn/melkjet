@@ -4392,6 +4392,11 @@ function AiCostView() {
           </div>
           <button onClick={() => save(true)} style={{ marginTop: 12, width: '100%', padding: '11px', borderRadius: 11, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 13.5, cursor: 'pointer', fontFamily: 'inherit' }}>💾 ذخیره و اعمالِ خودکارِ قیمت روی بسته‌های توکن</button>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6, lineHeight: 1.7 }}>قیمتِ هر بستهٔ توکن = تعدادِ توکن × قیمتِ فروشِ هر توکن، گِردشده. (بسته‌ها در «پلن‌ها» قابلِ مشاهده‌اند.)</div>
+          <div style={{ marginTop: 10, borderTop: '1px solid var(--line)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" checked={c.autoSync !== false} onChange={e => setC({ ...c, autoSync: e.target.checked })} /> دریافتِ <b>هفتگیِ خودکار</b>ِ قیمتِ مدل‌ها از API (بدونِ کارِ دستی)</label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" checked={c.autoReprice !== false} onChange={e => setC({ ...c, autoReprice: e.target.checked })} /> پس از هر سینک، قیمتِ بسته‌های توکن هم خودکار به‌روز شود</label>
+            <div style={{ fontSize: 11, color: 'var(--faint)' }}>{c.lastSyncAt ? `آخرین سینکِ خودکار: ${new Date(c.lastSyncAt).toLocaleDateString('fa-IR')}` : 'هنوز سینکِ خودکاری انجام نشده'}</div>
+          </div>
         </Card>
         <Card>
           <div style={{ fontSize: 13.5, fontWeight: 800, marginBottom: 12 }}>مصرفِ توکنِ عملیاتِ غیرمتنی</div>

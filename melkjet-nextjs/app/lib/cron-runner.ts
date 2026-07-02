@@ -7,6 +7,7 @@ import { processProfileGate } from './profile-gate-runner'
 import { processWorkflows } from './workflow-runner'
 import { maybeRunReveal, maybeCreateAccounts } from './persiansaze-cron'
 import { maybeAutoScrape } from './hypersaz-scraper'
+import { maybeAutoSyncCost } from './cost-store'
 
 // زمان‌بندِ سبک و بدونِ وابستگی برای سینکِ خودکارِ دیوار. روی سرورِ همیشه‌روشنِ
 // pm2 با یک setInterval اجرا می‌شود؛ یک قفلِ global از اجرای موازی/تکراری جلوگیری می‌کند.
@@ -32,6 +33,7 @@ async function tick(): Promise<{ due: number; synced: number }> {
     try { maybeRunReveal(Date.now()) } catch { /* گرفتنِ هفتگیِ شمارهٔ سازنده‌های پرشین سازه */ }
     try { maybeCreateAccounts() } catch { /* ساختِ خودکارِ حسابِ سازنده پس از به‌روزشدنِ پروفایل‌ها */ }
     try { maybeAutoScrape(Date.now()) } catch { /* اسکرپِ خودکارِ زمان‌بندی‌شدهٔ کاتالوگ */ }
+    maybeAutoSyncCost(Date.now()).catch(() => { /* سینکِ هفتگیِ قیمتِ مدل‌های AI از API */ })
     due = listDueSources(Date.now())
     for (const { phone, source } of due) {
       try {

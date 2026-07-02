@@ -15,6 +15,9 @@ export interface CostConfig {
   referenceModelId: string // مدلی که قیمتِ فروشِ توکن از رویش حساب می‌شود
   unitTokens: Record<string, number> // مصرفِ توکنِ هر عملیاتِ غیرمتنی (تصویر/رندر/ایمپورت/تماس)
   models: ModelCost[]
+  autoSync?: boolean      // دریافتِ هفتگیِ خودکارِ قیمت‌ها از API
+  autoReprice?: boolean   // پس از سینک، قیمتِ بسته‌های توکن هم خودکار به‌روز شود
+  lastSyncAt?: number
   v?: number
 }
 
@@ -44,7 +47,7 @@ function defaults(): CostConfig {
   return {
     usdToman: 700000, markup: 2, profitPercent: 100, roundTo: 1000, referenceModelId: 'gapgpt-qwen-3.6',
     unitTokens: { image: 2000, render3d: 20000, divarImport: 1000, contactReveal: 5000, sms: 500, email: 200 },
-    models: seedModels(), v: SEED_V,
+    models: seedModels(), autoSync: true, autoReprice: true, lastSyncAt: 0, v: SEED_V,
   }
 }
 function load(): CostConfig {
@@ -65,6 +68,8 @@ export function setCostConfig(patch: Partial<CostConfig>): CostConfig {
   if (patch.markup !== undefined) c.markup = Math.max(1, Number(patch.markup) || 1)
   if (patch.profitPercent !== undefined) c.profitPercent = Math.max(0, Number(patch.profitPercent) || 0)
   if (patch.roundTo !== undefined) c.roundTo = Math.max(1, Number(patch.roundTo) || 1)
+  if (patch.autoSync !== undefined) c.autoSync = !!patch.autoSync
+  if (patch.autoReprice !== undefined) c.autoReprice = !!patch.autoReprice
   if (patch.referenceModelId !== undefined) c.referenceModelId = String(patch.referenceModelId)
   if (patch.unitTokens) c.unitTokens = { ...c.unitTokens, ...patch.unitTokens }
   if (Array.isArray(patch.models)) c.models = patch.models.map(m => ({ id: String(m.id || '').trim(), label: String(m.label || m.id || '').trim(), provider: String(m.provider || '').trim(), type: (['text', 'image', 'audio', 'embedding'] as const).includes(m.type as any) ? m.type as any : 'text', inUsd: Number(m.inUsd) || 0, outUsd: Number(m.outUsd) || 0 })).filter(m => m.id)
@@ -82,6 +87,33 @@ export function syncModels(fetched: { id: string; label?: string; provider?: str
   }
   save(c); return { updated, added }
 }
+// سینکِ هفتگیِ خودکارِ قیمت‌ها از API (از کرونِ اینستنسِ ۰). قیمتِ مدل‌ها را می‌گیرد،
+// و در صورتِ فعال‌بودن، قیمتِ بسته‌های توکن را هم به‌روز می‌کند.
+declare global { // eslint-disable-next-line no-var
+  var __mjCostSyncing: boolean | undefined
+}
+export async function maybeAutoSyncCost(now = Date.now()): Promise<boolean> {
+  const c = load()
+  if (c.autoSync === false) return false
+  const WEEK = 7 * 24 * 3600 * 1000
+  if ((c.lastSyncAt || 0) && now - (c.lastSyncAt || 0) < WEEK) return false
+  if (globalThis.__mjCostSyncing) return false
+  globalThis.__mjCostSyncing = true
+  try {
+    const { listModelsWithPricing } = await import('./gapgpt')
+    const fetched = await listModelsWithPricing()
+    if (fetched.length) {
+      syncModels(fetched)
+      if (load().autoReprice !== false) {
+        const { repriceTokenPackages } = await import('./comm-store')
+        repriceTokenPackages(tokenSellPriceToman(), load().roundTo)
+      }
+    }
+  } catch { /* اگر API قیمت نداد، فقط زمانِ سینک را ثبت کن تا هفتهٔ بعد دوباره تلاش شود */ }
+  finally { const c2 = load(); c2.lastSyncAt = now; save(c2); globalThis.__mjCostSyncing = false }
+  return true
+}
+
 // قیمتِ فروشِ هر توکن (تومان) = هزینهٔ خروجیِ مدلِ مرجع × نرخِ دلار × (۱ + درصدِ سود/۱۰۰).
 export function tokenSellPriceToman(): number {
   const c = load()
