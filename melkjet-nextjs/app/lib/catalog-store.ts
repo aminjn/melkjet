@@ -53,11 +53,14 @@ export function updateCategory(cid: string, patch: Partial<Pick<CatalogCategory,
   if (patch.active !== undefined) c.active = !!patch.active
   save(db); return c
 }
-export function deleteCategory(cid: string) {
+export function deleteCategory(cid: string): { categories: number; products: number } {
   const db = load()
-  db.categories = db.categories.filter(c => c.id !== cid)
-  db.products = db.products.filter(p => p.categoryId !== cid)   // کالاهای دستهٔ حذف‌شده هم بروند
+  const ids = descendantsOf(db.categories, cid)   // دسته + همهٔ زیردسته‌ها
+  const cBefore = db.categories.length, pBefore = db.products.length
+  db.categories = db.categories.filter(c => !ids.has(c.id))
+  db.products = db.products.filter(p => !ids.has(p.categoryId))   // کالاهای این دسته و زیردسته‌ها هم بروند
   save(db)
+  return { categories: cBefore - db.categories.length, products: pBefore - db.products.length }
 }
 // یافتنِ دسته با نام (برای ادغامِ اسکرپ). ایجاد اگر نبود.
 export function ensureCategory(name: string, parentId?: string): CatalogCategory {
@@ -110,6 +113,31 @@ export function setCategoryImage(categoryId: string, url: string): number {
   const db = load(); const cat = db.categories.find(c => c.id === categoryId); if (!cat) return 0
   cat.image = url; let n = 0
   for (const p of db.products) if (p.categoryId === categoryId && !p.image) { p.image = url; n++ }
+  save(db); return n
+}
+// ── تولیدِ دسته‌جمعیِ عکسِ محصولات با AI (به‌ازای هر دسته یک عکس، روی محصولاتِ آن دسته) ──
+function srcMatch(p: CatalogProduct, source?: string) {
+  if (!source || source === 'all') return true
+  return source === 'scraped' ? p.source !== 'manual' : p.source === source
+}
+// فهرستِ دسته‌های هدف برای تولیدِ عکس. mode='missing' فقط دسته‌هایی که محصولِ بدونِ عکس دارند،
+// mode='all' همهٔ دسته‌های دارای محصول (برای جایگزینیِ عکس‌های خراب/اشتباه).
+export function imageGenTargets(mode: 'missing' | 'all', scope?: { source?: string; category?: string }): { id: string; name: string; count: number }[] {
+  const db = load()
+  const catIds = scope?.category ? descendantsOf(db.categories, scope.category) : null
+  const rel = db.products.filter(p => p.active && srcMatch(p, scope?.source) && (!catIds || catIds.has(p.categoryId)))
+  const counter = new Map<string, number>()
+  for (const p of rel) { if (mode === 'all' || !p.image) counter.set(p.categoryId, (counter.get(p.categoryId) || 0) + 1) }
+  return db.categories.filter(c => counter.has(c.id)).map(c => ({ id: c.id, name: c.name, count: counter.get(c.id) || 0 }))
+}
+// نشاندنِ عکس روی محصولاتِ یک دسته. replace=true همه را بازنویسی می‌کند، وگرنه فقط بدونِ عکس.
+export function applyCategoryImage(categoryId: string, url: string, opts?: { replace?: boolean; source?: string }): number {
+  const db = load(); const cat = db.categories.find(c => c.id === categoryId); if (!cat || !url) return 0
+  cat.image = url; let n = 0
+  for (const p of db.products) {
+    if (p.categoryId !== categoryId || !srcMatch(p, opts?.source)) continue
+    if (opts?.replace || !p.image) { p.image = url; n++ }
+  }
   save(db); return n
 }
 // مسیرِ دسته (والد→…→برگ) برای نمایشِ breadcrumb در صفحهٔ محصول.

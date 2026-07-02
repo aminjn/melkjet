@@ -4,7 +4,7 @@ import {
   listCategories, addCategory, updateCategory, deleteCategory,
   listProducts, addProduct, updateProduct, deleteProduct, catalogStats, clearCatalog,
   categoriesNeedingImage, setCategoryImage, bulkDeleteQuery, bulkDeleteProducts, enrichStats,
-  getProduct, countImageUsage, clearImageEverywhere,
+  getProduct, countImageUsage, clearImageEverywhere, imageGenTargets, applyCategoryImage,
 } from '@/app/lib/catalog-store'
 import { hasCap } from '@/app/lib/account-store'
 import { generateImage, agentModel, agentProvider } from '@/app/lib/gapgpt'
@@ -84,6 +84,26 @@ export async function POST(req: NextRequest) {
         } catch { /* یکی خطا داد، بقیه ادامه */ }
       }
       return NextResponse.json({ ok: true, generated, applied, remaining: Math.max(0, need.length - batch.length) })
+    }
+    case 'imageGenTargets': {
+      const mode = b.mode === 'all' ? 'all' : 'missing'
+      const targets = imageGenTargets(mode, { source: b.source, category: b.category })
+      return NextResponse.json({ ok: true, targets })
+    }
+    case 'genCategoryImage': {
+      // یک عکسِ AI برای یک دستهٔ مشخص ساخته و روی محصولاتِ آن می‌نشاند (کلاینت تک‌تک صدا می‌زند).
+      const model = agentModel('content', 'image') || agentModel('studio', 'image')
+      if (!model) return NextResponse.json({ error: 'به ایجنتِ ContentAgent یک مدلِ تصویر بدهید (پنل → API و مدل‌های AI).' }, { status: 400 })
+      const provider = agentProvider('content', 'image') || agentProvider('studio', 'image')
+      const cat = listCategories().find(c => c.id === String(b.id))
+      if (!cat) return NextResponse.json({ error: 'دسته یافت نشد' }, { status: 404 })
+      const prompt = `Realistic professional product photo of Iranian construction/building material category "${cat.name}", isolated on clean white studio background, centered, sharp, high quality, no people, no person, no human, no hands, no text, no watermark, no logo.`
+      try {
+        const url = await generateImage(model, prompt, '1024x1024', provider)
+        if (!url) return NextResponse.json({ error: 'تصویری تولید نشد' }, { status: 500 })
+        const applied = applyCategoryImage(String(b.id), url, { replace: !!b.replace, source: b.source })
+        return NextResponse.json({ ok: true, applied })
+      } catch (e: any) { return NextResponse.json({ error: e?.message || 'خطا در تولیدِ تصویر' }, { status: 500 }) }
     }
     case 'genProductImage': {
       // تولیدِ عکسِ AI برای یک کالای مشخص (جایگزینیِ عکسِ اشتباه).
