@@ -14,7 +14,7 @@ import CatalogAdminView from './CatalogAdminView'
 type View =
   | 'overview' | 'scraper' | 'persiansaze' | 'listings' | 'products' | 'catalog' | 'geo' | 'moderation' | 'content' | 'studio' | 'articles' | 'categories' | 'crm' | 'api'
   | 'reports' | 'plans' | 'promos' | 'discounts' | 'ads' | 'users' | 'profiles' | 'roles' | 'connections'
-  | 'tracker' | 'sms' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags' | 'support' | 'payment' | 'aicost'
+  | 'tracker' | 'sms' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags' | 'support' | 'payment' | 'aicost' | 'smscost'
 
 interface NavItem { id: View; icon: string; label: string; badge?: string; badgeColor?: string }
 interface NavSection { title: string; items: NavItem[] }
@@ -56,6 +56,7 @@ const sections: NavSection[] = [
       { id: 'plans',  icon: '◔', label: 'پلن‌ها' },
       { id: 'payment', icon: '💳', label: 'درگاه‌های پرداخت', badge: 'NEW', badgeColor: '#c9a84c' },
       { id: 'aicost', icon: '🧮', label: 'هزینه و قیمتِ AI', badge: 'NEW', badgeColor: '#c9a84c' },
+      { id: 'smscost', icon: '✉', label: 'تعرفهٔ پیامک', badge: 'NEW', badgeColor: '#c9a84c' },
       { id: 'promos', icon: '★', label: 'پروموت و ویژه‌سازی' },
       { id: 'discounts', icon: '٪', label: 'کدهای تخفیف' },
       { id: 'ads',    icon: '▤', label: 'تبلیغات بنری' },
@@ -113,6 +114,7 @@ const viewTitles: Record<View, string> = {
   plans:      'پلن‌ها و اشتراک‌ها',
   payment:    'درگاه‌های پرداخت',
   aicost:     'هزینه و قیمت‌گذاریِ AI',
+  smscost:    'تعرفه و قیمتِ پیامک',
   promos:     'پروموت و ویژه‌سازی',
   discounts:  'کدهای تخفیف',
   ads:        'تبلیغات بنری',
@@ -4491,6 +4493,70 @@ function AiCostView() {
   )
 }
 
+// ─── تعرفهٔ واقعیِ پیامک + قیمتِ فروش ─────────────────────────────────────────
+function SmsCostView() {
+  const [c, setC] = useState<any>(null)
+  const [saved, setSaved] = useState('')
+  const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '8px 10px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
+  const lab: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', marginBottom: 5, display: 'block', fontWeight: 600 }
+  const load = () => fetch('/api/admin/sms-cost').then(r => r.ok ? r.json() : null).then(d => { if (d) setC(d) }).catch(() => {})
+  useEffect(() => { load() }, [])
+  const save = async (applySmsPricing = false) => { const r = await fetch('/api/admin/sms-cost', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...c, applySmsPricing }) }); const d = await r.json().catch(() => ({})); if (d?.ok) setC(d); setSaved(applySmsPricing ? `✓ قیمتِ ${(d?.repriced || 0).toLocaleString('fa-IR')} بستهٔ پیامک به‌روز شد` : 'ذخیره شد ✓'); setTimeout(() => setSaved(''), 3500) }
+  const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
+  if (!c) return <div style={{ color: 'var(--muted)', fontSize: 13 }}>در حال بارگذاری…</div>
+  const setT = (i: number, patch: any) => setC({ ...c, tariffs: c.tariffs.map((t: any, j: number) => j === i ? { ...t, ...patch } : t) })
+  const refT = c.tariffs.find((t: any) => t.lineType === c.refLine) || c.tariffs[0]
+  const costRial = refT ? (c.refOperator === 'other' ? (c.refLang === 'lat' ? refT.otherLat : refT.otherFa) : (c.refLang === 'lat' ? refT.mciLat : refT.mciFa)) : 0
+  const sellPerSms = (costRial / 10) * (1 + (Number(c.profitPercent) || 0) / 100)
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <Card style={{ marginBottom: 14, background: 'linear-gradient(120deg, rgba(212,175,55,.1), transparent 60%), var(--surface)', borderColor: 'rgba(201,168,76,.4)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 26 }}>✉</span>
+            <div><div style={{ fontWeight: 900, fontSize: 18 }}>تعرفه و قیمتِ پیامک</div><div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3 }}>تعرفهٔ واقعیِ اپراتور (ریال) + درصدِ سود → قیمتِ فروشِ پیامک و بسته‌ها.</div></div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>{saved && <span style={{ fontSize: 12, color: '#5fd98a' }}>{saved}</span>}<GoldButton onClick={() => save(false)}>ذخیره</GoldButton></div>
+        </div>
+      </Card>
+
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 800, marginBottom: 12 }}>نرخِ تبدیل و مرجع</div>
+        <div className="mjsa-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+          <div><label style={lab}>درصدِ سود (٪)</label><input style={inp} type="number" value={c.profitPercent} onChange={e => setC({ ...c, profitPercent: Number(e.target.value) || 0 })} /></div>
+          <div><label style={lab}>گِردکردنِ قیمت (تومان)</label><input style={inp} type="number" value={c.roundTo} onChange={e => setC({ ...c, roundTo: Number(e.target.value) || 1000 })} /></div>
+          <div><label style={lab}>خطِ مرجع</label><select style={{ ...inp, cursor: 'pointer' }} value={c.refLine} onChange={e => setC({ ...c, refLine: e.target.value })}>{c.tariffs.map((t: any) => <option key={t.lineType} value={t.lineType}>{t.lineType}</option>)}</select></div>
+          <div><label style={lab}>اپراتورِ مرجع</label><select style={{ ...inp, cursor: 'pointer' }} value={c.refOperator} onChange={e => setC({ ...c, refOperator: e.target.value })}><option value="mci">همراه اول</option><option value="other">ایرانسل و سایر</option></select></div>
+          <div><label style={lab}>زبانِ مرجع</label><select style={{ ...inp, cursor: 'pointer' }} value={c.refLang} onChange={e => setC({ ...c, refLang: e.target.value })}><option value="fa">فارسی</option><option value="lat">لاتین</option></select></div>
+        </div>
+        <div style={{ marginTop: 12, background: 'var(--goldDim)', border: '1px solid var(--gold)', borderRadius: 10, padding: '12px 14px', fontSize: 13, lineHeight: 2 }}>
+          هزینهٔ خامِ هر پیامکِ مرجع: <b>{fa(costRial)} ریال ({fa(costRial / 10)} تومان)</b><br />
+          قیمتِ فروشِ هر پیامک: <b style={{ color: 'var(--gold)' }}>{Math.round(sellPerSms).toLocaleString('fa-IR')} تومان</b> · پیشنهادِ بستهٔ ۱۰۰۰ پیامک: <b style={{ color: 'var(--gold)' }}>{fa(sellPerSms * 1000)} تومان</b>
+        </div>
+        <button onClick={() => save(true)} style={{ marginTop: 12, width: '100%', padding: '11px', borderRadius: 11, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 13.5, cursor: 'pointer', fontFamily: 'inherit' }}>💾 ذخیره و اعمالِ خودکارِ قیمت روی بسته‌های پیامک</button>
+      </Card>
+
+      <Card>
+        <div style={{ fontSize: 13.5, fontWeight: 800, marginBottom: 12 }}>تعرفهٔ اپراتور (ریال به‌ازای هر پیامک)</div>
+        <div style={{ maxHeight: 500, overflowY: 'auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr 1fr', gap: 8, padding: '6px 8px', fontSize: 11, fontWeight: 700, color: 'var(--muted)', position: 'sticky', top: 0, background: 'var(--surface)' }}>
+            <div>خطِ ارسال</div><div>همراه‌اول فارسی</div><div>همراه‌اول لاتین</div><div>سایر فارسی</div><div>سایر لاتین</div>
+          </div>
+          {c.tariffs.map((t: any, i: number) => (
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr 1fr', gap: 8, padding: '5px 8px', alignItems: 'center', borderTop: '1px solid var(--line)', fontSize: 12 }}>
+              <input style={{ ...inp, padding: '5px 7px' }} value={t.lineType} onChange={e => setT(i, { lineType: e.target.value })} />
+              <input style={{ ...inp, padding: '5px 7px' }} type="number" value={t.mciFa} onChange={e => setT(i, { mciFa: Number(e.target.value) || 0 })} />
+              <input style={{ ...inp, padding: '5px 7px' }} type="number" value={t.mciLat} onChange={e => setT(i, { mciLat: Number(e.target.value) || 0 })} />
+              <input style={{ ...inp, padding: '5px 7px' }} type="number" value={t.otherFa} onChange={e => setT(i, { otherFa: Number(e.target.value) || 0 })} />
+              <input style={{ ...inp, padding: '5px 7px' }} type="number" value={t.otherLat} onChange={e => setT(i, { otherLat: Number(e.target.value) || 0 })} />
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  )
+}
+
 // ─── Promotions / featuring across the site ────────────────────────────────
 function SlotPromoter({ slot, promos, onChange }: { slot: any; promos: any[]; onChange: () => void }) {
   const [q, setQ] = useState('')
@@ -4926,6 +4992,7 @@ export default function SuperAdminPage() {
       case 'plans':      return <PlansView />
       case 'payment':    return <PaymentView />
       case 'aicost':     return <AiCostView />
+      case 'smscost':    return <SmsCostView />
       case 'tracker':    return <TrackerConfig />
       case 'sms':        return <SmsView />
       case 'promos':     return <PromotionsView />
