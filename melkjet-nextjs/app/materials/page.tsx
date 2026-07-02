@@ -731,11 +731,11 @@ function ProductEditor({ product, post, onClose }: { product: Product | null; po
   const set = (k: string, v: any) => setF(s => ({ ...s, [k]: v }))
 
   // کاتالوگِ مرجع — مصالح‌فروش از این لیست انتخاب می‌کند (اگر کالایی موجود باشد).
-  const [catalog, setCatalog] = useState<{ categories: { id: string; name: string }[]; products: any[] } | null>(null)
+  const [catalog, setCatalog] = useState<{ categories: { id: string; name: string; parentId?: string }[]; products: any[] } | null>(null)
   const [catalogId, setCatalogId] = useState(product?.catalogId || '')
   const [picking, setPicking] = useState(false)
   const [pickSearch, setPickSearch] = useState('')
-  const [pickCat, setPickCat] = useState('')
+  const [catStack, setCatStack] = useState<{ id: string; name: string }[]>([])   // مسیرِ دسته (درخت)
   const locked = !!catalogId
   useEffect(() => {
     if (product) return   // ویرایشِ محصولِ موجود: پیکر لازم نیست
@@ -793,37 +793,63 @@ function ProductEditor({ product, post, onClose }: { product: Product | null; po
   )
   const lab: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', fontWeight: 600, marginBottom: 5, display: 'block' }
 
-  // ── مرحلهٔ انتخاب از کاتالوگِ مرجع (فقط برای محصولِ جدید، وقتی کاتالوگ کالا دارد) ──
+  // ── ویزاردِ انتخاب از کاتالوگ: مرحله‌به‌مرحله مثلِ ثبتِ آگهی (اول دسته، بعد کالا) ──
   if (picking && catalog) {
+    const cats = catalog.categories
     const q = pickSearch.trim()
-    const list = catalog.products.filter((p: any) => (!pickCat || p.categoryId === pickCat) && (!q || (p.name || '').includes(q) || (p.brand || '').includes(q)))
+    const parentId = catStack.length ? catStack[catStack.length - 1].id : ''
+    const childCats = cats.filter(c => (c.parentId || '') === parentId)
+    const catProdCount = (id: string) => { const ids = new Set([id]); let g = true; while (g) { g = false; for (const c of cats) if (c.parentId && ids.has(c.parentId) && !ids.has(c.id)) { ids.add(c.id); g = true } } return catalog.products.filter((p: any) => ids.has(p.categoryId)).length }
+    // اگر جستجو فعال است → مستقیم محصولات؛ وگرنه اگر دستهٔ فعلی زیردسته دارد → انتخابِ دسته؛ وگرنه → محصولاتِ همان دسته
+    const searching = !!q
+    const showProducts = searching || (parentId && childCats.length === 0)
+    const descIds = (() => { const ids = new Set([parentId].filter(Boolean)); let g = true; while (g) { g = false; for (const c of cats) if (c.parentId && ids.has(c.parentId) && !ids.has(c.id)) { ids.add(c.id); g = true } } return ids })()
+    const prods = catalog.products.filter((p: any) => (searching ? true : (parentId ? descIds.has(p.categoryId) : false)) && (!q || (p.name || '').includes(q) || (p.brand || '').includes(q)))
     return (
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', backdropFilter: 'blur(3px)' }}>
-        <div onClick={e => e.stopPropagation()} style={{ ...card, maxWidth: 720, width: '100%', margin: '20px 0', padding: 22 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <div style={{ fontSize: 16, fontWeight: 800 }}>انتخابِ کالا از کاتالوگ</div>
+        <div onClick={e => e.stopPropagation()} style={{ ...card, maxWidth: 760, width: '100%', margin: '20px 0', padding: 22 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+            <div style={{ fontSize: 16, fontWeight: 800 }}>افزودنِ محصول — {searching ? 'نتیجهٔ جستجو' : showProducts ? 'انتخابِ کالا' : 'انتخابِ دسته‌بندی'}</div>
             <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 24, cursor: 'pointer', lineHeight: 1 }}>×</button>
           </div>
-          <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 14 }}>برای یکدستیِ نام و دسته، کالا را از کاتالوگِ مرجع انتخاب کنید؛ سپس قیمت و موجودیِ خودتان را وارد می‌کنید.</div>
-          <input placeholder="جستجوی کالا…" value={pickSearch} onChange={e => setPickSearch(e.target.value)} style={{ ...inputStyle, marginBottom: 10 }} />
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-            <button onClick={() => setPickCat('')} style={pickChip(pickCat === '')}>همه</button>
-            {catalog.categories.map(c => <button key={c.id} onClick={() => setPickCat(c.id)} style={pickChip(pickCat === c.id)}>{c.name}</button>)}
+          {/* breadcrumb + back */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--muted)', marginBottom: 12, flexWrap: 'wrap' }}>
+            <button onClick={() => { setCatStack([]); setPickSearch('') }} style={{ background: 'none', border: 'none', color: catStack.length ? 'var(--gold)' : 'var(--muted)', cursor: 'pointer', fontFamily: FONT, fontSize: 12.5, padding: 0 }}>دسته‌بندی‌ها</button>
+            {catStack.map((c, i) => <span key={c.id} style={{ display: 'flex', gap: 6 }}><span style={{ color: 'var(--faint)' }}>›</span><button onClick={() => setCatStack(catStack.slice(0, i + 1))} style={{ background: 'none', border: 'none', color: 'var(--gold)', cursor: 'pointer', fontFamily: FONT, fontSize: 12.5, padding: 0 }}>{c.name}</button></span>)}
           </div>
-          {list.length === 0 ? (
-            <div style={{ padding: 30, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>کالایی یافت نشد.</div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 10, maxHeight: 440, overflowY: 'auto' }}>
-              {list.map((cp: any) => (
-                <button key={cp.id} onClick={() => pickProduct(cp)} style={{ ...card, padding: 0, overflow: 'hidden', textAlign: 'right', cursor: 'pointer', display: 'flex', flexDirection: 'column', fontFamily: FONT }}>
-                  <div style={{ height: 100, background: cp.image ? `center/cover no-repeat url(${cp.image})` : 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>{!cp.image && '🧱'}</div>
-                  <div style={{ padding: 10 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.5 }}>{cp.name}</div>
-                    {cp.brand && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>{cp.brand}</div>}
-                  </div>
-                </button>
-              ))}
+          <input placeholder="🔍 جستجوی مستقیمِ کالا (در همهٔ دسته‌ها)…" value={pickSearch} onChange={e => setPickSearch(e.target.value)} style={{ ...inputStyle, marginBottom: 14 }} />
+
+          {!showProducts ? (
+            /* مرحلهٔ ۱: انتخابِ دسته (کارت‌های بزرگ، نه دیوارِ چیپ) */
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(160px,1fr))', gap: 10, maxHeight: 460, overflowY: 'auto' }}>
+              {childCats.length === 0 ? <div style={{ gridColumn: '1/-1', padding: 24, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>دسته‌ای نیست.</div> : childCats.map(c => {
+                const hasKids = cats.some(x => x.parentId === c.id)
+                return (
+                  <button key={c.id} onClick={() => setCatStack([...catStack, { id: c.id, name: c.name }])} style={{ ...card, padding: '16px 14px', textAlign: 'right', cursor: 'pointer', fontFamily: FONT, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span style={{ fontSize: 22 }}>{hasKids ? '📂' : '📦'}</span>
+                    <span style={{ fontSize: 13.5, fontWeight: 700 }}>{c.name}</span>
+                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>{catProdCount(c.id).toLocaleString('fa-IR')} کالا{hasKids ? ' · زیردسته دارد' : ''}</span>
+                  </button>
+                )
+              })}
             </div>
+          ) : (
+            /* مرحلهٔ ۲: انتخابِ کالا از دستهٔ انتخاب‌شده */
+            prods.length === 0 ? (
+              <div style={{ padding: 30, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>کالایی در این دسته یافت نشد.</div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 10, maxHeight: 460, overflowY: 'auto' }}>
+                {prods.slice(0, 200).map((cp: any) => (
+                  <button key={cp.id} onClick={() => pickProduct(cp)} style={{ ...card, padding: 0, overflow: 'hidden', textAlign: 'right', cursor: 'pointer', display: 'flex', flexDirection: 'column', fontFamily: FONT }}>
+                    <div style={{ height: 110, background: cp.image ? `center/contain no-repeat url(${cp.image}) var(--bg2)` : 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>{!cp.image && '🧱'}</div>
+                    <div style={{ padding: 10 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.5 }}>{cp.name}</div>
+                      {cp.brand && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>{cp.brand}</div>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )
           )}
         </div>
       </div>
