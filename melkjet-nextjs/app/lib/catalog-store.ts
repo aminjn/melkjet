@@ -215,6 +215,21 @@ export function deleteProducts(ids: string[]): number {
   db.products = db.products.filter(p => !set.has(p.id)); save(db)
   return before - db.products.length
 }
+// پس از اسکرپ: روی محصولاتِ یک منبع که «عکسِ درست» ندارند لوگو بگذار — تا کاربر هی دستی پاک نکند.
+// «عکسِ نادرست» = خالی، یا خودِ لوگو نیست ولی روی بیش از ۵ محصول تکرار شده (بنر/عکسِ اشتباهِ مشترک).
+export function applyLogoToScraped(source: string, logoUrl: string): number {
+  if (!logoUrl) return 0
+  const db = load()
+  const usage = new Map<string, number>()
+  for (const p of db.products) if (p.image) usage.set(p.image, (usage.get(p.image) || 0) + 1)
+  let n = 0
+  for (const p of db.products) {
+    if (p.source !== source || p.image === logoUrl) continue
+    const shared = p.image ? (usage.get(p.image) || 0) > 5 : false   // بنرِ مشترک
+    if (!p.image || shared) { p.image = logoUrl; n++ }
+  }
+  if (n) save(db); return n
+}
 // نشاندنِ یک تصویر (لوگو) یا حذفِ عکس روی محصولاتِ یک محدوده (منبع/دسته) — بدونِ AI، آنی.
 export function setImagesForScope(opts: { source?: string; category?: string }, url: string): number {
   const db = load(); const catIds = opts.category ? descendantsOf(db.categories, opts.category) : null

@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
-import { upsertScraped, pruneSourceCategories, productsNeedingChart, setProductPriceHistory, type CatalogSpec } from './catalog-store'
+import { upsertScraped, pruneSourceCategories, productsNeedingChart, setProductPriceHistory, applyLogoToScraped, type CatalogSpec } from './catalog-store'
+const SITE_LOGO = '/icon-512.png'
 import { enrichCatalogBatch } from './catalog-enrich'
 
 // موتورِ اسکرپِ چند-منبعی → کاتالوگِ مرجع. هر منبع (هایپرساز/آهن‌آنلاین/…) تنظیمات،
@@ -24,10 +25,11 @@ export interface ScraperConfig {
   lastAutoAt?: number
   aiEnrich?: boolean   // تکمیلِ خودکارِ توضیحات/مشخصات با AI پس از اسکرپ
   fetchCharts?: boolean   // واکشیِ نمودارِ قیمت از صفحهٔ اختصاصیِ هر محصول
+  imageLogo?: boolean   // لوگوی سایت روی محصولاتِ بدونِ عکس/بنرِ اشتباه پس از اسکرپ
   productLinkSel?: string; nameSel?: string; priceSel?: string; imageSel?: string; categorySel?: string
 }
 function defaultCfg(source: string): ScraperConfig {
-  return { baseUrl: SOURCES.find(s => s.id === source)?.base || '', strategy: 'auto', maxProducts: 3000, schedule: 'off', scheduleHour: 3, aiEnrich: true, fetchCharts: true }
+  return { baseUrl: SOURCES.find(s => s.id === source)?.base || '', strategy: 'auto', maxProducts: 3000, schedule: 'off', scheduleHour: 3, aiEnrich: true, fetchCharts: true, imageLogo: true }
 }
 export function getConfig(source: string): ScraperConfig {
   const f = cfgFile(source)
@@ -46,6 +48,7 @@ export function setConfig(source: string, patchIn: Partial<ScraperConfig>): Scra
     lastAutoAt: patchIn.lastAutoAt !== undefined ? Number(patchIn.lastAutoAt) : cur.lastAutoAt,
     aiEnrich: patchIn.aiEnrich !== undefined ? !!patchIn.aiEnrich : cur.aiEnrich,
     fetchCharts: patchIn.fetchCharts !== undefined ? !!patchIn.fetchCharts : cur.fetchCharts,
+    imageLogo: patchIn.imageLogo !== undefined ? !!patchIn.imageLogo : cur.imageLogo,
     productLinkSel: patchIn.productLinkSel !== undefined ? String(patchIn.productLinkSel) : cur.productLinkSel,
     nameSel: patchIn.nameSel !== undefined ? String(patchIn.nameSel) : cur.nameSel,
     priceSel: patchIn.priceSel !== undefined ? String(patchIn.priceSel) : cur.priceSel,
@@ -499,6 +502,8 @@ async function run(source: string) {
         patch(source, { label: `✓ نمودارِ قیمت برای ${charted.toLocaleString('fa-IR')} محصول` })
       }
     }
+    // لوگوی سایت روی محصولاتِ بدونِ عکس/بنرِ اشتباه (تا کاربر هی دستی پاک نکند)
+    if (getConfig(source).imageLogo !== false) { const n = applyLogoToScraped(source, SITE_LOGO); if (n) patch(source, { label: `لوگو روی ${n.toLocaleString('fa-IR')} محصولِ بدونِ عکس` }) }
     // تکمیلِ توضیحات/مشخصاتِ فنیِ محصولاتِ بدونِ توضیح با AI (فقط جاهای خالی، یک‌بار)
     if (getConfig(source).aiEnrich !== false) {
       patch(source, { label: 'تکمیلِ توضیحات/مشخصات با AI' })
