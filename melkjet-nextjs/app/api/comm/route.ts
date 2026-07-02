@@ -33,9 +33,10 @@ export async function POST(req: NextRequest) {
   if (act === 'orderPlan') {
     const pl = listActive().find(p => p.id === String(b.planId || ''))
     if (!pl) return NextResponse.json({ error: 'پلن یافت نشد' }, { status: 400 })
-    const yearly = b.period === 'yearly'
-    const price = yearly ? pl.priceYearly : pl.priceMonthly
-    const r = createPlanOrder(s.phone, pl.id, `${pl.name}${yearly ? ' (سالانه)' : ''}`, price, { gateway: b.gateway ? String(b.gateway) : undefined, receipt: b.receipt ? String(b.receipt).slice(0, 120) : undefined, period: yearly ? 'yearly' : 'monthly' })
+    const period = ['monthly', '3m', '6m', 'yearly'].includes(String(b.period)) ? String(b.period) : 'monthly'
+    const priceMap: Record<string, number> = { monthly: pl.priceMonthly, '3m': (pl as any).price3m || pl.priceMonthly * 3, '6m': (pl as any).price6m || pl.priceMonthly * 6, yearly: pl.priceYearly }
+    const labelMap: Record<string, string> = { monthly: '', '3m': ' (۳ماهه)', '6m': ' (۶ماهه)', yearly: ' (سالانه)' }
+    const r = createPlanOrder(s.phone, pl.id, `${pl.name}${labelMap[period]}`, priceMap[period], { gateway: b.gateway ? String(b.gateway) : undefined, receipt: b.receipt ? String(b.receipt).slice(0, 120) : undefined, period })
     return NextResponse.json({ ok: true, order: r.order })
   }
 

@@ -6,7 +6,7 @@ import { listRoles } from './role-store'
 // استورِ پلن‌های اشتراک — نقش‌محور، با سقفِ مصرف (quotas) و اعتبارِ AI (aiCredits).
 // همه‌چیز داینامیک و قابلِ ویرایش از پنلِ سوپرادمین است؛ هیچ عددی هاردکد نیست (فقط seedِ اولیه).
 const DATA_FILE = join(process.cwd(), '.plan-data.json')
-const SEED_V = 5   // با تغییرِ ساختار/قیمت‌های پیش‌فرض این را بالا ببرید تا seed دوباره اعمال شود
+const SEED_V = 6   // با تغییرِ ساختار/قیمت‌های پیش‌فرض این را بالا ببرید تا seed دوباره اعمال شود
 
 // کلیدهای سقفِ مصرف (−۱ = نامحدود، ۰/تعریف‌نشده = بدونِ محدودیتِ اعمال‌شده)
 export const QUOTA_KEYS: { id: string; label: string }[] = [
@@ -25,6 +25,8 @@ export interface Plan {
   id: string
   name: string
   priceMonthly: number
+  price3m?: number
+  price6m?: number
   priceYearly: number
   currency?: string
   features: string[]
@@ -64,7 +66,7 @@ function seed(): DB {
   const ridFor = (dash: string) => roles.find(r => r.dashboard === dash)?.id
   const Q = (o: Record<string, number>) => o
   const mk = (dashboard: string, name: string, priceMonthly: number, o: { yearly?: number; features?: string[]; perms?: string[]; quotas?: Record<string, number>; ai?: number; hot?: boolean; badge?: string; tier?: string }): Plan => ({
-    id: id(), name, dashboard, roleId: ridFor(dashboard), priceMonthly, priceYearly: o.yearly ?? priceMonthly * 10, currency: 'تومان',
+    id: id(), name, dashboard, roleId: ridFor(dashboard), priceMonthly, price3m: priceMonthly * 3, price6m: priceMonthly * 6, priceYearly: o.yearly ?? priceMonthly * 10, currency: 'تومان',
     features: o.features || [], permissions: o.perms || [], quotas: o.quotas || {}, aiCredits: o.ai || 0,
     tier: o.tier, promotionDiscount: 0, trialEnabled: priceMonthly > 0, founderEligible: true, referralEligible: true, couponEligible: priceMonthly > 0,
     highlighted: !!o.hot, badge: o.badge, order: ord++, active: true, createdAt: now++,
@@ -108,7 +110,7 @@ export function listActive(): Plan[] { return load().plans.filter(p => p.active)
 export function getPlan(pid: string): Plan | null { return load().plans.find(p => p.id === pid) || null }
 
 export interface PlanInput {
-  name: string; priceMonthly: number; priceYearly: number; currency?: string; features?: string[]
+  name: string; priceMonthly: number; price3m?: number; price6m?: number; priceYearly: number; currency?: string; features?: string[]
   highlighted?: boolean; cta?: string; order?: number; active?: boolean; roleId?: string; dashboard?: string
   badge?: string; permissions?: string[]; quotas?: Record<string, number>; aiCredits?: number
   tier?: string; promotionDiscount?: number; trialEnabled?: boolean; founderEligible?: boolean; referralEligible?: boolean; couponEligible?: boolean
@@ -123,7 +125,7 @@ export function addPlan(input: PlanInput): Plan {
   const maxOrder = db.plans.reduce((m, p) => Math.max(m, p.order), 0)
   const plan: Plan = {
     id: id(), name: String(input.name || '').trim(),
-    priceMonthly: Number(input.priceMonthly) || 0, priceYearly: Number(input.priceYearly) || 0,
+    priceMonthly: Number(input.priceMonthly) || 0, price3m: Number(input.price3m) || 0, price6m: Number(input.price6m) || 0, priceYearly: Number(input.priceYearly) || 0,
     currency: input.currency ? String(input.currency) : 'تومان',
     features: Array.isArray(input.features) ? input.features.map(f => String(f)) : [],
     highlighted: !!input.highlighted, cta: input.cta ? String(input.cta) : undefined,
@@ -144,6 +146,8 @@ export function updatePlan(pid: string, patch: PlanPatch): Plan | null {
   const db = load(); const p = db.plans.find(x => x.id === pid); if (!p) return null
   if (patch.name !== undefined) p.name = String(patch.name).trim()
   if (patch.priceMonthly !== undefined) p.priceMonthly = Number(patch.priceMonthly) || 0
+  if (patch.price3m !== undefined) p.price3m = Number(patch.price3m) || 0
+  if (patch.price6m !== undefined) p.price6m = Number(patch.price6m) || 0
   if (patch.priceYearly !== undefined) p.priceYearly = Number(patch.priceYearly) || 0
   if (patch.currency !== undefined) p.currency = patch.currency ? String(patch.currency) : undefined
   if (patch.features !== undefined) p.features = Array.isArray(patch.features) ? patch.features.map(f => String(f)) : []

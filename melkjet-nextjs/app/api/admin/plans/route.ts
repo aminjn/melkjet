@@ -26,6 +26,8 @@ export async function POST(req: NextRequest) {
     name,
     priceMonthly: b.priceMonthly != null ? Number(b.priceMonthly) : 0,
     priceYearly: b.priceYearly != null ? Number(b.priceYearly) : 0,
+    price3m: b.price3m != null && b.price3m !== '' ? Number(b.price3m) : undefined,
+    price6m: b.price6m != null && b.price6m !== '' ? Number(b.price6m) : undefined,
     currency: b.currency ? String(b.currency) : undefined,
     features: Array.isArray(b.features) ? b.features.map((f: unknown) => String(f)) : undefined,
     highlighted: b.highlighted !== undefined ? !!b.highlighted : undefined,

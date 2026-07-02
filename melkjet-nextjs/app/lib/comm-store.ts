@@ -3,6 +3,7 @@ import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { setPlan } from './account-store'
 import { getPlan } from './plan-store'
+import { getPaymentConfig } from './payment-store'
 
 // استورِ ارتباطات/خرید: پکیج‌های شارژ (پیامک/ایمیل/توکن) + اشتراکِ پلن + اعتبارِ هر کاربر + سفارش‌ها.
 // پکیج‌ها سراسری‌اند و سوپرادمین می‌سازد؛ اعتبار و سفارش‌ها per-owner (شمارهٔ کاربر).
@@ -15,10 +16,26 @@ export type OrderStatus = 'pending' | 'paid' | 'rejected'
 export type OrderKind = 'package' | 'plan'
 export interface CommOrder { id: string; owner: string; kind: OrderKind; name: string; price: number; status: OrderStatus; createdAt: number; paidAt?: number; packageId?: string; channel?: Channel; credits?: number; planId?: string; gateway?: string; receipt?: string; period?: string }
 
-interface DB { packages: CommPackage[]; credits: Record<string, Credit>; orders: CommOrder[]; usage?: Record<string, { token: number }> }
+interface DB { packages: CommPackage[]; credits: Record<string, Credit>; orders: CommOrder[]; usage?: Record<string, { token: number }>; pkgSeeded?: boolean }
 
 function id(p = '') { return p + randomBytes(5).toString('hex') }
-function load(): DB { if (existsSync(DATA_FILE)) { try { const d = JSON.parse(readFileSync(DATA_FILE, 'utf-8')); return { packages: d.packages || [], credits: d.credits || {}, orders: d.orders || [], usage: d.usage || {} } } catch {} } return { packages: [], credits: {}, orders: [], usage: {} } }
+// بسته‌های پیش‌فرض (اعتبارِ AI/پیامک/ایمیل) — یک‌بار seed می‌شوند؛ در همهٔ پروفایل‌ها دیده می‌شوند.
+function seedPackages(): CommPackage[] {
+  const now = Date.now()
+  const mk = (channel: Channel, name: string, credits: number, price: number): CommPackage => ({ id: id('pk_'), channel, name, credits, price, active: true, createdAt: now })
+  return [
+    mk('token', '۱۰٬۰۰۰ توکن هوش مصنوعی', 10000, 49000), mk('token', '۲۵٬۰۰۰ توکن', 25000, 99000), mk('token', '۵۰٬۰۰۰ توکن', 50000, 189000),
+    mk('token', '۱۰۰٬۰۰۰ توکن', 100000, 349000), mk('token', '۲۵۰٬۰۰۰ توکن', 250000, 799000), mk('token', '۵۰۰٬۰۰۰ توکن', 500000, 1490000), mk('token', '۱٬۰۰۰٬۰۰۰ توکن', 1000000, 2690000),
+    mk('sms', '۵۰۰ پیامک', 500, 45000), mk('sms', '۱٬۰۰۰ پیامک', 1000, 85000), mk('sms', '۲٬۰۰۰ پیامک', 2000, 160000), mk('sms', '۱۰٬۰۰۰ پیامک', 10000, 750000),
+    mk('email', '۱٬۰۰۰ ایمیل', 1000, 29000), mk('email', '۵٬۰۰۰ ایمیل', 5000, 120000), mk('email', '۱۰٬۰۰۰ ایمیل', 10000, 220000), mk('email', '۵۰٬۰۰۰ ایمیل', 50000, 990000),
+  ]
+}
+function load(): DB {
+  let db: DB = { packages: [], credits: {}, orders: [], usage: {} }
+  if (existsSync(DATA_FILE)) { try { const d = JSON.parse(readFileSync(DATA_FILE, 'utf-8')); db = { packages: d.packages || [], credits: d.credits || {}, orders: d.orders || [], usage: d.usage || {}, pkgSeeded: d.pkgSeeded } } catch {} }
+  if (!db.pkgSeeded) { if (!db.packages.length) db.packages = seedPackages(); db.pkgSeeded = true; save(db) }   // seedِ یک‌باره
+  return db
+}
 function save(db: DB) { writeFileSync(DATA_FILE, JSON.stringify(db, null, 2), 'utf-8') }
 
 // ---- Packages (super-admin) ----
@@ -42,8 +59,12 @@ export function setPackages(rows: Partial<CommPackage>[]): CommPackage[] {
   return db.packages
 }
 
-// آیا کسب‌وکارِ پکیج روشن است؟ (اگر هیچ پکیجِ فعالی نباشد، ارسال محدود نمی‌شود)
+// آیا مصرفِ این کانال محدود/پولی است؟ فقط در حالتِ درآمدی (scale/enterprise) اعمال می‌شود؛
+// در حالتِ استارتاپ/رشد بسته‌ها فقط «قابلِ خرید» هستند ولی مصرفِ رایگان محدود نمی‌شود.
 export function monetizationOn(channel: Channel): boolean {
+  let mode = 'startup'
+  try { mode = getPaymentConfig().pricingMode } catch {}
+  if (mode !== 'scale' && mode !== 'enterprise') return false
   return load().packages.some(p => p.active && p.channel === channel)
 }
 

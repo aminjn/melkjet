@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react'
 // پنلِ «پلن‌ها و اشتراک» — مشترک در همهٔ پنل‌ها. گرافیکِ غنی: اشتراک‌های نقش + بسته‌های افزایشی.
 const FONT = 'Vazirmatn, system-ui, sans-serif'
 type Channel = 'sms' | 'email' | 'token'
-interface Plan { id: string; name: string; priceMonthly: number; priceYearly: number; currency?: string; features: string[]; highlighted: boolean; cta?: string; badge?: string }
+interface Plan { id: string; name: string; priceMonthly: number; price3m?: number; price6m?: number; priceYearly: number; currency?: string; features: string[]; highlighted: boolean; cta?: string; badge?: string }
+type Period = 'monthly' | '3m' | '6m' | 'yearly'
+const PERIODS: [Period, string, string][] = [['monthly', 'ماهانه', 'ماه'], ['3m', '۳ماهه', '۳ ماه'], ['6m', '۶ماهه', '۶ ماه'], ['yearly', 'سالانه', 'سال']]
 interface Pkg { id: string; channel: Channel; name: string; credits: number; price: number }
 interface Order { id: string; kind: string; name: string; channel?: string; planId?: string; price: number; status: string }
 const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
@@ -21,7 +23,9 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
   const [credit, setCredit] = useState<Record<string, number>>({ sms: 0, email: 0, token: 0 })
   const [tokenUsed, setTokenUsed] = useState(0)
   const [orders, setOrders] = useState<Order[]>([])
-  const [period, setPeriod] = useState<'monthly' | 'yearly'>('monthly')
+  const [period, setPeriod] = useState<Period>('monthly')
+  const priceOf = (p: Plan) => period === 'yearly' ? p.priceYearly : period === '3m' ? (p.price3m || p.priceMonthly * 3) : period === '6m' ? (p.price6m || p.priceMonthly * 6) : p.priceMonthly
+  const periodLabel = PERIODS.find(x => x[0] === period)![2]
   const [busy, setBusy] = useState('')
   const [msg, setMsg] = useState('')
 
@@ -37,7 +41,7 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
   useEffect(() => { load() }, [dashboard])
 
   const [checkout, setCheckout] = useState<{ kind: 'plan' | 'pkg'; id: string; name: string; price: number } | null>(null)
-  const buyPlan = (p: Plan) => setCheckout({ kind: 'plan', id: p.id, name: p.name, price: period === 'yearly' ? p.priceYearly : p.priceMonthly })
+  const buyPlan = (p: Plan) => setCheckout({ kind: 'plan', id: p.id, name: p.name, price: priceOf(p) })
   const buyPkg = (p: Pkg) => setCheckout({ kind: 'pkg', id: p.id, name: p.name, price: p.price })
   const submitOrder = async (gateway: string, receipt: string) => {
     if (!checkout) return
@@ -71,9 +75,9 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
       {/* تعرفه ماهانه/سالانه */}
       {plans.length > 0 && (
         <div style={{ display: 'flex', justifyContent: 'center' }}>
-          <div style={{ display: 'inline-flex', background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 999, padding: 4 }}>
-            {([['monthly', 'ماهانه'], ['yearly', 'سالانه']] as const).map(([k, l]) => (
-              <button key={k} onClick={() => setPeriod(k)} style={{ padding: '8px 22px', borderRadius: 999, border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 700, background: period === k ? 'linear-gradient(135deg,var(--gold2),var(--gold))' : 'transparent', color: period === k ? '#16140f' : 'var(--muted)' }}>{l}{k === 'yearly' && <span style={{ fontSize: 10.5, marginInlineStart: 5, opacity: .85 }}>۲ ماه هدیه</span>}</button>
+          <div style={{ display: 'inline-flex', background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 999, padding: 4, flexWrap: 'wrap' }}>
+            {PERIODS.map(([k, l]) => (
+              <button key={k} onClick={() => setPeriod(k)} style={{ padding: '8px 18px', borderRadius: 999, border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 700, background: period === k ? 'linear-gradient(135deg,var(--gold2),var(--gold))' : 'transparent', color: period === k ? '#16140f' : 'var(--muted)' }}>{l}{k === 'yearly' && <span style={{ fontSize: 10.5, marginInlineStart: 5, opacity: .85 }}>۲ ماه هدیه</span>}</button>
             ))}
           </div>
         </div>
@@ -85,7 +89,7 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 16, alignItems: 'stretch' }}>
           {plans.map(p => {
-            const price = period === 'yearly' ? p.priceYearly : p.priceMonthly
+            const price = priceOf(p)
             const hl = p.highlighted
             return (
               <div key={p.id} style={{ position: 'relative', display: 'flex', flexDirection: 'column', borderRadius: 18, padding: 22, background: hl ? 'linear-gradient(160deg, rgba(212,175,55,.1), var(--surface) 60%)' : 'var(--surface)', border: `1.5px solid ${hl ? 'var(--gold)' : 'var(--line)'}`, boxShadow: hl ? '0 12px 36px -12px rgba(212,175,55,.45)' : 'none', transform: hl ? 'translateY(-2px)' : 'none' }}>
@@ -93,7 +97,7 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
                 <div style={{ fontSize: 17, fontWeight: 900, marginBottom: 4 }}>{p.name}</div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, margin: '12px 0 4px' }}>
                   <span style={{ fontSize: 30, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-1px' }}>{price > 0 ? fa(price) : 'رایگان'}</span>
-                  {price > 0 && <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{p.currency || 'تومان'} / {period === 'yearly' ? 'سال' : 'ماه'}</span>}
+                  {price > 0 && <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{p.currency || 'تومان'} / {periodLabel}</span>}
                 </div>
                 <div style={{ height: 1, background: 'var(--line)', margin: '14px 0' }} />
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 18 }}>
