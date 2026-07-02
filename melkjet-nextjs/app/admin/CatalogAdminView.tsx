@@ -288,11 +288,15 @@ function ScrapePanel({ onClose, onDone }: { onClose: () => void; onDone: () => v
   const [inspectRes, setInspectRes] = useState<any>(null)
   const [inspecting, setInspecting] = useState(false)
 
+  // نظرسنجیِ دوره‌ای فقط «وضعیتِ کار» را به‌روز می‌کند — نه تنظیمات را (وگرنه ویرایشِ کاربر پاک می‌شود).
   const poll = useCallback(() => {
-    fetch(`/api/admin/catalog/scrape?source=${source}`).then(r => r.ok ? r.json() : null).then(d => { if (d) { setJob(d.job); if (d.sources) setSources(d.sources); if (d.config) setCfg((c: any) => ({ ...c, ...d.config })) } }).catch(() => {})
+    fetch(`/api/admin/catalog/scrape?source=${source}`).then(r => r.ok ? r.json() : null).then(d => { if (d) { setJob(d.job); if (d.sources) setSources(d.sources) } }).catch(() => {})
   }, [source])
-  // با تعویضِ منبع، گزارش/بررسیِ قبلی پاک شود.
-  useEffect(() => { setReport(null); setInspectRes(null) }, [source])
+  // تنظیمات فقط یک‌بار با تعویضِ منبع بارگذاری می‌شود؛ بعد از آن دستِ کاربر است تا «ذخیره» کند.
+  useEffect(() => {
+    setReport(null); setInspectRes(null)
+    fetch(`/api/admin/catalog/scrape?source=${source}`).then(r => r.ok ? r.json() : null).then(d => { if (d?.config) setCfg(d.config) }).catch(() => {})
+  }, [source])
   useEffect(() => { poll(); const t = setInterval(poll, 2500); return () => clearInterval(t) }, [poll])
   // لیستِ کاتالوگ را زنده به‌روز کن (هر بار که تعدادِ کالاها تغییر کرد) تا محصولاتِ اسکرپ‌شده بلافاصله دیده شوند.
   useEffect(() => { if (job && (job.added || 0) + (job.updated || 0) > 0) onDone() }, [job?.added, job?.updated, job?.running]) // eslint-disable-line
