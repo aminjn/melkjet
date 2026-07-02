@@ -4097,6 +4097,10 @@ function PlanForm({ initial, roles, perms, onSave, onClose }: { initial: any; ro
   const QKEYS: [string, string][] = [['listings', 'آگهی'], ['files', 'فایل'], ['properties', 'ملک'], ['projects', 'پروژه'], ['units', 'واحد'], ['investors', 'سرمایه‌گذار'], ['leads', 'لید'], ['crmCustomers', 'مشتری CRM'], ['contacts', 'مخاطب'], ['agents', 'مشاور'], ['products', 'محصول'], ['aiRequests', 'درخواست AI'], ['contentGen', 'تولید محتوا'], ['aiImages', 'تصویر AI'], ['savedSearches', 'جستجوی ذخیره'], ['chats', 'چت'], ['divarImports', 'ایمپورت دیوار'], ['sites', 'سایت'], ['sitePages', 'صفحهٔ سایت'], ['sms', 'پیامک'], ['email', 'ایمیل'], ['campaigns', 'کمپین'], ['automations', 'اتوماسیون'], ['contactReveals', 'تماس آشکار']]
   const DASHES: [string, string][] = [['', '— بدون داشبورد —'], ['/buyer', 'کاربر عادی'], ['/owner', 'مالک'], ['/pros', 'مشاور'], ['/agency', 'آژانس'], ['/builder', 'سازنده'], ['/materials', 'مصالح'], ['/legal', 'حقوقی']]
   const setQ = (k: string, v: string) => setF((s: any) => ({ ...s, quotas: { ...s.quotas, [k]: v } }))
+  const [sellPerToken, setSellPerToken] = useState(0)
+  useEffect(() => { fetch('/api/admin/ai-cost').then(r => r.ok ? r.json() : null).then(d => { if (d?.tokenSellPrice) setSellPerToken(d.tokenSellPrice) }).catch(() => {}) }, [])
+  const aiValue = (Number(f.aiCredits) || 0) * sellPerToken   // ارزشِ تومانیِ اعتبارِ AIِ این پلن
+  const suggest = () => { const m = Math.max(1000, Math.round(aiValue / 1000) * 1000); if (!m) return; setF((s: any) => ({ ...s, priceMonthly: String(m), price3m: String(m * 3), price6m: String(m * 6), priceYearly: String(m * 10) })) }
   const role = roles.find(r => r.id === f.roleId)
   const availPerms = f.roleId ? perms.filter(p => (role?.permissions || []).includes(p.id)) : perms
   const permLabel = (id: string) => perms.find(p => p.id === id)?.label || id
@@ -4132,6 +4136,12 @@ function PlanForm({ initial, roles, perms, onSave, onClose }: { initial: any; ro
         </div>
         <div><label style={lab}>اعتبارِ AIِ ماهانه (توکن)</label><input style={inp} type="number" value={f.aiCredits} onChange={e => setF({ ...f, aiCredits: e.target.value })} placeholder="مثلاً ۲۰۰۰۰" /></div>
       </div>
+      {sellPerToken > 0 && Number(f.aiCredits) > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 10, padding: '9px 12px', marginBottom: 12, fontSize: 12 }}>
+          <span style={{ color: 'var(--muted)' }}>ارزشِ اعتبارِ AIِ این پلن ≈ <b style={{ color: 'var(--gold)' }}>{Math.round(aiValue).toLocaleString('fa-IR')} تومان</b> (هزینهٔ توکن). قیمتِ ماهانه را بالاتر بگذار تا سود بماند.</span>
+          <OutlineButton onClick={suggest} style={{ fontSize: 11.5, padding: '5px 12px' }}>قیمتِ پیشنهادی از اعتبار</OutlineButton>
+        </div>
+      )}
       <label style={lab}>سقفِ مصرف (Quotas) — خالی = بدونِ محدودیت، <b>−۱ = نامحدود</b></label>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 8, marginBottom: 12 }}>
         {QKEYS.map(([k, l]) => (
@@ -4399,7 +4409,10 @@ function AiCostView() {
       </div>
 
       <Card>
-        <div style={{ fontSize: 13.5, fontWeight: 800, marginBottom: 12 }}>هزینهٔ مدل‌ها ($ به‌ازای هر ۱میلیون توکن — تصویری: به‌ازای هر تصویر/۱M)</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 800 }}>هزینهٔ مدل‌ها ($ به‌ازای هر ۱میلیون توکن — تصویری: به‌ازای هر تصویر/۱M)</div>
+          <OutlineButton onClick={async () => { setSaved('در حال دریافت از API…'); const r = await fetch('/api/admin/ai-cost', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'syncModels' }) }); const d = await r.json().catch(() => ({})); if (d?.ok) { setC(d); setSaved(`✓ ${fa(d.updated || 0)} مدل به‌روز و ${fa(d.added || 0)} مدلِ جدید از API گرفته شد`) } else setSaved(d?.error || 'خطا در دریافت'); setTimeout(() => setSaved(''), 5000) }} style={{ fontSize: 12.5, padding: '7px 14px' }}>🔄 دریافتِ خودکارِ قیمت‌ها از API</OutlineButton>
+        </div>
         <div style={{ maxHeight: 460, overflowY: 'auto' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 0.8fr 0.8fr 1fr', gap: 8, padding: '6px 8px', fontSize: 11.5, fontWeight: 700, color: 'var(--muted)', position: 'sticky', top: 0, background: 'var(--surface)' }}>
             <div>مدل</div><div>تأمین‌کننده</div><div>ورودی $</div><div>خروجی $</div><div>هزینهٔ ۱M (تومان)</div>

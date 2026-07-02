@@ -58,6 +58,29 @@ export async function listModels(provider?: string): Promise<string[]> {
   return ids.sort()
 }
 
+// قیمتِ مدل‌ها از خودِ API (OpenRouter/GapGPT: pricing.prompt/completion به‌ازای هر توکن).
+// خروجی: $ به‌ازای هر ۱میلیون توکن. اگر قیمت خیلی کوچک بود (per-token) در ۱M ضرب می‌شود.
+export interface ApiModelPrice { id: string; label: string; provider: string; type: 'text' | 'image' | 'audio' | 'embedding'; inUsd: number; outUsd: number }
+export async function listModelsWithPricing(provider?: string): Promise<ApiModelPrice[]> {
+  const { base, key } = cfg(provider)
+  const res = await gapHttp(`${base}/models`, { method: 'GET', headers: { Authorization: `Bearer ${key}`, accept: 'application/json' } }, 20000)
+  if (res.status !== 200) throw new Error(`گپ HTTP ${res.status}`)
+  const d = JSON.parse(res.body)
+  const arr: any[] = Array.isArray(d.data) ? d.data : []
+  const scale = (v: any) => { const n = Number(v); if (!isFinite(n) || n <= 0) return 0; return n < 0.1 ? n * 1_000_000 : n }  // per-token→per-1M
+  return arr.map(m => {
+    const p = m.pricing || {}
+    const inUsd = scale(p.prompt ?? p.input ?? m.input_price ?? m.inputPrice)
+    const outUsd = scale(p.completion ?? p.output ?? m.output_price ?? m.outputPrice)
+    const imgUsd = scale(p.image ?? p.image_generation)
+    const id = String(m.id || '')
+    const type: ApiModelPrice['type'] = /whisper|transcri|tts|speech|audio/i.test(id) ? 'audio'
+      : /embedding/i.test(id) ? 'embedding'
+      : (/image|dall-?e|imagen|z-image|flash-image/i.test(id) || (imgUsd > 0 && !outUsd)) ? 'image' : 'text'
+    return { id, label: String(m.name || id), provider: String(m.owned_by || m.provider || (id.split(/[:/]/)[0])), type, inUsd: inUsd || imgUsd, outUsd: outUsd || imgUsd }
+  }).filter(m => m.id && (m.inUsd > 0 || m.outUsd > 0))
+}
+
 export async function chatComplete(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number } = {}, provider?: string): Promise<string> {
   const { base, key } = cfg(provider)
   const res = await gapHttp(`${base}/chat/completions`, {

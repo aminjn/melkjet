@@ -70,6 +70,18 @@ export function setCostConfig(patch: Partial<CostConfig>): CostConfig {
   if (Array.isArray(patch.models)) c.models = patch.models.map(m => ({ id: String(m.id || '').trim(), label: String(m.label || m.id || '').trim(), provider: String(m.provider || '').trim(), type: (['text', 'image', 'audio', 'embedding'] as const).includes(m.type as any) ? m.type as any : 'text', inUsd: Number(m.inUsd) || 0, outUsd: Number(m.outUsd) || 0 })).filter(m => m.id)
   save(c); return c
 }
+// ادغامِ قیمت‌های دریافت‌شده از API با فهرستِ مدل‌ها (به‌روزرسانی + افزودنِ مدلِ جدید).
+export function syncModels(fetched: { id: string; label?: string; provider?: string; type?: string; inUsd: number; outUsd: number }[]): { updated: number; added: number } {
+  const c = load(); const byId = new Map(c.models.map(m => [m.id, m]))
+  let updated = 0, added = 0
+  for (const f of fetched) {
+    if (!f.id) continue
+    const ex = byId.get(f.id)
+    if (ex) { ex.inUsd = Number(f.inUsd) || 0; ex.outUsd = Number(f.outUsd) || 0; if (f.label) ex.label = f.label; if (f.provider) ex.provider = f.provider; if (f.type) ex.type = f.type as any; updated++ }
+    else { c.models.push({ id: f.id, label: f.label || f.id, provider: f.provider || '', type: (['text', 'image', 'audio', 'embedding'].includes(f.type as any) ? f.type : 'text') as any, inUsd: Number(f.inUsd) || 0, outUsd: Number(f.outUsd) || 0 }); added++ }
+  }
+  save(c); return { updated, added }
+}
 // قیمتِ فروشِ هر توکن (تومان) = هزینهٔ خروجیِ مدلِ مرجع × نرخِ دلار × (۱ + درصدِ سود/۱۰۰).
 export function tokenSellPriceToman(): number {
   const c = load()
