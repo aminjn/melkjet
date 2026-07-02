@@ -553,7 +553,24 @@ export async function inspectProduct(source: string, url: string) {
   const scripts = [...new Set([...html.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)].map(m => abs(origin, m[1])))].filter(s => /\.js/i.test(s)).slice(0, 20)
   // تکه‌های inline JS که «table-chart» یا data-code را مدیریت می‌کنند
   const chartJs = [...html.matchAll(/table-chart|data-code|data-id|priceChart|drawChart|getChart/gi)].slice(0, 3).map(m => html.slice(Math.max(0, m.index! - 60), m.index! + 260).replace(/\s+/g, ' '))
-  return { ok: true, extracted, historyRows: histRows, productLinks, ajaxHints: ajax, scripts, chartJs, firstRowHtml, chartSnippet, snippet }
+  // ── خودمان فایل‌های JSِ هم‌مبدأ را می‌گیریم و آدرسِ endpointِ نمودار را در می‌آوریم ──
+  const jsHints: string[] = []
+  const sameOrigin = scripts.filter(s => s.startsWith(origin))
+  await Promise.all(sameOrigin.slice(0, 8).map(async src => {
+    try {
+      const jr = await fetchText(src, 12000); if (!jr.ok) return
+      const js = jr.text.slice(0, 600000)
+      const pats = [
+        /["'`](\/[^"'`\s]{0,90}(?:chart|nemodar|price[-_]?history|history)[^"'`\s]{0,40})["'`]/gi,
+        /["'`]([^"'`\s]{0,90}(?:code|id)=[^"'`\s]{0,40})["'`]/gi,
+        /`([^`]{0,140}\$\{[^}]{0,40}(?:code|id)[^}]{0,20}\}[^`]{0,60})`/gi,
+        /(?:url|href|action)\s*[:=]\s*["'`]([^"'`]{4,120})["'`]/gi,
+      ]
+      for (const re of pats) for (const m of js.matchAll(re)) { const v = (m[1] || '').trim(); if (v.length > 4 && /chart|nemodar|code|id|price|history/i.test(v)) jsHints.push(v) }
+    } catch {}
+  }))
+  const chartApiHints = [...new Set(jsHints)].slice(0, 25)
+  return { ok: true, extracted, historyRows: histRows, productLinks, ajaxHints: ajax, scripts, chartJs, chartApiHints, firstRowHtml, chartSnippet, snippet }
 }
 
 export function startBackgroundScrape(source: string): { started: boolean } {
