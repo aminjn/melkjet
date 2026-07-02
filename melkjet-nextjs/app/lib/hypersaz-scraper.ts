@@ -547,9 +547,13 @@ export async function inspectProduct(source: string, url: string) {
   const firstRowHtml = firstRow ? firstRow[0].replace(/\s+/g, ' ').slice(0, 900) : ''
   const productLinks = [...new Set([...html.matchAll(/href=["']([^"']*\/product\/[^"']+)["']/gi)].map(m => m[1]))].slice(0, 6)
   const histRows = historyTable(html).length
-  // آدرسِ احتمالیِ AJAXِ نمودار (اگر باشد)
-  const ajax = [...new Set([...html.matchAll(/["'](\/[^"']*(?:chart|price-?history|history|nemodar|ajax)[^"']*)["']/gi)].map(m => m[1]))].slice(0, 6)
-  return { ok: true, extracted, historyRows: histRows, productLinks, ajaxHints: ajax, firstRowHtml, chartSnippet, snippet }
+  // آدرسِ احتمالیِ AJAXِ نمودار (هر URLِ حاوی chart/history/…)
+  const ajax = [...new Set([...html.matchAll(/["'`]([^"'`]*(?:chart|price[-_]?history|history|nemodar|ajax|api)[^"'`]*)["'`]/gi)].map(m => m[1]).filter(u => u.length < 160 && /[\/=]/.test(u)))].slice(0, 12)
+  // فایل‌های جاوااسکریپت (هندلرِ کلیکِ نمودار احتمالاً اینجاست)
+  const scripts = [...new Set([...html.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)].map(m => abs(origin, m[1])))].filter(s => /\.js/i.test(s)).slice(0, 20)
+  // تکه‌های inline JS که «table-chart» یا data-code را مدیریت می‌کنند
+  const chartJs = [...html.matchAll(/table-chart|data-code|data-id|priceChart|drawChart|getChart/gi)].slice(0, 3).map(m => html.slice(Math.max(0, m.index! - 60), m.index! + 260).replace(/\s+/g, ' '))
+  return { ok: true, extracted, historyRows: histRows, productLinks, ajaxHints: ajax, scripts, chartJs, firstRowHtml, chartSnippet, snippet }
 }
 
 export function startBackgroundScrape(source: string): { started: boolean } {
