@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   // عملیاتِ کاربری
   if (act === 'order') {
     if (!b.packageId) return NextResponse.json({ error: 'پکیج را انتخاب کنید' }, { status: 400 })
-    const r = createOrder(s.phone, String(b.packageId))
+    const r = createOrder(s.phone, String(b.packageId), { gateway: b.gateway ? String(b.gateway) : undefined, receipt: b.receipt ? String(b.receipt).slice(0, 120) : undefined })
     return r.ok ? NextResponse.json({ ok: true, order: r.order }) : NextResponse.json({ error: r.error }, { status: 400 })
   }
   if (act === 'orderPlan') {
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     if (!pl) return NextResponse.json({ error: 'پلن یافت نشد' }, { status: 400 })
     const yearly = b.period === 'yearly'
     const price = yearly ? pl.priceYearly : pl.priceMonthly
-    const r = createPlanOrder(s.phone, pl.id, `${pl.name}${yearly ? ' (سالانه)' : ''}`, price)
+    const r = createPlanOrder(s.phone, pl.id, `${pl.name}${yearly ? ' (سالانه)' : ''}`, price, { gateway: b.gateway ? String(b.gateway) : undefined, receipt: b.receipt ? String(b.receipt).slice(0, 120) : undefined, period: yearly ? 'yearly' : 'monthly' })
     return NextResponse.json({ ok: true, order: r.order })
   }
 

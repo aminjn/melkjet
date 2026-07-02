@@ -36,22 +36,20 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
   }
   useEffect(() => { load() }, [dashboard])
 
-  const buyPlan = async (p: Plan) => {
-    setBusy('plan_' + p.id); setMsg('')
+  const [checkout, setCheckout] = useState<{ kind: 'plan' | 'pkg'; id: string; name: string; price: number } | null>(null)
+  const buyPlan = (p: Plan) => setCheckout({ kind: 'plan', id: p.id, name: p.name, price: period === 'yearly' ? p.priceYearly : p.priceMonthly })
+  const buyPkg = (p: Pkg) => setCheckout({ kind: 'pkg', id: p.id, name: p.name, price: p.price })
+  const submitOrder = async (gateway: string, receipt: string) => {
+    if (!checkout) return
+    setBusy('checkout'); setMsg('')
     try {
-      const r = await fetch('/api/comm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'orderPlan', planId: p.id, period }) })
+      const body = checkout.kind === 'plan'
+        ? { action: 'orderPlan', planId: checkout.id, period, gateway, receipt }
+        : { action: 'order', packageId: checkout.id, gateway, receipt }
+      const r = await fetch('/api/comm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       const d = await r.json()
-      setMsg(d.ok ? `✓ سفارشِ «${p.name}» ثبت شد. پس از تأییدِ پرداخت، اشتراک فعال می‌شود.` : `⚠ ${d.error || 'خطا'}`)
-      if (d.ok) loadComm()
-    } catch { setMsg('⚠ خطا در ارتباط با سرور') } finally { setBusy('') }
-  }
-  const buyPkg = async (p: Pkg) => {
-    setBusy('pkg_' + p.id); setMsg('')
-    try {
-      const r = await fetch('/api/comm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'order', packageId: p.id }) })
-      const d = await r.json()
-      setMsg(d.ok ? `✓ سفارشِ «${p.name}» ثبت شد. پس از تأییدِ پرداخت، اعتبار شارژ می‌شود.` : `⚠ ${d.error || 'خطا'}`)
-      if (d.ok) loadComm()
+      setMsg(d.ok ? `✓ سفارشِ «${checkout.name}» ثبت شد. پس از تأییدِ پرداخت، فعال می‌شود.` : `⚠ ${d.error || 'خطا'}`)
+      if (d.ok) { setCheckout(null); loadComm() }
     } catch { setMsg('⚠ خطا در ارتباط با سرور') } finally { setBusy('') }
   }
 
@@ -143,6 +141,7 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
         )
       })}
 
+      {checkout && <CheckoutModal item={checkout} busy={busy === 'checkout'} onClose={() => setCheckout(null)} onSubmit={submitOrder} />}
       {msg && <div style={{ fontSize: 13, fontWeight: 600, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a', textAlign: 'center' }}>{msg}</div>}
       {pending.length > 0 && (
         <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: 16 }}>
@@ -152,6 +151,58 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+interface Gateway { id: string; type: string; label: string; cardNumber?: string; iban?: string; accountNumber?: string; holderName?: string; bank?: string; note?: string }
+function CheckoutModal({ item, busy, onClose, onSubmit }: { item: { name: string; price: number }; busy: boolean; onClose: () => void; onSubmit: (gateway: string, receipt: string) => void }) {
+  const [gws, setGws] = useState<Gateway[]>([])
+  const [sel, setSel] = useState<string>('')
+  const [receipt, setReceipt] = useState('')
+  const [copied, setCopied] = useState('')
+  useEffect(() => { fetch('/api/payment/methods').then(r => r.ok ? r.json() : null).then(d => { if (d?.ok) { setGws(d.gateways || []); setSel(d.gateways?.[0]?.id || '') } }).catch(() => {}) }, [])
+  const g = gws.find(x => x.id === sel)
+  const copy = (t: string) => { try { navigator.clipboard.writeText(t.replace(/\s/g, '')); setCopied(t); setTimeout(() => setCopied(''), 1500) } catch {} }
+  const row = (label: string, val?: string) => val ? (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '9px 12px', background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 10, marginBottom: 8 }}>
+      <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{label}</span>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <b dir="ltr" style={{ fontSize: 14, letterSpacing: '.5px' }}>{val}</b>
+        <button onClick={() => copy(val)} style={{ fontSize: 10.5, border: '1px solid var(--line2)', background: 'transparent', color: copied === val ? '#5fd98a' : 'var(--gold)', borderRadius: 7, padding: '3px 8px', cursor: 'pointer', fontFamily: FONT }}>{copied === val ? '✓ کپی شد' : 'کپی'}</button>
+      </span>
+    </div>
+  ) : null
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.72)', zIndex: 300, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', fontFamily: FONT }}>
+      <div onClick={e => e.stopPropagation()} dir="rtl" style={{ background: 'var(--surface)', border: '1px solid var(--gold)', borderRadius: 16, maxWidth: 460, width: '100%', margin: '30px 0', padding: 22 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <div style={{ fontSize: 16, fontWeight: 900 }}>پرداخت</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 22, cursor: 'pointer' }}>×</button>
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 14 }}>{item.name} — <b style={{ color: 'var(--gold)' }}>{item.price > 0 ? fa(item.price) + ' تومان' : 'رایگان'}</b></div>
+        {gws.length === 0 ? <div style={{ fontSize: 13, color: 'var(--muted)', padding: 16, textAlign: 'center' }}>روشِ پرداختی فعال نیست. با پشتیبانی تماس بگیرید.</div> : (
+          <>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+              {gws.map(x => <button key={x.id} onClick={() => setSel(x.id)} style={{ padding: '8px 14px', borderRadius: 10, border: `1px solid ${sel === x.id ? 'var(--gold)' : 'var(--line2)'}`, background: sel === x.id ? 'var(--goldDim)' : 'transparent', color: sel === x.id ? 'var(--gold)' : 'var(--muted)', fontSize: 12.5, fontWeight: sel === x.id ? 700 : 400, cursor: 'pointer', fontFamily: FONT }}>{x.label}</button>)}
+            </div>
+            {g?.type === 'card2card' && (
+              <div style={{ marginBottom: 14 }}>
+                {row('شمارهٔ کارت', g.cardNumber)}
+                {row('شمارهٔ شبا', g.iban)}
+                {row('شمارهٔ حساب', g.accountNumber)}
+                {g.holderName && <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>به نامِ: <b style={{ color: 'var(--text)' }}>{g.holderName}</b>{g.bank ? ` — ${g.bank}` : ''}</div>}
+                {g.note && <div style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.8, marginBottom: 10 }}>{g.note}</div>}
+                <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 5 }}>کدِ رهگیری / چهار رقمِ آخرِ کارت *</label>
+                <input value={receipt} onChange={e => setReceipt(e.target.value)} placeholder="مثلاً ۱۲۳۴۵۶ یا ۱۲۳۴" style={{ width: '100%', height: 42, padding: '0 12px', borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--line2)', color: 'var(--text)', fontSize: 13, outline: 'none', fontFamily: FONT, boxSizing: 'border-box' }} />
+              </div>
+            )}
+            {g?.type === 'zarinpal' && <div style={{ fontSize: 12.5, color: 'var(--muted)', padding: 12, background: 'var(--bg2)', borderRadius: 10, marginBottom: 14, lineHeight: 1.9 }}>پس از ثبت، به درگاهِ بانکی هدایت می‌شوید.</div>}
+            {g?.type === 'wallet' && <div style={{ fontSize: 12.5, color: 'var(--muted)', padding: 12, background: 'var(--bg2)', borderRadius: 10, marginBottom: 14 }}>از موجودیِ کیفِ پول کسر می‌شود.</div>}
+            <button onClick={() => onSubmit(g?.id || '', receipt.trim())} disabled={busy || (g?.type === 'card2card' && !receipt.trim())} style={{ width: '100%', padding: '12px', borderRadius: 11, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 14, cursor: 'pointer', fontFamily: FONT, opacity: busy || (g?.type === 'card2card' && !receipt.trim()) ? 0.6 : 1 }}>{busy ? 'در حال ثبت…' : (g?.type === 'card2card' ? 'ثبتِ پرداخت (پس از تأیید فعال می‌شود)' : 'ثبتِ سفارش')}</button>
+          </>
+        )}
+      </div>
     </div>
   )
 }

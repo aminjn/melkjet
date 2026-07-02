@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { setPlan } from './account-store'
+import { getPlan } from './plan-store'
 
 // استورِ ارتباطات/خرید: پکیج‌های شارژ (پیامک/ایمیل/توکن) + اشتراکِ پلن + اعتبارِ هر کاربر + سفارش‌ها.
 // پکیج‌ها سراسری‌اند و سوپرادمین می‌سازد؛ اعتبار و سفارش‌ها per-owner (شمارهٔ کاربر).
@@ -12,7 +13,7 @@ export interface CommPackage { id: string; channel: Channel; name: string; credi
 export interface Credit { sms: number; email: number; token: number }
 export type OrderStatus = 'pending' | 'paid' | 'rejected'
 export type OrderKind = 'package' | 'plan'
-export interface CommOrder { id: string; owner: string; kind: OrderKind; name: string; price: number; status: OrderStatus; createdAt: number; paidAt?: number; packageId?: string; channel?: Channel; credits?: number; planId?: string }
+export interface CommOrder { id: string; owner: string; kind: OrderKind; name: string; price: number; status: OrderStatus; createdAt: number; paidAt?: number; packageId?: string; channel?: Channel; credits?: number; planId?: string; gateway?: string; receipt?: string; period?: string }
 
 interface DB { packages: CommPackage[]; credits: Record<string, Credit>; orders: CommOrder[]; usage?: Record<string, { token: number }> }
 
@@ -98,19 +99,19 @@ export function recordToken(owner: string, role: string, tokens: number) {
 }
 
 // ---- Orders ----
-export function createOrder(owner: string, packageId: string): { ok: boolean; error?: string; order?: CommOrder } {
+export function createOrder(owner: string, packageId: string, pay?: { gateway?: string; receipt?: string }): { ok: boolean; error?: string; order?: CommOrder } {
   const db = load()
   const pk = db.packages.find(p => p.id === packageId && p.active)
   if (!pk) return { ok: false, error: 'پکیج یافت نشد' }
-  const order: CommOrder = { id: id('ord_'), owner, kind: 'package', packageId: pk.id, name: pk.name, channel: pk.channel, credits: pk.credits, price: pk.price, status: 'pending', createdAt: Date.now() }
+  const order: CommOrder = { id: id('ord_'), owner, kind: 'package', packageId: pk.id, name: pk.name, channel: pk.channel, credits: pk.credits, price: pk.price, status: 'pending', createdAt: Date.now(), gateway: pay?.gateway, receipt: pay?.receipt }
   db.orders.unshift(order)
   save(db)
   return { ok: true, order }
 }
 // سفارشِ اشتراکِ پلن — پس از تأییدِ سوپرادمین، پلنِ حساب تنظیم می‌شود.
-export function createPlanOrder(owner: string, planId: string, planName: string, price: number): { ok: boolean; order?: CommOrder } {
+export function createPlanOrder(owner: string, planId: string, planName: string, price: number, pay?: { gateway?: string; receipt?: string; period?: string }): { ok: boolean; order?: CommOrder } {
   const db = load()
-  const order: CommOrder = { id: id('ord_'), owner, kind: 'plan', planId, name: planName || 'اشتراک', price: Math.max(0, Math.round(Number(price) || 0)), status: 'pending', createdAt: Date.now() }
+  const order: CommOrder = { id: id('ord_'), owner, kind: 'plan', planId, name: planName || 'اشتراک', price: Math.max(0, Math.round(Number(price) || 0)), status: 'pending', createdAt: Date.now(), gateway: pay?.gateway, receipt: pay?.receipt, period: pay?.period }
   db.orders.unshift(order)
   save(db)
   return { ok: true, order }
@@ -127,8 +128,11 @@ export function approveOrder(orderId: string): { ok: boolean; error?: string } {
   if (o.status === 'paid') return { ok: true }
   o.status = 'paid'; o.paidAt = Date.now()
   if (o.kind === 'plan') {
-    // اشتراک: پلنِ حسابِ کاربر را تنظیم کن
-    if (o.planId) try { setPlan(o.owner, o.planId) } catch {}
+    // اشتراک: پلنِ حسابِ کاربر را تنظیم کن + اعتبارِ AIِ پلن را شارژ کن
+    if (o.planId) {
+      try { setPlan(o.owner, o.planId) } catch {}
+      try { const pl = getPlan(o.planId); const ai = Number(pl?.aiCredits) || 0; if (ai > 0) { const c = db.credits[o.owner] || { sms: 0, email: 0, token: 0 }; c.token = (Number(c.token) || 0) + ai; db.credits[o.owner] = c } } catch {}
+    }
   } else if (o.channel) {
     const c = db.credits[o.owner] || { sms: 0, email: 0, token: 0 }
     c[o.channel] = (Number(c[o.channel]) || 0) + (Number(o.credits) || 0)

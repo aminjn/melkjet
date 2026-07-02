@@ -14,7 +14,7 @@ import CatalogAdminView from './CatalogAdminView'
 type View =
   | 'overview' | 'scraper' | 'persiansaze' | 'listings' | 'products' | 'catalog' | 'geo' | 'moderation' | 'content' | 'studio' | 'articles' | 'categories' | 'crm' | 'api'
   | 'reports' | 'plans' | 'promos' | 'discounts' | 'ads' | 'users' | 'profiles' | 'roles' | 'connections'
-  | 'tracker' | 'sms' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags' | 'support'
+  | 'tracker' | 'sms' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags' | 'support' | 'payment'
 
 interface NavItem { id: View; icon: string; label: string; badge?: string; badgeColor?: string }
 interface NavSection { title: string; items: NavItem[] }
@@ -54,6 +54,7 @@ const sections: NavSection[] = [
     title: 'درآمد و رشد',
     items: [
       { id: 'plans',  icon: '◔', label: 'پلن‌ها' },
+      { id: 'payment', icon: '💳', label: 'درگاه‌های پرداخت', badge: 'NEW', badgeColor: '#c9a84c' },
       { id: 'promos', icon: '★', label: 'پروموت و ویژه‌سازی' },
       { id: 'discounts', icon: '٪', label: 'کدهای تخفیف' },
       { id: 'ads',    icon: '▤', label: 'تبلیغات بنری' },
@@ -109,6 +110,7 @@ const viewTitles: Record<View, string> = {
   api:        'API و مدل‌های هوش مصنوعی',
   reports:    'گزارش‌ها و تحلیل داده',
   plans:      'پلن‌ها و اشتراک‌ها',
+  payment:    'درگاه‌های پرداخت',
   promos:     'پروموت و ویژه‌سازی',
   discounts:  'کدهای تخفیف',
   ads:        'تبلیغات بنری',
@@ -2589,7 +2591,7 @@ function TrackerConfig() {
 
 // ─── Communication packages (شارژِ پیامک/ایمیل) + orders ────────────────────
 type CPkg = { id: string; channel: 'sms' | 'email' | 'token'; name: string; credits: number; price: number; active: boolean }
-type COrder = { id: string; owner: string; kind?: string; name: string; channel?: string; credits?: number; planId?: string; price: number; status: string; createdAt: number }
+type COrder = { id: string; owner: string; kind?: string; name: string; channel?: string; credits?: number; planId?: string; price: number; status: string; createdAt: number; gateway?: string; receipt?: string }
 function CommPackagesConfig() {
   const [pkgs, setPkgs] = useState<CPkg[]>([])
   const [orders, setOrders] = useState<COrder[]>([])
@@ -2645,6 +2647,7 @@ function CommPackagesConfig() {
                 <span style={{ fontWeight: 700 }}>{o.name}</span>
                 <span style={{ color: 'var(--muted)', marginInlineStart: 8, direction: 'ltr', display: 'inline-block' }}>{o.owner}</span>
                 <span style={{ color: 'var(--muted)', marginInlineStart: 8 }}>· {o.kind === 'plan' ? 'اشتراک' : (o.channel === 'sms' ? 'پیامک' : o.channel === 'token' ? 'توکن' : 'ایمیل')}{o.kind !== 'plan' ? ` · ${fa(o.credits || 0)} عدد` : ''} · {fa(o.price)} تومان</span>
+                {o.receipt && <span style={{ color: 'var(--gold)', marginInlineStart: 8, fontSize: 11.5 }}>💳 کارت‌به‌کارت · کدِ رهگیری: {o.receipt}</span>}
               </div>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 {o.status === 'pending' ? <>
@@ -4219,6 +4222,66 @@ function PlansView() {
   )
 }
 
+// ─── درگاه‌های پرداخت + حالتِ قیمت‌گذاری ─────────────────────────────────────
+function PaymentView() {
+  const [cfg, setCfg] = useState<any>({ pricingMode: 'startup', gateways: [] })
+  const [saved, setSaved] = useState('')
+  const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '9px 11px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
+  const lab: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', marginBottom: 5, display: 'block', fontWeight: 600 }
+  const load = () => fetch('/api/admin/payment').then(r => r.ok ? r.json() : null).then(d => { if (d) setCfg({ pricingMode: d.pricingMode || 'startup', gateways: d.gateways || [] }) }).catch(() => {})
+  useEffect(() => { load() }, [])
+  const save = async () => { await fetch('/api/admin/payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg) }); setSaved('ذخیره شد ✓'); setTimeout(() => setSaved(''), 2000); load() }
+  const setGw = (i: number, patch: any) => setCfg((c: any) => ({ ...c, gateways: c.gateways.map((g: any, j: number) => j === i ? { ...g, ...patch } : g) }))
+  const MODES: [string, string][] = [['startup', 'استارتاپ (رشدِ کاربر)'], ['growth', 'رشد'], ['scale', 'درآمد (Scale)'], ['enterprise', 'سازمانی']]
+  const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
+  return (
+    <div style={{ animation: 'fade .35s ease' }}>
+      <Card style={{ marginBottom: 14, background: 'linear-gradient(120deg, rgba(212,175,55,.1), transparent 60%), var(--surface)', borderColor: 'rgba(201,168,76,.4)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 26 }}>💳</span>
+            <div><div style={{ fontWeight: 900, fontSize: 18 }}>درگاه‌های پرداخت</div><div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3 }}>روش‌های پرداخت را روشن/خاموش کن. «کارت‌به‌کارت» اطلاعاتِ کارت/حساب/شبا را به کاربر نشان می‌دهد و پس از واریز، سفارش را تأیید می‌کنی.</div></div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>{saved && <span style={{ fontSize: 12, color: '#5fd98a' }}>{saved}</span>}<GoldButton onClick={save}>ذخیره</GoldButton></div>
+        </div>
+      </Card>
+
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 800, marginBottom: 8 }}>حالتِ قیمت‌گذاری</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>استراتژیِ کلی: استارتاپ = تمرکز بر رشد و رایگان؛ Scale = تمرکز بر درآمد. (اعمالِ کاملِ محدودیت‌ها در فازِ بعدی)</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {MODES.map(([v, l]) => <button key={v} onClick={() => setCfg({ ...cfg, pricingMode: v })} style={{ padding: '9px 16px', borderRadius: 10, border: `1px solid ${cfg.pricingMode === v ? 'var(--gold)' : 'var(--line2)'}`, background: cfg.pricingMode === v ? 'var(--goldDim)' : 'transparent', color: cfg.pricingMode === v ? 'var(--gold)' : 'var(--muted)', fontSize: 13, fontWeight: cfg.pricingMode === v ? 700 : 400, cursor: 'pointer', fontFamily: 'inherit' }}>{l}</button>)}
+        </div>
+      </Card>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {(cfg.gateways || []).map((g: any, i: number) => (
+          <Card key={g.id || i} style={{ borderColor: g.enabled ? 'var(--gold)' : 'var(--line2)', opacity: g.enabled ? 1 : .7 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: g.type === 'card2card' ? 14 : 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 20 }}>{g.type === 'card2card' ? '🏧' : g.type === 'zarinpal' ? '🔷' : g.type === 'wallet' ? '👛' : '💠'}</span>
+                <input value={g.label} onChange={e => setGw(i, { label: e.target.value })} style={{ ...inp, width: 220, fontWeight: 700 }} />
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}><input type="checkbox" checked={g.enabled !== false} onChange={e => setGw(i, { enabled: e.target.checked })} /> {g.enabled !== false ? 'روشن' : 'خاموش'}</label>
+            </div>
+            {g.type === 'card2card' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }} className="mjsa-2col">
+                <div><label style={lab}>شمارهٔ کارت</label><input value={g.cardNumber || ''} onChange={e => setGw(i, { cardNumber: e.target.value })} dir="ltr" style={inp} placeholder="6037-XXXX-XXXX-XXXX" /></div>
+                <div><label style={lab}>شمارهٔ شبا (IBAN)</label><input value={g.iban || ''} onChange={e => setGw(i, { iban: e.target.value })} dir="ltr" style={inp} placeholder="IR..." /></div>
+                <div><label style={lab}>شمارهٔ حساب</label><input value={g.accountNumber || ''} onChange={e => setGw(i, { accountNumber: e.target.value })} dir="ltr" style={inp} /></div>
+                <div><label style={lab}>نامِ صاحبِ حساب</label><input value={g.holderName || ''} onChange={e => setGw(i, { holderName: e.target.value })} style={inp} /></div>
+                <div><label style={lab}>بانک</label><input value={g.bank || ''} onChange={e => setGw(i, { bank: e.target.value })} style={inp} /></div>
+                <div style={{ gridColumn: '1 / -1' }}><label style={lab}>توضیح به کاربر</label><input value={g.note || ''} onChange={e => setGw(i, { note: e.target.value })} style={inp} /></div>
+              </div>
+            )}
+            {g.type === 'zarinpal' && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>کلیدِ درگاه در «اتصال‌ها و سرویس‌ها» تنظیم می‌شود. (اتصالِ کاملِ پرداختِ آنلاین در فازِ بعدی)</div>}
+          </Card>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Promotions / featuring across the site ────────────────────────────────
 function SlotPromoter({ slot, promos, onChange }: { slot: any; promos: any[]; onChange: () => void }) {
   const [q, setQ] = useState('')
@@ -4652,6 +4715,7 @@ export default function SuperAdminPage() {
       case 'profiles':   return <ProfilesView />
       case 'roles':      return <RolesView />
       case 'plans':      return <PlansView />
+      case 'payment':    return <PaymentView />
       case 'tracker':    return <TrackerConfig />
       case 'sms':        return <SmsView />
       case 'promos':     return <PromotionsView />
