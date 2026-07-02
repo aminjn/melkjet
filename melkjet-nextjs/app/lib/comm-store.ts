@@ -16,7 +16,8 @@ export type OrderStatus = 'pending' | 'paid' | 'rejected'
 export type OrderKind = 'package' | 'plan'
 export interface CommOrder { id: string; owner: string; kind: OrderKind; name: string; price: number; status: OrderStatus; createdAt: number; paidAt?: number; packageId?: string; channel?: Channel; credits?: number; planId?: string; gateway?: string; receipt?: string; period?: string }
 
-interface DB { packages: CommPackage[]; credits: Record<string, Credit>; orders: CommOrder[]; usage?: Record<string, { token: number }>; pkgSeeded?: boolean }
+interface DB { packages: CommPackage[]; credits: Record<string, Credit>; orders: CommOrder[]; usage?: Record<string, { token: number }>; pkgSeeded?: boolean; seedV?: number }
+const PKG_SEED_V = 2
 
 function id(p = '') { return p + randomBytes(5).toString('hex') }
 // بسته‌های پیش‌فرض (اعتبارِ AI/پیامک/ایمیل) — یک‌بار seed می‌شوند؛ در همهٔ پروفایل‌ها دیده می‌شوند.
@@ -32,8 +33,13 @@ function seedPackages(): CommPackage[] {
 }
 function load(): DB {
   let db: DB = { packages: [], credits: {}, orders: [], usage: {} }
-  if (existsSync(DATA_FILE)) { try { const d = JSON.parse(readFileSync(DATA_FILE, 'utf-8')); db = { packages: d.packages || [], credits: d.credits || {}, orders: d.orders || [], usage: d.usage || {}, pkgSeeded: d.pkgSeeded } } catch {} }
-  if (!db.pkgSeeded) { if (!db.packages.length) db.packages = seedPackages(); db.pkgSeeded = true; save(db) }   // seedِ یک‌باره
+  if (existsSync(DATA_FILE)) { try { const d = JSON.parse(readFileSync(DATA_FILE, 'utf-8')); db = { packages: d.packages || [], credits: d.credits || {}, orders: d.orders || [], usage: d.usage || {}, pkgSeeded: d.pkgSeeded, seedV: d.seedV } } catch {} }
+  // برای هر کانالی که هیچ بسته‌ای ندارد، پیش‌فرض‌ها را اضافه کن (بدونِ دست‌زدن به بسته‌های موجود)
+  if ((db.seedV || 0) < PKG_SEED_V) {
+    const seeds = seedPackages()
+    for (const ch of ['token', 'sms', 'email'] as Channel[]) if (!db.packages.some(p => p.channel === ch)) db.packages.push(...seeds.filter(s => s.channel === ch))
+    db.seedV = PKG_SEED_V; db.pkgSeeded = true; save(db)
+  }
   return db
 }
 function save(db: DB) { writeFileSync(DATA_FILE, JSON.stringify(db, null, 2), 'utf-8') }
