@@ -88,7 +88,6 @@ export default function MaterialPrices() {
                       <div style={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
                       <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 2, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                         <span>{r.category}{r.brand ? ` · ${r.brand}` : ''}</span>
-                        <span style={{ color: 'var(--gold)', background: 'var(--goldDim)', borderRadius: 5, padding: '1px 6px' }}>{r.sourceLabel}</span>
                         {r.sellerCount > 0
                           ? <span style={{ color: '#5fd98a' }}>● {fa(r.sellerCount)} فروشنده</span>
                           : <span style={{ color: 'var(--faint)' }}>○ بدون فروشنده</span>}

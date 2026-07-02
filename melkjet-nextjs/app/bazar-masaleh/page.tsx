@@ -19,7 +19,6 @@ export default function BazarMasaleh() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('')
-  const [source, setSource] = useState('all')
   const [brand, setBrand] = useState('')
   const [sort, setSort] = useState('')
   const [withSeller, setWithSeller] = useState(false)
@@ -31,7 +30,6 @@ export default function BazarMasaleh() {
     const q = new URLSearchParams({ page: String(p), pageSize: '24' })
     if (search.trim()) q.set('search', search.trim())
     if (category) q.set('category', category)
-    if (source !== 'all') q.set('source', source)
     if (brand) q.set('brand', brand)
     if (sort) q.set('sort', sort)
     if (withSeller) q.set('withSeller', '1')
@@ -40,7 +38,7 @@ export default function BazarMasaleh() {
       if (d?.ok) { setTotal(d.total); setItems(prev => replace ? d.items : [...prev, ...d.items]); if (d.facets) setFacets(d.facets) }
       setLoading(false)
     }).catch(() => setLoading(false))
-  }, [search, category, source, brand, sort, withSeller])
+  }, [search, category, brand, sort, withSeller])
 
   useEffect(() => { setPage(1); const t = setTimeout(() => fetchPage(1, true), 250); return () => clearTimeout(t) }, [fetchPage])
 
@@ -81,7 +79,6 @@ export default function BazarMasaleh() {
         {/* filters */}
         <div className="mjb-tools" style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="جستجوی کالا…" style={{ flex: 1, minWidth: 180, height: 44, padding: '0 14px', borderRadius: 12, background: 'var(--surface)', border: '1px solid var(--line2)', color: 'var(--text)', fontSize: 13.5, outline: 'none', fontFamily: FONT }} />
-          <select value={source} onChange={e => setSource(e.target.value)} style={sel}><option value="all">همهٔ منابع</option>{facets && Object.keys(facets.sources).map(s => <option key={s} value={s}>{s === 'hypersaz' ? 'هایپرساز' : s === 'ahanonline' ? 'آهن‌آنلاین' : s === 'manual' ? 'دستی' : s} ({fa(facets.sources[s])})</option>)}</select>
           <select value={brand} onChange={e => setBrand(e.target.value)} style={sel}><option value="">همهٔ برندها</option>{facets?.brands.map(b => <option key={b.label} value={b.label}>{b.label} ({fa(b.count)})</option>)}</select>
           <select value={sort} onChange={e => setSort(e.target.value)} style={sel}><option value="">جدیدترین</option><option value="cheap">ارزان‌ترین</option><option value="expensive">گران‌ترین</option></select>
           <button onClick={() => setWithSeller(v => !v)} style={{ ...sel, cursor: 'pointer', border: `1px solid ${withSeller ? 'var(--gold)' : 'var(--line2)'}`, color: withSeller ? 'var(--gold)' : 'var(--muted)', background: withSeller ? 'var(--goldDim)' : 'var(--surface)', fontWeight: withSeller ? 700 : 400 }}>فقط دارای فروشنده</button>
@@ -102,9 +99,8 @@ export default function BazarMasaleh() {
             <div className="mjb-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 16 }}>
               {items.map(p => (
                 <Link key={p.id} href={`/mahsul/${p.id}`} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden', textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ height: 150, background: p.image ? `center/contain no-repeat url(${p.image}) var(--bg2)` : 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, position: 'relative' }}>
+                  <div style={{ height: 150, background: p.image ? `center/contain no-repeat url(${p.image}) var(--bg2)` : 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30 }}>
                     {!p.image && '🧱'}
-                    <span style={{ position: 'absolute', top: 8, insetInlineStart: 8, fontSize: 10, fontWeight: 700, color: 'var(--gold)', background: 'rgba(10,9,8,0.7)', borderRadius: 6, padding: '2px 7px' }}>{p.sourceLabel}</span>
                   </div>
                   <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 5, flex: 1 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.6, minHeight: 42 }}>{p.name}</div>

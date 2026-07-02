@@ -223,11 +223,14 @@ function priceTableProducts(html: string, url: string, base: string) {
     for (let i = 0; i < cells.length; i++) {
       const k = (headers[i] || '').trim(); const v = cells[i]
       if (/\d{3,4}\/\d{1,2}\/\d{1,2}/.test(v)) { dateCell = v; continue }
-      if (k && v && !/قیمت|نمودار|price|عملیات/i.test(k) && v.length < 40 && !/^\d[\d,]{4,}$/.test(v)) specs.push({ key: k, value: v })
+      if (k && v && !/قیمت|نمودار|price|عملیات|نوسان|تغییر/i.test(k) && v.length < 40 && !/^\d[\d,]{4,}$/.test(v)) specs.push({ key: k, value: v })
     }
-    const distinct = specs.filter(s => /سایز|ابعاد|ضخامت|طول|قطر|شاخه|حالت|گرید|استاندارد|برند|نوع|وزن|حالت/.test(s.key)).slice(0, 3).map(s => s.value)
-    const name = [category, ...distinct].join(' ').replace(/\s+/g, ' ').trim()
-    if (!name || name === category && !distinct.length) continue
+    // نامِ خوانا: دسته + سایز + «ضخامت X» + طول/حالت
+    const specVal = (re: RegExp) => specs.find(s => re.test(s.key))?.value || ''
+    const size = specVal(/سایز|ابعاد|قطر/), thick = specVal(/ضخامت/), len = specVal(/طول|حالت|شاخه/), grade = specVal(/گرید|استاندارد|نوع/)
+    const nameParts = [category, size, thick ? `ضخامت ${thick}` : '', len, grade].filter(Boolean)
+    const name = (nameParts.length > 1 ? nameParts.join(' ') : [category, ...specs.slice(0, 3).map(s => s.value)].join(' ')).replace(/\s+/g, ' ').trim()
+    if (!name || (name === category && !size && !thick)) continue
     items.push({
       name, categoryPath: catPath.length ? catPath : undefined, categoryName: category,
       image, specs: specs.length ? specs : undefined,
@@ -324,18 +327,20 @@ async function collectSitemapUrls(base: string, cap: number): Promise<{ urls: st
   const topXml = topLocs.filter(isXml)
   let productSpecific = false
   if (topXml.length) {
-    // زیرنقشه‌های «محصول» را ترجیح بده؛ سپس به‌صورتِ بازگشتی داخلِ نقشه‌های تودرتو برو.
-    let seeds = topXml.filter(l => /\/products?\/|product|kala|mahsul|shop|ahan|price|nerkh|qeymat/i.test(l) && !/product-types|categories|category|posts|pages|misc|tag|author/i.test(l))
-    if (seeds.length) productSpecific = true
-    else seeds = topXml.filter(l => !/(misc|posts?|pages?|categor|tag|author|user|blog)/i.test(l))
+    // زیرنقشه‌های «محصول» و «دستهٔ محصول» را بگیر (صفحاتِ دسته مثلِ آهن‌آنلاین جدولِ قیمت دارند).
+    // پست/برگه/برچسب/misc را کنار بگذار.
+    let seeds = topXml.filter(l => !/(misc|posts?|\/pages?\/|tag|author|user|blog|comment)/i.test(l))
     if (!seeds.length) seeds = topXml
+    // صفحاتِ «دسته/product-category» اول (چون جدولِ قیمتِ کامل دارند) تا در سقفِ تعداد اول بیایند.
+    seeds = seeds.sort((a, b) => (/categor/i.test(b) ? 1 : 0) - (/categor/i.test(a) ? 1 : 0))
+    productSpecific = true
     const queue = [...seeds]; const visited = new Set<string>()
     while (queue.length && urls.size < cap) {
       const sm = queue.shift()!; if (visited.has(sm)) continue; visited.add(sm)
       const r = await fetchText(sm, 15000); if (!r.ok) continue
       for (const loc of locsOf(r.text)) {
         if (isXml(loc)) { if (!visited.has(loc)) queue.push(loc) }        // نقشهٔ تودرتو → ادامه بده
-        else { urls.add(loc); if (urls.size >= cap) break }               // لینکِ صفحهٔ محصول
+        else { urls.add(loc); if (urls.size >= cap) break }               // لینکِ صفحه
       }
     }
   } else {
@@ -343,7 +348,7 @@ async function collectSitemapUrls(base: string, cap: number): Promise<{ urls: st
     productSpecific = /product|kala|mahsul|shop|ahan/i.test(text)
   }
   const all = [...urls]
-  const prod = all.filter(u => /\/product\/|\/products\/|\/kala\/|\/shop\/|mahsul|\/p\//i.test(u))
+  const prod = all.filter(u => /\/product\/|\/products\/|\/product-category\/|\/category\/|\/kala\/|\/shop\/|mahsul|\/p\//i.test(u))
   if (prod.length) return { urls: prod.slice(0, cap), productSpecific: true }
   return { urls: all.slice(0, cap), productSpecific }
 }
