@@ -36,6 +36,11 @@ function load(): DB {
         for (const p of ['listings', 'analytics']) if (!buyerRole.permissions.includes(p)) { buyerRole.permissions.push(p); migrated = true }
         if (buyerRole.dashboard !== '/buyer') { buyerRole.dashboard = '/buyer'; migrated = true }
       }
+      // اطمینان از وجودِ نقشِ «مالک» (/owner) — تا پلن‌های مالک «عمومی» نمانند
+      if (!db.roles.some(r => r.dashboard === '/owner' || r.name === 'مالک')) {
+        db.roles.push({ id: id(), name: 'مالک', dashboard: '/owner', permissions: ['listings', 'crm', 'analytics'], builtin: true, active: true, createdAt: Date.now() })
+        migrated = true
+      }
       if (migrated) save(db)
       return db
     } catch {}
@@ -65,6 +70,7 @@ function defaults(): Role[] {
     ({ id: id(), name, dashboard, permissions, builtin: true, active: true, createdAt: t })
   return [
     mk('کاربر عادی', '/buyer', ['listings', 'content', 'analytics']),
+    mk('مالک', '/owner', ['listings', 'crm', 'analytics']),
     mk('مشاور املاک', '/pros', ['listings', 'crm', 'content', 'website']),
     mk('آژانس املاک', '/agency', ['listings', 'crm', 'marketing', 'website', 'content', 'analytics']),
     mk('سازنده / انبوه‌ساز', '/builder', ['units', 'investors', 'crm', 'marketing', 'website', 'analytics']),

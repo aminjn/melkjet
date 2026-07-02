@@ -4148,6 +4148,7 @@ function PlansView() {
   const [accounts, setAccounts] = useState<any[]>([])
   const [creating, setCreating] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [roleFilter, setRoleFilter] = useState('')
   const load = () => fetch('/api/admin/plans').then(r => r.ok ? r.json() : { plans: [] }).then(d => setPlans(d.plans || []))
   useEffect(() => {
     load()
@@ -4175,17 +4176,28 @@ function PlansView() {
             <span style={{ fontSize: 26 }}>👑</span>
             <div><div style={{ fontWeight: 900, fontSize: 18 }}>پلن‌ها و اشتراک</div><div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3 }}>پلن بساز و به نقش نسبت بده؛ با انتخابِ نقش، ماژول‌های همان نقش می‌آید تا انتخاب کنی. وقتی کاربری بخرد، پلن به حسابش وصل می‌شود و در «مشترکین» شمرده می‌شود.</div></div>
           </div>
-          <GoldButton onClick={() => { setCreating(c => !c); setEditingId(null) }}>{creating ? 'بستن' : '＋ پلن جدید'}</GoldButton>
+          <GoldButton onClick={() => { setEditingId(null); setCreating(true) }}>＋ پلن جدید</GoldButton>
         </div>
-        {creating && <div style={{ marginTop: 14 }}><PlanForm initial={{}} roles={roles} perms={perms} onSave={create} onClose={() => setCreating(false)} /></div>}
       </Card>
 
-      {editingId && (() => { const p = plans.find(x => x.id === editingId); return p ? <PlanForm key={editingId} initial={editInitial(p)} roles={roles} perms={perms} onSave={pl => patch(editingId, pl)} onClose={() => setEditingId(null)} /> : null })()}
+      {/* فیلترِ نقش — برای مدیریتِ آسان */}
+      {(() => {
+        const order = ['کاربر عادی', 'مالک', 'مشاور املاک', 'آژانس املاک', 'سازنده', 'مصالح‌فروش', 'حقوقی', 'عمومی']
+        const counts = new Map<string, number>()
+        for (const p of plans) { const g = groupLabel(p); counts.set(g, (counts.get(g) || 0) + 1) }
+        const present = order.filter(o => counts.has(o))
+        return (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+            <button onClick={() => setRoleFilter('')} style={tabBtn(roleFilter === '')}>همه ({fa(plans.length)})</button>
+            {present.map(g => <button key={g} onClick={() => setRoleFilter(g)} style={tabBtn(roleFilter === g)}>{g} ({fa(counts.get(g) || 0)})</button>)}
+          </div>
+        )
+      })()}
 
       {(() => {
         const order = ['کاربر عادی', 'مالک', 'مشاور املاک', 'آژانس املاک', 'سازنده', 'مصالح‌فروش', 'حقوقی', 'عمومی']
         const groups = new Map<string, any[]>()
-        for (const p of plans) { const g = groupLabel(p); if (!groups.has(g)) groups.set(g, []); groups.get(g)!.push(p) }
+        for (const p of plans) { const g = groupLabel(p); if (roleFilter && g !== roleFilter) continue; if (!groups.has(g)) groups.set(g, []); groups.get(g)!.push(p) }
         const keys = [...groups.keys()].sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99))
         return keys.map(gk => (
           <div key={gk} style={{ marginBottom: 20 }}>
@@ -4217,9 +4229,27 @@ function PlansView() {
         ))
       })()}
       {plans.length === 0 && <Card><div style={{ color: 'var(--muted)', fontSize: 13 }}>پلنی نیست.</div></Card>}
+
+      {/* مودالِ ساخت/ویرایش (به‌جای فرمِ درون‌خطی — سبک‌تر و بدونِ هنگ) */}
+      {(creating || editingId) && (() => {
+        const p = editingId ? plans.find(x => x.id === editingId) : null
+        if (editingId && !p) return null
+        return (
+          <div onClick={() => { setCreating(false); setEditingId(null) }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.72)', zIndex: 300, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto' }}>
+            <div onClick={e => e.stopPropagation()} style={{ maxWidth: 720, width: '100%', margin: '24px 0' }}>
+              <div style={{ fontSize: 15, fontWeight: 900, color: 'var(--gold)', marginBottom: 8 }}>{editingId ? `ویرایشِ «${p!.name}»` : 'پلنِ جدید'}</div>
+              <PlanForm key={editingId || 'new'} initial={editingId ? editInitial(p) : {}} roles={roles} perms={perms} onSave={pl => editingId ? patch(editingId, pl) : create(pl)} onClose={() => { setCreating(false); setEditingId(null) }} />
+            </div>
+          </div>
+        )
+      })()}
+
       <CommPackagesConfig />
     </div>
   )
+}
+function tabBtn(active: boolean): React.CSSProperties {
+  return { padding: '7px 14px', borderRadius: 999, border: `1px solid ${active ? 'var(--gold)' : 'var(--line2)'}`, background: active ? 'var(--goldDim)' : 'transparent', color: active ? 'var(--gold)' : 'var(--muted)', fontSize: 12.5, fontWeight: active ? 700 : 400, cursor: 'pointer', fontFamily: 'inherit' }
 }
 
 // ─── درگاه‌های پرداخت + حالتِ قیمت‌گذاری ─────────────────────────────────────
