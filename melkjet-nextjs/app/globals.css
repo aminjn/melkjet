@@ -252,3 +252,7 @@ body { padding-bottom: env(safe-area-inset-bottom); }
 @media(max-width:560px){.mjwb-tplgrid{grid-template-columns:1fr!important}}
 
 @media(max-width:680px){.mjpf-grid{grid-template-columns:1fr!important}}
+
+/* بازار/فروشگاه‌های مصالح — کارت‌ها و ردیف‌ها */
+.mjd-card:hover{transform:translateY(-4px);box-shadow:0 14px 30px -14px rgba(0,0,0,0.7);border-color:var(--line2)!important}
+.mjn-r:not(:first-child):hover{background:var(--bg2)}

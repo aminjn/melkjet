@@ -69,20 +69,29 @@ export default function MaterialsDirectory() {
         ) : (
           <div className="mjd-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 16 }}>
             {shops.map(s => (
-              <Link key={s.slug} href={`/forushgah/${s.slug}`} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden', textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column' }}>
-                <div style={{ height: 84, background: s.cover ? `center/cover no-repeat url(${s.cover})` : 'linear-gradient(120deg,#1f2937,#0f2340)', position: 'relative' }}>
-                  {s.rating > 0 && <span style={{ position: 'absolute', top: 10, insetInlineStart: 10, fontSize: 11.5, fontWeight: 700, color: 'var(--gold)', background: 'rgba(10,9,8,0.75)', borderRadius: 8, padding: '3px 9px' }}>{fa(s.rating)} ★</span>}
+              <Link key={s.slug} href={`/forushgah/${s.slug}`} className="mjd-card" style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, overflow: 'hidden', textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column', transition: 'transform .15s, box-shadow .15s' }}>
+                {/* cover */}
+                <div style={{ height: 92, background: s.cover ? `center/cover no-repeat url(${s.cover})` : 'linear-gradient(120deg,#242b38,#12151c)', position: 'relative' }}>
+                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, var(--surface), transparent 70%)' }} />
+                  {s.rating > 0 && <span style={{ position: 'absolute', top: 12, insetInlineEnd: 12, fontSize: 11.5, fontWeight: 800, color: 'var(--gold)', background: 'rgba(10,9,8,0.8)', borderRadius: 999, padding: '4px 10px' }}>★ {fa(s.rating)}</span>}
                 </div>
-                <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
-                  <div style={{ width: 56, height: 56, borderRadius: 14, marginTop: -28, background: s.logo ? `center/cover no-repeat url(${s.logo})` : 'linear-gradient(135deg,var(--gold2),var(--gold))', border: '3px solid var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 800, color: '#16140f', flexShrink: 0, boxShadow: '0 4px 12px -4px rgba(0,0,0,0.5)' }}>{!s.logo && (s.name.charAt(0) || 'ف')}</div>
-                  <div style={{ fontSize: 15.5, fontWeight: 800, marginTop: 4, lineHeight: 1.5 }}>{s.name}</div>
-                  {s.tagline && <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.tagline}</div>}
+                {/* logo + name row */}
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, padding: '0 16px', marginTop: -34, position: 'relative' }}>
+                  <div style={{ width: 64, height: 64, borderRadius: 16, background: s.logo ? `center/cover no-repeat url(${s.logo})` : 'linear-gradient(135deg,var(--gold2),var(--gold))', border: '3px solid var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 800, color: '#16140f', flexShrink: 0, boxShadow: '0 6px 16px -6px rgba(0,0,0,0.6)' }}>{!s.logo && (s.name.charAt(0) || 'ف')}</div>
+                  <div style={{ minWidth: 0, flex: 1, paddingBottom: 4 }}>
+                    <div style={{ fontSize: 16, fontWeight: 800, lineHeight: 1.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name}</div>
+                    {s.city && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 3 }}>📍 {s.city}</div>}
+                  </div>
+                </div>
+                {/* body */}
+                <div style={{ padding: '12px 16px 16px', display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+                  {s.tagline && <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.9, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.tagline}</div>}
                   {s.categories.length > 0 && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    {s.categories.slice(0, 3).map(c => <span key={c} style={{ fontSize: 11, color: 'var(--muted)', background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 7, padding: '3px 9px' }}>{c}</span>)}
+                    {s.categories.slice(0, 3).map(c => <span key={c} style={{ fontSize: 11, color: 'var(--muted)', background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 999, padding: '4px 11px' }}>{c}</span>)}
                   </div>}
-                  <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: 'var(--faint)', paddingTop: 10, borderTop: '1px solid var(--line)' }}>
-                    <span>📦 {fa(s.productCount)} کالا{s.city ? ` · ${s.city}` : ''}</span>
-                    {s.minPrice > 0 && <span style={{ color: 'var(--gold)', fontWeight: 700 }}>از {mt(s.minPrice)} ت</span>}
+                  <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: 'var(--faint)', paddingTop: 12, borderTop: '1px solid var(--line)' }}>
+                    <span>📦 {fa(s.productCount)} کالا</span>
+                    {s.minPrice > 0 && <span style={{ color: 'var(--gold)', fontWeight: 800 }}>از {mt(s.minPrice)} تومان</span>}
                   </div>
                 </div>
               </Link>

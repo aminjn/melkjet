@@ -201,41 +201,55 @@ function extractProduct(html: string, url: string, base: string) {
 // ── جدولِ قیمت (مثلِ آهن‌آنلاین): هر ردیف = یک محصول با data-price (ریال) ──
 function normName(s: string): string { return (s || '').replace(/‌/g, '').replace(/\s+/g, ' ').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim() }
 function priceTableProducts(html: string, url: string, base: string) {
-  // جدولی که ردیف‌هایش data-price دارند را پیدا کن.
-  let table = ''
-  for (const t of html.match(/<table[\s\S]*?<\/table>/gi) || []) { if (/data-price|table_price|product-price/i.test(t)) { table = t; break } }
-  if (!table) return []
-  const headHtml = table.match(/<thead[\s\S]*?<\/thead>/i)?.[0] || table.match(/<tr[\s\S]*?<\/tr>/i)?.[0] || ''
-  const headers = [...headHtml.matchAll(/<th[^>]*>([\s\S]*?)<\/th>/gi)].map(m => stripHtml(m[1]))
   const catPath = categoryPathFromLd(html)
   const category = catPath[catPath.length - 1] || stripHtml(ogMeta(html, 'og:title')).replace(/^قیمت\s+/, '').split(/[|(]/)[0].trim() || 'آهن‌آلات'
   const image = firstImg(html, base) || undefined
-  const bodyHtml = table.match(/<tbody[\s\S]*?<\/tbody>/i)?.[0] || table
   const items: any[] = []
-  for (const row of bodyHtml.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)) {
-    const rowHtml = row[1]
-    const priceAttr = rowHtml.match(/data-price=["'](\d+)["']/)
-    const price = priceAttr ? Number(priceAttr[1]) : 0   // ریال
-    if (!price) continue
-    const cells = [...rowHtml.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(m => stripHtml(m[1]))
-    const specs: CatalogSpec[] = []
-    let dateCell = ''
-    for (let i = 0; i < cells.length; i++) {
-      const k = (headers[i] || '').trim(); const v = cells[i]
-      if (/\d{3,4}\/\d{1,2}\/\d{1,2}/.test(v)) { dateCell = v; continue }
-      if (k && v && !/قیمت|نمودار|price|عملیات|نوسان|تغییر/i.test(k) && v.length < 40 && !/^\d[\d,]{4,}$/.test(v)) specs.push({ key: k, value: v })
+  // هر صفحه ممکن است چند جدولِ کارخانه داشته باشد (پروفیل تهران، پروفیل اصفهان…). همه را بگیر.
+  const tableRe = /<table[\s\S]*?<\/table>/gi
+  let tm: RegExpExecArray | null
+  while ((tm = tableRe.exec(html))) {
+    const table = tm[0]
+    if (!/data-price|table_price|product-price/i.test(table)) continue
+    // نامِ کارخانه: نزدیک‌ترین عنوان قبل از جدول (مثلِ «پروفیل تهران»). دسته را از آن حذف کن.
+    const before = html.slice(Math.max(0, tm.index - 700), tm.index)
+    const heads = [...before.matchAll(/<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>|class=["'][^"']*(?:title|heading|table[_-]?title|tab[_-]?title)[^"']*["'][^>]*>([\s\S]*?)</gi)]
+    let factory = ''
+    if (heads.length) {
+      let h = stripHtml(heads[heads.length - 1][1] || heads[heads.length - 1][2] || '').split('|')[0]
+      factory = h.replace(new RegExp(`قیمت|آهن\\s*آنلاین|قوطی|${category}`, 'g'), '').replace(/\s+/g, ' ').trim()
+      if (factory.length > 24 || /\d{3,}/.test(factory)) factory = ''
     }
-    // نامِ خوانا: دسته + سایز + «ضخامت X» + طول/حالت
-    const specVal = (re: RegExp) => specs.find(s => re.test(s.key))?.value || ''
-    const size = specVal(/سایز|ابعاد|قطر/), thick = specVal(/ضخامت/), len = specVal(/طول|حالت|شاخه/), grade = specVal(/گرید|استاندارد|نوع/)
-    const nameParts = [category, size, thick ? `ضخامت ${thick}` : '', len, grade].filter(Boolean)
-    const name = (nameParts.length > 1 ? nameParts.join(' ') : [category, ...specs.slice(0, 3).map(s => s.value)].join(' ')).replace(/\s+/g, ' ').trim()
-    if (!name || (name === category && !size && !thick)) continue
-    items.push({
-      name, categoryPath: catPath.length ? catPath : undefined, categoryName: category,
-      image, specs: specs.length ? specs : undefined,
-      priceHistory: [{ date: dateCell || '', price }], externalId: `ahan-${normName(name).replace(/\s+/g, '-').slice(0, 60)}`, externalUrl: url,
-    })
+    const headHtml = table.match(/<thead[\s\S]*?<\/thead>/i)?.[0] || table.match(/<tr[\s\S]*?<\/tr>/i)?.[0] || ''
+    const headers = [...headHtml.matchAll(/<th[^>]*>([\s\S]*?)<\/th>/gi)].map(m => stripHtml(m[1]))
+    const bodyHtml = table.match(/<tbody[\s\S]*?<\/tbody>/i)?.[0] || table
+    for (const row of bodyHtml.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)) {
+      const rowHtml = row[1]
+      const priceAttr = rowHtml.match(/data-price=["'](\d+)["']/)
+      const price = priceAttr ? Number(priceAttr[1]) : 0   // ریال
+      if (!price) continue
+      const cells = [...rowHtml.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(m => stripHtml(m[1]))
+      const specs: CatalogSpec[] = []
+      let dateCell = ''
+      for (let i = 0; i < cells.length; i++) {
+        const k = (headers[i] || '').trim(); const v = cells[i]
+        if (/\d{3,4}\/\d{1,2}\/\d{1,2}/.test(v)) { dateCell = v; continue }
+        if (k && v && !/قیمت|نمودار|price|عملیات|نوسان|تغییر/i.test(k) && v.length < 40 && !/^\d[\d,]{4,}$/.test(v)) specs.push({ key: k, value: v })
+      }
+      if (factory) specs.push({ key: 'کارخانه', value: factory })
+      const specVal = (re: RegExp) => specs.find(s => re.test(s.key))?.value || ''
+      const size = specVal(/سایز|ابعاد|قطر/), thick = specVal(/ضخامت/), len = specVal(/طول|حالت|شاخه/), grade = specVal(/گرید|استاندارد|^نوع/)
+      // نام = دسته + سایز + ضخامت + طول + کارخانه (کارخانه نام را یکتا می‌کند)
+      const nameParts = [category, size, thick ? `ضخامت ${thick}` : '', len, grade, factory].filter(Boolean)
+      const name = (nameParts.length > 1 ? nameParts.join(' ') : [category, ...specs.slice(0, 3).map(s => s.value)].join(' ')).replace(/\s+/g, ' ').trim()
+      if (!name || (name === category && !size && !thick)) continue
+      items.push({
+        name, categoryPath: catPath.length ? catPath : undefined, categoryName: category,
+        image, specs: specs.length ? specs : undefined, brand: factory || undefined,
+        priceHistory: [{ date: dateCell || '', price }],
+        externalId: `ahan-${normName(name).replace(/\s+/g, '-').slice(0, 70)}`, externalUrl: url,
+      })
+    }
   }
   return items
 }
