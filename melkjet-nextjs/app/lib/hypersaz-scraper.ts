@@ -196,7 +196,8 @@ function extractProduct(html: string, url: string, base: string) {
   // فقط صفحه‌ای که واقعاً محصول است (Schema محصول، مشخصات، قیمت یا دکمهٔ خرید) — نه مقاله/صفحهٔ عمومی
   const hasCommerce = !!ld || specs.length > 0 || priceHistory.length > 0 || /data-price|افزودن\s*به\s*سبد|add[-_]?to[-_]?cart|ريال|تومان/i.test(html)
   if (!hasCommerce) return null
-  const brand = specs.find(s => /تولید\s*کننده|^برند|مبدا\s*برند|سازنده/.test(s.key))?.value || (ld?.brand ? String(ld.brand.name || ld.brand) : undefined)
+  // برند = «برند/تولیدکننده/سازنده» ولی نه «مبدا برند/کشور» (که کشورِ مبدأ است، نه برند)
+  const brand = specs.find(s => /برند|تولید\s*کننده|سازنده|نام\s*تجاری/.test(s.key) && !/مبدا|کشور/.test(s.key))?.value || (ld?.brand ? String(ld.brand.name || ld.brand) : undefined)
   const other = specs.find(s => /سایر\s*توضیحات|توضیحات/.test(s.key))?.value
   const og = ogMeta(html, 'og:description')
   const description = other || (og && !/خرید آنلاین انواع/.test(og) ? og : '')

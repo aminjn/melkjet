@@ -47,6 +47,18 @@ export function guessCategory(name: string): string {
   for (const [re, cat] of CAT_GUESS) if (re.test(n)) return cat
   return ''
 }
+// «برند»هایی که در واقع کشورِ مبدأ هستند (مبدا برندِ هایپرساز) نه برند — باید حذف شوند.
+const COUNTRIES = new Set(['ایران', 'آلمان', 'چین', 'بلژیک', 'ایتالیا', 'تایوان', 'ترکیه', 'کرهجنوبی', 'کره', 'ژاپن', 'فرانسه', 'اسپانیا', 'هند', 'امارات', 'روسیه', 'اوکراین', 'انگلیس', 'اتریش', 'سوئد', 'سوئیس', 'لهستان', 'ویتنام', 'مالزی', 'ایرانایتالیا', 'ایرانآلمان', 'ایرانچین'])
+export function sanitizeBrand(b?: string): string | undefined {
+  if (!b) return undefined
+  const n = norm(b)
+  if (!n) return undefined
+  // اگر همهٔ اجزای برند کشور باشند (مثلِ «ایران» یا «ایران-ایتالیا») برند نیست
+  const parts = n.split(/[-,،\/]+/).map(s => s.replace(/\s+/g, '')).filter(Boolean)
+  if (parts.length && parts.every(p => COUNTRIES.has(p))) return undefined
+  if (COUNTRIES.has(n.replace(/\s+/g, ''))) return undefined
+  return b
+}
 // نام‌هایی که در واقع مقاله/صفحهٔ محتوایی‌اند نه محصول
 export function looksLikeArticle(name: string): boolean {
   const n = norm(name)
@@ -337,6 +349,8 @@ export function pruneSourceCategories(): number {
   if (uncat) {
     for (const p of db.products) if (p.categoryId === uncat.id) { const g = guessCategory(p.name); if (g) { p.categoryId = ensureCategoryInDb(db, g).id; removed++ } }
   }
+  // برندهایی که در واقع کشورِ مبدأ‌اند (ایران/آلمان/…) پاک شوند تا در فیلترِ برند نیایند
+  for (const p of db.products) if (p.brand) { const clean = sanitizeBrand(p.brand); if (clean !== p.brand) { p.brand = clean; removed++ } }
   if (removed) save(db)
   return removed
 }
@@ -357,7 +371,7 @@ export function upsertScraped(items: { name: string; categoryName?: string; cate
     if (!existing) existing = db.products.find(p => p.source === source && norm(p.name) === norm(it.name))
     if (existing) {
       existing.categoryId = cat.id; existing.name = it.name.slice(0, 160)
-      if (it.brand) existing.brand = it.brand.slice(0, 80)
+      { const b = sanitizeBrand(it.brand); if (b) existing.brand = b.slice(0, 80) }
       if (it.unit) existing.unit = it.unit.slice(0, 24)
       if (it.image) existing.image = it.image.slice(0, 100000)
       if (it.description) existing.description = it.description.slice(0, 4000)
@@ -382,7 +396,7 @@ export function upsertScraped(items: { name: string; categoryName?: string; cate
       updated++
     } else {
       db.products.unshift({
-        id: id('cp_'), categoryId: cat.id, name: it.name.slice(0, 160), brand: it.brand?.slice(0, 80),
+        id: id('cp_'), categoryId: cat.id, name: it.name.slice(0, 160), brand: sanitizeBrand(it.brand)?.slice(0, 80),
         unit: it.unit?.slice(0, 24), image: it.image?.slice(0, 100000) || cat.image, description: it.description?.slice(0, 4000),
         specs: sanitizeSpecs(it.specs?.slice(0, 40)), priceHistory: it.priceHistory?.slice(0, 40),
         source, externalId: ext || undefined, externalUrl: it.externalUrl,
@@ -457,16 +471,22 @@ export function publicCatalogFacets() {
   // شمارشِ هر دسته شاملِ زیردسته‌ها (سلسله‌مراتبی)
   const catCount = new Map<string, number>()
   for (const p of active) { const ids = new Set<string>(); let c = db.categories.find(x => x.id === p.categoryId); let g = 0; while (c && g++ < 6) { ids.add(c.id); c = c.parentId ? db.categories.find(x => x.id === c!.parentId) : undefined }; for (const id of ids) catCount.set(id, (catCount.get(id) || 0) + 1) }
+  // درختِ نمایشی: دسته‌های «نامِ سایت» (آهن آنلاین) شفاف‌اند → بچه‌هایشان بالا می‌آیند؛
+  // دسته‌های «محتوایی» (مجله) و زیرشاخه‌شان کلاً حذف می‌شوند. (مستقل از پاک‌سازیِ فایل)
+  const catById = new Map(db.categories.map(c => [c.id, c]))
+  const isSite = (c: CatalogCategory) => JUNK_SITE.test(norm(c.name))
+  const isContent = (c: CatalogCategory) => JUNK_CONTENT.test(norm(c.name))
+  const underContent = (c: CatalogCategory) => { let x: CatalogCategory | undefined = c, g = 0; while (x && g++ < 8) { if (isContent(x)) return true; x = x.parentId ? catById.get(x.parentId) : undefined } return false }
+  const effParent = (c: CatalogCategory) => { let p = c.parentId ? catById.get(c.parentId) : undefined, g = 0; while (p && isSite(p) && g++ < 8) p = p.parentId ? catById.get(p.parentId) : undefined; return p }
   const mk = (c: CatalogCategory) => ({ id: c.id, name: c.name, count: catCount.get(c.id) || 0 })
-  const childrenTree = (pid: string): any[] => db.categories.filter(c => c.parentId === pid && (catCount.get(c.id) || 0) > 0)
-    .sort((a, b) => (catCount.get(b.id) || 0) - (catCount.get(a.id) || 0))
-    .map(c => ({ ...mk(c), children: childrenTree(c.id) }))
-  const tree = db.categories.filter(c => !c.parentId && (catCount.get(c.id) || 0) > 0 && !isJunkCategory(c.name))
-    .sort((a, b) => (catCount.get(b.id) || 0) - (catCount.get(a.id) || 0))
-    .map(c => ({ ...mk(c), children: childrenTree(c.id) }))
-  const roots = tree.map(({ children, ...r }) => r)   // سازگاریِ عقب‌رو (چیپ‌های تخت)
+  const visible = db.categories.filter(c => (catCount.get(c.id) || 0) > 0 && !isSite(c) && !isContent(c) && !underContent(c))
+  const byEff = new Map<string, CatalogCategory[]>()
+  for (const c of visible) { const ep = effParent(c); const key = ep ? ep.id : ''; if (!byEff.has(key)) byEff.set(key, []); byEff.get(key)!.push(c) }
+  const buildNode = (c: CatalogCategory): any => ({ ...mk(c), children: (byEff.get(c.id) || []).sort((a, b) => (catCount.get(b.id) || 0) - (catCount.get(a.id) || 0)).map(buildNode) })
+  const tree = (byEff.get('') || []).sort((a, b) => (catCount.get(b.id) || 0) - (catCount.get(a.id) || 0)).map(buildNode)
+  const roots = tree.map(({ children, ...r }: any) => r)   // سازگاریِ عقب‌رو (چیپ‌های تخت)
   const brandCount = new Map<string, number>()
-  for (const p of active) if (p.brand) brandCount.set(p.brand, (brandCount.get(p.brand) || 0) + 1)
+  for (const p of active) { const b = sanitizeBrand(p.brand); if (b) brandCount.set(b, (brandCount.get(b) || 0) + 1) }
   const brands = [...brandCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 40).map(([label, count]) => ({ label, count }))
   const unitCount = new Map<string, number>()
   for (const p of active) if (p.unit) unitCount.set(p.unit, (unitCount.get(p.unit) || 0) + 1)
