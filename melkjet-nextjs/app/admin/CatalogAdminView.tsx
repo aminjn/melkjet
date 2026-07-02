@@ -12,8 +12,9 @@ const ghost: React.CSSProperties = { padding: '9px 16px', borderRadius: 10, bord
 
 interface Spec { key: string; value: string }
 interface Cat { id: string; name: string; parentId?: string; order: number; active: boolean }
-interface Prod { id: string; categoryId: string; name: string; brand?: string; unit?: string; image?: string; description?: string; specs?: Spec[]; tags?: string[]; source: 'manual' | 'hypersaz'; externalUrl?: string; active: boolean }
-interface Stats { categories: number; products: number; hypersaz: number; manual: number }
+interface Prod { id: string; categoryId: string; name: string; brand?: string; unit?: string; image?: string; description?: string; specs?: Spec[]; tags?: string[]; source: string; externalUrl?: string; active: boolean }
+const SRC_LABEL: Record<string, string> = { manual: 'دستی', hypersaz: 'هایپرساز', ahanonline: 'آهن‌آنلاین' }
+interface Stats { categories: number; products: number; manual: number; bySource: Record<string, number> }
 
 export default function CatalogAdminView() {
   const [cats, setCats] = useState<Cat[]>([])
@@ -61,7 +62,7 @@ export default function CatalogAdminView() {
         <div>
           <h2 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>کاتالوگِ مرجعِ مصالح</h2>
           <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 6 }}>
-            {stats && `${fa(stats.categories)} دسته · ${fa(stats.products)} کالا (${fa(stats.hypersaz)} اسکرپ‌شده، ${fa(stats.manual)} دستی)`}
+            {stats && `${fa(stats.categories)} دسته · ${fa(stats.products)} کالا (${fa(stats.products - stats.manual)} اسکرپ‌شده، ${fa(stats.manual)} دستی)`}
             {' — '}مصالح‌فروش‌ها فقط از این لیست انتخاب می‌کنند.
           </div>
         </div>
@@ -109,7 +110,7 @@ export default function CatalogAdminView() {
                     <div style={{ minWidth: 0 }}><div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</div>{p.brand && <div style={{ fontSize: 11, color: 'var(--muted)' }}>{p.brand}</div>}</div>
                   </div>
                   <div style={{ color: 'var(--muted)', fontSize: 12 }}>{cats.find(c => c.id === p.categoryId)?.name || '—'}</div>
-                  <div><span style={{ fontSize: 10.5, fontWeight: 700, color: p.source === 'hypersaz' ? '#5fd98a' : 'var(--gold)', background: 'var(--bg2)', borderRadius: 6, padding: '2px 7px' }}>{p.source === 'hypersaz' ? 'اسکرپ' : 'دستی'}</span></div>
+                  <div><span style={{ fontSize: 10.5, fontWeight: 700, color: p.source !== 'manual' ? '#5fd98a' : 'var(--gold)', background: 'var(--bg2)', borderRadius: 6, padding: '2px 7px' }}>{SRC_LABEL[p.source] || p.source}</span></div>
                   <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                     <a href={`/mahsul/${p.id}`} target="_blank" rel="noreferrer" title="صفحهٔ عمومیِ محصول" style={{ ...rowBtn, textDecoration: 'none', color: 'var(--gold)' }}>↗</a>
                     <button onClick={() => setEditing(p)} style={rowBtn}>ویرایش</button>
@@ -276,7 +277,9 @@ function ProductEditor({ product, cats, defaultCat, post, busy, onClose }: { pro
 // ── پنلِ اسکرپ + تنظیمات + تستِ اتصال ──
 interface Probe { name: string; url: string; ok: boolean; status: number; note: string }
 function ScrapePanel({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-  const [cfg, setCfg] = useState<any>({ baseUrl: 'https://www.hypersaz.com', strategy: 'auto', maxProducts: 3000, schedule: 'off', scheduleHour: 3 })
+  const [source, setSource] = useState('hypersaz')
+  const [sources, setSources] = useState<{ id: string; label: string }[]>([{ id: 'hypersaz', label: 'هایپرساز' }, { id: 'ahanonline', label: 'آهن‌آنلاین' }])
+  const [cfg, setCfg] = useState<any>({ baseUrl: '', strategy: 'auto', maxProducts: 3000, schedule: 'off', scheduleHour: 3 })
   const [job, setJob] = useState<any>(null)
   const [report, setReport] = useState<{ platform: string; probes: Probe[]; recommend: string; smUrl?: string; sitemapType?: string; sitemapLocs?: string[]; subSample?: string[] } | null>(null)
   const [testing, setTesting] = useState(false)
@@ -286,13 +289,15 @@ function ScrapePanel({ onClose, onDone }: { onClose: () => void; onDone: () => v
   const [inspecting, setInspecting] = useState(false)
 
   const poll = useCallback(() => {
-    fetch('/api/admin/catalog/scrape').then(r => r.ok ? r.json() : null).then(d => { if (d) { setJob(d.job); if (d.config) setCfg((c: any) => ({ ...c, ...d.config })) } }).catch(() => {})
-  }, [])
+    fetch(`/api/admin/catalog/scrape?source=${source}`).then(r => r.ok ? r.json() : null).then(d => { if (d) { setJob(d.job); if (d.sources) setSources(d.sources); if (d.config) setCfg((c: any) => ({ ...c, ...d.config })) } }).catch(() => {})
+  }, [source])
+  // با تعویضِ منبع، گزارش/بررسیِ قبلی پاک شود.
+  useEffect(() => { setReport(null); setInspectRes(null) }, [source])
   useEffect(() => { poll(); const t = setInterval(poll, 2500); return () => clearInterval(t) }, [poll])
   // لیستِ کاتالوگ را زنده به‌روز کن (هر بار که تعدادِ کالاها تغییر کرد) تا محصولاتِ اسکرپ‌شده بلافاصله دیده شوند.
   useEffect(() => { if (job && (job.added || 0) + (job.updated || 0) > 0) onDone() }, [job?.added, job?.updated, job?.running]) // eslint-disable-line
 
-  const act = async (body: any) => { const r = await fetch('/api/admin/catalog/scrape', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); return r.ok ? r.json() : null }
+  const act = async (body: any) => { const r = await fetch('/api/admin/catalog/scrape', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, source }) }); return r.ok ? r.json() : null }
   const saveCfg = async () => { await act({ action: 'setConfig', config: cfg }); setSavedMsg('ذخیره شد ✓'); setTimeout(() => setSavedMsg(''), 2000) }
   const test = async () => { setTesting(true); setReport(null); await act({ action: 'setConfig', config: cfg }); const d = await act({ action: 'test' }); if (d?.ok) setReport(d.report); setTesting(false) }
   const start = async () => { await act({ action: 'setConfig', config: cfg }); await act({ action: 'start' }); poll() }
@@ -302,7 +307,14 @@ function ScrapePanel({ onClose, onDone }: { onClose: () => void; onDone: () => v
   const pct = job && job.total ? Math.min(100, Math.round((job.done / job.total) * 100)) : 0
   return (
     <Overlay onClose={onClose} max={600}>
-      <Head title="⛏ اسکرپِ فروشگاه و تنظیمات" onClose={onClose} />
+      <Head title="⛏ اسکرپِ منابع و تنظیمات" onClose={onClose} />
+
+      {/* انتخابِ منبع */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        {sources.map(s => (
+          <button key={s.id} onClick={() => setSource(s.id)} style={{ flex: 1, padding: '10px', borderRadius: 11, border: `1px solid ${source === s.id ? 'var(--gold)' : 'var(--line2)'}`, background: source === s.id ? 'var(--goldDim)' : 'transparent', color: source === s.id ? 'var(--gold)' : 'var(--muted)', fontSize: 13.5, fontWeight: source === s.id ? 700 : 400, cursor: 'pointer', fontFamily: FONT }}>{s.label}</button>
+        ))}
+      </div>
 
       <label style={lab}>آدرسِ سایتِ منبع</label>
       <input value={cfg.baseUrl} onChange={e => setCfg({ ...cfg, baseUrl: e.target.value })} dir="ltr" style={{ ...inp, marginBottom: 12 }} />

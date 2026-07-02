@@ -14,7 +14,8 @@ export interface CatalogProduct {
   id: string; categoryId: string; name: string
   brand?: string; unit?: string; image?: string; description?: string
   specs?: CatalogSpec[]; tags?: string[]; priceHistory?: PricePoint[]
-  source: 'manual' | 'hypersaz'; externalId?: string; externalUrl?: string
+  source: string   // 'manual' یا شناسهٔ منبعِ اسکرپ (hypersaz، ahanonline، …)
+  externalId?: string; externalUrl?: string
   active: boolean; createdAt: number
 }
 interface DB { categories: CatalogCategory[]; products: CatalogProduct[] }
@@ -104,7 +105,7 @@ export function addProduct(input: any): CatalogProduct {
   const p: CatalogProduct = {
     id: id('cp_'), categoryId: c.categoryId || '', name: c.name || '', brand: c.brand, unit: c.unit,
     image: c.image, description: c.description, specs: c.specs, tags: c.tags,
-    source: input.source === 'hypersaz' ? 'hypersaz' : 'manual', externalId: c.externalId, externalUrl: c.externalUrl,
+    source: input.source && input.source !== 'manual' ? String(input.source) : 'manual', externalId: c.externalId, externalUrl: c.externalUrl,
     active: c.active ?? true, createdAt: Date.now(),
   }
   db.products.unshift(p); save(db); return p
@@ -131,12 +132,14 @@ function ensureCategoryPathInDb(db: DB, path: string[]): CatalogCategory | null 
 }
 
 // پاک‌کردنِ دسته‌جمعی — «scraped» فقط اسکرپ‌شده‌ها، «all» همه‌چیز.
-export function clearCatalog(scope: 'scraped' | 'all'): { products: number; categories: number } {
+// scope: 'all' (همه) | 'scraped' (همهٔ اسکرپ‌شده‌ها، دستی می‌ماند) | یک شناسهٔ منبع (مثلِ 'ahanonline')
+export function clearCatalog(scope: string): { products: number; categories: number } {
   const db = load()
   const pBefore = db.products.length, cBefore = db.categories.length
   if (scope === 'all') { db.products = []; db.categories = [] }
   else {
-    db.products = db.products.filter(p => p.source !== 'hypersaz')
+    if (scope === 'scraped') db.products = db.products.filter(p => p.source === 'manual')
+    else db.products = db.products.filter(p => p.source !== scope)   // فقط همان منبع
     // دسته‌هایی که دیگر نه محصولی دارند نه زیردسته‌ای، حذف شوند.
     const usedCat = new Set(db.products.map(p => p.categoryId))
     const hasChild = new Set(db.categories.filter(c => c.parentId).map(c => c.parentId!))
@@ -146,15 +149,15 @@ export function clearCatalog(scope: 'scraped' | 'all'): { products: number; cate
   return { products: pBefore - db.products.length, categories: cBefore - db.categories.length }
 }
 
-export function upsertScraped(items: { name: string; categoryName?: string; categoryPath?: string[]; brand?: string; unit?: string; image?: string; description?: string; specs?: CatalogSpec[]; priceHistory?: PricePoint[]; externalId?: string; externalUrl?: string }[]): { added: number; updated: number } {
+export function upsertScraped(items: { name: string; categoryName?: string; categoryPath?: string[]; brand?: string; unit?: string; image?: string; description?: string; specs?: CatalogSpec[]; priceHistory?: PricePoint[]; externalId?: string; externalUrl?: string }[], source = 'hypersaz'): { added: number; updated: number } {
   let added = 0, updated = 0
   const db = load()
   for (const it of items) {
     if (!it.name) continue
     const cat = (it.categoryPath && it.categoryPath.length ? ensureCategoryPathInDb(db, it.categoryPath) : null) || ensureCategoryInDb(db, it.categoryName || 'دسته‌بندی‌نشده')
     const ext = it.externalId ? String(it.externalId) : ''
-    let existing = ext ? db.products.find(p => p.source === 'hypersaz' && p.externalId === ext) : undefined
-    if (!existing) existing = db.products.find(p => p.source === 'hypersaz' && norm(p.name) === norm(it.name))
+    let existing = ext ? db.products.find(p => p.source === source && p.externalId === ext) : undefined
+    if (!existing) existing = db.products.find(p => p.source === source && norm(p.name) === norm(it.name))
     if (existing) {
       existing.categoryId = cat.id; existing.name = it.name.slice(0, 160)
       if (it.brand) existing.brand = it.brand.slice(0, 80)
@@ -170,7 +173,7 @@ export function upsertScraped(items: { name: string; categoryName?: string; cate
         id: id('cp_'), categoryId: cat.id, name: it.name.slice(0, 160), brand: it.brand?.slice(0, 80),
         unit: it.unit?.slice(0, 24), image: it.image?.slice(0, 100000), description: it.description?.slice(0, 4000),
         specs: it.specs?.slice(0, 40), priceHistory: it.priceHistory?.slice(0, 40),
-        source: 'hypersaz', externalId: ext || undefined, externalUrl: it.externalUrl,
+        source, externalId: ext || undefined, externalUrl: it.externalUrl,
         active: true, createdAt: Date.now(),
       })
       added++
@@ -197,7 +200,7 @@ export function referencePriceIndex(opts?: { category?: string; search?: string 
     const last = toToman(ph[ph.length - 1].price)
     const first = toToman(ph[0].price)
     const changePct = first ? Math.round(((last - first) / first) * 100) : 0
-    return { id: p.id, name: p.name, image: p.image || '', brand: p.brand || '', category: catName(p.categoryId), unit: p.unit || '', price: last, changePct, spark: ph.slice(-14).map(x => toToman(x.price)), updatedAt: ph[ph.length - 1].date }
+    return { id: p.id, name: p.name, image: p.image || '', brand: p.brand || '', category: catName(p.categoryId), unit: p.unit || '', price: last, changePct, spark: ph.slice(-14).map(x => toToman(x.price)), updatedAt: ph[ph.length - 1].date, source: p.source }
   })
   if (opts?.category && opts.category !== 'همه') { const g = norm(opts.category); rows = rows.filter(r => norm(r.category).includes(g)) }
   if (opts?.search) { const q = norm(opts.search); rows = rows.filter(r => norm(r.name).includes(q) || norm(r.brand).includes(q)) }
@@ -208,5 +211,7 @@ export function referencePriceIndex(opts?: { category?: string; search?: string 
 
 export function catalogStats() {
   const db = load()
-  return { categories: db.categories.length, products: db.products.length, hypersaz: db.products.filter(p => p.source === 'hypersaz').length, manual: db.products.filter(p => p.source === 'manual').length }
+  const bySource: Record<string, number> = {}
+  for (const p of db.products) bySource[p.source] = (bySource[p.source] || 0) + 1
+  return { categories: db.categories.length, products: db.products.length, manual: bySource['manual'] || 0, bySource }
 }

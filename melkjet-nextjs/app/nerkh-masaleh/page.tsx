@@ -9,7 +9,7 @@ const fa = (n: number) => n.toLocaleString('fa-IR')
 const money = (t: number) => t >= 1e9 ? `${fa(Math.round(t / 1e8) / 10)} میلیارد` : t >= 1e6 ? `${fa(Math.round(t / 1e5) / 10)} م` : fa(t)
 
 interface SellerRow { name: string; category: string; unit: string; min: number; max: number; avg: number; sellers: number }
-interface RefRow { id: string; name: string; image: string; brand: string; category: string; unit: string; price: number; changePct: number; spark: number[]; updatedAt: string }
+interface RefRow { id: string; name: string; image: string; brand: string; category: string; unit: string; price: number; changePct: number; spark: number[]; updatedAt: string; sellerCount: number; sourceLabel: string }
 
 export default function MaterialPrices() {
   const [tab, setTab] = useState<'ref' | 'sellers'>('ref')
@@ -84,7 +84,16 @@ export default function MaterialPrices() {
                 <Link key={r.id} href={`/mahsul/${r.id}`} className="mjn-r" style={{ display: 'grid', gridTemplateColumns: '2.4fr 1.2fr 1fr 0.9fr', padding: '11px 18px', borderBottom: i < refRows.length - 1 ? '1px solid var(--line)' : 'none', fontSize: 13, alignItems: 'center', textDecoration: 'none', color: 'inherit' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                     <div style={{ width: 40, height: 40, borderRadius: 8, flexShrink: 0, background: r.image ? `center/contain no-repeat url(${r.image}) var(--bg2)` : 'var(--bg2)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>{!r.image && '🧱'}</div>
-                    <div style={{ minWidth: 0 }}><div style={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div><div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 2 }}>{r.category}{r.brand ? ` · ${r.brand}` : ''}</div></div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
+                      <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 2, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <span>{r.category}{r.brand ? ` · ${r.brand}` : ''}</span>
+                        <span style={{ color: 'var(--gold)', background: 'var(--goldDim)', borderRadius: 5, padding: '1px 6px' }}>{r.sourceLabel}</span>
+                        {r.sellerCount > 0
+                          ? <span style={{ color: '#5fd98a' }}>● {fa(r.sellerCount)} فروشنده</span>
+                          : <span style={{ color: 'var(--faint)' }}>○ بدون فروشنده</span>}
+                      </div>
+                    </div>
                   </div>
                   <div><Spark data={r.spark} up={r.changePct >= 0} /></div>
                   <div style={{ fontWeight: 800, color: 'var(--gold)', whiteSpace: 'nowrap' }}>{money(r.price)} <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 400 }}>ت/{r.unit}</span></div>

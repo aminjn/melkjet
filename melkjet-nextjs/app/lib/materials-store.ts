@@ -204,6 +204,13 @@ export function addPublicInquiry(slug: string, input: { customer: string; produc
 
 function normName(s: string): string { return (s || '').replace(/‌/g, '').replace(/\s+/g, ' ').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim() }
 
+// تعدادِ فروشندهٔ هر کالای مرجع (برای نشانِ «بدون فروشنده / N فروشنده» در نرخِ روز).
+export function sellerCountsByCatalog(): Record<string, number> {
+  const db = load(); const out: Record<string, number> = {}
+  for (const shop of Object.values(db.shops)) if (shop.slug) for (const p of shop.products) if (p.active && p.catalogId) out[p.catalogId] = (out[p.catalogId] || 0) + 1
+  return out
+}
+
 // فروشندگانِ یک کالای مرجع (کاتالوگ) — برای صفحهٔ محصولِ عمومی و مقایسهٔ قیمت.
 export function sellersOfCatalog(catalogId: string) {
   const db = load()

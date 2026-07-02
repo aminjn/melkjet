@@ -97,3 +97,6 @@ next-env.d.ts
 .catalog-data.json
 .hypersaz-job.json
 .hypersaz-config.json
+
+.scraper-cfg-*.json
+.scraper-job-*.json
