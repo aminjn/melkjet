@@ -2618,9 +2618,9 @@ function CommPackagesConfig() {
   const pending = orders.filter(o => o.status === 'pending')
   return (
     <Card style={{ marginBottom: 14 }}>
-      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>پکیج‌های شارژِ پیامک و ایمیل</div>
+      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>بسته‌های شارژِ توکنِ AI / پیامک / ایمیل</div>
       <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.9 }}>
-        پکیج‌هایی که اینجا فعال کنی، در بخشِ «پیامک» و «کمپین ایمیلِ» مارکتینگِ کاربران نمایش داده می‌شوند و قابلِ تهیه‌اند. اگر هیچ پکیجِ فعالی نباشد، ارسال محدود نمی‌شود.
+        بسته‌هایی که اینجا فعال کنی، در بخشِ «پلن‌ها و اشتراک»ِ همهٔ پروفایل‌ها (توکنِ هوشِ مصنوعی، پیامک، ایمیل) نمایش داده می‌شوند و قابلِ تهیه‌اند.
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
         {pkgs.length === 0 ? <div style={{ color: 'var(--muted)', fontSize: 13, padding: '8px 0' }}>پکیجی تعریف نشده.</div> : pkgs.map((p, i) => (

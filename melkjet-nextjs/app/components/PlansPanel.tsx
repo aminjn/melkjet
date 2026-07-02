@@ -58,7 +58,8 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
   }
 
   const pending = orders.filter(o => o.status === 'pending')
-  const usedChannels = channels.filter(ch => packages.some(p => p.channel === ch))
+  const ORDER: Channel[] = ['token', 'sms', 'email']
+  const usedChannels = ORDER.filter(ch => channels.includes(ch) && packages.some(p => p.channel === ch))
 
   return (
     <div dir="rtl" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -116,11 +117,12 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
       )}
 
       {/* بسته‌های افزایشی */}
+      {usedChannels.length > 0 && <div style={{ fontSize: 16, fontWeight: 900, marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>🪙 بسته‌های اعتباریِ افزایشی</div>}
       {usedChannels.map(ch => {
         const list = packages.filter(p => p.channel === ch)
         const meta = CH[ch]
         return (
-          <div key={ch} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 20 }}>
+          <div key={ch} style={{ background: 'var(--surface)', border: `1px solid ${ch === 'token' ? 'var(--gold)' : 'var(--line)'}`, borderRadius: 18, padding: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontSize: 22 }}>{meta.icon}</span>
