@@ -53,11 +53,14 @@ export function sanitizeBrand(b?: string): string | undefined {
   if (!b) return undefined
   const n = norm(b)
   if (!n) return undefined
+  // برند/کارخانه یک اسمِ کوتاه است، نه جمله/توضیح. اگر بلند یا جمله‌گونه بود، برند نیست.
+  if (n.length > 28 || n.split(/\s+/).length > 4) return undefined
+  if (/[.!؟?:؛]|بنابراین|هستند|دارد|می\s*باشد|معروف|کیفیت|مرغوب|مختلف|بهترین|انواع|برخوردار|تفاوت/.test(n)) return undefined
   // اگر همهٔ اجزای برند کشور باشند (مثلِ «ایران» یا «ایران-ایتالیا») برند نیست
   const parts = n.split(/[-,،\/]+/).map(s => s.replace(/\s+/g, '')).filter(Boolean)
   if (parts.length && parts.every(p => COUNTRIES.has(p))) return undefined
   if (COUNTRIES.has(n.replace(/\s+/g, ''))) return undefined
-  return b
+  return b.trim()
 }
 // نام‌هایی که در واقع مقاله/صفحهٔ محتوایی‌اند نه محصول
 export function looksLikeArticle(name: string): boolean {
@@ -206,6 +209,23 @@ export function updateProduct(pid: string, patch: any): CatalogProduct | null {
   Object.assign(p, cleanProduct(patch)); save(db); return p
 }
 export function deleteProduct(pid: string) { const db = load(); db.products = db.products.filter(p => p.id !== pid); save(db) }
+// حذفِ چند محصولِ انتخاب‌شده با شناسه
+export function deleteProducts(ids: string[]): number {
+  const set = new Set(ids); const db = load(); const before = db.products.length
+  db.products = db.products.filter(p => !set.has(p.id)); save(db)
+  return before - db.products.length
+}
+// نشاندنِ یک تصویر (لوگو) یا حذفِ عکس روی محصولاتِ یک محدوده (منبع/دسته) — بدونِ AI، آنی.
+export function setImagesForScope(opts: { source?: string; category?: string }, url: string): number {
+  const db = load(); const catIds = opts.category ? descendantsOf(db.categories, opts.category) : null
+  let n = 0
+  for (const p of db.products) {
+    if (!srcMatch(p, opts.source)) continue
+    if (catIds && !catIds.has(p.categoryId)) continue
+    p.image = url || undefined; n++
+  }
+  save(db); return n
+}
 
 // ── مدیریتِ تصویر ──
 // شمارشِ استفادهٔ یک URLِ تصویر (برای تشخیصِ عکسِ اشتباهِ مشترک مثلِ بنر/عکسِ شخص).

@@ -5,6 +5,7 @@ import {
   listProducts, addProduct, updateProduct, deleteProduct, catalogStats, clearCatalog,
   categoriesNeedingImage, setCategoryImage, bulkDeleteQuery, bulkDeleteProducts, enrichStats,
   getProduct, countImageUsage, clearImageEverywhere, imageGenTargets, applyCategoryImage, pruneSourceCategories,
+  deleteProducts, setImagesForScope,
 } from '@/app/lib/catalog-store'
 import { hasCap } from '@/app/lib/account-store'
 import { generateImage, agentModel, agentProvider } from '@/app/lib/gapgpt'
@@ -57,6 +58,11 @@ export async function POST(req: NextRequest) {
     case 'deleteProduct':
       if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
       deleteProduct(String(b.id)); return NextResponse.json({ ok: true })
+    case 'deleteProducts':
+      return NextResponse.json({ ok: true, deleted: deleteProducts(Array.isArray(b.ids) ? b.ids.map(String) : []) })
+    case 'setScopeImage':
+      // لوگوی سایت روی محصولات (url) یا حذفِ عکس (url خالی) — با فیلترِ منبع/دسته
+      return NextResponse.json({ ok: true, applied: setImagesForScope({ source: b.source, category: b.category }, String(b.url || '')) })
     case 'clearCatalog':
       return NextResponse.json({ ok: true, cleared: clearCatalog(b.scope === 'all' ? 'all' : (b.scope || 'scraped')) })
     case 'bulkDeleteCount':

@@ -28,6 +28,8 @@ export default function CatalogAdminView() {
   const [scrape, setScrape] = useState(false)
   const [imgEdit, setImgEdit] = useState<Prod | null>(null)
   const [bulkOpen, setBulkOpen] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const toggleSel = (id: string) => setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
   const [enrich, setEnrich] = useState<{ total: number; needing: number } | null>(null)
   const [busy, setBusy] = useState(false)
   const [toast, setToast] = useState('')
@@ -41,6 +43,14 @@ export default function CatalogAdminView() {
     }).catch(() => {})
   }, [activeCat, search])
   useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t) }, [load])
+  useEffect(() => { setSelected(new Set()) }, [activeCat, search])
+
+  const delSelected = async () => {
+    if (!selected.size) return
+    const ok = await post({ action: 'deleteProducts', ids: [...selected] })
+    if (ok) setSelected(new Set())
+  }
+  const allOnPageSelected = prods.length > 0 && prods.every(p => selected.has(p.id))
 
   const [genMsg, setGenMsg] = useState('')
   const [imgGen, setImgGen] = useState(false)
@@ -91,7 +101,7 @@ export default function CatalogAdminView() {
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {enrich && enrich.needing > 0 && <button onClick={enrichText} disabled={!!genMsg} style={{ ...ghost, border: '1px solid var(--gold)', color: 'var(--gold)' }}>✍ توضیحات/مشخصات با AI ({fa(enrich.needing)})</button>}
-          {stats && stats.products > 0 && <button onClick={() => setImgGen(true)} disabled={!!genMsg} style={{ ...ghost, border: '1px solid var(--gold)', color: 'var(--gold)' }}>🖼 عکسِ محصولات با AI</button>}
+          {stats && stats.products > 0 && <button onClick={() => setImgGen(true)} disabled={!!genMsg} style={{ ...ghost, border: '1px solid var(--gold)', color: 'var(--gold)' }}>🖼 عکسِ محصولات (لوگو/حذف/AI)</button>}
           {stats && stats.products > 0 && <button onClick={() => setBulkOpen(true)} style={{ ...ghost, border: '1px solid #e7674a', color: '#f87171' }}>🗑 حذفِ دسته‌جمعی</button>}
           <button onClick={() => setScrape(true)} style={{ ...ghost, border: '1px solid var(--gold)', color: 'var(--gold)', fontWeight: 700 }}>⛏ اسکرپ و تنظیمات</button>
           <button onClick={() => setEditing('new')} style={gold}>+ کالای جدید</button>
@@ -121,15 +131,27 @@ export default function CatalogAdminView() {
         {/* products */}
         <div>
           <input placeholder="جستجوی کالا…" value={search} onChange={e => setSearch(e.target.value)} style={{ ...inp, marginBottom: 12, height: 42 }} />
+          {/* نوارِ انتخاب: حذفِ محصولاتِ انتخاب‌شده */}
+          {selected.size > 0 && (
+            <div style={{ ...card, padding: '10px 14px', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, background: 'var(--goldDim)', borderColor: 'var(--gold)' }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold)' }}>{fa(selected.size)} محصول انتخاب شده</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setSelected(new Set())} style={ghost}>لغو</button>
+                <button onClick={delSelected} disabled={busy} style={{ ...gold, background: '#e7674a', color: '#fff' }}>🗑 حذفِ {fa(selected.size)} انتخاب‌شده</button>
+              </div>
+            </div>
+          )}
           <div style={{ ...card, overflow: 'hidden' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '2.4fr 1fr 0.8fr 1fr', padding: '10px 16px', background: 'var(--bg2)', borderBottom: '1px solid var(--line)', fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '30px 2.4fr 1fr 0.8fr 1fr', padding: '10px 16px', background: 'var(--bg2)', borderBottom: '1px solid var(--line)', fontSize: 12, fontWeight: 700, color: 'var(--muted)', alignItems: 'center' }}>
+              <input type="checkbox" checked={allOnPageSelected} onChange={e => setSelected(e.target.checked ? new Set(prods.map(p => p.id)) : new Set())} title="انتخابِ همه" style={{ cursor: 'pointer' }} />
               <div>کالا</div><div>دسته</div><div>منبع</div><div style={{ textAlign: 'left' }}>عملیات</div>
             </div>
             <div style={{ maxHeight: 560, overflowY: 'auto' }}>
               {prods.length === 0 ? (
                 <div style={{ padding: 28, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>کالایی نیست — «+ کالای جدید» یا «اسکرپ».</div>
               ) : prods.map((p, i) => (
-                <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '2.4fr 1fr 0.8fr 1fr', padding: '10px 16px', borderTop: i ? '1px solid var(--line)' : 'none', fontSize: 13, alignItems: 'center' }}>
+                <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '30px 2.4fr 1fr 0.8fr 1fr', padding: '10px 16px', borderTop: i ? '1px solid var(--line)' : 'none', fontSize: 13, alignItems: 'center', background: selected.has(p.id) ? 'var(--goldDim)' : 'transparent' }}>
+                  <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleSel(p.id)} style={{ cursor: 'pointer' }} />
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                     <button onClick={() => setImgEdit(p)} title="تغییرِ تصویرِ کالا" style={{ width: 38, height: 38, borderRadius: 8, flexShrink: 0, background: p.image ? `center/cover no-repeat url(${p.image})` : 'var(--bg2)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, cursor: 'pointer', padding: 0, position: 'relative' }}>{!p.image && '🧱'}<span style={{ position: 'absolute', bottom: -2, insetInlineEnd: -2, fontSize: 8, background: 'var(--gold)', color: '#16140f', borderRadius: 4, padding: '0 2px', lineHeight: 1.4 }}>✎</span></button>
                     <div style={{ minWidth: 0 }}><div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</div>{p.brand && <div style={{ fontSize: 11, color: 'var(--muted)' }}>{p.brand}</div>}</div>
@@ -265,8 +287,10 @@ function BulkDeleteModal({ cats, onClose, onDone }: { cats: Cat[]; onClose: () =
 }
 
 // ── تولیدِ دسته‌جمعیِ عکسِ محصولات با AI (به‌ازای هر دسته یک عکس؛ حالتِ «فقط بدونِ عکس» یا «جایگزینیِ همه») ──
+const SITE_LOGO = '/icon-512.png'
 function GenImagesModal({ cats, onClose, onDone }: { cats: Cat[]; onClose: () => void; onDone: () => void }) {
-  const [mode, setMode] = useState<'missing' | 'all'>('missing')
+  const [act, setAct] = useState<'logo' | 'clear' | 'ai'>('logo')
+  const [mode, setMode] = useState<'missing' | 'all'>('all')
   const [source, setSource] = useState('all')
   const [category, setCategory] = useState('')
   const [running, setRunning] = useState(false)
@@ -274,7 +298,18 @@ function GenImagesModal({ cats, onClose, onDone }: { cats: Cat[]; onClose: () =>
   const [msg, setMsg] = useState('')
   const stopRef = useState<{ stop: boolean }>({ stop: false })[0]
   const opts = catOptions(cats)
+  // لوگو/حذف: آنی و بدونِ AI
+  const runScope = async (url: string) => {
+    setRunning(true); setMsg('در حال اعمال…')
+    const r = await fetch('/api/admin/catalog', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'setScopeImage', url, source, category: category || undefined }) })
+    const d = await r.json().catch(() => ({}))
+    setRunning(false)
+    if (!r.ok || d.error) { setMsg(d.error || 'خطا'); return }
+    setMsg(`✓ روی ${fa(d.applied || 0)} محصول اعمال شد.`); onDone()
+  }
   const run = async () => {
+    if (act === 'logo') return runScope(SITE_LOGO)
+    if (act === 'clear') return runScope('')
     setRunning(true); stopRef.stop = false; setMsg('در حال یافتنِ دسته‌ها…'); setProgress({ done: 0, total: 0, applied: 0 })
     const tr = await fetch('/api/admin/catalog', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'imageGenTargets', mode, source, category: category || undefined }) })
     const td = await tr.json().catch(() => ({}))
@@ -298,13 +333,23 @@ function GenImagesModal({ cats, onClose, onDone }: { cats: Cat[]; onClose: () =>
   const pct = progress.total ? Math.round((progress.done / progress.total) * 100) : 0
   return (
     <Overlay onClose={running ? () => {} : onClose} max={460}>
-      <Head title="🖼 عکسِ محصولات با AI" onClose={running ? () => { stopRef.stop = true } : onClose} />
-      <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.9, marginBottom: 14 }}>به‌ازای هر دسته یک عکسِ واقعیِ حرفه‌ای ساخته و روی محصولاتِ همان دسته گذاشته می‌شود.</div>
-      <label style={lab}>کدام محصولات؟</label>
+      <Head title="🖼 عکسِ محصولات" onClose={running ? () => { stopRef.stop = true } : onClose} />
+      <label style={lab}>چه کاری انجام شود؟</label>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
-        <button onClick={() => setMode('missing')} disabled={running} style={{ ...ghost, textAlign: 'right', padding: '11px 13px', border: `1px solid ${mode === 'missing' ? 'var(--gold)' : 'var(--line2)'}`, color: mode === 'missing' ? 'var(--gold)' : 'var(--muted)', background: mode === 'missing' ? 'var(--goldDim)' : 'transparent' }}>{mode === 'missing' ? '◉ ' : '○ '}فقط محصولاتِ بدونِ عکس</button>
-        <button onClick={() => setMode('all')} disabled={running} style={{ ...ghost, textAlign: 'right', padding: '11px 13px', border: `1px solid ${mode === 'all' ? 'var(--gold)' : 'var(--line2)'}`, color: mode === 'all' ? 'var(--gold)' : 'var(--muted)', background: mode === 'all' ? 'var(--goldDim)' : 'transparent' }}>{mode === 'all' ? '◉ ' : '○ '}همهٔ محصولات — جایگزینیِ عکس‌های خراب/اشتباه</button>
+        {([['logo', '🏢 لوگوی سایت روی محصولات (حذفِ عکسِ اشتباهِ اسکرپ) — آنی'], ['clear', '🗑 حذفِ کاملِ عکس (نمایشِ آیکونِ پیش‌فرض) — آنی'], ['ai', '🎨 ساختِ عکسِ واقعی با AI (به‌ازای هر دسته)']] as const).map(([k, l]) => (
+          <button key={k} onClick={() => setAct(k)} disabled={running} style={{ ...ghost, textAlign: 'right', padding: '11px 13px', border: `1px solid ${act === k ? 'var(--gold)' : 'var(--line2)'}`, color: act === k ? 'var(--gold)' : 'var(--muted)', background: act === k ? 'var(--goldDim)' : 'transparent' }}>{act === k ? '◉ ' : '○ '}{l}</button>
+        ))}
       </div>
+      {act === 'ai' && (
+        <>
+          <label style={lab}>کدام محصولات؟</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+            <button onClick={() => setMode('missing')} disabled={running} style={{ ...ghost, textAlign: 'right', padding: '11px 13px', border: `1px solid ${mode === 'missing' ? 'var(--gold)' : 'var(--line2)'}`, color: mode === 'missing' ? 'var(--gold)' : 'var(--muted)', background: mode === 'missing' ? 'var(--goldDim)' : 'transparent' }}>{mode === 'missing' ? '◉ ' : '○ '}فقط محصولاتِ بدونِ عکس</button>
+            <button onClick={() => setMode('all')} disabled={running} style={{ ...ghost, textAlign: 'right', padding: '11px 13px', border: `1px solid ${mode === 'all' ? 'var(--gold)' : 'var(--line2)'}`, color: mode === 'all' ? 'var(--gold)' : 'var(--muted)', background: mode === 'all' ? 'var(--goldDim)' : 'transparent' }}>{mode === 'all' ? '◉ ' : '○ '}همهٔ محصولات — جایگزینی</button>
+          </div>
+        </>
+      )}
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>محدودهٔ اعمال (با فیلترِ منبع و دسته):</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
         <div><label style={lab}>منبع</label><select value={source} onChange={e => setSource(e.target.value)} disabled={running} style={{ ...inp, cursor: 'pointer' }}><option value="all">همه</option><option value="scraped">اسکرپ‌شده‌ها</option><option value="ahanonline">آهن‌آنلاین</option><option value="hypersaz">هایپرساز</option><option value="manual">دستی</option></select></div>
         <div><label style={lab}>دسته (اختیاری)</label><select value={category} onChange={e => setCategory(e.target.value)} disabled={running} style={{ ...inp, cursor: 'pointer' }}><option value="">همهٔ دسته‌ها</option>{opts.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}</select></div>
@@ -321,7 +366,7 @@ function GenImagesModal({ cats, onClose, onDone }: { cats: Cat[]; onClose: () =>
           ? <button onClick={() => { stopRef.stop = true }} style={{ ...gold, background: '#e7674a', color: '#fff' }}>توقف</button>
           : <>
             <button onClick={onClose} style={ghost}>بستن</button>
-            <button onClick={run} style={gold}>شروعِ ساختِ عکس</button>
+            <button onClick={run} style={gold}>{act === 'logo' ? 'اعمالِ لوگو' : act === 'clear' ? 'حذفِ عکس‌ها' : 'شروعِ ساختِ عکس'}</button>
           </>}
       </div>
     </Overlay>
