@@ -136,6 +136,7 @@ export default function MaterialsPage() {
   const openWb = (v: WebsiteView) => { clearTools(); setWbView(v); setWbOpen(true) }
   const [data, setData] = useState<MaterialsData | null>(null)
   const [myName, setMyName] = useState('')
+  const [hasCatalog, setHasCatalog] = useState(false)   // دسترسیِ کاتالوگ/اسکرپِ هایپرساز
   const [loading, setLoading] = useState(true)
   const [unauth, setUnauth] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -153,7 +154,7 @@ export default function MaterialsPage() {
   }, [])
 
   useEffect(() => { refresh() }, [refresh])
-  useEffect(() => { fetch('/api/auth/profile', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d?.account?.name) setMyName(d.account.name) }).catch(() => {}) }, [])
+  useEffect(() => { fetch('/api/auth/profile', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d?.account?.name) setMyName(d.account.name); setHasCatalog(!!(d?.account?.caps || []).includes('catalog')) }).catch(() => {}) }, [])
 
   // POST mutation then refetch
   const post = useCallback(async (body: Record<string, unknown>): Promise<boolean> => {
@@ -250,6 +251,17 @@ export default function MaterialsPage() {
               </button>
             )
           })}
+          {hasCatalog && (
+            <a href="/catalog-admin" style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10,
+              textDecoration: 'none', background: 'transparent', color: 'var(--gold)', fontWeight: 600, fontSize: 14,
+              fontFamily: FONT, boxSizing: 'border-box',
+            }}>
+              <span style={{ fontSize: 15, width: 18, textAlign: 'center' }}>🧱</span>
+              <span className="mjm-sidelabel" style={{ flex: 1 }}>کاتالوگ و اسکرپِ مصالح</span>
+              <span style={{ fontSize: 9, background: 'var(--gold)', color: '#16140f', borderRadius: 6, padding: '1px 6px', fontWeight: 800 }}>ویژه</span>
+            </a>
+          )}
           <div style={{ height: 1, background: 'var(--line)', margin: '10px 8px' }} />
 
           {/* CRM — جاسازی‌شده با منوی آبشاری (داخل همین پنل باز می‌شود) */}
@@ -885,8 +897,8 @@ function ProductEditor({ product, post, onClose }: { product: Product | null; po
         <div className="mjm-form" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
           <div style={{ gridColumn: '1 / -1' }}><label style={lab}>نامِ محصول *</label><input value={f.name} onChange={e => set('name', e.target.value)} readOnly={locked} placeholder="مثلاً میلگرد آجدار ۱۶ ذوب‌آهن" style={{ ...inputStyle, ...(locked ? lockedStyle : {}) }} /></div>
           <div><label style={lab}>دسته</label><input value={f.category} onChange={e => set('category', e.target.value)} readOnly={locked} list="mjm-cats" style={{ ...inputStyle, ...(locked ? lockedStyle : {}) }} /><datalist id="mjm-cats">{CATEGORY_OPTIONS.map(c => <option key={c} value={c} />)}</datalist></div>
-          <div><label style={lab}>واحدِ فروش</label><select value={f.unit} onChange={e => set('unit', e.target.value)} disabled={locked} style={{ ...inputStyle, cursor: 'pointer', ...(locked ? lockedStyle : {}) }}>{UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}</select></div>
-          <div><label style={lab}>برند / تولیدکننده</label><input value={f.brand} onChange={e => set('brand', e.target.value)} readOnly={locked} style={{ ...inputStyle, ...(locked ? lockedStyle : {}) }} /></div>
+          <div><label style={lab}>واحدِ فروش</label><select value={f.unit} onChange={e => set('unit', e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>{UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}</select></div>
+          <div><label style={lab}>برند / تولیدکننده</label><input value={f.brand} onChange={e => set('brand', e.target.value)} style={inputStyle} /></div>
           <div><label style={lab}>کشور/محلِ ساخت</label><input value={f.origin} onChange={e => set('origin', e.target.value)} style={inputStyle} /></div>
           <div><label style={{ ...lab, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span>قیمت (تومان/{f.unit})</span>{aiBtn('price', 'پیشنهادِ قیمت')}</label><NumberInput value={f.price} onChange={v => set('price', v)} style={inputStyle} /></div>
           <div><label style={lab}>درصدِ تخفیف</label><NumberInput value={f.discountPct} onChange={v => set('discountPct', v)} placeholder="0" style={inputStyle} /></div>
