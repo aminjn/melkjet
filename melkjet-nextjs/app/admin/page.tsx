@@ -4151,6 +4151,8 @@ function PlansView() {
     fetch('/api/admin/roles').then(r => r.ok ? r.json() : null).then(d => { if (d?.roles) setRoles(d.roles); if (d?.permissions) setPerms(d.permissions) })
     fetch('/api/admin/users').then(r => r.ok ? r.json() : null).then(d => { if (d?.users) setAccounts(d.users) }).catch(() => {})
   }, [])
+  const DASH_LABEL: Record<string, string> = { '/buyer': 'کاربر عادی', '/owner': 'مالک', '/pros': 'مشاور املاک', '/agency': 'آژانس املاک', '/builder': 'سازنده', '/materials': 'مصالح‌فروش', '/legal': 'حقوقی' }
+  const groupLabel = (p: any) => (p.roleId && roles.find(r => r.id === p.roleId)?.name) || DASH_LABEL[p.dashboard || ''] || 'عمومی'
   const roleName = (rid?: string) => rid ? (roles.find(r => r.id === rid)?.name || '—') : 'عمومی (همه)'
   const subCount = (pid: string) => accounts.filter(a => a.plan === pid).length
   const create = async (payload: any) => { await fetch('/api/admin/plans', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); setCreating(false); load() }
@@ -4177,8 +4179,16 @@ function PlansView() {
 
       {editingId && (() => { const p = plans.find(x => x.id === editingId); return p ? <PlanForm key={editingId} initial={editInitial(p)} roles={roles} perms={perms} onSave={pl => patch(editingId, pl)} onClose={() => setEditingId(null)} /> : null })()}
 
-      <div className="mjsa-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18 }}>
-        {plans.map(p => (
+      {(() => {
+        const order = ['کاربر عادی', 'مالک', 'مشاور املاک', 'آژانس املاک', 'سازنده', 'مصالح‌فروش', 'حقوقی', 'عمومی']
+        const groups = new Map<string, any[]>()
+        for (const p of plans) { const g = groupLabel(p); if (!groups.has(g)) groups.set(g, []); groups.get(g)!.push(p) }
+        const keys = [...groups.keys()].sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99))
+        return keys.map(gk => (
+          <div key={gk} style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--gold)', margin: '4px 0 10px', display: 'flex', alignItems: 'center', gap: 8 }}>👤 {gk} <span style={{ fontSize: 11, color: 'var(--faint)', fontWeight: 400 }}>({(groups.get(gk)!.length).toLocaleString('fa-IR')} پلن)</span></div>
+            <div className="mjsa-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              {groups.get(gk)!.map(p => (
           <Card key={p.id} style={{ position: 'relative', borderColor: editingId === p.id ? 'var(--gold)' : (p.highlighted ? 'var(--gold)' : 'var(--line2)'), boxShadow: p.highlighted ? '0 10px 30px -14px rgba(212,175,55,.5)' : 'none', background: p.highlighted ? 'linear-gradient(160deg, rgba(212,175,55,.08), var(--surface) 60%)' : 'var(--surface)', opacity: p.active ? 1 : .55 }}>
             {(p.badge || p.highlighted) && <span style={{ position: 'absolute', top: 14, insetInlineStart: 14, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 10.5, fontWeight: 800, borderRadius: 999, padding: '3px 11px' }}>{p.badge || 'محبوب'}</span>}
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -4186,7 +4196,7 @@ function PlansView() {
               <div style={{ textAlign: 'left' }}><span style={{ fontSize: 18, fontWeight: 900, color: 'var(--gold)' }}>{fa(p.priceMonthly)}</span><span style={{ fontSize: 11, color: 'var(--faint)' }}> ت/ماه</span><div style={{ fontSize: 11, color: 'var(--faint)' }}>{fa(p.priceYearly)} ت/سال</div></div>
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 11.5, color: 'var(--gold)' }}>● {roleName(p.roleId)}</span>
+              <span style={{ fontSize: 11.5, color: 'var(--gold)' }}>● {groupLabel(p)}</span>
               <span style={{ fontSize: 11, color: 'var(--muted)', background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 999, padding: '2px 10px' }}>{fa(subCount(p.id))} مشترک</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
@@ -4198,9 +4208,12 @@ function PlansView() {
               <button onClick={() => del(p.id)} style={{ fontSize: 12, padding: '6px 12px', borderRadius: 9, border: '1px solid rgba(231,103,74,.3)', color: '#e7674a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>حذف</button>
             </div>
           </Card>
-        ))}
-        {plans.length === 0 && <Card><div style={{ color: 'var(--muted)', fontSize: 13 }}>پلنی نیست.</div></Card>}
-      </div>
+              ))}
+            </div>
+          </div>
+        ))
+      })()}
+      {plans.length === 0 && <Card><div style={{ color: 'var(--muted)', fontSize: 13 }}>پلنی نیست.</div></Card>}
       <CommPackagesConfig />
     </div>
   )

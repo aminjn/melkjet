@@ -38,6 +38,12 @@ export async function POST(req: NextRequest) {
     permissions: Array.isArray(b.permissions) ? b.permissions.map((x: unknown) => String(x)) : undefined,
     quotas: b.quotas && typeof b.quotas === 'object' ? b.quotas : undefined,
     aiCredits: b.aiCredits != null && b.aiCredits !== '' ? Number(b.aiCredits) : undefined,
+    tier: b.tier ? String(b.tier) : undefined,
+    promotionDiscount: b.promotionDiscount != null && b.promotionDiscount !== '' ? Number(b.promotionDiscount) : undefined,
+    trialEnabled: b.trialEnabled !== undefined ? !!b.trialEnabled : undefined,
+    founderEligible: b.founderEligible !== undefined ? !!b.founderEligible : undefined,
+    referralEligible: b.referralEligible !== undefined ? !!b.referralEligible : undefined,
+    couponEligible: b.couponEligible !== undefined ? !!b.couponEligible : undefined,
   })
   return NextResponse.json({ plan })
 }

@@ -1,11 +1,12 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
+import { listRoles } from './role-store'
 
 // استورِ پلن‌های اشتراک — نقش‌محور، با سقفِ مصرف (quotas) و اعتبارِ AI (aiCredits).
 // همه‌چیز داینامیک و قابلِ ویرایش از پنلِ سوپرادمین است؛ هیچ عددی هاردکد نیست (فقط seedِ اولیه).
 const DATA_FILE = join(process.cwd(), '.plan-data.json')
-const SEED_V = 3   // با تغییرِ ساختار/قیمت‌های پیش‌فرض این را بالا ببرید تا seed دوباره اعمال شود
+const SEED_V = 4   // با تغییرِ ساختار/قیمت‌های پیش‌فرض این را بالا ببرید تا seed دوباره اعمال شود
 
 // کلیدهای سقفِ مصرف (−۱ = نامحدود، ۰/تعریف‌نشده = بدونِ محدودیتِ اعمال‌شده)
 export const QUOTA_KEYS: { id: string; label: string }[] = [
@@ -37,6 +38,12 @@ export interface Plan {
   permissions?: string[] // ماژول‌هایی که باز می‌کند (از PERMISSIONS)
   quotas?: Record<string, number>  // سقفِ مصرف (−۱ نامحدود)
   aiCredits?: number     // اعتبارِ AIِ ماهانه که با این پلن داده می‌شود
+  tier?: string          // سطح: free | starter | growth | pro | premium | enterprise
+  promotionDiscount?: number  // درصدِ تخفیفِ پروموشن برای این پلن
+  trialEnabled?: boolean      // امکانِ دورهٔ آزمایشی
+  founderEligible?: boolean    // مشمولِ باشگاهِ بنیان‌گذاران
+  referralEligible?: boolean   // مشمولِ سیستمِ دعوت
+  couponEligible?: boolean     // امکانِ اعمالِ کدِ تخفیف
   createdAt: number
 }
 
@@ -53,10 +60,13 @@ function save(db: DB) { db.v = SEED_V; writeFileSync(DATA_FILE, JSON.stringify(d
 // ── seedِ کاملِ پلن‌ها طبقِ سندِ درآمدیِ ملک‌جت ──
 function seed(): DB {
   let now = Date.now(), ord = 0
+  const roles = (() => { try { return listRoles() } catch { return [] } })()
+  const ridFor = (dash: string) => roles.find(r => r.dashboard === dash)?.id
   const Q = (o: Record<string, number>) => o
-  const mk = (dashboard: string, name: string, priceMonthly: number, o: { yearly?: number; features?: string[]; perms?: string[]; quotas?: Record<string, number>; ai?: number; hot?: boolean; badge?: string }): Plan => ({
-    id: id(), name, dashboard, priceMonthly, priceYearly: o.yearly ?? priceMonthly * 10, currency: 'تومان',
+  const mk = (dashboard: string, name: string, priceMonthly: number, o: { yearly?: number; features?: string[]; perms?: string[]; quotas?: Record<string, number>; ai?: number; hot?: boolean; badge?: string; tier?: string }): Plan => ({
+    id: id(), name, dashboard, roleId: ridFor(dashboard), priceMonthly, priceYearly: o.yearly ?? priceMonthly * 10, currency: 'تومان',
     features: o.features || [], permissions: o.perms || [], quotas: o.quotas || {}, aiCredits: o.ai || 0,
+    tier: o.tier, promotionDiscount: 0, trialEnabled: priceMonthly > 0, founderEligible: true, referralEligible: true, couponEligible: priceMonthly > 0,
     highlighted: !!o.hot, badge: o.badge, order: ord++, active: true, createdAt: now++,
   })
   const U = -1
@@ -101,6 +111,7 @@ export interface PlanInput {
   name: string; priceMonthly: number; priceYearly: number; currency?: string; features?: string[]
   highlighted?: boolean; cta?: string; order?: number; active?: boolean; roleId?: string; dashboard?: string
   badge?: string; permissions?: string[]; quotas?: Record<string, number>; aiCredits?: number
+  tier?: string; promotionDiscount?: number; trialEnabled?: boolean; founderEligible?: boolean; referralEligible?: boolean; couponEligible?: boolean
 }
 function cleanQuotas(q: any): Record<string, number> {
   const out: Record<string, number> = {}
@@ -121,6 +132,8 @@ export function addPlan(input: PlanInput): Plan {
     badge: input.badge ? String(input.badge) : undefined,
     permissions: Array.isArray(input.permissions) ? input.permissions.map(String) : [],
     quotas: cleanQuotas(input.quotas), aiCredits: Number(input.aiCredits) || 0,
+    tier: input.tier ? String(input.tier) : undefined, promotionDiscount: Number(input.promotionDiscount) || 0,
+    trialEnabled: !!input.trialEnabled, founderEligible: !!input.founderEligible, referralEligible: !!input.referralEligible, couponEligible: !!input.couponEligible,
     createdAt: Date.now(),
   }
   db.plans.push(plan); save(db); return plan
@@ -144,6 +157,12 @@ export function updatePlan(pid: string, patch: PlanPatch): Plan | null {
   if (patch.permissions !== undefined) p.permissions = Array.isArray(patch.permissions) ? patch.permissions.map(String) : []
   if (patch.quotas !== undefined) p.quotas = cleanQuotas(patch.quotas)
   if (patch.aiCredits !== undefined) p.aiCredits = Number(patch.aiCredits) || 0
+  if (patch.tier !== undefined) p.tier = patch.tier ? String(patch.tier) : undefined
+  if (patch.promotionDiscount !== undefined) p.promotionDiscount = Number(patch.promotionDiscount) || 0
+  if (patch.trialEnabled !== undefined) p.trialEnabled = !!patch.trialEnabled
+  if (patch.founderEligible !== undefined) p.founderEligible = !!patch.founderEligible
+  if (patch.referralEligible !== undefined) p.referralEligible = !!patch.referralEligible
+  if (patch.couponEligible !== undefined) p.couponEligible = !!patch.couponEligible
   save(db); return p
 }
 export function deletePlan(pid: string): void { const db = load(); db.plans = db.plans.filter(x => x.id !== pid); save(db) }
