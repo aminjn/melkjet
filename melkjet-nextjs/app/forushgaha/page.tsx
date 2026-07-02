@@ -70,18 +70,17 @@ export default function MaterialsDirectory() {
           <div className="mjd-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 16 }}>
             {shops.map(s => (
               <Link key={s.slug} href={`/forushgah/${s.slug}`} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden', textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column' }}>
-                <div style={{ height: 96, background: s.cover ? `center/cover no-repeat url(${s.cover})` : 'linear-gradient(120deg,#1f2937,#0f2340)', position: 'relative' }} />
-                <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: -34 }}>
-                    <div style={{ width: 52, height: 52, borderRadius: 12, background: s.logo ? `center/cover no-repeat url(${s.logo})` : 'linear-gradient(135deg,var(--gold2),var(--gold))', border: '2px solid var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 800, color: '#16140f', flexShrink: 0 }}>{!s.logo && (s.name.charAt(0) || 'ف')}</div>
-                    <div style={{ paddingTop: 24 }}>{s.rating > 0 && <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--gold)' }}>{fa(s.rating)} ★</span>}</div>
-                  </div>
-                  <div style={{ fontSize: 15, fontWeight: 800 }}>{s.name}</div>
-                  {s.tagline && <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.7, minHeight: 20 }}>{s.tagline}</div>}
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    {s.categories.slice(0, 3).map(c => <span key={c} style={{ fontSize: 11, color: 'var(--muted)', background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 7, padding: '3px 8px' }}>{c}</span>)}
-                  </div>
-                  <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: 'var(--faint)', paddingTop: 8 }}>
+                <div style={{ height: 84, background: s.cover ? `center/cover no-repeat url(${s.cover})` : 'linear-gradient(120deg,#1f2937,#0f2340)', position: 'relative' }}>
+                  {s.rating > 0 && <span style={{ position: 'absolute', top: 10, insetInlineStart: 10, fontSize: 11.5, fontWeight: 700, color: 'var(--gold)', background: 'rgba(10,9,8,0.75)', borderRadius: 8, padding: '3px 9px' }}>{fa(s.rating)} ★</span>}
+                </div>
+                <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+                  <div style={{ width: 56, height: 56, borderRadius: 14, marginTop: -28, background: s.logo ? `center/cover no-repeat url(${s.logo})` : 'linear-gradient(135deg,var(--gold2),var(--gold))', border: '3px solid var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 800, color: '#16140f', flexShrink: 0, boxShadow: '0 4px 12px -4px rgba(0,0,0,0.5)' }}>{!s.logo && (s.name.charAt(0) || 'ف')}</div>
+                  <div style={{ fontSize: 15.5, fontWeight: 800, marginTop: 4, lineHeight: 1.5 }}>{s.name}</div>
+                  {s.tagline && <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.tagline}</div>}
+                  {s.categories.length > 0 && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {s.categories.slice(0, 3).map(c => <span key={c} style={{ fontSize: 11, color: 'var(--muted)', background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 7, padding: '3px 9px' }}>{c}</span>)}
+                  </div>}
+                  <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: 'var(--faint)', paddingTop: 10, borderTop: '1px solid var(--line)' }}>
                     <span>📦 {fa(s.productCount)} کالا{s.city ? ` · ${s.city}` : ''}</span>
                     {s.minPrice > 0 && <span style={{ color: 'var(--gold)', fontWeight: 700 }}>از {mt(s.minPrice)} ت</span>}
                   </div>
