@@ -3,10 +3,11 @@ import { getSession } from '@/app/lib/session'
 import {
   listCategories, addCategory, updateCategory, deleteCategory,
   listProducts, addProduct, updateProduct, deleteProduct, catalogStats, clearCatalog,
-  categoriesNeedingImage, setCategoryImage,
+  categoriesNeedingImage, setCategoryImage, bulkDeleteQuery, bulkDeleteProducts, enrichStats,
 } from '@/app/lib/catalog-store'
 import { hasCap } from '@/app/lib/account-store'
 import { generateImage, agentModel, agentProvider } from '@/app/lib/gapgpt'
+import { enrichCatalogBatch } from '@/app/lib/catalog-enrich'
 
 // مدیریتِ کاتالوگِ مرجع — سوپرادمین یا کاربرِ دارای دسترسیِ «catalog».
 async function guard() {
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
     while (grew) { grew = false; for (const c of cats) if (c.parentId && ids.has(c.parentId) && !ids.has(c.id)) { ids.add(c.id); grew = true } }
     products = products.filter(p => ids.has(p.categoryId))
   }
-  return NextResponse.json({ categories: cats, products, stats: catalogStats() })
+  return NextResponse.json({ categories: cats, products, stats: catalogStats(), enrich: enrichStats() })
 }
 
 export async function POST(req: NextRequest) {
@@ -56,6 +57,16 @@ export async function POST(req: NextRequest) {
       deleteProduct(String(b.id)); return NextResponse.json({ ok: true })
     case 'clearCatalog':
       return NextResponse.json({ ok: true, cleared: clearCatalog(b.scope === 'all' ? 'all' : (b.scope || 'scraped')) })
+    case 'bulkDeleteCount':
+      return NextResponse.json({ ok: true, ...bulkDeleteQuery(b.filter || {}) })
+    case 'bulkDelete':
+      return NextResponse.json({ ok: true, ...bulkDeleteProducts(b.filter || {}) })
+    case 'enrichText': {
+      // تکمیلِ توضیحات/مشخصاتِ فنیِ محصولاتِ اسکرپ‌شده با AI (بَچ‌به‌بَچ؛ UI تا پایان تکرار می‌کند).
+      const r = await enrichCatalogBatch({ source: b.source || undefined, limit: 4 })
+      if (r.noModel) return NextResponse.json({ error: 'به ایجنتِ ContentAgent یک مدلِ متن بدهید (پنل → API و مدل‌های AI).' }, { status: 400 })
+      return NextResponse.json({ ok: true, ...r })
+    }
     case 'genImages': {
       // تولیدِ عکسِ AI برای دسته‌هایِ بدونِ عکس (هر بار چند تا؛ UI تا پایان تکرار می‌کند).
       const model = agentModel('content', 'image') || agentModel('studio', 'image')

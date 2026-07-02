@@ -131,6 +131,69 @@ export function updateProduct(pid: string, patch: any): CatalogProduct | null {
 }
 export function deleteProduct(pid: string) { const db = load(); db.products = db.products.filter(p => p.id !== pid); save(db) }
 
+// ── تکمیلِ AI: محصولاتِ اسکرپ‌شده‌ای که توضیحات یا مشخصاتِ فنیِ کافی ندارند ──
+function lacksText(p: CatalogProduct) { return (!p.description || p.description.trim().length < 20) || !(p.specs && p.specs.length >= 2) }
+export function productsNeedingEnrich(source?: string, limit = 0): CatalogProduct[] {
+  const db = load()
+  const rows = db.products.filter(p => p.active && (source ? p.source === source : p.source !== 'manual') && lacksText(p))
+  return limit > 0 ? rows.slice(0, limit) : rows
+}
+// فقط جاهای خالی را پُر می‌کند (توضیح/مشخصاتِ موجود دست‌نخورده می‌ماند) → «یک‌بار» تولید.
+export function setProductEnrichment(pid: string, patch: { description?: string; specs?: CatalogSpec[] }): boolean {
+  const db = load(); const p = db.products.find(x => x.id === pid); if (!p) return false
+  let changed = false
+  if (patch.description && (!p.description || p.description.trim().length < 20)) { p.description = String(patch.description).slice(0, 4000); changed = true }
+  if (patch.specs?.length && !(p.specs && p.specs.length >= 2)) {
+    const clean = patch.specs.slice(0, 40).map(s => ({ key: String(s.key || '').slice(0, 60), value: String(s.value || '').slice(0, 120) })).filter(s => s.key && s.value)
+    const existing = p.specs || []; const keys = new Set(existing.map(s => norm(s.key)))
+    const merged = [...existing, ...clean.filter(s => !keys.has(norm(s.key)))].slice(0, 40)
+    if (merged.length) { p.specs = merged; changed = true }
+  }
+  if (changed) save(db)
+  return changed
+}
+export function enrichStats(source?: string): { total: number; needing: number } {
+  const db = load()
+  const scraped = db.products.filter(p => p.active && (source ? p.source === source : p.source !== 'manual'))
+  return { total: scraped.length, needing: scraped.filter(lacksText).length }
+}
+
+// ── حذفِ دسته‌جمعی با فیلترِ چندحالته ──
+export interface BulkDeleteFilter { source?: string; category?: string; search?: string; brand?: string; missing?: string[] }
+function matchesBulk(p: CatalogProduct, f: BulkDeleteFilter, catIds: Set<string> | null): boolean {
+  if (f.source === 'scraped') { if (p.source === 'manual') return false }
+  else if (f.source && f.source !== 'all') { if (p.source !== f.source) return false }
+  if (catIds && !catIds.has(p.categoryId)) return false
+  if (f.brand && norm(p.brand || '') !== norm(f.brand)) return false
+  if (f.search) { const q = norm(f.search); if (!(norm(p.name).includes(q) || norm(p.brand || '').includes(q))) return false }
+  for (const m of (f.missing || [])) {
+    if (m === 'price' && p.priceHistory && p.priceHistory.length) return false
+    if (m === 'image' && p.image) return false
+    if (m === 'specs' && p.specs && p.specs.length >= 2) return false
+    if (m === 'description' && p.description && p.description.trim().length >= 20) return false
+  }
+  return true
+}
+export function bulkDeleteQuery(f: BulkDeleteFilter): { count: number } {
+  const db = load(); const catIds = f.category ? descendantsOf(db.categories, f.category) : null
+  return { count: db.products.filter(p => matchesBulk(p, f, catIds)).length }
+}
+export function bulkDeleteProducts(f: BulkDeleteFilter): { deleted: number; categories: number } {
+  const db = load(); const catIds = f.category ? descendantsOf(db.categories, f.category) : null
+  const before = db.products.length, cBefore = db.categories.length
+  db.products = db.products.filter(p => !matchesBulk(p, f, catIds))
+  // پاک‌سازیِ دسته‌های خالی (تا رسیدن به حالتِ پایدار — والدهای بی‌فرزند هم بروند)
+  let pruned = true
+  while (pruned) {
+    const usedCat = new Set(db.products.map(p => p.categoryId))
+    const hasChild = new Set(db.categories.filter(c => c.parentId).map(c => c.parentId!))
+    const keep = db.categories.filter(c => usedCat.has(c.id) || hasChild.has(c.id))
+    pruned = keep.length !== db.categories.length; db.categories = keep
+  }
+  save(db)
+  return { deleted: before - db.products.length, categories: cBefore - db.categories.length }
+}
+
 // ادغامِ نتیجهٔ اسکرپ: بر اساسِ externalId (source=hypersaz) به‌روزرسانی یا افزودن.
 // مسیرِ دسته‌ها را سلسله‌مراتبی می‌سازد (والد→زیردسته) و عمیق‌ترین دسته را برمی‌گرداند.
 function ensureCategoryPathInDb(db: DB, path: string[]): CatalogCategory | null {
@@ -230,7 +293,7 @@ function descendantsOf(cats: CatalogCategory[], rootId: string): Set<string> {
   while (g) { g = false; for (const c of cats) if (c.parentId && ids.has(c.parentId) && !ids.has(c.id)) { ids.add(c.id); g = true } }
   return ids
 }
-export function publicCatalogQuery(opts: { search?: string; category?: string; source?: string; brand?: string; sort?: string; page?: number; pageSize?: number }) {
+export function publicCatalogQuery(opts: { search?: string; category?: string; source?: string; brand?: string; unit?: string; sort?: string; minPrice?: number; maxPrice?: number; withSeller?: boolean; sellerIds?: Set<string>; page?: number; pageSize?: number }) {
   const db = load()
   const catName = (id: string) => db.categories.find(c => c.id === id)?.name || ''
   const refPrice = (p: CatalogProduct) => p.priceHistory?.length ? Math.round(p.priceHistory[p.priceHistory.length - 1].price / 10) : 0
@@ -238,6 +301,10 @@ export function publicCatalogQuery(opts: { search?: string; category?: string; s
   if (opts.category) { const ids = descendantsOf(db.categories, opts.category); items = items.filter(p => ids.has(p.categoryId)) }
   if (opts.source && opts.source !== 'all') items = items.filter(p => p.source === opts.source)
   if (opts.brand) { const b = norm(opts.brand); items = items.filter(p => norm(p.brand || '').includes(b)) }
+  if (opts.unit) { const u = norm(opts.unit); items = items.filter(p => norm(p.unit || '') === u) }
+  if (opts.withSeller && opts.sellerIds) items = items.filter(p => opts.sellerIds!.has(p.id))
+  if (opts.minPrice) items = items.filter(p => refPrice(p) >= opts.minPrice!)
+  if (opts.maxPrice) items = items.filter(p => { const v = refPrice(p); return v > 0 && v <= opts.maxPrice! })
   if (opts.search) { const q = norm(opts.search); items = items.filter(p => norm(p.name).includes(q) || norm(p.brand || '').includes(q) || (p.tags || []).some(t => norm(t).includes(q))) }
   const total = items.length
   if (opts.sort === 'cheap') items = [...items].sort((a, b) => (refPrice(a) || Infinity) - (refPrice(b) || Infinity))
@@ -253,15 +320,28 @@ export function publicCatalogQuery(opts: { search?: string; category?: string; s
 export function publicCatalogFacets() {
   const db = load()
   const active = db.products.filter(p => p.active)
+  // شمارشِ هر دسته شاملِ زیردسته‌ها (سلسله‌مراتبی)
   const catCount = new Map<string, number>()
   for (const p of active) { const ids = new Set<string>(); let c = db.categories.find(x => x.id === p.categoryId); let g = 0; while (c && g++ < 6) { ids.add(c.id); c = c.parentId ? db.categories.find(x => x.id === c!.parentId) : undefined }; for (const id of ids) catCount.set(id, (catCount.get(id) || 0) + 1) }
-  const roots = db.categories.filter(c => !c.parentId).map(c => ({ id: c.id, name: c.name, count: catCount.get(c.id) || 0 })).filter(c => c.count > 0).sort((a, b) => b.count - a.count)
+  const mk = (c: CatalogCategory) => ({ id: c.id, name: c.name, count: catCount.get(c.id) || 0 })
+  const childrenTree = (pid: string): any[] => db.categories.filter(c => c.parentId === pid && (catCount.get(c.id) || 0) > 0)
+    .sort((a, b) => (catCount.get(b.id) || 0) - (catCount.get(a.id) || 0))
+    .map(c => ({ ...mk(c), children: childrenTree(c.id) }))
+  const tree = db.categories.filter(c => !c.parentId && (catCount.get(c.id) || 0) > 0)
+    .sort((a, b) => (catCount.get(b.id) || 0) - (catCount.get(a.id) || 0))
+    .map(c => ({ ...mk(c), children: childrenTree(c.id) }))
+  const roots = tree.map(({ children, ...r }) => r)   // سازگاریِ عقب‌رو (چیپ‌های تخت)
   const brandCount = new Map<string, number>()
   for (const p of active) if (p.brand) brandCount.set(p.brand, (brandCount.get(p.brand) || 0) + 1)
-  const brands = [...brandCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30).map(([label, count]) => ({ label, count }))
+  const brands = [...brandCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 40).map(([label, count]) => ({ label, count }))
+  const unitCount = new Map<string, number>()
+  for (const p of active) if (p.unit) unitCount.set(p.unit, (unitCount.get(p.unit) || 0) + 1)
+  const units = [...unitCount.entries()].sort((a, b) => b[1] - a[1]).map(([label, count]) => ({ label, count }))
   const sourceCount: Record<string, number> = {}
   for (const p of active) sourceCount[p.source] = (sourceCount[p.source] || 0) + 1
-  return { categories: roots, brands, sources: sourceCount, total: active.length }
+  const prices = active.map(p => p.priceHistory?.length ? Math.round(p.priceHistory[p.priceHistory.length - 1].price / 10) : 0).filter(v => v > 0)
+  const priceRange = prices.length ? { min: Math.min(...prices), max: Math.max(...prices) } : null
+  return { categories: roots, tree, brands, units, sources: sourceCount, priceRange, total: active.length }
 }
 
 export function catalogStats() {

@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { upsertScraped, type CatalogSpec } from './catalog-store'
+import { enrichCatalogBatch } from './catalog-enrich'
 
 // موتورِ اسکرپِ چند-منبعی → کاتالوگِ مرجع. هر منبع (هایپرساز/آهن‌آنلاین/…) تنظیمات،
 // وضعیتِ کار و زمان‌بندیِ مستقلِ خودش را دارد. چند-استراتژی با تشخیصِ خودکار:
@@ -21,10 +22,11 @@ export interface ScraperConfig {
   schedule: 'off' | 'daily' | 'weekly'
   scheduleHour: number
   lastAutoAt?: number
+  aiEnrich?: boolean   // تکمیلِ خودکارِ توضیحات/مشخصات با AI پس از اسکرپ
   productLinkSel?: string; nameSel?: string; priceSel?: string; imageSel?: string; categorySel?: string
 }
 function defaultCfg(source: string): ScraperConfig {
-  return { baseUrl: SOURCES.find(s => s.id === source)?.base || '', strategy: 'auto', maxProducts: 3000, schedule: 'off', scheduleHour: 3 }
+  return { baseUrl: SOURCES.find(s => s.id === source)?.base || '', strategy: 'auto', maxProducts: 3000, schedule: 'off', scheduleHour: 3, aiEnrich: true }
 }
 export function getConfig(source: string): ScraperConfig {
   const f = cfgFile(source)
@@ -41,6 +43,7 @@ export function setConfig(source: string, patchIn: Partial<ScraperConfig>): Scra
     schedule: (['off', 'daily', 'weekly'] as const).includes(patchIn.schedule as any) ? patchIn.schedule as any : cur.schedule,
     scheduleHour: patchIn.scheduleHour !== undefined ? Math.max(0, Math.min(23, Number(patchIn.scheduleHour) || 0)) : cur.scheduleHour,
     lastAutoAt: patchIn.lastAutoAt !== undefined ? Number(patchIn.lastAutoAt) : cur.lastAutoAt,
+    aiEnrich: patchIn.aiEnrich !== undefined ? !!patchIn.aiEnrich : cur.aiEnrich,
     productLinkSel: patchIn.productLinkSel !== undefined ? String(patchIn.productLinkSel) : cur.productLinkSel,
     nameSel: patchIn.nameSel !== undefined ? String(patchIn.nameSel) : cur.nameSel,
     priceSel: patchIn.priceSel !== undefined ? String(patchIn.priceSel) : cur.priceSel,
@@ -410,6 +413,18 @@ async function run(source: string) {
     if (strat === 'wp') res = await runWp(source, cfg)
     else res = await runSitemap(source, cfg)
     if (res.added === 0 && res.updated === 0) throw new Error('هیچ محصولی یافت نشد — «تستِ اتصال» را بزنید.')
+    // تکمیلِ توضیحات/مشخصاتِ فنیِ محصولاتِ بدونِ توضیح با AI (فقط جاهای خالی، یک‌بار)
+    if (getConfig(source).aiEnrich !== false) {
+      patch(source, { label: 'تکمیلِ توضیحات/مشخصات با AI' })
+      let enriched = 0
+      while (loadJob(source).running) {
+        const e = await enrichCatalogBatch({ source, limit: 3 })
+        if (e.noModel) break
+        enriched += e.enriched
+        patch(source, { label: `AI: ${enriched.toLocaleString('fa-IR')} محصول تکمیل شد${e.remaining ? ` · ${e.remaining.toLocaleString('fa-IR')} باقی` : ''}` })
+        if (e.remaining === 0 || e.enriched === 0) break
+      }
+    }
     patch(source, { running: false, finishedAt: Date.now(), label: 'پایان' })
   } catch (e: any) {
     patch(source, { running: false, finishedAt: Date.now(), error: e?.message || 'خطا در اسکرپ' })

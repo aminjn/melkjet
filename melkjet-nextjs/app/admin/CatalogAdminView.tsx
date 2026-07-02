@@ -26,7 +26,8 @@ export default function CatalogAdminView() {
   const [catModal, setCatModal] = useState<{ mode: 'add' | 'edit'; cat?: Cat; parentId?: string } | null>(null)
   const [confirmDel, setConfirmDel] = useState<{ kind: 'cat' | 'prod'; id: string; name: string } | null>(null)
   const [scrape, setScrape] = useState(false)
-  const [clearScope, setClearScope] = useState<'scraped' | 'all' | null>(null)
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [enrich, setEnrich] = useState<{ total: number; needing: number } | null>(null)
   const [busy, setBusy] = useState(false)
   const [toast, setToast] = useState('')
 
@@ -35,7 +36,7 @@ export default function CatalogAdminView() {
     if (activeCat) p.set('categoryId', activeCat)
     if (search.trim()) p.set('search', search.trim())
     fetch(`/api/admin/catalog?${p}`).then(r => r.ok ? r.json() : null).then(d => {
-      if (d) { setCats(d.categories || []); setProds(d.products || []); setStats(d.stats || null) }
+      if (d) { setCats(d.categories || []); setProds(d.products || []); setStats(d.stats || null); setEnrich(d.enrich || null) }
     }).catch(() => {})
   }, [activeCat, search])
   useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t) }, [load])
@@ -55,6 +56,23 @@ export default function CatalogAdminView() {
       if (!d.remaining || (d.generated || 0) === 0) break
     }
     setGenMsg(`✓ تمام شد — ${total.toLocaleString('fa-IR')} عکسِ دسته ساخته شد.`); setTimeout(() => setGenMsg(''), 4000)
+  }
+
+  // تکمیلِ توضیحات/مشخصاتِ فنیِ محصولاتِ اسکرپ‌شده با AI (فقط جاهای خالی، بَچ‌به‌بَچ تا پایان)
+  const enrichText = async () => {
+    if (genMsg) return
+    setGenMsg('در حال تکمیلِ توضیحات/مشخصات با AI…')
+    let total = 0
+    for (let guard = 0; guard < 400; guard++) {
+      const r = await fetch('/api/admin/catalog', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'enrichText' }) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || d.error) { setGenMsg(d.error || 'خطا در تکمیلِ متن'); setTimeout(() => setGenMsg(''), 4000); return }
+      total += d.enriched || 0
+      setGenMsg(`تکمیلِ AI: ${fa(total)} محصول${d.remaining ? ` · ${fa(d.remaining)} باقی‌مانده…` : ''}`)
+      load()
+      if (!d.remaining || (d.enriched || 0) === 0) break
+    }
+    setGenMsg(`✓ تمام شد — ${fa(total)} محصول تکمیل شد.`); setTimeout(() => setGenMsg(''), 4000)
   }
 
   const post = async (body: any): Promise<boolean> => {
@@ -85,8 +103,9 @@ export default function CatalogAdminView() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {enrich && enrich.needing > 0 && <button onClick={enrichText} disabled={!!genMsg} style={{ ...ghost, border: '1px solid var(--gold)', color: 'var(--gold)' }}>✍ توضیحات/مشخصات با AI ({fa(enrich.needing)})</button>}
           {stats && stats.products > 0 && <button onClick={genImages} disabled={!!genMsg} style={{ ...ghost, border: '1px solid var(--gold)', color: 'var(--gold)' }}>🎨 عکسِ دسته‌ها با AI</button>}
-          {stats && stats.products > 0 && <button onClick={() => setClearScope('scraped')} style={{ ...ghost, border: '1px solid #e7674a', color: '#f87171' }}>🗑 پاک‌کردنِ دسته‌جمعی</button>}
+          {stats && stats.products > 0 && <button onClick={() => setBulkOpen(true)} style={{ ...ghost, border: '1px solid #e7674a', color: '#f87171' }}>🗑 حذفِ دسته‌جمعی</button>}
           <button onClick={() => setScrape(true)} style={{ ...ghost, border: '1px solid var(--gold)', color: 'var(--gold)', fontWeight: 700 }}>⛏ اسکرپ و تنظیمات</button>
           <button onClick={() => setEditing('new')} style={gold}>+ کالای جدید</button>
         </div>
@@ -145,17 +164,7 @@ export default function CatalogAdminView() {
       {editing && <ProductEditor product={editing === 'new' ? null : editing} cats={cats} defaultCat={activeCat} post={post} busy={busy} onClose={() => setEditing(null)} />}
       {catModal && <CategoryModal state={catModal} cats={cats} post={post} busy={busy} onClose={() => setCatModal(null)} />}
       {scrape && <ScrapePanel onClose={() => setScrape(false)} onDone={load} />}
-      {clearScope && (
-        <Overlay onClose={() => setClearScope(null)} max={440}>
-          <Head title="پاک‌کردنِ دسته‌جمعی" onClose={() => setClearScope(null)} />
-          <div style={{ fontSize: 13.5, lineHeight: 1.9, marginBottom: 16 }}>چه چیزی پاک شود؟ این عملیات بازگشت‌ناپذیر است.</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 18 }}>
-            <button onClick={async () => { const r = await post({ action: 'clearCatalog', scope: 'scraped' }); if (r) { setClearScope(null); setActiveCat('') } }} disabled={busy} style={{ ...ghost, textAlign: 'right', padding: '12px 14px' }}>🗑 فقط محصولاتِ <b>اسکرپ‌شده</b> (هایپرساز) + دسته‌های خالی — کالاهای دستی می‌مانند</button>
-            <button onClick={async () => { const r = await post({ action: 'clearCatalog', scope: 'all' }); if (r) { setClearScope(null); setActiveCat('') } }} disabled={busy} style={{ ...ghost, textAlign: 'right', padding: '12px 14px', border: '1px solid #e7674a', color: '#f87171' }}>⚠ <b>همهٔ</b> کالاها و دسته‌بندی‌ها (اسکرپ‌شده + دستی)</button>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}><button onClick={() => setClearScope(null)} style={ghost}>انصراف</button></div>
-        </Overlay>
-      )}
+      {bulkOpen && <BulkDeleteModal cats={cats} onClose={() => setBulkOpen(false)} onDone={() => { setActiveCat(''); load() }} />}
       {confirmDel && <ConfirmModal text={confirmDel.kind === 'cat' ? `حذفِ دستهٔ «${confirmDel.name}» و همهٔ کالاها/زیردسته‌هایش؟` : `حذفِ «${confirmDel.name}»؟`} busy={busy} onClose={() => setConfirmDel(null)} onConfirm={async () => { await post({ action: confirmDel.kind === 'cat' ? 'deleteCategory' : 'deleteProduct', id: confirmDel.id }); setConfirmDel(null) }} />}
     </div>
   )
@@ -196,6 +205,71 @@ function ConfirmModal({ text, busy, onConfirm, onClose }: { text: string; busy: 
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
         <button onClick={onClose} style={ghost}>انصراف</button>
         <button onClick={onConfirm} disabled={busy} style={{ ...gold, background: '#e7674a', color: '#fff' }}>حذف</button>
+      </div>
+    </Overlay>
+  )
+}
+
+// ── حذفِ دسته‌جمعی با فیلترِ چندحالته (منبع/دسته/جستجو/ناقص‌ها) + پیش‌نمایشِ تعداد ──
+const SRC_OPTS: { id: string; label: string }[] = [
+  { id: 'scraped', label: 'همهٔ اسکرپ‌شده‌ها (دستی می‌ماند)' },
+  { id: 'all', label: 'همه (اسکرپ‌شده + دستی)' },
+  { id: 'hypersaz', label: 'فقط هایپرساز' },
+  { id: 'ahanonline', label: 'فقط آهن‌آنلاین' },
+  { id: 'manual', label: 'فقط دستی' },
+]
+const MISS_OPTS: { id: string; label: string }[] = [
+  { id: 'price', label: 'بدون قیمت' }, { id: 'image', label: 'بدون عکس' },
+  { id: 'specs', label: 'بدون مشخصات' }, { id: 'description', label: 'بدون توضیحات' },
+]
+function BulkDeleteModal({ cats, onClose, onDone }: { cats: Cat[]; onClose: () => void; onDone: () => void }) {
+  const [source, setSource] = useState('scraped')
+  const [category, setCategory] = useState('')
+  const [search, setSearch] = useState('')
+  const [missing, setMissing] = useState<string[]>([])
+  const [count, setCount] = useState<number | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [confirm, setConfirm] = useState(false)
+  const opts = catOptions(cats)
+  const filter = () => ({ source, category: category || undefined, search: search.trim() || undefined, missing })
+  useEffect(() => {
+    setConfirm(false)
+    const t = setTimeout(async () => {
+      const r = await fetch('/api/admin/catalog', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'bulkDeleteCount', filter: filter() }) })
+      const d = await r.json().catch(() => ({})); setCount(typeof d?.count === 'number' ? d.count : null)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [source, category, search, missing]) // eslint-disable-line
+  const del = async () => {
+    setBusy(true)
+    const r = await fetch('/api/admin/catalog', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'bulkDelete', filter: filter() }) })
+    const d = await r.json().catch(() => ({})); setBusy(false)
+    if (d?.ok) { onDone(); onClose() }
+  }
+  return (
+    <Overlay onClose={onClose} max={480}>
+      <Head title="🗑 حذفِ دسته‌جمعیِ محصولات" onClose={onClose} />
+      <label style={lab}>منبع</label>
+      <select value={source} onChange={e => setSource(e.target.value)} style={{ ...inp, cursor: 'pointer', marginBottom: 12 }}>{SRC_OPTS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}</select>
+      <label style={lab}>دسته‌بندی (اختیاری — شاملِ زیردسته‌ها)</label>
+      <select value={category} onChange={e => setCategory(e.target.value)} style={{ ...inp, cursor: 'pointer', marginBottom: 12 }}><option value="">— همهٔ دسته‌ها —</option>{opts.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}</select>
+      <label style={lab}>جستجو در نام/برند (اختیاری)</label>
+      <input value={search} onChange={e => setSearch(e.target.value)} placeholder="مثلاً میلگرد" style={{ ...inp, marginBottom: 12 }} />
+      <label style={lab}>فقط محصولاتِ ناقص (اختیاری)</label>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+        {MISS_OPTS.map(m => {
+          const on = missing.includes(m.id)
+          return <button key={m.id} onClick={() => setMissing(a => on ? a.filter(x => x !== m.id) : [...a, m.id])} style={{ padding: '7px 13px', borderRadius: 999, border: `1px solid ${on ? 'var(--gold)' : 'var(--line2)'}`, background: on ? 'var(--goldDim)' : 'transparent', color: on ? 'var(--gold)' : 'var(--muted)', fontSize: 12.5, fontWeight: on ? 700 : 400, cursor: 'pointer', fontFamily: FONT }}>{on ? '✓ ' : ''}{m.label}</button>
+        })}
+      </div>
+      <div style={{ background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 10, padding: '12px 14px', marginBottom: 16, fontSize: 13.5, textAlign: 'center' }}>
+        {count === null ? 'در حال شمارش…' : count === 0 ? 'محصولی با این فیلتر یافت نشد.' : <>مطابقِ این فیلتر <b style={{ color: '#f87171' }}>{fa(count)}</b> محصول حذف می‌شود. <span style={{ color: 'var(--muted)' }}>(بازگشت‌ناپذیر)</span></>}
+      </div>
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+        <button onClick={onClose} style={ghost}>انصراف</button>
+        {!confirm
+          ? <button onClick={() => setConfirm(true)} disabled={!count} style={{ ...gold, background: count ? '#e7674a' : 'var(--line2)', color: '#fff', cursor: count ? 'pointer' : 'default' }}>حذفِ {count ? fa(count) : ''} محصول</button>
+          : <button onClick={del} disabled={busy} style={{ ...gold, background: '#e7674a', color: '#fff' }}>{busy ? '…' : `مطمئنم، حذف کن (${fa(count || 0)})`}</button>}
       </div>
     </Overlay>
   )
@@ -298,7 +372,7 @@ interface Probe { name: string; url: string; ok: boolean; status: number; note: 
 function ScrapePanel({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [source, setSource] = useState('hypersaz')
   const [sources, setSources] = useState<{ id: string; label: string }[]>([{ id: 'hypersaz', label: 'هایپرساز' }, { id: 'ahanonline', label: 'آهن‌آنلاین' }])
-  const [cfg, setCfg] = useState<any>({ baseUrl: '', strategy: 'auto', maxProducts: 3000, schedule: 'off', scheduleHour: 3 })
+  const [cfg, setCfg] = useState<any>({ baseUrl: '', strategy: 'auto', maxProducts: 3000, schedule: 'off', scheduleHour: 3, aiEnrich: true })
   const [job, setJob] = useState<any>(null)
   const [report, setReport] = useState<{ platform: string; probes: Probe[]; recommend: string; smUrl?: string; sitemapType?: string; sitemapLocs?: string[]; subSample?: string[] } | null>(null)
   const [testing, setTesting] = useState(false)
@@ -374,6 +448,10 @@ function ScrapePanel({ onClose, onDone }: { onClose: () => void; onDone: () => v
         </div>
       </div>
       {cfg.schedule !== 'off' && <div style={{ fontSize: 11.5, color: '#5fd98a', marginBottom: 10 }}>✓ به‌صورتِ {cfg.schedule === 'daily' ? 'روزانه' : 'هفتگی'} ساعتِ {Number(cfg.scheduleHour).toLocaleString('fa-IR')} خودکار اسکرپ می‌شود و همه‌چیز آپدیت + کالای جدید اضافه می‌شود. (پس از تغییر، «ذخیرهٔ تنظیمات» را بزنید.)</div>}
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, cursor: 'pointer', marginBottom: 12, lineHeight: 1.7 }}>
+        <input type="checkbox" checked={cfg.aiEnrich !== false} onChange={e => setCfg({ ...cfg, aiEnrich: e.target.checked })} />
+        <span>تکمیلِ خودکارِ توضیحات و مشخصاتِ فنی با AI برای محصولاتِ بدونِ توضیح (پس از اسکرپ، فقط یک‌بار برای هر محصول)</span>
+      </label>
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
         <button onClick={test} disabled={testing} style={{ ...ghost, border: '1px solid var(--gold)', color: 'var(--gold)' }}>{testing ? 'در حال تست…' : '🔍 تستِ اتصال'}</button>
         <button onClick={saveCfg} style={ghost}>ذخیرهٔ تنظیمات</button>
