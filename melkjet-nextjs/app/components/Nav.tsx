@@ -24,14 +24,15 @@ const MENUS: Menu[] = [
   { label: 'پروژه‌ها', items: [
     { ic: '🏗', label: 'دایرکتوری پروژه‌ها', desc: 'پیش‌فروش تا آماده تحویل', href: '/sazandeha' },
     { ic: '◉', label: 'سازندگان', desc: 'پروفایل سازندگان', href: '/sazandeha' },
-    { ic: '🧱', label: 'بازار مصالح', desc: 'فروشگاه‌های مصالح', href: '/forushgaha' },
+    { ic: '🧱', label: 'بازار مصالح', desc: 'همهٔ محصولات + قیمت', href: '/bazar-masaleh' },
+    { ic: '🏪', label: 'فروشگاه‌های مصالح', desc: 'فروشندگانِ مصالح', href: '/forushgaha' },
     { ic: '📊', label: 'نرخِ روزِ مصالح', desc: 'قیمتِ روزِ آهن، سیمان و…', href: '/nerkh-masaleh' },
   ] },
   { label: 'متخصصان', items: [
     { ic: '◎', label: 'مشاوران املاک', desc: 'یافتن مشاور', href: '/directory?category=مشاور' },
     { ic: '🏢', label: 'آژانس‌های املاک', desc: 'دفاتر و شعب', href: '/directory?category=آژانس' },
     { ic: '🏗', label: 'سازندگان', desc: 'پروژه و پیش‌فروش', href: '/sazandeha' },
-    { ic: '🧱', label: 'فروشندگان مصالح', desc: 'فروشگاه‌ها و نرخِ روز', href: '/forushgaha' },
+    { ic: '🧱', label: 'بازار و محصولاتِ مصالح', desc: 'همهٔ محصولات + قیمت', href: '/bazar-masaleh' },
     { ic: '📐', label: 'معمار و طراح داخلی', desc: 'طراحی و نظارت', href: '/directory?category=معمار' },
     { ic: '🛠', label: 'پیمانکار', desc: 'اجرای ساختمان', href: '/directory?category=پیمانکار' },
     { ic: '📋', label: 'کارشناس رسمی', desc: 'ارزیابی و گزارش', href: '/directory?category=کارشناس' },

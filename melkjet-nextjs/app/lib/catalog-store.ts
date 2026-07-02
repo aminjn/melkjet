@@ -224,6 +224,46 @@ export function referencePriceIndex(opts?: { category?: string; search?: string 
   return { rows: rows.slice(0, 600), categories, count: rows.length }
 }
 
+// ── کوئریِ عمومیِ محصولات (صفحهٔ بازارِ مصالح) با فیلتر/جستجو/مرتب‌سازی ──
+function descendantsOf(cats: CatalogCategory[], rootId: string): Set<string> {
+  const ids = new Set<string>([rootId]); let g = true
+  while (g) { g = false; for (const c of cats) if (c.parentId && ids.has(c.parentId) && !ids.has(c.id)) { ids.add(c.id); g = true } }
+  return ids
+}
+export function publicCatalogQuery(opts: { search?: string; category?: string; source?: string; brand?: string; sort?: string; page?: number; pageSize?: number }) {
+  const db = load()
+  const catName = (id: string) => db.categories.find(c => c.id === id)?.name || ''
+  const refPrice = (p: CatalogProduct) => p.priceHistory?.length ? Math.round(p.priceHistory[p.priceHistory.length - 1].price / 10) : 0
+  let items = db.products.filter(p => p.active)
+  if (opts.category) { const ids = descendantsOf(db.categories, opts.category); items = items.filter(p => ids.has(p.categoryId)) }
+  if (opts.source && opts.source !== 'all') items = items.filter(p => p.source === opts.source)
+  if (opts.brand) { const b = norm(opts.brand); items = items.filter(p => norm(p.brand || '').includes(b)) }
+  if (opts.search) { const q = norm(opts.search); items = items.filter(p => norm(p.name).includes(q) || norm(p.brand || '').includes(q) || (p.tags || []).some(t => norm(t).includes(q))) }
+  const total = items.length
+  if (opts.sort === 'cheap') items = [...items].sort((a, b) => (refPrice(a) || Infinity) - (refPrice(b) || Infinity))
+  else if (opts.sort === 'expensive') items = [...items].sort((a, b) => refPrice(b) - refPrice(a))
+  else items = [...items].sort((a, b) => b.createdAt - a.createdAt)
+  const page = Math.max(1, opts.page || 1), pageSize = Math.min(60, opts.pageSize || 24)
+  const paged = items.slice((page - 1) * pageSize, page * pageSize).map(p => ({
+    id: p.id, name: p.name, image: p.image || '', brand: p.brand || '', category: catName(p.categoryId),
+    unit: p.unit || '', source: p.source, refPrice: refPrice(p),
+  }))
+  return { items: paged, total, page, pageSize }
+}
+export function publicCatalogFacets() {
+  const db = load()
+  const active = db.products.filter(p => p.active)
+  const catCount = new Map<string, number>()
+  for (const p of active) { const ids = new Set<string>(); let c = db.categories.find(x => x.id === p.categoryId); let g = 0; while (c && g++ < 6) { ids.add(c.id); c = c.parentId ? db.categories.find(x => x.id === c!.parentId) : undefined }; for (const id of ids) catCount.set(id, (catCount.get(id) || 0) + 1) }
+  const roots = db.categories.filter(c => !c.parentId).map(c => ({ id: c.id, name: c.name, count: catCount.get(c.id) || 0 })).filter(c => c.count > 0).sort((a, b) => b.count - a.count)
+  const brandCount = new Map<string, number>()
+  for (const p of active) if (p.brand) brandCount.set(p.brand, (brandCount.get(p.brand) || 0) + 1)
+  const brands = [...brandCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30).map(([label, count]) => ({ label, count }))
+  const sourceCount: Record<string, number> = {}
+  for (const p of active) sourceCount[p.source] = (sourceCount[p.source] || 0) + 1
+  return { categories: roots, brands, sources: sourceCount, total: active.length }
+}
+
 export function catalogStats() {
   const db = load()
   const bySource: Record<string, number> = {}
