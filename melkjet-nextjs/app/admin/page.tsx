@@ -321,6 +321,43 @@ const M_STATUS: Record<string, { label: string; color: string }> = {
   duplicate: { label: 'تکراری', color: '#e7a14a' }, rejected: { label: 'رد', color: '#e7674a' },
 }
 
+// ── صفحه‌بندیِ سبک برای فهرست‌های سنگین (کاربران/آگهی/اسکرپ/…) ──
+function usePaged<T>(items: T[]) {
+  const [page, setPage] = useState(1)
+  const [size, setSizeState] = useState<number>(() => { try { return Number(localStorage.getItem('mj_admin_page_size')) || 20 } catch { return 20 } })
+  useEffect(() => { setPage(1) }, [items.length, size])
+  const total = items.length
+  const pageCount = size <= 0 ? 1 : Math.max(1, Math.ceil(total / size))
+  const p = Math.min(page, pageCount)
+  const paged = size <= 0 ? items : items.slice((p - 1) * size, p * size)
+  const setSize = (s: number) => { setSizeState(s); setPage(1); try { localStorage.setItem('mj_admin_page_size', String(s)) } catch {} }
+  return { paged, page: p, setPage, size, setSize, total, pageCount }
+}
+function Pager({ page, pageCount, size, setSize, setPage, total }: { page: number; pageCount: number; size: number; setSize: (s: number) => void; setPage: (f: (p: number) => number) => void; total: number }) {
+  const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
+  const sel: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 8, padding: '5px 10px', color: 'var(--text)', fontSize: 12.5, fontFamily: 'inherit', cursor: 'pointer' }
+  const btn = (dis: boolean): React.CSSProperties => ({ padding: '6px 14px', borderRadius: 8, border: '1px solid var(--line2)', background: dis ? 'transparent' : 'var(--bg2)', color: dis ? 'var(--faint)' : 'var(--text)', fontSize: 12.5, cursor: dis ? 'default' : 'pointer', fontFamily: 'inherit' })
+  if (total === 0) return null
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--muted)' }}>
+        <span>تعدادِ نمایش:</span>
+        <select value={size} onChange={e => setSize(Number(e.target.value))} style={sel}>
+          {[10, 20, 50, 100, 0].map(s => <option key={s} value={s}>{s === 0 ? 'همه' : fa(s)}</option>)}
+        </select>
+        <span>از {fa(total)} مورد</span>
+      </div>
+      {pageCount > 1 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5 }}>
+          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1} style={btn(page <= 1)}>‹ قبلی</button>
+          <span style={{ color: 'var(--muted)' }}>صفحهٔ {fa(page)} از {fa(pageCount)}</span>
+          <button onClick={() => setPage(p => Math.min(pageCount, p + 1))} disabled={page >= pageCount} style={btn(page >= pageCount)}>بعدی ›</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ListingsView() {
   const [items, setItems] = useState<MItem[]>([])
   const [total, setTotal] = useState(0)
@@ -403,6 +440,7 @@ function ListingsView() {
 
   const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '8px 11px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
 
+  const pg = usePaged(items)
   return (
     <div style={{ animation: 'fade .35s ease' }}>
       {/* filters */}
@@ -447,7 +485,7 @@ function ListingsView() {
           <div style={{ color: 'var(--muted)', fontSize: 13, padding: '30px 0', textAlign: 'center' }}>موردی نیست. یک منبع اجرا کنید یا فیلترها را تغییر دهید.</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {items.map(it => (
+            {pg.paged.map(it => (
               <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg2)', borderRadius: 12, padding: '10px 12px', flexWrap: 'wrap' }}>
                 <input type="checkbox" checked={sel.has(it.id)} onChange={() => toggleSel(it.id)} style={{ width: 16, height: 16, accentColor: 'var(--gold)', cursor: 'pointer' }} />
                 {it.image
@@ -471,6 +509,7 @@ function ListingsView() {
             ))}
           </div>
         )}
+        <Pager {...pg} />
       </Card>
 
       {edit && <EditItemModal item={edit} onClose={() => setEdit(null)} onSave={saveEdit} />}
@@ -1096,7 +1135,7 @@ function ScraperView() {
     padding: '10px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none',
   }
   const labelCss: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', marginBottom: 6, display: 'block', fontWeight: 600 }
-
+  const pg = usePaged(items)
   return (
     <div style={{ animation: 'fade .35s ease' }}>
       <DivarProxyConfig />
@@ -1228,7 +1267,7 @@ function ScraperView() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {items.map(it => (
+            {pg.paged.map(it => (
               <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 14, background: 'var(--bg2)', borderRadius: 12, padding: '12px 16px', flexWrap: 'wrap' }}>
                 {it.image
                   ? <img src={it.image} alt="" style={{ width: 46, height: 46, borderRadius: 9, objectFit: 'cover', flexShrink: 0, background: 'var(--line)' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
@@ -1251,6 +1290,7 @@ function ScraperView() {
             ))}
           </div>
         )}
+        <Pager {...pg} />
       </Card>
 
       {/* Add-source modal — detailed configurator */}
@@ -2865,6 +2905,7 @@ function ProductsView() {
   const del = async (id: string) => { if (!confirm('این محصول حذف شود؟')) return; setItems(items.filter(i => i.id !== id)); await fetch(`/api/admin/scraper/items?id=${id}`, { method: 'DELETE' }) }
   const saveEdit = async (patch: any) => { if (!edit) return; setItems(items.map(i => i.id === edit.id ? { ...i, ...patch } : i)); await fetch('/api/admin/scraper/items', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: edit.id, patch }) }); setEdit(null) }
   const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '9px 11px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
+  const pg = usePaged(items)
   return (
     <div style={{ animation: 'fade .35s ease' }}>
       <Card style={{ marginBottom: 14 }}>
@@ -2887,7 +2928,7 @@ function ProductsView() {
       <Card>
         {items.length === 0 ? <div style={{ color: 'var(--muted)', fontSize: 13, padding: '24px 0', textAlign: 'center' }}>محصولی نیست. «محصول جدید» را بزن یا از موتور اسکرپ محصول واکشی کن.</div> : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {items.map(it => (
+            {pg.paged.map(it => (
               <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg2)', borderRadius: 12, padding: '10px 12px', flexWrap: 'wrap' }}>
                 {it.image ? <img src={it.image} alt="" style={{ width: 46, height: 46, borderRadius: 9, objectFit: 'cover', flexShrink: 0 }} onError={e => { (e.target as HTMLImageElement).style.visibility = 'hidden' }} /> : <span style={{ width: 46, height: 46, borderRadius: 9, background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--gold)' }}>◰</span>}
                 <div style={{ flex: 1, minWidth: 160 }}><div style={{ fontSize: 13.5, fontWeight: 600 }}>{it.title}</div><div style={{ fontSize: 12, color: 'var(--muted)' }}>{[it.location, it.category].filter(Boolean).join(' · ')}</div></div>
@@ -2900,6 +2941,7 @@ function ProductsView() {
             ))}
           </div>
         )}
+        <Pager {...pg} />
       </Card>
       {edit && <EditItemModal item={edit} onClose={() => setEdit(null)} onSave={saveEdit} />}
     </div>
@@ -3538,6 +3580,7 @@ function UsersView() {
   const toggleSel = (phone: string) => setSel(s => { const n = new Set(s); n.has(phone) ? n.delete(phone) : n.add(phone); return n })
   const allVisibleSelected = filtered.length > 0 && filtered.every(u => sel.has(u.phone))
   const selectAll = () => setSel(allVisibleSelected ? new Set() : new Set(filtered.map(u => u.phone)))
+  const pg = usePaged(filtered)
 
   const bulkAssign = async (patch: { role?: string } | { plan?: string }) => {
     if (!sel.size) return
@@ -3613,7 +3656,7 @@ function UsersView() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(u => {
+                {pg.paged.map(u => {
                   const m = RMETA[u.dashboard || ''] || RMETA['']
                   return (
                     <tr key={u.phone} style={{ background: sel.has(u.phone) ? 'var(--goldDim)' : 'transparent', transition: 'background .15s' }}>
@@ -3656,6 +3699,7 @@ function UsersView() {
             </table>
           </div>
         )}
+        <Pager {...pg} />
         <div style={{ marginTop: 12, fontSize: 11.5, color: 'var(--faint)', lineHeight: 1.8 }}>
           روی «مشاهده» یا آواتارِ هر کاربر بزن تا پروفایلِ کاملش (فعالیت، اعتبار، مصرفِ توکن) باز شود. نقش و پلن را مستقیم از جدول یا کشوی جزئیات تغییر بده.
         </div>
@@ -3726,6 +3770,7 @@ function ProfilesView() {
     return true
   })
 
+  const pg = usePaged(filtered)
   const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '8px 11px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
   const total = rows.length
   const withPlan = rows.filter(u => u.plan).length
@@ -3764,7 +3809,7 @@ function ProfilesView() {
         <Card><div style={{ color: 'var(--muted)', fontSize: 13, padding: '30px 0', textAlign: 'center' }}>پروفایلی یافت نشد.</div></Card>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
-          {filtered.map(u => (
+          {pg.paged.map(u => (
             <button key={u.phone} onClick={() => open(u.phone)} style={{
               textAlign: 'right', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14,
               padding: 16, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', flexDirection: 'column', gap: 12,
@@ -3796,6 +3841,7 @@ function ProfilesView() {
           ))}
         </div>
       )}
+      <Pager {...pg} />
 
       {(detail || detailLoading) && (
         <div onClick={() => { setDetail(null); setDetailLoading(false) }} style={{
