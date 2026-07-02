@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { getCostConfig, setCostConfig, tokenSellPriceToman } from '@/app/lib/cost-store'
+import { repriceTokenPackages } from '@/app/lib/comm-store'
 
 async function guard() { const s = await getSession(); return s && s.role === 'super_admin' }
 
@@ -12,5 +13,8 @@ export async function POST(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const b = await req.json().catch(() => ({} as any))
   const c = setCostConfig(b)
-  return NextResponse.json({ ok: true, ...c, tokenSellPrice: tokenSellPriceToman() })
+  // اعمالِ خودکارِ قیمتِ بسته‌های توکن از نرخِ محاسبه‌شده
+  let repriced = 0
+  if (b.applyTokenPricing) repriced = repriceTokenPackages(tokenSellPriceToman(), c.roundTo)
+  return NextResponse.json({ ok: true, ...c, tokenSellPrice: tokenSellPriceToman(), repriced })
 }

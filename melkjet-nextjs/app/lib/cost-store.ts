@@ -9,7 +9,9 @@ const SEED_V = 1
 export interface ModelCost { id: string; label: string; provider: string; type: 'text' | 'image' | 'audio' | 'embedding'; inUsd: number; outUsd: number }
 export interface CostConfig {
   usdToman: number        // نرخِ دلار به تومان
-  markup: number          // ضریبِ سود (۲ = دو برابرِ هزینه)
+  markup: number          // (قدیمی) ضریبِ سود — با profitPercent جایگزین شد
+  profitPercent: number   // درصدِ سود (۱۰۰ = دو برابرِ هزینه)
+  roundTo: number         // گِردکردنِ قیمتِ بسته (مثلاً ۱۰۰۰ تومان)
   referenceModelId: string // مدلی که قیمتِ فروشِ توکن از رویش حساب می‌شود
   unitTokens: Record<string, number> // مصرفِ توکنِ هر عملیاتِ غیرمتنی (تصویر/رندر/ایمپورت/تماس)
   models: ModelCost[]
@@ -40,7 +42,7 @@ function seedModels(): ModelCost[] {
 }
 function defaults(): CostConfig {
   return {
-    usdToman: 700000, markup: 2, referenceModelId: 'gapgpt-qwen-3.6',
+    usdToman: 700000, markup: 2, profitPercent: 100, roundTo: 1000, referenceModelId: 'gapgpt-qwen-3.6',
     unitTokens: { image: 2000, render3d: 20000, divarImport: 1000, contactReveal: 5000, sms: 500, email: 200 },
     models: seedModels(), v: SEED_V,
   }
@@ -61,16 +63,18 @@ export function setCostConfig(patch: Partial<CostConfig>): CostConfig {
   const c = load()
   if (patch.usdToman !== undefined) c.usdToman = Math.max(0, Number(patch.usdToman) || 0)
   if (patch.markup !== undefined) c.markup = Math.max(1, Number(patch.markup) || 1)
+  if (patch.profitPercent !== undefined) c.profitPercent = Math.max(0, Number(patch.profitPercent) || 0)
+  if (patch.roundTo !== undefined) c.roundTo = Math.max(1, Number(patch.roundTo) || 1)
   if (patch.referenceModelId !== undefined) c.referenceModelId = String(patch.referenceModelId)
   if (patch.unitTokens) c.unitTokens = { ...c.unitTokens, ...patch.unitTokens }
   if (Array.isArray(patch.models)) c.models = patch.models.map(m => ({ id: String(m.id || '').trim(), label: String(m.label || m.id || '').trim(), provider: String(m.provider || '').trim(), type: (['text', 'image', 'audio', 'embedding'] as const).includes(m.type as any) ? m.type as any : 'text', inUsd: Number(m.inUsd) || 0, outUsd: Number(m.outUsd) || 0 })).filter(m => m.id)
   save(c); return c
 }
-// قیمتِ فروشِ هر توکن (تومان) = هزینهٔ خروجیِ مدلِ مرجع × نرخِ دلار × ضریبِ سود.
+// قیمتِ فروشِ هر توکن (تومان) = هزینهٔ خروجیِ مدلِ مرجع × نرخِ دلار × (۱ + درصدِ سود/۱۰۰).
 export function tokenSellPriceToman(): number {
   const c = load()
   const m = c.models.find(x => x.id === c.referenceModelId) || c.models[0]
   if (!m) return 0
   const costPerTokenUsd = (m.outUsd || m.inUsd) / 1_000_000
-  return costPerTokenUsd * c.usdToman * c.markup
+  return costPerTokenUsd * c.usdToman * (1 + (Number(c.profitPercent) || 0) / 100)
 }

@@ -64,6 +64,19 @@ export function setPackages(rows: Partial<CommPackage>[]): CommPackage[] {
   save(db)
   return db.packages
 }
+// قیمت‌گذاریِ خودکارِ بسته‌های توکن از نرخِ فروشِ هر توکن (تومان) + گِردکردن.
+export function repriceTokenPackages(pricePerToken: number, roundTo = 1000): number {
+  if (!(pricePerToken > 0)) return 0
+  const db = load(); let n = 0
+  for (const p of db.packages) {
+    if (p.channel !== 'token') continue
+    const raw = p.credits * pricePerToken
+    const rounded = Math.max(roundTo, Math.round(raw / roundTo) * roundTo)
+    if (p.price !== rounded) { p.price = rounded; n++ }
+  }
+  if (n) save(db)
+  return n
+}
 
 // آیا مصرفِ این کانال محدود/پولی است؟ فقط در حالتِ درآمدی (scale/enterprise) اعمال می‌شود؛
 // در حالتِ استارتاپ/رشد بسته‌ها فقط «قابلِ خرید» هستند ولی مصرفِ رایگان محدود نمی‌شود.
