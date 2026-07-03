@@ -24,6 +24,8 @@ export async function POST(req: NextRequest) {
     excerpt: b.excerpt ? String(b.excerpt) : undefined, phone: b.phone ? String(b.phone) : undefined,
     category: b.category ? String(b.category) : undefined, owner: b.owner ? String(b.owner) : undefined,
   })
+  // آگهیِ دستیِ ادمین = نمونهٔ مثبتِ باکیفیت برای مدلِ یادگیرنده (ادمین عمداً آن را ساخته).
+  if (type === 'listing') { try { teachFromAdmin(it, 'approved') } catch {} }
   logAudit(await actor(), `ساخت ${type}`, it.title)
   return NextResponse.json({ ok: true, id: it.id, item: it })
 }
