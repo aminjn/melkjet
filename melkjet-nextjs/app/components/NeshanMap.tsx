@@ -11,18 +11,38 @@ const SDK_JS = 'https://static.neshan.org/sdk/leaflet/1.4.0/neshan-sdk-v1.0.8/di
 const TEHRAN: [number, number] = [35.7559, 51.4105]
 
 let sdkPromise: Promise<any> | null = null
+function neshanReady(): any { const L = (window as any).L; return (L && L.Map && L.Marker) ? L : null }
+// لودرِ مقاومِ SDKِ نشان: تلاشِ مجدد، منتظرِ آماده‌شدنِ واقعیِ L.Map، و کش‌نکردنِ شکست
+// (تا اگر یک‌بار CDN هیک‌آپ کرد، دفعهٔ بعد دوباره تلاش شود — نه اینکه برای همیشه «sdk» بدهد).
 function loadSdk(): Promise<any> {
   if (typeof window === 'undefined') return Promise.reject('ssr')
-  if ((window as any).L?.Map) return Promise.resolve((window as any).L)
+  const ready = neshanReady(); if (ready) return Promise.resolve(ready)
   if (sdkPromise) return sdkPromise
   sdkPromise = new Promise((resolve, reject) => {
     if (!document.querySelector(`link[href="${SDK_CSS}"]`)) {
       const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = SDK_CSS; document.head.appendChild(link)
     }
-    const s = document.createElement('script'); s.src = SDK_JS; s.async = true
-    s.onload = () => resolve((window as any).L)
-    s.onerror = () => reject('sdk-load-failed')
-    document.body.appendChild(s)
+    let tries = 0
+    const retry = () => { if (tries >= 3) { sdkPromise = null; reject('sdk-load-failed') } else setTimeout(attempt, 700) }
+    const attempt = () => {
+      tries++
+      if (neshanReady()) { resolve(neshanReady()); return }
+      // اسکریپتِ موجود را دوباره اضافه نکن؛ اگر نبود، بساز.
+      let s = document.querySelector(`script[src="${SDK_JS}"]`) as HTMLScriptElement | null
+      if (!s) {
+        s = document.createElement('script'); s.src = SDK_JS; s.async = true
+        s.onerror = () => { try { s?.remove() } catch {} ; retry() }
+        document.body.appendChild(s)
+      }
+      // پس از لود، منتظرِ آماده‌شدنِ واقعیِ L.Map بمان (گاهی بعد از onload کمی طول می‌کشد).
+      const started = Date.now()
+      const poll = setInterval(() => {
+        const L = neshanReady()
+        if (L) { clearInterval(poll); resolve(L); return }
+        if (Date.now() - started > 8000) { clearInterval(poll); try { s?.remove() } catch {} ; retry() }
+      }, 200)
+    }
+    attempt()
   })
   return sdkPromise
 }
@@ -44,15 +64,21 @@ export default function NeshanMap({
   const markersRef = useRef<any[]>([])
   const pickRef = useRef<any>(null)
   const [err, setErr] = useState<string>('')
+  const [tick, setTick] = useState(0)   // برای تلاشِ مجددِ خودکار در صورتِ شکستِ گذرا
 
-  // ساختِ یک‌بارهٔ نقشه
+  // ساختِ یک‌بارهٔ نقشه (با تلاشِ مجددِ خودکار تا ۲ بار در صورتِ خطای گذرا)
   useEffect(() => {
     let dead = false
+    const failSoft = (code: string) => {
+      if (dead) return
+      if (tick < 2) setTimeout(() => { if (!dead) setTick(t => t + 1) }, 1200)   // دوباره تلاش کن
+      else setErr(code)
+    }
     fetch('/api/geo/mapkey').then(r => r.ok ? r.json() : null).then(async (d) => {
       const key = d?.key
-      if (!key) { if (!dead) setErr('no-key'); return }
+      if (!key) { if (!dead) setErr('no-key'); return }   // کلید نیست = مشکلِ تنظیمات، تلاشِ مجدد بی‌فایده
       let L: any
-      try { L = await loadSdk() } catch { if (!dead) setErr('sdk'); return }
+      try { L = await loadSdk() } catch { failSoft('sdk'); return }
       if (dead || !ref.current || mapRef.current) return
       const isLight = theme ? theme === 'day' : (typeof document !== 'undefined' && document.documentElement.classList.contains('light'))
       // اگر همان container قبلاً توسط Leaflet مقداردهی شده (ری‌مانت/ناوبریِ مرحله) پاک کن تا خطای «already initialized» ندهد.
@@ -64,7 +90,7 @@ export default function NeshanMap({
           center: center ? [center.lat, center.lng] : TEHRAN,
           zoom,
         })
-      } catch { if (!dead) setErr('init'); return }
+      } catch { failSoft('init'); return }
       // اندازهٔ نقشه را بعد از چیدمان درست کن (کانتینرهایی که هنگام init هنوز اندازه نداشته‌اند).
       setTimeout(() => { try { mapRef.current?.invalidateSize?.() } catch {} }, 250)
       // انتخابِ موقعیت با کلیک — جدا و غیرِمخرب: اگر بایندِ کلیک شکست بخورد، خودِ نقشه نباید خطا شود.
@@ -79,10 +105,10 @@ export default function NeshanMap({
           })
         } catch { /* بایندِ کلیک غیرِحیاتی است */ }
       }
-    }).catch(() => { if (!dead) setErr('key') })
+    }).catch(() => failSoft('key'))
     return () => { dead = true; try { mapRef.current?.remove() } catch {} ; mapRef.current = null }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [tick])
 
   // به‌روزرسانیِ مارکرها
   useEffect(() => {
