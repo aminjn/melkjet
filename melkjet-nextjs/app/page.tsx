@@ -221,8 +221,40 @@ export default function Home() {
         </div>
       </section>
 
+      {/* همهٔ خدمات — ویترینِ جامعِ سیستم */}
+      <section style={{ maxWidth: 1280, margin: '0 auto', padding: 'clamp(40px,5vw,64px) 24px 0' }}>
+        <div style={{ textAlign: 'center', maxWidth: 680, margin: '0 auto 34px' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}>◆ یک پلتفرم، همهٔ نیازها</div>
+          <h2 style={{ fontSize: 'clamp(24px,3.6vw,36px)', fontWeight: 800, letterSpacing: '-.6px', color: 'var(--text)' }}>سیستمِ جامعِ املاک و ساختمان</h2>
+          <p style={{ fontSize: 'clamp(14px,1.8vw,16px)', color: 'var(--muted)', marginTop: 12, lineHeight: 1.9 }}>از خرید و فروشِ ملک تا بازارِ مصالح، متخصصان، هوشِ مصنوعی و ابزارهای کاملِ کسب‌وکار — همه در ملک‌جت.</p>
+        </div>
+        <div className="mjh-serv" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 16 }}>
+          {[
+            { ic: '🏠', t: 'خرید، فروش و اجارهٔ ملک', d: 'جستجوی هوشمند با هزاران فایلِ فعال، تحلیلِ قیمت و مقایسه.', href: '/search', c: '#7a8fae' },
+            { ic: '👷', t: 'متخصصان و مشاوران', d: 'دایرکتوریِ مشاور، آژانس، سازنده و مشاورِ حقوقیِ تأییدشده.', href: '/directory', c: '#caa86a' },
+            { ic: '🏗️', t: 'بانکِ سازندگان', d: 'دیتابیسِ سازندگان و پروژه‌ها با اطلاعاتِ تماسِ مستقیم.', href: '/sazandeha', c: '#b07a8a' },
+            { ic: '🧱', t: 'بازارِ مصالح', d: 'کاتالوگِ کاملِ مصالح با قیمتِ مرجع، جستجو و مقایسهٔ فروشندگان.', href: '/bazar-masaleh', c: '#e7a14a' },
+            { ic: '🏪', t: 'فروشگاه‌های مصالح', d: 'دایرکتوریِ تأمین‌کنندگان با ویترینِ اختصاصی و استعلامِ مستقیم.', href: '/forushgaha', c: '#5fd98a' },
+            { ic: '📊', t: 'نرخِ روزِ مصالح', d: 'قیمتِ روزِ آهن، سیمان و مصالح با نمودارِ روندِ تاریخی.', href: '/nerkh-masaleh', c: '#4ec4e8' },
+            { ic: '🤖', t: 'دستیارِ هوشِ مصنوعی', d: 'مشاورِ ۲۴ساعته برای خرید، قیمت‌گذاری، مذاکره و راهنماییِ حقوقی.', href: '/plan-ai', c: '#a77fd4' },
+            { ic: '📐', t: 'استودیو پلان و سه‌بعدی', d: 'طراحیِ نقشه و رندرِ سه‌بعدیِ واحد با کمکِ هوشِ مصنوعی.', href: '/plan-ai', c: '#7aa88f' },
+            { ic: '💼', t: 'ابزارِ کسب‌وکار', d: 'CRM، بازاریابی، اتوماسیون و سایت‌سازِ اختصاصی برای متخصصان.', href: '/pricing', c: '#c9a84c' },
+            { ic: '📰', t: 'بلاگ و راهنما', d: 'مقالاتِ تخصصیِ خرید، سرمایه‌گذاری و ساخت‌وساز.', href: '/blog', c: '#7a8fae' },
+            { ic: '📈', t: 'تحلیل و نقشهٔ بازار', d: 'ارزشِ واقعی، رشد و پیش‌بینیِ قیمتِ هر محله.', href: '/search', c: '#e7674a' },
+            { ic: '👑', t: 'پنل‌های تخصصی', d: 'داشبوردِ اختصاصیِ سازنده، مصالح‌فروش، مشاور، آژانس و مالک.', href: '/auth', c: '#caa86a' },
+          ].map(s => (
+            <Link key={s.t} href={s.href} className="mjh-card" style={{ display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: '20px 18px', textDecoration: 'none', color: 'inherit', transition: 'transform .16s, box-shadow .16s, border-color .16s' }}>
+              <div style={{ width: 46, height: 46, borderRadius: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, background: `${s.c}22`, border: `1px solid ${s.c}55` }}>{s.ic}</div>
+              <div style={{ fontSize: 15.5, fontWeight: 800, color: 'var(--text)' }}>{s.t}</div>
+              <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.85, flex: 1 }}>{s.d}</div>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--gold)' }}>ورود ↗</div>
+            </Link>
+          ))}
+        </div>
+      </section>
+
       {/* STATS */}
-      <section style={{ borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)', background: 'var(--bg2)' }}>
+      <section style={{ marginTop: 'clamp(40px,5vw,64px)', borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)', background: 'var(--bg2)' }}>
         <div style={{ maxWidth: 1280, margin: '0 auto', padding: '26px 24px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 18 }}>
           {stats.map(s => (
             <div key={s.l} style={{ textAlign: 'center' }}>

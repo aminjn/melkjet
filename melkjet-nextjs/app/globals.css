@@ -256,6 +256,10 @@ body { padding-bottom: env(safe-area-inset-bottom); }
 /* بازار/فروشگاه‌های مصالح — کارت‌ها و ردیف‌ها */
 .mjd-card:hover{transform:translateY(-4px);box-shadow:0 14px 30px -14px rgba(0,0,0,0.7);border-color:var(--line2)!important}
 .mjn-r:not(:first-child):hover{background:var(--bg2)}
+/* خانه — کارت‌های خدمات */
+.mjh-card:hover{transform:translateY(-4px);box-shadow:0 16px 34px -16px rgba(0,0,0,0.6);border-color:var(--gold)!important}
+@media(max-width:560px){.mjh-serv{grid-template-columns:1fr 1fr!important}}
+
 /* بازار مصالح — چیدمانِ فیلترِ کناری (موبایل: کشویی) */
 @media(max-width:860px){
   .mjb-layout{grid-template-columns:1fr!important}
