@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
       if (conv.messages.length === 1) {
         createAutoLead(owner.phone, {
           name: myName, phone: s.phone,
-          need: conv.listingTitle,
+          need: conv.listingTitle, listingTitle: conv.listingTitle,
           note: `پیام دربارهٔ «${conv.listingTitle}»: ${String(b.text).trim()}`,
           source: 'پیامِ آگهی',
         })

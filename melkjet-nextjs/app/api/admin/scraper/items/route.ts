@@ -38,7 +38,16 @@ export async function GET(req: NextRequest) {
   if (status) items = items.filter(i => i.status === status)
   const q = (sp.get('q') || '').trim()
   if (q) items = items.filter(i => i.title.includes(q) || (i.location || '').includes(q) || (i.sourceName || '').includes(q))
-  return NextResponse.json({ items: items.slice(0, 300), total: items.length })
+  // فهرستِ محله‌ها (facet) از روی موقعیتِ آگهی‌ها — قبل از اعمالِ فیلترِ محله تا دراپ‌داون خالی نشود.
+  const norm = (s: string) => (s || '').replace(/‌/g, '').replace(/\s+/g, ' ').trim()
+  const hoodOf = (loc: string) => { const p = norm(loc).split(/[،,]/).map(x => x.trim()).filter(Boolean); return p.length > 1 ? p[p.length - 1] : (p[0] || '') }
+  const hoodCounts = new Map<string, number>()
+  for (const i of items) { const h = hoodOf(i.location || ''); if (h && h !== 'نامشخص') hoodCounts.set(h, (hoodCounts.get(h) || 0) + 1) }
+  const hoods = [...hoodCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 80).map(([h, c]) => ({ h, c }))
+  // فیلترِ محله/شهر (تطبیقِ متنیِ بی‌طرف نسبت به نیم‌فاصله)
+  const loc = norm(sp.get('loc') || '')
+  if (loc) items = items.filter(i => norm(i.location || '').includes(loc))
+  return NextResponse.json({ items: items.slice(0, 300), total: items.length, hoods })
 }
 
 // PATCH: { id, status }  OR  { id, patch:{...editable fields} }

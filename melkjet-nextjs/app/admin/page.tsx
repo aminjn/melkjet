@@ -366,6 +366,8 @@ function ListingsView() {
   const [loading, setLoading] = useState(true)
   const [type, setType] = useState('')
   const [status, setStatus] = useState('')
+  const [loc, setLoc] = useState('')                       // فیلترِ محله/شهر
+  const [hoods, setHoods] = useState<{ h: string; c: number }[]>([])
   const [q, setQ] = useState('')
   const [edit, setEdit] = useState<MItem | null>(null)
   const [bulkOpen, setBulkOpen] = useState(false)
@@ -378,12 +380,13 @@ function ListingsView() {
     const sp = new URLSearchParams()
     if (type) sp.set('type', type)
     if (status) sp.set('status', status)
+    if (loc) sp.set('loc', loc)
     if (q.trim()) sp.set('q', q.trim())
     const r = await fetch(`/api/admin/scraper/items?${sp}`)
-    if (r.ok) { const d = await r.json(); setItems(d.items); setTotal(d.total) }
+    if (r.ok) { const d = await r.json(); setItems(d.items); setTotal(d.total); setHoods(d.hoods || []) }
     setLoading(false); setSel(new Set())
   }
-  useEffect(() => { load() }, [type, status])
+  useEffect(() => { load() }, [type, status, loc])
 
   const patch = async (id: string, body: any) => {
     await fetch('/api/admin/scraper/items', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...body }) })
@@ -461,6 +464,10 @@ function ListingsView() {
             <option value="pending">منتظر</option>
             <option value="approved">تأیید‌شده</option>
             <option value="rejected">رد‌شده</option>
+          </select>
+          <select style={{ ...inp, ...(loc ? { borderColor: 'var(--gold)', color: 'var(--gold)', fontWeight: 700 } : {}) }} value={loc} onChange={e => setLoc(e.target.value)} title="فیلترِ محله/شهر">
+            <option value="">همهٔ محله‌ها</option>
+            {hoods.map(o => <option key={o.h} value={o.h}>{o.h} ({o.c})</option>)}
           </select>
           <input style={inp} placeholder="جستجو…" value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') load() }} />
           <OutlineButton onClick={load}>جستجو</OutlineButton>

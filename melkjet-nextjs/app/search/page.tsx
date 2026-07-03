@@ -303,7 +303,9 @@ function SearchPageInner() {
     const counts = new Map<string, number>()
     for (const p of filteredProperties) {
       if (selectedCity && !norm(p.location).includes(norm(selectedCity))) continue
-      const h = (p.location || '').split(/[،,]/)[0].trim()
+      // آخرین بخشِ موقعیت = محله (موقعیت به‌صورتِ «شهر، محله» ساخته می‌شود)؛ اگر یک بخش بود، همان.
+      const segs = (p.location || '').split(/[،,]/).map(s => s.trim()).filter(Boolean)
+      const h = segs.length > 1 ? segs[segs.length - 1] : (segs[0] || '')
       if (h && h !== 'نامشخص' && (!selectedCity || norm(h) !== norm(selectedCity))) counts.set(h, (counts.get(h) || 0) + 1)
     }
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 40).map(([h, c]) => ({ h, c }))
