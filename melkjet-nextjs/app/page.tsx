@@ -93,6 +93,7 @@ export default function Home() {
   const [promoFeatured, setPromoFeatured] = useState<ContentItem[]>([])
   const [promoInvest, setPromoInvest] = useState<ContentItem[]>([])
   const [promoAdvisors, setPromoAdvisors] = useState<ContentItem[]>([])
+  const [sysStats, setSysStats] = useState<{ listings: number; advisors: number; products: number; shops: number; builders: number } | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -107,6 +108,7 @@ export default function Home() {
     loadPromo('home_featured', setPromoFeatured)
     loadPromo('home_invest', setPromoInvest)
     loadPromo('home_advisors', setPromoAdvisors)
+    fetch('/api/stats').then(r => r.ok ? r.json() : null).then(d => { if (alive && d) setSysStats(d) }).catch(() => {})
     return () => { alive = false }
   }, [])
 
@@ -189,12 +191,15 @@ export default function Home() {
       <Nav />
 
       {/* HERO */}
-      <section style={{ position: 'relative', overflow: 'hidden', padding: 'clamp(48px,7vw,96px) 24px clamp(40px,5vw,72px)' }}>
-        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(900px 460px at 78% -8%,var(--goldDim),transparent 60%)', pointerEvents: 'none' }}></div>
+      <section style={{ position: 'relative', overflow: 'hidden', padding: 'clamp(52px,7vw,104px) 24px clamp(44px,5vw,80px)' }}>
+        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(900px 460px at 78% -8%,var(--goldDim),transparent 60%)' }}></div>
+        <div className="mjh-orb" style={{ position: 'absolute', top: '-12%', insetInlineEnd: '-8%', width: 'clamp(300px,38vw,560px)', height: 'clamp(300px,38vw,560px)', borderRadius: '50%', background: 'radial-gradient(circle, rgba(212,175,55,.28), transparent 68%)', filter: 'blur(24px)', pointerEvents: 'none', animation: 'mjfloat 9s ease-in-out infinite' }}></div>
+        <div className="mjh-orb" style={{ position: 'absolute', bottom: '-18%', insetInlineStart: '-10%', width: 'clamp(280px,34vw,520px)', height: 'clamp(280px,34vw,520px)', borderRadius: '50%', background: 'radial-gradient(circle, rgba(122,143,174,.22), transparent 68%)', filter: 'blur(28px)', pointerEvents: 'none', animation: 'mjfloat 11s ease-in-out infinite reverse' }}></div>
+        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', backgroundImage: 'linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px)', backgroundSize: '54px 54px', opacity: 0.35, maskImage: 'radial-gradient(60% 55% at 50% 30%, #000, transparent 80%)', WebkitMaskImage: 'radial-gradient(60% 55% at 50% 30%, #000, transparent 80%)' }}></div>
         <div style={{ position: 'relative', maxWidth: 980, margin: '0 auto', textAlign: 'center' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderRadius: 999, border: '1px solid var(--line2)', background: 'var(--surface)', fontSize: 13, fontWeight: 600, color: 'var(--gold)' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderRadius: 999, border: '1px solid var(--gold)', background: 'var(--goldDim)', fontSize: 13, fontWeight: 700, color: 'var(--gold)' }}>
             <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--gold)', boxShadow: '0 0 0 4px var(--goldDim)', animation: 'glow 2s infinite', display: 'inline-block' }}></span>
-            موتور تصمیم‌گیری هوشمند املاک
+            سیستمِ جامعِ املاک، ساختمان و مصالح
           </div>
           <h1 style={{ marginTop: 22, fontSize: 'clamp(34px,6vw,64px)', lineHeight: 1.12, fontWeight: 800, letterSpacing: '-1px', color: 'var(--text)' }}>
             خانه‌ی بعدی‌ات،<br />
@@ -217,6 +222,22 @@ export default function Home() {
                 ))}
               </div>
             </div>
+          </div>
+
+          {/* دسترسیِ سریع به همهٔ اکوسیستم‌ها */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 10, marginTop: 26 }}>
+            {[
+              { l: 'خرید و اجارهٔ ملک', h: '/search', ic: '🏠' },
+              { l: 'بازارِ مصالح', h: '/bazar-masaleh', ic: '🧱' },
+              { l: 'نرخِ روزِ مصالح', h: '/nerkh-masaleh', ic: '📊' },
+              { l: 'متخصصان', h: '/directory', ic: '👷' },
+              { l: 'سازندگان', h: '/sazandeha', ic: '🏗️' },
+              { l: 'دستیارِ AI', h: '/plan-ai', ic: '🤖' },
+            ].map(p => (
+              <Link key={p.l} href={p.h} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 999, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--text)', textDecoration: 'none', fontSize: 13, fontWeight: 600 }}>
+                <span>{p.ic}</span>{p.l}
+              </Link>
+            ))}
           </div>
         </div>
       </section>
@@ -255,13 +276,23 @@ export default function Home() {
 
       {/* STATS */}
       <section style={{ marginTop: 'clamp(40px,5vw,64px)', borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)', background: 'var(--bg2)' }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '26px 24px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 18 }}>
-          {stats.map(s => (
-            <div key={s.l} style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 'clamp(24px,3vw,32px)', fontWeight: 800, color: 'var(--text)', letterSpacing: '-.5px' }}>{s.n}</div>
-              <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>{s.l}</div>
-            </div>
-          ))}
+        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '26px 24px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 18 }}>
+          {(() => {
+            const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
+            const live = sysStats ? [
+              { n: `${fa(sysStats.listings)}+`, l: 'آگهیِ فعالِ ملک' },
+              { n: `${fa(sysStats.products)}+`, l: 'محصولِ مصالح' },
+              { n: `${fa(sysStats.shops)}+`, l: 'فروشگاهِ مصالح' },
+              { n: `${fa(sysStats.advisors)}+`, l: 'متخصص و مشاور' },
+              { n: `${fa(sysStats.builders)}+`, l: 'سازنده در دیتابیس' },
+            ] : stats
+            return live.map(s => (
+              <div key={s.l} style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 'clamp(22px,3vw,32px)', fontWeight: 800, color: 'var(--gold)', letterSpacing: '-.5px' }}>{s.n}</div>
+                <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>{s.l}</div>
+              </div>
+            ))
+          })()}
         </div>
       </section>
 
