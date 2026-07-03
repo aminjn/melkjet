@@ -43,6 +43,8 @@ async function tick(): Promise<{ due: number; synced: number }> {
         synced++
       } catch { /* خطای یک منبع بقیه را متوقف نکند */ }
     }
+    // اگر آگهیِ جدیدی ایمپورت شد، تکراری‌ها را پاک کن (SEO).
+    if (synced) { try { const { dedupeListings } = await import('./listing-dedupe'); dedupeListings() } catch {} }
   } finally { g.running = false }
   return { due: due.length, synced }
 }

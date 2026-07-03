@@ -3,6 +3,7 @@ import { getSession } from '@/app/lib/session'
 import { listSources, insertItems, markError } from '@/app/lib/scraper-store'
 import { scrapeSource } from '@/app/lib/scraper-engine'
 import { moderatePending } from '@/app/lib/moderation'
+import { dedupeListings } from '@/app/lib/listing-dedupe'
 
 async function guard() {
   const s = await getSession()
@@ -43,6 +44,9 @@ export async function POST(req: NextRequest) {
   if (totalAdded > 0) {
     try { moderated = (await moderatePending()).moderated } catch { /* اگر مدل تنظیم نشده باشد */ }
   }
+  // حذفِ آگهی‌های تکراری (SEO): از هر گروهِ مشابه فقط قدیمی‌ترین می‌ماند.
+  let deduped = 0
+  if (totalAdded > 0) { try { deduped = dedupeListings().removed } catch {} }
 
-  return NextResponse.json({ ok: true, totalAdded, totalDup, moderated, results, sources: listSources() })
+  return NextResponse.json({ ok: true, totalAdded, totalDup, moderated, deduped, results, sources: listSources() })
 }

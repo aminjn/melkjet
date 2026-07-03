@@ -471,6 +471,13 @@ function ListingsView() {
           </select>
           <input style={inp} placeholder="جستجو…" value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') load() }} />
           <OutlineButton onClick={load}>جستجو</OutlineButton>
+          <OutlineButton onClick={async () => {
+            if (!confirm('آگهی‌های تکراری شناسایی و از نمایشِ عمومی خارج شوند؟ (قدیمی‌ترینِ هر گروه می‌ماند)')) return
+            const r = await fetch('/api/admin/scraper/dedupe', { method: 'POST' })
+            const d = await r.json().catch(() => ({}))
+            alert(r.ok ? `${d.removed || 0} آگهیِ تکراری حذف شد (${d.kept || 0} آگهی ماند).` : (d.error || 'خطا'))
+            if (r.ok) load()
+          }}>🧹 پاک‌سازیِ تکراری‌ها</OutlineButton>
           <GoldButton onClick={() => setCreateOpen(true)}>＋ آگهی جدید</GoldButton>
         </div>
         <div style={{ marginTop: 10, fontSize: 12.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 12 }}>
