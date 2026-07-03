@@ -42,7 +42,7 @@ async function tick(): Promise<{ due: number; synced: number }> {
         // سقفِ زمانی برای هر منبع تا یک هنگِ پروکسی/دیوار کلِ کرون را قفل نکند.
         const r = await Promise.race([
           syncAdvisorDivar(phone, { ...base, searchUrl: source.searchUrl, divarName: source.divarName, autoPublish: source.autoPublish, autoNeighborhood: source.autoNeighborhood, schedule: source.schedule }, source.id),
-          new Promise<any>((_, rej) => setTimeout(() => rej(new Error('timeout')), 5 * 60 * 1000)),
+          new Promise<any>((_, rej) => setTimeout(() => rej(new Error('timeout')), 15 * 60 * 1000)),
         ])
         markSourceRun(phone, source.id, r.imported || 0, r.ok ? '' : (r.reason || 'خطا'))
         synced++

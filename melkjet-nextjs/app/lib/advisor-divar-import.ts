@@ -115,21 +115,25 @@ function normName(s: string): string {
 
 export interface SyncResult { ok: boolean; reason?: string; scanned: number; imported: number; updated: number; skipped: number; sold?: number; tokens: string[] }
 
-// چند آگهی را پشت‌سرهم وارد/به‌روزرسانی می‌کند — hint برای عنوان/تصویرِ درست.
+// چند آگهی را با هم‌زمانیِ محدود وارد/به‌روزرسانی می‌کند (تا ۶۶ آگهی در چند دقیقه، نه ۱۱ دقیقه).
 async function importTokens(o: string, items: BrandPost[], sourceId?: string, onProgress?: (done: number, total: number) => void): Promise<{ imported: number; updated: number; skipped: number; tokens: string[] }> {
   let imported = 0, updated = 0, skipped = 0
   const done: string[] = []
   const total = items.length
   let i = 0
-  let consecutiveFail = 0   // مدارشکن: اگر پروکسی/دیوار قطع است، به‌جای گرفتنِ ۶۶ آگهی (~یک ساعت) زود بیرون بیا.
-  for (const it of items) {
-    i++
-    const token = it.token
-    if (token) {
-      // یک‌بار تلاشِ مجدد در صورتِ خطای گذرای پروکسی/دیوار (تا یک آگهیِ تکی کلِ کار را خراب نکند).
-      // هر آگهی سقفِ ۱۵ ثانیه زمان دارد؛ اگر پروکسی/دیوار هنگ کرد، رد می‌شود تا کل کار قفل نشود.
+  let consecutiveFail = 0   // مدارشکن: اگر پروکسی/دیوار قطع است، زود بیرون بیا (نه گرفتنِ همهٔ آگهی‌ها).
+  let aborted = false
+  let idx = 0
+  const CONC = 4            // هم‌زمانی: ۴ آگهی با هم → حدودِ ۴ برابر سریع‌تر
+
+  const worker = async () => {
+    while (idx < items.length && !aborted) {
+      const it = items[idx++]
+      const token = it.token
+      if (!token) { i++; try { onProgress?.(i, total) } catch {} ; continue }
+      // هر آگهی سقفِ ۱۵ ثانیه + یک‌بار تلاشِ مجدد؛ اگر هنگ کرد، رد می‌شود تا کل کار قفل نشود.
       let res: any = null
-      for (let attempt = 0; attempt < 2; attempt++) {
+      for (let attempt = 0; attempt < 2 && !aborted; attempt++) {
         try {
           res = await Promise.race([
             importDivarToken(o, token, it, sourceId),
@@ -137,18 +141,19 @@ async function importTokens(o: string, items: BrandPost[], sourceId?: string, on
           ])
           if (res && (res.ok || res.skipped)) break
         } catch { res = null }
-        if (attempt === 0) await new Promise(r => setTimeout(r, 500))
+        if (attempt === 0) await new Promise(r => setTimeout(r, 400))
       }
       const okThis = !!(res && res.ok)
-      if (res && res.ok && res.updated) { updated++ }
+      if (res && res.ok && res.updated) updated++
       else if (res && res.ok && !res.skipped) { imported++; done.push(token) }
       else skipped++
-      // مدارشکن: پس از ۶ شکستِ پیاپی، اتصال قطع فرض می‌شود و کار متوقف می‌شود.
       consecutiveFail = okThis ? 0 : consecutiveFail + 1
-      if (consecutiveFail >= 6) throw new Error('اتصال به دیوار برقرار نشد (چند آگهیِ پیاپی خوانده نشد) — پروکسیِ دیوار را در ادمین بررسی کنید.')
+      if (consecutiveFail >= 8) aborted = true   // ۸ شکستِ پیاپی = اتصال قطع
+      i++; try { onProgress?.(i, total) } catch {}
     }
-    try { onProgress?.(i, total) } catch {}
   }
+  await Promise.all(Array.from({ length: Math.min(CONC, items.length) }, () => worker()))
+  if (aborted) throw new Error('اتصال به دیوار برقرار نشد (چند آگهیِ پیاپی خوانده نشد) — پروکسیِ دیوار را در ادمین بررسی کنید.')
   return { imported, updated, skipped, tokens: done }
 }
 
@@ -271,7 +276,7 @@ export function startBackgroundSync(o: string, cfgIn?: AdvisorDivar, sourceId?: 
   setJob(o, { running: true, total: 0, done: 0, imported: 0, updated: 0, skipped: 0, failed: 0, sold: 0, error: '', label: label || 'همگام‌سازیِ دیوار', startedAt: Date.now(), lastProgressAt: Date.now(), finishedAt: undefined })
   // عمداً await نمی‌کنیم — در پس‌زمینهٔ همین ورکر تا تهِ کار اجرا می‌شود.
   ;(async () => {
-    const DEADLINE = 5 * 60 * 1000   // سقفِ کلِ کار: اگر پروکسی/دیوار پاسخ نداد، بعد از ۵ دقیقه قطعاً متوقف می‌شود
+    const DEADLINE = 15 * 60 * 1000   // سقفِ نهاییِ کلِ کار (backstop). هنگِ واقعی را مدارشکن/بی‌پیشرفت خیلی زودتر می‌گیرد.
     try {
       const onProgress = (done: number, total: number) => setJob(o, { done, total, lastProgressAt: Date.now() })
       const r = await Promise.race([
