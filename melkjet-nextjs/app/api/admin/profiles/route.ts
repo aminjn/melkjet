@@ -18,11 +18,11 @@ import { getProfile, completeness } from '@/app/lib/profile-store'
 async function guard() { const s = await getSession(); return s && s.role === 'super_admin' }
 
 // فعالیتِ واقعی (بدون seed) که در همهٔ نقش‌ها مشترک است.
-function commonActivity(phone: string) {
+async function commonActivity(phone: string) {
   return {
-    tasks: listTasks(phone).length,
-    leads: listLeads(phone).length,
-    workflows: listWorkflows(phone).length,
+    tasks: (await listTasks(phone)).length,
+    leads: (await listLeads(phone)).length,
+    workflows: (await listWorkflows(phone)).length,
     favorites: getPrefs(phone).favorites.length,
   }
 }
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
   // ── لیست همهٔ پروفایل‌ها ──
   if (!phone) {
     const accounts = listAccounts()
-    const profiles = accounts.map(a => ({
+    const profiles = await Promise.all(accounts.map(async a => ({
       phone: a.phone,
       name: a.name || '',
       role: a.role || '',
@@ -57,8 +57,8 @@ export async function GET(req: NextRequest) {
       onboarded: a.onboarded,
       createdAt: a.createdAt,
       lastLogin: a.lastLogin || null,
-      activity: commonActivity(a.phone),
-    }))
+      activity: await commonActivity(a.phone),
+    })))
     return NextResponse.json({
       profiles,
       roles: listRoles(true).map(r => ({ id: r.id, name: r.name })),
@@ -87,7 +87,7 @@ export async function GET(req: NextRequest) {
       ]
       sections = [{ title: 'آخرین درخواست‌ها', items: s.recentInquiries.map(q => ({ primary: q.name, secondary: q.message || '' })) }]
     } else if (dashboard === '/buyer') {
-      const s = buyerStats(phone)
+      const s = await buyerStats(phone)
       kpis = [
         { label: 'ملک‌های ذخیره‌شده', value: s.kpis.savedCount },
         { label: 'جستجوهای ذخیره‌شده', value: s.kpis.searchCount },
@@ -148,6 +148,6 @@ export async function GET(req: NextRequest) {
     profile, completeness: completeness(profile),
     kpis,
     sections,
-    activity: commonActivity(phone),
+    activity: await commonActivity(phone),
   }, { headers: { 'Cache-Control': 'no-store, private' } })
 }

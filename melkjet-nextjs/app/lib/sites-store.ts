@@ -1,10 +1,13 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
+import { pgEnabled, kvGet, kvMutate } from './db'
 
 // Dependency-free JSON-file store for published builder sites.
 // Mirrors the persistence style of crm-store.ts.
+// دومَحاله: اگر DATABASE_URL ست باشد → Postgres (نوشتنِ اتمیک)، وگرنه فایل.
 const DATA_FILE = join(process.cwd(), '.sites-data.json')
+const KV_KEY = 'sites'
 
 export interface SiteBlock {
   id: number
@@ -83,15 +86,21 @@ export function normalizeBlock(b: any): SiteBlock {
 
 interface DB { sites: Site[] }
 
-function load(): DB {
+function fileLoad(): DB {
   if (existsSync(DATA_FILE)) {
     try { return JSON.parse(readFileSync(DATA_FILE, 'utf-8')) } catch {}
   }
   return { sites: [] }
 }
 
-function persist(db: DB) {
+function fileSave(db: DB) {
   writeFileSync(DATA_FILE, JSON.stringify(db, null, 2), 'utf-8')
+}
+
+async function load(): Promise<DB> { return pgEnabled() ? await kvGet<DB>(KV_KEY, { sites: [] }) : fileLoad() }
+async function mutate<R>(fn: (db: DB) => R): Promise<R> {
+  if (pgEnabled()) return kvMutate<DB, R>(KV_KEY, { sites: [] }, fn)
+  const db = fileLoad(); const r = fn(db); fileSave(db); return r
 }
 
 // Make a url-safe slug: lowercase, keep a-z0-9 and dash only.
@@ -143,14 +152,14 @@ function migrateSite(site: any): Site {
   }
 }
 
-export function listSites(): Site[] {
-  return load().sites.map(migrateSite).sort((a, b) => b.updatedAt - a.updatedAt)
+export async function listSites(): Promise<Site[]> {
+  return (await load()).sites.map(migrateSite).sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
-export function getSite(slug: string): Site | null {
+export async function getSite(slug: string): Promise<Site | null> {
   const s = sanitizeSlug(slug)
   if (!s) return null
-  const site = load().sites.find(site => site.slug === s) ?? null
+  const site = (await load()).sites.find(site => site.slug === s) ?? null
   if (!site) return null
   return migrateSite(site)
 }
@@ -163,7 +172,7 @@ export function getSitePage(site: Site, pageSlug: string): SitePage {
 
 interface SavePageInput { slug?: string; title?: string; blocks?: any[]; inMenu?: boolean; menuLabel?: string }
 
-export function saveSite(input: {
+export async function saveSite(input: {
   slug?: string
   title: string
   owner?: string
@@ -173,68 +182,68 @@ export function saveSite(input: {
   blocks?: SiteBlock[]
   seo?: Partial<SiteSeo>
   theme?: Partial<SiteTheme>
-}): Site {
-  const db = load()
-  // Derive slug: explicit slug → title → random.
-  let slug = sanitizeSlug(input.slug || '')
-  if (!slug) slug = sanitizeSlug(input.title || '')
-  if (!slug) slug = randomSlug()
+}): Promise<Site> {
+  return mutate((db) => {
+    // Derive slug: explicit slug → title → random.
+    let slug = sanitizeSlug(input.slug || '')
+    if (!slug) slug = sanitizeSlug(input.title || '')
+    if (!slug) slug = randomSlug()
 
-  const now = Date.now()
-  const existing = db.sites.find(site => site.slug === slug)
-  const primary = String(input.theme?.primary || '').trim()
+    const now = Date.now()
+    const existing = db.sites.find(site => site.slug === slug)
+    const primary = String(input.theme?.primary || '').trim()
 
-  // Build the pages array. Prefer `pages`; fall back to a legacy single `blocks` array.
-  let rawPages: SavePageInput[]
-  if (Array.isArray(input.pages) && input.pages.length) {
-    rawPages = input.pages
-  } else {
-    rawPages = [{ slug: 'home', title: input.title, blocks: Array.isArray(input.blocks) ? input.blocks : [] }]
-  }
-
-  // Sanitize/validate pages: first page is always home; slugs url-safe + unique.
-  const used = new Set<string>()
-  const pages: SitePage[] = rawPages.map((pg, i) => {
-    let s = i === 0 ? 'home' : sanitizeSlug(pg?.slug || '')
-    if (!s) s = `page-${i}`
-    // ensure uniqueness within the site
-    let candidate = s
-    let n = 2
-    while (used.has(candidate)) { candidate = `${s}-${n++}` }
-    used.add(candidate)
-    return {
-      slug: candidate,
-      title: String(pg?.title || '').trim() || (i === 0 ? 'خانه' : `صفحه ${i + 1}`),
-      inMenu: (pg as { inMenu?: boolean })?.inMenu !== false,
-      menuLabel: (pg as { menuLabel?: string })?.menuLabel ? String((pg as { menuLabel?: string }).menuLabel) : undefined,
-      blocks: Array.isArray(pg?.blocks) ? pg.blocks.map(normalizeBlock) : [],
+    // Build the pages array. Prefer `pages`; fall back to a legacy single `blocks` array.
+    let rawPages: SavePageInput[]
+    if (Array.isArray(input.pages) && input.pages.length) {
+      rawPages = input.pages
+    } else {
+      rawPages = [{ slug: 'home', title: input.title, blocks: Array.isArray(input.blocks) ? input.blocks : [] }]
     }
-  })
-  // Always at least one page (home).
-  if (!pages.length) {
-    pages.push({ slug: 'home', title: String(input.title || '').trim() || 'خانه', blocks: [] })
-  }
 
-  const site: Site = {
-    slug,
-    title: String(input.title || '').trim() || 'سایت بدون عنوان',
-    owner: input.owner ? String(input.owner) : (existing?.owner),
-    ownerName: input.ownerName !== undefined ? String(input.ownerName).trim() : (existing?.ownerName),
-    theme: normTheme({ ...input.theme, primary: HEX.test(primary) ? primary : (input.theme?.primary || '#c9a84c') }),
-    pages,
-    seo: {
-      title: String(input.seo?.title || '').trim(),
-      description: String(input.seo?.description || '').trim(),
-    },
-    createdAt: existing ? existing.createdAt : now,
-    updatedAt: now,
-  }
-  if (existing) {
-    const idx = db.sites.findIndex(s => s.slug === slug)
-    db.sites[idx] = site
-  } else {
-    db.sites.unshift(site)
-  }
-  persist(db)
-  return site
+    // Sanitize/validate pages: first page is always home; slugs url-safe + unique.
+    const used = new Set<string>()
+    const pages: SitePage[] = rawPages.map((pg, i) => {
+      let s = i === 0 ? 'home' : sanitizeSlug(pg?.slug || '')
+      if (!s) s = `page-${i}`
+      // ensure uniqueness within the site
+      let candidate = s
+      let n = 2
+      while (used.has(candidate)) { candidate = `${s}-${n++}` }
+      used.add(candidate)
+      return {
+        slug: candidate,
+        title: String(pg?.title || '').trim() || (i === 0 ? 'خانه' : `صفحه ${i + 1}`),
+        inMenu: (pg as { inMenu?: boolean })?.inMenu !== false,
+        menuLabel: (pg as { menuLabel?: string })?.menuLabel ? String((pg as { menuLabel?: string }).menuLabel) : undefined,
+        blocks: Array.isArray(pg?.blocks) ? pg.blocks.map(normalizeBlock) : [],
+      }
+    })
+    // Always at least one page (home).
+    if (!pages.length) {
+      pages.push({ slug: 'home', title: String(input.title || '').trim() || 'خانه', blocks: [] })
+    }
+
+    const site: Site = {
+      slug,
+      title: String(input.title || '').trim() || 'سایت بدون عنوان',
+      owner: input.owner ? String(input.owner) : (existing?.owner),
+      ownerName: input.ownerName !== undefined ? String(input.ownerName).trim() : (existing?.ownerName),
+      theme: normTheme({ ...input.theme, primary: HEX.test(primary) ? primary : (input.theme?.primary || '#c9a84c') }),
+      pages,
+      seo: {
+        title: String(input.seo?.title || '').trim(),
+        description: String(input.seo?.description || '').trim(),
+      },
+      createdAt: existing ? existing.createdAt : now,
+      updatedAt: now,
+    }
+    if (existing) {
+      const idx = db.sites.findIndex(s => s.slug === slug)
+      db.sites[idx] = site
+    } else {
+      db.sites.unshift(site)
+    }
+    return site
+  })
 }

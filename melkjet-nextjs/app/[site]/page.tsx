@@ -26,7 +26,7 @@ export async function generateMetadata(
   { params }: { params: Promise<{ site: string }> }
 ): Promise<Metadata> {
   const { site: slug } = await params
-  const site = getSite(slug)
+  const site = await getSite(slug)
   if (!site) return {}
   return {
     title: site.seo?.title || site.title,
@@ -695,12 +695,12 @@ export function TeamMemberCard({ m, primary, showSites, showPhone }: { m: TeamMe
   )
 }
 
-function TeamBlock({ block, primary, ownerPhone }: { block: SiteBlock; primary: string; ownerPhone?: string }) {
+async function TeamBlock({ block, primary, ownerPhone }: { block: SiteBlock; primary: string; ownerPhone?: string }) {
   const props = p(block)
   const showSites = props.showSites !== 'no'
   const showPhone = props.showPhone !== 'no'
   const sel = Array.isArray(props.members) ? (props.members as string[]) : null
-  let people = ownerPhone ? getTeamMembers(ownerPhone) : []
+  let people = ownerPhone ? await getTeamMembers(ownerPhone) : []
   if (sel) people = people.filter(m => sel.includes(m.phone))
   return (
     <section id="team" style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
@@ -897,7 +897,7 @@ export default async function PublishedSitePage(
   { params }: { params: Promise<{ site: string }> }
 ) {
   const { site: slug } = await params
-  const site: Site | null = getSite(slug)
+  const site: Site | null = await getSite(slug)
   if (!site) notFound()
 
   const home = getSitePage(site, 'home')

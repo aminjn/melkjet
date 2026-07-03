@@ -12,7 +12,7 @@ export async function generateMetadata(
   { params }: { params: Promise<{ site: string; page: string }> }
 ): Promise<Metadata> {
   const { site: slug, page: pageSlug } = await params
-  const site = getSite(slug)
+  const site = await getSite(slug)
   if (!site) return {}
   const want = sanitizeSlug(pageSlug)
   const page = site.pages.find(p => p.slug === want)
@@ -27,7 +27,7 @@ export default async function PublishedSiteSubPage(
   { params }: { params: Promise<{ site: string; page: string }> }
 ) {
   const { site: slug, page: pageSlug } = await params
-  const site: Site | null = getSite(slug)
+  const site: Site | null = await getSite(slug)
   if (!site) notFound()
 
   // Resolve the requested page; 404 if the slug doesn't match a real page.

@@ -10,9 +10,9 @@ export async function GET(req: NextRequest) {
   // ?recipients=email|sms&group=… → فهرستِ آمادهٔ ارسال (برای فرمِ کمپین)
   const ch = sp.get('recipients')
   if (ch === 'email' || ch === 'sms') {
-    return NextResponse.json({ recipients: recipientsForGroup(s.phone, sp.get('group') || '__all', ch) }, { headers: { 'Cache-Control': 'no-store' } })
+    return NextResponse.json({ recipients: await recipientsForGroup(s.phone, sp.get('group') || '__all', ch) }, { headers: { 'Cache-Control': 'no-store' } })
   }
-  return NextResponse.json({ contacts: listContacts(s.phone), groups: listGroups(s.phone) }, { headers: { 'Cache-Control': 'no-store' } })
+  return NextResponse.json({ contacts: await listContacts(s.phone), groups: await listGroups(s.phone) }, { headers: { 'Cache-Control': 'no-store' } })
 }
 
 export async function POST(req: NextRequest) {
@@ -21,14 +21,14 @@ export async function POST(req: NextRequest) {
   const o = s.phone
   const b = await req.json().catch(() => ({} as any))
   switch (b.action as string) {
-    case 'add': return NextResponse.json({ ok: true, contact: addContact(o, b) })
-    case 'update': { if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); const c = updateContact(o, String(b.id), b.patch || {}); return c ? NextResponse.json({ ok: true, contact: c }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
-    case 'delete': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); deleteContact(o, String(b.id)); return NextResponse.json({ ok: true })
-    case 'bulk': { const rows = Array.isArray(b.rows) ? b.rows : []; const r = bulkAddContacts(o, rows, Array.isArray(b.groups) ? b.groups : (b.group ? [String(b.group)] : [])); return NextResponse.json({ ok: true, ...r, groups: listGroups(o) }) }
-    case 'fromLeads': { const r = importFromLeads(o, b.group ? String(b.group) : undefined); return NextResponse.json({ ok: true, ...r, groups: listGroups(o) }) }
-    case 'addGroup': if (!b.name) return NextResponse.json({ error: 'نام گروه الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, groups: addGroup(o, String(b.name)) })
-    case 'deleteGroup': if (!b.name) return NextResponse.json({ error: 'نام گروه الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, groups: deleteGroup(o, String(b.name)) })
-    case 'assignGroup': { const ids = Array.isArray(b.ids) ? b.ids.map(String) : []; if (!ids.length || !b.group) return NextResponse.json({ error: 'مخاطب و گروه الزامی است' }, { status: 400 }); assignGroup(o, ids, String(b.group), b.add !== false); return NextResponse.json({ ok: true, groups: listGroups(o) }) }
+    case 'add': return NextResponse.json({ ok: true, contact: await addContact(o, b) })
+    case 'update': { if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); const c = await updateContact(o, String(b.id), b.patch || {}); return c ? NextResponse.json({ ok: true, contact: c }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
+    case 'delete': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); await deleteContact(o, String(b.id)); return NextResponse.json({ ok: true })
+    case 'bulk': { const rows = Array.isArray(b.rows) ? b.rows : []; const r = await bulkAddContacts(o, rows, Array.isArray(b.groups) ? b.groups : (b.group ? [String(b.group)] : [])); return NextResponse.json({ ok: true, ...r, groups: await listGroups(o) }) }
+    case 'fromLeads': { const r = await importFromLeads(o, b.group ? String(b.group) : undefined); return NextResponse.json({ ok: true, ...r, groups: await listGroups(o) }) }
+    case 'addGroup': if (!b.name) return NextResponse.json({ error: 'نام گروه الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, groups: await addGroup(o, String(b.name)) })
+    case 'deleteGroup': if (!b.name) return NextResponse.json({ error: 'نام گروه الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, groups: await deleteGroup(o, String(b.name)) })
+    case 'assignGroup': { const ids = Array.isArray(b.ids) ? b.ids.map(String) : []; if (!ids.length || !b.group) return NextResponse.json({ error: 'مخاطب و گروه الزامی است' }, { status: 400 }); await assignGroup(o, ids, String(b.group), b.add !== false); return NextResponse.json({ ok: true, groups: await listGroups(o) }) }
     default: return NextResponse.json({ error: 'عملیات نامعتبر' }, { status: 400 })
   }
 }

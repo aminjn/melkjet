@@ -13,23 +13,23 @@ import { addInquiry as addOwnerInquiry, listProperties } from './owner-store'
 //   مصالح  (/materials)→ leads-store     (علاوه بر «استعلامِ ویترین» که جداگانه ساخته می‌شود)
 function norm(s: string) { return (s || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase() }
 
-export function createAutoLead(ownerPhone: string, input: {
+export async function createAutoLead(ownerPhone: string, input: {
   name: string; phone?: string; need?: string; note?: string; source?: string; listingTitle?: string
-}): void {
+}): Promise<void> {
   if (!ownerPhone || !input?.name) return
   try {
     const dash = dashForRole(getAccount(ownerPhone)?.role)
     const base = { name: input.name, phone: input.phone, need: input.need, note: input.note, source: input.source || 'خودکار', stage: 'new' as const }
-    if (dash === '/pros') addAdvisorLead(ownerPhone, base)
-    else if (dash === '/agency') addAgencyLead(ownerPhone, base)
+    if (dash === '/pros') await addAdvisorLead(ownerPhone, base)
+    else if (dash === '/agency') await addAgencyLead(ownerPhone, base)
     else if (dash === '/owner') {
       // پنلِ مالک لید ندارد؛ معادلش «استعلام» است که به یک ملک گره می‌خورد.
       const title = norm(input.listingTitle || input.need || '')
       const prop = title
-        ? listProperties(ownerPhone).find(p => { const t = norm(p.title); return t === title || t.includes(title) || title.includes(t) })
+        ? (await listProperties(ownerPhone)).find(p => { const t = norm(p.title); return t === title || t.includes(title) || title.includes(t) })
         : null
-      addOwnerInquiry(ownerPhone, { propertyId: prop?.id || '', name: input.name, phone: input.phone, message: input.note })
+      await addOwnerInquiry(ownerPhone, { propertyId: prop?.id || '', name: input.name, phone: input.phone, message: input.note })
     }
-    else addGenericLead(ownerPhone, { name: base.name, phone: base.phone, need: base.need, note: base.note, stage: 'new' })
+    else await addGenericLead(ownerPhone, { name: base.name, phone: base.phone, need: base.need, note: base.note, stage: 'new' })
   } catch { /* ساختِ لید نباید مسیرِ اصلی را بشکند */ }
 }

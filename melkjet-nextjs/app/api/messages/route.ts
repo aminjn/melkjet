@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
       // فقط برای گفتگوی تازه‌ساخته‌شده (اولین پیام) یک لیدِ خودکار در CRMِ صاحبِ آگهی بساز —
       // مطابقِ نقشِ او (مشاور→/pros، آژانس→/agency، بقیه→CRMِ عمومی)، گره‌خورده به همان آگهی.
       if (conv.messages.length === 1) {
-        createAutoLead(owner.phone, {
+        await createAutoLead(owner.phone, {
           name: myName, phone: s.phone,
           need: conv.listingTitle, listingTitle: conv.listingTitle,
           note: `پیام دربارهٔ «${conv.listingTitle}»: ${String(b.text).trim()}`,

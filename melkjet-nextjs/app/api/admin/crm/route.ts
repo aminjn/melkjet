@@ -13,9 +13,9 @@ async function guard() {
 export async function GET() {
   const s = await guard()
   if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
-  const leads = listLeads(s.phone)
-  const tasks = listTasks(s.phone)
-  const clients = listClients()
+  const leads = await listLeads(s.phone)
+  const tasks = await listTasks(s.phone)
+  const clients = await listClients()
   const byStage: Record<Stage, number> = { new: 0, review: 0, offered: 0, contract: 0, lost: 0 }
   for (const l of leads) byStage[l.stage] = (byStage[l.stage] || 0) + 1
   const stats = {
@@ -36,7 +36,7 @@ export async function PATCH(req: NextRequest) {
   if (b.kind !== 'lead') return NextResponse.json({ error: 'نوع نامعتبر' }, { status: 400 })
   if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
   const { kind, id, ...patch } = b
-  const lead = updateLead(s.phone, id, patch as LeadPatch)
+  const lead = await updateLead(s.phone, id, patch as LeadPatch)
   if (!lead) return NextResponse.json({ error: 'یافت نشد' }, { status: 404 })
   return NextResponse.json({ lead })
 }
@@ -50,9 +50,9 @@ export async function DELETE(req: NextRequest) {
   const id = sp.get('id')
   if (!id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
   switch (kind) {
-    case 'lead': deleteLead(s.phone, id); break
-    case 'task': deleteTask(s.phone, id); break
-    case 'client': deleteClient(id); break
+    case 'lead': await deleteLead(s.phone, id); break
+    case 'task': await deleteTask(s.phone, id); break
+    case 'client': await deleteClient(id); break
     default: return NextResponse.json({ error: 'نوع نامعتبر' }, { status: 400 })
   }
   return NextResponse.json({ ok: true })

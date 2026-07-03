@@ -103,7 +103,7 @@ async function runFrom(owner: string, wf: Workflow, fromNode: WorkflowNode, ctx:
 }
 
 export async function processWorkflows(now = Date.now()): Promise<{ workflows: number; fired: number }> {
-  const wfs = allWorkflows().filter(w => w.enabled && w.owner)
+  const wfs = (await allWorkflows()).filter(w => w.enabled && w.owner)
   let fired = 0
   for (const wf of wfs) {
     const trig = wf.nodes.find(n => n.type === 'trigger')

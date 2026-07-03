@@ -23,13 +23,13 @@ export async function GET() {
   const listingCounts: Record<string, number> = {}
   for (const it of listItems('listing')) { const ph = String(it.meta?.__ownerPhone || ''); if (ph) listingCounts[ph] = (listingCounts[ph] || 0) + 1 }
   // اطلاعاتِ کامل‌ترِ هر کاربر بر اساسِ پروفایلش
-  const users = listAccounts().map(a => {
+  const users = await Promise.all(listAccounts().map(async a => {
     const credit = getCredit(a.phone)
     let leads = 0, tasks = 0
-    try { leads = listLeads(a.phone).length } catch {}
-    try { tasks = listTasks(a.phone).length } catch {}
+    try { leads = (await listLeads(a.phone)).length } catch {}
+    try { tasks = (await listTasks(a.phone)).length } catch {}
     return { ...a, roleName: roleNameOf(a.role), planName: planNameOf(a.plan), dashboard: dashForRoleId(a.role), listings: listingCounts[a.phone] || 0, leads, tasks, credit, tokenUsed: getTokenUsage(a.phone), profileCompletion: completeness(getProfile(a.phone)) }
-  })
+  }))
   return NextResponse.json({ users, roles, plans })
 }
 

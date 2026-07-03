@@ -6,7 +6,7 @@ import { getSession } from '@/app/lib/session'
 export async function GET(req: NextRequest) {
   const slug = new URL(req.url).searchParams.get('slug') || ''
   if (!slug) return NextResponse.json({ error: 'slug خالی است' }, { status: 400 })
-  const site = getSite(slug)
+  const site = await getSite(slug)
   if (!site) return NextResponse.json({ error: 'یافت نشد' }, { status: 404 })
   return NextResponse.json({ site })
 }
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     ? { primary: String(body.theme.primary || ''), font: body.theme.font ? String(body.theme.font) : undefined }
     : undefined
 
-  const site = saveSite({
+  const site = await saveSite({
     slug: body.slug ? String(body.slug) : undefined,
     title: String(body.title || ''),
     owner: session.phone,

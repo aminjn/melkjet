@@ -17,15 +17,15 @@ export interface TeamMember {
 }
 
 // آدرسِ سایتِ منتشرشدهٔ خودِ مشاور (در صورتِ وجود) — منبعِ واقعی به‌جای slugِ دستی در پروفایل.
-function siteSlugFor(phone: string): string {
+async function siteSlugFor(phone: string): Promise<string> {
   if (!phone) return ''
-  try { const s = listSites().find(s => s.owner === phone); return s?.slug || '' } catch { return '' }
+  try { const s = (await listSites()).find(s => s.owner === phone); return s?.slug || '' } catch { return '' }
 }
 
 // اعضای تیمِ یک آژانس را با اطلاعاتِ کاملشان برمی‌گرداند (از رابطهٔ واقعیِ مشاور↔آژانس).
-export function getTeamMembers(agencyPhone: string): TeamMember[] {
+export async function getTeamMembers(agencyPhone: string): Promise<TeamMember[]> {
   if (!agencyPhone) return []
-  return listAgencyMembers(agencyPhone).map(m => {
+  return Promise.all(listAgencyMembers(agencyPhone).map(async m => {
     const phone = m.advisorPhone
     let name = m.advisorName || '', photo = '', title = '', areas = '', experience = '', specialties: string[] = [], activeListings = 0
     try {
@@ -47,6 +47,6 @@ export function getTeamMembers(agencyPhone: string): TeamMember[] {
     if (!title) title = prof.businessType || prof.tagline || ''
     if (!areas && Array.isArray(prof.areas) && prof.areas.length) areas = prof.areas.join('، ')
     if (!specialties.length && Array.isArray(prof.specialties) && prof.specialties.length) specialties = prof.specialties
-    return { phone, name: name || 'مشاور', photo, title, specialties: specialties.slice(0, 6), areas, experience, activeListings, slug: siteSlugFor(phone) }
-  })
+    return { phone, name: name || 'مشاور', photo, title, specialties: specialties.slice(0, 6), areas, experience, activeListings, slug: await siteSlugFor(phone) }
+  }))
 }

@@ -5,8 +5,8 @@ import { getSite } from '@/app/lib/sites-store'
 import { moderateReview } from '@/app/lib/moderation'
 
 // نظرِ سایت را به مالکِ آن (از روی slug) نسبت می‌دهد تا شمارهٔ مالک در صفحه لو نرود.
-function ownerOfSlug(slug: string): string {
-  const s = getSite(String(slug || ''))
+async function ownerOfSlug(slug: string): Promise<string> {
+  const s = await getSite(String(slug || ''))
   return s?.owner || ''
 }
 
@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const slug = url.searchParams.get('slug')
   if (slug) {
-    const owner = ownerOfSlug(slug)
+    const owner = await ownerOfSlug(slug)
     return NextResponse.json({ reviews: owner ? listReviews(owner) : [] }, { headers: { 'Cache-Control': 'no-store' } })
   }
   // بدونِ slug → نظراتِ خودِ کاربرِ واردشده (برای پیش‌نمایش/مدیریت)
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
 // ثبتِ نظر توسطِ بازدیدکننده (عمومی) — با slugِ سایت.
 export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({} as any))
-  const owner = ownerOfSlug(b.slug)
+  const owner = await ownerOfSlug(b.slug)
   if (!owner) return NextResponse.json({ error: 'سایت یافت نشد' }, { status: 404 })
   const r = addReview(owner, { name: b.name, text: b.text, rating: b.rating })
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 })

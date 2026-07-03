@@ -6,5 +6,5 @@ import { getTeamMembers } from '@/app/lib/team-members'
 export async function GET() {
   const s = await getSession()
   if (!s) return NextResponse.json({ members: [] }, { headers: { 'Cache-Control': 'no-store' } })
-  return NextResponse.json({ members: getTeamMembers(s.phone) }, { headers: { 'Cache-Control': 'no-store, private' } })
+  return NextResponse.json({ members: await getTeamMembers(s.phone) }, { headers: { 'Cache-Control': 'no-store, private' } })
 }

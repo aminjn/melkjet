@@ -10,8 +10,8 @@ import { getSession } from '@/app/lib/session'
 // selects the collection. Reads are open; writes require a logged-in session.
 export async function GET(req: NextRequest) {
   const kind = new URL(req.url).searchParams.get('kind')
-  if (kind === 'clients') return NextResponse.json({ clients: listClients() })
-  return NextResponse.json({ tasks: listTasks() })
+  if (kind === 'clients') return NextResponse.json({ clients: await listClients() })
+  return NextResponse.json({ tasks: await listTasks() })
 }
 
 export async function POST(req: NextRequest) {
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   if (body.kind === 'client') {
     const name = String(body.name || '').trim()
     if (!name) return NextResponse.json({ error: 'نام مشتری خالی است' }, { status: 400 })
-    const client = addClient({
+    const client = await addClient({
       name,
       phone: body.phone ? String(body.phone) : undefined,
       need: body.need ? String(body.need) : undefined,
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   if (!title) return NextResponse.json({ error: 'عنوان وظیفه خالی است' }, { status: 400 })
   const priority = (['high', 'medium', 'low'] as const).includes(body.priority) ? body.priority as Priority : undefined
   const due = body.due ? String(body.due) : undefined
-  const task = addTask({ title, priority, due })
+  const task = await addTask({ title, priority, due })
   return NextResponse.json({ task })
 }
 
@@ -47,7 +47,7 @@ export async function PATCH(req: NextRequest) {
   const id = String(body.id || '')
   if (!id) return NextResponse.json({ error: 'شناسه نامعتبر' }, { status: 400 })
   // only tasks support toggle
-  toggleTask(id)
+  await toggleTask(id)
   return NextResponse.json({ ok: true })
 }
 
@@ -58,7 +58,7 @@ export async function DELETE(req: NextRequest) {
   const kind = params.get('kind')
   const id = params.get('id') || ''
   if (!id) return NextResponse.json({ error: 'شناسه نامعتبر' }, { status: 400 })
-  if (kind === 'clients') deleteClient(id)
-  else deleteTask(id)
+  if (kind === 'clients') await deleteClient(id)
+  else await deleteTask(id)
   return NextResponse.json({ ok: true })
 }

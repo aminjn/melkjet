@@ -6,7 +6,7 @@ import { getSession } from '@/app/lib/session'
 export async function GET() {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  return NextResponse.json({ tasks: listTasks(session.phone) })
+  return NextResponse.json({ tasks: await listTasks(session.phone) })
 }
 
 export async function POST(req: NextRequest) {
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   const priority = (['high', 'medium', 'low'] as const).includes(body.priority) ? body.priority as Priority : undefined
   const due = body.due ? String(body.due) : undefined
   const dueTs = typeof body.dueTs === 'number' && isFinite(body.dueTs) ? body.dueTs : undefined
-  const task = addTask(session.phone, { title, priority, due, dueTs })
+  const task = await addTask(session.phone, { title, priority, due, dueTs })
   return NextResponse.json({ task })
 }
 
@@ -32,7 +32,7 @@ export async function PATCH(req: NextRequest) {
   const hasPatch = ['title', 'priority', 'due', 'dueTs', 'done'].some(k => body[k] !== undefined)
   if (hasPatch) {
     const priority = (['high', 'medium', 'low'] as const).includes(body.priority) ? body.priority as Priority : undefined
-    const task = updateTask(session.phone, id, {
+    const task = await updateTask(session.phone, id, {
       title: body.title !== undefined ? String(body.title) : undefined,
       priority,
       due: body.due !== undefined ? String(body.due) : undefined,
@@ -42,7 +42,7 @@ export async function PATCH(req: NextRequest) {
     if (!task) return NextResponse.json({ error: 'یافت نشد' }, { status: 404 })
     return NextResponse.json({ task })
   }
-  toggleTask(session.phone, id)
+  await toggleTask(session.phone, id)
   return NextResponse.json({ ok: true })
 }
 
@@ -51,6 +51,6 @@ export async function DELETE(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   const id = new URL(req.url).searchParams.get('id') || ''
   if (!id) return NextResponse.json({ error: 'شناسه نامعتبر' }, { status: 400 })
-  deleteTask(session.phone, id)
+  await deleteTask(session.phone, id)
   return NextResponse.json({ ok: true })
 }
