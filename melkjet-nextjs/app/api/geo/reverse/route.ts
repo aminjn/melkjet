@@ -21,9 +21,11 @@ export async function GET(req: NextRequest) {
       if (r.status === 200) {
         const d = JSON.parse(r.body)
         return NextResponse.json({
-          neighbourhood: d.neighbourhood || undefined,
-          city: d.city || d.county || undefined,
-          address: d.formatted_address || undefined,
+          province: d.state || undefined,                          // استان
+          city: d.city || d.county || undefined,                    // شهر
+          district: d.municipality_zone || d.district || undefined, // منطقهٔ شهرداری
+          neighbourhood: d.neighbourhood || undefined,              // محله
+          address: d.formatted_address || undefined,                // آدرسِ کامل
           source: 'neshan',
         })
       }

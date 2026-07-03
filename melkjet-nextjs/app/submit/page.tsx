@@ -100,12 +100,46 @@ export default function SubmitPage() {
     } finally { setSubmitting(false); }
   };
 
+  const [me, setMe] = useState<{ name: string } | null>(null);   // نامِ مشاور برای درجِ خودکار در توضیحات
+
   useEffect(() => {
     fetch('/api/geo', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : { provinces: [] }))
       .then((d) => setGeo(d.provinces || []))
       .catch(() => {});
+    fetch('/api/auth/profile', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { const a = d?.account; const nm = a?.fullName || [a?.firstName, a?.lastName].filter(Boolean).join(' ') || d?.name || ''; if (nm) setMe({ name: nm }); })
+      .catch(() => {});
   }, []);
+
+  // تطبیقِ نامِ برگشتی از نقشه با گزینه‌های موجودِ ژئو (نرمال‌سازی + شاملِ یکدیگر).
+  const same = (a?: string, b?: string) => {
+    if (!a || !b) return false;
+    const n = (s: string) => s.replace(/‌/g, '').replace(/\s+/g, '').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim();
+    const x = n(a), y = n(b);
+    return x === y || (x.length > 1 && (x.includes(y) || y.includes(x)));
+  };
+
+  // اگر مقدارِ پرشده از نقشه در فهرستِ ژئو نبود، همان را به‌عنوان گزینه نشان بده تا در دراپ‌داون دیده شود.
+  const extraOpt = (val: string, names: string[]) => (val && !names.includes(val)) ? <option value={val}>{val}</option> : null;
+
+  // کلیک روی نقشه → پرکردنِ خودکارِ آدرس + استان/شهر/منطقه/محله (تطبیق با ژئو، وگرنه همان مقدارِ نشان).
+  const applyGeoPick = (r: { lat: number; lng: number; province?: string; city?: string; district?: string; neighbourhood?: string; address?: string }) => {
+    setForm((prev) => {
+      const next = { ...prev, lat: r.lat, lng: r.lng };
+      if (r.address) next.address = r.address;
+      const prov = geo.find((p) => same(p.name, r.province));
+      next.province = prov?.name || r.province || next.province;
+      const city = prov?.cities.find((c) => same(c.name, r.city));
+      next.city = city?.name || r.city || next.city;
+      const dist = city?.districts.find((d) => same(d.name, r.district) || d.neighborhoods.some((nb) => same(nb, r.neighbourhood)));
+      next.district = dist?.name || r.district || next.district;
+      const nb = dist?.neighborhoods.find((x) => same(x, r.neighbourhood));
+      next.neighborhood = nb || r.neighbourhood || next.neighborhood;
+      return next;
+    });
+  };
 
   const geoProvince = geo.find((p) => p.name === form.province);
   const geoCity = geoProvince?.cities.find((c) => c.name === form.city);
@@ -127,14 +161,39 @@ export default function SubmitPage() {
     set('images', updated);
   };
 
-  const handleGenerateDescription = () => {
+  const fallbackDesc = () =>
+    `${form.propertyType || 'ملک'} ${form.area ? form.area + ' متری' : ''} در ${form.neighborhood || form.city || 'موقعیت مناسب'}${form.rooms ? '، دارای ' + form.rooms + ' اتاق خواب' : ''}${form.parking === 'yes' ? '، پارکینگ' : ''}${form.elevator === 'yes' ? '، آسانسور' : ''}${form.storage === 'yes' ? '، انباری' : ''}. موقعیت عالی با دسترسی آسان به امکانات شهری.${me?.name ? ` جهتِ هماهنگیِ بازدید با ${me.name} تماس بگیرید.` : ''}`;
+
+  // توضیحاتِ واقعیِ هوش مصنوعی — کامل، حرفه‌ای، با ذکرِ نامِ مشاور. اگر AI در دسترس نبود، قالبِ محلی.
+  const handleGenerateDescription = async () => {
     setAiLoading(true);
-    setTimeout(() => {
-      setAiDescription(
-        `${form.propertyType || 'ملک'} ${form.area ? form.area + ' متری' : ''} در ${form.neighborhood || form.city || 'موقعیت مناسب'}، دارای ${form.rooms || '۳'} اتاق خواب${form.parking === 'yes' ? '، پارکینگ' : ''}${form.elevator === 'yes' ? '، آسانسور' : ''}${form.storage === 'yes' ? '، انباری' : ''}. موقعیت عالی با دسترسی آسان به امکانات شهری.`
-      );
+    try {
+      const specs = [
+        form.propertyType && `نوعِ ملک: ${form.propertyType}`,
+        form.dealType && `نوعِ معامله: ${form.dealType === 'rent' ? 'اجاره' : 'فروش'}`,
+        form.area && `متراژ: ${form.area} متر`,
+        form.rooms && `اتاقِ خواب: ${form.rooms}`,
+        [form.city, form.district, form.neighborhood].filter(Boolean).length && `موقعیت: ${[form.city, form.district, form.neighborhood].filter(Boolean).join('، ')}`,
+        form.address && `آدرس: ${form.address}`,
+        form.floor && `طبقه: ${form.floor}${form.totalFloors ? ' از ' + form.totalFloors : ''}`,
+        form.buildingAge && `سنِ بنا: ${form.buildingAge} سال`,
+        form.parking === 'yes' && 'پارکینگ دارد',
+        form.elevator === 'yes' && 'آسانسور دارد',
+        form.storage === 'yes' && 'انباری دارد',
+        form.totalPrice && `قیمتِ کل: ${form.totalPrice} تومان`,
+        form.rent && `اجارهٔ ماهانه: ${form.rent} تومان`,
+        form.deposit && `ودیعه: ${form.deposit} تومان`,
+      ].filter(Boolean).join('\n');
+      const input = `برای این ملک یک «توضیحاتِ آگهیِ» حرفه‌ای، جذاب و کاملِ فارسی بنویس (حدودِ ۵ تا ۷ جمله، لحنِ مشاورِ املاکِ حرفه‌ای). ویژگی‌ها را روان و کامل توصیف کن، نقاطِ قوت و موقعیت و دسترسی‌ها را برجسته کن، و در پایان یک دعوت به تماس/بازدید بگذار.${me?.name ? ` حتماً در پایان نامِ «${me.name}» را به‌عنوانِ مشاورِ تنظیم‌کنندهٔ آگهی ذکر کن.` : ''} فقط متنِ توضیحات را بده — بدونِ تیتر، بدونِ علامتِ نقل‌قول، بدونِ فهرست.\n\nمشخصاتِ ملک:\n${specs}`;
+      const r = await fetch('/api/ai/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agent: 'content', input }) });
+      const d = await r.json();
+      if (r.ok && d.text && String(d.text).trim()) setAiDescription(String(d.text).trim());
+      else setAiDescription(fallbackDesc());
+    } catch {
+      setAiDescription(fallbackDesc());
+    } finally {
       setAiLoading(false);
-    }, 2000);
+    }
   };
 
   const containerStyle: React.CSSProperties = {
@@ -291,6 +350,7 @@ export default function SubmitPage() {
             <label style={labelStyle}>استان</label>
             <select style={inputStyle} value={form.province} onChange={(e) => { set('province', e.target.value); set('city', ''); set('district', ''); set('neighborhood', ''); }}>
               <option value="">انتخاب کنید</option>
+              {extraOpt(form.province, geo.map((p) => p.name))}
               {geo.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
             </select>
           </div>
@@ -298,6 +358,7 @@ export default function SubmitPage() {
             <label style={labelStyle}>شهر</label>
             <select style={inputStyle} value={form.city} onChange={(e) => { set('city', e.target.value); set('district', ''); set('neighborhood', ''); }} disabled={!form.province}>
               <option value="">انتخاب کنید</option>
+              {extraOpt(form.city, (geoProvince?.cities || []).map((c) => c.name))}
               {(geoProvince?.cities || []).map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
             </select>
           </div>
@@ -307,6 +368,7 @@ export default function SubmitPage() {
             <label style={labelStyle}>منطقه</label>
             <select style={inputStyle} value={form.district} onChange={(e) => { set('district', e.target.value); set('neighborhood', ''); }} disabled={!form.city}>
               <option value="">انتخاب کنید</option>
+              {extraOpt(form.district, (geoCity?.districts || []).map((d) => d.name))}
               {(geoCity?.districts || []).map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
             </select>
           </div>
@@ -314,21 +376,17 @@ export default function SubmitPage() {
             <label style={labelStyle}>محله</label>
             <select style={inputStyle} value={form.neighborhood} onChange={(e) => set('neighborhood', e.target.value)} disabled={!form.district}>
               <option value="">انتخاب کنید</option>
+              {extraOpt(form.neighborhood, geoDistrict?.neighborhoods || [])}
               {(geoDistrict?.neighborhoods || []).map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </div>
         </div>
         <div>
-          <label style={labelStyle}>موقعیت روی نقشه — روی محل ملک کلیک کنید تا محله به‌صورت خودکار تشخیص داده شود</label>
+          <label style={labelStyle}>موقعیت روی نقشه — روی محلِ ملک کلیک کنید تا آدرس، استان، شهر، منطقه و محله خودکار پر شود</label>
           <LocationPicker
             lat={form.lat}
             lng={form.lng}
-            onPick={(r) => {
-              set('lat', r.lat); set('lng', r.lng);
-              if (r.neighbourhood) set('neighborhood', r.neighbourhood);
-              if (r.city && !form.city) set('city', r.city);
-              if (r.address) set('address', r.address);
-            }}
+            onPick={applyGeoPick}
           />
         </div>
         <div className="mjsub-3col" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
@@ -536,12 +594,18 @@ export default function SubmitPage() {
           <p style={{ fontWeight: 700, fontSize: 16, color: 'var(--gold)', margin: 0 }}>توضیحات هوشمند</p>
         </div>
         {aiDescription ? (
-          <div style={{ background: 'var(--bg2)', borderRadius: 10, padding: '14px 16px', color: 'var(--text)', fontSize: 14, lineHeight: 1.8, marginBottom: 14 }}>
-            {aiDescription}
-          </div>
+          <>
+            <textarea
+              value={aiDescription}
+              onChange={(e) => setAiDescription(e.target.value)}
+              rows={7}
+              style={{ width: '100%', background: 'var(--bg2)', borderRadius: 10, padding: '14px 16px', color: 'var(--text)', fontSize: 14, lineHeight: 1.9, marginBottom: 8, border: '1px solid var(--line2)', fontFamily: 'inherit', resize: 'vertical', outline: 'none' }}
+            />
+            <p style={{ color: 'var(--faint)', fontSize: 12, marginBottom: 14 }}>می‌توانید متن را ویرایش کنید — کم/زیاد کنید یا با دکمهٔ زیر دوباره با هوش مصنوعی بنویسید.</p>
+          </>
         ) : (
           <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 14 }}>
-            با یک کلیک، هوش مصنوعی MelkJet توضیح حرفه‌ای برای آگهی شما می‌نویسد.
+            با یک کلیک، هوش مصنوعی MelkJet یک توضیحِ کامل و حرفه‌ای برای آگهی شما می‌نویسد (با نامِ شما) — و بعد می‌توانید ویرایشش کنید.
           </p>
         )}
         <button
