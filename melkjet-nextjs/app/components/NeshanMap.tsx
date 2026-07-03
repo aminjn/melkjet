@@ -28,19 +28,21 @@ function loadSdk(): Promise<any> {
 }
 
 export default function NeshanMap({
-  points = [], center, zoom = 13, height = '100%', onSelect, theme, fallback,
+  points = [], center, zoom = 13, height = '100%', onSelect, onMapClick, theme, fallback,
 }: {
   points?: MapPoint[]
   center?: { lat: number; lng: number }
   zoom?: number
   height?: number | string
   onSelect?: (id: string) => void
+  onMapClick?: (lat: number, lng: number) => void   // انتخابِ موقعیت با کلیک روی نقشه (مارکر جابه‌جا می‌شود)
   theme?: 'day' | 'night'
   fallback?: React.ReactNode   // اگر SDK بارگذاری نشد، این نمایش داده می‌شود (مثلِ نقشهٔ استاتیک)
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const mapRef = useRef<any>(null)
   const markersRef = useRef<any[]>([])
+  const pickRef = useRef<any>(null)
   const [err, setErr] = useState<string>('')
 
   // ساختِ یک‌بارهٔ نقشه
@@ -60,6 +62,16 @@ export default function NeshanMap({
           center: center ? [center.lat, center.lng] : TEHRAN,
           zoom,
         })
+        // انتخابِ موقعیت با کلیک: مارکر را جابه‌جا می‌کند و مختصات را برمی‌گرداند.
+        if (onMapClick) {
+          if (center) pickRef.current = L.marker([center.lat, center.lng]).addTo(mapRef.current)
+          mapRef.current.on('click', (e: any) => {
+            const la = e.latlng.lat, ln = e.latlng.lng
+            if (pickRef.current) pickRef.current.setLatLng([la, ln])
+            else pickRef.current = L.marker([la, ln]).addTo(mapRef.current)
+            onMapClick(la, ln)
+          })
+        }
       } catch { if (!dead) setErr('init') }
     }).catch(() => { if (!dead) setErr('key') })
     return () => { dead = true; try { mapRef.current?.remove() } catch {} ; mapRef.current = null }

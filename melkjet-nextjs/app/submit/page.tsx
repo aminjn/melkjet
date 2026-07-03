@@ -79,6 +79,8 @@ export default function SubmitPage() {
   });
   const [aiLoading, setAiLoading] = useState(false);
   const [aiDescription, setAiDescription] = useState('');
+  const [priceSuggest, setPriceSuggest] = useState<{ min: number; max: number; count: number } | null>(null);  // برآوردِ واقعیِ قیمت
+  const [priceLoading, setPriceLoading] = useState(false);
   const [geo, setGeo] = useState<GeoProvince[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState<{ status: string; reason: string } | null>(null);
@@ -120,6 +122,27 @@ export default function SubmitPage() {
     const x = n(a), y = n(b);
     return x === y || (x.length > 1 && (x.includes(y) || y.includes(x)));
   };
+
+  // برآوردِ واقعیِ قیمت از آمارِ معاملاتِ همان محله (دادهٔ اسکرپ‌شده) × متراژ — نه عددِ ثابت.
+  useEffect(() => {
+    const area = Number(String(form.area).replace(/[^\d.]/g, '').replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))));
+    const district = form.district || form.neighborhood || '';
+    if (!area || (!district && !form.city)) { setPriceSuggest(null); return; }
+    setPriceLoading(true);
+    const q = new URLSearchParams({ city: form.city || '', district });
+    fetch(`/api/market/stats?${q}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const s = d?.stats;
+        const ppm = s?.median || s?.avg;
+        if (s && s.count > 0 && ppm) {
+          const mid = ppm * area;
+          setPriceSuggest({ min: Math.round(mid * 0.93), max: Math.round(mid * 1.08), count: s.count });
+        } else setPriceSuggest(null);
+      })
+      .catch(() => setPriceSuggest(null))
+      .finally(() => setPriceLoading(false));
+  }, [form.area, form.city, form.district, form.neighborhood]);
 
   // اگر مقدارِ پرشده از نقشه در فهرستِ ژئو نبود، همان را به‌عنوان گزینه نشان بده تا در دراپ‌داون دیده شود.
   const extraOpt = (val: string, names: string[]) => (val && !names.includes(val)) ? <option value={val}>{val}</option> : null;
@@ -461,23 +484,33 @@ export default function SubmitPage() {
           <p style={{ fontWeight: 700, fontSize: 16, color: 'var(--gold)', margin: 0 }}>پیشنهاد قیمت هوش مصنوعی</p>
         </div>
         <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 14 }}>
-          بر اساس آمار معاملات اخیر منطقه و ویژگی‌های ملک شما:
+          بر اساس قیمتِ واقعیِ هر مترمربعِ همین محله (از معاملاتِ ثبت‌شده) × متراژِ ملکِ شما:
         </p>
-        <div style={{ display: 'flex', gap: 16 }}>
-          <div style={{ flex: 1, background: 'var(--bg2)', borderRadius: 10, padding: '14px 16px', textAlign: 'center' }}>
-            <div style={{ color: 'var(--muted)', fontSize: 12, marginBottom: 4 }}>حداقل پیشنهادی</div>
-            <div style={{ color: 'var(--text)', fontWeight: 700, fontSize: 15 }}>۳,۲۰۰,۰۰۰,۰۰۰</div>
-            <div style={{ color: 'var(--faint)', fontSize: 11 }}>تومان</div>
-          </div>
-          <div style={{ flex: 1, background: 'var(--bg2)', borderRadius: 10, padding: '14px 16px', textAlign: 'center' }}>
-            <div style={{ color: 'var(--muted)', fontSize: 12, marginBottom: 4 }}>حداکثر پیشنهادی</div>
-            <div style={{ color: 'var(--text)', fontWeight: 700, fontSize: 15 }}>۳,۸۰۰,۰۰۰,۰۰۰</div>
-            <div style={{ color: 'var(--faint)', fontSize: 11 }}>تومان</div>
-          </div>
-        </div>
-        <p style={{ color: 'var(--faint)', fontSize: 12, marginTop: 12, margin: '12px 0 0' }}>
-          ✦ این پیشنهاد بر اساس ۴۷ معامله مشابه در ۳ ماه اخیر محاسبه شده است.
-        </p>
+        {priceLoading ? (
+          <p style={{ color: 'var(--muted)', fontSize: 13 }}>در حال محاسبه بر اساس دادهٔ واقعیِ منطقه…</p>
+        ) : priceSuggest ? (
+          <>
+            <div style={{ display: 'flex', gap: 16 }}>
+              <div style={{ flex: 1, background: 'var(--bg2)', borderRadius: 10, padding: '14px 16px', textAlign: 'center' }}>
+                <div style={{ color: 'var(--muted)', fontSize: 12, marginBottom: 4 }}>حداقل پیشنهادی</div>
+                <div style={{ color: 'var(--text)', fontWeight: 700, fontSize: 15 }}>{priceSuggest.min.toLocaleString('fa-IR')}</div>
+                <div style={{ color: 'var(--faint)', fontSize: 11 }}>تومان</div>
+              </div>
+              <div style={{ flex: 1, background: 'var(--bg2)', borderRadius: 10, padding: '14px 16px', textAlign: 'center' }}>
+                <div style={{ color: 'var(--muted)', fontSize: 12, marginBottom: 4 }}>حداکثر پیشنهادی</div>
+                <div style={{ color: 'var(--text)', fontWeight: 700, fontSize: 15 }}>{priceSuggest.max.toLocaleString('fa-IR')}</div>
+                <div style={{ color: 'var(--faint)', fontSize: 11 }}>تومان</div>
+              </div>
+            </div>
+            <p style={{ color: 'var(--faint)', fontSize: 12, marginTop: 12, margin: '12px 0 0' }}>
+              ✦ بر اساس {priceSuggest.count.toLocaleString('fa-IR')} آگهیِ واقعیِ ثبت‌شده در همین محله محاسبه شده است.
+            </p>
+          </>
+        ) : (
+          <p style={{ color: 'var(--faint)', fontSize: 13 }}>
+            برای برآوردِ قیمت، «متراژ» و «محله/منطقه» را کامل کنید. اگر هنوز دادهٔ کافی از این محله نداریم، برآورد نمایش داده نمی‌شود.
+          </p>
+        )}
       </div>
     </div>
   );
