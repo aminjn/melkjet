@@ -368,6 +368,7 @@ function ListingsView() {
   const [status, setStatus] = useState('')
   const [loc, setLoc] = useState('')                       // فیلترِ محله/شهر
   const [hoods, setHoods] = useState<{ h: string; c: number }[]>([])
+  const [ml, setMl] = useState<any>(null)                  // وضعیتِ مدلِ یادگیرندهٔ ممیزی
   const [q, setQ] = useState('')
   const [edit, setEdit] = useState<MItem | null>(null)
   const [bulkOpen, setBulkOpen] = useState(false)
@@ -387,6 +388,8 @@ function ListingsView() {
     setLoading(false); setSel(new Set())
   }
   useEffect(() => { load() }, [type, status, loc])
+  const loadMl = () => fetch('/api/admin/scraper/moderate').then(r => r.ok ? r.json() : null).then(d => setMl(d?.ml || null)).catch(() => {})
+  useEffect(() => { loadMl() }, [])
 
   const patch = async (id: string, body: any) => {
     await fetch('/api/admin/scraper/items', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...body }) })
@@ -439,7 +442,7 @@ function ListingsView() {
       for (const id of ids) {
         try { await fetch('/api/admin/scraper/moderate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }) } catch {}
       }
-      await load()
+      await load(); loadMl()
     } finally { setAiBusy(false) }
   }
 
@@ -480,8 +483,16 @@ function ListingsView() {
           }}>🧹 پاک‌سازیِ تکراری‌ها</OutlineButton>
           <GoldButton onClick={() => setCreateOpen(true)}>＋ آگهی جدید</GoldButton>
         </div>
-        <div style={{ marginTop: 10, fontSize: 12.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ marginTop: 10, fontSize: 12.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <span>{loading ? 'در حال بارگذاری…' : `${total} مورد`}</span>
+          {ml && (
+            <span title="مدلِ یادگیرندهٔ ممیزی: از هر تصمیمِ تأیید/رد یاد می‌گیرد و پس از دیدنِ نمونهٔ کافی خودش تصمیم می‌گیرد."
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, padding: '4px 10px', borderRadius: 999, border: `1px solid ${ml.ready ? '#5fd98a' : 'var(--line2)'}`, color: ml.ready ? '#5fd98a' : 'var(--faint)' }}>
+              🧠 مدلِ یادگیرنده: {ml.ready ? 'آماده — خودکار تصمیم می‌گیرد' : 'در حالِ یادگیری'}
+              <span style={{ color: 'var(--faint)' }}>· ✓{ml.approvedSamples} ✕{ml.rejectedSamples} از {ml.minPerClass}</span>
+              {ml.autoDecided > 0 && <span style={{ color: 'var(--gold)' }}>· {ml.autoDecided} تصمیمِ خودکار</span>}
+            </span>
+          )}
           <button onClick={selectAll} style={{ background: 'transparent', border: '1px solid var(--line2)', color: 'var(--muted)', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>{sel.size === items.length && items.length ? 'لغو انتخاب همه' : 'انتخاب همه'}</button>
           {sel.size > 0 && <>
             <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{sel.size} انتخاب‌شده:</span>

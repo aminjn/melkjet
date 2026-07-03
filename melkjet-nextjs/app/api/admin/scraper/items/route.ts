@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listItems, setItemStatus, updateItem, deleteItem, deleteItems, addItemManual, SourceType, ItemStatus, EditableItem } from '@/app/lib/scraper-store'
+import { listItems, setItemStatus, updateItem, deleteItem, deleteItems, addItemManual, getItemById, SourceType, ItemStatus, EditableItem } from '@/app/lib/scraper-store'
 import { clearEnrichment } from '@/app/lib/enrich-store'
 import { logAudit } from '@/app/lib/audit-store'
+import { teachFromAdmin } from '@/app/lib/moderation'
 
 async function guard() {
   const s = await getSession()
@@ -62,6 +63,8 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ ok: true, item: it })
   }
   if (b.status && ['pending', 'approved', 'duplicate', 'rejected'].includes(b.status)) {
+    // مدلِ یادگیرنده از تصمیمِ دستیِ ادمین یاد بگیرد (قوی‌ترین سیگنال) — قبل از تغییرِ وضعیت آیتم را بگیر.
+    if (b.status === 'approved' || b.status === 'rejected') { const it = getItemById(b.id); if (it && it.type === 'listing') teachFromAdmin(it, b.status as ItemStatus) }
     setItemStatus(b.id, b.status as ItemStatus)
     logAudit(await actor(), `تغییر وضعیت به ${b.status}`, b.id)
     return NextResponse.json({ ok: true })

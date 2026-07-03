@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { warmEnrichment } from '@/app/lib/enrich-warm'
 import { checkDuplicate, advisorScope } from '@/app/lib/duplicate-check'
+import { moderateFields } from '@/app/lib/moderation'
+import { setModeration } from '@/app/lib/scraper-store'
 import {
   advisorStats, listLeads, listListings, listAppts, listCommissions,
   addLead, updateLead, setLeadStage, deleteLead, addListing, updateListing, setListingStatus, deleteListing, publishListing, unpublishListing,
@@ -38,7 +40,23 @@ export async function POST(req: NextRequest) {
     case 'updateListing': { if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); const l = updateListing(o, String(b.id), b.patch || {}); return l ? NextResponse.json({ ok: true, listing: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'setListingStatus': { const l = setListingStatus(o, String(b.id), b.status); return l ? NextResponse.json({ ok: true, listing: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'deleteListing': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); deleteListing(o, String(b.id)); return NextResponse.json({ ok: true })
-    case 'publishListing': { if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); const l = publishListing(o, String(b.id)); if (l?.publicId) warmEnrichment(l.publicId); return l ? NextResponse.json({ ok: true, listing: l, publicId: l.publicId }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
+    case 'publishListing': {
+      if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
+      const lst = listListings(o).find(x => x.id === String(b.id))
+      if (!lst) return NextResponse.json({ error: 'یافت نشد' }, { status: 404 })
+      // ممیزیِ قبل از انتشار (مدلِ یادگیرنده → در صورتِ نبودِ اطمینان، AI). فقط ردِ قطعی جلوی انتشار را می‌گیرد.
+      const mod = await moderateFields({
+        title: lst.title,
+        price: lst.deal === 'rent' ? `ودیعه ${lst.price} تومان${lst.rentMonthly ? ` اجاره ماهانه ${lst.rentMonthly} تومان` : ''}` : `${lst.price} تومان`,
+        location: [lst.city, lst.neighborhood].filter(Boolean).join('، ') || lst.location,
+        excerpt: lst.description,
+        meta: { 'نوع معامله': lst.deal === 'rent' ? 'اجاره' : 'فروش', 'متراژ': lst.area ? `${lst.area} متر` : '', 'اتاق خواب': String(lst.rooms || '') },
+      })
+      if (mod.status === 'rejected') return NextResponse.json({ blocked: true, reason: mod.reason, error: `این آگهی در ممیزی رد شد: ${mod.reason}` })
+      const l = publishListing(o, String(b.id))
+      if (l?.publicId) { warmEnrichment(l.publicId); if (mod.status === 'approved') setModeration(l.publicId, 'approved', mod.reason, mod.score) }
+      return l ? NextResponse.json({ ok: true, listing: l, publicId: l.publicId, moderation: mod }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 })
+    }
     case 'unpublishListing': { if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); const l = unpublishListing(o, String(b.id)); return l ? NextResponse.json({ ok: true, listing: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'addAppt': if (!b.client || !b.date) return NextResponse.json({ error: 'مشتری و تاریخ الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, appt: addAppt(o, { client: String(b.client), listingTitle: b.listingTitle, date: String(b.date), type: b.type }) })
     case 'setApptStatus': { const x = setApptStatus(o, String(b.id), b.status); return x ? NextResponse.json({ ok: true, appt: x }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }

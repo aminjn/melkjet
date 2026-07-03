@@ -32,10 +32,9 @@ export async function POST(req: NextRequest) {
     meta,
   })
 
-  // تأیید/رد فوری توسط هوش مصنوعی
+  // تأیید/رد فوری: مدلِ یادگیرنده اول، در صورتِ نبودِ اطمینان هوش مصنوعی (اگر تنظیم شده).
   let verdict: any = { status: 'pending', reason: 'در صف بررسی', score: 0 }
-  const model = moderationModel()
-  if (model) { try { verdict = await moderateOne(item, model) } catch { /* بماند در صف */ } }
+  try { verdict = await moderateOne(item, moderationModel()) } catch { /* بماند در صف */ }
 
   return NextResponse.json({ ok: true, id: item.id, status: verdict.status, reason: verdict.reason, score: verdict.score })
 }

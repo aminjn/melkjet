@@ -7,6 +7,16 @@ import { getJob, setJob, isStale } from './advisor-divar-job'
 import { scrapeDivar } from './divar'
 import type { Source } from './scraper-store'
 
+// ممیزیِ خودکارِ آگهیِ منتشرشده در پس‌زمینه (مدلِ یادگیرنده → در صورتِ نبودِ اطمینان AI).
+// importهای پویا برای پرهیز از حلقهٔ وابستگی؛ fire-and-forget تا جریانِ ایمپورت را کند نکند.
+function moderatePublicItem(id: string): void {
+  (async () => {
+    const [{ moderateOne, moderationModel }, { getItemById }] = await Promise.all([import('./moderation'), import('./scraper-store')])
+    const it = getItemById(id)
+    if (it) await moderateOne(it, moderationModel())
+  })().catch(() => {})
+}
+
 export interface ImportResult {
   ok: boolean
   skipped?: boolean
@@ -86,7 +96,7 @@ export async function importDivarToken(o: string, input: string, hint?: BrandPos
       return importDivarToken(o, input, hint, sourceId)
     }
     let published = updated.published || false
-    if (cfg.autoPublish) { const pub = publishListing(o, existing.listingId); published = !!pub; if (pub?.publicId) warmEnrichment(pub.publicId) }   // بازانتشار + پیش‌گرم تحلیل
+    if (cfg.autoPublish) { const pub = publishListing(o, existing.listingId); published = !!pub; if (pub?.publicId) { warmEnrichment(pub.publicId); moderatePublicItem(pub.publicId) } }   // بازانتشار + پیش‌گرم تحلیل + ممیزی
     recordImport(o, { token, listingId: existing.listingId, title: updated.title, url: `https://divar.ir/v/${token}`, at: existing.at, published, sourceId: sourceId || existing.sourceId })
     return { ok: true, updated: true, listing: updated, token }
   }
@@ -94,7 +104,7 @@ export async function importDivarToken(o: string, input: string, hint?: BrandPos
   // ── افزودنِ آگهیِ جدید ──
   const listing = addListing(o, payload)
   let published = false
-  if (cfg.autoPublish) { const pub = publishListing(o, listing.id); published = !!pub; if (pub?.publicId) warmEnrichment(pub.publicId) }   // تحلیلِ AI در پس‌زمینه پیش‌گرم می‌شود
+  if (cfg.autoPublish) { const pub = publishListing(o, listing.id); published = !!pub; if (pub?.publicId) { warmEnrichment(pub.publicId); moderatePublicItem(pub.publicId) } }   // پیش‌گرمِ تحلیل + ممیزیِ خودکار
   recordImport(o, { token, listingId: listing.id, title: listing.title, url: `https://divar.ir/v/${token}`, at: Date.now(), published, sourceId })
   return { ok: true, listing, token }
 }
