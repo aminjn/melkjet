@@ -74,7 +74,7 @@ export async function processSavedSearches(now = Date.now()): Promise<{ searches
       const name = getAccount(s.owner)?.name || 'کاربر'
       for (const it of fresh.slice(0, 5)) {
         const txt = `🏠 آگهیِ جدید مطابقِ جستجوی شما${s.label ? ` (${s.label})` : ''}:\n«${it.title}»\n${it.price ? it.price + ' تومان\n' : ''}مشاهده: melkjet.com/property/${it.id}`
-        try { pushSystemMessage(s.owner, name, txt) } catch {}
+        try { await pushSystemMessage(s.owner, name, txt) } catch {}
       }
       await sendSms(s.owner, s.label)
       // پوش‌نوتیفیکیشن (حتی اگر اپ بسته باشد)
