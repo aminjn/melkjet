@@ -265,12 +265,23 @@ function SearchPageInner() {
   // محله (سوابق/موقعیت) = اولویتِ نرم داخلِ همان شهر؛ اگر در آن محله نبود، به سطحِ شهر برمی‌گردد.
   const scoped = useMemo(() => {
     const norm = (s: string) => (s || '').replace(/‌/g, '').replace(/\s/g, '').toLowerCase()
+    // تطبیقِ محله (دوسویه): «جنت‌آباد» و «جنت آباد شمالی» یکدیگر را می‌پذیرند، ولی «نیاوران» نه.
+    // چون موقعیتِ GPS کاربر معمولاً دقیق‌تر (جنت آباد شمالی) و برچسبِ فایل کلی‌تر (جنت‌آباد) است،
+    // تطبیقِ زیرمجموعه‌ایِ زیررشته کافی نیست و باید هر دو جهت بررسی شود.
+    const areaMatch = (loc: string, ar: string) => {
+      const na = norm(ar); if (!na) return true
+      const nl = norm(loc)
+      if (nl.includes(na)) return true
+      const parts = nl.split(/[،,]/).map(x => x.trim()).filter(Boolean)
+      const hoodPart = parts.length ? parts[parts.length - 1] : nl
+      return hoodPart.length >= 2 && (na.includes(hoodPart) || hoodPart.includes(na))
+    }
     const base = filteredProperties
     const city = selectedCity
     // محلهٔ انتخابیِ کاربر = فیلترِ قطعی؛ وگرنه محلهٔ سوابق/موقعیت = اولویتِ نرم.
     const area = hood || (parsed.area ? '' : prefArea)
     const hard = !!hood
-    const inArea = (p: PropertyT) => area ? norm(p.location).includes(norm(area)) : true
+    const inArea = (p: PropertyT) => area ? areaMatch(p.location, area) : true
     // «نزدیکِ من» فعال است وقتی: GPS داریم، شهرِ انتخابی با شهرِ کاربر یکی است،
     // کاربر محله/مکانِ خاصی نخواسته، و خودش خاموشش نکرده.
     const gpsCityOk = !city || !userCity || norm(city) === norm(userCity) || norm(userCity).includes(norm(city)) || norm(city).includes(norm(userCity))
@@ -281,7 +292,7 @@ function SearchPageInner() {
       const withD = list.map(p => ({
         p,
         d: (p.lat && p.lng) ? haversineKm(userLoc.lat, userLoc.lng, p.lat, p.lng)
-          : (userArea && norm(p.location).includes(norm(userArea)) ? 0.8 : Infinity),
+          : (userArea && areaMatch(p.location, userArea) ? 0.8 : Infinity),
       }))
       let near = withD.filter(x => isFinite(x.d))
       for (const r of [3, 6, 10, 15, 25]) { const f = withD.filter(x => x.d <= r); if (f.length >= 8) { near = f; break } }
