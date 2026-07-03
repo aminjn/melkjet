@@ -7,6 +7,7 @@ import {
   getCommissionConfig, setDefaultCommission, setAgentCommission, clearAgentCommission,
 } from '@/app/lib/agency-store'
 import { agencyAdvisorFiles } from '@/app/lib/agency-team'
+import { getAdvisor, setListingStatus as advSetStatus, deleteListing as advDeleteListing } from '@/app/lib/advisor-store'
 import { checkDuplicate, advisorScope } from '@/app/lib/duplicate-check'
 
 // همهٔ دادهٔ پنل آژانس، مخصوص کاربرِ واردشده (per-profile).
@@ -14,8 +15,30 @@ export async function GET() {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای مشاهده وارد شوید' }, { status: 401 })
   const o = s.phone
+  const stats = agencyStats(o)
+  // فایل‌های آژانس در دو جا ذخیره می‌شوند: فرمِ «افزودن فایل» → agency-store، و
+  // ایمپورتِ دیوار (ابزارِ مشترکِ مشاور) → advisor-store[همین آژانس]. هر دو باید در «فایل‌ها» دیده شوند.
+  const own = listListings(o)
+  const seen = new Set(own.map(l => l.id))
+  let imported: typeof own = []
+  try {
+    imported = (getAdvisor(o).listings || [])
+      .filter(l => !seen.has(l.id))
+      .map(l => ({
+        id: l.id, title: l.title, ptype: l.ptype, location: l.location, price: l.price,
+        deal: l.deal, status: l.status, createdAt: l.createdAt,
+        province: l.province, city: l.city, district: l.district, neighborhood: l.neighborhood,
+        address: l.address, rentMonthly: l.rentMonthly, area: l.area, rooms: l.rooms, floor: l.floor,
+        totalFloors: l.totalFloors, yearBuilt: l.yearBuilt, facing: l.facing, docType: l.docType,
+        phone: l.phone, description: l.description, parking: l.parking, elevator: l.elevator,
+        storage: l.storage, balcony: l.balcony, furnished: l.furnished, amenities: l.amenities, images: l.images,
+      })) as typeof own
+  } catch {}
+  const listings = [...own, ...imported]
+  // KPIِ «فایل‌های فعال» هم واقعیت را نشان دهد (شاملِ ایمپورت‌ها).
+  if ((stats as any)?.kpis) (stats as any).kpis.activeListings = listings.filter(l => l.status === 'active').length
   return NextResponse.json({
-    stats: agencyStats(o), agents: listAgents(o), listings: listListings(o), leads: listLeads(o), deals: listDeals(o),
+    stats, agents: listAgents(o), listings, leads: listLeads(o), deals: listDeals(o),
     advisorFiles: agencyAdvisorFiles(o), commission: getCommissionConfig(o),
   }, { headers: { 'Cache-Control': 'no-store, private' } })
 }
@@ -44,9 +67,18 @@ export async function POST(req: NextRequest) {
       } catch { /* اختیاری */ }
       return NextResponse.json({ ok: true, listing, duplicate })
     }
-    case 'setListingStatus': { const l = setListingStatus(o, String(b.id), b.status); return l ? NextResponse.json({ ok: true, listing: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
+    case 'setListingStatus': {
+      // اول در فایل‌های خودِ آژانس؛ اگر نبود، فایلِ ایمپورت‌شده از دیوار (advisor-store) است.
+      let l: any = setListingStatus(o, String(b.id), b.status)
+      if (!l) { try { l = advSetStatus(o, String(b.id), b.status) } catch {} }
+      return l ? NextResponse.json({ ok: true, listing: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 })
+    }
     case 'assignListing': { const l = assignListing(o, String(b.id), String(b.agent || '')); return l ? NextResponse.json({ ok: true, listing: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
-    case 'deleteListing': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); deleteListing(o, String(b.id)); return NextResponse.json({ ok: true })
+    case 'deleteListing':
+      if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
+      deleteListing(o, String(b.id))
+      try { advDeleteListing(o, String(b.id)) } catch {}   // اگر فایلِ ایمپورت‌شده بود، از advisor-store هم حذف شود
+      return NextResponse.json({ ok: true })
     case 'addLead': if (!b.name) return NextResponse.json({ error: 'نام الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, lead: addLead(o, b) })
     case 'assignLead': { const l = assignLead(o, String(b.id), String(b.agent || '')); return l ? NextResponse.json({ ok: true, lead: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'setLeadStage': { const l = setLeadStage(o, String(b.id), b.stage); return l ? NextResponse.json({ ok: true, lead: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
