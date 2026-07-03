@@ -122,7 +122,7 @@ export function hasToken(o: string, token: string): boolean {
 export function recordImport(o: string, post: ImportedPost) {
   const db = load()
   const cur = db.advisors[o] || seed()
-  cur.imports = [post, ...cur.imports.filter(i => i.token !== post.token)].slice(0, 200)
+  cur.imports = [post, ...cur.imports.filter(i => i.token !== post.token)].slice(0, 3000)
   db.advisors[o] = cur; save(db)
 }
 

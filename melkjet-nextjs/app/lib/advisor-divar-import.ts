@@ -1,5 +1,5 @@
 import { fetchDivarPost, divarToken, divarProfileSlug, fetchDivarProfileTokens, type BrandPost } from './divar-post'
-import { addListing, updateListing, publishListing, unpublishListing, setListingStatus, deleteListing, getAdvisor, updateAdvisorProfile, type Listing } from './advisor-store'
+import { addListing, updateListing, publishListing, setListingStatus, deleteListing, getAdvisor, updateAdvisorProfile, type Listing } from './advisor-store'
 import { findNeighborhoodInGeo } from './geo-store'
 import { warmEnrichment } from './enrich-warm'
 import { getDivar, hasToken, recordImport, removeImport, markRun, markSourceRun, clearImports, type AdvisorDivar } from './advisor-divar-store'
@@ -181,9 +181,10 @@ function markGone(o: string, gone: { token: string; listingId: string; title: st
   for (const g of gone) {
     const l = listings.find(x => x.id === g.listingId)
     if (!l || l.status !== 'active') continue
+    // از پروفایلِ دیوار حذف شده → «فروخته/اجاره‌رفته». روی سایت می‌ماند ولی با مهرِ «فروخته شد / اجاره رفت»
+    // (setListingStatus مهر را روی آگهیِ عمومی هم می‌زند) — نه حذفِ کامل، تا هم SEO حفظ شود هم کاربر ببیند.
     setListingStatus(o, l.id, l.deal === 'rent' ? 'rented' : 'sold')
-    unpublishListing(o, l.id)   // از سرچِ سایت حذف می‌شود
-    recordImport(o, { ...g, published: false })
+    recordImport(o, { ...g, published: true })
     count++
   }
   return count
