@@ -443,6 +443,42 @@ export default function Home() {
         </div>
       </section>
 
+      {/* چرا ملک‌جت */}
+      <section style={{ borderTop: '1px solid var(--line)', background: 'var(--bg2)' }}>
+        <div style={{ maxWidth: 1280, margin: '0 auto', padding: 'clamp(40px,5vw,64px) 24px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 16 }}>
+          {[
+            { ic: '🧠', t: 'هوشِ مصنوعیِ همه‌جا', d: 'از جستجو و قیمت‌گذاری تا مذاکره، محتوا و تصویر — دستیارِ هوشمند کنارِ توست.' },
+            { ic: '🔗', t: 'زنجیرهٔ کامل', d: 'خریدار، مالک، مشاور، آژانس، سازنده و مصالح‌فروش، همه در یک اکوسیستمِ متصل.' },
+            { ic: '📉', t: 'دادهٔ واقعی', d: 'نرخِ روزِ مصالح، تحلیلِ قیمتِ ملک و دیتابیسِ سازندگان — بر پایهٔ دادهٔ واقعی.' },
+            { ic: '🛠️', t: 'ابزارِ حرفه‌ای', d: 'CRM، بازاریابی، اتوماسیون و سایت‌سازِ اختصاصی برای رشدِ کسب‌وکارت.' },
+          ].map(x => (
+            <div key={x.t} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '4px 6px' }}>
+              <div style={{ fontSize: 30 }}>{x.ic}</div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)' }}>{x.t}</div>
+              <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.9 }}>{x.d}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* CTA پایانی */}
+      <section style={{ maxWidth: 1280, margin: '0 auto', padding: 'clamp(40px,5vw,72px) 24px' }}>
+        <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 28, border: '1px solid var(--gold)', background: 'linear-gradient(120deg, var(--goldDim), transparent 55%), var(--surface)', padding: 'clamp(32px,5vw,56px) clamp(24px,4vw,48px)', textAlign: 'center' }}>
+          <div style={{ position: 'absolute', top: '-30%', insetInlineStart: '-6%', width: 320, height: 320, borderRadius: '50%', background: 'radial-gradient(circle, rgba(212,175,55,.25), transparent 70%)', filter: 'blur(20px)', pointerEvents: 'none' }} />
+          <h2 style={{ position: 'relative', fontSize: 'clamp(24px,3.6vw,38px)', fontWeight: 800, letterSpacing: '-.6px', color: 'var(--text)' }}>همین حالا به ملک‌جت بپیوند</h2>
+          <p style={{ position: 'relative', fontSize: 'clamp(14px,1.8vw,16.5px)', color: 'var(--muted)', maxWidth: 560, margin: '14px auto 0', lineHeight: 1.9 }}>ثبت‌نامِ رایگان؛ بعد نقشت را انتخاب کن و داشبوردِ اختصاصیِ خودت را با همهٔ ابزارها تحویل بگیر.</p>
+          <div style={{ position: 'relative', display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 12, marginTop: 26 }}>
+            <Link href="/auth" style={{ padding: '13px 30px', borderRadius: 13, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 15, textDecoration: 'none', boxShadow: '0 12px 28px -12px var(--gold)' }}>شروعِ رایگان →</Link>
+            <Link href="/pricing" style={{ padding: '13px 28px', borderRadius: 13, border: '1px solid var(--gold)', background: 'transparent', color: 'var(--gold)', fontWeight: 700, fontSize: 15, textDecoration: 'none' }}>مشاهدهٔ پلن‌ها</Link>
+          </div>
+          <div style={{ position: 'relative', display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 22 }}>
+            {['سازنده', 'مصالح‌فروش', 'مشاورِ املاک', 'آژانس', 'مالک', 'مشاورِ حقوقی'].map(r => (
+              <span key={r} style={{ fontSize: 12, color: 'var(--muted)', background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 999, padding: '6px 14px' }}>{r}</span>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <Footer />
       <AIAssistant />
     </div>
