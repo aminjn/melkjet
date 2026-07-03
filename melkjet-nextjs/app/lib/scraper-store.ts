@@ -226,6 +226,18 @@ export function updateItem(itemId: string, patch: EditableItem) {
   return it
 }
 
+// وضعیتِ معاملهٔ آگهیِ عمومی (فروخته‌شده/اجاره‌رفته) روی خودِ آیتم مهر می‌خورد تا در صفحه/کارت‌ها دیده شود.
+// status = '' یعنی برگشت به «فعال» (مهر برداشته می‌شود).
+export function setItemDealStatus(itemId: string, status: 'sold' | 'rented' | '') {
+  const db = load()
+  const it = db.items.find(i => i.id === itemId)
+  if (!it) return
+  it.meta = it.meta || {}
+  if (status) it.meta['__dealStatus'] = status
+  else delete it.meta['__dealStatus']
+  save(db)
+}
+
 export function deleteItem(itemId: string) {
   const db = load()
   const n = db.items.length

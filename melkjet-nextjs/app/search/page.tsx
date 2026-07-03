@@ -85,12 +85,14 @@ function toProperty(it: ContentItem) {
   const kind = detectKind(`${it.title} ${it.category || ''} ${it.meta?.['نوع ملک'] || ''}`)
   const lat = Number(it.meta?.['__lat']) || undefined
   const lng = Number(it.meta?.['__lng']) || undefined
+  const ds = it.meta?.['__dealStatus']
+  const dealStatus: 'sold' | 'rented' | '' = ds === 'sold' ? 'sold' : ds === 'rented' ? 'rented' : ''
   return {
     id: it.id, deal, title: it.title, location: it.location || 'نامشخص',
     price: it.price || '—', priceNum,
     beds: bedsNum != null ? toPersianDigits(bedsNum) : '—', bedsNum,
     size: areaNum ? toPersianDigits(areaNum) : '—', areaNum,
-    floorNum, yearNum, kind, lat, lng,
+    floorNum, yearNum, kind, lat, lng, dealStatus,
     year: yearNum ? toPersianDigits(yearNum) : '—',
     tag: '', score: 80 + (h % 19),
     img: it.image ? '' : gradientFor(it.title), image: it.image, url: it.url,
@@ -620,10 +622,17 @@ function SearchPageInner() {
               cards.push(
                 <div key={p.id} onMouseEnter={() => setHoveredCard(p.id)} onMouseLeave={() => setHoveredCard(null)} style={{ borderRadius: 14, border: `1px solid ${isHov ? 'var(--gold)' : 'var(--line)'}`, background: 'var(--surface)', overflow: 'hidden', cursor: 'pointer', transition: 'transform 0.18s, box-shadow 0.18s, border-color 0.18s', transform: isHov ? 'translateY(-4px)' : 'none', boxShadow: isHov ? '0 12px 40px -12px rgba(201,168,76,0.22)' : '0 2px 10px -4px rgba(0,0,0,0.3)' }}>
                   <Link href={`/property/${p.id}`} style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}>
-                    <div style={{ height: 156, background: p.image ? `center/cover no-repeat url(${p.image})` : p.img, position: 'relative' }}>
+                    <div style={{ height: 156, background: p.image ? `center/cover no-repeat url(${p.image})` : p.img, position: 'relative', filter: p.dealStatus ? 'grayscale(0.55) brightness(0.7)' : 'none' }}>
                       <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 64, background: 'linear-gradient(to top,rgba(0,0,0,0.5),transparent)' }} />
                       <div style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(8px)', color: 'var(--gold2)', borderRadius: 8, padding: '4px 8px', fontSize: 11.5, fontWeight: 700, border: '1px solid rgba(201,168,76,0.3)', display: 'flex', alignItems: 'center', gap: 3 }}>✦ {toPersianDigits(p.score)}</div>
-                      {isPromoted && <div style={{ position: 'absolute', top: 10, left: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', borderRadius: 8, padding: '4px 9px', fontSize: 11.5, fontWeight: 800 }}>★ ویژه</div>}
+                      {isPromoted && !p.dealStatus && <div style={{ position: 'absolute', top: 10, left: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', borderRadius: 8, padding: '4px 9px', fontSize: 11.5, fontWeight: 800 }}>★ ویژه</div>}
+                      {p.dealStatus && (
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <span style={{ transform: 'rotate(-13deg)', background: p.dealStatus === 'sold' ? 'rgba(231,74,74,0.92)' : 'rgba(74,144,231,0.92)', color: '#fff', fontWeight: 900, fontSize: 17, padding: '7px 20px', borderRadius: 10, border: '2px solid rgba(255,255,255,0.85)', boxShadow: '0 6px 22px -6px rgba(0,0,0,0.6)', letterSpacing: '0.5px' }}>
+                            {p.dealStatus === 'sold' ? 'فروخته شد' : 'اجاره رفت'}
+                          </span>
+                        </div>
+                      )}
                     </div>
                     <div style={{ padding: '13px 14px 15px' }}>
                       <div style={{ fontSize: 14.5, fontWeight: 700, lineHeight: 1.4, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.title}</div>

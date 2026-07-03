@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
-import { addUserListing, deleteItem, getItemById } from './scraper-store'
+import { addUserListing, deleteItem, getItemById, setItemDealStatus } from './scraper-store'
 
 // استور پنل «مشاور املاک» — per-owner (هر کاربر فقط دادهٔ خودش).
 const DATA_FILE = join(process.cwd(), '.advisor-data.json')
@@ -162,7 +162,10 @@ export function updateListing(o: string, fid: string, patch: Partial<Listing>): 
 export function setListingStatus(o: string, fid: string, status: ListingStatus): Listing | null {
   if (!LISTING_STATUSES.includes(status)) return null
   let res: Listing | null = null
-  mutate(o, a => { const l = a.listings.find(x => x.id === fid); if (!l) return; l.status = status; res = l })
+  let pubId = ''
+  mutate(o, a => { const l = a.listings.find(x => x.id === fid); if (!l) return; l.status = status; res = l; pubId = l.publicId || '' })
+  // مهرِ «فروخته شد / اجاره رفت» روی آگهیِ عمومی هم اعمال شود (اگر منتشر شده).
+  if (pubId) setItemDealStatus(pubId, status === 'sold' ? 'sold' : status === 'rented' ? 'rented' : '')
   return res
 }
 export function deleteListing(o: string, fid: string) { mutate(o, a => { const l = a.listings.find(x => x.id === fid); if (l?.publicId) deleteItem(l.publicId); a.listings = a.listings.filter(x => x.id !== fid) }) }
@@ -182,6 +185,7 @@ function publicPayload(l: Listing, advisorName: string, ownerPhone?: string) {
   put('طبقه', faNum(l.floor)); put('تعداد طبقات', faNum(l.totalFloors)); put('سال ساخت', faNum(l.yearBuilt))
   put('جهت', l.facing); put('سند', l.docType)
   if (l.amenities && l.amenities.length) meta['امکانات'] = l.amenities.join('، ')
+  if (l.status === 'sold') meta['__dealStatus'] = 'sold'; else if (l.status === 'rented') meta['__dealStatus'] = 'rented'
   if (l.images && l.images.length) meta['__gallery'] = l.images.join('\n')
   if (typeof l.lat === 'number' && typeof l.lng === 'number') { meta['__lat'] = String(l.lat); meta['__lng'] = String(l.lng) }
   // شناسهٔ مالک (شمارهٔ حساب) برای تطبیقِ مطمئنِ «آگهی‌های من» در سایت‌ساز — مستقل از نام

@@ -173,6 +173,7 @@ export default function PropertyPage() {
 
 
   const images = gallery.length ? gallery : (item?.image ? [item.image] : [])
+  const dealStatus: 'sold' | 'rented' | '' = item?.meta?.['__dealStatus'] === 'sold' ? 'sold' : item?.meta?.['__dealStatus'] === 'rented' ? 'rented' : ''
   const amenities = (() => {
     const text = (item?.excerpt || '') + ' ' + facts.map(f => f.label + ' ' + f.value).join(' ')
     const fromText = AMENITY_WORDS.filter(w => text.includes(w))
@@ -258,7 +259,14 @@ export default function PropertyPage() {
             </nav>
             <div className="mjp-gallery" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gridTemplateRows: '200px 200px', gap: 10, borderRadius: 20, overflow: 'hidden', height: 410 }}>
               <div style={{ gridRow: '1/3', position: 'relative', background: 'var(--surface)' }}>
-                {images.length ? <img src={images[activeImg]} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 56, opacity: 0.1 }}>🏠</div>}
+                {images.length ? <img src={images[activeImg]} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover', filter: dealStatus ? 'grayscale(0.5) brightness(0.72)' : 'none' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 56, opacity: 0.1 }}>🏠</div>}
+                {dealStatus && (
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                    <span style={{ transform: 'rotate(-12deg)', background: dealStatus === 'sold' ? 'rgba(231,74,74,0.94)' : 'rgba(74,144,231,0.94)', color: '#fff', fontWeight: 900, fontSize: 34, padding: '12px 38px', borderRadius: 16, border: '3px solid rgba(255,255,255,0.9)', boxShadow: '0 10px 40px -8px rgba(0,0,0,0.7)', letterSpacing: '1px' }}>
+                      {dealStatus === 'sold' ? 'فروخته شد' : 'اجاره رفت'}
+                    </span>
+                  </div>
+                )}
               </div>
               {[1, 2].map((i, k) => (
                 <div key={i} onClick={() => images[i] && setActiveImg(i)} style={{ position: 'relative', background: 'var(--surface)', cursor: 'pointer', overflow: 'hidden' }}>
@@ -460,16 +468,21 @@ export default function PropertyPage() {
                 <div>
                   <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>آگهی‌های مشابه</div>
                   <div className="mjp-similar" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
-                    {similar.map(s => (
+                    {similar.map(s => {
+                      const sd = s.meta?.['__dealStatus']
+                      return (
                       <Link key={s.id} href={`/property/${s.id}`} style={{ textDecoration: 'none', ...card, padding: 0, overflow: 'hidden', display: 'block' }}>
-                        <div style={{ height: 110, background: 'var(--bg2)' }}>{s.image && <img src={s.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}</div>
+                        <div style={{ height: 110, background: 'var(--bg2)', position: 'relative' }}>
+                          {s.image && <img src={s.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: sd ? 'grayscale(0.5) brightness(0.72)' : 'none' }} />}
+                          {sd && <span style={{ position: 'absolute', top: 8, right: 8, background: sd === 'sold' ? 'rgba(231,74,74,0.94)' : 'rgba(74,144,231,0.94)', color: '#fff', fontWeight: 800, fontSize: 10.5, padding: '3px 8px', borderRadius: 7 }}>{sd === 'sold' ? 'فروخته شد' : 'اجاره رفت'}</span>}
+                        </div>
                         <div style={{ padding: '12px 14px' }}>
                           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', lineHeight: 1.4, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</div>
                           <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 6 }}>{s.location}</div>
                           <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--gold)' }}>{s.price}</div>
                         </div>
                       </Link>
-                    ))}
+                    )})}
                   </div>
                 </div>
               )}
