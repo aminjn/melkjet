@@ -140,26 +140,34 @@ export default function PropertyPage() {
       fetch(`/api/content?type=listing&limit=12`).then(r => r.ok ? r.json() : { items: [] }).then(s => {
         setSimilar((s.items || []).filter((x: Item) => x.id !== it.id).slice(0, 3))
       }).catch(() => {})
-      // غنی‌سازی کش‌شده: گالری/مشخصات/تحلیل AI/دسترسی‌ها فقط یک‌بار تولید و سپس از کش خوانده می‌شوند
-      fetch(`/api/listing/enrich?id=${id}`).then(r => r.ok ? r.json() : null).then((e: any) => {
-        if (!e) { setAiError('تحلیل در دسترس نیست'); return }
-        if (e.gallery?.length) setGallery(e.gallery)
-        if (e.facts?.length) setFacts(e.facts)
-        if (e.amenities?.length) setDivarAmenities(e.amenities)
-        if (e.geo) setGeo(e.geo)
-        if (e.nearby?.length) setNearby(e.nearby)
-        // اگر دسترسی‌ها در کش نبود ولی مختصات داریم، همان‌جا با نشان (فاصله/زمانِ واقعی) بساز.
-        else {
-          const g = e.geo || (mlat && mlng ? { lat: mlat, lng: mlng } : null)
-          if (g) fetch(`/api/geo/nearby?lat=${g.lat}&lng=${g.lng}`).then(r => r.ok ? r.json() : null).then((d: any) => { if (d?.nearby?.length) setNearby(d.nearby) }).catch(() => {})
-        }
-        if (e.description) setItem(p => p ? { ...p, excerpt: e.description } : p)
-        if (e.analysis) {
-          setAnalysis(e.analysis)
-          if (!e.facts?.length && e.analysis.facts?.length) setFacts(e.analysis.facts)
-          if (e.analysis.amenities?.length) setAiAmenities(e.analysis.amenities)
-        } else setAiError('تحلیل هوشمند هنوز آماده نیست — چند لحظه بعد دوباره باز کنید')
-      }).catch(() => setAiError('خطا در ارتباط با هوش مصنوعی'))
+      // غنی‌سازی فقط یک‌بار (هنگامِ اسکرپ) ساخته و در دیتابیس ذخیره می‌شود؛ این‌جا فقط از کش خوانده می‌شود.
+      // اگر آگهیِ قدیمی هنوز غنی نشده باشد، سرور در پس‌زمینه گرمش می‌کند و یک‌بار دوباره از دیتابیس می‌خوانیم.
+      const loadEnrich = (retry = false) => {
+        fetch(`/api/listing/enrich?id=${id}`).then(r => r.ok ? r.json() : null).then((e: any) => {
+          if (!e) { setAiError('تحلیل در دسترس نیست'); return }
+          if (e.gallery?.length) setGallery(e.gallery)
+          if (e.facts?.length) setFacts(e.facts)
+          if (e.amenities?.length) setDivarAmenities(e.amenities)
+          if (e.geo) setGeo(e.geo)
+          if (e.nearby?.length) setNearby(e.nearby)
+          // اگر دسترسی‌ها در کش نبود ولی مختصات داریم، همان‌جا با نشان (فاصله/زمانِ واقعی) بساز.
+          else {
+            const g = e.geo || (mlat && mlng ? { lat: mlat, lng: mlng } : null)
+            if (g) fetch(`/api/geo/nearby?lat=${g.lat}&lng=${g.lng}`).then(r => r.ok ? r.json() : null).then((d: any) => { if (d?.nearby?.length) setNearby(d.nearby) }).catch(() => {})
+          }
+          if (e.description) setItem(p => p ? { ...p, excerpt: e.description } : p)
+          if (e.analysis) {
+            setAnalysis(e.analysis); setAiError('')
+            if (!e.facts?.length && e.analysis.facts?.length) setFacts(e.analysis.facts)
+            if (e.analysis.amenities?.length) setAiAmenities(e.analysis.amenities)
+          } else if (e.pending && !retry) {
+            // در پس‌زمینه در حالِ ساخت است — یک‌بار دیگر (بدونِ اجرای دوبارهٔ AI) از دیتابیس بخوان.
+            setAiError('تحلیل هوشمند در حالِ آماده‌سازی است…')
+            setTimeout(() => loadEnrich(true), 9000)
+          } else setAiError('تحلیل هوشمند هنوز آماده نیست — چند لحظه بعد دوباره باز کنید')
+        }).catch(() => setAiError('خطا در ارتباط با هوش مصنوعی'))
+      }
+      loadEnrich()
     }).catch(() => setLoading(false))
   }, [id])
 

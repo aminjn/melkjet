@@ -253,6 +253,7 @@ export function insertItems(source: Source, raw: Omit<Item, 'id' | 'sourceId' | 
   const db = load()
   const existingKeys = new Set(db.items.map(i => (i.url || '') + '|' + i.title))
   let added = 0, dup = 0
+  const newListingIds: string[] = []
   db.owners = db.owners || []
   for (const r of raw) {
     const key = (r.url || '') + '|' + r.title
@@ -277,17 +278,22 @@ export function insertItems(source: Source, raw: Omit<Item, 'id' | 'sourceId' | 
       owner.count++
       ownerId = owner.id
     }
+    const newId = id()
     db.items.unshift({
-      id: id(), sourceId: source.id, sourceName: source.name, type: source.type,
+      id: newId, sourceId: source.id, sourceName: source.name, type: source.type,
       category: source.category, meta, scrapedAt: Date.now(), status: 'pending',
       ...r, location: loc, ownerId,
     })
+    if (source.type === 'listing') newListingIds.push(newId)
     added++
   }
   if (db.items.length > 1000) db.items = db.items.slice(0, 1000)
   const s = db.sources.find(x => x.id === source.id)
   if (s) { s.lastRun = Date.now(); s.lastCount = added; s.status = 'ok'; s.lastError = undefined }
   save(db)
+  // تحلیلِ AI هر آگهیِ جدید همین حالا (هنگامِ اسکرپ) در پس‌زمینه ساخته و در دیتابیس ذخیره می‌شود،
+  // تا بازکردنِ آگهی توسطِ کاربر دیگر AI را دوباره اجرا نکند. (import پویا برای پرهیز از حلقهٔ وابستگی.)
+  if (newListingIds.length) import('./enrich-warm').then(m => m.warmMany(newListingIds)).catch(() => {})
   return { added, dup }
 }
 

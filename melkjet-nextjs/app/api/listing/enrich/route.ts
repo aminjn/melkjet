@@ -1,18 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getEnrichment } from '@/app/lib/enrich-store'
-import { ENRICH_V, ensureEnrichment } from '@/app/lib/enrich-warm'
+import { ENRICH_V, warmEnrichment } from '@/app/lib/enrich-warm'
 
-// کش غنی‌سازیِ هر آگهی: دادهٔ دیوار + تحلیل AI فقط یک‌بار محاسبه و ذخیره می‌شود.
-// تولید معمولاً هنگامِ «افزودن» آگهی در پس‌زمینه انجام شده، پس این‌جا فقط از کش می‌خواند.
+// کشِ غنی‌سازیِ هر آگهی: دادهٔ دیوار + تحلیلِ AI فقط یک‌بار (هنگامِ اسکرپ) محاسبه و ذخیره می‌شود.
+// این endpoint فقط از دیتابیس می‌خواند و هرگز در مسیرِ بازکردنِ آگهی، AI را به‌صورتِ همزمان اجرا نمی‌کند —
+// اگر آگهی هنوز غنی نشده باشد، فقط یک پیش‌گرمِ پس‌زمینه راه می‌اندازد و دادهٔ موجود را برمی‌گرداند.
 export async function GET(req: NextRequest) {
   const id = new URL(req.url).searchParams.get('id') || ''
   if (!id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
 
   const cached = getEnrichment(id)
-  if (cached?.v === ENRICH_V && cached?.baseDone && cached?.analysisOk) {
-    return NextResponse.json({ ok: true, cached: true, ...cached })
-  }
-
-  const result = await ensureEnrichment(id)
-  return NextResponse.json({ ok: true, cached: false, ...result })
+  const complete = cached?.v === ENRICH_V && cached?.baseDone && cached?.analysisOk
+  if (!complete) warmEnrichment(id)   // پس‌زمینه، بدونِ انتظار — نتیجه در اسکرپِ بعدی/رفرش می‌آید
+  return NextResponse.json({ ok: true, cached: !!complete, pending: !complete, ...(cached || {}) })
 }
