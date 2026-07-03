@@ -199,7 +199,18 @@ export function shopPhone(slug: string): string | null {
 export function addPublicInquiry(slug: string, input: { customer: string; product: string; qty: string; note?: string }): Inquiry | null {
   const found = shopBySlug(slug)
   if (!found) return null
-  return addInquiry(found.owner, input)
+  const q = addInquiry(found.owner, input)
+  // استعلامِ عمومیِ خریدار روی ویترینِ مصالح → لیدِ خودکار در CRMِ فروشنده (منطبق با پروفایلش).
+  try {
+    const { createAutoLead } = require('./auto-lead') as typeof import('./auto-lead')
+    createAutoLead(found.owner, {
+      name: input.customer || 'مشتری',
+      need: input.product,
+      note: `استعلامِ «${input.product}»${input.qty ? ` — تعداد: ${input.qty}` : ''}${input.note ? ` — ${input.note}` : ''}`,
+      source: 'استعلامِ ویترین',
+    })
+  } catch { /* ساختِ لید نباید مسیرِ اصلی را بشکند */ }
+  return q
 }
 
 function normName(s: string): string { return (s || '').replace(/‌/g, '').replace(/\s+/g, ' ').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim() }

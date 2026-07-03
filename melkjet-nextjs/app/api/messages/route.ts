@@ -3,6 +3,7 @@ import { getSession } from '@/app/lib/session'
 import { getAccount, listAccounts } from '@/app/lib/account-store'
 import { getItemById } from '@/app/lib/scraper-store'
 import { startConversation, replyTo, listForBuyer, listForOwner, getConv, markRead } from '@/app/lib/message-store'
+import { createAutoLead } from '@/app/lib/auto-lead'
 
 // صاحبِ آگهی را از روی خودِ آگهی پیدا می‌کند: اول __ownerPhone (هنگام انتشار مهر می‌خورد)،
 // سپس تطبیقِ نامِ آگهی‌دهنده با یک حسابِ واقعیِ ملک‌جت (مشاور/آژانس). هر آگهی صاحب دارد.
@@ -48,6 +49,16 @@ export async function POST(req: NextRequest) {
         ownerPhone: owner.phone, ownerName: owner.name,
         text: String(b.text).trim(),
       })
+      // فقط برای گفتگوی تازه‌ساخته‌شده (اولین پیام) یک لیدِ خودکار در CRMِ صاحبِ آگهی بساز —
+      // مطابقِ نقشِ او (مشاور→/pros، آژانس→/agency، بقیه→CRMِ عمومی)، گره‌خورده به همان آگهی.
+      if (conv.messages.length === 1) {
+        createAutoLead(owner.phone, {
+          name: myName, phone: s.phone,
+          need: conv.listingTitle,
+          note: `پیام دربارهٔ «${conv.listingTitle}»: ${String(b.text).trim()}`,
+          source: 'پیامِ آگهی',
+        })
+      }
       return NextResponse.json({ ok: true, conversation: conv })
     }
     case 'reply': {
