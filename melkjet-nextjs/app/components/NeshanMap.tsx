@@ -55,6 +55,8 @@ export default function NeshanMap({
       try { L = await loadSdk() } catch { if (!dead) setErr('sdk'); return }
       if (dead || !ref.current || mapRef.current) return
       const isLight = theme ? theme === 'day' : (typeof document !== 'undefined' && document.documentElement.classList.contains('light'))
+      // اگر همان container قبلاً توسط Leaflet مقداردهی شده (ری‌مانت/ناوبریِ مرحله) پاک کن تا خطای «already initialized» ندهد.
+      try { if ((ref.current as any)._leaflet_id) { (ref.current as any)._leaflet_id = null; ref.current.innerHTML = '' } } catch {}
       try {
         mapRef.current = new L.Map(ref.current, {
           key, maptype: isLight ? 'standard-day' : 'standard-night',
@@ -62,17 +64,21 @@ export default function NeshanMap({
           center: center ? [center.lat, center.lng] : TEHRAN,
           zoom,
         })
-        // انتخابِ موقعیت با کلیک: مارکر را جابه‌جا می‌کند و مختصات را برمی‌گرداند.
-        if (onMapClick) {
+      } catch { if (!dead) setErr('init'); return }
+      // اندازهٔ نقشه را بعد از چیدمان درست کن (کانتینرهایی که هنگام init هنوز اندازه نداشته‌اند).
+      setTimeout(() => { try { mapRef.current?.invalidateSize?.() } catch {} }, 250)
+      // انتخابِ موقعیت با کلیک — جدا و غیرِمخرب: اگر بایندِ کلیک شکست بخورد، خودِ نقشه نباید خطا شود.
+      if (onMapClick) {
+        try {
           if (center) pickRef.current = L.marker([center.lat, center.lng]).addTo(mapRef.current)
           mapRef.current.on('click', (e: any) => {
             const la = e.latlng.lat, ln = e.latlng.lng
-            if (pickRef.current) pickRef.current.setLatLng([la, ln])
-            else pickRef.current = L.marker([la, ln]).addTo(mapRef.current)
+            if (pickRef.current) { try { pickRef.current.setLatLng([la, ln]) } catch {} }
+            else { try { pickRef.current = L.marker([la, ln]).addTo(mapRef.current) } catch {} }
             onMapClick(la, ln)
           })
-        }
-      } catch { if (!dead) setErr('init') }
+        } catch { /* بایندِ کلیک غیرِحیاتی است */ }
+      }
     }).catch(() => { if (!dead) setErr('key') })
     return () => { dead = true; try { mapRef.current?.remove() } catch {} ; mapRef.current = null }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -109,7 +115,7 @@ export default function NeshanMap({
     if (fallback) return <>{fallback}</>
     return (
       <div style={{ width: '100%', height, borderRadius: 16, border: '1px solid var(--line)', background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: 13, textAlign: 'center', padding: 20 }}>
-        {err === 'no-key' ? 'نقشه به «کلیدِ نقشهٔ نشان» (web.…) نیاز دارد — پنل سوپرادمین → اتصال‌ها → نشان → کلید نقشه' : 'بارگذاریِ نقشه ناموفق بود.'}
+        {err === 'no-key' ? 'نقشه به «کلیدِ نقشهٔ نشان» (web.…) نیاز دارد — پنل سوپرادمین → اتصال‌ها → نشان → کلید نقشه' : `بارگذاریِ نقشه ناموفق بود. (${err})`}
       </div>
     )
   }
