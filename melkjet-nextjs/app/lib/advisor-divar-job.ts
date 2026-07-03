@@ -5,15 +5,23 @@ import { join } from 'path'
 const FILE = join(process.cwd(), '.advisor-divar-jobs.json')
 
 export interface DivarJob {
-  running: boolean; total: number; done: number
+  running: boolean; paused?: boolean; total: number; done: number
   imported: number; updated: number; skipped: number; failed: number; sold: number
-  label?: string; error?: string; startedAt?: number; finishedAt?: number; lastProgressAt?: number
+  label?: string; error?: string; note?: string; startedAt?: number; finishedAt?: number; lastProgressAt?: number
+  // وضعیتِ ازسرگیری (resume): آگهی‌های باقی‌مانده + دادهٔ لازم برای ادامه/پایان.
+  pending?: any[]; gone?: any[]; sourceId?: string
 }
 const EMPTY: DivarJob = { running: false, total: 0, done: 0, imported: 0, updated: 0, skipped: 0, failed: 0, sold: 0 }
 
 type DB = Record<string, DivarJob>
 function load(): DB { if (existsSync(FILE)) { try { return JSON.parse(readFileSync(FILE, 'utf-8')) } catch {} } return {} }
 function save(db: DB) { try { writeFileSync(FILE, JSON.stringify(db), 'utf-8') } catch {} }
+
+// فهرستِ کارهای «هولدشده» که آگهیِ باقی‌مانده دارند — برای ادامهٔ خودکار توسطِ کرون.
+export function listPausedJobs(): string[] {
+  const db = load()
+  return Object.keys(db).filter(p => { const j = db[p]; return !!(j && j.paused && !j.running && Array.isArray(j.pending) && j.pending.length) })
+}
 
 export function getJob(o: string): DivarJob { return { ...EMPTY, ...(load()[o] || {}) } }
 export function setJob(o: string, patch: Partial<DivarJob>): DivarJob {
@@ -28,11 +36,18 @@ export function isStale(j: DivarJob): boolean {
 }
 // توقفِ دستیِ کار (دکمهٔ «توقف» یا شروعِ مجدد).
 export function stopJob(o: string): DivarJob {
-  return setJob(o, { running: false, finishedAt: Date.now(), error: 'به‌صورتِ دستی متوقف شد.' })
+  // pending/paused را هم پاک کن تا کرون این کارِ متوقف‌شده را دوباره ادامه ندهد.
+  return setJob(o, { running: false, paused: false, pending: [], finishedAt: Date.now(), error: 'به‌صورتِ دستی متوقف شد.', note: '' })
 }
 // نسخهٔ نرمال‌شده برای نمایش/تصمیم: کارِ کهنه را «متوقف» اعلام می‌کند.
 export function getJobNormalized(o: string): DivarJob {
   const j = getJob(o)
-  if (isStale(j)) { return setJob(o, { running: false, error: j.error || 'همگام‌سازی متوقف شد (هنگِ پروکسی یا ری‌استارتِ سرور) — دوباره شروع کنید.' }) }
+  if (isStale(j)) {
+    // ورکر ری‌استارت شد یا هنگ کرد؛ اگر آگهیِ باقی‌مانده هست، «هولد» کن تا کرون ادامه دهد (نه fail).
+    if (Array.isArray(j.pending) && j.pending.length) {
+      return setJob(o, { running: false, paused: true, note: 'ادامه پس از وقفه…' })
+    }
+    return setJob(o, { running: false, error: j.error || 'همگام‌سازی متوقف شد — دوباره شروع کنید.' })
+  }
   return j
 }

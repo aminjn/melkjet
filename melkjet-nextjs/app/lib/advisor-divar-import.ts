@@ -268,30 +268,122 @@ export async function syncAdvisorDivar(o: string, cfgIn?: AdvisorDivar, sourceId
   return { ok: true, scanned: rows.length, ...r }
 }
 
-// ── همگام‌سازیِ پس‌زمینه: کار را شروع می‌کند و بلافاصله برمی‌گردد؛ تا پایان ادامه می‌یابد
-//    حتی اگر کاربر صفحه را ببندد. پیشرفت در فایلِ jobها ذخیره می‌شود تا UI بپاید. ─────
+// ── همگام‌سازیِ پس‌زمینهٔ «ازسرگیری‌پذیر» (resumable) ───────────────────────────
+// کار به دسته‌های زمان‌دار شکسته می‌شود: هر دور حداکثر BATCH_BUDGET کار می‌کند؛ اگر آگهی
+// باقی بماند (مثلاً ۳۰۰ فایل) یا اتصال موقتاً قطع شود، «هولد» می‌شود و کرون چند دقیقهٔ
+// بعد خودکار ادامه می‌دهد — پس هیچ اسکرپِ بزرگی نیمه‌کاره fail نمی‌شود.
+const BATCH_BUDGET = 3.5 * 60 * 1000
+const BATCH_CONC = 4
+
+// فهرستِ آگهی‌ها + آگهی‌های حذف‌شده را می‌سازد (بدونِ وارد کردن).
+async function prepareSync(o: string, cfgIn?: AdvisorDivar, sourceId?: string): Promise<{ items: BrandPost[]; gone: any[] }> {
+  const cfg = cfgIn || getDivar(o)
+  if (!cfg.searchUrl) throw new Error('لینک دیوار تنظیم نشده')
+  const slug = divarProfileSlug(cfg.searchUrl)
+  if (slug) {
+    const { posts, reason } = await fetchDivarProfileTokens(slug)
+    if (!posts.length) {
+      throw new Error(reason === 'unreachable'
+        ? 'اتصال به دیوار برقرار نشد — پروکسیِ دیوار را در ادمین → «اتصال‌ها» بررسی کنید'
+        : reason && reason.startsWith('http_') ? `دیوار پاسخِ خطای ${reason.replace('http_', '')} داد` : 'آگهی‌ای در این پروفایل خوانده نشد')
+    }
+    const liveTokens = new Set(posts.map(p => p.token))
+    const gone = getDivar(o).imports.filter(i => !liveTokens.has(i.token) && (sourceId ? i.sourceId === sourceId : true))
+    return { items: posts, gone }
+  }
+  const want = normName(cfg.divarName)
+  if (!want) throw new Error('برای همگام‌سازیِ جستجو، «نام شما در دیوار» را پر کنید یا لینکِ پروفایلِ پرو بدهید')
+  const rows = await scrapeDivar({ url: cfg.searchUrl, meta: {} } as unknown as Source)
+  const mine = rows.filter(r => { if (!r.url) return false; const owner = normName(r.owner || ''); return owner && (owner === want || owner.includes(want) || want.includes(owner)) })
+  const items: BrandPost[] = mine.map(x => ({ token: divarToken(x.url || '') || '', title: x.title, price: x.price, location: x.location, image: x.image })).filter(it => it.token)
+  return { items, gone: [] }
+}
+
+async function importOneSafe(o: string, it: BrandPost, sourceId?: string): Promise<{ ok: boolean; updated?: boolean; skipped?: boolean }> {
+  const token = it.token
+  if (!token) return { ok: true, skipped: true }
+  let res: any = null
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      res = await Promise.race([importDivarToken(o, token, it, sourceId), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))])
+      if (res && (res.ok || res.skipped)) break
+    } catch { res = null }
+    if (attempt === 0) await new Promise(r => setTimeout(r, 400))
+  }
+  if (!res) return { ok: false }
+  return { ok: !!res.ok, updated: !!res.updated, skipped: !!res.skipped }
+}
+
+// یک دورِ زمان‌دار: pending را تا پایانِ بودجه پردازش می‌کند؛ اگر ماند → هولد، وگرنه → پایان.
+export async function runBatch(o: string): Promise<void> {
+  const budgetEnd = Date.now() + BATCH_BUDGET
+  const j0 = getJob(o)
+  let imported = j0.imported || 0, updated = j0.updated || 0, skipped = j0.skipped || 0
+  const sourceId = j0.sourceId
+  const total = j0.total || 0
+  let pending: BrandPost[] = Array.isArray(j0.pending) ? j0.pending.slice() : []
+  let consecutiveFail = 0
+
+  while (pending.length && Date.now() < budgetEnd) {
+    const batch = pending.slice(0, BATCH_CONC)
+    pending = pending.slice(batch.length)
+    const results = await Promise.all(batch.map(it => importOneSafe(o, it, sourceId)))
+    for (const r of results) {
+      if (r.ok && r.updated) updated++
+      else if (r.ok && !r.skipped) imported++
+      else skipped++
+      consecutiveFail = r.ok ? 0 : consecutiveFail + 1
+    }
+    setJob(o, { pending, imported, updated, skipped, done: total - pending.length, lastProgressAt: Date.now() })
+    if (consecutiveFail >= 12) {   // ~۳ دستهٔ کاملاً ناموفق = اتصال قطع → هولد و ادامهٔ بعدی
+      setJob(o, { running: false, paused: true, note: 'اتصالِ دیوار موقتاً قطع شد — چند دقیقهٔ دیگر خودکار ادامه می‌یابد.', lastProgressAt: Date.now() })
+      return
+    }
+  }
+
+  if (pending.length) {   // بودجهٔ این دور تمام شد ولی آگهی مانده → هولد؛ کرون ادامه می‌دهد.
+    setJob(o, { running: false, paused: true, pending, imported, updated, skipped, done: total - pending.length, note: `متوقفِ موقت — ${total - pending.length} از ${total} انجام شد؛ چند دقیقهٔ دیگر خودکار ادامه می‌یابد.`, lastProgressAt: Date.now() })
+    return
+  }
+
+  let sold = 0   // تمام شد → مهرِ فروخته/اجاره‌رفته + پایان
+  try { sold = markGone(o, j0.gone || []) } catch {}
+  if (sourceId) { try { markSourceRun(o, sourceId, imported, '') } catch {} }
+  setJob(o, { running: false, paused: false, pending: [], gone: [], imported, updated, skipped, sold, done: total, finishedAt: Date.now(), note: '', error: '' })
+}
+
+// شروعِ اسکرپِ پس‌زمینهٔ ازسرگیری‌پذیر. اگر کارِ هولدشده‌ای هست، ادامه‌اش می‌دهد.
 export function startBackgroundSync(o: string, cfgIn?: AdvisorDivar, sourceId?: string, label?: string): { started: boolean; alreadyRunning?: boolean } {
   const cur = getJob(o)
   if (cur.running && !isStale(cur)) return { started: false, alreadyRunning: true }
-  setJob(o, { running: true, total: 0, done: 0, imported: 0, updated: 0, skipped: 0, failed: 0, sold: 0, error: '', label: label || 'همگام‌سازیِ دیوار', startedAt: Date.now(), lastProgressAt: Date.now(), finishedAt: undefined })
-  // عمداً await نمی‌کنیم — در پس‌زمینهٔ همین ورکر تا تهِ کار اجرا می‌شود.
+  if (cur.paused && (cur.pending || []).length) { resumeJob(o); return { started: true } }
+  setJob(o, { running: true, paused: false, total: 0, done: 0, imported: 0, updated: 0, skipped: 0, failed: 0, sold: 0, error: '', note: '', label: label || 'همگام‌سازیِ دیوار', startedAt: Date.now(), lastProgressAt: Date.now(), finishedAt: undefined, pending: [], gone: [], sourceId })
   ;(async () => {
-    const DEADLINE = 15 * 60 * 1000   // سقفِ نهاییِ کلِ کار (backstop). هنگِ واقعی را مدارشکن/بی‌پیشرفت خیلی زودتر می‌گیرد.
     try {
-      const onProgress = (done: number, total: number) => setJob(o, { done, total, lastProgressAt: Date.now() })
-      const r = await Promise.race([
-        syncAdvisorDivar(o, cfgIn, sourceId, onProgress),
-        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('همگام‌سازی بیش از حد طول کشید (پروکسی/دیوار پاسخ نداد) و متوقف شد. اتصالِ پروکسی را بررسی کنید.')), DEADLINE)),
+      const prep = await Promise.race([
+        prepareSync(o, cfgIn, sourceId),
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('خواندنِ فهرستِ آگهی‌ها از دیوار بیش از حد طول کشید — اتصالِ پروکسی را بررسی کنید.')), 90000)),
       ])
-      if (sourceId) markSourceRun(o, sourceId, r.imported || 0, r.ok ? '' : (r.reason || 'خطا'))
-      setJob(o, { running: false, finishedAt: Date.now(), imported: r.imported || 0, updated: r.updated || 0, skipped: r.skipped || 0, sold: r.sold || 0, error: r.ok ? '' : (r.reason || 'همگام‌سازی ناموفق بود') })
+      setJob(o, { total: prep.items.length, pending: prep.items, gone: prep.gone, sourceId, lastProgressAt: Date.now() })
+      await runBatch(o)
     } catch (e: any) {
-      // مهم: حتی در خطا/وقفه هم lastRun را آپدیت کن تا کرون این منبع را بی‌وقفه هر ۵ دقیقه دوباره اجرا نکند.
       if (sourceId) { try { markSourceRun(o, sourceId, 0, e?.message || 'خطا یا وقفه') } catch {} }
-      setJob(o, { running: false, finishedAt: Date.now(), error: e?.message || 'خطای داخلی هنگامِ همگام‌سازی' })
+      setJob(o, { running: false, paused: false, pending: [], finishedAt: Date.now(), error: e?.message || 'خطای داخلی هنگامِ همگام‌سازی' })
     }
   })()
   return { started: true }
+}
+
+// ادامهٔ یک کارِ هولدشده (کرون یا دکمهٔ «ادامهٔ الان»).
+export function resumeJob(o: string): boolean {
+  const j = getJob(o)
+  if (j.running || !j.paused || !(j.pending || []).length) return false
+  setJob(o, { running: true, paused: false, lastProgressAt: Date.now(), note: 'در حالِ ادامه…' })
+  ;(async () => {
+    try { await runBatch(o) }
+    catch (e: any) { setJob(o, { running: false, paused: true, note: 'وقفه — دوباره تلاش می‌شود.', error: e?.message || 'خطا' }) }
+  })()
+  return true
 }
 
 /** همهٔ آگهی‌های واردشده از دیوار را پاک می‌کند (فایل + نسخهٔ عمومی) و فهرست را خالی می‌کند. */

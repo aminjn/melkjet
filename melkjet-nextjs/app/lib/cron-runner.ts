@@ -1,5 +1,6 @@
-import { listDueSources, getDivar, markSourceRun } from './advisor-divar-store'
-import { syncAdvisorDivar } from './advisor-divar-import'
+import { listDueSources, getDivar } from './advisor-divar-store'
+import { startBackgroundSync, resumeJob } from './advisor-divar-import'
+import { listPausedJobs } from './advisor-divar-job'
 import { publishDueArticles } from './scraper-store'
 import { processTrackerQueue } from './tracker-sender'
 import { processSavedSearches } from './alerts-runner'
@@ -39,18 +40,13 @@ async function tick(): Promise<{ due: number; synced: number }> {
     for (const { phone, source } of due) {
       try {
         const base = getDivar(phone)
-        // سقفِ زمانی برای هر منبع تا یک هنگِ پروکسی/دیوار کلِ کرون را قفل نکند.
-        const r = await Promise.race([
-          syncAdvisorDivar(phone, { ...base, searchUrl: source.searchUrl, divarName: source.divarName, autoPublish: source.autoPublish, autoNeighborhood: source.autoNeighborhood, schedule: source.schedule }, source.id),
-          new Promise<any>((_, rej) => setTimeout(() => rej(new Error('timeout')), 15 * 60 * 1000)),
-        ])
-        markSourceRun(phone, source.id, r.imported || 0, r.ok ? '' : (r.reason || 'خطا'))
-        synced++
-      } catch {
-        // حتی در وقفه هم lastRun آپدیت شود تا این منبع هر تیک دوباره اجرا نشود.
-        try { markSourceRun(phone, source.id, 0, 'وقفه در اتصال (پروکسی/دیوار)') } catch {}
-      }
+        // اسکرپِ پس‌زمینهٔ ازسرگیری‌پذیر (fire-and-forget؛ کرون را قفل نمی‌کند).
+        const r = startBackgroundSync(phone, { ...base, searchUrl: source.searchUrl, divarName: source.divarName, autoPublish: source.autoPublish, autoNeighborhood: source.autoNeighborhood, schedule: source.schedule }, source.id, source.name || 'همگام‌سازیِ منبع')
+        if (r.started) synced++
+      } catch { /* خطای یک منبع بقیه را متوقف نکند */ }
     }
+    // ادامهٔ خودکارِ اسکرپ‌های هولدشده (بزرگ یا وقفه‌خورده) — چند دقیقهٔ بعد از سرِ گرفته می‌شوند.
+    for (const phone of listPausedJobs()) { try { resumeJob(phone) } catch {} }
     // اگر آگهیِ جدیدی ایمپورت شد، تکراری‌ها را پاک کن (SEO) — حداکثر هر ۳۰ دقیقه (O(n²) است).
     if (synced && Date.now() - lastDedupAt > 30 * 60 * 1000) {
       lastDedupAt = Date.now()

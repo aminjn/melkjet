@@ -45,22 +45,23 @@ export default function DivarImport({ onChange, entity = 'شما' }: { onChange?
     return '✓ همگام‌سازی کامل شد — ' + (parts.join(' · ') || 'تغییری نبود')
   }
 
-  // تا وقتی کارِ پس‌زمینه در حال اجراست، پیشرفت را بپا (مستقل از باز/بسته بودنِ صفحه روی سرور).
+  // تا وقتی کار «در حال اجرا» یا «هولد» است پیشرفت را بپا (اسکرپِ بزرگ چند دور طول می‌کشد).
   useEffect(() => {
-    if (!job?.running) return
+    if (!job?.running && !job?.paused) return
     const t = setInterval(async () => {
       try {
         const r = await fetch('/api/advisor/divar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'jobStatus' }) })
         const d = await r.json().catch(() => ({}))
         if (d?.ok) {
           setJob(d.job)
-          if (!d.job.running) { clearInterval(t); setMsg(finalMsg(d.job)); setShowFiles(true); refresh(); onChange?.() }
+          // فقط وقتی کاملاً تمام شد (نه هولد) پیام پایان بده.
+          if (!d.job.running && !d.job.paused) { clearInterval(t); setMsg(finalMsg(d.job)); setShowFiles(true); refresh(); onChange?.() }
         }
       } catch {}
     }, 2500)
     return () => clearInterval(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [job?.running])
+  }, [job?.running, job?.paused])
 
   const post = useCallback(async (body: Record<string, unknown>): Promise<any> => {
     setBusy(true); setMsg('')
@@ -128,19 +129,22 @@ export default function DivarImport({ onChange, entity = 'شما' }: { onChange?
         </div>
       </div>
 
-      {/* نوارِ پیشرفتِ همگام‌سازیِ پس‌زمینه */}
-      {job?.running && (
+      {/* نوارِ پیشرفتِ همگام‌سازیِ پس‌زمینه (در حال اجرا یا هولد) */}
+      {(job?.running || job?.paused) && (
         <div style={{ ...card, padding: '12px 14px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>
-            <span style={{ color: 'var(--gold)' }}>⏳ {job.label || 'همگام‌سازیِ دیوار'} در حال اجرا…</span>
+            <span style={{ color: job.paused ? '#e7a14a' : 'var(--gold)' }}>{job.paused ? '⏸' : '⏳'} {job.label || 'همگام‌سازیِ دیوار'} {job.paused ? 'متوقفِ موقت' : 'در حال اجرا…'}</span>
             <span style={{ color: 'var(--muted)' }}>{job.total ? `${(job.done || 0).toLocaleString('fa-IR')} از ${(job.total).toLocaleString('fa-IR')}` : 'در حالِ خواندنِ فهرست…'}</span>
           </div>
           <div style={{ height: 7, borderRadius: 999, background: 'var(--line)', overflow: 'hidden' }}>
-            <div style={{ height: '100%', borderRadius: 999, width: job.total ? `${Math.round(((job.done || 0) / job.total) * 100)}%` : '15%', background: 'linear-gradient(90deg,var(--gold2),var(--gold))', transition: 'width .4s ease' }} />
+            <div style={{ height: '100%', borderRadius: 999, width: job.total ? `${Math.round(((job.done || 0) / job.total) * 100)}%` : '15%', background: job.paused ? 'linear-gradient(90deg,#e7a14a,#e7c04a)' : 'linear-gradient(90deg,var(--gold2),var(--gold))', transition: 'width .4s ease' }} />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 11, color: 'var(--faint)' }}>می‌توانید این صفحه را ببندید — همگام‌سازی روی سرور تا پایان ادامه می‌یابد.</span>
-            <button onClick={async () => { const d = await post({ action: 'stopJob' }); if (d?.job) { setJob(d.job); setMsg('همگام‌سازی متوقف شد. می‌توانید دوباره شروع کنید.') } }} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.4)', color: '#e7674a', borderRadius: 9, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>توقف و شروعِ مجدد</button>
+            <span style={{ fontSize: 11, color: 'var(--faint)' }}>{job.note || 'می‌توانید این صفحه را ببندید — همگام‌سازی روی سرور تا پایان ادامه می‌یابد.'}</span>
+            <span style={{ display: 'flex', gap: 8 }}>
+              {job.paused && <button onClick={async () => { const d = await post({ action: 'resumeJob' }); if (d?.job) setJob(d.job) }} style={{ background: 'transparent', border: '1px solid var(--gold)', color: 'var(--gold)', borderRadius: 9, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>ادامهٔ الان</button>}
+              <button onClick={async () => { const d = await post({ action: 'stopJob' }); if (d?.job) { setJob(d.job); setMsg('همگام‌سازی متوقف شد. می‌توانید دوباره شروع کنید.') } }} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.4)', color: '#e7674a', borderRadius: 9, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>توقف و شروعِ مجدد</button>
+            </span>
           </div>
         </div>
       )}

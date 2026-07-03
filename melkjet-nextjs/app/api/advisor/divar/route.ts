@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { getDivar, updateDivarConfig, removeImport, addSource, updateSource, removeSource, getSource } from '@/app/lib/advisor-divar-store'
-import { importDivarInput, startBackgroundSync, clearDivarImports } from '@/app/lib/advisor-divar-import'
+import { importDivarInput, startBackgroundSync, clearDivarImports, resumeJob } from '@/app/lib/advisor-divar-import'
 import { getJob, getJobNormalized, stopJob } from '@/app/lib/advisor-divar-job'
 import { ensureCronStarted } from '@/app/lib/cron-runner'
 
@@ -39,6 +39,10 @@ export async function POST(req: NextRequest) {
     }
     case 'jobStatus': {
       return NextResponse.json({ ok: true, job: getJobNormalized(o) })
+    }
+    case 'resumeJob': {
+      resumeJob(o)
+      return NextResponse.json({ ok: true, job: getJob(o) })
     }
     case 'stopJob': {
       return NextResponse.json({ ok: true, job: stopJob(o) })
