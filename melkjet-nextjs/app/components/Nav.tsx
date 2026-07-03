@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import ThemeToggle from './ThemeToggle'
 import CitySelector from './CitySelector'
@@ -54,6 +54,10 @@ export default function Nav() {
   const [open, setOpen] = useState<string | null>(null)        // منوی دسکتاپِ بازشده
   const [mobOpen, setMobOpen] = useState<string | null>(null)  // بخشِ بازشدهٔ موبایل
   const [me, setMe] = useState<{ dash: string } | null | undefined>(undefined)
+  // «قصدِ هاور»: بستنِ منو با کمی تأخیر تا رد شدن از فاصلهٔ بینِ دکمه و منو، آن را نبندد (پرش/فلیکر).
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const openMenu = (label: string) => { if (closeTimer.current) clearTimeout(closeTimer.current); setOpen(label) }
+  const scheduleClose = () => { if (closeTimer.current) clearTimeout(closeTimer.current); closeTimer.current = setTimeout(() => setOpen(null), 180) }
 
   useEffect(() => {
     let cancelled = false
@@ -85,21 +89,25 @@ export default function Nav() {
         {/* Desktop dropdown menus */}
         <div className="mj-navlinks" style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 14.5, fontWeight: 600 }}>
           {MENUS.map(m => (
-            <div key={m.label} style={{ position: 'relative' }} onMouseEnter={() => setOpen(m.label)} onMouseLeave={() => setOpen(o => o === m.label ? null : o)}>
-              <button style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '9px 13px', borderRadius: 9, color: open === m.label ? 'var(--text)' : 'var(--muted)', background: open === m.label ? 'var(--surface)' : 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 600 }}>
+            <div key={m.label} style={{ position: 'relative' }} onMouseEnter={() => openMenu(m.label)} onMouseLeave={scheduleClose}>
+              <button onClick={() => (open === m.label ? setOpen(null) : openMenu(m.label))} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '9px 13px', borderRadius: 9, color: open === m.label ? 'var(--text)' : 'var(--muted)', background: open === m.label ? 'var(--surface)' : 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 600 }}>
                 {m.label}<span style={{ fontSize: 9, opacity: .7 }}>▾</span>
               </button>
               {open === m.label && (
-                <div style={{ position: 'absolute', top: '100%', insetInlineEnd: 0, marginTop: 6, minWidth: 270, background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 16, boxShadow: '0 16px 50px -12px rgba(0,0,0,.55)', padding: 8, maxHeight: '76vh', overflowY: 'auto', zIndex: 60 }}>
-                  {m.items.map(it => (
-                    <Link key={it.label + it.href} href={it.href} onClick={() => setOpen(null)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 12px', borderRadius: 11, textDecoration: 'none', color: 'inherit' }} className="mj-menu-item">
-                      <span style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 11, background: 'var(--goldDim)', color: 'var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17 }}>{it.ic}</span>
-                      <span style={{ flex: 1 }}>
-                        <span style={{ display: 'block', fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{it.label}</span>
-                        <span style={{ display: 'block', fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{it.desc}</span>
-                      </span>
-                    </Link>
-                  ))}
+                // ظرفِ بیرونی از لبهٔ دکمه شروع می‌شود (top:100%، بدونِ فاصلهٔ مُرده) و فاصلهٔ بصری را با
+                // paddingTop می‌سازد؛ آن ۸px شفاف ولی قابلِ‌هاور است، پس عبورِ نشانگر منو را نمی‌بندد.
+                <div style={{ position: 'absolute', top: '100%', insetInlineEnd: 0, paddingTop: 8, minWidth: 270, zIndex: 60 }}>
+                  <div style={{ background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 16, boxShadow: '0 16px 50px -12px rgba(0,0,0,.55)', padding: 8, maxHeight: '76vh', overflowY: 'auto' }}>
+                    {m.items.map(it => (
+                      <Link key={it.label + it.href} href={it.href} onClick={() => setOpen(null)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 12px', borderRadius: 11, textDecoration: 'none', color: 'inherit' }} className="mj-menu-item">
+                        <span style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 11, background: 'var(--goldDim)', color: 'var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17 }}>{it.ic}</span>
+                        <span style={{ flex: 1 }}>
+                          <span style={{ display: 'block', fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{it.label}</span>
+                          <span style={{ display: 'block', fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{it.desc}</span>
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
