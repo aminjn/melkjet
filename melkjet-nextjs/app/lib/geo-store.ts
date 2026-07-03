@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync, existsSync, statSync } from 'fs'
+import { statSync } from 'fs'
+import { readJsonCached, writeJsonCached } from './json-file'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
 
@@ -137,12 +138,11 @@ function buildSeed(): GeoDB {
 }
 
 export function load(): GeoDB {
-  if (existsSync(DATA_FILE)) {
-    try { return JSON.parse(readFileSync(DATA_FILE, 'utf-8')) } catch {}
-  }
-  return buildSeed()
+  return readJsonCached<GeoDB>(DATA_FILE, buildSeedCached())
 }
-export function save(db: GeoDB) { writeFileSync(DATA_FILE, JSON.stringify(db), 'utf-8') }
+let _seedCache: GeoDB | null = null
+function buildSeedCached(): GeoDB { return _seedCache || (_seedCache = buildSeed()) }
+export function save(db: GeoDB) { writeJsonCached(DATA_FILE, db) }
 
 // Public-shaped read
 export function getAll(): Province[] { return load().provinces }

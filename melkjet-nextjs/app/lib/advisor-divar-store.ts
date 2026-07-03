@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
+import { readJsonCached, writeJsonCached } from './json-file'
 
 // تنظیمات و تاریخچهٔ «ایمپورت از دیوار» برای هر مشاور (per-owner، کلید = شمارهٔ حساب).
 const DATA_FILE = join(process.cwd(), '.advisor-divar-data.json')
@@ -46,8 +46,8 @@ export interface AdvisorDivar {
 
 interface DB { advisors: Record<string, AdvisorDivar> }
 
-function load(): DB { if (existsSync(DATA_FILE)) { try { return JSON.parse(readFileSync(DATA_FILE, 'utf-8')) } catch {} } return { advisors: {} } }
-function save(db: DB) { writeFileSync(DATA_FILE, JSON.stringify(db, null, 2)) }
+function load(): DB { return readJsonCached<DB>(DATA_FILE, { advisors: {} }) }
+function save(db: DB) { writeJsonCached(DATA_FILE, db, true) }
 function sid() { return 'src_' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4) }
 
 function seed(): AdvisorDivar {
@@ -65,9 +65,9 @@ function migrate(cur: AdvisorDivar): AdvisorDivar {
 
 export function getDivar(o: string): AdvisorDivar {
   const db = load()
-  if (!db.advisors[o]) { db.advisors[o] = seed(); save(db) }
-  const cur = migrate({ ...seed(), ...db.advisors[o] })
-  db.advisors[o] = cur; save(db)
+  const cur = migrate({ ...seed(), ...(db.advisors[o] || {}) })
+  // فقط وقتی چیزی واقعاً تغییر کرده بنویس — نه در هر خواندن (که هر تیکِ کرون فایل را بازنویسی می‌کرد).
+  if (JSON.stringify(db.advisors[o]) !== JSON.stringify(cur)) { db.advisors[o] = cur; save(db) }
   return cur
 }
 

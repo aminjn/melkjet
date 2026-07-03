@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
+import { readJsonCached, writeJsonCached } from './json-file'
 
 const FILE = join(process.cwd(), '.enrich-data.json')
 
@@ -20,11 +20,8 @@ export interface Enrichment {
 
 type DB = Record<string, Enrichment>
 
-function load(): DB {
-  if (existsSync(FILE)) { try { return JSON.parse(readFileSync(FILE, 'utf-8')) } catch {} }
-  return {}
-}
-function save(db: DB) { writeFileSync(FILE, JSON.stringify(db), 'utf-8') }
+function load(): DB { return readJsonCached<DB>(FILE, {}) }
+function save(db: DB) { writeJsonCached(FILE, db) }
 
 export function getEnrichment(id: string): Enrichment | null {
   return load()[id] || null

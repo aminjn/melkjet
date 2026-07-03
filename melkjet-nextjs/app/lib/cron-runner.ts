@@ -18,6 +18,7 @@ declare global {
   var __mjCron: { started: boolean; running: boolean } | undefined
 }
 
+let lastDedupAt = 0   // آخرین باری که پاک‌سازیِ تکراری‌ها اجرا شد (throttle برای O(n²))
 async function tick(): Promise<{ due: number; synced: number }> {
   const g = globalThis.__mjCron
   if (!g || g.running) return { due: 0, synced: 0 }
@@ -43,8 +44,11 @@ async function tick(): Promise<{ due: number; synced: number }> {
         synced++
       } catch { /* خطای یک منبع بقیه را متوقف نکند */ }
     }
-    // اگر آگهیِ جدیدی ایمپورت شد، تکراری‌ها را پاک کن (SEO).
-    if (synced) { try { const { dedupeListings } = await import('./listing-dedupe'); dedupeListings() } catch {} }
+    // اگر آگهیِ جدیدی ایمپورت شد، تکراری‌ها را پاک کن (SEO) — حداکثر هر ۳۰ دقیقه (O(n²) است).
+    if (synced && Date.now() - lastDedupAt > 30 * 60 * 1000) {
+      lastDedupAt = Date.now()
+      try { const { dedupeListings } = await import('./listing-dedupe'); dedupeListings() } catch {}
+    }
   } finally { g.running = false }
   return { due: due.length, synced }
 }

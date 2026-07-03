@@ -1,6 +1,6 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import type { Item } from './scraper-store'
+import { readJsonCached, writeJsonCached } from './json-file'
 
 // ── مدلِ یادگیرندهٔ ممیزیِ آگهی (Naive Bayes، بدونِ کتابخانهٔ بیرونی) ─────────────
 // از هر تصمیمِ «تأیید/رد» (چه هوش مصنوعی، چه ادمین) یاد می‌گیرد. وقتی به‌اندازهٔ کافی
@@ -18,8 +18,8 @@ interface MLData { v: number; approved: ClassStat; rejected: ClassStat; autoDeci
 
 function cls(): ClassStat { return { docs: 0, total: 0, tok: {} } }
 function empty(): MLData { return { v: MODEL_V, approved: cls(), rejected: cls(), autoDecided: 0, aiDecided: 0, adminTaught: 0, updatedAt: 0 } }
-function load(): MLData { if (existsSync(FILE)) { try { const d = JSON.parse(readFileSync(FILE, 'utf8')); if (d?.v === MODEL_V) return d } catch {} } return empty() }
-function save(d: MLData) { writeFileSync(FILE, JSON.stringify(d)) }
+function load(): MLData { const d = readJsonCached<MLData | null>(FILE, null); return d && d.v === MODEL_V ? d : empty() }
+function save(d: MLData) { writeJsonCached(FILE, d) }
 
 function faToEn(s: string): string { return (s || '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))) }
 function norm(s: string): string { return (s || '').replace(/‌/g, '').replace(/\s+/g, ' ').trim().toLocaleLowerCase() }

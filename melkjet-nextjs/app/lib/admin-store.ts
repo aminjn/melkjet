@@ -1,6 +1,6 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { createHmac } from 'crypto'
+import { readJsonCached, writeJsonCached } from './json-file'
 
 const DATA_FILE = join(process.cwd(), '.admin-data.json')
 
@@ -109,9 +109,8 @@ export interface AdminData {
 }
 
 export function getAdminData(): AdminData {
-  if (existsSync(DATA_FILE)) {
-    try { return JSON.parse(readFileSync(DATA_FILE, 'utf-8')) } catch {}
-  }
+  const d = readJsonCached<AdminData | null>(DATA_FILE, null)
+  if (d) return d
   return {
     email: process.env.ADMIN_EMAIL || 'naeiniamini@gmail.com',
     passwordHash: hashPassword(process.env.ADMIN_PASSWORD || 'Admin@123456'),
@@ -119,5 +118,5 @@ export function getAdminData(): AdminData {
 }
 
 export function saveAdminData(data: AdminData) {
-  writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8')
+  writeJsonCached(DATA_FILE, data, true)
 }

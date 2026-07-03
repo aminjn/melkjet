@@ -1,6 +1,6 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
+import { readJsonCached, writeJsonCached } from './json-file'
 
 const DATA_FILE = join(process.cwd(), '.scraper-data.json')
 
@@ -82,7 +82,7 @@ interface DB { sources: Source[]; items: Item[]; categories?: string[]; owners?:
 function normName(s: string): string { return (s || '').replace(/‌/g, '').replace(/\s+/g, ' ').trim() }
 
 export function listOwners(): Owner[] {
-  return (load().owners || []).sort((a, b) => b.count - a.count)
+  return [...(load().owners || [])].sort((a, b) => b.count - a.count)
 }
 
 export function updateOwner(ownerId: string, patch: { name?: string; phone?: string }) {
@@ -117,14 +117,11 @@ const DEFAULT_SOURCES: Source[] = [
 ]
 
 export function load(): DB {
-  if (existsSync(DATA_FILE)) {
-    try { return JSON.parse(readFileSync(DATA_FILE, 'utf-8')) } catch {}
-  }
-  return { sources: DEFAULT_SOURCES, items: [] }
+  return readJsonCached<DB>(DATA_FILE, { sources: DEFAULT_SOURCES, items: [] })
 }
 
 export function save(db: DB) {
-  writeFileSync(DATA_FILE, JSON.stringify(db, null, 2), 'utf-8')
+  writeJsonCached(DATA_FILE, db, true)
 }
 
 export function listSources(): Source[] { return load().sources }
@@ -173,7 +170,8 @@ export function deleteSource(sid: string) {
 
 export function listItems(type?: SourceType, opts?: { category?: string; publicOnly?: boolean }): Item[] {
   const db = load()
-  let items = type ? db.items.filter(i => i.type === type) : db.items
+  // کپی (نه ارجاع به آرایهٔ کش‌شده) تا sortِ درجا کشِ مشترک را جابه‌جا نکند.
+  let items = type ? db.items.filter(i => i.type === type) : [...db.items]
   if (opts?.category) items = items.filter(i => i.category === opts.category)
   if (opts?.publicOnly) { const now = Date.now(); items = items.filter(i => i.status !== 'rejected' && i.status !== 'duplicate' && !isExpired(i, now)) }
   return items.sort((a, b) => b.scrapedAt - a.scrapedAt)

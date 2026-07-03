@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
+import { readJsonCached, writeJsonCached } from './json-file'
 
 // پروفایلِ کاملِ کسب‌وکار/شخص — per-user (شمارهٔ کاربر). هویتِ رسمی از account (شاهکار) می‌آید؛
 // این‌جا اطلاعاتِ کسب‌وکار، تماس، موقعیت، معرفی و شبکه‌های اجتماعی نگه‌داری می‌شود.
@@ -37,8 +37,8 @@ export interface BusinessProfile {
 }
 
 type DB = Record<string, BusinessProfile>
-function load(): DB { if (existsSync(DATA_FILE)) { try { return JSON.parse(readFileSync(DATA_FILE, 'utf-8')) } catch {} } return {} }
-function save(db: DB) { writeFileSync(DATA_FILE, JSON.stringify(db, null, 2)) }
+function load(): DB { return readJsonCached<DB>(DATA_FILE, {}) }
+function save(db: DB) { writeJsonCached(DATA_FILE, db, true) }
 
 export function emptyProfile(): BusinessProfile {
   return {

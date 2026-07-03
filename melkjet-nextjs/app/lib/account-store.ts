@@ -1,6 +1,6 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { dashForRoleId, listRoles } from './role-store'
+import { readJsonCached, writeJsonCached } from './json-file'
 
 const FILE = join(process.cwd(), '.account-data.json')
 
@@ -27,8 +27,8 @@ function assignIdentity(a: Account, idy: Idy) {
 }
 type DB = Record<string, Account>
 
-function load(): DB { if (existsSync(FILE)) { try { return JSON.parse(readFileSync(FILE, 'utf-8')) } catch {} } return {} }
-function save(db: DB) { writeFileSync(FILE, JSON.stringify(db, null, 2), 'utf-8') }
+function load(): DB { return readJsonCached<DB>(FILE, {}) }
+function save(db: DB) { writeJsonCached(FILE, db, true) }
 
 export function getAccount(phone: string): Account | null { return load()[phone] || null }
 

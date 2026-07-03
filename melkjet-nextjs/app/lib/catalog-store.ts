@@ -1,6 +1,6 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
+import { readJsonCached, writeJsonCached } from './json-file'
 
 // کاتالوگِ مرجعِ مصالح — دسته‌بندی‌ها و کالاهای «رسمی» که ادمین می‌سازد (یا از هایپرساز
 // اسکرپ می‌شود). مصالح‌فروش‌ها فقط از همین لیست انتخاب می‌کنند تا نام/دسته‌ها یکدست
@@ -22,10 +22,10 @@ interface DB { categories: CatalogCategory[]; products: CatalogProduct[] }
 
 function id(p = '') { return p + randomBytes(5).toString('hex') }
 function load(): DB {
-  if (existsSync(FILE)) { try { const d = JSON.parse(readFileSync(FILE, 'utf-8')); return { categories: d.categories || [], products: d.products || [] } } catch {} }
-  return { categories: [], products: [] }
+  const d = readJsonCached<Partial<DB>>(FILE, {})
+  return { categories: d.categories || [], products: d.products || [] }
 }
-function save(db: DB) { try { writeFileSync(FILE, JSON.stringify(db)) } catch {} }
+function save(db: DB) { try { writeJsonCached(FILE, db) } catch {} }
 function norm(s: string) { return (s || '').replace(/‌/g, '').replace(/\s+/g, ' ').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim() }
 // نامِ سایت/منبع یا آیتمِ ناوبری (breadcrumb) — دسته نیست؛ بچه‌هایش بالا می‌روند.
 const JUNK_SITE = /^(صفحه\s*اصلی|خانه|home|فروشگاه|فروشگاه\s*اینترنتی|آهن\s*آنلاین|هایپرساز|ahanonline|hypersaz|قیمت\s*روز|قیمت\s*آهن(\s*آلات)?|لیست\s*قیمت|محصولات|همه\s*محصولات|دسته\s*بندی(\s*ها)?)$/i

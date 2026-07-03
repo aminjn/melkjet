@@ -1,6 +1,6 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
+import { readJsonCached, writeJsonCached } from './json-file'
 
 const FILE = join(process.cwd(), '.role-data.json')
 
@@ -18,9 +18,10 @@ export interface Role {
 type DB = { roles: Role[] }
 function id() { return randomBytes(5).toString('hex') }
 function load(): DB {
-  if (existsSync(FILE)) {
-    try {
-      const db: DB = JSON.parse(readFileSync(FILE, 'utf-8'))
+  const existing = readJsonCached<DB | null>(FILE, null)
+  if (existing && existing.roles) {
+    {
+      const db = existing
       let migrated = false
       // تغییر نام نقشِ «خریدار / مستأجر» به «کاربر عادی»
       for (const r of db.roles || []) {
@@ -43,11 +44,11 @@ function load(): DB {
       }
       if (migrated) save(db)
       return db
-    } catch {}
+    }
   }
   const db: DB = { roles: defaults() }; save(db); return db
 }
-function save(db: DB) { writeFileSync(FILE, JSON.stringify(db, null, 2), 'utf-8') }
+function save(db: DB) { writeJsonCached(FILE, db, true) }
 
 // قابلیت‌های قابل‌اعطا (برای گیت دسترسی هر نقش/پلن)
 export const PERMISSIONS: { id: string; label: string }[] = [

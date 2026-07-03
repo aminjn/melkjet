@@ -7,20 +7,38 @@ import { getConfig, getReveals, getMeta, createBuilderAccounts } from './persian
 // موتورِ گرفتنِ شماره را در پس‌زمینه اجرا می‌کند. توسطِ cron-runner صدا زده می‌شود.
 const REVEAL_LOG = path.join(process.cwd(), '.persiansaze-reveal.log')
 const REVEAL_LOCK = path.join(process.cwd(), '.persiansaze-reveal.lock')
+const REVEAL_ATTEMPT = path.join(process.cwd(), '.persiansaze-reveal.attempt')
 const PROFILES_FILE = path.join(process.cwd(), '.persiansaze-profiles.json')
 const ACCT_SYNC = path.join(process.cwd(), '.persiansaze-accounts.sync')
 const WEEK = 6.5 * 24 * 3600 * 1000
+const MAX_RUN = 25 * 60 * 1000            // اگر Chrome بیش از این طول کشید، هنگ کرده → کشته شود (رفعِ CPUِ ۴۰۰٪)
+const ATTEMPT_COOLDOWN = 6 * 3600 * 1000  // چه موفق چه ناموفق، تا این مدت دوباره Chrome راه نمی‌افتد
 
 function alive(file: string): boolean {
   try { const pid = Number(fs.readFileSync(file, 'utf8')); if (!pid) return false; process.kill(pid, 0); return true } catch { return false }
 }
+function readNum(file: string): number { try { return Number(fs.readFileSync(file, 'utf8')) || 0 } catch { return 0 } }
 
 const DAY = 24 * 3600 * 1000
 export function maybeRunReveal(now = Date.now()): boolean {
   const cfg = getConfig()
   if (!cfg.enabled || !cfg.user || !cfg.pass) return false
-  if (alive(REVEAL_LOCK)) return false
-  // ابتدا گیتِ زمانی (ارزان) تا هر ۵ دقیقه Chrome راه نیفتد و فایلِ بزرگ خوانده نشود.
+
+  // نگهبان: اگر اجرای قبلی هنگ کرده (بیش از MAX_RUN در حالِ اجراست)، Chromeِ معلق را بکش تا CPU آزاد شود.
+  if (alive(REVEAL_LOCK)) {
+    const started = readNum(REVEAL_ATTEMPT)
+    if (started && now - started > MAX_RUN) {
+      try { const pid = Number(fs.readFileSync(REVEAL_LOCK, 'utf8')); if (pid) process.kill(pid, 'SIGKILL') } catch {}
+      try { fs.unlinkSync(REVEAL_LOCK) } catch {}
+    }
+    return false   // یکی در حالِ اجراست
+  }
+  // کول‌داونِ تلاش (کلیدِ رفعِ سواتوثِ CPU): حتی اگر ورود به سایت شکست بخورد و lastRevealAt ثبت نشود،
+  // تا ۶ ساعت دوباره Chrome راه نمی‌افتد — به‌جای هر ۵ دقیقه یک Chromeِ سنگین.
+  const lastAttempt = readNum(REVEAL_ATTEMPT)
+  if (lastAttempt && now - lastAttempt < ATTEMPT_COOLDOWN) return false
+
+  // گیتِ زمانی (ارزان) تا فایلِ بزرگ بی‌جهت خوانده نشود.
   const reveals = getReveals()
   const last = reveals.meta?.lastRevealAt ? Date.parse(reveals.meta.lastRevealAt) : 0
   const avail = reveals.meta?.availableCount
@@ -34,6 +52,7 @@ export function maybeRunReveal(now = Date.now()): boolean {
   const pending = getMeta().totalProjects - Object.keys(reveals.items || {}).length
   if (pending <= 0) return false
   try {
+    fs.writeFileSync(REVEAL_ATTEMPT, String(now))   // مهرِ تلاش قبل از spawn — تا شکستِ launch هم کول‌داون بخورد
     const out = fs.openSync(REVEAL_LOG, 'w')
     const child = spawn(process.execPath, [path.join(process.cwd(), 'scripts', 'persiansaze-reveal.mjs')], {
       detached: true, stdio: ['ignore', out, out],

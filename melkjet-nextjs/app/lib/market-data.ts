@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { readJsonCached, writeJsonCached } from './json-file'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
 
@@ -21,14 +21,13 @@ export interface DataPoint {
 interface DB { points: DataPoint[] }
 
 function load(): DB {
-  if (existsSync(DATA_FILE)) { try { return JSON.parse(readFileSync(DATA_FILE, 'utf-8')) } catch {} }
-  return { points: [] }
+  return readJsonCached<DB>(DATA_FILE, { points: [] })
 }
-function save(db: DB) { writeFileSync(DATA_FILE, JSON.stringify(db), 'utf-8') }
+function save(db: DB) { writeJsonCached(DATA_FILE, db) }
 function id() { return randomBytes(6).toString('hex') }
 
 export function listPoints(filter?: { city?: string; district?: string; metric?: string }): DataPoint[] {
-  let pts = load().points
+  let pts = [...load().points]   // کپی تا sortِ درجا کش را جابه‌جا نکند
   if (filter?.city) pts = pts.filter(p => p.city === filter.city)
   if (filter?.district) pts = pts.filter(p => p.district === filter.district)
   if (filter?.metric) pts = pts.filter(p => p.metric.includes(filter.metric!))
