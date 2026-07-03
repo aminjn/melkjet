@@ -121,26 +121,31 @@ async function importTokens(o: string, items: BrandPost[], sourceId?: string, on
   const done: string[] = []
   const total = items.length
   let i = 0
+  let consecutiveFail = 0   // مدارشکن: اگر پروکسی/دیوار قطع است، به‌جای گرفتنِ ۶۶ آگهی (~یک ساعت) زود بیرون بیا.
   for (const it of items) {
     i++
     const token = it.token
     if (token) {
       // یک‌بار تلاشِ مجدد در صورتِ خطای گذرای پروکسی/دیوار (تا یک آگهیِ تکی کلِ کار را خراب نکند).
-      // هر آگهی سقفِ ۲۵ ثانیه زمان دارد؛ اگر پروکسی/دیوار هنگ کرد، رد می‌شود تا کل کار قفل نشود.
+      // هر آگهی سقفِ ۱۵ ثانیه زمان دارد؛ اگر پروکسی/دیوار هنگ کرد، رد می‌شود تا کل کار قفل نشود.
       let res: any = null
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
           res = await Promise.race([
             importDivarToken(o, token, it, sourceId),
-            new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 25000)),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000)),
           ])
           if (res && (res.ok || res.skipped)) break
         } catch { res = null }
-        if (attempt === 0) await new Promise(r => setTimeout(r, 600))
+        if (attempt === 0) await new Promise(r => setTimeout(r, 500))
       }
+      const okThis = !!(res && res.ok)
       if (res && res.ok && res.updated) { updated++ }
       else if (res && res.ok && !res.skipped) { imported++; done.push(token) }
       else skipped++
+      // مدارشکن: پس از ۶ شکستِ پیاپی، اتصال قطع فرض می‌شود و کار متوقف می‌شود.
+      consecutiveFail = okThis ? 0 : consecutiveFail + 1
+      if (consecutiveFail >= 6) throw new Error('اتصال به دیوار برقرار نشد (چند آگهیِ پیاپی خوانده نشد) — پروکسیِ دیوار را در ادمین بررسی کنید.')
     }
     try { onProgress?.(i, total) } catch {}
   }
@@ -266,12 +271,18 @@ export function startBackgroundSync(o: string, cfgIn?: AdvisorDivar, sourceId?: 
   setJob(o, { running: true, total: 0, done: 0, imported: 0, updated: 0, skipped: 0, failed: 0, sold: 0, error: '', label: label || 'همگام‌سازیِ دیوار', startedAt: Date.now(), lastProgressAt: Date.now(), finishedAt: undefined })
   // عمداً await نمی‌کنیم — در پس‌زمینهٔ همین ورکر تا تهِ کار اجرا می‌شود.
   ;(async () => {
+    const DEADLINE = 5 * 60 * 1000   // سقفِ کلِ کار: اگر پروکسی/دیوار پاسخ نداد، بعد از ۵ دقیقه قطعاً متوقف می‌شود
     try {
       const onProgress = (done: number, total: number) => setJob(o, { done, total, lastProgressAt: Date.now() })
-      const r = await syncAdvisorDivar(o, cfgIn, sourceId, onProgress)
+      const r = await Promise.race([
+        syncAdvisorDivar(o, cfgIn, sourceId, onProgress),
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('همگام‌سازی بیش از حد طول کشید (پروکسی/دیوار پاسخ نداد) و متوقف شد. اتصالِ پروکسی را بررسی کنید.')), DEADLINE)),
+      ])
       if (sourceId) markSourceRun(o, sourceId, r.imported || 0, r.ok ? '' : (r.reason || 'خطا'))
       setJob(o, { running: false, finishedAt: Date.now(), imported: r.imported || 0, updated: r.updated || 0, skipped: r.skipped || 0, sold: r.sold || 0, error: r.ok ? '' : (r.reason || 'همگام‌سازی ناموفق بود') })
     } catch (e: any) {
+      // مهم: حتی در خطا/وقفه هم lastRun را آپدیت کن تا کرون این منبع را بی‌وقفه هر ۵ دقیقه دوباره اجرا نکند.
+      if (sourceId) { try { markSourceRun(o, sourceId, 0, e?.message || 'خطا یا وقفه') } catch {} }
       setJob(o, { running: false, finishedAt: Date.now(), error: e?.message || 'خطای داخلی هنگامِ همگام‌سازی' })
     }
   })()

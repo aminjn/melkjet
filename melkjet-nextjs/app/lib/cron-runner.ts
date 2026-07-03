@@ -39,10 +39,17 @@ async function tick(): Promise<{ due: number; synced: number }> {
     for (const { phone, source } of due) {
       try {
         const base = getDivar(phone)
-        const r = await syncAdvisorDivar(phone, { ...base, searchUrl: source.searchUrl, divarName: source.divarName, autoPublish: source.autoPublish, autoNeighborhood: source.autoNeighborhood, schedule: source.schedule }, source.id)
+        // سقفِ زمانی برای هر منبع تا یک هنگِ پروکسی/دیوار کلِ کرون را قفل نکند.
+        const r = await Promise.race([
+          syncAdvisorDivar(phone, { ...base, searchUrl: source.searchUrl, divarName: source.divarName, autoPublish: source.autoPublish, autoNeighborhood: source.autoNeighborhood, schedule: source.schedule }, source.id),
+          new Promise<any>((_, rej) => setTimeout(() => rej(new Error('timeout')), 5 * 60 * 1000)),
+        ])
         markSourceRun(phone, source.id, r.imported || 0, r.ok ? '' : (r.reason || 'خطا'))
         synced++
-      } catch { /* خطای یک منبع بقیه را متوقف نکند */ }
+      } catch {
+        // حتی در وقفه هم lastRun آپدیت شود تا این منبع هر تیک دوباره اجرا نشود.
+        try { markSourceRun(phone, source.id, 0, 'وقفه در اتصال (پروکسی/دیوار)') } catch {}
+      }
     }
     // اگر آگهیِ جدیدی ایمپورت شد، تکراری‌ها را پاک کن (SEO) — حداکثر هر ۳۰ دقیقه (O(n²) است).
     if (synced && Date.now() - lastDedupAt > 30 * 60 * 1000) {
