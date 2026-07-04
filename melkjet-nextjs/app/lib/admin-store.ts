@@ -104,6 +104,14 @@ export interface AdminData {
     throttleHours?: number // حداقل فاصلهٔ دو پیامک برای یک کاربر (ساعت)
     paths?: string       // پیشوندهای مسیر که پیامک را فعال می‌کنند (هر خط یکی؛ خالی=همهٔ صفحات عمومی)
   }
+  moderation?: {          // معیارهای ممیزیِ آگهی (سوپرادمین تعریف می‌کند؛ AI بر اساسش تصمیم می‌گیرد و ML یاد می‌گیرد)
+    criteria?: string     // متنِ معیارها (به AI داده می‌شود). خالی = پیش‌فرض
+    approveMin?: number   // امتیاز ≥ این → تأیید (پیش‌فرض ۷۰)
+    rejectMax?: number    // امتیاز ≤ این → رد (پیش‌فرض ۴۰)؛ بینِ این‌دو → بازبینیِ دستی
+    requirePrice?: boolean // آگهیِ بدونِ قیمت به‌صورتِ خودکار رد/بازبینی شود
+    priceMissing?: 'reject' | 'review'  // اگر قیمت نبود چه‌کار (پیش‌فرض reject)
+    autoMl?: boolean      // آیا مدلِ یادگیرنده وقتی مطمئن شد خودش تصمیم بگیرد (پیش‌فرض true)
+  }
   // تخصیصِ مدل به‌ازای هر ایجنت + (اختیاری) provider به‌ازای هر اسلات. provider خالی = پیش‌فرض (گپ).
   agentModels?: Record<string, { text?: string; image?: string; textProvider?: string; imageProvider?: string }>
 }

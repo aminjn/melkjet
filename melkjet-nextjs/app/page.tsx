@@ -190,6 +190,7 @@ export default function Home() {
     <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
       <Nav />
 
+      <main>
       {/* HERO */}
       <section style={{ position: 'relative', overflow: 'hidden', padding: 'clamp(52px,7vw,104px) 24px clamp(44px,5vw,80px)' }}>
         <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(900px 460px at 78% -8%,var(--goldDim),transparent 60%)' }}></div>
@@ -478,6 +479,7 @@ export default function Home() {
           </div>
         </div>
       </section>
+      </main>
 
       <Footer />
       <AIAssistant />

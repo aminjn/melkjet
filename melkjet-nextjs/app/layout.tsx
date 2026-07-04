@@ -33,7 +33,8 @@ export const viewport: Viewport = {
   themeColor: '#c9a84c',
   width: 'device-width',
   initialScale: 1,
-  maximumScale:1,
+  // maximumScale را حذف کردیم: قفل‌کردنِ زوم یک خطای دسترسی‌پذیری (accessibility) است
+  // و کاربرانِ کم‌بینا نمی‌توانند بزرگ‌نمایی کنند. Lighthouse هم همین را ایراد می‌گرفت.
 }
 
 export default function RootLayout({

@@ -2113,6 +2113,12 @@ function ModerationView() {
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState('')
   const [detail, setDetail] = useState<MItem | null>(null)
+  const [cfg, setCfg] = useState<any>(null)
+  const [ml, setMl] = useState<any>(null)
+  const [cfgOpen, setCfgOpen] = useState(false)
+  const [savingCfg, setSavingCfg] = useState(false)
+  const [cfgMsg, setCfgMsg] = useState('')
+  const [defCrit, setDefCrit] = useState('')
 
   const load = async () => {
     setLoading(true)
@@ -2120,7 +2126,20 @@ function ModerationView() {
     if (r.ok) { const d = await r.json(); setItems(d.items as MItem[]) }
     setLoading(false)
   }
-  useEffect(() => { load() }, [])
+  const loadCfg = async () => {
+    const r = await fetch('/api/admin/moderation-config')
+    if (r.ok) { const d = await r.json(); setCfg(d.config); setMl(d.ml); setDefCrit(d.defaultCriteria || '') }
+  }
+  useEffect(() => { load(); loadCfg() }, [])
+
+  const saveCfg = async () => {
+    setSavingCfg(true); setCfgMsg('')
+    try {
+      const r = await fetch('/api/admin/moderation-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg) })
+      const d = await r.json()
+      if (d.ok) { setCfg(d.config); setCfgMsg('✓ معیارها ذخیره شد') } else setCfgMsg('⚠ ' + (d.error || 'خطا'))
+    } catch { setCfgMsg('⚠ خطا در ذخیره') } finally { setSavingCfg(false); setTimeout(() => setCfgMsg(''), 4000) }
+  }
 
   // اجرای تأیید خودکار AI روی صف منتظر، دسته‌دسته تا تمام شدن
   const runAuto = async () => {
@@ -2163,6 +2182,72 @@ function ModerationView() {
         <KPI label="رد‌شده توسط AI" value={fa(rejected.length)} trend="مشکوک/ناقص" icon="✗" iconBg="rgba(231,103,74,.1)" iconColor="#e7674a" />
         <KPI label="نیازمند بازبینی دستی" value={fa(review.length)} trend="حکم: بازبینی" icon="👁" iconBg="rgba(231,161,74,.15)" iconColor="#e7a14a" />
       </div>
+
+      {/* ── معیارهای ممیزی: ادمین قوانین را تعریف می‌کند؛ AI بر اساسش تصمیم می‌گیرد و ML یاد می‌گیرد ── */}
+      <Card style={{ marginBottom: 14 }}>
+        <div onClick={() => setCfgOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, cursor: 'pointer' }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 14 }}>⚙️ معیارهای ممیزی و یادگیریِ ماشین</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3, maxWidth: 520, lineHeight: 1.6 }}>قوانینی که هوش مصنوعی بر اساسِ آن‌ها آگهی‌ها را تأیید/رد می‌کند را اینجا تعریف کن. ماشین لرنینگ از همین تصمیم‌ها یاد می‌گیرد تا کم‌کم خودش انجام دهد.</div>
+          </div>
+          <span style={{ color: 'var(--muted)', fontSize: 13 }}>{cfgOpen ? '▲ بستن' : '▼ تنظیم معیارها'}</span>
+        </div>
+        {cfgOpen && cfg && (
+          <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 16, animation: 'fade .25s ease' }}>
+            <div>
+              <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>معیارها (متنی که به هوش مصنوعی داده می‌شود)</label>
+              <textarea value={cfg.criteria} onChange={e => setCfg({ ...cfg, criteria: e.target.value })} rows={7}
+                style={{ width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '10px 12px', color: 'var(--text)', fontSize: 12.5, fontFamily: 'inherit', lineHeight: 2, outline: 'none', resize: 'vertical' }} />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div>
+                <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>آستانهٔ تأیید — امتیاز ≥ <b style={{ color: '#5fd98a' }}>{cfg.approveMin}</b></label>
+                <input type="range" min={0} max={100} value={cfg.approveMin} onChange={e => setCfg({ ...cfg, approveMin: Number(e.target.value) })} style={{ width: '100%', accentColor: '#5fd98a' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>آستانهٔ رد — امتیاز ≤ <b style={{ color: '#e7674a' }}>{cfg.rejectMax}</b></label>
+                <input type="range" min={0} max={100} value={cfg.rejectMax} onChange={e => setCfg({ ...cfg, rejectMax: Number(e.target.value) })} style={{ width: '100%', accentColor: '#e7674a' }} />
+              </div>
+            </div>
+            <div style={{ fontSize: 11.5, color: 'var(--faint)', lineHeight: 1.7, marginTop: -6 }}>امتیازِ بینِ این دو → «بازبینیِ دستی». اگر خیلی آگهی رد می‌شود، <b>آستانهٔ رد را پایین‌تر</b> بیاور (مثلاً ۲۰) تا به‌جای رد، برای بازبینی بماند.</div>
+
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5, flexWrap: 'wrap' }}>
+              <input type="checkbox" checked={cfg.requirePrice} onChange={e => setCfg({ ...cfg, requirePrice: e.target.checked })} style={{ accentColor: 'var(--gold)' }} />
+              <span>آگهیِ بدونِ قیمت را خودکار</span>
+              <select value={cfg.priceMissing} onChange={e => setCfg({ ...cfg, priceMissing: e.target.value })} disabled={!cfg.requirePrice}
+                style={{ background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 8, padding: '4px 8px', color: 'var(--text)', fontFamily: 'inherit', fontSize: 12.5 }}>
+                <option value="reject">رد</option><option value="review">بازبینی</option>
+              </select>
+              <span>کن</span>
+            </label>
+
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5 }}>
+              <input type="checkbox" checked={cfg.autoMl} onChange={e => setCfg({ ...cfg, autoMl: e.target.checked })} style={{ accentColor: 'var(--gold)' }} />
+              <span>وقتی ماشین لرنینگ به‌قدرِ کافی مطمئن شد، خودش تصمیم بگیرد (بدونِ فراخوانیِ هوش مصنوعی)</span>
+            </label>
+
+            {ml && (
+              <div style={{ background: 'var(--bg2)', borderRadius: 10, padding: 14, fontSize: 12, lineHeight: 1.9 }}>
+                <div style={{ fontWeight: 700, marginBottom: 6 }}>وضعیتِ یادگیریِ ماشین</div>
+                <div style={{ color: ml.ready ? '#5fd98a' : 'var(--muted)' }}>
+                  {ml.ready
+                    ? '✅ آماده است — مدل می‌تواند بخشی از تصمیم‌ها را خودش بگیرد.'
+                    : `⏳ در حالِ یادگیری — برای آماده‌شدن حداقل ${fa(ml.minPerClass)} تأیید و ${fa(ml.minPerClass)} رد لازم است (فعلاً: ${fa(ml.approvedSamples)} تأیید، ${fa(ml.rejectedSamples)} رد).`}
+                </div>
+                <div style={{ color: 'var(--faint)', marginTop: 4 }}>تصمیمِ خودکارِ ML: {fa(ml.autoDecided)} · تصمیمِ AI: {fa(ml.aiDecided)} · آموزش از تصمیمِ دستیِ شما: {fa(ml.adminTaught)}</div>
+                <div style={{ color: 'var(--faint)', fontSize: 11, marginTop: 4 }}>هر بار که دستی «تأیید» یا «رد» می‌زنی، مدل قوی‌تر یاد می‌گیرد.</div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              <GoldButton onClick={saveCfg} disabled={savingCfg}>{savingCfg ? 'در حال ذخیره…' : 'ذخیرهٔ معیارها'}</GoldButton>
+              <OutlineButton onClick={() => setCfg({ ...cfg, criteria: defCrit })}>بازگردانی به پیش‌فرض</OutlineButton>
+              {cfgMsg && <span style={{ color: cfgMsg.startsWith('✓') ? '#5fd98a' : '#e7674a', fontSize: 12.5, fontWeight: 600 }}>{cfgMsg}</span>}
+            </div>
+          </div>
+        )}
+      </Card>
 
       <Card style={{ marginBottom: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
