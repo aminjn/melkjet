@@ -149,6 +149,7 @@ function SearchPageInner() {
   const searchParams = useSearchParams()
   const initialQuery = searchParams.get('q') || ''
   const typeParam = (searchParams.get('type') || '').toLowerCase()
+  const kindParam = searchParams.get('kind') || ''   // نوعِ ملک از URL (برای میان‌بُرهای منو)
   const dealFromParam = (t: string) => t === 'rent' || t === 'اجاره' ? 'اجاره'
     : t === 'presale' || t === 'pre-sale' || t === 'پیش‌فروش' ? 'پیش‌فروش'
       : t === 'mortgage' || t === 'rahn' || t === 'رهن' ? 'رهن' : 'خرید'
@@ -175,7 +176,8 @@ function SearchPageInner() {
   const [search, setSearch] = useState(initialQuery)
   const [searchTerm, setSearchTerm] = useState(initialQuery)
   const [beds, setBeds] = useState<string>('همه')
-  const [kind, setKind] = useState('')
+  const [kind, setKind] = useState(kindParam)
+  useEffect(() => { if (kindParam) setKind(kindParam) }, [kindParam])
   const [priceMin, setPriceMin] = useState(0)
   const [priceMax, setPriceMax] = useState(PRICE_MAX)
   const [areaMin, setAreaMin] = useState(0)

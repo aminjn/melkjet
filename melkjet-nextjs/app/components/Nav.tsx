@@ -16,10 +16,13 @@ interface Menu { label: string; items: MenuItem[] }
 // منوهای کشویی — همهٔ لینک‌ها به صفحاتِ واقعیِ سایت.
 const MENUS: Menu[] = [
   { label: 'خرید و اجاره', items: [
-    { ic: '🔍', label: 'جستجوی هوشمند', desc: 'جستجو با هوش مصنوعی', href: '/search' },
-    { ic: '🗺', label: 'نقشه و فیلتر', desc: 'جستجوی نقشه‌ای', href: '/search' },
-    { ic: '📈', label: 'محله‌های محبوب', desc: 'تحلیل قیمت محله', href: '/market' },
-    { ic: '＋', label: 'ثبت آگهی', desc: 'فروش یا اجاره ملک شما', href: '/submit' },
+    { ic: '🏢', label: 'خرید آپارتمان', desc: 'فروشِ مسکونی', href: '/search?kind=' + encodeURIComponent('آپارتمان') },
+    { ic: '🔑', label: 'اجارهٔ آپارتمان', desc: 'رهن و اجارهٔ مسکونی', href: '/search?type=rent&kind=' + encodeURIComponent('آپارتمان') },
+    { ic: '🏡', label: 'خرید ویلا و خانه', desc: 'ویلا، خانه، کلنگی', href: '/search?kind=' + encodeURIComponent('ویلا') },
+    { ic: '🏬', label: 'اداری و تجاری', desc: 'دفتر، مغازه، تجاری', href: '/search?kind=' + encodeURIComponent('دفتر/اداری') },
+    { ic: '🌱', label: 'پیش‌فروش پروژه‌ها', desc: 'پیش‌فروش تا آمادهٔ تحویل', href: '/search?type=presale' },
+    { ic: '🔍', label: 'جستجوی هوشمند (AI)', desc: 'به زبانِ خودت بگو چه می‌خواهی', href: '/search' },
+    { ic: '＋', label: 'ثبت آگهی', desc: 'فروش یا اجاره ملکِ شما', href: '/submit' },
   ] },
   { label: 'پروژه‌ها', items: [
     { ic: '🏗', label: 'دایرکتوری پروژه‌ها', desc: 'پیش‌فروش تا آماده تحویل', href: '/sazandeha' },
