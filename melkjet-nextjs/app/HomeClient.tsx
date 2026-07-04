@@ -1,17 +1,16 @@
-'use client'
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+// صفحهٔ اصلی حالا یک server component است: کلِ صفحه روی سرور رندر می‌شود (بدونِ hydration)
+// و فقط جزیره‌های تعاملی (جستجو، آکاردئونِ FAQ، دکمهٔ لایک، بنر، دستیارِ AI) در مرورگر
+// اجرا می‌شوند → main-thread و JavaScriptِ کلاینت به‌شدت کمتر.
 import Link from 'next/link'
-import dynamic from 'next/dynamic'
 import Nav from './components/Nav'
 import Footer from './components/Footer'
 import PropertyCard from './components/PropertyCard'
+import HeroSearch from './components/home/HeroSearch'
+import FaqAccordion from './components/home/FaqAccordion'
+import HomeBanner from './components/home/HomeBanner'
+import HomeAssistant from './components/home/HomeAssistant'
 import { gradientFor, initialsFor, type ContentItem } from './lib/content-display'
 import type { HomeData } from './lib/home-data'
-
-// ویجت‌های فقط‌کلاینتی را lazy و بدونِ SSR بارگذاری کن تا رندرِ اولِ صفحهٔ اصلی سبک بماند.
-const AIAssistant = dynamic(() => import('./components/AIAssistant'), { ssr: false })
-const BannerSlot = dynamic(() => import('./components/BannerSlot'), { ssr: false })
 
 const featured = [
   { id: '1', title: 'آپارتمان لوکس نوساز', location: 'سعادت‌آباد، تهران', price: '۱۷٫۸ میلیارد', size: '۱۴۰', beds: '۳', year: '۱۴۰۲', tag: 'ویژه', score: 96, img: 'linear-gradient(135deg,#3a3530,#211e1b)' },
@@ -86,12 +85,8 @@ const RISK_LEVELS = [
 ]
 
 export default function HomeClient({ initial }: { initial: HomeData }) {
-  const [query, setQuery] = useState('')
-  const [openFaq, setOpenFaq] = useState(-1)
-  const [likes, setLikes] = useState<Record<string, boolean>>({})
-  // دادهٔ اولیه از سرور می‌آید (SSR با محتوا) — دیگر واکشیِ کلاینتیِ بعد از لود لازم نیست.
+  // دادهٔ اولیه از سرور می‌آید (SSR با محتوا).
   const { listings, advisorItems, promoFeatured, promoInvest, promoAdvisors, sysStats } = initial
-  const router = useRouter()
 
   // Prepend promoted items to a listing array, dedup by id.
   const withPromoted = (promo: ContentItem[], normal: ContentItem[]): ContentItem[] => {
@@ -101,15 +96,6 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
       seen.add(it.id)
       return true
     })
-  }
-
-  const runSearch = () => {
-    const q = query.trim()
-    router.push(q ? `/search?q=${encodeURIComponent(q)}` : '/search')
-  }
-  const fillQuery = (text: string) => {
-    setQuery(text)
-    router.push(`/search?q=${encodeURIComponent(text)}`)
   }
 
   // Promoted items lead the featured/invest sections (dedup by id).
@@ -191,20 +177,7 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
             به زبان خودت بگو چه می‌خواهی. ملک‌جت بازار را تحلیل می‌کند، دلیل هر پیشنهاد را توضیح می‌دهد و کنارت می‌ماند تا بهترین تصمیم را بگیری.
           </p>
 
-          <div style={{ margin: '34px auto 0', maxWidth: 740, textAlign: 'right' }}>
-            <div style={{ position: 'relative', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 18, padding: 18, boxShadow: 'var(--shadow)' }}>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                <textarea value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runSearch() } }} placeholder="مثلاً: آپارتمان ۱۳۰ متری در سعادت‌آباد، زیر ۱۸ میلیارد، با آسانسور و پارکینگ، نزدیک مترو…" rows={2} style={{ flex: 1, resize: 'none', border: 'none', outline: 'none', background: 'transparent', color: 'var(--text)', fontFamily: 'inherit', fontSize: 16, lineHeight: 1.7, paddingTop: 8 }} />
-                <button onClick={runSearch} style={{ flexShrink: 0, height: 48, padding: '0 22px', border: 'none', borderRadius: 13, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontFamily: 'inherit', fontWeight: 700, fontSize: 15, cursor: 'pointer', boxShadow: '0 10px 24px -10px var(--gold)' }}>جستجو</button>
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
-                <span style={{ fontSize: 12.5, color: 'var(--faint)', alignSelf: 'center' }}>امتحان کنید:</span>
-                {examples.map(ex => (
-                  <button key={ex} onClick={() => fillQuery(ex)} style={{ padding: '7px 13px', borderRadius: 999, border: '1px solid var(--line)', background: 'var(--bg2)', color: 'var(--muted)', fontFamily: 'inherit', fontSize: 12.5, cursor: 'pointer' }}>{ex}</button>
-                ))}
-              </div>
-            </div>
-          </div>
+          <HeroSearch examples={examples} />
 
           {/* دسترسیِ سریع به همهٔ اکوسیستم‌ها */}
           <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 10, marginTop: 26 }}>
@@ -280,7 +253,7 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
 
       {/* AD BANNER */}
       <section style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px' }}>
-        <BannerSlot placement="home" />
+        <HomeBanner />
       </section>
 
       {/* FEATURED */}
@@ -291,7 +264,7 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
         </div>
         <div className="mj-feat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 18 }}>
           {featuredCards.map(p => (
-            <PropertyCard key={p.id} {...p} liked={likes[p.id]} onLike={() => setLikes(prev => ({ ...prev, [p.id]: !prev[p.id] }))} />
+            <PropertyCard key={p.id} {...p} />
           ))}
         </div>
       </section>
@@ -410,19 +383,7 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
       {/* FAQ */}
       <section style={{ maxWidth: 820, margin: '0 auto', padding: 'clamp(40px,5vw,72px) 24px' }}>
         <h2 style={{ textAlign: 'center', fontSize: 'clamp(24px,3.4vw,34px)', fontWeight: 800, letterSpacing: '-.6px', color: 'var(--text)', marginBottom: 32 }}>سوال‌های پرتکرار</h2>
-        <div style={{ display: 'grid', gap: 12 }}>
-          {faqs.map((f, i) => (
-            <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden' }}>
-              <button onClick={() => setOpenFaq(openFaq === i ? -1 : i)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, padding: '18px 20px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'right' }}>
-                <span style={{ fontSize: 15.5, fontWeight: 600, color: 'var(--text)' }}>{f.q}</span>
-                <span style={{ flexShrink: 0, width: 26, height: 26, borderRadius: 8, background: 'var(--goldDim)', color: 'var(--gold)', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{openFaq === i ? '−' : '+'}</span>
-              </button>
-              {openFaq === i && (
-                <div style={{ padding: '0 20px 18px', fontSize: 14.5, lineHeight: 1.9, color: 'var(--muted)' }}>{f.a}</div>
-              )}
-            </div>
-          ))}
-        </div>
+        <FaqAccordion faqs={faqs} />
       </section>
 
       {/* چرا ملک‌جت */}
@@ -463,7 +424,7 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
       </main>
 
       <Footer />
-      <AIAssistant />
+      <HomeAssistant />
     </div>
   )
 }

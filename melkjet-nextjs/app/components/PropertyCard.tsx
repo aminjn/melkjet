@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import CompareButton from './CompareButton'
+import LikeHeart from './home/LikeHeart'
 
 interface PropertyCardProps {
   id?: string | number
@@ -12,11 +13,11 @@ interface PropertyCardProps {
   tag?: string
   score?: string | number
   img?: string
-  liked?: boolean
-  onLike?: () => void
 }
 
-export default function PropertyCard({ id = '1', title, location, price, size, beds, year, tag, score, img = 'linear-gradient(135deg,#3a3530,#211e1b)', liked, onLike }: PropertyCardProps) {
+// کارتِ آگهی — server component. دکمهٔ لایک یک جزیرهٔ کوچکِ کلاینتی (LikeHeart) است،
+// پس این کارت خودش hydrate نمی‌شود و می‌تواند در صفحاتِ سروری استفاده شود.
+export default function PropertyCard({ id = '1', title, location, price, size, beds, year, tag, score, img = 'linear-gradient(135deg,#3a3530,#211e1b)' }: PropertyCardProps) {
   return (
     <Link href={`/property/${id}`} style={{ display: 'block', textDecoration: 'none', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, overflow: 'hidden', transition: '.2s' }}>
       <div style={{ position: 'relative', height: 184, background: img }}>
@@ -27,11 +28,7 @@ export default function PropertyCard({ id = '1', title, location, price, size, b
             {tag}
           </span>
         )}
-        {onLike && (
-          <button onClick={e => { e.preventDefault(); onLike(); }} style={{ position: 'absolute', top: 12, left: 12, width: 34, height: 34, borderRadius: 10, border: 'none', cursor: 'pointer', background: 'rgba(20,18,14,0.6)', backdropFilter: 'blur(6px)', color: liked ? '#ff6b81' : 'rgba(255,255,255,0.85)', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            ♥
-          </button>
-        )}
+        <LikeHeart />
         {score && (
           <span style={{ position: 'absolute', bottom: 12, left: 12, display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 999, background: 'rgba(20,18,14,0.7)', backdropFilter: 'blur(6px)', fontSize: 11.5, fontWeight: 700, color: '#fff' }}>
             <span style={{ color: 'var(--gold2)' }}>✦</span> امتیاز AI {score}
