@@ -1,38 +1,30 @@
-const CACHE = 'melkjet-v2'
-const STATIC = [
-  '/',
-  '/search',
-  '/auth',
-  '/manifest.json',
-]
+// Service Worker فقط برای پوش‌نوتیفیکیشن.
+//
+// ⚠️ چرا دیگر fetch/HTML کش نمی‌شود: نسخهٔ قبلی همهٔ GETهای غیرِ /api (شاملِ HTMLِ
+// صفحات و چانک‌های JS) را network-first کش می‌کرد و روی هر خطای شبکه نسخهٔ کش‌شده را
+// سِرو می‌کرد. اگر صفحه‌ای (مثلِ /admin) یک‌بار جوابِ خراب می‌داد (مثلاً وسطِ دیپلوی/
+// کرش)، همان نسخهٔ خراب کش می‌شد و بعد از رفعِ مشکلِ سرور هم مرورگر همان کهنه را نشان
+// می‌داد — «۱ ثانیه می‌آمد بعد This page couldn't load»، و Ctrl+Shift+R هم کاری نمی‌کرد
+// چون SW جلوی شبکه را می‌گرفت. حالا هیچ fetch handlerای نداریم → مرورگر مستقیم شبکه را
+// می‌زند و هیچ‌وقت نسخهٔ کهنه/خراب سِرو نمی‌شود.
 
-self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(STATIC)).then(() => self.skipWaiting())
-  )
+const CACHE = 'melkjet-v3'
+
+self.addEventListener('install', () => {
+  self.skipWaiting()
 })
 
 self.addEventListener('activate', e => {
+  // همهٔ کش‌های قدیمی (شاملِ HTML/چانک‌های خرابِ نسخه‌های قبلی) پاک شوند.
   e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
+    caches.keys()
+      .then(keys => Promise.all(keys.map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
   )
 })
 
-self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return
-  if (e.request.url.includes('/api/')) return
-  e.respondWith(
-    fetch(e.request)
-      .then(res => {
-        const clone = res.clone()
-        caches.open(CACHE).then(c => c.put(e.request, clone))
-        return res
-      })
-      .catch(() => caches.match(e.request))
-  )
-})
+// عمداً هیچ 'fetch' handlerای نیست: مرورگر ناوبری و دارایی‌ها را مثلِ حالتِ عادی
+// مستقیم از شبکه می‌گیرد (چانک‌های /_next/static خودشان immutable و کش‌شده‌اند).
 
 // ── پوش‌نوتیفیکیشن (حتی وقتی PWA/مرورگر بسته است) ──
 self.addEventListener('push', e => {
