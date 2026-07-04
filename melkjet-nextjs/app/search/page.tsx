@@ -483,13 +483,13 @@ function SearchPageInner() {
 
           {/* «نزدیکِ من» — وقتی GPS داریم و کاربر محله‌ای نخواسته؛ روشن = فقط محدودهٔ کاربر */}
           {userLoc && !hood && !parsed.area && (
-            <button onClick={() => setNearMe(v => !v)} title={nearMe ? 'فقط آگهی‌های نزدیکِ شما — برای دیدنِ کلِ شهر بزنید' : 'نمایشِ آگهی‌های نزدیکِ موقعیتِ شما'}
+            <button className="mjs-hide-sm" onClick={() => setNearMe(v => !v)} title={nearMe ? 'فقط آگهی‌های نزدیکِ شما — برای دیدنِ کلِ شهر بزنید' : 'نمایشِ آگهی‌های نزدیکِ موقعیتِ شما'}
               style={{ height: 48, padding: '0 14px', borderRadius: 12, display: 'flex', alignItems: 'center', gap: 6, background: nearMe ? 'var(--goldDim)' : 'var(--surface)', border: `1px solid ${nearMe ? 'var(--gold)' : 'var(--line2)'}`, color: nearMe ? 'var(--gold)' : 'var(--text)', fontSize: 13.5, cursor: 'pointer', fontFamily: 'inherit', fontWeight: nearMe ? 700 : 400, whiteSpace: 'nowrap' }}>
               <span>📍</span>{nearMe ? `نزدیکِ من${userArea ? ` · ${userArea}` : ''}` : 'نزدیکِ من'}
             </button>
           )}
           <NeighborhoodPicker value={hood} onChange={setHood} city={selectedCity} fallback={hoodOptions.map(o => o.h)} />
-          <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ height: 48, padding: '0 12px', borderRadius: 12, background: 'var(--surface)', border: '1px solid var(--line2)', color: 'var(--text)', fontSize: 13.5, cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }}>
+          <select className="mjs-hide-sm" value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ height: 48, padding: '0 12px', borderRadius: 12, background: 'var(--surface)', border: '1px solid var(--line2)', color: 'var(--text)', fontSize: 13.5, cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }}>
             <option>پیشنهاد ملک‌جت</option><option>ارزان‌ترین</option><option>گران‌ترین</option><option>جدیدترین</option>
           </select>
         </div>
@@ -689,7 +689,7 @@ function SearchPageInner() {
       {/* موبایل: دکمهٔ شناورِ «نقشه» (فقط وقتی نقشه بسته است) */}
       {!mapOpenMobile && (
         <button className="mjs-mapbtn" onClick={() => setMapOpenMobile(true)}
-          style={{ position: 'fixed', bottom: 84, left: '50%', transform: 'translateX(-50%)', zIndex: 60, display: 'none', alignItems: 'center', gap: 7, padding: '11px 20px', borderRadius: 999, border: 'none', background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 14, fontFamily: 'inherit', boxShadow: '0 8px 24px -6px rgba(0,0,0,.5)', cursor: 'pointer' }}>
+          style={{ position: 'fixed', bottom: 74, left: 14, zIndex: 60, display: 'none', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 999, border: 'none', background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 13.5, fontFamily: 'inherit', boxShadow: '0 8px 24px -6px rgba(0,0,0,.55)', cursor: 'pointer' }}>
           🗺 نقشه
         </button>
       )}
@@ -738,12 +738,12 @@ function NotifyBar({ count, criteria }: { count: number; criteria: Criteria }) {
     } catch { setMsg('خطا در ارتباط') } finally { setBusy(false) }
   }
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: '13px 16px', marginBottom: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <span style={{ fontSize: 18 }}>🔔</span>
+    <div className="mjs-notify" style={{ display: 'flex', flexDirection: 'column', gap: 6, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: '11px 14px', marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: 17 }}>🔔</span>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 800 }}>آگهی جدید اومد خبرم کن</div>
-          <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{count > 0 ? `${count.toLocaleString('fa-IR')} ملک در این محدوده — ` : ''}با آمدنِ آگهیِ جدید، در گفتگوها و پیامک خبرت می‌کنیم.</div>
+          <div style={{ fontSize: 13, fontWeight: 800 }}>آگهی جدید اومد خبرم کن</div>
+          <div className="mjs-notify-desc" style={{ fontSize: 11.5, color: 'var(--muted)' }}>{count > 0 ? `${count.toLocaleString('fa-IR')} ملک در این محدوده — ` : ''}با آمدنِ آگهیِ جدید، در گفتگوها و پیامک خبرت می‌کنیم.</div>
         </div>
         <button onClick={toggle} disabled={busy} aria-label="toggle" style={{ position: 'relative', width: 48, height: 28, borderRadius: 999, border: 'none', cursor: 'pointer', background: on ? 'linear-gradient(135deg,var(--gold2),var(--gold))' : 'var(--line2)', transition: 'background .2s', flexShrink: 0, opacity: busy ? 0.6 : 1 }}>
           <span style={{ position: 'absolute', top: 3, insetInlineStart: on ? 23 : 3, width: 22, height: 22, borderRadius: '50%', background: '#fff', transition: 'inset-inline-start .2s', boxShadow: '0 1px 3px rgba(0,0,0,.3)' }} />
