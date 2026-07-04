@@ -40,6 +40,7 @@ export async function GET(req: NextRequest) {
           tags: pc ? [`${pc.toLocaleString('fa-IR')} پروژه`] : [],
           hasPhone: !!(b.phone || (b.phones && b.phones.length)),
           url: `/sazande/${encodeURIComponent(b.id)}`,
+          revealKind: 'builder', revealId: String(b.id),   // شمارهٔ سازنده از /api/contact-reveal
           scrapedAt: 0, status: 'approved', registered: true,
         })
       }
@@ -75,6 +76,9 @@ export async function GET(req: NextRequest) {
       id: a.phone, sourceName: 'ملک‌جت', type: 'directory', category: cat,
       title: name, location: city, image: photo, excerpt: tagline,
       tags: specialties.slice(0, 4), hasPhone, url: `/profile/${encodeURIComponent(a.phone)}`,
+      // شماره از /api/listing-reveal با kind=advisor — برای هر اکانت (مشاور یا غیرِ آن) خودِ
+      // شمارهٔ اکانت را برمی‌گرداند (اگر پروفایلِ مشاور نباشد). شناسه = تلفنِ اکانت.
+      revealKind: 'advisor', revealId: a.phone,
       scrapedAt: a.createdAt || 0, status: 'approved', registered: true,
     })
   }

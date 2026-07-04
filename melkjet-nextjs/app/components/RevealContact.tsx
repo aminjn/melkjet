@@ -1,18 +1,21 @@
 'use client'
 import { useState } from 'react'
 
-// نمایشِ شمارهٔ آگهی/مشاور فقط برای کاربرِ واردشده (از /api/listing-reveal). تا قبلِ ورود،
-// شماره به مرورگر نمی‌رود؛ کلیک = ورود یا دریافتِ شماره + ثبتِ تماس برای صاحبِ آگهی/مشاور.
+// نمایشِ شمارهٔ آگهی/مشاور/سازنده فقط برای کاربرِ واردشده. تا قبلِ ورود، شماره به مرورگر نمی‌رود؛
+// کلیک = ورود یا دریافتِ شماره + ثبتِ تماس برای صاحب. مسیرِ درخواست بر اساسِ نوع فرق می‌کند:
+// «builder» → /api/contact-reveal (سازنده، شناسه = constructorId)، «item/advisor» → /api/listing-reveal.
 export default function RevealContact({
   kind, id, label = 'نمایشِ شماره', compact, style,
-}: { kind: 'item' | 'advisor'; id: string; label?: string; compact?: boolean; style?: React.CSSProperties }) {
+}: { kind: 'item' | 'advisor' | 'builder'; id: string; label?: string; compact?: boolean; style?: React.CSSProperties }) {
   const [phone, setPhone] = useState('')
   const [busy, setBusy] = useState(false)
 
   const reveal = async () => {
     setBusy(true)
     try {
-      const r = await fetch('/api/listing-reveal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind, id }) })
+      const r = kind === 'builder'
+        ? await fetch('/api/contact-reveal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ builderId: id }) })
+        : await fetch('/api/listing-reveal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind, id }) })
       const d = await r.json().catch(() => ({}))
       if (r.status === 401 || d.login) { window.location.href = `/auth?next=${encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname : '/')}`; return }
       if (d.ok && d.phone) setPhone(d.phone)

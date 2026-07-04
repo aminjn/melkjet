@@ -27,6 +27,9 @@ function toProfessional(it: ContentItem) {
     phone: it.phone,
     hasPhone: it.hasPhone,
     image: it.image,
+    // مسیرِ درستِ نمایشِ شماره را از API بیاور (سازنده→builder، اکانت‌ها→advisor، اسکرپ→item).
+    revealKind: (it as any).revealKind as ('item' | 'advisor' | 'builder' | undefined),
+    revealId: (it as any).revealId as (string | undefined),
   }
 }
 
@@ -458,6 +461,8 @@ type Professional = {
   phone?: string
   hasPhone?: boolean
   image?: string
+  revealKind?: 'item' | 'advisor' | 'builder'
+  revealId?: string
 }
 
 function ProfessionalCard({ pro }: { pro: Professional }) {
@@ -520,7 +525,7 @@ function ProfessionalCard({ pro }: { pro: Professional }) {
       {/* فوتر: نمایشِ شماره + مشاهدهٔ پروفایل */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
         {pro.hasPhone
-          ? <div onClick={(e) => { e.preventDefault(); e.stopPropagation() }}><RevealContact kind="item" id={String(pro.id)} compact label="نمایشِ شماره" /></div>
+          ? <div onClick={(e) => { e.preventDefault(); e.stopPropagation() }}><RevealContact kind={pro.revealKind || 'item'} id={pro.revealId || String(pro.id)} compact label="نمایشِ شماره" /></div>
           : <span style={{ fontSize: 12, color: 'var(--faint)' }}>پروفایل و خدمات</span>}
         <span style={{ fontSize: 12.5, color: 'var(--gold)', fontWeight: 700, whiteSpace: 'nowrap' }}>مشاهده ←</span>
       </div>
