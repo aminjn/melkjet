@@ -720,9 +720,9 @@ async function TeamBlock({ block, primary, ownerPhone }: { block: SiteBlock; pri
 
 // Render one block. `ownerName` powers the real «آگهی‌های من» listings.
 // ── کاتالوگِ محصولاتِ مصالح (واقعی، از پنلِ فروشندهٔ همین سایت) ──
-function CatalogBlock({ block, primary, ownerPhone }: { block: SiteBlock; primary: string; ownerPhone?: string }) {
+async function CatalogBlock({ block, primary, ownerPhone }: { block: SiteBlock; primary: string; ownerPhone?: string }) {
   const props = p(block)
-  const data = ownerPhone ? shopProductsOf(ownerPhone) : null
+  const data = ownerPhone ? await shopProductsOf(ownerPhone) : null
   const count = Math.max(3, Math.min(24, Number(props.count) || 12))
   const products = (data?.products || []).slice(0, count)
   const fa = (n: number) => n.toLocaleString('fa-IR')
@@ -762,9 +762,9 @@ function CatalogBlock({ block, primary, ownerPhone }: { block: SiteBlock; primar
 }
 
 // ── نرخِ روزِ محصولاتِ فروشنده (جدولِ قیمت) ──
-function PriceListBlock({ block, primary, ownerPhone }: { block: SiteBlock; primary: string; ownerPhone?: string }) {
+async function PriceListBlock({ block, primary, ownerPhone }: { block: SiteBlock; primary: string; ownerPhone?: string }) {
   const props = p(block)
-  const data = ownerPhone ? shopProductsOf(ownerPhone) : null
+  const data = ownerPhone ? await shopProductsOf(ownerPhone) : null
   const rows = (data?.products || []).slice(0, 40)
   const fa = (n: number) => n.toLocaleString('fa-IR')
   return (

@@ -25,11 +25,11 @@ async function siteSlugFor(phone: string): Promise<string> {
 // اعضای تیمِ یک آژانس را با اطلاعاتِ کاملشان برمی‌گرداند (از رابطهٔ واقعیِ مشاور↔آژانس).
 export async function getTeamMembers(agencyPhone: string): Promise<TeamMember[]> {
   if (!agencyPhone) return []
-  return Promise.all(listAgencyMembers(agencyPhone).map(async m => {
+  return Promise.all((await listAgencyMembers(agencyPhone)).map(async m => {
     const phone = m.advisorPhone
     let name = m.advisorName || '', photo = '', title = '', areas = '', experience = '', specialties: string[] = [], activeListings = 0
     try {
-      const ad = getAdvisor(phone)
+      const ad = await getAdvisor(phone)
       const pr = ad.profile
       if (pr) {
         if (pr.name) name = pr.name

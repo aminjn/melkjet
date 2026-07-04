@@ -79,7 +79,7 @@ async function runFrom(owner: string, wf: Workflow, fromNode: WorkflowNode, ctx:
           ], { max_tokens: 220 })
           if (out && out.trim()) {
             ctx.ai = out.trim()
-            if (ctx.leadId) updateLead(owner, ctx.leadId, { note: `🤖 ${ctx.ai}` })
+            if (ctx.leadId) await updateLead(owner, ctx.leadId, { note: `🤖 ${ctx.ai}` })
           }
         } catch { /* AI در دسترس نبود → بدونِ تحلیل ادامه بده */ }
       } else if (node.type === 'action') {
@@ -90,12 +90,12 @@ async function runFrom(owner: string, wf: Workflow, fromNode: WorkflowNode, ctx:
           const body = interpolate(node.config?.template || node.config?.message || `لیدِ جدید: ${ctx.name || ''} (${ctx.need || ''}) بودجه ${ctx.budget || '-'}${ctx.ai ? '\n\nتحلیل: ' + ctx.ai : ''}`, ctx)
           await sendActionEmail(owner, node.config?.email || '', node.config?.subject || 'اعلان اتوماسیون ملک‌جت', body)
         } else if (node.label.includes('وظیفه') || node.label.includes('قرار')) {   // ایجاد وظیفه/پیگیری
-          addAppt(owner, { client: ctx.name || 'لید', listingTitle: ctx.need, date: new Date().toLocaleDateString('fa-IR'), type: 'call' })
+          await addAppt(owner, { client: ctx.name || 'لید', listingTitle: ctx.need, date: new Date().toLocaleDateString('fa-IR'), type: 'call' })
         } else if (node.label.includes('CRM') || node.label.includes('وضعیت')) {    // بروزرسانی CRM → مرحلهٔ «تماس‌گرفته»
-          if (ctx.leadId) setLeadStage(owner, ctx.leadId, 'contacted')
+          if (ctx.leadId) await setLeadStage(owner, ctx.leadId, 'contacted')
         }
       } else if (node.type === 'end') {                          // پایان: بستن لید / تبدیل به مشتری
-        if (ctx.leadId) setLeadStage(owner, ctx.leadId, 'closed')
+        if (ctx.leadId) await setLeadStage(owner, ctx.leadId, 'closed')
       }
     } catch { /* گرهِ خطادار، بقیه را متوقف نکند */ }
     await runFrom(owner, wf, node, ctx, depth + 1)
@@ -116,7 +116,7 @@ export async function processWorkflows(now = Date.now()): Promise<{ workflows: n
     let nextStages = prevStages
     let events: Ctx[] = []
     try {
-      const adv = getAdvisor(owner)
+      const adv = await getAdvisor(owner)
       if (trig.label.includes('وضعیت')) {                        // تریگر: تغییر وضعیت (مرحلهٔ لید)
         nextStages = Object.fromEntries(adv.leads.map(l => [l.id, l.stage]))
         const target = (trig.config?.filter || trig.config?.value || '').trim()   // مرحلهٔ هدف (خالی = هر تغییری)

@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: NextRequest) {
   const slug = new URL(req.url).searchParams.get('slug') || ''
   if (!slug) return NextResponse.json({ error: 'شناسهٔ فروشگاه لازم است' }, { status: 400 })
-  const shop = publicShop(slug)
+  const shop = await publicShop(slug)
   if (!shop) return NextResponse.json({ error: 'فروشگاه یافت نشد' }, { status: 404 })
   return NextResponse.json({ ok: true, shop })
 }
@@ -19,14 +19,14 @@ export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({} as any))
   const slug = String(b.slug || '')
   const action = String(b.action || '')
-  const found = shopBySlug(slug)
+  const found = await shopBySlug(slug)
   if (!found) return NextResponse.json({ error: 'فروشگاه یافت نشد' }, { status: 404 })
 
   if (action === 'reveal') {
     // شماره فقط برای کاربرِ واردشده؛ تماس در پنلِ فروشنده ثبت می‌شود.
     const s = await getSession()
     if (!s) return NextResponse.json({ login: true, error: 'برای دیدنِ شماره وارد شوید' }, { status: 401 })
-    const phone = shopPhone(slug)
+    const phone = await shopPhone(slug)
     if (!phone) return NextResponse.json({ error: 'شماره‌ای ثبت نشده' }, { status: 404 })
     addContact(found.owner, { viewerPhone: s.phone, viewerName: getAccount(s.phone)?.name, projectName: b.productName || 'ویترینِ فروشگاه', at: Date.now() })
     return NextResponse.json({ ok: true, phone })
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     const s = await getSession()
     if (!s) return NextResponse.json({ login: true, error: 'برای ارسالِ استعلام وارد شوید' }, { status: 401 })
     if (!b.product) return NextResponse.json({ error: 'محصول را مشخص کنید' }, { status: 400 })
-    const q = addPublicInquiry(slug, {
+    const q = await addPublicInquiry(slug, {
       customer: String(b.customer || getAccount(s.phone)?.name || s.phone).slice(0, 80),
       product: String(b.product).slice(0, 120),
       qty: String(b.qty || '').slice(0, 60),

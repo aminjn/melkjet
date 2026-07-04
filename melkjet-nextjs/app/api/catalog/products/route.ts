@@ -10,7 +10,7 @@ const SOURCE_LABEL: Record<string, string> = { hypersaz: 'هایپرساز', aha
 export async function GET(req: NextRequest) {
   const u = new URL(req.url).searchParams
   const num = (k: string) => { const v = Number(u.get(k)); return Number.isFinite(v) && v > 0 ? v : undefined }
-  const counts = sellerCountsByCatalog()
+  const counts = await sellerCountsByCatalog()
   const withSeller = u.get('withSeller') === '1'
   const sellerIds = new Set(Object.keys(counts).filter(id => counts[id] > 0))
   const res = publicCatalogQuery({

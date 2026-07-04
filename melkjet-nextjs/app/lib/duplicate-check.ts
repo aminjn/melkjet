@@ -54,16 +54,16 @@ export async function checkDuplicate(scope: DupExisting[], cand: DupCand, exclud
 }
 
 // آگهی‌های هم‌حوزه برای یک مشاور: خودش + هم‌آژانسی‌ها + آژانس (همگی از advisor-store).
-export function advisorScope(o: string): DupExisting[] {
+export async function advisorScope(o: string): Promise<DupExisting[]> {
   const out: DupExisting[] = []
-  const push = (phone: string, ownerName: string) => {
-    for (const l of getAdvisor(phone).listings) out.push({ id: l.id, ownerName, deal: l.deal, title: l.title, location: l.location, neighborhood: l.neighborhood, area: l.area, price: l.price, rooms: l.rooms })
+  const push = async (phone: string, ownerName: string) => {
+    for (const l of (await getAdvisor(phone)).listings) out.push({ id: l.id, ownerName, deal: l.deal, title: l.title, location: l.location, neighborhood: l.neighborhood, area: l.area, price: l.price, rooms: l.rooms })
   }
-  push(o, getAdvisor(o).profile.name || 'شما')
-  const m = getAdvisorMembership(o)
+  await push(o, (await getAdvisor(o)).profile.name || 'شما')
+  const m = await getAdvisorMembership(o)
   if (m) {
-    for (const mem of listAgencyMembers(m.agencyPhone)) if (mem.advisorPhone !== o) push(mem.advisorPhone, mem.advisorName)
-    push(m.agencyPhone, m.agencyName)
+    for (const mem of await listAgencyMembers(m.agencyPhone)) if (mem.advisorPhone !== o) await push(mem.advisorPhone, mem.advisorName)
+    await push(m.agencyPhone, m.agencyName)
   }
   return out
 }

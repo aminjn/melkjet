@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
 
   let phone = '', ownerKey = '', label = ''
   if (kind === 'advisor') {
-    const a = getAdvisor(id)
+    const a = await getAdvisor(id)
     phone = a.profile?.phone || id
     ownerKey = `advisor:${digits(id)}`
     label = a.profile?.name || 'مشاور'

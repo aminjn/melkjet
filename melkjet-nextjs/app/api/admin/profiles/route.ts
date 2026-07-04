@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
 
   try {
     if (dashboard === '/owner') {
-      const s = ownerStats(phone)
+      const s = await ownerStats(phone)
       kpis = [
         { label: 'کل ملک‌ها', value: s.kpis.totalProps },
         { label: 'آگهی فعال', value: s.kpis.activeCount },
@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
       ]
       sections = [{ title: 'ملک‌های ذخیره‌شده اخیر', items: s.recentSaved.map(p => ({ primary: p.title, secondary: p.location })) }]
     } else if (dashboard === '/pros') {
-      const s = advisorStats(phone)
+      const s = await advisorStats(phone)
       kpis = [
         { label: 'لیدهای فعال', value: s.kpis.activeLeads },
         { label: 'لید داغ', value: s.kpis.hotLeads },
@@ -108,7 +108,7 @@ export async function GET(req: NextRequest) {
       ]
       sections = [{ title: 'آخرین لیدها', items: s.recentLeads.map(l => ({ primary: l.name, secondary: l.need || '' })) }]
     } else if (dashboard === '/agency') {
-      const s = agencyStats(phone)
+      const s = await agencyStats(phone)
       kpis = [
         { label: 'مشاوران فعال', value: s.kpis.activeAgents },
         { label: 'کل مشاوران', value: s.kpis.totalAgents },
@@ -118,7 +118,7 @@ export async function GET(req: NextRequest) {
         { label: 'فروش این ماه', value: s.kpis.monthSales, money: true },
       ]
     } else if (dashboard === '/materials') {
-      const shop = getShop(phone)
+      const shop = await getShop(phone)
       const newOrders = shop.orders.filter(o => o.status === 'pending').length
       const lowStock = shop.products.filter(p => typeof p.stock === 'number' && p.stock <= 5).length
       kpis = [

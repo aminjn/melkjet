@@ -19,7 +19,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
     return <div dir="rtl" style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontFamily: 'Vazirmatn, system-ui, sans-serif' }}>کالا یافت نشد.</div>
   }
   const breadcrumb = categoryBreadcrumb(product.categoryId)
-  const sellers = sellersOfCatalog(id)
+  const sellers = await sellersOfCatalog(id)
   const related = relatedProducts(product.categoryId, id, 8).map(p => ({ id: p.id, name: p.name, image: p.image || '', brand: p.brand || '' }))
   return <ProductPageView product={product as any} breadcrumb={breadcrumb} sellers={sellers} related={related} />
 }

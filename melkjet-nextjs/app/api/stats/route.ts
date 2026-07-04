@@ -12,7 +12,7 @@ export async function GET() {
   try { listings = listItems('listing', { publicOnly: true }).length } catch {}
   try { advisors = listItems('directory', { publicOnly: true }).length } catch {}
   try { products = catalogStats().products } catch {}
-  try { shops = listPublicShops().length } catch {}
+  try { shops = (await listPublicShops()).length } catch {}
   try { builders = getMeta().totalBuilders || 0 } catch {}
   return NextResponse.json({ listings, advisors, products, shops, builders }, { headers: { 'Cache-Control': 's-maxage=120, stale-while-revalidate=600' } })
 }

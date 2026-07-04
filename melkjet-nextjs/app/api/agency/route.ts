@@ -15,14 +15,14 @@ export async function GET() {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای مشاهده وارد شوید' }, { status: 401 })
   const o = s.phone
-  const stats = agencyStats(o)
+  const stats = await agencyStats(o)
   // فایل‌های آژانس در دو جا ذخیره می‌شوند: فرمِ «افزودن فایل» → agency-store، و
   // ایمپورتِ دیوار (ابزارِ مشترکِ مشاور) → advisor-store[همین آژانس]. هر دو باید در «فایل‌ها» دیده شوند.
-  const own = listListings(o)
+  const own = await listListings(o)
   const seen = new Set(own.map(l => l.id))
   let imported: typeof own = []
   try {
-    imported = (getAdvisor(o).listings || [])
+    imported = ((await getAdvisor(o)).listings || [])
       .filter(l => !seen.has(l.id))
       .map(l => ({
         id: l.id, title: l.title, ptype: l.ptype, location: l.location, price: l.price,
@@ -38,8 +38,8 @@ export async function GET() {
   // KPIِ «فایل‌های فعال» هم واقعیت را نشان دهد (شاملِ ایمپورت‌ها).
   if ((stats as any)?.kpis) (stats as any).kpis.activeListings = listings.filter(l => l.status === 'active').length
   return NextResponse.json({
-    stats, agents: listAgents(o), listings, leads: listLeads(o), deals: listDeals(o),
-    advisorFiles: agencyAdvisorFiles(o), commission: getCommissionConfig(o),
+    stats, agents: await listAgents(o), listings, leads: await listLeads(o), deals: await listDeals(o),
+    advisorFiles: await agencyAdvisorFiles(o), commission: await getCommissionConfig(o),
   }, { headers: { 'Cache-Control': 'no-store, private' } })
 }
 
@@ -49,17 +49,17 @@ export async function POST(req: NextRequest) {
   const o = s.phone
   const b = await req.json().catch(() => ({} as any))
   switch (b.action as string) {
-    case 'addAgent': if (!b.name) return NextResponse.json({ error: 'نام الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, agent: addAgent(o, { name: String(b.name), phone: b.phone }) })
-    case 'toggleAgent': { const g = toggleAgent(o, String(b.id)); return g ? NextResponse.json({ ok: true, agent: g }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
-    case 'deleteAgent': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); deleteAgent(o, String(b.id)); return NextResponse.json({ ok: true })
+    case 'addAgent': if (!b.name) return NextResponse.json({ error: 'نام الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, agent: await addAgent(o, { name: String(b.name), phone: b.phone }) })
+    case 'toggleAgent': { const g = await toggleAgent(o, String(b.id)); return g ? NextResponse.json({ ok: true, agent: g }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
+    case 'deleteAgent': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); await deleteAgent(o, String(b.id)); return NextResponse.json({ ok: true })
     case 'addListing': {
-      const listing = addListing(o, b)
+      const listing = await addListing(o, b)
       let duplicate: { id: string; title: string; ownerName: string } | undefined
       try {
-        const ag = getAgency(o)
-        const agName = resolveAgencyName(o, ag.profile?.name) || 'آژانس'
+        const ag = await getAgency(o)
+        const agName = await resolveAgencyName(o, ag.profile?.name) || 'آژانس'
         const scope = [
-          ...advisorScope(o),
+          ...(await advisorScope(o)),
           ...ag.listings.filter(x => x.id !== listing.id).map(x => ({ id: x.id, ownerName: agName, deal: x.deal, title: x.title, location: x.location, price: x.price })),
         ]
         const dup = await checkDuplicate(scope, { deal: listing.deal, title: listing.title, location: listing.location, price: listing.price }, listing.id)
@@ -69,25 +69,25 @@ export async function POST(req: NextRequest) {
     }
     case 'setListingStatus': {
       // اول در فایل‌های خودِ آژانس؛ اگر نبود، فایلِ ایمپورت‌شده از دیوار (advisor-store) است.
-      let l: any = setListingStatus(o, String(b.id), b.status)
-      if (!l) { try { l = advSetStatus(o, String(b.id), b.status) } catch {} }
+      let l: any = await setListingStatus(o, String(b.id), b.status)
+      if (!l) { try { l = await advSetStatus(o, String(b.id), b.status) } catch {} }
       return l ? NextResponse.json({ ok: true, listing: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 })
     }
-    case 'assignListing': { const l = assignListing(o, String(b.id), String(b.agent || '')); return l ? NextResponse.json({ ok: true, listing: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
+    case 'assignListing': { const l = await assignListing(o, String(b.id), String(b.agent || '')); return l ? NextResponse.json({ ok: true, listing: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'deleteListing':
       if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
-      deleteListing(o, String(b.id))
-      try { advDeleteListing(o, String(b.id)) } catch {}   // اگر فایلِ ایمپورت‌شده بود، از advisor-store هم حذف شود
+      await deleteListing(o, String(b.id))
+      try { await advDeleteListing(o, String(b.id)) } catch {}   // اگر فایلِ ایمپورت‌شده بود، از advisor-store هم حذف شود
       return NextResponse.json({ ok: true })
-    case 'addLead': if (!b.name) return NextResponse.json({ error: 'نام الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, lead: addLead(o, b) })
-    case 'assignLead': { const l = assignLead(o, String(b.id), String(b.agent || '')); return l ? NextResponse.json({ ok: true, lead: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
-    case 'setLeadStage': { const l = setLeadStage(o, String(b.id), b.stage); return l ? NextResponse.json({ ok: true, lead: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
-    case 'deleteLead': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); deleteLead(o, String(b.id)); return NextResponse.json({ ok: true })
-    case 'addDeal': if (!b.title || !b.agent) return NextResponse.json({ error: 'عنوان و مشاور الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, deal: addDeal(o, { title: String(b.title), amount: Number(b.amount) || 0, agent: String(b.agent), date: String(b.date || '') }) })
-    case 'updateProfile': return NextResponse.json({ ok: true, profile: updateAgencyProfile(o, b.patch || {}) })
-    case 'setDefaultCommission': return NextResponse.json({ ok: true, commission: setDefaultCommission(o, b.mode, Number(b.value) || 0) })
-    case 'setAgentCommission': if (!b.advisorPhone) return NextResponse.json({ error: 'مشاور الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, commission: setAgentCommission(o, String(b.advisorPhone), b.mode, Number(b.value) || 0) })
-    case 'clearAgentCommission': if (!b.advisorPhone) return NextResponse.json({ error: 'مشاور الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, commission: clearAgentCommission(o, String(b.advisorPhone)) })
+    case 'addLead': if (!b.name) return NextResponse.json({ error: 'نام الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, lead: await addLead(o, b) })
+    case 'assignLead': { const l = await assignLead(o, String(b.id), String(b.agent || '')); return l ? NextResponse.json({ ok: true, lead: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
+    case 'setLeadStage': { const l = await setLeadStage(o, String(b.id), b.stage); return l ? NextResponse.json({ ok: true, lead: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
+    case 'deleteLead': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); await deleteLead(o, String(b.id)); return NextResponse.json({ ok: true })
+    case 'addDeal': if (!b.title || !b.agent) return NextResponse.json({ error: 'عنوان و مشاور الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, deal: await addDeal(o, { title: String(b.title), amount: Number(b.amount) || 0, agent: String(b.agent), date: String(b.date || '') }) })
+    case 'updateProfile': return NextResponse.json({ ok: true, profile: await updateAgencyProfile(o, b.patch || {}) })
+    case 'setDefaultCommission': return NextResponse.json({ ok: true, commission: await setDefaultCommission(o, b.mode, Number(b.value) || 0) })
+    case 'setAgentCommission': if (!b.advisorPhone) return NextResponse.json({ error: 'مشاور الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, commission: await setAgentCommission(o, String(b.advisorPhone), b.mode, Number(b.value) || 0) })
+    case 'clearAgentCommission': if (!b.advisorPhone) return NextResponse.json({ error: 'مشاور الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, commission: await clearAgentCommission(o, String(b.advisorPhone)) })
     default: return NextResponse.json({ error: 'عملیات نامعتبر' }, { status: 400 })
   }
 }

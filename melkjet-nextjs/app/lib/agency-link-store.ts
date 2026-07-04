@@ -36,62 +36,61 @@ function bizName(phone: string): string {
   return ''
 }
 // نامِ نمایشیِ مشاور: نامِ پروفایلِ مشاور → نامِ نمایشیِ کسب‌وکار → نامِ حساب (شخصی)
-function advisorNameOf(phone: string): string {
-  try { const n = (getAdvisor(phone).profile.name || '').trim(); if (n) return n } catch {}
+async function advisorNameOf(phone: string): Promise<string> {
+  try { const n = ((await getAdvisor(phone)).profile.name || '').trim(); if (n) return n } catch {}
   const b = bizName(phone); if (b) return b
   return getAccount(phone)?.name || phone
 }
 // نامِ نمایشیِ آژانس: نامِ کسب‌وکار (آژانس) → نامِ تنظیماتِ آژانس → نامِ حساب (شخصی، فقط آخرین چاره)
-function agencyNameOf(phone: string): string {
+async function agencyNameOf(phone: string): Promise<string> {
   const b = bizName(phone); if (b) return b
-  try { const n = (getAgency(phone).profile.name || '').trim(); if (n) return n } catch {}
+  try { const n = ((await getAgency(phone)).profile.name || '').trim(); if (n) return n } catch {}
   return getAccount(phone)?.name || phone
 }
 // نام‌ها در رکوردهای ذخیره‌شده، لحظهٔ ساخت اسنپ‌شات شده‌اند؛ هنگامِ خواندن دوباره و زنده حساب می‌کنیم
 // تا همه‌جا نامِ درست (نامِ آژانس) نمایش داده شود — حتی برای رکوردهای قدیمی.
-function freshMembership(m: Membership): Membership {
-  return { ...m, advisorName: advisorNameOf(m.advisorPhone), agencyName: agencyNameOf(m.agencyPhone) }
+async function freshMembership(m: Membership): Promise<Membership> {
+  return { ...m, advisorName: await advisorNameOf(m.advisorPhone), agencyName: await agencyNameOf(m.agencyPhone) }
 }
-function freshRequest(r: LinkRequest): LinkRequest {
-  return { ...r, advisorName: advisorNameOf(r.advisorPhone), agencyName: agencyNameOf(r.agencyPhone) }
+async function freshRequest(r: LinkRequest): Promise<LinkRequest> {
+  return { ...r, advisorName: await advisorNameOf(r.advisorPhone), agencyName: await agencyNameOf(r.agencyPhone) }
 }
 
 // همهٔ آژانس‌های ثبت‌شده (حساب‌هایی که داشبوردشان /agency است)
-export function listAgencies(): { phone: string; name: string; branches?: string }[] {
-  return listAccounts()
-    .filter(a => dashForRole(a.role) === '/agency')
-    .map(a => { let branches: string | undefined; try { branches = getAgency(a.phone).profile.branches } catch {} return { phone: a.phone, name: agencyNameOf(a.phone), branches } })
+export async function listAgencies(): Promise<{ phone: string; name: string; branches?: string }[]> {
+  const accts = listAccounts().filter(a => dashForRole(a.role) === '/agency')
+  return Promise.all(accts.map(async a => { let branches: string | undefined; try { branches = (await getAgency(a.phone)).profile.branches } catch {} return { phone: a.phone, name: await agencyNameOf(a.phone), branches } }))
 }
 
-export function getAdvisorMembership(advisorPhone: string): Membership | null {
+export async function getAdvisorMembership(advisorPhone: string): Promise<Membership | null> {
   const m = load().memberships.find(m => m.advisorPhone === advisorPhone)
-  return m ? freshMembership(m) : null
+  return m ? await freshMembership(m) : null
 }
-export function listAgencyMembers(agencyPhone: string): Membership[] {
-  return load().memberships.filter(m => m.agencyPhone === agencyPhone).sort((a, b) => b.since - a.since).map(freshMembership)
+export async function listAgencyMembers(agencyPhone: string): Promise<Membership[]> {
+  return Promise.all(load().memberships.filter(m => m.agencyPhone === agencyPhone).sort((a, b) => b.since - a.since).map(freshMembership))
 }
-export function requestsForAdvisor(advisorPhone: string): LinkRequest[] {
-  return load().requests.filter(r => r.advisorPhone === advisorPhone && r.status === 'pending').sort((a, b) => b.createdAt - a.createdAt).map(freshRequest)
+export async function requestsForAdvisor(advisorPhone: string): Promise<LinkRequest[]> {
+  return Promise.all(load().requests.filter(r => r.advisorPhone === advisorPhone && r.status === 'pending').sort((a, b) => b.createdAt - a.createdAt).map(freshRequest))
 }
-export function requestsForAgency(agencyPhone: string): LinkRequest[] {
-  return load().requests.filter(r => r.agencyPhone === agencyPhone && r.status === 'pending').sort((a, b) => b.createdAt - a.createdAt).map(freshRequest)
+export async function requestsForAgency(agencyPhone: string): Promise<LinkRequest[]> {
+  return Promise.all(load().requests.filter(r => r.agencyPhone === agencyPhone && r.status === 'pending').sort((a, b) => b.createdAt - a.createdAt).map(freshRequest))
 }
 
 // مشاور برای یک آژانس درخواست عضویت می‌فرستد
-export function advisorRequestJoin(advisorPhone: string, agencyPhone: string): { ok: boolean; error?: string; request?: LinkRequest } {
+export async function advisorRequestJoin(advisorPhone: string, agencyPhone: string): Promise<{ ok: boolean; error?: string; request?: LinkRequest }> {
   const db = load()
   if (db.memberships.find(m => m.advisorPhone === advisorPhone && m.agencyPhone === agencyPhone)) return { ok: false, error: 'شما عضو این آژانس هستید' }
   if (db.requests.find(r => r.advisorPhone === advisorPhone && r.agencyPhone === agencyPhone && r.status === 'pending')) return { ok: false, error: 'درخواست در انتظار بررسی است' }
-  const req: LinkRequest = { id: uid('r_'), advisorPhone, advisorName: advisorNameOf(advisorPhone), agencyPhone, agencyName: agencyNameOf(agencyPhone), initiator: 'advisor', status: 'pending', createdAt: Date.now() }
+  const req: LinkRequest = { id: uid('r_'), advisorPhone, advisorName: await advisorNameOf(advisorPhone), agencyPhone, agencyName: await agencyNameOf(agencyPhone), initiator: 'advisor', status: 'pending', createdAt: Date.now() }
   db.requests.unshift(req); save(db); return { ok: true, request: req }
 }
 // آژانس یک مشاور را دعوت/اضافه می‌کند
-export function agencyInvite(agencyPhone: string, advisorPhone: string): { ok: boolean; error?: string; request?: LinkRequest } {
+export async function agencyInvite(agencyPhone: string, advisorPhone: string): Promise<{ ok: boolean; error?: string; request?: LinkRequest }> {
   if (!advisorPhone) return { ok: false, error: 'شمارهٔ مشاور الزامی است' }
   const db = load()
   if (db.memberships.find(m => m.advisorPhone === advisorPhone && m.agencyPhone === agencyPhone)) return { ok: false, error: 'این مشاور عضو آژانس شماست' }
   if (db.requests.find(r => r.advisorPhone === advisorPhone && r.agencyPhone === agencyPhone && r.status === 'pending')) return { ok: false, error: 'درخواست قبلاً ارسال شده' }
-  const req: LinkRequest = { id: uid('r_'), advisorPhone, advisorName: advisorNameOf(advisorPhone), agencyPhone, agencyName: agencyNameOf(agencyPhone), initiator: 'agency', status: 'pending', createdAt: Date.now() }
+  const req: LinkRequest = { id: uid('r_'), advisorPhone, advisorName: await advisorNameOf(advisorPhone), agencyPhone, agencyName: await agencyNameOf(agencyPhone), initiator: 'agency', status: 'pending', createdAt: Date.now() }
   db.requests.unshift(req); save(db); return { ok: true, request: req }
 }
 // پاسخ به درخواست توسط طرفِ مقابل (byPhone). accept=true → عضویت.

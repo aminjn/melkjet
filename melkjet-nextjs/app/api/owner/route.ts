@@ -12,11 +12,11 @@ export async function GET() {
   if (!s) return NextResponse.json({ error: 'برای مشاهده وارد شوید' }, { status: 401 })
   const o = s.phone
   return NextResponse.json({
-    stats: ownerStats(o),
-    properties: listProperties(o),
-    inquiries: listInquiries(o),
-    viewings: listViewings(o),
-    offers: listOffers(o),
+    stats: await ownerStats(o),
+    properties: await listProperties(o),
+    inquiries: await listInquiries(o),
+    viewings: await listViewings(o),
+    offers: await listOffers(o),
   })
 }
 
@@ -27,27 +27,27 @@ export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({} as any))
   switch (b.action as string) {
     case 'addProperty':
-      return NextResponse.json({ ok: true, property: addProperty(o, b) })
+      return NextResponse.json({ ok: true, property: await addProperty(o, b) })
     case 'updateProperty':
       if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
-      { const p = updateProperty(o, String(b.id), b.patch || {}); return p ? NextResponse.json({ ok: true, property: p }) : NextResponse.json({ error: 'ملک یافت نشد' }, { status: 404 }) }
+      { const p = await updateProperty(o, String(b.id), b.patch || {}); return p ? NextResponse.json({ ok: true, property: p }) : NextResponse.json({ error: 'ملک یافت نشد' }, { status: 404 }) }
     case 'deleteProperty':
       if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
-      deleteProperty(o, String(b.id)); return NextResponse.json({ ok: true })
+      await deleteProperty(o, String(b.id)); return NextResponse.json({ ok: true })
     case 'setInquiryStatus':
-      { const q = setInquiryStatus(o, String(b.id), b.status); return q ? NextResponse.json({ ok: true, inquiry: q }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
+      { const q = await setInquiryStatus(o, String(b.id), b.status); return q ? NextResponse.json({ ok: true, inquiry: q }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'addInquiry':
       if (!b.propertyId || !b.name) return NextResponse.json({ error: 'ملک و نام الزامی است' }, { status: 400 })
-      return NextResponse.json({ ok: true, inquiry: addInquiry(o, { propertyId: String(b.propertyId), name: String(b.name), phone: b.phone, message: b.message }) })
+      return NextResponse.json({ ok: true, inquiry: await addInquiry(o, { propertyId: String(b.propertyId), name: String(b.name), phone: b.phone, message: b.message }) })
     case 'setViewingStatus':
-      { const v = setViewingStatus(o, String(b.id), b.status); return v ? NextResponse.json({ ok: true, viewing: v }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
+      { const v = await setViewingStatus(o, String(b.id), b.status); return v ? NextResponse.json({ ok: true, viewing: v }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'addViewing':
       if (!b.propertyId || !b.visitor || !b.date) return NextResponse.json({ error: 'ملک، نام و تاریخ الزامی است' }, { status: 400 })
-      return NextResponse.json({ ok: true, viewing: addViewing(o, { propertyId: String(b.propertyId), visitor: String(b.visitor), phone: b.phone, date: String(b.date) }) })
+      return NextResponse.json({ ok: true, viewing: await addViewing(o, { propertyId: String(b.propertyId), visitor: String(b.visitor), phone: b.phone, date: String(b.date) }) })
     case 'setOfferStatus':
-      { const of = setOfferStatus(o, String(b.id), b.status); return of ? NextResponse.json({ ok: true, offer: of }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
+      { const of = await setOfferStatus(o, String(b.id), b.status); return of ? NextResponse.json({ ok: true, offer: of }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'updateProfile':
-      return NextResponse.json({ ok: true, profile: updateOwnerProfile(o, b.patch || {}) })
+      return NextResponse.json({ ok: true, profile: await updateOwnerProfile(o, b.patch || {}) })
     default:
       return NextResponse.json({ error: 'عملیات نامعتبر' }, { status: 400 })
   }

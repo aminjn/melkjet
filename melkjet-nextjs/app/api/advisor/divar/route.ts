@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, profile: r.profile, imported: r.imported, updated: r.updated, skipped: r.skipped, failed: r.failed, sold: r.sold, config: getDivar(o) })
     }
     case 'clearImports': {
-      const r = clearDivarImports(o)
+      const r = await clearDivarImports(o)
       return NextResponse.json({ ok: true, removed: r.removed, config: getDivar(o) })
     }
     case 'sync': {

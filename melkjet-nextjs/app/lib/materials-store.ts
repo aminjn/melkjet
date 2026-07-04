@@ -4,11 +4,13 @@ import { randomBytes } from 'crypto'
 import { getAccount } from './account-store'
 import { getProfile } from './profile-store'
 import { getProduct as getCatalogProduct, listCategories as listCatalogCategories } from './catalog-store'
+import { pgEnabled, kvGet, kvMutate } from './db'
 
 // Per-owner (per-profile) store for the «بازار مصالح» seller dashboard.
-// Mirrors the file-based persistence style of builder-store.ts / crm-store.ts.
+// دومَحاله: اگر DATABASE_URL ست باشد → Postgres (نوشتنِ اتمیک)، وگرنه فایل.
 // Every shop is keyed by the owner's phone, so each profile sees only its own.
 const DATA_FILE = join(process.cwd(), '.materials-data.json')
+const KV_KEY = 'materials'
 
 export type OrderStatus = 'pending' | 'preparing' | 'shipped' | 'delivered' | 'canceled'
 export type InquiryStatus = 'new' | 'answered'
@@ -100,13 +102,20 @@ interface DB { shops: Record<string, Shop> }
 function id(p = '') { return p + randomBytes(5).toString('hex') }
 function orderId() { return 'ORD-' + randomBytes(3).toString('hex').toUpperCase() }
 
-function load(): DB {
+function fileLoad(): DB {
   if (existsSync(DATA_FILE)) {
     try { return JSON.parse(readFileSync(DATA_FILE, 'utf-8')) } catch {}
   }
   return { shops: {} }
 }
-function save(db: DB) { writeFileSync(DATA_FILE, JSON.stringify(db, null, 2)) }
+function fileSave(db: DB) { writeFileSync(DATA_FILE, JSON.stringify(db, null, 2)) }
+
+async function load(): Promise<DB> { return pgEnabled() ? await kvGet<DB>(KV_KEY, { shops: {} }) : fileLoad() }
+// wrapperِ عمومیِ خواندن-تغییر-نوشتن (نامش withDb تا با mutate(owner) پایین تداخل نکند)
+async function withDb<R>(fn: (db: DB) => R): Promise<R> {
+  if (pgEnabled()) return kvMutate<DB, R>(KV_KEY, { shops: {} }, fn)
+  const db = fileLoad(); const r = fn(db); fileSave(db); return r
+}
 
 const ORDER_STATUSES: OrderStatus[] = ['pending', 'preparing', 'shipped', 'delivered', 'canceled']
 
@@ -125,21 +134,27 @@ function makeSlug(owner: string, db: DB): string {
   return slug
 }
 
-export function getShop(owner: string): Shop {
-  const db = load()
+// seed/backfill را روی db برای مالکِ owner اعمال می‌کند؛ برمی‌گرداند که آیا چیزی تغییر کرد (نیاز به ذخیره).
+function applyShop(db: DB, owner: string): boolean {
   let changed = false
   if (!db.shops[owner]) { db.shops[owner] = emptyShop(owner); changed = true }
   const s = db.shops[owner]
   if (!s.slug) { s.slug = makeSlug(owner, db); changed = true }
   // نامِ فروشگاه اگر خالی بود از حسابِ کاربر پر شود (بدونِ ذخیرهٔ اجباری).
   if (!s.profile.name) { const acc = getAccount(owner); if (acc?.name) s.profile.name = acc.name }
-  if (changed) save(db)
-  return s
+  return changed
+}
+
+export async function getShop(owner: string): Promise<Shop> {
+  const db = await load()
+  // اگر seed/backfill لازم نبود، بدونِ نوشتن برگردان (مثلِ قبل که فقط وقتی changed بود ذخیره می‌شد).
+  if (!applyShop(db, owner)) return db.shops[owner]
+  return withDb(d => { applyShop(d, owner); return d.shops[owner] })
 }
 
 // خواندنیِ فقط‌خواندنی برای سایتِ منتشرشده (بدونِ ساختِ فروشگاهِ جدید).
-export function shopProductsOf(owner: string): { products: Product[]; slug: string; name: string } | null {
-  const db = load()
+export async function shopProductsOf(owner: string): Promise<{ products: Product[]; slug: string; name: string } | null> {
+  const db = await load()
   const shop = db.shops[owner]
   if (!shop) return null
   const p = getProfile(owner)
@@ -147,8 +162,8 @@ export function shopProductsOf(owner: string): { products: Product[]; slug: stri
 }
 
 // یافتنِ فروشگاه از روی slug عمومی → مالک (شمارهٔ تلفن) و فروشگاه.
-export function shopBySlug(slug: string): { owner: string; shop: Shop } | null {
-  const db = load()
+export async function shopBySlug(slug: string): Promise<{ owner: string; shop: Shop } | null> {
+  const db = await load()
   for (const [owner, shop] of Object.entries(db.shops)) {
     if (shop.slug === slug) return { owner, shop }
   }
@@ -156,8 +171,8 @@ export function shopBySlug(slug: string): { owner: string; shop: Shop } | null {
 }
 
 // دادهٔ عمومیِ ویترین: برندینگ از profile-store + محصولاتِ فعال + امتیاز. بدونِ شماره تلفن.
-export function publicShop(slug: string) {
-  const found = shopBySlug(slug)
+export async function publicShop(slug: string) {
+  const found = await shopBySlug(slug)
   if (!found) return null
   const { owner, shop } = found
   const p = getProfile(owner)
@@ -188,22 +203,22 @@ export function publicShop(slug: string) {
 }
 
 // شمارهٔ تماسِ عمومیِ فروشنده (فقط پس از ورودِ کاربر فراخوانی می‌شود).
-export function shopPhone(slug: string): string | null {
-  const found = shopBySlug(slug)
+export async function shopPhone(slug: string): Promise<string | null> {
+  const found = await shopBySlug(slug)
   if (!found) return null
   const p = getProfile(found.owner)
   return p.contactPhone || p.landline || found.owner || null
 }
 
 // استعلامِ عمومی از سمتِ خریدار روی ویترین → به پنلِ فروشنده اضافه می‌شود.
-export function addPublicInquiry(slug: string, input: { customer: string; product: string; qty: string; note?: string }): Inquiry | null {
-  const found = shopBySlug(slug)
+export async function addPublicInquiry(slug: string, input: { customer: string; product: string; qty: string; note?: string }): Promise<Inquiry | null> {
+  const found = await shopBySlug(slug)
   if (!found) return null
-  const q = addInquiry(found.owner, input)
+  const q = await addInquiry(found.owner, input)
   // استعلامِ عمومیِ خریدار روی ویترینِ مصالح → لیدِ خودکار در CRMِ فروشنده (منطبق با پروفایلش).
   try {
     const { createAutoLead } = require('./auto-lead') as typeof import('./auto-lead')
-    createAutoLead(found.owner, {
+    await createAutoLead(found.owner, {
       name: input.customer || 'مشتری',
       need: input.product,
       note: `استعلامِ «${input.product}»${input.qty ? ` — تعداد: ${input.qty}` : ''}${input.note ? ` — ${input.note}` : ''}`,
@@ -216,15 +231,15 @@ export function addPublicInquiry(slug: string, input: { customer: string; produc
 function normName(s: string): string { return (s || '').replace(/‌/g, '').replace(/\s+/g, ' ').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim() }
 
 // تعدادِ فروشندهٔ هر کالای مرجع (برای نشانِ «بدون فروشنده / N فروشنده» در نرخِ روز).
-export function sellerCountsByCatalog(): Record<string, number> {
-  const db = load(); const out: Record<string, number> = {}
+export async function sellerCountsByCatalog(): Promise<Record<string, number>> {
+  const db = await load(); const out: Record<string, number> = {}
   for (const shop of Object.values(db.shops)) if (shop.slug) for (const p of shop.products) if (p.active && p.catalogId) out[p.catalogId] = (out[p.catalogId] || 0) + 1
   return out
 }
 
 // فروشندگانِ یک کالای مرجع (کاتالوگ) — برای صفحهٔ محصولِ عمومی و مقایسهٔ قیمت.
-export function sellersOfCatalog(catalogId: string) {
-  const db = load()
+export async function sellersOfCatalog(catalogId: string) {
+  const db = await load()
   const out: { slug: string; name: string; logo: string; city: string; rating: number; price: number; discountPct: number; stock: number; unit: string }[] = []
   for (const [owner, shop] of Object.entries(db.shops)) {
     if (!shop.slug) continue
@@ -243,8 +258,8 @@ export function sellersOfCatalog(catalogId: string) {
 }
 
 // ── دایرکتوریِ عمومیِ همهٔ فروشگاه‌های مصالح (برای دیده‌شدنِ کامل) ──
-export function listPublicShops(opts?: { city?: string; category?: string; search?: string }) {
-  const db = load()
+export async function listPublicShops(opts?: { city?: string; category?: string; search?: string }) {
+  const db = await load()
   const out: any[] = []
   for (const [owner, shop] of Object.entries(db.shops)) {
     if (!shop.slug) continue
@@ -267,8 +282,8 @@ export function listPublicShops(opts?: { city?: string; category?: string; searc
   return rows.sort((a, b) => b.productCount - a.productCount || b.rating - a.rating)
 }
 
-export function publicShopFacets() {
-  const rows = listPublicShops()
+export async function publicShopFacets() {
+  const rows = await listPublicShops()
   const cities = Array.from(new Set(rows.map(r => r.city).filter(Boolean)))
   const cats = new Map<string, number>()
   for (const r of rows) for (const c of r.categories) cats.set(c, (cats.get(c) || 0) + 1)
@@ -276,8 +291,8 @@ export function publicShopFacets() {
 }
 
 // ── نرخِ روزِ مصالح: تجمیعِ قیمتِ محصولاتِ فعالِ همهٔ فروشگاه‌ها بر اساسِ نامِ کالا ──
-export function materialPriceIndex(opts?: { category?: string; search?: string }) {
-  const db = load()
+export async function materialPriceIndex(opts?: { category?: string; search?: string }) {
+  const db = await load()
   const byKey = new Map<string, { name: string; category: string; unit: string; prices: number[]; sellers: Set<string>; lastAt: number }>()
   for (const [owner, shop] of Object.entries(db.shops)) {
     for (const p of shop.products) {
@@ -306,12 +321,8 @@ export function materialPriceIndex(opts?: { category?: string; search?: string }
   return { rows, categories, updatedAt: rows.reduce((m, r) => Math.max(m, r.lastAt), 0) }
 }
 
-function mutate(owner: string, fn: (s: Shop) => void) {
-  const db = load()
-  if (!db.shops[owner]) db.shops[owner] = emptyShop(owner)
-  fn(db.shops[owner])
-  save(db)
-  return db.shops[owner]
+async function mutate(owner: string, fn: (s: Shop) => void): Promise<Shop> {
+  return withDb(db => { if (!db.shops[owner]) db.shops[owner] = emptyShop(owner); fn(db.shops[owner]); return db.shops[owner] })
 }
 
 // ماه/سالِ شمسیِ یک زمان‌مُهر (برای گروه‌بندیِ فروش بر اساسِ ماه).
@@ -344,8 +355,8 @@ function computeMonthlySales(orders: Order[]): MonthSale[] {
 }
 
 // ---- آمار داشبورد (محاسبه‌شده، نه ثابت) ----
-export function shopStats(owner: string) {
-  const s = getShop(owner)
+export async function shopStats(owner: string) {
+  const s = await getShop(owner)
   const activeProducts = s.products.filter(p => p.active)
   const lowStock = activeProducts.filter(p => p.stock <= p.threshold)
   const newInquiries = s.inquiries.filter(q => q.status === 'new')
@@ -387,9 +398,9 @@ export function shopStats(owner: string) {
 }
 
 // ---- محصولات ----
-export function addProduct(owner: string, input: any): Product {
+export async function addProduct(owner: string, input: any): Promise<Product> {
   let created!: Product
-  mutate(owner, s => {
+  await mutate(owner, s => {
     const c = cleanProductPatch(input)
     // اگر از کاتالوگِ مرجع انتخاب شده، مشخصاتِ پایه (نام/دسته/برند/مشخصات/توضیح/عکس) از همان
     // کالای مرجع می‌آید تا نام و دسته یکدست بماند؛ فروشنده فقط قیمت/موجودی/تخفیف را می‌دهد.
@@ -424,9 +435,9 @@ export function addProduct(owner: string, input: any): Product {
 function catNameOf(categoryId: string): string {
   return listCatalogCategories().find(c => c.id === categoryId)?.name || 'سایر'
 }
-export function updateProduct(owner: string, productId: string, patch: any): Product | null {
+export async function updateProduct(owner: string, productId: string, patch: any): Promise<Product | null> {
   let result: Product | null = null
-  mutate(owner, s => {
+  await mutate(owner, s => {
     const p = s.products.find(x => x.id === productId)
     if (!p) return
     Object.assign(p, cleanProductPatch(patch))
@@ -434,12 +445,12 @@ export function updateProduct(owner: string, productId: string, patch: any): Pro
   })
   return result
 }
-export function deleteProduct(owner: string, productId: string) {
-  mutate(owner, s => { s.products = s.products.filter(p => p.id !== productId) })
+export async function deleteProduct(owner: string, productId: string): Promise<void> {
+  await mutate(owner, s => { s.products = s.products.filter(p => p.id !== productId) })
 }
-export function restock(owner: string, productId: string, qty: number): Product | null {
+export async function restock(owner: string, productId: string, qty: number): Promise<Product | null> {
   let result: Product | null = null
-  mutate(owner, s => {
+  await mutate(owner, s => {
     const p = s.products.find(x => x.id === productId)
     if (!p) return
     p.stock += Math.max(0, qty)
@@ -451,9 +462,9 @@ export function restock(owner: string, productId: string, qty: number): Product 
 // ---- سفارش‌ها ----
 // ثبتِ سفارش. اگر «lines» (اقلامِ محصول) داده شود، موجودی کم و «فروخته‌شده» زیاد می‌شود
 // و مبلغ از قیمتِ محصول×تعداد محاسبه می‌گردد — پس نمودارِ فروش/دسته‌ها همه واقعی می‌شوند.
-export function addOrder(owner: string, input: { customer: string; items?: number; amount?: number; status?: OrderStatus; lines?: { productId: string; qty: number }[] }): Order {
+export async function addOrder(owner: string, input: { customer: string; items?: number; amount?: number; status?: OrderStatus; lines?: { productId: string; qty: number }[] }): Promise<Order> {
   let created!: Order
-  mutate(owner, s => {
+  await mutate(owner, s => {
     let amount = input.amount || 0
     let items = input.items || 0
     if (input.lines && input.lines.length) {
@@ -474,10 +485,10 @@ export function addOrder(owner: string, input: { customer: string; items?: numbe
   })
   return created
 }
-export function setOrderStatus(owner: string, orderId: string, status: OrderStatus): Order | null {
+export async function setOrderStatus(owner: string, orderId: string, status: OrderStatus): Promise<Order | null> {
   if (!ORDER_STATUSES.includes(status)) return null
   let result: Order | null = null
-  mutate(owner, s => {
+  await mutate(owner, s => {
     const o = s.orders.find(x => x.id === orderId)
     if (!o) return
     o.status = status
@@ -487,17 +498,17 @@ export function setOrderStatus(owner: string, orderId: string, status: OrderStat
 }
 
 // ---- استعلام‌ها ----
-export function addInquiry(owner: string, input: { customer: string; product: string; qty: string; note?: string }): Inquiry {
+export async function addInquiry(owner: string, input: { customer: string; product: string; qty: string; note?: string }): Promise<Inquiry> {
   let created!: Inquiry
-  mutate(owner, s => {
+  await mutate(owner, s => {
     created = { id: id('q_'), customer: input.customer, product: input.product, qty: input.qty, note: input.note, status: 'new', createdAt: Date.now() }
     s.inquiries.unshift(created)
   })
   return created
 }
-export function answerInquiry(owner: string, inquiryId: string, reply: string): Inquiry | null {
+export async function answerInquiry(owner: string, inquiryId: string, reply: string): Promise<Inquiry | null> {
   let result: Inquiry | null = null
-  mutate(owner, s => {
+  await mutate(owner, s => {
     const q = s.inquiries.find(x => x.id === inquiryId)
     if (!q) return
     q.status = 'answered'; q.reply = reply
@@ -506,9 +517,9 @@ export function answerInquiry(owner: string, inquiryId: string, reply: string): 
   return result
 }
 
-export function listProducts(owner: string) { return getShop(owner).products }
-export function listOrders(owner: string) { return getShop(owner).orders }
-export function listInquiries(owner: string) { return getShop(owner).inquiries }
-export function updateProfile(owner: string, patch: Partial<Shop['profile']>) {
-  return mutate(owner, s => { Object.assign(s.profile, patch) }).profile
+export async function listProducts(owner: string) { return (await getShop(owner)).products }
+export async function listOrders(owner: string) { return (await getShop(owner)).orders }
+export async function listInquiries(owner: string) { return (await getShop(owner)).inquiries }
+export async function updateProfile(owner: string, patch: Partial<Shop['profile']>) {
+  return (await mutate(owner, s => { Object.assign(s.profile, patch) })).profile
 }

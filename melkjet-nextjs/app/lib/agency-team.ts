@@ -36,11 +36,11 @@ function lastMonths(n: number): { key: string; label: string }[] {
   return out
 }
 
-export function agencyAdvisorFiles(agencyPhone: string): { rows: AgencyAdvisorRow[]; totals: { listings: number; active: number; sold: number; rented: number; leads: number; advisorCommission: number; agencyCut: number }; income: MonthPoint[] } {
-  const cfg = getCommissionConfig(agencyPhone)
+export async function agencyAdvisorFiles(agencyPhone: string): Promise<{ rows: AgencyAdvisorRow[]; totals: { listings: number; active: number; sold: number; rented: number; leads: number; advisorCommission: number; agencyCut: number }; income: MonthPoint[] }> {
+  const cfg = await getCommissionConfig(agencyPhone)
   const frame = lastMonths(6)
   const overall: Record<string, { amount: number; deals: number }> = {}
-  const rows: AgencyAdvisorRow[] = listAgencyMembers(agencyPhone).map(m => {
+  const rows: AgencyAdvisorRow[] = await Promise.all((await listAgencyMembers(agencyPhone)).map(async m => {
     const phone = m.advisorPhone
     const per = cfg.perAgent[phone]
     const mode: CommMode = per?.mode || cfg.defaultMode
@@ -54,7 +54,7 @@ export function agencyAdvisorFiles(agencyPhone: string): { rows: AgencyAdvisorRo
     let appts: AgencyAdvisorRow['appts'] = []
     const perMonth: Record<string, { amount: number; deals: number }> = {}
     try {
-      const ad = getAdvisor(phone)
+      const ad = await getAdvisor(phone)
       listings = (ad.listings || []).map(l => ({ id: l.id, title: l.title, location: l.location, price: l.price, deal: l.deal, status: l.status, ptype: l.ptype, createdAt: l.createdAt }))
         .sort((a, b) => b.createdAt - a.createdAt)
       const ls = (ad.leads || [])
@@ -93,7 +93,7 @@ export function agencyAdvisorFiles(agencyPhone: string): { rows: AgencyAdvisorRo
     let photo = ''
     try { const pr = getProfile(phone); photo = pr.logo || '' } catch {}
     return { advisorPhone: phone, advisorName: m.advisorName, photo, listings, counts, leads: { total: leadsTotal, open: leadsOpen, recent: leadRecent }, leadsList, commissions, appts, advisorCommission, paidCommission, pendingCommission, closedCount, dealCount, monthly, rate: { mode, value, isDefault: !per }, agencyCut }
-  })
+  }))
   const totals = rows.reduce((t, r) => ({
     listings: t.listings + r.counts.total,
     active: t.active + r.counts.active,

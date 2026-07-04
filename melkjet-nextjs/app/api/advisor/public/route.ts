@@ -12,13 +12,13 @@ export async function GET(req: NextRequest) {
   const phone = (new URL(req.url).searchParams.get('phone') || '').trim()
   if (!phone) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
 
-  const a = getAdvisor(phone)
+  const a = await getAdvisor(phone)
   const p = a.profile
   // اگر مشاور هنوز هیچ اطلاعاتِ واقعی‌ای ثبت نکرده، پروفایلِ عمومی وجود ندارد.
   const acc = getAccount(phone)
   if (!(p.name || '').trim()) return NextResponse.json({ error: 'مشاور یافت نشد' }, { status: 404 })
-  const stats = advisorStats(phone).kpis
-  const membership = getAdvisorMembership(phone)
+  const stats = (await advisorStats(phone)).kpis
+  const membership = await getAdvisorMembership(phone)
 
   // آگهی‌های عمومیِ این مشاور — فقط فایل‌های خودِ او، نه آگهی‌های سراسریِ سایت.
   // معیارِ مطمئن: شمارهٔ حسابِ مالک (هنگام انتشار روی آگهی مهر می‌خورد). فقط اگر هیچ

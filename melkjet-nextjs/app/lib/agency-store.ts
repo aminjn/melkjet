@@ -3,12 +3,15 @@ import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { getProfile, saveProfile } from './profile-store'
 import { getAccount } from './account-store'
+import { pgEnabled, kvGet, kvMutate } from './db'
 
 // استور پنل «آژانس املاک» — per-owner (هر کاربر فقط دادهٔ خودش).
+// دومَحاله: اگر DATABASE_URL ست باشد → Postgres (نوشتنِ اتمیک)، وگرنه فایل.
 const DATA_FILE = join(process.cwd(), '.agency-data.json')
+const KV_KEY = 'agency'
 
 // نامِ نمایشیِ آژانس: نامِ کسب‌وکار (پروفایل) → نامِ تنظیماتِ آژانس → نامِ حساب (شخصی، آخرین چاره)
-export function resolveAgencyName(phone: string, storedName?: string): string {
+export async function resolveAgencyName(phone: string, storedName?: string): Promise<string> {
   try { const bp = getProfile(phone); const n = (bp.businessName || bp.displayName || '').trim(); if (n) return n } catch {}
   const s = (storedName || '').trim(); if (s) return s
   return getAccount(phone)?.name || ''
@@ -46,8 +49,16 @@ export interface AgencyData {
 
 interface DB { agencies: Record<string, AgencyData> }
 function id(p = '') { return p + randomBytes(5).toString('hex') }
-function load(): DB { if (existsSync(DATA_FILE)) { try { return JSON.parse(readFileSync(DATA_FILE, 'utf-8')) } catch {} } return { agencies: {} } }
-function save(db: DB) { writeFileSync(DATA_FILE, JSON.stringify(db, null, 2)) }
+
+function fileLoad(): DB { if (existsSync(DATA_FILE)) { try { return JSON.parse(readFileSync(DATA_FILE, 'utf-8')) } catch {} } return { agencies: {} } }
+function fileSave(db: DB) { writeFileSync(DATA_FILE, JSON.stringify(db, null, 2)) }
+
+async function load(): Promise<DB> { return pgEnabled() ? await kvGet<DB>(KV_KEY, { agencies: {} }) : fileLoad() }
+// wrapperِ عمومیِ خواندن-تغییر-نوشتن (نامش withDb تا با mutate(owner) پایین تداخل نکند)
+async function withDb<R>(fn: (db: DB) => R): Promise<R> {
+  if (pgEnabled()) return kvMutate<DB, R>(KV_KEY, { agencies: {} }, fn)
+  const db = fileLoad(); const r = fn(db); fileSave(db); return r
+}
 
 export const STAGES: Stage[] = ['new', 'assigned', 'visit', 'negotiation', 'closed', 'lost']
 const LISTING_STATUSES: ListingStatus[] = ['active', 'sold', 'rented']
@@ -58,38 +69,50 @@ function seed(): AgencyData {
 }
 
 // ── پیکربندیِ کمیسیونِ آژانس از مشاوران ──────────────────────────────────────
-export function getCommissionConfig(o: string): CommissionConfig {
-  const c = getAgency(o).commission
+export async function getCommissionConfig(o: string): Promise<CommissionConfig> {
+  const c = (await getAgency(o)).commission
   return { defaultMode: c?.defaultMode || 'percent', defaultValue: c?.defaultValue ?? 30, perAgent: c?.perAgent || {} }
 }
-export function setDefaultCommission(o: string, mode: CommMode, value: number): CommissionConfig {
+export async function setDefaultCommission(o: string, mode: CommMode, value: number): Promise<CommissionConfig> {
   const m: CommMode = mode === 'amount' ? 'amount' : 'percent'
   const v = Math.max(0, Number(value) || 0)
-  return mutate(o, a => { a.commission = { ...getCommissionConfig(o), defaultMode: m, defaultValue: v } }).commission!
+  const cur = await getCommissionConfig(o)
+  return (await mutate(o, a => { a.commission = { ...cur, defaultMode: m, defaultValue: v } })).commission!
 }
-export function setAgentCommission(o: string, advisorPhone: string, mode: CommMode, value: number): CommissionConfig {
+export async function setAgentCommission(o: string, advisorPhone: string, mode: CommMode, value: number): Promise<CommissionConfig> {
   const m: CommMode = mode === 'amount' ? 'amount' : 'percent'
   const v = Math.max(0, Number(value) || 0)
-  return mutate(o, a => { const cur = getCommissionConfig(o); a.commission = { ...cur, perAgent: { ...cur.perAgent, [String(advisorPhone)]: { mode: m, value: v } } } }).commission!
+  const cur = await getCommissionConfig(o)
+  return (await mutate(o, a => { a.commission = { ...cur, perAgent: { ...cur.perAgent, [String(advisorPhone)]: { mode: m, value: v } } } })).commission!
 }
-export function clearAgentCommission(o: string, advisorPhone: string): CommissionConfig {
-  return mutate(o, a => { const cur = getCommissionConfig(o); const pa = { ...cur.perAgent }; delete pa[String(advisorPhone)]; a.commission = { ...cur, perAgent: pa } }).commission!
+export async function clearAgentCommission(o: string, advisorPhone: string): Promise<CommissionConfig> {
+  const cur = await getCommissionConfig(o)
+  return (await mutate(o, a => { const pa = { ...cur.perAgent }; delete pa[String(advisorPhone)]; a.commission = { ...cur, perAgent: pa } })).commission!
 }
 // آیا این دادهٔ ذخیره‌شده همان نمونهٔ قدیمیِ دست‌نخورده است؟ (برای پاک‌سازیِ خودکار)
 function isLegacyDemo(d: AgencyData): boolean {
   return d?.profile?.name === 'املاک برتر' && (d.agents || []).some(a => a.name === 'سمیرا نیک‌پور')
 }
 
-export function getAgency(o: string): AgencyData {
-  const db = load()
-  if (!db.agencies[o]) { db.agencies[o] = seed(); save(db) }
-  else if (isLegacyDemo(db.agencies[o])) { db.agencies[o] = seed(); save(db) }   // پاک‌سازیِ خودکارِ دادهٔ نمونهٔ قدیمی
-  return db.agencies[o]
+// seed/پاک‌سازیِ خودکار را روی db برای مالکِ o اعمال می‌کند؛ برمی‌گرداند که آیا چیزی تغییر کرد (نیاز به ذخیره).
+function applyAgency(db: DB, o: string): boolean {
+  if (!db.agencies[o]) { db.agencies[o] = seed(); return true }
+  if (isLegacyDemo(db.agencies[o])) { db.agencies[o] = seed(); return true }   // پاک‌سازیِ خودکارِ دادهٔ نمونهٔ قدیمی
+  return false
 }
-function mutate(o: string, fn: (a: AgencyData) => void) { const db = load(); if (!db.agencies[o]) db.agencies[o] = seed(); fn(db.agencies[o]); save(db); return db.agencies[o] }
 
-export function agencyStats(o: string) {
-  const a = getAgency(o)
+export async function getAgency(o: string): Promise<AgencyData> {
+  const db = await load()
+  // اگر seed/پاک‌سازی لازم نبود، بدونِ نوشتن برگردان (مثلِ قبل که فقط وقتی تغییر بود ذخیره می‌شد).
+  if (!applyAgency(db, o)) return db.agencies[o]
+  return withDb(d => { applyAgency(d, o); return d.agencies[o] })
+}
+async function mutate(o: string, fn: (a: AgencyData) => void): Promise<AgencyData> {
+  return withDb(db => { if (!db.agencies[o]) db.agencies[o] = seed(); fn(db.agencies[o]); return db.agencies[o] })
+}
+
+export async function agencyStats(o: string) {
+  const a = await getAgency(o)
   const activeAgents = a.agents.filter(g => g.active)
   const activeListings = a.listings.filter(l => l.status === 'active')
   const openLeads = a.leads.filter(l => l.stage !== 'closed' && l.stage !== 'lost')
@@ -100,8 +123,9 @@ export function agencyStats(o: string) {
   const monthChange = prev ? Math.round(((thisMonth - prev) / prev) * 100) : 0
   const dealsThisMonth = a.deals.filter(d => Date.now() - d.createdAt < 31 * 86400000).length
   const topAgents = [...a.agents].sort((x, y) => y.deals - x.deals).slice(0, 4)
+  const name = await resolveAgencyName(o, a.profile.name)
   return {
-    profile: { ...a.profile, name: resolveAgencyName(o, a.profile.name) },
+    profile: { ...a.profile, name },
     kpis: {
       activeAgents: activeAgents.length, totalAgents: a.agents.length, activeListings: activeListings.length,
       openLeads: openLeads.length, dealsThisMonth, monthSales: thisMonth, monthChange, totalCommission,
@@ -114,25 +138,25 @@ export function agencyStats(o: string) {
 }
 
 // ---- Agents ----
-export function addAgent(o: string, input: { name: string; phone?: string }): Agent {
+export async function addAgent(o: string, input: { name: string; phone?: string }): Promise<Agent> {
   let c!: Agent
-  mutate(o, a => { c = { id: id('a_'), name: input.name, phone: input.phone, deals: 0, leads: 0, commission: 0, active: true, createdAt: Date.now() }; a.agents.unshift(c) })
+  await mutate(o, a => { c = { id: id('a_'), name: input.name, phone: input.phone, deals: 0, leads: 0, commission: 0, active: true, createdAt: Date.now() }; a.agents.unshift(c) })
   return c
 }
-export function toggleAgent(o: string, gid: string): Agent | null {
+export async function toggleAgent(o: string, gid: string): Promise<Agent | null> {
   let res: Agent | null = null
-  mutate(o, a => { const g = a.agents.find(x => x.id === gid); if (!g) return; g.active = !g.active; res = g })
+  await mutate(o, a => { const g = a.agents.find(x => x.id === gid); if (!g) return; g.active = !g.active; res = g })
   return res
 }
-export function deleteAgent(o: string, gid: string) { mutate(o, a => { a.agents = a.agents.filter(g => g.id !== gid) }) }
+export async function deleteAgent(o: string, gid: string): Promise<void> { await mutate(o, a => { a.agents = a.agents.filter(g => g.id !== gid) }) }
 
 // ---- Listings ----
 const num = (v: any) => (v === undefined || v === null || v === '') ? undefined : (Number(v) || undefined)
-export function addListing(o: string, input: Partial<Listing>): Listing {
+export async function addListing(o: string, input: Partial<Listing>): Promise<Listing> {
   let c!: Listing
   // موقعیتِ خوانا را از استان/شهر/محله می‌سازد اگر location خالی باشد.
   const loc = String(input.location || '') || [input.neighborhood, input.district, input.city].filter(Boolean).join('، ')
-  mutate(o, a => {
+  await mutate(o, a => {
     c = {
       id: id('f_'), title: String(input.title || 'فایل'), ptype: String(input.ptype || 'آپارتمان'), location: loc,
       price: Number(input.price) || 0, deal: input.deal === 'rent' ? 'rent' : 'sale', status: 'active', agent: input.agent, createdAt: Date.now(),
@@ -146,51 +170,51 @@ export function addListing(o: string, input: Partial<Listing>): Listing {
   })
   return c
 }
-export function setListingStatus(o: string, fid: string, status: ListingStatus): Listing | null {
+export async function setListingStatus(o: string, fid: string, status: ListingStatus): Promise<Listing | null> {
   if (!LISTING_STATUSES.includes(status)) return null
   let res: Listing | null = null
-  mutate(o, a => { const l = a.listings.find(x => x.id === fid); if (!l) return; l.status = status; res = l })
+  await mutate(o, a => { const l = a.listings.find(x => x.id === fid); if (!l) return; l.status = status; res = l })
   return res
 }
-export function assignListing(o: string, fid: string, agent: string): Listing | null {
+export async function assignListing(o: string, fid: string, agent: string): Promise<Listing | null> {
   let res: Listing | null = null
-  mutate(o, a => { const l = a.listings.find(x => x.id === fid); if (!l) return; l.agent = agent; res = l })
+  await mutate(o, a => { const l = a.listings.find(x => x.id === fid); if (!l) return; l.agent = agent; res = l })
   return res
 }
-export function deleteListing(o: string, fid: string) { mutate(o, a => { a.listings = a.listings.filter(l => l.id !== fid) }) }
+export async function deleteListing(o: string, fid: string): Promise<void> { await mutate(o, a => { a.listings = a.listings.filter(l => l.id !== fid) }) }
 
 // ---- Leads ----
-export function addLead(o: string, input: Partial<Lead>): Lead {
+export async function addLead(o: string, input: Partial<Lead>): Promise<Lead> {
   let c!: Lead
-  mutate(o, a => { c = { id: id('l_'), name: String(input.name || 'لید'), phone: input.phone, need: input.need, budget: input.budget, stage: STAGES.includes(input.stage as Stage) ? input.stage as Stage : 'new', assignedTo: input.assignedTo, createdAt: Date.now() }; a.leads.unshift(c) })
+  await mutate(o, a => { c = { id: id('l_'), name: String(input.name || 'لید'), phone: input.phone, need: input.need, budget: input.budget, stage: STAGES.includes(input.stage as Stage) ? input.stage as Stage : 'new', assignedTo: input.assignedTo, createdAt: Date.now() }; a.leads.unshift(c) })
   return c
 }
-export function assignLead(o: string, lid: string, agent: string): Lead | null {
+export async function assignLead(o: string, lid: string, agent: string): Promise<Lead | null> {
   let res: Lead | null = null
-  mutate(o, a => { const l = a.leads.find(x => x.id === lid); if (!l) return; l.assignedTo = agent; if (l.stage === 'new') l.stage = 'assigned'; res = l })
+  await mutate(o, a => { const l = a.leads.find(x => x.id === lid); if (!l) return; l.assignedTo = agent; if (l.stage === 'new') l.stage = 'assigned'; res = l })
   return res
 }
-export function setLeadStage(o: string, lid: string, stage: Stage): Lead | null {
+export async function setLeadStage(o: string, lid: string, stage: Stage): Promise<Lead | null> {
   if (!STAGES.includes(stage)) return null
   let res: Lead | null = null
-  mutate(o, a => { const l = a.leads.find(x => x.id === lid); if (!l) return; l.stage = stage; res = l })
+  await mutate(o, a => { const l = a.leads.find(x => x.id === lid); if (!l) return; l.stage = stage; res = l })
   return res
 }
-export function deleteLead(o: string, lid: string) { mutate(o, a => { a.leads = a.leads.filter(l => l.id !== lid) }) }
+export async function deleteLead(o: string, lid: string): Promise<void> { await mutate(o, a => { a.leads = a.leads.filter(l => l.id !== lid) }) }
 
 // ---- Deals ----
-export function addDeal(o: string, input: { title: string; amount: number; agent: string; date: string }): Deal {
+export async function addDeal(o: string, input: { title: string; amount: number; agent: string; date: string }): Promise<Deal> {
   let c!: Deal
-  mutate(o, a => { c = { id: id('d_'), title: input.title, amount: Number(input.amount) || 0, agent: input.agent, date: input.date, createdAt: Date.now() }; a.deals.unshift(c); const g = a.agents.find(x => x.name === input.agent); if (g) g.deals += 1 })
+  await mutate(o, a => { c = { id: id('d_'), title: input.title, amount: Number(input.amount) || 0, agent: input.agent, date: input.date, createdAt: Date.now() }; a.deals.unshift(c); const g = a.agents.find(x => x.name === input.agent); if (g) g.deals += 1 })
   return c
 }
 
-export function listAgents(o: string) { return getAgency(o).agents }
-export function listListings(o: string) { return getAgency(o).listings }
-export function listLeads(o: string) { return getAgency(o).leads }
-export function listDeals(o: string) { return getAgency(o).deals }
-export function updateAgencyProfile(o: string, patch: Partial<AgencyData['profile']>) {
-  const res = mutate(o, a => { Object.assign(a.profile, patch) }).profile
+export async function listAgents(o: string): Promise<Agent[]> { return (await getAgency(o)).agents }
+export async function listListings(o: string): Promise<Listing[]> { return (await getAgency(o)).listings }
+export async function listLeads(o: string): Promise<Lead[]> { return (await getAgency(o)).leads }
+export async function listDeals(o: string): Promise<Deal[]> { return (await getAgency(o)).deals }
+export async function updateAgencyProfile(o: string, patch: Partial<AgencyData['profile']>): Promise<AgencyData['profile']> {
+  const res = (await mutate(o, a => { Object.assign(a.profile, patch) })).profile
   // نامِ آژانس را با نامِ کسب‌وکارِ پروفایل هم‌گام کن تا همه‌جا (لینکِ مشاوران، پروفایلِ عمومی) یکی باشد
   if (patch.name !== undefined && String(patch.name).trim()) { try { saveProfile(o, { businessName: String(patch.name).trim() }) } catch {} }
   return res

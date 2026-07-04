@@ -2,9 +2,12 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { addUserListing, deleteItem, getItemById, setItemDealStatus } from './scraper-store'
+import { pgEnabled, kvGet, kvMutate } from './db'
 
 // استور پنل «مشاور املاک» — per-owner (هر کاربر فقط دادهٔ خودش).
+// دومَحاله: اگر DATABASE_URL ست باشد → Postgres (نوشتنِ اتمیک)، وگرنه فایل.
 const DATA_FILE = join(process.cwd(), '.advisor-data.json')
+const KV_KEY = 'advisor'
 
 export type Stage = 'new' | 'contacted' | 'visit' | 'negotiation' | 'closed' | 'lost'
 export type ListingStatus = 'active' | 'sold' | 'rented'
@@ -42,8 +45,15 @@ export interface AdvisorData {
 
 interface DB { advisors: Record<string, AdvisorData> }
 function id(p = '') { return p + randomBytes(5).toString('hex') }
-function load(): DB { if (existsSync(DATA_FILE)) { try { return JSON.parse(readFileSync(DATA_FILE, 'utf-8')) } catch {} } return { advisors: {} } }
-function save(db: DB) { writeFileSync(DATA_FILE, JSON.stringify(db, null, 2)) }
+function fileLoad(): DB { if (existsSync(DATA_FILE)) { try { return JSON.parse(readFileSync(DATA_FILE, 'utf-8')) } catch {} } return { advisors: {} } }
+function fileSave(db: DB) { writeFileSync(DATA_FILE, JSON.stringify(db, null, 2)) }
+
+async function load(): Promise<DB> { return pgEnabled() ? await kvGet<DB>(KV_KEY, { advisors: {} }) : fileLoad() }
+// wrapperِ عمومیِ خواندن-تغییر-نوشتن (نامش withDb تا با mutate(owner) پایین تداخل نکند)
+async function withDb<R>(fn: (db: DB) => R): Promise<R> {
+  if (pgEnabled()) return kvMutate<DB, R>(KV_KEY, { advisors: {} }, fn)
+  const db = fileLoad(); const r = fn(db); fileSave(db); return r
+}
 
 export const STAGES: Stage[] = ['new', 'contacted', 'visit', 'negotiation', 'closed', 'lost']
 const LISTING_STATUSES: ListingStatus[] = ['active', 'sold', 'rented']
@@ -59,17 +69,27 @@ function isLegacyDemo(d: AdvisorData): boolean {
   return d?.profile?.name === 'سمیرا نیک‌پور' && d?.profile?.agency === 'املاک برتر'
 }
 
-export function getAdvisor(o: string): AdvisorData {
-  const db = load()
-  if (!db.advisors[o]) { db.advisors[o] = seed(); save(db) }
+// seed/پاک‌سازیِ دادهٔ نمونهٔ قدیمی را روی db برای مالکِ o اعمال می‌کند؛
+// برمی‌گرداند که آیا چیزی تغییر کرد (نیاز به ذخیره).
+function applyAdvisor(db: DB, o: string): boolean {
+  if (!db.advisors[o]) { db.advisors[o] = seed(); return true }
   // پاک‌سازی خودکارِ دادهٔ نمونهٔ قدیمی (دست‌نخورده) → همه‌چیز واقعی شود
-  else if (isLegacyDemo(db.advisors[o])) { db.advisors[o] = seed(); save(db) }
-  return db.advisors[o]
+  if (isLegacyDemo(db.advisors[o])) { db.advisors[o] = seed(); return true }
+  return false
 }
-function mutate(o: string, fn: (a: AdvisorData) => void) { const db = load(); if (!db.advisors[o]) db.advisors[o] = seed(); fn(db.advisors[o]); save(db); return db.advisors[o] }
 
-export function advisorStats(o: string) {
-  const a = getAdvisor(o)
+export async function getAdvisor(o: string): Promise<AdvisorData> {
+  const db = await load()
+  // اگر seed/پاک‌سازی لازم نبود، بدونِ نوشتن برگردان (مثلِ قبل که فقط وقتی dirty بود ذخیره می‌شد).
+  if (!applyAdvisor(db, o)) return db.advisors[o]
+  return withDb(d => { applyAdvisor(d, o); return d.advisors[o] })
+}
+async function mutate(o: string, fn: (a: AdvisorData) => void): Promise<AdvisorData> {
+  return withDb(db => { if (!db.advisors[o]) db.advisors[o] = seed(); fn(db.advisors[o]); return db.advisors[o] })
+}
+
+export async function advisorStats(o: string) {
+  const a = await getAdvisor(o)
   const activeLeads = a.leads.filter(l => l.stage !== 'closed' && l.stage !== 'lost')
   const hot = a.leads.filter(l => l.stage === 'negotiation' || l.stage === 'visit')
   const activeListings = a.listings.filter(l => l.status === 'active')
@@ -93,20 +113,20 @@ export function advisorStats(o: string) {
 }
 
 // ---- Leads ----
-export function addLead(o: string, input: Partial<Lead>): Lead {
+export async function addLead(o: string, input: Partial<Lead>): Promise<Lead> {
   let c!: Lead
-  mutate(o, a => { c = { id: id('l_'), name: String(input.name || 'لید جدید'), phone: input.phone, need: input.need, budget: input.budget, stage: STAGES.includes(input.stage as Stage) ? input.stage as Stage : 'new', source: input.source, note: input.note, createdAt: Date.now() }; a.leads.unshift(c) })
+  await mutate(o, a => { c = { id: id('l_'), name: String(input.name || 'لید جدید'), phone: input.phone, need: input.need, budget: input.budget, stage: STAGES.includes(input.stage as Stage) ? input.stage as Stage : 'new', source: input.source, note: input.note, createdAt: Date.now() }; a.leads.unshift(c) })
   return c
 }
-export function setLeadStage(o: string, lid: string, stage: Stage): Lead | null {
+export async function setLeadStage(o: string, lid: string, stage: Stage): Promise<Lead | null> {
   if (!STAGES.includes(stage)) return null
   let res: Lead | null = null
-  mutate(o, a => { const l = a.leads.find(x => x.id === lid); if (!l) return; l.stage = stage; res = l })
+  await mutate(o, a => { const l = a.leads.find(x => x.id === lid); if (!l) return; l.stage = stage; res = l })
   return res
 }
-export function updateLead(o: string, lid: string, patch: Partial<Lead>): Lead | null {
+export async function updateLead(o: string, lid: string, patch: Partial<Lead>): Promise<Lead | null> {
   let res: Lead | null = null
-  mutate(o, a => {
+  await mutate(o, a => {
     const l = a.leads.find(x => x.id === lid); if (!l) return
     const allow: (keyof Lead)[] = ['name', 'phone', 'need', 'budget', 'source', 'note', 'stage']
     for (const k of allow) if (k in patch) (l as unknown as Record<string, unknown>)[k] = (patch as Record<string, unknown>)[k]
@@ -114,12 +134,12 @@ export function updateLead(o: string, lid: string, patch: Partial<Lead>): Lead |
   })
   return res
 }
-export function deleteLead(o: string, lid: string) { mutate(o, a => { a.leads = a.leads.filter(l => l.id !== lid) }) }
+export async function deleteLead(o: string, lid: string): Promise<void> { await mutate(o, a => { a.leads = a.leads.filter(l => l.id !== lid) }) }
 
 // ---- Listings ----
-export function addListing(o: string, input: Partial<Listing>): Listing {
+export async function addListing(o: string, input: Partial<Listing>): Promise<Listing> {
   let c!: Listing
-  mutate(o, a => {
+  await mutate(o, a => {
     c = {
       id: id('f_'), title: String(input.title || 'فایل جدید'), ptype: String(input.ptype || 'آپارتمان'),
       location: String(input.location || ''), price: Number(input.price) || 0,
@@ -149,9 +169,9 @@ export function addListing(o: string, input: Partial<Listing>): Listing {
   })
   return c
 }
-export function updateListing(o: string, fid: string, patch: Partial<Listing>): Listing | null {
+export async function updateListing(o: string, fid: string, patch: Partial<Listing>): Promise<Listing | null> {
   let res: Listing | null = null
-  mutate(o, a => {
+  await mutate(o, a => {
     const l = a.listings.find(x => x.id === fid); if (!l) return
     const allow: (keyof Listing)[] = ['title', 'ptype', 'location', 'price', 'deal', 'city', 'neighborhood', 'province', 'district', 'lat', 'lng', 'facing', 'rentMonthly', 'area', 'rooms', 'floor', 'totalFloors', 'yearBuilt', 'parking', 'elevator', 'storage', 'balcony', 'furnished', 'amenities', 'docType', 'address', 'phone', 'description', 'images', 'sellerLeadId', 'buyerLeadIds']
     for (const k of allow) if (k in patch) (l as unknown as Record<string, unknown>)[k] = (patch as Record<string, unknown>)[k]
@@ -159,16 +179,16 @@ export function updateListing(o: string, fid: string, patch: Partial<Listing>): 
   })
   return res
 }
-export function setListingStatus(o: string, fid: string, status: ListingStatus): Listing | null {
+export async function setListingStatus(o: string, fid: string, status: ListingStatus): Promise<Listing | null> {
   if (!LISTING_STATUSES.includes(status)) return null
   let res: Listing | null = null
   let pubId = ''
-  mutate(o, a => { const l = a.listings.find(x => x.id === fid); if (!l) return; l.status = status; res = l; pubId = l.publicId || '' })
+  await mutate(o, a => { const l = a.listings.find(x => x.id === fid); if (!l) return; l.status = status; res = l; pubId = l.publicId || '' })
   // مهرِ «فروخته شد / اجاره رفت» روی آگهیِ عمومی هم اعمال شود (اگر منتشر شده).
   if (pubId) setItemDealStatus(pubId, status === 'sold' ? 'sold' : status === 'rented' ? 'rented' : '')
   return res
 }
-export function deleteListing(o: string, fid: string) { mutate(o, a => { const l = a.listings.find(x => x.id === fid); if (l?.publicId) deleteItem(l.publicId); a.listings = a.listings.filter(x => x.id !== fid) }) }
+export async function deleteListing(o: string, fid: string): Promise<void> { await mutate(o, a => { const l = a.listings.find(x => x.id === fid); if (l?.publicId) deleteItem(l.publicId); a.listings = a.listings.filter(x => x.id !== fid) }) }
 
 // ---- انتشار عمومی روی سایت (آگهی پابلیک) ----
 function faNum(n?: number): string { return n ? n.toLocaleString('fa-IR') : '' }
@@ -192,9 +212,9 @@ function publicPayload(l: Listing, advisorName: string, ownerPhone?: string) {
   if (ownerPhone) meta['__ownerPhone'] = ownerPhone
   return { title: l.title, price, location: loc, image: l.images?.[0], excerpt: l.description, phone: l.phone, owner: advisorName, meta }
 }
-export function publishListing(o: string, fid: string): Listing | null {
+export async function publishListing(o: string, fid: string): Promise<Listing | null> {
   let res: Listing | null = null
-  mutate(o, a => {
+  await mutate(o, a => {
     const l = a.listings.find(x => x.id === fid); if (!l) return
     if (l.publicId && getItemById(l.publicId)) deleteItem(l.publicId) // بازسازی برای اعمالِ تغییرات
     const item = addUserListing(publicPayload(l, a.profile.name || 'مشاور', o))
@@ -202,9 +222,9 @@ export function publishListing(o: string, fid: string): Listing | null {
   })
   return res
 }
-export function unpublishListing(o: string, fid: string): Listing | null {
+export async function unpublishListing(o: string, fid: string): Promise<Listing | null> {
   let res: Listing | null = null
-  mutate(o, a => {
+  await mutate(o, a => {
     const l = a.listings.find(x => x.id === fid); if (!l) return
     if (l.publicId) deleteItem(l.publicId)
     l.publicId = undefined; l.published = false; res = l
@@ -213,22 +233,22 @@ export function unpublishListing(o: string, fid: string): Listing | null {
 }
 
 // ---- Appointments ----
-export function addAppt(o: string, input: { client: string; listingTitle?: string; date: string; type?: ApptType }): Appt {
+export async function addAppt(o: string, input: { client: string; listingTitle?: string; date: string; type?: ApptType }): Promise<Appt> {
   let c!: Appt
-  mutate(o, a => { c = { id: id('a_'), client: input.client, listingTitle: input.listingTitle, date: input.date, type: (['visit', 'meeting', 'call'].includes(input.type as ApptType) ? input.type : 'visit') as ApptType, status: 'scheduled', createdAt: Date.now() }; a.appts.unshift(c) })
+  await mutate(o, a => { c = { id: id('a_'), client: input.client, listingTitle: input.listingTitle, date: input.date, type: (['visit', 'meeting', 'call'].includes(input.type as ApptType) ? input.type : 'visit') as ApptType, status: 'scheduled', createdAt: Date.now() }; a.appts.unshift(c) })
   return c
 }
-export function setApptStatus(o: string, aid: string, status: ApptStatus): Appt | null {
+export async function setApptStatus(o: string, aid: string, status: ApptStatus): Promise<Appt | null> {
   if (!APPT_STATUSES.includes(status)) return null
   let res: Appt | null = null
-  mutate(o, a => { const x = a.appts.find(y => y.id === aid); if (!x) return; x.status = status; res = x })
+  await mutate(o, a => { const x = a.appts.find(y => y.id === aid); if (!x) return; x.status = status; res = x })
   return res
 }
 
 // ---- Commissions ----
-export function addCommission(o: string, input: { dealTitle: string; amount: number; date?: string; percent?: number; dealAmount?: number }): Commission {
+export async function addCommission(o: string, input: { dealTitle: string; amount: number; date?: string; percent?: number; dealAmount?: number }): Promise<Commission> {
   let c!: Commission
-  mutate(o, a => {
+  await mutate(o, a => {
     const percent = input.percent ? Number(input.percent) : undefined
     const dealAmount = input.dealAmount ? Number(input.dealAmount) : undefined
     // اگر درصد و مبلغ معامله داده شده باشد، خودِ کمیسیون محاسبه می‌شود
@@ -238,23 +258,23 @@ export function addCommission(o: string, input: { dealTitle: string; amount: num
   })
   return c
 }
-export function deleteCommission(o: string, cid: string) { mutate(o, a => { a.commissions = a.commissions.filter(c => c.id !== cid) }) }
+export async function deleteCommission(o: string, cid: string): Promise<void> { await mutate(o, a => { a.commissions = a.commissions.filter(c => c.id !== cid) }) }
 // مبلغِ نهاییِ کمیسیون را ویرایش می‌کند (مثلاً وقتی معامله محقق شد و مبلغِ واقعی مشخص شد).
-export function setCommissionAmount(o: string, cid: string, amount: number): Commission | null {
+export async function setCommissionAmount(o: string, cid: string, amount: number): Promise<Commission | null> {
   let res: Commission | null = null
-  mutate(o, a => { const c = a.commissions.find(x => x.id === cid); if (!c) return; c.amount = Math.max(0, Math.round(Number(amount) || 0)); res = c })
+  await mutate(o, a => { const c = a.commissions.find(x => x.id === cid); if (!c) return; c.amount = Math.max(0, Math.round(Number(amount) || 0)); res = c })
   return res
 }
-export function setCommissionStatus(o: string, cid: string, status: CommStatus): Commission | null {
+export async function setCommissionStatus(o: string, cid: string, status: CommStatus): Promise<Commission | null> {
   let res: Commission | null = null
-  mutate(o, a => { const c = a.commissions.find(x => x.id === cid); if (!c) return; c.status = status; res = c })
+  await mutate(o, a => { const c = a.commissions.find(x => x.id === cid); if (!c) return; c.status = status; res = c })
   return res
 }
 
-export function listLeads(o: string) { return getAdvisor(o).leads }
-export function listListings(o: string) { return getAdvisor(o).listings }
-export function listAppts(o: string) { return getAdvisor(o).appts }
-export function listCommissions(o: string) { return getAdvisor(o).commissions }
-export function updateAdvisorProfile(o: string, patch: Partial<AdvisorData['profile']>) {
-  return mutate(o, a => { Object.assign(a.profile, patch) }).profile
+export async function listLeads(o: string): Promise<Lead[]> { return (await getAdvisor(o)).leads }
+export async function listListings(o: string): Promise<Listing[]> { return (await getAdvisor(o)).listings }
+export async function listAppts(o: string): Promise<Appt[]> { return (await getAdvisor(o)).appts }
+export async function listCommissions(o: string): Promise<Commission[]> { return (await getAdvisor(o)).commissions }
+export async function updateAdvisorProfile(o: string, patch: Partial<AdvisorData['profile']>): Promise<AdvisorData['profile']> {
+  return (await mutate(o, a => { Object.assign(a.profile, patch) })).profile
 }

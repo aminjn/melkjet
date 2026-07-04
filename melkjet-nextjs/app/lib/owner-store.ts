@@ -1,9 +1,12 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
+import { pgEnabled, kvGet, kvMutate } from './db'
 
 // استور پنل «مالک/فروشنده» — per-owner (مثل materials-store). هر کاربر فقط دادهٔ خودش.
+// دومَحاله: اگر DATABASE_URL ست باشد → Postgres (نوشتنِ اتمیک)، وگرنه فایل.
 const DATA_FILE = join(process.cwd(), '.owner-data.json')
+const KV_KEY = 'owner'
 
 export type DealType = 'sale' | 'rent'
 export type PropStatus = 'active' | 'sold' | 'rented' | 'draft'
@@ -51,11 +54,18 @@ export interface OwnerData {
 interface DB { owners: Record<string, OwnerData> }
 
 function id(p = '') { return p + randomBytes(5).toString('hex') }
-function load(): DB {
+function fileLoad(): DB {
   if (existsSync(DATA_FILE)) { try { return JSON.parse(readFileSync(DATA_FILE, 'utf-8')) } catch {} }
   return { owners: {} }
 }
-function save(db: DB) { writeFileSync(DATA_FILE, JSON.stringify(db, null, 2)) }
+function fileSave(db: DB) { writeFileSync(DATA_FILE, JSON.stringify(db, null, 2)) }
+
+async function load(): Promise<DB> { return pgEnabled() ? await kvGet<DB>(KV_KEY, { owners: {} }) : fileLoad() }
+// wrapperِ عمومیِ خواندن-تغییر-نوشتن (نامش withDb تا با mutate(owner) پایین تداخل نکند)
+async function withDb<R>(fn: (db: DB) => R): Promise<R> {
+  if (pgEnabled()) return kvMutate<DB, R>(KV_KEY, { owners: {} }, fn)
+  const db = fileLoad(); const r = fn(db); fileSave(db); return r
+}
 
 const PROP_STATUSES: PropStatus[] = ['active', 'sold', 'rented', 'draft']
 
@@ -99,17 +109,18 @@ function seed(): OwnerData {
   return { profile: { name: 'محمد رضایی' }, properties, inquiries, viewings, offers, monthlyViews, createdAt: now }
 }
 
-export function getOwner(owner: string): OwnerData {
-  const db = load()
-  if (!db.owners[owner]) { db.owners[owner] = seed(); save(db) }
-  return db.owners[owner]
+export async function getOwner(owner: string): Promise<OwnerData> {
+  const db = await load()
+  // اگر seed لازم نبود، بدونِ نوشتن برگردان (مثلِ قبل که فقط وقتی جدید بود ذخیره می‌شد).
+  if (db.owners[owner]) return db.owners[owner]
+  return withDb(d => { if (!d.owners[owner]) d.owners[owner] = seed(); return d.owners[owner] })
 }
-function mutate(owner: string, fn: (o: OwnerData) => void) {
-  const db = load(); if (!db.owners[owner]) db.owners[owner] = seed(); fn(db.owners[owner]); save(db); return db.owners[owner]
+async function mutate(owner: string, fn: (o: OwnerData) => void): Promise<OwnerData> {
+  return withDb(db => { if (!db.owners[owner]) db.owners[owner] = seed(); fn(db.owners[owner]); return db.owners[owner] })
 }
 
-export function ownerStats(owner: string) {
-  const o = getOwner(owner)
+export async function ownerStats(owner: string) {
+  const o = await getOwner(owner)
   const active = o.properties.filter(p => p.status === 'active')
   const newInquiries = o.inquiries.filter(q => q.status === 'new')
   const upcomingViewings = o.viewings.filter(v => v.status === 'scheduled')
@@ -139,14 +150,14 @@ export function ownerStats(owner: string) {
 }
 
 // عنوانِ ملک از روی id (برای نمایش در لیست‌ها)
-export function propTitle(owner: string, propertyId: string) {
-  return getOwner(owner).properties.find(p => p.id === propertyId)?.title || '—'
+export async function propTitle(owner: string, propertyId: string) {
+  return (await getOwner(owner)).properties.find(p => p.id === propertyId)?.title || '—'
 }
 
 // ---- Properties ----
-export function addProperty(owner: string, input: Partial<Property>): Property {
+export async function addProperty(owner: string, input: Partial<Property>): Promise<Property> {
   let created!: Property
-  mutate(owner, o => {
+  await mutate(owner, o => {
     created = {
       id: id('p_'), title: String(input.title || 'ملک جدید'), ptype: String(input.ptype || 'آپارتمان'),
       location: String(input.location || ''), area: Number(input.area) || 0, rooms: Number(input.rooms) || 0,
@@ -158,50 +169,50 @@ export function addProperty(owner: string, input: Partial<Property>): Property {
   })
   return created
 }
-export function updateProperty(owner: string, pid: string, patch: Partial<Property>): Property | null {
+export async function updateProperty(owner: string, pid: string, patch: Partial<Property>): Promise<Property | null> {
   let res: Property | null = null
-  mutate(owner, o => { const p = o.properties.find(x => x.id === pid); if (!p) return; Object.assign(p, patch); res = p })
+  await mutate(owner, o => { const p = o.properties.find(x => x.id === pid); if (!p) return; Object.assign(p, patch); res = p })
   return res
 }
-export function deleteProperty(owner: string, pid: string) {
-  mutate(owner, o => { o.properties = o.properties.filter(p => p.id !== pid) })
+export async function deleteProperty(owner: string, pid: string): Promise<void> {
+  await mutate(owner, o => { o.properties = o.properties.filter(p => p.id !== pid) })
 }
 
 // ---- Inquiries ----
-export function setInquiryStatus(owner: string, qid: string, status: InquiryStatus): Inquiry | null {
+export async function setInquiryStatus(owner: string, qid: string, status: InquiryStatus): Promise<Inquiry | null> {
   let res: Inquiry | null = null
-  mutate(owner, o => { const q = o.inquiries.find(x => x.id === qid); if (!q) return; q.status = status; res = q })
+  await mutate(owner, o => { const q = o.inquiries.find(x => x.id === qid); if (!q) return; q.status = status; res = q })
   return res
 }
-export function addInquiry(owner: string, input: { propertyId: string; name: string; phone?: string; message?: string }): Inquiry {
+export async function addInquiry(owner: string, input: { propertyId: string; name: string; phone?: string; message?: string }): Promise<Inquiry> {
   let created!: Inquiry
-  mutate(owner, o => { created = { id: id('q_'), propertyId: input.propertyId, name: input.name, phone: input.phone, message: input.message, status: 'new', createdAt: Date.now() }; o.inquiries.unshift(created) })
+  await mutate(owner, o => { created = { id: id('q_'), propertyId: input.propertyId, name: input.name, phone: input.phone, message: input.message, status: 'new', createdAt: Date.now() }; o.inquiries.unshift(created) })
   return created
 }
 
 // ---- Viewings ----
-export function setViewingStatus(owner: string, vid: string, status: ViewingStatus): Viewing | null {
+export async function setViewingStatus(owner: string, vid: string, status: ViewingStatus): Promise<Viewing | null> {
   let res: Viewing | null = null
-  mutate(owner, o => { const v = o.viewings.find(x => x.id === vid); if (!v) return; v.status = status; res = v })
+  await mutate(owner, o => { const v = o.viewings.find(x => x.id === vid); if (!v) return; v.status = status; res = v })
   return res
 }
-export function addViewing(owner: string, input: { propertyId: string; visitor: string; phone?: string; date: string }): Viewing {
+export async function addViewing(owner: string, input: { propertyId: string; visitor: string; phone?: string; date: string }): Promise<Viewing> {
   let created!: Viewing
-  mutate(owner, o => { created = { id: id('v_'), propertyId: input.propertyId, visitor: input.visitor, phone: input.phone, date: input.date, status: 'scheduled', createdAt: Date.now() }; o.viewings.unshift(created) })
+  await mutate(owner, o => { created = { id: id('v_'), propertyId: input.propertyId, visitor: input.visitor, phone: input.phone, date: input.date, status: 'scheduled', createdAt: Date.now() }; o.viewings.unshift(created) })
   return created
 }
 
 // ---- Offers ----
-export function setOfferStatus(owner: string, oid: string, status: OfferStatus): Offer | null {
+export async function setOfferStatus(owner: string, oid: string, status: OfferStatus): Promise<Offer | null> {
   let res: Offer | null = null
-  mutate(owner, o => { const of = o.offers.find(x => x.id === oid); if (!of) return; of.status = status; res = of })
+  await mutate(owner, o => { const of = o.offers.find(x => x.id === oid); if (!of) return; of.status = status; res = of })
   return res
 }
 
-export function listProperties(owner: string) { return getOwner(owner).properties }
-export function listInquiries(owner: string) { return getOwner(owner).inquiries }
-export function listViewings(owner: string) { return getOwner(owner).viewings }
-export function listOffers(owner: string) { return getOwner(owner).offers }
-export function updateOwnerProfile(owner: string, patch: Partial<OwnerData['profile']>) {
-  return mutate(owner, o => { Object.assign(o.profile, patch) }).profile
+export async function listProperties(owner: string): Promise<Property[]> { return (await getOwner(owner)).properties }
+export async function listInquiries(owner: string): Promise<Inquiry[]> { return (await getOwner(owner)).inquiries }
+export async function listViewings(owner: string): Promise<Viewing[]> { return (await getOwner(owner)).viewings }
+export async function listOffers(owner: string): Promise<Offer[]> { return (await getOwner(owner)).offers }
+export async function updateOwnerProfile(owner: string, patch: Partial<OwnerData['profile']>): Promise<OwnerData['profile']> {
+  return (await mutate(owner, o => { Object.assign(o.profile, patch) })).profile
 }

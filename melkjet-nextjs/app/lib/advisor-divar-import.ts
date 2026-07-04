@@ -27,14 +27,14 @@ export interface ImportResult {
 }
 
 // محله را به «مناطق فعالیتِ» مشاور اضافه می‌کند (برای کشف‌شدن در صفحات پابلیک).
-function addAreaToProfile(o: string, neighborhood: string) {
+async function addAreaToProfile(o: string, neighborhood: string) {
   if (!neighborhood) return
-  const prof = getAdvisor(o).profile
+  const prof = (await getAdvisor(o)).profile
   const areas = (prof.areas || '').split('،').map(s => s.trim()).filter(Boolean)
   const norm = (s: string) => s.replace(/‌/g, '').replace(/\s+/g, '')
   if (!areas.some(a => norm(a) === norm(neighborhood))) {
     areas.push(neighborhood)
-    updateAdvisorProfile(o, { areas: areas.join('، ') })
+    await updateAdvisorProfile(o, { areas: areas.join('، ') })
   }
 }
 
@@ -60,7 +60,7 @@ export async function importDivarToken(o: string, input: string, hint?: BrandPos
   // عنوانِ واقعیِ آگهی از hint (فهرستِ پروفایل) مقدّم بر post.title است که گاهی «املاک» می‌دهد.
   const realTitle = (hint?.title && hint.title.trim()) || (post.title && post.title.trim() && post.title.trim() !== 'املاک' ? post.title.trim() : '') || 'آگهی واردشده از دیوار'
   const images = (post.images && post.images.length) ? post.images : (hint?.image ? [hint.image] : [])
-  const advisorPhone = getAdvisor(o).profile.phone || ''
+  const advisorPhone = (await getAdvisor(o)).profile.phone || ''
 
   const payload: Partial<Listing> = {
     title: realTitle,
@@ -85,26 +85,26 @@ export async function importDivarToken(o: string, input: string, hint?: BrandPos
     phone: advisorPhone || undefined,
   }
 
-  if (cfg.autoNeighborhood && matched) addAreaToProfile(o, matched.neighborhood)
+  if (cfg.autoNeighborhood && matched) await addAreaToProfile(o, matched.neighborhood)
 
   // ── به‌روزرسانیِ آگهیِ موجود (اگر در دیوار تغییر کرده باشد) ──
   if (existing) {
-    const updated = updateListing(o, existing.listingId, payload)
+    const updated = await updateListing(o, existing.listingId, payload)
     if (!updated) {
       // فایل حذف شده بوده — دوباره به‌عنوان جدید اضافه کن
       removeImport(o, token)
       return importDivarToken(o, input, hint, sourceId)
     }
     let published = updated.published || false
-    if (cfg.autoPublish) { const pub = publishListing(o, existing.listingId); published = !!pub; if (pub?.publicId) { warmEnrichment(pub.publicId); moderatePublicItem(pub.publicId) } }   // بازانتشار + پیش‌گرم تحلیل + ممیزی
+    if (cfg.autoPublish) { const pub = await publishListing(o, existing.listingId); published = !!pub; if (pub?.publicId) { warmEnrichment(pub.publicId); moderatePublicItem(pub.publicId) } }   // بازانتشار + پیش‌گرم تحلیل + ممیزی
     recordImport(o, { token, listingId: existing.listingId, title: updated.title, url: `https://divar.ir/v/${token}`, at: existing.at, published, sourceId: sourceId || existing.sourceId })
     return { ok: true, updated: true, listing: updated, token }
   }
 
   // ── افزودنِ آگهیِ جدید ──
-  const listing = addListing(o, payload)
+  const listing = await addListing(o, payload)
   let published = false
-  if (cfg.autoPublish) { const pub = publishListing(o, listing.id); published = !!pub; if (pub?.publicId) { warmEnrichment(pub.publicId); moderatePublicItem(pub.publicId) } }   // پیش‌گرمِ تحلیل + ممیزیِ خودکار
+  if (cfg.autoPublish) { const pub = await publishListing(o, listing.id); published = !!pub; if (pub?.publicId) { warmEnrichment(pub.publicId); moderatePublicItem(pub.publicId) } }   // پیش‌گرمِ تحلیل + ممیزیِ خودکار
   recordImport(o, { token, listingId: listing.id, title: listing.title, url: `https://divar.ir/v/${token}`, at: Date.now(), published, sourceId })
   return { ok: true, listing, token }
 }
@@ -178,22 +178,22 @@ export async function importDivarProfile(o: string, url: string, sourceId?: stri
 
   onProgress?.(0, posts.length)
   const r = await importTokens(o, posts, sourceId, onProgress)
-  const sold = markGone(o, gone)
+  const sold = await markGone(o, gone)
   markRun(o, r.imported, '')
   return { ok: true, scanned: posts.length, ...r, sold }
 }
 
 // آگهی‌هایی که از دیوار حذف شده‌اند را «فروش/اجاره رفته» علامت می‌زند و از سرچِ سایت برمی‌دارد.
-function markGone(o: string, gone: { token: string; listingId: string; title: string; url: string; at: number; published: boolean }[]): number {
+async function markGone(o: string, gone: { token: string; listingId: string; title: string; url: string; at: number; published: boolean }[]): Promise<number> {
   if (!gone.length) return 0
-  const listings = getAdvisor(o).listings
+  const listings = (await getAdvisor(o)).listings
   let count = 0
   for (const g of gone) {
     const l = listings.find(x => x.id === g.listingId)
     if (!l || l.status !== 'active') continue
     // از پروفایلِ دیوار حذف شده → «فروخته/اجاره‌رفته». روی سایت می‌ماند ولی با مهرِ «فروخته شد / اجاره رفت»
     // (setListingStatus مهر را روی آگهیِ عمومی هم می‌زند) — نه حذفِ کامل، تا هم SEO حفظ شود هم کاربر ببیند.
-    setListingStatus(o, l.id, l.deal === 'rent' ? 'rented' : 'sold')
+    await setListingStatus(o, l.id, l.deal === 'rent' ? 'rented' : 'sold')
     recordImport(o, { ...g, published: true })
     count++
   }
@@ -347,7 +347,7 @@ export async function runBatch(o: string): Promise<void> {
   }
 
   let sold = 0   // تمام شد → مهرِ فروخته/اجاره‌رفته + پایان
-  try { sold = markGone(o, j0.gone || []) } catch {}
+  try { sold = await markGone(o, j0.gone || []) } catch {}
   if (sourceId) { try { markSourceRun(o, sourceId, imported, '') } catch {} }
   setJob(o, { running: false, paused: false, pending: [], gone: [], imported, updated, skipped, sold, done: total, finishedAt: Date.now(), note: '', error: '' })
 }
@@ -387,10 +387,10 @@ export function resumeJob(o: string): boolean {
 }
 
 /** همهٔ آگهی‌های واردشده از دیوار را پاک می‌کند (فایل + نسخهٔ عمومی) و فهرست را خالی می‌کند. */
-export function clearDivarImports(o: string): { removed: number } {
+export async function clearDivarImports(o: string): Promise<{ removed: number }> {
   const imports = getDivar(o).imports
   let removed = 0
-  for (const im of imports) { try { deleteListing(o, im.listingId); removed++ } catch {} }
+  for (const im of imports) { try { await deleteListing(o, im.listingId); removed++ } catch {} }
   clearImports(o)
   return { removed }
 }

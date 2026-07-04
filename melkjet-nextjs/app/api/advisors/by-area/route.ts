@@ -10,16 +10,18 @@ export async function GET(req: NextRequest) {
   const area = norm(new URL(req.url).searchParams.get('area') || '')
   if (!area) return NextResponse.json({ advisors: [] })
 
-  const advisors = listAccounts()
-    .filter(a => dashForRole(a.role) === '/pros')
-    .map(a => {
-      const p = getAdvisor(a.phone).profile
-      const areas = (p.areas || '').split('،').map(x => norm(x)).filter(Boolean)
-      if (!(p.name || '').trim()) return null
-      if (!areas.some(x => x === area || x.includes(area) || area.includes(x))) return null
-      const m = getAdvisorMembership(a.phone)
-      return { phone: a.phone, name: p.name, title: p.title || 'مشاور املاک', photo: p.photo || '', agency: m?.agencyName || '', areas: p.areas || '' }
-    })
+  const advisors = (await Promise.all(
+    listAccounts()
+      .filter(a => dashForRole(a.role) === '/pros')
+      .map(async a => {
+        const p = (await getAdvisor(a.phone)).profile
+        const areas = (p.areas || '').split('،').map(x => norm(x)).filter(Boolean)
+        if (!(p.name || '').trim()) return null
+        if (!areas.some(x => x === area || x.includes(area) || area.includes(x))) return null
+        const m = await getAdvisorMembership(a.phone)
+        return { phone: a.phone, name: p.name, title: p.title || 'مشاور املاک', photo: p.photo || '', agency: m?.agencyName || '', areas: p.areas || '' }
+      })
+  ))
     .filter(Boolean)
     .slice(0, 24)
 

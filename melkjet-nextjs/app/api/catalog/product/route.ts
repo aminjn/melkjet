@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
     ok: true,
     product,
     breadcrumb: categoryBreadcrumb(product.categoryId),
-    sellers: sellersOfCatalog(id),
+    sellers: await sellersOfCatalog(id),
     related: relatedProducts(product.categoryId, id, 8).map(p => ({ id: p.id, name: p.name, image: p.image, brand: p.brand })),
   })
 }
