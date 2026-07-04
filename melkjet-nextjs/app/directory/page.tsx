@@ -26,6 +26,7 @@ function toProfessional(it: ContentItem) {
     url: it.url,
     phone: it.phone,
     hasPhone: it.hasPhone,
+    image: it.image,
   }
 }
 
@@ -456,251 +457,95 @@ type Professional = {
   url?: string
   phone?: string
   hasPhone?: boolean
+  image?: string
 }
 
 function ProfessionalCard({ pro }: { pro: Professional }) {
   const [hovered, setHovered] = useState(false)
+  const hasArea = !!(pro.area && pro.area.trim())
+  const hasRating = !!(pro.rating && pro.rating !== '—')
+  const cat = (pro.category || pro.role || '').trim()
+  const href = pro.url || `/profile/${pro.id}`
+  const external = !!pro.url && !pro.url.startsWith('/')
 
   return (
-    <div
+    <a
+      href={href}
+      target={external ? '_blank' : undefined}
+      rel={external ? 'noreferrer' : undefined}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
+        display: 'block', textDecoration: 'none', color: 'inherit',
         background: 'var(--surface)',
-        border: pro.promoted
-          ? '1px solid var(--gold)'
-          : '1px solid var(--line)',
-        borderRadius: '16px',
-        overflow: 'hidden',
-        position: 'relative',
-        transition: 'transform 0.2s, box-shadow 0.2s',
-        transform: hovered ? 'translateY(-4px)' : 'translateY(0)',
-        boxShadow: hovered
-          ? '0 12px 40px var(--shadow)'
-          : '0 2px 8px var(--shadow)',
-        cursor: 'pointer',
-        display: 'flex',
-        flexDirection: 'column',
+        border: `1px solid ${pro.promoted || hovered ? 'var(--gold)' : 'var(--line)'}`,
+        borderRadius: 16, overflow: 'hidden',
+        transition: 'transform .18s, box-shadow .18s, border-color .18s',
+        transform: hovered ? 'translateY(-4px)' : 'none',
+        boxShadow: hovered ? '0 12px 40px -12px rgba(201,168,76,0.22)' : '0 2px 10px -4px rgba(0,0,0,0.3)',
       }}
     >
       {/* Cover */}
-      <div
-        style={{
-          height: '74px',
-          background: pro.coverGradient,
-          position: 'relative',
-          flexShrink: 0,
-        }}
-      >
-        {/* Promoted Badge */}
+      <div style={{ height: 68, background: pro.coverGradient, position: 'relative' }}>
         {pro.promoted && (
-          <div
-            style={{
-              position: 'absolute',
-              top: '10px',
-              left: '10px',
-              background: 'linear-gradient(135deg, var(--gold) 0%, var(--gold2, #c8a03c) 100%)',
-              color: '#1a1200',
-              fontSize: '0.68rem',
-              fontWeight: 700,
-              padding: '3px 9px',
-              borderRadius: '20px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '3px',
-              letterSpacing: '0.01em',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-            }}
-          >
-            ★ پروموت
-          </div>
+          <span style={{ position: 'absolute', top: 10, insetInlineStart: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 11, fontWeight: 800, padding: '4px 10px', borderRadius: 999, boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>★ ویژه</span>
         )}
       </div>
 
       {/* Body */}
-      <div
-        style={{
-          padding: '0 18px 18px',
-          display: 'flex',
-          flexDirection: 'column',
-          flex: 1,
-        }}
-      >
-        {/* Avatar Row */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'flex-end',
-            justifyContent: 'space-between',
-            marginBottom: '10px',
-          }}
-        >
-          {/* Avatar */}
-          <div
-            style={{
-              width: '56px',
-              height: '56px',
-              borderRadius: '50%',
-              background: pro.avatarGradient,
-              border: '3px solid var(--bg)',
-              marginTop: '-28px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#fff',
-              fontSize: '0.85rem',
-              fontWeight: 700,
-              flexShrink: 0,
-              boxShadow: '0 2px 10px rgba(0,0,0,0.25)',
-            }}
-          >
-            {pro.initials}
+      <div style={{ padding: '0 16px 16px' }}>
+        {/* Avatar (overlaps cover) + verified */}
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{
+            width: 62, height: 62, borderRadius: '50%', marginTop: -31, flexShrink: 0,
+            background: pro.image ? `center/cover no-repeat url(${pro.image})` : pro.avatarGradient,
+            border: '3px solid var(--surface)', boxShadow: '0 3px 12px rgba(0,0,0,0.3)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 16, fontWeight: 800, overflow: 'hidden',
+          }}>
+            {!pro.image && pro.initials}
           </div>
-
-          {/* Verified chip */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              background: 'rgba(34,197,94,0.1)',
-              border: '1px solid rgba(34,197,94,0.25)',
-              borderRadius: '20px',
-              padding: '3px 9px',
-              fontSize: '0.7rem',
-              color: '#22c55e',
-              fontWeight: 600,
-              marginBottom: '4px',
-            }}
-          >
-            ✓ تأییدشده
-          </div>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(95,217,138,0.12)', border: '1px solid rgba(95,217,138,0.3)', borderRadius: 999, padding: '3px 10px', fontSize: 11, color: '#5fd98a', fontWeight: 700 }}>✓ تأییدشده</span>
         </div>
 
-        {/* Name & Role */}
-        <h3
-          style={{
-            fontSize: '1rem',
-            fontWeight: 700,
-            color: 'var(--text)',
-            margin: '0 0 2px',
-            lineHeight: 1.3,
-          }}
-        >
-          {pro.name}
-        </h3>
-        <p
-          style={{
-            fontSize: '0.82rem',
-            color: 'var(--muted)',
-            margin: '0 0 10px',
-          }}
-        >
-          {pro.role}
-        </p>
+        {/* Name */}
+        <div style={{ fontSize: 15.5, fontWeight: 800, color: 'var(--text)', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pro.name}</div>
 
-        {/* Rating & Area */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: '10px',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-            }}
-          >
-            <span style={{ color: 'var(--gold)', fontSize: '0.9rem' }}>★</span>
-            <span
-              style={{
-                fontSize: '0.88rem',
-                fontWeight: 700,
-                color: 'var(--text)',
-              }}
-            >
-              {pro.rating}
-            </span>
-          </div>
-          <span
-            style={{
-              fontSize: '0.78rem',
-              color: 'var(--muted)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '3px',
-            }}
-          >
-            📍 {pro.area}
-          </span>
+        {/* Category + rating */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+          {cat && <span style={{ fontSize: 11.5, padding: '3px 10px', borderRadius: 999, background: 'var(--goldDim)', color: 'var(--gold)', fontWeight: 700 }}>{cat}</span>}
+          {hasRating && <span style={{ fontSize: 12.5, color: 'var(--text)', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 3 }}><span style={{ color: 'var(--gold)' }}>★</span>{pro.rating}</span>}
         </div>
 
-        {/* Phone — login-gated reveal + contact report */}
+        {/* Location — only if present */}
+        {hasArea && (
+          <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 5 }}>
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0 }}><path d="M6 1a3.5 3.5 0 0 1 3.5 3.5C9.5 7.5 6 11 6 11S2.5 7.5 2.5 4.5A3.5 3.5 0 0 1 6 1z" stroke="currentColor" strokeWidth="1.2" /><circle cx="6" cy="4.5" r="1.2" fill="currentColor" /></svg>
+            {pro.area}
+          </div>
+        )}
+
+        {/* Tags — only if present */}
+        {pro.tags.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+            {pro.tags.slice(0, 3).map((tag) => (
+              <span key={tag} style={{ fontSize: 11, padding: '3px 9px', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 999, color: 'var(--muted)', fontWeight: 500 }}>{tag}</span>
+            ))}
+          </div>
+        )}
+
+        {/* Phone reveal (login-gated) */}
         {pro.hasPhone && (
-          <div style={{ marginBottom: '12px' }} onClick={e => e.stopPropagation()}>
+          <div style={{ marginBottom: 12 }} onClick={(e) => { e.preventDefault(); e.stopPropagation() }}>
             <RevealContact kind="item" id={String(pro.id)} compact label="نمایشِ شماره" />
           </div>
         )}
 
-        {/* Tags */}
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '6px',
-            marginBottom: '14px',
-          }}
-        >
-          {pro.tags.map((tag) => (
-            <span
-              key={tag}
-              style={{
-                fontSize: '0.7rem',
-                padding: '3px 9px',
-                background: 'var(--faint)',
-                border: '1px solid var(--line2)',
-                borderRadius: '20px',
-                color: 'var(--muted)',
-                fontWeight: 500,
-              }}
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
-
-        {/* CTA */}
-        <div style={{ marginTop: 'auto' }}>
-          <a
-            href={pro.url || `/profile/${pro.id}`}
-            target={pro.url ? '_blank' : undefined}
-            rel="noreferrer"
-            onClick={pro.url ? undefined : (e) => e.preventDefault()}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              color: 'var(--gold)',
-              textDecoration: 'none',
-              transition: 'opacity 0.15s',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.opacity = '0.75'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.opacity = '1'
-            }}
-          >
-            مشاهده خدمات ←
-          </a>
+        {/* Footer CTA */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid var(--line)' }}>
+          <span style={{ fontSize: 12, color: 'var(--faint)' }}>پروفایل و خدمات</span>
+          <span style={{ fontSize: 12.5, color: 'var(--gold)', fontWeight: 700 }}>مشاهده ←</span>
         </div>
       </div>
-    </div>
+    </a>
   )
 }
