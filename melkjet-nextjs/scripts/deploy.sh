@@ -9,9 +9,9 @@ set -euo pipefail
 APP_DIR="${MELKJET_APP_DIR:-/var/www/melkjet/melkjet-nextjs}"
 cd "$APP_DIR"
 
-echo "→ git pull"
-git pull origin main
-
+# نکته: git pull اینجا انجام نمی‌شود. زیرِ sudo متغیرهای proxy پاک می‌شوند و git به
+# GitHub نمی‌رسد (hang). قبل از این اسکریپت، خودت با proxy-on دستی pull کن:
+#   proxy-on && git pull origin main
 echo "→ build"
 NODE_OPTIONS="--max-old-space-size=2048" npm run build
 
