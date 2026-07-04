@@ -271,3 +271,6 @@ body { padding-bottom: env(safe-area-inset-bottom); }
 }
 
 .mjsa-modrow:hover{background:var(--bg2)}
+
+.mjs-quickbar::-webkit-scrollbar{height:0}
+.mjs-quickbar{scrollbar-width:none}

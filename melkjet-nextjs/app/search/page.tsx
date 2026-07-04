@@ -43,6 +43,11 @@ const AMENITY_ALL = ['آسانسور', 'پارکینگ', 'انباری', 'بال
 const AMENITY_FILTER = ['آسانسور', 'پارکینگ', 'انباری', 'بالکن', 'تراس', 'مبله', 'روف گاردن', 'استخر', 'لابی', 'نوساز']
 const PRICE_MAX = 500 // «بدون سقف»
 // گزینه‌های آمادهٔ فیلتر (دراپ‌داون — کاربر تایپ نمی‌کند)
+// چیپِ نوعِ ملک در نوارِ ساختاریافتهٔ همیشه‌جلوی‌چشم.
+function chipStyle(active: boolean): React.CSSProperties {
+  return { padding: '8px 14px', borderRadius: 10, border: `1px solid ${active ? 'var(--gold)' : 'var(--line2)'}`, background: active ? 'var(--goldDim)' : 'var(--surface)', color: active ? 'var(--gold)' : 'var(--text)', cursor: 'pointer', fontSize: 12.5, fontWeight: active ? 700 : 500, fontFamily: 'inherit', whiteSpace: 'nowrap' }
+}
+
 const PRICE_OPTS = [0.5, 1, 2, 3, 5, 7, 10, 15, 20, 30, 50, 70, 100, 200, 300]
 const AREA_OPTS = [40, 50, 60, 75, 90, 100, 120, 150, 180, 200, 250, 300, 400, 500]
 const FLOOR_OPTS = [1, 2, 3, 4, 5, 6, 8, 10, 15, 20]
@@ -484,6 +489,24 @@ function SearchPageInner() {
           <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ height: 48, padding: '0 12px', borderRadius: 12, background: 'var(--surface)', border: '1px solid var(--line2)', color: 'var(--text)', fontSize: 13.5, cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }}>
             <option>پیشنهاد ملک‌جت</option><option>ارزان‌ترین</option><option>گران‌ترین</option><option>جدیدترین</option>
           </select>
+        </div>
+
+        {/* نوارِ ساختاریافتهٔ همیشه‌جلوی‌چشم — حسِ ۲-کلیکیِ دیوار: نوعِ معامله + نوعِ ملک با یک کلیک،
+            بدونِ بازکردنِ پنلِ فیلتر. روی موبایل به‌جای شکستن، افقی اسکرول می‌شود. */}
+        <div className="mjs-quickbar" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 12px', display: 'flex', gap: 8, alignItems: 'center', overflowX: 'auto', flexWrap: 'nowrap' }}>
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+            {['خرید', 'اجاره', 'پیش‌فروش'].map(type => {
+              const on = dealType === type || (type === 'اجاره' && dealType === 'رهن')
+              return <button key={type} onClick={() => goDeal(type)} style={{ padding: '8px 18px', borderRadius: 10, border: `1px solid ${on ? 'var(--gold)' : 'var(--line2)'}`, background: on ? 'var(--goldDim)' : 'var(--surface)', color: on ? 'var(--gold)' : 'var(--text)', cursor: 'pointer', fontSize: 13, fontWeight: on ? 700 : 500, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>{type}</button>
+            })}
+          </div>
+          <span style={{ width: 1, height: 22, background: 'var(--line2)', flexShrink: 0, marginInline: 2 }} />
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+            <button onClick={() => setKind('')} style={chipStyle(!kind)}>همهٔ املاک</button>
+            {PROPERTY_KINDS.map(k => (
+              <button key={k} onClick={() => setKind(kind === k ? '' : k)} style={chipStyle(kind === k)}>{k}</button>
+            ))}
+          </div>
         </div>
 
         {/* چیپ‌های تشخیص AI — فقط وقتی چیزی واقعاً از متن تشخیص داده شده */}
