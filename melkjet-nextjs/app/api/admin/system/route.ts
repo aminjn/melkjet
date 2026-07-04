@@ -3,6 +3,7 @@ import { getSession } from '@/app/lib/session'
 import { readdirSync, statSync, readFileSync } from 'fs'
 import { join } from 'path'
 import os from 'node:os'
+import { pgStats } from '@/app/lib/db'
 
 // آمار واقعی سیستم: پراسس، حافظه، و وضعیت فایل‌های دادهٔ پروژه.
 async function guard() { const s = await getSession(); return s && s.role === 'super_admin' }
@@ -63,6 +64,8 @@ export async function GET() {
     },
     stores,
     totalRecords: stores.reduce((a, s) => a + s.records, 0),
+    // وضعیتِ زندهٔ PostgreSQL (بعد از مهاجرت، منبعِ اصلیِ داده اینجاست؛ شمارشِ فایل‌ها بالا قدیمی است).
+    postgres: await pgStats(),
     now: Date.now(),
   })
 }

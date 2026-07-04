@@ -74,19 +74,29 @@ repo + this file are the source of truth, no chat history needed.
   (kvMutate = atomic read-modify-write with `FOR UPDATE` row lock → no lost concurrent writes).
 - **Dual-mode**: every migrated store checks `pgEnabled()` (=`!!process.env.DATABASE_URL`).
   No DATABASE_URL → behaves exactly like the old file store. So production is unchanged until enabled.
-- **Migrated to async+PG (26 stores):** messages, leads, crm, workflow, pros, sites, buyer,
+- **LIVE ON SERVER (DATABASE_URL is set in `.env.production.local`).** Enable was:
+  create DB+user, `node scripts/migrate-to-pg.mjs` (copies .*-data.json → kv), put
+  `DATABASE_URL` in `.env.production.local` (gitignored, Next auto-loads at runtime),
+  `pm2 reload --update-env`. Kill-switch: remove that env line + reload. **Password `@` MUST be
+  URL-encoded as `%40`** in the URL (e.g. `AMin1535%4012`) — a raw `@` breaks URL parsing.
+- **Migrated to async+PG (28 stores):** messages, leads, crm, workflow, pros, sites, buyer,
   contacts, advisor, agency, owner, materials, user, listing-stats, comm, builder, ticket,
   outreach, contact-log, saved-search, assistant, floorplan, tracker, tracker-links +
-  async lib helpers (agency-link-store, duplicate-check, agency-team). All their call sites `await`.
-- **Enable on server:** create DB+user, `node scripts/migrate-to-pg.mjs` (copies .*-data.json → kv),
-  set `DATABASE_URL` in ecosystem.config.js env, reload. Kill-switch: unset DATABASE_URL.
-- **STILL ON FILES (intentional):** config/read-mostly — account, role, admin, geo, category,
-  plan, cost, sms-cost, payment (mtime-cached, fine).
-- **NOT YET migrated (next):** scraper-store (the big central one — 38 callers + cascades;
-  best done as a NORMALIZED `listings` table, not a blob, for SQL search/filter/pagination —
-  a dedicated effort), plus caches (enrich, moderation-ml, market-data, catalog, persiansaze)
-  and small stores (reviews, push, audit, promo, promotion, banner, builder-public,
-  workflow-runner-store, advisor-divar-store/job, pending-reg, ps-enrich).
+  **scraper-store** (listings/articles/sources — kv blob + 2.5s read-cache on the PG path;
+  items hard-capped at 1000 so the blob stays small) + async lib helpers (agency-link-store,
+  duplicate-check, agency-team). All call sites `await`; the async cascade reaches
+  compare-normalize/market-stats/price-forecast/promotion/listing-dedupe and their callers.
+- **STILL ON FILES (intentional — config/read-mostly, single-writer, no concurrent-write risk):**
+  account, role, admin, geo, category, plan, cost, sms-cost, payment; and heavy read-only caches
+  enrich (~7MB), persiansaze (~6MB), moderation-ml, market-data. Migrating these adds risk for no
+  scale benefit. (Small stores reviews/push/audit/pending-reg also still on files — low-traffic.)
+- **BACKUP:** `scripts/backup.sh` dumps BOTH PostgreSQL (`pg_dump`) AND the on-disk `.*-data.json`
+  files (config still lives there), gzips, rotates (KEEP_DAYS=14), logs. Install as root cron:
+  `30 3 * * * /var/www/melkjet/melkjet-nextjs/scripts/backup.sh >> /var/log/melkjet-backup.log 2>&1`.
+  Restore steps are in the script header. Backups → `/var/backups/melkjet`.
+- **Health panel** (admin → «سلامت سیستم») now shows live PostgreSQL status (connected? kv rows?
+  db size? top keys?) via `pgStats()` in db.ts — the on-disk record counts above it are stale
+  post-migration (files are frozen snapshots; live data is in PG).
 
 ## Conventions
 - **Persistence = file-based JSON stores** in `process.cwd()`, all gitignored (`.*-data.json`).

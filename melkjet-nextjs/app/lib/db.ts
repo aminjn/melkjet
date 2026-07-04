@@ -53,6 +53,35 @@ export async function kvSet(key: string, data: unknown): Promise<void> {
 }
 
 /**
+ * آمارِ سلامتِ PostgreSQL برای پنلِ «سلامتِ سیستم» — آیا وصل است، چند کلید در kv،
+ * حجمِ کلِ دیتابیس، و بزرگ‌ترین کلیدها. اگر DATABASE_URL ست نباشد null برمی‌گردد.
+ */
+export async function pgStats(): Promise<
+  { enabled: true; connected: boolean; kvRows: number; dbSizeMB: number; topKeys: { key: string; kb: number }[] } | { enabled: false } | null
+> {
+  if (!pgEnabled()) return { enabled: false }
+  try {
+    const client = await getPool().connect()
+    try {
+      await ensureSchema(client)
+      const rows = await client.query('SELECT count(*)::int AS n FROM kv')
+      const size = await client.query('SELECT pg_database_size(current_database())::bigint AS s')
+      const top = await client.query(
+        `SELECT key, (pg_column_size(data) / 1024.0)::numeric(10,1) AS kb FROM kv ORDER BY pg_column_size(data) DESC LIMIT 8`,
+      )
+      return {
+        enabled: true, connected: true,
+        kvRows: rows.rows[0].n,
+        dbSizeMB: Math.round((Number(size.rows[0].s) / 1048576) * 10) / 10,
+        topKeys: top.rows.map(r => ({ key: r.key as string, kb: Number(r.kb) })),
+      }
+    } finally { client.release() }
+  } catch {
+    return { enabled: true, connected: false, kvRows: 0, dbSizeMB: 0, topKeys: [] }
+  }
+}
+
+/**
  * خواندن-تغییر-نوشتنِ اتمیک با قفلِ ردیف. fn سند را «در جا» تغییر می‌دهد و مقدارِ دلخواه برمی‌گرداند.
  * دو نوشتنِ همزمان روی همان کلید سریالایز می‌شوند → هیچ به‌روزرسانی‌ای گم نمی‌شود (برخلافِ فایل).
  */

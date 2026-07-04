@@ -4780,6 +4780,34 @@ function HealthView() {
           </tbody>
         </table>
       </Card>
+      {d.postgres && (
+        <Card style={{ marginTop: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <div style={{ fontWeight: 700, fontSize: 14 }}>پایگاه‌دادهٔ PostgreSQL</div>
+            {d.postgres.enabled === false
+              ? <span style={{ fontSize: 11.5, color: 'var(--faint)', border: '1px solid var(--line)', borderRadius: 999, padding: '2px 9px' }}>غیرفعال (روی فایل)</span>
+              : d.postgres.connected
+                ? <span style={{ fontSize: 11.5, color: '#5fd98a', border: '1px solid rgba(95,217,138,.4)', borderRadius: 999, padding: '2px 9px' }}>● متصل</span>
+                : <span style={{ fontSize: 11.5, color: '#e7674a', border: '1px solid rgba(231,103,74,.4)', borderRadius: 999, padding: '2px 9px' }}>✕ قطع</span>}
+          </div>
+          {d.postgres.enabled === false
+            ? <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>DATABASE_URL ست نشده — همه‌چیز روی فایل‌های JSON بالا کار می‌کند.</div>
+            : d.postgres.connected ? (
+              <>
+                <div style={{ display: 'flex', gap: 24, marginBottom: 14, flexWrap: 'wrap' }}>
+                  <div><div style={{ fontSize: 11, color: 'var(--faint)' }}>کلیدها (kv)</div><div style={{ fontSize: 18, fontWeight: 800, color: 'var(--gold)' }}>{d.postgres.kvRows.toLocaleString('fa-IR')}</div></div>
+                  <div><div style={{ fontSize: 11, color: 'var(--faint)' }}>حجمِ کلِ دیتابیس</div><div style={{ fontSize: 18, fontWeight: 800 }}>{d.postgres.dbSizeMB.toLocaleString('fa-IR')} MB</div></div>
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--faint)', marginBottom: 6 }}>بزرگ‌ترین استورها:</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {d.postgres.topKeys.map((k: any) => (
+                    <span key={k.key} style={{ fontSize: 11.5, background: 'var(--line2)', borderRadius: 8, padding: '3px 9px', direction: 'ltr' }}>{k.key} · {k.kb.toLocaleString('fa-IR')} KB</span>
+                  ))}
+                </div>
+              </>
+            ) : <div style={{ fontSize: 12.5, color: '#e7674a' }}>اتصال به PostgreSQL برقرار نشد — لاگِ pm2 و رمزِ DATABASE_URL را بررسی کنید.</div>}
+        </Card>
+      )}
     </div>
   )
 }
