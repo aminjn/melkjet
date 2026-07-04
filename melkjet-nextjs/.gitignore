@@ -100,3 +100,9 @@ next-env.d.ts
 
 .scraper-cfg-*.json
 .scraper-job-*.json
+
+# همهٔ فایل‌های دادهٔ استورها (server state) — هیچ‌وقت نباید در git باشند
+.*-data.json
+.persiansaze*.json
+.media*
+.*-store.json
