@@ -28,7 +28,7 @@ async function guard() {
 
 export async function GET() {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
-  return NextResponse.json({ sources: listSources() })
+  return NextResponse.json({ sources: await listSources() })
 }
 
 export async function POST(req: NextRequest) {

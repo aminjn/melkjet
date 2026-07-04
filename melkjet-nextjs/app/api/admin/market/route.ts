@@ -6,5 +6,5 @@ import { platformStats } from '@/app/lib/platform-stats'
 export async function GET() {
   const s = await getSession()
   if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
-  return NextResponse.json({ ...marketOverview(), platform: platformStats() })
+  return NextResponse.json({ ...(await marketOverview()), platform: await platformStats() })
 }

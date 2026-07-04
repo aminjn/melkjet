@@ -9,7 +9,7 @@ async function guard() {
 
 export async function GET() {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
-  return NextResponse.json({ owners: listOwners() })
+  return NextResponse.json({ owners: await listOwners() })
 }
 
 // PATCH { id, name?, phone? }
