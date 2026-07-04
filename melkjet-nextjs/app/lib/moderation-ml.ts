@@ -21,6 +21,10 @@ function empty(): MLData { return { v: MODEL_V, approved: cls(), rejected: cls()
 function load(): MLData { const d = readJsonCached<MLData | null>(FILE, null); return d && d.v === MODEL_V ? d : empty() }
 function save(d: MLData) { writeJsonCached(FILE, d) }
 
+// پاک‌کردنِ کاملِ مدلِ یادگیرنده — وقتی مدل «مسموم» شده (از دادهٔ غلطِ قبلی رد یاد گرفته)
+// و باید از صفر با تصمیم‌های درست دوباره یاد بگیرد.
+export function resetMl(): void { save(empty()) }
+
 function faToEn(s: string): string { return (s || '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))) }
 function norm(s: string): string { return (s || '').replace(/‌/g, '').replace(/\s+/g, ' ').trim().toLocaleLowerCase() }
 const STOP = new Set(['در', 'با', 'و', 'به', 'از', 'که', 'این', 'برای', 'یک', 'را', 'های', 'می', 'تا', 'رو', 'هم', 'یا', 'شده', 'است'])

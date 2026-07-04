@@ -2140,6 +2140,14 @@ function ModerationView() {
       if (d.ok) { setCfg(d.config); setCfgMsg('✓ معیارها ذخیره شد') } else setCfgMsg('⚠ ' + (d.error || 'خطا'))
     } catch { setCfgMsg('⚠ خطا در ذخیره') } finally { setSavingCfg(false); setTimeout(() => setCfgMsg(''), 4000) }
   }
+  const resetMlModel = async () => {
+    if (!confirm('مدلِ یادگیرنده کاملاً پاک شود؟ (وقتی مدل «مسموم» شده و همه‌چیز را رد می‌کند مفید است — از صفر با تصمیم‌های درست دوباره یاد می‌گیرد.)')) return
+    try {
+      const r = await fetch('/api/admin/moderation-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resetMl: true }) })
+      const d = await r.json()
+      if (d.ok) { setMl(d.ml); setCfgMsg('✓ مدلِ یادگیرنده ریست شد') } else setCfgMsg('⚠ خطا')
+    } catch { setCfgMsg('⚠ خطا') } finally { setTimeout(() => setCfgMsg(''), 4000) }
+  }
 
   // اجرای تأیید خودکار AI روی صف منتظر، دسته‌دسته تا تمام شدن
   const runAuto = async () => {
@@ -2236,7 +2244,11 @@ function ModerationView() {
                     : `⏳ در حالِ یادگیری — برای آماده‌شدن حداقل ${fa(ml.minPerClass)} تأیید و ${fa(ml.minPerClass)} رد لازم است (فعلاً: ${fa(ml.approvedSamples)} تأیید، ${fa(ml.rejectedSamples)} رد).`}
                 </div>
                 <div style={{ color: 'var(--faint)', marginTop: 4 }}>تصمیمِ خودکارِ ML: {fa(ml.autoDecided)} · تصمیمِ AI: {fa(ml.aiDecided)} · آموزش از تصمیمِ دستیِ شما: {fa(ml.adminTaught)}</div>
-                <div style={{ color: 'var(--faint)', fontSize: 11, marginTop: 4 }}>هر بار که دستی «تأیید» یا «رد» می‌زنی، مدل قوی‌تر یاد می‌گیرد.</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+                  <span style={{ color: 'var(--faint)', fontSize: 11 }}>هر بار که دستی «تأیید» یا «رد» می‌زنی، مدل قوی‌تر یاد می‌گیرد.</span>
+                  <button onClick={resetMlModel} style={{ fontSize: 11.5, padding: '5px 12px', borderRadius: 8, border: '1px solid #e7674a', color: '#e7674a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', marginInlineStart: 'auto' }}>♻️ ریستِ مدلِ یادگیرنده</button>
+                </div>
+                <div style={{ color: 'var(--faint)', fontSize: 10.5, marginTop: 4 }}>اگر مدل «مسموم» شده (از دادهٔ غلطِ قبلی رد یاد گرفته و همه را رد می‌کند)، ریست کن تا از صفر شروع کند.</div>
               </div>
             )}
 

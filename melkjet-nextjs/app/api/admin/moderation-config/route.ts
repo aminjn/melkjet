@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { getAdminData, saveAdminData } from '@/app/lib/admin-store'
 import { DEFAULT_CRITERIA, modConfig } from '@/app/lib/moderation'
-import { mlStats } from '@/app/lib/moderation-ml'
+import { mlStats, resetMl } from '@/app/lib/moderation-ml'
 
 // معیارهای ممیزیِ آگهی (سوپرادمین): متنِ معیارها + آستانه‌های امتیاز + قانونِ قیمت.
 // AI بر اساسِ این‌ها تصمیم می‌گیرد و ML از تصمیم‌ها یاد می‌گیرد تا کم‌کم خودش انجام دهد.
@@ -17,6 +17,8 @@ export async function POST(req: NextRequest) {
   const s = await getSession()
   if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const b = await req.json().catch(() => ({} as any))
+  // ریستِ مدلِ یادگیرنده (وقتی مسموم شده و همه‌چیز را رد می‌کند).
+  if (b.resetMl) { resetMl(); return NextResponse.json({ ok: true, reset: true, ml: mlStats() }) }
   const data = getAdminData()
   const cur = data.moderation || {}
   const clamp = (n: any, d: number) => { const x = Number(n); return Number.isFinite(x) ? Math.max(0, Math.min(100, Math.round(x))) : d }
