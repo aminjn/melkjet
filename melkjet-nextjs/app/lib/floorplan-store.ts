@@ -1,12 +1,15 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
+import { pgEnabled, kvGet, kvMutate } from './db'
 
 // Per-owner (per-profile) store for saved floor-plans from the offline plan editor.
 // Mirrors the file-based persistence style of materials-store.ts: file-based JSON in
 // process.cwd(), every plan keyed by the owner's phone so each profile sees only its own.
 // Domestic-only — survives even if Iran goes national-internet-only (it's our own server).
+// دومَحاله: اگر DATABASE_URL ست باشد → Postgres (نوشتنِ اتمیک)، وگرنه فایل.
 const DATA_FILE = join(process.cwd(), '.floorplan-data.json')
+const KV_KEY = 'floorplan'
 
 export interface PlanDoor { x: number; y: number; side: 'N' | 'S' | 'E' | 'W' }
 export interface PlanRoomRec { name: string; type: string; x: number; y: number; w: number; h: number }
@@ -26,13 +29,19 @@ interface DB { plans: Record<string, SavedPlan[]> }
 
 function id() { return 'fp_' + randomBytes(5).toString('hex') }
 
-function load(): DB {
+function fileLoad(): DB {
   if (existsSync(DATA_FILE)) {
     try { return JSON.parse(readFileSync(DATA_FILE, 'utf-8')) } catch {}
   }
   return { plans: {} }
 }
-function save(db: DB) { writeFileSync(DATA_FILE, JSON.stringify(db, null, 2)) }
+function fileSave(db: DB) { writeFileSync(DATA_FILE, JSON.stringify(db, null, 2)) }
+
+async function load(): Promise<DB> { return pgEnabled() ? await kvGet<DB>(KV_KEY, { plans: {} }) : fileLoad() }
+async function mutate<R>(fn: (db: DB) => R): Promise<R> {
+  if (pgEnabled()) return kvMutate<DB, R>(KV_KEY, { plans: {} }, fn)
+  const db = fileLoad(); const r = fn(db); fileSave(db); return r
+}
 
 const clampi = (n: any, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(Number(n) || 0)))
 
@@ -54,42 +63,42 @@ function sanitize(input: { area?: any; cols?: any; rows?: any; rooms?: any; door
   return { cols, rows, area, rooms, doors }
 }
 
-export function listPlans(owner: string): SavedPlan[] {
-  const db = load()
+export async function listPlans(owner: string): Promise<SavedPlan[]> {
+  const db = await load()
   return (db.plans[owner] || []).slice().sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
-export function getPlan(owner: string, planId: string): SavedPlan | null {
-  const db = load()
+export async function getPlan(owner: string, planId: string): Promise<SavedPlan | null> {
+  const db = await load()
   return (db.plans[owner] || []).find(p => p.id === planId) || null
 }
 
 // ایجاد یا به‌روزرسانی؛ هر دو حالت پلانِ ذخیره‌شده را برمی‌گرداند. کاملاً محدود به owner.
-export function savePlan(owner: string, input: { id?: string; name?: string; area?: any; cols?: any; rows?: any; rooms?: any; doors?: any }): SavedPlan {
-  const db = load()
-  if (!db.plans[owner]) db.plans[owner] = []
-  const list = db.plans[owner]
-  const s = sanitize(input)
-  const name = String(input.name || 'پلان من').slice(0, 60) || 'پلان من'
-  let plan: SavedPlan
-  const existing = input.id ? list.find(p => p.id === input.id) : null
-  if (existing) {
-    existing.name = name; existing.area = s.area; existing.cols = s.cols; existing.rows = s.rows
-    existing.rooms = s.rooms; existing.doors = s.doors; existing.updatedAt = Date.now()
-    plan = existing
-  } else {
-    plan = { id: id(), name, area: s.area, cols: s.cols, rows: s.rows, rooms: s.rooms, doors: s.doors, updatedAt: Date.now() }
-    list.unshift(plan)
-  }
-  // سقف منطقی برای جلوگیری از رشد بی‌حد
-  if (list.length > 100) db.plans[owner] = list.slice(0, 100)
-  save(db)
-  return plan
+export async function savePlan(owner: string, input: { id?: string; name?: string; area?: any; cols?: any; rows?: any; rooms?: any; doors?: any }): Promise<SavedPlan> {
+  return mutate(db => {
+    if (!db.plans[owner]) db.plans[owner] = []
+    const list = db.plans[owner]
+    const s = sanitize(input)
+    const name = String(input.name || 'پلان من').slice(0, 60) || 'پلان من'
+    let plan: SavedPlan
+    const existing = input.id ? list.find(p => p.id === input.id) : null
+    if (existing) {
+      existing.name = name; existing.area = s.area; existing.cols = s.cols; existing.rows = s.rows
+      existing.rooms = s.rooms; existing.doors = s.doors; existing.updatedAt = Date.now()
+      plan = existing
+    } else {
+      plan = { id: id(), name, area: s.area, cols: s.cols, rows: s.rows, rooms: s.rooms, doors: s.doors, updatedAt: Date.now() }
+      list.unshift(plan)
+    }
+    // سقف منطقی برای جلوگیری از رشد بی‌حد
+    if (list.length > 100) db.plans[owner] = list.slice(0, 100)
+    return plan
+  })
 }
 
-export function deletePlan(owner: string, planId: string) {
-  const db = load()
-  if (!db.plans[owner]) return
-  db.plans[owner] = db.plans[owner].filter(p => p.id !== planId)
-  save(db)
+export async function deletePlan(owner: string, planId: string): Promise<void> {
+  await mutate(db => {
+    if (!db.plans[owner]) return
+    db.plans[owner] = db.plans[owner].filter(p => p.id !== planId)
+  })
 }

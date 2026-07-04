@@ -11,12 +11,12 @@ export async function GET(req: NextRequest) {
   if (!s) return NextResponse.json({ ok: false, login: true, tickets: [], unread: 0 }, { status: 401 })
   const tid = new URL(req.url).searchParams.get('id')
   if (tid) {
-    const t = getTicket(tid)
+    const t = await getTicket(tid)
     if (!t || t.owner !== s.phone) return NextResponse.json({ error: 'یافت نشد' }, { status: 404 })
-    markReadByUser(tid, s.phone)
+    await markReadByUser(tid, s.phone)
     return NextResponse.json({ ok: true, ticket: t })
   }
-  return NextResponse.json({ ok: true, tickets: listByOwner(s.phone), unread: userUnreadCount(s.phone) })
+  return NextResponse.json({ ok: true, tickets: await listByOwner(s.phone), unread: await userUnreadCount(s.phone) })
 }
 
 export async function POST(req: NextRequest) {
@@ -24,13 +24,13 @@ export async function POST(req: NextRequest) {
   if (!s) return NextResponse.json({ error: 'برای پشتیبانی باید وارد شوید', login: true }, { status: 401 })
   const b = await req.json().catch(() => ({}))
   if (b.action === 'reply') {
-    const t = userReply(String(b.id), s.phone, String(b.text || ''))
+    const t = await userReply(String(b.id), s.phone, String(b.text || ''))
     if (!t) return NextResponse.json({ error: 'یافت نشد' }, { status: 404 })
     return NextResponse.json({ ok: true, ticket: t })
   }
   const subject = String(b.subject || '').trim()
   const text = String(b.text || '').trim()
   if (!subject || !text) return NextResponse.json({ error: 'موضوع و توضیحات الزامی است' }, { status: 400 })
-  const t = createTicket(s.phone, { subject, category: b.category, text, name: getAccount(s.phone)?.name, phone: s.phone, panel: b.panel })
+  const t = await createTicket(s.phone, { subject, category: b.category, text, name: getAccount(s.phone)?.name, phone: s.phone, panel: b.panel })
   return NextResponse.json({ ok: true, ticket: t })
 }

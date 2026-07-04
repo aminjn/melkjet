@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     if (!s) return NextResponse.json({ login: true, error: 'برای دیدنِ شماره وارد شوید' }, { status: 401 })
     const phone = await shopPhone(slug)
     if (!phone) return NextResponse.json({ error: 'شماره‌ای ثبت نشده' }, { status: 404 })
-    addContact(found.owner, { viewerPhone: s.phone, viewerName: getAccount(s.phone)?.name, projectName: b.productName || 'ویترینِ فروشگاه', at: Date.now() })
+    await addContact(found.owner, { viewerPhone: s.phone, viewerName: getAccount(s.phone)?.name, projectName: b.productName || 'ویترینِ فروشگاه', at: Date.now() })
     return NextResponse.json({ ok: true, phone })
   }
 

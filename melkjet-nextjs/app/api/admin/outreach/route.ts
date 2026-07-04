@@ -33,9 +33,9 @@ export async function GET(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const onlyNew = new URL(req.url).searchParams.get('onlyNew') === '1'
   const all = targets(onlyNew)
-  const inv = invitedSet()
+  const inv = await invitedSet()
   const pending = all.filter(o => !inv.has(o.phone))
-  return NextResponse.json({ totalOwners: all.length, invited: invitedCount(), pending: pending.length, sample: pending.slice(0, 8).map(o => ({ name: o.name, phone: o.phone.replace(/(\d{4})\d{3}(\d{4})/, '$1***$2') })) })
+  return NextResponse.json({ totalOwners: all.length, invited: await invitedCount(), pending: pending.length, sample: pending.slice(0, 8).map(o => ({ name: o.name, phone: o.phone.replace(/(\d{4})\d{3}(\d{4})/, '$1***$2') })) })
 }
 
 // POST { limit } → به نخستین «limit» صاحبِ آگهیِ دعوت‌نشده پیامکِ دعوت می‌فرستد.
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
   const patternCode = (a.ippanel?.outreachPattern || '').trim()
   const patternVar = (a.ippanel?.outreachVar || 'name').trim() || 'name'
 
-  const inv = invitedSet()
+  const inv = await invitedSet()
   const pending = targets(onlyNew).filter(o => !inv.has(o.phone)).slice(0, limit)
   let sent = 0, failed = 0
   for (const o of pending) {
@@ -65,8 +65,8 @@ export async function POST(req: NextRequest) {
       }
       else { const msg = await shortenLinksInText(inviteText(o.name), { channel: 'outreach', phone: o.phone, title: o.name }); url = 'https://api2.ippanel.com/api/v1/sms/send/webservice/single'; body = { sender, recipient: [o.phone], message: msg, description: { summary: 'دعوت ملک‌جت', count_recipient: '1' } } }
       const res = await shecanRequest(url, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: apiKey, accept: 'application/json' }, body: JSON.stringify(body), timeout: 20000 })
-      if (res.status >= 200 && res.status < 300) { markInvited(o.phone); sent++ } else failed++
+      if (res.status >= 200 && res.status < 300) { await markInvited(o.phone); sent++ } else failed++
     } catch { failed++ }
   }
-  return NextResponse.json({ ok: true, sent, failed, invited: invitedCount() })
+  return NextResponse.json({ ok: true, sent, failed, invited: await invitedCount() })
 }

@@ -56,9 +56,9 @@ export async function trackAndShorten(url: string, opts: { channel: string; phon
   if (!getAdminData().shortener?.apiKey || !url) return url
   const { createLink, setLinkMeta } = await import('./tracker-links-store')
   try {
-    const link = createLink({ dest: url, title: opts.title, phone: opts.phone, channel: opts.channel })
+    const link = await createLink({ dest: url, title: opts.title, phone: opts.phone, channel: opts.channel })
     const sh = await shortenUrl(url)
-    if (sh) { setLinkMeta(link.code, { shortUrl: sh.shortUrl, linkId: sh.id }); return sh.shortUrl }
+    if (sh) { await setLinkMeta(link.code, { shortUrl: sh.shortUrl, linkId: sh.id }); return sh.shortUrl }
   } catch { /* همان لینکِ بلند */ }
   return url
 }
@@ -78,9 +78,9 @@ export async function shortenLinksInText(text: string, opts: { channel: string; 
   let out = text
   for (const u of urls.slice(0, 5)) {
     try {
-      const link = createLink({ dest: u, title: opts.title, phone: opts.phone, channel: opts.channel })
+      const link = await createLink({ dest: u, title: opts.title, phone: opts.phone, channel: opts.channel })
       const sh = await shortenUrl(u)
-      if (sh) { setLinkMeta(link.code, { shortUrl: sh.shortUrl, linkId: sh.id }); out = out.split(u).join(sh.shortUrl) }
+      if (sh) { await setLinkMeta(link.code, { shortUrl: sh.shortUrl, linkId: sh.id }); out = out.split(u).join(sh.shortUrl) }
     } catch { /* همان لینکِ بلند می‌ماند */ }
   }
   return out

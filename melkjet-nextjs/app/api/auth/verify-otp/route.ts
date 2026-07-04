@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
   const token = await createSession(phone)
   // اتصالِ شمارهٔ کاربر به کوکیِ دائمیِ ترکر (mj_vid) — برای پیامکِ هدفمندِ بعدی
   const vid = req.cookies.get('mj_vid')?.value || ''
-  if (vid && vid.length >= 8) { try { linkPhone(vid, phone) } catch {}; try { attachPhone(vid, phone) } catch {} }
+  if (vid && vid.length >= 8) { try { await linkPhone(vid, phone) } catch {}; try { attachPhone(vid, phone) } catch {} }
   // کاربر جدید یا بدون نقش → باید آنبورد شود؛ وگرنه مستقیم به داشبورد نقشش
   const needsOnboarding = !isSuper && (isNew || !account.onboarded)
   const redirect = isSuper ? '/admin' : (needsOnboarding ? '' : dashForRole(account.role))

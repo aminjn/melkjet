@@ -1,9 +1,12 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
+import { pgEnabled, kvGet, kvMutate } from './db'
 
 // ─── سیستمِ تیکتِ پشتیبانی — یک‌جا برای همهٔ پنل‌ها و سوپرادمین ─────────────────
+// دومَحاله: اگر DATABASE_URL ست باشد → Postgres (نوشتنِ اتمیک)، وگرنه فایل.
 const FILE = join(process.cwd(), '.ticket-data.json')
+const KV_KEY = 'ticket'
 function id() { return randomBytes(6).toString('hex') }
 
 export type TicketStatus = 'open' | 'answered' | 'closed'
@@ -17,41 +20,54 @@ export interface Ticket {
 }
 
 type DB = { tickets: Ticket[] }
-function load(): DB { if (existsSync(FILE)) { try { return JSON.parse(readFileSync(FILE, 'utf-8')) } catch {} } return { tickets: [] } }
-function save(db: DB) { try { writeFileSync(FILE, JSON.stringify(db), 'utf-8') } catch {} }
+function fileLoad(): DB { if (existsSync(FILE)) { try { return JSON.parse(readFileSync(FILE, 'utf-8')) } catch {} } return { tickets: [] } }
+function fileSave(db: DB) { try { writeFileSync(FILE, JSON.stringify(db), 'utf-8') } catch {} }
 
-export function createTicket(owner: string, d: { subject: string; category?: string; text: string; name?: string; phone?: string; panel?: string }): Ticket {
-  const db = load()
-  const t: Ticket = {
-    id: id(), owner, name: d.name, phone: d.phone, panel: d.panel,
-    subject: String(d.subject || 'تیکت').slice(0, 120), category: d.category,
-    status: 'open', messages: [{ id: id(), from: 'user', text: String(d.text || '').slice(0, 4000), at: Date.now() }],
-    createdAt: Date.now(), updatedAt: Date.now(), adminUnread: true, userUnread: false,
-  }
-  db.tickets.unshift(t); save(db); return t
+async function load(): Promise<DB> { return pgEnabled() ? await kvGet<DB>(KV_KEY, { tickets: [] }) : fileLoad() }
+async function mutate<R>(fn: (db: DB) => R): Promise<R> {
+  if (pgEnabled()) return kvMutate<DB, R>(KV_KEY, { tickets: [] }, fn)
+  const db = fileLoad(); const r = fn(db); fileSave(db); return r
 }
-export function listByOwner(owner: string): Ticket[] {
-  return load().tickets.filter(t => t.owner === owner).sort((a, b) => b.updatedAt - a.updatedAt)
-}
-export function getTicket(tid: string): Ticket | null { return load().tickets.find(t => t.id === tid) || null }
 
-export function userReply(tid: string, owner: string, text: string): Ticket | null {
-  const db = load(); const t = db.tickets.find(x => x.id === tid && x.owner === owner); if (!t) return null
-  t.messages.push({ id: id(), from: 'user', text: String(text || '').slice(0, 4000), at: Date.now() })
-  t.updatedAt = Date.now(); t.adminUnread = true; t.status = 'open'; save(db); return t
+export async function createTicket(owner: string, d: { subject: string; category?: string; text: string; name?: string; phone?: string; panel?: string }): Promise<Ticket> {
+  return mutate((db) => {
+    const t: Ticket = {
+      id: id(), owner, name: d.name, phone: d.phone, panel: d.panel,
+      subject: String(d.subject || 'تیکت').slice(0, 120), category: d.category,
+      status: 'open', messages: [{ id: id(), from: 'user', text: String(d.text || '').slice(0, 4000), at: Date.now() }],
+      createdAt: Date.now(), updatedAt: Date.now(), adminUnread: true, userUnread: false,
+    }
+    db.tickets.unshift(t); return t
+  })
 }
-export function adminReply(tid: string, text: string): Ticket | null {
-  const db = load(); const t = db.tickets.find(x => x.id === tid); if (!t) return null
-  t.messages.push({ id: id(), from: 'admin', text: String(text || '').slice(0, 4000), at: Date.now() })
-  t.updatedAt = Date.now(); t.userUnread = true; t.status = 'answered'; save(db); return t
+export async function listByOwner(owner: string): Promise<Ticket[]> {
+  return (await load()).tickets.filter(t => t.owner === owner).sort((a, b) => b.updatedAt - a.updatedAt)
 }
-export function setStatus(tid: string, status: TicketStatus): Ticket | null {
-  const db = load(); const t = db.tickets.find(x => x.id === tid); if (!t) return null
-  t.status = status; t.updatedAt = Date.now(); save(db); return t
-}
-export function markReadByUser(tid: string, owner: string) { const db = load(); const t = db.tickets.find(x => x.id === tid && x.owner === owner); if (t && t.userUnread) { t.userUnread = false; save(db) } }
-export function markReadByAdmin(tid: string) { const db = load(); const t = db.tickets.find(x => x.id === tid); if (t && t.adminUnread) { t.adminUnread = false; save(db) } }
+export async function getTicket(tid: string): Promise<Ticket | null> { return (await load()).tickets.find(t => t.id === tid) || null }
 
-export function listAll(): Ticket[] { return load().tickets.slice().sort((a, b) => b.updatedAt - a.updatedAt) }
-export function adminUnreadCount(): number { return load().tickets.filter(t => t.adminUnread).length }
-export function userUnreadCount(owner: string): number { return load().tickets.filter(t => t.owner === owner && t.userUnread).length }
+export async function userReply(tid: string, owner: string, text: string): Promise<Ticket | null> {
+  return mutate((db) => {
+    const t = db.tickets.find(x => x.id === tid && x.owner === owner); if (!t) return null
+    t.messages.push({ id: id(), from: 'user', text: String(text || '').slice(0, 4000), at: Date.now() })
+    t.updatedAt = Date.now(); t.adminUnread = true; t.status = 'open'; return t
+  })
+}
+export async function adminReply(tid: string, text: string): Promise<Ticket | null> {
+  return mutate((db) => {
+    const t = db.tickets.find(x => x.id === tid); if (!t) return null
+    t.messages.push({ id: id(), from: 'admin', text: String(text || '').slice(0, 4000), at: Date.now() })
+    t.updatedAt = Date.now(); t.userUnread = true; t.status = 'answered'; return t
+  })
+}
+export async function setStatus(tid: string, status: TicketStatus): Promise<Ticket | null> {
+  return mutate((db) => {
+    const t = db.tickets.find(x => x.id === tid); if (!t) return null
+    t.status = status; t.updatedAt = Date.now(); return t
+  })
+}
+export async function markReadByUser(tid: string, owner: string): Promise<void> { await mutate((db) => { const t = db.tickets.find(x => x.id === tid && x.owner === owner); if (t && t.userUnread) { t.userUnread = false } }) }
+export async function markReadByAdmin(tid: string): Promise<void> { await mutate((db) => { const t = db.tickets.find(x => x.id === tid); if (t && t.adminUnread) { t.adminUnread = false } }) }
+
+export async function listAll(): Promise<Ticket[]> { return (await load()).tickets.slice().sort((a, b) => b.updatedAt - a.updatedAt) }
+export async function adminUnreadCount(): Promise<number> { return (await load()).tickets.filter(t => t.adminUnread).length }
+export async function userUnreadCount(owner: string): Promise<number> { return (await load()).tickets.filter(t => t.owner === owner && t.userUnread).length }

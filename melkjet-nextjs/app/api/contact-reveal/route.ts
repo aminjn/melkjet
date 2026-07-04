@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
   const norm = (p: string) => String(p).replace(/\D/g, '')
   const isOwner = (prof.phones || []).some(ph => norm(ph) === norm(s.phone))
   if (!isOwner) {
-    addContact(builderId, {
+    await addContact(builderId, {
       viewerPhone: s.phone, viewerName: getAccount(s.phone)?.name,
       projectHashId: b.projectHashId || undefined, projectName: b.projectName || undefined, at: Date.now(),
     })

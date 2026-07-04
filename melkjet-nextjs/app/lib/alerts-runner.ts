@@ -59,7 +59,7 @@ async function sendSms(phone: string, label: string) {
 
 // چرخهٔ هشدار: برای هر جستجوی ذخیره‌شده، آگهی‌های جدیدِ منطبق را پیدا و کاربر را مطلع می‌کند.
 export async function processSavedSearches(now = Date.now()): Promise<{ searches: number; notified: number }> {
-  const searches = listAll()
+  const searches = await listAll()
   if (!searches.length) return { searches: 0, notified: 0 }
   const items = listItems('listing', { publicOnly: true })   // مرتب بر اساسِ scrapedAt نزولی
   let notified = 0
@@ -88,7 +88,7 @@ export async function processSavedSearches(now = Date.now()): Promise<{ searches
       }
       notified++
     }
-    setLastCheck(s.id, now)
+    await setLastCheck(s.id, now)
   }
   return { searches: searches.length, notified }
 }

@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   if (url.searchParams.get('contacts') === '1') {
     const builderId = builderIdForPhone(s.phone)
     if (!builderId) return NextResponse.json({ ok: true, linked: false, contacts: [] })
-    return NextResponse.json({ ok: true, linked: true, contacts: getContacts(builderId) })
+    return NextResponse.json({ ok: true, linked: true, contacts: await getContacts(builderId) })
   }
 
   // دادهٔ ویرایشِ پروفایلِ عمومی (تب «پروفایلِ عمومی» در پنل).

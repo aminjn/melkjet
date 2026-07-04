@@ -22,7 +22,7 @@ function topMatch(text: string, list: string[]): string {
 
 export async function GET(req: NextRequest) {
   const vid = req.cookies.get('mj_vid')?.value || ''
-  const v = vid ? getVisitor(vid) : null
+  const v = vid ? await getVisitor(vid) : null
   if (!v || !v.events?.length) return NextResponse.json({ city: '', neighborhood: '' }, { headers: { 'Cache-Control': 'no-store' } })
   const text = v.events.map(e => `${e.title || ''} ${e.url || ''}`).join(' ')
   return NextResponse.json(

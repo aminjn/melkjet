@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای مشاهده وارد شوید' }, { status: 401 })
   const panel = new URL(req.url).searchParams.get('panel') || 'buyer'
-  return NextResponse.json({ chats: listChats(s.phone, panel) }, { headers: { 'Cache-Control': 'no-store, private' } })
+  return NextResponse.json({ chats: await listChats(s.phone, panel) }, { headers: { 'Cache-Control': 'no-store, private' } })
 }
 
 export async function POST(req: NextRequest) {
@@ -41,16 +41,16 @@ export async function POST(req: NextRequest) {
     case 'ask': {
       const text = String(b.text || '').trim()
       if (!text) return NextResponse.json({ error: 'پیام خالی است' }, { status: 400 })
-      const chat = addMessage(o, panel, b.chatId ? String(b.chatId) : undefined, 'user', text)
+      const chat = await addMessage(o, panel, b.chatId ? String(b.chatId) : undefined, 'user', text)
       const history = chat.messages.slice(-12).map(m => ({ role: m.role, content: m.text }))
       const out = await aiSafe([{ role: 'system', content: systemPrompt(panel) }, ...history])
       const answer = out || 'دستیار هوشمند فعلاً در دسترس نیست (کلید سرویس AI در پنل مدیریت تنظیم نشده). لطفاً بعداً تلاش کنید.'
-      addMessage(o, panel, chat.id, 'assistant', answer)
-      return NextResponse.json({ ok: true, chat: getChat(o, panel, chat.id), chats: listChats(o, panel), degraded: !out })
+      await addMessage(o, panel, chat.id, 'assistant', answer)
+      return NextResponse.json({ ok: true, chat: await getChat(o, panel, chat.id), chats: await listChats(o, panel), degraded: !out })
     }
-    case 'new': { const c = newChat(o, panel); return NextResponse.json({ ok: true, chat: c, chats: listChats(o, panel) }) }
-    case 'rename': { const c = renameChat(o, panel, String(b.id), String(b.title || '')); return c ? NextResponse.json({ ok: true, chat: c }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
-    case 'delete': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); deleteChat(o, panel, String(b.id)); return NextResponse.json({ ok: true, chats: listChats(o, panel) })
+    case 'new': { const c = await newChat(o, panel); return NextResponse.json({ ok: true, chat: c, chats: await listChats(o, panel) }) }
+    case 'rename': { const c = await renameChat(o, panel, String(b.id), String(b.title || '')); return c ? NextResponse.json({ ok: true, chat: c }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
+    case 'delete': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); await deleteChat(o, panel, String(b.id)); return NextResponse.json({ ok: true, chats: await listChats(o, panel) })
     default: return NextResponse.json({ error: 'عملیات نامعتبر' }, { status: 400 })
   }
 }

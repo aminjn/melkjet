@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   const builderId = String(b.builderId || '')
   if (!builderId) return NextResponse.json({ ok: false }, { status: 400 })
   const unit = b.unit ? ` — واحد ${b.unit}` : ''
-  addContact(builderId, {
+  await addContact(builderId, {
     viewerPhone: String(b.phone || '—'), viewerName: b.name || undefined,
     projectHashId: b.projectHash || undefined, projectName: `${b.projectName || 'پروژه'}${unit}`, at: Date.now(),
   })

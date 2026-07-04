@@ -15,10 +15,10 @@ export async function GET(req: NextRequest) {
   if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   // با ?refresh=1 آمارِ کلیکِ لینک‌ها از nxal به‌روزرسانی می‌شود.
   if (new URL(req.url).searchParams.get('refresh') === '1') {
-    for (const l of listLinks(60)) {
+    for (const l of await listLinks(60)) {
       if (!l.linkId) continue
       const st = await getNxalStats(l.linkId)
-      if (st) applyStats(l.code, st)
+      if (st) await applyStats(l.code, st)
     }
   }
   const d = getAdminData()
@@ -32,10 +32,10 @@ export async function GET(req: NextRequest) {
     delayMin: t.delayMin ?? 2,
     throttleHours: t.throttleHours ?? 6,
     paths: t.paths || '',
-    stats: stats(),
+    stats: await stats(),
     shortener: { configured: !!sh?.apiKey, masked: sh?.apiKey ? '***' + sh.apiKey.slice(-4) : '', siteBase: sh?.siteBase || 'https://melkjet.com', domain: sh?.domain || '' },
-    links: listLinks(100),
-    linkStats: linkStats(),
+    links: await listLinks(100),
+    linkStats: await linkStats(),
   })
 }
 

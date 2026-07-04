@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({} as any))
   const url = String(b.url || '').slice(0, 300)
   const title = cleanTitle(b.title || '')
-  if (url) recordEvent(vid, { url, title, at: Date.now() })
+  if (url) await recordEvent(vid, { url, title, at: Date.now() })
 
   // تصمیم برای پیامکِ هدفمند
   const t = getAdminData().tracker
@@ -29,11 +29,11 @@ export async function POST(req: NextRequest) {
     const path = url.split('?')[0]
     const match = list.some(p => path.startsWith(p))
     const throttleMs = Math.max(0, (t.throttleHours ?? 6)) * 3600_000
-    if (match && canSend(vid, throttleMs)) {
+    if (match && await canSend(vid, throttleMs)) {
       const tmpl = t.template || 'سلام👋 «%title%» را در ملک‌جت دیدید و مشتاقانه منتظرِ شما هستیم.'
       const message = tmpl.replace(/%title%/g, title || 'موردِ موردِ علاقه‌تان').replace(/%url%/g, url)
       const dueAt = Date.now() + Math.max(0, (t.delayMin ?? 2)) * 60_000
-      enqueuePending(vid, { message, title, url, dueAt })
+      await enqueuePending(vid, { message, title, url, dueAt })
     }
   }
 

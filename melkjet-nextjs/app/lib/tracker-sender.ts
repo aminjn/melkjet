@@ -14,23 +14,23 @@ export async function processTrackerQueue(now = Date.now()): Promise<{ due: numb
   const sender = process.env.IPPANEL_SENDER || admin.ippanel?.sender
   if (!apiKey || !sender) return { due: 0, sent: 0 }
 
-  const due = listDuePending(now)
+  const due = await listDuePending(now)
   let sent = 0
   const patternCode = (t.pattern || '').trim()
   const patternVar = (t.patternVar || 'message').trim() || 'message'
 
   for (const { vid, phone, pending } of due) {
     const recipient = String(phone).replace(/\D/g, '')
-    if (!/^09\d{9}$/.test(recipient)) { markSent(vid, false); continue }
+    if (!/^09\d{9}$/.test(recipient)) { await markSent(vid, false); continue }
     // لینکِ آگهی را با nxal کوتاه کن (id برای آمار ذخیره می‌شود).
     let message = pending.message
     let shortLink = ''
     if (pending.url && /^https?:\/\//.test(pending.url)) {
       try {
-        const link = createLink({ dest: pending.url, title: pending.title, phone: recipient, channel: 'tracker' })
+        const link = await createLink({ dest: pending.url, title: pending.title, phone: recipient, channel: 'tracker' })
         const sh = await shortenUrl(pending.url)
         if (sh) {
-          setLinkMeta(link.code, { shortUrl: sh.shortUrl, linkId: sh.id })
+          await setLinkMeta(link.code, { shortUrl: sh.shortUrl, linkId: sh.id })
           shortLink = sh.shortUrl
           message = message.includes(pending.url) ? message.split(pending.url).join(sh.shortUrl) : `${message} ${sh.shortUrl}`
         }
@@ -54,9 +54,9 @@ export async function processTrackerQueue(now = Date.now()): Promise<{ due: numb
       const okStatus = res.status >= 200 && res.status < 300
       const metaOk = parsed?.meta?.status !== false && !/"status"\s*:\s*"?error"?/i.test(res.body)
       const ok = okStatus && metaOk
-      markSent(vid, ok)
+      await markSent(vid, ok)
       if (ok) sent++
-    } catch { markSent(vid, false) }
+    } catch { await markSent(vid, false) }
   }
   return { due: due.length, sent }
 }

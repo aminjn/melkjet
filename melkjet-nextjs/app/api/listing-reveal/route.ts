@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
 
   // اگر بیننده خودِ صاحب نباشد، تماس را ثبت کن.
   if (digits(s.phone) !== digits(phone)) {
-    addContact(ownerKey, { viewerPhone: s.phone, viewerName: getAccount(s.phone)?.name, projectName: label, at: Date.now() })
+    await addContact(ownerKey, { viewerPhone: s.phone, viewerName: getAccount(s.phone)?.name, projectName: label, at: Date.now() })
   }
   return NextResponse.json({ ok: true, phone })
 }
