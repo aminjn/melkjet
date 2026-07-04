@@ -42,6 +42,20 @@ function faToNum(s?: string): number {
   return Number.isFinite(n) ? n : 0
 }
 
+// پارسِ مبلغِ تومان با درکِ «میلیون/میلیارد» (توضیحاتِ دیوار اغلب این‌طوری‌اند: «۲۵۰ میلیون»).
+// «رایگان/توافقی/مجانی» → صفر. اعدادِ کامل با کاما («۲۵۰,۰۰۰,۰۰۰») هم درست خوانده می‌شوند.
+function parseToman(s?: string): number {
+  if (!s) return 0
+  if (/رایگان|توافقی|مجانی|مجانی|طبق توافق/.test(s)) return 0
+  const latin = String(s).replace(/[۰-۹]/g, d => String(FA_DIGITS.indexOf(d)))
+  const num = latin.match(/[\d][\d,.]*/)
+  if (!num) return 0
+  const base = parseFloat(num[0].replace(/,/g, '')) || 0
+  if (/میلیارد/.test(s)) return Math.round(base * 1e9)
+  if (/میلیون/.test(s)) return Math.round(base * 1e6)
+  return Math.round(base)
+}
+
 const UA_BROWSER = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
 
 // تشخیصِ لینکِ پروفایلِ پرو/کسب‌وکارِ دیوار: divar.ir/pro/<slug> یا /businesses/<slug>
@@ -204,7 +218,7 @@ export async function fetchDivarPost(token: string): Promise<DivarPost> {
       walk(o); return r
     }
 
-    const FACT_LABELS = ['متراژ', 'ساخت', 'سن بنا', 'سال ساخت', 'اتاق', 'تعداد اتاق', 'خواب', 'طبقه', 'ودیعه', 'اجاره', 'اجارهٔ ماهانه', 'قیمت', 'قیمت کل', 'قیمت کل (تومان)', 'قیمت هر متر', 'پارکینگ', 'آسانسور', 'انباری', 'بالکن', 'جهت ساختمان', 'سند', 'وضعیت واحد', 'نوع']
+    const FACT_LABELS = ['متراژ', 'ساخت', 'سن بنا', 'سال ساخت', 'اتاق', 'تعداد اتاق', 'خواب', 'طبقه', 'ودیعه', 'رهن', 'رهن و اجاره', 'مبلغ رهن', 'مبلغ ودیعه', 'اجاره', 'اجارهٔ ماهانه', 'اجاره ماهیانه', 'مبلغ اجاره', 'قیمت', 'قیمت کل', 'قیمت کل (تومان)', 'قیمت فروش', 'قیمت هر متر', 'پارکینگ', 'آسانسور', 'انباری', 'بالکن', 'جهت ساختمان', 'سند', 'وضعیت واحد', 'نوع']
     const AMENITY_WORDS = ['آسانسور', 'پارکینگ', 'انباری', 'بالکن', 'تراس', 'کولر', 'پکیج', 'لابی', 'سالن اجتماعات', 'استخر', 'سونا', 'جکوزی', 'روف‌گاردن', 'دوربین', 'سیستم امنیتی', 'لاندری', 'مستر', 'نگهبان', 'سرایدار', 'فول مشاعات']
     const factsMap: Record<string, string> = {}
     const amenitySet = new Set<string>()
@@ -257,10 +271,9 @@ export async function fetchDivarPost(token: string): Promise<DivarPost> {
 
     // ── فیلدهای ساخت‌یافته برای ایمپورت ──
     const factVal = (...keys: string[]) => { for (const k of keys) if (factsMap[k]) return factsMap[k]; return '' }
-    const deposit = factVal('ودیعه')
-    const monthly = factVal('اجارهٔ ماهانه', 'اجاره')
-    const total = factVal('قیمت کل (تومان)', 'قیمت کل', 'قیمت')
-    const isRent = !!(deposit || monthly) && !total
+    let deposit = factVal('ودیعه', 'رهن', 'مبلغ رهن', 'مبلغ ودیعه', 'رهن و اجاره')
+    let monthly = factVal('اجارهٔ ماهانه', 'اجاره ماهیانه', 'مبلغ اجاره', 'اجاره')
+    let total = factVal('قیمت کل (تومان)', 'قیمت کل', 'قیمت فروش', 'قیمت')
     const area = faToNum(factVal('متراژ')) || undefined
     const roomsRaw = factVal('اتاق', 'تعداد اتاق', 'خواب')
     const rooms = roomsRaw.includes('بدون') ? 0 : (faToNum(roomsRaw) || undefined)
@@ -281,21 +294,42 @@ export async function fetchDivarPost(token: string): Promise<DivarPost> {
     const city = d ? strOf(findFirst(d, 'city_persian')).trim() : ''
     const district = d ? strOf(findFirst(d, 'district_persian')).trim() : ''
     const neighborhood = (d ? (strOf(findFirst(d, 'neighborhood_persian')) || strOf(findFirst(d, 'neighbourhood_persian'))).trim() : '') || district
-    const cat = d ? strOf(findFirst(d, 'category')).trim() : ''
+    const cat = (d ? strOf(findFirst(d, 'category')).trim() : '').toLowerCase()
+    const dsc = description || ''
+    // بلابِ تشخیص: اسلاگِ انگلیسیِ دسته + عنوان + توضیحات.
+    const blob = `${cat} ${title} ${dsc}`
+
+    // ── نوعِ معامله (اجاره/فروش) — اولویت: اسلاگِ دسته، بعد فیلدهای قیمت، بعد واژه‌ها ──
+    let deal: 'sale' | 'rent'
+    if (/rent|اجاره|رهن|ودیعه/.test(blob) && !/(pre-?sell|pishforush|پیش[\s‌]?فروش|فروش)/.test(`${cat} ${title}`)) deal = 'rent'
+    else if (/sell|sale|فروش/.test(`${cat} ${title}`)) deal = 'sale'
+    else if (deposit || monthly) deal = 'rent'
+    else if (total) deal = 'sale'
+    else deal = 'sale'
+
+    // ── نوعِ ملک (مسکونی/اداری/تجاری/…) — اولویت: اسلاگِ دسته (انگلیسی) بعد واژه‌های فارسی ──
     let ptype = 'آپارتمان'
-    const blob = cat + ' ' + title
-    if (/اداری|دفتر/.test(blob)) ptype = 'اداری'
-    else if (/مغازه|تجاری/.test(blob)) ptype = 'تجاری'
-    else if (/ویلا|خانه|کلنگی/.test(blob)) ptype = 'ویلا/خانه'
-    else if (/زمین/.test(blob)) ptype = 'زمین'
+    if (/office|دفتر|اداری/.test(blob)) ptype = 'اداری'
+    else if (/store|shop|مغازه|تجاری|سوله|انبار/.test(blob)) ptype = 'تجاری'
+    else if (/plot|land|زمین|کلنگی/.test(blob)) ptype = 'زمین'
+    else if (/villa|house|ویلا|خانه|دربست/.test(blob)) ptype = 'ویلا/خانه'
+    else if (/apartment|residential|آپارتمان/.test(blob)) ptype = 'آپارتمان'
+
+    // ── قیمت: اگر از فکت‌ها نیامد، از توضیحات درش بیاور (پشتیبان) ──
+    if (deal === 'rent') {
+      if (!deposit) { const m = dsc.match(/(?:ودیعه|رهن)[^\d۰-۹]{0,12}([\d۰-۹][\d۰-۹,.\s]*(?:میلیون|میلیارد)?)/); if (m) deposit = m[1] }
+      if (!monthly) { const m = dsc.match(/اجاره[^\d۰-۹]{0,12}([\d۰-۹][\d۰-۹,.\s]*(?:میلیون|میلیارد)?)/); if (m) monthly = m[1] }
+    } else {
+      if (!total) { const m = dsc.match(/(?:قیمت|مبلغ)[^\d۰-۹]{0,12}([\d۰-۹][\d۰-۹,.\s]*(?:میلیون|میلیارد)?)/); if (m) total = m[1] }
+    }
 
     return {
       images, description, facts, amenities, lat, lng,
       title, city, district, neighborhood, ptype,
       location: [city, neighborhood].filter(Boolean).join('، '),
-      deal: isRent ? 'rent' : 'sale',
-      price: isRent ? faToNum(deposit) : faToNum(total),
-      rentMonthly: isRent ? faToNum(monthly) : 0,
+      deal,
+      price: deal === 'rent' ? parseToman(deposit) : parseToman(total),
+      rentMonthly: deal === 'rent' ? parseToman(monthly) : 0,
       area, rooms, floor, yearBuilt,
     }
   } catch (e: any) {
