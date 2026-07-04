@@ -121,8 +121,9 @@ body {
 
 /* Search */
 .mjs-map-mobile{display:none}
-@media(max-width:1040px){.mjs-map{display:none!important}.mjs-grid{grid-template-columns:1fr!important}.mjs-navlinks{display:none!important}.mjs-map-mobile{display:block!important}}
-@media(max-width:640px){.mjs-cards{grid-template-columns:1fr!important}.mjs-filterbar{flex-wrap:wrap!important}}
+@media(max-width:1040px){.mjs-map{display:none!important}.mjs-grid{grid-template-columns:1fr!important}.mjs-navlinks{display:none!important}.mjs-mapbtn{display:inline-flex!important}.mjs-mapfull{display:block!important}}
+/* موبایل: هدرِ جستجو جمع‌وجورتر تا آگهی‌ها زودتر دیده شوند */
+@media(max-width:640px){.mjs-cards{grid-template-columns:1fr!important}.mjs-filterbar{flex-wrap:wrap!important;padding:10px 14px!important;gap:8px!important}.mjs-quickbar{padding:0 14px 10px!important}}
 
 /* Property */
 @media(max-width:980px){.mjp-grid{grid-template-columns:1fr!important}.mjp-side{position:static!important}.mjp-navlinks{display:none!important}}

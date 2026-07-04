@@ -173,6 +173,7 @@ function SearchPageInner() {
   }
 
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [mapOpenMobile, setMapOpenMobile] = useState(false)   // موبایل: نقشه پیش‌فرض بسته، با دکمهٔ شناور باز می‌شود
   const [search, setSearch] = useState(initialQuery)
   const [searchTerm, setSearchTerm] = useState(initialQuery)
   const [beds, setBeds] = useState<string>('همه')
@@ -615,10 +616,8 @@ function SearchPageInner() {
       {/* محتوای اصلی */}
       <div className="mjs-grid" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 48px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, alignItems: 'start', minHeight: 'calc(100vh - 200px)' }}>
         <div style={{ paddingTop: 20, paddingLeft: 12 }}>
-          {/* نقشه روی موبایل (مثلِ دیوار) — بالای نتایج */}
-          <div className="mjs-map-mobile" style={{ height: 300, marginBottom: 14 }}>
-            <SearchMap view={mapView} pins={pins} city={mapArea || selectedCity || userArea} />
-          </div>
+          {/* روی موبایل نقشه پیش‌فرض نشان داده نمی‌شود (فضای آگهی‌ها را نمی‌گیرد)؛ با دکمهٔ
+              شناورِ «نقشه» به‌صورتِ تمام‌صفحه باز می‌شود — مثلِ دیوار. */}
           {/* «آگهی جدید اومد خبرم کن» */}
           <NotifyBar count={shownProperties.length} criteria={{ city: selectedCity, area: mapArea || prefArea, deal: (dealType === 'پیش‌فروش' ? 'presale' : (dealType === 'اجاره' || dealType === 'رهن') ? 'rent' : 'sale'), kind: fKind, priceMax: fBudgetMax }} />
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
@@ -680,12 +679,32 @@ function SearchPageInner() {
           </div>
         </div>
 
-        {/* نقشهٔ واقعیِ نشان */}
+        {/* نقشهٔ واقعیِ نشان — فقط دسکتاپ (کنارِ نتایج، چسبان) */}
         <div className="map-panel mjs-map" style={{ position: 'sticky', top: 88, height: 'calc(100vh - 108px)', paddingTop: 20, paddingRight: 12 }}>
           <style>{`@media (max-width: 768px) { .map-panel { display: none !important; } }`}</style>
           <SearchMap view={mapView} pins={pins} city={mapArea || selectedCity || userArea} />
         </div>
       </div>
+
+      {/* موبایل: دکمهٔ شناورِ «نقشه» (فقط وقتی نقشه بسته است) */}
+      {!mapOpenMobile && (
+        <button className="mjs-mapbtn" onClick={() => setMapOpenMobile(true)}
+          style={{ position: 'fixed', bottom: 84, left: '50%', transform: 'translateX(-50%)', zIndex: 60, display: 'none', alignItems: 'center', gap: 7, padding: '11px 20px', borderRadius: 999, border: 'none', background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 14, fontFamily: 'inherit', boxShadow: '0 8px 24px -6px rgba(0,0,0,.5)', cursor: 'pointer' }}>
+          🗺 نقشه
+        </button>
+      )}
+      {/* موبایل: نقشهٔ تمام‌صفحه وقتی باز است */}
+      {mapOpenMobile && (
+        <div className="mjs-mapfull" style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'var(--bg)', display: 'none' }}>
+          <div style={{ position: 'absolute', inset: 0, padding: 8 }}>
+            <SearchMap view={mapView} pins={pins} city={mapArea || selectedCity || userArea} />
+          </div>
+          <button onClick={() => setMapOpenMobile(false)}
+            style={{ position: 'fixed', bottom: 84, left: '50%', transform: 'translateX(-50%)', zIndex: 80, display: 'flex', alignItems: 'center', gap: 7, padding: '11px 22px', borderRadius: 999, border: 'none', background: '#e7674a', color: '#fff', fontWeight: 800, fontSize: 14, fontFamily: 'inherit', boxShadow: '0 8px 24px -6px rgba(0,0,0,.6)', cursor: 'pointer' }}>
+            ✕ بستن نقشه
+          </button>
+        </div>
+      )}
     </div>
   )
 }
