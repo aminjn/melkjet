@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import Nav from '@/app/components/Nav'
 import BannerSlot from '@/app/components/BannerSlot'
 import CompareButton from '@/app/components/CompareButton'
+import NeighborhoodPicker from '@/app/components/NeighborhoodPicker'
 import { fetchContent, gradientFor, type ContentItem } from '@/app/lib/content-display'
 import { readLoc } from '@/app/components/LocationDetector'
 import { readCity } from '@/app/components/CitySelector'
@@ -479,12 +480,7 @@ function SearchPageInner() {
               <span>📍</span>{nearMe ? `نزدیکِ من${userArea ? ` · ${userArea}` : ''}` : 'نزدیکِ من'}
             </button>
           )}
-          {hoodOptions.length > 0 && (
-            <select value={hood} onChange={e => setHood(e.target.value)} title="فیلترِ محله" style={{ height: 48, padding: '0 12px', borderRadius: 12, background: hood ? 'var(--goldDim)' : 'var(--surface)', border: `1px solid ${hood ? 'var(--gold)' : 'var(--line2)'}`, color: hood ? 'var(--gold)' : 'var(--text)', fontSize: 13.5, cursor: 'pointer', outline: 'none', fontFamily: 'inherit', fontWeight: hood ? 700 : 400 }}>
-              <option value="">همهٔ محله‌ها</option>
-              {hoodOptions.map(o => <option key={o.h} value={o.h}>{o.h} ({toPersianDigits(o.c)})</option>)}
-            </select>
-          )}
+          <NeighborhoodPicker value={hood} onChange={setHood} city={selectedCity} fallback={hoodOptions.map(o => o.h)} />
           <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ height: 48, padding: '0 12px', borderRadius: 12, background: 'var(--surface)', border: '1px solid var(--line2)', color: 'var(--text)', fontSize: 13.5, cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }}>
             <option>پیشنهاد ملک‌جت</option><option>ارزان‌ترین</option><option>گران‌ترین</option><option>جدیدترین</option>
           </select>
@@ -503,8 +499,9 @@ function SearchPageInner() {
           </div>
         )}
 
-        {/* کشوی فیلترها */}
-        <div style={{ maxHeight: filtersOpen ? 520 : 0, overflow: 'hidden', transition: 'max-height 0.32s cubic-bezier(0.4,0,0.2,1)', borderTop: filtersOpen ? '1px solid var(--line)' : 'none', background: 'var(--surface)' }}>
+        {/* کشوی فیلترها — وقتی باز است داخلِ خودش اسکرول می‌شود (روی موبایل کوتاه‌تر از ارتفاعِ محتواست
+            و قبلاً overflow:hidden محتوا را می‌بُرید و کاربر نمی‌توانست به فیلترهای پایین برسد). */}
+        <div style={{ maxHeight: filtersOpen ? 'min(72vh, 560px)' : 0, overflowY: filtersOpen ? 'auto' : 'hidden', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', transition: 'max-height 0.32s cubic-bezier(0.4,0,0.2,1)', borderTop: filtersOpen ? '1px solid var(--line)' : 'none', background: 'var(--surface)' }}>
           <div style={{ maxWidth: 1280, margin: '0 auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
             {/* نوع معامله + نوع ملک */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
