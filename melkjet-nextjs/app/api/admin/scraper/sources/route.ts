@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
   // Divar connector uses the official API, not a page URL
   if (!b.name || (!b.url && method !== 'divar')) return NextResponse.json({ error: 'نام و آدرس الزامی است' }, { status: 400 })
   if (b.url) { try { new URL(b.url) } catch { return NextResponse.json({ error: 'آدرس نامعتبر است' }, { status: 400 }) } }
-  const src = addSource({
+  const src = await addSource({
     name: String(b.name).slice(0, 80),
     url: String(b.url || 'https://divar.ir'),
     type: (['listing', 'directory', 'product', 'article', 'price'].includes(b.type) ? b.type : 'listing') as SourceType,
@@ -59,7 +59,7 @@ export async function PATCH(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const b = await req.json()
   if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
-  const s = updateSource(b.id, b.patch || {})
+  const s = await updateSource(b.id, b.patch || {})
   if (!s) return NextResponse.json({ error: 'منبع یافت نشد' }, { status: 404 })
   return NextResponse.json({ ok: true, source: s })
 }
@@ -68,6 +68,6 @@ export async function DELETE(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const id = new URL(req.url).searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
-  deleteSource(id)
+  await deleteSource(id)
   return NextResponse.json({ ok: true })
 }

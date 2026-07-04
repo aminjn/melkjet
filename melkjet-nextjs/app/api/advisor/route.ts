@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
       })
       if (mod.status === 'rejected') return NextResponse.json({ blocked: true, reason: mod.reason, error: `این آگهی در ممیزی رد شد: ${mod.reason}` })
       const l = await publishListing(o, String(b.id))
-      if (l?.publicId) { warmEnrichment(l.publicId); if (mod.status === 'approved') setModeration(l.publicId, 'approved', mod.reason, mod.score) }
+      if (l?.publicId) { warmEnrichment(l.publicId); if (mod.status === 'approved') await setModeration(l.publicId, 'approved', mod.reason, mod.score) }
       return l ? NextResponse.json({ ok: true, listing: l, publicId: l.publicId, moderation: mod }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 })
     }
     case 'unpublishListing': { if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); const l = await unpublishListing(o, String(b.id)); return l ? NextResponse.json({ ok: true, listing: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }

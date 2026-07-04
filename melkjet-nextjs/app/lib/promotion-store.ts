@@ -36,9 +36,9 @@ export function listActive(slot: string): Promotion[] {
   return load().filter(p => p.slot === slot && p.active && (!p.expiresAt || p.expiresAt > now)).sort((a, b) => a.order - b.order)
 }
 
-export function addPromotion(slot: string, targetId: string, expiresAt?: number): Promotion | null {
+export async function addPromotion(slot: string, targetId: string, expiresAt?: number): Promise<Promotion | null> {
   if (!slotOf(slot)) return null
-  const it = getItemById(targetId)
+  const it = await getItemById(targetId)
   if (!it) return null
   const rows = load()
   const order = rows.filter(p => p.slot === slot).length

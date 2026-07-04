@@ -27,7 +27,7 @@ async function tick(): Promise<{ due: number; synced: number }> {
   let synced = 0
   let due: { phone: string; source: any }[] = []
   try {
-    try { publishDueArticles() } catch { /* مقالاتِ زمان‌بندی‌شده */ }
+    try { await publishDueArticles() } catch { /* مقالاتِ زمان‌بندی‌شده */ }
     try { await processTrackerQueue(Date.now()) } catch { /* صفِ پیامکِ هدفمندِ ترکر */ }
     try { await processSavedSearches(Date.now()) } catch { /* هشدارِ آگهیِ جدید */ }
     try { await processProfileGate(Date.now()) } catch { /* سامانهٔ تکمیلِ پروفایل */ }

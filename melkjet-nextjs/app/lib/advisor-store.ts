@@ -185,10 +185,10 @@ export async function setListingStatus(o: string, fid: string, status: ListingSt
   let pubId = ''
   await mutate(o, a => { const l = a.listings.find(x => x.id === fid); if (!l) return; l.status = status; res = l; pubId = l.publicId || '' })
   // مهرِ «فروخته شد / اجاره رفت» روی آگهیِ عمومی هم اعمال شود (اگر منتشر شده).
-  if (pubId) setItemDealStatus(pubId, status === 'sold' ? 'sold' : status === 'rented' ? 'rented' : '')
+  if (pubId) await setItemDealStatus(pubId, status === 'sold' ? 'sold' : status === 'rented' ? 'rented' : '')
   return res
 }
-export async function deleteListing(o: string, fid: string): Promise<void> { await mutate(o, a => { const l = a.listings.find(x => x.id === fid); if (l?.publicId) deleteItem(l.publicId); a.listings = a.listings.filter(x => x.id !== fid) }) }
+export async function deleteListing(o: string, fid: string): Promise<void> { let pub = ''; await mutate(o, a => { const l = a.listings.find(x => x.id === fid); if (l?.publicId) pub = l.publicId; a.listings = a.listings.filter(x => x.id !== fid) }); if (pub) await deleteItem(pub) }
 
 // ---- انتشار عمومی روی سایت (آگهی پابلیک) ----
 function faNum(n?: number): string { return n ? n.toLocaleString('fa-IR') : '' }
@@ -213,22 +213,27 @@ function publicPayload(l: Listing, advisorName: string, ownerPhone?: string) {
   return { title: l.title, price, location: loc, image: l.images?.[0], excerpt: l.description, phone: l.phone, owner: advisorName, meta }
 }
 export async function publishListing(o: string, fid: string): Promise<Listing | null> {
+  const a0 = await getAdvisor(o)
+  const l0 = a0.listings.find(x => x.id === fid)
+  if (!l0) return null
+  if (l0.publicId && await getItemById(l0.publicId)) await deleteItem(l0.publicId) // بازسازی برای اعمالِ تغییرات
+  const item = await addUserListing(publicPayload(l0, a0.profile.name || 'مشاور', o))
   let res: Listing | null = null
   await mutate(o, a => {
     const l = a.listings.find(x => x.id === fid); if (!l) return
-    if (l.publicId && getItemById(l.publicId)) deleteItem(l.publicId) // بازسازی برای اعمالِ تغییرات
-    const item = addUserListing(publicPayload(l, a.profile.name || 'مشاور', o))
     l.publicId = item.id; l.published = true; res = l
   })
   return res
 }
 export async function unpublishListing(o: string, fid: string): Promise<Listing | null> {
   let res: Listing | null = null
+  let pub = ''
   await mutate(o, a => {
     const l = a.listings.find(x => x.id === fid); if (!l) return
-    if (l.publicId) deleteItem(l.publicId)
+    if (l.publicId) pub = l.publicId
     l.publicId = undefined; l.published = false; res = l
   })
+  if (pub) await deleteItem(pub)
   return res
 }
 

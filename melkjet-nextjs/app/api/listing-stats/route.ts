@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   if (sp.get('mine') === '1') {
     const s = await getSession()
     if (!s) return NextResponse.json({ listings: [], totals: { views: 0, contacts: 0 } }, { status: 401 })
-    const mine = listItems('listing').filter(it => String(it.meta?.__ownerPhone || '') === s.phone)
+    const mine = (await listItems('listing')).filter(it => String(it.meta?.__ownerPhone || '') === s.phone)
     const stats = await forIds(mine.map(it => it.id))
     const listings = mine.map(it => ({ id: it.id, title: it.title, location: it.location || '', price: it.price || '', image: it.image, views: stats[it.id].views, contacts: stats[it.id].contacts, lastView: stats[it.id].lastView }))
       .sort((a, b) => (b.views + b.contacts * 3) - (a.views + a.contacts * 3))

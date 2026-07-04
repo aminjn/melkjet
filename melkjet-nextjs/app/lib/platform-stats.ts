@@ -12,12 +12,12 @@ function cityOf(it: Item) { return it.meta?.['شهر'] || (it.location || '').sp
 function districtOf(it: Item) { return it.meta?.['محله'] || (it.location || '').split('،')[0]?.trim() || 'نامشخص' }
 
 // Comprehensive, real platform-wide data overview (everything we have).
-export function platformStats() {
-  const listings = listItems('listing')
-  const directory = listItems('directory')
-  const products = listItems('product')
-  const articles = listItems('article')
-  const prices = listItems('price')
+export async function platformStats() {
+  const listings = await listItems('listing')
+  const directory = await listItems('directory')
+  const products = await listItems('product')
+  const articles = await listItems('article')
+  const prices = await listItems('price')
 
   let sale = 0, rent = 0
   const byCity: Record<string, number> = {}
@@ -64,7 +64,7 @@ export function platformStats() {
     products: products.length,
     articles: articles.length,
     prices: prices.length,
-    owners: listOwners().length,
+    owners: (await listOwners()).length,
     dataset: listPoints().length,
   }
 }

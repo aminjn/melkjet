@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   const model = moderationModel()
 
   if (b.id) {
-    const it = getItemById(b.id)
+    const it = await getItemById(b.id)
     if (!it) return NextResponse.json({ error: 'یافت نشد' }, { status: 404 })
     const r = await moderateOne(it, model)
     return NextResponse.json({ ok: true, moderated: 1, results: [r], ml: mlStats() })

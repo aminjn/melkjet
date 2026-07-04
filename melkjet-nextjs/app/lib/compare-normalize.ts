@@ -53,8 +53,8 @@ function projectCompare(id: string): CompareItem | null {
   return null
 }
 
-function itemCompare(id: string): CompareItem | null {
-  const it = getItemById(id)
+async function itemCompare(id: string): Promise<CompareItem | null> {
+  const it = await getItemById(id)
   if (!it) return null
   const specs: { label: string; value: string }[] = []
   if (it.price) specs.push({ label: 'قیمت', value: it.price })
@@ -67,6 +67,6 @@ function itemCompare(id: string): CompareItem | null {
   return { kind: 'item', id, title: it.title, subtitle: it.location || '', photo: it.image || '', href: `/property/${id}`, specs }
 }
 
-export function normalizeForCompare(kind: string, id: string): CompareItem | null {
+export async function normalizeForCompare(kind: string, id: string): Promise<CompareItem | null> {
   return kind === 'project' ? projectCompare(id) : itemCompare(id)
 }

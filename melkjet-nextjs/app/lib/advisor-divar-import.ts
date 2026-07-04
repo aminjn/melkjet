@@ -12,7 +12,7 @@ import type { Source } from './scraper-store'
 function moderatePublicItem(id: string): void {
   (async () => {
     const [{ moderateOne, moderationModel }, { getItemById }] = await Promise.all([import('./moderation'), import('./scraper-store')])
-    const it = getItemById(id)
+    const it = await getItemById(id)
     if (it) await moderateOne(it, moderationModel())
   })().catch(() => {})
 }

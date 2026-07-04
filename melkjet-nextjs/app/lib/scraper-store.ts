@@ -1,8 +1,10 @@
 import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { readJsonCached, writeJsonCached } from './json-file'
+import { pgEnabled, kvGet, kvMutate } from './db'
 
 const DATA_FILE = join(process.cwd(), '.scraper-data.json')
+const KV_KEY = 'scraper'
 
 // Top-level content type → which public page it feeds
 export type SourceType = 'listing' | 'directory' | 'product' | 'article' | 'price'
@@ -81,28 +83,26 @@ interface DB { sources: Source[]; items: Item[]; categories?: string[]; owners?:
 
 function normName(s: string): string { return (s || '').replace(/‌/g, '').replace(/\s+/g, ' ').trim() }
 
-export function listOwners(): Owner[] {
-  return [...(load().owners || [])].sort((a, b) => b.count - a.count)
+export async function listOwners(): Promise<Owner[]> {
+  return [...((await load()).owners || [])].sort((a, b) => b.count - a.count)
 }
 
-export function updateOwner(ownerId: string, patch: { name?: string; phone?: string }) {
-  const db = load()
-  const o = (db.owners || []).find(x => x.id === ownerId)
-  if (!o) return null
-  if (patch.name !== undefined) o.name = String(patch.name)
-  if (patch.phone !== undefined) {
-    o.phone = String(patch.phone)
-    // propagate the phone to all of this owner's items
-    db.items.forEach(it => { if (it.ownerId === ownerId) it.phone = o.phone })
-  }
-  save(db)
-  return o
+export async function updateOwner(ownerId: string, patch: { name?: string; phone?: string }) {
+  return mutate(db => {
+    const o = (db.owners || []).find(x => x.id === ownerId)
+    if (!o) return null
+    if (patch.name !== undefined) o.name = String(patch.name)
+    if (patch.phone !== undefined) {
+      o.phone = String(patch.phone)
+      // propagate the phone to all of this owner's items
+      db.items.forEach(it => { if (it.ownerId === ownerId) it.phone = o.phone })
+    }
+    return o
+  })
 }
 
-export function deleteOwner(ownerId: string) {
-  const db = load()
-  db.owners = (db.owners || []).filter(x => x.id !== ownerId)
-  save(db)
+export async function deleteOwner(ownerId: string) {
+  return mutate(db => { db.owners = (db.owners || []).filter(x => x.id !== ownerId) })
 }
 
 function id() { return randomBytes(6).toString('hex') }
@@ -116,60 +116,89 @@ const DEFAULT_SOURCES: Source[] = [
   { id: id(), name: 'اخبار املاک - ایسنا', url: 'https://www.isna.ir/rss/tp/45', type: 'article', method: 'rss', enabled: true, schedule: 'daily', lastRun: null, lastCount: 0, status: 'idle' },
 ]
 
-export function load(): DB {
-  return readJsonCached<DB>(DATA_FILE, { sources: DEFAULT_SOURCES, items: [] })
-}
+function emptyDB(): DB { return { sources: DEFAULT_SOURCES, items: [] } }
 
-export function save(db: DB) {
+function fileLoad(): DB {
+  return readJsonCached<DB>(DATA_FILE, emptyDB())
+}
+function fileSave(db: DB) {
   writeJsonCached(DATA_FILE, db, true)
 }
 
-export function listSources(): Source[] { return load().sources }
+// کشِ کوتاهِ خواندن روی مسیرِ PG: صفحهٔ خانه/جستجو در هر رندر listItems را صدا می‌زند؛
+// بدونِ این کش هر رندر یک SELECT + دی‌سریالایزِ ~۱مگابایتی روی CPUِ تک‌هسته می‌شد.
+// نوشتن (mutate) کش را باطل می‌کند تا همان اینستنس نوشتهٔ خودش را فوری ببیند. کهنگیِ
+// چند-ثانیه‌ایِ فیدِ آگهی بینِ اینستنس‌ها بی‌ضرر است (نوشتن‌ها اتمیک روی PG می‌مانند).
+let pgCache: { at: number; data: DB } | null = null
+const PG_TTL = 2500
 
-export function listCategories(): string[] {
-  const db = load()
+/** خواندنِ سندِ کاملِ اسکرپر (دو-حالته: PG یا فایل). */
+async function load(): Promise<DB> {
+  if (!pgEnabled()) return fileLoad()
+  const now = Date.now()
+  if (pgCache && now - pgCache.at < PG_TTL) return pgCache.data
+  const data = await kvGet<DB>(KV_KEY, emptyDB())
+  pgCache = { at: now, data }
+  return data
+}
+
+/** خواندن-تغییر-نوشتنِ اتمیک. روی PG با قفلِ ردیف؛ روی فایل مثلِ قبل. */
+async function mutate<R>(fn: (db: DB) => R): Promise<R> {
+  if (!pgEnabled()) { const d = fileLoad(); const r = fn(d); fileSave(d); return r }
+  const r = await kvMutate<DB, R>(KV_KEY, emptyDB(), fn)
+  pgCache = null   // نوشته شد → کش باطل تا خواندنِ بعدی تازه باشد
+  return r
+}
+
+export async function listSources(): Promise<Source[]> { return (await load()).sources }
+
+function categoriesOf(db: DB): string[] {
   const fromItems = Array.from(new Set(db.items.filter(i => i.type === 'directory' && i.category).map(i => i.category as string)))
-  const merged = Array.from(new Set([...(db.categories || DEFAULT_CATEGORIES), ...fromItems]))
-  return merged
+  return Array.from(new Set([...(db.categories || DEFAULT_CATEGORIES), ...fromItems]))
 }
 
-export function addCategory(name: string): string[] {
-  const db = load()
-  const n = name.trim()
-  if (!n) return listCategories()
-  const cats = db.categories || DEFAULT_CATEGORIES.slice()
-  if (!cats.includes(n)) cats.unshift(n)
-  db.categories = cats
-  save(db)
-  return listCategories()
+export async function listCategories(): Promise<string[]> {
+  return categoriesOf(await load())
 }
 
-export function addSource(input: Omit<Source, 'id' | 'lastRun' | 'lastCount' | 'status'>): Source {
-  const db = load()
-  const src: Source = { ...input, id: id(), lastRun: null, lastCount: 0, status: 'idle' }
-  db.sources.unshift(src)
-  save(db)
-  return src
+export async function addCategory(name: string): Promise<string[]> {
+  return mutate(db => {
+    const n = name.trim()
+    if (n) {
+      const cats = db.categories || DEFAULT_CATEGORIES.slice()
+      if (!cats.includes(n)) cats.unshift(n)
+      db.categories = cats
+    }
+    return categoriesOf(db)
+  })
 }
 
-export function updateSource(sid: string, patch: Partial<Source>): Source | null {
-  const db = load()
-  const s = db.sources.find(x => x.id === sid)
-  if (!s) return null
-  Object.assign(s, patch)
-  save(db)
-  return s
+export async function addSource(input: Omit<Source, 'id' | 'lastRun' | 'lastCount' | 'status'>): Promise<Source> {
+  return mutate(db => {
+    const src: Source = { ...input, id: id(), lastRun: null, lastCount: 0, status: 'idle' }
+    db.sources.unshift(src)
+    return src
+  })
 }
 
-export function deleteSource(sid: string) {
-  const db = load()
-  db.sources = db.sources.filter(x => x.id !== sid)
-  db.items = db.items.filter(x => x.sourceId !== sid)
-  save(db)
+export async function updateSource(sid: string, patch: Partial<Source>): Promise<Source | null> {
+  return mutate(db => {
+    const s = db.sources.find(x => x.id === sid)
+    if (!s) return null
+    Object.assign(s, patch)
+    return s
+  })
 }
 
-export function listItems(type?: SourceType, opts?: { category?: string; publicOnly?: boolean }): Item[] {
-  const db = load()
+export async function deleteSource(sid: string) {
+  return mutate(db => {
+    db.sources = db.sources.filter(x => x.id !== sid)
+    db.items = db.items.filter(x => x.sourceId !== sid)
+  })
+}
+
+export async function listItems(type?: SourceType, opts?: { category?: string; publicOnly?: boolean }): Promise<Item[]> {
+  const db = await load()
   // کپی (نه ارجاع به آرایهٔ کش‌شده) تا sortِ درجا کشِ مشترک را جابه‌جا نکند.
   let items = type ? db.items.filter(i => i.type === type) : [...db.items]
   if (opts?.category) items = items.filter(i => i.category === opts.category)
@@ -177,172 +206,177 @@ export function listItems(type?: SourceType, opts?: { category?: string; publicO
   return items.sort((a, b) => b.scrapedAt - a.scrapedAt)
 }
 
-export function getItemById(itemId: string): Item | null {
-  return load().items.find(i => i.id === itemId) || null
+export async function getItemById(itemId: string): Promise<Item | null> {
+  return (await load()).items.find(i => i.id === itemId) || null
 }
 
 // Items awaiting AI moderation (pending, not yet moderated)
-export function pendingForModeration(limit = 25): Item[] {
-  return load().items.filter(i => i.status === 'pending' && !i.moderatedAt).slice(0, limit)
+export async function pendingForModeration(limit = 25): Promise<Item[]> {
+  return (await load()).items.filter(i => i.status === 'pending' && !i.moderatedAt).slice(0, limit)
 }
 
-export function setModeration(itemId: string, status: ItemStatus, reason: string, score: number) {
-  const db = load()
-  const it = db.items.find(i => i.id === itemId)
-  if (it) { it.status = status; it.aiReason = reason; it.aiScore = score; it.moderatedAt = Date.now(); save(db) }
+export async function setModeration(itemId: string, status: ItemStatus, reason: string, score: number) {
+  return mutate(db => {
+    const it = db.items.find(i => i.id === itemId)
+    if (it) { it.status = status; it.aiReason = reason; it.aiScore = score; it.moderatedAt = Date.now() }
+  })
 }
 
 // Persist many moderation verdicts in a single atomic write (avoids file races under concurrency).
-export function setModerationBatch(verdicts: { id: string; status: ItemStatus; reason: string; score: number }[]) {
+export async function setModerationBatch(verdicts: { id: string; status: ItemStatus; reason: string; score: number }[]) {
   if (!verdicts.length) return
-  const db = load()
-  const now = Date.now()
-  const map = new Map(verdicts.map(v => [v.id, v]))
-  for (const it of db.items) {
-    const v = map.get(it.id)
-    if (v) { it.status = v.status; it.aiReason = v.reason; it.aiScore = v.score; it.moderatedAt = now }
-  }
-  save(db)
+  return mutate(db => {
+    const now = Date.now()
+    const map = new Map(verdicts.map(v => [v.id, v]))
+    for (const it of db.items) {
+      const v = map.get(it.id)
+      if (v) { it.status = v.status; it.aiReason = v.reason; it.aiScore = v.score; it.moderatedAt = now }
+    }
+  })
 }
 
-export function setItemStatus(itemId: string, status: ItemStatus) {
-  const db = load()
-  const it = db.items.find(i => i.id === itemId)
-  if (it) { it.status = status; save(db) }
+export async function setItemStatus(itemId: string, status: ItemStatus) {
+  return mutate(db => {
+    const it = db.items.find(i => i.id === itemId)
+    if (it) it.status = status
+  })
 }
 
-export function updateItem(itemId: string, patch: EditableItem) {
-  const db = load()
-  const it = db.items.find(i => i.id === itemId)
-  if (!it) return null
-  const allowed: (keyof EditableItem)[] = ['title', 'price', 'location', 'image', 'url', 'excerpt', 'phone', 'category', 'status', 'featured']
-  for (const k of allowed) {
-    if (patch[k] !== undefined) (it as any)[k] = patch[k]
-  }
-  it.edited = true
-  save(db)
-  return it
+export async function updateItem(itemId: string, patch: EditableItem) {
+  return mutate(db => {
+    const it = db.items.find(i => i.id === itemId)
+    if (!it) return null
+    const allowed: (keyof EditableItem)[] = ['title', 'price', 'location', 'image', 'url', 'excerpt', 'phone', 'category', 'status', 'featured']
+    for (const k of allowed) {
+      if (patch[k] !== undefined) (it as any)[k] = patch[k]
+    }
+    it.edited = true
+    return it
+  })
 }
 
 // وضعیتِ معاملهٔ آگهیِ عمومی (فروخته‌شده/اجاره‌رفته) روی خودِ آیتم مهر می‌خورد تا در صفحه/کارت‌ها دیده شود.
 // status = '' یعنی برگشت به «فعال» (مهر برداشته می‌شود).
-export function setItemDealStatus(itemId: string, status: 'sold' | 'rented' | '') {
-  const db = load()
-  const it = db.items.find(i => i.id === itemId)
-  if (!it) return
-  it.meta = it.meta || {}
-  if (status) it.meta['__dealStatus'] = status
-  else delete it.meta['__dealStatus']
-  save(db)
+export async function setItemDealStatus(itemId: string, status: 'sold' | 'rented' | '') {
+  return mutate(db => {
+    const it = db.items.find(i => i.id === itemId)
+    if (!it) return
+    it.meta = it.meta || {}
+    if (status) it.meta['__dealStatus'] = status
+    else delete it.meta['__dealStatus']
+  })
 }
 
-export function deleteItem(itemId: string) {
-  const db = load()
-  const n = db.items.length
-  db.items = db.items.filter(i => i.id !== itemId)
-  save(db)
-  return db.items.length < n
+export async function deleteItem(itemId: string) {
+  return mutate(db => {
+    const n = db.items.length
+    db.items = db.items.filter(i => i.id !== itemId)
+    return db.items.length < n
+  })
 }
 
-export function deleteItems(ids: string[]) {
-  const db = load()
-  const set = new Set(ids)
-  db.items = db.items.filter(i => !set.has(i.id))
-  save(db)
+export async function deleteItems(ids: string[]) {
+  return mutate(db => {
+    const set = new Set(ids)
+    db.items = db.items.filter(i => !set.has(i.id))
+  })
 }
 
 // Wipe all items, or only one type. Sources are kept.
-export function clearItems(type?: SourceType) {
-  const db = load()
-  db.items = type ? db.items.filter(i => i.type !== type) : []
-  save(db)
+export async function clearItems(type?: SourceType) {
+  return mutate(db => {
+    db.items = type ? db.items.filter(i => i.type !== type) : []
+  })
 }
 
 // Insert items, dedup by url+title. Returns {added, dup}
-export function insertItems(source: Source, raw: Omit<Item, 'id' | 'sourceId' | 'sourceName' | 'type' | 'category' | 'meta' | 'scrapedAt' | 'status'>[]): { added: number; dup: number } {
-  const db = load()
-  const existingKeys = new Set(db.items.map(i => (i.url || '') + '|' + i.title))
-  let added = 0, dup = 0
+export async function insertItems(source: Source, raw: Omit<Item, 'id' | 'sourceId' | 'sourceName' | 'type' | 'category' | 'meta' | 'scrapedAt' | 'status'>[]): Promise<{ added: number; dup: number }> {
   const newListingIds: string[] = []
-  db.owners = db.owners || []
-  for (const r of raw) {
-    const key = (r.url || '') + '|' + r.title
-    if (existingKeys.has(key)) { dup++; continue }
-    existingKeys.add(key)
-    // merge source meta (city/neighborhood/type/specialty) into the item
-    const meta = source.meta && Object.keys(source.meta).length ? source.meta : undefined
-    const loc = r.location
-      || [meta?.['شهر'], meta?.['محله']].filter(Boolean).join('، ')
-      || undefined
-    // owner dedup: one user per advertiser (by phone, else by name)
-    let ownerId: string | undefined
-    if (r.owner || r.phone) {
-      const pn = r.phone ? r.phone.replace(/\D/g, '') : ''
-      const nn = normName(r.owner || '')
-      let owner = db.owners.find(o => (pn && o.phone && o.phone.replace(/\D/g, '') === pn) || (!pn && nn && normName(o.name) === nn))
-      if (!owner) {
-        owner = { id: id(), name: r.owner || 'نامشخص', phone: r.phone, count: 0, firstSeen: Date.now() }
-        db.owners.push(owner)
+  const res = await mutate(db => {
+    const existingKeys = new Set(db.items.map(i => (i.url || '') + '|' + i.title))
+    let added = 0, dup = 0
+    db.owners = db.owners || []
+    for (const r of raw) {
+      const key = (r.url || '') + '|' + r.title
+      if (existingKeys.has(key)) { dup++; continue }
+      existingKeys.add(key)
+      // merge source meta (city/neighborhood/type/specialty) into the item
+      const meta = source.meta && Object.keys(source.meta).length ? source.meta : undefined
+      const loc = r.location
+        || [meta?.['شهر'], meta?.['محله']].filter(Boolean).join('، ')
+        || undefined
+      // owner dedup: one user per advertiser (by phone, else by name)
+      let ownerId: string | undefined
+      if (r.owner || r.phone) {
+        const pn = r.phone ? r.phone.replace(/\D/g, '') : ''
+        const nn = normName(r.owner || '')
+        let owner = db.owners.find(o => (pn && o.phone && o.phone.replace(/\D/g, '') === pn) || (!pn && nn && normName(o.name) === nn))
+        if (!owner) {
+          owner = { id: id(), name: r.owner || 'نامشخص', phone: r.phone, count: 0, firstSeen: Date.now() }
+          db.owners.push(owner)
+        }
+        if (r.phone && !owner.phone) owner.phone = r.phone
+        owner.count++
+        ownerId = owner.id
       }
-      if (r.phone && !owner.phone) owner.phone = r.phone
-      owner.count++
-      ownerId = owner.id
+      const newId = id()
+      db.items.unshift({
+        id: newId, sourceId: source.id, sourceName: source.name, type: source.type,
+        category: source.category, meta, scrapedAt: Date.now(), status: 'pending',
+        ...r, location: loc, ownerId,
+      })
+      if (source.type === 'listing') newListingIds.push(newId)
+      added++
     }
-    const newId = id()
-    db.items.unshift({
-      id: newId, sourceId: source.id, sourceName: source.name, type: source.type,
-      category: source.category, meta, scrapedAt: Date.now(), status: 'pending',
-      ...r, location: loc, ownerId,
-    })
-    if (source.type === 'listing') newListingIds.push(newId)
-    added++
-  }
-  if (db.items.length > 1000) db.items = db.items.slice(0, 1000)
-  const s = db.sources.find(x => x.id === source.id)
-  if (s) { s.lastRun = Date.now(); s.lastCount = added; s.status = 'ok'; s.lastError = undefined }
-  save(db)
+    if (db.items.length > 1000) db.items = db.items.slice(0, 1000)
+    const s = db.sources.find(x => x.id === source.id)
+    if (s) { s.lastRun = Date.now(); s.lastCount = added; s.status = 'ok'; s.lastError = undefined }
+    return { added, dup }
+  })
   // تحلیلِ AI هر آگهیِ جدید همین حالا (هنگامِ اسکرپ) در پس‌زمینه ساخته و در دیتابیس ذخیره می‌شود،
   // تا بازکردنِ آگهی توسطِ کاربر دیگر AI را دوباره اجرا نکند. (import پویا برای پرهیز از حلقهٔ وابستگی.)
   if (newListingIds.length) import('./enrich-warm').then(m => m.warmMany(newListingIds)).catch(() => {})
-  return { added, dup }
+  return res
 }
 
 // Insert a single user-submitted listing (status pending → goes to AI moderation immediately).
 export function addUserListing(raw: {
   title: string; price?: string; location?: string; image?: string; excerpt?: string;
   phone?: string; owner?: string; url?: string; meta?: Record<string, string>
-}): Item {
-  const db = load()
-  db.owners = db.owners || []
-  let ownerId: string | undefined
-  if (raw.owner || raw.phone) {
-    const pn = raw.phone ? raw.phone.replace(/\D/g, '') : ''
-    const nn = normName(raw.owner || '')
-    let owner = db.owners.find(o => (pn && o.phone && o.phone.replace(/\D/g, '') === pn) || (!pn && nn && normName(o.name) === nn))
-    if (!owner) { owner = { id: id(), name: raw.owner || 'کاربر', phone: raw.phone, count: 0, firstSeen: Date.now() }; db.owners.push(owner) }
-    if (raw.phone && !owner.phone) owner.phone = raw.phone
-    owner.count++; ownerId = owner.id
-  }
-  const item: Item = {
-    id: id(), sourceId: 'user', sourceName: 'ثبت توسط کاربر', type: 'listing',
-    title: raw.title, price: raw.price, location: raw.location, image: raw.image,
-    excerpt: raw.excerpt, phone: raw.phone, owner: raw.owner, url: raw.url, ownerId,
-    meta: raw.meta && Object.keys(raw.meta).length ? raw.meta : undefined,
-    scrapedAt: Date.now(), status: 'pending', expiresAt: Date.now() + LISTING_TTL,
-  }
-  db.items.unshift(item)
-  save(db)
-  return item
+}): Promise<Item> {
+  return mutate(db => {
+    db.owners = db.owners || []
+    let ownerId: string | undefined
+    if (raw.owner || raw.phone) {
+      const pn = raw.phone ? raw.phone.replace(/\D/g, '') : ''
+      const nn = normName(raw.owner || '')
+      let owner = db.owners.find(o => (pn && o.phone && o.phone.replace(/\D/g, '') === pn) || (!pn && nn && normName(o.name) === nn))
+      if (!owner) { owner = { id: id(), name: raw.owner || 'کاربر', phone: raw.phone, count: 0, firstSeen: Date.now() }; db.owners.push(owner) }
+      if (raw.phone && !owner.phone) owner.phone = raw.phone
+      owner.count++; ownerId = owner.id
+    }
+    const item: Item = {
+      id: id(), sourceId: 'user', sourceName: 'ثبت توسط کاربر', type: 'listing',
+      title: raw.title, price: raw.price, location: raw.location, image: raw.image,
+      excerpt: raw.excerpt, phone: raw.phone, owner: raw.owner, url: raw.url, ownerId,
+      meta: raw.meta && Object.keys(raw.meta).length ? raw.meta : undefined,
+      scrapedAt: Date.now(), status: 'pending', expiresAt: Date.now() + LISTING_TTL,
+    }
+    db.items.unshift(item)
+    return item
+  })
 }
 // تمدیدِ آگهی برای ۳۰ روزِ دیگر
-export function renewListing(itemId: string): Item | null {
-  const db = load(); const it = db.items.find(i => i.id === itemId); if (!it) return null
-  it.expiresAt = Date.now() + LISTING_TTL; save(db); return it
+export async function renewListing(itemId: string): Promise<Item | null> {
+  return mutate(db => {
+    const it = db.items.find(i => i.id === itemId); if (!it) return null
+    it.expiresAt = Date.now() + LISTING_TTL; return it
+  })
 }
 // شمارشِ آگهی‌های فعالِ (منقضی‌نشدهٔ) یک کاربر — برای سقفِ پلن
-export function countActiveListingsOf(ownerId: string): number {
+export async function countActiveListingsOf(ownerId: string): Promise<number> {
   const now = Date.now()
-  return load().items.filter(i => i.type === 'listing' && i.ownerId === ownerId && i.status !== 'rejected' && !isExpired(i, now)).length
+  return (await load()).items.filter(i => i.type === 'listing' && i.ownerId === ownerId && i.status !== 'rejected' && !isExpired(i, now)).length
 }
 
 // ── Articles (CMS) ──────────────────────────────────────────────────────────
@@ -385,106 +419,106 @@ function uniqueTitle(db: DB, base: string, exceptId?: string): string {
 }
 
 // Insert an editorial article. Published → public immediately; draft → hidden from lists.
-export function addArticle(raw: ArticleInput): Item {
-  const db = load()
-  // اگر زمان‌بندی در آینده باشد، وضعیت «scheduled» می‌شود تا کران در زمانش منتشرش کند.
-  const scheduled = !!raw.publishAt && raw.publishAt > Date.now()
-  const status = scheduled ? 'scheduled' : (raw.status || 'published')
-  const title = uniqueTitle(db, raw.title)
-  const slug = uniqueSlug(db, raw.slug || title)
-  const meta: Record<string, string> = {
-    slug,
-    cmsStatus: status,
-    ...(scheduled ? { publishAt: String(raw.publishAt) } : {}),
-    author: raw.author || raw.source || 'تحریریه ملک‌جت',
-    seoTitle: raw.seoTitle || title,
-    metaDescription: raw.metaDescription || (raw.excerpt || raw.body).slice(0, 160),
-    focusKeyword: raw.focusKeyword || '',
-    summary: raw.excerpt || raw.body.replace(/[#*_>`-]/g, '').slice(0, 200),
-  }
-  const item: Item = {
-    id: id(), sourceId: 'cms', sourceName: raw.source || meta.author, type: 'article',
-    category: raw.category, title, image: raw.image, excerpt: raw.body,
-    tags: raw.tags && raw.tags.length ? raw.tags : undefined,
-    meta, scrapedAt: Date.now(), status: 'approved',
-  }
-  db.items.unshift(item)
-  save(db)
-  return item
+export async function addArticle(raw: ArticleInput): Promise<Item> {
+  return mutate(db => {
+    // اگر زمان‌بندی در آینده باشد، وضعیت «scheduled» می‌شود تا کران در زمانش منتشرش کند.
+    const scheduled = !!raw.publishAt && raw.publishAt > Date.now()
+    const status = scheduled ? 'scheduled' : (raw.status || 'published')
+    const title = uniqueTitle(db, raw.title)
+    const slug = uniqueSlug(db, raw.slug || title)
+    const meta: Record<string, string> = {
+      slug,
+      cmsStatus: status,
+      ...(scheduled ? { publishAt: String(raw.publishAt) } : {}),
+      author: raw.author || raw.source || 'تحریریه ملک‌جت',
+      seoTitle: raw.seoTitle || title,
+      metaDescription: raw.metaDescription || (raw.excerpt || raw.body).slice(0, 160),
+      focusKeyword: raw.focusKeyword || '',
+      summary: raw.excerpt || raw.body.replace(/[#*_>`-]/g, '').slice(0, 200),
+    }
+    const item: Item = {
+      id: id(), sourceId: 'cms', sourceName: raw.source || meta.author, type: 'article',
+      category: raw.category, title, image: raw.image, excerpt: raw.body,
+      tags: raw.tags && raw.tags.length ? raw.tags : undefined,
+      meta, scrapedAt: Date.now(), status: 'approved',
+    }
+    db.items.unshift(item)
+    return item
+  })
 }
 
-export function updateArticle(itemId: string, patch: Partial<ArticleInput>): Item | null {
-  const db = load()
-  const it = db.items.find(i => i.id === itemId && i.type === 'article')
-  if (!it) return null
-  const meta = { ...(it.meta || {}) }
-  if (patch.title !== undefined) it.title = uniqueTitle(db, patch.title, itemId)
-  if (patch.body !== undefined) { it.excerpt = patch.body; if (!patch.excerpt) meta.summary = patch.body.replace(/[#*_>`-]/g, '').slice(0, 200) }
-  if (patch.excerpt !== undefined) meta.summary = patch.excerpt
-  if (patch.image !== undefined) it.image = patch.image
-  if (patch.category !== undefined) it.category = patch.category
-  if (patch.tags !== undefined) it.tags = patch.tags.length ? patch.tags : undefined
-  if (patch.slug !== undefined && patch.slug.trim()) meta.slug = uniqueSlug(db, patch.slug, itemId)
-  if (patch.seoTitle !== undefined) meta.seoTitle = patch.seoTitle
-  if (patch.metaDescription !== undefined) meta.metaDescription = patch.metaDescription
-  if (patch.focusKeyword !== undefined) meta.focusKeyword = patch.focusKeyword
-  if (patch.author !== undefined) { meta.author = patch.author; it.sourceName = patch.author }
-  // زمان‌بندی: اگر publishAt در آینده داده شد → scheduled؛ اگر منتشر شد → publishAt پاک می‌شود.
-  if (patch.publishAt !== undefined && patch.publishAt > Date.now()) { meta.cmsStatus = 'scheduled'; meta.publishAt = String(patch.publishAt) }
-  else if (patch.status !== undefined) { meta.cmsStatus = patch.status; if (patch.status === 'published' || patch.status === 'draft') delete meta.publishAt }
-  it.meta = meta
-  it.edited = true
-  save(db)
-  return it
+export async function updateArticle(itemId: string, patch: Partial<ArticleInput>): Promise<Item | null> {
+  return mutate(db => {
+    const it = db.items.find(i => i.id === itemId && i.type === 'article')
+    if (!it) return null
+    const meta = { ...(it.meta || {}) }
+    if (patch.title !== undefined) it.title = uniqueTitle(db, patch.title, itemId)
+    if (patch.body !== undefined) { it.excerpt = patch.body; if (!patch.excerpt) meta.summary = patch.body.replace(/[#*_>`-]/g, '').slice(0, 200) }
+    if (patch.excerpt !== undefined) meta.summary = patch.excerpt
+    if (patch.image !== undefined) it.image = patch.image
+    if (patch.category !== undefined) it.category = patch.category
+    if (patch.tags !== undefined) it.tags = patch.tags.length ? patch.tags : undefined
+    if (patch.slug !== undefined && patch.slug.trim()) meta.slug = uniqueSlug(db, patch.slug, itemId)
+    if (patch.seoTitle !== undefined) meta.seoTitle = patch.seoTitle
+    if (patch.metaDescription !== undefined) meta.metaDescription = patch.metaDescription
+    if (patch.focusKeyword !== undefined) meta.focusKeyword = patch.focusKeyword
+    if (patch.author !== undefined) { meta.author = patch.author; it.sourceName = patch.author }
+    // زمان‌بندی: اگر publishAt در آینده داده شد → scheduled؛ اگر منتشر شد → publishAt پاک می‌شود.
+    if (patch.publishAt !== undefined && patch.publishAt > Date.now()) { meta.cmsStatus = 'scheduled'; meta.publishAt = String(patch.publishAt) }
+    else if (patch.status !== undefined) { meta.cmsStatus = patch.status; if (patch.status === 'published' || patch.status === 'draft') delete meta.publishAt }
+    it.meta = meta
+    it.edited = true
+    return it
+  })
 }
 
 // All article items (newest first). publishedOnly → فقط «published» (نه پیش‌نویس، نه زمان‌بندی‌شده).
-export function listArticles(opts?: { publishedOnly?: boolean }): Item[] {
-  return load().items
+export async function listArticles(opts?: { publishedOnly?: boolean }): Promise<Item[]> {
+  return (await load()).items
     .filter(i => i.type === 'article' && (!opts?.publishedOnly || (i.meta?.cmsStatus !== 'draft' && i.meta?.cmsStatus !== 'scheduled')))
     .sort((a, b) => b.scrapedAt - a.scrapedAt)
 }
 
 // مقالاتِ زمان‌بندی‌شده‌ای که زمانشان رسیده را منتشر می‌کند (برای کران). تعداد را برمی‌گرداند.
-export function publishDueArticles(): number {
-  const db = load()
-  const now = Date.now()
-  let n = 0
-  for (const it of db.items) {
-    if (it.type !== 'article' || it.meta?.cmsStatus !== 'scheduled') continue
-    const at = Number(it.meta?.publishAt || 0)
-    if (at && at <= now) { it.meta!.cmsStatus = 'published'; delete it.meta!.publishAt; n++ }
-  }
-  if (n) save(db)
-  return n
+export async function publishDueArticles(): Promise<number> {
+  return mutate(db => {
+    const now = Date.now()
+    let n = 0
+    for (const it of db.items) {
+      if (it.type !== 'article' || it.meta?.cmsStatus !== 'scheduled') continue
+      const at = Number(it.meta?.publishAt || 0)
+      if (at && at <= now) { it.meta!.cmsStatus = 'published'; delete it.meta!.publishAt; n++ }
+    }
+    return n
+  })
 }
 
-export function getArticleBySlug(slug: string): Item | null {
-  return load().items.find(i => i.type === 'article' && i.meta?.slug === slug) || null
+export async function getArticleBySlug(slug: string): Promise<Item | null> {
+  return (await load()).items.find(i => i.type === 'article' && i.meta?.slug === slug) || null
 }
 
 // ایجاد دستی یک آیتم (آگهی/محصول/پروفایل/قیمت) از سوپرادمین — منتشرشده.
-export function addItemManual(raw: {
+export async function addItemManual(raw: {
   type: SourceType; title: string; price?: string; location?: string; image?: string
   url?: string; excerpt?: string; phone?: string; category?: string; owner?: string
   meta?: Record<string, string>
-}): Item {
-  const db = load()
-  const item: Item = {
-    id: id(), sourceId: 'manual', sourceName: 'ثبت دستی مدیر', type: raw.type,
-    category: raw.category, title: raw.title, price: raw.price, location: raw.location,
-    image: raw.image, url: raw.url, excerpt: raw.excerpt, phone: raw.phone, owner: raw.owner,
-    meta: raw.meta && Object.keys(raw.meta).length ? raw.meta : undefined,
-    scrapedAt: Date.now(), status: 'approved', edited: true,
-  }
-  db.items.unshift(item)
-  save(db)
-  return item
+}): Promise<Item> {
+  return mutate(db => {
+    const item: Item = {
+      id: id(), sourceId: 'manual', sourceName: 'ثبت دستی مدیر', type: raw.type,
+      category: raw.category, title: raw.title, price: raw.price, location: raw.location,
+      image: raw.image, url: raw.url, excerpt: raw.excerpt, phone: raw.phone, owner: raw.owner,
+      meta: raw.meta && Object.keys(raw.meta).length ? raw.meta : undefined,
+      scrapedAt: Date.now(), status: 'approved', edited: true,
+    }
+    db.items.unshift(item)
+    return item
+  })
 }
 
-export function markError(sourceId: string, err: string) {
-  const db = load()
-  const s = db.sources.find(x => x.id === sourceId)
-  if (s) { s.lastRun = Date.now(); s.status = 'error'; s.lastError = err }
-  save(db)
+export async function markError(sourceId: string, err: string) {
+  return mutate(db => {
+    const s = db.sources.find(x => x.id === sourceId)
+    if (s) { s.lastRun = Date.now(); s.status = 'error'; s.lastError = err }
+  })
 }

@@ -34,9 +34,9 @@ function isSale(it: Item): boolean {
 
 interface Rec { city: string; district: string; ppm: number; t: number }
 
-function records(): Rec[] {
+async function records(): Promise<Rec[]> {
   const out: Rec[] = []
-  for (const it of listItems('listing')) {
+  for (const it of await listItems('listing')) {
     if (!isSale(it)) continue
     const area = parseArea(it.title) || parseArea(it.excerpt || '')
     const price = parsePrice(it.price || '')
@@ -59,8 +59,8 @@ function agg(vals: number[]) {
 }
 
 // Stats for one neighbourhood (+ monthly trend) for the sale market.
-export function neighbourhoodStats(city: string, district: string) {
-  const recs = records().filter(r => (!district || r.district === district) && (!city || r.city === city))
+export async function neighbourhoodStats(city: string, district: string) {
+  const recs = (await records()).filter(r => (!district || r.district === district) && (!city || r.city === city))
   const base = agg(recs.map(r => r.ppm))
   if (!base) return null
   // monthly trend (last 12 months by scrape date)
@@ -85,8 +85,8 @@ export function valueScore(thisPpm: number, avgPpm: number): number {
 
 // Market overview: top neighbourhoods by avg price/m² and listing counts.
 function normCity(s: string): string { return (s || '').replace(/‌/g, '').replace(/\s+/g, '').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim() }
-export function marketOverview(city?: string) {
-  let recs = records()
+export async function marketOverview(city?: string) {
+  let recs = await records()
   if (city) { const c = normCity(city); recs = recs.filter(r => { const rc = normCity(r.city); return rc === c || rc.includes(c) || c.includes(rc) }) }
   const byKey: Record<string, number[]> = {}
   for (const r of recs) {

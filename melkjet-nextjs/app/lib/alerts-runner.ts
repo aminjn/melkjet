@@ -61,7 +61,7 @@ async function sendSms(phone: string, label: string) {
 export async function processSavedSearches(now = Date.now()): Promise<{ searches: number; notified: number }> {
   const searches = await listAll()
   if (!searches.length) return { searches: 0, notified: 0 }
-  const items = listItems('listing', { publicOnly: true })   // مرتب بر اساسِ scrapedAt نزولی
+  const items = await listItems('listing', { publicOnly: true })   // مرتب بر اساسِ scrapedAt نزولی
   let notified = 0
   for (const s of searches) {
     const fresh: any[] = []

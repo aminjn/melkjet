@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     : (b.totalPrice ? String(b.totalPrice) : undefined)
   const location = [b.city, b.neighborhood || b.district].filter(Boolean).join('، ') || b.address || undefined
 
-  const item = addUserListing({
+  const item = await addUserListing({
     title, price, location,
     excerpt: String(b.description || '').slice(0, 2000) || undefined,
     phone: b.phone ? String(b.phone) : undefined,

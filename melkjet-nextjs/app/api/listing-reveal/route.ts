@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     ownerKey = `advisor:${digits(id)}`
     label = a.profile?.name || 'مشاور'
   } else if (kind === 'item') {
-    const it = getItemById(id)
+    const it = await getItemById(id)
     if (!it) return NextResponse.json({ error: 'آگهی پیدا نشد' }, { status: 404 })
     phone = String(it.phone || it.meta?.__ownerPhone || '')
     ownerKey = `owner:${digits(it.meta?.__ownerPhone || it.phone || id)}`

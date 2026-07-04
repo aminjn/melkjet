@@ -14,7 +14,7 @@ const inflight = new Map<string, Promise<Enrichment>>()
 const ANALYSIS_COOLDOWN = 6 * 60 * 60 * 1000
 
 async function generate(id: string): Promise<Enrichment> {
-  const it = getItemById(id)
+  const it = await getItemById(id)
   if (!it) return {}
   let cur = getEnrichment(id) || {}
   if (cur.v !== ENRICH_V) cur = {}

@@ -8,8 +8,8 @@ import { createAutoLead } from '@/app/lib/auto-lead'
 // صاحبِ آگهی را از روی خودِ آگهی پیدا می‌کند: اول __ownerPhone (هنگام انتشار مهر می‌خورد)،
 // سپس تطبیقِ نامِ آگهی‌دهنده با یک حسابِ واقعیِ ملک‌جت (مشاور/آژانس). هر آگهی صاحب دارد.
 function norm(s: string) { return (s || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase() }
-function resolveOwner(listingId: string, hintName: string, hintPhone: string): { phone: string; name: string } {
-  const it = listingId ? getItemById(listingId) : null
+async function resolveOwner(listingId: string, hintName: string, hintPhone: string): Promise<{ phone: string; name: string }> {
+  const it = listingId ? await getItemById(listingId) : null
   let phone = String(it?.meta?.__ownerPhone || hintPhone || '').trim()
   const name = (it?.owner || hintName || 'صاحب آگهی').trim()
   if (!phone && name) {
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     case 'start': {
       // خریدار از صفحهٔ آگهی پیام می‌دهد؛ صاحب از روی خودِ آگهی پیدا می‌شود.
       if (!b.text || !String(b.text).trim()) return NextResponse.json({ error: 'متن پیام الزامی است' }, { status: 400 })
-      const owner = resolveOwner(String(b.listingId || ''), String(b.ownerName || ''), String(b.ownerPhone || ''))
+      const owner = await resolveOwner(String(b.listingId || ''), String(b.ownerName || ''), String(b.ownerPhone || ''))
       if (!owner.phone) return NextResponse.json({ error: 'صاحبِ این آگهی پیدا نشد.', noOwner: true }, { status: 400 })
       if (owner.phone === s.phone) return NextResponse.json({ error: 'این آگهیِ خودِ شماست' }, { status: 400 })
       const conv = await startConversation({

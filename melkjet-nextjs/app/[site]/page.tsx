@@ -48,11 +48,11 @@ function normOwner(s: string): string {
 
 // تطبیق آگهی‌ها با مالک سایت: اول با شمارهٔ حساب (مطمئن، مستقل از نام)، سپس
 // به‌عنوان جایگزین با نامِ نمایشیِ نرمال‌شده.
-function ownerListings(ownerName: string | undefined, ownerPhone: string | undefined, count: number): Item[] {
+async function ownerListings(ownerName: string | undefined, ownerPhone: string | undefined, count: number): Promise<Item[]> {
   const want = normOwner(ownerName || '')
   const phone = (ownerPhone || '').trim()
   if (!want && !phone) return []
-  const all = listItems('listing', { publicOnly: true })
+  const all = await listItems('listing', { publicOnly: true })
   // معیارِ مطمئن: شمارهٔ حساب (هنگام انتشار مهر می‌خورد). فقط اگر هیچ آگهیِ مهرخورده‌ای
   // نبود، به‌عنوان جایگزین با نام تطبیق می‌دهیم — تا آگهی‌های سراسریِ سایت نشت نکنند.
   let mine = phone ? all.filter(it => it.meta?.__ownerPhone === phone) : []
@@ -62,10 +62,10 @@ function ownerListings(ownerName: string | undefined, ownerPhone: string | undef
 
 // Owner articles: resolve the site owner's REAL published articles, matched the
 // same way as listings — normalised meta.author === normalised site ownerName.
-function ownerArticles(ownerName: string | undefined, count: number): Item[] {
+async function ownerArticles(ownerName: string | undefined, count: number): Promise<Item[]> {
   const want = normOwner(ownerName || '')
   if (!want) return []
-  return listArticles({ publishedOnly: true })
+  return (await listArticles({ publishedOnly: true }))
     .filter(it => normOwner(it.meta?.author || '') === want)
     .slice(0, count)
 }
@@ -216,7 +216,7 @@ function MediaCard({ href, image, gradient, children }: {
   )
 }
 
-function ListingsBlock({ block, primary, ownerName, ownerPhone }: { block: SiteBlock; primary: string; ownerName?: string; ownerPhone?: string }) {
+async function ListingsBlock({ block, primary, ownerName, ownerPhone }: { block: SiteBlock; primary: string; ownerName?: string; ownerPhone?: string }) {
   const props = p(block)
   // total = تعداد آگهی‌های بارگذاری‌شده (پیش‌فرض ۹)؛ count به‌عنوان جایگزینِ legacy.
   const total = Math.max(1, Math.min(48, Number(props.total) || Number(props.count) || 9))
@@ -224,7 +224,7 @@ function ListingsBlock({ block, primary, ownerName, ownerPhone }: { block: SiteB
   const showCategories = props.showCategories !== 'no'
 
   // فقط آگهی‌های واقعیِ منتشرشدهٔ مالک — هیچ دادهٔ نمونه/فیک. در نبودِ آگهی، حالتِ خالی.
-  const items = ownerListings(ownerName, ownerPhone, total)
+  const items = await ownerListings(ownerName, ownerPhone, total)
   const categories: string[] = []
   for (const it of items) {
     const c = (it.category || '').trim()
@@ -255,13 +255,13 @@ function ListingsBlock({ block, primary, ownerName, ownerPhone }: { block: SiteB
   )
 }
 
-function BlogBlock({ block, primary, ownerName }: { block: SiteBlock; primary: string; ownerName?: string }) {
+async function BlogBlock({ block, primary, ownerName }: { block: SiteBlock; primary: string; ownerName?: string }) {
   const props = p(block)
   const n = Math.max(1, Math.min(12, Number(props.count) || 3))
   const grads = ['#15202d,#101828', '#251528,#1a0e1e', '#152825,#0e1a18', '#2d2215,#1e1a12', '#2d1515,#1e0e0e', '#1e2215,#141a10']
 
   // فقط مقاله‌های واقعیِ منتشرشدهٔ مالک — هیچ دادهٔ نمونه. در نبودِ مقاله، حالتِ خالی.
-  const items = ownerArticles(ownerName, n)
+  const items = await ownerArticles(ownerName, n)
   return (
     <section id="blog" style={{ background: SURFACE, padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
@@ -302,12 +302,12 @@ function BlogBlock({ block, primary, ownerName }: { block: SiteBlock; primary: s
 
 // صفحهٔ کاملِ وبلاگ: فقط مقاله‌های واقعیِ منتشرشده را بارگذاری می‌کند (هیچ دادهٔ نمونه)؛
 // دسته‌ها را استخراج و به مؤلفهٔ کلاینتِ BlogFull (فیلتر + جستجو + ساید‌بار) پاس می‌دهد.
-function BlogFullBlock({ block, primary, ownerName }: { block: SiteBlock; primary: string; ownerName?: string }) {
+async function BlogFullBlock({ block, primary, ownerName }: { block: SiteBlock; primary: string; ownerName?: string }) {
   const props = p(block)
   const heading = props.heading || 'وبلاگ'
   const sidebar: 'yes' | 'no' = props.sidebar === 'no' ? 'no' : 'yes'
 
-  const items = ownerArticles(ownerName, 24)
+  const items = await ownerArticles(ownerName, 24)
   const articles: BlogArticle[] = items.map(it => ({
     id: it.id,
     slug: it.meta?.slug || it.id,
@@ -344,10 +344,10 @@ function faDigits(s: string): number {
 }
 
 // «آگهی‌ها با جستجو و فیلتر» — مثلِ صفحهٔ اصلیِ آگهی‌ها: گریدِ کامل + فیلتر + جستجو.
-function SearchListBlock({ block, primary, ownerName, ownerPhone }: { block: SiteBlock; primary: string; ownerName?: string; ownerPhone?: string }) {
+async function SearchListBlock({ block, primary, ownerName, ownerPhone }: { block: SiteBlock; primary: string; ownerName?: string; ownerPhone?: string }) {
   const props = p(block)
   const total = Math.max(1, Math.min(300, Number(props.total) || 60))
-  const items: SiteListing[] = ownerListings(ownerName, ownerPhone, total).map(it => {
+  const items: SiteListing[] = (await ownerListings(ownerName, ownerPhone, total)).map(it => {
     const m = (it.meta || {}) as Record<string, string>
     const deal: 'sale' | 'rent' = m['نوع معامله'] === 'اجاره' ? 'rent' : 'sale'
     return {

@@ -6,7 +6,7 @@ export async function GET(req: NextRequest) {
   const sp = new URL(req.url).searchParams
   const id = sp.get('id'); const slug = sp.get('slug')
   if (!id && !slug) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
-  const item = slug ? getArticleBySlug(slug) : (id ? getItemById(id) : null)
+  const item = slug ? await getArticleBySlug(slug) : (id ? await getItemById(id) : null)
   if (!item || item.status === 'rejected') return NextResponse.json({ item: null }, { status: 404 })
   return NextResponse.json({ item })
 }

@@ -16,8 +16,8 @@ function toArticle(it: Item) {
 
 export async function GET(req: NextRequest) {
   const id = new URL(req.url).searchParams.get('id')
-  if (id) { const it = getItemById(id); return NextResponse.json({ article: it && it.type === 'article' ? toArticle(it) : null }) }
-  return NextResponse.json({ articles: listArticles().map(toArticle) })
+  if (id) { const it = await getItemById(id); return NextResponse.json({ article: it && it.type === 'article' ? toArticle(it) : null }) }
+  return NextResponse.json({ articles: (await listArticles()).map(toArticle) })
 }
 
 // حذف اسکریپت و هندلرهای خطرناک از HTML ذخیره‌شده
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
   if (!s) return NextResponse.json({ error: 'برای انتشار باید وارد شوید' }, { status: 401 })
   const b = await req.json().catch(() => ({})) as ArticleInput
   if (!b.title || !b.body) return NextResponse.json({ error: 'عنوان و متن مقاله الزامی است' }, { status: 400 })
-  const it = addArticle({ ...b, body: sanitize(b.body), author: b.author || (s as any).name || (s as any).phone })
+  const it = await addArticle({ ...b, body: sanitize(b.body), author: b.author || (s as any).name || (s as any).phone })
   return NextResponse.json({ ok: true, id: it.id, article: toArticle(it) })
 }
 
@@ -44,7 +44,7 @@ export async function PATCH(req: NextRequest) {
   const b = await req.json().catch(() => ({}))
   if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
   if (typeof b.body === 'string') b.body = sanitize(b.body)
-  const it = updateArticle(b.id, b)
+  const it = await updateArticle(b.id, b)
   if (!it) return NextResponse.json({ error: 'مقاله یافت نشد' }, { status: 404 })
   return NextResponse.json({ ok: true, article: toArticle(it) })
 }
@@ -54,6 +54,6 @@ export async function DELETE(req: NextRequest) {
   if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
   const id = new URL(req.url).searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
-  deleteItem(id)
+  await deleteItem(id)
   return NextResponse.json({ ok: true })
 }

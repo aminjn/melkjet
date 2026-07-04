@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({}))
   const type = (['listing', 'directory', 'product', 'article', 'price'].includes(b.type) ? b.type : 'listing') as SourceType
   if (!b.title || !String(b.title).trim()) return NextResponse.json({ error: 'عنوان الزامی است' }, { status: 400 })
-  const it = addItemManual({
+  const it = await addItemManual({
     type, title: String(b.title).slice(0, 200),
     price: b.price ? String(b.price) : undefined, location: b.location ? String(b.location) : undefined,
     image: b.image ? String(b.image) : undefined, url: b.url ? String(b.url) : undefined,
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
   const type = sp.get('type') as SourceType | null
   const category = sp.get('category') || undefined
   const valid = type && ['listing', 'directory', 'product', 'article', 'price'].includes(type)
-  let items = listItems(valid ? type : undefined, { category })
+  let items = await listItems(valid ? type : undefined, { category })
   const status = sp.get('status')
   if (status) items = items.filter(i => i.status === status)
   const q = (sp.get('q') || '').trim()
@@ -59,15 +59,15 @@ export async function PATCH(req: NextRequest) {
   const b = await req.json()
   if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
   if (b.patch && typeof b.patch === 'object') {
-    const it = updateItem(b.id, b.patch as EditableItem)
+    const it = await updateItem(b.id, b.patch as EditableItem)
     if (!it) return NextResponse.json({ error: 'یافت نشد' }, { status: 404 })
     clearEnrichment(b.id)   // کش غنی‌سازی باطل شود تا ویرایش اعمال گردد
     return NextResponse.json({ ok: true, item: it })
   }
   if (b.status && ['pending', 'approved', 'duplicate', 'rejected'].includes(b.status)) {
     // مدلِ یادگیرنده از تصمیمِ دستیِ ادمین یاد بگیرد (قوی‌ترین سیگنال) — قبل از تغییرِ وضعیت آیتم را بگیر.
-    if (b.status === 'approved' || b.status === 'rejected') { const it = getItemById(b.id); if (it && it.type === 'listing') teachFromAdmin(it, b.status as ItemStatus) }
-    setItemStatus(b.id, b.status as ItemStatus)
+    if (b.status === 'approved' || b.status === 'rejected') { const it = await getItemById(b.id); if (it && it.type === 'listing') teachFromAdmin(it, b.status as ItemStatus) }
+    await setItemStatus(b.id, b.status as ItemStatus)
     logAudit(await actor(), `تغییر وضعیت به ${b.status}`, b.id)
     return NextResponse.json({ ok: true })
   }
@@ -78,8 +78,8 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const id = new URL(req.url).searchParams.get('id')
-  if (id) { deleteItem(id); logAudit(await actor(), 'حذف آیتم', id); return NextResponse.json({ ok: true }) }
+  if (id) { await deleteItem(id); logAudit(await actor(), 'حذف آیتم', id); return NextResponse.json({ ok: true }) }
   const b = await req.json().catch(() => ({}))
-  if (Array.isArray(b.ids)) { deleteItems(b.ids); logAudit(await actor(), `حذف گروهی`, `${b.ids.length} مورد`); return NextResponse.json({ ok: true }) }
+  if (Array.isArray(b.ids)) { await deleteItems(b.ids); logAudit(await actor(), `حذف گروهی`, `${b.ids.length} مورد`); return NextResponse.json({ ok: true }) }
   return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
 }

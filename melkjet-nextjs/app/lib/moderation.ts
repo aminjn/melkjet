@@ -52,7 +52,7 @@ async function smartVerdict(it: Item, model: string | null): Promise<{ id: strin
 // Moderate a single item now (persists immediately). Used for one-off (user submit / single id).
 export async function moderateOne(it: Item, model: string | null) {
   const v = await smartVerdict(it, model)
-  setModeration(it.id, v.status, v.reason, v.score)
+  await setModeration(it.id, v.status, v.reason, v.score)
   return v
 }
 
@@ -84,13 +84,13 @@ async function pool<T, R>(items: T[], limit: number, fn: (x: T) => Promise<R>): 
 export async function moderatePending(max = 300): Promise<{ moderated: number; results: any[]; error?: string }> {
   const model = moderationModel()   // ممکن است null باشد — مدلِ یادگیرنده می‌تواند بدونِ AI تصمیم بگیرد
 
-  const queue = pendingForModeration(max)
+  const queue = await pendingForModeration(max)
   if (!queue.length) return { moderated: 0, results: [] }
 
   const results = await pool(queue, 5, (it) => smartVerdict(it, model))
   // فقط مواردی که واقعاً تصمیم‌گیری شده‌اند را بنویس (pending را دست‌نخورده بگذار).
   const decided = results.filter(r => r.status === 'approved' || r.status === 'rejected')
-  setModerationBatch(decided.map(r => ({ id: r.id, status: r.status, reason: r.reason, score: r.score })))
+  await setModerationBatch(decided.map(r => ({ id: r.id, status: r.status, reason: r.reason, score: r.score })))
   const err = (!model && decided.length === 0) ? 'مدلِ AI تنظیم نشده و دادهٔ یادگیری هنوز کافی نیست' : undefined
   return { moderated: decided.length, results, error: err }
 }

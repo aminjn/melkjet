@@ -35,10 +35,10 @@ export interface Forecast {
 //   • نرخِ رشد فقط از «شکلِ» بهترین سریِ روندِ واقعی (محله ← شهر ← کشور) تخمین زده می‌شود،
 //     نه از سطحِ مطلقِ آن؛ پس روندِ بازار رعایت می‌شود ولی قیمتِ پایه مخصوصِ همین ملک می‌ماند.
 // fallbackAvg = قیمتِ هر مترِ خودِ همین ملک (price/area) وقتی دادهٔ محله نداریم.
-export function neighbourhoodForecast(city: string, district: string, fallbackAvg?: number): Forecast | null {
-  const districtStats = (city || district) ? neighbourhoodStats(city, district) : null
-  const cityStats = city ? neighbourhoodStats(city, '') : null
-  const natStats = neighbourhoodStats('', '')
+export async function neighbourhoodForecast(city: string, district: string, fallbackAvg?: number): Promise<Forecast | null> {
+  const districtStats = (city || district) ? await neighbourhoodStats(city, district) : null
+  const cityStats = city ? await neighbourhoodStats(city, '') : null
+  const natStats = await neighbourhoodStats('', '')
 
   // مبنای سطحِ قیمتِ «ماهِ جاری»: خاص‌ترین دادهٔ موجود، بعد قیمتِ همین ملک، بعد عام‌تر.
   const baseAvg = (districtStats?.avg) || (fallbackAvg && fallbackAvg > 0 ? fallbackAvg : 0) || (cityStats?.avg) || (natStats?.avg) || 0

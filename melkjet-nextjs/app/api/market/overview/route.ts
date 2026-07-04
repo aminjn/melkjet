@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: NextRequest) {
   const u = new URL(req.url).searchParams
   const city = u.get('city') || ''
-  const ov = marketOverview(city || undefined)
+  const ov = await marketOverview(city || undefined)
 
   let analysis: string | null = null
   if (u.get('ai') === '1' && ov.rows.length) {

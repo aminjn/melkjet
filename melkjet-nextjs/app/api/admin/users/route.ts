@@ -21,7 +21,7 @@ export async function GET() {
   const planNameOf = (pid?: string) => { if (!pid) return ''; const p = planList.find(x => x.id === pid); return p?.name || pid }
   // شمارشِ آگهیِ هر مالک
   const listingCounts: Record<string, number> = {}
-  for (const it of listItems('listing')) { const ph = String(it.meta?.__ownerPhone || ''); if (ph) listingCounts[ph] = (listingCounts[ph] || 0) + 1 }
+  for (const it of await listItems('listing')) { const ph = String(it.meta?.__ownerPhone || ''); if (ph) listingCounts[ph] = (listingCounts[ph] || 0) + 1 }
   // اطلاعاتِ کامل‌ترِ هر کاربر بر اساسِ پروفایلش
   const users = await Promise.all(listAccounts().map(async a => {
     const credit = await getCredit(a.phone)

@@ -36,7 +36,7 @@ async function analyze(items: CompareItem[]): Promise<CompareAnalysis | null> {
 export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({}))
   const reqItems: { kind: string; id: string }[] = Array.isArray(b.items) ? b.items.slice(0, 4) : []
-  const items = reqItems.map(r => normalizeForCompare(r.kind, r.id)).filter(Boolean) as CompareItem[]
+  const items = (await Promise.all(reqItems.map(r => normalizeForCompare(r.kind, r.id)))).filter(Boolean) as CompareItem[]
   if (!items.length) return NextResponse.json({ ok: false, error: 'موردی برای مقایسه نیست' }, { status: 400 })
   const analysis = b.ai === false ? null : await analyze(items)
   return NextResponse.json({ ok: true, items, analysis })

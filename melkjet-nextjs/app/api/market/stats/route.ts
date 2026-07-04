@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   const sp = new URL(req.url).searchParams
   const city = sp.get('city') || ''
   const district = sp.get('district') || ''
-  const stats = neighbourhoodStats(city, district)
+  const stats = await neighbourhoodStats(city, district)
   if (!stats) return NextResponse.json({ stats: null })
 
   let value: number | undefined

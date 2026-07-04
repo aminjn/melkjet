@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const itemId = sp.get('id')
   let storedUrl: string | undefined
   if (itemId) {
-    const it = getItemById(itemId)
+    const it = await getItemById(itemId)
     storedUrl = it?.url
     const m = (it?.url || '').match(/divar\.ir\/v\/([A-Za-z0-9_-]+)/)
     if (m) token = m[1]

@@ -45,8 +45,8 @@ function similarity(x: Fields, y: Fields): number {
 const DUP_THRESHOLD = 0.85
 
 // همهٔ آگهی‌های نمایش‌داده‌شده را می‌گردد و تکراری‌ها را «duplicate» می‌کند (قدیمی‌ترین می‌ماند).
-export function dedupeListings(): { removed: number; kept: number } {
-  const items = listItems('listing').filter(i => i.status === 'approved' || i.status === 'pending')
+export async function dedupeListings(): Promise<{ removed: number; kept: number }> {
+  const items = (await listItems('listing')).filter(i => i.status === 'approved' || i.status === 'pending')
   // قدیمی‌ترین اول → همان نگه داشته می‌شود، جدیدترها اگر تکراری بودند حذف می‌شوند.
   items.sort((a, b) => (a.scrapedAt || 0) - (b.scrapedAt || 0))
   const kept: Fields[] = []
@@ -54,7 +54,7 @@ export function dedupeListings(): { removed: number; kept: number } {
   for (const it of items) {
     const f = fieldsOf(it)
     if (kept.some(k => similarity(k, f) >= DUP_THRESHOLD)) {
-      setModeration(it.id, 'duplicate', 'آگهیِ تکراری — مشابهِ یک آگهیِ منتشرشدهٔ دیگر', 0)
+      await setModeration(it.id, 'duplicate', 'آگهیِ تکراری — مشابهِ یک آگهیِ منتشرشدهٔ دیگر', 0)
       removed++
     } else {
       kept.push(f)
@@ -64,8 +64,8 @@ export function dedupeListings(): { removed: number; kept: number } {
 }
 
 // آیا آیتم، تکراریِ یکی از آگهی‌های منتشرشدهٔ موجود است؟ (برای بررسیِ یک آگهیِ تازه)
-export function isDuplicateListing(it: Item): boolean {
+export async function isDuplicateListing(it: Item): Promise<boolean> {
   const f = fieldsOf(it)
-  const others = listItems('listing').filter(x => x.id !== it.id && (x.status === 'approved' || x.status === 'pending'))
+  const others = (await listItems('listing')).filter(x => x.id !== it.id && (x.status === 'approved' || x.status === 'pending'))
   return others.some(o => similarity(fieldsOf(o), f) >= DUP_THRESHOLD)
 }

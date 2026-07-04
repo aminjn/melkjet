@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
 
   const body = await req.json().catch(() => ({}))
-  const all = listSources()
+  const all = await listSources()
   const targets = body.id ? all.filter(s => s.id === body.id) : all.filter(s => s.enabled)
   if (!targets.length) return NextResponse.json({ error: 'منبعی برای اجرا یافت نشد' }, { status: 404 })
 
@@ -25,16 +25,16 @@ export async function POST(req: NextRequest) {
     try {
       const raw = await scrapeSource(src)
       if (!raw.length) {
-        markError(src.id, 'هیچ داده‌ای استخراج نشد (ساختار صفحه پشتیبانی نشد یا نیاز به RSS/JSON-LD دارد)')
+        await markError(src.id, 'هیچ داده‌ای استخراج نشد (ساختار صفحه پشتیبانی نشد یا نیاز به RSS/JSON-LD دارد)')
         results.push({ source: src.name, ok: false, added: 0, dup: 0, error: 'بدون داده' })
         continue
       }
-      const { added, dup } = insertItems(src, raw)
+      const { added, dup } = await insertItems(src, raw)
       totalAdded += added; totalDup += dup
       results.push({ source: src.name, ok: true, added, dup })
     } catch (e: any) {
       const msg = e?.message || 'خطای ناشناخته'
-      markError(src.id, msg)
+      await markError(src.id, msg)
       results.push({ source: src.name, ok: false, added: 0, dup: 0, error: msg })
     }
   }
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
   }
   // حذفِ آگهی‌های تکراری (SEO): از هر گروهِ مشابه فقط قدیمی‌ترین می‌ماند.
   let deduped = 0
-  if (totalAdded > 0) { try { deduped = dedupeListings().removed } catch {} }
+  if (totalAdded > 0) { try { deduped = (await dedupeListings()).removed } catch {} }
 
-  return NextResponse.json({ ok: true, totalAdded, totalDup, moderated, deduped, results, sources: listSources() })
+  return NextResponse.json({ ok: true, totalAdded, totalDup, moderated, deduped, results, sources: await listSources() })
 }

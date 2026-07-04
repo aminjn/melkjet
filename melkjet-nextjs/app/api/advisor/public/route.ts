@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   // آگهی‌های عمومیِ این مشاور — فقط فایل‌های خودِ او، نه آگهی‌های سراسریِ سایت.
   // معیارِ مطمئن: شمارهٔ حسابِ مالک (هنگام انتشار روی آگهی مهر می‌خورد). فقط اگر هیچ
   // آگهیِ مهرخورده‌ای نبود، به‌عنوان جایگزین با نامِ نمایشی تطبیق می‌دهیم (دادهٔ قدیمی).
-  const all = listItems('listing', { publicOnly: true })
+  const all = await listItems('listing', { publicOnly: true })
   const want = normOwner(p.name || '')
   let mine = all.filter(it => it.meta?.__ownerPhone === phone)
   if (mine.length === 0 && want) mine = all.filter(it => !it.meta?.__ownerPhone && normOwner(it.owner || '') === want)

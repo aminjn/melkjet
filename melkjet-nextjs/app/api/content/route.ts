@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   const owner = (sp.get('owner') || '').replace(/\s+/g, ' ').trim()
   const limit = Math.min(parseInt(sp.get('limit') || '60', 10) || 60, 200)
   const valid = type && ['listing', 'directory', 'product', 'article', 'price'].includes(type)
-  let items = listItems(valid ? type : undefined, { category, publicOnly: true })
+  let items = await listItems(valid ? type : undefined, { category, publicOnly: true })
   // پیش‌نویس‌های CMS نباید در فهرست عمومی بیایند
   items = items.filter(i => !(i.type === 'article' && i.meta?.cmsStatus === 'draft'))
   // فیلتر بر اساس آگهی‌دهنده/نویسنده. مقاله‌ها نویسنده را در meta.author نگه می‌دارند

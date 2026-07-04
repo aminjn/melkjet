@@ -7,7 +7,7 @@ import { logAudit } from '@/app/lib/audit-store'
 export async function POST() {
   const s = await getSession()
   if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
-  const r = dedupeListings()
+  const r = await dedupeListings()
   logAudit((s as any).name || (s as any).phone || 'مدیر', 'پاک‌سازیِ آگهی‌های تکراری', `${r.removed} حذف، ${r.kept} ماند`)
   return NextResponse.json({ ok: true, ...r })
 }

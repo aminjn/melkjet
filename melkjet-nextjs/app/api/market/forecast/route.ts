@@ -15,6 +15,6 @@ export async function GET(req: NextRequest) {
   // متراژ ممکن است «۸۰» (فقط رقمِ فارسی، بدونِ «متر») باشد → faToEn سپس عدد.
   const area = parseArea(u.get('area') || '') || parseArea(u.get('title') || '') || (parseInt(faToEn(u.get('area') || ''), 10) || 0)
   const fallbackAvg = price > 1e8 && area >= 15 ? Math.round(price / area) : 0
-  const forecast = neighbourhoodForecast(city, district, fallbackAvg)
+  const forecast = await neighbourhoodForecast(city, district, fallbackAvg)
   return NextResponse.json({ ok: true, forecast })
 }

@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const b = await req.json().catch(() => ({}))
   if (!b.slot || !b.targetId) return NextResponse.json({ error: 'جایگاه و آیتم الزامی است' }, { status: 400 })
-  const p = addPromotion(String(b.slot), String(b.targetId), b.expiresAt ? Number(b.expiresAt) : undefined)
+  const p = await addPromotion(String(b.slot), String(b.targetId), b.expiresAt ? Number(b.expiresAt) : undefined)
   if (!p) return NextResponse.json({ error: 'جایگاه یا آیتم نامعتبر است' }, { status: 400 })
   logAudit(await actor(), 'پروموت', `${p.title} → ${b.slot}`)
   return NextResponse.json({ ok: true, promotion: p })

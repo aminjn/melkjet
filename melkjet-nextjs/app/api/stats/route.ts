@@ -9,8 +9,8 @@ export const dynamic = 'force-dynamic'
 // آمارِ واقعیِ سیستم برای صفحهٔ خانه (سبک، با کشِ کوتاه).
 export async function GET() {
   let listings = 0, advisors = 0, products = 0, shops = 0, builders = 0
-  try { listings = listItems('listing', { publicOnly: true }).length } catch {}
-  try { advisors = listItems('directory', { publicOnly: true }).length } catch {}
+  try { listings = (await listItems('listing', { publicOnly: true })).length } catch {}
+  try { advisors = (await listItems('directory', { publicOnly: true })).length } catch {}
   try { products = catalogStats().products } catch {}
   try { shops = (await listPublicShops()).length } catch {}
   try { builders = getMeta().totalBuilders || 0 } catch {}
