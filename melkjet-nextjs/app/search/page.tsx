@@ -776,20 +776,31 @@ function SearchMap({ view, pins, city }: { view: MapView; pins: { id: string; la
   const ready = iv && size.w > 0 && size.h > 0
   const src = ready ? `/api/geo/static-map?lat=${iv!.center.lat.toFixed(5)}&lng=${iv!.center.lng.toFixed(5)}&w=${size.w}&h=${size.h}&zoom=${iv!.zoom}` : ''
 
-  // پیکسلِ هر پین + جداسازی (declutter) تا روی هم نیفتند
-  const placed = useMemo(() => {
-    if (!ready || err) return [] as { id: string; label: string; x: number; y: number }[]
+  // خوشه‌بندیِ پین‌ها → «حباب‌های شمارش» مثلِ دیوار: در زوم پایین، پین‌های نزدیک به هم در
+  // یک حبابِ عدد جمع می‌شوند؛ با زوم/کلیک باز می‌شوند به پین‌های تکیِ قیمت.
+  const clusters = useMemo(() => {
+    if (!ready || err) return [] as { x: number; y: number; count: number; id: string; label: string; lat: number; lng: number }[]
     const pc = project(iv!.center.lat, iv!.center.lng, iv!.zoom)
-    const arr = pins.map(p => { const pp = project(p.lat, p.lng, iv!.zoom); return { id: p.id, label: p.label, x: size.w / 2 + (pp.x - pc.x), y: size.h / 2 + (pp.y - pc.y) } })
+    const pts = pins.map(p => { const pp = project(p.lat, p.lng, iv!.zoom); return { id: p.id, label: p.label, x: size.w / 2 + (pp.x - pc.x), y: size.h / 2 + (pp.y - pc.y), lat: p.lat, lng: p.lng } })
       .filter(p => p.x >= 0 && p.x <= size.w && p.y >= 6 && p.y <= size.h - 6)
-    const PW = 62, PH = 26, out: { id: string; label: string; x: number; y: number }[] = []
-    for (const p of arr) {
+    const R = 46   // شعاعِ خوشه (پیکسل)
+    const out: { x: number; y: number; count: number; id: string; label: string; lat: number; lng: number }[] = []
+    for (const p of pts) {
+      const c = out.find(q => Math.abs(q.x - p.x) < R && Math.abs(q.y - p.y) < R)
+      if (c) c.count++
+      else out.push({ x: p.x, y: p.y, count: 1, id: p.id, label: p.label, lat: p.lat, lng: p.lng })
+    }
+    // پین‌های تکی را برای نیفتادن روی هم کمی جدا کن (declutter عمودی).
+    const PW = 62, PH = 26
+    for (let i = 0; i < out.length; i++) {
+      const p = out[i]; if (p.count > 1) continue
       let y = p.y, t = 0
-      while (t < 10 && out.some(q => Math.abs(q.x - p.x) < PW && Math.abs(q.y - y) < PH)) { y += PH; t++ }
-      out.push({ ...p, y: Math.min(y, size.h - 6) })
+      while (t < 8 && out.some((q, j) => j < i && Math.abs(q.x - p.x) < PW && Math.abs(q.y - y) < PH)) { y += PH; t++ }
+      p.y = Math.min(y, size.h - 6)
     }
     return out
   }, [pins, iv, size, err, ready])
+  const zoomToCluster = (lat: number, lng: number) => setIv(v => v ? { center: { lat, lng }, zoom: clampZoom(v.zoom + 2) } : v)
 
   const pt = (e: React.MouseEvent | React.TouchEvent) => {
     const t = 'touches' in e ? e.touches[0] : (e as React.MouseEvent)
@@ -824,12 +835,24 @@ function SearchMap({ view, pins, city }: { view: MapView; pins: { id: string; la
             {err ? 'نقشه به «کلید نقشهٔ نشان» (web.…) نیاز دارد — پنل سوپرادمین → اتصال‌ها → نشان → کلید نقشه' : 'برای نمایشِ نقشه، موقعیتِ شما یا مختصاتِ آگهی‌ها لازم است.'}
           </div>
         )}
-        {/* پین‌های قیمت */}
-        {placed.map(p => {
+        {/* حباب‌های شمارش (خوشه) و پین‌های قیمت */}
+        {clusters.map(p => {
+          const left = `${(p.x / size.w) * 100}%`, top = `${(p.y / size.h) * 100}%`
+          if (p.count > 1) {
+            // حبابِ شمارشِ منطقه — مثلِ دیوار. کلیک → زوم به همان خوشه.
+            const d = Math.min(64, 34 + String(p.count).length * 7)
+            return (
+              <button key={`c${p.id}`} onClick={e => { if (movedRef.current) { e.preventDefault(); return } zoomToCluster(p.lat, p.lng) }}
+                style={{ position: 'absolute', left, top, transform: 'translate(-50%,-50%)', width: d, height: d, borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%, rgba(231,103,74,.98), rgba(198,74,52,.98))', border: '2.5px solid rgba(255,255,255,.85)', color: '#fff', fontSize: p.count > 999 ? 11 : 13, fontWeight: 800, cursor: 'pointer', boxShadow: '0 3px 14px -3px rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 12, fontFamily: 'inherit' }}
+                title={`${toPersianDigits(p.count)} آگهی — برای دیدن، بزرگ‌نمایی کنید`}>
+                {toPersianDigits(p.count)}
+              </button>
+            )
+          }
           const on = active === p.id
           return (
             <a key={p.id} href={`/property/${p.id}`} onClick={e => { if (movedRef.current) e.preventDefault() }} onMouseEnter={() => setActive(p.id)} onMouseLeave={() => setActive(null)}
-              style={{ position: 'absolute', left: `${(p.x / size.w) * 100}%`, top: `${(p.y / size.h) * 100}%`, transform: `translate(-50%,-50%) scale(${on ? 1.12 : 1})`, padding: '4px 9px', borderRadius: 14, background: on ? 'linear-gradient(140deg,var(--gold2),var(--gold))' : 'rgba(10,9,8,0.92)', border: `1.5px solid ${on ? 'var(--gold2)' : 'var(--gold)'}`, color: on ? '#16140f' : '#f0ede6', fontSize: 11, fontWeight: 800, textDecoration: 'none', whiteSpace: 'nowrap', cursor: 'pointer', boxShadow: '0 2px 10px -3px rgba(0,0,0,.7)', zIndex: on ? 20 : 10, fontFamily: 'inherit' }}>
+              style={{ position: 'absolute', left, top, transform: `translate(-50%,-50%) scale(${on ? 1.12 : 1})`, padding: '4px 9px', borderRadius: 14, background: on ? 'linear-gradient(140deg,var(--gold2),var(--gold))' : 'rgba(10,9,8,0.92)', border: `1.5px solid ${on ? 'var(--gold2)' : 'var(--gold)'}`, color: on ? '#16140f' : '#f0ede6', fontSize: 11, fontWeight: 800, textDecoration: 'none', whiteSpace: 'nowrap', cursor: 'pointer', boxShadow: '0 2px 10px -3px rgba(0,0,0,.7)', zIndex: on ? 20 : 10, fontFamily: 'inherit' }}>
               {p.label}
             </a>
           )
@@ -844,7 +867,7 @@ function SearchMap({ view, pins, city }: { view: MapView; pins: { id: string; la
       </div>
 
       <div style={{ position: 'absolute', top: 14, right: 14, background: 'rgba(0,0,0,0.62)', backdropFilter: 'blur(10px)', borderRadius: 9, padding: '6px 12px', fontSize: 12, color: '#f0ede6', border: '1px solid rgba(255,255,255,.12)', pointerEvents: 'none', zIndex: 30 }}>
-        {placed.length > 0 ? `${placed.length.toLocaleString('fa-IR')} ملک روی نقشه` : (city ? `نقشهٔ ${city}` : 'نقشهٔ منطقه')}
+        {(() => { const n = clusters.reduce((a, c) => a + c.count, 0); return n > 0 ? `${n.toLocaleString('fa-IR')} ملک روی نقشه` : (city ? `نقشهٔ ${city}` : 'نقشهٔ منطقه') })()}
       </div>
     </div>
   )
