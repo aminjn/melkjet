@@ -15,11 +15,13 @@ function toContent(it: any): ContentItem {
 }
 
 // همان انتخابِ عمومیِ /api/content (منتشر، غیرِ پیش‌نویس، ویژه‌ها اول، تازه‌ترها بعد).
-async function publicList(type: 'listing' | 'directory', limit: number): Promise<ContentItem[]> {
+// کلِ لیستِ مرتب‌شده را برمی‌گرداند تا هم top-N و هم «تعدادِ کل» از یک خواندن درآید
+// (به‌جای دو بار صداکردنِ listItems که TTFB را بالا می‌برد).
+async function publicListFull(type: 'listing' | 'directory'): Promise<ContentItem[]> {
   let items: any[] = await listItems(type, { publicOnly: true })
   items = items.filter(i => !(i.type === 'article' && i.meta?.cmsStatus === 'draft'))
   items.sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0) || b.scrapedAt - a.scrapedAt)
-  return items.slice(0, limit).map(toContent)
+  return items.map(toContent)
 }
 
 async function promoItems(slot: string): Promise<ContentItem[]> {
@@ -40,19 +42,44 @@ export interface HomeData {
 // هر منبع مستقل و امن: خطای یکی نباید کلِ صفحه را ۵۰۰ کند (fallback = آرایهٔ خالی).
 const safe = <T>(p: Promise<T[]>): Promise<T[]> => p.catch(() => [] as T[])
 
-export async function getHomeData(): Promise<HomeData> {
-  const [listings, advisorItems, promoFeatured, promoInvest, promoAdvisors] = await Promise.all([
-    safe(publicList('listing', 12)),
-    safe(publicList('directory', 6)),
+async function compute(): Promise<HomeData> {
+  const [listingsAll, advisorsAll, promoFeatured, promoInvest, promoAdvisors] = await Promise.all([
+    safe(publicListFull('listing')),
+    safe(publicListFull('directory')),
     safe(promoItems('home_featured')),
     safe(promoItems('home_invest')),
     safe(promoItems('home_advisors')),
   ])
-  const sysStats = { listings: 0, advisors: 0, products: 0, shops: 0, builders: 0 }
-  try { sysStats.listings = (await listItems('listing', { publicOnly: true })).length } catch {}
-  try { sysStats.advisors = (await listItems('directory', { publicOnly: true })).length } catch {}
+  // آمار از همان لیست‌های خوانده‌شده (بدونِ خواندنِ دوباره).
+  const sysStats = { listings: listingsAll.length, advisors: advisorsAll.length, products: 0, shops: 0, builders: 0 }
   try { sysStats.products = catalogStats().products } catch {}
   try { sysStats.shops = (await listPublicShops()).length } catch {}
   try { sysStats.builders = getMeta().totalBuilders || 0 } catch {}
-  return { listings, advisorItems, promoFeatured, promoInvest, promoAdvisors, sysStats }
+  return {
+    listings: listingsAll.slice(0, 12),
+    advisorItems: advisorsAll.slice(0, 6),
+    promoFeatured, promoInvest, promoAdvisors, sysStats,
+  }
+}
+
+// کش با «stale-while-revalidate»: صفحهٔ اصلی برای همهٔ کاربران یکسان است. بدونِ این، هر
+// درخواست کلِ دادهٔ صفحه (لیست‌ها + آمار + getMetaِ ۶مگی) را دوباره می‌خواند و TTFB را
+// چند ثانیه می‌کرد (همان «Document request latency»). حالا:
+//   • اولین درخواست (که warmUpِ بوت جذبش می‌کند) یک‌بار داده را می‌سازد.
+//   • بعد از آن هر درخواست فوری دادهٔ کش‌شده را می‌گیرد؛ اگر کهنه شد، در پس‌زمینه تازه
+//     می‌شود و درخواست منتظر نمی‌ماند → TTFB همیشه سریع.
+let cache: { at: number; data: HomeData } | null = null
+let refreshing = false
+const TTL = 60_000
+
+function refreshBg() {
+  if (refreshing) return
+  refreshing = true
+  compute().then(d => { cache = { at: Date.now(), data: d } }).catch(() => {}).finally(() => { refreshing = false })
+}
+
+export async function getHomeData(): Promise<HomeData> {
+  if (!cache) { const data = await compute(); cache = { at: Date.now(), data }; return data }
+  if (Date.now() - cache.at >= TTL) refreshBg()   // کهنه → در پس‌زمینه تازه کن، ولی الان همین را بده
+  return cache.data
 }
