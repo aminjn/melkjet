@@ -269,3 +269,5 @@ body { padding-bottom: env(safe-area-inset-bottom); }
   .mjb-side.open{display:block!important}
   .mjb-filterbtn{display:inline-block!important}
 }
+
+.mjsa-modrow:hover{background:var(--bg2)}

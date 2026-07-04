@@ -310,9 +310,10 @@ function timeAgo(ts: number | null): string {
 // ─── مدیریت آگهی‌ها و محتوای واکشی‌شده ─────────────────────────────────────
 interface MItem {
   id: string; type: string; category?: string; title: string; price?: string
-  location?: string; image?: string; url?: string; excerpt?: string; phone?: string; owner?: string
+  location?: string; image?: string; url?: string; excerpt?: string; phone?: string; owner?: string; ownerId?: string
   sourceName: string; status: string; featured?: boolean; edited?: boolean; scrapedAt: number
   aiReason?: string; aiScore?: number; moderatedAt?: number
+  meta?: Record<string, string>; tags?: string[]; expiresAt?: number
 }
 const M_TYPES: { k: string; label: string }[] = [
   { k: '', label: 'همه' }, { k: 'listing', label: 'آگهی' }, { k: 'directory', label: 'پروفایل/دفتر' },
@@ -2111,6 +2112,7 @@ function ModerationView() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState('')
+  const [detail, setDetail] = useState<MItem | null>(null)
 
   const load = async () => {
     setLoading(true)
@@ -2192,7 +2194,7 @@ function ModerationView() {
               {moderated.slice(0, 50).map(it => {
                 const v = verdictOf(it); const score = it.aiScore ?? 0
                 return (
-                  <tr key={it.id} style={{ borderBottom: '1px solid var(--line)' }}>
+                  <tr key={it.id} onClick={() => setDetail(it)} className="mjsa-modrow" style={{ borderBottom: '1px solid var(--line)', cursor: 'pointer' }}>
                     <td style={{ padding: '11px 0', fontWeight: 600, fontSize: 13, maxWidth: 220 }}>{it.title}<div style={{ fontSize: 11, color: 'var(--faint)', fontWeight: 400 }}>{[it.location, it.price].filter(Boolean).join(' · ')}</div></td>
                     <td style={{ padding: '11px 0' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -2206,8 +2208,9 @@ function ModerationView() {
                     <td style={{ padding: '11px 0', fontSize: 12, color: 'var(--muted)', maxWidth: 220, lineHeight: 1.5 }}>{it.aiReason || '—'}</td>
                     <td style={{ padding: '11px 0' }}>
                       <div style={{ display: 'flex', gap: 6 }}>
-                        {it.status !== 'approved' && <button onClick={() => setStatusOf(it.id, 'approved')} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 8, border: '1px solid #5fd98a', color: '#5fd98a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>تأیید</button>}
-                        {it.status !== 'rejected' && <button onClick={() => setStatusOf(it.id, 'rejected')} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 8, border: '1px solid #e7674a', color: '#e7674a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>رد</button>}
+                        <button onClick={e => { e.stopPropagation(); setDetail(it) }} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 8, border: '1px solid var(--line2)', color: 'var(--muted)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>جزئیات</button>
+                        {it.status !== 'approved' && <button onClick={e => { e.stopPropagation(); setStatusOf(it.id, 'approved') }} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 8, border: '1px solid #5fd98a', color: '#5fd98a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>تأیید</button>}
+                        {it.status !== 'rejected' && <button onClick={e => { e.stopPropagation(); setStatusOf(it.id, 'rejected') }} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 8, border: '1px solid #e7674a', color: '#e7674a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>رد</button>}
                       </div>
                     </td>
                   </tr>
@@ -2217,6 +2220,98 @@ function ModerationView() {
           </table>
         )}
       </Card>
+      {detail && <ModerationDetailModal item={detail} onClose={() => setDetail(null)} onStatus={s => { setStatusOf(detail.id, s); setDetail(null) }} />}
+    </div>
+  )
+}
+
+// جزئیاتِ کاملِ آگهی + دلیلِ حکمِ هوش مصنوعی (کلیک روی هر ردیف)
+function ModerationDetailModal({ item, onClose, onStatus }: { item: MItem; onClose: () => void; onStatus: (s: string) => void }) {
+  const v = item.status === 'approved' ? { label: 'تأیید', color: '#5fd98a' } : item.status === 'rejected' ? { label: 'رد', color: '#e7674a' } : { label: 'بازبینی', color: '#e7a14a' }
+  const score = item.aiScore ?? 0
+  const metaEntries = Object.entries(item.meta || {}).filter(([k]) => !k.startsWith('__'))
+  const dealStatus = item.meta?.['__dealStatus']
+  const fmtDate = (ms?: number) => ms ? new Date(ms).toLocaleString('fa-IR') : '—'
+  const Row = ({ label, value, ltr }: { label: string; value?: string; ltr?: boolean }) => value ? (
+    <div style={{ display: 'flex', gap: 8, fontSize: 12.5, padding: '5px 0', borderBottom: '1px solid var(--line)' }}>
+      <span style={{ color: 'var(--faint)', minWidth: 92, flexShrink: 0 }}>{label}</span>
+      <span style={{ color: 'var(--text)', direction: ltr ? 'ltr' : 'rtl', textAlign: ltr ? 'left' : 'right', wordBreak: 'break-word' }}>{value}</span>
+    </div>
+  ) : null
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 100, padding: 20, overflowY: 'auto' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 18, padding: 24, width: '100%', maxWidth: 640, margin: 'auto', animation: 'rise .25s ease' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
+          <div style={{ fontWeight: 800, fontSize: 17, lineHeight: 1.5 }}>{item.title}</div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>×</button>
+        </div>
+
+        {/* حکمِ هوش مصنوعی — برجسته */}
+        <div style={{ background: 'var(--bg2)', border: `1px solid ${v.color}44`, borderRadius: 14, padding: 16, marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 15 }}>🤖</span>
+            <span style={{ fontWeight: 700, fontSize: 13.5 }}>حکمِ هوش مصنوعی</span>
+            <Badge label={v.label} color={v.color} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginInlineStart: 'auto' }}>
+              <div style={{ width: 60, height: 7, borderRadius: 999, background: 'var(--line2)', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${score}%`, background: v.color, borderRadius: 999 }} />
+              </div>
+              <span style={{ fontSize: 13, fontWeight: 800, color: v.color }}>{score}</span>
+            </div>
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.9 }}>{item.aiReason || 'دلیلی ثبت نشده است.'}</div>
+          <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 8 }}>زمانِ بررسی: {fmtDate(item.moderatedAt)}</div>
+        </div>
+
+        {item.image && <img src={item.image} alt="" style={{ width: '100%', maxHeight: 260, objectFit: 'cover', borderRadius: 12, marginBottom: 16 }} />}
+
+        {/* اطلاعاتِ آگهی */}
+        <div style={{ marginBottom: 14 }}>
+          <Row label="قیمت" value={item.price} />
+          <Row label="موقعیت" value={item.location} />
+          <Row label="دسته" value={item.category} />
+          <Row label="تلفن" value={item.phone} ltr />
+          <Row label="آگهی‌دهنده" value={item.owner} />
+          <Row label="منبع" value={item.sourceName} />
+          <Row label="لینک" value={item.url} ltr />
+          <Row label="وضعیت معامله" value={dealStatus === 'sold' ? 'فروخته شد' : dealStatus === 'rented' ? 'اجاره رفت' : undefined} />
+          <Row label="ثبت" value={fmtDate(item.scrapedAt)} />
+          <Row label="انقضا" value={item.expiresAt ? fmtDate(item.expiresAt) : undefined} />
+        </div>
+
+        {/* مشخصاتِ ملک (meta) */}
+        {metaEntries.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', marginBottom: 8 }}>مشخصات</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 6 }}>
+              {metaEntries.map(([k, val]) => (
+                <div key={k} style={{ background: 'var(--bg2)', borderRadius: 8, padding: '6px 10px', fontSize: 12 }}>
+                  <span style={{ color: 'var(--faint)' }}>{k}: </span><span style={{ color: 'var(--text)', fontWeight: 600 }}>{String(val)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {item.excerpt && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', marginBottom: 6 }}>توضیحات</div>
+            <div style={{ fontSize: 12.5, color: 'var(--text)', lineHeight: 2, whiteSpace: 'pre-wrap', background: 'var(--bg2)', borderRadius: 10, padding: 12, maxHeight: 200, overflowY: 'auto' }}>{item.excerpt}</div>
+          </div>
+        )}
+
+        {item.tags && item.tags.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+            {item.tags.map((t, i) => <span key={i} style={{ fontSize: 11.5, background: 'var(--line2)', borderRadius: 999, padding: '3px 10px', color: 'var(--muted)' }}>{t}</span>)}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+          {item.status !== 'approved' && <GoldButton onClick={() => onStatus('approved')} style={{ flex: 1, background: '#5fd98a', borderColor: '#5fd98a' }}>✓ تأیید آگهی</GoldButton>}
+          {item.status !== 'rejected' && <button onClick={() => onStatus('rejected')} style={{ flex: 1, background: 'transparent', border: '1px solid #e7674a', color: '#e7674a', borderRadius: 10, padding: '10px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>✗ رد آگهی</button>}
+          {item.url && <a href={item.url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', padding: '10px 14px', border: '1px solid var(--line2)', borderRadius: 10, color: 'var(--muted)', textDecoration: 'none', fontSize: 12.5 }}>منبع ↗</a>}
+        </div>
+      </div>
     </div>
   )
 }
