@@ -238,7 +238,7 @@ export default function PropertyPage() {
   const monthly = (() => { const r = 0.18 / 12, n = 240; return loan * r * Math.pow(1 + r, n) / (Math.pow(1 + r, n) - 1) })()
 
   return (
-    <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
+    <div dir="rtl" className="mjp-page" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
       <Nav />
       {loading ? (
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '80px 24px', textAlign: 'center', color: 'var(--muted)' }}>در حال بارگذاری…</div>
@@ -525,7 +525,7 @@ export default function PropertyPage() {
               </div>
 
               {/* chat with owner — saved to buyer panel */}
-              <div style={{ ...card, border: '1px solid var(--gold)' }}>
+              <div id="mjp-chat" style={{ ...card, border: '1px solid var(--gold)', scrollMarginTop: 80 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
                   <span style={{ width: 30, height: 30, borderRadius: 9, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16140f', fontWeight: 800 }}>💬</span>
                   <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 13.5 }}>چت با صاحب آگهی</div><div style={{ fontSize: 11, color: 'var(--muted)' }}>{item.owner || 'صاحب آگهی'} · پاسخِ شخصِ آگهی‌دهنده</div></div>
@@ -603,6 +603,20 @@ export default function PropertyPage() {
             </div>
           </section>
         </>
+      )}
+
+      {/* نوارِ اکشنِ چسبانِ پایین (موبایل) — مثلِ دیوار: چت + اطلاعات تماس همیشه جلوی چشم */}
+      {item && (
+        <div className="mjp-actionbar" style={{ position: 'fixed', bottom: 0, insetInlineStart: 0, insetInlineEnd: 0, zIndex: 60, display: 'none', gap: 10, padding: '10px 14px calc(10px + env(safe-area-inset-bottom))', background: 'var(--surface)', borderTop: '1px solid var(--line2)', boxShadow: '0 -4px 22px -10px rgba(0,0,0,.6)' }}>
+          <button onClick={() => { const el = document.getElementById('mjp-chat'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}
+            style={{ flex: 1, height: 46, borderRadius: 12, border: '1px solid var(--gold)', background: 'transparent', color: 'var(--gold)', fontWeight: 800, fontSize: 14, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>💬 چت</button>
+          {revealed && (contactPhone || (phone && /^\d/.test(phone))) ? (
+            <a href={`tel:${contactPhone || phone}`} style={{ flex: 1, height: 46, borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontWeight: 800, fontSize: 14, direction: 'ltr', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>☎ {contactPhone || phone}</a>
+          ) : (
+            <button onClick={revealContact} disabled={gettingPhone}
+              style={{ flex: 1, height: 46, borderRadius: 12, border: 'none', background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 14, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: gettingPhone ? 0.6 : 1 }}>☎ اطلاعات تماس</button>
+          )}
+        </div>
       )}
     </div>
   )

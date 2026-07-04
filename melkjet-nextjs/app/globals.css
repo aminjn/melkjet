@@ -282,3 +282,7 @@ body { padding-bottom: env(safe-area-inset-bottom); }
 
 .mjs-quickbar::-webkit-scrollbar{height:0}
 .mjs-quickbar{scrollbar-width:none}
+
+/* صفحهٔ آگهی: نوارِ اکشنِ چسبانِ پایین فقط روی موبایل (جای تب‌بار) + فاصلهٔ پایین تا محتوا پشتش نرود */
+.mjp-actionbar{display:none}
+@media(max-width:900px){.mjp-actionbar{display:flex!important}.mjp-page{padding-bottom:78px!important}}
