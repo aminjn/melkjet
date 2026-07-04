@@ -69,9 +69,29 @@ The `!important` is REQUIRED to override inline styles.
 Read this to resume work in a fresh session. **Everything is committed to git** — the
 repo + this file are the source of truth, no chat history needed.
 
+## PostgreSQL migration (IN PROGRESS — gated by DATABASE_URL)
+- **`app/lib/db.ts`** = pg Pool + `kv(key jsonb)` layer: `kvGet`/`kvSet`/`kvMutate`
+  (kvMutate = atomic read-modify-write with `FOR UPDATE` row lock → no lost concurrent writes).
+- **Dual-mode**: every migrated store checks `pgEnabled()` (=`!!process.env.DATABASE_URL`).
+  No DATABASE_URL → behaves exactly like the old file store. So production is unchanged until enabled.
+- **Migrated to async+PG (26 stores):** messages, leads, crm, workflow, pros, sites, buyer,
+  contacts, advisor, agency, owner, materials, user, listing-stats, comm, builder, ticket,
+  outreach, contact-log, saved-search, assistant, floorplan, tracker, tracker-links +
+  async lib helpers (agency-link-store, duplicate-check, agency-team). All their call sites `await`.
+- **Enable on server:** create DB+user, `node scripts/migrate-to-pg.mjs` (copies .*-data.json → kv),
+  set `DATABASE_URL` in ecosystem.config.js env, reload. Kill-switch: unset DATABASE_URL.
+- **STILL ON FILES (intentional):** config/read-mostly — account, role, admin, geo, category,
+  plan, cost, sms-cost, payment (mtime-cached, fine).
+- **NOT YET migrated (next):** scraper-store (the big central one — 38 callers + cascades;
+  best done as a NORMALIZED `listings` table, not a blob, for SQL search/filter/pagination —
+  a dedicated effort), plus caches (enrich, moderation-ml, market-data, catalog, persiansaze)
+  and small stores (reviews, push, audit, promo, promotion, banner, builder-public,
+  workflow-runner-store, advisor-divar-store/job, pending-reg, ps-enrich).
+
 ## Conventions
 - **Persistence = file-based JSON stores** in `process.cwd()`, all gitignored (`.*-data.json`).
   Mirror the style of `app/lib/scraper-store.ts` / `crm-store.ts` for any new store.
+  NEW stores that hold user data should follow the async dual-mode pattern of `leads-store.ts`.
 - **No new npm deps** unless unavoidable (dependency-free patterns: `app/lib/html-select.ts`
   parser, `app/lib/proxy-fetch.ts` CONNECT tunnel, `app/lib/shecan-https.ts` DNS, `app/lib/smtp.ts`).
 - **Inline styles + CSS vars** everywhere (--bg2,--surface,--line,--line2,--text,--muted,--faint,--gold,--goldDim). Persian digits via `toLocaleString('fa-IR')`. RTL.
