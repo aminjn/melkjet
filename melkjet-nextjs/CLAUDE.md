@@ -53,6 +53,23 @@ Only NODE_APP_INSTANCE=0 runs cron/Chrome (cron-runner.ts) so scraping stays sin
 If you ever see chunk 500s + huge ↺: `pm2 delete melkjet; pm2 kill; pkill -9 -f next-server;`
 then `pm2 start ecosystem.config.js`.
 
+## Scrape architecture (scale — user-facing instances do ZERO heavy work)
+The Divar scrape/import is a **queue processed only on instance 0** (the cron worker):
+- **User request → enqueue only.** `startBackgroundSync()` (called from `/api/advisor/divar`
+  on a user-facing instance 3001-3003) just sets the job to `queued` and returns instantly —
+  NO prepareSync/runBatch in-process. So user traffic is never slowed by scrapes.
+- **Instance 0 cron drives the queue** (`cron-runner.ts` → `queueTick` every 45s):
+  `driveJob()` picks up `queued`/`paused` jobs up to `MAX_ACTIVE_SYNCS=2` (global concurrency
+  cap). 1000 advisors syncing = one orderly queue, not 1000 parallel loops.
+- **Moderation is BATCHED** (`moderatePending` in queueTick), NOT per-listing during import —
+  avoids one AI call per listing (was 100k+ AI calls at scale). Enrichment stays "at scrape
+  time" but via the throttled warm-queue (`WARM_CONCURRENCY=2`), on instance 0.
+- Job model: `advisor-divar-job.ts` (`queued`/`cfg`/`queuedAt`, `listQueuedJobs`,
+  `countActiveJobs`). `driveJob` sets `running:true` synchronously before the first await so the
+  concurrency cap is race-free.
+- NEVER run scrape/enrich/moderate on user-facing instances again. If throughput needs to grow,
+  raise `MAX_ACTIVE_SYNCS` or move the job queue to PG — do not move work back onto the request path.
+
 ## Stack
 - Next.js 16.2.9 (App Router) — use `proxy.ts` not `middleware.ts`, function named `proxy` not `middleware`
 - Auth: JWT via `jose`, cookie `mj_session`, 30-day expiry

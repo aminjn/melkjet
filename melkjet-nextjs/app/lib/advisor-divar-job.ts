@@ -10,6 +10,8 @@ export interface DivarJob {
   label?: string; error?: string; note?: string; startedAt?: number; finishedAt?: number; lastProgressAt?: number
   // وضعیتِ ازسرگیری (resume): آگهی‌های باقی‌مانده + دادهٔ لازم برای ادامه/پایان.
   pending?: any[]; gone?: any[]; sourceId?: string
+  // صف: کاربر فقط «در صف» می‌گذارد؛ کارگرِ اینستنسِ ۰ آن را برمی‌دارد و اجرا می‌کند.
+  queued?: boolean; cfg?: any; queuedAt?: number
 }
 const EMPTY: DivarJob = { running: false, total: 0, done: 0, imported: 0, updated: 0, skipped: 0, failed: 0, sold: 0 }
 
@@ -21,6 +23,20 @@ function save(db: DB) { try { writeFileSync(FILE, JSON.stringify(db), 'utf-8') }
 export function listPausedJobs(): string[] {
   const db = load()
   return Object.keys(db).filter(p => { const j = db[p]; return !!(j && j.paused && !j.running && Array.isArray(j.pending) && j.pending.length) })
+}
+
+// فهرستِ کارهای «در صف» (FIFO) — کاربر ثبت کرده ولی هنوز کارگر برنداشته.
+export function listQueuedJobs(): string[] {
+  const db = load()
+  return Object.keys(db)
+    .filter(p => { const j = db[p]; return !!(j && j.queued && !j.running) })
+    .sort((a, b) => (db[a].queuedAt || 0) - (db[b].queuedAt || 0))
+}
+
+// تعدادِ کارهایِ واقعاً در حالِ اجرا (نه کهنه) — برای سقفِ همزمانیِ سراسری.
+export function countActiveJobs(): number {
+  const db = load()
+  return Object.values(db).filter(j => j.running && !isStale(j)).length
 }
 
 export function getJob(o: string): DivarJob { return { ...EMPTY, ...(load()[o] || {}) } }

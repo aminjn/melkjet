@@ -7,15 +7,7 @@ import { getJob, setJob, isStale } from './advisor-divar-job'
 import { scrapeDivar } from './divar'
 import type { Source } from './scraper-store'
 
-// ممیزیِ خودکارِ آگهیِ منتشرشده در پس‌زمینه (مدلِ یادگیرنده → در صورتِ نبودِ اطمینان AI).
-// importهای پویا برای پرهیز از حلقهٔ وابستگی؛ fire-and-forget تا جریانِ ایمپورت را کند نکند.
-function moderatePublicItem(id: string): void {
-  (async () => {
-    const [{ moderateOne, moderationModel }, { getItemById }] = await Promise.all([import('./moderation'), import('./scraper-store')])
-    const it = await getItemById(id)
-    if (it) await moderateOne(it, moderationModel())
-  })().catch(() => {})
-}
+// (ممیزیِ per-listing حذف شد؛ ممیزی حالا دسته‌ای و روی اینستنسِ ۰ توسطِ کرون انجام می‌شود.)
 
 export interface ImportResult {
   ok: boolean
@@ -96,7 +88,7 @@ export async function importDivarToken(o: string, input: string, hint?: BrandPos
       return importDivarToken(o, input, hint, sourceId)
     }
     let published = updated.published || false
-    if (cfg.autoPublish) { const pub = await publishListing(o, existing.listingId); published = !!pub; if (pub?.publicId) { warmEnrichment(pub.publicId); moderatePublicItem(pub.publicId) } }   // بازانتشار + پیش‌گرم تحلیل + ممیزی
+    if (cfg.autoPublish) { const pub = await publishListing(o, existing.listingId); published = !!pub; if (pub?.publicId) warmEnrichment(pub.publicId) }   // بازانتشار + پیش‌گرمِ تحلیل (ممیزی دسته‌ای توسطِ کرون)
     recordImport(o, { token, listingId: existing.listingId, title: updated.title, url: `https://divar.ir/v/${token}`, at: existing.at, published, sourceId: sourceId || existing.sourceId })
     return { ok: true, updated: true, listing: updated, token }
   }
@@ -104,7 +96,7 @@ export async function importDivarToken(o: string, input: string, hint?: BrandPos
   // ── افزودنِ آگهیِ جدید ──
   const listing = await addListing(o, payload)
   let published = false
-  if (cfg.autoPublish) { const pub = await publishListing(o, listing.id); published = !!pub; if (pub?.publicId) { warmEnrichment(pub.publicId); moderatePublicItem(pub.publicId) } }   // پیش‌گرمِ تحلیل + ممیزیِ خودکار
+  if (cfg.autoPublish) { const pub = await publishListing(o, listing.id); published = !!pub; if (pub?.publicId) warmEnrichment(pub.publicId) }   // پیش‌گرمِ تحلیل (ممیزی دسته‌ای توسطِ کرون)
   recordImport(o, { token, listingId: listing.id, title: listing.title, url: `https://divar.ir/v/${token}`, at: Date.now(), published, sourceId })
   return { ok: true, listing, token }
 }
@@ -352,26 +344,45 @@ export async function runBatch(o: string): Promise<void> {
   setJob(o, { running: false, paused: false, pending: [], gone: [], imported, updated, skipped, sold, done: total, finishedAt: Date.now(), note: '', error: '' })
 }
 
-// شروعِ اسکرپِ پس‌زمینهٔ ازسرگیری‌پذیر. اگر کارِ هولدشده‌ای هست، ادامه‌اش می‌دهد.
-export function startBackgroundSync(o: string, cfgIn?: AdvisorDivar, sourceId?: string, label?: string): { started: boolean; alreadyRunning?: boolean } {
+// «در صف گذاشتنِ» همگام‌سازی. کارِ سنگین اینجا اجرا نمی‌شود؛ فقط ثبتِ صف می‌شود و
+// کارگرِ اینستنسِ ۰ (cron-runner → driveJob) آن را با سقفِ همزمانی برمی‌دارد.
+// این‌طور اینستنس‌های کاربری (۳۰۰۱-۳۰۰۳) هیچ کارِ سنگینی نمی‌کنند و سایت سریع می‌ماند،
+// و ۱۰۰۰ مشاورِ همزمان → یک صفِ منظم، نه ۱۰۰۰ حلقهٔ موازیِ اسکرپ.
+export function startBackgroundSync(o: string, cfgIn?: AdvisorDivar, sourceId?: string, label?: string): { started: boolean; alreadyRunning?: boolean; queued?: boolean } {
   const cur = getJob(o)
   if (cur.running && !isStale(cur)) return { started: false, alreadyRunning: true }
-  if (cur.paused && (cur.pending || []).length) { resumeJob(o); return { started: true } }
-  setJob(o, { running: true, paused: false, total: 0, done: 0, imported: 0, updated: 0, skipped: 0, failed: 0, sold: 0, error: '', note: '', label: label || 'همگام‌سازیِ دیوار', startedAt: Date.now(), lastProgressAt: Date.now(), finishedAt: undefined, pending: [], gone: [], sourceId })
-  ;(async () => {
-    try {
-      const prep = await Promise.race([
-        prepareSync(o, cfgIn, sourceId),
-        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('خواندنِ فهرستِ آگهی‌ها از دیوار بیش از حد طول کشید — اتصالِ پروکسی را بررسی کنید.')), 90000)),
-      ])
-      setJob(o, { total: prep.items.length, pending: prep.items, gone: prep.gone, sourceId, lastProgressAt: Date.now() })
-      await runBatch(o)
-    } catch (e: any) {
-      if (sourceId) { try { markSourceRun(o, sourceId, 0, e?.message || 'خطا یا وقفه') } catch {} }
-      setJob(o, { running: false, paused: false, pending: [], finishedAt: Date.now(), error: e?.message || 'خطای داخلی هنگامِ همگام‌سازی' })
-    }
-  })()
-  return { started: true }
+  if (cur.queued) return { started: true, queued: true }                                   // از قبل در صف است
+  if (cur.paused && (cur.pending || []).length) return { started: true, queued: true }      // هولدشده؛ کارگر ادامه می‌دهد
+  setJob(o, {
+    queued: true, cfg: cfgIn || null, queuedAt: Date.now(),
+    running: false, paused: false, total: 0, done: 0, imported: 0, updated: 0, skipped: 0, failed: 0, sold: 0,
+    error: '', note: 'در صفِ پردازش…', label: label || 'همگام‌سازیِ دیوار',
+    startedAt: Date.now(), lastProgressAt: Date.now(), finishedAt: undefined, pending: [], gone: [], sourceId,
+  })
+  return { started: true, queued: true }
+}
+
+// اجرای واقعیِ یک کار — فقط از کارگرِ اینستنسِ ۰ (cron-runner) صدا زده می‌شود.
+// اگر «در صف» است: prepareSync سپس runBatch. اگر «هولد» است: ادامه (resume).
+export async function driveJob(o: string): Promise<void> {
+  const j = getJob(o)
+  if (j.running && !isStale(j)) return
+  if (j.paused && (j.pending || []).length) { resumeJob(o); return }
+  if (!j.queued) return
+  const cfgIn = j.cfg as AdvisorDivar | undefined
+  const sourceId = j.sourceId
+  setJob(o, { queued: false, running: true, paused: false, note: '', startedAt: Date.now(), lastProgressAt: Date.now() })
+  try {
+    const prep = await Promise.race([
+      prepareSync(o, cfgIn, sourceId),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error('خواندنِ فهرستِ آگهی‌ها از دیوار بیش از حد طول کشید — اتصالِ پروکسی را بررسی کنید.')), 90000)),
+    ])
+    setJob(o, { total: prep.items.length, pending: prep.items, gone: prep.gone, sourceId, lastProgressAt: Date.now() })
+    await runBatch(o)
+  } catch (e: any) {
+    if (sourceId) { try { markSourceRun(o, sourceId, 0, e?.message || 'خطا یا وقفه') } catch {} }
+    setJob(o, { running: false, paused: false, queued: false, pending: [], finishedAt: Date.now(), error: e?.message || 'خطای داخلی هنگامِ همگام‌سازی' })
+  }
 }
 
 // ادامهٔ یک کارِ هولدشده (کرون یا دکمهٔ «ادامهٔ الان»).

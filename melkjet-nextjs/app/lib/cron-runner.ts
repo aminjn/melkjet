@@ -1,6 +1,6 @@
 import { listDueSources, getDivar } from './advisor-divar-store'
-import { startBackgroundSync, resumeJob } from './advisor-divar-import'
-import { listPausedJobs } from './advisor-divar-job'
+import { startBackgroundSync, driveJob } from './advisor-divar-import'
+import { listPausedJobs, listQueuedJobs, countActiveJobs } from './advisor-divar-job'
 import { publishDueArticles } from './scraper-store'
 import { processTrackerQueue } from './tracker-sender'
 import { processSavedSearches } from './alerts-runner'
@@ -45,8 +45,7 @@ async function tick(): Promise<{ due: number; synced: number }> {
         if (r.started) synced++
       } catch { /* خطای یک منبع بقیه را متوقف نکند */ }
     }
-    // ادامهٔ خودکارِ اسکرپ‌های هولدشده (بزرگ یا وقفه‌خورده) — چند دقیقهٔ بعد از سرِ گرفته می‌شوند.
-    for (const phone of listPausedJobs()) { try { resumeJob(phone) } catch {} }
+    // (درین‌کردنِ صفِ اسکرپ و ممیزیِ دسته‌ای در queueTick هر ۴۵ ثانیه انجام می‌شود.)
     // اگر آگهیِ جدیدی ایمپورت شد، تکراری‌ها را پاک کن (SEO) — حداکثر هر ۳۰ دقیقه (O(n²) است).
     if (synced && Date.now() - lastDedupAt > 30 * 60 * 1000) {
       lastDedupAt = Date.now()
@@ -81,7 +80,43 @@ export function ensureCronStarted() {
   setTimeout(() => { warmUp().catch(() => {}) }, 8_000)         // یک‌بار گرم‌کردنِ سبک پس از بوت
   setTimeout(() => { tick().catch(() => {}) }, 30_000)          // کمی بعد از بوت
   setInterval(() => { tick().catch(() => {}) }, TICK_MS)
+  // کارگرِ صف: هر ۴۵ ثانیه صفِ اسکرپ را با سقفِ همزمانی درین می‌کند + ممیزیِ دسته‌ای.
+  setTimeout(() => { queueTick().catch(() => {}) }, 20_000)     // زودتر از tick تا سینکِ کاربر سریع شروع شود
+  setInterval(() => { queueTick().catch(() => {}) }, QUEUE_TICK_MS)
   // بدونِ حلقهٔ گرم‌کردنِ مکرر — منبعِ اصلیِ مصرفِ بی‌مورد CPU بود.
+}
+
+// ── کارگرِ صفِ اسکرپ (فقط اینستنسِ ۰) ────────────────────────────────────────
+// اصلِ معماری برای مقیاس: اینستنس‌های کاربری فقط «در صف می‌گذارند»؛ کارِ سنگین اینجا،
+// روی اینستنسِ ۰، با سقفِ همزمانیِ سراسری اجرا می‌شود. پس هزار مشاورِ همزمان =
+// یک صفِ منظم، نه هزار حلقهٔ موازی روی اینستنس‌های کاربری.
+const MAX_ACTIVE_SYNCS = 2          // حداکثر همگام‌سازیِ همزمان روی کلِ سیستم
+const QUEUE_TICK_MS = 45 * 1000     // هر ۴۵ ثانیه صف را درین کن (پاسخ‌گوییِ خوب به کاربر)
+let queueRunning = false
+let moderating = false
+
+async function queueTick(): Promise<void> {
+  if (queueRunning) return
+  queueRunning = true
+  try {
+    // ۱) درین‌کردنِ صف با سقفِ همزمانی: اول هولدشده‌ها (ادامه)، بعد صفِ جدید.
+    let active = countActiveJobs()
+    if (active < MAX_ACTIVE_SYNCS) {
+      const queue = [...listPausedJobs(), ...listQueuedJobs()]
+      for (const phone of queue) {
+        if (active >= MAX_ACTIVE_SYNCS) break
+        active++
+        driveJob(phone).catch(() => {})   // fire-and-forget؛ هر کار بودجهٔ ۳.۵دقیقهٔ خودش را دارد
+      }
+    }
+    // ۲) ممیزیِ دسته‌ایِ آگهی‌های منتشرشدهٔ منتظر (به‌جای فراخوانِ AI برای هر آگهی هنگامِ ایمپورت).
+    //    اگر چیزی منتظر نباشد، سریع و بی‌هزینه برمی‌گردد. قفلِ moderating از هم‌پوشانی جلوگیری می‌کند.
+    if (!moderating) {
+      moderating = true
+      try { const { moderatePending } = await import('./moderation'); await moderatePending() }
+      catch { /* اگر AI/مدل آماده نبود */ } finally { moderating = false }
+    }
+  } finally { queueRunning = false }
 }
 
 // اجرای فوریِ یک چرخه (برای تریگرِ دستی/خارجی).
