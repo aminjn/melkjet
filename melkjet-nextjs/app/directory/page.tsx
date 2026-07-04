@@ -479,72 +479,50 @@ function ProfessionalCard({ pro }: { pro: Professional }) {
         display: 'block', textDecoration: 'none', color: 'inherit',
         background: 'var(--surface)',
         border: `1px solid ${pro.promoted || hovered ? 'var(--gold)' : 'var(--line)'}`,
-        borderRadius: 16, overflow: 'hidden',
+        borderRadius: 14, padding: 14,
         transition: 'transform .18s, box-shadow .18s, border-color .18s',
-        transform: hovered ? 'translateY(-4px)' : 'none',
-        boxShadow: hovered ? '0 12px 40px -12px rgba(201,168,76,0.22)' : '0 2px 10px -4px rgba(0,0,0,0.3)',
+        transform: hovered ? 'translateY(-3px)' : 'none',
+        boxShadow: hovered ? '0 12px 34px -14px rgba(201,168,76,0.22)' : '0 2px 10px -6px rgba(0,0,0,0.3)',
       }}
     >
-      {/* Cover */}
-      <div style={{ height: 68, background: pro.coverGradient, position: 'relative' }}>
-        {pro.promoted && (
-          <span style={{ position: 'absolute', top: 10, insetInlineStart: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 11, fontWeight: 800, padding: '4px 10px', borderRadius: 999, boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>★ ویژه</span>
-        )}
+      {/* ردیفِ بالا: آواتار + اطلاعات */}
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+        <div style={{
+          width: 54, height: 54, borderRadius: 14, flexShrink: 0,
+          background: pro.image ? `center/cover no-repeat url(${pro.image})` : pro.avatarGradient,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 16, fontWeight: 800, overflow: 'hidden',
+        }}>
+          {!pro.image && pro.initials}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3 }}>
+            <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pro.name}</span>
+            <span title="تأییدشده" style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, borderRadius: '50%', background: 'rgba(95,217,138,0.15)', color: '#5fd98a', fontSize: 10, fontWeight: 800 }}>✓</span>
+            {pro.promoted && <span style={{ flexShrink: 0, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 10, fontWeight: 800, padding: '2px 7px', borderRadius: 999 }}>★ ویژه</span>}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', fontSize: 12, color: 'var(--muted)' }}>
+            {cat && <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{cat}</span>}
+            {hasArea && <><span style={{ color: 'var(--faint)' }}>·</span><span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+              <svg width="10" height="10" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0 }}><path d="M6 1a3.5 3.5 0 0 1 3.5 3.5C9.5 7.5 6 11 6 11S2.5 7.5 2.5 4.5A3.5 3.5 0 0 1 6 1z" stroke="currentColor" strokeWidth="1.2" /></svg>
+              {pro.area}</span></>}
+            {hasRating && <><span style={{ color: 'var(--faint)' }}>·</span><span style={{ color: 'var(--text)', fontWeight: 700 }}>★ {pro.rating}</span></>}
+          </div>
+          {pro.tags.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8 }}>
+              {pro.tags.slice(0, 3).map((tag) => (
+                <span key={tag} style={{ fontSize: 10.5, padding: '2px 8px', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 999, color: 'var(--muted)', fontWeight: 500 }}>{tag}</span>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Body */}
-      <div style={{ padding: '0 16px 16px' }}>
-        {/* Avatar (overlaps cover) + verified */}
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 12 }}>
-          <div style={{
-            width: 62, height: 62, borderRadius: '50%', marginTop: -31, flexShrink: 0,
-            background: pro.image ? `center/cover no-repeat url(${pro.image})` : pro.avatarGradient,
-            border: '3px solid var(--surface)', boxShadow: '0 3px 12px rgba(0,0,0,0.3)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 16, fontWeight: 800, overflow: 'hidden',
-          }}>
-            {!pro.image && pro.initials}
-          </div>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(95,217,138,0.12)', border: '1px solid rgba(95,217,138,0.3)', borderRadius: 999, padding: '3px 10px', fontSize: 11, color: '#5fd98a', fontWeight: 700 }}>✓ تأییدشده</span>
-        </div>
-
-        {/* Name */}
-        <div style={{ fontSize: 15.5, fontWeight: 800, color: 'var(--text)', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pro.name}</div>
-
-        {/* Category + rating */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-          {cat && <span style={{ fontSize: 11.5, padding: '3px 10px', borderRadius: 999, background: 'var(--goldDim)', color: 'var(--gold)', fontWeight: 700 }}>{cat}</span>}
-          {hasRating && <span style={{ fontSize: 12.5, color: 'var(--text)', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 3 }}><span style={{ color: 'var(--gold)' }}>★</span>{pro.rating}</span>}
-        </div>
-
-        {/* Location — only if present */}
-        {hasArea && (
-          <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 5 }}>
-            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0 }}><path d="M6 1a3.5 3.5 0 0 1 3.5 3.5C9.5 7.5 6 11 6 11S2.5 7.5 2.5 4.5A3.5 3.5 0 0 1 6 1z" stroke="currentColor" strokeWidth="1.2" /><circle cx="6" cy="4.5" r="1.2" fill="currentColor" /></svg>
-            {pro.area}
-          </div>
-        )}
-
-        {/* Tags — only if present */}
-        {pro.tags.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-            {pro.tags.slice(0, 3).map((tag) => (
-              <span key={tag} style={{ fontSize: 11, padding: '3px 9px', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 999, color: 'var(--muted)', fontWeight: 500 }}>{tag}</span>
-            ))}
-          </div>
-        )}
-
-        {/* Phone reveal (login-gated) */}
-        {pro.hasPhone && (
-          <div style={{ marginBottom: 12 }} onClick={(e) => { e.preventDefault(); e.stopPropagation() }}>
-            <RevealContact kind="item" id={String(pro.id)} compact label="نمایشِ شماره" />
-          </div>
-        )}
-
-        {/* Footer CTA */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid var(--line)' }}>
-          <span style={{ fontSize: 12, color: 'var(--faint)' }}>پروفایل و خدمات</span>
-          <span style={{ fontSize: 12.5, color: 'var(--gold)', fontWeight: 700 }}>مشاهده ←</span>
-        </div>
+      {/* فوتر: نمایشِ شماره + مشاهدهٔ پروفایل */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
+        {pro.hasPhone
+          ? <div onClick={(e) => { e.preventDefault(); e.stopPropagation() }}><RevealContact kind="item" id={String(pro.id)} compact label="نمایشِ شماره" /></div>
+          : <span style={{ fontSize: 12, color: 'var(--faint)' }}>پروفایل و خدمات</span>}
+        <span style={{ fontSize: 12.5, color: 'var(--gold)', fontWeight: 700, whiteSpace: 'nowrap' }}>مشاهده ←</span>
       </div>
     </a>
   )
