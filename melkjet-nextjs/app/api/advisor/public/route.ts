@@ -13,10 +13,17 @@ export async function GET(req: NextRequest) {
   if (!phone) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
 
   const a = await getAdvisor(phone)
-  const p = a.profile
-  // اگر مشاور هنوز هیچ اطلاعاتِ واقعی‌ای ثبت نکرده، پروفایلِ عمومی وجود ندارد.
+  let p = a.profile
   const acc = getAccount(phone)
-  if (!(p.name || '').trim()) return NextResponse.json({ error: 'مشاور یافت نشد' }, { status: 404 })
+  // اگر مشاور نیست ولی متخصصِ ثبت‌شدهٔ دیگری است (آژانس/سازنده/مصالح/حقوقی)، پروفایلِ
+  // عمومی را از پروفایلِ کسب‌وکار می‌سازیم تا صفحهٔ /profile برای همهٔ متخصصان کار کند.
+  if (!(p.name || '').trim()) {
+    const { getProfile } = await import('@/app/lib/profile-store')
+    const gp = getProfile(phone)
+    const nm = (gp.businessName || gp.displayName || acc?.name || '').trim()
+    if (!nm) return NextResponse.json({ error: 'متخصص یافت نشد' }, { status: 404 })
+    p = { name: nm, title: gp.businessType || 'متخصص', bio: gp.about || gp.tagline || '', photo: gp.logo || '', areas: gp.city || '', experience: '', phone: gp.contactPhone || gp.landline || '', specialties: Array.isArray(gp.specialties) ? gp.specialties : [] }
+  }
   const stats = (await advisorStats(phone)).kpis
   const membership = await getAdvisorMembership(phone)
 

@@ -148,8 +148,16 @@ export default function DirectoryPage() {
   useEffect(() => {
     let alive = true
     setLoading(true)
-    fetchContent('directory', activeCategory).then((d) => {
-      if (alive) { setItems(d); setLoading(false) }
+    // متخصصانِ ثبت‌شده در سایت (اکانت‌های نقش‌دار) + آیتم‌های اسکرپ‌شدهٔ دایرکتوری — یکجا.
+    Promise.all([
+      fetch(`/api/directory?category=${encodeURIComponent(activeCategory)}`, { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : { items: [] })).then((d) => (d.items || []) as ContentItem[]).catch(() => [] as ContentItem[]),
+      fetchContent('directory', activeCategory),
+    ]).then(([registered, scraped]) => {
+      if (!alive) return
+      const seen = new Set<string>()
+      const merged = [...registered, ...scraped].filter((it) => { if (seen.has(it.id)) return false; seen.add(it.id); return true })
+      setItems(merged); setLoading(false)
     })
     return () => { alive = false }
   }, [activeCategory])
