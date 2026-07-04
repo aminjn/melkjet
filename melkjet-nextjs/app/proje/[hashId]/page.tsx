@@ -84,7 +84,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ hashId
   const statusLabel = (enrich.status && STATUS_LABEL[enrich.status as keyof typeof STATUS_LABEL]) || phase || 'در حال ساخت'
 
   // وضعیتِ واقعیِ واحدها از موجودیِ سازنده (اگر ثبت کرده باشد) — موجود/رزرو/فروخته/مشارکت.
-  const realUnits = ps ? unitStatusesForHash(hashId) : null
+  const realUnits = ps ? await unitStatusesForHash(hashId) : null
 
   const view = {
     hashId, title, region, phase, progress, milestones, statusLabel, photos,

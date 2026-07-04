@@ -23,7 +23,7 @@ async function commonActivity(phone: string) {
     tasks: (await listTasks(phone)).length,
     leads: (await listLeads(phone)).length,
     workflows: (await listWorkflows(phone)).length,
-    favorites: getPrefs(phone).favorites.length,
+    favorites: (await getPrefs(phone)).favorites.length,
   }
 }
 

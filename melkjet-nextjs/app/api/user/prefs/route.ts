@@ -12,7 +12,7 @@ async function userId(): Promise<string> {
 
 export async function GET() {
   const uid = await userId()
-  return NextResponse.json(getPrefs(uid))
+  return NextResponse.json(await getPrefs(uid))
 }
 
 export async function POST(req: NextRequest) {
@@ -24,23 +24,23 @@ export async function POST(req: NextRequest) {
     case 'addFav': {
       const listingId = String(body.listingId || '').trim()
       if (!listingId) return NextResponse.json({ error: 'شناسه ملک نامعتبر است' }, { status: 400 })
-      return NextResponse.json(addFavorite(uid, listingId))
+      return NextResponse.json(await addFavorite(uid, listingId))
     }
     case 'removeFav': {
       const listingId = String(body.listingId || '').trim()
       if (!listingId) return NextResponse.json({ error: 'شناسه ملک نامعتبر است' }, { status: 400 })
-      return NextResponse.json(removeFavorite(uid, listingId))
+      return NextResponse.json(await removeFavorite(uid, listingId))
     }
     case 'addSearch': {
       const query = String(body.query || '').trim()
       const label = String(body.label || '').trim()
       if (!query && !label) return NextResponse.json({ error: 'جستجوی خالی است' }, { status: 400 })
-      return NextResponse.json(addSavedSearch(uid, { label, query }))
+      return NextResponse.json(await addSavedSearch(uid, { label, query }))
     }
     case 'removeSearch': {
       const id = String(body.id || '').trim()
       if (!id) return NextResponse.json({ error: 'شناسه نامعتبر' }, { status: 400 })
-      return NextResponse.json(removeSavedSearch(uid, id))
+      return NextResponse.json(await removeSavedSearch(uid, id))
     }
     default:
       return NextResponse.json({ error: 'عملیات نامعتبر' }, { status: 400 })

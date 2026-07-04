@@ -1,8 +1,10 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
+import { pgEnabled, kvGet, kvMutate } from './db'
 
-const FILE = join(process.cwd(), '.builder-data.json')
+const DATA_FILE = join(process.cwd(), '.builder-data.json')
+const KV_KEY = 'builder'
 
 // available=موجود برای فروش، reserved=رزرو، sold=فروخته‌شده (داخل/خارجِ سایت)،
 // owner=سهمِ مالکِ زمین/مشارکت (فروشِ سازنده نیست و در پابلیک غیرقابلِ‌فروش است).
@@ -30,17 +32,25 @@ function id() { return randomBytes(6).toString('hex') }
 const IMPORT_VERSION = 5
 type OwnerData = { projects: Project[]; imported?: boolean; importVersion?: number }
 type DB = Record<string, OwnerData>
-function load(): DB { if (existsSync(FILE)) { try { return JSON.parse(readFileSync(FILE, 'utf-8')) } catch {} } return {} }
-function save(db: DB) { writeFileSync(FILE, JSON.stringify(db), 'utf-8') }
+// دومَحاله: اگر DATABASE_URL ست باشد → Postgres (نوشتنِ اتمیک)، وگرنه فایل.
+function fileLoad(): DB { if (existsSync(DATA_FILE)) { try { return JSON.parse(readFileSync(DATA_FILE, 'utf-8')) } catch {} } return {} }
+function fileSave(db: DB) { writeFileSync(DATA_FILE, JSON.stringify(db), 'utf-8') }
+
+async function load(): Promise<DB> { return pgEnabled() ? await kvGet<DB>(KV_KEY, {}) : fileLoad() }
+// wrapperِ عمومیِ خواندن-تغییر-نوشتن (نامش withDb تا با mutate(owner) استورهای per-owner تداخل نکند)
+async function withDb<R>(fn: (db: DB) => R): Promise<R> {
+  if (pgEnabled()) return kvMutate<DB, R>(KV_KEY, {}, fn)
+  const db = fileLoad(); const r = fn(db); fileSave(db); return r
+}
 function ownerOf(db: DB, owner: string): OwnerData { if (!db[owner]) db[owner] = { projects: [] }; return db[owner] }
 
-export function listProjects(owner: string): Project[] { return load()[owner]?.projects || [] }
-export function getProject(owner: string, pid: string): Project | null { return (load()[owner]?.projects || []).find(p => p.id === pid) || null }
+export async function listProjects(owner: string): Promise<Project[]> { return (await load())[owner]?.projects || [] }
+export async function getProject(owner: string, pid: string): Promise<Project | null> { return ((await load())[owner]?.projects || []).find(p => p.id === pid) || null }
 
 // واحدهای واقعیِ یک پروژهٔ پابلیک (بر اساسِ hashIdِ پرشین سازه) — از موجودیِ سازنده، اگر ثبت کرده باشد.
 // خروجی: نگاشتِ «شمارهٔ واحد» → وضعیت، تا صفحهٔ عمومی موجود/رزرو/فروخته/مشارکت را درست نشان دهد.
-export function unitStatusesForHash(hashId: string): { byNumber: Record<string, UnitStatus>; counts: Record<UnitStatus, number> } | null {
-  const db = load()
+export async function unitStatusesForHash(hashId: string): Promise<{ byNumber: Record<string, UnitStatus>; counts: Record<UnitStatus, number> } | null> {
+  const db = await load()
   for (const owner of Object.keys(db)) {
     const p = (db[owner].projects || []).find(x => x.source?.hashId === hashId)
     if (p && p.units.length) {
@@ -53,48 +63,44 @@ export function unitStatusesForHash(hashId: string): { byNumber: Record<string, 
   return null
 }
 // واحدِ یک پروژه را با hashId + شمارهٔ واحد، «رزرو» می‌کند (درخواستِ خریدِ داخلِ سایت).
-export function reserveUnitByHash(hashId: string, unitNumber: string, buyer?: string): boolean {
-  const db = load()
-  for (const owner of Object.keys(db)) {
-    const p = (db[owner].projects || []).find(x => x.source?.hashId === hashId)
-    if (p) { const u = p.units.find(x => x.number === unitNumber); if (u && u.status === 'available') { u.status = 'reserved'; if (buyer) u.buyer = buyer; u.soldVia = 'site'; save(db); return true } return false }
-  }
-  return false
+export async function reserveUnitByHash(hashId: string, unitNumber: string, buyer?: string): Promise<boolean> {
+  return withDb(db => {
+    for (const owner of Object.keys(db)) {
+      const p = (db[owner].projects || []).find(x => x.source?.hashId === hashId)
+      if (p) { const u = p.units.find(x => x.number === unitNumber); if (u && u.status === 'available') { u.status = 'reserved'; if (buyer) u.buyer = buyer; u.soldVia = 'site'; return true } return false }
+    }
+    return false
+  })
 }
 
-export function addProject(owner: string, name: string, location: string): Project {
-  const db = load(); const o = ownerOf(db, owner)
+export async function addProject(owner: string, name: string, location: string): Promise<Project> {
   const p: Project = { id: id(), name, location, phase: 'فاز ۱', progress: 0, units: [], investors: [], milestones: [], monthlySales: [], createdAt: Date.now() }
-  o.projects.unshift(p); save(db); return p
+  return withDb(db => { const o = ownerOf(db, owner); o.projects.unshift(p); return p })
 }
-export function updateProject(owner: string, pid: string, patch: Partial<Pick<Project, 'name' | 'location' | 'phase' | 'progress'>>): Project | null {
-  const db = load(); const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return null
-  Object.assign(p, patch); save(db); return p
+export async function updateProject(owner: string, pid: string, patch: Partial<Pick<Project, 'name' | 'location' | 'phase' | 'progress'>>): Promise<Project | null> {
+  return withDb(db => { const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return null; Object.assign(p, patch); return p })
 }
-export function addUnit(owner: string, pid: string, u: Omit<Unit, 'id'>): Unit | null {
-  const db = load(); const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return null
-  const unit: Unit = { ...u, id: id() }; p.units.push(unit); save(db); return unit
+export async function addUnit(owner: string, pid: string, u: Omit<Unit, 'id'>): Promise<Unit | null> {
+  return withDb(db => { const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return null; const unit: Unit = { ...u, id: id() }; p.units.push(unit); return unit })
 }
-export function updateUnit(owner: string, pid: string, uid: string, patch: Partial<Unit>): Unit | null {
-  const db = load(); const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return null
-  const u = p.units.find(x => x.id === uid); if (!u) return null
-  Object.assign(u, patch); save(db); return u
+export async function updateUnit(owner: string, pid: string, uid: string, patch: Partial<Unit>): Promise<Unit | null> {
+  return withDb(db => {
+    const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return null
+    const u = p.units.find(x => x.id === uid); if (!u) return null
+    Object.assign(u, patch); return u
+  })
 }
-export function deleteUnit(owner: string, pid: string, uid: string) {
-  const db = load(); const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return
-  p.units = p.units.filter(x => x.id !== uid); save(db)
+export async function deleteUnit(owner: string, pid: string, uid: string): Promise<void> {
+  await withDb(db => { const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return; p.units = p.units.filter(x => x.id !== uid) })
 }
-export function addInvestor(owner: string, pid: string, inv: Omit<Investor, 'id'>): Investor | null {
-  const db = load(); const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return null
-  const v: Investor = { ...inv, id: id() }; p.investors.unshift(v); save(db); return v
+export async function addInvestor(owner: string, pid: string, inv: Omit<Investor, 'id'>): Promise<Investor | null> {
+  return withDb(db => { const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return null; const v: Investor = { ...inv, id: id() }; p.investors.unshift(v); return v })
 }
-export function deleteInvestor(owner: string, pid: string, vid: string) {
-  const db = load(); const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return
-  p.investors = p.investors.filter(x => x.id !== vid); save(db)
+export async function deleteInvestor(owner: string, pid: string, vid: string): Promise<void> {
+  await withDb(db => { const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return; p.investors = p.investors.filter(x => x.id !== vid) })
 }
-export function updateMilestone(owner: string, pid: string, mid: string, status: Milestone['status']) {
-  const db = load(); const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return
-  const m = p.milestones.find(x => x.id === mid); if (m) { m.status = status; save(db) }
+export async function updateMilestone(owner: string, pid: string, mid: string, status: Milestone['status']): Promise<void> {
+  await withDb(db => { const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return; const m = p.milestones.find(x => x.id === mid); if (m) { m.status = status } })
 }
 
 // نردبانِ مراحلِ ساخت (مطابقِ مراحلِ پرشین سازه). مرحلهٔ فعلیِ پروژه = «در حال انجام».
@@ -119,7 +125,7 @@ function milestonesForPhase(label: string): { milestones: Milestone[]; progress:
 // واحدها از تعدادِ طبقه/واحدِ واقعی ساخته می‌شوند (همه «موجود»، بدونِ خریدارِ فیک) تا
 // سازنده خودش بفروشد. اگر سازنده‌ای در پرشین سازه نباشد، خالی می‌ماند.
 export async function ensureImported(owner: string): Promise<void> {
-  const db = load()
+  const db = await load()
   // اگر با نسخهٔ فعلیِ منطقِ import واردشده، رد کن؛ وگرنه دوباره وارد کن (خودکار، بدونِ rm).
   if (db[owner]?.importVersion === IMPORT_VERSION) return
   let projects: Project[] = []
@@ -154,12 +160,11 @@ export async function ensureImported(owner: string): Promise<void> {
       }
     }
   } catch { /* اگر پرشین سازه در دسترس نبود، خالی */ }
-  db[owner] = { projects, imported: true, importVersion: IMPORT_VERSION }
-  save(db)
+  await withDb(db => { db[owner] = { projects, imported: true, importVersion: IMPORT_VERSION } })
 }
 
 // آمار محاسبه‌شده برای داشبورد
-export function projectStats(p: Project) {
+export async function projectStats(p: Project) {
   const sold = p.units.filter(u => u.status === 'sold')
   const reserved = p.units.filter(u => u.status === 'reserved').length
   const available = p.units.filter(u => u.status === 'available').length

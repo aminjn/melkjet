@@ -17,9 +17,9 @@ export async function GET(req: NextRequest) {
     plans = plans.filter(p => p.dashboard === dashboard || (rid && p.roleId === rid) || (!p.roleId && !p.dashboard))
   }
   const s = await getSession()
-  const credit = s ? getCredit(s.phone) : null
+  const credit = s ? await getCredit(s.phone) : null
   return NextResponse.json(
-    { plans, packages: listPackages(true), credit },
+    { plans, packages: await listPackages(true), credit },
     { headers: { 'Cache-Control': 'no-store' } },
   )
 }

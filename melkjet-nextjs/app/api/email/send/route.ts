@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   }
 
   // کسرِ اعتبارِ ایمیل (اگر سیستمِ پکیج روشن باشد؛ سوپرادمین معاف)
-  const gate = chargeSend(s.phone, s.role, 'email', recipients.length)
+  const gate = await chargeSend(s.phone, s.role, 'email', recipients.length)
   if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: 200 })
 
   // متن ساده را به HTML سادهٔ راست‌چین تبدیل کن

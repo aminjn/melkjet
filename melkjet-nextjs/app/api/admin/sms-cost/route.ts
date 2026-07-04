@@ -14,6 +14,6 @@ export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({} as any))
   const c = setSmsCostConfig(b)
   let repriced = 0
-  if (b.applySmsPricing) repriced = repriceSmsPackages(smsSellPriceToman(), c.roundTo)
+  if (b.applySmsPricing) repriced = await repriceSmsPackages(smsSellPriceToman(), c.roundTo)
   return NextResponse.json({ ok: true, ...c, smsSellPrice: smsSellPriceToman(), smsCostRial: smsCostRial(), repriced })
 }

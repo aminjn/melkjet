@@ -25,6 +25,6 @@ export async function POST(req: NextRequest) {
   const c = setCostConfig(b)
   // اعمالِ خودکارِ قیمتِ بسته‌های توکن از نرخِ محاسبه‌شده
   let repriced = 0
-  if (b.applyTokenPricing) repriced = repriceTokenPackages(tokenSellPriceToman(), c.roundTo)
+  if (b.applyTokenPricing) repriced = await repriceTokenPackages(tokenSellPriceToman(), c.roundTo)
   return NextResponse.json({ ok: true, ...c, tokenSellPrice: tokenSellPriceToman(), repriced })
 }

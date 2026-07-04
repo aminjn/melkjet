@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   }
 
   // کسرِ اعتبارِ پیامک (اگر سیستمِ پکیج روشن باشد؛ سوپرادمین معاف)
-  const gate = chargeSend(s.phone, s.role, 'sms', recipients.length)
+  const gate = await chargeSend(s.phone, s.role, 'sms', recipients.length)
   if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: 200 })
 
   // لینک‌های داخلِ متن را کوتاه و ردگیری کن (انبوه = آمارِ تجمیعی، بدون شمارهٔ خاص)

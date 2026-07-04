@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 
   // محدودیتِ توکن: اگر بستهٔ توکن فعال باشد و اعتبارِ کاربر صفر باشد، اجازه نده
   const sess = await getSession()
-  if (sess && !canUseToken(sess.phone, sess.role)) {
+  if (sess && !(await canUseToken(sess.phone, sess.role))) {
     return NextResponse.json({ error: 'اعتبارِ توکنِ هوش مصنوعی شما تمام شده — از بخش «پلن‌ها و اشتراک» توکن تهیه کنید.' }, { status: 402 })
   }
 
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
       { role: 'user', content: input },
     ])
     // ثبتِ مصرفِ توکن برای کاربر (توکنِ واقعی از API؛ اگر نبود، تخمین از طولِ متن)
-    if (sess) { const used = tokens || Math.ceil((input.length + (text || '').length) / 3); recordToken(sess.phone, sess.role, used) }
+    if (sess) { const used = tokens || Math.ceil((input.length + (text || '').length) / 3); await recordToken(sess.phone, sess.role, used) }
 
     let imageUrl: string | undefined
     if (wantImage) {

@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   await ensureImported(s.phone)
   const url = new URL(req.url)
   const pid = url.searchParams.get('id')
-  if (pid) return NextResponse.json({ project: getProject(s.phone, pid) })
+  if (pid) return NextResponse.json({ project: await getProject(s.phone, pid) })
 
   // گزارشِ تماس‌ها (کاربرانی که شمارهٔ این سازنده را دیده‌اند).
   if (url.searchParams.get('contacts') === '1') {
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
     }))
     return NextResponse.json({ ok: true, linked: true, builderId, name: prof?.name || '', public: pub, psProjects, manual: pub.manual || [], preview: assembleBuilderProfile(builderId) })
   }
-  return NextResponse.json({ projects: listProjects(s.phone) })
+  return NextResponse.json({ projects: await listProjects(s.phone) })
 }
 
 export async function POST(req: NextRequest) {
@@ -46,14 +46,14 @@ export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({}))
   const a = b.action
   try {
-    if (a === 'project') return NextResponse.json({ ok: true, project: addProject(o, String(b.name || 'پروژهٔ جدید'), String(b.location || '')) })
-    if (a === 'updateProject') return NextResponse.json({ ok: true, project: updateProject(o, b.pid, b.patch || {}) })
-    if (a === 'addUnit') return NextResponse.json({ ok: true, unit: addUnit(o, b.pid, { number: String(b.number || ''), floor: Number(b.floor) || 1, area: Number(b.area) || 0, price: Number(b.price) || 0, status: b.status || 'available', buyer: b.buyer }) })
-    if (a === 'updateUnit') return NextResponse.json({ ok: true, unit: updateUnit(o, b.pid, b.uid, b.patch || {}) })
-    if (a === 'deleteUnit') { deleteUnit(o, b.pid, b.uid); return NextResponse.json({ ok: true }) }
-    if (a === 'addInvestor') return NextResponse.json({ ok: true, investor: addInvestor(o, b.pid, { name: String(b.name || ''), phone: b.phone, amount: Number(b.amount) || 0, units: Number(b.units) || 0 }) })
-    if (a === 'deleteInvestor') { deleteInvestor(o, b.pid, b.vid); return NextResponse.json({ ok: true }) }
-    if (a === 'milestone') { updateMilestone(o, b.pid, b.mid, b.status); return NextResponse.json({ ok: true }) }
+    if (a === 'project') return NextResponse.json({ ok: true, project: await addProject(o, String(b.name || 'پروژهٔ جدید'), String(b.location || '')) })
+    if (a === 'updateProject') return NextResponse.json({ ok: true, project: await updateProject(o, b.pid, b.patch || {}) })
+    if (a === 'addUnit') return NextResponse.json({ ok: true, unit: await addUnit(o, b.pid, { number: String(b.number || ''), floor: Number(b.floor) || 1, area: Number(b.area) || 0, price: Number(b.price) || 0, status: b.status || 'available', buyer: b.buyer }) })
+    if (a === 'updateUnit') return NextResponse.json({ ok: true, unit: await updateUnit(o, b.pid, b.uid, b.patch || {}) })
+    if (a === 'deleteUnit') { await deleteUnit(o, b.pid, b.uid); return NextResponse.json({ ok: true }) }
+    if (a === 'addInvestor') return NextResponse.json({ ok: true, investor: await addInvestor(o, b.pid, { name: String(b.name || ''), phone: b.phone, amount: Number(b.amount) || 0, units: Number(b.units) || 0 }) })
+    if (a === 'deleteInvestor') { await deleteInvestor(o, b.pid, b.vid); return NextResponse.json({ ok: true }) }
+    if (a === 'milestone') { await updateMilestone(o, b.pid, b.mid, b.status); return NextResponse.json({ ok: true }) }
 
     // ── پروفایلِ عمومی ──
     if (a === 'publicProfile' || a === 'projMeta' || a === 'manualAdd' || a === 'manualUpdate' || a === 'manualDelete') {

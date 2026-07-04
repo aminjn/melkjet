@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   const sender = process.env.IPPANEL_SENDER || admin.ippanel?.sender
   if (!apiKey || !sender) return NextResponse.json({ error: 'سرویس پیامک تنظیم نشده — در پنل سوپرادمین کلید و خط IPPanel را وارد کنید.' }, { status: 400 })
 
-  const gate = chargeSend(s.phone, s.role, 'sms', 1)
+  const gate = await chargeSend(s.phone, s.role, 'sms', 1)
   if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: 200 })
 
   const patternCode = (admin.negotiation?.pattern || '').trim()

@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     const s = await getSession()
     if (!s) return NextResponse.json({ listings: [], totals: { views: 0, contacts: 0 } }, { status: 401 })
     const mine = listItems('listing').filter(it => String(it.meta?.__ownerPhone || '') === s.phone)
-    const stats = forIds(mine.map(it => it.id))
+    const stats = await forIds(mine.map(it => it.id))
     const listings = mine.map(it => ({ id: it.id, title: it.title, location: it.location || '', price: it.price || '', image: it.image, views: stats[it.id].views, contacts: stats[it.id].contacts, lastView: stats[it.id].lastView }))
       .sort((a, b) => (b.views + b.contacts * 3) - (a.views + a.contacts * 3))
     const totals = listings.reduce((t, l) => ({ views: t.views + l.views, contacts: t.contacts + l.contacts }), { views: 0, contacts: 0 })
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   }
   const id = sp.get('id') || ''
   if (!id) return NextResponse.json({ error: 'id لازم است' }, { status: 400 })
-  return NextResponse.json({ stat: getStat(id) }, { headers: { 'Cache-Control': 'no-store' } })
+  return NextResponse.json({ stat: await getStat(id) }, { headers: { 'Cache-Control': 'no-store' } })
 }
 
 // POST { action:'view'|'contact', id } — تماس نیاز به ورود دارد
@@ -30,9 +30,9 @@ export async function POST(req: NextRequest) {
   if (b.action === 'contact') {
     const s = await getSession()
     if (!s) return NextResponse.json({ error: 'برای دیدن اطلاعات تماس وارد شوید', needLogin: true }, { status: 401 })
-    recordContact(id)
+    await recordContact(id)
     return NextResponse.json({ ok: true })
   }
-  recordView(id)
+  await recordView(id)
   return NextResponse.json({ ok: true })
 }
