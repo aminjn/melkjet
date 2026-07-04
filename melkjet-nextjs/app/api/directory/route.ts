@@ -7,10 +7,11 @@ import { getAdvisor } from '@/app/lib/advisor-store'
 // دایرکتوریِ متخصصانِ «ثبت‌شده در سایت» — تا کاربران واقعیِ نقش‌دار (مشاور/آژانس/سازنده/
 // مصالح/حقوقی) در دایرکتوری دیده شوند و به پروفایلِ عمومی‌شان لینک شوند.
 // نگاشتِ نامِ نقش → دستهٔ دایرکتوری:
+// سازنده جدا از این نگاشت است: مستقیم از پرشین‌سازه با لینکِ درستِ /sazande/{id} می‌آید،
+// نه از اکانت‌ها با لینکِ /profile (که صفحهٔ خالی بود).
 const ROLE_CAT: Record<string, string> = {
   'مشاور املاک': 'مشاور',
   'آژانس املاک': 'آژانس',
-  'سازنده / انبوه‌ساز': 'سازنده',
   'تأمین‌کنندهٔ مصالح': 'مصالح',
   'مشاور حقوقی': 'حقوقی',
 }
@@ -21,6 +22,29 @@ export async function GET(req: NextRequest) {
   const roleName = (rid?: string) => { if (!rid) return ''; const r = roles.find(x => x.id === rid || x.name === rid); return r?.name || rid }
 
   const items: any[] = []
+
+  // ── سازنده‌ها: مستقیم از دیتابیسِ پرشین‌سازه، با لینکِ درستِ /sazande/{constructorId} ──
+  if (!category || category === 'سازنده') {
+    try {
+      const { getProfiles, regionLabel } = await import('@/app/lib/persiansaze-store')
+      const profs = getProfiles()
+      for (const key in profs) {
+        const b = profs[key]
+        if (!b || !b.name) continue
+        const region = (b.regions && b.regions.length) ? regionLabel({ cityId: 1, regionId: b.regions[0] }) : ''
+        const pc = Number(b.projectCount) || 0
+        items.push({
+          id: b.id, sourceName: 'ملک‌جت', type: 'directory', category: 'سازنده',
+          title: b.name, location: region, image: '',
+          excerpt: pc ? `${pc.toLocaleString('fa-IR')} پروژه` : '',
+          tags: pc ? [`${pc.toLocaleString('fa-IR')} پروژه`] : [],
+          hasPhone: !!(b.phone || (b.phones && b.phones.length)),
+          url: `/sazande/${encodeURIComponent(b.id)}`,
+          scrapedAt: 0, status: 'approved', registered: true,
+        })
+      }
+    } catch { /* پرشین‌سازه در دسترس نبود */ }
+  }
   for (const a of listAccounts()) {
     const cat = ROLE_CAT[roleName(a.role)]
     if (!cat) continue                                   // فقط نقش‌های متخصص
