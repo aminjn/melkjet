@@ -6,6 +6,25 @@
 ```bash
 cd /var/www/melkjet/melkjet-nextjs && git pull && npm run build && pm2 reload ecosystem.config.js
 ```
+Better: `sudo scripts/deploy.sh` — same steps but **health-checks localhost:3001-3003 after
+reload**, so a broken deploy is caught immediately (not from the browser).
+
+## Why deploys used to break ("This page couldn't load" / crash-loops) — FIXED, keep it fixed
+Two independent root causes, both now closed:
+1. **Missing `app/not-found.tsx`** → Next 16 + Turbopack failed to emit
+   `_not-found/page_client-reference-manifest.js`, so EVERY 404 (bots, old links, a
+   missing chunk) threw `InvariantError: client reference manifest … does not exist` and
+   crash-looped the instance (saw ↺ 76). **NEVER delete `app/not-found.tsx`.** If the
+   invariant ever returns, `rm -rf .next && npm run build` and confirm that manifest file exists.
+2. **`auto-deploy.sh` had `pm2 restart melkjet`** — wrong name (procs are `melkjet-3000..3003`),
+   so on cron it built (overwriting `.next`, deleting old chunks) then died at the restart via
+   `set -e`, leaving old instances pointed at deleted chunks → 500s until a manual reload. Fixed
+   to `pm2 reload ecosystem.config.js --update-env` + health check.
+3. **Arvan CDN** must cache ONLY `/_next/static/*` (immutable, versioned) and **NEVER HTML or
+   /api**. next.config already sends `no-cache` on HTML + `no-store` on /api, but confirm the
+   Arvan panel's cache rules don't override and cache HTML. If HTML is never edge-cached, a
+   deploy can't serve stale markup and you never need to purge. (If it does cache HTML: purge
+   after every deploy — panel → CDN → clear cache.)
 After deploy, **purge the Arvan CDN cache** (panel → CDN → clear cache) — otherwise
 the CDN serves stale HTML pointing at old CSS/JS chunks and the whole site looks
 unstyled ("گرافیک ریخت"). next.config sets `no-cache` on HTML + `immutable` on
