@@ -1,4 +1,4 @@
-import { getAccount, dashForRole } from './account-store'
+import { getAccount, dashForRole, listAccounts } from './account-store'
 import { getProfile } from './profile-store'
 import { getAdvisor } from './advisor-store'
 import { listItems } from './scraper-store'
@@ -37,6 +37,28 @@ export async function getProviderPublic(phone: string): Promise<ProviderPublic |
   const badges = computeRepBadges({ createdAt: acc.createdAt, listingCount: mine.length, soldCount, profileComplete: !!(name && (photo || specialties.length) && (gp.contactPhone || gp.landline)), responsive: !!(gp.contactPhone || gp.landline) })
   const slug = await ensureProviderSlug(phone, name)
   return { phone, type, typeLabel: typeLabel(type), slug, name, photo, bio, city, specialties, badges, listings: mine.slice(0, 12).map(it => ({ id: it.id, title: it.title, price: it.price, location: it.location, image: it.image })), hasPhone: !!(gp.contactPhone || gp.landline) }
+}
+
+export interface ProviderCard { name: string; slug: string; type: string; typeLabel: string; photo: string; city: string; phone: string; promoted: boolean }
+// متخصصانِ یک محدوده (بر اساسِ تطابقِ نامِ محله/منطقه/شهر با پروفایل). پروموت‌شده‌ها اول.
+export async function providersInArea(types: string[], trailNames: string[], limit = 24): Promise<ProviderCard[]> {
+  const wants = (trailNames || []).map(s => String(s || '').trim()).filter(Boolean)
+  let promotedSet = new Set<string>()
+  try { const { promotedProfilePhones } = await import('./promotion-store'); promotedSet = await promotedProfilePhones() } catch {}
+  const out: ProviderCard[] = []
+  for (const a of listAccounts()) {
+    const t = urlTypeForRole(a.role); if (!t || !types.includes(t)) continue
+    const gp = getProfile(a.phone)
+    const name = (gp.businessName || gp.displayName || a.name || '').trim(); if (!name) continue
+    const hay = `${gp.city || ''} ${gp.tagline || ''} ${gp.businessType || ''} ${(gp.specialties || []).join(' ')}`
+    const match = wants.length === 0 || wants.some(w => hay.includes(w) || (gp.city && w.includes(gp.city)))
+    if (!match) continue
+    const slug = await ensureProviderSlug(a.phone, name)
+    out.push({ name, slug, type: t, typeLabel: typeLabel(t), photo: gp.logo || '', city: gp.city || '', phone: a.phone, promoted: promotedSet.has(String(a.phone).replace(/\D/g, '')) })
+    if (out.length >= limit * 2) break
+  }
+  out.sort((x, y) => Number(y.promoted) - Number(x.promoted))
+  return out.slice(0, limit)
 }
 
 // resolve یک صفحهٔ عمومی: /{type}/{slug} → دادهٔ متخصص (و بررسیِ تطابقِ نوع).

@@ -5,23 +5,24 @@ import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
 import { locationTree, resolveLocationPath, type LocationNode } from '@/app/lib/locations-store'
 import { listItems } from '@/app/lib/scraper-store'
-import { gradientFor } from '@/app/lib/content-display'
+import { gradientFor, initialsFor } from '@/app/lib/content-display'
+import { providersInArea } from '@/app/lib/provider-public'
 
 export const dynamic = 'force-dynamic'
 
 // اکشن‌های Programmatic زیرِ هر مکان (خرید/اجاره/متخصصان/…).
-const ACTIONS: Record<string, { fa: string; deal?: 'sale' | 'rent'; kind: 'listing' | 'provider' | 'info' | 'project' }> = {
+const ACTIONS: Record<string, { fa: string; deal?: 'sale' | 'rent'; kind: 'listing' | 'provider' | 'info' | 'project'; types?: string[] }> = {
   buy: { fa: 'خرید', deal: 'sale', kind: 'listing' },
   rent: { fa: 'اجاره', deal: 'rent', kind: 'listing' },
   investment: { fa: 'سرمایه‌گذاری', kind: 'listing' },
   'market-analysis': { fa: 'تحلیل بازار', kind: 'info' },
-  agents: { fa: 'مشاوران املاک', kind: 'provider' },
-  agencies: { fa: 'آژانس‌های املاک', kind: 'provider' },
-  builders: { fa: 'سازندگان', kind: 'provider' },
-  architects: { fa: 'معماران', kind: 'provider' },
-  contractors: { fa: 'پیمانکاران', kind: 'provider' },
-  legal: { fa: 'خدماتِ حقوقی', kind: 'provider' },
-  finance: { fa: 'وام و بیمه', kind: 'provider' },
+  agents: { fa: 'مشاوران املاک', kind: 'provider', types: ['pros'] },
+  agencies: { fa: 'آژانس‌های املاک', kind: 'provider', types: ['agency'] },
+  builders: { fa: 'سازندگان', kind: 'provider', types: ['builder'] },
+  architects: { fa: 'معماران', kind: 'provider', types: ['architect'] },
+  contractors: { fa: 'پیمانکاران', kind: 'provider', types: ['contractor'] },
+  legal: { fa: 'خدماتِ حقوقی', kind: 'provider', types: ['legal', 'lawfirm'] },
+  finance: { fa: 'وام و بیمه', kind: 'provider', types: ['finance'] },
   projects: { fa: 'پروژه‌های ساختمانی', kind: 'project' },
 }
 
@@ -121,9 +122,28 @@ export default async function LocationPage({ params }: { params: Promise<{ path?
           </div>}
       </>}
 
-      {/* اکشن‌های متخصص/پروژه → لینک به دایرکتوری/جستجو با فیلترِ محله */}
-      {act && (act.kind === 'provider' || act.kind === 'project') && (
-        <Empty text={`${act.fa} در ${node.nameFa} — به‌زودی. فعلاً از دایرکتوریِ متخصصان و صفحهٔ محله استفاده کنید.`} extra={<Link href="/directory" style={{ color: 'var(--gold)', fontWeight: 700 }}>مشاهدهٔ متخصصان ←</Link>} />
+      {/* متخصصانِ همان محدوده (داده‌محور) */}
+      {act && act.kind === 'provider' && await (async () => {
+        const provs = await providersInArea(act.types || [], r.trail.map(t => t.nameFa))
+        return <>
+          <h2 style={{ fontSize: 18, fontWeight: 800, margin: '10px 0 12px' }}>{act.fa} در {node.nameFa}</h2>
+          {provs.length === 0 ? <Empty text={`هنوز ${act.fa} در این محدوده ثبت نشده است.`} extra={<Link href="/directory" style={{ color: 'var(--gold)', fontWeight: 700 }}>مشاهدهٔ همهٔ متخصصان ←</Link>} />
+            : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 14 }}>
+              {provs.map(p => (
+                <Link key={p.phone} href={`/${p.type}/${p.slug}`} style={{ display: 'flex', gap: 12, alignItems: 'center', textDecoration: 'none', color: 'inherit', background: 'var(--surface)', border: `1px solid ${p.promoted ? 'var(--gold)' : 'var(--line)'}`, borderRadius: 14, padding: '13px 15px' }}>
+                  {p.photo ? <img src={p.photo} alt={p.name} style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} /> : <span style={{ width: 48, height: 48, borderRadius: '50%', background: gradientFor(p.name, 'avatar'), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 15, flexShrink: 0 }}>{initialsFor(p.name)}</span>}
+                  <span style={{ minWidth: 0 }}>
+                    <span style={{ display: 'block', fontSize: 13.5, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}{p.promoted && <span style={{ color: 'var(--gold)', marginInlineStart: 5 }}>★</span>}</span>
+                    <span style={{ display: 'block', fontSize: 11.5, color: 'var(--muted)' }}>{p.typeLabel}{p.city ? ` · ${p.city}` : ''}</span>
+                  </span>
+                </Link>
+              ))}
+            </div>}
+        </>
+      })()}
+
+      {act && act.kind === 'project' && (
+        <Empty text={`پروژه‌های ${node.nameFa} را در صفحهٔ پروژه‌ها ببینید.`} extra={<Link href="/projects" style={{ color: 'var(--gold)', fontWeight: 700 }}>مشاهدهٔ پروژه‌ها ←</Link>} />
       )}
       {act && act.kind === 'info' && <Empty text={`تحلیلِ بازارِ ${node.nameFa} به‌زودی از دادهٔ واقعیِ آگهی‌ها تولید می‌شود.`} />}
     </Shell>

@@ -25,14 +25,32 @@ const DICT: Record<string, string> = {
   'پیش فروش': 'pre-sale', 'پیش‌فروش': 'pre-sale', 'آپارتمان': 'apartment', 'ویلا': 'villa', 'خانه': 'home',
   'زمین': 'land', 'مغازه': 'shop', 'اداری': 'office', 'دفتر': 'office', 'تجاری': 'commercial', 'کلنگی': 'old-build',
   'سرمایه': 'investment', 'لوکس': 'luxury',
-  // استان‌ها / شهرهای بزرگ
-  'تهران': 'tehran', 'مشهد': 'mashhad', 'شیراز': 'shiraz', 'اصفهان': 'isfahan', 'تبریز': 'tabriz',
-  'کرج': 'karaj', 'قم': 'qom', 'اهواز': 'ahvaz', 'رشت': 'rasht', 'کرمان': 'kerman', 'یزد': 'yazd',
-  'البرز': 'alborz', 'فارس': 'fars', 'خراسان رضوی': 'khorasan-razavi', 'گیلان': 'gilan', 'مازندران': 'mazandaran',
-  // محله‌های شاخصِ تهران (نمونه — بقیه با ترنسلیتر)
+  // ── استان‌ها (۳۱) ──
+  'تهران': 'tehran', 'البرز': 'alborz', 'اصفهان': 'isfahan', 'فارس': 'fars', 'خوزستان': 'khuzestan',
+  'خراسان رضوی': 'khorasan-razavi', 'خراسان شمالی': 'north-khorasan', 'خراسان جنوبی': 'south-khorasan',
+  'آذربایجان شرقی': 'east-azerbaijan', 'آذربایجان غربی': 'west-azerbaijan', 'اردبیل': 'ardabil',
+  'کرمانشاه': 'kermanshah', 'گیلان': 'gilan', 'مازندران': 'mazandaran', 'گلستان': 'golestan',
+  'کردستان': 'kurdistan', 'همدان': 'hamedan', 'لرستان': 'lorestan', 'مرکزی': 'markazi', 'قزوین': 'qazvin',
+  'قم': 'qom', 'زنجان': 'zanjan', 'سمنان': 'semnan', 'یزد': 'yazd', 'کرمان': 'kerman', 'هرمزگان': 'hormozgan',
+  'سیستان و بلوچستان': 'sistan-baluchestan', 'بوشهر': 'bushehr', 'ایلام': 'ilam',
+  'چهارمحال و بختیاری': 'chaharmahal-bakhtiari', 'کهگیلویه و بویراحمد': 'kohgiluyeh-boyerahmad',
+  // ── شهرهای بزرگ ──
+  'مشهد': 'mashhad', 'شیراز': 'shiraz', 'تبریز': 'tabriz', 'کرج': 'karaj', 'اهواز': 'ahvaz', 'رشت': 'rasht',
+  'ارومیه': 'urmia', 'زاهدان': 'zahedan', 'اراک': 'arak', 'بندرعباس': 'bandar-abbas', 'ساری': 'sari',
+  'گرگان': 'gorgan', 'بابل': 'babol', 'آمل': 'amol', 'قائم‌شهر': 'qaemshahr', 'سنندج': 'sanandaj',
+  'خرم‌آباد': 'khorramabad', 'بیرجند': 'birjand', 'سبزوار': 'sabzevar', 'نیشابور': 'neyshabur',
+  'شهریار': 'shahriar', 'اسلامشهر': 'eslamshahr', 'پاکدشت': 'pakdasht', 'ورامین': 'varamin',
+  'دماوند': 'damavand', 'پردیس': 'pardis', 'ملارد': 'malard', 'رباط‌کریم': 'robatkarim', 'قدس': 'qods',
+  // ── محله‌های شاخصِ تهران ──
   'سعادت آباد': 'saadat-abad', 'سعادت‌آباد': 'saadat-abad', 'پونک': 'poonak', 'اکباتان': 'ekbatan',
   'ونک': 'vanak', 'جردن': 'jordan', 'زعفرانیه': 'zaferaniyeh', 'نیاوران': 'niavaran', 'تجریش': 'tajrish',
   'فرمانیه': 'farmaniyeh', 'الهیه': 'elahiyeh', 'پاسداران': 'pasdaran', 'شهرک غرب': 'shahrak-gharb',
+  'قیطریه': 'gheytariyeh', 'اقدسیه': 'aghdasiyeh', 'دربند': 'darband', 'ولنجک': 'velenjak', 'دروس': 'darrous',
+  'قلهک': 'gholhak', 'میرداماد': 'mirdamad', 'صادقیه': 'sadeghiyeh', 'ستارخان': 'sattarkhan', 'گیشا': 'gisha',
+  'یوسف‌آباد': 'yousef-abad', 'امیرآباد': 'amirabad', 'انقلاب': 'enghelab', 'ولیعصر': 'valiasr', 'نارمک': 'narmak',
+  'تهرانپارس': 'tehranpars', 'رسالت': 'resalat', 'پیروزی': 'piroozi', 'نازی‌آباد': 'naziabad', 'یافت‌آباد': 'yaftabad',
+  'جنت‌آباد': 'jannatabad', 'شهران': 'shahran', 'مرزداران': 'marzdaran', 'آجودانیه': 'ajoudaniyeh',
+  'کامرانیه': 'kamraniyeh', 'ازگل': 'ozgol', 'لواسان': 'lavasan', 'اندرزگو': 'andarzgou', 'فرشته': 'fereshteh',
   'منطقه': 'district',
 }
 
