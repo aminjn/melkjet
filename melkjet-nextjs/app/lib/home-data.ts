@@ -8,6 +8,7 @@ import { catalogStats } from './catalog-store'
 import { listPublicShops } from './materials-store'
 import { getMeta } from './persiansaze-store'
 import { getProfile } from './profile-store'
+import { getAccount } from './account-store'
 import type { ContentItem } from './content-display'
 
 function toContent(it: any): ContentItem {
@@ -17,9 +18,16 @@ function toContent(it: any): ContentItem {
 
 // ContentItem از یک پروموتِ پروفایل (targetId = شماره) — بدونِ نیاز به آیتمِ اسکرپر.
 function profilePromoToContent(p: any): ContentItem {
-  let photo = ''; let category = 'متخصص'
-  try { const gp = getProfile(p.targetId); photo = gp.logo || ''; category = (gp.businessType || '').trim() || 'متخصص' } catch {}
-  return { id: p.targetId, sourceName: 'ملک‌جت', type: 'directory', category, title: p.title || 'متخصص', location: p.location || '', image: photo, url: `/profile/${encodeURIComponent(p.targetId)}`, hasPhone: true, promoted: true, promoKind: p.kind || 'ویژه', scrapedAt: p.createdAt || 0, status: 'approved' }
+  let photo = ''; let category = 'متخصص'; let name = String(p.title || '').trim(); let loc = String(p.location || '').trim()
+  try {
+    const gp = getProfile(p.targetId)
+    photo = gp.logo || ''
+    category = (gp.businessType || '').trim() || 'متخصص'
+    if (!name || name === 'متخصص') name = (gp.businessName || gp.displayName || '').trim()
+    if (!loc) loc = (gp.city || '').trim()
+  } catch {}
+  if (!name || name === 'متخصص') { try { name = (getAccount(p.targetId)?.name || '').trim() } catch {} }
+  return { id: p.targetId, sourceName: 'ملک‌جت', type: 'directory', category, title: name || 'متخصصِ ملک‌جت', location: loc, image: photo, url: `/profile/${encodeURIComponent(p.targetId)}`, hasPhone: true, promoted: true, promoKind: p.kind || 'ویژه', scrapedAt: p.createdAt || 0, status: 'approved' }
 }
 
 // همان انتخابِ عمومیِ /api/content (منتشر، غیرِ پیش‌نویس، ویژه‌ها اول، تازه‌ترها بعد).

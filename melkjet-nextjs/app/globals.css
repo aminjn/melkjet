@@ -118,6 +118,7 @@ body {
 /* Home */
 @media(max-width:860px){.mj-feat-grid{grid-template-columns:1fr 1fr!important}}
 @media(max-width:540px){.mj-feat-grid{grid-template-columns:1fr!important}}
+@media(max-width:640px){.mj-spot-cta{display:none!important}}
 
 /* Search */
 .mjs-map-mobile{display:none}
