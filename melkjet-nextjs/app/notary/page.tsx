@@ -1,20 +1,197 @@
 'use client'
-import ProDeskPage, { type ProDeskConfig } from '@/app/components/prodesk/ProDeskPage'
-import { fa, money } from '@/app/components/prodesk/ProDeskKit'
+import { useState } from 'react'
+import AssistantPanel from '@/app/components/AssistantPanel'
+import PlansPanel from '@/app/components/PlansPanel'
+import SupportPanel from '@/app/components/SupportPanel'
+import BusinessProfileForm from '@/app/components/BusinessProfileForm'
+import {
+  Shell, useProDesk, Kpi, LoginGate, SectionCard, Modal, btnGold,
+  money, fa, card, inputStyle, type ProRecord, type ProRequest, type ReqStatus, type ShellCfg,
+} from '@/app/components/prodesk/ProDeskKit'
 
-// میزِ کارِ «دفترخانه»
-const CFG: ProDeskConfig = {
-  role: '/notary', unit: 'دفترخانه', icon: '◆', accent: '#b0a06f',
-  recordsLabel: 'خدمات و اسناد', recordsIcon: '🧾',
-  directoryCategory: 'دفترخانه',
-  kpis: s => [
-    { label: 'نوبت‌های باز', value: fa(s.open), accent: '#b0a06f' },
-    { label: 'خدماتِ ثبت‌شده', value: fa(s.records) },
-    { label: 'انجام‌شده', value: fa(s.done), accent: '#34d399' },
-    { label: 'درآمد', value: money(s.revenue), accent: 'var(--gold)' },
-  ],
-  reqTerms: { title: 'نوبت‌ها و استعلام‌ها', kindLabel: 'نوعِ خدمت', kinds: ['تنظیمِ سند', 'وکالت‌نامه', 'تعهدنامه', 'اقرارنامه', 'استعلام'], addCta: 'نوبت/استعلام', empty: 'هنوز نوبتی ثبت نشده.' },
-  recTerms: { title: 'خدمات و اسناد', kinds: ['سندِ رسمی', 'وکالت', 'تعهد', 'اقرار'], addCta: 'خدمت', titlePh: 'عنوانِ خدمت', subtitlePh: 'شرح', withAmount: true, empty: 'خدمتی ثبت نشده.' },
-  suggestions: ['مدارکِ لازم برای تنظیمِ سندِ رسمیِ ملک را بگو', 'تفاوتِ وکالتِ بلاعزل و عادی چیست؟', 'مراحلِ نقل‌وانتقالِ سند در دفترخانه', 'یک متنِ راهنمای مراجعان برای پروفایلم بنویس'],
+// میزِ کارِ «دفترخانه» — نسخهٔ تخصصی: نوبت‌دهیِ خدمات + چک‌لیستِ مدارک + دفترِ ثبتِ اسناد.
+const ROLE = '/notary'
+const SERVICES = ['تنظیمِ سند', 'وکالت‌نامه', 'تعهدنامه', 'اقرارنامه', 'استعلام']
+const DOC_MAP: Record<string, string[]> = {
+  'تنظیمِ سند': ['سندِ مالکیت', 'کارتِ ملیِ طرفین', 'پایان‌کار', 'مفاصاحسابِ شهرداری', 'گواهیِ مالیاتی'],
+  'وکالت‌نامه': ['کارتِ ملیِ موکل', 'کارتِ ملیِ وکیل', 'موضوعِ وکالت'],
+  'تعهدنامه': ['کارتِ ملی', 'متنِ تعهد'],
+  'اقرارنامه': ['کارتِ ملیِ مُقِر', 'موضوعِ اقرار'],
+  'استعلام': ['پلاکِ ثبتی', 'کارتِ ملی'],
 }
-export default function Page() { return <ProDeskPage cfg={CFG} /> }
+const today = () => { try { return new Date().toLocaleDateString('fa-IR') } catch { return '' } }
+const sanadNo = () => 'س-' + String(Date.now()).slice(-6)
+
+const N_LABEL: Record<ReqStatus, string> = { new: 'رزرو', in_progress: 'در جریان', done: 'صادر شد', canceled: 'لغو' }
+const N_COLOR: Record<ReqStatus, string> = { new: '#f59e0b', in_progress: '#60a5fa', done: '#34d399', canceled: '#7a8fae' }
+const NEXT: Record<ReqStatus, ReqStatus> = { new: 'in_progress', in_progress: 'done', done: 'new', canceled: 'new' }
+function NPill({ st }: { st: ReqStatus }) {
+  const c = N_COLOR[st]
+  return <span style={{ fontSize: 11, fontWeight: 700, color: c, background: `color-mix(in srgb, ${c} 16%, transparent)`, padding: '3px 10px', borderRadius: 7, whiteSpace: 'nowrap' }}>{N_LABEL[st]}</span>
+}
+
+// ── نوبت‌ها + چک‌لیستِ مدارک ──────────────────────────────────────────────────
+function Appointments({ requests, post, onIssue }: { requests: ProRequest[]; post: (p: any) => Promise<any>; onIssue: (r: ProRequest) => void }) {
+  const [open, setOpen] = useState(false)
+  const [f, setF] = useState({ clientName: '', clientPhone: '', kind: SERVICES[0], date: '', time: '' })
+  const save = async () => {
+    if (!f.clientName.trim()) { alert('نامِ مراجع الزامی است'); return }
+    const d = await post({ action: 'addRequest', clientName: f.clientName, clientPhone: f.clientPhone, kind: f.kind, meta: { date: f.date, time: f.time, checked: [] } })
+    if (d) { setF({ clientName: '', clientPhone: '', kind: SERVICES[0], date: '', time: '' }); setOpen(false) }
+  }
+  const toggleDoc = (r: ProRequest, doc: string) => {
+    const checked: string[] = Array.isArray(r.meta?.checked) ? r.meta!.checked : []
+    const next = checked.includes(doc) ? checked.filter(x => x !== doc) : [...checked, doc]
+    post({ action: 'updateRequest', id: r.id, patch: { meta: { ...(r.meta || {}), checked: next } } })
+  }
+  return (
+    <SectionCard title="نوبت‌های خدمات" action={<button onClick={() => setOpen(true)} style={btnGold}>＋ نوبتِ جدید</button>}>
+      {requests.length === 0 ? <div style={{ color: 'var(--faint)', fontSize: 13, textAlign: 'center', padding: '30px 0' }}>هنوز نوبتی ثبت نشده.</div> : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+          {requests.map(r => {
+            const docs = DOC_MAP[r.kind || ''] || []
+            const checked: string[] = Array.isArray(r.meta?.checked) ? r.meta!.checked : []
+            return (
+              <div key={r.id} style={{ ...card, padding: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 150 }}>
+                    <div style={{ fontWeight: 800, fontSize: 14 }}>{r.clientName}{r.kind && <span style={{ color: 'var(--gold)', fontWeight: 600, marginRight: 8, fontSize: 12 }}>· {r.kind}</span>}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 3 }}>{[r.meta?.date, r.meta?.time && `ساعت ${r.meta.time}`, r.clientPhone].filter(Boolean).join(' · ')}</div>
+                  </div>
+                  <NPill st={r.status} />
+                  {r.status !== 'done' && <button onClick={() => onIssue(r)} style={{ padding: '5px 11px', borderRadius: 8, border: '1px solid var(--gold)', background: 'transparent', color: 'var(--gold)', fontWeight: 700, fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>ثبتِ سند</button>}
+                  <button onClick={() => post({ action: 'updateRequest', id: r.id, patch: { status: NEXT[r.status] } })} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--muted)', fontSize: 15 }} title="تغییرِ وضعیت">↻</button>
+                  <button onClick={() => { if (confirm('حذف شود؟')) post({ action: 'deleteRequest', id: r.id }) }} style={{ border: 'none', background: 'transparent', color: 'var(--faint)', cursor: 'pointer', fontSize: 15 }}>×</button>
+                </div>
+                {docs.length > 0 && (
+                  <div style={{ marginTop: 11, paddingTop: 11, borderTop: '1px solid var(--line)' }}>
+                    <div style={{ fontSize: 11, color: 'var(--faint)', marginBottom: 7 }}>مدارکِ لازم — {fa(checked.length)}/{fa(docs.length)}</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {docs.map(doc => {
+                        const on = checked.includes(doc)
+                        return (
+                          <button key={doc} onClick={() => toggleDoc(r, doc)} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${on ? '#34d399' : 'var(--line2)'}`, background: on ? 'color-mix(in srgb,#34d399 15%,transparent)' : 'var(--bg2)', color: on ? '#34d399' : 'var(--muted)', fontWeight: on ? 700 : 500 }}>{on ? '✓ ' : ''}{doc}</button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {open && (
+        <Modal title="نوبتِ جدید" onClose={() => setOpen(false)}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <input placeholder="نامِ مراجع" value={f.clientName} onChange={e => setF({ ...f, clientName: e.target.value })} style={inputStyle} />
+            <input placeholder="شمارهٔ تماس" value={f.clientPhone} onChange={e => setF({ ...f, clientPhone: e.target.value })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
+            <select value={f.kind} onChange={e => setF({ ...f, kind: e.target.value })} style={{ ...inputStyle, gridColumn: '1 / -1' }}>{SERVICES.map(t => <option key={t}>{t}</option>)}</select>
+            <input placeholder="تاریخِ نوبت" value={f.date} onChange={e => setF({ ...f, date: e.target.value })} style={inputStyle} />
+            <input placeholder="ساعت (مثلاً ۱۰:۳۰)" value={f.time} onChange={e => setF({ ...f, time: e.target.value })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
+          </div>
+          <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--bg2)', borderRadius: 10, fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.9 }}>
+            مدارکِ لازم: {(DOC_MAP[f.kind] || []).join('، ')}
+          </div>
+          <button onClick={save} style={{ ...btnGold, width: '100%', marginTop: 14, padding: 11 }}>ثبتِ نوبت</button>
+        </Modal>
+      )}
+    </SectionCard>
+  )
+}
+
+// ── مودالِ ثبتِ سند ───────────────────────────────────────────────────────────
+function IssueModal({ req, post, onClose }: { req: ProRequest; post: (p: any) => Promise<any>; onClose: () => void }) {
+  const [f, setF] = useState({ sanadNo: sanadNo(), date: today(), kind: req.kind || SERVICES[0], amount: '', note: '' })
+  const issue = async () => {
+    await post({ action: 'addRecord', title: req.clientName, subtitle: f.note, kind: f.kind, amount: Number(f.amount) || undefined, status: 'archived', meta: { sanadNo: f.sanadNo, date: f.date } })
+    await post({ action: 'updateRequest', id: req.id, patch: { status: 'done' } })
+    onClose()
+  }
+  return (
+    <Modal title={`ثبتِ سند — ${req.clientName}`} onClose={onClose}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <input placeholder="شمارهٔ سند" value={f.sanadNo} onChange={e => setF({ ...f, sanadNo: e.target.value })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
+        <input placeholder="تاریخ" value={f.date} onChange={e => setF({ ...f, date: e.target.value })} style={inputStyle} />
+        <select value={f.kind} onChange={e => setF({ ...f, kind: e.target.value })} style={inputStyle}>{SERVICES.map(t => <option key={t}>{t}</option>)}</select>
+        <input placeholder="حق‌التحریر (تومان)" value={f.amount} onChange={e => setF({ ...f, amount: e.target.value.replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
+        <input placeholder="طرفین / موضوعِ سند" value={f.note} onChange={e => setF({ ...f, note: e.target.value })} style={{ ...inputStyle, gridColumn: '1 / -1' }} />
+      </div>
+      <button onClick={issue} style={{ ...btnGold, width: '100%', marginTop: 14, padding: 11 }}>ثبت در دفترِ اسناد</button>
+    </Modal>
+  )
+}
+
+// ── دفترِ اسناد ───────────────────────────────────────────────────────────────
+function Register({ records, post }: { records: ProRecord[]; post: (p: any) => Promise<any> }) {
+  return (
+    <SectionCard title="دفترِ اسناد">
+      {records.length === 0 ? <div style={{ color: 'var(--faint)', fontSize: 13, textAlign: 'center', padding: '30px 0' }}>هنوز سندی ثبت نشده — از یک نوبت، «ثبتِ سند» بزن.</div> : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(230px,1fr))', gap: 12 }}>
+          {records.map(r => (
+            <div key={r.id} style={{ ...card, padding: 14, position: 'relative' }}>
+              <button onClick={() => { if (confirm('حذف شود؟')) post({ action: 'deleteRecord', id: r.id }) }} style={{ position: 'absolute', top: 10, left: 10, border: 'none', background: 'transparent', color: 'var(--faint)', cursor: 'pointer', fontSize: 15 }}>×</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <span style={{ fontSize: 10.5, fontWeight: 800, color: 'var(--gold)', direction: 'ltr' }}>{r.meta?.sanadNo || '—'}</span>
+                {r.kind && <span style={{ fontSize: 10, padding: '1px 7px', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 999, color: 'var(--muted)' }}>{r.kind}</span>}
+              </div>
+              <div style={{ fontWeight: 800, fontSize: 14 }}>{r.title}</div>
+              {r.subtitle && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4, lineHeight: 1.7 }}>{r.subtitle}</div>}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+                {r.meta?.date && <span style={{ fontSize: 11, color: 'var(--faint)' }}>{r.meta.date}</span>}
+                {!!r.amount && <span style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--gold)' }}>{money(r.amount)}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </SectionCard>
+  )
+}
+
+export default function NotaryPage() {
+  const { data, authed, loading, post } = useProDesk(ROLE)
+  const [view, setView] = useState('dashboard')
+  const [issueReq, setIssueReq] = useState<ProRequest | null>(null)
+  if (!loading && !authed) return <LoginGate />
+
+  const nav = [
+    { id: 'dashboard', label: 'داشبورد', icon: '▦', badge: data?.stats.open },
+    { id: 'appointments', label: 'نوبت‌ها', icon: '📅', badge: data?.stats.open },
+    { id: 'register', label: 'دفترِ اسناد', icon: '🧾' },
+    { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
+    { id: 'profile', label: 'پروفایل', icon: '🪪' },
+    { id: 'plans', label: 'پلن‌ها و اشتراک', icon: '👑' },
+    { id: 'support', label: 'پشتیبانی', icon: '🛟' },
+  ]
+  const shell: ShellCfg = { dash: ROLE, unit: 'دفترخانه', icon: '◆', accent: '#b0a06f', nav }
+
+  return (
+    <Shell cfg={shell} active={view} setActive={setView} title={nav.find(n => n.id === view)?.label || 'داشبورد'}>
+      {issueReq && <IssueModal req={issueReq} post={post} onClose={() => setIssueReq(null)} />}
+      {!data ? <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--muted)' }}>در حال بارگذاری…</div> :
+        view === 'dashboard' ? (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 14, marginBottom: 20 }}>
+              <Kpi label="نوبت‌های باز" value={fa(data.stats.open)} accent="#b0a06f" />
+              <Kpi label="اسنادِ صادرشده" value={fa(data.stats.records)} accent="#34d399" />
+              <Kpi label="انجام‌شده" value={fa(data.stats.done)} />
+              <Kpi label="درآمدِ حق‌التحریر" value={money(data.records.reduce((a, r) => a + (Number(r.amount) || 0), 0))} accent="var(--gold)" />
+            </div>
+            <Appointments requests={data.requests} post={post} onIssue={setIssueReq} />
+            <Register records={data.records} post={post} />
+          </>
+        ) : view === 'appointments' ? <Appointments requests={data.requests} post={post} onIssue={setIssueReq} />
+          : view === 'register' ? <Register records={data.records} post={post} />
+            : view === 'assistant' ? <div style={{ height: 'calc(100vh - 150px)' }}><AssistantPanel panel="notary" title="دستیارِ هوشمندِ دفترخانه" subtitle="مشاورِ AI شخصیِ تو" suggestions={['مدارکِ لازم برای تنظیمِ سندِ رسمیِ ملک را بگو', 'تفاوتِ وکالتِ بلاعزل و عادی چیست؟', 'مراحلِ نقل‌وانتقالِ سند در دفترخانه', 'یک متنِ راهنمای مراجعان برای پروفایلم بنویس']} /></div>
+              : view === 'profile' ? (
+                <>
+                  <SectionCard title="پروفایلِ عمومی" action={<a href="/directory?category=دفترخانه" style={{ fontSize: 12.5, color: 'var(--gold)', fontWeight: 700, textDecoration: 'none' }}>دیدنِ من در دایرکتوری ↗</a>}>
+                    <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.9 }}>پروفایلت را کامل کن تا در دایرکتوریِ «دفترخانه» به مراجعان نمایش داده شوی.</div>
+                  </SectionCard>
+                  <BusinessProfileForm />
+                </>
+              ) : view === 'plans' ? <PlansPanel dashboard={ROLE} /> : <SupportPanel panel="notary" />}
+    </Shell>
+  )
+}
