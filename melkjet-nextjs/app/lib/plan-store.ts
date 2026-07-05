@@ -6,7 +6,7 @@ import { listRoles } from './role-store'
 // استورِ پلن‌های اشتراک — نقش‌محور، با سقفِ مصرف (quotas) و اعتبارِ AI (aiCredits).
 // همه‌چیز داینامیک و قابلِ ویرایش از پنلِ سوپرادمین است؛ هیچ عددی هاردکد نیست (فقط seedِ اولیه).
 const DATA_FILE = join(process.cwd(), '.plan-data.json')
-const SEED_V = 6   // با تغییرِ ساختار/قیمت‌های پیش‌فرض این را بالا ببرید تا seed دوباره اعمال شود
+const SEED_V = 7   // با تغییرِ ساختار/قیمت‌های پیش‌فرض این را بالا ببرید تا seed دوباره اعمال شود
 
 // کلیدهای سقفِ مصرف (−۱ = نامحدود، ۰/تعریف‌نشده = بدونِ محدودیتِ اعمال‌شده)
 export const QUOTA_KEYS: { id: string; label: string }[] = [
@@ -72,35 +72,56 @@ function seed(): DB {
     highlighted: !!o.hot, badge: o.badge, order: ord++, active: true, createdAt: now++,
   })
   const U = -1
+  const op = (n: number) => n * 2000   // اعتبارِ AI بر حسبِ «عملیات» (۱ عملیات = ۲۰۰۰ توکن، هم‌راستا با comm-store)
   const plans: Plan[] = [
-    // خریدار
-    mk('/buyer', 'رایگان', 0, { features: ['۲ آگهی', '۵ جستجوی ذخیره‌شده', '۲۰ پیام', '۵۰ درخواست AI'], quotas: Q({ listings: 2, savedSearches: 5, chats: 20, aiRequests: 50 }), ai: 5000 }),
-    mk('/buyer', 'Plus', 99000, { features: ['۱۰ آگهی', 'جستجوی نامحدود', '۲۰۰ درخواست AI'], quotas: Q({ listings: 10, savedSearches: U, chats: U, aiRequests: 200 }), ai: 20000, hot: true, badge: 'محبوب' }),
-    mk('/buyer', 'Pro', 199000, { features: ['آگهی نامحدود', 'تحلیل قیمت', 'تحلیل منطقه', 'دستیار خرید'], quotas: Q({ listings: U, savedSearches: U, chats: U, aiRequests: U }), ai: 50000 }),
-    // مالک
-    mk('/owner', 'رایگان', 0, { features: ['۳ ملک'], quotas: Q({ properties: 3 }), ai: 5000 }),
-    mk('/owner', 'حرفه‌ای', 249000, { features: ['۲۰ ملک', 'CRM سبک', 'گزارش بازدید'], perms: ['crm', 'analytics'], quotas: Q({ properties: 20, crmCustomers: 100 }), ai: 20000, hot: true }),
-    mk('/owner', 'پریمیوم', 449000, { features: ['ملک نامحدود', 'وب‌سایت اختصاصی', 'تخفیفِ پروموشن'], perms: ['crm', 'analytics', 'website'], quotas: Q({ properties: U, crmCustomers: U, sites: 1 }), ai: 50000 }),
+    // کاربر عادی (خریدار/مالک — یکپارچه)
+    mk('/buyer', 'رایگان', 0, { features: ['۲ آگهی', '۵ جستجوی ذخیره‌شده', '۵۰ عملیات هوش مصنوعی'], quotas: Q({ listings: 2, savedSearches: 5, chats: 20, aiRequests: 50 }), ai: op(50) }),
+    mk('/buyer', 'Plus', 99000, { features: ['۱۰ آگهی', 'جستجوی نامحدود', '۲۰۰ عملیات هوش مصنوعی'], quotas: Q({ listings: 10, savedSearches: U, chats: U, aiRequests: 200 }), ai: op(200), hot: true, badge: 'محبوب' }),
+    mk('/buyer', 'Pro', 199000, { features: ['آگهی نامحدود', 'تحلیل قیمت و منطقه', 'دستیار خرید', '۵۰۰ عملیات هوش مصنوعی'], quotas: Q({ listings: U, savedSearches: U, chats: U, aiRequests: U }), ai: op(500) }),
     // مشاور املاک
-    mk('/pros', 'Starter', 290000, { features: ['۱۰۰ فایل', '۲۰۰ لید', '۵۰ مشتری', '۵ ایمپورت دیوار'], perms: ['crm', 'listings'], quotas: Q({ files: 100, leads: 200, crmCustomers: 50, divarImports: 5 }), ai: 20000 }),
-    mk('/pros', 'Growth', 590000, { features: ['۵۰۰ فایل', 'CRM کامل', 'موتور مذاکره', 'سایت‌ساز', 'گزارش'], perms: ['crm', 'marketing', 'website', 'analytics', 'listings'], quotas: Q({ files: 500, leads: U, crmCustomers: U, divarImports: 50, sites: 1 }), ai: 50000, hot: true }),
-    mk('/pros', 'Elite', 990000, { features: ['نامحدود', 'اتوماسیون', 'همه امکانات'], perms: ['crm', 'marketing', 'website', 'automation', 'analytics', 'listings'], quotas: Q({ files: U, leads: U, crmCustomers: U, divarImports: U, sites: U }), ai: 100000 }),
+    mk('/pros', 'Starter', 290000, { features: ['۱۰۰ فایل', '۲۰۰ لید', '۵۰ مشتری', '۵ ایمپورت دیوار', '۲۰۰ عملیات هوش مصنوعی'], perms: ['crm', 'listings'], quotas: Q({ files: 100, leads: 200, crmCustomers: 50, divarImports: 5 }), ai: op(200) }),
+    mk('/pros', 'Growth', 590000, { features: ['۵۰۰ فایل', 'CRM کامل', 'موتور مذاکره', 'سایت‌ساز', '۵۰۰ عملیات هوش مصنوعی'], perms: ['crm', 'marketing', 'website', 'analytics', 'listings'], quotas: Q({ files: 500, leads: U, crmCustomers: U, divarImports: 50, sites: 1 }), ai: op(500), hot: true }),
+    mk('/pros', 'Elite', 990000, { features: ['نامحدود', 'اتوماسیون', 'همه امکانات', '۱۵۰۰ عملیات هوش مصنوعی'], perms: ['crm', 'marketing', 'website', 'automation', 'analytics', 'listings'], quotas: Q({ files: U, leads: U, crmCustomers: U, divarImports: U, sites: U }), ai: op(1500) }),
     // آژانس املاک
-    mk('/agency', 'Team', 690000, { features: ['۳ مشاور', '۱۰۰۰ فایل', 'CRM'], perms: ['crm', 'listings'], quotas: Q({ agents: 3, files: 1000, crmCustomers: U }), ai: 30000 }),
-    mk('/agency', 'Business', 1200000, { features: ['۱۰ مشاور', 'بازاریابی', 'وب‌سایت', 'گزارش'], perms: ['crm', 'marketing', 'website', 'analytics', 'listings'], quotas: Q({ agents: 10, files: U, sites: 1 }), ai: 80000, hot: true }),
-    mk('/agency', 'Enterprise', 2400000, { features: ['مشاورِ نامحدود', 'اتوماسیون', 'API', 'Big Data'], perms: ['crm', 'marketing', 'website', 'automation', 'analytics', 'listings'], quotas: Q({ agents: U, files: U, sites: U }), ai: 200000 }),
+    mk('/agency', 'Team', 690000, { features: ['۳ مشاور', '۱۰۰۰ فایل', 'CRM', '۳۰۰ عملیات هوش مصنوعی'], perms: ['crm', 'listings'], quotas: Q({ agents: 3, files: 1000, crmCustomers: U }), ai: op(300) }),
+    mk('/agency', 'Business', 1200000, { features: ['۱۰ مشاور', 'بازاریابی', 'وب‌سایت', 'گزارش', '۸۰۰ عملیات هوش مصنوعی'], perms: ['crm', 'marketing', 'website', 'analytics', 'listings'], quotas: Q({ agents: 10, files: U, sites: 1 }), ai: op(800), hot: true }),
+    mk('/agency', 'Enterprise', 2400000, { features: ['مشاورِ نامحدود', 'اتوماسیون', 'API', 'Big Data', '۲۰۰۰ عملیات هوش مصنوعی'], perms: ['crm', 'marketing', 'website', 'automation', 'analytics', 'listings'], quotas: Q({ agents: U, files: U, sites: U }), ai: op(2000) }),
     // سازنده
-    mk('/builder', 'Lite', 590000, { features: ['۱ پروژه', '۵۰ واحد', '۲۰ سرمایه‌گذار'], perms: ['units', 'investors'], quotas: Q({ projects: 1, units: 50, investors: 20 }), ai: 20000 }),
-    mk('/builder', 'Pro', 1190000, { features: ['۵ پروژه', '۳۰۰ واحد', 'بازار مصالح', 'تحلیل'], perms: ['units', 'investors', 'store', 'analytics'], quotas: Q({ projects: 5, units: 300, investors: U }), ai: 50000, hot: true }),
-    mk('/builder', 'Max', 2490000, { features: ['نامحدود', 'AI Studio', 'پلانِ سه‌بعدی', 'گزارشِ پیشرفته'], perms: ['units', 'investors', 'store', 'analytics', 'ai_studio', 'website'], quotas: Q({ projects: U, units: U, investors: U }), ai: 150000 }),
+    mk('/builder', 'Lite', 590000, { features: ['۱ پروژه', '۵۰ واحد', '۲۰ سرمایه‌گذار', '۲۰۰ عملیات هوش مصنوعی'], perms: ['units', 'investors'], quotas: Q({ projects: 1, units: 50, investors: 20 }), ai: op(200) }),
+    mk('/builder', 'Pro', 1190000, { features: ['۵ پروژه', '۳۰۰ واحد', 'بازار مصالح', 'تحلیل', '۵۰۰ عملیات هوش مصنوعی'], perms: ['units', 'investors', 'store', 'analytics'], quotas: Q({ projects: 5, units: 300, investors: U }), ai: op(500), hot: true }),
+    mk('/builder', 'Max', 2490000, { features: ['نامحدود', 'AI Studio', 'پلانِ سه‌بعدی', '۱۵۰۰ عملیات هوش مصنوعی'], perms: ['units', 'investors', 'store', 'analytics', 'ai_studio', 'website'], quotas: Q({ projects: U, units: U, investors: U }), ai: op(1500) }),
     // مصالح
-    mk('/materials', 'Basic', 390000, { features: ['۵۰ محصول', 'ویترینِ فروشگاهی'], perms: ['store'], quotas: Q({ products: 50 }), ai: 10000 }),
-    mk('/materials', 'Advanced', 790000, { features: ['۳۰۰ محصول', 'نرخِ روز', 'هوش مصنوعی'], perms: ['store', 'marketing'], quotas: Q({ products: 300 }), ai: 40000, hot: true }),
-    mk('/materials', 'Premium', 1490000, { features: ['محصولِ نامحدود', 'ویژه‌سازی', 'تبلیغات'], perms: ['store', 'marketing', 'website'], quotas: Q({ products: U }), ai: 100000 }),
-    // حقوقی
-    mk('/legal', 'Basic', 199000, { features: ['پروفایل', 'مقاله'], perms: ['content'], quotas: Q({ contentGen: 10 }), ai: 5000 }),
-    mk('/legal', 'Expert', 490000, { features: ['وب‌سایت', 'SEO با AI'], perms: ['content', 'website'], quotas: Q({ contentGen: 50, sites: 1 }), ai: 20000, hot: true }),
-    mk('/legal', 'Professional', 890000, { features: ['محتوای نامحدود', 'مارکتینگ', 'لیدسازی'], perms: ['content', 'website', 'marketing', 'crm'], quotas: Q({ contentGen: U, leads: U }), ai: 50000 }),
+    mk('/materials', 'Basic', 390000, { features: ['۵۰ محصول', 'ویترینِ فروشگاهی', '۱۰۰ عملیات هوش مصنوعی'], perms: ['store'], quotas: Q({ products: 50 }), ai: op(100) }),
+    mk('/materials', 'Advanced', 790000, { features: ['۳۰۰ محصول', 'نرخِ روز', 'مارکتینگ', '۴۰۰ عملیات هوش مصنوعی'], perms: ['store', 'marketing'], quotas: Q({ products: 300 }), ai: op(400), hot: true }),
+    mk('/materials', 'Premium', 1490000, { features: ['محصولِ نامحدود', 'ویژه‌سازی', 'تبلیغات', '۱۰۰۰ عملیات هوش مصنوعی'], perms: ['store', 'marketing', 'website'], quotas: Q({ products: U }), ai: op(1000) }),
+    // مشاور حقوقی
+    mk('/legal', 'Basic', 199000, { features: ['پروفایل', '۱۰۰ پرونده', 'CRM موکل', '۵۰ عملیات هوش مصنوعی'], perms: ['crm', 'content'], quotas: Q({ contentGen: 50, leads: 100 }), ai: op(50) }),
+    mk('/legal', 'Expert', 490000, { features: ['وب‌سایت', 'SEO با AI', 'مارکتینگ', '۲۰۰ عملیات هوش مصنوعی'], perms: ['crm', 'content', 'website', 'marketing'], quotas: Q({ contentGen: U, leads: U, sites: 1 }), ai: op(200), hot: true }),
+    mk('/legal', 'Professional', 890000, { features: ['نامحدود', 'اتوماسیون', 'همه امکانات', '۵۰۰ عملیات هوش مصنوعی'], perms: ['crm', 'content', 'website', 'marketing', 'automation', 'analytics'], quotas: Q({ contentGen: U, leads: U, sites: U }), ai: op(500) }),
+    // معمار و طراح داخلی
+    mk('/architect', 'Starter', 290000, { features: ['۳۰ نمونه‌کار', '۲۰۰ استعلام', 'CRM', '۲۰۰ عملیات هوش مصنوعی'], perms: ['crm', 'content'], quotas: Q({ leads: 200, contentGen: 50 }), ai: op(200) }),
+    mk('/architect', 'Growth', 590000, { features: ['نمونه‌کارِ نامحدود', 'سایت‌ساز', 'گزارش', '۵۰۰ عملیات هوش مصنوعی'], perms: ['crm', 'content', 'website', 'analytics'], quotas: Q({ leads: U, contentGen: U, sites: 1 }), ai: op(500), hot: true }),
+    mk('/architect', 'Elite', 990000, { features: ['نامحدود', 'اتوماسیون', 'همه امکانات', '۱۵۰۰ عملیات هوش مصنوعی'], perms: ['crm', 'content', 'website', 'automation', 'analytics'], quotas: Q({ leads: U, contentGen: U, sites: U }), ai: op(1500) }),
+    // پیمانکار
+    mk('/contractor', 'Starter', 290000, { features: ['۳۰ پروژه', '۲۰۰ مناقصه', 'CRM', '۲۰۰ عملیات هوش مصنوعی'], perms: ['crm', 'content'], quotas: Q({ leads: 200, contentGen: 50 }), ai: op(200) }),
+    mk('/contractor', 'Growth', 590000, { features: ['پروژهٔ نامحدود', 'سایت‌ساز', 'گزارش', '۵۰۰ عملیات هوش مصنوعی'], perms: ['crm', 'content', 'website', 'analytics'], quotas: Q({ leads: U, contentGen: U, sites: 1 }), ai: op(500), hot: true }),
+    mk('/contractor', 'Elite', 990000, { features: ['نامحدود', 'اتوماسیون', 'همه امکانات', '۱۵۰۰ عملیات هوش مصنوعی'], perms: ['crm', 'content', 'website', 'automation', 'analytics'], quotas: Q({ leads: U, contentGen: U, sites: U }), ai: op(1500) }),
+    // کارشناسِ رسمی
+    mk('/appraiser', 'Basic', 199000, { features: ['۱۰۰ درخواستِ ارزیابی', 'گزارش‌گیری', '۱۰۰ عملیات هوش مصنوعی'], perms: ['crm', 'analytics'], quotas: Q({ leads: 100 }), ai: op(100) }),
+    mk('/appraiser', 'Pro', 490000, { features: ['نامحدود', 'وب‌سایت', 'گزارشِ کامل', '۳۰۰ عملیات هوش مصنوعی'], perms: ['crm', 'analytics', 'website'], quotas: Q({ leads: U, sites: 1 }), ai: op(300), hot: true }),
+    mk('/appraiser', 'Premium', 890000, { features: ['اتوماسیون', 'همه امکانات', '۷۰۰ عملیات هوش مصنوعی'], perms: ['crm', 'analytics', 'website', 'automation'], quotas: Q({ leads: U, sites: U }), ai: op(700) }),
+    // دفترِ حقوقی
+    mk('/lawfirm', 'Basic', 290000, { features: ['۱۰۰ پرونده', 'CRM موکل', 'تقویمِ جلسات', '۱۰۰ عملیات هوش مصنوعی'], perms: ['crm', 'content'], quotas: Q({ leads: 100, contentGen: 50 }), ai: op(100) }),
+    mk('/lawfirm', 'Pro', 590000, { features: ['پروندهٔ نامحدود', 'وب‌سایت', 'مارکتینگ', '۳۰۰ عملیات هوش مصنوعی'], perms: ['crm', 'content', 'website', 'marketing'], quotas: Q({ leads: U, contentGen: U, sites: 1 }), ai: op(300), hot: true }),
+    mk('/lawfirm', 'Premium', 990000, { features: ['اتوماسیون', 'همه امکانات', '۷۰۰ عملیات هوش مصنوعی'], perms: ['crm', 'content', 'website', 'marketing', 'automation', 'analytics'], quotas: Q({ leads: U, contentGen: U, sites: U }), ai: op(700) }),
+    // بانک و بیمه
+    mk('/finance', 'Basic', 390000, { features: ['۲۰۰ متقاضی', 'محصولات و طرح‌ها', '۱۰۰ عملیات هوش مصنوعی'], perms: ['crm', 'analytics'], quotas: Q({ leads: 200 }), ai: op(100) }),
+    mk('/finance', 'Pro', 790000, { features: ['نامحدود', 'مارکتینگ', 'وب‌سایت', '۴۰۰ عملیات هوش مصنوعی'], perms: ['crm', 'marketing', 'website', 'analytics'], quotas: Q({ leads: U, sites: 1 }), ai: op(400), hot: true }),
+    mk('/finance', 'Enterprise', 1490000, { features: ['اتوماسیون', 'همه امکانات', '۱۰۰۰ عملیات هوش مصنوعی'], perms: ['crm', 'marketing', 'website', 'automation', 'analytics'], quotas: Q({ leads: U, sites: U }), ai: op(1000) }),
+    // دفترخانه
+    mk('/notary', 'Basic', 199000, { features: ['۲۰۰ نوبت', 'دفترِ اسناد', '۵۰ عملیات هوش مصنوعی'], perms: ['crm', 'analytics'], quotas: Q({ leads: 200 }), ai: op(50) }),
+    mk('/notary', 'Pro', 390000, { features: ['نوبتِ نامحدود', 'وب‌سایت', '۱۵۰ عملیات هوش مصنوعی'], perms: ['crm', 'analytics', 'website'], quotas: Q({ leads: U, sites: 1 }), ai: op(150), hot: true }),
+    mk('/notary', 'Premium', 690000, { features: ['اتوماسیون', 'همه امکانات', '۴۰۰ عملیات هوش مصنوعی'], perms: ['crm', 'analytics', 'website', 'automation'], quotas: Q({ leads: U, sites: U }), ai: op(400) }),
   ]
   return { plans, v: SEED_V }
 }
