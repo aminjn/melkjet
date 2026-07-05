@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     const form = await req.formData()
     const file = form.get('file') as File | null
     if (!file) return NextResponse.json({ error: 'فایلی انتخاب نشده' }, { status: 400 })
-    if (!isAllowed(file.type)) return NextResponse.json({ error: 'فقط تصویر یا ویدئو مجاز است' }, { status: 400 })
+    if (!isAllowed(file.type)) return NextResponse.json({ error: 'فقط تصویر، ویدئو یا PDF مجاز است' }, { status: 400 })
     if (file.size > 30 * 1024 * 1024) return NextResponse.json({ error: 'حجم فایل بیش از ۳۰ مگابایت' }, { status: 400 })
     const buf = Buffer.from(await file.arrayBuffer())
     const m = saveMedia(buf, file.type, file.name || 'file')

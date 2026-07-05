@@ -14,6 +14,7 @@ function saveIndex(rows: MediaMeta[]) { writeFileSync(INDEX, JSON.stringify(rows
 const EXT: Record<string, string> = {
   'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
   'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov',
+  'application/pdf': 'pdf',
 }
 
 export function saveMedia(buf: Buffer, mime: string, name: string): MediaMeta {
@@ -34,4 +35,4 @@ export function getMedia(id: string): { path: string; mime: string } | null {
   return { path: p, mime: m.mime }
 }
 
-export function isAllowed(mime: string): boolean { return /^image\/|^video\//.test(mime) }
+export function isAllowed(mime: string): boolean { return /^image\/|^video\/|^application\/pdf$/.test(mime) }
