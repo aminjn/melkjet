@@ -1,6 +1,11 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { J_MONTHS, J_DOW, jMonthLength, jDow, jKey } from '@/app/lib/jalali'
+import CrmTool, { CRM_VIEWS, type CrmView } from '@/app/components/tools/CrmTool'
+import MarketingTool, { MARKETING_VIEWS, type MarketingView } from '@/app/components/tools/MarketingTool'
+import WorkflowTool, { WORKFLOW_VIEWS, type WorkflowView } from '@/app/components/tools/WorkflowTool'
+import WebsiteBuilderTool, { WEBSITE_VIEWS, type WebsiteView } from '@/app/components/tools/WebsiteBuilderTool'
+import ArticleEditor from '@/app/components/ArticleEditor'
 
 // ابزارکِ مشترکِ میزِ کارِ متخصص — چرومِ سایدبار/هدر + هوکِ داده + اجزای درخواست‌ها و رکوردها.
 // هر داشبوردِ شغلی (معمار/پیمانکار/…) این‌ها را با کانفیگِ اختصاصیِ خودش می‌چیند.
@@ -56,16 +61,57 @@ export function useProDesk(role: string) {
 // ── چرومِ پنل (سایدبار + هدر) ─────────────────────────────────────────────────
 export interface NavItem { id: string; label: string; icon: string; badge?: number }
 export interface ShellCfg { dash: string; unit: string; icon: string; accent: string; nav: NavItem[] }
-// لینک‌های ابزارِ مشترک (همان چیزی که در پنل‌های دیگر هست) — داخلِ همان تب باز می‌شوند.
-const CROSS = [
-  { href: '/crm', icon: '◇', label: 'CRM و مشتریان' },
-  { href: '/marketing', icon: '◈', label: 'مارکتینگ' },
-  { href: '/website-builder', icon: '🌐', label: 'سایت‌ساز' },
-  { href: '/workflow', icon: '⛭', label: 'اتوماسیون' },
-]
+
+// نگاشتِ داشبورد → پروفایلِ سایت‌سازِ صنفی (برای بازکردنِ قالبِ درست در سایت‌سازِ جاسازی‌شده).
+const DASH_WB_PROFILE: Record<string, string> = {
+  '/architect': 'معمار', '/contractor': 'پیمانکار', '/appraiser': 'کارشناس',
+  '/lawfirm': 'دفتر حقوقی', '/finance': 'بانک و بیمه', '/notary': 'دفترخانه',
+}
+
+// یک گروهِ ابزارِ آبشاری در سایدبار (CRM/مارکتینگ/اتوماسیون/سایت‌ساز) — داخلِ همین پنل باز می‌شود.
+function ToolGroup<T extends string>({ icon, label, views, activeView, open, setOpen, onPick }: { icon: string; label: string; views: { id: T; label: string; icon: string }[]; activeView: T | null; open: boolean; setOpen: (f: (o: boolean) => boolean) => void; onPick: (v: T) => void }) {
+  const on = !!activeView
+  return (
+    <>
+      <button onClick={() => { setOpen(o => !o); if (!activeView) onPick(views[0].id) }} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: on ? 'var(--goldDim)' : 'transparent', color: on ? 'var(--gold)' : 'var(--muted)', fontWeight: on ? 700 : 500, fontSize: 14, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
+        <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: on ? 1 : 0.7 }}>{icon}</span>
+        <span style={{ flex: 1 }}>{label}</span>
+        <span style={{ fontSize: 11, transition: 'transform .2s', transform: open ? 'rotate(90deg)' : 'none' }}>‹</span>
+      </button>
+      {open && views.map(v => {
+        const sel = activeView === v.id
+        return (
+          <button key={v.id} onClick={() => onPick(v.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 9, padding: '8px 14px', paddingRight: 34, borderRadius: 10, border: 'none', cursor: 'pointer', background: sel ? 'var(--goldDim)' : 'transparent', color: sel ? 'var(--gold)' : 'var(--muted)', fontWeight: sel ? 700 : 500, fontSize: 13, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
+            <span style={{ fontSize: 13, width: 16, textAlign: 'center', opacity: sel ? 1 : 0.6 }}>{v.icon}</span>
+            <span style={{ flex: 1 }}>{v.label}</span>
+          </button>
+        )
+      })}
+    </>
+  )
+}
 
 export function Shell({ cfg, active, setActive, title, children }: { cfg: ShellCfg; active: string; setActive: (id: string) => void; title: string; children: React.ReactNode }) {
   const [navOpen, setNavOpen] = useState(false)
+  // ابزارهای مشترک، جاسازی‌شده داخلِ همین پنل (مثلِ مشاور/آژانس/سازنده) — نه لینک به بیرون.
+  const [crmView, setCrmView] = useState<CrmView | null>(null)
+  const [mktView, setMktView] = useState<MarketingView | null>(null)
+  const [wfView, setWfView] = useState<WorkflowView | null>(null)
+  const [wbView, setWbView] = useState<WebsiteView | null>(null)
+  const [crmOpen, setCrmOpen] = useState(false), [mktOpen, setMktOpen] = useState(false), [wfOpen, setWfOpen] = useState(false), [wbOpen, setWbOpen] = useState(false)
+  const toolActive = !!(crmView || mktView || wfView || wbView)
+  const clearTools = () => { setCrmView(null); setMktView(null); setWfView(null); setWbView(null) }
+  const pickPanel = (id: string) => { clearTools(); setActive(id); setNavOpen(false) }
+  const openCrm = (v: CrmView) => { clearTools(); setCrmView(v); setCrmOpen(true); setNavOpen(false) }
+  const openMkt = (v: MarketingView) => { clearTools(); setMktView(v); setMktOpen(true); setNavOpen(false) }
+  const openWf = (v: WorkflowView) => { clearTools(); setWfView(v); setWfOpen(true); setNavOpen(false) }
+  const openWb = (v: WebsiteView) => { clearTools(); setWbView(v); setWbOpen(true); setNavOpen(false) }
+  const wbProfile = DASH_WB_PROFILE[cfg.dash]
+  const hdr = crmView ? `CRM · ${CRM_VIEWS.find(v => v.id === crmView)?.label || ''}`
+    : mktView ? `مارکتینگ · ${MARKETING_VIEWS.find(v => v.id === mktView)?.label || ''}`
+      : wfView ? `اتوماسیون · ${WORKFLOW_VIEWS.find(v => v.id === wfView)?.label || ''}`
+        : wbView ? `وب‌سایت‌ساز · ${WEBSITE_VIEWS.find(v => v.id === wbView)?.label || ''}` : title
+
   return (
     <div dir="rtl" style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: FONT }}>
       <style>{`@media(max-width:900px){.mjpd-side{position:fixed!important;z-index:200;transform:translateX(100%);transition:transform .25s}.mjpd-side.open{transform:none}.mjpd-burger{display:inline-flex!important}}`}</style>
@@ -77,9 +123,9 @@ export function Shell({ cfg, active, setActive, title, children }: { cfg: ShellC
         </div>
         <nav style={{ padding: '10px 8px', flex: 1, overflowY: 'auto' }}>
           {cfg.nav.map(it => {
-            const on = active === it.id
+            const on = active === it.id && !toolActive
             return (
-              <button key={it.id} onClick={() => { setActive(it.id); setNavOpen(false) }} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: on ? 'var(--goldDim)' : 'transparent', color: on ? 'var(--gold)' : 'var(--muted)', fontWeight: on ? 700 : 500, fontSize: 14, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
+              <button key={it.id} onClick={() => pickPanel(it.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: on ? 'var(--goldDim)' : 'transparent', color: on ? 'var(--gold)' : 'var(--muted)', fontWeight: on ? 700 : 500, fontSize: 14, textAlign: 'right', marginBottom: 2, fontFamily: FONT }}>
                 <span style={{ fontSize: 15, width: 18, textAlign: 'center', opacity: on ? 1 : 0.7 }}>{it.icon}</span>
                 <span style={{ flex: 1 }}>{it.label}</span>
                 {!!it.badge && it.badge > 0 && <span style={{ background: on ? 'var(--gold)' : 'var(--line2)', color: on ? '#16140f' : 'var(--text)', borderRadius: 9, fontSize: 10, fontWeight: 700, padding: '1px 7px' }}>{fa(it.badge)}</span>}
@@ -87,11 +133,10 @@ export function Shell({ cfg, active, setActive, title, children }: { cfg: ShellC
             )
           })}
           <div style={{ height: 1, background: 'var(--line)', margin: '10px 8px' }} />
-          {CROSS.map(c => (
-            <a key={c.href} href={c.href} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderRadius: 10, textDecoration: 'none', background: 'transparent', color: 'var(--muted)', fontWeight: 500, fontSize: 13.5, fontFamily: FONT, boxSizing: 'border-box' }}>
-              <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>{c.icon}</span><span style={{ flex: 1 }}>{c.label}</span>
-            </a>
-          ))}
+          <ToolGroup icon="◇" label="CRM و مشتریان" views={CRM_VIEWS} activeView={crmView} open={crmOpen} setOpen={setCrmOpen} onPick={openCrm} />
+          <ToolGroup icon="◈" label="مارکتینگ" views={MARKETING_VIEWS} activeView={mktView} open={mktOpen} setOpen={setMktOpen} onPick={openMkt} />
+          <ToolGroup icon="⛭" label="اتوماسیون" views={WORKFLOW_VIEWS} activeView={wfView} open={wfOpen} setOpen={setWfOpen} onPick={openWf} />
+          <ToolGroup icon="🌐" label="وب‌سایت‌ساز" views={WEBSITE_VIEWS} activeView={wbView} open={wbOpen} setOpen={setWbOpen} onPick={openWb} />
         </nav>
         <a href="/" style={{ padding: '12px 16px', borderTop: '1px solid var(--line)', fontSize: 12.5, color: 'var(--muted)', textDecoration: 'none' }}>← بازگشت به سایت</a>
       </aside>
@@ -99,9 +144,16 @@ export function Shell({ cfg, active, setActive, title, children }: { cfg: ShellC
       <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <header style={{ padding: '16px 22px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg2)', position: 'sticky', top: 0, zIndex: 100 }}>
           <button className="mjpd-burger" onClick={() => setNavOpen(true)} style={{ display: 'none', width: 38, height: 38, borderRadius: 9, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--text)', cursor: 'pointer', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>☰</button>
-          <h1 style={{ margin: 0, fontSize: 17, fontWeight: 800, flex: 1 }}>{title}</h1>
+          <h1 style={{ margin: 0, fontSize: 17, fontWeight: 800, flex: 1 }}>{hdr}</h1>
         </header>
-        <div style={{ padding: 22, flex: 1 }}>{children}</div>
+        <div style={{ padding: toolActive ? 0 : 22, flex: 1, minWidth: 0 }}>
+          {crmView ? <div style={{ padding: 22 }}><CrmTool embedded view={crmView} onView={v => setCrmView(v)} /></div>
+            : mktView === 'articles' ? <div style={{ padding: 22 }}><ArticleEditor compact /></div>
+              : mktView ? <div style={{ padding: 22 }}><MarketingTool embedded view={mktView} onView={v => setMktView(v)} /></div>
+                : wfView ? <div style={{ height: 'calc(100vh - 66px)' }}><WorkflowTool embedded view={wfView} onView={v => setWfView(v)} /></div>
+                  : wbView ? <div style={{ height: 'calc(100vh - 66px)' }}><WebsiteBuilderTool embedded profile={wbProfile} view={wbView} onView={v => setWbView(v)} /></div>
+                    : children}
+        </div>
       </main>
     </div>
   )
