@@ -25,6 +25,7 @@ export interface ProRequest {
   detail?: string
   status: ReqStatus
   amount?: number        // مبلغِ برآورد/حق‌الزحمه (تومان)
+  meta?: Record<string, any>   // فیلدهای اختصاصیِ شغل (متراژ/سبک/بودجه …)
   createdAt: number
   updatedAt: number
 }
@@ -39,6 +40,8 @@ export interface ProRecord {
   status: RecStatus
   amount?: number
   tags?: string[]
+  cover?: string         // تصویرِ شاخص (برای نمونه‌کارِ تصویری)
+  meta?: Record<string, any>   // فیلدهای اختصاصیِ شغل (متراژ/سبک/مرحله …)
   createdAt: number
   updatedAt: number
 }
@@ -68,10 +71,10 @@ const owns = (owner: string, role: string) => (x: { owner: string; role: string 
 export async function listRequests(owner: string, role: string): Promise<ProRequest[]> {
   return (await load()).requests.filter(owns(owner, role)).sort((a, b) => b.createdAt - a.createdAt)
 }
-export interface RequestInput { clientName: string; clientPhone?: string; kind?: string; detail?: string; status?: ReqStatus; amount?: number }
+export interface RequestInput { clientName: string; clientPhone?: string; kind?: string; detail?: string; status?: ReqStatus; amount?: number; meta?: Record<string, any> }
 export async function addRequest(owner: string, role: string, input: RequestInput): Promise<ProRequest> {
   const now = Date.now()
-  const r: ProRequest = { id: id(), owner, role, clientName: input.clientName || 'بدون‌نام', clientPhone: input.clientPhone, kind: input.kind, detail: input.detail, status: input.status || 'new', amount: input.amount, createdAt: now, updatedAt: now }
+  const r: ProRequest = { id: id(), owner, role, clientName: input.clientName || 'بدون‌نام', clientPhone: input.clientPhone, kind: input.kind, detail: input.detail, status: input.status || 'new', amount: input.amount, meta: input.meta, createdAt: now, updatedAt: now }
   await mutate(db => { db.requests.push(r) })
   return r
 }
@@ -91,10 +94,10 @@ export async function deleteRequest(owner: string, role: string, rid: string): P
 export async function listRecords(owner: string, role: string): Promise<ProRecord[]> {
   return (await load()).records.filter(owns(owner, role)).sort((a, b) => b.createdAt - a.createdAt)
 }
-export interface RecordInput { title: string; subtitle?: string; kind?: string; status?: RecStatus; amount?: number; tags?: string[] }
+export interface RecordInput { title: string; subtitle?: string; kind?: string; status?: RecStatus; amount?: number; tags?: string[]; cover?: string; meta?: Record<string, any> }
 export async function addRecord(owner: string, role: string, input: RecordInput): Promise<ProRecord> {
   const now = Date.now()
-  const r: ProRecord = { id: id(), owner, role, title: input.title || 'بدون‌عنوان', subtitle: input.subtitle, kind: input.kind, status: input.status || 'active', amount: input.amount, tags: input.tags || [], createdAt: now, updatedAt: now }
+  const r: ProRecord = { id: id(), owner, role, title: input.title || 'بدون‌عنوان', subtitle: input.subtitle, kind: input.kind, status: input.status || 'active', amount: input.amount, tags: input.tags || [], cover: input.cover, meta: input.meta, createdAt: now, updatedAt: now }
   await mutate(db => { db.records.push(r) })
   return r
 }

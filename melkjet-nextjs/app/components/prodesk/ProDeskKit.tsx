@@ -14,8 +14,8 @@ export const card: React.CSSProperties = { background: 'var(--surface)', border:
 export const inputStyle: React.CSSProperties = { padding: '9px 11px', borderRadius: 9, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--text)', fontSize: 13, outline: 'none', fontFamily: FONT, width: '100%', boxSizing: 'border-box' }
 
 export type ReqStatus = 'new' | 'in_progress' | 'done' | 'canceled'
-export interface ProRequest { id: string; clientName: string; clientPhone?: string; kind?: string; detail?: string; status: ReqStatus; amount?: number; createdAt: number }
-export interface ProRecord { id: string; title: string; subtitle?: string; kind?: string; status: 'active' | 'pending' | 'archived'; amount?: number; tags?: string[]; createdAt: number }
+export interface ProRequest { id: string; clientName: string; clientPhone?: string; kind?: string; detail?: string; status: ReqStatus; amount?: number; meta?: Record<string, any>; createdAt: number }
+export interface ProRecord { id: string; title: string; subtitle?: string; kind?: string; status: 'active' | 'pending' | 'archived'; amount?: number; tags?: string[]; cover?: string; meta?: Record<string, any>; createdAt: number }
 export interface ProStats { total: number; open: number; done: number; records: number; revenue: number; recent: ProRequest[] }
 export interface ProData { stats: ProStats; requests: ProRequest[]; records: ProRecord[] }
 
