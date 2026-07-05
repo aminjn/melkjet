@@ -42,8 +42,8 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
   const periodLabel = PERIODS.find(x => x[0] === period)![2]
   const [busy, setBusy] = useState('')
   const [msg, setMsg] = useState('')
-  // دو بخشِ جدا: اشتراک/بسته‌ها  ×  پروموت/تبلیغات
-  const [section, setSection] = useState<'plans' | 'promo'>('plans')
+  // سه بخشِ جدا: کیفِ پول × اشتراک/بسته‌ها × پروموت/تبلیغات
+  const [section, setSection] = useState<'wallet' | 'plans' | 'promo'>('plans')
 
   const loadComm = () => fetch('/api/comm').then(r => r.ok ? r.json() : null).then(d => { if (d) { setCredit(d.credit || { sms: 0, email: 0, token: 0 }); setOrders(d.orders || []); setTokenUsed(d.tokenUsed || 0); setPromoTiers(d.promoTiers || []); setPromoBundles(d.promoBundles || []); setPromoDiscount(Number(d.promoDiscount) || 0); setPromoWallet(Number(d.promoWallet) || 0); setPromoCreditPacks(d.promoCreditPacks || []); setMyPromotions(d.myPromotions || []); setActiveplan(d.activePlan || null) } }).catch(() => {})
   const load = () => {
@@ -103,17 +103,61 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
           <span style={{ fontSize: 26 }}>👑</span>
           <div style={{ fontSize: 21, fontWeight: 900, letterSpacing: '-.5px' }}>{title}</div>
         </div>
-        <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.9, maxWidth: 640, position: 'relative' }}>{section === 'plans' ? 'اشتراکِ مناسبِ خود را انتخاب کنید و در صورتِ نیاز، بسته‌های افزایشیِ عملیاتِ هوش مصنوعی، پیامک و ایمیل را تهیه کنید.' : 'با پروموت، کسب‌وکار یا آگهیِ شما در جایگاه‌های پربازدیدِ ملک‌جت برجسته می‌شود — جدا از اشتراک.'}</div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.9, maxWidth: 640, position: 'relative' }}>{section === 'wallet' ? 'خلاصهٔ مالیِ حسابِ شما: موجودیِ کیفِ پول، اعتبارِ هوش مصنوعی، پیامک و ایمیل، و تاریخچهٔ تراکنش‌ها.' : section === 'plans' ? 'اشتراکِ مناسبِ خود را انتخاب کنید و در صورتِ نیاز، بسته‌های افزایشیِ عملیاتِ هوش مصنوعی، پیامک و ایمیل را تهیه کنید.' : 'با پروموت، کسب‌وکار یا آگهیِ شما در جایگاه‌های پربازدیدِ ملک‌جت برجسته می‌شود — جدا از اشتراک.'}</div>
       </div>
 
-      {/* دو بخشِ جدا: اشتراک/بسته‌ها × پروموت/تبلیغات */}
+      {/* سه بخشِ جدا: کیفِ پول × اشتراک/بسته‌ها × پروموت/تبلیغات */}
       <div style={{ display: 'flex', justifyContent: 'center' }}>
-        <div style={{ display: 'inline-flex', background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 999, padding: 4 }}>
-          {([['plans', '👑 اشتراک و بسته‌ها'], ['promo', '🚀 پروموت و تبلیغات']] as const).map(([k, l]) => (
-            <button key={k} onClick={() => setSection(k)} style={{ padding: '9px 20px', borderRadius: 999, border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800, background: section === k ? 'linear-gradient(135deg,var(--gold2),var(--gold))' : 'transparent', color: section === k ? '#16140f' : 'var(--muted)' }}>{l}</button>
+        <div style={{ display: 'inline-flex', background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 999, padding: 4, flexWrap: 'wrap' }}>
+          {([['wallet', '💰 کیفِ پول'], ['plans', '👑 اشتراک و بسته‌ها'], ['promo', '🚀 پروموت و تبلیغات']] as const).map(([k, l]) => (
+            <button key={k} onClick={() => setSection(k)} style={{ padding: '9px 18px', borderRadius: 999, border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 800, background: section === k ? 'linear-gradient(135deg,var(--gold2),var(--gold))' : 'transparent', color: section === k ? '#16140f' : 'var(--muted)' }}>{l}</button>
           ))}
         </div>
       </div>
+
+      {/* ── کیفِ پول: خلاصهٔ مالیِ پروفایل (موجودی‌ها + تراکنش‌ها) ── */}
+      {section === 'wallet' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 12 }}>
+            {[
+              { icon: '💳', label: 'کیفِ پولِ پروموت', value: fa(promoWallet), unit: 'تومان', hl: true, action: () => setSection('promo') },
+              { icon: '🤖', label: 'اعتبارِ هوش مصنوعی', value: fa(toOps(credit.token || 0)), unit: 'عملیات', action: () => setSection('plans') },
+              { icon: '✆', label: 'پیامک', value: fa(credit.sms || 0), unit: 'پیامک', action: () => setSection('plans') },
+              { icon: '✉', label: 'ایمیل', value: fa(credit.email || 0), unit: 'ایمیل', action: () => setSection('plans') },
+            ].map((c, i) => (
+              <div key={i} style={{ background: c.hl ? 'linear-gradient(160deg, rgba(212,175,55,.12), var(--surface) 60%)' : 'var(--surface)', border: `1px solid ${c.hl ? 'var(--gold)' : 'var(--line)'}`, borderRadius: 16, padding: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ fontSize: 20 }}>{c.icon}</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>{c.label}</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: c.hl ? 'var(--gold)' : 'var(--text)' }}>{c.value} <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)' }}>{c.unit}</span></div>
+                <button onClick={c.action} style={{ marginTop: 4, alignSelf: 'flex-start', fontSize: 11.5, fontWeight: 700, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: FONT, padding: 0 }}>{c.hl ? 'شارژِ کیفِ پول ←' : 'افزایشِ اعتبار ←'}</button>
+              </div>
+            ))}
+          </div>
+          {activeplan && (
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--gold)', borderRadius: 14, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 18 }}>👑</span>
+              <span style={{ fontSize: 13, fontWeight: 700 }}>اشتراکِ فعال</span>
+              {activeplan.expiresAt && <span style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>· {daysLeftLabel(activeplan.expiresAt)}</span>}
+            </div>
+          )}
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18 }}>
+            <div style={{ fontSize: 14, fontWeight: 900, marginBottom: 12 }}>🧾 تراکنش‌ها و سفارش‌ها</div>
+            {orders.length === 0 ? <div style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center', padding: 16 }}>هنوز تراکنشی ندارید.</div> : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {orders.slice(0, 15).map(o => (
+                  <div key={o.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, background: 'var(--bg2)', borderRadius: 10, padding: '9px 13px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 600 }}>{o.name}</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--gold)' }}>{fa(o.price)} تومان</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: o.status === 'paid' ? '#5fd98a' : o.status === 'pending' ? '#f59e0b' : 'var(--faint)' }}>{o.status === 'paid' ? '✓ پرداخت‌شده' : o.status === 'pending' ? '⏳ در انتظار' : 'رد‌شده'}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* پروموت‌های من — وضعیت + محلِ نمایش (تا کاربر بداند پروموت کجا و تا کِی فعال است) */}
       {section === 'promo' && (myPromotions.length > 0 || pendingPromos.length > 0) && (
