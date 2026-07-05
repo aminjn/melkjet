@@ -3,15 +3,20 @@ import { useState, useEffect } from 'react'
 import { fetchContent, type ContentItem } from '@/app/lib/content-display'
 import PanelReturnBar from '@/app/components/PanelReturnBar'
 
-export type CrmView = 'dashboard' | 'listings' | 'pipeline' | 'tasks' | 'calendar'
+export type CrmView = 'dashboard' | 'listings' | 'pipeline' | 'deals' | 'contacts' | 'tasks' | 'calendar' | 'reports'
 
 // Sidebar nav entries (one per view). Persian labels match the standalone /crm sidebar.
+// NOTE: labels here are the *generic* defaults; the active role config (ROLE_CRM) overrides
+// per role via viewLabel() so the same view reads correctly for every dashboard type.
 export const CRM_VIEWS: { id: CrmView; label: string; icon: string }[] = [
   { id: 'dashboard', icon: '◈', label: 'داشبورد' },
   { id: 'listings', icon: '◰', label: 'فایل‌ها' },
   { id: 'pipeline', icon: '◴', label: 'پایپ‌لاین CRM' },
+  { id: 'deals', icon: '◈', label: 'قراردادها' },
+  { id: 'contacts', icon: '☎', label: 'مخاطبین' },
   { id: 'tasks', icon: '✓', label: 'وظایف' },
   { id: 'calendar', icon: '◫', label: 'تقویم' },
+  { id: 'reports', icon: '▤', label: 'گزارش‌ها' },
 ]
 
 // Mirrors app/lib/crm-store.ts Task (the API shape). `dueTs` is the epoch ms of the due moment.
@@ -40,25 +45,106 @@ interface Lead {
   updatedAt: number
 }
 
-// Pipeline stage columns (kanban). Order matters for ‹ › moves.
-const stageColumns: { id: Stage; label: string; color: string }[] = [
-  { id: 'new', label: 'لید جدید', color: '#7a8fae' },
-  { id: 'review', label: 'در حال بررسی', color: '#e7a14a' },
-  { id: 'offered', label: 'پیشنهاد داده‌شده', color: 'var(--gold)' },
-  { id: 'contract', label: 'قرارداد', color: '#5fd98a' },
-  { id: 'lost', label: 'از دست‌رفته', color: '#e74c3c' },
-]
-
 const navItems = CRM_VIEWS
 
 const J_MON = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند']
 
-const viewTitles: Record<CrmView, string> = {
-  dashboard: 'داشبورد',
-  listings: 'فایل‌های ملکی',
-  pipeline: 'پایپ‌لاین CRM',
-  tasks: 'وظایف',
-  calendar: 'تقویم',
+// ─────────────────────────────────────────────────────────────────────────────
+// Role-adaptive CRM configuration.
+// The whole CRM (terminology + pipeline stage labels + per-view labels) adapts to
+// the user's role, keyed by their dashboard path (from /api/auth/profile → dash).
+// The 5 backend stage ids (new|review|offered|contract|lost) NEVER change — only
+// their displayed labels do — so the leads backend is untouched.
+// ─────────────────────────────────────────────────────────────────────────────
+const STAGE_ORDER: Stage[] = ['new', 'review', 'offered', 'contract', 'lost']
+const STAGE_COLORS: Record<Stage, string> = { new: '#7a8fae', review: '#e7a14a', offered: 'var(--gold)', contract: '#5fd98a', lost: '#e74c3c' }
+
+interface RoleCrmCfg {
+  leadWord: string          // singular «lead/customer» noun for this role
+  leadsWord: string         // its plural
+  needLabel: string         // «نیاز» field label
+  budgetLabel: string       // «بودجه» field label
+  pipelineLabel: string     // «پایپ‌لاین» view/section label
+  dealWord: string          // singular «deal» noun
+  dealsWord: string         // plural «deals» (the «معاملات» view label)
+  stages: Record<Stage, string>  // per-role stage labels (same 5 ids)
+  viewLabels: Partial<Record<CrmView, string>> // per-view label overrides
+}
+
+const DEFAULT_STAGES: Record<Stage, string> = { new: 'لید جدید', review: 'در حال بررسی', offered: 'پیشنهاد داده‌شده', contract: 'قرارداد', lost: 'از دست‌رفته' }
+
+// Default (مشاور/آژانس/generic) — keeps the original stage columns & labels.
+const DEFAULT_CRM: RoleCrmCfg = {
+  leadWord: 'لید', leadsWord: 'لیدها', needLabel: 'نیاز', budgetLabel: 'بودجه',
+  pipelineLabel: 'پایپ‌لاین CRM', dealWord: 'قرارداد', dealsWord: 'قراردادها',
+  stages: DEFAULT_STAGES, viewLabels: { listings: 'فایل‌ها' },
+}
+
+const REALESTATE_CRM: RoleCrmCfg = {
+  leadWord: 'مشتری', leadsWord: 'مشتریان', needLabel: 'نیاز', budgetLabel: 'بودجه',
+  pipelineLabel: 'پایپ‌لاین CRM', dealWord: 'قرارداد', dealsWord: 'قراردادها',
+  stages: DEFAULT_STAGES, viewLabels: { listings: 'فایل‌ها' },
+}
+
+const LEGAL_CRM: RoleCrmCfg = {
+  leadWord: 'موکل', leadsWord: 'موکلان', needLabel: 'موضوعِ پرونده', budgetLabel: 'حق‌الوکاله',
+  pipelineLabel: 'روندِ پرونده', dealWord: 'پرونده', dealsWord: 'پرونده‌ها',
+  stages: { new: 'تماسِ اولیه', review: 'بررسیِ پرونده', offered: 'تنظیمِ لایحه', contract: 'پروندهٔ فعال', lost: 'منتفی' },
+  viewLabels: { listings: 'پرونده‌ها' },
+}
+
+const ROLE_CRM: Record<string, RoleCrmCfg> = {
+  '/pros': REALESTATE_CRM,
+  '/agency': REALESTATE_CRM,
+  '/buyer': {
+    leadWord: 'مخاطب', leadsWord: 'مخاطبان', needLabel: 'نیاز', budgetLabel: 'بودجه',
+    pipelineLabel: 'پیگیری‌ها', dealWord: 'معامله', dealsWord: 'معاملات',
+    stages: DEFAULT_STAGES, viewLabels: { listings: 'ملک‌های موردنظر' },
+  },
+  '/builder': {
+    leadWord: 'خریدار', leadsWord: 'خریداران', needLabel: 'واحدِ موردنیاز', budgetLabel: 'بودجه',
+    pipelineLabel: 'قیفِ فروش', dealWord: 'فروش', dealsWord: 'فروش‌ها',
+    stages: { new: 'سرنخ', review: 'بازدید', offered: 'پیش‌قرارداد', contract: 'فروش', lost: 'منتفی' },
+    viewLabels: { listings: 'واحدها' },
+  },
+  '/materials': {
+    leadWord: 'مشتری', leadsWord: 'مشتریان', needLabel: 'محصولِ موردنیاز', budgetLabel: 'مبلغِ سفارش',
+    pipelineLabel: 'قیفِ فروش', dealWord: 'سفارش', dealsWord: 'سفارش‌ها',
+    stages: { new: 'استعلامِ جدید', review: 'پیش‌فاکتور', offered: 'مذاکره', contract: 'سفارشِ قطعی', lost: 'لغوشده' },
+    viewLabels: { listings: 'مشتریان', tasks: 'کارها و پیگیری' },
+  },
+  '/architect': {
+    leadWord: 'کارفرما', leadsWord: 'کارفرمایان', needLabel: 'نوعِ پروژه', budgetLabel: 'برآوردِ هزینه',
+    pipelineLabel: 'روندِ پروژه', dealWord: 'قرارداد', dealsWord: 'قراردادها',
+    stages: { new: 'سرنخ', review: 'مشاوره', offered: 'پیشنهادِ قیمت', contract: 'قرارداد', lost: 'منتفی' },
+    viewLabels: { listings: 'پروژه‌ها' },
+  },
+  '/contractor': {
+    leadWord: 'کارفرما', leadsWord: 'کارفرمایان', needLabel: 'شرحِ کار', budgetLabel: 'مبلغِ برآورد',
+    pipelineLabel: 'روندِ پروژه', dealWord: 'قرارداد', dealsWord: 'قراردادها',
+    stages: { new: 'سرنخ', review: 'مشاوره', offered: 'پیشنهادِ قیمت', contract: 'قرارداد', lost: 'منتفی' },
+    viewLabels: { listings: 'پروژه‌ها' },
+  },
+  '/appraiser': {
+    leadWord: 'متقاضی', leadsWord: 'متقاضیان', needLabel: 'نوعِ ملک', budgetLabel: 'ارزشِ برآوردی',
+    pipelineLabel: 'روندِ کارشناسی', dealWord: 'گزارش', dealsWord: 'گزارش‌ها',
+    stages: { new: 'درخواستِ جدید', review: 'بازدید', offered: 'کارشناسی', contract: 'گزارش صادر', lost: 'منتفی' },
+    viewLabels: { listings: 'درخواست‌ها' },
+  },
+  '/lawfirm': LEGAL_CRM,
+  '/legal': LEGAL_CRM,
+  '/finance': {
+    leadWord: 'متقاضی', leadsWord: 'متقاضیان', needLabel: 'نوعِ خدمت', budgetLabel: 'مبلغِ تسهیلات',
+    pipelineLabel: 'روندِ درخواست', dealWord: 'تسهیلات', dealsWord: 'تسهیلات',
+    stages: { new: 'درخواستِ جدید', review: 'در حالِ بررسی', offered: 'پیش‌تأیید', contract: 'تأییدشده', lost: 'رد' },
+    viewLabels: { listings: 'درخواست‌ها' },
+  },
+  '/notary': {
+    leadWord: 'مراجع', leadsWord: 'مراجعان', needLabel: 'نوعِ خدمت', budgetLabel: 'مبلغِ سند',
+    pipelineLabel: 'روندِ نوبت', dealWord: 'سند', dealsWord: 'اسناد',
+    stages: { new: 'نوبتِ جدید', review: 'در انتظارِ مدارک', offered: 'آماده', contract: 'تنظیم‌شده', lost: 'لغو' },
+    viewLabels: { listings: 'مراجعان' },
+  },
 }
 
 // ── تقویم جلالی (بدون وابستگی) — مثل app/pros/page.tsx ──
@@ -213,21 +299,19 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
   const activeView: CrmView = viewProp ?? internalView
   const setActiveView = (v: CrmView) => { onView ? onView(v) : setInternalView(v) }
 
-  // ── سازگاریِ CRM با نوعِ پروفایل (مصالح/املاک/عمومی) ──
-  const [ctx, setCtx] = useState<'materials' | 'realestate' | 'generic'>('generic')
-  useEffect(() => { fetch('/api/auth/profile').then(r => r.ok ? r.json() : null).then(d => { const dash = d?.dash || ''; setCtx(dash === '/materials' ? 'materials' : (dash === '/pros' || dash === '/agency') ? 'realestate' : 'generic') }).catch(() => {}) }, [])
-  const isMat = ctx === 'materials'
-  const stages: { id: Stage; label: string; color: string }[] = isMat ? [
-    { id: 'new', label: 'استعلامِ جدید', color: '#7a8fae' },
-    { id: 'review', label: 'پیش‌فاکتور', color: '#e7a14a' },
-    { id: 'offered', label: 'مذاکره', color: 'var(--gold)' },
-    { id: 'contract', label: 'سفارشِ قطعی', color: '#5fd98a' },
-    { id: 'lost', label: 'لغوشده', color: '#e74c3c' },
-  ] : stageColumns
-  const MAT_VIEW: Record<CrmView, string> = { dashboard: 'داشبورد', listings: 'مشتریان', pipeline: 'قیفِ فروش', tasks: 'کارها و پیگیری', calendar: 'تقویم' }
-  const viewLabel = (v: CrmView) => isMat ? MAT_VIEW[v] : (CRM_VIEWS.find(x => x.id === v)?.label || v)
-  const needLabel = isMat ? 'محصولِ موردنیاز' : 'نیاز'
-  const budgetLabel = isMat ? 'مبلغِ سفارش' : 'بودجه'
+  // ── سازگاریِ کاملِ CRM با نقشِ کاربر (ROLE_CRM) — بر اساسِ داشبوردِ پروفایل ──
+  const [role, setRole] = useState<string>('')
+  useEffect(() => { fetch('/api/auth/profile').then(r => r.ok ? r.json() : null).then(d => { setRole(d?.dash || '') }).catch(() => {}) }, [])
+  const cfg = ROLE_CRM[role] || DEFAULT_CRM
+  const isMat = role === '/materials'
+  const stages: { id: Stage; label: string; color: string }[] = STAGE_ORDER.map(id => ({ id, label: cfg.stages[id], color: STAGE_COLORS[id] }))
+  const viewLabel = (v: CrmView): string => {
+    if (v === 'pipeline') return cfg.pipelineLabel
+    if (v === 'deals') return cfg.dealsWord
+    return cfg.viewLabels[v] ?? (CRM_VIEWS.find(x => x.id === v)?.label || v)
+  }
+  const needLabel = cfg.needLabel
+  const budgetLabel = cfg.budgetLabel
   const [tasks, setTasks] = useState<Task[]>([])
   const [newTaskText, setNewTaskText] = useState('')
   const [newTaskPriority, setNewTaskPriority] = useState<'high' | 'medium' | 'low'>('medium')
@@ -259,6 +343,11 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
   const [aiReply, setAiReply] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
 
+  // Contact book (مخاطبین) — real /api/contacts data.
+  const [contacts, setContacts] = useState<{ id: string; name?: string; phone?: string; email?: string; groups?: string[] }[]>([])
+  const [contactSearch, setContactSearch] = useState('')
+  const [cForm, setCForm] = useState<{ name: string; phone: string; email: string }>({ name: '', phone: '', email: '' })
+
   // Load persisted tasks on mount.
   useEffect(() => {
     fetch('/api/crm/tasks')
@@ -272,6 +361,14 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
     fetch('/api/crm/leads')
       .then(r => r.ok ? r.json() : { leads: [] })
       .then(d => setLeads(Array.isArray(d.leads) ? d.leads : []))
+      .catch(() => {})
+  }, [])
+
+  // Load the marketing contact book on mount.
+  useEffect(() => {
+    fetch('/api/contacts')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d && Array.isArray(d.contacts)) setContacts(d.contacts) })
       .catch(() => {})
   }, [])
 
@@ -392,6 +489,46 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
     fetch('/api/crm/leads?id=' + encodeURIComponent(id), { method: 'DELETE' }).catch(() => {})
   }
 
+  // ── مخاطبین (contact book) — /api/contacts action-based POST ──
+  const submitContact = async () => {
+    const name = cForm.name.trim(), phone = cForm.phone.trim(), email = cForm.email.trim()
+    if (!name && !phone && !email) return
+    setCForm({ name: '', phone: '', email: '' })
+    try {
+      const r = await fetch('/api/contacts', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'add', name, phone, email }),
+      })
+      if (r.ok) { const d = await r.json(); const c = d?.contact; if (c) setContacts(prev => [c, ...prev.filter(x => x.id !== c.id)]) }
+    } catch {}
+  }
+  const removeContact = (id: string) => {
+    setContacts(prev => prev.filter(c => c.id !== id))
+    fetch('/api/contacts', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete', id }),
+    }).catch(() => {})
+  }
+
+  // Parse a free-text budget («۱۲۰ میلیون», «۲۰ میلیارد», «۳۵۰۰۰۰۰۰۰») into a number (تومان).
+  const parseBudget = (s?: string): number => {
+    if (!s) return 0
+    const en = s.replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+    const m = en.match(/[\d.]+/)
+    if (!m) return 0
+    let n = parseFloat(m[0])
+    if (!isFinite(n)) return 0
+    if (/میلیارد/.test(s)) n *= 1e9
+    else if (/میلیون/.test(s)) n *= 1e6
+    return n
+  }
+  const fmtMoney = (n: number): string => {
+    if (n >= 1e9) return FA(Math.round(n / 1e8) / 10) + ' میلیارد'
+    if (n >= 1e6) return FA(Math.round(n / 1e5) / 10) + ' میلیون'
+    if (n > 0) return FA(Math.round(n))
+    return '—'
+  }
+
   const runAi = async () => {
     const input = aiInput.trim()
     if (!input || aiLoading) return
@@ -456,11 +593,36 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
 
   const realInsights: { icon: string; text: string }[] = []
   const staleNew = leads.filter(l => l.stage === 'new' && (now - l.createdAt) > 3 * 86400000)
-  if (staleNew.length) realInsights.push({ icon: '✦', text: `${FA(staleNew.length)} لیدِ جدید بیش از ۳ روز بدون پیگیری مانده — تماس بگیرید.` })
+  if (staleNew.length) realInsights.push({ icon: '✦', text: `${FA(staleNew.length)} ${cfg.leadWord}ِ جدید بیش از ۳ روز بدون پیگیری مانده — تماس بگیرید.` })
   if (overdueCount) realInsights.push({ icon: '◰', text: `${FA(overdueCount)} وظیفهٔ معوق دارید؛ هرچه زودتر رسیدگی کنید.` })
   const contractCount = leads.filter(l => l.stage === 'contract').length
-  if (contractCount) realInsights.push({ icon: '✓', text: `${FA(contractCount)} لید به مرحلهٔ قرارداد رسیده است. آفرین!` })
-  if (growth !== null) realInsights.push({ icon: '◈', text: `رشد قیمتِ منطقه: ${growth >= 0 ? '+' : ''}${FA(growth)}٪ (دادهٔ واقعی). به لیدها اطلاع دهید.` })
+  if (contractCount) realInsights.push({ icon: '✓', text: `${FA(contractCount)} ${cfg.leadWord} به مرحلهٔ ${cfg.stages.contract} رسیده است. آفرین!` })
+  if (growth !== null) realInsights.push({ icon: '◈', text: `رشد قیمتِ منطقه: ${growth >= 0 ? '+' : ''}${FA(growth)}٪ (دادهٔ واقعی). به ${cfg.leadsWord} اطلاع دهید.` })
+
+  // ───── Deals (won leads) — «معاملات/قراردادها/…» ─────
+  const wonLeads = leads.filter(l => l.stage === 'contract')
+  const dealsTotalValue = wonLeads.reduce((sum, l) => sum + parseBudget(l.budget), 0)
+  const dealsThisMonth = wonLeads.filter(l => { const p = jParts(new Date(l.updatedAt)); return p.jy === curJ.jy && p.jm === curJ.jm }).length
+
+  // ───── Reports — conversion funnel + score breakdown ─────
+  const funnel = stages.map(s => {
+    const count = leads.filter(l => l.stage === s.id).length
+    return { ...s, count, pct: leads.length ? Math.round((count / leads.length) * 100) : 0 }
+  })
+  const scored = leads.filter(l => typeof l.score === 'number')
+  const scoreBuckets = [
+    { label: 'داغ (۸۰+)', color: '#e74c3c', count: scored.filter(l => (l.score || 0) >= 80).length },
+    { label: 'گرم (۵۰–۷۹)', color: '#e7a14a', count: scored.filter(l => (l.score || 0) >= 50 && (l.score || 0) < 80).length },
+    { label: 'سرد (زیر ۵۰)', color: '#7a8fae', count: scored.filter(l => (l.score || 0) < 50).length },
+  ]
+  const notedCount = leads.filter(l => l.note && l.note.trim()).length
+  const maxTrend = Math.max(1, ...realSales.map(d => d.value))
+
+  // Contact-book filtered list (search across name/phone/email).
+  const cq = contactSearch.trim().toLowerCase()
+  const filteredContacts = cq
+    ? contacts.filter(c => [c.name, c.phone, c.email, ...(c.groups || [])].some(v => (v || '').toLowerCase().includes(cq)))
+    : contacts
 
   // Filtered + sorted list for the Tasks view
   const filteredTasks = sortedTasks.filter(t => {
@@ -482,7 +644,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
             {[
               { label: 'وظایف باز', value: openCount, sub: `${FA(todayCount)} امروز`, subColor: 'var(--gold)', icon: '✓' },
               { label: 'معوق', value: overdueCount, sub: overdueCount > 0 ? 'نیاز به پیگیری' : 'بدون معوقه', subColor: overdueCount > 0 ? '#e74c3c' : '#5fd98a', icon: '◴' },
-              { label: 'کل لیدها', value: leads.length, sub: `${FA(stageBreakdown.find(s => s.id === 'contract')?.count || 0)} قرارداد`, subColor: '#5fd98a', icon: '◈' },
+              { label: `کل ${cfg.leadsWord}`, value: leads.length, sub: `${FA(stageBreakdown.find(s => s.id === 'contract')?.count || 0)} ${cfg.dealWord}`, subColor: '#5fd98a', icon: '◈' },
               { label: 'فایل‌های ملکی', value: ownListings ? ownListings.length : listings.length, sub: growth !== null ? `رشد منطقه ${growth >= 0 ? '+' : ''}${FA(growth)}٪` : 'فایل فعال', subColor: 'var(--gold)', icon: '◰' },
             ].map((kpi, i) => (
               <div key={i} style={{
@@ -525,7 +687,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
             background: 'var(--surface)', border: '1px solid var(--line)',
             borderRadius: 16, padding: 20,
           }}>
-            <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>پایپ‌لاین لیدها</h3>
+            <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>{cfg.pipelineLabel}</h3>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               {stageBreakdown.map(s => (
                 <div key={s.id} style={{
@@ -551,7 +713,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
               padding: 24,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-                <h3 style={{ fontSize: 15, fontWeight: 700 }}>روند لیدها</h3>
+                <h3 style={{ fontSize: 15, fontWeight: 700 }}>روندِ {cfg.leadsWord}</h3>
                 <span style={{ fontSize: 12, color: 'var(--muted)' }}>۶ ماه گذشته</span>
               </div>
               {!hasSales ? (
@@ -590,7 +752,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
                             fontSize: 10, fontWeight: 700,
                             padding: '2px 6px', borderRadius: 4,
                             whiteSpace: 'nowrap',
-                          }}>{FA(d.value)} لید</div>
+                          }}>{FA(d.value)} {cfg.leadWord}</div>
                         )}
                       </div>
                       <span style={{ fontSize: 11, color: 'var(--muted)' }}>{d.month}</span>
@@ -645,7 +807,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
               padding: 20,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-                <h3 style={{ fontSize: 15, fontWeight: 700 }}>لیدهای اخیر</h3>
+                <h3 style={{ fontSize: 15, fontWeight: 700 }}>آخرین {cfg.leadsWord}</h3>
                 <button
                   onClick={() => setActiveView('pipeline')}
                   style={{
@@ -892,7 +1054,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
         <div>
           {/* Pipeline toolbar */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <span style={{ fontSize: 13, color: 'var(--muted)' }}>{leads.length.toLocaleString('fa-IR')} {isMat ? 'مشتری در قیفِ فروش' : 'لید در پایپ‌لاین'}</span>
+            <span style={{ fontSize: 13, color: 'var(--muted)' }}>{leads.length.toLocaleString('fa-IR')} {cfg.leadWord} در {cfg.pipelineLabel}</span>
             <button
               onClick={addLead}
               style={{
@@ -901,7 +1063,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
                 color: '#16140f', fontSize: 13, fontWeight: 700,
                 cursor: 'pointer', fontFamily: 'Vazirmatn, system-ui, sans-serif',
               }}
-            >＋ {isMat ? 'مشتریِ جدید' : 'لید جدید'}</button>
+            >＋ {cfg.leadWord}ِ جدید</button>
           </div>
 
           <div className="mjc-kanban" style={{ display: 'flex', gap: 14, overflowX: 'auto', paddingBottom: 8 }}>
@@ -1310,6 +1472,165 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
           </div>
         )
       })()}
+
+      {/* ==================== CONTACTS (دفترچهٔ مخاطبین) ==================== */}
+      {activeView === 'contacts' && (
+        <div style={{ maxWidth: 900 }}>
+          {/* Add form */}
+          <div style={{ marginBottom: 16, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: 14 }}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <input value={cForm.name} onChange={e => setCForm({ ...cForm, name: e.target.value })} onKeyDown={e => e.key === 'Enter' && submitContact()} placeholder="نام" style={{ flex: '1 1 160px', padding: '8px 12px', borderRadius: 10, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--text)', fontSize: 13, outline: 'none', fontFamily: FONT }} />
+              <input value={cForm.phone} onChange={e => setCForm({ ...cForm, phone: e.target.value })} onKeyDown={e => e.key === 'Enter' && submitContact()} placeholder="تلفن" dir="ltr" style={{ flex: '1 1 140px', padding: '8px 12px', borderRadius: 10, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--text)', fontSize: 13, outline: 'none', fontFamily: FONT, textAlign: 'right' }} />
+              <input value={cForm.email} onChange={e => setCForm({ ...cForm, email: e.target.value })} onKeyDown={e => e.key === 'Enter' && submitContact()} placeholder="ایمیل" dir="ltr" style={{ flex: '1 1 160px', padding: '8px 12px', borderRadius: 10, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--text)', fontSize: 13, outline: 'none', fontFamily: FONT, textAlign: 'right' }} />
+              <button onClick={submitContact} disabled={!cForm.name.trim() && !cForm.phone.trim() && !cForm.email.trim()} style={{ padding: '8px 20px', borderRadius: 10, background: 'var(--gold)', border: 'none', color: '#16140f', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: FONT, opacity: (cForm.name.trim() || cForm.phone.trim() || cForm.email.trim()) ? 1 : 0.5 }}>＋ افزودن</button>
+            </div>
+          </div>
+
+          {/* Search */}
+          <input value={contactSearch} onChange={e => setContactSearch(e.target.value)} placeholder="جستجوی مخاطب…" style={{ width: '100%', maxWidth: 320, padding: '8px 12px', borderRadius: 10, background: 'var(--surface)', border: '1px solid var(--line)', color: 'var(--text)', fontSize: 13, outline: 'none', fontFamily: FONT, marginBottom: 14 }} />
+
+          {/* List */}
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1.4fr 1fr 40px', gap: 8, padding: '11px 16px', background: 'var(--bg2)', borderBottom: '1px solid var(--line)', fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>
+              <div>نام</div><div>تلفن</div><div>ایمیل</div><div>گروه‌ها</div><div></div>
+            </div>
+            <div style={{ maxHeight: 560, overflowY: 'auto' }}>
+              {filteredContacts.length === 0 ? (
+                <div style={{ padding: 28, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>{contacts.length === 0 ? 'هنوز مخاطبی ثبت نشده — از فرمِ بالا اضافه کنید.' : 'مخاطبی با این جستجو یافت نشد.'}</div>
+              ) : filteredContacts.map((c, i) => (
+                <div key={c.id} style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1.4fr 1fr 40px', gap: 8, padding: '11px 16px', borderTop: i ? '1px solid var(--line)' : 'none', fontSize: 13, alignItems: 'center' }}>
+                  <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name || '—'}</div>
+                  <div dir="ltr" style={{ color: 'var(--muted)', fontSize: 12, textAlign: 'right' }}>{c.phone || '—'}</div>
+                  <div dir="ltr" style={{ color: 'var(--muted)', fontSize: 12, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.email || '—'}</div>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {(c.groups || []).length === 0 ? <span style={{ color: 'var(--faint)', fontSize: 12 }}>—</span> : (c.groups || []).map(g => (
+                      <span key={g} style={{ fontSize: 10.5, color: 'var(--gold)', background: 'var(--goldDim)', border: '1px solid rgba(201,168,76,0.25)', borderRadius: 6, padding: '2px 6px' }}>{g}</span>
+                    ))}
+                  </div>
+                  <button onClick={() => removeContact(c.id)} title="حذف" style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', borderRadius: 8, padding: '3px 8px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>×</button>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ marginTop: 12, fontSize: 11.5, color: 'var(--faint)' }}>{FA(contacts.length)} مخاطب در دفترچه. مخاطبین در کمپین‌های پیامک و ایمیل هم استفاده می‌شوند.</div>
+        </div>
+      )}
+
+      {/* ==================== DEALS (معاملات — role-adapted) ==================== */}
+      {activeView === 'deals' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {/* KPI tiles */}
+          <div className="mjc-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+            {[
+              { label: `تعدادِ ${cfg.dealsWord}`, value: FA(wonLeads.length), icon: '◈' },
+              { label: 'ارزشِ کل', value: fmtMoney(dealsTotalValue), icon: '❋' },
+              { label: 'این ماه', value: FA(dealsThisMonth), icon: '↑' },
+            ].map((kpi, i) => (
+              <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 20, position: 'relative', overflow: 'hidden' }}>
+                <div style={{ position: 'absolute', top: 10, left: 14, fontSize: 48, opacity: 0.05, color: 'var(--gold)', fontWeight: 900, userSelect: 'none', lineHeight: 1 }}>{kpi.icon}</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                  <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 500 }}>{kpi.label}</span>
+                  <span style={{ width: 30, height: 30, borderRadius: 8, background: 'var(--goldDim)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: 'var(--gold)' }}>{kpi.icon}</span>
+                </div>
+                <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.5px' }}>{kpi.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Won-leads list */}
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden' }}>
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--line)' }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700 }}>{cfg.dealsWord} ({FA(wonLeads.length)})</h3>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr 1fr', gap: 8, padding: '11px 20px', background: 'var(--bg2)', borderBottom: '1px solid var(--line)', fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>
+              <div>{cfg.leadWord}</div><div>{needLabel}</div><div>{budgetLabel}</div><div>تاریخ</div>
+            </div>
+            <div style={{ maxHeight: 520, overflowY: 'auto' }}>
+              {wonLeads.length === 0 ? (
+                <div style={{ padding: 28, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>هنوز {cfg.dealWord}ی به مرحلهٔ «{cfg.stages.contract}» نرسیده است.</div>
+              ) : wonLeads.map((l, i) => (
+                <div key={l.id} style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr 1fr', gap: 8, padding: '12px 20px', borderTop: i ? '1px solid var(--line)' : 'none', fontSize: 13, alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                    <div style={{ width: 30, height: 30, borderRadius: '50%', background: getGradient(l.name), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#16140f', flexShrink: 0 }}>{getInitials(l.name)}</div>
+                    <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.name}</span>
+                  </div>
+                  <div style={{ color: 'var(--muted)', fontSize: 12 }}>{l.need || '—'}</div>
+                  <div style={{ color: 'var(--gold)', fontWeight: 700, fontSize: 12.5 }}>{l.budget || '—'}</div>
+                  <div style={{ color: 'var(--muted)', fontSize: 12 }}>{(() => { try { return new Date(l.updatedAt).toLocaleDateString('fa-IR') } catch { return '—' } })()}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== REPORTS (گزارش‌ها) ==================== */}
+      {activeView === 'reports' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {/* Conversion funnel */}
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700 }}>قیفِ تبدیل</h3>
+              <span style={{ fontSize: 12, color: 'var(--muted)' }}>{FA(leads.length)} {cfg.leadWord} در مجموع</span>
+            </div>
+            {leads.length === 0 ? (
+              <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--faint)', fontSize: 13 }}>هنوز داده‌ای برای گزارش نیست — با افزودنِ {cfg.leadWord}، تحلیل‌ها اینجا نمایش داده می‌شوند.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {funnel.map(s => (
+                  <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 96, flexShrink: 0, fontSize: 12, color: s.color, fontWeight: 700, textAlign: 'left' }}>{s.label}</div>
+                    <div style={{ flex: 1, background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 8, overflow: 'hidden', height: 26, position: 'relative' }}>
+                      <div style={{ height: '100%', width: `${s.pct}%`, minWidth: s.count ? 6 : 0, background: s.color, opacity: 0.85, borderRadius: 8, transition: 'width .3s' }} />
+                    </div>
+                    <div style={{ width: 78, flexShrink: 0, fontSize: 12, color: 'var(--muted)', textAlign: 'left' }}>{FA(s.count)} <span style={{ color: 'var(--faint)' }}>({FA(s.pct)}٪)</span></div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Score breakdown (only if any lead is scored) */}
+          {scored.length > 0 && (
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 20 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>دسته‌بندیِ امتیاز</h3>
+              <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>{FA(scored.length)} {cfg.leadWord}ِ امتیازدهی‌شده — {FA(notedCount)} دارای یادداشت.</div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {scoreBuckets.map(b => (
+                  <div key={b.label} style={{ flex: '1 1 140px', minWidth: 140, background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 12, padding: '12px 14px', borderTop: `3px solid ${b.color}` }}>
+                    <div style={{ fontSize: 11.5, color: b.color, fontWeight: 700 }}>{b.label}</div>
+                    <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4 }}>{FA(b.count)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Monthly leads trend */}
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700 }}>روندِ ماهانهٔ {cfg.leadsWord}</h3>
+              <span style={{ fontSize: 12, color: 'var(--muted)' }}>۶ ماه گذشته</span>
+            </div>
+            {!hasSales ? (
+              <div style={{ height: 150, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--faint)', fontSize: 13, textAlign: 'center' }}>هنوز داده‌ای برای نمودار نیست.</div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, height: 150, paddingTop: 24 }}>
+                {realSales.map((d, i) => {
+                  const pct = (d.value / maxTrend) * 100
+                  return (
+                    <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%', justifyContent: 'flex-end' }}>
+                      <span style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 700 }}>{FA(d.value)}</span>
+                      <div style={{ width: '100%', height: `${pct}%`, background: 'linear-gradient(180deg,rgba(201,168,76,0.55),rgba(201,168,76,0.28))', borderRadius: '6px 6px 0 0', minHeight: 8 }} />
+                      <span style={{ fontSize: 11, color: 'var(--muted)' }}>{d.month}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </>
   )
 
@@ -1394,7 +1715,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
     <div onClick={() => setLeadForm(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.72)', zIndex: 400, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', fontFamily: F }}>
       <div onClick={e => e.stopPropagation()} dir="rtl" style={{ background: 'var(--surface)', border: '1px solid var(--gold)', borderRadius: 16, maxWidth: 440, width: '100%', margin: '30px 0', padding: 22 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <div style={{ fontSize: 16, fontWeight: 900 }}>{isMat ? 'مشتریِ جدید' : 'لیدِ جدید'}</div>
+          <div style={{ fontSize: 16, fontWeight: 900 }}>{cfg.leadWord}ِ جدید</div>
           <button onClick={() => setLeadForm(null)} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 22, cursor: 'pointer' }}>×</button>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
