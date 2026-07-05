@@ -14,7 +14,7 @@ import CatalogAdminView from './CatalogAdminView'
 type View =
   | 'overview' | 'scraper' | 'persiansaze' | 'listings' | 'products' | 'catalog' | 'geo' | 'moderation' | 'content' | 'studio' | 'articles' | 'categories' | 'crm' | 'api'
   | 'reports' | 'plans' | 'promos' | 'discounts' | 'ads' | 'users' | 'profiles' | 'roles' | 'connections'
-  | 'tracker' | 'sms' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags' | 'support' | 'payment' | 'aicost' | 'smscost'
+  | 'tracker' | 'sms' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags' | 'support' | 'payment' | 'aicost' | 'smscost' | 'sitemap'
 
 interface NavItem { id: View; icon: string; label: string; badge?: string; badgeColor?: string }
 interface NavSection { title: string; items: NavItem[] }
@@ -69,6 +69,7 @@ const sections: NavSection[] = [
     items: [
       { id: 'overview', icon: '▦', label: 'نمای کلی' },
       { id: 'reports',  icon: '◔', label: 'گزارش‌ها و Big Data' },
+      { id: 'sitemap',  icon: '🗺', label: 'مرکز سایت‌مپ (SEO)', badge: 'NEW', badgeColor: '#c9a84c' },
       { id: 'api',      icon: '◈', label: 'API و مدل‌های AI' },
     ],
   },
@@ -111,6 +112,7 @@ const viewTitles: Record<View, string> = {
   articles:   'مدیریت مقالات و وبلاگ',
   api:        'API و مدل‌های هوش مصنوعی',
   reports:    'گزارش‌ها و تحلیل داده',
+  sitemap:    'مرکز سایت‌مپ و SEO',
   plans:      'پلن‌ها و اشتراک‌ها',
   payment:    'درگاه‌های پرداخت',
   aicost:     'هزینه و قیمت‌گذاریِ AI',
@@ -1596,6 +1598,124 @@ interface PSState {
   profiles: { builders: number; withPhone: number; projects: number; revealedProjects?: number; pendingProjects?: number; quotaAvailable?: number | null; lastRevealAt?: string; accounts?: number }
   log: string
   revealLog: string
+}
+
+// ── مرکز سایت‌مپ (SEO) ──────────────────────────────────────────────────────
+interface SmShard { name: string; type: string; count: number; lastmod?: string; status: 'healthy' | 'empty' | 'over' }
+interface SmData { config: { maxUrls: number; sections: Record<string, boolean> }; sections: string[]; indexUrl: string; robotsUrl: string; shards: SmShard[]; total: number; snapshot: { snapshotAt?: number; totalUrls?: number }; defaultMax: number }
+const SEC_LABEL: Record<string, string> = { static: 'ثابت', blog: 'بلاگ', listings: 'آگهی‌ها', locations: 'مکان‌ها', projects: 'پروژه‌ها', providers: 'متخصصان' }
+
+function SitemapView() {
+  const [d, setD] = useState<SmData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState('')
+  const [maxUrls, setMaxUrls] = useState(10000)
+  const [sections, setSections] = useState<Record<string, boolean>>({})
+  const [msg, setMsg] = useState('')
+
+  const load = () => { setLoading(true); fetch('/api/admin/seo/sitemaps', { cache: 'no-store' }).then(r => r.json()).then((j: SmData & { error?: string }) => { if (j && !j.error) { setD(j); setMaxUrls(j.config.maxUrls); setSections(j.config.sections || {}) } }).finally(() => setLoading(false)) }
+  useEffect(load, [])
+
+  const post = async (body: Record<string, any>, label: string) => {
+    setBusy(label); setMsg('')
+    try { const r = await fetch('/api/admin/seo/sitemaps', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); const j = await r.json(); if (j.ok) { if (j.shards) setD(prev => prev ? { ...prev, shards: j.shards, total: j.total, config: j.config || prev.config } : prev); if (body.action === 'regenerate') { setMsg(j.added?.length ? `✅ ${j.added.length} شاردِ جدید. مجموع: ${j.total}` : `✅ بدونِ تغییر. مجموع: ${j.total} شارد`); load() } if (body.action === 'ping') setMsg(`Google: ${j.results?.google || '—'} · Bing: ${j.results?.bing || '—'} — ${j.note || ''}`); if (body.maxUrls !== undefined || body.sections) setMsg('✅ تنظیمات ذخیره شد') } else setMsg('خطا: ' + (j.error || '')) } catch { setMsg('خطای شبکه') } finally { setBusy('') }
+  }
+
+  const th: React.CSSProperties = { textAlign: 'right', fontSize: 11.5, color: 'var(--muted)', fontWeight: 700, padding: '9px 12px', borderBottom: '1px solid var(--line)' }
+  const td: React.CSSProperties = { fontSize: 12.5, padding: '9px 12px', borderBottom: '1px solid var(--line)' }
+  const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
+  const ago = (ts?: number) => { if (!ts) return '—'; const m = Math.floor((Date.now() - ts) / 60000); if (m < 1) return 'الان'; if (m < 60) return `${fa(m)} دقیقه پیش`; const h = Math.floor(m / 60); if (h < 24) return `${fa(h)} ساعت پیش`; return `${fa(Math.floor(h / 24))} روز پیش` }
+  const inp2: React.CSSProperties = { width: 140, direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+
+  const over = (d?.shards || []).filter(s => s.status === 'over')
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* راهنما */}
+      <Card>
+        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 6 }}>🗺 مرکز سایت‌مپ (معماریِ مقیاس‌پذیر)</div>
+        <p style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.9, margin: 0 }}>
+          سایت‌مپ به‌صورتِ <b>ایندکس + شاردهای بخش‌بندی‌شده</b> ساخته می‌شود؛ هر شارد حداکثر <b>{fa(maxUrls)}</b> URL دارد تا گوگل هیچ‌وقت به فایلِ عظیم برنخورد.
+          آگهی‌ها بر اساسِ <b>شهر + نوعِ معامله</b> خرد می‌شوند (سبکِ Zillow). این آدرس را در Google Search Console ثبت کن:
+        </p>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10, alignItems: 'center' }}>
+          <code style={{ direction: 'ltr', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 8, padding: '7px 12px', fontSize: 12.5, color: 'var(--gold)' }}>{d?.indexUrl || 'https://melkjet.com/sitemap.xml'}</code>
+          <OutlineButton onClick={() => { navigator.clipboard?.writeText(d?.indexUrl || 'https://melkjet.com/sitemap.xml'); setMsg('آدرس کپی شد') }}>کپی</OutlineButton>
+          <a href={d?.indexUrl || '/sitemap.xml'} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: 'var(--gold)', textDecoration: 'none' }}>باز کردنِ ایندکس ↗</a>
+        </div>
+      </Card>
+
+      {/* آمار + اکشن‌ها */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12 }}>
+        {[
+          { l: 'مجموعِ شاردها', v: fa((d?.shards || []).length) },
+          { l: 'مجموعِ URLها', v: fa(d?.total || 0) },
+          { l: 'سقفِ هر شارد', v: fa(maxUrls) },
+          { l: 'آخرین بررسی', v: ago(d?.snapshot?.snapshotAt) },
+        ].map(s => (
+          <Card key={s.l} style={{ padding: 15 }}>
+            <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{s.l}</div>
+            <div style={{ fontSize: 20, fontWeight: 800, marginTop: 4, color: 'var(--gold)' }}>{s.v}</div>
+          </Card>
+        ))}
+      </div>
+
+      {over.length > 0 && (
+        <Card style={{ borderColor: '#e7674a', background: 'rgba(231,103,74,0.08)' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#e7674a' }}>⚠ {fa(over.length)} شارد از سقف رد شده — سقف را کم کن یا بخش را بیشتر خرد کن.</div>
+        </Card>
+      )}
+
+      {/* تنظیمات */}
+      <Card>
+        <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 14 }}>تنظیمات</div>
+        <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
+          <label style={{ fontSize: 12.5, color: 'var(--muted)' }}>سقفِ URL هر شارد (پیشنهاد: ۱۰٬۰۰۰ — کمتر از حدِ ۵۰٬۰۰۰ِ گوگل):</label>
+          <input type="number" min={100} max={50000} step={1000} value={maxUrls} onChange={e => setMaxUrls(Number(e.target.value))} style={inp2} />
+        </div>
+        <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 8 }}>بخش‌های فعال در سایت‌مپ:</div>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
+          {(d?.sections || Object.keys(SEC_LABEL)).map(k => (
+            <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, cursor: 'pointer' }}>
+              <Toggle on={sections[k] !== false} onChange={v => setSections(s => ({ ...s, [k]: v }))} />
+              {SEC_LABEL[k] || k}
+            </label>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <GoldButton disabled={!!busy} onClick={() => post({ maxUrls, sections }, 'save')}>{busy === 'save' ? '...' : 'ذخیرهٔ تنظیمات'}</GoldButton>
+          <OutlineButton onClick={() => post({ action: 'regenerate' }, 'regenerate')}>{busy === 'regenerate' ? '...' : '🔄 بازتولید و بررسیِ شاردِ جدید'}</OutlineButton>
+          <OutlineButton onClick={() => post({ action: 'ping' }, 'ping')}>{busy === 'ping' ? '...' : '📣 Ping گوگل/بینگ'}</OutlineButton>
+          <OutlineButton onClick={load}>تازه‌سازی</OutlineButton>
+        </div>
+        {msg && <div style={{ marginTop: 12, fontSize: 12.5, color: msg.startsWith('خطا') ? '#e7674a' : 'var(--gold)' }}>{msg}</div>}
+      </Card>
+
+      {/* جدولِ شاردها */}
+      <Card style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{ padding: '14px 18px', fontSize: 14, fontWeight: 800, borderBottom: '1px solid var(--line)' }}>شاردهای سایت‌مپ ({fa((d?.shards || []).length)})</div>
+        {loading ? <div style={{ padding: 30, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>در حال بارگذاری…</div> : (d?.shards || []).length === 0 ? <div style={{ padding: 30, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>هنوز داده‌ای برای سایت‌مپ نیست.</div> : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 620 }}>
+              <thead><tr><th style={th}>شارد</th><th style={th}>نوع</th><th style={th}>تعداد URL</th><th style={th}>وضعیت</th><th style={th}>آخرین تغییر</th><th style={th}></th></tr></thead>
+              <tbody>
+                {(d?.shards || []).map(s => (
+                  <tr key={s.name}>
+                    <td style={{ ...td, direction: 'ltr', textAlign: 'left', fontFamily: 'monospace', color: 'var(--gold)' }}>{s.name}.xml</td>
+                    <td style={td}>{s.type}</td>
+                    <td style={td}>{fa(s.count)}</td>
+                    <td style={td}><span style={{ padding: '3px 9px', borderRadius: 999, fontSize: 11, fontWeight: 700, background: s.status === 'healthy' ? 'rgba(95,217,138,0.15)' : s.status === 'over' ? 'rgba(231,103,74,0.15)' : 'var(--bg2)', color: s.status === 'healthy' ? '#5fd98a' : s.status === 'over' ? '#e7674a' : 'var(--muted)' }}>{s.status === 'healthy' ? 'سالم' : s.status === 'over' ? 'بیش از سقف' : 'خالی'}</span></td>
+                    <td style={{ ...td, direction: 'ltr', textAlign: 'left', fontSize: 11, color: 'var(--muted)' }}>{s.lastmod ? s.lastmod.slice(0, 10) : '—'}</td>
+                    <td style={td}><a href={`/sitemaps/${s.name}.xml`} target="_blank" rel="noreferrer" style={{ fontSize: 11.5, color: 'var(--gold)', textDecoration: 'none' }}>باز کردن ↗</a></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </div>
+  )
 }
 
 function PersianSazeView() {
@@ -5565,6 +5685,7 @@ export default function SuperAdminPage() {
       case 'queue':      return <QueueView />
       case 'audit':      return <AuditView />
       case 'reports':    return <ReportsView />
+      case 'sitemap':    return <SitemapView />
       default:           return <SimpleView title={viewTitles[active]} />
     }
   }

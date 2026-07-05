@@ -20,6 +20,7 @@ declare global {
 }
 
 let lastDedupAt = 0   // آخرین باری که پاک‌سازیِ تکراری‌ها اجرا شد (throttle برای O(n²))
+let lastSitemapAt = 0 // آخرین بررسیِ شاردهای سایت‌مپ (هشدارِ سوپرادمین برای شاردِ جدید)
 async function tick(): Promise<{ due: number; synced: number }> {
   const g = globalThis.__mjCron
   if (!g || g.running) return { due: 0, synced: 0 }
@@ -50,6 +51,11 @@ async function tick(): Promise<{ due: number; synced: number }> {
     if (synced && Date.now() - lastDedupAt > 30 * 60 * 1000) {
       lastDedupAt = Date.now()
       try { const { dedupeListings } = await import('./listing-dedupe'); dedupeListings() } catch {}
+    }
+    // بررسیِ شاردهای سایت‌مپ هر ۱ ساعت — اگر شاردِ جدیدی ساخته شد به سوپرادمین هشدار می‌دهد.
+    if (Date.now() - lastSitemapAt > 60 * 60 * 1000) {
+      lastSitemapAt = Date.now()
+      try { const { checkNewShards } = await import('./sitemap-store'); await checkNewShards() } catch {}
     }
   } finally { g.running = false }
   return { due: due.length, synced }
