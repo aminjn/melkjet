@@ -207,6 +207,22 @@ export function RecordsPanel({ records, terms, post }: { records: ProRecord[]; t
   )
 }
 
+// مودالِ سادهٔ مشترک.
+export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ ...card, width: 'min(560px,100%)', maxHeight: '90vh', overflowY: 'auto', padding: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>{title}</h3>
+          <button onClick={onClose} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: 22 }}>×</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  )
+}
+export const btnGold: React.CSSProperties = { padding: '8px 15px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }
+
 // حالتِ «وارد شوید» برای کاربرِ بدونِ نشست.
 export function LoginGate() {
   return (
