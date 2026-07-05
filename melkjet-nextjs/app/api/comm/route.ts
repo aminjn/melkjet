@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listPackages, setPackages, getCredit, grantCredit, createOrder, createPlanOrder, createPromoOrder, listOrders, approveOrder, rejectOrder, getTokenUsage } from '@/app/lib/comm-store'
-import { listActive } from '@/app/lib/plan-store'
-import { PROMO_TIERS, promoTierOf } from '@/app/lib/promotion-store'
+import { listPackages, setPackages, getCredit, grantCredit, createOrder, createPlanOrder, createPromoOrder, createBundleOrder, listOrders, approveOrder, rejectOrder, getTokenUsage } from '@/app/lib/comm-store'
+import { listActive, getPlan } from '@/app/lib/plan-store'
+import { promoTierOf, promoDiscountForPlanName, PROMO_BUNDLES, tiersForRole, bundleOf } from '@/app/lib/promotion-store'
 import { getProfile } from '@/app/lib/profile-store'
+import { getAccount, dashForRole } from '@/app/lib/account-store'
+
+// تخفیفِ پروموتِ کاربر از روی پلنِ اشتراکِ حسابش.
+const discountFor = (phone: string) => { try { return promoDiscountForPlanName(getPlan(getAccount(phone)?.plan || '')?.name) } catch { return 0 } }
+// داشبوردِ نقشِ کاربر (super_admin → /pros تا کاتالوگِ کامل ببیند).
+const dashFor = (phone: string, role?: string) => role === 'super_admin' ? '/pros' : dashForRole(getAccount(phone)?.role)
 
 // ارتباطات: پکیج‌های شارژ + اعتبارِ کاربر + سفارش‌ها.
 export async function GET(req: NextRequest) {
@@ -15,8 +21,9 @@ export async function GET(req: NextRequest) {
     if (s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
     return NextResponse.json({ packages: await listPackages(false), orders: await listOrders() }, { headers: { 'Cache-Control': 'no-store' } })
   }
-  // نمای کاربر: پکیج‌های فعال + اعتبارِ خودش + سفارش‌های خودش
-  return NextResponse.json({ packages: await listPackages(true), credit: await getCredit(s.phone), orders: await listOrders(s.phone), tokenUsed: await getTokenUsage(s.phone), promoTiers: PROMO_TIERS }, { headers: { 'Cache-Control': 'no-store' } })
+  // نمای کاربر: پکیج‌های فعال + اعتبارِ خودش + سفارش‌های خودش + کاتالوگِ پروموتِ نقش‌محور
+  const dash = dashFor(s.phone, s.role)
+  return NextResponse.json({ packages: await listPackages(true), credit: await getCredit(s.phone), orders: await listOrders(s.phone), tokenUsed: await getTokenUsage(s.phone), promoTiers: tiersForRole(dash), promoBundles: PROMO_BUNDLES.filter(b => b.forRoles.includes(dash)), promoDiscount: discountFor(s.phone) }, { headers: { 'Cache-Control': 'no-store' } })
 }
 
 export async function POST(req: NextRequest) {
@@ -52,7 +59,16 @@ export async function POST(req: NextRequest) {
       const p = getProfile(s.phone); targetName = (p.businessName || p.displayName || '').trim() || undefined
     }
     if (!targetId) return NextResponse.json({ error: 'موردِ پروموت مشخص نیست' }, { status: 400 })
-    const r = await createPromoOrder(s.phone, { tierId: t.id, targetId, targetName }, { gateway: b.gateway ? String(b.gateway) : undefined, receipt: b.receipt ? String(b.receipt).slice(0, 120) : undefined })
+    const r = await createPromoOrder(s.phone, { tierId: t.id, targetId, targetName, discountPct: discountFor(s.phone) }, { gateway: b.gateway ? String(b.gateway) : undefined, receipt: b.receipt ? String(b.receipt).slice(0, 120) : undefined })
+    return r.ok ? NextResponse.json({ ok: true, order: r.order }) : NextResponse.json({ error: r.error }, { status: 400 })
+  }
+
+  if (act === 'orderBundle') {
+    const bundle = bundleOf(String(b.bundleId || ''))
+    if (!bundle) return NextResponse.json({ error: 'باندلِ پروموت یافت نشد' }, { status: 400 })
+    // باندل همیشه روی پروفایلِ خودِ کاربر فعال می‌شود؛ نامش را سرور برمی‌دارد.
+    const p = getProfile(s.phone); const targetName = (p.businessName || p.displayName || '').trim() || undefined
+    const r = await createBundleOrder(s.phone, { bundleId: bundle.id, discountPct: discountFor(s.phone), targetName }, { gateway: b.gateway ? String(b.gateway) : undefined, receipt: b.receipt ? String(b.receipt).slice(0, 120) : undefined })
     return r.ok ? NextResponse.json({ ok: true, order: r.order }) : NextResponse.json({ error: r.error }, { status: 400 })
   }
 

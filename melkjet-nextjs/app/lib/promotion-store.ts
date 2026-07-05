@@ -15,19 +15,100 @@ export const PROMO_SLOTS: { id: string; label: string; target: 'listing' | 'dire
   { id: 'directory_top', label: 'صفحهٔ مشاوران — مشاور ویژه', target: 'directory', where: 'بالای فهرست مشاوران' },
   { id: 'store_featured', label: 'فروشگاه — محصول ویژه', target: 'product', where: 'محصول برجستهٔ فروشگاه' },
   { id: 'presale_featured', label: 'پیش‌فروش — پروژهٔ ویژه', target: 'listing', where: 'پروژهٔ برجستهٔ پیش‌فروش' },
+  { id: 'home_trending', label: 'صفحهٔ خانه — آگهی‌های ترند', target: 'listing', where: 'بخش «ترند/داغِ» صفحهٔ اصلی' },
 ]
 export function slotOf(id: string) { return PROMO_SLOTS.find(s => s.id === id) }
 
-// بسته‌های خودسرویسِ پروموت (کاربر خودش می‌خرد؛ سوپرادمین تأیید می‌کند). قیمت‌ها سمتِ سرور تعریف می‌شوند.
-export interface PromoTier { id: string; slot: string; target: 'profile' | 'listing'; days: number; name: string; price: number; desc: string; forRoles?: string[] }
+// موتورِ پروموت (نقش‌محور): کاربر خودش می‌خرد؛ سوپرادمین تأیید می‌کند. قیمت‌ها سمتِ سرور تعریف می‌شوند.
+// پروموت جدا از اشتراک است؛ حتی کاربرانِ رایگان هم پروموت می‌خرند. `kind` = نشانِ فارسیِ کوتاه،
+// `forRoles` = داشبوردهایی که این بسته را می‌بینند.
+export interface PromoTier { id: string; slot: string; target: 'profile' | 'listing'; days: number; name: string; price: number; desc: string; kind: string; forRoles?: string[] }
+const LISTING_ROLES = ['/buyer', '/pros', '/agency', '/builder']
 export const PROMO_TIERS: PromoTier[] = [
-  { id: 'dir_featured_30', slot: 'directory_top', target: 'profile', days: 30, name: 'نشانِ «ویژه» در دایرکتوری', price: 199000, desc: 'نمایش با نشانِ ★ ویژه و اولویتِ بالاتر در فهرستِ متخصصان — ۳۰ روز' },
-  { id: 'dir_home_30', slot: 'home_advisors', target: 'profile', days: 30, name: 'نمایش در «متخصصانِ برترِ» صفحهٔ اصلی', price: 349000, desc: 'معرفیِ شما در بخشِ متخصصانِ برترِ صفحهٔ نخستِ ملک‌جت — ۳۰ روز' },
-  { id: 'listing_home_7', slot: 'home_featured', target: 'listing', days: 7, name: 'آگهیِ ویژه در صفحهٔ اصلی', price: 149000, desc: 'نمایشِ آگهیِ شما در «املاکِ ویژه» صفحهٔ اصلی — ۷ روز' },
-  { id: 'listing_search_7', slot: 'search_top', target: 'listing', days: 7, name: 'نردبان — بالای نتایجِ جستجو', price: 99000, desc: 'قرارگرفتنِ آگهیِ شما بالای نتایجِ جستجو — ۷ روز' },
-  { id: 'listing_neighborhood_7', slot: 'neighborhood_featured', target: 'listing', days: 7, name: 'آگهیِ ویژهٔ محله', price: 79000, desc: 'آگهیِ برجستهٔ صفحهٔ محلهٔ ملک — ۷ روز' },
+  // ── آگهی/پروژه (listing) — نردبان/ویژه/VIP/صفحهٔ اول/ترند ──
+  { id: 'l_ladder_1d', slot: 'search_top', target: 'listing', days: 1, name: 'نردبان ۲۴ ساعت', price: 49000, kind: 'نردبان', forRoles: LISTING_ROLES, desc: 'قرارگرفتنِ آگهیِ شما بالای نتایجِ جستجو — ۲۴ ساعت' },
+  { id: 'l_ladder_7d', slot: 'search_top', target: 'listing', days: 7, name: 'نردبان ۷ روز', price: 149000, kind: 'نردبان', forRoles: LISTING_ROLES, desc: 'قرارگرفتنِ مکررِ آگهیِ شما بالای نتایجِ جستجو — ۷ روز' },
+  { id: 'l_featured_7d', slot: 'home_featured', target: 'listing', days: 7, name: 'ویژه ۷ روز', price: 199000, kind: 'ویژه', forRoles: LISTING_ROLES, desc: 'نمایشِ آگهیِ شما در «املاکِ ویژه» صفحهٔ اصلی — ۷ روز' },
+  { id: 'l_vip_7d', slot: 'home_featured', target: 'listing', days: 7, name: 'VIP ۷ روز', price: 299000, kind: 'VIP', forRoles: LISTING_ROLES, desc: 'نشانِ VIP + بالاترین اولویتِ نمایش در «املاکِ ویژه» — ۷ روز' },
+  { id: 'l_frontpage_7d', slot: 'home_featured', target: 'listing', days: 7, name: 'صفحهٔ اول ۷ روز', price: 499000, kind: 'صفحه اول', forRoles: LISTING_ROLES, desc: 'نمایشِ برجستهٔ آگهیِ شما در صدرِ صفحهٔ نخستِ ملک‌جت — ۷ روز' },
+  { id: 'l_trending_7d', slot: 'home_trending', target: 'listing', days: 7, name: 'ترند ۷ روز', price: 399000, kind: 'ترند', forRoles: LISTING_ROLES, desc: 'نمایشِ آگهیِ شما در بخشِ «ترند/داغِ» صفحهٔ اصلی — ۷ روز' },
+
+  // ── مشاور /pros ──
+  { id: 'pros_featured', slot: 'directory_top', target: 'profile', days: 30, name: 'مشاورِ ویژه', price: 199000, kind: 'ویژه', forRoles: ['/pros'], desc: 'نشانِ ★ ویژه و اولویتِ بالاتر در فهرستِ مشاوران — ۳۰ روز' },
+  { id: 'pros_top', slot: 'directory_top', target: 'profile', days: 30, name: 'مشاورِ منتخبِ منطقه', price: 399000, kind: 'منتخب', forRoles: ['/pros'], desc: 'نمایش به‌عنوانِ مشاورِ منتخبِ منطقهٔ شما در صدرِ فهرست — ۳۰ روز' },
+  { id: 'pros_home', slot: 'home_advisors', target: 'profile', days: 30, name: 'نمایش در صفحهٔ اصلی', price: 349000, kind: 'صفحه اول', forRoles: ['/pros'], desc: 'معرفیِ شما در بخشِ «مشاورانِ برترِ» صفحهٔ نخست — ۳۰ روز' },
+
+  // ── آژانس /agency ──
+  { id: 'agency_top', slot: 'directory_top', target: 'profile', days: 30, name: 'آژانسِ برتر', price: 999000, kind: 'برتر', forRoles: ['/agency'], desc: 'بالاترین اولویتِ نمایش + نشانِ برترِ آژانس در دایرکتوری — ۳۰ روز' },
+  { id: 'agency_featured', slot: 'directory_top', target: 'profile', days: 30, name: 'آژانسِ ویژه', price: 499000, kind: 'ویژه', forRoles: ['/agency'], desc: 'نشانِ ★ ویژه و اولویتِ بالاتر برای آژانسِ شما — ۳۰ روز' },
+  { id: 'agency_hero', slot: 'home_advisors', target: 'profile', days: 7, name: 'بنرِ Hero آژانس', price: 1500000, kind: 'VIP', forRoles: ['/agency'], desc: 'نمایشِ ویژهٔ آژانسِ شما در بنرِ قهرمانِ صفحهٔ اصلی — ۷ روز' },
+
+  // ── معمار /architect ──
+  { id: 'arch_featured', slot: 'directory_top', target: 'profile', days: 30, name: 'معمارِ ویژه', price: 199000, kind: 'ویژه', forRoles: ['/architect'], desc: 'نشانِ ★ ویژه و اولویتِ بالاتر در فهرستِ معماران — ۳۰ روز' },
+  { id: 'arch_spotlight', slot: 'home_advisors', target: 'profile', days: 30, name: 'نمایشِ نمونه‌کار (Spotlight)', price: 349000, kind: 'منتخب', forRoles: ['/architect'], desc: 'معرفیِ نمونه‌کارهای شما در صفحهٔ اصلی — ۳۰ روز' },
+
+  // ── پیمانکار /contractor ──
+  { id: 'contractor_featured', slot: 'directory_top', target: 'profile', days: 30, name: 'پیمانکارِ ویژه', price: 199000, kind: 'ویژه', forRoles: ['/contractor'], desc: 'نشانِ ★ ویژه و اولویتِ بالاتر در فهرستِ پیمانکاران — ۳۰ روز' },
+  { id: 'contractor_top', slot: 'directory_top', target: 'profile', days: 30, name: 'پیمانکارِ برتر', price: 349000, kind: 'برتر', forRoles: ['/contractor'], desc: 'نمایش به‌عنوانِ پیمانکارِ برتر در صدرِ فهرست — ۳۰ روز' },
+
+  // ── کارشناس /appraiser ──
+  { id: 'appraiser_verified', slot: 'directory_top', target: 'profile', days: 30, name: 'کارشناسِ تأییدشده', price: 199000, kind: 'تأییدشده', forRoles: ['/appraiser'], desc: 'نشانِ تأییدشده و اعتمادِ بیشتر در فهرستِ کارشناسان — ۳۰ روز' },
+  { id: 'appraiser_top', slot: 'directory_top', target: 'profile', days: 30, name: 'کارشناسِ برتر', price: 349000, kind: 'برتر', forRoles: ['/appraiser'], desc: 'نمایش به‌عنوانِ کارشناسِ برتر در صدرِ فهرست — ۳۰ روز' },
+
+  // ── دفترِ حقوقی /lawfirm ──
+  { id: 'lawfirm_top', slot: 'directory_top', target: 'profile', days: 30, name: 'دفترِ حقوقیِ برتر', price: 399000, kind: 'برتر', forRoles: ['/lawfirm'], desc: 'بالاترین اولویتِ نمایش + نشانِ برتر برای دفترِ حقوقیِ شما — ۳۰ روز' },
+  { id: 'lawfirm_featured', slot: 'directory_top', target: 'profile', days: 30, name: 'وکیلِ ویژه', price: 199000, kind: 'ویژه', forRoles: ['/lawfirm'], desc: 'نشانِ ★ ویژه و اولویتِ بالاتر در فهرستِ حقوقی — ۳۰ روز' },
+
+  // ── وکیل /legal ──
+  { id: 'legal_featured', slot: 'directory_top', target: 'profile', days: 30, name: 'وکیلِ ویژه', price: 199000, kind: 'ویژه', forRoles: ['/legal'], desc: 'نشانِ ★ ویژه و اولویتِ بالاتر در فهرستِ وکلا — ۳۰ روز' },
+  { id: 'legal_top', slot: 'directory_top', target: 'profile', days: 30, name: 'وکیلِ برتر', price: 349000, kind: 'برتر', forRoles: ['/legal'], desc: 'نمایش به‌عنوانِ وکیلِ برتر در صدرِ فهرست — ۳۰ روز' },
+
+  // ── مالی /finance ──
+  { id: 'finance_featured', slot: 'directory_top', target: 'profile', days: 30, name: 'شریکِ مالیِ ویژه', price: 499000, kind: 'ویژه', forRoles: ['/finance'], desc: 'نشانِ ★ ویژه و اولویتِ بالاتر در فهرستِ شرکای مالی — ۳۰ روز' },
+  { id: 'finance_home', slot: 'home_advisors', target: 'profile', days: 30, name: 'نمایش در صفحهٔ اصلی', price: 999000, kind: 'صفحه اول', forRoles: ['/finance'], desc: 'معرفیِ شما در بخشِ برترِ صفحهٔ نخستِ ملک‌جت — ۳۰ روز' },
+
+  // ── دفترخانه /notary ──
+  { id: 'notary_verified', slot: 'directory_top', target: 'profile', days: 30, name: 'دفترخانهٔ تأییدشده', price: 199000, kind: 'تأییدشده', forRoles: ['/notary'], desc: 'نشانِ تأییدشده و اعتمادِ بیشتر در فهرستِ دفاترِ اسناد — ۳۰ روز' },
+  { id: 'notary_top', slot: 'directory_top', target: 'profile', days: 30, name: 'دفترخانهٔ برتر', price: 349000, kind: 'برتر', forRoles: ['/notary'], desc: 'نمایش به‌عنوانِ دفترخانهٔ برتر در صدرِ فهرست — ۳۰ روز' },
+
+  // ── سازنده /builder (پروفایل؛ آگهی‌های پروژه از بسته‌های listing استفاده می‌کنند) ──
+  { id: 'builder_featured', slot: 'directory_top', target: 'profile', days: 30, name: 'سازندهٔ ویژه', price: 499000, kind: 'ویژه', forRoles: ['/builder'], desc: 'نشانِ ★ ویژه و اولویتِ بالاتر برای سازندهٔ شما در دایرکتوری — ۳۰ روز' },
+
+  // ── تأمین‌کنندهٔ مصالح /materials ──
+  { id: 'materials_featured', slot: 'directory_top', target: 'profile', days: 30, name: 'تأمین‌کنندهٔ ویژه', price: 199000, kind: 'ویژه', forRoles: ['/materials'], desc: 'نشانِ ★ ویژه و اولویتِ بالاتر در فهرستِ تأمین‌کنندگان — ۳۰ روز' },
+  { id: 'materials_top', slot: 'directory_top', target: 'profile', days: 30, name: 'تأمین‌کنندهٔ برتر', price: 499000, kind: 'برتر', forRoles: ['/materials'], desc: 'نمایش به‌عنوانِ تأمین‌کنندهٔ برتر در صدرِ فهرست — ۳۰ روز' },
+  { id: 'materials_product', slot: 'store_featured', target: 'listing', days: 7, name: 'محصولِ ویژهٔ فروشگاه', price: 149000, kind: 'ویژه', forRoles: ['/materials'], desc: 'نمایشِ محصولِ شما به‌عنوانِ محصولِ برجستهٔ فروشگاه — ۷ روز' },
 ]
 export function promoTierOf(id: string) { return PROMO_TIERS.find(t => t.id === id) }
+// بسته‌های قابلِ نمایش برای یک داشبورد (نقش) — اگر forRoles نداشته باشد برای همه است.
+export function tiersForRole(dash: string): PromoTier[] { return PROMO_TIERS.filter(t => !t.forRoles || t.forRoles.includes(dash)) }
+
+// ── تخفیفِ پروموت بر اساسِ پلنِ اشتراکِ کاربر (کلیدواژهٔ نامِ پلن → درصد) ──
+export const PLAN_PROMO_DISCOUNT: Record<string, number> = {
+  'رایگان': 0, 'free': 0,
+  'starter': 5, 'basic': 5, 'lite': 5, 'team': 5,
+  'growth': 10, 'advanced': 10, 'pro': 10, 'plus': 10,
+  'professional': 15, 'business': 15, 'expert': 15,
+  'elite': 20, 'premium': 20, 'max': 20,
+  'enterprise': 30,
+}
+// بیشترین تخفیفِ منطبق با نامِ پلن (case-insensitive contains). پیش‌فرض ۰.
+export function promoDiscountForPlanName(name?: string): number {
+  const n = String(name || '').toLowerCase().trim()
+  if (!n) return 0
+  let best = 0
+  for (const [k, v] of Object.entries(PLAN_PROMO_DISCOUNT)) if (n.includes(k) && v > best) best = v
+  return best
+}
+
+// ── باندل‌های پروموت (چند بسته با یک قیمتِ تخفیف‌خورده) — فقط بسته‌های profile تا فعال‌سازی ساده باشد ──
+export interface PromoBundle { id: string; name: string; desc: string; tierIds: string[]; price: number; forRoles: string[] }
+export const PROMO_BUNDLES: PromoBundle[] = [
+  { id: 'bundle_pros_gold', name: 'باندلِ «مشاورِ طلایی»', desc: 'ویژه + منتخبِ منطقه + نمایش در صفحهٔ اصلی — یکجا و اقتصادی', tierIds: ['pros_featured', 'pros_top', 'pros_home'], price: 599000, forRoles: ['/pros'] },
+  { id: 'bundle_arch_pro', name: 'باندلِ «معمارِ حرفه‌ای»', desc: 'معمارِ ویژه + نمایشِ نمونه‌کار (Spotlight) — یکجا', tierIds: ['arch_featured', 'arch_spotlight'], price: 449000, forRoles: ['/architect'] },
+  { id: 'bundle_legal_top', name: 'باندلِ «حقوقیِ برتر»', desc: 'وکیلِ ویژه + دفترِ حقوقیِ برتر — یکجا', tierIds: ['lawfirm_featured', 'lawfirm_top'], price: 499000, forRoles: ['/lawfirm', '/legal'] },
+]
+export function bundleOf(id: string) { return PROMO_BUNDLES.find(b => b.id === id) }
 
 export interface Promotion {
   id: string; slot: string; targetId: string; title: string; image?: string; price?: string; location?: string

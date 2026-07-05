@@ -27,7 +27,9 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
   const [packages, setPackages] = useState<Pkg[]>([])
   const [credit, setCredit] = useState<Record<string, number>>({ sms: 0, email: 0, token: 0 })
   const [tokenUsed, setTokenUsed] = useState(0)
-  const [promoTiers, setPromoTiers] = useState<{ id: string; target: string; name: string; price: number; desc: string; days: number }[]>([])
+  const [promoTiers, setPromoTiers] = useState<{ id: string; target: string; name: string; price: number; desc: string; days: number; kind?: string }[]>([])
+  const [promoBundles, setPromoBundles] = useState<{ id: string; name: string; desc: string; tierIds: string[]; price: number }[]>([])
+  const [promoDiscount, setPromoDiscount] = useState(0)
   const [orders, setOrders] = useState<Order[]>([])
   const [period, setPeriod] = useState<Period>('monthly')
   const priceOf = (p: Plan) => period === 'yearly' ? p.priceYearly : period === '3m' ? (p.price3m || p.priceMonthly * 3) : period === '6m' ? (p.price6m || p.priceMonthly * 6) : p.priceMonthly
@@ -35,7 +37,7 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
   const [busy, setBusy] = useState('')
   const [msg, setMsg] = useState('')
 
-  const loadComm = () => fetch('/api/comm').then(r => r.ok ? r.json() : null).then(d => { if (d) { setCredit(d.credit || { sms: 0, email: 0, token: 0 }); setOrders(d.orders || []); setTokenUsed(d.tokenUsed || 0); setPromoTiers(d.promoTiers || []) } }).catch(() => {})
+  const loadComm = () => fetch('/api/comm').then(r => r.ok ? r.json() : null).then(d => { if (d) { setCredit(d.credit || { sms: 0, email: 0, token: 0 }); setOrders(d.orders || []); setTokenUsed(d.tokenUsed || 0); setPromoTiers(d.promoTiers || []); setPromoBundles(d.promoBundles || []); setPromoDiscount(Number(d.promoDiscount) || 0) } }).catch(() => {})
   const load = () => {
     fetch(`/api/plans?dashboard=${encodeURIComponent(dashboard)}`).then(r => r.ok ? r.json() : null).then(d => {
       if (!d) return
@@ -46,10 +48,13 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
   }
   useEffect(() => { load() }, [dashboard])
 
-  const [checkout, setCheckout] = useState<{ kind: 'plan' | 'pkg' | 'promo'; id: string; name: string; price: number } | null>(null)
+  // قیمتِ تخفیف‌خوردهٔ پروموت با پلنِ کاربر (هم‌راستا با سرور).
+  const discPrice = (p: number) => Math.round(p * (1 - promoDiscount / 100))
+  const [checkout, setCheckout] = useState<{ kind: 'plan' | 'pkg' | 'promo' | 'bundle'; id: string; name: string; price: number } | null>(null)
   const buyPlan = (p: Plan) => setCheckout({ kind: 'plan', id: p.id, name: p.name, price: priceOf(p) })
   const buyPkg = (p: Pkg) => setCheckout({ kind: 'pkg', id: p.id, name: p.name, price: p.price })
-  const buyPromo = (t: { id: string; name: string; price: number }) => setCheckout({ kind: 'promo', id: t.id, name: t.name, price: t.price })
+  const buyPromo = (t: { id: string; name: string; price: number }) => setCheckout({ kind: 'promo', id: t.id, name: t.name, price: discPrice(t.price) })
+  const buyBundle = (b: { id: string; name: string; price: number }) => setCheckout({ kind: 'bundle', id: b.id, name: b.name, price: discPrice(b.price) })
   const submitOrder = async (gateway: string, receipt: string) => {
     if (!checkout) return
     setBusy('checkout'); setMsg('')
@@ -58,7 +63,9 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
         ? { action: 'orderPlan', planId: checkout.id, period, gateway, receipt }
         : checkout.kind === 'promo'
           ? { action: 'orderPromo', tierId: checkout.id, gateway, receipt }
-          : { action: 'order', packageId: checkout.id, gateway, receipt }
+          : checkout.kind === 'bundle'
+            ? { action: 'orderBundle', bundleId: checkout.id, gateway, receipt }
+            : { action: 'order', packageId: checkout.id, gateway, receipt }
       const r = await fetch('/api/comm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       const d = await r.json()
       setMsg(d.ok ? `✓ سفارشِ «${checkout.name}» ثبت شد. پس از تأییدِ پرداخت، فعال می‌شود.` : `⚠ ${d.error || 'خطا'}`)
@@ -159,22 +166,70 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
       {/* پروموت و تبلیغات — دیده‌شدنِ بیشتر */}
       {promoTiers.length > 0 && (
         <>
-          <div style={{ fontSize: 16, fontWeight: 900, marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>🚀 پروموت و تبلیغات</div>
+          <div style={{ fontSize: 16, fontWeight: 900, marginTop: 6, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            🚀 پروموت و تبلیغات
+            {promoDiscount > 0 && <span style={{ background: 'var(--goldDim)', border: '1px solid var(--gold)', color: 'var(--gold)', fontSize: 11, fontWeight: 800, borderRadius: 999, padding: '3px 11px' }}>٪{fa(promoDiscount)} تخفیفِ پلنِ شما روی پروموت اعمال می‌شود</span>}
+          </div>
           <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: -8 }}>با پروموت، کسب‌وکار یا آگهیِ شما در جایگاه‌های پربازدیدِ ملک‌جت (صفحهٔ اصلی، جستجو، دایرکتوری) برجسته می‌شود.</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(230px,1fr))', gap: 12 }}>
             {promoTiers.map(t => {
               const isProfile = t.target === 'profile'
+              const dp = discPrice(t.price)
               return (
                 <div key={t.id} style={{ background: 'var(--surface)', border: `1px solid ${isProfile ? 'var(--gold)' : 'var(--line)'}`, borderRadius: 16, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 17 }}>{isProfile ? '⭐' : '📣'}</span>
                     <div style={{ fontSize: 13.5, fontWeight: 800 }}>{t.name}</div>
+                    {t.kind && <span style={{ background: 'var(--bg2)', border: '1px solid var(--line2)', color: 'var(--gold)', fontSize: 10, fontWeight: 800, borderRadius: 999, padding: '2px 9px' }}>{t.kind}</span>}
                   </div>
                   <div style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.8, flex: 1 }}>{t.desc}</div>
-                  <div style={{ fontSize: 16, fontWeight: 900, color: 'var(--gold)' }}>{fa(t.price)} <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--muted)' }}>تومان · {fa(t.days)} روز</span></div>
+                  <div style={{ fontSize: 16, fontWeight: 900, color: 'var(--gold)', display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+                    {promoDiscount > 0 && <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)', textDecoration: 'line-through' }}>{fa(t.price)}</span>}
+                    <span>{fa(dp)}</span>
+                    <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--muted)' }}>تومان · {fa(t.days)} روز</span>
+                  </div>
                   {isProfile
                     ? <button onClick={() => buyPromo(t)} disabled={!!busy} style={{ marginTop: 4, padding: '9px', borderRadius: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 12.5, border: 'none', cursor: 'pointer', fontFamily: FONT }}>پروموتِ کسب‌وکارِ من</button>
                     : <div style={{ marginTop: 4, padding: '9px', borderRadius: 10, background: 'var(--bg2)', border: '1px dashed var(--line2)', color: 'var(--muted)', fontSize: 11.5, textAlign: 'center' }}>از دکمهٔ «پروموت» رویِ آگهیِ خود</div>}
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
+
+      {/* باندل‌های پروموت — چند بسته با قیمتِ اقتصادی */}
+      {promoBundles.length > 0 && (
+        <>
+          <div style={{ fontSize: 15, fontWeight: 900, marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>🎁 باندل‌های پروموت</div>
+          <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: -8 }}>چند بستهٔ پروموت را یکجا و با قیمتِ اقتصادی‌تر تهیه کنید — روی پروفایلِ شما فعال می‌شوند.</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(250px,1fr))', gap: 12 }}>
+            {promoBundles.map(b => {
+              const dp = discPrice(b.price)
+              const incl = b.tierIds.map(tid => promoTiers.find(t => t.id === tid)?.name).filter(Boolean) as string[]
+              return (
+                <div key={b.id} style={{ background: 'linear-gradient(160deg, rgba(212,175,55,.1), var(--surface) 60%)', border: '1.5px solid var(--gold)', borderRadius: 16, padding: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <span style={{ fontSize: 18 }}>🎁</span>
+                    <div style={{ fontSize: 14, fontWeight: 900 }}>{b.name}</div>
+                  </div>
+                  <div style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.8 }}>{b.desc}</div>
+                  {incl.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: 1 }}>
+                      {incl.map((n, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: 'var(--text)' }}>
+                          <span style={{ flexShrink: 0, width: 16, height: 16, borderRadius: '50%', background: 'var(--goldDim)', color: 'var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800 }}>✓</span>
+                          <span>{n}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 17, fontWeight: 900, color: 'var(--gold)', display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+                    {promoDiscount > 0 && <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)', textDecoration: 'line-through' }}>{fa(b.price)}</span>}
+                    <span>{fa(dp)}</span>
+                    <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--muted)' }}>تومان</span>
+                  </div>
+                  <button onClick={() => buyBundle(b)} disabled={!!busy} style={{ marginTop: 4, padding: '10px', borderRadius: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 12.5, border: 'none', cursor: 'pointer', fontFamily: FONT }}>تهیهٔ باندل</button>
                 </div>
               )
             })}
