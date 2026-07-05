@@ -52,8 +52,10 @@ export async function POST(req: NextRequest) {
         location: [lst.city, lst.neighborhood].filter(Boolean).join('، ') || lst.location,
         excerpt: lst.description,
         meta: { 'نوع معامله': lst.deal === 'rent' ? 'اجاره' : 'فروش', 'متراژ': lst.area ? `${lst.area} متر` : '', 'اتاق خواب': String(lst.rooms || '') },
-      })
+      }, { excludeId: lst.publicId })
       if (mod.status === 'rejected') return NextResponse.json({ blocked: true, reason: mod.reason, error: `این آگهی در ممیزی رد شد: ${mod.reason}` })
+      // آگهیِ تکراری هرگز منتشر نمی‌شود (تشخیصِ خودکار — پیش از انتشار).
+      if (mod.status === 'duplicate') return NextResponse.json({ blocked: true, duplicate: true, reason: mod.reason, error: `این آگهی تکراری است و منتشر نشد: ${mod.reason}` })
       const l = await publishListing(o, String(b.id))
       if (l?.publicId) { warmEnrichment(l.publicId); if (mod.status === 'approved') await setModeration(l.publicId, 'approved', mod.reason, mod.score) }
       return l ? NextResponse.json({ ok: true, listing: l, publicId: l.publicId, moderation: mod }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 })

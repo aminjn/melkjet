@@ -2,8 +2,11 @@ import { pendingForModeration, setModeration, setModerationBatch, Item, ItemStat
 import { chatCompleteSafe, agentModel } from './gapgpt'
 import { predict, learn, noteDecision } from './moderation-ml'
 import { getAdminData } from './admin-store'
+import { buildDupIndex, dupMasterInIndex, type DupCandidate } from './listing-dedupe'
 
-export type ModVia = 'ml' | 'ai' | 'none'
+export type ModVia = 'ml' | 'ai' | 'dup' | 'none'
+
+const DUP_REASON = 'آگهیِ تکراری — مشابهِ یک آگهیِ منتشرشدهٔ دیگر (تشخیصِ خودکار)'
 
 // معیارهای پیش‌فرض (اگر ادمین چیزی تعریف نکرده باشد).
 export const DEFAULT_CRITERIA = `- آگهیِ معتبر: عنوانِ روشن، قیمتِ مشخص و واقعی، موقعیت و توضیحاتِ کافی → امتیازِ بالا.
@@ -68,8 +71,14 @@ async function getVerdict(it: Item, model: string, cfg: ModConfig) {
 
 // تصمیمِ هوشمند برای یک آگهی: اول مدلِ یادگیرنده؛ اگر آماده و مطمئن بود خودش تصمیم می‌گیرد
 // (بدونِ AI). وگرنه AI تصمیم می‌گیرد و مدل از تصمیمش یاد می‌گیرد. (persist نمی‌کند.)
-async function smartVerdict(it: Item, model: string | null): Promise<{ id: string; title: string; status: ItemStatus; reason: string; score: number; via: ModVia }> {
+async function smartVerdict(it: Item, model: string | null, dupIndex?: DupCandidate[]): Promise<{ id: string; title: string; status: ItemStatus; reason: string; score: number; via: ModVia }> {
   const cfg = modConfig()
+  // گِیتِ تکرار (قطعی، پیش از ML/AI): آگهیِ تکراری هرگز منتشر نشود.
+  if (it.type === 'listing') {
+    const idx = dupIndex || await buildDupIndex()
+    const master = dupMasterInIndex(it, idx)
+    if (master) return { id: it.id, title: it.title, status: 'duplicate', score: 100, via: 'dup', reason: DUP_REASON }
+  }
   const p = predict(it)
   if (p.confident && cfg.autoMl) {
     noteDecision('ml')
@@ -89,8 +98,13 @@ export async function moderateOne(it: Item, model: string | null) {
 }
 
 // ممیزیِ «قبل از انتشار» روی فیلدهای خام (بدونِ آیتمِ ذخیره‌شده) — برای آگهیِ مشاور/آژانس.
-export async function moderateFields(fields: { title: string; price?: string; location?: string; excerpt?: string; meta?: Record<string, string> }): Promise<{ status: ItemStatus; reason: string; score: number; via: ModVia }> {
-  const pseudo = { id: '__prepublish__', title: fields.title, price: fields.price, location: fields.location, excerpt: fields.excerpt, meta: fields.meta } as Item
+// excludeId = شناسهٔ آگهیِ عمومیِ فعلیِ همین آگهی (در بازانتشار) تا با نسخهٔ قبلیِ خودش «تکراری» شمرده نشود.
+export async function moderateFields(
+  fields: { title: string; price?: string; location?: string; excerpt?: string; meta?: Record<string, string> },
+  opts?: { excludeId?: string },
+): Promise<{ status: ItemStatus; reason: string; score: number; via: ModVia }> {
+  // type='listing' تا گِیتِ تکرار فعال شود؛ id=excludeId تا آگهیِ قبلیِ خودِ کاربر رد شود.
+  const pseudo = { id: opts?.excludeId || '__prepublish__', type: 'listing', title: fields.title, price: fields.price, location: fields.location, excerpt: fields.excerpt, meta: fields.meta } as Item
   const v = await smartVerdict(pseudo, moderationModel())
   return { status: v.status, reason: v.reason, score: v.score, via: v.via }
 }
@@ -119,9 +133,11 @@ export async function moderatePending(max = 300): Promise<{ moderated: number; r
   const queue = await pendingForModeration(max)
   if (!queue.length) return { moderated: 0, results: [] }
 
-  const results = await pool(queue, 5, (it) => smartVerdict(it, model))
-  // فقط مواردی که واقعاً تصمیم‌گیری شده‌اند را بنویس (pending را دست‌نخورده بگذار).
-  const decided = results.filter(r => r.status === 'approved' || r.status === 'rejected')
+  // ایندکسِ تکرار یک‌بار ساخته می‌شود (نه در هر آیتم) — گِیتِ خودکارِ تکرار برای کلِ صف.
+  const dupIndex = await buildDupIndex()
+  const results = await pool(queue, 5, (it) => smartVerdict(it, model, dupIndex))
+  // موارد تصمیم‌گرفته‌شده (تأیید/رد/تکراری) نوشته می‌شوند؛ pending دست‌نخورده می‌ماند.
+  const decided = results.filter(r => r.status === 'approved' || r.status === 'rejected' || r.status === 'duplicate')
   await setModerationBatch(decided.map(r => ({ id: r.id, status: r.status, reason: r.reason, score: r.score })))
   const err = (!model && decided.length === 0) ? 'مدلِ AI تنظیم نشده و دادهٔ یادگیری هنوز کافی نیست' : undefined
   return { moderated: decided.length, results, error: err }

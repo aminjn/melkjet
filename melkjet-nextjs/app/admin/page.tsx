@@ -468,6 +468,7 @@ function ListingsView() {
             <option value="pending">منتظر</option>
             <option value="approved">تأیید‌شده</option>
             <option value="rejected">رد‌شده</option>
+            <option value="duplicate">تکراری</option>
           </select>
           <select style={{ ...inp, ...(loc ? { borderColor: 'var(--gold)', color: 'var(--gold)', fontWeight: 700 } : {}) }} value={loc} onChange={e => setLoc(e.target.value)} title="فیلترِ محله/شهر">
             <option value="">همهٔ محله‌ها</option>

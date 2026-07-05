@@ -69,3 +69,32 @@ export async function isDuplicateListing(it: Item): Promise<boolean> {
   const others = (await listItems('listing')).filter(x => x.id !== it.id && (x.status === 'approved' || x.status === 'pending'))
   return others.some(o => similarity(fieldsOf(o), f) >= DUP_THRESHOLD)
 }
+
+// ── ایندکسِ سبکِ تشخیصِ تکرار (یک‌بار ساخته می‌شود، بارها بررسی) ──
+// برای گِیتِ خودکارِ ممیزیِ دسته‌ای: از محاسبهٔ دوبارهٔ fieldsOf در هر بررسی جلوگیری می‌کند.
+export interface DupCandidate { id: string; status: string; scrapedAt: number; f: Fields }
+export async function buildDupIndex(): Promise<DupCandidate[]> {
+  return (await listItems('listing'))
+    .filter(x => x.status === 'approved' || x.status === 'pending')
+    .map(x => ({ id: x.id, status: String(x.status), scrapedAt: x.scrapedAt || 0, f: fieldsOf(x) }))
+}
+// «مَستر»ِ تکرار برای یک آیتم را در ایندکس می‌یابد (اگر باشد). قانونِ نگهداریِ قدیمی‌تر:
+// یک نامزد فقط وقتی مَستر است که یا از قبل «approved» باشد، یا «pending»ِ قدیمی‌تر
+// (تساوی زمان → شناسهٔ کوچک‌تر). این تضمین می‌کند از هر خوشهٔ تکراری فقط یکی می‌ماند.
+export function dupMasterInIndex(it: Item, index: DupCandidate[]): DupCandidate | null {
+  const f = fieldsOf(it)
+  const at = it.scrapedAt || 0
+  for (const c of index) {
+    if (c.id === it.id) continue
+    const isMaster = c.status === 'approved' || c.scrapedAt < at || (c.scrapedAt === at && c.id < it.id)
+    if (!isMaster) continue
+    if (similarity(c.f, f) >= DUP_THRESHOLD) return c
+  }
+  return null
+}
+// تکِ آیتم: آیا تکراریِ یک آگهیِ قدیمی‌تر/منتشرشده است؟ نتیجه = خودِ مَستر (یا null).
+export async function findDuplicateOf(it: Item): Promise<Item | null> {
+  const m = dupMasterInIndex(it, await buildDupIndex())
+  if (!m) return null
+  return (await listItems('listing')).find(x => x.id === m.id) || null
+}
