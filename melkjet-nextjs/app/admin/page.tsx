@@ -14,7 +14,7 @@ import CatalogAdminView from './CatalogAdminView'
 type View =
   | 'overview' | 'scraper' | 'persiansaze' | 'listings' | 'products' | 'catalog' | 'geo' | 'moderation' | 'content' | 'studio' | 'articles' | 'categories' | 'crm' | 'api'
   | 'reports' | 'plans' | 'promos' | 'discounts' | 'ads' | 'users' | 'profiles' | 'roles' | 'connections'
-  | 'tracker' | 'sms' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags' | 'support' | 'payment' | 'aicost' | 'smscost' | 'sitemap'
+  | 'tracker' | 'sms' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags' | 'support' | 'payment' | 'aicost' | 'smscost' | 'sitemap' | 'agencyintel'
 
 interface NavItem { id: View; icon: string; label: string; badge?: string; badgeColor?: string }
 interface NavSection { title: string; items: NavItem[] }
@@ -45,6 +45,7 @@ const sections: NavSection[] = [
     items: [
       { id: 'users', icon: '◍', label: 'کاربران' },
       { id: 'profiles', icon: '👁', label: 'همه پروفایل‌ها' },
+      { id: 'agencyintel', icon: '🏢', label: 'هوشِ آژانس', badge: 'NEW', badgeColor: '#c9a84c' },
       { id: 'roles', icon: '🛡', label: 'نقش‌ها و دسترسی' },
       { id: 'crm',   icon: '◈', label: 'CRM کاربران' },
       { id: 'support', icon: '🛟', label: 'پشتیبانی' },
@@ -113,6 +114,7 @@ const viewTitles: Record<View, string> = {
   api:        'API و مدل‌های هوش مصنوعی',
   reports:    'گزارش‌ها و تحلیل داده',
   sitemap:    'مرکز سایت‌مپ و SEO',
+  agencyintel: 'هوشِ آژانس',
   plans:      'پلن‌ها و اشتراک‌ها',
   payment:    'درگاه‌های پرداخت',
   aicost:     'هزینه و قیمت‌گذاریِ AI',
@@ -1598,6 +1600,102 @@ interface PSState {
   profiles: { builders: number; withPhone: number; projects: number; revealedProjects?: number; pendingProjects?: number; quotaAvailable?: number | null; lastRevealAt?: string; accounts?: number }
   log: string
   revealLog: string
+}
+
+// ── هوشِ آژانس ───────────────────────────────────────────────────────────────
+interface OwnCluster { slug: string; advisors: { phone: string; name: string; type: string }[] }
+const PTYPE_LABEL: Record<string, string> = { pros: 'مشاور', agency: 'آژانس', builder: 'سازنده', architect: 'معمار', contractor: 'پیمانکار', materials: 'مصالح', legal: 'وکیل', lawfirm: 'دفتر حقوقی', finance: 'مالی', appraiser: 'کارشناس', notary: 'دفترخانه' }
+
+function AgencyIntelView() {
+  const [clusters, setClusters] = useState<OwnCluster[]>([])
+  const [agencyCount, setAgencyCount] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [slug, setSlug] = useState('')
+  const [sample, setSample] = useState(20)
+  const [busy, setBusy] = useState(false)
+  const [res, setRes] = useState<any>(null)
+  const [err, setErr] = useState('')
+  const fa = (n: any) => (Number(n) || 0).toLocaleString('fa-IR')
+
+  useEffect(() => { fetch('/api/admin/agency-intel', { cache: 'no-store' }).then(r => r.json()).then(j => { if (j.ok) { setClusters(j.clusters || []); setAgencyCount(j.agencyCount || 0) } }).finally(() => setLoading(false)) }, [])
+
+  const analyze = async () => {
+    if (!slug.trim()) return
+    setBusy(true); setErr(''); setRes(null)
+    try {
+      const r = await fetch('/api/admin/agency-intel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slug: slug.trim(), sample }) })
+      const j = await r.json()
+      if (j.ok) setRes(j); else setErr(j.error || 'خطا')
+    } catch { setErr('خطای شبکه') } finally { setBusy(false) }
+  }
+
+  const th: React.CSSProperties = { textAlign: 'right', fontSize: 11.5, color: 'var(--muted)', fontWeight: 700, padding: '8px 12px', borderBottom: '1px solid var(--line)' }
+  const td: React.CSSProperties = { fontSize: 12.5, padding: '8px 12px', borderBottom: '1px solid var(--line)' }
+  const inp: React.CSSProperties = { direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+  const multi = clusters.filter(c => c.advisors.length >= 2)
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* تحلیلِ برندِ دیوار */}
+      <Card>
+        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 6 }}>🏢 تحلیلِ برندِ دیوار</div>
+        <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.9, margin: '0 0 12px' }}>
+          slug یا لینکِ صفحهٔ pro/کسب‌وکارِ آژانس در دیوار را بده تا <b>تعدادِ دقیقِ آگهی</b> + <b>تخمینِ تعدادِ مشاور</b> (از شماره‌های متمایزِ آگهی‌ها) را بگیری.
+          نکته: شماره‌ها گِیت‌شده‌اند و reveal کند است؛ پس تخمین «حدِ پایین» است (اگر آژانس شمارهٔ مشترک بزند، کمتر نشان می‌دهد). نمونه‌گیری روی چند آگهیِ اول انجام می‌شود.
+        </p>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <input style={{ ...inp, flex: 1, minWidth: 260 }} value={slug} onChange={e => setSlug(e.target.value)} placeholder="مثلاً: amlak-fereshteh یا https://divar.ir/pro/amlak-fereshteh" />
+          <label style={{ fontSize: 12, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6 }}>نمونه: <input type="number" min={0} max={40} value={sample} onChange={e => setSample(Number(e.target.value))} style={{ ...inp, width: 70 }} /></label>
+          <GoldButton disabled={busy} onClick={analyze}>{busy ? '⏳ در حال تحلیل…' : 'تحلیل'}</GoldButton>
+        </div>
+        {err && <div style={{ marginTop: 10, fontSize: 12.5, color: '#e7674a' }}>❌ {err}</div>}
+        {res && (
+          <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12 }}>
+            {[
+              { l: 'برند', v: res.name || res.slug },
+              { l: 'تعدادِ آگهی (دقیق)', v: fa(res.listings) },
+              { l: 'مشاورِ تخمینی (حدِ پایین)', v: fa(res.distinctPhones) },
+              { l: 'نمونه‌گیری‌شده / reveal‌شده', v: `${fa(res.sampled)} / ${fa(res.revealed)}` },
+            ].map(s => (
+              <div key={s.l} style={{ background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 12, padding: 13 }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>{s.l}</div>
+                <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--gold)', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.v}</div>
+              </div>
+            ))}
+            {res.phones?.length > 0 && (
+              <div style={{ gridColumn: '1/-1', fontSize: 12, color: 'var(--muted)' }}>شماره‌های متمایزِ یافت‌شده: <span style={{ direction: 'ltr', color: 'var(--text)' }}>{res.phones.join('، ')}</span></div>
+            )}
+          </div>
+        )}
+      </Card>
+
+      {/* خوشه‌های خودمان */}
+      <Card style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--line)' }}>
+          <div style={{ fontSize: 14, fontWeight: 800 }}>مشاورهای ملک‌جت، خوشه‌بندی‌شده بر اساسِ برندِ دیوارِ مشترک</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>{loading ? 'در حال بارگذاری…' : `${fa(clusters.length)} برندِ متصل · ${fa(multi.length)} آژانس (۲+ مشاور)`}</div>
+        </div>
+        {!loading && (clusters.length === 0 ? (
+          <div style={{ padding: 28, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>هنوز مشاوری برندِ دیوارش را وصل نکرده.</div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 520 }}>
+              <thead><tr><th style={th}>برندِ دیوار</th><th style={th}>تعدادِ مشاور</th><th style={th}>مشاورها</th></tr></thead>
+              <tbody>
+                {clusters.map(c => (
+                  <tr key={c.slug} style={c.advisors.length >= 2 ? { background: 'rgba(201,168,76,0.06)' } : undefined}>
+                    <td style={{ ...td, direction: 'ltr', textAlign: 'left' }}><a href={`https://divar.ir/pro/${c.slug}`} target="_blank" rel="noreferrer" style={{ color: 'var(--gold)', textDecoration: 'none' }}>{c.slug} ↗</a></td>
+                    <td style={{ ...td, fontWeight: 800, color: c.advisors.length >= 2 ? 'var(--gold)' : 'inherit' }}>{fa(c.advisors.length)}</td>
+                    <td style={td}>{c.advisors.map(a => `${a.name} (${PTYPE_LABEL[a.type] || a.type})`).join('، ')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+      </Card>
+    </div>
+  )
 }
 
 // ── مرکز سایت‌مپ (SEO) ──────────────────────────────────────────────────────
@@ -5858,6 +5956,7 @@ export default function SuperAdminPage() {
       case 'audit':      return <AuditView />
       case 'reports':    return <ReportsView />
       case 'sitemap':    return <SitemapView />
+      case 'agencyintel': return <AgencyIntelView />
       default:           return <SimpleView title={viewTitles[active]} />
     }
   }
