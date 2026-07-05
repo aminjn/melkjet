@@ -44,6 +44,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     for (const it of await listItems('listing', { publicOnly: true })) add(`/property/${it.id}`, { priority: 0.6, lastModified: it.scrapedAt ? new Date(it.scrapedAt) : undefined })
   } catch {}
 
+  // پروژه‌ها: /projects/{slug} (سقف‌دار تا حجمِ سایت‌مپ کنترل‌شده بماند؛ کاملش با شارد)
+  try {
+    const { publicQuery } = await import('@/app/lib/persiansaze-store')
+    const { ensureProjectSlug } = await import('@/app/lib/project-slug-store')
+    const items = (publicQuery({ withPhoto: true, pageSize: 2000 }).items || [])
+    for (const p of items) { const slug = await ensureProjectSlug(p.hashId, p.address || (p as any).builderName || 'پروژه'); if (slug) add(`/projects/${slug}`, { priority: 0.55 }) }
+  } catch {}
+
   // متخصصان: /{type}/{slug}
   try {
     const { listAccounts } = await import('@/app/lib/account-store')
