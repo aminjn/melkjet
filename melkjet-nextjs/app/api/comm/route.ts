@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listPackages, setPackages, getCredit, grantCredit, createOrder, createPlanOrder, createPromoOrder, createBundleOrder, listOrders, approveOrder, rejectOrder, getTokenUsage } from '@/app/lib/comm-store'
+import { listPackages, setPackages, getCredit, grantCredit, createOrder, createPlanOrder, createPromoOrder, createBundleOrder, createPromoCreditOrder, getPromoWallet, listOrders, approveOrder, rejectOrder, getTokenUsage } from '@/app/lib/comm-store'
 import { listActive, getPlan } from '@/app/lib/plan-store'
-import { promoTierOf, promoDiscountForPlanName, PROMO_BUNDLES, tiersForRole, bundleOf } from '@/app/lib/promotion-store'
+import { promoTierOf, promoDiscountForPlanName, PROMO_BUNDLES, tiersForRole, bundleOf, PROMO_CREDIT_PACKS } from '@/app/lib/promotion-store'
 import { getProfile } from '@/app/lib/profile-store'
 import { getAccount, dashForRole } from '@/app/lib/account-store'
 
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   }
   // نمای کاربر: پکیج‌های فعال + اعتبارِ خودش + سفارش‌های خودش + کاتالوگِ پروموتِ نقش‌محور
   const dash = dashFor(s.phone, s.role)
-  return NextResponse.json({ packages: await listPackages(true), credit: await getCredit(s.phone), orders: await listOrders(s.phone), tokenUsed: await getTokenUsage(s.phone), promoTiers: tiersForRole(dash), promoBundles: PROMO_BUNDLES.filter(b => b.forRoles.includes(dash)), promoDiscount: discountFor(s.phone) }, { headers: { 'Cache-Control': 'no-store' } })
+  return NextResponse.json({ packages: await listPackages(true), credit: await getCredit(s.phone), orders: await listOrders(s.phone), tokenUsed: await getTokenUsage(s.phone), promoTiers: tiersForRole(dash), promoBundles: PROMO_BUNDLES.filter(b => b.forRoles.includes(dash)), promoDiscount: discountFor(s.phone), promoWallet: await getPromoWallet(s.phone), promoCreditPacks: PROMO_CREDIT_PACKS }, { headers: { 'Cache-Control': 'no-store' } })
 }
 
 export async function POST(req: NextRequest) {
@@ -67,8 +67,8 @@ export async function POST(req: NextRequest) {
       if (String((it as any).meta?.__ownerPhone || '') !== s.phone) return NextResponse.json({ error: 'فقط آگهی‌های خودتان را می‌توانید پروموت کنید' }, { status: 403 })
       if (!targetName) targetName = it.title
     }
-    const r = await createPromoOrder(s.phone, { tierId: t.id, targetId, targetName, discountPct: discountFor(s.phone) }, { gateway: b.gateway ? String(b.gateway) : undefined, receipt: b.receipt ? String(b.receipt).slice(0, 120) : undefined })
-    return r.ok ? NextResponse.json({ ok: true, order: r.order }) : NextResponse.json({ error: r.error }, { status: 400 })
+    const r = await createPromoOrder(s.phone, { tierId: t.id, targetId, targetName, discountPct: discountFor(s.phone), payFromWallet: !!b.payFromWallet }, { gateway: b.gateway ? String(b.gateway) : undefined, receipt: b.receipt ? String(b.receipt).slice(0, 120) : undefined })
+    return r.ok ? NextResponse.json({ ok: true, order: r.order, walletPaid: r.walletPaid }) : NextResponse.json({ error: r.error }, { status: 400 })
   }
 
   if (act === 'orderBundle') {
@@ -76,7 +76,12 @@ export async function POST(req: NextRequest) {
     if (!bundle) return NextResponse.json({ error: 'باندلِ پروموت یافت نشد' }, { status: 400 })
     // باندل همیشه روی پروفایلِ خودِ کاربر فعال می‌شود؛ نامش را سرور برمی‌دارد.
     const p = getProfile(s.phone); const targetName = (p.businessName || p.displayName || '').trim() || undefined
-    const r = await createBundleOrder(s.phone, { bundleId: bundle.id, discountPct: discountFor(s.phone), targetName }, { gateway: b.gateway ? String(b.gateway) : undefined, receipt: b.receipt ? String(b.receipt).slice(0, 120) : undefined })
+    const r = await createBundleOrder(s.phone, { bundleId: bundle.id, discountPct: discountFor(s.phone), targetName, payFromWallet: !!b.payFromWallet }, { gateway: b.gateway ? String(b.gateway) : undefined, receipt: b.receipt ? String(b.receipt).slice(0, 120) : undefined })
+    return r.ok ? NextResponse.json({ ok: true, order: r.order, walletPaid: r.walletPaid }) : NextResponse.json({ error: r.error }, { status: 400 })
+  }
+
+  if (act === 'orderCredit') {
+    const r = await createPromoCreditOrder(s.phone, String(b.packId || ''), { gateway: b.gateway ? String(b.gateway) : undefined, receipt: b.receipt ? String(b.receipt).slice(0, 120) : undefined })
     return r.ok ? NextResponse.json({ ok: true, order: r.order }) : NextResponse.json({ error: r.error }, { status: 400 })
   }
 

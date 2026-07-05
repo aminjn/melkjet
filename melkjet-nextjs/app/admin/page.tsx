@@ -2923,7 +2923,7 @@ function CommPackagesConfig() {
               <div style={{ fontSize: 12.5 }}>
                 <span style={{ fontWeight: 700 }}>{o.name}</span>
                 <span style={{ color: 'var(--muted)', marginInlineStart: 8, direction: 'ltr', display: 'inline-block' }}>{o.owner}</span>
-                <span style={{ color: 'var(--muted)', marginInlineStart: 8 }}>· {o.kind === 'plan' ? 'اشتراک' : o.kind === 'promo' ? `🚀 پروموت${o.promoTarget === 'listing' ? 'ِ آگهی' : o.bundleId ? 'ِ باندل' : 'ِ پروفایل'}${o.targetName ? ` · ${o.targetName}` : ''}${o.days ? ` · ${fa(o.days)} روز` : ''}` : (o.channel === 'sms' ? 'پیامک' : o.channel === 'token' ? 'توکن' : 'ایمیل')}{o.kind !== 'plan' && o.kind !== 'promo' ? ` · ${fa(o.credits || 0)} عدد` : ''} · {fa(o.price)} تومان</span>
+                <span style={{ color: 'var(--muted)', marginInlineStart: 8 }}>· {o.kind === 'plan' ? 'اشتراک' : o.kind === 'promo_credit' ? '💳 شارژِ کیفِ پولِ پروموت' : o.kind === 'promo' ? `🚀 پروموت${o.promoTarget === 'listing' ? 'ِ آگهی' : o.bundleId ? 'ِ باندل' : 'ِ پروفایل'}${o.targetName ? ` · ${o.targetName}` : ''}${o.days ? ` · ${fa(o.days)} روز` : ''}` : (o.channel === 'sms' ? 'پیامک' : o.channel === 'token' ? 'توکن' : 'ایمیل')}{o.kind !== 'plan' && o.kind !== 'promo' && o.kind !== 'promo_credit' ? ` · ${fa(o.credits || 0)} عدد` : ''} · {fa(o.price)} تومان</span>
                 {o.receipt && <span style={{ color: 'var(--gold)', marginInlineStart: 8, fontSize: 11.5 }}>💳 کارت‌به‌کارت · کدِ رهگیری: {o.receipt}</span>}
               </div>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>

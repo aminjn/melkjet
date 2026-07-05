@@ -20,6 +20,7 @@ export default function ListingPromoteModal({ preListing, preTierId, onClose, on
 }) {
   const [tiers, setTiers] = useState<Tier[]>([])
   const [discount, setDiscount] = useState(0)
+  const [wallet, setWallet] = useState(0)
   const [listings, setListings] = useState<OwnListing[]>([])
   const [loadedListings, setLoadedListings] = useState(false)
   const [tierId, setTierId] = useState(preTierId || '')
@@ -30,7 +31,7 @@ export default function ListingPromoteModal({ preListing, preTierId, onClose, on
 
   useEffect(() => {
     fetch('/api/comm').then(r => r.ok ? r.json() : null).then(d => {
-      if (d) { setTiers((d.promoTiers || []).filter((t: Tier) => t.target === 'listing')); setDiscount(Number(d.promoDiscount) || 0) }
+      if (d) { setTiers((d.promoTiers || []).filter((t: Tier) => t.target === 'listing')); setDiscount(Number(d.promoDiscount) || 0); setWallet(Number(d.promoWallet) || 0) }
     }).catch(() => {})
     // آگهی‌های منتشرشدهٔ خودِ کاربر (شناسه = آیتمِ اسکرپر، قابلِ استفاده به‌عنوان targetId).
     if (!preListing) {
@@ -46,16 +47,16 @@ export default function ListingPromoteModal({ preListing, preTierId, onClose, on
   const listing = preListing || listings.find(l => l.id === listingId)
   const canProceed = !!tier && !!listing
 
-  const submit = async (gateway: string, receipt: string) => {
+  const submit = async (gateway: string, receipt: string, payFromWallet = false) => {
     if (!tier || !listing) return
     setBusy(true); setMsg('')
     try {
       const r = await fetch('/api/comm', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'orderPromo', tierId: tier.id, targetId: listing.id, targetName: listing.title, gateway, receipt }),
+        body: JSON.stringify({ action: 'orderPromo', tierId: tier.id, targetId: listing.id, targetName: listing.title, gateway, receipt, payFromWallet }),
       })
       const d = await r.json()
-      if (d.ok) { setMsg('✓ سفارشِ پروموت ثبت شد. پس از تأییدِ پرداخت، آگهیِ شما ویژه می‌شود.'); setTimeout(() => { onDone?.(); onClose() }, 1400) }
+      if (d.ok) { setMsg(d.walletPaid ? '✓ از کیفِ پول پرداخت و بلافاصله فعال شد. آگهیِ شما اکنون ویژه است.' : '✓ سفارشِ پروموت ثبت شد. پس از تأییدِ پرداخت، آگهیِ شما ویژه می‌شود.'); setTimeout(() => { onDone?.(); onClose() }, 1500) }
       else setMsg(`⚠ ${d.error || 'خطا'}`)
     } catch { setMsg('⚠ خطا در ارتباط با سرور') } finally { setBusy(false) }
   }
@@ -139,6 +140,7 @@ export default function ListingPromoteModal({ preListing, preTierId, onClose, on
           <PayStep
             title={`${tier?.name || ''} — ${listing?.title || ''}`}
             price={tier ? discPrice(tier.price) : 0}
+            wallet={wallet}
             busy={busy}
             msg={msg}
             onBack={() => setStep('select')}
@@ -151,7 +153,7 @@ export default function ListingPromoteModal({ preListing, preTierId, onClose, on
 }
 
 // گامِ پرداخت — همان روش‌های پرداختِ /api/payment/methods.
-function PayStep({ title, price, busy, msg, onBack, onSubmit }: { title: string; price: number; busy: boolean; msg: string; onBack: () => void; onSubmit: (gateway: string, receipt: string) => void }) {
+function PayStep({ title, price, wallet, busy, msg, onBack, onSubmit }: { title: string; price: number; wallet: number; busy: boolean; msg: string; onBack: () => void; onSubmit: (gateway: string, receipt: string, payFromWallet?: boolean) => void }) {
   const [gws, setGws] = useState<Gateway[]>([])
   const [sel, setSel] = useState('')
   const [receipt, setReceipt] = useState('')
@@ -172,6 +174,14 @@ function PayStep({ title, price, busy, msg, onBack, onSubmit }: { title: string;
     <div>
       <button onClick={onBack} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 12.5, cursor: 'pointer', fontFamily: FONT, padding: '4px 0', marginBottom: 6 }}>‹ بازگشت به انتخاب</button>
       <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 14 }}>{title} — <b style={{ color: 'var(--gold)' }}>{price > 0 ? fa(price) + ' تومان' : 'رایگان'}</b></div>
+      {wallet >= price && price > 0 && (
+        <div style={{ marginBottom: 14, padding: 14, background: 'var(--goldDim)', border: '1px solid var(--gold)', borderRadius: 12 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>💳 پرداخت از کیفِ پولِ پروموت <span style={{ color: 'var(--muted)', fontWeight: 500 }}>(موجودی: {fa(wallet)} تومان)</span></div>
+          <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.8 }}>پروموت بلافاصله و بدونِ انتظارِ تأییدِ مدیر فعال می‌شود.</div>
+          <button onClick={() => onSubmit('wallet', '', true)} disabled={busy} style={{ width: '100%', padding: '11px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 13.5, cursor: 'pointer', fontFamily: FONT, opacity: busy ? 0.6 : 1 }}>{busy ? 'در حال پرداخت…' : `پرداختِ فوری از کیفِ پول (${fa(price)} تومان)`}</button>
+          <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', marginTop: 10 }}>یا با روشِ دیگری پرداخت کنید:</div>
+        </div>
+      )}
       {gws.length === 0 ? <div style={{ fontSize: 13, color: 'var(--muted)', padding: 16, textAlign: 'center' }}>روشِ پرداختی فعال نیست. با پشتیبانی تماس بگیرید.</div> : (
         <>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>

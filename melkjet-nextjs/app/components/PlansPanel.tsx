@@ -31,6 +31,8 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
   const [promoTiers, setPromoTiers] = useState<{ id: string; target: string; name: string; price: number; desc: string; days: number; kind?: string }[]>([])
   const [promoBundles, setPromoBundles] = useState<{ id: string; name: string; desc: string; tierIds: string[]; price: number }[]>([])
   const [promoDiscount, setPromoDiscount] = useState(0)
+  const [promoWallet, setPromoWallet] = useState(0)
+  const [promoCreditPacks, setPromoCreditPacks] = useState<{ id: string; name: string; pay: number; credit: number; bonusPct: number }[]>([])
   const [orders, setOrders] = useState<Order[]>([])
   const [period, setPeriod] = useState<Period>('monthly')
   const priceOf = (p: Plan) => period === 'yearly' ? p.priceYearly : period === '3m' ? (p.price3m || p.priceMonthly * 3) : period === '6m' ? (p.price6m || p.priceMonthly * 6) : p.priceMonthly
@@ -38,7 +40,7 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
   const [busy, setBusy] = useState('')
   const [msg, setMsg] = useState('')
 
-  const loadComm = () => fetch('/api/comm').then(r => r.ok ? r.json() : null).then(d => { if (d) { setCredit(d.credit || { sms: 0, email: 0, token: 0 }); setOrders(d.orders || []); setTokenUsed(d.tokenUsed || 0); setPromoTiers(d.promoTiers || []); setPromoBundles(d.promoBundles || []); setPromoDiscount(Number(d.promoDiscount) || 0) } }).catch(() => {})
+  const loadComm = () => fetch('/api/comm').then(r => r.ok ? r.json() : null).then(d => { if (d) { setCredit(d.credit || { sms: 0, email: 0, token: 0 }); setOrders(d.orders || []); setTokenUsed(d.tokenUsed || 0); setPromoTiers(d.promoTiers || []); setPromoBundles(d.promoBundles || []); setPromoDiscount(Number(d.promoDiscount) || 0); setPromoWallet(Number(d.promoWallet) || 0); setPromoCreditPacks(d.promoCreditPacks || []) } }).catch(() => {})
   const load = () => {
     fetch(`/api/plans?dashboard=${encodeURIComponent(dashboard)}`).then(r => r.ok ? r.json() : null).then(d => {
       if (!d) return
@@ -52,25 +54,30 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
   // قیمتِ تخفیف‌خوردهٔ پروموت با پلنِ کاربر (هم‌راستا با سرور).
   const discPrice = (p: number) => Math.round(p * (1 - promoDiscount / 100))
   const [promoteTierId, setPromoteTierId] = useState<string | null>(null)   // بستهٔ پروموتِ آگهی که کاربر برگزیده — مودالِ انتخابِ آگهی باز می‌شود
-  const [checkout, setCheckout] = useState<{ kind: 'plan' | 'pkg' | 'promo' | 'bundle'; id: string; name: string; price: number } | null>(null)
+  const [checkout, setCheckout] = useState<{ kind: 'plan' | 'pkg' | 'promo' | 'bundle' | 'credit'; id: string; name: string; price: number } | null>(null)
   const buyPlan = (p: Plan) => setCheckout({ kind: 'plan', id: p.id, name: p.name, price: priceOf(p) })
   const buyPkg = (p: Pkg) => setCheckout({ kind: 'pkg', id: p.id, name: p.name, price: p.price })
   const buyPromo = (t: { id: string; name: string; price: number }) => setCheckout({ kind: 'promo', id: t.id, name: t.name, price: discPrice(t.price) })
   const buyBundle = (b: { id: string; name: string; price: number }) => setCheckout({ kind: 'bundle', id: b.id, name: b.name, price: discPrice(b.price) })
-  const submitOrder = async (gateway: string, receipt: string) => {
+  const buyCredit = (p: { id: string; name: string; pay: number }) => setCheckout({ kind: 'credit', id: p.id, name: p.name, price: p.pay })
+  // آیا این checkout قابلِ پرداخت از کیفِ پول است؟ (فقط پروموت/باندل و اگر موجودی کافی باشد)
+  const canWalletPay = !!checkout && (checkout.kind === 'promo' || checkout.kind === 'bundle') && promoWallet >= checkout.price
+  const submitOrder = async (gateway: string, receipt: string, payFromWallet = false) => {
     if (!checkout) return
     setBusy('checkout'); setMsg('')
     try {
       const body = checkout.kind === 'plan'
         ? { action: 'orderPlan', planId: checkout.id, period, gateway, receipt }
         : checkout.kind === 'promo'
-          ? { action: 'orderPromo', tierId: checkout.id, gateway, receipt }
+          ? { action: 'orderPromo', tierId: checkout.id, gateway, receipt, payFromWallet }
           : checkout.kind === 'bundle'
-            ? { action: 'orderBundle', bundleId: checkout.id, gateway, receipt }
-            : { action: 'order', packageId: checkout.id, gateway, receipt }
+            ? { action: 'orderBundle', bundleId: checkout.id, gateway, receipt, payFromWallet }
+            : checkout.kind === 'credit'
+              ? { action: 'orderCredit', packId: checkout.id, gateway, receipt }
+              : { action: 'order', packageId: checkout.id, gateway, receipt }
       const r = await fetch('/api/comm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       const d = await r.json()
-      setMsg(d.ok ? `✓ سفارشِ «${checkout.name}» ثبت شد. پس از تأییدِ پرداخت، فعال می‌شود.` : `⚠ ${d.error || 'خطا'}`)
+      setMsg(d.ok ? (d.walletPaid ? `✓ «${checkout.name}» از کیفِ پول پرداخت و بلافاصله فعال شد.` : `✓ سفارشِ «${checkout.name}» ثبت شد. پس از تأییدِ پرداخت، فعال می‌شود.`) : `⚠ ${d.error || 'خطا'}`)
       if (d.ok) { setCheckout(null); loadComm() }
     } catch { setMsg('⚠ خطا در ارتباط با سرور') } finally { setBusy('') }
   }
@@ -239,8 +246,32 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
         </>
       )}
 
+      {/* اعتبارِ پروموت (کیفِ پول) — شارژِ پیش‌پرداخت با پاداش؛ پرداختِ فوریِ پروموت‌ها */}
+      {promoCreditPacks.length > 0 && (
+        <>
+          <div style={{ fontSize: 15, fontWeight: 900, marginTop: 4, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            💳 اعتبارِ پروموت (کیفِ پول)
+            <span style={{ background: 'var(--goldDim)', border: '1px solid var(--gold)', color: 'var(--gold)', fontSize: 12, fontWeight: 800, borderRadius: 999, padding: '3px 12px' }}>موجودی: {fa(promoWallet)} تومان</span>
+          </div>
+          <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: -8 }}>کیفِ پول را با پاداش شارژ کنید؛ سپس هر پروموت را «از کیفِ پول» پرداخت کنید تا <b style={{ color: 'var(--text)' }}>بلافاصله و بدونِ انتظارِ تأیید</b> فعال شود.</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 12 }}>
+            {promoCreditPacks.map(p => (
+              <div key={p.id} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 16, display: 'flex', flexDirection: 'column', gap: 7 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 800 }}>{p.name}</div>
+                  <span style={{ background: 'var(--goldDim)', border: '1px solid var(--gold)', color: 'var(--gold)', fontSize: 10, fontWeight: 800, borderRadius: 999, padding: '2px 8px' }}>+{fa(p.bonusPct)}٪ پاداش</span>
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 900, color: 'var(--gold)' }}>{fa(p.credit)} <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--muted)' }}>تومان اعتبار</span></div>
+                <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>پرداخت: {fa(p.pay)} تومان</div>
+                <button onClick={() => buyCredit(p)} disabled={!!busy} style={{ marginTop: 4, padding: '9px', borderRadius: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 12.5, border: 'none', cursor: 'pointer', fontFamily: FONT }}>شارژِ کیفِ پول</button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
       {promoteTierId && <ListingPromoteModal preTierId={promoteTierId} onClose={() => setPromoteTierId(null)} onDone={loadComm} />}
-      {checkout && <CheckoutModal item={checkout} busy={busy === 'checkout'} onClose={() => setCheckout(null)} onSubmit={submitOrder} />}
+      {checkout && <CheckoutModal item={checkout} busy={busy === 'checkout'} walletBalance={canWalletPay ? promoWallet : undefined} onClose={() => setCheckout(null)} onSubmit={submitOrder} />}
       {msg && <div style={{ fontSize: 13, fontWeight: 600, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a', textAlign: 'center' }}>{msg}</div>}
       {pending.length > 0 && (
         <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: 16 }}>
@@ -255,7 +286,7 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
 }
 
 interface Gateway { id: string; type: string; label: string; cardNumber?: string; iban?: string; accountNumber?: string; holderName?: string; bank?: string; note?: string }
-function CheckoutModal({ item, busy, onClose, onSubmit }: { item: { name: string; price: number }; busy: boolean; onClose: () => void; onSubmit: (gateway: string, receipt: string) => void }) {
+function CheckoutModal({ item, busy, walletBalance, onClose, onSubmit }: { item: { name: string; price: number }; busy: boolean; walletBalance?: number; onClose: () => void; onSubmit: (gateway: string, receipt: string, payFromWallet?: boolean) => void }) {
   const [gws, setGws] = useState<Gateway[]>([])
   const [sel, setSel] = useState<string>('')
   const [receipt, setReceipt] = useState('')
@@ -280,6 +311,14 @@ function CheckoutModal({ item, busy, onClose, onSubmit }: { item: { name: string
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 22, cursor: 'pointer' }}>×</button>
         </div>
         <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 14 }}>{item.name} — <b style={{ color: 'var(--gold)' }}>{item.price > 0 ? fa(item.price) + ' تومان' : 'رایگان'}</b></div>
+        {walletBalance !== undefined && (
+          <div style={{ marginBottom: 14, padding: 14, background: 'var(--goldDim)', border: '1px solid var(--gold)', borderRadius: 12 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>💳 پرداخت از کیفِ پولِ پروموت <span style={{ color: 'var(--muted)', fontWeight: 500 }}>(موجودی: {fa(walletBalance)} تومان)</span></div>
+            <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.8 }}>با پرداخت از کیفِ پول، این پروموت بلافاصله و بدونِ انتظارِ تأییدِ مدیر فعال می‌شود.</div>
+            <button onClick={() => onSubmit('wallet', '', true)} disabled={busy} style={{ width: '100%', padding: '11px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 13.5, cursor: 'pointer', fontFamily: FONT, opacity: busy ? 0.6 : 1 }}>{busy ? 'در حال پرداخت…' : `پرداختِ فوری از کیفِ پول (${fa(item.price)} تومان)`}</button>
+            <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', marginTop: 10 }}>یا با روشِ دیگری پرداخت کنید:</div>
+          </div>
+        )}
         {gws.length === 0 ? <div style={{ fontSize: 13, color: 'var(--muted)', padding: 16, textAlign: 'center' }}>روشِ پرداختی فعال نیست. با پشتیبانی تماس بگیرید.</div> : (
           <>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>

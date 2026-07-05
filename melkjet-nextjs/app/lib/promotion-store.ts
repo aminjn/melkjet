@@ -112,6 +112,18 @@ export const PROMO_BUNDLES: PromoBundle[] = [
 ]
 export function bundleOf(id: string) { return PROMO_BUNDLES.find(b => b.id === id) }
 
+// ── اعتبارِ پروموت (کیفِ پولِ پیش‌پرداختِ تبلیغات) — مدلِ «شارژِ کیف‌پول» مثلِ عملیاتِ AI ──
+// کاربر مبلغی می‌پردازد و اعتبارِ بیشتری (با پاداش) می‌گیرد؛ بعداً هر پروموت را می‌تواند «از
+// کیفِ پول» پرداخت کند که فوری و بدونِ انتظارِ تأییدِ مدیر فعال می‌شود.
+export interface PromoCreditPack { id: string; name: string; pay: number; credit: number; bonusPct: number }
+export const PROMO_CREDIT_PACKS: PromoCreditPack[] = [
+  { id: 'pc_200', name: 'شارژِ پایه', pay: 200000, credit: 220000, bonusPct: 10 },
+  { id: 'pc_500', name: 'شارژِ استاندارد', pay: 500000, credit: 575000, bonusPct: 15 },
+  { id: 'pc_1000', name: 'شارژِ حرفه‌ای', pay: 1000000, credit: 1200000, bonusPct: 20 },
+  { id: 'pc_2000', name: 'شارژِ کسب‌وکار', pay: 2000000, credit: 2600000, bonusPct: 30 },
+]
+export function creditPackOf(id: string) { return PROMO_CREDIT_PACKS.find(p => p.id === id) }
+
 export interface Promotion {
   id: string; slot: string; targetId: string; title: string; image?: string; price?: string; location?: string
   order: number; active: boolean; expiresAt?: number; createdAt: number; kind?: string
