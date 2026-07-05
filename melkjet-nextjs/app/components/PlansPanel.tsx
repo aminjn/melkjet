@@ -29,8 +29,10 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
   const [packages, setPackages] = useState<Pkg[]>([])
   const [credit, setCredit] = useState<Record<string, number>>({ sms: 0, email: 0, token: 0 })
   const [tokenUsed, setTokenUsed] = useState(0)
-  const [promoTiers, setPromoTiers] = useState<{ id: string; target: string; name: string; price: number; desc: string; days: number; kind?: string }[]>([])
-  const [promoBundles, setPromoBundles] = useState<{ id: string; name: string; desc: string; tierIds: string[]; price: number }[]>([])
+  const [promoTiers, setPromoTiers] = useState<{ id: string; target: string; name: string; price: number; desc: string; days: number; kind?: string; where?: string; slotLabel?: string }[]>([])
+  const [promoBundles, setPromoBundles] = useState<{ id: string; name: string; desc: string; tierIds: string[]; price: number; where?: string }[]>([])
+  const [myPromotions, setMyPromotions] = useState<{ id: string; slotLabel: string; where: string; kind?: string; title: string; expiresAt?: number; target: string }[]>([])
+  const [activeplan, setActiveplan] = useState<{ plan: string; expiresAt?: number } | null>(null)
   const [promoDiscount, setPromoDiscount] = useState(0)
   const [promoWallet, setPromoWallet] = useState(0)
   const [promoCreditPacks, setPromoCreditPacks] = useState<{ id: string; name: string; pay: number; credit: number; bonusPct: number }[]>([])
@@ -41,7 +43,7 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
   const [busy, setBusy] = useState('')
   const [msg, setMsg] = useState('')
 
-  const loadComm = () => fetch('/api/comm').then(r => r.ok ? r.json() : null).then(d => { if (d) { setCredit(d.credit || { sms: 0, email: 0, token: 0 }); setOrders(d.orders || []); setTokenUsed(d.tokenUsed || 0); setPromoTiers(d.promoTiers || []); setPromoBundles(d.promoBundles || []); setPromoDiscount(Number(d.promoDiscount) || 0); setPromoWallet(Number(d.promoWallet) || 0); setPromoCreditPacks(d.promoCreditPacks || []) } }).catch(() => {})
+  const loadComm = () => fetch('/api/comm').then(r => r.ok ? r.json() : null).then(d => { if (d) { setCredit(d.credit || { sms: 0, email: 0, token: 0 }); setOrders(d.orders || []); setTokenUsed(d.tokenUsed || 0); setPromoTiers(d.promoTiers || []); setPromoBundles(d.promoBundles || []); setPromoDiscount(Number(d.promoDiscount) || 0); setPromoWallet(Number(d.promoWallet) || 0); setPromoCreditPacks(d.promoCreditPacks || []); setMyPromotions(d.myPromotions || []); setActiveplan(d.activePlan || null) } }).catch(() => {})
   const load = () => {
     fetch(`/api/plans?dashboard=${encodeURIComponent(dashboard)}`).then(r => r.ok ? r.json() : null).then(d => {
       if (!d) return
@@ -54,6 +56,9 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
 
   // قیمتِ تخفیف‌خوردهٔ پروموت با پلنِ کاربر (هم‌راستا با سرور).
   const discPrice = (p: number) => Math.round(p * (1 - promoDiscount / 100))
+  const daysLeftLabel = (exp: number) => { const d = Math.max(0, Math.ceil((exp - Date.now()) / 86400000)); return d > 0 ? `${fa(d)} روز باقی‌مانده` : 'امروز پایان می‌یابد' }
+  // سفارش‌های پروموتِ در انتظارِ تأیید (کارت‌به‌کارت) — تا کاربر بداند پروموت هنوز فعال نشده.
+  const pendingPromos = orders.filter(o => (o.kind === 'promo') && o.status === 'pending')
   const [promoteTierId, setPromoteTierId] = useState<string | null>(null)   // بستهٔ پروموتِ آگهی که کاربر برگزیده — مودالِ انتخابِ آگهی باز می‌شود
   const [checkout, setCheckout] = useState<{ kind: 'plan' | 'pkg' | 'promo' | 'bundle' | 'credit'; id: string; name: string; price: number } | null>(null)
   const buyPlan = (p: Plan) => setCheckout({ kind: 'plan', id: p.id, name: p.name, price: priceOf(p) })
@@ -99,6 +104,34 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
         <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.9, maxWidth: 640, position: 'relative' }}>اشتراکِ مناسبِ خود را انتخاب کنید و در صورتِ نیاز، بسته‌های افزایشیِ عملیاتِ هوش مصنوعی، پیامک و ایمیل را تهیه کنید.</div>
       </div>
 
+      {/* پروموت‌های من — وضعیت + محلِ نمایش (تا کاربر بداند پروموت کجا و تا کِی فعال است) */}
+      {(myPromotions.length > 0 || pendingPromos.length > 0) && (
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--gold)', borderRadius: 16, padding: 18 }}>
+          <div style={{ fontSize: 14, fontWeight: 900, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>🚀 پروموت‌های من</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {myPromotions.map(m => (
+              <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg2)', borderRadius: 11, padding: '10px 13px', flexWrap: 'wrap' }}>
+                <span style={{ background: 'rgba(95,217,138,.15)', color: '#5fd98a', fontSize: 11, fontWeight: 800, borderRadius: 999, padding: '3px 10px', flexShrink: 0 }}>● فعال</span>
+                <span style={{ minWidth: 0, flex: 1 }}>
+                  <b style={{ fontSize: 13 }}>{m.title}</b>
+                  <span style={{ display: 'block', fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>📍 {m.where}</span>
+                </span>
+                {m.expiresAt && <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--gold)', flexShrink: 0 }}>{daysLeftLabel(m.expiresAt)}</span>}
+              </div>
+            ))}
+            {pendingPromos.map(o => (
+              <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg2)', borderRadius: 11, padding: '10px 13px', flexWrap: 'wrap' }}>
+                <span style={{ background: 'rgba(245,158,11,.15)', color: '#f59e0b', fontSize: 11, fontWeight: 800, borderRadius: 999, padding: '3px 10px', flexShrink: 0 }}>⏳ در انتظارِ تأیید</span>
+                <span style={{ minWidth: 0, flex: 1 }}>
+                  <b style={{ fontSize: 13 }}>{o.name}</b>
+                  <span style={{ display: 'block', fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>پس از تأییدِ پرداخت توسطِ پشتیبانی فعال و نمایش داده می‌شود.</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* تعرفه ماهانه/سالانه */}
       {plans.length > 0 && (
         <div style={{ display: 'flex', justifyContent: 'center' }}>
@@ -135,7 +168,13 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
                     </div>
                   ))}
                 </div>
-                <button onClick={() => buyPlan(p)} disabled={!!busy} style={{ marginTop: 'auto', padding: '11px', borderRadius: 11, border: hl ? 'none' : '1px solid var(--gold)', background: hl ? 'linear-gradient(135deg,var(--gold2),var(--gold))' : 'transparent', color: hl ? '#16140f' : 'var(--gold)', fontWeight: 800, fontSize: 13.5, cursor: 'pointer', fontFamily: FONT, opacity: busy === 'plan_' + p.id ? 0.6 : 1 }}>{busy === 'plan_' + p.id ? 'در حال ثبت…' : (p.cta || 'تهیهٔ اشتراک')}</button>
+                {activeplan ? (
+                  <div style={{ marginTop: 'auto', padding: '11px', borderRadius: 11, border: '1px dashed var(--line2)', background: 'var(--bg2)', color: 'var(--muted)', fontWeight: 700, fontSize: 12, textAlign: 'center', lineHeight: 1.7 }}>
+                    پلنِ فعال دارید{activeplan.expiresAt ? ` — ${daysLeftLabel(activeplan.expiresAt)}` : ''}<br /><span style={{ fontSize: 11, color: 'var(--faint)' }}>پس از پایان می‌توانید تهیه کنید</span>
+                  </div>
+                ) : (
+                  <button onClick={() => buyPlan(p)} disabled={!!busy} style={{ marginTop: 'auto', padding: '11px', borderRadius: 11, border: hl ? 'none' : '1px solid var(--gold)', background: hl ? 'linear-gradient(135deg,var(--gold2),var(--gold))' : 'transparent', color: hl ? '#16140f' : 'var(--gold)', fontWeight: 800, fontSize: 13.5, cursor: 'pointer', fontFamily: FONT, opacity: busy === 'plan_' + p.id ? 0.6 : 1 }}>{busy === 'plan_' + p.id ? 'در حال ثبت…' : (p.cta || 'تهیهٔ اشتراک')}</button>
+                )}
               </div>
             )
           })}
@@ -193,6 +232,7 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
                     {t.kind && <span style={{ background: 'var(--bg2)', border: '1px solid var(--line2)', color: 'var(--gold)', fontSize: 10, fontWeight: 800, borderRadius: 999, padding: '2px 9px' }}>{t.kind}</span>}
                   </div>
                   <div style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.8, flex: 1 }}>{t.desc}</div>
+                  {t.where && <div style={{ fontSize: 11, color: 'var(--gold2)', background: 'var(--goldDim)', border: '1px solid var(--line2)', borderRadius: 8, padding: '5px 9px', lineHeight: 1.6 }}>📍 محلِ نمایش: {t.where}</div>}
                   <div style={{ fontSize: 16, fontWeight: 900, color: 'var(--gold)', display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
                     {promoDiscount > 0 && <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)', textDecoration: 'line-through' }}>{fa(t.price)}</span>}
                     <span>{fa(dp)}</span>
@@ -224,6 +264,7 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
                     <div style={{ fontSize: 14, fontWeight: 900 }}>{b.name}</div>
                   </div>
                   <div style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.8 }}>{b.desc}</div>
+                  {b.where && <div style={{ fontSize: 11, color: 'var(--gold2)', background: 'var(--goldDim)', border: '1px solid var(--line2)', borderRadius: 8, padding: '5px 9px', lineHeight: 1.6 }}>📍 محلِ نمایش: {b.where}</div>}
                   {incl.length > 0 && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: 1 }}>
                       {incl.map((n, i) => (

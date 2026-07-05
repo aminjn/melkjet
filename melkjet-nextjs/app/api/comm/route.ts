@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { listPackages, setPackages, getCredit, grantCredit, createOrder, createPlanOrder, createPromoOrder, createBundleOrder, createPromoCreditOrder, getPromoWallet, listOrders, approveOrder, rejectOrder, getTokenUsage } from '@/app/lib/comm-store'
 import { listActive, getPlan } from '@/app/lib/plan-store'
-import { promoTierOf, promoDiscountForPlanName, bundlesAll, tiersForRole, bundleOf, creditPacks } from '@/app/lib/promotion-store'
+import { promoTierOf, promoDiscountForPlanName, bundlesAll, tiersForRole, bundleOf, creditPacks, slotOf, myActivePromotions, hasActivePromoInSlot } from '@/app/lib/promotion-store'
 import { ensurePromoPricing } from '@/app/lib/promo-pricing-store'
 import { getProfile } from '@/app/lib/profile-store'
-import { getAccount, dashForRole } from '@/app/lib/account-store'
+import { getAccount, dashForRole, activePlan } from '@/app/lib/account-store'
 
 // تخفیفِ پروموتِ کاربر از روی پلنِ اشتراکِ حسابش.
 const discountFor = (phone: string) => { try { return promoDiscountForPlanName(getPlan(getAccount(phone)?.plan || '')?.name) } catch { return 0 } }
@@ -25,7 +25,11 @@ export async function GET(req: NextRequest) {
   }
   // نمای کاربر: پکیج‌های فعال + اعتبارِ خودش + سفارش‌های خودش + کاتالوگِ پروموتِ نقش‌محور
   const dash = dashFor(s.phone, s.role)
-  return NextResponse.json({ packages: await listPackages(true), credit: await getCredit(s.phone), orders: await listOrders(s.phone), tokenUsed: await getTokenUsage(s.phone), promoTiers: tiersForRole(dash), promoBundles: bundlesAll().filter(b => b.forRoles.includes(dash)), promoDiscount: discountFor(s.phone), promoWallet: await getPromoWallet(s.phone), promoCreditPacks: creditPacks() }, { headers: { 'Cache-Control': 'no-store' } })
+  // نشانِ «کجا نمایش داده می‌شود» را به هر بسته اضافه کن تا کاربر بداند پروموت دقیقاً کجا می‌آید.
+  const withWhere = <T extends { slot: string }>(t: T) => ({ ...t, where: slotOf(t.slot)?.where || '', slotLabel: slotOf(t.slot)?.label || '' })
+  const tiers = tiersForRole(dash).map(withWhere)
+  const bundles = bundlesAll().filter(b => b.forRoles.includes(dash)).map(b => ({ ...b, where: Array.from(new Set(b.tierIds.map(id => { const t = promoTierOf(id); return t ? (slotOf(t.slot)?.where || '') : '' }).filter(Boolean))).join(' + ') }))
+  return NextResponse.json({ packages: await listPackages(true), credit: await getCredit(s.phone), orders: await listOrders(s.phone), tokenUsed: await getTokenUsage(s.phone), promoTiers: tiers, promoBundles: bundles, promoDiscount: discountFor(s.phone), promoWallet: await getPromoWallet(s.phone), promoCreditPacks: creditPacks(), myPromotions: await myActivePromotions(s.phone), activePlan: activePlan(s.phone) }, { headers: { 'Cache-Control': 'no-store' } })
 }
 
 export async function POST(req: NextRequest) {
@@ -45,6 +49,9 @@ export async function POST(req: NextRequest) {
   if (act === 'orderPlan') {
     const pl = listActive().find(p => p.id === String(b.planId || ''))
     if (!pl) return NextResponse.json({ error: 'پلن یافت نشد' }, { status: 400 })
+    // گِیتِ خریدِ دوباره: تا پایانِ پلنِ فعال، خریدِ دوباره مجاز نیست.
+    const ap = activePlan(s.phone)
+    if (ap) { const d = ap.expiresAt ? Math.max(1, Math.ceil((ap.expiresAt - Date.now()) / 86400000)) : 0; return NextResponse.json({ error: `شما پلنِ فعال دارید${d ? ` (${d.toLocaleString('fa-IR')} روز باقی‌مانده)` : ''}. پس از پایانِ آن می‌توانید دوباره تهیه کنید.` }, { status: 400 }) }
     const period = ['monthly', '3m', '6m', 'yearly'].includes(String(b.period)) ? String(b.period) : 'monthly'
     const priceMap: Record<string, number> = { monthly: pl.priceMonthly, '3m': (pl as any).price3m || pl.priceMonthly * 3, '6m': (pl as any).price6m || pl.priceMonthly * 6, yearly: pl.priceYearly }
     const labelMap: Record<string, string> = { monthly: '', '3m': ' (۳ماهه)', '6m': ' (۶ماهه)', yearly: ' (سالانه)' }
@@ -70,6 +77,10 @@ export async function POST(req: NextRequest) {
       if (String((it as any).meta?.__ownerPhone || '') !== s.phone) return NextResponse.json({ error: 'فقط آگهی‌های خودتان را می‌توانید پروموت کنید' }, { status: 403 })
       if (!targetName) targetName = it.title
     }
+    // گِیتِ خریدِ دوباره: اگر همین مورد در همین جایگاه پروموتِ فعال دارد، تا پایانِ آن دوباره مجاز نیست.
+    const mine = await myActivePromotions(s.phone)
+    const dup = mine.find(m => m.slot === t.slot && (t.target === 'profile' ? true : m.targetId === targetId))
+    if (dup) { const d = dup.expiresAt ? Math.max(1, Math.ceil((dup.expiresAt - Date.now()) / 86400000)) : 0; return NextResponse.json({ error: `این ${t.target === 'profile' ? 'جایگاه برای کسب‌وکارِ شما' : 'آگهی در این جایگاه'} پروموتِ فعال دارد${d ? ` (${d.toLocaleString('fa-IR')} روز باقی‌مانده)` : ''}. پس از پایانِ آن دوباره تهیه کنید.` }, { status: 400 }) }
     const r = await createPromoOrder(s.phone, { tierId: t.id, targetId, targetName, discountPct: discountFor(s.phone), payFromWallet: !!b.payFromWallet }, { gateway: b.gateway ? String(b.gateway) : undefined, receipt: b.receipt ? String(b.receipt).slice(0, 120) : undefined })
     return r.ok ? NextResponse.json({ ok: true, order: r.order, walletPaid: r.walletPaid }) : NextResponse.json({ error: r.error }, { status: 400 })
   }
@@ -79,6 +90,10 @@ export async function POST(req: NextRequest) {
     if (!bundle) return NextResponse.json({ error: 'باندلِ پروموت یافت نشد' }, { status: 400 })
     // باندل همیشه روی پروفایلِ خودِ کاربر فعال می‌شود؛ نامش را سرور برمی‌دارد.
     const p = getProfile(s.phone); const targetName = (p.businessName || p.displayName || '').trim() || undefined
+    // گِیتِ خریدِ دوباره: اگر یکی از جایگاه‌های باندل پروموتِ فعال دارد، تا پایانِ آن مجاز نیست.
+    const bundleSlots = new Set(bundle.tierIds.map(id => promoTierOf(id)?.slot).filter(Boolean) as string[])
+    const mineB = await myActivePromotions(s.phone)
+    if (mineB.some(m => bundleSlots.has(m.slot))) return NextResponse.json({ error: 'یکی از جایگاه‌های این باندل هم‌اکنون پروموتِ فعال دارد. پس از پایانِ آن دوباره تهیه کنید.' }, { status: 400 })
     const r = await createBundleOrder(s.phone, { bundleId: bundle.id, discountPct: discountFor(s.phone), targetName, payFromWallet: !!b.payFromWallet }, { gateway: b.gateway ? String(b.gateway) : undefined, receipt: b.receipt ? String(b.receipt).slice(0, 120) : undefined })
     return r.ok ? NextResponse.json({ ok: true, order: r.order, walletPaid: r.walletPaid }) : NextResponse.json({ error: r.error }, { status: 400 })
   }

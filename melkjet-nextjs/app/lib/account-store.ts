@@ -6,6 +6,8 @@ const FILE = join(process.cwd(), '.account-data.json')
 
 export interface Account {
   phone: string; name?: string; role?: string; plan?: string; onboarded: boolean; createdAt: number; lastLogin?: number
+  // اشتراک: زمانِ شروع/پایانِ پلنِ فعال (برای جلوگیری از خریدِ دوباره تا پایان)
+  planStartedAt?: number; planExpiresAt?: number
   // هویتِ تأییدشدهٔ شاهکار (پس از تأیید غیرقابلِ‌تغییر است)
   nationalId?: string; firstName?: string; lastName?: string; gender?: string; fatherName?: string; birthDate?: string; birthPlace?: string; idNumber?: string; idSerial?: string; birthPlaceCode?: string; fullName?: string; issuancePlace?: string; issuancePlaceCode?: string; officeCode?: string; identityVerifiedAt?: number
   // کلِ پاسخِ هویتیِ شاهکار — تا هیچ فیلدی از دست نرود
@@ -66,11 +68,26 @@ export function setProfile(phone: string, patch: { name?: string; role?: string 
 
 // ── مدیریت کاربران از سوپرادمین ──
 // پلنِ کاربر را پس از پرداخت موفق تنظیم می‌کند (حساب را در صورت نبود می‌سازد).
-export function setPlan(phone: string, plan: string): Account {
+export function setPlan(phone: string, plan: string, durationMs?: number): Account {
   const db = load()
   if (!db[phone]) db[phone] = { phone, onboarded: false, createdAt: Date.now() }
   db[phone].plan = plan || undefined
+  if (durationMs && durationMs > 0) {
+    const now = Date.now()
+    db[phone].planStartedAt = now
+    db[phone].planExpiresAt = now + durationMs
+  } else if (!plan) {
+    db[phone].planStartedAt = undefined; db[phone].planExpiresAt = undefined
+  }
   save(db); return db[phone]
+}
+
+// پلنِ فعالِ کاربر (اگر منقضی نشده باشد) — برای گِیتِ خریدِ دوباره.
+export function activePlan(phone: string): { plan: string; expiresAt?: number } | null {
+  const a = load()[phone]
+  if (!a?.plan) return null
+  if (a.planExpiresAt && a.planExpiresAt <= Date.now()) return null   // منقضی شده
+  return { plan: a.plan, expiresAt: a.planExpiresAt }
 }
 
 // ساختِ کاربر توسطِ سوپرادمین (دستی) — با هویتِ شاهکار (اختیاری) و وضعیتِ تأیید

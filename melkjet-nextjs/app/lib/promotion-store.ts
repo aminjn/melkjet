@@ -222,6 +222,30 @@ export async function promotedProfileInfo(): Promise<Map<string, { kind?: string
   return m
 }
 
+// ── پروموت‌های فعالِ یک کاربر (برای پنلِ «پروموت‌های من» + گِیتِ خریدِ دوباره) ──
+// پروفایل: targetId = شمارهٔ کاربر. آگهی: targetId = شناسهٔ آیتم که مالکش این کاربر است.
+export interface MyPromo { id: string; slot: string; slotLabel: string; where: string; kind?: string; title: string; targetId: string; expiresAt?: number; target: 'listing' | 'directory' | 'product' }
+export async function myActivePromotions(phone: string): Promise<MyPromo[]> {
+  const now = Date.now()
+  const ph = normPhone(phone)
+  const rows = (await load()).filter(p => p.active && (!p.expiresAt || p.expiresAt > now))
+  const out: MyPromo[] = []
+  for (const p of rows) {
+    const s = slotOf(p.slot); if (!s) continue
+    let mine = false
+    if (s.target === 'directory') mine = normPhone(p.targetId) === ph
+    else { try { const it = await getItemById(p.targetId); mine = String((it as any)?.meta?.__ownerPhone || '') === phone } catch {} }
+    if (mine) out.push({ id: p.id, slot: p.slot, slotLabel: s.label, where: s.where, kind: p.kind, title: p.title, targetId: String(p.targetId), expiresAt: p.expiresAt, target: s.target })
+  }
+  return out
+}
+// آیا کاربر پروموتِ فعالی در این جایگاه دارد؟ (برای جلوگیری از خریدِ دوباره تا پایان)
+export async function hasActivePromoInSlot(phone: string, slot: string): Promise<{ has: boolean; expiresAt?: number }> {
+  const mine = await myActivePromotions(phone)
+  const m = mine.find(x => x.slot === slot)
+  return m ? { has: true, expiresAt: m.expiresAt } : { has: false }
+}
+
 // نگاشتِ شناسهٔ آیتمِ آگهیِ پروموت‌شده → {slot, kind} برای نمایشِ نشانِ نوعِ پروموت روی کارتِ آگهی.
 export async function promotedListingKinds(): Promise<Map<string, { slot: string; kind?: string }>> {
   const now = Date.now()

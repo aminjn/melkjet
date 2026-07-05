@@ -306,9 +306,11 @@ export async function approveOrder(orderId: string): Promise<{ ok: boolean; erro
     if (o.status === 'paid') return { ok: true as const }
     o.status = 'paid'; o.paidAt = Date.now()
     if (o.kind === 'plan') {
-      // اشتراک: پلنِ حسابِ کاربر را تنظیم کن + اعتبارِ AIِ پلن را شارژ کن
+      // اشتراک: پلنِ حسابِ کاربر را تنظیم کن (+ مدتِ اعتبار) + اعتبارِ AIِ پلن را شارژ کن
       if (o.planId) {
-        try { setPlan(o.owner, o.planId) } catch {}
+        const DAY = 86400000
+        const dur: Record<string, number> = { monthly: 30 * DAY, '3m': 90 * DAY, '6m': 180 * DAY, yearly: 365 * DAY }
+        try { setPlan(o.owner, o.planId, dur[o.period || 'monthly'] || 30 * DAY) } catch {}
         try { const pl = getPlan(o.planId); const ai = Number(pl?.aiCredits) || 0; if (ai > 0) { const c = db.credits[o.owner] || { sms: 0, email: 0, token: 0 }; c.token = (Number(c.token) || 0) + ai; db.credits[o.owner] = c } } catch {}
       }
     } else if (o.kind === 'promo_credit') {

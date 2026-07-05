@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react'
 const FONT = 'Vazirmatn, system-ui, sans-serif'
 const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
 
-type Tier = { id: string; target: string; name: string; price: number; desc: string; days: number; kind?: string }
+type Tier = { id: string; target: string; name: string; price: number; desc: string; days: number; kind?: string; where?: string }
 type OwnListing = { id: string; title: string; location?: string; price?: string; image?: string }
 interface Gateway { id: string; type: string; label: string; cardNumber?: string; iban?: string; accountNumber?: string; holderName?: string; bank?: string; note?: string }
 
@@ -120,6 +120,7 @@ export default function ListingPromoteModal({ preListing, preTierId, onClose, on
                         {t.kind && <span style={{ background: 'var(--bg2)', border: '1px solid var(--line2)', color: 'var(--gold)', fontSize: 9.5, fontWeight: 800, borderRadius: 999, padding: '2px 8px' }}>{t.kind}</span>}
                       </span>
                       <span style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.7 }}>{t.desc}</span>
+                      {t.where && <span style={{ fontSize: 10, color: 'var(--gold2)' }}>📍 {t.where}</span>}
                       <span style={{ fontSize: 13.5, fontWeight: 900, color: 'var(--gold)', display: 'flex', alignItems: 'baseline', gap: 5, flexWrap: 'wrap' }}>
                         {discount > 0 && <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textDecoration: 'line-through' }}>{fa(t.price)}</span>}
                         <span>{fa(discPrice(t.price))}</span>

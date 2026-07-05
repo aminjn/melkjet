@@ -4997,7 +4997,7 @@ function PromoPricingEditor() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {list.map((t: any) => (
         <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg2)', borderRadius: 10, padding: '8px 12px', flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: 160 }}><span style={{ fontSize: 13, fontWeight: 700 }}>{t.name}</span> <span style={{ fontSize: 10.5, color: 'var(--gold)', background: 'var(--goldDim)', borderRadius: 999, padding: '1px 7px' }}>{t.kind}</span> <span style={{ fontSize: 11, color: 'var(--faint)' }}>· {roleLabel(t.forRoles)}</span></div>
+          <div style={{ flex: 1, minWidth: 200 }}><span style={{ fontSize: 13, fontWeight: 700 }}>{t.name}</span> <span style={{ fontSize: 10.5, color: 'var(--gold)', background: 'var(--goldDim)', borderRadius: 999, padding: '1px 7px' }}>{t.kind}</span> <span style={{ fontSize: 11, color: 'var(--faint)' }}>· {roleLabel(t.forRoles)}</span>{t.where && <span style={{ display: 'block', fontSize: 10.5, color: 'var(--muted)', marginTop: 2 }}>📍 {t.where}</span>}</div>
           <label style={{ fontSize: 11.5, color: 'var(--muted)' }}>قیمت: <input style={inp} value={vals.tiers[t.id]?.price ?? ''} onChange={e => setV('tiers', t.id, 'price', num(e))} /></label>
           <label style={{ fontSize: 11.5, color: 'var(--muted)' }}>مدت(روز): <input style={{ ...inp, width: 64 }} value={vals.tiers[t.id]?.days ?? ''} onChange={e => setV('tiers', t.id, 'days', num(e))} /></label>
         </div>
