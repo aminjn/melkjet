@@ -1,6 +1,23 @@
-import { createSign } from 'crypto'
+import { createSign, randomBytes } from 'crypto'
 import { proxiedRequest } from './proxy-fetch'
-import { getAdminData } from './admin-store'
+import { getAdminData, saveAdminData } from './admin-store'
+
+// ── مسیرِ «GitHub Action» (چون سرورِ آروان به Google API نمی‌رسد) ──
+// GitHub (بین‌الملل دارد) داده را می‌گیرد و با این توکن به /api/admin/seo/gsc-ingest می‌فرستد.
+export function getIngestToken(): string {
+  const data = getAdminData() as Record<string, any>
+  let t = data.seo?.searchConsole?.ingestToken
+  if (!t) { t = randomBytes(24).toString('hex'); data.seo = data.seo || {}; data.seo.searchConsole = { ...(data.seo.searchConsole || {}), ingestToken: t }; saveAdminData(data as any) }
+  return t
+}
+export function verifyIngestToken(t: string): boolean { const cur = getIngestToken(); return !!t && !!cur && t === cur }
+export function saveIngestData(payload: Record<string, any>): void {
+  const data = getAdminData() as Record<string, any>
+  data.seo = data.seo || {}
+  data.seo.searchConsole = { ...(data.seo.searchConsole || {}), data: { ...payload, fetchedAt: Date.now() } }
+  saveAdminData(data as any)
+}
+export function getIngestData(): Record<string, any> | null { return (getAdminData() as Record<string, any>).seo?.searchConsole?.data || null }
 
 // ── کلاینتِ Google Search Console (احرازِ سرویس‌اکانت RS256 → توکن → APIها) ──
 // گوگل خارجی/فیلتر است → از همان پروکسیِ دیوار (یا پروکسیِ اختصاصی) عبور می‌کند.
