@@ -7,7 +7,8 @@ import { usePathname } from 'next/navigation'
 interface Msg { role: 'user' | 'assistant'; content: string }
 interface Pro { id: string; name: string; area?: string; rating?: string; tags?: string[]; url?: string; hasPhone?: boolean; promoted?: boolean }
 
-const PANEL_ROUTES = ['/admin', '/agency', '/pros', '/builder', '/materials', '/owner', '/buyer', '/crm', '/marketing', '/workflow', '/website-builder', '/content', '/plan-ai', '/architect', '/contractor', '/appraiser', '/lawfirm', '/finance', '/notary']
+// توجه: «/admin» عمداً نیست — سوپرادمین نیازی به دستیارِ حقوقیِ شناور ندارد (مزاحم بود).
+const PANEL_ROUTES = ['/agency', '/pros', '/builder', '/materials', '/owner', '/buyer', '/crm', '/marketing', '/workflow', '/website-builder', '/content', '/plan-ai', '/architect', '/contractor', '/appraiser', '/lawfirm', '/finance', '/notary']
 const chips = ['سند مالکیت', 'قرارداد اجاره', 'حقوق مستاجر', 'مبایعه‌نامه', 'کد رهگیری']
 const ratingNum = (r?: string) => { const n = parseFloat(String(r || '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))); return isNaN(n) ? -1 : n }
 

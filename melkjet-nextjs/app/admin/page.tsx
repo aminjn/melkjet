@@ -2393,6 +2393,24 @@ function ModerationView() {
         </div>
       </Card>
 
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 14 }}>🧹 پاک‌سازیِ آگهی‌های تکراری</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3, maxWidth: 520, lineHeight: 1.6 }}>آگهی‌های تکراری (یک ملک با چند آگهی) را در کلِ سایت پیدا می‌کند و از نمایشِ عمومی خارج می‌کند — از هر گروه، قدیمی‌ترین می‌ماند. به‌صورتِ خودکار هم هنگامِ ممیزی جلوی انتشارِ تکراری گرفته می‌شود؛ این دکمه برای پاک‌سازیِ یک‌بارهٔ انبوهِ فعلی است.</div>
+            {progress && progress.startsWith('DUP:') && <div style={{ fontSize: 12.5, color: 'var(--gold)', marginTop: 8, fontWeight: 600 }}>{progress.slice(4)}</div>}
+          </div>
+          <OutlineButton onClick={async () => {
+            if (!confirm('آگهی‌های تکراری شناسایی و از نمایشِ عمومی خارج شوند؟ (قدیمی‌ترینِ هر گروه می‌ماند)')) return
+            setProgress('DUP:در حال پاک‌سازی…')
+            const r = await fetch('/api/admin/scraper/dedupe', { method: 'POST' })
+            const dd = await r.json().catch(() => ({}))
+            setProgress(`DUP:${r.ok ? `✓ ${fa(dd.removed || 0)} آگهیِ تکراری حذف شد (${fa(dd.kept || 0)} ماند)` : (dd.error || 'خطا')}`)
+            if (r.ok) load()
+          }} style={{ borderColor: 'var(--gold)', color: 'var(--gold)' }}>🧹 پاک‌سازیِ تکراری‌ها</OutlineButton>
+        </div>
+      </Card>
+
       <Card>
         <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>آخرین تصمیم‌های هوش مصنوعی</div>
         {loading ? (

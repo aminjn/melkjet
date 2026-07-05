@@ -235,13 +235,16 @@ export async function fetchDivarPost(token: string): Promise<DivarPost> {
       const la = findFirst(d, 'latitude'), lo = findFirst(d, 'longitude')
       if (typeof la === 'number' && typeof lo === 'number') { lat = la; lng = lo }
       const dsc = findFirst(d, 'description'); if (dsc) description = strOf(dsc)
-      let longest = description || ''
+      // فقط «متنِ واقعی» کاندیدِ توضیحات باشد — نه URLِ عکس (که طولانی‌ترین رشتهٔ payload است
+      // و قبلاً اشتباهاً به‌جای توضیحات می‌نشست). متنِ واقعی فاصله دارد و URL نیست.
+      const isText = (s: string) => s.length > 20 && /\s/.test(s) && !/^https?:\/\//i.test(s) && !/divarcdn|\/static\/|\.(webp|jpe?g|png|gif|svg|mp4)(\?|$)/i.test(s)
+      let longest = description && isText(description) ? description : ''
       const dwalk = (x: any) => {
-        if (typeof x === 'string') { if (x.length > longest.length) longest = x }
+        if (typeof x === 'string') { if (isText(x) && x.length > longest.length) longest = x }
         else if (x && typeof x === 'object') { for (const k in x) dwalk(x[k]) }
       }
       dwalk(d)
-      if (longest.length > (description?.length || 0)) description = longest
+      if (longest && longest.length > (description && isText(description) ? description.length : 0)) description = longest
 
       const walk = (x: any) => {
         if (!x || typeof x !== 'object') return
