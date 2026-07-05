@@ -25,14 +25,26 @@ function b64url(buf: Buffer | string): string {
   return Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
+// پارسِ بُردبار: اگر JSONِ استاندارد نبود (مثلاً هنگامِ کپی، private_key با نیم‌فاصله/خطِ
+// واقعی شکسته شده و JSON را نامعتبر کرده)، client_email و private_key را با regex درمی‌آورد.
+export function parseServiceAccount(raw: string): { client_email?: string; private_key?: string } | null {
+  const s = String(raw || '').trim()
+  if (!s) return null
+  try { const j = JSON.parse(s); if (j && (j.client_email || j.private_key)) return j } catch {}
+  const email = s.match(/"client_email"\s*:\s*"([^"]+)"/)?.[1]
+  const key = s.match(/"private_key"\s*:\s*"([\s\S]*?-----END PRIVATE KEY-----[\\nrt\s]*)"/)?.[1]
+  if (email && key) return { client_email: email, private_key: key }
+  return null
+}
+
 let TOKEN: { token: string; exp: number } | null = null
 
 async function getToken(): Promise<{ token?: string; error?: string }> {
   if (TOKEN && Date.now() < TOKEN.exp - 60_000) return { token: TOKEN.token }
   const { serviceAccountJson } = scConfig()
   if (!serviceAccountJson) return { error: 'کلیدِ سرویس‌اکانت تنظیم نشده' }
-  let sa: { client_email?: string; private_key?: string }
-  try { sa = JSON.parse(serviceAccountJson) } catch { return { error: 'JSONِ سرویس‌اکانت نامعتبر است' } }
+  const sa = parseServiceAccount(serviceAccountJson)
+  if (!sa) return { error: 'JSONِ سرویس‌اکانت نامعتبر است — کلِ محتوای فایل را کپی کن' }
   if (!sa.client_email || !sa.private_key) return { error: 'client_email یا private_key در کلید نیست' }
 
   const now = Math.floor(Date.now() / 1000)

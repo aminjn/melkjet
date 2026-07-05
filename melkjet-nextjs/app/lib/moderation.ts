@@ -2,7 +2,7 @@ import { pendingForModeration, setModeration, setModerationBatch, Item, ItemStat
 import { chatCompleteSafe, agentModel } from './gapgpt'
 import { predict, learn, noteDecision } from './moderation-ml'
 import { getAdminData } from './admin-store'
-import { buildDupIndex, dupMasterInIndex, type DupCandidate } from './listing-dedupe'
+import { buildDupIndex, dupMasterInIndex, type DupIndex } from './listing-dedupe'
 
 export type ModVia = 'ml' | 'ai' | 'dup' | 'none'
 
@@ -71,7 +71,7 @@ async function getVerdict(it: Item, model: string, cfg: ModConfig) {
 
 // تصمیمِ هوشمند برای یک آگهی: اول مدلِ یادگیرنده؛ اگر آماده و مطمئن بود خودش تصمیم می‌گیرد
 // (بدونِ AI). وگرنه AI تصمیم می‌گیرد و مدل از تصمیمش یاد می‌گیرد. (persist نمی‌کند.)
-async function smartVerdict(it: Item, model: string | null, dupIndex?: DupCandidate[]): Promise<{ id: string; title: string; status: ItemStatus; reason: string; score: number; via: ModVia }> {
+async function smartVerdict(it: Item, model: string | null, dupIndex?: DupIndex): Promise<{ id: string; title: string; status: ItemStatus; reason: string; score: number; via: ModVia }> {
   const cfg = modConfig()
   // گِیتِ تکرار (قطعی، پیش از ML/AI): آگهیِ تکراری هرگز منتشر نشود.
   if (it.type === 'listing') {

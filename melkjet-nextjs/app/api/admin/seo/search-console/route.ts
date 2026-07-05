@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { getAdminData, saveAdminData } from '@/app/lib/admin-store'
-import { scConfig, scConfigured, scTest, scPerformance, scSitemaps, scInspect } from '@/app/lib/search-console'
+import { scConfig, scConfigured, scTest, scPerformance, scSitemaps, scInspect, parseServiceAccount } from '@/app/lib/search-console'
 import { logAudit } from '@/app/lib/audit-store'
 
 async function guard() { const s = await getSession(); return s && s.role === 'super_admin' ? s : null }
@@ -26,15 +26,23 @@ export async function POST(req: NextRequest) {
     const data = getAdminData() as Record<string, any>
     data.seo = data.seo || {}
     const cur = data.seo.searchConsole || {}
+    // کلیدِ جدید (اگر فرستاده شد) قبل از ذخیره اعتبارسنجی می‌شود تا کلیدِ خراب ذخیره نشود.
+    let keyToSave = cur.serviceAccountJson
+    if (b.serviceAccountJson && String(b.serviceAccountJson).trim()) {
+      const sa = parseServiceAccount(String(b.serviceAccountJson))
+      if (!sa || !sa.client_email || !sa.private_key || !/BEGIN PRIVATE KEY/.test(sa.private_key)) {
+        return NextResponse.json({ error: 'کلیدِ JSON نامعتبر است — کلِ محتوای فایلِ سرویس‌اکانت (شاملِ client_email و private_key) را کپی کن' }, { status: 400 })
+      }
+      keyToSave = String(b.serviceAccountJson).trim()
+    }
     data.seo.searchConsole = {
-      // اگر کلیدِ جدید نفرستاد، کلیدِ قبلی حفظ شود (تا در UI ماسک بماند).
-      serviceAccountJson: (b.serviceAccountJson && String(b.serviceAccountJson).trim()) ? String(b.serviceAccountJson).trim() : cur.serviceAccountJson,
+      serviceAccountJson: keyToSave,
       propertyUrl: b.propertyUrl !== undefined ? String(b.propertyUrl).trim() : cur.propertyUrl,
       proxyUrl: b.proxyUrl !== undefined ? String(b.proxyUrl).trim() : cur.proxyUrl,
     }
     saveAdminData(data as any)
     logAudit(actor, 'تنظیماتِ Search Console', data.seo.searchConsole.propertyUrl || '')
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, email: parseServiceAccount(keyToSave || '')?.client_email || '' })
   }
 
   if (!scConfigured()) return NextResponse.json({ error: 'ابتدا کلیدِ سرویس‌اکانت و آدرسِ property را ذخیره کن' }, { status: 400 })
