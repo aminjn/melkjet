@@ -224,14 +224,14 @@ export async function createOrder(owner: string, packageId: string, pay?: { gate
 }
 // سفارشِ پروموت/تبلیغات — پس از تأییدِ سوپرادمین، آیتم/پروفایل در جایگاهِ موردنظر ویژه می‌شود.
 export async function createPromoOrder(owner: string, input: { tierId: string; targetId: string; targetName?: string; discountPct?: number; payFromWallet?: boolean; areas?: string[] }, pay?: { gateway?: string; receipt?: string }): Promise<{ ok: boolean; error?: string; order?: CommOrder; walletPaid?: boolean }> {
-  const { promoTierOf, areasIncluded, extraAreaPrice } = await import('./promotion-store')
+  const { promoTierOf, maxAreasPerPromo } = await import('./promotion-store')
   const t = promoTierOf(input.tierId)
   if (!t) return { ok: false, error: 'بستهٔ پروموت یافت نشد' }
   if (!input.targetId) return { ok: false, error: 'موردِ پروموت مشخص نیست' }
   const disc = Math.min(90, Math.max(0, Number(input.discountPct) || 0))
-  const areas = (input.areas || []).map(a => String(a).trim()).filter(Boolean).slice(0, 8)
-  const extraAreas = Math.max(0, areas.length - areasIncluded())
-  const price = Math.round(t.price * (1 - disc / 100)) + extraAreas * extraAreaPrice()
+  // هر پروموت دقیقاً تا سقفِ محله‌ها را پوشش می‌دهد؛ بدونِ هزینهٔ اضافه.
+  const areas = (input.areas || []).map(a => String(a).trim()).filter(Boolean).slice(0, maxAreasPerPromo())
+  const price = Math.round(t.price * (1 - disc / 100))
   const res = await withDb(db => {
     applySeed(db)
     const order: CommOrder = { id: id('ord_'), owner, kind: 'promo', name: t.name, price, status: 'pending', createdAt: Date.now(), slot: t.slot, targetId: String(input.targetId), days: t.days, targetName: input.targetName, promoTarget: t.target as 'profile' | 'listing', promoKind: t.kind, areas, gateway: pay?.gateway, receipt: pay?.receipt }

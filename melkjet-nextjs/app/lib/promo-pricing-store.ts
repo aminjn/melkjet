@@ -20,7 +20,7 @@ export interface PromoPricing {
   tierMeta?: Record<string, { name?: string; kind?: string; slot?: string; desc?: string; forRoles?: string[]; enabled?: boolean }>
   deletedTiers?: string[]          // idِ تیرهای seed که ادمین حذف کرده
   customTiers?: PromoTier[]        // تیرهای کاملاً جدیدِ ادمین
-  areaConfig?: { included?: number; extraPrice?: number }   // محله‌های شاملِ هر پروموت + نرخِ محلهٔ اضافه
+  areaConfig?: { maxAreas?: number }   // سقفِ محله‌های هر پروموتِ محله‌محور (بدونِ رایگان/اضافه)
 }
 const EMPTY: PromoPricing = { tiers: {}, packs: {}, bundles: {}, auction: {}, tierMeta: {}, deletedTiers: [], customTiers: [] }
 

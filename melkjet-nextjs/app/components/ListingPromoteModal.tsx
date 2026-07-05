@@ -22,8 +22,7 @@ export default function ListingPromoteModal({ preListing, preTierId, onClose, on
   const [tiers, setTiers] = useState<Tier[]>([])
   const [discount, setDiscount] = useState(0)
   const [wallet, setWallet] = useState(0)
-  const [areasIncluded, setAreasIncluded] = useState(2)
-  const [extraAreaPrice, setExtraAreaPrice] = useState(0)
+  const [maxAreas, setMaxAreas] = useState(2)
   const [listings, setListings] = useState<OwnListing[]>([])
   const [loadedListings, setLoadedListings] = useState(false)
   const [tierId, setTierId] = useState(preTierId || '')
@@ -35,7 +34,7 @@ export default function ListingPromoteModal({ preListing, preTierId, onClose, on
 
   useEffect(() => {
     fetch('/api/comm').then(r => r.ok ? r.json() : null).then(d => {
-      if (d) { setTiers(d.promoTiers || []); setDiscount(Number(d.promoDiscount) || 0); setWallet(Number(d.promoWallet) || 0); setAreasIncluded(Number(d.areasIncluded) || 2); setExtraAreaPrice(Number(d.extraAreaPrice) || 0) }
+      if (d) { setTiers(d.promoTiers || []); setDiscount(Number(d.promoDiscount) || 0); setWallet(Number(d.promoWallet) || 0); setMaxAreas(Number(d.maxAreas) || 2) }
     }).catch(() => {})
     // آگهی‌های منتشرشدهٔ خودِ کاربر (شناسه = آیتمِ اسکرپر، قابلِ استفاده به‌عنوان targetId).
     if (!preListing) {
@@ -50,8 +49,7 @@ export default function ListingPromoteModal({ preListing, preTierId, onClose, on
   const tier = tiers.find(t => t.id === tierId)
   const needsListing = tier?.target === 'listing'
   const listing = preListing || listings.find(l => l.id === listingId)
-  const extraAreas = Math.max(0, areas.length - areasIncluded)
-  const effectiveTotal = (tier ? discPrice(tier.price) : 0) + extraAreas * extraAreaPrice
+  const effectiveTotal = tier ? discPrice(tier.price) : 0
   const canProceed = !!tier && (!needsListing || !!listing)
 
   const submit = async (gateway: string, receipt: string, payFromWallet = false) => {
@@ -141,13 +139,12 @@ export default function ListingPromoteModal({ preListing, preTierId, onClose, on
               </div>
             )}
 
-            {/* محله‌های هدف — اختیاری */}
+            {/* محله‌های هدف — اختیاری، تا سقفِ مجاز */}
             <div style={{ fontSize: 13, fontWeight: 800, margin: '18px 0 6px' }}>۳. محله‌های هدف <span style={{ fontWeight: 500, color: 'var(--muted)' }}>(اختیاری)</span></div>
             <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.8 }}>
-              {fa(areasIncluded)} محلهٔ اول رایگان است؛ هر محلهٔ بیشتر {fa(extraAreaPrice)} تومان.
-              {extraAreas > 0 && <span style={{ color: 'var(--gold)', fontWeight: 700 }}> — {fa(extraAreas)} محلهٔ اضافه: {fa(extraAreas * extraAreaPrice)} تومان</span>}
+              این پروموت تا <b style={{ color: 'var(--text)' }}>{fa(maxAreas)} محله</b> را پوشش می‌دهد (بدونِ هزینهٔ اضافه). برای محله‌های بیشتر، پروموتِ دیگری تهیه کنید.
             </div>
-            <AreaPicker value={areas} onChange={setAreas} />
+            <AreaPicker value={areas} onChange={setAreas} max={maxAreas} />
 
             {msg && <div style={{ fontSize: 12.5, fontWeight: 600, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a', marginTop: 14, textAlign: 'center' }}>{msg}</div>}
             <button onClick={() => setStep('pay')} disabled={!canProceed} style={{ width: '100%', marginTop: 16, padding: '12px', borderRadius: 12, border: 'none', background: canProceed ? 'linear-gradient(135deg,var(--gold2),var(--gold))' : 'var(--bg2)', color: canProceed ? '#16140f' : 'var(--muted)', fontWeight: 800, fontSize: 14, cursor: canProceed ? 'pointer' : 'not-allowed', fontFamily: FONT }}>

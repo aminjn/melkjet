@@ -180,9 +180,9 @@ export interface Promotion {
 }
 
 // ── پیکربندیِ محله‌محوریِ پروموت (قابلِ تنظیم از سوپرادمین) ──
-// هر پروموت به‌صورتِ پیش‌فرض این تعداد محله را شامل می‌شود؛ محله‌های بیشتر با نرخِ زیر.
-export function areasIncluded(): number { try { const n = Number(promoPricing().areaConfig?.included); return n > 0 ? n : 2 } catch { return 2 } }
-export function extraAreaPrice(): number { try { const n = Number(promoPricing().areaConfig?.extraPrice); return n >= 0 ? n : 99000 } catch { return 99000 } }
+// هر پروموتِ محله‌محور دقیقاً تا این تعداد محله را پوشش می‌دهد (بدونِ محلهٔ رایگان/اضافه).
+// برای پوششِ محله‌های بیشتر، کاربر پروموتِ دیگری می‌خرد.
+export function maxAreasPerPromo(): number { try { const n = Number(promoPricing().areaConfig?.maxAreas); return n > 0 ? n : 2 } catch { return 2 } }
 const normArea = (s: string) => String(s || '').trim().replace(/\s+/g, ' ')
 
 // دومَحاله: DATABASE_URL ست باشد → Postgres (نوشتنِ اتمیک، سازگار با ۴ اینستنسِ pm2)، وگرنه فایل.
