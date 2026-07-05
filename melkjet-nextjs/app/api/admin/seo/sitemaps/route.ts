@@ -4,7 +4,7 @@ import { getAdminData, saveAdminData } from '@/app/lib/admin-store'
 import { shardList, sitemapConfig, snapshotMeta, checkNewShards, DEFAULT_MAX, BASE } from '@/app/lib/sitemap-store'
 import { logAudit } from '@/app/lib/audit-store'
 
-const SECTIONS = ['static', 'blog', 'listings', 'locations', 'projects', 'providers']
+const SECTIONS = ['static', 'blog', 'listings', 'locations', 'projects', 'providers', 'builders', 'products', 'stores']
 
 // مرکزِ سایت‌مپ (سوپرادمین): فهرستِ شاردها + تنظیماتِ سقف/بخش‌ها + هشدارِ شاردِ جدید.
 export async function GET() {

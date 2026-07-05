@@ -40,8 +40,8 @@ export default function MaterialsSupplyView() {
           نرخِ روزِ مصالح از قیمتِ واقعیِ فروشندگانِ ملک‌جت. برای برآوردِ هزینه، مقایسه و استعلامِ مستقیم از فروشنده.
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-          <a href="/nerkh-masaleh" target="_blank" rel="noreferrer" style={linkBtn}>📊 نرخِ روزِ کامل ↗</a>
-          <a href="/forushgaha" target="_blank" rel="noreferrer" style={linkBtn}>🏪 همهٔ فروشگاه‌ها ↗</a>
+          <a href="/materials-prices" target="_blank" rel="noreferrer" style={linkBtn}>📊 نرخِ روزِ کامل ↗</a>
+          <a href="/stores" target="_blank" rel="noreferrer" style={linkBtn}>🏪 همهٔ فروشگاه‌ها ↗</a>
         </div>
       </div>
 
@@ -77,7 +77,7 @@ export default function MaterialsSupplyView() {
             ) : (
               <div style={{ maxHeight: 520, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
                 {shops.slice(0, 20).map((s, i) => (
-                  <a key={s.slug} href={`/forushgah/${s.slug}`} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderTop: i ? '1px solid var(--line)' : 'none', textDecoration: 'none', color: 'inherit' }}>
+                  <a key={s.slug} href={`/store/${s.slug}`} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderTop: i ? '1px solid var(--line)' : 'none', textDecoration: 'none', color: 'inherit' }}>
                     <div style={{ width: 42, height: 42, borderRadius: 10, flexShrink: 0, background: s.logo ? `center/cover no-repeat url(${s.logo})` : 'linear-gradient(135deg,var(--gold2),var(--gold))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 800, color: '#16140f' }}>{!s.logo && (s.name.charAt(0) || 'ف')}</div>
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ fontSize: 13.5, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name}</div>

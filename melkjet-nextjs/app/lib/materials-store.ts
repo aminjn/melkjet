@@ -93,7 +93,7 @@ export interface Shop {
   products: Product[]
   orders: Order[]
   inquiries: Inquiry[]
-  slug?: string        // شناسهٔ عمومیِ ویترین (/forushgah/[slug])
+  slug?: string        // شناسهٔ عمومیِ ویترین (/store/[slug])
   createdAt: number
 }
 

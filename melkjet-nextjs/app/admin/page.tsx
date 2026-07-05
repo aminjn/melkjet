@@ -1603,7 +1603,7 @@ interface PSState {
 // ── مرکز سایت‌مپ (SEO) ──────────────────────────────────────────────────────
 interface SmShard { name: string; type: string; count: number; lastmod?: string; status: 'healthy' | 'empty' | 'over' }
 interface SmData { config: { maxUrls: number; sections: Record<string, boolean> }; sections: string[]; indexUrl: string; robotsUrl: string; shards: SmShard[]; total: number; snapshot: { snapshotAt?: number; totalUrls?: number }; defaultMax: number }
-const SEC_LABEL: Record<string, string> = { static: 'ثابت', blog: 'بلاگ', listings: 'آگهی‌ها', locations: 'مکان‌ها', projects: 'پروژه‌ها', providers: 'متخصصان' }
+const SEC_LABEL: Record<string, string> = { static: 'ثابت', blog: 'بلاگ', listings: 'آگهی‌ها', locations: 'مکان‌ها', projects: 'پروژه‌ها', providers: 'متخصصان', builders: 'سازنده‌ها', products: 'محصولات', stores: 'فروشگاه‌ها' }
 
 function SitemapView() {
   const [d, setD] = useState<SmData | null>(null)
@@ -1940,7 +1940,7 @@ function PersianSazeView() {
                   <div>
                     <div style={{ fontWeight: 900, fontSize: 18 }}>{detail.name}</div>
                     <div style={{ fontSize: 13, marginTop: 6 }}>{detail.phone ? <span style={{ color: '#5fd98a', direction: 'ltr', display: 'inline-block' }}>{detail.phone}</span> : <span style={{ color: 'var(--faint)' }}>بدون شماره</span>} · {fa(detail.projectCount)} پروژه</div>
-                    <a href={`/sazande/${encodeURIComponent(detail.id)}`} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--gold)', textDecoration: 'none', display: 'inline-block', marginTop: 8 }}>🔗 مشاهدهٔ صفحهٔ عمومیِ سازنده</a>
+                    <a href={`/builders/${encodeURIComponent(detail.id)}`} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--gold)', textDecoration: 'none', display: 'inline-block', marginTop: 8 }}>🔗 مشاهدهٔ صفحهٔ عمومیِ سازنده</a>
                   </div>
                   <button onClick={() => { setDetail(null); setDetailLoading(false) }} style={{ fontSize: 18, padding: '4px 10px', borderRadius: 8, border: '1px solid var(--line2)', color: 'var(--muted)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>×</button>
                 </div>

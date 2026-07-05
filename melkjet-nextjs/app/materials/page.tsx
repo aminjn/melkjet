@@ -456,7 +456,7 @@ export default function MaterialsPage() {
               <ArticleEditor compact author={myName || undefined} />
             </div>
           )}
-          {view === 'catalog' && <CatalogView products={products} post={post} busy={busy} search={search} showAdd={showAdd} setShowAdd={setShowAdd} storefrontUrl={stats.slug ? `/forushgah/${stats.slug}` : ''} />}
+          {view === 'catalog' && <CatalogView products={products} post={post} busy={busy} search={search} showAdd={showAdd} setShowAdd={setShowAdd} storefrontUrl={stats.slug ? `/store/${stats.slug}` : ''} />}
           {view === 'orders' && <OrdersView orders={orders} products={products} post={post} busy={busy} search={search} />}
           {view === 'inquiries' && <InquiriesView inquiries={inquiries} products={products} post={post} busy={busy} search={search} />}
           {view === 'plans' && <PlansPanel dashboard="/materials" />}
@@ -491,7 +491,7 @@ export default function MaterialsPage() {
 // بنرِ ویترینِ عمومی — لینک + کپیِ آدرس برای اشتراک‌گذاری.
 function StorefrontBanner({ slug }: { slug: string }) {
   const [copied, setCopied] = useState(false)
-  const path = `/forushgah/${slug}`
+  const path = `/store/${slug}`
   const copy = () => {
     const url = (typeof window !== 'undefined' ? window.location.origin : '') + path
     navigator.clipboard?.writeText(url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) }).catch(() => {})

@@ -70,7 +70,7 @@ async function tick(): Promise<{ due: number; synced: number }> {
 // آن‌ها با اولین ترافیکِ واقعی کش می‌شوند. گرم‌کردنِ مکررِ APIهای ۱۹هزار-پروژه‌ای CPU را می‌سوزاند.)
 async function warmUp() {
   const ports = (process.env.WARM_PORTS || String(process.env.PORT || 3000)).split(',').map(s => s.trim()).filter(Boolean)
-  const paths = ['/', '/search', '/sazandeha']
+  const paths = ['/', '/search', '/builders']
   for (const port of ports) {
     for (const p of paths) { try { await fetch(`http://127.0.0.1:${port}${p}`, { cache: 'no-store' }) } catch {} }
   }

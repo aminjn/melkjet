@@ -3,7 +3,7 @@ import { join } from 'path'
 import { randomBytes } from 'crypto'
 
 // ─── پروفایلِ عمومیِ سازنده (آنچه سازنده در پنلِ خودش پر می‌کند) ────────────────
-// کلید = شناسهٔ سازندهٔ پرشین سازه (constructor.id) — همان که صفحهٔ عمومی /sazande/[id]
+// کلید = شناسهٔ سازندهٔ پرشین سازه (constructor.id) — همان که صفحهٔ عمومی /builders/[id]
 // با آن باز می‌شود. هیچ دادهٔ فیکی نیست: یا واقعیِ پرشین سازه است یا واردشده توسطِ خودِ سازنده.
 const FILE = join(process.cwd(), '.builder-public-data.json')
 function id() { return randomBytes(6).toString('hex') }

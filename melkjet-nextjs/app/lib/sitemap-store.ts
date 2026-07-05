@@ -144,6 +144,36 @@ export async function buildShards(force = false): Promise<Shard[]> {
     } catch {}
   }
 
+  // ── سازنده‌ها (پرشین‌سازه) — فقط‌خواندنی از نگاشتِ slug ──
+  if (enabled(sections, 'builders')) {
+    try {
+      const { allBuilderSlugsById } = await import('./builder-slug-store')
+      const map = await allBuilderSlugsById()
+      const s = Object.values(map).map(slug => ({ url: `${BASE}/builders/${slug}`, priority: 0.55 } as UrlEntry))
+      addSection('builders', 'سازنده', s)
+    } catch {}
+  }
+
+  // ── محصولاتِ مصالح — فقط‌خواندنی از نگاشتِ slug ──
+  if (enabled(sections, 'products')) {
+    try {
+      const { allProductSlugsById } = await import('./product-slug-store')
+      const map = await allProductSlugsById()
+      const s = Object.values(map).map(slug => ({ url: `${BASE}/product/${slug}`, priority: 0.5 } as UrlEntry))
+      addSection('products', 'محصول', s)
+    } catch {}
+  }
+
+  // ── فروشگاه‌های مصالح (storefront) — از قبل slug دارند ──
+  if (enabled(sections, 'stores')) {
+    try {
+      const { listPublicShops } = await import('./materials-store')
+      const shops = await listPublicShops()
+      const s = (shops || []).map((sh: any) => sh.slug ? ({ url: `${BASE}/store/${sh.slug}`, priority: 0.55 } as UrlEntry) : null).filter(Boolean) as UrlEntry[]
+      addSection('stores', 'فروشگاه', s)
+    } catch {}
+  }
+
   CACHE = { at: Date.now(), shards }
   return shards
 }
@@ -226,6 +256,22 @@ export async function precomputeSlugs(): Promise<{ projects: number; providers: 
     const need = items.filter(p => !have[p.hashId]).map(p => ({ hashId: p.hashId, name: p.address || (p as any).builderName || 'پروژه' }))
     if (need.length) projects = await ensureManyProjectSlugs(need)
   } catch {}
-  if (projects || providers) CACHE = null   // کشِ سایت‌مپ باطل شود تا slugهای تازه بازتاب یابند
-  return { projects, providers }
+  let builders = 0, products = 0
+  try {
+    const { getProfiles } = await import('./persiansaze-store')
+    const { ensureManyBuilderSlugs, allBuilderSlugsById } = await import('./builder-slug-store')
+    const have = await allBuilderSlugsById()
+    const profs = getProfiles()
+    const need = Object.values(profs).filter(b => b && b.name && !have[b.id]).map(b => ({ id: b.id, name: b.name }))
+    if (need.length) builders = await ensureManyBuilderSlugs(need)
+  } catch {}
+  try {
+    const { listProducts } = await import('./catalog-store')
+    const { ensureManyProductSlugs, allProductSlugsById } = await import('./product-slug-store')
+    const have = await allProductSlugsById()
+    const need = listProducts({ activeOnly: true }).filter(p => !have[p.id]).map(p => ({ id: p.id, name: p.name }))
+    if (need.length) products = await ensureManyProductSlugs(need)
+  } catch {}
+  if (projects || providers || builders || products) CACHE = null   // کشِ سایت‌مپ باطل شود
+  return { projects, providers, builders, products } as any
 }

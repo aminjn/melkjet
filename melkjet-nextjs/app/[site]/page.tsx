@@ -764,7 +764,7 @@ async function CatalogBlock({ block, primary, ownerPhone }: { block: SiteBlock; 
             {products.map(pr => {
               const price = Math.round(pr.price * (1 - (pr.discountPct || 0) / 100))
               const img = pr.images?.[0]
-              const href = data?.slug ? `/forushgah/${data.slug}` : undefined
+              const href = data?.slug ? `/store/${data.slug}` : undefined
               const Card: any = href ? 'a' : 'div'
               return (
                 <Card key={pr.id} {...(href ? { href } : {})} style={{ background: SURFACE, border: '1px solid rgba(0,0,0,0.08)', borderRadius: 16, overflow: 'hidden', textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column', boxShadow: CARD_SHADOW }}>

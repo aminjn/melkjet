@@ -69,7 +69,7 @@ export default function ComparePage() {
         ) : !items.length ? (
           <div style={{ color: 'var(--faint)', textAlign: 'center', padding: '70px 0' }}>
             از روی کارت‌ها یا صفحهٔ آگهی/پروژه، گزینهٔ «⇄ مقایسه» را بزنید تا این‌جا کنارِ هم بیایند.
-            <div style={{ marginTop: 16 }}><Link href="/sazandeha" style={{ color: 'var(--gold)', textDecoration: 'none' }}>مشاهدهٔ پروژه‌ها →</Link></div>
+            <div style={{ marginTop: 16 }}><Link href="/builders" style={{ color: 'var(--gold)', textDecoration: 'none' }}>مشاهدهٔ پروژه‌ها →</Link></div>
           </div>
         ) : (
           <>

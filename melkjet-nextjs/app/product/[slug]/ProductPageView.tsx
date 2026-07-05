@@ -27,7 +27,7 @@ export default function ProductPageView({ product, breadcrumb, sellers, related 
       <div style={{ maxWidth: 1120, margin: '0 auto', padding: '20px 20px 60px' }}>
         {/* breadcrumb */}
         <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 16, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-          <Link href="/forushgaha" style={{ color: 'var(--muted)', textDecoration: 'none' }}>بازار مصالح</Link>
+          <Link href="/stores" style={{ color: 'var(--muted)', textDecoration: 'none' }}>بازار مصالح</Link>
           {breadcrumb.map(b => <span key={b.id} style={{ display: 'flex', gap: 6 }}><span style={{ color: 'var(--faint)' }}>›</span><span>{b.name}</span></span>)}
         </div>
 
@@ -61,13 +61,13 @@ export default function ProductPageView({ product, breadcrumb, sellers, related 
                     <span style={{ fontSize: 13, color: 'var(--muted)' }}>تومان{product.unit ? ` / ${product.unit}` : ''}</span>
                   </div>
                   <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 8, lineHeight: 1.9 }}>هنوز فروشنده‌ای این کالا را عرضه نکرده است.
-                    <Link href="/forushgaha" style={{ color: 'var(--gold)', textDecoration: 'none', marginInlineStart: 6 }}>فروشگاه‌های مصالح ↗</Link>
+                    <Link href="/stores" style={{ color: 'var(--gold)', textDecoration: 'none', marginInlineStart: 6 }}>فروشگاه‌های مصالح ↗</Link>
                   </div>
                 </>
               ) : (
                 <div style={{ fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.9 }}>
                   هنوز فروشنده‌ای این کالا را عرضه نکرده است.
-                  <Link href="/forushgaha" style={{ display: 'block', marginTop: 8, color: 'var(--gold)', textDecoration: 'none' }}>مشاهدهٔ فروشگاه‌های مصالح ↗</Link>
+                  <Link href="/stores" style={{ display: 'block', marginTop: 8, color: 'var(--gold)', textDecoration: 'none' }}>مشاهدهٔ فروشگاه‌های مصالح ↗</Link>
                 </div>
               )}
             </div>
@@ -125,7 +125,7 @@ export default function ProductPageView({ product, breadcrumb, sellers, related 
           {sellers.length === 0 ? (
             <div style={{ ...card, padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 14 }}>
               هنوز فروشنده‌ای این کالا را با قیمت عرضه نکرده است.
-              <Link href="/forushgaha" style={{ display: 'block', marginTop: 10, color: 'var(--gold)', textDecoration: 'none' }}>مرورِ فروشگاه‌های مصالح ↗</Link>
+              <Link href="/stores" style={{ display: 'block', marginTop: 10, color: 'var(--gold)', textDecoration: 'none' }}>مرورِ فروشگاه‌های مصالح ↗</Link>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -141,7 +141,7 @@ export default function ProductPageView({ product, breadcrumb, sellers, related 
                       <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--gold)' }}>{money(s.price)}</div>
                       <div style={{ fontSize: 10.5, color: 'var(--muted)' }}>تومان/{s.unit}</div>
                     </div>
-                    <Link href={`/forushgah/${s.slug}`} style={{ fontSize: 12.5, color: '#16140f', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', textDecoration: 'none', borderRadius: 9, padding: '9px 16px', fontWeight: 700, whiteSpace: 'nowrap' }}>مشاهدهٔ فروشگاه</Link>
+                    <Link href={`/store/${s.slug}`} style={{ fontSize: 12.5, color: '#16140f', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', textDecoration: 'none', borderRadius: 9, padding: '9px 16px', fontWeight: 700, whiteSpace: 'nowrap' }}>مشاهدهٔ فروشگاه</Link>
                   </div>
                 </div>
               ))}
@@ -155,7 +155,7 @@ export default function ProductPageView({ product, breadcrumb, sellers, related 
             <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 14 }}>محصولاتِ مشابه</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(160px,1fr))', gap: 14 }}>
               {related.map(r => (
-                <Link key={r.id} href={`/mahsul/${r.id}`} style={{ ...card, overflow: 'hidden', textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column' }}>
+                <Link key={r.id} href={`/product/${r.id}`} style={{ ...card, overflow: 'hidden', textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column' }}>
                   <div style={{ height: 120, background: r.image ? `center/contain no-repeat url(${r.image}) var(--bg2)` : 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>{!r.image && '🧱'}</div>
                   <div style={{ padding: 12 }}>
                     <div style={{ fontSize: 12.5, fontWeight: 700, lineHeight: 1.6, minHeight: 40 }}>{r.name}</div>

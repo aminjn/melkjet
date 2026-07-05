@@ -159,7 +159,7 @@ export default function CatalogAdminView() {
                   <div style={{ color: 'var(--muted)', fontSize: 12 }}>{cats.find(c => c.id === p.categoryId)?.name || '—'}</div>
                   <div><span style={{ fontSize: 10.5, fontWeight: 700, color: p.source !== 'manual' ? '#5fd98a' : 'var(--gold)', background: 'var(--bg2)', borderRadius: 6, padding: '2px 7px' }}>{SRC_LABEL[p.source] || p.source}</span></div>
                   <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                    <a href={`/mahsul/${p.id}`} target="_blank" rel="noreferrer" title="صفحهٔ عمومیِ محصول" style={{ ...rowBtn, textDecoration: 'none', color: 'var(--gold)' }}>↗</a>
+                    <a href={`/product/${p.id}`} target="_blank" rel="noreferrer" title="صفحهٔ عمومیِ محصول" style={{ ...rowBtn, textDecoration: 'none', color: 'var(--gold)' }}>↗</a>
                     <button onClick={() => setEditing(p)} style={rowBtn}>ویرایش</button>
                     <button onClick={() => setConfirmDel({ kind: 'prod', id: p.id, name: p.name })} style={{ ...rowBtn, color: '#f87171' }}>×</button>
                   </div>

@@ -43,7 +43,7 @@ export default async function ProjectsHub() {
             ))}
           </div>
         )}
-        <p style={{ marginTop: 24, fontSize: 13, color: 'var(--muted)' }}>مرور بر اساسِ سازنده؟ <Link href="/sazandeha" style={{ color: 'var(--gold)', fontWeight: 700 }}>فهرستِ سازندگان ←</Link></p>
+        <p style={{ marginTop: 24, fontSize: 13, color: 'var(--muted)' }}>مرور بر اساسِ سازنده؟ <Link href="/builders" style={{ color: 'var(--gold)', fontWeight: 700 }}>فهرستِ سازندگان ←</Link></p>
       </div>
       <Footer />
     </div>

@@ -197,10 +197,10 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
           <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 10, marginTop: 26 }}>
             {[
               { l: 'خرید و اجارهٔ ملک', h: '/search', ic: '🏠' },
-              { l: 'بازارِ مصالح', h: '/bazar-masaleh', ic: '🧱' },
-              { l: 'نرخِ روزِ مصالح', h: '/nerkh-masaleh', ic: '📊' },
+              { l: 'بازارِ مصالح', h: '/materials-market', ic: '🧱' },
+              { l: 'نرخِ روزِ مصالح', h: '/materials-prices', ic: '📊' },
               { l: 'متخصصان', h: '/directory', ic: '👷' },
-              { l: 'سازندگان', h: '/sazandeha', ic: '🏗️' },
+              { l: 'سازندگان', h: '/builders', ic: '🏗️' },
               { l: 'دستیارِ AI', h: '/plan-ai', ic: '🤖' },
             ].map(p => (
               <Link key={p.l} href={p.h} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 999, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--text)', textDecoration: 'none', fontSize: 13, fontWeight: 600 }}>
@@ -222,10 +222,10 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
           {[
             { ic: '🏠', t: 'خرید، فروش و اجارهٔ ملک', d: 'جستجوی هوشمند با هزاران فایلِ فعال، تحلیلِ قیمت و مقایسه.', href: '/search', c: '#7a8fae' },
             { ic: '👷', t: 'متخصصان و مشاوران', d: 'دایرکتوریِ مشاور، آژانس، سازنده و مشاورِ حقوقیِ تأییدشده.', href: '/directory', c: '#caa86a' },
-            { ic: '🏗️', t: 'بانکِ سازندگان', d: 'دیتابیسِ سازندگان و پروژه‌ها با اطلاعاتِ تماسِ مستقیم.', href: '/sazandeha', c: '#b07a8a' },
-            { ic: '🧱', t: 'بازارِ مصالح', d: 'کاتالوگِ کاملِ مصالح با قیمتِ مرجع، جستجو و مقایسهٔ فروشندگان.', href: '/bazar-masaleh', c: '#e7a14a' },
-            { ic: '🏪', t: 'فروشگاه‌های مصالح', d: 'دایرکتوریِ تأمین‌کنندگان با ویترینِ اختصاصی و استعلامِ مستقیم.', href: '/forushgaha', c: '#5fd98a' },
-            { ic: '📊', t: 'نرخِ روزِ مصالح', d: 'قیمتِ روزِ آهن، سیمان و مصالح با نمودارِ روندِ تاریخی.', href: '/nerkh-masaleh', c: '#4ec4e8' },
+            { ic: '🏗️', t: 'بانکِ سازندگان', d: 'دیتابیسِ سازندگان و پروژه‌ها با اطلاعاتِ تماسِ مستقیم.', href: '/builders', c: '#b07a8a' },
+            { ic: '🧱', t: 'بازارِ مصالح', d: 'کاتالوگِ کاملِ مصالح با قیمتِ مرجع، جستجو و مقایسهٔ فروشندگان.', href: '/materials-market', c: '#e7a14a' },
+            { ic: '🏪', t: 'فروشگاه‌های مصالح', d: 'دایرکتوریِ تأمین‌کنندگان با ویترینِ اختصاصی و استعلامِ مستقیم.', href: '/stores', c: '#5fd98a' },
+            { ic: '📊', t: 'نرخِ روزِ مصالح', d: 'قیمتِ روزِ آهن، سیمان و مصالح با نمودارِ روندِ تاریخی.', href: '/materials-prices', c: '#4ec4e8' },
             { ic: '🤖', t: 'دستیارِ هوشِ مصنوعی', d: 'مشاورِ ۲۴ساعته برای خرید، قیمت‌گذاری، مذاکره و راهنماییِ حقوقی.', href: '/plan-ai', c: '#a77fd4' },
             { ic: '📐', t: 'استودیو پلان و سه‌بعدی', d: 'طراحیِ نقشه و رندرِ سه‌بعدیِ واحد با کمکِ هوشِ مصنوعی.', href: '/plan-ai', c: '#7aa88f' },
             { ic: '💼', t: 'ابزارِ کسب‌وکار', d: 'CRM، بازاریابی، اتوماسیون و سایت‌سازِ اختصاصی برای متخصصان.', href: '/pricing', c: '#c9a84c' },

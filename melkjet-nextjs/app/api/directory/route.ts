@@ -7,7 +7,7 @@ import { getAdvisor } from '@/app/lib/advisor-store'
 // دایرکتوریِ متخصصانِ «ثبت‌شده در سایت» — تا کاربران واقعیِ نقش‌دار (مشاور/آژانس/سازنده/
 // مصالح/حقوقی) در دایرکتوری دیده شوند و به پروفایلِ عمومی‌شان لینک شوند.
 // نگاشتِ نامِ نقش → دستهٔ دایرکتوری:
-// سازنده جدا از این نگاشت است: مستقیم از پرشین‌سازه با لینکِ درستِ /sazande/{id} می‌آید،
+// سازنده جدا از این نگاشت است: مستقیم از پرشین‌سازه با لینکِ درستِ /builders/{id} می‌آید،
 // نه از اکانت‌ها با لینکِ /profile (که صفحهٔ خالی بود).
 const ROLE_CAT: Record<string, string> = {
   'مشاور املاک': 'مشاور',
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
   } catch { /* اسکرپر در دسترس نبود */ }
   const { computeRepBadges } = await import('@/app/lib/reputation')
 
-  // ── سازنده‌ها: مستقیم از دیتابیسِ پرشین‌سازه، با لینکِ درستِ /sazande/{constructorId} ──
+  // ── سازنده‌ها: مستقیم از دیتابیسِ پرشین‌سازه، با لینکِ درستِ /builders/{constructorId} ──
   if (!category || category === 'سازنده') {
     try {
       const { getProfiles, regionLabel } = await import('@/app/lib/persiansaze-store')
@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
           excerpt: pc ? `${pc.toLocaleString('fa-IR')} پروژه` : '',
           tags: pc ? [`${pc.toLocaleString('fa-IR')} پروژه`] : [],
           hasPhone: !!(b.phone || (b.phones && b.phones.length)),
-          url: `/sazande/${encodeURIComponent(b.id)}`,
+          url: `/builders/${encodeURIComponent(b.id)}`,
           revealKind: 'builder', revealId: String(b.id),   // شمارهٔ سازنده از /api/contact-reveal
           scrapedAt: 0, status: 'approved', registered: true,
         })

@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 
 // ویرایشگرِ پروفایلِ عمومیِ سازنده در پنل — وصل به /api/builder (action‌های public).
-// آنچه این‌جا پر می‌شود، دقیقاً در صفحهٔ عمومی /sazande/[id] نمایش داده می‌شود.
+// آنچه این‌جا پر می‌شود، دقیقاً در صفحهٔ عمومی /builders/[id] نمایش داده می‌شود.
 
 const inp: React.CSSProperties = { width: '100%', border: '1px solid var(--line2)', borderRadius: 10, background: 'var(--bg2)', color: 'var(--text)', fontFamily: 'inherit', fontSize: 13, padding: '10px 12px', outline: 'none', boxSizing: 'border-box' }
 const lbl: React.CSSProperties = { fontSize: 11.5, color: 'var(--muted)', fontWeight: 700, marginBottom: 6, display: 'block' }
@@ -69,7 +69,7 @@ export default function BuilderPublicView() {
           <div style={{ fontSize: 18, fontWeight: 800 }}>پروفایلِ عمومیِ سازنده</div>
           <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 4 }}>{name} · این اطلاعات در صفحهٔ عمومیِ شما نمایش داده می‌شود</div>
         </div>
-        <a href={`/sazande/${encodeURIComponent(builderId)}`} target="_blank" rel="noreferrer" style={{ ...btnGhost, textDecoration: 'none', display: 'inline-block' }}>مشاهدهٔ صفحهٔ عمومی ↗</a>
+        <a href={`/builders/${encodeURIComponent(builderId)}`} target="_blank" rel="noreferrer" style={{ ...btnGhost, textDecoration: 'none', display: 'inline-block' }}>مشاهدهٔ صفحهٔ عمومی ↗</a>
       </div>
 
       {/* Profile fields */}

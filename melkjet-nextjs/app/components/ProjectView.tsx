@@ -285,7 +285,7 @@ export default function ProjectView({ p }: { p: ViewProject }) {
             <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
               <div style={{ width: 56, height: 56, borderRadius: 18, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16140f', fontSize: 22, fontWeight: 900 }}>{devLogo}</div>
               <div style={{ minWidth: 0 }}>
-                <Link href={`/sazande/${encodeURIComponent(p.builder.id)}`} style={{ fontSize: 17, fontWeight: 800, color: 'var(--text)', textDecoration: 'none' }}>{p.builder.name}</Link>
+                <Link href={`/builders/${encodeURIComponent(p.builder.id)}`} style={{ fontSize: 17, fontWeight: 800, color: 'var(--text)', textDecoration: 'none' }}>{p.builder.name}</Link>
                 <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 4 }}>{p.builder.regions.length ? `فعال در ${p.builder.regions.join('، ')}` : 'سازنده / انبوه‌ساز'}</div>
               </div>
               <div style={{ marginRight: 'auto', display: 'flex', gap: 20 }}>
