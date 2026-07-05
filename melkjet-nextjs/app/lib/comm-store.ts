@@ -20,17 +20,25 @@ export type OrderKind = 'package' | 'plan'
 export interface CommOrder { id: string; owner: string; kind: OrderKind; name: string; price: number; status: OrderStatus; createdAt: number; paidAt?: number; packageId?: string; channel?: Channel; credits?: number; planId?: string; gateway?: string; receipt?: string; period?: string }
 
 interface DB { packages: CommPackage[]; credits: Record<string, Credit>; orders: CommOrder[]; usage?: Record<string, { token: number }>; pkgSeeded?: boolean; seedV?: number }
-const PKG_SEED_V = 2
+const PKG_SEED_V = 3
 const EMPTY: DB = { packages: [], credits: {}, orders: [], usage: {} }
 
 function id(p = '') { return p + randomBytes(5).toString('hex') }
-// بسته‌های پیش‌فرض (اعتبارِ AI/پیامک/ایمیل) — یک‌بار seed می‌شوند؛ در همهٔ پروفایل‌ها دیده می‌شوند.
+// هر «عملیاتِ هوش مصنوعی» (تولیدِ متن، تحلیل، بازنویسی و…) ≈ این تعداد توکن. اعتبار به‌شکلِ
+// «عملیات» به کاربر نشان داده می‌شود (نه توکنِ خام) چون برای کاربر معنادارتر است.
+export const TOKENS_PER_OP = 2000
+export const toOps = (tokens: number) => Math.max(0, Math.floor((Number(tokens) || 0) / TOKENS_PER_OP))
+
+// بسته‌های پیش‌فرض. کانالِ «token» حالا بسته‌های «عملیاتِ هوش مصنوعی» است (credits = عملیات × TOKENS_PER_OP).
 function seedPackages(): CommPackage[] {
   const now = Date.now()
   const mk = (channel: Channel, name: string, credits: number, price: number): CommPackage => ({ id: id('pk_'), channel, name, credits, price, active: true, createdAt: now })
+  const op = (name: string, ops: number, price: number) => mk('token', name, ops * TOKENS_PER_OP, price)
   return [
-    mk('token', '۱۰٬۰۰۰ توکن هوش مصنوعی', 10000, 49000), mk('token', '۲۵٬۰۰۰ توکن', 25000, 99000), mk('token', '۵۰٬۰۰۰ توکن', 50000, 189000),
-    mk('token', '۱۰۰٬۰۰۰ توکن', 100000, 349000), mk('token', '۲۵۰٬۰۰۰ توکن', 250000, 799000), mk('token', '۵۰۰٬۰۰۰ توکن', 500000, 1490000), mk('token', '۱٬۰۰۰٬۰۰۰ توکن', 1000000, 2690000),
+    op('بستهٔ AI پایه — ۵۰ عملیات', 50, 29000),
+    op('بستهٔ AI استاندارد — ۲۰۰ عملیات', 200, 79000),
+    op('بستهٔ AI حرفه‌ای — ۵۰۰ عملیات', 500, 179000),
+    op('بستهٔ AI کسب‌وکار — ۱۵۰۰ عملیات', 1500, 399000),
     mk('sms', '۵۰۰ پیامک', 500, 45000), mk('sms', '۱٬۰۰۰ پیامک', 1000, 85000), mk('sms', '۲٬۰۰۰ پیامک', 2000, 160000), mk('sms', '۱۰٬۰۰۰ پیامک', 10000, 750000),
     mk('email', '۱٬۰۰۰ ایمیل', 1000, 29000), mk('email', '۵٬۰۰۰ ایمیل', 5000, 120000), mk('email', '۱۰٬۰۰۰ ایمیل', 10000, 220000), mk('email', '۵۰٬۰۰۰ ایمیل', 50000, 990000),
   ]
@@ -55,6 +63,8 @@ void EMPTY
 function applySeed(db: DB): boolean {
   if ((db.seedV || 0) < PKG_SEED_V) {
     const seeds = seedPackages()
+    // نسخهٔ ۳: بسته‌های توکنِ قدیمی با بسته‌های «عملیات» جایگزین می‌شوند (یک‌بار).
+    if ((db.seedV || 0) < 3) db.packages = db.packages.filter(p => p.channel !== 'token')
     for (const ch of ['token', 'sms', 'email'] as Channel[]) if (!db.packages.some(p => p.channel === ch)) db.packages.push(...seeds.filter(s => s.channel === ch))
     db.seedV = PKG_SEED_V; db.pkgSeeded = true
     return true
@@ -156,7 +166,11 @@ export async function getTokenUsage(owner: string): Promise<number> { return Num
 export async function canUseToken(owner: string, role: string): Promise<boolean> {
   if (role === 'super_admin') return true
   if (!(await monetizationOn('token'))) return true
-  return (await getCredit(owner)).token > 0
+  return (await getCredit(owner)).token >= TOKENS_PER_OP   // حداقل یک «عملیات» اعتبار
+}
+// ثبتِ یک (یا چند) «عملیاتِ هوش مصنوعی» — هر عملیات = TOKENS_PER_OP توکن (کسرِ ثابت و قابل‌پیش‌بینی).
+export async function recordOp(owner: string, role: string, ops = 1): Promise<void> {
+  await recordToken(owner, role, Math.max(1, Math.round(ops)) * TOKENS_PER_OP)
 }
 // ثبتِ مصرف + کسر از اعتبار (اگر بستهٔ توکن فعال باشد) — اتمیک (read-modify-write زیرِ یک قفل).
 export async function recordToken(owner: string, role: string, tokens: number): Promise<void> {

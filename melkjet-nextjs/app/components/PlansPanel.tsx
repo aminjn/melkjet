@@ -12,10 +12,15 @@ interface Order { id: string; kind: string; name: string; channel?: string; plan
 const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
 
 const CH: Record<Channel, { label: string; icon: string; unit: string; buyLabel: string }> = {
-  token: { label: 'توکن هوش مصنوعی', icon: '🪙', unit: 'توکن', buyLabel: 'تهیهٔ توکن اضافه' },
+  token: { label: 'هوش مصنوعی', icon: '🤖', unit: 'عملیات', buyLabel: 'افزایش اعتبارِ هوش مصنوعی' },
   sms: { label: 'پیامک', icon: '✆', unit: 'پیامک', buyLabel: 'خریدِ بستهٔ پیامک' },
   email: { label: 'ایمیل', icon: '✉', unit: 'ایمیل', buyLabel: 'خریدِ بستهٔ ایمیل' },
 }
+// هر «عملیاتِ هوش مصنوعی» ≈ این تعداد توکن (هم‌راستا با comm-store.TOKENS_PER_OP). کاربر «عملیات» می‌بیند.
+const TOKENS_PER_OP = 2000
+const toOps = (t: number) => Math.max(0, Math.floor((Number(t) || 0) / TOKENS_PER_OP))
+// مقدارِ نمایشی برای هر کانال: توکن → عملیات؛ بقیه بدونِ تغییر.
+const disp = (ch: Channel, val: number) => ch === 'token' ? toOps(val) : (Number(val) || 0)
 
 export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'email'], title = 'پلن‌ها و اشتراک' }: { dashboard: string; channels?: Channel[]; title?: string }) {
   const [plans, setPlans] = useState<Plan[]>([])
@@ -70,7 +75,7 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
           <span style={{ fontSize: 26 }}>👑</span>
           <div style={{ fontSize: 21, fontWeight: 900, letterSpacing: '-.5px' }}>{title}</div>
         </div>
-        <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.9, maxWidth: 640, position: 'relative' }}>اشتراکِ مناسبِ خود را انتخاب کنید و در صورتِ نیاز، بسته‌های افزایشیِ پیامک، ایمیل و توکنِ هوش مصنوعی را تهیه کنید.</div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.9, maxWidth: 640, position: 'relative' }}>اشتراکِ مناسبِ خود را انتخاب کنید و در صورتِ نیاز، بسته‌های افزایشیِ عملیاتِ هوش مصنوعی، پیامک و ایمیل را تهیه کنید.</div>
       </div>
 
       {/* تعرفه ماهانه/سالانه */}
@@ -128,16 +133,16 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
                 <span style={{ fontSize: 22 }}>{meta.icon}</span>
                 <div>
                   <div style={{ fontSize: 14.5, fontWeight: 800 }}>{meta.buyLabel}</div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>بسته‌های قابلِ تهیه برای شارژِ {meta.label}{ch === 'token' && tokenUsed > 0 ? ` · تاکنون ${fa(tokenUsed)} توکن مصرف شده` : ''}</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>بسته‌های قابلِ تهیه برای شارژِ {meta.label}{ch === 'token' && toOps(tokenUsed) > 0 ? ` · تاکنون ${fa(toOps(tokenUsed))} عملیات انجام شده` : ''}</div>
                 </div>
               </div>
-              <div style={{ background: 'var(--goldDim)', border: '1px solid var(--gold)', borderRadius: 999, padding: '7px 16px', fontSize: 14.5, fontWeight: 900, color: 'var(--gold)' }}>{fa(credit[ch] || 0)} <span style={{ fontSize: 11, fontWeight: 600 }}>{meta.unit}</span></div>
+              <div style={{ background: 'var(--goldDim)', border: '1px solid var(--gold)', borderRadius: 999, padding: '7px 16px', fontSize: 14.5, fontWeight: 900, color: 'var(--gold)' }}>{fa(disp(ch, credit[ch] || 0))} <span style={{ fontSize: 11, fontWeight: 600 }}>{meta.unit}{ch === 'token' ? '‌ باقی‌مانده' : ''}</span></div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(165px,1fr))', gap: 12 }}>
               {list.map(p => (
                 <div key={p.id} style={{ background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 14, padding: 15, display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <div style={{ fontSize: 14, fontWeight: 800 }}>{p.name}</div>
-                  <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>{fa(p.credits)} {meta.unit}</div>
+                  <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>{fa(disp(ch, p.credits))} {meta.unit}</div>
                   <div style={{ fontSize: 17, fontWeight: 900, color: 'var(--gold)', marginTop: 2 }}>{fa(p.price)} <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)' }}>تومان</span></div>
                   <button onClick={() => buyPkg(p)} disabled={!!busy} style={{ marginTop: 6, padding: '9px', borderRadius: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 12.5, border: 'none', cursor: 'pointer', fontFamily: FONT, opacity: busy === 'pkg_' + p.id ? 0.6 : 1 }}>{busy === 'pkg_' + p.id ? '…' : 'تهیه'}</button>
                 </div>

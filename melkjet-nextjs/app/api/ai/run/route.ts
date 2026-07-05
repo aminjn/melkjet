@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { chatCompleteUsage, generateImage, agentModel } from '@/app/lib/gapgpt'
 import { getSession } from '@/app/lib/session'
-import { canUseToken, recordToken } from '@/app/lib/comm-store'
+import { canUseToken, recordOp } from '@/app/lib/comm-store'
 
 // System prompts per agent — defines what each agent does
 const SYSTEMS: Record<string, string> = {
@@ -36,8 +36,9 @@ export async function POST(req: NextRequest) {
       { role: 'system', content: system },
       { role: 'user', content: input },
     ])
-    // ثبتِ مصرفِ توکن برای کاربر (توکنِ واقعی از API؛ اگر نبود، تخمین از طولِ متن)
-    if (sess) { const used = tokens || Math.ceil((input.length + (text || '').length) / 3); await recordToken(sess.phone, sess.role, used) }
+    // هر فراخوانیِ AI = یک «عملیات» (کسرِ ثابت و قابل‌فهم برای کاربر). tokens صرفاً برای لاگ.
+    void tokens
+    if (sess) await recordOp(sess.phone, sess.role, 1)
 
     let imageUrl: string | undefined
     if (wantImage) {
