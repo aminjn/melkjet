@@ -1813,162 +1813,21 @@ function SitemapView() {
         )}
       </Card>
 
-      <SearchConsolePanel />
+      {/* ثبتِ سایت‌مپ در گوگل — مسیرِ درست (بدونِ نیاز به API). Googlebot از بیرون سایت‌مپ را می‌خواند؛
+          به «اینترنتِ بین‌المللِ سرور» ربطی ندارد. آمار را در خودِ Search Console گوگل ببین. */}
+      <Card style={{ borderColor: 'var(--gold)', background: 'var(--goldDim)' }}>
+        <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>✅ ثبت در گوگل (کارِ لازم — خیلی ساده)</div>
+        <ol style={{ margin: 0, paddingInlineStart: 18, fontSize: 12.5, color: 'var(--text)', lineHeight: 2 }}>
+          <li>وارد <a href="https://search.google.com/search-console" target="_blank" rel="noreferrer" style={{ color: 'var(--gold)' }}>Google Search Console</a> شو و property دامنه‌ات را اضافه/تأیید کن.</li>
+          <li>در بخشِ <b>Sitemaps</b>، این آدرس را Submit کن: <code style={{ direction: 'ltr', color: 'var(--gold)' }}>sitemap.xml</code></li>
+          <li>تمام. گوگل خودش می‌خواند (مثلِ بقیهٔ سایت‌های آروانی) — نه پروکسی می‌خواهد نه API.</li>
+        </ol>
+        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 8, lineHeight: 1.9 }}>آمارِ کلیک/ایمپرشن/کوئری را همان‌جا در Search Console گوگل می‌بینی. (اتصالِ APIِ داخلِ پنل کنار گذاشته شد چون سرورِ آروان بین‌الملل ندارد — و برای سئو لازم نیست.)</div>
+      </Card>
     </div>
   )
 }
 
-// ── اتصال به Google Search Console (Performance + وضعیتِ Sitemap + بازرسیِ URL) ──
-function SearchConsolePanel() {
-  const [st, setSt] = useState<{ configured?: boolean; propertyUrl?: string; hasKey?: boolean; proxyUrl?: string } | null>(null)
-  const [property, setProperty] = useState('sc-domain:melkjet.com')
-  const [key, setKey] = useState('')
-  const [proxyUrl, setProxyUrl] = useState('')
-  const [busy, setBusy] = useState('')
-  const [msg, setMsg] = useState('')
-  const [diag, setDiag] = useState<{ via: string; status: number; reached: boolean; snippet: string }[] | null>(null)
-  const [perf, setPerf] = useState<any>(null)
-  const [sm, setSm] = useState<any[] | null>(null)
-  const [inspectUrl, setInspectUrl] = useState('https://melkjet.com/')
-  const [inspectRes, setInspectRes] = useState<any>(null)
-
-  const load = () => fetch('/api/admin/seo/search-console', { cache: 'no-store' }).then(r => r.json()).then(j => { if (j.ok) { setSt(j); if (j.propertyUrl) setProperty(j.propertyUrl); if (j.proxyUrl) setProxyUrl(j.proxyUrl) } })
-  useEffect(() => { load() }, [])
-
-  const post = async (body: any, label: string) => {
-    setBusy(label); setMsg('')
-    try { const r = await fetch('/api/admin/seo/search-console', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); return await r.json() }
-    finally { setBusy('') }
-  }
-  const fa = (n: any) => (Number(n) || 0).toLocaleString('fa-IR')
-  const pct = (n: number) => `${((Number(n) || 0) * 100).toFixed(1)}٪`
-  const th: React.CSSProperties = { textAlign: 'right', fontSize: 11.5, color: 'var(--muted)', fontWeight: 700, padding: '8px 12px', borderBottom: '1px solid var(--line)' }
-  const td: React.CSSProperties = { fontSize: 12.5, padding: '8px 12px', borderBottom: '1px solid var(--line)' }
-  const inp: React.CSSProperties = { width: '100%', direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 12.5, fontFamily: 'monospace', outline: 'none', boxSizing: 'border-box' }
-
-  return (
-    <>
-      <Card style={{ marginTop: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-          <div style={{ fontSize: 15, fontWeight: 800 }}>🔗 اتصال به Google Search Console</div>
-          {st?.configured
-            ? <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: 'rgba(95,217,138,0.15)', color: '#5fd98a', fontWeight: 700 }}>متصل</span>
-            : <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: 'var(--bg2)', color: 'var(--muted)', fontWeight: 700 }}>تنظیم نشده</span>}
-        </div>
-        <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.9, margin: '0 0 12px' }}>
-          یک <b>Service Account</b> در Google Cloud بساز، API «Search Console» را فعال کن، فایلِ JSONِ کلید را این‌جا بگذار و همان
-          <span style={{ direction: 'ltr', display: 'inline-block' }}> client_email </span> را در Search Console به‌عنوانِ کاربرِ property اضافه کن.
-          آدرسِ property برای دامنه: <code style={{ color: 'var(--gold)' }}>sc-domain:melkjet.com</code>.
-        </p>
-        <div style={{ display: 'grid', gap: 10, marginBottom: 12 }}>
-          <label style={{ fontSize: 12, color: 'var(--muted)' }}>آدرسِ property
-            <input style={{ ...inp, marginTop: 5 }} value={property} onChange={e => setProperty(e.target.value)} placeholder="sc-domain:melkjet.com" />
-          </label>
-          <label style={{ fontSize: 12, color: 'var(--muted)' }}>کلیدِ Service Account (JSON){st?.hasKey ? ' — ذخیره شده (برای تغییر، جدید بگذار)' : ''}
-            <textarea style={{ ...inp, marginTop: 5, minHeight: 90, resize: 'vertical' }} value={key} onChange={e => setKey(e.target.value)} placeholder={st?.hasKey ? '•••••• (کلید ذخیره شده)' : '{ "type": "service_account", "client_email": "...", "private_key": "..." }'} />
-          </label>
-          <label style={{ fontSize: 12, color: 'var(--muted)' }}>پروکسی (اختیاری — اگر خالی باشد از پروکسیِ دیوار استفاده می‌شود؛ گوگل خارجی است)
-            <input style={{ ...inp, marginTop: 5 }} value={proxyUrl} onChange={e => setProxyUrl(e.target.value)} placeholder="http://127.0.0.1:10809" />
-          </label>
-        </div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <GoldButton disabled={!!busy} onClick={async () => { const j = await post({ action: 'save', propertyUrl: property, serviceAccountJson: key, proxyUrl }, 'save'); setMsg(j.ok ? '✅ ذخیره شد' : ('خطا: ' + (j.error || ''))); setKey(''); load() }}>{busy === 'save' ? '...' : 'ذخیره'}</GoldButton>
-          <OutlineButton onClick={async () => { const j = await post({ action: 'test' }, 'test'); setMsg(j.ok ? `✅ متصل — ${j.email || ''} روی ${j.property || ''}` : ('❌ ' + (j.error || 'اتصال ناموفق'))) }}>{busy === 'test' ? '...' : '🔌 تستِ اتصال'}</OutlineButton>
-          <OutlineButton onClick={async () => { setDiag(null); const j = await post({ action: 'diagnose' }, 'diag'); if (j.results) { setDiag(j.results); setMsg('') } else setMsg('خطا: ' + (j.error || '')) }}>{busy === 'diag' ? '...' : '🔬 عیب‌یابیِ اتصال'}</OutlineButton>
-          <a href="https://search.google.com/search-console" target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: 'var(--gold)', textDecoration: 'none', alignSelf: 'center' }}>بازکردنِ Search Console ↗</a>
-        </div>
-        {msg && <div style={{ marginTop: 10, fontSize: 12.5, color: msg.startsWith('❌') || msg.startsWith('خطا') ? '#e7674a' : 'var(--gold)' }}>{msg}</div>}
-        {diag && (
-          <div style={{ marginTop: 12, background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 10, padding: 12 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>کدام مسیر به گوگل می‌رسد؟ <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(هرکدام «رسید» بود، همان را در کادرِ پروکسی بگذار)</span></div>
-            <div style={{ display: 'grid', gap: 7 }}>
-              {diag.map((r, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, borderBottom: '1px solid var(--line)', paddingBottom: 6 }}>
-                  <span style={{ width: 20 }}>{r.reached ? '✅' : '❌'}</span>
-                  <span style={{ flex: 1 }}>{r.via}</span>
-                  <span style={{ color: r.reached ? '#5fd98a' : 'var(--muted)', fontWeight: 700 }}>{r.reached ? 'رسید به گوگل' : `نرسید (کد ${r.status})`}</span>
-                  <span style={{ direction: 'ltr', fontSize: 10.5, color: 'var(--faint)', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.snippet}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </Card>
-
-      {st?.configured && (
-        <>
-          {/* Performance */}
-          <Card style={{ marginTop: 14 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
-              <div style={{ fontSize: 14, fontWeight: 800 }}>📈 عملکردِ جستجو (۲۸ روز)</div>
-              <OutlineButton onClick={async () => { const j = await post({ action: 'performance', days: 28 }, 'perf'); if (j.ok) setPerf(j); else setMsg('خطا: ' + (j.error || '')) }}>{busy === 'perf' ? '...' : 'بارگذاری'}</OutlineButton>
-            </div>
-            {perf?.totals && (
-              <>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 10, marginBottom: 14 }}>
-                  {[['کلیک', fa(perf.totals.clicks)], ['ایمپرشن', fa(perf.totals.impressions)], ['CTR', pct(perf.totals.ctr)], ['میانگین جایگاه', (Number(perf.totals.position) || 0).toFixed(1)]].map(([l, v]) => (
-                    <div key={l} style={{ background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 10, padding: 12 }}>
-                      <div style={{ fontSize: 11, color: 'var(--muted)' }}>{l}</div><div style={{ fontSize: 18, fontWeight: 800, color: 'var(--gold)', marginTop: 3 }}>{v}</div>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }} className="mjsa-scgrid">
-                  {[['بالاترین کوئری‌ها', perf.queries, 'keys'], ['پُربازدیدترین صفحه‌ها', perf.pages, 'keys']].map(([title, rows]: any) => (
-                    <div key={title}>
-                      <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>{title}</div>
-                      <div style={{ overflowX: 'auto', border: '1px solid var(--line)', borderRadius: 10 }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 260 }}>
-                          <thead><tr><th style={th}>{title.includes('کوئری') ? 'عبارت' : 'صفحه'}</th><th style={th}>کلیک</th><th style={th}>ایمپرشن</th></tr></thead>
-                          <tbody>{(rows || []).slice(0, 12).map((r: any, i: number) => (
-                            <tr key={i}><td style={{ ...td, direction: title.includes('کوئری') ? 'rtl' : 'ltr', textAlign: title.includes('کوئری') ? 'right' : 'left', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5 }}>{r.keys?.[0]}</td><td style={td}>{fa(r.clicks)}</td><td style={td}>{fa(r.impressions)}</td></tr>
-                          ))}{!(rows || []).length && <tr><td style={{ ...td, color: 'var(--muted)' }} colSpan={3}>داده‌ای نیست</td></tr>}</tbody>
-                        </table>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </Card>
-
-          {/* Sitemaps status */}
-          <Card style={{ marginTop: 14 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
-              <div style={{ fontSize: 14, fontWeight: 800 }}>🗺 وضعیتِ Sitemapها در گوگل</div>
-              <OutlineButton onClick={async () => { const j = await post({ action: 'sitemaps' }, 'sm'); if (j.ok) setSm(j.sitemaps || []); else setMsg('خطا: ' + (j.error || '')) }}>{busy === 'sm' ? '...' : 'بارگذاری'}</OutlineButton>
-            </div>
-            {sm && (sm.length ? (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
-                  <thead><tr><th style={th}>مسیر</th><th style={th}>آخرین خوانده‌شدن</th><th style={th}>خطا</th><th style={th}>هشدار</th></tr></thead>
-                  <tbody>{sm.map((s: any, i: number) => (
-                    <tr key={i}><td style={{ ...td, direction: 'ltr', textAlign: 'left', fontSize: 11 }}>{(s.path || '').replace('https://melkjet.com', '')}</td><td style={{ ...td, direction: 'ltr', textAlign: 'left', fontSize: 11 }}>{s.lastDownloaded ? String(s.lastDownloaded).slice(0, 10) : '—'}</td><td style={{ ...td, color: Number(s.errors) ? '#e7674a' : 'inherit' }}>{fa(s.errors || 0)}</td><td style={{ ...td, color: Number(s.warnings) ? '#e7a14a' : 'inherit' }}>{fa(s.warnings || 0)}</td></tr>
-                  ))}</tbody>
-                </table>
-              </div>
-            ) : <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>هیچ Sitemap‌ای در گوگل ثبت نشده — آدرسِ <code style={{ color: 'var(--gold)' }}>/sitemap.xml</code> را در Search Console ثبت کن.</div>)}
-          </Card>
-
-          {/* URL inspector */}
-          <Card style={{ marginTop: 14 }}>
-            <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 10 }}>🔍 بازرسیِ ایندکسِ URL</div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <input style={{ ...inp, flex: 1, minWidth: 240 }} value={inspectUrl} onChange={e => setInspectUrl(e.target.value)} placeholder="https://melkjet.com/..." />
-              <OutlineButton onClick={async () => { const j = await post({ action: 'inspect', url: inspectUrl }, 'insp'); if (j.ok) setInspectRes(j.result); else setMsg('خطا: ' + (j.error || '')) }}>{busy === 'insp' ? '...' : 'بررسی'}</OutlineButton>
-            </div>
-            {inspectRes && (
-              <div style={{ marginTop: 12, display: 'grid', gap: 6, fontSize: 12.5 }}>
-                {[['وضعیتِ ایندکس', inspectRes.indexStatusResult?.verdict], ['پوششِ کراول', inspectRes.indexStatusResult?.coverageState], ['کنونیکالِ گوگل', inspectRes.indexStatusResult?.googleCanonical], ['آخرین کراول', inspectRes.indexStatusResult?.lastCrawlTime], ['روبات', inspectRes.indexStatusResult?.robotsTxtState]].map(([l, v]) => v ? (
-                  <div key={l as string} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, borderBottom: '1px solid var(--line)', paddingBottom: 5 }}><span style={{ color: 'var(--muted)' }}>{l}</span><span style={{ direction: 'ltr', fontSize: 11.5 }}>{String(v)}</span></div>
-                ) : null)}
-              </div>
-            )}
-          </Card>
-        </>
-      )}
-    </>
-  )
-}
 
 function PersianSazeView() {
   const [st, setSt] = useState<PSState | null>(null)
