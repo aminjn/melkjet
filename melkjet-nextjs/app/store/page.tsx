@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
+import PromoBadge from '@/app/components/PromoBadge'
 import { fetchContent } from '@/app/lib/content-display'
 
 type StockStatus = 'موجود' | 'محدود' | 'سفارشی'
@@ -117,6 +118,7 @@ export default function StorePage() {
   const [addedId, setAddedId] = useState<string | null>(null)
   const [products, setProducts] = useState<Product[]>([])
   const [promoted, setPromoted] = useState<Product[]>([])
+  const [promoKinds, setPromoKinds] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [orderState, setOrderState] = useState<'idle' | 'sending' | 'done'>('idle')
   const [rfqState, setRfqState] = useState<'idle' | 'sending' | 'done'>('idle')
@@ -129,8 +131,13 @@ export default function StorePage() {
     fetch('/api/promotions?slot=store_featured', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : { items: [] }))
       .then((d) => {
-        if (alive) setPromoted((d.items || []).map((it: { id: string; title: string; price?: string; category?: string; image?: string; url?: string }) =>
-          toProduct({ ...it, sourceName: '' })))
+        if (alive) {
+          setPromoted((d.items || []).map((it: { id: string; title: string; price?: string; category?: string; image?: string; url?: string }) =>
+            toProduct({ ...it, sourceName: '' })))
+          const km: Record<string, string> = {}
+          for (const it of (d.items || [])) km[it.id] = it.promoKind || 'ویژه'
+          setPromoKinds(km)
+        }
       })
       .catch(() => {})
     return () => { alive = false }
@@ -714,8 +721,8 @@ export default function StorePage() {
                       </div>
                     )}
                     {promotedIds.has(product.id) && (
-                      <div style={{ position: 'absolute', top: 12, left: 12, background: 'linear-gradient(135deg, var(--gold2), var(--gold))', color: '#16140f', fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 20, zIndex: 1 }}>
-                        ★ ویژه
+                      <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 1 }}>
+                        <PromoBadge kind={promoKinds[product.id] || 'ویژه'} size="sm" />
                       </div>
                     )}
                     <div style={{

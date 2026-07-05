@@ -125,6 +125,14 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
       }))
     : featured
 
+  // آگهی‌های ترند/داغ — فقط اگر پروموتِ فعالِ ترند وجود داشته باشد نمایش داده می‌شود.
+  const trendingCards = (promoTrending || []).map((it, i) => ({
+    id: it.id, title: it.title, location: it.location || 'نامشخص', price: it.price || '—',
+    size: sizeFromItem(it), beds: bedsFromItem(it), year: undefined as string | undefined,
+    tag: 'ترند', promoKind: it.promoKind || 'ترند', score: 80 + (i % 19),
+    img: it.image ? `center/cover no-repeat url(${it.image})` : gradientFor(it.id),
+  }))
+
   // Reuse listings as investment offers; fall back to static mockup if empty.
   const investCards = investSource.length
     ? investSource.slice(0, 3).map((it, i) => {
@@ -280,6 +288,18 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
           ))}
         </div>
       </section>
+
+      {/* TRENDING — فقط با پروموتِ فعالِ ترند */}
+      {trendingCards.length > 0 && (
+        <section style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px clamp(48px,6vw,80px)' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, marginBottom: 28 }}>
+            <div><div style={{ fontSize: 13, fontWeight: 700, color: '#f08a6e', marginBottom: 8 }}>🔥 داغِ این روزها</div><h2 style={{ fontSize: 'clamp(24px,3.4vw,34px)', fontWeight: 800, letterSpacing: '-.6px', color: 'var(--text)' }}>آگهی‌های ترند</h2></div>
+          </div>
+          <div className="mj-feat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 18 }}>
+            {trendingCards.map(p => <PropertyCard key={p.id} {...p} />)}
+          </div>
+        </section>
+      )}
 
       {/* INVESTMENT */}
       <section style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px clamp(48px,6vw,80px)' }}>

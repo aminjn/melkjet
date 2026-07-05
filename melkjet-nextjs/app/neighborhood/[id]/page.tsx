@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { fetchContent, gradientFor, type ContentItem } from '@/app/lib/content-display';
+import PromoBadge from '@/app/components/PromoBadge';
 
 // ── helpers ────────────────────────────────────────────────────────────────
 const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
@@ -281,7 +282,7 @@ export default function NeighborhoodPage() {
                       onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--line)'; (e.currentTarget as HTMLDivElement).style.boxShadow = 'none'; }}
                     >
                       <div style={{ height: '100px', background: listing.image ? `url(${listing.image}) center/cover` : gradientFor(listing.id), display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                        {promotedListingIds.has(listing.id) && <span style={{ position: 'absolute', top: '6px', left: '6px', background: 'linear-gradient(135deg, var(--gold2, #b8860b), var(--gold))', color: '#1a0e04', fontSize: '0.62rem', fontWeight: 800, padding: '2px 7px', borderRadius: '20px' }}>★ ویژه</span>}
+                        {promotedListingIds.has(listing.id) && <span style={{ position: 'absolute', top: '6px', left: '6px' }}><PromoBadge kind={(listing as any).promoKind || 'ویژه'} size="sm" /></span>}
                         {!listing.image && <span style={{ fontSize: '1.6rem', opacity: 0.35 }}>🏢</span>}
                       </div>
                       <div style={{ padding: '0.75rem' }}>
