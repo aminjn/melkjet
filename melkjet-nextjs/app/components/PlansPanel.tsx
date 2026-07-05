@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import ListingPromoteModal from '@/app/components/ListingPromoteModal'
+import AuctionPanel from '@/app/components/AuctionPanel'
 
 // پنلِ «پلن‌ها و اشتراک» — مشترک در همهٔ پنل‌ها. گرافیکِ غنی: اشتراک‌های نقش + بسته‌های افزایشی.
 const FONT = 'Vazirmatn, system-ui, sans-serif'
@@ -269,6 +270,9 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
           </div>
         </>
       )}
+
+      {/* مزایدهٔ جایگاهِ ویژه — فقط برای نقش‌هایی که جایگاهِ مزایده‌ای دارند نمایش داده می‌شود */}
+      <AuctionPanel />
 
       {promoteTierId && <ListingPromoteModal preTierId={promoteTierId} onClose={() => setPromoteTierId(null)} onDone={loadComm} />}
       {checkout && <CheckoutModal item={checkout} busy={busy === 'checkout'} walletBalance={canWalletPay ? promoWallet : undefined} onClose={() => setCheckout(null)} onSubmit={submitOrder} />}

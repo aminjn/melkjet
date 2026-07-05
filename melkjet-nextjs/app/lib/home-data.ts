@@ -43,6 +43,8 @@ export interface HomeData {
 const safe = <T>(p: Promise<T[]>): Promise<T[]> => p.catch(() => [] as T[])
 
 async function compute(): Promise<HomeData> {
+  // تسویهٔ تنبلِ مزایده‌ها — صفحهٔ اصلی پربازدید است، پس مزایده بدونِ کرون خودش بسته می‌شود.
+  try { const { resolveDue } = await import('./auction-store'); await resolveDue() } catch {}
   const [listingsAll, advisorsAll, promoFeatured, promoInvest, promoAdvisors] = await Promise.all([
     safe(publicListFull('listing')),
     safe(publicListFull('directory')),

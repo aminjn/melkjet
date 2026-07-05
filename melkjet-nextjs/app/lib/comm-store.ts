@@ -155,6 +155,18 @@ export async function grantPromoWallet(owner: string, amount: number): Promise<n
     return db.promoWallet[owner]
   })
 }
+// کسرِ اتمیک از کیفِ پول — فقط اگر موجودی کافی باشد (برای تسویهٔ مزایده). خروجی: موفق/ناموفق.
+export async function chargePromoWallet(owner: string, amount: number): Promise<{ ok: boolean; balance: number }> {
+  const amt = Math.max(0, Math.round(amount))
+  return withDb(db => {
+    applySeed(db)
+    if (!db.promoWallet) db.promoWallet = {}
+    const bal = Number(db.promoWallet[owner]) || 0
+    if (bal < amt) return { ok: false, balance: bal }
+    db.promoWallet[owner] = bal - amt
+    return { ok: true, balance: db.promoWallet[owner] }
+  })
+}
 
 // هزینهٔ ارسال: super_admin معاف؛ اگر پکیجِ فعالی نباشد آزاد؛ وگرنه از اعتبار کم می‌کند (اتمیک).
 export async function chargeSend(owner: string, role: string, channel: Channel, count: number): Promise<{ ok: boolean; error?: string; remaining?: number }> {
