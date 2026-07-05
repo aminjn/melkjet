@@ -88,28 +88,37 @@ function parseJsonOr(res: { status: number; body: string }): { json?: any; err?:
   }
 }
 
-async function scApi(url: string, method: 'GET' | 'POST', payload?: any): Promise<{ ok: boolean; data?: any; error?: string }> {
+// چند URLِ کاندید را به‌ترتیب امتحان می‌کند و اولی که «JSON» برگرداند (نه HTMLِ بلوک) را می‌پذیرد.
+// این‌طور اگر پروکسی یک هاستِ گوگل را بلوک کرد، خودکار هاستِ بعدی امتحان می‌شود.
+async function scApi(urls: string | string[], method: 'GET' | 'POST', payload?: any): Promise<{ ok: boolean; data?: any; error?: string }> {
   const t = await getToken()
   if (!t.token) return { ok: false, error: t.error }
-  try {
-    const res = await proxiedRequest(url, {
-      method, proxyUrl: proxy(), timeout: 25000,
-      headers: { Authorization: `Bearer ${t.token}`, ...(payload ? { 'Content-Type': 'application/json' } : {}) },
-      body: payload ? JSON.stringify(payload) : undefined,
-    })
-    const p = parseJsonOr(res)
-    if (p.err) return { ok: false, error: p.err }
-    if (res.status >= 400) return { ok: false, error: p.json?.error?.message || `HTTP ${res.status}` }
-    return { ok: true, data: p.json }
-  } catch (e: any) { return { ok: false, error: e?.message || 'خطای شبکه' } }
+  const list = Array.isArray(urls) ? urls : [urls]
+  let last = 'خطای شبکه'
+  for (const url of list) {
+    try {
+      const res = await proxiedRequest(url, {
+        method, proxyUrl: proxy(), timeout: 25000,
+        headers: { Authorization: `Bearer ${t.token}`, ...(payload ? { 'Content-Type': 'application/json' } : {}) },
+        body: payload ? JSON.stringify(payload) : undefined,
+      })
+      const p = parseJsonOr(res)
+      if (p.err) { last = p.err; continue }   // HTML/بلوک → هاستِ بعدی
+      if (res.status >= 400) return { ok: false, error: p.json?.error?.message || `HTTP ${res.status}` }
+      return { ok: true, data: p.json }
+    } catch (e: any) { last = e?.message || 'خطای شبکه' }
+  }
+  return { ok: false, error: last }
 }
 
 const enc = (s: string) => encodeURIComponent(s)
+// هاست‌های APIِ سرچ‌کنسول (webmasters/v3) — اگر یکی بلوک بود، دیگری امتحان می‌شود.
+const wm = (path: string) => [`https://searchconsole.googleapis.com/webmasters/v3/${path}`, `https://www.googleapis.com/webmasters/v3/${path}`]
 
 // وضعیتِ Sitemapهای ثبت‌شده (submitted, lastDownloaded, errors, warnings, contents).
 export async function scSitemaps(): Promise<{ ok: boolean; sitemaps?: any[]; error?: string }> {
   const { propertyUrl } = scConfig(); if (!propertyUrl) return { ok: false, error: 'property تنظیم نشده' }
-  const r = await scApi(`https://searchconsole.googleapis.com/webmasters/v3/sites/${enc(propertyUrl)}/sitemaps`, 'GET')
+  const r = await scApi(wm(`sites/${enc(propertyUrl)}/sitemaps`), 'GET')
   if (!r.ok) return { ok: false, error: r.error }
   return { ok: true, sitemaps: r.data?.sitemap || [] }
 }
@@ -119,7 +128,7 @@ export async function scPerformance(days = 28): Promise<{ ok: boolean; error?: s
   const { propertyUrl } = scConfig(); if (!propertyUrl) return { ok: false, error: 'property تنظیم نشده' }
   const end = new Date(Date.now() - 2 * 86400_000).toISOString().slice(0, 10)   // گوگل ~۲ روز تأخیر دارد
   const start = new Date(Date.now() - (days + 2) * 86400_000).toISOString().slice(0, 10)
-  const base = `https://searchconsole.googleapis.com/webmasters/v3/sites/${enc(propertyUrl)}/searchAnalytics/query`
+  const base = wm(`sites/${enc(propertyUrl)}/searchAnalytics/query`)
   const totalsR = await scApi(base, 'POST', { startDate: start, endDate: end, dimensions: [] })
   if (!totalsR.ok) return { ok: false, error: totalsR.error }
   const totals = totalsR.data?.rows?.[0] || { clicks: 0, impressions: 0, ctr: 0, position: 0 }
@@ -141,25 +150,22 @@ export async function scInspect(url: string): Promise<{ ok: boolean; error?: str
 // عیب‌یابیِ اتصال به گوگل از مسیرهای مختلف (مستقیم / پروکسیِ تنظیم‌شده / پروکسیِ دیوار).
 // اگر به گوگل برسیم، حتی یک خطای JSON (مثلِ invalid_grant) هم می‌گیریم = «رسید». اگر HTML بگیریم = نرسید.
 export async function scDiagnose(): Promise<{ results: { via: string; status: number; reached: boolean; snippet: string }[] }> {
-  const divarProxy = (getAdminData() as Record<string, any>).divar?.proxyUrl
-  const cfgProxy = scConfig().proxyUrl
-  const paths: { via: string; proxyUrl?: string }[] = [
-    { via: 'مستقیم (بدون پروکسی)', proxyUrl: undefined },
-    { via: `پروکسیِ تنظیم‌شده: ${cfgProxy || '—'}`, proxyUrl: cfgProxy },
-    { via: `پروکسیِ دیوار: ${divarProxy || '—'}`, proxyUrl: divarProxy },
+  const p = proxy()   // پروکسیِ مؤثر (چون قبلاً تأیید شد که به گوگل می‌رسد)
+  // هر هاستِ مهمِ گوگل را جدا امتحان می‌کنیم — چون پروکسی ممکن است یک هاست را بگذارد و دیگری را بلوک کند.
+  const targets: { via: string; url: string; method: 'GET' | 'POST'; body?: string }[] = [
+    { via: 'توکن — oauth2.googleapis.com', url: 'https://oauth2.googleapis.com/token', method: 'POST', body: 'grant_type=probe' },
+    { via: 'APIِ سرچ‌کنسول — searchconsole.googleapis.com', url: 'https://searchconsole.googleapis.com/webmasters/v3/sites', method: 'GET' },
+    { via: 'APIِ جایگزین — www.googleapis.com', url: 'https://www.googleapis.com/webmasters/v3/sites', method: 'GET' },
   ]
-  const seen = new Set<string>()
   const out: { via: string; status: number; reached: boolean; snippet: string }[] = []
-  for (const p of paths) {
-    const key = String(p.proxyUrl || 'direct')
-    if (seen.has(key)) continue; seen.add(key)
+  for (const t of targets) {
     try {
-      const res = await proxiedRequest('https://oauth2.googleapis.com/token', {
-        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'grant_type=probe', proxyUrl: p.proxyUrl, timeout: 12000,
+      const res = await proxiedRequest(t.url, {
+        method: t.method, headers: t.body ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}, body: t.body, proxyUrl: p, timeout: 12000,
       })
-      const reached = !/^\s*</.test(res.body) && /error|grant|invalid|unsupported/i.test(res.body)
-      out.push({ via: p.via, status: res.status, reached, snippet: (res.body || '').slice(0, 100).replace(/\s+/g, ' ').trim() })
-    } catch (e: any) { out.push({ via: p.via, status: 0, reached: false, snippet: e?.message || 'خطای شبکه' }) }
+      const reached = !/^\s*</.test(res.body || '')   // JSON = رسید، HTML = بلوک
+      out.push({ via: t.via, status: res.status, reached, snippet: (res.body || '').slice(0, 100).replace(/\s+/g, ' ').trim() })
+    } catch (e: any) { out.push({ via: t.via, status: 0, reached: false, snippet: e?.message || 'خطای شبکه' }) }
   }
   return { results: out }
 }
