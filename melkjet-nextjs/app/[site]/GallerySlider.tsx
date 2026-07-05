@@ -7,11 +7,12 @@ const CARD_SHADOW = '0 10px 34px -22px rgba(20,16,10,.55), 0 2px 8px -4px rgba(2
 // اسلایدرِ افقیِ گالری: ردیفِ اسکرول‌شونده با scroll-snap و دکمه‌های جهت. عرضِ هر آیتم
 // بر اساسِ perSlide محاسبه می‌شود و با min-width روی موبایل تقریباً یکی-در-نما می‌شود.
 export default function GallerySlider({
-  images, perSlide = 3, primary,
+  images, perSlide = 3, primary, placeholders = 0,
 }: {
   images: string[]
   perSlide?: number
   primary: string
+  placeholders?: number
 }) {
   const rowRef = useRef<HTMLDivElement | null>(null)
   const imgs = (images || []).filter(Boolean)
@@ -39,14 +40,18 @@ export default function GallerySlider({
   const cardWidth = `calc((100% - ${(per - 1) * 16}px) / ${per})`
 
   if (imgs.length === 0) {
+    // بدونِ تصویر: کاشی‌های نمونهٔ رنگی نشان بده تا صفحه خالی به‌نظر نرسد (مالک با عکسِ خود جایگزین می‌کند).
+    const n = Math.max(3, Math.min(9, Number(placeholders) || 6))
+    const grads = ['#c9a84c', '#2d6a8f', '#7b4fa0', '#2d8a52', '#a03030', '#0f766e', '#b45309', '#9333ea', '#0891b2']
     return (
-      <div style={{
-        background: 'var(--mjs-surface)', border: '1px dashed #ddd4c5', borderRadius: 18,
-        padding: '56px 24px', textAlign: 'center', color: '#9b9285', fontSize: 14.5,
-        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
-      }}>
-        <span style={{ fontSize: 38, opacity: .35 }}>▥</span>
-        هنوز تصویری برای گالری اضافه نشده است.
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 16 }}>
+        {Array.from({ length: n }).map((_, i) => (
+          <div key={i} style={{
+            height: 200, borderRadius: 16, border: '1px solid #efe9df', boxShadow: CARD_SHADOW,
+            background: `linear-gradient(135deg, ${grads[i % grads.length]}, ${primary})`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,.55)', fontSize: 34,
+          }}>▥</div>
+        ))}
       </div>
     )
   }
