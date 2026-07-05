@@ -56,7 +56,7 @@ async function tick(): Promise<{ due: number; synced: number }> {
     // تا سایت‌مپ فقط‌خواندنی و سریع بماند و ۵۰۴ ندهد)، بعد شاردِ جدید را چک/هشدار بده.
     if (Date.now() - lastSitemapAt > 60 * 60 * 1000) {
       lastSitemapAt = Date.now()
-      try { const { precomputeSlugs, checkNewShards } = await import('./sitemap-store'); await precomputeSlugs(); await checkNewShards() } catch {}
+      try { const { precomputeSlugs, checkNewShards, precomputeSitemapXml } = await import('./sitemap-store'); await precomputeSlugs(); await checkNewShards(); await precomputeSitemapXml() } catch {}
     }
   } finally { g.running = false }
   return { due: due.length, synced }

@@ -5,6 +5,7 @@
 // فعلاً تولیدِ پویا با کشِ کوتاه کافی است (آیتم‌ها فعلاً سقفِ ۱۰۰۰ دارند).
 
 import { listItems, type Item } from './scraper-store'
+import { pgEnabled, kvGet, kvSet } from './db'
 import { locationTree } from './locations-store'
 import { BLOG_CATEGORIES, categorySlugForName } from './blog-taxonomy'
 import { slugify } from './slugify'
@@ -197,6 +198,42 @@ export async function getShard(name: string): Promise<Shard | null> {
   const shards = await buildShards()
   return shards.find(s => s.name === clean) || null
 }
+
+// ── سرویس‌دهیِ «ضدِّ ۵۰۴»: XML یک‌بار (کرونِ instance صفر) رندر و ذخیره می‌شود؛ مسیرها
+// رشتهٔ آماده را فوری می‌دهند (بدونِ ساختِ درخواستی) → حتی زیرِ بار هم تایم‌اوت نمی‌دهد. ──
+const escXml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+export function renderShardXml(entries: UrlEntry[]): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.map(e => `  <url>\n    <loc>${escXml(e.url)}</loc>${e.lastModified ? `\n    <lastmod>${e.lastModified}</lastmod>` : ''}${e.changeFrequency ? `\n    <changefreq>${e.changeFrequency}</changefreq>` : ''}${e.priority != null ? `\n    <priority>${e.priority}</priority>` : ''}\n  </url>`).join('\n')}\n</urlset>`
+}
+export function renderIndexXml(infos: { name: string; lastmod?: string }[]): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${infos.map(s => `  <sitemap>\n    <loc>${BASE}/sitemaps/${s.name}.xml</loc>${s.lastmod ? `\n    <lastmod>${s.lastmod}</lastmod>` : ''}\n  </sitemap>`).join('\n')}\n</sitemapindex>`
+}
+
+interface Rendered { at: number; index: string; shards: Record<string, string> }
+let RENDER: Rendered | null = null
+const RENDER_TTL = 6 * 60_000   // کشِ حافظه‌ایِ هر instance
+const KV_RENDER = 'sitemap_rendered'
+
+// پیش‌محاسبه + ذخیرهٔ XML (کرونِ instance صفر، خارج از مسیرِ درخواست).
+export async function precomputeSitemapXml(): Promise<{ shards: number; urls: number }> {
+  const shards = (await buildShards(true)).filter(s => s.entries.length)
+  const infos = shards.map(s => { let lm: string | undefined; for (const e of s.entries) if (e.lastModified && (!lm || e.lastModified > lm)) lm = e.lastModified; return { name: s.name, lastmod: lm } })
+  const map: Record<string, string> = {}
+  let urls = 0
+  for (const s of shards) { map[s.name] = renderShardXml(s.entries); urls += s.entries.length }
+  RENDER = { at: Date.now(), index: renderIndexXml(infos), shards: map }
+  if (pgEnabled()) { try { await kvSet(KV_RENDER, RENDER) } catch {} }
+  return { shards: shards.length, urls }
+}
+
+async function getRender(): Promise<Rendered | null> {
+  if (RENDER && Date.now() - RENDER.at < RENDER_TTL) return RENDER
+  if (pgEnabled()) { try { const r = await kvGet<Rendered | null>(KV_RENDER, null); if (r && r.index) { RENDER = { at: Date.now(), index: r.index, shards: r.shards || {} }; return RENDER } } catch {} }
+  return RENDER   // آخرین نسخهٔ حافظه‌ای (حتی اگر کمی کهنه) بهتر از هیچ است
+}
+// index/shardِ آماده (اگر کش نبود null → مسیر خودش زندهٔ سبک می‌سازد).
+export async function renderedIndex(): Promise<string | null> { return (await getRender())?.index ?? null }
+export async function renderedShard(name: string): Promise<string | null> { const r = await getRender(); return r ? (r.shards[name] ?? null) : null }
 
 // ── هشدارِ سوپرادمین وقتی شاردِ جدید اضافه می‌شود (روی instance صفر/کرون اجرا شود) ──
 export async function checkNewShards(): Promise<{ added: string[]; total: number }> {

@@ -1606,6 +1606,7 @@ interface PSState {
 interface OwnCluster { slug: string; advisors: { phone: string; name: string; type: string }[] }
 const PTYPE_LABEL: Record<string, string> = { pros: 'مشاور', agency: 'آژانس', builder: 'سازنده', architect: 'معمار', contractor: 'پیمانکار', materials: 'مصالح', legal: 'وکیل', lawfirm: 'دفتر حقوقی', finance: 'مالی', appraiser: 'کارشناس', notary: 'دفترخانه' }
 
+interface DivarPro { slug: string; url: string; name?: string; listingCount?: number; source: string }
 function AgencyIntelView() {
   const [clusters, setClusters] = useState<OwnCluster[]>([])
   const [agencyCount, setAgencyCount] = useState(0)
@@ -1615,9 +1616,26 @@ function AgencyIntelView() {
   const [busy, setBusy] = useState(false)
   const [res, setRes] = useState<any>(null)
   const [err, setErr] = useState('')
+  // کشفِ pro دیوار
+  const [pros, setPros] = useState<DivarPro[]>([])
+  const [pmeta, setPmeta] = useState<any>({ running: false })
+  const [ptotal, setPtotal] = useState(0)
+  const [searchUrl, setSearchUrl] = useState('')
+  const [dmsg, setDmsg] = useState('')
   const fa = (n: any) => (Number(n) || 0).toLocaleString('fa-IR')
 
-  useEffect(() => { fetch('/api/admin/agency-intel', { cache: 'no-store' }).then(r => r.json()).then(j => { if (j.ok) { setClusters(j.clusters || []); setAgencyCount(j.agencyCount || 0) } }).finally(() => setLoading(false)) }, [])
+  const loadPros = () => fetch('/api/admin/divar-pros', { cache: 'no-store' }).then(r => r.json()).then(j => { if (j.ok) { setPros(j.pros || []); setPtotal(j.total || 0); setPmeta(j.meta || { running: false }) } })
+  useEffect(() => { fetch('/api/admin/agency-intel', { cache: 'no-store' }).then(r => r.json()).then(j => { if (j.ok) { setClusters(j.clusters || []); setAgencyCount(j.agencyCount || 0) } }).finally(() => setLoading(false)); loadPros() }, [])
+  // در حالِ کشف → هر ۳ ثانیه رفرش
+  useEffect(() => { if (!pmeta?.running) return; const id = setInterval(loadPros, 3000); return () => clearInterval(id) }, [pmeta?.running])
+
+  const runDiscovery = async (method: 'sitemap' | 'search') => {
+    setDmsg('')
+    const r = await fetch('/api/admin/divar-pros', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ method, searchUrl }) })
+    const j = await r.json()
+    setDmsg(j.started ? '✅ کشف شروع شد (پس‌زمینه)…' : ('❌ ' + (j.reason || 'ناموفق')))
+    setTimeout(loadPros, 800)
+  }
 
   const analyze = async () => {
     if (!slug.trim()) return
@@ -1636,6 +1654,53 @@ function AgencyIntelView() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* کاوشگرِ pro دیوار */}
+      <Card>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 15, fontWeight: 800 }}>🔎 کاوشگرِ آژانس‌های دیوار (Pro)</div>
+          {pmeta?.running && <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: 'rgba(201,168,76,0.15)', color: 'var(--gold)', fontWeight: 700 }}>در حال کشف…</span>}
+          <span style={{ marginInlineStart: 'auto', fontSize: 13, color: 'var(--gold)', fontWeight: 800 }}>{fa(ptotal)} pro کشف‌شده</span>
+        </div>
+        <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.9, margin: '0 0 12px' }}>
+          همهٔ صفحه‌های pro (آژانس) دیوار را پیدا و لینک‌شان را جمع می‌کند — قبل از ساختِ حساب. <b>روشِ سایت‌مپ</b>: کلِ سایت‌مپِ دیوار را می‌خزد. <b>روشِ جستجو</b>: از یک لینکِ جستجوی دیوار، proی آگهی‌ها را درمی‌آورد. پس‌زمینه اجرا می‌شود و انباشته می‌گردد.
+        </p>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <GoldButton disabled={pmeta?.running} onClick={() => runDiscovery('sitemap')}>{pmeta?.running ? '…' : '🗺 کشف از سایت‌مپِ دیوار'}</GoldButton>
+          <input style={{ ...inp, flex: 1, minWidth: 240 }} value={searchUrl} onChange={e => setSearchUrl(e.target.value)} placeholder="لینکِ جستجوی دیوار (برای روشِ جستجو)" />
+          <OutlineButton onClick={() => runDiscovery('search')}>🔍 کشف از این جستجو</OutlineButton>
+          <OutlineButton onClick={loadPros}>تازه‌سازی</OutlineButton>
+          {pros.length > 0 && <>
+            <a href="/api/admin/divar-pros?export=links" style={{ fontSize: 12.5, color: 'var(--gold)', textDecoration: 'none', alignSelf: 'center' }}>⬇ دانلودِ همهٔ لینک‌ها</a>
+            <button onClick={() => { navigator.clipboard?.writeText(pros.map(p => p.url).join('\n')); setDmsg('لینک‌ها کپی شد') }} style={{ background: 'transparent', border: '1px solid var(--line2)', color: 'var(--muted)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>کپیِ همه</button>
+          </>}
+        </div>
+        {(dmsg || pmeta?.note) && <div style={{ marginTop: 10, fontSize: 12.5, color: dmsg.startsWith('❌') ? '#e7674a' : 'var(--gold)' }}>{dmsg || pmeta?.note}</div>}
+      </Card>
+
+      {/* جدولِ pro‌های کشف‌شده */}
+      {pros.length > 0 && (
+        <Card style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: '12px 18px', fontSize: 13.5, fontWeight: 800, borderBottom: '1px solid var(--line)' }}>آژانس‌های کشف‌شده ({fa(pros.length)})</div>
+          <div style={{ overflowX: 'auto', maxHeight: 460 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
+              <thead><tr><th style={th}>#</th><th style={th}>slug</th><th style={th}>لینک</th><th style={th}>منبع</th><th style={th}>آگهی</th></tr></thead>
+              <tbody>
+                {pros.slice(0, 500).map((p, i) => (
+                  <tr key={p.slug}>
+                    <td style={{ ...td, color: 'var(--faint)' }}>{fa(i + 1)}</td>
+                    <td style={{ ...td, direction: 'ltr', textAlign: 'left', fontFamily: 'monospace' }}>{p.slug}</td>
+                    <td style={{ ...td, direction: 'ltr', textAlign: 'left' }}><a href={p.url} target="_blank" rel="noreferrer" style={{ color: 'var(--gold)', textDecoration: 'none' }}>باز کردن ↗</a> <button onClick={() => { setSlug(p.slug) }} style={{ marginInlineStart: 8, background: 'transparent', border: '1px solid var(--line2)', color: 'var(--muted)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>تحلیل</button></td>
+                    <td style={{ ...td, fontSize: 11, color: 'var(--muted)' }}>{p.source === 'sitemap' ? 'سایت‌مپ' : 'جستجو'}</td>
+                    <td style={td}>{p.listingCount != null ? fa(p.listingCount) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {pros.length > 500 && <div style={{ padding: '8px 18px', fontSize: 11.5, color: 'var(--muted)' }}>۵۰۰ موردِ اول نمایش داده شد — همه را با «دانلودِ لینک‌ها» بگیر.</div>}
+        </Card>
+      )}
+
       {/* تحلیلِ برندِ دیوار */}
       <Card>
         <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 6 }}>🏢 تحلیلِ برندِ دیوار</div>
