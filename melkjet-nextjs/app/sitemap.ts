@@ -26,15 +26,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }
   } catch {}
 
-  // مکان‌ها: شهر → منطقه → محله (+ اکشن‌های اصلیِ خرید/اجاره)
+  // مکان‌ها: شهرها همیشه (صفحهٔ هاب)؛ منطقه/محله فقط اگر آگهی داشته باشند
+  // (هم‌سو با noindexِ صفحه — تا صفحهٔ «تُنُک» در سایت‌مپ نباشد و اخطارِ سرچ‌کنسول ندهد).
   try {
+    const listings = await listItems('listing', { publicOnly: true })
+    const hay = listings.map(it => `${it.location || ''} ${it.title || ''}`)
+    const hasListings = (nameFa: string) => !!nameFa && hay.some(h => h.includes(nameFa))
     for (const prov of locationTree()) for (const city of prov.children) {
-      add(`/locations/${city.path.join('/')}`, { priority: 0.6 })
+      add(`/locations/${city.path.join('/')}`, { priority: 0.6 })   // شهر: همیشه
       for (const d of city.children) {
+        if (!hasListings(d.nameFa)) continue
         add(`/locations/${d.path.join('/')}`, { priority: 0.55 })
         add(`/locations/${d.path.join('/')}/buy`, { priority: 0.5 })
         add(`/locations/${d.path.join('/')}/rent`, { priority: 0.5 })
-        for (const h of d.children) add(`/locations/${h.path.join('/')}`, { priority: 0.55 })
+        for (const h of d.children) if (hasListings(h.nameFa)) add(`/locations/${h.path.join('/')}`, { priority: 0.55 })
       }
     }
   } catch {}
