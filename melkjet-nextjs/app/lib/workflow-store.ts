@@ -32,7 +32,7 @@ export interface Workflow {
   updatedAt: number
 }
 
-interface DB { workflows: Workflow[] }
+interface DB { workflows: Workflow[]; seeded?: string[] }
 
 function id() { return randomBytes(6).toString('hex') }
 
@@ -99,5 +99,20 @@ export async function saveWorkflow(owner: string, input: {
 export async function removeWorkflow(owner: string, workflowId: string): Promise<void> {
   await mutate((db) => {
     db.workflows = db.workflows.filter(w => !(w.id === workflowId && w.owner === owner))
+  })
+}
+
+// اتوماسیون‌های پیش‌فرضِ صنفی را یک‌بار برای هر کاربر می‌سازد (خاموش). با «seeded» علامت می‌زنیم
+// تا اگر کاربر همه را حذف کرد، دوباره ساخته نشوند.
+export async function ensureDefaultWorkflows(owner: string, dash: string): Promise<void> {
+  const { roleDefaultWorkflows } = await import('./workflow-defaults')
+  await mutate((db) => {
+    const seeded = db.seeded || (db.seeded = [])
+    if (seeded.includes(owner)) return
+    seeded.push(owner)
+    const now = Date.now()
+    for (const d of roleDefaultWorkflows(dash)) {
+      db.workflows.unshift({ id: id(), name: d.name, nodes: d.nodes, connections: d.connections, owner, enabled: false, updatedAt: now })
+    }
   })
 }
