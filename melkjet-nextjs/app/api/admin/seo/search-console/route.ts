@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { getAdminData, saveAdminData } from '@/app/lib/admin-store'
-import { scConfig, scConfigured, scTest, scPerformance, scSitemaps, scInspect, parseServiceAccount } from '@/app/lib/search-console'
+import { scConfig, scConfigured, scTest, scPerformance, scSitemaps, scInspect, scDiagnose, parseServiceAccount } from '@/app/lib/search-console'
 import { logAudit } from '@/app/lib/audit-store'
 
 async function guard() { const s = await getSession(); return s && s.role === 'super_admin' ? s : null }
@@ -44,6 +44,9 @@ export async function POST(req: NextRequest) {
     logAudit(actor, 'تنظیماتِ Search Console', data.seo.searchConsole.propertyUrl || '')
     return NextResponse.json({ ok: true, email: parseServiceAccount(keyToSave || '')?.client_email || '' })
   }
+
+  // عیب‌یابیِ اتصال (فقط شبکه) — بدونِ نیاز به کلید کار می‌کند.
+  if (b.action === 'diagnose') return NextResponse.json({ ok: true, ...(await scDiagnose()) })
 
   if (!scConfigured()) return NextResponse.json({ error: 'ابتدا کلیدِ سرویس‌اکانت و آدرسِ property را ذخیره کن' }, { status: 400 })
 

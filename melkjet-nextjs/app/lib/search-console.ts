@@ -68,11 +68,24 @@ async function getToken(): Promise<{ token?: string; error?: string }> {
     const res = await proxiedRequest('https://oauth2.googleapis.com/token', {
       method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body, proxyUrl: proxy(), timeout: 20000,
     })
-    const j = JSON.parse(res.body || '{}')
-    if (!j.access_token) return { error: `دریافتِ توکن ناموفق (${res.status}): ${j.error_description || j.error || res.body.slice(0, 120)}` }
+    const p = parseJsonOr(res)
+    if (p.err) return { error: 'دریافتِ توکن — ' + p.err }
+    const j = p.json
+    if (!j.access_token) return { error: `دریافتِ توکن ناموفق (${res.status}): ${j.error_description || j.error || ''}` }
     TOKEN = { token: j.access_token, exp: Date.now() + (Number(j.expires_in) || 3600) * 1000 }
     return { token: j.access_token }
-  } catch (e: any) { return { error: 'اتصال به گوگل ناموفق: ' + (e?.message || 'خطای شبکه (پروکسی؟)') } }
+  } catch (e: any) { return { error: 'اتصال به گوگل ناموفق (پروکسی؟): ' + (e?.message || 'خطای شبکه') } }
+}
+
+// پارسِ امنِ پاسخ + پیامِ خطای گویا (اگر HTML/غیرJSON بود = بلوکِ پروکسی/فیلترینگ را نشان می‌دهد).
+function parseJsonOr(res: { status: number; body: string }): { json?: any; err?: string } {
+  const b = res.body || ''
+  try { return { json: JSON.parse(b) } }
+  catch {
+    const isHtml = /^\s*</.test(b)
+    const snip = b.slice(0, 120).replace(/\s+/g, ' ').trim()
+    return { err: `پاسخِ ${isHtml ? 'HTML (به گوگل نرسید — پروکسی/فیلترینگ)' : 'غیرJSON'} با کدِ ${res.status}: ${snip}` }
+  }
 }
 
 async function scApi(url: string, method: 'GET' | 'POST', payload?: any): Promise<{ ok: boolean; data?: any; error?: string }> {
@@ -84,9 +97,10 @@ async function scApi(url: string, method: 'GET' | 'POST', payload?: any): Promis
       headers: { Authorization: `Bearer ${t.token}`, ...(payload ? { 'Content-Type': 'application/json' } : {}) },
       body: payload ? JSON.stringify(payload) : undefined,
     })
-    const data = res.body ? JSON.parse(res.body) : {}
-    if (res.status >= 400) return { ok: false, error: data?.error?.message || `HTTP ${res.status}` }
-    return { ok: true, data }
+    const p = parseJsonOr(res)
+    if (p.err) return { ok: false, error: p.err }
+    if (res.status >= 400) return { ok: false, error: p.json?.error?.message || `HTTP ${res.status}` }
+    return { ok: true, data: p.json }
   } catch (e: any) { return { ok: false, error: e?.message || 'خطای شبکه' } }
 }
 
@@ -122,6 +136,32 @@ export async function scInspect(url: string): Promise<{ ok: boolean; error?: str
   })
   if (!r.ok) return { ok: false, error: r.error }
   return { ok: true, result: r.data?.inspectionResult || {} }
+}
+
+// عیب‌یابیِ اتصال به گوگل از مسیرهای مختلف (مستقیم / پروکسیِ تنظیم‌شده / پروکسیِ دیوار).
+// اگر به گوگل برسیم، حتی یک خطای JSON (مثلِ invalid_grant) هم می‌گیریم = «رسید». اگر HTML بگیریم = نرسید.
+export async function scDiagnose(): Promise<{ results: { via: string; status: number; reached: boolean; snippet: string }[] }> {
+  const divarProxy = (getAdminData() as Record<string, any>).divar?.proxyUrl
+  const cfgProxy = scConfig().proxyUrl
+  const paths: { via: string; proxyUrl?: string }[] = [
+    { via: 'مستقیم (بدون پروکسی)', proxyUrl: undefined },
+    { via: `پروکسیِ تنظیم‌شده: ${cfgProxy || '—'}`, proxyUrl: cfgProxy },
+    { via: `پروکسیِ دیوار: ${divarProxy || '—'}`, proxyUrl: divarProxy },
+  ]
+  const seen = new Set<string>()
+  const out: { via: string; status: number; reached: boolean; snippet: string }[] = []
+  for (const p of paths) {
+    const key = String(p.proxyUrl || 'direct')
+    if (seen.has(key)) continue; seen.add(key)
+    try {
+      const res = await proxiedRequest('https://oauth2.googleapis.com/token', {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'grant_type=probe', proxyUrl: p.proxyUrl, timeout: 12000,
+      })
+      const reached = !/^\s*</.test(res.body) && /error|grant|invalid|unsupported/i.test(res.body)
+      out.push({ via: p.via, status: res.status, reached, snippet: (res.body || '').slice(0, 100).replace(/\s+/g, ' ').trim() })
+    } catch (e: any) { out.push({ via: p.via, status: 0, reached: false, snippet: e?.message || 'خطای شبکه' }) }
+  }
+  return { results: out }
 }
 
 export async function scTest(): Promise<{ ok: boolean; error?: string; email?: string; property?: string }> {

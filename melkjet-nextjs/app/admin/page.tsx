@@ -1728,6 +1728,7 @@ function SearchConsolePanel() {
   const [proxyUrl, setProxyUrl] = useState('')
   const [busy, setBusy] = useState('')
   const [msg, setMsg] = useState('')
+  const [diag, setDiag] = useState<{ via: string; status: number; reached: boolean; snippet: string }[] | null>(null)
   const [perf, setPerf] = useState<any>(null)
   const [sm, setSm] = useState<any[] | null>(null)
   const [inspectUrl, setInspectUrl] = useState('https://melkjet.com/')
@@ -1775,9 +1776,25 @@ function SearchConsolePanel() {
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <GoldButton disabled={!!busy} onClick={async () => { const j = await post({ action: 'save', propertyUrl: property, serviceAccountJson: key, proxyUrl }, 'save'); setMsg(j.ok ? '✅ ذخیره شد' : ('خطا: ' + (j.error || ''))); setKey(''); load() }}>{busy === 'save' ? '...' : 'ذخیره'}</GoldButton>
           <OutlineButton onClick={async () => { const j = await post({ action: 'test' }, 'test'); setMsg(j.ok ? `✅ متصل — ${j.email || ''} روی ${j.property || ''}` : ('❌ ' + (j.error || 'اتصال ناموفق'))) }}>{busy === 'test' ? '...' : '🔌 تستِ اتصال'}</OutlineButton>
+          <OutlineButton onClick={async () => { setDiag(null); const j = await post({ action: 'diagnose' }, 'diag'); if (j.results) { setDiag(j.results); setMsg('') } else setMsg('خطا: ' + (j.error || '')) }}>{busy === 'diag' ? '...' : '🔬 عیب‌یابیِ اتصال'}</OutlineButton>
           <a href="https://search.google.com/search-console" target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: 'var(--gold)', textDecoration: 'none', alignSelf: 'center' }}>بازکردنِ Search Console ↗</a>
         </div>
         {msg && <div style={{ marginTop: 10, fontSize: 12.5, color: msg.startsWith('❌') || msg.startsWith('خطا') ? '#e7674a' : 'var(--gold)' }}>{msg}</div>}
+        {diag && (
+          <div style={{ marginTop: 12, background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 10, padding: 12 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>کدام مسیر به گوگل می‌رسد؟ <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(هرکدام «رسید» بود، همان را در کادرِ پروکسی بگذار)</span></div>
+            <div style={{ display: 'grid', gap: 7 }}>
+              {diag.map((r, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, borderBottom: '1px solid var(--line)', paddingBottom: 6 }}>
+                  <span style={{ width: 20 }}>{r.reached ? '✅' : '❌'}</span>
+                  <span style={{ flex: 1 }}>{r.via}</span>
+                  <span style={{ color: r.reached ? '#5fd98a' : 'var(--muted)', fontWeight: 700 }}>{r.reached ? 'رسید به گوگل' : `نرسید (کد ${r.status})`}</span>
+                  <span style={{ direction: 'ltr', fontSize: 10.5, color: 'var(--faint)', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.snippet}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </Card>
 
       {st?.configured && (
