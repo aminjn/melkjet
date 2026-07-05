@@ -38,7 +38,10 @@ export async function GET(req: NextRequest) {
   const valid = type && ['listing', 'directory', 'product', 'article', 'price'].includes(type)
   let items = await listItems(valid ? type : undefined, { category })
   const status = sp.get('status')
+  // به‌صورتِ پیش‌فرض آگهی‌های «تکراری» (که خودکار مخفی شده‌اند) در فهرست نمایش داده نمی‌شوند
+  // تا لیست شلوغ نشود؛ فقط وقتی فیلترِ «تکراری» انتخاب شود دیده می‌شوند.
   if (status) items = items.filter(i => i.status === status)
+  else items = items.filter(i => i.status !== 'duplicate')
   const q = (sp.get('q') || '').trim()
   if (q) items = items.filter(i => i.title.includes(q) || (i.location || '').includes(q) || (i.sourceName || '').includes(q))
   // فهرستِ محله‌ها (facet) از روی موقعیتِ آگهی‌ها — قبل از اعمالِ فیلترِ محله تا دراپ‌داون خالی نشود.

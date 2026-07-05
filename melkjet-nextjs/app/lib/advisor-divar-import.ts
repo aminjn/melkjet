@@ -93,6 +93,24 @@ export async function importDivarToken(o: string, input: string, hint?: BrandPos
     return { ok: true, updated: true, listing: updated, token }
   }
 
+  // ── جلوگیری از تکراری: دیوار اغلب همان ملک را با «توکنِ جدید» بازنشر می‌کند (توکنِ قبلی می‌میرد)،
+  //    پس تطبیقِ توکنی رد می‌شود و آگهیِ تکراری ساخته می‌شد. اگر آگهیِ «محتوایی‌یکسانی» از همین مشاور
+  //    باشد، همان را به‌روزرسانی و توکن را به آن نگاشت می‌کنیم (نه ساختِ نسخهٔ دوم). ──
+  const nrm = (s?: string) => (s || '').replace(/‌/g, '').replace(/\s+/g, ' ').trim()
+  const near = (x?: number, y?: number, tol = 0.05) => !!x && !!y && Math.abs(x - y) / Math.max(x, y) <= tol
+  const mineListings = (await getAdvisor(o)).listings || []
+  const twin = mineListings.find(l =>
+    (l.deal || 'sale') === (payload.deal || 'sale') &&
+    nrm(l.title) && nrm(l.title) === nrm(payload.title) &&
+    (near(l.area, payload.area) || near(l.price, payload.price, 0.03)))
+  if (twin) {
+    const updated = await updateListing(o, twin.id, payload)
+    let published = updated?.published || false
+    if (cfg.autoPublish && updated) { const pub = await publishListing(o, twin.id); published = !!pub; if (pub?.publicId) warmEnrichment(pub.publicId) }
+    recordImport(o, { token, listingId: twin.id, title: (updated || twin).title, url: `https://divar.ir/v/${token}`, at: Date.now(), published, sourceId })
+    return { ok: true, updated: true, listing: updated || twin, token }
+  }
+
   // ── افزودنِ آگهیِ جدید ──
   const listing = await addListing(o, payload)
   let published = false
