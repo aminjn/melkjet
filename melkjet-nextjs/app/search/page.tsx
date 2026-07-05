@@ -13,6 +13,7 @@ import { readLoc } from '@/app/components/LocationDetector'
 import { readCity } from '@/app/components/CitySelector'
 import { openAuth } from '@/app/components/AuthModal'
 import { PROPERTY_KINDS } from '@/app/lib/taxonomy'
+import { listingHref } from '@/app/lib/listing-url'
 
 function seedNum(s: string): number {
   let h = 0
@@ -643,7 +644,7 @@ function SearchPageInner() {
               if (index === 3) cards.push(<div key="promo" style={{ gridColumn: '1 / -1' }}><BannerSlot placement="search" /></div>)
               cards.push(
                 <div key={p.id} onMouseEnter={() => setHoveredCard(p.id)} onMouseLeave={() => setHoveredCard(null)} style={{ borderRadius: 14, border: `1px solid ${isHov ? 'var(--gold)' : 'var(--line)'}`, background: 'var(--surface)', overflow: 'hidden', cursor: 'pointer', transition: 'transform 0.18s, box-shadow 0.18s, border-color 0.18s', transform: isHov ? 'translateY(-4px)' : 'none', boxShadow: isHov ? '0 12px 40px -12px rgba(201,168,76,0.22)' : '0 2px 10px -4px rgba(0,0,0,0.3)' }}>
-                  <Link href={`/property/${p.id}`} style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}>
+                  <Link href={listingHref(p.id, p.title, p.location)} style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}>
                     <div style={{ height: 156, background: p.image ? `center/cover no-repeat url(${p.image})` : p.img, position: 'relative', filter: p.dealStatus ? 'grayscale(0.55) brightness(0.7)' : 'none' }}>
                       <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 64, background: 'linear-gradient(to top,rgba(0,0,0,0.5),transparent)' }} />
                       <div style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(8px)', color: 'var(--gold2)', borderRadius: 8, padding: '4px 8px', fontSize: 11.5, fontWeight: 700, border: '1px solid rgba(201,168,76,0.3)', display: 'flex', alignItems: 'center', gap: 3 }}>✦ {toPersianDigits(p.score)}</div>
@@ -873,7 +874,7 @@ function SearchMap({ view, pins, city }: { view: MapView; pins: { id: string; la
           }
           const on = active === p.id
           return (
-            <a key={p.id} href={`/property/${p.id}`} onClick={e => { if (movedRef.current) e.preventDefault() }} onMouseEnter={() => setActive(p.id)} onMouseLeave={() => setActive(null)}
+            <a key={p.id} href={listingHref(p.id, p.label)} onClick={e => { if (movedRef.current) e.preventDefault() }} onMouseEnter={() => setActive(p.id)} onMouseLeave={() => setActive(null)}
               style={{ position: 'absolute', left, top, transform: `translate(-50%,-50%) scale(${on ? 1.12 : 1})`, padding: '4px 9px', borderRadius: 14, background: on ? 'linear-gradient(140deg,var(--gold2),var(--gold))' : 'rgba(10,9,8,0.92)', border: `1.5px solid ${on ? 'var(--gold2)' : 'var(--gold)'}`, color: on ? '#16140f' : '#f0ede6', fontSize: 11, fontWeight: 800, textDecoration: 'none', whiteSpace: 'nowrap', cursor: 'pointer', boxShadow: '0 2px 10px -3px rgba(0,0,0,.7)', zIndex: on ? 20 : 10, fontFamily: 'inherit' }}>
               {p.label}
             </a>

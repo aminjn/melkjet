@@ -39,9 +39,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }
   } catch {}
 
-  // آگهی‌ها (مسیرِ فعلی؛ در فازِ Listings به /listings/{id}-{slug} منتقل می‌شود)
+  // آگهی‌ها → canonicalِ /listing/{id}-{slug}
   try {
-    for (const it of await listItems('listing', { publicOnly: true })) add(`/property/${it.id}`, { priority: 0.6, lastModified: it.scrapedAt ? new Date(it.scrapedAt) : undefined })
+    const { listingHref } = await import('@/app/lib/listing-url')
+    for (const it of await listItems('listing', { publicOnly: true })) add(listingHref(it.id, it.title, it.location), { priority: 0.6, lastModified: it.scrapedAt ? new Date(it.scrapedAt) : undefined })
   } catch {}
 
   // پروژه‌ها: /projects/{slug} (سقف‌دار تا حجمِ سایت‌مپ کنترل‌شده بماند؛ کاملش با شارد)

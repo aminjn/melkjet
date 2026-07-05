@@ -2,6 +2,7 @@ import { publicProject, regionLabel, phaseLabel } from './persiansaze-store'
 import { getPublic, findManual, STATUS_LABEL } from './builder-public-store'
 import { getProfile } from './persiansaze-store'
 import { getItemById } from './scraper-store'
+import { listingHref } from './listing-url'
 
 // شکلِ یکسانِ یک موردِ مقایسه (آگهی یا پروژه) با ردیف‌های مشخصات.
 export interface CompareItem {
@@ -64,7 +65,7 @@ async function itemCompare(id: string): Promise<CompareItem | null> {
     if (!v || k.startsWith('__') || ['شهر', 'محله'].includes(k)) continue
     specs.push({ label: k, value: String(v) })
   }
-  return { kind: 'item', id, title: it.title, subtitle: it.location || '', photo: it.image || '', href: `/property/${id}`, specs }
+  return { kind: 'item', id, title: it.title, subtitle: it.location || '', photo: it.image || '', href: listingHref(id, it.title, it.location), specs }
 }
 
 export async function normalizeForCompare(kind: string, id: string): Promise<CompareItem | null> {

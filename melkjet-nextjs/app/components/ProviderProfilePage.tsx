@@ -4,6 +4,7 @@ import { notFound, redirect } from 'next/navigation'
 import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
 import RevealContact from '@/app/components/RevealContact'
+import { listingHref } from '@/app/lib/listing-url'
 import RepBadges from '@/app/components/RepBadges'
 import { resolveProvider, typeLabel } from '@/app/lib/provider-public'
 import { gradientFor, initialsFor } from '@/app/lib/content-display'
@@ -80,7 +81,7 @@ export default async function ProviderProfilePage({ type, slug }: { type: string
             <h2 style={{ fontSize: 16, fontWeight: 800, marginBottom: 12 }}>آگهی‌های {p.name}</h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 14 }}>
               {p.listings.map(it => (
-                <Link key={it.id} href={`/property/${it.id}`} style={{ display: 'block', textDecoration: 'none', color: 'inherit', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 13, overflow: 'hidden' }}>
+                <Link key={it.id} href={listingHref(it.id, it.title, it.location)} style={{ display: 'block', textDecoration: 'none', color: 'inherit', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 13, overflow: 'hidden' }}>
                   <div style={{ height: 130, background: it.image ? `center/cover no-repeat url(${it.image})` : gradientFor(it.title) }} />
                   <div style={{ padding: '11px 13px' }}>
                     <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--gold)' }}>{it.price || '—'}</div>

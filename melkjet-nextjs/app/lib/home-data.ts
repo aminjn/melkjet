@@ -3,6 +3,7 @@
 // /api/content + /api/promotions + /api/stats، ولی مستقیم روی استورها (بدونِ رفت‌وبرگشتِ HTTP).
 
 import { listItems, getItemById } from './scraper-store'
+import { listingHref } from './listing-url'
 import { listActive, listAllActive, slotOf } from './promotion-store'
 import { catalogStats } from './catalog-store'
 import { listPublicShops } from './materials-store'
@@ -70,7 +71,7 @@ async function buildSpotlight(): Promise<SpotlightItem[]> {
     } else {
       const it = await getItemById(p.targetId)
       if (!it || it.status === 'rejected') continue
-      out.push({ id: it.id, kind: p.kind || 'ویژه', title: it.title, subtitle: [it.location, it.price].filter(Boolean).join(' · '), image: it.image || '', url: it.url || `/property/${encodeURIComponent(it.id)}`, isProfile: false })
+      out.push({ id: it.id, kind: p.kind || 'ویژه', title: it.title, subtitle: [it.location, it.price].filter(Boolean).join(' · '), image: it.image || '', url: it.url || listingHref(it.id, it.title, it.location), isProfile: false })
     }
   }
   out.sort((a, b) => (KIND_RANK[b.kind] || 0) - (KIND_RANK[a.kind] || 0))

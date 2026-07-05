@@ -12,6 +12,7 @@ import FaqAccordion from './components/home/FaqAccordion'
 import HomeBanner from './components/home/HomeBanner'
 import HomeAssistant from './components/home/HomeAssistant'
 import { gradientFor, initialsFor, type ContentItem } from './lib/content-display'
+import { listingHref } from './lib/listing-url'
 import type { HomeData } from './lib/home-data'
 
 const featured = [
@@ -312,7 +313,7 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 18 }}>
           {investCards.map(o => (
-            <Link key={o.id} href={`/property/${o.id}`} style={{ display: 'block', textDecoration: 'none', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, overflow: 'hidden' }}>
+            <Link key={o.id} href={listingHref(o.id, o.title, o.location)} style={{ display: 'block', textDecoration: 'none', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, overflow: 'hidden' }}>
               <div style={{ position: 'relative', height: 150, background: o.img }}>
                 {o.promoted && <span style={{ position: 'absolute', top: 12, left: 12, zIndex: 2 }}><PromoBadge kind={o.promoKind} /></span>}
                 <span style={{ position: 'absolute', top: 12, right: 12, padding: '5px 11px', borderRadius: 999, background: 'rgba(95,217,138,0.9)', color: '#0a2a16', fontSize: 12, fontWeight: 800 }}>بازده {o.roi}</span>

@@ -1,5 +1,6 @@
 import { listAll, setLastCheck, type SavedSearch } from './saved-search-store'
 import { listItems } from './scraper-store'
+import { listingHref } from './listing-url'
 import { getAccount } from './account-store'
 import { pushSystemMessage } from './message-store'
 import { getAdminData } from './admin-store'
@@ -73,7 +74,7 @@ export async function processSavedSearches(now = Date.now()): Promise<{ searches
     if (fresh.length) {
       const name = getAccount(s.owner)?.name || 'کاربر'
       for (const it of fresh.slice(0, 5)) {
-        const txt = `🏠 آگهیِ جدید مطابقِ جستجوی شما${s.label ? ` (${s.label})` : ''}:\n«${it.title}»\n${it.price ? it.price + ' تومان\n' : ''}مشاهده: melkjet.com/property/${it.id}`
+        const txt = `🏠 آگهیِ جدید مطابقِ جستجوی شما${s.label ? ` (${s.label})` : ''}:\n«${it.title}»\n${it.price ? it.price + ' تومان\n' : ''}مشاهده: melkjet.com${listingHref(it.id, it.title, it.location)}`
         try { await pushSystemMessage(s.owner, name, txt) } catch {}
       }
       await sendSms(s.owner, s.label)
@@ -82,7 +83,7 @@ export async function processSavedSearches(now = Date.now()): Promise<{ searches
       const subs = listForPhone(s.owner)
       for (const sub of subs) {
         try {
-          const st = await sendPush(sub, { title: 'آگهیِ جدید در ملک‌جت 🏠', body: `«${top.title}»${s.label ? ` در ${s.label}` : ''} مطابقِ جستجوی شما اضافه شد`, url: `/property/${top.id}`, tag: 'mj-alert' })
+          const st = await sendPush(sub, { title: 'آگهیِ جدید در ملک‌جت 🏠', body: `«${top.title}»${s.label ? ` در ${s.label}` : ''} مطابقِ جستجوی شما اضافه شد`, url: listingHref(top.id, top.title, top.location), tag: 'mj-alert' })
           if (st === 404 || st === 410) removeByEndpoint(sub.endpoint)
         } catch { /* بی‌صدا */ }
       }

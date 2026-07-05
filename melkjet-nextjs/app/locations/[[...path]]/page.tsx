@@ -7,6 +7,7 @@ import { locationTree, resolveLocationPath, type LocationNode } from '@/app/lib/
 import { listItems } from '@/app/lib/scraper-store'
 import { gradientFor, initialsFor } from '@/app/lib/content-display'
 import { providersInArea } from '@/app/lib/provider-public'
+import { listingHref } from '@/app/lib/listing-url'
 
 export const dynamic = 'force-dynamic'
 
@@ -110,7 +111,7 @@ export default async function LocationPage({ params }: { params: Promise<{ path?
         {listings.length === 0 ? <Empty text="هنوز آگهیِ فعالی در این محدوده ثبت نشده است." />
           : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 16 }}>
             {listings.slice(0, 24).map(it => (
-              <Link key={it.id} href={it.url || `/property/${it.id}`} style={{ display: 'block', textDecoration: 'none', color: 'inherit', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden' }}>
+              <Link key={it.id} href={it.url || listingHref(it.id, it.title, it.location)} style={{ display: 'block', textDecoration: 'none', color: 'inherit', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden' }}>
                 <div style={{ height: 150, background: it.image ? `center/cover no-repeat url(${it.image})` : gradientFor(it.title) }} />
                 <div style={{ padding: '13px 15px' }}>
                   <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--gold)' }}>{money(it.price) || '—'}</div>

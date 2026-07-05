@@ -1,12 +1,12 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import Nav from '../../components/Nav'
-import Footer from '../../components/Footer'
-import StaticMap from '../../components/StaticMap'
-import NeshanMap from '../../components/NeshanMap'
-import RevealPhone from '../../components/RevealPhone'
-import CompareButton from '../../components/CompareButton'
+import Nav from './Nav'
+import Footer from './Footer'
+import StaticMap from './StaticMap'
+import NeshanMap from './NeshanMap'
+import RevealPhone from './RevealPhone'
+import CompareButton from './CompareButton'
 
 const fa = (n: number | string) => String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d])
 const faNum = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
@@ -22,7 +22,7 @@ interface ViewProject {
   amenities: string[]; plans: { label: string; url: string }[]; usage?: string
   priceText?: string; salesProgress?: number
   builder: { id: string; name: string; hasPhone: boolean; projectCount: number; regions: string[] }
-  similar: { hashId: string; address: string; region: string; photo: string; builderName: string }[]
+  similar: { hashId: string; address: string; region: string; photo: string; builderName: string; slug?: string }[]
 }
 interface Intel {
   analysis?: { summary: string; risk: number; riskLabel: string; points: string[] }
@@ -303,7 +303,7 @@ export default function ProjectView({ p }: { p: ViewProject }) {
               <div style={h}>پروژه‌های مرتبط</div>
               <div className="mjpr-units" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
                 {p.similar.map((s) => (
-                  <Link key={s.hashId} href={`/proje/${s.hashId}`} style={{ textDecoration: 'none', borderRadius: 14, overflow: 'hidden', border: '1px solid var(--line)', display: 'block', color: 'inherit' }}>
+                  <Link key={s.hashId} href={s.slug ? `/projects/${s.slug}` : `/proje/${s.hashId}`} style={{ textDecoration: 'none', borderRadius: 14, overflow: 'hidden', border: '1px solid var(--line)', display: 'block', color: 'inherit' }}>
                     <div style={{ height: 96, background: 'var(--bg2)' }}>
                       {s.photo ? <img src={s.photo} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, color: 'var(--faint)' }}>🏗</div>}
                     </div>

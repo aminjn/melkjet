@@ -2,6 +2,7 @@ import Link from 'next/link'
 import CompareButton from './CompareButton'
 import LikeHeart from './home/LikeHeart'
 import PromoBadge from './PromoBadge'
+import { listingHref } from '@/app/lib/listing-url'
 
 interface PropertyCardProps {
   id?: string | number
@@ -21,7 +22,7 @@ interface PropertyCardProps {
 // پس این کارت خودش hydrate نمی‌شود و می‌تواند در صفحاتِ سروری استفاده شود.
 export default function PropertyCard({ id = '1', title, location, price, size, beds, year, tag, score, img = 'linear-gradient(135deg,#3a3530,#211e1b)', promoKind }: PropertyCardProps) {
   return (
-    <Link href={`/property/${id}`} style={{ display: 'block', textDecoration: 'none', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, overflow: 'hidden', transition: '.2s' }}>
+    <Link href={listingHref(id, title, location)} style={{ display: 'block', textDecoration: 'none', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, overflow: 'hidden', transition: '.2s' }}>
       <div style={{ position: 'relative', height: 184, background: img }}>
         <div style={{ position: 'absolute', inset: 0, background: 'repeating-linear-gradient(135deg,transparent,transparent 9px,rgba(255,255,255,0.025) 9px,rgba(255,255,255,0.025) 10px)' }}></div>
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top,rgba(0,0,0,0.35),transparent 55%)' }}></div>

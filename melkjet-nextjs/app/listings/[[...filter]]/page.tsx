@@ -5,6 +5,7 @@ import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
 import { listItems } from '@/app/lib/scraper-store'
 import { gradientFor } from '@/app/lib/content-display'
+import { listingHref } from '@/app/lib/listing-url'
 
 export const dynamic = 'force-dynamic'
 
@@ -63,7 +64,7 @@ export default async function Listings({ params }: { params: Promise<{ filter?: 
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 16 }}>
             {items.slice(0, 48).map(it => (
-              <Link key={it.id} href={it.url || `/property/${it.id}`} style={{ display: 'block', textDecoration: 'none', color: 'inherit', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden' }}>
+              <Link key={it.id} href={it.url || listingHref(it.id, it.title, it.location)} style={{ display: 'block', textDecoration: 'none', color: 'inherit', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden' }}>
                 <div style={{ height: 152, background: it.image ? `center/cover no-repeat url(${it.image})` : gradientFor(it.title) }} />
                 <div style={{ padding: '13px 15px' }}>
                   <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--gold)' }}>{money(it.price) || '—'}</div>
