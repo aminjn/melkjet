@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import Nav from '../../components/Nav'
 import Footer from '../../components/Footer'
 import RevealContact from '../../components/RevealContact'
+import RepBadges from '../../components/RepBadges'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -42,6 +43,7 @@ interface AdvisorPublic {
   agency: { name: string; phone: string } | null;
   stats: { activeListings: number; deals: number; totalListings: number };
   listings: AdvisorListing[];
+  badges?: { id: string; label: string; icon: string; desc?: string }[];
 }
 
 // ─── Static Data ──────────────────────────────────────────────────────────────
@@ -665,9 +667,12 @@ function RealAdvisorProfile({ phone }: { phone: string }) {
             <div style={{ flex: 1, minWidth: 0, paddingBottom: 4 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
                 <h1 style={{ fontSize: 'clamp(20px,2.8vw,26px)', fontWeight: 800, color: 'var(--text)', margin: 0 }}>{data.name}</h1>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5, fontWeight: 700, color: '#5fd98a', background: 'rgba(95,217,138,0.12)', border: '1px solid rgba(95,217,138,0.4)', borderRadius: 999, padding: '3px 10px' }}>✓ تأییدشده</span>
+                {data.badges?.some(b => b.id === 'verified') && <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5, fontWeight: 700, color: '#5fd98a', background: 'rgba(95,217,138,0.12)', border: '1px solid rgba(95,217,138,0.4)', borderRadius: 999, padding: '3px 10px' }}>✓ تأییدشده</span>}
                 <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--gold)', background: 'var(--goldDim)', border: '1px solid var(--gold)', borderRadius: 999, padding: '3px 11px' }}>{data.title}</span>
               </div>
+              {(data.badges?.filter(b => b.id !== 'verified').length ?? 0) > 0 && (
+                <div style={{ marginTop: 10 }}><RepBadges badges={data.badges!.filter(b => b.id !== 'verified')} /></div>
+              )}
               {/* meta chips + agency badge */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
                 {data.agency && (

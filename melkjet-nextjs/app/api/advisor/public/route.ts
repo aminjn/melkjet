@@ -36,7 +36,19 @@ export async function GET(req: NextRequest) {
   if (mine.length === 0 && want) mine = all.filter(it => !it.meta?.__ownerPhone && normOwner(it.owner || '') === want)
   const listings = mine.slice(0, 12).map(it => ({ id: it.id, title: it.title, price: it.price, location: it.location, image: it.image }))
 
+  // نشان‌های اعتبار — از همان سیگنال‌های واقعی (با کامل‌ترشدنِ دیتا خودکار فعال می‌شوند).
+  const soldCount = mine.filter(it => { const ds = String(it.meta?.__dealStatus || ''); return ds === 'sold' || ds === 'rented' }).length
+  const { computeRepBadges } = await import('@/app/lib/reputation')
+  const badges = computeRepBadges({
+    createdAt: acc?.createdAt,
+    listingCount: mine.length,
+    soldCount,
+    profileComplete: !!((p.name || '').trim() && (p.photo || (p.specialties && p.specialties.length)) && p.phone),
+    responsive: !!p.phone,
+  })
+
   return NextResponse.json({
+    badges,
     phone,
     name: p.name || acc?.name || 'مشاور املاک',
     title: p.title || 'مشاور املاک',

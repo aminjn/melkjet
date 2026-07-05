@@ -30,6 +30,22 @@ export async function GET(req: NextRequest) {
 
   const items: any[] = []
 
+  // شمارشِ آگهی‌ها و معاملاتِ موفق به‌ازای هر مالک — سیگنالِ نشان‌های اعتبار (یک‌بار خوانده می‌شود).
+  const listingAgg = new Map<string, { count: number; sold: number }>()
+  try {
+    const { listItems } = await import('@/app/lib/scraper-store')
+    for (const it of await listItems('listing', { publicOnly: true })) {
+      const ph = String((it as any).meta?.__ownerPhone || '').replace(/\D/g, '')
+      if (!ph) continue
+      const a = listingAgg.get(ph) || { count: 0, sold: 0 }
+      a.count++
+      const ds = String((it as any).meta?.__dealStatus || '')
+      if (ds === 'sold' || ds === 'rented') a.sold++
+      listingAgg.set(ph, a)
+    }
+  } catch { /* اسکرپر در دسترس نبود */ }
+  const { computeRepBadges } = await import('@/app/lib/reputation')
+
   // ── سازنده‌ها: مستقیم از دیتابیسِ پرشین‌سازه، با لینکِ درستِ /sazande/{constructorId} ──
   if (!category || category === 'سازنده') {
     try {
@@ -79,10 +95,21 @@ export async function GET(req: NextRequest) {
       } catch {}
     }
     if (!name) continue                                  // بدونِ نام، در دایرکتوری نیاور
+    // سیگنال‌های اعتبار → نشان‌های اکتسابی (با کامل‌ترشدنِ دیتا خودکار فعال می‌شوند).
+    const norm = String(a.phone || '').replace(/\D/g, '')
+    const agg = listingAgg.get(norm) || { count: 0, sold: 0 }
+    const badges = computeRepBadges({
+      createdAt: a.createdAt,
+      listingCount: agg.count,
+      soldCount: agg.sold,
+      profileComplete: !!(name && (photo || specialties.length) && hasPhone),
+      responsive: hasPhone,
+    })
     items.push({
       id: a.phone, sourceName: 'ملک‌جت', type: 'directory', category: cat,
       title: name, location: city, image: photo, excerpt: tagline,
       tags: specialties.slice(0, 4), hasPhone, url: `/profile/${encodeURIComponent(a.phone)}`,
+      badges,
       // شماره از /api/listing-reveal با kind=advisor — برای هر اکانت (مشاور یا غیرِ آن) خودِ
       // شمارهٔ اکانت را برمی‌گرداند (اگر پروفایلِ مشاور نباشد). شناسه = تلفنِ اکانت.
       revealKind: 'advisor', revealId: a.phone,

@@ -4,6 +4,7 @@ import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
 import RevealContact from '@/app/components/RevealContact'
 import PromoBadge from '@/app/components/PromoBadge'
+import RepBadges from '@/app/components/RepBadges'
 import { useState, useEffect } from 'react'
 import { fetchContent, gradientFor, initialsFor, type ContentItem } from '@/app/lib/content-display'
 
@@ -23,6 +24,7 @@ function toProfessional(it: ContentItem) {
     category: it.category || '',
     promoted: false,
     promoKind: (it as any).promoKind as (string | undefined),
+    badges: ((it as any).badges || []) as { id: string; label: string; icon: string; desc?: string }[],
     coverGradient: gradientFor(it.title, 'cover'),
     avatarGradient: gradientFor(it.title, 'avatar'),
     url: it.url,
@@ -458,6 +460,7 @@ type Professional = {
   category: string
   promoted: boolean
   promoKind?: string
+  badges?: { id: string; label: string; icon: string; desc?: string }[]
   coverGradient: string
   avatarGradient: string
   url?: string
@@ -505,7 +508,7 @@ function ProfessionalCard({ pro }: { pro: Professional }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3 }}>
             <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pro.name}</span>
-            <span title="تأییدشده" style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, borderRadius: '50%', background: 'rgba(95,217,138,0.15)', color: '#5fd98a', fontSize: 10, fontWeight: 800 }}>✓</span>
+            {pro.badges?.some(b => b.id === 'verified') && <span title="پروفایلِ کامل و تأییدشده" style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, borderRadius: '50%', background: 'rgba(95,217,138,0.15)', color: '#5fd98a', fontSize: 10, fontWeight: 800 }}>✓</span>}
             {pro.promoted && <span style={{ flexShrink: 0 }}><PromoBadge kind={pro.promoKind || 'ویژه'} size="sm" /></span>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', fontSize: 12, color: 'var(--muted)' }}>
@@ -515,6 +518,9 @@ function ProfessionalCard({ pro }: { pro: Professional }) {
               {pro.area}</span></>}
             {hasRating && <><span style={{ color: 'var(--faint)' }}>·</span><span style={{ color: 'var(--text)', fontWeight: 700 }}>★ {pro.rating}</span></>}
           </div>
+          {(pro.badges?.filter(b => b.id !== 'verified').length ?? 0) > 0 && (
+            <div style={{ marginTop: 8 }}><RepBadges badges={pro.badges!.filter(b => b.id !== 'verified')} size="sm" /></div>
+          )}
           {pro.tags.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8 }}>
               {pro.tags.slice(0, 3).map((tag) => (
