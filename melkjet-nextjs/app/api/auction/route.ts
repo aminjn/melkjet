@@ -3,6 +3,7 @@ import { getSession } from '@/app/lib/session'
 import { auctionSlotsForRole, auctionStatus, placeBid, cancelBid, auctionSlotOf } from '@/app/lib/auction-store'
 import { getAccount, dashForRole } from '@/app/lib/account-store'
 import { getItemById } from '@/app/lib/scraper-store'
+import { ensurePromoPricing } from '@/app/lib/promo-pricing-store'
 
 const dashFor = (phone: string, role?: string) => role === 'super_admin' ? '/pros' : dashForRole(getAccount(phone)?.role)
 
@@ -10,6 +11,7 @@ const dashFor = (phone: string, role?: string) => role === 'super_admin' ? '/pro
 export async function GET() {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای مشاهده وارد شوید' }, { status: 401 })
+  await ensurePromoPricing()
   const dash = dashFor(s.phone, s.role)
   const slots = auctionSlotsForRole(dash)
   const statuses = (await Promise.all(slots.map(sl => auctionStatus(sl.id, s.phone)))).filter(Boolean)

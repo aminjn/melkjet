@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { pgEnabled, kvGet, kvMutate } from './db'
+import { promoPricing } from './promo-pricing-store'
 
 // ── مزایدهٔ جایگاهِ ویژه — سیستمِ خودگردان ──────────────────────────────────
 // مزایدهٔ «مُهرِ بسته» (sealed-bid) و دوره‌ای برای گران‌ترین جایگاه‌ها. کاملاً خودکار:
@@ -20,8 +21,13 @@ export interface AuctionSlot { id: string; promoSlot: string; label: string; tar
 export const AUCTION_SLOTS: AuctionSlot[] = [
   { id: 'home_top', promoSlot: 'home_featured', label: 'آگهیِ صدرِ صفحهٔ اصلی (هفتگی)', target: 'listing', periodDays: 7, minBid: 300000, step: 50000, kind: 'صفحه اول', forRoles: ['/buyer', '/pros', '/agency', '/builder'] },
 ]
-export function auctionSlotOf(id: string) { return AUCTION_SLOTS.find(s => s.id === id) }
-export function auctionSlotsForRole(dash: string) { return AUCTION_SLOTS.filter(s => s.forRoles.includes(dash)) }
+// اعمالِ overrideِ ادمین روی جایگاهِ مزایده (حداقلِ پیشنهاد/پله/مدت).
+function applyAuctionOverride(s: AuctionSlot): AuctionSlot {
+  try { const o = promoPricing().auction[s.id]; if (o) return { ...s, minBid: o.minBid != null ? o.minBid : s.minBid, step: o.step != null ? o.step : s.step, periodDays: o.periodDays != null ? o.periodDays : s.periodDays } } catch {}
+  return s
+}
+export function auctionSlotOf(id: string) { const s = AUCTION_SLOTS.find(s => s.id === id); return s ? applyAuctionOverride(s) : undefined }
+export function auctionSlotsForRole(dash: string) { return AUCTION_SLOTS.filter(s => s.forRoles.includes(dash)).map(applyAuctionOverride) }
 
 export interface Bid { id: string; slot: string; owner: string; targetId: string; targetName: string; amount: number; createdAt: number }
 export interface WinnerRec { owner: string; targetName: string; amount: number; at: number }

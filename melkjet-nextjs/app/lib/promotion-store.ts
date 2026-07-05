@@ -3,6 +3,7 @@ import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { getItemById } from './scraper-store'
 import { pgEnabled, kvGet, kvMutate } from './db'
+import { promoPricing } from './promo-pricing-store'
 
 const FILE = join(process.cwd(), '.promotion-data.json')
 const KV_KEY = 'promotions'
@@ -81,9 +82,14 @@ export const PROMO_TIERS: PromoTier[] = [
   { id: 'materials_top', slot: 'directory_top', target: 'profile', days: 30, name: 'تأمین‌کنندهٔ برتر', price: 499000, kind: 'برتر', forRoles: ['/materials'], desc: 'نمایش به‌عنوانِ تأمین‌کنندهٔ برتر در صدرِ فهرست — ۳۰ روز' },
   { id: 'materials_product', slot: 'store_featured', target: 'listing', days: 7, name: 'محصولِ ویژهٔ فروشگاه', price: 149000, kind: 'ویژه', forRoles: ['/materials'], desc: 'نمایشِ محصولِ شما به‌عنوانِ محصولِ برجستهٔ فروشگاه — ۷ روز' },
 ]
-export function promoTierOf(id: string) { return PROMO_TIERS.find(t => t.id === id) }
+// اعمالِ overrideِ ادمین روی یک تیر (قیمت/مدت).
+function applyTierOverride(t: PromoTier): PromoTier {
+  try { const o = promoPricing().tiers[t.id]; if (o) return { ...t, price: o.price != null ? o.price : t.price, days: o.days != null ? o.days : t.days } } catch {}
+  return t
+}
+export function promoTierOf(id: string) { const t = PROMO_TIERS.find(t => t.id === id); return t ? applyTierOverride(t) : undefined }
 // بسته‌های قابلِ نمایش برای یک داشبورد (نقش) — اگر forRoles نداشته باشد برای همه است.
-export function tiersForRole(dash: string): PromoTier[] { return PROMO_TIERS.filter(t => !t.forRoles || t.forRoles.includes(dash)) }
+export function tiersForRole(dash: string): PromoTier[] { return PROMO_TIERS.filter(t => !t.forRoles || t.forRoles.includes(dash)).map(applyTierOverride) }
 
 // ── تخفیفِ پروموت بر اساسِ پلنِ اشتراکِ کاربر (کلیدواژهٔ نامِ پلن → درصد) ──
 export const PLAN_PROMO_DISCOUNT: Record<string, number> = {
@@ -110,7 +116,12 @@ export const PROMO_BUNDLES: PromoBundle[] = [
   { id: 'bundle_arch_pro', name: 'باندلِ «معمارِ حرفه‌ای»', desc: 'معمارِ ویژه + نمایشِ نمونه‌کار (Spotlight) — یکجا', tierIds: ['arch_featured', 'arch_spotlight'], price: 449000, forRoles: ['/architect'] },
   { id: 'bundle_legal_top', name: 'باندلِ «حقوقیِ برتر»', desc: 'وکیلِ ویژه + دفترِ حقوقیِ برتر — یکجا', tierIds: ['lawfirm_featured', 'lawfirm_top'], price: 499000, forRoles: ['/lawfirm', '/legal'] },
 ]
-export function bundleOf(id: string) { return PROMO_BUNDLES.find(b => b.id === id) }
+function applyBundleOverride(b: PromoBundle): PromoBundle {
+  try { const o = promoPricing().bundles[b.id]; if (o && o.price != null) return { ...b, price: o.price } } catch {}
+  return b
+}
+export function bundlesAll(): PromoBundle[] { return PROMO_BUNDLES.map(applyBundleOverride) }
+export function bundleOf(id: string) { const b = PROMO_BUNDLES.find(b => b.id === id); return b ? applyBundleOverride(b) : undefined }
 
 // ── اعتبارِ پروموت (کیفِ پولِ پیش‌پرداختِ تبلیغات) — مدلِ «شارژِ کیف‌پول» مثلِ عملیاتِ AI ──
 // کاربر مبلغی می‌پردازد و اعتبارِ بیشتری (با پاداش) می‌گیرد؛ بعداً هر پروموت را می‌تواند «از
@@ -122,7 +133,12 @@ export const PROMO_CREDIT_PACKS: PromoCreditPack[] = [
   { id: 'pc_1000', name: 'شارژِ حرفه‌ای', pay: 1000000, credit: 1200000, bonusPct: 20 },
   { id: 'pc_2000', name: 'شارژِ کسب‌وکار', pay: 2000000, credit: 2600000, bonusPct: 30 },
 ]
-export function creditPackOf(id: string) { return PROMO_CREDIT_PACKS.find(p => p.id === id) }
+function applyPackOverride(p: PromoCreditPack): PromoCreditPack {
+  try { const o = promoPricing().packs[p.id]; if (o) { const pay = o.pay != null ? o.pay : p.pay, credit = o.credit != null ? o.credit : p.credit; return { ...p, pay, credit, bonusPct: pay > 0 ? Math.round((credit / pay - 1) * 100) : p.bonusPct } } } catch {}
+  return p
+}
+export function creditPacks(): PromoCreditPack[] { return PROMO_CREDIT_PACKS.map(applyPackOverride) }
+export function creditPackOf(id: string) { const p = PROMO_CREDIT_PACKS.find(p => p.id === id); return p ? applyPackOverride(p) : undefined }
 
 export interface Promotion {
   id: string; slot: string; targetId: string; title: string; image?: string; price?: string; location?: string

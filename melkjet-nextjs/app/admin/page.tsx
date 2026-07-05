@@ -4841,7 +4841,7 @@ function PromotionsView() {
   const [slots, setSlots] = useState<any[]>([])
   const [promotions, setPromotions] = useState<any[]>([])
   const [orders, setOrders] = useState<any[]>([])
-  const [tab, setTab] = useState<'active' | 'orders' | 'manual'>('active')
+  const [tab, setTab] = useState<'active' | 'orders' | 'pricing' | 'manual'>('active')
   const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
   const load = () => fetch('/api/admin/promotions').then(r => r.ok ? r.json() : { slots: [], promotions: [] }).then(d => { setSlots(d.slots || []); setPromotions(d.promotions || []) })
   const loadOrders = () => fetch('/api/comm?admin=1').then(r => r.ok ? r.json() : null).then(d => { if (d) setOrders((d.orders || []).filter((o: any) => o.kind === 'promo')) })
@@ -4881,8 +4881,11 @@ function PromotionsView() {
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
         <TabBtn id="active" label="پروموت‌های فعال" />
         <TabBtn id="orders" label="سفارش‌های خودسرویس" badge={pendingOrders.length} />
+        <TabBtn id="pricing" label="قیمت‌گذاری" />
         <TabBtn id="manual" label="ویژه‌سازیِ دستی" />
       </div>
+
+      {tab === 'pricing' && <PromoPricingEditor />}
 
       {tab === 'active' && (
         <Card>
@@ -4946,6 +4949,115 @@ function PromotionsView() {
           {slots.map(s => <SlotPromoter key={s.id} slot={s} promos={promotions.filter(p => p.slot === s.id)} onChange={load} />)}
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── ویرایشگرِ قیمت‌گذاریِ پروموت (بسته‌ها/شارژ/باندل/مزایده) ───────────────
+function PromoPricingEditor() {
+  const [defaults, setDefaults] = useState<any>(null)
+  const [vals, setVals] = useState<any>({ tiers: {}, packs: {}, bundles: {}, auction: {} })
+  const [msg, setMsg] = useState('')
+  const [busy, setBusy] = useState(false)
+  const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
+  useEffect(() => {
+    fetch('/api/admin/promo-pricing').then(r => r.ok ? r.json() : null).then(d => {
+      if (!d) return
+      setDefaults(d.defaults)
+      const ov = d.overrides || {}
+      // مقدارِ مؤثر = override ?? پیش‌فرض
+      const v: any = { tiers: {}, packs: {}, bundles: {}, auction: {} }
+      for (const t of d.defaults.tiers) v.tiers[t.id] = { price: ov.tiers?.[t.id]?.price ?? t.price, days: ov.tiers?.[t.id]?.days ?? t.days }
+      for (const p of d.defaults.packs) v.packs[p.id] = { pay: ov.packs?.[p.id]?.pay ?? p.pay, credit: ov.packs?.[p.id]?.credit ?? p.credit }
+      for (const b of d.defaults.bundles) v.bundles[b.id] = { price: ov.bundles?.[b.id]?.price ?? b.price }
+      for (const a of d.defaults.auction) v.auction[a.id] = { minBid: ov.auction?.[a.id]?.minBid ?? a.minBid, step: ov.auction?.[a.id]?.step ?? a.step, periodDays: ov.auction?.[a.id]?.periodDays ?? a.periodDays }
+      setVals(v)
+    })
+  }, [])
+  const inp: React.CSSProperties = { width: 110, background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 8, padding: '6px 9px', color: 'var(--text)', fontSize: 12.5, fontFamily: 'inherit', outline: 'none' }
+  const setV = (grp: string, id: string, field: string, num: number) => setVals((s: any) => ({ ...s, [grp]: { ...s[grp], [id]: { ...s[grp][id], [field]: num } } }))
+  const num = (e: React.ChangeEvent<HTMLInputElement>) => Math.max(0, parseInt(e.target.value.replace(/\D/g, '') || '0', 10))
+  const save = async () => {
+    if (!defaults) return
+    setBusy(true); setMsg('')
+    // فقط فیلدهایی که با پیش‌فرض فرق دارند در override ذخیره می‌شوند.
+    const ov: any = { tiers: {}, packs: {}, bundles: {}, auction: {} }
+    for (const t of defaults.tiers) { const o: any = {}; if (vals.tiers[t.id]?.price !== t.price) o.price = vals.tiers[t.id].price; if (vals.tiers[t.id]?.days !== t.days) o.days = vals.tiers[t.id].days; if (Object.keys(o).length) ov.tiers[t.id] = o }
+    for (const p of defaults.packs) { const o: any = {}; if (vals.packs[p.id]?.pay !== p.pay) o.pay = vals.packs[p.id].pay; if (vals.packs[p.id]?.credit !== p.credit) o.credit = vals.packs[p.id].credit; if (Object.keys(o).length) ov.packs[p.id] = o }
+    for (const b of defaults.bundles) { if (vals.bundles[b.id]?.price !== b.price) ov.bundles[b.id] = { price: vals.bundles[b.id].price } }
+    for (const a of defaults.auction) { const o: any = {}; if (vals.auction[a.id]?.minBid !== a.minBid) o.minBid = vals.auction[a.id].minBid; if (vals.auction[a.id]?.step !== a.step) o.step = vals.auction[a.id].step; if (vals.auction[a.id]?.periodDays !== a.periodDays) o.periodDays = vals.auction[a.id].periodDays; if (Object.keys(o).length) ov.auction[a.id] = o }
+    const r = await fetch('/api/admin/promo-pricing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ov) })
+    setBusy(false); setMsg(r.ok ? '✓ قیمت‌ها ذخیره شد (تا ۵ ثانیه روی همهٔ اینستنس‌ها اعمال می‌شود)' : '⚠ خطا در ذخیره')
+  }
+  if (!defaults) return <Card><div style={{ color: 'var(--muted)', fontSize: 13 }}>در حالِ بارگذاری…</div></Card>
+  const roleLabel = (r?: string[]) => (r && r.length ? r.map(x => x.replace('/', '')).join('، ') : 'همه')
+  const listingTiers = defaults.tiers.filter((t: any) => t.target === 'listing')
+  const profileTiers = defaults.tiers.filter((t: any) => t.target === 'profile')
+  const TierRows = ({ list }: { list: any[] }) => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {list.map((t: any) => (
+        <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg2)', borderRadius: 10, padding: '8px 12px', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 160 }}><span style={{ fontSize: 13, fontWeight: 700 }}>{t.name}</span> <span style={{ fontSize: 10.5, color: 'var(--gold)', background: 'var(--goldDim)', borderRadius: 999, padding: '1px 7px' }}>{t.kind}</span> <span style={{ fontSize: 11, color: 'var(--faint)' }}>· {roleLabel(t.forRoles)}</span></div>
+          <label style={{ fontSize: 11.5, color: 'var(--muted)' }}>قیمت: <input style={inp} value={vals.tiers[t.id]?.price ?? ''} onChange={e => setV('tiers', t.id, 'price', num(e))} /></label>
+          <label style={{ fontSize: 11.5, color: 'var(--muted)' }}>مدت(روز): <input style={{ ...inp, width: 64 }} value={vals.tiers[t.id]?.days ?? ''} onChange={e => setV('tiers', t.id, 'days', num(e))} /></label>
+        </div>
+      ))}
+    </div>
+  )
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>قیمتِ همهٔ بسته‌های پروموت، شارژِ کیفِ پول، باندل‌ها و مزایده را این‌جا تنظیم کن. مقادیر برحسبِ تومان‌اند. تغییرِ مقدار نسبت به پیش‌فرض به‌عنوان «override» ذخیره می‌شود.</div>
+
+      <Card>
+        <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 10 }}>🚀 بسته‌های پروموتِ آگهی</div>
+        <TierRows list={listingTiers} />
+      </Card>
+      <Card>
+        <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 10 }}>⭐ بسته‌های پروموتِ پروفایل (نقش‌محور)</div>
+        <TierRows list={profileTiers} />
+      </Card>
+      <Card>
+        <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 10 }}>💳 بسته‌های شارژِ کیفِ پول</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {defaults.packs.map((p: any) => (
+            <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg2)', borderRadius: 10, padding: '8px 12px', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 140, fontSize: 13, fontWeight: 700 }}>{p.name}</div>
+              <label style={{ fontSize: 11.5, color: 'var(--muted)' }}>پرداخت: <input style={inp} value={vals.packs[p.id]?.pay ?? ''} onChange={e => setV('packs', p.id, 'pay', num(e))} /></label>
+              <label style={{ fontSize: 11.5, color: 'var(--muted)' }}>اعتبار: <input style={inp} value={vals.packs[p.id]?.credit ?? ''} onChange={e => setV('packs', p.id, 'credit', num(e))} /></label>
+              <span style={{ fontSize: 11, color: 'var(--gold)' }}>پاداش: {fa(vals.packs[p.id]?.pay > 0 ? Math.round((vals.packs[p.id].credit / vals.packs[p.id].pay - 1) * 100) : 0)}٪</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+      <Card>
+        <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 10 }}>🎁 باندل‌ها</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {defaults.bundles.map((b: any) => (
+            <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg2)', borderRadius: 10, padding: '8px 12px', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 160, fontSize: 13, fontWeight: 700 }}>{b.name}</div>
+              <label style={{ fontSize: 11.5, color: 'var(--muted)' }}>قیمت: <input style={inp} value={vals.bundles[b.id]?.price ?? ''} onChange={e => setV('bundles', b.id, 'price', num(e))} /></label>
+            </div>
+          ))}
+        </div>
+      </Card>
+      <Card>
+        <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 10 }}>🏆 مزایدهٔ جایگاهِ ویژه</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {defaults.auction.map((a: any) => (
+            <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg2)', borderRadius: 10, padding: '8px 12px', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 160, fontSize: 13, fontWeight: 700 }}>{a.label}</div>
+              <label style={{ fontSize: 11.5, color: 'var(--muted)' }}>حداقلِ پیشنهاد: <input style={inp} value={vals.auction[a.id]?.minBid ?? ''} onChange={e => setV('auction', a.id, 'minBid', num(e))} /></label>
+              <label style={{ fontSize: 11.5, color: 'var(--muted)' }}>پله: <input style={{ ...inp, width: 90 }} value={vals.auction[a.id]?.step ?? ''} onChange={e => setV('auction', a.id, 'step', num(e))} /></label>
+              <label style={{ fontSize: 11.5, color: 'var(--muted)' }}>مدت(روز): <input style={{ ...inp, width: 64 }} value={vals.auction[a.id]?.periodDays ?? ''} onChange={e => setV('auction', a.id, 'periodDays', num(e))} /></label>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', position: 'sticky', bottom: 0, background: 'var(--bg)', padding: '10px 0' }}>
+        <GoldButton onClick={save} disabled={busy}>{busy ? 'در حال ذخیره…' : 'ذخیرهٔ قیمت‌ها'}</GoldButton>
+        {msg && <span style={{ fontSize: 12.5, fontWeight: 600, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</span>}
+      </div>
     </div>
   )
 }

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { listPackages, setPackages, getCredit, grantCredit, createOrder, createPlanOrder, createPromoOrder, createBundleOrder, createPromoCreditOrder, getPromoWallet, listOrders, approveOrder, rejectOrder, getTokenUsage } from '@/app/lib/comm-store'
 import { listActive, getPlan } from '@/app/lib/plan-store'
-import { promoTierOf, promoDiscountForPlanName, PROMO_BUNDLES, tiersForRole, bundleOf, PROMO_CREDIT_PACKS } from '@/app/lib/promotion-store'
+import { promoTierOf, promoDiscountForPlanName, bundlesAll, tiersForRole, bundleOf, creditPacks } from '@/app/lib/promotion-store'
+import { ensurePromoPricing } from '@/app/lib/promo-pricing-store'
 import { getProfile } from '@/app/lib/profile-store'
 import { getAccount, dashForRole } from '@/app/lib/account-store'
 
@@ -15,6 +16,7 @@ const dashFor = (phone: string, role?: string) => role === 'super_admin' ? '/pro
 export async function GET(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای مشاهده وارد شوید' }, { status: 401 })
+  await ensurePromoPricing()
   const sp = new URL(req.url).searchParams
   // نمای سوپرادمین: همهٔ پکیج‌ها + همهٔ سفارش‌ها
   if (sp.get('admin') === '1') {
@@ -23,12 +25,13 @@ export async function GET(req: NextRequest) {
   }
   // نمای کاربر: پکیج‌های فعال + اعتبارِ خودش + سفارش‌های خودش + کاتالوگِ پروموتِ نقش‌محور
   const dash = dashFor(s.phone, s.role)
-  return NextResponse.json({ packages: await listPackages(true), credit: await getCredit(s.phone), orders: await listOrders(s.phone), tokenUsed: await getTokenUsage(s.phone), promoTiers: tiersForRole(dash), promoBundles: PROMO_BUNDLES.filter(b => b.forRoles.includes(dash)), promoDiscount: discountFor(s.phone), promoWallet: await getPromoWallet(s.phone), promoCreditPacks: PROMO_CREDIT_PACKS }, { headers: { 'Cache-Control': 'no-store' } })
+  return NextResponse.json({ packages: await listPackages(true), credit: await getCredit(s.phone), orders: await listOrders(s.phone), tokenUsed: await getTokenUsage(s.phone), promoTiers: tiersForRole(dash), promoBundles: bundlesAll().filter(b => b.forRoles.includes(dash)), promoDiscount: discountFor(s.phone), promoWallet: await getPromoWallet(s.phone), promoCreditPacks: creditPacks() }, { headers: { 'Cache-Control': 'no-store' } })
 }
 
 export async function POST(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای انجام این عملیات وارد شوید' }, { status: 401 })
+  await ensurePromoPricing()
   const b = await req.json().catch(() => ({} as any))
   const act = String(b.action || '')
   const isAdmin = s.role === 'super_admin'
