@@ -6,6 +6,7 @@ import { promoTierOf, promoDiscountForPlanName, bundlesAll, tiersForRole, bundle
 import { ensurePromoPricing } from '@/app/lib/promo-pricing-store'
 import { getProfile } from '@/app/lib/profile-store'
 import { getAccount, dashForRole, activePlan } from '@/app/lib/account-store'
+import { listNotifs, unreadCount, markAllRead } from '@/app/lib/notif-store'
 
 // تخفیفِ پروموتِ کاربر از روی پلنِ اشتراکِ حسابش.
 const discountFor = (phone: string) => { try { return promoDiscountForPlanName(getPlan(getAccount(phone)?.plan || '')?.name) } catch { return 0 } }
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
   const withWhere = <T extends { slot: string }>(t: T) => ({ ...t, where: slotOf(t.slot)?.where || '', slotLabel: slotOf(t.slot)?.label || '' })
   const tiers = tiersForRole(dash).map(withWhere)
   const bundles = bundlesAll().filter(b => b.forRoles.includes(dash)).map(b => ({ ...b, where: Array.from(new Set(b.tierIds.map(id => { const t = promoTierOf(id); return t ? (slotOf(t.slot)?.where || '') : '' }).filter(Boolean))).join(' + ') }))
-  return NextResponse.json({ packages: await listPackages(true), credit: await getCredit(s.phone), orders: await listOrders(s.phone), tokenUsed: await getTokenUsage(s.phone), promoTiers: tiers, promoBundles: bundles, promoDiscount: discountFor(s.phone), promoWallet: await getPromoWallet(s.phone), promoCreditPacks: creditPacks(), myPromotions: await myActivePromotions(s.phone), activePlan: activePlan(s.phone), maxAreas: maxAreasPerPromo() }, { headers: { 'Cache-Control': 'no-store' } })
+  return NextResponse.json({ packages: await listPackages(true), credit: await getCredit(s.phone), orders: await listOrders(s.phone), tokenUsed: await getTokenUsage(s.phone), promoTiers: tiers, promoBundles: bundles, promoDiscount: discountFor(s.phone), promoWallet: await getPromoWallet(s.phone), promoCreditPacks: creditPacks(), myPromotions: await myActivePromotions(s.phone), activePlan: activePlan(s.phone), maxAreas: maxAreasPerPromo(), notifs: await listNotifs(s.phone, 20), unreadNotifs: await unreadCount(s.phone) }, { headers: { 'Cache-Control': 'no-store' } })
 }
 
 export async function POST(req: NextRequest) {
@@ -98,6 +99,8 @@ export async function POST(req: NextRequest) {
     const r = await createBundleOrder(s.phone, { bundleId: bundle.id, discountPct: discountFor(s.phone), targetName, payFromWallet: !!b.payFromWallet }, { gateway: b.gateway ? String(b.gateway) : undefined, receipt: b.receipt ? String(b.receipt).slice(0, 120) : undefined })
     return r.ok ? NextResponse.json({ ok: true, order: r.order, walletPaid: r.walletPaid }) : NextResponse.json({ error: r.error }, { status: 400 })
   }
+
+  if (act === 'markNotifsRead') { await markAllRead(s.phone); return NextResponse.json({ ok: true }) }
 
   if (act === 'orderCredit') {
     const r = await createPromoCreditOrder(s.phone, String(b.packId || ''), { gateway: b.gateway ? String(b.gateway) : undefined, receipt: b.receipt ? String(b.receipt).slice(0, 120) : undefined })

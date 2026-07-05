@@ -15,7 +15,7 @@ export interface PromoPricing {
   tiers: Record<string, { price?: number; days?: number }>
   packs: Record<string, { pay?: number; credit?: number }>
   bundles: Record<string, { price?: number }>
-  auction: Record<string, { minBid?: number; step?: number; periodDays?: number }>
+  auction: Record<string, { minBid?: number; step?: number; periodDays?: number; enabled?: boolean }>
   // کنترلِ کاملِ کاتالوگِ تیرها:
   tierMeta?: Record<string, { name?: string; kind?: string; slot?: string; desc?: string; forRoles?: string[]; enabled?: boolean }>
   deletedTiers?: string[]          // idِ تیرهای seed که ادمین حذف کرده

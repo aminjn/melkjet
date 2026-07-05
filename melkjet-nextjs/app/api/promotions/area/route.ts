@@ -31,6 +31,8 @@ export async function GET(req: NextRequest) {
       listings.push({ id: it.id, title: it.title, price: it.price, location: it.location, image: it.image, url: it.url, category: it.category, type: it.type, promoted: true, promoKind: info.kind || 'ویژه' })
     } catch {}
   }
+  // برندهٔ مزایده (نشانِ «مزایده») بالاتر از پروموت‌های محله‌محورِ عادی نمایش داده می‌شود.
+  listings.sort((a, b) => (b.promoKind === 'مزایده' ? 1 : 0) - (a.promoKind === 'مزایده' ? 1 : 0))
 
   return NextResponse.json({ profiles, listings }, { headers: { 'Cache-Control': 'no-store' } })
 }

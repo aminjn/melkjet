@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { PROMO_TIERS, PROMO_CREDIT_PACKS, PROMO_BUNDLES, PROMO_SLOTS, PROMO_ROLE_OPTIONS, slotOf } from '@/app/lib/promotion-store'
-import { AUCTION_SLOTS } from '@/app/lib/auction-store'
+import { auctionConfig } from '@/app/lib/auction-store'
 import { getPromoPricing, setPromoPricing } from '@/app/lib/promo-pricing-store'
 import { logAudit } from '@/app/lib/audit-store'
 
@@ -15,7 +15,7 @@ export async function GET() {
       tiers: PROMO_TIERS.map(t => ({ id: t.id, name: t.name, kind: t.kind, target: t.target, price: t.price, days: t.days, forRoles: t.forRoles, where: slotOf(t.slot)?.where || '' })),
       packs: PROMO_CREDIT_PACKS.map(p => ({ id: p.id, name: p.name, pay: p.pay, credit: p.credit })),
       bundles: PROMO_BUNDLES.map(b => ({ id: b.id, name: b.name, price: b.price, tierIds: b.tierIds })),
-      auction: AUCTION_SLOTS.map(a => ({ id: a.id, label: a.label, minBid: a.minBid, step: a.step, periodDays: a.periodDays })),
+      auction: [(() => { const a = auctionConfig(); return { id: a.id, label: a.label, minBid: a.minBid, step: a.step, periodDays: a.periodDays, enabled: a.enabled } })()],
     },
     slots: PROMO_SLOTS.map(s => ({ id: s.id, label: s.label, where: s.where, target: s.target })),
     roleOptions: PROMO_ROLE_OPTIONS,
