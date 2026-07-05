@@ -44,5 +44,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     for (const it of await listItems('listing', { publicOnly: true })) add(`/property/${it.id}`, { priority: 0.6, lastModified: it.scrapedAt ? new Date(it.scrapedAt) : undefined })
   } catch {}
 
+  // متخصصان: /{type}/{slug}
+  try {
+    const { listAccounts } = await import('@/app/lib/account-store')
+    const { urlTypeForRole } = await import('@/app/lib/provider-public')
+    const { ensureProviderSlug } = await import('@/app/lib/provider-slug-store')
+    const { getProfile } = await import('@/app/lib/profile-store')
+    for (const a of listAccounts()) {
+      const type = urlTypeForRole(a.role); if (!type) continue
+      const gp = getProfile(a.phone)
+      const name = (gp.businessName || gp.displayName || a.name || '').trim(); if (!name) continue
+      const slug = await ensureProviderSlug(a.phone, name)
+      if (slug) add(`/${type}/${slug}`, { priority: 0.6 })
+    }
+  } catch {}
+
   return out
 }
