@@ -3,7 +3,7 @@ import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { getItemById } from './scraper-store'
 import { pgEnabled, kvGet, kvMutate } from './db'
-import { promoPricing } from './promo-pricing-store'
+import { promoPricing, type PromoPricing } from './promo-pricing-store'
 
 const FILE = join(process.cwd(), '.promotion-data.json')
 const KV_KEY = 'promotions'
@@ -82,14 +82,47 @@ export const PROMO_TIERS: PromoTier[] = [
   { id: 'materials_top', slot: 'directory_top', target: 'profile', days: 30, name: 'تأمین‌کنندهٔ برتر', price: 499000, kind: 'برتر', forRoles: ['/materials'], desc: 'نمایش به‌عنوانِ تأمین‌کنندهٔ برتر در صدرِ فهرست — ۳۰ روز' },
   { id: 'materials_product', slot: 'store_featured', target: 'listing', days: 7, name: 'محصولِ ویژهٔ فروشگاه', price: 149000, kind: 'ویژه', forRoles: ['/materials'], desc: 'نمایشِ محصولِ شما به‌عنوانِ محصولِ برجستهٔ فروشگاه — ۷ روز' },
 ]
-// اعمالِ overrideِ ادمین روی یک تیر (قیمت/مدت).
+// نقش‌هایی که می‌توان یک بسته را برایشان محدود کرد (برای انتخابگرِ ادمین).
+export const PROMO_ROLE_OPTIONS: { id: string; label: string }[] = [
+  { id: '/buyer', label: 'خریدار' }, { id: '/pros', label: 'مشاور' }, { id: '/agency', label: 'آژانس' }, { id: '/builder', label: 'سازنده' },
+  { id: '/materials', label: 'مصالح' }, { id: '/architect', label: 'معمار' }, { id: '/contractor', label: 'پیمانکار' }, { id: '/appraiser', label: 'کارشناس' },
+  { id: '/lawfirm', label: 'دفتر حقوقی' }, { id: '/legal', label: 'وکیل' }, { id: '/finance', label: 'مالی/بیمه' }, { id: '/notary', label: 'دفترخانه' },
+]
+
+// اعمالِ ویرایش‌های ادمین روی یک تیرِ seed (قیمت/مدت/نام/نشان/جایگاه/نقش‌ها).
 function applyTierOverride(t: PromoTier): PromoTier {
-  try { const o = promoPricing().tiers[t.id]; if (o) return { ...t, price: o.price != null ? o.price : t.price, days: o.days != null ? o.days : t.days } } catch {}
-  return t
+  try {
+    const pp = promoPricing()
+    const price = pp.tiers[t.id]; const meta = pp.tierMeta?.[t.id]
+    const r: PromoTier = { ...t }
+    if (price) { if (price.price != null) r.price = price.price; if (price.days != null) r.days = price.days }
+    if (meta) {
+      if (meta.name) r.name = meta.name
+      if (meta.kind) r.kind = meta.kind
+      if (meta.slot && slotOf(meta.slot)) r.slot = meta.slot
+      if (meta.desc) r.desc = meta.desc
+      if (Array.isArray(meta.forRoles)) r.forRoles = meta.forRoles
+    }
+    // target همیشه از جایگاه مشتق می‌شود (directory→profile، بقیه→listing) تا فعال‌سازی درست باشد.
+    const s = slotOf(r.slot); if (s) r.target = s.target === 'directory' ? 'profile' : 'listing'
+    return r
+  } catch { return t }
 }
-export function promoTierOf(id: string) { const t = PROMO_TIERS.find(t => t.id === id); return t ? applyTierOverride(t) : undefined }
-// بسته‌های قابلِ نمایش برای یک داشبورد (نقش) — اگر forRoles نداشته باشد برای همه است.
-export function tiersForRole(dash: string): PromoTier[] { return PROMO_TIERS.filter(t => !t.forRoles || t.forRoles.includes(dash)).map(applyTierOverride) }
+// همهٔ تیرهای فعال = seed (منهای حذف‌شده‌ها/غیرفعال‌ها، با ویرایش‌ها) + تیرهای سفارشیِ ادمین.
+export function allTiers(): PromoTier[] {
+  let pp: PromoPricing = { tiers: {}, packs: {}, bundles: {}, auction: {} }
+  try { pp = promoPricing() } catch {}
+  const deleted = new Set(pp.deletedTiers || [])
+  const seed = PROMO_TIERS.filter(t => !deleted.has(t.id) && pp.tierMeta?.[t.id]?.enabled !== false).map(applyTierOverride)
+  const custom = (pp.customTiers || []).filter(t => (t as any).enabled !== false && slotOf(t.slot)).map(t => {
+    const s = slotOf(t.slot)!
+    return { ...t, target: (s.target === 'directory' ? 'profile' : 'listing') as 'profile' | 'listing' }
+  })
+  return [...seed, ...custom]
+}
+export function promoTierOf(id: string) { return allTiers().find(t => t.id === id) }
+// بسته‌های قابلِ نمایش برای یک داشبورد (نقش) — اگر forRoles نداشته/خالی باشد برای همه است.
+export function tiersForRole(dash: string): PromoTier[] { return allTiers().filter(t => !t.forRoles || t.forRoles.length === 0 || t.forRoles.includes(dash)) }
 
 // ── تخفیفِ پروموت بر اساسِ پلنِ اشتراکِ کاربر (کلیدواژهٔ نامِ پلن → درصد) ──
 export const PLAN_PROMO_DISCOUNT: Record<string, number> = {
