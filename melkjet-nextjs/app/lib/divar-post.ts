@@ -47,7 +47,8 @@ function faToNum(s?: string): number {
 function parseToman(s?: string): number {
   if (!s) return 0
   if (/رایگان|توافقی|مجانی|مجانی|طبق توافق/.test(s)) return 0
-  const latin = String(s).replace(/[۰-۹]/g, d => String(FA_DIGITS.indexOf(d)))
+  // ارقامِ فارسی → لاتین + نرمال‌سازیِ جداکننده‌های عربی: ٬ (هزارگان) حذف، ٫ (اعشار) → نقطه.
+  const latin = String(s).replace(/[۰-۹]/g, d => String(FA_DIGITS.indexOf(d))).replace(/٬/g, '').replace(/٫/g, '.')
   const num = latin.match(/[\d][\d,.]*/)
   if (!num) return 0
   const base = parseFloat(num[0].replace(/,/g, '')) || 0
@@ -339,6 +340,30 @@ export async function fetchDivarPost(token: string): Promise<DivarPost> {
       if (!monthly) { const m = dsc.match(/اجاره\D{0,14}([\d۰-۹][\d۰-۹,.\s]*(?:میلیون|میلیارد)?)/); if (m && bigEnough(m[1])) monthly = m[1] }
     } else {
       if (!total) { const m = dsc.match(/(?:قیمت|مبلغ کل)\D{0,14}([\d۰-۹][\d۰-۹,.\s]*(?:میلیون|میلیارد)?)/); if (m && bigEnough(m[1])) total = m[1] }
+    }
+
+    // پشتیبانِ عمیق برای آگهی‌های اجارهٔ «قابل‌تبدیل» (تاگلِ ودیعه/اجاره): قیمت در ویجتی می‌آید
+    // که از walkِ title/value رد می‌شود؛ پس مستقیم از کلِ بدنهٔ پاسخ می‌خوانیم.
+    const body = res.body || ''
+    // مقدار پس از برچسبِ فارسی (ودیعه/رهن/اجاره/قیمت) در بدنه. همهٔ occurrenceها را می‌گردیم
+    // و اولین عددِ واقع‌بینانه (≥۱م) را برمی‌گردانیم؛ پس برچسب‌های تزئینی (بردکرامب، «قابل تبدیل»)
+    // که عددِ بزرگ کنارشان نیست، رد می‌شوند.
+    const afterLabel = (labels: RegExp): string => {
+      const re = new RegExp('(?:' + labels.source + ')(?:\\s*\\(?تومان\\)?)?[^\\d۰-۹]{0,40}?([\\d۰-۹][\\d۰-۹٬٫,.\\s]*(?:\\s*(?:میلیون|میلیارد))?)', 'g')
+      let m: RegExpExecArray | null
+      while ((m = re.exec(body))) { if (bigEnough(m[1])) return m[1].trim() }
+      return ''
+    }
+    // فیلدهای عددیِ خامِ دیوار (credit=ودیعه، rent=اجاره، price=فروش) به‌عنوان آخرین تلاش.
+    const rawNum = (key: RegExp, minDigits: number): string => {
+      const re = new RegExp('"(?:' + key.source + ')"\\s*:\\s*"?(\\d{' + minDigits + ',})')
+      const m = body.match(re); return m ? m[1] : ''
+    }
+    if (deal === 'rent') {
+      if (!deposit) deposit = afterLabel(/ودیعه|رهن/) || rawNum(/credit|deposit/, 7)
+      if (!monthly) monthly = afterLabel(/اجاره/) || rawNum(/rent/, 6)
+    } else {
+      if (!total) total = afterLabel(/قیمت کل|قیمت فروش|مبلغ کل/) || rawNum(/total_?price|sale_?price|price/, 8)
     }
 
     return {
