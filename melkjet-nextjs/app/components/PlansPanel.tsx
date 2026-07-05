@@ -37,6 +37,8 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
   const [promoWallet, setPromoWallet] = useState(0)
   const [promoCreditPacks, setPromoCreditPacks] = useState<{ id: string; name: string; pay: number; credit: number; bonusPct: number }[]>([])
   const [orders, setOrders] = useState<Order[]>([])
+  const [notifs, setNotifs] = useState<{ id: string; text: string; kind: string; createdAt: number; read: boolean }[]>([])
+  const [unreadNotifs, setUnreadNotifs] = useState(0)
   const [period, setPeriod] = useState<Period>('monthly')
   const priceOf = (p: Plan) => period === 'yearly' ? p.priceYearly : period === '3m' ? (p.price3m || p.priceMonthly * 3) : period === '6m' ? (p.price6m || p.priceMonthly * 6) : p.priceMonthly
   const periodLabel = PERIODS.find(x => x[0] === period)![2]
@@ -45,7 +47,9 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
   // سه بخشِ جدا: کیفِ پول × اشتراک/بسته‌ها × پروموت/تبلیغات
   const [section, setSection] = useState<'wallet' | 'plans' | 'promo'>('plans')
 
-  const loadComm = () => fetch('/api/comm').then(r => r.ok ? r.json() : null).then(d => { if (d) { setCredit(d.credit || { sms: 0, email: 0, token: 0 }); setOrders(d.orders || []); setTokenUsed(d.tokenUsed || 0); setPromoTiers(d.promoTiers || []); setPromoBundles(d.promoBundles || []); setPromoDiscount(Number(d.promoDiscount) || 0); setPromoWallet(Number(d.promoWallet) || 0); setPromoCreditPacks(d.promoCreditPacks || []); setMyPromotions(d.myPromotions || []); setActiveplan(d.activePlan || null) } }).catch(() => {})
+  const loadComm = () => fetch('/api/comm').then(r => r.ok ? r.json() : null).then(d => { if (d) { setCredit(d.credit || { sms: 0, email: 0, token: 0 }); setOrders(d.orders || []); setTokenUsed(d.tokenUsed || 0); setPromoTiers(d.promoTiers || []); setPromoBundles(d.promoBundles || []); setPromoDiscount(Number(d.promoDiscount) || 0); setPromoWallet(Number(d.promoWallet) || 0); setPromoCreditPacks(d.promoCreditPacks || []); setMyPromotions(d.myPromotions || []); setActiveplan(d.activePlan || null); setNotifs(d.notifs || []); setUnreadNotifs(Number(d.unreadNotifs) || 0) } }).catch(() => {})
+  const markNotifsRead = async () => { try { await fetch('/api/comm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'markNotifsRead' }) }); loadComm() } catch {} }
+  const notifDate = (ts: number) => { try { return new Date(ts).toLocaleDateString('fa-IR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }) } catch { return '' } }
   const load = () => {
     fetch(`/api/plans?dashboard=${encodeURIComponent(dashboard)}`).then(r => r.ok ? r.json() : null).then(d => {
       if (!d) return
@@ -110,7 +114,7 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
       <div style={{ display: 'flex', justifyContent: 'center' }}>
         <div style={{ display: 'inline-flex', background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 999, padding: 4, flexWrap: 'wrap' }}>
           {([['wallet', '💰 کیفِ پول'], ['plans', '👑 اشتراک و بسته‌ها'], ['promo', '🚀 پروموت و تبلیغات']] as const).map(([k, l]) => (
-            <button key={k} onClick={() => setSection(k)} style={{ padding: '9px 18px', borderRadius: 999, border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 800, background: section === k ? 'linear-gradient(135deg,var(--gold2),var(--gold))' : 'transparent', color: section === k ? '#16140f' : 'var(--muted)' }}>{l}</button>
+            <button key={k} onClick={() => setSection(k)} style={{ padding: '9px 18px', borderRadius: 999, border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 800, background: section === k ? 'linear-gradient(135deg,var(--gold2),var(--gold))' : 'transparent', color: section === k ? '#16140f' : 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>{l}{k === 'wallet' && unreadNotifs > 0 && <span style={{ background: section === k ? '#16140f' : 'var(--gold)', color: section === k ? 'var(--gold)' : '#16140f', fontSize: 10, fontWeight: 800, borderRadius: 999, minWidth: 17, height: 17, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{fa(unreadNotifs)}</span>}</button>
           ))}
         </div>
       </div>
@@ -150,6 +154,26 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
                     <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--gold)' }}>{fa(o.price)} تومان</span>
                       <span style={{ fontSize: 11, fontWeight: 700, color: o.status === 'paid' ? '#5fd98a' : o.status === 'pending' ? '#f59e0b' : 'var(--faint)' }}>{o.status === 'paid' ? '✓ پرداخت‌شده' : o.status === 'pending' ? '⏳ در انتظار' : 'رد‌شده'}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* اعلان‌ها */}
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+              <div style={{ fontSize: 14, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 8 }}>🔔 اعلان‌ها{unreadNotifs > 0 && <span style={{ background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 11, fontWeight: 800, borderRadius: 999, padding: '2px 9px' }}>{fa(unreadNotifs)} تازه</span>}</div>
+              {unreadNotifs > 0 && <button onClick={markNotifsRead} style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--gold)', background: 'none', border: '1px solid var(--line2)', borderRadius: 9, padding: '6px 12px', cursor: 'pointer', fontFamily: FONT }}>علامت‌گذاری همه به‌عنوان خوانده‌شده</button>}
+            </div>
+            {notifs.length === 0 ? <div style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center', padding: 16 }}>اعلانی ندارید.</div> : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {notifs.map(n => (
+                  <div key={n.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, background: n.read ? 'var(--bg2)' : 'var(--goldDim)', border: `1px solid ${n.read ? 'transparent' : 'var(--gold)'}`, borderRadius: 10, padding: '10px 13px' }}>
+                    {!n.read && <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--gold)', flexShrink: 0, marginTop: 6 }} />}
+                    <span style={{ minWidth: 0, flex: 1 }}>
+                      <span style={{ display: 'block', fontSize: 12.5, fontWeight: n.read ? 500 : 700, lineHeight: 1.8 }}>{n.text}</span>
+                      <span style={{ display: 'block', fontSize: 10.5, color: 'var(--faint)', marginTop: 3 }}>{notifDate(n.createdAt)}</span>
                     </span>
                   </div>
                 ))}

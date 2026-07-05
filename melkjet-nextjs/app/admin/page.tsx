@@ -4962,6 +4962,7 @@ function PromoPricingEditor() {
   const [rows, setRows] = useState<any[]>([])        // فهرستِ یکپارچهٔ همهٔ تیرها (seed + سفارشی)
   const [deleted, setDeleted] = useState<string[]>([]) // idِ تیرهای seed که حذف شده‌اند
   const [vals, setVals] = useState<any>({ packs: {}, bundles: {}, auction: {} })
+  const [maxAreas, setMaxAreas] = useState(2)
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -5004,8 +5005,9 @@ function PromoPricingEditor() {
       const v: any = { packs: {}, bundles: {}, auction: {} }
       for (const p of d.defaults.packs) v.packs[p.id] = { pay: ov.packs?.[p.id]?.pay ?? p.pay, credit: ov.packs?.[p.id]?.credit ?? p.credit }
       for (const b of d.defaults.bundles) v.bundles[b.id] = { price: ov.bundles?.[b.id]?.price ?? b.price }
-      for (const a of d.defaults.auction) v.auction[a.id] = { minBid: ov.auction?.[a.id]?.minBid ?? a.minBid, step: ov.auction?.[a.id]?.step ?? a.step, periodDays: ov.auction?.[a.id]?.periodDays ?? a.periodDays }
+      for (const a of d.defaults.auction) v.auction[a.id] = { minBid: ov.auction?.[a.id]?.minBid ?? a.minBid, step: ov.auction?.[a.id]?.step ?? a.step, periodDays: ov.auction?.[a.id]?.periodDays ?? a.periodDays, enabled: (ov.auction?.[a.id]?.enabled ?? a.enabled) !== false }
       setVals(v)
+      setMaxAreas(ov.areaConfig?.maxAreas ?? 2)
     })
   }, [])
 
@@ -5030,7 +5032,7 @@ function PromoPricingEditor() {
   const save = async () => {
     if (!defaults) return
     setBusy(true); setMsg('')
-    const ov: any = { tiers: {}, packs: {}, bundles: {}, auction: {}, tierMeta: {}, deletedTiers: [...deleted], customTiers: [] }
+    const ov: any = { tiers: {}, packs: {}, bundles: {}, auction: {}, areaConfig: {}, tierMeta: {}, deletedTiers: [...deleted], customTiers: [] }
     for (const r of rows) {
       if (r.seed) {
         const seed = defaults.tiers.find((t: any) => t.id === r.id)
@@ -5053,7 +5055,8 @@ function PromoPricingEditor() {
     }
     for (const p of defaults.packs) { const o: any = {}; if (vals.packs[p.id]?.pay !== p.pay) o.pay = vals.packs[p.id].pay; if (vals.packs[p.id]?.credit !== p.credit) o.credit = vals.packs[p.id].credit; if (Object.keys(o).length) ov.packs[p.id] = o }
     for (const b of defaults.bundles) { if (vals.bundles[b.id]?.price !== b.price) ov.bundles[b.id] = { price: vals.bundles[b.id].price } }
-    for (const a of defaults.auction) { const o: any = {}; if (vals.auction[a.id]?.minBid !== a.minBid) o.minBid = vals.auction[a.id].minBid; if (vals.auction[a.id]?.step !== a.step) o.step = vals.auction[a.id].step; if (vals.auction[a.id]?.periodDays !== a.periodDays) o.periodDays = vals.auction[a.id].periodDays; if (Object.keys(o).length) ov.auction[a.id] = o }
+    for (const a of defaults.auction) { const v = vals.auction[a.id] || {}; ov.auction[a.id] = { minBid: v.minBid ?? a.minBid, step: v.step ?? a.step, periodDays: v.periodDays ?? a.periodDays, enabled: v.enabled !== false } }
+    ov.areaConfig = { maxAreas }
     const r = await fetch('/api/admin/promo-pricing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ov) })
     setBusy(false); setMsg(r.ok ? '✓ کاتالوگ ذخیره شد (تا ۵ ثانیه روی همهٔ اینستنس‌ها اعمال می‌شود)' : '⚠ خطا در ذخیره')
   }
@@ -5138,9 +5141,16 @@ function PromoPricingEditor() {
               <label style={{ fontSize: 11.5, color: 'var(--muted)' }}>حداقلِ پیشنهاد: <input style={inp} value={vals.auction[a.id]?.minBid ?? ''} onChange={e => setV('auction', a.id, 'minBid', num(e))} /></label>
               <label style={{ fontSize: 11.5, color: 'var(--muted)' }}>پله: <input style={{ ...inp, width: 90 }} value={vals.auction[a.id]?.step ?? ''} onChange={e => setV('auction', a.id, 'step', num(e))} /></label>
               <label style={{ fontSize: 11.5, color: 'var(--muted)' }}>مدت(روز): <input style={{ ...inp, width: 64 }} value={vals.auction[a.id]?.periodDays ?? ''} onChange={e => setV('auction', a.id, 'periodDays', num(e))} /></label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: 'var(--muted)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={vals.auction[a.id]?.enabled !== false} onChange={e => setVals((s: any) => ({ ...s, auction: { ...s.auction, [a.id]: { ...s.auction[a.id], enabled: e.target.checked } } }))} /> فعال
+              </label>
             </div>
           ))}
         </div>
+      </Card>
+      <Card>
+        <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 10 }}>📍 محله‌محوری</div>
+        <label style={{ fontSize: 11.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>سقفِ محله در هر پروموت: <input style={{ ...inp, width: 90 }} value={maxAreas} onChange={e => setMaxAreas(Math.max(0, parseInt(e.target.value.replace(/\D/g, '') || '0', 10)))} /></label>
       </Card>
 
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', position: 'sticky', bottom: 0, background: 'var(--bg)', padding: '10px 0' }}>
