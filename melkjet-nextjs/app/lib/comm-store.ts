@@ -245,7 +245,7 @@ export async function createPromoOrder(owner: string, input: { tierId: string; t
     return { ok: true as const, order }
   })
   if (!res.ok) return res
-  if (res.order!.status === 'paid') { await activatePromo(promoPayload(res.order!)); return { ok: true, order: res.order, walletPaid: true } }
+  if (res.order!.status === 'paid') { await activatePromo(promoPayload(res.order!)); try { const { invalidateHomeCache } = await import('./home-data'); invalidateHomeCache() } catch {} return { ok: true, order: res.order, walletPaid: true } }
   return { ok: true, order: res.order }
 }
 // سفارشِ باندلِ پروموت — یک سفارش که پس از تأیید، همهٔ بسته‌های پروفایلیِ باندل را فعال می‌کند.
@@ -269,7 +269,7 @@ export async function createBundleOrder(owner: string, input: { bundleId: string
     return { ok: true as const, order }
   })
   if (!res.ok) return res
-  if (res.order!.status === 'paid') { await activatePromo(promoPayload(res.order!)); return { ok: true, order: res.order, walletPaid: true } }
+  if (res.order!.status === 'paid') { await activatePromo(promoPayload(res.order!)); try { const { invalidateHomeCache } = await import('./home-data'); invalidateHomeCache() } catch {} return { ok: true, order: res.order, walletPaid: true } }
   return { ok: true, order: res.order }
 }
 // سفارشِ شارژِ کیفِ پولِ پروموت — پس از تأییدِ مدیر، اعتبار به کیفِ پول اضافه می‌شود.
@@ -327,7 +327,7 @@ export async function approveOrder(orderId: string): Promise<{ ok: boolean; erro
   })
   // فعال‌سازیِ پروموت پس از تراکنش.
   const pr = (res as any).promo
-  if (pr) await activatePromo(pr)
+  if (pr) { await activatePromo(pr); try { const { invalidateHomeCache } = await import('./home-data'); invalidateHomeCache() } catch {} }
   return { ok: res.ok, error: (res as any).error }
 }
 

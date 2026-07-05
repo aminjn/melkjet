@@ -6,6 +6,7 @@ import Nav from './components/Nav'
 import Footer from './components/Footer'
 import PropertyCard from './components/PropertyCard'
 import PromoBadge from './components/PromoBadge'
+import PromoSpotlight from './components/PromoSpotlight'
 import HeroSearch from './components/home/HeroSearch'
 import FaqAccordion from './components/home/FaqAccordion'
 import HomeBanner from './components/home/HomeBanner'
@@ -87,7 +88,7 @@ const RISK_LEVELS = [
 
 export default function HomeClient({ initial }: { initial: HomeData }) {
   // دادهٔ اولیه از سرور می‌آید (SSR با محتوا).
-  const { listings, advisorItems, promoFeatured, promoInvest, promoAdvisors, sysStats } = initial
+  const { listings, advisorItems, promoFeatured, promoInvest, promoAdvisors, promoTrending, spotlight, sysStats } = initial
 
   // Prepend promoted items to a listing array, dedup by id.
   const withPromoted = (promo: ContentItem[], normal: ContentItem[]): ContentItem[] => {
@@ -254,6 +255,13 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
           })()}
         </div>
       </section>
+
+      {/* PROMOTED SPOTLIGHT — بنرِ خودکار از پروموت‌های فعال */}
+      {(spotlight || []).length > 0 && (
+        <section style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px clamp(20px,3vw,32px)' }}>
+          <PromoSpotlight items={spotlight} />
+        </section>
+      )}
 
       {/* AD BANNER */}
       <section style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px' }}>

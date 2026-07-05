@@ -3,15 +3,23 @@
 // /api/content + /api/promotions + /api/stats، ولی مستقیم روی استورها (بدونِ رفت‌وبرگشتِ HTTP).
 
 import { listItems, getItemById } from './scraper-store'
-import { listActive } from './promotion-store'
+import { listActive, listAllActive, slotOf } from './promotion-store'
 import { catalogStats } from './catalog-store'
 import { listPublicShops } from './materials-store'
 import { getMeta } from './persiansaze-store'
+import { getProfile } from './profile-store'
 import type { ContentItem } from './content-display'
 
 function toContent(it: any): ContentItem {
   const { phone, ...rest } = it
   return { ...rest, hasPhone: !!(phone || it.meta?.__ownerPhone) }
+}
+
+// ContentItem از یک پروموتِ پروفایل (targetId = شماره) — بدونِ نیاز به آیتمِ اسکرپر.
+function profilePromoToContent(p: any): ContentItem {
+  let photo = ''; let category = 'متخصص'
+  try { const gp = getProfile(p.targetId); photo = gp.logo || ''; category = (gp.businessType || '').trim() || 'متخصص' } catch {}
+  return { id: p.targetId, sourceName: 'ملک‌جت', type: 'directory', category, title: p.title || 'متخصص', location: p.location || '', image: photo, url: `/profile/${encodeURIComponent(p.targetId)}`, hasPhone: true, promoted: true, promoKind: p.kind || 'ویژه', scrapedAt: p.createdAt || 0, status: 'approved' }
 }
 
 // همان انتخابِ عمومیِ /api/content (منتشر، غیرِ پیش‌نویس، ویژه‌ها اول، تازه‌ترها بعد).
@@ -25,17 +33,46 @@ async function publicListFull(type: 'listing' | 'directory'): Promise<ContentIte
 }
 
 async function promoItems(slot: string): Promise<ContentItem[]> {
-  const arr = await Promise.all((await listActive(slot)).map(async p => {
+  const s = slotOf(slot)
+  const active = await listActive(slot)
+  // پروموتِ پروفایل (directory): مستقیم از ردیفِ پروموت + پروفایل ساخته می‌شود.
+  if (s?.target === 'directory') return active.map(profilePromoToContent)
+  // پروموتِ آگهی/محصول (listing/product): از آیتمِ اسکرپر.
+  const arr = await Promise.all(active.map(async p => {
     const it = await getItemById(p.targetId)
     if (!it || it.status === 'rejected') return null
-    return { ...toContent(it), promoKind: p.kind || 'ویژه' } as ContentItem
+    return { ...toContent(it), promoted: true, promoKind: p.kind || 'ویژه' } as ContentItem
   }))
   return arr.filter(Boolean) as ContentItem[]
 }
 
+// ── بنرِ خودکارِ پروموت (Spotlight) — از همهٔ پروموت‌های فعال ساخته می‌شود ──
+// هر پروموتِ فعالی (پروفایل یا آگهی، هر جایگاهی) این‌جا به بنرِ صدرِ صفحهٔ اصلی می‌آید.
+// اولویت با نشان‌های گران‌تر (VIP/صفحه اول/Hero) است.
+export interface SpotlightItem { id: string; kind: string; title: string; subtitle: string; image: string; url: string; isProfile: boolean }
+const KIND_RANK: Record<string, number> = { 'VIP': 100, 'صفحه اول': 90, 'Hero': 90, 'برتر': 70, 'منتخب': 60, 'ترند': 55, 'ویژه': 40, 'تأییدشده': 30, 'نردبان': 20 }
+async function buildSpotlight(): Promise<SpotlightItem[]> {
+  const active = await listAllActive()
+  const out: SpotlightItem[] = []
+  for (const p of active) {
+    const s = slotOf(p.slot)
+    if (s?.target === 'directory') {
+      const c = profilePromoToContent(p)
+      out.push({ id: c.id, kind: p.kind || 'ویژه', title: c.title, subtitle: [c.category, c.location].filter(Boolean).join(' · ') || 'متخصصِ ویژه', image: c.image || '', url: c.url || `/profile/${encodeURIComponent(p.targetId)}`, isProfile: true })
+    } else {
+      const it = await getItemById(p.targetId)
+      if (!it || it.status === 'rejected') continue
+      out.push({ id: it.id, kind: p.kind || 'ویژه', title: it.title, subtitle: [it.location, it.price].filter(Boolean).join(' · '), image: it.image || '', url: it.url || `/property/${encodeURIComponent(it.id)}`, isProfile: false })
+    }
+  }
+  out.sort((a, b) => (KIND_RANK[b.kind] || 0) - (KIND_RANK[a.kind] || 0))
+  return out.slice(0, 8)
+}
+
 export interface HomeData {
   listings: ContentItem[]; advisorItems: ContentItem[]
-  promoFeatured: ContentItem[]; promoInvest: ContentItem[]; promoAdvisors: ContentItem[]
+  promoFeatured: ContentItem[]; promoInvest: ContentItem[]; promoAdvisors: ContentItem[]; promoTrending: ContentItem[]
+  spotlight: SpotlightItem[]
   sysStats: { listings: number; advisors: number; products: number; shops: number; builders: number }
 }
 
@@ -45,12 +82,14 @@ const safe = <T>(p: Promise<T[]>): Promise<T[]> => p.catch(() => [] as T[])
 async function compute(): Promise<HomeData> {
   // تسویهٔ تنبلِ مزایده‌ها — صفحهٔ اصلی پربازدید است، پس مزایده بدونِ کرون خودش بسته می‌شود.
   try { const { ensurePromoPricing } = await import('./promo-pricing-store'); await ensurePromoPricing(); const { resolveDue } = await import('./auction-store'); await resolveDue() } catch {}
-  const [listingsAll, advisorsAll, promoFeatured, promoInvest, promoAdvisors] = await Promise.all([
+  const [listingsAll, advisorsAll, promoFeatured, promoInvest, promoAdvisors, promoTrending, spotlight] = await Promise.all([
     safe(publicListFull('listing')),
     safe(publicListFull('directory')),
     safe(promoItems('home_featured')),
     safe(promoItems('home_invest')),
     safe(promoItems('home_advisors')),
+    safe(promoItems('home_trending')),
+    buildSpotlight().catch(() => [] as SpotlightItem[]),
   ])
   // آمار از همان لیست‌های خوانده‌شده (بدونِ خواندنِ دوباره).
   const sysStats = { listings: listingsAll.length, advisors: advisorsAll.length, products: 0, shops: 0, builders: 0 }
@@ -60,7 +99,7 @@ async function compute(): Promise<HomeData> {
   return {
     listings: listingsAll.slice(0, 12),
     advisorItems: advisorsAll.slice(0, 6),
-    promoFeatured, promoInvest, promoAdvisors, sysStats,
+    promoFeatured, promoInvest, promoAdvisors, promoTrending, spotlight, sysStats,
   }
 }
 
@@ -85,3 +124,7 @@ export async function getHomeData(): Promise<HomeData> {
   if (Date.now() - cache.at >= TTL) refreshBg()   // کهنه → در پس‌زمینه تازه کن، ولی الان همین را بده
   return cache.data
 }
+
+// باطل‌کردنِ کش — پس از فعال‌شدنِ پروموت صدا زده می‌شود تا بنر فوری روی صفحهٔ اصلی بیاید
+// (به‌جای انتظارِ تا ۶۰ ثانیه). درخواستِ بعدیِ صفحهٔ اصلی داده را از نو می‌سازد.
+export function invalidateHomeCache() { cache = null }
