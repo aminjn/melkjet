@@ -89,7 +89,14 @@ export async function GET(req: NextRequest) {
       scrapedAt: a.createdAt || 0, status: 'approved', registered: true,
     })
   }
-  // تازه‌ترها / کامل‌ترها اول (آن‌هایی که عکس یا تخصص دارند).
-  items.sort((x, y) => (Number(!!y.image) - Number(!!x.image)) || (y.scrapedAt - x.scrapedAt))
+  // نشان‌گذاریِ «ویژه» برای پروفایل‌های دارای پروموتِ فعال (خودسرویس).
+  try {
+    const { promotedProfilePhones } = await import('@/app/lib/promotion-store')
+    const promoted = promotedProfilePhones()
+    const norm = (p?: string) => String(p || '').replace(/\D/g, '')
+    for (const it of items) it.promoted = promoted.has(norm(it.revealId || it.id))
+  } catch { /* پروموت در دسترس نبود */ }
+  // ویژه‌ها اول، سپس تازه‌ترها / کامل‌ترها (عکس‌دار/تخصص‌دار).
+  items.sort((x, y) => (Number(!!y.promoted) - Number(!!x.promoted)) || (Number(!!y.image) - Number(!!x.image)) || (y.scrapedAt - x.scrapedAt))
   return NextResponse.json({ items }, { headers: { 'Cache-Control': 'no-store, private' } })
 }

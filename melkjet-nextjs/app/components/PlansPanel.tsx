@@ -27,6 +27,7 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
   const [packages, setPackages] = useState<Pkg[]>([])
   const [credit, setCredit] = useState<Record<string, number>>({ sms: 0, email: 0, token: 0 })
   const [tokenUsed, setTokenUsed] = useState(0)
+  const [promoTiers, setPromoTiers] = useState<{ id: string; target: string; name: string; price: number; desc: string; days: number }[]>([])
   const [orders, setOrders] = useState<Order[]>([])
   const [period, setPeriod] = useState<Period>('monthly')
   const priceOf = (p: Plan) => period === 'yearly' ? p.priceYearly : period === '3m' ? (p.price3m || p.priceMonthly * 3) : period === '6m' ? (p.price6m || p.priceMonthly * 6) : p.priceMonthly
@@ -34,7 +35,7 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
   const [busy, setBusy] = useState('')
   const [msg, setMsg] = useState('')
 
-  const loadComm = () => fetch('/api/comm').then(r => r.ok ? r.json() : null).then(d => { if (d) { setCredit(d.credit || { sms: 0, email: 0, token: 0 }); setOrders(d.orders || []); setTokenUsed(d.tokenUsed || 0) } }).catch(() => {})
+  const loadComm = () => fetch('/api/comm').then(r => r.ok ? r.json() : null).then(d => { if (d) { setCredit(d.credit || { sms: 0, email: 0, token: 0 }); setOrders(d.orders || []); setTokenUsed(d.tokenUsed || 0); setPromoTiers(d.promoTiers || []) } }).catch(() => {})
   const load = () => {
     fetch(`/api/plans?dashboard=${encodeURIComponent(dashboard)}`).then(r => r.ok ? r.json() : null).then(d => {
       if (!d) return
@@ -45,16 +46,19 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
   }
   useEffect(() => { load() }, [dashboard])
 
-  const [checkout, setCheckout] = useState<{ kind: 'plan' | 'pkg'; id: string; name: string; price: number } | null>(null)
+  const [checkout, setCheckout] = useState<{ kind: 'plan' | 'pkg' | 'promo'; id: string; name: string; price: number } | null>(null)
   const buyPlan = (p: Plan) => setCheckout({ kind: 'plan', id: p.id, name: p.name, price: priceOf(p) })
   const buyPkg = (p: Pkg) => setCheckout({ kind: 'pkg', id: p.id, name: p.name, price: p.price })
+  const buyPromo = (t: { id: string; name: string; price: number }) => setCheckout({ kind: 'promo', id: t.id, name: t.name, price: t.price })
   const submitOrder = async (gateway: string, receipt: string) => {
     if (!checkout) return
     setBusy('checkout'); setMsg('')
     try {
       const body = checkout.kind === 'plan'
         ? { action: 'orderPlan', planId: checkout.id, period, gateway, receipt }
-        : { action: 'order', packageId: checkout.id, gateway, receipt }
+        : checkout.kind === 'promo'
+          ? { action: 'orderPromo', tierId: checkout.id, gateway, receipt }
+          : { action: 'order', packageId: checkout.id, gateway, receipt }
       const r = await fetch('/api/comm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       const d = await r.json()
       setMsg(d.ok ? `✓ سفارشِ «${checkout.name}» ثبت شد. پس از تأییدِ پرداخت، فعال می‌شود.` : `⚠ ${d.error || 'خطا'}`)
@@ -151,6 +155,32 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
           </div>
         )
       })}
+
+      {/* پروموت و تبلیغات — دیده‌شدنِ بیشتر */}
+      {promoTiers.length > 0 && (
+        <>
+          <div style={{ fontSize: 16, fontWeight: 900, marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>🚀 پروموت و تبلیغات</div>
+          <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: -8 }}>با پروموت، کسب‌وکار یا آگهیِ شما در جایگاه‌های پربازدیدِ ملک‌جت (صفحهٔ اصلی، جستجو، دایرکتوری) برجسته می‌شود.</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(230px,1fr))', gap: 12 }}>
+            {promoTiers.map(t => {
+              const isProfile = t.target === 'profile'
+              return (
+                <div key={t.id} style={{ background: 'var(--surface)', border: `1px solid ${isProfile ? 'var(--gold)' : 'var(--line)'}`, borderRadius: 16, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <span style={{ fontSize: 17 }}>{isProfile ? '⭐' : '📣'}</span>
+                    <div style={{ fontSize: 13.5, fontWeight: 800 }}>{t.name}</div>
+                  </div>
+                  <div style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.8, flex: 1 }}>{t.desc}</div>
+                  <div style={{ fontSize: 16, fontWeight: 900, color: 'var(--gold)' }}>{fa(t.price)} <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--muted)' }}>تومان · {fa(t.days)} روز</span></div>
+                  {isProfile
+                    ? <button onClick={() => buyPromo(t)} disabled={!!busy} style={{ marginTop: 4, padding: '9px', borderRadius: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 12.5, border: 'none', cursor: 'pointer', fontFamily: FONT }}>پروموتِ کسب‌وکارِ من</button>
+                    : <div style={{ marginTop: 4, padding: '9px', borderRadius: 10, background: 'var(--bg2)', border: '1px dashed var(--line2)', color: 'var(--muted)', fontSize: 11.5, textAlign: 'center' }}>از دکمهٔ «پروموت» رویِ آگهیِ خود</div>}
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
 
       {checkout && <CheckoutModal item={checkout} busy={busy === 'checkout'} onClose={() => setCheckout(null)} onSubmit={submitOrder} />}
       {msg && <div style={{ fontSize: 13, fontWeight: 600, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a', textAlign: 'center' }}>{msg}</div>}

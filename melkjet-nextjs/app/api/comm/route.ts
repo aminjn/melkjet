@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listPackages, setPackages, getCredit, grantCredit, createOrder, createPlanOrder, listOrders, approveOrder, rejectOrder, getTokenUsage } from '@/app/lib/comm-store'
+import { listPackages, setPackages, getCredit, grantCredit, createOrder, createPlanOrder, createPromoOrder, listOrders, approveOrder, rejectOrder, getTokenUsage } from '@/app/lib/comm-store'
 import { listActive } from '@/app/lib/plan-store'
+import { PROMO_TIERS, promoTierOf } from '@/app/lib/promotion-store'
+import { getProfile } from '@/app/lib/profile-store'
 
 // ارتباطات: پکیج‌های شارژ + اعتبارِ کاربر + سفارش‌ها.
 export async function GET(req: NextRequest) {
@@ -14,7 +16,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ packages: await listPackages(false), orders: await listOrders() }, { headers: { 'Cache-Control': 'no-store' } })
   }
   // نمای کاربر: پکیج‌های فعال + اعتبارِ خودش + سفارش‌های خودش
-  return NextResponse.json({ packages: await listPackages(true), credit: await getCredit(s.phone), orders: await listOrders(s.phone), tokenUsed: await getTokenUsage(s.phone) }, { headers: { 'Cache-Control': 'no-store' } })
+  return NextResponse.json({ packages: await listPackages(true), credit: await getCredit(s.phone), orders: await listOrders(s.phone), tokenUsed: await getTokenUsage(s.phone), promoTiers: PROMO_TIERS }, { headers: { 'Cache-Control': 'no-store' } })
 }
 
 export async function POST(req: NextRequest) {
@@ -38,6 +40,20 @@ export async function POST(req: NextRequest) {
     const labelMap: Record<string, string> = { monthly: '', '3m': ' (۳ماهه)', '6m': ' (۶ماهه)', yearly: ' (سالانه)' }
     const r = await createPlanOrder(s.phone, pl.id, `${pl.name}${labelMap[period]}`, priceMap[period], { gateway: b.gateway ? String(b.gateway) : undefined, receipt: b.receipt ? String(b.receipt).slice(0, 120) : undefined, period })
     return NextResponse.json({ ok: true, order: r.order })
+  }
+
+  if (act === 'orderPromo') {
+    const t = promoTierOf(String(b.tierId || ''))
+    if (!t) return NextResponse.json({ error: 'بستهٔ پروموت یافت نشد' }, { status: 400 })
+    let targetId = String(b.targetId || ''), targetName: string | undefined = b.targetName ? String(b.targetName) : undefined
+    if (t.target === 'profile') {
+      // پروموتِ پروفایل: همیشه پروفایلِ خودِ کاربر (شمارهٔ نشست) — نامش را سرور برمی‌دارد.
+      targetId = s.phone
+      const p = getProfile(s.phone); targetName = (p.businessName || p.displayName || '').trim() || undefined
+    }
+    if (!targetId) return NextResponse.json({ error: 'موردِ پروموت مشخص نیست' }, { status: 400 })
+    const r = await createPromoOrder(s.phone, { tierId: t.id, targetId, targetName }, { gateway: b.gateway ? String(b.gateway) : undefined, receipt: b.receipt ? String(b.receipt).slice(0, 120) : undefined })
+    return r.ok ? NextResponse.json({ ok: true, order: r.order }) : NextResponse.json({ error: r.error }, { status: 400 })
   }
 
   // عملیاتِ سوپرادمین

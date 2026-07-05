@@ -18,6 +18,17 @@ export const PROMO_SLOTS: { id: string; label: string; target: 'listing' | 'dire
 ]
 export function slotOf(id: string) { return PROMO_SLOTS.find(s => s.id === id) }
 
+// بسته‌های خودسرویسِ پروموت (کاربر خودش می‌خرد؛ سوپرادمین تأیید می‌کند). قیمت‌ها سمتِ سرور تعریف می‌شوند.
+export interface PromoTier { id: string; slot: string; target: 'profile' | 'listing'; days: number; name: string; price: number; desc: string; forRoles?: string[] }
+export const PROMO_TIERS: PromoTier[] = [
+  { id: 'dir_featured_30', slot: 'directory_top', target: 'profile', days: 30, name: 'نشانِ «ویژه» در دایرکتوری', price: 199000, desc: 'نمایش با نشانِ ★ ویژه و اولویتِ بالاتر در فهرستِ متخصصان — ۳۰ روز' },
+  { id: 'dir_home_30', slot: 'home_advisors', target: 'profile', days: 30, name: 'نمایش در «متخصصانِ برترِ» صفحهٔ اصلی', price: 349000, desc: 'معرفیِ شما در بخشِ متخصصانِ برترِ صفحهٔ نخستِ ملک‌جت — ۳۰ روز' },
+  { id: 'listing_home_7', slot: 'home_featured', target: 'listing', days: 7, name: 'آگهیِ ویژه در صفحهٔ اصلی', price: 149000, desc: 'نمایشِ آگهیِ شما در «املاکِ ویژه» صفحهٔ اصلی — ۷ روز' },
+  { id: 'listing_search_7', slot: 'search_top', target: 'listing', days: 7, name: 'نردبان — بالای نتایجِ جستجو', price: 99000, desc: 'قرارگرفتنِ آگهیِ شما بالای نتایجِ جستجو — ۷ روز' },
+  { id: 'listing_neighborhood_7', slot: 'neighborhood_featured', target: 'listing', days: 7, name: 'آگهیِ ویژهٔ محله', price: 79000, desc: 'آگهیِ برجستهٔ صفحهٔ محلهٔ ملک — ۷ روز' },
+]
+export function promoTierOf(id: string) { return PROMO_TIERS.find(t => t.id === id) }
+
 export interface Promotion {
   id: string; slot: string; targetId: string; title: string; image?: string; price?: string; location?: string
   order: number; active: boolean; expiresAt?: number; createdAt: number
@@ -58,3 +69,18 @@ export function updatePromotion(id: string, patch: Partial<Pick<Promotion, 'orde
 }
 
 export function deletePromotion(id: string) { save(load().filter(p => p.id !== id)) }
+
+// ── پروموتِ پروفایل (مشاور/وکیل/… در دایرکتوری) — بدونِ نیاز به آیتمِ اسکرپ ──
+const normPhone = (p: string) => String(p || '').replace(/\D/g, '')
+export function addProfilePromotion(slot: string, phone: string, name: string, area?: string, expiresAt?: number): Promotion | null {
+  const s = slotOf(slot); if (!s || s.target !== 'directory') return null
+  const rows = load()
+  const promo: Promotion = { id: randomBytes(6).toString('hex'), slot, targetId: phone, title: name || 'متخصص', location: area, order: 0, active: true, expiresAt, createdAt: Date.now() }
+  rows.unshift(promo); save(rows); return promo
+}
+// مجموعهٔ شماره‌هایِ دارای پروموتِ فعالِ دایرکتوری (برای علامت‌گذاریِ «ویژه» و اولویتِ نمایش).
+export function promotedProfilePhones(): Set<string> {
+  const now = Date.now()
+  const dirSlots = PROMO_SLOTS.filter(s => s.target === 'directory').map(s => s.id)
+  return new Set(load().filter(p => dirSlots.includes(p.slot) && p.active && (!p.expiresAt || p.expiresAt > now)).map(p => normPhone(p.targetId)))
+}

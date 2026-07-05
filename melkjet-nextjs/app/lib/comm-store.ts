@@ -16,8 +16,8 @@ export type Channel = 'sms' | 'email' | 'token'
 export interface CommPackage { id: string; channel: Channel; name: string; credits: number; price: number; active: boolean; createdAt: number }
 export interface Credit { sms: number; email: number; token: number }
 export type OrderStatus = 'pending' | 'paid' | 'rejected'
-export type OrderKind = 'package' | 'plan'
-export interface CommOrder { id: string; owner: string; kind: OrderKind; name: string; price: number; status: OrderStatus; createdAt: number; paidAt?: number; packageId?: string; channel?: Channel; credits?: number; planId?: string; gateway?: string; receipt?: string; period?: string }
+export type OrderKind = 'package' | 'plan' | 'promo'
+export interface CommOrder { id: string; owner: string; kind: OrderKind; name: string; price: number; status: OrderStatus; createdAt: number; paidAt?: number; packageId?: string; channel?: Channel; credits?: number; planId?: string; gateway?: string; receipt?: string; period?: string; slot?: string; targetId?: string; days?: number; targetName?: string; promoTarget?: 'profile' | 'listing' }
 
 interface DB { packages: CommPackage[]; credits: Record<string, Credit>; orders: CommOrder[]; usage?: Record<string, { token: number }>; pkgSeeded?: boolean; seedV?: number }
 const PKG_SEED_V = 3
@@ -199,6 +199,19 @@ export async function createOrder(owner: string, packageId: string, pay?: { gate
     return { ok: true, order }
   })
 }
+// سفارشِ پروموت/تبلیغات — پس از تأییدِ سوپرادمین، آیتم/پروفایل در جایگاهِ موردنظر ویژه می‌شود.
+export async function createPromoOrder(owner: string, input: { tierId: string; targetId: string; targetName?: string }, pay?: { gateway?: string; receipt?: string }): Promise<{ ok: boolean; error?: string; order?: CommOrder }> {
+  const { promoTierOf } = await import('./promotion-store')
+  const t = promoTierOf(input.tierId)
+  if (!t) return { ok: false, error: 'بستهٔ پروموت یافت نشد' }
+  if (!input.targetId) return { ok: false, error: 'موردِ پروموت مشخص نیست' }
+  return withDb(db => {
+    applySeed(db)
+    const order: CommOrder = { id: id('ord_'), owner, kind: 'promo', name: t.name, price: t.price, status: 'pending', createdAt: Date.now(), slot: t.slot, targetId: String(input.targetId), days: t.days, targetName: input.targetName, promoTarget: t.target as 'profile' | 'listing', gateway: pay?.gateway, receipt: pay?.receipt }
+    db.orders.unshift(order)
+    return { ok: true, order }
+  })
+}
 // سفارشِ اشتراکِ پلن — پس از تأییدِ سوپرادمین، پلنِ حساب تنظیم می‌شود.
 export async function createPlanOrder(owner: string, planId: string, planName: string, price: number, pay?: { gateway?: string; receipt?: string; period?: string }): Promise<{ ok: boolean; order?: CommOrder }> {
   return withDb(db => {
@@ -214,11 +227,11 @@ export async function listOrders(owner?: string): Promise<CommOrder[]> {
   return [...os].sort((a, b) => b.createdAt - a.createdAt)
 }
 export async function approveOrder(orderId: string): Promise<{ ok: boolean; error?: string }> {
-  return withDb(db => {
+  const res = await withDb(db => {
     applySeed(db)
     const o = db.orders.find(x => x.id === orderId)
-    if (!o) return { ok: false, error: 'سفارش یافت نشد' }
-    if (o.status === 'paid') return { ok: true }
+    if (!o) return { ok: false as const, error: 'سفارش یافت نشد' }
+    if (o.status === 'paid') return { ok: true as const }
     o.status = 'paid'; o.paidAt = Date.now()
     if (o.kind === 'plan') {
       // اشتراک: پلنِ حسابِ کاربر را تنظیم کن + اعتبارِ AIِ پلن را شارژ کن
@@ -226,13 +239,27 @@ export async function approveOrder(orderId: string): Promise<{ ok: boolean; erro
         try { setPlan(o.owner, o.planId) } catch {}
         try { const pl = getPlan(o.planId); const ai = Number(pl?.aiCredits) || 0; if (ai > 0) { const c = db.credits[o.owner] || { sms: 0, email: 0, token: 0 }; c.token = (Number(c.token) || 0) + ai; db.credits[o.owner] = c } } catch {}
       }
+    } else if (o.kind === 'promo') {
+      // بیرون از تراکنش فعال می‌شود (promotion-store جداست + پروموتِ آگهی async است).
+      return { ok: true as const, promo: { slot: o.slot, targetId: o.targetId, days: o.days, targetName: o.targetName, target: o.promoTarget } }
     } else if (o.channel) {
       const c = db.credits[o.owner] || { sms: 0, email: 0, token: 0 }
       c[o.channel] = (Number(c[o.channel]) || 0) + (Number(o.credits) || 0)
       db.credits[o.owner] = c
     }
-    return { ok: true }
+    return { ok: true as const }
   })
+  // فعال‌سازیِ پروموت پس از تراکنش.
+  const pr = (res as any).promo
+  if (pr && pr.slot && pr.targetId) {
+    const exp = Date.now() + (Number(pr.days) || 30) * 86400000
+    try {
+      const ps = await import('./promotion-store')
+      if (pr.target === 'listing') await ps.addPromotion(pr.slot, pr.targetId, exp)
+      else ps.addProfilePromotion(pr.slot, pr.targetId, pr.targetName || 'متخصص', undefined, exp)
+    } catch {}
+  }
+  return { ok: res.ok, error: (res as any).error }
 }
 export async function rejectOrder(orderId: string): Promise<{ ok: boolean }> {
   return withDb(db => {
