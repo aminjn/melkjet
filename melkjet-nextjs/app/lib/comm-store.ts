@@ -17,7 +17,7 @@ export interface CommPackage { id: string; channel: Channel; name: string; credi
 export interface Credit { sms: number; email: number; token: number }
 export type OrderStatus = 'pending' | 'paid' | 'rejected'
 export type OrderKind = 'package' | 'plan' | 'promo' | 'promo_credit'
-export interface CommOrder { id: string; owner: string; kind: OrderKind; name: string; price: number; status: OrderStatus; createdAt: number; paidAt?: number; packageId?: string; channel?: Channel; credits?: number; planId?: string; gateway?: string; receipt?: string; period?: string; slot?: string; targetId?: string; days?: number; targetName?: string; promoTarget?: 'profile' | 'listing'; bundleId?: string; promoKind?: string }
+export interface CommOrder { id: string; owner: string; kind: OrderKind; name: string; price: number; status: OrderStatus; createdAt: number; paidAt?: number; packageId?: string; channel?: Channel; credits?: number; planId?: string; gateway?: string; receipt?: string; period?: string; slot?: string; targetId?: string; days?: number; targetName?: string; promoTarget?: 'profile' | 'listing'; bundleId?: string; promoKind?: string; areas?: string[] }
 
 interface DB { packages: CommPackage[]; credits: Record<string, Credit>; orders: CommOrder[]; usage?: Record<string, { token: number }>; promoWallet?: Record<string, number>; pkgSeeded?: boolean; seedV?: number }
 const PKG_SEED_V = 3
@@ -223,16 +223,18 @@ export async function createOrder(owner: string, packageId: string, pay?: { gate
   })
 }
 // سفارشِ پروموت/تبلیغات — پس از تأییدِ سوپرادمین، آیتم/پروفایل در جایگاهِ موردنظر ویژه می‌شود.
-export async function createPromoOrder(owner: string, input: { tierId: string; targetId: string; targetName?: string; discountPct?: number; payFromWallet?: boolean }, pay?: { gateway?: string; receipt?: string }): Promise<{ ok: boolean; error?: string; order?: CommOrder; walletPaid?: boolean }> {
-  const { promoTierOf } = await import('./promotion-store')
+export async function createPromoOrder(owner: string, input: { tierId: string; targetId: string; targetName?: string; discountPct?: number; payFromWallet?: boolean; areas?: string[] }, pay?: { gateway?: string; receipt?: string }): Promise<{ ok: boolean; error?: string; order?: CommOrder; walletPaid?: boolean }> {
+  const { promoTierOf, areasIncluded, extraAreaPrice } = await import('./promotion-store')
   const t = promoTierOf(input.tierId)
   if (!t) return { ok: false, error: 'بستهٔ پروموت یافت نشد' }
   if (!input.targetId) return { ok: false, error: 'موردِ پروموت مشخص نیست' }
   const disc = Math.min(90, Math.max(0, Number(input.discountPct) || 0))
-  const price = Math.round(t.price * (1 - disc / 100))
+  const areas = (input.areas || []).map(a => String(a).trim()).filter(Boolean).slice(0, 8)
+  const extraAreas = Math.max(0, areas.length - areasIncluded())
+  const price = Math.round(t.price * (1 - disc / 100)) + extraAreas * extraAreaPrice()
   const res = await withDb(db => {
     applySeed(db)
-    const order: CommOrder = { id: id('ord_'), owner, kind: 'promo', name: t.name, price, status: 'pending', createdAt: Date.now(), slot: t.slot, targetId: String(input.targetId), days: t.days, targetName: input.targetName, promoTarget: t.target as 'profile' | 'listing', promoKind: t.kind, gateway: pay?.gateway, receipt: pay?.receipt }
+    const order: CommOrder = { id: id('ord_'), owner, kind: 'promo', name: t.name, price, status: 'pending', createdAt: Date.now(), slot: t.slot, targetId: String(input.targetId), days: t.days, targetName: input.targetName, promoTarget: t.target as 'profile' | 'listing', promoKind: t.kind, areas, gateway: pay?.gateway, receipt: pay?.receipt }
     // پرداختِ فوری از کیفِ پول (اگر موجودی کافی باشد) → بدونِ انتظارِ تأییدِ مدیر.
     if (input.payFromWallet) {
       const bal = Number(db.promoWallet?.[owner]) || 0
@@ -335,7 +337,7 @@ export async function approveOrder(orderId: string): Promise<{ ok: boolean; erro
 
 // دادهٔ لازم برای فعال‌سازیِ پروموت از یک سفارش (بیرون از تراکنشِ withDb).
 function promoPayload(o: CommOrder) {
-  return { slot: o.slot, targetId: o.targetId, days: o.days, targetName: o.targetName, target: o.promoTarget, bundleId: o.bundleId, owner: o.owner, promoKind: o.promoKind }
+  return { slot: o.slot, targetId: o.targetId, days: o.days, targetName: o.targetName, target: o.promoTarget, bundleId: o.bundleId, owner: o.owner, promoKind: o.promoKind, areas: o.areas }
 }
 // فعال‌سازیِ واقعیِ پروموت روی promotion-store (async و جدا از تراکنش). هم مسیرِ تأییدِ مدیر و
 // هم مسیرِ پرداختِ فوری از کیفِ پول از این استفاده می‌کنند.
@@ -354,8 +356,8 @@ async function activatePromo(pr: ReturnType<typeof promoPayload>): Promise<void>
     const exp = Date.now() + (Number(pr.days) || 30) * 86400000
     try {
       const ps = await import('./promotion-store')
-      if (pr.target === 'listing') await ps.addPromotion(pr.slot, pr.targetId, exp, pr.promoKind)
-      else await ps.addProfilePromotion(pr.slot, pr.targetId, pr.targetName || 'متخصص', undefined, exp, pr.promoKind)
+      if (pr.target === 'listing') await ps.addPromotion(pr.slot, pr.targetId, exp, pr.promoKind, pr.areas)
+      else await ps.addProfilePromotion(pr.slot, pr.targetId, pr.targetName || 'متخصص', undefined, exp, pr.promoKind, pr.areas)
     } catch {}
   }
 }

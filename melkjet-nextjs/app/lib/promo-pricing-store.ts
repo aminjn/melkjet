@@ -20,6 +20,7 @@ export interface PromoPricing {
   tierMeta?: Record<string, { name?: string; kind?: string; slot?: string; desc?: string; forRoles?: string[]; enabled?: boolean }>
   deletedTiers?: string[]          // idِ تیرهای seed که ادمین حذف کرده
   customTiers?: PromoTier[]        // تیرهای کاملاً جدیدِ ادمین
+  areaConfig?: { included?: number; extraPrice?: number }   // محله‌های شاملِ هر پروموت + نرخِ محلهٔ اضافه
 }
 const EMPTY: PromoPricing = { tiers: {}, packs: {}, bundles: {}, auction: {}, tierMeta: {}, deletedTiers: [], customTiers: [] }
 
@@ -30,6 +31,7 @@ function norm(p: any): PromoPricing {
     tierMeta: o(p?.tierMeta),
     deletedTiers: Array.isArray(p?.deletedTiers) ? p.deletedTiers.map(String) : [],
     customTiers: Array.isArray(p?.customTiers) ? p.customTiers : [],
+    areaConfig: o(p?.areaConfig),
   }
 }
 function fileLoad(): PromoPricing { if (existsSync(FILE)) { try { return norm(JSON.parse(readFileSync(FILE, 'utf-8'))) } catch {} } return norm({}) }
@@ -49,7 +51,7 @@ export async function getPromoPricing(): Promise<PromoPricing> { await ensurePro
 
 export async function setPromoPricing(patch: any): Promise<PromoPricing> {
   const clean = norm(patch)
-  if (pgEnabled()) await kvMutate<PromoPricing, void>(KV_KEY, EMPTY, db => { db.tiers = clean.tiers; db.packs = clean.packs; db.bundles = clean.bundles; db.auction = clean.auction; db.tierMeta = clean.tierMeta; db.deletedTiers = clean.deletedTiers; db.customTiers = clean.customTiers })
+  if (pgEnabled()) await kvMutate<PromoPricing, void>(KV_KEY, EMPTY, db => { db.tiers = clean.tiers; db.packs = clean.packs; db.bundles = clean.bundles; db.auction = clean.auction; db.tierMeta = clean.tierMeta; db.deletedTiers = clean.deletedTiers; db.customTiers = clean.customTiers; db.areaConfig = clean.areaConfig })
   else fileSave(clean)
   cache = clean; at = Date.now()
   return clean

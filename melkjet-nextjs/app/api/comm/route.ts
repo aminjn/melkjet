@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { listPackages, setPackages, getCredit, grantCredit, createOrder, createPlanOrder, createPromoOrder, createBundleOrder, createPromoCreditOrder, getPromoWallet, listOrders, approveOrder, rejectOrder, getTokenUsage } from '@/app/lib/comm-store'
 import { listActive, getPlan } from '@/app/lib/plan-store'
-import { promoTierOf, promoDiscountForPlanName, bundlesAll, tiersForRole, bundleOf, creditPacks, slotOf, myActivePromotions, hasActivePromoInSlot } from '@/app/lib/promotion-store'
+import { promoTierOf, promoDiscountForPlanName, bundlesAll, tiersForRole, bundleOf, creditPacks, slotOf, myActivePromotions, hasActivePromoInSlot, areasIncluded, extraAreaPrice } from '@/app/lib/promotion-store'
 import { ensurePromoPricing } from '@/app/lib/promo-pricing-store'
 import { getProfile } from '@/app/lib/profile-store'
 import { getAccount, dashForRole, activePlan } from '@/app/lib/account-store'
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
   const withWhere = <T extends { slot: string }>(t: T) => ({ ...t, where: slotOf(t.slot)?.where || '', slotLabel: slotOf(t.slot)?.label || '' })
   const tiers = tiersForRole(dash).map(withWhere)
   const bundles = bundlesAll().filter(b => b.forRoles.includes(dash)).map(b => ({ ...b, where: Array.from(new Set(b.tierIds.map(id => { const t = promoTierOf(id); return t ? (slotOf(t.slot)?.where || '') : '' }).filter(Boolean))).join(' + ') }))
-  return NextResponse.json({ packages: await listPackages(true), credit: await getCredit(s.phone), orders: await listOrders(s.phone), tokenUsed: await getTokenUsage(s.phone), promoTiers: tiers, promoBundles: bundles, promoDiscount: discountFor(s.phone), promoWallet: await getPromoWallet(s.phone), promoCreditPacks: creditPacks(), myPromotions: await myActivePromotions(s.phone), activePlan: activePlan(s.phone) }, { headers: { 'Cache-Control': 'no-store' } })
+  return NextResponse.json({ packages: await listPackages(true), credit: await getCredit(s.phone), orders: await listOrders(s.phone), tokenUsed: await getTokenUsage(s.phone), promoTiers: tiers, promoBundles: bundles, promoDiscount: discountFor(s.phone), promoWallet: await getPromoWallet(s.phone), promoCreditPacks: creditPacks(), myPromotions: await myActivePromotions(s.phone), activePlan: activePlan(s.phone), areasIncluded: areasIncluded(), extraAreaPrice: extraAreaPrice() }, { headers: { 'Cache-Control': 'no-store' } })
 }
 
 export async function POST(req: NextRequest) {
@@ -81,7 +81,8 @@ export async function POST(req: NextRequest) {
     const mine = await myActivePromotions(s.phone)
     const dup = mine.find(m => m.slot === t.slot && (t.target === 'profile' ? true : m.targetId === targetId))
     if (dup) { const d = dup.expiresAt ? Math.max(1, Math.ceil((dup.expiresAt - Date.now()) / 86400000)) : 0; return NextResponse.json({ error: `این ${t.target === 'profile' ? 'جایگاه برای کسب‌وکارِ شما' : 'آگهی در این جایگاه'} پروموتِ فعال دارد${d ? ` (${d.toLocaleString('fa-IR')} روز باقی‌مانده)` : ''}. پس از پایانِ آن دوباره تهیه کنید.` }, { status: 400 }) }
-    const r = await createPromoOrder(s.phone, { tierId: t.id, targetId, targetName, discountPct: discountFor(s.phone), payFromWallet: !!b.payFromWallet }, { gateway: b.gateway ? String(b.gateway) : undefined, receipt: b.receipt ? String(b.receipt).slice(0, 120) : undefined })
+    const areas = Array.isArray(b.areas) ? b.areas.map((a: any) => String(a).trim()).filter(Boolean).slice(0, 8) : []
+    const r = await createPromoOrder(s.phone, { tierId: t.id, targetId, targetName, discountPct: discountFor(s.phone), payFromWallet: !!b.payFromWallet, areas }, { gateway: b.gateway ? String(b.gateway) : undefined, receipt: b.receipt ? String(b.receipt).slice(0, 120) : undefined })
     return r.ok ? NextResponse.json({ ok: true, order: r.order, walletPaid: r.walletPaid }) : NextResponse.json({ error: r.error }, { status: 400 })
   }
 

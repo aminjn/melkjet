@@ -176,7 +176,14 @@ export function creditPackOf(id: string) { const p = PROMO_CREDIT_PACKS.find(p =
 export interface Promotion {
   id: string; slot: string; targetId: string; title: string; image?: string; price?: string; location?: string
   order: number; active: boolean; expiresAt?: number; createdAt: number; kind?: string
+  areas?: string[]   // محله‌هایی که این پروموت در آن‌ها برجسته می‌شود (خالی = سراسری)
 }
+
+// ── پیکربندیِ محله‌محوریِ پروموت (قابلِ تنظیم از سوپرادمین) ──
+// هر پروموت به‌صورتِ پیش‌فرض این تعداد محله را شامل می‌شود؛ محله‌های بیشتر با نرخِ زیر.
+export function areasIncluded(): number { try { const n = Number(promoPricing().areaConfig?.included); return n > 0 ? n : 2 } catch { return 2 } }
+export function extraAreaPrice(): number { try { const n = Number(promoPricing().areaConfig?.extraPrice); return n >= 0 ? n : 99000 } catch { return 99000 } }
+const normArea = (s: string) => String(s || '').trim().replace(/\s+/g, ' ')
 
 // دومَحاله: DATABASE_URL ست باشد → Postgres (نوشتنِ اتمیک، سازگار با ۴ اینستنسِ pm2)، وگرنه فایل.
 interface PDB { rows: Promotion[] }
@@ -204,7 +211,7 @@ export async function listAllActive(): Promise<Promotion[]> {
   return (await load()).filter(p => p.active && (!p.expiresAt || p.expiresAt > now)).sort((a, b) => b.createdAt - a.createdAt)
 }
 
-export async function addPromotion(slot: string, targetId: string, expiresAt?: number, kind?: string): Promise<Promotion | null> {
+export async function addPromotion(slot: string, targetId: string, expiresAt?: number, kind?: string, areas?: string[]): Promise<Promotion | null> {
   if (!slotOf(slot)) return null
   const it = await getItemById(targetId)
   if (!it) return null
@@ -213,6 +220,7 @@ export async function addPromotion(slot: string, targetId: string, expiresAt?: n
     const promo: Promotion = {
       id: randomBytes(6).toString('hex'), slot, targetId, title: it.title, image: it.image,
       price: it.price, location: it.location, order, active: true, expiresAt, createdAt: Date.now(), kind,
+      areas: (areas || []).map(normArea).filter(Boolean),
     }
     rows.unshift(promo); return promo
   })
@@ -232,12 +240,29 @@ export async function deletePromotion(id: string): Promise<void> { await mutate(
 
 // ── پروموتِ پروفایل (مشاور/وکیل/… در دایرکتوری) — بدونِ نیاز به آیتمِ اسکرپ ──
 const normPhone = (p: string) => String(p || '').replace(/\D/g, '')
-export async function addProfilePromotion(slot: string, phone: string, name: string, area?: string, expiresAt?: number, kind?: string): Promise<Promotion | null> {
+export async function addProfilePromotion(slot: string, phone: string, name: string, area?: string, expiresAt?: number, kind?: string, areas?: string[]): Promise<Promotion | null> {
   const s = slotOf(slot); if (!s || s.target !== 'directory') return null
   return mutate(rows => {
-    const promo: Promotion = { id: randomBytes(6).toString('hex'), slot, targetId: phone, title: name || 'متخصص', location: area, order: 0, active: true, expiresAt, createdAt: Date.now(), kind }
+    const promo: Promotion = { id: randomBytes(6).toString('hex'), slot, targetId: phone, title: name || 'متخصص', location: area, order: 0, active: true, expiresAt, createdAt: Date.now(), kind, areas: (areas || []).map(normArea).filter(Boolean) }
     rows.unshift(promo); return promo
   })
+}
+// پروموت‌های فعالِ محله‌محور برای یک محله — پروفایل‌ها و آگهی‌ها که این محله در areasشان است.
+export async function promotedInArea(areaName: string): Promise<{ profilePhones: Set<string>; listingIds: Map<string, { kind?: string }>; profileKinds: Map<string, { kind?: string }> }> {
+  const now = Date.now()
+  const want = normArea(areaName)
+  const profilePhones = new Set<string>(); const listingIds = new Map<string, { kind?: string }>(); const profileKinds = new Map<string, { kind?: string }>()
+  if (!want) return { profilePhones, listingIds, profileKinds }
+  for (const p of await load()) {
+    if (!p.active || (p.expiresAt && p.expiresAt <= now)) continue
+    if (!p.areas || p.areas.length === 0) continue
+    const hit = p.areas.some(a => normArea(a) === want || normArea(a).includes(want) || want.includes(normArea(a)))
+    if (!hit) continue
+    const s = slotOf(p.slot); if (!s) continue
+    if (s.target === 'directory') { profilePhones.add(normPhone(p.targetId)); if (!profileKinds.has(normPhone(p.targetId))) profileKinds.set(normPhone(p.targetId), { kind: p.kind }) }
+    else if (!listingIds.has(String(p.targetId))) listingIds.set(String(p.targetId), { kind: p.kind })
+  }
+  return { profilePhones, listingIds, profileKinds }
 }
 // مجموعهٔ شماره‌هایِ دارای پروموتِ فعالِ دایرکتوری (برای علامت‌گذاریِ «ویژه» و اولویتِ نمایش).
 export async function promotedProfilePhones(): Promise<Set<string>> {
