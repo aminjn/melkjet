@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation'
 type Tab = 'phone' | 'email'
 type OtpStep = 'enter-phone' | 'shahkar' | 'enter-code' | 'onboard'
 const faToEn = (v: string) => (v || '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
-const ROLE_ICONS: Record<string, string> = { '/buyer': '🔑', '/owner': '🏠', '/pros': '🤝', '/agency': '🏢', '/builder': '🏗', '/materials': '🧱', '/legal': '⚖' }
+const ROLE_ICONS: Record<string, string> = { '/buyer': '🔑', '/pros': '🤝', '/agency': '🏢', '/builder': '🏗', '/materials': '🧱', '/legal': '⚖', '/architect': '📐', '/contractor': '🛠', '/appraiser': '📋', '/lawfirm': '⚖', '/finance': '🏦', '/notary': '◆' }
 const FALLBACK_ROLES = [
   { id: 'کاربر عادی', name: 'کاربر عادی', dashboard: '/buyer' },
   { id: 'مشاور املاک', name: 'مشاور املاک', dashboard: '/pros' },

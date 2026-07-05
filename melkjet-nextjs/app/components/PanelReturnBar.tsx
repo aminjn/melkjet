@@ -4,8 +4,10 @@ import { useEffect, useState } from 'react'
 // نام پنل هر مسیر داشبورد
 const DASH_LABEL: Record<string, string> = {
   '/admin': 'پنل مدیریت', '/builder': 'پنل سازنده', '/pros': 'پنل مشاور',
-  '/agency': 'پنل آژانس', '/materials': 'پنل فروشگاه', '/owner': 'پنل من',
+  '/agency': 'پنل آژانس', '/materials': 'پنل فروشگاه',
   '/buyer': 'پنل من', '/legal': 'پنل حقوقی',
+  '/architect': 'پنل معمار', '/contractor': 'پنل پیمانکار', '/appraiser': 'پنل کارشناس',
+  '/lawfirm': 'پنل دفتر حقوقی', '/finance': 'پنل بانک و بیمه', '/notary': 'پنل دفترخانه',
 }
 
 // نوار شناور «بازگشت به پنل» — همیشه پیداست تا کاربر از پنل خودش گم نشود.

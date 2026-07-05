@@ -27,9 +27,10 @@ function load(): DB {
       for (const r of db.roles || []) {
         if (r.name === 'خریدار / مستأجر') { r.name = 'کاربر عادی'; migrated = true }
       }
-      // ادغام: نقش‌های «فروشنده / مالک» و «سرمایه‌گذار» حذف می‌شوند (همه‌چیز در «کاربر عادی»/buyer)
+      // ادغام: نقش‌های «فروشنده / مالک»، «سرمایه‌گذار» و «مالک» حذف می‌شوند —
+      // همه با «کاربر عادی» (/buyer) یکپارچه شده‌اند؛ کاربرانِ قدیمی به /buyer برمی‌گردند.
       const before = (db.roles || []).length
-      db.roles = (db.roles || []).filter(r => !(r.builtin && (r.name === 'فروشنده / مالک' || r.name === 'سرمایه‌گذار')))
+      db.roles = (db.roles || []).filter(r => !(r.builtin && (r.name === 'فروشنده / مالک' || r.name === 'سرمایه‌گذار' || r.name === 'مالک' || r.dashboard === '/owner')))
       if (db.roles.length !== before) migrated = true
       // اطمینان از وجود نقشِ «کاربر عادی» با امکاناتِ یکپارچه
       const buyerRole = db.roles.find(r => r.name === 'کاربر عادی')
@@ -37,10 +38,9 @@ function load(): DB {
         for (const p of ['listings', 'analytics']) if (!buyerRole.permissions.includes(p)) { buyerRole.permissions.push(p); migrated = true }
         if (buyerRole.dashboard !== '/buyer') { buyerRole.dashboard = '/buyer'; migrated = true }
       }
-      // اطمینان از وجودِ نقشِ «مالک» (/owner) — تا پلن‌های مالک «عمومی» نمانند
-      if (!db.roles.some(r => r.dashboard === '/owner' || r.name === 'مالک')) {
-        db.roles.push({ id: id(), name: 'مالک', dashboard: '/owner', permissions: ['listings', 'crm', 'analytics'], builtin: true, active: true, createdAt: Date.now() })
-        migrated = true
+      // اطمینان از وجودِ نقش‌های متخصصِ خدماتی روی نصب‌های قدیمی (اگر نبودند، اضافه کن).
+      for (const seed of proDefaults()) {
+        if (!db.roles.some(r => r.dashboard === seed.dashboard || r.name === seed.name)) { db.roles.push(seed); migrated = true }
       }
       if (migrated) save(db)
       return db
@@ -65,18 +65,32 @@ export const PERMISSIONS: { id: string; label: string }[] = [
   { id: 'ai_studio', label: 'استودیو AI (پلان/سه‌بعدی)' },
 ]
 
-function defaults(): Role[] {
-  const t = Date.now()
-  const mk = (name: string, dashboard: string, permissions: string[]): Role =>
-    ({ id: id(), name, dashboard, permissions, builtin: true, active: true, createdAt: t })
+function mkRole(name: string, dashboard: string, permissions: string[]): Role {
+  return { id: id(), name, dashboard, permissions, builtin: true, active: true, createdAt: Date.now() }
+}
+
+// نقش‌های متخصصِ خدماتی — هر کدام پنلِ اختصاصیِ خودش را دارد (میزِ کارِ متخصص).
+// این‌ها هم در ثبت‌نام/سوپرادمین دیده می‌شوند و هم به دایرکتوری وصل‌اند.
+function proDefaults(): Role[] {
   return [
-    mk('کاربر عادی', '/buyer', ['listings', 'content', 'analytics']),
-    mk('مالک', '/owner', ['listings', 'crm', 'analytics']),
-    mk('مشاور املاک', '/pros', ['listings', 'crm', 'content', 'website']),
-    mk('آژانس املاک', '/agency', ['listings', 'crm', 'marketing', 'website', 'content', 'analytics']),
-    mk('سازنده / انبوه‌ساز', '/builder', ['units', 'investors', 'crm', 'marketing', 'website', 'analytics']),
-    mk('تأمین‌کنندهٔ مصالح', '/materials', ['store', 'marketing', 'website']),
-    mk('مشاور حقوقی', '/legal', ['content', 'website']),
+    mkRole('معمار و طراح داخلی', '/architect', ['crm', 'content', 'website', 'analytics']),
+    mkRole('پیمانکار', '/contractor', ['crm', 'content', 'website', 'analytics']),
+    mkRole('کارشناس رسمی', '/appraiser', ['crm', 'analytics']),
+    mkRole('دفتر حقوقی', '/lawfirm', ['crm', 'content', 'website']),
+    mkRole('بانک و بیمه', '/finance', ['crm', 'marketing', 'analytics']),
+    mkRole('دفترخانه', '/notary', ['crm', 'analytics']),
+  ]
+}
+
+function defaults(): Role[] {
+  return [
+    mkRole('کاربر عادی', '/buyer', ['listings', 'content', 'analytics']),
+    mkRole('مشاور املاک', '/pros', ['listings', 'crm', 'content', 'website']),
+    mkRole('آژانس املاک', '/agency', ['listings', 'crm', 'marketing', 'website', 'content', 'analytics']),
+    mkRole('سازنده / انبوه‌ساز', '/builder', ['units', 'investors', 'crm', 'marketing', 'website', 'analytics']),
+    mkRole('تأمین‌کنندهٔ مصالح', '/materials', ['store', 'marketing', 'website']),
+    mkRole('مشاور حقوقی', '/legal', ['content', 'website']),
+    ...proDefaults(),
   ]
 }
 

@@ -8,7 +8,7 @@ import { usePathname } from 'next/navigation'
 interface Msg { role: 'user' | 'assistant'; content: string }
 
 // مسیرهای پنل/داشبورد که دستیار باید در آن‌ها باشد. خودِ /legal مستثناست (صفحهٔ کامل است).
-const PANEL_ROUTES = ['/admin', '/agency', '/pros', '/builder', '/materials', '/owner', '/buyer', '/crm', '/marketing', '/workflow', '/website-builder', '/content', '/plan-ai']
+const PANEL_ROUTES = ['/admin', '/agency', '/pros', '/builder', '/materials', '/owner', '/buyer', '/crm', '/marketing', '/workflow', '/website-builder', '/content', '/plan-ai', '/architect', '/contractor', '/appraiser', '/lawfirm', '/finance', '/notary']
 
 const chips = ['سند مالکیت', 'قرارداد اجاره', 'حقوق مستاجر', 'مبایعه‌نامه', 'کد رهگیری']
 

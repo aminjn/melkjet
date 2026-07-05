@@ -3522,8 +3522,9 @@ interface Account { phone: string; name?: string; role?: string; plan?: string; 
 interface IdName { id: string; name: string }
 
 const RMETA: Record<string, { c: string; ic: string }> = {
-  '/buyer': { c: '#5b9bd5', ic: '🔑' }, '/owner': { c: '#5fd98a', ic: '🏠' }, '/pros': { c: '#c9a84c', ic: '🤝' },
-  '/agency': { c: '#a99bf0', ic: '🏢' }, '/builder': { c: '#e7894a', ic: '🏗' }, '/materials': { c: '#4ec4e8', ic: '🧱' }, '/legal': { c: '#e0719a', ic: '⚖' }, '': { c: '#8a8a8a', ic: '○' },
+  '/buyer': { c: '#5b9bd5', ic: '🔑' }, '/pros': { c: '#c9a84c', ic: '🤝' },
+  '/agency': { c: '#a99bf0', ic: '🏢' }, '/builder': { c: '#e7894a', ic: '🏗' }, '/materials': { c: '#4ec4e8', ic: '🧱' }, '/legal': { c: '#e0719a', ic: '⚖' },
+  '/architect': { c: '#7bb0d6', ic: '📐' }, '/contractor': { c: '#d69a5c', ic: '🛠' }, '/appraiser': { c: '#8fbf7f', ic: '📋' }, '/lawfirm': { c: '#c98fb0', ic: '⚖' }, '/finance': { c: '#6fae8f', ic: '🏦' }, '/notary': { c: '#b0a06f', ic: '◆' }, '': { c: '#8a8a8a', ic: '○' },
 }
 function uInitials(name?: string, phone?: string) { const n = (name || '').trim(); if (n) { const p = n.split(/\s+/); return (p[0]?.[0] || '') + (p[1]?.[0] || '') } return (phone || '').slice(-2) }
 function UAvatar({ name, phone, dash, size = 40 }: { name?: string; phone?: string; dash?: string; size?: number }) {
@@ -4166,12 +4167,17 @@ interface PermDef { id: string; label: string }
 
 const DASHBOARD_OPTIONS: { value: string; label: string }[] = [
   { value: '/buyer', label: 'کاربر عادی' },
-  { value: '/owner', label: 'مالک' },
   { value: '/pros', label: 'مشاور' },
   { value: '/agency', label: 'آژانس' },
   { value: '/builder', label: 'سازنده' },
   { value: '/materials', label: 'مصالح' },
   { value: '/legal', label: 'حقوقی' },
+  { value: '/architect', label: 'معمار و طراح' },
+  { value: '/contractor', label: 'پیمانکار' },
+  { value: '/appraiser', label: 'کارشناس رسمی' },
+  { value: '/lawfirm', label: 'دفتر حقوقی' },
+  { value: '/finance', label: 'بانک و بیمه' },
+  { value: '/notary', label: 'دفترخانه' },
   { value: '/crm', label: 'CRM' },
   { value: '/marketing', label: 'مارکتینگ' },
 ]
@@ -4360,7 +4366,7 @@ function RolesView() {
 function PlanForm({ initial, roles, perms, onSave, onClose }: { initial: any; roles: any[]; perms: { id: string; label: string }[]; onSave: (payload: any) => void; onClose: () => void }) {
   const [f, setF] = useState<any>(() => ({ name: '', priceMonthly: '', price3m: '', price6m: '', priceYearly: '', roleId: '', dashboard: '', badge: '', cta: '', highlighted: false, active: true, permissions: [], quotas: {}, aiCredits: '', extra: '', ...initial }))
   const QKEYS: [string, string][] = [['listings', 'آگهی'], ['files', 'فایل'], ['properties', 'ملک'], ['projects', 'پروژه'], ['units', 'واحد'], ['investors', 'سرمایه‌گذار'], ['leads', 'لید'], ['crmCustomers', 'مشتری CRM'], ['contacts', 'مخاطب'], ['agents', 'مشاور'], ['products', 'محصول'], ['aiRequests', 'درخواست AI'], ['contentGen', 'تولید محتوا'], ['aiImages', 'تصویر AI'], ['savedSearches', 'جستجوی ذخیره'], ['chats', 'چت'], ['divarImports', 'ایمپورت دیوار'], ['sites', 'سایت'], ['sitePages', 'صفحهٔ سایت'], ['sms', 'پیامک'], ['email', 'ایمیل'], ['campaigns', 'کمپین'], ['automations', 'اتوماسیون'], ['contactReveals', 'تماس آشکار']]
-  const DASHES: [string, string][] = [['', '— بدون داشبورد —'], ['/buyer', 'کاربر عادی'], ['/owner', 'مالک'], ['/pros', 'مشاور'], ['/agency', 'آژانس'], ['/builder', 'سازنده'], ['/materials', 'مصالح'], ['/legal', 'حقوقی']]
+  const DASHES: [string, string][] = [['', '— بدون داشبورد —'], ['/buyer', 'کاربر عادی'], ['/pros', 'مشاور'], ['/agency', 'آژانس'], ['/builder', 'سازنده'], ['/materials', 'مصالح'], ['/legal', 'حقوقی'], ['/architect', 'معمار و طراح'], ['/contractor', 'پیمانکار'], ['/appraiser', 'کارشناس رسمی'], ['/lawfirm', 'دفتر حقوقی'], ['/finance', 'بانک و بیمه'], ['/notary', 'دفترخانه']]
   const setQ = (k: string, v: string) => setF((s: any) => ({ ...s, quotas: { ...s.quotas, [k]: v } }))
   const [sellPerToken, setSellPerToken] = useState(0)
   useEffect(() => { fetch('/api/admin/ai-cost').then(r => r.ok ? r.json() : null).then(d => { if (d?.tokenSellPrice) setSellPerToken(d.tokenSellPrice) }).catch(() => {}) }, [])

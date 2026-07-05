@@ -5,7 +5,7 @@ import BusinessProfileForm from './BusinessProfileForm'
 
 // اگر پنلِ کاربر به‌خاطرِ پروفایلِ ناقص معلق شده باشد، روی صفحاتِ پنل یک پوششِ اجباریِ
 // «پروفایلت را کامل کن» نمایش می‌دهد تا با تکمیل، تعلیق رفع شود.
-const PANEL_PREFIXES = ['/pros', '/agency', '/builder', '/materials', '/owner', '/buyer', '/legal', '/crm', '/marketing', '/workflow', '/website-builder']
+const PANEL_PREFIXES = ['/pros', '/agency', '/builder', '/materials', '/owner', '/buyer', '/legal', '/architect', '/contractor', '/appraiser', '/lawfirm', '/finance', '/notary', '/crm', '/marketing', '/workflow', '/website-builder']
 const FONT = 'Vazirmatn, system-ui, sans-serif'
 
 export default function SuspensionGate() {
