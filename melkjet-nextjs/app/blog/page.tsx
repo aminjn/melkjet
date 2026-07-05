@@ -4,6 +4,7 @@ import Link from 'next/link'
 import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
 import { fetchContent, gradientFor, type ContentItem } from '@/app/lib/content-display'
+import { categorySlugForName } from '@/app/lib/blog-taxonomy'
 
 function toFa(n: number | string) { return String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d]) }
 function faDate(ts?: number) { try { return ts ? new Date(ts).toLocaleDateString('fa-IR') : '' } catch { return '' } }
@@ -29,7 +30,7 @@ export default function BlogPage() {
   const featured = shown[0]
   const rest = shown.slice(featured ? 1 : 0)
   const meta = (a: any) => a.meta?.metaDescription || a.meta?.summary || (a.excerpt || '').replace(/<[^>]+>/g, ' ').replace(/[#*_>`-]/g, '').slice(0, 150)
-  const href = (a: any) => `/article/${a.meta?.slug || a.id}`
+  const href = (a: any) => `/blog/${categorySlugForName(a.category)}/${a.meta?.slug || a.id}`
   const card: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden', textDecoration: 'none', color: 'var(--text)', display: 'flex', flexDirection: 'column' }
 
   return (
