@@ -2852,7 +2852,7 @@ function TrackerConfig() {
 
 // ─── Communication packages (شارژِ پیامک/ایمیل) + orders ────────────────────
 type CPkg = { id: string; channel: 'sms' | 'email' | 'token'; name: string; credits: number; price: number; active: boolean }
-type COrder = { id: string; owner: string; kind?: string; name: string; channel?: string; credits?: number; planId?: string; price: number; status: string; createdAt: number; gateway?: string; receipt?: string }
+type COrder = { id: string; owner: string; kind?: string; name: string; channel?: string; credits?: number; planId?: string; price: number; status: string; createdAt: number; gateway?: string; receipt?: string; promoTarget?: 'profile' | 'listing'; bundleId?: string; targetName?: string; days?: number; slot?: string; targetId?: string }
 function CommPackagesConfig() {
   const [pkgs, setPkgs] = useState<CPkg[]>([])
   const [orders, setOrders] = useState<COrder[]>([])
@@ -2923,7 +2923,7 @@ function CommPackagesConfig() {
               <div style={{ fontSize: 12.5 }}>
                 <span style={{ fontWeight: 700 }}>{o.name}</span>
                 <span style={{ color: 'var(--muted)', marginInlineStart: 8, direction: 'ltr', display: 'inline-block' }}>{o.owner}</span>
-                <span style={{ color: 'var(--muted)', marginInlineStart: 8 }}>· {o.kind === 'plan' ? 'اشتراک' : (o.channel === 'sms' ? 'پیامک' : o.channel === 'token' ? 'توکن' : 'ایمیل')}{o.kind !== 'plan' ? ` · ${fa(o.credits || 0)} عدد` : ''} · {fa(o.price)} تومان</span>
+                <span style={{ color: 'var(--muted)', marginInlineStart: 8 }}>· {o.kind === 'plan' ? 'اشتراک' : o.kind === 'promo' ? `🚀 پروموت${o.promoTarget === 'listing' ? 'ِ آگهی' : o.bundleId ? 'ِ باندل' : 'ِ پروفایل'}${o.targetName ? ` · ${o.targetName}` : ''}${o.days ? ` · ${fa(o.days)} روز` : ''}` : (o.channel === 'sms' ? 'پیامک' : o.channel === 'token' ? 'توکن' : 'ایمیل')}{o.kind !== 'plan' && o.kind !== 'promo' ? ` · ${fa(o.credits || 0)} عدد` : ''} · {fa(o.price)} تومان</span>
                 {o.receipt && <span style={{ color: 'var(--gold)', marginInlineStart: 8, fontSize: 11.5 }}>💳 کارت‌به‌کارت · کدِ رهگیری: {o.receipt}</span>}
               </div>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -4840,15 +4840,112 @@ function SlotPromoter({ slot, promos, onChange }: { slot: any; promos: any[]; on
 function PromotionsView() {
   const [slots, setSlots] = useState<any[]>([])
   const [promotions, setPromotions] = useState<any[]>([])
+  const [orders, setOrders] = useState<any[]>([])
+  const [tab, setTab] = useState<'active' | 'orders' | 'manual'>('active')
+  const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
   const load = () => fetch('/api/admin/promotions').then(r => r.ok ? r.json() : { slots: [], promotions: [] }).then(d => { setSlots(d.slots || []); setPromotions(d.promotions || []) })
-  useEffect(() => { load() }, [])
+  const loadOrders = () => fetch('/api/comm?admin=1').then(r => r.ok ? r.json() : null).then(d => { if (d) setOrders((d.orders || []).filter((o: any) => o.kind === 'promo')) })
+  useEffect(() => { load(); loadOrders() }, [])
+
+  const now = Date.now()
+  const slotLabel = (id: string) => slots.find(s => s.id === id)?.label || id
+  const active = promotions.filter(p => p.active && (!p.expiresAt || p.expiresAt > now))
+  const pendingOrders = orders.filter(o => o.status === 'pending')
+  const paidOrders = orders.filter(o => o.status === 'paid')
+  const revenue = paidOrders.reduce((s, o) => s + (Number(o.price) || 0), 0)
+  const daysLeft = (exp?: number) => exp ? Math.max(0, Math.ceil((exp - now) / 86400000)) : null
+
+  const orderAct = async (id: string, action: 'approveOrder' | 'rejectOrder') => { await fetch('/api/comm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, id }) }); loadOrders(); load() }
+  const toggle = async (id: string, act: boolean) => { await fetch('/api/admin/promotions', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, active: act }) }); load() }
+  const del = async (id: string) => { if (!confirm('این پروموت حذف شود؟')) return; await fetch(`/api/admin/promotions?id=${id}`, { method: 'DELETE' }); load() }
+
+  const TabBtn = ({ id, label, badge }: { id: typeof tab; label: string; badge?: number }) => (
+    <button onClick={() => setTab(id)} style={{ padding: '8px 15px', borderRadius: 10, border: `1px solid ${tab === id ? 'var(--gold)' : 'var(--line2)'}`, background: tab === id ? 'var(--goldDim)' : 'transparent', color: tab === id ? 'var(--gold)' : 'var(--muted)', fontSize: 12.5, fontWeight: tab === id ? 800 : 500, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}>
+      {label}{badge ? <span style={{ background: '#e7674a', color: '#fff', borderRadius: 999, fontSize: 10, fontWeight: 800, padding: '1px 7px' }}>{fa(badge)}</span> : null}
+    </button>
+  )
+
   return (
     <div style={{ animation: 'fade .35s ease' }}>
       <Card style={{ marginBottom: 14 }}>
         <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>پروموت و ویژه‌سازی</div>
-        <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>هر جای سایت که می‌توان آگهی/مشاور/محصول را «ویژه» کرد در فهرست زیر آمده. برای هر جایگاه، آیتم‌ها را جستجو و پروموت کن؛ روی صفحات عمومی در همان جایگاه و در صدر نمایش داده می‌شوند.</div>
+        <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>مدیریتِ کاملِ موتورِ پروموت: پروموت‌های فعالِ کاربران، تأییدِ سفارش‌های خودسرویس، و ویژه‌سازیِ دستی از هر جایگاه.</div>
       </Card>
-      {slots.map(s => <SlotPromoter key={s.id} slot={s} promos={promotions.filter(p => p.slot === s.id)} onChange={load} />)}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginBottom: 14 }}>
+        <KPI label="پروموت‌های فعال" value={fa(active.length)} trend={`${fa(promotions.length)} کل`} icon="★" iconBg="rgba(212,175,55,.15)" iconColor="var(--gold)" />
+        <KPI label="سفارشِ در انتظار" value={fa(pendingOrders.length)} trend={pendingOrders.length ? 'نیازمندِ تأیید' : 'صف خالی'} icon="⏳" iconBg="rgba(231,103,74,.15)" iconColor="#e7674a" />
+        <KPI label="درآمدِ پروموت" value={fa(revenue)} trend={`${fa(paidOrders.length)} سفارشِ پرداخت‌شده`} icon="₮" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" />
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+        <TabBtn id="active" label="پروموت‌های فعال" />
+        <TabBtn id="orders" label="سفارش‌های خودسرویس" badge={pendingOrders.length} />
+        <TabBtn id="manual" label="ویژه‌سازیِ دستی" />
+      </div>
+
+      {tab === 'active' && (
+        <Card>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>پروموت‌های فعال ({fa(active.length)})</div>
+          {active.length === 0 ? <div style={{ color: 'var(--muted)', fontSize: 13 }}>در حالِ حاضر پروموتِ فعالی وجود ندارد.</div> : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {active.map(p => {
+                const dl = daysLeft(p.expiresAt)
+                return (
+                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, background: 'var(--bg2)', borderRadius: 10, padding: '9px 12px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                      {p.image ? <img src={p.image} alt="" style={{ width: 38, height: 38, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} /> : <span style={{ width: 38, height: 38, borderRadius: 8, background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--gold)' }}>★</span>}
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.title}</div>
+                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>{slotLabel(p.slot)}{p.location ? ` · ${p.location}` : ''}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      {dl != null && <span style={{ fontSize: 11.5, fontWeight: 700, color: dl <= 2 ? '#e7674a' : '#5fd98a' }}>{dl > 0 ? `${fa(dl)} روز باقی‌مانده` : 'امروز پایان'}</span>}
+                      <button onClick={() => toggle(p.id, false)} style={{ fontSize: 11.5, padding: '4px 11px', borderRadius: 8, border: '1px solid var(--line2)', color: 'var(--muted)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>غیرفعال</button>
+                      <button onClick={() => del(p.id)} style={{ fontSize: 11.5, padding: '4px 11px', borderRadius: 8, border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>حذف</button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {tab === 'orders' && (
+        <Card>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>سفارش‌های پروموتِ خودسرویس {pendingOrders.length > 0 && <span style={{ color: '#e7674a', fontSize: 12 }}>({fa(pendingOrders.length)} در انتظار)</span>}</div>
+          {orders.length === 0 ? <div style={{ color: 'var(--muted)', fontSize: 13 }}>سفارشِ پروموتی ثبت نشده.</div> : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {orders.slice(0, 30).map(o => (
+                <div key={o.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, background: 'var(--bg2)', borderRadius: 10, padding: '9px 12px', flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: 12.5 }}>
+                    <span style={{ fontWeight: 700 }}>🚀 {o.name}</span>
+                    <span style={{ color: 'var(--muted)', marginInlineStart: 8 }}>{o.promoTarget === 'listing' ? 'آگهی' : o.bundleId ? 'باندل' : 'پروفایل'}{o.targetName ? ` · ${o.targetName}` : ''}{o.days ? ` · ${fa(o.days)} روز` : ''}</span>
+                    <span style={{ color: 'var(--muted)', marginInlineStart: 8, direction: 'ltr', display: 'inline-block' }}>{o.owner}</span>
+                    <span style={{ color: 'var(--gold)', marginInlineStart: 8 }}>{fa(o.price)} تومان</span>
+                    {o.receipt && <span style={{ color: 'var(--gold)', marginInlineStart: 8, fontSize: 11.5 }}>💳 کدِ رهگیری: {o.receipt}</span>}
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    {o.status === 'pending' ? <>
+                      <button onClick={() => orderAct(o.id, 'approveOrder')} style={{ fontSize: 11.5, padding: '4px 11px', borderRadius: 8, border: '1px solid #5fd98a', color: '#5fd98a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>تأیید و فعال‌سازی</button>
+                      <button onClick={() => orderAct(o.id, 'rejectOrder')} style={{ fontSize: 11.5, padding: '4px 11px', borderRadius: 8, border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>رد</button>
+                    </> : <span style={{ fontSize: 11.5, fontWeight: 700, color: o.status === 'paid' ? '#5fd98a' : 'var(--faint)' }}>{o.status === 'paid' ? '✓ فعال شد' : 'رد‌شده'}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {tab === 'manual' && (
+        <div>
+          <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8, marginBottom: 12 }}>ویژه‌سازیِ دستی از سمتِ مدیر — بدونِ نیاز به سفارشِ کاربر. برای هر جایگاه، آیتم را جستجو و پروموت کن.</div>
+          {slots.map(s => <SlotPromoter key={s.id} slot={s} promos={promotions.filter(p => p.slot === s.id)} onChange={load} />)}
+        </div>
+      )}
     </div>
   )
 }

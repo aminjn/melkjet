@@ -91,10 +91,10 @@ export async function GET(req: NextRequest) {
   }
   // نشان‌گذاریِ «ویژه» برای پروفایل‌های دارای پروموتِ فعال (خودسرویس).
   try {
-    const { promotedProfilePhones } = await import('@/app/lib/promotion-store')
-    const promoted = promotedProfilePhones()
+    const { promotedProfileInfo } = await import('@/app/lib/promotion-store')
+    const promoted = await promotedProfileInfo()
     const norm = (p?: string) => String(p || '').replace(/\D/g, '')
-    for (const it of items) it.promoted = promoted.has(norm(it.revealId || it.id))
+    for (const it of items) { const info = promoted.get(norm(it.revealId || it.id)); it.promoted = !!info; if (info) it.promoKind = info.kind || 'ویژه' }
   } catch { /* پروموت در دسترس نبود */ }
   // ویژه‌ها اول، سپس تازه‌ترها / کامل‌ترها (عکس‌دار/تخصص‌دار).
   items.sort((x, y) => (Number(!!y.promoted) - Number(!!x.promoted)) || (Number(!!y.image) - Number(!!x.image)) || (y.scrapedAt - x.scrapedAt))

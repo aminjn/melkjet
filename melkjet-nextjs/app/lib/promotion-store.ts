@@ -2,8 +2,10 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { getItemById } from './scraper-store'
+import { pgEnabled, kvGet, kvMutate } from './db'
 
 const FILE = join(process.cwd(), '.promotion-data.json')
+const KV_KEY = 'promotions'
 
 // فهرست همهٔ جایگاه‌هایی که در سایت می‌توان چیزی را «پروموت/ویژه» کرد.
 export const PROMO_SLOTS: { id: string; label: string; target: 'listing' | 'directory' | 'product'; where: string }[] = [
@@ -112,56 +114,93 @@ export function bundleOf(id: string) { return PROMO_BUNDLES.find(b => b.id === i
 
 export interface Promotion {
   id: string; slot: string; targetId: string; title: string; image?: string; price?: string; location?: string
-  order: number; active: boolean; expiresAt?: number; createdAt: number
+  order: number; active: boolean; expiresAt?: number; createdAt: number; kind?: string
 }
 
-function load(): Promotion[] { if (existsSync(FILE)) { try { return JSON.parse(readFileSync(FILE, 'utf-8')) } catch {} } return [] }
-function save(rows: Promotion[]) { writeFileSync(FILE, JSON.stringify(rows, null, 2), 'utf-8') }
+// دومَحاله: DATABASE_URL ست باشد → Postgres (نوشتنِ اتمیک، سازگار با ۴ اینستنسِ pm2)، وگرنه فایل.
+interface PDB { rows: Promotion[] }
+function fileLoad(): PDB { if (existsSync(FILE)) { try { const raw = JSON.parse(readFileSync(FILE, 'utf-8')); return { rows: Array.isArray(raw) ? raw : (Array.isArray(raw.rows) ? raw.rows : []) } } catch {} } return { rows: [] } }
+function fileSave(db: PDB) { writeFileSync(FILE, JSON.stringify(db.rows, null, 2), 'utf-8') }
+async function load(): Promise<Promotion[]> { return (pgEnabled() ? await kvGet<PDB>(KV_KEY, { rows: [] }) : fileLoad()).rows }
+async function mutate<R>(fn: (rows: Promotion[]) => R): Promise<R> {
+  if (pgEnabled()) return kvMutate<PDB, R>(KV_KEY, { rows: [] }, db => fn(db.rows))
+  const db = fileLoad(); const r = fn(db.rows); fileSave(db); return r
+}
 
-export function listPromotions(slot?: string): Promotion[] {
-  return load().filter(p => !slot || p.slot === slot).sort((a, b) => a.order - b.order || b.createdAt - a.createdAt)
+export async function listPromotions(slot?: string): Promise<Promotion[]> {
+  return (await load()).filter(p => !slot || p.slot === slot).sort((a, b) => a.order - b.order || b.createdAt - a.createdAt)
 }
 
 // پروموت‌های فعالِ یک جایگاه (با احتساب انقضا) — برای نمایش عمومی.
-export function listActive(slot: string): Promotion[] {
+export async function listActive(slot: string): Promise<Promotion[]> {
   const now = Date.now()
-  return load().filter(p => p.slot === slot && p.active && (!p.expiresAt || p.expiresAt > now)).sort((a, b) => a.order - b.order)
+  return (await load()).filter(p => p.slot === slot && p.active && (!p.expiresAt || p.expiresAt > now)).sort((a, b) => a.order - b.order)
 }
 
-export async function addPromotion(slot: string, targetId: string, expiresAt?: number): Promise<Promotion | null> {
+// همهٔ پروموت‌های فعال (هر جایگاه) — برای نمایِ مدیریتیِ سوپرادمین.
+export async function listAllActive(): Promise<Promotion[]> {
+  const now = Date.now()
+  return (await load()).filter(p => p.active && (!p.expiresAt || p.expiresAt > now)).sort((a, b) => b.createdAt - a.createdAt)
+}
+
+export async function addPromotion(slot: string, targetId: string, expiresAt?: number, kind?: string): Promise<Promotion | null> {
   if (!slotOf(slot)) return null
   const it = await getItemById(targetId)
   if (!it) return null
-  const rows = load()
-  const order = rows.filter(p => p.slot === slot).length
-  const promo: Promotion = {
-    id: randomBytes(6).toString('hex'), slot, targetId, title: it.title, image: it.image,
-    price: it.price, location: it.location, order, active: true, expiresAt, createdAt: Date.now(),
-  }
-  rows.unshift(promo); save(rows); return promo
+  return mutate(rows => {
+    const order = rows.filter(p => p.slot === slot).length
+    const promo: Promotion = {
+      id: randomBytes(6).toString('hex'), slot, targetId, title: it.title, image: it.image,
+      price: it.price, location: it.location, order, active: true, expiresAt, createdAt: Date.now(), kind,
+    }
+    rows.unshift(promo); return promo
+  })
 }
 
-export function updatePromotion(id: string, patch: Partial<Pick<Promotion, 'order' | 'active' | 'expiresAt'>>): Promotion | null {
-  const rows = load(); const p = rows.find(x => x.id === id); if (!p) return null
-  if (patch.order !== undefined) p.order = patch.order
-  if (patch.active !== undefined) p.active = patch.active
-  if (patch.expiresAt !== undefined) p.expiresAt = patch.expiresAt
-  save(rows); return p
+export async function updatePromotion(id: string, patch: Partial<Pick<Promotion, 'order' | 'active' | 'expiresAt'>>): Promise<Promotion | null> {
+  return mutate(rows => {
+    const p = rows.find(x => x.id === id); if (!p) return null
+    if (patch.order !== undefined) p.order = patch.order
+    if (patch.active !== undefined) p.active = patch.active
+    if (patch.expiresAt !== undefined) p.expiresAt = patch.expiresAt
+    return p
+  })
 }
 
-export function deletePromotion(id: string) { save(load().filter(p => p.id !== id)) }
+export async function deletePromotion(id: string): Promise<void> { await mutate(rows => { const i = rows.findIndex(p => p.id === id); if (i >= 0) rows.splice(i, 1) }) }
 
 // ── پروموتِ پروفایل (مشاور/وکیل/… در دایرکتوری) — بدونِ نیاز به آیتمِ اسکرپ ──
 const normPhone = (p: string) => String(p || '').replace(/\D/g, '')
-export function addProfilePromotion(slot: string, phone: string, name: string, area?: string, expiresAt?: number): Promotion | null {
+export async function addProfilePromotion(slot: string, phone: string, name: string, area?: string, expiresAt?: number, kind?: string): Promise<Promotion | null> {
   const s = slotOf(slot); if (!s || s.target !== 'directory') return null
-  const rows = load()
-  const promo: Promotion = { id: randomBytes(6).toString('hex'), slot, targetId: phone, title: name || 'متخصص', location: area, order: 0, active: true, expiresAt, createdAt: Date.now() }
-  rows.unshift(promo); save(rows); return promo
+  return mutate(rows => {
+    const promo: Promotion = { id: randomBytes(6).toString('hex'), slot, targetId: phone, title: name || 'متخصص', location: area, order: 0, active: true, expiresAt, createdAt: Date.now(), kind }
+    rows.unshift(promo); return promo
+  })
 }
 // مجموعهٔ شماره‌هایِ دارای پروموتِ فعالِ دایرکتوری (برای علامت‌گذاریِ «ویژه» و اولویتِ نمایش).
-export function promotedProfilePhones(): Set<string> {
+export async function promotedProfilePhones(): Promise<Set<string>> {
+  return new Set((await promotedProfileInfo()).keys())
+}
+// نگاشتِ شمارهٔ پروفایلِ پروموت‌شده → نوعِ نشان (kind) برای نمایشِ نشانِ درست در دایرکتوری.
+export async function promotedProfileInfo(): Promise<Map<string, { kind?: string }>> {
   const now = Date.now()
   const dirSlots = PROMO_SLOTS.filter(s => s.target === 'directory').map(s => s.id)
-  return new Set(load().filter(p => dirSlots.includes(p.slot) && p.active && (!p.expiresAt || p.expiresAt > now)).map(p => normPhone(p.targetId)))
+  const m = new Map<string, { kind?: string }>()
+  for (const p of await load()) if (dirSlots.includes(p.slot) && p.active && (!p.expiresAt || p.expiresAt > now)) {
+    const key = normPhone(p.targetId)
+    if (!m.has(key)) m.set(key, { kind: p.kind })   // اولین (تازه‌ترین) پروموتِ فعال
+  }
+  return m
+}
+
+// نگاشتِ شناسهٔ آیتمِ آگهیِ پروموت‌شده → {slot, kind} برای نمایشِ نشانِ نوعِ پروموت روی کارتِ آگهی.
+export async function promotedListingKinds(): Promise<Map<string, { slot: string; kind?: string }>> {
+  const now = Date.now()
+  const listSlots = PROMO_SLOTS.filter(s => s.target === 'listing').map(s => s.id)
+  const m = new Map<string, { slot: string; kind?: string }>()
+  for (const p of await load()) if (listSlots.includes(p.slot) && p.active && (!p.expiresAt || p.expiresAt > now)) {
+    if (!m.has(String(p.targetId))) m.set(String(p.targetId), { slot: p.slot, kind: p.kind })
+  }
+  return m
 }

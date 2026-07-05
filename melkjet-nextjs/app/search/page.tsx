@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import Nav from '@/app/components/Nav'
+import PromoBadge from '@/app/components/PromoBadge'
 import BannerSlot from '@/app/components/BannerSlot'
 import CompareButton from '@/app/components/CompareButton'
 import NeighborhoodPicker from '@/app/components/NeighborhoodPicker'
@@ -102,7 +103,7 @@ function toProperty(it: ContentItem) {
     year: yearNum ? toPersianDigits(yearNum) : '—',
     tag: '', score: 80 + (h % 19),
     img: it.image ? '' : gradientFor(it.title), image: it.image, url: it.url,
-    category: it.category || '', searchText,
+    category: it.category || '', searchText, promoKind: (it as any).promoKind || '',
   }
 }
 type PropertyT = ReturnType<typeof toProperty>
@@ -646,7 +647,7 @@ function SearchPageInner() {
                     <div style={{ height: 156, background: p.image ? `center/cover no-repeat url(${p.image})` : p.img, position: 'relative', filter: p.dealStatus ? 'grayscale(0.55) brightness(0.7)' : 'none' }}>
                       <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 64, background: 'linear-gradient(to top,rgba(0,0,0,0.5),transparent)' }} />
                       <div style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(8px)', color: 'var(--gold2)', borderRadius: 8, padding: '4px 8px', fontSize: 11.5, fontWeight: 700, border: '1px solid rgba(201,168,76,0.3)', display: 'flex', alignItems: 'center', gap: 3 }}>✦ {toPersianDigits(p.score)}</div>
-                      {isPromoted && !p.dealStatus && <div style={{ position: 'absolute', top: 10, left: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', borderRadius: 8, padding: '4px 9px', fontSize: 11.5, fontWeight: 800 }}>★ ویژه</div>}
+                      {isPromoted && !p.dealStatus && <div style={{ position: 'absolute', top: 10, left: 10 }}><PromoBadge kind={p.promoKind || 'ویژه'} /></div>}
                       {p.dealStatus && (
                         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <span style={{ transform: 'rotate(-13deg)', background: p.dealStatus === 'sold' ? 'rgba(231,74,74,0.92)' : 'rgba(74,144,231,0.92)', color: '#fff', fontWeight: 900, fontSize: 17, padding: '7px 20px', borderRadius: 10, border: '2px solid rgba(255,255,255,0.85)', boxShadow: '0 6px 22px -6px rgba(0,0,0,0.6)', letterSpacing: '0.5px' }}>

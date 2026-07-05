@@ -19,6 +19,8 @@ export interface ContentItem {
   meta?: Record<string, string>
   scrapedAt: number
   status: string
+  promoted?: boolean
+  promoKind?: string
 }
 
 const GRADIENTS = [

@@ -17,7 +17,7 @@ export interface CommPackage { id: string; channel: Channel; name: string; credi
 export interface Credit { sms: number; email: number; token: number }
 export type OrderStatus = 'pending' | 'paid' | 'rejected'
 export type OrderKind = 'package' | 'plan' | 'promo'
-export interface CommOrder { id: string; owner: string; kind: OrderKind; name: string; price: number; status: OrderStatus; createdAt: number; paidAt?: number; packageId?: string; channel?: Channel; credits?: number; planId?: string; gateway?: string; receipt?: string; period?: string; slot?: string; targetId?: string; days?: number; targetName?: string; promoTarget?: 'profile' | 'listing'; bundleId?: string }
+export interface CommOrder { id: string; owner: string; kind: OrderKind; name: string; price: number; status: OrderStatus; createdAt: number; paidAt?: number; packageId?: string; channel?: Channel; credits?: number; planId?: string; gateway?: string; receipt?: string; period?: string; slot?: string; targetId?: string; days?: number; targetName?: string; promoTarget?: 'profile' | 'listing'; bundleId?: string; promoKind?: string }
 
 interface DB { packages: CommPackage[]; credits: Record<string, Credit>; orders: CommOrder[]; usage?: Record<string, { token: number }>; pkgSeeded?: boolean; seedV?: number }
 const PKG_SEED_V = 3
@@ -209,7 +209,7 @@ export async function createPromoOrder(owner: string, input: { tierId: string; t
   const price = Math.round(t.price * (1 - disc / 100))
   return withDb(db => {
     applySeed(db)
-    const order: CommOrder = { id: id('ord_'), owner, kind: 'promo', name: t.name, price, status: 'pending', createdAt: Date.now(), slot: t.slot, targetId: String(input.targetId), days: t.days, targetName: input.targetName, promoTarget: t.target as 'profile' | 'listing', gateway: pay?.gateway, receipt: pay?.receipt }
+    const order: CommOrder = { id: id('ord_'), owner, kind: 'promo', name: t.name, price, status: 'pending', createdAt: Date.now(), slot: t.slot, targetId: String(input.targetId), days: t.days, targetName: input.targetName, promoTarget: t.target as 'profile' | 'listing', promoKind: t.kind, gateway: pay?.gateway, receipt: pay?.receipt }
     db.orders.unshift(order)
     return { ok: true, order }
   })
@@ -257,7 +257,7 @@ export async function approveOrder(orderId: string): Promise<{ ok: boolean; erro
       }
     } else if (o.kind === 'promo') {
       // بیرون از تراکنش فعال می‌شود (promotion-store جداست + پروموتِ آگهی async است).
-      return { ok: true as const, promo: { slot: o.slot, targetId: o.targetId, days: o.days, targetName: o.targetName, target: o.promoTarget, bundleId: o.bundleId, owner: o.owner } }
+      return { ok: true as const, promo: { slot: o.slot, targetId: o.targetId, days: o.days, targetName: o.targetName, target: o.promoTarget, bundleId: o.bundleId, owner: o.owner, promoKind: o.promoKind } }
     } else if (o.channel) {
       const c = db.credits[o.owner] || { sms: 0, email: 0, token: 0 }
       c[o.channel] = (Number(c[o.channel]) || 0) + (Number(o.credits) || 0)
@@ -275,15 +275,15 @@ export async function approveOrder(orderId: string): Promise<{ ok: boolean; erro
       const now = Date.now()
       for (const tid of bundle?.tierIds || []) {
         const t = ps.promoTierOf(tid)
-        if (t) ps.addProfilePromotion(t.slot, pr.owner, pr.targetName || 'متخصص', undefined, now + (Number(t.days) || 30) * 86400000)
+        if (t) await ps.addProfilePromotion(t.slot, pr.owner, pr.targetName || 'متخصص', undefined, now + (Number(t.days) || 30) * 86400000, t.kind)
       }
     } catch {}
   } else if (pr && pr.slot && pr.targetId) {
     const exp = Date.now() + (Number(pr.days) || 30) * 86400000
     try {
       const ps = await import('./promotion-store')
-      if (pr.target === 'listing') await ps.addPromotion(pr.slot, pr.targetId, exp)
-      else ps.addProfilePromotion(pr.slot, pr.targetId, pr.targetName || 'متخصص', undefined, exp)
+      if (pr.target === 'listing') await ps.addPromotion(pr.slot, pr.targetId, exp, pr.promoKind)
+      else await ps.addProfilePromotion(pr.slot, pr.targetId, pr.targetName || 'متخصص', undefined, exp, pr.promoKind)
     } catch {}
   }
   return { ok: res.ok, error: (res as any).error }

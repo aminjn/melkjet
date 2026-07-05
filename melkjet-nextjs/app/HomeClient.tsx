@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Nav from './components/Nav'
 import Footer from './components/Footer'
 import PropertyCard from './components/PropertyCard'
+import PromoBadge from './components/PromoBadge'
 import HeroSearch from './components/home/HeroSearch'
 import FaqAccordion from './components/home/FaqAccordion'
 import HomeBanner from './components/home/HomeBanner'
@@ -117,6 +118,7 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
         beds: bedsFromItem(it),
         year: undefined as string | undefined,
         tag: promotedIds.has(it.id) ? 'ویژه' : ((it.tags && it.tags[0]) || it.category || 'ویژه'),
+        promoKind: promotedIds.has(it.id) ? (it.promoKind || 'ویژه') : undefined,
         score: 80 + (i % 19),
         img: it.image ? `center/cover no-repeat url(${it.image})` : gradientFor(it.id),
       }))
@@ -136,9 +138,10 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
           price: it.price ? `از ${it.price}` : '—',
           img: it.image ? `center/cover no-repeat url(${it.image})` : gradientFor(it.id),
           promoted: promotedInvestIds.has(it.id),
+          promoKind: it.promoKind || 'ویژه',
         }
       })
-    : invest.map((o) => ({ ...o, promoted: false }))
+    : invest.map((o) => ({ ...o, promoted: false, promoKind: 'ویژه' }))
 
   // Map real directory entries into advisor cards; fall back to static mockup if empty.
   const advisorCards = advisorSource.length
@@ -150,8 +153,9 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
         img: gradientFor(it.title, 'avatar'),
         initials: initialsFor(it.title),
         promoted: promotedAdvisorIds.has(it.id),
+        promoKind: it.promoKind || 'ویژه',
       }))
-    : advisors.map((a) => ({ ...a, initials: initialsFor(a.n), promoted: false }))
+    : advisors.map((a) => ({ ...a, initials: initialsFor(a.n), promoted: false, promoKind: 'ویژه' }))
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
@@ -279,7 +283,7 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
           {investCards.map(o => (
             <Link key={o.id} href={`/property/${o.id}`} style={{ display: 'block', textDecoration: 'none', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, overflow: 'hidden' }}>
               <div style={{ position: 'relative', height: 150, background: o.img }}>
-                {o.promoted && <span style={{ position: 'absolute', top: 12, left: 12, padding: '4px 9px', borderRadius: 999, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 11, fontWeight: 800, zIndex: 2 }}>★ ویژه</span>}
+                {o.promoted && <span style={{ position: 'absolute', top: 12, left: 12, zIndex: 2 }}><PromoBadge kind={o.promoKind} /></span>}
                 <span style={{ position: 'absolute', top: 12, right: 12, padding: '5px 11px', borderRadius: 999, background: 'rgba(95,217,138,0.9)', color: '#0a2a16', fontSize: 12, fontWeight: 800 }}>بازده {o.roi}</span>
                 <span style={{ position: 'absolute', bottom: 12, left: 12, padding: '4px 10px', borderRadius: 999, background: 'rgba(20,18,14,0.7)', backdropFilter: 'blur(6px)', color: o.riskColor, fontSize: 11, fontWeight: 700 }}>ریسک {o.risk}</span>
               </div>
@@ -344,7 +348,7 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 18 }}>
             {advisorCards.map(a => (
               <div key={a.n} style={{ position: 'relative', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 22, textAlign: 'center' }}>
-                {a.promoted && <span style={{ position: 'absolute', top: 12, left: 12, padding: '3px 9px', borderRadius: 999, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 10.5, fontWeight: 800 }}>★ ویژه</span>}
+                {a.promoted && <span style={{ position: 'absolute', top: 12, left: 12 }}><PromoBadge kind={a.promoKind} size="sm" /></span>}
                 <div style={{ width: 72, height: 72, borderRadius: '50%', margin: '0 auto', background: a.img, border: '2px solid var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 18, fontWeight: 700 }}>{a.initials}</div>
                 <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text)', marginTop: 14 }}>{a.n}</div>
                 <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 4 }}>{a.r}</div>

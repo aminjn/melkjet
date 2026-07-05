@@ -8,7 +8,7 @@ async function actor() { const s = await getSession(); return (s as any)?.name |
 
 export async function GET() {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
-  return NextResponse.json({ slots: PROMO_SLOTS, promotions: listPromotions() })
+  return NextResponse.json({ slots: PROMO_SLOTS, promotions: await listPromotions() })
 }
 
 export async function POST(req: NextRequest) {
@@ -25,7 +25,7 @@ export async function PATCH(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const b = await req.json().catch(() => ({}))
   if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
-  const p = updatePromotion(b.id, b)
+  const p = await updatePromotion(b.id, b)
   if (!p) return NextResponse.json({ error: 'یافت نشد' }, { status: 404 })
   return NextResponse.json({ ok: true, promotion: p })
 }
@@ -34,5 +34,5 @@ export async function DELETE(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const id = new URL(req.url).searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
-  deletePromotion(id); return NextResponse.json({ ok: true })
+  await deletePromotion(id); return NextResponse.json({ ok: true })
 }

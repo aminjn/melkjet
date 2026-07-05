@@ -8,5 +8,8 @@ export async function GET(req: NextRequest) {
   if (!id && !slug) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
   const item = slug ? await getArticleBySlug(slug) : (id ? await getItemById(id) : null)
   if (!item || item.status === 'rejected') return NextResponse.json({ item: null }, { status: 404 })
-  return NextResponse.json({ item })
+  // نشانِ پروموتِ فعال (نوع) — برای نمایشِ ریبونِ «ویژه/VIP/…» در صفحهٔ آگهی.
+  let promoKind: string | undefined
+  try { const { promotedListingKinds } = await import('@/app/lib/promotion-store'); promoKind = (await promotedListingKinds()).get(String(item.id))?.kind } catch {}
+  return NextResponse.json({ item: promoKind ? { ...item, promoted: true, promoKind } : item })
 }

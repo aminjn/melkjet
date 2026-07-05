@@ -25,10 +25,10 @@ async function publicListFull(type: 'listing' | 'directory'): Promise<ContentIte
 }
 
 async function promoItems(slot: string): Promise<ContentItem[]> {
-  const arr = await Promise.all(listActive(slot).map(async p => {
+  const arr = await Promise.all((await listActive(slot)).map(async p => {
     const it = await getItemById(p.targetId)
     if (!it || it.status === 'rejected') return null
-    return toContent(it)
+    return { ...toContent(it), promoKind: p.kind || 'ویژه' } as ContentItem
   }))
   return arr.filter(Boolean) as ContentItem[]
 }

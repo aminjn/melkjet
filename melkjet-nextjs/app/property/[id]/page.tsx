@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import Nav from '@/app/components/Nav'
 import PropertyMap from '@/app/components/PropertyMap'
+import PromoBadge from '@/app/components/PromoBadge'
 import CompareButton from '@/app/components/CompareButton'
 import { openAuth } from '@/app/components/AuthModal'
 
@@ -260,6 +261,7 @@ export default function PropertyPage() {
             <div className="mjp-gallery" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gridTemplateRows: '200px 200px', gap: 10, borderRadius: 20, overflow: 'hidden', height: 410 }}>
               <div style={{ gridRow: '1/3', position: 'relative', background: 'var(--surface)' }}>
                 {images.length ? <img src={images[activeImg]} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover', filter: dealStatus ? 'grayscale(0.5) brightness(0.72)' : 'none' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 56, opacity: 0.1 }}>🏠</div>}
+                {(item as any).promoKind && !dealStatus && <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 2 }}><PromoBadge kind={(item as any).promoKind} /></div>}
                 {dealStatus && (
                   <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                     <span style={{ transform: 'rotate(-12deg)', background: dealStatus === 'sold' ? 'rgba(231,74,74,0.94)' : 'rgba(74,144,231,0.94)', color: '#fff', fontWeight: 900, fontSize: 34, padding: '12px 38px', borderRadius: 16, border: '3px solid rgba(255,255,255,0.9)', boxShadow: '0 10px 40px -8px rgba(0,0,0,0.7)', letterSpacing: '1px' }}>

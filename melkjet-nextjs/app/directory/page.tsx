@@ -3,6 +3,7 @@
 import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
 import RevealContact from '@/app/components/RevealContact'
+import PromoBadge from '@/app/components/PromoBadge'
 import { useState, useEffect } from 'react'
 import { fetchContent, gradientFor, initialsFor, type ContentItem } from '@/app/lib/content-display'
 
@@ -21,6 +22,7 @@ function toProfessional(it: ContentItem) {
     initials: initialsFor(it.title),
     category: it.category || '',
     promoted: false,
+    promoKind: (it as any).promoKind as (string | undefined),
     coverGradient: gradientFor(it.title, 'cover'),
     avatarGradient: gradientFor(it.title, 'avatar'),
     url: it.url,
@@ -179,7 +181,7 @@ export default function DirectoryPage() {
   // Promoted profiles lead the list (dedup by id), flagged so the existing badge shows.
   const filteredProfessionals = [...promoted, ...items.filter((p) => !promotedIds.has(p.id))]
     .filter((p) => !searchQuery || p.title.includes(searchQuery) || (p.location || '').includes(searchQuery))
-    .map((it) => ({ ...toProfessional(it), promoted: promotedIds.has(it.id) }))
+    .map((it) => ({ ...toProfessional(it), promoted: promotedIds.has(it.id) || !!(it as any).promoted }))
 
   return (
     <div
@@ -455,6 +457,7 @@ type Professional = {
   initials: string
   category: string
   promoted: boolean
+  promoKind?: string
   coverGradient: string
   avatarGradient: string
   url?: string
@@ -503,7 +506,7 @@ function ProfessionalCard({ pro }: { pro: Professional }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3 }}>
             <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pro.name}</span>
             <span title="تأییدشده" style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, borderRadius: '50%', background: 'rgba(95,217,138,0.15)', color: '#5fd98a', fontSize: 10, fontWeight: 800 }}>✓</span>
-            {pro.promoted && <span style={{ flexShrink: 0, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 10, fontWeight: 800, padding: '2px 7px', borderRadius: 999 }}>★ ویژه</span>}
+            {pro.promoted && <span style={{ flexShrink: 0 }}><PromoBadge kind={pro.promoKind || 'ویژه'} size="sm" /></span>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', fontSize: 12, color: 'var(--muted)' }}>
             {cat && <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{cat}</span>}
