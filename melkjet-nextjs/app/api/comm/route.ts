@@ -59,6 +59,14 @@ export async function POST(req: NextRequest) {
       const p = getProfile(s.phone); targetName = (p.businessName || p.displayName || '').trim() || undefined
     }
     if (!targetId) return NextResponse.json({ error: 'موردِ پروموت مشخص نیست' }, { status: 400 })
+    if (t.target === 'listing') {
+      // پروموتِ آگهی: آگهی باید منتشرشده و متعلق به خودِ کاربر باشد (جلوگیری از پروموتِ آگهیِ دیگران).
+      const { getItemById } = await import('@/app/lib/scraper-store')
+      const it = await getItemById(targetId)
+      if (!it) return NextResponse.json({ error: 'آگهیِ منتشرشده‌ای با این شناسه یافت نشد' }, { status: 400 })
+      if (String((it as any).meta?.__ownerPhone || '') !== s.phone) return NextResponse.json({ error: 'فقط آگهی‌های خودتان را می‌توانید پروموت کنید' }, { status: 403 })
+      if (!targetName) targetName = it.title
+    }
     const r = await createPromoOrder(s.phone, { tierId: t.id, targetId, targetName, discountPct: discountFor(s.phone) }, { gateway: b.gateway ? String(b.gateway) : undefined, receipt: b.receipt ? String(b.receipt).slice(0, 120) : undefined })
     return r.ok ? NextResponse.json({ ok: true, order: r.order }) : NextResponse.json({ error: r.error }, { status: 400 })
   }

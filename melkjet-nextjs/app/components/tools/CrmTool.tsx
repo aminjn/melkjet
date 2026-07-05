@@ -279,7 +279,7 @@ function JalaliDateTimePicker({ value, onPick, onClose }: { value?: number; onPi
 export interface CrmOwnListing { id: string; title: string; priceText: string; status: string; location?: string; published?: boolean; publicId?: string; sellerLeadId?: string; buyerLeadIds?: string[] }
 export interface CrmLeadRef { id: string; name: string }
 
-export default function CrmTool({ embedded = false, view: viewProp, onView, ownListings, leads: leadRefs, onAddListing, onEditListing, onDeleteListing, onSetListingStatus, onBulkDelete, onBulkStatus, onLinkLeads }: {
+export default function CrmTool({ embedded = false, view: viewProp, onView, ownListings, leads: leadRefs, onAddListing, onEditListing, onDeleteListing, onPromoteListing, onSetListingStatus, onBulkDelete, onBulkStatus, onLinkLeads }: {
   embedded?: boolean; view?: CrmView; onView?: (v: CrmView) => void
   // وقتی این‌ها داده شوند، نمای «فایل‌ها» فایل‌های واقعیِ خودِ کاربر را نشان می‌دهد (نه آگهی‌های سراسری).
   ownListings?: CrmOwnListing[]
@@ -287,6 +287,8 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
   onAddListing?: () => void
   onEditListing?: (id: string) => void
   onDeleteListing?: (id: string) => void
+  // پروموتِ آگهیِ منتشرشده از رویِ خودِ آگهی (فقط برای آگهی‌های دارای publicId).
+  onPromoteListing?: (listing: CrmOwnListing) => void
   onSetListingStatus?: (id: string, status: string) => void
   onBulkDelete?: (ids: string[]) => void
   onBulkStatus?: (ids: string[], status: string) => void
@@ -1009,6 +1011,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
                       <button onClick={() => setLeadOpen(open ? null : l.id)} style={{ padding: '5px 9px', borderRadius: 7, background: open ? 'var(--goldDim)' : 'var(--bg)', border: `1px solid ${open || l.sellerLeadId || buyerCount ? 'var(--gold)' : 'var(--line)'}`, color: 'var(--gold)', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>🔗 لیدها{(l.sellerLeadId ? 1 : 0) + buyerCount > 0 ? ` (${((l.sellerLeadId ? 1 : 0) + buyerCount).toLocaleString('fa-IR')})` : ''}</button>
                       <button onClick={() => onEditListing?.(l.id)} style={{ padding: '5px 9px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>ویرایش</button>
                       <button onClick={() => { if (confirm('این فایل حذف شود؟')) onDeleteListing?.(l.id) }} style={{ padding: '5px 9px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: '#ef4444', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>حذف</button>
+                      {onPromoteListing && l.published && l.publicId && <button onClick={() => onPromoteListing(l)} title="پروموتِ این آگهی" style={{ padding: '5px 9px', borderRadius: 7, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', border: 'none', color: '#16140f', fontSize: 11.5, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>🚀 پروموت</button>}
                       {l.published && l.publicId && <a href={`/property/${l.publicId}`} target="_blank" rel="noreferrer" style={{ fontSize: 11.5, color: 'var(--gold)', textDecoration: 'none' }}>↗</a>}
                     </div>
                   </div>

@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import ListingPromoteModal from '@/app/components/ListingPromoteModal'
 
 // پنلِ «پلن‌ها و اشتراک» — مشترک در همهٔ پنل‌ها. گرافیکِ غنی: اشتراک‌های نقش + بسته‌های افزایشی.
 const FONT = 'Vazirmatn, system-ui, sans-serif'
@@ -50,6 +51,7 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
 
   // قیمتِ تخفیف‌خوردهٔ پروموت با پلنِ کاربر (هم‌راستا با سرور).
   const discPrice = (p: number) => Math.round(p * (1 - promoDiscount / 100))
+  const [promoteTierId, setPromoteTierId] = useState<string | null>(null)   // بستهٔ پروموتِ آگهی که کاربر برگزیده — مودالِ انتخابِ آگهی باز می‌شود
   const [checkout, setCheckout] = useState<{ kind: 'plan' | 'pkg' | 'promo' | 'bundle'; id: string; name: string; price: number } | null>(null)
   const buyPlan = (p: Plan) => setCheckout({ kind: 'plan', id: p.id, name: p.name, price: priceOf(p) })
   const buyPkg = (p: Pkg) => setCheckout({ kind: 'pkg', id: p.id, name: p.name, price: p.price })
@@ -190,7 +192,7 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
                   </div>
                   {isProfile
                     ? <button onClick={() => buyPromo(t)} disabled={!!busy} style={{ marginTop: 4, padding: '9px', borderRadius: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 12.5, border: 'none', cursor: 'pointer', fontFamily: FONT }}>پروموتِ کسب‌وکارِ من</button>
-                    : <div style={{ marginTop: 4, padding: '9px', borderRadius: 10, background: 'var(--bg2)', border: '1px dashed var(--line2)', color: 'var(--muted)', fontSize: 11.5, textAlign: 'center' }}>از دکمهٔ «پروموت» رویِ آگهیِ خود</div>}
+                    : <button onClick={() => setPromoteTierId(t.id)} disabled={!!busy} style={{ marginTop: 4, padding: '9px', borderRadius: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 12.5, border: 'none', cursor: 'pointer', fontFamily: FONT }}>انتخابِ آگهی و پروموت</button>}
                 </div>
               )
             })}
@@ -237,6 +239,7 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
         </>
       )}
 
+      {promoteTierId && <ListingPromoteModal preTierId={promoteTierId} onClose={() => setPromoteTierId(null)} onDone={loadComm} />}
       {checkout && <CheckoutModal item={checkout} busy={busy === 'checkout'} onClose={() => setCheckout(null)} onSubmit={submitOrder} />}
       {msg && <div style={{ fontSize: 13, fontWeight: 600, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a', textAlign: 'center' }}>{msg}</div>}
       {pending.length > 0 && (

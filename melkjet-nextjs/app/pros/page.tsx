@@ -4,7 +4,8 @@ import AssistantPanel from '@/app/components/AssistantPanel'
 import MessagesPanel from '@/app/components/MessagesPanel'
 import NegotiationEngine from '@/app/components/NegotiationEngine'
 import DivarImport from '@/app/components/DivarImport'
-import CrmTool, { CRM_VIEWS, type CrmView } from '@/app/components/tools/CrmTool'
+import CrmTool, { CRM_VIEWS, type CrmView, type CrmOwnListing } from '@/app/components/tools/CrmTool'
+import ListingPromoteModal from '@/app/components/ListingPromoteModal'
 import MarketingTool, { MARKETING_VIEWS, type MarketingView } from '@/app/components/tools/MarketingTool'
 import WorkflowTool, { WORKFLOW_VIEWS, type WorkflowView } from '@/app/components/tools/WorkflowTool'
 import WebsiteBuilderTool, { WEBSITE_VIEWS, type WebsiteView } from '@/app/components/tools/WebsiteBuilderTool'
@@ -281,6 +282,7 @@ export default function ProsPage() {
   const [wbView, setWbView] = useState<WebsiteView | null>(null)
   const [wbOpen, setWbOpen] = useState(false)
   const [navOpen, setNavOpen] = useState(false)   // کشوی منوی موبایل
+  const [promoteListing, setPromoteListing] = useState<CrmOwnListing | null>(null)   // آگهیِ در حالِ پروموت
   const clearTools = () => { setCrmView(null); setMktView(null); setWfView(null); setWbView(null) }
   const goView = (v: View) => { setView(v); clearTools(); if (CRM_GROUP_IDS.includes(v)) setCrmOpen(true); setNavOpen(false) }
   const crmGroupActive = CRM_GROUP_IDS.includes(view) && !crmView && !mktView && !wfView && !wbView
@@ -619,6 +621,7 @@ export default function ProsPage() {
               onAddListing={openAdd}
               onEditListing={id => { const l = listings.find(x => x.id === id); if (l) openEdit(l) }}
               onDeleteListing={id => post({ action: 'deleteListing', id })}
+              onPromoteListing={l => setPromoteListing(l)}
               onSetListingStatus={(id, status) => post({ action: 'setListingStatus', id, status })}
               onLinkLeads={(id, sellerLeadId, buyerLeadIds) => post({ action: 'updateListing', id, patch: { sellerLeadId, buyerLeadIds } })}
               onBulkDelete={async ids => { for (const id of ids) await post({ action: 'deleteListing', id }) }}
@@ -1191,6 +1194,11 @@ export default function ProsPage() {
           </>}
         </main>
       </div>
+
+      {/* پروموتِ آگهی از رویِ خودِ آگهی */}
+      {promoteListing && promoteListing.publicId && (
+        <ListingPromoteModal preListing={{ id: promoteListing.publicId, title: promoteListing.title }} onClose={() => setPromoteListing(null)} />
+      )}
 
       {/* اخطارِ آگهیِ تکراری (تشخیصِ هوش مصنوعی) */}
       {dupWarn && (
