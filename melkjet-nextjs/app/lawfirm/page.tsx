@@ -6,8 +6,10 @@ import SupportPanel from '@/app/components/SupportPanel'
 import BusinessProfileForm from '@/app/components/BusinessProfileForm'
 import {
   Shell, useProDesk, Kpi, StatusPill, LoginGate, SectionCard, Modal, btnGold,
-  money, fa, card, inputStyle, type ProRecord, type ProRequest, type ReqStatus, type ShellCfg,
+  JalaliPicker, ProCalendar, FileField, FileLink,
+  money, fa, card, inputStyle, type ProRecord, type ProRequest, type ReqStatus, type ShellCfg, type JDate,
 } from '@/app/components/prodesk/ProDeskKit'
+import { jToday, jKey, jLabel } from '@/app/lib/jalali'
 
 // میزِ کارِ «دفترِ حقوقی» — نسخهٔ تخصصی: پرونده‌ها با مرحلهٔ رسیدگی + جلساتِ پیشِ‌رو + پذیرشِ موکل.
 const ROLE = '/lawfirm'
@@ -17,9 +19,12 @@ const NEXT: Record<ReqStatus, ReqStatus> = { new: 'in_progress', in_progress: 'd
 const caseNo = () => 'پ-' + String(Date.now()).slice(-5)
 const stageOf = (r: ProRecord) => Math.max(0, Math.min(LEGAL_STAGES.length - 1, Number(r.meta?.stage) || 0))
 
+// آیتم‌های تقویم از جلساتِ پرونده‌ها.
+const hearingCalItems = (records: ProRecord[]) => records.filter(r => r.meta?.jhearing && r.status !== 'archived').map(r => ({ id: r.id, dateKey: r.meta!.jhearing as string, label: r.title, color: '#c98fb0' }))
+
 // ── پرونده‌ها ────────────────────────────────────────────────────────────────
-function CaseForm({ initial, onSave, onClose }: { initial?: Partial<{ title: string; kind: string; court: string; hearing: string; amount: string }>; onSave: (f: any) => void; onClose: () => void }) {
-  const [f, setF] = useState({ title: initial?.title || '', kind: initial?.kind || DISPUTE_TYPES[0], caseNo: caseNo(), court: initial?.court || '', hearing: initial?.hearing || '', amount: initial?.amount || '' })
+function CaseForm({ initial, onSave, onClose, today }: { initial?: Partial<{ title: string; kind: string; court: string; amount: string }>; onSave: (f: any) => void; onClose: () => void; today: JDate }) {
+  const [f, setF] = useState<{ title: string; kind: string; caseNo: string; court: string; amount: string; jy: number; jm: number; jd: number; file?: { url: string; name: string } }>({ title: initial?.title || '', kind: initial?.kind || DISPUTE_TYPES[0], caseNo: caseNo(), court: initial?.court || '', amount: initial?.amount || '', ...today, file: undefined })
   return (
     <Modal title="پروندهٔ جدید" onClose={onClose}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -27,18 +32,20 @@ function CaseForm({ initial, onSave, onClose }: { initial?: Partial<{ title: str
         <select value={f.kind} onChange={e => setF({ ...f, kind: e.target.value })} style={inputStyle}>{DISPUTE_TYPES.map(t => <option key={t}>{t}</option>)}</select>
         <input placeholder="شمارهٔ پرونده" value={f.caseNo} onChange={e => setF({ ...f, caseNo: e.target.value })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
         <input placeholder="شعبه / دادگاه" value={f.court} onChange={e => setF({ ...f, court: e.target.value })} style={inputStyle} />
-        <input placeholder="تاریخِ جلسهٔ بعدی" value={f.hearing} onChange={e => setF({ ...f, hearing: e.target.value })} style={inputStyle} />
-        <input placeholder="حق‌الوکاله (تومان)" value={f.amount} onChange={e => setF({ ...f, amount: e.target.value.replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
+        <input placeholder="حق‌الوکاله (تومان)" value={f.amount} onChange={e => setF({ ...f, amount: e.target.value.replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right', gridColumn: '1 / -1' }} />
+        <div style={{ gridColumn: '1 / -1', fontSize: 11.5, color: 'var(--muted)', marginBottom: -4 }}>تاریخِ جلسهٔ بعدی</div>
+        <JalaliPicker jy={f.jy} jm={f.jm} jd={f.jd} baseYear={today.jy} onChange={v => setF({ ...f, ...v })} />
+        <FileField value={f.file} onChange={v => setF({ ...f, file: v })} label="📎 پیوستِ پرونده / لایحه (تصویر یا PDF)" />
       </div>
-      <button onClick={() => { if (!f.title.trim()) { alert('نامِ موکل الزامی است'); return } onSave(f) }} style={{ ...btnGold, width: '100%', marginTop: 14, padding: 11 }}>تشکیلِ پرونده</button>
+      <button onClick={() => { if (!f.title.trim()) { alert('نامِ موکل الزامی است'); return } onSave({ ...f, hearing: jLabel(f.jy, f.jm, f.jd), jhearing: jKey(f.jy, f.jm, f.jd) }) }} style={{ ...btnGold, width: '100%', marginTop: 14, padding: 11 }}>تشکیلِ پرونده</button>
     </Modal>
   )
 }
 
-function Cases({ records, post }: { records: ProRecord[]; post: (p: any) => Promise<any> }) {
+function Cases({ records, post, today }: { records: ProRecord[]; post: (p: any) => Promise<any>; today: JDate }) {
   const [open, setOpen] = useState(false)
   const save = async (f: any) => {
-    const d = await post({ action: 'addRecord', title: f.title, kind: f.kind, subtitle: f.court, amount: Number(f.amount) || undefined, status: 'active', meta: { caseNo: f.caseNo, court: f.court, hearing: f.hearing, stage: 0 } })
+    const d = await post({ action: 'addRecord', title: f.title, kind: f.kind, subtitle: f.court, amount: Number(f.amount) || undefined, status: 'active', meta: { caseNo: f.caseNo, court: f.court, hearing: f.hearing, jhearing: f.jhearing, file: f.file, stage: 0 } })
     if (d) setOpen(false)
   }
   const advance = (r: ProRecord) => {
@@ -62,6 +69,7 @@ function Cases({ records, post }: { records: ProRecord[]; post: (p: any) => Prom
                   </div>
                   <span style={{ fontSize: 11, fontWeight: 700, color: closed ? '#34d399' : '#c98fb0', background: `color-mix(in srgb, ${closed ? '#34d399' : '#c98fb0'} 16%, transparent)`, padding: '3px 10px', borderRadius: 7 }}>{closed ? 'مختومه' : `مرحله: ${LEGAL_STAGES[st]}`}</span>
                   {!!r.amount && <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--gold)' }}>{money(r.amount)}</span>}
+                  <FileLink file={r.meta?.file} />
                   <button onClick={() => { if (confirm('حذف شود؟')) post({ action: 'deleteRecord', id: r.id }) }} style={{ border: 'none', background: 'transparent', color: 'var(--faint)', cursor: 'pointer', fontSize: 15 }}>×</button>
                 </div>
                 {!closed && <button onClick={() => advance(r)} style={{ marginTop: 10, padding: '6px 13px', borderRadius: 8, border: '1px solid var(--gold)', background: 'transparent', color: 'var(--gold)', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>{st >= LEGAL_STAGES.length - 1 ? 'مختومه‌کردن ✓' : `ارجاع به ${LEGAL_STAGES[st + 1]} ›`}</button>}
@@ -70,7 +78,7 @@ function Cases({ records, post }: { records: ProRecord[]; post: (p: any) => Prom
           })}
         </div>
       )}
-      {open && <CaseForm onSave={save} onClose={() => setOpen(false)} />}
+      {open && <CaseForm onSave={save} onClose={() => setOpen(false)} today={today} />}
     </SectionCard>
   )
 }
@@ -140,6 +148,7 @@ export default function LawfirmPage() {
   const { data, authed, loading, post } = useProDesk(ROLE)
   const [view, setView] = useState('dashboard')
   const [caseFrom, setCaseFrom] = useState<ProRequest | null>(null)
+  const [today] = useState(() => jToday(new Date()))
   if (!loading && !authed) return <LoginGate />
 
   const openCases = data?.records.filter(r => r.status !== 'archived').length || 0
@@ -147,6 +156,7 @@ export default function LawfirmPage() {
   const nav = [
     { id: 'dashboard', label: 'داشبورد', icon: '▦', badge: data?.stats.open },
     { id: 'cases', label: 'پرونده‌ها', icon: '📁' },
+    { id: 'calendar', label: 'تقویمِ جلسات', icon: '📆' },
     { id: 'intake', label: 'موکلین', icon: '📥', badge: data?.stats.open },
     { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
     { id: 'profile', label: 'پروفایل', icon: '🪪' },
@@ -156,14 +166,14 @@ export default function LawfirmPage() {
   const shell: ShellCfg = { dash: ROLE, unit: 'دفترِ حقوقی', icon: '⚖', accent: '#c98fb0', nav }
 
   const makeCase = async (f: any) => {
-    const d = await post({ action: 'addRecord', title: f.title, kind: f.kind, subtitle: f.court, amount: Number(f.amount) || undefined, status: 'active', meta: { caseNo: f.caseNo, court: f.court, hearing: f.hearing, stage: 0 } })
+    const d = await post({ action: 'addRecord', title: f.title, kind: f.kind, subtitle: f.court, amount: Number(f.amount) || undefined, status: 'active', meta: { caseNo: f.caseNo, court: f.court, hearing: f.hearing, jhearing: f.jhearing, file: f.file, stage: 0 } })
     if (d && caseFrom) await post({ action: 'updateRequest', id: caseFrom.id, patch: { status: 'done' } })
     setCaseFrom(null)
   }
 
   return (
     <Shell cfg={shell} active={view} setActive={setView} title={nav.find(n => n.id === view)?.label || 'داشبورد'}>
-      {caseFrom && <CaseForm initial={{ title: caseFrom.clientName, kind: caseFrom.kind }} onSave={makeCase} onClose={() => setCaseFrom(null)} />}
+      {caseFrom && <CaseForm initial={{ title: caseFrom.clientName, kind: caseFrom.kind }} onSave={makeCase} onClose={() => setCaseFrom(null)} today={today} />}
       {!data ? <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--muted)' }}>در حال بارگذاری…</div> :
         view === 'dashboard' ? (
           <>
@@ -175,10 +185,11 @@ export default function LawfirmPage() {
             </div>
             <Hearings records={data.records} />
             <Intake requests={data.requests} post={post} onOpenCase={setCaseFrom} />
-            <Cases records={data.records} post={post} />
+            <Cases records={data.records} post={post} today={today} />
           </>
-        ) : view === 'cases' ? <Cases records={data.records} post={post} />
-          : view === 'intake' ? <Intake requests={data.requests} post={post} onOpenCase={setCaseFrom} />
+        ) : view === 'cases' ? <Cases records={data.records} post={post} today={today} />
+          : view === 'calendar' ? <ProCalendar items={hearingCalItems(data.records)} today={today} title="تقویمِ جلسات" />
+            : view === 'intake' ? <Intake requests={data.requests} post={post} onOpenCase={setCaseFrom} />
             : view === 'assistant' ? <div style={{ height: 'calc(100vh - 150px)' }}><AssistantPanel panel="lawfirm" title="دستیارِ حقوقیِ دفتر" subtitle="مشاورِ AI شخصیِ تو" suggestions={['نکاتِ حقوقیِ یک مبایعه‌نامهٔ استاندارد را بگو', 'متنِ یک اظهارنامهٔ مطالبهٔ وجه بنویس', 'مراحلِ دعوای خلعِ ید چیست؟', 'چک‌لیستِ بررسیِ سندِ ملک قبل از معامله']} /></div>
               : view === 'profile' ? (
                 <>

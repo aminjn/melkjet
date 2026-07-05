@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
+import { J_MONTHS, J_DOW, jMonthLength, jDow, jKey } from '@/app/lib/jalali'
 
 // ابزارکِ مشترکِ میزِ کارِ متخصص — چرومِ سایدبار/هدر + هوکِ داده + اجزای درخواست‌ها و رکوردها.
 // هر داشبوردِ شغلی (معمار/پیمانکار/…) این‌ها را با کانفیگِ اختصاصیِ خودش می‌چیند.
@@ -222,6 +223,100 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
   )
 }
 export const btnGold: React.CSSProperties = { padding: '8px 15px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }
+
+const faY = (n: number) => n.toLocaleString('fa-IR', { useGrouping: false })
+export type JDate = { jy: number; jm: number; jd: number }
+
+// انتخابگرِ تاریخِ جلالی (سه منوی روز/ماه/سال) — مشترکِ همهٔ پنل‌ها.
+export function JalaliPicker({ jy, jm, jd, onChange, baseYear }: { jy: number; jm: number; jd: number; onChange: (v: JDate) => void; baseYear: number }) {
+  const days = jMonthLength(jy, jm)
+  const set = (p: Partial<JDate>) => {
+    const nY = p.jy ?? jy, nM = p.jm ?? jm
+    onChange({ jy: nY, jm: nM, jd: Math.min(p.jd ?? jd, jMonthLength(nY, nM)) })
+  }
+  const sel: React.CSSProperties = { ...inputStyle, padding: '9px 8px' }
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr 1fr', gap: 8, gridColumn: '1 / -1' }}>
+      <select value={jd} onChange={e => set({ jd: Number(e.target.value) })} style={sel}>{Array.from({ length: days }, (_, i) => i + 1).map(d => <option key={d} value={d}>{fa(d)}</option>)}</select>
+      <select value={jm} onChange={e => set({ jm: Number(e.target.value) })} style={sel}>{J_MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</select>
+      <select value={jy} onChange={e => set({ jy: Number(e.target.value) })} style={sel}>{Array.from({ length: 3 }, (_, i) => baseYear - 1 + i).map(y => <option key={y} value={y}>{faY(y)}</option>)}</select>
+    </div>
+  )
+}
+
+// تقویمِ ماهانهٔ جلالیِ عمومی — آیتم‌ها با کلیدِ تاریخِ "YYYY/MM/DD".
+export interface CalItem { id: string; dateKey: string; time?: string; label: string; color?: string }
+export function ProCalendar({ items, today, title = 'تقویم' }: { items: CalItem[]; today: JDate; title?: string }) {
+  const [y, setY] = useState(today.jy)
+  const [m, setM] = useState(today.jm)
+  const byDay: Record<string, CalItem[]> = {}
+  for (const it of items) { if (it.dateKey) (byDay[it.dateKey] ||= []).push(it) }
+  const lead = jDow(y, m, 1), len = jMonthLength(y, m)
+  const cells: (number | null)[] = [...Array(lead).fill(null), ...Array.from({ length: len }, (_, i) => i + 1)]
+  const prev = () => { if (m === 1) { setY(y - 1); setM(12) } else setM(m - 1) }
+  const next = () => { if (m === 12) { setY(y + 1); setM(1) } else setM(m + 1) }
+  return (
+    <SectionCard title={`${title} — ${J_MONTHS[m - 1]} ${faY(y)}`} action={
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button onClick={prev} style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid var(--line)', background: 'var(--bg2)', color: 'var(--text)', cursor: 'pointer' }}>›</button>
+        <button onClick={() => { setY(today.jy); setM(today.jm) }} style={{ height: 30, padding: '0 12px', borderRadius: 8, border: '1px solid var(--line)', background: 'var(--bg2)', color: 'var(--muted)', cursor: 'pointer', fontFamily: FONT, fontSize: 12 }}>امروز</button>
+        <button onClick={next} style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid var(--line)', background: 'var(--bg2)', color: 'var(--text)', cursor: 'pointer' }}>‹</button>
+      </div>}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 6 }}>
+        {J_DOW.map(d => <div key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--muted)', padding: '4px 0' }}>{d}</div>)}
+        {cells.map((d, i) => {
+          if (d === null) return <div key={`b${i}`} />
+          const key = jKey(y, m, d), list = byDay[key] || []
+          const isToday = y === today.jy && m === today.jm && d === today.jd
+          return (
+            <div key={key} style={{ minHeight: 78, borderRadius: 10, border: `1px solid ${isToday ? 'var(--gold)' : 'var(--line)'}`, background: isToday ? 'var(--goldDim)' : 'var(--bg2)', padding: 6, display: 'flex', flexDirection: 'column', gap: 3, overflow: 'hidden' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: isToday ? 'var(--gold)' : 'var(--faint)', textAlign: 'left' }}>{fa(d)}</div>
+              {list.slice(0, 3).map(it => {
+                const c = it.color || 'var(--gold)'
+                return <div key={it.id} title={it.label} style={{ fontSize: 9.5, background: `color-mix(in srgb, ${c} 20%, transparent)`, color: c, borderRadius: 5, padding: '2px 5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.time ? `${it.time} ` : ''}{it.label}</div>
+              })}
+              {list.length > 3 && <div style={{ fontSize: 9, color: 'var(--muted)' }}>+{fa(list.length - 3)}</div>}
+            </div>
+          )
+        })}
+      </div>
+    </SectionCard>
+  )
+}
+
+// آپلودِ فایل (تصویر/PDF) → /api/media؛ خروجی {url,name}. مشترکِ همهٔ پنل‌ها.
+export function FileField({ value, onChange, label = '📎 پیوستِ فایل (تصویر یا PDF)' }: { value?: { url: string; name: string }; onChange: (v?: { url: string; name: string }) => void; label?: string }) {
+  const [busy, setBusy] = useState(false)
+  const up = async (file: File | null) => {
+    if (!file) return
+    setBusy(true)
+    try {
+      const fd = new FormData(); fd.append('file', file)
+      const r = await fetch('/api/media', { method: 'POST', body: fd })
+      const d = await r.json().catch(() => ({}))
+      if (d.ok && d.url) onChange({ url: d.url, name: file.name }); else alert(d.error || 'خطا در آپلود')
+    } catch { alert('خطا در آپلود') } finally { setBusy(false) }
+  }
+  if (value) return (
+    <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: 'var(--bg2)', borderRadius: 9, border: '1px solid var(--line)' }}>
+      <span style={{ fontSize: 14 }}>📎</span>
+      <a href={value.url} target="_blank" rel="noreferrer" style={{ flex: 1, fontSize: 12.5, color: 'var(--gold)', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value.name}</a>
+      <button onClick={() => onChange(undefined)} style={{ border: 'none', background: 'transparent', color: 'var(--faint)', cursor: 'pointer', fontSize: 15 }}>×</button>
+    </div>
+  )
+  return (
+    <label style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px', borderRadius: 9, border: '1px dashed var(--line2)', background: 'var(--bg2)', color: 'var(--muted)', fontSize: 12.5, cursor: 'pointer' }}>
+      <input type="file" accept="image/*,application/pdf" onChange={e => up(e.target.files?.[0] || null)} style={{ display: 'none' }} />
+      {busy ? 'در حالِ آپلود…' : label}
+    </label>
+  )
+}
+
+// لینکِ «مشاهدهٔ فایل» برای کارت‌ها.
+export function FileLink({ file }: { file?: { url: string; name: string } }) {
+  if (!file?.url) return null
+  return <a href={file.url} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 8, fontSize: 11.5, color: 'var(--gold)', textDecoration: 'none', fontWeight: 700 }}>📎 مشاهدهٔ فایل</a>
+}
 
 // حالتِ «وارد شوید» برای کاربرِ بدونِ نشست.
 export function LoginGate() {

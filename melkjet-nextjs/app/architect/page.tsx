@@ -6,7 +6,7 @@ import SupportPanel from '@/app/components/SupportPanel'
 import BusinessProfileForm from '@/app/components/BusinessProfileForm'
 import ImageUpload from '@/app/components/ImageUpload'
 import {
-  Shell, useProDesk, Kpi, StatusPill, LoginGate, SectionCard,
+  Shell, useProDesk, Kpi, StatusPill, LoginGate, SectionCard, FileField, FileLink,
   money, fa, card, inputStyle, FONT, type ProRecord, type ProRequest, type ReqStatus, type ShellCfg,
 } from '@/app/components/prodesk/ProDeskKit'
 
@@ -37,11 +37,11 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 // ── گالریِ نمونه‌کار ──────────────────────────────────────────────────────────
 function Portfolio({ records, post }: { records: ProRecord[]; post: (p: any) => Promise<any> }) {
   const [open, setOpen] = useState(false)
-  const [f, setF] = useState({ title: '', kind: PROJECT_TYPES[0], style: STYLES[0], area: '', amount: '', cover: '' })
+  const [f, setF] = useState<{ title: string; kind: string; style: string; area: string; amount: string; cover: string; file?: { url: string; name: string } }>({ title: '', kind: PROJECT_TYPES[0], style: STYLES[0], area: '', amount: '', cover: '', file: undefined })
   const save = async () => {
     if (!f.title.trim()) { alert('نامِ پروژه الزامی است'); return }
-    const d = await post({ action: 'addRecord', title: f.title, kind: f.kind, cover: f.cover, amount: Number(f.amount) || undefined, meta: { style: f.style, area: f.area }, subtitle: [f.style, f.area && `${f.area} متر`].filter(Boolean).join(' · ') })
-    if (d) { setF({ title: '', kind: PROJECT_TYPES[0], style: STYLES[0], area: '', amount: '', cover: '' }); setOpen(false) }
+    const d = await post({ action: 'addRecord', title: f.title, kind: f.kind, cover: f.cover, amount: Number(f.amount) || undefined, meta: { style: f.style, area: f.area, file: f.file }, subtitle: [f.style, f.area && `${f.area} متر`].filter(Boolean).join(' · ') })
+    if (d) { setF({ title: '', kind: PROJECT_TYPES[0], style: STYLES[0], area: '', amount: '', cover: '', file: undefined }); setOpen(false) }
   }
   return (
     <SectionCard title="نمونه‌کارها و پروژه‌ها" action={<button onClick={() => setOpen(true)} style={btnGold}>＋ نمونه‌کار جدید</button>}>
@@ -55,6 +55,7 @@ function Portfolio({ records, post }: { records: ProRecord[]; post: (p: any) => 
                 {r.kind && <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--gold)', marginBottom: 4 }}>{r.kind}</div>}
                 <div style={{ fontWeight: 800, fontSize: 14 }}>{r.title}</div>
                 {r.subtitle && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 3 }}>{r.subtitle}</div>}
+                <FileLink file={r.meta?.file} />
                 {!!r.amount && <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--gold)', marginTop: 7 }}>{money(r.amount)}</div>}
               </div>
             </div>
@@ -70,6 +71,7 @@ function Portfolio({ records, post }: { records: ProRecord[]; post: (p: any) => 
             <select value={f.style} onChange={e => setF({ ...f, style: e.target.value })} style={inputStyle}>{STYLES.map(t => <option key={t}>{t}</option>)}</select>
             <input placeholder="متراژ (متر)" value={f.area} onChange={e => setF({ ...f, area: e.target.value.replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
             <input placeholder="مبلغِ قرارداد (تومان)" value={f.amount} onChange={e => setF({ ...f, amount: e.target.value.replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
+            <FileField value={f.file} onChange={v => setF({ ...f, file: v })} label="📎 نقشه / فایلِ پروژه (تصویر یا PDF)" />
           </div>
           <button onClick={save} style={{ ...btnGold, width: '100%', marginTop: 14, padding: 11 }}>افزودن به نمونه‌کارها</button>
         </Modal>

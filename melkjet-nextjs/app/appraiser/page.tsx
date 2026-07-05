@@ -6,8 +6,10 @@ import SupportPanel from '@/app/components/SupportPanel'
 import BusinessProfileForm from '@/app/components/BusinessProfileForm'
 import {
   Shell, useProDesk, Kpi, StatusPill, LoginGate, SectionCard, Modal, btnGold,
-  money, fa, card, inputStyle, type ProRecord, type ProRequest, type ReqStatus, type ShellCfg,
+  JalaliPicker, ProCalendar, FileField, FileLink,
+  money, fa, card, inputStyle, type ProRecord, type ProRequest, type ReqStatus, type ShellCfg, type JDate,
 } from '@/app/components/prodesk/ProDeskKit'
+import { jToday, jKey, jLabel } from '@/app/lib/jalali'
 
 // میزِ کارِ «کارشناسِ رسمی» — نسخهٔ تخصصی: پرونده‌های ارزیابی با محاسبهٔ ارزش + صدورِ گزارش.
 const ROLE = '/appraiser'
@@ -18,15 +20,18 @@ const NEXT: Record<ReqStatus, ReqStatus> = { new: 'in_progress', in_progress: 'd
 const today = () => { try { return new Date().toLocaleDateString('fa-IR') } catch { return '' } }
 const caseNo = () => 'MJ-' + String(Date.now()).slice(-6)
 
+// آیتم‌های تقویم از بازدیدها.
+const visitCalItems = (requests: ProRequest[]) => requests.filter(r => r.meta?.jvisit).map(r => ({ id: r.id, dateKey: r.meta!.jvisit as string, label: r.clientName, color: r.status === 'done' ? '#34d399' : '#8fbf7f' }))
+
 // ── درخواست‌های ارزیابی ───────────────────────────────────────────────────────
-function Requests({ requests, post, onReport }: { requests: ProRequest[]; post: (p: any) => Promise<any>; onReport: (r: ProRequest) => void }) {
+function Requests({ requests, post, onReport, today }: { requests: ProRequest[]; post: (p: any) => Promise<any>; onReport: (r: ProRequest) => void; today: JDate }) {
   const [open, setOpen] = useState(false)
-  const [f, setF] = useState({ clientName: '', clientPhone: '', kind: APPRAISAL_TYPES[0], ptype: PROPERTY_TYPES[0], area: '', vpm: '', visit: '', detail: '' })
+  const [f, setF] = useState({ clientName: '', clientPhone: '', kind: APPRAISAL_TYPES[0], ptype: PROPERTY_TYPES[0], area: '', vpm: '', detail: '', ...today })
   const value = (Number(f.area) || 0) * (Number(f.vpm) || 0)
   const save = async () => {
     if (!f.clientName.trim()) { alert('نامِ متقاضی الزامی است'); return }
-    const d = await post({ action: 'addRequest', clientName: f.clientName, clientPhone: f.clientPhone, kind: f.kind, amount: value || undefined, detail: f.detail, meta: { ptype: f.ptype, area: f.area, vpm: f.vpm, visit: f.visit } })
-    if (d) { setF({ clientName: '', clientPhone: '', kind: APPRAISAL_TYPES[0], ptype: PROPERTY_TYPES[0], area: '', vpm: '', visit: '', detail: '' }); setOpen(false) }
+    const d = await post({ action: 'addRequest', clientName: f.clientName, clientPhone: f.clientPhone, kind: f.kind, amount: value || undefined, detail: f.detail, meta: { ptype: f.ptype, area: f.area, vpm: f.vpm, jvisit: jKey(f.jy, f.jm, f.jd), visit: jLabel(f.jy, f.jm, f.jd) } })
+    if (d) { setF({ clientName: '', clientPhone: '', kind: APPRAISAL_TYPES[0], ptype: PROPERTY_TYPES[0], area: '', vpm: '', detail: '', ...today }); setOpen(false) }
   }
   return (
     <SectionCard title="درخواست‌های ارزیابی" action={<button onClick={() => setOpen(true)} style={btnGold}>＋ درخواستِ ارزیابی</button>}>
@@ -60,7 +65,8 @@ function Requests({ requests, post, onReport }: { requests: ProRequest[]; post: 
             <select value={f.ptype} onChange={e => setF({ ...f, ptype: e.target.value })} style={inputStyle}>{PROPERTY_TYPES.map(t => <option key={t}>{t}</option>)}</select>
             <input placeholder="متراژ (متر)" value={f.area} onChange={e => setF({ ...f, area: e.target.value.replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
             <input placeholder="ارزشِ هر متر (تومان)" value={f.vpm} onChange={e => setF({ ...f, vpm: e.target.value.replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
-            <input placeholder="تاریخِ بازدید (مثلاً ۱۴۰۳/۰۵/۱۲)" value={f.visit} onChange={e => setF({ ...f, visit: e.target.value })} style={{ ...inputStyle, gridColumn: '1 / -1' }} />
+            <div style={{ gridColumn: '1 / -1', fontSize: 11.5, color: 'var(--muted)', marginBottom: -4 }}>تاریخِ بازدید</div>
+            <JalaliPicker jy={f.jy} jm={f.jm} jd={f.jd} baseYear={today.jy} onChange={v => setF({ ...f, ...v })} />
             <input placeholder="توضیح" value={f.detail} onChange={e => setF({ ...f, detail: e.target.value })} style={{ ...inputStyle, gridColumn: '1 / -1' }} />
           </div>
           <div style={{ marginTop: 12, padding: '11px 14px', background: 'var(--goldDim)', border: '1px solid var(--gold)', borderRadius: 10, fontSize: 13, fontWeight: 700, display: 'flex', justifyContent: 'space-between' }}>
@@ -75,9 +81,9 @@ function Requests({ requests, post, onReport }: { requests: ProRequest[]; post: 
 
 // ── مودالِ صدورِ گزارش (از یک درخواست) ────────────────────────────────────────
 function ReportModal({ req, post, onClose }: { req: ProRequest; post: (p: any) => Promise<any>; onClose: () => void }) {
-  const [f, setF] = useState({ caseNo: caseNo(), date: today(), kind: REPORT_TYPES[0], amount: String(req.amount || ''), note: '' })
+  const [f, setF] = useState<{ caseNo: string; date: string; kind: string; amount: string; note: string; file?: { url: string; name: string } }>({ caseNo: caseNo(), date: today(), kind: REPORT_TYPES[0], amount: String(req.amount || ''), note: '', file: undefined })
   const issue = async () => {
-    await post({ action: 'addRecord', title: req.clientName, subtitle: f.note, kind: f.kind, amount: Number(f.amount) || undefined, status: 'archived', meta: { caseNo: f.caseNo, date: f.date, ptype: req.meta?.ptype, area: req.meta?.area } })
+    await post({ action: 'addRecord', title: req.clientName, subtitle: f.note, kind: f.kind, amount: Number(f.amount) || undefined, status: 'archived', meta: { caseNo: f.caseNo, date: f.date, ptype: req.meta?.ptype, area: req.meta?.area, file: f.file } })
     await post({ action: 'updateRequest', id: req.id, patch: { status: 'done' } })
     onClose()
   }
@@ -89,6 +95,7 @@ function ReportModal({ req, post, onClose }: { req: ProRequest; post: (p: any) =
         <select value={f.kind} onChange={e => setF({ ...f, kind: e.target.value })} style={inputStyle}>{REPORT_TYPES.map(t => <option key={t}>{t}</option>)}</select>
         <input placeholder="ارزشِ نهایی (تومان)" value={f.amount} onChange={e => setF({ ...f, amount: e.target.value.replace(/\D/g, '') })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} />
         <textarea placeholder="خلاصهٔ نظرِ کارشناسی" value={f.note} onChange={e => setF({ ...f, note: e.target.value })} style={{ ...inputStyle, gridColumn: '1 / -1', minHeight: 70, resize: 'vertical' }} />
+        <FileField value={f.file} onChange={v => setF({ ...f, file: v })} label="📎 پیوستِ فایلِ گزارش (تصویر یا PDF)" />
       </div>
       <button onClick={issue} style={{ ...btnGold, width: '100%', marginTop: 14, padding: 11 }}>صدور و بایگانی</button>
     </Modal>
@@ -110,6 +117,7 @@ function Reports({ records, post }: { records: ProRecord[]; post: (p: any) => Pr
               </div>
               <div style={{ fontWeight: 800, fontSize: 14 }}>{r.title}</div>
               {r.subtitle && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4, lineHeight: 1.7 }}>{r.subtitle}</div>}
+              <FileLink file={r.meta?.file} />
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
                 {r.meta?.date && <span style={{ fontSize: 11, color: 'var(--faint)' }}>{r.meta.date}</span>}
                 {!!r.amount && <span style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--gold)' }}>{money(r.amount)}</span>}
@@ -126,11 +134,13 @@ export default function AppraiserPage() {
   const { data, authed, loading, post } = useProDesk(ROLE)
   const [view, setView] = useState('dashboard')
   const [reportReq, setReportReq] = useState<ProRequest | null>(null)
+  const [today] = useState(() => jToday(new Date()))
   if (!loading && !authed) return <LoginGate />
 
   const nav = [
     { id: 'dashboard', label: 'داشبورد', icon: '▦', badge: data?.stats.open },
     { id: 'requests', label: 'درخواست‌ها', icon: '📥', badge: data?.stats.open },
+    { id: 'calendar', label: 'تقویمِ بازدید', icon: '📆' },
     { id: 'reports', label: 'گزارش‌ها', icon: '📄' },
     { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
     { id: 'profile', label: 'پروفایل', icon: '🪪' },
@@ -153,11 +163,12 @@ export default function AppraiserPage() {
               <Kpi label="ارزشِ ارزیابی‌شده" value={money(totalValue)} accent="var(--gold)" />
               <Kpi label="درآمدِ کارشناسی" value={money(s!.revenue)} accent="#34d399" />
             </div>
-            <Requests requests={data.requests} post={post} onReport={setReportReq} />
+            <Requests requests={data.requests} post={post} onReport={setReportReq} today={today} />
             <Reports records={data.records} post={post} />
           </>
-        ) : view === 'requests' ? <Requests requests={data.requests} post={post} onReport={setReportReq} />
-          : view === 'reports' ? <Reports records={data.records} post={post} />
+        ) : view === 'requests' ? <Requests requests={data.requests} post={post} onReport={setReportReq} today={today} />
+          : view === 'calendar' ? <ProCalendar items={visitCalItems(data.requests)} today={today} title="تقویمِ بازدیدها" />
+            : view === 'reports' ? <Reports records={data.records} post={post} />
             : view === 'assistant' ? <div style={{ height: 'calc(100vh - 150px)' }}><AssistantPanel panel="appraiser" title="دستیارِ هوشمندِ کارشناس" subtitle="مشاورِ AI شخصیِ تو" suggestions={['روشِ ارزیابیِ یک آپارتمانِ ۱۰ ساله را توضیح بده', 'ساختارِ یک گزارشِ کارشناسیِ رسمی را بنویس', 'فاکتورهای مؤثر بر ارزشِ ملک را فهرست کن', 'نحوهٔ محاسبهٔ افتِ قیمت به‌خاطرِ خسارت؟']} /></div>
               : view === 'profile' ? (
                 <>
