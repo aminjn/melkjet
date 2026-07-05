@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import AreaPicker from '@/app/components/AreaPicker'
 
 // مودالِ خودسرویسِ «پروموتِ آگهی» — دو نقطهٔ ورود، یک مودال:
 //  • از رویِ خودِ آگهی (CrmTool «فایل‌ها»): آگهی از پیش انتخاب‌شده، کاربر بستهٔ پروموت را برمی‌گزیند.
@@ -21,17 +22,20 @@ export default function ListingPromoteModal({ preListing, preTierId, onClose, on
   const [tiers, setTiers] = useState<Tier[]>([])
   const [discount, setDiscount] = useState(0)
   const [wallet, setWallet] = useState(0)
+  const [areasIncluded, setAreasIncluded] = useState(2)
+  const [extraAreaPrice, setExtraAreaPrice] = useState(0)
   const [listings, setListings] = useState<OwnListing[]>([])
   const [loadedListings, setLoadedListings] = useState(false)
   const [tierId, setTierId] = useState(preTierId || '')
   const [listingId, setListingId] = useState(preListing?.id || '')
+  const [areas, setAreas] = useState<string[]>([])
   const [step, setStep] = useState<'select' | 'pay'>('select')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
 
   useEffect(() => {
     fetch('/api/comm').then(r => r.ok ? r.json() : null).then(d => {
-      if (d) { setTiers((d.promoTiers || []).filter((t: Tier) => t.target === 'listing')); setDiscount(Number(d.promoDiscount) || 0); setWallet(Number(d.promoWallet) || 0) }
+      if (d) { setTiers(d.promoTiers || []); setDiscount(Number(d.promoDiscount) || 0); setWallet(Number(d.promoWallet) || 0); setAreasIncluded(Number(d.areasIncluded) || 2); setExtraAreaPrice(Number(d.extraAreaPrice) || 0) }
     }).catch(() => {})
     // آگهی‌های منتشرشدهٔ خودِ کاربر (شناسه = آیتمِ اسکرپر، قابلِ استفاده به‌عنوان targetId).
     if (!preListing) {
@@ -44,16 +48,19 @@ export default function ListingPromoteModal({ preListing, preTierId, onClose, on
 
   const discPrice = (p: number) => Math.round(p * (1 - discount / 100))
   const tier = tiers.find(t => t.id === tierId)
+  const needsListing = tier?.target === 'listing'
   const listing = preListing || listings.find(l => l.id === listingId)
-  const canProceed = !!tier && !!listing
+  const extraAreas = Math.max(0, areas.length - areasIncluded)
+  const effectiveTotal = (tier ? discPrice(tier.price) : 0) + extraAreas * extraAreaPrice
+  const canProceed = !!tier && (!needsListing || !!listing)
 
   const submit = async (gateway: string, receipt: string, payFromWallet = false) => {
-    if (!tier || !listing) return
+    if (!tier || (needsListing && !listing)) return
     setBusy(true); setMsg('')
     try {
       const r = await fetch('/api/comm', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'orderPromo', tierId: tier.id, targetId: listing.id, targetName: listing.title, gateway, receipt, payFromWallet }),
+        body: JSON.stringify({ action: 'orderPromo', tierId: tier.id, targetId: needsListing ? listing?.id : undefined, targetName: needsListing ? listing?.title : undefined, areas, gateway, receipt, payFromWallet }),
       })
       const d = await r.json()
       if (d.ok) { setMsg(d.walletPaid ? '✓ از کیفِ پول پرداخت و بلافاصله فعال شد. آگهیِ شما اکنون ویژه است.' : '✓ سفارشِ پروموت ثبت شد. پس از تأییدِ پرداخت، آگهیِ شما ویژه می‌شود.'); setTimeout(() => { onDone?.(); onClose() }, 1500) }
@@ -72,7 +79,8 @@ export default function ListingPromoteModal({ preListing, preTierId, onClose, on
 
         {step === 'select' ? (
           <>
-            {/* آگهیِ هدف */}
+            {/* آگهیِ هدف — فقط برای بسته‌های آگهی؛ بسته‌های پروفایل روی خودِ کسب‌وکار اعمال می‌شوند */}
+            {(preListing || needsListing) && (<>
             <div style={{ fontSize: 13, fontWeight: 800, margin: '10px 0 8px' }}>۱. آگهیِ موردِ نظر</div>
             {preListing ? (
               <div style={{ padding: '11px 14px', background: 'var(--goldDim)', border: '1px solid var(--gold)', borderRadius: 12, fontSize: 13, fontWeight: 700 }}>{preListing.title}</div>
@@ -99,6 +107,7 @@ export default function ListingPromoteModal({ preListing, preTierId, onClose, on
                 })}
               </div>
             )}
+            </>)}
 
             {/* بستهٔ پروموت */}
             <div style={{ fontSize: 13, fontWeight: 800, margin: '18px 0 8px' }}>۲. بستهٔ پروموت</div>
@@ -107,11 +116,11 @@ export default function ListingPromoteModal({ preListing, preTierId, onClose, on
                 <span style={{ fontSize: 13, fontWeight: 700 }}>{tier.name}{tier.kind ? ` · ${tier.kind}` : ''}</span>
                 <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--gold)' }}>{fa(discPrice(tier.price))} تومان · {fa(tier.days)} روز</span>
               </div>
-            ) : tiers.length === 0 ? (
+            ) : tiers.filter(t => t.target === 'listing').length === 0 ? (
               <div style={{ fontSize: 12.5, color: 'var(--muted)', padding: 12 }}>بستهٔ پروموتی برای نقشِ شما تعریف نشده است.</div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 10 }}>
-                {tiers.map(t => {
+                {tiers.filter(t => t.target === 'listing').map(t => {
                   const on = tierId === t.id
                   return (
                     <button key={t.id} onClick={() => setTierId(t.id)} style={{ textAlign: 'right', padding: '12px 14px', borderRadius: 13, cursor: 'pointer', fontFamily: FONT, background: on ? 'var(--goldDim)' : 'var(--surface)', border: `1px solid ${on ? 'var(--gold)' : 'var(--line)'}`, display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -132,15 +141,23 @@ export default function ListingPromoteModal({ preListing, preTierId, onClose, on
               </div>
             )}
 
+            {/* محله‌های هدف — اختیاری */}
+            <div style={{ fontSize: 13, fontWeight: 800, margin: '18px 0 6px' }}>۳. محله‌های هدف <span style={{ fontWeight: 500, color: 'var(--muted)' }}>(اختیاری)</span></div>
+            <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.8 }}>
+              {fa(areasIncluded)} محلهٔ اول رایگان است؛ هر محلهٔ بیشتر {fa(extraAreaPrice)} تومان.
+              {extraAreas > 0 && <span style={{ color: 'var(--gold)', fontWeight: 700 }}> — {fa(extraAreas)} محلهٔ اضافه: {fa(extraAreas * extraAreaPrice)} تومان</span>}
+            </div>
+            <AreaPicker value={areas} onChange={setAreas} />
+
             {msg && <div style={{ fontSize: 12.5, fontWeight: 600, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a', marginTop: 14, textAlign: 'center' }}>{msg}</div>}
             <button onClick={() => setStep('pay')} disabled={!canProceed} style={{ width: '100%', marginTop: 16, padding: '12px', borderRadius: 12, border: 'none', background: canProceed ? 'linear-gradient(135deg,var(--gold2),var(--gold))' : 'var(--bg2)', color: canProceed ? '#16140f' : 'var(--muted)', fontWeight: 800, fontSize: 14, cursor: canProceed ? 'pointer' : 'not-allowed', fontFamily: FONT }}>
-              ادامه به پرداخت{tier ? ` — ${fa(discPrice(tier.price))} تومان` : ''}
+              ادامه به پرداخت{tier ? ` — ${fa(effectiveTotal)} تومان` : ''}
             </button>
           </>
         ) : (
           <PayStep
-            title={`${tier?.name || ''} — ${listing?.title || ''}`}
-            price={tier ? discPrice(tier.price) : 0}
+            title={`${tier?.name || ''}${needsListing && listing?.title ? ` — ${listing.title}` : ''}${areas.length ? ` · ${fa(areas.length)} محله` : ''}`}
+            price={effectiveTotal}
             wallet={wallet}
             busy={busy}
             msg={msg}

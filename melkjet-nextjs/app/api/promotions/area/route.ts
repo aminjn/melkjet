@@ -14,8 +14,7 @@ export async function GET(req: NextRequest) {
   for (const phone of profilePhones) {
     try {
       const p = getProfile(phone); const acc = getAccount(phone)
-      const nm = (p.businessName || p.displayName || acc?.name || '').trim()
-      if (!nm) continue
+      const nm = (p.businessName || p.displayName || acc?.name || profileKinds.get(phone)?.title || '').trim() || 'متخصصِ ملک‌جت'
       profiles.push({
         id: phone, title: nm, category: (p.businessType || 'متخصص'), location: p.city || '', image: p.logo || '',
         excerpt: p.tagline || '', hasPhone: !!(p.contactPhone || p.landline), url: `/profile/${encodeURIComponent(phone)}`,

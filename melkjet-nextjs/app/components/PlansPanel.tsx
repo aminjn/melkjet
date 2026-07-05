@@ -293,9 +293,7 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
                     <span>{fa(dp)}</span>
                     <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--muted)' }}>تومان · {fa(t.days)} روز</span>
                   </div>
-                  {isProfile
-                    ? <button onClick={() => buyPromo(t)} disabled={!!busy} style={{ marginTop: 4, padding: '9px', borderRadius: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 12.5, border: 'none', cursor: 'pointer', fontFamily: FONT }}>پروموتِ کسب‌وکارِ من</button>
-                    : <button onClick={() => setPromoteTierId(t.id)} disabled={!!busy} style={{ marginTop: 4, padding: '9px', borderRadius: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 12.5, border: 'none', cursor: 'pointer', fontFamily: FONT }}>انتخابِ آگهی و پروموت</button>}
+                  <button onClick={() => setPromoteTierId(t.id)} disabled={!!busy} style={{ marginTop: 4, padding: '9px', borderRadius: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 12.5, border: 'none', cursor: 'pointer', fontFamily: FONT }}>{isProfile ? 'پروموتِ کسب‌وکارِ من' : 'انتخابِ آگهی و پروموت'}</button>
                 </div>
               )
             })}

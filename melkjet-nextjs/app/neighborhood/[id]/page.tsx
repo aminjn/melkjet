@@ -43,6 +43,8 @@ export default function NeighborhoodPage() {
   const [promotedListings, setPromotedListings] = useState<ContentItem[]>([]);
   const [advisorItems, setAdvisorItems] = useState<ContentItem[]>([]);
   const [areaAdvisors, setAreaAdvisors] = useState<{ phone: string; name: string; title: string; photo: string; agency: string }[]>([]);
+  const [areaProfiles, setAreaProfiles] = useState<{ id: string; title: string; category?: string; location?: string; image?: string; excerpt?: string; url: string; promoKind?: string }[]>([]);
+  const [areaListings, setAreaListings] = useState<{ id: string; title: string; price?: string; location?: string; image?: string; url?: string; category?: string; type?: string; promoKind?: string }[]>([]);
 
   useEffect(() => {
     let alive = true;
@@ -76,6 +78,12 @@ export default function NeighborhoodPage() {
     fetch('/api/promotions?slot=neighborhood_featured', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : { items: [] }))
       .then((d) => { if (alive) setPromotedListings((d.items || []) as ContentItem[]); })
+      .catch(() => {});
+
+    // پروموت‌های محله‌محور — متخصصان و آگهی‌های ویژهٔ این محله
+    fetch(`/api/promotions/area?name=${encodeURIComponent(neighborhoodName)}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : { profiles: [], listings: [] }))
+      .then((d) => { if (alive) { setAreaProfiles(d.profiles || []); setAreaListings(d.listings || []); } })
       .catch(() => {});
 
     return () => { alive = false; };
@@ -200,6 +208,65 @@ export default function NeighborhoodPage() {
             <div style={{ fontSize: '0.7rem', color: 'var(--faint)', marginTop: '0.3rem' }}>بر اساس نظرات ساکنین</div>
           </div>
         </div>
+
+        {/* ⭐ متخصصانِ ویژهٔ این محله (پروموتِ محله‌محور) */}
+        {areaProfiles.length > 0 && (
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--gold)', borderRadius: '12px', padding: '1.5rem', marginBottom: '1.5rem', boxShadow: 'var(--shadow)' }}>
+            <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text)', margin: '0 0 1.1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span>⭐</span> متخصصانِ ویژهٔ این محله
+            </h2>
+            <div className="mjn-listings" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: '1rem' }}>
+              {areaProfiles.map((p) => (
+                <Link key={p.id} href={p.url} style={{ textDecoration: 'none', display: 'block' }}>
+                  <div
+                    style={{ border: '1px solid var(--line)', borderRadius: '10px', overflow: 'hidden', cursor: 'pointer', transition: 'border-color 0.2s, box-shadow 0.2s', height: '100%' }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--gold)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 16px rgba(212,175,55,0.15)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--line)'; (e.currentTarget as HTMLDivElement).style.boxShadow = 'none'; }}
+                  >
+                    <div style={{ height: '96px', background: p.image ? `url(${p.image}) center/cover` : gradientFor(p.id), display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                      <span style={{ position: 'absolute', top: '6px', left: '6px' }}><PromoBadge kind={p.promoKind || 'ویژه'} size="sm" /></span>
+                      {!p.image && <span style={{ fontSize: '1.6rem', opacity: 0.35 }}>👤</span>}
+                    </div>
+                    <div style={{ padding: '0.75rem' }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text)', marginBottom: '0.25rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.title}</div>
+                      {(p.category || p.location) && <div style={{ fontSize: '0.72rem', color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{[p.category, p.location].filter(Boolean).join(' · ')}</div>}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 🚀 آگهی‌های ویژهٔ این محله (پروموتِ محله‌محور) */}
+        {areaListings.length > 0 && (
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--gold)', borderRadius: '12px', padding: '1.5rem', marginBottom: '1.5rem', boxShadow: 'var(--shadow)' }}>
+            <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text)', margin: '0 0 1.1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span>🚀</span> آگهی‌های ویژهٔ این محله
+            </h2>
+            <div className="mjn-listings" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: '1rem' }}>
+              {areaListings.map((l) => (
+                <Link key={l.id} href={l.url || `/property/${l.id}`} style={{ textDecoration: 'none', display: 'block' }}>
+                  <div
+                    style={{ border: '1px solid var(--line)', borderRadius: '10px', overflow: 'hidden', cursor: 'pointer', transition: 'border-color 0.2s, box-shadow 0.2s', height: '100%' }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--gold)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 16px rgba(212,175,55,0.15)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--line)'; (e.currentTarget as HTMLDivElement).style.boxShadow = 'none'; }}
+                  >
+                    <div style={{ height: '96px', background: l.image ? `url(${l.image}) center/cover` : gradientFor(l.id), display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                      <span style={{ position: 'absolute', top: '6px', left: '6px' }}><PromoBadge kind={l.promoKind || 'ویژه'} size="sm" /></span>
+                      {!l.image && <span style={{ fontSize: '1.6rem', opacity: 0.35 }}>🏢</span>}
+                    </div>
+                    <div style={{ padding: '0.75rem' }}>
+                      {l.price && <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--gold)', marginBottom: '0.25rem' }}>{l.price}</div>}
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text)', marginBottom: '0.25rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.title}</div>
+                      {l.location && <div style={{ fontSize: '0.72rem', color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📍 {l.location}</div>}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Main 2-column layout */}
         <div className="mjn-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '1.5rem', alignItems: 'start', paddingBottom: '3.5rem' }}>

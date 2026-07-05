@@ -248,10 +248,10 @@ export async function addProfilePromotion(slot: string, phone: string, name: str
   })
 }
 // پروموت‌های فعالِ محله‌محور برای یک محله — پروفایل‌ها و آگهی‌ها که این محله در areasشان است.
-export async function promotedInArea(areaName: string): Promise<{ profilePhones: Set<string>; listingIds: Map<string, { kind?: string }>; profileKinds: Map<string, { kind?: string }> }> {
+export async function promotedInArea(areaName: string): Promise<{ profilePhones: Set<string>; listingIds: Map<string, { kind?: string }>; profileKinds: Map<string, { kind?: string; title?: string }> }> {
   const now = Date.now()
   const want = normArea(areaName)
-  const profilePhones = new Set<string>(); const listingIds = new Map<string, { kind?: string }>(); const profileKinds = new Map<string, { kind?: string }>()
+  const profilePhones = new Set<string>(); const listingIds = new Map<string, { kind?: string }>(); const profileKinds = new Map<string, { kind?: string; title?: string }>()
   if (!want) return { profilePhones, listingIds, profileKinds }
   for (const p of await load()) {
     if (!p.active || (p.expiresAt && p.expiresAt <= now)) continue
@@ -259,7 +259,7 @@ export async function promotedInArea(areaName: string): Promise<{ profilePhones:
     const hit = p.areas.some(a => normArea(a) === want || normArea(a).includes(want) || want.includes(normArea(a)))
     if (!hit) continue
     const s = slotOf(p.slot); if (!s) continue
-    if (s.target === 'directory') { profilePhones.add(normPhone(p.targetId)); if (!profileKinds.has(normPhone(p.targetId))) profileKinds.set(normPhone(p.targetId), { kind: p.kind }) }
+    if (s.target === 'directory') { const k = normPhone(p.targetId); profilePhones.add(k); if (!profileKinds.has(k)) profileKinds.set(k, { kind: p.kind, title: p.title }) }
     else if (!listingIds.has(String(p.targetId))) listingIds.set(String(p.targetId), { kind: p.kind })
   }
   return { profilePhones, listingIds, profileKinds }
