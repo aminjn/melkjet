@@ -89,6 +89,7 @@ const LIST_BTN: CSSProperties = { width: 22, height: 22, borderRadius: 5, border
 // ── Per-type defaults: a fresh block looks real out of the box ──────────────
 const BLOCK_DEFAULTS: Record<string, Record<string, any>> = {
   hero: {
+    eyebrow: 'املاک و مستغلات',
     heading: 'بهترین ملک را با ما بیابید',
     subheading: 'مشاور املاک حرفه‌ای با بیش از ۱۰ سال تجربه',
     buttonText: 'مشاهده ملک‌ها',
@@ -225,6 +226,7 @@ interface FieldSpec {
 
 const BLOCK_SCHEMA: Record<string, FieldSpec[]> = {
   hero: [
+    { key: 'eyebrow', label: 'برچسبِ بالای عنوان', kind: 'text' },
     { key: 'heading', label: 'عنوان', kind: 'text' },
     { key: 'subheading', label: 'زیرعنوان', kind: 'textarea' },
     { key: 'buttonText', label: 'متن دکمه', kind: 'text' },
@@ -345,7 +347,7 @@ const BLOCK_LIBRARY = [
   { type: 'footer', label: 'فوتر', icon: '▬' },
 ]
 
-const PROFILE_GROUPS = ['مشاور', 'آژانس', 'سازنده', 'فروشگاه', 'سرمایه‌گذار', 'حقوقی', 'عمومی'] as const
+const PROFILE_GROUPS = ['مشاور', 'آژانس', 'سازنده', 'فروشگاه', 'سرمایه‌گذار', 'حقوقی', 'معمار', 'پیمانکار', 'کارشناس', 'دفتر حقوقی', 'بانک و بیمه', 'دفترخانه', 'عمومی'] as const
 
 // رنگ تم (primary) و گرادیان هیرو هر پروفایل — قالب‌ها را واقعاً متمایز می‌کند
 const PROFILE_THEME: Record<string, { primary: string; heroBg: string }> = {
@@ -355,6 +357,12 @@ const PROFILE_THEME: Record<string, { primary: string; heroBg: string }> = {
   'فروشگاه': { primary: '#ec4899', heroBg: 'linear-gradient(140deg,#2a0d2a,#7c3aed,#2a0d2a)' },
   'سرمایه‌گذار': { primary: '#10b981', heroBg: 'linear-gradient(140deg,#052b1e,#065f46,#052b1e)' },
   'حقوقی': { primary: '#64748b', heroBg: 'linear-gradient(140deg,#15202b,#334155,#15202b)' },
+  'معمار': { primary: '#3b82f6', heroBg: 'linear-gradient(140deg,#0d1b2e,#2b5f8a,#0d1b2e)' },
+  'پیمانکار': { primary: '#ea580c', heroBg: 'linear-gradient(140deg,#2a1505,#9a3412,#2a1505)' },
+  'کارشناس': { primary: '#0f9d76', heroBg: 'linear-gradient(140deg,#06302c,#0f766e,#06302c)' },
+  'دفتر حقوقی': { primary: '#9333ea', heroBg: 'linear-gradient(140deg,#1e1033,#6b21a8,#1e1033)' },
+  'بانک و بیمه': { primary: '#0891b2', heroBg: 'linear-gradient(140deg,#0a2a33,#0e7490,#0a2a33)' },
+  'دفترخانه': { primary: '#b08d2f', heroBg: 'linear-gradient(140deg,#231a08,#8a6d1e,#231a08)' },
   'عمومی': { primary: '#c9a84c', heroBg: 'linear-gradient(140deg,#1a1510,#2d2215,#1a1510)' },
 }
 
@@ -366,7 +374,115 @@ const PROFILE_HERO_COPY: Record<string, { heading: string; subheading: string; b
   'فروشگاه': { heading: 'فروشگاه مصالح ساختمانی', subheading: 'بهترین کیفیت با مناسب‌ترین قیمت', buttonText: 'مشاهده محصولات' },
   'سرمایه‌گذار': { heading: 'سرمایه‌گذاری هوشمند در املاک', subheading: 'بازده تضمین‌شده با فرصت‌های منتخب', buttonText: 'فرصت‌های سرمایه‌گذاری' },
   'حقوقی': { heading: 'مشاوره حقوقی تخصصی املاک', subheading: 'وکالت و تنظیم قراردادهای ملکی', buttonText: 'دریافت مشاوره' },
+  'معمار': { heading: 'طراحیِ فضای رؤیاییِ شما', subheading: 'طراحیِ داخلی، معماری و نظارت بر پروژه‌های مسکونی، اداری و تجاری', buttonText: 'مشاهدهٔ نمونه‌کارها' },
+  'پیمانکار': { heading: 'اجرای حرفه‌ایِ پروژه‌های ساختمانی', subheading: 'از فونداسیون تا تحویلِ کلید، با کیفیت، تعهد و زمان‌بندیِ دقیق', buttonText: 'مشاهدهٔ پروژه‌ها' },
+  'کارشناس': { heading: 'کارشناسیِ رسمی و ارزیابیِ دقیقِ املاک', subheading: 'ارزیابی، تفکیک، افراز و تعیینِ اجاره‌بها با گزارشِ رسمیِ دادگستری', buttonText: 'درخواستِ کارشناسی' },
+  'دفتر حقوقی': { heading: 'وکالت و مشاورهٔ تخصصیِ دعاویِ ملکی', subheading: 'قرارداد، خلعِ ید، الزام به تنظیمِ سند و مطالباتِ مالی', buttonText: 'رزروِ مشاوره' },
+  'بانک و بیمه': { heading: 'تسهیلاتِ ملکی و بیمهٔ مطمئن', subheading: 'وامِ مسکن، وامِ ساخت و انواعِ بیمه‌نامه با بهترین شرایط', buttonText: 'درخواستِ تسهیلات' },
+  'دفترخانه': { heading: 'دفترِ اسنادِ رسمی؛ سریع و مطمئن', subheading: 'تنظیمِ سند، وکالت‌نامه، تعهدنامه و استعلام با کمترین معطلی', buttonText: 'رزروِ نوبت' },
   'عمومی': { heading: 'بهترین ملک را با ما بیابید', subheading: 'مشاور املاک حرفه‌ای با بیش از ۱۰ سال تجربه', buttonText: 'مشاهده ملک‌ها' },
+}
+
+// محتوایِ اختصاصیِ هر صنف (خدمات/درباره/آمار/گالری) — تا سایتِ هر پنل «پُر و مرتبط» باشد،
+// نه با متنِ عمومیِ املاک. در loadTemplate روی بلوک‌های services/about/stats/gallery نشانده می‌شود.
+interface ProfilePreset { servicesHeading?: string; services?: { icon: string; title: string; desc: string }[]; about?: string; aboutHeading?: string; stats?: { value: string; label: string }[]; galleryHeading?: string; footerAbout?: string; seoTitle?: string; seoDesc?: string; eyebrow?: string }
+const PROFILE_PRESETS: Record<string, ProfilePreset> = {
+  'معمار': {
+    servicesHeading: 'خدماتِ طراحی و معماری',
+    services: [
+      { icon: '✎', title: 'طراحیِ داخلی', desc: 'طراحیِ دکوراسیونِ داخلیِ مسکونی، اداری و تجاری متناسب با سبکِ شما' },
+      { icon: '◱', title: 'طراحیِ نما', desc: 'طراحیِ نمای مدرن و کلاسیک با متریالِ روز و اجرایِ دقیق' },
+      { icon: '⟳', title: 'بازسازی', desc: 'بازسازیِ کاملِ فضاهای قدیمی با کمترین هزینه و بیشترین کیفیت' },
+      { icon: '◈', title: 'نظارتِ اجرا', desc: 'نظارتِ تخصصی بر رونِد اجرا تا تحققِ کاملِ طرح' },
+      { icon: '⬢', title: 'مدل‌سازیِ سه‌بعدی', desc: 'ارائهٔ پلان و رندرِ سه‌بعدی پیش از اجرا' },
+      { icon: '☰', title: 'مشاورهٔ طراحی', desc: 'مشاورهٔ تخصصی برای انتخابِ سبک، نور و چیدمان' },
+    ],
+    aboutHeading: 'دربارهٔ استودیوِ ما',
+    about: 'استودیوِ معماریِ ما با تلفیقِ زیبایی و کارایی، فضاهایی خلق می‌کند که هم چشم‌نواز و هم کاربردی‌اند. با تیمی از معماران و طراحانِ داخلیِ باتجربه، از ایده تا اجرا کنارِ شما هستیم.',
+    stats: [{ value: '۲۵۰+', label: 'پروژهٔ طراحی' }, { value: '۱۴', label: 'سال تجربه' }, { value: '۹۸٪', label: 'رضایتِ کارفرما' }, { value: '۳', label: 'جایزهٔ طراحی' }],
+    galleryHeading: 'نمونه‌کارها و پروژه‌ها',
+    footerAbout: 'استودیوِ معماری و طراحیِ داخلی؛ خلقِ فضاهایی زیبا و کاربردی از ایده تا اجرا.', seoTitle: 'استودیوِ معماری و طراحیِ داخلی', eyebrow: 'معماری و طراحی', seoDesc: 'طراحیِ داخلی، معماری و نظارت بر پروژه‌های مسکونی، اداری و تجاری با تیمی حرفه‌ای.',
+  },
+  'پیمانکار': {
+    servicesHeading: 'خدماتِ اجرایی',
+    services: [
+      { icon: '◧', title: 'ساخت از صفر', desc: 'اجرایِ کاملِ پروژه از فونداسیون تا تحویلِ کلید' },
+      { icon: '⬒', title: 'اسکلت و سازه', desc: 'اجرایِ اسکلتِ فلزی و بتنی با استانداردِ مهندسی' },
+      { icon: '▤', title: 'سفت‌کاری و نازک‌کاری', desc: 'دیوارچینی، گچ‌کاری، کاشی و سنگ با کیفیتِ بالا' },
+      { icon: '⚡', title: 'تأسیساتِ مکانیکی و برقی', desc: 'اجرایِ کاملِ آب، فاضلاب، گرمایش و برق' },
+      { icon: '⟲', title: 'بازسازی', desc: 'بازسازیِ ساختمان‌های فرسوده و به‌روزرسانیِ فضاها' },
+      { icon: '❖', title: 'محوطه‌سازی', desc: 'اجرایِ محوطه، فضایِ سبز و نمای بیرونی' },
+    ],
+    aboutHeading: 'دربارهٔ شرکتِ ما',
+    about: 'شرکتِ پیمانکاریِ ما با اکیپِ مجرب، ماشین‌آلاتِ مدرن و مدیریتِ دقیقِ پروژه، ساختمان‌هایی باکیفیت و در زمان‌بندیِ مشخص تحویل می‌دهد. تعهد، کیفیت و شفافیتِ مالی، اصولِ کارِ ماست.',
+    stats: [{ value: '۱۸۰+', label: 'پروژهٔ اجراشده' }, { value: '۲۲۰ هزار', label: 'مترمربع ساخت' }, { value: '۱۶', label: 'سال سابقه' }, { value: '۱۰۰٪', label: 'تحویلِ به‌موقع' }],
+    galleryHeading: 'پروژه‌های اجراشده',
+    footerAbout: 'شرکتِ پیمانکاریِ ساختمان؛ اجرایِ حرفه‌ای از فونداسیون تا تحویلِ کلید.', seoTitle: 'شرکتِ پیمانکاریِ ساختمان', eyebrow: 'ساخت و ساز', seoDesc: 'اجرایِ حرفه‌ایِ پروژه‌های ساختمانی از فونداسیون تا تحویلِ کلید، با کیفیت و تعهد.',
+  },
+  'کارشناس': {
+    servicesHeading: 'خدماتِ کارشناسی',
+    services: [
+      { icon: '◉', title: 'ارزیابیِ ملک', desc: 'تعیینِ ارزشِ روزِ ملک برای خرید، فروش، وثیقه و مالیات' },
+      { icon: '⚠', title: 'ارزیابیِ خسارت', desc: 'برآوردِ خسارتِ ناشی از حریق، سیل و حوادث' },
+      { icon: '⊞', title: 'تفکیک و افراز', desc: 'کارشناسیِ تفکیک، افراز و تقسیمِ املاکِ مشاع' },
+      { icon: '⌂', title: 'تعیینِ اجاره‌بها', desc: 'تعیینِ اجاره‌بها و سرقفلیِ منصفانه' },
+      { icon: '§', title: 'گزارشِ رسمی', desc: 'تنظیمِ گزارشِ کارشناسیِ رسمیِ موردِ قبولِ مراجع' },
+      { icon: '☰', title: 'مشاورهٔ فنی', desc: 'مشاورهٔ فنی و حقوقی در معاملاتِ ملکی' },
+    ],
+    aboutHeading: 'دربارهٔ کارشناس',
+    about: 'کارشناسِ رسمیِ دادگستری در رشتهٔ راه و ساختمان، با سال‌ها تجربه در ارزیابیِ دقیق و بی‌طرفانهٔ املاک. گزارش‌های ما موردِ استنادِ دادگاه‌ها، بانک‌ها و ادارات است.',
+    stats: [{ value: '۹۰۰+', label: 'پروندهٔ کارشناسی' }, { value: '۲۰', label: 'سال سابقه' }, { value: '۹۹٪', label: 'دقتِ ارزیابی' }, { value: '۴۸ ساعت', label: 'زمانِ صدورِ گزارش' }],
+    galleryHeading: 'نمونهٔ گزارش‌ها',
+    footerAbout: 'کارشناسِ رسمیِ دادگستری؛ ارزیابیِ دقیق و بی‌طرفانهٔ املاک با گزارشِ رسمی.', seoTitle: 'کارشناسِ رسمیِ دادگستری — املاک', eyebrow: 'کارشناسِ رسمی', seoDesc: 'ارزیابی، تفکیک و تعیینِ اجاره‌بهای املاک با گزارشِ رسمیِ موردِ قبولِ مراجع.',
+  },
+  'دفتر حقوقی': {
+    servicesHeading: 'خدماتِ حقوقی',
+    services: [
+      { icon: '§', title: 'دعاویِ ملکی', desc: 'خلعِ ید، تخلیه، الزام به تنظیمِ سند و ابطالِ معامله' },
+      { icon: '✎', title: 'تنظیمِ قرارداد', desc: 'تنظیم و بازبینیِ انواعِ قراردادهای ملکی و تجاری' },
+      { icon: '⚖', title: 'مطالباتِ مالی', desc: 'وصولِ مطالبات، چک و سفتهٔ برگشتی' },
+      { icon: '◈', title: 'مشاورهٔ حقوقی', desc: 'مشاورهٔ تخصصی پیش از معامله برای پیشگیری از دعوا' },
+      { icon: '☖', title: 'امورِ ثبتی', desc: 'پیگیریِ امورِ ثبتی، سند و استعلامات' },
+      { icon: '⛨', title: 'داوری', desc: 'حلِ اختلافاتِ ملکی از طریقِ داوری و سازش' },
+    ],
+    aboutHeading: 'دربارهٔ دفترِ ما',
+    about: 'دفترِ حقوقیِ ما با تیمی از وکلای پایه‌یکِ دادگستری، در تمامِ دعاوی و قراردادهای ملکی کنارِ شماست. هدفِ ما، احقاقِ حقِ موکل با کمترین زمان و هزینه است.',
+    stats: [{ value: '۱٬۲۰۰+', label: 'پروندهٔ موفق' }, { value: '۱۸', label: 'سال تجربه' }, { value: '۹۴٪', label: 'نرخِ موفقیت' }, { value: '۵', label: 'وکیلِ پایه‌یک' }],
+    galleryHeading: 'گواهی‌نامه‌ها و افتخارات',
+    footerAbout: 'دفترِ حقوقیِ تخصصیِ املاک؛ وکالت، مشاوره و تنظیمِ قرارداد با وکلای پایه‌یک.', seoTitle: 'دفترِ حقوقیِ تخصصیِ املاک', eyebrow: 'خدماتِ حقوقی', seoDesc: 'وکالت و مشاورهٔ دعاویِ ملکی: قرارداد، خلعِ ید و الزام به تنظیمِ سند با وکلای پایه‌یک.',
+  },
+  'بانک و بیمه': {
+    servicesHeading: 'خدماتِ مالی و بیمه‌ای',
+    services: [
+      { icon: '⌂', title: 'وامِ مسکن', desc: 'تسهیلاتِ خریدِ مسکن با نرخ و بازپرداختِ مناسب' },
+      { icon: '◧', title: 'وامِ ساخت', desc: 'تأمینِ مالیِ پروژه‌های ساختمانی و انبوه‌سازی' },
+      { icon: '🔥', title: 'بیمهٔ آتش‌سوزی', desc: 'پوششِ کاملِ ساختمان در برابرِ حریق، سیل و زلزله' },
+      { icon: '♥', title: 'بیمهٔ عمر', desc: 'بیمهٔ عمر و سرمایه‌گذاری با سودِ تضمینی' },
+      { icon: '⛨', title: 'بیمهٔ مسئولیت', desc: 'بیمهٔ مسئولیتِ مدنیِ سازندگان و کارفرمایان' },
+      { icon: '◈', title: 'مشاورهٔ مالی', desc: 'مشاورهٔ تخصصی برای انتخابِ بهترین طرحِ تسهیلات و بیمه' },
+    ],
+    aboutHeading: 'دربارهٔ ما',
+    about: 'ما با ارائهٔ راهکارهای مالی و بیمه‌ایِ متنوع، خریدِ ملک و اجرای پروژه را برای شما آسان می‌کنیم. کارشناسانِ ما بهترین طرح را متناسب با شرایطِ شما پیشنهاد می‌دهند.',
+    stats: [{ value: '۵ هزار میلیارد', label: 'تسهیلاتِ پرداختی' }, { value: '۳۰ هزار', label: 'مشتری' }, { value: '۲۵', label: 'سال فعالیت' }, { value: '۹۶٪', label: 'رضایتِ مشتری' }],
+    galleryHeading: 'طرح‌ها و تفاهم‌نامه‌ها',
+    footerAbout: 'خدماتِ مالی و بیمه‌ایِ املاک؛ وامِ مسکن، وامِ ساخت و انواعِ بیمه‌نامه.', seoTitle: 'خدماتِ مالی و بیمهٔ املاک', eyebrow: 'مالی و بیمه', seoDesc: 'وامِ مسکن، وامِ ساخت و انواعِ بیمه‌نامه با بهترین شرایط و مشاورهٔ رایگان.',
+  },
+  'دفترخانه': {
+    servicesHeading: 'خدماتِ ثبتی',
+    services: [
+      { icon: '§', title: 'تنظیمِ سند', desc: 'تنظیمِ سندِ رسمیِ نقل و انتقالِ املاک و خودرو' },
+      { icon: '✎', title: 'وکالت‌نامه', desc: 'تنظیمِ انواعِ وکالت‌نامهٔ رسمی و بلاعزل' },
+      { icon: '☖', title: 'تعهدنامه و اقرارنامه', desc: 'تنظیمِ تعهدنامه، اقرارنامه و رضایت‌نامه' },
+      { icon: '◉', title: 'استعلامِ ثبتی', desc: 'اخذِ استعلامِ آنیِ وضعیتِ ثبتیِ ملک' },
+      { icon: '⇄', title: 'نقل و انتقال', desc: 'انجامِ کاملِ مراحلِ نقل و انتقالِ سند' },
+      { icon: '◈', title: 'مشاورهٔ اسناد', desc: 'مشاوره برای تنظیمِ درستِ اسناد و پیشگیری از مشکلات' },
+    ],
+    aboutHeading: 'دربارهٔ دفترخانه',
+    about: 'دفترِ اسنادِ رسمیِ ما با کادری مجرب و سیستمِ نوبت‌دهیِ آنلاین، خدماتِ ثبتیِ شما را سریع، دقیق و مطمئن انجام می‌دهد. رضایتِ مراجعان، اولویتِ ماست.',
+    stats: [{ value: '۴۰ هزار+', label: 'سندِ ثبت‌شده' }, { value: '۲۲', label: 'سال فعالیت' }, { value: '۱۵ دقیقه', label: 'میانگینِ انتظار' }, { value: '۹۷٪', label: 'رضایتِ مراجع' }],
+    galleryHeading: 'دفتر و امکانات',
+    footerAbout: 'دفترِ اسنادِ رسمی؛ تنظیمِ سند، وکالت و استعلام با نوبت‌دهیِ آنلاین.', seoTitle: 'دفترِ اسنادِ رسمی', eyebrow: 'اسنادِ رسمی', seoDesc: 'تنظیمِ سند، وکالت‌نامه، تعهدنامه و استعلامِ ثبتی سریع و مطمئن با نوبت‌دهیِ آنلاین.',
+  },
 }
 
 // نگاشت مسیر داشبورد کاربر به گروه پروفایل قالب‌ها
@@ -379,11 +495,19 @@ const DASH_TO_PROFILE: Record<string, string> = {
   '/buyer': 'عمومی',
   '/legal': 'حقوقی',
   '/crm': 'مشاور',
+  '/architect': 'معمار',
+  '/contractor': 'پیمانکار',
+  '/appraiser': 'کارشناس',
+  '/lawfirm': 'دفتر حقوقی',
+  '/finance': 'بانک و بیمه',
+  '/notary': 'دفترخانه',
 }
 // slugِ پیش‌فرضِ صنفی — تا هر صنف سایتِ نمونهٔ خودش را ببیند (نه سایتِ مشترکِ آژانس).
 const PROFILE_SLUG: Record<string, string> = {
   'مشاور': 'advisor-sample', 'آژانس': 'agency-sample', 'سازنده': 'builder-sample',
-  'فروشگاه': 'shop-sample', 'سرمایه‌گذار': 'investor-sample', 'حقوقی': 'legal-sample', 'عمومی': 'my-site',
+  'فروشگاه': 'shop-sample', 'سرمایه‌گذار': 'investor-sample', 'حقوقی': 'legal-sample',
+  'معمار': 'architect-sample', 'پیمانکار': 'contractor-sample', 'کارشناس': 'appraiser-sample',
+  'دفتر حقوقی': 'lawfirm-sample', 'بانک و بیمه': 'finance-sample', 'دفترخانه': 'notary-sample', 'عمومی': 'my-site',
 }
 
 const STARTER_TEMPLATES = [
@@ -470,6 +594,78 @@ const STARTER_TEMPLATES = [
   { id: 'gen-08', name: 'صفحهٔ رویداد', profile: 'عمومی', blocks: ['hero', 'about', 'gallery', 'cta', 'contact', 'footer'], desc: 'هیرو، درباره، گالری، اقدام، تماس' },
   { id: 'gen-09', name: 'صفحهٔ خدمات', profile: 'عمومی', blocks: ['hero', 'services', 'testimonials', 'cta', 'footer'], desc: 'هیرو، خدمات، نظرات، اقدام' },
   { id: 'gen-10', name: 'صفحهٔ حرفه‌ای', profile: 'عمومی', blocks: ['hero', 'stats', 'services', 'about', 'contact', 'footer'], desc: 'هیرو، آمار، خدمات، درباره، تماس' },
+
+  // ───────── معمار و طراح داخلی (۱۰) ─────────
+  { id: 'arc-01', name: 'استودیوِ مدرن', profile: 'معمار', blocks: ['hero', 'gallery', 'services', 'testimonials', 'contact', 'footer'], desc: 'هیرو، نمونه‌کار، خدمات، نظرات، تماس' },
+  { id: 'arc-02', name: 'پرتفولیوِ تصویری', profile: 'معمار', blocks: ['hero', 'gallery', 'about', 'cta', 'footer'], desc: 'هیرو، گالریِ نمونه‌کار، درباره، اقدام' },
+  { id: 'arc-03', name: 'طراحِ داخلی', profile: 'معمار', blocks: ['hero', 'services', 'gallery', 'stats', 'contact', 'footer'], desc: 'هیرو، خدمات، نمونه‌کار، آمار، تماس' },
+  { id: 'arc-04', name: 'معمارِ لوکس', profile: 'معمار', blocks: ['hero', 'about', 'gallery', 'services', 'testimonials', 'footer'], desc: 'هیرو، درباره، نمونه‌کار، خدمات، نظرات', blogPage: true },
+  { id: 'arc-05', name: 'استودیوِ کامل', profile: 'معمار', blocks: ['hero', 'gallery', 'stats', 'services', 'team', 'cta', 'footer'], desc: 'هیرو، نمونه‌کار، آمار، خدمات، تیم، اقدام' },
+  { id: 'arc-06', name: 'طراحیِ مینیمال', profile: 'معمار', blocks: ['hero', 'about', 'gallery', 'cta', 'contact', 'footer'], desc: 'هیرو، درباره، نمونه‌کار، اقدام، تماس' },
+  { id: 'arc-07', name: 'معمارِ حرفه‌ای', profile: 'معمار', blocks: ['hero', 'services', 'stats', 'gallery', 'testimonials', 'contact', 'footer'], desc: 'هیرو، خدمات، آمار، نمونه‌کار، نظرات، تماس' },
+  { id: 'arc-08', name: 'نمونه‌کارمحور', profile: 'معمار', blocks: ['hero', 'gallery', 'services', 'about', 'footer'], desc: 'هیرو، گالری، خدمات، درباره' },
+  { id: 'arc-09', name: 'استودیوِ خلاق', profile: 'معمار', blocks: ['hero', 'gallery', 'team', 'services', 'cta', 'footer'], desc: 'هیرو، نمونه‌کار، تیم، خدمات، اقدام' },
+  { id: 'arc-10', name: 'معمارِ برتر', profile: 'معمار', blocks: ['hero', 'about', 'services', 'gallery', 'stats', 'contact', 'footer'], desc: 'هیرو، درباره، خدمات، نمونه‌کار، آمار، تماس' },
+
+  // ───────── پیمانکار (۱۰) ─────────
+  { id: 'con-01', name: 'پیمانکارِ جامع', profile: 'پیمانکار', blocks: ['hero', 'services', 'gallery', 'stats', 'contact', 'footer'], desc: 'هیرو، خدمات، پروژه‌ها، آمار، تماس' },
+  { id: 'con-02', name: 'پروژه‌محور', profile: 'پیمانکار', blocks: ['hero', 'gallery', 'about', 'cta', 'footer'], desc: 'هیرو، پروژه‌ها، درباره، اقدام' },
+  { id: 'con-03', name: 'اجرایِ حرفه‌ای', profile: 'پیمانکار', blocks: ['hero', 'services', 'stats', 'gallery', 'testimonials', 'footer'], desc: 'هیرو، خدمات، آمار، پروژه‌ها، نظرات', blogPage: true },
+  { id: 'con-04', name: 'سازندهٔ مطمئن', profile: 'پیمانکار', blocks: ['hero', 'about', 'gallery', 'services', 'contact', 'footer'], desc: 'هیرو، درباره، پروژه‌ها، خدمات، تماس' },
+  { id: 'con-05', name: 'پیمانکارِ کامل', profile: 'پیمانکار', blocks: ['hero', 'gallery', 'stats', 'services', 'team', 'cta', 'footer'], desc: 'هیرو، پروژه‌ها، آمار، خدمات، تیم، اقدام' },
+  { id: 'con-06', name: 'اسکلت و سازه', profile: 'پیمانکار', blocks: ['hero', 'services', 'gallery', 'about', 'cta', 'footer'], desc: 'هیرو، خدمات، پروژه‌ها، درباره، اقدام' },
+  { id: 'con-07', name: 'پیمانکارِ لوکس', profile: 'پیمانکار', blocks: ['hero', 'about', 'services', 'gallery', 'testimonials', 'contact', 'footer'], desc: 'هیرو، درباره، خدمات، پروژه‌ها، نظرات، تماس' },
+  { id: 'con-08', name: 'پروژهٔ نمونه', profile: 'پیمانکار', blocks: ['hero', 'gallery', 'stats', 'cta', 'footer'], desc: 'هیرو، پروژه‌ها، آمار، اقدام' },
+  { id: 'con-09', name: 'اجرایِ کامل', profile: 'پیمانکار', blocks: ['hero', 'services', 'gallery', 'stats', 'testimonials', 'footer'], desc: 'هیرو، خدمات، پروژه‌ها، آمار، نظرات' },
+  { id: 'con-10', name: 'پیمانکارِ برتر', profile: 'پیمانکار', blocks: ['hero', 'about', 'gallery', 'services', 'contact', 'footer'], desc: 'هیرو، درباره، پروژه‌ها، خدمات، تماس' },
+
+  // ───────── کارشناسِ رسمی (۱۰) ─────────
+  { id: 'apr-01', name: 'کارشناسِ رسمی', profile: 'کارشناس', blocks: ['hero', 'services', 'about', 'testimonials', 'contact', 'footer'], desc: 'هیرو، خدمات، درباره، نظرات، تماس' },
+  { id: 'apr-02', name: 'ارزیابِ ملک', profile: 'کارشناس', blocks: ['hero', 'about', 'services', 'stats', 'contact', 'footer'], desc: 'هیرو، درباره، خدمات، آمار، تماس' },
+  { id: 'apr-03', name: 'کارشناسیِ دقیق', profile: 'کارشناس', blocks: ['hero', 'services', 'stats', 'testimonials', 'cta', 'footer'], desc: 'هیرو، خدمات، آمار، نظرات، اقدام' },
+  { id: 'apr-04', name: 'کارشناسِ حرفه‌ای', profile: 'کارشناس', blocks: ['hero', 'about', 'services', 'testimonials', 'contact', 'footer'], desc: 'هیرو، درباره، خدمات، نظرات، تماس', blogPage: true },
+  { id: 'apr-05', name: 'گزارشِ رسمی', profile: 'کارشناس', blocks: ['hero', 'services', 'about', 'cta', 'contact', 'footer'], desc: 'هیرو، خدمات، درباره، اقدام، تماس' },
+  { id: 'apr-06', name: 'کارشناسِ معتبر', profile: 'کارشناس', blocks: ['hero', 'services', 'stats', 'about', 'footer'], desc: 'هیرو، خدمات، آمار، درباره' },
+  { id: 'apr-07', name: 'ارزیابیِ تخصصی', profile: 'کارشناس', blocks: ['hero', 'about', 'services', 'stats', 'testimonials', 'footer'], desc: 'هیرو، درباره، خدمات، آمار، نظرات' },
+  { id: 'apr-08', name: 'کارشناسِ کامل', profile: 'کارشناس', blocks: ['hero', 'services', 'testimonials', 'about', 'contact', 'footer'], desc: 'هیرو، خدمات، نظرات، درباره، تماس' },
+  { id: 'apr-09', name: 'کارشناسِ سریع', profile: 'کارشناس', blocks: ['hero', 'services', 'cta', 'contact', 'footer'], desc: 'هیرو، خدمات، اقدام، تماس' },
+  { id: 'apr-10', name: 'کارشناسِ برتر', profile: 'کارشناس', blocks: ['hero', 'about', 'stats', 'services', 'testimonials', 'contact', 'footer'], desc: 'هیرو، درباره، آمار، خدمات، نظرات، تماس' },
+
+  // ───────── دفترِ حقوقی (۱۰) ─────────
+  { id: 'lwf-01', name: 'دفترِ وکالت', profile: 'دفتر حقوقی', blocks: ['hero', 'services', 'about', 'testimonials', 'contact', 'footer'], desc: 'هیرو، خدمات، درباره، نظرات، تماس' },
+  { id: 'lwf-02', name: 'حقوقیِ ملکی', profile: 'دفتر حقوقی', blocks: ['hero', 'about', 'services', 'stats', 'contact', 'footer'], desc: 'هیرو، درباره، خدمات، آمار، تماس' },
+  { id: 'lwf-03', name: 'وکیلِ پایه‌یک', profile: 'دفتر حقوقی', blocks: ['hero', 'services', 'testimonials', 'cta', 'footer'], desc: 'هیرو، خدمات، نظرات، اقدام' },
+  { id: 'lwf-04', name: 'حقوقیِ حرفه‌ای', profile: 'دفتر حقوقی', blocks: ['hero', 'about', 'services', 'stats', 'testimonials', 'footer'], desc: 'هیرو، درباره، خدمات، آمار، نظرات' },
+  { id: 'lwf-05', name: 'مشاورهٔ ملکی', profile: 'دفتر حقوقی', blocks: ['hero', 'services', 'about', 'cta', 'contact', 'footer'], desc: 'هیرو، خدمات، درباره، اقدام، تماس' },
+  { id: 'lwf-06', name: 'دفترِ معتبر', profile: 'دفتر حقوقی', blocks: ['hero', 'services', 'stats', 'testimonials', 'footer'], desc: 'هیرو، خدمات، آمار، نظرات' },
+  { id: 'lwf-07', name: 'قراردادِ ملکی', profile: 'دفتر حقوقی', blocks: ['hero', 'about', 'services', 'testimonials', 'cta', 'footer'], desc: 'هیرو، درباره، خدمات، نظرات، اقدام' },
+  { id: 'lwf-08', name: 'حقوقیِ کامل', profile: 'دفتر حقوقی', blocks: ['hero', 'services', 'about', 'stats', 'contact', 'footer'], desc: 'هیرو، خدمات، درباره، آمار، تماس', blogPage: true },
+  { id: 'lwf-09', name: 'وکالتِ تخصصی', profile: 'دفتر حقوقی', blocks: ['hero', 'services', 'testimonials', 'contact', 'footer'], desc: 'هیرو، خدمات، نظرات، تماس' },
+  { id: 'lwf-10', name: 'دفترِ برتر', profile: 'دفتر حقوقی', blocks: ['hero', 'about', 'stats', 'services', 'testimonials', 'contact', 'footer'], desc: 'هیرو، درباره، آمار، خدمات، نظرات، تماس' },
+
+  // ───────── بانک و بیمه (۱۰) ─────────
+  { id: 'fin-01', name: 'تسهیلاتِ ملکی', profile: 'بانک و بیمه', blocks: ['hero', 'services', 'stats', 'testimonials', 'contact', 'footer'], desc: 'هیرو، خدمات، آمار، نظرات، تماس' },
+  { id: 'fin-02', name: 'وام و بیمه', profile: 'بانک و بیمه', blocks: ['hero', 'about', 'services', 'cta', 'footer'], desc: 'هیرو، درباره، خدمات، اقدام' },
+  { id: 'fin-03', name: 'مالیِ حرفه‌ای', profile: 'بانک و بیمه', blocks: ['hero', 'services', 'stats', 'about', 'contact', 'footer'], desc: 'هیرو، خدمات، آمار، درباره، تماس' },
+  { id: 'fin-04', name: 'بیمهٔ کامل', profile: 'بانک و بیمه', blocks: ['hero', 'services', 'testimonials', 'cta', 'contact', 'footer'], desc: 'هیرو، خدمات، نظرات، اقدام، تماس' },
+  { id: 'fin-05', name: 'تسهیلاتِ ساخت', profile: 'بانک و بیمه', blocks: ['hero', 'about', 'services', 'stats', 'cta', 'footer'], desc: 'هیرو، درباره، خدمات، آمار، اقدام', blogPage: true },
+  { id: 'fin-06', name: 'مالیِ معتبر', profile: 'بانک و بیمه', blocks: ['hero', 'stats', 'services', 'testimonials', 'footer'], desc: 'هیرو، آمار، خدمات، نظرات' },
+  { id: 'fin-07', name: 'مشاورهٔ مالی', profile: 'بانک و بیمه', blocks: ['hero', 'services', 'about', 'testimonials', 'contact', 'footer'], desc: 'هیرو، خدمات، درباره، نظرات، تماس' },
+  { id: 'fin-08', name: 'وامِ مسکن', profile: 'بانک و بیمه', blocks: ['hero', 'services', 'cta', 'stats', 'contact', 'footer'], desc: 'هیرو، خدمات، اقدام، آمار، تماس' },
+  { id: 'fin-09', name: 'بیمهٔ تخصصی', profile: 'بانک و بیمه', blocks: ['hero', 'about', 'services', 'stats', 'testimonials', 'footer'], desc: 'هیرو، درباره، خدمات، آمار، نظرات' },
+  { id: 'fin-10', name: 'مالیِ برتر', profile: 'بانک و بیمه', blocks: ['hero', 'services', 'stats', 'about', 'cta', 'contact', 'footer'], desc: 'هیرو، خدمات، آمار، درباره، اقدام، تماس' },
+
+  // ───────── دفترخانه (۱۰) ─────────
+  { id: 'ntr-01', name: 'دفترِ اسناد', profile: 'دفترخانه', blocks: ['hero', 'services', 'about', 'contact', 'footer'], desc: 'هیرو، خدمات، درباره، تماس' },
+  { id: 'ntr-02', name: 'ثبتیِ سریع', profile: 'دفترخانه', blocks: ['hero', 'services', 'stats', 'cta', 'contact', 'footer'], desc: 'هیرو، خدمات، آمار، اقدام، تماس' },
+  { id: 'ntr-03', name: 'دفترخانهٔ مدرن', profile: 'دفترخانه', blocks: ['hero', 'about', 'services', 'testimonials', 'contact', 'footer'], desc: 'هیرو، درباره، خدمات، نظرات، تماس' },
+  { id: 'ntr-04', name: 'اسنادِ رسمی', profile: 'دفترخانه', blocks: ['hero', 'services', 'about', 'cta', 'footer'], desc: 'هیرو، خدمات، درباره، اقدام' },
+  { id: 'ntr-05', name: 'دفترِ معتبر', profile: 'دفترخانه', blocks: ['hero', 'services', 'stats', 'testimonials', 'footer'], desc: 'هیرو، خدمات، آمار، نظرات', blogPage: true },
+  { id: 'ntr-06', name: 'نوبت‌دهیِ آنلاین', profile: 'دفترخانه', blocks: ['hero', 'services', 'cta', 'contact', 'footer'], desc: 'هیرو، خدمات، اقدام، تماس' },
+  { id: 'ntr-07', name: 'دفترخانهٔ کامل', profile: 'دفترخانه', blocks: ['hero', 'about', 'services', 'stats', 'contact', 'footer'], desc: 'هیرو، درباره، خدمات، آمار، تماس' },
+  { id: 'ntr-08', name: 'خدماتِ ثبتی', profile: 'دفترخانه', blocks: ['hero', 'services', 'testimonials', 'about', 'footer'], desc: 'هیرو، خدمات، نظرات، درباره' },
+  { id: 'ntr-09', name: 'دفترِ تخصصی', profile: 'دفترخانه', blocks: ['hero', 'services', 'about', 'gallery', 'contact', 'footer'], desc: 'هیرو، خدمات، درباره، گالری، تماس' },
+  { id: 'ntr-10', name: 'دفترخانهٔ برتر', profile: 'دفترخانه', blocks: ['hero', 'about', 'stats', 'services', 'testimonials', 'contact', 'footer'], desc: 'هیرو، درباره، آمار، خدمات، نظرات، تماس' },
 ]
 
 // ── سایتِ کامل (multi-page) — هر قالبِ اصلی یک وبسایتِ کامل با همهٔ صفحات می‌سازد ──
@@ -489,6 +685,7 @@ function profilePageSpec(profile: string): PageSpec[] {
   const products: PageSpec = { slug: 'products', title: 'محصولات', menuLabel: 'محصولات', blocks: ['hero', 'catalog', 'pricelist', 'footer'], heroHeading: 'محصولات', heroSub: 'کاتالوگِ کاملِ محصولاتِ ما' }
   const categories: PageSpec = { slug: 'prices', title: 'نرخِ روز', menuLabel: 'نرخِ روز', blocks: ['hero', 'pricelist', 'cta', 'footer'], heroHeading: 'نرخِ روزِ مصالح', heroSub: 'قیمتِ به‌روزِ محصولاتِ ما' }
   const opportunities: PageSpec = { slug: 'opportunities', title: 'فرصت‌ها', menuLabel: 'فرصت‌ها', blocks: ['hero', 'stats', 'searchlist', 'cta', 'footer'], heroHeading: 'فرصت‌های سرمایه‌گذاری', heroSub: 'بازده و فرصت‌هایِ منتخبِ ملکی' }
+  const portfolio: PageSpec = { slug: 'portfolio', title: 'نمونه‌کارها', menuLabel: 'نمونه‌کارها', blocks: ['hero', 'gallery', 'stats', 'cta', 'footer'], heroHeading: 'نمونه‌کارها و پروژه‌ها', heroSub: 'گزیده‌ای از پروژه‌های طراحی و اجراشدهٔ ما' }
   switch (profile) {
     case 'مشاور': return [about, listings, services, blog, contact]
     case 'آژانس': return [aboutTeam, listings, services, team, blog, contact]
@@ -496,6 +693,12 @@ function profilePageSpec(profile: string): PageSpec[] {
     case 'فروشگاه': return [about, products, categories, blog, contact]
     case 'سرمایه‌گذار': return [about, opportunities, services, blog, contact]
     case 'حقوقی': return [about, services, blog, contact]
+    case 'معمار': return [about, portfolio, services, blog, contact]
+    case 'پیمانکار': return [about, portfolio, services, blog, contact]
+    case 'کارشناس': return [about, services, blog, contact]
+    case 'دفتر حقوقی': return [aboutTeam, services, blog, contact]
+    case 'بانک و بیمه': return [about, services, blog, contact]
+    case 'دفترخانه': return [about, services, blog, contact]
     default: return [about, services, blog, contact]
   }
 }
@@ -655,7 +858,7 @@ function BlockBody({ block, primary, myListings, myArticles, teamMembers }: { bl
     return (
       <div style={{ position: 'relative', background: baseBg, padding: tall ? '110px 28px' : '64px 28px', textAlign: align as any, direction: 'rtl', overflow: 'hidden' }}>
         {slider && <span style={{ position: 'absolute', top: 10, insetInlineStart: 10, fontSize: 10, fontWeight: 700, color: '#fff', background: 'rgba(0,0,0,.45)', borderRadius: 999, padding: '3px 10px' }}>⟳ اسلایدرِ {imgs.length.toLocaleString('fa-IR')} تصویری</span>}
-        <div style={{ display: 'inline-block', fontSize: 10.5, fontWeight: 700, color: '#fff', background: 'rgba(255,255,255,.16)', border: '1px solid rgba(255,255,255,.25)', padding: '4px 12px', borderRadius: 999, marginBottom: 14 }}>املاک و مستغلات</div>
+        <div style={{ display: 'inline-block', fontSize: 10.5, fontWeight: 700, color: '#fff', background: 'rgba(255,255,255,.16)', border: '1px solid rgba(255,255,255,.25)', padding: '4px 12px', borderRadius: 999, marginBottom: 14 }}>{p.eyebrow || 'املاک و مستغلات'}</div>
         <div style={{ fontSize: 28, fontWeight: 900, color: p.textColor || '#fff', marginBottom: 10, letterSpacing: '-0.5px' }}>{p.heading}</div>
         <div style={{ fontSize: 14, color: p.textColor || '#fff', opacity: 0.82, marginBottom: 22, maxWidth: 520, marginInline: align === 'center' ? 'auto' : undefined }}>{p.subheading}</div>
         {p.buttonText ? btn(p.buttonText) : null}
@@ -1424,13 +1627,22 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
     const heroBg = `linear-gradient(135deg, ${pal.primary}, ${pal.secondary} 72%)`
     // هر قالب، پالتِ کاملِ خودش را می‌گذارد تا واقعاً متمایز دیده شود.
     setTheme({ ...pal })
-    // بلوک‌سازِ مشترک: هیرو/cta/footer پیش‌فرضِ متناسب می‌گیرند.
+    // محتوایِ اختصاصیِ صنف (خدمات/درباره/آمار/گالری) — تا سایت «پُر و مرتبط» شود، نه عمومی.
+    const pp = PROFILE_PRESETS[tpl.profile]
+    // عنوان و توضیحِ سئو (و در نتیجه برندِ هدر) را نیز صنفی کن تا «آژانس نمونه» نماند.
+    if (pp?.seoTitle) setSeoTitle(pp.seoTitle)
+    if (pp?.seoDesc) setSeoDesc(pp.seoDesc)
+    // بلوک‌سازِ مشترک: هیرو/cta/footer پیش‌فرضِ متناسب می‌گیرند + محتوایِ صنفی.
     const build = (type: string, opts?: { heading?: string; sub?: string; btn?: string }) => {
       let preset: Record<string, any> | undefined
-      if (type === 'hero') preset = { heading: opts?.heading ?? copy.heading, subheading: opts?.sub ?? copy.subheading, buttonText: opts?.btn ?? copy.buttonText, bg: heroBg }
+      if (type === 'hero') preset = { heading: opts?.heading ?? copy.heading, subheading: opts?.sub ?? copy.subheading, buttonText: opts?.btn ?? copy.buttonText, bg: heroBg, ...(pp?.eyebrow ? { eyebrow: pp.eyebrow } : {}) }
       else if (type === 'cta') preset = { bg: heroBg }
-      else if (type === 'footer') preset = { brand: tpl.name }
+      else if (type === 'footer') preset = { brand: tpl.name, ...(pp?.footerAbout ? { about: pp.footerAbout } : {}) }
       else if (type === 'blogfull') preset = { heading: opts?.heading ?? 'وبلاگ' }
+      else if (type === 'services' && pp?.services) preset = { heading: pp.servicesHeading || 'خدمات ما', items: pp.services }
+      else if (type === 'about' && pp?.about) preset = { heading: pp.aboutHeading || 'درباره ما', text: pp.about }
+      else if (type === 'stats' && pp?.stats) preset = { items: pp.stats }
+      else if (type === 'gallery' && pp?.galleryHeading) preset = { heading: pp.galleryHeading }
       return makeBlock(type, preset)
     }
     // ── صفحهٔ اصلیِ حرفه‌ای و کامل، متناسب با پروفایل ──
@@ -1439,7 +1651,9 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
     // حقوقی → خدمات. این بلوک حتماً روی صفحهٔ اصلی قرار می‌گیرد.
     // آنچه هر پروفایل روی صفحهٔ اصلی نشان می‌دهد: فروشگاه → کاتالوگِ مصالح، سازنده → پروژه‌ها،
     // حقوقی → خدمات، بقیه → آگهی‌ها.
-    const offeringsType = tpl.profile === 'فروشگاه' ? 'catalog' : tpl.profile === 'سازنده' ? 'gallery' : tpl.profile === 'حقوقی' ? 'services' : 'listings'
+    const galleryProfiles = ['سازنده', 'معمار', 'پیمانکار']
+    const servicesProfiles = ['حقوقی', 'کارشناس', 'دفتر حقوقی', 'بانک و بیمه', 'دفترخانه']
+    const offeringsType = tpl.profile === 'فروشگاه' ? 'catalog' : galleryProfiles.includes(tpl.profile) ? 'gallery' : servicesProfiles.includes(tpl.profile) ? 'services' : 'listings'
     const isShop = tpl.profile === 'فروشگاه'
     // بلوک‌های متمایزِ خودِ قالب (درباره/تیم و…) که در ترکیبِ پایه نیستند، حفظ می‌شوند تا تنوع بماند.
     const baseTypes = ['hero', 'footer', 'cta', 'listings', 'gallery', 'services', 'stats', 'testimonials', 'search', 'catalog', 'pricelist']
