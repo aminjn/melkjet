@@ -42,6 +42,8 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
   const periodLabel = PERIODS.find(x => x[0] === period)![2]
   const [busy, setBusy] = useState('')
   const [msg, setMsg] = useState('')
+  // دو بخشِ جدا: اشتراک/بسته‌ها  ×  پروموت/تبلیغات
+  const [section, setSection] = useState<'plans' | 'promo'>('plans')
 
   const loadComm = () => fetch('/api/comm').then(r => r.ok ? r.json() : null).then(d => { if (d) { setCredit(d.credit || { sms: 0, email: 0, token: 0 }); setOrders(d.orders || []); setTokenUsed(d.tokenUsed || 0); setPromoTiers(d.promoTiers || []); setPromoBundles(d.promoBundles || []); setPromoDiscount(Number(d.promoDiscount) || 0); setPromoWallet(Number(d.promoWallet) || 0); setPromoCreditPacks(d.promoCreditPacks || []); setMyPromotions(d.myPromotions || []); setActiveplan(d.activePlan || null) } }).catch(() => {})
   const load = () => {
@@ -101,11 +103,20 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
           <span style={{ fontSize: 26 }}>👑</span>
           <div style={{ fontSize: 21, fontWeight: 900, letterSpacing: '-.5px' }}>{title}</div>
         </div>
-        <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.9, maxWidth: 640, position: 'relative' }}>اشتراکِ مناسبِ خود را انتخاب کنید و در صورتِ نیاز، بسته‌های افزایشیِ عملیاتِ هوش مصنوعی، پیامک و ایمیل را تهیه کنید.</div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.9, maxWidth: 640, position: 'relative' }}>{section === 'plans' ? 'اشتراکِ مناسبِ خود را انتخاب کنید و در صورتِ نیاز، بسته‌های افزایشیِ عملیاتِ هوش مصنوعی، پیامک و ایمیل را تهیه کنید.' : 'با پروموت، کسب‌وکار یا آگهیِ شما در جایگاه‌های پربازدیدِ ملک‌جت برجسته می‌شود — جدا از اشتراک.'}</div>
+      </div>
+
+      {/* دو بخشِ جدا: اشتراک/بسته‌ها × پروموت/تبلیغات */}
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <div style={{ display: 'inline-flex', background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 999, padding: 4 }}>
+          {([['plans', '👑 اشتراک و بسته‌ها'], ['promo', '🚀 پروموت و تبلیغات']] as const).map(([k, l]) => (
+            <button key={k} onClick={() => setSection(k)} style={{ padding: '9px 20px', borderRadius: 999, border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 13.5, fontWeight: 800, background: section === k ? 'linear-gradient(135deg,var(--gold2),var(--gold))' : 'transparent', color: section === k ? '#16140f' : 'var(--muted)' }}>{l}</button>
+          ))}
+        </div>
       </div>
 
       {/* پروموت‌های من — وضعیت + محلِ نمایش (تا کاربر بداند پروموت کجا و تا کِی فعال است) */}
-      {(myPromotions.length > 0 || pendingPromos.length > 0) && (
+      {section === 'promo' && (myPromotions.length > 0 || pendingPromos.length > 0) && (
         <div style={{ background: 'var(--surface)', border: '1px solid var(--gold)', borderRadius: 16, padding: 18 }}>
           <div style={{ fontSize: 14, fontWeight: 900, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>🚀 پروموت‌های من</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -133,7 +144,7 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
       )}
 
       {/* تعرفه ماهانه/سالانه */}
-      {plans.length > 0 && (
+      {section === 'plans' && plans.length > 0 && (
         <div style={{ display: 'flex', justifyContent: 'center' }}>
           <div style={{ display: 'inline-flex', background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 999, padding: 4, flexWrap: 'wrap' }}>
             {PERIODS.map(([k, l]) => (
@@ -144,7 +155,7 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
       )}
 
       {/* کارت‌های اشتراک */}
-      {plans.length === 0 ? (
+      {section === 'plans' && (plans.length === 0 ? (
         <div style={{ background: 'var(--surface)', border: '1px dashed var(--line2)', borderRadius: 16, padding: 28, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>هنوز پلنی برای این بخش تعریف نشده است.</div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 16, alignItems: 'stretch' }}>
@@ -179,11 +190,11 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
             )
           })}
         </div>
-      )}
+      ))}
 
       {/* بسته‌های افزایشی */}
-      {usedChannels.length > 0 && <div style={{ fontSize: 16, fontWeight: 900, marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>🪙 بسته‌های اعتباریِ افزایشی</div>}
-      {usedChannels.map(ch => {
+      {section === 'plans' && usedChannels.length > 0 && <div style={{ fontSize: 16, fontWeight: 900, marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>🪙 بسته‌های اعتباریِ افزایشی</div>}
+      {section === 'plans' && usedChannels.map(ch => {
         const list = packages.filter(p => p.channel === ch)
         const meta = CH[ch]
         return (
@@ -213,7 +224,7 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
       })}
 
       {/* پروموت و تبلیغات — دیده‌شدنِ بیشتر */}
-      {promoTiers.length > 0 && (
+      {section === 'promo' && promoTiers.length > 0 && (
         <>
           <div style={{ fontSize: 16, fontWeight: 900, marginTop: 6, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             🚀 پروموت و تبلیغات
@@ -249,7 +260,7 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
       )}
 
       {/* باندل‌های پروموت — چند بسته با قیمتِ اقتصادی */}
-      {promoBundles.length > 0 && (
+      {section === 'promo' && promoBundles.length > 0 && (
         <>
           <div style={{ fontSize: 15, fontWeight: 900, marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>🎁 باندل‌های پروموت</div>
           <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: -8 }}>چند بستهٔ پروموت را یکجا و با قیمتِ اقتصادی‌تر تهیه کنید — روی پروفایلِ شما فعال می‌شوند.</div>
@@ -289,7 +300,7 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
       )}
 
       {/* اعتبارِ پروموت (کیفِ پول) — شارژِ پیش‌پرداخت با پاداش؛ پرداختِ فوریِ پروموت‌ها */}
-      {promoCreditPacks.length > 0 && (
+      {section === 'promo' && promoCreditPacks.length > 0 && (
         <>
           <div style={{ fontSize: 15, fontWeight: 900, marginTop: 4, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             💳 اعتبارِ پروموت (کیفِ پول)
@@ -313,7 +324,7 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
       )}
 
       {/* مزایدهٔ جایگاهِ ویژه — فقط برای نقش‌هایی که جایگاهِ مزایده‌ای دارند نمایش داده می‌شود */}
-      <AuctionPanel />
+      {section === 'promo' && <AuctionPanel />}
 
       {promoteTierId && <ListingPromoteModal preTierId={promoteTierId} onClose={() => setPromoteTierId(null)} onDone={loadComm} />}
       {checkout && <CheckoutModal item={checkout} busy={busy === 'checkout'} walletBalance={canWalletPay ? promoWallet : undefined} onClose={() => setCheckout(null)} onSubmit={submitOrder} />}
