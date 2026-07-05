@@ -10,6 +10,7 @@ import AuthModal from './components/AuthModal'
 import SuspensionGate from './components/SuspensionGate'
 import CompareBar from './components/CompareBar'
 import SupportLauncher from './components/SupportLauncher'
+import LegalAssistant from './components/LegalAssistant'
 
 export const metadata: Metadata = {
   title: 'ملک‌جت - اکوسیستم هوشمند املاک',
@@ -62,6 +63,7 @@ export default function RootLayout({
         <SuspensionGate />
         <CompareBar />
         <SupportLauncher />
+        <LegalAssistant />
         <BottomNav />
         <PWAInstall />
       </body>
