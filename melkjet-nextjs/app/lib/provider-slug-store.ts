@@ -39,3 +39,21 @@ export async function phoneForProviderSlug(slug: string): Promise<string | null>
 export async function slugForProviderPhone(phone: string): Promise<string | null> {
   return (await load()).byPhone[norm(phone)] || null
 }
+// نگاشتِ کاملِ phone→slug (فقط‌خواندنی) — برای سایت‌مپ (بدونِ نوشتن/به‌ازای‌هر‌آیتم load).
+export async function allProviderSlugsByPhone(): Promise<Record<string, string>> {
+  return (await load()).byPhone
+}
+// ساختِ دسته‌ایِ slug در یک نوشتِ واحد — برای پیش‌محاسبهٔ کرون.
+export async function ensureManyProviderSlugs(items: { phone: string; name: string }[]): Promise<number> {
+  return mutate(db => {
+    const taken = new Set(Object.keys(db.bySlug))
+    let n = 0
+    for (const { phone, name } of items) {
+      const ph = norm(phone); if (!ph || db.byPhone[ph]) continue
+      const base = slugify(name || '') || `melk-${ph.slice(-4)}`
+      const slug = uniqueSlug(base, s => taken.has(s))
+      taken.add(slug); db.bySlug[slug] = ph; db.byPhone[ph] = slug; n++
+    }
+    return n
+  })
+}

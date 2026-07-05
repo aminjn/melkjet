@@ -35,3 +35,21 @@ export async function hashForProjectSlug(slug: string): Promise<string | null> {
 export async function slugForProjectHash(hashId: string): Promise<string | null> {
   return (await load()).byHash[String(hashId || '').trim()] || null
 }
+// نگاشتِ کاملِ hashId→slug (فقط‌خواندنی) — برای سایت‌مپ تا به‌ازای هر پروژه یک‌بار load نشود.
+export async function allProjectSlugsByHash(): Promise<Record<string, string>> {
+  return (await load()).byHash
+}
+// ساختِ دسته‌ایِ slug در یک نوشتِ واحد (نه یک نوشت به‌ازای هر پروژه) — برای پیش‌محاسبهٔ کرون.
+export async function ensureManyProjectSlugs(items: { hashId: string; name: string }[]): Promise<number> {
+  return mutate(db => {
+    const taken = new Set(Object.keys(db.bySlug))
+    let n = 0
+    for (const { hashId, name } of items) {
+      const h = String(hashId || '').trim(); if (!h || db.byHash[h]) continue
+      const base = slugify(name || '') || `porozhe-${h.slice(-6)}`
+      const slug = uniqueSlug(base, s => taken.has(s))
+      taken.add(slug); db.bySlug[slug] = h; db.byHash[h] = slug; n++
+    }
+    return n
+  })
+}

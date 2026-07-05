@@ -113,31 +113,31 @@ export async function buildShards(force = false): Promise<Shard[]> {
     addSection('locations', 'مکان', s)
   }
 
-  // ── پروژه‌ها ──
+  // ── پروژه‌ها (فقط‌خواندنی: slug از نگاشتِ آماده؛ نبودِ slug → hashId که مسیر resolve می‌کند) ──
   if (enabled(sections, 'projects')) {
     const s: UrlEntry[] = []
     try {
       const { publicQuery } = await import('./persiansaze-store')
-      const { ensureProjectSlug } = await import('./project-slug-store')
-      const items = (publicQuery({ withPhoto: true, pageSize: 5000 }).items || [])
-      for (const p of items) { const slug = await ensureProjectSlug(p.hashId, p.address || (p as any).builderName || 'پروژه'); if (slug) s.push({ url: `${BASE}/projects/${slug}`, priority: 0.55 }) }
+      const { allProjectSlugsByHash } = await import('./project-slug-store')
+      const map = await allProjectSlugsByHash()
+      const items = (publicQuery({ withPhoto: true, pageSize: 20000 }).items || [])
+      for (const p of items) { const slug = map[p.hashId] || p.hashId; if (slug) s.push({ url: `${BASE}/projects/${slug}`, priority: 0.55 }) }
     } catch {}
     addSection('projects', 'پروژه', s)
   }
 
-  // ── متخصصان: شارد به‌ازای هر نوع (مشاور/آژانس/سازنده/…) ──
+  // ── متخصصان (فقط‌خواندنی: فقط آن‌هایی که slug دارند؛ بقیه را کرون slug می‌دهد) ──
   if (enabled(sections, 'providers')) {
     try {
       const { listAccounts } = await import('./account-store')
       const { urlTypeForRole } = await import('./provider-public')
-      const { ensureProviderSlug } = await import('./provider-slug-store')
-      const { getProfile } = await import('./profile-store')
+      const { allProviderSlugsByPhone } = await import('./provider-slug-store')
+      const map = await allProviderSlugsByPhone()
+      const norm = (p: string) => String(p || '').replace(/\D/g, '')
       const byType = new Map<string, UrlEntry[]>()
       for (const a of listAccounts()) {
         const type = urlTypeForRole(a.role); if (!type) continue
-        const gp = getProfile(a.phone)
-        const name = (gp.businessName || gp.displayName || a.name || '').trim(); if (!name) continue
-        const slug = await ensureProviderSlug(a.phone, name); if (!slug) continue
+        const slug = map[norm(a.phone)]; if (!slug) continue
         ;(byType.get(type) || byType.set(type, []).get(type)!).push({ url: `${BASE}/${type}/${slug}`, priority: 0.6 })
       }
       for (const [type, entries] of [...byType.entries()].sort()) addSection(`providers-${type}`, 'متخصص', entries)
@@ -197,4 +197,35 @@ export async function checkNewShards(): Promise<{ added: string[]; total: number
 export function snapshotMeta(): { snapshotAt?: number; totalUrls?: number } {
   const s = (getAdminData() as Record<string, any>).seo?.sitemap || {}
   return { snapshotAt: s.snapshotAt, totalUrls: s.totalUrls }
+}
+
+// ── پیش‌محاسبهٔ slugِ پروژه‌ها/متخصصان (کرونِ instance صفر) تا سایت‌مپ فقط‌خواندنی و سریع بماند ──
+// هر نوعِ موجودیت در «یک نوشتِ واحد» slug می‌گیرد (نه یک نوشت به‌ازای هر آیتم = جلوگیری از ۵۰۴).
+export async function precomputeSlugs(): Promise<{ projects: number; providers: number }> {
+  let projects = 0, providers = 0
+  try {
+    const { listAccounts } = await import('./account-store')
+    const { urlTypeForRole } = await import('./provider-public')
+    const { getProfile } = await import('./profile-store')
+    const { ensureManyProviderSlugs, allProviderSlugsByPhone } = await import('./provider-slug-store')
+    const have = await allProviderSlugsByPhone()
+    const norm = (p: string) => String(p || '').replace(/\D/g, '')
+    const need: { phone: string; name: string }[] = []
+    for (const a of listAccounts()) {
+      const type = urlTypeForRole(a.role); if (!type || have[norm(a.phone)]) continue
+      const gp = getProfile(a.phone); const name = (gp.businessName || gp.displayName || a.name || '').trim(); if (!name) continue
+      need.push({ phone: a.phone, name })
+    }
+    if (need.length) providers = await ensureManyProviderSlugs(need)
+  } catch {}
+  try {
+    const { publicQuery } = await import('./persiansaze-store')
+    const { ensureManyProjectSlugs, allProjectSlugsByHash } = await import('./project-slug-store')
+    const have = await allProjectSlugsByHash()
+    const items = (publicQuery({ pageSize: 20000 }).items || [])
+    const need = items.filter(p => !have[p.hashId]).map(p => ({ hashId: p.hashId, name: p.address || (p as any).builderName || 'پروژه' }))
+    if (need.length) projects = await ensureManyProjectSlugs(need)
+  } catch {}
+  if (projects || providers) CACHE = null   // کشِ سایت‌مپ باطل شود تا slugهای تازه بازتاب یابند
+  return { projects, providers }
 }
