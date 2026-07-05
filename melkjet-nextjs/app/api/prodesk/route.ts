@@ -8,7 +8,7 @@ import {
 
 // میزِ کارِ متخصص — دادهٔ هر پنل مخصوصِ کاربرِ واردشده و نقشِ آن (role=مسیرِ داشبورد).
 // role از کوئری/بدنه می‌آید تا یک اندپوینت به هر شش داشبورد سرویس دهد.
-const ROLES = ['/architect', '/contractor', '/appraiser', '/lawfirm', '/finance', '/notary']
+const ROLES = ['/architect', '/contractor', '/appraiser', '/lawfirm', '/finance', '/notary', '/legal']
 const roleOf = (v: string) => (ROLES.includes(v) ? v : '')
 
 export async function GET(req: NextRequest) {

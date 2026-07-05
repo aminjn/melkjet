@@ -4,10 +4,10 @@ import { usePathname } from 'next/navigation'
 
 // دستیارِ حقوقیِ شناور — روی همهٔ پنل‌ها/داشبوردها دیده می‌شود تا کاربر بدونِ ترکِ پنل،
 // سؤالِ حقوقی (قرارداد، سند، حقوقِ خریدار/فروشنده) بپرسد. همان مغزِ صفحهٔ /legal
-// (agent=chat با پیش‌وندِ «مشاور حقوقی») را می‌زند؛ لینکِ «صفحهٔ کامل» به /legal (موتورِ مذاکره).
+// (agent=chat با پیش‌وندِ «مشاور حقوقی») را می‌زند.
 interface Msg { role: 'user' | 'assistant'; content: string }
 
-// مسیرهای پنل/داشبورد که دستیار باید در آن‌ها باشد. خودِ /legal مستثناست (صفحهٔ کامل است).
+// مسیرهای پنل/داشبورد که دستیار باید در آن‌ها باشد. خودِ /legal مستثناست (پنلِ مشاورِ حقوقی، تبِ دستیارِ خودش را دارد).
 const PANEL_ROUTES = ['/admin', '/agency', '/pros', '/builder', '/materials', '/owner', '/buyer', '/crm', '/marketing', '/workflow', '/website-builder', '/content', '/plan-ai', '/architect', '/contractor', '/appraiser', '/lawfirm', '/finance', '/notary']
 
 const chips = ['سند مالکیت', 'قرارداد اجاره', 'حقوق مستاجر', 'مبایعه‌نامه', 'کد رهگیری']
@@ -60,7 +60,6 @@ export default function LegalAssistant() {
                 آنلاین · مشاورهٔ حقوقی ملکی
               </div>
             </div>
-            <a href="/legal" title="صفحهٔ کامل (موتورِ مذاکره)" style={{ textDecoration: 'none', color: 'var(--gold)', fontSize: 11.5, fontWeight: 700, border: '1px solid var(--line)', borderRadius: 8, padding: '4px 8px', whiteSpace: 'nowrap' }}>صفحهٔ کامل ↗</a>
             <button onClick={() => setOpen(false)} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: 20 }}>×</button>
           </div>
 

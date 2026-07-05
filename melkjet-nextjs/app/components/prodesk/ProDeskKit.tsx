@@ -65,7 +65,7 @@ export interface ShellCfg { dash: string; unit: string; icon: string; accent: st
 // نگاشتِ داشبورد → پروفایلِ سایت‌سازِ صنفی (برای بازکردنِ قالبِ درست در سایت‌سازِ جاسازی‌شده).
 const DASH_WB_PROFILE: Record<string, string> = {
   '/architect': 'معمار', '/contractor': 'پیمانکار', '/appraiser': 'کارشناس',
-  '/lawfirm': 'دفتر حقوقی', '/finance': 'بانک و بیمه', '/notary': 'دفترخانه',
+  '/lawfirm': 'دفتر حقوقی', '/finance': 'بانک و بیمه', '/notary': 'دفترخانه', '/legal': 'حقوقی',
 }
 
 // یک گروهِ ابزارِ آبشاری در سایدبار (CRM/مارکتینگ/اتوماسیون/سایت‌ساز) — داخلِ همین پنل باز می‌شود.
