@@ -4955,69 +4955,158 @@ function PromotionsView() {
 
 // ─── ویرایشگرِ قیمت‌گذاریِ پروموت (بسته‌ها/شارژ/باندل/مزایده) ───────────────
 function PromoPricingEditor() {
+  const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
   const [defaults, setDefaults] = useState<any>(null)
-  const [vals, setVals] = useState<any>({ tiers: {}, packs: {}, bundles: {}, auction: {} })
+  const [slots, setSlots] = useState<any[]>([])
+  const [roleOptions, setRoleOptions] = useState<any[]>([])
+  const [rows, setRows] = useState<any[]>([])        // فهرستِ یکپارچهٔ همهٔ تیرها (seed + سفارشی)
+  const [deleted, setDeleted] = useState<string[]>([]) // idِ تیرهای seed که حذف شده‌اند
+  const [vals, setVals] = useState<any>({ packs: {}, bundles: {}, auction: {} })
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
-  const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
+
   useEffect(() => {
     fetch('/api/admin/promo-pricing').then(r => r.ok ? r.json() : null).then(d => {
       if (!d) return
       setDefaults(d.defaults)
+      const sl: any[] = d.slots || []
+      setSlots(sl)
+      setRoleOptions(d.roleOptions || [])
       const ov = d.overrides || {}
-      // مقدارِ مؤثر = override ?? پیش‌فرض
-      const v: any = { tiers: {}, packs: {}, bundles: {}, auction: {} }
-      for (const t of d.defaults.tiers) v.tiers[t.id] = { price: ov.tiers?.[t.id]?.price ?? t.price, days: ov.tiers?.[t.id]?.days ?? t.days }
+      // slotِ seed از روی متنِ «where» بازیابی می‌شود (GET، slotِ id را نمی‌فرستد).
+      const seedSlotOf = (t: any) => sl.find(s => s.where === t.where)?.id || sl[0]?.id || ''
+      const seedRows = (d.defaults.tiers || []).map((t: any) => {
+        const o = ov.tiers?.[t.id] || {}
+        const meta = ov.tierMeta?.[t.id] || {}
+        const seedSlot = seedSlotOf(t)
+        return {
+          id: t.id, seed: true, seedSlot,
+          name: meta.name ?? t.name,
+          kind: meta.kind ?? t.kind,
+          slot: (meta.slot && sl.some(s => s.id === meta.slot)) ? meta.slot : seedSlot,
+          price: o.price ?? t.price,
+          days: o.days ?? t.days,
+          forRoles: Array.isArray(meta.forRoles) ? meta.forRoles : (t.forRoles || []),
+          desc: meta.desc ?? '',
+          enabled: meta.enabled !== false,
+        }
+      }).filter((r: any) => !(ov.deletedTiers || []).includes(r.id))
+      const customRows = (ov.customTiers || []).map((c: any) => ({
+        id: c.id, seed: false, seedSlot: '',
+        name: c.name || '', kind: c.kind || 'ویژه',
+        slot: (c.slot && sl.some(s => s.id === c.slot)) ? c.slot : (sl[0]?.id || ''),
+        price: c.price ?? 0, days: c.days ?? 7,
+        forRoles: Array.isArray(c.forRoles) ? c.forRoles : [],
+        desc: c.desc || '', enabled: c.enabled !== false,
+      }))
+      setRows([...seedRows, ...customRows])
+      setDeleted(ov.deletedTiers || [])
+      const v: any = { packs: {}, bundles: {}, auction: {} }
       for (const p of d.defaults.packs) v.packs[p.id] = { pay: ov.packs?.[p.id]?.pay ?? p.pay, credit: ov.packs?.[p.id]?.credit ?? p.credit }
       for (const b of d.defaults.bundles) v.bundles[b.id] = { price: ov.bundles?.[b.id]?.price ?? b.price }
       for (const a of d.defaults.auction) v.auction[a.id] = { minBid: ov.auction?.[a.id]?.minBid ?? a.minBid, step: ov.auction?.[a.id]?.step ?? a.step, periodDays: ov.auction?.[a.id]?.periodDays ?? a.periodDays }
       setVals(v)
     })
   }, [])
+
   const inp: React.CSSProperties = { width: 110, background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 8, padding: '6px 9px', color: 'var(--text)', fontSize: 12.5, fontFamily: 'inherit', outline: 'none' }
-  const setV = (grp: string, id: string, field: string, num: number) => setVals((s: any) => ({ ...s, [grp]: { ...s[grp], [id]: { ...s[grp][id], [field]: num } } }))
+  const tinp: React.CSSProperties = { ...inp, width: 'auto' }
   const num = (e: React.ChangeEvent<HTMLInputElement>) => Math.max(0, parseInt(e.target.value.replace(/\D/g, '') || '0', 10))
+  const setV = (grp: string, id: string, field: string, n: number) => setVals((s: any) => ({ ...s, [grp]: { ...s[grp], [id]: { ...s[grp][id], [field]: n } } }))
+  const slotById = (id: string) => slots.find(s => s.id === id)
+  const derivedTarget = (slotId: string): 'profile' | 'listing' => { const s = slotById(slotId); return s && s.target === 'directory' ? 'profile' : 'listing' }
+
+  const setRow = (id: string, patch: any) => setRows(rs => rs.map(r => r.id === id ? { ...r, ...patch } : r))
+  const toggleRole = (id: string, roleId: string) => setRows(rs => rs.map(r => r.id === id ? { ...r, forRoles: r.forRoles.includes(roleId) ? r.forRoles.filter((x: string) => x !== roleId) : [...r.forRoles, roleId] } : r))
+  const delRow = (row: any) => { if (row.seed) setDeleted(d => d.includes(row.id) ? d : [...d, row.id]); setRows(rs => rs.filter(r => r.id !== row.id)) }
+  const addRow = () => {
+    const id = 'cus_' + Date.now().toString(36)
+    setRows(rs => [...rs, { id, seed: false, seedSlot: '', name: '', kind: 'ویژه', slot: slots[0]?.id || '', price: 199000, days: 7, forRoles: [], desc: '', enabled: true }])
+  }
+
+  const roleLabel = (id: string) => (roleOptions.find(o => o.id === id)?.label || id.replace('/', ''))
+  const sameRoles = (a: string[], b: string[]) => JSON.stringify([...(a || [])].sort()) === JSON.stringify([...(b || [])].sort())
+
   const save = async () => {
     if (!defaults) return
     setBusy(true); setMsg('')
-    // فقط فیلدهایی که با پیش‌فرض فرق دارند در override ذخیره می‌شوند.
-    const ov: any = { tiers: {}, packs: {}, bundles: {}, auction: {} }
-    for (const t of defaults.tiers) { const o: any = {}; if (vals.tiers[t.id]?.price !== t.price) o.price = vals.tiers[t.id].price; if (vals.tiers[t.id]?.days !== t.days) o.days = vals.tiers[t.id].days; if (Object.keys(o).length) ov.tiers[t.id] = o }
+    const ov: any = { tiers: {}, packs: {}, bundles: {}, auction: {}, tierMeta: {}, deletedTiers: [...deleted], customTiers: [] }
+    for (const r of rows) {
+      if (r.seed) {
+        const seed = defaults.tiers.find((t: any) => t.id === r.id)
+        if (!seed) continue
+        const o: any = {}
+        if (r.price !== seed.price) o.price = r.price
+        if (r.days !== seed.days) o.days = r.days
+        if (Object.keys(o).length) ov.tiers[r.id] = o
+        const meta: any = {}
+        if (r.name !== seed.name) meta.name = r.name
+        if (r.kind !== seed.kind) meta.kind = r.kind
+        if (r.slot !== r.seedSlot) meta.slot = r.slot
+        if (r.desc) meta.desc = r.desc
+        if (!sameRoles(r.forRoles, seed.forRoles || [])) meta.forRoles = r.forRoles
+        if (!r.enabled) meta.enabled = false
+        if (Object.keys(meta).length) ov.tierMeta[r.id] = meta
+      } else {
+        ov.customTiers.push({ id: r.id, slot: r.slot, target: derivedTarget(r.slot), days: r.days, name: r.name, price: r.price, desc: r.desc || '', kind: r.kind, forRoles: r.forRoles, enabled: r.enabled })
+      }
+    }
     for (const p of defaults.packs) { const o: any = {}; if (vals.packs[p.id]?.pay !== p.pay) o.pay = vals.packs[p.id].pay; if (vals.packs[p.id]?.credit !== p.credit) o.credit = vals.packs[p.id].credit; if (Object.keys(o).length) ov.packs[p.id] = o }
     for (const b of defaults.bundles) { if (vals.bundles[b.id]?.price !== b.price) ov.bundles[b.id] = { price: vals.bundles[b.id].price } }
     for (const a of defaults.auction) { const o: any = {}; if (vals.auction[a.id]?.minBid !== a.minBid) o.minBid = vals.auction[a.id].minBid; if (vals.auction[a.id]?.step !== a.step) o.step = vals.auction[a.id].step; if (vals.auction[a.id]?.periodDays !== a.periodDays) o.periodDays = vals.auction[a.id].periodDays; if (Object.keys(o).length) ov.auction[a.id] = o }
     const r = await fetch('/api/admin/promo-pricing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ov) })
-    setBusy(false); setMsg(r.ok ? '✓ قیمت‌ها ذخیره شد (تا ۵ ثانیه روی همهٔ اینستنس‌ها اعمال می‌شود)' : '⚠ خطا در ذخیره')
+    setBusy(false); setMsg(r.ok ? '✓ کاتالوگ ذخیره شد (تا ۵ ثانیه روی همهٔ اینستنس‌ها اعمال می‌شود)' : '⚠ خطا در ذخیره')
   }
+
   if (!defaults) return <Card><div style={{ color: 'var(--muted)', fontSize: 13 }}>در حالِ بارگذاری…</div></Card>
-  const roleLabel = (r?: string[]) => (r && r.length ? r.map(x => x.replace('/', '')).join('، ') : 'همه')
-  const listingTiers = defaults.tiers.filter((t: any) => t.target === 'listing')
-  const profileTiers = defaults.tiers.filter((t: any) => t.target === 'profile')
-  const TierRows = ({ list }: { list: any[] }) => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {list.map((t: any) => (
-        <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg2)', borderRadius: 10, padding: '8px 12px', flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: 200 }}><span style={{ fontSize: 13, fontWeight: 700 }}>{t.name}</span> <span style={{ fontSize: 10.5, color: 'var(--gold)', background: 'var(--goldDim)', borderRadius: 999, padding: '1px 7px' }}>{t.kind}</span> <span style={{ fontSize: 11, color: 'var(--faint)' }}>· {roleLabel(t.forRoles)}</span>{t.where && <span style={{ display: 'block', fontSize: 10.5, color: 'var(--muted)', marginTop: 2 }}>📍 {t.where}</span>}</div>
-          <label style={{ fontSize: 11.5, color: 'var(--muted)' }}>قیمت: <input style={inp} value={vals.tiers[t.id]?.price ?? ''} onChange={e => setV('tiers', t.id, 'price', num(e))} /></label>
-          <label style={{ fontSize: 11.5, color: 'var(--muted)' }}>مدت(روز): <input style={{ ...inp, width: 64 }} value={vals.tiers[t.id]?.days ?? ''} onChange={e => setV('tiers', t.id, 'days', num(e))} /></label>
-        </div>
-      ))}
-    </div>
-  )
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>قیمتِ همهٔ بسته‌های پروموت، شارژِ کیفِ پول، باندل‌ها و مزایده را این‌جا تنظیم کن. مقادیر برحسبِ تومان‌اند. تغییرِ مقدار نسبت به پیش‌فرض به‌عنوان «override» ذخیره می‌شود.</div>
+      <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>کاتالوگِ کاملِ پروموت را این‌جا مدیریت کن: بسته‌ها را بساز، ویرایش یا حذف کن (نام، نشان، جایگاه، قیمت، مدت، نقش‌ها، فعال/غیرفعال)، شارژِ کیفِ پول، باندل‌ها و مزایده را تنظیم کن. مقادیر برحسبِ تومان‌اند و تغییرِ نسبت به پیش‌فرض ذخیره می‌شود.</div>
 
       <Card>
-        <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 10 }}>🚀 بسته‌های پروموتِ آگهی</div>
-        <TierRows list={listingTiers} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+          <div style={{ fontWeight: 800, fontSize: 14 }}>🚀 بسته‌های پروموت</div>
+          <GoldButton onClick={addRow} style={{ fontSize: 12.5, padding: '8px 14px' }}>＋ افزودنِ بستهٔ پروموتِ جدید</GoldButton>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {rows.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--faint)' }}>هیچ بسته‌ای وجود ندارد. یک بستهٔ جدید بسازید.</div>}
+          {rows.map((r: any) => {
+            const s = slotById(r.slot)
+            return (
+              <div key={r.id} style={{ background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 12, padding: '10px 12px', opacity: r.enabled ? 1 : 0.6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <label style={{ fontSize: 11.5, color: 'var(--muted)', flex: 1, minWidth: 160 }}>نام: <input style={{ ...tinp, width: '100%', marginTop: 3 }} value={r.name} onChange={e => setRow(r.id, { name: e.target.value })} placeholder="نامِ بسته" /></label>
+                  <label style={{ fontSize: 11.5, color: 'var(--muted)' }}>نشان: <input style={{ ...inp, width: 96 }} value={r.kind} onChange={e => setRow(r.id, { kind: e.target.value })} placeholder="VIP/ویژه" /></label>
+                  <label style={{ fontSize: 11.5, color: 'var(--muted)' }}>قیمت: <input style={inp} value={r.price} onChange={e => setRow(r.id, { price: num(e) })} /></label>
+                  <label style={{ fontSize: 11.5, color: 'var(--muted)' }}>مدت(روز): <input style={{ ...inp, width: 64 }} value={r.days} onChange={e => setRow(r.id, { days: num(e) })} /></label>
+                  <span style={{ fontSize: 10, color: r.seed ? 'var(--faint)' : 'var(--gold)', background: r.seed ? 'var(--line)' : 'var(--goldDim)', borderRadius: 999, padding: '2px 8px', whiteSpace: 'nowrap' }}>{r.seed ? 'پیش‌فرض' : 'سفارشی'}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 8 }}>
+                  <label style={{ fontSize: 11.5, color: 'var(--muted)' }}>جایگاه: <select style={{ ...inp, width: 'auto', maxWidth: 320 }} value={r.slot} onChange={e => setRow(r.id, { slot: e.target.value })}>
+                    {slots.map((sl: any) => <option key={sl.id} value={sl.id}>{sl.label} — {sl.where}</option>)}
+                  </select></label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: 'var(--muted)', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={r.enabled} onChange={e => setRow(r.id, { enabled: e.target.checked })} /> فعال
+                  </label>
+                  <button onClick={() => delRow(r)} style={{ marginInlineStart: 'auto', fontSize: 11.5, padding: '5px 12px', borderRadius: 8, border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>حذف</button>
+                </div>
+                {s && <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 6 }}>📍 {s.where}</div>}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>نقش‌ها {r.forRoles.length === 0 && '(همه)'}:</span>
+                  {roleOptions.map((o: any) => {
+                    const on = r.forRoles.includes(o.id)
+                    return <button key={o.id} onClick={() => toggleRole(r.id, o.id)} style={{ fontSize: 10.5, padding: '3px 10px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', border: '1px solid ' + (on ? 'var(--gold2)' : 'var(--line2)'), color: on ? 'var(--gold)' : 'var(--faint)', background: on ? 'var(--goldDim)' : 'transparent' }}>{o.label || roleLabel(o.id)}</button>
+                  })}
+                </div>
+              </div>
+            )
+          })}
+        </div>
       </Card>
+
       <Card>
-        <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 10 }}>⭐ بسته‌های پروموتِ پروفایل (نقش‌محور)</div>
-        <TierRows list={profileTiers} />
-      </Card>
-      <Card>
-        <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 10 }}>💳 بسته‌های شارژِ کیفِ پول</div>
+        <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 10 }}>💳 شارژِ کیفِ پول</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {defaults.packs.map((p: any) => (
             <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg2)', borderRadius: 10, padding: '8px 12px', flexWrap: 'wrap' }}>
@@ -5041,7 +5130,7 @@ function PromoPricingEditor() {
         </div>
       </Card>
       <Card>
-        <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 10 }}>🏆 مزایدهٔ جایگاهِ ویژه</div>
+        <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 10 }}>🏆 مزایده</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {defaults.auction.map((a: any) => (
             <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg2)', borderRadius: 10, padding: '8px 12px', flexWrap: 'wrap' }}>
@@ -5055,7 +5144,7 @@ function PromoPricingEditor() {
       </Card>
 
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', position: 'sticky', bottom: 0, background: 'var(--bg)', padding: '10px 0' }}>
-        <GoldButton onClick={save} disabled={busy}>{busy ? 'در حال ذخیره…' : 'ذخیرهٔ قیمت‌ها'}</GoldButton>
+        <GoldButton onClick={save} disabled={busy}>{busy ? 'در حال ذخیره…' : 'ذخیرهٔ کاتالوگ'}</GoldButton>
         {msg && <span style={{ fontSize: 12.5, fontWeight: 600, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</span>}
       </div>
     </div>
