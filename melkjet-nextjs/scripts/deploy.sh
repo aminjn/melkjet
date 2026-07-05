@@ -1,17 +1,50 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# دیپلوی امنِ ملک‌جت — بعد از reload سلامتِ هر اینستنس را چک می‌کند تا اگر دیپلوی
-# چیزی را خراب کرد، همان لحظه بفهمی (نه از روی مرورگرِ کاربر).
+# دیپلوی امنِ ملک‌جت — کدِ روی سرور را با origin/main هم‌گام می‌کند، build می‌کند،
+# reload می‌کند و سلامتِ هر اینستنس را چک می‌کند. اگر سرور از گیت‌هاب عقب باشد و
+# نتواند pull کند، «با صدای بلند» متوقف می‌شود (نه اینکه بی‌صدا کدِ قدیمی را build کند).
 #
 # اجرا:  sudo /var/www/melkjet/melkjet-nextjs/scripts/deploy.sh
+#   یا با pullِ دستیِ قبلی:  proxy-on && git pull origin main && sudo scripts/deploy.sh
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 APP_DIR="${MELKJET_APP_DIR:-/var/www/melkjet/melkjet-nextjs}"
 cd "$APP_DIR"
 
-# نکته: git pull اینجا انجام نمی‌شود. زیرِ sudo متغیرهای proxy پاک می‌شوند و git به
-# GitHub نمی‌رسد (hang). قبل از این اسکریپت، خودت با proxy-on دستی pull کن:
-#   proxy-on && git pull origin main
+echo "→ کدِ فعلیِ روی سرور:"
+git log -1 --oneline 2>/dev/null || true
+
+# ── هم‌گام‌سازی با origin/main ────────────────────────────────────────────────
+# fetch/pull ممکن است زیرِ sudo (پروکسیِ پاک‌شده) hang کند؛ پس با timeout و best-effort.
+# اگر fetch موفق شد و سرور عقب بود، اول ff-only pull؛ اگر نشد، «با صدای بلند» توقف.
+echo "→ بررسیِ هم‌گامی با گیت‌هاب…"
+FETCH_OK=0
+if timeout 30 git fetch origin main 2>/dev/null; then FETCH_OK=1; fi
+
+if [ "$FETCH_OK" = "1" ]; then
+  LOCAL=$(git rev-parse HEAD)
+  REMOTE=$(git rev-parse origin/main)
+  if [ "$LOCAL" != "$REMOTE" ]; then
+    echo "   سرور عقب است — در حالِ pull (ff-only)…"
+    if timeout 30 git pull --ff-only origin main; then
+      echo "   ✓ هم‌گام شد:"; git log -1 --oneline
+    else
+      echo "   ✗ pull نشد (احتمالاً تعارضِ محلی). دستی حل کن:"
+      echo "     proxy-on && git status && git pull origin main"
+      exit 1
+    fi
+  else
+    echo "   ✓ سرور به‌روز است."
+  fi
+else
+  # نتوانستیم fetch کنیم (پروکسی زیرِ sudo). به کاربر بگو حتماً قبلش دستی pull کرده باشد.
+  echo "   ⚠ نتوانستم با گیت‌هاب چک کنم (پروکسی زیرِ sudo پاک می‌شود)."
+  echo "   ⚠ اگر مطمئن نیستی جدیدترین کد را pull کرده‌ای، همین حالا Ctrl+C بزن و اجرا کن:"
+  echo "        proxy-on && git pull origin main   ← بعد دوباره این اسکریپت"
+  echo "   ۵ ثانیه تا ادامه…"
+  sleep 5
+fi
+
 echo "→ build"
 NODE_OPTIONS="--max-old-space-size=2048" npm run build
 
@@ -28,8 +61,9 @@ for port in 3001 3002 3003; do
 done
 
 if [ "$ok" = "1" ]; then
-  echo "✓ همهٔ اینستنس‌ها سالم‌اند."
-  echo "یادآوری: اگر HTML را در Arvan کش می‌کنی، cache را Purge کن — یا بهتر، در CDN فقط /_next/static را کش کن و HTML را هرگز (راهنما در CLAUDE.md → «هرگز خراب نشدنِ دیپلوی»)."
+  echo "✓ همهٔ اینستنس‌ها سالم‌اند. دیپلوی‌شده:"
+  git log -1 --oneline
+  echo "یادآوری: اگر HTML را در Arvan کش می‌کنی، cache را Purge کن (یا در CDN فقط /_next/static را کش کن، HTML را هرگز)."
 else
   echo "✗ یک اینستنس ۲۰۰ نداد. لاگ:  pm2 logs --err --lines 40 --nostream"
   exit 1

@@ -4844,7 +4844,7 @@ function PromotionsView() {
   const [tab, setTab] = useState<'active' | 'orders' | 'pricing' | 'manual'>('active')
   const fa = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
   const load = () => fetch('/api/admin/promotions').then(r => r.ok ? r.json() : { slots: [], promotions: [] }).then(d => { setSlots(d.slots || []); setPromotions(d.promotions || []) })
-  const loadOrders = () => fetch('/api/comm?admin=1').then(r => r.ok ? r.json() : null).then(d => { if (d) setOrders((d.orders || []).filter((o: any) => o.kind === 'promo')) })
+  const loadOrders = () => fetch('/api/comm?admin=1').then(r => r.ok ? r.json() : null).then(d => { if (d) setOrders((d.orders || []).filter((o: any) => o.kind === 'promo' || o.kind === 'promo_credit')) })
   useEffect(() => { load(); loadOrders() }, [])
 
   const now = Date.now()
@@ -4924,8 +4924,8 @@ function PromotionsView() {
               {orders.slice(0, 30).map(o => (
                 <div key={o.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, background: 'var(--bg2)', borderRadius: 10, padding: '9px 12px', flexWrap: 'wrap' }}>
                   <div style={{ fontSize: 12.5 }}>
-                    <span style={{ fontWeight: 700 }}>🚀 {o.name}</span>
-                    <span style={{ color: 'var(--muted)', marginInlineStart: 8 }}>{o.promoTarget === 'listing' ? 'آگهی' : o.bundleId ? 'باندل' : 'پروفایل'}{o.targetName ? ` · ${o.targetName}` : ''}{o.days ? ` · ${fa(o.days)} روز` : ''}</span>
+                    <span style={{ fontWeight: 700 }}>{o.kind === 'promo_credit' ? '💳' : '🚀'} {o.name}</span>
+                    <span style={{ color: 'var(--muted)', marginInlineStart: 8 }}>{o.kind === 'promo_credit' ? 'شارژِ کیفِ پول' : o.promoTarget === 'listing' ? 'آگهی' : o.bundleId ? 'باندل' : 'پروفایل'}{o.targetName ? ` · ${o.targetName}` : ''}{o.days ? ` · ${fa(o.days)} روز` : ''}</span>
                     <span style={{ color: 'var(--muted)', marginInlineStart: 8, direction: 'ltr', display: 'inline-block' }}>{o.owner}</span>
                     <span style={{ color: 'var(--gold)', marginInlineStart: 8 }}>{fa(o.price)} تومان</span>
                     {o.receipt && <span style={{ color: 'var(--gold)', marginInlineStart: 8, fontSize: 11.5 }}>💳 کدِ رهگیری: {o.receipt}</span>}

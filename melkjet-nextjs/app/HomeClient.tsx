@@ -123,7 +123,7 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
         score: 80 + (i % 19),
         img: it.image ? `center/cover no-repeat url(${it.image})` : gradientFor(it.id),
       }))
-    : featured
+    : []   // بدونِ دادهٔ واقعی، دادهٔ فیک نشان نده (بخش پنهان می‌شود)
 
   // آگهی‌های ترند/داغ — فقط اگر پروموتِ فعالِ ترند وجود داشته باشد نمایش داده می‌شود.
   const trendingCards = (promoTrending || []).map((it, i) => ({
@@ -150,7 +150,7 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
           promoKind: it.promoKind || 'ویژه',
         }
       })
-    : invest.map((o) => ({ ...o, promoted: false, promoKind: 'ویژه' }))
+    : []
 
   // Map real directory entries into advisor cards; fall back to static mockup if empty.
   const advisorCards = advisorSource.length
@@ -164,7 +164,7 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
         promoted: promotedAdvisorIds.has(it.id),
         promoKind: it.promoKind || 'ویژه',
       }))
-    : advisors.map((a) => ({ ...a, initials: initialsFor(a.n), promoted: false, promoKind: 'ویژه' }))
+    : []   // بدونِ متخصصِ واقعی، «مشاوران برتر»ِ فیک نشان نده
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
@@ -277,6 +277,7 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
       </section>
 
       {/* FEATURED */}
+      {featuredCards.length > 0 && (
       <section style={{ maxWidth: 1280, margin: '0 auto', padding: 'clamp(48px,6vw,80px) 24px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, marginBottom: 28 }}>
           <div><div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}>★ منتخب ملک‌جت</div><h2 style={{ fontSize: 'clamp(24px,3.4vw,34px)', fontWeight: 800, letterSpacing: '-.6px', color: 'var(--text)' }}>املاک ویژه و لوکس</h2></div>
@@ -288,6 +289,7 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
           ))}
         </div>
       </section>
+      )}
 
       {/* TRENDING — فقط با پروموتِ فعالِ ترند */}
       {trendingCards.length > 0 && (
@@ -302,6 +304,7 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
       )}
 
       {/* INVESTMENT */}
+      {investCards.length > 0 && (
       <section style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px clamp(48px,6vw,80px)' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, marginBottom: 28 }}>
           <div><div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}>◈ بازده بالا</div><h2 style={{ fontSize: 'clamp(24px,3.4vw,34px)', fontWeight: 800, letterSpacing: '-.6px', color: 'var(--text)' }}>فرصت‌های سرمایه‌گذاری</h2></div>
@@ -324,6 +327,7 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
           ))}
         </div>
       </section>
+      )}
 
       {/* AI MODULES */}
       <section style={{ background: 'var(--bg2)', borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)' }}>
@@ -366,7 +370,8 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
         </div>
       </section>
 
-      {/* ADVISORS */}
+      {/* ADVISORS — فقط با متخصصِ واقعی (پروموت‌شده/ثبت‌شده)؛ بدونِ دادهٔ فیک */}
+      {advisorCards.length > 0 && (
       <section style={{ background: 'var(--bg2)', borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)' }}>
         <div style={{ maxWidth: 1280, margin: '0 auto', padding: 'clamp(48px,6vw,80px) 24px' }}>
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, marginBottom: 28 }}>
@@ -389,6 +394,7 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
           </div>
         </div>
       </section>
+      )}
 
       {/* MATERIALS */}
       <section style={{ maxWidth: 1280, margin: '0 auto', padding: 'clamp(48px,6vw,80px) 24px' }}>
