@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
+import { listingHref } from '@/app/lib/listing-url'
 
 // آیتمِ آگهی که از سرور به اسلایدر پاس داده می‌شود.
 export interface SliderItem {
@@ -17,13 +18,14 @@ const GRADS = ['#2d2215,#1e1a12', '#1e2215,#141a10', '#15202d,#101828', '#251528
 
 // اسلایدرِ آگهی‌ها: چیپ‌های دسته‌بندی + ردیفِ افقیِ اسکرول‌شونده با snap و دکمه‌های جهت.
 export default function ListingsSlider({
-  items, categories, perSlide, primary, showCategories,
+  items, categories, perSlide, primary, showCategories, siteSlug = '',
 }: {
   items: SliderItem[]
   categories: string[]
   perSlide: number
   primary: string
   showCategories: boolean
+  siteSlug?: string
 }) {
   const [active, setActive] = useState<string>('__all__')
   const rowRef = useRef<HTMLDivElement | null>(null)
@@ -109,7 +111,7 @@ export default function ListingsSlider({
           ) : visible.map((it, i) => (
             <a
               key={it.id}
-              href={`/property/${it.id}`}
+              href={siteSlug ? `/${siteSlug}${listingHref(it.id, it.title, it.location)}` : `/property/${it.id}`}
               className="mjs-slide-card"
               style={{
                 flex: `0 0 ${cardWidth}`, minWidth: 240, scrollSnapAlign: 'start',

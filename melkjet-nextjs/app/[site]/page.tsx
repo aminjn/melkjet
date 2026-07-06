@@ -234,7 +234,7 @@ const DEMO_PRODUCTS = [
   { name: 'رنگِ پلاستیک', brand: 'الوان', unit: 'گالن', price: '۴۲۰٬۰۰۰' },
 ]
 
-async function ListingsBlock({ block, primary, ownerName, ownerPhone }: { block: SiteBlock; primary: string; ownerName?: string; ownerPhone?: string }) {
+async function ListingsBlock({ block, primary, ownerName, ownerPhone, slug }: { block: SiteBlock; primary: string; ownerName?: string; ownerPhone?: string; slug?: string }) {
   const props = p(block)
   // total = تعداد آگهی‌های بارگذاری‌شده (پیش‌فرض ۹)؛ count به‌عنوان جایگزینِ legacy.
   const total = Math.max(1, Math.min(48, Number(props.total) || Number(props.count) || 9))
@@ -261,6 +261,7 @@ async function ListingsBlock({ block, primary, ownerName, ownerPhone }: { block:
           perSlide={perSlide}
           primary={primary}
           showCategories={showCategories}
+          siteSlug={slug || ''}
         />
       </div>
     </section>
@@ -356,7 +357,7 @@ function faDigits(s: string): number {
 }
 
 // «آگهی‌ها با جستجو و فیلتر» — مثلِ صفحهٔ اصلیِ آگهی‌ها: گریدِ کامل + فیلتر + جستجو.
-async function SearchListBlock({ block, primary, ownerName, ownerPhone }: { block: SiteBlock; primary: string; ownerName?: string; ownerPhone?: string }) {
+async function SearchListBlock({ block, primary, ownerName, ownerPhone, slug }: { block: SiteBlock; primary: string; ownerName?: string; ownerPhone?: string; slug?: string }) {
   const props = p(block)
   const total = Math.max(1, Math.min(300, Number(props.total) || 60))
   const items: SiteListing[] = (await ownerListings(ownerName, ownerPhone, total)).map(it => {
@@ -379,7 +380,7 @@ async function SearchListBlock({ block, primary, ownerName, ownerPhone }: { bloc
             هنوز آگهی منتشرشده‌ای برای نمایش وجود ندارد.
           </div>
         ) : (
-          <SiteListings items={items} primary={primary} />
+          <SiteListings items={items} primary={primary} siteSlug={slug || ''} />
         )}
       </div>
     </section>
@@ -831,8 +832,8 @@ function renderBlock(block: SiteBlock, primary: string, ownerName?: string, owne
     case 'pricelist': return <PriceListBlock key={block.id} block={block} primary={primary} ownerPhone={ownerPhone} />
     case 'hero': return <HeroBlock key={block.id} block={block} primary={primary} />
     case 'search': return <SearchBlock key={block.id} block={block} primary={primary} />
-    case 'listings': return <ListingsBlock key={block.id} block={block} primary={primary} ownerName={ownerName} ownerPhone={ownerPhone} />
-    case 'searchlist': return <SearchListBlock key={block.id} block={block} primary={primary} ownerName={ownerName} ownerPhone={ownerPhone} />
+    case 'listings': return <ListingsBlock key={block.id} block={block} primary={primary} ownerName={ownerName} ownerPhone={ownerPhone} slug={slug} />
+    case 'searchlist': return <SearchListBlock key={block.id} block={block} primary={primary} ownerName={ownerName} ownerPhone={ownerPhone} slug={slug} />
     case 'blog': return <BlogBlock key={block.id} block={block} primary={primary} ownerName={ownerName} />
     case 'blogfull': return <BlogFullBlock key={block.id} block={block} primary={primary} ownerName={ownerName} />
     case 'services': return <ServicesBlock key={block.id} block={block} primary={primary} />
@@ -869,9 +870,9 @@ function SiteNav({ site, primary, currentSlug }: { site: Site; primary: string; 
 
 // Shared full-site shell: nav + the given page's blocks. Used by both the home
 // route and the [page] sub-route so there's a single source of truth.
-export function SiteShell({ site, page }: { site: Site; page: SitePage }) {
-  // پالتِ کاملِ تم را یک‌بار با مقادیرِ پیش‌فرض حل می‌کنیم؛ کلِ سایت از همین متغیرهای CSS
-  // (روی <main>) بازرنگ می‌شود.
+// پوستهٔ سایت‌ساز (تم + ناوبری + فوتر) که «هر محتوایی» را داخلِ خودش می‌گیرد.
+// صفحه‌های جزئیاتِ آگهی/محصول/مقاله از همین استفاده می‌کنند تا داخلِ همان سایت + قالب بمانند.
+export function SiteChrome({ site, currentSlug, children, appendFooter }: { site: Site; currentSlug?: string; children: React.ReactNode; appendFooter?: boolean }) {
   const t = site.theme
   const primary = t?.primary || '#c9a84c'
   const secondary = t?.secondary || '#1a1510'
@@ -879,17 +880,14 @@ export function SiteShell({ site, page }: { site: Site; page: SitePage }) {
   const surface = t?.surface || '#fbfaf8'
   const text = t?.text || '#4a4338'
   const heading = t?.heading || '#15110b'
-  // همهٔ فونت‌ها لوکال‌اند (@font-face در globals.css) — هیچ بارگذاری از گوگل.
   const fontFamily = (t?.font ? `'${t.font}', ` : '') + 'Vazirmatn, Tahoma, sans-serif'
   const cssVars = {
-    '--mjs-primary': primary,
-    '--mjs-secondary': secondary,
-    '--mjs-bg': bg,
-    '--mjs-surface': surface,
-    '--mjs-text': text,
-    '--mjs-heading': heading,
-    '--mjs-muted': text, // متنِ بدنه در برابرِ عنوان‌ها نقشِ «خاموش/muted» را بازی می‌کند.
+    '--mjs-primary': primary, '--mjs-secondary': secondary, '--mjs-bg': bg,
+    '--mjs-surface': surface, '--mjs-text': text, '--mjs-heading': heading, '--mjs-muted': text,
   } as React.CSSProperties
+  // برای صفحه‌های جزئیات، فوترِ صفحهٔ خانه را هم ته صفحه بیاور تا حسِ «داخلِ سایت» کامل شود.
+  const home = site.pages.find(p => p.slug === 'home') || site.pages[0]
+  const footerBlocks = appendFooter ? (home?.blocks || []).filter(b => b.type === 'footer') : []
   return (
     <main style={{ minHeight: '100vh', background: 'var(--mjs-bg)', color: 'var(--mjs-text)', fontFamily, ...cssVars }}>
       <style>{`
@@ -917,9 +915,19 @@ export function SiteShell({ site, page }: { site: Site; page: SitePage }) {
           .mjs-footer-grid{grid-template-columns:1fr !important}
         }
       `}</style>
-      <NavBar brand={site.title} items={menuPages(site)} currentSlug={page.slug} siteSlug={site.slug} primary={primary} />
-      {page.blocks.map(block => renderBlock(block, primary, site.ownerName, site.owner, site.slug))}
+      <NavBar brand={site.title} items={menuPages(site)} currentSlug={currentSlug || ''} siteSlug={site.slug} primary={primary} />
+      {children}
+      {footerBlocks.map(block => renderBlock(block, primary, site.ownerName, site.owner, site.slug))}
     </main>
+  )
+}
+
+export function SiteShell({ site, page }: { site: Site; page: SitePage }) {
+  const primary = site.theme?.primary || '#c9a84c'
+  return (
+    <SiteChrome site={site} currentSlug={page.slug}>
+      {page.blocks.map(block => renderBlock(block, primary, site.ownerName, site.owner, site.slug))}
+    </SiteChrome>
   )
 }
 

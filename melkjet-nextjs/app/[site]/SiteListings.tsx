@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { listingHref } from '@/app/lib/listing-url'
 
 // آگهیِ غنی‌شده برای صفحهٔ جستجو/فیلترِ سایت‌ساز (مثلِ صفحهٔ اصلیِ آگهی‌ها).
 export interface SiteListing {
@@ -23,7 +24,7 @@ const CARD_SHADOW = '0 10px 34px -22px rgba(20,16,10,.55), 0 2px 8px -4px rgba(2
 const GRADS = ['#2d2215,#1e1a12', '#1e2215,#141a10', '#15202d,#101828', '#251528,#1a0e1e', '#152825,#0e1a18', '#2d1515,#1e0e0e']
 const uniq = (a: (string | undefined)[]) => Array.from(new Set(a.map(s => (s || '').trim()).filter(Boolean)))
 
-export default function SiteListings({ items, primary }: { items: SiteListing[]; primary: string }) {
+export default function SiteListings({ items, primary, siteSlug = '' }: { items: SiteListing[]; primary: string; siteSlug?: string }) {
   const [q, setQ] = useState('')
   const [deal, setDeal] = useState<'all' | 'sale' | 'rent'>('all')
   const [ptype, setPtype] = useState('all')
@@ -139,7 +140,7 @@ export default function SiteListings({ items, primary }: { items: SiteListing[];
       ) : (
         <div className="mjsl-grid">
           {shown.map((it, i) => (
-            <a key={it.id} href={`/property/${it.id}`} className="mjsl-card" style={{
+            <a key={it.id} href={siteSlug ? `/${siteSlug}${listingHref(it.id, it.title, it.location)}` : `/property/${it.id}`} className="mjsl-card" style={{
               background: 'var(--mjs-bg)', borderRadius: 18, overflow: 'hidden', border: '1px solid #efe9df',
               textDecoration: 'none', display: 'block', boxShadow: CARD_SHADOW,
             }}>
