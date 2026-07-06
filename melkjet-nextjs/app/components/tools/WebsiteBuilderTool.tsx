@@ -1,11 +1,13 @@
 'use client'
-import { useState, useEffect, useRef, type CSSProperties } from 'react'
+import { useState, useEffect, useRef, useCallback, type CSSProperties } from 'react'
 import PanelReturnBar from '@/app/components/PanelReturnBar'
 
-export type WebsiteView = 'templates' | 'editor'
+export type WebsiteView = 'my-site' | 'templates' | 'editor'
 
 // Sidebar nav entries (one per sub-view) — lets a host panel show a cascading submenu.
+// «سایت من» اولین آیتم است تا بازکردنِ سایت‌ساز مستقیم روی سایتِ ذخیره‌شدهٔ کاربر بیفتد (نه قالب‌ها).
 export const WEBSITE_VIEWS: { id: WebsiteView; label: string; icon: string }[] = [
+  { id: 'my-site', icon: '◆', label: 'سایت من' },
   { id: 'templates', icon: '▦', label: 'قالب‌ها' },
   { id: 'editor', icon: '◳', label: 'ویرایشگر' },
 ]
@@ -1447,7 +1449,7 @@ function ReviewsManager() {
 
 export default function WebsiteBuilderTool({ embedded = false, view: viewProp, onView, profile: profileProp }: { embedded?: boolean; view?: WebsiteView; onView?: (v: WebsiteView) => void; profile?: string }) {
   // Default to 'editor' so standalone /website-builder stays pixel-identical (always the builder).
-  const [internalView, setInternalView] = useState<WebsiteView>('editor')
+  const [internalView, setInternalView] = useState<WebsiteView>('my-site')
   const activeView: WebsiteView = viewProp ?? internalView
   const setActiveView = (v: WebsiteView) => { onView ? onView(v) : setInternalView(v) }
 
@@ -1508,6 +1510,27 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
   const [savedSiteChecked, setSavedSiteChecked] = useState(false)
   const [hadSavedSite, setHadSavedSite] = useState(false)
   const autoTplRef = useRef(false)
+  // آیا محتوای فعلیِ ویرایشگر «سایتِ ذخیره‌شدهٔ خودِ کاربر» است یا پیش‌نمایشِ یک قالب؟
+  const contentIsMineRef = useRef(false)
+  // سایتِ ذخیره‌شدهٔ کاربر را در ویرایشگر می‌گذارد (استفادهٔ مشترک: mount + کلیکِ «سایت من»).
+  const applyLoadedSite = useCallback((s: any) => {
+    contentIsMineRef.current = true
+    setSlug(String(s.slug || ''))
+    setHadSavedSite(true)
+    setPages(s.pages.map((pg: any, i: number) => ({
+      slug: i === 0 ? 'home' : slugify(pg.slug || '') || `page-${i}`,
+      title: String(pg.title || '') || (i === 0 ? 'صفحه اصلی' : `صفحه ${i + 1}`),
+      inMenu: pg.inMenu !== false,
+      menuLabel: pg.menuLabel ? String(pg.menuLabel) : undefined,
+      blocks: Array.isArray(pg.blocks) ? pg.blocks.map(migrateBlock) : [],
+    })))
+    setActivePage(0); setSelectedBlock(null)
+    if (s.theme?.primary) setTheme({ ...DEFAULT_THEME, ...s.theme })
+    if (s.seo?.title) setSeoTitle(String(s.seo.title))
+    if (s.seo?.description) setSeoDesc(String(s.seo.description))
+    if (s.ownerName) setOwnerName(String(s.ownerName))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   useEffect(() => {
     let cancelled = false
     fetch('/api/auth/profile')
@@ -1530,24 +1553,8 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
             if (cancelled) return
             const s = data?.site
             const mine = s && Array.isArray(s.pages) && s.pages.length
-            if (mine) {
-              setSlug(String(s.slug || wantSlug))
-              setHadSavedSite(true)
-              setPages(s.pages.map((pg: any, i: number) => ({
-                slug: i === 0 ? 'home' : slugify(pg.slug || '') || `page-${i}`,
-                title: String(pg.title || '') || (i === 0 ? 'صفحه اصلی' : `صفحه ${i + 1}`),
-                inMenu: pg.inMenu !== false,
-                menuLabel: pg.menuLabel ? String(pg.menuLabel) : undefined,
-                blocks: Array.isArray(pg.blocks) ? pg.blocks.map(migrateBlock) : [],
-              })))
-              setActivePage(0); setSelectedBlock(null)
-              if (s.theme?.primary) setTheme({ ...DEFAULT_THEME, ...s.theme })
-              if (s.seo?.title) setSeoTitle(String(s.seo.title))
-              if (s.seo?.description) setSeoDesc(String(s.seo.description))
-              if (s.ownerName) setOwnerName(String(s.ownerName))
-            } else {
-              setSlug(wantSlug)
-            }
+            if (mine) applyLoadedSite(s)
+            else setSlug(wantSlug)
             setSavedSiteChecked(true)
           })
           .catch(() => { setSlug(wantSlug); setSavedSiteChecked(true) })
@@ -1612,6 +1619,19 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lockedProfile, savedSiteChecked, hadSavedSite])
 
+  // کلیکِ «سایت من»: اگر محتوای فعلی سایتِ خودِ کاربر نیست (مثلاً بعد از دیدنِ یک قالب)،
+  // نسخهٔ ذخیره‌شده را از سرور دوباره بارگذاری کن تا همیشه سایتِ واقعیِ کاربر دیده شود.
+  useEffect(() => {
+    if (activeView !== 'my-site' || !savedSiteChecked || contentIsMineRef.current) return
+    let cancelled = false
+    fetch('/api/sites?mine=1', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (!cancelled) { const s = data?.site; if (s && Array.isArray(s.pages) && s.pages.length) applyLoadedSite(s) } })
+      .catch(() => {})
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeView, savedSiteChecked])
+
   const pushHistory = (b: Block[]) => setHistory(h => [...h.slice(-19), b])
 
   const addBlock = (type: string) => {
@@ -1624,6 +1644,7 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
   }
 
   const loadTemplate = (tpl: typeof STARTER_TEMPLATES[0]) => {
+    contentIsMineRef.current = false   // محتوا حالا پیش‌نمایشِ قالب است، نه سایتِ ذخیره‌شدهٔ کاربر
     pushHistory(blocks)
     const pal = templatePalette(tpl)
     const copy = PROFILE_HERO_COPY[tpl.profile] || PROFILE_HERO_COPY['عمومی']

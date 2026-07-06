@@ -195,13 +195,33 @@ export async function saveSite(input: {
   theme?: Partial<SiteTheme>
 }): Promise<Site> {
   return mutate((db) => {
-    // Derive slug: explicit slug → title → random.
-    let slug = sanitizeSlug(input.slug || '')
-    if (!slug) slug = sanitizeSlug(input.title || '')
-    if (!slug) slug = randomSlug()
-
     const now = Date.now()
-    const existing = db.sites.find(site => site.slug === slug)
+    // سایت per-user است: هر کاربر یک سایتِ خودش دارد. slug را طوری حل می‌کنیم که کاربر همیشه
+    // سایتِ خودش را آپدیت کند و هرگز سایتِ کاربرِ دیگر یا قالبِ نمونه را رونویسی نکند
+    // (باگِ گم‌شدنِ سایت: چند کاربرِ یک صنف روی slugِ پیش‌فرضِ مشترک همدیگر را پاک می‌کردند).
+    const owner = input.owner ? String(input.owner) : undefined
+    let slug = sanitizeSlug(input.slug || '')
+    let existing: Site | undefined
+    if (owner) {
+      const mineExisting = db.sites.find(s => String(s.owner || '') === owner)
+      if (mineExisting) {
+        slug = mineExisting.slug            // سایتِ خودش را در جا آپدیت کن (مستقلِ از slugِ ارسالی)
+        existing = mineExisting
+      } else {
+        // کاربرِ جدید: اگر slug خالی است یا متعلق به دیگری/نمونه است، یک slugِ یکتا بساز.
+        const taken = slug ? db.sites.find(s => s.slug === slug) : undefined
+        if (!slug || (taken && String(taken.owner || '') !== owner)) {
+          const base = sanitizeSlug(input.ownerName || input.title || slug || 'site') || 'site'
+          let cand = base, n = 2
+          while (db.sites.some(s => s.slug === cand)) cand = `${base}-${n++}`
+          slug = cand
+        }
+        existing = undefined
+      }
+    } else {
+      if (!slug) slug = sanitizeSlug(input.title || '') || randomSlug()
+      existing = db.sites.find(s => s.slug === slug)
+    }
     const primary = String(input.theme?.primary || '').trim()
 
     // Build the pages array. Prefer `pages`; fall back to a legacy single `blocks` array.
