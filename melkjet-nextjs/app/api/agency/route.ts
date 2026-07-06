@@ -117,11 +117,37 @@ export async function POST(req: NextRequest) {
     case 'clearAgentCommission': if (!b.advisorPhone) return NextResponse.json({ error: 'مشاور الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, commission: await clearAgentCommission(o, String(b.advisorPhone)) })
     case 'distributeLeads': {
       // موتورِ تقسیمِ خودکارِ لید: لیدهای تقسیم‌نشده را بینِ مشاورانِ فعال پخش کن.
+      // استخرِ مشاوران = مشاورانِ محلیِ فعال + مشاورانِ واقعیِ لینک‌شده (با آمارِ عملکردِ واقعی‌شان).
       const agency = await getAgency(o)
-      const plan = planDistribution(agency.leads, agency.agents, agency.listings)
+      const af = await agencyAdvisorFiles(o)
+      const localNames = new Set(agency.agents.filter(a => a.active).map(a => a.name))
+      const memberAgents = af.rows.filter(r => !localNames.has(r.advisorName)).map(r => ({
+        id: 'm_' + r.advisorPhone, name: r.advisorName, phone: r.advisorPhone,
+        deals: r.closedCount, leads: r.leads.total, commission: r.advisorCommission, active: true, createdAt: 0,
+      }))
+      const pool = [...agency.agents.filter(a => a.active), ...memberAgents]
+      const plan = planDistribution(agency.leads, pool, agency.listings)
       const preview = b.preview === true
       if (!preview) for (const a of plan) await assignLead(o, a.leadId, a.agentName)
       return NextResponse.json({ ok: true, assignments: plan, applied: !preview, leads: await listLeads(o) })
+    }
+    case 'autoAssignLead': {
+      // تخصیصِ خودکارِ یک لید به «مناسب‌ترین» مشاور (همان امتیازدهیِ موتورِ تقسیم).
+      if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
+      const agency = await getAgency(o)
+      const af = await agencyAdvisorFiles(o)
+      const localNames = new Set(agency.agents.filter(a => a.active).map(a => a.name))
+      const memberAgents = af.rows.filter(r => !localNames.has(r.advisorName)).map(r => ({
+        id: 'm_' + r.advisorPhone, name: r.advisorName, phone: r.advisorPhone,
+        deals: r.closedCount, leads: r.leads.total, commission: r.advisorCommission, active: true, createdAt: 0,
+      }))
+      const pool = [...agency.agents.filter(a => a.active), ...memberAgents]
+      if (!pool.length) return NextResponse.json({ ok: false, error: 'مشاورِ فعالی برای تخصیص وجود ندارد — اول یک مشاور اضافه/لینک کنید.' })
+      const plan = planDistribution(agency.leads, pool, agency.listings)
+      const a = plan.find(x => x.leadId === String(b.id))
+      if (!a) return NextResponse.json({ ok: false, error: 'این لید قابلِ تخصیصِ خودکار نیست (شاید قبلاً تخصیص یافته یا بسته شده).' })
+      await assignLead(o, a.leadId, a.agentName)
+      return NextResponse.json({ ok: true, assignedTo: a.agentName, reasons: a.reasons, leads: await listLeads(o) })
     }
     case 'conflicts': return NextResponse.json({ ok: true, conflicts: findConflicts(await listLeads(o)) })
     case 'aiInsights': {

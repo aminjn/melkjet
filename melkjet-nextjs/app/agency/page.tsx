@@ -158,19 +158,23 @@ function IncomeBars({ points, height = 96 }: { points: MonthPoint[]; height?: nu
 }
 
 // ═══ کشوی پروندهٔ لیدِ آژانس (Sales OS): تایم‌لاین، ثبتِ فعالیت، تخصیص، AI اقدامِ بعدی ═══
-function AgencyLeadDrawer({ lead, agents, onClose, onLog, onStage, onAssign, onReminder }: {
+function AgencyLeadDrawer({ lead, agents, onClose, onLog, onStage, onAssign, onReminder, onAutoAssign }: {
   lead: Lead; agents: string[]
   onClose: () => void
   onLog: (id: string, type: ActivityType, note?: string) => Promise<boolean>
   onStage: (s: Stage) => void
   onAssign: (agent: string) => void
   onReminder: (at: number | null) => void
+  onAutoAssign: () => Promise<{ ok: boolean; assignedTo?: string; error?: string }>
 }) {
   const [note, setNote] = useState('')
   const [logType, setLogType] = useState<ActivityType>('call')
   const [saving, setSaving] = useState(false)
   const [advice, setAdvice] = useState('')
   const [adviceBusy, setAdviceBusy] = useState(false)
+  const [autoBusy, setAutoBusy] = useState(false)
+  const [autoMsg, setAutoMsg] = useState('')
+  const doAuto = async () => { setAutoBusy(true); setAutoMsg(''); try { const r = await onAutoAssign(); setAutoMsg(r.ok ? `✓ تخصیص یافت به «${r.assignedTo}»` : (r.error || 'تخصیص ناموفق')) } catch { setAutoMsg('خطا') } finally { setAutoBusy(false) } }
   const sc = agScoreOf(lead)
   const timeline = [...(lead.activities || [])].sort((a, b) => b.at - a.at)
   const nextStep = (() => {
@@ -221,6 +225,10 @@ function AgencyLeadDrawer({ lead, agents, onClose, onLog, onStage, onAssign, onR
               <span style={{ fontSize: 13.5, fontWeight: 800 }}>✦ اقدامِ بعدی</span>
               <button disabled={adviceBusy} onClick={getAdvice} style={{ ...dBtn, marginInlineStart: 'auto', color: 'var(--gold)', borderColor: 'var(--gold)' }}>{adviceBusy ? '…' : '✨ پیشنهادِ هوش مصنوعی'}</button>
             </div>
+            {!lead.assignedTo && <div style={{ marginTop: 10 }}>
+              <button disabled={autoBusy} onClick={doAuto} style={{ padding: '8px 14px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 12.5, border: 'none', cursor: 'pointer', fontFamily: FONT }}>{autoBusy ? '…' : '✨ تخصیصِ خودکار به بهترین مشاور'}</button>
+              {autoMsg && <span style={{ fontSize: 12, color: autoMsg.startsWith('✓') ? '#34d399' : '#e7a14a', marginInlineStart: 10 }}>{autoMsg}</span>}
+            </div>}
             <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.9 }}>{nextStep}</div>
             {advice && <div style={{ fontSize: 12.5, color: 'var(--text)', lineHeight: 2, marginTop: 10, borderTop: '1px solid var(--line)', paddingTop: 10, whiteSpace: 'pre-wrap' }}>{advice}</div>}
           </div>
@@ -497,10 +505,12 @@ export default function AgencyPage() {
   const ownerBadge = (agency: boolean, owner: string) => <span style={{ fontSize: 10.5, fontWeight: 700, color: agency ? 'var(--gold)' : '#60a5fa', background: agency ? 'var(--goldDim)' : 'rgba(96,165,250,.14)', border: `1px solid ${agency ? 'var(--gold)' : '#60a5fa55'}`, borderRadius: 999, padding: '2px 9px', whiteSpace: 'nowrap' }}>{agency ? '🏢 ' : '👤 '}{owner}</span>
 
   const activeAgentNames = agents.filter(a => a.active).map(a => a.name)
+  // مشاورانِ قابلِ تخصیص = مشاورانِ محلیِ فعال + مشاورانِ واقعیِ لینک‌شده (عضوِ آژانس).
+  const assignableAdvisors = Array.from(new Set([...activeAgentNames, ...members.map(m => m.advisorName)].filter(Boolean)))
   const maxSales = Math.max(1, ...stats.monthlySales.map(m => m.amount))
   const sectionTitle = (t: string) => <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 12 }}>{t}</div>
   const agentSelect = (val: string, on: (v: string) => void) => (
-    <select value={val} onChange={e => on(e.target.value)} style={inputStyle}><option value="">— مشاور —</option>{activeAgentNames.map(n => <option key={n} value={n}>{n}</option>)}</select>
+    <select value={val} onChange={e => on(e.target.value)} style={inputStyle}><option value="">— مشاور —</option>{assignableAdvisors.map(n => <option key={n} value={n}>{n}</option>)}</select>
   )
 
   return (
@@ -1144,7 +1154,7 @@ export default function AgencyPage() {
                     <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{l.need} {l.budget ? `· بودجه: ${money(Number((l.budget || '').replace(/[^0-9]/g, '')) || 0)}` : ''}</div>
                   </div>
                   {l.agency ? <>
-                    <select value={l.assignedTo || ''} onClick={e => e.stopPropagation()} onChange={e => post({ action: 'assignLead', id: l.id, agent: e.target.value })} style={{ ...actionBtn, cursor: 'pointer' }}><option value="">تخصیص به…</option>{activeAgentNames.map(n => <option key={n} value={n}>{n}</option>)}</select>
+                    <select value={l.assignedTo || ''} onClick={e => e.stopPropagation()} onChange={e => post({ action: 'assignLead', id: l.id, agent: e.target.value })} style={{ ...actionBtn, cursor: 'pointer' }}><option value="">تخصیص به…</option>{assignableAdvisors.map(n => <option key={n} value={n}>{n}</option>)}</select>
                     <select value={l.stage} onClick={e => e.stopPropagation()} onChange={e => post({ action: 'setLeadStage', id: l.id, stage: e.target.value })} style={{ ...actionBtn, cursor: 'pointer', color: STAGE_COLOR[l.stage as Stage], borderColor: STAGE_COLOR[l.stage as Stage] }}>{STAGES.map(s => <option key={s} value={s} style={{ color: 'var(--text)' }}>{STAGE_LABEL[s]}</option>)}</select>
                     <button onClick={e => { e.stopPropagation(); post({ action: 'deleteLead', id: l.id }) }} style={{ ...actionBtn, color: '#ef4444' }}>حذف</button>
                   </> : <Pill label={STAGE_LABEL[l.stage as Stage] || l.stage} color={STAGE_COLOR[l.stage as Stage] || 'var(--muted)'} />}
@@ -1299,7 +1309,7 @@ export default function AgencyPage() {
       </div>
 
       {/* ───── کشوی پروندهٔ لیدِ آژانس (Sales OS) ───── */}
-      {openLead && <AgencyLeadDrawer lead={openLead} agents={activeAgentNames} onClose={() => setOpenLeadId(null)} onLog={logActivity} onStage={(s) => post({ action: 'setLeadStage', id: openLead.id, stage: s })} onAssign={(ag) => post({ action: 'assignLead', id: openLead.id, agent: ag })} onReminder={(at) => post({ action: 'setReminder', id: openLead.id, at })} />}
+      {openLead && <AgencyLeadDrawer lead={openLead} agents={assignableAdvisors} onClose={() => setOpenLeadId(null)} onLog={logActivity} onStage={(s) => post({ action: 'setLeadStage', id: openLead.id, stage: s })} onAssign={(ag) => post({ action: 'assignLead', id: openLead.id, agent: ag })} onReminder={(at) => post({ action: 'setReminder', id: openLead.id, at })} onAutoAssign={async () => { try { const r = await fetch('/api/agency', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'autoAssignLead', id: openLead.id }) }); const d = await r.json(); await refresh(); return d } catch { return { ok: false, error: 'خطا' } } }} />}
 
       {/* ───── مودالِ اتوماسیونِ فروش ───── */}
       {settingsOpen && crmSettings && (
