@@ -8,6 +8,8 @@ import {
 } from '@/app/lib/agency-store'
 import { agencyAdvisorFiles } from '@/app/lib/agency-team'
 import { planDistribution, findConflicts } from '@/app/lib/agency-distribution'
+import { forecastIncome, advisorPerformance, teamInsights } from '@/app/lib/agency-ai'
+import { agentModel, agentProvider, chatCompleteSafe } from '@/app/lib/gapgpt'
 import { getAdvisor, setListingStatus as advSetStatus, deleteListing as advDeleteListing } from '@/app/lib/advisor-store'
 import { checkDuplicate, advisorScope } from '@/app/lib/duplicate-check'
 
@@ -100,6 +102,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, assignments: plan, applied: !preview, leads: await listLeads(o) })
     }
     case 'conflicts': return NextResponse.json({ ok: true, conflicts: findConflicts(await listLeads(o)) })
+    case 'aiInsights': {
+      // تحلیلِ هوشمندِ تیم: پیش‌بینیِ درآمد + عملکردِ مشاوران + پیشنهادها (+ توصیهٔ AI اختیاری).
+      const agency = await getAgency(o)
+      const forecast = forecastIncome(agency)
+      const performance = advisorPerformance(agency)
+      const insights = teamInsights(agency)
+      let advice: string | null = null
+      const model = agentModel('chat', 'text') || agentModel('content', 'text')
+      if (model) {
+        try {
+          const weak = performance.rows.filter(r => r.weak).map(r => r.name).join('، ') || 'ندارد'
+          advice = (await chatCompleteSafe(model, [
+            { role: 'system', content: 'تو مشاورِ مدیریتِ فروشِ املاک هستی. کوتاه، فارسی و عملی پاسخ بده.' },
+            { role: 'user', content: `آژانس با ${agency.agents.filter(a => a.active).length} مشاورِ فعال، ${(agency.leads || []).length} لید، ${(agency.deals || []).length} معامله. مشاورِ ضعیف: ${weak}. برای بهبودِ درآمدِ ماهِ آینده چه کنم؟` },
+          ], { temperature: 0.5, max_tokens: 220 }, agentProvider('chat', 'text'))).trim() || null
+        } catch {}
+      }
+      return NextResponse.json({ ok: true, forecast, performance, insights, advice })
+    }
     default: return NextResponse.json({ error: 'عملیات نامعتبر' }, { status: 400 })
   }
 }

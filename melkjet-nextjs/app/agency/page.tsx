@@ -233,6 +233,13 @@ export default function AgencyPage() {
     setDistBusy(true)
     try { await fetch('/api/agency', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'distributeLeads' }) }); setDistPlan(null); await refresh() } catch {} finally { setDistBusy(false) }
   }
+  // تحلیلِ هوشمندِ تیم (AI)
+  const [aiIns, setAiIns] = useState<any>(null)
+  const [aiBusy, setAiBusy] = useState(false)
+  const loadAiInsights = async () => {
+    setAiBusy(true)
+    try { const r = await fetch('/api/agency', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'aiInsights' }) }); const d = await r.json(); if (d.ok) setAiIns(d) } catch {} finally { setAiBusy(false) }
+  }
   const post = useCallback(async (body: Record<string, unknown>): Promise<boolean> => {
     setBusy(true)
     try {
@@ -475,6 +482,48 @@ export default function AgencyPage() {
             : <>
           {/* DASHBOARD */}
           {view === 'dashboard' && <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {/* تحلیلِ هوشمندِ تیم (AI) */}
+            <div style={{ ...card, padding: 18 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                {sectionTitle('✦ تحلیلِ هوشمندِ تیم')}
+                <button disabled={aiBusy} onClick={loadAiInsights} style={{ ...goldBtn, marginInlineStart: 'auto' }}>{aiBusy ? '…' : (aiIns ? 'به‌روزرسانی' : 'تحلیل کن')}</button>
+              </div>
+              {aiIns && <>
+                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 14 }}>
+                  <div style={{ flex: '1 1 180px', background: 'var(--bg2)', borderRadius: 12, padding: 14 }}>
+                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>پیش‌بینیِ فروشِ ماهِ آینده</div>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--gold)', marginTop: 6 }}>{money(aiIns.forecast.nextMonth)}</div>
+                    <div style={{ fontSize: 11, color: aiIns.forecast.trendPct >= 0 ? '#34d399' : '#ef4444', marginTop: 3 }}>روند {aiIns.forecast.trendPct >= 0 ? '+' : ''}{fa(aiIns.forecast.trendPct)}٪ · اطمینان: {({ low: 'کم', medium: 'متوسط', high: 'زیاد' } as any)[aiIns.forecast.confidence]}</div>
+                  </div>
+                  <div style={{ flex: '1 1 180px', background: 'var(--bg2)', borderRadius: 12, padding: 14 }}>
+                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>ارزشِ لیدهای در جریان</div>
+                    <div style={{ fontSize: 20, fontWeight: 900, marginTop: 6 }}>{money(aiIns.forecast.pipelineValue)}</div>
+                    <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 3 }}>میانگینِ معاملهٔ تیم: {fa(aiIns.performance.teamAvgDeals)}</div>
+                  </div>
+                </div>
+                {/* مشاورانِ ضعیف */}
+                {aiIns.performance.rows.some((r: any) => r.weak) && (
+                  <div style={{ marginTop: 14 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 800, marginBottom: 8, color: '#e7a14a' }}>مشاورانِ نیازمندِ توجه</div>
+                    {aiIns.performance.rows.filter((r: any) => r.weak).map((r: any) => (
+                      <div key={r.id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5, padding: '5px 0' }}>
+                        <span style={{ fontWeight: 700 }}>{r.name}</span>
+                        <span style={{ fontSize: 11, color: 'var(--muted)' }}>{fa(r.deals)} معامله · {fa(r.leads)} لید · تبدیل ٪{fa(r.conversion)}</span>
+                        <span style={{ marginInlineStart: 'auto', fontSize: 11, color: '#e7a14a' }}>{r.reason}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* پیشنهادها */}
+                {aiIns.insights?.length > 0 && (
+                  <ul style={{ margin: '14px 0 0', paddingInlineStart: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {aiIns.insights.map((t: string, i: number) => <li key={i} style={{ fontSize: 12.5, color: 'var(--text)', lineHeight: 1.9 }}>{t}</li>)}
+                  </ul>
+                )}
+                {aiIns.advice && <div style={{ marginTop: 12, background: 'var(--goldDim)', border: '1px solid rgba(201,168,76,.3)', borderRadius: 10, padding: 12, fontSize: 12.5, lineHeight: 2 }}>{aiIns.advice}</div>}
+              </>}
+              {!aiIns && <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 10 }}>پیش‌بینیِ درآمدِ ماهِ آینده، تشخیصِ مشاورِ ضعیف و پیشنهادِ بهینه‌سازیِ تیم — دکمهٔ «تحلیل کن» را بزن.</div>}
+            </div>
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
               <Kpi label="مشاوران فعال" value={fa(stats.kpis.activeAgents)} sub={`${fa(stats.kpis.totalAgents)} کل`} />
               <Kpi label="فایل‌های فعال" value={fa(stats.kpis.activeListings)} />
