@@ -134,6 +134,32 @@ repo + this file are the source of truth, no chat history needed.
   db size? top keys?) via `pgStats()` in db.ts — the on-disk record counts above it are stale
   post-migration (files are frozen snapshots; live data is in PG).
 
+### scraper-store LISTINGS NORMALIZED (permanent 504 fix — `listings` table, not a kv blob)
+Root cause of recurring 504s + slowness: **every listing lived in ONE `kv('scraper')` jsonb blob**
+(~1 MB, up to 1000 items). Each public page read pulled the whole blob; each write rewrote it under
+a global `FOR UPDATE` lock → the pg pool (max 10) saturated → `Error: timeout exceeded when trying
+to connect` (db.ts) → nginx 504. It was NOT CPU/RAM/Arvan (load avg was ~0.5).
+- **Fix (db.ts + scraper-store.ts):** items now live in a normalized **`listings` table** (one row
+  per item, indexed on `scraped_at`/`type`). Reads come from the table, **cached 15 s** (`PG_TTL`),
+  lock-free, and **serve the stale cache on a transient DB error** instead of 500/504. Writes take a
+  small **`FOR UPDATE` lock on the tiny `scraper_meta` row** and **sync only the changed rows** (diff)
+  — the big blob is never rewritten. `mutate(fn)` still runs the exact same in-memory logic (zero
+  rewrite of the ~20 store functions → low risk).
+- **Metadata split:** small config (sources/categories/owners) lives in **`kv('scraper_meta')`**;
+  the original **`kv('scraper')` blob is left FROZEN as a rollback backup** (never touched after
+  migration). So reverting to old code still finds listings in the old blob — the site won't go empty.
+- **Auto-migration:** first load/mutate copies the old blob's items → `listings` and creates
+  `scraper_meta`; idempotent + race-safe across the 4 instances (serialized via the FOR UPDATE lock +
+  a `scraper_meta` existence re-check). No manual script needed.
+- **pool:** `max` 10 → 15 per instance (4×15=60 < 100) + `statement_timeout: 15s` (db.ts).
+- **nearby.ts:** «دسترسی‌های اطراف» now cached 6 h per rounded lat/lng — each property view used to
+  fire up to 8 Neshan searches + a slow AI path, holding a request 10–30 s (also in the 504 log).
+- **Verified:** 21-test integration suite on a real local PostgreSQL 16 (migration, CRUD, dedup,
+  owner-phone propagation, article uniqueness, cascade delete, rollback-safety, 3-way concurrency).
+- If listings ever look empty after deploy: check `SELECT count(*) FROM listings;` and that
+  `kv('scraper_meta')` exists. To force a clean re-migrate: `DELETE FROM kv WHERE key='scraper_meta';
+  TRUNCATE listings;` then reload (old `scraper` blob re-seeds them).
+
 ## Conventions
 - **Persistence = file-based JSON stores** in `process.cwd()`, all gitignored (`.*-data.json`).
   Mirror the style of `app/lib/scraper-store.ts` / `crm-store.ts` for any new store.
