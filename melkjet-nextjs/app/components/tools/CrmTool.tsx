@@ -353,6 +353,12 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
 
   // Real CRM leads for the pipeline (kanban) and dashboard recent-leads.
   const [leads, setLeads] = useState<Lead[]>([])
+  const [salesStats, setSalesStats] = useState<{ conversionRate: number; revenue: number; avgScore: number; needFollowUp: number; activities7d: number } | null>(null)
+  const [followUp, setFollowUp] = useState<{ id: string; name: string; phone?: string; stage: Stage; score?: number }[]>([])
+  const [crmSettings, setCrmSettings] = useState<{ autoWelcomeSms: boolean; welcomeTemplate: string; followUpHours: number } | null>(null)
+  const [nextCall, setNextCall] = useState<{ leads?: any[]; advice?: string } | null>(null)
+  const [nextCallBusy, setNextCallBusy] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   // Real neighbourhood growth for the dashboard insights card.
   const [growth, setGrowth] = useState<number | null>(null)
@@ -377,12 +383,14 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
   }, [])
 
   // Load real CRM leads on mount.
-  useEffect(() => {
-    fetch('/api/crm/leads')
+  const loadLeadsStats = () => {
+    fetch('/api/crm/leads?analytics=1')
       .then(r => r.ok ? r.json() : { leads: [] })
-      .then(d => setLeads(Array.isArray(d.leads) ? d.leads : []))
+      .then(d => { setLeads(Array.isArray(d.leads) ? d.leads : []); if (d.analytics) setSalesStats(d.analytics); if (d.followUp) setFollowUp(d.followUp) })
       .catch(() => {})
-  }, [])
+  }
+  useEffect(() => { loadLeadsStats() }, [])
+  useEffect(() => { fetch('/api/crm/settings').then(r => r.ok ? r.json() : null).then(d => { if (d?.settings) setCrmSettings(d.settings) }).catch(() => {}) }, [])
 
   // Load the marketing contact book on mount.
   useEffect(() => {
@@ -511,6 +519,16 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
   const openLead = leads.find(l => l.id === openLeadId) || null
   // Replace a lead in local state (after drawer actions return the updated lead).
   const patchLeadLocal = (lead: Lead) => setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, ...lead } : l))
+
+  // «با کدام لید تماس بگیرم؟» (AI)
+  const loadNextCall = async () => {
+    setNextCallBusy(true)
+    try { const d = await fetch('/api/crm/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'next' }) }).then(r => r.json()); setNextCall({ leads: d.leads, advice: d.advice }) }
+    catch {} finally { setNextCallBusy(false) }
+  }
+  const saveCrmSettings = async (patch: Record<string, any>) => {
+    try { const d = await fetch('/api/crm/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...(crmSettings || {}), ...patch }) }).then(r => r.json()); if (d.settings) setCrmSettings(d.settings) } catch {}
+  }
 
   const deleteLead = (id: string) => {
     setLeads(prev => prev.filter(l => l.id !== id))
@@ -666,6 +684,61 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
       {/* ==================== DASHBOARD ==================== */}
       {activeView === 'dashboard' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+          {/* ── Sales OS: تحلیل‌ها + پیگیریِ لازم + دستیارِ تماس ── */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ fontSize: 15, fontWeight: 800 }}>سیستمِ فروش</div>
+            <button onClick={() => setSettingsOpen(true)} style={{ padding: '6px 12px', borderRadius: 9, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--muted)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'Vazirmatn, system-ui, sans-serif' }}>⚙ اتوماسیون{crmSettings?.autoWelcomeSms ? ' • روشن' : ''}</button>
+          </div>
+          <div className="mjc-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+            {[
+              { label: 'نرخِ تبدیل', value: `٪${FA(salesStats?.conversionRate ?? 0)}`, sub: 'قرارداد ÷ بسته‌شده', color: '#5fd98a' },
+              { label: 'درآمدِ فروش', value: fmtMoney(salesStats?.revenue ?? 0), sub: `${cfg.dealWord}های بسته‌شده`, color: 'var(--gold)' },
+              { label: 'میانگینِ امتیاز', value: FA(salesStats?.avgScore ?? 0), sub: 'کیفیتِ لیدها', color: '#7a8fae' },
+              { label: 'پیگیریِ لازم', value: FA(salesStats?.needFollowUp ?? followUp.length), sub: `>${FA(crmSettings?.followUpHours ?? 24)} ساعت بی‌فعالیت`, color: (salesStats?.needFollowUp ?? followUp.length) > 0 ? '#e7a14a' : '#5fd98a' },
+            ].map((k, i) => (
+              <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18 }}>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>{k.label}</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: k.color }}>{k.value}</div>
+                <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 4 }}>{k.sub}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }} className="mjc-sos">
+            {/* پیگیریِ لازم */}
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 800, marginBottom: 12 }}>⏰ پیگیریِ لازم</div>
+              {followUp.length === 0 ? <div style={{ color: 'var(--muted)', fontSize: 12.5, padding: '12px 0' }}>همه‌چیز به‌روز است 👌</div> : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {followUp.slice(0, 6).map(l => (
+                    <div key={l.id} onClick={() => setOpenLeadId(l.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 10, background: 'var(--bg2)', cursor: 'pointer' }}>
+                      <div style={{ width: 30, height: 30, borderRadius: '50%', background: getGradient(l.name), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10.5, fontWeight: 700, color: '#16140f' }}>{getInitials(l.name)}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12.5, fontWeight: 700 }}>{l.name}</div><div style={{ fontSize: 11, color: 'var(--muted)' }}>{l.phone || '—'}</div></div>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--gold)' }}>✦{FA(l.score ?? 0)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {/* دستیارِ تماس */}
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 800 }}>✦ با کی تماس بگیرم؟</div>
+                <button onClick={loadNextCall} disabled={nextCallBusy} style={{ padding: '5px 11px', borderRadius: 8, border: '1px solid var(--gold)', background: 'var(--goldDim)', color: 'var(--gold)', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'Vazirmatn, system-ui, sans-serif' }}>{nextCallBusy ? '…' : 'پیشنهاد بده'}</button>
+              </div>
+              {!nextCall ? <div style={{ color: 'var(--muted)', fontSize: 12.5, padding: '12px 0' }}>دکمهٔ «پیشنهاد بده» را بزن تا دستیار بهترین لیدها را برای تماس رتبه‌بندی کند.</div> : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {(nextCall.leads || []).slice(0, 4).map((l: any) => (
+                    <div key={l.id} onClick={() => setOpenLeadId(l.id)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 10, background: 'var(--bg2)', cursor: 'pointer' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12.5, fontWeight: 700 }}>{l.name}</div><div style={{ fontSize: 11, color: 'var(--muted)' }}>{l.reason}</div></div>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--gold)' }}>✦{FA(l.score)}</span>
+                    </div>
+                  ))}
+                  {nextCall.advice && <div style={{ fontSize: 12, color: 'var(--text)', lineHeight: 1.9, marginTop: 6, background: 'var(--bg2)', borderRadius: 10, padding: 10 }}>{nextCall.advice}</div>}
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* KPI Cards — real numbers from live data */}
           <div className="mjc-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
@@ -1775,6 +1848,33 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
     </div>
   )
 
+  const settingsModal = settingsOpen && (
+    <div onClick={() => setSettingsOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.72)', zIndex: 400, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto', fontFamily: F }}>
+      <div onClick={e => e.stopPropagation()} dir="rtl" style={{ background: 'var(--surface)', border: '1px solid var(--gold)', borderRadius: 16, maxWidth: 480, width: '100%', margin: '30px 0', padding: 22 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <div style={{ fontSize: 16, fontWeight: 900 }}>⚙ اتوماسیونِ فروش</div>
+          <button onClick={() => setSettingsOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 22, cursor: 'pointer' }}>×</button>
+        </div>
+        <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.9, margin: '0 0 16px' }}>وقتی {cfg.leadWord}ِ جدید با شماره ثبت شود، به‌صورتِ خودکار پیامکِ خوش‌آمد برایش ارسال شود (پیامک از خطِ سرویس، ممکن است هزینه داشته باشد).</p>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, cursor: 'pointer' }}>
+          <input type="checkbox" checked={!!crmSettings?.autoWelcomeSms} onChange={e => saveCrmSettings({ autoWelcomeSms: e.target.checked })} style={{ width: 18, height: 18, accentColor: 'var(--gold)' }} />
+          <span style={{ fontSize: 13.5, fontWeight: 700 }}>ارسالِ خودکارِ پیامکِ خوش‌آمد به {cfg.leadWord}ِ جدید</span>
+        </label>
+        <div style={{ marginBottom: 16 }}>
+          <label style={mLab}>متنِ پیامکِ خوش‌آمد <span style={{ color: 'var(--faint)' }}>({'{name}'} = نامِ {cfg.leadWord})</span></label>
+          <textarea defaultValue={crmSettings?.welcomeTemplate || ''} onBlur={e => saveCrmSettings({ welcomeTemplate: e.target.value })} style={{ ...mInp, resize: 'vertical', minHeight: 70 }} />
+        </div>
+        <div>
+          <label style={mLab}>آستانهٔ «پیگیریِ لازم» (ساعت)</label>
+          <input type="number" min={1} max={720} defaultValue={crmSettings?.followUpHours ?? 24} onBlur={e => saveCrmSettings({ followUpHours: Number(e.target.value) })} style={{ ...mInp, direction: 'ltr', textAlign: 'left', width: 120 }} />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>
+          <button onClick={() => { setSettingsOpen(false); loadLeadsStats() }} style={{ padding: '9px 20px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: F }}>ذخیره و بستن</button>
+        </div>
+      </div>
+    </div>
+  )
+
   // ===== EMBEDDED MODE: only the inner content area (no sidebar/header/return-bar/full-page). =====
   if (embedded) {
     return (
@@ -1783,6 +1883,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
         {aiModal}
         {leadModal}
         {openLead && <LeadDrawer lead={openLead} stages={stages} leadWord={cfg.leadWord} onClose={() => setOpenLeadId(null)} onChanged={patchLeadLocal} />}
+        {settingsModal}
       </div>
     )
   }
@@ -1985,6 +2086,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
       {aiModal}
       {leadModal}
       {openLead && <LeadDrawer lead={openLead} stages={stages} leadWord={cfg.leadWord} onClose={() => setOpenLeadId(null)} onChanged={patchLeadLocal} />}
+      {settingsModal}
     </div>
   )
 }

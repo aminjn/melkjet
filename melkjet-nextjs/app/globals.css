@@ -145,7 +145,7 @@ body {
 
 /* CRM */
 @media(max-width:1024px){.mjc-dash{grid-template-columns:1fr!important}.mjc-kanban{overflow-x:auto!important;display:flex!important;gap:12px!important}}
-@media(max-width:760px){.mjc-side{width:64px!important;padding:14px 8px!important}.mjc-sidelabel{display:none!important}.mjc-kpi{grid-template-columns:repeat(2,1fr)!important}}
+@media(max-width:760px){.mjc-side{width:64px!important;padding:14px 8px!important}.mjc-sidelabel{display:none!important}.mjc-kpi{grid-template-columns:repeat(2,1fr)!important}.mjc-sos{grid-template-columns:1fr!important}}
 
 /* Admin (SuperAdmin) — سایدبار حالا کشوی موبایل است (در خودِ پنل) */
 @media(max-width:980px){.mjsa-kpi{grid-template-columns:repeat(2,1fr)!important}.mjsa-2col{grid-template-columns:1fr!important}}

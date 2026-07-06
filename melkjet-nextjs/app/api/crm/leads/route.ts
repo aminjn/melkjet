@@ -1,14 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listLeads, addLead, updateLead, deleteLead, leadAnalytics } from '@/app/lib/leads-store'
+import { listLeads, addLead, updateLead, deleteLead, leadAnalytics, followUpNeeded, addActivity } from '@/app/lib/leads-store'
+import { getCrmSettings } from '@/app/lib/crm-settings-store'
+import { sendServiceSms } from '@/app/lib/sms'
 
-// GET → { leads, analytics } — scoped to the current user's own leads.
+// GET → { leads, analytics?, followUp? } — scoped to the current user's own leads.
 export async function GET(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
-  const withStats = new URL(req.url).searchParams.get('analytics')
+  const sp = new URL(req.url).searchParams
   const leads = await listLeads(s.phone)
-  if (withStats) return NextResponse.json({ leads, analytics: await leadAnalytics(s.phone) })
+  if (sp.get('analytics')) {
+    const settings = await getCrmSettings(s.phone)
+    return NextResponse.json({
+      leads,
+      analytics: await leadAnalytics(s.phone),
+      followUp: (await followUpNeeded(s.phone, settings.followUpHours)).map(l => ({ id: l.id, name: l.name, phone: l.phone, stage: l.stage, score: l.score, lastActivityAt: l.lastActivityAt })),
+    })
+  }
   return NextResponse.json({ leads })
 }
 
@@ -27,7 +36,18 @@ export async function POST(req: NextRequest) {
     tags: Array.isArray(b.tags) ? b.tags : undefined,
     note: b.note, source: b.source,
   })
-  return NextResponse.json({ lead })
+  // اتوماسیون: لیدِ جدید با شماره → پیامکِ خوش‌آمدِ خودکار (فقط اگر کاربر فعالش کرده باشد).
+  let welcomed = false
+  try {
+    const cfg = await getCrmSettings(s.phone)
+    if (cfg.autoWelcomeSms && lead.phone) {
+      const text = cfg.welcomeTemplate.replace(/\{name\}/g, lead.name || '')
+      const r = await sendServiceSms(lead.phone, text, 'خوش‌آمدِ لید')
+      welcomed = r.ok
+      await addActivity(s.phone, lead.id, { type: 'sms', note: r.ok ? `پیامکِ خوش‌آمدِ خودکار` : `پیامکِ خوش‌آمد ناموفق: ${r.error || ''}`, meta: { auto: true, ok: r.ok } })
+    }
+  } catch { /* اتوماسیون نباید ثبتِ لید را خراب کند */ }
+  return NextResponse.json({ lead, welcomed })
 }
 
 // PATCH { id, ...patch } → { lead } — also used to move pipeline stage.
