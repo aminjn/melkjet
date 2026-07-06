@@ -13,7 +13,9 @@ export function pgEnabled(): boolean { return !!process.env.DATABASE_URL }
 let pool: Pool | null = null
 function getPool(): Pool {
   if (!pool) {
-    pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 10, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 8_000 })
+    // max: هر instance تا ۱۵ connection (۴ instance × ۱۵ = ۶۰ < سقفِ پیش‌فرضِ ۱۰۰ پستگرس).
+    // statement_timeout: یک کوئریِ کندِ سرکش نباید connection را تا ابد بگیرد (۱۵ث سقف).
+    pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 15, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 8_000, statement_timeout: 15_000 })
     pool.on('error', () => { /* خطای idle client، pool خودش بازیابی می‌کند */ })
   }
   return pool

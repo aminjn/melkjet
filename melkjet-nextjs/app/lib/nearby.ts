@@ -85,7 +85,26 @@ export interface NearbyResult { nearby: { type?: string; name?: string; time: st
 // بین‌الملل ندارد). اگر سرویس Search روی کلید نبود، از reverse + geocoding +
 // distance-matrix (که کلید دارد) استفاده می‌کنیم: نام مکان‌ها را AI پیشنهاد می‌دهد
 // ولی هر مکان با geocoding نشان «اعتبارسنجی و مکان‌یابی» می‌شود (پس fake نمی‌ماند).
+// کشِ «دسترسی‌های اطراف»: POIهای اطرافِ یک نقطه تغییر نمی‌کنند، ولی هر بازدیدِ صفحهٔ ملک
+// تا ۸ کوئریِ Neshan + ماتریسِ فاصله (یا مسیرِ کندِ AI) می‌زد و درخواستِ Next را ۱۰-۳۰ث نگه
+// می‌داشت → از عواملِ ۵۰۴. کش (کلید: مختصاتِ گردشده ~۱۰۰م، TTL ۶ ساعت) این بار را حذف می‌کند.
+const nearbyCache = new Map<string, { at: number; data: NearbyResult }>()
+const NEARBY_TTL = 6 * 3600 * 1000
+
 export async function computeNearby(lat: number, lng: number): Promise<NearbyResult> {
+  const ck = `${lat.toFixed(3)},${lng.toFixed(3)}`
+  const hit = nearbyCache.get(ck)
+  if (hit && Date.now() - hit.at < NEARBY_TTL) return hit.data
+  const data = await computeNearbyUncached(lat, lng)
+  // فقط نتیجهٔ واقعی را کش کن (نه خطا/خالی) تا دفعهٔ بعد دوباره تلاش شود.
+  if (data.nearby && data.nearby.length) {
+    if (nearbyCache.size > 2000) nearbyCache.clear()
+    nearbyCache.set(ck, { at: Date.now(), data })
+  }
+  return data
+}
+
+async function computeNearbyUncached(lat: number, lng: number): Promise<NearbyResult> {
   const nz = getAdminData().neshan
   const keys = Array.from(new Set([nz?.serviceKey, nz?.mapKey].filter(Boolean) as string[]))
   if (!keys.length) return { nearby: [], source: 'none', note: 'کلید نشان تنظیم نشده است.' }

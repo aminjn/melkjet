@@ -130,16 +130,28 @@ function fileSave(db: DB) {
 // نوشتن (mutate) کش را باطل می‌کند تا همان اینستنس نوشتهٔ خودش را فوری ببیند. کهنگیِ
 // چند-ثانیه‌ایِ فیدِ آگهی بینِ اینستنس‌ها بی‌ضرر است (نوشتن‌ها اتمیک روی PG می‌مانند).
 let pgCache: { at: number; data: DB } | null = null
-const PG_TTL = 2500
+// کش ۱۵ ثانیه‌ای: صفحاتِ عمومی (خانه/جستجو/ملک) در هر رندر listItems را صدا می‌زنند و این
+// بلابِ ~۱مگابایتی داغ‌ترین کوئریِ سایت است. با ۲.۵ث، هر instance زیرِ ترافیک pool را اشباع
+// می‌کرد → «timeout when trying to connect» → ۵۰۴. ۱۵ث بارِ خواندن را ~۶ برابر کم می‌کند.
+// نوشتن (mutate) کش را باطل می‌کند، پس ادمینِ همان instance ویرایشش را فوری می‌بیند؛ کهنگیِ
+// حداکثر ۱۵ث بینِ instanceها برای فیدِ آگهی بی‌ضرر است.
+const PG_TTL = 15_000
 
 /** خواندنِ سندِ کاملِ اسکرپر (دو-حالته: PG یا فایل). */
 async function load(): Promise<DB> {
   if (!pgEnabled()) return fileLoad()
   const now = Date.now()
   if (pgCache && now - pgCache.at < PG_TTL) return pgCache.data
-  const data = await kvGet<DB>(KV_KEY, emptyDB())
-  pgCache = { at: now, data }
-  return data
+  try {
+    const data = await kvGet<DB>(KV_KEY, emptyDB())
+    pgCache = { at: now, data }
+    return data
+  } catch (e) {
+    // تاب‌آوری: اگر دیتابیس لحظه‌ای اشباع/کند بود، دادهٔ کش‌شدهٔ قبلی (هرچند کهنه) را سِرو کن تا
+    // صفحه ۵۰۰/۵۰۴ ندهد. فقط اگر هیچ کشی نداریم خطا بالا می‌رود.
+    if (pgCache) return pgCache.data
+    throw e
+  }
 }
 
 /** خواندن-تغییر-نوشتنِ اتمیک. روی PG با قفلِ ردیف؛ روی فایل مثلِ قبل. */
