@@ -10,6 +10,7 @@ import {
   money, fa, card, inputStyle, type ProRecord, type ProRequest, type ReqStatus, type ShellCfg, type JDate,
 } from '@/app/components/prodesk/ProDeskKit'
 import { jToday, jKey, jLabel } from '@/app/lib/jalali'
+import ReportStudio from './ReportStudio'
 
 // میزِ کارِ «کارشناسِ رسمی» — نسخهٔ تخصصی: پرونده‌های ارزیابی با محاسبهٔ ارزش + صدورِ گزارش.
 const ROLE = '/appraiser'
@@ -142,6 +143,7 @@ export default function AppraiserPage() {
     { id: 'requests', label: 'درخواست‌ها', icon: '📥', badge: data?.stats.open },
     { id: 'calendar', label: 'تقویمِ بازدید', icon: '📆' },
     { id: 'reports', label: 'گزارش‌ها', icon: '📄' },
+    { id: 'reportgen', label: 'صدورِ گزارش', icon: '🧾' },
     { id: 'aitools', label: 'برآوردِ هوشمند', icon: '✦' },
     { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
     { id: 'profile', label: 'پروفایل', icon: '🪪' },
@@ -170,6 +172,7 @@ export default function AppraiserPage() {
         ) : view === 'requests' ? <Requests requests={data.requests} post={post} onReport={setReportReq} today={today} />
           : view === 'calendar' ? <ProCalendar items={visitCalItems(data.requests)} today={today} title="تقویمِ بازدیدها" />
             : view === 'reports' ? <Reports records={data.records} post={post} />
+            : view === 'reportgen' ? <ReportStudio post={post} />
             : view === 'aitools' ? <ProAiTool accent="#8fa9c9" tools={[{ id: 'price_estimate', label: 'برآوردِ قیمتِ ملک', placeholder: 'منطقه، متراژ، سنِ بنا، طبقه و امکاناتِ ملک را بنویس تا بازهٔ قیمتِ منصفانه را بدهد…' }]} />
             : view === 'assistant' ? <div style={{ height: 'calc(100vh - 150px)' }}><AssistantPanel panel="appraiser" title="دستیارِ هوشمندِ کارشناس" subtitle="مشاورِ AI شخصیِ تو" suggestions={['روشِ ارزیابیِ یک آپارتمانِ ۱۰ ساله را توضیح بده', 'ساختارِ یک گزارشِ کارشناسیِ رسمی را بنویس', 'فاکتورهای مؤثر بر ارزشِ ملک را فهرست کن', 'نحوهٔ محاسبهٔ افتِ قیمت به‌خاطرِ خسارت؟']} /></div>
               : view === 'profile' ? (

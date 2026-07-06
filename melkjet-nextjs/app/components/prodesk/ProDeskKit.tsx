@@ -440,3 +440,53 @@ export function ProLoanCalc() {
     </SectionCard>
   )
 }
+
+// ── امتیازِ اعتباری (Credit Scoring) — موتورِ عددیِ خالص، بدونِ AI ──
+export function ProCreditScore() {
+  const [f, setF] = useState({ income: '', debt: '', job: 'gov', history: 'good', collateral: 'yes', amount: '', months: '60' })
+  const set = (k: string, v: string) => setF(p => ({ ...p, [k]: v }))
+  const income = Number(f.income) || 0, debt = Number(f.debt) || 0, amount = Number(f.amount) || 0, months = Number(f.months) || 60
+  // امتیازِ ۰..۱۰۰
+  let score = 0
+  // درآمد (سقفِ ۲۵)
+  score += Math.min(25, income / 4_000_000)   // ~۱۰۰م تومان درآمد → ۲۵
+  // نوعِ شغل (۰..۲۰)
+  score += ({ gov: 20, formal: 16, private: 11, self: 7 } as any)[f.job] ?? 10
+  // سابقهٔ اعتباری (۰..۲۵)
+  score += ({ excellent: 25, good: 18, fair: 10, bad: 0 } as any)[f.history] ?? 10
+  // وثیقه (۰..۱۵)
+  score += f.collateral === 'yes' ? 15 : 0
+  // نسبتِ بدهی به درآمد (۰..۱۵؛ کمتر بهتر)
+  const dti = income > 0 ? debt / income : 1
+  score += Math.max(0, 15 - dti * 30)
+  score = Math.max(0, Math.min(100, Math.round(score)))
+  const tier = score >= 80 ? { t: 'عالی', c: '#34d399' } : score >= 60 ? { t: 'خوب', c: '#6fae8f' } : score >= 40 ? { t: 'متوسط', c: '#e7a14a' } : { t: 'ضعیف', c: '#ef4444' }
+  // ظرفیتِ قسط ~ ۴۰٪ درآمد منهای بدهیِ فعلی؛ سقفِ وامِ پیشنهادی از روی آن.
+  const capacity = Math.max(0, income * 0.4 - debt)
+  const maxLoan = Math.round(capacity * months * (score / 100))
+  const decision = score >= 60 ? '✅ تأییدِ اولیه' : score >= 40 ? '⚠ نیازمندِ بررسیِ بیشتر / وثیقهٔ مکمل' : '✗ ریسکِ بالا — رد یا کاهشِ مبلغ'
+  const okAmount = amount > 0 ? amount <= maxLoan : true
+  const inp: React.CSSProperties = { ...inputStyle, direction: 'ltr', textAlign: 'left' }
+  return (
+    <SectionCard title="📊 امتیازِ اعتباری (Credit Scoring)">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10, marginBottom: 14 }}>
+        <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>درآمدِ ماهانه (تومان)</label><input value={f.income} onChange={e => set('income', e.target.value.replace(/\D/g, ''))} style={inp} /></div>
+        <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>اقساطِ فعلی (ماهانه)</label><input value={f.debt} onChange={e => set('debt', e.target.value.replace(/\D/g, ''))} style={inp} /></div>
+        <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>نوعِ شغل</label><select value={f.job} onChange={e => set('job', e.target.value)} style={inputStyle}><option value="gov">دولتی/رسمی</option><option value="formal">شرکتِ معتبر</option><option value="private">بخشِ خصوصی</option><option value="self">آزاد</option></select></div>
+        <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>سابقهٔ اعتباری</label><select value={f.history} onChange={e => set('history', e.target.value)} style={inputStyle}><option value="excellent">عالی</option><option value="good">خوب</option><option value="fair">متوسط</option><option value="bad">بدحساب</option></select></div>
+        <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>وثیقه/ضامن</label><select value={f.collateral} onChange={e => set('collateral', e.target.value)} style={inputStyle}><option value="yes">دارد</option><option value="no">ندارد</option></select></div>
+        <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>مبلغِ درخواستی (تومان)</label><input value={f.amount} onChange={e => set('amount', e.target.value.replace(/\D/g, ''))} style={inp} /></div>
+      </div>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ flex: '1 1 140px', background: 'var(--bg2)', borderRadius: 12, padding: 14, textAlign: 'center' }}>
+          <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>امتیاز</div>
+          <div style={{ fontSize: 30, fontWeight: 900, color: tier.c, lineHeight: 1.1 }}>{fa(score)}</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: tier.c }}>{tier.t}</div>
+        </div>
+        <div style={{ flex: '1 1 160px', background: 'var(--bg2)', borderRadius: 12, padding: 14 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>سقفِ وامِ پیشنهادی</div><div style={{ fontSize: 17, fontWeight: 800, marginTop: 4 }}>{money(maxLoan)}</div><div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 3 }}>ظرفیتِ قسط: {money(Math.round(capacity))}/ماه</div></div>
+        <div style={{ flex: '2 1 200px', background: 'var(--bg2)', borderRadius: 12, padding: 14 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>تصمیم</div><div style={{ fontSize: 14, fontWeight: 800, marginTop: 6 }}>{decision}</div>{amount > 0 && <div style={{ fontSize: 11.5, marginTop: 4, color: okAmount ? '#34d399' : '#ef4444' }}>{okAmount ? 'مبلغِ درخواستی در ظرفیت است' : 'مبلغِ درخواستی بیش از ظرفیت است'}</div>}</div>
+      </div>
+      <div style={{ marginTop: 10, fontSize: 11, color: 'var(--faint)' }}>امتیاز مدلِ کمکی است؛ تصمیمِ نهاییِ اعتبارسنجی با کارشناسِ بانک است.</div>
+    </SectionCard>
+  )
+}
