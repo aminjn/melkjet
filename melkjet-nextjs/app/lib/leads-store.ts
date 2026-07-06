@@ -45,6 +45,7 @@ export interface Lead {
   status: LeadStatus
   score: number            // ۰..۱۰۰ خودکار
   tags: string[]
+  autoTags?: string[]      // تگِ هوشمندِ قانون‌محور (مشتق، ذخیره نمی‌شود)
   listingIds: string[]     // آگهی‌های متصل/پیشنهادشده
   activities: Activity[]
   source?: string
@@ -103,7 +104,21 @@ function migrate(raw: any): Lead {
     lastActivityAt: lastActivityAt || undefined,
   }
   lead.score = scoreOf(lead)
+  lead.autoTags = autoTags(lead)
   return lead
+}
+
+// ── تگ‌گذاریِ هوشمند (قانون‌محور) — روی خواندن محاسبه می‌شود، جدا از تگِ دستیِ کاربر ──
+export function autoTags(l: Lead): string[] {
+  const t: string[] = []
+  if (l.status === 'hot') t.push('داغ')
+  if ((l.budget || 0) >= 10_000_000_000) t.push('بودجه‌بالا')
+  if (!l.phone) t.push('بدونِ‌شماره')
+  const ageH = (l.lastActivityAt || l.createdAt) ? (Date.now() - (l.lastActivityAt || l.createdAt)) / 36e5 : 0
+  if (ageH > 24 * 7 && l.stage !== 'contract' && l.stage !== 'lost') t.push('راکد')
+  if (l.stage === 'offered' || l.stage === 'contract') t.push('نزدیکِ‌قرارداد')
+  if ((l.score || 0) >= 70) t.push('اولویت‌بالا')
+  return t
 }
 
 // ── امتیازدهیِ خودکارِ لید (Lead Scoring) ۰..۱۰۰ ──

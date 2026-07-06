@@ -48,6 +48,7 @@ interface Lead {
   status?: LeadStatus
   score?: number
   tags?: string[]
+  autoTags?: string[]
   listingIds?: string[]
   activities?: Activity[]
   note?: string
@@ -2140,6 +2141,15 @@ function LeadDrawer({ lead, stages, leadWord, onClose, onChanged }: {
   }
   const addTag = () => { const t = tagInput.trim(); if (!t) return; patchLead({ tags: [...(lead.tags || []), t] }); setTagInput('') }
   const rmTag = (t: string) => patchLead({ tags: (lead.tags || []).filter(x => x !== t) })
+  // یادآوری = تسکِ CRM لینک‌شده به لید (پیش‌فرض فردا).
+  const reminder = async () => {
+    setBusy('reminder')
+    try {
+      const dueTs = Date.now() + 24 * 36e5
+      await fetch('/api/crm/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: `پیگیریِ ${lead.name}${lead.phone ? ' — ' + lead.phone : ''}`, priority: 'high', dueTs, due: new Date(dueTs).toLocaleDateString('fa-IR') }) })
+      await act('note', 'یادآوریِ پیگیری برای فردا ثبت شد')
+    } catch {} finally { setBusy('') }
+  }
 
   const chip = (label: string, active: boolean, onClick: () => void) => (
     <button onClick={onClick} style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${active ? 'var(--gold)' : 'var(--line2)'}`, background: active ? 'var(--goldDim)' : 'transparent', color: active ? 'var(--gold)' : 'var(--muted)', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: F }}>{label}</button>
@@ -2182,8 +2192,9 @@ function LeadDrawer({ lead, stages, leadWord, onClose, onChanged }: {
               {stages.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
             </select>
           </div>
-          {/* تگ‌ها */}
+          {/* تگ‌ها (هوشمند + دستی) */}
           <div style={{ display: 'flex', gap: 6, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+            {(lead.autoTags || []).map(t => <span key={'a' + t} style={{ fontSize: 11, background: 'var(--goldDim)', border: '1px solid rgba(201,168,76,.35)', color: 'var(--gold)', borderRadius: 999, padding: '3px 9px', fontWeight: 700 }}>◆ {t}</span>)}
             {(lead.tags || []).map(t => <span key={t} style={{ fontSize: 11, background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 999, padding: '3px 9px', display: 'flex', gap: 5, alignItems: 'center' }}>{t}<span onClick={() => rmTag(t)} style={{ cursor: 'pointer', color: 'var(--muted)' }}>×</span></span>)}
             <input value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addTag() }} placeholder="+ تگ" style={{ width: 70, background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 999, padding: '3px 10px', color: 'var(--text)', fontSize: 11, fontFamily: F, outline: 'none' }} />
           </div>
@@ -2192,7 +2203,7 @@ function LeadDrawer({ lead, stages, leadWord, onClose, onChanged }: {
             {actBtn('☎', 'ثبتِ تماس', () => act('call', 'تماسِ تلفنی'), 'call')}
             {actBtn('⚑', 'ثبتِ بازدید', () => act('visit', 'بازدیدِ حضوری'), 'visit')}
             {actBtn('✆', 'واتساپ', () => comm('whatsapp', { text: `سلام ${lead.name} عزیز،` }), 'whatsapp')}
-            {actBtn('✎', 'یادداشت', () => { const n = prompt('یادداشت:'); if (n) act('note', n) }, 'note')}
+            {actBtn('⏰', 'یادآوری', () => reminder(), 'reminder')}
           </div>
         </div>
 
