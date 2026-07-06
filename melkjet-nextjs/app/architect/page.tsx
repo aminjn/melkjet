@@ -35,6 +35,43 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 }
 
 // ── گالریِ نمونه‌کار ──────────────────────────────────────────────────────────
+// ── نسخه‌بندیِ طرح (Design System) — هر پروژه، تاریخچهٔ نسخه‌ها با فایل ──
+function DesignVersions({ r, post }: { r: ProRecord; post: (p: any) => Promise<any> }) {
+  const [open, setOpen] = useState(false)
+  const [note, setNote] = useState('')
+  const [file, setFile] = useState<{ url: string; name: string } | undefined>()
+  const versions: { v: number; note?: string; file?: { url: string; name: string }; at: number }[] = Array.isArray(r.meta?.versions) ? r.meta!.versions : []
+  const addVersion = async () => {
+    const v = (versions[versions.length - 1]?.v || 0) + 1
+    const next = [...versions, { v, note: note.trim() || undefined, file, at: Date.now() }]
+    const ok = await post({ action: 'updateRecord', id: r.id, patch: { meta: { ...(r.meta || {}), versions: next } } })
+    if (ok) { setNote(''); setFile(undefined) }
+  }
+  return (
+    <div style={{ marginTop: 8, borderTop: '1px solid var(--line)', paddingTop: 8 }}>
+      <button onClick={() => setOpen(o => !o)} style={{ background: 'transparent', border: 'none', color: 'var(--gold)', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>
+        {open ? '▾' : '▸'} نسخه‌ها ({fa(versions.length)})
+      </button>
+      {open && (
+        <div style={{ marginTop: 8 }}>
+          {versions.map(ver => (
+            <div key={ver.v} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 11.5, padding: '4px 0' }}>
+              <span style={{ fontWeight: 800, color: 'var(--gold)' }}>v{fa(ver.v)}</span>
+              <span style={{ flex: 1, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ver.note || '—'}</span>
+              <FileLink file={ver.file} />
+            </div>
+          ))}
+          <div style={{ marginTop: 8 }}>
+            <input value={note} onChange={e => setNote(e.target.value)} placeholder="توضیحِ نسخهٔ جدید (مثلاً بازنگریِ پلان)" style={{ ...inputStyle, fontSize: 12, marginBottom: 6 }} />
+            <FileField value={file} onChange={setFile} label="📎 فایلِ نسخه (نقشه/رندر)" />
+            <button onClick={addVersion} style={{ marginTop: 8, fontSize: 11.5, padding: '5px 12px', borderRadius: 8, border: '1px solid var(--gold)', background: 'transparent', color: 'var(--gold)', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>＋ ثبتِ نسخه</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function Portfolio({ records, post }: { records: ProRecord[]; post: (p: any) => Promise<any> }) {
   const [open, setOpen] = useState(false)
   const [f, setF] = useState<{ title: string; kind: string; style: string; area: string; amount: string; cover: string; file?: { url: string; name: string } }>({ title: '', kind: PROJECT_TYPES[0], style: STYLES[0], area: '', amount: '', cover: '', file: undefined })
@@ -57,6 +94,7 @@ function Portfolio({ records, post }: { records: ProRecord[]; post: (p: any) => 
                 {r.subtitle && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 3 }}>{r.subtitle}</div>}
                 <FileLink file={r.meta?.file} />
                 {!!r.amount && <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--gold)', marginTop: 7 }}>{money(r.amount)}</div>}
+                <DesignVersions r={r} post={post} />
               </div>
             </div>
           ))}
