@@ -8,6 +8,7 @@ import {
   advisorStats, listLeads, listListings, listAppts, listCommissions,
   addLead, updateLead, setLeadStage, deleteLead, addListing, updateListing, setListingStatus, deleteListing, publishListing, unpublishListing,
   addAppt, setApptStatus, addCommission, deleteCommission, setCommissionStatus, setCommissionAmount, updateAdvisorProfile,
+  addLeadActivity, advisorAiInsights, advisorLeadAdvice, type ActivityType,
 } from '@/app/lib/advisor-store'
 
 // همهٔ دادهٔ پنل مشاور، مخصوص کاربرِ واردشده (per-profile).
@@ -29,6 +30,9 @@ export async function POST(req: NextRequest) {
     case 'updateLead': { if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); const l = await updateLead(o, String(b.id), b.patch || {}); return l ? NextResponse.json({ ok: true, lead: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'setLeadStage': { const l = await setLeadStage(o, String(b.id), b.stage); return l ? NextResponse.json({ ok: true, lead: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'deleteLead': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); await deleteLead(o, String(b.id)); return NextResponse.json({ ok: true })
+    case 'addActivity': { if (!b.id || !b.type) return NextResponse.json({ error: 'شناسه و نوع الزامی است' }, { status: 400 }); const l = await addLeadActivity(o, String(b.id), { type: b.type as ActivityType, note: b.note ? String(b.note) : undefined }); return l ? NextResponse.json({ ok: true, lead: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
+    case 'aiInsights': { const r = await advisorAiInsights(o); return NextResponse.json({ ok: true, ...r }) }
+    case 'leadAdvice': { if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); const advice = await advisorLeadAdvice(o, String(b.id)); return NextResponse.json({ ok: true, advice }) }
     case 'addListing': {
       const listing = await addListing(o, b)
       let duplicate: { id: string; title: string; ownerName: string } | undefined
@@ -61,7 +65,7 @@ export async function POST(req: NextRequest) {
       return l ? NextResponse.json({ ok: true, listing: l, publicId: l.publicId, moderation: mod }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 })
     }
     case 'unpublishListing': { if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); const l = await unpublishListing(o, String(b.id)); return l ? NextResponse.json({ ok: true, listing: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
-    case 'addAppt': if (!b.client || !b.date) return NextResponse.json({ error: 'مشتری و تاریخ الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, appt: await addAppt(o, { client: String(b.client), listingTitle: b.listingTitle, date: String(b.date), type: b.type }) })
+    case 'addAppt': if (!b.client || !b.date) return NextResponse.json({ error: 'مشتری و تاریخ الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, appt: await addAppt(o, { client: String(b.client), leadId: b.leadId ? String(b.leadId) : undefined, listingTitle: b.listingTitle, date: String(b.date), type: b.type }) })
     case 'setApptStatus': { const x = await setApptStatus(o, String(b.id), b.status); return x ? NextResponse.json({ ok: true, appt: x }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'addCommission': if (!b.dealTitle) return NextResponse.json({ error: 'عنوان معامله الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, commission: await addCommission(o, { dealTitle: String(b.dealTitle), amount: Number(b.amount) || 0, date: b.date, percent: Number(b.percent) || undefined, dealAmount: Number(b.dealAmount) || undefined }) })
     case 'deleteCommission': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); await deleteCommission(o, String(b.id)); return NextResponse.json({ ok: true })

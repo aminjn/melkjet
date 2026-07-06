@@ -3,6 +3,7 @@ import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { addUserListing, deleteItem, getItemById, setItemDealStatus } from './scraper-store'
 import { pgEnabled, kvGet, kvMutate } from './db'
+import { chatCompleteSafe, agentModel, agentProvider } from './gapgpt'
 
 // استور پنل «مشاور املاک» — per-owner (هر کاربر فقط دادهٔ خودش).
 // دومَحاله: اگر DATABASE_URL ست باشد → Postgres (نوشتنِ اتمیک)، وگرنه فایل.
@@ -15,7 +16,13 @@ export type ApptType = 'visit' | 'meeting' | 'call'
 export type ApptStatus = 'scheduled' | 'done' | 'canceled'
 export type CommStatus = 'pending' | 'paid' | 'canceled'
 
-export interface Lead { id: string; name: string; phone?: string; need?: string; budget?: string; stage: Stage; source?: string; note?: string; createdAt: number }
+export type ActivityType = 'created' | 'call' | 'visit' | 'meeting' | 'sms' | 'note' | 'stage' | 'appt'
+export interface Activity { id: string; type: ActivityType; at: number; note?: string }
+export interface Lead {
+  id: string; name: string; phone?: string; need?: string; budget?: string; stage: Stage; source?: string; note?: string; createdAt: number
+  // Sales OS: تایم‌لاین فعالیت + امتیازِ خودکار + تگ + آخرین فعالیت
+  activities?: Activity[]; score?: number; tags?: string[]; lastActivityAt?: number
+}
 export interface Listing {
   id: string; title: string; ptype: string; location: string; price: number; deal: 'sale' | 'rent'; status: ListingStatus; createdAt: number
   // جزئیات کامل فایل (همه اختیاری برای سازگاری با دادهٔ قبلی)
@@ -29,7 +36,7 @@ export interface Listing {
   // اتصال فایل به لیدها: یک لیدِ فروشنده + چند لیدِ خریدار (برای CRM)
   sellerLeadId?: string; buyerLeadIds?: string[]
 }
-export interface Appt { id: string; client: string; listingTitle?: string; date: string; type: ApptType; status: ApptStatus; createdAt: number }
+export interface Appt { id: string; client: string; leadId?: string; listingTitle?: string; date: string; type: ApptType; status: ApptStatus; createdAt: number }
 export interface Commission { id: string; dealTitle: string; amount: number; status: CommStatus; date: string; createdAt: number; percent?: number; dealAmount?: number }
 export interface MonthDeals { month: string; count: number }
 
@@ -113,15 +120,57 @@ export async function advisorStats(o: string) {
 }
 
 // ---- Leads ----
+// امتیازِ خودکارِ لید (۰..۱۰۰) — کاملیِ اطلاعات + پیشرفتِ مرحله + تازگیِ فعالیت.
+export function leadScore(l: Lead): number {
+  let s = 0
+  const idx = STAGES.indexOf(l.stage)
+  if (l.stage === 'closed') return 92
+  if (l.stage === 'lost') return 5
+  s += 12 + Math.min(20, Math.max(0, idx) * 6)
+  if (l.phone) s += 14
+  if (l.budget) s += 10
+  if (l.need) s += 6
+  const acts = (l.activities || []).filter(a => a.type !== 'created' && a.type !== 'stage')
+  s += Math.min(14, acts.length * 3)
+  const last = l.lastActivityAt || l.createdAt
+  const ageH = (Date.now() - last) / 36e5
+  if (ageH <= 24) s += 12; else if (ageH <= 24 * 7) s += 6
+  return Math.max(0, Math.min(100, Math.round(s)))
+}
+
 export async function addLead(o: string, input: Partial<Lead>): Promise<Lead> {
   let c!: Lead
-  await mutate(o, a => { c = { id: id('l_'), name: String(input.name || 'لید جدید'), phone: input.phone, need: input.need, budget: input.budget, stage: STAGES.includes(input.stage as Stage) ? input.stage as Stage : 'new', source: input.source, note: input.note, createdAt: Date.now() }; a.leads.unshift(c) })
+  await mutate(o, a => {
+    const now = Date.now()
+    c = { id: id('l_'), name: String(input.name || 'لید جدید'), phone: input.phone, need: input.need, budget: input.budget, stage: STAGES.includes(input.stage as Stage) ? input.stage as Stage : 'new', source: input.source, note: input.note, createdAt: now, lastActivityAt: now, tags: [], activities: [{ id: id('ac_'), type: 'created', at: now, note: input.source ? `ثبت از ${input.source}` : 'ثبتِ لید' }] }
+    c.score = leadScore(c)
+    a.leads.unshift(c)
+  })
   return c
 }
 export async function setLeadStage(o: string, lid: string, stage: Stage): Promise<Lead | null> {
   if (!STAGES.includes(stage)) return null
   let res: Lead | null = null
-  await mutate(o, a => { const l = a.leads.find(x => x.id === lid); if (!l) return; l.stage = stage; res = l })
+  await mutate(o, a => {
+    const l = a.leads.find(x => x.id === lid); if (!l) return
+    if (l.stage !== stage) { l.activities = [...(l.activities || []), { id: id('ac_'), type: 'stage', at: Date.now(), note: `مرحله → ${stage}` }]; l.lastActivityAt = Date.now() }
+    l.stage = stage; l.score = leadScore(l); res = l
+  })
+  return res
+}
+// ثبتِ فعالیت روی تایم‌لاینِ لید (تماس/بازدید/یادداشت/…).
+export async function addLeadActivity(o: string, lid: string, act: { type: ActivityType; note?: string }): Promise<Lead | null> {
+  let res: Lead | null = null
+  await mutate(o, a => {
+    const l = a.leads.find(x => x.id === lid); if (!l) return
+    const now = Date.now()
+    l.activities = [...(l.activities || []), { id: id('ac_'), type: act.type, at: now, note: act.note }]
+    l.lastActivityAt = now
+    // تماس/بازدید/جلسه روی لیدِ «جدید» → به «تماس‌گرفته/بازدید» ارتقا (اتوماسیونِ سبک)
+    if (l.stage === 'new' && (act.type === 'call' || act.type === 'sms')) l.stage = 'contacted'
+    if (act.type === 'visit' && (l.stage === 'new' || l.stage === 'contacted')) l.stage = 'visit'
+    l.score = leadScore(l); res = l
+  })
   return res
 }
 export async function updateLead(o: string, lid: string, patch: Partial<Lead>): Promise<Lead | null> {
@@ -238,9 +287,18 @@ export async function unpublishListing(o: string, fid: string): Promise<Listing 
 }
 
 // ---- Appointments ----
-export async function addAppt(o: string, input: { client: string; listingTitle?: string; date: string; type?: ApptType }): Promise<Appt> {
+export async function addAppt(o: string, input: { client: string; leadId?: string; listingTitle?: string; date: string; type?: ApptType }): Promise<Appt> {
   let c!: Appt
-  await mutate(o, a => { c = { id: id('a_'), client: input.client, listingTitle: input.listingTitle, date: input.date, type: (['visit', 'meeting', 'call'].includes(input.type as ApptType) ? input.type : 'visit') as ApptType, status: 'scheduled', createdAt: Date.now() }; a.appts.unshift(c) })
+  await mutate(o, a => {
+    const t = (['visit', 'meeting', 'call'].includes(input.type as ApptType) ? input.type : 'visit') as ApptType
+    c = { id: id('a_'), client: input.client, leadId: input.leadId, listingTitle: input.listingTitle, date: input.date, type: t, status: 'scheduled', createdAt: Date.now() }
+    a.appts.unshift(c)
+    // اتصال به لید: فعالیتِ «قرار» روی تایم‌لاینِ لید ثبت می‌شود.
+    if (input.leadId) {
+      const l = a.leads.find(x => x.id === input.leadId)
+      if (l) { l.activities = [...(l.activities || []), { id: id('ac_'), type: 'appt', at: Date.now(), note: `${t === 'visit' ? 'بازدید' : t === 'call' ? 'تماس' : 'جلسه'} — ${input.date}${input.listingTitle ? ' · ' + input.listingTitle : ''}` }]; l.lastActivityAt = Date.now(); if (l.stage === 'new') l.stage = 'contacted'; l.score = leadScore(l) }
+    }
+  })
   return c
 }
 export async function setApptStatus(o: string, aid: string, status: ApptStatus): Promise<Appt | null> {
@@ -282,4 +340,94 @@ export async function listAppts(o: string): Promise<Appt[]> { return (await getA
 export async function listCommissions(o: string): Promise<Commission[]> { return (await getAdvisor(o)).commissions }
 export async function updateAdvisorProfile(o: string, patch: Partial<AdvisorData['profile']>): Promise<AdvisorData['profile']> {
   return (await mutate(o, a => { Object.assign(a.profile, patch) })).profile
+}
+
+// ═══════════ هوشِ CRM (Sales OS) ═══════════
+const STAGE_FA: Record<Stage, string> = { new: 'لید جدید', contacted: 'تماس‌گرفته', visit: 'بازدید', negotiation: 'مذاکره', closed: 'قرارداد', lost: 'ازدست‌رفته' }
+
+// «با کی تماس بگیرم» + سلامتِ پایپ‌لاین. قاعده‌مند (همیشه‌کار)؛ اگر AI در دسترس بود، تحلیلِ متنی هم اضافه می‌شود.
+export async function advisorAiInsights(o: string): Promise<{ callNow: { id: string; name: string; phone?: string; score: number; why: string }[]; health: string; tips: string[] }> {
+  const a = await getAdvisor(o)
+  const open = a.leads.filter(l => l.stage !== 'closed' && l.stage !== 'lost')
+  const now = Date.now()
+  const ranked = open.map(l => {
+    const sc = leadScore(l)
+    const ageH = (now - (l.lastActivityAt || l.createdAt)) / 36e5
+    let why = ''
+    if (ageH >= 72) why = `${Math.round(ageH / 24)} روز بی‌فعالیت`
+    else if (l.stage === 'negotiation') why = 'در مذاکره — نزدیکِ بستن'
+    else if (l.stage === 'visit') why = 'بعد از بازدید، پیگیری کن'
+    else if (sc >= 70) why = 'امتیازِ بالا'
+    else why = 'پیگیریِ عادی'
+    return { id: l.id, name: l.name, phone: l.phone, score: sc, why, ageH }
+  }).filter(x => x.ageH >= 24 || x.score >= 60 || false)
+    .sort((x, y) => y.score - x.score).slice(0, 8)
+  const callNow = ranked.map(({ id, name, phone, score, why }) => ({ id, name, phone, score, why }))
+
+  // خلاصهٔ وضعیت برای تحلیل
+  const byStage = STAGES.map(s => ({ s, n: a.leads.filter(l => l.stage === s).length }))
+  const won = a.leads.filter(l => l.stage === 'closed').length
+  const conv = a.leads.length ? Math.round((won / a.leads.length) * 100) : 0
+  const noPhone = open.filter(l => !l.phone).length
+  const stale = open.filter(l => (now - (l.lastActivityAt || l.createdAt)) / 36e5 >= 72).length
+
+  // تحلیلِ قاعده‌مند (پیش‌فرض)
+  const tips: string[] = []
+  if (stale > 0) tips.push(`${stale} لید بیش از ۳ روز بی‌پیگیری مانده — امروز تماس بگیر.`)
+  if (noPhone > 0) tips.push(`${noPhone} لید شمارهٔ تماس ندارد — شماره‌شان را کامل کن.`)
+  const negC = a.leads.filter(l => l.stage === 'negotiation').length
+  if (negC > 0) tips.push(`${negC} لید در مذاکره است — نزدیک‌ترین‌ها به بستنِ قرارداد؛ اولویت بده.`)
+  if (!tips.length) tips.push('پایپ‌لاین سالم است — لیدهای جدید را سریع وارد چرخه کن.')
+  let health = `از ${a.leads.length} لید، ${won} به قرارداد رسیده (نرخِ تبدیل ${conv}٪). ${open.length} لیدِ باز داری.`
+
+  // اگر AI فعال بود، یک تحلیلِ کوتاهِ حرفه‌ای جایگزینِ health می‌شود (اختیاری، با fallback).
+  try {
+    const model = agentModel('chat', 'text')
+    if (model) {
+      const provider = agentProvider('chat', 'text')
+      const summary = byStage.map(x => `${STAGE_FA[x.s]}: ${x.n}`).join('، ')
+      const txt = await chatCompleteSafe(model, [
+        { role: 'system', content: 'تو مشاورِ فروشِ املاک هستی. خیلی کوتاه (حداکثر ۲ جمله)، فارسی و عملی تحلیل کن. بدون مقدمه.' },
+        { role: 'user', content: `وضعیتِ پایپ‌لاینِ من: ${summary}. نرخِ تبدیل ${conv}٪. ${stale} لیدِ عقب‌افتاده. تحلیلِ کوتاه و یک توصیهٔ کلیدی بده.` },
+      ], { temperature: 0.4, max_tokens: 220, ...(provider ? {} : {}) }, provider)
+      if (txt && txt.trim()) health = txt.trim()
+    }
+  } catch {}
+  return { callNow, health, tips }
+}
+
+// پیشنهادِ اقدامِ بعدی برای یک لیدِ خاص (AI با fallbackِ قاعده‌مند).
+export async function advisorLeadAdvice(o: string, lid: string): Promise<string> {
+  const a = await getAdvisor(o)
+  const l = a.leads.find(x => x.id === lid)
+  if (!l) return 'لید یافت نشد.'
+  const acts = (l.activities || []).slice(-5).map(x => x.type).join('، ') || 'بدونِ فعالیت'
+  const rel = a.listings.filter(x => x.status === 'active').slice(0, 20)
+  // پیشنهادِ فایلِ متناسب (قاعده‌مند): تطبیقِ نوع/بودجه از متنِ نیاز
+  const needTxt = (l.need || '').toLowerCase()
+  const budgetNum = Number(String(l.budget || '').replace(/[^\d۰-۹]/g, '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))) || 0
+  const match = rel.filter(x => (!budgetNum || (x.price <= budgetNum * 1.15)) && (!needTxt || needTxt.split(/\s+/).some(w => w.length > 2 && (x.ptype.includes(w) || (x.neighborhood || '').includes(w) || (x.city || '').includes(w))))).slice(0, 3)
+  const matchLine = match.length ? `\nفایل‌های پیشنهادی برای این لید:\n${match.map(x => `• ${x.title} — ${x.price.toLocaleString('fa-IR')} تومان`).join('\n')}` : ''
+
+  try {
+    const model = agentModel('chat', 'text')
+    if (model) {
+      const provider = agentProvider('chat', 'text')
+      const txt = await chatCompleteSafe(model, [
+        { role: 'system', content: 'تو مشاورِ ارشدِ فروشِ املاک هستی. فارسی، کوتاه و عملی. ۲ تا ۴ گامِ مشخصِ بعدی برای این لید بده (شماره‌دار). بدون مقدمهٔ اضافه.' },
+        { role: 'user', content: `لید: ${l.name}. مرحله: ${STAGE_FA[l.stage]}. نیاز: ${l.need || '—'}. بودجه: ${l.budget || '—'}. آخرین فعالیت‌ها: ${acts}. اقدامِ بعدی چه باشد؟` },
+      ], { temperature: 0.5, max_tokens: 320 }, provider)
+      if (txt && txt.trim()) return txt.trim() + matchLine
+    }
+  } catch {}
+  // fallback قاعده‌مند
+  const base: Record<Stage, string> = {
+    new: '۱) همین امروز اولین تماس را بگیر و نیاز را دقیق کن.\n۲) بودجه و بازهٔ زمانی را مشخص کن.',
+    contacted: '۱) دو تا سه فایلِ متناسب بفرست.\n۲) برای بازدید وقت بگیر.',
+    visit: '۱) بعد از بازدید بازخورد بگیر.\n۲) اگر مثبت بود، وارد مذاکرهٔ قیمت شو.',
+    negotiation: '۱) پیشنهادِ نهاییِ قیمت را جمع‌بندی کن.\n۲) برای امضای قرارداد وقت بگذار.',
+    closed: 'مشتری شد ✓ — برای معرفیِ مشتریِ جدید (ریفرال) پیگیری کن.',
+    lost: 'اگر شرایطش عوض شد دوباره فعالش کن؛ فعلاً روی لیدهای فعال تمرکز کن.',
+  }
+  return base[l.stage] + matchLine
 }

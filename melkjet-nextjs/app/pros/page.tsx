@@ -29,7 +29,9 @@ type ApptType = 'visit' | 'meeting' | 'call'
 type ApptStatus = 'scheduled' | 'done' | 'canceled'
 type CommStatus = 'pending' | 'paid' | 'canceled'
 
-interface Lead { id: string; name: string; phone?: string; need?: string; budget?: string; stage: Stage; source?: string; note?: string; createdAt: number }
+type ActivityType = 'created' | 'call' | 'visit' | 'meeting' | 'sms' | 'note' | 'stage' | 'appt'
+interface Activity { id: string; type: ActivityType; at: number; note?: string }
+interface Lead { id: string; name: string; phone?: string; need?: string; budget?: string; stage: Stage; source?: string; note?: string; createdAt: number; activities?: Activity[]; score?: number; tags?: string[]; lastActivityAt?: number }
 interface Listing {
   id: string; title: string; ptype: string; location: string; price: number; deal: 'sale' | 'rent'; status: ListingStatus; createdAt: number
   city?: string; neighborhood?: string; facing?: string; province?: string; district?: string; lat?: number; lng?: number
@@ -40,7 +42,7 @@ interface Listing {
   published?: boolean; publicId?: string
   sellerLeadId?: string; buyerLeadIds?: string[]
 }
-interface Appt { id: string; client: string; listingTitle?: string; date: string; type: ApptType; status: ApptStatus; createdAt: number }
+interface Appt { id: string; client: string; leadId?: string; listingTitle?: string; date: string; type: ApptType; status: ApptStatus; createdAt: number }
 interface Commission { id: string; dealTitle: string; amount: number; status: CommStatus; date: string; createdAt: number; percent?: number; dealAmount?: number }
 interface Stats {
   profile: { name: string; agency?: string; title?: string; bio?: string; phone?: string; areas?: string; experience?: string; photo?: string; specialties?: string[] }
@@ -191,6 +193,25 @@ function ReportsView({ stats }: { stats: Stats }) {
 const STAGES: Stage[] = ['new', 'contacted', 'visit', 'negotiation', 'closed', 'lost']
 const STAGE_LABEL: Record<Stage, string> = { new: 'لید جدید', contacted: 'تماس‌گرفته', visit: 'بازدید', negotiation: 'مذاکره', closed: 'قرارداد', lost: 'ازدست‌رفته' }
 const STAGE_COLOR: Record<Stage, string> = { new: 'var(--gold)', contacted: '#60a5fa', visit: '#2dd4bf', negotiation: '#f59e0b', closed: '#34d399', lost: '#7a8fae' }
+// ── Sales OS: مراحلِ کانبان (بدون «ازدست‌رفته» که ستونِ جدا ندارد) ──
+const PIPE_STAGES: Stage[] = ['new', 'contacted', 'visit', 'negotiation', 'closed']
+const ACT_LABEL: Record<ActivityType, string> = { created: 'ایجاد', call: 'تماس', visit: 'بازدید', meeting: 'جلسه', sms: 'پیامک', note: 'یادداشت', stage: 'تغییرِ مرحله', appt: 'قرار' }
+const ACT_ICON: Record<ActivityType, string> = { created: '✦', call: '☎', visit: '🏠', meeting: '👥', sms: '✉', note: '✎', stage: '➜', appt: '◉' }
+// امتیازِ لید ۰..۱۰۰ (اگر backend نداد، همین‌جا تخمین می‌زنیم تا UI همیشه امتیاز نشان دهد)
+function scoreOf(l: Lead): number {
+  if (typeof l.score === 'number') return l.score
+  if (l.stage === 'closed') return 92; if (l.stage === 'lost') return 5
+  let s = 12 + Math.max(0, STAGES.indexOf(l.stage)) * 6
+  if (l.phone) s += 14; if (l.budget) s += 10; if (l.need) s += 6
+  const acts = (l.activities || []).filter(a => a.type !== 'created' && a.type !== 'stage')
+  s += Math.min(14, acts.length * 3)
+  const last = l.lastActivityAt || l.createdAt
+  const ageH = (Date.now() - last) / 36e5
+  if (ageH <= 24) s += 12; else if (ageH <= 24 * 7) s += 6
+  return Math.max(0, Math.min(100, Math.round(s)))
+}
+function scoreColor(n: number): string { return n >= 80 ? '#e74c3c' : n >= 50 ? '#e7a14a' : '#7a8fae' }
+function scoreLabel(n: number): string { return n >= 80 ? 'داغ' : n >= 50 ? 'گرم' : 'سرد' }
 const LIST_LABEL: Record<ListingStatus, string> = { active: 'فعال', sold: 'فروخته‌شده', rented: 'اجاره‌رفته' }
 const LIST_COLOR: Record<ListingStatus, string> = { active: '#34d399', sold: '#60a5fa', rented: '#2dd4bf' }
 const LIST_STATUSES: ListingStatus[] = ['active', 'sold', 'rented']
@@ -270,6 +291,121 @@ function Kpi({ label, value, sub, subColor }: { label: string; value: string; su
   )
 }
 
+// ═══ کشوی جزئیاتِ لید (Sales OS): تایم‌لاین، ثبتِ فعالیت، تگ، قرارهای متصل، AI اقدامِ بعدی ═══
+function LeadDrawer({ lead, appts, onClose, onLog, onStage, onEdit }: {
+  lead: Lead; appts: Appt[]
+  onClose: () => void
+  onLog: (id: string, type: ActivityType, note?: string) => Promise<boolean>
+  onStage: (s: Stage) => void
+  onEdit: () => void
+}) {
+  const [note, setNote] = useState('')
+  const [logType, setLogType] = useState<ActivityType>('call')
+  const [saving, setSaving] = useState(false)
+  const [advice, setAdvice] = useState('')
+  const [adviceBusy, setAdviceBusy] = useState(false)
+  const sc = scoreOf(lead)
+  const timeline = [...(lead.activities || [])].sort((a, b) => b.at - a.at)
+  // اقدامِ بعدیِ قاعده‌مند (همیشه‌کار) — قبل از AI هم چیزی برای نمایش هست
+  const nextStep = (() => {
+    if (lead.stage === 'new') return 'اولین تماس را همین امروز بگیر و نیاز را دقیق کن.'
+    if (lead.stage === 'contacted') return 'یک فایلِ متناسب با نیازش بفرست و بازدید هماهنگ کن.'
+    if (lead.stage === 'visit') return 'بعد از بازدید، بازخورد بگیر و وارد مذاکرهٔ قیمت شو.'
+    if (lead.stage === 'negotiation') return 'پیشنهادِ نهایی را جمع‌بندی کن و برای قرارداد وقت بگذار.'
+    if (lead.stage === 'closed') return 'مشتری شد ✓ — برای معرفیِ مشتریِ جدید (ریفرال) پیگیری کن.'
+    return 'لیدِ ازدست‌رفته — اگر شرایط عوض شد دوباره فعالش کن.'
+  })()
+  const doLog = async () => { setSaving(true); const ok = await onLog(lead.id, logType, note.trim() || undefined); if (ok) setNote(''); setSaving(false) }
+  const getAdvice = async () => {
+    setAdviceBusy(true)
+    try { const r = await fetch('/api/advisor', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'leadAdvice', id: lead.id }) }); const d = await r.json(); setAdvice(d.advice || d.error || 'پاسخی دریافت نشد.') } catch { setAdvice('خطا در ارتباط با هوش مصنوعی.') } finally { setAdviceBusy(false) }
+  }
+  const dBtn: React.CSSProperties = { padding: '7px 12px', borderRadius: 8, border: '1px solid var(--line)', background: 'var(--bg)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT }
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 150, display: 'flex', justifyContent: 'flex-start' }}>
+      <div onClick={e => e.stopPropagation()} dir="rtl" style={{ width: 'min(460px,100%)', height: '100%', background: 'var(--surface)', borderInlineEnd: '1px solid var(--line)', overflowY: 'auto', boxShadow: '0 0 40px rgba(0,0,0,.5)', fontFamily: FONT }}>
+        {/* header */}
+        <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--line)', position: 'sticky', top: 0, background: 'var(--surface)', zIndex: 2 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 12, fontWeight: 800, color: scoreColor(sc), border: `1.5px solid ${scoreColor(sc)}`, borderRadius: 9, padding: '4px 8px' }}>✦{fa(sc)} {scoreLabel(sc)}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 16, fontWeight: 800 }}>{lead.name}</div>
+              <div style={{ fontSize: 11.5, color: 'var(--muted)', direction: 'ltr', textAlign: 'right' }}>{lead.phone || 'بدون شماره'}</div>
+            </div>
+            <button onClick={onClose} style={{ ...dBtn, fontSize: 16, padding: '4px 10px' }}>✕</button>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8, lineHeight: 1.8 }}>{lead.need || 'بدون شرحِ نیاز'}{lead.budget ? ` · بودجه: ${fmtBudget(lead.budget)}` : ''}{lead.source ? ` · منبع: ${lead.source}` : ''}</div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+            {lead.phone && <a href={`tel:${lead.phone}`} onClick={() => onLog(lead.id, 'call')} style={{ ...dBtn, textDecoration: 'none', color: 'var(--gold)', borderColor: 'var(--gold)', direction: 'ltr' }}>☎ تماس</a>}
+            {lead.phone && <a href={`sms:${lead.phone}`} onClick={() => onLog(lead.id, 'sms')} style={{ ...dBtn, textDecoration: 'none', direction: 'ltr' }}>✉ پیامک</a>}
+            <button onClick={onEdit} style={dBtn}>✎ ویرایش</button>
+          </div>
+          {/* مرحله */}
+          <div style={{ display: 'flex', gap: 6, marginTop: 12, flexWrap: 'wrap' }}>
+            {STAGES.map(s => <button key={s} onClick={() => onStage(s)} style={{ ...dBtn, padding: '4px 9px', fontSize: 11, background: lead.stage === s ? STAGE_COLOR[s] : 'var(--bg)', color: lead.stage === s ? '#16140f' : 'var(--muted)', borderColor: lead.stage === s ? STAGE_COLOR[s] : 'var(--line)', fontWeight: lead.stage === s ? 800 : 500 }}>{STAGE_LABEL[s]}</button>)}
+          </div>
+        </div>
+
+        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 18 }}>
+          {/* اقدامِ بعدی + AI */}
+          <div style={{ background: 'linear-gradient(135deg,var(--goldDim),transparent)', border: '1px solid var(--line)', borderRadius: 12, padding: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span style={{ fontSize: 13.5, fontWeight: 800 }}>✦ اقدامِ بعدی</span>
+              <button disabled={adviceBusy} onClick={getAdvice} style={{ ...dBtn, marginInlineStart: 'auto', color: 'var(--gold)', borderColor: 'var(--gold)' }}>{adviceBusy ? '…' : '✨ پیشنهادِ هوش مصنوعی'}</button>
+            </div>
+            <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.9 }}>{nextStep}</div>
+            {advice && <div style={{ fontSize: 12.5, color: 'var(--text)', lineHeight: 2, marginTop: 10, borderTop: '1px solid var(--line)', paddingTop: 10, whiteSpace: 'pre-wrap' }}>{advice}</div>}
+          </div>
+
+          {/* قرارهای متصل */}
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>قرارهای متصل ({fa(appts.length)})</div>
+            {appts.length ? appts.map(a => (
+              <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--line)' }}>
+                <span style={{ fontSize: 13 }}>{APPT_LABEL[a.type] === 'بازدید' ? '🏠' : a.type === 'call' ? '☎' : '👥'}</span>
+                <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12.5, fontWeight: 600 }}>{APPT_LABEL[a.type]}{a.listingTitle ? ` · ${a.listingTitle}` : ''}</div><div style={{ fontSize: 11, color: 'var(--muted)' }}>{a.date}</div></div>
+                <Pill label={APPTST_LABEL[a.status]} color={APPTST_COLOR[a.status]} />
+              </div>
+            )) : <div style={{ fontSize: 12, color: 'var(--faint)' }}>قراری به این لید وصل نیست — از بخشِ «قرارها» یک قرار برایش ثبت کن.</div>}
+          </div>
+
+          {/* ثبتِ فعالیت */}
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>ثبتِ فعالیت</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+              {(['call', 'sms', 'meeting', 'visit', 'note'] as ActivityType[]).map(t => (
+                <button key={t} onClick={() => setLogType(t)} style={{ ...dBtn, background: logType === t ? 'var(--goldDim)' : 'var(--bg)', color: logType === t ? 'var(--gold)' : 'var(--muted)', borderColor: logType === t ? 'var(--gold)' : 'var(--line)' }}>{ACT_ICON[t]} {ACT_LABEL[t]}</button>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input value={note} onChange={e => setNote(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') doLog() }} placeholder="یادداشت (اختیاری)…" style={{ ...inputStyle, flex: 1 }} />
+              <button disabled={saving} onClick={doLog} style={{ ...goldBtn, padding: '9px 16px' }}>{saving ? '…' : 'ثبت'}</button>
+            </div>
+          </div>
+
+          {/* تایم‌لاین */}
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>تایم‌لاینِ فعالیت</div>
+            {timeline.length ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0, position: 'relative' }}>
+                {timeline.map(a => (
+                  <div key={a.id} style={{ display: 'flex', gap: 10, padding: '9px 0', borderBottom: '1px solid var(--line)' }}>
+                    <span style={{ fontSize: 13, width: 22, textAlign: 'center' }}>{ACT_ICON[a.type]}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 600 }}>{ACT_LABEL[a.type]}{a.note ? <span style={{ fontWeight: 400, color: 'var(--muted)' }}> — {a.note}</span> : ''}</div>
+                      <div style={{ fontSize: 10.5, color: 'var(--faint)' }}>{faDate(a.at)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : <div style={{ fontSize: 12, color: 'var(--faint)' }}>هنوز فعالیتی ثبت نشده.</div>}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ProsPage() {
   const [view, setView] = useState<View>('dashboard')
   // CRM جاسازی‌شده: وقتی مقدار دارد، محتوای CRM در همین پنل نمایش داده می‌شود
@@ -299,7 +435,14 @@ export default function ProsPage() {
   const [editLeadId, setEditLeadId] = useState<string | null>(null)
   const startEditLead = (l: Lead) => { setEditLeadId(l.id); setNl({ name: l.name, phone: l.phone || '', need: l.need || '', budget: l.budget || '', source: l.source || '' }) }
   const cancelEditLead = () => { setEditLeadId(null); setNl({ name: '', phone: '', need: '', budget: '', source: '' }) }
-  const [na, setNa] = useState({ client: '', listingTitle: '', date: '', type: 'visit' })
+  const [na, setNa] = useState({ client: '', leadId: '', listingTitle: '', date: '', type: 'visit' })
+  // Sales OS: کشوی جزئیاتِ لید + حالتِ کانبان + کشیدن‌ورهاکردن + هوشِ CRM
+  const [openLeadId, setOpenLeadId] = useState<string | null>(null)
+  const [leadKanban, setLeadKanban] = useState(true)
+  const [dragLead, setDragLead] = useState<string | null>(null)
+  const [dragOverCol, setDragOverCol] = useState<Stage | null>(null)
+  const [crmAi, setCrmAi] = useState<{ callNow: { id: string; name: string; phone?: string; score: number; why: string }[]; health: string; tips: string[] } | null>(null)
+  const [crmAiBusy, setCrmAiBusy] = useState(false)
   // فرمِ کاملِ فایل (پاپ‌آپ)
   const emptyForm = { title: '', ptype: 'آپارتمان', deal: 'sale' as 'sale' | 'rent', province: '', city: '', district: '', neighborhood: '', location: '', address: '', lat: null as number | null, lng: null as number | null, facing: '', price: '', rentMonthly: '', area: '', rooms: '', floor: '', totalFloors: '', yearBuilt: '', docType: '', phone: '', description: '', amenities: [] as string[], images: [] as string[], publish: false }
   const [form, setForm] = useState(emptyForm)
@@ -453,6 +596,19 @@ export default function ProsPage() {
     } catch { return false } finally { setBusy(false) }
   }, [refresh])
 
+  // Sales OS: کشیدنِ کارتِ لید به ستونِ دیگر → تغییرِ مرحله
+  const moveLead = useCallback((id: string, stage: Stage) => {
+    const l = data?.leads.find(x => x.id === id)
+    if (l && l.stage !== stage) post({ action: 'setLeadStage', id, stage })
+  }, [data, post])
+  // ثبتِ فعالیت روی تایم‌لاینِ لید
+  const logActivity = useCallback((id: string, type: ActivityType, note?: string) => post({ action: 'addActivity', id, type, note }), [post])
+  // هوشِ CRM: «با کی تماس بگیرم» + سلامتِ پایپ‌لاین (سمتِ سرور؛ اگر AI نبود، قاعده‌مند)
+  const loadCrmAi = useCallback(async () => {
+    setCrmAiBusy(true)
+    try { const r = await fetch('/api/advisor', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'aiInsights' }) }); const d = await r.json(); if (d.ok) setCrmAi({ callNow: d.callNow || [], health: d.health || '', tips: d.tips || [] }) } catch {} finally { setCrmAiBusy(false) }
+  }, [])
+
   const toggleTheme = () => { const html = document.documentElement; if (theme === 'dark') { html.classList.add('light'); setTheme('light') } else { html.classList.remove('light'); setTheme('dark') } }
 
   if (loading) return <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT, fontSize: 15 }}>در حال بارگذاری پنل مشاور…</div>
@@ -470,6 +626,16 @@ export default function ProsPage() {
   const { stats, leads, listings, appts, commissions } = data
   const q = search.trim()
   const leadsF = q ? leads.filter(l => (l.name + (l.need || '') + (l.phone || '')).includes(q)) : leads
+  // Sales OS derived: لیدِ بازِ کشو + قرارهای متصل به هر لید
+  const openLead = openLeadId ? leads.find(l => l.id === openLeadId) || null : null
+  const apptsByLead: Record<string, Appt[]> = {}
+  for (const a of appts) if (a.leadId) (apptsByLead[a.leadId] = apptsByLead[a.leadId] || []).push(a)
+  // «با کی تماس بگیرم» — نسخهٔ کلاینتیِ همیشه‌کار (لیدهای بازِ پرامتیاز که بی‌فعالیت مانده‌اند)
+  const followUp = leads
+    .filter(l => l.stage !== 'closed' && l.stage !== 'lost')
+    .map(l => ({ l, s: scoreOf(l), age: (Date.now() - (l.lastActivityAt || l.createdAt)) / 36e5 }))
+    .filter(x => x.age >= 24 || x.s >= 60)
+    .sort((a, b) => b.s - a.s).slice(0, 6)
   const maxDeals = Math.max(1, ...stats.monthlyDeals.map(m => m.count))
   const sectionTitle = (t: string) => <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 12 }}>{t}</div>
   // درختِ جغرافیایی برای فرمِ افزودن فایل
@@ -729,21 +895,98 @@ export default function ProsPage() {
                 {editLeadId && <button onClick={cancelEditLead} style={actionBtn}>لغو</button>}
               </div>
             </div>
+            {/* ✦ هوشِ CRM: با کی تماس بگیرم؟ + سلامتِ پایپ‌لاین */}
+            <div style={{ ...card, padding: 18, background: 'linear-gradient(135deg,var(--goldDim),transparent)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+                <div style={{ fontWeight: 800, fontSize: 15 }}>✦ با کی تماس بگیرم؟</div>
+                <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>لیدهای پرامتیازی که پیگیری می‌خواهند</div>
+                <button disabled={crmAiBusy} onClick={loadCrmAi} style={{ ...actionBtn, marginInlineStart: 'auto', color: 'var(--gold)', borderColor: 'var(--gold)' }}>{crmAiBusy ? '…' : '✨ تحلیلِ هوشمند'}</button>
+              </div>
+              {(crmAi?.callNow?.length ? crmAi.callNow : followUp.map(x => ({ id: x.l.id, name: x.l.name, phone: x.l.phone, score: x.s, why: x.age >= 24 ? `${fa(Math.round(x.age / 24))} روز بی‌فعالیت` : 'امتیازِ بالا' }))).length ? (
+                <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }}>
+                  {(crmAi?.callNow?.length ? crmAi.callNow : followUp.map(x => ({ id: x.l.id, name: x.l.name, phone: x.l.phone, score: x.s, why: x.age >= 24 ? `${fa(Math.round(x.age / 24))} روز بی‌فعالیت` : 'امتیازِ بالا' }))).map(c => (
+                    <div key={c.id} style={{ flex: '0 0 auto', minWidth: 180, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: scoreColor(c.score) }}>✦{fa(c.score)}</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>{c.why}</div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {c.phone && <a href={`tel:${c.phone}`} onClick={() => logActivity(c.id, 'call')} style={{ ...actionBtn, textDecoration: 'none', color: 'var(--gold)', borderColor: 'var(--gold)', direction: 'ltr', flex: 1, textAlign: 'center' }}>☎ تماس</a>}
+                        <button onClick={() => setOpenLeadId(c.id)} style={{ ...actionBtn, flex: 1 }}>پرونده</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>همه‌چیز به‌روز است 👌 — لیدِ عقب‌افتاده‌ای نداری.</div>}
+              {crmAi?.health && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 12, lineHeight: 1.9, borderTop: '1px solid var(--line)', paddingTop: 10 }}><b style={{ color: 'var(--gold)' }}>تحلیلِ پایپ‌لاین:</b> {crmAi.health}{crmAi.tips?.length ? <ul style={{ margin: '6px 0 0', paddingInlineStart: 18 }}>{crmAi.tips.map((t, i) => <li key={i}>{t}</li>)}</ul> : null}</div>}
+            </div>
+
+            {/* پایپ‌لاین: کانبان / لیست */}
             <div style={{ ...card, padding: 18 }}>
-              {sectionTitle(`لیدها (${fa(leadsF.length)})`)}
-              {leadsF.length ? leadsF.map(l => (
-                <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)', opacity: l.stage === 'lost' ? 0.55 : 1, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+                {sectionTitle(`لیدها و پایپ‌لاین (${fa(leadsF.length)})`)}
+                <div style={{ marginInlineStart: 'auto', display: 'flex', gap: 6, background: 'var(--bg2)', borderRadius: 9, padding: 3 }}>
+                  <button onClick={() => setLeadKanban(true)} style={{ ...actionBtn, border: 'none', background: leadKanban ? 'var(--goldDim)' : 'transparent', color: leadKanban ? 'var(--gold)' : 'var(--muted)' }}>▦ کانبان</button>
+                  <button onClick={() => setLeadKanban(false)} style={{ ...actionBtn, border: 'none', background: !leadKanban ? 'var(--goldDim)' : 'transparent', color: !leadKanban ? 'var(--gold)' : 'var(--muted)' }}>☰ لیست</button>
+                </div>
+              </div>
+              {!leadsF.length ? <div style={{ color: 'var(--faint)', fontSize: 13 }}>لیدی نداری — از فرمِ بالا اضافه کن یا از دیوار ایمپورت کن.</div>
+                : leadKanban ? (
+                <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8 }} className="mjp-kanban">
+                  {PIPE_STAGES.map(col => {
+                    const items = leadsF.filter(l => l.stage === col)
+                    return (
+                      <div key={col}
+                        onDragOver={e => { e.preventDefault(); if (dragOverCol !== col) setDragOverCol(col) }}
+                        onDrop={e => { e.preventDefault(); if (dragLead) moveLead(dragLead, col); setDragLead(null); setDragOverCol(null) }}
+                        style={{ flex: '0 0 220px', minWidth: 220 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
+                          <span style={{ width: 9, height: 9, borderRadius: '50%', background: STAGE_COLOR[col] }} />
+                          <span style={{ fontSize: 12.5, fontWeight: 800 }}>{STAGE_LABEL[col]}</span>
+                          <span style={{ fontSize: 11, color: 'var(--muted)' }}>({fa(items.length)})</span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 9, minHeight: 44, borderRadius: 12, outline: dragOverCol === col ? '2px dashed var(--gold)' : 'none', outlineOffset: 4, padding: 2 }}>
+                          {items.map(l => {
+                            const sc = scoreOf(l); const la = apptsByLead[l.id]?.length || 0
+                            return (
+                              <div key={l.id} draggable onDragStart={() => setDragLead(l.id)} onDragEnd={() => { setDragLead(null); setDragOverCol(null) }}
+                                onClick={() => setOpenLeadId(l.id)}
+                                style={{ background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 11, padding: 11, cursor: 'pointer', opacity: dragLead === l.id ? 0.4 : 1 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+                                  <span style={{ fontSize: 10.5, fontWeight: 800, color: scoreColor(sc) }}>✦{fa(sc)}</span>
+                                  <span style={{ fontSize: 13, fontWeight: 700, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.name}</span>
+                                </div>
+                                <div style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.need || 'بدون شرحِ نیاز'}</div>
+                                <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 5, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                  {l.budget ? <span>{fmtBudget(l.budget)}</span> : null}
+                                  {la > 0 ? <span style={{ color: 'var(--gold)' }}>◉ {fa(la)} قرار</span> : null}
+                                  {l.phone ? <span style={{ direction: 'ltr' }}>☎</span> : null}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : leadsF.map(l => {
+                const sc = scoreOf(l)
+                return (
+                <div key={l.id} onClick={() => setOpenLeadId(l.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)', opacity: l.stage === 'lost' ? 0.55 : 1, flexWrap: 'wrap', cursor: 'pointer' }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: scoreColor(sc), width: 44, textAlign: 'center', flexShrink: 0 }}>✦{fa(sc)}<div style={{ fontSize: 9, color: 'var(--faint)', fontWeight: 500 }}>{scoreLabel(sc)}</div></span>
                   <div style={{ flex: 1, minWidth: 140 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>{l.name}{l.phone ? <span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 12 }}> · {l.phone}</span> : ''}{l.stage === 'closed' && <span style={{ fontSize: 10.5, fontWeight: 700, color: '#16140f', background: '#34d399', borderRadius: 6, padding: '1px 7px' }}>★ تبدیل به مشتری</span>}</div>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>{l.name}{l.phone ? <span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 12 }}> · {l.phone}</span> : ''}{(apptsByLead[l.id]?.length || 0) > 0 && <span style={{ fontSize: 10.5, color: 'var(--gold)' }}>◉ {fa(apptsByLead[l.id].length)} قرار</span>}{l.stage === 'closed' && <span style={{ fontSize: 10.5, fontWeight: 700, color: '#16140f', background: '#34d399', borderRadius: 6, padding: '1px 7px' }}>★ مشتری</span>}</div>
                     <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{l.need} {l.budget ? `· بودجه: ${fmtBudget(l.budget)}` : ''} {l.source ? `· منبع: ${l.source}` : ''}</div>
                   </div>
-                  <select value={l.stage} onChange={e => post({ action: 'setLeadStage', id: l.id, stage: e.target.value })} style={{ ...actionBtn, cursor: 'pointer', color: STAGE_COLOR[l.stage], borderColor: STAGE_COLOR[l.stage] }}>
+                  <select value={l.stage} onClick={e => e.stopPropagation()} onChange={e => post({ action: 'setLeadStage', id: l.id, stage: e.target.value })} style={{ ...actionBtn, cursor: 'pointer', color: STAGE_COLOR[l.stage], borderColor: STAGE_COLOR[l.stage] }}>
                     {STAGES.map(s => <option key={s} value={s} style={{ color: 'var(--text)' }}>{STAGE_LABEL[s]}</option>)}
                   </select>
-                  <button onClick={() => startEditLead(l)} style={actionBtn}>ویرایش</button>
-                  <button onClick={() => post({ action: 'deleteLead', id: l.id })} style={{ ...actionBtn, color: '#ef4444' }}>حذف</button>
+                  <button onClick={e => { e.stopPropagation(); startEditLead(l) }} style={actionBtn}>ویرایش</button>
+                  <button onClick={e => { e.stopPropagation(); post({ action: 'deleteLead', id: l.id }) }} style={{ ...actionBtn, color: '#ef4444' }}>حذف</button>
                 </div>
-              )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>لیدی نداری.</div>}
+              )})}
             </div>
           </div>}
 
@@ -863,19 +1106,26 @@ export default function ProsPage() {
             <div style={{ ...card, padding: 18 }}>
               {sectionTitle('قرار جدید')}
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                <div style={{ flex: '1 1 140px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>مشتری</label><input value={na.client} onChange={e => setNa({ ...na, client: e.target.value })} style={inputStyle} /></div>
-                <div style={{ flex: '2 1 180px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>ملک</label><input value={na.listingTitle} onChange={e => setNa({ ...na, listingTitle: e.target.value })} style={inputStyle} /></div>
+                <div style={{ flex: '1 1 150px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>لید (اختیاری — اتصال به پرونده)</label>
+                  <select value={na.leadId} onChange={e => { const lid = e.target.value; const l = leads.find(x => x.id === lid); setNa({ ...na, leadId: lid, client: l ? l.name : na.client }) }} style={inputStyle}>
+                    <option value="">— بدون لید —</option>
+                    {leads.filter(l => l.stage !== 'lost').map(l => <option key={l.id} value={l.id}>{l.name}{l.phone ? ` · ${l.phone}` : ''}</option>)}
+                  </select>
+                </div>
+                <div style={{ flex: '1 1 130px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>مشتری</label><input value={na.client} onChange={e => setNa({ ...na, client: e.target.value })} style={inputStyle} /></div>
+                <div style={{ flex: '2 1 160px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>ملک</label><input value={na.listingTitle} onChange={e => setNa({ ...na, listingTitle: e.target.value })} style={inputStyle} /></div>
                 <div style={{ flex: '0 1 110px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>نوع</label><select value={na.type} onChange={e => setNa({ ...na, type: e.target.value })} style={inputStyle}><option value="visit">بازدید</option><option value="meeting">جلسه</option><option value="call">تماس</option></select></div>
                 <div style={{ flex: '1 1 150px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>تاریخ و ساعت</label><JalaliDatePicker value={na.date} onChange={d => setNa({ ...na, date: d })} withTime /></div>
-                <button disabled={busy || !na.client.trim() || !na.date.trim()} onClick={async () => { if (await post({ action: 'addAppt', client: na.client.trim(), listingTitle: na.listingTitle, date: na.date.trim(), type: na.type })) setNa({ client: '', listingTitle: '', date: '', type: 'visit' }) }} style={goldBtn}>افزودن</button>
+                <button disabled={busy || !na.client.trim() || !na.date.trim()} onClick={async () => { if (await post({ action: 'addAppt', client: na.client.trim(), leadId: na.leadId || undefined, listingTitle: na.listingTitle, date: na.date.trim(), type: na.type })) setNa({ client: '', leadId: '', listingTitle: '', date: '', type: 'visit' }) }} style={goldBtn}>افزودن</button>
               </div>
+              <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 8 }}>وقتی قرار را به یک لید وصل کنی، روی تایم‌لاینِ آن لید ثبت می‌شود و در پروندهٔ لید دیده می‌شود.</div>
             </div>
             <div style={{ ...card, padding: 18 }}>
               {sectionTitle('قرارها و بازدیدها')}
               {appts.length ? appts.map(a => (
                 <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 700 }}>{a.client} <span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 12 }}>· {APPT_LABEL[a.type]}</span></div>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>{a.client} <span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 12 }}>· {APPT_LABEL[a.type]}</span>{a.leadId && leads.find(l => l.id === a.leadId) && <button onClick={() => setOpenLeadId(a.leadId!)} style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--gold)', background: 'var(--goldDim)', border: 'none', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', fontFamily: FONT }}>◎ پروندهٔ لید</button>}</div>
                     <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{a.listingTitle || '—'} · {a.date}</div>
                   </div>
                   <Pill label={APPTST_LABEL[a.status]} color={APPTST_COLOR[a.status]} />
@@ -1194,6 +1444,9 @@ export default function ProsPage() {
           </>}
         </main>
       </div>
+
+      {/* ───── کشوی جزئیاتِ لید (Sales OS) ───── */}
+      {openLead && <LeadDrawer lead={openLead} appts={apptsByLead[openLead.id] || []} onClose={() => setOpenLeadId(null)} onLog={logActivity} onStage={(s) => post({ action: 'setLeadStage', id: openLead.id, stage: s })} onEdit={() => { startEditLead(openLead); setOpenLeadId(null); setView('leads') }} />}
 
       {/* پروموتِ آگهی از رویِ خودِ آگهی */}
       {promoteListing && promoteListing.publicId && (
