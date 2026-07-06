@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listLeads, addLead, updateLead, deleteLead, Stage } from '@/app/lib/leads-store'
+import { listLeads, addLead, updateLead, deleteLead, leadAnalytics } from '@/app/lib/leads-store'
 
-const STAGES: Stage[] = ['new', 'review', 'offered', 'contract', 'lost']
-
-// GET → { leads } — scoped to the current user's own leads.
-export async function GET() {
+// GET → { leads, analytics } — scoped to the current user's own leads.
+export async function GET(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
-  return NextResponse.json({ leads: await listLeads(s.phone) })
+  const withStats = new URL(req.url).searchParams.get('analytics')
+  const leads = await listLeads(s.phone)
+  if (withStats) return NextResponse.json({ leads, analytics: await leadAnalytics(s.phone) })
+  return NextResponse.json({ leads })
 }
 
-// POST { name, phone?, need?, budget?, stage?, score?, note? } → { lead }
+// POST { name, phone?, need?, budget?, area?, region?, dealType?, stage?, status?, tags?, note?, source? } → { lead }
 export async function POST(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
@@ -19,15 +20,12 @@ export async function POST(req: NextRequest) {
   if (!b.name || !String(b.name).trim()) {
     return NextResponse.json({ error: 'نام الزامی است' }, { status: 400 })
   }
-  const stage: Stage | undefined = b.stage && STAGES.includes(b.stage) ? b.stage : undefined
   const lead = await addLead(s.phone, {
-    name: b.name,
-    phone: b.phone,
-    need: b.need,
-    budget: b.budget,
-    stage,
-    score: typeof b.score === 'number' ? b.score : undefined,
-    note: b.note,
+    name: b.name, phone: b.phone, need: b.need,
+    budget: b.budget, area: b.area, region: b.region, dealType: b.dealType,
+    stage: b.stage, status: b.status,
+    tags: Array.isArray(b.tags) ? b.tags : undefined,
+    note: b.note, source: b.source,
   })
   return NextResponse.json({ lead })
 }

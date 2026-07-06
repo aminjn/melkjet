@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { listTasks, deleteTask } from '@/app/lib/crm-store'
 import { listClients, deleteClient } from '@/app/lib/pros-store'
-import { listLeads, updateLead, deleteLead, Stage, LeadPatch } from '@/app/lib/leads-store'
+import { listLeads, updateLead, deleteLead, leadAnalytics, LeadPatch } from '@/app/lib/leads-store'
 
 async function guard() {
   const s = await getSession()
@@ -16,11 +16,12 @@ export async function GET() {
   const leads = await listLeads(s.phone)
   const tasks = await listTasks(s.phone)
   const clients = await listClients()
-  const byStage: Record<Stage, number> = { new: 0, review: 0, offered: 0, contract: 0, lost: 0 }
-  for (const l of leads) byStage[l.stage] = (byStage[l.stage] || 0) + 1
+  const analytics = await leadAnalytics(s.phone)
   const stats = {
     totalLeads: leads.length,
-    byStage,
+    byStage: analytics.byStage,
+    conversionRate: analytics.conversionRate,
+    revenue: analytics.revenue,
     totalTasks: tasks.length,
     openTasks: tasks.filter(t => !t.done).length,
     totalClients: clients.length,
