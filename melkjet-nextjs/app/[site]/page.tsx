@@ -733,7 +733,7 @@ async function TeamBlock({ block, primary, ownerPhone }: { block: SiteBlock; pri
 
 // Render one block. `ownerName` powers the real «آگهی‌های من» listings.
 // ── کاتالوگِ محصولاتِ مصالح (واقعی، از پنلِ فروشندهٔ همین سایت) ──
-async function CatalogBlock({ block, primary, ownerPhone }: { block: SiteBlock; primary: string; ownerPhone?: string }) {
+async function CatalogBlock({ block, primary, ownerPhone, slug: siteSlug }: { block: SiteBlock; primary: string; ownerPhone?: string; slug?: string }) {
   const props = p(block)
   const data = ownerPhone ? await shopProductsOf(ownerPhone) : null
   const count = Math.max(3, Math.min(24, Number(props.count) || 12))
@@ -765,7 +765,7 @@ async function CatalogBlock({ block, primary, ownerPhone }: { block: SiteBlock; 
             {products.map(pr => {
               const price = Math.round(pr.price * (1 - (pr.discountPct || 0) / 100))
               const img = pr.images?.[0]
-              const href = data?.slug ? `/store/${data.slug}` : undefined
+              const href = siteSlug ? `/${siteSlug}/store` : (data?.slug ? `/store/${data.slug}` : undefined)
               const Card: any = href ? 'a' : 'div'
               return (
                 <Card key={pr.id} {...(href ? { href } : {})} style={{ background: SURFACE, border: '1px solid rgba(0,0,0,0.08)', borderRadius: 16, overflow: 'hidden', textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column', boxShadow: CARD_SHADOW }}>
@@ -828,7 +828,7 @@ async function PriceListBlock({ block, primary, ownerPhone }: { block: SiteBlock
 
 function renderBlock(block: SiteBlock, primary: string, ownerName?: string, ownerPhone?: string, slug?: string) {
   switch (block.type) {
-    case 'catalog': return <CatalogBlock key={block.id} block={block} primary={primary} ownerPhone={ownerPhone} />
+    case 'catalog': return <CatalogBlock key={block.id} block={block} primary={primary} ownerPhone={ownerPhone} slug={slug} />
     case 'pricelist': return <PriceListBlock key={block.id} block={block} primary={primary} ownerPhone={ownerPhone} />
     case 'hero': return <HeroBlock key={block.id} block={block} primary={primary} />
     case 'search': return <SearchBlock key={block.id} block={block} primary={primary} />
