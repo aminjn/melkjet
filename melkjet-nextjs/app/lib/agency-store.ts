@@ -31,9 +31,9 @@ export interface Listing {
   parking?: boolean; elevator?: boolean; storage?: boolean; balcony?: boolean; furnished?: boolean
   amenities?: string[]; images?: string[]
 }
-export type ActivityType = 'created' | 'call' | 'visit' | 'meeting' | 'sms' | 'note' | 'stage' | 'assign'
+export type ActivityType = 'created' | 'call' | 'visit' | 'meeting' | 'sms' | 'whatsapp' | 'email' | 'note' | 'stage' | 'assign'
 export interface Activity { id: string; type: ActivityType; at: number; note?: string }
-export interface Lead { id: string; name: string; phone?: string; need?: string; budget?: string; stage: Stage; assignedTo?: string; createdAt: number; activities?: Activity[]; score?: number; tags?: string[]; lastActivityAt?: number }
+export interface Lead { id: string; name: string; phone?: string; email?: string; need?: string; budget?: string; stage: Stage; assignedTo?: string; createdAt: number; activities?: Activity[]; score?: number; tags?: string[]; lastActivityAt?: number; reminderAt?: number }
 export interface Deal { id: string; title: string; amount: number; agent: string; date: string; createdAt: number }
 export interface MonthSale { month: string; amount: number }
 export type CommMode = 'percent' | 'amount'
@@ -203,7 +203,7 @@ export async function addLead(o: string, input: Partial<Lead>): Promise<Lead> {
   let c!: Lead
   await mutate(o, a => {
     const now = Date.now()
-    c = { id: id('l_'), name: String(input.name || 'لید'), phone: input.phone, need: input.need, budget: input.budget, stage: STAGES.includes(input.stage as Stage) ? input.stage as Stage : 'new', assignedTo: input.assignedTo, createdAt: now, lastActivityAt: now, tags: [], activities: [{ id: id('ac_'), type: 'created', at: now, note: 'ثبتِ لید' }] }
+    c = { id: id('l_'), name: String(input.name || 'لید'), phone: input.phone, email: input.email, need: input.need, budget: input.budget, stage: STAGES.includes(input.stage as Stage) ? input.stage as Stage : 'new', assignedTo: input.assignedTo, createdAt: now, lastActivityAt: now, tags: [], activities: [{ id: id('ac_'), type: 'created', at: now, note: 'ثبتِ لید' }] }
     c.score = leadScore(c)
     a.leads.unshift(c)
   })
@@ -240,6 +240,17 @@ export async function addLeadActivity(o: string, lid: string, act: { type: Activ
     if (l.stage === 'new' && (act.type === 'call' || act.type === 'sms')) l.stage = 'assigned'
     if (act.type === 'visit' && (l.stage === 'new' || l.stage === 'assigned')) l.stage = 'visit'
     l.score = leadScore(l); res = l
+  })
+  return res
+}
+// یادآورِ پیگیری (Task & Reminder)
+export async function setLeadReminder(o: string, lid: string, at: number | null): Promise<Lead | null> {
+  let res: Lead | null = null
+  await mutate(o, a => {
+    const l = a.leads.find(x => x.id === lid); if (!l) return
+    l.reminderAt = at && at > 0 ? at : undefined
+    l.activities = [...(l.activities || []), { id: id('ac_'), type: 'note', at: Date.now(), note: at ? 'یادآورِ پیگیری تنظیم شد' : 'یادآور حذف شد' }]
+    l.lastActivityAt = Date.now(); res = l
   })
   return res
 }

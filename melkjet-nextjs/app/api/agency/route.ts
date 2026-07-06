@@ -5,8 +5,10 @@ import {
   addAgent, toggleAgent, deleteAgent, addListing, setListingStatus, assignListing, deleteListing,
   addLead, assignLead, setLeadStage, deleteLead, addDeal, updateAgencyProfile, resolveAgencyName,
   getCommissionConfig, setDefaultCommission, setAgentCommission, clearAgentCommission,
-  addLeadActivity, agencyAiInsights, agencyLeadAdvice, type ActivityType,
+  addLeadActivity, agencyAiInsights, agencyLeadAdvice, setLeadReminder, type ActivityType,
 } from '@/app/lib/agency-store'
+import { getCrmSettings, setCrmSettings } from '@/app/lib/crm-settings-store'
+import { sendServiceSms } from '@/app/lib/sms'
 import { agencyAdvisorFiles } from '@/app/lib/agency-team'
 import { planDistribution, findConflicts } from '@/app/lib/agency-distribution'
 import { forecastIncome, advisorPerformance, teamInsights } from '@/app/lib/agency-ai'
@@ -85,7 +87,23 @@ export async function POST(req: NextRequest) {
       await deleteListing(o, String(b.id))
       try { await advDeleteListing(o, String(b.id)) } catch {}   // اگر فایلِ ایمپورت‌شده بود، از advisor-store هم حذف شود
       return NextResponse.json({ ok: true })
-    case 'addLead': if (!b.name) return NextResponse.json({ error: 'نام الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, lead: await addLead(o, b) })
+    case 'addLead': {
+      if (!b.name) return NextResponse.json({ error: 'نام الزامی است' }, { status: 400 })
+      const lead = await addLead(o, b)
+      let welcomed = false
+      try {
+        const cfg = await getCrmSettings(o)
+        if (cfg.autoWelcomeSms && lead.phone) {
+          const r = await sendServiceSms(lead.phone, cfg.welcomeTemplate.replace(/\{name\}/g, lead.name || ''), 'خوش‌آمدِ لید')
+          welcomed = r.ok
+          await addLeadActivity(o, lead.id, { type: 'sms', note: r.ok ? 'پیامکِ خوش‌آمدِ خودکار' : `پیامکِ خوش‌آمد ناموفق: ${r.error || ''}` })
+        }
+      } catch {}
+      return NextResponse.json({ ok: true, lead, welcomed })
+    }
+    case 'setReminder': { if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); const l = await setLeadReminder(o, String(b.id), b.at ? Number(b.at) : null); return l ? NextResponse.json({ ok: true, lead: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
+    case 'getCrmSettings': return NextResponse.json({ ok: true, settings: await getCrmSettings(o) })
+    case 'setCrmSettings': return NextResponse.json({ ok: true, settings: await setCrmSettings(o, b.patch || {}) })
     case 'assignLead': { const l = await assignLead(o, String(b.id), String(b.agent || '')); return l ? NextResponse.json({ ok: true, lead: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'setLeadStage': { const l = await setLeadStage(o, String(b.id), b.stage); return l ? NextResponse.json({ ok: true, lead: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'deleteLead': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); await deleteLead(o, String(b.id)); return NextResponse.json({ ok: true })

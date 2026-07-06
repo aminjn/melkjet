@@ -16,12 +16,12 @@ export type ApptType = 'visit' | 'meeting' | 'call'
 export type ApptStatus = 'scheduled' | 'done' | 'canceled'
 export type CommStatus = 'pending' | 'paid' | 'canceled'
 
-export type ActivityType = 'created' | 'call' | 'visit' | 'meeting' | 'sms' | 'note' | 'stage' | 'appt'
+export type ActivityType = 'created' | 'call' | 'visit' | 'meeting' | 'sms' | 'whatsapp' | 'email' | 'note' | 'stage' | 'appt'
 export interface Activity { id: string; type: ActivityType; at: number; note?: string }
 export interface Lead {
-  id: string; name: string; phone?: string; need?: string; budget?: string; stage: Stage; source?: string; note?: string; createdAt: number
-  // Sales OS: تایم‌لاین فعالیت + امتیازِ خودکار + تگ + آخرین فعالیت
-  activities?: Activity[]; score?: number; tags?: string[]; lastActivityAt?: number
+  id: string; name: string; phone?: string; email?: string; need?: string; budget?: string; stage: Stage; source?: string; note?: string; createdAt: number
+  // Sales OS: تایم‌لاین فعالیت + امتیازِ خودکار + تگ + آخرین فعالیت + یادآورِ پیگیری
+  activities?: Activity[]; score?: number; tags?: string[]; lastActivityAt?: number; reminderAt?: number
 }
 export interface Listing {
   id: string; title: string; ptype: string; location: string; price: number; deal: 'sale' | 'rent'; status: ListingStatus; createdAt: number
@@ -142,7 +142,7 @@ export async function addLead(o: string, input: Partial<Lead>): Promise<Lead> {
   let c!: Lead
   await mutate(o, a => {
     const now = Date.now()
-    c = { id: id('l_'), name: String(input.name || 'لید جدید'), phone: input.phone, need: input.need, budget: input.budget, stage: STAGES.includes(input.stage as Stage) ? input.stage as Stage : 'new', source: input.source, note: input.note, createdAt: now, lastActivityAt: now, tags: [], activities: [{ id: id('ac_'), type: 'created', at: now, note: input.source ? `ثبت از ${input.source}` : 'ثبتِ لید' }] }
+    c = { id: id('l_'), name: String(input.name || 'لید جدید'), phone: input.phone, email: input.email, need: input.need, budget: input.budget, stage: STAGES.includes(input.stage as Stage) ? input.stage as Stage : 'new', source: input.source, note: input.note, createdAt: now, lastActivityAt: now, tags: [], activities: [{ id: id('ac_'), type: 'created', at: now, note: input.source ? `ثبت از ${input.source}` : 'ثبتِ لید' }] }
     c.score = leadScore(c)
     a.leads.unshift(c)
   })
@@ -177,9 +177,20 @@ export async function updateLead(o: string, lid: string, patch: Partial<Lead>): 
   let res: Lead | null = null
   await mutate(o, a => {
     const l = a.leads.find(x => x.id === lid); if (!l) return
-    const allow: (keyof Lead)[] = ['name', 'phone', 'need', 'budget', 'source', 'note', 'stage']
+    const allow: (keyof Lead)[] = ['name', 'phone', 'email', 'need', 'budget', 'source', 'note', 'stage']
     for (const k of allow) if (k in patch) (l as unknown as Record<string, unknown>)[k] = (patch as Record<string, unknown>)[k]
     res = l
+  })
+  return res
+}
+// یادآورِ پیگیری (Task & Reminder): زمانِ آینده‌ای که باید لید را پیگیری کرد.
+export async function setLeadReminder(o: string, lid: string, at: number | null): Promise<Lead | null> {
+  let res: Lead | null = null
+  await mutate(o, a => {
+    const l = a.leads.find(x => x.id === lid); if (!l) return
+    l.reminderAt = at && at > 0 ? at : undefined
+    l.activities = [...(l.activities || []), { id: id('ac_'), type: 'note', at: Date.now(), note: at ? `یادآورِ پیگیری تنظیم شد` : 'یادآور حذف شد' }]
+    l.lastActivityAt = Date.now(); res = l
   })
   return res
 }

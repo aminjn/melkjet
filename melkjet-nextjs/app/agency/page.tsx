@@ -23,9 +23,9 @@ type ListingStatus = 'active' | 'sold' | 'rented'
 
 interface Agent { id: string; name: string; phone?: string; deals: number; leads: number; commission: number; active: boolean; createdAt: number }
 interface Listing { id: string; title: string; ptype: string; location: string; price: number; deal: 'sale' | 'rent'; status: ListingStatus; agent?: string; createdAt: number }
-type ActivityType = 'created' | 'call' | 'visit' | 'meeting' | 'sms' | 'note' | 'stage' | 'assign'
+type ActivityType = 'created' | 'call' | 'visit' | 'meeting' | 'sms' | 'whatsapp' | 'email' | 'note' | 'stage' | 'assign'
 interface Activity { id: string; type: ActivityType; at: number; note?: string }
-interface Lead { id: string; name: string; phone?: string; need?: string; budget?: string; stage: Stage; assignedTo?: string; createdAt: number; activities?: Activity[]; score?: number; tags?: string[]; lastActivityAt?: number }
+interface Lead { id: string; name: string; phone?: string; email?: string; need?: string; budget?: string; stage: Stage; assignedTo?: string; createdAt: number; activities?: Activity[]; score?: number; tags?: string[]; lastActivityAt?: number; reminderAt?: number }
 interface Deal { id: string; title: string; amount: number; agent: string; date: string; createdAt: number }
 interface Stats {
   profile: { name: string; branches?: string }
@@ -69,8 +69,9 @@ const STAGE_LABEL: Record<Stage, string> = { new: 'جدید', assigned: 'تخص�
 const STAGE_COLOR: Record<Stage, string> = { new: 'var(--gold)', assigned: '#60a5fa', visit: '#2dd4bf', negotiation: '#f59e0b', closed: '#34d399', lost: '#7a8fae' }
 // Sales OS آژانس
 const PIPE_STAGES: Stage[] = ['new', 'assigned', 'visit', 'negotiation', 'closed']
-const ACT_LABEL: Record<ActivityType, string> = { created: 'ایجاد', call: 'تماس', visit: 'بازدید', meeting: 'جلسه', sms: 'پیامک', note: 'یادداشت', stage: 'تغییرِ مرحله', assign: 'تخصیص' }
-const ACT_ICON: Record<ActivityType, string> = { created: '✦', call: '☎', visit: '🏠', meeting: '👥', sms: '✉', note: '✎', stage: '➜', assign: '👤' }
+const ACT_LABEL: Record<ActivityType, string> = { created: 'ایجاد', call: 'تماس', visit: 'بازدید', meeting: 'جلسه', sms: 'پیامک', whatsapp: 'واتساپ', email: 'ایمیل', note: 'یادداشت', stage: 'تغییرِ مرحله', assign: 'تخصیص' }
+const ACT_ICON: Record<ActivityType, string> = { created: '✦', call: '☎', visit: '🏠', meeting: '👥', sms: '✉', whatsapp: '🟢', email: '✉', note: '✎', stage: '➜', assign: '👤' }
+function waLink(phone?: string): string { const d = String(phone || '').replace(/[^\d]/g, ''); if (!d) return ''; const n = d.startsWith('0') ? '98' + d.slice(1) : d.startsWith('98') ? d : d.startsWith('9') ? '98' + d : d; return `https://wa.me/${n}` }
 function agScoreOf(l: { stage: string; score?: number; phone?: string; budget?: string; need?: string; assignedTo?: string; activities?: Activity[]; lastActivityAt?: number; createdAt?: number }): number {
   if (typeof l.score === 'number') return l.score
   if (l.stage === 'closed') return 92; if (l.stage === 'lost') return 5
@@ -157,12 +158,13 @@ function IncomeBars({ points, height = 96 }: { points: MonthPoint[]; height?: nu
 }
 
 // ═══ کشوی پروندهٔ لیدِ آژانس (Sales OS): تایم‌لاین، ثبتِ فعالیت، تخصیص، AI اقدامِ بعدی ═══
-function AgencyLeadDrawer({ lead, agents, onClose, onLog, onStage, onAssign }: {
+function AgencyLeadDrawer({ lead, agents, onClose, onLog, onStage, onAssign, onReminder }: {
   lead: Lead; agents: string[]
   onClose: () => void
   onLog: (id: string, type: ActivityType, note?: string) => Promise<boolean>
   onStage: (s: Stage) => void
   onAssign: (agent: string) => void
+  onReminder: (at: number | null) => void
 }) {
   const [note, setNote] = useState('')
   const [logType, setLogType] = useState<ActivityType>('call')
@@ -200,9 +202,12 @@ function AgencyLeadDrawer({ lead, agents, onClose, onLog, onStage, onAssign }: {
             <button onClick={onClose} style={{ ...dBtn, fontSize: 16, padding: '4px 10px' }}>✕</button>
           </div>
           <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8, lineHeight: 1.8 }}>{lead.need || 'بدون شرحِ نیاز'}{lead.budget ? ` · بودجه: ${money(Number((lead.budget || '').replace(/[^0-9]/g, '')) || 0)}` : ''}</div>
+          {/* Communication Hub */}
           <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
             {lead.phone && <a href={`tel:${lead.phone}`} onClick={() => onLog(lead.id, 'call')} style={{ ...dBtn, textDecoration: 'none', color: 'var(--gold)', borderColor: 'var(--gold)', direction: 'ltr' }}>☎ تماس</a>}
             {lead.phone && <a href={`sms:${lead.phone}`} onClick={() => onLog(lead.id, 'sms')} style={{ ...dBtn, textDecoration: 'none', direction: 'ltr' }}>✉ پیامک</a>}
+            {lead.phone && waLink(lead.phone) && <a href={waLink(lead.phone)} target="_blank" rel="noreferrer" onClick={() => onLog(lead.id, 'whatsapp')} style={{ ...dBtn, textDecoration: 'none', color: '#25d366', borderColor: '#25d36688', direction: 'ltr' }}>🟢 واتساپ</a>}
+            {lead.email && <a href={`mailto:${lead.email}`} onClick={() => onLog(lead.id, 'email')} style={{ ...dBtn, textDecoration: 'none', direction: 'ltr' }}>✉ ایمیل</a>}
             <select value={lead.assignedTo || ''} onChange={e => onAssign(e.target.value)} style={{ ...dBtn, cursor: 'pointer' }}><option value="">تخصیص به…</option>{agents.map(n => <option key={n} value={n}>{n}</option>)}</select>
           </div>
           <div style={{ display: 'flex', gap: 6, marginTop: 12, flexWrap: 'wrap' }}>
@@ -218,6 +223,17 @@ function AgencyLeadDrawer({ lead, agents, onClose, onLog, onStage, onAssign }: {
             </div>
             <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.9 }}>{nextStep}</div>
             {advice && <div style={{ fontSize: 12.5, color: 'var(--text)', lineHeight: 2, marginTop: 10, borderTop: '1px solid var(--line)', paddingTop: 10, whiteSpace: 'pre-wrap' }}>{advice}</div>}
+          </div>
+
+          {/* یادآورِ پیگیری (Task & Reminder) */}
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>⏰ یادآورِ پیگیری{lead.reminderAt ? <span style={{ fontSize: 11, fontWeight: 600, color: lead.reminderAt <= Date.now() ? '#ef4444' : 'var(--gold)' }}>— {faDate(lead.reminderAt)}{lead.reminderAt <= Date.now() ? ' (رسیده)' : ''}</span> : null}</div>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              {([['فردا', 1], ['۳ روز دیگر', 3], ['هفتهٔ بعد', 7], ['۲ هفته', 14]] as [string, number][]).map(([lbl, d]) => (
+                <button key={d} onClick={() => onReminder(Date.now() + d * 864e5)} style={dBtn}>{lbl}</button>
+              ))}
+              {lead.reminderAt && <button onClick={() => onReminder(null)} style={{ ...dBtn, color: '#ef4444' }}>حذفِ یادآور</button>}
+            </div>
           </div>
 
           <div>
@@ -284,7 +300,9 @@ export default function AgencyPage() {
   // فرمِ کاملِ افزودنِ فایل (مثلِ پنل مشاور)
   const [fileModal, setFileModal] = useState(false)
   const [ff, setFf] = useState({ ...emptyFileForm })
-  const [nl, setNl] = useState({ name: '', phone: '', need: '', budget: '' })
+  const [nl, setNl] = useState({ name: '', phone: '', email: '', need: '', budget: '' })
+  const [crmSettings, setCrmSettings] = useState<{ autoWelcomeSms: boolean; welcomeTemplate: string; followUpHours: number } | null>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [nd, setNd] = useState({ title: '', amount: '', agent: '', date: '' })
   const [prof, setProf] = useState({ name: '', branches: '' })
   // ویرایشِ نرخِ کمیسیون (پیش‌فرض + per-advisor)
@@ -386,6 +404,8 @@ export default function AgencyPage() {
     setCrmAiBusy(true)
     try { const r = await fetch('/api/agency', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'crmInsights' }) }); const d = await r.json(); if (d.ok) setCrmAi({ callNow: d.callNow || [], health: d.health || '', tips: d.tips || [] }) } catch {} finally { setCrmAiBusy(false) }
   }, [])
+  useEffect(() => { fetch('/api/agency', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getCrmSettings' }) }).then(r => r.json()).then(d => { if (d.settings) setCrmSettings(d.settings) }).catch(() => {}) }, [])
+  const saveCrmSettings = async (patch: Partial<{ autoWelcomeSms: boolean; welcomeTemplate: string; followUpHours: number }>) => { try { const r = await fetch('/api/agency', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'setCrmSettings', patch }) }); const d = await r.json(); if (d.settings) setCrmSettings(d.settings) } catch {} }
 
   const submitFile = async () => {
     if (busy || !ff.title.trim()) return
@@ -444,9 +464,9 @@ export default function AgencyPage() {
   // «با کی تماس بگیرم» (کلاینتی، همیشه‌کار) — لیدهای بازِ آژانس
   const agFollowUp = leads
     .filter(l => l.stage !== 'closed' && l.stage !== 'lost')
-    .map(l => ({ l, s: agScoreOf(l), age: (Date.now() - (l.lastActivityAt || l.createdAt)) / 36e5 }))
-    .filter(x => !x.l.assignedTo || x.age >= 24 || x.s >= 60)
-    .sort((a, b) => b.s - a.s).slice(0, 6)
+    .map(l => ({ l, s: agScoreOf(l), age: (Date.now() - (l.lastActivityAt || l.createdAt)) / 36e5, due: !!(l.reminderAt && l.reminderAt <= Date.now()) }))
+    .filter(x => x.due || !x.l.assignedTo || x.age >= 24 || x.s >= 60)
+    .sort((a, b) => (a.due === b.due ? b.s - a.s : a.due ? -1 : 1)).slice(0, 6)
   const leadsF = leadsUnified
     .filter(l => !q || (l.name + l.need + l.owner + (l.phone || '')).includes(q))
     .filter(l => leadStageF === 'all' || l.stage === leadStageF)
@@ -1068,13 +1088,17 @@ export default function AgencyPage() {
               )}
             </div>
             <div style={{ ...card, padding: 18 }}>
-              {sectionTitle('افزودن لید')}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+                <div style={{ fontWeight: 800, fontSize: 15 }}>افزودن لید</div>
+                <button onClick={() => setSettingsOpen(true)} style={{ ...actionBtn, marginInlineStart: 'auto' }}>⚙ اتوماسیون{crmSettings?.autoWelcomeSms ? ' • روشن' : ''}</button>
+              </div>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                <div style={{ flex: '1 1 140px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>نام</label><input value={nl.name} onChange={e => setNl({ ...nl, name: e.target.value })} style={inputStyle} /></div>
-                <div style={{ flex: '1 1 130px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>تلفن</label><input value={nl.phone} onChange={e => setNl({ ...nl, phone: e.target.value })} style={inputStyle} /></div>
-                <div style={{ flex: '2 1 180px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>نیاز</label><input value={nl.need} onChange={e => setNl({ ...nl, need: e.target.value })} style={inputStyle} /></div>
-                <div style={{ flex: '1 1 130px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>بودجه (تومان)</label><NumberInput value={nl.budget} onChange={v => setNl({ ...nl, budget: v })} style={inputStyle} /></div>
-                <button disabled={busy || !nl.name.trim()} onClick={async () => { if (await post({ action: 'addLead', name: nl.name.trim(), phone: nl.phone, need: nl.need, budget: nl.budget })) setNl({ name: '', phone: '', need: '', budget: '' }) }} style={goldBtn}>افزودن</button>
+                <div style={{ flex: '1 1 130px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>نام</label><input value={nl.name} onChange={e => setNl({ ...nl, name: e.target.value })} style={inputStyle} /></div>
+                <div style={{ flex: '1 1 120px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>تلفن</label><input value={nl.phone} onChange={e => setNl({ ...nl, phone: e.target.value })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} /></div>
+                <div style={{ flex: '1 1 140px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>ایمیل</label><input value={nl.email} onChange={e => setNl({ ...nl, email: e.target.value })} placeholder="اختیاری" style={{ ...inputStyle, direction: 'ltr', textAlign: 'right' }} /></div>
+                <div style={{ flex: '2 1 150px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>نیاز</label><input value={nl.need} onChange={e => setNl({ ...nl, need: e.target.value })} style={inputStyle} /></div>
+                <div style={{ flex: '1 1 120px' }}><label style={{ fontSize: 12, color: 'var(--muted)' }}>بودجه (تومان)</label><NumberInput value={nl.budget} onChange={v => setNl({ ...nl, budget: v })} style={inputStyle} /></div>
+                <button disabled={busy || !nl.name.trim()} onClick={async () => { if (await post({ action: 'addLead', name: nl.name.trim(), phone: nl.phone, email: nl.email, need: nl.need, budget: nl.budget })) setNl({ name: '', phone: '', email: '', need: '', budget: '' }) }} style={goldBtn}>افزودن</button>
               </div>
             </div>
             {/* ✦ هوشِ CRM آژانس: با کی تماس بگیرم؟ + سلامتِ پایپ‌لاین */}
@@ -1084,9 +1108,9 @@ export default function AgencyPage() {
                 <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>لیدهای تخصیص‌نیافته/پرامتیازِ آژانس</div>
                 <button disabled={crmAiBusy} onClick={loadCrmAi} style={{ ...actionBtn, marginInlineStart: 'auto', color: 'var(--gold)', borderColor: 'var(--gold)' }}>{crmAiBusy ? '…' : '✨ تحلیلِ هوشمند'}</button>
               </div>
-              {(crmAi?.callNow?.length ? crmAi.callNow : agFollowUp.map(x => ({ id: x.l.id, name: x.l.name, phone: x.l.phone, score: x.s, why: !x.l.assignedTo ? 'تخصیص‌نیافته' : x.age >= 24 ? `${fa(Math.round(x.age / 24))} روز بی‌فعالیت` : 'امتیازِ بالا', assignedTo: x.l.assignedTo }))).length ? (
+              {(crmAi?.callNow?.length ? crmAi.callNow : agFollowUp.map(x => ({ id: x.l.id, name: x.l.name, phone: x.l.phone, score: x.s, why: x.due ? '⏰ یادآورِ رسیده' : !x.l.assignedTo ? 'تخصیص‌نیافته' : x.age >= 24 ? `${fa(Math.round(x.age / 24))} روز بی‌فعالیت` : 'امتیازِ بالا', assignedTo: x.l.assignedTo }))).length ? (
                 <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }}>
-                  {(crmAi?.callNow?.length ? crmAi.callNow : agFollowUp.map(x => ({ id: x.l.id, name: x.l.name, phone: x.l.phone, score: x.s, why: !x.l.assignedTo ? 'تخصیص‌نیافته' : x.age >= 24 ? `${fa(Math.round(x.age / 24))} روز بی‌فعالیت` : 'امتیازِ بالا', assignedTo: x.l.assignedTo }))).map(c => (
+                  {(crmAi?.callNow?.length ? crmAi.callNow : agFollowUp.map(x => ({ id: x.l.id, name: x.l.name, phone: x.l.phone, score: x.s, why: x.due ? '⏰ یادآورِ رسیده' : !x.l.assignedTo ? 'تخصیص‌نیافته' : x.age >= 24 ? `${fa(Math.round(x.age / 24))} روز بی‌فعالیت` : 'امتیازِ بالا', assignedTo: x.l.assignedTo }))).map(c => (
                     <div key={c.id} style={{ flex: '0 0 auto', minWidth: 190, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: 12 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                         <span style={{ fontSize: 11, fontWeight: 800, color: scoreColor(c.score) }}>✦{fa(c.score)}</span>
@@ -1275,7 +1299,32 @@ export default function AgencyPage() {
       </div>
 
       {/* ───── کشوی پروندهٔ لیدِ آژانس (Sales OS) ───── */}
-      {openLead && <AgencyLeadDrawer lead={openLead} agents={activeAgentNames} onClose={() => setOpenLeadId(null)} onLog={logActivity} onStage={(s) => post({ action: 'setLeadStage', id: openLead.id, stage: s })} onAssign={(ag) => post({ action: 'assignLead', id: openLead.id, agent: ag })} />}
+      {openLead && <AgencyLeadDrawer lead={openLead} agents={activeAgentNames} onClose={() => setOpenLeadId(null)} onLog={logActivity} onStage={(s) => post({ action: 'setLeadStage', id: openLead.id, stage: s })} onAssign={(ag) => post({ action: 'assignLead', id: openLead.id, agent: ag })} onReminder={(at) => post({ action: 'setReminder', id: openLead.id, at })} />}
+
+      {/* ───── مودالِ اتوماسیونِ فروش ───── */}
+      {settingsOpen && crmSettings && (
+        <div onClick={() => setSettingsOpen(false)} dir="rtl" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 1600, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, fontFamily: FONT }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...card, width: 'min(480px,100%)', padding: 22 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+              <div style={{ fontSize: 16, fontWeight: 900 }}>⚙ اتوماسیونِ فروش</div>
+              <button onClick={() => setSettingsOpen(false)} style={{ ...actionBtn, marginInlineStart: 'auto' }}>✕</button>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 14 }}>
+              <input type="checkbox" checked={crmSettings.autoWelcomeSms} onChange={e => saveCrmSettings({ autoWelcomeSms: e.target.checked })} style={{ width: 18, height: 18, cursor: 'pointer' }} />
+              <div><div style={{ fontSize: 13.5, fontWeight: 700 }}>پیامکِ خوش‌آمدِ خودکار</div><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>هر لیدِ جدید با شماره → یک پیامک خودکار دریافت می‌کند.</div></div>
+            </label>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, color: 'var(--muted)' }}>متنِ پیامک ({'{name}'} = نامِ لید)</label>
+              <textarea defaultValue={crmSettings.welcomeTemplate} onBlur={e => saveCrmSettings({ welcomeTemplate: e.target.value })} rows={3} style={{ ...inputStyle, resize: 'vertical', marginTop: 4 }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: 'var(--muted)' }}>آستانهٔ «پیگیریِ لازم» (ساعت)</label>
+              <input type="number" min={1} max={720} defaultValue={crmSettings.followUpHours} onBlur={e => saveCrmSettings({ followUpHours: Number(e.target.value) })} style={{ ...inputStyle, direction: 'ltr', textAlign: 'left', width: 120, marginTop: 4 }} />
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 14, lineHeight: 1.8 }}>پیامک از طریقِ سرویسِ پیامکِ تنظیم‌شده در ادمین ارسال می‌شود.</div>
+          </div>
+        </div>
+      )}
 
       {/* مودالِ افزودنِ فایلِ کامل — مثلِ پنل مشاور */}
       {fileModal && (
