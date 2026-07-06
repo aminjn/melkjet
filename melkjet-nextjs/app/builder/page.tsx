@@ -16,7 +16,8 @@ import SupportPanel from '@/app/components/SupportPanel'
 
 // ── Types (mirror app/lib/builder-store.ts API shape) ──
 type UnitStatus = 'sold' | 'reserved' | 'available' | 'owner'
-interface Unit { id: string; number: string; floor: number; area: number; price: number; status: UnitStatus; buyer?: string; soldVia?: 'site' | 'offline' }
+interface PaymentStage { id: string; label: string; amount: number; due?: string; paid: boolean }
+interface Unit { id: string; number: string; floor: number; area: number; price: number; status: UnitStatus; buyer?: string; soldVia?: 'site' | 'offline'; plan?: PaymentStage[] }
 interface Investor { id: string; name: string; phone?: string; amount: number; units?: number }
 type MilestoneStatus = 'done' | 'active' | 'pending'
 interface Milestone { id: string; name: string; status: MilestoneStatus; date?: string }
@@ -28,6 +29,7 @@ interface Project {
   id: string; name: string; location: string; phase: string; progress: number
   units: Unit[]; investors: Investor[]; milestones: Milestone[]
   monthlySales: { month: string; count: number }[]
+  finance?: { landCost?: number; buildCost?: number; otherCost?: number }
   createdAt: number
   source?: ProjectSource
 }
@@ -511,7 +513,7 @@ export default function BuilderPage() {
               {view === 'units' && <UnitsView project={project} post={post} pid={pid} busy={busy} />}
               {view === 'sales' && <SalesView project={project} s={s} />}
               {view === 'investors' && <InvestorsView project={project} post={post} pid={pid} busy={busy} />}
-              {view === 'reports' && <ReportsView project={project} s={s} />}
+              {view === 'reports' && <ReportsView project={project} s={s} post={post} pid={pid} busy={busy} />}
             </>
           )}
         </main>
@@ -996,12 +998,30 @@ function InvestorsView({ project, post, pid, busy }: {
 // ════════════════════════════════════════════════════════
 //  REPORTS
 // ════════════════════════════════════════════════════════
-function ReportsView({ project, s }: { project: Project; s: Stats }) {
+function ReportsView({ project, s, post, pid, busy }: { project: Project; s: Stats; post: (b: Record<string, unknown>) => Promise<boolean>; pid: string | null; busy: boolean }) {
   const sellRate = s.total ? Math.round((s.sold / s.total) * 100) : 0
   const withArea = project.units.filter(u => u.area > 0)
   const avgPerMeter = withArea.length ? Math.round(withArea.reduce((a, u) => a + u.price / u.area, 0) / withArea.length) : 0
   const maxSale = Math.max(1, ...project.monthlySales.map(m => m.count))
   const tallest = project.monthlySales.reduce((mi, m, i, arr) => m.count > arr[mi].count ? i : mi, 0)
+
+  // ── مالی (Financial Tracking) — ورودی به میلیارد تومان ──
+  const toB = (n?: number) => n ? String(Math.round((n / 1e9) * 100) / 100) : ''
+  const [fin, setFin] = useState({ land: toB(project.finance?.landCost), build: toB(project.finance?.buildCost), other: toB(project.finance?.otherCost) })
+  useEffect(() => { setFin({ land: toB(project.finance?.landCost), build: toB(project.finance?.buildCost), other: toB(project.finance?.otherCost) }) }, [project.id, project.finance?.landCost, project.finance?.buildCost, project.finance?.otherCost])
+  const saveFin = () => post({ action: 'setFinance', pid, patch: { landCost: (Number(fin.land) || 0) * 1e9, buildCost: (Number(fin.build) || 0) * 1e9, otherCost: (Number(fin.other) || 0) * 1e9 } })
+  const totalCost = ((Number(fin.land) || 0) + (Number(fin.build) || 0) + (Number(fin.other) || 0)) * 1e9
+  const profit = s.revenue - totalCost
+  const margin = s.revenue > 0 ? Math.round((profit / s.revenue) * 100) : 0
+
+  // ── AI ──
+  const [ai, setAi] = useState<any>(null)
+  const [aiBusy, setAiBusy] = useState(false)
+  const runAi = async () => {
+    setAiBusy(true)
+    try { const r = await fetch('/api/builder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'aiInsights', pid }) }); const d = await r.json(); if (d.ok) setAi(d) } catch {} finally { setAiBusy(false) }
+  }
+  const finInput: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '9px 11px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', direction: 'ltr', textAlign: 'left' }
 
   const cards = [
     { label: 'نرخ فروش', value: fa(sellRate) + '٪', sub: `${fa(s.sold)} از ${fa(s.total)} واحد`, color: '#34d399' },
@@ -1035,6 +1055,40 @@ function ReportsView({ project, s }: { project: Project; s: Stats }) {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Financial Tracking — هزینه، سود، حاشیه */}
+      <div style={{ ...card, padding: 22 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>مالیِ پروژه</h3>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 16 }}>هزینه‌ها را به میلیارد تومان وارد کن تا سود و حاشیهٔ سود محاسبه شود.</div>
+        <div className="mjb-grid4" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 16 }}>
+          <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>هزینهٔ زمین (م.ت)</label><input value={fin.land} onChange={e => setFin({ ...fin, land: e.target.value })} style={finInput} /></div>
+          <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>هزینهٔ ساخت (م.ت)</label><input value={fin.build} onChange={e => setFin({ ...fin, build: e.target.value })} style={finInput} /></div>
+          <div><label style={{ fontSize: 12, color: 'var(--muted)' }}>سایر هزینه‌ها (م.ت)</label><input value={fin.other} onChange={e => setFin({ ...fin, other: e.target.value })} style={finInput} /></div>
+        </div>
+        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ flex: '1 1 140px' }}><div style={{ fontSize: 11, color: 'var(--muted)' }}>هزینهٔ کل</div><div style={{ fontSize: 18, fontWeight: 800 }}>{money(totalCost)}</div></div>
+          <div style={{ flex: '1 1 140px' }}><div style={{ fontSize: 11, color: 'var(--muted)' }}>درآمدِ فروش</div><div style={{ fontSize: 18, fontWeight: 800, color: 'var(--gold)' }}>{money(s.revenue)}</div></div>
+          <div style={{ flex: '1 1 140px' }}><div style={{ fontSize: 11, color: 'var(--muted)' }}>سودِ ناخالص</div><div style={{ fontSize: 18, fontWeight: 800, color: profit >= 0 ? '#34d399' : '#ef4444' }}>{money(profit)} <span style={{ fontSize: 12 }}>({fa(margin)}٪)</span></div></div>
+          <button disabled={busy} onClick={saveFin} style={{ marginInlineStart: 'auto', padding: '10px 20px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>ذخیرهٔ هزینه‌ها</button>
+        </div>
+      </div>
+
+      {/* AI Engine — پیش‌بینیِ فروش + زمانِ فروشِ کامل */}
+      <div style={{ ...card, padding: 22 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700 }}>✦ تحلیلِ هوشمندِ پروژه</h3>
+          <button disabled={aiBusy} onClick={runAi} style={{ marginInlineStart: 'auto', padding: '8px 16px', borderRadius: 10, border: '1px solid var(--gold)', background: 'var(--goldDim)', color: 'var(--gold)', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>{aiBusy ? '…' : (ai ? 'به‌روزرسانی' : 'تحلیل کن')}</button>
+        </div>
+        {ai ? <>
+          <div className="mjb-grid4" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginTop: 16 }}>
+            <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: 14 }}><div style={{ fontSize: 11, color: 'var(--muted)' }}>سرعتِ فروش</div><div style={{ fontSize: 18, fontWeight: 800, marginTop: 4 }}>{fa(ai.forecast.velocity)} <span style={{ fontSize: 12, color: 'var(--muted)' }}>واحد/ماه</span></div></div>
+            <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: 14 }}><div style={{ fontSize: 11, color: 'var(--muted)' }}>زمانِ فروشِ کامل</div><div style={{ fontSize: 18, fontWeight: 800, marginTop: 4, color: 'var(--gold)' }}>{ai.forecast.soldOutDate || (ai.forecast.remaining === 0 ? 'فروش رفته' : '—')}</div></div>
+            <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: 14 }}><div style={{ fontSize: 11, color: 'var(--muted)' }}>ارزشِ واحدهای مانده</div><div style={{ fontSize: 18, fontWeight: 800, marginTop: 4 }}>{money(ai.forecast.revenueLeft)}</div></div>
+          </div>
+          {ai.insights?.length > 0 && <ul style={{ margin: '14px 0 0', paddingInlineStart: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>{ai.insights.map((t: string, i: number) => <li key={i} style={{ fontSize: 12.5, lineHeight: 1.9 }}>{t}</li>)}</ul>}
+          {ai.advice && <div style={{ marginTop: 12, background: 'var(--goldDim)', border: '1px solid rgba(201,168,76,.3)', borderRadius: 10, padding: 12, fontSize: 12.5, lineHeight: 2 }}>{ai.advice}</div>}
+        </> : <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 12 }}>پیش‌بینیِ زمانِ فروشِ کاملِ پروژه، سرعتِ فروش و پیشنهادها — دکمهٔ «تحلیل کن» را بزن.</div>}
       </div>
     </div>
   )

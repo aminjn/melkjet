@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listProjects, getProject, addProject, updateProject, addUnit, updateUnit, deleteUnit, addInvestor, deleteInvestor, updateMilestone, ensureImported } from '@/app/lib/builder-store'
+import { listProjects, getProject, addProject, updateProject, addUnit, updateUnit, deleteUnit, addInvestor, deleteInvestor, updateMilestone, ensureImported, setProjectFinance, setUnitPlan, toggleUnitStage, projectStats } from '@/app/lib/builder-store'
+import { sellThroughForecast, suggestUnitPrice, projectInsights } from '@/app/lib/builder-ai'
+import { agentModel, agentProvider, chatCompleteSafe } from '@/app/lib/gapgpt'
 import { builderIdForPhone, getProfile, regionLabel, phaseLabel } from '@/app/lib/persiansaze-store'
 import { getPublic, patchPublic, setProjMeta, addManual, updateManual, deleteManual } from '@/app/lib/builder-public-store'
 import { assembleBuilderProfile } from '@/app/lib/builder-profile'
@@ -54,6 +56,35 @@ export async function POST(req: NextRequest) {
     if (a === 'addInvestor') return NextResponse.json({ ok: true, investor: await addInvestor(o, b.pid, { name: String(b.name || ''), phone: b.phone, amount: Number(b.amount) || 0, units: Number(b.units) || 0 }) })
     if (a === 'deleteInvestor') { await deleteInvestor(o, b.pid, b.vid); return NextResponse.json({ ok: true }) }
     if (a === 'milestone') { await updateMilestone(o, b.pid, b.mid, b.status); return NextResponse.json({ ok: true }) }
+
+    // ── مالی (Financial Tracking) + پیش‌فروشِ مرحله‌ای ──
+    if (a === 'setFinance') return NextResponse.json({ ok: true, project: await setProjectFinance(o, b.pid, b.patch || {}) })
+    if (a === 'setUnitPlan') return NextResponse.json({ ok: true, unit: await setUnitPlan(o, b.pid, b.uid, Array.isArray(b.stages) ? b.stages : []) })
+    if (a === 'toggleStage') return NextResponse.json({ ok: true, unit: await toggleUnitStage(o, b.pid, b.uid, String(b.stageId)) })
+
+    // ── موتورِ AI سازنده ──
+    if (a === 'suggestPrice') {
+      const p = await getProject(o, b.pid); if (!p) return NextResponse.json({ error: 'پروژه یافت نشد' }, { status: 404 })
+      const u = p.units.find(x => x.id === b.uid); if (!u) return NextResponse.json({ error: 'واحد یافت نشد' }, { status: 404 })
+      return NextResponse.json({ ok: true, suggestion: suggestUnitPrice(p, u) })
+    }
+    if (a === 'aiInsights') {
+      const p = await getProject(o, b.pid); if (!p) return NextResponse.json({ error: 'پروژه یافت نشد' }, { status: 404 })
+      const forecast = sellThroughForecast(p)
+      const stats = await projectStats(p)
+      const insights = projectInsights(p)
+      let advice: string | null = null
+      const model = agentModel('chat', 'text') || agentModel('content', 'text')
+      if (model) {
+        try {
+          advice = (await chatCompleteSafe(model, [
+            { role: 'system', content: 'تو مشاورِ فروش و مالیِ پروژه‌های ساختمانی هستی. کوتاه، فارسی و عملی پاسخ بده.' },
+            { role: 'user', content: `پروژه «${p.name}»: ${stats.sold} از ${stats.total} واحد فروخته، سرعتِ فروش ${forecast.velocity} واحد/ماه، ${forecast.remaining} واحد مانده، سود تخمینی ${stats.profit}. برای تسریعِ فروش و افزایشِ سود چه پیشنهادی داری؟` },
+          ], { temperature: 0.5, max_tokens: 220 }, agentProvider('chat', 'text'))).trim() || null
+        } catch {}
+      }
+      return NextResponse.json({ ok: true, forecast, stats, insights, advice })
+    }
 
     // ── پروفایلِ عمومی ──
     if (a === 'publicProfile' || a === 'projMeta' || a === 'manualAdd' || a === 'manualUpdate' || a === 'manualDelete') {

@@ -9,7 +9,9 @@ const KV_KEY = 'builder'
 // available=موجود برای فروش، reserved=رزرو، sold=فروخته‌شده (داخل/خارجِ سایت)،
 // owner=سهمِ مالکِ زمین/مشارکت (فروشِ سازنده نیست و در پابلیک غیرقابلِ‌فروش است).
 export type UnitStatus = 'sold' | 'reserved' | 'available' | 'owner'
-export interface Unit { id: string; number: string; floor: number; area: number; price: number; status: UnitStatus; buyer?: string; soldVia?: 'site' | 'offline' }
+// مرحلهٔ پرداخت (پیش‌فروش): قسط/مرحله با مبلغ و وضعیتِ پرداخت.
+export interface PaymentStage { id: string; label: string; amount: number; due?: string; paid: boolean }
+export interface Unit { id: string; number: string; floor: number; area: number; price: number; status: UnitStatus; buyer?: string; soldVia?: 'site' | 'offline'; plan?: PaymentStage[] }
 export interface Investor { id: string; name: string; phone?: string; amount: number; units?: number }
 export interface Milestone { id: string; name: string; status: 'done' | 'active' | 'pending'; date?: string }
 // متادیتای واقعیِ پرشین سازه (عکس‌ها، آدرس، مختصات…) که روی پروژهٔ واردشده می‌نشیند.
@@ -17,10 +19,13 @@ export interface ProjectSource {
   hashId?: string; photos?: string[]; address?: string; region?: string; phase?: string
   lat?: number; lng?: number; groundArea?: number; residentialArea?: number; floors?: number; totalUnits?: number
 }
+// هزینه‌های پروژه (برای محاسبهٔ سود)
+export interface ProjectFinance { landCost?: number; buildCost?: number; otherCost?: number }
 export interface Project {
   id: string; name: string; location: string; phase: string; progress: number
   units: Unit[]; investors: Investor[]; milestones: Milestone[]
   monthlySales: { month: string; count: number }[]
+  finance?: ProjectFinance
   createdAt: number
   source?: ProjectSource
 }
@@ -169,5 +174,44 @@ export async function projectStats(p: Project) {
   const reserved = p.units.filter(u => u.status === 'reserved').length
   const available = p.units.filter(u => u.status === 'available').length
   const revenue = sold.reduce((a, u) => a + u.price, 0)
-  return { total: p.units.length, sold: sold.length, reserved, available, revenue }
+  // مالی: هزینهٔ کل، سودِ ناخالص، حاشیهٔ سود، و مبلغِ وصول‌شده از اقساط.
+  const f = p.finance || {}
+  const totalCost = (f.landCost || 0) + (f.buildCost || 0) + (f.otherCost || 0)
+  const profit = revenue - totalCost
+  const margin = revenue > 0 ? Math.round((profit / revenue) * 100) : 0
+  const collected = p.units.reduce((a, u) => a + (u.plan || []).filter(s => s.paid).reduce((x, s) => x + s.amount, 0), 0)
+  const pendingInstallments = p.units.reduce((a, u) => a + (u.plan || []).filter(s => !s.paid).reduce((x, s) => x + s.amount, 0), 0)
+  return { total: p.units.length, sold: sold.length, reserved, available, revenue, totalCost, profit, margin, collected, pendingInstallments }
+}
+
+// تنظیمِ هزینه‌های پروژه (Financial Tracking)
+export async function setProjectFinance(owner: string, pid: string, patch: ProjectFinance): Promise<Project | null> {
+  return withDb(db => {
+    const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return null
+    const cur = p.finance || {}
+    p.finance = {
+      landCost: patch.landCost !== undefined ? Math.max(0, Number(patch.landCost) || 0) : cur.landCost,
+      buildCost: patch.buildCost !== undefined ? Math.max(0, Number(patch.buildCost) || 0) : cur.buildCost,
+      otherCost: patch.otherCost !== undefined ? Math.max(0, Number(patch.otherCost) || 0) : cur.otherCost,
+    }
+    return p
+  })
+}
+
+// تنظیمِ برنامهٔ پرداختِ مرحله‌ایِ یک واحد (پیش‌فروش)
+export async function setUnitPlan(owner: string, pid: string, uid: string, stages: Omit<PaymentStage, 'id'>[]): Promise<Unit | null> {
+  return withDb(db => {
+    const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return null
+    const u = p.units.find(x => x.id === uid); if (!u) return null
+    u.plan = stages.map(s => ({ id: id(), label: String(s.label || 'قسط'), amount: Math.max(0, Number(s.amount) || 0), due: s.due, paid: !!s.paid }))
+    return u
+  })
+}
+export async function toggleUnitStage(owner: string, pid: string, uid: string, stageId: string): Promise<Unit | null> {
+  return withDb(db => {
+    const p = (db[owner]?.projects || []).find(x => x.id === pid); if (!p) return null
+    const u = p.units.find(x => x.id === uid); if (!u || !u.plan) return null
+    const s = u.plan.find(x => x.id === stageId); if (s) s.paid = !s.paid
+    return u
+  })
 }
