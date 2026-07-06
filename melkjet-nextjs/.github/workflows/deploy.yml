@@ -1,0 +1,39 @@
+name: Deploy to server
+
+# دیپلویِ دستی از خودِ گیت‌هاب: تبِ Actions → «Deploy to server» → دکمهٔ «Run workflow».
+# (اتوماتیک روی هر push نیست تا خودت کنترل کنی کِی دیپلوی شود.)
+on:
+  workflow_dispatch:
+    inputs:
+      purge_note:
+        description: 'یادآوری: بعدِ دیپلوی کشِ آروان را هم پاک کن'
+        required: false
+        default: 'yes'
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH → pull + build + reload (health-checked)
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          PORT="${DEPLOY_PORT:-22}"
+          ssh-keyscan -p "$PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh -o StrictHostKeyChecking=accept-new -p "$PORT" -i ~/.ssh/id_deploy \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            'cd /var/www/melkjet/melkjet-nextjs && sudo scripts/deploy.sh'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Reminder
+        run: echo "✅ Deploy finished. Now purge Arvan CDN cache (panel → CDN → clear cache)."
