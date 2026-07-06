@@ -5,7 +5,7 @@ import PlansPanel from '@/app/components/PlansPanel'
 import SupportPanel from '@/app/components/SupportPanel'
 import BusinessProfileForm from '@/app/components/BusinessProfileForm'
 import {
-  Shell, useProDesk, Kpi, StatusPill, LoginGate, SectionCard, Modal, btnGold,
+  Shell, useProDesk, Kpi, StatusPill, LoginGate, SectionCard, Modal, btnGold, ProAiTool,
   money, fa, card, inputStyle, type ProRecord, type ProRequest, type ReqStatus, type ShellCfg,
 } from '@/app/components/prodesk/ProDeskKit'
 
@@ -142,6 +142,7 @@ export default function ContractorPage() {
     { id: 'dashboard', label: 'داشبورد', icon: '▦', badge: data?.stats.open },
     { id: 'projects', label: 'پروژه‌ها', icon: '🏗' },
     { id: 'tenders', label: 'برآورد و مناقصه', icon: '📐', badge: data?.stats.open },
+    { id: 'aitools', label: 'برآوردِ هوشمند', icon: '✦' },
     { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
     { id: 'profile', label: 'پروفایل', icon: '🪪' },
     { id: 'plans', label: 'پلن‌ها و اشتراک', icon: '👑' },
@@ -166,6 +167,7 @@ export default function ContractorPage() {
           </>
         ) : view === 'projects' ? <Projects records={data.records} post={post} />
           : view === 'tenders' ? <Tenders requests={data.requests} post={post} />
+            : view === 'aitools' ? <ProAiTool accent="#d69a5c" tools={[{ id: 'cost_estimate', label: 'تخمینِ هزینهٔ ساخت', placeholder: 'متراژ، تعداد طبقات، نوعِ سازه و کیفیتِ موردنظر را بنویس…' }, { id: 'design_idea', label: 'راهکارِ اجرا', placeholder: 'شرحِ کارِ اجرایی را بنویس تا راهکار و نکاتِ فنی بدهد…' }]} />
             : view === 'assistant' ? <div style={{ height: 'calc(100vh - 150px)' }}><AssistantPanel panel="contractor" title="دستیارِ هوشمندِ پیمانکار" subtitle="مشاورِ AI شخصیِ تو" suggestions={['یک برآوردِ اولیهٔ هزینهٔ ساختِ بنای ۲۰۰ متری بده', 'چک‌لیستِ کنترلِ کیفیتِ سفت‌کاری را بنویس', 'متنِ پیشنهادِ قیمت برای یک مناقصه بنویس', 'چطور تیمِ اجراییِ منظم بسازم؟']} /></div>
               : view === 'profile' ? (
                 <>

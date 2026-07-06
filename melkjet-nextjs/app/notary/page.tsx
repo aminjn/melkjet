@@ -6,7 +6,7 @@ import SupportPanel from '@/app/components/SupportPanel'
 import BusinessProfileForm from '@/app/components/BusinessProfileForm'
 import {
   Shell, useProDesk, Kpi, LoginGate, SectionCard, Modal, btnGold,
-  JalaliPicker, ProCalendar, FileField, FileLink,
+  JalaliPicker, ProCalendar, FileField, FileLink, ProAiTool,
   money, fa, card, inputStyle, type ProRecord, type ProRequest, type ReqStatus, type ShellCfg,
 } from '@/app/components/prodesk/ProDeskKit'
 import { jToday, jKey, jLabel } from '@/app/lib/jalali'
@@ -164,6 +164,7 @@ export default function NotaryPage() {
     { id: 'calendar', label: 'تقویم', icon: '📆' },
     { id: 'appointments', label: 'نوبت‌ها', icon: '📅', badge: data?.stats.open },
     { id: 'register', label: 'دفترِ اسناد', icon: '🧾' },
+    { id: 'aitools', label: 'بررسیِ سند (AI)', icon: '✦' },
     { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
     { id: 'profile', label: 'پروفایل', icon: '🪪' },
     { id: 'plans', label: 'پلن‌ها و اشتراک', icon: '👑' },
@@ -189,6 +190,7 @@ export default function NotaryPage() {
         ) : view === 'calendar' ? <ProCalendar items={apptCalItems(data.requests)} today={today} title="تقویمِ نوبت‌ها" />
           : view === 'appointments' ? <Appointments requests={data.requests} post={post} onIssue={setIssueReq} today={today} />
             : view === 'register' ? <Register records={data.records} post={post} />
+              : view === 'aitools' ? <ProAiTool accent="#b0a06f" tools={[{ id: 'doc_check', label: 'بررسیِ سند/تشخیصِ خطا', placeholder: 'متن یا مشخصاتِ سند/معامله را بنویس تا مغایرت‌ها، خطاها و نشانه‌های ریسکِ جعل را بررسی کند…' }]} />
               : view === 'assistant' ? <div style={{ height: 'calc(100vh - 150px)' }}><AssistantPanel panel="notary" title="دستیارِ هوشمندِ دفترخانه" subtitle="مشاورِ AI شخصیِ تو" suggestions={['مدارکِ لازم برای تنظیمِ سندِ رسمیِ ملک را بگو', 'تفاوتِ وکالتِ بلاعزل و عادی چیست؟', 'مراحلِ نقل‌وانتقالِ سند در دفترخانه', 'یک متنِ راهنمای مراجعان برای پروفایلم بنویس']} /></div>
                 : view === 'profile' ? (
                   <>

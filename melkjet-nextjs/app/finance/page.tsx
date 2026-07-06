@@ -5,7 +5,7 @@ import PlansPanel from '@/app/components/PlansPanel'
 import SupportPanel from '@/app/components/SupportPanel'
 import BusinessProfileForm from '@/app/components/BusinessProfileForm'
 import {
-  Shell, useProDesk, Kpi, LoginGate, SectionCard, Modal, btnGold,
+  Shell, useProDesk, Kpi, LoginGate, SectionCard, Modal, btnGold, ProAiTool, ProLoanCalc,
   money, fa, card, inputStyle, type ProRecord, type ProRequest, type ReqStatus, type ShellCfg,
 } from '@/app/components/prodesk/ProDeskKit'
 
@@ -135,6 +135,7 @@ export default function FinancePage() {
     { id: 'dashboard', label: 'داشبورد', icon: '▦', badge: data?.stats.open },
     { id: 'applicants', label: 'متقاضیان', icon: '📥', badge: data?.stats.open },
     { id: 'products', label: 'محصولات', icon: '💳' },
+    { id: 'aitools', label: 'محاسبه‌گر و AI', icon: '✦' },
     { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
     { id: 'profile', label: 'پروفایل', icon: '🪪' },
     { id: 'plans', label: 'پلن‌ها و اشتراک', icon: '👑' },
@@ -158,6 +159,7 @@ export default function FinancePage() {
           </>
         ) : view === 'applicants' ? <Applicants requests={data.requests} post={post} />
           : view === 'products' ? <Products records={data.records} post={post} />
+            : view === 'aitools' ? <><ProLoanCalc /><ProAiTool accent="#6fae8f" tools={[{ id: 'loan_risk', label: 'تحلیلِ ریسکِ وام', placeholder: 'درآمد، شغل، سابقهٔ اعتباری و مبلغِ درخواستیِ متقاضی را بنویس…' }, { id: 'loan_advice', label: 'پیشنهادِ وام/بیمه', placeholder: 'نیازِ مشتری را بنویس تا مناسب‌ترین محصول را پیشنهاد دهد…' }]} /></>
             : view === 'assistant' ? <div style={{ height: 'calc(100vh - 150px)' }}><AssistantPanel panel="finance" title="دستیارِ هوشمندِ بانک و بیمه" subtitle="مشاورِ AI شخصیِ تو" suggestions={['شرایطِ وامِ مسکنِ اوراق را خلاصه کن', 'تفاوتِ بیمهٔ آتش‌سوزیِ ساده و جامع چیست؟', 'یک متنِ معرفیِ طرحِ تسهیلاتِ ساخت بنویس', 'مدارکِ لازم برای وامِ ساخت را فهرست کن']} /></div>
               : view === 'profile' ? (
                 <>

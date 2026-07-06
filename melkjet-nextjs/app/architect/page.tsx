@@ -6,7 +6,7 @@ import SupportPanel from '@/app/components/SupportPanel'
 import BusinessProfileForm from '@/app/components/BusinessProfileForm'
 import ImageUpload from '@/app/components/ImageUpload'
 import {
-  Shell, useProDesk, Kpi, StatusPill, LoginGate, SectionCard, FileField, FileLink,
+  Shell, useProDesk, Kpi, StatusPill, LoginGate, SectionCard, FileField, FileLink, ProAiTool,
   money, fa, card, inputStyle, FONT, type ProRecord, type ProRequest, type ReqStatus, type ShellCfg,
 } from '@/app/components/prodesk/ProDeskKit'
 
@@ -138,6 +138,7 @@ export default function ArchitectPage() {
     { id: 'dashboard', label: 'داشبورد', icon: '▦', badge: data?.stats.open },
     { id: 'portfolio', label: 'نمونه‌کارها', icon: '🖼' },
     { id: 'inquiries', label: 'استعلام‌ها', icon: '✉', badge: data?.stats.open },
+    { id: 'aitools', label: 'ابزارِ هوشمند', icon: '✦' },
     { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
     { id: 'profile', label: 'پروفایل', icon: '🪪' },
     { id: 'plans', label: 'پلن‌ها و اشتراک', icon: '👑' },
@@ -163,6 +164,7 @@ export default function ArchitectPage() {
           </>
         ) : view === 'portfolio' ? <Portfolio records={data.records} post={post} />
           : view === 'inquiries' ? <Inquiries requests={data.requests} post={post} />
+            : view === 'aitools' ? <ProAiTool accent="#7bb0d6" tools={[{ id: 'design_idea', label: 'پیشنهادِ طراحی', placeholder: 'شرحِ فضا/پروژه (کاربری، متراژ، سبک، بودجه) را بنویس…' }, { id: 'cost_estimate', label: 'تخمینِ هزینهٔ ساخت', placeholder: 'متراژ، تعداد طبقات و کیفیتِ موردنظر را بنویس…' }]} />
             : view === 'assistant' ? <div style={{ height: 'calc(100vh - 150px)' }}><AssistantPanel panel="architect" title="دستیارِ هوشمندِ معمار" subtitle="مشاورِ AI شخصیِ تو" suggestions={['ایده‌های طراحیِ داخلیِ یک واحدِ ۸۵ متری بده', 'یک متنِ معرفیِ حرفه‌ای برای پروفایلم بنویس', 'برآوردِ هزینهٔ بازسازیِ آشپزخانه را توضیح بده', 'ترندهای طراحیِ داخلیِ امسال چیست؟']} /></div>
               : view === 'profile' ? (
                 <>

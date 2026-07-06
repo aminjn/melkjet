@@ -6,7 +6,7 @@ import SupportPanel from '@/app/components/SupportPanel'
 import BusinessProfileForm from '@/app/components/BusinessProfileForm'
 import {
   Shell, useProDesk, Kpi, StatusPill, LoginGate, SectionCard, Modal, btnGold,
-  JalaliPicker, ProCalendar, FileField, FileLink,
+  JalaliPicker, ProCalendar, FileField, FileLink, ProAiTool,
   money, fa, card, inputStyle, type ProRecord, type ProRequest, type ReqStatus, type ShellCfg, type JDate,
 } from '@/app/components/prodesk/ProDeskKit'
 import { jToday, jKey, jLabel } from '@/app/lib/jalali'
@@ -158,6 +158,7 @@ export default function LawfirmPage() {
     { id: 'cases', label: 'پرونده‌ها', icon: '📁' },
     { id: 'calendar', label: 'تقویمِ جلسات', icon: '📆' },
     { id: 'intake', label: 'موکلین', icon: '📥', badge: data?.stats.open },
+    { id: 'aitools', label: 'ابزارِ هوشمند', icon: '✦' },
     { id: 'assistant', label: 'دستیار هوشمند', icon: '✨' },
     { id: 'profile', label: 'پروفایل', icon: '🪪' },
     { id: 'plans', label: 'پلن‌ها و اشتراک', icon: '👑' },
@@ -190,6 +191,7 @@ export default function LawfirmPage() {
         ) : view === 'cases' ? <Cases records={data.records} post={post} today={today} />
           : view === 'calendar' ? <ProCalendar items={hearingCalItems(data.records)} today={today} title="تقویمِ جلسات" />
             : view === 'intake' ? <Intake requests={data.requests} post={post} onOpenCase={setCaseFrom} />
+            : view === 'aitools' ? <ProAiTool accent="#c98fb0" tools={[{ id: 'contract_review', label: 'تحلیلِ قرارداد', placeholder: 'متنِ قرارداد/مبایعه‌نامه را اینجا بچسبان تا ریسک‌ها و اصلاحات را بدهد…' }, { id: 'legal_risk', label: 'ریسکِ حقوقی', placeholder: 'شرحِ معامله یا موقعیتِ حقوقی را بنویس…' }]} />
             : view === 'assistant' ? <div style={{ height: 'calc(100vh - 150px)' }}><AssistantPanel panel="lawfirm" title="دستیارِ حقوقیِ دفتر" subtitle="مشاورِ AI شخصیِ تو" suggestions={['نکاتِ حقوقیِ یک مبایعه‌نامهٔ استاندارد را بگو', 'متنِ یک اظهارنامهٔ مطالبهٔ وجه بنویس', 'مراحلِ دعوای خلعِ ید چیست؟', 'چک‌لیستِ بررسیِ سندِ ملک قبل از معامله']} /></div>
               : view === 'profile' ? (
                 <>

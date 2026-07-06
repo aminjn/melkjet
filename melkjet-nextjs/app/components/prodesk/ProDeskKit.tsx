@@ -382,3 +382,61 @@ export function LoginGate() {
     </div>
   )
 }
+
+// ── ابزارِ AI تخصصیِ شغل (تحلیلِ قرارداد/ریسکِ وام/برآوردِ قیمت/…) ──
+
+export function ProAiTool({ tools, accent = 'var(--gold)' }: { tools: { id: string; label: string; placeholder: string }[]; accent?: string }) {
+  const [tool, setTool] = useState(tools[0]?.id || '')
+  const [input, setInput] = useState('')
+  const [out, setOut] = useState('')
+  const [busy, setBusy] = useState(false)
+  const cur = tools.find(t => t.id === tool) || tools[0]
+  const run = async () => {
+    if (!input.trim() || busy) return
+    setBusy(true); setOut('')
+    try {
+      const r = await fetch('/api/prodesk/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tool, input }) })
+      const d = await r.json()
+      setOut(d.ok ? d.text : ('⚠ ' + (d.error || 'خطا')))
+    } catch { setOut('⚠ خطای ارتباط') } finally { setBusy(false) }
+  }
+  return (
+    <SectionCard title="✦ ابزارِ هوشمند">
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+        {tools.map(t => (
+          <button key={t.id} onClick={() => { setTool(t.id); setOut('') }} style={{ padding: '6px 13px', borderRadius: 999, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: FONT, border: '1px solid ' + (tool === t.id ? accent : 'var(--line2)'), background: tool === t.id ? `color-mix(in srgb, ${accent} 15%, transparent)` : 'transparent', color: tool === t.id ? accent : 'var(--muted)' }}>{t.label}</button>
+        ))}
+      </div>
+      <textarea value={input} onChange={e => setInput(e.target.value)} placeholder={cur?.placeholder || 'ورودی…'} style={{ ...inputStyle, minHeight: 120, resize: 'vertical', lineHeight: 1.9 }} />
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
+        <button onClick={run} disabled={busy || !input.trim()} style={{ ...btnGold, opacity: busy || !input.trim() ? 0.5 : 1, padding: '9px 22px' }}>{busy ? 'در حال تحلیل…' : 'تحلیل کن'}</button>
+      </div>
+      {out && <div style={{ marginTop: 14, background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 12, padding: 16, fontSize: 13, lineHeight: 2.1, whiteSpace: 'pre-wrap' }}>{out}</div>}
+      <div style={{ marginTop: 10, fontSize: 11, color: 'var(--faint)' }}>پاسخِ هوش مصنوعی راهنماست؛ تصمیمِ نهایی با کارشناس است.</div>
+    </SectionCard>
+  )
+}
+
+// ── محاسبه‌گرِ وام/اقساط (بانک و بیمه) — خالص، بدونِ AI ──
+export function ProLoanCalc() {
+  const [amount, setAmount] = useState('')   // مبلغِ وام (تومان)
+  const [rate, setRate] = useState('23')     // نرخِ سالانه ٪
+  const [months, setMonths] = useState('60') // مدت (ماه)
+  const P = Number(amount) || 0, r = (Number(rate) || 0) / 100 / 12, n = Number(months) || 0
+  const monthly = P > 0 && n > 0 ? (r > 0 ? Math.round(P * r * Math.pow(1 + r, n) / (Math.pow(1 + r, n) - 1)) : Math.round(P / n)) : 0
+  const total = monthly * n, interest = total - P
+  return (
+    <SectionCard title="🧮 محاسبه‌گرِ وام و اقساط">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 10, marginBottom: 14 }}>
+        <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>مبلغِ وام (تومان)</label><input value={amount} onChange={e => setAmount(e.target.value.replace(/\D/g, ''))} style={{ ...inputStyle, direction: 'ltr', textAlign: 'left' }} /></div>
+        <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>نرخِ سالانه (٪)</label><input value={rate} onChange={e => setRate(e.target.value.replace(/[^\d.]/g, ''))} style={{ ...inputStyle, direction: 'ltr', textAlign: 'left' }} /></div>
+        <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>مدت (ماه)</label><input value={months} onChange={e => setMonths(e.target.value.replace(/\D/g, ''))} style={{ ...inputStyle, direction: 'ltr', textAlign: 'left' }} /></div>
+      </div>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 140px', background: 'var(--bg2)', borderRadius: 12, padding: 14 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>قسطِ ماهانه</div><div style={{ fontSize: 18, fontWeight: 800, color: 'var(--gold)', marginTop: 4 }}>{money(monthly)}</div></div>
+        <div style={{ flex: '1 1 140px', background: 'var(--bg2)', borderRadius: 12, padding: 14 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>بازپرداختِ کل</div><div style={{ fontSize: 18, fontWeight: 800, marginTop: 4 }}>{money(total)}</div></div>
+        <div style={{ flex: '1 1 140px', background: 'var(--bg2)', borderRadius: 12, padding: 14 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>سودِ کل</div><div style={{ fontSize: 18, fontWeight: 800, color: '#e7a14a', marginTop: 4 }}>{money(interest)}</div></div>
+      </div>
+    </SectionCard>
+  )
+}
