@@ -4,7 +4,13 @@ import { useEffect } from 'react'
 // مرزِ خطای ریشه — وقتی خودِ layout.tsx خطا بدهد فعال می‌شود (باید html/body خودش را داشته باشد).
 // جایگزینِ صفحهٔ پیش‌فرضِ «Something went wrong!» با نسخهٔ فارسیِ برندشده.
 export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
-  useEffect(() => { try { console.error('[app/global-error]', error) } catch {} }, [error])
+  useEffect(() => {
+    try { console.error('[app/global-error]', error) } catch {}
+    try {
+      fetch('/api/client-error', { method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
+        body: JSON.stringify({ message: error?.message, stack: error?.stack, digest: error?.digest, url: typeof location !== 'undefined' ? location.href : '' }) }).catch(() => {})
+    } catch {}
+  }, [error])
   return (
     <html lang="fa" dir="rtl">
       <body style={{ margin: 0, fontFamily: 'Vazirmatn, system-ui, sans-serif', background: '#0f0d0a', color: '#e8e2d8' }}>

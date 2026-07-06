@@ -5,7 +5,14 @@ import { useEffect } from 'react'
 // هر خطای رندرِ سرور/کلاینت در صفحه‌ها اینجا گرفته می‌شود؛ کاربر پیامِ فارسیِ برندشده،
 // دکمهٔ «تلاش دوباره» و کدِ خطا (digest) برای پیگیری می‌بیند.
 export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
-  useEffect(() => { try { console.error('[app/error]', error) } catch {} }, [error])
+  useEffect(() => {
+    try { console.error('[app/error]', error) } catch {}
+    // گزارش به سرور تا متن/stackِ خطای واقعی در لاگ ثبت شود (برای پیگیری).
+    try {
+      fetch('/api/client-error', { method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
+        body: JSON.stringify({ message: error?.message, stack: error?.stack, digest: error?.digest, url: typeof location !== 'undefined' ? location.href : '' }) }).catch(() => {})
+    } catch {}
+  }, [error])
   return (
     <main style={{ minHeight: '70vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, textAlign: 'center', padding: '48px 24px', background: 'var(--bg)', color: 'var(--text)' }}>
       <div style={{ fontSize: 54, lineHeight: 1 }}>⚠️</div>
