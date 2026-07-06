@@ -747,6 +747,21 @@ function UnitsView({ project, post, pid, busy }: {
   const [filter, setFilter] = useState<'all' | UnitStatus>('all')
   const [limit, setLimit] = useState(120)
   const [form, setForm] = useState({ number: '', floor: '', area: '', price: '', status: 'available' as UnitStatus })
+  // پرداختِ مرحله‌ای (پیش‌فروش) — ویرایشگرِ اقساطِ هر واحد
+  const [openPlan, setOpenPlan] = useState<string | null>(null)
+  const [draft, setDraft] = useState<{ label: string; amount: string; paid: boolean }[]>([])
+  const openUnitPlan = (u: Unit) => {
+    setOpenPlan(prev => prev === u.id ? null : u.id)
+    setDraft((u.plan || []).map(s => ({ label: s.label, amount: String(Math.round((s.amount / 1e9) * 100) / 100), paid: s.paid })))
+  }
+  const equalSplit = (u: Unit, n: number) => {
+    const each = Math.round((u.price / n / 1e9) * 100) / 100
+    setDraft(Array.from({ length: n }, (_, i) => ({ label: i === 0 ? 'پیش‌پرداخت' : `قسط ${fa(i)}`, amount: String(each), paid: false })))
+  }
+  const savePlan = async (u: Unit) => {
+    await post({ action: 'setUnitPlan', pid, uid: u.id, stages: draft.map(d => ({ label: d.label, amount: (Number(d.amount) || 0) * 1e9, paid: d.paid })) })
+    setOpenPlan(null)
+  }
 
   const filtered = project.units.filter(u => filter === 'all' || u.status === filter)
   const shown = filtered.slice(0, limit)
@@ -818,14 +833,16 @@ function UnitsView({ project, post, pid, busy }: {
         </div>
         <div style={{ maxHeight: 540, overflowY: 'auto' }}>
           {shown.map((u, i) => (
-            <div key={u.id} style={{ display: 'grid', gridTemplateColumns: '90px 70px 90px 1fr 110px 1fr 150px', padding: '12px 18px', borderBottom: i < shown.length - 1 ? '1px solid var(--line)' : 'none', fontSize: 13, alignItems: 'center' }}>
+            <div key={u.id}>
+            <div style={{ display: 'grid', gridTemplateColumns: '90px 70px 90px 1fr 110px 1fr 150px', padding: '12px 18px', borderBottom: i < shown.length - 1 ? '1px solid var(--line)' : 'none', fontSize: 13, alignItems: 'center' }}>
               <div style={{ fontWeight: 700, color: 'var(--gold)' }}>{u.number}</div>
               <div style={{ color: 'var(--muted)' }}>طبقه {fa(u.floor)}</div>
               <div>{fa(u.area)} م²</div>
-              <div style={{ fontWeight: 600 }}>{money(u.price)}</div>
+              <div style={{ fontWeight: 600 }}>{money(u.price)}{u.plan && u.plan.length ? <span title="پرداختِ مرحله‌ای" style={{ fontSize: 10, color: '#34d399', marginInlineStart: 5 }}>◷{fa(u.plan.filter(x => x.paid).length)}/{fa(u.plan.length)}</span> : null}</div>
               <div><StatusBadge st={u.status} /></div>
               <div style={{ color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.buyer || '—'}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                <button onClick={() => openUnitPlan(u)} title="پرداختِ مرحله‌ای" style={{ width: 26, height: 26, borderRadius: 7, background: openPlan === u.id ? 'var(--goldDim)' : 'var(--bg)', border: '1px solid ' + (openPlan === u.id ? 'var(--gold)' : 'var(--line)'), color: openPlan === u.id ? 'var(--gold)' : 'var(--muted)', cursor: 'pointer', fontSize: 13, lineHeight: 1, flexShrink: 0, fontFamily: FONT }}>◷</button>
                 <select value={u.status} onChange={e => changeStatus(u, e.target.value as UnitStatus)} disabled={busy} style={{
                   padding: '5px 8px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)',
                   color: 'var(--text)', fontSize: 11.5, outline: 'none', cursor: 'pointer', fontFamily: FONT,
@@ -840,6 +857,33 @@ function UnitsView({ project, post, pid, busy }: {
                   color: 'var(--muted)', cursor: 'pointer', fontSize: 14, lineHeight: 1, flexShrink: 0, fontFamily: FONT,
                 }}>×</button>
               </div>
+            </div>
+            {openPlan === u.id && (
+              <div style={{ padding: '14px 18px', background: 'var(--bg2)', borderBottom: '1px solid var(--line)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 700 }}>پرداختِ مرحله‌ای (پیش‌فروش)</span>
+                  <button onClick={() => equalSplit(u, 4)} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 7, border: '1px solid var(--line2)', background: 'var(--bg)', color: 'var(--muted)', cursor: 'pointer', fontFamily: FONT }}>۴ قسطِ مساوی</button>
+                  <button onClick={() => setDraft([...draft, { label: `قسط ${fa(draft.length + 1)}`, amount: '', paid: false }])} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 7, border: '1px solid var(--line2)', background: 'var(--bg)', color: 'var(--muted)', cursor: 'pointer', fontFamily: FONT }}>＋ مرحله</button>
+                  <span style={{ marginInlineStart: 'auto', fontSize: 11.5, color: 'var(--muted)' }}>وصول‌شده: {money(draft.filter(d => d.paid).reduce((s, d) => s + (Number(d.amount) || 0) * 1e9, 0))}</span>
+                </div>
+                {draft.length === 0 ? <div style={{ fontSize: 12, color: 'var(--muted)', padding: '6px 0' }}>مرحله‌ای تعریف نشده — «۴ قسطِ مساوی» یا «＋ مرحله» را بزن.</div> : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {draft.map((d, di) => (
+                      <div key={di} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <input type="checkbox" checked={d.paid} onChange={e => setDraft(draft.map((x, xi) => xi === di ? { ...x, paid: e.target.checked } : x))} style={{ width: 16, height: 16, accentColor: 'var(--gold)' }} />
+                        <input value={d.label} onChange={e => setDraft(draft.map((x, xi) => xi === di ? { ...x, label: e.target.value } : x))} placeholder="عنوان" style={{ ...inputStyle, flex: '1 1 120px' }} />
+                        <input value={d.amount} onChange={e => setDraft(draft.map((x, xi) => xi === di ? { ...x, amount: e.target.value } : x))} placeholder="مبلغ (م.ت)" style={{ ...inputStyle, width: 130, direction: 'ltr', textAlign: 'left' }} />
+                        <button onClick={() => setDraft(draft.filter((_, xi) => xi !== di))} style={{ width: 26, height: 26, borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', cursor: 'pointer', fontFamily: FONT }}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+                  <button onClick={() => setOpenPlan(null)} style={{ fontSize: 12.5, padding: '8px 16px', borderRadius: 9, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontFamily: FONT }}>بستن</button>
+                  <button onClick={() => savePlan(u)} disabled={busy} style={{ fontSize: 12.5, padding: '8px 18px', borderRadius: 9, border: 'none', background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, cursor: 'pointer', fontFamily: FONT }}>ذخیرهٔ اقساط</button>
+                </div>
+              </div>
+            )}
             </div>
           ))}
           {shown.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>واحدی یافت نشد</div>}
