@@ -5,6 +5,7 @@ import {
   addAgent, toggleAgent, deleteAgent, addListing, setListingStatus, assignListing, deleteListing,
   addLead, assignLead, setLeadStage, deleteLead, addDeal, updateAgencyProfile, resolveAgencyName,
   getCommissionConfig, setDefaultCommission, setAgentCommission, clearAgentCommission,
+  addLeadActivity, agencyAiInsights, agencyLeadAdvice, type ActivityType,
 } from '@/app/lib/agency-store'
 import { agencyAdvisorFiles } from '@/app/lib/agency-team'
 import { planDistribution, findConflicts } from '@/app/lib/agency-distribution'
@@ -88,6 +89,9 @@ export async function POST(req: NextRequest) {
     case 'assignLead': { const l = await assignLead(o, String(b.id), String(b.agent || '')); return l ? NextResponse.json({ ok: true, lead: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'setLeadStage': { const l = await setLeadStage(o, String(b.id), b.stage); return l ? NextResponse.json({ ok: true, lead: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'deleteLead': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); await deleteLead(o, String(b.id)); return NextResponse.json({ ok: true })
+    case 'addActivity': { if (!b.id || !b.type) return NextResponse.json({ error: 'شناسه و نوع الزامی است' }, { status: 400 }); const l = await addLeadActivity(o, String(b.id), { type: b.type as ActivityType, note: b.note ? String(b.note) : undefined }); return l ? NextResponse.json({ ok: true, lead: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
+    case 'crmInsights': { const r = await agencyAiInsights(o); return NextResponse.json({ ok: true, ...r }) }
+    case 'leadAdvice': { if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); const advice = await agencyLeadAdvice(o, String(b.id)); return NextResponse.json({ ok: true, advice }) }
     case 'addDeal': if (!b.title || !b.agent) return NextResponse.json({ error: 'عنوان و مشاور الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, deal: await addDeal(o, { title: String(b.title), amount: Number(b.amount) || 0, agent: String(b.agent), date: String(b.date || '') }) })
     case 'updateProfile': return NextResponse.json({ ok: true, profile: await updateAgencyProfile(o, b.patch || {}) })
     case 'setDefaultCommission': return NextResponse.json({ ok: true, commission: await setDefaultCommission(o, b.mode, Number(b.value) || 0) })

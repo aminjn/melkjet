@@ -4,6 +4,7 @@ import { randomBytes } from 'crypto'
 import { getProfile, saveProfile } from './profile-store'
 import { getAccount } from './account-store'
 import { pgEnabled, kvGet, kvMutate } from './db'
+import { chatCompleteSafe, agentModel, agentProvider } from './gapgpt'
 
 // استور پنل «آژانس املاک» — per-owner (هر کاربر فقط دادهٔ خودش).
 // دومَحاله: اگر DATABASE_URL ست باشد → Postgres (نوشتنِ اتمیک)، وگرنه فایل.
@@ -30,7 +31,9 @@ export interface Listing {
   parking?: boolean; elevator?: boolean; storage?: boolean; balcony?: boolean; furnished?: boolean
   amenities?: string[]; images?: string[]
 }
-export interface Lead { id: string; name: string; phone?: string; need?: string; budget?: string; stage: Stage; assignedTo?: string; createdAt: number }
+export type ActivityType = 'created' | 'call' | 'visit' | 'meeting' | 'sms' | 'note' | 'stage' | 'assign'
+export interface Activity { id: string; type: ActivityType; at: number; note?: string }
+export interface Lead { id: string; name: string; phone?: string; need?: string; budget?: string; stage: Stage; assignedTo?: string; createdAt: number; activities?: Activity[]; score?: number; tags?: string[]; lastActivityAt?: number }
 export interface Deal { id: string; title: string; amount: number; agent: string; date: string; createdAt: number }
 export interface MonthSale { month: string; amount: number }
 export type CommMode = 'percent' | 'amount'
@@ -184,20 +187,60 @@ export async function assignListing(o: string, fid: string, agent: string): Prom
 export async function deleteListing(o: string, fid: string): Promise<void> { await mutate(o, a => { a.listings = a.listings.filter(l => l.id !== fid) }) }
 
 // ---- Leads ----
+// امتیازِ خودکارِ لید (۰..۱۰۰) — کاملیِ اطلاعات + پیشرفتِ مرحله + تازگیِ فعالیت + تخصیص.
+export function leadScore(l: Lead): number {
+  if (l.stage === 'closed') return 92; if (l.stage === 'lost') return 5
+  let s = 12 + Math.max(0, STAGES.indexOf(l.stage)) * 6
+  if (l.phone) s += 14; if (l.budget) s += 10; if (l.need) s += 6; if (l.assignedTo) s += 6
+  const acts = (l.activities || []).filter(a => a.type !== 'created' && a.type !== 'stage')
+  s += Math.min(12, acts.length * 3)
+  const last = l.lastActivityAt || l.createdAt
+  const ageH = (Date.now() - last) / 36e5
+  if (ageH <= 24) s += 10; else if (ageH <= 24 * 7) s += 5
+  return Math.max(0, Math.min(100, Math.round(s)))
+}
 export async function addLead(o: string, input: Partial<Lead>): Promise<Lead> {
   let c!: Lead
-  await mutate(o, a => { c = { id: id('l_'), name: String(input.name || 'لید'), phone: input.phone, need: input.need, budget: input.budget, stage: STAGES.includes(input.stage as Stage) ? input.stage as Stage : 'new', assignedTo: input.assignedTo, createdAt: Date.now() }; a.leads.unshift(c) })
+  await mutate(o, a => {
+    const now = Date.now()
+    c = { id: id('l_'), name: String(input.name || 'لید'), phone: input.phone, need: input.need, budget: input.budget, stage: STAGES.includes(input.stage as Stage) ? input.stage as Stage : 'new', assignedTo: input.assignedTo, createdAt: now, lastActivityAt: now, tags: [], activities: [{ id: id('ac_'), type: 'created', at: now, note: 'ثبتِ لید' }] }
+    c.score = leadScore(c)
+    a.leads.unshift(c)
+  })
   return c
 }
 export async function assignLead(o: string, lid: string, agent: string): Promise<Lead | null> {
   let res: Lead | null = null
-  await mutate(o, a => { const l = a.leads.find(x => x.id === lid); if (!l) return; l.assignedTo = agent; if (l.stage === 'new') l.stage = 'assigned'; res = l })
+  await mutate(o, a => {
+    const l = a.leads.find(x => x.id === lid); if (!l) return
+    l.assignedTo = agent; if (l.stage === 'new') l.stage = 'assigned'
+    l.activities = [...(l.activities || []), { id: id('ac_'), type: 'assign', at: Date.now(), note: agent ? `تخصیص به ${agent}` : 'لغوِ تخصیص' }]
+    l.lastActivityAt = Date.now(); l.score = leadScore(l); res = l
+  })
   return res
 }
 export async function setLeadStage(o: string, lid: string, stage: Stage): Promise<Lead | null> {
   if (!STAGES.includes(stage)) return null
   let res: Lead | null = null
-  await mutate(o, a => { const l = a.leads.find(x => x.id === lid); if (!l) return; l.stage = stage; res = l })
+  await mutate(o, a => {
+    const l = a.leads.find(x => x.id === lid); if (!l) return
+    if (l.stage !== stage) { l.activities = [...(l.activities || []), { id: id('ac_'), type: 'stage', at: Date.now(), note: `مرحله → ${stage}` }]; l.lastActivityAt = Date.now() }
+    l.stage = stage; l.score = leadScore(l); res = l
+  })
+  return res
+}
+// ثبتِ فعالیت روی تایم‌لاینِ لیدِ آژانس + اتوماسیونِ سبکِ مرحله.
+export async function addLeadActivity(o: string, lid: string, act: { type: ActivityType; note?: string }): Promise<Lead | null> {
+  let res: Lead | null = null
+  await mutate(o, a => {
+    const l = a.leads.find(x => x.id === lid); if (!l) return
+    const now = Date.now()
+    l.activities = [...(l.activities || []), { id: id('ac_'), type: act.type, at: now, note: act.note }]
+    l.lastActivityAt = now
+    if (l.stage === 'new' && (act.type === 'call' || act.type === 'sms')) l.stage = 'assigned'
+    if (act.type === 'visit' && (l.stage === 'new' || l.stage === 'assigned')) l.stage = 'visit'
+    l.score = leadScore(l); res = l
+  })
   return res
 }
 export async function deleteLead(o: string, lid: string): Promise<void> { await mutate(o, a => { a.leads = a.leads.filter(l => l.id !== lid) }) }
@@ -218,4 +261,86 @@ export async function updateAgencyProfile(o: string, patch: Partial<AgencyData['
   // نامِ آژانس را با نامِ کسب‌وکارِ پروفایل هم‌گام کن تا همه‌جا (لینکِ مشاوران، پروفایلِ عمومی) یکی باشد
   if (patch.name !== undefined && String(patch.name).trim()) { try { saveProfile(o, { businessName: String(patch.name).trim() }) } catch {} }
   return res
+}
+
+// ═══════════ هوشِ CRM آژانس (Sales OS) ═══════════
+const STAGE_FA: Record<Stage, string> = { new: 'لید جدید', assigned: 'تخصیص‌یافته', visit: 'بازدید', negotiation: 'مذاکره', closed: 'قرارداد', lost: 'ازدست‌رفته' }
+
+// «با کی تماس بگیرم» + سلامتِ پایپ‌لاینِ آژانس (قاعده‌مند؛ اگر AI بود، تحلیلِ متنی هم اضافه می‌شود).
+export async function agencyAiInsights(o: string): Promise<{ callNow: { id: string; name: string; phone?: string; score: number; why: string; assignedTo?: string }[]; health: string; tips: string[] }> {
+  const a = await getAgency(o)
+  const open = a.leads.filter(l => l.stage !== 'closed' && l.stage !== 'lost')
+  const now = Date.now()
+  const ranked = open.map(l => {
+    const sc = leadScore(l)
+    const ageH = (now - (l.lastActivityAt || l.createdAt)) / 36e5
+    let why = ''
+    if (!l.assignedTo) why = 'تخصیص‌نیافته — به یک مشاور بده'
+    else if (ageH >= 72) why = `${Math.round(ageH / 24)} روز بی‌فعالیت`
+    else if (l.stage === 'negotiation') why = 'در مذاکره — نزدیکِ بستن'
+    else if (sc >= 70) why = 'امتیازِ بالا'
+    else why = 'پیگیریِ عادی'
+    return { id: l.id, name: l.name, phone: l.phone, score: sc, why, assignedTo: l.assignedTo, ageH, unassigned: !l.assignedTo }
+  }).filter(x => x.unassigned || x.ageH >= 24 || x.score >= 60)
+    .sort((x, y) => (x.unassigned === y.unassigned ? y.score - x.score : x.unassigned ? -1 : 1)).slice(0, 8)
+  const callNow = ranked.map(({ id, name, phone, score, why, assignedTo }) => ({ id, name, phone, score, why, assignedTo }))
+
+  const won = a.leads.filter(l => l.stage === 'closed').length
+  const conv = a.leads.length ? Math.round((won / a.leads.length) * 100) : 0
+  const unassigned = open.filter(l => !l.assignedTo).length
+  const stale = open.filter(l => (now - (l.lastActivityAt || l.createdAt)) / 36e5 >= 72).length
+  const tips: string[] = []
+  if (unassigned > 0) tips.push(`${unassigned} لیدِ تخصیص‌نیافته — با «تقسیمِ هوشمند» بین مشاوران پخش کن.`)
+  if (stale > 0) tips.push(`${stale} لید بیش از ۳ روز بی‌پیگیری — به مشاورِ مربوط یادآوری کن.`)
+  const negC = a.leads.filter(l => l.stage === 'negotiation').length
+  if (negC > 0) tips.push(`${negC} لید در مذاکره — نزدیک به بستنِ قرارداد؛ اولویت بده.`)
+  if (!tips.length) tips.push('پایپ‌لاینِ آژانس سالم است — لیدهای جدید را سریع تخصیص بده.')
+  let health = `از ${a.leads.length} لید، ${won} به قرارداد رسیده (نرخِ تبدیل ${conv}٪). ${open.length} لیدِ باز، ${unassigned} تخصیص‌نیافته.`
+
+  try {
+    const model = agentModel('chat', 'text')
+    if (model) {
+      const provider = agentProvider('chat', 'text')
+      const byStage = STAGES.map(s => `${STAGE_FA[s]}: ${a.leads.filter(l => l.stage === s).length}`).join('، ')
+      const txt = await chatCompleteSafe(model, [
+        { role: 'system', content: 'تو مدیرِ فروشِ آژانسِ املاک هستی. خیلی کوتاه (حداکثر ۲ جمله)، فارسی و عملی تحلیل کن. بدون مقدمه.' },
+        { role: 'user', content: `پایپ‌لاینِ آژانس: ${byStage}. نرخِ تبدیل ${conv}٪. ${unassigned} لیدِ تخصیص‌نیافته، ${stale} عقب‌افتاده. تحلیلِ کوتاه + یک توصیهٔ کلیدی.` },
+      ], { temperature: 0.4, max_tokens: 220 }, provider)
+      if (txt && txt.trim()) health = txt.trim()
+    }
+  } catch {}
+  return { callNow, health, tips }
+}
+
+// پیشنهادِ اقدامِ بعدی برای یک لیدِ آژانس (AI با fallbackِ قاعده‌مند).
+export async function agencyLeadAdvice(o: string, lid: string): Promise<string> {
+  const a = await getAgency(o)
+  const l = a.leads.find(x => x.id === lid)
+  if (!l) return 'لید یافت نشد.'
+  const acts = (l.activities || []).slice(-5).map(x => x.type).join('، ') || 'بدونِ فعالیت'
+  const rel = a.listings.filter(x => x.status === 'active').slice(0, 20)
+  const needTxt = (l.need || '').toLowerCase()
+  const budgetNum = Number(String(l.budget || '').replace(/[^\d۰-۹]/g, '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))) || 0
+  const match = rel.filter(x => (!budgetNum || x.price <= budgetNum * 1.15) && (!needTxt || needTxt.split(/\s+/).some(w => w.length > 2 && (x.ptype.includes(w) || (x.neighborhood || '').includes(w) || (x.city || '').includes(w))))).slice(0, 3)
+  const matchLine = match.length ? `\nفایل‌های پیشنهادی:\n${match.map(x => `• ${x.title} — ${x.price.toLocaleString('fa-IR')} تومان`).join('\n')}` : ''
+  try {
+    const model = agentModel('chat', 'text')
+    if (model) {
+      const provider = agentProvider('chat', 'text')
+      const txt = await chatCompleteSafe(model, [
+        { role: 'system', content: 'تو مدیرِ فروشِ آژانسِ املاک هستی. فارسی، کوتاه و عملی. ۲ تا ۴ گامِ مشخصِ بعدی برای این لید بده (شماره‌دار). بدون مقدمه.' },
+        { role: 'user', content: `لید: ${l.name}. مرحله: ${STAGE_FA[l.stage]}. مشاورِ مسئول: ${l.assignedTo || 'تخصیص‌نیافته'}. نیاز: ${l.need || '—'}. بودجه: ${l.budget || '—'}. آخرین فعالیت‌ها: ${acts}. اقدامِ بعدی؟` },
+      ], { temperature: 0.5, max_tokens: 320 }, provider)
+      if (txt && txt.trim()) return txt.trim() + matchLine
+    }
+  } catch {}
+  const base: Record<Stage, string> = {
+    new: '۱) لید را به مناسب‌ترین مشاور تخصیص بده.\n۲) اولین تماس را همین امروز هماهنگ کن.',
+    assigned: '۱) مطمئن شو مشاور تماس گرفته.\n۲) فایلِ متناسب را برایش بفرست و بازدید بگذار.',
+    visit: '۱) بازخوردِ بازدید را از مشاور بگیر.\n۲) اگر مثبت بود وارد مذاکره شوید.',
+    negotiation: '۱) روی قیمتِ نهایی و شرایط با مشاور هماهنگ شو.\n۲) برای قرارداد وقت بگذار.',
+    closed: 'قرارداد بسته شد ✓ — کمیسیون را ثبت و برای ریفرال پیگیری کن.',
+    lost: 'اگر شرایط عوض شد دوباره فعالش کن؛ فعلاً روی لیدهای فعال تمرکز کن.',
+  }
+  return base[l.stage] + matchLine
 }

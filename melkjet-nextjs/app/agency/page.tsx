@@ -23,7 +23,9 @@ type ListingStatus = 'active' | 'sold' | 'rented'
 
 interface Agent { id: string; name: string; phone?: string; deals: number; leads: number; commission: number; active: boolean; createdAt: number }
 interface Listing { id: string; title: string; ptype: string; location: string; price: number; deal: 'sale' | 'rent'; status: ListingStatus; agent?: string; createdAt: number }
-interface Lead { id: string; name: string; phone?: string; need?: string; budget?: string; stage: Stage; assignedTo?: string; createdAt: number }
+type ActivityType = 'created' | 'call' | 'visit' | 'meeting' | 'sms' | 'note' | 'stage' | 'assign'
+interface Activity { id: string; type: ActivityType; at: number; note?: string }
+interface Lead { id: string; name: string; phone?: string; need?: string; budget?: string; stage: Stage; assignedTo?: string; createdAt: number; activities?: Activity[]; score?: number; tags?: string[]; lastActivityAt?: number }
 interface Deal { id: string; title: string; amount: number; agent: string; date: string; createdAt: number }
 interface Stats {
   profile: { name: string; branches?: string }
@@ -65,6 +67,24 @@ const faDate = (ts: number) => { try { return new Date(ts).toLocaleDateString('f
 const STAGES: Stage[] = ['new', 'assigned', 'visit', 'negotiation', 'closed', 'lost']
 const STAGE_LABEL: Record<Stage, string> = { new: 'جدید', assigned: 'تخصیص‌یافته', visit: 'بازدید', negotiation: 'مذاکره', closed: 'قرارداد', lost: 'ازدست‌رفته' }
 const STAGE_COLOR: Record<Stage, string> = { new: 'var(--gold)', assigned: '#60a5fa', visit: '#2dd4bf', negotiation: '#f59e0b', closed: '#34d399', lost: '#7a8fae' }
+// Sales OS آژانس
+const PIPE_STAGES: Stage[] = ['new', 'assigned', 'visit', 'negotiation', 'closed']
+const ACT_LABEL: Record<ActivityType, string> = { created: 'ایجاد', call: 'تماس', visit: 'بازدید', meeting: 'جلسه', sms: 'پیامک', note: 'یادداشت', stage: 'تغییرِ مرحله', assign: 'تخصیص' }
+const ACT_ICON: Record<ActivityType, string> = { created: '✦', call: '☎', visit: '🏠', meeting: '👥', sms: '✉', note: '✎', stage: '➜', assign: '👤' }
+function agScoreOf(l: { stage: string; score?: number; phone?: string; budget?: string; need?: string; assignedTo?: string; activities?: Activity[]; lastActivityAt?: number; createdAt?: number }): number {
+  if (typeof l.score === 'number') return l.score
+  if (l.stage === 'closed') return 92; if (l.stage === 'lost') return 5
+  let s = 12 + Math.max(0, STAGES.indexOf(l.stage as Stage)) * 6
+  if (l.phone) s += 14; if (l.budget) s += 10; if (l.need) s += 6; if (l.assignedTo) s += 6
+  const acts = (l.activities || []).filter(a => a.type !== 'created' && a.type !== 'stage')
+  s += Math.min(12, acts.length * 3)
+  const last = l.lastActivityAt || l.createdAt || Date.now()
+  const ageH = (Date.now() - last) / 36e5
+  if (ageH <= 24) s += 10; else if (ageH <= 24 * 7) s += 5
+  return Math.max(0, Math.min(100, Math.round(s)))
+}
+function scoreColor(n: number): string { return n >= 80 ? '#e74c3c' : n >= 50 ? '#e7a14a' : '#7a8fae' }
+function scoreLabel(n: number): string { return n >= 80 ? 'داغ' : n >= 50 ? 'گرم' : 'سرد' }
 const LIST_LABEL: Record<ListingStatus, string> = { active: 'فعال', sold: 'فروخته‌شده', rented: 'اجاره‌رفته' }
 const LIST_COLOR: Record<ListingStatus, string> = { active: '#34d399', sold: '#60a5fa', rented: '#2dd4bf' }
 const LIST_STATUSES: ListingStatus[] = ['active', 'sold', 'rented']
@@ -136,6 +156,105 @@ function IncomeBars({ points, height = 96 }: { points: MonthPoint[]; height?: nu
   )
 }
 
+// ═══ کشوی پروندهٔ لیدِ آژانس (Sales OS): تایم‌لاین، ثبتِ فعالیت، تخصیص، AI اقدامِ بعدی ═══
+function AgencyLeadDrawer({ lead, agents, onClose, onLog, onStage, onAssign }: {
+  lead: Lead; agents: string[]
+  onClose: () => void
+  onLog: (id: string, type: ActivityType, note?: string) => Promise<boolean>
+  onStage: (s: Stage) => void
+  onAssign: (agent: string) => void
+}) {
+  const [note, setNote] = useState('')
+  const [logType, setLogType] = useState<ActivityType>('call')
+  const [saving, setSaving] = useState(false)
+  const [advice, setAdvice] = useState('')
+  const [adviceBusy, setAdviceBusy] = useState(false)
+  const sc = agScoreOf(lead)
+  const timeline = [...(lead.activities || [])].sort((a, b) => b.at - a.at)
+  const nextStep = (() => {
+    if (!lead.assignedTo) return 'این لید به هیچ مشاوری تخصیص نیافته — همین حالا به مناسب‌ترین مشاور بده.'
+    if (lead.stage === 'new') return 'اولین تماس را هماهنگ کن و نیاز را دقیق کن.'
+    if (lead.stage === 'assigned') return 'مطمئن شو مشاور تماس گرفته و فایلِ متناسب فرستاده.'
+    if (lead.stage === 'visit') return 'بازخوردِ بازدید را بگیر و وارد مذاکره شوید.'
+    if (lead.stage === 'negotiation') return 'روی قیمتِ نهایی هماهنگ شو و برای قرارداد وقت بگذار.'
+    if (lead.stage === 'closed') return 'قرارداد بسته شد ✓ — کمیسیون را ثبت کن.'
+    return 'لیدِ ازدست‌رفته — اگر شرایط عوض شد دوباره فعالش کن.'
+  })()
+  const doLog = async () => { setSaving(true); const ok = await onLog(lead.id, logType, note.trim() || undefined); if (ok) setNote(''); setSaving(false) }
+  const getAdvice = async () => {
+    setAdviceBusy(true)
+    try { const r = await fetch('/api/agency', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'leadAdvice', id: lead.id }) }); const d = await r.json(); setAdvice(d.advice || d.error || 'پاسخی دریافت نشد.') } catch { setAdvice('خطا در ارتباط با هوش مصنوعی.') } finally { setAdviceBusy(false) }
+  }
+  const dBtn: React.CSSProperties = { padding: '7px 12px', borderRadius: 8, border: '1px solid var(--line)', background: 'var(--bg)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT }
+  const inp: React.CSSProperties = { padding: '9px 11px', borderRadius: 9, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--text)', fontSize: 13, outline: 'none', fontFamily: FONT, width: '100%' }
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 1400, display: 'flex', justifyContent: 'flex-start' }}>
+      <div onClick={e => e.stopPropagation()} dir="rtl" style={{ width: 'min(460px,100%)', height: '100%', background: 'var(--surface)', borderInlineEnd: '1px solid var(--line)', overflowY: 'auto', boxShadow: '0 0 40px rgba(0,0,0,.5)', fontFamily: FONT }}>
+        <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--line)', position: 'sticky', top: 0, background: 'var(--surface)', zIndex: 2 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 12, fontWeight: 800, color: scoreColor(sc), border: `1.5px solid ${scoreColor(sc)}`, borderRadius: 9, padding: '4px 8px' }}>✦{fa(sc)} {scoreLabel(sc)}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 16, fontWeight: 800 }}>{lead.name}</div>
+              <div style={{ fontSize: 11.5, color: 'var(--muted)', direction: 'ltr', textAlign: 'right' }}>{lead.phone || 'بدون شماره'}</div>
+            </div>
+            <button onClick={onClose} style={{ ...dBtn, fontSize: 16, padding: '4px 10px' }}>✕</button>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8, lineHeight: 1.8 }}>{lead.need || 'بدون شرحِ نیاز'}{lead.budget ? ` · بودجه: ${money(Number((lead.budget || '').replace(/[^0-9]/g, '')) || 0)}` : ''}</div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+            {lead.phone && <a href={`tel:${lead.phone}`} onClick={() => onLog(lead.id, 'call')} style={{ ...dBtn, textDecoration: 'none', color: 'var(--gold)', borderColor: 'var(--gold)', direction: 'ltr' }}>☎ تماس</a>}
+            {lead.phone && <a href={`sms:${lead.phone}`} onClick={() => onLog(lead.id, 'sms')} style={{ ...dBtn, textDecoration: 'none', direction: 'ltr' }}>✉ پیامک</a>}
+            <select value={lead.assignedTo || ''} onChange={e => onAssign(e.target.value)} style={{ ...dBtn, cursor: 'pointer' }}><option value="">تخصیص به…</option>{agents.map(n => <option key={n} value={n}>{n}</option>)}</select>
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 12, flexWrap: 'wrap' }}>
+            {STAGES.map(s => <button key={s} onClick={() => onStage(s)} style={{ ...dBtn, padding: '4px 9px', fontSize: 11, background: lead.stage === s ? STAGE_COLOR[s] : 'var(--bg)', color: lead.stage === s ? '#16140f' : 'var(--muted)', borderColor: lead.stage === s ? STAGE_COLOR[s] : 'var(--line)', fontWeight: lead.stage === s ? 800 : 500 }}>{STAGE_LABEL[s]}</button>)}
+          </div>
+        </div>
+
+        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 18 }}>
+          <div style={{ background: 'linear-gradient(135deg,var(--goldDim),transparent)', border: '1px solid var(--line)', borderRadius: 12, padding: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span style={{ fontSize: 13.5, fontWeight: 800 }}>✦ اقدامِ بعدی</span>
+              <button disabled={adviceBusy} onClick={getAdvice} style={{ ...dBtn, marginInlineStart: 'auto', color: 'var(--gold)', borderColor: 'var(--gold)' }}>{adviceBusy ? '…' : '✨ پیشنهادِ هوش مصنوعی'}</button>
+            </div>
+            <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.9 }}>{nextStep}</div>
+            {advice && <div style={{ fontSize: 12.5, color: 'var(--text)', lineHeight: 2, marginTop: 10, borderTop: '1px solid var(--line)', paddingTop: 10, whiteSpace: 'pre-wrap' }}>{advice}</div>}
+          </div>
+
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>ثبتِ فعالیت</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+              {(['call', 'sms', 'meeting', 'visit', 'note'] as ActivityType[]).map(t => (
+                <button key={t} onClick={() => setLogType(t)} style={{ ...dBtn, background: logType === t ? 'var(--goldDim)' : 'var(--bg)', color: logType === t ? 'var(--gold)' : 'var(--muted)', borderColor: logType === t ? 'var(--gold)' : 'var(--line)' }}>{ACT_ICON[t]} {ACT_LABEL[t]}</button>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input value={note} onChange={e => setNote(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') doLog() }} placeholder="یادداشت (اختیاری)…" style={{ ...inp, flex: 1 }} />
+              <button disabled={saving} onClick={doLog} style={{ padding: '9px 16px', borderRadius: 9, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', fontFamily: FONT }}>{saving ? '…' : 'ثبت'}</button>
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>تایم‌لاینِ فعالیت</div>
+            {timeline.length ? (
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {timeline.map(a => (
+                  <div key={a.id} style={{ display: 'flex', gap: 10, padding: '9px 0', borderBottom: '1px solid var(--line)' }}>
+                    <span style={{ fontSize: 13, width: 22, textAlign: 'center' }}>{ACT_ICON[a.type]}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 600 }}>{ACT_LABEL[a.type]}{a.note ? <span style={{ fontWeight: 400, color: 'var(--muted)' }}> — {a.note}</span> : ''}</div>
+                      <div style={{ fontSize: 10.5, color: 'var(--faint)' }}>{faDate(a.at)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : <div style={{ fontSize: 12, color: 'var(--faint)' }}>هنوز فعالیتی ثبت نشده.</div>}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function AgencyPage() {
   const [view, setView] = useState<View>('dashboard')
   // ابزارهای جاسازی‌شده: وقتی مقدار دارند، محتوای ابزار در همین پنل نمایش داده می‌شود
@@ -179,6 +298,13 @@ export default function AgencyPage() {
   const [lstSort, setLstSort] = useState<'new' | 'priceDesc' | 'priceAsc'>('new')
   const [ownerF, setOwnerF] = useState<string>('all')   // 'all' | 'agency' | advisorPhone
   const [leadStageF, setLeadStageF] = useState<string>('all')
+  // Sales OS آژانس: کشوی پرونده + کانبان + کشیدن + هوشِ CRM
+  const [openLeadId, setOpenLeadId] = useState<string | null>(null)
+  const [leadKanban, setLeadKanban] = useState(true)
+  const [dragLead, setDragLead] = useState<string | null>(null)
+  const [dragOverCol, setDragOverCol] = useState<Stage | null>(null)
+  const [crmAi, setCrmAi] = useState<{ callNow: { id: string; name: string; phone?: string; score: number; why: string; assignedTo?: string }[]; health: string; tips: string[] } | null>(null)
+  const [crmAiBusy, setCrmAiBusy] = useState(false)
   // عضویت واقعی مشاوران (advisor↔agency)
   const [members, setMembers] = useState<LinkMember[]>([])
   const [linkReqs, setLinkReqs] = useState<LinkRequest[]>([])
@@ -251,6 +377,16 @@ export default function AgencyPage() {
     } catch { return false } finally { setBusy(false) }
   }, [refresh])
 
+  // Sales OS آژانس: کشیدنِ کارتِ لید → تغییرِ مرحله (فقط لیدِ خودِ آژانس)
+  const moveLead = useCallback((id: string, stage: Stage) => {
+    if (id) post({ action: 'setLeadStage', id, stage })
+  }, [post])
+  const logActivity = useCallback((id: string, type: ActivityType, note?: string) => post({ action: 'addActivity', id, type, note }), [post])
+  const loadCrmAi = useCallback(async () => {
+    setCrmAiBusy(true)
+    try { const r = await fetch('/api/agency', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'crmInsights' }) }); const d = await r.json(); if (d.ok) setCrmAi({ callNow: d.callNow || [], health: d.health || '', tips: d.tips || [] }) } catch {} finally { setCrmAiBusy(false) }
+  }, [])
+
   const submitFile = async () => {
     if (busy || !ff.title.trim()) return
     const ok = await post({
@@ -298,11 +434,19 @@ export default function AgencyPage() {
     .sort((a, b) => lstSort === 'priceDesc' ? b.price - a.price : lstSort === 'priceAsc' ? a.price - b.price : b.createdAt - a.createdAt)
 
   // ── لیدها (یکجا): لیدِ آژانس + همهٔ مشاوران ──
-  type ULead = { key: string; id: string; name: string; need: string; budget: string; phone: string; stage: string; owner: string; ownerKey: string; agency: boolean; assignedTo?: string; createdAt: number }
+  type ULead = { key: string; id: string; name: string; need: string; budget: string; phone: string; stage: string; owner: string; ownerKey: string; agency: boolean; assignedTo?: string; createdAt: number; score: number; apptCount: number }
   const leadsUnified: ULead[] = [
-    ...leads.map(l => ({ key: 'a_' + l.id, id: l.id, name: l.name, need: l.need || '', budget: l.budget || '', phone: l.phone || '', stage: l.stage as string, owner: agencyName, ownerKey: 'agency', agency: true, assignedTo: l.assignedTo, createdAt: l.createdAt })),
-    ...(af?.rows || []).flatMap(r => r.leadsList.map((l, i) => ({ key: 'm_' + r.advisorPhone + '_' + i, id: '', name: l.name, need: l.need, budget: l.budget, phone: l.phone, stage: l.stage, owner: r.advisorName, ownerKey: r.advisorPhone, agency: false, createdAt: l.createdAt }))),
+    ...leads.map(l => ({ key: 'a_' + l.id, id: l.id, name: l.name, need: l.need || '', budget: l.budget || '', phone: l.phone || '', stage: l.stage as string, owner: agencyName, ownerKey: 'agency', agency: true, assignedTo: l.assignedTo, createdAt: l.createdAt, score: agScoreOf(l), apptCount: 0 })),
+    ...(af?.rows || []).flatMap(r => r.leadsList.map((l, i) => ({ key: 'm_' + r.advisorPhone + '_' + i, id: '', name: l.name, need: l.need, budget: l.budget, phone: l.phone, stage: l.stage, owner: r.advisorName, ownerKey: r.advisorPhone, agency: false, createdAt: l.createdAt, score: agScoreOf(l as { stage: string; phone?: string; budget?: string; need?: string; createdAt?: number }), apptCount: 0 }))),
   ]
+  // لیدِ بازِ کشو (فقط لیدِ خودِ آژانس ویرایش‌پذیر است)
+  const openLead = openLeadId ? leads.find(l => l.id === openLeadId) || null : null
+  // «با کی تماس بگیرم» (کلاینتی، همیشه‌کار) — لیدهای بازِ آژانس
+  const agFollowUp = leads
+    .filter(l => l.stage !== 'closed' && l.stage !== 'lost')
+    .map(l => ({ l, s: agScoreOf(l), age: (Date.now() - (l.lastActivityAt || l.createdAt)) / 36e5 }))
+    .filter(x => !x.l.assignedTo || x.age >= 24 || x.s >= 60)
+    .sort((a, b) => b.s - a.s).slice(0, 6)
   const leadsF = leadsUnified
     .filter(l => !q || (l.name + l.need + l.owner + (l.phone || '')).includes(q))
     .filter(l => leadStageF === 'all' || l.stage === leadStageF)
@@ -933,6 +1077,33 @@ export default function AgencyPage() {
                 <button disabled={busy || !nl.name.trim()} onClick={async () => { if (await post({ action: 'addLead', name: nl.name.trim(), phone: nl.phone, need: nl.need, budget: nl.budget })) setNl({ name: '', phone: '', need: '', budget: '' }) }} style={goldBtn}>افزودن</button>
               </div>
             </div>
+            {/* ✦ هوشِ CRM آژانس: با کی تماس بگیرم؟ + سلامتِ پایپ‌لاین */}
+            <div style={{ ...card, padding: 18, background: 'linear-gradient(135deg,var(--goldDim),transparent)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+                <div style={{ fontWeight: 800, fontSize: 15 }}>✦ با کی تماس بگیرم؟</div>
+                <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>لیدهای تخصیص‌نیافته/پرامتیازِ آژانس</div>
+                <button disabled={crmAiBusy} onClick={loadCrmAi} style={{ ...actionBtn, marginInlineStart: 'auto', color: 'var(--gold)', borderColor: 'var(--gold)' }}>{crmAiBusy ? '…' : '✨ تحلیلِ هوشمند'}</button>
+              </div>
+              {(crmAi?.callNow?.length ? crmAi.callNow : agFollowUp.map(x => ({ id: x.l.id, name: x.l.name, phone: x.l.phone, score: x.s, why: !x.l.assignedTo ? 'تخصیص‌نیافته' : x.age >= 24 ? `${fa(Math.round(x.age / 24))} روز بی‌فعالیت` : 'امتیازِ بالا', assignedTo: x.l.assignedTo }))).length ? (
+                <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }}>
+                  {(crmAi?.callNow?.length ? crmAi.callNow : agFollowUp.map(x => ({ id: x.l.id, name: x.l.name, phone: x.l.phone, score: x.s, why: !x.l.assignedTo ? 'تخصیص‌نیافته' : x.age >= 24 ? `${fa(Math.round(x.age / 24))} روز بی‌فعالیت` : 'امتیازِ بالا', assignedTo: x.l.assignedTo }))).map(c => (
+                    <div key={c.id} style={{ flex: '0 0 auto', minWidth: 190, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: scoreColor(c.score) }}>✦{fa(c.score)}</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>{c.why}{c.assignedTo ? ` · ${c.assignedTo}` : ''}</div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {c.phone && <a href={`tel:${c.phone}`} onClick={() => c.id && logActivity(c.id, 'call')} style={{ ...actionBtn, textDecoration: 'none', color: 'var(--gold)', borderColor: 'var(--gold)', direction: 'ltr', flex: 1, textAlign: 'center' }}>☎ تماس</a>}
+                        {c.id && <button onClick={() => setOpenLeadId(c.id)} style={{ ...actionBtn, flex: 1 }}>پرونده</button>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>همه‌چیز به‌روز است 👌 — لیدِ عقب‌افتاده یا تخصیص‌نیافته‌ای نداری.</div>}
+              {crmAi?.health && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 12, lineHeight: 1.9, borderTop: '1px solid var(--line)', paddingTop: 10 }}><b style={{ color: 'var(--gold)' }}>تحلیلِ پایپ‌لاین:</b> {crmAi.health}{crmAi.tips?.length ? <ul style={{ margin: '6px 0 0', paddingInlineStart: 18 }}>{crmAi.tips.map((t, i) => <li key={i}>{t}</li>)}</ul> : null}</div>}
+            </div>
+
             <div style={{ ...card, padding: 18 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
                 {sectionTitle(`لیدها (${fa(leadsF.length)})`)}
@@ -942,15 +1113,16 @@ export default function AgencyPage() {
                 </div>
               </div>
               {leadsF.length ? leadsF.map(l => (
-                <div key={l.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
+                <div key={l.key} onClick={() => { if (l.agency && l.id) setOpenLeadId(l.id) }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: '1px solid var(--line)', flexWrap: 'wrap', cursor: l.agency ? 'pointer' : 'default' }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: scoreColor(l.score), width: 42, textAlign: 'center', flexShrink: 0 }}>✦{fa(l.score)}<div style={{ fontSize: 9, color: 'var(--faint)', fontWeight: 500 }}>{scoreLabel(l.score)}</div></span>
                   <div style={{ flex: 1, minWidth: 150 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>{l.name}{l.phone ? <span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 12 }}> · {l.phone}</span> : ''} {ownerBadge(l.agency, l.owner)}</div>
                     <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{l.need} {l.budget ? `· بودجه: ${money(Number((l.budget || '').replace(/[^0-9]/g, '')) || 0)}` : ''}</div>
                   </div>
                   {l.agency ? <>
-                    <select value={l.assignedTo || ''} onChange={e => post({ action: 'assignLead', id: l.id, agent: e.target.value })} style={{ ...actionBtn, cursor: 'pointer' }}><option value="">تخصیص به…</option>{activeAgentNames.map(n => <option key={n} value={n}>{n}</option>)}</select>
-                    <select value={l.stage} onChange={e => post({ action: 'setLeadStage', id: l.id, stage: e.target.value })} style={{ ...actionBtn, cursor: 'pointer', color: STAGE_COLOR[l.stage as Stage], borderColor: STAGE_COLOR[l.stage as Stage] }}>{STAGES.map(s => <option key={s} value={s} style={{ color: 'var(--text)' }}>{STAGE_LABEL[s]}</option>)}</select>
-                    <button onClick={() => post({ action: 'deleteLead', id: l.id })} style={{ ...actionBtn, color: '#ef4444' }}>حذف</button>
+                    <select value={l.assignedTo || ''} onClick={e => e.stopPropagation()} onChange={e => post({ action: 'assignLead', id: l.id, agent: e.target.value })} style={{ ...actionBtn, cursor: 'pointer' }}><option value="">تخصیص به…</option>{activeAgentNames.map(n => <option key={n} value={n}>{n}</option>)}</select>
+                    <select value={l.stage} onClick={e => e.stopPropagation()} onChange={e => post({ action: 'setLeadStage', id: l.id, stage: e.target.value })} style={{ ...actionBtn, cursor: 'pointer', color: STAGE_COLOR[l.stage as Stage], borderColor: STAGE_COLOR[l.stage as Stage] }}>{STAGES.map(s => <option key={s} value={s} style={{ color: 'var(--text)' }}>{STAGE_LABEL[s]}</option>)}</select>
+                    <button onClick={e => { e.stopPropagation(); post({ action: 'deleteLead', id: l.id }) }} style={{ ...actionBtn, color: '#ef4444' }}>حذف</button>
                   </> : <Pill label={STAGE_LABEL[l.stage as Stage] || l.stage} color={STAGE_COLOR[l.stage as Stage] || 'var(--muted)'} />}
                 </div>
               )) : <div style={{ color: 'var(--faint)', fontSize: 13 }}>لیدی با این فیلتر نیست.</div>}
@@ -991,26 +1163,37 @@ export default function AgencyPage() {
             </div>
           </div>}
 
-          {/* PIPELINE — کلی (آژانس + همهٔ مشاوران) */}
+          {/* PIPELINE — کانبانِ کلی (آژانس + همهٔ مشاوران)؛ کارتِ لیدِ آژانس را می‌توان کشید */}
           {view === 'pipeline' && <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>پایپ‌لاینِ کلیِ لیدها — آژانس و همهٔ مشاوران یکجا.</div>
+              <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>پایپ‌لاینِ کلیِ لیدها — کارتِ لیدِ 🏢 آژانس را بین ستون‌ها بکش تا مرحله عوض شود.</div>
               <div style={{ marginInlineStart: 'auto' }}>{ownerFilterBar}</div>
             </div>
             <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8 }}>
-              {STAGES.map(s => {
+              {PIPE_STAGES.map(s => {
                 const col = leadsUnified.filter(l => l.stage === s).filter(l => ownerOk(l.ownerKey))
                 return (
-                  <div key={s} style={{ flex: '0 0 230px', minWidth: 230, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: 10 }}>
+                  <div key={s}
+                    onDragOver={e => { e.preventDefault(); if (dragOverCol !== s) setDragOverCol(s) }}
+                    onDrop={e => { e.preventDefault(); if (dragLead) moveLead(dragLead, s); setDragLead(null); setDragOverCol(null) }}
+                    style={{ flex: '0 0 240px', minWidth: 240, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: 10, outline: dragOverCol === s ? '2px dashed var(--gold)' : 'none', outlineOffset: 2 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingInlineStart: 6 }}>
                       <span style={{ fontSize: 12.5, fontWeight: 800, color: STAGE_COLOR[s] }}>{STAGE_LABEL[s]}</span>
                       <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', background: 'var(--bg)', borderRadius: 999, padding: '2px 9px' }}>{fa(col.length)}</span>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 460, overflowY: 'auto' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 480, overflowY: 'auto', minHeight: 40 }}>
                       {col.length ? col.map(l => (
-                        <div key={l.key} style={{ background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 9, padding: '9px 11px' }}>
-                          <div style={{ fontSize: 12.5, fontWeight: 700 }}>{l.name}</div>
-                          {l.need ? <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{l.need}</div> : null}
+                        <div key={l.key}
+                          draggable={l.agency && !!l.id}
+                          onDragStart={() => { if (l.agency && l.id) setDragLead(l.id) }}
+                          onDragEnd={() => { setDragLead(null); setDragOverCol(null) }}
+                          onClick={() => { if (l.agency && l.id) setOpenLeadId(l.id) }}
+                          style={{ background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 9, padding: '9px 11px', cursor: l.agency ? 'pointer' : 'default', opacity: dragLead === l.id ? 0.4 : 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 10.5, fontWeight: 800, color: scoreColor(l.score) }}>✦{fa(l.score)}</span>
+                            <span style={{ fontSize: 12.5, fontWeight: 700, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.name}</span>
+                          </div>
+                          {l.need ? <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.need}</div> : null}
                           <div style={{ marginTop: 6 }}>{ownerBadge(l.agency, l.owner)}</div>
                         </div>
                       )) : <div style={{ fontSize: 11, color: 'var(--faint)', textAlign: 'center', padding: '14px 0' }}>—</div>}
@@ -1090,6 +1273,9 @@ export default function AgencyPage() {
           </>}
         </main>
       </div>
+
+      {/* ───── کشوی پروندهٔ لیدِ آژانس (Sales OS) ───── */}
+      {openLead && <AgencyLeadDrawer lead={openLead} agents={activeAgentNames} onClose={() => setOpenLeadId(null)} onLog={logActivity} onStage={(s) => post({ action: 'setLeadStage', id: openLead.id, stage: s })} onAssign={(ag) => post({ action: 'assignLead', id: openLead.id, agent: ag })} />}
 
       {/* مودالِ افزودنِ فایلِ کامل — مثلِ پنل مشاور */}
       {fileModal && (
