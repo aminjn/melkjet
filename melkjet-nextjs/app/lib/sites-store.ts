@@ -164,6 +164,17 @@ export async function getSite(slug: string): Promise<Site | null> {
   return migrateSite(site)
 }
 
+// سایتِ متعلق به یک مالک (شمارهٔ حساب) — تازه‌ترین. برای «سایتِ من» در سایت‌ساز که باید
+// مستقل از slug، همان سایتِ ذخیره‌شدهٔ کاربر را برگرداند (نه قالبِ پیش‌فرض).
+export async function getSiteByOwner(owner: string): Promise<Site | null> {
+  const o = String(owner || '').trim(); if (!o) return null
+  const mine = (await load()).sites.filter(s => String(s.owner || '') === o)
+  if (!mine.length) return null
+  // تازه‌ترین (بیشترین updatedAt/createdAt)
+  mine.sort((a, b) => (Number((b as any).updatedAt || (b as any).createdAt || 0)) - (Number((a as any).updatedAt || (a as any).createdAt || 0)))
+  return migrateSite(mine[0])
+}
+
 // Find a page within a site by slug; falls back to the home page (pages[0]).
 export function getSitePage(site: Site, pageSlug: string): SitePage {
   const want = sanitizeSlug(pageSlug)

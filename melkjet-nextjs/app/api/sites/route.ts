@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSite, saveSite } from '@/app/lib/sites-store'
+import { getSite, getSiteByOwner, saveSite } from '@/app/lib/sites-store'
 import { getSession } from '@/app/lib/session'
 
 // Persistent published-site store. Reads are open; writes require a logged-in session.
 export async function GET(req: NextRequest) {
-  const slug = new URL(req.url).searchParams.get('slug') || ''
+  const sp = new URL(req.url).searchParams
+  // «سایتِ من»: سایتِ ذخیره‌شدهٔ خودِ کاربر (بر اساسِ session)، مستقل از slug.
+  if (sp.get('mine')) {
+    const s = await getSession()
+    if (!s) return NextResponse.json({ site: null }, { status: 200 })
+    const site = await getSiteByOwner(s.phone)
+    return NextResponse.json({ site: site || null })
+  }
+  const slug = sp.get('slug') || ''
   if (!slug) return NextResponse.json({ error: 'slug خالی است' }, { status: 400 })
   const site = await getSite(slug)
   if (!site) return NextResponse.json({ error: 'یافت نشد' }, { status: 404 })

@@ -14,6 +14,7 @@ export interface Category {
   id: string
   name: string
   slug: string
+  parentId?: string   // زیردستهٔ کدام دسته است (خالی = دستهٔ سطحِ‌اول)
   createdAt: number
 }
 
@@ -28,6 +29,14 @@ function slugify(s: string): string {
     .replace(/[^\w؀-ۿ-]/g, '')
     .replace(/-+/g, '-').replace(/^-|-$/g, '')
     .slice(0, 80) || 'cat'
+}
+
+// slugِ یکتا در دلِ یک لیست (اگر تکراری بود، پسوندِ عددی می‌زند)
+function uniqueSlug(list: Category[], want: string, exceptId?: string): string {
+  const base = slugify(want)
+  let s = base, n = 2
+  while (list.some(c => c.slug === s && c.id !== exceptId)) s = `${base}-${n++}`
+  return s
 }
 
 // Sensible Persian defaults, seeded on first load.
@@ -70,29 +79,81 @@ export function listCategories(type: CategoryType): Category[] {
   return (db[type] || []).slice().sort((a, b) => a.createdAt - b.createdAt)
 }
 
-export function addCategory(type: CategoryType, name: string): Category {
+export function addCategory(type: CategoryType, name: string, opts?: { slug?: string; parentId?: string }): Category {
   const db = load()
   const list = db[type] || (db[type] = [])
   const n = String(name || '').trim().slice(0, 60)
-  const cat: Category = { id: id(), name: n, slug: slugify(n), createdAt: Date.now() }
+  const parentId = opts?.parentId && list.some(c => c.id === opts.parentId) ? String(opts.parentId) : undefined
+  const slug = uniqueSlug(list, opts?.slug ? String(opts.slug) : n)
+  const cat: Category = { id: id(), name: n, slug, ...(parentId ? { parentId } : {}), createdAt: Date.now() }
   list.push(cat)
   save(db)
   return cat
 }
 
+// ویرایشِ کامل: نام + slug + زیردسته (parent). renameCategory را پوشش می‌دهد.
+export function updateCategory(type: CategoryType, catId: string, patch: { name?: string; slug?: string; parentId?: string | null }): Category | null {
+  const db = load()
+  const list = db[type] || []
+  const cat = list.find(c => c.id === catId)
+  if (!cat) return null
+  if (patch.name !== undefined) cat.name = String(patch.name || '').trim().slice(0, 60)
+  if (patch.slug !== undefined && String(patch.slug).trim()) cat.slug = uniqueSlug(list, String(patch.slug), cat.id)
+  if (patch.parentId !== undefined) {
+    // جلوگیری از حلقه: نمی‌تواند خودش یا یکی از فرزندانش را والد کند
+    const pid = patch.parentId ? String(patch.parentId) : ''
+    if (!pid) delete cat.parentId
+    else if (pid !== cat.id && !isDescendant(list, pid, cat.id)) cat.parentId = pid
+  }
+  save(db)
+  return cat
+}
+
+// آیا candidate از فرزندانِ ancestorId است؟ (برای جلوگیری از حلقهٔ والد/فرزند)
+function isDescendant(list: Category[], candidateId: string, ancestorId: string): boolean {
+  let cur = list.find(c => c.id === candidateId)
+  let guard = 0
+  while (cur?.parentId && guard++ < 50) {
+    if (cur.parentId === ancestorId) return true
+    cur = list.find(c => c.id === cur!.parentId)
+  }
+  return false
+}
+
+// back-compat: تغییرِ نام (+ همگام‌سازیِ slug با نامِ جدید)
 export function renameCategory(type: CategoryType, catId: string, name: string): Category | null {
   const db = load()
   const cat = (db[type] || []).find(c => c.id === catId)
   if (!cat) return null
   const n = String(name || '').trim().slice(0, 60)
   cat.name = n
-  cat.slug = slugify(n)
+  cat.slug = uniqueSlug(db[type] || [], n, cat.id)
   save(db)
   return cat
 }
 
 export function deleteCategory(type: CategoryType, catId: string): void {
   const db = load()
-  db[type] = (db[type] || []).filter(c => c.id !== catId)
+  // فرزندان را هم به سطحِ‌بالا منتقل کن تا یتیم نمانند (یا حذف؟ — انتقال امن‌تر است)
+  const list = (db[type] || [])
+  for (const c of list) if (c.parentId === catId) delete c.parentId
+  db[type] = list.filter(c => c.id !== catId)
   save(db)
+}
+
+// ── کمکی‌های بلاگ (سرور-ساید) — دسته‌های مقالهٔ سوپرادمین را به مسیریابیِ /blog وصل می‌کند ──
+// نامِ فارسیِ دسته → slug (برای URLِ مقاله). فقط سطحِ‌اول (زیردسته‌ها تگ‌اند).
+export function articleSlugForName(name?: string): string | null {
+  const n = String(name || '').trim(); if (!n) return null
+  const cat = (load().article || []).find(c => c.name === n && !c.parentId)
+  return cat ? cat.slug : null
+}
+// slug → دستهٔ مقاله (برای صفحهٔ /blog/[category] که در تاکسونومیِ ثابت نیست).
+export function articleCatBySlug(slug: string): Category | null {
+  const s = String(slug || '').trim(); if (!s) return null
+  return (load().article || []).find(c => c.slug === s && !c.parentId) || null
+}
+// همهٔ دسته‌های مقالهٔ سطحِ‌اول (برای نقشهٔ سایت + پیمایشِ دسته‌ها).
+export function articleTopCategories(): Category[] {
+  return (load().article || []).filter(c => !c.parentId).sort((a, b) => a.createdAt - b.createdAt)
 }

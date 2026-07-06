@@ -5,7 +5,7 @@ import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
 import { listItems } from '@/app/lib/scraper-store'
 import { gradientFor } from '@/app/lib/content-display'
-import { blogCatBySlug, categorySlugForName, BLOG_CATEGORIES } from '@/app/lib/blog-taxonomy'
+import { blogCatBySlugDyn as blogCatBySlug, categorySlugForNameDyn as categorySlugForName, allBlogCategories } from '@/app/lib/blog-taxonomy-server'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,7 +38,7 @@ export default async function BlogCategory({ params }: { params: Promise<{ categ
 
         {/* پیمایشِ دسته‌ها */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '16px 0 26px' }}>
-          {BLOG_CATEGORIES.map(c => (
+          {allBlogCategories().map(c => (
             <Link key={c.slug} href={`/blog/${c.slug}`} style={{ fontSize: 12.5, fontWeight: 700, padding: '6px 13px', borderRadius: 999, textDecoration: 'none', border: `1px solid ${c.slug === category ? 'var(--gold)' : 'var(--line)'}`, background: c.slug === category ? 'var(--goldDim)' : 'var(--surface)', color: c.slug === category ? 'var(--gold)' : 'var(--muted)' }}>{c.nameFa}</Link>
           ))}
         </div>

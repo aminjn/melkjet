@@ -14,4 +14,5 @@ export const BLOG_CATEGORIES: BlogCategory[] = [
 export function blogCatBySlug(slug: string) { return BLOG_CATEGORIES.find(c => c.slug === slug) }
 export function blogCatByNameFa(name: string) { const n = String(name || '').trim(); return BLOG_CATEGORIES.find(c => c.nameFa === n) }
 // slugِ دستهٔ یک مقاله از نامِ فارسیِ دسته‌اش (fallback: اولین دسته).
+// نکته: نسخهٔ «سرور-ساید و آگاه از دسته‌های سوپرادمین» در blog-taxonomy-server.ts است.
 export function categorySlugForName(name?: string): string { return (blogCatByNameFa(name || '')?.slug) || 'akhbar' }

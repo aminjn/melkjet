@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { getSite } from '@/app/lib/sites-store'
 import { getArticleBySlug } from '@/app/lib/scraper-store'
 import { mdToHtml } from '@/app/lib/markdown'
-import { categorySlugForName } from '@/app/lib/blog-taxonomy'
+import { categorySlugForNameDyn as categorySlugForName } from '@/app/lib/blog-taxonomy-server'
 import { SiteChrome } from '../../page'
 
 export const dynamic = 'force-dynamic'

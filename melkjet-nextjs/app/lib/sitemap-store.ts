@@ -7,7 +7,7 @@
 import { listItems, type Item } from './scraper-store'
 import { pgEnabled, kvGet, kvSet } from './db'
 import { locationTree } from './locations-store'
-import { BLOG_CATEGORIES, categorySlugForName } from './blog-taxonomy'
+import { allBlogCategories, categorySlugForNameDyn as categorySlugForName } from './blog-taxonomy-server'
 import { slugify } from './slugify'
 import { listingHref } from './listing-url'
 import { getAdminData, saveAdminData } from './admin-store'
@@ -68,7 +68,7 @@ export async function buildShards(force = false): Promise<Shard[]> {
 
   // ── بلاگ ──
   if (enabled(sections, 'blog')) {
-    const s: UrlEntry[] = BLOG_CATEGORIES.map(c => ({ url: `${BASE}/blog/${c.slug}`, priority: 0.6, changeFrequency: 'weekly' as ChangeFreq }))
+    const s: UrlEntry[] = allBlogCategories().map(c => ({ url: `${BASE}/blog/${c.slug}`, priority: 0.6, changeFrequency: 'weekly' as ChangeFreq }))
     try {
       for (const a of await listItems('article', { publicOnly: true })) {
         const slug = (a.meta as Record<string, string> | undefined)?.slug || a.id

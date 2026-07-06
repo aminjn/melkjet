@@ -1520,17 +1520,18 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
         if (mapped) { setTplFilter(mapped); setLockedProfile(mapped) }
         if (prof?.account?.name) setOwnerName(String(prof.account.name))
         const phone = prof?.phone ? String(prof.phone) : ''
-        // slugِ پیش‌فرضِ صنفی تا هر صنف سایتِ نمونهٔ خودش را ببیند.
+        // slugِ پیش‌فرضِ صنفی تا هر صنف سایتِ نمونهٔ خودش را ببیند (اگر هنوز سایتی نساخته).
         const wantSlug = (mapped && PROFILE_SLUG[mapped]) || slug
-        setSlug(wantSlug)
-        // فقط سایتی بارگذاری می‌شود که «مالِ خودِ کاربر» است؛ وگرنه قالبِ پیش‌فرضِ صنف اعمال می‌شود.
-        fetch(`/api/sites?slug=${encodeURIComponent(wantSlug)}`)
+        // «سایتِ من»: تازه‌ترین سایتِ ذخیره‌شدهٔ خودِ کاربر را بر اساسِ session بارگذاری کن (مستقل از slug).
+        // اگر داشت → همان را در ویرایشگر بگذار (نه قالبِ پیش‌فرض)؛ وگرنه به slugِ پیش‌فرضِ صنف برگرد.
+        fetch('/api/sites?mine=1', { cache: 'no-store' })
           .then(r => r.ok ? r.json() : null)
           .then(data => {
             if (cancelled) return
             const s = data?.site
-            const mine = s && Array.isArray(s.pages) && s.pages.length && s.owner && phone && String(s.owner) === phone
+            const mine = s && Array.isArray(s.pages) && s.pages.length
             if (mine) {
+              setSlug(String(s.slug || wantSlug))
               setHadSavedSite(true)
               setPages(s.pages.map((pg: any, i: number) => ({
                 slug: i === 0 ? 'home' : slugify(pg.slug || '') || `page-${i}`,
@@ -1544,10 +1545,12 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
               if (s.seo?.title) setSeoTitle(String(s.seo.title))
               if (s.seo?.description) setSeoDesc(String(s.seo.description))
               if (s.ownerName) setOwnerName(String(s.ownerName))
+            } else {
+              setSlug(wantSlug)
             }
             setSavedSiteChecked(true)
           })
-          .catch(() => setSavedSiteChecked(true))
+          .catch(() => { setSlug(wantSlug); setSavedSiteChecked(true) })
       })
       .catch(() => setSavedSiteChecked(true))
     return () => { cancelled = true }

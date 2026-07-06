@@ -1,6 +1,6 @@
 import { redirect, notFound } from 'next/navigation'
 import { getArticleBySlug } from '@/app/lib/scraper-store'
-import { categorySlugForName } from '@/app/lib/blog-taxonomy'
+import { categorySlugForNameDyn as categorySlugForName } from '@/app/lib/blog-taxonomy-server'
 
 export const dynamic = 'force-dynamic'
 

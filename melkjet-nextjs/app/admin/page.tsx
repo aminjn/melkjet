@@ -3383,16 +3383,71 @@ function ConnectionsView() {
 }
 
 // ─── Categories CRUD (WordPress-like) ──────────────────────────────────────
+type Cat = { id: string; name: string; slug: string; parentId?: string }
 function CategoriesView() {
   const TYPES: [string, string][] = [['article', 'مقالات'], ['listing', 'آگهی‌ها'], ['product', 'محصولات'], ['directory', 'پروفایل/دفاتر']]
   const [type, setType] = useState('article')
-  const [cats, setCats] = useState<{ id: string; name: string; slug: string }[]>([])
+  const [cats, setCats] = useState<Cat[]>([])
   const [name, setName] = useState('')
+  const [slug, setSlug] = useState('')
+  const [parentId, setParentId] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [edit, setEdit] = useState<Cat | null>(null)
   const load = (t: string) => fetch(`/api/admin/categories?type=${t}`).then(r => r.ok ? r.json() : { categories: [] }).then(d => setCats(d.categories || []))
-  useEffect(() => { load(type) }, [type])
-  const add = async () => { if (!name.trim()) return; const r = await fetch('/api/admin/categories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, name: name.trim() }) }); const d = await r.json(); setCats(d.categories || cats); setName('') }
-  const rename = async (id: string, cur: string) => { const n = prompt('نام جدید:', cur); if (!n) return; const r = await fetch('/api/admin/categories', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, id, name: n }) }); setCats((await r.json()).categories || cats) }
-  const del = async (id: string) => { if (!confirm('این دسته حذف شود؟')) return; const r = await fetch(`/api/admin/categories?type=${type}&id=${id}`, { method: 'DELETE' }); setCats((await r.json()).categories || cats) }
+  useEffect(() => { load(type); setName(''); setSlug(''); setParentId(''); setErr(''); setEdit(null) }, [type])
+
+  const tops = cats.filter(c => !c.parentId)
+  const childrenOf = (id: string) => cats.filter(c => c.parentId === id)
+
+  const add = async () => {
+    if (!name.trim()) { setErr('نامِ دسته را وارد کنید.'); return }
+    setBusy(true); setErr('')
+    try {
+      const r = await fetch('/api/admin/categories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, name: name.trim(), slug: slug.trim() || undefined, parentId: parentId || undefined }) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { setErr(d?.error || 'افزودن ناموفق بود.'); return }
+      setCats(d.categories || cats); setName(''); setSlug(''); setParentId('')
+    } catch { setErr('خطای شبکه هنگام افزودن.') } finally { setBusy(false) }
+  }
+  const saveEdit = async () => {
+    if (!edit) return
+    setBusy(true); setErr('')
+    try {
+      const r = await fetch('/api/admin/categories', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, id: edit.id, name: edit.name, slug: edit.slug, parentId: edit.parentId || '' }) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { setErr(d?.error || 'ویرایش ناموفق بود.'); return }
+      setCats(d.categories || cats); setEdit(null)
+    } catch { setErr('خطای شبکه هنگام ویرایش.') } finally { setBusy(false) }
+  }
+  const del = async (id: string) => { if (!confirm('این دسته حذف شود؟ (زیردسته‌هایش به سطحِ‌بالا منتقل می‌شوند)')) return; const r = await fetch(`/api/admin/categories?type=${type}&id=${id}`, { method: 'DELETE' }); setCats((await r.json()).categories || cats) }
+
+  const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+  const row = (c: Cat, child: boolean) => (
+    <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg2)', borderRadius: 10, padding: '10px 12px', marginInlineStart: child ? 26 : 0, borderInlineStart: child ? '2px solid var(--gold)' : undefined }}>
+      {edit?.id === c.id ? (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', flex: 1 }}>
+          <input value={edit.name} onChange={e => setEdit({ ...edit, name: e.target.value })} placeholder="نام" style={{ ...inp, flex: '1 1 130px' }} />
+          <input value={edit.slug} onChange={e => setEdit({ ...edit, slug: e.target.value })} placeholder="slug" style={{ ...inp, flex: '1 1 120px', direction: 'ltr' }} />
+          <select value={edit.parentId || ''} onChange={e => setEdit({ ...edit, parentId: e.target.value })} style={{ ...inp }}>
+            <option value="">— سطحِ‌اول —</option>
+            {tops.filter(t => t.id !== c.id).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+          <button disabled={busy} onClick={saveEdit} style={{ fontSize: 11.5, padding: '5px 12px', borderRadius: 8, border: 'none', background: 'var(--gold)', color: '#1a1510', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>ذخیره</button>
+          <button onClick={() => setEdit(null)} style={{ fontSize: 11.5, padding: '5px 10px', borderRadius: 8, border: '1px solid var(--line2)', color: 'var(--muted)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>لغو</button>
+        </div>
+      ) : (
+        <>
+          <div><span style={{ fontSize: 13.5, fontWeight: 600 }}>{child ? '↳ ' : ''}{c.name}</span><span style={{ fontSize: 11, color: 'var(--faint)', marginInlineStart: 8, direction: 'ltr' }}>/{c.slug}</span></div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={() => setEdit(c)} style={{ fontSize: 11.5, padding: '4px 11px', borderRadius: 8, border: '1px solid var(--gold)', color: 'var(--gold)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>ویرایش</button>
+            <button onClick={() => del(c.id)} style={{ fontSize: 12.5, padding: '4px 10px', borderRadius: 8, border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>×</button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+
   return (
     <div style={{ animation: 'fade .35s ease' }}>
       <Card style={{ marginBottom: 14 }}>
@@ -3400,20 +3455,26 @@ function CategoriesView() {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {TYPES.map(([k, l]) => <button key={k} onClick={() => setType(k)} style={{ padding: '7px 15px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5, border: `1px solid ${type === k ? 'var(--gold)' : 'var(--line2)'}`, background: type === k ? 'var(--goldDim)' : 'transparent', color: type === k ? 'var(--gold)' : 'var(--muted)', fontWeight: type === k ? 700 : 500 }}>{l}</button>)}
         </div>
+        {type === 'article' && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 10, lineHeight: 1.9 }}>دسته‌های مقاله در نقشهٔ سایت (<span style={{ direction: 'ltr' }}>/blog/&lt;slug&gt;</span>) و در انتخابِ دستهٔ پنل‌ها استفاده می‌شوند. slug را انگلیسی بدهید تا URLِ سئو-پسند بسازد.</div>}
       </Card>
       <Card>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-          <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') add() }} placeholder="نام دستهٔ جدید…" style={{ flex: 1, background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }} />
-          <GoldButton onClick={add}>＋ افزودن</GoldButton>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+          <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') add() }} placeholder="نامِ دستهٔ جدید…" style={inp} />
+          <input value={slug} onChange={e => setSlug(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') add() }} placeholder="slug (اختیاری، انگلیسی)" style={{ ...inp, direction: 'ltr' }} />
+          <GoldButton onClick={add} disabled={busy}>＋ افزودن</GoldButton>
         </div>
+        <div style={{ marginBottom: 14 }}>
+          <select value={parentId} onChange={e => setParentId(e.target.value)} style={{ ...inp, width: '100%' }}>
+            <option value="">زیردستهٔ… — (خالی = دستهٔ سطحِ‌اول)</option>
+            {tops.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </div>
+        {err && <div style={{ color: '#e7674a', fontSize: 12.5, marginBottom: 10 }}>{err}</div>}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {cats.length === 0 ? <div style={{ color: 'var(--muted)', fontSize: 13, padding: '16px 0', textAlign: 'center' }}>دسته‌ای نیست.</div> : cats.map(c => (
-            <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg2)', borderRadius: 10, padding: '10px 12px' }}>
-              <div><span style={{ fontSize: 13.5, fontWeight: 600 }}>{c.name}</span><span style={{ fontSize: 11, color: 'var(--faint)', marginInlineStart: 8, direction: 'ltr' }}>/{c.slug}</span></div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button onClick={() => rename(c.id, c.name)} style={{ fontSize: 11.5, padding: '4px 11px', borderRadius: 8, border: '1px solid var(--gold)', color: 'var(--gold)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>ویرایش</button>
-                <button onClick={() => del(c.id)} style={{ fontSize: 12.5, padding: '4px 10px', borderRadius: 8, border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>×</button>
-              </div>
+          {cats.length === 0 ? <div style={{ color: 'var(--muted)', fontSize: 13, padding: '16px 0', textAlign: 'center' }}>دسته‌ای نیست.</div> : tops.map(t => (
+            <div key={t.id} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {row(t, false)}
+              {childrenOf(t.id).map(ch => row(ch, true))}
             </div>
           ))}
         </div>

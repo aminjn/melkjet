@@ -5,7 +5,7 @@ import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
 import { getArticleBySlug } from '@/app/lib/scraper-store'
 import { mdToHtml } from '@/app/lib/markdown'
-import { blogCatBySlug, categorySlugForName } from '@/app/lib/blog-taxonomy'
+import { blogCatBySlugDyn as blogCatBySlug, categorySlugForNameDyn as categorySlugForName } from '@/app/lib/blog-taxonomy-server'
 
 export const dynamic = 'force-dynamic'
 

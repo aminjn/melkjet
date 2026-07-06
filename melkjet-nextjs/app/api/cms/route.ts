@@ -14,10 +14,30 @@ function toArticle(it: Item) {
   }
 }
 
+// آیا این مقاله متعلق به همین کاربر است؟ (سوپرادمین همه را دارد)
+const norm = (s?: string) => String(s || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase()
+function isSuper(s: any) { return s?.role === 'super_admin' }
+function ownsArticle(s: any, a: { author?: string }): boolean {
+  if (isSuper(s)) return true
+  const owner = norm(a.author)
+  return !!owner && (owner === norm(s?.name) || owner === norm(s?.phone))
+}
+
 export async function GET(req: NextRequest) {
+  const s = await getSession()
   const id = new URL(req.url).searchParams.get('id')
-  if (id) { const it = await getItemById(id); return NextResponse.json({ article: it && it.type === 'article' ? toArticle(it) : null }) }
-  return NextResponse.json({ articles: (await listArticles()).map(toArticle) })
+  if (id) {
+    const it = await getItemById(id)
+    const art = it && it.type === 'article' ? toArticle(it) : null
+    // فقط سوپرادمین یا نویسندهٔ خودِ مقاله می‌تواند آن را در ویرایشگر باز کند.
+    if (art && s && !ownsArticle(s, art)) return NextResponse.json({ article: null }, { status: 403 })
+    return NextResponse.json({ article: art })
+  }
+  if (!s) return NextResponse.json({ articles: [] })   // مدیریتِ مقاله فقط برای کاربرِ واردشده
+  const all = (await listArticles()).map(toArticle)
+  // ایزوله‌سازیِ سمتِ سرور: هر کاربرِ حرفه‌ای فقط مقالاتِ خودش را می‌بیند؛ سوپرادمین همه را.
+  const visible = isSuper(s) ? all : all.filter(a => ownsArticle(s, a))
+  return NextResponse.json({ articles: visible })
 }
 
 // حذف اسکریپت و هندلرهای خطرناک از HTML ذخیره‌شده
@@ -43,6 +63,10 @@ export async function PATCH(req: NextRequest) {
   if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
   const b = await req.json().catch(() => ({}))
   if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
+  // فقط سوپرادمین یا نویسندهٔ خودِ مقاله اجازهٔ ویرایش دارد.
+  const cur = await getItemById(String(b.id))
+  if (!cur || cur.type !== 'article') return NextResponse.json({ error: 'مقاله یافت نشد' }, { status: 404 })
+  if (!ownsArticle(s, toArticle(cur))) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   if (typeof b.body === 'string') b.body = sanitize(b.body)
   const it = await updateArticle(b.id, b)
   if (!it) return NextResponse.json({ error: 'مقاله یافت نشد' }, { status: 404 })
@@ -54,6 +78,9 @@ export async function DELETE(req: NextRequest) {
   if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
   const id = new URL(req.url).searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
+  // فقط سوپرادمین یا نویسندهٔ خودِ مقاله اجازهٔ حذف دارد.
+  const cur = await getItemById(id)
+  if (cur && cur.type === 'article' && !ownsArticle(s, toArticle(cur))) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   await deleteItem(id)
   return NextResponse.json({ ok: true })
 }
