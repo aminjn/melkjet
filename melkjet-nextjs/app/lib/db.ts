@@ -29,7 +29,43 @@ async function ensureSchema(client: PoolClient) {
     data jsonb NOT NULL DEFAULT '{}'::jsonb,
     updated_at timestamptz NOT NULL DEFAULT now()
   )`)
+  // جدولِ نرمالِ آگهی‌ها (رفعِ دائمیِ گلوگاهِ تک‌بلاب): هر آگهی یک ردیفِ مستقل + ایندکس،
+  // تا خواندن هدفمند و نوشتن تک‌ردیفی باشد (نه بازنویسیِ کلِ بلاب زیرِ قفلِ سراسری).
+  await client.query(`CREATE TABLE IF NOT EXISTS listings (
+    id text PRIMARY KEY,
+    scraped_at bigint NOT NULL DEFAULT 0,
+    type text,
+    status text,
+    data jsonb NOT NULL
+  )`)
+  await client.query(`CREATE INDEX IF NOT EXISTS listings_scraped ON listings(scraped_at DESC)`)
+  await client.query(`CREATE INDEX IF NOT EXISTS listings_type ON listings(type)`)
   schemaReady = true
+}
+
+/** اجرای یک تابع داخلِ یک تراکنش (BEGIN/COMMIT با rollback خودکار). client خام برای کوئری‌های دلخواه. */
+export async function pgTx<R>(fn: (client: PoolClient) => Promise<R>): Promise<R> {
+  const client = await getPool().connect()
+  try {
+    await ensureSchema(client)
+    await client.query('BEGIN')
+    const r = await fn(client)
+    await client.query('COMMIT')
+    return r
+  } catch (e) {
+    try { await client.query('ROLLBACK') } catch {}
+    throw e
+  } finally { client.release() }
+}
+
+/** خواندنِ همهٔ ردیف‌های listings (فقط ستونِ data). خارج از تراکنش، سبک. */
+export async function pgListingsAll(): Promise<unknown[]> {
+  const client = await getPool().connect()
+  try {
+    await ensureSchema(client)
+    const r = await client.query('SELECT data FROM listings ORDER BY scraped_at DESC')
+    return r.rows.map(x => x.data)
+  } finally { client.release() }
 }
 
 /** خواندنِ سندِ یک استور. اگر نبود، fallback. */

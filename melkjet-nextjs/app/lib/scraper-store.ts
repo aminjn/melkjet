@@ -1,7 +1,7 @@
 import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { readJsonCached, writeJsonCached } from './json-file'
-import { pgEnabled, kvGet, kvMutate } from './db'
+import { pgEnabled, kvGet, pgTx, pgListingsAll } from './db'
 
 const DATA_FILE = join(process.cwd(), '.scraper-data.json')
 const KV_KEY = 'scraper'
@@ -130,12 +130,43 @@ function fileSave(db: DB) {
 // نوشتن (mutate) کش را باطل می‌کند تا همان اینستنس نوشتهٔ خودش را فوری ببیند. کهنگیِ
 // چند-ثانیه‌ایِ فیدِ آگهی بینِ اینستنس‌ها بی‌ضرر است (نوشتن‌ها اتمیک روی PG می‌مانند).
 let pgCache: { at: number; data: DB } | null = null
-// کش ۱۵ ثانیه‌ای: صفحاتِ عمومی (خانه/جستجو/ملک) در هر رندر listItems را صدا می‌زنند و این
-// بلابِ ~۱مگابایتی داغ‌ترین کوئریِ سایت است. با ۲.۵ث، هر instance زیرِ ترافیک pool را اشباع
-// می‌کرد → «timeout when trying to connect» → ۵۰۴. ۱۵ث بارِ خواندن را ~۶ برابر کم می‌کند.
-// نوشتن (mutate) کش را باطل می‌کند، پس ادمینِ همان instance ویرایشش را فوری می‌بیند؛ کهنگیِ
-// حداکثر ۱۵ث بینِ instanceها برای فیدِ آگهی بی‌ضرر است.
+// کش ۱۵ ثانیه‌ای رویِ مسیرِ PG: صفحاتِ عمومی در هر رندر listItems را صدا می‌زنند. کش بارِ
+// خواندنِ دیتابیس را شدیداً کم می‌کند؛ نوشتن کش را باطل می‌کند.
 const PG_TTL = 15_000
+
+// ── معماریِ دائمی: آگهی‌ها در جدولِ نرمالِ `listings` (هر ردیف یک آگهی)، متادیتای کوچک
+// (sources/categories/owners) در kv['scraper']. خواندن از جدول (کش‌شده)، نوشتن فقط روی
+// ردیف‌های تغییرکرده زیرِ قفلِ ردیفِ کوچکِ متادیتا — دیگر بلابِ بزرگ زیرِ قفلِ سراسری بازنویسی
+// نمی‌شود. کلِ منطقِ mutate(fn) دست‌نخورده روی همان db در حافظه کار می‌کند.
+function metaOf(db: DB) { return { sources: db.sources, categories: db.categories, owners: db.owners || [] } }
+
+// migrationِ خودکار و امن: اگر جدول خالی بود ولی بلابِ قدیمی آگهی داشت، یک‌بار منتقل می‌شود.
+// قفلِ ردیفِ متادیتا چند instance را سریالایز می‌کند، پس فقط یکی migrate می‌کند (idempotent).
+let pgMigrated = false
+async function ensureMigrated(): Promise<void> {
+  if (!pgEnabled() || pgMigrated) return
+  await pgTx(async (c) => {
+    await c.query(`INSERT INTO kv(key,data) VALUES($1,'{}'::jsonb) ON CONFLICT(key) DO NOTHING`, [KV_KEY])
+    const row = await c.query('SELECT data FROM kv WHERE key=$1 FOR UPDATE', [KV_KEY])
+    const blob = (row.rows[0]?.data || {}) as Partial<DB>
+    const items = Array.isArray(blob.items) ? blob.items : []
+    if (items.length) {
+      const cnt = await c.query('SELECT count(*)::int AS n FROM listings')
+      if ((cnt.rows[0].n as number) === 0) {
+        for (const it of items) {
+          await c.query(
+            `INSERT INTO listings(id, scraped_at, type, status, data) VALUES($1,$2,$3,$4,$5)
+             ON CONFLICT(id) DO UPDATE SET scraped_at=EXCLUDED.scraped_at, type=EXCLUDED.type, status=EXCLUDED.status, data=EXCLUDED.data`,
+            [it.id, it.scrapedAt || 0, it.type, it.status, JSON.stringify(it)],
+          )
+        }
+      }
+      // آگهی‌ها را از بلاب حذف کن (فقط متادیتا بماند) — idempotent
+      await c.query(`UPDATE kv SET data=$2, updated_at=now() WHERE key=$1`, [KV_KEY, JSON.stringify(metaOf(blob as DB))])
+    }
+  })
+  pgMigrated = true
+}
 
 /** خواندنِ سندِ کاملِ اسکرپر (دو-حالته: PG یا فایل). */
 async function load(): Promise<DB> {
@@ -143,22 +174,63 @@ async function load(): Promise<DB> {
   const now = Date.now()
   if (pgCache && now - pgCache.at < PG_TTL) return pgCache.data
   try {
-    const data = await kvGet<DB>(KV_KEY, emptyDB())
+    await ensureMigrated()
+    const [meta, items] = await Promise.all([kvGet<Partial<DB>>(KV_KEY, {}), pgListingsAll() as Promise<Item[]>])
+    const data: DB = {
+      sources: meta.sources && meta.sources.length ? meta.sources : DEFAULT_SOURCES,
+      items,
+      categories: meta.categories,
+      owners: meta.owners || [],
+    }
     pgCache = { at: now, data }
     return data
   } catch (e) {
-    // تاب‌آوری: اگر دیتابیس لحظه‌ای اشباع/کند بود، دادهٔ کش‌شدهٔ قبلی (هرچند کهنه) را سِرو کن تا
-    // صفحه ۵۰۰/۵۰۴ ندهد. فقط اگر هیچ کشی نداریم خطا بالا می‌رود.
+    // تاب‌آوری: اگر دیتابیس لحظه‌ای کند/اشباع بود، کشِ کهنه را سِرو کن (نه ۵۰۰/۵۰۴).
     if (pgCache) return pgCache.data
     throw e
   }
 }
 
-/** خواندن-تغییر-نوشتنِ اتمیک. روی PG با قفلِ ردیف؛ روی فایل مثلِ قبل. */
+/** خواندن-تغییر-نوشتنِ اتمیک. روی PG: قفلِ ردیفِ متادیتا + همگام‌سازیِ فقط ردیف‌های تغییرکرده. */
 async function mutate<R>(fn: (db: DB) => R): Promise<R> {
   if (!pgEnabled()) { const d = fileLoad(); const r = fn(d); fileSave(d); return r }
-  const r = await kvMutate<DB, R>(KV_KEY, emptyDB(), fn)
-  pgCache = null   // نوشته شد → کش باطل تا خواندنِ بعدی تازه باشد
+  await ensureMigrated()
+  const r = await pgTx(async (c) => {
+    // سریالایزِ نویسنده‌ها روی ردیفِ کوچکِ متادیتا (نه بلابِ بزرگ).
+    await c.query(`INSERT INTO kv(key,data) VALUES($1,'{}'::jsonb) ON CONFLICT(key) DO NOTHING`, [KV_KEY])
+    const metaRow = await c.query('SELECT data FROM kv WHERE key=$1 FOR UPDATE', [KV_KEY])
+    const meta = (metaRow.rows[0]?.data || {}) as Partial<DB>
+    const itemsRes = await c.query('SELECT data FROM listings ORDER BY scraped_at DESC')
+    const items = itemsRes.rows.map(x => x.data as Item)
+    const db: DB = {
+      sources: meta.sources && meta.sources.length ? meta.sources : DEFAULT_SOURCES.slice(),
+      items,
+      categories: meta.categories,
+      owners: meta.owners || [],
+    }
+    const before = new Map(items.map(i => [i.id, JSON.stringify(i)]))
+    const result = fn(db)
+    // متادیتا (کوچک) را بنویس
+    await c.query(`UPDATE kv SET data=$2, updated_at=now() WHERE key=$1`, [KV_KEY, JSON.stringify(metaOf(db))])
+    // فقط ردیف‌های اضافه‌شده/تغییرکرده را upsert کن
+    const afterIds = new Set<string>()
+    for (const it of db.items) {
+      afterIds.add(it.id)
+      const s = JSON.stringify(it)
+      if (before.get(it.id) !== s) {
+        await c.query(
+          `INSERT INTO listings(id, scraped_at, type, status, data) VALUES($1,$2,$3,$4,$5)
+           ON CONFLICT(id) DO UPDATE SET scraped_at=EXCLUDED.scraped_at, type=EXCLUDED.type, status=EXCLUDED.status, data=EXCLUDED.data`,
+          [it.id, it.scrapedAt || 0, it.type, it.status, s],
+        )
+      }
+    }
+    // ردیف‌های حذف‌شده را پاک کن
+    const del = [...before.keys()].filter(idv => !afterIds.has(idv))
+    if (del.length) await c.query(`DELETE FROM listings WHERE id = ANY($1::text[])`, [del])
+    return result
+  })
+  pgCache = null
   return r
 }
 
