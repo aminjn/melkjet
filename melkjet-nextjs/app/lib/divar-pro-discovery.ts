@@ -93,10 +93,16 @@ async function discoverFromSearch(searchUrl: string, sampleDetails = 120): Promi
   const pros = new Set<string>()
   let scanned = 0, proListingHits = 0
   for (const tk of tokens) {
-    // پاسخِ APIِ تک‌آگهی — لینک/توکنِ آژانس در همین‌جا می‌آید اگر آگهی مالِ یک pro باشد.
+    // دو منبع برای بیشترین پوشش:
+    //  الف) JSONِ APIِ تک‌آگهی — آگهیِ آژانس‌ها اغلب business_ref_token دارد.
+    //  ب) HTMLِ صفحهٔ آگهی — لینکِ «همه آگهی‌های این آژانس» (/pro/<slug>) آنجا رندر می‌شود.
     const before = pros.size
-    const body = await get(`https://api.divar.ir/v8/posts-v2/web/${tk}`, { headers: { origin: 'https://divar.ir', 'x-standard-divar-error': 'true', accept: 'application/json, text/plain, */*' } })
-    if (body) extractPros(body, pros)
+    const json = await get(`https://api.divar.ir/v8/posts-v2/web/${tk}`, { headers: { origin: 'https://divar.ir', 'x-standard-divar-error': 'true', accept: 'application/json, text/plain, */*' } })
+    if (json) extractPros(json, pros)
+    if (pros.size === before) {   // اگر از JSON چیزی نیامد، HTML را امتحان کن
+      const html = await get(`https://divar.ir/v/${tk}`, { headers: { accept: 'text/html,application/xhtml+xml' } })
+      if (html) extractPros(html, pros)
+    }
     if (pros.size > before) proListingHits++
     scanned++
     if (scanned % 8 === 0) { await addPros([...pros].map(slug => ({ slug, source: 'search' }))); await setMeta({ scanned, note: `جستجو: ${scanned}/${tokens.length} آگهی خوانده شد، ${pros.size} آژانس (${proListingHits} آگهیِ آژانسی)` }) }
@@ -163,13 +169,18 @@ export async function probeDivar(searchUrl?: string): Promise<{ proxyUrl: string
   // ۳) جزئیاتِ یک آگهی — آیا ارجاعِ آژانس (pro) در آن هست؟
   await run('۳) آگهی → آژانس؟', firstToken ? `api.divar.ir/v8/posts-v2/web/${firstToken}` : '(بدون توکن)', async () => {
     if (!firstToken) return { ok: false, note: 'توکنی از مرحلهٔ ۲ نیامد.' }
-    const body = await get(`https://api.divar.ir/v8/posts-v2/web/${firstToken}`, { headers: { origin: 'https://divar.ir', 'x-standard-divar-error': 'true', accept: 'application/json, text/plain, */*' } })
+    const json = await get(`https://api.divar.ir/v8/posts-v2/web/${firstToken}`, { headers: { origin: 'https://divar.ir', 'x-standard-divar-error': 'true', accept: 'application/json, text/plain, */*' } })
+    const found = new Set<string>(); if (json) extractPros(json, found)
+    let src = 'JSON'
+    let body = json
+    if (!found.size) {   // HTML را هم امتحان کن (لینکِ آژانس آنجا رندر می‌شود)
+      const html = await get(`https://divar.ir/v/${firstToken}`, { headers: { accept: 'text/html,application/xhtml+xml' } })
+      if (html) { extractPros(html, found); if (found.size) { src = 'HTML'; body = html } else body = json || html }
+    }
     if (!body) return { ok: false, note: `پاسخِ آگهی خالی (HTTP ${lastGet.status})` }
-    const found = new Set<string>(); extractPros(body, found)
-    // کلیدهای مرتبط با کسب‌وکار که در پاسخ هستند (برای تنظیمِ استخراج)
     const keys = ['brand_token', 'business_ref_token', 'subscription_token', 'business_token', '/pro/', 'business_data', 'business_ref', 'contact'].filter(k => body.includes(k))
-    const proSnippet = (body.match(/.{0,30}(?:brand_token|\/pro\/|business_ref)[^,}]{0,60}/i) || [''])[0]
-    return { ok: found.size > 0, note: found.size ? `✓ ${found.size} آژانس در همین آگهی: ${[...found].join(', ')}` : `آژانسی پیدا نشد. کلیدهای موجود: ${keys.join(', ') || '—'}`, sample: proSnippet }
+    const proSnippet = (body.match(/.{0,30}(?:brand_token|\/pro\/|business_ref)[^,}"]{0,60}/i) || [''])[0]
+    return { ok: found.size > 0, note: found.size ? `✓ ${found.size} آژانس در همین آگهی (منبع: ${src}): ${[...found].join(', ')}` : `آژانسی پیدا نشد. کلیدهای موجودِ کسب‌وکار: ${keys.join(', ') || '—'}`, sample: proSnippet }
   })
 
   // ۴) صفحهٔ یک آژانسِ معلوم (brand-landing) — تأییدِ خواندنِ آگهی‌های آژانس
