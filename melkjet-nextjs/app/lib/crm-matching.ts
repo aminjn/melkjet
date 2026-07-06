@@ -71,7 +71,7 @@ export interface LeadMatch { lead: Lead; score: number; reasons: string[] }
 // لیدهای پیشنهادی برای یک آگهی (مرتب‌شده).
 export function matchLeadsForListing(listing: Item, leads: Lead[], limit = 12): LeadMatch[] {
   return leads
-    .filter(l => l.stage !== 'lost' && l.stage !== 'won')
+    .filter(l => l.stage !== 'lost' && l.stage !== 'contract')
     .map(l => ({ lead: l, ...matchScore(l, listing) }))
     .filter(r => r.score >= 20)
     .sort((a, b) => b.score - a.score)

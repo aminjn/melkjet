@@ -10,16 +10,17 @@ import { pgEnabled, kvGet, kvMutate } from './db'
 const DATA_FILE = join(process.cwd(), '.leads-data.json')
 const KV_KEY = 'leads'
 
-// مرحلهٔ pipeline فروش (Drag & Drop). ترتیب مهم است.
-export type Stage = 'new' | 'contacted' | 'sent' | 'visited' | 'negotiation' | 'contract' | 'won' | 'lost'
-export const STAGES: Stage[] = ['new', 'contacted', 'sent', 'visited', 'negotiation', 'contract', 'won', 'lost']
+// مرحلهٔ pipeline فروش (Drag & Drop). پنجِ شناسهٔ پایدارِ بک‌اند — برچسبِ نمایشی‌شان در UI
+// بر اساسِ نقش تغییر می‌کند (CrmTool)، ولی خودِ شناسه‌ها ثابت‌اند تا هیچ پنلی نشکند.
+export type Stage = 'new' | 'review' | 'offered' | 'contract' | 'lost'
+export const STAGES: Stage[] = ['new', 'review', 'offered', 'contract', 'lost']
 export const STAGE_LABEL: Record<Stage, string> = {
-  new: 'لید جدید', contacted: 'تماس گرفته‌شد', sent: 'ارسال فایل', visited: 'بازدید',
-  negotiation: 'مذاکره', contract: 'قرارداد', won: 'فروش', lost: 'ازدست‌رفته',
+  new: 'لید جدید', review: 'تماس/بازدید', offered: 'ارسال فایل/پیشنهاد', contract: 'قرارداد/فروش', lost: 'ازدست‌رفته',
 }
-// نگاشتِ مرحله‌های قدیمی → جدید (سازگاریِ داده‌های قبلی).
-const STAGE_ALIAS: Record<string, Stage> = { new: 'new', review: 'contacted', offered: 'sent', contract: 'contract', lost: 'lost' }
+// نگاشتِ مرحله‌های جدیدِ blueprint (اگر از جایی آمد) → شناسه‌های پایدار.
+const STAGE_ALIAS: Record<string, Stage> = { new: 'new', contacted: 'review', visited: 'review', sent: 'offered', negotiation: 'offered', contract: 'contract', won: 'contract', lost: 'lost' }
 const normStage = (s: any): Stage => { const v = String(s || 'new'); return (STAGES as string[]).includes(v) ? v as Stage : (STAGE_ALIAS[v] || 'new') }
+const isWon = (st: Stage) => st === 'contract'
 
 // وضعیتِ سلامتِ لید (blueprint).
 export type LeadStatus = 'new' | 'hot' | 'cold' | 'lost' | 'converted'
@@ -78,7 +79,7 @@ function migrate(raw: any): Lead {
   const activities: Activity[] = Array.isArray(raw?.activities) ? raw.activities : []
   const lastActivityAt = raw?.lastActivityAt || (activities.length ? Math.max(...activities.map((a: Activity) => a.at || 0)) : (raw?.updatedAt || raw?.createdAt))
   let status: LeadStatus = STATUSES.includes(raw?.status) ? raw.status
-    : stage === 'won' ? 'converted' : stage === 'lost' ? 'lost' : 'new'
+    : isWon(stage) ? 'converted' : stage === 'lost' ? 'lost' : 'new'
   const lead: Lead = {
     id: String(raw?.id || id()),
     name: String(raw?.name || '').trim(),
@@ -123,7 +124,7 @@ export function scoreOf(l: Lead): number {
   const last = l.lastActivityAt || 0
   const ageH = last ? (Date.now() - last) / 36e5 : 1e9
   if (ageH <= 24) s += 12; else if (ageH <= 24 * 7) s += 6
-  if (l.stage === 'won') s = Math.max(s, 92)
+  if (isWon(l.stage)) s = Math.max(s, 92)
   if (l.stage === 'lost' || l.status === 'lost') s = Math.min(s, 8)
   return Math.max(0, Math.min(100, Math.round(s)))
 }
@@ -193,7 +194,7 @@ export async function updateLead(owner: string, leadId: string, patch: LeadPatch
       if (ns !== lead.stage) {
         lead.activities.push({ id: id(), type: 'stage', at: Date.now(), note: `مرحله → ${STAGE_LABEL[ns]}` })
         lead.stage = ns
-        if (ns === 'won') lead.status = 'converted'
+        if (isWon(ns)) lead.status = 'converted'
         else if (ns === 'lost') lead.status = 'lost'
         else if (lead.status === 'new') lead.status = 'hot'
       }
@@ -251,7 +252,7 @@ export async function deleteLead(owner: string, leadId: string): Promise<void> {
 // لیدهایی که ≥ N ساعت پیگیری نشده‌اند و هنوز باز (نه فروش/ازدست‌رفته) — برای یادآوریِ خودکار.
 export async function followUpNeeded(owner: string, hours = 24): Promise<Lead[]> {
   const cut = Date.now() - hours * 36e5
-  return (await listLeads(owner)).filter(l => l.stage !== 'won' && l.stage !== 'lost' && (l.lastActivityAt || l.createdAt) < cut)
+  return (await listLeads(owner)).filter(l => !isWon(l.stage) && l.stage !== 'lost' && (l.lastActivityAt || l.createdAt) < cut)
 }
 
 export interface LeadAnalytics {
@@ -272,12 +273,12 @@ export async function leadAnalytics(owner: string): Promise<LeadAnalytics> {
   const wk = Date.now() - 7 * 24 * 36e5
   for (const l of leads) {
     byStage[l.stage]++; byStatus[l.status]++
-    if (l.stage === 'won') revenue += l.budget || 0
+    if (isWon(l.stage)) revenue += l.budget || 0
     act7 += (l.activities || []).filter(a => a.at >= wk).length
     scoreSum += l.score
   }
-  const closed = byStage.won + byStage.lost
-  const conversionRate = closed ? Math.round((byStage.won / closed) * 100) : 0
+  const closed = byStage.contract + byStage.lost
+  const conversionRate = closed ? Math.round((byStage.contract / closed) * 100) : 0
   const need = (await followUpNeeded(owner)).length
   return { total: leads.length, byStage, byStatus, conversionRate, revenue, activities7d: act7, needFollowUp: need, avgScore: leads.length ? Math.round(scoreSum / leads.length) : 0 }
 }

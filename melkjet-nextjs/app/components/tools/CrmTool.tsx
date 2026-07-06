@@ -32,18 +32,36 @@ interface Task {
 
 // Mirrors app/lib/leads-store.ts Lead (the API shape).
 type Stage = 'new' | 'review' | 'offered' | 'contract' | 'lost'
+type LeadStatus = 'new' | 'hot' | 'cold' | 'lost' | 'converted'
+interface Activity { id: string; type: string; at: number; note?: string; meta?: Record<string, any> }
 interface Lead {
   id: string
   name: string
   phone?: string
   need?: string
   budget?: string
+  budgetText?: string
+  region?: string
+  area?: number
+  dealType?: 'sale' | 'rent' | ''
   stage: Stage
+  status?: LeadStatus
   score?: number
+  tags?: string[]
+  listingIds?: string[]
+  activities?: Activity[]
   note?: string
+  lastActivityAt?: number
   createdAt: number
   updatedAt: number
 }
+const STATUS_META: Record<LeadStatus, { label: string; color: string }> = {
+  new: { label: 'جدید', color: '#7a8fae' }, hot: { label: 'داغ', color: '#e74c3c' },
+  cold: { label: 'سرد', color: '#5a6b82' }, lost: { label: 'ازدست‌رفته', color: '#8a8a8a' },
+  converted: { label: 'تبدیل‌شده', color: '#5fd98a' },
+}
+const ACT_ICON: Record<string, string> = { created: '✚', call: '☎', visit: '⚑', message: '✉', sms: '✉', email: '✉', whatsapp: '✆', click: '☞', note: '✎', stage: '⇄', match: '⌂' }
+const ACT_LABEL: Record<string, string> = { created: 'ایجاد', call: 'تماس', visit: 'بازدید', message: 'پیام', sms: 'پیامک', email: 'ایمیل', whatsapp: 'واتساپ', click: 'کلیک', note: 'یادداشت', stage: 'تغییر مرحله', match: 'تطبیق' }
 
 const navItems = CRM_VIEWS
 
@@ -485,6 +503,14 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
     const next = stages[idx + dir]
     if (next) moveLead(lead.id, next.id)
   }
+
+  // Drag & Drop pipeline + Lead detail drawer.
+  const [dragLead, setDragLead] = useState<string | null>(null)
+  const [dragOverCol, setDragOverCol] = useState<Stage | null>(null)
+  const [openLeadId, setOpenLeadId] = useState<string | null>(null)
+  const openLead = leads.find(l => l.id === openLeadId) || null
+  // Replace a lead in local state (after drawer actions return the updated lead).
+  const patchLeadLocal = (lead: Lead) => setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, ...lead } : l))
 
   const deleteLead = (id: string) => {
     setLeads(prev => prev.filter(l => l.id !== id))
@@ -1073,7 +1099,10 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
             {stages.map((col, colIdx) => {
               const colLeads = leads.filter(l => l.stage === col.id)
               return (
-              <div key={col.id} style={{ flex: '0 0 260px', display: 'flex', flexDirection: 'column' }}>
+              <div key={col.id} style={{ flex: '0 0 260px', display: 'flex', flexDirection: 'column' }}
+                onDragOver={e => { e.preventDefault(); if (dragOverCol !== col.id) setDragOverCol(col.id) }}
+                onDragLeave={() => setDragOverCol(prev => prev === col.id ? null : prev)}
+                onDrop={e => { e.preventDefault(); if (dragLead) moveLead(dragLead, col.id); setDragLead(null); setDragOverCol(null) }}>
 
                 {/* Column Header */}
                 <div style={{
@@ -1095,27 +1124,36 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
                 </div>
 
                 {/* Cards */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 40, borderRadius: 12, outline: dragOverCol === col.id ? '2px dashed var(--gold)' : 'none', outlineOffset: 4 }}>
                   {colLeads.length === 0 && (
                     <div style={{ fontSize: 11.5, color: 'var(--faint)', textAlign: 'center', padding: '12px 0' }}>—</div>
                   )}
                   {colLeads.map(card => (
-                    <div key={card.id} style={{
-                      background: 'var(--surface)',
-                      borderRadius: 12,
-                      padding: 14,
-                      border: '1px solid var(--line)',
-                    }}>
+                    <div key={card.id}
+                      draggable
+                      onDragStart={() => setDragLead(card.id)}
+                      onDragEnd={() => { setDragLead(null); setDragOverCol(null) }}
+                      style={{
+                        background: 'var(--surface)',
+                        borderRadius: 12,
+                        padding: 14,
+                        border: '1px solid var(--line)',
+                        opacity: dragLead === card.id ? 0.4 : 1,
+                        cursor: 'grab',
+                      }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                        <div style={{
+                        <div onClick={() => setOpenLeadId(card.id)} style={{
                           width: 34, height: 34, borderRadius: '50%',
                           background: getGradient(card.name),
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                           fontSize: 11, fontWeight: 700, color: '#16140f',
-                          flexShrink: 0,
+                          flexShrink: 0, cursor: 'pointer',
                         }}>{getInitials(card.name)}</div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 700 }}>{card.name}</div>
+                        <div onClick={() => setOpenLeadId(card.id)} style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {card.name}
+                            {card.status && card.status !== 'new' && <span style={{ width: 7, height: 7, borderRadius: '50%', background: STATUS_META[card.status].color, flexShrink: 0 }} title={STATUS_META[card.status].label} />}
+                          </div>
                           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>{card.phone || '—'}</div>
                         </div>
                         <button
@@ -1744,6 +1782,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
         {content}
         {aiModal}
         {leadModal}
+        {openLead && <LeadDrawer lead={openLead} stages={stages} leadWord={cfg.leadWord} onClose={() => setOpenLeadId(null)} onChanged={patchLeadLocal} />}
       </div>
     )
   }
@@ -1945,6 +1984,188 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
 
       {aiModal}
       {leadModal}
+      {openLead && <LeadDrawer lead={openLead} stages={stages} leadWord={cfg.leadWord} onClose={() => setOpenLeadId(null)} onChanged={patchLeadLocal} />}
+    </div>
+  )
+}
+
+// ── کشوی جزئیاتِ لید (Sales OS) — تایم‌لاین، تگ، ارتباط، تطبیق، AI ──
+function LeadDrawer({ lead, stages, leadWord, onClose, onChanged }: {
+  lead: Lead
+  stages: { id: Stage; label: string; color: string }[]
+  leadWord: string
+  onClose: () => void
+  onChanged: (l: Lead) => void
+}) {
+  const F = 'Vazirmatn, system-ui, sans-serif'
+  const [tab, setTab] = useState<'timeline' | 'match' | 'ai'>('timeline')
+  const [busy, setBusy] = useState('')
+  const [tagInput, setTagInput] = useState('')
+  const [smsText, setSmsText] = useState('')
+  const [matches, setMatches] = useState<any[] | null>(null)
+  const [ai, setAi] = useState<{ prob?: number; advice?: string; listings?: any[] } | null>(null)
+  const acts = (lead.activities || []).slice().sort((a, b) => b.at - a.at)
+  const st = lead.status || 'new'
+
+  const patchLead = async (patch: Record<string, any>) => {
+    setBusy('save')
+    try { const r = await fetch('/api/crm/leads', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: lead.id, ...patch }) }); const d = await r.json(); if (d.lead) onChanged(d.lead) } catch {} finally { setBusy('') }
+  }
+  const act = async (type: string, note?: string) => {
+    setBusy(type)
+    try { const r = await fetch('/api/crm/activity', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ leadId: lead.id, type, note }) }); const d = await r.json(); if (d.lead) onChanged(d.lead) } catch {} finally { setBusy('') }
+  }
+  const comm = async (channel: string, extra?: Record<string, any>) => {
+    setBusy(channel)
+    try {
+      const r = await fetch('/api/crm/comm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ leadId: lead.id, channel, ...extra }) })
+      const d = await r.json()
+      if (channel === 'whatsapp' && d.link) window.open(d.link, '_blank')
+      // refresh lead activities
+      const lr = await fetch('/api/crm/activity?leadId=' + lead.id).then(x => x.json()).catch(() => null)
+      if (lr?.activities) onChanged({ ...lead, activities: lr.activities })
+      if (channel === 'sms') { setSmsText(''); if (!d.ok) alert(d.error || 'ارسالِ پیامک ناموفق بود') }
+    } catch {} finally { setBusy('') }
+  }
+  const loadMatches = async () => { setBusy('match'); try { const d = await fetch('/api/crm/matching?leadId=' + lead.id).then(x => x.json()); setMatches(d.matches || []) } catch { setMatches([]) } finally { setBusy('') } }
+  const linkListing = async (listingId: string) => { try { const r = await fetch('/api/crm/matching', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ leadId: lead.id, listingId }) }); const d = await r.json(); if (d.lead) onChanged(d.lead) } catch {} }
+  const runAi = async (action: string) => {
+    setBusy('ai-' + action)
+    try { const d = await fetch('/api/crm/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, leadId: lead.id }) }).then(x => x.json())
+      if (action === 'convert') setAi({ prob: d.probability, advice: d.advice })
+      else if (action === 'best') setAi({ advice: d.advice, listings: d.listings })
+    } catch {} finally { setBusy('') }
+  }
+  const addTag = () => { const t = tagInput.trim(); if (!t) return; patchLead({ tags: [...(lead.tags || []), t] }); setTagInput('') }
+  const rmTag = (t: string) => patchLead({ tags: (lead.tags || []).filter(x => x !== t) })
+
+  const chip = (label: string, active: boolean, onClick: () => void) => (
+    <button onClick={onClick} style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${active ? 'var(--gold)' : 'var(--line2)'}`, background: active ? 'var(--goldDim)' : 'transparent', color: active ? 'var(--gold)' : 'var(--muted)', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: F }}>{label}</button>
+  )
+  const actBtn = (icon: string, label: string, onClick: () => void, key: string) => (
+    <button onClick={onClick} disabled={!!busy} style={{ flex: 1, minWidth: 72, padding: '8px 6px', borderRadius: 9, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', fontFamily: F, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+      <span style={{ fontSize: 15 }}>{busy === key ? '…' : icon}</span>{label}
+    </button>
+  )
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 500, display: 'flex', justifyContent: 'flex-start', fontFamily: F }}>
+      <div onClick={e => e.stopPropagation()} dir="rtl" style={{ background: 'var(--bg)', borderInlineEnd: '1px solid var(--line)', width: 'min(460px,100%)', height: '100%', overflowY: 'auto', boxShadow: '-20px 0 60px -20px rgba(0,0,0,.6)' }}>
+        {/* هدر */}
+        <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--line)', position: 'sticky', top: 0, background: 'var(--bg)', zIndex: 2 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 42, height: 42, borderRadius: '50%', background: getGradient(lead.name), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: '#16140f' }}>{getInitials(lead.name)}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 16, fontWeight: 900 }}>{lead.name}</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)', direction: 'ltr', textAlign: 'right' }}>{lead.phone || '—'}</div>
+            </div>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 24, cursor: 'pointer' }}>×</button>
+          </div>
+          {/* امتیاز + وضعیت */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}><span>امتیازِ لید</span><span style={{ color: 'var(--gold)', fontWeight: 800 }}>{lead.score ?? 0}</span></div>
+              <div style={{ height: 7, borderRadius: 4, background: 'var(--bg2)', overflow: 'hidden' }}><div style={{ height: '100%', width: `${lead.score ?? 0}%`, background: 'linear-gradient(90deg,var(--gold2),var(--gold))' }} /></div>
+            </div>
+          </div>
+          {/* وضعیتِ سلامت */}
+          <div style={{ display: 'flex', gap: 6, marginTop: 12, flexWrap: 'wrap' }}>
+            {(['new', 'hot', 'cold', 'converted', 'lost'] as LeadStatus[]).map(s => (
+              <button key={s} onClick={() => patchLead({ status: s })} style={{ padding: '4px 10px', borderRadius: 999, border: `1px solid ${st === s ? STATUS_META[s].color : 'var(--line2)'}`, background: st === s ? STATUS_META[s].color + '22' : 'transparent', color: st === s ? STATUS_META[s].color : 'var(--muted)', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: F }}>{STATUS_META[s].label}</button>
+            ))}
+          </div>
+          {/* مرحله */}
+          <div style={{ marginTop: 12 }}>
+            <select value={lead.stage} onChange={e => patchLead({ stage: e.target.value })} style={{ width: '100%', padding: '8px 10px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--line2)', color: 'var(--text)', fontSize: 12.5, fontFamily: F, cursor: 'pointer' }}>
+              {stages.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </select>
+          </div>
+          {/* تگ‌ها */}
+          <div style={{ display: 'flex', gap: 6, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+            {(lead.tags || []).map(t => <span key={t} style={{ fontSize: 11, background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 999, padding: '3px 9px', display: 'flex', gap: 5, alignItems: 'center' }}>{t}<span onClick={() => rmTag(t)} style={{ cursor: 'pointer', color: 'var(--muted)' }}>×</span></span>)}
+            <input value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addTag() }} placeholder="+ تگ" style={{ width: 70, background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 999, padding: '3px 10px', color: 'var(--text)', fontSize: 11, fontFamily: F, outline: 'none' }} />
+          </div>
+          {/* اقداماتِ سریع (Communication Hub) */}
+          <div style={{ display: 'flex', gap: 6, marginTop: 14, flexWrap: 'wrap' }}>
+            {actBtn('☎', 'ثبتِ تماس', () => act('call', 'تماسِ تلفنی'), 'call')}
+            {actBtn('⚑', 'ثبتِ بازدید', () => act('visit', 'بازدیدِ حضوری'), 'visit')}
+            {actBtn('✆', 'واتساپ', () => comm('whatsapp', { text: `سلام ${lead.name} عزیز،` }), 'whatsapp')}
+            {actBtn('✎', 'یادداشت', () => { const n = prompt('یادداشت:'); if (n) act('note', n) }, 'note')}
+          </div>
+        </div>
+
+        {/* تب‌ها */}
+        <div style={{ display: 'flex', gap: 8, padding: '12px 20px 0' }}>
+          {chip('تایم‌لاین', tab === 'timeline', () => setTab('timeline'))}
+          {chip('فایل‌های پیشنهادی', tab === 'match', () => { setTab('match'); if (matches === null) loadMatches() })}
+          {chip('دستیارِ AI', tab === 'ai', () => setTab('ai'))}
+        </div>
+
+        <div style={{ padding: 20 }}>
+          {tab === 'timeline' && (
+            <div>
+              {/* ارسالِ پیامک */}
+              <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+                <input value={smsText} onChange={e => setSmsText(e.target.value)} placeholder="متنِ پیامک به لید…" style={{ flex: 1, background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '8px 11px', color: 'var(--text)', fontSize: 12.5, fontFamily: F, outline: 'none' }} />
+                <button onClick={() => smsText.trim() && comm('sms', { text: smsText.trim() })} disabled={!smsText.trim() || busy === 'sms'} style={{ padding: '8px 14px', borderRadius: 9, border: 'none', background: 'var(--gold)', color: '#16140f', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', fontFamily: F, opacity: smsText.trim() ? 1 : 0.5 }}>{busy === 'sms' ? '…' : 'ارسال'}</button>
+              </div>
+              {acts.length === 0 ? <div style={{ color: 'var(--muted)', fontSize: 12.5, textAlign: 'center', padding: 20 }}>هنوز فعالیتی ثبت نشده.</div> : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                  {acts.map((a, i) => (
+                    <div key={a.id} style={{ display: 'flex', gap: 10 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--bg2)', border: '1px solid var(--line2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, flexShrink: 0 }}>{ACT_ICON[a.type] || '•'}</div>
+                        {i < acts.length - 1 && <div style={{ width: 1, flex: 1, background: 'var(--line)', minHeight: 14 }} />}
+                      </div>
+                      <div style={{ paddingBottom: 16, flex: 1 }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 600 }}>{ACT_LABEL[a.type] || a.type}</div>
+                        {a.note && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2, lineHeight: 1.7 }}>{a.note}</div>}
+                        <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 3, direction: 'ltr', textAlign: 'right' }}>{new Date(a.at).toLocaleString('fa-IR')}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab === 'match' && (
+            <div>
+              {matches === null ? <div style={{ color: 'var(--muted)', fontSize: 12.5, textAlign: 'center', padding: 20 }}>در حالِ یافتنِ فایل…</div>
+                : matches.length === 0 ? <div style={{ color: 'var(--muted)', fontSize: 12.5, textAlign: 'center', padding: 20 }}>فایلِ متناسبی یافت نشد (بودجه/منطقهٔ لید را کامل کن).</div>
+                : matches.map((m: any) => (
+                  <div key={m.listing.id} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 8, background: m.listing.image ? `center/cover url(${m.listing.image})` : 'var(--bg2)', flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.listing.title}</div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)' }}>{m.listing.price || '—'} · {m.reasons?.[0] || ''}</div>
+                    </div>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gold)' }}>٪{m.score}</div>
+                    <button onClick={() => linkListing(m.listing.id)} style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid var(--gold)', background: (lead.listingIds || []).includes(m.listing.id) ? 'var(--goldDim)' : 'transparent', color: 'var(--gold)', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: F }}>{(lead.listingIds || []).includes(m.listing.id) ? '✓' : 'اتصال'}</button>
+                  </div>
+                ))}
+            </div>
+          )}
+
+          {tab === 'ai' && (
+            <div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                <button onClick={() => runAi('convert')} disabled={!!busy} style={{ flex: 1, padding: '9px', borderRadius: 9, border: '1px solid var(--gold)', background: 'var(--goldDim)', color: 'var(--gold)', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: F }}>{busy === 'ai-convert' ? '…' : 'احتمالِ تبدیل'}</button>
+                <button onClick={() => runAi('best')} disabled={!!busy} style={{ flex: 1, padding: '9px', borderRadius: 9, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: F }}>{busy === 'ai-best' ? '…' : 'بهترین فایل'}</button>
+              </div>
+              {ai?.prob !== undefined && (
+                <div style={{ textAlign: 'center', margin: '10px 0 16px' }}>
+                  <div style={{ fontSize: 34, fontWeight: 900, color: 'var(--gold)' }}>٪{ai.prob}</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>احتمالِ تبدیل به {leadWord === 'لید' ? 'مشتری' : 'قرارداد'}</div>
+                </div>
+              )}
+              {ai?.listings && ai.listings.map((l: any) => <div key={l.id} style={{ fontSize: 12, padding: '7px 0', borderBottom: '1px solid var(--line)' }}>◦ {l.title} <span style={{ color: 'var(--gold)' }}>٪{l.score}</span></div>)}
+              {ai?.advice && <div style={{ marginTop: 12, background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: 12, fontSize: 12.5, lineHeight: 2, color: 'var(--text)' }}>{ai.advice}</div>}
+              {!ai && <div style={{ color: 'var(--muted)', fontSize: 12.5, textAlign: 'center', padding: 20 }}>یکی از دکمه‌های بالا را بزن تا دستیار تحلیل کند.</div>}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

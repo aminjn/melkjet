@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
 
   // ۱) با کدام لید تماس بگیرم؟
   if (action === 'next') {
-    const open = (await listLeads(s.phone)).filter(l => l.stage !== 'won' && l.stage !== 'lost')
+    const open = (await listLeads(s.phone)).filter(l => l.stage !== 'contract' && l.stage !== 'lost')
     const stale = new Set((await followUpNeeded(s.phone)).map(l => l.id))
     const ranked = open
       .map(l => ({ l, urgency: l.score + (stale.has(l.id) ? 20 : 0) + (l.status === 'hot' ? 15 : 0) }))
@@ -60,8 +60,8 @@ export async function POST(req: NextRequest) {
   if (action === 'convert') {
     const lead = await getLead(s.phone, String(b.leadId || ''))
     if (!lead) return NextResponse.json({ error: 'لید یافت نشد' }, { status: 404 })
-    const stageIdx = ['new', 'contacted', 'sent', 'visited', 'negotiation', 'contract', 'won'].indexOf(lead.stage)
-    const base = lead.stage === 'won' ? 100 : lead.stage === 'lost' ? 2 : Math.round(lead.score * 0.6 + Math.max(0, stageIdx) * 6)
+    const stageIdx = ['new', 'review', 'offered', 'contract'].indexOf(lead.stage)
+    const base = lead.stage === 'contract' ? 100 : lead.stage === 'lost' ? 2 : Math.round(lead.score * 0.6 + Math.max(0, stageIdx) * 9)
     const prob = Math.max(2, Math.min(98, base))
     const advice = await aiText(`لید «${lead.name}» در مرحلهٔ ${STAGE_LABEL[lead.stage]}، امتیاز ${lead.score}. برای بستنِ معامله چه قدمِ بعدی را پیشنهاد می‌دهی؟`)
     return NextResponse.json({ ok: true, action, probability: prob, advice })
