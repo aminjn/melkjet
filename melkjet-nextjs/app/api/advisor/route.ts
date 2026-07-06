@@ -12,12 +12,39 @@ import {
 } from '@/app/lib/advisor-store'
 import { getCrmSettings, setCrmSettings } from '@/app/lib/crm-settings-store'
 import { sendServiceSms } from '@/app/lib/sms'
+import { getAdvisorMembership } from '@/app/lib/agency-link-store'
+import { getAgency } from '@/app/lib/agency-store'
+
+// آشتی‌سازی: لیدهای آژانسی که به این مشاور تخصیص یافته‌اند را در پنلِ خودش می‌سازد (گذشته‌نگر +
+// خوددرمان). با هر بار بازکردنِ پنل اجرا می‌شود، پس مهم نیست تخصیص کِی انجام شده. مطابقت بر اساسِ
+// نامِ عضویت (همان نامی که آژانس در کشوی «تخصیص به…» می‌بیند) → مستقل از مغایرتِ نامِ نمایشیِ اکانت.
+async function syncAgencyLeads(advisorPhone: string): Promise<void> {
+  try {
+    const mem = await getAdvisorMembership(advisorPhone)
+    if (!mem) return
+    const agency = await getAgency(mem.agencyPhone)
+    const nm = (x?: string) => (x || '').replace(/\s+/g, ' ').trim()
+    const assigned = agency.leads.filter(l => l.assignedTo && nm(l.assignedTo) === nm(mem.advisorName) && l.stage !== 'lost')
+    if (!assigned.length) return
+    const existing = await listLeads(advisorPhone)
+    const key = (l: { phone?: string; name?: string }) => (l.phone || '').replace(/\D/g, '') || nm(l.name)
+    const have = new Set(existing.map(key))
+    const stageMap: Record<string, string> = { new: 'new', assigned: 'contacted', visit: 'visit', negotiation: 'negotiation', closed: 'closed', lost: 'lost' }
+    for (const l of assigned) {
+      const k = key(l)
+      if (!k || have.has(k)) continue
+      await addLead(advisorPhone, { name: l.name, phone: l.phone, email: (l as { email?: string }).email, need: l.need, budget: l.budget, source: `آژانس${mem.agencyName ? ': ' + mem.agencyName : ''}`, stage: (stageMap[l.stage] || 'new') as any })
+      have.add(k)
+    }
+  } catch { /* آشتی‌سازی نباید بارگذاریِ پنل را خراب کند */ }
+}
 
 // همهٔ دادهٔ پنل مشاور، مخصوص کاربرِ واردشده (per-profile).
 export async function GET() {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای مشاهده وارد شوید' }, { status: 401 })
   const o = s.phone
+  await syncAgencyLeads(o)   // لیدهای تخصیص‌یافتهٔ آژانس را قبل از خواندن، در پنلِ مشاور بساز
   const [stats, leads, listings, appts, commissions] = await Promise.all([advisorStats(o), listLeads(o), listListings(o), listAppts(o), listCommissions(o)])
   return NextResponse.json({ stats, leads, listings, appts, commissions })
 }
