@@ -4,7 +4,8 @@ import { readJsonCached, writeJsonCached } from './json-file'
 import { pgEnabled, kvGet, pgTx, pgListingsAll } from './db'
 
 const DATA_FILE = join(process.cwd(), '.scraper-data.json')
-const KV_KEY = 'scraper'
+const KV_KEY = 'scraper'          // بلابِ قدیمی — بعد از migration دست‌نخورده به‌عنوان بکاپِ rollback می‌ماند
+const KV_META = 'scraper_meta'    // متادیتای کوچکِ زنده (sources/categories/owners) پس از نرمال‌سازی
 
 // Top-level content type → which public page it feeds
 export type SourceType = 'listing' | 'directory' | 'product' | 'article' | 'price'
@@ -140,32 +141,37 @@ const PG_TTL = 15_000
 // نمی‌شود. کلِ منطقِ mutate(fn) دست‌نخورده روی همان db در حافظه کار می‌کند.
 function metaOf(db: DB) { return { sources: db.sources, categories: db.categories, owners: db.owners || [] } }
 
-// migrationِ خودکار و امن: اگر جدول خالی بود ولی بلابِ قدیمی آگهی داشت، یک‌بار منتقل می‌شود.
-// قفلِ ردیفِ متادیتا چند instance را سریالایز می‌کند، پس فقط یکی migrate می‌کند (idempotent).
+// migrationِ خودکارِ غیرمخرب: بلابِ قدیمی (KV_KEY) دست‌نخورده به‌عنوان بکاپِ rollback می‌ماند؛
+// آگهی‌ها به جدول کپی می‌شوند و متادیتا در KV_META (کلیدِ جدا) ساخته می‌شود. قفلِ FOR UPDATE
+// روی بلابِ قدیمی + بازچکِ KV_META چند instance را سریالایز می‌کند (idempotent، race-safe).
 let pgMigrated = false
 async function ensureMigrated(): Promise<void> {
   if (!pgEnabled() || pgMigrated) return
-  await pgTx(async (c) => {
+  const done = await pgTx(async (c) => {
+    const has = await c.query('SELECT 1 FROM kv WHERE key=$1', [KV_META])
+    if (has.rows.length) return true   // قبلاً migrate شده
+    // قفلِ بلابِ قدیمی برای سریالایز کردنِ migration بینِ instanceها
     await c.query(`INSERT INTO kv(key,data) VALUES($1,'{}'::jsonb) ON CONFLICT(key) DO NOTHING`, [KV_KEY])
     const row = await c.query('SELECT data FROM kv WHERE key=$1 FOR UPDATE', [KV_KEY])
+    const again = await c.query('SELECT 1 FROM kv WHERE key=$1', [KV_META])
+    if (again.rows.length) return true  // instance دیگری همین‌الان migrate کرد
     const blob = (row.rows[0]?.data || {}) as Partial<DB>
     const items = Array.isArray(blob.items) ? blob.items : []
-    if (items.length) {
-      const cnt = await c.query('SELECT count(*)::int AS n FROM listings')
-      if ((cnt.rows[0].n as number) === 0) {
-        for (const it of items) {
-          await c.query(
-            `INSERT INTO listings(id, scraped_at, type, status, data) VALUES($1,$2,$3,$4,$5)
-             ON CONFLICT(id) DO UPDATE SET scraped_at=EXCLUDED.scraped_at, type=EXCLUDED.type, status=EXCLUDED.status, data=EXCLUDED.data`,
-            [it.id, it.scrapedAt || 0, it.type, it.status, JSON.stringify(it)],
-          )
-        }
+    const cnt = await c.query('SELECT count(*)::int AS n FROM listings')
+    if ((cnt.rows[0].n as number) === 0 && items.length) {
+      for (const it of items) {
+        await c.query(
+          `INSERT INTO listings(id, scraped_at, type, status, data) VALUES($1,$2,$3,$4,$5)
+           ON CONFLICT(id) DO UPDATE SET scraped_at=EXCLUDED.scraped_at, type=EXCLUDED.type, status=EXCLUDED.status, data=EXCLUDED.data`,
+          [it.id, it.scrapedAt || 0, it.type, it.status, JSON.stringify(it)],
+        )
       }
-      // آگهی‌ها را از بلاب حذف کن (فقط متادیتا بماند) — idempotent
-      await c.query(`UPDATE kv SET data=$2, updated_at=now() WHERE key=$1`, [KV_KEY, JSON.stringify(metaOf(blob as DB))])
     }
+    // متادیتای زنده را در کلیدِ جدا بساز؛ KV_KEY (بلابِ قدیمی) را برای rollback دست نمی‌زنیم.
+    await c.query(`INSERT INTO kv(key,data) VALUES($1,$2) ON CONFLICT(key) DO NOTHING`, [KV_META, JSON.stringify(metaOf(blob as DB))])
+    return true
   })
-  pgMigrated = true
+  if (done) pgMigrated = true
 }
 
 /** خواندنِ سندِ کاملِ اسکرپر (دو-حالته: PG یا فایل). */
@@ -175,12 +181,14 @@ async function load(): Promise<DB> {
   if (pgCache && now - pgCache.at < PG_TTL) return pgCache.data
   try {
     await ensureMigrated()
-    const [meta, items] = await Promise.all([kvGet<Partial<DB>>(KV_KEY, {}), pgListingsAll() as Promise<Item[]>])
+    // متادیتای زنده از KV_META؛ اگر هنوز نبود (لحظهٔ گذار)، از بلابِ قدیمی bootstrap کن.
+    const [meta, items] = await Promise.all([kvGet<Partial<DB>>(KV_META, {}), pgListingsAll() as Promise<Item[]>])
+    const m = (meta.sources || meta.owners || meta.categories) ? meta : await kvGet<Partial<DB>>(KV_KEY, {})
     const data: DB = {
-      sources: meta.sources && meta.sources.length ? meta.sources : DEFAULT_SOURCES,
+      sources: m.sources && m.sources.length ? m.sources : DEFAULT_SOURCES,
       items,
-      categories: meta.categories,
-      owners: meta.owners || [],
+      categories: m.categories,
+      owners: m.owners || [],
     }
     pgCache = { at: now, data }
     return data
@@ -196,9 +204,9 @@ async function mutate<R>(fn: (db: DB) => R): Promise<R> {
   if (!pgEnabled()) { const d = fileLoad(); const r = fn(d); fileSave(d); return r }
   await ensureMigrated()
   const r = await pgTx(async (c) => {
-    // سریالایزِ نویسنده‌ها روی ردیفِ کوچکِ متادیتا (نه بلابِ بزرگ).
-    await c.query(`INSERT INTO kv(key,data) VALUES($1,'{}'::jsonb) ON CONFLICT(key) DO NOTHING`, [KV_KEY])
-    const metaRow = await c.query('SELECT data FROM kv WHERE key=$1 FOR UPDATE', [KV_KEY])
+    // سریالایزِ نویسنده‌ها روی ردیفِ کوچکِ متادیتا (KV_META، نه بلابِ بزرگ).
+    await c.query(`INSERT INTO kv(key,data) VALUES($1,'{}'::jsonb) ON CONFLICT(key) DO NOTHING`, [KV_META])
+    const metaRow = await c.query('SELECT data FROM kv WHERE key=$1 FOR UPDATE', [KV_META])
     const meta = (metaRow.rows[0]?.data || {}) as Partial<DB>
     const itemsRes = await c.query('SELECT data FROM listings ORDER BY scraped_at DESC')
     const items = itemsRes.rows.map(x => x.data as Item)
@@ -210,8 +218,8 @@ async function mutate<R>(fn: (db: DB) => R): Promise<R> {
     }
     const before = new Map(items.map(i => [i.id, JSON.stringify(i)]))
     const result = fn(db)
-    // متادیتا (کوچک) را بنویس
-    await c.query(`UPDATE kv SET data=$2, updated_at=now() WHERE key=$1`, [KV_KEY, JSON.stringify(metaOf(db))])
+    // متادیتای زنده (کوچک) را در KV_META بنویس؛ بلابِ قدیمیِ KV_KEY دست‌نخورده می‌ماند.
+    await c.query(`UPDATE kv SET data=$2, updated_at=now() WHERE key=$1`, [KV_META, JSON.stringify(metaOf(db))])
     // فقط ردیف‌های اضافه‌شده/تغییرکرده را upsert کن
     const afterIds = new Set<string>()
     for (const it of db.items) {
