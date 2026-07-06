@@ -13,7 +13,32 @@ import { agencyAdvisorFiles } from '@/app/lib/agency-team'
 import { planDistribution, findConflicts } from '@/app/lib/agency-distribution'
 import { forecastIncome, advisorPerformance, teamInsights } from '@/app/lib/agency-ai'
 import { agentModel, agentProvider, chatCompleteSafe } from '@/app/lib/gapgpt'
-import { getAdvisor, setListingStatus as advSetStatus, deleteListing as advDeleteListing } from '@/app/lib/advisor-store'
+import { getAdvisor, setListingStatus as advSetStatus, deleteListing as advDeleteListing, addLead as advAddLead, listLeads as advListLeads } from '@/app/lib/advisor-store'
+import { listAgencyMembers } from '@/app/lib/agency-link-store'
+
+// وقتی آژانس یک لید را به مشاور تخصیص می‌دهد، همان لید در پنلِ خودِ آن مشاور (advisor-store)
+// هم ساخته می‌شود تا واقعاً در «/pros → لیدها» ببیندش. dedup: اگر مشاور از قبل لیدی با همان
+// شماره (یا همان نام، اگر شماره نبود) دارد، دوباره ساخته نمی‌شود.
+async function pushLeadToAdvisor(agencyOwner: string, agencyName: string, lead: { name: string; phone?: string; email?: string; need?: string; budget?: string; stage?: string }, advisorName: string): Promise<void> {
+  const nm = (s?: string) => (s || '').replace(/\s+/g, ' ').trim()
+  if (!nm(advisorName)) return
+  try {
+    const members = await listAgencyMembers(agencyOwner)
+    const m = members.find(x => nm(x.advisorName) === nm(advisorName))
+    const advisorPhone = m?.advisorPhone
+    if (!advisorPhone) return   // فقط مشاورِ واقعیِ لینک‌شده پنل دارد
+    const existing = await advListLeads(advisorPhone)
+    const key = (l: { phone?: string; name?: string }) => (l.phone || '').replace(/\D/g, '') || nm(l.name)
+    const want = key(lead)
+    if (want && existing.some(l => key(l) === want)) return   // قبلاً ساخته شده
+    const stageMap: Record<string, string> = { new: 'new', assigned: 'contacted', visit: 'visit', negotiation: 'negotiation', closed: 'closed', lost: 'lost' }
+    await advAddLead(advisorPhone, {
+      name: lead.name, phone: lead.phone, email: lead.email, need: lead.need, budget: lead.budget,
+      source: `آژانس${agencyName ? ': ' + agencyName : ''}`,
+      stage: (stageMap[lead.stage || 'new'] || 'new') as any,
+    })
+  } catch { /* تخصیص نباید به‌خاطرِ خطای push خراب شود */ }
+}
 import { checkDuplicate, advisorScope } from '@/app/lib/duplicate-check'
 
 // همهٔ دادهٔ پنل آژانس، مخصوص کاربرِ واردشده (per-profile).
@@ -104,7 +129,13 @@ export async function POST(req: NextRequest) {
     case 'setReminder': { if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); const l = await setLeadReminder(o, String(b.id), b.at ? Number(b.at) : null); return l ? NextResponse.json({ ok: true, lead: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'getCrmSettings': return NextResponse.json({ ok: true, settings: await getCrmSettings(o) })
     case 'setCrmSettings': return NextResponse.json({ ok: true, settings: await setCrmSettings(o, b.patch || {}) })
-    case 'assignLead': { const l = await assignLead(o, String(b.id), String(b.agent || '')); return l ? NextResponse.json({ ok: true, lead: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
+    case 'assignLead': {
+      const agent = String(b.agent || '')
+      const l = await assignLead(o, String(b.id), agent)
+      if (!l) return NextResponse.json({ error: 'یافت نشد' }, { status: 404 })
+      if (agent) { const agencyName = await resolveAgencyName(o); await pushLeadToAdvisor(o, agencyName, l, agent) }
+      return NextResponse.json({ ok: true, lead: l })
+    }
     case 'setLeadStage': { const l = await setLeadStage(o, String(b.id), b.stage); return l ? NextResponse.json({ ok: true, lead: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'deleteLead': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); await deleteLead(o, String(b.id)); return NextResponse.json({ ok: true })
     case 'addActivity': { if (!b.id || !b.type) return NextResponse.json({ error: 'شناسه و نوع الزامی است' }, { status: 400 }); const l = await addLeadActivity(o, String(b.id), { type: b.type as ActivityType, note: b.note ? String(b.note) : undefined }); return l ? NextResponse.json({ ok: true, lead: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
@@ -146,7 +177,8 @@ export async function POST(req: NextRequest) {
       const plan = planDistribution(agency.leads, pool, agency.listings)
       const a = plan.find(x => x.leadId === String(b.id))
       if (!a) return NextResponse.json({ ok: false, error: 'این لید قابلِ تخصیصِ خودکار نیست (شاید قبلاً تخصیص یافته یا بسته شده).' })
-      await assignLead(o, a.leadId, a.agentName)
+      const assigned = await assignLead(o, a.leadId, a.agentName)
+      if (assigned) { const agencyName = await resolveAgencyName(o); await pushLeadToAdvisor(o, agencyName, assigned, a.agentName) }
       return NextResponse.json({ ok: true, assignedTo: a.agentName, reasons: a.reasons, leads: await listLeads(o) })
     }
     case 'conflicts': return NextResponse.json({ ok: true, conflicts: findConflicts(await listLeads(o)) })
