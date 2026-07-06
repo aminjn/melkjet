@@ -839,8 +839,11 @@ void migrateBlock
 // page (app/[site]/page.tsx) mirrors this exact markup as a clean page.
 type TeamMemberLite = { phone: string; name: string; photo: string; title: string; specialties: string[]; areas: string; experience: string; activeListings: number; slug: string }
 type ArticleLite = { title: string; excerpt?: string; image?: string; category?: string; date?: string }
+// آگهیِ کامل (مثلِ کارتِ سایت اصلی): نوعِ معامله، متراژ، اتاق، وضعیتِ فروش.
+type ListingLite = { title: string; location?: string; price?: string; image?: string; category?: string; deal?: string; ptype?: string; area?: string; rooms?: string; dealStatus?: string }
+type ProductLite = { name: string; brand?: string; category?: string; price?: number; unit?: string; image?: string; discountPct?: number }
 
-function BlockBody({ block, primary, myListings, myArticles, teamMembers }: { block: Block; primary: string; myListings?: { title: string; location?: string; price?: string; image?: string; category?: string }[]; myArticles?: ArticleLite[]; teamMembers?: TeamMemberLite[] }) {
+function BlockBody({ block, primary, myListings, myArticles, myProducts, teamMembers }: { block: Block; primary: string; myListings?: ListingLite[]; myArticles?: ArticleLite[]; myProducts?: ProductLite[]; teamMembers?: TeamMemberLite[] }) {
   const p = block.props || {}
   const t = block.type
   const btn = (text: string) => (
@@ -885,7 +888,7 @@ function BlockBody({ block, primary, myListings, myArticles, teamMembers }: { bl
   if (t === 'searchlist') {
     const grads = ['#2d2215,#1e1a12', '#1e2215,#141a10', '#15202d,#101828', '#251528,#1a0e1e', '#152825,#0e1a18', '#2d1515,#1e0e0e']
     const real = myListings || []
-    const cards = (real.length ? real.slice(0, 6) : Array.from({ length: 6 }).map(() => null)) as ({ title?: string; location?: string; price?: string; image?: string } | null)[]
+    const cards = (real.length ? real.slice(0, 6) : Array.from({ length: 6 }).map(() => null)) as (ListingLite | null)[]
     return (
       <div style={{ background: '#faf9f7', padding: '24px 28px', direction: 'rtl' }}>
         {p.heading ? <div style={{ fontSize: 18, fontWeight: 800, color: '#1a1510', marginBottom: 14 }}>{p.heading}</div> : null}
@@ -898,10 +901,14 @@ function BlockBody({ block, primary, myListings, myArticles, teamMembers }: { bl
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
           {cards.map((c, i) => (
             <div key={i} style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', border: '1px solid #eee', boxShadow: '0 8px 22px -16px rgba(0,0,0,.5)' }}>
-              <div style={{ height: 80, background: c?.image ? `center/cover no-repeat url(${c.image})` : `linear-gradient(135deg,${grads[i % grads.length]})` }} />
+              <div style={{ position: 'relative', height: 80, background: c?.image ? `center/cover no-repeat url(${c.image})` : `linear-gradient(135deg,${grads[i % grads.length]})` }}>
+                {c?.deal ? <span style={{ position: 'absolute', top: 5, right: 5, fontSize: 9, fontWeight: 800, color: '#fff', background: c.deal === 'اجاره' ? '#2dd4bf' : '#60a5fa', borderRadius: 5, padding: '1px 6px' }}>{c.deal}</span> : null}
+                {(c?.dealStatus === 'sold' || c?.dealStatus === 'rented') ? <span style={{ position: 'absolute', top: 5, left: 5, fontSize: 9, fontWeight: 800, color: '#fff', background: c.dealStatus === 'sold' ? '#ef4444' : '#0ea5e9', borderRadius: 5, padding: '1px 6px' }}>{c.dealStatus === 'sold' ? 'فروخته' : 'اجاره رفت'}</span> : null}
+              </div>
               <div style={{ padding: 10 }}>
                 <div style={{ fontSize: 12, fontWeight: 800, color: '#1a1510', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c?.title || 'عنوان آگهی'}</div>
                 <div style={{ fontSize: 10, color: '#888' }}>{c?.location || 'موقعیت'}</div>
+                {(c?.area || c?.rooms) ? <div style={{ display: 'flex', gap: 7, fontSize: 9, color: '#666', marginTop: 4 }}>{c?.area ? <span>◱ {c.area}م</span> : null}{c?.rooms ? <span>⌂ {c.rooms} خواب</span> : null}</div> : null}
                 <div style={{ fontSize: 12, fontWeight: 800, color: primary, marginTop: 6 }}>{c?.price || 'قیمت'}</div>
               </div>
             </div>
@@ -922,18 +929,30 @@ function BlockBody({ block, primary, myListings, myArticles, teamMembers }: { bl
     ]
     const grads = ['#2d2215,#1e1a12', '#1e2215,#141a10', '#15202d,#101828', '#251528,#1a0e1e', '#152825,#0e1a18', '#2d1515,#1e0e0e']
     const count = Math.max(3, Math.min(12, Number(p.count) || 6))
-    const items = Array.from({ length: count }).map((_, i) => SAMPLE[i % SAMPLE.length])
+    const realP = myProducts || []
+    const faN = (n?: number) => n ? n.toLocaleString('fa-IR') : ''
+    // محصولاتِ واقعیِ فروشنده (کاملِ دیتا: نام/برند/قیمت/واحد/عکس/تخفیف)؛ اگر نبود، نمونه.
+    const items = realP.length
+      ? realP.slice(0, count).map((pr, i) => ({ name: pr.name, brand: pr.brand || pr.category || '', price: faN(pr.price), unit: pr.unit || '', image: pr.image, discountPct: pr.discountPct || 0, grad: grads[i % grads.length] }))
+      : Array.from({ length: count }).map((_, i) => ({ ...SAMPLE[i % SAMPLE.length], image: undefined as string | undefined, discountPct: 0, grad: grads[i % grads.length] }))
     return (
       <div style={{ background: '#fff', padding: '28px', direction: 'rtl' }}>
-        <div style={{ fontSize: 19, fontWeight: 800, color: '#1a1510', textAlign: 'center', marginBottom: 18 }}>{p.heading || 'محصولات ما'}</div>
+        <div style={{ fontSize: 19, fontWeight: 800, color: '#1a1510', textAlign: 'center', marginBottom: realP.length ? 8 : 18 }}>{p.heading || 'محصولات ما'}</div>
+        {realP.length ? <div style={{ fontSize: 11, color: primary, textAlign: 'center', marginBottom: 16 }}>↻ {faN(realP.length)} محصولِ واقعیِ فروشگاهِ شما</div> : null}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 14 }}>
           {items.map((it, i) => (
             <div key={i} style={{ background: '#f7f5f1', borderRadius: 12, overflow: 'hidden', border: '1px solid #eee' }}>
-              <div style={{ height: 88, background: `linear-gradient(135deg,${grads[i % grads.length]})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>🧱</div>
+              <div style={{ position: 'relative', height: 88 }}>
+                {it.image
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={it.image} alt="" style={{ width: '100%', height: 88, objectFit: 'cover', display: 'block' }} />
+                  : <div style={{ height: 88, background: `linear-gradient(135deg,${it.grad})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>🧱</div>}
+                {it.discountPct ? <span style={{ position: 'absolute', top: 6, right: 6, fontSize: 9.5, fontWeight: 800, color: '#fff', background: '#ef4444', borderRadius: 6, padding: '2px 7px' }}>٪{faN(it.discountPct)} تخفیف</span> : null}
+              </div>
               <div style={{ padding: 11 }}>
                 <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1a1510', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.name}</div>
                 <div style={{ fontSize: 10.5, color: '#999', marginBottom: 7 }}>{it.brand}</div>
-                <div style={{ fontSize: 12.5, fontWeight: 800, color: primary }}>{it.price} <span style={{ fontSize: 10, color: '#999', fontWeight: 400 }}>تومان/{it.unit}</span></div>
+                <div style={{ fontSize: 12.5, fontWeight: 800, color: primary }}>{it.price} <span style={{ fontSize: 10, color: '#999', fontWeight: 400 }}>تومان{it.unit ? `/${it.unit}` : ''}</span></div>
               </div>
             </div>
           ))}
@@ -942,13 +961,16 @@ function BlockBody({ block, primary, myListings, myArticles, teamMembers }: { bl
     )
   }
   if (t === 'pricelist') {
-    const ROWS = [
-      { name: 'میلگرد آجدار ۱۶ · ذوب‌آهن', unit: 'تن', price: '۳۸٬۰۰۰٬۰۰۰' },
-      { name: 'تیرآهن ۱۴ · فولاد اهواز', unit: 'شاخه', price: '۴۲٬۰۰۰٬۰۰۰' },
-      { name: 'سیمان تیپ ۲ · تهران', unit: 'کیسه', price: '۹۵٬۰۰۰' },
-      { name: 'کاشی ۶۰×۶۰ · مرجان', unit: 'متر', price: '۳۲۰٬۰۰۰' },
-      { name: 'گچ سفیدکاری · سمنان', unit: 'کیسه', price: '۶۰٬۰۰۰' },
-    ]
+    const realP = myProducts || []
+    const ROWS = realP.length
+      ? realP.slice(0, 20).map(pr => ({ name: pr.brand ? `${pr.name} · ${pr.brand}` : pr.name, unit: pr.unit || '', price: pr.price ? pr.price.toLocaleString('fa-IR') : '—' }))
+      : [
+        { name: 'میلگرد آجدار ۱۶ · ذوب‌آهن', unit: 'تن', price: '۳۸٬۰۰۰٬۰۰۰' },
+        { name: 'تیرآهن ۱۴ · فولاد اهواز', unit: 'شاخه', price: '۴۲٬۰۰۰٬۰۰۰' },
+        { name: 'سیمان تیپ ۲ · تهران', unit: 'کیسه', price: '۹۵٬۰۰۰' },
+        { name: 'کاشی ۶۰×۶۰ · مرجان', unit: 'متر', price: '۳۲۰٬۰۰۰' },
+        { name: 'گچ سفیدکاری · سمنان', unit: 'کیسه', price: '۶۰٬۰۰۰' },
+      ]
     return (
       <div style={{ background: '#faf9f7', padding: '28px', direction: 'rtl' }}>
         <div style={{ fontSize: 19, fontWeight: 800, color: '#1a1510', textAlign: 'center', marginBottom: 18 }}>{p.heading || 'نرخِ روزِ محصولات'}</div>
@@ -976,8 +998,8 @@ function BlockBody({ block, primary, myListings, myArticles, teamMembers }: { bl
     const real = mine ? (myListings || []).slice(0, total) : []
     const cats = Array.from(new Set((mine ? real : []).map(it => it.category).filter(Boolean))) as string[]
     const cards = mine && real.length
-      ? real.map((it, i) => ({ title: it.title, location: it.location || 'موقعیت نامشخص', price: it.price || 'قیمت توافقی', image: it.image, grad: grads[i % grads.length] }))
-      : Array.from({ length: Math.max(perSlide + 1, 4) }).map((_, i) => ({ title: 'آپارتمان لوکس', location: 'تهران، منطقه نمونه', price: 'قیمت توافقی', image: undefined as string | undefined, grad: grads[i % grads.length] }))
+      ? real.map((it, i) => ({ title: it.title, location: it.location || 'موقعیت نامشخص', price: it.price || 'قیمت توافقی', image: it.image, grad: grads[i % grads.length], deal: it.deal, ptype: it.ptype, area: it.area, rooms: it.rooms, dealStatus: it.dealStatus }))
+      : Array.from({ length: Math.max(perSlide + 1, 4) }).map((_, i) => ({ title: 'آپارتمان لوکس', location: 'تهران، منطقه نمونه', price: 'قیمت توافقی', image: undefined as string | undefined, grad: grads[i % grads.length], deal: 'فروش', ptype: 'آپارتمان', area: '۱۲۰', rooms: '۲', dealStatus: undefined as string | undefined }))
     const cardW = `calc((100% - ${(perSlide - 1) * 12}px) / ${perSlide})`
     return (
       <div style={{ background: '#fff', padding: '28px', direction: 'rtl' }}>
@@ -998,13 +1020,18 @@ function BlockBody({ block, primary, myListings, myArticles, teamMembers }: { bl
           <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 6 }}>
             {cards.map((it, i) => (
               <div key={i} style={{ flex: `0 0 ${cardW}`, minWidth: 130, background: '#f5f3ef', borderRadius: 12, overflow: 'hidden', border: '1px solid #eee' }}>
-                {it.image
-                  // eslint-disable-next-line @next/next/no-img-element
-                  ? <img src={it.image} alt="" style={{ width: '100%', height: 84, objectFit: 'cover', display: 'block' }} />
-                  : <div style={{ height: 84, background: `linear-gradient(135deg,${it.grad})` }} />}
+                <div style={{ position: 'relative' }}>
+                  {it.image
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={it.image} alt="" style={{ width: '100%', height: 84, objectFit: 'cover', display: 'block' }} />
+                    : <div style={{ height: 84, background: `linear-gradient(135deg,${it.grad})` }} />}
+                  {it.deal ? <span style={{ position: 'absolute', top: 6, right: 6, fontSize: 9.5, fontWeight: 800, color: '#fff', background: it.deal === 'اجاره' ? '#2dd4bf' : '#60a5fa', borderRadius: 6, padding: '2px 7px' }}>{it.deal}</span> : null}
+                  {(it.dealStatus === 'sold' || it.dealStatus === 'rented') ? <span style={{ position: 'absolute', top: 6, left: 6, fontSize: 9.5, fontWeight: 800, color: '#fff', background: it.dealStatus === 'sold' ? '#ef4444' : '#0ea5e9', borderRadius: 6, padding: '2px 7px' }}>{it.dealStatus === 'sold' ? 'فروخته شد' : 'اجاره رفت'}</span> : null}
+                </div>
                 <div style={{ padding: '11px' }}>
                   <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1a1510', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.title}</div>
-                  <div style={{ fontSize: 10.5, color: '#888', marginBottom: 7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.location}</div>
+                  <div style={{ fontSize: 10.5, color: '#888', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.location}</div>
+                  {(it.area || it.rooms || it.ptype) ? <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 9.5, color: '#666', marginBottom: 6 }}>{it.ptype ? <span>{it.ptype}</span> : null}{it.area ? <span>◱ {it.area} متر</span> : null}{it.rooms ? <span>⌂ {it.rooms} خواب</span> : null}</div> : null}
                   <div style={{ fontSize: 12.5, fontWeight: 800, color: primary }}>{it.price}</div>
                 </div>
               </div>
@@ -1306,7 +1333,7 @@ function BlockBody({ block, primary, myListings, myArticles, teamMembers }: { bl
   )
 }
 
-function BlockPreview({ block, primary, selected, onSelect, onUp, onDown, onDelete, myListings, myArticles, teamMembers, enableDrag, isDragging, isDragOver, onDragStartBlock, onDragEnterBlock, onDropBlock, onDragEndBlock, bigControls }: {
+function BlockPreview({ block, primary, selected, onSelect, onUp, onDown, onDelete, myListings, myArticles, myProducts, teamMembers, enableDrag, isDragging, isDragOver, onDragStartBlock, onDragEnterBlock, onDropBlock, onDragEndBlock, bigControls }: {
   block: Block
   primary: string
   selected: boolean
@@ -1315,7 +1342,8 @@ function BlockPreview({ block, primary, selected, onSelect, onUp, onDown, onDele
   onDown: () => void
   onDelete: () => void
   myArticles?: ArticleLite[]
-  myListings?: { title: string; location?: string; price?: string; image?: string; category?: string }[]
+  myListings?: ListingLite[]
+  myProducts?: ProductLite[]
   teamMembers?: TeamMemberLite[]
   enableDrag?: boolean
   isDragging?: boolean
@@ -1368,7 +1396,7 @@ function BlockPreview({ block, primary, selected, onSelect, onUp, onDown, onDele
           <button title="حذف" onClick={e => { e.stopPropagation(); onDelete() }} style={{ ...ctrlBtn, background: 'rgba(220,60,60,0.6)' }}>×</button>
         </div>
       )}
-      <BlockBody block={block} primary={primary} myListings={myListings} myArticles={myArticles} teamMembers={teamMembers} />
+      <BlockBody block={block} primary={primary} myListings={myListings} myArticles={myArticles} myProducts={myProducts} teamMembers={teamMembers} />
     </div>
   )
 }
@@ -1468,8 +1496,9 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
       : pg))
   }
   const [ownerName, setOwnerName] = useState('')
-  const [myListings, setMyListings] = useState<{ title: string; location?: string; price?: string; image?: string; category?: string }[]>([])
+  const [myListings, setMyListings] = useState<ListingLite[]>([])
   const [myArticles, setMyArticles] = useState<ArticleLite[]>([])
+  const [myProducts, setMyProducts] = useState<ProductLite[]>([])
   const [teamMembers, setTeamMembers] = useState<TeamMemberLite[]>([])
   const [selectedBlock, setSelectedBlock] = useState<number | null>(null)
   const [tplFilter, setTplFilter] = useState('عمومی')
@@ -1573,11 +1602,28 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
       .then(data => {
         if (cancelled || !data) return
         const items = Array.isArray(data.items) ? data.items : (Array.isArray(data) ? data : [])
-        setMyListings(items.slice(0, 12).map((it: any) => ({ title: String(it.title || ''), location: it.location, price: it.price, image: it.image, category: it.category })))
+        // دیتای کامل مثلِ کارتِ سایت اصلی: نوعِ معامله/متراژ/اتاق/وضعیتِ فروش از meta.
+        setMyListings(items.slice(0, 24).map((it: any) => ({
+          title: String(it.title || ''), location: it.location, price: it.price,
+          image: it.image || (typeof it.meta?.__gallery === 'string' ? String(it.meta.__gallery).split('\n')[0] : undefined),
+          category: it.category,
+          deal: it.meta?.['نوع معامله'], ptype: it.meta?.['نوع ملک'], area: it.meta?.['متراژ'], rooms: it.meta?.['اتاق خواب'],
+          dealStatus: it.meta?.['__dealStatus'],
+        })))
       })
       .catch(() => { /* پیش‌نمایش روی کارت‌های نمونه می‌ماند */ })
     return () => { cancelled = true }
   }, [ownerName])
+
+  // محصولاتِ واقعیِ فروشنده — برای پیش‌نمایشِ زندهٔ بلوکِ «محصولات/کاتالوگ/نرخ».
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/website/products')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (!cancelled && d && Array.isArray(d.products)) setMyProducts(d.products) })
+      .catch(() => { /* روی نمونه می‌ماند */ })
+    return () => { cancelled = true }
+  }, [])
 
   // مقالاتِ واقعیِ منتشرشدهٔ کاربر — برای پیش‌نمایشِ زندهٔ بلوک «وبلاگ» (مثلِ سایتِ منتشرشده).
   useEffect(() => {
@@ -2204,6 +2250,7 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
                     onDelete={() => deleteBlock(block.id)}
                     myListings={myListings}
                     myArticles={myArticles}
+                    myProducts={myProducts}
                     teamMembers={teamMembers}
                     enableDrag={!isMobile}
                     bigControls={isMobile}
