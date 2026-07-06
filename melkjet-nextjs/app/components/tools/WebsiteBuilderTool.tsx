@@ -1642,6 +1642,7 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
       else if (type === 'cta') preset = { bg: heroBg }
       else if (type === 'footer') preset = { brand: tpl.name, ...(pp?.footerAbout ? { about: pp.footerAbout } : {}) }
       else if (type === 'blogfull') preset = { heading: opts?.heading ?? 'وبلاگ' }
+      else if (type === 'blog') preset = { heading: opts?.heading ?? 'آخرین مقالات', count: 3 }
       else if (type === 'services' && pp?.services) preset = { heading: pp.servicesHeading || 'خدمات ما', items: pp.services }
       else if (type === 'about' && pp?.about) preset = { heading: pp.aboutHeading || 'درباره ما', text: pp.about }
       else if (type === 'stats' && pp?.stats) preset = { items: pp.stats }
@@ -1670,6 +1671,7 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
       ...distinct,
       'services',
       'testimonials',
+      'blog',         // تیزرِ «آخرین مقالات» روی صفحهٔ اصلی — هر پنل مقالاتِ خودش را نشان می‌دهد
       'cta',
       'footer',
     ] : [
@@ -1680,6 +1682,7 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
       'services',
       'stats',
       'testimonials',
+      'blog',         // تیزرِ «آخرین مقالات» روی صفحهٔ اصلی
       'cta',
       'footer',
     ]
