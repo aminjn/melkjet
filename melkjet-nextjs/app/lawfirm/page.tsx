@@ -10,6 +10,7 @@ import {
   money, fa, card, inputStyle, type ProRecord, type ProRequest, type ReqStatus, type ShellCfg, type JDate,
 } from '@/app/components/prodesk/ProDeskKit'
 import { jToday, jKey, jLabel } from '@/app/lib/jalali'
+import ContractStudio from './ContractStudio'
 
 // میزِ کارِ «دفترِ حقوقی» — نسخهٔ تخصصی: پرونده‌ها با مرحلهٔ رسیدگی + جلساتِ پیشِ‌رو + پذیرشِ موکل.
 const ROLE = '/lawfirm'
@@ -156,6 +157,7 @@ export default function LawfirmPage() {
   const nav = [
     { id: 'dashboard', label: 'داشبورد', icon: '▦', badge: data?.stats.open },
     { id: 'cases', label: 'پرونده‌ها', icon: '📁' },
+    { id: 'contract', label: 'قراردادساز', icon: '📝' },
     { id: 'calendar', label: 'تقویمِ جلسات', icon: '📆' },
     { id: 'intake', label: 'موکلین', icon: '📥', badge: data?.stats.open },
     { id: 'aitools', label: 'ابزارِ هوشمند', icon: '✦' },
@@ -188,7 +190,8 @@ export default function LawfirmPage() {
             <Intake requests={data.requests} post={post} onOpenCase={setCaseFrom} />
             <Cases records={data.records} post={post} today={today} />
           </>
-        ) : view === 'cases' ? <Cases records={data.records} post={post} today={today} />
+        ) : view === 'contract' ? <ContractStudio post={post} />
+          : view === 'cases' ? <Cases records={data.records} post={post} today={today} />
           : view === 'calendar' ? <ProCalendar items={hearingCalItems(data.records)} today={today} title="تقویمِ جلسات" />
             : view === 'intake' ? <Intake requests={data.requests} post={post} onOpenCase={setCaseFrom} />
             : view === 'aitools' ? <ProAiTool accent="#c98fb0" tools={[{ id: 'contract_review', label: 'تحلیلِ قرارداد', placeholder: 'متنِ قرارداد/مبایعه‌نامه را اینجا بچسبان تا ریسک‌ها و اصلاحات را بدهد…' }, { id: 'legal_risk', label: 'ریسکِ حقوقی', placeholder: 'شرحِ معامله یا موقعیتِ حقوقی را بنویس…' }]} />
