@@ -24,7 +24,10 @@ async function syncAgencyLeads(advisorPhone: string): Promise<void> {
     if (!mem) return
     const agency = await getAgency(mem.agencyPhone)
     const nm = (x?: string) => (x || '').replace(/\s+/g, ' ').trim()
-    const assigned = agency.leads.filter(l => l.assignedTo && nm(l.assignedTo) === nm(mem.advisorName) && l.stage !== 'lost')
+    const digits = (x?: string) => (x || '').replace(/\D/g, '')
+    const myId = digits(advisorPhone)
+    // مطابقت فقط با آیدیِ پروفایل (شماره) — نه نام. سیستم هیچ‌وقت بهم نمی‌ریزد.
+    const assigned = agency.leads.filter(l => digits(l.assignedToPhone) === myId && myId && l.stage !== 'lost')
     if (!assigned.length) return
     const existing = await listLeads(advisorPhone)
     const key = (l: { phone?: string; name?: string }) => (l.phone || '').replace(/\D/g, '') || nm(l.name)

@@ -33,7 +33,7 @@ export interface Listing {
 }
 export type ActivityType = 'created' | 'call' | 'visit' | 'meeting' | 'sms' | 'whatsapp' | 'email' | 'note' | 'stage' | 'assign'
 export interface Activity { id: string; type: ActivityType; at: number; note?: string }
-export interface Lead { id: string; name: string; phone?: string; email?: string; need?: string; budget?: string; stage: Stage; assignedTo?: string; createdAt: number; activities?: Activity[]; score?: number; tags?: string[]; lastActivityAt?: number; reminderAt?: number }
+export interface Lead { id: string; name: string; phone?: string; email?: string; need?: string; budget?: string; stage: Stage; assignedTo?: string; assignedToPhone?: string; createdAt: number; activities?: Activity[]; score?: number; tags?: string[]; lastActivityAt?: number; reminderAt?: number }
 export interface Deal { id: string; title: string; amount: number; agent: string; date: string; createdAt: number }
 export interface MonthSale { month: string; amount: number }
 export type CommMode = 'percent' | 'amount'
@@ -209,11 +209,13 @@ export async function addLead(o: string, input: Partial<Lead>): Promise<Lead> {
   })
   return c
 }
-export async function assignLead(o: string, lid: string, agent: string): Promise<Lead | null> {
+// agentPhone = آیدیِ پروفایلِ مشاور (شماره). لینکِ واقعی با همین است، نه با نام — تا سیستم بهم نریزد.
+export async function assignLead(o: string, lid: string, agent: string, agentPhone?: string): Promise<Lead | null> {
   let res: Lead | null = null
   await mutate(o, a => {
     const l = a.leads.find(x => x.id === lid); if (!l) return
-    l.assignedTo = agent; if (l.stage === 'new') l.stage = 'assigned'
+    l.assignedTo = agent; l.assignedToPhone = agentPhone ? String(agentPhone) : undefined
+    if (l.stage === 'new') l.stage = 'assigned'
     l.activities = [...(l.activities || []), { id: id('ac_'), type: 'assign', at: Date.now(), note: agent ? `تخصیص به ${agent}` : 'لغوِ تخصیص' }]
     l.lastActivityAt = Date.now(); l.score = leadScore(l); res = l
   })
@@ -229,6 +231,22 @@ export async function setLeadStage(o: string, lid: string, stage: Stage): Promis
   })
   return res
 }
+// مهاجرتِ یک‌بارهٔ لیدهای قدیمی که فقط با «نام» تخصیص یافته بودند → افزودنِ آیدیِ پروفایل (شماره)
+// تا لینک از این به بعد فقط با آیدی باشد. برمی‌گرداند که آیا چیزی نوشته شد.
+export async function backfillAssignedPhones(o: string, nameToPhone: Record<string, string>): Promise<boolean> {
+  const nm = (s?: string) => (s || '').replace(/\s+/g, ' ').trim()
+  let changed = false
+  await mutate(o, a => {
+    for (const l of a.leads) {
+      if (l.assignedTo && !l.assignedToPhone) {
+        const p = nameToPhone[nm(l.assignedTo)]
+        if (p) { l.assignedToPhone = p; changed = true }
+      }
+    }
+  })
+  return changed
+}
+
 // ثبتِ فعالیت روی تایم‌لاینِ لیدِ آژانس + اتوماسیونِ سبکِ مرحله.
 export async function addLeadActivity(o: string, lid: string, act: { type: ActivityType; note?: string }): Promise<Lead | null> {
   let res: Lead | null = null

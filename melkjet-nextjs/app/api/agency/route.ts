@@ -5,7 +5,7 @@ import {
   addAgent, toggleAgent, deleteAgent, addListing, setListingStatus, assignListing, deleteListing,
   addLead, assignLead, setLeadStage, deleteLead, addDeal, updateAgencyProfile, resolveAgencyName,
   getCommissionConfig, setDefaultCommission, setAgentCommission, clearAgentCommission,
-  addLeadActivity, agencyAiInsights, agencyLeadAdvice, setLeadReminder, type ActivityType,
+  addLeadActivity, agencyAiInsights, agencyLeadAdvice, setLeadReminder, backfillAssignedPhones, type ActivityType,
 } from '@/app/lib/agency-store'
 import { getCrmSettings, setCrmSettings } from '@/app/lib/crm-settings-store'
 import { sendServiceSms } from '@/app/lib/sms'
@@ -19,14 +19,11 @@ import { listAgencyMembers } from '@/app/lib/agency-link-store'
 // وقتی آژانس یک لید را به مشاور تخصیص می‌دهد، همان لید در پنلِ خودِ آن مشاور (advisor-store)
 // هم ساخته می‌شود تا واقعاً در «/pros → لیدها» ببیندش. dedup: اگر مشاور از قبل لیدی با همان
 // شماره (یا همان نام، اگر شماره نبود) دارد، دوباره ساخته نمی‌شود.
-async function pushLeadToAdvisor(agencyOwner: string, agencyName: string, lead: { name: string; phone?: string; email?: string; need?: string; budget?: string; stage?: string }, advisorName: string): Promise<void> {
-  const nm = (s?: string) => (s || '').replace(/\s+/g, ' ').trim()
-  if (!nm(advisorName)) return
+// لینک بر اساسِ آیدیِ پروفایل (شماره)، نه نام. lead در store خودِ آن مشاور ساخته می‌شود.
+async function pushLeadToAdvisor(agencyName: string, lead: { name: string; phone?: string; email?: string; need?: string; budget?: string; stage?: string }, advisorPhone?: string): Promise<void> {
+  if (!advisorPhone) return   // فقط مشاورِ واقعیِ لینک‌شده (اکانت‌دار) پنل دارد
   try {
-    const members = await listAgencyMembers(agencyOwner)
-    const m = members.find(x => nm(x.advisorName) === nm(advisorName))
-    const advisorPhone = m?.advisorPhone
-    if (!advisorPhone) return   // فقط مشاورِ واقعیِ لینک‌شده پنل دارد
+    const nm = (s?: string) => (s || '').replace(/\s+/g, ' ').trim()
     const existing = await advListLeads(advisorPhone)
     const key = (l: { phone?: string; name?: string }) => (l.phone || '').replace(/\D/g, '') || nm(l.name)
     const want = key(lead)
@@ -39,6 +36,14 @@ async function pushLeadToAdvisor(agencyOwner: string, agencyName: string, lead: 
     })
   } catch { /* تخصیص نباید به‌خاطرِ خطای push خراب شود */ }
 }
+
+// نامِ مشاور → آیدیِ پروفایل (شماره) از عضویت. تنها نقطه‌ای که نام درگیر است، همین‌جاست
+// (تبدیلِ انتخابِ کشو به آیدی)؛ از این به بعد همه‌چیز با آیدی کار می‌کند.
+async function advisorPhoneOf(agencyOwner: string, advisorName: string): Promise<string | undefined> {
+  const nm = (s?: string) => (s || '').replace(/\s+/g, ' ').trim()
+  if (!nm(advisorName)) return undefined
+  try { const members = await listAgencyMembers(agencyOwner); return members.find(x => nm(x.advisorName) === nm(advisorName))?.advisorPhone } catch { return undefined }
+}
 import { checkDuplicate, advisorScope } from '@/app/lib/duplicate-check'
 
 // همهٔ دادهٔ پنل آژانس، مخصوص کاربرِ واردشده (per-profile).
@@ -46,6 +51,16 @@ export async function GET() {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای مشاهده وارد شوید' }, { status: 401 })
   const o = s.phone
+  // مهاجرتِ یک‌بارهٔ لینکِ لیدهای قدیمی از «نام» به «آیدیِ پروفایل» (فقط وقتی لازم است می‌نویسد).
+  try {
+    const ag = await getAgency(o)
+    if (ag.leads.some(l => l.assignedTo && !l.assignedToPhone)) {
+      const nm2 = (x?: string) => (x || '').replace(/\s+/g, ' ').trim()
+      const map: Record<string, string> = {}
+      for (const m of await listAgencyMembers(o)) if (m.advisorPhone) map[nm2(m.advisorName)] = m.advisorPhone
+      if (Object.keys(map).length) await backfillAssignedPhones(o, map)
+    }
+  } catch {}
   const stats = await agencyStats(o)
   // فایل‌های آژانس در دو جا ذخیره می‌شوند: فرمِ «افزودن فایل» → agency-store، و
   // ایمپورتِ دیوار (ابزارِ مشترکِ مشاور) → advisor-store[همین آژانس]. هر دو باید در «فایل‌ها» دیده شوند.
@@ -131,9 +146,10 @@ export async function POST(req: NextRequest) {
     case 'setCrmSettings': return NextResponse.json({ ok: true, settings: await setCrmSettings(o, b.patch || {}) })
     case 'assignLead': {
       const agent = String(b.agent || '')
-      const l = await assignLead(o, String(b.id), agent)
+      const agentPhone = agent ? await advisorPhoneOf(o, agent) : undefined   // آیدیِ پروفایل
+      const l = await assignLead(o, String(b.id), agent, agentPhone)
       if (!l) return NextResponse.json({ error: 'یافت نشد' }, { status: 404 })
-      if (agent) { const agencyName = await resolveAgencyName(o); await pushLeadToAdvisor(o, agencyName, l, agent) }
+      if (agentPhone) { const agencyName = await resolveAgencyName(o); await pushLeadToAdvisor(agencyName, l, agentPhone) }
       return NextResponse.json({ ok: true, lead: l })
     }
     case 'setLeadStage': { const l = await setLeadStage(o, String(b.id), b.stage); return l ? NextResponse.json({ ok: true, lead: l }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
@@ -177,8 +193,9 @@ export async function POST(req: NextRequest) {
       const plan = planDistribution(agency.leads, pool, agency.listings)
       const a = plan.find(x => x.leadId === String(b.id))
       if (!a) return NextResponse.json({ ok: false, error: 'این لید قابلِ تخصیصِ خودکار نیست (شاید قبلاً تخصیص یافته یا بسته شده).' })
-      const assigned = await assignLead(o, a.leadId, a.agentName)
-      if (assigned) { const agencyName = await resolveAgencyName(o); await pushLeadToAdvisor(o, agencyName, assigned, a.agentName) }
+      const agentPhone = await advisorPhoneOf(o, a.agentName)
+      const assigned = await assignLead(o, a.leadId, a.agentName, agentPhone)
+      if (assigned && agentPhone) { const agencyName = await resolveAgencyName(o); await pushLeadToAdvisor(agencyName, assigned, agentPhone) }
       return NextResponse.json({ ok: true, assignedTo: a.agentName, reasons: a.reasons, leads: await listLeads(o) })
     }
     case 'conflicts': return NextResponse.json({ ok: true, conflicts: findConflicts(await listLeads(o)) })
