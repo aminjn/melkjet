@@ -22,7 +22,8 @@ function toDetail(it: Item): DetailItem {
   const images = (gallery.length ? gallery : (it.image ? [it.image] : [])).slice(0, 12)
   const specs: { k: string; v: string }[] = []
   for (const [k, v] of Object.entries(it.meta || {})) { if (!v || k.startsWith('__') || ['شهر', 'محله', 'استان', 'منطقه'].includes(k)) continue; specs.push({ k, v: String(v) }) }
-  return { id: it.id, title: it.title, price: it.price, location: it.location, images, description: it.excerpt, specs: specs.slice(0, 10) }
+  const lat = Number(it.meta?.['__lat']); const lng = Number(it.meta?.['__lng'])
+  return { id: it.id, title: it.title, price: it.price, location: it.location, images, description: it.excerpt, specs: specs.slice(0, 16), lat: lat || undefined, lng: lng || undefined }
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ site: string; slug: string }> }): Promise<Metadata> {

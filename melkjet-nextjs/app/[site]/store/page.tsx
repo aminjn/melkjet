@@ -47,11 +47,16 @@ export default async function InSiteStore({ params }: { params: Promise<{ site: 
               const img = pr.images?.[0]
               return (
                 <div key={pr.id} style={{ background: 'var(--mjs-surface)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 16, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ height: 150, background: img ? `center/cover no-repeat url(${img})` : 'linear-gradient(135deg,var(--mjs-surface),var(--mjs-bg))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, color: 'var(--mjs-primary)' }}>{!img && '🧱'}</div>
-                  <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+                  <div style={{ position: 'relative', height: 150, background: img ? `center/cover no-repeat url(${img})` : 'linear-gradient(135deg,var(--mjs-surface),var(--mjs-bg))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, color: 'var(--mjs-primary)' }}>
+                    {!img && '🧱'}
+                    {pr.discountPct ? <span style={{ position: 'absolute', top: 8, right: 8, fontSize: 10.5, fontWeight: 800, color: '#fff', background: '#dc2626', borderRadius: 6, padding: '2px 8px' }}>٪{pr.discountPct.toLocaleString('fa-IR')} تخفیف</span> : null}
+                  </div>
+                  <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 5, flex: 1 }}>
                     <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--mjs-heading)', lineHeight: 1.6 }}>{pr.name}</div>
-                    {pr.brand && <div style={{ fontSize: 11.5, color: 'var(--mjs-muted)' }}>{pr.brand}</div>}
+                    <div style={{ fontSize: 11.5, color: 'var(--mjs-muted)' }}>{[pr.brand, pr.category].filter(Boolean).join(' · ')}</div>
+                    {pr.stock > 0 ? <div style={{ fontSize: 10.5, color: '#16a34a' }}>✓ موجود{pr.stock ? ` (${pr.stock.toLocaleString('fa-IR')} ${pr.unit})` : ''}</div> : <div style={{ fontSize: 10.5, color: '#dc2626' }}>ناموجود</div>}
                     <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                      {pr.discountPct ? <span style={{ fontSize: 11, color: 'var(--mjs-muted)', textDecoration: 'line-through' }}>{money(pr.price)}</span> : null}
                       <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--mjs-primary)' }}>{money(price)}</span>
                       <span style={{ fontSize: 11, color: 'var(--mjs-muted)' }}>تومان/{pr.unit}</span>
                     </div>
