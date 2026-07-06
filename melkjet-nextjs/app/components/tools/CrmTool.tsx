@@ -30,8 +30,8 @@ interface Task {
   createdAt: number
 }
 
-// Mirrors app/lib/leads-store.ts Lead (the API shape).
-type Stage = 'new' | 'review' | 'offered' | 'contract' | 'lost'
+// Mirrors app/lib/leads-store.ts Lead (the API shape). سوپرمجموعهٔ شناسه‌ها (املاک ۷مرحله‌ای + کلاسیک ۵مرحله‌ای).
+type Stage = 'new' | 'contacted' | 'sent' | 'visited' | 'negotiation' | 'review' | 'offered' | 'contract' | 'won' | 'lost'
 type LeadStatus = 'new' | 'hot' | 'cold' | 'lost' | 'converted'
 interface Activity { id: string; type: string; at: number; note?: string; meta?: Record<string, any> }
 interface Lead {
@@ -75,34 +75,49 @@ const J_MON = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'م
 // The 5 backend stage ids (new|review|offered|contract|lost) NEVER change — only
 // their displayed labels do — so the leads backend is untouched.
 // ─────────────────────────────────────────────────────────────────────────────
+// ترتیبِ پیش‌فرض (نقش‌های غیرِ‌املاک): ۵ مرحلهٔ کلاسیک.
 const STAGE_ORDER: Stage[] = ['new', 'review', 'offered', 'contract', 'lost']
-const STAGE_COLORS: Record<Stage, string> = { new: '#7a8fae', review: '#e7a14a', offered: 'var(--gold)', contract: '#5fd98a', lost: '#e74c3c' }
-
-interface RoleCrmCfg {
-  leadWord: string          // singular «lead/customer» noun for this role
-  leadsWord: string         // its plural
-  needLabel: string         // «نیاز» field label
-  budgetLabel: string       // «بودجه» field label
-  pipelineLabel: string     // «پایپ‌لاین» view/section label
-  dealWord: string          // singular «deal» noun
-  dealsWord: string         // plural «deals» (the «معاملات» view label)
-  stages: Record<Stage, string>  // per-role stage labels (same 5 ids)
-  viewLabels: Partial<Record<CrmView, string>> // per-view label overrides
+// ترتیبِ املاک (بلوپرینتِ مشاور): ۷ مرحله + ازدست‌رفته.
+const REALESTATE_ORDER: Stage[] = ['new', 'contacted', 'sent', 'visited', 'negotiation', 'contract', 'won', 'lost']
+const STAGE_COLORS: Record<Stage, string> = {
+  new: '#7a8fae', contacted: '#e7a14a', sent: '#d6b24a', visited: '#c9a84c', negotiation: '#b98fd6',
+  review: '#e7a14a', offered: 'var(--gold)', contract: '#5ac88a', won: '#5fd98a', lost: '#e74c3c',
+}
+// برچسبِ پیش‌فرضِ هر شناسه (اگر نقش برچسبِ اختصاصی ندهد).
+const STAGE_LABEL_DEFAULT: Record<Stage, string> = {
+  new: 'لید جدید', contacted: 'تماس', sent: 'ارسال فایل', visited: 'بازدید', negotiation: 'مذاکره',
+  review: 'در حال بررسی', offered: 'پیشنهاد', contract: 'قرارداد', won: 'فروش', lost: 'ازدست‌رفته',
+}
+// نگاشتِ لیدهای قدیمی (۵مرحله‌ای) به ستون‌های نقشِ املاک وقتی ستونِ همان شناسه وجود ندارد.
+const STAGE_FALLBACK: Record<string, Stage[]> = {
+  review: ['contacted', 'visited'], offered: ['sent', 'negotiation'], contract: ['contract', 'won'],
+  contacted: ['review'], sent: ['offered'], visited: ['review'], negotiation: ['offered'], won: ['contract'],
 }
 
-const DEFAULT_STAGES: Record<Stage, string> = { new: 'لید جدید', review: 'در حال بررسی', offered: 'پیشنهاد داده‌شده', contract: 'قرارداد', lost: 'از دست‌رفته' }
+interface RoleCrmCfg {
+  leadWord: string
+  leadsWord: string
+  needLabel: string
+  budgetLabel: string
+  pipelineLabel: string
+  dealWord: string
+  dealsWord: string
+  stageOrder?: Stage[]                       // ستون‌های این نقش (اگر نبود، STAGE_ORDER)
+  stages?: Partial<Record<Stage, string>>    // برچسبِ اختصاصیِ مرحله‌ها
+  viewLabels: Partial<Record<CrmView, string>>
+}
 
-// Default (مشاور/آژانس/generic) — keeps the original stage columns & labels.
+// Default (generic) — pipelineِ ۷مرحله‌ایِ املاک.
 const DEFAULT_CRM: RoleCrmCfg = {
   leadWord: 'لید', leadsWord: 'لیدها', needLabel: 'نیاز', budgetLabel: 'بودجه',
   pipelineLabel: 'پایپ‌لاین CRM', dealWord: 'قرارداد', dealsWord: 'قراردادها',
-  stages: DEFAULT_STAGES, viewLabels: { listings: 'فایل‌ها' },
+  stageOrder: REALESTATE_ORDER, viewLabels: { listings: 'فایل‌ها' },
 }
 
 const REALESTATE_CRM: RoleCrmCfg = {
   leadWord: 'مشتری', leadsWord: 'مشتریان', needLabel: 'نیاز', budgetLabel: 'بودجه',
   pipelineLabel: 'پایپ‌لاین CRM', dealWord: 'قرارداد', dealsWord: 'قراردادها',
-  stages: DEFAULT_STAGES, viewLabels: { listings: 'فایل‌ها' },
+  stageOrder: REALESTATE_ORDER, viewLabels: { listings: 'فایل‌ها' },
 }
 
 const LEGAL_CRM: RoleCrmCfg = {
@@ -118,7 +133,7 @@ const ROLE_CRM: Record<string, RoleCrmCfg> = {
   '/buyer': {
     leadWord: 'مخاطب', leadsWord: 'مخاطبان', needLabel: 'نیاز', budgetLabel: 'بودجه',
     pipelineLabel: 'پیگیری‌ها', dealWord: 'معامله', dealsWord: 'معاملات',
-    stages: DEFAULT_STAGES, viewLabels: { listings: 'ملک‌های موردنظر' },
+    stageOrder: REALESTATE_ORDER, viewLabels: { listings: 'ملک‌های موردنظر' },
   },
   '/builder': {
     leadWord: 'خریدار', leadsWord: 'خریداران', needLabel: 'واحدِ موردنیاز', budgetLabel: 'بودجه',
@@ -325,7 +340,16 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
   useEffect(() => { fetch('/api/auth/profile').then(r => r.ok ? r.json() : null).then(d => { setRole(d?.dash || '') }).catch(() => {}) }, [])
   const cfg = ROLE_CRM[role] || DEFAULT_CRM
   const isMat = role === '/materials'
-  const stages: { id: Stage; label: string; color: string }[] = STAGE_ORDER.map(id => ({ id, label: cfg.stages[id], color: STAGE_COLORS[id] }))
+  const order: Stage[] = cfg.stageOrder || STAGE_ORDER
+  const stages: { id: Stage; label: string; color: string }[] = order.map(id => ({ id, label: cfg.stages?.[id] ?? STAGE_LABEL_DEFAULT[id], color: STAGE_COLORS[id] }))
+  // شناسهٔ ذخیره‌شدهٔ لید را به ستونی که در این نقش وجود دارد نگاشت می‌کند (سازگاریِ داده‌های قدیمی).
+  const colOf = (s: Stage): Stage => {
+    if (order.includes(s)) return s
+    for (const alt of (STAGE_FALLBACK[s] || [])) if (order.includes(alt)) return alt
+    return order[0]
+  }
+  const isWonStage = (s: Stage) => s === 'contract' || s === 'won'
+  const wonLabel = (stages.find(s => s.id === 'won') || stages.find(s => s.id === 'contract'))?.label || cfg.dealWord
   const viewLabel = (v: CrmView): string => {
     if (v === 'pipeline') return cfg.pipelineLabel
     if (v === 'deals') return cfg.dealsWord
@@ -508,7 +532,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
 
   // Shift a lead one column left/right in the pipeline order.
   const shiftLead = (lead: Lead, dir: -1 | 1) => {
-    const idx = stages.findIndex(c => c.id === lead.stage)
+    const idx = stages.findIndex(c => c.id === colOf(lead.stage))
     const next = stages[idx + dir]
     if (next) moveLead(lead.id, next.id)
   }
@@ -598,18 +622,19 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
 
   // Dashboard "recent leads" — real leads when present, else the original demo copy.
   const stageMeta: Record<Stage, { status: string; color: string }> = {
-    new: { status: 'سرد', color: '#7a8fae' },
-    review: { status: 'گرم', color: '#e7a14a' },
-    offered: { status: 'داغ', color: '#e74c3c' },
-    contract: { status: 'قرارداد', color: '#5fd98a' },
-    lost: { status: 'از دست‌رفته', color: '#7a8fae' },
+    new: { status: 'سرد', color: '#7a8fae' }, contacted: { status: 'گرم', color: '#e7a14a' },
+    sent: { status: 'گرم', color: '#e7a14a' }, visited: { status: 'داغ', color: '#e74c3c' },
+    negotiation: { status: 'داغ', color: '#e74c3c' }, review: { status: 'گرم', color: '#e7a14a' },
+    offered: { status: 'داغ', color: '#e74c3c' }, contract: { status: 'قرارداد', color: '#5fd98a' },
+    won: { status: 'فروش', color: '#5fd98a' }, lost: { status: 'از دست‌رفته', color: '#8a8a8a' },
   }
+  const sm = (s: Stage) => stageMeta[s] || stageMeta.new
   const recentLeadsLive = leads.slice(0, 5).map(l => ({
     name: l.name,
     need: l.need || '—',
     budget: l.budget || '—',
-    status: stageMeta[l.stage].status,
-    statusColor: stageMeta[l.stage].color,
+    status: sm(l.stage).status,
+    statusColor: sm(l.stage).color,
     lastContact: (() => { try { return new Date(l.updatedAt).toLocaleDateString('fa-IR') } catch { return '—' } })(),
   }))
 
@@ -633,7 +658,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
   for (let i = 5; i >= 0; i--) { let m = curJ.jm - i, y = curJ.jy; while (m <= 0) { m += 12; y-- } last6.push({ jy: y, jm: m }) }
   const realSales = last6.map(p => {
     const inM = leads.filter(l => { const lp = jParts(new Date(l.createdAt)); return lp.jy === p.jy && lp.jm === p.jm })
-    return { month: J_MON[p.jm - 1], value: inM.length, deals: inM.filter(l => l.stage === 'contract').length }
+    return { month: J_MON[p.jm - 1], value: inM.length, deals: inM.filter(l => isWonStage(l.stage)).length }
   })
   const maxSales = Math.max(1, ...realSales.map(d => d.value))
   const hasSales = realSales.some(d => d.value > 0)
@@ -642,12 +667,12 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
   const staleNew = leads.filter(l => l.stage === 'new' && (now - l.createdAt) > 3 * 86400000)
   if (staleNew.length) realInsights.push({ icon: '✦', text: `${FA(staleNew.length)} ${cfg.leadWord}ِ جدید بیش از ۳ روز بدون پیگیری مانده — تماس بگیرید.` })
   if (overdueCount) realInsights.push({ icon: '◰', text: `${FA(overdueCount)} وظیفهٔ معوق دارید؛ هرچه زودتر رسیدگی کنید.` })
-  const contractCount = leads.filter(l => l.stage === 'contract').length
-  if (contractCount) realInsights.push({ icon: '✓', text: `${FA(contractCount)} ${cfg.leadWord} به مرحلهٔ ${cfg.stages.contract} رسیده است. آفرین!` })
+  const contractCount = leads.filter(l => isWonStage(l.stage)).length
+  if (contractCount) realInsights.push({ icon: '✓', text: `${FA(contractCount)} ${cfg.leadWord} به ${wonLabel} رسیده است. آفرین!` })
   if (growth !== null) realInsights.push({ icon: '◈', text: `رشد قیمتِ منطقه: ${growth >= 0 ? '+' : ''}${FA(growth)}٪ (دادهٔ واقعی). به ${cfg.leadsWord} اطلاع دهید.` })
 
   // ───── Deals (won leads) — «معاملات/قراردادها/…» ─────
-  const wonLeads = leads.filter(l => l.stage === 'contract')
+  const wonLeads = leads.filter(l => isWonStage(l.stage))
   const dealsTotalValue = wonLeads.reduce((sum, l) => sum + parseBudget(l.budget), 0)
   const dealsThisMonth = wonLeads.filter(l => { const p = jParts(new Date(l.updatedAt)); return p.jy === curJ.jy && p.jm === curJ.jm }).length
 
@@ -746,7 +771,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
             {[
               { label: 'وظایف باز', value: openCount, sub: `${FA(todayCount)} امروز`, subColor: 'var(--gold)', icon: '✓' },
               { label: 'معوق', value: overdueCount, sub: overdueCount > 0 ? 'نیاز به پیگیری' : 'بدون معوقه', subColor: overdueCount > 0 ? '#e74c3c' : '#5fd98a', icon: '◴' },
-              { label: `کل ${cfg.leadsWord}`, value: leads.length, sub: `${FA(stageBreakdown.find(s => s.id === 'contract')?.count || 0)} ${cfg.dealWord}`, subColor: '#5fd98a', icon: '◈' },
+              { label: `کل ${cfg.leadsWord}`, value: leads.length, sub: `${FA(contractCount)} ${cfg.dealWord}`, subColor: '#5fd98a', icon: '◈' },
               { label: 'فایل‌های ملکی', value: ownListings ? ownListings.length : listings.length, sub: growth !== null ? `رشد منطقه ${growth >= 0 ? '+' : ''}${FA(growth)}٪` : 'فایل فعال', subColor: 'var(--gold)', icon: '◰' },
             ].map((kpi, i) => (
               <div key={i} style={{
@@ -1171,7 +1196,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
 
           <div className="mjc-kanban" style={{ display: 'flex', gap: 14, overflowX: 'auto', paddingBottom: 8 }}>
             {stages.map((col, colIdx) => {
-              const colLeads = leads.filter(l => l.stage === col.id)
+              const colLeads = leads.filter(l => colOf(l.stage) === col.id)
               return (
               <div key={col.id} style={{ flex: '0 0 260px', display: 'flex', flexDirection: 'column' }}
                 onDragOver={e => { e.preventDefault(); if (dragOverCol !== col.id) setDragOverCol(col.id) }}
@@ -1662,7 +1687,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
             </div>
             <div style={{ maxHeight: 520, overflowY: 'auto' }}>
               {wonLeads.length === 0 ? (
-                <div style={{ padding: 28, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>هنوز {cfg.dealWord}ی به مرحلهٔ «{cfg.stages.contract}» نرسیده است.</div>
+                <div style={{ padding: 28, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>هنوز {cfg.dealWord}ی به مرحلهٔ «{wonLabel}» نرسیده است.</div>
               ) : wonLeads.map((l, i) => (
                 <div key={l.id} style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr 1fr', gap: 8, padding: '12px 20px', borderTop: i ? '1px solid var(--line)' : 'none', fontSize: 13, alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>

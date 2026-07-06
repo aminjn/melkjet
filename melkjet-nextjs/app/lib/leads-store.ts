@@ -10,17 +10,18 @@ import { pgEnabled, kvGet, kvMutate } from './db'
 const DATA_FILE = join(process.cwd(), '.leads-data.json')
 const KV_KEY = 'leads'
 
-// مرحلهٔ pipeline فروش (Drag & Drop). پنجِ شناسهٔ پایدارِ بک‌اند — برچسبِ نمایشی‌شان در UI
-// بر اساسِ نقش تغییر می‌کند (CrmTool)، ولی خودِ شناسه‌ها ثابت‌اند تا هیچ پنلی نشکند.
-export type Stage = 'new' | 'review' | 'offered' | 'contract' | 'lost'
-export const STAGES: Stage[] = ['new', 'review', 'offered', 'contract', 'lost']
+// مرحلهٔ pipeline فروش (Drag & Drop). سوپرمجموعهٔ شناسه‌ها: نقشِ املاک از pipelineِ ۷مرحله‌ای
+// (contacted/sent/visited/negotiation/won) استفاده می‌کند و بقیهٔ نقش‌ها از ۵ شناسهٔ کلاسیک
+// (review/offered/…). همه معتبرند تا هیچ پنلی نشکند؛ برچسبِ نمایشی در UI نقش‌محور است.
+export type Stage = 'new' | 'contacted' | 'sent' | 'visited' | 'negotiation' | 'review' | 'offered' | 'contract' | 'won' | 'lost'
+export const STAGES: Stage[] = ['new', 'contacted', 'review', 'sent', 'offered', 'visited', 'negotiation', 'contract', 'won', 'lost']
 export const STAGE_LABEL: Record<Stage, string> = {
-  new: 'لید جدید', review: 'تماس/بازدید', offered: 'ارسال فایل/پیشنهاد', contract: 'قرارداد/فروش', lost: 'ازدست‌رفته',
+  new: 'لید جدید', contacted: 'تماس', sent: 'ارسال فایل', visited: 'بازدید', negotiation: 'مذاکره',
+  review: 'در حال بررسی', offered: 'پیشنهاد', contract: 'قرارداد', won: 'فروش', lost: 'ازدست‌رفته',
 }
-// نگاشتِ مرحله‌های جدیدِ blueprint (اگر از جایی آمد) → شناسه‌های پایدار.
-const STAGE_ALIAS: Record<string, Stage> = { new: 'new', contacted: 'review', visited: 'review', sent: 'offered', negotiation: 'offered', contract: 'contract', won: 'contract', lost: 'lost' }
-const normStage = (s: any): Stage => { const v = String(s || 'new'); return (STAGES as string[]).includes(v) ? v as Stage : (STAGE_ALIAS[v] || 'new') }
-const isWon = (st: Stage) => st === 'contract'
+const normStage = (s: any): Stage => { const v = String(s || 'new'); return (STAGES as string[]).includes(v) ? v as Stage : 'new' }
+// «بسته‌شدهٔ موفق»: هم قرارداد (۵مرحله‌ای) و هم فروش (۷مرحله‌ای).
+const isWon = (st: Stage) => st === 'contract' || st === 'won'
 
 // وضعیتِ سلامتِ لید (blueprint).
 export type LeadStatus = 'new' | 'hot' | 'cold' | 'lost' | 'converted'
@@ -292,8 +293,9 @@ export async function leadAnalytics(owner: string): Promise<LeadAnalytics> {
     act7 += (l.activities || []).filter(a => a.at >= wk).length
     scoreSum += l.score
   }
-  const closed = byStage.contract + byStage.lost
-  const conversionRate = closed ? Math.round((byStage.contract / closed) * 100) : 0
+  const wonCount = byStage.contract + byStage.won
+  const closed = wonCount + byStage.lost
+  const conversionRate = closed ? Math.round((wonCount / closed) * 100) : 0
   const need = (await followUpNeeded(owner)).length
   return { total: leads.length, byStage, byStatus, conversionRate, revenue, activities7d: act7, needFollowUp: need, avgScore: leads.length ? Math.round(scoreSum / leads.length) : 0 }
 }
