@@ -1636,6 +1636,17 @@ function AgencyIntelView() {
     setDmsg(j.started ? '✅ کشف شروع شد (پس‌زمینه)…' : ('❌ ' + (j.reason || 'ناموفق')))
     setTimeout(loadPros, 800)
   }
+  const [probe, setProbe] = useState<any>(null)
+  const [probing, setProbing] = useState(false)
+  const runProbe = async () => {
+    setProbing(true); setProbe(null); setDmsg('')
+    try {
+      const q = searchUrl.trim() ? `&searchUrl=${encodeURIComponent(searchUrl.trim())}` : ''
+      const r = await fetch(`/api/admin/divar-pros?probe=1${q}`, { cache: 'no-store' })
+      const j = await r.json()
+      if (j.ok) setProbe(j); else setDmsg('❌ ' + (j.error || 'خطا در تشخیص'))
+    } catch { setDmsg('❌ خطای شبکه') } finally { setProbing(false) }
+  }
 
   const analyze = async () => {
     if (!slug.trim()) return
@@ -1668,6 +1679,7 @@ function AgencyIntelView() {
           <GoldButton disabled={pmeta?.running} onClick={() => runDiscovery('sitemap')}>{pmeta?.running ? '…' : '🗺 کشف از سایت‌مپِ دیوار'}</GoldButton>
           <input style={{ ...inp, flex: 1, minWidth: 240 }} value={searchUrl} onChange={e => setSearchUrl(e.target.value)} placeholder="لینکِ جستجوی دیوار (برای روشِ جستجو)" />
           <OutlineButton onClick={() => runDiscovery('search')}>🔍 کشف از این جستجو</OutlineButton>
+          <OutlineButton onClick={runProbe}>{probing ? '…' : '🩺 تشخیصِ اتصال'}</OutlineButton>
           <OutlineButton onClick={loadPros}>تازه‌سازی</OutlineButton>
           {pros.length > 0 && <>
             <a href="/api/admin/divar-pros?export=links" style={{ fontSize: 12.5, color: 'var(--gold)', textDecoration: 'none', alignSelf: 'center' }}>⬇ دانلودِ همهٔ لینک‌ها</a>
@@ -1675,6 +1687,24 @@ function AgencyIntelView() {
           </>}
         </div>
         {(dmsg || pmeta?.note) && <div style={{ marginTop: 10, fontSize: 12.5, color: dmsg.startsWith('❌') ? '#e7674a' : 'var(--gold)' }}>{dmsg || pmeta?.note}</div>}
+        {probe && (
+          <div style={{ marginTop: 12, background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 12, padding: 14 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 800, marginBottom: 8 }}>🩺 تشخیصِ اتصال به دیوار</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)', direction: 'ltr', textAlign: 'left', marginBottom: 10 }}>proxy: {probe.proxyUrl}</div>
+            {(probe.steps || []).map((s: any, i: number) => (
+              <div key={i} style={{ padding: '8px 0', borderBottom: '1px solid var(--line)' }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: 14 }}>{s.ok ? '✅' : '❌'}</span>
+                  <span style={{ fontSize: 12.5, fontWeight: 700 }}>{s.name}</span>
+                  <span style={{ marginInlineStart: 'auto', fontSize: 10.5, color: 'var(--faint)' }}>HTTP {s.status} · {s.ms}ms</span>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3, lineHeight: 1.8 }}>{s.note}</div>
+                {s.sample && <pre style={{ fontSize: 10.5, color: 'var(--faint)', direction: 'ltr', textAlign: 'left', margin: '4px 0 0', whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: 80, overflow: 'auto' }}>{s.sample}</pre>}
+              </div>
+            ))}
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--gold)', marginTop: 10 }}>{probe.verdict}</div>
+          </div>
+        )}
       </Card>
 
       {/* جدولِ pro‌های کشف‌شده */}
