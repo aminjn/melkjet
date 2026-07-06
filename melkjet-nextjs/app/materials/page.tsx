@@ -524,6 +524,14 @@ function DashboardView({ stats, post, onAll }: {
   const maxSale = Math.max(1, ...stats.monthlySales.map(m => m.amount))
   const lastIdx = stats.monthlySales.length - 1
 
+  // تحلیلِ هوشمند (پیش‌بینیِ تقاضا + پیشنهادِ قیمت)
+  const [ai, setAi] = useState<any>(null)
+  const [aiBusy, setAiBusy] = useState(false)
+  const runAi = async () => {
+    setAiBusy(true)
+    try { const r = await fetch('/api/materials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'aiInsights' }) }); const d = await r.json(); if (d.ok) setAi(d) } catch {} finally { setAiBusy(false) }
+  }
+
   const restockPrompt = async (item: LowStock) => {
     const raw = window.prompt(`مقدار تأمین برای «${item.name}» (${item.unit}):`, '')
     if (raw == null) return
@@ -545,6 +553,33 @@ function DashboardView({ stats, post, onAll }: {
             <div style={{ fontSize: 12, color: c.subColor, marginTop: 8, fontWeight: 600 }}>{c.sub}</div>
           </div>
         ))}
+      </div>
+
+      {/* تحلیلِ هوشمند — پیش‌بینیِ تقاضا + پیشنهادِ قیمت */}
+      <div style={{ ...card, padding: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 15, fontWeight: 800 }}>✦ تحلیلِ هوشمندِ فروش</div>
+          <button disabled={aiBusy} onClick={runAi} style={{ marginInlineStart: 'auto', padding: '8px 16px', borderRadius: 10, border: '1px solid var(--gold)', background: 'var(--goldDim)', color: 'var(--gold)', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>{aiBusy ? '…' : (ai ? 'به‌روزرسانی' : 'تحلیل کن')}</button>
+        </div>
+        {ai ? <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 160px', background: 'var(--bg2)', borderRadius: 12, padding: 14 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>پیش‌بینیِ فروشِ ماهِ آینده</div><div style={{ fontSize: 18, fontWeight: 800, color: 'var(--gold)', marginTop: 4 }}>{mt(ai.forecast.nextMonth)}</div><div style={{ fontSize: 11, color: ai.forecast.trendPct >= 0 ? '#34d399' : '#f87171', marginTop: 3 }}>روند {ai.forecast.trendPct >= 0 ? '+' : ''}{fa(ai.forecast.trendPct)}٪</div></div>
+            <div style={{ flex: '1 1 160px', background: 'var(--bg2)', borderRadius: 12, padding: 14 }}><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>نیازمندِ تأمین</div><div style={{ fontSize: 18, fontWeight: 800, color: '#f59e0b', marginTop: 4 }}>{fa(ai.forecast.restock.length)} محصول</div><div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 3 }}>{ai.forecast.restock.slice(0, 2).map((r: any) => r.name).join('، ') || '—'}</div></div>
+          </div>
+          {ai.prices?.length > 0 && (
+            <div>
+              <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>پیشنهادِ قیمت (نسبت به میانگینِ دسته)</div>
+              {ai.prices.slice(0, 5).map((p: any, i: number) => (
+                <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5, padding: '5px 0', borderBottom: '1px solid var(--line)' }}>
+                  <span style={{ fontWeight: 600 }}>{p.name}</span>
+                  <span style={{ marginInlineStart: 'auto', color: 'var(--muted)' }}>{mt(p.price)}</span>
+                  <span style={{ color: p.delta > 0 ? '#f87171' : '#34d399', fontWeight: 700, minWidth: 44, textAlign: 'left' }}>{p.delta > 0 ? '+' : ''}{fa(p.delta)}٪</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {ai.advice && <div style={{ background: 'var(--goldDim)', border: '1px solid rgba(201,168,76,.3)', borderRadius: 10, padding: 12, fontSize: 12.5, lineHeight: 2 }}>{ai.advice}</div>}
+        </div> : <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 10 }}>پیش‌بینیِ تقاضا، محصولاتِ نیازمندِ تأمین و پیشنهادِ قیمت — دکمهٔ «تحلیل کن» را بزن.</div>}
       </div>
 
       {/* Categories + 6-month chart */}

@@ -3,9 +3,11 @@ import { getSession } from '@/app/lib/session'
 import {
   shopStats, listProducts, listOrders, listInquiries,
   addProduct, updateProduct, deleteProduct, restock,
-  addOrder, setOrderStatus, addInquiry, answerInquiry, updateProfile,
+  addOrder, setOrderStatus, addInquiry, answerInquiry, updateProfile, getShop,
   type OrderStatus,
 } from '@/app/lib/materials-store'
+import { demandForecast, priceInsights } from '@/app/lib/materials-ai'
+import { agentModel, agentProvider, chatCompleteSafe } from '@/app/lib/gapgpt'
 
 // همهٔ دادهٔ پنل بازار مصالح، مخصوص کاربرِ واردشده (per-profile).
 export async function GET() {
@@ -74,6 +76,22 @@ export async function POST(req: NextRequest) {
     }
     case 'updateProfile': {
       return NextResponse.json({ ok: true, profile: await updateProfile(owner, b.patch || {}) })
+    }
+    case 'aiInsights': {
+      const shop = await getShop(owner)
+      const forecast = demandForecast(shop)
+      const prices = priceInsights(shop)
+      let advice: string | null = null
+      const model = agentModel('chat', 'text') || agentModel('content', 'text')
+      if (model) {
+        try {
+          advice = (await chatCompleteSafe(model, [
+            { role: 'system', content: 'تو مشاورِ فروشِ B2B مصالحِ ساختمانی هستی. کوتاه، فارسی و عملی پاسخ بده.' },
+            { role: 'user', content: `فروشگاه با ${shop.products.filter(p => p.active).length} محصولِ فعال، روندِ فروش ${forecast.trendPct}٪، ${forecast.restock.length} محصولِ نیازمندِ تأمین. برای افزایشِ فروش و مدیریتِ موجودی چه پیشنهادی داری؟` },
+          ], { temperature: 0.5, max_tokens: 220 }, agentProvider('chat', 'text'))).trim() || null
+        } catch {}
+      }
+      return NextResponse.json({ ok: true, forecast, prices, advice })
     }
     default:
       return NextResponse.json({ error: 'عملیات نامعتبر' }, { status: 400 })
