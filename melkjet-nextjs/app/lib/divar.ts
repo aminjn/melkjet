@@ -99,7 +99,7 @@ export async function scrapeDivar(source: Source): Promise<RawItem[]> {
     }
   }
 
-  const proxyUrl = getAdminData().divar?.proxyUrl
+  const proxyUrl = getAdminData().divar?.proxyUrl || 'http://127.0.0.1:1080'
     || process.env.HTTPS_PROXY || process.env.https_proxy
     || process.env.HTTP_PROXY || process.env.http_proxy
     || undefined

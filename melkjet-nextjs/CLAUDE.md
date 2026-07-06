@@ -81,7 +81,7 @@ The VPS egress is restricted. Each external service has a different path:
 - **GapGPT (AI, api.gapgpt.app)** → DIRECT, never via proxy. It's domestic but
   `.app` needs Shecan DNS to resolve. The foreign proxy EMPTIES its responses.
   `app/lib/gapgpt.ts` is direct-only.
-- **Divar (api.divar.ir)** → via HTTP proxy (`http://127.0.0.1:10809`), saved in
+- **Divar (api.divar.ir)** → via HTTP proxy (`http://127.0.0.1:1080`), saved in
   admin → «پروکسی دیوار». Direct is DNS/filter-blocked.
 - **github / foreign** → need `proxy-on` for manual git.
 - **Shecan DNS**: GapGPT now resolves DNS via Shecan *inside the app*

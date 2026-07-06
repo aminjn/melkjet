@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (debug) {
-    const proxyUrl = getAdminData().divar?.proxyUrl || process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy || undefined
+    const proxyUrl = getAdminData().divar?.proxyUrl || process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy || 'http://127.0.0.1:1080'
     try {
       const res = await proxiedRequest(`https://api.divar.ir/v8/posts-v2/web/${token}`, {
         method: 'GET',

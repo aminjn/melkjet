@@ -71,7 +71,7 @@ export async function sendPush(sub: PushSubscription, payloadObj: any): Promise<
     'Content-Type': 'application/octet-stream',
     TTL: '2419200',
   }
-  const proxyUrl = getAdminData().divar?.proxyUrl
+  const proxyUrl = getAdminData().divar?.proxyUrl || 'http://127.0.0.1:1080'
   try {
     const res = await proxiedRequest(sub.endpoint, { method: 'POST', headers, body, proxyUrl, timeout: 15000 })
     return res.status

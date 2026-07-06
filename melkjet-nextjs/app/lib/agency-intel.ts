@@ -44,7 +44,7 @@ export function ownAdvisorClusters(minAdvisors = 1): OwnCluster[] {
 }
 
 function proxy(): string | undefined {
-  return getAdminData().divar?.proxyUrl || process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy || undefined
+  return getAdminData().divar?.proxyUrl || process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy || 'http://127.0.0.1:1080'
 }
 
 // شمارهٔ یک آگهی را (best-effort، گِیت‌شده) از دیوار می‌گیرد.

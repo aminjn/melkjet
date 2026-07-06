@@ -11,7 +11,7 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 async function fetchPage(url: string, useProxy = false): Promise<string> {
   // Sites that are filtered/unreachable directly are fetched through the server proxy (HTTPS-over-CONNECT)
   if (useProxy && /^https:/i.test(url)) {
-    const proxyUrl = getAdminData().divar?.proxyUrl
+    const proxyUrl = getAdminData().divar?.proxyUrl || 'http://127.0.0.1:1080'
     const res = await proxiedRequest(url, {
       method: 'GET',
       headers: { 'User-Agent': UA, 'Accept': 'text/html,application/xhtml+xml,application/xml,application/rss+xml,*/*' },
