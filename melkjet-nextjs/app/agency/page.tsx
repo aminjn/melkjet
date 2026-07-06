@@ -222,6 +222,17 @@ export default function AgencyPage() {
   useEffect(() => { fetch('/api/auth/profile', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d?.account?.name) setMyName(d.account.name) }).catch(() => {}) }, [])
 
   const [dupWarn, setDupWarn] = useState('')
+  // موتورِ تقسیمِ خودکارِ لید
+  const [distPlan, setDistPlan] = useState<{ leadId: string; leadName: string; agentName: string; score: number; reasons: string[] }[] | null>(null)
+  const [distBusy, setDistBusy] = useState(false)
+  const previewDist = async () => {
+    setDistBusy(true)
+    try { const r = await fetch('/api/agency', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'distributeLeads', preview: true }) }); const d = await r.json(); setDistPlan(Array.isArray(d.assignments) ? d.assignments : []) } catch {} finally { setDistBusy(false) }
+  }
+  const applyDist = async () => {
+    setDistBusy(true)
+    try { await fetch('/api/agency', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'distributeLeads' }) }); setDistPlan(null); await refresh() } catch {} finally { setDistBusy(false) }
+  }
   const post = useCallback(async (body: Record<string, unknown>): Promise<boolean> => {
     setBusy(true)
     try {
@@ -830,6 +841,39 @@ export default function AgencyPage() {
 
           {/* LEADS */}
           {view === 'leads' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* موتورِ تقسیمِ خودکارِ لید + تداخل */}
+            <div style={{ ...card, padding: 18 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                {sectionTitle('تقسیمِ خودکارِ لید')}
+                <div style={{ marginInlineStart: 'auto', display: 'flex', gap: 8 }}>
+                  <button disabled={distBusy} onClick={previewDist} style={{ ...actionBtn, cursor: 'pointer' }}>{distBusy ? '…' : 'پیشنهادِ تقسیم'}</button>
+                  {distPlan && distPlan.length > 0 && <button disabled={distBusy} onClick={applyDist} style={goldBtn}>اعمالِ {fa(distPlan.length)} تخصیص</button>}
+                </div>
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.9, marginTop: 6 }}>لیدهای تقسیم‌نشده بر اساسِ عملکردِ مشاور، ظرفیتِ خالی و تخصصِ منطقه/نوع، بینِ مشاورانِ فعال پخش می‌شوند.</div>
+              {distPlan && (distPlan.length === 0
+                ? <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 10 }}>لیدِ تقسیم‌نشده‌ای نیست (یا مشاورِ فعالی موجود نیست).</div>
+                : <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {distPlan.map(a => (
+                      <div key={a.leadId} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, padding: '6px 10px', background: 'var(--bg2)', borderRadius: 8 }}>
+                        <span style={{ fontWeight: 700 }}>{a.leadName}</span><span style={{ color: 'var(--muted)' }}>→</span>
+                        <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{a.agentName}</span>
+                        <span style={{ marginInlineStart: 'auto', fontSize: 11, color: 'var(--faint)' }}>{a.reasons.join(' · ') || 'متعادل'}</span>
+                      </div>
+                    ))}
+                  </div>)}
+              {/* تداخلِ لید */}
+              {Array.isArray((data as any)?.conflicts) && (data as any).conflicts.length > 0 && (
+                <div style={{ marginTop: 14, background: 'rgba(231,161,74,.1)', border: '1px solid rgba(231,161,74,.4)', borderRadius: 10, padding: 12 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 800, color: '#e7a14a', marginBottom: 6 }}>⚠ تداخلِ لید ({fa((data as any).conflicts.length)})</div>
+                  {(data as any).conflicts.slice(0, 8).map((g: any, i: number) => (
+                    <div key={i} style={{ fontSize: 12, color: 'var(--muted)', padding: '3px 0' }}>
+                      {g.kind === 'phone' ? '☎ ' : '👤 '}<b style={{ color: 'var(--text)' }}>{g.leads[0].name}</b> — {fa(g.leads.length)} لیدِ تکراری{g.leads.some((x: any) => x.assignedTo) ? ` (منتسب به: ${[...new Set(g.leads.map((x: any) => x.assignedTo).filter(Boolean))].join('، ')})` : ''}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             <div style={{ ...card, padding: 18 }}>
               {sectionTitle('افزودن لید')}
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>

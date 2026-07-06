@@ -7,6 +7,7 @@ import {
   getCommissionConfig, setDefaultCommission, setAgentCommission, clearAgentCommission,
 } from '@/app/lib/agency-store'
 import { agencyAdvisorFiles } from '@/app/lib/agency-team'
+import { planDistribution, findConflicts } from '@/app/lib/agency-distribution'
 import { getAdvisor, setListingStatus as advSetStatus, deleteListing as advDeleteListing } from '@/app/lib/advisor-store'
 import { checkDuplicate, advisorScope } from '@/app/lib/duplicate-check'
 
@@ -37,9 +38,11 @@ export async function GET() {
   const listings = [...own, ...imported]
   // KPIِ «فایل‌های فعال» هم واقعیت را نشان دهد (شاملِ ایمپورت‌ها).
   if ((stats as any)?.kpis) (stats as any).kpis.activeListings = listings.filter(l => l.status === 'active').length
+  const leads = await listLeads(o)
   return NextResponse.json({
-    stats, agents: await listAgents(o), listings, leads: await listLeads(o), deals: await listDeals(o),
+    stats, agents: await listAgents(o), listings, leads, deals: await listDeals(o),
     advisorFiles: await agencyAdvisorFiles(o), commission: await getCommissionConfig(o),
+    conflicts: findConflicts(leads),   // مدیریتِ تداخلِ لید
   }, { headers: { 'Cache-Control': 'no-store, private' } })
 }
 
@@ -88,6 +91,15 @@ export async function POST(req: NextRequest) {
     case 'setDefaultCommission': return NextResponse.json({ ok: true, commission: await setDefaultCommission(o, b.mode, Number(b.value) || 0) })
     case 'setAgentCommission': if (!b.advisorPhone) return NextResponse.json({ error: 'مشاور الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, commission: await setAgentCommission(o, String(b.advisorPhone), b.mode, Number(b.value) || 0) })
     case 'clearAgentCommission': if (!b.advisorPhone) return NextResponse.json({ error: 'مشاور الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, commission: await clearAgentCommission(o, String(b.advisorPhone)) })
+    case 'distributeLeads': {
+      // موتورِ تقسیمِ خودکارِ لید: لیدهای تقسیم‌نشده را بینِ مشاورانِ فعال پخش کن.
+      const agency = await getAgency(o)
+      const plan = planDistribution(agency.leads, agency.agents, agency.listings)
+      const preview = b.preview === true
+      if (!preview) for (const a of plan) await assignLead(o, a.leadId, a.agentName)
+      return NextResponse.json({ ok: true, assignments: plan, applied: !preview, leads: await listLeads(o) })
+    }
+    case 'conflicts': return NextResponse.json({ ok: true, conflicts: findConflicts(await listLeads(o)) })
     default: return NextResponse.json({ error: 'عملیات نامعتبر' }, { status: 400 })
   }
 }
