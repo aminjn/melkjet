@@ -268,7 +268,7 @@ async function ListingsBlock({ block, primary, ownerName, ownerPhone, slug }: { 
   )
 }
 
-async function BlogBlock({ block, primary, ownerName }: { block: SiteBlock; primary: string; ownerName?: string }) {
+async function BlogBlock({ block, primary, ownerName, slug: siteSlug }: { block: SiteBlock; primary: string; ownerName?: string; slug?: string }) {
   const props = p(block)
   const n = Math.max(1, Math.min(12, Number(props.count) || 3))
   const grads = ['#15202d,#101828', '#251528,#1a0e1e', '#152825,#0e1a18', '#2d2215,#1e1a12', '#2d1515,#1e0e0e', '#1e2215,#141a10']
@@ -293,7 +293,7 @@ async function BlogBlock({ block, primary, ownerName }: { block: SiteBlock; prim
               const date = (it.meta?.date || it.meta?.publishedAt || '').trim()
               const meta = [author, date].filter(Boolean).join(' · ')
               return (
-                <MediaCard key={it.id} href={`/article/${slug}`} image={it.image} gradient={grads[i % grads.length]}>
+                <MediaCard key={it.id} href={siteSlug ? `/${siteSlug}/blog/${slug}` : `/article/${slug}`} image={it.image} gradient={grads[i % grads.length]}>
                   {cat ? (
                     <span style={{ display: 'inline-block', fontSize: 11.5, fontWeight: 700, color: primary, background: `${primary}14`, border: `1px solid ${primary}33`, borderRadius: 999, padding: '3px 11px', marginBottom: 12 }}>{cat}</span>
                   ) : null}
@@ -315,7 +315,7 @@ async function BlogBlock({ block, primary, ownerName }: { block: SiteBlock; prim
 
 // صفحهٔ کاملِ وبلاگ: فقط مقاله‌های واقعیِ منتشرشده را بارگذاری می‌کند (هیچ دادهٔ نمونه)؛
 // دسته‌ها را استخراج و به مؤلفهٔ کلاینتِ BlogFull (فیلتر + جستجو + ساید‌بار) پاس می‌دهد.
-async function BlogFullBlock({ block, primary, ownerName }: { block: SiteBlock; primary: string; ownerName?: string }) {
+async function BlogFullBlock({ block, primary, ownerName, slug }: { block: SiteBlock; primary: string; ownerName?: string; slug?: string }) {
   const props = p(block)
   const heading = props.heading || 'وبلاگ'
   const sidebar: 'yes' | 'no' = props.sidebar === 'no' ? 'no' : 'yes'
@@ -343,7 +343,7 @@ async function BlogFullBlock({ block, primary, ownerName }: { block: SiteBlock; 
     <section id="blog" style={{ background: SURFACE, padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         <SectionHeading primary={primary}>{heading}</SectionHeading>
-        <BlogFull articles={articles} categories={categories} sidebar={sidebar} primary={primary} />
+        <BlogFull articles={articles} categories={categories} sidebar={sidebar} primary={primary} siteSlug={slug || ''} />
       </div>
     </section>
   )
@@ -834,8 +834,8 @@ function renderBlock(block: SiteBlock, primary: string, ownerName?: string, owne
     case 'search': return <SearchBlock key={block.id} block={block} primary={primary} />
     case 'listings': return <ListingsBlock key={block.id} block={block} primary={primary} ownerName={ownerName} ownerPhone={ownerPhone} slug={slug} />
     case 'searchlist': return <SearchListBlock key={block.id} block={block} primary={primary} ownerName={ownerName} ownerPhone={ownerPhone} slug={slug} />
-    case 'blog': return <BlogBlock key={block.id} block={block} primary={primary} ownerName={ownerName} />
-    case 'blogfull': return <BlogFullBlock key={block.id} block={block} primary={primary} ownerName={ownerName} />
+    case 'blog': return <BlogBlock key={block.id} block={block} primary={primary} ownerName={ownerName} slug={slug} />
+    case 'blogfull': return <BlogFullBlock key={block.id} block={block} primary={primary} ownerName={ownerName} slug={slug} />
     case 'services': return <ServicesBlock key={block.id} block={block} primary={primary} />
     case 'about': return <AboutBlock key={block.id} block={block} primary={primary} />
     case 'team': return <TeamBlock key={block.id} block={block} primary={primary} ownerPhone={ownerPhone} />

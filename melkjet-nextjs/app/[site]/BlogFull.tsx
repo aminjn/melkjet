@@ -20,8 +20,12 @@ export interface BlogArticle {
 }
 
 // کارتِ مقاله (همان ظاهرِ بخشِ وبلاگِ صفحهٔ اصلی): کاور، چیپِ دسته، عنوان، خلاصه، متاها.
-function ArticleCard({ a, i, primary }: { a: BlogArticle; i: number; primary: string }) {
-  const href = `/article/${a.slug || a.id || ''}`
+const articleHref = (a: { slug?: string; id?: string }, siteSlug?: string) => {
+  const s = a.slug || a.id || ''
+  return siteSlug ? `/${siteSlug}/blog/${s}` : `/article/${s}`
+}
+function ArticleCard({ a, i, primary, siteSlug }: { a: BlogArticle; i: number; primary: string; siteSlug?: string }) {
+  const href = articleHref(a, siteSlug)
   return (
     <a href={href} className="mjs-card" style={{
       background: 'var(--mjs-bg)', borderRadius: 18, overflow: 'hidden', border: '1px solid #efe9df',
@@ -59,12 +63,13 @@ function ArticleCard({ a, i, primary }: { a: BlogArticle; i: number; primary: st
 // صفحهٔ کاملِ وبلاگ: ستونِ اصلی (گرید کارت‌ها با فیلترِ دسته + جستجو) + ساید‌بار
 // (جستجو، فهرستِ دسته‌ها با تعداد، آخرین مطالب). روی موبایل ساید‌بار زیر می‌نشیند.
 export default function BlogFull({
-  articles, categories, sidebar = 'yes', primary,
+  articles, categories, sidebar = 'yes', primary, siteSlug = '',
 }: {
   articles: BlogArticle[]
   categories: string[]
   sidebar?: 'yes' | 'no'
   primary: string
+  siteSlug?: string
 }) {
   const [cat, setCat] = useState<string>('__all__')
   const [q, setQ] = useState<string>('')
@@ -137,7 +142,7 @@ export default function BlogFull({
             </div>
           ) : (
             <div className="mjs-blogfull-grid">
-              {filtered.map((a, i) => <ArticleCard key={a.id || a.slug || i} a={a} i={i} primary={primary} />)}
+              {filtered.map((a, i) => <ArticleCard key={a.id || a.slug || i} a={a} i={i} primary={primary} siteSlug={siteSlug} />)}
             </div>
           )}
         </div>
@@ -180,7 +185,7 @@ export default function BlogFull({
               <div style={{ fontSize: 14, fontWeight: 800, color: INK, marginBottom: 12 }}>آخرین مطالب</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {recent.map((a, i) => (
-                  <a key={a.id || a.slug || i} href={`/article/${a.slug || a.id || ''}`} style={{ display: 'flex', gap: 11, alignItems: 'center', textDecoration: 'none' }}>
+                  <a key={a.id || a.slug || i} href={articleHref(a, siteSlug)} style={{ display: 'flex', gap: 11, alignItems: 'center', textDecoration: 'none' }}>
                     {a.image ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={a.image} alt="" style={{ width: 56, height: 56, borderRadius: 10, objectFit: 'cover', flex: '0 0 auto' }} />
