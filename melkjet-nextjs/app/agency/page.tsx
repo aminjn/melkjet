@@ -412,6 +412,19 @@ export default function AgencyPage() {
     setCrmAiBusy(true)
     try { const r = await fetch('/api/agency', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'crmInsights' }) }); const d = await r.json(); if (d.ok) setCrmAi({ callNow: d.callNow || [], health: d.health || '', tips: d.tips || [] }) } catch {} finally { setCrmAiBusy(false) }
   }, [])
+  // تخصیصِ خودکارِ یک‌کلیکیِ لید به بهترین مشاور (همان موتورِ امتیازدهی).
+  const [assignBusyId, setAssignBusyId] = useState<string | null>(null)
+  const autoAssign = useCallback(async (id: string) => {
+    if (!id) return
+    setAssignBusyId(id)
+    try {
+      const r = await fetch('/api/agency', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'autoAssignLead', id }) })
+      const d = await r.json()
+      if (!d.ok) alert(d.error || 'تخصیص ناموفق — مطمئن شوید مشاورِ فعالی هست.')
+      await refresh()
+      setCrmAi(null)
+    } catch { alert('خطا در تخصیص') } finally { setAssignBusyId(null) }
+  }, [refresh])
   useEffect(() => { fetch('/api/agency', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getCrmSettings' }) }).then(r => r.json()).then(d => { if (d.settings) setCrmSettings(d.settings) }).catch(() => {}) }, [])
   const saveCrmSettings = async (patch: Partial<{ autoWelcomeSms: boolean; welcomeTemplate: string; followUpHours: number }>) => { try { const r = await fetch('/api/agency', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'setCrmSettings', patch }) }); const d = await r.json(); if (d.settings) setCrmSettings(d.settings) } catch {} }
 
@@ -1127,10 +1140,11 @@ export default function AgencyPage() {
                         <span style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</span>
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>{c.why}{c.assignedTo ? ` · ${c.assignedTo}` : ''}</div>
-                      <div style={{ display: 'flex', gap: 6 }}>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         {c.phone && <a href={`tel:${c.phone}`} onClick={() => c.id && logActivity(c.id, 'call')} style={{ ...actionBtn, textDecoration: 'none', color: 'var(--gold)', borderColor: 'var(--gold)', direction: 'ltr', flex: 1, textAlign: 'center' }}>☎ تماس</a>}
                         {c.id && <button onClick={() => setOpenLeadId(c.id)} style={{ ...actionBtn, flex: 1 }}>پرونده</button>}
                       </div>
+                      {c.id && !c.assignedTo && <button disabled={assignBusyId === c.id} onClick={() => autoAssign(c.id!)} style={{ width: '100%', marginTop: 6, padding: '7px 10px', borderRadius: 8, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 11.5, border: 'none', cursor: 'pointer', fontFamily: FONT }}>{assignBusyId === c.id ? '…' : '✨ تخصیص به بهترین مشاور'}</button>}
                     </div>
                   ))}
                 </div>
