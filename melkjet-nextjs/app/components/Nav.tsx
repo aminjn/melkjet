@@ -126,6 +126,7 @@ export default function Nav() {
           {me ? (
             <>
               <button onClick={logout} title="خروج از حساب" style={{ padding: '0 14px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--muted)', fontFamily: 'inherit', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>خروج</button>
+              {me.dash !== '/buyer' && <Link href="/content" title="مقالاتِ من" style={{ padding: '0 14px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--text)', textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>✎ مقالات</Link>}
               <Link href={me.dash} style={{ padding: '0 18px', height: 40, display: 'flex', alignItems: 'center', borderRadius: 11, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontSize: 14, fontWeight: 700 }}>{dashLabel}</Link>
             </>
           ) : (

@@ -30,8 +30,13 @@ export default function ArticleEditor({ compact, author }: { compact?: boolean; 
   const [aiLength, setAiLength] = useState('1200')
   const [cats, setCats] = useState<string[]>(DEFAULT_CATS)
 
-  const load = () => fetch('/api/cms').then(r => r.ok ? r.json() : { articles: [] }).then(d => setArticles(d.articles || []))
-  useEffect(() => { load() }, [])
+  // در پنلِ کاربر (author ست شده) فقط مقالاتِ خودِ او دیده می‌شود؛ در سوپرادمین همه.
+  const norm = (s?: string) => (s || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase()
+  const load = () => fetch('/api/cms').then(r => r.ok ? r.json() : { articles: [] }).then(d => {
+    const all: Article[] = d.articles || []
+    setArticles(author ? all.filter(a => norm(a.author) === norm(author)) : all)
+  })
+  useEffect(() => { load() }, [author])
   useEffect(() => {
     fetch('/api/categories?type=article')
       .then(r => r.ok ? r.json() : { categories: [] })
