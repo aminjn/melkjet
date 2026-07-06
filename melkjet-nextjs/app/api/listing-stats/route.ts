@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { listItems } from '@/app/lib/scraper-store'
 import { recordView, recordContact, getStat, forIds } from '@/app/lib/listing-stats-store'
+import { ingest } from '@/app/lib/reos/events'
 
 // GET ?id=…        → آمارِ یک آگهی
 // GET ?mine=1      → آگهی‌های کاربرِ واردشده + آمارشان (برای گزارشِ پنل)
@@ -27,12 +28,16 @@ export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({} as any))
   const id = String(b.id || '')
   if (!id) return NextResponse.json({ error: 'id لازم است' }, { status: 400 })
+  const s = await getSession()
   if (b.action === 'contact') {
-    const s = await getSession()
     if (!s) return NextResponse.json({ error: 'برای دیدن اطلاعات تماس وارد شوید', needLogin: true }, { status: 401 })
     await recordContact(id)
+    // REOS: سیگنالِ تماس (قوی‌ترین سیگنالِ نیت) → feature store + یادگیریِ آنلاین
+    try { await ingest({ type: 'contact_made', propertyId: id, userId: s.phone }) } catch {}
     return NextResponse.json({ ok: true })
   }
   await recordView(id)
+  // REOS: سیگنالِ بازدید (userId اگر واردشده باشد؛ وگرنه فقط ویژگیِ ملک بالا می‌رود)
+  try { await ingest({ type: 'user_clicked_property', propertyId: id, userId: s?.phone }) } catch {}
   return NextResponse.json({ ok: true })
 }

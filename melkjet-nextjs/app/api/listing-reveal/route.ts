@@ -4,6 +4,7 @@ import { getItemById } from '@/app/lib/scraper-store'
 import { getAdvisor } from '@/app/lib/advisor-store'
 import { getAccount } from '@/app/lib/account-store'
 import { addContact } from '@/app/lib/contact-log-store'
+import { ingest } from '@/app/lib/reos/events'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,6 +37,8 @@ export async function POST(req: NextRequest) {
   // اگر بیننده خودِ صاحب نباشد، تماس را ثبت کن.
   if (digits(s.phone) !== digits(phone)) {
     await addContact(ownerKey, { viewerPhone: s.phone, viewerName: getAccount(s.phone)?.name, projectName: label, at: Date.now() })
+    // REOS: سیگنالِ تماس روی آگهیِ سایتِ ساخته‌شده (kind item) → یادگیریِ آنلاین
+    if (kind === 'item') { try { await ingest({ type: 'contact_made', propertyId: id, userId: s.phone }) } catch {} }
   }
   return NextResponse.json({ ok: true, phone })
 }

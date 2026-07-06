@@ -3,6 +3,7 @@ import { getSession } from '@/app/lib/session'
 import {
   getPrefs, addFavorite, removeFavorite, addSavedSearch, removeSavedSearch,
 } from '@/app/lib/user-store'
+import { ingest } from '@/app/lib/reos/events'
 
 // Per-user favorites + saved searches. Guests (no session) are keyed as 'guest'.
 async function userId(): Promise<string> {
@@ -24,7 +25,10 @@ export async function POST(req: NextRequest) {
     case 'addFav': {
       const listingId = String(body.listingId || '').trim()
       if (!listingId) return NextResponse.json({ error: 'شناسه ملک نامعتبر است' }, { status: 400 })
-      return NextResponse.json(await addFavorite(uid, listingId))
+      const res = await addFavorite(uid, listingId)
+      // REOS: سیگنالِ سیو (reward +۵) → یادگیریِ سلیقهٔ کاربر
+      try { await ingest({ type: 'user_saved_property', propertyId: listingId, userId: uid !== 'guest' ? uid : undefined }) } catch {}
+      return NextResponse.json(res)
     }
     case 'removeFav': {
       const listingId = String(body.listingId || '').trim()
