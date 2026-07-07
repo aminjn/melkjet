@@ -16,81 +16,76 @@ type View =
   | 'reports' | 'plans' | 'promos' | 'discounts' | 'ads' | 'users' | 'profiles' | 'roles' | 'connections'
   | 'tracker' | 'sms' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags' | 'support' | 'payment' | 'aicost' | 'smscost' | 'sitemap' | 'agencyintel'
 
-interface NavItem { id: View; icon: string; label: string; badge?: string; badgeColor?: string; url?: string }
+interface NavItem { id: View; icon: string; label: string; badge?: string; badgeColor?: string; url?: string; accent?: boolean }
 interface NavSection { title: string; items: NavItem[] }
 
 /* ─── Sidebar nav data ───────────────────────────────────────── */
 const sections: NavSection[] = [
   {
-    title: 'محتوا',
-    items: [
-      { id: 'articles',    icon: '✎',  label: 'مقالات' },
-      { id: 'categories',  icon: '☰',  label: 'دسته‌بندی‌ها' },
-    ],
-  },
-  {
-    title: 'آگهی و فروشگاه',
-    items: [
-      { id: 'listings',    icon: '▤',  label: 'مدیریت آگهی‌ها' },
-      { id: 'products',    icon: '◰',  label: 'مدیریت محصولات' },
-      { id: 'catalog',     icon: '🧱', label: 'کاتالوگِ مصالح',   badge: 'NEW', badgeColor: '#c9a84c' },
-      { id: 'moderation',  icon: '✓',  label: 'تأیید آگهی AI',     badge: '32',    badgeColor: '#e7674a' },
-      { id: 'scraper',     icon: '⛏',  label: 'موتور اسکرپی',     badge: 'زنده',  badgeColor: '#5fd98a' },
-      { id: 'persiansaze', icon: '🏗', label: 'سازنده‌ها (پرشین سازه)', badge: 'NEW', badgeColor: '#c9a84c' },
-      { id: 'studio',      icon: '◳',  label: 'استودیو پلان و ۳بعدی', badge: 'AI', badgeColor: '#c9a84c' },
-    ],
-  },
-  {
-    title: 'کاربران و دسترسی',
-    items: [
-      { id: 'users', icon: '◍', label: 'کاربران' },
-      { id: 'profiles', icon: '👁', label: 'همه پروفایل‌ها' },
-      { id: 'agencyintel', icon: '🏢', label: 'هوشِ آژانس', badge: 'NEW', badgeColor: '#c9a84c' },
-      { id: 'roles', icon: '🛡', label: 'نقش‌ها و دسترسی' },
-      { id: 'crm',   icon: '◈', label: 'CRM کاربران' },
-      { id: 'support', icon: '🛟', label: 'پشتیبانی' },
-    ],
-  },
-  {
-    title: 'درآمد و رشد',
-    items: [
-      { id: 'plans',  icon: '◔', label: 'پلن‌ها' },
-      { id: 'payment', icon: '💳', label: 'درگاه‌های پرداخت', badge: 'NEW', badgeColor: '#c9a84c' },
-      { id: 'aicost', icon: '🧮', label: 'هزینه و قیمتِ AI', badge: 'NEW', badgeColor: '#c9a84c' },
-      { id: 'smscost', icon: '✉', label: 'تعرفهٔ پیامک', badge: 'NEW', badgeColor: '#c9a84c' },
-      { id: 'promos', icon: '★', label: 'پروموت و ویژه‌سازی' },
-      { id: 'discounts', icon: '٪', label: 'کدهای تخفیف' },
-      { id: 'ads',    icon: '▤', label: 'تبلیغات بنری' },
-      { id: 'tracker', icon: '🎯', label: 'ترکر و پیامک هدفمند' },
-      { id: 'sms', icon: '✉', label: 'پیامک و الگوها', badge: 'SMS', badgeColor: '#5fd98a' },
-    ],
-  },
-  {
-    title: 'داده و گزارش',
+    title: 'اصلی',
     items: [
       { id: 'overview', icon: '▦', label: 'نمای کلی' },
+      { id: 'reos' as View, icon: '✦', label: 'REOS — مغزِ هوشمند', url: '/reos-admin', accent: true },
       { id: 'reports',  icon: '◔', label: 'گزارش‌ها و Big Data' },
-      { id: 'sitemap',  icon: '🗺', label: 'مرکز سایت‌مپ (SEO)', badge: 'NEW', badgeColor: '#c9a84c' },
-      { id: 'api',      icon: '◈', label: 'API و مدل‌های AI' },
     ],
   },
   {
-    title: 'پیکربندی',
+    title: 'آگهی و محتوا',
     items: [
+      { id: 'listings',    icon: '▤',  label: 'آگهی‌ها' },
+      { id: 'moderation',  icon: '✓',  label: 'تأیید آگهی', badge: 'AI', badgeColor: '#c9a84c' },
+      { id: 'products',    icon: '◰',  label: 'محصولات فروشگاه' },
+      { id: 'catalog',     icon: '🧱', label: 'کاتالوگِ مصالح' },
+      { id: 'articles',    icon: '✎',  label: 'مقالات' },
+      { id: 'categories',  icon: '☰',  label: 'دسته‌بندی‌ها' },
+      { id: 'studio',      icon: '◳',  label: 'استودیو پلان و ۳بعدی' },
+    ],
+  },
+  {
+    title: 'منابعِ داده',
+    items: [
+      { id: 'scraper',     icon: '⛏',  label: 'موتور اسکرپی', badge: 'زنده', badgeColor: '#5fd98a' },
+      { id: 'persiansaze', icon: '🏗', label: 'سازنده‌ها (پرشین‌سازه)' },
+    ],
+  },
+  {
+    title: 'کاربران و CRM',
+    items: [
+      { id: 'users',       icon: '◍',  label: 'کاربران' },
+      { id: 'profiles',    icon: '👁', label: 'پروفایل‌ها' },
+      { id: 'agencyintel', icon: '🏢', label: 'هوشِ آژانس' },
+      { id: 'crm',         icon: '◈',  label: 'CRM' },
+      { id: 'roles',       icon: '🛡', label: 'نقش‌ها و دسترسی' },
+      { id: 'support',     icon: '🛟', label: 'پشتیبانی' },
+    ],
+  },
+  {
+    title: 'درآمد و بازاریابی',
+    items: [
+      { id: 'plans',     icon: '◔',  label: 'پلن‌ها و اشتراک' },
+      { id: 'payment',   icon: '💳', label: 'درگاه‌های پرداخت' },
+      { id: 'promos',    icon: '★',  label: 'پروموت و ویژه‌سازی' },
+      { id: 'discounts', icon: '٪',  label: 'کدهای تخفیف' },
+      { id: 'ads',       icon: '▤',  label: 'تبلیغات بنری' },
+      { id: 'tracker',   icon: '🎯', label: 'ترکر و پیامکِ هدفمند' },
+      { id: 'sms',       icon: '✉',  label: 'پیامک و الگوها', badge: 'SMS', badgeColor: '#5fd98a' },
+      { id: 'aicost',    icon: '🧮', label: 'هزینه و قیمتِ AI' },
+      { id: 'smscost',   icon: '📨', label: 'تعرفهٔ پیامک' },
+    ],
+  },
+  {
+    title: 'سیستم و پیکربندی',
+    items: [
+      { id: 'api',         icon: '◈', label: 'API و مدل‌های AI' },
       { id: 'connections', icon: '⚯', label: 'اتصال‌ها و سرویس‌ها' },
       { id: 'geo',         icon: '🗺', label: 'مناطق و محله‌ها' },
-      { id: 'settings',    icon: '⚙', label: 'تنظیمات کامل' },
-    ],
-  },
-  {
-    title: 'زیرساخت',
-    items: [
-      { id: 'health',  icon: '◉', label: 'سلامت سیستم' },
-      { id: 'reos' as View, icon: '✦', label: 'REOS (مغزِ AI)', url: '/reos-admin' },
-      { id: 'servers', icon: '▤', label: 'سرورها' },
-      { id: 'queue',   icon: '◳', label: 'صف پردازش' },
-      { id: 'audit',   icon: '❖', label: 'لاگ ممیزی' },
-      { id: 'flags',   icon: '⚑', label: 'فلگ‌ها' },
+      { id: 'sitemap',     icon: '🧭', label: 'سایت‌مپ و SEO' },
+      { id: 'settings',    icon: '⚙', label: 'تنظیماتِ کامل' },
+      { id: 'health',      icon: '◉', label: 'سلامتِ سیستم' },
+      { id: 'servers',     icon: '▤', label: 'سرورها' },
+      { id: 'queue',       icon: '◳', label: 'صفِ پردازش' },
+      { id: 'audit',       icon: '❖', label: 'لاگِ ممیزی' },
+      { id: 'flags',       icon: '⚑', label: 'فلگ‌ها' },
     ],
   },
 ]
@@ -155,14 +150,6 @@ function Badge({ label, color }: { label: string; color: string }) {
     <span style={{ fontSize: 10.5, borderRadius: 999, padding: '3px 9px', background: `${color}22`, color, fontWeight: 600, whiteSpace: 'nowrap' }}>
       {label}
     </span>
-  )
-}
-
-function SectionHeader({ title }: { title: string }) {
-  return (
-    <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--faint)', letterSpacing: 1, padding: '16px 16px 5px', userSelect: 'none' }}>
-      {title}
-    </div>
   )
 }
 
@@ -5919,6 +5906,11 @@ function SimpleView({ title }: { title: string }) {
 export default function SuperAdminPage() {
   const [active, setActive] = useState<View>('overview')
   const [navOpen, setNavOpen] = useState(false)   // کشوی منوی موبایل
+  // آکاردئونِ منو: فقط گروهِ فعال (+ «اصلی») باز است تا سایدبار شلوغ نباشد.
+  const sectionOf = (v: View) => sections.find(s => s.items.some(i => i.id === v))?.title || 'اصلی'
+  const [openSecs, setOpenSecs] = useState<Set<string>>(() => new Set(['اصلی', sectionOf('overview')]))
+  const toggleSec = (t: string) => setOpenSecs(p => { const n = new Set(p); n.has(t) ? n.delete(t) : n.add(t); return n })
+  useEffect(() => { setOpenSecs(p => new Set(p).add(sectionOf(active))) }, [active])
   const [now, setNow] = useState('')
   const [supportUnread, setSupportUnread] = useState(0)   // نوتیفِ تیکت‌های پاسخ‌نداده
 
@@ -6001,39 +5993,52 @@ export default function SuperAdminPage() {
           </div>
         </div>
 
-        {/* Nav sections */}
+        {/* Nav sections (آکاردئون: هر گروه قابلِ جمع‌شدن) */}
         <nav style={{ flex: 1, paddingBottom: 8 }}>
-          {sections.map(sec => (
-            <div key={sec.title}>
-              <SectionHeader title={sec.title} />
-              {sec.items.map(item => (
+          {sections.map(sec => {
+            const open = openSecs.has(sec.title)
+            const hasActive = sec.items.some(i => i.id === active)
+            return (
+              <div key={sec.title}>
+                {/* هدرِ گروه — کلیک برای باز/بستن */}
                 <button
-                  key={item.id}
-                  onClick={() => { const u = (item as { url?: string }).url; if (u) { window.open(u, '_blank'); setNavOpen(false); return } setActive(item.id); setNavOpen(false) }}
-                  style={{
+                  onClick={() => toggleSec(sec.title)}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: '14px 14px 5px', userSelect: 'none' }}
+                >
+                  <span style={{ fontSize: 10.5, fontWeight: 700, color: hasActive ? 'var(--gold)' : 'var(--faint)', letterSpacing: 1, flex: 1, textAlign: 'right' }}>{sec.title}</span>
+                  <span style={{ fontSize: 9, color: 'var(--faint)', transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform .15s' }}>▼</span>
+                </button>
+                {open && sec.items.map(item => {
+                  const isActive = active === item.id
+                  const accent = item.accent
+                  const inner = <>
+                    <span style={{ fontSize: 15, width: 20, textAlign: 'center', flexShrink: 0, color: accent ? 'var(--gold)' : isActive ? '#e7674a' : 'var(--faint)' }}>{item.icon}</span>
+                    <span className="mjsa-sidelabel" style={{ flex: 1 }}>{item.label}</span>
+                    {item.id === 'support' && supportUnread > 0
+                      ? <Badge label={supportUnread.toLocaleString('fa-IR')} color="#e7674a" />
+                      : item.badge && <Badge label={item.badge} color={item.badgeColor ?? '#5fd98a'} />}
+                    {item.url && <span style={{ fontSize: 11, color: 'var(--faint)', marginInlineStart: 2 }}>↗</span>}
+                  </>
+                  const css: React.CSSProperties = {
                     width: '100%',
-                    background: active === item.id ? 'rgba(231,103,74,0.12)' : 'transparent',
+                    background: isActive ? 'rgba(231,103,74,0.12)' : accent ? 'var(--goldDim)' : 'transparent',
                     border: 'none',
-                    borderRight: active === item.id ? '3px solid #e7674a' : '3px solid transparent',
+                    borderRight: isActive ? '3px solid #e7674a' : accent ? '3px solid var(--gold)' : '3px solid transparent',
                     padding: '9px 14px 9px 12px',
                     display: 'flex', alignItems: 'center', gap: 9,
                     cursor: 'pointer', fontFamily: 'inherit',
-                    color: active === item.id ? 'var(--text)' : 'var(--muted)',
-                    fontSize: 13.5,
-                    fontWeight: active === item.id ? 700 : 500,
-                    textAlign: 'right',
-                    transition: 'all .15s'
-                  }}
-                >
-                  <span style={{ fontSize: 15, width: 20, textAlign: 'center', flexShrink: 0, color: active === item.id ? '#e7674a' : 'var(--faint)' }}>{item.icon}</span>
-                  <span className="mjsa-sidelabel" style={{ flex: 1 }}>{item.label}</span>
-                  {item.id === 'support' && supportUnread > 0
-                    ? <Badge label={supportUnread.toLocaleString('fa-IR')} color="#e7674a" />
-                    : item.badge && <Badge label={item.badge} color={item.badgeColor ?? '#5fd98a'} />}
-                </button>
-              ))}
-            </div>
-          ))}
+                    color: accent ? 'var(--gold)' : isActive ? 'var(--text)' : 'var(--muted)',
+                    fontSize: 13.5, fontWeight: isActive || accent ? 700 : 500,
+                    textAlign: 'right', textDecoration: 'none', transition: 'all .15s', boxSizing: 'border-box',
+                  }
+                  // آیتم‌های دارای url = لینکِ واقعی (کلیک همیشه کار می‌کند، بدونِ مسدودشدنِ پاپ‌آپ).
+                  return item.url
+                    ? <a key={item.id} href={item.url} onClick={() => setNavOpen(false)} style={css}>{inner}</a>
+                    : <button key={item.id} onClick={() => { setActive(item.id); setNavOpen(false) }} style={css}>{inner}</button>
+                })}
+              </div>
+            )
+          })}
         </nav>
 
         {/* User avatar at bottom */}
