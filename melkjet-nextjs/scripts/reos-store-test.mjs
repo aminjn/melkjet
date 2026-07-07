@@ -15,6 +15,7 @@ import { upsertNode, addEdge, getNode, neighbors, subgraph, shortestPath, graphS
 import { recordEvent as recEv } from '../app/lib/reos/store.ts'
 import { createCampaign, recordClick, recordImpression, getCampaign, activeBoosts, analytics } from '../app/lib/reos/promotion-engine.ts'
 import { computeMarketFeatures, getMarketFeature, topMarkets } from '../app/lib/reos/market-features.ts'
+import { createLead, moveStage, addActivity, timeline, createTask, listTasks, funnel, createAutomation, runIdleAutomations, getLead, listLeads } from '../app/lib/reos/crm.ts'
 
 if (!process.env.DATABASE_URL) { console.error('DATABASE_URL not set'); process.exit(2) }
 let pass = 0, fail = 0
@@ -242,6 +243,40 @@ async function main() {
     ok('reos_property_features typed view queryable', typeof pv.rows[0].n === 'number')
     const uv = await pool.query(`SELECT count(*)::int n FROM reos_user_features`)
     ok('reos_user_features typed view queryable', typeof uv.rows[0].n === 'number')
+  }
+
+  console.log('\n── REOS v2: CRM OS (pipeline/activities/tasks/timeline/funnel/automations) ──')
+  {
+    await pool.query('TRUNCATE reos_crm').catch(() => {})   // deterministic across reruns
+    const owner = 'crmU'
+    // automation: on new_lead → create a follow-up task
+    await createAutomation({ ownerId: owner, trigger: 'new_lead', params: {}, action: 'create_task', actionParams: { title: 'تماسِ اولیه' } })
+    const lead = await createLead({ ownerId: owner, name: 'علی', phone: '09120000000', source: 'divar' })
+    ok('createLead with pipeline stage + score', lead.stage === 'new' && lead.score > 0)
+    ok('automation fired on new_lead (task created)', (await listTasks(owner, { open: true })).some(t => t.title === 'تماسِ اولیه' && t.leadId === lead.id))
+    // activities raise score + build timeline
+    await addActivity({ ownerId: owner, leadId: lead.id, type: 'call', text: 'تماس گرفتم' })
+    await addActivity({ ownerId: owner, leadId: lead.id, type: 'note', text: 'علاقه‌مند به سعادت‌آباد' })
+    const afterAct = await getLead(lead.id)
+    ok('activities recomputed lead score', afterAct.score >= lead.score)
+    // move stage → logs stage activity, re-scores
+    const won = await moveStage(lead.id, 'won')
+    ok('moveStage updates stage', won.stage === 'won')
+    const tl = await timeline(lead.id)
+    ok('timeline merges activities+tasks (has stage + call + task)', tl.some(x => x.kind === 'activity:stage') && tl.some(x => x.kind === 'activity:call') && tl.some(x => x.kind === 'task'))
+    ok('timeline sorted desc by time', tl.every((x, i, a) => i === 0 || a[i - 1].at >= x.at))
+    // funnel conversion
+    await createLead({ ownerId: owner, name: 'ب', stage: 'new' })
+    const fn = await funnel(owner)
+    ok('funnel counts by stage', fn.byStage.won === 1 && fn.total === 2)
+    ok('funnel conversion rate computed', fn.conversionRate === 50)
+    // idle automation: lead not touched for > N days → create task
+    await createAutomation({ ownerId: owner, trigger: 'idle', params: { days: 3 }, action: 'create_task', actionParams: { title: 'پیگیریِ معطل' } })
+    const stale = await createLead({ ownerId: owner, name: 'کهنه', stage: 'contacted' })
+    // force updatedAt into the past by re-putting via moveStage then patching time isn't exposed; simulate by aging: create then run with now far in future
+    const future = Date.now() + 10 * 864e5
+    const acted = await runIdleAutomations(owner, future)
+    ok('idle automation acts on stale leads', acted >= 1 && (await listTasks(owner, { open: true })).some(t => t.title === 'پیگیریِ معطل'))
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)
