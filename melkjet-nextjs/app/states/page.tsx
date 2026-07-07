@@ -118,6 +118,11 @@ export default function StatesPage() {
     <div dir="rtl" style={{ minHeight:'100vh', background:'var(--bg)', color:'var(--text)', fontFamily:'Vazirmatn,sans-serif' }}>
       <Nav />
 
+      {/* این صفحه گالریِ طراحی است — همهٔ نام‌ها/عددهای داخلش صرفاً «نمونهٔ طراحی» هستند، نه دادهٔ واقعی */}
+      <div style={{ background:'var(--goldDim)', borderBottom:'1px solid var(--gold)', padding:'10px 24px', textAlign:'center', fontSize:12.5, fontWeight:700, color:'var(--gold)' }}>
+        🎨 نمونهٔ طراحی (Design Gallery) — محتوای این صفحه صرفاً برای نمایشِ الگوهای UI است و دادهٔ واقعی نیست.
+      </div>
+
       {/* HERO */}
       <div style={{ background:'var(--bg2)', borderBottom:'1px solid var(--line)', padding:'36px 24px 30px' }}>
         <div style={{ maxWidth:1280, margin:'0 auto', display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:16, flexWrap:'wrap' }}>

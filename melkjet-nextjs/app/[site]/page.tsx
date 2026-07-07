@@ -216,23 +216,10 @@ function MediaCard({ href, image, gradient, children }: {
   )
 }
 
-// محتوایِ نمونه برای زمانی که مالک هنوز داده‌ای ندارد — تا صفحه خالی به‌نظر نرسد (قابلِ جایگزینی).
-const DEMO_LISTINGS = [
-  { id: 'demo-1', title: 'آپارتمانِ ۱۲۰ متری، نوساز', location: 'تهران، سعادت‌آباد', price: '۸٬۵۰۰٬۰۰۰٬۰۰۰ تومان', image: '', category: 'فروش' },
-  { id: 'demo-2', title: 'آپارتمانِ ۸۵ متری، بازسازی‌شده', location: 'تهران، جردن', price: 'رهن ۲ / اجاره ۴۵', image: '', category: 'اجاره' },
-  { id: 'demo-3', title: 'ویلایِ دوبلکسِ ۳۰۰ متری', location: 'کرج، مهرشهر', price: '۱۸٬۰۰۰٬۰۰۰٬۰۰۰ تومان', image: '', category: 'فروش' },
-  { id: 'demo-4', title: 'واحدِ اداریِ ۶۰ متری', location: 'تهران، میرداماد', price: '۴٬۲۰۰٬۰۰۰٬۰۰۰ تومان', image: '', category: 'تجاری' },
-  { id: 'demo-5', title: 'پیش‌فروشِ برجِ لوکس', location: 'تهران، الهیه', price: 'متری ۱۲۰ میلیون', image: '', category: 'پیش‌فروش' },
-  { id: 'demo-6', title: 'مغازهٔ ۴۰ متری، بر خیابان', location: 'تهران، ونک', price: 'رهن ۵ / اجاره ۹۰', image: '', category: 'تجاری' },
-]
-const DEMO_PRODUCTS = [
-  { name: 'سیمانِ تیپ ۲', brand: 'تهران', unit: 'کیسه', price: '۹۵٬۰۰۰' },
-  { name: 'میلگردِ آجدار ۱۶', brand: 'ذوب‌آهن', unit: 'کیلوگرم', price: '۳۸٬۵۰۰' },
-  { name: 'کاشیِ کفِ ۶۰×۶۰', brand: 'مرجان', unit: 'مترمربع', price: '۲۸۰٬۰۰۰' },
-  { name: 'گچِ ساختمانی', brand: 'سمنان', unit: 'کیسه', price: '۶۵٬۰۰۰' },
-  { name: 'آجرِ سفالی', brand: 'اصفهان', unit: 'عدد', price: '۴٬۵۰۰' },
-  { name: 'رنگِ پلاستیک', brand: 'الوان', unit: 'گالن', price: '۴۲۰٬۰۰۰' },
-]
+// حالتِ خالیِ صادقانه — روی سایتِ منتشرشدهٔ کاربر هرگز آگهی/قیمتِ ساختگی نمایش داده نمی‌شود.
+function EmptyBlockNote({ text }: { text: string }) {
+  return <div style={{ marginTop: 24, padding: '28px 18px', textAlign: 'center', color: MUTED, fontSize: 13.5, background: SURFACE, borderRadius: 16, border: '1px dashed rgba(0,0,0,0.15)' }}>{text}</div>
+}
 
 async function ListingsBlock({ block, primary, ownerName, ownerPhone, slug }: { block: SiteBlock; primary: string; ownerName?: string; ownerPhone?: string; slug?: string }) {
   const props = p(block)
@@ -255,14 +242,18 @@ async function ListingsBlock({ block, primary, ownerName, ownerPhone, slug }: { 
     <section id="listings" style={{ background: 'var(--mjs-bg)', padding: SECTION_PAD, direction: 'rtl' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <SectionHeading primary={primary}>{props.heading}</SectionHeading>
-        <ListingsSlider
-          items={items.length === 0 ? DEMO_LISTINGS : sliderItems}
-          categories={items.length === 0 ? ['فروش', 'اجاره', 'پیش‌فروش', 'تجاری'] : categories}
-          perSlide={perSlide}
-          primary={primary}
-          showCategories={showCategories}
-          siteSlug={slug || ''}
-        />
+        {items.length === 0 ? (
+          <EmptyBlockNote text="به‌زودی آگهی‌های ما اینجا نمایش داده می‌شود." />
+        ) : (
+          <ListingsSlider
+            items={sliderItems}
+            categories={categories}
+            perSlide={perSlide}
+            primary={primary}
+            showCategories={showCategories}
+            siteSlug={slug || ''}
+          />
+        )}
       </div>
     </section>
   )
@@ -745,21 +736,7 @@ async function CatalogBlock({ block, primary, ownerPhone, slug: siteSlug }: { bl
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <SectionHeading primary={primary} center>{props.heading || 'محصولات ما'}</SectionHeading>
         {products.length === 0 ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(210px,1fr))', gap: 18, marginTop: 24 }}>
-            {DEMO_PRODUCTS.map((pr, i) => (
-              <div key={i} style={{ background: SURFACE, border: '1px solid rgba(0,0,0,0.08)', borderRadius: 16, overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: CARD_SHADOW }}>
-                <div style={{ height: 150, background: `linear-gradient(135deg,${primary}22,${primary}05)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30 }}>🧱</div>
-                <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: INK, lineHeight: 1.6 }}>{pr.name}</div>
-                  <div style={{ fontSize: 11.5, color: MUTED }}>{pr.brand}</div>
-                  <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                    <span style={{ fontSize: 16, fontWeight: 800, color: primary }}>{pr.price}</span>
-                    <span style={{ fontSize: 11, color: MUTED }}>تومان/{pr.unit}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <EmptyBlockNote text="به‌زودی محصولات و قیمت‌های ما اینجا نمایش داده می‌شود." />
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(210px,1fr))', gap: 18, marginTop: 24 }}>
             {products.map(pr => {
@@ -803,13 +780,7 @@ async function PriceListBlock({ block, primary, ownerPhone }: { block: SiteBlock
             <div>کالا</div><div>واحد</div><div style={{ textAlign: 'left' }}>قیمت (تومان)</div>
           </div>
           {rows.length === 0
-            ? DEMO_PRODUCTS.map((pr, i) => (
-              <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', padding: '12px 18px', borderTop: '1px solid rgba(0,0,0,0.06)', fontSize: 13.5, alignItems: 'center' }}>
-                <div style={{ fontWeight: 700, color: INK }}>{pr.name}<span style={{ color: MUTED, fontWeight: 400 }}> · {pr.brand}</span></div>
-                <div style={{ color: MUTED }}>{pr.unit}</div>
-                <div style={{ textAlign: 'left', fontWeight: 800, color: primary }}>{pr.price}</div>
-              </div>
-            ))
+            ? <div style={{ padding: '26px 18px', textAlign: 'center', color: MUTED, fontSize: 13.5, borderTop: '1px solid rgba(0,0,0,0.06)' }}>هنوز قیمتی ثبت نشده — به‌زودی نرخِ روزِ محصولات اینجا قرار می‌گیرد.</div>
             : rows.map((pr, i) => {
               const price = Math.round(pr.price * (1 - (pr.discountPct || 0) / 100))
               return (

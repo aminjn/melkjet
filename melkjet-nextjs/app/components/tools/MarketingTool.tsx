@@ -44,7 +44,8 @@ const socialPlatforms = [
   { name: 'توییتر', ic: '◆', followers: '۰', engagement: 0, engStr: '—', posts: '۰', color: '#62aee8' },
 ]
 
-const scheduledDays = new Set([3, 7, 10, 14, 17, 21, 24, 28])
+// تقویمِ انتشار — تا زمانِ وجودِ زمان‌بندیِ واقعی، خالی (نه روزهای ساختگی)
+const scheduledDays = new Set<number>()
 const calDays = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه']
 
 const funnelSteps = [
@@ -71,12 +72,13 @@ const viewTitles: Record<MarketingView, string> = {
   reports: 'گزارش‌های بازاریابی',
 }
 
+// عملکردِ کانال‌ها — مثلِ بقیهٔ KPIها صفر/— تا وقتی کمپینِ واقعی اجرا شود (نه آمارِ ساختگی)
 const channelPerf = [
-  { label: 'ایمیل', value: 48, color: 'var(--gold)', stat: '۳۲٪ نرخ بازشدن' },
-  { label: 'پیامک', value: 35, color: '#5fd98a', stat: '۹۵٪ نرخ تحویل' },
-  { label: 'اینستاگرام', value: 62, color: '#e056a0', stat: '۴٫۸٪ تعامل' },
-  { label: 'لینکدین', value: 41, color: '#5b9bd5', stat: '۶٫۲٪ تعامل' },
-  { label: 'توییتر', value: 28, color: '#62aee8', stat: '۳٫۱٪ تعامل' },
+  { label: 'ایمیل', value: 0, color: 'var(--gold)', stat: '—' },
+  { label: 'پیامک', value: 0, color: '#5fd98a', stat: '—' },
+  { label: 'اینستاگرام', value: 0, color: '#e056a0', stat: '—' },
+  { label: 'لینکدین', value: 0, color: '#5b9bd5', stat: '—' },
+  { label: 'توییتر', value: 0, color: '#62aee8', stat: '—' },
 ]
 
 function buildPolyline(

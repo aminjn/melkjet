@@ -337,7 +337,8 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
 
   // ── سازگاریِ کاملِ CRM با نقشِ کاربر (ROLE_CRM) — بر اساسِ داشبوردِ پروفایل ──
   const [role, setRole] = useState<string>('')
-  useEffect(() => { fetch('/api/auth/profile').then(r => r.ok ? r.json() : null).then(d => { setRole(d?.dash || '') }).catch(() => {}) }, [])
+  const [me, setMe] = useState<{ name: string; roleLabel: string }>({ name: '', roleLabel: '' })
+  useEffect(() => { fetch('/api/auth/profile').then(r => r.ok ? r.json() : null).then(d => { setRole(d?.dash || ''); setMe({ name: d?.name || d?.account?.name || '', roleLabel: d?.account?.role || '' }) }).catch(() => {}) }, [])
   const cfg = ROLE_CRM[role] || DEFAULT_CRM
   const isMat = role === '/materials'
   const order: Stage[] = cfg.stageOrder || STAGE_ORDER
@@ -669,7 +670,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
   if (overdueCount) realInsights.push({ icon: '◰', text: `${FA(overdueCount)} وظیفهٔ معوق دارید؛ هرچه زودتر رسیدگی کنید.` })
   const contractCount = leads.filter(l => isWonStage(l.stage)).length
   if (contractCount) realInsights.push({ icon: '✓', text: `${FA(contractCount)} ${cfg.leadWord} به ${wonLabel} رسیده است. آفرین!` })
-  if (growth !== null) realInsights.push({ icon: '◈', text: `رشد قیمتِ منطقه: ${growth >= 0 ? '+' : ''}${FA(growth)}٪ (دادهٔ واقعی). به ${cfg.leadsWord} اطلاع دهید.` })
+  if (growth !== null) realInsights.push({ icon: '◈', text: `رشد قیمتِ سعادت‌آبادِ تهران: ${growth >= 0 ? '+' : ''}${FA(growth)}٪ (دادهٔ واقعیِ بازار). به ${cfg.leadsWord} اطلاع دهید.` })
 
   // ───── Deals (won leads) — «معاملات/قراردادها/…» ─────
   const wonLeads = leads.filter(l => isWonStage(l.stage))
@@ -772,7 +773,7 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
               { label: 'وظایف باز', value: openCount, sub: `${FA(todayCount)} امروز`, subColor: 'var(--gold)', icon: '✓' },
               { label: 'معوق', value: overdueCount, sub: overdueCount > 0 ? 'نیاز به پیگیری' : 'بدون معوقه', subColor: overdueCount > 0 ? '#e74c3c' : '#5fd98a', icon: '◴' },
               { label: `کل ${cfg.leadsWord}`, value: leads.length, sub: `${FA(contractCount)} ${cfg.dealWord}`, subColor: '#5fd98a', icon: '◈' },
-              { label: 'فایل‌های ملکی', value: ownListings ? ownListings.length : listings.length, sub: growth !== null ? `رشد منطقه ${growth >= 0 ? '+' : ''}${FA(growth)}٪` : 'فایل فعال', subColor: 'var(--gold)', icon: '◰' },
+              { label: 'فایل‌های ملکی', value: ownListings ? ownListings.length : listings.length, sub: growth !== null ? `رشد سعادت‌آباد ${growth >= 0 ? '+' : ''}${FA(growth)}٪` : 'فایل فعال', subColor: 'var(--gold)', icon: '◰' },
             ].map((kpi, i) => (
               <div key={i} style={{
                 background: 'var(--surface)',
@@ -2028,16 +2029,17 @@ export default function CrmTool({ embedded = false, view: viewProp, onView, ownL
           alignItems: 'center',
           gap: 10,
         }}>
+          {/* هویتِ واقعیِ کاربرِ واردشده — نه نامِ ساختگی */}
           <div style={{
             width: 36, height: 36, borderRadius: '50%',
             background: 'linear-gradient(135deg,var(--gold2),var(--gold))',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 12, fontWeight: 700, color: '#16140f',
             flexShrink: 0,
-          }}>سم</div>
+          }}>{(me.name || 'کاربر').trim().charAt(0)}</div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>سارا محمدی</div>
-            <div style={{ fontSize: 11, color: 'var(--muted)' }}>مشاور ارشد</div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{me.name || 'کاربرِ ملک‌جت'}</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>{me.roleLabel || 'CRM'}</div>
           </div>
           <button
             onClick={toggleTheme}

@@ -253,16 +253,16 @@ const faqs = [
     a: 'بله، شما می‌توانید در هر زمان پلن خود را ارتقا یا تغییر دهید. در صورت ارتقا، مبلغ مازاد بر اساس روزهای باقی‌مانده محاسبه می‌شود و در صورت کاهش پلن، اعتبار به دوره بعدی منتقل می‌شود.',
   },
   {
-    q: 'آیا دوره آزمایشی رایگان وجود دارد؟',
-    a: 'بله، پلن‌های مشاور پایه و حرفه‌ای دارای ۱۴ روز دوره آزمایشی رایگان هستند. در طول این مدت به تمام امکانات دسترسی کامل خواهید داشت و نیازی به ارائه اطلاعات کارت بانکی نیست.',
+    q: 'آیا پلنِ رایگان وجود دارد؟',
+    a: 'بله، امکاناتِ پایه (جستجو، ذخیره، پیشنهادهای هوشمند) رایگان است. جزئیاتِ دقیقِ هر پلن روی همین صفحه از سیستمِ زنده خوانده می‌شود.',
   },
   {
     q: 'روش‌های پرداخت چیست؟',
-    a: 'ما از درگاه‌های معتبر داخلی (زرین‌پال، ایدی‌پی، پارسیان) پشتیبانی می‌کنیم. پرداخت می‌تواند از طریق کارت‌های عضو شتاب، کیف پول الکترونیک یا انتقال بانکی انجام شود. برای پلن‌های سازمانی، فاکتور رسمی صادر می‌گردد.',
+    a: 'پرداخت از طریقِ درگاهِ امنِ داخلی و کارت‌های عضو شتاب انجام می‌شود. برای پلن‌های سازمانی امکانِ صدورِ فاکتور وجود دارد.',
   },
   {
-    q: 'اگر از پلن ناراضی بودم، بازگشت وجه دارید؟',
-    a: 'در صورتی که در ۷ روز اول اشتراک از پلن راضی نباشید، مبلغ پرداختی به‌طور کامل بازگردانده می‌شود. پس از این مدت، بازگشت وجه به‌صورت اعتبار برای دوره‌های بعدی در نظر گرفته می‌شود.',
+    q: 'اگر سؤالی دربارهٔ پلن‌ها داشتم؟',
+    a: 'از بخشِ پشتیبانی در پنلِ کاربری یا صفحهٔ تماسِ با ما پیام بدهید — تیمِ ملک‌جت پاسخ می‌دهد.',
   },
 ]
 
@@ -287,7 +287,8 @@ export default function PricingPage() {
     return () => { cancelled = true }
   }, [])
 
-  const cardPlans: CardPlan[] = livePlans ?? plans
+  // فقط پلن‌های واقعی از API — نه قیمتِ ساختگیِ هاردکد (تا کاربر بر اساسِ قیمتِ غیرواقعی تصمیم نگیرد).
+  const cardPlans: CardPlan[] = livePlans ?? []
 
   // بنر نتیجهٔ پرداخت (پس از بازگشت از زرین‌پال)
   const [payBanner, setPayBanner] = useState<{ ok: boolean; text: string } | null>(null)
@@ -383,7 +384,7 @@ export default function PricingPage() {
               سالانه
               {annual && (
                 <span style={{ background: 'var(--gold)', color: '#1a1200', fontSize: 11, fontWeight: 800, padding: '2px 10px', borderRadius: 999 }}>
-                  ۲۰٪ تخفیف
+                  به‌صرفه‌تر
                 </span>
               )}
             </span>
@@ -393,6 +394,9 @@ export default function PricingPage() {
 
       {/* Plans grid */}
       <section style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 80px' }}>
+        {cardPlans.length === 0 && (
+          <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 14, padding: '40px 0' }}>در حال دریافتِ پلن‌ها…</div>
+        )}
         <div className="mjr-grid" style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(3, 1fr)',
@@ -493,59 +497,7 @@ export default function PricingPage() {
         </div>
       </section>
 
-      {/* Comparison Table */}
-      <section style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 80px' }}>
-        <h2 style={{ fontSize: 28, fontWeight: 800, textAlign: 'center', marginBottom: 8 }}>مقایسه کامل ویژگی‌ها</h2>
-        <p style={{ textAlign: 'center', color: 'var(--muted)', marginBottom: 40, fontSize: 15 }}>
-          یک نگاه جامع به تمام امکاناتی که هر پلن ارائه می‌دهد
-        </p>
-        <div style={{ overflowX: 'auto', borderRadius: 16, border: '1px solid var(--line)' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 860 }}>
-            <thead>
-              <tr style={{ background: 'var(--surface)', borderBottom: '1px solid var(--line)' }}>
-                <th style={{ padding: '16px 20px', textAlign: 'right', fontSize: 13, color: 'var(--muted)', fontWeight: 600, width: '28%' }}>
-                  ویژگی
-                </th>
-                {plans.map(p => (
-                  <th key={p.id} style={{ padding: '16px 12px', textAlign: 'center', fontSize: 12, color: p.goldBorder ? 'var(--gold)' : 'var(--text)', fontWeight: 700 }}>
-                    {p.name}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {compareFeatures.map((row, ri) => (
-                <tr
-                  key={ri}
-                  style={{
-                    borderBottom: '1px solid var(--line)',
-                    background: ri % 2 === 0 ? 'transparent' : 'var(--bg2)',
-                  }}
-                >
-                  <td style={{ padding: '14px 20px', fontSize: 13.5, color: 'var(--text)', fontWeight: 500 }}>
-                    {row.label}
-                  </td>
-                  {planIds.map((pid, ci) => {
-                    const val = row.values ? row.values[ci] : null
-                    const included = row.keys ? row.keys.includes(pid) : false
-                    return (
-                      <td key={pid} style={{ padding: '14px 12px', textAlign: 'center' }}>
-                        {val ? (
-                          <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>{val}</span>
-                        ) : included ? (
-                          <span style={{ color: 'var(--gold)', fontSize: 16, fontWeight: 800 }}>✓</span>
-                        ) : (
-                          <span style={{ color: 'var(--faint)', fontSize: 16 }}>✕</span>
-                        )}
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      {/* جدولِ مقایسهٔ ساختگیِ قبلی حذف شد — امکاناتِ واقعیِ هر پلن روی خودِ کارت‌ها (از API) دیده می‌شود */}
 
       {/* FAQ */}
       <section style={{ maxWidth: 780, margin: '0 auto', padding: '0 24px 100px' }}>

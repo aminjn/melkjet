@@ -5,7 +5,7 @@ import Footer from '@/app/components/Footer'
 import PromoBadge from '@/app/components/PromoBadge'
 import { fetchContent } from '@/app/lib/content-display'
 
-type StockStatus = 'موجود' | 'محدود' | 'سفارشی'
+type StockStatus = 'موجود' | 'محدود' | 'سفارشی' | 'استعلام موجودی'
 
 type Product = {
   id: string
@@ -27,13 +27,6 @@ type Product = {
 
 type CartItem = { product: Product; qty: number }
 
-type Review = {
-  name: string
-  company: string
-  rating: number
-  text: string
-  date: string
-}
 
 const PRODUCT_PALETTE: [string, string][] = [
   ['#374151', '#1f2937'], ['#9ca3af', '#6b7280'], ['#d97706', '#92400e'],
@@ -55,7 +48,7 @@ function toProduct(it: { id: string; title: string; price?: string; sourceName: 
     price: priceNum,
     priceLabel: it.price || '—',
     unit: '',
-    stock: 'موجود',
+    stock: 'استعلام موجودی',   // موجودیِ واقعی نامشخص است — ادعای «موجود» نکن
     hot: false,
     gradientFrom: from,
     gradientTo: to,
@@ -66,14 +59,6 @@ function toProduct(it: { id: string; title: string; price?: string; sourceName: 
   }
 }
 
-const BRANDS = [
-  { name: 'فولاد خوزستان', abbr: 'F.KH', color: '#374151' },
-  { name: 'سیمان تهران', abbr: 'S.T', color: '#6b7280' },
-  { name: 'سرامیک ایران', abbr: 'S.IR', color: '#d1d5db' },
-  { name: 'کاشی یزد', abbr: 'K.Y', color: '#d97706' },
-  { name: 'ذوب‌آهن اصفهان', abbr: 'Z.A', color: '#1e3a5f' },
-]
-
 const CATEGORY_CHIPS = ['همه', 'آهن و میلگرد', 'سیمان و گچ', 'کاشی‌وسرامیک', 'درب‌وپنجره', 'تأسیسات', 'دکوراسیون', 'ابزار']
 
 const SIDEBAR_CATS = [
@@ -83,14 +68,6 @@ const SIDEBAR_CATS = [
   { name: 'تأسیسات', children: ['شیرآلات', 'برق و کلید', 'لوله‌کشی'] },
   { name: 'دکوراسیون', children: ['کابینت', 'رنگ', 'کفپوش'] },
   { name: 'ابزار', children: ['ابزار برقی', 'ابزار دستی'] },
-]
-
-const BRAND_FILTERS = ['فولاد خوزستان', 'سیمان تهران', 'سرامیک ایران', 'کاشی یزد', 'ذوب‌آهن اصفهان', 'ایران رنگ', 'ترموپنجره']
-
-const REVIEWS: Review[] = [
-  { name: 'مهندس رضایی', company: 'شرکت عمران پارس', rating: 5, text: 'کیفیت میلگردهای فولاد خوزستان عالی بود. تحویل به موقع و بسته‌بندی مناسب.', date: '۱۴۰۳/۰۳/۱۰' },
-  { name: 'آقای کریمی', company: 'پیمانکاری البرز', rating: 4, text: 'سیمان تیپ ۲ با کیفیت خوب. قیمت رقابتی در مقایسه با بازار آزاد.', date: '۱۴۰۳/۰۲/۲۸' },
-  { name: 'خانم محمدی', company: 'طراحی داخلی مدرن', rating: 5, text: 'کاشی پرسلان سرامیک ایران بی‌نقص بود. رنگ و کیفیت سطح فوق‌العاده.', date: '۱۴۰۳/۰۲/۱۵' },
 ]
 
 const SORT_OPTIONS = ['جدیدترین', 'ارزان‌ترین', 'گران‌ترین', 'پرفروش‌ترین']
@@ -158,6 +135,8 @@ export default function StorePage() {
       return next
     })
   }
+  // فروشندگان/برندهای واقعی از محصولاتِ بارگذاری‌شده (نه فهرستِ ساختگی)
+  const realBrands = Array.from(new Set(products.map(p => p.brand).filter(b => b && b !== 'نامشخص')))
 
   const addToCart = (product: Product, qty = 1) => {
     setCart(prev => {
@@ -448,15 +427,9 @@ export default function StorePage() {
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
                   <h1 style={{ margin: 0, fontSize: 22, fontWeight: 900 }}>بازار مصالح و محصولات</h1>
-                  <span style={{ background: '#22c55e22', color: '#22c55e', fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} />
-                    تأییدشده
-                  </span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: 'var(--muted)' }}>
-                  <span>ملک‌جت B2B · بازار عمده مصالح ساختمانی</span>
-                  <span style={{ color: 'var(--gold)', fontWeight: 700 }}>★ ۴.۸</span>
-                  <span>(۱٬۲۴۷ نظر)</span>
+                  <span>ملک‌جت B2B · بازار عمده مصالح ساختمانی · قیمت از فروشندگانِ واقعی</span>
                 </div>
               </div>
             </div>
@@ -479,32 +452,26 @@ export default function StorePage() {
             </button>
           </div>
 
-          {/* Featured Brands Bar */}
+          {/* فروشندگانِ واقعی (از محصولاتِ بارگذاری‌شده) — فیلترِ برند/فروشنده */}
+          {realBrands.length > 0 && (
           <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 4 }}>
-            {BRANDS.map(brand => (
+            {realBrands.slice(0, 10).map(brand => (
               <button
-                key={brand.name}
-                onClick={() => toggleBrand(brand.name)}
+                key={brand}
+                onClick={() => toggleBrand(brand)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10, padding: '10px 18px',
-                  background: selectedBrands.has(brand.name) ? 'var(--goldDim)' : 'var(--surface)',
-                  border: `1px solid ${selectedBrands.has(brand.name) ? 'var(--gold)' : 'var(--line)'}`,
+                  background: selectedBrands.has(brand) ? 'var(--goldDim)' : 'var(--surface)',
+                  border: `1px solid ${selectedBrands.has(brand) ? 'var(--gold)' : 'var(--line)'}`,
                   borderRadius: 12, cursor: 'pointer', flexShrink: 0, fontFamily: 'inherit',
                   transition: 'all 0.2s',
                 }}
               >
-                <div style={{
-                  width: 36, height: 36, borderRadius: 8, flexShrink: 0,
-                  background: brand.color,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 10, fontWeight: 900, color: '#fff', letterSpacing: 0.5,
-                }}>
-                  {brand.abbr}
-                </div>
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap' }}>{brand.name}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap' }}>{brand}</span>
               </button>
             ))}
           </div>
+          )}
 
           {/* Category Chips */}
           <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
@@ -578,11 +545,12 @@ export default function StorePage() {
             ))}
           </div>
 
-          {/* Brand Filter */}
+          {/* فیلترِ فروشنده/برند — از دادهٔ واقعیِ محصولات */}
+          {realBrands.length > 0 && (
           <div style={{ ...s, padding: 18 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 14 }}>برند</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 14 }}>فروشنده / برند</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {BRAND_FILTERS.map(brand => (
+              {realBrands.slice(0, 12).map(brand => (
                 <label key={brand} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13, color: 'var(--text)' }}>
                   <input
                     type="checkbox"
@@ -595,6 +563,7 @@ export default function StorePage() {
               ))}
             </div>
           </div>
+          )}
 
           {/* Price Range */}
           <div style={{ ...s, padding: 18 }}>
@@ -632,24 +601,6 @@ export default function StorePage() {
             </div>
           </div>
 
-          {/* Certification Filter */}
-          <div style={{ ...s, padding: 18 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 12 }}>گواهینامه</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {['ISO 9001', 'CE', 'استاندارد ملی', 'ISIRI'].map(cert => (
-                <span
-                  key={cert}
-                  style={{
-                    padding: '4px 10px', borderRadius: 20,
-                    border: '1px solid var(--gold2)', background: 'var(--goldDim)',
-                    color: 'var(--gold)', fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                  }}
-                >
-                  {cert}
-                </span>
-              ))}
-            </div>
-          </div>
         </aside>
 
         {/* ── MAIN CONTENT ── */}
@@ -879,37 +830,7 @@ export default function StorePage() {
             </button>
           </div>
 
-          {/* ── REVIEWS SECTION ── */}
-          <div style={{ marginTop: 8 }}>
-            <h2 style={{ fontSize: 18, fontWeight: 800, margin: '0 0 20px', color: 'var(--text)' }}>نظرات خریداران</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
-              {REVIEWS.map((review, i) => (
-                <div key={i} style={{ ...s, padding: 20 }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{
-                        width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
-                        background: 'linear-gradient(135deg, var(--gold2), var(--gold))',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 14, fontWeight: 900, color: '#000',
-                      }}>
-                        {review.name.charAt(review.name.length - 1)}
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{review.name}</div>
-                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>{review.company}</div>
-                      </div>
-                    </div>
-                    <div style={{ fontSize: 10, color: 'var(--faint)', flexShrink: 0 }}>{review.date}</div>
-                  </div>
-                  <Stars count={review.rating} />
-                  <p style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.8, margin: '10px 0 0' }}>
-                    {review.text}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
+          {/* نظرات: فقط نظرِ واقعیِ خریداران — تا وقتی نظری ثبت نشده، بخشی نمایش داده نمی‌شود */}
         </main>
       </div>
 

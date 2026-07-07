@@ -175,10 +175,8 @@ const BLOCK_DEFAULTS: Record<string, Record<string, any>> = {
     heading: 'نظرات مشتریان',
     showReal: 'yes',
     allowSubmit: 'yes',
-    items: [
-      { name: 'علی رضایی', text: 'تجربه‌ای عالی و حرفه‌ای داشتم. کاملاً راضی هستم.', rating: 5 },
-      { name: 'مریم احمدی', text: 'برخورد بسیار خوب و مشاوره دقیق. پیشنهاد می‌کنم.', rating: 5 },
-    ],
+    // خالی — نظرِ ساختگی با نامِ جعلی روی سایتِ زندهٔ کاربر منتشر نمی‌شود؛ فقط نظرِ واقعی/واردشده.
+    items: [],
   },
   cta: {
     heading: 'همین امروز با ما تماس بگیرید',
@@ -2306,22 +2304,31 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
           <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
 
             {/* SEO Tab */}
-            {activeTab === 'seo' && (
+            {activeTab === 'seo' && (() => {
+              // امتیازِ واقعیِ سئو از محتوای خودِ سایت (نه عددِ ثابت): عنوان/توضیح/تعدادِ صفحه
+              const tLen = (seoTitle || '').trim().length, dLen = (seoDesc || '').trim().length
+              let seoScore = 0
+              seoScore += tLen === 0 ? 0 : tLen >= 25 && tLen <= 65 ? 35 : 18
+              seoScore += dLen === 0 ? 0 : dLen >= 70 && dLen <= 165 ? 35 : 18
+              seoScore += Math.min(30, pages.length * 10)
+              const frac = Math.max(0.02, seoScore / 100)
+              const status = seoScore >= 80 ? { l: 'عالی', c: '#5fd98a' } : seoScore >= 55 ? { l: 'خوب — قابلِ بهبود', c: '#e7a14a' } : { l: 'نیازمندِ تکمیلِ عنوان/توضیح', c: '#e7674a' }
+              return (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: '14px 16px' }}>
                   <div style={{ position: 'relative', width: 56, height: 56, flexShrink: 0 }}>
                     <svg width="56" height="56" viewBox="0 0 56 56">
                       <circle cx="28" cy="28" r="24" fill="none" stroke="var(--line2)" strokeWidth="4" />
                       <circle cx="28" cy="28" r="24" fill="none" stroke="var(--gold)" strokeWidth="4"
-                        strokeDasharray={`${2 * Math.PI * 24 * 0.92} ${2 * Math.PI * 24 * (1 - 0.92)}`}
+                        strokeDasharray={`${2 * Math.PI * 24 * frac} ${2 * Math.PI * 24 * (1 - frac)}`}
                         strokeLinecap="round"
                         transform="rotate(-90 28 28)" />
                     </svg>
-                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 900, color: 'var(--gold)' }}>۹۲</div>
+                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 900, color: 'var(--gold)' }}>{seoScore.toLocaleString('fa-IR')}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>امتیاز سئو</div>
-                    <div style={{ fontSize: 11, color: '#5fd98a', fontWeight: 600 }}>وضعیت: عالی</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>امتیاز سئو (از محتوای شما)</div>
+                    <div style={{ fontSize: 11, color: status.c, fontWeight: 600 }}>وضعیت: {status.l}</div>
                   </div>
                 </div>
 
@@ -2401,22 +2408,24 @@ export default function WebsiteBuilderTool({ embedded = false, view: viewProp, o
                 </div>
 
                 <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, padding: '12px 14px' }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', marginBottom: 10 }}>بررسی‌های سئو</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', marginBottom: 10 }}>وضعیتِ سئوی سایتِ شما</div>
+                  {/* چک‌های واقعی از وضعیتِ خودِ سایت — نه تیکِ ساختگی */}
                   {[
-                    'رندرینگ سمت سرور (SSR)',
-                    'دامنه اختصاصی فعال',
-                    'اسکیما Schema.org',
-                    'سرعت بارگذاری ۹۰+',
-                    'نقشه سایت (Sitemap)',
-                  ].map(label => (
-                    <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
-                      <span style={{ fontSize: 12, color: '#5fd98a', flexShrink: 0 }}>✓</span>
-                      <span style={{ fontSize: 11, color: 'var(--text)' }}>{label}</span>
+                    { label: 'رندرینگِ سمتِ سرور (SSR)', ok: true },                                   // پلتفرم واقعاً SSR است
+                    { label: 'نقشهٔ سایت (Sitemap)', ok: true },                                       // سایت‌مپِ خودکارِ پلتفرم
+                    { label: 'عنوانِ صفحه (۲۵–۶۵ نویسه)', ok: tLen >= 25 && tLen <= 65 },
+                    { label: 'توضیحِ متا (۷۰–۱۶۵ نویسه)', ok: dLen >= 70 && dLen <= 165 },
+                    { label: 'بیش از یک صفحه محتوا', ok: pages.length > 1 },
+                  ].map(c => (
+                    <div key={c.label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
+                      <span style={{ fontSize: 12, color: c.ok ? '#5fd98a' : 'var(--faint)', flexShrink: 0 }}>{c.ok ? '✓' : '○'}</span>
+                      <span style={{ fontSize: 11, color: c.ok ? 'var(--text)' : 'var(--muted)' }}>{c.label}</span>
                     </div>
                   ))}
                 </div>
               </div>
-            )}
+              )
+            })()}
 
             {/* Settings Tab */}
             {activeTab === 'settings' && (

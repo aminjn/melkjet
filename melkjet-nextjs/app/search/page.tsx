@@ -102,7 +102,8 @@ function toProperty(it: ContentItem) {
     size: areaNum ? toPersianDigits(areaNum) : '—', areaNum,
     floorNum, yearNum, kind, lat, lng, dealStatus,
     year: yearNum ? toPersianDigits(yearNum) : '—',
-    tag: '', score: 80 + (h % 19),
+    // بدونِ «امتیازِ AI»ِ ساختگی — score فقط برای ترتیبِ پایدارِ «پیشنهاد ملک‌جت» (از هش؛ نمایش داده نمی‌شود)
+    tag: '', score: h % 100,
     img: it.image ? '' : gradientFor(it.title), image: it.image, url: it.url,
     category: it.category || '', searchText, promoKind: (it as any).promoKind || '',
   }
@@ -647,7 +648,6 @@ function SearchPageInner() {
                   <Link href={listingHref(p.id, p.title, p.location)} style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}>
                     <div style={{ height: 156, background: p.image ? `center/cover no-repeat url(${p.image})` : p.img, position: 'relative', filter: p.dealStatus ? 'grayscale(0.55) brightness(0.7)' : 'none' }}>
                       <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 64, background: 'linear-gradient(to top,rgba(0,0,0,0.5),transparent)' }} />
-                      <div style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(8px)', color: 'var(--gold2)', borderRadius: 8, padding: '4px 8px', fontSize: 11.5, fontWeight: 700, border: '1px solid rgba(201,168,76,0.3)', display: 'flex', alignItems: 'center', gap: 3 }}>✦ {toPersianDigits(p.score)}</div>
                       {isPromoted && !p.dealStatus && <div style={{ position: 'absolute', top: 10, left: 10 }}><PromoBadge kind={p.promoKind || 'ویژه'} /></div>}
                       {p.dealStatus && (
                         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

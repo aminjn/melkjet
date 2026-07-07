@@ -2772,13 +2772,14 @@ function ContentView() {
   const [generating, setGenerating] = useState(false)
   const [output, setOutput] = useState('')
   const types = ['مقاله سئو', 'صفحه سئو', 'خبر', 'FAQ']
-  const seoQueue = [
-    { title: 'راهنمای خرید ملک در سعادت‌آباد', status: 'منتشر', views: '۴٬۲۰۰' },
-    { title: '۱۰ نکته مهم قبل از اجاره آپارتمان', status: 'پیش‌نویس', views: '—' },
-    { title: 'قیمت ملک در زعفرانیه ۱۴۰۳', status: 'در بررسی', views: '—' },
-    { title: 'مقایسه محله‌های شمال تهران', status: 'منتشر', views: '۲٬۸۰۰' },
-    { title: 'شرایط دریافت وام مسکن ۱۴۰۳', status: 'در بررسی', views: '—' },
-  ]
+  // صفِ سئو از مقاله‌های واقعیِ CMS — نه فهرستِ ساختگی
+  const [seoQueue, setSeoQueue] = useState<{ title: string; status: string; views: string }[]>([])
+  useEffect(() => {
+    fetch('/api/admin/scraper/items?type=article', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => {
+      const items = (d?.items || []) as { title: string; published?: boolean }[]
+      setSeoQueue(items.slice(0, 6).map(a => ({ title: a.title, status: a.published === false ? 'پیش‌نویس' : 'منتشر', views: '—' })))
+    }).catch(() => {})
+  }, [])
   const statusColor: Record<string, string> = { منتشر: '#5fd98a', 'پیش‌نویس': '#5b9bd5', 'در بررسی': '#e7a14a' }
 
   const generate = async () => {
@@ -2800,8 +2801,9 @@ function ContentView() {
     <div style={{ animation: 'fade .35s ease', display: 'grid', gridTemplateColumns: '220px 1fr', gap: 14 }} className="mjsa-2col">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <Card style={{ padding: 14 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12 }}>صف سئو</div>
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12 }}>صف سئو (مقاله‌های واقعی)</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {seoQueue.length === 0 && <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>هنوز مقاله‌ای ثبت نشده.</div>}
             {seoQueue.map((s, i) => (
               <div key={i} style={{ background: 'var(--bg2)', borderRadius: 10, padding: '10px 12px' }}>
                 <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4, lineHeight: 1.4 }}>{s.title}</div>
@@ -5798,40 +5800,29 @@ function AuditView() {
 }
 
 function SettingsView() {
-  const [toggles, setToggles] = useState<Record<string, boolean>>({
-    maintenance: false, registration: true, aiModeration: true,
-    autoPublish: false, emailNotifs: true, smsNotifs: true,
-    darkDefault: true, rtlForce: true, analyticsPublic: false,
-    apiPublic: true, devMode: false, betaFeatures: false,
-  })
-  const settings = [
-    { key: 'maintenance',     label: 'حالت تعمیر و نگهداری',   desc: 'سایت برای کاربران غیرفعال می‌شود' },
-    { key: 'registration',    label: 'ثبت‌نام جدید',            desc: 'امکان ایجاد حساب برای کاربران جدید' },
-    { key: 'aiModeration',    label: 'تأیید خودکار AI',         desc: 'مدل هوش مصنوعی آگهی‌ها را بررسی می‌کند' },
-    { key: 'autoPublish',     label: 'انتشار خودکار',           desc: 'آگهی‌های تأییدشده بلافاصله منتشر می‌شوند' },
-    { key: 'emailNotifs',     label: 'اعلان‌های ایمیل',         desc: 'ارسال خودکار ایمیل به کاربران' },
-    { key: 'smsNotifs',       label: 'اعلان‌های پیامکی',        desc: 'ارسال خودکار SMS' },
-    { key: 'darkDefault',     label: 'تم تاریک پیش‌فرض',       desc: 'کاربران جدید با تم تاریک وارد می‌شوند' },
-    { key: 'rtlForce',        label: 'جهت RTL اجباری',          desc: 'رابط کاربری همیشه راست‌به‌چپ' },
-    { key: 'analyticsPublic', label: 'آمار عمومی',              desc: 'نمایش آمار سایت به همه کاربران' },
-    { key: 'apiPublic',       label: 'API عمومی',               desc: 'امکان دسترسی API برای توسعه‌دهندگان' },
-    { key: 'devMode',         label: 'حالت توسعه',              desc: 'نمایش لاگ‌ها و اطلاعات دیباگ' },
-    { key: 'betaFeatures',    label: 'ویژگی‌های بتا',           desc: 'فعال‌سازی ویژگی‌های آزمایشی' },
+  // تنظیماتِ واقعیِ پلتفرم در بخش‌های خودشان است — این صفحه راهنمای رسیدن به آن‌هاست (نه سوییچِ دکوری).
+  const links = [
+    { label: 'اتصال‌ها و سرویس‌ها (پیامک/ایمیل/نشان/دیوار)', href: null, view: 'connections', desc: 'کلیدها و پیکربندیِ سرویس‌های بیرونی' },
+    { label: 'API و مدل‌های AI', href: null, view: 'api', desc: 'مدلِ هر ایجنت + کلیدِ GapGPT' },
+    { label: 'مرکزِ کنترلِ REOS (وزن‌ها، فلگ‌ها، AutoML، تعلیق)', href: '/reos-admin', view: null, desc: 'همهٔ تنظیماتِ موتورِ هوشمند — روی موتورِ زنده' },
+    { label: 'پلن‌ها و اشتراک', href: null, view: 'plans', desc: 'قیمت و امکاناتِ پلن‌ها' },
+    { label: 'نقش‌ها و دسترسی', href: null, view: 'roles', desc: 'داشبورد و مجوزهای هر نقش' },
+    { label: 'تعرفهٔ پیامک و هزینهٔ AI', href: null, view: 'smscost', desc: 'قیمت‌گذاریِ مصرف' },
   ]
-
   return (
     <div style={{ animation: 'fade .35s ease' }}>
       <Card>
-        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 16 }}>تنظیمات کلی پلتفرم</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-          {settings.map((s, i) => (
-            <div key={s.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 0', borderBottom: i < settings.length - 1 ? '1px solid var(--line)' : 'none', gap: 16 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>تنظیماتِ پلتفرم</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>هر تنظیم در بخشِ تخصصیِ خودش نگهداری می‌شود و واقعاً اعمال می‌شود:</div>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {links.map((l, i) => (
+            <a key={l.label} href={l.href || '#'} onClick={e => { if (!l.href) e.preventDefault() }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '14px 0', borderBottom: i < links.length - 1 ? '1px solid var(--line)' : 'none', textDecoration: 'none', color: 'inherit', cursor: l.href ? 'pointer' : 'default' }}>
               <div>
-                <div style={{ fontWeight: 600, fontSize: 13.5 }}>{s.label}</div>
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{s.desc}</div>
+                <div style={{ fontWeight: 600, fontSize: 13.5 }}>{l.label}</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{l.desc}{!l.href && ' — از منوی کنار بازش کنید'}</div>
               </div>
-              <Toggle on={toggles[s.key]} onChange={v => setToggles(prev => ({ ...prev, [s.key]: v }))} />
-            </div>
+              {l.href && <span style={{ color: 'var(--gold)', fontSize: 13 }}>باز کردن ↗</span>}
+            </a>
           ))}
         </div>
       </Card>
@@ -5840,45 +5831,31 @@ function SettingsView() {
 }
 
 function FlagsView() {
-  const [flags, setFlags] = useState<Record<string, boolean>>({
-    newSearch: true, aiChat: true, mapHeat: false, pricePredict: false,
-    videoTour: false, mortgageCalc: true, compareMode: false, agentMatch: true,
-    arView: false, blockchainDeed: false, instantOffer: false, virtualStaging: false,
-  })
-  const featureFlags = [
-    { key: 'newSearch',      name: 'جستجوی نسل جدید',     desc: 'موتور جستجوی معنایی بر پایه embeddings',        rollout: '۱۰۰٪', tag: 'پایدار' },
-    { key: 'aiChat',         name: 'دستیار AI چت',          desc: 'چت‌بات هوشمند برای راهنمایی کاربران',           rollout: '۱۰۰٪', tag: 'پایدار' },
-    { key: 'mapHeat',        name: 'نقشه حرارتی',           desc: 'ویژوالیزیشن قیمت و تقاضا روی نقشه',             rollout: '۲۰٪',  tag: 'بتا' },
-    { key: 'pricePredict',   name: 'پیش‌بینی قیمت',        desc: 'مدل پیش‌بینی روند قیمت ملک',                    rollout: '۵٪',   tag: 'آلفا' },
-    { key: 'videoTour',      name: 'تور ویدیویی',           desc: 'پشتیبانی از ویدیو در آگهی‌ها',                  rollout: '۰٪',   tag: 'آلفا' },
-    { key: 'mortgageCalc',   name: 'ماشین‌حساب وام',       desc: 'محاسبه اقساط و شرایط وام مسکن',                 rollout: '۱۰۰٪', tag: 'پایدار' },
-    { key: 'compareMode',    name: 'مقایسه ملک‌ها',        desc: 'مقایسه جدولی چند ملک با هم',                    rollout: '۱۵٪',  tag: 'بتا' },
-    { key: 'agentMatch',     name: 'تطبیق مشاور AI',        desc: 'پیشنهاد مشاور بر اساس نیاز کاربر',              rollout: '۸۰٪',  tag: 'پایدار' },
-    { key: 'arView',         name: 'نمای واقعیت افزوده',   desc: 'مشاهده ملک با AR در محل',                        rollout: '۰٪',   tag: 'تحقیق' },
-    { key: 'blockchainDeed', name: 'سند بلاک‌چین',         desc: 'ثبت سند مالکیت روی بلاک‌چین',                   rollout: '۰٪',   tag: 'تحقیق' },
-    { key: 'instantOffer',   name: 'پیشنهاد فوری',          desc: 'خرید مستقیم بدون مذاکره',                        rollout: '۰٪',   tag: 'آلفا' },
-    { key: 'virtualStaging', name: 'چیدمان مجازی',          desc: 'دکوراسیون مبله مجازی با AI',                     rollout: '۱۰٪',  tag: 'بتا' },
-  ]
-  const tagColor: Record<string, string> = { پایدار: '#5fd98a', بتا: '#5b9bd5', آلفا: '#e7a14a', تحقیق: 'var(--muted)' }
-
+  // فلگ‌های واقعیِ پلتفرم از /api/reos/flags — روشن/خاموش و عرضهٔ تدریجی واقعاً روی لایه‌ها اثر می‌گذارد.
+  const [flags, setFlags] = useState<{ key: string; label: string; enabled: boolean; rolloutPct: number; cities: string[] }[]>([])
+  const load = () => fetch('/api/reos/flags', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d?.ok) setFlags(d.flags || []) }).catch(() => {})
+  useEffect(() => { load() }, [])
+  const save = async (key: string, patch: Record<string, unknown>) => {
+    await fetch('/api/reos/flags', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, patch }) }).catch(() => {})
+    load()
+  }
   return (
     <div style={{ animation: 'fade .35s ease' }}>
       <Card>
-        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 16 }}>فیچر فلگ‌های پلتفرم</div>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>فیچر فلگ‌های پلتفرم (واقعی)</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>روشن/خاموش و درصدِ عرضه مستقیماً روی لایه‌های REOS (اقتدار/اقتصاد/اجتماعی/کیف پول/AutoML) اعمال می‌شود.</div>
+        {flags.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>در حال بارگذاری…</div>}
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          {featureFlags.map((f, i) => (
-            <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 0', borderBottom: i < featureFlags.length - 1 ? '1px solid var(--line)' : 'none' }}>
-              <Toggle on={flags[f.key]} onChange={v => setFlags(prev => ({ ...prev, [f.key]: v }))} />
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                  <span style={{ fontWeight: 600, fontSize: 13.5 }}>{f.name}</span>
-                  <Badge label={f.tag} color={tagColor[f.tag]} />
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--muted)' }}>{f.desc}</div>
+          {flags.map((f, i) => (
+            <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 0', borderBottom: i < flags.length - 1 ? '1px solid var(--line)' : 'none', flexWrap: 'wrap' }}>
+              <Toggle on={f.enabled} onChange={v => save(f.key, { enabled: v })} />
+              <div style={{ flex: 1, minWidth: 180 }}>
+                <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 2 }}>{f.label}</div>
+                <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{f.key}{f.cities?.length ? ` · فقط: ${f.cities.join('، ')}` : ''}</div>
               </div>
-              <div style={{ textAlign: 'left', minWidth: 60 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: flags[f.key] ? '#5fd98a' : 'var(--faint)' }}>{f.rollout}</div>
-                <div style={{ fontSize: 11, color: 'var(--faint)' }}>rollout</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input type="number" min={0} max={100} defaultValue={f.rolloutPct} onBlur={e => { const v = Math.max(0, Math.min(100, Number(e.target.value) || 0)); if (v !== f.rolloutPct) save(f.key, { rolloutPct: v }) }} style={{ width: 64, padding: '6px 8px', borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 12, textAlign: 'center', fontFamily: 'inherit' }} />
+                <span style={{ fontSize: 11, color: 'var(--faint)' }}>٪ عرضه</span>
               </div>
             </div>
           ))}

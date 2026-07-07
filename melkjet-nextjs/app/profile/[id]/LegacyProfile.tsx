@@ -1,6 +1,6 @@
 'use client'
 
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import Nav from '../../components/Nav'
 import Footer from '../../components/Footer'
@@ -798,13 +798,13 @@ function RealAdvisorProfile({ phone }: { phone: string }) {
 
 export default function LegacyProfile() {
   const params = useParams()
+  const router = useRouter()
   const urlId = (params?.id as string) || 'advisor'
-
-  // یک شناسهٔ نقشِ شناخته‌شده (advisor/agency/…) = صفحهٔ نمونهٔ نقش.
-  // هر چیز دیگری (شمارهٔ تلفنِ مشاور یا کلیدِ پیش‌نمایشِ نقش) = پروفایلِ واقعیِ مشاور.
-  if (urlId in profiles) {
-    return <RoleTemplateProfile urlId={urlId} />
-  }
+  // شناسه‌های نقش (advisor/agency/…) قبلاً «پرسونای نمونهٔ ساختگی» را عمومی نشان می‌دادند
+  // (نام/نظر/شمارهٔ فیک با نشانِ تأیید) — حذف شد؛ به دایرکتوریِ واقعیِ متخصصان می‌رویم.
+  const isRoleId = urlId in profiles
+  useEffect(() => { if (isRoleId) router.replace('/directory') }, [isRoleId, router])
+  if (isRoleId) return null
   return <RealAdvisorProfile phone={urlId} />
 }
 

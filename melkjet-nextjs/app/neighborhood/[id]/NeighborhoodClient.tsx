@@ -97,7 +97,7 @@ export default function NeighborhoodClient({ name }: { name: string }) {
     ? trend.map((t, i) => monthLabel(t.month, i))
     : ['فرو', 'ارد', 'خرد', 'تیر', 'مرد', 'شهر', 'مهر', 'آبا', 'آذر', 'دی', 'بهم', 'اسف'];
   const trendAvgs = trend.map((t) => t.avg);
-  const barHeights = trendAvgs.length ? trendAvgs : [80, 85, 82, 88, 90, 92, 95, 98, 100, 105, 110, 115];
+  const barHeights = trendAvgs;   // فقط دادهٔ واقعی — بدونِ میله‌های ساختگی در حالِ بارگذاری
   const maxBar = Math.max(...barHeights, 1);
   const maxHeight = 150;
   const barCount = barHeights.length || 12;
@@ -156,7 +156,7 @@ export default function NeighborhoodClient({ name }: { name: string }) {
         </h1>
 
         <p style={{ fontSize: '0.9rem', color: 'rgba(212,175,55,0.85)', margin: 0, position: 'relative', zIndex: 1, letterSpacing: '0.02em' }}>
-          ۲٬۴۰۰ ملک فعال · تحلیل بازار به‌روز · راهنمای خرید هوشمند
+          {stats?.count ? `${toFa(stats.count)} آگهیِ فعال · ` : ''}تحلیل بازار به‌روز · راهنمای خرید هوشمند
         </p>
       </div>
 
@@ -178,25 +178,21 @@ export default function NeighborhoodClient({ name }: { name: string }) {
           </div>
 
           <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '12px', padding: '1.25rem 1.25rem 1rem', boxShadow: 'var(--shadow)' }}>
-            <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '0.4rem' }}>ودیعه میانگین</div>
-            <div style={{ fontSize: '1.35rem', fontWeight: 700, color: 'var(--text)' }}>۹۰۰ م</div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--faint)', marginTop: '0.3rem' }}>برای واحد ۱۰۰ متری</div>
-          </div>
-
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '12px', padding: '1.25rem 1.25rem 1rem', boxShadow: 'var(--shadow)' }}>
             <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '0.4rem' }}>آگهی‌های فعال</div>
             <div style={{ fontSize: '1.35rem', fontWeight: 700, color: 'var(--text)' }}>{stats ? toFa(stats.count) : '—'}</div>
             <div style={{ fontSize: '0.7rem', color: 'var(--faint)', marginTop: '0.3rem' }}>آگهی فروش این منطقه</div>
           </div>
 
           <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '12px', padding: '1.25rem 1.25rem 1rem', boxShadow: 'var(--shadow)' }}>
-            <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '0.4rem' }}>امتیاز محله</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <span style={{ fontSize: '1.35rem', fontWeight: 700, color: 'var(--text)' }}>۹.۲</span>
-              <span style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>/ ۱۰</span>
-              <span style={{ fontSize: '1.15rem', color: 'var(--gold)' }}>★</span>
-            </div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--faint)', marginTop: '0.3rem' }}>بر اساس نظرات ساکنین</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '0.4rem' }}>مشاورانِ فعال</div>
+            <div style={{ fontSize: '1.35rem', fontWeight: 700, color: 'var(--text)' }}>{areaAdvisors.length ? toFa(areaAdvisors.length) : '—'}</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--faint)', marginTop: '0.3rem' }}>ثبت‌شده در این محله</div>
+          </div>
+
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '12px', padding: '1.25rem 1.25rem 1rem', boxShadow: 'var(--shadow)' }}>
+            <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '0.4rem' }}>روندِ قیمت</div>
+            <div style={{ fontSize: '1.35rem', fontWeight: 700, color: 'var(--text)' }}>{growthPct !== null ? `${growthPct >= 0 ? '+' : ''}${toFa(growthPct)}٪` : '—'}</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--faint)', marginTop: '0.3rem' }}>{growthPct !== null ? 'از ابتدای بازهٔ داده' : 'داده کافی موجود نیست'}</div>
           </div>
         </div>
 
@@ -269,9 +265,9 @@ export default function NeighborhoodClient({ name }: { name: string }) {
             <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '12px', padding: '1.5rem', boxShadow: 'var(--shadow)' }}>
               <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text)', margin: '0 0 1.25rem 0' }}>روند قیمت {toFa(barCount)} ماه گذشته</h2>
 
-              {statsLoaded && !trendAvgs.length ? (
+              {!trendAvgs.length ? (
                 <div style={{ padding: '2rem 0', textAlign: 'center', color: 'var(--muted)', fontSize: '0.85rem' }}>
-                  داده کافی برای نمایش روند قیمت این محله موجود نیست.
+                  {statsLoaded ? 'داده کافی برای نمایش روند قیمت این محله موجود نیست.' : 'در حال بارگذاریِ داده‌های بازار…'}
                 </div>
               ) : (
               <svg viewBox="0 0 600 200" style={{ width: '100%', height: 'auto', display: 'block' }} aria-label="نمودار روند قیمت">
@@ -298,27 +294,20 @@ export default function NeighborhoodClient({ name }: { name: string }) {
               )}
             </div>
 
-            {/* Section 2 – AI Insight */}
+            {/* Section 2 – تحلیلِ روند از دادهٔ واقعی (فقط وقتی داده هست؛ بدونِ عددِ ساختگی) */}
+            {growthPct !== null && stats && (
             <div style={{ background: 'var(--goldDim, rgba(212,175,55,0.06))', border: '1px solid var(--gold)', borderRadius: '12px', padding: '1.5rem' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '1.1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
                 <span style={{ fontSize: '1.5rem', color: 'var(--gold)', lineHeight: 1, flexShrink: 0, marginTop: '2px' }}>✦</span>
                 <div>
-                  <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text)', margin: '0 0 0.5rem 0' }}>تحلیل هوش مصنوعی</h3>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text)', margin: '0 0 0.5rem 0' }}>تحلیلِ روندِ بازار</h3>
                   <p style={{ fontSize: '0.875rem', color: 'var(--text)', margin: 0, lineHeight: 1.75 }}>
-                    ۷۴٪ احتمال افزایش قیمت در ۶ ماه آینده بر اساس تحلیل ۱۲۰٬۰۰۰ تراکنش تاریخی، روند بازار و شاخص‌های اقتصادی
+                    میانگینِ قیمتِ هر متر در {neighborhoodName} در بازهٔ دادهٔ موجود {growthPct >= 0 ? 'حدود ' : ''}{toFa(Math.abs(growthPct))}٪ {growthPct >= 0 ? 'رشد' : 'کاهش'} داشته — بر اساسِ {toFa(stats.count)} آگهیِ واقعیِ این منطقه.
                   </p>
                 </div>
               </div>
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '0.4rem' }}>
-                  <span>سطح اطمینان</span>
-                  <span style={{ color: 'var(--gold)', fontWeight: 700 }}>۷۴٪</span>
-                </div>
-                <div style={{ height: '8px', background: 'var(--line)', borderRadius: '100px', overflow: 'hidden' }}>
-                  <div style={{ width: '74%', height: '100%', background: 'linear-gradient(90deg, var(--gold2, #b8860b) 0%, var(--gold) 100%)', borderRadius: '100px' }} />
-                </div>
-              </div>
             </div>
+            )}
 
             {/* Section 3 – Mini listings grid */}
             <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '12px', padding: '1.5rem', boxShadow: 'var(--shadow)' }}>
@@ -393,13 +382,13 @@ export default function NeighborhoodClient({ name }: { name: string }) {
                 ثبت رایگان آگهی ←
               </Link>
               <div style={{ fontSize: '0.72rem', color: 'var(--muted)', background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: '6px', padding: '0.5rem 0.75rem' }}>
-                بیش از ۸۰٬۰۰۰ خریدار فعال در انتظار
+                آگهیِ شما به خریدارانِ همین محله پیشنهاد می‌شود
               </div>
             </div>
 
-            {/* Card 2 – Nearby neighborhoods */}
+            {/* Card 2 – محله‌های محبوب (لینکِ ناوبری) */}
             <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '12px', padding: '1.5rem', boxShadow: 'var(--shadow)' }}>
-              <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text)', margin: '0 0 1rem 0' }}>محله‌های اطراف</h3>
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text)', margin: '0 0 1rem 0' }}>محله‌های محبوب</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 {nearbyNeighborhoods.map((n, i) => (
                   <Link
