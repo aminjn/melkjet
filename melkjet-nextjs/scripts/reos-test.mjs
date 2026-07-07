@@ -17,6 +17,7 @@ import { recallAtK, precisionAtK, mrr, ndcgAtK, evaluateRankings } from '../app/
 import { histogram, psi, uniformEdges, driftReport } from '../app/lib/reos/drift.ts'
 import { fitPairwise, rankItems, rankScore } from '../app/lib/reos/rank.ts'
 import { cellKey, buildHeatmap } from '../app/lib/reos/geo-intel.ts'
+import { liquidityScore, daysToSell, saleProbability, riskProfile, aiConfidence } from '../app/lib/reos/digital-twin.ts'
 
 let pass = 0, fail = 0
 const approx = (a, b, e = 1e-6) => Math.abs(a - b) <= e
@@ -247,6 +248,21 @@ console.log('\n── REOS v3: Geospatial heatmap ──')
   ok('heatmap computes avg price per cell', cells[0].avgPrice === 6_000_000_000)
   ok('heatmap intensity normalized (busiest cell = 1)', cells[0].intensity === 1)
   ok('separate far point → its own cell', cells.length === 2 && cells[1].count === 1)
+}
+
+console.log('\n── REOS v4: Property Digital Twin ──')
+{
+  ok('liquidityScore 0..10, high demand → higher', liquidityScore(0.9, 0.8) > liquidityScore(0.1, 0.2) && liquidityScore(0.9, 0.8) <= 10)
+  // high demand + below market → sells faster than low demand + above market
+  const fast = daysToSell(0.9, -0.15), slow = daysToSell(0.1, 0.2)
+  ok('daysToSell: hot+cheap << cold+expensive', fast < slow && fast >= 5)
+  ok('saleProbability: fewer days → higher prob', saleProbability(fast, 45) > saleProbability(slow, 45))
+  ok('saleProbability in 0..100', saleProbability(30) >= 0 && saleProbability(30) <= 100)
+  const hiRisk = riskProfile({ priceVsMarket: 0.25, demand: 0.1, completeness: 0.4, ageDays: 120 })
+  const loRisk = riskProfile({ priceVsMarket: -0.05, demand: 0.8, completeness: 0.9, ageDays: 5 })
+  ok('riskProfile: overpriced+cold+stale = high', hiRisk.level === 'بالا' && hiRisk.factors.length >= 2)
+  ok('riskProfile: fair+hot+fresh = low', loRisk.level === 'کم')
+  ok('aiConfidence rises with comps + completeness', aiConfidence(10, 1) > aiConfidence(1, 0.3) && aiConfidence(10, 1) <= 100)
 }
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} REOS unit tests: ${pass} passed, ${fail} failed\n`)
