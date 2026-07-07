@@ -41,6 +41,7 @@ import { awardXp, grantXp, lifetimeXp, xpStatus, seasonLeaderboard, seasonKey } 
 import { bumpMissions, listMissions, claimMission } from '../app/lib/reos/missions.ts'
 import { creditBucket, debitBucket, bucketBalance, walletSummary, walletLedger, refundTxn } from '../app/lib/reos/wallet.ts'
 import { recordDeal, commissionOn } from '../app/lib/reos/economy.ts'
+import { follow, unfollow, isFollowing, followerCount, followingCount, followingList, createCollection, addToCollection, removeFromCollection, listCollections, collectionItems, addComment, listComments, commentCount, hideComment, socialProof } from '../app/lib/reos/community.ts'
 
 if (!process.env.DATABASE_URL) { console.error('DATABASE_URL not set'); process.exit(2) }
 let pass = 0, fail = 0
@@ -52,7 +53,7 @@ async function reset() {
   // ensure tables exist first (a no-op call triggers ensureReos), then truncate.
   await recordEvent({ type: 'user_searched', userId: '__warm__' }).catch(() => {})
   await saveEmbeddings('property', [{ id: '__warm__', embed: [0, 0] }]).catch(() => {})
-  for (const t of ['reos_events', 'reos_feature_store', 'reos_embeddings', 'reos_territory_scores', 'reos_territories', 'reos_territory_battles', 'reos_streaks', 'reos_xp', 'reos_missions', 'reos_wallet', 'reos_wallet_txn']) {
+  for (const t of ['reos_events', 'reos_feature_store', 'reos_embeddings', 'reos_territory_scores', 'reos_territories', 'reos_territory_battles', 'reos_streaks', 'reos_xp', 'reos_missions', 'reos_wallet', 'reos_wallet_txn', 'reos_follows', 'reos_collections', 'reos_collection_items', 'reos_comments']) {
     await pool.query(`TRUNCATE ${t}`).catch(() => {})
   }
 }
@@ -720,6 +721,54 @@ async function main() {
     const r2 = await recordDeal('0924deal', 1_000_000_000, { referrerId: '0925ref', now })
     ok('affiliate paid to referrer', r2.affiliate > 0 && (await bucketBalance('0925ref', 'reward')) === refBefore + r2.affiliate)
     ok('affiliate is a cut of commission', r2.affiliate === Math.round(r2.commission * 0.2))
+  }
+
+  console.log('\n── REOS v7: Community — follow / collections / comments (real PG) ──')
+  {
+    // follow
+    await follow('0931u1', '0931agentA', 'agent')
+    await follow('0931u2', '0931agentA', 'agent')
+    await follow('0931u1', '0931agentA', 'agent')   // تکراری → idempotent
+    ok('isFollowing true after follow', (await isFollowing('0931u1', '0931agentA')) === true)
+    ok('follower count dedups', (await followerCount('0931agentA')) === 2)
+    ok('following count', (await followingCount('0931u1')) === 1)
+    await follow('0931u1', '0931agentB', 'agent')
+    ok('followingList returns targets', (await followingList('0931u1')).length === 2)
+    await unfollow('0931u1', '0931agentA')
+    ok('unfollow removes', (await isFollowing('0931u1', '0931agentA')) === false && (await followerCount('0931agentA')) === 1)
+    ok('cannot follow self', (await follow('0931x', '0931x')).ok === false)
+
+    // collections
+    const col = await createCollection('0931owner', 'ویلاهای لوکس', true)
+    ok('collection created', !!col.id && col.name === 'ویلاهای لوکس')
+    await addToCollection(col.id, 'listing1', 'property')
+    await addToCollection(col.id, 'listing2', 'property')
+    await addToCollection(col.id, 'listing1', 'property')   // تکراری
+    ok('collection items dedup', (await collectionItems(col.id)).length === 2)
+    const cols = await listCollections('0931owner')
+    ok('listCollections shows count', cols.length === 1 && cols[0].count === 2)
+    await removeFromCollection(col.id, 'listing1')
+    ok('remove from collection', (await collectionItems(col.id)).length === 1)
+
+    // comments
+    const c1 = await addComment({ authorId: '0931u1', authorName: 'کاربر ۱', targetId: '0931agentA', targetType: 'agent', text: '  آژانسِ خوبی بود  ' })
+    ok('comment added + sanitized', c1.ok && c1.comment.text === 'آژانسِ خوبی بود')
+    const c2 = await addComment({ authorId: '0931u2', targetId: '0931agentA', targetType: 'agent', text: 'موافقم', parentId: c1.comment.id })
+    ok('reply added', c2.ok)
+    const empty = await addComment({ authorId: '0931u2', targetId: '0931agentA', text: '   ' })
+    ok('empty comment rejected', empty.ok === false)
+    const tree = await listComments('0931agentA', 'agent')
+    ok('comments threaded (1 root + 1 reply)', tree.length === 1 && tree[0].replies.length === 1)
+    ok('comment count = 2', (await commentCount('0931agentA')) === 2)
+    const hid = await hideComment(c2.comment.id, '0931u2', false)   // نویسنده خودش
+    ok('author can hide own comment', hid.ok)
+    ok('hidden excluded from count', (await commentCount('0931agentA')) === 1)
+    const badHide = await hideComment(c1.comment.id, '0931other', false)
+    ok('non-author cannot hide', badHide.ok === false)
+
+    // social proof
+    const sp = await socialProof('0931agentA')
+    ok('socialProof aggregates followers + comments + score', sp.followers === 1 && sp.comments === 1 && typeof sp.score === 'number')
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

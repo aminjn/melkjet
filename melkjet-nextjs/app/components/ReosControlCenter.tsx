@@ -128,6 +128,14 @@ export default function ReosControlCenter() {
               {row('اعتبارِ مأموریت', inp('economy', 'missionRewardCredit'))}
               {row('پایهٔ منحنیِ سطح', inp('xp', 'levelBase'))}
             </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8, color: 'var(--gold)' }}>اعتبارِ اجتماعی (Community)</div>
+              {row('وزنِ دنبال‌کننده', inp('community', 'weights', 'followers'))}
+              {row('وزنِ اقتدار', inp('community', 'weights', 'dominance'))}
+              {row('وزنِ اعتماد', inp('community', 'weights', 'trust'))}
+              {row('وزنِ سطح', inp('community', 'weights', 'level'))}
+              {row('حداکثر طولِ نظر', inp('community', 'commentMaxLen'))}
+            </div>
           </div>
         )}
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>

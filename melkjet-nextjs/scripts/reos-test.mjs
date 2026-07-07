@@ -30,6 +30,7 @@ import { checkAchievements, nextAchievements, streakStatus, streakBonus, fomoAle
 import { levelForXp, xpForAction, seasonKey } from '../app/lib/reos/xp.ts'
 import { missionCatalog, missionState, periodKey } from '../app/lib/reos/missions.ts'
 import { commissionOn, affiliateCut, loyaltyBonus } from '../app/lib/reos/economy.ts'
+import { communityScore, sanitizeComment, threadComments } from '../app/lib/reos/community.ts'
 
 let pass = 0, fail = 0
 const approx = (a, b, e = 1e-6) => Math.abs(a - b) <= e
@@ -453,6 +454,32 @@ console.log('\n── REOS v6: Reward economy (commission / affiliate / loyalty)
   ok('loyalty bonus computed', loyaltyBonus(1_000_000_000, 0.005) === 5_000_000)
   ok('no negative payouts', commissionOn(-5) === 0 && affiliateCut(-5) === 0 && loyaltyBonus(0) === 0)
   ok('commission uses config default when pct omitted', commissionOn(1_000_000) === Math.round(1_000_000 * 0.02))
+}
+
+console.log('\n── REOS v7: Community — social proof + comments ──')
+{
+  const strong = communityScore({ followers: 800, dominance: 85, trust: 90, level: 20 })
+  const weak = communityScore({ followers: 2, dominance: 20, trust: 45, level: 1 })
+  ok('social proof: strong > weak', strong.score > weak.score)
+  ok('social proof in [0,100]', strong.score >= 0 && strong.score <= 100)
+  ok('parts exposed', strong.parts.followers > 50 && strong.parts.trust > 50)
+  ok('followers log-scaled (diminishing)', communityScore({ followers: 100000 }).parts.followers >= communityScore({ followers: 1000 }).parts.followers)
+  // sanitize
+  ok('empty comment rejected', sanitizeComment('   ').ok === false)
+  ok('valid comment trimmed', sanitizeComment('  سلام   دنیا  ').text === 'سلام دنیا')
+  ok('over-long comment rejected', sanitizeComment('x'.repeat(2000)).ok === false)
+  // threading
+  const flat = [
+    { id: 'a', authorId: 'u1', authorName: '', targetId: 't', targetType: 'agent', text: 'root', hidden: false, at: 1 },
+    { id: 'b', authorId: 'u2', authorName: '', targetId: 't', targetType: 'agent', parentId: 'a', text: 'reply', hidden: false, at: 2 },
+    { id: 'c', authorId: 'u3', authorName: '', targetId: 't', targetType: 'agent', text: 'root2', hidden: false, at: 3 },
+    { id: 'd', authorId: 'u4', authorName: '', targetId: 't', targetType: 'agent', parentId: 'a', text: 'hidden reply', hidden: true, at: 4 },
+  ]
+  const tree = threadComments(flat)
+  ok('threading: 2 roots', tree.length === 2)
+  ok('threading: reply nested under parent', tree[0].replies.length === 1 && tree[0].replies[0].id === 'b')
+  ok('threading: hidden comment excluded', !JSON.stringify(tree).includes('hidden reply'))
+  ok('threading: roots sorted by time', tree[0].at <= tree[1].at)
 }
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} REOS unit tests: ${pass} passed, ${fail} failed\n`)

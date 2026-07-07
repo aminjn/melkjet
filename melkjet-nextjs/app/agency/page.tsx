@@ -8,6 +8,7 @@ import ReosPanelSection from '@/app/components/ReosPanelSection'
 import ReosMarketIntel from '@/app/components/ReosMarketIntel'
 import ReosTerritoryCard from '@/app/components/ReosTerritoryCard'
 import ReosRewardsCard from '@/app/components/ReosRewardsCard'
+import ReosSocialCard from '@/app/components/ReosSocialCard'
 import ReosWorkflowBuilder from '@/app/components/ReosWorkflowBuilder'
 import ReosWallet from '@/app/components/ReosWallet'
 import ReosTrustBadge from '@/app/components/ReosTrustBadge'
@@ -680,6 +681,7 @@ export default function AgencyPage() {
             <ReosTrustBadge />
             <ReosTerritoryCard />
             <ReosRewardsCard />
+            <ReosSocialCard />
             <ReosMarketIntel title="هوشِ بازار (REOS)" />
             <ReosWorkflowBuilder />
             <ReosWallet />
