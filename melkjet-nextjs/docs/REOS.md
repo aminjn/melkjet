@@ -334,6 +334,25 @@ Backend → PostgreSQL(+PostGIS+pgvector) → { Redis · Elasticsearch · Vector
 
 **همچنان scale-out (طراحی‌شده، هنوز جایگزینِ صنعتی نصب‌نشده):** Kafka/Pinecone/Elasticsearch/WebSocket و آموزشِ توزیع‌شدهٔ XGBoost — همه با «معادلِ درون‌استکیِ» بالا کار می‌کنند و مسیرِ ارتقا در جدولِ استک مستند است. schemaِ اختصاصیِ pgvector (`reos-schema.sql`) هنوز روی DB اعمال نشده؛ لایهٔ فعلی jsonb است.
 
-**تست‌ها:** `npm run test:reos` (۳۴ تستِ خالص + آموزش) و `DATABASE_URL=… npm run test:reos:pg` (۲۲ تستِ یکپارچه روی PostgreSQLِ واقعی).
+**تست‌ها:** `npm run test:reos` (۴۳ تستِ خالص + آموزش + Multi-Role) و `DATABASE_URL=… npm run test:reos:pg` (۲۲ تستِ یکپارچه روی PostgreSQLِ واقعی).
+
+### REOS v2 — فاز ۱: لایهٔ هوشِ چندنقشی (Multi-Role Intelligence) — اجرا شد
+پاسخ به بزرگ‌ترین ضعفِ ممیزی (فیدِ همهٔ پنل‌ها یکسان بود). `app/lib/reos/roles.ts`: هر نقش
+**هدفِ متفاوت** دارد و از همان primitiveهای هسته (demand/quality/freshness/value/price-band)
+فیدِ مخصوصِ خودش را می‌سازد — بدونِ refactorِ هسته، backward-compatible:
+- **مالک/سرمایه‌گذار** → فرصت‌های سرمایه‌گذاری (ارزشِ زیرِ بازار × تقاضا) + پرتقاضاها
+- **مشاور/آژانس** → فایل‌های داغ برای پیشنهاد به مشتری + تازه‌ثبت‌شده‌ها
+- **سازنده** → زمین/کلنگیِ پرتقاضا + مناطقِ پرتقاضا برای ساخت
+- **مصالح/معمار/پیمانکار** → پروژه‌ها و کلنگی‌های فعال (مشتریانِ بالقوه)
+- **کارشناس** → آگهی‌های جدید نیازمندِ ارزش‌گذاری
+- **حقوقی/دفترخانه** → معاملاتِ فعالِ منطقه
+- **بانک/بیمه** → بازارِ وام‌پذیر (بندِ قیمتیِ تسهیلات)
+مسیر: `/api/reos/role-feed?role=…` → `ReosPanelSection` نقش را از مسیرِ داشبورد تشخیص می‌دهد.
+تست: تفکیکِ نقش‌ها (سازنده فقط کلنگی، بانک بدونِ اجاره، مالک تخفیف‌محور)، ۹ سنجه PASS.
+
+**فازهای بعدیِ v2 (طبقِ سندِ ممیزی، هنوز نشده):** AI Agent Framework (memory/planner/executor/tools)،
+Knowledge Graph (buyer→property→agent→builder→lawyer→bank→notary)، CRM OS یکپارچه، Feature Store v2
+(جداولِ نرمالِ per-entity)، deploymentِ pgvector، Promotion Engine (campaign/budget/CPC/CPM/analytics)،
+Event Streaming واقعی.
 
 **اصلِ راهنما:** هیچ لایه‌ای «فیک» نیست — هر فرمول و مدل کدِ واقعیِ قابلِ‌اجرا و قابلِ‌تست دارد؛ زیرساخت‌های سنگین با معادلِ واقعیِ همین استک پیاده و مسیرِ ارتقا مستند شده است.

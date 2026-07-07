@@ -2,9 +2,12 @@
 import { useEffect, useState } from 'react'
 
 // فیدِ توصیهٔ زندهٔ REOS — «پیشنهادهای مخصوص شما» با امتیازِ تطبیق + دلایل (لایهٔ توضیحِ AI).
+// دو حالت: (۱) پیش‌فرض = فیدِ شخصیِ خریدار (/api/reos/recommendations)؛
+//          (۲) role="…" = فیدِ نقش‌محورِ REOS v2 (/api/reos/role-feed) با بخش‌های مخصوصِ هر نقش.
 type Listing = { title: string; price?: string; image?: string; location?: string; deal?: string; href: string; promoted?: string }
 type Card = { id: string; score: number; matchPct: number; reasons: string[]; why: string[]; listing: Listing | null }
 type Feed = { forYou: Card[]; hotInArea: Card[]; freshMatches: Card[]; priceDrops: Card[]; investment: Card[] }
+type RenderSection = { key: string; label: string; icon: string; cards: Card[] }
 
 const FONT = 'Vazirmatn, system-ui, sans-serif'
 const SECTIONS: { key: keyof Feed; label: string; icon: string }[] = [
@@ -17,7 +20,7 @@ const SECTIONS: { key: keyof Feed; label: string; icon: string }[] = [
 
 function pctColor(p: number) { return p >= 80 ? '#e74c3c' : p >= 55 ? '#e7a14a' : 'var(--gold)' }
 
-function Cards({ cards }: { cards: Card[] }) {
+function Cards({ cards, pctSuffix }: { cards: Card[]; pctSuffix: string }) {
   if (!cards.length) return <div style={{ fontSize: 12.5, color: 'var(--muted)', padding: '8px 2px' }}>فعلاً موردی نیست — با بازدید/سیوِ چند آگهی، پیشنهادها دقیق‌تر می‌شوند.</div>
   return (
     <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 6 }}>
@@ -26,7 +29,7 @@ function Cards({ cards }: { cards: Card[] }) {
         return (
           <a key={c.id} href={l?.href || '#'} target="_blank" rel="noreferrer" style={{ flex: '0 0 auto', width: 210, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden', textDecoration: 'none', color: 'inherit', fontFamily: FONT }}>
             <div style={{ position: 'relative', height: 116, background: l?.image ? `center/cover no-repeat url(${l.image})` : 'linear-gradient(135deg,var(--bg2),var(--surface))' }}>
-              <span style={{ position: 'absolute', top: 8, right: 8, fontSize: 11, fontWeight: 900, color: '#fff', background: pctColor(c.matchPct), borderRadius: 8, padding: '2px 8px' }}>{c.matchPct.toLocaleString('fa-IR')}٪ مناسب</span>
+              <span style={{ position: 'absolute', top: 8, right: 8, fontSize: 11, fontWeight: 900, color: '#fff', background: pctColor(c.matchPct), borderRadius: 8, padding: '2px 8px' }}>{c.matchPct.toLocaleString('fa-IR')}{pctSuffix}</span>
               {l?.promoted ? <span style={{ position: 'absolute', bottom: 8, right: 8, fontSize: 9.5, fontWeight: 900, color: '#16140f', background: 'linear-gradient(135deg,#f7d774,#e7a14a)', borderRadius: 6, padding: '2px 7px' }}>★ {l.promoted}</span> : null}
               {l?.deal ? <span style={{ position: 'absolute', top: 8, left: 8, fontSize: 10, fontWeight: 800, color: '#fff', background: l.deal === 'اجاره' ? '#2dd4bf' : '#60a5fa', borderRadius: 6, padding: '1px 7px' }}>{l.deal}</span> : null}
             </div>
@@ -46,43 +49,52 @@ function Cards({ cards }: { cards: Card[] }) {
 }
 
 // silent=true → اگر واردنشده/بی‌داده بود، چیزی نشان نده (برای صفحهٔ عمومیِ خانه).
-export default function ReosFeed({ compact = false, silent = false }: { compact?: boolean; silent?: boolean }) {
-  const [feed, setFeed] = useState<Feed | null>(null)
+// role="…" → فیدِ نقش‌محورِ REOS v2 (بخش‌های مخصوصِ هر نقش).
+export default function ReosFeed({ compact = false, silent = false, role }: { compact?: boolean; silent?: boolean; role?: string }) {
+  const [sections, setSections] = useState<RenderSection[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
   useEffect(() => {
     let on = true
-    fetch('/api/reos/recommendations', { cache: 'no-store' })
+    const url = role ? `/api/reos/role-feed?role=${encodeURIComponent(role)}` : '/api/reos/recommendations'
+    fetch(url, { cache: 'no-store' })
       .then(r => r.ok ? r.json() : r.json().then(d => Promise.reject(d)))
-      .then(d => { if (on) { setFeed(d.feed); setLoading(false) } })
+      .then(d => {
+        if (!on) return
+        if (role && Array.isArray(d.sections)) setSections(d.sections as RenderSection[])
+        else if (d.feed) { const f = d.feed as Feed; setSections(SECTIONS.map(s => ({ key: s.key, label: s.label, icon: s.icon, cards: f[s.key] || [] }))) }
+        else setSections([])
+        setLoading(false)
+      })
       .catch(d => { if (on) { setErr(d?.error || 'پیشنهادی در دسترس نیست'); setLoading(false) } })
     return () => { on = false }
-  }, [])
+  }, [role])
 
   if (loading) return silent ? null : <div style={{ fontSize: 13, color: 'var(--muted)', fontFamily: FONT }}>در حال ساختِ پیشنهادهای هوشمند…</div>
   if (err) return silent ? null : <div style={{ fontSize: 13, color: 'var(--muted)', fontFamily: FONT }}>{err}</div>
-  if (!feed) return null
+  if (!sections) return null
+  const nonEmpty = sections.filter(s => s.cards.length)
   // در حالتِ silent، اگر هیچ کارتی نبود چیزی نشان نده (خانهٔ عمومی شلوغ نشود).
-  if (silent) { const any = SECTIONS.some(s => (feed[s.key] || []).length); if (!any) return null }
+  if (silent && !nonEmpty.length) return null
 
-  const shown = compact ? SECTIONS.filter(s => s.key === 'forYou') : SECTIONS
+  const shown = compact ? (nonEmpty.length ? nonEmpty.slice(0, role ? 2 : 1) : sections.slice(0, 1)) : sections
+  const pctSuffix = role ? '٪ امتیاز' : '٪ مناسب'
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18, fontFamily: FONT }}>
       {shown.map(sec => {
-        const cards = feed[sec.key]
-        if (compact && !cards.length) return null
+        if (compact && !sec.cards.length) return null
         return (
           <div key={sec.key}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
               <span style={{ fontSize: 15 }}>{sec.icon}</span>
               <span style={{ fontSize: 14.5, fontWeight: 800 }}>{sec.label}</span>
-              <span style={{ fontSize: 11, color: 'var(--faint)' }}>({cards.length.toLocaleString('fa-IR')})</span>
+              <span style={{ fontSize: 11, color: 'var(--faint)' }}>({sec.cards.length.toLocaleString('fa-IR')})</span>
             </div>
-            <Cards cards={cards} />
+            <Cards cards={sec.cards} pctSuffix={pctSuffix} />
           </div>
         )
       })}
-      <div style={{ fontSize: 10.5, color: 'var(--faint)', textAlign: 'center' }}>✦ رتبه‌بندی با موتورِ REOS — از رفتارِ شما (بازدید/سیو/تماس) یاد می‌گیرد.</div>
+      <div style={{ fontSize: 10.5, color: 'var(--faint)', textAlign: 'center' }}>✦ رتبه‌بندی با موتورِ REOS — از رفتارِ شما و بازارِ زنده یاد می‌گیرد.</div>
     </div>
   )
 }

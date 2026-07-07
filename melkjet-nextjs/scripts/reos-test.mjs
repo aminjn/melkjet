@@ -10,6 +10,7 @@ import { predictLeadConversion, optimizePrice } from '../app/lib/reos/ml.ts'
 import { effectiveBoost, leadValue } from '../app/lib/reos/monetization.ts'
 import { assignLeadToAgent, matchUserToProperties } from '../app/lib/reos/engine.ts'
 import { fitLogistic, evaluate, scoreWith, engageFeatures, predictEngage, DEFAULT_ENGAGE } from '../app/lib/reos/train.ts'
+import { buildRoleFeed, roleFromPath, medianPricePerM, isRoleKind } from '../app/lib/reos/roles.ts'
 
 let pass = 0, fail = 0
 const approx = (a, b, e = 1e-6) => Math.abs(a - b) <= e
@@ -119,6 +120,36 @@ console.log('\n── REAL TRAINING: gradient-descent logistic regression ──
   ok('engageFeatures in [0,1]', Object.values(f).every(v => v >= 0 && v <= 1))
   ok('scoreWith in [0,1]', (() => { const s = scoreWith(trained, f); return s >= 0 && s <= 1 })())
   ok('predictEngage returns number in [0,1]', (() => { const s = predictEngage({ views: 100, saves: 8 }, 0.5); return s >= 0 && s <= 1 })())
+}
+
+console.log('\n── REOS v2: Multi-Role Intelligence ──')
+{
+  ok('roleFromPath maps dashboards', roleFromPath('/architect/x') === 'architect' && roleFromPath('/builder') === 'builder' && roleFromPath('/') === 'buyer')
+  ok('isRoleKind validates', isRoleKind('finance') && !isRoleKind('hacker'))
+  const now = Date.now()
+  // A: کلنگی، زیرِ بازار، پرتقاضا · B: آپارتمانِ گران، کم‌تقاضا، تازه · C: آپارتمانِ اجاره‌ایِ پرتقاضا
+  const A = { id: 'A', price: 6_000_000_000, deal: 'sale', ptype: 'کلنگی', tokens: ['کلنگی', 'قیطریه'], area: 200, views: 120, contacts: 10, saves: 15, createdAt: now - 40 * 864e5, locationText: 'قیطریه' }
+  const B = { id: 'B', price: 20_000_000_000, deal: 'sale', ptype: 'آپارتمان', tokens: ['آپارتمان'], area: 100, views: 3, contacts: 0, saves: 0, createdAt: now - 864e5, locationText: 'ولنجک' }
+  const C = { id: 'C', rentMonthly: 50_000_000, deal: 'rent', ptype: 'آپارتمان', tokens: ['آپارتمان'], area: 90, views: 80, contacts: 6, saves: 4, createdAt: now - 10 * 864e5, locationText: 'سعادت آباد' }
+  const D = { id: 'D', price: 8_000_000_000, deal: 'sale', ptype: 'آپارتمان', tokens: ['آپارتمان'], area: 130, views: 60, contacts: 5, saves: 8, createdAt: now - 5 * 864e5, locationText: 'سعادت آباد' }
+  const props = [A, B, C, D]
+
+  const owner = buildRoleFeed('owner', props)
+  ok('owner feed has invest + hot sections', owner.sections.map(s => s.key).join(',') === 'invest,hot')
+  ok('owner invest ranks below-market high-demand (A) on top', owner.sections[0].items[0].id === 'A')
+
+  const builder = buildRoleFeed('builder', props)
+  const land = builder.sections.find(s => s.key === 'land')
+  ok('builder land section only land-like (A)', land.items.length === 1 && land.items[0].id === 'A')
+
+  const finance = buildRoleFeed('finance', props)
+  const loanable = finance.sections.find(s => s.key === 'loanable')
+  ok('finance loanable excludes rent listing (C)', !loanable.items.some(i => i.id === 'C'))
+
+  const pros = buildRoleFeed('pros', props)
+  ok('pros feed differs from owner feed (role-specific)', pros.sections[0].key !== owner.sections[0].key)
+  ok('every role produces a labeled feed', ['owner','pros','agency','builder','materials','architect','contractor','appraiser','lawfirm','finance','notary','buyer'].every(r => { const f = buildRoleFeed(r, props); return f.label && f.sections.length >= 1 }))
+  ok('medianPricePerM computes', medianPricePerM(props) > 0)
 }
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} REOS unit tests: ${pass} passed, ${fail} failed\n`)
