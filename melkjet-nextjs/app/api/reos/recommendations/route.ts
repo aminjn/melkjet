@@ -10,8 +10,10 @@ import { listingHref } from '@/app/lib/listing-url'
 export async function GET(req: NextRequest) {
   const sp = new URL(req.url).searchParams
   const s = await getSession()
-  const userId = sp.get('userId') || s?.phone
-  if (!userId) return NextResponse.json({ error: 'برای دریافتِ پیشنهاد وارد شوید' }, { status: 401 })
+  if (!s) return NextResponse.json({ error: 'برای دریافتِ پیشنهاد وارد شوید' }, { status: 401 })
+  // ?userId= فقط برای سوپرادمین؛ کاربرِ عادی همیشه فیدِ خودش را می‌بیند (نه بودجه/نیتِ دیگران).
+  const isAdmin = s.role === 'super_admin' || s.phone === '09122862184'
+  const userId = (isAdmin && sp.get('userId')) ? String(sp.get('userId')) : s.phone
   const limit = Math.min(Number(sp.get('limit')) || 12, 40)
 
   // بارگذاریِ آگهی‌ها + آمار (یک پاس؛ بدونِ feature-store به‌ازای هر ملک).

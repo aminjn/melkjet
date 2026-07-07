@@ -11,7 +11,9 @@ export async function GET(req: NextRequest) {
   const sp = new URL(req.url).searchParams
   const s = await getSession()
   const propertyId = sp.get('propertyId')
-  const userId = sp.get('userId') || (!propertyId ? s?.phone : undefined)
+  const isAdmin = !!s && (s.role === 'super_admin' || s.phone === '09122862184')
+  // ?userId= فقط برای سوپرادمین؛ کاربرِ عادی فیدِ خودش را می‌گیرد.
+  const userId = (isAdmin && sp.get('userId')) ? String(sp.get('userId')) : (!propertyId ? s?.phone : undefined)
 
   if (propertyId) {
     const it = await getItemById(propertyId)
