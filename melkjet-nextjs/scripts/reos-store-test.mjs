@@ -21,6 +21,8 @@ import { createWorkflow, evalCondition, matchWorkflow, leadContext, runWorkflows
 import { computeMarketIntel, getMarketIntel, topMarketIntel } from '../app/lib/reos/market-intel.ts'
 import { valuate } from '../app/lib/reos/avm.ts'
 import { setVerification, setSignals, getTrust } from '../app/lib/reos/trust.ts'
+import { getOrCreateReferral, recordInvite, recordConversion as refConvert, referralStats } from '../app/lib/reos/growth.ts'
+import { getBalance as walletBalance } from '../app/lib/reos/billing.ts'
 import { assignVariant, createExperiment, recordExposure, recordConversion, results } from '../app/lib/reos/experiments.ts'
 import { credit, debit, getBalance, listTransactions, createInvoice, payInvoice } from '../app/lib/reos/billing.ts'
 import { recordTouch, recordSpend, recordConversion as attrConvert, channelReport } from '../app/lib/reos/attribution.ts'
@@ -438,6 +440,20 @@ async function main() {
     await setVerification(e, 'agency', false)
     ok('un-verify removes badge', !(await getTrust(e)).badges.includes('agency'))
     ok('implicit extra verification (phone) applies', (await getTrust(e, ['phone'])).badges.includes('phone'))
+  }
+
+  console.log('\n── REOS v4: Growth Engine (referral → wallet credit) ──')
+  {
+    const owner = 'growU_' + Math.floor(Date.now() / 1000)
+    const ref = await getOrCreateReferral(owner)
+    ok('referral code created (6 chars)', ref.code.length === 6 && ref.invited === 0)
+    await recordInvite(ref.code); await recordInvite(ref.code)
+    const bal0 = await walletBalance(owner)
+    await refConvert(ref.code, 150000)
+    const st = await referralStats(owner)
+    ok('invites + conversion tracked', st.invited === 2 && st.converted === 1)
+    ok('conversion rate computed', st.conversionRate === 50)
+    ok('conversion credited the wallet (+150k)', (await walletBalance(owner)) === bal0 + 150000)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

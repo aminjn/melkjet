@@ -20,6 +20,8 @@ import { cellKey, buildHeatmap } from '../app/lib/reos/geo-intel.ts'
 import { liquidityScore, daysToSell, saleProbability, riskProfile, aiConfidence } from '../app/lib/reos/digital-twin.ts'
 import { trustScore } from '../app/lib/reos/trust.ts'
 import { sellerInsight } from '../app/lib/reos/seller-intel.ts'
+import { listingSuggestions, listingHealth } from '../app/lib/reos/copilot.ts'
+import { codeFor } from '../app/lib/reos/growth.ts'
 
 let pass = 0, fail = 0
 const approx = (a, b, e = 1e-6) => Math.abs(a - b) <= e
@@ -287,6 +289,23 @@ console.log('\n── REOS v4: Seller Intelligence ──')
   ok('overpriced → suggests a cut (capped ≤15%)', bad.suggestedCutPct > 0 && bad.suggestedCutPct <= 15)
   ok('fair+hot → low cut likelihood + no cut', good.priceCutLikelihood < 35 && good.suggestedCutPct === 0)
   ok('gives a recommendation + reasons', !!bad.recommendation && bad.reasons.length >= 2)
+}
+
+console.log('\n── REOS v4: AI Copilot (listing suggestions) ──')
+{
+  const weak = listingSuggestions({ title: 'خانه', photoCount: 0, priceVsMarket: 20, saleProbability: 15, hasDescription: false })
+  const strong = listingSuggestions({ title: 'آپارتمان ۱۲۰ متری دو خواب سعادت‌آباد', area: 'تهران، سعادت‌آباد', meters: 120, rooms: 2, photoCount: 6, hasDescription: true, priceVsMarket: -3, saleProbability: 72 })
+  ok('short title → warn', weak.some(s => s.field === 'title' && s.severity === 'warn'))
+  ok('no photos → warn', weak.some(s => s.field === 'photos' && s.severity === 'warn'))
+  ok('overpriced → price warn', weak.some(s => s.field === 'price' && s.severity === 'warn'))
+  ok('complete listing → title good + high health', strong.some(s => s.field === 'title' && s.severity === 'good') && listingHealth(strong) >= 80)
+  ok('weak listing → low health', listingHealth(weak) < 50)
+}
+
+console.log('\n── REOS v4: Growth Engine (referral code) ──')
+{
+  ok('codeFor deterministic + 6 chars', codeFor('09120000000') === codeFor('09120000000') && codeFor('09120000000').length === 6)
+  ok('different users → different codes', codeFor('09120000000') !== codeFor('09121111111'))
 }
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} REOS unit tests: ${pass} passed, ${fail} failed\n`)
