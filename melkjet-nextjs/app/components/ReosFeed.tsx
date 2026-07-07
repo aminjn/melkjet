@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 
 // فیدِ توصیهٔ زندهٔ REOS — «پیشنهادهای مخصوص شما» با امتیازِ تطبیق + دلایل (لایهٔ توضیحِ AI).
-type Listing = { title: string; price?: string; image?: string; location?: string; deal?: string; href: string }
+type Listing = { title: string; price?: string; image?: string; location?: string; deal?: string; href: string; promoted?: string }
 type Card = { id: string; score: number; matchPct: number; reasons: string[]; why: string[]; listing: Listing | null }
 type Feed = { forYou: Card[]; hotInArea: Card[]; freshMatches: Card[]; priceDrops: Card[]; investment: Card[] }
 
@@ -27,6 +27,7 @@ function Cards({ cards }: { cards: Card[] }) {
           <a key={c.id} href={l?.href || '#'} target="_blank" rel="noreferrer" style={{ flex: '0 0 auto', width: 210, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden', textDecoration: 'none', color: 'inherit', fontFamily: FONT }}>
             <div style={{ position: 'relative', height: 116, background: l?.image ? `center/cover no-repeat url(${l.image})` : 'linear-gradient(135deg,var(--bg2),var(--surface))' }}>
               <span style={{ position: 'absolute', top: 8, right: 8, fontSize: 11, fontWeight: 900, color: '#fff', background: pctColor(c.matchPct), borderRadius: 8, padding: '2px 8px' }}>{c.matchPct.toLocaleString('fa-IR')}٪ مناسب</span>
+              {l?.promoted ? <span style={{ position: 'absolute', bottom: 8, right: 8, fontSize: 9.5, fontWeight: 900, color: '#16140f', background: 'linear-gradient(135deg,#f7d774,#e7a14a)', borderRadius: 6, padding: '2px 7px' }}>★ {l.promoted}</span> : null}
               {l?.deal ? <span style={{ position: 'absolute', top: 8, left: 8, fontSize: 10, fontWeight: 800, color: '#fff', background: l.deal === 'اجاره' ? '#2dd4bf' : '#60a5fa', borderRadius: 6, padding: '1px 7px' }}>{l.deal}</span> : null}
             </div>
             <div style={{ padding: 11 }}>
