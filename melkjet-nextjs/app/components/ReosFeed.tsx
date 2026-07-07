@@ -45,7 +45,8 @@ function Cards({ cards }: { cards: Card[] }) {
   )
 }
 
-export default function ReosFeed({ compact = false }: { compact?: boolean }) {
+// silent=true → اگر واردنشده/بی‌داده بود، چیزی نشان نده (برای صفحهٔ عمومیِ خانه).
+export default function ReosFeed({ compact = false, silent = false }: { compact?: boolean; silent?: boolean }) {
   const [feed, setFeed] = useState<Feed | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
@@ -58,9 +59,11 @@ export default function ReosFeed({ compact = false }: { compact?: boolean }) {
     return () => { on = false }
   }, [])
 
-  if (loading) return <div style={{ fontSize: 13, color: 'var(--muted)', fontFamily: FONT }}>در حال ساختِ پیشنهادهای هوشمند…</div>
-  if (err) return <div style={{ fontSize: 13, color: 'var(--muted)', fontFamily: FONT }}>{err}</div>
+  if (loading) return silent ? null : <div style={{ fontSize: 13, color: 'var(--muted)', fontFamily: FONT }}>در حال ساختِ پیشنهادهای هوشمند…</div>
+  if (err) return silent ? null : <div style={{ fontSize: 13, color: 'var(--muted)', fontFamily: FONT }}>{err}</div>
   if (!feed) return null
+  // در حالتِ silent، اگر هیچ کارتی نبود چیزی نشان نده (خانهٔ عمومی شلوغ نشود).
+  if (silent) { const any = SECTIONS.some(s => (feed[s.key] || []).length); if (!any) return null }
 
   const shown = compact ? SECTIONS.filter(s => s.key === 'forYou') : SECTIONS
   return (

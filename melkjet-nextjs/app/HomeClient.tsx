@@ -11,6 +11,7 @@ import HeroSearch from './components/home/HeroSearch'
 import FaqAccordion from './components/home/FaqAccordion'
 import HomeBanner from './components/home/HomeBanner'
 import HomeAssistant from './components/home/HomeAssistant'
+import ReosFeed from './components/ReosFeed'
 import { gradientFor, initialsFor, type ContentItem } from './lib/content-display'
 import { listingHref } from './lib/listing-url'
 import type { HomeData } from './lib/home-data'
@@ -209,6 +210,11 @@ export default function HomeClient({ initial }: { initial: HomeData }) {
             ))}
           </div>
         </div>
+      </section>
+
+      {/* پیشنهادِ هوشمندِ REOS — فقط برای کاربرِ واردشده (silent؛ برای مهمان چیزی نشان نمی‌دهد) */}
+      <section style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px' }}>
+        <ReosFeed compact silent />
       </section>
 
       {/* همهٔ خدمات — ویترینِ جامعِ سیستم */}

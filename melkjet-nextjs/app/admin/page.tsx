@@ -16,7 +16,7 @@ type View =
   | 'reports' | 'plans' | 'promos' | 'discounts' | 'ads' | 'users' | 'profiles' | 'roles' | 'connections'
   | 'tracker' | 'sms' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags' | 'support' | 'payment' | 'aicost' | 'smscost' | 'sitemap' | 'agencyintel'
 
-interface NavItem { id: View; icon: string; label: string; badge?: string; badgeColor?: string }
+interface NavItem { id: View; icon: string; label: string; badge?: string; badgeColor?: string; url?: string }
 interface NavSection { title: string; items: NavItem[] }
 
 /* ─── Sidebar nav data ───────────────────────────────────────── */
@@ -86,6 +86,7 @@ const sections: NavSection[] = [
     title: 'زیرساخت',
     items: [
       { id: 'health',  icon: '◉', label: 'سلامت سیستم' },
+      { id: 'reos' as View, icon: '✦', label: 'REOS (مغزِ AI)', url: '/reos-admin' },
       { id: 'servers', icon: '▤', label: 'سرورها' },
       { id: 'queue',   icon: '◳', label: 'صف پردازش' },
       { id: 'audit',   icon: '❖', label: 'لاگ ممیزی' },
@@ -6008,7 +6009,7 @@ export default function SuperAdminPage() {
               {sec.items.map(item => (
                 <button
                   key={item.id}
-                  onClick={() => { setActive(item.id); setNavOpen(false) }}
+                  onClick={() => { const u = (item as { url?: string }).url; if (u) { window.open(u, '_blank'); setNavOpen(false); return } setActive(item.id); setNavOpen(false) }}
                   style={{
                     width: '100%',
                     background: active === item.id ? 'rgba(231,103,74,0.12)' : 'transparent',
