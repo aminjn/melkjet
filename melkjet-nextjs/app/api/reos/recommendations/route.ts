@@ -3,6 +3,7 @@ import { getSession } from '@/app/lib/session'
 import { loadUser, itemToProperty } from '@/app/lib/reos/data'
 import { buildHomeFeed, explain, type FeedCard } from '@/app/lib/reos/feed'
 import { primeEngageModel } from '@/app/lib/reos/train'
+import { activeBoosts } from '@/app/lib/reos/promotion-engine'
 import { listItems } from '@/app/lib/scraper-store'
 import { forIds } from '@/app/lib/listing-stats-store'
 import { listingHref } from '@/app/lib/listing-url'
@@ -35,6 +36,8 @@ export async function GET(req: NextRequest) {
   // Monetization در رتبه‌بندی: boostِ آگهی‌های ویژه (با گیتِ کیفیت در خودِ موتور).
   const boosts: Record<string, number> = {}
   for (const it of items) { const p = promoted.get(it.id); if (p) boosts[it.id] = rawBoost(p.kind) }
+  // REOS Promotion Engine: boostِ کمپین‌های فعال (بودجه/CPC/CPM) روی همان مسیر (گیتِ کیفیت در فید).
+  try { const cb = await activeBoosts(); for (const id in cb) boosts[id] = Math.max(boosts[id] || 0, cb[id]) } catch {}
   const disp = new Map(items.map(it => [it.id, {
     title: it.title, price: it.price || '', image: it.image || (typeof it.meta?.__gallery === 'string' ? String(it.meta.__gallery).split('\n')[0] : undefined),
     location: it.location || '', deal: it.meta?.['نوع معامله'] || '', href: listingHref(it.id, it.title, it.location),

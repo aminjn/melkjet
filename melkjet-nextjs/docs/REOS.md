@@ -350,9 +350,25 @@ Backend → PostgreSQL(+PostGIS+pgvector) → { Redis · Elasticsearch · Vector
 مسیر: `/api/reos/role-feed?role=…` → `ReosPanelSection` نقش را از مسیرِ داشبورد تشخیص می‌دهد.
 تست: تفکیکِ نقش‌ها (سازنده فقط کلنگی، بانک بدونِ اجاره، مالک تخفیف‌محور)، ۹ سنجه PASS.
 
-**فازهای بعدیِ v2 (طبقِ سندِ ممیزی، هنوز نشده):** AI Agent Framework (memory/planner/executor/tools)،
-Knowledge Graph (buyer→property→agent→builder→lawyer→bank→notary)، CRM OS یکپارچه، Feature Store v2
-(جداولِ نرمالِ per-entity)، deploymentِ pgvector، Promotion Engine (campaign/budget/CPC/CPM/analytics)،
-Event Streaming واقعی.
+### REOS v2 — فاز ۲: AI Agent Framework — اجرا شد
+`app/lib/reos/agent/` (memory/tools/planner/executor). حافظهٔ بلندمدت (fact/pref/goal)، رجیستریِ
+ابزار روی موتورِ واقعی (recommend/similar/estimate_price/predict_lead/match_agent/remember/recall)،
+plannerِ قاعده‌مند + LLM (GapGPT ReAct)، حلقهٔ executor با ثبتِ trace در `reos_agent_tasks`.
+مسیر: `/api/reos/agent` + ویجتِ چت در پنلِ خریدار. ۷ تستِ PG.
+
+### REOS v2 — فاز ۳: Knowledge Graph — اجرا شد
+`app/lib/reos/graph.ts`: گره‌های نوع‌دار (user/property/agent/builder/lawyer/bank/notary/…) + یال‌های
+نوع‌دار (viewed/saved/contacted/assigned/represents/…)، پیمایشِ BFS (neighbors/subgraph/shortestPath)،
+پرشدن خودکار از رویدادها (هر ۶ ساعت). مسیر: `/api/reos/graph`. ۸ تستِ PG.
+
+### REOS v2 — فاز ۴: Promotion Engine — اجرا شد
+`app/lib/reos/promotion-engine.ts`: کمپین با بودجه + CPC/CPM/flat + pacingِ روزانه + آنالیتیکس
+(CTR/CPCِ واقعی/مانده)، شارژِ اتمیک، `activeBoosts` که به boostِ فید تزریق می‌شود (گیتِ کیفیت پابرجا).
+مسیر: `/api/reos/promo`. ۱۱ تستِ PG.
+
+**فازهای باقی‌ماندهٔ v2 (هنوز نشده):** deploymentِ pgvector روی DB (نیازمندِ extension روی سرور)،
+Feature Store v2 (جداولِ نرمالِ per-entity)، CRM OS یکپارچه (تجمیعِ Sales-OSهای فعلی).
+
+**تست‌های کل: ۴۳ واحد + ۵۰ روی PostgreSQLِ واقعی = ۹۳.**
 
 **اصلِ راهنما:** هیچ لایه‌ای «فیک» نیست — هر فرمول و مدل کدِ واقعیِ قابلِ‌اجرا و قابلِ‌تست دارد؛ زیرساخت‌های سنگین با معادلِ واقعیِ همین استک پیاده و مسیرِ ارتقا مستند شده است.

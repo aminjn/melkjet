@@ -13,6 +13,7 @@ import { rulePlanner } from '../app/lib/reos/agent/planner.ts'
 import { getMemories, recentTasks } from '../app/lib/reos/agent/memory.ts'
 import { upsertNode, addEdge, getNode, neighbors, subgraph, shortestPath, graphStats, syncGraphFromEvents } from '../app/lib/reos/graph.ts'
 import { recordEvent as recEv } from '../app/lib/reos/store.ts'
+import { createCampaign, recordClick, recordImpression, getCampaign, activeBoosts, analytics } from '../app/lib/reos/promotion-engine.ts'
 
 if (!process.env.DATABASE_URL) { console.error('DATABASE_URL not set'); process.exit(2) }
 let pass = 0, fail = 0
@@ -142,6 +143,8 @@ async function main() {
 
   console.log('\n── REOS v2: Knowledge Graph (typed entities + BFS traversal) ──')
   {
+    await upsertNode({ id: '__warm__', type: 'user' }).catch(() => {})   // ensure tables exist
+    await pool.query('TRUNCATE reos_graph_nodes, reos_graph_edges').catch(() => {})   // deterministic across reruns
     await upsertNode({ id: 'gn:1', type: 'user', label: 'خریدار' })
     ok('upsertNode + getNode', (await getNode('gn:1'))?.type === 'user')
     await addEdge('gn:1', 'gn:2', 'viewed', 1); await addEdge('gn:1', 'gn:2', 'viewed', 2)
@@ -160,6 +163,41 @@ async function main() {
     const gs = await graphStats()
     ok('graphStats reports typed counts', gs.nodes > 0 && gs.byType.user > 0 && gs.byRel.viewed > 0)
     ok('no path returns null for disconnected', (await shortestPath('gn:1', 'a:A9', 3)) === null)
+  }
+
+  console.log('\n── REOS v2: Promotion Engine (budget / CPC / CPM / pacing / analytics) ──')
+  {
+    const now = Date.now()
+    // CPC: bid 1000, budget 3000 → after 3 clicks it exhausts
+    const cpc = await createCampaign({ ownerId: 'promoU', targetType: 'property', targetId: 'PZ1', type: 'featured', model: 'cpc', budget: 3000, bid: 1000, startAt: now - 1000, endAt: now + 10 * 86400000 })
+    ok('campaign created active', cpc.status === 'active')
+    await recordImpression(cpc.id); await recordImpression(cpc.id)
+    let c = await recordClick(cpc.id)
+    ok('CPC click charges the bid (spent=1000)', c.spent === 1000)
+    ok('impressions not charged under CPC', c.impressions === 2)
+    await recordClick(cpc.id); c = await recordClick(cpc.id)
+    ok('budget exhausts at cap (spent=3000, status=exhausted)', c.spent === 3000 && c.status === 'exhausted')
+    const c2 = await recordClick(cpc.id)
+    ok('spent never exceeds budget', c2.spent === 3000)
+    const an = analytics(c2, now)
+    ok('analytics CTR computed (4 clicks / 2 impressions)', an.ctr === 200 && an.cpcActual === 750)
+
+    // CPM: bid 2000 per mille → each impression costs 2
+    const cpm = await createCampaign({ ownerId: 'promoU', targetType: 'property', targetId: 'PZ2', type: 'boost', model: 'cpm', budget: 100, bid: 2000, startAt: now - 1000, endAt: now + 10 * 86400000 })
+    const m = await recordImpression(cpm.id)
+    ok('CPM impression charges bid/1000 (spent=2)', m.spent === 2)
+
+    // activeBoosts reflects servable campaigns, excludes exhausted
+    const boosts = await activeBoosts(now)
+    ok('activeBoosts includes servable campaign (PZ2)', (boosts.PZ2 || 0) > 0)
+    ok('activeBoosts excludes exhausted campaign (PZ1)', !boosts.PZ1)
+
+    // Pacing: tiny daily cap → paced out after spending it in one day
+    const paced = await createCampaign({ ownerId: 'promoU', targetType: 'property', targetId: 'PZ3', type: 'vip', model: 'cpc', budget: 3000, bid: 1000, startAt: now - 1000, endAt: now + 3 * 86400000 })
+    await recordClick(paced.id)  // dailyCap = 3000/3 = 1000 → after 1 click today, paced out
+    const pc = await getCampaign(paced.id)
+    ok('pacing: paced out after hitting daily cap', analytics(pc, now).pacedOut === true)
+    ok('paced campaign excluded from activeBoosts', !(await activeBoosts(now)).PZ3)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)
