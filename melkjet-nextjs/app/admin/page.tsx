@@ -10,6 +10,7 @@ import ArticleEditor from '@/app/components/ArticleEditor'
 import AdminSupportView from './AdminSupportView'
 import CatalogAdminView from './CatalogAdminView'
 import ReosAdminPanel from '@/app/components/ReosAdminPanel'
+import { listingHref } from '@/app/lib/listing-url'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 type View =
@@ -311,6 +312,9 @@ interface MItem {
   sourceName: string; status: string; featured?: boolean; edited?: boolean; scrapedAt: number
   aiReason?: string; aiScore?: number; moderatedAt?: number
   meta?: Record<string, string>; tags?: string[]; expiresAt?: number
+  // غنی‌سازیِ سوپرادمین: آمارِ واقعی + هویتِ حسابِ صاحبِ آگهی
+  stats?: { views: number; contacts: number }
+  ownerAccount?: { name: string; role: string } | null
 }
 const M_TYPES: { k: string; label: string }[] = [
   { k: '', label: 'همه' }, { k: 'listing', label: 'آگهی' }, { k: 'directory', label: 'پروفایل/دفتر' },
@@ -361,10 +365,13 @@ function Pager({ page, pageCount, size, setSize, setPage, total }: { page: numbe
 function ListingsView() {
   const [items, setItems] = useState<MItem[]>([])
   const [total, setTotal] = useState(0)
+  const [byStatus, setByStatus] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [type, setType] = useState('')
   const [status, setStatus] = useState('')
   const [loc, setLoc] = useState('')                       // فیلترِ محله/شهر
+  const [ownerF, setOwnerF] = useState('')                 // فیلترِ «فقط آگهی‌های این کاربر»
+  const [sort, setSort] = useState('new')
   const [hoods, setHoods] = useState<{ h: string; c: number }[]>([])
   const [ml, setMl] = useState<any>(null)                  // وضعیتِ مدلِ یادگیرندهٔ ممیزی
   const [q, setQ] = useState('')
@@ -380,12 +387,23 @@ function ListingsView() {
     if (type) sp.set('type', type)
     if (status) sp.set('status', status)
     if (loc) sp.set('loc', loc)
+    if (ownerF) sp.set('owner', ownerF)
+    if (sort !== 'new') sp.set('sort', sort)
     if (q.trim()) sp.set('q', q.trim())
     const r = await fetch(`/api/admin/scraper/items?${sp}`)
-    if (r.ok) { const d = await r.json(); setItems(d.items); setTotal(d.total); setHoods(d.hoods || []) }
+    if (r.ok) { const d = await r.json(); setItems(d.items); setTotal(d.total); setHoods(d.hoods || []); setByStatus(d.byStatus || {}) }
     setLoading(false); setSel(new Set())
   }
-  useEffect(() => { load() }, [type, status, loc])
+  useEffect(() => { load() }, [type, status, loc, ownerF, sort])
+  // ورود به پنلِ کاربرِ صاحبِ آگهی (impersonation) — از همین‌جا، بدونِ ترکِ ادمین در تبِ فعلی.
+  const openUserPanel = async (phone?: string) => {
+    const p = (phone || '').trim()
+    if (!p) return
+    const r = await fetch('/api/admin/impersonate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: p }) })
+    const d = await r.json().catch(() => ({}))
+    if (r.ok && d.dashboard) window.open(d.dashboard, '_blank')
+    else alert(d.error || 'این شماره حسابِ کاربری ندارد')
+  }
   const loadMl = () => fetch('/api/admin/scraper/moderate').then(r => r.ok ? r.json() : null).then(d => setMl(d?.ml || null)).catch(() => {})
   useEffect(() => { loadMl() }, [])
 
@@ -462,26 +480,46 @@ function ListingsView() {
           <div style={{ flex: 1 }} />
           <select style={inp} value={status} onChange={e => setStatus(e.target.value)}>
             <option value="">همه وضعیت‌ها</option>
-            <option value="pending">منتظر</option>
-            <option value="approved">تأیید‌شده</option>
-            <option value="rejected">رد‌شده</option>
-            <option value="duplicate">تکراری</option>
+            <option value="pending">منتظر ({byStatus.pending || 0})</option>
+            <option value="approved">تأیید‌شده ({byStatus.approved || 0})</option>
+            <option value="rejected">رد‌شده ({byStatus.rejected || 0})</option>
+            <option value="duplicate">تکراری ({byStatus.duplicate || 0})</option>
+          </select>
+          <select style={inp} value={sort} onChange={e => setSort(e.target.value)} title="مرتب‌سازی">
+            <option value="new">جدیدترین</option>
+            <option value="views">پربازدیدترین</option>
+            <option value="contacts">پرتماس‌ترین</option>
+            <option value="price_desc">گران‌ترین</option>
+            <option value="price_asc">ارزان‌ترین</option>
           </select>
           <select style={{ ...inp, ...(loc ? { borderColor: 'var(--gold)', color: 'var(--gold)', fontWeight: 700 } : {}) }} value={loc} onChange={e => setLoc(e.target.value)} title="فیلترِ محله/شهر">
             <option value="">همهٔ محله‌ها</option>
             {hoods.map(o => <option key={o.h} value={o.h}>{o.h} ({o.c})</option>)}
           </select>
-          <input style={inp} placeholder="جستجو…" value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') load() }} />
+          <input style={inp} placeholder="جستجو (عنوان/محله/شماره)…" value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') load() }} />
           <OutlineButton onClick={load}>جستجو</OutlineButton>
           <OutlineButton onClick={async () => {
             if (!confirm('آگهی‌های تکراری شناسایی و از نمایشِ عمومی خارج شوند؟ (قدیمی‌ترینِ هر گروه می‌ماند)')) return
             const r = await fetch('/api/admin/scraper/dedupe', { method: 'POST' })
             const d = await r.json().catch(() => ({}))
-            alert(r.ok ? `${d.removed || 0} آگهیِ تکراری حذف شد (${d.kept || 0} آگهی ماند).` : (d.error || 'خطا'))
+            alert(r.ok ? `${d.removed || 0} آگهی «تکراری» علامت خورد و از سایت مخفی شد (${d.kept || 0} ماند). برای حذفِ همیشگی «حذفِ قطعی» را بزنید.` : (d.error || 'خطا'))
             if (r.ok) load()
           }}>🧹 پاک‌سازیِ تکراری‌ها</OutlineButton>
+          {(byStatus.duplicate || 0) > 0 && <OutlineButton onClick={async () => {
+            if (!confirm(`${byStatus.duplicate} آیتمِ علامت‌خوردهٔ «تکراری» برای همیشه حذفِ فیزیکی شوند؟ (غیرقابلِ بازگشت)`)) return
+            const r = await fetch('/api/admin/scraper/dedupe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ purge: true }) })
+            const d = await r.json().catch(() => ({}))
+            alert(r.ok ? `${d.purged || 0} آیتم برای همیشه حذف شد.` : (d.error || 'خطا'))
+            if (r.ok) load()
+          }} style={{ borderColor: 'rgba(231,103,74,.5)', color: '#e7674a' }}>🗑 حذفِ قطعیِ تکراری‌ها ({byStatus.duplicate})</OutlineButton>}
           <GoldButton onClick={() => setCreateOpen(true)}>＋ آگهی جدید</GoldButton>
         </div>
+        {ownerF && (
+          <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 12.5, color: 'var(--gold)', fontWeight: 700, background: 'var(--goldDim)', border: '1px solid var(--gold)', borderRadius: 999, padding: '4px 12px' }}>فقط آگهی‌های کاربرِ {ownerF}</span>
+            <button onClick={() => setOwnerF('')} style={{ background: 'transparent', border: '1px solid var(--line2)', color: 'var(--muted)', borderRadius: 8, padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>✕ حذفِ فیلتر</button>
+          </div>
+        )}
         <div style={{ marginTop: 10, fontSize: 12.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <span>{loading ? 'در حال بارگذاری…' : `${total} مورد`}</span>
           {ml && (
@@ -497,6 +535,7 @@ function ListingsView() {
             <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{sel.size} انتخاب‌شده:</span>
             <button onClick={() => bulkStatus('approved')} style={{ background: 'transparent', border: '1px solid #5fd98a', color: '#5fd98a', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>✓ تأیید</button>
             <button onClick={() => bulkStatus('rejected')} style={{ background: 'transparent', border: '1px solid #e7a14a', color: '#e7a14a', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>↧ رد</button>
+            <button onClick={() => bulkStatus('duplicate')} title="علامتِ تکراری — از سایت مخفی می‌شود" style={{ background: 'transparent', border: '1px solid #8a7bd8', color: '#a99bf0', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>⧉ تکراری</button>
             <button onClick={() => bulkFeature(true)} style={{ background: 'transparent', border: '1px solid var(--gold)', color: 'var(--gold)', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>★ ویژه</button>
             <button onClick={() => setBulkOpen(true)} style={{ background: 'transparent', border: '1px solid #8a7bd8', color: '#a99bf0', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>✎ ویرایش دسته‌ای</button>
             <button onClick={bulkAi} disabled={aiBusy} style={{ background: 'transparent', border: '1px solid var(--gold)', color: 'var(--gold)', borderRadius: 8, padding: '5px 12px', cursor: aiBusy ? 'default' : 'pointer', fontFamily: 'inherit', fontSize: 12.5, opacity: aiBusy ? .6 : 1 }}>{aiBusy ? '⏳ در حال بررسی…' : '🤖 بررسی با AI'}</button>
@@ -511,28 +550,49 @@ function ListingsView() {
           <div style={{ color: 'var(--muted)', fontSize: 13, padding: '30px 0', textAlign: 'center' }}>موردی نیست. یک منبع اجرا کنید یا فیلترها را تغییر دهید.</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {pg.paged.map(it => (
+            {pg.paged.map(it => {
+              const siteUrl = it.type === 'listing' || !it.type ? listingHref(it.id, it.title, it.location) : (it.url || '#')
+              const ownerName = it.ownerAccount?.name || it.owner || ''
+              return (
               <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg2)', borderRadius: 12, padding: '10px 12px', flexWrap: 'wrap' }}>
                 <input type="checkbox" checked={sel.has(it.id)} onChange={() => toggleSel(it.id)} style={{ width: 16, height: 16, accentColor: 'var(--gold)', cursor: 'pointer' }} />
-                {it.image
-                  ? <img src={it.image} alt="" style={{ width: 48, height: 48, borderRadius: 9, objectFit: 'cover', flexShrink: 0, background: 'var(--surface)' }} onError={e => { (e.target as HTMLImageElement).style.visibility = 'hidden' }} />
-                  : <span style={{ width: 48, height: 48, borderRadius: 9, background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--gold)' }}>▤</span>}
-                <div style={{ flex: 1, minWidth: 180 }}>
-                  <a href={it.url || '#'} target="_blank" rel="noreferrer" style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text)', textDecoration: 'none', display: 'block', lineHeight: 1.5 }}>{it.featured && '★ '}{it.title}{it.edited && <span style={{ color: 'var(--faint)', fontSize: 10, marginRight: 4 }}>(ویرایش‌شده)</span>}</a>
-                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>{[it.location, it.sourceName, it.category].filter(Boolean).join(' · ')}</div>
+                <a href={siteUrl} target="_blank" rel="noreferrer" title="دیدنِ آگهی در سایت">
+                  {it.image
+                    ? <img src={it.image} alt="" style={{ width: 48, height: 48, borderRadius: 9, objectFit: 'cover', flexShrink: 0, background: 'var(--surface)' }} onError={e => { (e.target as HTMLImageElement).style.visibility = 'hidden' }} />
+                    : <span style={{ width: 48, height: 48, borderRadius: 9, background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--gold)' }}>▤</span>}
+                </a>
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  {/* عنوان → صفحهٔ آگهی در خودِ سایت (نه لینکِ منبع) */}
+                  <a href={siteUrl} target="_blank" rel="noreferrer" title="دیدنِ آگهی در سایت" style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text)', textDecoration: 'none', display: 'block', lineHeight: 1.5 }}>{it.featured && '★ '}{it.title}{it.edited && <span style={{ color: 'var(--faint)', fontSize: 10, marginRight: 4 }}>(ویرایش‌شده)</span>}</a>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                    {[it.location, it.sourceName, it.category].filter(Boolean).join(' · ')}
+                    {it.scrapedAt ? <span style={{ color: 'var(--faint)' }}> · {new Date(it.scrapedAt).toLocaleDateString('fa-IR')}</span> : null}
+                    <span style={{ color: 'var(--faint)' }}> · 👁 {(it.stats?.views || 0).toLocaleString('fa-IR')} · ☎ {(it.stats?.contacts || 0).toLocaleString('fa-IR')}</span>
+                  </div>
+                  {/* هویتِ صاحبِ آگهی + دسترسیِ مستقیم به پنلش */}
+                  <div style={{ fontSize: 11.5, marginTop: 3, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ color: ownerName ? 'var(--text)' : 'var(--faint)' }}>👤 {ownerName || 'صاحبِ نامشخص'}{it.ownerAccount?.role ? <span style={{ color: 'var(--faint)' }}> ({it.ownerAccount.role})</span> : null}</span>
+                    {it.phone && <span style={{ color: 'var(--faint)', direction: 'ltr' }}>{it.phone}</span>}
+                    {it.phone && it.ownerAccount && <button onClick={() => openUserPanel(it.phone)} style={{ background: 'transparent', border: '1px solid var(--gold)', color: 'var(--gold)', borderRadius: 7, padding: '2px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 10.5, fontWeight: 700 }}>پنلِ کاربر ↗</button>}
+                    {it.phone && <button title="فقط آگهی‌های این کاربر" onClick={() => setOwnerF((it.phone || '').replace(/\D/g, ''))} style={{ background: 'transparent', border: '1px solid var(--line2)', color: 'var(--muted)', borderRadius: 7, padding: '2px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 10.5 }}>آگهی‌هایش</button>}
+                    {it.phone && !it.ownerAccount && <span style={{ fontSize: 10, color: 'var(--faint)' }}>(حسابِ ملک‌جت ندارد)</span>}
+                  </div>
                   {it.aiReason && <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ color: 'var(--gold)' }}>🤖</span><span>{it.aiReason}</span>{typeof it.aiScore === 'number' && <span style={{ color: it.aiScore >= 70 ? '#5fd98a' : it.aiScore >= 45 ? '#e7a14a' : '#e7674a', fontWeight: 700 }}>({it.aiScore})</span>}</div>}
                 </div>
                 {it.price && <span style={{ fontWeight: 700, color: 'var(--gold)', fontSize: 13, whiteSpace: 'nowrap' }}>{it.price}</span>}
                 <Badge label={M_STATUS[it.status]?.label || it.status} color={M_STATUS[it.status]?.color || 'var(--faint)'} />
-                <div style={{ display: 'flex', gap: 6 }}>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <a href={siteUrl} target="_blank" rel="noreferrer" title="دیدن در سایت" style={{ border: '1px solid var(--line2)', color: 'var(--muted)', borderRadius: 8, padding: '4px 9px', fontSize: 11.5, textDecoration: 'none' }}>سایت ↗</a>
+                  <button title="کپیِ لینکِ آگهی" onClick={() => { navigator.clipboard?.writeText(`https://melkjet.com${siteUrl}`); }} style={{ background: 'transparent', border: '1px solid var(--line2)', color: 'var(--muted)', borderRadius: 8, padding: '4px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11.5 }}>⧉ لینک</button>
                   <button title="ویژه" onClick={() => toggleFeatured(it)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16, color: it.featured ? 'var(--gold)' : 'var(--faint)' }}>★</button>
                   {it.status !== 'approved' && <button title="تأیید" onClick={() => setStatusOf(it.id, 'approved')} style={{ background: 'transparent', border: '1px solid #5fd98a', color: '#5fd98a', borderRadius: 8, padding: '4px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11.5 }}>✓</button>}
                   {it.status !== 'rejected' && <button title="رد" onClick={() => setStatusOf(it.id, 'rejected')} style={{ background: 'transparent', border: '1px solid #e7a14a', color: '#e7a14a', borderRadius: 8, padding: '4px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11.5 }}>↧</button>}
+                  {it.status !== 'duplicate' && <button title="علامتِ تکراری (از سایت مخفی می‌شود)" onClick={() => setStatusOf(it.id, 'duplicate')} style={{ background: 'transparent', border: '1px solid #8a7bd8', color: '#a99bf0', borderRadius: 8, padding: '4px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11.5 }}>⧉</button>}
                   <OutlineButton onClick={() => setEdit(it)} style={{ fontSize: 11.5, padding: '4px 11px' }}>ویرایش</OutlineButton>
                   <button title="حذف" onClick={() => del(it.id)} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', borderRadius: 8, padding: '4px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>×</button>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
         )}
         <Pager {...pg} />
