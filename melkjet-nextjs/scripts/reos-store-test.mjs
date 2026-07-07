@@ -20,6 +20,9 @@ import { runLLM, selectModel, cacheKey, estimateCost, usageStats, cacheClear } f
 import { createWorkflow, evalCondition, matchWorkflow, leadContext, runWorkflows } from '../app/lib/reos/workflow-builder.ts'
 import { computeMarketIntel, getMarketIntel, topMarketIntel } from '../app/lib/reos/market-intel.ts'
 import { valuate } from '../app/lib/reos/avm.ts'
+import { assignVariant, createExperiment, recordExposure, recordConversion, results } from '../app/lib/reos/experiments.ts'
+import { credit, debit, getBalance, listTransactions, createInvoice, payInvoice } from '../app/lib/reos/billing.ts'
+import { recordTouch, recordSpend, recordConversion as attrConvert, channelReport } from '../app/lib/reos/attribution.ts'
 
 if (!process.env.DATABASE_URL) { console.error('DATABASE_URL not set'); process.exit(2) }
 let pass = 0, fail = 0
@@ -373,6 +376,54 @@ async function main() {
     ok('valuate returns low/high band + confidence', v.low < v.estimate && v.estimate < v.high && v.confidence > 0)
     const none = await valuate('nonexistent-id')
     ok('valuate handles missing property gracefully', none.estimate === 0)
+  }
+
+  console.log('\n── REOS v3: Experiment Platform (A/B) ──')
+  {
+    ok('assignVariant is sticky/deterministic', assignVariant('u1', 'e1', ['A', 'B']) === assignVariant('u1', 'e1', ['A', 'B']))
+    // distribution over 2000 users roughly matches 50/50
+    let a = 0; for (let i = 0; i < 2000; i++) if (assignVariant('user' + i, 'exp', ['A', 'B']) === 'A') a++
+    ok('assignVariant ~50/50 split', a > 850 && a < 1150)
+    // weighted 80/20
+    let x = 0; for (let i = 0; i < 2000; i++) if (assignVariant('u' + i, 'w', ['X', 'Y'], [8, 2]) === 'X') x++
+    ok('assignVariant respects weights (~80% X)', x > 1500 && x < 1700)
+    const exp = await createExperiment({ name: 'feed test', variants: ['A', 'B'] })
+    for (let i = 0; i < 100; i++) await recordExposure(exp.id, 'A'); for (let i = 0; i < 30; i++) await recordConversion(exp.id, 'A', 10)
+    for (let i = 0; i < 100; i++) await recordExposure(exp.id, 'B'); for (let i = 0; i < 12; i++) await recordConversion(exp.id, 'B', 10)
+    const res = await results(exp)
+    ok('results conversion rates (A=30%, B=12%)', res.variants.find(v => v.variant === 'A').conversionRate === 30 && res.variants.find(v => v.variant === 'B').conversionRate === 12)
+    ok('results picks winner (A) + lift', res.winner === 'A' && res.lift > 0)
+  }
+
+  console.log('\n── REOS v3: Billing Engine (wallet/txn/invoice) ──')
+  {
+    const owner = 'billU_' + Math.floor(Date.now() / 1000)
+    await credit(owner, 1_000_000, 'شارژ')
+    ok('credit raises balance', (await getBalance(owner)) === 1_000_000)
+    const d = await debit(owner, 300_000, 'خرید')
+    ok('debit lowers balance', d.ok && d.balance === 700_000)
+    const over = await debit(owner, 999_999_999, 'زیاد')
+    ok('debit rejects insufficient funds (atomic)', over.ok === false && (await getBalance(owner)) === 700_000)
+    ok('transactions logged (credit + debit)', (await listTransactions(owner)).length === 2)
+    const inv = await createInvoice(owner, [{ desc: 'کمپین', amount: 500_000 }], 0.1)
+    ok('invoice computes tax + total', inv.subtotal === 500_000 && inv.tax === 50_000 && inv.total === 550_000)
+    const pay = await payInvoice(inv.id)
+    ok('payInvoice debits wallet (700k - 550k = 150k)', pay.ok && (await getBalance(owner)) === 150_000)
+    const pay2 = await payInvoice(inv.id)
+    ok('cannot pay same invoice twice', pay2.ok === false)
+  }
+
+  console.log('\n── REOS v3: Attribution Engine (CAC/LTV/ROAS) ──')
+  {
+    const ch = 'divar_' + Math.floor(Date.now() / 1000)
+    for (let i = 0; i < 50; i++) await recordTouch(ch)
+    await recordSpend(ch, 5_000_000)
+    for (let i = 0; i < 10; i++) await attrConvert(ch, 2_000_000)   // 10 conversions × 2M revenue
+    const r = await channelReport(ch)
+    ok('attribution counts touches/conversions/spend/revenue', r.touches === 50 && r.conversions === 10 && r.spend === 5_000_000 && r.revenue === 20_000_000)
+    ok('CAC = spend/conversions = 500k', r.cac === 500_000)
+    ok('ROAS = revenue/spend = 4', r.roas === 4)
+    ok('LTV = revenue/conversions = 2M', r.ltv === 2_000_000)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)
