@@ -8,6 +8,7 @@ import { valuate } from './avm'
 import { getMarketIntel } from './market-intel'
 import { demandScore, parseFaNum, clamp01 } from './features'
 import { rentalYield } from './investor'
+import { config } from './reos-config'
 import type { PropertyEntity } from './types'
 
 function r1(x: number) { return Math.round(x * 10) / 10 }
@@ -77,6 +78,8 @@ export async function buildTwin(propertyId: string): Promise<Twin | null> {
   const days = daysToSell(demand, priceVsMarket)
   const completeness = completenessOf(p)
   const monthlyRent = parseFaNum(String(it.meta?.['اجاره'] || it.meta?.['اجاره ماهیانه'] || '')) || (p.deal === 'rent' ? p.rentMonthly || 0 : 0)
+  const tw = config().twin   // آستانه‌ها از تنظیماتِ سوپرادمین
+  const over = tw.overpricePct / 100, under = tw.underpricePct / 100
 
   return {
     id: propertyId, title: it.title,
@@ -84,12 +87,12 @@ export async function buildTwin(propertyId: string): Promise<Twin | null> {
     demand: Math.round(demand * 100) / 100,
     liquidity: liquidityScore(demand, intel?.liquidityIndex ?? 0.5),
     daysToSell: days,
-    saleProbability: saleProbability(days, 45),
+    saleProbability: saleProbability(days, tw.saleWindowDays),
     priceVsMarket: Math.round(priceVsMarket * 1000) / 10,   // درصد
     rentalYield: monthlyRent && p.price ? rentalYield(monthlyRent * 12, p.price) : null,
     risk: riskProfile({ priceVsMarket, demand, completeness, ageDays: p.createdAt ? (Date.now() - p.createdAt) / 864e5 : 0 }),
     aiConfidence: aiConfidence(avm?.comps || 0, completeness),
     trend: intel?.trend || 'flat',
-    note: priceVsMarket > 0.12 ? 'قیمت بالاتر از بازار — احتمالِ کاهش/مذاکره' : priceVsMarket < -0.08 ? 'قیمتِ رقابتی — احتمالِ فروشِ سریع' : 'قیمتِ نزدیک به بازار',
+    note: priceVsMarket > over ? 'قیمت بالاتر از بازار — احتمالِ کاهش/مذاکره' : priceVsMarket < -under ? 'قیمتِ رقابتی — احتمالِ فروشِ سریع' : 'قیمتِ نزدیک به بازار',
   }
 }

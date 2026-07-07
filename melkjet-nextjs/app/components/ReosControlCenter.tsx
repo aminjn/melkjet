@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 // مرکزِ کنترلِ REOS برای سوپرادمین — تنظیماتِ واقعیِ همهٔ موتورها + دکمه‌های اکشن.
 const FONT = 'Vazirmatn, system-ui, sans-serif'
 const card: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18, marginTop: 16, fontFamily: FONT, direction: 'rtl' }
+const sub: React.CSSProperties = { fontSize: 13, fontWeight: 800, marginBottom: 8, color: 'var(--gold)' }
 type Cfg = Record<string, Record<string, unknown>>
 
 export default function ReosControlCenter() {
@@ -70,66 +71,116 @@ export default function ReosControlCenter() {
         {cfg && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 16 }}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8, color: 'var(--gold)' }}>یادگیریِ آنلاین (RL)</div>
+              <div style={sub}>یادگیریِ آنلاین (RL)</div>
               {row('نرخِ یادگیری (lr)', inp('rl', 'lr'))}
               {row('اکتشاف (epsilon)', inp('rl', 'epsilon'))}
+              {row('پاداشِ کلیک', inp('rl', 'rewards', 'click'))}
+              {row('پاداشِ ذخیره', inp('rl', 'rewards', 'save'))}
               {row('پاداشِ تماس', inp('rl', 'rewards', 'contact'))}
+              {row('پاداشِ بازدید', inp('rl', 'rewards', 'visit'))}
               {row('پاداشِ قرارداد', inp('rl', 'rewards', 'contract'))}
             </div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8, color: 'var(--gold)' }}>تبلیغات (Boost)</div>
+              <div style={sub}>تبلیغات (Boost)</div>
               {row('نردبان', inp('promotion', 'boost'))}
               {row('ویژه', inp('promotion', 'featured'))}
               {row('VIP', inp('promotion', 'vip'))}
               {row('گیتِ کیفیت (۱/۰)', inp('promotion', 'trustGate'))}
             </div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8, color: 'var(--gold)' }}>آموزش + Gateway</div>
+              <div style={sub}>آموزش</div>
               {row('آموزشِ خودکار هر (ساعت)', inp('training', 'autoHours'))}
               {row('آموزشِ خودکار فعال (۱/۰)', inp('training', 'enabled'))}
               {row('مدلِ لیدِ آموزش‌دیده (۱/۰)', inp('training', 'useLearnedLead'))}
-              {row('کشِ AI (دقیقه)', inp('gateway', 'cacheTtlMin'))}
             </div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8, color: 'var(--gold)' }}>وزن‌های اعتماد</div>
+              <div style={sub}>Gateway + نرخِ AI (تومان/۱هزار توکن)</div>
+              {row('کشِ AI (دقیقه)', inp('gateway', 'cacheTtlMin'))}
+              {row('نرخِ gpt-4o', inp('gateway', 'rates', 'gpt-4o'))}
+              {row('نرخِ gpt-4o-mini', inp('gateway', 'rates', 'gpt-4o-mini'))}
+              {row('نرخِ پیش‌فرض', inp('gateway', 'rates', 'default'))}
+            </div>
+            <div>
+              <div style={sub}>وزن‌های اعتماد (Trust)</div>
               {row('تأیید', inp('trust', 'weights', 'verified'))}
+              {row('کاملیِ پروفایل', inp('trust', 'weights', 'profile'))}
+              {row('نرخِ پاسخ', inp('trust', 'weights', 'response'))}
               {row('معاملات', inp('trust', 'weights', 'deals'))}
               {row('امتیاز', inp('trust', 'weights', 'rating'))}
+              {row('سابقه', inp('trust', 'weights', 'tenure'))}
             </div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8, color: 'var(--gold)' }}>وزن‌های رتبه‌بندیِ فید</div>
+              <div style={sub}>وزن‌های رتبه‌بندیِ فید</div>
               {row('تطابقِ کاربر', inp('feed', 'rankWeights', 'userMatch'))}
               {row('کیفیت', inp('feed', 'rankWeights', 'quality'))}
               {row('تعامل', inp('feed', 'rankWeights', 'engagement'))}
               {row('تازگی', inp('feed', 'rankWeights', 'freshness'))}
+              {row('تقاضا', inp('feed', 'rankWeights', 'demand'))}
+              {row('تبلیغ', inp('feed', 'rankWeights', 'promotion'))}
             </div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8, color: 'var(--gold)' }}>وزن‌های امتیازِ Global</div>
+              <div style={sub}>وزن‌های امتیازِ Global</div>
               {row('بودجه', inp('scoring', 'budget'))}
               {row('موقعیت', inp('scoring', 'location'))}
               {row('رفتار', inp('scoring', 'behavior'))}
               {row('نیت', inp('scoring', 'intent'))}
+              {row('تاریخچه', inp('scoring', 'historical'))}
+              {row('تقاضا', inp('scoring', 'demand'))}
             </div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8, color: 'var(--gold)' }}>اقتدارِ بازار (Market Dominance)</div>
-              {row('وزنِ معاملات', inp('territory', 'weights', 'transactions'))}
-              {row('وزنِ تبدیلِ لید', inp('territory', 'weights', 'leadConversion'))}
-              {row('وزنِ کیفیتِ آگهی', inp('territory', 'weights', 'listingQuality'))}
+              <div style={sub}>وزن‌های Hybrid</div>
+              {row('ML', inp('hybrid', 'ml'))}
+              {row('برداری (vector)', inp('hybrid', 'vector'))}
+              {row('قانون (rule)', inp('hybrid', 'rule'))}
+              {row('رفتاری', inp('hybrid', 'behavioral'))}
+              {row('boost', inp('hybrid', 'boost'))}
+            </div>
+            <div>
+              <div style={sub}>دوقلوی دیجیتال (Digital Twin)</div>
+              {row('پنجرهٔ فروش (روز)', inp('twin', 'saleWindowDays'))}
+              {row('آستانهٔ گران‌بودن (٪)', inp('twin', 'overpricePct'))}
+              {row('آستانهٔ ارزان‌بودن (٪)', inp('twin', 'underpricePct'))}
+            </div>
+            <div>
+              <div style={sub}>اقتدارِ بازار — وزن‌ها (جمع=۱)</div>
+              {row('معاملات', inp('territory', 'weights', 'transactions'))}
+              {row('تبدیلِ لید', inp('territory', 'weights', 'leadConversion'))}
+              {row('کیفیتِ آگهی', inp('territory', 'weights', 'listingQuality'))}
+              {row('رضایت', inp('territory', 'weights', 'satisfaction'))}
+              {row('محتوا', inp('territory', 'weights', 'content'))}
+              {row('فعالیت', inp('territory', 'weights', 'activity'))}
+              {row('اعتمادِ AI', inp('territory', 'weights', 'aiTrust'))}
+            </div>
+            <div>
+              <div style={sub}>اقتدارِ بازار — نبرد و ضدِتقلب</div>
               {row('روزهای نبرد', inp('territory', 'battleDays'))}
               {row('آستانهٔ تقلب', inp('territory', 'fraudThreshold'))}
               {row('وزنِ اعتبار در فید', inp('territory', 'feedAuthority'))}
+              {row('فاصلهٔ رقابت', inp('territory', 'contestGap'))}
             </div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8, color: 'var(--gold)' }}>اقتصادِ پاداش + XP</div>
+              <div style={sub}>اقتصادِ پاداش (Economy)</div>
               {row('کمیسیونِ معامله', inp('economy', 'commissionPct'))}
               {row('پورسانتِ معرف', inp('economy', 'affiliatePct'))}
               {row('پاداشِ وفاداری', inp('economy', 'loyaltyBonusPct'))}
               {row('XP پاداشِ مأموریت', inp('economy', 'missionRewardXp'))}
               {row('اعتبارِ مأموریت', inp('economy', 'missionRewardCredit'))}
-              {row('پایهٔ منحنیِ سطح', inp('xp', 'levelBase'))}
             </div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8, color: 'var(--gold)' }}>اعتبارِ اجتماعی (Community)</div>
+              <div style={sub}>XP هر اقدام + منحنیِ سطح</div>
+              {row('ثبتِ آگهی', inp('xp', 'actions', 'list_property'))}
+              {row('بستنِ معامله', inp('xp', 'actions', 'close_deal'))}
+              {row('پاسخ به لید', inp('xp', 'actions', 'respond_lead'))}
+              {row('دریافتِ نظر', inp('xp', 'actions', 'get_review'))}
+              {row('انتشارِ محتوا', inp('xp', 'actions', 'publish_content'))}
+              {row('بردِ نبرد', inp('xp', 'actions', 'win_battle'))}
+              {row('تأیید', inp('xp', 'actions', 'verify'))}
+              {row('معرفیِ موفق', inp('xp', 'actions', 'refer_convert'))}
+              {row('پایهٔ منحنیِ سطح', inp('xp', 'levelBase'))}
+              {row('تندیِ منحنی (exp)', inp('xp', 'levelExp'))}
+            </div>
+            <div>
+              <div style={sub}>اعتبارِ اجتماعی (Community)</div>
               {row('وزنِ دنبال‌کننده', inp('community', 'weights', 'followers'))}
               {row('وزنِ اقتدار', inp('community', 'weights', 'dominance'))}
               {row('وزنِ اعتماد', inp('community', 'weights', 'trust'))}
