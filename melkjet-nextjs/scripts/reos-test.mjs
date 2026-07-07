@@ -526,13 +526,15 @@ console.log('\n── REOS v8: AutoML — autonomous champion/challenger ──'
 
 console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جلد۲ فصل ۱–۶) ──')
 {
-  // سطح‌ها طبق §6.2: Citizen → Explorer(500) → Investor(1500) → Builder(5000)
-  const lv = { explorer: 500, investor: 1500, builder: 5000 }
-  ok('0 XP → Citizen', empireLevel(0, lv).title === 'Citizen')
-  ok('100 XP (خوش‌آمد) → هنوز Citizen با next=500', empireLevel(100, lv).title === 'Citizen' && empireLevel(100, lv).next === 500)
-  ok('500 XP → Explorer', empireLevel(500, lv).title === 'Explorer')
-  ok('1500 XP → Investor', empireLevel(1500, lv).title === 'Investor')
-  ok('5000+ XP → Builder (progress=1، بدون next)', empireLevel(9000, lv).title === 'Builder' && empireLevel(9000, lv).next === null && empireLevel(9000, lv).progress === 1)
+  // سطح‌بندیِ GDD جلد۳: منحنیِ base×(L-1)^exp + مراحلِ Rookie→Explorer→Investor→Broker→Agency→Developer→Corporation→Empire
+  const curve = { base: 100, exp: 1.5 }
+  const cum = L => Math.round(100 * Math.pow(L - 1, 1.5))
+  ok('0 XP → سطح ۱ (Rookie)', empireLevel(0, curve).level === 1 && empireLevel(0, curve).title === 'Rookie')
+  ok('100 XP → سطح ۲ (Explorer)', empireLevel(100, curve).level === 2 && empireLevel(100, curve).title === 'Explorer')
+  ok('سطح ۱۰ → مرحلهٔ Investor', empireLevel(cum(10), curve).level === 10 && empireLevel(cum(10), curve).title === 'Investor')
+  ok('سطح ۲۵ → Broker، ۴۰ → Agency، ۶۰ → Developer', empireLevel(cum(25), curve).title === 'Broker' && empireLevel(cum(40), curve).title === 'Agency' && empireLevel(cum(60), curve).title === 'Developer')
+  ok('سطح ۸۰ → Corporation و ۱۰۰ → Empire (بی‌سقف)', empireLevel(cum(80), curve).title === 'Corporation' && empireLevel(cum(100), curve).title === 'Empire' && empireLevel(cum(120), curve).level >= 120)
+  ok('next همیشه بالاتر از XP فعلی (بازیِ بی‌پایان)', empireLevel(cum(100), curve).next > cum(100))
   // Identity Engine از پاسخ‌های ۵گانه — قطعی
   const inv = identityFromAnswers({ tenB: 'سرمایه‌گذاری می‌کردم', risk: 40, ptype: 'آپارتمان', goal: 'رشدِ سرمایه' })
   ok('پاسخِ سرمایه‌گذارانه → investor غالب', inv.investor > inv.builder && inv.investor > inv.commercial)

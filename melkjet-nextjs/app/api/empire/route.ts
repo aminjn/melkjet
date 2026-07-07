@@ -8,7 +8,7 @@ import {
   setStylePicks, setHunterPair, answerHunter, empireLevel, netWorthOf, empireCount, assetKindOf,
   getBrief, markBriefOpened, dayNumberOf,
   sellAsset, setLandPlan, chooseBusiness, accrueIncome, claimDailyChest, chestRewardOf,
-  landProjection, empireScoreOf, listEmpiresPublic,
+  landProjection, empireScoreOf, listEmpiresPublic, applyUpkeep,
   type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
 import { buildBriefFor } from '@/app/lib/empire-brief'
@@ -103,8 +103,23 @@ async function accrueRentFor(userId: string, e: EmpireData, now = Date.now()): P
   return r.ok && r.empire ? r.empire : e
 }
 
+// هزینهٔ مالکیت (GDD جلد۵): نگهداری/مالیاتِ سالانه به‌نسبتِ روزهای گذشته — اقتصاد در گردش می‌ماند.
+async function upkeepFor(userId: string, e: EmpireData, now = Date.now()): Promise<EmpireData> {
+  const pct = config().empire.maintenancePctYear
+  if (!(pct > 0) || !e.assets.length) return e
+  const since = e.lastUpkeepAt || e.createdAt
+  const days = Math.floor((now - since) / 864e5)
+  if (days < 1) return e
+  const assetsValue = e.assets.reduce((s, a) => s + a.buyPrice, 0)
+  const cost = Math.round(assetsValue * (pct / 100) * (days / 365))
+  if (!(cost > 0)) return e
+  const r = await applyUpkeep(userId, cost, now)
+  return r.ok && r.empire ? r.empire : e
+}
+
 // وضعیتِ کاملِ امپراتوری برای UI.
-async function stateOf(userId: string, e0: EmpireData) {
+async function stateOf(userId: string, e00: EmpireData) {
+  const e0 = await upkeepFor(userId, e00).catch(() => e00)    // هزینهٔ مالکیت (GDD جلد۵)
   const e = await accrueRentFor(userId, e0).catch(() => e0)   // درآمدِ اجاره/کسب‌وکار از بازارِ واقعی
   const [prices, missions, total] = await Promise.all([livePrices(e), missionsOf(userId, e), empireCount()])
   const nw = netWorthOf(e, prices)
@@ -156,7 +171,7 @@ export async function POST(req: NextRequest) {
   switch (action) {
     // تولد (فصل ۲): پاسخ‌ها → هویت → بستهٔ خوش‌آمد.
     case 'create': {
-      const e = await createEmpire(userId, { name: b.name, persona: b.persona, answers: b.answers || {}, dreamPicks: Array.isArray(b.dreamPicks) ? b.dreamPicks : [] })
+      const e = await createEmpire(userId, { name: b.name, persona: b.persona, path: b.path, answers: b.answers || {}, dreamPicks: Array.isArray(b.dreamPicks) ? b.dreamPicks : [] })
       return NextResponse.json(await stateOf(userId, e))
     }
     case 'rename': { const r = await renameEmpire(userId, String(b.name || '')); return r.ok ? NextResponse.json({ ok: true, name: r.empire!.name }) : NextResponse.json({ error: r.reason }, { status: 400 }) }

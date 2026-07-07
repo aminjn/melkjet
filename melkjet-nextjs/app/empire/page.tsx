@@ -43,6 +43,7 @@ export default function EmpirePage() {
   const [dreamPicks, setDreamPicks] = useState<string[]>([])
   const [name, setName] = useState('')
   const [persona, setPersona] = useState('🦁')
+  const [pathKey, setPathKey] = useState('')
   const [verdict, setVerdict] = useState<{ title: string; confidence: number; dna: string } | null>(null)
 
   const [opps, setOpps] = useState<Opp[]>([])
@@ -104,7 +105,7 @@ export default function EmpirePage() {
   ]
 
   async function doCreate() {
-    const d = await api({ action: 'create', name, persona, answers: { city, tenB, risk, ptype, goal }, dreamPicks })
+    const d = await api({ action: 'create', name, persona, path: pathKey, answers: { city, tenB, risk, ptype, goal }, dreamPicks })
     if (d) { setSt(d); setStep('gift') }
   }
   async function doSuggest() {
@@ -165,25 +166,44 @@ export default function EmpirePage() {
   if (step === 'load') return wrap(<div style={card}>در حال آماده‌سازی...</div>)
   if (step === 'off') return wrap(<div style={card}>این بخش فعلاً برای حسابِ شما فعال نیست.</div>)
 
-  // ── معرفیِ ملک‌جت (۹۰ ثانیه‌ای) — مهمان هم می‌بیند؛ «بعداً» کارت می‌گذارد ──
+  // ── تجربهٔ آغاز (GDD جلد۱): «از بین میلیون‌ها نفر، تو انتخاب شده‌ای... فقط یک فرصت.» ──
   if (step === 'pitch') return wrap(<>
-    <MJ>
-      <b>سلام! من ملک‌جت هستم — همراهِ مالیِ تو.</b><br />
-      اینجا فقط آگهی نمی‌بینی؛ یک <b>مسیرِ رشد</b> داری: با یک سرمایهٔ اولیه شروع می‌کنی، روی ملک‌های <b>واقعیِ همین سایت</b> تمرین می‌کنی،
-      تصمیم می‌گیری، از نتیجهٔ واقعیِ بازار یاد می‌گیری و قدم‌به‌قدم امپراتوریِ خودت را می‌سازی.<br />
-      هر عددی که اینجا می‌بینی از بازارِ واقعی می‌آید — قولِ من به تو.
-    </MJ>
+    <div style={{ ...card, textAlign: 'center', padding: '36px 20px', background: '#0a0a0c', borderColor: 'var(--gold)' }}>
+      <div style={{ fontSize: 34 }}>🏛</div>
+      <div style={{ fontSize: 19, fontWeight: 900, color: '#eee', margin: '14px 0 6px' }}>تبریک.</div>
+      <div style={{ fontSize: 14, color: '#bbb', lineHeight: 2.3 }}>
+        از بین میلیون‌ها نفر، تو برای برنامهٔ <b style={{ color: 'var(--gold)' }}>امپراتوریِ ملک‌جت</b> انتخاب شده‌ای.<br />
+        اما هنوز هیچ‌چیز نداری.<br />
+        نه خانه. نه سرمایه. نه اعتبار. نه شرکت.<br />
+        <b style={{ color: '#eee' }}>فقط یک فرصت.</b>
+      </div>
+      <div style={{ fontSize: 11, color: '#777', marginTop: 12 }}>همهٔ اعداد و ملک‌های این مسیر از بازارِ واقعیِ ملک‌جت می‌آیند.</div>
+    </div>
     {st?.guest ? (
       <div style={{ display: 'flex', gap: 10 }}>
-        <Link href="/auth" style={{ ...btn, textDecoration: 'none', display: 'inline-block' }}>ورود و شروعِ مسیر</Link>
+        <Link href="/auth" style={{ ...btn, textDecoration: 'none', display: 'inline-block' }}>👑 شروعِ امپراتوری</Link>
         <Link href="/search" style={{ ...btnGhost, textDecoration: 'none', display: 'inline-block' }}>فعلاً فقط نگاه می‌کنم</Link>
       </div>
     ) : (
       <div style={{ display: 'flex', gap: 10 }}>
-        <button style={btn} onClick={() => { setQi(0); setStep('q') }}>بزن بریم — شروعِ سفر</button>
+        <button style={btn} onClick={() => setStep('path')}>👑 شروعِ امپراتوری</button>
         <Link href="/buyer" style={{ ...btnGhost, textDecoration: 'none', display: 'inline-block' }}>بعداً</Link>
       </div>
     )}
+  </>)
+
+  // ── انتخابِ مسیرِ شخصیت (GDD جلد۱): «این فقط ظاهر نیست — رفتارِ بازی تغییر می‌کند» ──
+  if (step === 'path') return wrap(<>
+    <MJ><b>اولین تصمیمت:</b> کدام شخصیت را می‌خواهی؟ مسیرِ رشد، مأموریت‌ها و پیشنهادها بر همین اساس شکل می‌گیرد — و هیچ مسیری بسته نیست.</MJ>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 10 }}>
+      {[['hunter', '🏠', 'شکارچیِ فرصت'], ['investor', '💰', 'سرمایه‌گذار'], ['builder', '🏗', 'سازنده'], ['negotiator', '🤝', 'مذاکره‌کننده'], ['entrepreneur', '📈', 'کارآفرین'], ['trader', '🎯', 'تاجر']].map(([k, icon, l]) => (
+        <button key={k} onClick={() => { setPathKey(k); setQi(0); setStep('q') }}
+          style={{ ...card, cursor: 'pointer', textAlign: 'center', borderColor: pathKey === k ? 'var(--gold)' : 'var(--line)' }}>
+          <div style={{ fontSize: 28 }}>{icon}</div>
+          <div style={{ fontSize: 13, marginTop: 6, fontWeight: 700 }}>{l}</div>
+        </button>
+      ))}
+    </div>
   </>)
 
   // ── ۵ سؤالِ شخصیتی ──
@@ -337,7 +357,7 @@ export default function EmpirePage() {
         <div style={{ fontWeight: 800, fontSize: 16 }}>{e.name} <span style={{ fontSize: 11, color: 'var(--muted)' }}>#{fa(e.no)}</span></div>
         <div style={{ fontSize: 12, color: 'var(--muted)' }}>{e.profile?.title} · DNA: {e.dna} · دستیار: {e.mentor}</div>
         <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>{lv.titleFa} ({lv.title})</span>
+          <span style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>سطح {fa(lv.level || 1)} · {lv.titleFa} ({lv.title})</span>
           <div style={{ flex: 1, height: 5, background: 'var(--line)', borderRadius: 3 }}><div style={{ width: `${(lv.progress || 0) * 100}%`, height: 5, background: 'var(--gold)', borderRadius: 3 }} /></div>
           <span style={{ fontSize: 11, color: 'var(--muted)' }}>⚡ {fa(e.xp)}{lv.next ? ` / ${fa(lv.next)}` : ''}</span>
         </div>

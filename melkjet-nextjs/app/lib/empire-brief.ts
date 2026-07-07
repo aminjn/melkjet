@@ -29,12 +29,23 @@ export async function buildBriefFor(userId: string, now = Date.now()): Promise<b
     items.push({ icon: nw.growth > 0 ? '📈' : nw.growth < 0 ? '📉' : '📊', text: nw.growth ? `ارزشِ دارایی‌هایت نسبت به قیمتِ خرید ${Math.abs(nw.growth).toLocaleString('fa-IR')}٪ ${nw.growth > 0 ? 'بالاتر' : 'پایین‌تر'} است (${faB(nw.assetsValue)} تومان).` : `ارزشِ دارایی‌هایت روی ${faB(nw.assetsValue)} تومان پایدار است.` })
   }
 
-  // ۲) آگهی‌های تازهٔ ۲۴ ساعتِ اخیر در شهرِ انتخابیِ کاربر (بازارِ زنده — فصل ۴ «Real-Time Market»)
+  // ۲) گزارشِ صبحگاهیِ بازار (GDD جلد۸ «Morning Empire Report»): آگهی‌های تازهٔ شهر + داغ‌ترین محلهٔ امروز.
   const city = e.answers.city
+  const all = await candidateListings(300).catch(() => [])
   if (city) {
-    const fresh = (await candidateListings(300).catch(() => [])).filter(it => (it.location || '').includes(city) && (now - (it.scrapedAt || 0)) < 864e5)
+    const fresh = all.filter(it => (it.location || '').includes(city) && (now - (it.scrapedAt || 0)) < 864e5)
     if (fresh.length) items.push({ icon: '🏙', text: `${fresh.length.toLocaleString('fa-IR')} آگهیِ تازه در ${city} ثبت شده — شاید فرصتِ بعدی‌ات بینشان باشد.` })
   }
+  // داغ‌ترین محله = بیشترین آگهیِ تازهٔ ۴۸ ساعت (عرضهٔ واقعیِ بازار)
+  const hotCount = new Map<string, number>()
+  for (const it of all) {
+    if ((now - (it.scrapedAt || 0)) > 2 * 864e5) continue
+    const p = String(it.location || '').split(/[،,]/).map(x => x.trim()).filter(Boolean)
+    const h = p.length > 1 ? p[p.length - 1] : (p[0] || '')
+    if (h) hotCount.set(h, (hotCount.get(h) || 0) + 1)
+  }
+  const hot = [...hotCount.entries()].sort((a, b) => b[1] - a[1])[0]
+  if (hot && hot[1] >= 3) items.push({ icon: '🔥', text: `بازارِ داغِ امروز: «${hot[0]}» با ${hot[1].toLocaleString('fa-IR')} آگهیِ تازه — زودتر از بقیه ببینش.` })
 
   // ۳) مأموریت/پاداشِ معطل (فصل ۹: «یک هدف در روز»)
   if (!e.claims['m1_explore']) items.push({ icon: '🎯', text: 'مأموریتِ «شهرت را کشف کن» هنوز باز است — امروز فقط چند آگهی ببین.' })

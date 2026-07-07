@@ -39,6 +39,8 @@ export interface EmpireData {
   name: string                // نامِ امپراتوری (مثل «Amin Capital»)
   createdAt: number
   persona: string             // آواتار/پرسونای انتخابی
+  path?: string               // مسیرِ شخصیتِ شروع (GDD جلد۱): hunter/investor/builder/negotiator/entrepreneur/trader
+  lastUpkeepAt?: number       // آخرین کسرِ هزینهٔ مالکیت (GDD جلد۵)
   mentor: Mentor              // دستیارِ هوشمندِ همراه — همیشه «ملک‌جت»
   answers: { city: string; tenB: string; risk: number; ptype: string; goal: string }
   dream: { picks: string[]; sentence: string }        // Dream Board (فصل ۳)
@@ -65,14 +67,32 @@ export interface EmpireData {
 
 // ══════════ هسته‌های خالص (تست‌پذیر، بدونِ I/O) ══════════
 
-// سطح از XPِ امپراتوری — آستانه‌ها از تنظیماتِ سوپرادمین (§6.2: 500/1500/5000).
-export function empireLevel(xp: number, lv = config().empire.levelXp): { level: number; title: string; titleFa: string; next: number | null; progress: number } {
-  const steps: Array<[number, string, string]> = [[0, 'Citizen', 'شهروند'], [lv.explorer, 'Explorer', 'کاوشگر'], [lv.investor, 'Investor', 'سرمایه‌گذار'], [lv.builder, 'Builder', 'سازنده']]
-  let i = 0
-  while (i + 1 < steps.length && xp >= steps[i + 1][0]) i++
-  const next = i + 1 < steps.length ? steps[i + 1][0] : null
-  const start = steps[i][0], span = next ? next - start : 1
-  return { level: i + 1, title: steps[i][1], titleFa: steps[i][2], next, progress: next ? Math.min(1, Math.round(((xp - start) / span) * 100) / 100) : 1 }
+// سطح‌بندیِ GDD (جلد ۳ Empire Progression): سطحِ عددی از منحنیِ XP + مرحلهٔ هویتی.
+// «هیچ بازیکنی نباید به سقف برسد» — بعد از ۱۰۰ مرحلهٔ Empire ادامه دارد (Prestige در فازهای بعد).
+const STAGES: Array<[number, string, string]> = [
+  [1, 'Rookie', 'تازه‌وارد'], [2, 'Explorer', 'کاوشگر'], [10, 'Investor', 'سرمایه‌گذار'],
+  [25, 'Broker', 'مشاور'], [40, 'Agency', 'آژانس'], [60, 'Developer', 'سازنده'],
+  [80, 'Corporation', 'هلدینگ'], [100, 'Empire', 'امپراتور'],
+]
+export function empireLevel(xp: number, curve = config().empire.levelCurve): { level: number; title: string; titleFa: string; next: number | null; progress: number } {
+  const base = Math.max(1, curve.base), exp = Math.max(1, curve.exp)
+  const cum = (L: number) => Math.round(base * Math.pow(L - 1, exp))   // XPِ تجمعی برای رسیدن به سطحِ L (سطح ۱ = صفر)
+  let level = 1
+  while (xp >= cum(level + 1) && level < 999) level++
+  let si = 0
+  while (si + 1 < STAGES.length && level >= STAGES[si + 1][0]) si++
+  const start = cum(level), next = cum(level + 1), span = Math.max(1, next - start)
+  return { level, title: STAGES[si][1], titleFa: STAGES[si][2], next, progress: Math.min(1, Math.round(((xp - start) / span) * 100) / 100) }
+}
+
+// مسیرهای شخصیتِ شروع (GDD جلد ۱): «این فقط ظاهر نیست — رفتارِ بازی تغییر می‌کند» → سیگنالِ هویتیِ اولیه.
+export const PATHS: Record<string, { icon: string; label: string; bumps: Record<string, number> }> = {
+  hunter: { icon: '🏠', label: 'شکارچیِ فرصت', bumps: { investor: 10, risk: 15 } },
+  investor: { icon: '💰', label: 'سرمایه‌گذار', bumps: { investor: 20 } },
+  builder: { icon: '🏗', label: 'سازنده', bumps: { builder: 20 } },
+  negotiator: { icon: '🤝', label: 'مذاکره‌کننده', bumps: { negotiation: 20 } },
+  entrepreneur: { icon: '📈', label: 'کارآفرین', bumps: { commercial: 15, builder: 5 } },
+  trader: { icon: '🎯', label: 'تاجر', bumps: { commercial: 20 } },
 }
 
 // Identity Engine (فصل ۲): امتیازهای هویتی ۰..۱۰۰ از پاسخ‌های ۵گانه — قطعی و شفاف.
@@ -221,7 +241,7 @@ async function mutateEmpire(userId: string, fn: (e: EmpireData) => void | string
 
 // ══════════ تولد (فصل ۲): سؤال‌ها → هویت → نام → بستهٔ خوش‌آمد → اولین نقطهٔ تایم‌لاین ══════════
 export async function createEmpire(userId: string, input: {
-  name?: string; persona?: string
+  name?: string; persona?: string; path?: string
   answers: { city?: string; tenB?: string; risk?: number; ptype?: string; goal?: string }
   dreamPicks?: string[]
 }, now = Date.now()): Promise<EmpireData> {
@@ -236,6 +256,9 @@ export async function createEmpire(userId: string, input: {
     goal: String(input.answers.goal || '').slice(0, 80),
   }
   const identity = identityFromAnswers(answers)
+  // مسیرِ شخصیت (GDD جلد۱): سیگنالِ هویتیِ اولیه — رفتارِ بازی از همان اول تغییر می‌کند.
+  const path = PATHS[String(input.path || '')] ? String(input.path) : ''
+  if (path) for (const [k, v] of Object.entries(PATHS[path].bumps)) identity[k] = Math.min(100, (identity[k] || 0) + v)
   const v = identityVerdict(identity)
   const picks = (input.dreamPicks || []).map(String).slice(0, 5)
   // شمارهٔ تولد (Empire #N) — در PG داخلِ همان تراکنشِ درج تا مسابقهٔ همزمانی شماره‌ی تکراری نسازد.
@@ -252,6 +275,7 @@ export async function createEmpire(userId: string, input: {
     name: String(input.name || '').slice(0, 60) || `امپراتوری #${no}`,
     createdAt: now,
     persona: String(input.persona || '').slice(0, 30),
+    path,
     mentor: v.mentor,
     answers,
     dream: { picks, sentence: dreamSentence(picks) },
@@ -457,6 +481,19 @@ export async function accrueIncome(userId: string, accruals: Array<{ assetId: st
     }
     if (total > 0) e.capital += total
   })
+}
+
+// هزینهٔ مالکیت (GDD جلد۵ «Cost of Ownership»): نگهداری/مالیاتِ سالانه — پول از هیچ‌جا تولید و در هیچ‌جا حبس نمی‌شود.
+// کسر تا کفِ صفرِ سرمایه؛ خروجی، مبلغِ کسرشده است تا در UI شفاف نمایش داده شود.
+export async function applyUpkeep(userId: string, cost: number, now = Date.now()): Promise<{ ok: boolean; reason?: string; charged?: number; empire?: EmpireData }> {
+  let charged = 0
+  const r = await mutateEmpire(userId, e => {
+    charged = Math.min(e.capital, Math.max(0, Math.round(cost)))
+    e.capital -= charged
+    e.lastUpkeepAt = now
+  })
+  if (!r.ok) return { ok: false, reason: r.reason }
+  return { ok: true, charged, empire: r.empire }
 }
 
 // دریافتِ صندوقچهٔ روزانه (پاداشِ متغیرِ فصل ۴) — یک‌بار در روز؛ جایزه قطعی از هش.

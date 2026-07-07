@@ -45,7 +45,7 @@ import { follow, unfollow, isFollowing, followerCount, followingCount, following
 import { listFlags, getFlag, setFlag, flagEnabled } from '../app/lib/reos/flags.ts'
 import { registerModel as regModel, getChampion as champOf } from '../app/lib/reos/model-registry.ts'
 import { autoPromote, autoMLStatus } from '../app/lib/reos/automl.ts'
-import { createEmpire, getEmpire, renameEmpire, buyAsset, chooseAssetAction, recordGuess, claimEmpireMission, spendAiToken, setHunterPair, answerHunter, setStylePicks, bumpRejects, empireCount, netWorthOf as empNetWorth, saveBrief, getBrief, markBriefOpened, dayNumberOf, sellAsset, setLandPlan, chooseBusiness, accrueIncome, claimDailyChest, listEmpiresPublic } from '../app/lib/empire-store.ts'
+import { createEmpire, getEmpire, renameEmpire, buyAsset, chooseAssetAction, recordGuess, claimEmpireMission, spendAiToken, setHunterPair, answerHunter, setStylePicks, bumpRejects, empireCount, netWorthOf as empNetWorth, saveBrief, getBrief, markBriefOpened, dayNumberOf, sellAsset, setLandPlan, chooseBusiness, accrueIncome, claimDailyChest, listEmpiresPublic, applyUpkeep } from '../app/lib/empire-store.ts'
 
 if (!process.env.DATABASE_URL) { console.error('DATABASE_URL not set'); process.exit(2) }
 let pass = 0, fail = 0
@@ -899,6 +899,15 @@ async function main() {
     ok('روزِ بعد دوباره باز می‌شود', (await claimDailyChest(uid, day + 1)).ok === true)
     const pub = await listEmpiresPublic()
     ok('listEmpiresPublic همهٔ امپراتوری‌ها را می‌دهد', pub.length >= 1 && pub.some(x => x.userId === uid))
+    // فاز ۴: مسیرِ شخصیت (GDD جلد۱) + هزینهٔ مالکیت (GDD جلد۵)
+    const e4 = await createEmpire('0912empire4', { path: 'builder', answers: { city: 'مشهد', tenB: 'خانهٔ خودم را می‌خریدم', risk: 30, ptype: 'آپارتمان', goal: 'اولین خانهٔ خودم' } })
+    ok('مسیرِ شخصیتِ سازنده → builder هویت را بالا می‌برد', e4.path === 'builder' && e4.identity.builder >= 40)
+    const eU = await getEmpire(uid)
+    const capU = eU.capital
+    const up = await applyUpkeep(uid, 10_000_000)
+    ok('هزینهٔ مالکیت: کسرِ اتمیک از سرمایه', up.ok && up.charged === 10_000_000 && up.empire.capital === capU - 10_000_000 && up.empire.lastUpkeepAt > 0)
+    const up2 = await applyUpkeep('0912empire4', 999_999_999_999_999)
+    ok('هزینهٔ مالکیت هرگز سرمایه را منفی نمی‌کند', up2.ok && up2.empire.capital === 0 && up2.charged <= 10_000_000_000)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

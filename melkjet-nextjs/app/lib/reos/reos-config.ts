@@ -24,12 +24,13 @@ export interface ReosConfig {
     giftToman: number; welcomeCoins: number; welcomeXp: number; welcomeAiTokens: number
     buyRewardXp: number; missionRewardXp: number; missionRewardCoins: number
     guessTolerancePct: number; guessRewardXp: number; guessRewardCoins: number
-    levelXp: { explorer: number; investor: number; builder: number }
+    levelCurve: { base: number; exp: number }
     mentorInitiates: boolean
     dailyBrief: boolean
     sellProfitXp: number
     land: { buildGainPct: number; partnerGainPct: number; buildMonths: number }
     rentIncome: boolean
+    maintenancePctYear: number
     chest: { enabled: boolean; maxCoins: number; maxXp: number }
   }
 }
@@ -57,14 +58,16 @@ export const DEFAULT_CONFIG: ReosConfig = {
     giftToman: 10_000_000_000, welcomeCoins: 500, welcomeXp: 100, welcomeAiTokens: 5,
     buyRewardXp: 100, missionRewardXp: 200, missionRewardCoins: 50,
     guessTolerancePct: 15, guessRewardXp: 30, guessRewardCoins: 10,
-    levelXp: { explorer: 500, investor: 1500, builder: 5000 },
+    // سطح‌بندیِ GDD جلد۳: سطحِ L نیازمندِ base×(L-1)^exp XP تجمعی — مراحل: Rookie→Explorer→…→Empire.
+    levelCurve: { base: 100, exp: 1.5 },
     mentorInitiates: true,
     dailyBrief: true,
     // چرخهٔ عمرِ ملک (§6.7-6.8 و فصل ۵): فروش با سود → XP؛ برآوردِ زمین (ساخت/مشارکت) با پارامترهای شفافِ ادمین.
     sellProfitXp: 50,
     land: { buildGainPct: 45, partnerGainPct: 20, buildMonths: 18 },
-    // درآمدِ اجاره از میانهٔ اجارهٔ واقعیِ هم‌محله‌ها (Real Estate Simulation) + صندوقچهٔ پاداشِ متغیر (فصل ۴).
+    // درآمدِ اجاره از میانهٔ اجارهٔ واقعیِ هم‌محله‌ها + هزینهٔ مالکیت (GDD جلد۵: اقتصاد باید در گردش بماند).
     rentIncome: true,
+    maintenancePctYear: 1,
     chest: { enabled: true, maxCoins: 100, maxXp: 50 },
   },
 }
