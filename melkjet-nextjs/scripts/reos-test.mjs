@@ -19,6 +19,7 @@ import { fitPairwise, rankItems, rankScore } from '../app/lib/reos/rank.ts'
 import { cellKey, buildHeatmap } from '../app/lib/reos/geo-intel.ts'
 import { liquidityScore, daysToSell, saleProbability, riskProfile, aiConfidence } from '../app/lib/reos/digital-twin.ts'
 import { trustScore } from '../app/lib/reos/trust.ts'
+import { sellerInsight } from '../app/lib/reos/seller-intel.ts'
 
 let pass = 0, fail = 0
 const approx = (a, b, e = 1e-6) => Math.abs(a - b) <= e
@@ -276,6 +277,16 @@ console.log('\n── REOS v4: Trust Layer ──')
   ok('reviews make rating more credible', trustScore({ rating: 5, reviews: 40 }).parts.rating > trustScore({ rating: 5, reviews: 0 }).parts.rating)
   ok('badges returned + parts exposed', strong.badges.length === 3 && typeof strong.parts.verified === 'number')
   ok('score bounded 0..100', strong.score <= 100 && fresh.score >= 0)
+}
+
+console.log('\n── REOS v4: Seller Intelligence ──')
+{
+  const bad = sellerInsight({ priceVsMarket: 22, demand: 0.15, daysOnMarket: 80, saleProbability: 20 })
+  const good = sellerInsight({ priceVsMarket: -3, demand: 0.75, daysOnMarket: 10, saleProbability: 78 })
+  ok('overpriced+cold+stale → high price-cut likelihood + بالا urgency', bad.priceCutLikelihood >= 60 && bad.urgency === 'بالا')
+  ok('overpriced → suggests a cut (capped ≤15%)', bad.suggestedCutPct > 0 && bad.suggestedCutPct <= 15)
+  ok('fair+hot → low cut likelihood + no cut', good.priceCutLikelihood < 35 && good.suggestedCutPct === 0)
+  ok('gives a recommendation + reasons', !!bad.recommendation && bad.reasons.length >= 2)
 }
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} REOS unit tests: ${pass} passed, ${fail} failed\n`)
