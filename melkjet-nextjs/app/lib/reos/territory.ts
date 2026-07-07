@@ -268,6 +268,7 @@ export async function resolveBattle(id: string, now = Date.now()): Promise<Battl
     { agentId: b.defenderId, startScore: b.startScores[b.defenderId] || 0, endScore: sc(b.defenderId) },
   )
   b.status = 'resolved'; b.winnerId = winner || undefined; b.resolvedAt = now
+  if (b.winnerId) import('./economy').then(m => m.onMarketAction(b!.winnerId!, 'win_battle', 1, now)).catch(() => {})
   if (pgEnabled()) {
     await pgTx(c => c.query(`UPDATE reos_territory_battles SET status='resolved', winner_id=$2, resolved_at=$3 WHERE id=$1`, [id, b.winnerId || null, now]))
   } else {

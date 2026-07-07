@@ -37,6 +37,10 @@ import { credit, debit, getBalance, listTransactions, createInvoice, payInvoice 
 import { recordTouch, recordSpend, recordConversion as attrConvert, channelReport } from '../app/lib/reos/attribution.ts'
 import { recordDominance, leaderboard, standing, getOwner, agentTerritories, startBattle, resolveBattle, openBattles, resolveDueBattles, territoryStats, battlesWonBy, dominanceMap, territoryKeyFromName } from '../app/lib/reos/territory.ts'
 import { touchStreak, getStreak } from '../app/lib/reos/achievements.ts'
+import { awardXp, grantXp, lifetimeXp, xpStatus, seasonLeaderboard, seasonKey } from '../app/lib/reos/xp.ts'
+import { bumpMissions, listMissions, claimMission } from '../app/lib/reos/missions.ts'
+import { creditBucket, debitBucket, bucketBalance, walletSummary, walletLedger, refundTxn } from '../app/lib/reos/wallet.ts'
+import { recordDeal, commissionOn } from '../app/lib/reos/economy.ts'
 
 if (!process.env.DATABASE_URL) { console.error('DATABASE_URL not set'); process.exit(2) }
 let pass = 0, fail = 0
@@ -48,7 +52,7 @@ async function reset() {
   // ensure tables exist first (a no-op call triggers ensureReos), then truncate.
   await recordEvent({ type: 'user_searched', userId: '__warm__' }).catch(() => {})
   await saveEmbeddings('property', [{ id: '__warm__', embed: [0, 0] }]).catch(() => {})
-  for (const t of ['reos_events', 'reos_feature_store', 'reos_embeddings', 'reos_territory_scores', 'reos_territories', 'reos_territory_battles', 'reos_streaks']) {
+  for (const t of ['reos_events', 'reos_feature_store', 'reos_embeddings', 'reos_territory_scores', 'reos_territories', 'reos_territory_battles', 'reos_streaks', 'reos_xp', 'reos_missions', 'reos_wallet', 'reos_wallet_txn']) {
     await pool.query(`TRUNCATE ${t}`).catch(() => {})
   }
 }
@@ -642,6 +646,80 @@ async function main() {
     const broken = await getStreak('0914xyz', (day + 5) * 864e5)   // فاصله
     ok('streak reads 0 after gap (not alive)', broken.streak === 0 && broken.alive === false)
     ok('longest preserved across break', broken.longest === 2)
+  }
+
+  console.log('\n── REOS v6: XP + Levels + Seasons (real PG) ──')
+  {
+    const now = Date.UTC(2026, 1, 15)   // 2026-Q1
+    const a1 = await awardXp('0921aaa', 'close_deal', 1, now)
+    ok('awardXp returns awarded + lifetime + season', a1.awarded > 0 && a1.lifetime === a1.awarded && a1.season === a1.awarded)
+    await awardXp('0921aaa', 'respond_lead', 3, now)
+    ok('xp accumulates in lifetime', (await lifetimeXp('0921aaa')) > a1.awarded)
+    await grantXp('0921aaa', 500, now)
+    const stA = await xpStatus('0921aaa', now)
+    ok('xpStatus exposes level + season rank', stA.lifetime.level >= 1 && stA.rank === 1 && stA.season === '2026-Q1')
+    await awardXp('0921bbb', 'respond_lead', 1, now)   // کمتر از aaa
+    const lb = await seasonLeaderboard(seasonKey(now), 10)
+    ok('season leaderboard ordered', lb.length === 2 && lb[0].agentId === '0921aaa' && lb[0].rank === 1)
+    const rankB = (await xpStatus('0921bbb', now)).rank
+    ok('lower XP → worse rank', rankB === 2)
+    // XPِ فصلِ دیگر جدا شمرده می‌شود
+    await awardXp('0921aaa', 'close_deal', 1, Date.UTC(2026, 7, 1))   // Q3
+    const q3 = await xpStatus('0921aaa', Date.UTC(2026, 7, 1))
+    ok('season XP resets per season (lifetime persists)', q3.seasonXp < q3.lifetime.total && q3.lifetime.total > stA.lifetime.total)
+  }
+
+  console.log('\n── REOS v6: Missions + claim → wallet reward (real PG) ──')
+  {
+    const now = Date.UTC(2026, 1, 15)
+    await bumpMissions('0922xyz', 'respond_lead', 3, now)   // daily_respond target = 3
+    const ms = await listMissions('0922xyz', now)
+    const dr = ms.find(m => m.key === 'daily_respond')
+    ok('mission progresses from real action', dr.progress === 3 && dr.complete && dr.claimable)
+    const c1 = await claimMission('0922xyz', 'daily_respond', now)
+    ok('claim grants XP + credit', c1.ok && c1.rewardXp > 0 && c1.rewardCredit > 0)
+    ok('reward credited to wallet reward bucket', (await bucketBalance('0922xyz', 'reward')) === c1.rewardCredit)
+    ok('claimed XP reflected in lifetime', (await lifetimeXp('0922xyz')) >= c1.rewardXp)
+    const c2 = await claimMission('0922xyz', 'daily_respond', now)
+    ok('double-claim rejected (idempotent)', c2.ok === false)
+    const c3 = await claimMission('0922xyz', 'weekly_deal', now)
+    ok('incomplete mission not claimable', c3.ok === false)
+  }
+
+  console.log('\n── REOS v6: Unified multi-bucket wallet (real PG) ──')
+  {
+    const w1 = await creditBucket('0923www', 'promo', 100000, 'تست')
+    ok('creditBucket increments balance', w1.ok && w1.balance === 100000)
+    const d1 = await debitBucket('0923www', 'promo', 30000, 'مصرف')
+    ok('debitBucket decrements', d1.ok && d1.balance === 70000)
+    const d2 = await debitBucket('0923www', 'promo', 999999, 'زیاد')
+    ok('over-debit rejected atomically', d2.ok === false && (await bucketBalance('0923www', 'promo')) === 70000)
+    await creditBucket('0923www', 'ai', 5000, 'AI')
+    const sum = await walletSummary('0923www')
+    ok('wallet summary aggregates buckets', sum.buckets.promo === 70000 && sum.buckets.ai === 5000 && sum.total >= 75000)
+    // refund
+    const cr = await creditBucket('0923www', 'reward', 40000, 'پاداش')
+    const rf = await refundTxn(cr.txn.id)
+    ok('refund reverses a credit', rf.ok && (await bucketBalance('0923www', 'reward')) === 0)
+    const rf2 = await refundTxn(cr.txn.id)
+    ok('double-refund rejected', rf2.ok === false)
+    const led = await walletLedger('0923www')
+    ok('ledger records typed transactions', led.length >= 4 && led.some(t => t.type === 'credit') && led.some(t => t.type === 'debit'))
+  }
+
+  console.log('\n── REOS v6: Reward economy end-to-end (real PG) ──')
+  {
+    const now = Date.UTC(2026, 1, 20)
+    const before = await bucketBalance('0924deal', 'reward')
+    const r = await recordDeal('0924deal', 1_000_000_000, { now })   // معاملهٔ ۱ میلیارد
+    ok('recordDeal computes commission', r.commission === commissionOn(1_000_000_000))
+    ok('recordDeal pays loyalty to reward bucket', (await bucketBalance('0924deal', 'reward')) === before + r.loyalty && r.loyalty > 0)
+    ok('recordDeal awards close_deal XP', (await lifetimeXp('0924deal')) > 0)
+    // با معرف → پورسانت به معرف
+    const refBefore = await bucketBalance('0925ref', 'reward')
+    const r2 = await recordDeal('0924deal', 1_000_000_000, { referrerId: '0925ref', now })
+    ok('affiliate paid to referrer', r2.affiliate > 0 && (await bucketBalance('0925ref', 'reward')) === refBefore + r2.affiliate)
+    ok('affiliate is a cut of commission', r2.affiliate === Math.round(r2.commission * 0.2))
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

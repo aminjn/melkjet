@@ -119,6 +119,15 @@ export default function ReosControlCenter() {
               {row('آستانهٔ تقلب', inp('territory', 'fraudThreshold'))}
               {row('وزنِ اعتبار در فید', inp('territory', 'feedAuthority'))}
             </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8, color: 'var(--gold)' }}>اقتصادِ پاداش + XP</div>
+              {row('کمیسیونِ معامله', inp('economy', 'commissionPct'))}
+              {row('پورسانتِ معرف', inp('economy', 'affiliatePct'))}
+              {row('پاداشِ وفاداری', inp('economy', 'loyaltyBonusPct'))}
+              {row('XP پاداشِ مأموریت', inp('economy', 'missionRewardXp'))}
+              {row('اعتبارِ مأموریت', inp('economy', 'missionRewardCredit'))}
+              {row('پایهٔ منحنیِ سطح', inp('xp', 'levelBase'))}
+            </div>
           </div>
         )}
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>

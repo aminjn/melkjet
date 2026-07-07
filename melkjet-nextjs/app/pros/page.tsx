@@ -7,6 +7,7 @@ import DivarImport from '@/app/components/DivarImport'
 import ReosPanelSection from '@/app/components/ReosPanelSection'
 import ReosMarketIntel from '@/app/components/ReosMarketIntel'
 import ReosTerritoryCard from '@/app/components/ReosTerritoryCard'
+import ReosRewardsCard from '@/app/components/ReosRewardsCard'
 import ReosWorkflowBuilder from '@/app/components/ReosWorkflowBuilder'
 import ReosTrustBadge from '@/app/components/ReosTrustBadge'
 import ReosReferralCard from '@/app/components/ReosReferralCard'
@@ -831,6 +832,7 @@ export default function ProsPage() {
           {view === 'dashboard' && <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <ReosTrustBadge />
             <ReosTerritoryCard />
+            <ReosRewardsCard />
             <ReosMarketIntel title="هوشِ بازار (REOS)" />
             <ReosWorkflowBuilder />
             <ReosReferralCard />

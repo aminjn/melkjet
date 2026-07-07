@@ -15,6 +15,8 @@ export interface ReosConfig {
   hybrid: { ml: number; vector: number; rule: number; behavioral: number; boost: number }
   twin: { saleWindowDays: number; overpricePct: number; underpricePct: number }
   territory: { weights: { transactions: number; listingQuality: number; leadConversion: number; satisfaction: number; content: number; activity: number; aiTrust: number }; battleDays: number; fraudThreshold: number; feedAuthority: number; contestGap: number }
+  xp: { actions: Record<string, number>; levelBase: number; levelExp: number }
+  economy: { commissionPct: number; affiliatePct: number; loyaltyBonusPct: number; missionRewardXp: number; missionRewardCredit: number }
 }
 
 export const DEFAULT_CONFIG: ReosConfig = {
@@ -28,6 +30,8 @@ export const DEFAULT_CONFIG: ReosConfig = {
   hybrid: { ml: 0.30, vector: 0.25, rule: 0.20, behavioral: 0.15, boost: 0.10 },
   twin: { saleWindowDays: 45, overpricePct: 12, underpricePct: 8 },
   territory: { weights: { transactions: 0.30, listingQuality: 0.15, leadConversion: 0.20, satisfaction: 0.10, content: 0.10, activity: 0.10, aiTrust: 0.05 }, battleDays: 7, fraudThreshold: 0.5, feedAuthority: 0.08, contestGap: 8 },
+  xp: { actions: { list_property: 10, close_deal: 200, respond_lead: 5, get_review: 30, publish_content: 20, win_battle: 100, verify: 40, refer_convert: 60 }, levelBase: 100, levelExp: 1.6 },
+  economy: { commissionPct: 0.02, affiliatePct: 0.2, loyaltyBonusPct: 0.005, missionRewardXp: 50, missionRewardCredit: 20000 },
 }
 
 const FILE = join(process.cwd(), '.reos-config-settings.json')

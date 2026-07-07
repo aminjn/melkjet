@@ -94,6 +94,8 @@ export async function moveStage(leadId: string, toStage: Stage): Promise<Lead | 
   await put({ id: lead.id, kind: 'lead', ownerId: lead.ownerId, leadId: lead.id, at: r.at, data: lead })
   await addActivity({ ownerId: lead.ownerId, leadId, type: 'stage', text: `مرحله: ${from} → ${toStage}` })
   await runAutomationsFor('stage_change', lead).catch(() => {})
+  // REOS v6 · اقتصادِ پاداش: معاملهٔ بسته‌شده → کمیسیون/وفاداری/XP/مأموریت (fire-and-forget، بلاک‌نکردنِ CRM).
+  if (toStage === 'won' && from !== 'won') import('./economy').then(m => m.recordDeal(lead.ownerId, lead.value || 0)).catch(() => {})
   return lead
 }
 
@@ -104,6 +106,8 @@ export async function addActivity(input: { ownerId: string; leadId: string; type
   // به‌روزرسانیِ امتیازِ لید با هر فعالیت
   const r = await byId(input.leadId)
   if (r && r.kind === 'lead') { const lead = rowToLead(r); const acts = (await listActivities(input.leadId)).length; lead.score = leadScore({ phone: lead.phone, email: lead.email, stage: lead.stage, activityCount: acts }); lead.updatedAt = Date.now(); await put({ id: lead.id, kind: 'lead', ownerId: lead.ownerId, leadId: lead.id, at: r.at, data: lead }) }
+  // REOS v6 · پاسخ به لید (تماس/پیامک/ایمیل/جلسه) → XP + پیشرفتِ مأموریت (fire-and-forget).
+  if (['call', 'sms', 'email', 'meeting'].includes(input.type)) import('./economy').then(m => m.onMarketAction(input.ownerId, 'respond_lead', 1)).catch(() => {})
   return a
 }
 export async function listActivities(leadId: string): Promise<Activity[]> { return (await query('activity', undefined, leadId)).map(r => r.data as unknown as Activity) }

@@ -27,6 +27,9 @@ import { planAutonomous } from '../app/lib/reos/autonomous.ts'
 import { fitLeadLogistic, DEFAULT_LEAD, scoreLead } from '../app/lib/reos/lead-model.ts'
 import { dominanceScore, fraudScore, battleWinner, territoryValue, territoryKeyFromName, territoryKeyFromGeo } from '../app/lib/reos/territory.ts'
 import { checkAchievements, nextAchievements, streakStatus, streakBonus, fomoAlerts, dayNumber } from '../app/lib/reos/achievements.ts'
+import { levelForXp, xpForAction, seasonKey } from '../app/lib/reos/xp.ts'
+import { missionCatalog, missionState, periodKey } from '../app/lib/reos/missions.ts'
+import { commissionOn, affiliateCut, loyaltyBonus } from '../app/lib/reos/economy.ts'
 
 let pass = 0, fail = 0
 const approx = (a, b, e = 1e-6) => Math.abs(a - b) <= e
@@ -412,6 +415,44 @@ console.log('\n── REOS: Achievements + streaks + FOMO ──')
   const climber = fomoAlerts({ isOwner: false, rank: 2, toNext: 5, contested: false, nextName: 'صدر' })
   ok('close climber → medium alert', climber.some(a => a.level === 'medium'))
   ok('comfortable leader → no scary alert', fomoAlerts({ isOwner: true, rank: 1, toNext: 0, contested: false }).length === 0)
+}
+
+console.log('\n── REOS v6: XP + Levels + Seasons ──')
+{
+  ok('xpForAction reads config (close_deal high)', xpForAction('close_deal') > xpForAction('respond_lead') && xpForAction('respond_lead') > 0)
+  ok('xpForAction unknown → 0 (no inflation)', xpForAction('made_up_action') === 0)
+  ok('xpForAction scales by count', xpForAction('list_property', 3) === xpForAction('list_property') * 3)
+  const l0 = levelForXp(0), l1 = levelForXp(500), l2 = levelForXp(50000)
+  ok('more XP → higher level (monotonic)', l2.level > l1.level && l1.level >= l0.level)
+  ok('level 1 at 0 xp', l0.level === 1 && l0.total === 0)
+  ok('xpForNext positive below max', l1.xpForNext > 0)
+  ok('progress in [0,1]', l1.progress >= 0 && l1.progress <= 1)
+  ok('title advances with level', levelForXp(500000).title !== l0.title)
+  ok('seasonKey is quarterly + stable', seasonKey(Date.UTC(2026, 0, 15)) === '2026-Q1' && seasonKey(Date.UTC(2026, 7, 1)) === '2026-Q3')
+}
+
+console.log('\n── REOS v6: Missions / Challenges ──')
+{
+  const cat = missionCatalog()
+  ok('catalog has daily + weekly', cat.some(m => m.cadence === 'daily') && cat.some(m => m.cadence === 'weekly'))
+  ok('weekly deal rewards more than daily', cat.find(m => m.key === 'weekly_deal').rewardXp > cat.find(m => m.key === 'daily_respond').rewardXp)
+  const m = cat[0]
+  ok('mission incomplete below target', missionState(m, m.target - 1, false).complete === false)
+  ok('mission complete + claimable at target', missionState(m, m.target, false).complete && missionState(m, m.target, false).claimable)
+  ok('mission not claimable once claimed', missionState(m, m.target, true).claimable === false)
+  ok('mission pct capped at 1', missionState(m, m.target * 5, false).pct === 1)
+  ok('daily/weekly period keys differ by cadence', periodKey('daily', Date.UTC(2026, 0, 8)).startsWith('d') && periodKey('weekly', Date.UTC(2026, 0, 8)).startsWith('w'))
+  ok('daily period rolls each day', periodKey('daily', 100 * 864e5) !== periodKey('daily', 101 * 864e5))
+  ok('weekly period stable within week', periodKey('weekly', 700 * 864e5) === periodKey('weekly', 703 * 864e5))
+}
+
+console.log('\n── REOS v6: Reward economy (commission / affiliate / loyalty) ──')
+{
+  ok('commission = value × pct', commissionOn(1_000_000_000, 0.02) === 20_000_000)
+  ok('affiliate cut computed', affiliateCut(20_000_000, 0.2) === 4_000_000)
+  ok('loyalty bonus computed', loyaltyBonus(1_000_000_000, 0.005) === 5_000_000)
+  ok('no negative payouts', commissionOn(-5) === 0 && affiliateCut(-5) === 0 && loyaltyBonus(0) === 0)
+  ok('commission uses config default when pct omitted', commissionOn(1_000_000) === Math.round(1_000_000 * 0.02))
 }
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} REOS unit tests: ${pass} passed, ${fail} failed\n`)
