@@ -5,6 +5,7 @@ import Nav from '@/app/components/Nav'
 import PropertyMap from '@/app/components/PropertyMap'
 import PromoBadge from '@/app/components/PromoBadge'
 import CompareButton from '@/app/components/CompareButton'
+import ReosAvmCard from '@/app/components/ReosAvmCard'
 import { openAuth } from '@/app/components/AuthModal'
 
 interface Item {
@@ -467,6 +468,8 @@ export default function PropertyClient({ id }: { id: string }) {
                   <p style={{ fontSize: 14.5, lineHeight: 1.9, whiteSpace: 'pre-wrap' }}>{item.excerpt}</p>
                 </div>
               )}
+
+              <ReosAvmCard propertyId={id} />
 
               {similar.length > 0 && (
                 <div>

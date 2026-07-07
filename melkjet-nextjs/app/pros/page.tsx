@@ -5,6 +5,7 @@ import MessagesPanel from '@/app/components/MessagesPanel'
 import NegotiationEngine from '@/app/components/NegotiationEngine'
 import DivarImport from '@/app/components/DivarImport'
 import ReosPanelSection from '@/app/components/ReosPanelSection'
+import ReosMarketIntel from '@/app/components/ReosMarketIntel'
 import CrmTool, { CRM_VIEWS, type CrmView, type CrmOwnListing } from '@/app/components/tools/CrmTool'
 import ListingPromoteModal from '@/app/components/ListingPromoteModal'
 import MarketingTool, { MARKETING_VIEWS, type MarketingView } from '@/app/components/tools/MarketingTool'
@@ -824,6 +825,7 @@ export default function ProsPage() {
             : <>
           {/* DASHBOARD */}
           {view === 'dashboard' && <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <ReosMarketIntel title="هوشِ بازار (REOS)" />
             <ReosPanelSection title="فایل‌های پیشنهادیِ REOS برای مشتریانِ شما" subtitle="بر اساسِ تقاضای زندهٔ بازار" />
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
               <Kpi label="لیدهای فعال" value={fa(stats.kpis.activeLeads)} subColor="var(--gold)" sub={`${fa(stats.kpis.hotLeads)} داغ`} />
