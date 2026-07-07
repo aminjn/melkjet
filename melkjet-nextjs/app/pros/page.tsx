@@ -8,6 +8,7 @@ import ReosPanelSection from '@/app/components/ReosPanelSection'
 import ReosMarketIntel from '@/app/components/ReosMarketIntel'
 import ReosWorkflowBuilder from '@/app/components/ReosWorkflowBuilder'
 import ReosTrustBadge from '@/app/components/ReosTrustBadge'
+import ReosReferralCard from '@/app/components/ReosReferralCard'
 import CrmTool, { CRM_VIEWS, type CrmView, type CrmOwnListing } from '@/app/components/tools/CrmTool'
 import ListingPromoteModal from '@/app/components/ListingPromoteModal'
 import MarketingTool, { MARKETING_VIEWS, type MarketingView } from '@/app/components/tools/MarketingTool'
@@ -830,6 +831,7 @@ export default function ProsPage() {
             <ReosTrustBadge />
             <ReosMarketIntel title="هوشِ بازار (REOS)" />
             <ReosWorkflowBuilder />
+            <ReosReferralCard />
             <ReosPanelSection title="فایل‌های پیشنهادیِ REOS برای مشتریانِ شما" subtitle="بر اساسِ تقاضای زندهٔ بازار" />
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
               <Kpi label="لیدهای فعال" value={fa(stats.kpis.activeLeads)} subColor="var(--gold)" sub={`${fa(stats.kpis.hotLeads)} داغ`} />

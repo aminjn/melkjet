@@ -9,6 +9,7 @@ import ReosMarketIntel from '@/app/components/ReosMarketIntel'
 import ReosWorkflowBuilder from '@/app/components/ReosWorkflowBuilder'
 import ReosWallet from '@/app/components/ReosWallet'
 import ReosTrustBadge from '@/app/components/ReosTrustBadge'
+import ReosReferralCard from '@/app/components/ReosReferralCard'
 import JalaliDatePicker from '@/app/components/JalaliDatePicker'
 import NumberInput from '@/app/components/NumberInput'
 import ImageUpload from '@/app/components/ImageUpload'
@@ -678,6 +679,7 @@ export default function AgencyPage() {
             <ReosMarketIntel title="هوشِ بازار (REOS)" />
             <ReosWorkflowBuilder />
             <ReosWallet />
+            <ReosReferralCard />
             <ReosPanelSection title="فایل‌های پیشنهادیِ REOS برای آژانس" subtitle="بر اساسِ تقاضای زندهٔ بازار" />
             {/* تحلیلِ هوشمندِ تیم (AI) */}
             <div style={{ ...card, padding: 18 }}>
