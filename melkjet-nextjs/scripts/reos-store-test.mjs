@@ -16,7 +16,8 @@ import { recordEvent as recEv } from '../app/lib/reos/store.ts'
 import { createCampaign, recordClick, recordImpression, getCampaign, activeBoosts, analytics } from '../app/lib/reos/promotion-engine.ts'
 import { computeMarketFeatures, getMarketFeature, topMarkets } from '../app/lib/reos/market-features.ts'
 import { createLead, moveStage, addActivity, timeline, createTask, listTasks, funnel, createAutomation, runIdleAutomations, getLead, listLeads } from '../app/lib/reos/crm.ts'
-import { runLLM, selectModel, cacheKey, estimateCost, usageStats, cacheClear } from '../app/lib/reos/gateway.ts'
+import { runLLM, selectModel, cacheKey, estimateCost, usageStats, cacheClear, complexityOf, taskForComplexity } from '../app/lib/reos/gateway.ts'
+import { modelCatalog } from '../app/lib/reos/model-catalog.ts'
 import { createWorkflow, evalCondition, matchWorkflow, leadContext, runWorkflows } from '../app/lib/reos/workflow-builder.ts'
 import { computeMarketIntel, getMarketIntel, topMarketIntel } from '../app/lib/reos/market-intel.ts'
 import { valuate } from '../app/lib/reos/avm.ts'
@@ -555,6 +556,17 @@ async function main() {
     ok('lead model trained from CRM won/lost (not default)', w.usedDefault === false && w.n >= 32)
     ok('learned hasBudget weight positive (won had budget)', w.hasBudget > 0)
     ok('lead model AUC computed', typeof w.auc === 'number' && w.auc > 0)
+  }
+
+  console.log('\n── REOS v5: AI Cost Router + Model Catalog ──')
+  {
+    ok('complexity: short → simple', complexityOf('سلام') === 'simple')
+    ok('complexity: legal keyword → legal', complexityOf('لطفاً این قرارداد را بررسی کن') === 'legal')
+    ok('complexity: long → complex', complexityOf('x'.repeat(700)) === 'complex')
+    ok('cost router: simple → cheap task, legal → agent task', taskForComplexity('simple') === 'cheap' && taskForComplexity('legal') === 'agent')
+    const cat = await modelCatalog()
+    ok('catalog lists REOS models with types', cat.length >= 6 && cat.some(m => m.key === 'engage' && m.type === 'trained') && cat.some(m => m.key === 'avm' && m.type === 'formula'))
+    ok('catalog reports real trained status', cat.find(m => m.key === 'lead')?.status.length > 0)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

@@ -29,6 +29,25 @@ export function selectModel(task: LlmTask): { model: string; provider?: string }
   return { model: r.model || FALLBACK_MODEL, provider: r.provider }
 }
 
+// ── AI Cost Router: مسیریابی بر اساسِ پیچیدگیِ وظیفه (ساده→ارزان، پیچیده/حقوقی→قوی) ──
+export type Complexity = 'simple' | 'standard' | 'complex' | 'legal'
+export function complexityOf(text: string): Complexity {
+  const t = String(text || '')
+  if (/حقوق|قرارداد|سند|دادگاه|وکیل|مالیات|legal|contract|clause/i.test(t)) return 'legal'
+  const len = t.length
+  if (len < 120 || /^\s*(بله|خیر|سلام|چند|کی|کجا|آیا)\b/.test(t)) return 'simple'
+  if (len < 600) return 'standard'
+  return 'complex'
+}
+// پیچیدگی → وظیفه (که خودش به مدلِ تنظیم‌شدهٔ سوپرادمین نگاشت می‌شود). ساده=ارزان‌ترین مدل.
+export function taskForComplexity(c: Complexity): LlmTask {
+  return c === 'simple' ? 'cheap' : c === 'standard' ? 'content' : 'agent'
+}
+export function routeByComplexity(text: string): { complexity: Complexity; model: string; provider?: string } {
+  const c = complexityOf(text)
+  return { complexity: c, ...selectModel(taskForComplexity(c)) }
+}
+
 // ── Cache (in-memory با TTL) ──
 const cache = new Map<string, { text: string; tokens: number; at: number }>()
 const DEFAULT_TTL = 10 * 60 * 1000

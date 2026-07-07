@@ -12,10 +12,12 @@ export default function ReosControlCenter() {
   const [busy, setBusy] = useState('')
   const [vId, setVId] = useState(''); const [vKind, setVKind] = useState('identity')
   const [models, setModels] = useState<{ id: string; version: number; status: string; metrics: Record<string, number> }[]>([])
+  const [catalog, setCatalog] = useState<{ key: string; name: string; purpose: string; type: string; status: string; metric?: string }[]>([])
 
   const loadCfg = () => fetch('/api/reos/config', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d) setCfg(d.config) }).catch(() => {})
   const loadModels = () => fetch('/api/reos/models?name=engage', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d) setModels(d.versions || []) }).catch(() => {})
-  useEffect(() => { loadCfg(); loadModels() }, [])
+  const loadCatalog = () => fetch('/api/reos/catalog', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d) setCatalog(d.models || []) }).catch(() => {})
+  useEffect(() => { loadCfg(); loadModels(); loadCatalog() }, [])
 
   const setPath = (section: string, key: string, val: string, sub?: string) => {
     setCfg(c => { if (!c) return c; const n = JSON.parse(JSON.stringify(c)); const num = val === '' ? '' : (isNaN(Number(val)) ? val : Number(val)); if (sub) n[section][key][sub] = num; else n[section][key] = num; return n })
@@ -121,6 +123,18 @@ export default function ReosControlCenter() {
           </select>
           {btn('تأیید کن', verify, 'verify', true)}
         </div>
+      </div>
+
+      {/* Model Catalog / Marketplace */}
+      <div style={card}>
+        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>مدل‌های REOS (شفافیت: کدام آموزش‌دیده، کدام فرمول)</div>
+        {catalog.map(m => (
+          <div key={m.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderTop: '1px solid var(--line)', fontSize: 12.5 }}>
+            <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, color: m.type === 'trained' ? '#34d399' : m.type === 'online' ? '#60a5fa' : m.type === 'embedding' ? '#a78bfa' : 'var(--muted)', background: 'var(--bg2)' }}>{m.type === 'trained' ? 'آموزش‌دیده' : m.type === 'online' ? 'آنلاین' : m.type === 'embedding' ? 'برداری' : 'فرمول'}</span>
+            <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 700 }}>{m.name}</div><div style={{ fontSize: 10.5, color: 'var(--faint)' }}>{m.purpose}</div></div>
+            <span style={{ color: 'var(--muted)', fontSize: 11, textAlign: 'left' }}>{m.status}{m.metric ? ` · ${m.metric}` : ''}</span>
+          </div>
+        ))}
       </div>
 
       {/* Model Registry */}
