@@ -15,6 +15,8 @@ import { npv, irr, paybackPeriod, roi, rentalYield, mortgagePayment, analyzeInve
 import { avmFromComps } from '../app/lib/reos/avm.ts'
 import { recallAtK, precisionAtK, mrr, ndcgAtK, evaluateRankings } from '../app/lib/reos/eval.ts'
 import { histogram, psi, uniformEdges, driftReport } from '../app/lib/reos/drift.ts'
+import { fitPairwise, rankItems, rankScore } from '../app/lib/reos/rank.ts'
+import { cellKey, buildHeatmap } from '../app/lib/reos/geo-intel.ts'
 
 let pass = 0, fail = 0
 const approx = (a, b, e = 1e-6) => Math.abs(a - b) <= e
@@ -210,6 +212,41 @@ console.log('\n── REOS v3: Feature Drift (PSI) ──')
   const shifted = Array.from({ length: 200 }, () => 9)   // all in top bin
   ok('shifted distribution → significant drift', driftReport(base, shifted).level === 'significant' && driftReport(base, shifted).psi > 0.25)
   ok('psi non-negative for divergence', psi([0.5, 0.5], [0.9, 0.1], [1]) >= 0 || true)
+}
+
+console.log('\n── REOS v3: Learning-to-Rank (pairwise) ──')
+{
+  let sd = 42
+  const rnd = () => { sd = (sd * 1103515245 + 12345) & 0x7fffffff; return sd / 0x7fffffff }
+  // relevance driven by feature[0]; feature[1] is noise; feature[2] bias. Input order shuffled.
+  const queries = []
+  for (let q = 0; q < 30; q++) {
+    const items = []
+    for (let r = 0; r < 5; r++) items.push({ features: [r + rnd() * 0.5, rnd(), 1], relevance: r })
+    for (let i = items.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1));[items[i], items[j]] = [items[j], items[i]] }
+    queries.push(items)
+  }
+  const w = fitPairwise(queries, { dim: 3, epochs: 300, lr: 0.3 })
+  ok('learned weight on the true signal (feature[0]) is dominant positive', w[0] > 0 && w[0] > Math.abs(w[1]))
+  // after ranking, top item = most relevant in the vast majority of queries
+  let top1correct = 0
+  for (const items of queries) { const ranked = rankItems(items, w); if (ranked[0].relevance === 4) top1correct++ }
+  ok('LTR ranks the most-relevant item first in ≥80% of queries', top1correct / queries.length >= 0.8)
+  ok('rankScore is linear in weights', rankScore([2, 0, 1], [3, 0, 1]) === 7)
+}
+
+console.log('\n── REOS v3: Geospatial heatmap ──')
+{
+  ok('cellKey grids coordinates', cellKey(35.7541, 51.4102, 2) === cellKey(35.7549, 51.4098, 2))
+  const pts = [
+    { lat: 35.75, lng: 51.41, price: 6_000_000_000 }, { lat: 35.752, lng: 51.409, price: 6_400_000_000 },
+    { lat: 35.751, lng: 51.411, price: 5_600_000_000 }, { lat: 35.60, lng: 51.20, price: 2_000_000_000 },
+  ]
+  const cells = buildHeatmap(pts, 2)
+  ok('heatmap groups nearby points into a cell', cells[0].count === 3)
+  ok('heatmap computes avg price per cell', cells[0].avgPrice === 6_000_000_000)
+  ok('heatmap intensity normalized (busiest cell = 1)', cells[0].intensity === 1)
+  ok('separate far point → its own cell', cells.length === 2 && cells[1].count === 1)
 }
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} REOS unit tests: ${pass} passed, ${fail} failed\n`)
