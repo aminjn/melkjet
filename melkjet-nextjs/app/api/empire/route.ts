@@ -6,8 +6,11 @@ import {
   getEmpire, createEmpire, renameEmpire, buyAsset, chooseAssetAction, recordGuess,
   claimEmpireMission, spendAiToken, setSuspense, addJournal, bumpRejects, setPersona, setMentor,
   setStylePicks, setHunterPair, answerHunter, empireLevel, netWorthOf, empireCount, assetKindOf,
+  getBrief, markBriefOpened, dayNumberOf,
   type EmpireData, type AssetKind,
 } from '@/app/lib/empire-store'
+import { buildBriefFor } from '@/app/lib/empire-brief'
+import { touchStreak, getStreak } from '@/app/lib/reos/achievements'
 import { candidateListings, getItemById, type Item } from '@/app/lib/scraper-store'
 import { parseFaNum } from '@/app/lib/reos/features'
 import { recentEvents } from '@/app/lib/reos/store'
@@ -63,10 +66,18 @@ async function stateOf(userId: string, e: EmpireData) {
   const [prices, missions, total] = await Promise.all([livePrices(e), missionsOf(userId, e), empireCount()])
   const nw = netWorthOf(e, prices)
   const assets = e.assets.map(a => ({ ...a, current: prices[a.listingId] || a.buyPrice, growthPct: a.buyPrice ? Math.round(((prices[a.listingId] || a.buyPrice) - a.buyPrice) / a.buyPrice * 1000) / 10 : 0 }))
+  // نامهٔ امروزِ ملک‌جت (اگر cron هنوز نساخته، همین‌جا از دادهٔ واقعی ساخته می‌شود) + استریک (ورودِ امروز = حفظِ زنجیره)
+  let brief = null, streak = null
+  try {
+    if (config().empire.dailyBrief) { await buildBriefFor(userId); brief = await getBrief(userId, dayNumberOf(Date.now())) }
+    await touchStreak(userId)
+    streak = await getStreak(userId)
+  } catch { /* نامه/استریک اختیاری است */ }
   return {
     enabled: true, empire: { ...e, assets }, level: empireLevel(e.xp), ...nw, missions,
     othersBuilding: Math.max(0, total - 1),
     suspense: e.suspense && e.suspense.dueAt > Date.now() ? e.suspense : null,
+    brief, streak,
   }
 }
 
@@ -238,6 +249,9 @@ export async function POST(req: NextRequest) {
     }
 
     case 'journal': { const r = await addJournal(userId, String(b.text || '')); return r.ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: r.reason }, { status: 400 }) }
+
+    // بازکردنِ نامهٔ روزانه (opened_at طبق طرحِ سند ثبت می‌شود).
+    case 'briefOpen': { await markBriefOpened(userId, dayNumberOf(Date.now())); return NextResponse.json({ ok: true }) }
 
     // «هیچ جلسه‌ای بی‌دلیلِ برگشت تمام نشود» (فصل ۴): تعلیقِ فردا ساعتِ ۹.
     case 'suspend': {

@@ -1,6 +1,6 @@
 'use client'
 // Empire · «مسیرِ رشد» — سفرِ سندِ Empire Bible (جلد۲ فصل ۱–۶) مو به مو:
-// نورا → ۵ سؤالِ شخصیتی → Dream Board → حکمِ هویتی → تولد + نام‌گذاری → هدیهٔ سرمایه →
+// معرفیِ ملک‌جت → ۵ سؤالِ شخصیتی → Dream Board → حکمِ هویتی → تولد + نام‌گذاری → هدیهٔ سرمایه →
 // ۴ فرصتِ واقعی (یکی برجسته) → متن‌های خرید + امضا → «تو مالک هستی» + پاداش → تصمیمِ معنادار → داشبورد.
 // قانونِ برندینگِ سند: هرگز «بازی» گفته نمی‌شود — «مسیرِ رشد / امپراتوری / سفرِ مالی».
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -17,8 +17,8 @@ const btn: React.CSSProperties = { background: 'var(--gold)', color: '#1a1503', 
 const btnGhost: React.CSSProperties = { background: 'transparent', color: 'var(--text)', border: '1px solid var(--line2)', borderRadius: 10, padding: '10px 18px', cursor: 'pointer', fontSize: 14 }
 const chip = (on: boolean): React.CSSProperties => ({ padding: '10px 14px', borderRadius: 12, border: `1px solid ${on ? 'var(--gold)' : 'var(--line2)'}`, background: on ? 'rgba(212,175,55,.12)' : 'var(--bg2)', color: on ? 'var(--gold)' : 'var(--text)', cursor: 'pointer', fontSize: 13 })
 
-// نورا — منتورِ مالیِ ثابتِ سند؛ گفت‌وگوها متنِ قطعیِ خودِ سند است.
-function Nora({ children }: { children: React.ReactNode }) {
+// ملک‌جت — دستیارِ هوشمندِ همراه؛ گفت‌وگوها متنِ قطعیِ سند است.
+function MJ({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
       <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'linear-gradient(135deg,var(--gold),#8a6d1a)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>✨</div>
@@ -155,14 +155,14 @@ export default function EmpirePage() {
   if (step === 'load') return wrap(<div style={card}>در حال آماده‌سازی...</div>)
   if (step === 'off') return wrap(<div style={card}>این بخش فعلاً برای حسابِ شما فعال نیست.</div>)
 
-  // ── معرفیِ نورا (۹۰ ثانیه‌ای) — مهمان هم می‌بیند؛ «بعداً» کارت می‌گذارد ──
+  // ── معرفیِ ملک‌جت (۹۰ ثانیه‌ای) — مهمان هم می‌بیند؛ «بعداً» کارت می‌گذارد ──
   if (step === 'pitch') return wrap(<>
-    <Nora>
-      <b>سلام! من نورا هستم — همراهِ مالیِ تو در ملک‌جت.</b><br />
+    <MJ>
+      <b>سلام! من ملک‌جت هستم — همراهِ مالیِ تو.</b><br />
       اینجا فقط آگهی نمی‌بینی؛ یک <b>مسیرِ رشد</b> داری: با یک سرمایهٔ اولیه شروع می‌کنی، روی ملک‌های <b>واقعیِ همین سایت</b> تمرین می‌کنی،
       تصمیم می‌گیری، از نتیجهٔ واقعیِ بازار یاد می‌گیری و قدم‌به‌قدم امپراتوریِ خودت را می‌سازی.<br />
       هر عددی که اینجا می‌بینی از بازارِ واقعی می‌آید — قولِ من به تو.
-    </Nora>
+    </MJ>
     {st?.guest ? (
       <div style={{ display: 'flex', gap: 10 }}>
         <Link href="/auth" style={{ ...btn, textDecoration: 'none', display: 'inline-block' }}>ورود و شروعِ مسیر</Link>
@@ -180,7 +180,7 @@ export default function EmpirePage() {
   if (step === 'q') { const q = questions[qi]; return wrap(<>
     <div style={{ fontSize: 12, color: 'var(--muted)' }}>شناختِ تو · {fa(qi + 1)} از {fa(questions.length)}</div>
     <div style={{ height: 4, background: 'var(--line)', borderRadius: 2 }}><div style={{ height: 4, width: `${((qi + 1) / questions.length) * 100}%`, background: 'var(--gold)', borderRadius: 2, transition: 'width .3s' }} /></div>
-    <Nora><b>{q.title}</b></Nora>
+    <MJ><b>{q.title}</b></MJ>
     <div style={card}>{q.el}</div>
     <div style={{ display: 'flex', gap: 10 }}>
       <button style={btn} disabled={!q.ok()} onClick={() => qi + 1 < questions.length ? setQi(qi + 1) : setStep('dream')}>{qi + 1 < questions.length ? 'بعدی' : 'ادامه'}</button>
@@ -190,7 +190,7 @@ export default function EmpirePage() {
 
   // ── Dream Board (فصل ۳: اول رؤیا، نه مالکیت) ──
   if (step === 'dream') return wrap(<>
-    <Nora><b>قبل از هر عددی، بگو رؤیایت چه شکلی است؟</b><br />هر کدام که به دلت نشست را انتخاب کن.</Nora>
+    <MJ><b>قبل از هر عددی، بگو رؤیایت چه شکلی است؟</b><br />هر کدام که به دلت نشست را انتخاب کن.</MJ>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(140px,1fr))', gap: 10 }}>
       {DREAMS.map(d => { const on = dreamPicks.includes(d.key); return (
         <button key={d.key} onClick={() => setDreamPicks(p => on ? p.filter(x => x !== d.key) : [...p, d.key])}
@@ -222,7 +222,7 @@ export default function EmpirePage() {
 
   // ── تولد: نام + پرسونا ──
   if (step === 'birth') return wrap(<>
-    <Nora><b>وقتشه امپراتوری‌ات متولد شود.</b><br />یک نام برایش انتخاب کن — مثل «Amin Capital» یا هر نامی که نشانِ تو باشد.</Nora>
+    <MJ><b>وقتشه امپراتوری‌ات متولد شود.</b><br />یک نام برایش انتخاب کن — مثل «Amin Capital» یا هر نامی که نشانِ تو باشد.</MJ>
     <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: 12 }}>
       <input value={name} onChange={e => setName(e.target.value)} placeholder="نامِ امپراتوری (اختیاری)" style={{ padding: 12, borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 14 }} />
       <div style={{ fontSize: 13, color: 'var(--muted)' }}>نشانِ امپراتوری:</div>
@@ -247,7 +247,7 @@ export default function EmpirePage() {
         <span style={{ ...card, padding: '6px 12px' }}>🏅 نشانِ Founder</span>
       </div>
     </div>
-    <Nora>این سرمایه فقط پول نیست. این اعتبارِ اولیهٔ تو برای ساختِ آینده‌ات است. با هم قدم‌به‌قدم جلو می‌رویم — و همهٔ تمرین‌ها روی بازارِ واقعی است.</Nora>
+    <MJ>این سرمایه فقط پول نیست. این اعتبارِ اولیهٔ تو برای ساختِ آینده‌ات است. با هم قدم‌به‌قدم جلو می‌رویم — و همهٔ تمرین‌ها روی بازارِ واقعی است.</MJ>
     <button style={btn} onClick={doSuggest}>اولین قدم: پیدا کردنِ اولین فرصت</button>
   </>) }
 
@@ -256,7 +256,7 @@ export default function EmpirePage() {
     <main dir="rtl" style={{ minHeight: '70vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 18, background: '#0a0a0c' }}>
       <div style={{ fontSize: 40 }}>🔮</div>
       <div style={{ color: '#eee', fontSize: 17, fontWeight: 700 }}>در حال بررسی آیندهٔ مالی شما...</div>
-      <div style={{ color: '#888', fontSize: 12 }}>نورا در همین لحظه فرصت‌های واقعیِ بازار {city || st?.empire?.answers?.city || ''} را می‌سنجد</div>
+      <div style={{ color: '#888', fontSize: 12 }}>هوشِ ملک‌جت در همین لحظه فرصت‌های واقعیِ بازار {city || st?.empire?.answers?.city || ''} را می‌سنجد</div>
       <div style={{ width: 180, height: 3, background: '#222', borderRadius: 2, overflow: 'hidden' }}><div style={{ width: '60%', height: 3, background: 'var(--gold)', animation: 'empScan 1.2s infinite alternate ease-in-out' }} /></div>
       <style>{`@keyframes empScan{from{transform:translateX(-60px)}to{transform:translateX(120px)}}`}</style>
     </main>
@@ -264,11 +264,11 @@ export default function EmpirePage() {
 
   // ── ۴ فرصتِ واقعی ──
   if (step === 'opps') return wrap(<>
-    <Nora><b>{fa(opps.length)} فرصتِ واقعی برایت پیدا کردم</b> — همه آگهی‌های زندهٔ ملک‌جت و در حدِ سرمایهٔ تو.{rejects === 1 && <><br />باشه، یک دورِ دیگر گشتم — این‌ها را ببین. اگر باز هم نبود، کنترل کاملاً دستِ خودت.</>}</Nora>
+    <MJ><b>{fa(opps.length)} فرصتِ واقعی برایت پیدا کردم</b> — همه آگهی‌های زندهٔ ملک‌جت و در حدِ سرمایهٔ تو.{rejects === 1 && <><br />باشه، یک دورِ دیگر گشتم — این‌ها را ببین. اگر باز هم نبود، کنترل کاملاً دستِ خودت.</>}</MJ>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 12 }}>
       {opps.map(o => (
         <div key={o.id} style={{ ...card, borderColor: o.recommended ? 'var(--gold)' : 'var(--line)', position: 'relative', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {o.recommended && <div style={{ position: 'absolute', top: -10, right: 12, background: 'var(--gold)', color: '#1a1503', fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 8 }}>پیشنهادِ نورا</div>}
+          {o.recommended && <div style={{ position: 'absolute', top: -10, right: 12, background: 'var(--gold)', color: '#1a1503', fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 8 }}>پیشنهادِ ملک‌جت</div>}
           {o.image ? <img src={o.image} alt="" style={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 8 }} /> : <div style={{ height: 120, borderRadius: 8, background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30 }}>{o.kind === 'land' ? '🏞' : o.kind === 'villa' ? '🏡' : o.kind === 'commercial' ? '🏬' : '🏢'}</div>}
           <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.7 }}>{o.title.slice(0, 60)}</div>
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>{o.hood}{o.area ? ` · ${fa(o.area)} متر` : ''}</div>
@@ -306,7 +306,7 @@ export default function EmpirePage() {
         <span style={{ ...card, padding: '6px 12px' }}>📈 Investor Confidence +۱</span>
       </div>
     </div>
-    <Nora><b>حالا یک تصمیمِ واقعی:</b> اگر این ملک واقعاً متعلق به تو بود، اولین اقدامت چه بود؟</Nora>
+    <MJ><b>حالا یک تصمیمِ واقعی:</b> اگر این ملک واقعاً متعلق به تو بود، اولین اقدامت چه بود؟</MJ>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(160px,1fr))', gap: 10 }}>
       <button style={{ ...card, cursor: 'pointer', textAlign: 'center' }} onClick={() => doDecide('renovate')}><div style={{ fontSize: 26 }}>🛠</div><div style={{ marginTop: 6, fontSize: 13 }}>بازسازی می‌کردم</div></button>
       <button style={{ ...card, cursor: 'pointer', textAlign: 'center' }} onClick={() => doDecide('rent')}><div style={{ fontSize: 26 }}>💰</div><div style={{ marginTop: 6, fontSize: 13 }}>اجاره می‌دادم</div></button>
@@ -325,7 +325,7 @@ export default function EmpirePage() {
       <div style={{ fontSize: 30 }}>{e.persona || '🏛'}</div>
       <div style={{ flex: 1, minWidth: 180 }}>
         <div style={{ fontWeight: 800, fontSize: 16 }}>{e.name} <span style={{ fontSize: 11, color: 'var(--muted)' }}>#{fa(e.no)}</span></div>
-        <div style={{ fontSize: 12, color: 'var(--muted)' }}>{e.profile?.title} · DNA: {e.dna} · منتور: {e.mentor}</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)' }}>{e.profile?.title} · DNA: {e.dna} · دستیار: {e.mentor}</div>
         <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>{lv.titleFa} ({lv.title})</span>
           <div style={{ flex: 1, height: 5, background: 'var(--line)', borderRadius: 3 }}><div style={{ width: `${(lv.progress || 0) * 100}%`, height: 5, background: 'var(--gold)', borderRadius: 3 }} /></div>
@@ -335,8 +335,18 @@ export default function EmpirePage() {
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 12 }}>
         <span style={{ ...card, padding: '6px 10px' }}>🪙 {fa(e.coins)}</span>
         <span style={{ ...card, padding: '6px 10px' }}>🤖 {fa(e.aiTokens)}</span>
+        {st.streak && st.streak.streak > 0 && <span style={{ ...card, padding: '6px 10px' }} title="روزهای پیاپیِ حضور">🔥 {fa(st.streak.streak)}</span>}
       </div>
     </div>
+
+    {/* نامهٔ روزانهٔ ملک‌جت — از دادهٔ واقعیِ دیشبِ بازار */}
+    {st.brief && <details style={{ ...card, borderColor: st.brief.openedAt ? 'var(--line)' : 'var(--gold)' }} open={!st.brief.openedAt}
+      onToggle={(ev: any) => { if (ev.currentTarget.open && !st.brief.openedAt) { api({ action: 'briefOpen' }); setSt((s: any) => ({ ...s, brief: { ...s.brief, openedAt: Date.now() } })) } }}>
+      <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>📬 نامهٔ امروزِ ملک‌جت{!st.brief.openedAt && <span style={{ color: 'var(--gold)', fontSize: 11, marginRight: 8 }}>● جدید</span>}</summary>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+        {st.brief.items.map((it: any, i: number) => <div key={i} style={{ fontSize: 13, lineHeight: 1.9 }}>{it.icon} {it.text}</div>)}
+      </div>
+    </details>}
 
     {/* ارزشِ خالص (زنده از بازارِ واقعی) */}
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10 }}>
@@ -364,12 +374,12 @@ export default function EmpirePage() {
             {a.action
               ? <span style={{ fontSize: 11, color: 'var(--muted)' }}>{a.action === 'renovate' ? '🛠 بازسازی' : a.action === 'rent' ? '💰 اجاره' : '📈 نگه‌داری'}</span>
               : <span style={{ display: 'flex', gap: 4 }}>{[['renovate', '🛠'], ['rent', '💰'], ['hold', '📈']].map(([k, i]) => <button key={k} title={k} style={{ ...btnGhost, padding: '4px 8px', fontSize: 13 }} onClick={async () => { const d = await api({ action: 'assetAction', assetId: a.id, act: k }); if (d) setSt(d) }}>{i}</button>)}</span>}
-            <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 12 }} disabled={busy || e.aiTokens <= 0} onClick={() => doAnalyze(a.listingId)}>تحلیلِ نورا (۱ ژتون)</button>
+            <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 12 }} disabled={busy || e.aiTokens <= 0} onClick={() => doAnalyze(a.listingId)}>تحلیلِ ملک‌جت (۱ ژتون)</button>
           </div>
         ))}
       </div>
       {analysis && <div style={{ ...card, background: 'var(--bg2)', marginTop: 10, fontSize: 13 }}>
-        <b>🤖 تحلیلِ نورا — {analysis.hood || 'محله'}:</b> {analysis.verdict}
+        <b>🤖 تحلیلِ ملک‌جت — {analysis.hood || 'محله'}:</b> {analysis.verdict}
         {analysis.samples > 0 && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>میانگینِ متری هم‌محله‌ها: {faB(analysis.avgPerM)} تومان · این ملک: {faB(analysis.minePerM)} تومان (از {fa(analysis.samples)} آگهیِ واقعی)</div>}
       </div>}
       {e.assets?.length > 0 && <div style={{ marginTop: 10 }}><button style={{ ...btnGhost, fontSize: 12, padding: '6px 12px' }} onClick={doSuggest}>+ فرصتِ بعدی</button></div>}
@@ -412,7 +422,7 @@ export default function EmpirePage() {
         {/* M3 · Beat AI */}
         <div style={{ ...card, background: 'var(--bg2)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
-            <b style={{ fontSize: 13 }}>M3 · قیمت را حدس بزن (شکستِ نورا)</b>
+            <b style={{ fontSize: 13 }}>M3 · قیمت را حدس بزن (هوشِ ملک‌جت را شکست بده)</b>
             <span style={{ fontSize: 11, color: 'var(--muted)' }}>دقتِ تو: {fa(ms.m3.correct)}/{fa(ms.m3.tries)} · هر حدسِ درست ⚡{fa(ms.m3.rewardXp)} + 🪙{fa(ms.m3.rewardCoins)}</span>
           </div>
           {!guessL ? <button style={{ ...btnGhost, marginTop: 8, fontSize: 12, padding: '6px 12px' }} disabled={busy} onClick={doGuessNext}>یک ملکِ واقعی نشانم بده</button> : (
@@ -459,7 +469,7 @@ export default function EmpirePage() {
       </div>
     </div>}
 
-    {/* تایم‌لاینِ زندگی + دفترچهٔ نورا */}
+    {/* تایم‌لاینِ زندگی + دفترچهٔ ملک‌جت */}
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 12 }}>
       <div style={card}>
         <div style={{ fontWeight: 700, marginBottom: 10 }}>📍 تایم‌لاینِ زندگیِ تو</div>
@@ -473,7 +483,7 @@ export default function EmpirePage() {
         </div>
       </div>
       <div style={card}>
-        <div style={{ fontWeight: 700, marginBottom: 10 }}>📔 دفترچهٔ نورا</div>
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>📔 دفترچهٔ ملک‌جت</div>
         {!(e.journal || []).length && <div style={{ fontSize: 12, color: 'var(--muted)' }}>هنوز یادداشتی ندارد — با اولین تصمیم‌ها پر می‌شود.</div>}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {[...(e.journal || [])].reverse().slice(0, 8).map((j: any, i: number) => (

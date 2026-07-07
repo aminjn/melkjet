@@ -60,6 +60,8 @@ async function tick(): Promise<{ due: number; synced: number }> {
       try { const { resolveDueBattles } = await import('./reos/territory'); const b = await resolveDueBattles(); if (b) console.log(`[reos] territory battles resolved: ${b}`) } catch { /* نبردهای قلمروِ REOS */ }
       // تورِ ایمنیِ ضدتکراری: هر ۶ ساعت روی کلِ آگهی‌های قابل‌نمایش (علاوه بر گِیتِ ingest و ممیزی)
       try { const { dedupeListings } = await import('./listing-dedupe'); const dd = await dedupeListings(); if (dd.removed) console.log(`[dedupe] ${dd.removed} duplicate listings hidden (${dd.kept} kept)`) } catch { /* ضدتکراری */ }
+      // نامهٔ روزانهٔ ملک‌جت برای امپراتوری‌ها (سند فصل ۴: AI Overnight → کنجکاویِ صبح)
+      try { const { runEmpireBriefs } = await import('./empire-brief'); const nb = await runEmpireBriefs(); if (nb) console.log(`[empire] daily briefs built: ${nb}`) } catch { /* نامهٔ امپراتوری */ }
     }
     due = listDueSources(Date.now())
     for (const { phone, source } of due) {

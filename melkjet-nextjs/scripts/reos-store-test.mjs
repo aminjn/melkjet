@@ -45,7 +45,7 @@ import { follow, unfollow, isFollowing, followerCount, followingCount, following
 import { listFlags, getFlag, setFlag, flagEnabled } from '../app/lib/reos/flags.ts'
 import { registerModel as regModel, getChampion as champOf } from '../app/lib/reos/model-registry.ts'
 import { autoPromote, autoMLStatus } from '../app/lib/reos/automl.ts'
-import { createEmpire, getEmpire, renameEmpire, buyAsset, chooseAssetAction, recordGuess, claimEmpireMission, spendAiToken, setHunterPair, answerHunter, setStylePicks, bumpRejects, empireCount, netWorthOf as empNetWorth } from '../app/lib/empire-store.ts'
+import { createEmpire, getEmpire, renameEmpire, buyAsset, chooseAssetAction, recordGuess, claimEmpireMission, spendAiToken, setHunterPair, answerHunter, setStylePicks, bumpRejects, empireCount, netWorthOf as empNetWorth, saveBrief, getBrief, markBriefOpened, dayNumberOf } from '../app/lib/empire-store.ts'
 
 if (!process.env.DATABASE_URL) { console.error('DATABASE_URL not set'); process.exit(2) }
 let pass = 0, fail = 0
@@ -57,7 +57,7 @@ async function reset() {
   // ensure tables exist first (a no-op call triggers ensureReos), then truncate.
   await recordEvent({ type: 'user_searched', userId: '__warm__' }).catch(() => {})
   await saveEmbeddings('property', [{ id: '__warm__', embed: [0, 0] }]).catch(() => {})
-  for (const t of ['reos_events', 'reos_feature_store', 'reos_embeddings', 'reos_territory_scores', 'reos_territories', 'reos_territory_battles', 'reos_streaks', 'reos_xp', 'reos_missions', 'reos_wallet', 'reos_wallet_txn', 'reos_follows', 'reos_collections', 'reos_collection_items', 'reos_comments', 'reos_flags', 'reos_models', 'reos_empire']) {
+  for (const t of ['reos_events', 'reos_feature_store', 'reos_embeddings', 'reos_territory_scores', 'reos_territories', 'reos_territory_battles', 'reos_streaks', 'reos_xp', 'reos_missions', 'reos_wallet', 'reos_wallet_txn', 'reos_follows', 'reos_collections', 'reos_collection_items', 'reos_comments', 'reos_flags', 'reos_models', 'reos_empire', 'reos_daily_brief']) {
     await pool.query(`TRUNCATE ${t}`).catch(() => {})
   }
 }
@@ -813,7 +813,7 @@ async function main() {
     const e = await createEmpire(uid, { name: 'Amin Capital', persona: '🦁', answers: { city: 'تهران', tenB: 'سرمایه‌گذاری می‌کردم', risk: 60, ptype: 'آپارتمان', goal: 'رشدِ سرمایه' }, dreamPicks: ['home', 'income'] })
     ok('تولد: بستهٔ خوش‌آمد §6.3 (سرمایه+کوین+XP+ژتون)', e.capital === 10_000_000_000 && e.coins === 500 && e.xp === 100 && e.aiTokens === 5)
     ok('تولد: نشانِ Founder + اولین نقطهٔ تایم‌لاین', e.badges.includes('Founder') && e.timeline[0].title === 'به ملک‌جت پیوست')
-    ok('تولد: هویت + حکم + منتور', e.identity.investor > 0 && e.profile.title === 'Investor Profile' && e.mentor === 'نورا')
+    ok('تولد: هویت + حکم + منتور', e.identity.investor > 0 && e.profile.title === 'Investor Profile' && e.mentor === 'ملک‌جت')
     ok('createEmpire ایدمپوتنت (دوباره → همان)', (await createEmpire(uid, { answers: {} })).no === e.no)
     // خرید: سرمایه کم می‌شود + پاداشِ سند
     const b1 = await buyAsset(uid, { id: 'LST1', title: 'آپارتمان ۱۰۰ متری پونک', hood: 'پونک', price: 4_000_000_000, ptype: 'آپارتمان' })
@@ -857,6 +857,17 @@ async function main() {
     const fin = await getEmpire(uid)
     const nw = empNetWorth(fin, { LST1: 4_400_000_000 })
     ok('netWorth زنده: نقد + ارزشِ روز (+۱۰٪ رشد)', nw.netWorth === fin.capital + 4_400_000_000 && nw.growth === 10)
+    // نامهٔ روزانه (فصل ۴: daily_brief — یکی در روز، opened_at)
+    const day = dayNumberOf(Date.now())
+    const bf1 = await saveBrief({ userId: uid, day, summary: 'خلاصه', items: [{ icon: '📈', text: 'خلاصه' }], priority: 1 })
+    ok('saveBrief: id و createdAt طبق طرحِ سند', !!bf1.id && bf1.createdAt > 0)
+    await saveBrief({ userId: uid, day, summary: 'دوباره', items: [], priority: 0 })
+    const g = await getBrief(uid, day)
+    ok('یک نامه در روز (درجِ دوم بی‌اثر)', g.summary === 'خلاصه')
+    ok('نامهٔ نخوانده: opened_at خالی', !g.openedAt)
+    await markBriefOpened(uid, day)
+    ok('بازکردنِ نامه opened_at را ثبت می‌کند', (await getBrief(uid, day)).openedAt > 0)
+    ok('روزِ دیگر → نامه‌ای نیست', (await getBrief(uid, day + 1)) === null)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

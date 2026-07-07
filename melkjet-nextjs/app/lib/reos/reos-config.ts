@@ -26,6 +26,7 @@ export interface ReosConfig {
     guessTolerancePct: number; guessRewardXp: number; guessRewardCoins: number
     levelXp: { explorer: number; investor: number; builder: number }
     mentorInitiates: boolean
+    dailyBrief: boolean
   }
 }
 
@@ -54,6 +55,7 @@ export const DEFAULT_CONFIG: ReosConfig = {
     guessTolerancePct: 15, guessRewardXp: 30, guessRewardCoins: 10,
     levelXp: { explorer: 500, investor: 1500, builder: 5000 },
     mentorInitiates: true,
+    dailyBrief: true,
   },
 }
 

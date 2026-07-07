@@ -10,7 +10,7 @@ import { config } from './reos/reos-config'
 
 export type AssetKind = 'apartment' | 'villa' | 'commercial' | 'land'
 export type AssetAction = 'renovate' | 'rent' | 'hold'
-export const MENTORS = ['نورا', 'آرمان', 'سارا'] as const
+export const MENTORS = ['ملک‌جت'] as const
 export type Mentor = typeof MENTORS[number]
 
 export interface EmpireAsset {
@@ -33,7 +33,7 @@ export interface EmpireData {
   name: string                // نامِ امپراتوری (مثل «Amin Capital»)
   createdAt: number
   persona: string             // آواتار/پرسونای انتخابی
-  mentor: Mentor              // منتورِ ثابت: نورا (مالی) / آرمان (سازنده) / سارا (تجاری)
+  mentor: Mentor              // دستیارِ هوشمندِ همراه — همیشه «ملک‌جت»
   answers: { city: string; tenB: string; risk: number; ptype: string; goal: string }
   dream: { picks: string[]; sentence: string }        // Dream Board (فصل ۳)
   identity: Record<string, number>                    // امتیازهای هویتی ۰..۱۰۰ (Identity Engine)
@@ -94,10 +94,10 @@ export function identityFromAnswers(a: { tenB?: string; risk?: number; ptype?: s
 // حکمِ هویتی («Investor Profile / Confidence 82%») + DNA — از امتیازها، قطعی.
 export function identityVerdict(scores: Record<string, number>): { title: string; confidence: number; dna: string; mentor: Mentor } {
   const order: Array<[string, string, string, Mentor]> = [
-    ['investor', 'Investor Profile', 'Investor', 'نورا'],
-    ['builder', 'Builder Profile', 'Builder', 'آرمان'],
-    ['commercial', 'Commercial Profile', 'Trader', 'سارا'],
-    ['luxury', 'Luxury Profile', 'Collector', 'نورا'],
+    ['investor', 'Investor Profile', 'Investor', 'ملک‌جت'],
+    ['builder', 'Builder Profile', 'Builder', 'ملک‌جت'],
+    ['commercial', 'Commercial Profile', 'Trader', 'ملک‌جت'],
+    ['luxury', 'Luxury Profile', 'Collector', 'ملک‌جت'],
   ]
   const ranked = order.map(([k, t, d, m]) => ({ k, t, d, m, v: scores[k] || 0 })).sort((x, y) => y.v - x.v)
   const top = ranked[0], second = ranked[1]
@@ -364,4 +364,36 @@ export function netWorthOf(e: EmpireData, livePrices: Record<string, number>): {
 export async function empireCount(): Promise<number> {
   if (pgEnabled()) { await ensure(); const r = await pgTx(c => c.query(`SELECT count(*)::int AS n FROM reos_empire`)); return r.rows[0]?.n || 0 }
   return Object.keys(fileLoad()).length
+}
+
+// همهٔ کاربرانِ صاحبِ امپراتوری (برای تولیدِ نامهٔ روزانه در cron).
+export async function listEmpireUsers(): Promise<string[]> {
+  if (pgEnabled()) { await ensure(); const r = await pgTx(c => c.query(`SELECT user_id FROM reos_empire`)); return r.rows.map(x => x.user_id) }
+  return Object.keys(fileLoad())
+}
+
+// ══════════ نامهٔ روزانهٔ ملک‌جت — Daily Brief (سند فصل ۴: AI Overnight + جدولِ daily_brief) ══════════
+// طرحِ سند: id / user_id / summary / priority / created_at / opened_at — یکی به‌ازای هر کاربر در هر روز.
+export interface DailyBrief { id: string; userId: string; day: number; summary: string; items: Array<{ icon: string; text: string }>; priority: number; createdAt: number; openedAt?: number }
+export const dayNumberOf = (ts: number) => Math.floor(ts / 864e5)
+const BRIEF_FILE = join(process.cwd(), '.empire-briefs.json')
+function briefLoad(): Record<string, DailyBrief> { if (existsSync(BRIEF_FILE)) { try { return JSON.parse(readFileSync(BRIEF_FILE, 'utf-8')) } catch {} } return {} }
+function briefSave(d: unknown) { try { writeFileSync(BRIEF_FILE, JSON.stringify(d)) } catch {} }
+const briefKey = (u: string, day: number) => u + '|' + day
+let briefReady = false
+async function ensureBrief() { if (briefReady) return; await pgTx(c => c.query(`CREATE TABLE IF NOT EXISTS reos_daily_brief (user_id text NOT NULL, day integer NOT NULL, data jsonb NOT NULL, at bigint NOT NULL, PRIMARY KEY (user_id, day))`)); briefReady = true }
+
+export async function saveBrief(b: Omit<DailyBrief, 'id' | 'createdAt'> & { createdAt?: number }): Promise<DailyBrief> {
+  const full: DailyBrief = { id: 'brf_' + randomBytes(5).toString('hex'), createdAt: b.createdAt || Date.now(), ...b }
+  if (pgEnabled()) { await ensureBrief(); await pgTx(c => c.query(`INSERT INTO reos_daily_brief(user_id,day,data,at) VALUES($1,$2,$3,$4) ON CONFLICT(user_id,day) DO NOTHING`, [full.userId, full.day, JSON.stringify(full), full.createdAt])) }
+  else { const db = briefLoad(); if (!db[briefKey(full.userId, full.day)]) { db[briefKey(full.userId, full.day)] = full; briefSave(db) } }
+  return full
+}
+export async function getBrief(userId: string, day: number): Promise<DailyBrief | null> {
+  if (pgEnabled()) { await ensureBrief(); const r = await pgTx(c => c.query(`SELECT data FROM reos_daily_brief WHERE user_id=$1 AND day=$2`, [userId, day])); return (r.rows[0]?.data as DailyBrief) || null }
+  return briefLoad()[briefKey(userId, day)] || null
+}
+export async function markBriefOpened(userId: string, day: number, now = Date.now()): Promise<void> {
+  if (pgEnabled()) { await ensureBrief(); await pgTx(c => c.query(`UPDATE reos_daily_brief SET data = data || jsonb_build_object('openedAt', $3::bigint) WHERE user_id=$1 AND day=$2`, [userId, day, now])) }
+  else { const db = briefLoad(); const b = db[briefKey(userId, day)]; if (b && !b.openedAt) { b.openedAt = now; briefSave(db) } }
 }

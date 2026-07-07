@@ -245,7 +245,7 @@ export default function ReosAdminPanel() {
               <div><div style={sub}>پاداش‌ها</div>
                 {row('XP خریدِ دارایی', inp('empire', 'buyRewardXp'))}{row('XP مأموریت', inp('empire', 'missionRewardXp'))}{row('کوینِ مأموریت', inp('empire', 'missionRewardCoins'))}{row('XP حدسِ درست', inp('empire', 'guessRewardXp'))}{row('کوینِ حدسِ درست', inp('empire', 'guessRewardCoins'))}</div>
               <div><div style={sub}>قواعدِ مسیر</div>
-                {row('تلورانسِ حدسِ قیمت (٪)', inp('empire', 'guessTolerancePct'))}{row('XP سطحِ Explorer', inp('empire', 'levelXp', 'explorer'))}{row('XP سطحِ Investor', inp('empire', 'levelXp', 'investor'))}{row('XP سطحِ Builder', inp('empire', 'levelXp', 'builder'))}{row('پیام‌آغازیِ منتور (۱/۰)', inp('empire', 'mentorInitiates'))}</div>
+                {row('تلورانسِ حدسِ قیمت (٪)', inp('empire', 'guessTolerancePct'))}{row('XP سطحِ Explorer', inp('empire', 'levelXp', 'explorer'))}{row('XP سطحِ Investor', inp('empire', 'levelXp', 'investor'))}{row('XP سطحِ Builder', inp('empire', 'levelXp', 'builder'))}{row('پیام‌آغازیِ منتور (۱/۰)', inp('empire', 'mentorInitiates'))}{row('نامهٔ روزانهٔ ملک‌جت (۱/۰)', inp('empire', 'dailyBrief'))}</div>
             </div>
           </div>
 
