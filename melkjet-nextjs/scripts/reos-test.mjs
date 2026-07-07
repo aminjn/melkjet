@@ -11,6 +11,8 @@ import { effectiveBoost, leadValue } from '../app/lib/reos/monetization.ts'
 import { assignLeadToAgent, matchUserToProperties } from '../app/lib/reos/engine.ts'
 import { fitLogistic, evaluate, scoreWith, engageFeatures, predictEngage, DEFAULT_ENGAGE } from '../app/lib/reos/train.ts'
 import { buildRoleFeed, roleFromPath, medianPricePerM, isRoleKind } from '../app/lib/reos/roles.ts'
+import { npv, irr, paybackPeriod, roi, rentalYield, mortgagePayment, analyzeInvestment, analyzeConstruction } from '../app/lib/reos/investor.ts'
+import { avmFromComps } from '../app/lib/reos/avm.ts'
 
 let pass = 0, fail = 0
 const approx = (a, b, e = 1e-6) => Math.abs(a - b) <= e
@@ -150,6 +152,40 @@ console.log('\n── REOS v2: Multi-Role Intelligence ──')
   ok('pros feed differs from owner feed (role-specific)', pros.sections[0].key !== owner.sections[0].key)
   ok('every role produces a labeled feed', ['owner','pros','agency','builder','materials','architect','contractor','appraiser','lawfirm','finance','notary','buyer'].every(r => { const f = buildRoleFeed(r, props); return f.label && f.sections.length >= 1 }))
   ok('medianPricePerM computes', medianPricePerM(props) > 0)
+}
+
+console.log('\n── REOS v3: Investor Intelligence (ROI/IRR/NPV/payback) ──')
+{
+  ok('npv at 0% = sum of cashflows', npv(0, [-1000, 600, 600]) === 200)
+  ok('npv discounts future', approx(npv(0.1, [-1000, 600, 600]), 41.32, 0.5))
+  ok('irr of [-1000,600,600] ≈ 13.1%', Math.abs(irr([-1000, 600, 600]) - 0.131) < 0.005)
+  ok('irr returns NaN when no root (all positive)', isNaN(irr([100, 200, 300])))
+  ok('paybackPeriod ≈ 1.67y', Math.abs(paybackPeriod([-1000, 600, 600]) - 1.67) < 0.05)
+  ok('roi(200,1000)=20%', roi(200, 1000) === 20)
+  ok('rentalYield(100,1000)=10%', rentalYield(100, 1000) === 10)
+  ok('mortgagePayment(1000,12%,12)≈89', Math.abs(mortgagePayment(1000, 0.12, 12) - 89) <= 1)
+  const inv = analyzeInvestment({ price: 10_000_000_000, monthlyRent: 40_000_000, annualAppreciation: 0.25, holdYears: 5, downPayment: 10_000_000_000 })
+  ok('analyzeInvestment: positive ROI on appreciation', inv.roi > 0 && inv.cashflows.length === 6)
+  ok('analyzeInvestment: irr present', inv.irr !== null && typeof inv.rentalYield === 'number')
+  const con = analyzeConstruction({ landCost: 10_000_000_000, buildCostPerM: 30_000_000, totalArea: 500, sellPricePerM: 80_000_000, months: 24 })
+  ok('analyzeConstruction: profit = revenue - cost', con.profit === 40_000_000_000 - 25_000_000_000)
+  ok('analyzeConstruction: margin 37.5%', con.margin === 37.5)
+  ok('analyzeConstruction: risk label present', ['کم', 'متوسط', 'بالا'].includes(con.riskLabel))
+}
+
+console.log('\n── REOS v3: AVM (automated valuation from comps) ──')
+{
+  // comps at ~60M/m², target 100m² → estimate ~6B
+  const comps = [{ perM: 58_000_000, sim: 1 }, { perM: 60_000_000, sim: 1 }, { perM: 62_000_000, sim: 1 }, { perM: 61_000_000, sim: 0.8 }]
+  const r = avmFromComps(100, comps, 0.5)
+  ok('avm estimate ≈ perM × area (~6B)', r.estimate >= 5_800_000_000 && r.estimate <= 6_200_000_000)
+  ok('avm low < estimate < high', r.low < r.estimate && r.estimate < r.high)
+  ok('avm tight comps → high confidence', r.confidence >= 30)
+  ok('avm exposes comps count', r.comps === 4)
+  const noisy = avmFromComps(100, [{ perM: 20_000_000, sim: 1 }, { perM: 90_000_000, sim: 1 }])
+  ok('avm wide spread → wider band + lower confidence', (noisy.high - noisy.low) > (r.high - r.low) && noisy.confidence <= r.confidence)
+  ok('avm insufficient data → 0 estimate', avmFromComps(100, []).method === 'insufficient')
+  ok('avm demand adjustment raises price', avmFromComps(100, comps, 1).estimate > avmFromComps(100, comps, 0).estimate)
 }
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} REOS unit tests: ${pass} passed, ${fail} failed\n`)

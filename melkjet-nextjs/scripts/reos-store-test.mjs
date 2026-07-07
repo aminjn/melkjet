@@ -19,6 +19,7 @@ import { createLead, moveStage, addActivity, timeline, createTask, listTasks, fu
 import { runLLM, selectModel, cacheKey, estimateCost, usageStats, cacheClear } from '../app/lib/reos/gateway.ts'
 import { createWorkflow, evalCondition, matchWorkflow, leadContext, runWorkflows } from '../app/lib/reos/workflow-builder.ts'
 import { computeMarketIntel, getMarketIntel, topMarketIntel } from '../app/lib/reos/market-intel.ts'
+import { valuate } from '../app/lib/reos/avm.ts'
 
 if (!process.env.DATABASE_URL) { console.error('DATABASE_URL not set'); process.exit(2) }
 let pass = 0, fail = 0
@@ -353,6 +354,25 @@ async function main() {
     ok('market intel stored (listings + indices)', !!mi && mi.listings >= 8 && mi.demandIndex > 0 && mi.healthScore > 0)
     ok('trend computed (fresh listings → up)', !!mi && mi.trend === 'up')
     ok('topMarketIntel ranks by health', (await topMarketIntel(10)).some(a => a.area === 'تهران|زعفرانیه'))
+  }
+
+  console.log('\n── REOS v3: AVM valuate (data-backed comparables) ──')
+  {
+    // seed target + 5 comps in same area (~60M/m²), target 100m² → ~6B
+    const seed = async (id, price, meters) => pool.query(`INSERT INTO listings(id,scraped_at,type,status,data) VALUES($1,$2,'listing','ok',$3) ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data, status='ok'`,
+      [id, Date.now(), JSON.stringify({ id, type: 'listing', status: 'ok', scrapedAt: Date.now(), title: id, price: String(price), location: 'نیاوران', meta: { 'شهر': 'تهران', 'محله': 'نیاوران', 'متراژ': String(meters), 'نوع معامله': 'فروش' } })])
+    await seed('avmT', 0, 100)                    // target: price unknown, 100m²
+    await seed('avmC1', 5_800_000_000, 100)       // 58M/m²
+    await seed('avmC2', 6_000_000_000, 100)       // 60M/m²
+    await seed('avmC3', 6_200_000_000, 100)       // 62M/m²
+    await seed('avmC4', 9_150_000_000, 150)       // 61M/m²
+    await seed('avmC5', 5_940_000_000, 90)        // 66M/m²
+    const v = await valuate('avmT')
+    ok('valuate found comparables', v.comps >= 4 && v.method === 'comparables')
+    ok('valuate estimate in plausible range (5–7B for 100m²)', v.estimate >= 5_000_000_000 && v.estimate <= 7_000_000_000)
+    ok('valuate returns low/high band + confidence', v.low < v.estimate && v.estimate < v.high && v.confidence > 0)
+    const none = await valuate('nonexistent-id')
+    ok('valuate handles missing property gracefully', none.estimate === 0)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)
