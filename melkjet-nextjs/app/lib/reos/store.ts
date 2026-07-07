@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { pgEnabled, pgTx } from '../db'
+import { EMBED_DIM } from './types'
 import type { ReosEvent, EventType } from './types'
 
 const EV_FILE = join(process.cwd(), '.reos-events.json')
@@ -26,12 +27,45 @@ async function ensureReos(): Promise<void> {
     await c.query(`CREATE TABLE IF NOT EXISTS reos_feature_store (
       entity_type text NOT NULL, entity_id text NOT NULL, features jsonb NOT NULL DEFAULT '{}'::jsonb,
       updated_at bigint NOT NULL, PRIMARY KEY (entity_type, entity_id) )`)
-    // بردارِ نهفته (embedding) — معادلِ pgvector با jsonb (مسیرِ ارتقا به VECTOR بدونِ تغییرِ منطق).
+    // بردارِ نهفته (embedding): jsonb همیشه؛ اگر pgvector نصب باشد ستونِ بومیِ vector هم اضافه می‌شود.
     await c.query(`CREATE TABLE IF NOT EXISTS reos_embeddings (
       kind text NOT NULL, entity_id text NOT NULL, dim int NOT NULL,
       embed jsonb NOT NULL, updated_at bigint NOT NULL, PRIMARY KEY (kind, entity_id) )`)
   })
+  // تشخیص/فعال‌سازیِ pgvector (اگر ممکن بود). CREATE EXTENSION نیازمندِ superuser است؛
+  // اگر نشد، مسیرِ jsonb + cosineِ JS دست‌نخورده کار می‌کند (backward-compatible).
+  await detectPgvector()
   reosSchemaReady = true
+}
+
+// ═══ pgvector (اختیاری، با fallback به jsonb) ═══
+let pgvectorReady: boolean | null = null
+async function detectPgvector(): Promise<boolean> {
+  if (pgvectorReady !== null) return pgvectorReady
+  try {
+    try { await pgTx(c => c.query(`CREATE EXTENSION IF NOT EXISTS vector`)) } catch { /* نیازمندِ superuser؛ شاید از قبل نصب باشد */ }
+    const r = await pgTx(c => c.query(`SELECT 1 FROM pg_extension WHERE extname='vector'`))
+    pgvectorReady = r.rows.length > 0
+    if (pgvectorReady) {
+      await pgTx(c => c.query(`ALTER TABLE reos_embeddings ADD COLUMN IF NOT EXISTS vec vector(${EMBED_DIM})`))
+      try { await pgTx(c => c.query(`CREATE INDEX IF NOT EXISTS reos_embeddings_vec ON reos_embeddings USING hnsw (vec vector_cosine_ops)`)) } catch { /* ایندکس اختیاری؛ seqscan هم درست است */ }
+    }
+  } catch { pgvectorReady = false }
+  return pgvectorReady
+}
+export async function hasPgvector(): Promise<boolean> { if (pgEnabled()) { await ensureReos() } return !!pgvectorReady }
+function vecLit(v: number[]): string { return '[' + v.join(',') + ']' }
+
+// جستجوی نزدیک‌ترین بردارها با pgvector (native، ایندکس‌دار). اگر pgvector نبود null برمی‌گرداند
+// تا فراخوان به مسیرِ jsonb + cosineِ JS برگردد.
+export async function nearestByVector(kind: string, vec: number[], k = 8): Promise<{ id: string; sim: number }[] | null> {
+  if (!pgEnabled()) return null
+  await ensureReos()
+  if (!pgvectorReady) return null
+  const r = await pgTx(c => c.query(
+    `SELECT entity_id, 1 - (vec <=> $2::vector) AS sim FROM reos_embeddings
+     WHERE kind=$1 AND vec IS NOT NULL ORDER BY vec <=> $2::vector LIMIT $3`, [kind, vecLit(vec), k]))
+  return r.rows.map(x => ({ id: x.entity_id as string, sim: Math.round(Number(x.sim) * 1000) / 1000 }))
 }
 
 // ── فایل‌مود helpers ──
@@ -166,11 +200,21 @@ export async function saveEmbeddings(kind: string, rows: { id: string; embed: nu
   const now = Date.now()
   if (pgEnabled()) {
     await ensureReos()
-    const cols = 5, values: string[] = [], params: unknown[] = []
-    rows.forEach((r, i) => { const b = i * cols; values.push(`($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5})`); params.push(kind, r.id, r.embed.length, JSON.stringify(r.embed), now) })
-    await pgTx(c => c.query(
-      `INSERT INTO reos_embeddings(kind,entity_id,dim,embed,updated_at) VALUES ${values.join(',')}
-       ON CONFLICT(kind,entity_id) DO UPDATE SET dim=EXCLUDED.dim, embed=EXCLUDED.embed, updated_at=EXCLUDED.updated_at`, params))
+    if (pgvectorReady) {
+      // مسیرِ pgvector: ستونِ بومیِ vec هم پر می‌شود (۶ پارامتر per row).
+      const cols = 6, values: string[] = [], params: unknown[] = []
+      // vec فقط برای بردارهای هم‌بُعد با ستون (EMBED_DIM) پر می‌شود؛ بقیه NULL (فقط jsonb) تا هرگز خطا ندهد.
+      rows.forEach((r, i) => { const b = i * cols; values.push(`($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6}::vector)`); params.push(kind, r.id, r.embed.length, JSON.stringify(r.embed), now, r.embed.length === EMBED_DIM ? vecLit(r.embed) : null) })
+      await pgTx(c => c.query(
+        `INSERT INTO reos_embeddings(kind,entity_id,dim,embed,updated_at,vec) VALUES ${values.join(',')}
+         ON CONFLICT(kind,entity_id) DO UPDATE SET dim=EXCLUDED.dim, embed=EXCLUDED.embed, updated_at=EXCLUDED.updated_at, vec=EXCLUDED.vec`, params))
+    } else {
+      const cols = 5, values: string[] = [], params: unknown[] = []
+      rows.forEach((r, i) => { const b = i * cols; values.push(`($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5})`); params.push(kind, r.id, r.embed.length, JSON.stringify(r.embed), now) })
+      await pgTx(c => c.query(
+        `INSERT INTO reos_embeddings(kind,entity_id,dim,embed,updated_at) VALUES ${values.join(',')}
+         ON CONFLICT(kind,entity_id) DO UPDATE SET dim=EXCLUDED.dim, embed=EXCLUDED.embed, updated_at=EXCLUDED.updated_at`, params))
+    }
   } else {
     const db = fileLoad<Record<string, { embed: number[]; at: number }>>(EMB_FILE, {})
     for (const r of rows) db[`${kind}:${r.id}`] = { embed: r.embed, at: now }

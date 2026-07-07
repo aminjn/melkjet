@@ -5,7 +5,7 @@ import { getPrefs } from '../user-store'
 import { getAgency } from '../agency-store'
 import { getAdvisor as getAdvisorProfile } from '../advisor-store'
 import { agencyAdvisorFiles } from '../agency-team'
-import { getFeatures, recentEvents, saveEmbeddings, getEmbedding, getEmbeddings, existingEmbeddingIds } from './store'
+import { getFeatures, recentEvents, saveEmbeddings, getEmbedding, getEmbeddings, existingEmbeddingIds, nearestByVector } from './store'
 import { parseFaNum, tokenize, propertyVector, cosine } from './features'
 import type { PropertyEntity, UserEntity, AgentEntity, Intent } from './types'
 
@@ -60,6 +60,9 @@ export async function similarProperties(propertyId: string, k = 8): Promise<{ id
     base = propertyVector(itemToProperty(it)).embed
     await saveEmbeddings('property', [{ id: propertyId, embed: base }]).catch(() => {})
   }
+  // مسیرِ pgvector (native، ایندکسِ HNSW) — مقیاس‌پذیر؛ اگر نبود، cosineِ JS روی همهٔ بردارها.
+  const native = await nearestByVector('property', base, k + 1).catch(() => null)
+  if (native) return native.filter(n => n.id !== propertyId).slice(0, k)
   const all = await getEmbeddings('property', 3000)
   const out = all.filter(e => e.id !== propertyId && e.embed?.length)
     .map(e => ({ id: e.id, sim: Math.round(cosine(base!, e.embed) * 1000) / 1000 }))

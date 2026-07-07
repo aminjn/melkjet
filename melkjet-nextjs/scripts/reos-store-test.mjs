@@ -4,7 +4,7 @@
 // Covers: event log, batch insert, feature store, embeddings, the async queue (flush),
 // and the end-to-end training pipeline (events → dataset → fit → persist → prime → predict).
 import pg from 'pg'
-import { recordEvent, recordEventBatch, recentEvents, eventStats, topFeatures, bumpFeatures, getFeatures, saveEmbeddings, getEmbedding, getEmbeddings, existingEmbeddingIds } from '../app/lib/reos/store.ts'
+import { recordEvent, recordEventBatch, recentEvents, eventStats, topFeatures, bumpFeatures, getFeatures, saveEmbeddings, getEmbedding, getEmbeddings, existingEmbeddingIds, hasPgvector, nearestByVector } from '../app/lib/reos/store.ts'
 import { ingest } from '../app/lib/reos/events.ts'
 import { flushQueue, queueDepth } from '../app/lib/reos/queue.ts'
 import { trainEngageModel, primeEngageModel, predictEngage, buildTrainingSet } from '../app/lib/reos/train.ts'
@@ -198,6 +198,25 @@ async function main() {
     const pc = await getCampaign(paced.id)
     ok('pacing: paced out after hitting daily cap', analytics(pc, now).pacedOut === true)
     ok('paced campaign excluded from activeBoosts', !(await activeBoosts(now)).PZ3)
+  }
+
+  console.log('\n── REOS v2: pgvector native similarity (falls back to JS cosine if absent) ──')
+  {
+    const has = await hasPgvector()
+    console.log(`  · pgvector installed: ${has}`)
+    const dim = (i, v) => { const a = new Array(64).fill(0); a[i] = v; return a }
+    const B = new Array(64).fill(0); B[0] = 0.9; B[1] = 0.1
+    await saveEmbeddings('tv', [{ id: 'A', embed: dim(0, 1) }, { id: 'B', embed: B }, { id: 'C', embed: dim(63, 1) }])
+    const near = await nearestByVector('tv', dim(0, 1), 3)
+    if (has) {
+      ok('nearestByVector returns rows (native pgvector path)', Array.isArray(near) && near.length >= 3)
+      const idx = id => near.findIndex(x => x.id === id)
+      ok('native: B (close to A) ranks above C (orthogonal)', idx('B') < idx('C'))
+      ok('native: identical vector has cosine sim ≈ 1', (near.find(x => x.id === 'A')?.sim || 0) > 0.99)
+      ok('native: orthogonal vector has low sim', (near.find(x => x.id === 'C')?.sim ?? 1) < 0.2)
+    } else {
+      ok('pgvector absent → nearestByVector returns null (JS-cosine fallback used)', near === null)
+    }
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)
