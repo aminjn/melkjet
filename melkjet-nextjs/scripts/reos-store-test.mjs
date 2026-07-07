@@ -20,6 +20,7 @@ import { runLLM, selectModel, cacheKey, estimateCost, usageStats, cacheClear } f
 import { createWorkflow, evalCondition, matchWorkflow, leadContext, runWorkflows } from '../app/lib/reos/workflow-builder.ts'
 import { computeMarketIntel, getMarketIntel, topMarketIntel } from '../app/lib/reos/market-intel.ts'
 import { valuate } from '../app/lib/reos/avm.ts'
+import { setVerification, setSignals, getTrust } from '../app/lib/reos/trust.ts'
 import { assignVariant, createExperiment, recordExposure, recordConversion, results } from '../app/lib/reos/experiments.ts'
 import { credit, debit, getBalance, listTransactions, createInvoice, payInvoice } from '../app/lib/reos/billing.ts'
 import { recordTouch, recordSpend, recordConversion as attrConvert, channelReport } from '../app/lib/reos/attribution.ts'
@@ -424,6 +425,19 @@ async function main() {
     ok('CAC = spend/conversions = 500k', r.cac === 500_000)
     ok('ROAS = revenue/spend = 4', r.roas === 4)
     ok('LTV = revenue/conversions = 2M', r.ltv === 2_000_000)
+  }
+
+  console.log('\n── REOS v4: Trust Layer (store) ──')
+  {
+    const e = 'trustE'
+    await setSignals(e, { profileComplete: 0.8, deals: 10, rating: 4.5, reviews: 12, tenureDays: 200 })
+    await setVerification(e, 'identity', true)
+    await setVerification(e, 'agency', true)
+    const t = await getTrust(e)
+    ok('verifications + signals persisted → score', t.score > 40 && t.badges.includes('identity') && t.badges.includes('agency'))
+    await setVerification(e, 'agency', false)
+    ok('un-verify removes badge', !(await getTrust(e)).badges.includes('agency'))
+    ok('implicit extra verification (phone) applies', (await getTrust(e, ['phone'])).badges.includes('phone'))
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

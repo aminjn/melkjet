@@ -18,6 +18,7 @@ import { histogram, psi, uniformEdges, driftReport } from '../app/lib/reos/drift
 import { fitPairwise, rankItems, rankScore } from '../app/lib/reos/rank.ts'
 import { cellKey, buildHeatmap } from '../app/lib/reos/geo-intel.ts'
 import { liquidityScore, daysToSell, saleProbability, riskProfile, aiConfidence } from '../app/lib/reos/digital-twin.ts'
+import { trustScore } from '../app/lib/reos/trust.ts'
 
 let pass = 0, fail = 0
 const approx = (a, b, e = 1e-6) => Math.abs(a - b) <= e
@@ -263,6 +264,18 @@ console.log('\n── REOS v4: Property Digital Twin ──')
   ok('riskProfile: overpriced+cold+stale = high', hiRisk.level === 'بالا' && hiRisk.factors.length >= 2)
   ok('riskProfile: fair+hot+fresh = low', loRisk.level === 'کم')
   ok('aiConfidence rises with comps + completeness', aiConfidence(10, 1) > aiConfidence(1, 0.3) && aiConfidence(10, 1) <= 100)
+}
+
+console.log('\n── REOS v4: Trust Layer ──')
+{
+  const strong = trustScore({ verified: ['identity', 'phone', 'agency'], profileComplete: 1, responseRate: 0.9, deals: 30, rating: 4.8, reviews: 25, tenureDays: 400 })
+  const fresh = trustScore({ verified: [], profileComplete: 0.2 })
+  ok('strong profile → high score + طلایی', strong.score >= 80 && strong.tier === 'طلایی')
+  ok('empty profile → low score + جدید', fresh.score < 30 && fresh.tier === 'جدید')
+  ok('verification lifts score', trustScore({ verified: ['identity'], deals: 5 }).score > trustScore({ verified: [], deals: 5 }).score)
+  ok('reviews make rating more credible', trustScore({ rating: 5, reviews: 40 }).parts.rating > trustScore({ rating: 5, reviews: 0 }).parts.rating)
+  ok('badges returned + parts exposed', strong.badges.length === 3 && typeof strong.parts.verified === 'number')
+  ok('score bounded 0..100', strong.score <= 100 && fresh.score >= 0)
 }
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} REOS unit tests: ${pass} passed, ${fail} failed\n`)

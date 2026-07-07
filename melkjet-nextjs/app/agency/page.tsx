@@ -8,6 +8,7 @@ import ReosPanelSection from '@/app/components/ReosPanelSection'
 import ReosMarketIntel from '@/app/components/ReosMarketIntel'
 import ReosWorkflowBuilder from '@/app/components/ReosWorkflowBuilder'
 import ReosWallet from '@/app/components/ReosWallet'
+import ReosTrustBadge from '@/app/components/ReosTrustBadge'
 import JalaliDatePicker from '@/app/components/JalaliDatePicker'
 import NumberInput from '@/app/components/NumberInput'
 import ImageUpload from '@/app/components/ImageUpload'
@@ -673,6 +674,7 @@ export default function AgencyPage() {
             : <>
           {/* DASHBOARD */}
           {view === 'dashboard' && <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <ReosTrustBadge />
             <ReosMarketIntel title="هوشِ بازار (REOS)" />
             <ReosWorkflowBuilder />
             <ReosWallet />
