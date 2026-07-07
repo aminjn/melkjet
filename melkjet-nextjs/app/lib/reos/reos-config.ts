@@ -18,6 +18,7 @@ export interface ReosConfig {
   xp: { actions: Record<string, number>; levelBase: number; levelExp: number }
   economy: { commissionPct: number; affiliatePct: number; loyaltyBonusPct: number; missionRewardXp: number; missionRewardCredit: number }
   community: { weights: { followers: number; dominance: number; trust: number; level: number }; commentMaxLen: number }
+  automl: { enabled: boolean; promoteMargin: number; minSamples: number }
 }
 
 export const DEFAULT_CONFIG: ReosConfig = {
@@ -34,6 +35,7 @@ export const DEFAULT_CONFIG: ReosConfig = {
   xp: { actions: { list_property: 10, close_deal: 200, respond_lead: 5, get_review: 30, publish_content: 20, win_battle: 100, verify: 40, refer_convert: 60 }, levelBase: 100, levelExp: 1.6 },
   economy: { commissionPct: 0.02, affiliatePct: 0.2, loyaltyBonusPct: 0.005, missionRewardXp: 50, missionRewardCredit: 20000 },
   community: { weights: { followers: 0.30, dominance: 0.30, trust: 0.25, level: 0.15 }, commentMaxLen: 800 },
+  automl: { enabled: true, promoteMargin: 0.02, minSamples: 100 },
 }
 
 const FILE = join(process.cwd(), '.reos-config-settings.json')

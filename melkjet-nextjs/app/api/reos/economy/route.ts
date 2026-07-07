@@ -4,6 +4,7 @@ import { primeConfig } from '@/app/lib/reos/reos-config'
 import { xpStatus, seasonLeaderboard, seasonKey } from '@/app/lib/reos/xp'
 import { listMissions, claimMission } from '@/app/lib/reos/missions'
 import { walletSummary, walletLedger, creditBucket, refundTxn, type Bucket, BUCKETS } from '@/app/lib/reos/wallet'
+import { flagEnabled } from '@/app/lib/reos/flags'
 
 // GET /api/reos/economy — گیمیفیکیشن + کیفِ پولِ چندسطلی.
 //   ?view=profile (پیش‌فرض) → سطح/فصل/رتبه + مأموریت‌ها + خلاصهٔ کیف پول
@@ -16,6 +17,7 @@ export async function GET(req: NextRequest) {
   const view = new URL(req.url).searchParams.get('view') || 'profile'
   const agentId = String(s.phone || '').replace(/\D/g, '')
   const H = { headers: { 'Cache-Control': 'no-store, private' } }
+  if (!(await flagEnabled('economy', { userId: agentId, role: String(s.role || '') }))) return NextResponse.json({ ok: true, disabled: true }, H)
 
   if (view === 'season') {
     const season = seasonKey(Date.now())

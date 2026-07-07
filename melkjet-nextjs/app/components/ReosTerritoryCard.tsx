@@ -25,7 +25,7 @@ export default function ReosTerritoryCard({ title = 'اقتدارِ بازار (
   useEffect(() => {
     let on = true
     fetch('/api/reos/territory?view=profile', { cache: 'no-store' }).then(r => r.ok ? r.json() : null)
-      .then(d => { if (on) { setP(d?.ok ? d : null); setLoading(false) } }).catch(() => { if (on) setLoading(false) })
+      .then(d => { if (on) { setP(d?.ok && !d.disabled ? d : null); setLoading(false) } }).catch(() => { if (on) setLoading(false) })
     return () => { on = false }
   }, [])
 

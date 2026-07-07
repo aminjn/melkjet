@@ -14,11 +14,24 @@ export default function ReosControlCenter() {
   const [vId, setVId] = useState(''); const [vKind, setVKind] = useState('identity')
   const [models, setModels] = useState<{ id: string; version: number; status: string; metrics: Record<string, number> }[]>([])
   const [catalog, setCatalog] = useState<{ key: string; name: string; purpose: string; type: string; status: string; metric?: string }[]>([])
+  const [flags, setFlags] = useState<{ key: string; label: string; enabled: boolean; rolloutPct: number; cities: string[]; plans: string[]; roles: string[] }[]>([])
+  const [aml, setAml] = useState<{ name: string; champion?: { version: number; metric: number }; challenger?: { version: number; metric: number; samples: number }; wouldPromote: boolean }[]>([])
 
   const loadCfg = () => fetch('/api/reos/config', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d) setCfg(d.config) }).catch(() => {})
   const loadModels = () => fetch('/api/reos/models?name=engage', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d) setModels(d.versions || []) }).catch(() => {})
   const loadCatalog = () => fetch('/api/reos/catalog', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d) setCatalog(d.models || []) }).catch(() => {})
-  useEffect(() => { loadCfg(); loadModels(); loadCatalog() }, [])
+  const loadFlags = () => fetch('/api/reos/flags', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d) setFlags(d.flags || []) }).catch(() => {})
+  const loadAml = () => fetch('/api/reos/automl', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d) setAml(d.status || []) }).catch(() => {})
+  useEffect(() => { loadCfg(); loadModels(); loadCatalog(); loadFlags(); loadAml() }, [])
+
+  const saveFlag = async (key: string, patch: Record<string, unknown>) => {
+    await fetch('/api/reos/flags', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, patch }) }).catch(() => {})
+    loadFlags()
+  }
+  const runAutoml = async () => {
+    setBusy('automl'); const d = await fetch('/api/reos/automl', { method: 'POST' }).then(r => r.json()).catch(() => null)
+    setBusy(''); setMsg(d?.message || (d?.ok ? 'انجام شد ✓' : 'خطا')); setTimeout(() => setMsg(''), 5000); loadAml(); loadModels()
+  }
 
   const setPath = (section: string, key: string, val: string, sub?: string) => {
     setCfg(c => { if (!c) return c; const n = JSON.parse(JSON.stringify(c)); const num = val === '' ? '' : (isNaN(Number(val)) ? val : Number(val)); if (sub) n[section][key][sub] = num; else n[section][key] = num; return n })
@@ -187,12 +200,55 @@ export default function ReosControlCenter() {
               {row('وزنِ سطح', inp('community', 'weights', 'level'))}
               {row('حداکثر طولِ نظر', inp('community', 'commentMaxLen'))}
             </div>
+            <div>
+              <div style={sub}>AutoML (ارتقای خودکار)</div>
+              {row('فعال (۱/۰)', inp('automl', 'enabled'))}
+              {row('حاشیهٔ ارتقا (AUC)', inp('automl', 'promoteMargin'))}
+              {row('حداقلِ نمونه', inp('automl', 'minSamples'))}
+            </div>
           </div>
         )}
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
           {btn('💾 ذخیرهٔ تنظیمات', save, 'save', true)}
           {btn('بازگردانی به پیش‌فرض', reset, 'reset')}
         </div>
+      </div>
+
+      {/* Feature Flags */}
+      <div style={card}>
+        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>🚩 فلگ‌های ویژگی (Feature Flags)</div>
+        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 12 }}>هر لایه را مستقل روشن/خاموش یا تدریجی عرضه کنید — مثلاً «اقتدار فقط ۱۰٪ کاربران».</div>
+        {flags.map(f => (
+          <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderTop: '1px solid var(--line)', fontSize: 12.5, flexWrap: 'wrap' }}>
+            <button onClick={() => saveFlag(f.key, { enabled: !f.enabled })} style={{ width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', background: f.enabled ? '#34d399' : 'var(--line2)', position: 'relative', flexShrink: 0 }}>
+              <span style={{ position: 'absolute', top: 2, insetInlineStart: f.enabled ? 22 : 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'all .15s' }} />
+            </button>
+            <div style={{ flex: 1, minWidth: 140 }}><div style={{ fontWeight: 700 }}>{f.label}</div><div style={{ fontSize: 10, color: 'var(--faint)' }}>{f.key}</div></div>
+            <label style={{ fontSize: 11, color: 'var(--muted)' }}>عرضه٪</label>
+            <input type="number" min={0} max={100} defaultValue={f.rolloutPct} onBlur={e => { const v = Math.max(0, Math.min(100, Number(e.target.value) || 0)); if (v !== f.rolloutPct) saveFlag(f.key, { rolloutPct: v }) }} style={{ width: 60, padding: '5px 7px', borderRadius: 7, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontFamily: FONT, fontSize: 12, textAlign: 'center' }} />
+            <input placeholder="شهرها (با ،)" defaultValue={(f.cities || []).join('،')} onBlur={e => saveFlag(f.key, { cities: e.target.value.split(/[،,]/).map(s => s.trim()).filter(Boolean) })} style={{ width: 130, padding: '5px 8px', borderRadius: 7, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontFamily: FONT, fontSize: 11 }} />
+          </div>
+        ))}
+      </div>
+
+      {/* AutoML — پلتفرمِ آزمایشِ خودکار */}
+      <div style={card}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, flex: 1 }}>🤖 AutoML — ارتقای خودکارِ مدل</div>
+          {btn('اجرای دورِ AutoML', runAutoml, 'automl', true)}
+        </div>
+        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 12 }}>سیستم خودش چالش‌گر را با قهرمان می‌سنجد و اگر با حاشیهٔ مطمئن بهتر بود، بدونِ دخالتِ انسان ارتقا می‌دهد.</div>
+        {aml.map(m => (
+          <div key={m.name} style={{ padding: '8px 0', borderTop: '1px solid var(--line)', fontSize: 12.5 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontWeight: 800, minWidth: 60 }}>{m.name === 'engage' ? 'تعامل' : m.name === 'lead' ? 'لید' : m.name}</span>
+              <span style={{ color: 'var(--muted)' }}>قهرمان: {m.champion ? `v${m.champion.version.toLocaleString('fa-IR')} (AUC ${m.champion.metric.toLocaleString('fa-IR')})` : '—'}</span>
+              <span style={{ color: 'var(--muted)', flex: 1 }}>چالش‌گر: {m.challenger ? `v${m.challenger.version.toLocaleString('fa-IR')} (AUC ${m.challenger.metric.toLocaleString('fa-IR')}، n=${m.challenger.samples.toLocaleString('fa-IR')})` : '—'}</span>
+              {m.wouldPromote ? <span style={{ fontSize: 10.5, fontWeight: 700, color: '#34d399', background: 'var(--bg2)', padding: '2px 8px', borderRadius: 999 }}>آمادهٔ ارتقا</span> : <span style={{ fontSize: 10.5, color: 'var(--faint)' }}>پایدار</span>}
+            </div>
+          </div>
+        ))}
+        {!aml.length && <div style={{ fontSize: 12, color: 'var(--muted)' }}>هنوز مدلی ثبت نشده — «آموزشِ مدل» را بزنید.</div>}
       </div>
 
       {/* تأییدِ اعتماد */}

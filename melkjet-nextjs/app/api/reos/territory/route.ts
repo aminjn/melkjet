@@ -6,6 +6,7 @@ import { checkAchievements, nextAchievements, getStreak, touchStreak, fomoAlerts
 import { funnel } from '@/app/lib/reos/crm'
 import { getTrust } from '@/app/lib/reos/trust'
 import { syncTerritories } from '@/app/lib/reos/territory-sync'
+import { flagEnabled } from '@/app/lib/reos/flags'
 
 // GET /api/reos/territory — هوشِ رقابتیِ Market Dominance.
 //   ?view=profile          → پروفایلِ اعتبارِ آژانسِ جاری (قلمروها، نشان‌ها، زنجیره)
@@ -22,6 +23,8 @@ export async function GET(req: NextRequest) {
   const territory = url.searchParams.get('territory') || ''
   const agentId = String(s.phone || '').replace(/\D/g, '')
   const H = { headers: { 'Cache-Control': 'no-store, private' } }
+  // Feature Flag: اگر «اقتدارِ بازار» برای این کاربر روشن نباشد، لایه غیرفعال است.
+  if (!(await flagEnabled('dominance', { userId: agentId, role: String(s.role || '') }))) return NextResponse.json({ ok: true, disabled: true }, H)
 
   if (view === 'map') return NextResponse.json({ ok: true, map: await dominanceMap(200) }, H)
 

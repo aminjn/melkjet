@@ -42,6 +42,9 @@ import { bumpMissions, listMissions, claimMission } from '../app/lib/reos/missio
 import { creditBucket, debitBucket, bucketBalance, walletSummary, walletLedger, refundTxn } from '../app/lib/reos/wallet.ts'
 import { recordDeal, commissionOn } from '../app/lib/reos/economy.ts'
 import { follow, unfollow, isFollowing, followerCount, followingCount, followingList, createCollection, addToCollection, removeFromCollection, listCollections, collectionItems, addComment, listComments, commentCount, hideComment, socialProof } from '../app/lib/reos/community.ts'
+import { listFlags, getFlag, setFlag, flagEnabled } from '../app/lib/reos/flags.ts'
+import { registerModel as regModel, getChampion as champOf } from '../app/lib/reos/model-registry.ts'
+import { autoPromote, autoMLStatus } from '../app/lib/reos/automl.ts'
 
 if (!process.env.DATABASE_URL) { console.error('DATABASE_URL not set'); process.exit(2) }
 let pass = 0, fail = 0
@@ -53,7 +56,7 @@ async function reset() {
   // ensure tables exist first (a no-op call triggers ensureReos), then truncate.
   await recordEvent({ type: 'user_searched', userId: '__warm__' }).catch(() => {})
   await saveEmbeddings('property', [{ id: '__warm__', embed: [0, 0] }]).catch(() => {})
-  for (const t of ['reos_events', 'reos_feature_store', 'reos_embeddings', 'reos_territory_scores', 'reos_territories', 'reos_territory_battles', 'reos_streaks', 'reos_xp', 'reos_missions', 'reos_wallet', 'reos_wallet_txn', 'reos_follows', 'reos_collections', 'reos_collection_items', 'reos_comments']) {
+  for (const t of ['reos_events', 'reos_feature_store', 'reos_embeddings', 'reos_territory_scores', 'reos_territories', 'reos_territory_battles', 'reos_streaks', 'reos_xp', 'reos_missions', 'reos_wallet', 'reos_wallet_txn', 'reos_follows', 'reos_collections', 'reos_collection_items', 'reos_comments', 'reos_flags', 'reos_models']) {
     await pool.query(`TRUNCATE ${t}`).catch(() => {})
   }
 }
@@ -769,6 +772,37 @@ async function main() {
     // social proof
     const sp = await socialProof('0931agentA')
     ok('socialProof aggregates followers + comments + score', sp.followers === 1 && sp.comments === 1 && typeof sp.score === 'number')
+  }
+
+  console.log('\n── REOS v8: Feature Flags (real PG) ──')
+  {
+    const all = await listFlags()
+    ok('listFlags returns seeded defaults', all.length >= 5 && all.some(f => f.key === 'dominance'))
+    ok('default flag enabled + 100%', (await flagEnabled('dominance', { userId: 'u1' })) === true)
+    await setFlag('dominance', { enabled: false })
+    ok('setFlag persists (dominance off)', (await getFlag('dominance')).enabled === false && (await flagEnabled('dominance', { userId: 'u1' })) === false)
+    await setFlag('dominance', { enabled: true, rolloutPct: 0 })
+    ok('rollout 0 → off even when enabled', (await flagEnabled('dominance', { userId: 'u1' })) === false)
+    await setFlag('community', { cities: ['تهران'] })
+    ok('city scope persists + gates', (await flagEnabled('community', { userId: 'u', city: 'تهران' })) === true && (await flagEnabled('community', { userId: 'u', city: 'کرج' })) === false)
+    ok('unknown flag defaults to on', (await flagEnabled('nonexistent_flag', { userId: 'u' })) === true)
+  }
+
+  console.log('\n── REOS v8: AutoML autonomous promotion (real PG) ──')
+  {
+    await regModel('amltest', { w: 1 }, { auc: 0.80, n: 500 })   // اولین → قهرمان
+    ok('first model becomes champion', (await champOf('amltest'))?.metrics.auc === 0.80)
+    await regModel('amltest', { w: 2 }, { auc: 0.86, n: 500 })   // بهتر → نامزد
+    const r1 = await autoPromote('amltest')
+    ok('autoPromote promotes clearly-better challenger', r1.promoted === true)
+    ok('champion is now the better model', (await champOf('amltest'))?.metrics.auc === 0.86)
+    const r2 = await autoPromote('amltest')
+    ok('no further promotion when stable', r2.promoted === false)
+    await regModel('amltest', { w: 3 }, { auc: 0.99, n: 10 })    // بهتر ولی نمونهٔ کم
+    const r3 = await autoPromote('amltest')
+    ok('does NOT promote high-AUC with too few samples', r3.promoted === false && (await champOf('amltest'))?.metrics.auc === 0.86)
+    const st = await autoMLStatus('amltest')
+    ok('autoMLStatus exposes champion + challenger', st.champion?.metric === 0.86 && !!st.challenger)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

@@ -7,6 +7,7 @@ import {
   createCollection, addToCollection, removeFromCollection, listCollections, collectionItems,
   addComment, listComments, hideComment, socialProof, publicRankings, type TargetType,
 } from '@/app/lib/reos/community'
+import { flagEnabled } from '@/app/lib/reos/flags'
 
 // GET /api/reos/community — لایهٔ اجتماعی.
 //   ?view=me (پیش‌فرض)            → اثباتِ اجتماعی + مجموعه‌های کاربرِ جاری
@@ -22,6 +23,7 @@ export async function GET(req: NextRequest) {
   const view = url.searchParams.get('view') || 'me'
   const me = String(s.phone || '').replace(/\D/g, '')
   const H = { headers: { 'Cache-Control': 'no-store, private' } }
+  if (!(await flagEnabled('community', { userId: me, role: String(s.role || '') }))) return NextResponse.json({ ok: true, disabled: true }, H)
 
   if (view === 'rankings') return NextResponse.json({ ok: true, rankings: await publicRankings(30) }, H)
   if (view === 'comments') {

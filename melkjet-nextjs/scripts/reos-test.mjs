@@ -31,6 +31,8 @@ import { levelForXp, xpForAction, seasonKey } from '../app/lib/reos/xp.ts'
 import { missionCatalog, missionState, periodKey } from '../app/lib/reos/missions.ts'
 import { commissionOn, affiliateCut, loyaltyBonus } from '../app/lib/reos/economy.ts'
 import { communityScore, sanitizeComment, threadComments } from '../app/lib/reos/community.ts'
+import { evalFlag, bucketOf, DEFAULT_FLAGS } from '../app/lib/reos/flags.ts'
+import { shouldPromote, pickChallenger } from '../app/lib/reos/automl.ts'
 
 let pass = 0, fail = 0
 const approx = (a, b, e = 1e-6) => Math.abs(a - b) <= e
@@ -480,6 +482,45 @@ console.log('\n── REOS v7: Community — social proof + comments ──')
   ok('threading: reply nested under parent', tree[0].replies.length === 1 && tree[0].replies[0].id === 'b')
   ok('threading: hidden comment excluded', !JSON.stringify(tree).includes('hidden reply'))
   ok('threading: roots sorted by time', tree[0].at <= tree[1].at)
+}
+
+console.log('\n── REOS v8: Feature Flags ──')
+{
+  const f = { key: 'x', label: 'x', enabled: true, rolloutPct: 100, cities: [], plans: [], roles: [], at: 0 }
+  ok('enabled + 100% → on', evalFlag(f, { userId: 'u1' }) === true)
+  ok('disabled → off', evalFlag({ ...f, enabled: false }, { userId: 'u1' }) === false)
+  ok('0% → off', evalFlag({ ...f, rolloutPct: 0 }, { userId: 'u1' }) === false)
+  ok('bucket deterministic (same user → same result)', bucketOf('x', 'u1') === bucketOf('x', 'u1'))
+  ok('bucket in [0,100)', bucketOf('x', 'u1') >= 0 && bucketOf('x', 'u1') < 100)
+  // city scoping
+  const city = { ...f, cities: ['تهران'] }
+  ok('city scope: matching city → on', evalFlag(city, { userId: 'u1', city: 'تهران' }) === true)
+  ok('city scope: other city → off', evalFlag(city, { userId: 'u1', city: 'کرج' }) === false)
+  ok('city scope: no city in ctx → off', evalFlag(city, { userId: 'u1' }) === false)
+  // plan scoping
+  ok('plan scope works', evalFlag({ ...f, plans: ['pro'] }, { userId: 'u', plan: 'pro' }) && !evalFlag({ ...f, plans: ['pro'] }, { userId: 'u', plan: 'free' }))
+  // rollout is monotone-ish: 100% covers everyone a 50% covers
+  let atFull = 0, atHalf = 0
+  for (let i = 0; i < 200; i++) { if (evalFlag({ ...f, key: 'r', rolloutPct: 100 }, { userId: 'u' + i })) atFull++; if (evalFlag({ ...f, key: 'r', rolloutPct: 50 }, { userId: 'u' + i })) atHalf++ }
+  ok('100% rollout covers all', atFull === 200)
+  ok('50% rollout ~half (30-70%)', atHalf > 60 && atHalf < 140)
+  ok('default flags seed the REOS layers', DEFAULT_FLAGS.dominance && DEFAULT_FLAGS.economy && DEFAULT_FLAGS.community)
+}
+
+console.log('\n── REOS v8: AutoML — autonomous champion/challenger ──')
+{
+  const champ = { id: 'c', name: 'm', version: 1, status: 'champion', at: 0, weights: {}, metrics: { auc: 0.80, n: 500 } }
+  const better = { id: 'b', name: 'm', version: 2, status: 'challenger', at: 0, weights: {}, metrics: { auc: 0.85, n: 500 } }
+  const marginal = { id: 'g', name: 'm', version: 3, status: 'challenger', at: 0, weights: {}, metrics: { auc: 0.805, n: 500 } }
+  const tiny = { id: 't', name: 'm', version: 4, status: 'challenger', at: 0, weights: {}, metrics: { auc: 0.95, n: 10 } }
+  ok('promote when clearly better + enough samples', shouldPromote(champ, better, 0.02, 100) === true)
+  ok('do NOT promote marginal gain (below margin)', shouldPromote(champ, marginal, 0.02, 100) === false)
+  ok('do NOT promote high-AUC but too-few-samples', shouldPromote(champ, tiny, 0.02, 100) === false)
+  ok('promote first valid when no champion', shouldPromote(null, better, 0.02, 100) === true)
+  ok('never promote champion over itself', shouldPromote(champ, champ, 0.02, 100) === false)
+  const best = pickChallenger([champ, marginal, better], champ.id)
+  ok('pickChallenger returns highest-metric non-champion', best.id === 'b')
+  ok('pickChallenger ignores retired/champion', pickChallenger([champ], champ.id) === null)
 }
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} REOS unit tests: ${pass} passed, ${fail} failed\n`)
