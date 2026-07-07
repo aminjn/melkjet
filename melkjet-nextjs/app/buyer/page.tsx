@@ -7,6 +7,7 @@ import PlansPanel from '@/app/components/PlansPanel'
 import ListingReports from '@/app/components/ListingReports'
 import BusinessProfileForm from '@/app/components/BusinessProfileForm'
 import SupportPanel from '@/app/components/SupportPanel'
+import ReosFeed from '@/app/components/ReosFeed'
 
 // ════════════════════════════════════════════════════════
 //  Types (mirror app/lib/buyer-store.ts API shape)
@@ -63,7 +64,7 @@ interface Stats {
 }
 interface BuyerData { stats: Stats; profile: Profile; settings: Settings; phone: string; saved: Saved[]; searches: Search[]; viewings: Viewing[]; offers: Offer[]; messages: Message[]; conversations: Conversation[]; aiChats: AiChat[] }
 
-type View = 'dashboard' | 'ai' | 'chat' | 'selling' | 'favorites' | 'searches' | 'viewings' | 'offers' | 'messages' | 'plans' | 'profile' | 'bizprofile' | 'settings' | 'support'
+type View = 'dashboard' | 'reos' | 'ai' | 'chat' | 'selling' | 'favorites' | 'searches' | 'viewings' | 'offers' | 'messages' | 'plans' | 'profile' | 'bizprofile' | 'settings' | 'support'
 
 // ════════════════════════════════════════════════════════
 //  Helpers
@@ -91,12 +92,13 @@ const inputStyle: React.CSSProperties = { padding: '9px 11px', borderRadius: 9, 
 const actionBtn: React.CSSProperties = { padding: '5px 12px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap' }
 
 const VIEW_TITLES: Record<View, string> = {
-  dashboard: 'پنل کاربری', ai: 'دستیار هوشمند', chat: 'چت با صاحب آگهی', selling: 'فروش و اجارهٔ من',
+  dashboard: 'پنل کاربری', reos: 'پیشنهادِ هوشمند', ai: 'دستیار هوشمند', chat: 'چت با صاحب آگهی', selling: 'فروش و اجارهٔ من',
   favorites: 'علاقه‌مندی‌ها', searches: 'جستجوهای ذخیره‌شده',
   viewings: 'بازدیدهای من', offers: 'پیشنهادهای من', messages: 'پیام‌ها', plans: 'پلن‌ها', profile: 'پروفایل من', bizprofile: 'پروفایل', settings: 'تنظیمات', support: 'پشتیبانی',
 }
 const NAV_ITEMS: { id: View; label: string; icon: string; badge?: 'viewings' | 'offers' | 'messages'; ai?: boolean }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: '▦' },
+  { id: 'reos', label: 'پیشنهادِ هوشمند', icon: '✦', ai: true },
   { id: 'ai', label: 'دستیار هوشمند', icon: '✨', ai: true },
   { id: 'selling', label: 'فروش و اجارهٔ من', icon: '🏠' },
   { id: 'chat', label: 'چت با صاحب آگهی', icon: '💬' },
@@ -395,7 +397,21 @@ export default function BuyerPage() {
 
         <main style={{ padding: 22, flex: 1, overflowY: 'auto' }}>
           {/* ─── DASHBOARD ─── */}
+          {/* پیشنهادِ هوشمندِ REOS — فیدِ کامل */}
+          {view === 'reos' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.9 }}>موتورِ REOS بر اساسِ بودجه، منطقه، و رفتارِ شما (بازدید/سیو/تماس) بهترین املاک را رتبه‌بندی می‌کند و می‌گوید «چرا».</div>
+            <ReosFeed />
+          </div>}
+
           {view === 'dashboard' && <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {/* پیشنهادِ هوشمندِ REOS — نسخهٔ فشرده در داشبورد */}
+            <div style={{ ...card, padding: 18 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 15, fontWeight: 800 }}>✦ پیشنهادهای مخصوص شما</span>
+                <button onClick={() => setView('reos')} style={{ marginInlineStart: 'auto', padding: '5px 12px', borderRadius: 8, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--muted)', fontSize: 12, cursor: 'pointer', fontFamily: FONT }}>مشاهدهٔ همه ←</button>
+              </div>
+              <ReosFeed compact />
+            </div>
             {/* AI HERO */}
             <div style={{ borderRadius: 18, padding: '22px 24px', background: 'linear-gradient(135deg, color-mix(in srgb,var(--gold) 22%,var(--surface)), var(--surface) 70%)', border: '1px solid color-mix(in srgb,var(--gold) 40%,transparent)', position: 'relative', overflow: 'hidden' }}>
               <div style={{ position: 'absolute', left: -30, top: -30, width: 160, height: 160, borderRadius: '50%', background: 'radial-gradient(circle, color-mix(in srgb,var(--gold) 35%,transparent), transparent 70%)' }} />
