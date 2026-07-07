@@ -69,6 +69,32 @@ export async function recentEvents(opts: { userId?: string; propertyId?: string;
   return db.slice(0, limit)
 }
 
+// آمارِ رویدادها (شمارش به‌تفکیکِ نوع) — برای پنلِ observability.
+export async function eventStats(): Promise<{ total: number; byType: Record<string, number> }> {
+  const byType: Record<string, number> = {}
+  if (pgEnabled()) {
+    await ensureReos()
+    const r = await pgTx(c => c.query(`SELECT type, count(*)::int AS n FROM reos_events GROUP BY type`))
+    let total = 0; for (const row of r.rows) { byType[row.type as string] = row.n as number; total += row.n as number }
+    return { total, byType }
+  }
+  const db = fileLoad<ReosEvent[]>(EV_FILE, [])
+  for (const e of db) byType[e.type] = (byType[e.type] || 0) + 1
+  return { total: db.length, byType }
+}
+
+// پرتعامل‌ترین موجودیت‌ها بر اساسِ یک ویژگی (مثلِ engagement_score) — برای پنلِ observability.
+export async function topFeatures(entityType: string, key: string, limit = 10): Promise<{ id: string; value: number; features: Record<string, number> }[]> {
+  if (pgEnabled()) {
+    await ensureReos()
+    const r = await pgTx(c => c.query(`SELECT entity_id, features FROM reos_feature_store WHERE entity_type=$1 ORDER BY (features->>$2)::float DESC NULLS LAST LIMIT $3`, [entityType, key, limit]))
+    return r.rows.map(x => ({ id: x.entity_id as string, value: Number((x.features || {})[key]) || 0, features: (x.features || {}) as Record<string, number> }))
+  }
+  const db = fileLoad<Record<string, Record<string, number>>>(FS_FILE, {})
+  return Object.entries(db).filter(([k]) => k.startsWith(entityType + ':')).map(([k, f]) => ({ id: k.slice(entityType.length + 1), value: Number(f[key]) || 0, features: f }))
+    .sort((a, b) => b.value - a.value).slice(0, limit)
+}
+
 // ═══ Feature Store ═══
 export async function getFeatures(entityType: string, entityId: string): Promise<Record<string, number>> {
   if (pgEnabled()) {
