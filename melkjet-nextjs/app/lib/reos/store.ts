@@ -32,6 +32,23 @@ async function ensureReos(): Promise<void> {
       kind text NOT NULL, entity_id text NOT NULL, dim int NOT NULL,
       embed jsonb NOT NULL, updated_at bigint NOT NULL, PRIMARY KEY (kind, entity_id) )`)
   })
+  // Feature Store v2 — ویوهای نوع‌دارِ per-entity روی jsonb (queryable با SQL؛ مسیرِ نوشتن jsonb می‌ماند).
+  await pgTx(async c => {
+    await c.query(`CREATE OR REPLACE VIEW reos_property_features AS SELECT entity_id AS property_id,
+      COALESCE((features->>'click_count')::float,0) AS clicks, COALESCE((features->>'save_count')::float,0) AS saves,
+      COALESCE((features->>'contact_count')::float,0) AS contacts, COALESCE((features->>'engagement_score')::float,0) AS engagement,
+      updated_at FROM reos_feature_store WHERE entity_type='property'`)
+    await c.query(`CREATE OR REPLACE VIEW reos_user_features AS SELECT entity_id AS user_id,
+      COALESCE((features->>'click_count')::float,0) AS clicks, COALESCE((features->>'save_count')::float,0) AS saves,
+      COALESCE((features->>'contact_count')::float,0) AS contacts, COALESCE((features->>'intent_score')::float,0) AS intent,
+      COALESCE((features->>'search_count')::float,0) AS searches, updated_at FROM reos_feature_store WHERE entity_type='user'`)
+    await c.query(`CREATE OR REPLACE VIEW reos_agent_features AS SELECT entity_id AS agent_id,
+      COALESCE((features->>'assigned_count')::float,0) AS assigned, updated_at FROM reos_feature_store WHERE entity_type='agent'`)
+    await c.query(`CREATE OR REPLACE VIEW reos_market_features AS SELECT entity_id AS area,
+      COALESCE((features->>'count')::float,0) AS listings, COALESCE((features->>'median_price_per_m')::float,0) AS median_price_per_m,
+      COALESCE((features->>'avg_price')::float,0) AS avg_price, COALESCE((features->>'demand_index')::float,0) AS demand_index,
+      updated_at FROM reos_feature_store WHERE entity_type='market'`)
+  }).catch(() => { /* ویوها اختیاری‌اند */ })
   // تشخیص/فعال‌سازیِ pgvector (اگر ممکن بود). CREATE EXTENSION نیازمندِ superuser است؛
   // اگر نشد، مسیرِ jsonb + cosineِ JS دست‌نخورده کار می‌کند (backward-compatible).
   await detectPgvector()

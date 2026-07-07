@@ -14,6 +14,7 @@ import { getMemories, recentTasks } from '../app/lib/reos/agent/memory.ts'
 import { upsertNode, addEdge, getNode, neighbors, subgraph, shortestPath, graphStats, syncGraphFromEvents } from '../app/lib/reos/graph.ts'
 import { recordEvent as recEv } from '../app/lib/reos/store.ts'
 import { createCampaign, recordClick, recordImpression, getCampaign, activeBoosts, analytics } from '../app/lib/reos/promotion-engine.ts'
+import { computeMarketFeatures, getMarketFeature, topMarkets } from '../app/lib/reos/market-features.ts'
 
 if (!process.env.DATABASE_URL) { console.error('DATABASE_URL not set'); process.exit(2) }
 let pass = 0, fail = 0
@@ -217,6 +218,30 @@ async function main() {
     } else {
       ok('pgvector absent → nearestByVector returns null (JS-cosine fallback used)', near === null)
     }
+  }
+
+  console.log('\n── REOS v2: Feature Store v2 (market_features + typed views) ──')
+  {
+    // seed a few listings into the normalized `listings` table for market aggregation
+    await recordEvent({ type: 'user_searched', userId: '__warm__' }).catch(() => {}) // ensures db schema (listings table) exists
+    for (let i = 0; i < 6; i++) {
+      await pool.query(`INSERT INTO listings(id,scraped_at,type,status,data) VALUES($1,$2,'listing','ok',$3)
+        ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data, status='ok'`,
+        ['mf' + i, Date.now(), JSON.stringify({ id: 'mf' + i, type: 'listing', status: 'ok', title: 'خانه ' + i, price: String(5_000_000_000 + i * 200_000_000), location: 'سعادت آباد', meta: { 'شهر': 'تهران', 'محله': 'سعادت آباد', 'متراژ': String(100 + i * 5) } })])
+    }
+    const nAreas = await computeMarketFeatures(500)
+    ok('computeMarketFeatures aggregated ≥1 area', nAreas >= 1)
+    const mf = await getMarketFeature('تهران|سعادت آباد')
+    ok('market feature stored (count≥6, median/m>0)', !!mf && mf.count >= 6 && mf.medianPricePerM > 0)
+    ok('market avg price computed', !!mf && mf.avgPrice > 0)
+    ok('topMarkets includes the area', (await topMarkets(20)).some(t => t.area === 'تهران|سعادت آباد'))
+    // typed views (Feature Store v2)
+    const mv = await pool.query(`SELECT * FROM reos_market_features WHERE area='تهران|سعادت آباد'`)
+    ok('reos_market_features view returns typed row', mv.rows.length === 1 && Number(mv.rows[0].median_price_per_m) > 0)
+    const pv = await pool.query(`SELECT count(*)::int n FROM reos_property_features`)
+    ok('reos_property_features typed view queryable', typeof pv.rows[0].n === 'number')
+    const uv = await pool.query(`SELECT count(*)::int n FROM reos_user_features`)
+    ok('reos_user_features typed view queryable', typeof uv.rows[0].n === 'number')
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)
