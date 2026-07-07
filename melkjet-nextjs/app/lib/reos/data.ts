@@ -3,6 +3,7 @@ import { listItems, type Item } from '../scraper-store'
 import { forIds } from '../listing-stats-store'
 import { getPrefs } from '../user-store'
 import { getAgency } from '../agency-store'
+import { getAdvisor as getAdvisorProfile } from '../advisor-store'
 import { agencyAdvisorFiles } from '../agency-team'
 import { getFeatures, recentEvents } from './store'
 import { parseFaNum, tokenize } from './features'
@@ -65,7 +66,10 @@ export async function loadAgentsForAgency(agencyPhone: string): Promise<AgentEnt
   for (const r of af.rows) {
     const leads = r.leads?.total || 0
     const conv = leads ? Math.min(1, r.closedCount / leads) : 0
-    out.push({ id: r.advisorPhone, name: r.advisorName, conversionRate: conv, deals: r.closedCount, openLoad: r.leads?.open || 0, rating: 4, active: true, specialties: [] })
+    // تخصصِ واقعیِ مشاور از پروفایلش (تخصص‌ها + مناطق) — برای تطبیقِ منطقه/نوع در موتور.
+    let specialties: string[] = []
+    try { const prof = (await getAdvisorProfile(r.advisorPhone)).profile; specialties = [...(prof.specialties || []), ...(prof.areas ? String(prof.areas).split(/[،,]/).map(s => s.trim()).filter(Boolean) : [])] } catch {}
+    out.push({ id: r.advisorPhone, name: r.advisorName, conversionRate: conv, deals: r.closedCount, openLoad: r.leads?.open || 0, rating: 4, active: true, specialties })
   }
   // مشاورانِ محلیِ دستی (بدونِ اکانت) — برای تخصیصِ داخلی
   for (const g of agency.agents.filter(a => a.active)) {

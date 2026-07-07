@@ -15,6 +15,10 @@ import { forecastIncome, advisorPerformance, teamInsights } from '@/app/lib/agen
 import { agentModel, agentProvider, chatCompleteSafe } from '@/app/lib/gapgpt'
 import { getAdvisor, setListingStatus as advSetStatus, deleteListing as advDeleteListing, addLead as advAddLead, listLeads as advListLeads } from '@/app/lib/advisor-store'
 import { listAgencyMembers } from '@/app/lib/agency-link-store'
+import { loadAgentsForAgency } from '@/app/lib/reos/data'
+import { assignLeadToAgent } from '@/app/lib/reos/engine'
+import { ingest } from '@/app/lib/reos/events'
+import { parseFaNum } from '@/app/lib/reos/features'
 
 // وقتی آژانس یک لید را به مشاور تخصیص می‌دهد، همان لید در پنلِ خودِ آن مشاور (advisor-store)
 // هم ساخته می‌شود تا واقعاً در «/pros → لیدها» ببیندش. dedup: اگر مشاور از قبل لیدی با همان
@@ -179,24 +183,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, assignments: plan, applied: !preview, leads: await listLeads(o) })
     }
     case 'autoAssignLead': {
-      // تخصیصِ خودکارِ یک لید به «مناسب‌ترین» مشاور (همان امتیازدهیِ موتورِ تقسیم).
+      // تخصیصِ خودکارِ یک لید به «مناسب‌ترین» مشاور با موتورِ مرکزیِ REOS (perf+ظرفیت+تخصص).
+      // مزیت: آیدیِ مشاور (شماره) مستقیم از موتور می‌آید → لینکِ ID-based بدونِ جستجوی نام.
       if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
       const agency = await getAgency(o)
-      const af = await agencyAdvisorFiles(o)
-      const localNames = new Set(agency.agents.filter(a => a.active).map(a => a.name))
-      const memberAgents = af.rows.filter(r => !localNames.has(r.advisorName)).map(r => ({
-        id: 'm_' + r.advisorPhone, name: r.advisorName, phone: r.advisorPhone,
-        deals: r.closedCount, leads: r.leads.total, commission: r.advisorCommission, active: true, createdAt: 0,
-      }))
-      const pool = [...agency.agents.filter(a => a.active), ...memberAgents]
-      if (!pool.length) return NextResponse.json({ ok: false, error: 'مشاورِ فعالی برای تخصیص وجود ندارد — اول یک مشاور اضافه/لینک کنید.' })
-      const plan = planDistribution(agency.leads, pool, agency.listings)
-      const a = plan.find(x => x.leadId === String(b.id))
-      if (!a) return NextResponse.json({ ok: false, error: 'این لید قابلِ تخصیصِ خودکار نیست (شاید قبلاً تخصیص یافته یا بسته شده).' })
-      const agentPhone = await advisorPhoneOf(o, a.agentName)
-      const assigned = await assignLead(o, a.leadId, a.agentName, agentPhone)
+      const lead = agency.leads.find(l => l.id === String(b.id))
+      if (!lead) return NextResponse.json({ ok: false, error: 'لید یافت نشد' }, { status: 404 })
+      if (lead.stage === 'closed' || lead.stage === 'lost') return NextResponse.json({ ok: false, error: 'این لید بسته/ازدست‌رفته است.' })
+      const agents = await loadAgentsForAgency(o)   // آداپتورِ REOS: اعضا (id=شماره) + مشاورِ محلی (id=local:..)
+      if (!agents.length) return NextResponse.json({ ok: false, error: 'مشاورِ فعالی برای تخصیص وجود ندارد — اول یک مشاور اضافه/لینک کنید.' })
+      const matches = assignLeadToAgent({ need: lead.need, budget: parseFaNum(lead.budget), locationText: lead.need }, agents)
+      const best = matches[0]
+      if (!best) return NextResponse.json({ ok: false, error: 'تخصیصِ خودکار ممکن نشد.' })
+      const agent = agents.find(x => x.id === best.targetId)
+      const agentPhone = agent && !agent.id.startsWith('local:') ? agent.id : undefined   // فقط اکانتِ واقعی شماره دارد
+      const agentName = agent?.name || best.targetId
+      const assigned = await assignLead(o, lead.id, agentName, agentPhone)
       if (assigned && agentPhone) { const agencyName = await resolveAgencyName(o); await pushLeadToAdvisor(agencyName, assigned, agentPhone) }
-      return NextResponse.json({ ok: true, assignedTo: a.agentName, reasons: a.reasons, leads: await listLeads(o) })
+      // REOS event: تخصیصِ مشاور → flywheel
+      try { await ingest({ type: 'agent_assigned', leadId: lead.id, agentId: agentPhone || best.targetId, userId: o }) } catch {}
+      return NextResponse.json({ ok: true, assignedTo: agentName, reasons: best.reasons, score: best.score, leads: await listLeads(o) })
     }
     case 'conflicts': return NextResponse.json({ ok: true, conflicts: findConflicts(await listLeads(o)) })
     case 'aiInsights': {
