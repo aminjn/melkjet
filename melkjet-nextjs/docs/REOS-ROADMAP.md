@@ -42,18 +42,19 @@
 
 ---
 
-## V4 — لایه‌های تمایزِ عمیق (کپی‌کردن برای رقبا سخت)
-- **Property Digital Twin** 🔥 — هر ملک یک موجودیتِ زنده: price/demand/interest history، buyer personas،
-  risk profile، future price prediction، rental yield، liquidity score، AI confidence score.
-- **Real Estate Knowledge Graph (بازار-محور)** — District→Neighborhood→Projects→Builders→Agents→Banks→
-  Lawyers→Notaries→Buyers→Investors؛ پاسخ به «بهترین بانکِ منطقهٔ ۵؟»، «سریع‌ترین سازندهٔ سعادت‌آباد؟».
-- **AI Memory Layer per role** — حافظهٔ ماندگارِ خریدار/مشاور/آژانس/سازنده/سرمایه‌گذار.
-- **Unified Communication Hub** — SMS/Email/WhatsApp/Telegram/Push/Voice + call tracking.
-- **Trust Layer** — Verified Agency/Builder/Lawyer/Expert/Property + Trust Score 0-100.
-- **Seller Intelligence** — «این فروشنده ۷۰٪ احتمالِ فروش، قیمتِ بالا، ۶۳٪ احتمالِ کاهش».
-- **Neighborhood Intelligence** — crime/school/transit/walkability/noise/population/income/demand.
-- **AI Copilot Everywhere** — در هر صفحه (نه فقط چت): بهبودِ عنوان/قیمت/عکس + پیش‌بینیِ زمانِ فروش.
-- **Marketing Attribution کامل** + **Growth Engine** (referral/ambassador/affiliate/credits).
+## V4 — لایه‌های تمایزِ عمیق (در حالِ اجرا)
+- **Property Digital Twin** 🔥 ✅ — `digital-twin.ts`: ارزش (AVM) + تقاضا + نقدشوندگی + روزهای تا فروش +
+  احتمالِ فروشِ ۴۵روزه + نسبت به بازار + ریسک + اطمینانِ AI + روند. `/api/reos/twin` + کارت روی صفحهٔ ملک. (۷ تست)
+- **Trust Layer** ✅ — `trust.ts`: امتیازِ اعتماد ۰..۱۰۰ + tier + نشان‌های Verified از سیگنالِ واقعی.
+  `/api/reos/trust` + `ReosTrustBadge` در پنلِ مشاور/آژانس. (۹ تست)
+- **Seller Intelligence** ✅ — `seller-intel.ts`: احتمالِ کاهشِ قیمت + کاهشِ پیشنهادی + فوریت + توصیه.
+  `/api/reos/seller-intel`. (۴ تست)
+- **Real Estate Knowledge Graph (بازار-محور)** ⏳ — District→Neighborhood→Projects→Builders→Agents→Banks
+  →Lawyers→Notaries→Buyers؛ «بهترین بانکِ منطقهٔ ۵؟». (گرافِ پایه هست؛ یال‌های بازاری باقی مانده)
+- **AI Copilot Everywhere** ⏳ — بهبودِ عنوان/قیمت/عکس در هر صفحه (بخشی از twin/seller-intel آماده است).
+- **Neighborhood Intelligence** ⏳ — crime/school/transit/walkability (نیازمندِ دیتاست/سرویسِ بیرونی).
+- **AI Memory Layer per role** ⏳ (حافظهٔ ایجنت هست؛ توسعه per-role باقی مانده)
+- **Unified Communication Hub** ⏳ · **Growth Engine** (referral/credits) ⏳
 
 ---
 
