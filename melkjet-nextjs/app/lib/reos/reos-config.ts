@@ -14,6 +14,7 @@ export interface ReosConfig {
   scoring: { budget: number; location: number; behavior: number; intent: number; historical: number; demand: number }
   hybrid: { ml: number; vector: number; rule: number; behavioral: number; boost: number }
   twin: { saleWindowDays: number; overpricePct: number; underpricePct: number }
+  territory: { weights: { transactions: number; listingQuality: number; leadConversion: number; satisfaction: number; content: number; activity: number; aiTrust: number }; battleDays: number; fraudThreshold: number; feedAuthority: number; contestGap: number }
 }
 
 export const DEFAULT_CONFIG: ReosConfig = {
@@ -26,6 +27,7 @@ export const DEFAULT_CONFIG: ReosConfig = {
   scoring: { budget: 0.35, location: 0.25, behavior: 0.15, intent: 0.10, historical: 0.10, demand: 0.05 },
   hybrid: { ml: 0.30, vector: 0.25, rule: 0.20, behavioral: 0.15, boost: 0.10 },
   twin: { saleWindowDays: 45, overpricePct: 12, underpricePct: 8 },
+  territory: { weights: { transactions: 0.30, listingQuality: 0.15, leadConversion: 0.20, satisfaction: 0.10, content: 0.10, activity: 0.10, aiTrust: 0.05 }, battleDays: 7, fraudThreshold: 0.5, feedAuthority: 0.08, contestGap: 8 },
 }
 
 const FILE = join(process.cwd(), '.reos-config-settings.json')

@@ -25,6 +25,8 @@ import { codeFor } from '../app/lib/reos/growth.ts'
 import { banditUpdate, epsilonGreedy, normReward, EVENT_REWARD } from '../app/lib/reos/rl.ts'
 import { planAutonomous } from '../app/lib/reos/autonomous.ts'
 import { fitLeadLogistic, DEFAULT_LEAD, scoreLead } from '../app/lib/reos/lead-model.ts'
+import { dominanceScore, fraudScore, battleWinner, territoryValue, territoryKeyFromName, territoryKeyFromGeo } from '../app/lib/reos/territory.ts'
+import { checkAchievements, nextAchievements, streakStatus, streakBonus, fomoAlerts, dayNumber } from '../app/lib/reos/achievements.ts'
 
 let pass = 0, fail = 0
 const approx = (a, b, e = 1e-6) => Math.abs(a - b) <= e
@@ -354,6 +356,62 @@ console.log('\n── REOS: Lead Conversion — REAL trained model (gradient des
   const dEval = fitLeadLogistic(data.slice(0, 8))   // tiny → default
   ok('tiny dataset keeps safe default', dEval.usedDefault === true)
   ok('scoreLead separates budget vs none', scoreLead(w, { hasPhone: 1, hasEmail: 0, hasBudget: 1, activity: 0.8, recency: 0.8 }) > scoreLead(w, { hasPhone: 1, hasEmail: 0, hasBudget: 0, activity: 0.1, recency: 0.1 }))
+}
+
+console.log('\n── REOS: Market Dominance — امتیازِ اقتدار (فرمولِ وزنی) ──')
+{
+  const strong = dominanceScore({ transactions: 25, listingQuality: 0.9, leadConversion: 0.6, satisfaction: 4.6, contentPieces: 15, activity: 0.9, aiTrust: 85 })
+  const weak = dominanceScore({ transactions: 0, listingQuality: 0.2, leadConversion: 0.05, satisfaction: 2, contentPieces: 0, activity: 0.1, aiTrust: 40 })
+  ok('strong agent scores higher than weak', strong.score > weak.score)
+  ok('dominance in [0,100]', strong.score >= 0 && strong.score <= 100 && weak.score >= 0)
+  ok('strong agent reaches high tier', ['امپراتور', 'سلطان', 'قهرمان'].includes(strong.tier))
+  ok('transactions dominate the score (30% weight)', dominanceScore({ transactions: 30 }).score > dominanceScore({ contentPieces: 30 }).score)
+  ok('parts are exposed 0..100', strong.parts.transactions > 50 && strong.parts.aiTrust > 50)
+  ok('empty signals → neutral-low, not crash', dominanceScore({}).score >= 0 && dominanceScore({}).score < 40)
+}
+
+console.log('\n── REOS: Anti-cheat — امتیازِ تقلب ──')
+{
+  const clean = fraudScore({ listings: 5, listingViews: 200, contacts: 30, selfContacts: 0, transactions: 3, leads: 8 })
+  const dirty = fraudScore({ listings: 40, listingViews: 3, contacts: 10, selfContacts: 6, transactions: 5, leads: 0, spikeRatio: 9 })
+  ok('clean agent low fraud', clean.score < 0.2)
+  ok('dirty agent high fraud', dirty.score >= 0.5)
+  ok('dirty flags include mass-listing + self-contact', dirty.flags.some(f => f.includes('انبوه')) && dirty.flags.some(f => f.includes('خود')))
+  ok('fraud in [0,1]', dirty.score <= 1 && clean.score >= 0)
+}
+
+console.log('\n── REOS: Territory battle + value ──')
+{
+  const b = battleWinner({ agentId: 'A', startScore: 40, endScore: 62 }, { agentId: 'B', startScore: 50, endScore: 60 })
+  ok('battle: bigger gain wins (not bigger absolute)', b.winner === 'A' && b.gainA === 22 && b.gainB === 10)
+  const tie = battleWinner({ agentId: 'A', startScore: 40, endScore: 55 }, { agentId: 'B', startScore: 45, endScore: 60 })
+  ok('battle: equal gain → higher final wins', tie.winner === 'B')
+  const hot = territoryValue({ competitors: 15, topScore: 80, avgScore: 55 })
+  const cold = territoryValue({ competitors: 1, topScore: 20, avgScore: 15 })
+  ok('competitive territory worth more', hot.monthlyToman > cold.monthlyToman)
+  ok('competitiveness in [0,1]', hot.competitiveness > 0 && hot.competitiveness <= 1)
+  ok('territory keys distinct by kind', territoryKeyFromName('سعادت آباد').startsWith('area:') && territoryKeyFromGeo(35.75, 51.4).startsWith('geo:'))
+}
+
+console.log('\n── REOS: Achievements + streaks + FOMO ──')
+{
+  const badges = checkAchievements({ transactions: 12, ownedTerritories: 1, activeDays: 8, avgRating: 4.6, leadsConverted: 30, battlesWon: 5, responseRate: 0.95 })
+  ok('earns first_deal + deal_10', badges.some(b => b.key === 'first_deal') && badges.some(b => b.key === 'deal_10'))
+  ok('does NOT earn deal_50 (only 12)', !badges.some(b => b.key === 'deal_50'))
+  ok('earns rating + territory + streak badges', badges.some(b => b.key === 'rating_star') && badges.some(b => b.key === 'territory_1') && badges.some(b => b.key === 'streak_7'))
+  ok('nextAchievements suggests unmet', nextAchievements({ transactions: 1 }).length > 0)
+  // streak
+  ok('streak continues on next day', streakStatus(100, 5, 101).streak === 6 && streakStatus(100, 5, 101).alive)
+  ok('streak holds same day (idempotent)', streakStatus(100, 5, 100).streak === 5)
+  ok('streak breaks after gap', streakStatus(100, 5, 103).streak === 1 && streakStatus(100, 5, 103).alive === false)
+  ok('streak bonus grows and caps at 0.5', streakBonus(30) === 0.5 && streakBonus(5) === 0.1 && streakBonus(0) === 0)
+  ok('dayNumber monotonic', dayNumber(200 * 864e5) === 200)
+  // FOMO
+  const owner = fomoAlerts({ isOwner: true, rank: 1, toNext: 0, contested: true, runnerUpName: 'رقیب' })
+  ok('owner contested → high alert', owner.some(a => a.level === 'high'))
+  const climber = fomoAlerts({ isOwner: false, rank: 2, toNext: 5, contested: false, nextName: 'صدر' })
+  ok('close climber → medium alert', climber.some(a => a.level === 'medium'))
+  ok('comfortable leader → no scary alert', fomoAlerts({ isOwner: true, rank: 1, toNext: 0, contested: false }).length === 0)
 }
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} REOS unit tests: ${pass} passed, ${fail} failed\n`)

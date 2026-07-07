@@ -29,7 +29,8 @@ function freshness(p: PropertyEntity): number {
 }
 
 // امتیازِ رتبه‌بندیِ ملک برای یک کاربر (با گیتِ کیفیت روی promotion — pay to spam نمی‌شود).
-export function propertyRankScore(u: UserEntity, p: PropertyEntity, boost = 0): FeedCard {
+// authority (۰..۱) = اقتدارِ صاحبِ آگهی در قلمروِ این ملک (Market Dominance) — اعتبارِ واقعی، نه تبلیغِ پولی.
+export function propertyRankScore(u: UserEntity, p: PropertyEntity, boost = 0, authority = 0): FeedCard {
   const hy = hybridScore(u, p, { boost })
   const userMatch = hy.layers.rulePass ? hy.final : 0
   const qual = quality(p)
@@ -40,11 +41,11 @@ export function propertyRankScore(u: UserEntity, p: PropertyEntity, boost = 0): 
   const dem = demandScore(p)
   const promo = clamp01(boost) * clamp01(0.5 + 0.5 * qual)   // Trust gate: boost × quality
   const RW = config().feed.rankWeights   // وزن‌ها از تنظیماتِ سوپرادمین (پیش‌فرض = RANK_WEIGHTS)
-  const score = clamp01(
-    RW.userMatch * userMatch + RW.quality * qual + RW.engagement * eng +
-    RW.freshness * fresh + RW.demand * dem + RW.promotion * promo,
-  )
-  return { id: p.id, score: r3(score), matchPct: Math.round(userMatch * 100), reasons: hy.reasons, parts: { userMatch: r3(userMatch), quality: r3(qual), engagement: r3(eng), learned: r3(learned), freshness: r3(fresh), demand: r3(dem), promotion: r3(promo) } }
+  const auth = clamp01(authority) * clamp01(0.5 + 0.5 * qual)   // اقتدار × کیفیت (اعتبار نه اسپم)
+  const base = RW.userMatch * userMatch + RW.quality * qual + RW.engagement * eng +
+    RW.freshness * fresh + RW.demand * dem + RW.promotion * promo
+  const score = clamp01(base + config().territory.feedAuthority * auth)   // ترمِ اعتبارِ قلمرو (افزایشی)
+  return { id: p.id, score: r3(score), matchPct: Math.round(userMatch * 100), reasons: hy.reasons, parts: { userMatch: r3(userMatch), quality: r3(qual), engagement: r3(eng), learned: r3(learned), freshness: r3(fresh), demand: r3(dem), promotion: r3(promo), authority: r3(auth) } }
 }
 
 // لایهٔ توضیحِ AI: «چرا این ملک پیشنهاد شد؟»
@@ -66,10 +67,10 @@ export interface HomeFeed {
   priceDrops: FeedCard[]
   investment: FeedCard[]
 }
-export function buildHomeFeed(u: UserEntity, properties: PropertyEntity[], boosts: Record<string, number> = {}, priceDropIds: Set<string> = new Set(), limit = 12): HomeFeed {
+export function buildHomeFeed(u: UserEntity, properties: PropertyEntity[], boosts: Record<string, number> = {}, priceDropIds: Set<string> = new Set(), limit = 12, authorities: Record<string, number> = {}): HomeFeed {
   // Candidate generation (فیلترِ سریع) → Ranking → Business rules
   const scored = properties
-    .map(p => ({ p, card: propertyRankScore(u, p, boosts[p.id] || 0) }))
+    .map(p => ({ p, card: propertyRankScore(u, p, boosts[p.id] || 0, authorities[p.id] || 0) }))
     .filter(x => x.card.parts.userMatch > 0 || x.card.score > 0.2)   // حذفِ کاملاً نامرتبط
   const byScore = [...scored].sort((a, b) => b.card.score - a.card.score)
   const forYou = byScore.slice(0, limit).map(x => x.card)

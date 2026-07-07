@@ -6,6 +6,7 @@ import NegotiationEngine from '@/app/components/NegotiationEngine'
 import DivarImport from '@/app/components/DivarImport'
 import ReosPanelSection from '@/app/components/ReosPanelSection'
 import ReosMarketIntel from '@/app/components/ReosMarketIntel'
+import ReosTerritoryCard from '@/app/components/ReosTerritoryCard'
 import ReosWorkflowBuilder from '@/app/components/ReosWorkflowBuilder'
 import ReosWallet from '@/app/components/ReosWallet'
 import ReosTrustBadge from '@/app/components/ReosTrustBadge'
@@ -676,6 +677,7 @@ export default function AgencyPage() {
           {/* DASHBOARD */}
           {view === 'dashboard' && <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <ReosTrustBadge />
+            <ReosTerritoryCard />
             <ReosMarketIntel title="هوشِ بازار (REOS)" />
             <ReosWorkflowBuilder />
             <ReosWallet />

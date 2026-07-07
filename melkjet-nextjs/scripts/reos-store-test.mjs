@@ -35,6 +35,8 @@ import { trainLeadModel } from '../app/lib/reos/lead-model.ts'
 import { assignVariant, createExperiment, recordExposure, recordConversion, results } from '../app/lib/reos/experiments.ts'
 import { credit, debit, getBalance, listTransactions, createInvoice, payInvoice } from '../app/lib/reos/billing.ts'
 import { recordTouch, recordSpend, recordConversion as attrConvert, channelReport } from '../app/lib/reos/attribution.ts'
+import { recordDominance, leaderboard, standing, getOwner, agentTerritories, startBattle, resolveBattle, openBattles, resolveDueBattles, territoryStats, battlesWonBy, dominanceMap, territoryKeyFromName } from '../app/lib/reos/territory.ts'
+import { touchStreak, getStreak } from '../app/lib/reos/achievements.ts'
 
 if (!process.env.DATABASE_URL) { console.error('DATABASE_URL not set'); process.exit(2) }
 let pass = 0, fail = 0
@@ -46,7 +48,7 @@ async function reset() {
   // ensure tables exist first (a no-op call triggers ensureReos), then truncate.
   await recordEvent({ type: 'user_searched', userId: '__warm__' }).catch(() => {})
   await saveEmbeddings('property', [{ id: '__warm__', embed: [0, 0] }]).catch(() => {})
-  for (const t of ['reos_events', 'reos_feature_store', 'reos_embeddings']) {
+  for (const t of ['reos_events', 'reos_feature_store', 'reos_embeddings', 'reos_territory_scores', 'reos_territories', 'reos_territory_battles', 'reos_streaks']) {
     await pool.query(`TRUNCATE ${t}`).catch(() => {})
   }
 }
@@ -567,6 +569,79 @@ async function main() {
     const cat = await modelCatalog()
     ok('catalog lists REOS models with types', cat.length >= 6 && cat.some(m => m.key === 'engage' && m.type === 'trained') && cat.some(m => m.key === 'avm' && m.type === 'formula'))
     ok('catalog reports real trained status', cat.find(m => m.key === 'lead')?.status.length > 0)
+  }
+
+  console.log('\n── REOS: Market Dominance — territory store (real PG) ──')
+  {
+    const T = territoryKeyFromName('سعادت آباد')
+    // آژانسِ قوی vs ضعیف در همان قلمرو
+    await recordDominance(T, '0912111', 'آژانسِ الف', { transactions: 20, listingQuality: 0.9, leadConversion: 0.5, satisfaction: 4.5, contentPieces: 10, activity: 0.9, aiTrust: 80 })
+    await recordDominance(T, '0912222', 'آژانسِ ب', { transactions: 2, listingQuality: 0.4, leadConversion: 0.1, satisfaction: 3, contentPieces: 1, activity: 0.4, aiTrust: 50 })
+    const lb = await leaderboard(T)
+    ok('leaderboard ordered by score desc', lb.length === 2 && lb[0].score >= lb[1].score)
+    ok('leaderboard ranks assigned', lb[0].rank === 1 && lb[1].rank === 2)
+    const owner = await getOwner(T)
+    ok('owner = top agent', owner && owner.ownerId === lb[0].agentId)
+    const st = await standing(T, lb[1].agentId)
+    ok('standing computes rank + toNext', st.rank === 2 && st.toNext === (lb[0].score - lb[1].score))
+    ok('standing isOwner false for runner-up', st.isOwner === false)
+
+    // ضدِتقلب: امتیاز با تقلبِ بالا کاهش می‌یابد
+    const dirtyOnly = await recordDominance(territoryKeyFromName('منطقهٔ تقلب'), '0912999', 'مشکوک',
+      { transactions: 10, listingQuality: 0.9, leadConversion: 0.5, satisfaction: 4, contentPieces: 5, activity: 0.9, aiTrust: 70 },
+      { listings: 40, listingViews: 2, contacts: 20, selfContacts: 12, transactions: 10, leads: 0, spikeRatio: 9 })
+    ok('fraud dampens score', dirtyOnly.fraud >= 0.5 && dirtyOnly.score < 40)
+
+    // پروفایلِ آژانس در چند قلمرو
+    await recordDominance(territoryKeyFromName('ولنجک'), '0912111', 'آژانسِ الف', { transactions: 8, listingQuality: 0.7, activity: 0.8, aiTrust: 75 })
+    const terrs = await agentTerritories('0912111')
+    ok('agentTerritories lists all agent territories', terrs.length === 2 && terrs.every(t => typeof t.rank === 'number'))
+    ok('agent is owner where top', terrs.some(t => t.isOwner))
+
+    // نقشهٔ اقتدار
+    const map = await dominanceMap()
+    ok('dominance map returns owners', map.length >= 2 && map.some(m => m.territory === T))
+
+    // آمار + ارزشِ قلمرو
+    const stats = await territoryStats(T)
+    ok('territoryStats: competitors + premium value', stats.competitors === 2 && stats.value.monthlyToman > 0)
+  }
+
+  console.log('\n── REOS: Territory battles (7-day challenge) ──')
+  {
+    const T = territoryKeyFromName('نبردِ محله')
+    await recordDominance(T, '0913aaa', 'مدافع', { transactions: 10, activity: 0.8, aiTrust: 70 })
+    await recordDominance(T, '0913bbb', 'چالش‌گر', { transactions: 3, activity: 0.5, aiTrust: 55 })
+    const b = await startBattle(T, '0913bbb', '0913aaa')
+    ok('battle starts open with captured start scores', b.status === 'open' && typeof b.startScores['0913bbb'] === 'number')
+    const early = await resolveBattle(b.id, b.startAt + 1000)   // هنوز تمام نشده
+    ok('battle not resolved before end', early.status === 'open')
+    ok('openBattles lists it', (await openBattles(T)).some(x => x.id === b.id))
+    // چالش‌گر امتیازش را بالا می‌برد (رشدِ بیشتر)
+    await recordDominance(T, '0913bbb', 'چالش‌گر', { transactions: 25, listingQuality: 0.9, leadConversion: 0.6, satisfaction: 4.6, contentPieces: 12, activity: 0.95, aiTrust: 85 })
+    const done = await resolveBattle(b.id, b.endAt + 1000)
+    ok('battle resolves after end, challenger (bigger gain) wins', done.status === 'resolved' && done.winnerId === '0913bbb')
+    ok('battlesWonBy counts the win', (await battlesWonBy('0913bbb')) === 1)
+    // resolveDueBattles
+    await recordDominance(T, '0913ccc', 'ج۲', { transactions: 5, activity: 0.5 })
+    const b2 = await startBattle(T, '0913ccc', '0913aaa')
+    const n = await resolveDueBattles(b2.endAt + 1000)
+    ok('resolveDueBattles resolves due ones', n >= 1 && (await openBattles(T)).every(x => x.id !== b2.id))
+  }
+
+  console.log('\n── REOS: Activity streaks (real PG) ──')
+  {
+    const day = 20000
+    await touchStreak('0914xyz', day * 864e5)
+    await touchStreak('0914xyz', day * 864e5)   // همان روز → idempotent
+    let s = await getStreak('0914xyz', day * 864e5)
+    ok('streak = 1 after same-day touches', s.streak === 1 && s.alive)
+    await touchStreak('0914xyz', (day + 1) * 864e5)   // روزِ بعد
+    s = await getStreak('0914xyz', (day + 1) * 864e5)
+    ok('streak grows to 2 next day', s.streak === 2)
+    const broken = await getStreak('0914xyz', (day + 5) * 864e5)   // فاصله
+    ok('streak reads 0 after gap (not alive)', broken.streak === 0 && broken.alive === false)
+    ok('longest preserved across break', broken.longest === 2)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

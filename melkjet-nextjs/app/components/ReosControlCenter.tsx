@@ -38,6 +38,10 @@ export default function ReosControlCenter() {
     setBusy(''); setMsg(d?.ok ? `تأیید شد ✓ (اعتماد: ${d.trust?.score})` : d?.error || 'خطا'); setTimeout(() => setMsg(''), 4000)
   }
   const promote = async (id: string) => { setBusy('promote' + id); await fetch('/api/reos/models', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'promote', id }) }); await loadModels(); setBusy('') }
+  const syncTerritory = async () => {
+    setBusy('terr'); const d = await fetch('/api/reos/territory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sync' }) }).then(r => r.json()).catch(() => null)
+    setBusy(''); setMsg(d?.ok ? `اقتدارِ بازار همگام شد ✓ (${(d.result?.records || 0).toLocaleString('fa-IR')} رکورد در ${(d.result?.territories || 0).toLocaleString('fa-IR')} قلمرو)` : d?.error || 'خطا'); setTimeout(() => setMsg(''), 5000)
+  }
 
   const inp = (section: string, key: string, sub?: string) => {
     const v = cfg ? (sub ? (cfg[section][key] as Record<string, unknown>)[sub] : cfg[section][key]) : ''
@@ -59,6 +63,7 @@ export default function ReosControlCenter() {
           {btn('بازمحاسبهٔ هوشِ بازار', () => action('هوشِ بازار', '/api/reos/market-intel', 'mi'), 'mi')}
           {btn('بازمحاسبهٔ ویژگی‌های بازار', () => action('ویژگی‌های بازار', '/api/reos/market', 'mf'), 'mf')}
           {btn('همگام‌سازیِ گراف', () => action('گراف', '/api/reos/graph', 'gr'), 'gr')}
+          {btn('🏆 همگام‌سازیِ اقتدارِ بازار', syncTerritory, 'terr')}
         </div>
 
         {/* تنظیمات */}
@@ -104,6 +109,15 @@ export default function ReosControlCenter() {
               {row('موقعیت', inp('scoring', 'location'))}
               {row('رفتار', inp('scoring', 'behavior'))}
               {row('نیت', inp('scoring', 'intent'))}
+            </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8, color: 'var(--gold)' }}>اقتدارِ بازار (Market Dominance)</div>
+              {row('وزنِ معاملات', inp('territory', 'weights', 'transactions'))}
+              {row('وزنِ تبدیلِ لید', inp('territory', 'weights', 'leadConversion'))}
+              {row('وزنِ کیفیتِ آگهی', inp('territory', 'weights', 'listingQuality'))}
+              {row('روزهای نبرد', inp('territory', 'battleDays'))}
+              {row('آستانهٔ تقلب', inp('territory', 'fraudThreshold'))}
+              {row('وزنِ اعتبار در فید', inp('territory', 'feedAuthority'))}
             </div>
           </div>
         )}

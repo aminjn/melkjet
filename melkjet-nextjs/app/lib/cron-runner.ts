@@ -55,6 +55,8 @@ async function tick(): Promise<{ due: number; synced: number }> {
       try { const { runAllIdleWorkflows } = await import('./reos/workflow-builder'); const w = await runAllIdleWorkflows(); if (w) console.log(`[reos] workflows: ${w} actions`) } catch { /* گردش‌کارِ REOS */ }
       try { const { computeMarketIntel } = await import('./reos/market-intel'); const mi = await computeMarketIntel(); console.log(`[reos] market intel: ${mi} areas`) } catch { /* هوشِ بازارِ REOS */ }
       try { const { syncMarketGraph } = await import('./reos/market-graph'); const mg = await syncMarketGraph(); console.log(`[reos] market graph: ${mg.areas} areas, ${mg.edges} edges`) } catch { /* گرافِ بازارِ REOS */ }
+      try { const { syncTerritories } = await import('./reos/territory-sync'); const t = await syncTerritories(); console.log(`[reos] market dominance: ${t.records} records, ${t.territories} territories, ${t.agents} agents`) } catch { /* اقتدارِ بازارِ REOS */ }
+      try { const { resolveDueBattles } = await import('./reos/territory'); const b = await resolveDueBattles(); if (b) console.log(`[reos] territory battles resolved: ${b}`) } catch { /* نبردهای قلمروِ REOS */ }
     }
     due = listDueSources(Date.now())
     for (const { phone, source } of due) {
