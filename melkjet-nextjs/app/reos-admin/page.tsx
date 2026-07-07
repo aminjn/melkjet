@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { ReosExperimentsAdmin, ReosAttributionAdmin, ReosGeoHeat } from '@/app/components/ReosOpsPanels'
 
 const FONT = 'Vazirmatn, system-ui, sans-serif'
 const fa = (n: number) => (n || 0).toLocaleString('fa-IR')
@@ -193,6 +194,12 @@ export default function ReosAdminPage() {
           <div>FeedRank: {JSON.stringify(d.engine.weights.feedRank)}</div>
         </div>
       </div>
+
+      {/* پنل‌های V3: A/B، Attribution، نقشهٔ حرارتی */}
+      <ReosExperimentsAdmin />
+      <ReosAttributionAdmin />
+      <ReosGeoHeat />
+
       <style>{`@media(max-width:800px){.reos-cols{grid-template-columns:1fr !important}}`}</style>
     </div>
   )
