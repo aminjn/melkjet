@@ -20,6 +20,13 @@ export interface ReosConfig {
   community: { weights: { followers: number; dominance: number; trust: number; level: number }; commentMaxLen: number }
   automl: { enabled: boolean; promoteMargin: number; minSamples: number }
   suspension: { enabled: boolean; fraudPct: number; autoSuspend: boolean }
+  empire: {
+    giftToman: number; welcomeCoins: number; welcomeXp: number; welcomeAiTokens: number
+    buyRewardXp: number; missionRewardXp: number; missionRewardCoins: number
+    guessTolerancePct: number; guessRewardXp: number; guessRewardCoins: number
+    levelXp: { explorer: number; investor: number; builder: number }
+    mentorInitiates: boolean
+  }
 }
 
 export const DEFAULT_CONFIG: ReosConfig = {
@@ -39,6 +46,15 @@ export const DEFAULT_CONFIG: ReosConfig = {
   automl: { enabled: true, promoteMargin: 0.02, minSamples: 100 },
   // قوانینِ تعلیق: تقلب ≥ fraudPct٪ → پرچمِ بازبینی؛ اگر autoSuspend روشن باشد → تعلیقِ خودکار (ورود مسدود).
   suspension: { enabled: true, fraudPct: 70, autoSuspend: false },
+  // امپراتوری (سندِ Empire، جلد۲ فصل ۱–۶): چهار نوع ارزش — XP (غیرقابل‌خرید)، Melk Coin (ارزِ داخلی)،
+  // Real Asset (به تومان، دارایی = آگهیِ واقعی)، Reputation (از trustِ REOS). بستهٔ خوش‌آمد طبق §6.3.
+  empire: {
+    giftToman: 10_000_000_000, welcomeCoins: 500, welcomeXp: 100, welcomeAiTokens: 5,
+    buyRewardXp: 100, missionRewardXp: 200, missionRewardCoins: 50,
+    guessTolerancePct: 15, guessRewardXp: 30, guessRewardCoins: 10,
+    levelXp: { explorer: 500, investor: 1500, builder: 5000 },
+    mentorInitiates: true,
+  },
 }
 
 const FILE = join(process.cwd(), '.reos-config-settings.json')

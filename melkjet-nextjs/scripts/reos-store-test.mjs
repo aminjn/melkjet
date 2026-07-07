@@ -45,6 +45,7 @@ import { follow, unfollow, isFollowing, followerCount, followingCount, following
 import { listFlags, getFlag, setFlag, flagEnabled } from '../app/lib/reos/flags.ts'
 import { registerModel as regModel, getChampion as champOf } from '../app/lib/reos/model-registry.ts'
 import { autoPromote, autoMLStatus } from '../app/lib/reos/automl.ts'
+import { createEmpire, getEmpire, renameEmpire, buyAsset, chooseAssetAction, recordGuess, claimEmpireMission, spendAiToken, setHunterPair, answerHunter, setStylePicks, bumpRejects, empireCount, netWorthOf as empNetWorth } from '../app/lib/empire-store.ts'
 
 if (!process.env.DATABASE_URL) { console.error('DATABASE_URL not set'); process.exit(2) }
 let pass = 0, fail = 0
@@ -56,7 +57,7 @@ async function reset() {
   // ensure tables exist first (a no-op call triggers ensureReos), then truncate.
   await recordEvent({ type: 'user_searched', userId: '__warm__' }).catch(() => {})
   await saveEmbeddings('property', [{ id: '__warm__', embed: [0, 0] }]).catch(() => {})
-  for (const t of ['reos_events', 'reos_feature_store', 'reos_embeddings', 'reos_territory_scores', 'reos_territories', 'reos_territory_battles', 'reos_streaks', 'reos_xp', 'reos_missions', 'reos_wallet', 'reos_wallet_txn', 'reos_follows', 'reos_collections', 'reos_collection_items', 'reos_comments', 'reos_flags', 'reos_models']) {
+  for (const t of ['reos_events', 'reos_feature_store', 'reos_embeddings', 'reos_territory_scores', 'reos_territories', 'reos_territory_battles', 'reos_streaks', 'reos_xp', 'reos_missions', 'reos_wallet', 'reos_wallet_txn', 'reos_follows', 'reos_collections', 'reos_collection_items', 'reos_comments', 'reos_flags', 'reos_models', 'reos_empire']) {
     await pool.query(`TRUNCATE ${t}`).catch(() => {})
   }
 }
@@ -803,6 +804,59 @@ async function main() {
     ok('does NOT promote high-AUC with too few samples', r3.promoted === false && (await champOf('amltest'))?.metrics.auc === 0.86)
     const st = await autoMLStatus('amltest')
     ok('autoMLStatus exposes champion + challenger', st.champion?.metric === 0.86 && !!st.challenger)
+  }
+
+  console.log('\n── Empire فاز ۱: چرخهٔ کامل روی PG واقعی ──')
+  {
+    const uid = '0912empire1'
+    ok('قبل از تولد: getEmpire=null', (await getEmpire(uid)) === null)
+    const e = await createEmpire(uid, { name: 'Amin Capital', persona: '🦁', answers: { city: 'تهران', tenB: 'سرمایه‌گذاری می‌کردم', risk: 60, ptype: 'آپارتمان', goal: 'رشدِ سرمایه' }, dreamPicks: ['home', 'income'] })
+    ok('تولد: بستهٔ خوش‌آمد §6.3 (سرمایه+کوین+XP+ژتون)', e.capital === 10_000_000_000 && e.coins === 500 && e.xp === 100 && e.aiTokens === 5)
+    ok('تولد: نشانِ Founder + اولین نقطهٔ تایم‌لاین', e.badges.includes('Founder') && e.timeline[0].title === 'به ملک‌جت پیوست')
+    ok('تولد: هویت + حکم + منتور', e.identity.investor > 0 && e.profile.title === 'Investor Profile' && e.mentor === 'نورا')
+    ok('createEmpire ایدمپوتنت (دوباره → همان)', (await createEmpire(uid, { answers: {} })).no === e.no)
+    // خرید: سرمایه کم می‌شود + پاداشِ سند
+    const b1 = await buyAsset(uid, { id: 'LST1', title: 'آپارتمان ۱۰۰ متری پونک', hood: 'پونک', price: 4_000_000_000, ptype: 'آپارتمان' })
+    ok('خریدِ اول: کسرِ سرمایه + XP + First Owner', b1.ok && b1.empire.capital === 6_000_000_000 && b1.empire.xp === 200 && b1.empire.badges.includes('First Owner'))
+    ok('خریدِ اول: هویت +۲ builder/+۱ investor (سند فصل۳)', b1.empire.identity.builder === e.identity.builder + 2 && b1.empire.identity.investor === Math.min(100, e.identity.investor + 1))
+    const b2 = await buyAsset(uid, { id: 'LST1', title: 'x', hood: 'x', price: 1, ptype: '' })
+    ok('خریدِ تکراریِ همان آگهی رد می‌شود', b2.ok === false)
+    const b3 = await buyAsset(uid, { id: 'LST2', title: 'برج', hood: 'ونک', price: 99_000_000_000, ptype: 'آپارتمان' })
+    ok('سرمایهٔ ناکافی → رد', b3.ok === false && b3.reason === 'سرمایهٔ کافی نیست')
+    // تصمیمِ معنادار
+    const aid = b1.empire.assets[0].id
+    const d1 = await chooseAssetAction(uid, aid, 'rent')
+    ok('تصمیمِ اجاره → ثبت + سیگنالِ هویتیِ commercial', d1.ok && d1.empire.assets[0].action === 'rent' && d1.empire.identity.commercial === b1.empire.identity.commercial + 3)
+    // Beat AI
+    const g1 = await recordGuess(uid, 10_000_000_000, 10_500_000_000)
+    ok('حدسِ درست → XP+کوین + آمار', g1.ok && g1.correct === true && (await getEmpire(uid)).guess.correct === 1)
+    const g2 = await recordGuess(uid, 10_000_000_000, 30_000_000_000)
+    ok('حدسِ غلط → بدونِ پاداش، tries=2', g2.ok && g2.correct === false && (await getEmpire(uid)).guess.tries === 2)
+    // مأموریت: یک‌بارمصرف
+    const c1 = await claimEmpireMission(uid, 'm1_explore', 200, 50)
+    const c2 = await claimEmpireMission(uid, 'm1_explore', 200, 50)
+    ok('claim فقط یک‌بار', c1.ok === true && c2.ok === false && c2.reason === 'قبلاً دریافت شده')
+    // ژتونِ AI
+    for (let i = 0; i < 5; i++) await spendAiToken(uid)
+    ok('ژتونِ ششم رد می‌شود', (await spendAiToken(uid)).ok === false && (await getEmpire(uid)).aiTokens === 0)
+    // Property Hunter
+    await setHunterPair(uid, 'A1', 'B1', 'A1')
+    const h1 = await answerHunter(uid, 'A1')
+    ok('Hunter درست → پاداش + پاک‌شدنِ جفت', h1.ok && h1.correct === true && h1.rewardXp > 0 && !(await getEmpire(uid)).hunter)
+    const h2 = await answerHunter(uid, 'A1')
+    ok('Hunter بدونِ جفتِ فعال → رد', h2.ok === false)
+    // سبک + نام + رد
+    await setStylePicks(uid, ['مدرن', 'لوکس', 'مینیمال'])
+    ok('سبک‌ها ذخیره می‌شوند', (await getEmpire(uid)).stylePicks.length === 3)
+    const rn = await renameEmpire(uid, 'Noyan Group')
+    ok('تغییرِ نام', rn.ok && (await getEmpire(uid)).name === 'Noyan Group')
+    await bumpRejects(uid); await bumpRejects(uid)
+    ok('دو ردِ پیشنهاد → rejects=2 (کنترلِ آزاد)', (await getEmpire(uid)).rejects === 2)
+    ok('empireCount ≥ 1', (await empireCount()) >= 1)
+    // ارزشِ خالص زنده
+    const fin = await getEmpire(uid)
+    const nw = empNetWorth(fin, { LST1: 4_400_000_000 })
+    ok('netWorth زنده: نقد + ارزشِ روز (+۱۰٪ رشد)', nw.netWorth === fin.capital + 4_400_000_000 && nw.growth === 10)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

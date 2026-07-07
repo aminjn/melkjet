@@ -17,6 +17,7 @@ export const DEFAULT_FLAGS: Record<string, Omit<Flag, 'at'>> = {
   community: { key: 'community', label: 'لایهٔ اجتماعی (Community)', enabled: true, rolloutPct: 100, cities: [], plans: [], roles: [] },
   wallet: { key: 'wallet', label: 'کیفِ پول', enabled: true, rolloutPct: 100, cities: [], plans: [], roles: [] },
   automl: { key: 'automl', label: 'ارتقای خودکارِ مدل (AutoML)', enabled: true, rolloutPct: 100, cities: [], plans: [], roles: [] },
+  empire: { key: 'empire', label: 'امپراتوری (مسیرِ رشدِ کاربر)', enabled: true, rolloutPct: 100, cities: [], plans: [], roles: [] },
 }
 
 // سطلِ قطعیِ ۰..۹۹ از کلید+کاربر (هش پایدار — همان کاربر همیشه همان سطل).

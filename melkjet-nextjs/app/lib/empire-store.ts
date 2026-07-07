@@ -1,0 +1,367 @@
+// Empire · هستهٔ «امپراتوری» (سندِ Empire Bible، جلد۲ فصل ۱–۶) — مسیرِ رشدِ کاربرِ عادی.
+// قانونِ ۲ سند: هیچ دادهٔ جعلی — دارایی‌ها آگهی‌های واقعیِ سایت‌اند و ارزششان زنده محاسبه می‌شود.
+// چهار نوع ارزش (فصل ۶): XP (غیرقابل‌خرید)، Melk Coin (ارزِ داخلی)، Real Asset (تومان)، Reputation (از REOS trust).
+// ذخیره dual-mode: PG (جدولِ reos_empire، هر کاربر یک ردیف) یا فایلِ ‎.empire-data.json‎.
+import { pgEnabled, pgTx } from './db'
+import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { join } from 'path'
+import { randomBytes } from 'crypto'
+import { config } from './reos/reos-config'
+
+export type AssetKind = 'apartment' | 'villa' | 'commercial' | 'land'
+export type AssetAction = 'renovate' | 'rent' | 'hold'
+export const MENTORS = ['نورا', 'آرمان', 'سارا'] as const
+export type Mentor = typeof MENTORS[number]
+
+export interface EmpireAsset {
+  id: string
+  listingId: string           // آگهیِ واقعیِ سایت — ارزشِ روز از همان خوانده می‌شود
+  title: string
+  hood: string
+  kind: AssetKind
+  buyPrice: number            // تومان در لحظهٔ خرید
+  boughtAt: number
+  action?: AssetAction        // تصمیمِ معنادارِ بعد از خرید (بازسازی/اجاره/نگه‌داشتن)
+  actionAt?: number
+}
+export interface TimelineDot { at: number; icon: string; title: string; detail?: string }
+export interface JournalEntry { at: number; text: string }
+
+export interface EmpireData {
+  userId: string
+  no: number                  // Empire #N — شمارهٔ تولد
+  name: string                // نامِ امپراتوری (مثل «Amin Capital»)
+  createdAt: number
+  persona: string             // آواتار/پرسونای انتخابی
+  mentor: Mentor              // منتورِ ثابت: نورا (مالی) / آرمان (سازنده) / سارا (تجاری)
+  answers: { city: string; tenB: string; risk: number; ptype: string; goal: string }
+  dream: { picks: string[]; sentence: string }        // Dream Board (فصل ۳)
+  identity: Record<string, number>                    // امتیازهای هویتی ۰..۱۰۰ (Identity Engine)
+  dna: string                                         // Digital DNA (Explorer/Investor/…)
+  profile: { title: string; confidence: number }      // «Investor Profile / Confidence 82%»
+  capital: number             // تومان — قدرتِ خریدِ شبیه‌سازی (هدیهٔ شروع، فصل ۲)
+  coins: number               // Melk Coin (فصل ۶.۲)
+  xp: number                  // XPِ امپراتوری (سطح‌ها: Citizen/Explorer/Investor/Builder — §6.2)
+  aiTokens: number            // ژتونِ تحلیل AI (بستهٔ خوش‌آمد ×۵ — §6.3)
+  badges: string[]            // Founder / First Owner / …
+  assets: EmpireAsset[]
+  timeline: TimelineDot[]     // تایم‌لاینِ زندگی (اولین نقطه: «به ملک‌جت پیوست»)
+  journal: JournalEntry[]     // AI Journal (فصل ۳)
+  guess: { tries: number; correct: number }           // Beat AI (مأموریت M3)
+  stylePicks?: string[]                               // مأموریت M2 «سبکِ خودت را پیدا کن» (انتخابِ تصویری)
+  hunter?: { a: string; b: string; better: string; at: number }   // جفتِ فعالِ Property Hunter (§6.4)
+  claims: Record<string, number>                      // پاداش‌های یک‌بارمصرفِ دریافت‌شده (missionKey → ts)
+  rejects: number             // ردِ پیشنهادِ AI در خریدِ اول (۲ بار → کنترلِ آزاد)
+  suspense?: { text: string; dueAt: number }          // «Never End A Session» (فصل ۴)
+  updatedAt: number
+}
+
+// ══════════ هسته‌های خالص (تست‌پذیر، بدونِ I/O) ══════════
+
+// سطح از XPِ امپراتوری — آستانه‌ها از تنظیماتِ سوپرادمین (§6.2: 500/1500/5000).
+export function empireLevel(xp: number, lv = config().empire.levelXp): { level: number; title: string; titleFa: string; next: number | null; progress: number } {
+  const steps: Array<[number, string, string]> = [[0, 'Citizen', 'شهروند'], [lv.explorer, 'Explorer', 'کاوشگر'], [lv.investor, 'Investor', 'سرمایه‌گذار'], [lv.builder, 'Builder', 'سازنده']]
+  let i = 0
+  while (i + 1 < steps.length && xp >= steps[i + 1][0]) i++
+  const next = i + 1 < steps.length ? steps[i + 1][0] : null
+  const start = steps[i][0], span = next ? next - start : 1
+  return { level: i + 1, title: steps[i][1], titleFa: steps[i][2], next, progress: next ? Math.min(1, Math.round(((xp - start) / span) * 100) / 100) : 1 }
+}
+
+// Identity Engine (فصل ۲): امتیازهای هویتی ۰..۱۰۰ از پاسخ‌های ۵گانه — قطعی و شفاف.
+export function identityFromAnswers(a: { tenB?: string; risk?: number; ptype?: string; goal?: string }): Record<string, number> {
+  const risk = Math.max(0, Math.min(100, Number(a.risk) || 50))
+  const s: Record<string, number> = { investor: 30, builder: 20, commercial: 20, luxury: 20, agency: 10, risk, negotiation: 40 }
+  const tenB = a.tenB || ''
+  if (/سرمایه|invest/.test(tenB)) s.investor += 40
+  if (/ساخت|build|کلنگی/.test(tenB)) s.builder += 40
+  if (/کسب|تجاری|مغازه|business/.test(tenB)) s.commercial += 40
+  if (/خانه|home|زندگی/.test(tenB)) { s.investor += 10; s.negotiation += 10 }
+  const p = a.ptype || ''
+  if (/ویلا/.test(p)) s.luxury += 25
+  if (/تجاری|مغازه/.test(p)) s.commercial += 20
+  if (/زمین|کلنگی/.test(p)) s.builder += 20
+  if (/آپارتمان/.test(p)) s.investor += 10
+  const g = a.goal || ''
+  if (/درآمد|اجاره/.test(g)) s.commercial += 15
+  if (/رشد|سود/.test(g)) s.investor += 15
+  if (/ساخت/.test(g)) s.builder += 15
+  if (/اولین|خانه/.test(g)) s.negotiation += 10
+  for (const k in s) s[k] = Math.max(0, Math.min(100, Math.round(s[k])))
+  return s
+}
+
+// حکمِ هویتی («Investor Profile / Confidence 82%») + DNA — از امتیازها، قطعی.
+export function identityVerdict(scores: Record<string, number>): { title: string; confidence: number; dna: string; mentor: Mentor } {
+  const order: Array<[string, string, string, Mentor]> = [
+    ['investor', 'Investor Profile', 'Investor', 'نورا'],
+    ['builder', 'Builder Profile', 'Builder', 'آرمان'],
+    ['commercial', 'Commercial Profile', 'Trader', 'سارا'],
+    ['luxury', 'Luxury Profile', 'Collector', 'نورا'],
+  ]
+  const ranked = order.map(([k, t, d, m]) => ({ k, t, d, m, v: scores[k] || 0 })).sort((x, y) => y.v - x.v)
+  const top = ranked[0], second = ranked[1]
+  // اطمینان = پایه + فاصلهٔ نفرِ اول از دوم (هرچه تمایزِ رفتاری بیشتر، اطمینان بالاتر) — سقف ۹۵.
+  const confidence = Math.max(55, Math.min(95, 60 + (top.v - second.v)))
+  const dna = (scores.risk || 0) >= 70 ? 'Explorer' : top.d
+  return { title: top.t, confidence, dna, mentor: top.m }
+}
+
+// دسته‌بندیِ نوعِ دارایی از نوعِ ملکِ آگهیِ واقعی.
+export function assetKindOf(ptype: string): AssetKind {
+  const p = ptype || ''
+  if (/ویلا/.test(p)) return 'villa'
+  if (/تجاری|مغازه|اداری/.test(p)) return 'commercial'
+  if (/زمین|کلنگی|باغ/.test(p)) return 'land'
+  return 'apartment'
+}
+
+// Beat AI (M3): حدسِ قیمت — در بازهٔ تلورانس = درست.
+export function guessOutcome(actual: number, guess: number, tolerancePct = config().empire.guessTolerancePct): { correct: boolean; deltaPct: number } {
+  if (!actual || !guess) return { correct: false, deltaPct: 100 }
+  const deltaPct = Math.round(Math.abs(guess - actual) / actual * 100)
+  return { correct: deltaPct <= tolerancePct, deltaPct }
+}
+
+// جملهٔ AI Dream Engine از انتخاب‌های Dream Board (فصل ۳) — قطعی.
+export function dreamSentence(picks: string[]): string {
+  const p = new Set(picks)
+  const parts: string[] = []
+  if (p.has('home')) parts.push('خانه‌ای که مالِ خودت باشد')
+  if (p.has('company')) parts.push('شرکتی که خودت ساخته‌ای')
+  if (p.has('lifestyle')) parts.push('سبکِ زندگیِ دلخواهت')
+  if (p.has('income')) parts.push('درآمدی که آزادت کند')
+  if (p.has('city')) parts.push('زندگی در شهری که دوستش داری')
+  if (!parts.length) return 'رؤیای تو، نقطهٔ شروعِ امپراتوریِ توست.'
+  return `رؤیای تو: ${parts.join('، ')} — از همین‌جا مسیرش را با هم می‌سازیم.`
+}
+
+// ══════════ ذخیره (dual-mode) ══════════
+const FILE = join(process.cwd(), '.empire-data.json')
+function fileLoad(): Record<string, EmpireData> { if (existsSync(FILE)) { try { return JSON.parse(readFileSync(FILE, 'utf-8')) } catch {} } return {} }
+function fileSave(d: unknown) { try { writeFileSync(FILE, JSON.stringify(d)) } catch {} }
+let ready = false
+async function ensure() { if (ready) return; await pgTx(c => c.query(`CREATE TABLE IF NOT EXISTS reos_empire (user_id text PRIMARY KEY, no integer NOT NULL, data jsonb NOT NULL, at bigint NOT NULL)`)); ready = true }
+
+export async function getEmpire(userId: string): Promise<EmpireData | null> {
+  if (!userId) return null
+  if (pgEnabled()) { await ensure(); const r = await pgTx(c => c.query(`SELECT data FROM reos_empire WHERE user_id=$1`, [userId])); return (r.rows[0]?.data as EmpireData) || null }
+  return fileLoad()[userId] || null
+}
+
+async function putEmpire(e: EmpireData): Promise<EmpireData> {
+  e.updatedAt = Date.now()
+  if (pgEnabled()) { await ensure(); await pgTx(c => c.query(`INSERT INTO reos_empire(user_id,no,data,at) VALUES($1,$2,$3,$4) ON CONFLICT(user_id) DO UPDATE SET data=EXCLUDED.data, at=EXCLUDED.at`, [e.userId, e.no, JSON.stringify(e), e.updatedAt])) }
+  else { const db = fileLoad(); db[e.userId] = e; fileSave(db) }
+  return e
+}
+
+// جهش اتمیک: خواندن، اعمالِ fn، نوشتن — روی PG با قفلِ ردیف (FOR UPDATE) تا دو درخواستِ همزمان سکه/سرمایه را دوبار خرج نکنند.
+async function mutateEmpire(userId: string, fn: (e: EmpireData) => void | string): Promise<{ ok: boolean; reason?: string; empire?: EmpireData }> {
+  if (pgEnabled()) {
+    await ensure()
+    return pgTx(async c => {
+      const r = await c.query(`SELECT data FROM reos_empire WHERE user_id=$1 FOR UPDATE`, [userId])
+      const e = r.rows[0]?.data as EmpireData | undefined
+      if (!e) return { ok: false, reason: 'امپراتوری یافت نشد' }
+      const err = fn(e)
+      if (err) return { ok: false, reason: err, empire: e }
+      e.updatedAt = Date.now()
+      await c.query(`UPDATE reos_empire SET data=$2, at=$3 WHERE user_id=$1`, [userId, JSON.stringify(e), e.updatedAt])
+      return { ok: true, empire: e }
+    })
+  }
+  const db = fileLoad()
+  const e = db[userId]
+  if (!e) return { ok: false, reason: 'امپراتوری یافت نشد' }
+  const err = fn(e)
+  if (err) return { ok: false, reason: err, empire: e }
+  e.updatedAt = Date.now()
+  fileSave(db)
+  return { ok: true, empire: e }
+}
+
+// ══════════ تولد (فصل ۲): سؤال‌ها → هویت → نام → بستهٔ خوش‌آمد → اولین نقطهٔ تایم‌لاین ══════════
+export async function createEmpire(userId: string, input: {
+  name?: string; persona?: string
+  answers: { city?: string; tenB?: string; risk?: number; ptype?: string; goal?: string }
+  dreamPicks?: string[]
+}, now = Date.now()): Promise<EmpireData> {
+  const existing = await getEmpire(userId)
+  if (existing) return existing
+  const cfg = config().empire
+  const answers = {
+    city: String(input.answers.city || '').slice(0, 40),
+    tenB: String(input.answers.tenB || '').slice(0, 80),
+    risk: Math.max(0, Math.min(100, Number(input.answers.risk) || 50)),
+    ptype: String(input.answers.ptype || '').slice(0, 40),
+    goal: String(input.answers.goal || '').slice(0, 80),
+  }
+  const identity = identityFromAnswers(answers)
+  const v = identityVerdict(identity)
+  const picks = (input.dreamPicks || []).map(String).slice(0, 5)
+  // شمارهٔ تولد (Empire #N) — در PG داخلِ همان تراکنشِ درج تا مسابقهٔ همزمانی شماره‌ی تکراری نسازد.
+  let no = 1
+  if (pgEnabled()) {
+    await ensure()
+    no = await pgTx(async c => {
+      const r = await c.query(`SELECT coalesce(max(no),0)+1 AS n FROM reos_empire`)
+      return Number(r.rows[0].n)
+    })
+  } else no = Object.keys(fileLoad()).length + 1
+  const e: EmpireData = {
+    userId, no,
+    name: String(input.name || '').slice(0, 60) || `امپراتوری #${no}`,
+    createdAt: now,
+    persona: String(input.persona || '').slice(0, 30),
+    mentor: v.mentor,
+    answers,
+    dream: { picks, sentence: dreamSentence(picks) },
+    identity, dna: v.dna,
+    profile: { title: v.title, confidence: v.confidence },
+    capital: cfg.giftToman,
+    coins: cfg.welcomeCoins,
+    xp: cfg.welcomeXp,
+    aiTokens: cfg.welcomeAiTokens,
+    badges: ['Founder'],
+    assets: [],
+    timeline: [{ at: now, icon: '🌱', title: 'به ملک‌جت پیوست', detail: `تولدِ امپراتوری #${no}` }],
+    journal: [],
+    guess: { tries: 0, correct: 0 },
+    claims: {}, rejects: 0,
+    updatedAt: now,
+  }
+  return putEmpire(e)
+}
+
+export async function renameEmpire(userId: string, name: string) {
+  return mutateEmpire(userId, e => { const n = String(name || '').trim().slice(0, 60); if (!n) return 'نام خالی است'; e.name = n })
+}
+
+// خریدِ دارایی = انتخابِ یک آگهیِ واقعی با قیمتِ واقعی؛ سرمایهٔ شبیه‌سازی کم می‌شود (فصل ۳ + §6.5).
+export async function buyAsset(userId: string, listing: { id: string; title: string; hood: string; price: number; ptype?: string }, now = Date.now()) {
+  const cfg = config().empire
+  return mutateEmpire(userId, e => {
+    if (!listing.id || !(listing.price > 0)) return 'آگهیِ نامعتبر'
+    if (e.assets.some(a => a.listingId === listing.id)) return 'این ملک از قبل در امپراتوریِ توست'
+    if (e.capital < listing.price) return 'سرمایهٔ کافی نیست'
+    const first = e.assets.length === 0
+    e.capital -= listing.price
+    e.assets.push({ id: 'ast_' + randomBytes(5).toString('hex'), listingId: listing.id, title: String(listing.title).slice(0, 120), hood: String(listing.hood || '').slice(0, 60), kind: assetKindOf(listing.ptype || ''), buyPrice: listing.price, boughtAt: now })
+    // پاداشِ سند (فصل ۳): ‎+100 XP + Founder + First Owner + Builder Potential +2 + Investor Confidence +1‎
+    e.xp += cfg.buyRewardXp
+    if (first) {
+      if (!e.badges.includes('First Owner')) e.badges.push('First Owner')
+      e.identity.builder = Math.min(100, (e.identity.builder || 0) + 2)
+      e.identity.investor = Math.min(100, (e.identity.investor || 0) + 1)
+      e.timeline.push({ at: now, icon: '🏠', title: 'اولین مالکیت', detail: listing.title.slice(0, 80) })
+      e.journal.push({ at: now, text: `امروز اولین ملکِ مسیرت را انتخاب کردی: «${listing.title.slice(0, 60)}». از امروز تو فقط بازدیدکننده نیستی — تو مالک هستی.` })
+    } else {
+      e.timeline.push({ at: now, icon: '🏘', title: 'داراییِ جدید', detail: listing.title.slice(0, 80) })
+    }
+  })
+}
+
+// تصمیمِ معنادار بعد از خرید (فصل ۳): بازسازی / اجاره دادن / نگه داشتن — شاخهٔ مأموریت و سیگنالِ هویتی.
+export async function chooseAssetAction(userId: string, assetId: string, action: AssetAction, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    if (!a) return 'دارایی یافت نشد'
+    a.action = action; a.actionAt = now
+    const lbl = action === 'renovate' ? 'بازسازی' : action === 'rent' ? 'اجاره دادن' : 'نگه داشتن'
+    if (action === 'renovate') e.identity.builder = Math.min(100, (e.identity.builder || 0) + 3)
+    if (action === 'rent') e.identity.commercial = Math.min(100, (e.identity.commercial || 0) + 3)
+    if (action === 'hold') e.identity.investor = Math.min(100, (e.identity.investor || 0) + 3)
+    e.timeline.push({ at: now, icon: action === 'renovate' ? '🛠' : action === 'rent' ? '💰' : '📈', title: `تصمیم: ${lbl}`, detail: a.title.slice(0, 80) })
+  })
+}
+
+// Beat AI (M3): حدسِ قیمتِ آگهیِ واقعی — درست/غلط + پاداش + خوراکِ مدلِ AVM (دقتِ کاربر ذخیره می‌شود).
+export async function recordGuess(userId: string, actual: number, guess: number, now = Date.now()): Promise<{ ok: boolean; reason?: string; correct?: boolean; deltaPct?: number; rewardXp?: number; rewardCoins?: number }> {
+  const cfg = config().empire
+  const out = guessOutcome(actual, guess, cfg.guessTolerancePct)
+  const r = await mutateEmpire(userId, e => {
+    e.guess.tries += 1
+    if (out.correct) { e.guess.correct += 1; e.xp += cfg.guessRewardXp; e.coins += cfg.guessRewardCoins }
+  })
+  if (!r.ok) return { ok: false, reason: r.reason }
+  return { ok: true, correct: out.correct, deltaPct: out.deltaPct, rewardXp: out.correct ? cfg.guessRewardXp : 0, rewardCoins: out.correct ? cfg.guessRewardCoins : 0 }
+}
+
+// دریافتِ پاداشِ مأموریت (M1/M2/Property Hunter) — یک‌بارمصرف به‌ازای هر کلید.
+export async function claimEmpireMission(userId: string, missionKey: string, rewardXp: number, rewardCoins: number, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    if (e.claims[missionKey]) return 'قبلاً دریافت شده'
+    e.claims[missionKey] = now
+    e.xp += Math.max(0, rewardXp)
+    e.coins += Math.max(0, rewardCoins)
+  })
+}
+
+// مصرفِ یک ژتونِ تحلیل AI (بستهٔ خوش‌آمد ×۵ — §6.3).
+export async function spendAiToken(userId: string) {
+  return mutateEmpire(userId, e => { if (e.aiTokens <= 0) return 'ژتونِ تحلیل تمام شده'; e.aiTokens -= 1 })
+}
+
+export async function setSuspense(userId: string, text: string, dueAt: number) {
+  return mutateEmpire(userId, e => { e.suspense = { text: String(text).slice(0, 200), dueAt } })
+}
+export async function addJournal(userId: string, text: string, now = Date.now()) {
+  return mutateEmpire(userId, e => { e.journal.push({ at: now, text: String(text).slice(0, 400) }); if (e.journal.length > 120) e.journal = e.journal.slice(-120) })
+}
+export async function bumpRejects(userId: string) {
+  return mutateEmpire(userId, e => { e.rejects += 1 })
+}
+export async function setPersona(userId: string, persona: string) {
+  return mutateEmpire(userId, e => { e.persona = String(persona || '').slice(0, 30) })
+}
+export async function setMentor(userId: string, mentor: string) {
+  return mutateEmpire(userId, e => { if (!MENTORS.includes(mentor as Mentor)) return 'منتورِ نامعتبر'; e.mentor = mentor as Mentor })
+}
+
+// مأموریت M2 «سبکِ خودت را پیدا کن»: انتخابِ تصویریِ سبک — سیگنالِ هویتی هم می‌دهد.
+export async function setStylePicks(userId: string, picks: string[]) {
+  return mutateEmpire(userId, e => {
+    e.stylePicks = picks.map(String).slice(0, 6)
+    if (e.stylePicks.some(p => /لوکس|luxury/.test(p))) e.identity.luxury = Math.min(100, (e.identity.luxury || 0) + 2)
+    if (e.stylePicks.some(p => /مدرن|modern/.test(p))) e.identity.investor = Math.min(100, (e.identity.investor || 0) + 1)
+  })
+}
+
+// Property Hunter (§6.4): ثبتِ جفتِ فعالِ مقایسه (a/b آگهی‌های واقعی؛ better از دادهٔ واقعی محاسبه شده).
+export async function setHunterPair(userId: string, a: string, b: string, better: string, now = Date.now()) {
+  return mutateEmpire(userId, e => { e.hunter = { a, b, better, at: now } })
+}
+// پاسخِ Property Hunter: درست → پاداشِ §6.4 (یک‌بار)؛ جفت پاک می‌شود.
+export async function answerHunter(userId: string, pick: string, now = Date.now()): Promise<{ ok: boolean; reason?: string; correct?: boolean; better?: string; rewardXp?: number; rewardCoins?: number }> {
+  const cfg = config().empire
+  let correct = false, better = '', rewarded = false
+  const r = await mutateEmpire(userId, e => {
+    if (!e.hunter) return 'مقایسه‌ای فعال نیست'
+    better = e.hunter.better
+    correct = pick === e.hunter.better
+    e.hunter = undefined
+    if (correct && !e.claims['property_hunter']) {
+      e.claims['property_hunter'] = now
+      e.xp += cfg.missionRewardXp
+      e.coins += cfg.missionRewardCoins
+      rewarded = true
+    }
+  })
+  if (!r.ok) return { ok: false, reason: r.reason }
+  return { ok: true, correct, better, rewardXp: rewarded ? cfg.missionRewardXp : 0, rewardCoins: rewarded ? cfg.missionRewardCoins : 0 }
+}
+
+// ارزشِ خالص (Real Asset Value، §6.2-3): سرمایهٔ نقد + ارزشِ روزِ دارایی‌ها از قیمتِ زندهٔ آگهیِ واقعی.
+export function netWorthOf(e: EmpireData, livePrices: Record<string, number>): { netWorth: number; assetsValue: number; growth: number } {
+  let assetsValue = 0, cost = 0
+  for (const a of e.assets) { assetsValue += livePrices[a.listingId] || a.buyPrice; cost += a.buyPrice }
+  const growth = cost ? Math.round(((assetsValue - cost) / cost) * 1000) / 10 : 0
+  return { netWorth: e.capital + assetsValue, assetsValue, growth }
+}
+
+// شمارِ کلِ امپراتوری‌ها (برای «N نفر دیگر هم در حال ساخت‌اند» — فصل ۳، Neighbourhood Discovery).
+export async function empireCount(): Promise<number> {
+  if (pgEnabled()) { await ensure(); const r = await pgTx(c => c.query(`SELECT count(*)::int AS n FROM reos_empire`)); return r.rows[0]?.n || 0 }
+  return Object.keys(fileLoad()).length
+}

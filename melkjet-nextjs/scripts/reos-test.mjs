@@ -33,6 +33,7 @@ import { commissionOn, affiliateCut, loyaltyBonus } from '../app/lib/reos/econom
 import { communityScore, sanitizeComment, threadComments } from '../app/lib/reos/community.ts'
 import { evalFlag, bucketOf, DEFAULT_FLAGS } from '../app/lib/reos/flags.ts'
 import { shouldPromote, pickChallenger } from '../app/lib/reos/automl.ts'
+import { empireLevel, identityFromAnswers, identityVerdict, assetKindOf, guessOutcome, dreamSentence, netWorthOf } from '../app/lib/empire-store.ts'
 
 let pass = 0, fail = 0
 const approx = (a, b, e = 1e-6) => Math.abs(a - b) <= e
@@ -521,6 +522,42 @@ console.log('\n── REOS v8: AutoML — autonomous champion/challenger ──'
   const best = pickChallenger([champ, marginal, better], champ.id)
   ok('pickChallenger returns highest-metric non-champion', best.id === 'b')
   ok('pickChallenger ignores retired/champion', pickChallenger([champ], champ.id) === null)
+}
+
+console.log('\n── Empire فاز ۱: هسته‌های خالص (سند جلد۲ فصل ۱–۶) ──')
+{
+  // سطح‌ها طبق §6.2: Citizen → Explorer(500) → Investor(1500) → Builder(5000)
+  const lv = { explorer: 500, investor: 1500, builder: 5000 }
+  ok('0 XP → Citizen', empireLevel(0, lv).title === 'Citizen')
+  ok('100 XP (خوش‌آمد) → هنوز Citizen با next=500', empireLevel(100, lv).title === 'Citizen' && empireLevel(100, lv).next === 500)
+  ok('500 XP → Explorer', empireLevel(500, lv).title === 'Explorer')
+  ok('1500 XP → Investor', empireLevel(1500, lv).title === 'Investor')
+  ok('5000+ XP → Builder (progress=1، بدون next)', empireLevel(9000, lv).title === 'Builder' && empireLevel(9000, lv).next === null && empireLevel(9000, lv).progress === 1)
+  // Identity Engine از پاسخ‌های ۵گانه — قطعی
+  const inv = identityFromAnswers({ tenB: 'سرمایه‌گذاری می‌کردم', risk: 40, ptype: 'آپارتمان', goal: 'رشدِ سرمایه' })
+  ok('پاسخِ سرمایه‌گذارانه → investor غالب', inv.investor > inv.builder && inv.investor > inv.commercial)
+  const bld = identityFromAnswers({ tenB: 'زمین می‌خریدم و می‌ساختم', risk: 80, ptype: 'زمین و کلنگی', goal: 'ساخت‌وساز و توسعه' })
+  ok('پاسخِ سازنده‌محور → builder غالب', bld.builder > bld.investor && bld.builder > bld.luxury)
+  ok('همهٔ امتیازها در بازهٔ ۰..۱۰۰', Object.values(bld).every(v => v >= 0 && v <= 100))
+  const vInv = identityVerdict(inv), vBld = identityVerdict(bld)
+  ok('حکم: Investor Profile + منتور نورا', vInv.title === 'Investor Profile' && vInv.mentor === 'نورا')
+  ok('حکم: Builder Profile + منتور آرمان', vBld.title === 'Builder Profile' && vBld.mentor === 'آرمان')
+  ok('اطمینان در بازهٔ ۵۵..۹۵', vInv.confidence >= 55 && vInv.confidence <= 95)
+  ok('ریسکِ بالا → DNA=Explorer', identityVerdict({ ...inv, risk: 85 }).dna === 'Explorer')
+  // دسته‌بندیِ دارایی از نوعِ ملکِ واقعی
+  ok('assetKindOf: ویلا/تجاری/زمین/پیش‌فرض', assetKindOf('ویلا') === 'villa' && assetKindOf('مغازه تجاری') === 'commercial' && assetKindOf('زمین کلنگی') === 'land' && assetKindOf('آپارتمان') === 'apartment')
+  // Beat AI: تلورانسِ حدس
+  ok('حدس در تلورانس → درست', guessOutcome(10_000_000_000, 11_000_000_000, 15).correct === true)
+  ok('حدسِ خیلی دور → غلط + deltaPct', guessOutcome(10_000_000_000, 20_000_000_000, 15).correct === false && guessOutcome(10_000_000_000, 20_000_000_000, 15).deltaPct === 100)
+  ok('قیمت/حدسِ صفر → غلط', guessOutcome(0, 5, 15).correct === false)
+  // Dream Engine
+  ok('dreamSentence از انتخاب‌ها می‌سازد', dreamSentence(['home', 'income']).includes('خانه') && dreamSentence(['home', 'income']).includes('درآمد'))
+  ok('dreamSentence خالی → جملهٔ پیش‌فرض', dreamSentence([]).length > 10)
+  // ارزشِ خالص: زنده از قیمتِ واقعی + رشد
+  const e = { capital: 1_000, assets: [{ listingId: 'L1', buyPrice: 500 }, { listingId: 'L2', buyPrice: 500 }] }
+  const nw = netWorthOf(e, { L1: 600 })   // L2 قیمتِ زنده ندارد → قیمتِ خرید مبنا
+  ok('netWorth = نقد + ارزشِ زنده (fallback=خرید)', nw.netWorth === 1_000 + 600 + 500 && nw.assetsValue === 1100)
+  ok('growth = رشدِ نسبت به قیمتِ خرید (٪)', nw.growth === 10)
 }
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} REOS unit tests: ${pass} passed, ${fail} failed\n`)

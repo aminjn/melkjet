@@ -236,6 +236,19 @@ export default function ReosAdminPanel() {
             </div>
           </div>
 
+          <div style={card}>
+            <div style={{ fontSize: 14.5, fontWeight: 900, marginBottom: 4 }}>🏛 امپراتوری — مرکزِ کنترلِ اقتصاد</div>
+            <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 12 }}>مسیرِ رشدِ کاربرِ عادی (/empire) — چهار نوع ارزش: XP، ملک‌کوین، داراییِ واقعی (تومان)، اعتبار. روشن/خاموش و عرضهٔ تدریجی از تبِ «فلگ‌ها» (فلگِ empire).</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(250px,1fr))', gap: 16 }}>
+              <div><div style={sub}>بستهٔ خوش‌آمد (تولد)</div>
+                {row('سرمایهٔ هدیه (تومان)', inp('empire', 'giftToman'))}{row('ملک‌کوینِ شروع', inp('empire', 'welcomeCoins'))}{row('XP شروع', inp('empire', 'welcomeXp'))}{row('ژتونِ تحلیلِ AI', inp('empire', 'welcomeAiTokens'))}</div>
+              <div><div style={sub}>پاداش‌ها</div>
+                {row('XP خریدِ دارایی', inp('empire', 'buyRewardXp'))}{row('XP مأموریت', inp('empire', 'missionRewardXp'))}{row('کوینِ مأموریت', inp('empire', 'missionRewardCoins'))}{row('XP حدسِ درست', inp('empire', 'guessRewardXp'))}{row('کوینِ حدسِ درست', inp('empire', 'guessRewardCoins'))}</div>
+              <div><div style={sub}>قواعدِ مسیر</div>
+                {row('تلورانسِ حدسِ قیمت (٪)', inp('empire', 'guessTolerancePct'))}{row('XP سطحِ Explorer', inp('empire', 'levelXp', 'explorer'))}{row('XP سطحِ Investor', inp('empire', 'levelXp', 'investor'))}{row('XP سطحِ Builder', inp('empire', 'levelXp', 'builder'))}{row('پیام‌آغازیِ منتور (۱/۰)', inp('empire', 'mentorInitiates'))}</div>
+            </div>
+          </div>
+
           <div style={{ display: 'flex', gap: 8 }}>
             {btn('💾 ذخیرهٔ تنظیمات', saveCfg, 'save', true)}
             {btn('بازگردانی به پیش‌فرض', resetCfg, 'reset')}
