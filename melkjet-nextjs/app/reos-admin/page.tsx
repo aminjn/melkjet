@@ -6,10 +6,12 @@ const fa = (n: number) => (n || 0).toLocaleString('fa-IR')
 type Ev = { id: string; type: string; at: number; userId?: string; propertyId?: string; agentId?: string; leadId?: string }
 type Top = { id: string; title: string; engagement: number; clicks: number; saves: number; contacts: number }
 type Model = { demand: number; pop: number; saves: number; userEng: number; bias: number; n: number; auc: number; logloss: number; usedDefault: boolean; trainedAt: number } | null
+type Graph = { nodes: number; edges: number; byType: Record<string, number>; byRel: Record<string, number> }
 type Data = {
   engine: { publicListings: number; weights: Record<string, Record<string, number>> }
   model: Model
   queue: { events: number; features: number }
+  graph: Graph
   events: { total: number; byType: Record<string, number>; recent: Ev[] }
   topProperties: Top[]
 }
@@ -141,6 +143,21 @@ export default function ReosAdminPage() {
         {d.model && <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 10, fontFamily: 'monospace', direction: 'ltr' }}>w = {`{demand:${d.model.demand?.toFixed?.(2)}, pop:${d.model.pop?.toFixed?.(2)}, saves:${d.model.saves?.toFixed?.(2)}, userEng:${d.model.userEng?.toFixed?.(2)}, bias:${d.model.bias?.toFixed?.(2)}}`}</div>}
         {trainMsg && <div style={{ fontSize: 12.5, color: 'var(--gold)', marginTop: 10 }}>{trainMsg}</div>}
         <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 10 }}>صفِ رویداد (Kafka-equivalent): {fa(d.queue?.events || 0)} رویداد + {fa(d.queue?.features || 0)} feature در انتظارِ فلاش.</div>
+      </div>
+
+      {/* گرافِ دانش (Knowledge Graph) */}
+      <div style={{ ...card, marginTop: 16 }}>
+        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>گرافِ دانش (Knowledge Graph)</div>
+        {d.graph && (d.graph.nodes > 0) ? (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'center' }}>
+            <div><div style={{ fontSize: 11, color: 'var(--muted)' }}>گره‌ها</div><div style={{ fontSize: 22, fontWeight: 900, color: 'var(--gold)' }}>{fa(d.graph.nodes)}</div></div>
+            <div><div style={{ fontSize: 11, color: 'var(--muted)' }}>یال‌ها</div><div style={{ fontSize: 22, fontWeight: 900, color: '#60a5fa' }}>{fa(d.graph.edges)}</div></div>
+            <div style={{ flex: 1, minWidth: 180, fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.9 }}>
+              <div>نوعِ گره: {Object.entries(d.graph.byType).map(([t, n]) => `${t}:${fa(n)}`).join(' · ') || '—'}</div>
+              <div>نوعِ یال: {Object.entries(d.graph.byRel).map(([t, n]) => `${t}:${fa(n)}`).join(' · ') || '—'}</div>
+            </div>
+          </div>
+        ) : <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>گراف هنوز خالی است — با انباشتِ رویدادها هر ۶ ساعت خودکار ساخته می‌شود (یا POST به /api/reos/graph).</div>}
       </div>
 
       {/* وزن‌های موتور (شفافیت) */}

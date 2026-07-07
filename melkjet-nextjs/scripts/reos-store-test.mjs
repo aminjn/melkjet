@@ -11,6 +11,8 @@ import { trainEngageModel, primeEngageModel, predictEngage, buildTrainingSet } f
 import { runAgent } from '../app/lib/reos/agent/executor.ts'
 import { rulePlanner } from '../app/lib/reos/agent/planner.ts'
 import { getMemories, recentTasks } from '../app/lib/reos/agent/memory.ts'
+import { upsertNode, addEdge, getNode, neighbors, subgraph, shortestPath, graphStats, syncGraphFromEvents } from '../app/lib/reos/graph.ts'
+import { recordEvent as recEv } from '../app/lib/reos/store.ts'
 
 if (!process.env.DATABASE_URL) { console.error('DATABASE_URL not set'); process.exit(2) }
 let pass = 0, fail = 0
@@ -136,6 +138,28 @@ async function main() {
     // task persistence
     const tasks = await recentTasks('agentU', 10)
     ok('agent tasks persisted to PG (trace saved)', tasks.length >= 3 && Array.isArray(tasks[0].trace))
+  }
+
+  console.log('\n── REOS v2: Knowledge Graph (typed entities + BFS traversal) ──')
+  {
+    await upsertNode({ id: 'gn:1', type: 'user', label: 'خریدار' })
+    ok('upsertNode + getNode', (await getNode('gn:1'))?.type === 'user')
+    await addEdge('gn:1', 'gn:2', 'viewed', 1); await addEdge('gn:1', 'gn:2', 'viewed', 2)
+    const nb = await neighbors('gn:1', { dir: 'out' })
+    ok('addEdge weight accumulates (1+2=3)', nb.length === 1 && nb[0].weight === 3)
+    ok('neighbors dir=in works', (await neighbors('gn:2', { dir: 'in' })).length === 1)
+    // multi-hop path: agent -represents-> user -viewed-> property (buyer↔builder-style chain)
+    await recEv({ type: 'agent_assigned', agentId: 'A9', userId: 'U9', leadId: 'L9' })
+    await recEv({ type: 'user_clicked_property', userId: 'U9', propertyId: 'P9' })
+    await syncGraphFromEvents(5000)
+    ok('sync built nodes from events (a:A9)', (await getNode('a:A9'))?.type === 'agent')
+    const path = await shortestPath('a:A9', 'p:P9', 5)
+    ok('shortestPath finds multi-hop chain a→u→p', Array.isArray(path) && path[0] === 'a:A9' && path[path.length - 1] === 'p:P9' && path.length === 3)
+    const sg = await subgraph('u:U9', 2)
+    ok('subgraph collects neighborhood', sg.nodes.some(n => n.id === 'p:P9') && sg.edges.length >= 1)
+    const gs = await graphStats()
+    ok('graphStats reports typed counts', gs.nodes > 0 && gs.byType.user > 0 && gs.byRel.viewed > 0)
+    ok('no path returns null for disconnected', (await shortestPath('gn:1', 'a:A9', 3)) === null)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

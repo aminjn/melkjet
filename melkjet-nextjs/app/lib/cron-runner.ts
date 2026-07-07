@@ -11,6 +11,7 @@ import { maybeAutoScrape } from './hypersaz-scraper'
 import { maybeAutoSyncCost } from './cost-store'
 import { flushQueue } from './reos/queue'
 import { trainEngageModel } from './reos/train'
+import { syncGraphFromEvents } from './reos/graph'
 
 // زمان‌بندِ سبک و بدونِ وابستگی برای سینکِ خودکارِ دیوار. روی سرورِ همیشه‌روشنِ
 // pm2 با یک setInterval اجرا می‌شود؛ یک قفلِ global از اجرای موازی/تکراری جلوگیری می‌کند.
@@ -45,6 +46,7 @@ async function tick(): Promise<{ due: number; synced: number }> {
     if (Date.now() - lastReosTrainAt > 6 * 60 * 60 * 1000) {
       lastReosTrainAt = Date.now()
       try { const w = await trainEngageModel(); console.log(`[reos] engage model: n=${w.n} auc=${w.auc} default=${w.usedDefault}`) } catch { /* آموزشِ REOS */ }
+      try { const g = await syncGraphFromEvents(5000); console.log(`[reos] knowledge graph: +${g.nodes} nodes, +${g.edges} edges`) } catch { /* گرافِ دانشِ REOS */ }
     }
     due = listDueSources(Date.now())
     for (const { phone, source } of due) {
