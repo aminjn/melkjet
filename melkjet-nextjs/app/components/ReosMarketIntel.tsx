@@ -5,8 +5,13 @@ import { useEffect, useState } from 'react'
 const FONT = 'Vazirmatn, system-ui, sans-serif'
 const fa = (n: number) => (n || 0).toLocaleString('fa-IR')
 type Area = { area: string; demandIndex: number; supplyIndex: number; liquidityIndex: number; competition: number; trend: 'up' | 'down' | 'flat'; healthScore: number; listings: number }
-const trendIcon = (t: string) => t === 'up' ? '📈' : t === 'down' ? '📉' : '➡️'
-const bar = (v: number, c: string) => <div style={{ height: 5, background: 'var(--bg2)', borderRadius: 99, overflow: 'hidden' }}><div style={{ width: `${Math.round(v * 100)}%`, height: 5, background: c, borderRadius: 99 }} /></div>
+// آیکونِ روند با فلشِ یونیکدِ رنگی (به‌جای ایموجی که روی همهٔ فونت‌ها رندر نمی‌شود).
+function Trend({ t }: { t: string }) {
+  if (t === 'up') return <span style={{ color: '#34d399', fontWeight: 900, fontSize: 13 }}>▲ صعودی</span>
+  if (t === 'down') return <span style={{ color: '#e74c3c', fontWeight: 900, fontSize: 13 }}>▼ نزولی</span>
+  return <span style={{ color: 'var(--faint)', fontWeight: 700, fontSize: 12 }}>— ثابت</span>
+}
+const bar = (v: number, c: string) => <div style={{ height: 5, background: 'var(--bg2)', borderRadius: 99, overflow: 'hidden' }}><div style={{ width: `${Math.max(2, Math.round(v * 100))}%`, height: 5, background: c, borderRadius: 99 }} /></div>
 
 export default function ReosMarketIntel({ title = 'هوشِ بازار (REOS)' }: { title?: string }) {
   const [areas, setAreas] = useState<Area[] | null>(null)
@@ -32,15 +37,18 @@ export default function ReosMarketIntel({ title = 'هوشِ بازار (REOS)' }
           <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 1fr 0.6fr 0.5fr', gap: 8, fontSize: 10.5, color: 'var(--faint)', padding: '0 4px 4px' }}>
             <span>منطقه</span><span>تقاضا</span><span>نقدشوندگی</span><span>سلامت</span><span>روند</span>
           </div>
-          {areas.slice(0, 10).map(a => (
-            <div key={a.area} style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 1fr 0.6fr 0.5fr', gap: 8, alignItems: 'center', padding: '8px 4px', borderTop: '1px solid var(--line)' }}>
-              <span style={{ fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.area.replace('|', ' · ')}</span>
-              <span title={fa(Math.round(a.demandIndex * 100)) + '٪'}>{bar(a.demandIndex, '#e7a14a')}</span>
-              <span title={fa(Math.round(a.liquidityIndex * 100)) + '٪'}>{bar(a.liquidityIndex, '#60a5fa')}</span>
-              <span style={{ fontSize: 13, fontWeight: 800, color: a.healthScore >= 60 ? '#34d399' : a.healthScore >= 40 ? '#e7a14a' : '#e74c3c' }}>{fa(a.healthScore)}</span>
-              <span style={{ fontSize: 14 }}>{trendIcon(a.trend)}</span>
-            </div>
-          ))}
+          {areas.slice(0, 10).map(a => {
+            const hood = a.area.split('|').filter(Boolean).pop() || a.area
+            return (
+              <a key={a.area} href={`/search?q=${encodeURIComponent(hood)}`} style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 1fr 0.6fr 0.7fr', gap: 8, alignItems: 'center', padding: '9px 4px', borderTop: '1px solid var(--line)', textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}>
+                <span style={{ fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.area.replace('|', ' · ')}</span>
+                <span title={'تقاضا ' + fa(Math.round(a.demandIndex * 100)) + '٪'}>{bar(a.demandIndex, '#e7a14a')}</span>
+                <span title={'نقدشوندگی ' + fa(Math.round(a.liquidityIndex * 100)) + '٪'}>{bar(a.liquidityIndex, '#60a5fa')}</span>
+                <span style={{ fontSize: 13, fontWeight: 800, color: a.healthScore >= 60 ? '#34d399' : a.healthScore >= 40 ? '#e7a14a' : '#e74c3c' }}>{fa(a.healthScore)}</span>
+                <Trend t={a.trend} />
+              </a>
+            )
+          })}
         </div>
       )}
     </div>

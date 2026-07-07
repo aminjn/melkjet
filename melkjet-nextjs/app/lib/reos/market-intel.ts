@@ -2,6 +2,7 @@
 // Demand/Supply/Liquidity/Competition/Trend/HealthScore از آگهی‌ها (عرضه) + تعامل (تقاضا) + تازگی.
 // در feature store (entity_type='market_intel') ذخیره؛ هر ۶ ساعت بازمحاسبه (cron).
 import { candidateListings } from '../scraper-store'
+import { forIds } from '../listing-stats-store'
 import { bumpFeatures, getFeatures, topFeatures } from './store'
 import { clamp01 } from './features'
 
@@ -9,7 +10,8 @@ export interface MarketIntel { area: string; demandIndex: number; supplyIndex: n
 
 export async function computeMarketIntel(limit = 800): Promise<number> {
   const items = await candidateListings(limit)
-  // تعاملِ هر ملک از feature store در یک کوئری.
+  // تقاضای واقعی از آمارِ بازدید/تماسِ سایت (listing-stats) — نه فقط رویدادهای داخلیِ REOS.
+  const stats = await forIds(items.map(i => i.id)).catch(() => ({} as Record<string, { views: number; contacts: number }>))
   const engRows = await topFeatures('property', 'engagement_score', 5000).catch(() => [])
   const engOf = new Map(engRows.map(r => [r.id, r.value]))
 
@@ -21,14 +23,16 @@ export async function computeMarketIntel(limit = 800): Promise<number> {
     if (!area) continue
     const g = areas.get(area) || { count: 0, demand: 0, fresh: 0 }
     g.count++
-    g.demand += engOf.get(it.id) || 0
+    // سیگنالِ تقاضا: بازدید/تماسِ واقعی (وزنِ بیشتر برای تماس) + کمی از رویدادِ REOS.
+    const st = stats[it.id] || { views: 0, contacts: 0 }
+    g.demand += Math.log1p(st.views || 0) * 0.5 + Math.log1p(st.contacts || 0) * 1.6 + (engOf.get(it.id) || 0) * 0.05
     if (it.scrapedAt && now - it.scrapedAt < 30 * 864e5) g.fresh++
     areas.set(area, g)
   }
   if (!areas.size) return 0
 
   const maxCount = Math.max(...Array.from(areas.values()).map(a => a.count))
-  const maxDemand = Math.max(1, ...Array.from(areas.values()).map(a => a.demand))
+  const maxDemand = Math.max(0.001, ...Array.from(areas.values()).map(a => a.demand))   // بیشترین تقاضا = ۱ (نرمال‌سازیِ واقعی)
   let n = 0
   for (const [area, g] of areas) {
     if (g.count < 2) continue
@@ -38,7 +42,8 @@ export async function computeMarketIntel(limit = 800): Promise<number> {
     const competition = clamp01(g.count / (g.demand + 1) / (maxCount / 1))   // عرضهٔ زیاد نسبت به تقاضا = رقابتِ بالا
     const freshRatio = g.fresh / g.count
     const trend: MarketIntel['trend'] = freshRatio > 0.5 ? 'up' : freshRatio < 0.2 ? 'down' : 'flat'
-    const healthScore = Math.round((0.4 * demandIndex + 0.3 * liquidityIndex + 0.3 * (1 - competition)) * 100)
+    // تقاضا وزنِ غالب دارد تا مناطقِ بی‌تقاضا امتیازِ گمراه‌کننده نگیرند.
+    const healthScore = Math.round((0.55 * demandIndex + 0.25 * liquidityIndex + 0.2 * (1 - competition)) * 100)
     await bumpFeatures('market_intel', area, {}, {
       demand_index: Math.round(demandIndex * 1000) / 1000, supply_index: Math.round(supplyIndex * 1000) / 1000,
       liquidity_index: Math.round(liquidityIndex * 1000) / 1000, competition: Math.round(competition * 1000) / 1000,
