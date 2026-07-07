@@ -55,6 +55,9 @@ export default function EmpirePage() {
   const [hunterPair, setHunterPair] = useState<any[]>([])
   const [hunterRes, setHunterRes] = useState<any>(null)
   const [analysis, setAnalysis] = useState<any>(null)
+  const [chestReward, setChestReward] = useState<any>(null)
+  const [boards, setBoards] = useState<any>(null)
+  const [boardTab, setBoardTab] = useState('score')
   const suspended = useRef(false)
 
   const api = useCallback(async (body: any) => {
@@ -139,6 +142,13 @@ export default function EmpirePage() {
   async function doHunterPick(id: string) { const d = await api({ action: 'hunterAnswer', pick: id }); if (d) { setHunterRes(d); setHunterPair([]); load() } }
   async function doAnalyze(listingId: string) { const d = await api({ action: 'analyze', listingId }); if (d) { setAnalysis(d.analysis); load() } }
   async function doClaim(key: string) { const d = await api({ action: 'claim', key }); if (d) setSt(d) }
+  async function doSell(a: any) {
+    if (!confirm(`«${a.title.slice(0, 40)}» به قیمتِ روزِ ${faB(a.current || a.buyPrice)} تومان فروخته شود؟`)) return
+    const d = await api({ action: 'sell', assetId: a.id })
+    if (d) setSt(d)
+  }
+  async function doChest() { const d = await api({ action: 'chest' }); if (d) { setChestReward(d.reward); load() } }
+  async function doBoards() { const d = await api({ action: 'boards' }); if (d) setBoards(d) }
 
   // ══════════ رندر ══════════
   const wrap = (children: React.ReactNode) => (
@@ -333,11 +343,21 @@ export default function EmpirePage() {
         </div>
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 12 }}>
+        <span style={{ ...card, padding: '6px 10px' }} title="Empire Score">🏆 {fa(st.empireScore || 0)}</span>
         <span style={{ ...card, padding: '6px 10px' }}>🪙 {fa(e.coins)}</span>
         <span style={{ ...card, padding: '6px 10px' }}>🤖 {fa(e.aiTokens)}</span>
         {st.streak && st.streak.streak > 0 && <span style={{ ...card, padding: '6px 10px' }} title="روزهای پیاپیِ حضور">🔥 {fa(st.streak.streak)}</span>}
       </div>
     </div>
+
+    {/* صندوقچهٔ روزانه — پاداشِ متغیر (هر روز یک‌بار) */}
+    {(st.chest?.available || chestReward) && <div style={{ ...card, display: 'flex', alignItems: 'center', gap: 12, borderColor: 'var(--gold)' }}>
+      <span style={{ fontSize: 24 }}>🎁</span>
+      {chestReward
+        ? <div style={{ fontSize: 13 }}><b>صندوقچهٔ امروز باز شد:</b> {chestReward.kind === 'coins' ? `🪙 ${fa(chestReward.amount)} ملک‌کوین` : chestReward.kind === 'xp' ? `⚡ ${fa(chestReward.amount)} XP` : `🤖 ${fa(chestReward.amount)} ژتونِ تحلیل`}</div>
+        : <><div style={{ flex: 1, fontSize: 13 }}>صندوقچهٔ امروزت منتظر است — هیچ‌کس نمی‌داند داخلش چیست.</div>
+          <button style={{ ...btn, padding: '6px 14px', fontSize: 13 }} disabled={busy} onClick={doChest}>باز کن</button></>}
+    </div>}
 
     {/* نامهٔ روزانهٔ ملک‌جت — از دادهٔ واقعیِ دیشبِ بازار */}
     {st.brief && <details style={{ ...card, borderColor: st.brief.openedAt ? 'var(--line)' : 'var(--gold)' }} open={!st.brief.openedAt}
@@ -353,6 +373,7 @@ export default function EmpirePage() {
       <div style={card}><div style={{ fontSize: 11, color: 'var(--muted)' }}>ارزشِ خالص</div><div style={{ fontSize: 17, fontWeight: 800, color: 'var(--gold)' }}>{faB(st.netWorth || 0)} تومان</div></div>
       <div style={card}><div style={{ fontSize: 11, color: 'var(--muted)' }}>سرمایهٔ نقد</div><div style={{ fontSize: 17, fontWeight: 800 }}>{faB(e.capital)} تومان</div></div>
       <div style={card}><div style={{ fontSize: 11, color: 'var(--muted)' }}>ارزشِ دارایی‌ها (زنده)</div><div style={{ fontSize: 17, fontWeight: 800 }}>{faB(st.assetsValue || 0)} تومان {st.growth ? <span style={{ fontSize: 12, color: st.growth > 0 ? '#7c6' : '#e88' }}>({st.growth > 0 ? '+' : ''}{st.growth.toLocaleString('fa-IR')}٪)</span> : null}</div></div>
+      {(e.realized || 0) !== 0 && <div style={card}><div style={{ fontSize: 11, color: 'var(--muted)' }}>سودِ تحقق‌یافته (فروش‌ها)</div><div style={{ fontSize: 17, fontWeight: 800, color: e.realized > 0 ? '#7c6' : '#e88' }}>{e.realized > 0 ? '+' : '−'}{faB(Math.abs(e.realized))} تومان</div></div>}
     </div>
 
     {st.suspense && <div style={{ ...card, borderColor: 'var(--gold)', fontSize: 13 }}>⏳ {st.suspense.text}</div>}
@@ -370,11 +391,29 @@ export default function EmpirePage() {
               <div style={{ fontSize: 13, fontWeight: 700 }}>{a.title.slice(0, 55)}</div>
               <div style={{ fontSize: 11, color: 'var(--muted)' }}>{a.hood} · خرید: {faB(a.buyPrice)}</div>
             </div>
-            <div style={{ fontSize: 12 }}>ارزشِ روز: <b style={{ color: 'var(--gold)' }}>{faB(a.current || a.buyPrice)}</b> {a.growthPct ? <span style={{ color: a.growthPct > 0 ? '#7c6' : '#e88' }}>({a.growthPct > 0 ? '+' : ''}{a.growthPct.toLocaleString('fa-IR')}٪)</span> : null}</div>
-            {a.action
+            <div style={{ fontSize: 12 }}>ارزشِ روز: <b style={{ color: 'var(--gold)' }}>{faB(a.current || a.buyPrice)}</b> {a.growthPct ? <span style={{ color: a.growthPct > 0 ? '#7c6' : '#e88' }}>({a.growthPct > 0 ? '+' : ''}{a.growthPct.toLocaleString('fa-IR')}٪)</span> : null}
+              {a.income > 0 && <span style={{ fontSize: 11, color: '#7c6', marginRight: 6 }}>· درآمد {faB(a.income)}</span>}</div>
+            {/* زمین (§6.7): سه مسیر با برآوردِ شفاف؛ تجاری (§6.9): انتخابِ کسب‌وکار؛ بقیه: تصمیمِ سه‌گانه */}
+            {a.kind === 'land' && !a.landPlan && a.plans
+              ? <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>{a.plans.map((p: any) => (
+                  <button key={p.plan} style={{ ...btnGhost, padding: '4px 8px', fontSize: 11 }} title={`ریسک ${p.risk}${p.months ? ` · ${fa(p.months)} ماه` : ''}`}
+                    onClick={async () => { const d = await api({ action: 'landPlan', assetId: a.id, plan: p.plan }); if (d) setSt(d) }}>
+                    {p.label}{p.gainPct ? ` (+${fa(p.gainPct)}٪ برآورد)` : ''}</button>
+                ))}</span>
+              : a.kind === 'land' && a.landPlan
+              ? <span style={{ fontSize: 11, color: 'var(--muted)' }}>{a.landPlan === 'build' ? '🏗 در مسیرِ ساخت' : a.landPlan === 'partner' ? '🤝 مشارکت' : '💸 آمادهٔ فروش'}</span>
+              : a.kind === 'commercial' && !a.business
+              ? <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>{['کافه', 'رستوران', 'فروشگاه', 'کلینیک', 'دفترِ خدماتی'].map(bz => (
+                  <button key={bz} style={{ ...btnGhost, padding: '4px 8px', fontSize: 11 }}
+                    onClick={async () => { const d = await api({ action: 'business', assetId: a.id, biz: bz }); if (d) { setSt(d); alert(`احتمالِ موفقیتِ ${bz} در ${a.hood || 'این محله'}: ${fa(d.prob)}٪ (از ${fa(d.signals.hoodListings)} آگهیِ فعال و ${fa(d.signals.competitors)} رقیبِ واقعی)`) } }}>{bz}</button>
+                ))}</span>
+              : a.business
+              ? <span style={{ fontSize: 11, color: 'var(--muted)' }}>🏪 {a.business} ({fa(a.businessProb || 0)}٪)</span>
+              : a.action
               ? <span style={{ fontSize: 11, color: 'var(--muted)' }}>{a.action === 'renovate' ? '🛠 بازسازی' : a.action === 'rent' ? '💰 اجاره' : '📈 نگه‌داری'}</span>
               : <span style={{ display: 'flex', gap: 4 }}>{[['renovate', '🛠'], ['rent', '💰'], ['hold', '📈']].map(([k, i]) => <button key={k} title={k} style={{ ...btnGhost, padding: '4px 8px', fontSize: 13 }} onClick={async () => { const d = await api({ action: 'assetAction', assetId: a.id, act: k }); if (d) setSt(d) }}>{i}</button>)}</span>}
             <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 12 }} disabled={busy || e.aiTokens <= 0} onClick={() => doAnalyze(a.listingId)}>تحلیلِ ملک‌جت (۱ ژتون)</button>
+            <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 12, color: '#e88', borderColor: '#644' }} disabled={busy} onClick={() => doSell(a)}>💸 فروش</button>
           </div>
         ))}
       </div>
@@ -468,6 +507,42 @@ export default function EmpirePage() {
         </div>
       </div>
     </div>}
+
+    {/* ۵ جدولِ رتبه (فصل ۵) + لیگِ محله (§7.2) */}
+    <details style={card} onToggle={(ev: any) => { if (ev.currentTarget.open && !boards) doBoards() }}>
+      <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>🏅 جدول‌های رتبه و لیگِ محله</summary>
+      {!boards ? <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10 }}>در حال بارگذاری...</div> : (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+            {[['score', '👑 امتیازِ امپراتوری'], ['invest', '💎 سرمایه‌گذارِ برتر'], ['growth', '🚀 رشدِ سریع'], ['builder', '🏗 سازنده'], ['explorer', '🧭 کاوشگر']].map(([k, l]) => (
+              <button key={k} onClick={() => setBoardTab(k)} style={chip(boardTab === k)}>{l}</button>
+            ))}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {(boards.boards[boardTab] || []).map((r: any) => (
+              <div key={r.no} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, padding: '6px 10px', borderRadius: 8, background: r.me ? 'rgba(212,175,55,.10)' : 'var(--bg2)', border: r.me ? '1px solid var(--gold)' : '1px solid var(--line)' }}>
+                <b style={{ minWidth: 24, color: r.rank <= 3 ? 'var(--gold)' : 'var(--muted)' }}>{r.rank === 1 ? '🥇' : r.rank === 2 ? '🥈' : r.rank === 3 ? '🥉' : fa(r.rank)}</b>
+                <span>{r.persona || '🏛'}</span>
+                <span style={{ flex: 1 }}>{r.name}{r.me && <span style={{ fontSize: 10, color: 'var(--gold)' }}> (تو)</span>}</span>
+                <b style={{ color: 'var(--gold)', fontSize: 12 }}>{boardTab === 'invest' ? faB(r.value) : boardTab === 'growth' ? `${Number(r.value).toLocaleString('fa-IR')}٪` : fa(r.value)}</b>
+              </div>
+            ))}
+            {!(boards.boards[boardTab] || []).length && <div style={{ fontSize: 12, color: 'var(--muted)' }}>هنوز رقابتی شکل نگرفته — تو اولین باش!</div>}
+          </div>
+          {boards.hoodLeague?.rows?.length > 0 && <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>🏘 لیگِ محلهٔ {boards.hoodLeague.hood}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {boards.hoodLeague.rows.slice(0, 5).map((r: any) => (
+                <div key={r.no} style={{ display: 'flex', gap: 8, fontSize: 12, padding: '4px 10px', color: r.me ? 'var(--gold)' : 'var(--text)' }}>
+                  <b style={{ minWidth: 20 }}>{fa(r.rank)}</b><span>{r.persona}</span><span style={{ flex: 1 }}>{r.name}</span><b>{fa(r.value)}</b>
+                </div>
+              ))}
+            </div>
+          </div>}
+          <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 8 }}>رتبه‌ها از {fa(boards.total)} امپراتوریِ فعال — فقط نام و نشان نمایش داده می‌شود.</div>
+        </div>
+      )}
+    </details>
 
     {/* تایم‌لاینِ زندگی + دفترچهٔ ملک‌جت */}
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 12 }}>

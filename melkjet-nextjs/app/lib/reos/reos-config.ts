@@ -27,6 +27,10 @@ export interface ReosConfig {
     levelXp: { explorer: number; investor: number; builder: number }
     mentorInitiates: boolean
     dailyBrief: boolean
+    sellProfitXp: number
+    land: { buildGainPct: number; partnerGainPct: number; buildMonths: number }
+    rentIncome: boolean
+    chest: { enabled: boolean; maxCoins: number; maxXp: number }
   }
 }
 
@@ -56,6 +60,12 @@ export const DEFAULT_CONFIG: ReosConfig = {
     levelXp: { explorer: 500, investor: 1500, builder: 5000 },
     mentorInitiates: true,
     dailyBrief: true,
+    // چرخهٔ عمرِ ملک (§6.7-6.8 و فصل ۵): فروش با سود → XP؛ برآوردِ زمین (ساخت/مشارکت) با پارامترهای شفافِ ادمین.
+    sellProfitXp: 50,
+    land: { buildGainPct: 45, partnerGainPct: 20, buildMonths: 18 },
+    // درآمدِ اجاره از میانهٔ اجارهٔ واقعیِ هم‌محله‌ها (Real Estate Simulation) + صندوقچهٔ پاداشِ متغیر (فصل ۴).
+    rentIncome: true,
+    chest: { enabled: true, maxCoins: 100, maxXp: 50 },
   },
 }
 

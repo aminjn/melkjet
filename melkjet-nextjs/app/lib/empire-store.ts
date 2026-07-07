@@ -5,7 +5,7 @@
 import { pgEnabled, pgTx } from './db'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
-import { randomBytes } from 'crypto'
+import { randomBytes, createHash } from 'crypto'
 import { config } from './reos/reos-config'
 
 export type AssetKind = 'apartment' | 'villa' | 'commercial' | 'land'
@@ -13,6 +13,7 @@ export type AssetAction = 'renovate' | 'rent' | 'hold'
 export const MENTORS = ['ملک‌جت'] as const
 export type Mentor = typeof MENTORS[number]
 
+export type LandPlan = 'sell' | 'build' | 'partner'
 export interface EmpireAsset {
   id: string
   listingId: string           // آگهیِ واقعیِ سایت — ارزشِ روز از همان خوانده می‌شود
@@ -23,6 +24,11 @@ export interface EmpireAsset {
   boughtAt: number
   action?: AssetAction        // تصمیمِ معنادارِ بعد از خرید (بازسازی/اجاره/نگه‌داشتن)
   actionAt?: number
+  landPlan?: LandPlan         // سیستمِ زمین (§6.7): فروشِ فوری / ساخت / مشارکت
+  business?: string           // لایهٔ کسب‌وکارِ تجاری (§6.9): کافه/فروشگاه/…
+  businessProb?: number       // ٪ موفقیت — از دادهٔ واقعی (رقابت + استقبالِ محله)
+  income?: number             // درآمدِ جمع‌شدهٔ اجاره/کسب‌وکار (برآورد از بازارِ واقعی)
+  lastAccrualAt?: number
 }
 export interface TimelineDot { at: number; icon: string; title: string; detail?: string }
 export interface JournalEntry { at: number; text: string }
@@ -51,6 +57,7 @@ export interface EmpireData {
   stylePicks?: string[]                               // مأموریت M2 «سبکِ خودت را پیدا کن» (انتخابِ تصویری)
   hunter?: { a: string; b: string; better: string; at: number }   // جفتِ فعالِ Property Hunter (§6.4)
   claims: Record<string, number>                      // پاداش‌های یک‌بارمصرفِ دریافت‌شده (missionKey → ts)
+  realized: number            // سود/زیانِ تحقق‌یافته از فروشِ دارایی‌ها (چرخهٔ عمر — فصل ۵)
   rejects: number             // ردِ پیشنهادِ AI در خریدِ اول (۲ بار → کنترلِ آزاد)
   suspense?: { text: string; dueAt: number }          // «Never End A Session» (فصل ۴)
   updatedAt: number
@@ -121,6 +128,37 @@ export function guessOutcome(actual: number, guess: number, tolerancePct = confi
   if (!actual || !guess) return { correct: false, deltaPct: 100 }
   const deltaPct = Math.round(Math.abs(guess - actual) / actual * 100)
   return { correct: deltaPct <= tolerancePct, deltaPct }
+}
+
+// برآوردِ سه‌گزینه‌ایِ زمین (§6.7-6.8): فروشِ فوری / ساخت / مشارکت — از قیمتِ واقعی + پارامترهای شفافِ ادمین.
+export function landProjection(price: number, cfg = config().empire.land): Array<{ plan: LandPlan; label: string; gainPct: number; months: number; risk: string; projected: number }> {
+  return [
+    { plan: 'sell', label: 'فروشِ فوری', gainPct: 0, months: 0, risk: 'کم', projected: price },
+    { plan: 'build', label: 'ساخت', gainPct: cfg.buildGainPct, months: cfg.buildMonths, risk: 'بالا', projected: Math.round(price * (1 + cfg.buildGainPct / 100)) },
+    { plan: 'partner', label: 'مشارکت', gainPct: cfg.partnerGainPct, months: Math.round(cfg.buildMonths / 2), risk: 'متوسط', projected: Math.round(price * (1 + cfg.partnerGainPct / 100)) },
+  ]
+}
+
+// صندوقچهٔ روزانهٔ متغیر (فصل ۴ «Variable Rewards») — قطعی از هش، همان کاربر/روز همیشه همان جایزه.
+export function chestRewardOf(userId: string, day: number, cfg = config().empire.chest): { kind: 'coins' | 'xp' | 'token'; amount: number } {
+  const h = createHash('sha1').update(userId + '|chest|' + day).digest()
+  const r = h.readUInt32BE(0) % 100
+  if (r < 10) return { kind: 'token', amount: 1 }
+  if (r < 45) return { kind: 'xp', amount: 10 + (h.readUInt32BE(4) % Math.max(1, cfg.maxXp - 9)) }
+  return { kind: 'coins', amount: 20 + (h.readUInt32BE(8) % Math.max(1, cfg.maxCoins - 19)) }
+}
+
+// Empire Score (فصل ۵): دارایی + رشد + دانش (دقتِ حدس) + تجربه (XP) + نشان‌ها + تصمیم‌ها — ۰..۱۰۰۰.
+export function empireScoreOf(e: Pick<EmpireData, 'assets' | 'capital' | 'guess' | 'xp' | 'badges' | 'claims'>, livePrices: Record<string, number> = {}): number {
+  const nw = netWorthOf(e as EmpireData, livePrices)
+  const assetsPts = Math.min(300, e.assets.length * 60)
+  const growthPts = Math.max(0, Math.min(200, Math.round(nw.growth * 10)))
+  const accuracy = e.guess.tries ? e.guess.correct / e.guess.tries : 0
+  const knowledgePts = Math.round(accuracy * 150)
+  const xpPts = Math.min(200, Math.round(e.xp / 10))
+  const badgePts = Math.min(100, e.badges.length * 25)
+  const decisionPts = Math.min(50, Object.keys(e.claims).length * 10)
+  return assetsPts + growthPts + knowledgePts + xpPts + badgePts + decisionPts
 }
 
 // جملهٔ AI Dream Engine از انتخاب‌های Dream Board (فصل ۳) — قطعی.
@@ -228,7 +266,7 @@ export async function createEmpire(userId: string, input: {
     timeline: [{ at: now, icon: '🌱', title: 'به ملک‌جت پیوست', detail: `تولدِ امپراتوری #${no}` }],
     journal: [],
     guess: { tries: 0, correct: 0 },
-    claims: {}, rejects: 0,
+    claims: {}, realized: 0, rejects: 0,
     updatedAt: now,
   }
   return putEmpire(e)
@@ -350,6 +388,96 @@ export async function answerHunter(userId: string, pick: string, now = Date.now(
   })
   if (!r.ok) return { ok: false, reason: r.reason }
   return { ok: true, correct, better, rewardXp: rewarded ? cfg.missionRewardXp : 0, rewardCoins: rewarded ? cfg.missionRewardCoins : 0 }
+}
+
+// فروشِ دارایی (چرخهٔ عمر — فصل ۵): به قیمتِ روزِ واقعی؛ سود/زیان تحقق می‌یابد؛ سود → XP.
+export async function sellAsset(userId: string, assetId: string, livePrice: number, now = Date.now()): Promise<{ ok: boolean; reason?: string; profit?: number; salePrice?: number; empire?: EmpireData }> {
+  const cfg = config().empire
+  let profit = 0, salePrice = 0
+  const r = await mutateEmpire(userId, e => {
+    const i = e.assets.findIndex(x => x.id === assetId)
+    if (i < 0) return 'دارایی یافت نشد'
+    const a = e.assets[i]
+    salePrice = livePrice > 0 ? livePrice : a.buyPrice
+    profit = salePrice - a.buyPrice
+    e.capital += salePrice
+    e.realized = (e.realized || 0) + profit
+    if (profit > 0) e.xp += cfg.sellProfitXp
+    e.assets.splice(i, 1)
+    const sign = profit > 0 ? 'سود' : profit < 0 ? 'زیان' : 'سربه‌سر'
+    e.timeline.push({ at: now, icon: '💸', title: `فروش: ${a.title.slice(0, 50)}`, detail: `${sign} ${Math.abs(Math.round(profit / 1e6)).toLocaleString('fa-IR')} میلیون تومان` })
+    if (profit < 0 && !e.claims['first_loss']) {
+      // اولین شکستِ آموزشی (فصل ۳): همهٔ سرمایه‌گذارها اشتباه می‌کنند — درس، نه تنبیه.
+      e.claims['first_loss'] = now
+      e.journal.push({ at: now, text: 'اولین فروشِ با زیان — همهٔ سرمایه‌گذارهای بزرگ از همین‌جا شروع کرده‌اند. مهم این است که دلیلش را بفهمی: قیمتِ خرید، زمان، یا محله؟' })
+    }
+  })
+  if (!r.ok) return { ok: false, reason: r.reason }
+  return { ok: true, profit, salePrice, empire: r.empire }
+}
+
+// سیستمِ زمین (§6.7): انتخابِ مسیرِ فروشِ فوری / ساخت / مشارکت — سیگنالِ هویتی + تایم‌لاین.
+export async function setLandPlan(userId: string, assetId: string, plan: LandPlan, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    if (!a) return 'دارایی یافت نشد'
+    if (a.kind !== 'land') return 'این دارایی زمین نیست'
+    a.landPlan = plan; a.actionAt = now
+    if (plan === 'build') e.identity.builder = Math.min(100, (e.identity.builder || 0) + 4)
+    if (plan === 'partner') e.identity.investor = Math.min(100, (e.identity.investor || 0) + 2)
+    if (plan === 'sell') e.identity.negotiation = Math.min(100, (e.identity.negotiation || 0) + 2)
+    const lbl = plan === 'build' ? 'ساخت' : plan === 'partner' ? 'مشارکت' : 'فروشِ فوری'
+    e.timeline.push({ at: now, icon: '🏗', title: `برنامهٔ زمین: ${lbl}`, detail: a.title.slice(0, 70) })
+  })
+}
+
+// لایهٔ کسب‌وکارِ تجاری (§6.9): انتخابِ کسب‌وکار برای ملکِ تجاری با ٪ موفقیتِ محاسبه‌شده از دادهٔ واقعی.
+export async function chooseBusiness(userId: string, assetId: string, business: string, prob: number, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    if (!a) return 'دارایی یافت نشد'
+    if (a.kind !== 'commercial') return 'این دارایی تجاری نیست'
+    a.business = String(business).slice(0, 40); a.businessProb = Math.max(0, Math.min(100, Math.round(prob))); a.actionAt = now
+    e.identity.commercial = Math.min(100, (e.identity.commercial || 0) + 3)
+    e.timeline.push({ at: now, icon: '🏪', title: `راه‌اندازیِ ${a.business}`, detail: `${a.title.slice(0, 50)} · احتمالِ موفقیت ${a.businessProb.toLocaleString('fa-IR')}٪` })
+  })
+}
+
+// واریزِ درآمدِ اجاره/کسب‌وکار (برآورد از بازارِ واقعی — محاسبه در لایهٔ API، اعمالِ اتمیک اینجا).
+export async function accrueIncome(userId: string, accruals: Array<{ assetId: string; amount: number }>, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    let total = 0
+    for (const { assetId, amount } of accruals) {
+      if (!(amount > 0)) continue
+      const a = e.assets.find(x => x.id === assetId)
+      if (!a) continue
+      a.income = (a.income || 0) + Math.round(amount)
+      a.lastAccrualAt = now
+      total += Math.round(amount)
+    }
+    if (total > 0) e.capital += total
+  })
+}
+
+// دریافتِ صندوقچهٔ روزانه (پاداشِ متغیرِ فصل ۴) — یک‌بار در روز؛ جایزه قطعی از هش.
+export async function claimDailyChest(userId: string, day: number, now = Date.now()): Promise<{ ok: boolean; reason?: string; reward?: ReturnType<typeof chestRewardOf> }> {
+  const reward = chestRewardOf(userId, day)
+  const r = await mutateEmpire(userId, e => {
+    const key = 'chest_' + day
+    if (e.claims[key]) return 'صندوقچهٔ امروز باز شده — فردا دوباره بیا'
+    e.claims[key] = now
+    if (reward.kind === 'coins') e.coins += reward.amount
+    else if (reward.kind === 'xp') e.xp += reward.amount
+    else e.aiTokens += reward.amount
+  })
+  if (!r.ok) return { ok: false, reason: r.reason }
+  return { ok: true, reward }
+}
+
+// همهٔ امپراتوری‌ها برای جدول‌های رتبه (فصل ۵: ۵ لیدربرد) — نمایشِ عمومی فقط نام/نشان، بدونِ شماره‌تلفن.
+export async function listEmpiresPublic(limit = 300): Promise<EmpireData[]> {
+  if (pgEnabled()) { await ensure(); const r = await pgTx(c => c.query(`SELECT data FROM reos_empire ORDER BY at DESC LIMIT $1`, [limit])); return r.rows.map(x => x.data as EmpireData) }
+  return Object.values(fileLoad()).slice(0, limit)
 }
 
 // ارزشِ خالص (Real Asset Value، §6.2-3): سرمایهٔ نقد + ارزشِ روزِ دارایی‌ها از قیمتِ زندهٔ آگهیِ واقعی.

@@ -13,6 +13,7 @@ import ReosWorkflowBuilder from '@/app/components/ReosWorkflowBuilder'
 import ReosWallet from '@/app/components/ReosWallet'
 import ReosTrustBadge from '@/app/components/ReosTrustBadge'
 import ReosReferralCard from '@/app/components/ReosReferralCard'
+import EmpireCard from '@/app/components/EmpireCard'
 import JalaliDatePicker from '@/app/components/JalaliDatePicker'
 import NumberInput from '@/app/components/NumberInput'
 import ImageUpload from '@/app/components/ImageUpload'
@@ -679,6 +680,7 @@ export default function AgencyPage() {
           {/* DASHBOARD */}
           {view === 'dashboard' && <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <ReosTrustBadge />
+            <EmpireCard />
             <ReosTerritoryCard />
             <ReosRewardsCard />
             <ReosSocialCard />

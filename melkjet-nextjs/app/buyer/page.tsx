@@ -9,6 +9,7 @@ import BusinessProfileForm from '@/app/components/BusinessProfileForm'
 import SupportPanel from '@/app/components/SupportPanel'
 import ReosFeed from '@/app/components/ReosFeed'
 import ReosAgentChat from '@/app/components/ReosAgentChat'
+import EmpireCard from '@/app/components/EmpireCard'
 
 // ════════════════════════════════════════════════════════
 //  Types (mirror app/lib/buyer-store.ts API shape)
@@ -405,6 +406,8 @@ export default function BuyerPage() {
           </div>}
 
           {view === 'dashboard' && <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {/* ── امپراتوری: نقطهٔ ورودِ مسیرِ رشد ── */}
+            <EmpireCard />
             {/* ── آنبوردینگ: شناختِ کاربرِ تازه‌وارد (تا وقتی ترجیحی ثبت نکرده) ── */}
             {!(stats.profile.budget || stats.profile.areas || stats.profile.prefType) && (
               <div style={{ borderRadius: 18, padding: '20px 22px', background: 'linear-gradient(135deg, color-mix(in srgb,var(--gold) 16%,var(--surface)), var(--surface) 75%)', border: '1px solid color-mix(in srgb,var(--gold) 45%,transparent)' }}>

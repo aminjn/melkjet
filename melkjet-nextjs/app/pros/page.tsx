@@ -12,6 +12,7 @@ import ReosSocialCard from '@/app/components/ReosSocialCard'
 import ReosWorkflowBuilder from '@/app/components/ReosWorkflowBuilder'
 import ReosTrustBadge from '@/app/components/ReosTrustBadge'
 import ReosReferralCard from '@/app/components/ReosReferralCard'
+import EmpireCard from '@/app/components/EmpireCard'
 import CrmTool, { CRM_VIEWS, type CrmView, type CrmOwnListing } from '@/app/components/tools/CrmTool'
 import ListingPromoteModal from '@/app/components/ListingPromoteModal'
 import MarketingTool, { MARKETING_VIEWS, type MarketingView } from '@/app/components/tools/MarketingTool'
@@ -832,6 +833,7 @@ export default function ProsPage() {
           {/* DASHBOARD */}
           {view === 'dashboard' && <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <ReosTrustBadge />
+            <EmpireCard />
             <ReosTerritoryCard />
             <ReosRewardsCard />
             <ReosSocialCard />

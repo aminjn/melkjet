@@ -7,7 +7,9 @@ import {
   claimEmpireMission, spendAiToken, setSuspense, addJournal, bumpRejects, setPersona, setMentor,
   setStylePicks, setHunterPair, answerHunter, empireLevel, netWorthOf, empireCount, assetKindOf,
   getBrief, markBriefOpened, dayNumberOf,
-  type EmpireData, type AssetKind,
+  sellAsset, setLandPlan, chooseBusiness, accrueIncome, claimDailyChest, chestRewardOf,
+  landProjection, empireScoreOf, listEmpiresPublic,
+  type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
 import { buildBriefFor } from '@/app/lib/empire-brief'
 import { touchStreak, getStreak } from '@/app/lib/reos/achievements'
@@ -61,11 +63,59 @@ async function livePrices(e: EmpireData): Promise<Record<string, number>> {
   return out
 }
 
+// اجارهٔ ماهانهٔ یک آگهیِ اجاره‌ای («ودیعه X · اجاره Y» یا متنِ مشابه) — فقط بخشِ اجاره.
+function monthlyRentOf(it: Item): number {
+  const m = (it.price || '').match(/اجاره[^\d۰-۹]*([\d,٬۰-۹]+)/)
+  return m ? parseFaNum(m[1]) : 0
+}
+const median = (xs: number[]) => { if (!xs.length) return 0; const s = [...xs].sort((a, b) => a - b); return s[Math.floor(s.length / 2)] }
+
+// واریزِ درآمدِ اجاره/کسب‌وکار: برآورد از میانهٔ اجارهٔ واقعیِ هم‌محله‌ها (Real Estate Simulation — فصل ۵).
+// بدونِ دادهٔ اجاره در محله/شهر → هیچ واریزی (صادقانه). حداقل یک روزِ کامل باید گذشته باشد.
+async function accrueRentFor(userId: string, e: EmpireData, now = Date.now()): Promise<EmpireData> {
+  if (!config().empire.rentIncome) return e
+  const earners = e.assets.filter(a => a.action === 'rent' || a.business)
+  if (!earners.length) return e
+  const items = await candidateListings(500).catch(() => [] as Item[])
+  const rentByHood = new Map<string, number[]>()
+  const allRents: number[] = []
+  for (const it of items) {
+    if (isSale(it)) continue
+    const r = monthlyRentOf(it)
+    if (!(r > 0)) continue
+    allRents.push(r)
+    const h = hoodOf(it.location)
+    if (h) { if (!rentByHood.has(h)) rentByHood.set(h, []); rentByHood.get(h)!.push(r) }
+  }
+  const globalMed = median(allRents)
+  const accruals: Array<{ assetId: string; amount: number }> = []
+  for (const a of earners) {
+    const monthly0 = median(rentByHood.get(a.hood) || []) || globalMed
+    if (!(monthly0 > 0)) continue
+    const monthly = a.business ? Math.round(monthly0 * ((a.businessProb || 50) / 100) * 2) : monthly0   // کسب‌وکار: ~۲ برابرِ اجارهٔ مسکونی × احتمالِ موفقیت
+    const since = a.lastAccrualAt || a.actionAt || a.boughtAt
+    const days = Math.floor((now - since) / 864e5)
+    if (days < 1) continue
+    accruals.push({ assetId: a.id, amount: Math.round(monthly * days / 30) })
+  }
+  if (!accruals.length) return e
+  const r = await accrueIncome(userId, accruals, now)
+  return r.ok && r.empire ? r.empire : e
+}
+
 // وضعیتِ کاملِ امپراتوری برای UI.
-async function stateOf(userId: string, e: EmpireData) {
+async function stateOf(userId: string, e0: EmpireData) {
+  const e = await accrueRentFor(userId, e0).catch(() => e0)   // درآمدِ اجاره/کسب‌وکار از بازارِ واقعی
   const [prices, missions, total] = await Promise.all([livePrices(e), missionsOf(userId, e), empireCount()])
   const nw = netWorthOf(e, prices)
-  const assets = e.assets.map(a => ({ ...a, current: prices[a.listingId] || a.buyPrice, growthPct: a.buyPrice ? Math.round(((prices[a.listingId] || a.buyPrice) - a.buyPrice) / a.buyPrice * 1000) / 10 : 0 }))
+  const assets = e.assets.map(a => ({
+    ...a,
+    current: prices[a.listingId] || a.buyPrice,
+    growthPct: a.buyPrice ? Math.round(((prices[a.listingId] || a.buyPrice) - a.buyPrice) / a.buyPrice * 1000) / 10 : 0,
+    // زمینِ بدونِ برنامه → سه گزینهٔ سند (§6.7) با برآوردِ شفاف
+    plans: a.kind === 'land' && !a.landPlan ? landProjection(prices[a.listingId] || a.buyPrice) : undefined,
+  }))
+  const today = dayNumberOf(Date.now())
   // نامهٔ امروزِ ملک‌جت (اگر cron هنوز نساخته، همین‌جا از دادهٔ واقعی ساخته می‌شود) + استریک (ورودِ امروز = حفظِ زنجیره)
   let brief = null, streak = null
   try {
@@ -75,6 +125,8 @@ async function stateOf(userId: string, e: EmpireData) {
   } catch { /* نامه/استریک اختیاری است */ }
   return {
     enabled: true, empire: { ...e, assets }, level: empireLevel(e.xp), ...nw, missions,
+    empireScore: empireScoreOf(e, prices),
+    chest: config().empire.chest.enabled ? { available: !e.claims['chest_' + today] } : null,
     othersBuilding: Math.max(0, total - 1),
     suspense: e.suspense && e.suspense.dueAt > Date.now() ? e.suspense : null,
     brief, streak,
@@ -246,6 +298,78 @@ export async function POST(req: NextRequest) {
         : diffPct < -8 ? `قیمتِ هر متر حدود ${Math.abs(diffPct)}٪ پایین‌تر از میانگینِ ${rates.length} آگهیِ هم‌محله است — فرصتِ قابلِ‌بررسی.`
         : `قیمت با میانگینِ ${rates.length} آگهیِ هم‌محله هم‌خوان است (اختلاف ${Math.abs(diffPct)}٪).`
       return NextResponse.json({ ok: true, tokensLeft: t.empire!.aiTokens, analysis: { hood, samples: rates.length, avgPerM: Math.round(avg), minePerM: Math.round(mine), diffPct, verdict } })
+    }
+
+    // فروش (چرخهٔ عمر — فصل ۵): به قیمتِ روزِ واقعیِ آگهی؛ سود → XP، زیانِ اول → درسِ آموزشی.
+    case 'sell': {
+      const e = await getEmpire(userId)
+      const a = e?.assets.find(x => x.id === String(b.assetId || ''))
+      if (!e || !a) return NextResponse.json({ error: 'دارایی یافت نشد' }, { status: 404 })
+      const it = await getItemById(a.listingId).catch(() => null)
+      const r = await sellAsset(userId, a.id, it ? priceOf(it) : 0)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, profit: r.profit, salePrice: r.salePrice, ...(await stateOf(userId, r.empire!)) })
+    }
+
+    // سیستمِ زمین (§6.7): فروشِ فوری / ساخت / مشارکت.
+    case 'landPlan': {
+      const plan = String(b.plan || '') as LandPlan
+      if (!['sell', 'build', 'partner'].includes(plan)) return NextResponse.json({ error: 'برنامهٔ نامعتبر' }, { status: 400 })
+      const r = await setLandPlan(userId, String(b.assetId || ''), plan)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+    }
+
+    // لایهٔ کسب‌وکارِ تجاری (§6.9): ٪ موفقیت از دادهٔ واقعی — استقبالِ محله و رقابتِ کسب‌وکارهای واقعیِ همان محله.
+    case 'business': {
+      const biz = String(b.biz || '').slice(0, 40)
+      if (!biz) return NextResponse.json({ error: 'نوعِ کسب‌وکار را انتخاب کنید' }, { status: 400 })
+      const e = await getEmpire(userId)
+      const a = e?.assets.find(x => x.id === String(b.assetId || ''))
+      if (!e || !a) return NextResponse.json({ error: 'دارایی یافت نشد' }, { status: 404 })
+      // سیگنال‌های واقعی: تعدادِ آگهی‌های فعالِ محله (استقبال) و کسب‌وکارهای هم‌صنفِ همان محله (رقابت).
+      const { listItems } = await import('@/app/lib/scraper-store')
+      const [all, dirs] = await Promise.all([candidateListings(400).catch(() => [] as Item[]), listItems('directory').catch(() => [] as Item[])])
+      const hoodListings = all.filter(it => hoodOf(it.location) === a.hood).length
+      const competitors = dirs.filter(it => it.status !== 'rejected' && (it.location || '').includes(a.hood) && (it.title + ' ' + (it.category || '')).includes(biz.split(/[\s/]/)[0])).length
+      const prob = Math.round(Math.max(20, Math.min(92, 45 + Math.min(30, hoodListings) - competitors * 5)))
+      const r = await chooseBusiness(userId, a.id, biz, prob)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, prob, signals: { hoodListings, competitors }, ...(await stateOf(userId, r.empire!)) })
+    }
+
+    // صندوقچهٔ روزانه (فصل ۴ Variable Rewards) — یک‌بار در روز، جایزهٔ قطعی از هش.
+    case 'chest': {
+      if (!config().empire.chest.enabled) return NextResponse.json({ error: 'صندوقچه فعال نیست' }, { status: 403 })
+      const r = await claimDailyChest(userId, dayNumberOf(Date.now()))
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, reward: r.reward })
+    }
+
+    // ۵ جدولِ رتبه (فصل ۵) + لیگِ محله (فصل ۷ §7.2) — نمایشِ عمومی فقط نام/نشان.
+    case 'boards': {
+      const me = await getEmpire(userId)
+      const [empires, items] = await Promise.all([listEmpiresPublic(300), candidateListings(800).catch(() => [] as Item[])])
+      const prices: Record<string, number> = {}
+      for (const it of items) { const p = priceOf(it); if (p > 0) prices[it.id] = p }
+      const rows = empires.map(e => {
+        const nw = netWorthOf(e, prices)
+        return { name: e.name, persona: e.persona, no: e.no, me: e.userId === userId, assets: e.assets.length, netWorth: nw.netWorth, growth: nw.growth, correct: e.guess.correct, score: empireScoreOf(e, prices), hoods: e.assets.map(a => a.hood).filter(Boolean) }
+      })
+      const top = (key: 'netWorth' | 'growth' | 'assets' | 'correct' | 'score', filter?: (r: typeof rows[0]) => boolean) =>
+        [...rows].filter(r => !filter || filter(r)).sort((a, x) => (x[key] as number) - (a[key] as number)).slice(0, 10)
+          .map((r, i) => ({ rank: i + 1, name: r.name, persona: r.persona, no: r.no, me: r.me, value: r[key] }))
+      const myHood = me?.assets[0]?.hood || ''
+      const hoodLeague = myHood ? top('score', r => r.hoods.includes(myHood)) : []
+      return NextResponse.json({
+        ok: true,
+        boards: {
+          invest: top('netWorth'), growth: top('growth', r => r.assets > 0), builder: top('assets'),
+          explorer: top('correct'), score: top('score'),
+        },
+        hoodLeague: { hood: myHood, rows: hoodLeague },
+        total: rows.length,
+      })
     }
 
     case 'journal': { const r = await addJournal(userId, String(b.text || '')); return r.ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: r.reason }, { status: 400 }) }

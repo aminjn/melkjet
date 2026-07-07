@@ -45,7 +45,7 @@ import { follow, unfollow, isFollowing, followerCount, followingCount, following
 import { listFlags, getFlag, setFlag, flagEnabled } from '../app/lib/reos/flags.ts'
 import { registerModel as regModel, getChampion as champOf } from '../app/lib/reos/model-registry.ts'
 import { autoPromote, autoMLStatus } from '../app/lib/reos/automl.ts'
-import { createEmpire, getEmpire, renameEmpire, buyAsset, chooseAssetAction, recordGuess, claimEmpireMission, spendAiToken, setHunterPair, answerHunter, setStylePicks, bumpRejects, empireCount, netWorthOf as empNetWorth, saveBrief, getBrief, markBriefOpened, dayNumberOf } from '../app/lib/empire-store.ts'
+import { createEmpire, getEmpire, renameEmpire, buyAsset, chooseAssetAction, recordGuess, claimEmpireMission, spendAiToken, setHunterPair, answerHunter, setStylePicks, bumpRejects, empireCount, netWorthOf as empNetWorth, saveBrief, getBrief, markBriefOpened, dayNumberOf, sellAsset, setLandPlan, chooseBusiness, accrueIncome, claimDailyChest, listEmpiresPublic } from '../app/lib/empire-store.ts'
 
 if (!process.env.DATABASE_URL) { console.error('DATABASE_URL not set'); process.exit(2) }
 let pass = 0, fail = 0
@@ -868,6 +868,37 @@ async function main() {
     await markBriefOpened(uid, day)
     ok('بازکردنِ نامه opened_at را ثبت می‌کند', (await getBrief(uid, day)).openedAt > 0)
     ok('روزِ دیگر → نامه‌ای نیست', (await getBrief(uid, day + 1)) === null)
+
+    // ── فاز ۳: چرخهٔ عمرِ ملک + لیگ‌ها + صندوقچه ──
+    const bl = await buyAsset(uid, { id: 'LND1', title: 'زمین کلنگی ۲۰۰ متری', hood: 'چیتگر', price: 2_000_000_000, ptype: 'زمین' })
+    ok('خریدِ زمین → kind=land', bl.ok && bl.empire.assets.find(x => x.listingId === 'LND1').kind === 'land')
+    const landId = bl.empire.assets.find(x => x.listingId === 'LND1').id
+    const lp = await setLandPlan(uid, landId, 'build')
+    ok('برنامهٔ زمین: ساخت ثبت می‌شود', lp.ok && lp.empire.assets.find(x => x.id === landId).landPlan === 'build')
+    ok('برنامهٔ زمین روی داراییِ غیرزمین رد می‌شود', (await setLandPlan(uid, bl.empire.assets[0].id, 'build')).ok === false)
+    const bc = await buyAsset(uid, { id: 'CMR1', title: 'مغازه ۶۰ متری بر اصلی', hood: 'پونک', price: 1_500_000_000, ptype: 'مغازه تجاری' })
+    const cmrId = bc.empire.assets.find(x => x.listingId === 'CMR1').id
+    const cb = await chooseBusiness(uid, cmrId, 'کافه', 82)
+    ok('کسب‌وکارِ تجاری: نوع + ٪موفقیت ثبت می‌شود', cb.ok && cb.empire.assets.find(x => x.id === cmrId).business === 'کافه' && cb.empire.assets.find(x => x.id === cmrId).businessProb === 82)
+    const capBefore = cb.empire.capital
+    const ai2 = await accrueIncome(uid, [{ assetId: cmrId, amount: 30_000_000 }])
+    ok('واریزِ درآمد: سرمایه + incomeِ دارایی', ai2.ok && ai2.empire.capital === capBefore + 30_000_000 && ai2.empire.assets.find(x => x.id === cmrId).income === 30_000_000)
+    const eb = await getEmpire(uid)
+    const xpBefore = eb.xp, capB2 = eb.capital
+    const sl = await sellAsset(uid, landId, 2_500_000_000)
+    ok('فروشِ سودده: سرمایه+قیمتِ روز، realized+سود، XP+', sl.ok && sl.profit === 500_000_000 && sl.empire.capital === capB2 + 2_500_000_000 && sl.empire.realized === 500_000_000 && sl.empire.xp === xpBefore + 50 && !sl.empire.assets.some(x => x.id === landId))
+    const sl2 = await sellAsset(uid, cmrId, 1_000_000_000)
+    ok('فروشِ زیان‌ده: realized منفی + درسِ اولین شکست', sl2.ok && sl2.profit === -500_000_000 && sl2.empire.claims['first_loss'] > 0 && sl2.empire.journal.some(j => j.text.includes('اولین فروشِ با زیان')))
+    ok('فروشِ داراییِ ناموجود رد می‌شود', (await sellAsset(uid, landId, 1)).ok === false)
+    const eC = await getEmpire(uid)
+    const ch1 = await claimDailyChest(uid, day)
+    const eC2 = await getEmpire(uid)
+    const applied = ch1.reward.kind === 'coins' ? eC2.coins === eC.coins + ch1.reward.amount : ch1.reward.kind === 'xp' ? eC2.xp === eC.xp + ch1.reward.amount : eC2.aiTokens === eC.aiTokens + ch1.reward.amount
+    ok('صندوقچه: جایزه واقعاً اعمال می‌شود', ch1.ok && applied)
+    ok('صندوقچهٔ دوم در همان روز رد می‌شود', (await claimDailyChest(uid, day)).ok === false)
+    ok('روزِ بعد دوباره باز می‌شود', (await claimDailyChest(uid, day + 1)).ok === true)
+    const pub = await listEmpiresPublic()
+    ok('listEmpiresPublic همهٔ امپراتوری‌ها را می‌دهد', pub.length >= 1 && pub.some(x => x.userId === uid))
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)
