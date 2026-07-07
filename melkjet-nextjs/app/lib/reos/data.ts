@@ -75,16 +75,23 @@ export async function loadUser(userId: string): Promise<UserEntity> {
   const prefs = await getPrefs(userId).catch(() => ({ favorites: [] as string[], savedSearches: [] as { query: string }[] } as any))
   const feats = await getFeatures('user', userId).catch(() => ({} as Record<string, number>))
   const events = await recentEvents({ userId, limit: 100 }).catch(() => [])
+  // ترجیح‌های صریحِ آنبوردینگِ خریدار — قوی‌ترین سیگنالِ «شروعِ سرد» (کاربرِ تازه‌واردِ بدونِ رفتار).
+  let prof: { budget?: number; dealType?: string; prefType?: string; areas?: string } | null = null
+  try { prof = await (await import('../buyer-store')).peekBuyerProfile(userId) } catch {}
   const interacted = Array.from(new Set([...(prefs.favorites || []), ...events.filter(e => e.propertyId).map(e => e.propertyId!)]))
-  // توکنِ رفتاری از جستجوهای ذخیره‌شده (نوع/منطقه/…)
-  const searchToks = (prefs.savedSearches || []).flatMap((s: { query: string }) => tokenize(s.query))
-  // بودجه/نیت را از جستجوها استخراج کن (سبک)؛ وگرنه پیش‌فرض.
+  // توکنِ رفتاری از جستجوهای ذخیره‌شده + ترجیح‌های آنبوردینگ (منطقه/نوعِ ملک)
+  const searchToks = [
+    ...(prefs.savedSearches || []).flatMap((s: { query: string }) => tokenize(s.query)),
+    ...tokenize(prof?.areas || ''), ...tokenize(prof?.prefType || ''),
+  ]
+  // بودجه/نیت: اول آنبوردینگِ صریح، بعد استخراج از جستجوها، بعد feature store.
   const allSearch = (prefs.savedSearches || []).map((s: { query: string }) => s.query).join(' ')
-  const budget = parseFaNum((allSearch.match(/([\d۰-۹,٬]{4,})/) || [])[1]) || Number(feats.budget) || 0
-  const intent: Intent = /اجاره|رهن/.test(allSearch) ? 'rent' : /سرمایه|invest/.test(allSearch) ? 'invest' : 'buy'
+  const budget = Number(prof?.budget) || parseFaNum((allSearch.match(/([\d۰-۹,٬]{4,})/) || [])[1]) || Number(feats.budget) || 0
+  const intent: Intent = prof?.dealType === 'rent' ? 'rent'
+    : /اجاره|رهن/.test(allSearch) ? 'rent' : /سرمایه|invest/.test(allSearch) ? 'invest' : 'buy'
   const engagementScore = Math.min(1, (Number(feats.intent_score) || 0) / 50 + (interacted.length ? 0.2 : 0))
   return {
-    id: userId, budget, intent, locationText: (prefs.savedSearches?.[0]?.query) || undefined,
+    id: userId, budget, intent, locationText: (prefs.savedSearches?.[0]?.query) || prof?.areas || undefined,
     engagementScore, behaviorTokens: searchToks, interactedPropertyIds: interacted,
   }
 }

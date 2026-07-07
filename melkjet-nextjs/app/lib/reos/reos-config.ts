@@ -19,6 +19,7 @@ export interface ReosConfig {
   economy: { commissionPct: number; affiliatePct: number; loyaltyBonusPct: number; missionRewardXp: number; missionRewardCredit: number }
   community: { weights: { followers: number; dominance: number; trust: number; level: number }; commentMaxLen: number }
   automl: { enabled: boolean; promoteMargin: number; minSamples: number }
+  suspension: { enabled: boolean; fraudPct: number; autoSuspend: boolean }
 }
 
 export const DEFAULT_CONFIG: ReosConfig = {
@@ -36,6 +37,8 @@ export const DEFAULT_CONFIG: ReosConfig = {
   economy: { commissionPct: 0.02, affiliatePct: 0.2, loyaltyBonusPct: 0.005, missionRewardXp: 50, missionRewardCredit: 20000 },
   community: { weights: { followers: 0.30, dominance: 0.30, trust: 0.25, level: 0.15 }, commentMaxLen: 800 },
   automl: { enabled: true, promoteMargin: 0.02, minSamples: 100 },
+  // قوانینِ تعلیق: تقلب ≥ fraudPct٪ → پرچمِ بازبینی؛ اگر autoSuspend روشن باشد → تعلیقِ خودکار (ورود مسدود).
+  suspension: { enabled: true, fraudPct: 70, autoSuspend: false },
 }
 
 const FILE = join(process.cwd(), '.reos-config-settings.json')

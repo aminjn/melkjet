@@ -405,6 +405,32 @@ export default function BuyerPage() {
           </div>}
 
           {view === 'dashboard' && <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {/* ── آنبوردینگ: شناختِ کاربرِ تازه‌وارد (تا وقتی ترجیحی ثبت نکرده) ── */}
+            {!(stats.profile.budget || stats.profile.areas || stats.profile.prefType) && (
+              <div style={{ borderRadius: 18, padding: '20px 22px', background: 'linear-gradient(135deg, color-mix(in srgb,var(--gold) 16%,var(--surface)), var(--surface) 75%)', border: '1px solid color-mix(in srgb,var(--gold) 45%,transparent)' }}>
+                <div style={{ fontWeight: 900, fontSize: 17, marginBottom: 4 }}>👋 خوش آمدید! بگویید دنبالِ چه هستید</div>
+                <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.8 }}>با چند پاسخِ کوتاه، پیشنهادهای هوشمند دقیقاً برای شما شخصی می‌شود — همین حالا، نه بعد از هفته‌ها رفتار.</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                  {([['sale', 'می‌خواهم بخرم'], ['rent', 'می‌خواهم اجاره کنم'], ['both', 'هر دو']] as const).map(([v, l]) => (
+                    <button key={v} onClick={() => setProf({ ...prof, dealType: v })} style={{ padding: '8px 16px', borderRadius: 999, border: prof.dealType === v ? '1px solid var(--gold)' : '1px solid var(--line2)', background: prof.dealType === v ? 'color-mix(in srgb,var(--gold) 18%,transparent)' : 'transparent', color: prof.dealType === v ? 'var(--gold)' : 'var(--muted)', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', fontFamily: FONT }}>{l}</button>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+                  {['آپارتمان', 'ویلا', 'زمین', 'مغازه', 'دفترکار'].map(t => (
+                    <button key={t} onClick={() => setProf({ ...prof, prefType: prof.prefType === t ? '' : t })} style={{ padding: '7px 14px', borderRadius: 999, border: prof.prefType === t ? '1px solid var(--gold)' : '1px solid var(--line2)', background: prof.prefType === t ? 'color-mix(in srgb,var(--gold) 18%,transparent)' : 'transparent', color: prof.prefType === t ? 'var(--gold)' : 'var(--muted)', fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: FONT }}>{t}</button>
+                  ))}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 10, marginBottom: 12 }}>
+                  <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>بودجه (تومان){prof.budget ? <span style={{ color: 'var(--gold)' }}> — {money(Number(prof.budget) || 0)}</span> : null}</label><NumberInput value={prof.budget} onChange={v => setProf({ ...prof, budget: v })} style={inputStyle} /></div>
+                  <div><label style={{ fontSize: 11.5, color: 'var(--muted)' }}>محله‌های موردنظر</label><input value={prof.areas} onChange={e => setProf({ ...prof, areas: e.target.value })} placeholder="مثلاً: سعادت‌آباد، ونک" style={inputStyle} /></div>
+                </div>
+                <button disabled={busy} onClick={async () => {
+                  const ok = await post({ action: 'updateProfile', patch: { budget: Number(prof.budget) || 0, prefType: prof.prefType, dealType: prof.dealType, areas: prof.areas } })
+                  // جستجوی ذخیره‌شده با هشدار — تا موردِ جدیدِ منطبق خودکار اطلاع داده شود
+                  if (ok && (prof.areas || prof.prefType)) await post({ action: 'addSearch', query: [prof.prefType, prof.areas].filter(Boolean).join(' در '), area: prof.areas || undefined, priceMax: Number(prof.budget) || undefined, alerts: true })
+                }} style={{ padding: '11px 26px', borderRadius: 10, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 13.5, border: 'none', cursor: 'pointer', fontFamily: FONT }}>{busy ? 'در حال ذخیره…' : '✨ شروعِ پیشنهادهای شخصی'}</button>
+              </div>
+            )}
             <ReosAgentChat />
             {/* پیشنهادِ هوشمندِ REOS — نسخهٔ فشرده در داشبورد */}
             <div style={{ ...card, padding: 18 }}>

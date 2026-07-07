@@ -12,8 +12,10 @@ export interface Account {
   nationalId?: string; firstName?: string; lastName?: string; gender?: string; fatherName?: string; birthDate?: string; birthPlace?: string; idNumber?: string; idSerial?: string; birthPlaceCode?: string; fullName?: string; issuancePlace?: string; issuancePlaceCode?: string; officeCode?: string; identityVerifiedAt?: number
   // کلِ پاسخِ هویتیِ شاهکار — تا هیچ فیلدی از دست نرود
   identityRaw?: Record<string, unknown>
-  // تعلیقِ پنل به‌خاطرِ پروفایلِ ناقص
-  suspended?: boolean; profileWarnAt?: number
+  // تعلیقِ پنل به‌خاطرِ پروفایلِ ناقص (بدونِ reason) یا تعلیقِ ضدتقلب/ادمین (با reason → ورود مسدود)
+  suspended?: boolean; profileWarnAt?: number; suspendReason?: string; suspendedAt?: number
+  // پرچمِ بررسیِ ضدتقلب (هنوز معلق نشده — در صفِ بازبینیِ سوپرادمین)
+  flagged?: boolean; flagReason?: string; flaggedAt?: number
   // دسترسی‌های ویژه که سوپرادمین می‌دهد (مثلِ 'catalog' برای مدیریتِ کاتالوگ و اسکرپِ هایپرساز)
   caps?: string[]
 }
@@ -160,7 +162,23 @@ export function adminUpdate(phone: string, patch: { name?: string; role?: string
   if (patch.plan !== undefined) a.plan = String(patch.plan) || undefined
   save(db); return a
 }
-export function setSuspended(phone: string, val: boolean) { const db = load(); const a = db[phone]; if (a) { a.suspended = val || undefined; if (!val) a.profileWarnAt = undefined; save(db) } }
+export function setSuspended(phone: string, val: boolean, reason?: string) {
+  const db = load(); const a = db[phone]; if (!a) return
+  a.suspended = val || undefined
+  a.suspendReason = val ? (reason || a.suspendReason) : undefined
+  a.suspendedAt = val ? Date.now() : undefined
+  if (!val) a.profileWarnAt = undefined
+  if (val) { a.flagged = undefined; a.flagReason = undefined; a.flaggedAt = undefined }   // تعلیق پرچم را می‌بلعد
+  save(db)
+}
+// پرچمِ بازبینیِ ضدتقلب (تعلیق نیست؛ فقط در صفِ بررسیِ سوپرادمین می‌نشیند).
+export function setFlagged(phone: string, val: boolean, reason?: string) {
+  const db = load(); const a = db[phone]; if (!a) return
+  a.flagged = val || undefined
+  a.flagReason = val ? (reason || a.flagReason) : undefined
+  a.flaggedAt = val ? Date.now() : undefined
+  save(db)
+}
 export function setProfileWarn(phone: string, ts: number | undefined) { const db = load(); const a = db[phone]; if (a) { a.profileWarnAt = ts; save(db) } }
 export function deleteAccount(phone: string) { const db = load(); delete db[phone]; save(db) }
 export function bulkUpdate(phones: string[], patch: { role?: string; plan?: string }) {

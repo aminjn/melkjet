@@ -88,52 +88,31 @@ async function withDb<R>(fn: (db: DB) => R): Promise<R> {
   const db = fileLoad(); const r = fn(db); fileSave(db); return r
 }
 
+// حسابِ خریدار خالی شروع می‌شود — هیچ دادهٔ نمونه/فیک نیست؛ همه‌چیز همان است که خودِ کاربر می‌سازد.
+// شناختِ کاربر از راهِ آنبوردینگ (پروفایل/ترجیح‌ها) و رفتارِ واقعی (REOS) اتفاق می‌افتد، نه دادهٔ ساختگی.
 function seed(): BuyerData {
-  const now = Date.now(); const day = 86400000
-  const sp = (title: string, ptype: string, location: string, area: number, rooms: number, price: number, deal: DealType, ageDays: number): SavedProperty =>
-    ({ id: id('s_'), title, ptype, location, area, rooms, price, deal, addedAt: now - ageDays * day })
-  const saved: SavedProperty[] = [
-    sp('آپارتمان نوساز سعادت‌آباد', 'آپارتمان', 'تهران، سعادت‌آباد', 95, 2, 8500000000, 'sale', 2),
-    sp('آپارتمان ۲ خوابه جردن', 'آپارتمان', 'تهران، جردن', 110, 2, 11000000000, 'sale', 5),
-    sp('آپارتمان اجاره‌ای ونک', 'آپارتمان', 'تهران، ونک', 80, 2, 1500000000, 'rent', 1),
-  ]
-  const searches: SavedSearch[] = [
-    { id: id('q_'), query: 'آپارتمان ۲ خوابه شمال تهران', ptype: 'آپارتمان', area: 'شمال تهران', priceMax: 10000000000, alerts: true, createdAt: now - 3 * day },
-    { id: id('q_'), query: 'رهن کامل ونک تا ۲ میلیارد', ptype: 'آپارتمان', area: 'ونک', priceMax: 2000000000, alerts: false, createdAt: now - 7 * day },
-  ]
-  const viewings: BViewing[] = [
-    { id: id('v_'), propertyTitle: 'آپارتمان نوساز سعادت‌آباد', advisor: 'آژانس ملک برتر', date: '۱۴۰۴/۰۴/۰۲', status: 'scheduled', createdAt: now - 1 * day },
-    { id: id('v_'), propertyTitle: 'آپارتمان ۲ خوابه جردن', advisor: 'مشاور رضایی', date: '۱۴۰۴/۰۳/۲۹', status: 'done', createdAt: now - 4 * day },
-  ]
-  const offers: BOffer[] = [
-    { id: id('o_'), propertyTitle: 'آپارتمان نوساز سعادت‌آباد', amount: 8200000000, status: 'pending', createdAt: now - 1 * day },
-  ]
-  const messages: BMessage[] = [
-    { id: id('m_'), from: 'آژانس ملک برتر', propertyTitle: 'آپارتمان نوساز سعادت‌آباد', text: 'سلام، بازدید برای پنجشنبه ساعت ۱۰ هماهنگ شد.', unread: true, createdAt: now - 0.2 * day },
-    { id: id('m_'), from: 'مشاور رضایی', propertyTitle: 'آپارتمان ۲ خوابه جردن', text: 'مالک با قیمت پیشنهادی موافق نیست، گزینهٔ مشابه دارم.', unread: true, createdAt: now - 1 * day },
-    { id: id('m_'), from: 'پشتیبانی ملک‌جت', text: 'سرچ ذخیره‌شدهٔ شما ۳ مورد جدید دارد.', unread: false, createdAt: now - 2 * day },
-  ]
-  const conversations: Conversation[] = [
-    {
-      id: id('c_'), ownerName: 'مالک: آقای کریمی', propertyTitle: 'آپارتمان نوساز سعادت‌آباد',
-      createdAt: now - 1 * day, updatedAt: now - 0.3 * day,
-      messages: [
-        { id: id('cm_'), from: 'buyer', text: 'سلام، این واحد هنوز موجوده؟ امکان بازدید آخر هفته هست؟', createdAt: now - 1 * day },
-        { id: id('cm_'), from: 'owner', text: 'سلام، بله موجوده. پنجشنبه یا جمعه بعدازظهر می‌تونم هماهنگ کنم.', createdAt: now - 0.9 * day },
-        { id: id('cm_'), from: 'buyer', text: 'عالیه، قیمت نهایی‌تون چقدره؟ کمی انعطاف دارید؟', createdAt: now - 0.4 * day },
-        { id: id('cm_'), from: 'owner', text: 'قیمت ۸٫۵ میلیارده، برای خریدار جدی تا ۲۰۰ میلیون قابل مذاکره است.', createdAt: now - 0.3 * day },
-      ],
-    },
-    {
-      id: id('c_'), ownerName: 'مشاور رضایی', propertyTitle: 'آپارتمان ۲ خوابه جردن',
-      createdAt: now - 5 * day, updatedAt: now - 5 * day,
-      messages: [
-        { id: id('cm_'), from: 'buyer', text: 'سلام، طبقه و جهت نور این واحد چطوره؟', createdAt: now - 5 * day },
-      ],
-    },
-  ]
-  const aiChats: AiChat[] = []
-  return { profile: { name: 'کاربر ملک‌جت', email: '', bio: '', budget: 10000000000, prefType: 'آپارتمان', dealType: 'sale', rooms: 2, areaMin: 70, areaMax: 130, areas: 'شمال تهران', verifyStatus: 'none' }, settings: defaultSettings(), saved, searches, viewings, offers, messages, conversations, aiChats, createdAt: now }
+  return { profile: { name: '', email: '', bio: '', verifyStatus: 'none' }, settings: defaultSettings(), saved: [], searches: [], viewings: [], offers: [], messages: [], conversations: [], aiChats: [], createdAt: Date.now() }
+}
+
+// پاک‌سازیِ خودکارِ دادهٔ نمونهٔ قدیمی: آیتم‌های seedِ فیکِ سابق را حذف می‌کند و دادهٔ واقعیِ کاربر را نگه می‌دارد.
+const FAKE_TITLES = new Set(['آپارتمان نوساز سعادت‌آباد', 'آپارتمان ۲ خوابه جردن', 'آپارتمان اجاره‌ای ونک'])
+const FAKE_FROM = new Set(['آژانس ملک برتر', 'مشاور رضایی'])
+function scrubLegacyDemo(b: BuyerData): boolean {
+  let dirty = false
+  const cut = <T,>(arr: T[], drop: (x: T) => boolean): T[] => { const kept = arr.filter(x => !drop(x)); if (kept.length !== arr.length) dirty = true; return kept }
+  b.saved = cut(b.saved || [], s => FAKE_TITLES.has(s.title))
+  b.searches = cut(b.searches || [], q => q.query === 'آپارتمان ۲ خوابه شمال تهران' || q.query === 'رهن کامل ونک تا ۲ میلیارد')
+  b.viewings = cut(b.viewings || [], v => FAKE_TITLES.has(v.propertyTitle) && FAKE_FROM.has(v.advisor || ''))
+  b.offers = cut(b.offers || [], x => x.propertyTitle === 'آپارتمان نوساز سعادت‌آباد' && x.amount === 8200000000)
+  b.messages = cut(b.messages || [], m => FAKE_FROM.has(m.from) || (m.from === 'پشتیبانی ملک‌جت' && m.text === 'سرچ ذخیره‌شدهٔ شما ۳ مورد جدید دارد.'))
+  // گفتگوهای فیک propertyId ندارند و طرفشان نام‌های نمونه است؛ گفتگوی واقعی (از صفحهٔ آگهی) propertyId دارد.
+  b.conversations = cut(b.conversations || [], c => !c.propertyId && (c.ownerName === 'مالک: آقای کریمی' || c.ownerName === 'مشاور رضایی') && FAKE_TITLES.has(c.propertyTitle))
+  // پروفایلِ ساختگیِ پیش‌فرض → خالی تا آنبوردینگ واقعی بپرسد
+  if (b.profile?.name === 'کاربر ملک‌جت') {
+    b.profile = { ...b.profile, name: '', budget: undefined, prefType: undefined, dealType: undefined, rooms: undefined, areaMin: undefined, areaMax: undefined, areas: undefined }
+    dirty = true
+  }
+  return dirty
 }
 
 // seed/backfill را روی db برای مالکِ o اعمال می‌کند؛ برمی‌گرداند که آیا چیزی تغییر کرد (نیاز به ذخیره).
@@ -141,8 +120,9 @@ function applyBuyer(db: DB, o: string): boolean {
   let dirty = false
   if (!db.buyers[o]) { db.buyers[o] = seed(); dirty = true }
   const b = db.buyers[o]
+  if (scrubLegacyDemo(b)) dirty = true   // حذفِ دادهٔ نمونهٔ قدیمی (یک‌بار، خودکار)
   // backfill برای دادهٔ قدیمی‌تر
-  if (!Array.isArray(b.conversations)) { b.conversations = seed().conversations; dirty = true }
+  if (!Array.isArray(b.conversations)) { b.conversations = []; dirty = true }
   if (!Array.isArray(b.aiChats)) {
     // مهاجرت: تبدیلِ aiMessages تخت قدیمی به یک گفتگو
     const legacy = (b as unknown as { aiMessages?: AiMsg[] }).aiMessages
@@ -163,6 +143,12 @@ export async function getBuyer(o: string): Promise<BuyerData> {
   // اگر seed/backfill لازم نبود، بدونِ نوشتن برگردان (مثلِ قبل که فقط وقتی dirty بود ذخیره می‌شد).
   if (!applyBuyer(db, o)) return db.buyers[o]
   return withDb(d => { applyBuyer(d, o); return d.buyers[o] })
+}
+
+// خواندنِ پروفایل بدونِ ساختنِ رکورد (برای REOS/loadUser — تا برای نقش‌های دیگر رکوردِ خریدار ساخته نشود).
+export async function peekBuyerProfile(o: string): Promise<BuyerProfile | null> {
+  const db = await load()
+  return db.buyers[o]?.profile || null
 }
 // عنوانِ گفتگو از اولین پیامِ کاربر
 function chatTitleFrom(messages: AiMsg[]): string {

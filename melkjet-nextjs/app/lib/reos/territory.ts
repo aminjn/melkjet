@@ -136,6 +136,12 @@ export async function recordDominance(territory: string, agentId: string, agentN
   // تقلبِ بالاتر از آستانه → امتیاز به‌شدت کاهش می‌یابد (بی‌اعتبارسازی، نه حذف).
   const th = config().territory.fraudThreshold
   const finalScore = fraud.score >= th ? Math.round(dom.score * (1 - fraud.score)) : dom.score
+  // قوانینِ تعلیق (سوپرادمین): تقلب ≥ درصدِ تعیین‌شده → پرچمِ بازبینی یا تعلیقِ خودکار.
+  const sus = config().suspension
+  if (sus?.enabled && fraud.score * 100 >= sus.fraudPct && agentId) {
+    const reason = `ضدتقلبِ اقتدارِ بازار: امتیازِ تقلب ${Math.round(fraud.score * 100)}٪ — ${fraud.flags.join('، ')}`
+    import('../account-store').then(m => { if (sus.autoSuspend) m.setSuspended(agentId, true, reason); else m.setFlagged(agentId, true, reason) }).catch(() => {})
+  }
   const row: ScoreRow = { territory, agentId, agentName, signals, score: finalScore, fraud: fraud.score, at: Date.now() }
   if (pgEnabled()) {
     await ensure()

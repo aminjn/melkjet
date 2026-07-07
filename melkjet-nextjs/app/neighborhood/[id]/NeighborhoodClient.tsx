@@ -115,28 +115,24 @@ export default function NeighborhoodClient({ name }: { name: string }) {
     if (first > 0) growthPct = Math.round(((last - first) / first) * 100);
   }
 
+  // امکاناتِ محله — بدونِ عددِ ساختگی؛ فقط دسته‌های قابلِ‌جستجو (عددِ واقعی نیازمندِ دیتای POI است).
   const amenities = [
-    { icon: '🏫', label: 'مدارس', value: '۱۲ مدرسه' },
-    { icon: '🌳', label: 'پارک‌ها', value: '۸ پارک' },
-    { icon: '🚇', label: 'مترو', value: '۳ ایستگاه' },
-    { icon: '🏥', label: 'بیمارستان', value: '۴ مرکز درمانی' },
-    { icon: '🏬', label: 'مراکز خرید', value: '۶ مجتمع' },
-    { icon: '🍽️', label: 'رستوران', value: '۸۵+ مکان' },
-    { icon: '🏦', label: 'بانک', value: '۲۲ شعبه' },
-    { icon: '⚽', label: 'ورزشگاه', value: '۳ مجموعه' },
+    { icon: '🏫', label: 'مدارس', value: '' },
+    { icon: '🌳', label: 'پارک‌ها', value: '' },
+    { icon: '🚇', label: 'مترو', value: '' },
+    { icon: '🏥', label: 'درمانی', value: '' },
+    { icon: '🏬', label: 'مراکز خرید', value: '' },
+    { icon: '🍽️', label: 'رستوران', value: '' },
+    { icon: '🏦', label: 'بانک', value: '' },
+    { icon: '⚽', label: 'ورزشی', value: '' },
   ];
 
+  // محله‌های نزدیک — فقط لینک؛ قیمتِ ساختگی حذف شد (قیمتِ واقعی در صفحهٔ خودِ محله از stats می‌آید).
   const nearbyNeighborhoods = [
-    { name: 'زعفرانیه', href: '/neighborhood/zafaranieh', price: '۳۲۷ م/متر' },
-    { name: 'ونک', href: '/neighborhood/vanak', price: '۹۷ م/متر' },
-    { name: 'فرمانیه', href: '/neighborhood/farmaniyeh', price: '۱۸۵ م/متر' },
-    { name: 'شهرک غرب', href: '/neighborhood/shahrak', price: '۱۱۲ م/متر' },
-  ];
-
-  const advisors = [
-    { name: 'علی رضایی', rating: '۴.۹', hue: 30 },
-    { name: 'سارا احمدی', rating: '۴.۸', hue: 200 },
-    { name: 'محمد کریمی', rating: '۴.۷', hue: 120 },
+    { name: 'زعفرانیه', href: '/neighborhood/zafaranieh', price: '' },
+    { name: 'ونک', href: '/neighborhood/vanak', price: '' },
+    { name: 'فرمانیه', href: '/neighborhood/farmaniyeh', price: '' },
+    { name: 'شهرک غرب', href: '/neighborhood/shahrak', price: '' },
   ];
 
   return (
@@ -367,8 +363,8 @@ export default function NeighborhoodClient({ name }: { name: string }) {
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: '8px', padding: '0.75rem 0.65rem' }}>
                     <span style={{ fontSize: '1.3rem', flexShrink: 0 }}>{item.icon}</span>
                     <div>
-                      <div style={{ fontSize: '0.68rem', color: 'var(--muted)', marginBottom: '0.1rem' }}>{item.label}</div>
-                      <div style={{ fontSize: '0.76rem', fontWeight: 600, color: 'var(--text)' }}>{item.value}</div>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text)' }}>{item.label}</div>
+                      {item.value ? <div style={{ fontSize: '0.68rem', color: 'var(--muted)', marginTop: '0.1rem' }}>{item.value}</div> : null}
                     </div>
                   </div>
                 ))}

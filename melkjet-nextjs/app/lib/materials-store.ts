@@ -257,28 +257,35 @@ export async function sellersOfCatalog(catalogId: string) {
   return out.sort((a, b) => a.price - b.price)
 }
 
-// ── دایرکتوریِ عمومیِ همهٔ فروشگاه‌های مصالح (برای دیده‌شدنِ کامل) ──
-export async function listPublicShops(opts?: { city?: string; category?: string; search?: string }) {
+// ── دایرکتوریِ عمومیِ فروشگاه‌های مصالح (برای دیده‌شدنِ کامل) ──
+// فقط فروشندهٔ واقعیِ مصالح: کالای فعال دارد یا نقشِ حسابش «مصالح» است.
+// بدونِ این فیلتر هر حسابِ املاک/مشاوری که یک‌بار پنل را باز کرده بود اینجا ظاهر می‌شد.
+export async function listPublicShops(opts?: { city?: string; category?: string; search?: string; withPhone?: boolean }) {
   const db = await load()
   const out: any[] = []
   for (const [owner, shop] of Object.entries(db.shops)) {
     if (!shop.slug) continue
     const active = shop.products.filter(p => p.active)
+    const role = getAccount(owner)?.role || ''
+    const isMaterialsSeller = role === 'materials' || /مصالح/.test(role)
+    if (active.length === 0 && !isMaterialsSeller) continue
     const prof = getProfile(owner)
     const name = prof.businessName || shop.profile.name || prof.displayName || ''
-    if (active.length === 0 && !name) continue   // فروشگاهِ کاملاً خالی را نشان نده
+    if (!name && active.length === 0) continue   // فروشگاهِ کاملاً خالی را نشان نده
     const categories = Array.from(new Set(active.map(x => x.category).filter(Boolean)))
     out.push({
       slug: shop.slug, name: name || 'فروشگاه مصالح', tagline: prof.tagline || '',
-      logo: prof.logo || '', cover: prof.cover || '', city: prof.city || '', province: prof.province || '',
+      logo: prof.logo || '', cover: prof.cover || '', city: prof.city || '', province: prof.province || '', neighborhood: prof.neighborhood || '',
       rating: shop.profile.rating || 0, productCount: active.length, categories,
       minPrice: active.length ? Math.min(...active.map(p => Math.round(p.price * (1 - (p.discountPct || 0) / 100))).filter(Boolean)) : 0,
+      // شمارهٔ تماس فقط وقتی صریحاً خواسته شود (پشتِ session — قانونِ «شماره فقط برای واردشده‌ها»)
+      ...(opts?.withPhone ? { phone: prof.contactPhone || prof.landline || owner } : {}),
     })
   }
   let rows = out
-  if (opts?.city) { const c = normName(opts.city); rows = rows.filter(r => normName(r.city).includes(c) || c.includes(normName(r.city))) }
+  if (opts?.city) { const c = normName(opts.city); rows = rows.filter(r => normName(r.city).includes(c) || c.includes(normName(r.city)) || normName(r.province).includes(c)) }
   if (opts?.category) { const g = normName(opts.category); rows = rows.filter(r => r.categories.some((x: string) => normName(x).includes(g))) }
-  if (opts?.search) { const q = normName(opts.search); rows = rows.filter(r => normName(r.name).includes(q) || r.categories.some((x: string) => normName(x).includes(q))) }
+  if (opts?.search) { const q = normName(opts.search); rows = rows.filter(r => normName(r.name).includes(q) || normName(r.neighborhood || '').includes(q) || r.categories.some((x: string) => normName(x).includes(q))) }
   return rows.sort((a, b) => b.productCount - a.productCount || b.rating - a.rating)
 }
 

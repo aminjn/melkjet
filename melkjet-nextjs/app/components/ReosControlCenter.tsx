@@ -16,13 +16,15 @@ export default function ReosControlCenter() {
   const [catalog, setCatalog] = useState<{ key: string; name: string; purpose: string; type: string; status: string; metric?: string }[]>([])
   const [flags, setFlags] = useState<{ key: string; label: string; enabled: boolean; rolloutPct: number; cities: string[]; plans: string[]; roles: string[] }[]>([])
   const [aml, setAml] = useState<{ name: string; champion?: { version: number; metric: number }; challenger?: { version: number; metric: number; samples: number }; wouldPromote: boolean }[]>([])
+  const [sus, setSus] = useState<{ phone: string; name: string; role: string; flagged: boolean; flagReason: string; suspended: boolean; suspendReason: string; at: number }[]>([])
+  const [susPhone, setSusPhone] = useState('')
 
   const loadCfg = () => fetch('/api/reos/config', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d) setCfg(d.config) }).catch(() => {})
   const loadModels = () => fetch('/api/reos/models?name=engage', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d) setModels(d.versions || []) }).catch(() => {})
   const loadCatalog = () => fetch('/api/reos/catalog', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d) setCatalog(d.models || []) }).catch(() => {})
   const loadFlags = () => fetch('/api/reos/flags', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d) setFlags(d.flags || []) }).catch(() => {})
   const loadAml = () => fetch('/api/reos/automl', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d) setAml(d.status || []) }).catch(() => {})
-  useEffect(() => { loadCfg(); loadModels(); loadCatalog(); loadFlags(); loadAml() }, [])
+  useEffect(() => { loadCfg(); loadModels(); loadCatalog(); loadFlags(); loadAml(); loadSus() }, [])
 
   const saveFlag = async (key: string, patch: Record<string, unknown>) => {
     await fetch('/api/reos/flags', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, patch }) }).catch(() => {})
@@ -31,6 +33,18 @@ export default function ReosControlCenter() {
   const runAutoml = async () => {
     setBusy('automl'); const d = await fetch('/api/reos/automl', { method: 'POST' }).then(r => r.json()).catch(() => null)
     setBusy(''); setMsg(d?.message || (d?.ok ? 'انجام شد ✓' : 'خطا')); setTimeout(() => setMsg(''), 5000); loadAml(); loadModels()
+  }
+  const loadSus = () => fetch('/api/reos/suspension', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d) setSus(d.rows || []) }).catch(() => {})
+  const susAct = async (action: string, phone: string) => {
+    setBusy('sus' + phone)
+    await fetch('/api/reos/suspension', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, phone }) }).catch(() => {})
+    setBusy(''); loadSus()
+  }
+  const manualSuspend = async () => {
+    if (!susPhone.trim()) return
+    setBusy('sus-manual')
+    await fetch('/api/reos/suspension', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'suspend', phone: susPhone.trim(), reason: 'تعلیق دستی توسط سوپرادمین' }) }).catch(() => {})
+    setSusPhone(''); setBusy(''); loadSus()
   }
 
   const setPath = (section: string, key: string, val: string, sub?: string) => {
@@ -206,6 +220,13 @@ export default function ReosControlCenter() {
               {row('حاشیهٔ ارتقا (AUC)', inp('automl', 'promoteMargin'))}
               {row('حداقلِ نمونه', inp('automl', 'minSamples'))}
             </div>
+            <div>
+              <div style={sub}>قوانینِ تعلیقِ حساب (ضدتقلب)</div>
+              {row('فعال (۱/۰)', inp('suspension', 'enabled'))}
+              {row('آستانهٔ تقلب (٪)', inp('suspension', 'fraudPct'))}
+              {row('تعلیقِ خودکار (۱/۰)', inp('suspension', 'autoSuspend'))}
+              <div style={{ fontSize: 10.5, color: 'var(--faint)', lineHeight: 1.8 }}>تقلب ≥ آستانه → پرچمِ بازبینی؛ اگر تعلیقِ خودکار روشن باشد، حساب معلق و ورودش مسدود می‌شود.</div>
+            </div>
           </div>
         )}
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
@@ -249,6 +270,32 @@ export default function ReosControlCenter() {
           </div>
         ))}
         {!aml.length && <div style={{ fontSize: 12, color: 'var(--muted)' }}>هنوز مدلی ثبت نشده — «آموزشِ مدل» را بزنید.</div>}
+      </div>
+
+      {/* تعلیقِ حساب‌ها — صفِ بازبینیِ ضدتقلب + تعلیقِ دستی */}
+      <div style={card}>
+        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>⛔ تعلیقِ حساب‌ها (ضدتقلب)</div>
+        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 12 }}>حساب‌هایی که ضدتقلبِ اقتدارِ بازار پرچم زده یا معلق شده‌اند. قوانین (درصد/خودکار) در تنظیماتِ بالا.</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+          <input value={susPhone} onChange={e => setSusPhone(e.target.value)} placeholder="شمارهٔ حساب برای تعلیقِ دستی" style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontFamily: FONT, fontSize: 12, direction: 'ltr' }} />
+          {btn('تعلیق کن', manualSuspend, 'sus-manual')}
+        </div>
+        {sus.length === 0 ? <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>هیچ حسابِ پرچم‌خورده یا معلقی نیست ✓</div> :
+          sus.map(r => (
+            <div key={r.phone} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderTop: '1px solid var(--line)', fontSize: 12.5, flexWrap: 'wrap' }}>
+              <span style={{ padding: '2px 9px', borderRadius: 999, fontSize: 10.5, fontWeight: 700, background: 'var(--bg2)', color: r.suspended ? '#e74c3c' : '#e7a14a' }}>{r.suspended ? 'معلق' : 'پرچم'}</span>
+              <div style={{ flex: 1, minWidth: 160 }}>
+                <div style={{ fontWeight: 700, direction: 'ltr', textAlign: 'right' }}>{r.name || r.phone}{r.name ? <span style={{ color: 'var(--faint)', fontWeight: 400 }}> · {r.phone}</span> : null}</div>
+                <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 2 }}>{r.suspendReason || r.flagReason}</div>
+              </div>
+              {r.suspended
+                ? btn('رفعِ تعلیق', () => susAct('unsuspend', r.phone), 'sus' + r.phone)
+                : <>
+                    {btn('تعلیق', () => susAct('suspend', r.phone), 'sus' + r.phone, true)}
+                    {btn('پاک‌کردنِ پرچم', () => susAct('clearFlag', r.phone), 'susc' + r.phone)}
+                  </>}
+            </div>
+          ))}
       </div>
 
       {/* تأییدِ اعتماد */}

@@ -69,51 +69,26 @@ async function withDb<R>(fn: (db: DB) => R): Promise<R> {
 
 const PROP_STATUSES: PropStatus[] = ['active', 'sold', 'rented', 'draft']
 
+// حسابِ مالک خالی شروع می‌شود — هیچ دادهٔ نمونه/فیک نیست؛ همه‌چیز همان است که خودِ مالک ثبت می‌کند.
 function seed(): OwnerData {
-  const now = Date.now(); const day = 86400000
-  const p = (title: string, ptype: string, location: string, area: number, rooms: number, price: number, deal: DealType, status: PropStatus, views: number, ageDays: number): Property =>
-    ({ id: id('p_'), title, ptype, location, area, rooms, price, deal, status, views, createdAt: now - ageDays * day })
-  const properties: Property[] = [
-    p('آپارتمان نوساز سعادت‌آباد', 'آپارتمان', 'تهران، سعادت‌آباد', 95, 2, 8500000000, 'sale', 'active', 142, 12),
-    p('آپارتمان لوکس ولنجک', 'آپارتمان', 'تهران، ولنجک', 120, 3, 2000000000, 'rent', 'active', 88, 20),
-    p('ویلا باغ لواسان', 'ویلا', 'لواسان', 250, 4, 25000000000, 'sale', 'active', 210, 30),
-    p('مغازه تجاری تجریش', 'مغازه', 'تهران، تجریش', 40, 0, 6000000000, 'sale', 'sold', 320, 60),
-  ]
-  const pid = (i: number) => properties[i].id
-  const inq = (i: number, name: string, phone: string, message: string, status: InquiryStatus, ageDays: number): Inquiry =>
-    ({ id: id('q_'), propertyId: pid(i), name, phone, message, status, createdAt: now - ageDays * day })
-  const inquiries: Inquiry[] = [
-    inq(0, 'علی محمدی', '09120000001', 'امکان بازدید آخر هفته هست؟', 'new', 1),
-    inq(2, 'سارا احمدی', '09120000002', 'قیمت قابل مذاکره است؟', 'new', 2),
-    inq(0, 'رضا کریمی', '09120000003', 'سند تک‌برگ است؟', 'contacted', 4),
-    inq(1, 'مریم حسینی', '09120000004', 'ودیعه به اجاره تبدیل می‌شود؟', 'new', 3),
-  ]
-  const vw = (i: number, visitor: string, phone: string, date: string, status: ViewingStatus, ageDays: number): Viewing =>
-    ({ id: id('v_'), propertyId: pid(i), visitor, phone, date, status, createdAt: now - ageDays * day })
-  const viewings: Viewing[] = [
-    vw(0, 'علی محمدی', '09120000001', '۱۴۰۴/۰۴/۰۲', 'scheduled', 1),
-    vw(2, 'خانوادهٔ نیک‌پور', '09120000010', '۱۴۰۴/۰۴/۰۳', 'scheduled', 1),
-    vw(0, 'حسین رضوی', '09120000011', '۱۴۰۴/۰۳/۲۸', 'done', 6),
-  ]
-  const of = (i: number, buyer: string, phone: string, amount: number, status: OfferStatus, ageDays: number): Offer =>
-    ({ id: id('o_'), propertyId: pid(i), buyer, phone, amount, status, createdAt: now - ageDays * day })
-  const offers: Offer[] = [
-    of(0, 'علی محمدی', '09120000001', 8200000000, 'pending', 1),
-    of(2, 'گروه سرمایه‌گذاری آرتا', '09120000020', 24000000000, 'pending', 3),
-    of(3, 'بازرگانی پارس', '09120000021', 5800000000, 'accepted', 55),
-  ]
-  const monthlyViews: MonthViews[] = [
-    { month: 'آذر', count: 180 }, { month: 'دی', count: 220 }, { month: 'بهمن', count: 260 },
-    { month: 'اسفند', count: 300 }, { month: 'فروردین', count: 280 }, { month: 'اردیبهشت', count: 360 },
-  ]
-  return { profile: { name: 'محمد رضایی' }, properties, inquiries, viewings, offers, monthlyViews, createdAt: now }
+  return { profile: { name: '' }, properties: [], inquiries: [], viewings: [], offers: [], monthlyViews: [], createdAt: Date.now() }
+}
+
+// آیا این دادهٔ ذخیره‌شده همان نمونهٔ قدیمیِ دست‌نخورده است؟ (برای پاک‌سازیِ خودکار)
+function isLegacyDemo(d: OwnerData): boolean {
+  return d?.profile?.name === 'محمد رضایی' && (d.properties || []).some(p => p.title === 'آپارتمان نوساز سعادت‌آباد') && (d.inquiries || []).some(q => q.phone === '09120000001')
+}
+function applyOwner(db: DB, o: string): boolean {
+  if (!db.owners[o]) { db.owners[o] = seed(); return true }
+  if (isLegacyDemo(db.owners[o])) { db.owners[o] = seed(); return true }   // پاک‌سازیِ خودکارِ دادهٔ نمونهٔ قدیمی
+  return false
 }
 
 export async function getOwner(owner: string): Promise<OwnerData> {
   const db = await load()
-  // اگر seed لازم نبود، بدونِ نوشتن برگردان (مثلِ قبل که فقط وقتی جدید بود ذخیره می‌شد).
-  if (db.owners[owner]) return db.owners[owner]
-  return withDb(d => { if (!d.owners[owner]) d.owners[owner] = seed(); return d.owners[owner] })
+  // اگر seed/پاک‌سازی لازم نبود، بدونِ نوشتن برگردان (مثلِ قبل که فقط وقتی جدید بود ذخیره می‌شد).
+  if (!applyOwner(db, owner)) return db.owners[owner]
+  return withDb(d => { applyOwner(d, owner); return d.owners[owner] })
 }
 async function mutate(owner: string, fn: (o: OwnerData) => void): Promise<OwnerData> {
   return withDb(db => { if (!db.owners[owner]) db.owners[owner] = seed(); fn(db.owners[owner]); return db.owners[owner] })

@@ -37,6 +37,10 @@ export async function POST(req: NextRequest) {
     else return NextResponse.json({ error: 'ابتدا هویتِ خود را با شاهکار تأیید کنید.' }, { status: 400 })
   }
   if (!account) return NextResponse.json({ error: 'خطا در ساختِ حساب؛ دوباره تلاش کنید.' }, { status: 500 })
+  // تعلیقِ ضدتقلب/ادمین (با reason) → ورود مسدود. تعلیقِ پروفایلِ ناقص (بدونِ reason) ورود را نمی‌بندد.
+  if (!isSuper && account.suspended && account.suspendReason) {
+    return NextResponse.json({ error: 'حسابِ شما به دلیلِ تخلف معلق شده است. برای بررسی با پشتیبانی تماس بگیرید.' }, { status: 403 })
+  }
 
   const token = await createSession(phone)
   // اتصالِ شمارهٔ کاربر به کوکیِ دائمیِ ترکر (mj_vid) — برای پیامکِ هدفمندِ بعدی
