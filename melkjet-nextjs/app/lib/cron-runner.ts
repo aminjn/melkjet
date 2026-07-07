@@ -58,6 +58,8 @@ async function tick(): Promise<{ due: number; synced: number }> {
       try { const { syncMarketGraph } = await import('./reos/market-graph'); const mg = await syncMarketGraph(); console.log(`[reos] market graph: ${mg.areas} areas, ${mg.edges} edges`) } catch { /* گرافِ بازارِ REOS */ }
       try { const { syncTerritories } = await import('./reos/territory-sync'); const t = await syncTerritories(); console.log(`[reos] market dominance: ${t.records} records, ${t.territories} territories, ${t.agents} agents`) } catch { /* اقتدارِ بازارِ REOS */ }
       try { const { resolveDueBattles } = await import('./reos/territory'); const b = await resolveDueBattles(); if (b) console.log(`[reos] territory battles resolved: ${b}`) } catch { /* نبردهای قلمروِ REOS */ }
+      // تورِ ایمنیِ ضدتکراری: هر ۶ ساعت روی کلِ آگهی‌های قابل‌نمایش (علاوه بر گِیتِ ingest و ممیزی)
+      try { const { dedupeListings } = await import('./listing-dedupe'); const dd = await dedupeListings(); if (dd.removed) console.log(`[dedupe] ${dd.removed} duplicate listings hidden (${dd.kept} kept)`) } catch { /* ضدتکراری */ }
     }
     due = listDueSources(Date.now())
     for (const { phone, source } of due) {

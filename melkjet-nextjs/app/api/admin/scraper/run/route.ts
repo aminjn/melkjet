@@ -29,9 +29,9 @@ export async function POST(req: NextRequest) {
         results.push({ source: src.name, ok: false, added: 0, dup: 0, error: 'بدون داده' })
         continue
       }
-      const { added, dup } = await insertItems(src, raw)
+      const { added, dup, updated } = await insertItems(src, raw)
       totalAdded += added; totalDup += dup
-      results.push({ source: src.name, ok: true, added, dup })
+      results.push({ source: src.name, ok: true, added, dup, updated })
     } catch (e: any) {
       const msg = e?.message || 'خطای ناشناخته'
       await markError(src.id, msg)

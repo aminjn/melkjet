@@ -566,12 +566,14 @@ function ListingsView() {
                   <a href={siteUrl} target="_blank" rel="noreferrer" title="دیدنِ آگهی در سایت" style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text)', textDecoration: 'none', display: 'block', lineHeight: 1.5 }}>{it.featured && '★ '}{it.title}{it.edited && <span style={{ color: 'var(--faint)', fontSize: 10, marginRight: 4 }}>(ویرایش‌شده)</span>}</a>
                   <div style={{ fontSize: 12, color: 'var(--muted)' }}>
                     {[it.location, it.sourceName, it.category].filter(Boolean).join(' · ')}
-                    {it.scrapedAt ? <span style={{ color: 'var(--faint)' }}> · {new Date(it.scrapedAt).toLocaleDateString('fa-IR')}</span> : null}
+                    {it.scrapedAt ? <span style={{ color: 'var(--faint)' }}> · {new Date(it.scrapedAt).toLocaleDateString('fa-IR')} · 🕐 {new Date(it.scrapedAt).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}</span> : null}
                     <span style={{ color: 'var(--faint)' }}> · 👁 {(it.stats?.views || 0).toLocaleString('fa-IR')} · ☎ {(it.stats?.contacts || 0).toLocaleString('fa-IR')}</span>
                   </div>
-                  {/* هویتِ صاحبِ آگهی + دسترسیِ مستقیم به پنلش */}
+                  {/* هویتِ صاحبِ آگهی + دسترسیِ مستقیم به پنلش (کلیک روی نام = ورود به اکانت) */}
                   <div style={{ fontSize: 11.5, marginTop: 3, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <span style={{ color: ownerName ? 'var(--text)' : 'var(--faint)' }}>👤 {ownerName || 'صاحبِ نامشخص'}{it.ownerAccount?.role ? <span style={{ color: 'var(--faint)' }}> ({it.ownerAccount.role})</span> : null}</span>
+                    {it.phone && it.ownerAccount
+                      ? <button title="ورود به اکانتِ این کاربر" onClick={() => openUserPanel(it.phone)} style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11.5, color: 'var(--gold)', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>👤 {ownerName || 'کاربر'}{it.ownerAccount?.role ? <span style={{ color: 'var(--faint)', fontWeight: 400 }}> ({it.ownerAccount.role})</span> : null}</button>
+                      : <span style={{ color: ownerName ? 'var(--text)' : 'var(--faint)' }}>👤 {ownerName || 'صاحبِ نامشخص'}</span>}
                     {it.phone && <span style={{ color: 'var(--faint)', direction: 'ltr' }}>{it.phone}</span>}
                     {it.phone && it.ownerAccount && <button onClick={() => openUserPanel(it.phone)} style={{ background: 'transparent', border: '1px solid var(--gold)', color: 'var(--gold)', borderRadius: 7, padding: '2px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 10.5, fontWeight: 700 }}>پنلِ کاربر ↗</button>}
                     {it.phone && <button title="فقط آگهی‌های این کاربر" onClick={() => setOwnerF((it.phone || '').replace(/\D/g, ''))} style={{ background: 'transparent', border: '1px solid var(--line2)', color: 'var(--muted)', borderRadius: 7, padding: '2px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 10.5 }}>آگهی‌هایش</button>}

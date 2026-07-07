@@ -94,15 +94,18 @@ export async function importDivarToken(o: string, input: string, hint?: BrandPos
   }
 
   // ── جلوگیری از تکراری: دیوار اغلب همان ملک را با «توکنِ جدید» بازنشر می‌کند (توکنِ قبلی می‌میرد)،
-  //    پس تطبیقِ توکنی رد می‌شود و آگهیِ تکراری ساخته می‌شد. اگر آگهیِ «محتوایی‌یکسانی» از همین مشاور
-  //    باشد، همان را به‌روزرسانی و توکن را به آن نگاشت می‌کنیم (نه ساختِ نسخهٔ دوم). ──
-  const nrm = (s?: string) => (s || '').replace(/‌/g, '').replace(/\s+/g, ' ').trim()
-  const near = (x?: number, y?: number, tol = 0.05) => !!x && !!y && Math.abs(x - y) / Math.max(x, y) <= tol
+  //    پس تطبیقِ توکنی رد می‌شود و آگهیِ تکراری ساخته می‌شد. تطبیقِ محتوایی با موتورِ ویژگی‌محور
+  //    (متن+متراژ+قیمت+اتاق+محله، شباهت≥۰٫۸۵ — نه فقط عنوانِ دقیقاً یکسان) → همان فایل به‌روزرسانی
+  //    و توکنِ جدید به آن نگاشت می‌شود (نه ساختِ نسخهٔ دوم). ──
+  const { fieldsFromParts, similarity, DUP_THRESHOLD } = await import('./listing-similarity')
+  const probe = fieldsFromParts({ deal: payload.deal, title: payload.title, hood: payload.neighborhood || payload.district, price: payload.price, area: payload.area, rooms: payload.rooms })
   const mineListings = (await getAdvisor(o)).listings || []
-  const twin = mineListings.find(l =>
-    (l.deal || 'sale') === (payload.deal || 'sale') &&
-    nrm(l.title) && nrm(l.title) === nrm(payload.title) &&
-    (near(l.area, payload.area) || near(l.price, payload.price, 0.03)))
+  let twin: (typeof mineListings)[number] | undefined
+  let bestSim = DUP_THRESHOLD - 1e-9
+  for (const l of mineListings) {
+    const s = similarity(fieldsFromParts({ deal: l.deal, title: l.title, hood: l.neighborhood || l.district, price: l.price, area: l.area, rooms: l.rooms }), probe)
+    if (s > bestSim) { bestSim = s; twin = l }
+  }
   if (twin) {
     const updated = await updateListing(o, twin.id, payload)
     let published = updated?.published || false

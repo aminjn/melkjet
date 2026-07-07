@@ -398,12 +398,22 @@ export async function clearItems(type?: SourceType) {
   })
 }
 
-// Insert items, dedup by url+title. Returns {added, dup}
-export async function insertItems(source: Source, raw: Omit<Item, 'id' | 'sourceId' | 'sourceName' | 'type' | 'category' | 'meta' | 'scrapedAt' | 'status'>[]): Promise<{ added: number; dup: number }> {
+// Insert items — dedup سه‌لایه:
+// ۱) کلیدِ دقیقِ url+title (سریع)  ۲) تطبیقِ محتواییِ ویژگی‌محور (متن+مشخصات+لوکیشن، شباهت≥۰٫۸۵) →
+//    آگهیِ بازنشرشدهٔ همان ملک (توکن/عنوانِ جدیدِ دیوار) به‌جای درجِ دوباره، «به‌روزرسانی» می‌شود
+//    (قیمت/عکس/توضیح/لینک تازه، حفظِ id/آمار/وضعیت؛ اگر مهرِ فروخته داشت چون دوباره فعال شده برداشته می‌شود).
+// Returns {added, dup, updated}
+export async function insertItems(source: Source, raw: Omit<Item, 'id' | 'sourceId' | 'sourceName' | 'type' | 'category' | 'meta' | 'scrapedAt' | 'status'>[]): Promise<{ added: number; dup: number; updated: number }> {
   const newListingIds: string[] = []
+  const { fieldsOf, TwinIndex } = await import('./listing-similarity')
   const res = await mutate(db => {
     const existingKeys = new Set(db.items.map(i => (i.url || '') + '|' + i.title))
-    let added = 0, dup = 0
+    // ایندکسِ هم‌ملک‌یابی روی آگهی‌های قابلِ‌نمایشِ موجود (تکراری/ردشده‌ها مبنا نیستند)
+    const twinIdx = new TwinIndex<Item>()
+    if (source.type === 'listing') {
+      for (const i of db.items) if (i.type === 'listing' && i.status !== 'duplicate' && i.status !== 'rejected') twinIdx.add(fieldsOf(i), i)
+    }
+    let added = 0, dup = 0, updated = 0
     db.owners = db.owners || []
     for (const r of raw) {
       const key = (r.url || '') + '|' + r.title
@@ -414,6 +424,23 @@ export async function insertItems(source: Source, raw: Omit<Item, 'id' | 'source
       const loc = r.location
         || [meta?.['شهر'], meta?.['محله']].filter(Boolean).join('، ')
         || undefined
+      // ── گِیتِ محتوایی: همان ملک با URL/عنوانِ جدید؟ → آپدیتِ آیتمِ موجود، نه درجِ تکراری ──
+      if (source.type === 'listing') {
+        const f = fieldsOf({ title: r.title, price: r.price, location: loc, meta: { ...(meta || {}), ...((r as { meta?: Record<string, string> }).meta || {}) } })
+        const twin = twinIdx.find(f)
+        if (twin) {
+          if (r.price) twin.price = r.price
+          if (r.image) twin.image = r.image
+          if (r.excerpt) twin.excerpt = r.excerpt
+          if (r.url) twin.url = r.url
+          if (r.phone && !twin.phone) twin.phone = r.phone
+          twin.scrapedAt = Date.now()
+          // بازنشر = ملک هنوز فعال است → مهرِ فروخته/اجاره‌رفتهٔ قبلی برداشته می‌شود
+          if (twin.meta?.['__dealStatus']) delete twin.meta['__dealStatus']
+          updated++
+          continue
+        }
+      }
       // owner dedup: one user per advertiser (by phone, else by name)
       let ownerId: string | undefined
       if (r.owner || r.phone) {
@@ -429,18 +456,19 @@ export async function insertItems(source: Source, raw: Omit<Item, 'id' | 'source
         ownerId = owner.id
       }
       const newId = id()
-      db.items.unshift({
+      const item: Item = {
         id: newId, sourceId: source.id, sourceName: source.name, type: source.type,
         category: source.category, meta, scrapedAt: Date.now(), status: 'pending',
         ...r, location: loc, ownerId,
-      })
-      if (source.type === 'listing') newListingIds.push(newId)
+      }
+      db.items.unshift(item)
+      if (source.type === 'listing') { newListingIds.push(newId); twinIdx.add(fieldsOf(item), item) }
       added++
     }
     if (db.items.length > 1000) db.items = db.items.slice(0, 1000)
     const s = db.sources.find(x => x.id === source.id)
     if (s) { s.lastRun = Date.now(); s.lastCount = added; s.status = 'ok'; s.lastError = undefined }
-    return { added, dup }
+    return { added, dup, updated }
   })
   // تحلیلِ AI هر آگهیِ جدید همین حالا (هنگامِ اسکرپ) در پس‌زمینه ساخته و در دیتابیس ذخیره می‌شود،
   // تا بازکردنِ آگهی توسطِ کاربر دیگر AI را دوباره اجرا نکند. (import پویا برای پرهیز از حلقهٔ وابستگی.)
