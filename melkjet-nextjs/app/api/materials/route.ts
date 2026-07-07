@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import {
   shopStats, listProducts, listOrders, listInquiries,
-  addProduct, updateProduct, deleteProduct, restock,
+  addProduct, updateProduct, deleteProduct, restock, findShopProductTwin,
   addOrder, setOrderStatus, addInquiry, answerInquiry, updateProfile, getShop,
   type OrderStatus,
 } from '@/app/lib/materials-store'
@@ -33,6 +33,9 @@ export async function POST(req: NextRequest) {
     case 'addProduct': {
       // یا از کاتالوگِ مرجع انتخاب شده (catalogId) یا دستی با نام. بقیهٔ فیلدها در store پاک‌سازی می‌شوند.
       if (!b.catalogId && !b.name) return NextResponse.json({ error: 'کالا را از کاتالوگ انتخاب کنید یا نام را وارد کنید' }, { status: 400 })
+      // گِیتِ ضدتکراری: همان کالا (کاتالوگ یا نام+واحد) قبلاً در فروشگاهِ شما ثبت شده → ویرایشِ همان.
+      const twin = await findShopProductTwin(owner, { name: b.name ? String(b.name) : undefined, unit: b.unit ? String(b.unit) : undefined, catalogId: b.catalogId ? String(b.catalogId) : undefined })
+      if (twin) return NextResponse.json({ error: `«${twin.name}» قبلاً در فروشگاهِ شما ثبت شده — به‌جای ثبتِ دوباره، همان محصول را ویرایش کنید (قیمت/موجودی).`, duplicateOf: twin.id }, { status: 409 })
       const { action: _a, ...fields } = b
       return NextResponse.json({ ok: true, product: await addProduct(owner, fields) })
     }

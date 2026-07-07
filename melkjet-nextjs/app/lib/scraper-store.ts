@@ -2,6 +2,8 @@ import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { readJsonCached, writeJsonCached } from './json-file'
 import { pgEnabled, kvGet, pgTx, pgListingsAll } from './db'
+// موتورِ خالصِ هم‌ملک‌یابیِ ویژگی‌محور (متن+مشخصات+لوکیشن) — گِیتِ ضدتکراریِ همهٔ ورودی‌ها
+import { fieldsOf as simFieldsOf, TwinIndex, norm as simNorm } from './listing-similarity'
 
 const DATA_FILE = join(process.cwd(), '.scraper-data.json')
 const KV_KEY = 'scraper'          // بلابِ قدیمی — بعد از migration دست‌نخورده به‌عنوان بکاپِ rollback می‌ماند
@@ -405,13 +407,20 @@ export async function clearItems(type?: SourceType) {
 // Returns {added, dup, updated}
 export async function insertItems(source: Source, raw: Omit<Item, 'id' | 'sourceId' | 'sourceName' | 'type' | 'category' | 'meta' | 'scrapedAt' | 'status'>[]): Promise<{ added: number; dup: number; updated: number }> {
   const newListingIds: string[] = []
-  const { fieldsOf, TwinIndex } = await import('./listing-similarity')
+  const fieldsOf = simFieldsOf
   const res = await mutate(db => {
     const existingKeys = new Set(db.items.map(i => (i.url || '') + '|' + i.title))
     // ایندکسِ هم‌ملک‌یابی روی آگهی‌های قابلِ‌نمایشِ موجود (تکراری/ردشده‌ها مبنا نیستند)
     const twinIdx = new TwinIndex<Item>()
     if (source.type === 'listing') {
       for (const i of db.items) if (i.type === 'listing' && i.status !== 'duplicate' && i.status !== 'rejected') twinIdx.add(fieldsOf(i), i)
+    }
+    // کلیدِ هویتیِ غیرآگهی‌ها (محصول/پروفایل/قیمت/مقاله): نوع + عنوانِ نرمال + مالک (تلفن/نام/منبع)
+    const identKey = (i: { type?: string; title?: string; phone?: string; owner?: string; sourceName?: string }) =>
+      `${i.type || source.type}|${simNorm(i.title)}|${(i.phone || '').replace(/\D/g, '') || simNorm(i.owner) || simNorm(i.sourceName)}`
+    const identMap = new Map<string, Item>()
+    if (source.type !== 'listing') {
+      for (const i of db.items) if (i.type === source.type && i.status !== 'rejected') identMap.set(identKey(i), i)
     }
     let added = 0, dup = 0, updated = 0
     db.owners = db.owners || []
@@ -440,6 +449,18 @@ export async function insertItems(source: Source, raw: Omit<Item, 'id' | 'source
           updated++
           continue
         }
+      } else {
+        // ── غیرآگهی (محصول/پروفایل/قیمت/مقاله): همان کالا/موجودیت از همان مالک → آپدیت، نه تکرار ──
+        const twin = identMap.get(identKey({ ...r, type: source.type, sourceName: source.name }))
+        if (twin) {
+          if (r.price) twin.price = r.price
+          if (r.image) twin.image = r.image
+          if (r.excerpt) twin.excerpt = r.excerpt
+          if (r.url) twin.url = r.url
+          twin.scrapedAt = Date.now()
+          updated++
+          continue
+        }
       }
       // owner dedup: one user per advertiser (by phone, else by name)
       let ownerId: string | undefined
@@ -463,6 +484,7 @@ export async function insertItems(source: Source, raw: Omit<Item, 'id' | 'source
       }
       db.items.unshift(item)
       if (source.type === 'listing') { newListingIds.push(newId); twinIdx.add(fieldsOf(item), item) }
+      else identMap.set(identKey(item), item)
       added++
     }
     if (db.items.length > 1000) db.items = db.items.slice(0, 1000)
@@ -476,7 +498,20 @@ export async function insertItems(source: Source, raw: Omit<Item, 'id' | 'source
   return res
 }
 
+// آیا این آگهیِ ورودی «هم‌ملکِ» یکی از آگهی‌های قابلِ‌نمایشِ موجود است؟
+// گِیتِ عمومیِ همهٔ درهای ورود (ثبتِ کاربر، ساختِ دستیِ ادمین، انتشارِ پنل‌ها) — موتورِ ویژگی‌محور.
+export async function findPublicListingTwin(probe: { title?: string; price?: string; location?: string; meta?: Record<string, string> }): Promise<Item | null> {
+  const idx = new TwinIndex<Item>()
+  for (const i of (await load()).items) {
+    if (i.type !== 'listing' || i.status === 'duplicate' || i.status === 'rejected') continue
+    idx.add(simFieldsOf(i), i)
+  }
+  return idx.find(simFieldsOf(probe))
+}
+
 // Insert a single user-submitted listing (status pending → goes to AI moderation immediately).
+// گِیتِ ضدتکراری در لحظهٔ ثبت: اگر هم‌ملکِ آگهیِ موجود باشد، با وضعیتِ «duplicate» ساخته می‌شود
+// (هرگز عمومی نمی‌شود) و علتش برای ادمین ثبت است — نه اینکه نسخهٔ دوم واردِ سایت شود.
 export function addUserListing(raw: {
   title: string; price?: string; location?: string; image?: string; excerpt?: string;
   phone?: string; owner?: string; url?: string; meta?: Record<string, string>
@@ -492,12 +527,20 @@ export function addUserListing(raw: {
       if (raw.phone && !owner.phone) owner.phone = raw.phone
       owner.count++; ownerId = owner.id
     }
+    // هم‌ملک‌یابیِ درجا (داخلِ همان تراکنش — بدونِ race با درج‌های هم‌زمان)
+    const probeF = simFieldsOf({ title: raw.title, price: raw.price, location: raw.location, meta: raw.meta })
+    const twinIdx = new TwinIndex<Item>()
+    for (const i of db.items) if (i.type === 'listing' && i.status !== 'duplicate' && i.status !== 'rejected') twinIdx.add(simFieldsOf(i), i)
+    const twin = twinIdx.find(probeF)
     const item: Item = {
       id: id(), sourceId: 'user', sourceName: 'ثبت توسط کاربر', type: 'listing',
       title: raw.title, price: raw.price, location: raw.location, image: raw.image,
       excerpt: raw.excerpt, phone: raw.phone, owner: raw.owner, url: raw.url, ownerId,
       meta: raw.meta && Object.keys(raw.meta).length ? raw.meta : undefined,
-      scrapedAt: Date.now(), status: 'pending', expiresAt: Date.now() + LISTING_TTL,
+      scrapedAt: Date.now(),
+      status: twin ? 'duplicate' : 'pending',
+      aiReason: twin ? `تکراری در لحظهٔ ثبت — هم‌ملکِ «${twin.title.slice(0, 60)}»` : undefined,
+      expiresAt: Date.now() + LISTING_TTL,
     }
     db.items.unshift(item)
     return item

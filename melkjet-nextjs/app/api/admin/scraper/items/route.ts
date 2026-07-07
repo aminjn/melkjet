@@ -19,6 +19,18 @@ export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({}))
   const type = (['listing', 'directory', 'product', 'article', 'price'].includes(b.type) ? b.type : 'listing') as SourceType
   if (!b.title || !String(b.title).trim()) return NextResponse.json({ error: 'عنوان الزامی است' }, { status: 400 })
+  // گِیتِ ضدتکراریِ لحظهٔ ساخت (همهٔ انواع): آگهی با موتورِ هم‌ملک‌یابی، بقیه با کلیدِ هویتی.
+  if (type === 'listing') {
+    const { findPublicListingTwin } = await import('@/app/lib/scraper-store')
+    const twin = await findPublicListingTwin({ title: String(b.title), price: b.price ? String(b.price) : undefined, location: b.location ? String(b.location) : undefined })
+    if (twin) return NextResponse.json({ error: `آگهیِ مشابه از قبل وجود دارد: «${twin.title.slice(0, 70)}» — همان را ویرایش کنید.`, duplicateOf: twin.id }, { status: 409 })
+  } else {
+    const { norm } = await import('@/app/lib/listing-similarity')
+    const all = await listItems(type)
+    const t = norm(String(b.title)), ph = String(b.phone || '').replace(/\D/g, ''), ow = norm(String(b.owner || ''))
+    const twin = all.find(i => i.status !== 'rejected' && norm(i.title) === t && ((ph && (i.phone || '').replace(/\D/g, '') === ph) || (!ph && ow && norm(i.owner || '') === ow) || (!ph && !ow)))
+    if (twin) return NextResponse.json({ error: `آیتمِ مشابه از قبل وجود دارد: «${twin.title.slice(0, 70)}» — همان را ویرایش کنید.`, duplicateOf: twin.id }, { status: 409 })
+  }
   const it = await addItemManual({
     type, title: String(b.title).slice(0, 200),
     price: b.price ? String(b.price) : undefined, location: b.location ? String(b.location) : undefined,

@@ -405,6 +405,18 @@ export async function shopStats(owner: string) {
 }
 
 // ---- محصولات ----
+// گِیتِ ضدتکراریِ محصول در یک فروشگاه: همان کالای مرجع (catalogId) یا همان نام+واحدِ نرمال‌شده.
+export async function findShopProductTwin(owner: string, input: { name?: string; unit?: string; catalogId?: string }): Promise<Product | null> {
+  const s = (await load()).shops[owner]
+  if (!s) return null
+  const nrm = (x?: string) => (x || '').replace(/‌/g, '').replace(/\s+/g, ' ').trim().toLocaleLowerCase()
+  const name = nrm(input.name), unit = nrm(input.unit)
+  return s.products.find(p =>
+    (input.catalogId && p.catalogId && p.catalogId === input.catalogId) ||
+    (name && nrm(p.name) === name && (!unit || !p.unit || nrm(p.unit) === unit))
+  ) || null
+}
+
 export async function addProduct(owner: string, input: any): Promise<Product> {
   let created!: Product
   await mutate(owner, s => {

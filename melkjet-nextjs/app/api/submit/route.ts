@@ -32,6 +32,14 @@ export async function POST(req: NextRequest) {
     meta,
   })
 
+  // گِیتِ ضدتکراریِ لحظهٔ ثبت (داخلِ addUserListing): اگر هم‌ملکِ آگهیِ موجود بود، همان لحظه به کاربر بگو.
+  if (item.status === 'duplicate') {
+    return NextResponse.json({
+      error: 'این آگهی قبلاً در ملک‌جت ثبت شده است (ملکِ مشابه با همین مشخصات و محله موجود است). اگر ملکِ دیگری است، عنوان/مشخصات را دقیق‌تر وارد کنید.',
+      duplicate: true, id: item.id,
+    }, { status: 409 })
+  }
+
   // تأیید/رد فوری: مدلِ یادگیرنده اول، در صورتِ نبودِ اطمینان هوش مصنوعی (اگر تنظیم شده).
   let verdict: any = { status: 'pending', reason: 'در صف بررسی', score: 0 }
   try { verdict = await moderateOne(item, moderationModel()) } catch { /* بماند در صف */ }
