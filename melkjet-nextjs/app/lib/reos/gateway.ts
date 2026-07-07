@@ -6,6 +6,7 @@ import { join } from 'path'
 import { createHash } from 'crypto'
 import { pgEnabled, pgTx } from '../db'
 import { resolveAgent } from '../gapgpt'
+import { config } from './reos-config'
 
 export type LlmTask = 'agent' | 'content' | 'cheap' | 'vision'
 export interface LlmMsg { role: string; content: string }
@@ -41,9 +42,8 @@ export function cacheSet(key: string, text: string, tokens: number, now = Date.n
 export function cacheClear(): void { cache.clear() }
 
 // ── Cost tracker (usage log، dual-mode) ──
-// هزینهٔ تقریبیِ هر ۱۰۰۰ توکن (تومان) — برای آنالیتیکس؛ نرخ در admin قابلِ‌تنظیم است.
-const RATE_PER_1K: Record<string, number> = { 'gpt-4o': 3000, 'gpt-4o-mini': 300, default: 800 }
-export function estimateCost(model: string, tokens: number): number { const r = RATE_PER_1K[model] ?? RATE_PER_1K.default; return Math.round((tokens / 1000) * r) }
+// هزینهٔ تقریبیِ هر ۱۰۰۰ توکن (تومان) — نرخ‌ها از تنظیماتِ سوپرادمین (reos-config) خوانده می‌شوند.
+export function estimateCost(model: string, tokens: number): number { const rates = config().gateway.rates; const r = rates[model] ?? rates.default; return Math.round((tokens / 1000) * r) }
 
 const USAGE_FILE = join(process.cwd(), '.reos-ai-usage.json')
 interface Usage { id: string; at: number; task: string; model: string; provider?: string; tokens: number; ms: number; cached: boolean; ok: boolean }
@@ -87,7 +87,7 @@ export async function runLLM(
   const { model, provider } = selectModel(task)
   const temp = opts.temperature ?? 0.2
   const key = cacheKey(model, messages, temp)
-  if (opts.cache !== false) { const hit = cacheGet(key, opts.ttl ?? DEFAULT_TTL, now); if (hit) { await recordUsage({ at: now, task, model, provider, tokens: hit.tokens, ms: 0, cached: true, ok: true }); return { text: hit.text, model, provider, cached: true, tokens: hit.tokens, ms: 0, ok: true, fallback: false } } }
+  if (opts.cache !== false) { const hit = cacheGet(key, opts.ttl ?? config().gateway.cacheTtlMin * 60_000, now); if (hit) { await recordUsage({ at: now, task, model, provider, tokens: hit.tokens, ms: 0, cached: true, ok: true }); return { text: hit.text, model, provider, cached: true, tokens: hit.tokens, ms: 0, ok: true, fallback: false } } }
 
   const call = caller || realCaller
   const t0 = now

@@ -29,6 +29,7 @@ import { send as commsSend, commsLog, channels } from '../app/lib/reos/comms-hub
 import { registerModel, listVersions, promote, getChampion } from '../app/lib/reos/model-registry.ts'
 import { getPolicy, applyOnlineReward } from '../app/lib/reos/rl.ts'
 import { runAutonomous } from '../app/lib/reos/autonomous.ts'
+import { getConfig, setConfig, resetConfig, config as cfgCache, primeConfig } from '../app/lib/reos/reos-config.ts'
 import { assignVariant, createExperiment, recordExposure, recordConversion, results } from '../app/lib/reos/experiments.ts'
 import { credit, debit, getBalance, listTransactions, createInvoice, payInvoice } from '../app/lib/reos/billing.ts'
 import { recordTouch, recordSpend, recordConversion as attrConvert, channelReport } from '../app/lib/reos/attribution.ts'
@@ -525,6 +526,22 @@ async function main() {
     ok('autonomous produced a plan', r.plan.length >= 1)
     ok('autonomous executed actions (created tasks)', r.executed >= 1 && (await listTasks(owner, { open: true })).length >= 1)
     ok('plan includes the weak listing fix', r.plan.some(a => a.type === 'fix_listing' && a.targetId === 'weakL'))
+  }
+
+  console.log('\n── REOS · Super-Admin Config Center (settings actually drive engines) ──')
+  {
+    await resetConfig()
+    const def = await getConfig()
+    ok('defaults exposed (rl.lr, promotion.vip)', def.rl.lr === 0.05 && def.promotion.vip === 1)
+    // change the AI cost rate and confirm the LIVE gateway estimateCost uses it
+    const before = estimateCost('gpt-4o-mini', 1000)
+    await setConfig({ gateway: { rates: { 'gpt-4o-mini': 999 } } })
+    await primeConfig()
+    ok('config override persists', (await getConfig()).gateway.rates['gpt-4o-mini'] === 999)
+    ok('sync cache reflects override', cfgCache().gateway.rates['gpt-4o-mini'] === 999)
+    ok('LIVE engine (gateway.estimateCost) uses new rate', estimateCost('gpt-4o-mini', 1000) === 999 && before === 300)
+    await resetConfig()
+    ok('reset restores defaults on live engine', estimateCost('gpt-4o-mini', 1000) === 300)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

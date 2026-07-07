@@ -5,6 +5,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { pgEnabled, pgTx } from '../db'
+import { config } from './reos-config'
 
 export type PromoModel = 'cpc' | 'cpm' | 'flat'
 export type PromoType = 'boost' | 'featured' | 'vip'
@@ -122,9 +123,10 @@ export async function setStatus(id: string, status: 'paused' | 'active'): Promis
 // boostِ فعالِ املاک (propertyId → rawBoost) برای تزریق به رتبه‌بندیِ فید. فقط کمپینِ قابل‌سرو.
 export async function activeBoosts(now = Date.now()): Promise<Record<string, number>> {
   const out: Record<string, number> = {}
+  const boosts = config().promotion   // نرخِ boost از تنظیماتِ سوپرادمین
   for (const c of await listCampaigns()) {
     if (c.targetType !== 'property' || !isServable(c, now)) continue
-    out[c.targetId] = Math.max(out[c.targetId] || 0, RAW_BOOST[c.type])
+    out[c.targetId] = Math.max(out[c.targetId] || 0, (boosts as unknown as Record<string, number>)[c.type] ?? RAW_BOOST[c.type])
   }
   return out
 }

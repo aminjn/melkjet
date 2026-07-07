@@ -4,6 +4,7 @@
 import { pgEnabled, pgTx } from '../db'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
+import { config } from './reos-config'
 
 export type Verification = 'phone' | 'identity' | 'agency' | 'builder' | 'expert' | 'property'
 export const VERIF_LABEL: Record<Verification, string> = { phone: 'موبایلِ تأییدشده', identity: 'احرازِ هویت', agency: 'آژانسِ تأییدشده', builder: 'سازندهٔ تأییدشده', expert: 'کارشناسِ تأییدشده', property: 'ملکِ تأییدشده' }
@@ -32,7 +33,8 @@ export function trustScore(s: TrustSignals): { score: number; tier: Tier; badges
     verified: Math.round(verifiedScore * 100), profile: Math.round(profile * 100), response: Math.round(response * 100),
     deals: Math.round(dealScore * 100), rating: Math.round(ratingEff * 100), tenure: Math.round(tenure * 100),
   }
-  const score = Math.round(clamp01(0.28 * verifiedScore + 0.16 * profile + 0.16 * response + 0.16 * dealScore + 0.16 * ratingEff + 0.08 * tenure) * 100)
+  const w = config().trust.weights   // وزن‌ها از تنظیماتِ سوپرادمین
+  const score = Math.round(clamp01(w.verified * verifiedScore + w.profile * profile + w.response * response + w.deals * dealScore + w.rating * ratingEff + w.tenure * tenure) * 100)
   const tier: Tier = score >= 80 ? 'طلایی' : score >= 55 ? 'نقره‌ای' : score >= 30 ? 'برنزی' : 'جدید'
   return { score, tier, badges: verified, parts }
 }

@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { ReosExperimentsAdmin, ReosAttributionAdmin, ReosGeoHeat } from '@/app/components/ReosOpsPanels'
+import ReosControlCenter from '@/app/components/ReosControlCenter'
 
 const FONT = 'Vazirmatn, system-ui, sans-serif'
 const fa = (n: number) => (n || 0).toLocaleString('fa-IR')
@@ -58,6 +59,8 @@ export default function ReosAdminPage() {
         <div style={{ fontSize: 22, fontWeight: 900 }}>✦ REOS — مغزِ زندهٔ سیستم</div>
         <button onClick={load} style={{ marginInlineStart: 'auto', padding: '7px 14px', borderRadius: 9, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontFamily: FONT }}>به‌روزرسانی</button>
       </div>
+
+      <ReosControlCenter />
 
       {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 14, marginBottom: 18 }}>

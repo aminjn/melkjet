@@ -1,8 +1,9 @@
 // REOS v5 · Self-learning Feed (RL) — یادگیریِ آنلاین از پاداشِ رفتار + اکتشافِ epsilon-greedy.
 // Click→Save→Contact→Visit→Contract → Reward → به‌روزرسانیِ سیاستِ رتبه‌بندی (بدونِ آموزشِ دسته‌ای).
 import { getFeatures, bumpFeatures } from './store'
+import { config } from './reos-config'
 
-// پاداشِ هر رویداد (شدتِ سیگنال).
+// پاداشِ هر رویداد (شدتِ سیگنال) — پیش‌فرض؛ در runtime از تنظیماتِ سوپرادمین خوانده می‌شود.
 export const EVENT_REWARD: Record<string, number> = { click: 1, save: 5, contact: 20, visit: 40, contract: 100 }
 
 // به‌روزرسانیِ آنلاینِ وزن‌ها (SGD روی خطای پیش‌بینیِ پاداش). خالص و تست‌پذیر.
@@ -32,10 +33,11 @@ export async function getPolicy(): Promise<Policy> {
   return { w, updates: f.updates || 0 }
 }
 // اعمالِ پاداشِ یک تعامل روی سیاست (آنلاین).
-export async function applyOnlineReward(context: number[], eventType: keyof typeof EVENT_REWARD, lr = 0.05): Promise<Policy> {
+export async function applyOnlineReward(context: number[], eventType: keyof typeof EVENT_REWARD, lr?: number): Promise<Policy> {
   const { w } = await getPolicy()
-  const reward = normReward(EVENT_REWARD[eventType] || 0)
-  const nw = banditUpdate(w, context, reward, lr)
+  const cfg = config().rl
+  const reward = normReward((cfg.rewards as Record<string, number>)[eventType] ?? EVENT_REWARD[eventType] ?? 0)
+  const nw = banditUpdate(w, context, reward, lr ?? cfg.lr)
   const set: Record<string, number> = {}
   POLICY_KEYS.forEach((k, i) => { set[k] = Math.round(nw[i] * 1e4) / 1e4 })
   await bumpFeatures('policy', 'feed', { updates: 1 }, set)
