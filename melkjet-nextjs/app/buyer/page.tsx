@@ -8,6 +8,7 @@ import ListingReports from '@/app/components/ListingReports'
 import BusinessProfileForm from '@/app/components/BusinessProfileForm'
 import SupportPanel from '@/app/components/SupportPanel'
 import ReosFeed from '@/app/components/ReosFeed'
+import ReosAgentChat from '@/app/components/ReosAgentChat'
 
 // ════════════════════════════════════════════════════════
 //  Types (mirror app/lib/buyer-store.ts API shape)
@@ -404,6 +405,7 @@ export default function BuyerPage() {
           </div>}
 
           {view === 'dashboard' && <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <ReosAgentChat />
             {/* پیشنهادِ هوشمندِ REOS — نسخهٔ فشرده در داشبورد */}
             <div style={{ ...card, padding: 18 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>

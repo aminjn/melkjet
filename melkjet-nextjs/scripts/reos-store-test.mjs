@@ -8,6 +8,9 @@ import { recordEvent, recordEventBatch, recentEvents, eventStats, topFeatures, b
 import { ingest } from '../app/lib/reos/events.ts'
 import { flushQueue, queueDepth } from '../app/lib/reos/queue.ts'
 import { trainEngageModel, primeEngageModel, predictEngage, buildTrainingSet } from '../app/lib/reos/train.ts'
+import { runAgent } from '../app/lib/reos/agent/executor.ts'
+import { rulePlanner } from '../app/lib/reos/agent/planner.ts'
+import { getMemories, recentTasks } from '../app/lib/reos/agent/memory.ts'
 
 if (!process.env.DATABASE_URL) { console.error('DATABASE_URL not set'); process.exit(2) }
 let pass = 0, fail = 0
@@ -104,6 +107,36 @@ async function main() {
   const popularScore = predictEngage({ views: 50, saves: 8, contacts: 4 }, 0.5)
   const coldScore = predictEngage({ views: 3, saves: 0, contacts: 0 }, 0.5)
   ok('primed model scores popular > cold', popularScore > coldScore)
+
+  console.log('\n── REOS v2: AI Agent Framework (memory/planner/executor/tools) ──')
+  {
+    const ctx = { userId: 'agentU' }
+    // remember → memory persisted, answer confirms
+    const r1 = await runAgent('یادت باشه بودجه‌ام ۵ میلیارد است و دنبالِ سعادت‌آباد هستم', ctx, { planner: rulePlanner })
+    ok('agent ran remember tool', r1.trace.length === 1 && r1.trace[0].tool === 'remember' && r1.trace[0].ok)
+    ok('agent produced an answer', !!r1.answer)
+    const mems = await getMemories('agentU', { kind: 'pref' })
+    ok('memory persisted to PG', mems.length >= 1 && /سعادت/.test(mems[0].content))
+    // recall → finds the memory
+    const r2 = await runAgent('یادت هست بودجه‌ام چقدر بود؟', ctx, { planner: rulePlanner })
+    ok('agent ran recall tool', r2.trace[0]?.tool === 'recall')
+    ok('recall found stored memory', /میلیارد|سعادت/.test(r2.answer))
+    // pure tool via custom planner (predict_lead) — no network
+    let step = 0
+    const planner = async (goal, trace) => trace.length === 0
+      ? { action: 'tool', tool: 'predict_lead', args: { phone: '0912', stage: 'contract', activityCount: 6 } }
+      : { action: 'answer', answer: 'تحلیل انجام شد' }
+    const r3 = await runAgent('این لید چقدر احتمالِ معامله دارد؟', ctx, { planner, maxSteps: 3 })
+    ok('agent multi-step: tool then answer', r3.trace.length === 1 && r3.trace[0].tool === 'predict_lead' && r3.answer === 'تحلیل انجام شد')
+    ok('predict_lead tool returned a prediction 0..1', (() => { const v = r3.trace[0].result?.value; return typeof v === 'number' && v >= 0 && v <= 1 })())
+    // unknown tool is handled gracefully
+    const badPlanner = async (g, trace) => trace.length === 0 ? { action: 'tool', tool: 'nope', args: {} } : { action: 'answer', answer: 'x' }
+    const r4 = await runAgent('...', ctx, { planner: badPlanner, maxSteps: 2 })
+    ok('unknown tool recorded as failed, loop continues', r4.trace[0] && r4.trace[0].ok === false)
+    // task persistence
+    const tasks = await recentTasks('agentU', 10)
+    ok('agent tasks persisted to PG (trace saved)', tasks.length >= 3 && Array.isArray(tasks[0].trace))
+  }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)
   await pool.end()
