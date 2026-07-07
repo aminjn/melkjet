@@ -26,6 +26,9 @@ import { getBalance as walletBalance } from '../app/lib/reos/billing.ts'
 import { syncMarketGraph, topActiveInArea, areaListingCount } from '../app/lib/reos/market-graph.ts'
 import { neighborhoodProfile } from '../app/lib/reos/neighborhood.ts'
 import { send as commsSend, commsLog, channels } from '../app/lib/reos/comms-hub.ts'
+import { registerModel, listVersions, promote, getChampion } from '../app/lib/reos/model-registry.ts'
+import { getPolicy, applyOnlineReward } from '../app/lib/reos/rl.ts'
+import { runAutonomous } from '../app/lib/reos/autonomous.ts'
 import { assignVariant, createExperiment, recordExposure, recordConversion, results } from '../app/lib/reos/experiments.ts'
 import { credit, debit, getBalance, listTransactions, createInvoice, payInvoice } from '../app/lib/reos/billing.ts'
 import { recordTouch, recordSpend, recordConversion as attrConvert, channelReport } from '../app/lib/reos/attribution.ts'
@@ -486,6 +489,42 @@ async function main() {
     const log = await commsLog(owner)
     ok('unified log records both messages', log.length === 2)
     ok('channels() lists readiness (sms/email ready)', channels().filter(c => c.ready).map(c => c.channel).sort().join(',') === 'email,sms')
+  }
+
+  console.log('\n── REOS v5: Model Registry (champion/challenger) ──')
+  {
+    const nm = 'engage_test_' + Math.floor(Date.now() / 1000)
+    const v1 = await registerModel(nm, { demand: 1 }, { auc: 0.7 })
+    ok('first version → champion', v1.status === 'champion' && v1.version === 1)
+    const v2 = await registerModel(nm, { demand: 2 }, { auc: 0.8 })
+    ok('second version → candidate', v2.status === 'candidate' && v2.version === 2)
+    await promote(v2.id)
+    const champ = await getChampion(nm)
+    ok('promote sets new champion', champ.id === v2.id)
+    ok('old champion retired', (await listVersions(nm)).find(v => v.id === v1.id).status === 'retired')
+  }
+
+  console.log('\n── REOS v5: Self-learning policy (online) ──')
+  {
+    await pool.query(`DELETE FROM reos_feature_store WHERE entity_type='policy'`).catch(() => {})
+    const p0 = await getPolicy()
+    ok('default policy has weight vector', Array.isArray(p0.w) && p0.w.length === 5)
+    // context with high demand + strong (contract) reward → w_demand should rise toward the target
+    for (let i = 0; i < 30; i++) await applyOnlineReward([1, 0, 0, 0, 1], 'contract')
+    const p1 = await getPolicy()
+    ok('online reward updated policy (updates counted)', p1.updates >= 30)
+    ok('w_demand increased from reward', p1.w[0] > p0.w[0])
+  }
+
+  console.log('\n── REOS v5: Autonomous Agent (observe→plan→execute) ──')
+  {
+    const owner = 'autoU_' + Math.floor(Date.now() / 1000)
+    const hot = await createLead({ ownerId: owner, name: 'داغ', phone: '0912', stage: 'negotiation' })
+    await addActivity({ ownerId: owner, leadId: hot.id, type: 'call', text: 'x' }); await addActivity({ ownerId: owner, leadId: hot.id, type: 'note', text: 'y' })
+    const r = await runAutonomous(owner, [{ id: 'weakL', health: 25 }])
+    ok('autonomous produced a plan', r.plan.length >= 1)
+    ok('autonomous executed actions (created tasks)', r.executed >= 1 && (await listTasks(owner, { open: true })).length >= 1)
+    ok('plan includes the weak listing fix', r.plan.some(a => a.type === 'fix_listing' && a.targetId === 'weakL'))
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

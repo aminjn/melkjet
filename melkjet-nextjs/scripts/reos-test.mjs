@@ -22,6 +22,8 @@ import { trustScore } from '../app/lib/reos/trust.ts'
 import { sellerInsight } from '../app/lib/reos/seller-intel.ts'
 import { listingSuggestions, listingHealth } from '../app/lib/reos/copilot.ts'
 import { codeFor } from '../app/lib/reos/growth.ts'
+import { banditUpdate, epsilonGreedy, normReward, EVENT_REWARD } from '../app/lib/reos/rl.ts'
+import { planAutonomous } from '../app/lib/reos/autonomous.ts'
 
 let pass = 0, fail = 0
 const approx = (a, b, e = 1e-6) => Math.abs(a - b) <= e
@@ -306,6 +308,31 @@ console.log('\n── REOS v4: Growth Engine (referral code) ──')
 {
   ok('codeFor deterministic + 6 chars', codeFor('09120000000') === codeFor('09120000000') && codeFor('09120000000').length === 6)
   ok('different users → different codes', codeFor('09120000000') !== codeFor('09121111111'))
+}
+
+console.log('\n── REOS v5: Self-learning Feed (RL / bandit) ──')
+{
+  ok('event rewards ordered click<save<contact<visit<contract', EVENT_REWARD.click < EVENT_REWARD.save && EVENT_REWARD.contact < EVENT_REWARD.visit && EVENT_REWARD.visit < EVENT_REWARD.contract)
+  ok('normReward in 0..1', normReward(EVENT_REWARD.contract) === 1 && normReward(0) === 0)
+  // repeated positive reward on feature[0] → its weight increases
+  let w = [0, 0]
+  for (let i = 0; i < 200; i++) w = banditUpdate(w, [1, 0], 1, 0.1)
+  ok('banditUpdate moves weight toward reward', w[0] > 0.8 && Math.abs(w[1]) < 0.01)
+  ok('epsilon-greedy exploits when rand>epsilon (argmax)', epsilonGreedy([0.1, 0.9, 0.3], 0.1, 0.5) === 1)
+  ok('epsilon-greedy explores when rand<epsilon', epsilonGreedy([0.1, 0.9, 0.3], 0.9, 0.05, 0.99) === 2)
+}
+
+console.log('\n── REOS v5: Autonomous Agent (plan) ──')
+{
+  const plan = planAutonomous({
+    hotLeads: [{ id: 'H1', score: 80 }],
+    staleLeads: [{ id: 'S1', idleDays: 6 }],
+    weakListings: [{ id: 'L1', health: 30 }],
+  })
+  ok('plan prioritizes hot lead first', plan[0].type === 'follow_hot' && plan[0].targetId === 'H1')
+  ok('plan includes revive + fix actions', plan.some(a => a.type === 'revive_stale') && plan.some(a => a.type === 'fix_listing'))
+  ok('plan sorted by priority desc', plan.every((a, i, arr) => i === 0 || arr[i - 1].priority >= a.priority))
+  ok('each action has a reason', plan.every(a => !!a.reason))
 }
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} REOS unit tests: ${pass} passed, ${fail} failed\n`)

@@ -123,6 +123,8 @@ export async function trainEngageModel(opts: { epochs?: number; lr?: number } = 
   const data = await buildTrainingSet()
   const w = fitLogistic(data, opts)
   await bumpFeatures('model', 'engage_v1', {}, { ...w } as unknown as Record<string, number>).catch(() => {})
+  // ثبتِ نسخه در Model Registry (نسخه‌بندی + متریک؛ best-effort).
+  try { const { registerModel } = await import('./model-registry'); await registerModel('engage', { bias: w.bias, demand: w.demand, pop: w.pop, saves: w.saves, userEng: w.userEng }, { auc: w.auc, logloss: w.logloss, n: w.n }) } catch {}
   LEARNED = w; LEARNED_AT = Date.now()
   return w
 }
