@@ -1,12 +1,12 @@
 // REOS · Data adapters — موجودیت‌های موتور را از دادهٔ واقعیِ اپ می‌سازد (آگهی/مشاور/کاربر).
-import { listItems, type Item } from '../scraper-store'
+import { listItems, candidateListings, getItemById, type Item } from '../scraper-store'
 import { forIds } from '../listing-stats-store'
 import { getPrefs } from '../user-store'
 import { getAgency } from '../agency-store'
 import { getAdvisor as getAdvisorProfile } from '../advisor-store'
 import { agencyAdvisorFiles } from '../agency-team'
-import { getFeatures, recentEvents } from './store'
-import { parseFaNum, tokenize } from './features'
+import { getFeatures, recentEvents, saveEmbeddings, getEmbedding, getEmbeddings, existingEmbeddingIds } from './store'
+import { parseFaNum, tokenize, propertyVector, cosine } from './features'
 import type { PropertyEntity, UserEntity, AgentEntity, Intent } from './types'
 
 // ── Item (آگهیِ عمومی) → PropertyEntity ──
@@ -26,8 +26,9 @@ export function itemToProperty(it: Item, stat?: { views: number; contacts: numbe
 }
 
 // همهٔ املاکِ عمومیِ رتبه‌پذیر (با سیگنالِ تقاضا از listing-stats + feature store).
+// از candidate generationِ SQL استفاده می‌کند (بارگذاریِ N کاندیدا، نه کلِ جدول) تا با مقیاس رشد کند.
 export async function loadProperties(limit = 300): Promise<PropertyEntity[]> {
-  const items = (await listItems('listing', { publicOnly: true })).slice(0, limit)
+  const items = await candidateListings(limit)
   const stats = await forIds(items.map(i => i.id))
   const out: PropertyEntity[] = []
   for (const it of items) {
@@ -35,7 +36,35 @@ export async function loadProperties(limit = 300): Promise<PropertyEntity[]> {
     try { saves = Number((await getFeatures('property', it.id)).save_count) || 0 } catch {}
     out.push(itemToProperty(it, stats[it.id], saves))
   }
+  // بردارها را compute-once کن و ذخیره کن (فقط بردارهای جدید) — برای جستجوی برداریِ «املاکِ مشابه».
+  ensurePropertyEmbeddings(out).catch(() => {})
   return out
+}
+
+// warmِ جدولِ embedding: فقط برای املاکی که هنوز بردار ندارند محاسبه و ذخیره می‌کند (compute-once).
+export async function ensurePropertyEmbeddings(props: PropertyEntity[]): Promise<void> {
+  try {
+    const have = await existingEmbeddingIds('property')
+    const missing = props.filter(p => !have.has(p.id))
+    if (!missing.length) return
+    await saveEmbeddings('property', missing.map(p => ({ id: p.id, embed: propertyVector(p).embed })))
+  } catch { /* بردار اختیاری است؛ نبودش رتبه‌بندی را نمی‌شکند */ }
+}
+
+// «املاکِ مشابه» با شباهتِ برداری روی embeddingهای ذخیره‌شده (استفادهٔ واقعیِ لایهٔ embedding).
+export async function similarProperties(propertyId: string, k = 8): Promise<{ id: string; sim: number }[]> {
+  let base = await getEmbedding('property', propertyId).catch(() => null)
+  if (!base) {
+    const it = await getItemById(propertyId)
+    if (!it) return []
+    base = propertyVector(itemToProperty(it)).embed
+    await saveEmbeddings('property', [{ id: propertyId, embed: base }]).catch(() => {})
+  }
+  const all = await getEmbeddings('property', 3000)
+  const out = all.filter(e => e.id !== propertyId && e.embed?.length)
+    .map(e => ({ id: e.id, sim: Math.round(cosine(base!, e.embed) * 1000) / 1000 }))
+  out.sort((a, b) => b.sim - a.sim)
+  return out.slice(0, k)
 }
 
 // ── کاربر (خریدار/سرمایه‌گذار) → UserEntity: علاقه‌مندی + رفتار + ویژگی‌ها ──

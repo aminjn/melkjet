@@ -16,6 +16,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test:reos": "node --import ./scripts/reos-loader.mjs scripts/reos-test.mjs",
+    "test:reos:pg": "node --import ./scripts/reos-loader.mjs scripts/reos-store-test.mjs",
     "lint": "eslint"
   },
   "dependencies": {

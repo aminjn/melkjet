@@ -5,8 +5,11 @@ const FONT = 'Vazirmatn, system-ui, sans-serif'
 const fa = (n: number) => (n || 0).toLocaleString('fa-IR')
 type Ev = { id: string; type: string; at: number; userId?: string; propertyId?: string; agentId?: string; leadId?: string }
 type Top = { id: string; title: string; engagement: number; clicks: number; saves: number; contacts: number }
+type Model = { demand: number; pop: number; saves: number; userEng: number; bias: number; n: number; auc: number; logloss: number; usedDefault: boolean; trainedAt: number } | null
 type Data = {
   engine: { publicListings: number; weights: Record<string, Record<string, number>> }
+  model: Model
+  queue: { events: number; features: number }
   events: { total: number; byType: Record<string, number>; recent: Ev[] }
   topProperties: Top[]
 }
@@ -19,12 +22,21 @@ export default function ReosAdminPage() {
   const [d, setD] = useState<Data | null>(null)
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(true)
+  const [training, setTraining] = useState(false)
+  const [trainMsg, setTrainMsg] = useState('')
   const load = () => {
     setLoading(true)
     fetch('/api/reos/admin', { cache: 'no-store' })
       .then(r => r.ok ? r.json() : r.json().then(x => Promise.reject(x)))
       .then(x => { setD(x); setLoading(false) })
       .catch(x => { setErr(x?.error || 'خطا'); setLoading(false) })
+  }
+  const train = () => {
+    setTraining(true); setTrainMsg('')
+    fetch('/api/reos/train', { method: 'POST' })
+      .then(r => r.json())
+      .then(x => { setTrainMsg(x.message || (x.ok ? 'انجام شد' : x.error || 'خطا')); setTraining(false); load() })
+      .catch(() => { setTrainMsg('خطا در آموزش'); setTraining(false) })
   }
   useEffect(() => { load() }, [])
 
@@ -103,6 +115,32 @@ export default function ReosAdminPage() {
               </div>
             ))}
           </div>}
+      </div>
+
+      {/* مدلِ یادگیرنده (آموزش از رویدادهای واقعی) + صفِ رویداد */}
+      <div style={{ ...card, marginTop: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 15, fontWeight: 800 }}>مدلِ یادگیرندهٔ Engagement (آموزش‌دیده از رویدادها)</div>
+          <button onClick={train} disabled={training} style={{ marginInlineStart: 'auto', padding: '7px 14px', borderRadius: 9, border: '1px solid var(--gold)', background: training ? 'var(--bg2)' : 'var(--goldDim)', color: 'var(--gold)', cursor: training ? 'default' : 'pointer', fontFamily: FONT, fontWeight: 700, fontSize: 12.5 }}>{training ? 'در حال آموزش…' : '↻ آموزشِ مجدد از داده'}</button>
+        </div>
+        {d.model ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 12 }}>
+            {[
+              { l: 'نمونه‌های آموزش', v: fa(d.model.n) },
+              { l: 'AUC', v: d.model.auc.toLocaleString('fa-IR') },
+              { l: 'LogLoss', v: d.model.logloss.toLocaleString('fa-IR') },
+              { l: 'وضعیت', v: d.model.usedDefault ? 'پیش‌فرضِ امن' : 'آموزش‌دیده' },
+            ].map(k => (
+              <div key={k.l} style={{ background: 'var(--bg2)', borderRadius: 10, padding: '10px 12px' }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 5 }}>{k.l}</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--gold)' }}>{k.v}</div>
+              </div>
+            ))}
+          </div>
+        ) : <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>مدل هنوز آموزش ندیده — با انباشتِ رویدادها «آموزشِ مجدد» را بزنید (یا هر ۶ ساعت خودکار).</div>}
+        {d.model && <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 10, fontFamily: 'monospace', direction: 'ltr' }}>w = {`{demand:${d.model.demand?.toFixed?.(2)}, pop:${d.model.pop?.toFixed?.(2)}, saves:${d.model.saves?.toFixed?.(2)}, userEng:${d.model.userEng?.toFixed?.(2)}, bias:${d.model.bias?.toFixed?.(2)}}`}</div>}
+        {trainMsg && <div style={{ fontSize: 12.5, color: 'var(--gold)', marginTop: 10 }}>{trainMsg}</div>}
+        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 10 }}>صفِ رویداد (Kafka-equivalent): {fa(d.queue?.events || 0)} رویداد + {fa(d.queue?.features || 0)} feature در انتظارِ فلاش.</div>
       </div>
 
       {/* وزن‌های موتور (شفافیت) */}

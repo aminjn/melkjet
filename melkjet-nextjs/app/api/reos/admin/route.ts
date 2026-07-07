@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { eventStats, topFeatures, recentEvents } from '@/app/lib/reos/store'
+import { eventStats, topFeatures, recentEvents, getFeatures } from '@/app/lib/reos/store'
 import { listItems, getItemById } from '@/app/lib/scraper-store'
 import { HYBRID_WEIGHTS } from '@/app/lib/reos/hybrid'
 import { RANK_WEIGHTS } from '@/app/lib/reos/feed'
 import { WEIGHTS } from '@/app/lib/reos/scoring'
+import { DEFAULT_ENGAGE, type EngageWeights } from '@/app/lib/reos/train'
+import { queueDepth } from '@/app/lib/reos/queue'
 
 // GET /api/reos/admin — داشبوردِ observabilityِ REOS (فقط سوپرادمین).
 export async function GET() {
@@ -12,12 +14,14 @@ export async function GET() {
   const isAdmin = !!s && (s.role === 'super_admin' || s.phone === '09122862184')
   if (!isAdmin) return NextResponse.json({ error: 'دسترسی فقط برای مدیر' }, { status: 403 })
 
-  const [evStats, recent, topProps, propsCount] = await Promise.all([
+  const [evStats, recent, topProps, propsCount, modelF] = await Promise.all([
     eventStats(),
     recentEvents({ limit: 30 }),
     topFeatures('property', 'engagement_score', 12),
     listItems('listing', { publicOnly: true }).then(a => a.length),
+    getFeatures('model', 'engage_v1').catch(() => ({} as Record<string, number>)),
   ])
+  const model = modelF && modelF.trainedAt ? ({ ...DEFAULT_ENGAGE, ...modelF } as unknown as EngageWeights) : null
 
   // غنی‌سازیِ پرتعامل‌ترین املاک با عنوان
   const enriched = await Promise.all(topProps.map(async t => {
@@ -28,6 +32,7 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     engine: { publicListings: propsCount, weights: { global: WEIGHTS, hybrid: HYBRID_WEIGHTS, feedRank: RANK_WEIGHTS } },
+    model, queue: queueDepth(),
     events: { total: evStats.total, byType: evStats.byType, recent },
     topProperties: enriched,
   }, { headers: { 'Cache-Control': 'no-store, private' } })

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { loadUser, itemToProperty } from '@/app/lib/reos/data'
 import { buildHomeFeed, explain, type FeedCard } from '@/app/lib/reos/feed'
+import { primeEngageModel } from '@/app/lib/reos/train'
 import { listItems } from '@/app/lib/scraper-store'
 import { forIds } from '@/app/lib/listing-stats-store'
 import { listingHref } from '@/app/lib/listing-url'
@@ -25,6 +26,8 @@ export async function GET(req: NextRequest) {
   const userId = (isAdmin && sp.get('userId')) ? String(sp.get('userId')) : s.phone
   const limit = Math.min(Number(sp.get('limit')) || 12, 40)
 
+  // وزنِ آموزش‌دیدهٔ مدلِ engagement را به حافظه بیاور (کش‌شده) تا رتبه‌بندی از مدلِ یادگرفته استفاده کند.
+  await primeEngageModel().catch(() => {})
   // بارگذاریِ آگهی‌ها + آمار + پروموت‌های فعال (یک پاس؛ بدونِ feature-store به‌ازای هر ملک).
   const items = (await listItems('listing', { publicOnly: true })).slice(0, 300)
   const [stats, promoted] = await Promise.all([forIds(items.map(i => i.id)), promotedListingKinds()])

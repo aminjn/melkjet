@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import NumberInput from '@/app/components/NumberInput'
+import ReosPanelSection from '@/app/components/ReosPanelSection'
 import AssistantPanel from '@/app/components/AssistantPanel'
 import CrmTool, { CRM_VIEWS, type CrmView } from '@/app/components/tools/CrmTool'
 import MarketingTool, { MARKETING_VIEWS, type MarketingView } from '@/app/components/tools/MarketingTool'
@@ -442,7 +443,7 @@ export default function MaterialsPage() {
             : wfView ? <div style={{ height: 'calc(100vh - 130px)' }}><WorkflowTool embedded view={wfView} onView={v => setWfView(v)} /></div>
             : wbView ? <div style={{ height: 'calc(100vh - 130px)' }}><WebsiteBuilderTool embedded profile="فروشگاه" view={wbView} onView={v => setWbView(v)} /></div>
             : <>
-          {view === 'dashboard' && <DashboardView stats={stats} post={post} onAll={() => setView('orders')} />}
+          {view === 'dashboard' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}><DashboardView stats={stats} post={post} onAll={() => setView('orders')} /><ReosPanelSection title="املاکِ پیشنهادیِ REOS" subtitle="فرصت‌های مرتبط با بازار" /></div>}
           {view === 'assistant' && (
             <div style={{ height: 'calc(100vh - 130px)' }}>
               <AssistantPanel panel="materials" title="دستیار هوشمند فروشنده مصالح" subtitle="مشاور AI شخصیِ تو" suggestions={["قیمت‌گذاری این محصول را پیشنهاد بده", "پاسخ حرفه‌ای به استعلام مشتری بنویس", "چطور فروش این محصول را بیشتر کنم؟", "توضیحات فروش برای محصول بنویس"]} />

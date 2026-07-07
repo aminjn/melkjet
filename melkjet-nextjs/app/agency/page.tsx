@@ -4,6 +4,7 @@ import AssistantPanel from '@/app/components/AssistantPanel'
 import MessagesPanel from '@/app/components/MessagesPanel'
 import NegotiationEngine from '@/app/components/NegotiationEngine'
 import DivarImport from '@/app/components/DivarImport'
+import ReosPanelSection from '@/app/components/ReosPanelSection'
 import JalaliDatePicker from '@/app/components/JalaliDatePicker'
 import NumberInput from '@/app/components/NumberInput'
 import ImageUpload from '@/app/components/ImageUpload'
@@ -669,6 +670,7 @@ export default function AgencyPage() {
             : <>
           {/* DASHBOARD */}
           {view === 'dashboard' && <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <ReosPanelSection title="فایل‌های پیشنهادیِ REOS برای آژانس" subtitle="بر اساسِ تقاضای زندهٔ بازار" />
             {/* تحلیلِ هوشمندِ تیم (AI) */}
             <div style={{ ...card, padding: 18 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>

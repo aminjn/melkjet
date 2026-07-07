@@ -321,6 +321,19 @@ Backend → PostgreSQL(+PostGIS+pgvector) → { Redis · Elasticsearch · Vector
 > در MelkJet فعلی: Arvan CDN + Nginx + pm2×4 + PostgreSQL + `.media/` + صفِ درون‌برنامه‌ای + `scripts/deploy.sh` (health-check) + `scripts/backup.sh` — همان Phase 1، آمادهٔ رشد به Phase 2/3 بدونِ بازنویسی.
 
 ## ۱۵) وضعیتِ پیاده‌سازی (صادقانه)
-**اجراشده و تست‌شده (کدِ واقعی در `app/lib/reos/`):** feature engineering، embedding+cosine، هر دو فرمولِ اسکورینگ، مدلِ هایبریدِ ۴لایه، ۳ نوع تطبیق، فیدِ چندبخشی + لایهٔ توضیح، ۵ مدلِ ML (inference)، موتورِ درآمد، Event pipeline + online-learning + feature store (dual-mode PG/فایل)، آداپتورِ دادهٔ واقعی، Orchestrator. `docs/reos-schema.sql` schemaِ کاملِ production است.
-**در حالِ ساخت/scale-out:** route handlers (`app/api/reos/*`)، اتصالِ کاملِ فید به UIِ عمومی، جایگزینیِ Kafka/pgvector/Elasticsearch/WebSocket/XGBoost طبقِ جدولِ استک.
-**اصلِ راهنما:** هیچ لایه‌ای «فیک» نیست — هر فرمول و مدل کدِ واقعیِ قابلِ‌اجرا و قابلِ‌تست دارد؛ زیرساخت‌های سنگین (Kafka/Pinecone) با معادلِ واقعیِ همین استک پیاده و مسیرِ ارتقا مستند شده است.
+**اجراشده و تست‌شده (کدِ واقعی در `app/lib/reos/` + ۵۶ تستِ خودکار):** feature engineering، embedding+cosine، هر دو فرمولِ اسکورینگ، مدلِ هایبریدِ ۴لایه، ۳ نوع تطبیق، فیدِ چندبخشی + لایهٔ توضیح، ۵ مدلِ ML، موتورِ درآمد، Event pipeline + online-learning + feature store (dual-mode PG/فایل)، آداپتورِ دادهٔ واقعی، Orchestrator. `docs/reos-schema.sql` schemaِ کاملِ production است.
+
+**تکمیل‌شده در این دور (با تست):**
+- **آموزشِ واقعیِ ML** (`train.ts`): Logistic Regression با **Gradient Descent** روی دیتاستِ ساخته‌شده از رویدادهای واقعی؛ وزن‌ها یاد گرفته و در feature store ذخیره می‌شوند، در رتبه‌بندی (`feed.ts`) مصرف و هر ۶ ساعت خودکار بازآموزی می‌شوند (cron). تست: بازیابیِ سیگنالِ واقعی، AUC، کاهشِ LogLoss نسبت به پیش‌فرض.
+- **صفِ رویدادِ ناهمگام** (`queue.ts` — معادلِ Kafka): `ingest` دیگر مسیرِ درخواست را بلاک نمی‌کند؛ بافرِ حافظه + فلاشرِ دسته‌ای (batch INSERT + coalesced feature bumps).
+- **پایداریِ embedding** (`store.ts` `reos_embeddings` — معادلِ pgvector با jsonb): محاسبهٔ یک‌بار، استفادهٔ مجدد؛ مصرف‌شده در «املاکِ مشابه» (`/api/reos/similar`) روی صفحهٔ هر ملک.
+- **Candidate generation با SQL** (`candidateListings` — معادلِ Elasticsearch): گرفتنِ N کاندیدا با ایندکس به‌جای بارگذاریِ کلِ جدول → مقیاس‌پذیر به میلیون‌ها آگهی.
+- **route handlers کامل**: events, recommendations, match, predict, monetize, admin, **train, similar, orchestrate**.
+- **فید در همهٔ پنل‌ها**: خانهٔ عمومی + خریدار + مالک + مشاور + آژانس + سازنده + مصالح + ۶ نقشِ حرفه‌ای (معمار/پیمانکار/کارشناس/حقوقی/بانک/دفترخانه) + «املاکِ مشابهِ هوشمند» روی صفحهٔ هر ملک.
+- **Orchestrator زنده**: `/api/reos/orchestrate` سفرِ کاملِ خریدار (تطبیق→مشاور→مالی→cross-sell→ارزشِ لید).
+
+**همچنان scale-out (طراحی‌شده، هنوز جایگزینِ صنعتی نصب‌نشده):** Kafka/Pinecone/Elasticsearch/WebSocket و آموزشِ توزیع‌شدهٔ XGBoost — همه با «معادلِ درون‌استکیِ» بالا کار می‌کنند و مسیرِ ارتقا در جدولِ استک مستند است. schemaِ اختصاصیِ pgvector (`reos-schema.sql`) هنوز روی DB اعمال نشده؛ لایهٔ فعلی jsonb است.
+
+**تست‌ها:** `npm run test:reos` (۳۴ تستِ خالص + آموزش) و `DATABASE_URL=… npm run test:reos:pg` (۲۲ تستِ یکپارچه روی PostgreSQLِ واقعی).
+
+**اصلِ راهنما:** هیچ لایه‌ای «فیک» نیست — هر فرمول و مدل کدِ واقعیِ قابلِ‌اجرا و قابلِ‌تست دارد؛ زیرساخت‌های سنگین با معادلِ واقعیِ همین استک پیاده و مسیرِ ارتقا مستند شده است.

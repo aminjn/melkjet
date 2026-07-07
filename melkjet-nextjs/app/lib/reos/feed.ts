@@ -3,6 +3,7 @@
 import { type UserEntity, type PropertyEntity } from './types'
 import { hybridScore } from './hybrid'
 import { clamp01, demandScore } from './features'
+import { predictEngage } from './train'
 
 export const RANK_WEIGHTS = { userMatch: 0.35, quality: 0.20, engagement: 0.15, freshness: 0.10, demand: 0.10, promotion: 0.10 } as const
 
@@ -31,7 +32,9 @@ export function propertyRankScore(u: UserEntity, p: PropertyEntity, boost = 0): 
   const hy = hybridScore(u, p, { boost })
   const userMatch = hy.layers.rulePass ? hy.final : 0
   const qual = quality(p)
-  const eng = engagement(p)
+  // engagement = ترکیبِ سیگنالِ خام + پیش‌بینیِ مدلِ آموزش‌دیده (learned engagement propensity).
+  const learned = predictEngage(p, u.engagementScore ?? 0.3)
+  const eng = clamp01(0.5 * engagement(p) + 0.5 * learned)
   const fresh = freshness(p)
   const dem = demandScore(p)
   const promo = clamp01(boost) * clamp01(0.5 + 0.5 * qual)   // Trust gate: boost × quality
@@ -39,7 +42,7 @@ export function propertyRankScore(u: UserEntity, p: PropertyEntity, boost = 0): 
     RANK_WEIGHTS.userMatch * userMatch + RANK_WEIGHTS.quality * qual + RANK_WEIGHTS.engagement * eng +
     RANK_WEIGHTS.freshness * fresh + RANK_WEIGHTS.demand * dem + RANK_WEIGHTS.promotion * promo,
   )
-  return { id: p.id, score: r3(score), matchPct: Math.round(userMatch * 100), reasons: hy.reasons, parts: { userMatch: r3(userMatch), quality: r3(qual), engagement: r3(eng), freshness: r3(fresh), demand: r3(dem), promotion: r3(promo) } }
+  return { id: p.id, score: r3(score), matchPct: Math.round(userMatch * 100), reasons: hy.reasons, parts: { userMatch: r3(userMatch), quality: r3(qual), engagement: r3(eng), learned: r3(learned), freshness: r3(fresh), demand: r3(dem), promotion: r3(promo) } }
 }
 
 // لایهٔ توضیحِ AI: «چرا این ملک پیشنهاد شد؟»

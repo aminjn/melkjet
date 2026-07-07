@@ -298,6 +298,23 @@ export async function listItems(type?: SourceType, opts?: { category?: string; p
   return items.sort((a, b) => b.scrapedAt - a.scrapedAt)
 }
 
+// Candidate generation (معادلِ Elasticsearch/جستجوی توزیع‌شده در همین استک):
+// به‌جای بارگذاریِ همهٔ ردیف‌ها در حافظه و برش در JS، مستقیماً از جدولِ `listings` با SQL و
+// LIMIT کاندیدا می‌گیرد (ایندکسِ type + scraped_at). پس با میلیون‌ها آگهی هم مسیرِ رتبه‌بندی
+// فقط N کاندیدا را می‌گیرد، نه کلِ جدول. در حالتِ فایل به listItems برمی‌گردد.
+export async function candidateListings(limit = 500, type: SourceType = 'listing'): Promise<Item[]> {
+  if (pgEnabled()) {
+    try {
+      const r = await pgTx(c => c.query(
+        `SELECT data FROM listings WHERE type=$1 AND status NOT IN ('rejected','duplicate')
+         ORDER BY scraped_at DESC LIMIT $2`, [type, limit]))
+      const now = Date.now()
+      return (r.rows.map(x => x.data as Item)).filter(i => !isExpired(i, now))
+    } catch { /* اگر جدول/DB آماده نبود → مسیرِ امن */ }
+  }
+  return (await listItems(type, { publicOnly: true })).slice(0, limit)
+}
+
 export async function getItemById(itemId: string): Promise<Item | null> {
   return (await load()).items.find(i => i.id === itemId) || null
 }

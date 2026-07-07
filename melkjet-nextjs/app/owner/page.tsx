@@ -4,6 +4,7 @@ import JalaliDatePicker from '@/app/components/JalaliDatePicker'
 import NumberInput from '@/app/components/NumberInput'
 import PlansPanel from '@/app/components/PlansPanel'
 import ListingReports from '@/app/components/ListingReports'
+import ReosPanelSection from '@/app/components/ReosPanelSection'
 import BusinessProfileForm from '@/app/components/BusinessProfileForm'
 import SupportPanel from '@/app/components/SupportPanel'
 
@@ -301,7 +302,7 @@ export default function OwnerPage() {
 
         {/* Content */}
         <main style={{ flex: 1, padding: 24, overflow: 'auto' }}>
-          {view === 'dashboard' && <DashboardView stats={stats} titleOf={titleOf} post={post} onViewings={() => goView('viewings')} onInquiries={() => goView('inquiries')} />}
+          {view === 'dashboard' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}><DashboardView stats={stats} titleOf={titleOf} post={post} onViewings={() => goView('viewings')} onInquiries={() => goView('inquiries')} /><ReosPanelSection title="املاکِ پیشنهادیِ REOS" subtitle="مرتبط با بازار و رفتارِ خریداران" /></div>}
           {view === 'properties' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}><ListingReports /><PropertiesView properties={properties} post={post} busy={busy} search={search} showAdd={showAdd} setShowAdd={setShowAdd} /></div>}
           {view === 'inquiries' && <InquiriesView inquiries={inquiries} properties={properties} titleOf={titleOf} post={post} busy={busy} search={search} />}
           {view === 'viewings' && <ViewingsView viewings={viewings} properties={properties} titleOf={titleOf} post={post} busy={busy} search={search} />}

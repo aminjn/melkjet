@@ -8,6 +8,7 @@ import type { ReosEvent, EventType } from './types'
 
 const EV_FILE = join(process.cwd(), '.reos-events.json')
 const FS_FILE = join(process.cwd(), '.reos-features.json')
+const EMB_FILE = join(process.cwd(), '.reos-embeddings.json')
 const MAX_FILE_EVENTS = 5000
 function uid(p = 'ev_'): string { return p + randomBytes(6).toString('hex') }
 
@@ -25,6 +26,10 @@ async function ensureReos(): Promise<void> {
     await c.query(`CREATE TABLE IF NOT EXISTS reos_feature_store (
       entity_type text NOT NULL, entity_id text NOT NULL, features jsonb NOT NULL DEFAULT '{}'::jsonb,
       updated_at bigint NOT NULL, PRIMARY KEY (entity_type, entity_id) )`)
+    // بردارِ نهفته (embedding) — معادلِ pgvector با jsonb (مسیرِ ارتقا به VECTOR بدونِ تغییرِ منطق).
+    await c.query(`CREATE TABLE IF NOT EXISTS reos_embeddings (
+      kind text NOT NULL, entity_id text NOT NULL, dim int NOT NULL,
+      embed jsonb NOT NULL, updated_at bigint NOT NULL, PRIMARY KEY (kind, entity_id) )`)
   })
   reosSchemaReady = true
 }
@@ -48,6 +53,28 @@ export async function recordEvent(input: Omit<ReosEvent, 'id' | 'at'> & { at?: n
     fileSave(EV_FILE, db)
   }
   return ev
+}
+
+// درجِ دسته‌ایِ رویدادها (برای صفِ رویداد؛ یک round-trip به‌جای N تا).
+export async function recordEventBatch(evs: ReosEvent[]): Promise<void> {
+  if (!evs.length) return
+  if (pgEnabled()) {
+    await ensureReos()
+    // چند-ردیفیِ پارامتری در یک INSERT
+    const cols = 8
+    const values: string[] = [], params: unknown[] = []
+    evs.forEach((ev, i) => {
+      const b = i * cols
+      values.push(`($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8})`)
+      params.push(ev.id, ev.type, ev.userId || null, ev.propertyId || null, ev.agentId || null, ev.leadId || null, JSON.stringify(ev.meta || {}), ev.at)
+    })
+    await pgTx(c => c.query(`INSERT INTO reos_events(id,type,user_id,property_id,agent_id,lead_id,meta,at) VALUES ${values.join(',')} ON CONFLICT (id) DO NOTHING`, params))
+  } else {
+    const db = fileLoad<ReosEvent[]>(EV_FILE, [])
+    for (const ev of evs) db.unshift(ev)
+    if (db.length > MAX_FILE_EVENTS) db.length = MAX_FILE_EVENTS
+    fileSave(EV_FILE, db)
+  }
 }
 
 export async function recentEvents(opts: { userId?: string; propertyId?: string; type?: EventType; limit?: number } = {}): Promise<ReosEvent[]> {
@@ -130,4 +157,55 @@ export async function bumpFeatures(entityType: string, entityId: string, inc: Re
     for (const k in set) next[k] = set[k]
     db[key] = next; fileSave(FS_FILE, db)
   }
+}
+
+// ═══ Embedding store (pgvector-equivalent؛ compute-once، reuse) ═══
+// درجِ دسته‌ایِ بردارها (فقط بردارهای تغییرکرده/جدید نوشته می‌شوند).
+export async function saveEmbeddings(kind: string, rows: { id: string; embed: number[] }[]): Promise<void> {
+  if (!rows.length) return
+  const now = Date.now()
+  if (pgEnabled()) {
+    await ensureReos()
+    const cols = 5, values: string[] = [], params: unknown[] = []
+    rows.forEach((r, i) => { const b = i * cols; values.push(`($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5})`); params.push(kind, r.id, r.embed.length, JSON.stringify(r.embed), now) })
+    await pgTx(c => c.query(
+      `INSERT INTO reos_embeddings(kind,entity_id,dim,embed,updated_at) VALUES ${values.join(',')}
+       ON CONFLICT(kind,entity_id) DO UPDATE SET dim=EXCLUDED.dim, embed=EXCLUDED.embed, updated_at=EXCLUDED.updated_at`, params))
+  } else {
+    const db = fileLoad<Record<string, { embed: number[]; at: number }>>(EMB_FILE, {})
+    for (const r of rows) db[`${kind}:${r.id}`] = { embed: r.embed, at: now }
+    fileSave(EMB_FILE, db)
+  }
+}
+
+export async function getEmbedding(kind: string, id: string): Promise<number[] | null> {
+  if (pgEnabled()) {
+    await ensureReos()
+    const r = await pgTx(c => c.query(`SELECT embed FROM reos_embeddings WHERE kind=$1 AND entity_id=$2`, [kind, id]))
+    return (r.rows[0]?.embed as number[]) || null
+  }
+  const db = fileLoad<Record<string, { embed: number[]; at: number }>>(EMB_FILE, {})
+  return db[`${kind}:${id}`]?.embed || null
+}
+
+// همهٔ بردارهای یک نوع (بارگذاریِ کاندیداها برای جستجوی برداری). محدود برای ایمنی.
+export async function getEmbeddings(kind: string, limit = 3000): Promise<{ id: string; embed: number[] }[]> {
+  if (pgEnabled()) {
+    await ensureReos()
+    const r = await pgTx(c => c.query(`SELECT entity_id, embed FROM reos_embeddings WHERE kind=$1 ORDER BY updated_at DESC LIMIT $2`, [kind, limit]))
+    return r.rows.map(x => ({ id: x.entity_id as string, embed: (x.embed as number[]) || [] }))
+  }
+  const db = fileLoad<Record<string, { embed: number[]; at: number }>>(EMB_FILE, {})
+  return Object.entries(db).filter(([k]) => k.startsWith(kind + ':')).slice(0, limit).map(([k, v]) => ({ id: k.slice(kind.length + 1), embed: v.embed }))
+}
+
+// شناسه‌های بردارشدهٔ موجود (برای نوشتنِ فقط بردارهای جدید).
+export async function existingEmbeddingIds(kind: string): Promise<Set<string>> {
+  if (pgEnabled()) {
+    await ensureReos()
+    const r = await pgTx(c => c.query(`SELECT entity_id FROM reos_embeddings WHERE kind=$1`, [kind]))
+    return new Set(r.rows.map(x => x.entity_id as string))
+  }
+  const db = fileLoad<Record<string, { embed: number[]; at: number }>>(EMB_FILE, {})
+  return new Set(Object.keys(db).filter(k => k.startsWith(kind + ':')).map(k => k.slice(kind.length + 1)))
 }

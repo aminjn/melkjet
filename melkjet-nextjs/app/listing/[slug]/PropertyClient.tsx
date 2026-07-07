@@ -71,7 +71,7 @@ export default function PropertyClient({ id }: { id: string }) {
   const [forecast, setForecast] = useState<{ points: { label: string; value: number; kind: string }[]; currentAvg: number; yearGrowthPct: number; monthlyGrowthPct: number; method: string; confidence: string; samples: number } | null>(null)
   const [selMonth, setSelMonth] = useState<number | null>(null)
   const [aiError, setAiError] = useState('')
-  const [similar, setSimilar] = useState<Item[]>([])
+  const [similar, setSimilar] = useState<{ id: string; title?: string; price?: string; location?: string; image?: string; meta?: Record<string, string>; matchPct?: number }[]>([])
   const [phone, setPhone] = useState<string | null>(null)
   const [gettingPhone, setGettingPhone] = useState(false)
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null)
@@ -135,10 +135,14 @@ export default function PropertyClient({ id }: { id: string }) {
       // پیش‌بینیِ قیمت (مدلِ رگرسیونیِ یادگیریِ ماشین روی دادهٔ واقعی؛ اگر دادهٔ محله نبود، قیمتِ همین ملک مبنا)
       const fq = new URLSearchParams({ city: it.meta?.['شهر'] || '', district: it.meta?.['محله'] || it.location || '', price: it.price || '', area: it.meta?.['متراژ'] || '', title: it.title || '' })
       fetch(`/api/market/forecast?${fq}`).then(r => r.ok ? r.json() : null).then(d => setForecast(d?.forecast || null)).catch(() => {})
-      // similar (same category, exclude self)
-      fetch(`/api/content?type=listing&limit=12`).then(r => r.ok ? r.json() : { items: [] }).then(s => {
-        setSimilar((s.items || []).filter((x: Item) => x.id !== it.id).slice(0, 3))
-      }).catch(() => {})
+      // آگهی‌های مشابه — اول با شباهتِ برداریِ REOS (embedding cosine)، بعد fallback به آخرین‌ها.
+      const fallbackSimilar = () => fetch(`/api/content?type=listing&limit=12`).then(r => r.ok ? r.json() : { items: [] })
+        .then(s => setSimilar((s.items || []).filter((x: Item) => x.id !== it.id).slice(0, 3))).catch(() => {})
+      fetch(`/api/reos/similar?propertyId=${it.id}&k=6`).then(r => r.ok ? r.json() : null).then(d => {
+        const sim = (d?.similar || []).filter(Boolean)
+        if (sim.length >= 3) setSimilar(sim.slice(0, 6).map((x: { id: string; title?: string; price?: string; location?: string; image?: string; simPct?: number }) => ({ id: x.id, title: x.title, price: x.price, location: x.location, image: x.image, matchPct: x.simPct })))
+        else fallbackSimilar()
+      }).catch(fallbackSimilar)
       // غنی‌سازی فقط یک‌بار (هنگامِ اسکرپ) ساخته و در دیتابیس ذخیره می‌شود؛ این‌جا فقط از کش خوانده می‌شود.
       // اگر آگهیِ قدیمی هنوز غنی نشده باشد، سرور در پس‌زمینه گرمش می‌کند و یک‌بار دوباره از دیتابیس می‌خوانیم.
       const loadEnrich = (retry = false) => {
@@ -466,7 +470,7 @@ export default function PropertyClient({ id }: { id: string }) {
 
               {similar.length > 0 && (
                 <div>
-                  <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>آگهی‌های مشابه</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>آگهی‌های مشابه{similar.some(s => s.matchPct != null) && <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold)', background: 'var(--goldDim)', border: '1px solid var(--gold)', borderRadius: 999, padding: '2px 9px' }}>✦ هوشمند (REOS)</span>}</div>
                   <div className="mjp-similar" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
                     {similar.map(s => {
                       const sd = s.meta?.['__dealStatus']
@@ -475,6 +479,7 @@ export default function PropertyClient({ id }: { id: string }) {
                         <div style={{ height: 110, background: 'var(--bg2)', position: 'relative' }}>
                           {s.image && <img src={s.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: sd ? 'grayscale(0.5) brightness(0.72)' : 'none' }} />}
                           {sd && <span style={{ position: 'absolute', top: 8, right: 8, background: sd === 'sold' ? 'rgba(231,74,74,0.94)' : 'rgba(74,144,231,0.94)', color: '#fff', fontWeight: 800, fontSize: 10.5, padding: '3px 8px', borderRadius: 7 }}>{sd === 'sold' ? 'فروخته شد' : 'اجاره رفت'}</span>}
+                          {s.matchPct != null && !sd && <span style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(20,18,15,0.82)', color: 'var(--gold)', fontWeight: 800, fontSize: 10.5, padding: '3px 8px', borderRadius: 7 }}>{s.matchPct.toLocaleString('fa-IR')}٪ مشابه</span>}
                         </div>
                         <div style={{ padding: '12px 14px' }}>
                           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', lineHeight: 1.4, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</div>

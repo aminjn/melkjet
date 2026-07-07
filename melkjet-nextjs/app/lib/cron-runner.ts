@@ -9,6 +9,8 @@ import { processWorkflows } from './workflow-runner'
 import { maybeRunReveal, maybeCreateAccounts } from './persiansaze-cron'
 import { maybeAutoScrape } from './hypersaz-scraper'
 import { maybeAutoSyncCost } from './cost-store'
+import { flushQueue } from './reos/queue'
+import { trainEngageModel } from './reos/train'
 
 // زمان‌بندِ سبک و بدونِ وابستگی برای سینکِ خودکارِ دیوار. روی سرورِ همیشه‌روشنِ
 // pm2 با یک setInterval اجرا می‌شود؛ یک قفلِ global از اجرای موازی/تکراری جلوگیری می‌کند.
@@ -21,6 +23,7 @@ declare global {
 
 let lastDedupAt = 0   // آخرین باری که پاک‌سازیِ تکراری‌ها اجرا شد (throttle برای O(n²))
 let lastSitemapAt = 0 // آخرین بررسیِ شاردهای سایت‌مپ (هشدارِ سوپرادمین برای شاردِ جدید)
+let lastReosTrainAt = 0 // آخرین آموزشِ مدلِ REOS (هر ۶ ساعت)
 async function tick(): Promise<{ due: number; synced: number }> {
   const g = globalThis.__mjCron
   if (!g || g.running) return { due: 0, synced: 0 }
@@ -37,6 +40,12 @@ async function tick(): Promise<{ due: number; synced: number }> {
     try { maybeCreateAccounts() } catch { /* ساختِ خودکارِ حسابِ سازنده پس از به‌روزشدنِ پروفایل‌ها */ }
     try { maybeAutoScrape(Date.now()) } catch { /* اسکرپِ خودکارِ زمان‌بندی‌شدهٔ کاتالوگ */ }
     maybeAutoSyncCost(Date.now()).catch(() => { /* سینکِ هفتگیِ قیمتِ مدل‌های AI از API */ })
+    // REOS: صفِ رویداد را فلاش کن (دوامِ بهترین-تلاش) + مدلِ engagement را هر ۶ ساعت از رویدادهای واقعی آموزش بده.
+    try { await flushQueue() } catch { /* صفِ رویدادِ REOS */ }
+    if (Date.now() - lastReosTrainAt > 6 * 60 * 60 * 1000) {
+      lastReosTrainAt = Date.now()
+      try { const w = await trainEngageModel(); console.log(`[reos] engage model: n=${w.n} auc=${w.auc} default=${w.usedDefault}`) } catch { /* آموزشِ REOS */ }
+    }
     due = listDueSources(Date.now())
     for (const { phone, source } of due) {
       try {
