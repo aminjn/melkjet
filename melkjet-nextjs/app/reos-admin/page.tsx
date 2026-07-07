@@ -7,11 +7,13 @@ type Ev = { id: string; type: string; at: number; userId?: string; propertyId?: 
 type Top = { id: string; title: string; engagement: number; clicks: number; saves: number; contacts: number }
 type Model = { demand: number; pop: number; saves: number; userEng: number; bias: number; n: number; auc: number; logloss: number; usedDefault: boolean; trainedAt: number } | null
 type Graph = { nodes: number; edges: number; byType: Record<string, number>; byRel: Record<string, number> }
+type Ai = { calls: number; tokens: number; cost: number; cacheHitRate: number; avgMs: number; byModel: Record<string, { calls: number; tokens: number; cost: number }> }
 type Data = {
   engine: { publicListings: number; weights: Record<string, Record<string, number>> }
   model: Model
   queue: { events: number; features: number }
   graph: Graph
+  ai: Ai
   events: { total: number; byType: Record<string, number>; recent: Ev[] }
   topProperties: Top[]
 }
@@ -144,6 +146,28 @@ export default function ReosAdminPage() {
         {trainMsg && <div style={{ fontSize: 12.5, color: 'var(--gold)', marginTop: 10 }}>{trainMsg}</div>}
         <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 10 }}>صفِ رویداد (Kafka-equivalent): {fa(d.queue?.events || 0)} رویداد + {fa(d.queue?.features || 0)} feature در انتظارِ فلاش.</div>
       </div>
+
+      {/* Observability — مصرفِ AI (AI Gateway) */}
+      {d.ai && (
+        <div style={{ ...card, marginTop: 16 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>مصرفِ AI (Gateway) — هزینه/توکن/کش</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 12 }}>
+            {[
+              { l: 'فراخوان‌ها', v: fa(d.ai.calls) },
+              { l: 'توکن‌ها', v: fa(d.ai.tokens) },
+              { l: 'هزینهٔ تقریبی (ت)', v: fa(d.ai.cost) },
+              { l: 'نرخِ کش', v: (d.ai.cacheHitRate || 0).toLocaleString('fa-IR') + '٪' },
+              { l: 'میانگین تأخیر', v: fa(d.ai.avgMs) + ' ms' },
+            ].map(k => (
+              <div key={k.l} style={{ background: 'var(--bg2)', borderRadius: 10, padding: '10px 12px' }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 5 }}>{k.l}</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--gold)' }}>{k.v}</div>
+              </div>
+            ))}
+          </div>
+          {Object.keys(d.ai.byModel || {}).length > 0 && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 10 }}>به‌تفکیکِ مدل: {Object.entries(d.ai.byModel).map(([m, v]) => `${m} (${fa(v.calls)})`).join(' · ')}</div>}
+        </div>
+      )}
 
       {/* گرافِ دانش (Knowledge Graph) */}
       <div style={{ ...card, marginTop: 16 }}>

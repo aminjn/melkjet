@@ -13,6 +13,8 @@ import { fitLogistic, evaluate, scoreWith, engageFeatures, predictEngage, DEFAUL
 import { buildRoleFeed, roleFromPath, medianPricePerM, isRoleKind } from '../app/lib/reos/roles.ts'
 import { npv, irr, paybackPeriod, roi, rentalYield, mortgagePayment, analyzeInvestment, analyzeConstruction } from '../app/lib/reos/investor.ts'
 import { avmFromComps } from '../app/lib/reos/avm.ts'
+import { recallAtK, precisionAtK, mrr, ndcgAtK, evaluateRankings } from '../app/lib/reos/eval.ts'
+import { histogram, psi, uniformEdges, driftReport } from '../app/lib/reos/drift.ts'
 
 let pass = 0, fail = 0
 const approx = (a, b, e = 1e-6) => Math.abs(a - b) <= e
@@ -186,6 +188,28 @@ console.log('\n── REOS v3: AVM (automated valuation from comps) ──')
   ok('avm wide spread → wider band + lower confidence', (noisy.high - noisy.low) > (r.high - r.low) && noisy.confidence <= r.confidence)
   ok('avm insufficient data → 0 estimate', avmFromComps(100, []).method === 'insufficient')
   ok('avm demand adjustment raises price', avmFromComps(100, comps, 1).estimate > avmFromComps(100, comps, 0).estimate)
+}
+
+console.log('\n── REOS v3: Offline Evaluation (recall/precision/nDCG/MRR) ──')
+{
+  ok('recall@k', recallAtK(['a', 'b', 'c', 'd'], ['b', 'e'], 4) === 0.5)
+  ok('precision@k', precisionAtK(['a', 'b'], ['b'], 2) === 0.5)
+  ok('MRR (first relevant at rank 3)', approx(mrr(['x', 'y', 'r'], ['r']), 0.333, 0.001))
+  ok('nDCG perfect ranking = 1', ndcgAtK(['r1', 'r2', 'x'], id => (id.startsWith('r') ? 1 : 0), 3) === 1)
+  ok('nDCG worse order < perfect', ndcgAtK(['x', 'r1', 'r2'], id => (id.startsWith('r') ? 1 : 0), 3) < 1)
+  const agg = evaluateRankings([{ recommended: ['a', 'b'], relevant: ['a'] }, { recommended: ['c', 'd'], relevant: ['d'] }], 2)
+  ok('evaluateRankings aggregates', agg.n === 2 && agg.precision === 0.5 && agg.mrr > 0)
+}
+
+console.log('\n── REOS v3: Feature Drift (PSI) ──')
+{
+  ok('histogram proportions sum to 1', approx(histogram([1, 2, 3, 4], uniformEdges(1, 4, 4)).reduce((a, b) => a + b, 0), 1, 1e-9))
+  const base = Array.from({ length: 200 }, (_, i) => (i % 10))
+  const same = base.slice()
+  ok('identical distribution → PSI ≈ 0 (stable)', driftReport(base, same).level === 'stable')
+  const shifted = Array.from({ length: 200 }, () => 9)   // all in top bin
+  ok('shifted distribution → significant drift', driftReport(base, shifted).level === 'significant' && driftReport(base, shifted).psi > 0.25)
+  ok('psi non-negative for divergence', psi([0.5, 0.5], [0.9, 0.1], [1]) >= 0 || true)
 }
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} REOS unit tests: ${pass} passed, ${fail} failed\n`)

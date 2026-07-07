@@ -8,6 +8,7 @@ import { WEIGHTS } from '@/app/lib/reos/scoring'
 import { DEFAULT_ENGAGE, type EngageWeights } from '@/app/lib/reos/train'
 import { queueDepth } from '@/app/lib/reos/queue'
 import { graphStats } from '@/app/lib/reos/graph'
+import { usageStats } from '@/app/lib/reos/gateway'
 
 // GET /api/reos/admin — داشبوردِ observabilityِ REOS (فقط سوپرادمین).
 export async function GET() {
@@ -23,6 +24,7 @@ export async function GET() {
     getFeatures('model', 'engage_v1').catch(() => ({} as Record<string, number>)),
     graphStats().catch(() => ({ nodes: 0, edges: 0, byType: {}, byRel: {} })),
   ])
+  const ai = await usageStats().catch(() => ({ calls: 0, tokens: 0, cost: 0, cacheHitRate: 0, avgMs: 0, byModel: {} }))
   const model = modelF && modelF.trainedAt ? ({ ...DEFAULT_ENGAGE, ...modelF } as unknown as EngageWeights) : null
 
   // غنی‌سازیِ پرتعامل‌ترین املاک با عنوان
@@ -34,7 +36,7 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     engine: { publicListings: propsCount, weights: { global: WEIGHTS, hybrid: HYBRID_WEIGHTS, feedRank: RANK_WEIGHTS } },
-    model, queue: queueDepth(), graph,
+    model, queue: queueDepth(), graph, ai,
     events: { total: evStats.total, byType: evStats.byType, recent },
     topProperties: enriched,
   }, { headers: { 'Cache-Control': 'no-store, private' } })
