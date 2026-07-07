@@ -25,6 +25,7 @@ import { getOrCreateReferral, recordInvite, recordConversion as refConvert, refe
 import { getBalance as walletBalance } from '../app/lib/reos/billing.ts'
 import { syncMarketGraph, topActiveInArea, areaListingCount } from '../app/lib/reos/market-graph.ts'
 import { neighborhoodProfile } from '../app/lib/reos/neighborhood.ts'
+import { send as commsSend, commsLog, channels } from '../app/lib/reos/comms-hub.ts'
 import { assignVariant, createExperiment, recordExposure, recordConversion, results } from '../app/lib/reos/experiments.ts'
 import { credit, debit, getBalance, listTransactions, createInvoice, payInvoice } from '../app/lib/reos/billing.ts'
 import { recordTouch, recordSpend, recordConversion as attrConvert, channelReport } from '../app/lib/reos/attribution.ts'
@@ -473,6 +474,18 @@ async function main() {
     const prof = await neighborhoodProfile('تهران|ولنجک')
     ok('neighborhoodProfile returns data + topAgents + price level', !!prof && prof.listings >= 4 && prof.topAgents.length >= 1 && !!prof.priceLevel)
     ok('neighborhood external POI marked pending (null)', prof.external.walkability === null)
+  }
+
+  console.log('\n── REOS v4: Unified Communication Hub ──')
+  {
+    const owner = 'commU_' + Math.floor(Date.now() / 1000)
+    const sms = await commsSend({ channel: 'sms', to: '0912', message: 'سلام', ownerId: owner })
+    ok('SMS routed → queued (ready channel)', sms.status === 'queued')
+    const wa = await commsSend({ channel: 'whatsapp', to: '0912', message: 'hi', ownerId: owner })
+    ok('WhatsApp → pending (external integration needed)', wa.status === 'pending')
+    const log = await commsLog(owner)
+    ok('unified log records both messages', log.length === 2)
+    ok('channels() lists readiness (sms/email ready)', channels().filter(c => c.ready).map(c => c.channel).sort().join(',') === 'email,sms')
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)
