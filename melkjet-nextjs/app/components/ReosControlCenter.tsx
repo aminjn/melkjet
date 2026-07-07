@@ -80,6 +80,7 @@ export default function ReosControlCenter() {
               <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8, color: 'var(--gold)' }}>آموزش + Gateway</div>
               {row('آموزشِ خودکار هر (ساعت)', inp('training', 'autoHours'))}
               {row('آموزشِ خودکار فعال (۱/۰)', inp('training', 'enabled'))}
+              {row('مدلِ لیدِ آموزش‌دیده (۱/۰)', inp('training', 'useLearnedLead'))}
               {row('کشِ AI (دقیقه)', inp('gateway', 'cacheTtlMin'))}
             </div>
             <div>
@@ -87,6 +88,20 @@ export default function ReosControlCenter() {
               {row('تأیید', inp('trust', 'weights', 'verified'))}
               {row('معاملات', inp('trust', 'weights', 'deals'))}
               {row('امتیاز', inp('trust', 'weights', 'rating'))}
+            </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8, color: 'var(--gold)' }}>وزن‌های رتبه‌بندیِ فید</div>
+              {row('تطابقِ کاربر', inp('feed', 'rankWeights', 'userMatch'))}
+              {row('کیفیت', inp('feed', 'rankWeights', 'quality'))}
+              {row('تعامل', inp('feed', 'rankWeights', 'engagement'))}
+              {row('تازگی', inp('feed', 'rankWeights', 'freshness'))}
+            </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8, color: 'var(--gold)' }}>وزن‌های امتیازِ Global</div>
+              {row('بودجه', inp('scoring', 'budget'))}
+              {row('موقعیت', inp('scoring', 'location'))}
+              {row('رفتار', inp('scoring', 'behavior'))}
+              {row('نیت', inp('scoring', 'intent'))}
             </div>
           </div>
         )}

@@ -4,6 +4,7 @@ import { type UserEntity, type PropertyEntity } from './types'
 import { hybridScore } from './hybrid'
 import { clamp01, demandScore } from './features'
 import { predictEngage } from './train'
+import { config } from './reos-config'
 
 export const RANK_WEIGHTS = { userMatch: 0.35, quality: 0.20, engagement: 0.15, freshness: 0.10, demand: 0.10, promotion: 0.10 } as const
 
@@ -38,9 +39,10 @@ export function propertyRankScore(u: UserEntity, p: PropertyEntity, boost = 0): 
   const fresh = freshness(p)
   const dem = demandScore(p)
   const promo = clamp01(boost) * clamp01(0.5 + 0.5 * qual)   // Trust gate: boost × quality
+  const RW = config().feed.rankWeights   // وزن‌ها از تنظیماتِ سوپرادمین (پیش‌فرض = RANK_WEIGHTS)
   const score = clamp01(
-    RANK_WEIGHTS.userMatch * userMatch + RANK_WEIGHTS.quality * qual + RANK_WEIGHTS.engagement * eng +
-    RANK_WEIGHTS.freshness * fresh + RANK_WEIGHTS.demand * dem + RANK_WEIGHTS.promotion * promo,
+    RW.userMatch * userMatch + RW.quality * qual + RW.engagement * eng +
+    RW.freshness * fresh + RW.demand * dem + RW.promotion * promo,
   )
   return { id: p.id, score: r3(score), matchPct: Math.round(userMatch * 100), reasons: hy.reasons, parts: { userMatch: r3(userMatch), quality: r3(qual), engagement: r3(eng), learned: r3(learned), freshness: r3(fresh), demand: r3(dem), promotion: r3(promo) } }
 }

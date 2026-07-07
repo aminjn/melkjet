@@ -4,6 +4,8 @@
 // (همان فرمول، فقط بردارِ وزن از فایل/جدولِ آموزش می‌آید). ML system از این نقطه تزریق می‌شود.
 import { type AgentEntity, type PropertyEntity, type Prediction } from './types'
 import { agentPerf, demandScore, parseFaNum, clamp01 } from './features'
+import { config } from './reos-config'
+import { learnedLeadWeights, leadFeatures, scoreLead } from './lead-model'
 
 function sigmoid(z: number): number { return 1 / (1 + Math.exp(-z)) }
 function logit(features: Record<string, number>, weights: Record<string, number>, bias: number): number {
@@ -27,8 +29,16 @@ export function predictLeadConversion(lead: {
     activity: clamp01((lead.activityCount || 0) / 6),
     agentPerf: agent ? agentPerf(agent) : 0.5,
   }
-  const value = logit(f, CONV_W, -1.4)
-  return { value: r3(value), confidence: 0.7, features: f, label: value >= 0.66 ? 'داغ' : value >= 0.4 ? 'گرم' : 'سرد' }
+  let value = logit(f, CONV_W, -1.4)
+  // مدلِ آموزش‌دیدهٔ واقعی (اگر روی داده fit شده و در تنظیمات فعال باشد): با فرمول ترکیب می‌شود.
+  const lw = learnedLeadWeights()
+  let confidence = 0.7
+  if (config().training.useLearnedLead && !lw.usedDefault) {
+    const lf = leadFeatures({ phone: lead.phone, email: lead.email, budget: lead.budget, activityCount: lead.activityCount, ageDays: ageH / 24 })
+    value = 0.5 * value + 0.5 * scoreLead(lw, lf)
+    confidence = 0.8
+  }
+  return { value: r3(value), confidence, features: f, label: value >= 0.66 ? 'داغ' : value >= 0.4 ? 'گرم' : 'سرد' }
 }
 
 // ── ۲) Property Demand Prediction (۰..۱) ──

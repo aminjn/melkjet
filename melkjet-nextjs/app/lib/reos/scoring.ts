@@ -2,6 +2,7 @@
 // FinalScore = 0.35*Budget + 0.25*Location + 0.15*Behavior + 0.10*Intent + 0.10*Historical + 0.05*Demand
 import { type UserVector, type PropertyVector, type ScoreBreakdown, type Match } from './types'
 import { cosine, haversineKm, clamp01 } from './features'
+import { config } from './reos-config'
 
 export const WEIGHTS = { budget: 0.35, location: 0.25, behavior: 0.15, intent: 0.10, historical: 0.10, demand: 0.05 } as const
 
@@ -44,13 +45,14 @@ export function scoreUserProperty(
   const intentStrengthV = intentStrength(u.intent, p.deal, u.engagement)
   const historicalV = historicalInteraction(opts.prior ?? 0)
   const marketDemandV = clamp01(p.demand)
+  const W = config().scoring   // وزن‌ها از تنظیماتِ سوپرادمین (پیش‌فرض = WEIGHTS)
   const final =
-    WEIGHTS.budget * budgetMatchV +
-    WEIGHTS.location * locationMatchV +
-    WEIGHTS.behavior * behaviorMatchV +
-    WEIGHTS.intent * intentStrengthV +
-    WEIGHTS.historical * historicalV +
-    WEIGHTS.demand * marketDemandV
+    W.budget * budgetMatchV +
+    W.location * locationMatchV +
+    W.behavior * behaviorMatchV +
+    W.intent * intentStrengthV +
+    W.historical * historicalV +
+    W.demand * marketDemandV
   return {
     budgetMatch: r3(budgetMatchV), locationMatch: r3(locationMatchV), behaviorMatch: r3(behaviorMatchV),
     intentStrength: r3(intentStrengthV), historicalInteraction: r3(historicalV), marketDemand: r3(marketDemandV),

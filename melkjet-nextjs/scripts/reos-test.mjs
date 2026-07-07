@@ -24,6 +24,7 @@ import { listingSuggestions, listingHealth } from '../app/lib/reos/copilot.ts'
 import { codeFor } from '../app/lib/reos/growth.ts'
 import { banditUpdate, epsilonGreedy, normReward, EVENT_REWARD } from '../app/lib/reos/rl.ts'
 import { planAutonomous } from '../app/lib/reos/autonomous.ts'
+import { fitLeadLogistic, DEFAULT_LEAD, scoreLead } from '../app/lib/reos/lead-model.ts'
 
 let pass = 0, fail = 0
 const approx = (a, b, e = 1e-6) => Math.abs(a - b) <= e
@@ -333,6 +334,26 @@ console.log('\n── REOS v5: Autonomous Agent (plan) ──')
   ok('plan includes revive + fix actions', plan.some(a => a.type === 'revive_stale') && plan.some(a => a.type === 'fix_listing'))
   ok('plan sorted by priority desc', plan.every((a, i, arr) => i === 0 || arr[i - 1].priority >= a.priority))
   ok('each action has a reason', plan.every(a => !!a.reason))
+}
+
+console.log('\n── REOS: Lead Conversion — REAL trained model (gradient descent) ──')
+{
+  let sd = 7
+  const rnd = () => { sd = (sd * 1103515245 + 12345) & 0x7fffffff; return sd / 0x7fffffff }
+  const data = []
+  for (let i = 0; i < 300; i++) {
+    const hasBudget = rnd() < 0.5 ? 1 : 0, hasPhone = rnd() < 0.7 ? 1 : 0, activity = rnd(), recency = rnd(), hasEmail = rnd() < 0.3 ? 1 : 0
+    const p = 1 / (1 + Math.exp(-(-1.0 + 2.5 * hasBudget + 1.2 * activity)))  // truth: budget+activity drive conversion
+    data.push({ hasPhone, hasEmail, hasBudget, activity, recency, y: rnd() < p ? 1 : 0 })
+  }
+  const w = fitLeadLogistic(data, { epochs: 400, lr: 0.4 })
+  ok('lead model trained on data (not default)', w.usedDefault === false && w.n === 300)
+  ok('learned hasBudget weight strongly positive', w.hasBudget > 1.0)
+  ok('learned recovers structure (budget > email weight)', w.hasBudget > w.hasEmail)
+  ok('train AUC good (>0.7)', w.auc > 0.7)
+  const dEval = fitLeadLogistic(data.slice(0, 8))   // tiny → default
+  ok('tiny dataset keeps safe default', dEval.usedDefault === true)
+  ok('scoreLead separates budget vs none', scoreLead(w, { hasPhone: 1, hasEmail: 0, hasBudget: 1, activity: 0.8, recency: 0.8 }) > scoreLead(w, { hasPhone: 1, hasEmail: 0, hasBudget: 0, activity: 0.1, recency: 0.1 }))
 }
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} REOS unit tests: ${pass} passed, ${fail} failed\n`)

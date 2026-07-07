@@ -3,6 +3,7 @@
 import { type UserEntity, type PropertyEntity } from './types'
 import { userVector, propertyVector, cosine, tokenize, clamp01 } from './features'
 import { budgetMatch, locationMatch, intentStrength } from './scoring'
+import { config } from './reos-config'
 
 export const HYBRID_WEIGHTS = { ml: 0.30, vector: 0.25, rule: 0.20, behavioral: 0.15, boost: 0.10 } as const
 
@@ -43,12 +44,13 @@ export function hybridScore(u: UserEntity, p: PropertyEntity, opts: { boost?: nu
   const ml = mlConversion(bm, vector, pv.demand, uv.engagement)
   const behavioral = clamp01(0.6 * uv.engagement + 0.4 * vector)
   const boost = clamp01(opts.boost ?? 0)
+  const HW = config().hybrid   // وزن‌ها از تنظیماتِ سوپرادمین (پیش‌فرض = HYBRID_WEIGHTS)
   const final = clamp01(
-    HYBRID_WEIGHTS.ml * ml +
-    HYBRID_WEIGHTS.vector * vector +
-    HYBRID_WEIGHTS.rule * rule.score +
-    HYBRID_WEIGHTS.behavioral * behavioral +
-    HYBRID_WEIGHTS.boost * boost,
+    HW.ml * ml +
+    HW.vector * vector +
+    HW.rule * rule.score +
+    HW.behavioral * behavioral +
+    HW.boost * boost,
   )
   const reasons: string[] = []
   if (ml >= 0.6) reasons.push('احتمالِ تبدیلِ بالا')

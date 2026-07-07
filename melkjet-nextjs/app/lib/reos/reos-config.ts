@@ -9,8 +9,11 @@ export interface ReosConfig {
   rl: { lr: number; epsilon: number; rewards: { click: number; save: number; contact: number; visit: number; contract: number } }
   promotion: { boost: number; featured: number; vip: number; trustGate: boolean }
   trust: { weights: { verified: number; profile: number; response: number; deals: number; rating: number; tenure: number } }
-  training: { autoHours: number; enabled: boolean }
+  training: { autoHours: number; enabled: boolean; useLearnedLead: boolean }
   feed: { rankWeights: { userMatch: number; quality: number; engagement: number; freshness: number; demand: number; promotion: number } }
+  scoring: { budget: number; location: number; behavior: number; intent: number; historical: number; demand: number }
+  hybrid: { ml: number; vector: number; rule: number; behavioral: number; boost: number }
+  twin: { saleWindowDays: number; overpricePct: number; underpricePct: number }
 }
 
 export const DEFAULT_CONFIG: ReosConfig = {
@@ -18,8 +21,11 @@ export const DEFAULT_CONFIG: ReosConfig = {
   rl: { lr: 0.05, epsilon: 0.1, rewards: { click: 1, save: 5, contact: 20, visit: 40, contract: 100 } },
   promotion: { boost: 0.5, featured: 0.75, vip: 1, trustGate: true },
   trust: { weights: { verified: 0.28, profile: 0.16, response: 0.16, deals: 0.16, rating: 0.16, tenure: 0.08 } },
-  training: { autoHours: 6, enabled: true },
+  training: { autoHours: 6, enabled: true, useLearnedLead: true },
   feed: { rankWeights: { userMatch: 0.35, quality: 0.20, engagement: 0.15, freshness: 0.10, demand: 0.10, promotion: 0.10 } },
+  scoring: { budget: 0.35, location: 0.25, behavior: 0.15, intent: 0.10, historical: 0.10, demand: 0.05 },
+  hybrid: { ml: 0.30, vector: 0.25, rule: 0.20, behavioral: 0.15, boost: 0.10 },
+  twin: { saleWindowDays: 45, overpricePct: 12, underpricePct: 8 },
 }
 
 const FILE = join(process.cwd(), '.reos-config-settings.json')

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { getFeatures } from '@/app/lib/reos/store'
 import { trainEngageModel, DEFAULT_ENGAGE, buildTrainingSet, type EngageWeights } from '@/app/lib/reos/train'
+import { trainLeadModel, primeLeadModel } from '@/app/lib/reos/lead-model'
 
 async function guard() {
   const s = await getSession()
@@ -22,11 +23,8 @@ export async function GET() {
 export async function POST() {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی فقط برای مدیر' }, { status: 403 })
   const w = await trainEngageModel()
-  return NextResponse.json({
-    ok: true,
-    weights: w,
-    message: w.usedDefault
-      ? `دادهٔ کافی برای آموزش نیست (نمونه: ${w.n}) — وزنِ پیش‌فرضِ امن حفظ شد. با تعاملِ بیشترِ کاربران دوباره آموزش دهید.`
-      : `مدل با ${w.n} نمونه آموزش دید — AUC=${w.auc}، LogLoss=${w.logloss}.`,
-  })
+  const lead = await trainLeadModel().catch(() => null); await primeLeadModel().catch(() => {})
+  const engMsg = w.usedDefault ? `مدلِ فید: دادهٔ کافی نیست (${w.n}) — پیش‌فرض حفظ شد` : `مدلِ فید با ${w.n} نمونه (AUC=${w.auc})`
+  const leadMsg = !lead ? '' : lead.usedDefault ? ` · مدلِ لید: دادهٔ کافی نیست (${lead.n})` : ` · مدلِ لید با ${lead.n} نمونه (AUC=${lead.auc})`
+  return NextResponse.json({ ok: true, weights: w, lead, message: engMsg + leadMsg + ' آموزش دیدند.' })
 }

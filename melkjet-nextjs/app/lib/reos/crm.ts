@@ -82,6 +82,8 @@ export async function listLeads(ownerId: string, opts: { stage?: Stage } = {}): 
   return opts.stage ? leads.filter(l => l.stage === opts.stage) : leads
 }
 export async function getLead(id: string): Promise<Lead | null> { const r = await byId(id); return r && r.kind === 'lead' ? rowToLead(r) : null }
+// همهٔ لیدها (همهٔ مالکان) — برای آموزشِ مدلِ تبدیلِ لید.
+export async function allLeads(): Promise<Lead[]> { return (await query('lead')).map(rowToLead) }
 
 export async function moveStage(leadId: string, toStage: Stage): Promise<Lead | null> {
   const r = await byId(leadId); if (!r || r.kind !== 'lead') return null

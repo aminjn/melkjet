@@ -30,6 +30,7 @@ import { registerModel, listVersions, promote, getChampion } from '../app/lib/re
 import { getPolicy, applyOnlineReward } from '../app/lib/reos/rl.ts'
 import { runAutonomous } from '../app/lib/reos/autonomous.ts'
 import { getConfig, setConfig, resetConfig, config as cfgCache, primeConfig } from '../app/lib/reos/reos-config.ts'
+import { trainLeadModel } from '../app/lib/reos/lead-model.ts'
 import { assignVariant, createExperiment, recordExposure, recordConversion, results } from '../app/lib/reos/experiments.ts'
 import { credit, debit, getBalance, listTransactions, createInvoice, payInvoice } from '../app/lib/reos/billing.ts'
 import { recordTouch, recordSpend, recordConversion as attrConvert, channelReport } from '../app/lib/reos/attribution.ts'
@@ -542,6 +543,18 @@ async function main() {
     ok('LIVE engine (gateway.estimateCost) uses new rate', estimateCost('gpt-4o-mini', 1000) === 999 && before === 300)
     await resetConfig()
     ok('reset restores defaults on live engine', estimateCost('gpt-4o-mini', 1000) === 300)
+  }
+
+  console.log('\n── REOS: Lead model trained end-to-end from real CRM data ──')
+  {
+    const owner = 'leadTrainU_' + Math.floor(Date.now() / 1000)
+    // won leads have budget, lost leads don't → the model should learn hasBudget
+    for (let i = 0; i < 16; i++) { const l = await createLead({ ownerId: owner, name: 'w' + i, phone: '0912', value: 5_000_000_000 }); await moveStage(l.id, 'won') }
+    for (let i = 0; i < 16; i++) { const l = await createLead({ ownerId: owner, name: 'l' + i, phone: '0912', value: 0 }); await moveStage(l.id, 'lost') }
+    const w = await trainLeadModel({ epochs: 400, lr: 0.4 })
+    ok('lead model trained from CRM won/lost (not default)', w.usedDefault === false && w.n >= 32)
+    ok('learned hasBudget weight positive (won had budget)', w.hasBudget > 0)
+    ok('lead model AUC computed', typeof w.auc === 'number' && w.auc > 0)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)
