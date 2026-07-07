@@ -16,6 +16,9 @@ import { recordEvent as recEv } from '../app/lib/reos/store.ts'
 import { createCampaign, recordClick, recordImpression, getCampaign, activeBoosts, analytics } from '../app/lib/reos/promotion-engine.ts'
 import { computeMarketFeatures, getMarketFeature, topMarkets } from '../app/lib/reos/market-features.ts'
 import { createLead, moveStage, addActivity, timeline, createTask, listTasks, funnel, createAutomation, runIdleAutomations, getLead, listLeads } from '../app/lib/reos/crm.ts'
+import { runLLM, selectModel, cacheKey, estimateCost, usageStats, cacheClear } from '../app/lib/reos/gateway.ts'
+import { createWorkflow, evalCondition, matchWorkflow, leadContext, runWorkflows } from '../app/lib/reos/workflow-builder.ts'
+import { computeMarketIntel, getMarketIntel, topMarketIntel } from '../app/lib/reos/market-intel.ts'
 
 if (!process.env.DATABASE_URL) { console.error('DATABASE_URL not set'); process.exit(2) }
 let pass = 0, fail = 0
@@ -277,6 +280,79 @@ async function main() {
     const future = Date.now() + 10 * 864e5
     const acted = await runIdleAutomations(owner, future)
     ok('idle automation acts on stale leads', acted >= 1 && (await listTasks(owner, { open: true })).some(t => t.title === 'پیگیریِ معطل'))
+  }
+
+  console.log('\n── REOS v3: AI Gateway (router + cache + cost + fallback) ──')
+  {
+    await pool.query('TRUNCATE reos_ai_usage').catch(() => {})
+    cacheClear()
+    ok('selectModel returns a model', typeof selectModel('agent').model === 'string' && selectModel('agent').model.length > 0)
+    ok('estimateCost by model rate', estimateCost('gpt-4o-mini', 1000) === 300 && estimateCost('gpt-4o', 1000) === 3000)
+    ok('cacheKey deterministic', cacheKey('m', [{ role: 'user', content: 'x' }], 0) === cacheKey('m', [{ role: 'user', content: 'x' }], 0))
+
+    // cache: identical prompt calls the model once
+    let calls = 0
+    const counter = async () => { calls++; return { text: 'r' + calls, tokens: 4 } }
+    const r1 = await runLLM('agent', [{ role: 'user', content: 'same' }], {}, counter)
+    const r2 = await runLLM('agent', [{ role: 'user', content: 'same' }], {}, counter)
+    ok('gateway calls model on first request', r1.cached === false && r1.text === 'r1')
+    ok('gateway serves 2nd identical request from cache (no 2nd call)', r2.cached === true && calls === 1 && r2.text === 'r1')
+
+    // fallback: primary throws → fallback model used, still ok
+    let n = 0
+    const failFirst = async () => { n++; if (n === 1) throw new Error('primary down'); return { text: 'fallback-ok', tokens: 6 } }
+    const rf = await runLLM('agent', [{ role: 'user', content: 'unique-fb' }], { cache: false }, failFirst)
+    ok('gateway falls back on primary error', rf.ok === true && rf.fallback === true && rf.text === 'fallback-ok')
+
+    // total failure → ok:false, empty text (never throws)
+    const rdead = await runLLM('agent', [{ role: 'user', content: 'dead' }], { cache: false }, async () => { throw new Error('all down') })
+    ok('gateway never throws (total failure → ok:false)', rdead.ok === false && rdead.text === '')
+
+    // cost/usage tracking persisted
+    const st = await usageStats()
+    ok('usageStats records calls + tokens + cost', st.calls >= 3 && st.tokens > 0 && st.cost > 0)
+    ok('usageStats computes cache hit rate', st.cacheHitRate > 0)
+    ok('usageStats breaks down by model', Object.keys(st.byModel).length >= 1)
+  }
+
+  console.log('\n── REOS v3: Workflow Builder (IF/THEN, HubSpot-style) ──')
+  {
+    await pool.query('TRUNCATE reos_workflows, reos_crm').catch(() => {})
+    const owner = 'wfU'
+    ok('evalCondition gte', evalCondition({ field: 'idleDays', op: 'gte', value: 3 }, { idleDays: 5 }) === true && evalCondition({ field: 'idleDays', op: 'gte', value: 3 }, { idleDays: 1 }) === false)
+    ok('evalCondition eq/contains', evalCondition({ field: 'stage', op: 'eq', value: 'new' }, { stage: 'new' }) && evalCondition({ field: 'tags', op: 'contains', value: 'vip' }, { tags: 'a,vip,b' }))
+    // workflow: IF stage=new AND idleDays>=3 THEN create_task + move_stage
+    const wf = await createWorkflow({ ownerId: owner, name: 'پیگیریِ لیدِ خوابیده', trigger: 'lead_idle',
+      conditions: [{ field: 'stage', op: 'eq', value: 'new' }, { field: 'idleDays', op: 'gte', value: 3 }],
+      actions: [{ type: 'create_task', params: { title: 'تماسِ پیگیری' } }, { type: 'send_sms', params: { text: 'سلام' } }, { type: 'move_stage', params: { toStage: 'contacted' } }] })
+    ok('workflow created active', wf.active && wf.conditions.length === 2 && wf.actions.length === 3)
+    const lead = await createLead({ ownerId: owner, name: 'لید', stage: 'new' })
+    // matchWorkflow with a fresh lead (idleDays 0) → no match
+    ok('matchWorkflow false when idleDays<3', matchWorkflow(wf, leadContext(lead, Date.now())) === false)
+    // run with now far in future → idleDays large → match → actions fire
+    const future = Date.now() + 10 * 864e5
+    const res = await runWorkflows(owner, 'lead_idle', future)
+    ok('runWorkflows matched the stale new lead', res.matched >= 1)
+    ok('workflow actions executed (task + sms + stage)', res.actions.length === 3 && res.actions.every(a => a.ok))
+    ok('workflow created a real CRM task', (await listTasks(owner, { open: true })).some(t => t.title === 'تماسِ پیگیری'))
+    ok('workflow moved lead stage to contacted', (await getLead(lead.id)).stage === 'contacted')
+  }
+
+  console.log('\n── REOS v3: Market Intelligence (demand/supply/liquidity/health) ──')
+  {
+    await pool.query(`DELETE FROM reos_feature_store WHERE entity_type='market_intel'`).catch(() => {})
+    // seed listings in one area + engagement on some of them
+    for (let i = 0; i < 8; i++) {
+      await pool.query(`INSERT INTO listings(id,scraped_at,type,status,data) VALUES($1,$2,'listing','ok',$3) ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data, status='ok', scraped_at=EXCLUDED.scraped_at`,
+        ['mi' + i, Date.now(), JSON.stringify({ id: 'mi' + i, type: 'listing', status: 'ok', scrapedAt: Date.now(), title: 'x', price: '5000000000', location: 'زعفرانیه', meta: { 'شهر': 'تهران', 'محله': 'زعفرانیه', 'متراژ': '120' } })])
+      if (i < 5) await bumpFeatures('property', 'mi' + i, { engagement_score: 20 })   // نصف پرتقاضا
+    }
+    const n = await computeMarketIntel(500)
+    ok('computeMarketIntel produced ≥1 area', n >= 1)
+    const mi = await getMarketIntel('تهران|زعفرانیه')
+    ok('market intel stored (listings + indices)', !!mi && mi.listings >= 8 && mi.demandIndex > 0 && mi.healthScore > 0)
+    ok('trend computed (fresh listings → up)', !!mi && mi.trend === 'up')
+    ok('topMarketIntel ranks by health', (await topMarketIntel(10)).some(a => a.area === 'تهران|زعفرانیه'))
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

@@ -44,7 +44,8 @@ function summarize(goal: string, trace: ToolCall[]): string {
 export function makeLlmPlanner(model: string, provider?: string): Planner {
   return async (goal, trace, ctx) => {
     try {
-      const { chatCompleteSafe } = await import('../../gapgpt')
+      // از AI Gateway عبور می‌کنیم (router + cache + cost + fallback) — نه فراخوانِ مستقیم.
+      const { runLLM } = await import('../gateway')
       const obs = trace.map((t, i) => `مشاهدهٔ ${i + 1}: ابزار ${t.tool} → ${JSON.stringify(t.result).slice(0, 600)}`).join('\n')
       const sys = `تو دستیارِ املاکِ MelkJet هستی. با ابزارهای زیر به هدفِ کاربر می‌رسی.
 ابزارها:
@@ -53,7 +54,8 @@ ${toolCatalog()}
 {"action":"tool","tool":"<نام>","args":{...}}  یا  {"action":"answer","answer":"<پاسخِ نهاییِ فارسی>"}
 اگر با مشاهده‌ها می‌توانی جواب بدهی، action=answer بده. فقط JSON، بدونِ توضیحِ اضافه.`
       const user = `هدفِ کاربر: ${goal}\n${obs ? 'مشاهده‌های تاکنون:\n' + obs : 'هنوز ابزاری اجرا نشده.'}`
-      const raw = await chatCompleteSafe(model, [{ role: 'system', content: sys }, { role: 'user', content: user }], { temperature: 0.2, max_tokens: 500 }, provider)
+      const res = await runLLM('agent', [{ role: 'system', content: sys }, { role: 'user', content: user }], { temperature: 0.2, max_tokens: 500, cache: false })
+      const raw = res.text || ''
       const json = raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1)
       const plan = JSON.parse(json) as Plan
       if (plan.action === 'tool' && !TOOL_MAP[plan.tool]) return { action: 'answer', answer: 'ابزارِ مناسبی پیدا نشد.' }

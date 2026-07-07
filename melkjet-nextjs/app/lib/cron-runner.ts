@@ -49,6 +49,8 @@ async function tick(): Promise<{ due: number; synced: number }> {
       try { const g = await syncGraphFromEvents(5000); console.log(`[reos] knowledge graph: +${g.nodes} nodes, +${g.edges} edges`) } catch { /* گرافِ دانشِ REOS */ }
       try { const { computeMarketFeatures } = await import('./reos/market-features'); const areas = await computeMarketFeatures(); console.log(`[reos] market features: ${areas} areas`) } catch { /* ویژگی‌های بازارِ REOS */ }
       try { const { runIdleAutomations } = await import('./reos/crm'); const acted = await runIdleAutomations(); if (acted) console.log(`[reos] CRM idle automations: ${acted} actions`) } catch { /* اتوماسیونِ CRM OS */ }
+      try { const { runAllIdleWorkflows } = await import('./reos/workflow-builder'); const w = await runAllIdleWorkflows(); if (w) console.log(`[reos] workflows: ${w} actions`) } catch { /* گردش‌کارِ REOS */ }
+      try { const { computeMarketIntel } = await import('./reos/market-intel'); const mi = await computeMarketIntel(); console.log(`[reos] market intel: ${mi} areas`) } catch { /* هوشِ بازارِ REOS */ }
     }
     due = listDueSources(Date.now())
     for (const { phone, source } of due) {
