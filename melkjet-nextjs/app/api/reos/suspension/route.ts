@@ -8,11 +8,18 @@ function admin(s: { role?: string; phone?: string } | null) { return !!s && (s.r
 export async function GET() {
   const s = await getSession()
   if (!admin(s)) return NextResponse.json({ error: 'دسترسی فقط برای مدیر' }, { status: 403 })
-  const rows = listAccounts()
-    .filter(a => a.flagged || a.suspended)
-    .map(a => ({ phone: a.phone, name: a.name || a.fullName || '', role: a.role || '', flagged: !!a.flagged, flagReason: a.flagReason || '', suspended: !!a.suspended, suspendReason: a.suspendReason || '', at: a.suspendedAt || a.flaggedAt || 0 }))
+  const all = listAccounts().filter(a => a.flagged || a.suspended)
+  const rows = all
+    .map(a => ({
+      phone: a.phone, name: a.name || a.fullName || '', role: a.role || '',
+      flagged: !!a.flagged, flagReason: a.flagReason || '', suspended: !!a.suspended, suspendReason: a.suspendReason || '',
+      // نوع: fraud/admin (تعلیقِ باعلت — ورود مسدود) · profile (پروفایلِ ناقص — نرم) · flag (فقط پرچمِ بازبینی)
+      kind: a.suspended ? (a.suspendReason ? 'fraud' : 'profile') : 'flag',
+      at: a.suspendedAt || a.flaggedAt || 0,
+    }))
     .sort((a, b) => b.at - a.at)
-  return NextResponse.json({ ok: true, rows }, { headers: { 'Cache-Control': 'no-store, private' } })
+  const counts = { flag: rows.filter(r => r.kind === 'flag').length, fraud: rows.filter(r => r.kind === 'fraud').length, profile: rows.filter(r => r.kind === 'profile').length }
+  return NextResponse.json({ ok: true, rows: rows.slice(0, 300), counts }, { headers: { 'Cache-Control': 'no-store, private' } })
 }
 
 // POST — {action:'suspend'|'unsuspend'|'clearFlag', phone, reason?}

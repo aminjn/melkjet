@@ -9,12 +9,14 @@ import ImageUpload from '@/app/components/ImageUpload'
 import ArticleEditor from '@/app/components/ArticleEditor'
 import AdminSupportView from './AdminSupportView'
 import CatalogAdminView from './CatalogAdminView'
+import ReosAdminPanel from '@/app/components/ReosAdminPanel'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 type View =
   | 'overview' | 'scraper' | 'persiansaze' | 'listings' | 'products' | 'catalog' | 'geo' | 'moderation' | 'content' | 'studio' | 'articles' | 'categories' | 'crm' | 'api'
   | 'reports' | 'plans' | 'promos' | 'discounts' | 'ads' | 'users' | 'profiles' | 'roles' | 'connections'
   | 'tracker' | 'sms' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags' | 'support' | 'payment' | 'aicost' | 'smscost' | 'sitemap' | 'agencyintel'
+  | 'reos' | 'suspension'
 
 interface NavItem { id: View; icon: string; label: string; badge?: string; badgeColor?: string; url?: string; accent?: boolean }
 interface NavSection { title: string; items: NavItem[] }
@@ -25,7 +27,7 @@ const sections: NavSection[] = [
     title: 'اصلی',
     items: [
       { id: 'overview', icon: '▦', label: 'نمای کلی' },
-      { id: 'reos' as View, icon: '✦', label: 'REOS — مغزِ هوشمند', url: '/reos-admin', accent: true },
+      { id: 'reos', icon: '✦', label: 'REOS — مغزِ هوشمند', accent: true },
       { id: 'reports',  icon: '◔', label: 'گزارش‌ها و Big Data' },
     ],
   },
@@ -56,6 +58,7 @@ const sections: NavSection[] = [
       { id: 'agencyintel', icon: '🏢', label: 'هوشِ آژانس' },
       { id: 'crm',         icon: '◈',  label: 'CRM' },
       { id: 'roles',       icon: '🛡', label: 'نقش‌ها و دسترسی' },
+      { id: 'suspension',  icon: '⛔', label: 'تعلیق حساب‌ها' },
       { id: 'support',     icon: '🛟', label: 'پشتیبانی' },
     ],
   },
@@ -128,6 +131,8 @@ const viewTitles: Record<View, string> = {
   queue:      'صف پردازش',
   audit:      'لاگ ممیزی',
   flags:      'فیچر فلگ‌ها',
+  reos:       'REOS — مغزِ هوشمندِ سیستم',
+  suspension: 'تعلیق حساب‌ها (قوانین + بازبینی)',
 }
 
 /* ─── Shared sub-components ──────────────────────────────────── */
@@ -5830,6 +5835,101 @@ function SettingsView() {
   )
 }
 
+function SuspensionView() {
+  // قوانینِ تعلیق (متصل به ضدتقلبِ REOS) + صفِ بازبینی — با فیلتر تا صدها موردِ پروفایلِ ناقص صفحه را غرق نکند.
+  type Row = { phone: string; name: string; role: string; flagged: boolean; flagReason: string; suspended: boolean; suspendReason: string; kind: 'flag' | 'fraud' | 'profile'; at: number }
+  const [rows, setRows] = useState<Row[]>([])
+  const [counts, setCounts] = useState<{ flag: number; fraud: number; profile: number }>({ flag: 0, fraud: 0, profile: 0 })
+  const [filter, setFilter] = useState<'flag' | 'fraud' | 'profile'>('flag')
+  const [q, setQ] = useState('')
+  const [susPhone, setSusPhone] = useState('')
+  const [rules, setRules] = useState<{ enabled?: boolean; fraudPct?: number; autoSuspend?: boolean }>({})
+  const [busy, setBusy] = useState('')
+  const [msg, setMsg] = useState('')
+
+  const load = () => fetch('/api/reos/suspension', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d?.ok) { setRows(d.rows || []); setCounts(d.counts || { flag: 0, fraud: 0, profile: 0 }) } }).catch(() => {})
+  const loadRules = () => fetch('/api/reos/config', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d?.config?.suspension) setRules(d.config.suspension) }).catch(() => {})
+  useEffect(() => { load(); loadRules() }, [])
+
+  const saveRules = async () => {
+    setBusy('rules')
+    const d = await fetch('/api/reos/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ patch: { suspension: rules } }) }).then(r => r.json()).catch(() => null)
+    setBusy(''); setMsg(d?.ok ? 'قوانین ذخیره شد ✓ (روی ضدتقلبِ زنده اعمال شد)' : 'خطا'); setTimeout(() => setMsg(''), 3500)
+  }
+  const act = async (action: string, phone: string) => {
+    setBusy(phone)
+    await fetch('/api/reos/suspension', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, phone }) }).catch(() => {})
+    setBusy(''); load()
+  }
+  const manualSuspend = async () => {
+    if (!susPhone.trim()) return
+    setBusy('manual')
+    await fetch('/api/reos/suspension', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'suspend', phone: susPhone.trim(), reason: 'تعلیق دستی توسط سوپرادمین' }) }).catch(() => {})
+    setSusPhone(''); setBusy(''); load()
+  }
+
+  const shown = rows.filter(r => r.kind === filter).filter(r => !q.trim() || r.phone.includes(q.trim()) || r.name.includes(q.trim())).slice(0, 100)
+  const chip = (k: 'flag' | 'fraud' | 'profile', label: string, n: number, color: string) => (
+    <button key={k} onClick={() => setFilter(k)} style={{ padding: '8px 14px', borderRadius: 10, border: filter === k ? `1px solid ${color}` : '1px solid var(--line2)', background: filter === k ? `${color}18` : 'var(--surface)', color: filter === k ? color : 'var(--muted)', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>{label} ({n.toLocaleString('fa-IR')})</button>
+  )
+
+  return (
+    <div style={{ animation: 'fade .35s ease', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {msg && <div style={{ background: 'var(--goldDim)', border: '1px solid var(--gold)', borderRadius: 9, padding: '8px 12px', fontSize: 12.5, color: 'var(--gold)' }}>{msg}</div>}
+
+      {/* قوانین */}
+      <Card style={{ padding: 18 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>قوانینِ تعلیقِ خودکار (ضدتقلبِ REOS)</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>اگر امتیازِ تقلبِ یک حساب از آستانه بگذرد → پرچمِ بازبینی؛ با «تعلیقِ خودکار» حساب معلق و ورودش مسدود می‌شود.</div>
+        <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+            <Toggle on={rules.enabled !== false} onChange={v => setRules(r => ({ ...r, enabled: v }))} /> فعال
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+            آستانهٔ تقلب
+            <input type="number" min={1} max={100} value={rules.fraudPct ?? 70} onChange={e => setRules(r => ({ ...r, fraudPct: Number(e.target.value) || 70 }))} style={{ width: 64, padding: '7px 8px', borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 13, textAlign: 'center', fontFamily: 'inherit' }} /> ٪
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+            <Toggle on={!!rules.autoSuspend} onChange={v => setRules(r => ({ ...r, autoSuspend: v }))} /> تعلیقِ خودکار (به‌جای فقط پرچم)
+          </label>
+          <button onClick={saveRules} disabled={busy === 'rules'} style={{ padding: '9px 18px', borderRadius: 9, border: 'none', background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>{busy === 'rules' ? '…' : '💾 ذخیرهٔ قوانین'}</button>
+        </div>
+      </Card>
+
+      {/* صفِ بازبینی */}
+      <Card style={{ padding: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+          {chip('flag', '⚑ پرچمِ بازبینی', counts.flag, '#e7a14a')}
+          {chip('fraud', '⛔ تعلیقِ تخلف', counts.fraud, '#e7674a')}
+          {chip('profile', '📋 پروفایلِ ناقص', counts.profile, '#5b9bd5')}
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="جستجوی نام/شماره…" style={{ marginInlineStart: 'auto', padding: '8px 12px', borderRadius: 9, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 12.5, fontFamily: 'inherit', width: 180 }} />
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid var(--line)' }}>
+          <input value={susPhone} onChange={e => setSusPhone(e.target.value)} placeholder="تعلیقِ دستی: شمارهٔ حساب" style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 12, direction: 'ltr', fontFamily: 'inherit' }} />
+          <button onClick={manualSuspend} disabled={busy === 'manual'} style={{ padding: '8px 14px', borderRadius: 9, border: '1px solid #e7674a', background: 'rgba(231,103,74,0.12)', color: '#e7674a', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>{busy === 'manual' ? '…' : 'تعلیق کن'}</button>
+          <span style={{ fontSize: 11, color: 'var(--faint)' }}>تعلیقِ تخلف/دستی ورودِ کاربر را مسدود می‌کند؛ «پروفایلِ ناقص» فقط پنل را محدود می‌کند.</span>
+        </div>
+        {shown.length === 0 ? <div style={{ fontSize: 13, color: 'var(--muted)', padding: '14px 0' }}>موردی در این دسته نیست ✓</div> :
+          shown.map(r => (
+            <div key={r.phone} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--line)', fontSize: 12.5, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 180 }}>
+                <div style={{ fontWeight: 700 }}>{r.name || 'بدون نام'} <span style={{ color: 'var(--faint)', fontWeight: 400, direction: 'ltr', display: 'inline-block' }}>{r.phone}</span>{r.role && <span style={{ color: 'var(--faint)', fontWeight: 400 }}> · {r.role}</span>}</div>
+                {(r.suspendReason || r.flagReason) && <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 2 }}>{r.suspendReason || r.flagReason}</div>}
+              </div>
+              {r.suspended
+                ? <button onClick={() => act('unsuspend', r.phone)} disabled={busy === r.phone} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--muted)', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>{busy === r.phone ? '…' : 'رفعِ تعلیق'}</button>
+                : <>
+                    <button onClick={() => act('suspend', r.phone)} disabled={busy === r.phone} style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: '#e7674a', color: '#fff', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>تعلیق</button>
+                    <button onClick={() => act('clearFlag', r.phone)} disabled={busy === r.phone} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--muted)', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>پاکِ پرچم</button>
+                  </>}
+            </div>
+          ))}
+        {rows.filter(r => r.kind === filter).length > 100 && <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 10 }}>۱۰۰ موردِ اول نمایش داده شد — با جستجو محدود کنید.</div>}
+      </Card>
+    </div>
+  )
+}
+
 function FlagsView() {
   // فلگ‌های واقعیِ پلتفرم از /api/reos/flags — روشن/خاموش و عرضهٔ تدریجی واقعاً روی لایه‌ها اثر می‌گذارد.
   const [flags, setFlags] = useState<{ key: string; label: string; enabled: boolean; rolloutPct: number; cities: string[] }[]>([])
@@ -5883,6 +5983,11 @@ function SimpleView({ title }: { title: string }) {
 export default function SuperAdminPage() {
   const [active, setActive] = useState<View>('overview')
   const [navOpen, setNavOpen] = useState(false)   // کشوی منوی موبایل
+  // پشتیبانی از /admin?view=… (مثلاً ریدایرکتِ /reos-admin) — بدونِ شکستنِ لینک‌های قدیمی.
+  useEffect(() => {
+    const v = new URLSearchParams(window.location.search).get('view') as View | null
+    if (v && sections.some(s => s.items.some(i => i.id === v))) setActive(v)
+  }, [])
   // آکاردئونِ منو: فقط گروهِ فعال (+ «اصلی») باز است تا سایدبار شلوغ نباشد.
   const sectionOf = (v: View) => sections.find(s => s.items.some(i => i.id === v))?.title || 'اصلی'
   const [openSecs, setOpenSecs] = useState<Set<string>>(() => new Set(['اصلی', sectionOf('overview')]))
@@ -5942,6 +6047,8 @@ export default function SuperAdminPage() {
       case 'reports':    return <ReportsView />
       case 'sitemap':    return <SitemapView />
       case 'agencyintel': return <AgencyIntelView />
+      case 'reos':       return <ReosAdminPanel />
+      case 'suspension': return <SuspensionView />
       default:           return <SimpleView title={viewTitles[active]} />
     }
   }
