@@ -23,6 +23,8 @@ import { valuate } from '../app/lib/reos/avm.ts'
 import { setVerification, setSignals, getTrust } from '../app/lib/reos/trust.ts'
 import { getOrCreateReferral, recordInvite, recordConversion as refConvert, referralStats } from '../app/lib/reos/growth.ts'
 import { getBalance as walletBalance } from '../app/lib/reos/billing.ts'
+import { syncMarketGraph, topActiveInArea, areaListingCount } from '../app/lib/reos/market-graph.ts'
+import { neighborhoodProfile } from '../app/lib/reos/neighborhood.ts'
 import { assignVariant, createExperiment, recordExposure, recordConversion, results } from '../app/lib/reos/experiments.ts'
 import { credit, debit, getBalance, listTransactions, createInvoice, payInvoice } from '../app/lib/reos/billing.ts'
 import { recordTouch, recordSpend, recordConversion as attrConvert, channelReport } from '../app/lib/reos/attribution.ts'
@@ -454,6 +456,23 @@ async function main() {
     ok('invites + conversion tracked', st.invited === 2 && st.converted === 1)
     ok('conversion rate computed', st.conversionRate === 50)
     ok('conversion credited the wallet (+150k)', (await walletBalance(owner)) === bal0 + 150000)
+  }
+
+  console.log('\n── REOS v4: Market Knowledge Graph + Neighborhood ──')
+  {
+    await pool.query('TRUNCATE reos_graph_nodes, reos_graph_edges').catch(() => {})
+    // seed listings by owner O1 (3) and O2 (1) in one area
+    const seedOwned = (id, owner) => pool.query(`INSERT INTO listings(id,scraped_at,type,status,data) VALUES($1,$2,'listing','ok',$3) ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data, status='ok'`,
+      [id, Date.now(), JSON.stringify({ id, type: 'listing', status: 'ok', scrapedAt: Date.now(), title: id, ownerId: owner, owner: owner, price: '6000000000', location: 'ولنجک', meta: { 'شهر': 'تهران', 'محله': 'ولنجک', 'متراژ': '120' } })])
+    await seedOwned('mgA', 'O1'); await seedOwned('mgB', 'O1'); await seedOwned('mgC', 'O1'); await seedOwned('mgD', 'O2')
+    const r = await syncMarketGraph(500)
+    ok('market graph built area + edges', r.areas >= 1 && r.edges >= 4)
+    ok('areaListingCount counts located_in edges', (await areaListingCount('تهران|ولنجک')) >= 4)
+    const top = await topActiveInArea('تهران|ولنجک', 5)
+    ok('topActiveInArea ranks O1 first (3 listings)', top[0].id === 'O1' && top[0].listings === 3)
+    const prof = await neighborhoodProfile('تهران|ولنجک')
+    ok('neighborhoodProfile returns data + topAgents + price level', !!prof && prof.listings >= 4 && prof.topAgents.length >= 1 && !!prof.priceLevel)
+    ok('neighborhood external POI marked pending (null)', prof.external.walkability === null)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

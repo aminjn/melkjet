@@ -6,8 +6,8 @@ import { join } from 'path'
 import { pgEnabled, pgTx } from '../db'
 import { recentEvents } from './store'
 
-export type NodeType = 'user' | 'property' | 'agent' | 'agency' | 'builder' | 'lead' | 'deal' | 'lawyer' | 'bank' | 'notary' | 'contractor' | 'appraiser' | 'materials' | 'architect'
-export type EdgeRel = 'viewed' | 'saved' | 'contacted' | 'owns' | 'listed' | 'assigned' | 'represents' | 'built' | 'financed' | 'notarized' | 'appraised' | 'referred' | 'about'
+export type NodeType = 'user' | 'property' | 'agent' | 'agency' | 'builder' | 'lead' | 'deal' | 'lawyer' | 'bank' | 'notary' | 'contractor' | 'appraiser' | 'materials' | 'architect' | 'area'
+export type EdgeRel = 'viewed' | 'saved' | 'contacted' | 'owns' | 'listed' | 'assigned' | 'represents' | 'built' | 'financed' | 'notarized' | 'appraised' | 'referred' | 'about' | 'located_in' | 'active_in'
 export interface GNode { id: string; type: NodeType; label?: string; meta?: Record<string, unknown>; at: number }
 export interface GEdge { from: string; to: string; rel: EdgeRel; weight: number; at: number }
 
