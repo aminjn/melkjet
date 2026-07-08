@@ -298,6 +298,17 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             })}
           </div>
           <div style={card}>
+            <div style={sub}>⛏ موتورِ ساخت (جلد ۶۴–۷۲)</div>
+            {row('ساخت فعال (۱/۰)', cin('build', 'enabled'))}
+            {row('تراکمِ ساخت (بنا ÷ زمین)', cin('build', 'buildFactor'), 'مثلاً ۲٫۲ = ۲۲۰٪')}
+            {row('متراژِ هر واحد (متر)', cin('build', 'unitArea'))}
+            {row('هزینهٔ ساختِ هر متر (تومان)', cin('build', 'costPerM', 140), 'روزشمار از نقد کم می‌شود')}
+            {row('مدتِ ساختِ پایه (روز)', cin('build', 'buildDays'), 'بتنی ×۱ · فلزی ×۰٫۷۵ · ترکیبی ×۰٫۹')}
+            {row('شروعِ پیش‌فروش از (٪ پیشرفت)', cin('build', 'presaleMinPct'))}
+            {row('سقفِ پیش‌فروش (٪ واحدها)', cin('build', 'presaleMaxPct'))}
+            {row('تخفیفِ پیش‌فروش (٪)', cin('build', 'presaleDiscountPct'), 'قیمت از میانهٔ متریِ واقعیِ محله')}
+          </div>
+          <div style={card}>
             <div style={sub}>🏦 بانک و اعتبار (جلد ۱۶)</div>
             {row('بانک فعال (۱/۰)', cin('bank', 'enabled'))}
             {row('سقفِ وام (٪ ارزشِ خالص)', cin('bank', 'maxLoanPctOfNetWorth'), 'باندِ اعتباری روی این سقف ضریب می‌گذارد')}

@@ -1089,6 +1089,57 @@ async function main() {
     }
     const gr = await progressPermits(uc12)
     ok('پروانهٔ سررسیدشده صادر شد + نشانِ First Permit', gr.ok && gr.granted === 1 && gr.empire.badges.includes('First Permit') && gr.empire.assets.find(x => x.id === land12).permit.status === 'granted')
+
+    // ── فاز ۱۳: موتورِ ساخت (جلد ۶۴–۷۲) — کلنگ → روزشمار/توقفِ بی‌پولی → رویداد → پیش‌فروش → تکمیل → فروش ──
+    console.log('\n── Empire · Construction Engine (جلد ۶۴–۷۲) ──')
+    const { startBuild, progressBuild, resolveBuildEvent, presellUnits, sellUnits, buildPlanOf } = await import('../app/lib/empire-store.ts')
+    const bcfg = { buildFactor: 2, unitArea: 100, costPerM: 10_000_000, buildDays: 10 }
+    const plan13 = buildPlanOf('concrete', 'standard', 500, bcfg)   // بنا ۱۰۰۰م، ۱۰ واحد، هزینه ۱۰B، ۱۰ روز → روزی ۱B
+    ok('کلنگ فقط با پروانه', (await startBuild(uc12, 'nope', plan13, { structure: 'concrete', quality: 'standard' })).ok === false)
+    const sb = await startBuild(uc12, land12, plan13, { structure: 'concrete', quality: 'standard' })
+    ok('کلنگ‌زنی: پروژه ساخته شد', sb.ok && sb.empire.assets.find(x => x.id === land12).construction.totalUnits === 10)
+    ok('کلنگِ دوباره رد می‌شود', (await startBuild(uc12, land12, plan13, { structure: 'concrete', quality: 'standard' })).ok === false)
+    const back13 = async (days, patch = {}) => {
+      const eB = await getEmpire(uc12)
+      const c = eB.assets.find(x => x.id === land12).construction
+      c.lastPayAt = Date.now() - days * 864e5
+      Object.assign(c, patch)
+      await pool.query(`UPDATE reos_empire SET data=$2 WHERE user_id=$1`, [uc12, JSON.stringify(eB)])
+    }
+    await back13(2)
+    const cap13 = (await getEmpire(uc12)).capital
+    const p1 = await progressBuild(uc12)
+    ok('۲ روز ساخت پرداخت شد (روزی ۱B)', p1.ok && p1.paid === 2_000_000_000 && p1.empire.capital === cap13 - 2_000_000_000 && p1.empire.assets.find(x => x.id === land12).construction.paidDays === 2)
+    // ایستگاهِ ۳۰٪ (روزِ ۳): رویداد رخ می‌دهد و کار می‌ایستد
+    await back13(3)
+    const p2 = await progressBuild(uc12)
+    const cev = p2.empire.assets.find(x => x.id === land12).construction
+    ok('در ایستگاهِ ۳۰٪ رویدادِ قطعی رخ داد و کار ایستاد', p2.ok && cev.paidDays === 3 && !!cev.pendingEvent)
+    ok('با رویدادِ معلق پیشرفت نمی‌کند', (await progressBuild(uc12)).ok === false)
+    const rv = await resolveBuildEvent(uc12, land12, 'wait')
+    ok('صبر: روزهای ساخت زیاد شد و رویداد پاک شد', rv.ok && rv.empire.assets.find(x => x.id === land12).construction.days > 10 && !rv.empire.assets.find(x => x.id === land12).construction.pendingEvent)
+    // پیش‌فروش: زیرِ حداقلِ پیشرفت رد، بعد از پیشرفت مجاز با سقف
+    ok('پیش‌فروش زیرِ حداقلِ پیشرفت رد می‌شود', (await presellUnits(uc12, land12, 2, 1_000_000_000, 40, 50)).ok === false)
+    await back13(4)
+    await progressBuild(uc12)
+    const preCap = (await getEmpire(uc12)).capital
+    const pre2 = await presellUnits(uc12, land12, 2, 1_000_000_000, 30, 50)
+    ok('پیش‌فروش: نقدینگیِ فوری + تعهد', pre2.ok && pre2.revenue === 2_000_000_000 && pre2.empire.capital === preCap + 2_000_000_000 && pre2.empire.assets.find(x => x.id === land12).construction.presold === 2)
+    ok('سقفِ پیش‌فروش (۵۰٪=۵ واحد) رعایت می‌شود', (await presellUnits(uc12, land12, 4, 1_000_000_000, 30, 50)).ok === false)
+    ok('فروشِ واحد قبل از تکمیل رد می‌شود', (await sellUnits(uc12, land12, 1, 1_000_000_000, 1)).ok === false)
+    // نزدیکِ پایان می‌بریم و تکمیل را می‌سنجیم
+    await back13(1, { paidDays: 12, days: 13, eventsFired: 2 })
+    const done13 = await progressBuild(uc12)
+    const cD = done13.empire.assets.find(x => x.id === land12).construction
+    ok('تکمیل: done + First Tower + تحویلِ پیش‌فروش‌ها + projectsDelivered', done13.ok && cD.done === true && done13.empire.badges.includes('First Tower') && (done13.empire.stats.projectsDelivered || 0) >= 1)
+    // فروشِ واحدها تا تحویلِ کامل — بقای پول
+    const eD = await getEmpire(uc12)
+    const capD = eD.capital, taxD = eD.taxPaid
+    const s1 = await sellUnits(uc12, land12, 7, 1_000_000_000, 1)
+    ok('فروشِ ۷ واحد: نقد + مالیات→خزانه', s1.ok && s1.proceeds === 7_000_000_000 - 70_000_000 && s1.empire.capital === capD + s1.proceeds && s1.empire.taxPaid === taxD + 70_000_000)
+    const s2 = await sellUnits(uc12, land12, 1, 1_000_000_000, 1)
+    ok('آخرین واحد: تحویلِ کامل + حذف از پرتفوی + نشان', s2.ok && s2.completed === true && s2.empire.badges.includes('Project Delivered') && !s2.empire.assets.some(x => x.id === land12))
+    ok('فروش بیش از موجودی رد می‌شود', (await sellUnits(uc12, land12, 1, 1_000_000_000, 1)).ok === false)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

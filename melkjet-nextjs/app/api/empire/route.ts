@@ -15,6 +15,8 @@ import {
   buyFundUnits, sellFundUnits, accrueFundDividends, joinCrowd, exitCrowd,
   companyReputationOf, hireCandidatesOf, teamSkillOf, ownerPersonaOf, permitTermsOf, permitDueAt,
   foundCompany, hireEngineer, applyWages, requestPermit, settleObjection, progressPermits,
+  buildPlanOf, buildStageOf, BUILD_STRUCTURES, BUILD_QUALITIES,
+  startBuild, progressBuild, resolveBuildEvent, presellUnits, sellUnits,
   type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
 import {
@@ -120,6 +122,19 @@ function monthlyRentOf(it: Item): number {
 }
 const median = (xs: number[]) => { if (!xs.length) return 0; const s = [...xs].sort((a, b) => a - b); return s[Math.floor(s.length / 2)] }
 
+// میانهٔ قیمتِ هر مترِ فروش در یک محله (از آگهی‌های واقعی) — مبنای قیمت‌گذاریِ پیش‌فروش/فروشِ واحد (جلد ۷۱/۷۲).
+async function hoodPerM(hood: string): Promise<{ perM: number; samples: number }> {
+  const items = await candidateListings(600).catch(() => [] as Item[])
+  const rates: number[] = []
+  for (const x of items) {
+    if (!isSale(x) || (hood && hoodOf(x.location) !== hood)) continue
+    const a = parseFaNum((x.meta || {})['متراژ']) || 0
+    const p = priceOf(x)
+    if (a > 0 && p >= MIN_SALE) rates.push(p / a)
+  }
+  return { perM: Math.round(median(rates)), samples: rates.length }
+}
+
 // واریزِ درآمدِ اجاره/کسب‌وکار: برآورد از میانهٔ اجارهٔ واقعیِ هم‌محله‌ها (Real Estate Simulation — فصل ۵).
 // بدونِ دادهٔ اجاره در محله/شهر → هیچ واریزی (صادقانه). حداقل یک روزِ کامل باید گذشته باشد.
 async function accrueRentFor(userId: string, e: EmpireData, now = Date.now()): Promise<EmpireData> {
@@ -213,7 +228,11 @@ async function stateOf(userId: string, e00: EmpireData) {
   const wg = e0a.company?.engineers.length ? await applyWages(userId).catch(() => null) : null
   const e0b = wg?.ok && wg.empire ? wg.empire : e0a
   const pp = e0b.assets.some(a => a.permit?.status === 'pending') ? await progressPermits(userId).catch(() => null) : null
-  const e0 = pp?.ok && pp.empire ? pp.empire : e0b
+  const e0c = pp?.ok && pp.empire ? pp.empire : e0b
+  // موتورِ ساخت (جلد ۶۴–۷۲): هزینهٔ روزشمارِ کارگاه + رویدادها + تکمیل
+  const pb = config().empire.build.enabled && e0c.assets.some(a => a.construction && !a.construction.done && !a.construction.pendingEvent)
+    ? await progressBuild(userId).catch(() => null) : null
+  const e0 = pb?.ok && pb.empire ? pb.empire : e0c
   const e1 = await accrueRentFor(userId, e0).catch(() => e0)  // درآمدِ اجاره/کسب‌وکار از بازارِ واقعی
   // بازار سرمایه (جلد ۴۰): قیمتِ روزِ واحدها + سودِ دوره‌ای از اجارهٔ واقعی
   const mc = await marketCtx(e1).catch(() => null)
@@ -233,6 +252,7 @@ async function stateOf(userId: string, e00: EmpireData) {
     // زمینِ بدونِ برنامه → سه گزینهٔ سند (§6.7) با برآوردِ شفاف
     plans: a.kind === 'land' && !a.landPlan ? landProjection(prices[a.listingId] || a.buyPrice) : undefined,
     permitDue: a.permit?.status === 'pending' ? permitDueAt(a.permit) : undefined,   // شمارشِ معکوسِ پروانه (جلد ۶۳)
+    build: a.construction ? { stage: buildStageOf(a.construction), progressPct: Math.min(100, Math.round(a.construction.paidDays / Math.max(1, a.construction.days) * 100)), dailyCost: Math.max(1, Math.round(a.construction.costTotal / Math.max(1, a.construction.days))) } : undefined,
     url: listingHref(a.listingId, a.title, a.hood),   // پلِ بازی→واقعیت (جلد ۲۸)
   }))
   const today = dayNumberOf(Date.now())
@@ -776,6 +796,73 @@ export async function POST(req: NextRequest) {
       const r = await settleObjection(userId, String(b.assetId || ''))
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+    }
+
+    // ══════ موتورِ ساخت (جلد ۶۴–۷۲): کلنگ → هزینهٔ روزشمار → رویداد → پیش‌فروش → تکمیل → فروشِ واحد ══════
+    // پیش‌نمایشِ نقشهٔ ساخت: همهٔ ترکیب‌های سازه/کیفیت با روز و هزینهٔ شفاف.
+    case 'buildPlan': {
+      const cfg = config().empire.build
+      if (!cfg.enabled) return NextResponse.json({ error: 'ساخت فعلاً فعال نیست' }, { status: 403 })
+      const e = await getEmpire(userId)
+      const a = e?.assets.find(x => x.id === String(b.assetId || ''))
+      if (!e || !a) return NextResponse.json({ error: 'دارایی یافت نشد' }, { status: 404 })
+      if (a.permit?.status !== 'granted') return NextResponse.json({ error: 'اول پروانهٔ ساخت را بگیر' }, { status: 400 })
+      const it = await getItemById(a.listingId).catch(() => null)
+      const landArea = it ? (parseFaNum((it.meta || {})['متراژ']) || 0) : 0
+      if (!(landArea > 0)) return NextResponse.json({ error: 'متراژِ این زمین در آگهیِ واقعی ثبت نشده — ساختِ آن قابل‌برآورد نیست' }, { status: 400 })
+      const options: any[] = []
+      for (const [sk, s] of Object.entries(BUILD_STRUCTURES)) for (const [qk, q] of Object.entries(BUILD_QUALITIES)) {
+        const p = buildPlanOf(sk, qk, landArea, cfg)
+        if (p) options.push({ structure: sk, structureLabel: s.label, quality: qk, qualityLabel: q.label, days: p.days, costTotal: p.costTotal, qualityFactor: p.qualityFactor })
+      }
+      const base = buildPlanOf('concrete', 'standard', landArea, cfg)!
+      return NextResponse.json({ ok: true, landArea, builtArea: base.builtArea, unitArea: base.unitArea, totalUnits: base.totalUnits, options })
+    }
+    case 'startBuild': {
+      const cfg = config().empire.build
+      if (!cfg.enabled) return NextResponse.json({ error: 'ساخت فعلاً فعال نیست' }, { status: 403 })
+      const e = await getEmpire(userId)
+      const a = e?.assets.find(x => x.id === String(b.assetId || ''))
+      if (!e || !a) return NextResponse.json({ error: 'دارایی یافت نشد' }, { status: 404 })
+      const it = await getItemById(a.listingId).catch(() => null)
+      const landArea = it ? (parseFaNum((it.meta || {})['متراژ']) || 0) : 0
+      const plan = buildPlanOf(String(b.structure || ''), String(b.quality || ''), landArea, cfg)
+      if (!plan) return NextResponse.json({ error: 'سازه/کیفیتِ نامعتبر یا متراژِ نامشخص' }, { status: 400 })
+      const r = await startBuild(userId, a.id, plan, { structure: String(b.structure), quality: String(b.quality) })
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+    }
+    case 'buildEvent': {
+      const choice = String(b.choice || '')
+      if (!['pay', 'wait'].includes(choice)) return NextResponse.json({ error: 'انتخابِ نامعتبر' }, { status: 400 })
+      const r = await resolveBuildEvent(userId, String(b.assetId || ''), choice as 'pay' | 'wait')
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+    }
+    // پیش‌فروش (جلد ۷۱): قیمت = میانهٔ متریِ واقعیِ محله × متراژِ واحد × کیفیت − تخفیفِ شفاف.
+    case 'presell': {
+      const cfg = config().empire.build
+      const e = await getEmpire(userId)
+      const a = e?.assets.find(x => x.id === String(b.assetId || ''))
+      if (!e || !a?.construction) return NextResponse.json({ error: 'ساختی در جریان نیست' }, { status: 404 })
+      const { perM, samples } = await hoodPerM(a.hood)
+      if (!samples || !(perM > 0)) return NextResponse.json({ error: `برای قیمت‌گذاری در «${a.hood || 'این محله'}» نمونهٔ واقعیِ کافی نیست` }, { status: 400 })
+      const unitPrice = Math.round(perM * a.construction.unitArea * a.construction.qualityFactor * (1 - cfg.presaleDiscountPct / 100))
+      const r = await presellUnits(userId, a.id, Math.floor(Number(b.units) || 0), unitPrice, cfg.presaleMinPct, cfg.presaleMaxPct)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, revenue: r.revenue, unitPrice, samples, ...(await stateOf(userId, r.empire!)) })
+    }
+    // فروشِ واحد بعد از تکمیل (جلد ۷۲): قیمتِ کامل از میانهٔ متریِ واقعیِ همان لحظهٔ محله.
+    case 'sellUnit': {
+      const e = await getEmpire(userId)
+      const a = e?.assets.find(x => x.id === String(b.assetId || ''))
+      if (!e || !a?.construction) return NextResponse.json({ error: 'پروژه‌ای یافت نشد' }, { status: 404 })
+      const { perM, samples } = await hoodPerM(a.hood)
+      if (!samples || !(perM > 0)) return NextResponse.json({ error: `برای قیمت‌گذاری در «${a.hood || 'این محله'}» نمونهٔ واقعیِ کافی نیست` }, { status: 400 })
+      const unitPrice = Math.round(perM * a.construction.unitArea * a.construction.qualityFactor)
+      const r = await sellUnits(userId, a.id, Math.floor(Number(b.units) || 0), unitPrice, config().empire.transferTaxPct)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, proceeds: r.proceeds, pnl: r.pnl, completed: r.completed, unitPrice, samples, ...(await stateOf(userId, r.empire!)) })
     }
 
     // روزنامهٔ ملک‌جت (جلد ۵۲) + آرشیوِ تمدن (جلد ۵۱ فصل ۹): خبر فقط از اتفاقِ واقعیِ دنیا.

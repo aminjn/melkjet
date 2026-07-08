@@ -27,6 +27,8 @@ export interface EmpireAsset {
   landPlan?: LandPlan         // سیستمِ زمین (§6.7): فروشِ فوری / ساخت / مشارکت
   // پروانهٔ ساخت (جلد ۶۳): درخواست → بررسی (مهلتِ قطعی از هش) → اعتراضِ احتمالی → صدور. عوارض → خزانه.
   permit?: { requestedAt: number; days: number; fee: number; status: 'pending' | 'granted'; grantedAt?: number; objection?: { text: string; extraDays: number; settleCost: number; settled?: boolean } }
+  // موتورِ ساخت (جلد ۶۴–۷۲): هزینهٔ روزشمار (بی‌پولی = توقف — جلد ۷۱)، رویدادهای قطعی، پیش‌فروش، فروشِ واحدها.
+  construction?: Construction
   business?: string           // لایهٔ کسب‌وکارِ تجاری (§6.9): کافه/فروشگاه/…
   businessProb?: number       // ٪ موفقیت — از دادهٔ واقعی (رقابت + استقبالِ محله)
   income?: number             // درآمدِ جمع‌شدهٔ اجاره/کسب‌وکار (برآورد از بازارِ واقعی)
@@ -42,6 +44,19 @@ export interface CrowdHolding { listingId: string; title: string; hood: string; 
 // شرکتِ ساختمانی (جلد ۶۱): مهندس‌ها شخصیت‌های مسیرِ رشدند (قطعی از هش)؛ حقوقشان جریانِ واقعیِ پول است.
 export interface Engineer { id: string; name: string; persona: string; skill: number; salaryMonthly: number; hiredAt: number; lastPaidAt: number }
 export interface Company { name: string; kind: string; color: string; foundedAt: number; engineers: Engineer[] }
+
+// پروژهٔ ساخت (جلد ۶۴–۷۲): پیشرفت = روزهای «پرداخت‌شده» — پول نباشد، کارگاه می‌ایستد (جلد ۷۱).
+export interface Construction {
+  startedAt: number
+  days: number                 // کلِ روزهای ساخت (رویدادِ «صبر» اضافه‌اش می‌کند)
+  structure: string; quality: string; qualityFactor: number
+  builtArea: number; unitArea: number; totalUnits: number
+  costTotal: number; paid: number; paidDays: number; lastPayAt: number
+  presold: number; sold: number; presaleRevenue: number
+  eventsFired: number
+  pendingEvent?: { text: string; payCost: number; extraDays: number; at: number }
+  done?: boolean; doneAt?: number
+}
 
 export interface EmpireData {
   userId: string
@@ -74,7 +89,7 @@ export interface EmpireData {
   crowd?: CrowdHolding[]      // سهم‌های سرمایه‌گذاریِ جمعی روی آگهی‌های واقعی (جلد ۴۰ فصل ۷)
   company?: Company           // شرکتِ ساختمانی (جلد ۶۱) — «از یک اتاقِ کوچک تا امپراتوری»
   wagesPaid?: number          // حقوقِ پرداختی به مهندس‌ها (مصرفِ شفافِ پول — قانون ۶)
-  stats?: { sellsProfitable: number; negoWins: number }   // شمارنده‌های مأموریت‌های مخفی (جلد ۲۶)
+  stats?: { sellsProfitable: number; negoWins: number; projectsDelivered?: number }   // شمارنده‌های واقعیِ رفتار (جلد ۲۶/۷۲)
   snap?: { day: number; netWorth: number; prev: number }   // اسنپ‌شاتِ روزانه — «سود/زیانِ دیروز» (جلد ۲۶)
   pendingComeback?: number    // هدیهٔ بازگشت (Comeback Engine جلد ۲۶) — روزِ کشفِ غیبت
   stylePicks?: string[]                               // مأموریت M2 «سبکِ خودت را پیدا کن» (انتخابِ تصویری)
@@ -737,6 +752,8 @@ export function companyReputationOf(e: Pick<EmpireData, 'stats' | 'creditHist' |
   if (repaid) { score += Math.min(20, repaid * 10); factors.push('خوش‌حسابی با بانک') }
   const permits = e.assets.filter(a => a.permit?.status === 'granted').length
   if (permits) { score += Math.min(20, permits * 10); factors.push(`${permits.toLocaleString('fa-IR')} پروانهٔ صادرشده`) }
+  const delivered = e.stats?.projectsDelivered || 0
+  if (delivered) { score += Math.min(30, delivered * 15); factors.push(`${delivered.toLocaleString('fa-IR')} پروژهٔ تحویل‌شده`) }
   if (e.assets.length) { score += Math.min(10, e.assets.length * 3); factors.push('پرتفوی فعال') }
   const lateDays = e.creditHist?.lateDays || 0
   if (lateDays) { score -= Math.min(30, lateDays * 3); factors.push('دیرکردِ بانکی (منفی)') }
@@ -874,6 +891,194 @@ export async function settleObjection(userId: string, assetId: string, now = Dat
     ob.settled = true
     e.timeline.push({ at: now, icon: '🤝', title: 'اعتراضِ پروانه با توافق حل شد', detail: `${Math.round(ob.settleCost / 1e6).toLocaleString('fa-IR')}م تومان غرامت` })
   })
+}
+
+// ══════════ موتورِ ساخت (جلد ۶۴–۷۲) — یک Engine، رویدادها = دادهٔ قطعی از هش ══════════
+// نقشهٔ ساخت: سازه/کیفیت با ضرایبِ شفاف (مثلِ buildGainPct) — روزها و هزینه از knobهای ادمین.
+export const BUILD_STRUCTURES: Record<string, { label: string; daysMul: number; costMul: number }> = {
+  concrete: { label: 'بتنی', daysMul: 1, costMul: 1 },
+  steel: { label: 'فلزی', daysMul: 0.75, costMul: 1.15 },
+  hybrid: { label: 'ترکیبی', daysMul: 0.9, costMul: 1.05 },
+}
+export const BUILD_QUALITIES: Record<string, { label: string; costMul: number; qualityFactor: number }> = {
+  economy: { label: 'اقتصادی', costMul: 0.85, qualityFactor: 0.93 },
+  standard: { label: 'استاندارد', costMul: 1, qualityFactor: 1 },
+  luxury: { label: 'لوکس', costMul: 1.25, qualityFactor: 1.08 },
+}
+export function buildPlanOf(structure: string, quality: string, landArea: number, cfg: { buildFactor: number; unitArea: number; costPerM: number; buildDays: number }): { days: number; builtArea: number; unitArea: number; totalUnits: number; costTotal: number; qualityFactor: number } | null {
+  const s = BUILD_STRUCTURES[structure], q = BUILD_QUALITIES[quality]
+  if (!s || !q || !(landArea > 0)) return null
+  const builtArea = Math.round(landArea * cfg.buildFactor)
+  const totalUnits = Math.max(1, Math.floor(builtArea / Math.max(30, cfg.unitArea)))
+  return {
+    days: Math.max(3, Math.round(cfg.buildDays * s.daysMul)),
+    builtArea, unitArea: Math.max(30, cfg.unitArea), totalUnits,
+    costTotal: Math.round(builtArea * cfg.costPerM * s.costMul * q.costMul),
+    qualityFactor: q.qualityFactor,
+  }
+}
+// رویدادِ کارگاه (Project Event Engine نسخهٔ ۱): قطعی از هش — «پرداخت» یا «صبر»؛ هیچ‌کدام بی‌هزینه نیست.
+const BUILD_EVENTS = [
+  'بارانِ شدید — کارگاه گِل شد', 'جرثقیل خراب شد', 'در حفاری سنگِ بزرگ پیدا شد',
+  'بتن دیر رسید و کیفیتش مرزی است', 'بازرسِ نظام‌مهندسی ایراد گرفت', 'کمبودِ موقتِ میلگرد در بازار',
+]
+export function buildEventOf(userId: string, assetId: string, idx: number, costTotal: number): { text: string; payCost: number; extraDays: number } {
+  const h = createHash('sha1').update(`${userId}|bev|${assetId}|${idx}`).digest()
+  return {
+    text: BUILD_EVENTS[h.readUInt32BE(0) % BUILD_EVENTS.length],
+    payCost: Math.max(1, Math.round(costTotal * (1 + (h.readUInt32BE(4) % 2)) / 100)),   // ۱ تا ۲٪ هزینهٔ کل
+    extraDays: 1 + (h.readUInt32BE(8) % 3),
+  }
+}
+export const BUILD_STAGES = ['تجهیزِ کارگاه', 'خاکبرداری', 'فونداسیون', 'اسکلت', 'دیوار و تأسیسات', 'سقف و نما', 'نازک‌کاری']
+export const buildStageOf = (c: Pick<Construction, 'paidDays' | 'days'>) =>
+  BUILD_STAGES[Math.min(BUILD_STAGES.length - 1, Math.floor((c.paidDays / Math.max(1, c.days)) * BUILD_STAGES.length))]
+
+// کلنگ‌زنی (جلد ۶۴): فقط زمینِ دارای پروانهٔ صادرشده.
+export async function startBuild(userId: string, assetId: string, plan: NonNullable<ReturnType<typeof buildPlanOf>>, meta: { structure: string; quality: string }, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    if (!a) return 'دارایی یافت نشد'
+    if (a.permit?.status !== 'granted') return 'اول پروانهٔ ساخت را بگیر'
+    if (a.construction) return 'ساختِ این پروژه شروع شده'
+    a.construction = {
+      startedAt: now, days: plan.days,
+      structure: meta.structure, quality: meta.quality, qualityFactor: plan.qualityFactor,
+      builtArea: plan.builtArea, unitArea: plan.unitArea, totalUnits: plan.totalUnits,
+      costTotal: plan.costTotal, paid: 0, paidDays: 0, lastPayAt: now,
+      presold: 0, sold: 0, presaleRevenue: 0, eventsFired: 0,
+    }
+    e.timeline.push({ at: now, icon: '⛏', title: 'کلنگ‌زنی — ساخت آغاز شد', detail: `${a.title.slice(0, 45)} · ${plan.builtArea.toLocaleString('fa-IR')} مترِ بنا · ${plan.totalUnits.toLocaleString('fa-IR')} واحد` })
+    e.journal.push({ at: now, text: 'اولین کلنگِ پروژه زده شد. از امروز کارگاه هر روز هزینه دارد — مدیریتِ پول، خودِ ساخت است.' })
+  })
+}
+
+// پیشرفتِ روزشمار (جلد ۷۱ «Cash Flow Crisis»): هر روزِ ساخت باید «پرداخت» شود؛ بی‌پولی = توقفِ کارگاه.
+// در ایستگاه‌های ۳۰٪ و ۷۰٪ رویدادِ قطعی رخ می‌دهد و تا تصمیمِ بازیکن، پیشرفت می‌ایستد.
+export async function progressBuild(userId: string, now = Date.now()): Promise<{ ok: boolean; paid?: number; completedTitles?: string[]; empire?: EmpireData }> {
+  let paidTotal = 0
+  const completedTitles: string[] = []
+  const r = await mutateEmpire(userId, e => {
+    let touched = false
+    for (const a of e.assets) {
+      const c = a.construction
+      if (!c || c.done || c.pendingEvent) continue
+      const days = Math.floor((now - c.lastPayAt) / 864e5)
+      if (days < 1) continue
+      touched = true
+      c.lastPayAt = now   // روزهای بی‌پول از دست می‌روند (توقفِ واقعی، نه بدهیِ پنهان)
+      const dailyCost = Math.max(1, Math.round(c.costTotal / c.days))
+      const checkpoints = [Math.ceil(c.days * 0.3), Math.ceil(c.days * 0.7)]
+      for (let d = 0; d < days && c.paidDays < c.days; d++) {
+        if (e.capital < dailyCost) break                      // بحرانِ نقدینگی — کارگاه می‌ایستد
+        e.capital -= dailyCost
+        c.paid += dailyCost
+        c.paidDays += 1
+        paidTotal += dailyCost
+        const idx = checkpoints.indexOf(c.paidDays)
+        if (idx >= 0 && c.eventsFired <= idx) {
+          c.eventsFired = idx + 1
+          c.pendingEvent = { ...buildEventOf(e.userId, a.id, idx, c.costTotal), at: now }
+          e.timeline.push({ at: now, icon: '⚠️', title: 'اتفاق در کارگاه', detail: c.pendingEvent.text })
+          break                                               // تا تصمیمِ بازیکن، کار می‌ایستد
+        }
+      }
+      if (c.paidDays >= c.days && !c.done) {
+        c.done = true; c.doneAt = now
+        completedTitles.push(a.title)
+        // تحویلِ پیش‌فروش‌ها: سود/زیانشان همین‌جا تحقق می‌یابد (درآمدش قبلاً واردِ نقد شده بود).
+        if (c.presold > 0) {
+          const costShare = Math.round((a.buyPrice + c.paid) / c.totalUnits)
+          e.realized = (e.realized || 0) + (c.presaleRevenue - costShare * c.presold)
+        }
+        e.stats = e.stats || { sellsProfitable: 0, negoWins: 0 }
+        e.stats.projectsDelivered = (e.stats.projectsDelivered || 0) + 1
+        if (!e.badges.includes('First Tower')) e.badges.push('First Tower')
+        e.timeline.push({ at: now, icon: '🏙', title: 'ساختمان تکمیل شد', detail: `${a.title.slice(0, 45)} — ${c.totalUnits.toLocaleString('fa-IR')} واحد آمادهٔ عرضه` })
+        e.journal.push({ at: now, text: 'خطِ آسمانِ شهر عوض شد — ساختمانِ تو حالا واقعی است. وقتِ فروش است.' })
+      }
+    }
+    if (!touched && !paidTotal) return 'ساختِ فعالی نیست'
+  })
+  if (!r.ok) return { ok: false }
+  return { ok: true, paid: paidTotal, completedTitles, empire: r.empire }
+}
+
+// تصمیم دربارهٔ رویدادِ کارگاه: «پرداخت» (هزینه به بهای تمام‌شدهٔ پروژه) یا «صبر» (روزهای بیشتر).
+export async function resolveBuildEvent(userId: string, assetId: string, choice: 'pay' | 'wait', now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    const ev = a?.construction?.pendingEvent
+    if (!a || !a.construction || !ev) return 'اتفاقِ منتظری نیست'
+    if (choice === 'pay') {
+      if (e.capital < ev.payCost) return 'سرمایهٔ کافی برای حلِ فوری نیست — گزینهٔ صبر را انتخاب کن'
+      e.capital -= ev.payCost
+      a.construction.paid += ev.payCost
+      e.timeline.push({ at: now, icon: '🛠', title: 'مشکلِ کارگاه فوری حل شد', detail: `${Math.round(ev.payCost / 1e6).toLocaleString('fa-IR')}م تومان هزینه` })
+    } else {
+      a.construction.days += ev.extraDays
+      e.timeline.push({ at: now, icon: '⏳', title: 'کارگاه با صبر از مشکل عبور کرد', detail: `${ev.extraDays.toLocaleString('fa-IR')} روز به ساخت اضافه شد` })
+    }
+    a.construction.pendingEvent = undefined
+  })
+}
+
+// پیش‌فروش (جلد ۷۱): از ۳۰٪ پیشرفت، تا سقفِ مجاز — نقدینگیِ فوری با قیمتِ واقعیِ محله منهای تخفیفِ شفاف.
+export async function presellUnits(userId: string, assetId: string, units: number, unitPrice: number, minProgressPct: number, maxPct: number, now = Date.now()): Promise<{ ok: boolean; reason?: string; revenue?: number; empire?: EmpireData }> {
+  let revenue = 0
+  const r = await mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    const c = a?.construction
+    if (!a || !c) return 'ساختی در جریان نیست'
+    if (c.done) return 'ساختمان تکمیل شده — از فروشِ واحد استفاده کن'
+    if ((c.paidDays / c.days) * 100 < minProgressPct) return `پیش‌فروش از ${minProgressPct.toLocaleString('fa-IR')}٪ پیشرفت باز می‌شود`
+    const maxPresell = Math.floor(c.totalUnits * maxPct / 100)
+    if (!(units >= 1) || c.presold + units > maxPresell) return `سقفِ پیش‌فروش ${maxPresell.toLocaleString('fa-IR')} واحد است`
+    if (!(unitPrice > 0)) return 'برای قیمت‌گذاری، نمونهٔ واقعیِ هم‌محله در دسترس نیست'
+    revenue = Math.round(units * unitPrice)
+    e.capital += revenue
+    c.presold += units
+    c.presaleRevenue += revenue
+    e.timeline.push({ at: now, icon: '📝', title: `پیش‌فروشِ ${units.toLocaleString('fa-IR')} واحد`, detail: `${Math.round(revenue / 1e6).toLocaleString('fa-IR')}م تومان نقدینگی — تعهدِ تحویل ثبت شد` })
+  })
+  if (!r.ok) return { ok: false, reason: r.reason }
+  return { ok: true, revenue, empire: r.empire }
+}
+
+// فروشِ واحد بعد از تکمیل (جلد ۷۲): قیمت از میانهٔ متریِ واقعیِ محله؛ مالیات → خزانه؛ اتمامِ همهٔ واحدها = تحویلِ پروژه.
+export async function sellUnits(userId: string, assetId: string, units: number, unitPrice: number, taxPct: number, now = Date.now()): Promise<{ ok: boolean; reason?: string; proceeds?: number; pnl?: number; completed?: boolean; empire?: EmpireData }> {
+  let proceeds = 0, pnl = 0, completed = false
+  const r = await mutateEmpire(userId, e => {
+    const i = e.assets.findIndex(x => x.id === assetId)
+    const a = e.assets[i]
+    const c = a?.construction
+    if (!a || !c) return 'پروژه‌ای یافت نشد'
+    if (!c.done) return 'ساختمان هنوز تکمیل نشده'
+    const left = c.totalUnits - c.presold - c.sold
+    if (!(units >= 1) || units > left) return `فقط ${left.toLocaleString('fa-IR')} واحد باقی مانده`
+    if (!(unitPrice > 0)) return 'برای قیمت‌گذاری، نمونهٔ واقعیِ هم‌محله در دسترس نیست'
+    const value = Math.round(units * unitPrice)
+    const tax = Math.round(value * (Math.max(0, taxPct) / 100))
+    proceeds = value - tax
+    const costShare = Math.round((a.buyPrice + c.paid) / c.totalUnits) * units
+    pnl = proceeds - costShare
+    e.capital += proceeds
+    e.taxPaid = (e.taxPaid || 0) + tax
+    e.realized = (e.realized || 0) + pnl
+    if (pnl > 0) { e.stats = e.stats || { sellsProfitable: 0, negoWins: 0 }; e.stats.sellsProfitable += 1; e.xp += config().empire.sellProfitXp }
+    c.sold += units
+    const sign = pnl > 0 ? 'سود' : pnl < 0 ? 'زیان' : 'سربه‌سر'
+    e.timeline.push({ at: now, icon: '🔑', title: `فروشِ ${units.toLocaleString('fa-IR')} واحد`, detail: `${sign} ${Math.abs(Math.round(pnl / 1e6)).toLocaleString('fa-IR')}م تومان` })
+    if (c.presold + c.sold >= c.totalUnits) {
+      completed = true
+      e.assets.splice(i, 1)   // پروژه تحویل شد — زمین/بنا دیگر در پرتفوی نیست، سودش تحقق یافته
+      if (!e.badges.includes('Project Delivered')) e.badges.push('Project Delivered')
+      e.timeline.push({ at: now, icon: '🎉', title: 'تحویلِ کاملِ پروژه', detail: a.title.slice(0, 60) })
+      e.journal.push({ at: now, text: 'آخرین کلید تحویل شد. اولین چرخهٔ کاملِ «زمین → ساخت → فروش» بسته شد — حالا یک سازندهٔ واقعی هستی.' })
+    }
+  })
+  if (!r.ok) return { ok: false, reason: r.reason }
+  return { ok: true, proceeds, pnl, completed, empire: r.empire }
 }
 
 // صدورِ پروانه‌های سررسیدشده — روی هر بازدید سنجیده می‌شود؛ اولین پروانه نشانِ «First Permit» می‌دهد.
@@ -1043,7 +1248,17 @@ export async function briefStatsForDay(day: number): Promise<{ built: number; op
 // market (جلد ۴۰): fundUnit = قیمتِ روزِ هر واحدِ صندوق؛ crowdUnit = ارزشِ روزِ هر واحدِ مشارکت (اختیاری — بدونِ آن مبنای هزینه).
 export function netWorthOf(e: EmpireData, livePrices: Record<string, number>, market?: { fundUnit?: Record<string, number>; crowdUnit?: Record<string, number> }): { netWorth: number; assetsValue: number; growth: number; marketValue: number } {
   let assetsValue = 0, cost = 0
-  for (const a of e.assets) { assetsValue += livePrices[a.listingId] || a.buyPrice; cost += a.buyPrice }
+  for (const a of e.assets) {
+    cost += a.buyPrice
+    // پروژهٔ در ساخت/تکمیل‌شده (جلد ۶۴+): ارزش = بهای تمام‌شده × کسرِ واحدهای نفروخته (محافظه‌کارانه و واقعی).
+    if (a.construction) {
+      const c = a.construction
+      const frac = Math.max(0, (c.totalUnits - c.presold - c.sold) / Math.max(1, c.totalUnits))
+      assetsValue += Math.round((a.buyPrice + c.paid) * frac)
+      continue
+    }
+    assetsValue += livePrices[a.listingId] || a.buyPrice
+  }
   let marketValue = 0
   for (const h of e.funds || []) { const u = market?.fundUnit?.[h.fundId]; marketValue += u && u > 0 ? Math.round(h.units * u) : h.cost }
   for (const h of e.crowd || []) { const u = market?.crowdUnit?.[h.listingId]; marketValue += u && u > 0 ? Math.round(h.units * u) : h.cost }

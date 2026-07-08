@@ -44,6 +44,10 @@ export interface ReosConfig {
       enabled: boolean; regFee: number; engineerSalaryBase: number; maxEngineers: number
       permit: { baseDays: number; extraDaysMax: number; feePct: number; objectionPct: number; engineerSpeedupDays: number }
     }
+    build: {
+      enabled: boolean; buildFactor: number; unitArea: number; costPerM: number; buildDays: number
+      presaleMinPct: number; presaleMaxPct: number; presaleDiscountPct: number
+    }
   }
 }
 
@@ -99,6 +103,12 @@ export const DEFAULT_CONFIG: ReosConfig = {
     company: {
       enabled: true, regFee: 50_000_000, engineerSalaryBase: 30_000_000, maxEngineers: 5,
       permit: { baseDays: 2, extraDaysMax: 4, feePct: 2, objectionPct: 30, engineerSpeedupDays: 1 },
+    },
+    // موتورِ ساخت (جلد ۶۴–۷۲): بنا = مساحتِ زمین × تراکم؛ هزینهٔ هر متر knob شفاف؛ پیشرفت = روزهای پرداخت‌شده
+    // (بی‌پولی = توقف — جلد ۷۱)؛ قیمتِ واحدها همیشه از میانهٔ متریِ واقعیِ محله (پیش‌فروش با تخفیفِ شفاف).
+    build: {
+      enabled: true, buildFactor: 2.2, unitArea: 100, costPerM: 25_000_000, buildDays: 21,
+      presaleMinPct: 30, presaleMaxPct: 50, presaleDiscountPct: 12,
     },
   },
 }

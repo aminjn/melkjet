@@ -112,6 +112,8 @@ export default function EmpirePage() {
   const [burst, setBurst] = useState(0)                          // جشنِ موفقیت (جلد ۵۶)
   const [co, setCo] = useState({ name: '', kind: 'مسکونی', color: '#c9a84c' })   // ثبتِ شرکت (جلد ۶۱)
   const [hireL, setHireL] = useState<any>(null)                  // نامزدهای استخدامِ هفته
+  const [bplan, setBplan] = useState<any>(null)                  // پیش‌نمایشِ نقشهٔ ساخت (جلد ۶۴)
+  const [pu, setPu] = useState<Record<string, string>>({})       // تعدادِ واحدِ پیش‌فروش/فروش
   const celebrate = () => { setBurst(Date.now()); setTimeout(() => setBurst(0), 1100) }
   const [fu, setFu] = useState<Record<string, string>>({})       // تعدادِ واحدِ صندوق (ورودی)
   const [cu, setCu] = useState<Record<string, string>>({})       // تعدادِ واحدِ مشارکت (ورودی)
@@ -625,8 +627,14 @@ export default function EmpirePage() {
                 !a.permit
                   ? <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 11.5 }} disabled={busy}
                       onClick={async () => { const d = await api({ action: 'permit', assetId: a.id }); if (d) { setSt(d); alert(`🏛 درخواست ثبت شد — بررسی تا ${fa(d.terms.days)} روز · عوارض ${faB(d.terms.fee)} تومان${d.terms.objection ? `\n⚠️ ${d.terms.objection.text}` : ''}`) } }}>🏛 درخواستِ پروانهٔ ساخت</button>
+                  : a.permit.status === 'granted' && !a.construction
+                  ? <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <span style={{ fontSize: 11, color: '#7c6' }}>📜 پروانه ✓</span>
+                      <button style={{ ...btn, padding: '4px 12px', fontSize: 11.5 }} disabled={busy}
+                        onClick={async () => { const d = await api({ action: 'buildPlan', assetId: a.id }); if (d) setBplan({ assetId: a.id, ...d }) }}>⛏ شروعِ ساخت</button>
+                    </span>
                   : a.permit.status === 'granted'
-                  ? <span style={{ fontSize: 11, color: '#7c6' }}>📜 پروانه صادر شد ✓</span>
+                  ? <span style={{ fontSize: 11, color: '#7c6' }}>📜 پروانه ✓</span>
                   : <span style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11 }}>
                       <span style={{ color: 'var(--gold)' }}>⏳ بررسیِ پروانه — {fa(Math.max(0, Math.ceil(((a.permitDue || 0) - Date.now()) / 864e5)))} روز مانده</span>
                       {a.permit.objection && !a.permit.objection.settled && <span style={{ color: '#e7a14a' }}>⚠️ {a.permit.objection.text}
@@ -648,7 +656,51 @@ export default function EmpirePage() {
               : <span style={{ display: 'flex', gap: 4 }}>{[['renovate', '🛠'], ['rent', '💰'], ['hold', '📈']].map(([k, i]) => <button key={k} title={k} style={{ ...btnGhost, padding: '4px 8px', fontSize: 13 }} onClick={async () => { const d = await api({ action: 'assetAction', assetId: a.id, act: k }); if (d) setSt(d) }}>{i}</button>)}</span>}
             <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 12 }} disabled={busy || e.aiTokens <= 0} onClick={() => doAnalyze(a.listingId)}>تحلیلِ ملک‌جت (۱ ژتون)</button>
             {a.url && <a href={a.url} target="_blank" rel="noreferrer" style={{ ...btnGhost, padding: '4px 10px', fontSize: 12, textDecoration: 'none' }}>🔗 آگهیِ واقعی</a>}
-            <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 12, color: '#e88', borderColor: '#644' }} disabled={busy} onClick={() => doSell(a)}>💸 فروش</button>
+            {!a.construction && <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 12, color: '#e88', borderColor: '#644' }} disabled={busy} onClick={() => doSell(a)}>💸 فروش</button>}
+
+            {/* پیش‌نمایشِ نقشهٔ ساخت (جلد ۶۴): سازه/کیفیت با روز و هزینهٔ شفاف */}
+            {bplan?.assetId === a.id && !a.construction && <div style={{ width: '100%', ...card, background: 'var(--surface)', fontSize: 12 }}>
+              <b>⛏ نقشهٔ ساخت</b> — زمین {fa(bplan.landArea)} متر → <b style={{ color: 'var(--gold)' }}>{fa(bplan.builtArea)} مترِ بنا · {fa(bplan.totalUnits)} واحدِ {fa(bplan.unitArea)} متری</b>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 6, marginTop: 8 }}>
+                {(bplan.options || []).map((o: any) => (
+                  <button key={o.structure + o.quality} style={{ ...btnGhost, textAlign: 'right', padding: '8px 10px', fontSize: 11.5 }} disabled={busy}
+                    onClick={async () => { const d = await api({ action: 'startBuild', assetId: a.id, structure: o.structure, quality: o.quality }); if (d) { setSt(d); setBplan(null); celebrate() } }}>
+                    <b>{o.structureLabel} · {o.qualityLabel}</b>
+                    <div style={{ color: 'var(--muted)', fontSize: 10.5 }}>{fa(o.days)} روز · هزینهٔ کل {faB(o.costTotal)} تومان</div>
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 6 }}>هزینه روزشمار از سرمایهٔ نقد کم می‌شود — پول تمام شود، کارگاه می‌ایستد (خودِ ساخت، مدیریتِ پول است).</div>
+            </div>}
+
+            {/* کارگاهِ زنده (جلد ۶۴–۷۲): پیشرفت، مرحله، رویداد، پیش‌فروش، فروشِ واحد */}
+            {a.construction && <div style={{ width: '100%', ...card, background: 'var(--surface)', fontSize: 12 }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <b>{a.construction.done ? '🏙 ساختمان تکمیل شد' : `🏗 ${a.build?.stage || 'کارگاه'}`}</b>
+                <span style={{ color: 'var(--muted)' }}>{fa(a.construction.paidDays)}/{fa(a.construction.days)} روز · هزینهٔ روزانه {faB(a.build?.dailyCost || 0)}</span>
+                <span style={{ flex: 1 }} />
+                <span style={{ color: 'var(--muted)' }}>پرداختی: {faB(a.construction.paid)} از {faB(a.construction.costTotal)}</span>
+              </div>
+              <div style={{ height: 7, background: 'var(--line)', borderRadius: 4, marginTop: 6 }}>
+                <div style={{ width: `${a.build?.progressPct || 0}%`, height: 7, borderRadius: 4, background: a.construction.done ? '#7c6' : 'var(--gold)', transition: 'width .6s ease' }} />
+              </div>
+              {!a.construction.done && e.capital < (a.build?.dailyCost || 0) && <div style={{ color: '#e88', fontSize: 11.5, marginTop: 6 }}>🛑 بحرانِ نقدینگی — سرمایهٔ نقد به هزینهٔ روزانه نمی‌رسد؛ کارگاه ایستاده. پیش‌فروش کن، وام بگیر یا دارایی بفروش.</div>}
+              {a.construction.pendingEvent && <div style={{ ...card, background: 'var(--bg2)', borderColor: '#e7a14a', marginTop: 8, fontSize: 12 }}>
+                ⚠️ <b>{a.construction.pendingEvent.text}</b> — تا تصمیم نگیری کارگاه ایستاده:
+                <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                  <button style={{ ...btn, padding: '5px 12px', fontSize: 11.5 }} disabled={busy} onClick={async () => { const d = await api({ action: 'buildEvent', assetId: a.id, choice: 'pay' }); if (d) setSt(d) }}>🛠 حلِ فوری ({faB(a.construction.pendingEvent.payCost)})</button>
+                  <button style={{ ...btnGhost, padding: '5px 12px', fontSize: 11.5 }} disabled={busy} onClick={async () => { const d = await api({ action: 'buildEvent', assetId: a.id, choice: 'wait' }); if (d) setSt(d) }}>⏳ صبر (+{fa(a.construction.pendingEvent.extraDays)} روز)</button>
+                </div>
+              </div>}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
+                <span style={{ color: 'var(--muted)' }}>واحدها: {fa(a.construction.totalUnits)} کل · {fa(a.construction.presold)} پیش‌فروش · {fa(a.construction.sold)} فروخته</span>
+                <input value={pu[a.id] ? Number(pu[a.id]).toLocaleString('fa-IR') : ''} onChange={ev => setPu({ ...pu, [a.id]: digitsOf(ev.target.value) })} placeholder="تعداد" inputMode="numeric" dir="ltr" style={{ width: 70, padding: 6, borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 12, textAlign: 'center' }} />
+                {!a.construction.done && <button style={{ ...btnGhost, padding: '5px 12px', fontSize: 11.5 }} disabled={busy || !Number(pu[a.id])}
+                  onClick={async () => { const d = await api({ action: 'presell', assetId: a.id, units: Number(pu[a.id]) }); if (d) { setSt(d); setPu({ ...pu, [a.id]: '' }); alert(`📝 پیش‌فروش انجام شد: ${faB(d.revenue)} تومان (قیمتِ واحد ${faB(d.unitPrice)} — از ${fa(d.samples)} نمونهٔ واقعیِ محله)`) } }}>📝 پیش‌فروش</button>}
+                {a.construction.done && <button style={{ ...btn, padding: '5px 12px', fontSize: 11.5 }} disabled={busy || !Number(pu[a.id])}
+                  onClick={async () => { const d = await api({ action: 'sellUnit', assetId: a.id, units: Number(pu[a.id]) }); if (d) { setSt(d); setPu({ ...pu, [a.id]: '' }); if (d.completed) celebrate(); alert(`🔑 فروش انجام شد: ${faB(d.proceeds)} تومان${d.completed ? '\n🎉 پروژه به‌طورِ کامل تحویل شد!' : ''}`) } }}>🔑 فروشِ واحد</button>}
+              </div>
+            </div>}
           </div>
         ))}
       </div>
