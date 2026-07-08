@@ -8,6 +8,11 @@ import Link from 'next/link'
 
 const fa = (n: number) => Math.round(n).toLocaleString('fa-IR')
 const faB = (n: number) => n >= 1e9 ? `${(Math.round(n / 1e8) / 10).toLocaleString('fa-IR')} میلیارد` : n >= 1e6 ? `${fa(n / 1e6)} میلیون` : fa(n)
+// ورودیِ عددی: رقم‌های فارسی/عربی → لاتین، بقیهٔ کاراکترها (نقطه/ویرگول/فاصله) حذف — تا «۲۰.۰۰۰.۰۰۰.۰۰۰» صفر نشود.
+const digitsOf = (s: string) => s
+  .replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+  .replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+  .replace(/\D/g, '').slice(0, 15)
 
 type Opp = { id: string; title: string; hood: string; price: number; priceStr: string; image: string; area: number; rooms: number; ptype: string; kind: string; recommended: boolean; reason: string }
 type St = any
@@ -136,7 +141,7 @@ export default function EmpirePage() {
   async function doGuessNext() { setGuessRes(null); setGuessVal(''); const d = await api({ action: 'guessNext' }); if (d) setGuessL(d.listing) }
   async function doGuess() {
     if (!guessL) return
-    const d = await api({ action: 'guess', listingId: guessL.id, guess: Number(guessVal.replace(/[^\d]/g, '')) })
+    const d = await api({ action: 'guess', listingId: guessL.id, guess: Number(digitsOf(guessVal)) })
     if (d) { setGuessRes(d); load() }
   }
   async function doHunter() { setHunterRes(null); const d = await api({ action: 'hunterStart' }); if (d) setHunterPair(d.pair) }
@@ -489,9 +494,12 @@ export default function EmpirePage() {
               <div style={{ fontSize: 13, fontWeight: 700 }}>{guessL.title.slice(0, 70)}</div>
               <div style={{ fontSize: 12, color: 'var(--muted)' }}>{guessL.location}{guessL.area ? ` · ${fa(guessL.area)} متر` : ''}{guessL.rooms ? ` · ${fa(guessL.rooms)} خواب` : ''}</div>
               {!guessRes ? (
-                <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                  <input value={guessVal} onChange={ev => setGuessVal(ev.target.value)} placeholder="حدسِ تو (تومان)" inputMode="numeric" style={{ flex: 1, minWidth: 160, padding: 10, borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--text)', fontSize: 13 }} />
-                  <button style={{ ...btn, padding: '8px 14px', fontSize: 13 }} disabled={busy || !guessVal} onClick={doGuess}>ثبتِ حدس</button>
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <input value={guessVal ? Number(guessVal).toLocaleString('fa-IR') : ''} onChange={ev => setGuessVal(digitsOf(ev.target.value))} placeholder="حدسِ تو (تومان)" inputMode="numeric" dir="ltr" style={{ flex: 1, minWidth: 160, padding: 10, borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--text)', fontSize: 14, textAlign: 'center', letterSpacing: 1 }} />
+                    <button style={{ ...btn, padding: '8px 14px', fontSize: 13 }} disabled={busy || !guessVal} onClick={doGuess}>ثبتِ حدس</button>
+                  </div>
+                  {Number(guessVal) > 0 && <div style={{ fontSize: 12, color: 'var(--gold)', marginTop: 6 }}>حدسِ تو: <b>{faB(Number(guessVal))} تومان</b></div>}
                 </div>
               ) : (
                 <div style={{ marginTop: 8, fontSize: 13 }}>

@@ -24,6 +24,9 @@ const hoodOf = (loc?: string) => { const p = String(loc || '').split(/[،,]/).ma
 const ptypeOf = (it: Item) => (it.meta || {})['نوع ملک'] || it.category || ''
 const priceOf = (it: Item) => parseFaNum(it.price)
 const isSale = (it: Item) => !/اجاره|رهن|ودیعه/.test(it.price || '') && (it.meta || {})['نوع معامله'] !== 'اجاره'
+// قیمتِ فروشِ معتبر: زیر این کف یعنی قیمتِ آگهی درست پارس نشده («۱۹٫۶ میلیارد» متنی) — کاندیدِ بازی نشود.
+const MIN_SALE = 100_000_000
+const isPricedSale = (it: Item) => isSale(it) && priceOf(it) >= MIN_SALE
 
 // نمای سبکِ یک آگهی برای کلاینت (بدونِ چیزی جز دادهٔ واقعی).
 function lite(it: Item, opts: { hidePrice?: boolean } = {}) {
@@ -186,7 +189,7 @@ export async function POST(req: NextRequest) {
     case 'suggest': {
       const e = await getEmpire(userId)
       if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
-      const items = (await candidateListings(300)).filter(it => isSale(it) && priceOf(it) > 0 && priceOf(it) <= e.capital)
+      const items = (await candidateListings(300)).filter(it => isPricedSale(it) && priceOf(it) <= e.capital)
       const stats = await forIds(items.map(i => i.id)).catch(() => ({} as Record<string, { views: number; contacts: number }>))
       const cityMatch = (it: Item) => e.answers.city && (it.location || '').includes(e.answers.city) ? 1 : 0
       const engagement = (it: Item) => (stats[it.id]?.views || 0) + 3 * (stats[it.id]?.contacts || 0)
@@ -238,7 +241,7 @@ export async function POST(req: NextRequest) {
     case 'guessNext': {
       const e = await getEmpire(userId)
       if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
-      const items = (await candidateListings(120)).filter(it => isSale(it) && priceOf(it) > 0)
+      const items = (await candidateListings(120)).filter(it => isPricedSale(it))
       if (!items.length) return NextResponse.json({ error: 'فعلاً آگهیِ مناسبی برای حدس نیست' }, { status: 404 })
       const pick = items[(e.guess.tries + e.assets.length) % items.length]   // قطعی (بدونِ تصادف) و هر بار متفاوت
       return NextResponse.json({ ok: true, listing: lite(pick, { hidePrice: true }) })
@@ -254,7 +257,7 @@ export async function POST(req: NextRequest) {
 
     // Property Hunter (§6.4): دو آگهیِ واقعیِ هم‌محله → کدام بهتر است؟ «بهتر» = استقبالِ واقعیِ بازار.
     case 'hunterStart': {
-      const items = (await candidateListings(200)).filter(it => isSale(it) && priceOf(it) > 0)
+      const items = (await candidateListings(200)).filter(it => isPricedSale(it))
       const stats = await forIds(items.map(i => i.id)).catch(() => ({} as Record<string, { views: number; contacts: number }>))
       const eng = (it: Item) => (stats[it.id]?.views || 0) + 3 * (stats[it.id]?.contacts || 0)
       // جفتِ هم‌محله با بیشترین تفاوتِ استقبال (تا «بهتر» معنادار باشد)
