@@ -846,6 +846,37 @@ export default function EmpirePage() {
       )}
     </div>}
 
+    {/* گزارشِ مالیِ شرکت (جلد ۷۴ Economy Engine — Financial Reports): همه از شمارنده‌های واقعی */}
+    <details style={card}>
+      <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>📒 گزارشِ مالیِ شرکت</summary>
+      {(() => {
+        const buildPaid = (e.assets || []).reduce((s: number, a: any) => s + (a.construction?.paid || 0), 0)
+        const presale = (e.assets || []).reduce((s: number, a: any) => s + (a.construction?.presaleRevenue || 0), 0)
+        const rentIncome = (e.assets || []).reduce((s: number, a: any) => s + (a.income || 0), 0)
+        const rows: Array<[string, number, string]> = [
+          ['سودِ تحقق‌یافته (فروش‌ها/واحدها/صندوق)', e.realized || 0, (e.realized || 0) >= 0 ? '#7c6' : '#e88'],
+          ['درآمدِ اجاره/کسب‌وکارِ دارایی‌های فعلی', rentIncome, '#7c6'],
+          ['پیش‌فروشِ دریافت‌شده (تعهدِ تحویل)', presale, '#69c'],
+          ['هزینهٔ ساختِ پرداخت‌شده (پروژه‌های فعال)', -buildPaid, '#e7a14a'],
+          ['حقوقِ پرداختیِ تیم', -(e.wagesPaid || 0), '#e7a14a'],
+          ['مالیات و عوارض (→ خزانه)', -(e.taxPaid || 0), '#e7a14a'],
+          ['بدهیِ بانکی (مانده)', -(e.loan?.balance || 0), '#e88'],
+        ]
+        return (
+          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {rows.filter(([, v]) => v !== 0).map(([label, v, color]) => (
+              <div key={label} style={{ display: 'flex', gap: 8, fontSize: 12.5, padding: '5px 0', borderBottom: '1px solid var(--line)' }}>
+                <span style={{ flex: 1, color: 'var(--muted)' }}>{label}</span>
+                <b style={{ color }}>{v < 0 ? '−' : '+'}{faB(Math.abs(v))} تومان</b>
+              </div>
+            ))}
+            {rows.every(([, v]) => v === 0) && <div style={{ fontSize: 12, color: 'var(--muted)' }}>هنوز جریانِ مالی‌ای ثبت نشده — با اولین معامله پر می‌شود.</div>}
+            <div style={{ fontSize: 10.5, color: 'var(--faint)' }}>هیچ عددی تخمینی نیست — همه از تراکنش‌های واقعیِ همین حساب (قانونِ بقای پول).</div>
+          </div>
+        )
+      })()}
+    </details>
+
     {/* روزنامهٔ ملک‌جت (جلد ۵۲): خبر از خودِ دنیای واقعی تولید می‌شود، نه اسکریپت + آرشیوِ رکوردها (جلد ۵۱) */}
     <details style={card} onToggle={(ev: any) => { if (ev.currentTarget.open && !paper) doNews() }}>
       <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>📰 روزنامهٔ ملک‌جت — اخبارِ زندهٔ دنیا</summary>
