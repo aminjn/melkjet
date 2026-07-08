@@ -309,6 +309,24 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             {row('تخفیفِ پیش‌فروش (٪)', cin('build', 'presaleDiscountPct'), 'قیمت از میانهٔ متریِ واقعیِ محله')}
           </div>
           <div style={card}>
+            <div style={sub}>🎯 گیم‌پلی پروژه (GDD فصل ۴)</div>
+            {row('هدفِ «فروشِ سریع»: قیمت (٪ میانه)', cin('build', 'goalFastPricePct'), 'ارزان‌تر → نقدینگیِ سریع‌تر')}
+            {row('هدفِ «فروشِ سریع»: سقفِ پیش‌فروش (+٪)', cin('build', 'goalFastPresaleBonusPp'))}
+            {row('هدفِ «اعتبارِ برند»: قیمت (٪ میانه)', cin('build', 'goalRepPricePct'))}
+            {row('هدفِ «اعتبار»: امتیازِ هر تحویل', cin('build', 'repProjectScore'), 'در اعتبارِ ستاره‌ایِ شرکت')}
+            {row('فروشِ عمده: واحدهای بدونِ تخفیف', cin('build', 'bulkFreeUnits'), 'اشباعِ عرضهٔ خودِ بازیکن')}
+            {row('فروشِ عمده: افتِ هر واحدِ اضافه (٪)', cin('build', 'bulkStepPct'), 'کفِ قیمت ۸۰٪')}
+            {row('تیمِ ماهر: کاهشِ هزینهٔ رویداد (٪)', cin('build', 'eventSkillCutPct'), 'مهارتِ تیم ≥۵۰ — روی کارتِ استخدام هم نوشته می‌شود')}
+            {([['pool', 'استخر و سونا'], ['roof', 'روف‌گاردن'], ['gym', 'باشگاهِ ورزشی'], ['parking', 'پارکینگِ اضافه']] as const).map(([k, lbl]) => {
+              const am = cfg?.build?.amenities?.[k] || {}
+              const set = (field: 'costPct' | 'valuePct', val: string) => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.build = n.build || {}; n.build.amenities = n.build.amenities || {}; n.build.amenities[k] = n.build.amenities[k] || {}; n.build.amenities[k][field] = val === '' ? '' : Number(val); return n })
+              return row(`امکانات: ${lbl}`, <span key={k} style={{ display: 'flex', gap: 6 }}>
+                <input title="هزینه (٪ کلِ پروژه)" value={String(am.costPct ?? '')} onChange={ev => set('costPct', ev.target.value)} style={{ ...inpS, width: 52, textAlign: 'center' }} />
+                <input title="ارزش (+٪ قیمتِ واحد)" value={String(am.valuePct ?? '')} onChange={ev => set('valuePct', ev.target.value)} style={{ ...inpS, width: 52, textAlign: 'center' }} />
+              </span>, 'هزینه ٪ کلِ پروژه · ارزش +٪ قیمتِ واحد')
+            })}
+          </div>
+          <div style={card}>
             <div style={sub}>🏦 بانک و اعتبار (جلد ۱۶)</div>
             {row('بانک فعال (۱/۰)', cin('bank', 'enabled'))}
             {row('سقفِ وام (٪ ارزشِ خالص)', cin('bank', 'maxLoanPctOfNetWorth'), 'باندِ اعتباری روی این سقف ضریب می‌گذارد')}

@@ -47,6 +47,10 @@ export interface ReosConfig {
     build: {
       enabled: boolean; buildFactor: number; unitArea: number; costPerM: number; buildDays: number
       presaleMinPct: number; presaleMaxPct: number; presaleDiscountPct: number
+      // GDD فصل ۴ (گیم‌پلی تصمیم‌محور): هدفِ پروژه، امکاناتِ میان‌ساخت، اشباعِ فروشِ عمده، اثرِ تیمِ ماهر.
+      goalFastPricePct: number; goalFastPresaleBonusPp: number; goalRepPricePct: number; repProjectScore: number
+      bulkFreeUnits: number; bulkStepPct: number; eventSkillCutPct: number
+      amenities: Record<string, { costPct: number; valuePct: number }>
     }
   }
 }
@@ -109,6 +113,17 @@ export const DEFAULT_CONFIG: ReosConfig = {
     build: {
       enabled: true, buildFactor: 2.2, unitArea: 100, costPerM: 25_000_000, buildDays: 21,
       presaleMinPct: 30, presaleMaxPct: 50, presaleDiscountPct: 12,
+      // GDD فصل ۴: هدفِ «فروشِ سریع» = قیمتِ ۹۶٪ میانهٔ واقعی + سقفِ پیش‌فروشِ بیشتر؛ «اعتبار» = ۹۷٪ + امتیازِ برند؛
+      // فروشِ عمده (بیش از bulkFreeUnits در یک سفارش) هر واحدِ اضافه bulkStepPct٪ ارزان‌تر (اشباعِ عرضهٔ خودِ بازیکن)؛
+      // تیمِ ماهر (مهارت ≥۵۰) هزینهٔ رویدادِ کارگاه را eventSkillCutPct٪ کم می‌کند — همان اثرِ روی کارتِ استخدام.
+      goalFastPricePct: 96, goalFastPresaleBonusPp: 15, goalRepPricePct: 97, repProjectScore: 10,
+      bulkFreeUnits: 3, bulkStepPct: 2, eventSkillCutPct: 20,
+      amenities: {
+        pool: { costPct: 6, valuePct: 8 },
+        roof: { costPct: 3, valuePct: 4 },
+        gym: { costPct: 4, valuePct: 5 },
+        parking: { costPct: 5, valuePct: 6 },
+      },
     },
   },
 }

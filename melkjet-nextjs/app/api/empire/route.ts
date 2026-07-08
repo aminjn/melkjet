@@ -17,6 +17,8 @@ import {
   foundCompany, hireEngineer, applyWages, requestPermit, settleObjection, progressPermits,
   buildPlanOf, buildStageOf, BUILD_STRUCTURES, BUILD_QUALITIES,
   startBuild, progressBuild, resolveBuildEvent, presellUnits, sellUnits,
+  PROJECT_GOALS, goalPricePct, AMENITY_LABELS, amenityValueFactorOf, bulkPriceOf,
+  projectLessonsOf, engineerEffectsOf, addAmenity, rentOutUnits, stopRentUnits,
   type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
 import {
@@ -140,7 +142,9 @@ async function hoodPerM(hood: string): Promise<{ perM: number; samples: number }
 async function accrueRentFor(userId: string, e: EmpireData, now = Date.now()): Promise<EmpireData> {
   if (!config().empire.rentIncome) return e
   const earners = e.assets.filter(a => a.action === 'rent' || a.business)
-  if (!earners.length) return e
+  // «نگه‌دار و اجاره بده» (GDD فصل ۴): واحدهای اجاره‌رفتهٔ پروژه‌های تکمیل‌شده هم از میانهٔ واقعیِ محله درآمد دارند
+  const bldRenters = e.assets.filter(a => a.construction?.done && (a.construction.rented || 0) > 0 && !(a.action === 'rent' || a.business))
+  if (!earners.length && !bldRenters.length) return e
   const items = await candidateListings(500).catch(() => [] as Item[])
   const rentByHood = new Map<string, number[]>()
   const allRents: number[] = []
@@ -159,6 +163,16 @@ async function accrueRentFor(userId: string, e: EmpireData, now = Date.now()): P
     if (!(monthly0 > 0)) continue
     const monthly = a.business ? Math.round(monthly0 * ((a.businessProb || 50) / 100) * 2) : monthly0   // کسب‌وکار: ~۲ برابرِ اجارهٔ مسکونی × احتمالِ موفقیت
     const since = a.lastAccrualAt || a.actionAt || a.boughtAt
+    const days = Math.floor((now - since) / 864e5)
+    if (days < 1) continue
+    accruals.push({ assetId: a.id, amount: Math.round(monthly * days / 30) })
+  }
+  for (const a of bldRenters) {
+    const c = a.construction!
+    const monthly0 = median(rentByHood.get(a.hood) || []) || globalMed
+    if (!(monthly0 > 0)) continue   // بدونِ نمونهٔ واقعیِ اجاره → هیچ واریزی (صادقانه)
+    const monthly = Math.round(monthly0 * (c.rented || 0) * c.qualityFactor * amenityValueFactorOf(c, config().empire.build.amenities))
+    const since = a.lastAccrualAt || c.rentStartAt || c.doneAt || a.boughtAt
     const days = Math.floor((now - since) / 864e5)
     if (days < 1) continue
     accruals.push({ assetId: a.id, amount: Math.round(monthly * days / 30) })
@@ -252,7 +266,19 @@ async function stateOf(userId: string, e00: EmpireData) {
     // زمینِ بدونِ برنامه → سه گزینهٔ سند (§6.7) با برآوردِ شفاف
     plans: a.kind === 'land' && !a.landPlan ? landProjection(prices[a.listingId] || a.buyPrice) : undefined,
     permitDue: a.permit?.status === 'pending' ? permitDueAt(a.permit) : undefined,   // شمارشِ معکوسِ پروانه (جلد ۶۳)
-    build: a.construction ? { stage: buildStageOf(a.construction), progressPct: Math.min(100, Math.round(a.construction.paidDays / Math.max(1, a.construction.days) * 100)), dailyCost: Math.max(1, Math.round(a.construction.costTotal / Math.max(1, a.construction.days))) } : undefined,
+    build: a.construction ? {
+      stage: buildStageOf(a.construction),
+      progressPct: Math.min(100, Math.round(a.construction.paidDays / Math.max(1, a.construction.days) * 100)),
+      dailyCost: Math.max(1, Math.round(a.construction.costTotal / Math.max(1, a.construction.days))),
+      // GDD فصل ۴: هدفِ پروژه + امکاناتِ خریده‌شده + گزینه‌های باقی‌مانده (با هزینه/ارزشِ شفاف) + واحدهای اجاره‌ای
+      goal: a.construction.goal, goalLabel: a.construction.goal ? PROJECT_GOALS[a.construction.goal]?.label : undefined,
+      amenities: (a.construction.amenities || []).map(k => AMENITY_LABELS[k]?.label || k),
+      amenityOptions: a.construction.done ? [] : Object.entries(config().empire.build.amenities)
+        .filter(([k]) => AMENITY_LABELS[k] && !(a.construction!.amenities || []).includes(k))
+        .map(([k, v]) => ({ key: k, label: AMENITY_LABELS[k].label, icon: AMENITY_LABELS[k].icon, cost: Math.max(1, Math.round(a.construction!.costTotal * v.costPct / 100)), valuePct: v.valuePct })),
+      rented: a.construction.rented || 0,
+      freeUnits: Math.max(0, a.construction.totalUnits - a.construction.presold - a.construction.sold - (a.construction.rented || 0)),
+    } : undefined,
     url: listingHref(a.listingId, a.title, a.hood),   // پلِ بازی→واقعیت (جلد ۲۸)
   }))
   const today = dayNumberOf(Date.now())
@@ -292,7 +318,9 @@ async function stateOf(userId: string, e00: EmpireData) {
     mastery: masteryOf(e),   // استادیِ چندمحوره (جلد ۴۹ فصل ۵) — از شمارنده‌های واقعیِ رفتار
     // شرکتِ ساختمانی (جلد ۶۱): اعتبارِ ستاره‌ای از رفتارِ واقعی + مهارتِ تیم
     companyEnabled: config().empire.company.enabled,
-    company: e.company ? { ...e.company, reputation: companyReputationOf(e), teamSkill: teamSkillOf(e), wagesPaid: e.wagesPaid || 0 } : null,
+    company: e.company ? { ...e.company, engineers: e.company.engineers.map(x => ({ ...x, effects: engineerEffectsOf(x.skill, config().empire.build.eventSkillCutPct, config().empire.company.permit.engineerSpeedupDays) })), reputation: companyReputationOf(e, config().empire.build.repProjectScore), teamSkill: teamSkillOf(e), wagesPaid: e.wagesPaid || 0 } : null,
+    // کارنامهٔ پروژه‌های تحویل‌شده (GDD فصل ۴): هر پروژه یک درس — از اعدادِ واقعیِ خودش
+    projectHist: (e.projectHist || []).slice(-6).reverse().map(r => ({ ...r, goalLabel: r.goal ? PROJECT_GOALS[r.goal]?.label : undefined, lessons: projectLessonsOf(r) })),
   }
 }
 
@@ -767,7 +795,10 @@ export async function POST(req: NextRequest) {
       if (!e?.company) return NextResponse.json({ error: 'اول شرکتت را ثبت کن' }, { status: 400 })
       const week = Math.floor(dayNumberOf(Date.now()) / 7)
       const hired = new Set(e.company.engineers.map(x => x.id))
-      const cands = hireCandidatesOf(userId, week, config().empire.company.engineerSalaryBase).filter(c => !hired.has(c.id))
+      // کارتِ استخدام با اثرِ عددیِ مشخص (GDD فصل ۴ بخش ۳) — هر سطر یک اثرِ واقعیِ موتور است
+      const cands = hireCandidatesOf(userId, week, config().empire.company.engineerSalaryBase)
+        .filter(c => !hired.has(c.id))
+        .map(c => ({ ...c, effects: engineerEffectsOf(c.skill, config().empire.build.eventSkillCutPct, config().empire.company.permit.engineerSpeedupDays) }))
       return NextResponse.json({ ok: true, candidates: cands, maxEngineers: config().empire.company.maxEngineers, team: e.company.engineers.length })
     }
     case 'hire': {
@@ -816,7 +847,9 @@ export async function POST(req: NextRequest) {
         if (p) options.push({ structure: sk, structureLabel: s.label, quality: qk, qualityLabel: q.label, days: p.days, costTotal: p.costTotal, qualityFactor: p.qualityFactor })
       }
       const base = buildPlanOf('concrete', 'standard', landArea, cfg)!
-      return NextResponse.json({ ok: true, landArea, builtArea: base.builtArea, unitArea: base.unitArea, totalUnits: base.totalUnits, options })
+      // هدفِ پروژه (GDD فصل ۴ بخش ۸): تصمیمِ استراتژیکِ سرِ کلنگ — اثرِ هر گزینه شفاف اعلام می‌شود
+      const goals = Object.entries(PROJECT_GOALS).map(([k, g]) => ({ key: k, ...g, pricePct: goalPricePct(k, cfg), presaleBonusPp: k === 'fast' ? cfg.goalFastPresaleBonusPp : 0 }))
+      return NextResponse.json({ ok: true, landArea, builtArea: base.builtArea, unitArea: base.unitArea, totalUnits: base.totalUnits, options, goals })
     }
     case 'startBuild': {
       const cfg = config().empire.build
@@ -828,7 +861,7 @@ export async function POST(req: NextRequest) {
       const landArea = it ? (parseFaNum((it.meta || {})['متراژ']) || 0) : 0
       const plan = buildPlanOf(String(b.structure || ''), String(b.quality || ''), landArea, cfg)
       if (!plan) return NextResponse.json({ error: 'سازه/کیفیتِ نامعتبر یا متراژِ نامشخص' }, { status: 400 })
-      const r = await startBuild(userId, a.id, plan, { structure: String(b.structure), quality: String(b.quality) })
+      const r = await startBuild(userId, a.id, plan, { structure: String(b.structure), quality: String(b.quality), goal: String(b.goal || '') })
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
     }
@@ -847,22 +880,54 @@ export async function POST(req: NextRequest) {
       if (!e || !a?.construction) return NextResponse.json({ error: 'ساختی در جریان نیست' }, { status: 404 })
       const { perM, samples } = await hoodPerM(a.hood)
       if (!samples || !(perM > 0)) return NextResponse.json({ error: `برای قیمت‌گذاری در «${a.hood || 'این محله'}» نمونهٔ واقعیِ کافی نیست` }, { status: 400 })
-      const unitPrice = Math.round(perM * a.construction.unitArea * a.construction.qualityFactor * (1 - cfg.presaleDiscountPct / 100))
-      const r = await presellUnits(userId, a.id, Math.floor(Number(b.units) || 0), unitPrice, cfg.presaleMinPct, cfg.presaleMaxPct)
+      const c = a.construction
+      // قیمت = میانهٔ واقعی × کیفیت × امکانات × هدفِ پروژه − تخفیفِ پیش‌فروش؛ هدفِ «فروشِ سریع» سقفِ پیش‌فروش را بالا می‌برد
+      const unitPrice = Math.round(perM * c.unitArea * c.qualityFactor * amenityValueFactorOf(c, cfg.amenities) * (goalPricePct(c.goal, cfg) / 100) * (1 - cfg.presaleDiscountPct / 100))
+      const maxPct = Math.min(90, cfg.presaleMaxPct + (c.goal === 'fast' ? Math.max(0, cfg.goalFastPresaleBonusPp) : 0))
+      const r = await presellUnits(userId, a.id, Math.floor(Number(b.units) || 0), unitPrice, cfg.presaleMinPct, maxPct)
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       return NextResponse.json({ ok: true, revenue: r.revenue, unitPrice, samples, ...(await stateOf(userId, r.empire!)) })
     }
     // فروشِ واحد بعد از تکمیل (جلد ۷۲): قیمتِ کامل از میانهٔ متریِ واقعیِ همان لحظهٔ محله.
     case 'sellUnit': {
+      const cfg = config().empire.build
       const e = await getEmpire(userId)
       const a = e?.assets.find(x => x.id === String(b.assetId || ''))
       if (!e || !a?.construction) return NextResponse.json({ error: 'پروژه‌ای یافت نشد' }, { status: 404 })
       const { perM, samples } = await hoodPerM(a.hood)
       if (!samples || !(perM > 0)) return NextResponse.json({ error: `برای قیمت‌گذاری در «${a.hood || 'این محله'}» نمونهٔ واقعیِ کافی نیست` }, { status: 400 })
-      const unitPrice = Math.round(perM * a.construction.unitArea * a.construction.qualityFactor)
-      const r = await sellUnits(userId, a.id, Math.floor(Number(b.units) || 0), unitPrice, config().empire.transferTaxPct)
+      const c = a.construction
+      const units = Math.floor(Number(b.units) || 0)
+      const unitPrice = Math.round(perM * c.unitArea * c.qualityFactor * amenityValueFactorOf(c, cfg.amenities) * (goalPricePct(c.goal, cfg) / 100))
+      // اشباعِ عرضهٔ خودِ بازیکن (GDD فصل ۴ بخش ۵): فروشِ یکجای زیاد → هر واحدِ اضافه کمی ارزان‌تر — تصمیمِ سرعت/سود
+      const bulk = bulkPriceOf(unitPrice, units, cfg.bulkFreeUnits, cfg.bulkStepPct)
+      const r = await sellUnits(userId, a.id, units, bulk.avgUnit > 0 ? bulk.avgUnit : unitPrice, config().empire.transferTaxPct)
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
-      return NextResponse.json({ ok: true, proceeds: r.proceeds, pnl: r.pnl, completed: r.completed, unitPrice, samples, ...(await stateOf(userId, r.empire!)) })
+      return NextResponse.json({ ok: true, proceeds: r.proceeds, pnl: r.pnl, completed: r.completed, unitPrice, bulkDiscounted: bulk.discounted, samples, ...(await stateOf(userId, r.empire!)) })
+    }
+    // امکاناتِ میان‌ساخت (GDD فصل ۴ بخش ۴): هزینه = ٪ شفافی از هزینهٔ کلِ پروژه؛ ارزشِ فروش/اجاره بالاتر می‌رود.
+    case 'amenity': {
+      const cfg = config().empire.build
+      const e = await getEmpire(userId)
+      const a = e?.assets.find(x => x.id === String(b.assetId || ''))
+      if (!e || !a?.construction) return NextResponse.json({ error: 'ساختی در جریان نیست' }, { status: 404 })
+      const am = cfg.amenities[String(b.key || '')]
+      if (!am) return NextResponse.json({ error: 'امکاناتِ نامعتبر' }, { status: 400 })
+      const cost = Math.max(1, Math.round(a.construction.costTotal * am.costPct / 100))
+      const r = await addAmenity(userId, a.id, String(b.key), cost)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, cost, ...(await stateOf(userId, r.empire!)) })
+    }
+    // «بفروش یا نگه‌دار و اجاره بده» (GDD فصل ۴ بخش ۴) — درآمدِ اجاره از میانهٔ واقعیِ هم‌محله واریز می‌شود.
+    case 'rentUnits': {
+      const r = await rentOutUnits(userId, String(b.assetId || ''), Math.floor(Number(b.units) || 0))
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+    }
+    case 'stopRent': {
+      const r = await stopRentUnits(userId, String(b.assetId || ''), Math.floor(Number(b.units) || 0))
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
     }
 
     // روزنامهٔ ملک‌جت (جلد ۵۲) + آرشیوِ تمدن (جلد ۵۱ فصل ۹): خبر فقط از اتفاقِ واقعیِ دنیا.

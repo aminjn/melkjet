@@ -1140,6 +1140,56 @@ async function main() {
     const s2 = await sellUnits(uc12, land12, 1, 1_000_000_000, 1)
     ok('آخرین واحد: تحویلِ کامل + حذف از پرتفوی + نشان', s2.ok && s2.completed === true && s2.empire.badges.includes('Project Delivered') && !s2.empire.assets.some(x => x.id === land12))
     ok('فروش بیش از موجودی رد می‌شود', (await sellUnits(uc12, land12, 1, 1_000_000_000, 1)).ok === false)
+
+    // ── فاز ۱۵: GDD فصل ۴ — هدفِ پروژه + امکاناتِ میان‌ساخت + «بفروش یا اجاره بده» + کارنامهٔ پروژه ──
+    console.log('\n── Empire · GDD فصل ۴ (هدف/امکانات/اجاره/کارنامه) ──')
+    const { addAmenity, rentOutUnits, stopRentUnits } = await import('../app/lib/empire-store.ts')
+    await buyA(uc12, { id: 'LND2', title: 'زمینِ دوم', hood: 'ولنجک', price: 1_000_000_000, ptype: 'زمین' })
+    const land15 = (await getEmpire(uc12)).assets.find(x => x.listingId === 'LND2').id
+    await setLP(uc12, land15, 'build')
+    // پروانهٔ صادرشده را مستقیم می‌گذاریم — مسیرِ صدور در فاز ۱۲ تست شده
+    {
+      const eG = await getEmpire(uc12)
+      eG.assets.find(x => x.id === land15).permit = { requestedAt: Date.now(), days: 1, fee: 1, status: 'granted', grantedAt: Date.now() }
+      await pool.query(`UPDATE reos_empire SET data=$2 WHERE user_id=$1`, [uc12, JSON.stringify(eG)])
+    }
+    const plan15 = buildPlanOf('concrete', 'standard', 250, bcfg)   // بنا ۵۰۰م، ۵ واحد، هزینه ۵B، ۱۰ روز
+    const sb15 = await startBuild(uc12, land15, plan15, { structure: 'concrete', quality: 'standard', goal: 'rep' })
+    const c15 = sb15.empire.assets.find(x => x.id === land15).construction
+    ok('کلنگ با هدفِ پروژه: goal=rep و برنامهٔ اولیه (days0) ثبت شد', sb15.ok && c15.goal === 'rep' && c15.days0 === plan15.days)
+    // امکاناتِ میان‌ساخت: پولِ واقعی → بهای تمام‌شده
+    const capA15 = (await getEmpire(uc12)).capital
+    const am15 = await addAmenity(uc12, land15, 'pool', 100_000_000)
+    const cAm = am15.empire.assets.find(x => x.id === land15).construction
+    ok('افزودنِ استخر: کسرِ نقد + افزایشِ بهای تمام‌شده', am15.ok && am15.empire.capital === capA15 - 100_000_000 && cAm.paid === 100_000_000 && cAm.amenities.includes('pool'))
+    ok('امکاناتِ تکراری رد می‌شود', (await addAmenity(uc12, land15, 'pool', 1)).ok === false)
+    ok('امکاناتِ ناشناخته رد می‌شود', (await addAmenity(uc12, land15, 'jacuzzi', 1)).ok === false)
+    ok('اجارهٔ واحد قبل از تکمیل رد می‌شود', (await rentOutUnits(uc12, land15, 1)).ok === false)
+    // تکمیل از مسیرِ واقعیِ progressBuild (یک روزِ آخر)
+    {
+      const eT = await getEmpire(uc12)
+      const cT = eT.assets.find(x => x.id === land15).construction
+      cT.paidDays = cT.days - 1; cT.eventsFired = 2; cT.lastPayAt = Date.now() - 864e5
+      await pool.query(`UPDATE reos_empire SET data=$2 WHERE user_id=$1`, [uc12, JSON.stringify(eT)])
+    }
+    const dn15 = await progressBuild(uc12)
+    ok('تکمیل با هدفِ «اعتبارِ برند»: repProjects ثبت شد', dn15.ok && (dn15.empire.stats.repProjects || 0) === 1 && dn15.empire.assets.find(x => x.id === land15).construction.done === true)
+    // «بفروش یا نگه‌دار و اجاره بده»
+    const rn15 = await rentOutUnits(uc12, land15, 2)
+    const cRn = rn15.empire.assets.find(x => x.id === land15).construction
+    ok('اجارهٔ ۲ واحدِ نوساز: rented + rentStartAt', rn15.ok && cRn.rented === 2 && cRn.rentStartAt > 0)
+    ok('اجارهٔ بیش از واحدِ آزاد رد می‌شود', (await rentOutUnits(uc12, land15, 4)).ok === false)
+    const s15 = await sellUnits(uc12, land15, 3, 1_000_000_000, 1)
+    ok('فروشِ ۳ واحدِ آزاد: salesRevenue ثبت و پروژه باز ماند (اجاره‌ای‌ها مانعِ تحویل)', s15.ok && s15.completed === false && s15.empire.assets.find(x => x.id === land15).construction.salesRevenue === s15.proceeds)
+    ok('فروشِ واحدِ اجاره‌ای رد می‌شود (اول فسخ)', (await sellUnits(uc12, land15, 1, 1_000_000_000, 1)).ok === false)
+    const sr15 = await stopRentUnits(uc12, land15, 2)
+    ok('فسخِ اجاره: واحدها دوباره آزاد شدند', sr15.ok && !sr15.empire.assets.find(x => x.id === land15).construction.rented)
+    ok('فسخِ بدونِ واحدِ اجاره‌ای رد می‌شود', (await stopRentUnits(uc12, land15, 1)).ok === false)
+    const s15b = await sellUnits(uc12, land15, 2, 1_000_000_000, 1)
+    // پروژهٔ فاز ۱۳ (land12) هم موقعِ تحویلِ کامل کارنامه گرفته — پس اینجا دو کارنامه داریم
+    ok('فروشِ ۲ واحدِ آخر: تحویلِ کامل + ثبتِ کارنامهٔ پروژه', s15b.ok && s15b.completed === true && (s15b.empire.projectHist || []).length === 2)
+    const rep15 = (s15b.empire.projectHist || [])[1]
+    ok('کارنامه: هدف/امکانات/اعداد از خودِ پروژه', !!rep15 && rep15.goal === 'rep' && rep15.amenities.includes('pool') && rep15.units === 5 && rep15.revenue > 0 && rep15.daysPlanned === plan15.days)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

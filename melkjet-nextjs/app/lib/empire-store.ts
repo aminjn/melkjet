@@ -49,13 +49,28 @@ export interface Company { name: string; kind: string; color: string; foundedAt:
 export interface Construction {
   startedAt: number
   days: number                 // کلِ روزهای ساخت (رویدادِ «صبر» اضافه‌اش می‌کند)
+  days0?: number               // روزهای برنامهٔ اولیه — برای «تحلیلِ پس از پروژه» (GDD فصل ۴)
+  goal?: string                // هدفِ پروژه (GDD فصل ۴ بخش ۸): fast / profit / rep — روی قیمت و پیش‌فروش اثرِ شفاف دارد
   structure: string; quality: string; qualityFactor: number
   builtArea: number; unitArea: number; totalUnits: number
   costTotal: number; paid: number; paidDays: number; lastPayAt: number
   presold: number; sold: number; presaleRevenue: number
+  salesRevenue?: number        // عایدیِ فروشِ واحدها بعد از تکمیل (بعد از مالیات) — خوراکِ کارنامهٔ پروژه
+  amenities?: string[]         // امکاناتِ میان‌ساخت (GDD فصل ۴ بخش ۴): استخر/روف‌گاردن/… — هزینهٔ واقعی، ارزشِ شفاف
+  rented?: number              // واحدهای اجاره‌داده‌شده بعد از تکمیل («نگه‌دار و اجاره بده») — درآمد از میانهٔ واقعیِ محله
+  rentStartAt?: number
   eventsFired: number
   pendingEvent?: { text: string; payCost: number; extraDays: number; at: number }
   done?: boolean; doneAt?: number
+}
+
+// کارنامهٔ پروژهٔ تحویل‌شده (GDD فصل ۴: «هر پروژه یک درس است») — همه از اعدادِ واقعیِ همان پروژه.
+export interface ProjectReport {
+  at: number; title: string; hood: string
+  goal?: string; structure: string; quality: string; amenities: string[]
+  units: number; presold: number; events: number
+  landCost: number; buildCost: number; revenue: number; pnl: number
+  daysPlanned: number; daysReal: number
 }
 
 export interface EmpireData {
@@ -89,7 +104,8 @@ export interface EmpireData {
   crowd?: CrowdHolding[]      // سهم‌های سرمایه‌گذاریِ جمعی روی آگهی‌های واقعی (جلد ۴۰ فصل ۷)
   company?: Company           // شرکتِ ساختمانی (جلد ۶۱) — «از یک اتاقِ کوچک تا امپراتوری»
   wagesPaid?: number          // حقوقِ پرداختی به مهندس‌ها (مصرفِ شفافِ پول — قانون ۶)
-  stats?: { sellsProfitable: number; negoWins: number; projectsDelivered?: number }   // شمارنده‌های واقعیِ رفتار (جلد ۲۶/۷۲)
+  stats?: { sellsProfitable: number; negoWins: number; projectsDelivered?: number; repProjects?: number }   // شمارنده‌های واقعیِ رفتار (جلد ۲۶/۷۲)
+  projectHist?: ProjectReport[]   // کارنامهٔ پروژه‌های تحویل‌شده (GDD فصل ۴) — درسِ هر پروژه از اعدادِ واقعیِ خودش
   snap?: { day: number; netWorth: number; prev: number }   // اسنپ‌شاتِ روزانه — «سود/زیانِ دیروز» (جلد ۲۶)
   pendingComeback?: number    // هدیهٔ بازگشت (Comeback Engine جلد ۲۶) — روزِ کشفِ غیبت
   stylePicks?: string[]                               // مأموریت M2 «سبکِ خودت را پیدا کن» (انتخابِ تصویری)
@@ -741,7 +757,7 @@ export async function repayLoan(userId: string, amount: number, now = Date.now()
 
 // ══════════ شرکتِ ساختمانی (جلد ۶۱) + مالکِ زمین (جلد ۶۲) + پروانه (جلد ۶۳) ══════════
 // اعتبارِ ستاره‌ای شرکت (جلد ۶۱ «شرکت Level ندارد؛ اعتبار دارد») — فقط از رفتارِ واقعیِ ثبت‌شده.
-export function companyReputationOf(e: Pick<EmpireData, 'stats' | 'creditHist' | 'assets' | 'guess'>): { stars: number; score: number; factors: string[] } {
+export function companyReputationOf(e: Pick<EmpireData, 'stats' | 'creditHist' | 'assets' | 'guess'>, repProjectScore = 10): { stars: number; score: number; factors: string[] } {
   const factors: string[] = []
   let score = 0
   const sells = e.stats?.sellsProfitable || 0
@@ -754,6 +770,8 @@ export function companyReputationOf(e: Pick<EmpireData, 'stats' | 'creditHist' |
   if (permits) { score += Math.min(20, permits * 10); factors.push(`${permits.toLocaleString('fa-IR')} پروانهٔ صادرشده`) }
   const delivered = e.stats?.projectsDelivered || 0
   if (delivered) { score += Math.min(30, delivered * 15); factors.push(`${delivered.toLocaleString('fa-IR')} پروژهٔ تحویل‌شده`) }
+  const rep = e.stats?.repProjects || 0   // هدفِ «اعتبارِ برند» (GDD فصل ۴): ارزان‌تر فروختی، برند ساختی
+  if (rep) { score += Math.min(20, rep * Math.max(0, repProjectScore)); factors.push(`${rep.toLocaleString('fa-IR')} پروژهٔ اعتبارساز (هدفِ برند)`) }
   if (e.assets.length) { score += Math.min(10, e.assets.length * 3); factors.push('پرتفوی فعال') }
   const lateDays = e.creditHist?.lateDays || 0
   if (lateDays) { score -= Math.min(30, lateDays * 3); factors.push('دیرکردِ بانکی (منفی)') }
@@ -780,6 +798,15 @@ export function hireCandidatesOf(userId: string, week: number, salaryBase: numbe
 }
 // بیشترین مهارتِ تیم — پاداشِ واقعیِ استخدام: مذاکرهٔ قوی‌تر و پروانهٔ سریع‌تر.
 export const teamSkillOf = (e: Pick<EmpireData, 'company'>) => Math.max(0, ...(e.company?.engineers || []).map(x => x.skill))
+
+// اثرِ مشخصِ هر نامزد روی کارتِ استخدام (GDD فصل ۴ بخش ۳: «کارت با اثرِ عددی، نه رزومهٔ خشک»).
+// هر سطر یک اثرِ واقعیِ موتور است: مذاکره (negotiationOutcome)، پروانه (permitTermsOf)، رویدادِ کارگاه (progressBuild).
+export function engineerEffectsOf(skill: number, eventCutPct = 20, permitSpeedupDays = 1): string[] {
+  const fx = [`شانسِ مذاکره +${Math.round(skill / 10).toLocaleString('fa-IR')}٪`]
+  if (skill >= 50) fx.push(`هزینهٔ اتفاقِ کارگاه −${Math.round(eventCutPct).toLocaleString('fa-IR')}٪`)
+  if (skill >= 60) fx.push(`بررسیِ پروانه −${Math.max(1, Math.round(permitSpeedupDays)).toLocaleString('fa-IR')} روز`)
+  return fx
+}
 
 // شخصیتِ مالکِ زمین (جلد ۶۲ «زمین قیمتِ ثابت ندارد؛ مالک دارد») — قطعی از هشِ آگهی؛ روی شانسِ مذاکره اثر دارد.
 const OWNER_NAMES = ['حاج رضا', 'آقای توکل', 'خانم صبوری', 'آرش', 'آقای معتمد', 'خانم فرهی', 'حاج قاسم', 'مهندس بهرامی']
@@ -917,6 +944,73 @@ export function buildPlanOf(structure: string, quality: string, landArea: number
     qualityFactor: q.qualityFactor,
   }
 }
+// هدفِ پروژه (GDD فصل ۴ بخش ۸): یک تصمیمِ استراتژیکِ سرِ کلنگ — اثرش شفاف و برگشت‌ناپذیر.
+export const PROJECT_GOALS: Record<string, { label: string; icon: string; desc: string }> = {
+  fast: { label: 'فروشِ سریع', icon: '⚡', desc: 'کمی ارزان‌تر از میانهٔ واقعیِ محله می‌فروشی، اما سقفِ پیش‌فروش بالاتر است — نقدینگی زودتر برمی‌گردد' },
+  profit: { label: 'حداکثرِ سود', icon: '💰', desc: 'قیمتِ کاملِ میانهٔ واقعیِ محله — حاشیهٔ بیشتر، فروشِ صبورانه‌تر' },
+  rep: { label: 'اعتبارِ برند', icon: '⭐', desc: 'کمی ارزان‌تر می‌فروشی، اما تحویلِ این پروژه اعتبارِ شرکتت را بیشتر بالا می‌برد' },
+}
+// ضریبِ قیمتِ هدف — همیشه روی میانهٔ متریِ «واقعی» اعمال می‌شود؛ هیچ قیمتی از هوا نمی‌آید.
+export const goalPricePct = (goal: string | undefined, cfg: { goalFastPricePct: number; goalRepPricePct: number }): number =>
+  goal === 'fast' ? Math.max(50, Math.min(100, cfg.goalFastPricePct)) : goal === 'rep' ? Math.max(50, Math.min(100, cfg.goalRepPricePct)) : 100
+
+// امکاناتِ میان‌ساخت (GDD فصل ۴ بخش ۴): تصمیمِ وسطِ ساخت — هزینهٔ واقعیِ الان، ارزشِ شفافِ بعداً.
+export const AMENITY_LABELS: Record<string, { label: string; icon: string }> = {
+  pool: { label: 'استخر و سونا', icon: '🏊' },
+  roof: { label: 'روف‌گاردن', icon: '🌿' },
+  gym: { label: 'باشگاهِ ورزشی', icon: '🏋️' },
+  parking: { label: 'پارکینگِ اضافه', icon: '🅿️' },
+}
+export function amenityValueFactorOf(c: Pick<Construction, 'amenities'>, amenCfg: Record<string, { costPct: number; valuePct: number }>): number {
+  let f = 1
+  for (const k of c.amenities || []) { const a = amenCfg[k]; if (a) f *= 1 + Math.max(0, a.valuePct) / 100 }
+  return f
+}
+
+// فروشِ عمده (GDD فصل ۴ بخش ۵ «بازار به رفتارِ بازیکن واکنش نشان می‌دهد»): عرضهٔ یکجای خودت بازارِ خودت را اشباع می‌کند —
+// از واحدِ freeUnits+1 به بعد هر واحد stepPct٪ ارزان‌تر (کفِ ۸۰٪). تصمیم: همه را یکجا بفروش (سریع) یا کم‌کم (گران‌تر).
+export function bulkPriceOf(unitPrice: number, units: number, freeUnits: number, stepPct: number): { total: number; avgUnit: number; discounted: number } {
+  let total = 0, discounted = 0
+  for (let i = 0; i < Math.max(0, Math.floor(units)); i++) {
+    const over = Math.max(0, i + 1 - Math.max(0, Math.floor(freeUnits)))
+    const mul = Math.max(0.8, 1 - over * Math.max(0, stepPct) / 100)
+    if (over > 0 && mul < 1) discounted++
+    total += unitPrice * mul
+  }
+  total = Math.round(total)
+  return { total, avgUnit: units > 0 ? Math.round(total / units) : 0, discounted }
+}
+
+// کارنامهٔ پروژه (GDD فصل ۴: «تحلیلِ پس از تحویل — یادگیری، نه فقط جشن») — فقط از اعدادِ واقعیِ همان پروژه.
+export function projectReportOf(a: Pick<EmpireAsset, 'title' | 'hood' | 'buyPrice'>, c: Construction, now: number): ProjectReport {
+  return {
+    at: now, title: a.title.slice(0, 60), hood: a.hood,
+    goal: c.goal, structure: c.structure, quality: c.quality, amenities: [...(c.amenities || [])],
+    units: c.totalUnits, presold: c.presold, events: c.eventsFired,
+    landCost: a.buyPrice, buildCost: c.paid,
+    revenue: c.presaleRevenue + (c.salesRevenue || 0),
+    pnl: c.presaleRevenue + (c.salesRevenue || 0) - (a.buyPrice + c.paid),
+    daysPlanned: c.days0 || c.days,
+    daysReal: Math.max(1, Math.round(((c.doneAt || now) - c.startedAt) / 864e5)),
+  }
+}
+export function projectLessonsOf(r: ProjectReport): string[] {
+  const out: string[] = []
+  const cost = r.landCost + r.buildCost
+  const retPct = cost > 0 ? Math.round((r.pnl / cost) * 100) : 0
+  out.push(r.pnl >= 0
+    ? `سودِ خالص ${Math.round(r.pnl / 1e6).toLocaleString('fa-IR')}م تومان (بازدهِ ${retPct.toLocaleString('fa-IR')}٪ روی کلِ هزینه)`
+    : `زیانِ ${Math.abs(Math.round(r.pnl / 1e6)).toLocaleString('fa-IR')}م تومان — قیمتِ تمام‌شده از فروشِ واقعیِ محله بالاتر درآمد`)
+  out.push(r.daysReal > r.daysPlanned
+    ? `${(r.daysReal - r.daysPlanned).toLocaleString('fa-IR')} روز بیش از برنامه طول کشید (اتفاق‌های کارگاه یا توقفِ نقدینگی)`
+    : 'سرِ برنامه تمام شد — مدیریتِ نقدینگی درست بود')
+  if (r.presold > 0) out.push(`${r.presold.toLocaleString('fa-IR')} واحد پیش‌فروش شد — نقدینگیِ ساخت را داد اما ارزان‌تر از فروشِ نهایی بود`)
+  if (r.events > 0) out.push(`${r.events.toLocaleString('fa-IR')} اتفاقِ کارگاهی مدیریت شد`)
+  if (r.amenities.length) out.push(`${r.amenities.length.toLocaleString('fa-IR')} امکاناتِ رفاهی ارزشِ فروشِ هر واحد را بالا برد`)
+  if (r.goal && PROJECT_GOALS[r.goal]) out.push(`استراتژی: ${PROJECT_GOALS[r.goal].label}`)
+  return out
+}
+
 // رویدادِ کارگاه (Project Event Engine نسخهٔ ۱): قطعی از هش — «پرداخت» یا «صبر»؛ هیچ‌کدام بی‌هزینه نیست.
 const BUILD_EVENTS = [
   'بارانِ شدید — کارگاه گِل شد', 'جرثقیل خراب شد', 'در حفاری سنگِ بزرگ پیدا شد',
@@ -935,20 +1029,21 @@ export const buildStageOf = (c: Pick<Construction, 'paidDays' | 'days'>) =>
   BUILD_STAGES[Math.min(BUILD_STAGES.length - 1, Math.floor((c.paidDays / Math.max(1, c.days)) * BUILD_STAGES.length))]
 
 // کلنگ‌زنی (جلد ۶۴): فقط زمینِ دارای پروانهٔ صادرشده.
-export async function startBuild(userId: string, assetId: string, plan: NonNullable<ReturnType<typeof buildPlanOf>>, meta: { structure: string; quality: string }, now = Date.now()) {
+export async function startBuild(userId: string, assetId: string, plan: NonNullable<ReturnType<typeof buildPlanOf>>, meta: { structure: string; quality: string; goal?: string }, now = Date.now()) {
   return mutateEmpire(userId, e => {
     const a = e.assets.find(x => x.id === assetId)
     if (!a) return 'دارایی یافت نشد'
     if (a.permit?.status !== 'granted') return 'اول پروانهٔ ساخت را بگیر'
     if (a.construction) return 'ساختِ این پروژه شروع شده'
+    const goal = meta.goal && PROJECT_GOALS[meta.goal] ? meta.goal : undefined
     a.construction = {
-      startedAt: now, days: plan.days,
+      startedAt: now, days: plan.days, days0: plan.days, goal,
       structure: meta.structure, quality: meta.quality, qualityFactor: plan.qualityFactor,
       builtArea: plan.builtArea, unitArea: plan.unitArea, totalUnits: plan.totalUnits,
       costTotal: plan.costTotal, paid: 0, paidDays: 0, lastPayAt: now,
       presold: 0, sold: 0, presaleRevenue: 0, eventsFired: 0,
     }
-    e.timeline.push({ at: now, icon: '⛏', title: 'کلنگ‌زنی — ساخت آغاز شد', detail: `${a.title.slice(0, 45)} · ${plan.builtArea.toLocaleString('fa-IR')} مترِ بنا · ${plan.totalUnits.toLocaleString('fa-IR')} واحد` })
+    e.timeline.push({ at: now, icon: '⛏', title: 'کلنگ‌زنی — ساخت آغاز شد', detail: `${a.title.slice(0, 45)} · ${plan.builtArea.toLocaleString('fa-IR')} مترِ بنا · ${plan.totalUnits.toLocaleString('fa-IR')} واحد${goal ? ` · هدف: ${PROJECT_GOALS[goal].label}` : ''}` })
     e.journal.push({ at: now, text: 'اولین کلنگِ پروژه زده شد. از امروز کارگاه هر روز هزینه دارد — مدیریتِ پول، خودِ ساخت است.' })
   })
 }
@@ -978,7 +1073,10 @@ export async function progressBuild(userId: string, now = Date.now()): Promise<{
         const idx = checkpoints.indexOf(c.paidDays)
         if (idx >= 0 && c.eventsFired <= idx) {
           c.eventsFired = idx + 1
-          c.pendingEvent = { ...buildEventOf(e.userId, a.id, idx, c.costTotal), at: now }
+          const ev = buildEventOf(e.userId, a.id, idx, c.costTotal)
+          // تیمِ ماهر (مهارت ≥۵۰) هزینهٔ رویداد را کم می‌کند — همان اثری که روی کارتِ استخدام نوشته شده (GDD فصل ۴).
+          const cut = teamSkillOf(e) >= 50 ? Math.max(0, Math.min(90, config().empire.build.eventSkillCutPct)) : 0
+          c.pendingEvent = { ...ev, payCost: Math.max(1, Math.round(ev.payCost * (1 - cut / 100))), at: now }
           e.timeline.push({ at: now, icon: '⚠️', title: 'اتفاق در کارگاه', detail: c.pendingEvent.text })
           break                                               // تا تصمیمِ بازیکن، کار می‌ایستد
         }
@@ -993,6 +1091,7 @@ export async function progressBuild(userId: string, now = Date.now()): Promise<{
         }
         e.stats = e.stats || { sellsProfitable: 0, negoWins: 0 }
         e.stats.projectsDelivered = (e.stats.projectsDelivered || 0) + 1
+        if (c.goal === 'rep') e.stats.repProjects = (e.stats.repProjects || 0) + 1   // هدفِ «اعتبارِ برند» → امتیازِ اعتبارِ شرکت
         if (!e.badges.includes('First Tower')) e.badges.push('First Tower')
         e.timeline.push({ at: now, icon: '🏙', title: 'ساختمان تکمیل شد', detail: `${a.title.slice(0, 45)} — ${c.totalUnits.toLocaleString('fa-IR')} واحد آمادهٔ عرضه` })
         e.journal.push({ at: now, text: 'خطِ آسمانِ شهر عوض شد — ساختمانِ تو حالا واقعی است. وقتِ فروش است.' })
@@ -1054,8 +1153,10 @@ export async function sellUnits(userId: string, assetId: string, units: number, 
     const c = a?.construction
     if (!a || !c) return 'پروژه‌ای یافت نشد'
     if (!c.done) return 'ساختمان هنوز تکمیل نشده'
-    const left = c.totalUnits - c.presold - c.sold
-    if (!(units >= 1) || units > left) return `فقط ${left.toLocaleString('fa-IR')} واحد باقی مانده`
+    const left = c.totalUnits - c.presold - c.sold - (c.rented || 0)
+    if (!(units >= 1) || units > left) return (c.rented || 0) > 0
+      ? `فقط ${Math.max(0, left).toLocaleString('fa-IR')} واحدِ آزاد مانده — ${(c.rented || 0).toLocaleString('fa-IR')} واحد اجاره است (اول اجاره را فسخ کن)`
+      : `فقط ${Math.max(0, left).toLocaleString('fa-IR')} واحد باقی مانده`
     if (!(unitPrice > 0)) return 'برای قیمت‌گذاری، نمونهٔ واقعیِ هم‌محله در دسترس نیست'
     const value = Math.round(units * unitPrice)
     const tax = Math.round(value * (Math.max(0, taxPct) / 100))
@@ -1067,10 +1168,15 @@ export async function sellUnits(userId: string, assetId: string, units: number, 
     e.realized = (e.realized || 0) + pnl
     if (pnl > 0) { e.stats = e.stats || { sellsProfitable: 0, negoWins: 0 }; e.stats.sellsProfitable += 1; e.xp += config().empire.sellProfitXp }
     c.sold += units
+    c.salesRevenue = (c.salesRevenue || 0) + proceeds
     const sign = pnl > 0 ? 'سود' : pnl < 0 ? 'زیان' : 'سربه‌سر'
     e.timeline.push({ at: now, icon: '🔑', title: `فروشِ ${units.toLocaleString('fa-IR')} واحد`, detail: `${sign} ${Math.abs(Math.round(pnl / 1e6)).toLocaleString('fa-IR')}م تومان` })
     if (c.presold + c.sold >= c.totalUnits) {
       completed = true
+      // کارنامهٔ پروژه (GDD فصل ۴): درسِ این پروژه از اعدادِ واقعیِ خودش — قبل از حذفِ دارایی ثبت می‌شود.
+      e.projectHist = e.projectHist || []
+      e.projectHist.push(projectReportOf(a, c, now))
+      if (e.projectHist.length > 20) e.projectHist.splice(0, e.projectHist.length - 20)
       e.assets.splice(i, 1)   // پروژه تحویل شد — زمین/بنا دیگر در پرتفوی نیست، سودش تحقق یافته
       if (!e.badges.includes('Project Delivered')) e.badges.push('Project Delivered')
       e.timeline.push({ at: now, icon: '🎉', title: 'تحویلِ کاملِ پروژه', detail: a.title.slice(0, 60) })
@@ -1079,6 +1185,54 @@ export async function sellUnits(userId: string, assetId: string, units: number, 
   })
   if (!r.ok) return { ok: false, reason: r.reason }
   return { ok: true, proceeds, pnl, completed, empire: r.empire }
+}
+
+// امکاناتِ میان‌ساخت (GDD فصل ۴ بخش ۴): استخر/روف‌گاردن/… — هزینهٔ واقعیِ الان به بهای تمام‌شده، ارزشِ شفافِ بعداً.
+export async function addAmenity(userId: string, assetId: string, key: string, cost: number, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    const c = a?.construction
+    if (!a || !c) return 'ساختی در جریان نیست'
+    if (c.done) return 'ساختمان تکمیل شده — امکانات فقط حینِ ساخت اضافه می‌شود'
+    const am = AMENITY_LABELS[key]
+    if (!am) return 'امکاناتِ نامعتبر'
+    c.amenities = c.amenities || []
+    if (c.amenities.includes(key)) return `${am.label} قبلاً به این پروژه اضافه شده`
+    const pay = Math.max(1, Math.round(cost))
+    if (e.capital < pay) return 'سرمایهٔ نقدِ کافی نیست'
+    e.capital -= pay
+    c.paid += pay                       // به بهای تمام‌شدهٔ پروژه (قانون ۶: هیچ پولی گم نمی‌شود)
+    c.amenities.push(key)
+    e.timeline.push({ at: now, icon: am.icon, title: `افزودنِ ${am.label} به پروژه`, detail: `${Math.round(pay / 1e6).toLocaleString('fa-IR')}م تومان — ارزشِ فروشِ واحدها بالاتر می‌رود` })
+  })
+}
+
+// «نگه‌دار و اجاره بده» (GDD فصل ۴ بخش ۴): واحدِ تکمیل‌شده به‌جای فروش اجاره می‌رود — درآمد از میانهٔ اجارهٔ «واقعیِ» هم‌محله.
+export async function rentOutUnits(userId: string, assetId: string, units: number, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    const c = a?.construction
+    if (!a || !c || !c.done) return 'ساختمانِ تکمیل‌شده‌ای نیست'
+    const free = c.totalUnits - c.presold - c.sold - (c.rented || 0)
+    if (!(units >= 1) || units > free) return `فقط ${Math.max(0, free).toLocaleString('fa-IR')} واحدِ آزاد مانده`
+    if (!c.rented) c.rentStartAt = now
+    c.rented = (c.rented || 0) + Math.floor(units)
+    e.timeline.push({ at: now, icon: '🏠', title: `اجارهٔ ${Math.floor(units).toLocaleString('fa-IR')} واحدِ نوساز`, detail: 'درآمدِ ماهانه از میانهٔ اجارهٔ واقعیِ هم‌محله واریز می‌شود' })
+  })
+}
+
+// فسخِ اجاره — واحدها دوباره آمادهٔ فروش می‌شوند (تصمیمِ برگشت‌پذیر؛ فروش تصمیمِ برگشت‌ناپذیر است).
+export async function stopRentUnits(userId: string, assetId: string, units: number, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    const c = a?.construction
+    if (!a || !c || !(c.rented && c.rented > 0)) return 'واحدِ اجاره‌ای در این پروژه نیست'
+    const n = Math.min(Math.floor(units), c.rented)
+    if (!(n >= 1)) return 'تعدادِ نامعتبر'
+    c.rented -= n
+    if (!c.rented) c.rentStartAt = undefined
+    e.timeline.push({ at: now, icon: '🔓', title: `فسخِ اجارهٔ ${n.toLocaleString('fa-IR')} واحد`, detail: 'این واحدها دوباره آمادهٔ فروش‌اند' })
+  })
 }
 
 // صدورِ پروانه‌های سررسیدشده — روی هر بازدید سنجیده می‌شود؛ اولین پروانه نشانِ «First Permit» می‌دهد.

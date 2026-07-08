@@ -113,6 +113,7 @@ export default function EmpirePage() {
   const [co, setCo] = useState({ name: '', kind: 'مسکونی', color: '#c9a84c' })   // ثبتِ شرکت (جلد ۶۱)
   const [hireL, setHireL] = useState<any>(null)                  // نامزدهای استخدامِ هفته
   const [bplan, setBplan] = useState<any>(null)                  // پیش‌نمایشِ نقشهٔ ساخت (جلد ۶۴)
+  const [bgoal, setBgoal] = useState('profit')                   // هدفِ پروژه (GDD فصل ۴): fast / profit / rep
   const [pu, setPu] = useState<Record<string, string>>({})       // تعدادِ واحدِ پیش‌فروش/فروش
   const celebrate = () => { setBurst(Date.now()); setTimeout(() => setBurst(0), 1100) }
   const [fu, setFu] = useState<Record<string, string>>({})       // تعدادِ واحدِ صندوق (ورودی)
@@ -590,6 +591,9 @@ export default function EmpirePage() {
                 <b style={{ fontSize: 13 }}>👷 {c.name}</b>
                 <div style={{ fontSize: 11, color: 'var(--muted)', margin: '4px 0' }}>{c.persona}</div>
                 <div style={{ fontSize: 12 }}>مهارت <b style={{ color: 'var(--gold)' }}>{fa(c.skill)}</b> · حقوق {faB(c.salaryMonthly)}/ماه</div>
+                {(c.effects || []).length > 0 && <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
+                  {c.effects.map((fx: string, i: number) => <span key={i} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 10, border: '1px solid var(--line2)', color: '#7c6' }}>{fx}</span>)}
+                </div>}
                 <button style={{ ...btn, padding: '6px 12px', fontSize: 12, marginTop: 8 }} disabled={busy} onClick={async () => { const d = await api({ action: 'hire', candId: c.id }); if (d) { setSt(d); setHireL(null); celebrate() } }}>استخدام</button>
               </div>
             ))}
@@ -661,10 +665,23 @@ export default function EmpirePage() {
             {/* پیش‌نمایشِ نقشهٔ ساخت (جلد ۶۴): سازه/کیفیت با روز و هزینهٔ شفاف */}
             {bplan?.assetId === a.id && !a.construction && <div style={{ width: '100%', ...card, background: 'var(--surface)', fontSize: 12 }}>
               <b>⛏ نقشهٔ ساخت</b> — زمین {fa(bplan.landArea)} متر → <b style={{ color: 'var(--gold)' }}>{fa(bplan.builtArea)} مترِ بنا · {fa(bplan.totalUnits)} واحدِ {fa(bplan.unitArea)} متری</b>
+              {/* هدفِ پروژه (GDD فصل ۴ بخش ۸): تصمیمِ استراتژیک قبل از کلنگ — اثرش شفاف است */}
+              {(bplan.goals || []).length > 0 && <div style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>هدفِ این پروژه چیست؟ (روی قیمت‌گذاری و پیش‌فروش اثر دارد)</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {bplan.goals.map((g: any) => (
+                    <button key={g.key} title={g.desc} onClick={() => setBgoal(g.key)}
+                      style={{ ...btnGhost, padding: '6px 12px', fontSize: 11.5, borderColor: bgoal === g.key ? 'var(--gold)' : 'var(--line2)', color: bgoal === g.key ? 'var(--gold)' : 'var(--text)' }}>
+                      {g.icon} {g.label} <span style={{ fontSize: 10, color: 'var(--faint)' }}>قیمت {fa(g.pricePct)}٪{g.presaleBonusPp ? ` · پیش‌فروش +${fa(g.presaleBonusPp)}٪` : ''}</span>
+                    </button>
+                  ))}
+                </div>
+                <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 4 }}>{(bplan.goals.find((g: any) => g.key === bgoal) || {}).desc}</div>
+              </div>}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 6, marginTop: 8 }}>
                 {(bplan.options || []).map((o: any) => (
                   <button key={o.structure + o.quality} style={{ ...btnGhost, textAlign: 'right', padding: '8px 10px', fontSize: 11.5 }} disabled={busy}
-                    onClick={async () => { const d = await api({ action: 'startBuild', assetId: a.id, structure: o.structure, quality: o.quality }); if (d) { setSt(d); setBplan(null); celebrate() } }}>
+                    onClick={async () => { const d = await api({ action: 'startBuild', assetId: a.id, structure: o.structure, quality: o.quality, goal: bgoal }); if (d) { setSt(d); setBplan(null); celebrate() } }}>
                     <b>{o.structureLabel} · {o.qualityLabel}</b>
                     <div style={{ color: 'var(--muted)', fontSize: 10.5 }}>{fa(o.days)} روز · هزینهٔ کل {faB(o.costTotal)} تومان</div>
                   </button>
@@ -677,6 +694,8 @@ export default function EmpirePage() {
             {a.construction && <div style={{ width: '100%', ...card, background: 'var(--surface)', fontSize: 12 }}>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <b>{a.construction.done ? '🏙 ساختمان تکمیل شد' : `🏗 ${a.build?.stage || 'کارگاه'}`}</b>
+                {a.build?.goalLabel && <span style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: 10, border: '1px solid var(--line2)', color: 'var(--gold)' }}>🎯 {a.build.goalLabel}</span>}
+                {(a.build?.amenities || []).map((am: string) => <span key={am} style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: 10, border: '1px solid var(--line2)', color: '#7c6' }}>{am} ✓</span>)}
                 <span style={{ color: 'var(--muted)' }}>{fa(a.construction.paidDays)}/{fa(a.construction.days)} روز · هزینهٔ روزانه {faB(a.build?.dailyCost || 0)}</span>
                 <span style={{ flex: 1 }} />
                 <span style={{ color: 'var(--muted)' }}>پرداختی: {faB(a.construction.paid)} از {faB(a.construction.costTotal)}</span>
@@ -692,14 +711,32 @@ export default function EmpirePage() {
                   <button style={{ ...btnGhost, padding: '5px 12px', fontSize: 11.5 }} disabled={busy} onClick={async () => { const d = await api({ action: 'buildEvent', assetId: a.id, choice: 'wait' }); if (d) setSt(d) }}>⏳ صبر (+{fa(a.construction.pendingEvent.extraDays)} روز)</button>
                 </div>
               </div>}
+              {/* امکاناتِ میان‌ساخت (GDD فصل ۴ بخش ۴): تصمیمِ وسطِ ساخت — هزینهٔ الان، ارزشِ شفافِ بعداً */}
+              {!a.construction.done && (a.build?.amenityOptions || []).length > 0 && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+                <span style={{ fontSize: 11, color: 'var(--muted)' }}>ارتقای پروژه:</span>
+                {a.build.amenityOptions.map((op: any) => (
+                  <button key={op.key} style={{ ...btnGhost, padding: '4px 10px', fontSize: 11 }} disabled={busy || e.capital < op.cost}
+                    title={`هزینه ${faB(op.cost)} تومان · ارزشِ فروش/اجارهٔ هر واحد +${fa(op.valuePct)}٪`}
+                    onClick={async () => { const d = await api({ action: 'amenity', assetId: a.id, key: op.key }); if (d) { setSt(d); celebrate() } }}>
+                    {op.icon} {op.label} <span style={{ color: 'var(--faint)', fontSize: 10 }}>({faB(op.cost)} · ارزش +{fa(op.valuePct)}٪)</span>
+                  </button>
+                ))}
+              </div>}
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
-                <span style={{ color: 'var(--muted)' }}>واحدها: {fa(a.construction.totalUnits)} کل · {fa(a.construction.presold)} پیش‌فروش · {fa(a.construction.sold)} فروخته</span>
+                <span style={{ color: 'var(--muted)' }}>واحدها: {fa(a.construction.totalUnits)} کل · {fa(a.construction.presold)} پیش‌فروش · {fa(a.construction.sold)} فروخته{(a.build?.rented || 0) > 0 ? ` · ${fa(a.build.rented)} اجاره` : ''}</span>
                 <input value={pu[a.id] ? Number(pu[a.id]).toLocaleString('fa-IR') : ''} onChange={ev => setPu({ ...pu, [a.id]: digitsOf(ev.target.value) })} placeholder="تعداد" inputMode="numeric" dir="ltr" style={{ width: 70, padding: 6, borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 12, textAlign: 'center' }} />
                 {!a.construction.done && <button style={{ ...btnGhost, padding: '5px 12px', fontSize: 11.5 }} disabled={busy || !Number(pu[a.id])}
                   onClick={async () => { const d = await api({ action: 'presell', assetId: a.id, units: Number(pu[a.id]) }); if (d) { setSt(d); setPu({ ...pu, [a.id]: '' }); alert(`📝 پیش‌فروش انجام شد: ${faB(d.revenue)} تومان (قیمتِ واحد ${faB(d.unitPrice)} — از ${fa(d.samples)} نمونهٔ واقعیِ محله)`) } }}>📝 پیش‌فروش</button>}
                 {a.construction.done && <button style={{ ...btn, padding: '5px 12px', fontSize: 11.5 }} disabled={busy || !Number(pu[a.id])}
-                  onClick={async () => { const d = await api({ action: 'sellUnit', assetId: a.id, units: Number(pu[a.id]) }); if (d) { setSt(d); setPu({ ...pu, [a.id]: '' }); if (d.completed) celebrate(); alert(`🔑 فروش انجام شد: ${faB(d.proceeds)} تومان${d.completed ? '\n🎉 پروژه به‌طورِ کامل تحویل شد!' : ''}`) } }}>🔑 فروشِ واحد</button>}
+                  onClick={async () => { const d = await api({ action: 'sellUnit', assetId: a.id, units: Number(pu[a.id]) }); if (d) { setSt(d); setPu({ ...pu, [a.id]: '' }); if (d.completed) celebrate(); alert(`🔑 فروش انجام شد: ${faB(d.proceeds)} تومان${d.bulkDiscounted > 0 ? `\n📉 فروشِ یکجای ${fa(Number(pu[a.id]) || 0)} واحد بازارِ خودت را اشباع کرد — ${fa(d.bulkDiscounted)} واحدِ آخر ارزان‌تر رفت` : ''}${d.completed ? '\n🎉 پروژه به‌طورِ کامل تحویل شد!' : ''}`) } }}>🔑 فروشِ واحد</button>}
+                {/* «بفروش یا نگه‌دار و اجاره بده» (GDD فصل ۴ بخش ۴) — درآمد از میانهٔ اجارهٔ واقعیِ هم‌محله */}
+                {a.construction.done && <button style={{ ...btnGhost, padding: '5px 12px', fontSize: 11.5 }} disabled={busy || !Number(pu[a.id])}
+                  title="به‌جای فروش، درآمدِ ماهانه از میانهٔ اجارهٔ واقعیِ هم‌محله"
+                  onClick={async () => { const d = await api({ action: 'rentUnits', assetId: a.id, units: Number(pu[a.id]) }); if (d) { setSt(d); setPu({ ...pu, [a.id]: '' }) } }}>🏠 اجاره بده</button>}
+                {a.construction.done && (a.build?.rented || 0) > 0 && <button style={{ ...btnGhost, padding: '5px 12px', fontSize: 11.5 }} disabled={busy || !Number(pu[a.id])}
+                  onClick={async () => { const d = await api({ action: 'stopRent', assetId: a.id, units: Number(pu[a.id]) }); if (d) { setSt(d); setPu({ ...pu, [a.id]: '' }) } }}>🔓 فسخِ اجاره</button>}
               </div>
+              {a.construction.done && <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 4 }}>تصمیمِ توست: بفروش (سودِ یکجا) یا نگه‌دار و اجاره بده (جریانِ ماهانه از میانهٔ واقعیِ محله) — فروشِ یکجای تعدادِ زیاد، بازارِ خودت را اشباع می‌کند و ارزان‌تر می‌رود.</div>}
             </div>}
           </div>
         ))}
@@ -710,6 +747,30 @@ export default function EmpirePage() {
       </div>}
       {e.assets?.length > 0 && <div style={{ marginTop: 10 }}><button style={{ ...btnGhost, fontSize: 12, padding: '6px 12px' }} onClick={doSuggest}>+ فرصتِ بعدی</button></div>}
     </div>
+
+    {/* کارنامهٔ پروژه‌ها (GDD فصل ۴): تحلیلِ پس از تحویل — هر پروژه یک درس، همه از اعدادِ واقعیِ خودش */}
+    {(st.projectHist || []).length > 0 && <div style={card}>
+      <div style={{ fontWeight: 700, marginBottom: 10 }}>🎓 کارنامهٔ پروژه‌های تحویل‌شده</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {st.projectHist.map((r: any, i: number) => (
+          <div key={i} style={{ ...card, background: 'var(--bg2)', fontSize: 12 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <b>🏙 {r.title}</b>
+              <span style={{ color: 'var(--muted)' }}>{r.hood}</span>
+              {r.goalLabel && <span style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: 10, border: '1px solid var(--line2)', color: 'var(--gold)' }}>🎯 {r.goalLabel}</span>}
+              <span style={{ flex: 1 }} />
+              <b style={{ color: r.pnl >= 0 ? '#7c6' : '#e88' }}>{r.pnl >= 0 ? 'سود' : 'زیان'} {faB(Math.abs(r.pnl))} تومان</b>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
+              {fa(r.units)} واحد · هزینهٔ کل {faB(r.landCost + r.buildCost)} · فروش {faB(r.revenue)} · {fa(r.daysReal)} روز (برنامه: {fa(r.daysPlanned)})
+            </div>
+            <ul style={{ margin: '6px 0 0', paddingRight: 18, fontSize: 11.5, color: 'var(--text)' }}>
+              {(r.lessons || []).map((l: string, j: number) => <li key={j} style={{ marginBottom: 2 }}>{l}</li>)}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>}
 
     {/* مأموریت‌ها — پیشرفت از رفتارِ واقعی */}
     {ms && <div style={card}>
