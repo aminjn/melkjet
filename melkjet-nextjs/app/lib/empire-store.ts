@@ -60,6 +60,9 @@ export interface EmpireData {
   creditHist?: { taken: number; repaid: number; lateDays: number }   // سابقهٔ بازپرداخت — خوراکِ امتیازِ اعتباری
   taxPaid?: number            // مالیاتِ نقل‌وانتقالِ پرداختی → خزانهٔ بازی (جلد ۵/۱۶)
   refBy?: number              // شمارهٔ امپراتوریِ دعوت‌کننده (§7.4 دعوتِ شراکتی)
+  stats?: { sellsProfitable: number; negoWins: number }   // شمارنده‌های مأموریت‌های مخفی (جلد ۲۶)
+  snap?: { day: number; netWorth: number; prev: number }   // اسنپ‌شاتِ روزانه — «سود/زیانِ دیروز» (جلد ۲۶)
+  pendingComeback?: number    // هدیهٔ بازگشت (Comeback Engine جلد ۲۶) — روزِ کشفِ غیبت
   stylePicks?: string[]                               // مأموریت M2 «سبکِ خودت را پیدا کن» (انتخابِ تصویری)
   hunter?: { a: string; b: string; better: string; at: number }   // جفتِ فعالِ Property Hunter (§6.4)
   claims: Record<string, number>                      // پاداش‌های یک‌بارمصرفِ دریافت‌شده (missionKey → ts)
@@ -255,6 +258,52 @@ export function nextDreamOf(e: Pick<EmpireData, 'assets' | 'realized' | 'creditH
   return '👑 رؤیای بعدی: صدرِ جدولِ محله‌ات — نامت در تاریخِ ملک‌جت.'
 }
 
+// مأموریت‌های مخفی (GDD جلد ۲۶ «بازی همه مأموریت‌ها را نشان نمی‌دهد»): نشانِ داستان‌دار،
+// فقط با رفتارِ واقعی کشف می‌شوند؛ تا کشف نشده‌اند نامشان هم دیده نمی‌شود.
+export const HIDDEN_BADGES: Array<{ key: string; fa: string; earned: (e: EmpireData) => boolean }> = [
+  { key: 'Elite Seller', fa: 'فروشندهٔ نخبه — ۳ فروشِ سودده', earned: e => (e.stats?.sellsProfitable || 0) >= 3 },
+  { key: 'Master Negotiator', fa: 'استادِ مذاکره — ۳ خریدِ با تخفیف', earned: e => (e.stats?.negoWins || 0) >= 3 },
+  { key: 'Collector', fa: 'کلکسیونر — مالکِ هر ۴ نوع دارایی', earned: e => new Set(e.assets.map(a => a.kind)).size >= 4 },
+  { key: 'Landlord', fa: 'مالکِ درآمدساز — ۱۰۰ میلیون درآمدِ اجاره', earned: e => e.assets.reduce((s, a) => s + (a.income || 0), 0) >= 100_000_000 },
+  { key: 'Trusted Borrower', fa: 'خوش‌حسابِ افسانه‌ای — ۲ تسویه بدونِ دیرکرد', earned: e => (e.creditHist?.repaid || 0) >= 2 && (e.creditHist?.lateDays || 0) === 0 },
+]
+export function earnedHiddenBadges(e: EmpireData): string[] {
+  return HIDDEN_BADGES.filter(b => !e.badges.includes(b.key) && b.earned(e)).map(b => b.key)
+}
+// اعمالِ نشان‌های مخفیِ تازه‌کشف‌شده — با ثبتِ داستانی در تایم‌لاین.
+export async function applyHiddenBadges(userId: string, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const fresh = earnedHiddenBadges(e)
+    if (!fresh.length) return 'چیزی کشف نشد'
+    for (const k of fresh) {
+      e.badges.push(k)
+      const def = HIDDEN_BADGES.find(b => b.key === k)!
+      e.timeline.push({ at: now, icon: '🎖', title: 'مأموریتِ مخفی کشف شد', detail: def.fa })
+    }
+  })
+}
+
+// اسنپ‌شاتِ روزانهٔ ارزشِ خالص (جلد ۲۶ «سودِ دیروز») — اولین بازدیدِ هر روز ثبت می‌شود.
+export async function snapshotNetWorth(userId: string, day: number, netWorth: number) {
+  return mutateEmpire(userId, e => {
+    if (e.snap && e.snap.day >= day) return 'امروز ثبت شده'
+    e.snap = { day, netWorth, prev: e.snap?.netWorth ?? netWorth }
+  })
+}
+
+// هدیهٔ بازگشت (Comeback Engine): غیبت کشف شد → پرچم؛ دریافت یک‌بار، «نه اینکه تنبیه شود».
+export async function markComeback(userId: string, day: number) {
+  return mutateEmpire(userId, e => { if (e.pendingComeback) return 'از قبل هست'; e.pendingComeback = day })
+}
+export async function claimComeback(userId: string, coins: number, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    if (!e.pendingComeback) return 'هدیهٔ بازگشتی در انتظار نیست'
+    e.pendingComeback = undefined
+    e.coins += Math.max(0, Math.round(coins))
+    e.timeline.push({ at: now, icon: '🎁', title: 'هدیهٔ بازگشت', detail: 'خوش برگشتی — دنیا بدونِ تو کامل نبود' })
+  })
+}
+
 // جملهٔ AI Dream Engine از انتخاب‌های Dream Board (فصل ۳) — قطعی.
 export function dreamSentence(picks: string[]): string {
   const p = new Set(picks)
@@ -389,7 +438,7 @@ export async function renameEmpire(userId: string, name: string) {
 }
 
 // خریدِ دارایی = انتخابِ یک آگهیِ واقعی با قیمتِ واقعی؛ سرمایهٔ شبیه‌سازی کم می‌شود (فصل ۳ + §6.5).
-export async function buyAsset(userId: string, listing: { id: string; title: string; hood: string; price: number; ptype?: string }, now = Date.now()) {
+export async function buyAsset(userId: string, listing: { id: string; title: string; hood: string; price: number; ptype?: string }, opts: { negotiated?: boolean } = {}, now = Date.now()) {
   const cfg = config().empire
   return mutateEmpire(userId, e => {
     if (!listing.id || !(listing.price > 0)) return 'آگهیِ نامعتبر'
@@ -400,6 +449,7 @@ export async function buyAsset(userId: string, listing: { id: string; title: str
     const first = e.assets.length === 0
     e.capital -= listing.price + tax
     e.taxPaid = (e.taxPaid || 0) + tax
+    if (opts.negotiated) { e.stats = e.stats || { sellsProfitable: 0, negoWins: 0 }; e.stats.negoWins += 1 }
     e.assets.push({ id: 'ast_' + randomBytes(5).toString('hex'), listingId: listing.id, title: String(listing.title).slice(0, 120), hood: String(listing.hood || '').slice(0, 60), kind: assetKindOf(listing.ptype || ''), buyPrice: listing.price, boughtAt: now })
     // پاداشِ سند (فصل ۳): ‎+100 XP + Founder + First Owner + Builder Potential +2 + Investor Confidence +1‎
     e.xp += cfg.buyRewardXp
@@ -519,7 +569,7 @@ export async function sellAsset(userId: string, assetId: string, livePrice: numb
     e.capital += salePrice - tax
     e.taxPaid = (e.taxPaid || 0) + tax
     e.realized = (e.realized || 0) + profit
-    if (profit > 0) e.xp += cfg.sellProfitXp
+    if (profit > 0) { e.xp += cfg.sellProfitXp; e.stats = e.stats || { sellsProfitable: 0, negoWins: 0 }; e.stats.sellsProfitable += 1 }
     e.assets.splice(i, 1)
     const sign = profit > 0 ? 'سود' : profit < 0 ? 'زیان' : 'سربه‌سر'
     e.timeline.push({ at: now, icon: '💸', title: `فروش: ${a.title.slice(0, 50)}`, detail: `${sign} ${Math.abs(Math.round(profit / 1e6)).toLocaleString('fa-IR')} میلیون تومان` })

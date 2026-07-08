@@ -954,6 +954,35 @@ async function main() {
     ok('دعوت‌کننده: کوینِ شراکت + تایم‌لاینِ «شریکِ جدید»', eRef.coins === refCoinsBefore + 200 && eRef.timeline.some(t => t.title === 'شریکِ جدید وارد شد'))
     const eSelf = await createEmpire('0912empire8', { ref: 999999, answers: { city: 'x', tenB: 'x', risk: 1, ptype: 'x', goal: 'x' } })
     ok('refِ نامعتبر بی‌اثر است', !eSelf.refBy && eSelf.coins === 500)
+
+    // ── فاز ۸: زندگی روزانه (جلد ۲۶) — مأموریتِ مخفی، اسنپ‌شات، بازگشت ──
+    const { applyHiddenBadges, snapshotNetWorth, markComeback, claimComeback, earnedHiddenBadges } = await import('../app/lib/empire-store.ts')
+    const u8 = '0912empire8'
+    // ۳ خریدِ با مذاکره + ۳ فروشِ سودده → دو نشانِ مخفی
+    for (let i = 0; i < 3; i++) {
+      const bb = await buyAsset(u8, { id: 'HB' + i, title: 'ملک ' + i, hood: 'نارمک', price: 1_000_000_000, ptype: 'آپارتمان' }, { negotiated: true })
+      const aid8 = bb.empire.assets.find(x => x.listingId === 'HB' + i).id
+      await sellAsset(u8, aid8, 1_200_000_000)
+    }
+    const e8 = await getEmpire(u8)
+    ok('شمارنده‌ها: ۳ مذاکرهٔ برنده + ۳ فروشِ سودده', e8.stats.negoWins === 3 && e8.stats.sellsProfitable === 3)
+    ok('کشفِ مخفی‌ها قبل از اعمال درست است', earnedHiddenBadges(e8).includes('Elite Seller') && earnedHiddenBadges(e8).includes('Master Negotiator'))
+    const hb8 = await applyHiddenBadges(u8)
+    ok('اعمالِ نشانِ مخفی + تایم‌لاینِ داستانی', hb8.ok && hb8.empire.badges.includes('Elite Seller') && hb8.empire.timeline.some(t => t.title === 'مأموریتِ مخفی کشف شد'))
+    ok('اعمالِ دوباره بی‌اثر', (await applyHiddenBadges(u8)).ok === false)
+    // اسنپ‌شاتِ روزانه
+    const d8 = dayNumberOf(Date.now())
+    await snapshotNetWorth(u8, d8 - 1, 1_000)
+    await snapshotNetWorth(u8, d8, 1_500)
+    const eS = await getEmpire(u8)
+    ok('اسنپ‌شات: prev دیروز، netWorth امروز', eS.snap.day === d8 && eS.snap.netWorth === 1_500 && eS.snap.prev === 1_000)
+    ok('اسنپ‌شاتِ تکراریِ همان روز رد می‌شود', (await snapshotNetWorth(u8, d8, 9_999)).ok === false)
+    // هدیهٔ بازگشت
+    await markComeback(u8, d8)
+    const coins8 = (await getEmpire(u8)).coins
+    const cbk = await claimComeback(u8, 60)
+    ok('هدیهٔ بازگشت: کوین + پاک‌شدنِ پرچم', cbk.ok && cbk.empire.coins === coins8 + 60 && !cbk.empire.pendingComeback)
+    ok('دریافتِ دوباره رد می‌شود', (await claimComeback(u8, 60)).ok === false)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

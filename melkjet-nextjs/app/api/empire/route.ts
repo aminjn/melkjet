@@ -11,8 +11,11 @@ import {
   landProjection, empireScoreOf, listEmpiresPublic, applyUpkeep,
   creditScoreOf, loanTermsFor, takeLoan, repayLoan, accrueLoanInterest,
   negotiationOutcome, questOf, nextDreamOf,
+  applyHiddenBadges, HIDDEN_BADGES, snapshotNetWorth, markComeback, claimComeback,
   type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
+import { listingHref } from '@/app/lib/listing-url'
+import { recordEvent } from '@/app/lib/reos/store'
 import { buildBriefFor } from '@/app/lib/empire-brief'
 import { touchStreak, getStreak } from '@/app/lib/reos/achievements'
 import { candidateListings, getItemById, type Item } from '@/app/lib/scraper-store'
@@ -38,6 +41,8 @@ function lite(it: Item, opts: { hidePrice?: boolean } = {}) {
     price: opts.hidePrice ? 0 : priceOf(it), priceStr: opts.hidePrice ? '' : (it.price || ''),
     image: it.image || '', area: parseFaNum(m['متراژ']) || 0, rooms: parseFaNum(m['اتاق خواب'] || m['اتاق']) || 0,
     ptype: ptypeOf(it), kind: assetKindOf(ptypeOf(it)),
+    // پلِ بازی→واقعیت (جلد ۲۸ «Game → Lead → Sale»): لینکِ صفحهٔ واقعیِ آگهی
+    url: listingHref(it.id, it.title, it.location),
   }
 }
 
@@ -158,11 +163,15 @@ async function upkeepFor(userId: string, e: EmpireData, now = Date.now()): Promi
 async function stateOf(userId: string, e00: EmpireData) {
   // پیامِ بازگشت (فصل ۴): غیبتِ ۷+ روزه — قبل از هر جهشی سنجیده می‌شود تا سیگنال از بین نرود.
   const absentDays = Math.floor((Date.now() - (e00.updatedAt || e00.createdAt)) / 864e5)
+  if (absentDays >= 7 && !e00.pendingComeback) await markComeback(userId, dayNumberOf(Date.now())).catch(() => {})
   const e0 = await upkeepFor(userId, e00).catch(() => e00)    // هزینهٔ مالکیت (GDD جلد۵)
   const e1 = await accrueRentFor(userId, e0).catch(() => e0)  // درآمدِ اجاره/کسب‌وکار از بازارِ واقعی
   // بهرهٔ روزشمارِ وام (جلد ۱۶) — روزی یک‌بار
   const li = e1.loan ? await accrueLoanInterest(userId).catch(() => null) : null
-  const e = li?.ok && li.empire ? li.empire : e1
+  const e2 = li?.ok && li.empire ? li.empire : e1
+  // کشفِ مأموریت‌های مخفی (جلد ۲۶) — از رفتارِ واقعیِ همین لحظه
+  const hb = await applyHiddenBadges(userId).catch(() => null)
+  const e = hb?.ok && hb.empire ? hb.empire : e2
   const [prices, missions, total] = await Promise.all([livePrices(e), missionsOf(userId, e), empireCount()])
   const nw = netWorthOf(e, prices)
   const assets = e.assets.map(a => ({
@@ -171,6 +180,7 @@ async function stateOf(userId: string, e00: EmpireData) {
     growthPct: a.buyPrice ? Math.round(((prices[a.listingId] || a.buyPrice) - a.buyPrice) / a.buyPrice * 1000) / 10 : 0,
     // زمینِ بدونِ برنامه → سه گزینهٔ سند (§6.7) با برآوردِ شفاف
     plans: a.kind === 'land' && !a.landPlan ? landProjection(prices[a.listingId] || a.buyPrice) : undefined,
+    url: listingHref(a.listingId, a.title, a.hood),   // پلِ بازی→واقعیت (جلد ۲۸)
   }))
   const today = dayNumberOf(Date.now())
   // نامهٔ امروزِ ملک‌جت (اگر cron هنوز نساخته، همین‌جا از دادهٔ واقعی ساخته می‌شود) + استریک (ورودِ امروز = حفظِ زنجیره)
@@ -187,6 +197,10 @@ async function stateOf(userId: string, e00: EmpireData) {
   const chestAvailable = config().empire.chest.enabled && !e.claims['chest_' + today]
   // «امروز فقط N دقیقه لازم داری» (فصل ۴ Real Life Time Engine): از کارهای بازِ واقعی.
   const openActions = [quests?.daily && !quests.daily.claimed, quests?.weekly && !quests.weekly.claimed, chestAvailable, missions?.m1?.done && !missions.m1.claimed, brief && !brief.openedAt].filter(Boolean).length
+  // «سود/زیانِ دیروز» (جلد ۲۶): اسنپ‌شاتِ روزانه — اولین بازدیدِ روز ثبت، دلتا نسبت به روزِ قبل.
+  let dayDelta: number | null = null
+  if (!e.snap || e.snap.day < today) { await snapshotNetWorth(userId, today, nw.netWorth).catch(() => {}); dayDelta = e.snap ? nw.netWorth - e.snap.netWorth : null }
+  else dayDelta = nw.netWorth - e.snap.prev
   return {
     enabled: true, empire: { ...e, assets }, level: empireLevel(e.xp), ...nw, missions, bank, quests,
     empireScore: empireScoreOf(e, prices),
@@ -196,8 +210,11 @@ async function stateOf(userId: string, e00: EmpireData) {
     brief, streak,
     nextDream: nextDreamOf(e),
     mentorLine: mentorLineOf(e, bank, missions, chestAvailable),
-    welcomeBack: absentDays >= 7 ? { days: absentDays } : null,
+    welcomeBack: absentDays >= 7 || e.pendingComeback ? { days: Math.max(absentDays, 7), gift: !!e.pendingComeback } : null,
     minutesToday: openActions * 3,
+    dayDelta,
+    hiddenLeft: HIDDEN_BADGES.filter(b => !e.badges.includes(b.key)).length,
+    collection: ['apartment', 'villa', 'commercial', 'land'].map(k => ({ kind: k, owned: e.assets.some(a => a.kind === k) })),
   }
 }
 
@@ -286,13 +303,16 @@ export async function POST(req: NextRequest) {
       if (!it || it.type !== 'listing') return NextResponse.json({ error: 'آگهی یافت نشد' }, { status: 404 })
       let price = priceOf(it)
       if (!(price > 0) || !isSale(it)) return NextResponse.json({ error: 'این آگهی قیمتِ فروشِ مشخص ندارد' }, { status: 400 })
+      let negotiatedWin = false
       if (b.negotiated) {
         const e = await getEmpire(userId)
         const out = e ? negotiationOutcome(userId, it.id, e.identity.negotiation || 0) : { success: false, discountPct: 0 }
-        if (out.success) price = Math.round(price * (1 - out.discountPct / 100))
+        if (out.success) { price = Math.round(price * (1 - out.discountPct / 100)); negotiatedWin = true }
       }
-      const r = await buyAsset(userId, { id: it.id, title: it.title, hood: hoodOf(it.location), price, ptype: ptypeOf(it) })
+      const r = await buyAsset(userId, { id: it.id, title: it.title, hood: hoodOf(it.location), price, ptype: ptypeOf(it) }, { negotiated: negotiatedWin })
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      // جلد ۲۸: رفتارِ بازی = دادهٔ رفتاری برای ML — تعامل با همین آگهیِ واقعی ثبت می‌شود.
+      recordEvent({ type: 'user_clicked_property', userId, propertyId: it.id, meta: { src: 'empire_buy' } }).catch(() => {})
       return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
     }
     case 'assetAction': {
@@ -318,6 +338,7 @@ export async function POST(req: NextRequest) {
       const actual = priceOf(it)
       const r = await recordGuess(userId, actual, Number(b.guess) || 0)
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      recordEvent({ type: 'user_clicked_property', userId, propertyId: it.id, meta: { src: 'empire_guess' } }).catch(() => {})
       return NextResponse.json({ ok: true, correct: r.correct, deltaPct: r.deltaPct, actual, rewardXp: r.rewardXp, rewardCoins: r.rewardCoins })
     }
 
@@ -373,6 +394,7 @@ export async function POST(req: NextRequest) {
       if (!it) return NextResponse.json({ error: 'آگهی یافت نشد' }, { status: 404 })
       const t = await spendAiToken(userId)
       if (!t.ok) return NextResponse.json({ error: t.reason }, { status: 400 })
+      recordEvent({ type: 'user_clicked_property', userId, propertyId: it.id, meta: { src: 'empire_analyze' } }).catch(() => {})
       const hood = hoodOf(it.location), price = priceOf(it), area = parseFaNum((it.meta || {})['متراژ']) || 0
       const twins = (await candidateListings(300)).filter(x => x.id !== it.id && isSale(x) && priceOf(x) > 0 && hoodOf(x.location) === hood)
       const perM = (x: Item) => { const a = parseFaNum((x.meta || {})['متراژ']) || 0; const p = priceOf(x); return a > 0 && p > 0 ? p / a : 0 }
@@ -496,6 +518,13 @@ export async function POST(req: NextRequest) {
 
     // بازکردنِ نامهٔ روزانه (opened_at طبق طرحِ سند ثبت می‌شود).
     case 'briefOpen': { await markBriefOpened(userId, dayNumberOf(Date.now())); return NextResponse.json({ ok: true }) }
+
+    // هدیهٔ بازگشت (جلد ۲۶ Comeback Engine) — فقط وقتی غیبتِ واقعی کشف شده باشد.
+    case 'comeback': {
+      const r = await claimComeback(userId, config().empire.quests.weeklyCoins)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, coins: config().empire.quests.weeklyCoins, ...(await stateOf(userId, r.empire!)) })
+    }
 
     // «هیچ جلسه‌ای بی‌دلیلِ برگشت تمام نشود» (فصل ۴): تعلیقِ فردا ساعتِ ۹.
     case 'suspend': {

@@ -320,7 +320,7 @@ export default function EmpirePage() {
           <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.7 }}>{o.title.slice(0, 60)}</div>
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>{o.hood}{o.area ? ` · ${fa(o.area)} متر` : ''}</div>
           <div style={{ fontSize: 13, color: 'var(--gold)', fontWeight: 700 }}>{faB(o.price)} تومان</div>
-          <div style={{ fontSize: 11, color: 'var(--faint)' }}>{o.reason}</div>
+          <div style={{ fontSize: 11, color: 'var(--faint)' }}>{o.reason}{(o as any).url && <> · <a href={(o as any).url} target="_blank" rel="noreferrer" style={{ color: 'var(--gold)' }}>🔗 آگهیِ واقعی</a></>}</div>
           {/* مذاکره (GDD جلد۱ مرحلهٔ ۵) — یک‌بار، نتیجه قطعی */}
           {nego[o.id]
             ? <div style={{ fontSize: 11.5, color: nego[o.id].success ? '#7c6' : 'var(--muted)' }}>{nego[o.id].success ? `🤝 فروشنده ${fa(nego[o.id].discountPct)}٪ تخفیف داد → ${faB(nego[o.id].finalPrice)} تومان` : '🤝 فروشنده کوتاه نیامد — قیمت همان است.'}</div>
@@ -392,11 +392,14 @@ export default function EmpirePage() {
       </div>
     </div>
 
-    {/* پیامِ بازگشت (فصل ۴) + پیام‌آغازیِ دستیار + نردبانِ رؤیا + زمانِ امروز */}
-    {st.welcomeBack && <MJ><b>دلمان برایت تنگ شده بود — {fa(st.welcomeBack.days)} روز خبری ازت نبود.</b><br />در نبودت بازار حرکت کرده و ارزشِ دارایی‌هایت دوباره از قیمت‌های واقعی محاسبه شد. همهٔ سرمایه‌گذارهای بزرگ وقفه داشته‌اند — مهم برگشتن است. از نامهٔ امروز شروع کن.</MJ>}
+    {/* پیامِ بازگشت (فصل ۴) + هدیهٔ بازگشت + پیام‌آغازیِ دستیار + نردبانِ رؤیا + زمانِ امروز */}
+    {st.welcomeBack && <MJ><b>دلمان برایت تنگ شده بود.</b><br />در نبودت بازار حرکت کرده و ارزشِ دارایی‌هایت دوباره از قیمت‌های واقعی محاسبه شد. همهٔ سرمایه‌گذارهای بزرگ وقفه داشته‌اند — مهم برگشتن است.
+      {st.welcomeBack.gift && <div style={{ marginTop: 8 }}><button style={{ ...btn, padding: '6px 14px', fontSize: 12.5 }} disabled={busy} onClick={async () => { const d = await api({ action: 'comeback' }); if (d) { setSt(d); alert(`🎁 هدیهٔ بازگشت: ${fa(d.coins)} ملک‌کوین`) } }}>🎁 دریافتِ هدیهٔ بازگشت</button></div>}
+    </MJ>}
     {st.mentorLine && !st.welcomeBack && <MJ>{st.mentorLine}</MJ>}
     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', fontSize: 12.5 }}>
       <span style={{ ...card, padding: '8px 14px', color: 'var(--gold)' }}>{st.nextDream}</span>
+      {st.dayDelta != null && st.dayDelta !== 0 && <span style={{ ...card, padding: '8px 14px', color: st.dayDelta > 0 ? '#7c6' : '#e88' }}>{st.dayDelta > 0 ? '📈' : '📉'} نسبت به دیروز: {st.dayDelta > 0 ? '+' : '−'}{faB(Math.abs(st.dayDelta))} تومان</span>}
       {st.minutesToday > 0 && <span style={{ ...card, padding: '8px 14px', color: 'var(--muted)' }}>⏱ امروز فقط {fa(st.minutesToday)} دقیقه زمان لازم داری</span>}
     </div>
 
@@ -463,6 +466,7 @@ export default function EmpirePage() {
               ? <span style={{ fontSize: 11, color: 'var(--muted)' }}>{a.action === 'renovate' ? '🛠 بازسازی' : a.action === 'rent' ? '💰 اجاره' : '📈 نگه‌داری'}</span>
               : <span style={{ display: 'flex', gap: 4 }}>{[['renovate', '🛠'], ['rent', '💰'], ['hold', '📈']].map(([k, i]) => <button key={k} title={k} style={{ ...btnGhost, padding: '4px 8px', fontSize: 13 }} onClick={async () => { const d = await api({ action: 'assetAction', assetId: a.id, act: k }); if (d) setSt(d) }}>{i}</button>)}</span>}
             <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 12 }} disabled={busy || e.aiTokens <= 0} onClick={() => doAnalyze(a.listingId)}>تحلیلِ ملک‌جت (۱ ژتون)</button>
+            {a.url && <a href={a.url} target="_blank" rel="noreferrer" style={{ ...btnGhost, padding: '4px 10px', fontSize: 12, textDecoration: 'none' }}>🔗 آگهیِ واقعی</a>}
             <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 12, color: '#e88', borderColor: '#644' }} disabled={busy} onClick={() => doSell(a)}>💸 فروش</button>
           </div>
         ))}
@@ -681,12 +685,23 @@ export default function EmpirePage() {
       </div>
     </div>
 
-    {/* نشان‌ها + تغییرِ نام */}
-    <div style={{ ...card, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-      <span style={{ fontSize: 12, color: 'var(--muted)' }}>🏅 نشان‌ها:</span>
-      {(e.badges || []).map((bd: string) => <span key={bd} style={{ ...card, padding: '4px 10px', fontSize: 12, background: 'var(--bg2)' }}>{bd}</span>)}
-      <span style={{ flex: 1 }} />
-      <button style={{ ...btnGhost, fontSize: 12, padding: '6px 12px' }} onClick={async () => { const n = prompt('نامِ جدیدِ امپراتوری:', e.name); if (n != null) { const d = await api({ action: 'rename', name: n }); if (d) load() } }}>تغییرِ نام</button>
+    {/* کلکسیون (جلد ۲۶) + نشان‌ها + مأموریت‌های مخفی + تغییرِ نام */}
+    <div style={card}>
+      <div style={{ fontWeight: 700, marginBottom: 10 }}>🗃 کلکسیونِ دارایی‌ها</div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {(st.collection || []).map((c: any) => (
+          <span key={c.kind} style={{ ...card, padding: '8px 14px', fontSize: 13, background: 'var(--bg2)', opacity: c.owned ? 1 : 0.45, borderColor: c.owned ? 'var(--gold)' : 'var(--line)' }}>
+            {c.kind === 'apartment' ? '🏢 آپارتمان' : c.kind === 'villa' ? '🏡 ویلا' : c.kind === 'commercial' ? '🏬 تجاری' : '🏞 زمین'} {c.owned ? '✓' : ''}
+          </span>
+        ))}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 14 }}>
+        <span style={{ fontSize: 12, color: 'var(--muted)' }}>🏅 نشان‌ها:</span>
+        {(e.badges || []).map((bd: string) => <span key={bd} style={{ ...card, padding: '4px 10px', fontSize: 12, background: 'var(--bg2)' }}>{bd}</span>)}
+        {st.hiddenLeft > 0 && <span style={{ fontSize: 11.5, color: 'var(--faint)' }}>🎖 {fa(st.hiddenLeft)} مأموریتِ مخفی در انتظارِ کشف...</span>}
+        <span style={{ flex: 1 }} />
+        <button style={{ ...btnGhost, fontSize: 12, padding: '6px 12px' }} onClick={async () => { const n = prompt('نامِ جدیدِ امپراتوری:', e.name); if (n != null) { const d = await api({ action: 'rename', name: n }); if (d) load() } }}>تغییرِ نام</button>
+      </div>
     </div>
   </>)
 }
