@@ -888,7 +888,24 @@ function GeoView() {
             {r.unknown?.length > 0 && <span style={{ color: 'var(--muted)' }}> · شهرهای غایب در درخت (اول شهر را بساز، دوباره اجرا کن): {r.unknown.slice(0, 8).map((u: any) => u.city).join('، ')}</span>}
           </span>)
         }} style={{ padding: '9px 18px', borderRadius: 10, background: 'var(--gold)', color: '#1a1503', border: 'none', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>{enriching ? 'در حال استخراج…' : '⬇ تکمیلِ خودکار از آگهی‌های واقعی'}</button>
+        <button disabled={enriching} onClick={async () => {
+          setEnriching(true); setEnrichMsg(null)
+          const r = await fetch('/api/admin/geo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'enrichFromDivar' }) }).then(x => x.json()).catch(() => null)
+          setEnriching(false)
+          if (!r?.ok) { setEnrichMsg(<span style={{ color: '#e7674a' }}>{r?.error || 'خطا در اجرا'}</span>); return }
+          setProvinces(r.provinces)
+          setEnrichMsg(<span>
+            ✓ از دیوار: <b style={{ color: 'var(--gold)' }}>{Number(r.added).toLocaleString('fa-IR')}</b> محلهٔ جدید
+            {r.createdCities > 0 && <> + {Number(r.createdCities).toLocaleString('fa-IR')} شهرِ جدید</>}
+            {r.perCity?.length > 0 && <> — {r.perCity.slice(0, 6).map((c: any) => `${c.city} ${Number(c.added).toLocaleString('fa-IR')}`).join('، ')}{r.perCity.length > 6 ? ' و…' : ''}</>}
+            {r.unknown?.length > 0 && <span style={{ color: 'var(--muted)' }}> · شهرهای بدونِ استانِ شناخته‌شده: {r.unknown.slice(0, 8).map((u: any) => u.city).join('، ')}{r.unknown.length > 8 ? ' و…' : ''} (شهر را در درخت بساز و دوباره اجرا کن)</span>}
+          </span>)
+        }} style={{ padding: '9px 18px', borderRadius: 10, background: 'transparent', color: 'var(--gold)', border: '1px solid var(--gold)', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>{enriching ? '…' : '⬇ همگام‌سازیِ محلاتِ رسمیِ دیوار'}</button>
         {enrichMsg && <div style={{ width: '100%', fontSize: 12, lineHeight: 2 }}>{enrichMsg}</div>}
+        <div style={{ width: '100%', fontSize: 11, color: 'var(--faint)' }}>
+          دراپ‌داون‌های «شهر / محله / مناطقِ فعالیت» در پروفایل‌ها خودکار از هر سه منبع (درخت + دیوار + آگهی‌های واقعی) پر می‌شوند —
+          برای دیوار کافی است یک بار در «منابع داده → دیوار» دکمهٔ واردکردنِ همهٔ شهرها/محلات را بزنی.
+        </div>
       </div>
       {loading ? <div style={{ color: 'var(--muted)' }}>در حال بارگذاری…</div> : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }} className="mjsa-2col">

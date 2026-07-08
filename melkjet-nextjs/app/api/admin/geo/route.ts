@@ -6,6 +6,7 @@ import {
 } from '@/app/lib/geo-store'
 import { liveGeo, invalidateLiveGeo } from '@/app/lib/geo-live'
 import { invalidateLocations } from '@/app/lib/locations-store'
+import { getCities as divarCities, getDistricts as divarDistricts } from '@/app/lib/divar-places'
 
 async function guard() {
   const s = await getSession()
@@ -41,6 +42,35 @@ export async function POST(req: NextRequest) {
     }
     invalidateLocations()
     return NextResponse.json({ ok: true, added, perCity: perCity.sort((a, x) => x.added - a.added), unknown: unknown.sort((a, x) => x.hoods - a.hoods), provinces: getAll() })
+  }
+  // همگام‌سازیِ محلاتِ رسمیِ دیوار به درختِ geo — کامل‌ترین منبعِ محلاتِ کلِ ایران.
+  // پیش‌نیاز: ادمین در «منابع داده → دیوار» شهرها/محلات را ایمپورت کرده باشد (دکمهٔ «دریافت همه»).
+  if (b.action === 'enrichFromDivar') {
+    const norm = (s: string) => String(s || '').replace(/‌/g, '').replace(/\s+/g, '').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim()
+    const cities = divarCities()
+    if (!cities.length) return NextResponse.json({ error: 'اول از «منابع داده → دیوار» شهرها و محلات را دریافت کن (دکمهٔ دریافت/واردکردنِ همه)' }, { status: 400 })
+    const provs = getAll()
+    const provByName = new Map(provs.map(p => [norm(p.name), p.id] as const))
+    const knownCities = new Set(provs.flatMap(p => p.cities.map(c => norm(c.name))))
+    let added = 0, createdCities = 0
+    const perCity: Array<{ city: string; added: number }> = []
+    const unknown: Array<{ city: string; hoods: number }> = []
+    for (const c of cities) {
+      const hoods = divarDistricts(c.id).map(d => String(d.name || '').trim()).filter(Boolean)
+      if (!hoods.length) continue
+      if (!knownCities.has(norm(c.name))) {
+        // اگر دیوار استان را داده و آن استان در درخت هست، شهر خودکار ساخته می‌شود؛ وگرنه گزارش.
+        const pid = c.province ? provByName.get(norm(c.province)) : undefined
+        if (!pid) { unknown.push({ city: c.name, hoods: hoods.length }); continue }
+        addCity(pid, c.name)
+        knownCities.add(norm(c.name))
+        createdCities++
+      }
+      const r = addNeighborhoodsBulk(c.name, hoods)
+      if (r.added > 0) { added += r.added; perCity.push({ city: c.name, added: r.added }) }
+    }
+    invalidateLocations(); invalidateLiveGeo()
+    return NextResponse.json({ ok: true, added, createdCities, perCity: perCity.sort((a, x) => x.added - a.added), unknown: unknown.sort((a, x) => x.hoods - a.hoods), provinces: getAll() })
   }
   let provinces
   switch (b.action) {

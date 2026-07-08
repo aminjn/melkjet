@@ -6,7 +6,7 @@ import { proxiedRequest } from './proxy-fetch'
 const DATA_FILE = join(process.cwd(), '.divar-places.json')
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
 
-export interface DivarCity { id: number; name: string; slug: string }
+export interface DivarCity { id: number; name: string; slug: string; province?: string }
 export interface DivarDistrict { id: number; name: string; slug: string; lat?: number; lng?: number }
 interface PlacesDB { cities: DivarCity[]; districts: Record<string, DivarDistrict[]>; importedAt?: number }
 
@@ -42,7 +42,11 @@ export async function importCities(): Promise<{ count: number }> {
   const d = JSON.parse(res.body)
   const raw: any[] = Array.isArray(d) ? d : (d.cities || d.data || [])
   const cities: DivarCity[] = raw
-    .map((c: any) => ({ id: Number(c.id), name: c.name || c.title || '', slug: c.slug || '' }))
+    .map((c: any) => ({
+      id: Number(c.id), name: c.name || c.title || '', slug: c.slug || '',
+      // اگر پاسخِ دیوار استان را بدهد (province/parent/state)، نگه می‌داریم — برای ساختِ خودکارِ شهرهای غایب در درختِ geo.
+      province: String(c.province?.name || c.province?.title || c.parent?.name || c.parent?.title || c.state?.name || '').trim() || undefined,
+    }))
     .filter((c: DivarCity) => c.id && c.name)
   const db = load()
   db.cities = cities

@@ -5,6 +5,10 @@
 //   • ادمین با یک کلیک درختِ geo را از دادهٔ واقعی تکمیل کند (enrich)
 import { candidateListings, type Item } from './scraper-store'
 import { getAll } from './geo-store'
+import { getCities as divarCitiesRaw, getDistricts as divarDistricts } from './divar-places'
+
+// تطبیقِ نامِ فارسی (حذف ZWNJ/فاصله + یکسان‌سازی ی/ک) — همان قراردادِ geo-store.
+const normFa = (s: string) => String(s || '').replace(/‌/g, '').replace(/\s+/g, '').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim()
 
 export interface LiveGeo {
   cities: Array<{ city: string; count: number }>
@@ -42,28 +46,42 @@ export async function liveGeo(): Promise<LiveGeo> {
 }
 export function invalidateLiveGeo() { cache = null }
 
-// محله‌های یک شهر: ادغامِ درختِ دستیِ geo (اول) + محله‌های دیده‌شده در آگهی‌های واقعی (به‌ترتیبِ فراوانی).
+// محلاتِ رسمیِ دیوار برای یک شهر (اگر ادمین «دریافت از دیوار» را زده باشد) — کامل‌ترین منبعِ کلِ ایران.
+export function divarHoodsFor(cityName: string): string[] {
+  const key = normFa(cityName)
+  if (!key) return []
+  const c = divarCitiesRaw().find(x => normFa(x.name) === key)
+  if (!c) return []
+  return divarDistricts(c.id).map(d => String(d.name || '').trim()).filter(Boolean)
+}
+
+// محله‌های یک شهر: درختِ دستیِ geo (اول) + محلاتِ رسمیِ دیوار (کامل — مثلاً «جنت‌آباد شمالی») +
+// محله‌های دیده‌شده در آگهی‌های واقعی (به‌ترتیبِ فراوانی). تکراری‌ها با تطبیقِ فارسی حذف می‌شوند.
 export async function hoodsForCity(cityName: string): Promise<string[]> {
   const city = norm(cityName)
   if (!city) return []
   const out: string[] = []
   const seen = new Set<string>()
+  const push = (h: string) => { const n = norm(h); const k = normFa(n); if (n && k && !seen.has(k)) { seen.add(k); out.push(n) } }
   for (const p of getAll()) for (const c of p.cities || []) {
-    if (norm(c.name) !== city) continue
-    for (const d of c.districts || []) for (const h of d.neighborhoods || []) { const n = norm(h); if (n && !seen.has(n)) { seen.add(n); out.push(n) } }
+    if (normFa(c.name) !== normFa(city)) continue
+    for (const d of c.districts || []) for (const h of d.neighborhoods || []) push(h)
   }
+  for (const h of divarHoodsFor(city)) push(h)
   const live = await liveGeo()
   const fromListings = [...(live.hoodsByCity.get(city) || new Map()).entries()].sort((a, b) => b[1] - a[1])
-  for (const [h] of fromListings) if (!seen.has(h)) { seen.add(h); out.push(h) }
-  return out.slice(0, 400)
+  for (const [h] of fromListings) push(h)
+  return out.slice(0, 600)
 }
 
-// همهٔ شهرها برای دراپ‌داون: شهرهای درختِ geo + شهرهای دارای آگهیِ واقعی (≥۲ آگهی، ضدِ نویز).
+// همهٔ شهرها برای دراپ‌داون: درختِ geo + شهرهای دیوار (کلِ ایران، اگر ایمپورت شده) + شهرهای دارای آگهیِ واقعی.
 export async function citiesList(): Promise<string[]> {
   const out: string[] = []
   const seen = new Set<string>()
-  for (const p of getAll()) for (const c of p.cities || []) { const n = norm(c.name); if (n && !seen.has(n)) { seen.add(n); out.push(n) } }
+  const push = (c: string) => { const n = norm(c); const k = normFa(n); if (n && k && !seen.has(k)) { seen.add(k); out.push(n) } }
+  for (const p of getAll()) for (const c of p.cities || []) push(c.name)
+  for (const c of divarCitiesRaw()) push(c.name)
   const live = await liveGeo()
-  for (const { city, count } of live.cities) if (count >= 2 && !seen.has(city)) { seen.add(city); out.push(city) }
-  return out.slice(0, 500)
+  for (const { city, count } of live.cities) if (count >= 2) push(city)
+  return out.slice(0, 2000)
 }
