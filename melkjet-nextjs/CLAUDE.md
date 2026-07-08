@@ -274,3 +274,20 @@ HTTP/1.1 → WAF 401; only HTTP/2 works).
   Current data: 19,879 projects, 16,150 unique receptors. Profiles built per real constructor.id with name+phone+projects.
 - **PENDING**: weekly cron auto-reveal (cron-runner) + create MelkJet سازنده accounts from revealed
   builders (name+phone) + region/phase name lookups (regionId-100=Tehran district for city 1).
+
+---
+
+## 🏛 Empire (بازی «امپراتوری») — READ docs/EMPIRE-TRACKER.md FIRST
+The real-data game layer (Empire Bible, 7 docs so far) is tracked in
+**`docs/EMPIRE-TRACKER.md`** — the single source of truth for: unbreakable rules
+(no fake data; assistant is «ملک‌جت» never «نورا»; never say «بازی» in user UI;
+every knob live in super-admin; no P2W; deterministic hash mechanics), the code
+map (empire-store/api/page/EmpireAdminPanel/empire-brief/cron), completed phases
+1–8 with commit hashes, per-volume implementation status for ALL uploaded Bible
+docs, the pending queue (NPC Civilization → Quest/Season Studio → Crowdfunding →
+Zarinpal → Prestige), and the per-new-doc workflow. **Any session that touches
+the game MUST read that file first and update it in the same commit as the code.**
+Tests: `node --import ./scripts/reos-loader.mjs scripts/reos-test.mjs` (unit) and
+`DATABASE_URL=postgres://reos:reos@127.0.0.1:5432/reos_test node --import
+./scripts/reos-loader.mjs scripts/reos-store-test.mjs` (PG; start postgres first).
+Admin menus smoke test: `node scripts/admin-smoke.mjs` (real browser, all 45 views).
