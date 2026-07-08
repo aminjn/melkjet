@@ -66,6 +66,7 @@ export default function EmpirePage() {
   const [boardTab, setBoardTab] = useState('score')
   const [loanVal, setLoanVal] = useState('')
   const [repayVal, setRepayVal] = useState('')
+  const [nego, setNego] = useState<Record<string, any>>({})   // نتیجهٔ مذاکره به‌ازای هر آگهی
   const suspended = useRef(false)
 
   const api = useCallback(async (body: any) => {
@@ -112,8 +113,17 @@ export default function EmpirePage() {
   ]
 
   async function doCreate() {
-    const d = await api({ action: 'create', name, persona, path: pathKey, answers: { city, tenB, risk, ptype, goal }, dreamPicks })
+    // دعوتِ شراکتی (§7.4): ?ref=<شمارهٔ امپراتوری> — هر دو طرف پاداش می‌گیرند.
+    const ref = Number(new URLSearchParams(window.location.search).get('ref')) || 0
+    const d = await api({ action: 'create', name, persona, path: pathKey, ref, answers: { city, tenB, risk, ptype, goal }, dreamPicks })
     if (d) { setSt(d); setStep('gift') }
+  }
+  // اشتراکِ وایرال (§7.12): کارتِ افتخار — از سرِ افتخار، نه جایزه.
+  async function doShare(text: string) {
+    const url = `${window.location.origin}/empire${st?.empire?.no ? `?ref=${st.empire.no}` : ''}`
+    const full = `${text}\n${url}`
+    try { if (navigator.share) { await navigator.share({ text: full }); return } } catch {}
+    try { await navigator.clipboard.writeText(full); alert('متنِ اشتراک کپی شد — برای دوستانت بفرست 🤝') } catch {}
   }
   async function doSuggest() {
     setStep('scan')
@@ -123,11 +133,11 @@ export default function EmpirePage() {
     const wait = Math.max(0, 3000 - (Date.now() - t0))
     setTimeout(() => { if (d?.opportunities?.length) { setOpps(d.opportunities); setStep('opps') } else { setErr(d ? 'فعلاً فرصتِ هم‌بودجه‌ای در بازار نیست — از داشبورد ادامه بده' : err); setStep('dash') } }, wait)
   }
-  async function doBuy(o: Opp) {
+  async function doBuy(o: Opp, negotiated = false) {
     setStep('buying'); setOwned(o)
     const texts = ['در حال بررسی سند...', 'در حال بررسی ارزش...', 'در حال تحلیل بازار...', '✍️ امضای قرارداد']
     for (let i = 0; i < texts.length; i++) { setBuyTxt(texts[i]); await new Promise(r => setTimeout(r, 900)) }
-    const d = await api({ action: 'buy', listingId: o.id })
+    const d = await api({ action: 'buy', listingId: o.id, negotiated })
     if (d) { setSt(d); setStep('owned') } else setStep('opps')
   }
   async function doReject() {
@@ -311,7 +321,11 @@ export default function EmpirePage() {
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>{o.hood}{o.area ? ` · ${fa(o.area)} متر` : ''}</div>
           <div style={{ fontSize: 13, color: 'var(--gold)', fontWeight: 700 }}>{faB(o.price)} تومان</div>
           <div style={{ fontSize: 11, color: 'var(--faint)' }}>{o.reason}</div>
-          <button style={{ ...btn, padding: '8px 12px', fontSize: 13 }} disabled={busy} onClick={() => doBuy(o)}>این را انتخاب می‌کنم</button>
+          {/* مذاکره (GDD جلد۱ مرحلهٔ ۵) — یک‌بار، نتیجه قطعی */}
+          {nego[o.id]
+            ? <div style={{ fontSize: 11.5, color: nego[o.id].success ? '#7c6' : 'var(--muted)' }}>{nego[o.id].success ? `🤝 فروشنده ${fa(nego[o.id].discountPct)}٪ تخفیف داد → ${faB(nego[o.id].finalPrice)} تومان` : '🤝 فروشنده کوتاه نیامد — قیمت همان است.'}</div>
+            : <button style={{ ...btnGhost, padding: '5px 10px', fontSize: 11.5 }} disabled={busy} onClick={async () => { const d = await api({ action: 'negotiate', listingId: o.id }); if (d) setNego(p => ({ ...p, [o.id]: d })) }}>🤝 اول مذاکره کن</button>}
+          <button style={{ ...btn, padding: '8px 12px', fontSize: 13 }} disabled={busy} onClick={() => doBuy(o, !!nego[o.id]?.success)}>این را انتخاب می‌کنم{nego[o.id]?.success ? ' (با تخفیف)' : ''}</button>
         </div>
       ))}
     </div>
@@ -335,6 +349,7 @@ export default function EmpirePage() {
       <div style={{ fontSize: 40 }}>🎉</div>
       <div style={{ fontSize: 20, fontWeight: 800, margin: '10px 0' }}>تبریک — اولین ملکِ مسیرت مالِ توست</div>
       <div style={{ fontSize: 14, color: 'var(--gold)', fontWeight: 700 }}>از امروز تو فقط بازدیدکننده نیستی. تو مالک هستی.</div>
+      <button style={{ ...btnGhost, marginTop: 10, fontSize: 12, padding: '6px 14px' }} onClick={() => doShare(`🏠 اولین ملکِ امپراتوری‌ام را در ملک‌جت انتخاب کردم!\n«${owned?.title?.slice(0, 60) || ''}»\nتو هم امپراتوری‌ات را بساز:`)}>📤 این لحظه را به اشتراک بگذار</button>
       <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', marginTop: 16, fontSize: 13 }}>
         <span style={{ ...card, padding: '6px 12px' }}>⚡ +{fa(100)} XP</span>
         <span style={{ ...card, padding: '6px 12px' }}>🏅 Founder</span>
@@ -375,6 +390,14 @@ export default function EmpirePage() {
         <span style={{ ...card, padding: '6px 10px' }}>🤖 {fa(e.aiTokens)}</span>
         {st.streak && st.streak.streak > 0 && <span style={{ ...card, padding: '6px 10px' }} title="روزهای پیاپیِ حضور">🔥 {fa(st.streak.streak)}</span>}
       </div>
+    </div>
+
+    {/* پیامِ بازگشت (فصل ۴) + پیام‌آغازیِ دستیار + نردبانِ رؤیا + زمانِ امروز */}
+    {st.welcomeBack && <MJ><b>دلمان برایت تنگ شده بود — {fa(st.welcomeBack.days)} روز خبری ازت نبود.</b><br />در نبودت بازار حرکت کرده و ارزشِ دارایی‌هایت دوباره از قیمت‌های واقعی محاسبه شد. همهٔ سرمایه‌گذارهای بزرگ وقفه داشته‌اند — مهم برگشتن است. از نامهٔ امروز شروع کن.</MJ>}
+    {st.mentorLine && !st.welcomeBack && <MJ>{st.mentorLine}</MJ>}
+    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', fontSize: 12.5 }}>
+      <span style={{ ...card, padding: '8px 14px', color: 'var(--gold)' }}>{st.nextDream}</span>
+      {st.minutesToday > 0 && <span style={{ ...card, padding: '8px 14px', color: 'var(--muted)' }}>⏱ امروز فقط {fa(st.minutesToday)} دقیقه زمان لازم داری</span>}
     </div>
 
     {/* صندوقچهٔ روزانه — پاداشِ متغیر (هر روز یک‌بار) */}
@@ -455,6 +478,22 @@ export default function EmpirePage() {
     {ms && <div style={card}>
       <div style={{ fontWeight: 700, marginBottom: 10 }}>🎯 مأموریت‌های مسیر</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {/* کوئستِ روزانه/هفتگیِ شخصی (GDD جلد۲) — هر روز/هفته برای هر کاربر متفاوت */}
+        {st.quests && [['🌅 کوئستِ امروزِ تو', st.quests.daily], ['📅 کوئستِ این هفته', st.quests.weekly]].map(([lbl, q]: any) => (
+          <div key={q.claimKey} style={{ ...card, background: 'var(--bg2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+              <b style={{ fontSize: 13 }}>{lbl}: {q.title}</b>
+              {q.claimed ? <span style={{ fontSize: 12, color: '#7c6' }}>✓ دریافت شد</span>
+                : q.done ? <button style={{ ...btn, padding: '4px 12px', fontSize: 12 }} onClick={() => doClaim(q.claimKey)}>دریافتِ ⚡{fa(q.rewardXp)} + 🪙{fa(q.rewardCoins)}</button>
+                : <span style={{ fontSize: 11, color: 'var(--muted)' }}>⚡{fa(q.rewardXp)} + 🪙{fa(q.rewardCoins)}</span>}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+              <div style={{ flex: 1, height: 5, background: 'var(--line)', borderRadius: 3 }}><div style={{ width: `${Math.min(100, q.progress / q.target * 100)}%`, height: 5, background: q.done ? '#7c6' : 'var(--gold)', borderRadius: 3 }} /></div>
+              <span style={{ fontSize: 11, color: 'var(--muted)' }}>{fa(q.progress)}/{fa(q.target)}</span>
+            </div>
+            <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 4 }}>پیشرفت از رفتارِ واقعی‌ات در <Link href="/search" style={{ color: 'var(--gold)' }}>جستجوی ملک‌جت</Link> شمرده می‌شود.</div>
+          </div>
+        ))}
         {/* M1 */}
         <div style={{ ...card, background: 'var(--bg2)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
@@ -600,6 +639,18 @@ export default function EmpirePage() {
                 </div>
               ))}
             </div>
+          </div>}
+          {/* گذرنامهٔ امپراتوری (GDD جلد۶): نفوذِ من در محله‌ها + اشتراک */}
+          {boards.passport?.length > 0 && <div style={{ marginTop: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>🛂 گذرنامهٔ امپراتوریِ تو</div>
+            {boards.passport.map((p: any) => (
+              <div key={p.hood} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, padding: '5px 10px' }}>
+                <b style={{ minWidth: 110 }}>{p.hood}</b>
+                <div style={{ flex: 1, height: 5, background: 'var(--line)', borderRadius: 3 }}><div style={{ width: `${Math.min(100, p.influence)}%`, height: 5, background: 'var(--gold)', borderRadius: 3 }} /></div>
+                <span style={{ color: 'var(--gold)', fontWeight: 700 }}>نفوذ {fa(p.influence)}٪</span>
+              </div>
+            ))}
+            <button style={{ ...btnGhost, marginTop: 8, fontSize: 12, padding: '6px 14px' }} onClick={() => doShare(`🛂 گذرنامهٔ امپراتوریِ من در ملک‌جت:\n${boards.passport.slice(0, 3).map((p: any) => `${p.hood}: نفوذ ${fa(p.influence)}٪`).join('\n')}\nتو هم قلمروِ خودت را بساز:`)}>📤 اشتراکِ گذرنامه</button>
           </div>}
           <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 8 }}>رتبه‌ها از {fa(boards.total)} امپراتوریِ فعال — فقط نام و نشان نمایش داده می‌شود.</div>
         </div>

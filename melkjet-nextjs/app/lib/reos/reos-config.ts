@@ -33,6 +33,9 @@ export interface ReosConfig {
     maintenancePctYear: number
     chest: { enabled: boolean; maxCoins: number; maxXp: number }
     bank: { enabled: boolean; maxLoanPctOfNetWorth: number; baseRatePctYear: number; termDays: number; repayXp: number }
+    transferTaxPct: number
+    quests: { dailyXp: number; dailyCoins: number; weeklyXp: number; weeklyCoins: number }
+    referralCoins: number
   }
 }
 
@@ -72,6 +75,11 @@ export const DEFAULT_CONFIG: ReosConfig = {
     chest: { enabled: true, maxCoins: 100, maxXp: 50 },
     // بانک (GDD جلد ۱۶): سقف و نرخِ وام تابعِ امتیازِ اعتباری؛ نرخِ پایه سالانه است، بهره روزشمار.
     bank: { enabled: true, maxLoanPctOfNetWorth: 50, baseRatePctYear: 18, termDays: 90, repayXp: 40 },
+    // مالیاتِ نقل‌وانتقال (جلد ۵/۱۶): روی خرید و فروش؛ واردِ «خزانه» می‌شود — هیچ پولی بی‌هدف نیست.
+    transferTaxPct: 1,
+    // کوئستِ روزانه/هفتگیِ شخصی (GDD جلد ۲) + دعوتِ شراکتی (§7.4 — هر دو طرف پاداش می‌گیرند).
+    quests: { dailyXp: 30, dailyCoins: 15, weeklyXp: 120, weeklyCoins: 60 },
+    referralCoins: 200,
   },
 }
 

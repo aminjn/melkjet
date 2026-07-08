@@ -58,6 +58,8 @@ export interface EmpireData {
   guess: { tries: number; correct: number }           // Beat AI (مأموریت M3)
   loan?: { amount: number; balance: number; ratePctYear: number; startedAt: number; dueAt: number; lastInterestAt: number }   // بانک (جلد ۱۶) — یک وامِ فعال
   creditHist?: { taken: number; repaid: number; lateDays: number }   // سابقهٔ بازپرداخت — خوراکِ امتیازِ اعتباری
+  taxPaid?: number            // مالیاتِ نقل‌وانتقالِ پرداختی → خزانهٔ بازی (جلد ۵/۱۶)
+  refBy?: number              // شمارهٔ امپراتوریِ دعوت‌کننده (§7.4 دعوتِ شراکتی)
   stylePicks?: string[]                               // مأموریت M2 «سبکِ خودت را پیدا کن» (انتخابِ تصویری)
   hunter?: { a: string; b: string; better: string; at: number }   // جفتِ فعالِ Property Hunter (§6.4)
   claims: Record<string, number>                      // پاداش‌های یک‌بارمصرفِ دریافت‌شده (missionKey → ts)
@@ -211,6 +213,48 @@ export function loanTermsFor(score: number, netWorth: number, cfg = config().emp
   return { maxLoan, ratePctYear: Math.round(cfg.baseRatePctYear * mult * 10) / 10, termDays: cfg.termDays, eligible: cfg.enabled && maxLoan > 0 }
 }
 
+// مذاکره (GDD جلد۱، مرحلهٔ ۵ «تولد یک امپراتور») — قطعی از هش تا قابلِ‌سوءاستفاده نباشد:
+// شانسِ موفقیت با مهارتِ مذاکره بالا می‌رود؛ تخفیف ۲ تا ۶٪. همان کاربر/آگهی همیشه همان نتیجه.
+export function negotiationOutcome(userId: string, listingId: string, negotiationSkill: number): { success: boolean; discountPct: number } {
+  const h = createHash('sha1').update(userId + '|nego|' + listingId).digest()
+  const roll = h.readUInt32BE(0) % 100
+  const chance = 25 + Math.round(Math.max(0, Math.min(100, negotiationSkill)) / 2)   // ۲۵٪ پایه تا ۷۵٪
+  if (roll >= chance) return { success: false, discountPct: 0 }
+  return { success: true, discountPct: 2 + (h.readUInt32BE(4) % 5) }                  // ۲..۶٪
+}
+
+// کوئستِ روزانه/هفتگیِ شخصی (GDD جلد۲): چرخشِ قطعی از هشِ کاربر+دوره — «هیچ دو کاربری کوئستِ یکسان نمی‌گیرند».
+// همه از رویدادهای واقعیِ REOS قابلِ‌اندازه‌گیری‌اند (بازدید/محله/ذخیره/جستجو).
+export const DAILY_QUESTS = [
+  { key: 'views3', title: '۳ آگهیِ واقعی ببین', metric: 'views' as const, target: 3 },
+  { key: 'views5', title: '۵ آگهیِ واقعی ببین', metric: 'views' as const, target: 5 },
+  { key: 'hoods2', title: '۲ محلهٔ متفاوت را بگرد', metric: 'hoods' as const, target: 2 },
+  { key: 'save1', title: '۱ آگهی ذخیره کن', metric: 'saves' as const, target: 1 },
+  { key: 'search2', title: '۲ جستجوی هدفمند بزن', metric: 'searches' as const, target: 2 },
+]
+export const WEEKLY_QUESTS = [
+  { key: 'views15', title: 'این هفته ۱۵ آگهی بررسی کن', metric: 'views' as const, target: 15 },
+  { key: 'saves3', title: 'این هفته ۳ آگهی ذخیره کن', metric: 'saves' as const, target: 3 },
+  { key: 'hoods5', title: 'این هفته ۵ محلهٔ متفاوت را بشناس', metric: 'hoods' as const, target: 5 },
+]
+export function questOf(userId: string, period: number, cadence: 'daily' | 'weekly') {
+  const list = cadence === 'daily' ? DAILY_QUESTS : WEEKLY_QUESTS
+  const h = createHash('sha1').update(userId + '|q|' + cadence + '|' + period).digest()
+  return list[h.readUInt32BE(0) % list.length]
+}
+
+// نردبانِ رؤیا (GDD جلد۳ «Dream Ladder»): همیشه یک رؤیای بزرگ‌ترِ بعدی جلوی چشم — قطعی از وضعیتِ واقعی.
+export function nextDreamOf(e: Pick<EmpireData, 'assets' | 'realized' | 'creditHist' | 'badges'>): string {
+  if (!e.assets.length && !(e.realized || 0)) return '🏠 رؤیای بعدی: اولین ملکِ مسیرت را انتخاب کن.'
+  const hasIncome = e.assets.some(a => (a.income || 0) > 0)
+  if (!hasIncome && e.assets.length) return '💰 رؤیای بعدی: اولین درآمدِ اجاره/کسب‌وکارت را بساز.'
+  if (!(e.realized || 0)) return '📈 رؤیای بعدی: اولین فروشِ سودده — بخر، رشد بده، بفروش.'
+  if (!(e.creditHist?.repaid)) return '🏦 رؤیای بعدی: اولین وام را بگیر و خوش‌حساب تسویه کن.'
+  if (e.assets.length < 3) return '🏘 رؤیای بعدی: پرتفوی ۳ملکی — در محله‌های متفاوت.'
+  if (e.assets.length < 5) return '🗺 رؤیای بعدی: نفوذ در ۲ محله — پایه‌های امپراتوری.'
+  return '👑 رؤیای بعدی: صدرِ جدولِ محله‌ات — نامت در تاریخِ ملک‌جت.'
+}
+
 // جملهٔ AI Dream Engine از انتخاب‌های Dream Board (فصل ۳) — قطعی.
 export function dreamSentence(picks: string[]): string {
   const p = new Set(picks)
@@ -271,7 +315,7 @@ async function mutateEmpire(userId: string, fn: (e: EmpireData) => void | string
 
 // ══════════ تولد (فصل ۲): سؤال‌ها → هویت → نام → بستهٔ خوش‌آمد → اولین نقطهٔ تایم‌لاین ══════════
 export async function createEmpire(userId: string, input: {
-  name?: string; persona?: string; path?: string
+  name?: string; persona?: string; path?: string; ref?: number
   answers: { city?: string; tenB?: string; risk?: number; ptype?: string; goal?: string }
   dreamPicks?: string[]
 }, now = Date.now()): Promise<EmpireData> {
@@ -323,6 +367,20 @@ export async function createEmpire(userId: string, input: {
     claims: {}, realized: 0, rejects: 0,
     updatedAt: now,
   }
+  // دعوتِ شراکتی (§7.4): اگر با لینکِ یک امپراتوریِ دیگر آمده، هر دو طرف پاداش می‌گیرند — «قراردادِ همکاری».
+  const refNo = Number(input.ref) || 0
+  if (refNo > 0 && refNo !== no) {
+    const referrer = (await listEmpiresPublic(500)).find(x => x.no === refNo)
+    if (referrer) {
+      e.refBy = refNo
+      e.coins += cfg.referralCoins
+      e.timeline.push({ at: now, icon: '🤝', title: 'قراردادِ همکاری', detail: `با دعوتِ «${referrer.name}» وارد شدی — ${cfg.referralCoins.toLocaleString('fa-IR')} کوینِ شراکت` })
+      await mutateEmpire(referrer.userId, r => {
+        r.coins += cfg.referralCoins
+        r.timeline.push({ at: now, icon: '🤝', title: 'شریکِ جدید وارد شد', detail: `«${e.name}» با دعوتِ تو شروع کرد — ${cfg.referralCoins.toLocaleString('fa-IR')} کوینِ شراکت` })
+      }).catch(() => {})
+    }
+  }
   return putEmpire(e)
 }
 
@@ -336,9 +394,12 @@ export async function buyAsset(userId: string, listing: { id: string; title: str
   return mutateEmpire(userId, e => {
     if (!listing.id || !(listing.price > 0)) return 'آگهیِ نامعتبر'
     if (e.assets.some(a => a.listingId === listing.id)) return 'این ملک از قبل در امپراتوریِ توست'
-    if (e.capital < listing.price) return 'سرمایهٔ کافی نیست'
+    // مالیاتِ نقل‌وانتقال (جلد ۵/۱۶): خرید = قیمت + مالیات؛ مالیات به خزانه می‌رود.
+    const tax = Math.round(listing.price * (cfg.transferTaxPct / 100))
+    if (e.capital < listing.price + tax) return tax > 0 ? `سرمایه کافی نیست (قیمت + ${cfg.transferTaxPct.toLocaleString('fa-IR')}٪ مالیاتِ انتقال)` : 'سرمایهٔ کافی نیست'
     const first = e.assets.length === 0
-    e.capital -= listing.price
+    e.capital -= listing.price + tax
+    e.taxPaid = (e.taxPaid || 0) + tax
     e.assets.push({ id: 'ast_' + randomBytes(5).toString('hex'), listingId: listing.id, title: String(listing.title).slice(0, 120), hood: String(listing.hood || '').slice(0, 60), kind: assetKindOf(listing.ptype || ''), buyPrice: listing.price, boughtAt: now })
     // پاداشِ سند (فصل ۳): ‎+100 XP + Founder + First Owner + Builder Potential +2 + Investor Confidence +1‎
     e.xp += cfg.buyRewardXp
@@ -454,7 +515,9 @@ export async function sellAsset(userId: string, assetId: string, livePrice: numb
     const a = e.assets[i]
     salePrice = livePrice > 0 ? livePrice : a.buyPrice
     profit = salePrice - a.buyPrice
-    e.capital += salePrice
+    const tax = Math.round(salePrice * (config().empire.transferTaxPct / 100))
+    e.capital += salePrice - tax
+    e.taxPaid = (e.taxPaid || 0) + tax
     e.realized = (e.realized || 0) + profit
     if (profit > 0) e.xp += cfg.sellProfitXp
     e.assets.splice(i, 1)

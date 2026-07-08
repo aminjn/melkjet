@@ -10,6 +10,7 @@ import {
   sellAsset, setLandPlan, chooseBusiness, accrueIncome, claimDailyChest, chestRewardOf,
   landProjection, empireScoreOf, listEmpiresPublic, applyUpkeep,
   creditScoreOf, loanTermsFor, takeLoan, repayLoan, accrueLoanInterest,
+  negotiationOutcome, questOf, nextDreamOf,
   type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
 import { buildBriefFor } from '@/app/lib/empire-brief'
@@ -58,6 +59,38 @@ async function missionsOf(userId: string, e: EmpireData) {
     m3: { tries: e.guess.tries, correct: e.guess.correct, done: e.guess.tries >= 1, rewardXp: cfg.guessRewardXp, rewardCoins: cfg.guessRewardCoins },
     hunter: { active: !!e.hunter, claimed: !!e.claims['property_hunter'], rewardXp: cfg.missionRewardXp, rewardCoins: cfg.missionRewardCoins },
   }
+}
+
+// کوئستِ روزانه/هفتگی (GDD جلد۲): تعریفِ قطعیِ چرخشی + پیشرفت از رویدادهای واقعیِ همان دوره.
+async function questsOf(userId: string, e: EmpireData, now = Date.now()) {
+  const cfg = config().empire.quests
+  const day = dayNumberOf(now), week = Math.floor(day / 7)
+  const dayStart = day * 864e5, weekStart = week * 7 * 864e5
+  const evs = await recentEvents({ userId, limit: 300 }).catch(() => [])
+  const metric = async (since: number) => {
+    const win = evs.filter(x => x.at >= since)
+    const viewIds = [...new Set(win.filter(x => x.type === 'user_clicked_property' && x.propertyId).map(x => x.propertyId!))]
+    const hoods = new Set<string>()
+    for (const id of viewIds.slice(0, 15)) { const it = await getItemById(id).catch(() => null); const h = it ? hoodOf(it.location) : ''; if (h) hoods.add(h) }
+    return { views: viewIds.length, hoods: hoods.size, saves: win.filter(x => x.type === 'user_saved_property').length, searches: win.filter(x => x.type === 'user_searched').length }
+  }
+  const [dm, wm] = [await metric(dayStart), await metric(weekStart)]
+  const dq = questOf(userId, day, 'daily'), wq = questOf(userId, week, 'weekly')
+  const dp = Math.min(dq.target, (dm as any)[dq.metric] || 0), wp = Math.min(wq.target, (wm as any)[wq.metric] || 0)
+  return {
+    daily: { ...dq, progress: dp, done: dp >= dq.target, claimed: !!e.claims[`dq_${day}`], claimKey: `dq_${day}`, rewardXp: cfg.dailyXp, rewardCoins: cfg.dailyCoins },
+    weekly: { ...wq, progress: wp, done: wp >= wq.target, claimed: !!e.claims[`wq_${week}`], claimKey: `wq_${week}`, rewardXp: cfg.weeklyXp, rewardCoins: cfg.weeklyCoins },
+  }
+}
+
+// پیام‌آغازیِ دستیار (سند: proactive اما با اجازه — کلیدِ mentorInitiates): اولین موردِ مهم، قطعی.
+function mentorLineOf(e: EmpireData, bank: any, missions: any, chestAvailable: boolean): string | null {
+  if (!config().empire.mentorInitiates) return null
+  if (bank?.loan && Date.now() > bank.loan.dueAt) return 'وامت از سررسید گذشته — هر روز تأخیر، هم بهرهٔ بیشتر هم آسیب به اعتبارت. امروز تسویه کن.'
+  if (missions?.m1?.done && !missions.m1.claimed) return 'مأموریتِ «شهرت را کشف کن» کامل شده — پاداشت منتظر است.'
+  if (chestAvailable) return 'صندوقچهٔ امروزت هنوز بسته است — هیچ‌کس نمی‌داند داخلش چیست.'
+  if (e.assets.length && !e.assets.some(a => a.action || a.landPlan || a.business)) return 'دارایی‌ات بدونِ برنامه مانده — اجاره، بازسازی یا نگه‌داری؟ تصمیمت آینده را می‌سازد.'
+  return null
 }
 
 // ارزشِ روزِ دارایی‌ها از آگهی‌های واقعی (اگر آگهی حذف شده باشد، قیمتِ خرید مبنا می‌ماند).
@@ -123,6 +156,8 @@ async function upkeepFor(userId: string, e: EmpireData, now = Date.now()): Promi
 
 // وضعیتِ کاملِ امپراتوری برای UI.
 async function stateOf(userId: string, e00: EmpireData) {
+  // پیامِ بازگشت (فصل ۴): غیبتِ ۷+ روزه — قبل از هر جهشی سنجیده می‌شود تا سیگنال از بین نرود.
+  const absentDays = Math.floor((Date.now() - (e00.updatedAt || e00.createdAt)) / 864e5)
   const e0 = await upkeepFor(userId, e00).catch(() => e00)    // هزینهٔ مالکیت (GDD جلد۵)
   const e1 = await accrueRentFor(userId, e0).catch(() => e0)  // درآمدِ اجاره/کسب‌وکار از بازارِ واقعی
   // بهرهٔ روزشمارِ وام (جلد ۱۶) — روزی یک‌بار
@@ -148,13 +183,21 @@ async function stateOf(userId: string, e00: EmpireData) {
   // بانک (جلد ۱۶): امتیازِ اعتباری از رفتارِ واقعی + شرایطِ وامِ در دسترس
   const credit = creditScoreOf(e, streak?.streak || 0)
   const bank = config().empire.bank.enabled ? { credit, loan: e.loan || null, terms: e.loan ? null : loanTermsFor(credit.score, Math.max(0, nw.netWorth)) } : null
+  const quests = await questsOf(userId, e).catch(() => null)
+  const chestAvailable = config().empire.chest.enabled && !e.claims['chest_' + today]
+  // «امروز فقط N دقیقه لازم داری» (فصل ۴ Real Life Time Engine): از کارهای بازِ واقعی.
+  const openActions = [quests?.daily && !quests.daily.claimed, quests?.weekly && !quests.weekly.claimed, chestAvailable, missions?.m1?.done && !missions.m1.claimed, brief && !brief.openedAt].filter(Boolean).length
   return {
-    enabled: true, empire: { ...e, assets }, level: empireLevel(e.xp), ...nw, missions, bank,
+    enabled: true, empire: { ...e, assets }, level: empireLevel(e.xp), ...nw, missions, bank, quests,
     empireScore: empireScoreOf(e, prices),
-    chest: config().empire.chest.enabled ? { available: !e.claims['chest_' + today] } : null,
+    chest: config().empire.chest.enabled ? { available: chestAvailable } : null,
     othersBuilding: Math.max(0, total - 1),
     suspense: e.suspense && e.suspense.dueAt > Date.now() ? e.suspense : null,
     brief, streak,
+    nextDream: nextDreamOf(e),
+    mentorLine: mentorLineOf(e, bank, missions, chestAvailable),
+    welcomeBack: absentDays >= 7 ? { days: absentDays } : null,
+    minutesToday: openActions * 3,
   }
 }
 
@@ -181,7 +224,7 @@ export async function POST(req: NextRequest) {
   switch (action) {
     // تولد (فصل ۲): پاسخ‌ها → هویت → بستهٔ خوش‌آمد.
     case 'create': {
-      const e = await createEmpire(userId, { name: b.name, persona: b.persona, path: b.path, answers: b.answers || {}, dreamPicks: Array.isArray(b.dreamPicks) ? b.dreamPicks : [] })
+      const e = await createEmpire(userId, { name: b.name, persona: b.persona, path: b.path, ref: Number(b.ref) || 0, answers: b.answers || {}, dreamPicks: Array.isArray(b.dreamPicks) ? b.dreamPicks : [] })
       return NextResponse.json(await stateOf(userId, e))
     }
     case 'rename': { const r = await renameEmpire(userId, String(b.name || '')); return r.ok ? NextResponse.json({ ok: true, name: r.empire!.name }) : NextResponse.json({ error: r.reason }, { status: 400 }) }
@@ -226,12 +269,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, rejects: r.empire!.rejects, free: r.empire!.rejects >= 2 })
     }
 
-    // خرید (فصل ۳): آگهیِ واقعی با قیمتِ واقعی؛ سرمایه کم، پاداشِ سند اعطا.
+    // مذاکره (GDD جلد۱ مرحلهٔ ۵): نتیجه قطعی از هش + مهارتِ مذاکره — قابلِ‌سوءاستفاده نیست.
+    case 'negotiate': {
+      const it = await getItemById(String(b.listingId || ''))
+      if (!it) return NextResponse.json({ error: 'آگهی یافت نشد' }, { status: 404 })
+      const e = await getEmpire(userId)
+      if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      const out = negotiationOutcome(userId, it.id, e.identity.negotiation || 0)
+      const price = priceOf(it)
+      return NextResponse.json({ ok: true, ...out, price, finalPrice: Math.round(price * (1 - out.discountPct / 100)) })
+    }
+
+    // خرید (فصل ۳): آگهیِ واقعی با قیمتِ واقعی؛ اگر مذاکره کرده، همان تخفیفِ قطعی سمتِ سرور اعمال می‌شود.
     case 'buy': {
       const it = await getItemById(String(b.listingId || ''))
       if (!it || it.type !== 'listing') return NextResponse.json({ error: 'آگهی یافت نشد' }, { status: 404 })
-      const price = priceOf(it)
+      let price = priceOf(it)
       if (!(price > 0) || !isSale(it)) return NextResponse.json({ error: 'این آگهی قیمتِ فروشِ مشخص ندارد' }, { status: 400 })
+      if (b.negotiated) {
+        const e = await getEmpire(userId)
+        const out = e ? negotiationOutcome(userId, it.id, e.identity.negotiation || 0) : { success: false, discountPct: 0 }
+        if (out.success) price = Math.round(price * (1 - out.discountPct / 100))
+      }
       const r = await buyAsset(userId, { id: it.id, title: it.title, hood: hoodOf(it.location), price, ptype: ptypeOf(it) })
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
@@ -290,14 +349,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, correct: r.correct, better: r.better, rewardXp: r.rewardXp, rewardCoins: r.rewardCoins })
     }
 
-    // دریافتِ پاداشِ مأموریت — فقط بعد از راستی‌آزماییِ سمتِ سرور از رفتارِ واقعی.
+    // دریافتِ پاداشِ مأموریت/کوئست — فقط بعد از راستی‌آزماییِ سمتِ سرور از رفتارِ واقعی.
     case 'claim': {
       const e = await getEmpire(userId)
       if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
       const ms = await missionsOf(userId, e)
+      const qs = await questsOf(userId, e).catch(() => null)
       const key = String(b.key || '')
       const def = key === 'm1_explore' ? (ms.m1.done ? { xp: ms.m1.rewardXp, coins: ms.m1.rewardCoins } : null)
         : key === 'm2_style' ? (ms.m2.done ? { xp: ms.m2.rewardXp, coins: ms.m2.rewardCoins } : null)
+        : qs && key === qs.daily.claimKey ? (qs.daily.done ? { xp: qs.daily.rewardXp, coins: qs.daily.rewardCoins } : null)
+        : qs && key === qs.weekly.claimKey ? (qs.weekly.done ? { xp: qs.weekly.rewardXp, coins: qs.weekly.rewardCoins } : null)
         : null
       if (!def) return NextResponse.json({ error: 'این مأموریت هنوز کامل نشده یا قابلِ دریافت نیست' }, { status: 400 })
       const r = await claimEmpireMission(userId, key, def.xp, def.coins)
@@ -386,6 +448,15 @@ export async function POST(req: NextRequest) {
           .map((r, i) => ({ rank: i + 1, name: r.name, persona: r.persona, no: r.no, me: r.me, value: r[key] }))
       const myHood = me?.assets[0]?.hood || ''
       const hoodLeague = myHood ? top('score', r => r.hoods.includes(myHood)) : []
+      // گذرنامهٔ امپراتوری (GDD جلد۶ «Empire Passport»): نفوذِ من در هر محله = سهمِ ارزشِ من از کلِ بازیکنان.
+      const hoodTotal = new Map<string, number>(), myHoodVal = new Map<string, number>()
+      for (const em of empires) for (const a of em.assets) {
+        if (!a.hood) continue
+        const v = prices[a.listingId] || a.buyPrice
+        hoodTotal.set(a.hood, (hoodTotal.get(a.hood) || 0) + v)
+        if (em.userId === userId) myHoodVal.set(a.hood, (myHoodVal.get(a.hood) || 0) + v)
+      }
+      const passport = [...myHoodVal.entries()].map(([hood, v]) => ({ hood, value: v, influence: Math.round(v / Math.max(1, hoodTotal.get(hood) || v) * 100) })).sort((a, x) => x.influence - a.influence)
       return NextResponse.json({
         ok: true,
         boards: {
@@ -393,6 +464,7 @@ export async function POST(req: NextRequest) {
           explorer: top('correct'), score: top('score'),
         },
         hoodLeague: { hood: myHood, rows: hoodLeague },
+        passport,
         total: rows.length,
       })
     }

@@ -28,7 +28,7 @@ function rowOf(e: EmpireData, prices: Record<string, number>) {
     userId: e.userId, no: e.no, name: e.name, persona: e.persona, path: e.path || '',
     level: lv.level, stage: lv.titleFa, xp: e.xp, coins: e.coins, aiTokens: e.aiTokens,
     capital: e.capital, netWorth: nw.netWorth, growth: nw.growth, realized: e.realized || 0,
-    debt: e.loan?.balance || 0,
+    debt: e.loan?.balance || 0, taxPaid: e.taxPaid || 0,
     assets: e.assets.length, incomes: e.assets.reduce((s, a) => s + (a.income || 0), 0),
     score: empireScoreOf(e, prices), badges: e.badges, guess: e.guess,
     createdAt: e.createdAt, updatedAt: e.updatedAt,
@@ -108,7 +108,7 @@ export async function GET(req: NextRequest) {
     totals: {
       capital: sum(r => r.capital), netWorth: sum(r => r.netWorth), coins: sum(r => r.coins),
       xp: sum(r => r.xp), aiTokens: sum(r => r.aiTokens), assets: sum(r => r.assets),
-      realized: sum(r => r.realized), incomes: sum(r => r.incomes), debt: sum(r => r.debt),
+      realized: sum(r => r.realized), incomes: sum(r => r.incomes), debt: sum(r => r.debt), treasury: sum(r => r.taxPaid),
     },
     avgScore: rows.length ? Math.round(sum(r => r.score) / rows.length) : 0,
     stageDist, briefs,

@@ -107,6 +107,7 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
           <Mini label="سودِ تحقق‌یافتهٔ کل" value={`${faB(data.totals.realized)} ت`} hint="از فروش‌ها" />
           <Mini label="درآمدِ اجاره/کسب‌وکار" value={`${faB(data.totals.incomes)} ت`} />
           <Mini label="بدهیِ بانکیِ کل" value={`${faB(data.totals.debt || 0)} ت`} hint="ماندهٔ وام‌های فعال" />
+          <Mini label="خزانه (مالیاتِ جمع‌شده)" value={`${faB(data.totals.treasury || 0)} ت`} hint="مالیاتِ نقل‌وانتقال" />
           <Mini label="میانگینِ Empire Score" value={fa(data.avgScore)} />
           <Mini label="نامهٔ امروز" value={`${fa(data.briefs.built)} / ${fa(data.briefs.opened)}`} hint="ساخته / بازشده" />
         </div>
@@ -266,6 +267,15 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             <div style={sub}>♻️ گردشِ اقتصاد (ضدِ احتکار)</div>
             {row('درآمدِ اجاره (۱/۰)', cin('rentIncome'), 'از میانهٔ اجارهٔ واقعیِ هم‌محله‌ها')}
             {row('هزینهٔ مالکیت (٪ سالانه)', cin('maintenancePctYear'), 'نگهداری/مالیات — پول در گردش می‌ماند')}
+            {row('مالیاتِ نقل‌وانتقال (٪)', cin('transferTaxPct'), 'روی خرید و فروش → خزانهٔ بازی')}
+          </div>
+          <div style={card}>
+            <div style={sub}>🎲 کوئست و دعوت</div>
+            {row('XP کوئستِ روزانه', cin('quests', 'dailyXp'))}
+            {row('کوینِ کوئستِ روزانه', cin('quests', 'dailyCoins'))}
+            {row('XP کوئستِ هفتگی', cin('quests', 'weeklyXp'))}
+            {row('کوینِ کوئستِ هفتگی', cin('quests', 'weeklyCoins'))}
+            {row('کوینِ دعوتِ شراکتی (هر طرف)', cin('referralCoins'), '§7.4 — دعوت‌شده و دعوت‌کننده هر دو')}
           </div>
           <div style={card}>
             <div style={sub}>🏦 بانک و اعتبار (جلد ۱۶)</div>

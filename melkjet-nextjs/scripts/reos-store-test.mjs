@@ -815,14 +815,14 @@ async function main() {
     ok('تولد: نشانِ Founder + اولین نقطهٔ تایم‌لاین', e.badges.includes('Founder') && e.timeline[0].title === 'به ملک‌جت پیوست')
     ok('تولد: هویت + حکم + منتور', e.identity.investor > 0 && e.profile.title === 'Investor Profile' && e.mentor === 'ملک‌جت')
     ok('createEmpire ایدمپوتنت (دوباره → همان)', (await createEmpire(uid, { answers: {} })).no === e.no)
-    // خرید: سرمایه کم می‌شود + پاداشِ سند
+    // خرید: سرمایه کم می‌شود (+ ۱٪ مالیاتِ انتقال → خزانه) + پاداشِ سند
     const b1 = await buyAsset(uid, { id: 'LST1', title: 'آپارتمان ۱۰۰ متری پونک', hood: 'پونک', price: 4_000_000_000, ptype: 'آپارتمان' })
-    ok('خریدِ اول: کسرِ سرمایه + XP + First Owner', b1.ok && b1.empire.capital === 6_000_000_000 && b1.empire.xp === 200 && b1.empire.badges.includes('First Owner'))
+    ok('خریدِ اول: کسرِ قیمت + ۱٪ مالیات + XP + First Owner', b1.ok && b1.empire.capital === 5_960_000_000 && b1.empire.taxPaid === 40_000_000 && b1.empire.xp === 200 && b1.empire.badges.includes('First Owner'))
     ok('خریدِ اول: هویت +۲ builder/+۱ investor (سند فصل۳)', b1.empire.identity.builder === e.identity.builder + 2 && b1.empire.identity.investor === Math.min(100, e.identity.investor + 1))
     const b2 = await buyAsset(uid, { id: 'LST1', title: 'x', hood: 'x', price: 1, ptype: '' })
     ok('خریدِ تکراریِ همان آگهی رد می‌شود', b2.ok === false)
     const b3 = await buyAsset(uid, { id: 'LST2', title: 'برج', hood: 'ونک', price: 99_000_000_000, ptype: 'آپارتمان' })
-    ok('سرمایهٔ ناکافی → رد', b3.ok === false && b3.reason === 'سرمایهٔ کافی نیست')
+    ok('سرمایهٔ ناکافی → رد', b3.ok === false && String(b3.reason).startsWith('سرمایه'))
     // تصمیمِ معنادار
     const aid = b1.empire.assets[0].id
     const d1 = await chooseAssetAction(uid, aid, 'rent')
@@ -886,7 +886,7 @@ async function main() {
     const eb = await getEmpire(uid)
     const xpBefore = eb.xp, capB2 = eb.capital
     const sl = await sellAsset(uid, landId, 2_500_000_000)
-    ok('فروشِ سودده: سرمایه+قیمتِ روز، realized+سود، XP+', sl.ok && sl.profit === 500_000_000 && sl.empire.capital === capB2 + 2_500_000_000 && sl.empire.realized === 500_000_000 && sl.empire.xp === xpBefore + 50 && !sl.empire.assets.some(x => x.id === landId))
+    ok('فروشِ سودده: قیمتِ روز − ۱٪ مالیات، realized=سودِ اقتصادی، XP+', sl.ok && sl.profit === 500_000_000 && sl.empire.capital === capB2 + 2_500_000_000 - 25_000_000 && sl.empire.realized === 500_000_000 && sl.empire.xp === xpBefore + 50 && !sl.empire.assets.some(x => x.id === landId))
     const sl2 = await sellAsset(uid, cmrId, 1_000_000_000)
     ok('فروشِ زیان‌ده: realized منفی + درسِ اولین شکست', sl2.ok && sl2.profit === -500_000_000 && sl2.empire.claims['first_loss'] > 0 && sl2.empire.journal.some(j => j.text.includes('اولین فروشِ با زیان')))
     ok('فروشِ داراییِ ناموجود رد می‌شود', (await sellAsset(uid, landId, 1)).ok === false)
@@ -944,6 +944,16 @@ async function main() {
     const rp2 = await repayLoan(uid, eL1.loan.balance)
     ok('تسویهٔ کامل: حذفِ وام + repaid+1 + XP', rp2.ok && rp2.settled && !rp2.empire.loan && rp2.empire.creditHist.repaid === 1 && rp2.empire.xp === xpL + 40)
     ok('بازپرداخت بدونِ وام رد می‌شود', (await repayLoan(uid, 100)).ok === false)
+
+    // ── فاز ۷: دعوتِ شراکتی (§7.4) — هر دو طرف پاداش ──
+    const refCoinsBefore = (await getEmpire(uid)).coins
+    const myNo = (await getEmpire(uid)).no
+    const eNew = await createEmpire('0912empire7', { ref: myNo, answers: { city: 'شیراز', tenB: 'سرمایه‌گذاری می‌کردم', risk: 40, ptype: 'آپارتمان', goal: 'رشدِ سرمایه' } })
+    ok('دعوت‌شده: کوینِ شراکت + refBy + تایم‌لاین', eNew.refBy === myNo && eNew.coins === 500 + 200 && eNew.timeline.some(t => t.title === 'قراردادِ همکاری'))
+    const eRef = await getEmpire(uid)
+    ok('دعوت‌کننده: کوینِ شراکت + تایم‌لاینِ «شریکِ جدید»', eRef.coins === refCoinsBefore + 200 && eRef.timeline.some(t => t.title === 'شریکِ جدید وارد شد'))
+    const eSelf = await createEmpire('0912empire8', { ref: 999999, answers: { city: 'x', tenB: 'x', risk: 1, ptype: 'x', goal: 'x' } })
+    ok('refِ نامعتبر بی‌اثر است', !eSelf.refBy && eSelf.coins === 500)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)
