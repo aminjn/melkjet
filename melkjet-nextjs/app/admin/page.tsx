@@ -843,6 +843,8 @@ function GeoView() {
   const [cid, setCid] = useState<string | null>(null)
   const [did, setDid] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [enriching, setEnriching] = useState(false)
+  const [enrichMsg, setEnrichMsg] = useState<React.ReactNode>(null)
 
   const load = async () => {
     const r = await fetch('/api/admin/geo')
@@ -865,6 +867,26 @@ function GeoView() {
       <NeshanConfig />
       <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 12 }}>
         ستون‌ها را از راست به چپ انتخاب کن: استان ← شهر ← منطقه ← محله. افزودن/ویرایش/حذف در هر ستون.
+      </div>
+      {/* تکمیلِ خودکارِ محله‌ها از آگهی‌های واقعی — راه‌حلِ «لیستِ محلاتِ شهرهای دیگر کامل نیست» */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: '12px 14px', marginBottom: 14 }}>
+        <div style={{ flex: 1, minWidth: 260, fontSize: 12.5, color: 'var(--muted)' }}>
+          محله‌های هر شهر را از <b style={{ color: 'var(--text)' }}>آگهی‌های واقعیِ سایت</b> استخراج و به درخت اضافه می‌کند
+          (هر محله با ≥۲ آگهی → منطقهٔ «سایر محله‌ها»ی همان شهر؛ بعداً جابه‌جا/ویرایش کن).
+        </div>
+        <button disabled={enriching} onClick={async () => {
+          setEnriching(true); setEnrichMsg(null)
+          const r = await fetch('/api/admin/geo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'enrichFromListings' }) }).then(x => x.ok ? x.json() : null).catch(() => null)
+          setEnriching(false)
+          if (!r) { setEnrichMsg(<span style={{ color: '#e7674a' }}>خطا در اجرا</span>); return }
+          setProvinces(r.provinces)
+          setEnrichMsg(<span>
+            ✓ <b style={{ color: 'var(--gold)' }}>{Number(r.added).toLocaleString('fa-IR')}</b> محلهٔ جدید اضافه شد
+            {r.perCity?.length > 0 && <> — {r.perCity.slice(0, 6).map((c: any) => `${c.city} ${Number(c.added).toLocaleString('fa-IR')}`).join('، ')}{r.perCity.length > 6 ? ' و…' : ''}</>}
+            {r.unknown?.length > 0 && <span style={{ color: 'var(--muted)' }}> · شهرهای غایب در درخت (اول شهر را بساز، دوباره اجرا کن): {r.unknown.slice(0, 8).map((u: any) => u.city).join('، ')}</span>}
+          </span>)
+        }} style={{ padding: '9px 18px', borderRadius: 10, background: 'var(--gold)', color: '#1a1503', border: 'none', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>{enriching ? 'در حال استخراج…' : '⬇ تکمیلِ خودکار از آگهی‌های واقعی'}</button>
+        {enrichMsg && <div style={{ width: '100%', fontSize: 12, lineHeight: 2 }}>{enrichMsg}</div>}
       </div>
       {loading ? <div style={{ color: 'var(--muted)' }}>در حال بارگذاری…</div> : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }} className="mjsa-2col">
@@ -4437,6 +4459,56 @@ function pfMoney(n: number): string {
   return n.toLocaleString('fa-IR')
 }
 
+/* گزینه‌های استانداردِ پروفایل (تخصص‌ها/خدمات) — کاربر در پنلش فقط از این‌ها انتخاب می‌کند
+   تا داده برای ML قابل‌اندازه‌گیری باشد؛ اینجا اضافه/حذف کن، همان لحظه در همهٔ پنل‌ها اعمال می‌شود. */
+function ProfileOptionsEditor() {
+  const [opts, setOpts] = useState<{ specialties: string[]; services: string[] } | null>(null)
+  const [inputs, setInputs] = useState({ specialties: '', services: '' })
+  const [msg, setMsg] = useState('')
+  useEffect(() => { fetch('/api/admin/profile-options').then(r => r.ok ? r.json() : null).then(d => { if (d) setOpts(d) }) }, [])
+  const save = async (next: { specialties: string[]; services: string[] }) => {
+    setOpts(next)
+    const d = await fetch('/api/admin/profile-options', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next) }).then(r => r.ok ? r.json() : null).catch(() => null)
+    setMsg(d?.ok ? '✓ ذخیره شد — همین حالا در همهٔ پنل‌ها اعمال شد' : '⚠ خطا در ذخیره')
+    setTimeout(() => setMsg(''), 3500)
+  }
+  const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '8px 11px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+  if (!opts) return null
+  const block = (key: 'specialties' | 'services', title: string, hint: string) => (
+    <div style={{ flex: 1, minWidth: 280 }}>
+      <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 4 }}>{title}</div>
+      <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 8 }}>{hint}</div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+        <input value={inputs[key]} onChange={e => setInputs({ ...inputs, [key]: e.target.value })}
+          onKeyDown={e => { if (e.key === 'Enter') { const v = inputs[key].trim(); if (v && !opts[key].includes(v)) save({ ...opts, [key]: [...opts[key], v] }); setInputs({ ...inputs, [key]: '' }) } }}
+          placeholder="مورد جدید + Enter" style={{ ...inp, flex: 1 }} />
+        <OutlineButton onClick={() => { const v = inputs[key].trim(); if (v && !opts[key].includes(v)) save({ ...opts, [key]: [...opts[key], v] }); setInputs({ ...inputs, [key]: '' }) }}>افزودن</OutlineButton>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {opts[key].map(v => (
+          <span key={v} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 999, padding: '4px 10px', fontSize: 12 }}>
+            {v}<button onClick={() => save({ ...opts, [key]: opts[key].filter(x => x !== v) })} style={{ background: 'none', border: 'none', color: '#e7674a', cursor: 'pointer', fontSize: 13, padding: 0 }}>×</button>
+          </span>
+        ))}
+        {!opts[key].length && <span style={{ fontSize: 12, color: 'var(--muted)' }}>خالی — کاربرها فعلاً گزینه‌ای برای انتخاب ندارند.</span>}
+      </div>
+    </div>
+  )
+  return (
+    <Card style={{ marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <span style={{ fontSize: 16 }}>🏷</span><b style={{ fontSize: 14 }}>تخصص‌ها و خدماتِ استاندارد</b>
+        <span style={{ fontSize: 12, color: 'var(--muted)' }}>— لیستِ دراپ‌داونِ پروفایلِ همهٔ پنل‌ها (دادهٔ ساخت‌یافته برای ML)</span>
+        {msg && <span style={{ fontSize: 12, color: msg.startsWith('✓') ? '#5fd98a' : '#e7674a' }}>{msg}</span>}
+      </div>
+      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+        {block('specialties', 'تخصص‌ها', 'مثلاً «آپارتمان لوکس» — کاربر در پروفایلش فقط از این لیست انتخاب می‌کند.')}
+        {block('services', 'خدمات', 'مثلاً «مشاورهٔ سرمایه‌گذاری».')}
+      </div>
+    </Card>
+  )
+}
+
 function ProfilesView() {
   const [rows, setRows] = useState<ProfileRow[]>([])
   const [roles, setRoles] = useState<IdName[]>([])
@@ -4497,6 +4569,8 @@ function ProfilesView() {
         <KPI label="فعال (۳۰ روز)" value={active30.toLocaleString('fa-IR')} trend="ورود اخیر" icon="✓" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" />
         <KPI label="نقش‌دار" value={rows.filter(u => u.role).length.toLocaleString('fa-IR')} trend="نقش تخصیص‌یافته" icon="🛡" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" />
       </div>
+
+      <ProfileOptionsEditor />
 
       <Card style={{ marginBottom: 14 }}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>

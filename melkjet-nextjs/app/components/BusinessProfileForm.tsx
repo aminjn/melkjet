@@ -24,16 +24,25 @@ function Field({ label, children, full }: { label: string; children: React.React
 }
 const grid: React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }
 
-// ورودیِ تگ (تخصص‌ها/خدمات/مناطق)
-function TagInput({ value, onChange, placeholder }: { value: string[]; onChange: (v: string[]) => void; placeholder: string }) {
+// انتخابگرِ چندتایی از لیستِ استاندارد (تخصص‌ها/خدمات/مناطق) — ورودیِ آزاد ممنوع تا داده
+// برای ML قابل‌اندازه‌گیری بماند؛ لیست‌ها را سوپرادمین (تخصص/خدمت) یا بازارِ واقعی (محلات) می‌سازد.
+function PickTags({ value, onChange, options, placeholder, emptyHint }: { value: string[]; onChange: (v: string[]) => void; options: string[]; placeholder: string; emptyHint?: string }) {
   const [t, setT] = useState('')
+  const remaining = options.filter(o => !value.includes(o))
   const add = () => { const v = t.trim(); if (v && !value.includes(v)) onChange([...value, v]); setT('') }
   return (
     <div>
-      <div style={{ display: 'flex', gap: 6 }}>
-        <input value={t} onChange={e => setT(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } }} placeholder={placeholder} style={inp} />
-        <button type="button" onClick={add} style={{ padding: '0 14px', borderRadius: 9, background: 'var(--goldDim)', border: '1px solid var(--gold)', color: 'var(--gold)', cursor: 'pointer', fontFamily: FONT, fontWeight: 700, fontSize: 13 }}>افزودن</button>
-      </div>
+      {remaining.length > 0 || value.length > 0 ? (
+        <div style={{ display: 'flex', gap: 6 }}>
+          <select value={t} onChange={e => setT(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+            <option value="">{placeholder}</option>
+            {remaining.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+          <button type="button" onClick={add} disabled={!t} style={{ padding: '0 14px', borderRadius: 9, background: 'var(--goldDim)', border: '1px solid var(--gold)', color: 'var(--gold)', cursor: t ? 'pointer' : 'default', opacity: t ? 1 : 0.5, fontFamily: FONT, fontWeight: 700, fontSize: 13 }}>افزودن</button>
+        </div>
+      ) : (
+        <div style={{ ...inp, color: 'var(--muted)', fontSize: 12.5 }}>{emptyHint || 'فعلاً گزینه‌ای موجود نیست'}</div>
+      )}
       {value.length > 0 && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>{value.map(v => <span key={v} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 999, padding: '4px 10px', fontSize: 12 }}>{v}<button type="button" onClick={() => onChange(value.filter(x => x !== v))} style={{ background: 'none', border: 'none', color: '#e7674a', cursor: 'pointer', fontSize: 13, padding: 0 }}>×</button></span>)}</div>}
     </div>
   )
@@ -45,10 +54,24 @@ export default function BusinessProfileForm() {
   const [pct, setPct] = useState(0)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
+  // لیست‌های استاندارد: تخصص/خدمت از سوپرادمین؛ شهر/محله از درختِ geo + آگهی‌های واقعی.
+  const [opts, setOpts] = useState<{ specialties: string[]; services: string[] }>({ specialties: [], services: [] })
+  const [cities, setCities] = useState<string[]>([])
+  const [hoods, setHoods] = useState<string[]>([])
 
   useEffect(() => {
     fetch('/api/profile').then(r => r.ok ? r.json() : null).then(d => { if (d) { setP(d.profile); setIdentity(d.identity); setPct(d.completeness || 0) } }).catch(() => {})
+    fetch('/api/profile/options').then(r => r.ok ? r.json() : null).then(d => { if (d) setOpts({ specialties: d.specialties || [], services: d.services || [] }) }).catch(() => {})
+    fetch('/api/locations?cities=1').then(r => r.ok ? r.json() : null).then(d => { if (d) setCities(d.cities || []) }).catch(() => {})
   }, [])
+  // محله‌های شهرِ انتخابی — خودگسترنده از آگهی‌های واقعی (مشکلِ «محلاتِ مشهد فقط ۱۰ تاست» را می‌بندد).
+  const city = p?.city || ''
+  useEffect(() => {
+    if (!city) { setHoods([]); return }
+    let alive = true
+    fetch(`/api/locations?hoods=${encodeURIComponent(city)}`).then(r => r.ok ? r.json() : null).then(d => { if (alive && d) setHoods(d.hoods || []) }).catch(() => {})
+    return () => { alive = false }
+  }, [city])
 
   const set = (k: string, v: any) => setP((s: any) => ({ ...s, [k]: v }))
   const setSocial = (k: string, v: any) => setP((s: any) => ({ ...s, social: { ...s.social, [k]: v } }))
@@ -115,9 +138,9 @@ export default function BusinessProfileForm() {
           <Field label="تصویرِ کاور"><ImageUpload value={p.cover} onChange={v => set('cover', v)} height={120} /></Field>
           <Field label="معرفیِ کوتاه (شعار)" full><input value={p.tagline} onChange={e => set('tagline', e.target.value)} placeholder="یک جملهٔ کوتاه دربارهٔ کسب‌وکارتان" style={inp} /></Field>
           <Field label="دربارهٔ ما" full><textarea value={p.about} onChange={e => set('about', e.target.value)} rows={4} placeholder="توضیحاتِ کاملِ کسب‌وکار، سابقه، تخصص و خدمات…" style={{ ...inp, resize: 'vertical', lineHeight: 1.9 }} /></Field>
-          <Field label="تخصص‌ها"><TagInput value={p.specialties} onChange={v => set('specialties', v)} placeholder="مثلاً آپارتمان لوکس" /></Field>
-          <Field label="خدمات"><TagInput value={p.services} onChange={v => set('services', v)} placeholder="مثلاً مشاورهٔ سرمایه‌گذاری" /></Field>
-          <Field label="مناطقِ فعالیت"><TagInput value={p.areas} onChange={v => set('areas', v)} placeholder="مثلاً سعادت‌آباد" /></Field>
+          <Field label="تخصص‌ها"><PickTags value={p.specialties} onChange={v => set('specialties', v)} options={opts.specialties} placeholder="انتخابِ تخصص…" /></Field>
+          <Field label="خدمات"><PickTags value={p.services} onChange={v => set('services', v)} options={opts.services} placeholder="انتخابِ خدمت…" /></Field>
+          <Field label="مناطقِ فعالیت"><PickTags value={p.areas} onChange={v => set('areas', v)} options={hoods} placeholder={city ? 'انتخابِ محله…' : 'اول شهر را انتخاب کن'} emptyHint={city ? `هنوز محله‌ای برای «${city}» ثبت نشده — با رشدِ آگهی‌های این شهر خودکار کامل می‌شود` : 'اول در بخشِ «تماس و موقعیت» شهر را انتخاب کن'} /></Field>
           <Field label="ساعاتِ کاری"><input value={p.workHours} onChange={e => set('workHours', e.target.value)} placeholder="مثلاً شنبه تا چهارشنبه ۹ تا ۱۸" style={inp} /></Field>
         </div>
       </Section>
@@ -130,8 +153,20 @@ export default function BusinessProfileForm() {
           <Field label="ایمیل"><input value={p.email} onChange={e => set('email', e.target.value)} style={{ ...inp, direction: 'ltr', textAlign: 'left' }} /></Field>
           <Field label="وب‌سایت"><input value={p.website} onChange={e => set('website', e.target.value)} placeholder="https://" style={{ ...inp, direction: 'ltr', textAlign: 'left' }} /></Field>
           <Field label="استان"><input value={p.province} onChange={e => set('province', e.target.value)} style={inp} /></Field>
-          <Field label="شهر"><input value={p.city} onChange={e => set('city', e.target.value)} style={inp} /></Field>
-          <Field label="محله"><input value={p.neighborhood} onChange={e => set('neighborhood', e.target.value)} style={inp} /></Field>
+          <Field label="شهر">
+            <select value={p.city} onChange={e => { set('city', e.target.value); set('neighborhood', ''); set('areas', []) }} style={{ ...inp, cursor: 'pointer' }}>
+              <option value="">انتخابِ شهر…</option>
+              {p.city && !cities.includes(p.city) && <option value={p.city}>{p.city}</option>}
+              {cities.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </Field>
+          <Field label="محله">
+            <select value={p.neighborhood} onChange={e => set('neighborhood', e.target.value)} style={{ ...inp, cursor: 'pointer' }} disabled={!city}>
+              <option value="">{city ? 'انتخابِ محله…' : 'اول شهر را انتخاب کن'}</option>
+              {p.neighborhood && !hoods.includes(p.neighborhood) && <option value={p.neighborhood}>{p.neighborhood}</option>}
+              {hoods.map(h => <option key={h} value={h}>{h}</option>)}
+            </select>
+          </Field>
           <Field label="کدِ پستی"><input value={p.postalCode} onChange={e => set('postalCode', e.target.value)} style={{ ...inp, direction: 'ltr', textAlign: 'right' }} /></Field>
           <Field label="آدرسِ کامل" full><textarea value={p.address} onChange={e => set('address', e.target.value)} rows={2} style={{ ...inp, resize: 'vertical' }} /></Field>
         </div>

@@ -104,7 +104,7 @@ const APIS = [
   '/api/admin/crm', '/api/admin/support', '/api/admin/plans', '/api/admin/payment',
   '/api/admin/promos', '/api/admin/promotions', '/api/admin/banners', '/api/admin/categories',
   '/api/admin/geo', '/api/admin/audit', '/api/admin/ai-cost', '/api/admin/sms-cost',
-  '/api/admin/tracker-config', '/api/admin/agency-intel', '/api/admin/scraper/sources',
+  '/api/admin/tracker-config', '/api/admin/agency-intel', '/api/admin/scraper/sources', '/api/admin/profile-options',
   '/api/admin/empire?view=overview', '/api/admin/empire?view=players', '/api/admin/empire?view=world',
   '/api/admin/empire?view=liveops', '/api/admin/empire?view=capital', '/api/reos/admin', '/api/reos/config', '/api/reos/flags',
 ]

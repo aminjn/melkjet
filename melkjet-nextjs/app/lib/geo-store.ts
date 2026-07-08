@@ -160,6 +160,24 @@ export function addNeighborhood(pid: string, cid: string, did: string, name: str
   if (dist && !dist.neighborhoods.includes(name)) dist.neighborhoods.push(name)
   save(db); return db.provinces
 }
+// افزودنِ گروهیِ محله‌ها به یک شهر (تکمیل از آگهی‌های واقعی) — محله‌های تازه در منطقهٔ
+// «سایر محله‌ها» می‌نشینند تا ادمین بعداً به منطقهٔ درست منتقل/ویرایش کند. تکراری‌ها رد می‌شوند.
+export function addNeighborhoodsBulk(cityName: string, hoods: string[]): { added: number } {
+  const db = load()
+  let target: City | null = null
+  for (const p of db.provinces) for (const c of p.cities) if (normName(c.name) === normName(cityName)) { target = c; break }
+  if (!target) return { added: 0 }
+  const existing = new Set<string>()
+  for (const d of target.districts) for (const n of d.neighborhoods) existing.add(normName(n))
+  const fresh = hoods.map(h => String(h).trim()).filter(h => h && !existing.has(normName(h)))
+  if (!fresh.length) return { added: 0 }
+  let other = target.districts.find(d => d.name === 'سایر محله‌ها')
+  if (!other) { other = { id: id(), name: 'سایر محله‌ها', neighborhoods: [] }; target.districts.push(other) }
+  for (const h of fresh) other.neighborhoods.push(h)
+  save(db)
+  return { added: fresh.length }
+}
+
 // تطبیق نام (حذف ZWNJ + فاصله‌ها + یکسان‌سازی ی/ک)
 function normName(s: string): string {
   return (s || '').replace(/‌/g, '').replace(/\s+/g, '').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim()
