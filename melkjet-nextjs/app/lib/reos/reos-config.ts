@@ -40,6 +40,10 @@ export interface ReosConfig {
       enabled: boolean; fundFeePctYear: number; fundMinSamples: number; investRewardXp: number; dividends: boolean
       crowd: { enabled: boolean; unitToman: number; minPrice: number; maxPools: number }
     }
+    company: {
+      enabled: boolean; regFee: number; engineerSalaryBase: number; maxEngineers: number
+      permit: { baseDays: number; extraDaysMax: number; feePct: number; objectionPct: number; engineerSpeedupDays: number }
+    }
   }
 }
 
@@ -89,6 +93,12 @@ export const DEFAULT_CONFIG: ReosConfig = {
     capital: {
       enabled: true, fundFeePctYear: 2, fundMinSamples: 8, investRewardXp: 20, dividends: true,
       crowd: { enabled: true, unitToman: 500_000_000, minPrice: 20_000_000_000, maxPools: 12 },
+    },
+    // شرکتِ ساختمانی (جلد ۶۱) + پروانه (جلد ۶۳): هزینهٔ ثبت/عوارض → خزانه؛ حقوقِ مهندس جریانِ واقعیِ پول؛
+    // مهلتِ بررسی و اعتراض قطعی از هش (قانون ۷) در بازه‌های قابل‌تنظیمِ ادمین.
+    company: {
+      enabled: true, regFee: 50_000_000, engineerSalaryBase: 30_000_000, maxEngineers: 5,
+      permit: { baseDays: 2, extraDaysMax: 4, feePct: 2, objectionPct: 30, engineerSpeedupDays: 1 },
     },
   },
 }

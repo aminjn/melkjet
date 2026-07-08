@@ -286,6 +286,18 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             {row('کوینِ دعوتِ شراکتی (هر طرف)', cin('referralCoins'), '§7.4 — دعوت‌شده و دعوت‌کننده هر دو')}
           </div>
           <div style={card}>
+            <div style={sub}>🏗 شرکتِ ساختمانی و پروانه (جلد ۶۱/۶۳)</div>
+            {row('ثبتِ شرکت فعال (۱/۰)', cin('company', 'enabled'))}
+            {row('هزینهٔ ثبتِ شرکت (تومان)', cin('company', 'regFee', 140), '→ خزانه')}
+            {row('پایهٔ حقوقِ مهندس (تومان/ماه)', cin('company', 'engineerSalaryBase', 140), 'حقوق = پایه × (۰٫۶ + مهارت/۱۰۰)')}
+            {row('سقفِ تیمِ مهندسی', cin('company', 'maxEngineers'))}
+            {(['baseDays', 'extraDaysMax', 'feePct', 'objectionPct', 'engineerSpeedupDays'] as const).map(k => {
+              const labels: Record<string, [string, string?]> = { baseDays: ['پروانه: حداقلِ بررسی (روز)'], extraDaysMax: ['پروانه: حداکثر روزِ اضافه (هش)'], feePct: ['پروانه: عوارض (٪ ارزشِ زمین)', '→ خزانه'], objectionPct: ['پروانه: احتمالِ اعتراض (٪)'], engineerSpeedupDays: ['پروانه: تسریعِ مهندسِ ماهر (روز)', 'مهارتِ تیم ≥۶۰'] }
+              const v = cfg?.company?.permit?.[k]
+              return row(labels[k][0], <input key={k} value={String(v ?? '')} onChange={ev => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.company = n.company || {}; n.company.permit = n.company.permit || {}; n.company.permit[k] = ev.target.value === '' ? '' : Number(ev.target.value); return n })} style={{ ...inpS, width: 110, textAlign: 'center' }} />, labels[k][1])
+            })}
+          </div>
+          <div style={card}>
             <div style={sub}>🏦 بانک و اعتبار (جلد ۱۶)</div>
             {row('بانک فعال (۱/۰)', cin('bank', 'enabled'))}
             {row('سقفِ وام (٪ ارزشِ خالص)', cin('bank', 'maxLoanPctOfNetWorth'), 'باندِ اعتباری روی این سقف ضریب می‌گذارد')}

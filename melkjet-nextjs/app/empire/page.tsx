@@ -110,6 +110,8 @@ export default function EmpirePage() {
   const [mkt, setMkt] = useState<any>(null)                      // بازار سرمایه (جلد ۴۰)
   const [paper, setPaper] = useState<any>(null)                  // روزنامهٔ ملک‌جت (جلد ۵۲) + آرشیو رکوردها
   const [burst, setBurst] = useState(0)                          // جشنِ موفقیت (جلد ۵۶)
+  const [co, setCo] = useState({ name: '', kind: 'مسکونی', color: '#c9a84c' })   // ثبتِ شرکت (جلد ۶۱)
+  const [hireL, setHireL] = useState<any>(null)                  // نامزدهای استخدامِ هفته
   const celebrate = () => { setBurst(Date.now()); setTimeout(() => setBurst(0), 1100) }
   const [fu, setFu] = useState<Record<string, string>>({})       // تعدادِ واحدِ صندوق (ورودی)
   const [cu, setCu] = useState<Record<string, string>>({})       // تعدادِ واحدِ مشارکت (ورودی)
@@ -403,7 +405,10 @@ export default function EmpirePage() {
             <button style={{ ...btnGhost, padding: '8px 12px', fontSize: 12.5 }} onClick={() => setStep('dash')}>💰 هنوز نمی‌رسد — برو سرمایه بساز</button>
           ) : (<>
             {nego[o.id]
-              ? <div style={{ fontSize: 11.5, color: nego[o.id].success ? '#7c6' : 'var(--muted)' }}>{nego[o.id].success ? `🤝 فروشنده ${fa(nego[o.id].discountPct)}٪ تخفیف داد → ${faB(nego[o.id].finalPrice)} تومان` : '🤝 فروشنده کوتاه نیامد — قیمت همان است.'}</div>
+              ? <div style={{ fontSize: 11.5 }}>
+                  {nego[o.id].owner && <div style={{ color: 'var(--faint)', fontSize: 10.5 }}>مالک: {nego[o.id].owner.name} ({fa(nego[o.id].owner.age)} ساله) · {nego[o.id].owner.type} — {nego[o.id].owner.desc}</div>}
+                  <span style={{ color: nego[o.id].success ? '#7c6' : 'var(--muted)' }}>{nego[o.id].success ? `🤝 ${nego[o.id].owner?.name || 'فروشنده'} ${fa(nego[o.id].discountPct)}٪ تخفیف داد → ${faB(nego[o.id].finalPrice)} تومان` : `🤝 ${nego[o.id].owner?.name || 'فروشنده'} کوتاه نیامد — قیمت همان است.`}</span>
+                </div>
               : <button style={{ ...btnGhost, padding: '5px 10px', fontSize: 11.5 }} disabled={busy} onClick={async () => { const d = await api({ action: 'negotiate', listingId: o.id }); if (d) setNego(p => ({ ...p, [o.id]: d })) }}>🤝 اول مذاکره کن</button>}
             <button style={{ ...btn, padding: '8px 12px', fontSize: 13 }} disabled={busy} onClick={() => doBuy(o, !!nego[o.id]?.success)}>این را انتخاب می‌کنم{nego[o.id]?.success ? ' (با تخفیف)' : ''}</button>
           </>)}
@@ -544,6 +549,53 @@ export default function EmpirePage() {
       {(e.realized || 0) !== 0 && <div style={card}><div style={{ fontSize: 11, color: 'var(--muted)' }}>سودِ تحقق‌یافته (فروش‌ها)</div><div style={{ fontSize: 17, fontWeight: 800, color: e.realized > 0 ? '#7c6' : '#e88' }}>{e.realized > 0 ? '+' : '−'}<CountUp value={Math.abs(e.realized)} format={faB} /> تومان</div></div>}
     </div>
 
+    {/* شرکتِ ساختمانی (جلد ۶۱): «از یک اتاقِ کوچک تا امپراتوری» — اعتبارِ ستاره‌ای از رفتارِ واقعی */}
+    {st.companyEnabled && (!st.company ? (
+      <div style={{ ...card, borderColor: 'var(--gold)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+          <span style={{ fontSize: 22 }}>🏗</span>
+          <div><b style={{ fontSize: 14 }}>شرکتِ ساختمانی‌ات را ثبت کن</b>
+            <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>هنوز هیچ‌چیز نداری — نه برند، نه تیم. از یک دفترِ کوچک شروع کن؛ اعتبار با پروژه‌های واقعی ساخته می‌شود.</div></div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <input value={co.name} onChange={ev => setCo({ ...co, name: ev.target.value })} placeholder="نامِ شرکت (مثلاً آسمان‌سازه)" style={{ flex: 1, minWidth: 170, padding: 9, borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--text)', fontSize: 13 }} />
+          {['مسکونی', 'تجاری', 'لوکس', 'انبوه‌سازی'].map(k => <button key={k} style={{ ...btnGhost, padding: '6px 10px', fontSize: 12, borderColor: co.kind === k ? 'var(--gold)' : 'var(--line2)', color: co.kind === k ? 'var(--gold)' : 'var(--text)' }} onClick={() => setCo({ ...co, kind: k })}>{k}</button>)}
+          {['#c9a84c', '#5b9bd5', '#5fd98a', '#e7674a'].map(c => <button key={c} onClick={() => setCo({ ...co, color: c })} style={{ width: 22, height: 22, borderRadius: 999, background: c, border: co.color === c ? '2px solid var(--text)' : '1px solid var(--line2)', cursor: 'pointer' }} />)}
+          <button style={{ ...btn, padding: '8px 16px', fontSize: 13 }} disabled={busy || !co.name.trim()} onClick={async () => { const d = await api({ action: 'company', ...co }); if (d) { setSt(d); celebrate() } }}>ثبتِ شرکت</button>
+        </div>
+      </div>
+    ) : (
+      <div style={{ ...card }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ width: 14, height: 14, borderRadius: 4, background: st.company.color, display: 'inline-block' }} />
+          <b style={{ fontSize: 14 }}>🏗 {st.company.name}</b>
+          <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{st.company.kind}</span>
+          <span title={st.company.reputation.factors.join(' · ')} style={{ fontSize: 13, color: 'var(--gold)' }}>{'⭐'.repeat(st.company.reputation.stars)}<span style={{ fontSize: 10.5, color: 'var(--faint)' }}> اعتبار {fa(st.company.reputation.score)}/۱۰۰</span></span>
+          <span style={{ flex: 1 }} />
+          <button style={{ ...btnGhost, padding: '5px 12px', fontSize: 12 }} disabled={busy} onClick={async () => { if (hireL) { setHireL(null); return } const d = await api({ action: 'hireList' }); if (d) setHireL(d) }}>👷 استخدامِ مهندس</button>
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 4 }}>{st.company.reputation.factors.join(' · ')}</div>
+        {st.company.engineers.length > 0 && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+          {st.company.engineers.map((en: any) => <span key={en.id} title={en.persona} style={{ ...card, padding: '5px 10px', fontSize: 11.5, background: 'var(--bg2)' }}>👷 {en.name} · مهارت {fa(en.skill)} · {faB(en.salaryMonthly)}/ماه</span>)}
+          <span style={{ fontSize: 10.5, color: 'var(--faint)', alignSelf: 'center' }}>مهارتِ تیم مذاکره و پروانه را قوی‌تر می‌کند · حقوقِ پرداختی: {faB(st.company.wagesPaid || 0)}</span>
+        </div>}
+        {hireL && <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نامزدهای این هفته ({fa(hireL.team)}/{fa(hireL.maxEngineers)} نفر استخدام‌شده) — هفتهٔ بعد نامزدهای تازه می‌آیند:</div>
+          {!(hireL.candidates || []).length && <div style={{ fontSize: 12, color: 'var(--muted)' }}>نامزدِ تازه‌ای نمانده — هفتهٔ بعد برگرد.</div>}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 8 }}>
+            {(hireL.candidates || []).map((c: any) => (
+              <div key={c.id} style={{ ...card, background: 'var(--bg2)' }}>
+                <b style={{ fontSize: 13 }}>👷 {c.name}</b>
+                <div style={{ fontSize: 11, color: 'var(--muted)', margin: '4px 0' }}>{c.persona}</div>
+                <div style={{ fontSize: 12 }}>مهارت <b style={{ color: 'var(--gold)' }}>{fa(c.skill)}</b> · حقوق {faB(c.salaryMonthly)}/ماه</div>
+                <button style={{ ...btn, padding: '6px 12px', fontSize: 12, marginTop: 8 }} disabled={busy} onClick={async () => { const d = await api({ action: 'hire', candId: c.id }); if (d) { setSt(d); setHireL(null); celebrate() } }}>استخدام</button>
+              </div>
+            ))}
+          </div>
+        </div>}
+      </div>
+    ))}
+
     {st.suspense && <div style={{ ...card, borderColor: 'var(--gold)', fontSize: 13 }}>⏳ {st.suspense.text}</div>}
     {st.othersBuilding > 0 && <div style={{ fontSize: 12, color: 'var(--muted)' }}>🌍 {fa(st.othersBuilding)} نفرِ دیگر هم همین حالا در حالِ ساختِ امپراتوری‌شان هستند.</div>}
 
@@ -568,8 +620,22 @@ export default function EmpirePage() {
                     onClick={async () => { const d = await api({ action: 'landPlan', assetId: a.id, plan: p.plan }); if (d) setSt(d) }}>
                     {p.label}{p.gainPct ? ` (+${fa(p.gainPct)}٪ برآورد)` : ''}</button>
                 ))}</span>
+              : a.kind === 'land' && a.landPlan === 'build'
+              ? (/* پروانهٔ ساخت (جلد ۶۳): درخواست → بررسی → اعتراضِ احتمالی → صدور */
+                !a.permit
+                  ? <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 11.5 }} disabled={busy}
+                      onClick={async () => { const d = await api({ action: 'permit', assetId: a.id }); if (d) { setSt(d); alert(`🏛 درخواست ثبت شد — بررسی تا ${fa(d.terms.days)} روز · عوارض ${faB(d.terms.fee)} تومان${d.terms.objection ? `\n⚠️ ${d.terms.objection.text}` : ''}`) } }}>🏛 درخواستِ پروانهٔ ساخت</button>
+                  : a.permit.status === 'granted'
+                  ? <span style={{ fontSize: 11, color: '#7c6' }}>📜 پروانه صادر شد ✓</span>
+                  : <span style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11 }}>
+                      <span style={{ color: 'var(--gold)' }}>⏳ بررسیِ پروانه — {fa(Math.max(0, Math.ceil(((a.permitDue || 0) - Date.now()) / 864e5)))} روز مانده</span>
+                      {a.permit.objection && !a.permit.objection.settled && <span style={{ color: '#e7a14a' }}>⚠️ {a.permit.objection.text}
+                        <button style={{ ...btnGhost, padding: '2px 8px', fontSize: 10.5, marginRight: 6 }} disabled={busy}
+                          onClick={async () => { const d = await api({ action: 'permitSettle', assetId: a.id }); if (d) setSt(d) }}>🤝 توافق ({faB(a.permit.objection.settleCost)})</button>
+                        <span style={{ color: 'var(--faint)', fontSize: 10 }}> یا دفاع در کمیسیون (+{fa(a.permit.objection.extraDays)} روز)</span></span>}
+                    </span>)
               : a.kind === 'land' && a.landPlan
-              ? <span style={{ fontSize: 11, color: 'var(--muted)' }}>{a.landPlan === 'build' ? '🏗 در مسیرِ ساخت' : a.landPlan === 'partner' ? '🤝 مشارکت' : '💸 آمادهٔ فروش'}</span>
+              ? <span style={{ fontSize: 11, color: 'var(--muted)' }}>{a.landPlan === 'partner' ? '🤝 مشارکت' : '💸 آمادهٔ فروش'}</span>
               : a.kind === 'commercial' && !a.business
               ? <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>{['کافه', 'رستوران', 'فروشگاه', 'کلینیک', 'دفترِ خدماتی'].map(bz => (
                   <button key={bz} style={{ ...btnGhost, padding: '4px 8px', fontSize: 11 }}

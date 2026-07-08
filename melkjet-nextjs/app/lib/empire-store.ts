@@ -25,6 +25,8 @@ export interface EmpireAsset {
   action?: AssetAction        // تصمیمِ معنادارِ بعد از خرید (بازسازی/اجاره/نگه‌داشتن)
   actionAt?: number
   landPlan?: LandPlan         // سیستمِ زمین (§6.7): فروشِ فوری / ساخت / مشارکت
+  // پروانهٔ ساخت (جلد ۶۳): درخواست → بررسی (مهلتِ قطعی از هش) → اعتراضِ احتمالی → صدور. عوارض → خزانه.
+  permit?: { requestedAt: number; days: number; fee: number; status: 'pending' | 'granted'; grantedAt?: number; objection?: { text: string; extraDays: number; settleCost: number; settled?: boolean } }
   business?: string           // لایهٔ کسب‌وکارِ تجاری (§6.9): کافه/فروشگاه/…
   businessProb?: number       // ٪ موفقیت — از دادهٔ واقعی (رقابت + استقبالِ محله)
   income?: number             // درآمدِ جمع‌شدهٔ اجاره/کسب‌وکار (برآورد از بازارِ واقعی)
@@ -36,6 +38,10 @@ export interface JournalEntry { at: number; text: string }
 // بازار سرمایه (جلد ۴۰): واحدِ صندوق = «یک مترِ مجازی» از بازارِ واقعی؛ مشارکت = مالکیتِ کسریِ آگهیِ واقعی.
 export interface FundHolding { fundId: string; name: string; units: number; cost: number; boughtAt: number; lastDivAt?: number }
 export interface CrowdHolding { listingId: string; title: string; hood: string; units: number; cost: number; boughtAt: number }
+
+// شرکتِ ساختمانی (جلد ۶۱): مهندس‌ها شخصیت‌های مسیرِ رشدند (قطعی از هش)؛ حقوقشان جریانِ واقعیِ پول است.
+export interface Engineer { id: string; name: string; persona: string; skill: number; salaryMonthly: number; hiredAt: number; lastPaidAt: number }
+export interface Company { name: string; kind: string; color: string; foundedAt: number; engineers: Engineer[] }
 
 export interface EmpireData {
   userId: string
@@ -66,6 +72,8 @@ export interface EmpireData {
   refBy?: number              // شمارهٔ امپراتوریِ دعوت‌کننده (§7.4 دعوتِ شراکتی)
   funds?: FundHolding[]       // واحدهای صندوق‌های شاخصیِ املاک (جلد ۴۰ فصل ۸)
   crowd?: CrowdHolding[]      // سهم‌های سرمایه‌گذاریِ جمعی روی آگهی‌های واقعی (جلد ۴۰ فصل ۷)
+  company?: Company           // شرکتِ ساختمانی (جلد ۶۱) — «از یک اتاقِ کوچک تا امپراتوری»
+  wagesPaid?: number          // حقوقِ پرداختی به مهندس‌ها (مصرفِ شفافِ پول — قانون ۶)
   stats?: { sellsProfitable: number; negoWins: number }   // شمارنده‌های مأموریت‌های مخفی (جلد ۲۶)
   snap?: { day: number; netWorth: number; prev: number }   // اسنپ‌شاتِ روزانه — «سود/زیانِ دیروز» (جلد ۲۶)
   pendingComeback?: number    // هدیهٔ بازگشت (Comeback Engine جلد ۲۶) — روزِ کشفِ غیبت
@@ -714,6 +722,180 @@ export async function repayLoan(userId: string, amount: number, now = Date.now()
   })
   if (!r.ok) return { ok: false, reason: r.reason }
   return { ok: true, paid, settled, empire: r.empire }
+}
+
+// ══════════ شرکتِ ساختمانی (جلد ۶۱) + مالکِ زمین (جلد ۶۲) + پروانه (جلد ۶۳) ══════════
+// اعتبارِ ستاره‌ای شرکت (جلد ۶۱ «شرکت Level ندارد؛ اعتبار دارد») — فقط از رفتارِ واقعیِ ثبت‌شده.
+export function companyReputationOf(e: Pick<EmpireData, 'stats' | 'creditHist' | 'assets' | 'guess'>): { stars: number; score: number; factors: string[] } {
+  const factors: string[] = []
+  let score = 0
+  const sells = e.stats?.sellsProfitable || 0
+  if (sells) { score += Math.min(30, sells * 10); factors.push(`${sells.toLocaleString('fa-IR')} فروشِ سودده`) }
+  const nego = e.stats?.negoWins || 0
+  if (nego) { score += Math.min(20, nego * 7); factors.push(`${nego.toLocaleString('fa-IR')} مذاکرهٔ برنده`) }
+  const repaid = e.creditHist?.repaid || 0
+  if (repaid) { score += Math.min(20, repaid * 10); factors.push('خوش‌حسابی با بانک') }
+  const permits = e.assets.filter(a => a.permit?.status === 'granted').length
+  if (permits) { score += Math.min(20, permits * 10); factors.push(`${permits.toLocaleString('fa-IR')} پروانهٔ صادرشده`) }
+  if (e.assets.length) { score += Math.min(10, e.assets.length * 3); factors.push('پرتفوی فعال') }
+  const lateDays = e.creditHist?.lateDays || 0
+  if (lateDays) { score -= Math.min(30, lateDays * 3); factors.push('دیرکردِ بانکی (منفی)') }
+  score = Math.max(0, Math.min(100, Math.round(score)))
+  return { stars: 1 + Math.min(4, Math.floor(score / 20)), score, factors: factors.length ? factors : ['شرکتِ تازه‌کار — اعتبار با پروژه‌های واقعی ساخته می‌شود'] }
+}
+
+// نامزدهای استخدام (جلد ۶۱): هر هفته ۳ نامزدِ قطعی از هشِ کاربر+هفته — «رزومه، حقوق، شخصیت».
+const ENG_NAMES = ['مهندس رضایی', 'مهندس کریمی', 'مهندس احمدی', 'مهندس موسوی', 'مهندس شریفی', 'مهندس نادری', 'مهندس توکلی', 'مهندس صادقی', 'مهندس عظیمی', 'مهندس یوسفی', 'مهندس قاسمی', 'مهندس جعفری']
+const ENG_PERSONAS: Array<[string, string]> = [['دقیق', 'خطای پروژه را کم می‌کند'], ['خلاق', 'طرح‌های بهتر پیشنهاد می‌دهد'], ['باتجربه', 'کارهای اداری را سریع‌تر می‌کند'], ['جاه‌طلب', 'سریع رشد می‌کند']]
+export function hireCandidatesOf(userId: string, week: number, salaryBase: number): Array<Omit<Engineer, 'hiredAt' | 'lastPaidAt'>> {
+  return [0, 1, 2].map(i => {
+    const h = createHash('sha1').update(`${userId}|hire|${week}|${i}`).digest()
+    const skill = 35 + (h.readUInt32BE(0) % 56)                       // ۳۵..۹۰
+    const p = ENG_PERSONAS[h.readUInt32BE(4) % ENG_PERSONAS.length]
+    return {
+      id: `eng_${week}_${i}`,
+      name: ENG_NAMES[h.readUInt32BE(8) % ENG_NAMES.length],
+      persona: `${p[0]} — ${p[1]}`,
+      skill,
+      salaryMonthly: Math.round(salaryBase * (0.6 + skill / 100)),    // حقوق تابعِ مهارت — شفاف
+    }
+  })
+}
+// بیشترین مهارتِ تیم — پاداشِ واقعیِ استخدام: مذاکرهٔ قوی‌تر و پروانهٔ سریع‌تر.
+export const teamSkillOf = (e: Pick<EmpireData, 'company'>) => Math.max(0, ...(e.company?.engineers || []).map(x => x.skill))
+
+// شخصیتِ مالکِ زمین (جلد ۶۲ «زمین قیمتِ ثابت ندارد؛ مالک دارد») — قطعی از هشِ آگهی؛ روی شانسِ مذاکره اثر دارد.
+const OWNER_NAMES = ['حاج رضا', 'آقای توکل', 'خانم صبوری', 'آرش', 'آقای معتمد', 'خانم فرهی', 'حاج قاسم', 'مهندس بهرامی']
+const OWNER_TYPES: Array<[string, string, number]> = [
+  ['محافظه‌کار', 'اهلِ ریسک نیست — سخت کوتاه می‌آید', -10],
+  ['منصف', 'دنبالِ معاملهٔ منطقی است', 5],
+  ['قیمت‌بالا', 'دنبالِ بالاترین قیمت است', -5],
+]
+export function ownerPersonaOf(listingId: string): { name: string; age: number; type: string; desc: string; mod: number } {
+  const h = createHash('sha1').update(listingId + '|owner').digest()
+  const t = OWNER_TYPES[h.readUInt32BE(0) % OWNER_TYPES.length]
+  return { name: OWNER_NAMES[h.readUInt32BE(4) % OWNER_NAMES.length], age: 32 + (h.readUInt32BE(8) % 40), type: t[0], desc: t[1], mod: t[2] }
+}
+
+// مهلتِ بررسیِ پروانه (جلد ۶۳): قطعی از هش در بازهٔ ادمین؛ مهندسِ ماهر روند را سریع‌تر می‌کند.
+export function permitTermsOf(userId: string, assetId: string, cfg: { baseDays: number; extraDaysMax: number; feePct: number; objectionPct: number; engineerSpeedupDays: number }, teamSkill: number, landValue: number): { days: number; fee: number; objection: { text: string; extraDays: number; settleCost: number } | null } {
+  const h = createHash('sha1').update(`${userId}|permit|${assetId}`).digest()
+  let days = cfg.baseDays + (h.readUInt32BE(0) % (cfg.extraDaysMax + 1))
+  if (teamSkill >= 60) days = Math.max(1, days - cfg.engineerSpeedupDays)
+  const fee = Math.max(1, Math.round(landValue * (cfg.feePct / 100)))
+  const objection = (h.readUInt32BE(4) % 100) < cfg.objectionPct
+    ? {
+        text: ['همسایه: «نورِ خانهٔ من گرفته می‌شود»', 'همسایه: «کوچه شلوغ می‌شود»', 'کارشناس: «کمبودِ پارکینگ»'][h.readUInt32BE(8) % 3],
+        extraDays: 1 + (h.readUInt32BE(12) % 3),
+        settleCost: Math.max(1, Math.round(fee / 2)),
+      }
+    : null
+  return { days, fee, objection }
+}
+export const permitDueAt = (p: NonNullable<EmpireAsset['permit']>) =>
+  p.requestedAt + (p.days + (p.objection && !p.objection.settled ? p.objection.extraDays : 0)) * 864e5
+
+// ثبتِ شرکت (جلد ۶۱): نام/برند/نوعِ فعالیت — هزینهٔ ثبت → خزانه؛ نشانِ CEO؛ نقطهٔ تایم‌لاین.
+export async function foundCompany(userId: string, input: { name: string; kind: string; color: string }, regFee: number, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    if (e.company) return 'شرکتت از قبل ثبت شده'
+    const name = String(input.name || '').trim().slice(0, 50)
+    if (!name) return 'نامِ شرکت خالی است'
+    const fee = Math.max(0, Math.round(regFee))
+    if (e.capital < fee) return 'سرمایهٔ کافی برای هزینهٔ ثبت نیست'
+    e.capital -= fee
+    e.taxPaid = (e.taxPaid || 0) + fee
+    e.company = { name, kind: String(input.kind || 'مسکونی').slice(0, 20), color: String(input.color || '#c9a84c').slice(0, 12), foundedAt: now, engineers: [] }
+    if (!e.badges.includes('CEO')) e.badges.push('CEO')
+    e.timeline.push({ at: now, icon: '🏗', title: 'شرکت تأسیس شد', detail: `«${name}» — ${e.company.kind}` })
+    e.journal.push({ at: now, text: `امروز «${name}» را ثبت کردی. از یک دفترِ کوچک شروع می‌شود — مثلِ همهٔ امپراتوری‌های بزرگ.` })
+  })
+}
+
+// استخدامِ مهندس (جلد ۶۱): نامزد همان لحظه واردِ شرکت می‌شود؛ حقوقش از این به بعد جریانِ واقعیِ پول است.
+export async function hireEngineer(userId: string, cand: Omit<Engineer, 'hiredAt' | 'lastPaidAt'>, maxEngineers: number, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    if (!e.company) return 'اول شرکتت را ثبت کن'
+    if (e.company.engineers.length >= maxEngineers) return `سقفِ تیم ${maxEngineers.toLocaleString('fa-IR')} نفر است`
+    if (e.company.engineers.some(x => x.id === cand.id)) return 'این مهندس از قبل در تیمِ توست'
+    e.company.engineers.push({ ...cand, hiredAt: now, lastPaidAt: now })
+    e.timeline.push({ at: now, icon: '👷', title: `استخدام: ${cand.name}`, detail: `مهارت ${cand.skill.toLocaleString('fa-IR')} · حقوق ${Math.round(cand.salaryMonthly / 1e6).toLocaleString('fa-IR')}م/ماه` })
+  })
+}
+
+// پرداختِ حقوقِ تیم (روزشمار) — مثلِ هزینهٔ مالکیت: کسر تا کفِ صفر، ثبت در wagesPaid (قانون ۶).
+export async function applyWages(userId: string, now = Date.now()): Promise<{ ok: boolean; charged?: number; empire?: EmpireData }> {
+  let charged = 0
+  const r = await mutateEmpire(userId, e => {
+    if (!e.company?.engineers.length) return 'تیمی نیست'
+    let due = 0
+    for (const eng of e.company.engineers) {
+      const days = Math.floor((now - eng.lastPaidAt) / 864e5)
+      if (days < 1) continue
+      due += Math.round(eng.salaryMonthly * days / 30)
+      eng.lastPaidAt = now
+    }
+    if (!(due > 0)) return 'هنوز زود است'
+    charged = Math.min(e.capital, due)
+    e.capital -= charged
+    e.wagesPaid = (e.wagesPaid || 0) + charged
+  })
+  if (!r.ok) return { ok: false }
+  return { ok: true, charged, empire: r.empire }
+}
+
+// درخواستِ پروانه (جلد ۶۳): فقط زمینِ با برنامهٔ «ساخت»؛ عوارض → خزانه؛ مهلت/اعتراض قطعی از هش.
+export async function requestPermit(userId: string, assetId: string, terms: { days: number; fee: number; objection: { text: string; extraDays: number; settleCost: number } | null }, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    if (!a) return 'دارایی یافت نشد'
+    if (a.kind !== 'land') return 'پروانه فقط برای زمین است'
+    if (a.landPlan !== 'build') return 'اول برنامهٔ زمین را «ساخت» انتخاب کن'
+    if (a.permit) return a.permit.status === 'granted' ? 'پروانهٔ این زمین صادر شده' : 'درخواستِ پروانه در حالِ بررسی است'
+    if (e.capital < terms.fee) return 'سرمایهٔ کافی برای عوارضِ پروانه نیست'
+    e.capital -= terms.fee
+    e.taxPaid = (e.taxPaid || 0) + terms.fee
+    a.permit = { requestedAt: now, days: terms.days, fee: terms.fee, status: 'pending', objection: terms.objection || undefined }
+    e.timeline.push({ at: now, icon: '🏛', title: 'درخواستِ پروانهٔ ساخت ثبت شد', detail: `${a.title.slice(0, 50)} · بررسی تا ${terms.days.toLocaleString('fa-IR')} روز` })
+    if (terms.objection) e.timeline.push({ at: now, icon: '⚠️', title: 'اعتراض به پروانه', detail: terms.objection.text })
+  })
+}
+
+// حلِ اعتراض با پرداختِ غرامت (جلد ۶۳) — یا صبر برای دفاع در کمیسیون (روزهای اضافه).
+export async function settleObjection(userId: string, assetId: string, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    const ob = a?.permit?.objection
+    if (!a || !a.permit || !ob) return 'اعتراضی در کار نیست'
+    if (ob.settled) return 'اعتراض قبلاً حل شده'
+    if (e.capital < ob.settleCost) return 'سرمایهٔ کافی برای غرامت نیست'
+    e.capital -= ob.settleCost
+    e.taxPaid = (e.taxPaid || 0) + ob.settleCost
+    ob.settled = true
+    e.timeline.push({ at: now, icon: '🤝', title: 'اعتراضِ پروانه با توافق حل شد', detail: `${Math.round(ob.settleCost / 1e6).toLocaleString('fa-IR')}م تومان غرامت` })
+  })
+}
+
+// صدورِ پروانه‌های سررسیدشده — روی هر بازدید سنجیده می‌شود؛ اولین پروانه نشانِ «First Permit» می‌دهد.
+export async function progressPermits(userId: string, now = Date.now()): Promise<{ ok: boolean; granted?: number; empire?: EmpireData }> {
+  let granted = 0
+  const r = await mutateEmpire(userId, e => {
+    for (const a of e.assets) {
+      if (!a.permit || a.permit.status !== 'pending') continue
+      if (now < permitDueAt(a.permit)) continue
+      a.permit.status = 'granted'
+      a.permit.grantedAt = now
+      granted++
+      e.timeline.push({ at: now, icon: '📜', title: 'پروانهٔ ساخت صادر شد', detail: a.title.slice(0, 60) })
+      if (!e.badges.includes('First Permit')) {
+        e.badges.push('First Permit')
+        e.journal.push({ at: now, text: 'اولین پروانهٔ ساختِ شرکتت صادر شد — برای این لحظه جنگیدی، نه اینکه فقط یک دکمه بزنی.' })
+      }
+    }
+    if (!granted) return 'پروانهٔ سررسیدشده‌ای نیست'
+  })
+  if (!r.ok) return { ok: false }
+  return { ok: true, granted, empire: r.empire }
 }
 
 // ══════════ بازار سرمایه (جلد ۴۰): صندوقِ شاخصی + مشارکتِ جمعی — پول همیشه منبع و مقصد دارد ══════════

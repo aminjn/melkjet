@@ -1036,6 +1036,59 @@ async function main() {
     await recordFundVolume('buy', 123)
     const vst = await getMarketState()
     ok('ثبتِ حجمِ معاملات', vst.vol.buys >= 1 && vst.vol.buyToman >= 123)
+
+    // ── فاز ۱۲: شرکتِ ساختمانی (جلد ۶۱) + پروانه (جلد ۶۳) — بقای پول در هر قدم ──
+    console.log('\n── Empire · Construction Company (جلد ۶۱/۶۳) ──')
+    const { foundCompany, hireEngineer, applyWages, requestPermit, settleObjection, progressPermits, buyAsset: buyA, setLandPlan: setLP } = await import('../app/lib/empire-store.ts')
+    const uc12 = '0912company1'
+    await createEmpire(uc12, { answers: { city: 'تهران', tenB: 'زمین می‌خریدم و می‌ساختم', risk: 60, ptype: 'زمین و کلنگی', goal: 'ساخت‌وساز' } })
+    const fc = await foundCompany(uc12, { name: 'آسمان‌سازه', kind: 'مسکونی', color: '#c9a84c' }, 50_000_000)
+    ok('ثبتِ شرکت: کسرِ هزینه → خزانه + نشانِ CEO', fc.ok && fc.empire.capital === 10_000_000_000 - 50_000_000 && fc.empire.taxPaid === 50_000_000 && fc.empire.badges.includes('CEO') && fc.empire.company.name === 'آسمان‌سازه')
+    ok('ثبتِ دوباره رد می‌شود', (await foundCompany(uc12, { name: 'x', kind: 'y', color: 'z' }, 1)).ok === false)
+    // استخدام + حقوقِ روزشمار
+    const cand = { id: 'eng_t_0', name: 'مهندس تستی', persona: 'دقیق', skill: 70, salaryMonthly: 30_000_000 }
+    const hr = await hireEngineer(uc12, cand, 5)
+    ok('استخدام: مهندس واردِ تیم شد', hr.ok && hr.empire.company.engineers.length === 1)
+    ok('استخدامِ تکراری رد می‌شود', (await hireEngineer(uc12, cand, 5)).ok === false)
+    // حقوق: دستی lastPaidAt را ۳ روز عقب می‌بریم تا کسرِ روزشمار سنجیده شود
+    const eW = await getEmpire(uc12)
+    eW.company.engineers[0].lastPaidAt = Date.now() - 3 * 864e5
+    await adminAdjustEmpire(uc12, { coins: 1 }, 'sync')   // ذخیرهٔ تغییر از راهِ جهشِ اتمیک
+    const eW2 = await getEmpire(uc12)
+    eW2.company.engineers[0].lastPaidAt = Date.now() - 3 * 864e5
+    // ذخیرهٔ مستقیمِ حالت برای تست (فایل/PG) — از مسیرِ واقعیِ mutate
+    {
+      const { pgEnabled } = await import('../app/lib/db.ts')
+      if (pgEnabled()) await pool.query(`UPDATE reos_empire SET data=$2 WHERE user_id=$1`, [uc12, JSON.stringify(eW2)])
+    }
+    const capB12 = (await getEmpire(uc12)).capital
+    const wg = await applyWages(uc12)
+    const expWage = Math.round(30_000_000 * 3 / 30)
+    ok('حقوقِ ۳ روز کسر و در wagesPaid ثبت شد', wg.ok && wg.charged === expWage && wg.empire.capital === capB12 - expWage && wg.empire.wagesPaid === expWage)
+    ok('پرداختِ دوباره در همان روز رد می‌شود', (await applyWages(uc12)).ok === false)
+    // پروانه: فقط زمینِ با برنامهٔ ساخت؛ عوارض → خزانه؛ اعتراض → توافق؛ صدور بعد از سررسید
+    await buyA(uc12, { id: 'LND1', title: 'زمینِ تست', hood: 'ولنجک', price: 2_000_000_000, ptype: 'زمین' })
+    const eL = await getEmpire(uc12)
+    const land12 = eL.assets.find(x => x.listingId === 'LND1').id
+    ok('پروانه بدونِ برنامهٔ ساخت رد می‌شود', (await requestPermit(uc12, land12, { days: 2, fee: 10, objection: null })).ok === false)
+    await setLP(uc12, land12, 'build')
+    const taxBefore = (await getEmpire(uc12)).taxPaid
+    const rp12 = await requestPermit(uc12, land12, { days: 2, fee: 40_000_000, objection: { text: 'اعتراضِ همسایه', extraDays: 2, settleCost: 20_000_000 } })
+    ok('درخواستِ پروانه: عوارض → خزانه + وضعیتِ در بررسی', rp12.ok && rp12.empire.taxPaid === taxBefore + 40_000_000 && rp12.empire.assets.find(x => x.id === land12).permit.status === 'pending')
+    ok('درخواستِ دوباره رد می‌شود', (await requestPermit(uc12, land12, { days: 2, fee: 1, objection: null })).ok === false)
+    ok('قبل از سررسید صادر نمی‌شود', (await progressPermits(uc12)).ok === false)
+    const st12 = await settleObjection(uc12, land12)
+    ok('توافقِ اعتراض: غرامت → خزانه + settled', st12.ok && st12.empire.taxPaid === taxBefore + 60_000_000 && st12.empire.assets.find(x => x.id === land12).permit.objection.settled === true)
+    ok('توافقِ دوباره رد می‌شود', (await settleObjection(uc12, land12)).ok === false)
+    // سررسید را دستی می‌گذرانیم و صدور را می‌سنجیم
+    const eP = await getEmpire(uc12)
+    eP.assets.find(x => x.id === land12).permit.requestedAt = Date.now() - 3 * 864e5
+    {
+      const { pgEnabled } = await import('../app/lib/db.ts')
+      if (pgEnabled()) await pool.query(`UPDATE reos_empire SET data=$2 WHERE user_id=$1`, [uc12, JSON.stringify(eP)])
+    }
+    const gr = await progressPermits(uc12)
+    ok('پروانهٔ سررسیدشده صادر شد + نشانِ First Permit', gr.ok && gr.granted === 1 && gr.empire.badges.includes('First Permit') && gr.empire.assets.find(x => x.id === land12).permit.status === 'granted')
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

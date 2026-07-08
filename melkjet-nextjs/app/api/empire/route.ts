@@ -13,6 +13,8 @@ import {
   negotiationOutcome, questOf, nextDreamOf,
   applyHiddenBadges, HIDDEN_BADGES, snapshotNetWorth, markComeback, claimComeback,
   buyFundUnits, sellFundUnits, accrueFundDividends, joinCrowd, exitCrowd,
+  companyReputationOf, hireCandidatesOf, teamSkillOf, ownerPersonaOf, permitTermsOf, permitDueAt,
+  foundCompany, hireEngineer, applyWages, requestPermit, settleObjection, progressPermits,
   type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
 import {
@@ -206,7 +208,12 @@ async function stateOf(userId: string, e00: EmpireData) {
   // پیامِ بازگشت (فصل ۴): غیبتِ ۷+ روزه — قبل از هر جهشی سنجیده می‌شود تا سیگنال از بین نرود.
   const absentDays = Math.floor((Date.now() - (e00.updatedAt || e00.createdAt)) / 864e5)
   if (absentDays >= 7 && !e00.pendingComeback) await markComeback(userId, dayNumberOf(Date.now())).catch(() => {})
-  const e0 = await upkeepFor(userId, e00).catch(() => e00)    // هزینهٔ مالکیت (GDD جلد۵)
+  const e0a = await upkeepFor(userId, e00).catch(() => e00)   // هزینهٔ مالکیت (GDD جلد۵)
+  // شرکتِ ساختمانی (جلد ۶۱/۶۳): حقوقِ روزشمارِ تیم + صدورِ پروانه‌های سررسیدشده
+  const wg = e0a.company?.engineers.length ? await applyWages(userId).catch(() => null) : null
+  const e0b = wg?.ok && wg.empire ? wg.empire : e0a
+  const pp = e0b.assets.some(a => a.permit?.status === 'pending') ? await progressPermits(userId).catch(() => null) : null
+  const e0 = pp?.ok && pp.empire ? pp.empire : e0b
   const e1 = await accrueRentFor(userId, e0).catch(() => e0)  // درآمدِ اجاره/کسب‌وکار از بازارِ واقعی
   // بازار سرمایه (جلد ۴۰): قیمتِ روزِ واحدها + سودِ دوره‌ای از اجارهٔ واقعی
   const mc = await marketCtx(e1).catch(() => null)
@@ -225,6 +232,7 @@ async function stateOf(userId: string, e00: EmpireData) {
     growthPct: a.buyPrice ? Math.round(((prices[a.listingId] || a.buyPrice) - a.buyPrice) / a.buyPrice * 1000) / 10 : 0,
     // زمینِ بدونِ برنامه → سه گزینهٔ سند (§6.7) با برآوردِ شفاف
     plans: a.kind === 'land' && !a.landPlan ? landProjection(prices[a.listingId] || a.buyPrice) : undefined,
+    permitDue: a.permit?.status === 'pending' ? permitDueAt(a.permit) : undefined,   // شمارشِ معکوسِ پروانه (جلد ۶۳)
     url: listingHref(a.listingId, a.title, a.hood),   // پلِ بازی→واقعیت (جلد ۲۸)
   }))
   const today = dayNumberOf(Date.now())
@@ -262,6 +270,9 @@ async function stateOf(userId: string, e00: EmpireData) {
     collection: ['apartment', 'villa', 'commercial', 'land'].map(k => ({ kind: k, owned: e.assets.some(a => a.kind === k) })),
     capitalEnabled: config().empire.capital.enabled,
     mastery: masteryOf(e),   // استادیِ چندمحوره (جلد ۴۹ فصل ۵) — از شمارنده‌های واقعیِ رفتار
+    // شرکتِ ساختمانی (جلد ۶۱): اعتبارِ ستاره‌ای از رفتارِ واقعی + مهارتِ تیم
+    companyEnabled: config().empire.company.enabled,
+    company: e.company ? { ...e.company, reputation: companyReputationOf(e), teamSkill: teamSkillOf(e), wagesPaid: e.wagesPaid || 0 } : null,
   }
 }
 
@@ -359,9 +370,11 @@ export async function POST(req: NextRequest) {
       if (!it) return NextResponse.json({ error: 'آگهی یافت نشد' }, { status: 404 })
       const e = await getEmpire(userId)
       if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
-      const out = negotiationOutcome(userId, it.id, e.identity.negotiation || 0)
+      // جلد ۶۲: «زمین قیمتِ ثابت ندارد؛ مالک دارد» — شخصیتِ مالک + مهارتِ تیمِ مهندسی روی شانس اثر دارند.
+      const persona = ownerPersonaOf(it.id)
+      const out = negotiationOutcome(userId, it.id, (e.identity.negotiation || 0) + persona.mod + Math.round(teamSkillOf(e) / 10))
       const price = priceOf(it)
-      return NextResponse.json({ ok: true, ...out, price, finalPrice: Math.round(price * (1 - out.discountPct / 100)) })
+      return NextResponse.json({ ok: true, ...out, owner: { name: persona.name, age: persona.age, type: persona.type, desc: persona.desc }, price, finalPrice: Math.round(price * (1 - out.discountPct / 100)) })
     }
 
     // خرید (فصل ۳): آگهیِ واقعی با قیمتِ واقعی؛ اگر مذاکره کرده، همان تخفیفِ قطعی سمتِ سرور اعمال می‌شود.
@@ -718,6 +731,51 @@ export async function POST(req: NextRequest) {
       await releasePoolUnits(h.listingId, userId, units).catch(() => {})
       recordFundVolume('sell', r.proceeds || 0).catch(() => {})
       return NextResponse.json({ ok: true, proceeds: r.proceeds, pnl: r.pnl, ...(await stateOf(userId, r.empire!)) })
+    }
+
+    // ══════ شرکتِ ساختمانی (جلد ۶۱) + پروانه (جلد ۶۳): «از یک اتاقِ کوچک تا امپراتوری» ══════
+    case 'company': {
+      const cfg = config().empire.company
+      if (!cfg.enabled) return NextResponse.json({ error: 'ثبتِ شرکت فعلاً فعال نیست' }, { status: 403 })
+      const r = await foundCompany(userId, { name: String(b.name || ''), kind: String(b.kind || ''), color: String(b.color || '') }, cfg.regFee)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+    }
+    // ۳ نامزدِ استخدامِ این هفته (قطعی از هش — «رزومه، حقوق، شخصیت»)؛ استخدام‌شده‌ها حذف می‌شوند.
+    case 'hireList': {
+      const e = await getEmpire(userId)
+      if (!e?.company) return NextResponse.json({ error: 'اول شرکتت را ثبت کن' }, { status: 400 })
+      const week = Math.floor(dayNumberOf(Date.now()) / 7)
+      const hired = new Set(e.company.engineers.map(x => x.id))
+      const cands = hireCandidatesOf(userId, week, config().empire.company.engineerSalaryBase).filter(c => !hired.has(c.id))
+      return NextResponse.json({ ok: true, candidates: cands, maxEngineers: config().empire.company.maxEngineers, team: e.company.engineers.length })
+    }
+    case 'hire': {
+      const e = await getEmpire(userId)
+      if (!e?.company) return NextResponse.json({ error: 'اول شرکتت را ثبت کن' }, { status: 400 })
+      const week = Math.floor(dayNumberOf(Date.now()) / 7)
+      const cand = hireCandidatesOf(userId, week, config().empire.company.engineerSalaryBase).find(c => c.id === String(b.candId || ''))
+      if (!cand) return NextResponse.json({ error: 'این نامزد دیگر در دسترس نیست — نامزدهای هفتهٔ جدید را ببین' }, { status: 404 })
+      const r = await hireEngineer(userId, cand, config().empire.company.maxEngineers)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+    }
+    // درخواستِ پروانه (جلد ۶۳): مهلت/عوارض/اعتراض قطعی از هش؛ عوارض → خزانه.
+    case 'permit': {
+      const e = await getEmpire(userId)
+      const a = e?.assets.find(x => x.id === String(b.assetId || ''))
+      if (!e || !a) return NextResponse.json({ error: 'دارایی یافت نشد' }, { status: 404 })
+      const it = await getItemById(a.listingId).catch(() => null)
+      const landValue = it ? priceOf(it) : a.buyPrice
+      const terms = permitTermsOf(userId, a.id, config().empire.company.permit, teamSkillOf(e), landValue > 0 ? landValue : a.buyPrice)
+      const r = await requestPermit(userId, a.id, terms)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, terms, ...(await stateOf(userId, r.empire!)) })
+    }
+    case 'permitSettle': {
+      const r = await settleObjection(userId, String(b.assetId || ''))
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
     }
 
     // روزنامهٔ ملک‌جت (جلد ۵۲) + آرشیوِ تمدن (جلد ۵۱ فصل ۹): خبر فقط از اتفاقِ واقعیِ دنیا.
