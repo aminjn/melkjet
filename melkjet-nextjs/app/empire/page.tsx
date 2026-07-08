@@ -119,6 +119,9 @@ export default function EmpirePage() {
   const [fu, setFu] = useState<Record<string, string>>({})       // تعدادِ واحدِ صندوق (ورودی)
   const [cu, setCu] = useState<Record<string, string>>({})       // تعدادِ واحدِ مشارکت (ورودی)
   const [nego, setNego] = useState<Record<string, any>>({})   // نتیجهٔ مذاکره به‌ازای هر آگهی
+  const [deals, setDeals] = useState<any>(null)                // فرصت‌های طلاییِ امروز (سند ۱۴ — Hook)
+  const [tick, setTick] = useState(0)                          // تیکِ شمارشِ معکوسِ واقعی
+  const [dealAn, setDealAn] = useState('')                     // تحلیلِ کدام فرصتِ امروز نمایش داده شود
   const suspended = useRef(false)
 
   const api = useCallback(async (body: any) => {
@@ -142,6 +145,21 @@ export default function EmpirePage() {
     } catch { setErr('ارتباط برقرار نشد') }
   }, [])
   useEffect(() => { load() }, [load])
+
+  // فرصت‌های طلاییِ امروز (سند ۱۴ — Hook): اولین چیزی که کاربر می‌بیند؛ فردا فرصت‌های دیگری می‌آیند.
+  useEffect(() => {
+    if (step !== 'dash' || !st?.dealsEnabled || deals) return
+    let alive = true
+    fetch('/api/empire', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'deals' }) })
+      .then(r => r.json()).then(d => { if (alive && d?.ok) setDeals(d) }).catch(() => {})
+    return () => { alive = false }
+  }, [step, st?.dealsEnabled, deals])
+  // شمارشِ معکوسِ واقعی تا پایانِ روز — و با گذشتنِ مهلت، فهرستِ تازه گرفته می‌شود.
+  useEffect(() => {
+    if (!deals?.expiresAt) return
+    const t = setInterval(() => { setTick(x => x + 1); if (Date.now() >= deals.expiresAt) setDeals(null) }, 1000)
+    return () => clearInterval(t)
+  }, [deals?.expiresAt])
 
   // «هیچ جلسه‌ای بی‌دلیلِ برگشت تمام نشود» (فصل ۴): با ترکِ صفحه، تعلیقِ فردا ثبت می‌شود.
   useEffect(() => {
@@ -190,7 +208,7 @@ export default function EmpirePage() {
     const texts = ['در حال بررسی سند...', 'در حال بررسی ارزش...', 'در حال تحلیل بازار...', '✍️ امضای قرارداد']
     for (let i = 0; i < texts.length; i++) { setBuyTxt(texts[i]); await new Promise(r => setTimeout(r, 900)) }
     const d = await api({ action: 'buy', listingId: o.id, negotiated })
-    if (d) { setSt(d); setStep('owned'); celebrate() } else setStep('opps')
+    if (d) { setSt(d); setStep('owned'); celebrate() } else setStep(opps.length ? 'opps' : 'dash')
   }
   async function doReject() {
     const d = await api({ action: 'reject' })
@@ -411,6 +429,9 @@ export default function EmpirePage() {
               ? <div style={{ fontSize: 11.5 }}>
                   {nego[o.id].owner && <div style={{ color: 'var(--faint)', fontSize: 10.5 }}>مالک: {nego[o.id].owner.name} ({fa(nego[o.id].owner.age)} ساله) · {nego[o.id].owner.type} — {nego[o.id].owner.desc}</div>}
                   <span style={{ color: nego[o.id].success ? '#7c6' : 'var(--muted)' }}>{nego[o.id].success ? `🤝 ${nego[o.id].owner?.name || 'فروشنده'} ${fa(nego[o.id].discountPct)}٪ تخفیف داد → ${faB(nego[o.id].finalPrice)} تومان` : `🤝 ${nego[o.id].owner?.name || 'فروشنده'} کوتاه نیامد — قیمت همان است.`}</span>
+                  {/* حافظهٔ مذاکره (سند ۱۴): بازار سابقهٔ چانه‌زنی‌ات را به یاد دارد */}
+                  {nego[o.id].memoryNote && <div style={{ color: '#e7a14a', fontSize: 10.5, marginTop: 3 }}>🧠 {nego[o.id].memoryNote}</div>}
+                  {nego[o.id].repBonus > 0 && <div style={{ color: 'var(--gold)', fontSize: 10.5, marginTop: 3 }}>⭐ اعتبارِ برندت {fa(nego[o.id].repBonus)}٪ به شانسِ مذاکره اضافه کرد</div>}
                 </div>
               : <button style={{ ...btnGhost, padding: '5px 10px', fontSize: 11.5 }} disabled={busy} onClick={async () => { const d = await api({ action: 'negotiate', listingId: o.id }); if (d) setNego(p => ({ ...p, [o.id]: d })) }}>🤝 اول مذاکره کن</button>}
             <button style={{ ...btn, padding: '8px 12px', fontSize: 13 }} disabled={busy} onClick={() => doBuy(o, !!nego[o.id]?.success)}>این را انتخاب می‌کنم{nego[o.id]?.success ? ' (با تخفیف)' : ''}</button>
@@ -480,6 +501,50 @@ export default function EmpirePage() {
         {st.streak && st.streak.streak > 0 && <span style={{ ...card, padding: '6px 10px' }} title="روزهای پیاپیِ حضور">🔥 {fa(st.streak.streak)}</span>}
       </div>
     </div>
+
+    {/* 🔥 فرصت‌های طلاییِ امروز (سند ۱۴ — Hook): آگهی‌های واقعی، شمارشِ معکوسِ واقعی؛ فردا فهرستِ دیگری می‌آید.
+        کارت قضاوت نمی‌کند — بعضی واقعاً زیرِ قیمتِ محله‌اند، بعضی نه؛ فکرکردن (یا ژتونِ تحلیل) کارِ بازیکن است. */}
+    {st.dealsEnabled && deals && (deals.deals || []).length > 0 && (() => {
+      void tick
+      const left = Math.max(0, (deals.expiresAt || 0) - Date.now())
+      const p2 = (n: number) => n.toLocaleString('fa-IR', { minimumIntegerDigits: 2 })
+      return (
+        <div style={{ ...card, borderColor: 'var(--gold)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <b style={{ fontSize: 14 }}>🔥 فرصت‌های طلاییِ امروز</b>
+            <span style={{ fontSize: 11, color: 'var(--muted)' }}>بعضی واقعاً زیرِ قیمتِ محله‌اند، بعضی نه — تشخیصش با توست</span>
+            <span style={{ flex: 1 }} />
+            <span style={{ fontSize: 13, color: '#e7a14a', fontWeight: 800 }}>⏳ {p2(Math.floor(left / 36e5))}:{p2(Math.floor(left / 6e4) % 60)}:{p2(Math.floor(left / 1000) % 60)}</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(230px,1fr))', gap: 8, marginTop: 10 }}>
+            {deals.deals.map((dl: any) => (
+              <div key={dl.id} style={{ ...card, background: 'var(--bg2)', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, lineHeight: 1.7 }}>{dl.title.slice(0, 55)}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>{dl.hood}{dl.area ? ` · ${fa(dl.area)} متر` : ''}{dl.perM ? ` · متری ${faB(dl.perM)}` : ''}</div>
+                <div style={{ fontSize: 13, color: 'var(--gold)', fontWeight: 700 }}>{faB(dl.price)} تومان</div>
+                {nego[dl.id] && <div style={{ fontSize: 10.5, color: nego[dl.id].success ? '#7c6' : 'var(--muted)' }}>
+                  🤝 {nego[dl.id].owner?.name || 'مالک'}: {nego[dl.id].success ? `${fa(nego[dl.id].discountPct)}٪ تخفیف → ${faB(nego[dl.id].finalPrice)}` : 'کوتاه نیامد'}
+                  {nego[dl.id].memoryNote && <div style={{ color: '#e7a14a' }}>🧠 {nego[dl.id].memoryNote}</div>}
+                </div>}
+                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 'auto' }}>
+                  {!nego[dl.id] && <button style={{ ...btnGhost, padding: '4px 9px', fontSize: 11 }} disabled={busy}
+                    onClick={async () => { const d = await api({ action: 'negotiate', listingId: dl.id }); if (d) setNego(p => ({ ...p, [dl.id]: d })) }}>🤝 مذاکره</button>}
+                  <button style={{ ...btnGhost, padding: '4px 9px', fontSize: 11 }} disabled={busy || e.aiTokens <= 0} title="میانهٔ متریِ واقعیِ هم‌محله‌ها را نشان می‌دهد"
+                    onClick={async () => { setDealAn(dl.id); await doAnalyze(dl.id) }}>🤖 تحلیل (۱ ژتون)</button>
+                  <button style={{ ...btn, padding: '4px 10px', fontSize: 11 }} disabled={busy}
+                    onClick={() => doBuy({ id: dl.id, title: dl.title, hood: dl.hood, price: nego[dl.id]?.success ? nego[dl.id].finalPrice : dl.price, area: dl.area } as any, !!nego[dl.id]?.success)}>می‌خرم</button>
+                  {dl.url && <a href={dl.url} target="_blank" rel="noreferrer" style={{ ...btnGhost, padding: '4px 9px', fontSize: 11, textDecoration: 'none' }}>🔗</a>}
+                </div>
+                {dealAn === dl.id && analysis && <div style={{ fontSize: 10.5, color: 'var(--muted)', borderTop: '1px solid var(--line)', paddingTop: 5 }}>
+                  <b style={{ color: 'var(--text)' }}>{analysis.verdict}</b>
+                  {analysis.samples > 0 && <div>متریِ این ملک {faB(analysis.minePerM)} · میانگینِ هم‌محله‌ها {faB(analysis.avgPerM)} (از {fa(analysis.samples)} آگهیِ واقعی)</div>}
+                </div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )
+    })()}
 
     {/* پیامِ بازگشت (فصل ۴) + هدیهٔ بازگشت + پیام‌آغازیِ دستیار + نردبانِ رؤیا + زمانِ امروز */}
     {st.welcomeBack && <MJ><b>دلمان برایت تنگ شده بود.</b><br />در نبودت بازار حرکت کرده و ارزشِ دارایی‌هایت دوباره از قیمت‌های واقعی محاسبه شد. همهٔ سرمایه‌گذارهای بزرگ وقفه داشته‌اند — مهم برگشتن است.
@@ -895,7 +960,8 @@ export default function EmpirePage() {
         </div>
       ) : st.bank.terms?.eligible ? (
         <div style={{ ...card, background: 'var(--bg2)' }}>
-          <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>با اعتبارِ فعلی‌ات تا <b style={{ color: 'var(--gold)' }}>{faB(st.bank.terms.maxLoan)} تومان</b> وام می‌گیری · نرخ {st.bank.terms.ratePctYear.toLocaleString('fa-IR')}٪ سالانه · بازپرداخت تا {fa(st.bank.terms.termDays)} روز. اعتبارِ بالاتر = نرخِ بهتر و سقفِ بیشتر.</div>
+          <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>با اعتبارِ فعلی‌ات تا <b style={{ color: 'var(--gold)' }}>{faB(st.bank.terms.maxLoan)} تومان</b> وام می‌گیری · نرخ {st.bank.terms.ratePctYear.toLocaleString('fa-IR')}٪ سالانه · بازپرداخت تا {fa(st.bank.terms.termDays)} روز. اعتبارِ بالاتر = نرخِ بهتر و سقفِ بیشتر.
+            {st.bank.terms.repCutPct ? <span style={{ color: 'var(--gold)' }}> ⭐ اعتبارِ برندِ شرکتت {fa(st.bank.terms.repCutPct)}٪ از نرخ کم کرد.</span> : null}</div>
           <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
             <input value={loanVal ? Number(loanVal).toLocaleString('fa-IR') : ''} onChange={ev => setLoanVal(digitsOf(ev.target.value))} placeholder="مبلغِ وام (تومان)" inputMode="numeric" dir="ltr" style={{ flex: 1, minWidth: 150, padding: 9, borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--text)', fontSize: 13, textAlign: 'center' }} />
             <button style={{ ...btn, padding: '8px 14px', fontSize: 13 }} disabled={busy || !loanVal} onClick={async () => { const d = await api({ action: 'loan', amount: Number(loanVal) }); if (d) { setSt(d); setLoanVal('') } }}>دریافتِ وام</button>

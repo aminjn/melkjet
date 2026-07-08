@@ -327,6 +327,13 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             })}
           </div>
           <div style={card}>
+            <div style={sub}>🔥 فرصت‌های روزانه و اعتبارِ برند (سند ۱۴)</div>
+            {row('فرصت‌های طلاییِ امروز فعال (۱/۰)', cin('deals', 'enabled'), 'Hook — آگهی‌های واقعی + شمارشِ معکوس')}
+            {row('تعدادِ فرصت‌های روز', cin('deals', 'count'), 'انتخابِ قطعی از هشِ کاربر+روز')}
+            {row('اعتبار: شانسِ مذاکره (+٪ به‌ازای هر ⭐)', cin('reputation', 'negoBonusPerStar'), 'ستاره‌های بالای ۱')}
+            {row('اعتبار: کاهشِ نرخِ وام (٪ به‌ازای هر ⭐)', cin('reputation', 'loanRateCutPctPerStar'), 'کفِ نصفِ نرخِ باند')}
+          </div>
+          <div style={card}>
             <div style={sub}>🏦 بانک و اعتبار (جلد ۱۶)</div>
             {row('بانک فعال (۱/۰)', cin('bank', 'enabled'))}
             {row('سقفِ وام (٪ ارزشِ خالص)', cin('bank', 'maxLoanPctOfNetWorth'), 'باندِ اعتباری روی این سقف ضریب می‌گذارد')}

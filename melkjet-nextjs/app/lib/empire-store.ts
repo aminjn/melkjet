@@ -104,7 +104,7 @@ export interface EmpireData {
   crowd?: CrowdHolding[]      // سهم‌های سرمایه‌گذاریِ جمعی روی آگهی‌های واقعی (جلد ۴۰ فصل ۷)
   company?: Company           // شرکتِ ساختمانی (جلد ۶۱) — «از یک اتاقِ کوچک تا امپراتوری»
   wagesPaid?: number          // حقوقِ پرداختی به مهندس‌ها (مصرفِ شفافِ پول — قانون ۶)
-  stats?: { sellsProfitable: number; negoWins: number; projectsDelivered?: number; repProjects?: number }   // شمارنده‌های واقعیِ رفتار (جلد ۲۶/۷۲)
+  stats?: { sellsProfitable: number; negoWins: number; negoTries?: number; projectsDelivered?: number; repProjects?: number }   // شمارنده‌های واقعیِ رفتار (جلد ۲۶/۷۲)
   projectHist?: ProjectReport[]   // کارنامهٔ پروژه‌های تحویل‌شده (GDD فصل ۴) — درسِ هر پروژه از اعدادِ واقعیِ خودش
   snap?: { day: number; netWorth: number; prev: number }   // اسنپ‌شاتِ روزانه — «سود/زیانِ دیروز» (جلد ۲۶)
   pendingComeback?: number    // هدیهٔ بازگشت (Comeback Engine جلد ۲۶) — روزِ کشفِ غیبت
@@ -254,11 +254,15 @@ export function creditScoreOf(e: Pick<EmpireData, 'capital' | 'assets' | 'guess'
 }
 
 // شرایطِ وام از امتیازِ اعتباری — نرخِ بهتر برای اعتبارِ بالاتر (قطعی، تست‌پذیر).
-export function loanTermsFor(score: number, netWorth: number, cfg = config().empire.bank): { maxLoan: number; ratePctYear: number; termDays: number; eligible: boolean } {
+export function loanTermsFor(score: number, netWorth: number, cfg = config().empire.bank, rep?: { stars: number; cutPctPerStar: number }): { maxLoan: number; ratePctYear: number; termDays: number; eligible: boolean; repCutPct?: number } {
   const mult = score > 800 ? 0.75 : score > 600 ? 0.9 : score > 300 ? 1 : 1.4   // ضریبِ نرخ بر اساسِ باند
   const capMult = score > 800 ? 1.2 : score > 600 ? 1 : score > 300 ? 0.7 : 0.3 // سقفِ وام بر اساسِ باند
   const maxLoan = Math.max(0, Math.round(netWorth * (cfg.maxLoanPctOfNetWorth / 100) * capMult))
-  return { maxLoan, ratePctYear: Math.round(cfg.baseRatePctYear * mult * 10) / 10, termDays: cfg.termDays, eligible: cfg.enabled && maxLoan > 0 }
+  let rate = cfg.baseRatePctYear * mult
+  // اعتبارِ برند اثرِ واقعی دارد (سند ۱۴ / GDD فصل ۴ بخش ۱۵): هر ⭐ بالای ۱، ٪ کاهشِ نرخ — کفِ نصفِ نرخِ باند.
+  const repCutPct = rep && rep.stars > 1 ? Math.max(0, rep.stars - 1) * Math.max(0, rep.cutPctPerStar) : 0
+  if (repCutPct > 0) rate = Math.max(cfg.baseRatePctYear * mult * 0.5, rate * (1 - repCutPct / 100))
+  return { maxLoan, ratePctYear: Math.round(rate * 10) / 10, termDays: cfg.termDays, eligible: cfg.enabled && maxLoan > 0, repCutPct: repCutPct > 0 ? repCutPct : undefined }
 }
 
 // مذاکره (GDD جلد۱، مرحلهٔ ۵ «تولد یک امپراتور») — قطعی از هش تا قابلِ‌سوءاستفاده نباشد:
@@ -269,6 +273,39 @@ export function negotiationOutcome(userId: string, listingId: string, negotiatio
   const chance = 25 + Math.round(Math.max(0, Math.min(100, negotiationSkill)) / 2)   // ۲۵٪ پایه تا ۷۵٪
   if (roll >= chance) return { success: false, discountPct: 0 }
   return { success: true, discountPct: 2 + (h.readUInt32BE(4) % 5) }                  // ۲..۶٪
+}
+
+// حافظهٔ مذاکره (سند ۱۴ / GDD فصل ۴ بخش ۹): «هر شخصیت حافظه دارد» — نسخهٔ ۱ از رفتارِ ثبت‌شدهٔ خودِ بازیکن.
+// چانه‌زنِ ناموفقِ همیشگی → مالک‌ها محتاط‌تر؛ خوش‌معامله → اعتمادِ سریع‌تر. قطعی و شفاف.
+export function negoMemoryOf(stats?: { negoWins: number; negoTries?: number }): { mod: number; note: string | null } {
+  const tries = stats?.negoTries || 0
+  if (tries < 4) return { mod: 0, note: null }
+  const rate = (stats?.negoWins || 0) / tries
+  if (rate < 1 / 3) return { mod: -5, note: 'بازار می‌شناسدت — مالک‌ها می‌دانند سخت چانه می‌زنی و محتاط‌تر شده‌اند' }
+  if (rate >= 2 / 3) return { mod: 3, note: 'خوش‌معامله‌ای — سابقهٔ معامله‌های موفقت مالک‌ها را زودتر قانع می‌کند' }
+  return { mod: 0, note: null }
+}
+
+// ثبتِ تلاشِ مذاکره (هر آگهی فقط یک بار — کلیکِ تکراری حافظه را خراب نمی‌کند)؛ بردها هنگامِ خریدِ با تخفیف ثبت می‌شوند (buyAsset).
+export async function bumpNegoTries(userId: string, listingId: string) {
+  return mutateEmpire(userId, e => {
+    const key = 'negoT_' + listingId
+    if (e.claims[key]) return 'قبلاً ثبت شده'
+    e.claims[key] = Date.now()
+    e.stats = e.stats || { sellsProfitable: 0, negoWins: 0 }
+    e.stats.negoTries = (e.stats.negoTries || 0) + 1
+  })
+}
+
+// فرصت‌های طلاییِ امروز (سند ۱۴ — Hook): انتخابِ قطعی از هشِ کاربر+روز روی آگهی‌های «واقعی».
+// بعضی واقعاً زیرِ میانهٔ محله‌اند و بعضی نه — بازی قضاوت نمی‌کند؛ فکرکردن (یا ژتونِ تحلیل) کارِ بازیکن است.
+export function dailyDealPickOf(userId: string, day: number, ids: string[], count: number): string[] {
+  const n = Math.max(1, Math.floor(count))
+  return ids
+    .map(id => ({ id, r: createHash('sha1').update(`${userId}|deal|${day}|${id}`).digest().readUInt32BE(0) }))
+    .sort((a, b) => a.r - b.r)
+    .slice(0, n)
+    .map(x => x.id)
 }
 
 // کوئستِ روزانه/هفتگیِ شخصی (GDD جلد۲): چرخشِ قطعی از هشِ کاربر+دوره — «هیچ دو کاربری کوئستِ یکسان نمی‌گیرند».

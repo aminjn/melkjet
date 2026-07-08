@@ -52,6 +52,10 @@ export interface ReosConfig {
       bulkFreeUnits: number; bulkStepPct: number; eventSkillCutPct: number
       amenities: Record<string, { costPct: number; valuePct: number }>
     }
+    // GDD فصل ۴ بخش ۱۰ + پیوتِ «مدل B»: فرصت‌های محدودِ روزانه (Hook) از آگهی‌های واقعی با شمارشِ معکوسِ واقعی.
+    deals: { enabled: boolean; count: number }
+    // GDD فصل ۴ بخش ۱۵: اعتبارِ ⭐ باید اثرِ واقعی داشته باشد — روی مذاکره و شرایطِ بانک.
+    reputation: { negoBonusPerStar: number; loanRateCutPctPerStar: number }
   }
 }
 
@@ -125,6 +129,11 @@ export const DEFAULT_CONFIG: ReosConfig = {
         parking: { costPct: 5, valuePct: 6 },
       },
     },
+    // Hook روزانه (سند ۱۴): N آگهیِ واقعیِ قطعی از هشِ کاربر+روز؛ بعضی واقعاً زیرِ میانهٔ محله‌اند، بعضی نه —
+    // بازی قضاوت نمی‌کند؛ بازیکن فکر می‌کند یا ژتونِ تحلیل خرج می‌کند («اگر پاسخ واضح باشد، سیستم شکست خورده»).
+    deals: { enabled: true, count: 5 },
+    // اعتبار = دارایی (سند ۱۴): هر ستارهٔ بالای ۱ → مذاکرهٔ راحت‌تر + نرخِ وامِ بهتر — شفاف و قطعی.
+    reputation: { negoBonusPerStar: 2, loanRateCutPctPerStar: 3 },
   },
 }
 

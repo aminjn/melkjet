@@ -19,6 +19,7 @@ import {
   startBuild, progressBuild, resolveBuildEvent, presellUnits, sellUnits,
   PROJECT_GOALS, goalPricePct, AMENITY_LABELS, amenityValueFactorOf, bulkPriceOf,
   projectLessonsOf, engineerEffectsOf, addAmenity, rentOutUnits, stopRentUnits,
+  negoMemoryOf, bumpNegoTries, dailyDealPickOf,
   type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
 import {
@@ -123,6 +124,16 @@ function monthlyRentOf(it: Item): number {
   return m ? parseFaNum(m[1]) : 0
 }
 const median = (xs: number[]) => { if (!xs.length) return 0; const s = [...xs].sort((a, b) => a - b); return s[Math.floor(s.length / 2)] }
+
+// مهارتِ مؤثرِ مذاکره (سند ۱۴): هویت + شخصیتِ مالک + تیمِ مهندسی + حافظهٔ مذاکره + اعتبارِ ⭐ برند —
+// یک منبعِ واحد برای «مذاکره» و «خرید» تا نتیجهٔ هر دو یکی باشد.
+function negoSkillOf(e: EmpireData, personaMod: number): { skill: number; memory: { mod: number; note: string | null }; repBonus: number } {
+  const memory = negoMemoryOf(e.stats)
+  const repBonus = e.company
+    ? Math.max(0, companyReputationOf(e, config().empire.build.repProjectScore).stars - 1) * Math.max(0, config().empire.reputation.negoBonusPerStar)
+    : 0
+  return { skill: (e.identity.negotiation || 0) + personaMod + Math.round(teamSkillOf(e) / 10) + memory.mod + repBonus, memory, repBonus }
+}
 
 // میانهٔ قیمتِ هر مترِ فروش در یک محله (از آگهی‌های واقعی) — مبنای قیمت‌گذاریِ پیش‌فروش/فروشِ واحد (جلد ۷۱/۷۲).
 async function hoodPerM(hood: string): Promise<{ perM: number; samples: number }> {
@@ -291,7 +302,10 @@ async function stateOf(userId: string, e00: EmpireData) {
   } catch { /* نامه/استریک اختیاری است */ }
   // بانک (جلد ۱۶): امتیازِ اعتباری از رفتارِ واقعی + شرایطِ وامِ در دسترس
   const credit = creditScoreOf(e, streak?.streak || 0)
-  const bank = config().empire.bank.enabled ? { credit, loan: e.loan || null, terms: e.loan ? null : loanTermsFor(credit.score, Math.max(0, nw.netWorth)) } : null
+  // اعتبارِ برند روی شرایطِ بانک اثرِ واقعی دارد (سند ۱۴): هر ⭐ بالای ۱ → نرخِ بهتر
+  const repStars = e.company ? companyReputationOf(e, config().empire.build.repProjectScore).stars : 0
+  const repArg = repStars > 1 ? { stars: repStars, cutPctPerStar: config().empire.reputation.loanRateCutPctPerStar } : undefined
+  const bank = config().empire.bank.enabled ? { credit, loan: e.loan || null, terms: e.loan ? null : loanTermsFor(credit.score, Math.max(0, nw.netWorth), config().empire.bank, repArg) } : null
   const quests = await questsOf(userId, e).catch(() => null)
   const chestAvailable = config().empire.chest.enabled && !e.claims['chest_' + today]
   // «امروز فقط N دقیقه لازم داری» (فصل ۴ Real Life Time Engine): از کارهای بازِ واقعی.
@@ -315,6 +329,7 @@ async function stateOf(userId: string, e00: EmpireData) {
     hiddenLeft: HIDDEN_BADGES.filter(b => !e.badges.includes(b.key)).length,
     collection: ['apartment', 'villa', 'commercial', 'land'].map(k => ({ kind: k, owned: e.assets.some(a => a.kind === k) })),
     capitalEnabled: config().empire.capital.enabled,
+    dealsEnabled: config().empire.deals.enabled,   // Hook روزانه (سند ۱۴)
     mastery: masteryOf(e),   // استادیِ چندمحوره (جلد ۴۹ فصل ۵) — از شمارنده‌های واقعیِ رفتار
     // شرکتِ ساختمانی (جلد ۶۱): اعتبارِ ستاره‌ای از رفتارِ واقعی + مهارتِ تیم
     companyEnabled: config().empire.company.enabled,
@@ -418,11 +433,13 @@ export async function POST(req: NextRequest) {
       if (!it) return NextResponse.json({ error: 'آگهی یافت نشد' }, { status: 404 })
       const e = await getEmpire(userId)
       if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
-      // جلد ۶۲: «زمین قیمتِ ثابت ندارد؛ مالک دارد» — شخصیتِ مالک + مهارتِ تیمِ مهندسی روی شانس اثر دارند.
+      // جلد ۶۲: «زمین قیمتِ ثابت ندارد؛ مالک دارد» — شخصیت + تیم + حافظهٔ مذاکره + اعتبارِ برند (سند ۱۴) روی شانس اثر دارند.
       const persona = ownerPersonaOf(it.id)
-      const out = negotiationOutcome(userId, it.id, (e.identity.negotiation || 0) + persona.mod + Math.round(teamSkillOf(e) / 10))
+      const ns = negoSkillOf(e, persona.mod)
+      const out = negotiationOutcome(userId, it.id, ns.skill)
+      bumpNegoTries(userId, it.id).catch(() => {})   // حافظهٔ مذاکره: هر آگهی یک بار شمرده می‌شود
       const price = priceOf(it)
-      return NextResponse.json({ ok: true, ...out, owner: { name: persona.name, age: persona.age, type: persona.type, desc: persona.desc }, price, finalPrice: Math.round(price * (1 - out.discountPct / 100)) })
+      return NextResponse.json({ ok: true, ...out, owner: { name: persona.name, age: persona.age, type: persona.type, desc: persona.desc }, memoryNote: ns.memory.note, repBonus: ns.repBonus || undefined, price, finalPrice: Math.round(price * (1 - out.discountPct / 100)) })
     }
 
     // خرید (فصل ۳): آگهیِ واقعی با قیمتِ واقعی؛ اگر مذاکره کرده، همان تخفیفِ قطعی سمتِ سرور اعمال می‌شود.
@@ -433,8 +450,9 @@ export async function POST(req: NextRequest) {
       if (!(price > 0) || !isSale(it)) return NextResponse.json({ error: 'این آگهی قیمتِ فروشِ مشخص ندارد' }, { status: 400 })
       let negotiatedWin = false
       if (b.negotiated) {
+        // همان فرمولِ اکشنِ «مذاکره» (negoSkillOf) — تا تخفیفی که کاربر دیده، سرِ خرید هم همان باشد.
         const e = await getEmpire(userId)
-        const out = e ? negotiationOutcome(userId, it.id, e.identity.negotiation || 0) : { success: false, discountPct: 0 }
+        const out = e ? negotiationOutcome(userId, it.id, negoSkillOf(e, ownerPersonaOf(it.id).mod).skill) : { success: false, discountPct: 0 }
         if (out.success) { price = Math.round(price * (1 - out.discountPct / 100)); negotiatedWin = true }
       }
       const r = await buyAsset(userId, { id: it.id, title: it.title, hood: hoodOf(it.location), price, ptype: ptypeOf(it) }, { negotiated: negotiatedWin })
@@ -636,7 +654,8 @@ export async function POST(req: NextRequest) {
       const prices = await livePrices(e)
       const nw = netWorthOf(e, prices, (await marketCtx(e).catch(() => null)) || undefined)
       const credit = creditScoreOf(e, (await getStreak(userId).catch(() => ({ streak: 0 }))).streak)
-      const terms = loanTermsFor(credit.score, Math.max(0, nw.netWorth))
+      const stars = e.company ? companyReputationOf(e, config().empire.build.repProjectScore).stars : 0
+      const terms = loanTermsFor(credit.score, Math.max(0, nw.netWorth), config().empire.bank, stars > 1 ? { stars, cutPctPerStar: config().empire.reputation.loanRateCutPctPerStar } : undefined)
       const amount = Math.round(Number(b.amount) || 0)
       if (!terms.eligible) return NextResponse.json({ error: 'با این امتیازِ اعتباری فعلاً وام تعلق نمی‌گیرد' }, { status: 400 })
       if (amount <= 0 || amount > terms.maxLoan) return NextResponse.json({ error: `سقفِ وامِ تو ${Math.round(terms.maxLoan / 1e6).toLocaleString('fa-IR')} میلیون تومان است` }, { status: 400 })
@@ -928,6 +947,29 @@ export async function POST(req: NextRequest) {
       const r = await stopRentUnits(userId, String(b.assetId || ''), Math.floor(Number(b.units) || 0))
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+    }
+
+    // فرصت‌های طلاییِ امروز (سند ۱۴ — Hook): آگهی‌های واقعی، انتخابِ قطعی از هشِ کاربر+روز، شمارشِ معکوسِ واقعی.
+    // بعضی واقعاً زیرِ میانهٔ محله‌اند، بعضی نه — کارت قضاوت نمی‌کند؛ فکرکردن یا ژتونِ تحلیل کارِ بازیکن است.
+    case 'deals': {
+      const cfg = config().empire.deals
+      if (!cfg.enabled) return NextResponse.json({ error: 'فرصت‌های روزانه فعلاً فعال نیست' }, { status: 403 })
+      const e = await getEmpire(userId)
+      if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      const items = await candidateListings(800).catch(() => [] as Item[])
+      const owned = new Set(e.assets.map(a => a.listingId))
+      const pool = items.filter(it => isPricedSale(it) && !owned.has(it.id) && (parseFaNum((it.meta || {})['متراژ']) || 0) > 0 && priceOf(it) >= MIN_SALE)
+      const day = dayNumberOf(Date.now())
+      const expiresAt = (day + 1) * 864e5   // همان مرزِ روزِ صندوقچه/کوئست — فردا فرصت‌های دیگری می‌آیند
+      if (!pool.length) return NextResponse.json({ ok: true, deals: [], expiresAt })
+      const byId = new Map(pool.map(it => [it.id, it] as const))
+      const deals = dailyDealPickOf(userId, day, pool.map(it => it.id), cfg.count).map(id => {
+        const it = byId.get(id)!
+        const area = parseFaNum((it.meta || {})['متراژ']) || 0
+        const price = priceOf(it)
+        return { id, title: it.title, hood: hoodOf(it.location), price, area, perM: area > 0 ? Math.round(price / area) : 0, url: listingHref(id, it.title, hoodOf(it.location)) }
+      })
+      return NextResponse.json({ ok: true, deals, expiresAt })
     }
 
     // روزنامهٔ ملک‌جت (جلد ۵۲) + آرشیوِ تمدن (جلد ۵۱ فصل ۹): خبر فقط از اتفاقِ واقعیِ دنیا.

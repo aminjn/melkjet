@@ -1190,6 +1190,15 @@ async function main() {
     ok('فروشِ ۲ واحدِ آخر: تحویلِ کامل + ثبتِ کارنامهٔ پروژه', s15b.ok && s15b.completed === true && (s15b.empire.projectHist || []).length === 2)
     const rep15 = (s15b.empire.projectHist || [])[1]
     ok('کارنامه: هدف/امکانات/اعداد از خودِ پروژه', !!rep15 && rep15.goal === 'rep' && rep15.amenities.includes('pool') && rep15.units === 5 && rep15.revenue > 0 && rep15.daysPlanned === plan15.days)
+
+    // ── فاز ۱۶ (سند ۱۴): حافظهٔ مذاکره — هر آگهی فقط یک بار در شمارنده ──
+    console.log('\n── Empire · حافظهٔ مذاکره (سند ۱۴) ──')
+    const { bumpNegoTries } = await import('../app/lib/empire-store.ts')
+    const t1 = await bumpNegoTries(uc12, 'NEGO1')
+    ok('اولین مذاکره روی آگهی شمرده شد', t1.ok && (t1.empire.stats.negoTries || 0) === 1)
+    ok('مذاکرهٔ تکراری روی همان آگهی شمرده نمی‌شود', (await bumpNegoTries(uc12, 'NEGO1')).ok === false && ((await getEmpire(uc12)).stats.negoTries || 0) === 1)
+    const t2 = await bumpNegoTries(uc12, 'NEGO2')
+    ok('آگهیِ جدید شمارنده را بالا می‌برد', t2.ok && (t2.empire.stats.negoTries || 0) === 2)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)
