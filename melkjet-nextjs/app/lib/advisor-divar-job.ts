@@ -9,7 +9,7 @@ export interface DivarJob {
   imported: number; updated: number; skipped: number; failed: number; sold: number
   label?: string; error?: string; note?: string; startedAt?: number; finishedAt?: number; lastProgressAt?: number
   // وضعیتِ ازسرگیری (resume): آگهی‌های باقی‌مانده + دادهٔ لازم برای ادامه/پایان.
-  pending?: any[]; gone?: any[]; sourceId?: string
+  pending?: any[]; gone?: any[]; liveTokens?: string[]; sourceId?: string   // liveTokens: توکن‌های زندهٔ این اجرا — ضدِ مهرِ اشتباهِ «فروخته» روی بازنشرها
   // صف: کاربر فقط «در صف» می‌گذارد؛ کارگرِ اینستنسِ ۰ آن را برمی‌دارد و اجرا می‌کند.
   queued?: boolean; cfg?: any; queuedAt?: number
 }

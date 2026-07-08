@@ -87,6 +87,8 @@ export async function importDivarToken(o: string, input: string, hint?: BrandPos
       removeImport(o, token)
       return importDivarToken(o, input, hint, sourceId)
     }
+    // آگهی روی دیوار زنده است ولی فایل مهرِ فروخته/اجاره‌رفته دارد (بازنشر) → فعال برگردد، نه نسخهٔ دوم
+    if (updated.status !== 'active') await setListingStatus(o, existing.listingId, 'active')
     let published = updated.published || false
     if (cfg.autoPublish) { const pub = await publishListing(o, existing.listingId); published = !!pub; if (pub?.publicId) warmEnrichment(pub.publicId) }   // بازانتشار + پیش‌گرمِ تحلیل (ممیزی دسته‌ای توسطِ کرون)
     recordImport(o, { token, listingId: existing.listingId, title: updated.title, url: `https://divar.ir/v/${token}`, at: existing.at, published, sourceId: sourceId || existing.sourceId })
@@ -108,6 +110,8 @@ export async function importDivarToken(o: string, input: string, hint?: BrandPos
   }
   if (twin) {
     const updated = await updateListing(o, twin.id, payload)
+    // بازنشرِ همان ملک با توکنِ جدید در حالی که فایل مهرِ فروخته/اجاره‌رفته خورده → فعال برگردد
+    if (updated && updated.status !== 'active') await setListingStatus(o, twin.id, 'active')
     let published = updated?.published || false
     if (cfg.autoPublish && updated) { const pub = await publishListing(o, twin.id); published = !!pub; if (pub?.publicId) warmEnrichment(pub.publicId) }
     recordImport(o, { token, listingId: twin.id, title: (updated || twin).title, url: `https://divar.ir/v/${token}`, at: Date.now(), published, sourceId })
@@ -184,13 +188,24 @@ export async function importDivarProfile(o: string, url: string, sourceId?: stri
     markRun(o, 0, msg)
     return { ok: false, reason: msg, scanned: 0, imported: 0, updated: 0, skipped: 0, tokens: [] }
   }
-  // آگهی‌هایی که قبلاً وارد شده بودند ولی دیگر در پروفایلِ دیوار نیستند = فروخته/اجاره‌رفته.
-  // فقط در محدودهٔ همین اسکرپ (اگر sourceId داده شده) تا اسکرپ‌های دیگر دست‌نخورده بمانند.
   const liveTokens = new Set(posts.map(p => p.token))
-  const gone = getDivar(o).imports.filter(i => !liveTokens.has(i.token) && (sourceId ? i.sourceId === sourceId : true))
 
   onProgress?.(0, posts.length)
   const r = await importTokens(o, posts, sourceId, onProgress)
+
+  // آگهی‌هایی که قبلاً وارد شده بودند ولی دیگر در پروفایلِ دیوار نیستند = فروخته/اجاره‌رفته.
+  // «بعد از» ایمپورت محاسبه می‌شود: دیوار اغلب همان ملک را با توکنِ جدید بازنشر می‌کند و موتورِ
+  // شباهت آن را به همان فایل نگاشت می‌کند — در این حالت فایل زیرِ توکنِ تازه «زنده» است و نباید
+  // به‌خاطرِ مرگِ توکنِ کهنه مهرِ فروخته بخورد (باگِ قبلی)؛ فقط رکوردِ توکنِ کهنه پاک می‌شود.
+  const importsNow = getDivar(o).imports
+  const liveListingIds = new Set(importsNow.filter(i => liveTokens.has(i.token)).map(i => i.listingId))
+  const gone: typeof importsNow = []
+  for (const i of importsNow) {
+    if (liveTokens.has(i.token)) continue
+    if (sourceId && i.sourceId !== sourceId) continue
+    if (liveListingIds.has(i.listingId)) { removeImport(o, i.token); continue }   // همان فایل با توکنِ جدید زنده است
+    gone.push(i)
+  }
   const sold = await markGone(o, gone)
   markRun(o, r.imported, '')
   return { ok: true, scanned: posts.length, ...r, sold }
@@ -360,7 +375,17 @@ export async function runBatch(o: string): Promise<void> {
   }
 
   let sold = 0   // تمام شد → مهرِ فروخته/اجاره‌رفته + پایان
-  try { sold = await markGone(o, j0.gone || []) } catch {}
+  try {
+    // بازنشرِ دیوار (توکنِ جدید → همان فایل): فایل زیرِ توکنِ زنده است → مهرِ فروخته نخورَد؛ فقط رکوردِ کهنه پاک شود.
+    const live = new Set<string>((j0.liveTokens as string[] | undefined) || [])
+    const importsNow = getDivar(o).imports
+    const liveListingIds = new Set(importsNow.filter(i => live.has(i.token)).map(i => i.listingId))
+    const gone = ((j0.gone || []) as { token: string; listingId: string }[]).filter(g => {
+      if (live.size && liveListingIds.has(g.listingId)) { removeImport(o, g.token); return false }
+      return true
+    })
+    sold = await markGone(o, gone as any)
+  } catch {}
   if (sourceId) { try { markSourceRun(o, sourceId, imported, '') } catch {} }
   setJob(o, { running: false, paused: false, pending: [], gone: [], imported, updated, skipped, sold, done: total, finishedAt: Date.now(), note: '', error: '' })
 }
@@ -398,7 +423,9 @@ export async function driveJob(o: string): Promise<void> {
       prepareSync(o, cfgIn, sourceId),
       new Promise<never>((_, rej) => setTimeout(() => rej(new Error('خواندنِ فهرستِ آگهی‌ها از دیوار بیش از حد طول کشید — اتصالِ پروکسی را بررسی کنید.')), 90000)),
     ])
-    setJob(o, { total: prep.items.length, pending: prep.items, gone: prep.gone, sourceId, lastProgressAt: Date.now() })
+    // liveTokens هم ذخیره می‌شود تا در پایانِ اجرا (runBatch) فایل‌هایی که با توکنِ جدید بازنشر
+    // شده‌اند و موتورِ شباهت به همان فایل نگاشتشان کرده، اشتباهاً «فروخته» مهر نخورند.
+    setJob(o, { total: prep.items.length, pending: prep.items, gone: prep.gone, liveTokens: prep.items.map(i => i.token), sourceId, lastProgressAt: Date.now() })
     await runBatch(o)
   } catch (e: any) {
     if (sourceId) { try { markSourceRun(o, sourceId, 0, e?.message || 'خطا یا وقفه') } catch {} }

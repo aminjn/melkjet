@@ -4,7 +4,7 @@ import { getCommissionConfig, type CommMode } from './agency-store'
 import { getProfile } from './profile-store'
 
 // تجمیعِ فایل‌ها (آگهی‌ها) و کمیسیونِ مشاورانِ عضوِ یک آژانس — از پنلِ خودِ مشاوران (advisor-store).
-export interface AgencyAdvisorListing { id: string; title: string; location: string; price: number; deal: 'sale' | 'rent'; status: 'active' | 'sold' | 'rented'; ptype: string; createdAt: number }
+export interface AgencyAdvisorListing { id: string; title: string; location: string; price: number; deal: 'sale' | 'rent'; status: 'active' | 'sold' | 'rented'; ptype: string; createdAt: number; publicId?: string }
 export interface MonthPoint { key: string; label: string; amount: number; deals: number }
 export interface AgencyAdvisorRow {
   advisorPhone: string
@@ -55,7 +55,7 @@ export async function agencyAdvisorFiles(agencyPhone: string): Promise<{ rows: A
     const perMonth: Record<string, { amount: number; deals: number }> = {}
     try {
       const ad = await getAdvisor(phone)
-      listings = (ad.listings || []).map(l => ({ id: l.id, title: l.title, location: l.location, price: l.price, deal: l.deal, status: l.status, ptype: l.ptype, createdAt: l.createdAt }))
+      listings = (ad.listings || []).map(l => ({ id: l.id, title: l.title, location: l.location, price: l.price, deal: l.deal, status: l.status, ptype: l.ptype, createdAt: l.createdAt, publicId: l.publicId }))
         .sort((a, b) => b.createdAt - a.createdAt)
       const ls = (ad.leads || [])
       leadsTotal = ls.length

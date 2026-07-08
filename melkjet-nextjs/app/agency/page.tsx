@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
+import { listingHref } from '@/app/lib/listing-url'
 import AssistantPanel from '@/app/components/AssistantPanel'
 import MessagesPanel from '@/app/components/MessagesPanel'
 import NegotiationEngine from '@/app/components/NegotiationEngine'
@@ -47,7 +48,7 @@ interface Stats {
 }
 type CommMode = 'percent' | 'amount'
 interface MonthPoint { key: string; label: string; amount: number; deals: number }
-interface AdvisorFileItem { id: string; title: string; location: string; price: number; deal: 'sale' | 'rent'; status: 'active' | 'sold' | 'rented'; ptype: string; createdAt: number }
+interface AdvisorFileItem { id: string; title: string; location: string; price: number; deal: 'sale' | 'rent'; status: 'active' | 'sold' | 'rented'; ptype: string; createdAt: number; publicId?: string }
 interface AdvisorLeadInfo { total: number; open: number; recent: { name: string; need: string; stage: string }[] }
 interface AdvisorLeadItem { name: string; need: string; budget: string; phone: string; stage: string; createdAt: number }
 interface AdvisorCommItem { dealTitle: string; amount: number; status: string; date: string; createdAt: number }
@@ -473,10 +474,10 @@ export default function AgencyPage() {
   const ownerOk = (key: string) => ownerF === 'all' || ownerF === key
 
   // ── فایل‌ها (یکجا): آگهیِ آژانس + همهٔ مشاوران، با ستونِ «منتسب» ──
-  type UListing = { key: string; id: string; title: string; ptype: string; location: string; price: number; deal: 'sale' | 'rent'; status: 'active' | 'sold' | 'rented'; owner: string; ownerKey: string; agency: boolean; createdAt: number }
+  type UListing = { key: string; id: string; title: string; ptype: string; location: string; price: number; deal: 'sale' | 'rent'; status: 'active' | 'sold' | 'rented'; owner: string; ownerKey: string; agency: boolean; createdAt: number; publicId?: string }
   const listingsUnified: UListing[] = [
     ...listings.map(l => ({ key: 'a_' + l.id, id: l.id, title: l.title, ptype: l.ptype, location: l.location, price: l.price, deal: l.deal, status: l.status, owner: agencyName, ownerKey: 'agency', agency: true, createdAt: l.createdAt })),
-    ...(af?.rows || []).flatMap(r => r.listings.map(l => ({ key: 'm_' + r.advisorPhone + '_' + l.id, id: l.id, title: l.title, ptype: l.ptype, location: l.location, price: l.price, deal: l.deal, status: l.status, owner: r.advisorName, ownerKey: r.advisorPhone, agency: false, createdAt: l.createdAt }))),
+    ...(af?.rows || []).flatMap(r => r.listings.map(l => ({ key: 'm_' + r.advisorPhone + '_' + l.id, id: l.id, title: l.title, ptype: l.ptype, location: l.location, price: l.price, deal: l.deal, status: l.status, owner: r.advisorName, ownerKey: r.advisorPhone, agency: false, createdAt: l.createdAt, publicId: l.publicId }))),
   ]
   const listingsF = listingsUnified
     .filter(l => !q || (l.title + l.location + l.owner).includes(q))
@@ -1086,6 +1087,8 @@ export default function AgencyPage() {
                     <div style={{ fontSize: 13.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>{l.title} <Pill label={DEAL_LABEL[l.deal]} color={l.deal === 'sale' ? '#60a5fa' : '#2dd4bf'} /> {ownerBadge(l.agency, l.owner)}</div>
                     <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{l.ptype} · {l.location} · {money(l.price)}</div>
                   </div>
+                  {/* لینکِ عمومیِ آگهی روی سایت — کاربر از همین‌جا آگهیِ منتشرشده را می‌بیند */}
+                  {l.publicId && <a href={listingHref(l.publicId, l.title, l.location)} target="_blank" rel="noreferrer" style={{ ...actionBtn, textDecoration: 'none', color: 'var(--gold)' }}>↗ آگهی</a>}
                   {l.agency ? <>
                     <select value={l.status} onChange={e => post({ action: 'setListingStatus', id: l.id, status: e.target.value })} style={{ ...actionBtn, cursor: 'pointer', color: LIST_COLOR[l.status], borderColor: LIST_COLOR[l.status] }}>{LIST_STATUSES.map(s => <option key={s} value={s} style={{ color: 'var(--text)' }}>{LIST_LABEL[s]}</option>)}</select>
                     <button onClick={() => post({ action: 'deleteListing', id: l.id })} style={{ ...actionBtn, color: '#ef4444' }}>حذف</button>

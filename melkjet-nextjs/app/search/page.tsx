@@ -224,7 +224,7 @@ function SearchPageInner() {
 
   useEffect(() => {
     let alive = true
-    fetchContent('listing', undefined, 80).then((d) => { if (alive) { setProperties(d.map(toProperty)); setLoading(false) } })
+    fetchContent('listing', undefined, 1000, true).then((d) => { if (alive) { setProperties(d.map(toProperty)); setLoading(false) } })   // کلِ استخر (slim) — نه فقط ۸۰ تای آخر
     fetch('/api/promotions?slot=search_top', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : { items: [] })).then((d) => { if (alive) setPromoted(((d.items || []) as ContentItem[]).map(toProperty)) }).catch(() => {})
     return () => { alive = false }
   }, [])

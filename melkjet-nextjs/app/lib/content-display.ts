@@ -49,10 +49,11 @@ export function initialsFor(name: string): string {
   return parts[0][0] + '.' + parts[1][0]
 }
 
-export async function fetchContent(type: string, category?: string, limit = 60): Promise<ContentItem[]> {
+export async function fetchContent(type: string, category?: string, limit = 60, slim = false): Promise<ContentItem[]> {
   try {
     const q = new URLSearchParams({ type, limit: String(limit) })
     if (category) q.set('category', category)
+    if (slim) q.set('slim', '1')   // فیلدهای سبک ولی کلِ استخرِ آگهی‌ها — برای جستجو
     const r = await fetch(`/api/content?${q.toString()}`, { cache: 'no-store' })
     if (!r.ok) return []
     return (await r.json()).items || []
