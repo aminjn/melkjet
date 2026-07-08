@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { getCities, getDistricts, placesSummary, importCities, importDistricts } from '@/app/lib/divar-places'
+import { getCities, getDistricts, placesSummary, importCities, importDistricts, importCitiesTree } from '@/app/lib/divar-places'
 
 async function guard() {
   const s = await getSession()
@@ -17,12 +17,14 @@ export async function GET(req: NextRequest) {
 }
 
 // POST { action:'cities' }            → import the cities list
+// POST { action:'citiesTree' }        → import the full استان→شهر tree (all of Iran)
 // POST { action:'districts', cityId } → import one city's districts
 export async function POST(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const b = await req.json().catch(() => ({}))
   try {
     if (b.action === 'cities') return NextResponse.json({ ok: true, ...(await importCities()) })
+    if (b.action === 'citiesTree') return NextResponse.json({ ok: true, ...(await importCitiesTree()) })
     if (b.action === 'districts' && b.cityId) return NextResponse.json({ ok: true, ...(await importDistricts(b.cityId)) })
     return NextResponse.json({ error: 'ورودی نامعتبر' }, { status: 400 })
   } catch (e: any) {

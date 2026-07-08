@@ -889,16 +889,26 @@ function GeoView() {
           </span>)
         }} style={{ padding: '9px 18px', borderRadius: 10, background: 'var(--gold)', color: '#1a1503', border: 'none', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>{enriching ? 'در حال استخراج…' : '⬇ تکمیلِ خودکار از آگهی‌های واقعی'}</button>
         <button disabled={enriching} onClick={async () => {
-          setEnriching(true); setEnrichMsg(null)
+          setEnriching(true); setEnrichMsg(<span style={{ color: 'var(--muted)' }}>در حال دریافتِ درختِ استان←شهرِ کلِ ایران از دیوار… (تا یک دقیقه)</span>)
+          // قدم ۱: درختِ کاملِ استان→شهر (مثلاً مازندران ~۷۰ شهر) — بدونِ آن، شهرهای بی‌استان جا می‌مانند.
+          const t = await fetch('/api/admin/divar-places', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'citiesTree' }) }).then(x => x.json()).catch(() => null)
+          if (!t?.ok) { setEnriching(false); setEnrichMsg(<span style={{ color: '#e7674a' }}>{t?.error || 'دریافت از دیوار ناموفق بود — پروکسیِ دیوار را چک کن'}</span>); return }
+          if (t.note) {
+            setEnriching(false)
+            setEnrichMsg(<span style={{ color: '#e7a14a' }}>⚠ {t.note}<br /><code style={{ fontSize: 10.5, direction: 'ltr', display: 'inline-block', maxWidth: '100%', overflowWrap: 'anywhere' }}>{JSON.stringify(t.sample || {}).slice(0, 400)}</code></span>)
+            return
+          }
+          setEnrichMsg(<span style={{ color: 'var(--muted)' }}>✓ {Number(t.cities).toLocaleString('fa-IR')} شهر در {Number(t.provinces).toLocaleString('fa-IR')} استان دریافت شد — در حال واردکردن به درخت…</span>)
           const r = await fetch('/api/admin/geo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'enrichFromDivar' }) }).then(x => x.json()).catch(() => null)
           setEnriching(false)
           if (!r?.ok) { setEnrichMsg(<span style={{ color: '#e7674a' }}>{r?.error || 'خطا در اجرا'}</span>); return }
           setProvinces(r.provinces)
           setEnrichMsg(<span>
-            ✓ از دیوار: <b style={{ color: 'var(--gold)' }}>{Number(r.added).toLocaleString('fa-IR')}</b> محلهٔ جدید
-            {r.createdCities > 0 && <> + {Number(r.createdCities).toLocaleString('fa-IR')} شهرِ جدید</>}
-            {r.perCity?.length > 0 && <> — {r.perCity.slice(0, 6).map((c: any) => `${c.city} ${Number(c.added).toLocaleString('fa-IR')}`).join('، ')}{r.perCity.length > 6 ? ' و…' : ''}</>}
-            {r.unknown?.length > 0 && <span style={{ color: 'var(--muted)' }}> · شهرهای بدونِ استانِ شناخته‌شده: {r.unknown.slice(0, 8).map((u: any) => u.city).join('، ')}{r.unknown.length > 8 ? ' و…' : ''} (شهر را در درخت بساز و دوباره اجرا کن)</span>}
+            {Number(r.added) > 0 || Number(r.createdCities) > 0
+              ? <>✓ از دیوار: <b style={{ color: 'var(--gold)' }}>{Number(r.createdCities).toLocaleString('fa-IR')}</b> شهرِ جدید + <b style={{ color: 'var(--gold)' }}>{Number(r.added).toLocaleString('fa-IR')}</b> محلهٔ جدید
+                {r.perCity?.length > 0 && <> — {r.perCity.slice(0, 6).map((c: any) => `${c.city} ${Number(c.added).toLocaleString('fa-IR')}`).join('، ')}{r.perCity.length > 6 ? ' و…' : ''}</>}</>
+              : <>✓ چیزِ جدیدی نبود — شهرها و محلاتِ دیوار ({Number(r.alreadyComplete || 0).toLocaleString('fa-IR')} شهرِ محله‌دار) از قبل واردِ درخت شده‌اند. برای دیدنِ محلات: شهر ← منطقهٔ <b>«سایر محله‌ها»</b> ← ستونِ محله.</>}
+            {r.unknown?.length > 0 && <span style={{ color: 'var(--muted)' }}> · هنوز بدونِ استان: {r.unknown.slice(0, 8).map((u: any) => u.city).join('، ')}{r.unknown.length > 8 ? ' و…' : ''} (شهر را در درخت بساز و دوباره اجرا کن)</span>}
           </span>)
         }} style={{ padding: '9px 18px', borderRadius: 10, background: 'transparent', color: 'var(--gold)', border: '1px solid var(--gold)', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>{enriching ? '…' : '⬇ همگام‌سازیِ محلاتِ رسمیِ دیوار'}</button>
         {enrichMsg && <div style={{ width: '100%', fontSize: 12, lineHeight: 2 }}>{enrichMsg}</div>}

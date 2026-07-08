@@ -52,25 +52,48 @@ export async function POST(req: NextRequest) {
     const provs = getAll()
     const provByName = new Map(provs.map(p => [norm(p.name), p.id] as const))
     const knownCities = new Set(provs.flatMap(p => p.cities.map(c => norm(c.name))))
-    let added = 0, createdCities = 0
+    // استانِ شهرهای اقماری/شناخته‌شده‌ای که پاسخِ دیوار برایشان استان نمی‌دهد (نگاشتِ جغرافیاییِ واقعی).
+    const FALLBACK_PROVINCE: Record<string, string> = {
+      'شهرری': 'تهران', 'ری': 'تهران', 'قدس': 'تهران', 'اندیشه': 'تهران', 'رباطکریم': 'تهران',
+      'قرچک': 'تهران', 'ملارد': 'تهران', 'شهریار': 'تهران', 'اسلامشهر': 'تهران', 'پاکدشت': 'تهران',
+      'ورامین': 'تهران', 'پردیس': 'تهران', 'پرند': 'تهران', 'نسیمشهر': 'تهران', 'باقرشهر': 'تهران',
+      'لواسان': 'تهران', 'دماوند': 'تهران', 'فیروزکوه': 'تهران', 'بومهن': 'تهران', 'صالحیه': 'تهران',
+      'محمدشهر': 'البرز', 'کرج': 'البرز', 'فردیس': 'البرز', 'کمالشهر': 'البرز', 'نظرآباد': 'البرز',
+      'هشتگرد': 'البرز', 'ماهدشت': 'البرز', 'مشکیندشت': 'البرز', 'گرمدره': 'البرز',
+      'فولادشهر': 'اصفهان', 'خمینیشهر': 'اصفهان', 'شاهینشهر': 'اصفهان', 'نجفآباد': 'اصفهان',
+      'بهارستان': 'اصفهان', 'درچه': 'اصفهان', 'شهرضا': 'اصفهان',
+      'تربتجام': 'خراسان رضوی', 'تربتحیدریه': 'خراسان رضوی', 'طرقبه': 'خراسان رضوی',
+      'شاندیز': 'خراسان رضوی', 'گلبهار': 'خراسان رضوی', 'بینالود': 'خراسان رضوی',
+      'صدرا': 'فارس', 'مرودشت': 'فارس', 'کازرون': 'فارس',
+      'بندرکنگان': 'بوشهر', 'عسلویه': 'بوشهر',
+    }
+    let added = 0, createdCities = 0, withHoods = 0, alreadyComplete = 0
     const perCity: Array<{ city: string; added: number }> = []
     const unknown: Array<{ city: string; hoods: number }> = []
     for (const c of cities) {
       const hoods = divarDistricts(c.id).map(d => String(d.name || '').trim()).filter(Boolean)
-      if (!hoods.length) continue
+      if (hoods.length) withHoods++
       if (!knownCities.has(norm(c.name))) {
-        // اگر دیوار استان را داده و آن استان در درخت هست، شهر خودکار ساخته می‌شود؛ وگرنه گزارش.
-        const pid = c.province ? provByName.get(norm(c.province)) : undefined
-        if (!pid) { unknown.push({ city: c.name, hoods: hoods.length }); continue }
+        // اول استانِ اعلامیِ دیوار (از واردکردنِ درختی)، بعد نگاشتِ ثابتِ شهرهای اقماری؛ وگرنه گزارش.
+        // شهرِ بدونِ محله هم ساخته می‌شود — دیوار مثلاً برای مازندران ~۷۰ شهر دارد که اکثرشان محله ندارند.
+        const provName = c.province || FALLBACK_PROVINCE[norm(c.name)]
+        const pid = provName ? provByName.get(norm(provName)) : undefined
+        if (!pid) { if (hoods.length) unknown.push({ city: c.name, hoods: hoods.length }); continue }
         addCity(pid, c.name)
         knownCities.add(norm(c.name))
         createdCities++
       }
+      if (!hoods.length) continue
       const r = addNeighborhoodsBulk(c.name, hoods)
       if (r.added > 0) { added += r.added; perCity.push({ city: c.name, added: r.added }) }
+      else alreadyComplete++
     }
     invalidateLocations(); invalidateLiveGeo()
-    return NextResponse.json({ ok: true, added, createdCities, perCity: perCity.sort((a, x) => x.added - a.added), unknown: unknown.sort((a, x) => x.hoods - a.hoods), provinces: getAll() })
+    return NextResponse.json({
+      ok: true, added, createdCities, withHoods, alreadyComplete,
+      perCity: perCity.sort((a, x) => x.added - a.added),
+      unknown: unknown.sort((a, x) => x.hoods - a.hoods), provinces: getAll(),
+    })
   }
   let provinces
   switch (b.action) {
