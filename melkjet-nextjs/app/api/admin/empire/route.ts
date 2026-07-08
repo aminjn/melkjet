@@ -9,6 +9,7 @@ import { candidateListings, getItemById, type Item } from '@/app/lib/scraper-sto
 import { parseFaNum } from '@/app/lib/reos/features'
 import { logAudit } from '@/app/lib/audit-store'
 import { getMarketState, segmentQuote, marketIndices, psychologyOf, createFund, setFundEnabled, deleteFund } from '@/app/lib/empire-market'
+import { engagementStats, churnRisk } from '@/app/lib/empire-engage'
 import { recentEvents } from '@/app/lib/reos/store'
 import { config, primeConfig } from '@/app/lib/reos/reos-config'
 
@@ -85,6 +86,21 @@ export async function GET(req: NextRequest) {
         holders: new Set(empires.filter(e => (e.funds?.length || 0) + (e.crowd?.length || 0) > 0).map(e => e.userId)).size,
         vol: state.vol,
       },
+    })
+  }
+
+  // کنسولِ تعامل و بازگشت (جلد ۴۹ فصل ۱۹/۲۰): DAU/WAU/MAU و Retention از ردِ فعالیتِ واقعیِ بازیکنان.
+  if (view === 'engage') {
+    const [empires, prices] = await Promise.all([listEmpiresPublic(1000), livePriceMap()])
+    const today = dayNumberOf(Date.now())
+    const stats = engagementStats(empires, today)
+    // تکمیلِ مأموریت: چند بازیکن کوئستِ امروز/صندوقچهٔ امروز را زده‌اند (نرخِ واقعی)
+    const dqToday = empires.filter(e => e.claims[`dq_${today}`]).length
+    const chestToday = empires.filter(e => e.claims[`chest_${today}`]).length
+    return NextResponse.json({
+      total: empires.length, today, stats,
+      missions: { dqToday, chestToday },
+      churn: churnRisk(empires, prices, today),
     })
   }
 

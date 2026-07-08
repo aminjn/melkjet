@@ -14,7 +14,7 @@ const btn: React.CSSProperties = { background: 'var(--gold)', color: '#1a1503', 
 const btnGhost: React.CSSProperties = { background: 'transparent', color: 'var(--text)', border: '1px solid var(--line2)', borderRadius: 9, padding: '8px 16px', cursor: 'pointer', fontFamily: FONT, fontSize: 12.5 }
 const inpS: React.CSSProperties = { padding: '7px 10px', borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontFamily: FONT, fontSize: 12.5 }
 
-export type EmpireSection = 'overview' | 'players' | 'economy' | 'capital' | 'missions' | 'world' | 'liveops' | 'access'
+export type EmpireSection = 'overview' | 'players' | 'economy' | 'capital' | 'missions' | 'engage' | 'world' | 'liveops' | 'access'
 
 function Mini({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -56,6 +56,7 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
     if (section === 'liveops') { loadView('liveops').then(put); loadCfg() }
     if (section === 'economy' || section === 'missions') { loadCfg(); loadView('overview').then(put) }
     if (section === 'capital') { loadView('capital').then(put); loadCfg() }
+    if (section === 'engage') loadView('engage').then(put)
     if (section === 'access') loadFlag()
     return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -424,6 +425,49 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
           </div>
         </div>
         <div><button style={btn} disabled={busy === 'cfg'} onClick={saveCfg}>💾 ذخیره و اعمالِ زنده</button></div>
+      </>}
+    </div>
+  )
+
+  /* ══════════ 📈 تعامل و بازگشت (جلد ۴۹ فصل ۱۹/۲۰) ══════════ */
+  if (section === 'engage') return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, fontFamily: FONT, direction: 'rtl' }}>
+      {head('📈 تعامل و بازگشت', 'DAU/WAU/MAU و Retention از ردِ فعالیتِ واقعیِ بازیکنان (صندوقچه/کوئست/اسنپ‌شات) — هیچ عددِ تخمینی در کار نیست.')}
+      {!data?.stats ? loading : <>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10 }}>
+          <Mini label="DAU (فعالِ امروز)" value={fa(data.stats.dau)} hint={`از ${fa(data.total)} بازیکن`} />
+          <Mini label="WAU (۷ روز)" value={fa(data.stats.wau)} />
+          <Mini label="MAU (۳۰ روز)" value={fa(data.stats.mau)} />
+          <Mini label="Retention D1" value={`${fa(data.stats.retention.d1.pct)}٪`} hint={`کوهورت ${fa(data.stats.retention.d1.cohort)} نفر`} />
+          <Mini label="Retention D7" value={`${fa(data.stats.retention.d7.pct)}٪`} hint={`کوهورت ${fa(data.stats.retention.d7.cohort)} نفر`} />
+          <Mini label="Retention D30" value={`${fa(data.stats.retention.d30.pct)}٪`} hint={`کوهورت ${fa(data.stats.retention.d30.cohort)} نفر`} />
+          <Mini label="میانگینِ روزهای فعال" value={fa(data.stats.avgActiveDays)} hint="به‌ازای هر بازیکن" />
+          <Mini label="کوئست/صندوقچهٔ امروز" value={`${fa(data.missions.dqToday)} / ${fa(data.missions.chestToday)}`} hint="دریافت‌شده" />
+        </div>
+        <div style={card}>
+          <div style={sub}>فعالانِ ۱۴ روزِ اخیر (هر ستون یک روز)</div>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 90 }}>
+            {data.stats.series.map((s: any) => {
+              const max = Math.max(1, ...data.stats.series.map((x: any) => x.active))
+              return <div key={s.day} title={`${fa(s.active)} فعال`} style={{ flex: 1, height: `${Math.max(4, Math.round(s.active / max * 100))}%`, background: s.day === data.today ? 'var(--gold)' : 'var(--line2)', borderRadius: 4 }} />
+            })}
+          </div>
+          <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 6 }}>ردِ فعالیت از کلیدهای تاریخ‌دارِ خودِ بازیکنان ساخته می‌شود — همان چیزی که واقعاً رخ داده.</div>
+        </div>
+        <div style={card}>
+          <div style={sub}>⚠️ ریسکِ ریزش — باارزش‌ترین بازیکنانِ غایب (۷+ روز)</div>
+          {(data.churn || []).map((r: any) => (
+            <div key={r.no} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '7px 0', borderBottom: '1px solid var(--line)', fontSize: 12.5, flexWrap: 'wrap' }}>
+              <span>{r.persona || '🏛'}</span><b style={{ minWidth: 140 }}>{r.name}</b>
+              <span style={{ color: 'var(--faint)', fontSize: 11 }}>#{fa(r.no)} · {r.userId}</span>
+              <span style={{ color: 'var(--muted)' }}>{fa(r.assets)} دارایی · {faB(r.netWorth)} ت</span>
+              <span style={{ flex: 1 }} />
+              <b style={{ color: '#e88' }}>{fa(r.absentDays)} روز غایب</b>
+            </div>
+          ))}
+          {!(data.churn || []).length && <div style={{ fontSize: 12, color: 'var(--muted)' }}>هیچ بازیکنِ باارزشی بیش از ۷ روز غایب نیست ✅</div>}
+          <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 8 }}>از «بازیکنان» می‌توانی با 🎁 هدیه/جبران برایشان انگیزهٔ بازگشت بسازی — در تایم‌لاینِ خودشان هم ثبت می‌شود.</div>
+        </div>
       </>}
     </div>
   )

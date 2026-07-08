@@ -67,6 +67,7 @@ export default function EmpirePage() {
   const [loanVal, setLoanVal] = useState('')
   const [repayVal, setRepayVal] = useState('')
   const [mkt, setMkt] = useState<any>(null)                      // بازار سرمایه (جلد ۴۰)
+  const [paper, setPaper] = useState<any>(null)                  // روزنامهٔ ملک‌جت (جلد ۵۲) + آرشیو رکوردها
   const [fu, setFu] = useState<Record<string, string>>({})       // تعدادِ واحدِ صندوق (ورودی)
   const [cu, setCu] = useState<Record<string, string>>({})       // تعدادِ واحدِ مشارکت (ورودی)
   const [nego, setNego] = useState<Record<string, any>>({})   // نتیجهٔ مذاکره به‌ازای هر آگهی
@@ -171,6 +172,7 @@ export default function EmpirePage() {
   async function doChest() { const d = await api({ action: 'chest' }); if (d) { setChestReward(d.reward); load() } }
   async function doBoards() { const d = await api({ action: 'boards' }); if (d) setBoards(d) }
   async function doMarket() { const d = await api({ action: 'market' }); if (d) setMkt(d) }
+  async function doNews() { const d = await api({ action: 'news' }); if (d) setPaper(d) }
   // معاملهٔ بازار سرمایه: بعد از موفقیت، هم وضعیتِ کلی و هم نمای بازار تازه می‌شود.
   async function doTrade(body: any, clear?: () => void) {
     const d = await api(body)
@@ -628,6 +630,35 @@ export default function EmpirePage() {
       )}
     </div>}
 
+    {/* روزنامهٔ ملک‌جت (جلد ۵۲): خبر از خودِ دنیای واقعی تولید می‌شود، نه اسکریپت + آرشیوِ رکوردها (جلد ۵۱) */}
+    <details style={card} onToggle={(ev: any) => { if (ev.currentTarget.open && !paper) doNews() }}>
+      <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>📰 روزنامهٔ ملک‌جت — اخبارِ زندهٔ دنیا</summary>
+      {!paper ? <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10 }}>در حال بارگذاری...</div> : (
+        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {(paper.news || []).map((n: any, i: number) => (
+              <div key={i} style={{ display: 'flex', gap: 10, fontSize: 13, padding: '8px 10px', borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--line)' }}>
+                <span style={{ fontSize: 16 }}>{n.icon}</span>
+                <div><b>{n.title}</b>{n.detail && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{n.detail}</div>}</div>
+              </div>
+            ))}
+            {!(paper.news || []).length && <div style={{ fontSize: 12, color: 'var(--muted)' }}>امروز اتفاقِ تازه‌ای در دنیا ثبت نشده — خبرها از رویدادهای واقعی ساخته می‌شوند.</div>}
+          </div>
+          {(paper.records || []).length > 0 && <div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>🏆 آرشیوِ رکوردهای دنیا</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {(paper.records || []).map((r: any) => (
+                <div key={r.label} style={{ display: 'flex', gap: 8, fontSize: 12, padding: '4px 0' }}>
+                  <span>{r.icon}</span><span style={{ color: 'var(--muted)', minWidth: 170 }}>{r.label}:</span><b>{r.value}</b>
+                </div>
+              ))}
+            </div>
+          </div>}
+          <div style={{ fontSize: 10.5, color: 'var(--faint)' }}>هر تیتر از یک اتفاقِ واقعی در بازار یا میانِ امپراتوری‌ها ساخته شده — هیچ خبری از پیش نوشته نشده.</div>
+        </div>
+      )}
+    </details>
+
     {/* بازار سرمایه (جلد ۴۰): صندوقِ شاخصی + مشارکتِ جمعی + شاخص‌ها — همه از بازارِ واقعی */}
     {st.capitalEnabled && <details style={card} onToggle={(ev: any) => { if (ev.currentTarget.open && !mkt) doMarket() }}>
       <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>📊 بازار سرمایه — صندوق‌ها و مشارکت‌ها</summary>
@@ -801,6 +832,15 @@ export default function EmpirePage() {
           </span>
         ))}
       </div>
+      {/* استادی‌های چندمحوره (جلد ۴۹ فصل ۵) — از شمارنده‌های واقعیِ رفتار */}
+      {(st.mastery || []).some((m: any) => m.level > 0 || m.count > 0) && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
+        {(st.mastery || []).map((m: any) => (
+          <span key={m.key} title={m.next != null ? `${fa(m.count)} از ${fa(m.next)} تا سطحِ بعد` : 'بالاترین سطح'} style={{ ...card, padding: '6px 12px', fontSize: 12, background: 'var(--bg2)', opacity: m.level > 0 ? 1 : 0.5, borderColor: m.level >= 3 ? 'var(--gold)' : 'var(--line)' }}>
+            {m.icon} {m.label} {m.level > 0 && <b style={{ color: 'var(--gold)' }}>{'★'.repeat(Math.min(5, m.level))}</b>}
+            <span style={{ color: 'var(--faint)', fontSize: 10.5 }}> ({fa(m.count)})</span>
+          </span>
+        ))}
+      </div>}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 14 }}>
         <span style={{ fontSize: 12, color: 'var(--muted)' }}>🏅 نشان‌ها:</span>
         {(e.badges || []).map((bd: string) => <span key={bd} style={{ ...card, padding: '4px 10px', fontSize: 12, background: 'var(--bg2)' }}>{bd}</span>)}

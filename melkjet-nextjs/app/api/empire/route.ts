@@ -19,6 +19,7 @@ import {
   getMarketState, segmentQuote, marketIndices, psychologyOf, fundFeeOf, portfolioOf,
   reservePoolUnits, releasePoolUnits, recordFundVolume,
 } from '@/app/lib/empire-market'
+import { masteryOf, newsOf } from '@/app/lib/empire-engage'
 import { listingHref } from '@/app/lib/listing-url'
 import { recordEvent } from '@/app/lib/reos/store'
 import { buildBriefFor } from '@/app/lib/empire-brief'
@@ -260,6 +261,7 @@ async function stateOf(userId: string, e00: EmpireData) {
     hiddenLeft: HIDDEN_BADGES.filter(b => !e.badges.includes(b.key)).length,
     collection: ['apartment', 'villa', 'commercial', 'land'].map(k => ({ kind: k, owned: e.assets.some(a => a.kind === k) })),
     capitalEnabled: config().empire.capital.enabled,
+    mastery: masteryOf(e),   // استادیِ چندمحوره (جلد ۴۹ فصل ۵) — از شمارنده‌های واقعیِ رفتار
   }
 }
 
@@ -709,6 +711,19 @@ export async function POST(req: NextRequest) {
       await releasePoolUnits(h.listingId, userId, units).catch(() => {})
       recordFundVolume('sell', r.proceeds || 0).catch(() => {})
       return NextResponse.json({ ok: true, proceeds: r.proceeds, pnl: r.pnl, ...(await stateOf(userId, r.empire!)) })
+    }
+
+    // روزنامهٔ ملک‌جت (جلد ۵۲) + آرشیوِ تمدن (جلد ۵۱ فصل ۹): خبر فقط از اتفاقِ واقعیِ دنیا.
+    case 'news': {
+      const [items, empires] = await Promise.all([candidateListings(800).catch(() => [] as Item[]), listEmpiresPublic(300)])
+      const prices: Record<string, number> = {}
+      for (const it of items) { const p = priceOf(it); if (p > 0) prices[it.id] = p }
+      const listings = items.filter(isPricedSale).map(it => {
+        const area = parseFaNum((it.meta || {})['متراژ']) || 0
+        const price = priceOf(it)
+        return { id: it.id, title: it.title, hood: hoodOf(it.location), price, perM: area > 0 ? Math.round(price / area) : 0, scrapedAt: it.scrapedAt || 0 }
+      })
+      return NextResponse.json({ ok: true, ...newsOf({ now: Date.now(), listings, empires, prices }) })
     }
 
     case 'journal': { const r = await addJournal(userId, String(b.text || '')); return r.ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: r.reason }, { status: 400 }) }
