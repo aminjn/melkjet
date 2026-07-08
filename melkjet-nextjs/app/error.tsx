@@ -28,7 +28,9 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
           بازگشت به خانه
         </a>
       </div>
-      {error?.digest && <div style={{ marginTop: 10, fontSize: 11.5, color: 'var(--faint)', direction: 'ltr' }}>کد پیگیری: {error.digest}</div>}
+      {/* متنِ واقعیِ خطا — تا اسکرین‌شاتِ کاربر به‌تنهایی مشکل را مشخص کند (در pm2 هم با CLIENT_ERROR ثبت می‌شود) */}
+      {error?.message && <div style={{ marginTop: 6, fontSize: 11.5, color: 'var(--faint)', direction: 'ltr', maxWidth: 560, wordBreak: 'break-word', fontFamily: 'monospace' }}>{String(error.message).slice(0, 300)}</div>}
+      {error?.digest && <div style={{ marginTop: 4, fontSize: 11.5, color: 'var(--faint)', direction: 'ltr' }}>کد پیگیری: {error.digest}</div>}
     </main>
   )
 }

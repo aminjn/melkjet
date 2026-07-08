@@ -28,7 +28,8 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
               بازگشت به خانه
             </a>
           </div>
-          {error?.digest && <div style={{ marginTop: 10, fontSize: 11.5, color: '#6f6858', direction: 'ltr' }}>کد پیگیری: {error.digest}</div>}
+          {error?.message && <div style={{ marginTop: 6, fontSize: 11.5, color: '#6f6858', direction: 'ltr', maxWidth: 560, wordBreak: 'break-word', fontFamily: 'monospace' }}>{String(error.message).slice(0, 300)}</div>}
+          {error?.digest && <div style={{ marginTop: 4, fontSize: 11.5, color: '#6f6858', direction: 'ltr' }}>کد پیگیری: {error.digest}</div>}
         </main>
       </body>
     </html>

@@ -301,8 +301,21 @@ export async function POST(req: NextRequest) {
     case 'suggest': {
       const e = await getEmpire(userId)
       if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
-      const items = (await candidateListings(300)).filter(it => isPricedSale(it) && priceOf(it) <= e.capital)
-      const stats = await forIds(items.map(i => i.id)).catch(() => ({} as Record<string, { views: number; contacts: number }>))
+      // کلِ بازار را می‌گردیم (نه فقط ۳۰۰ آگهیِ اخیر — آن‌ها ممکن است همه گران‌تر از سرمایه باشند)؛
+      // «در حدِ سرمایه» یعنی قیمت + مالیاتِ انتقال، تا فرصتی پیشنهاد نشود که خریدش رد شود.
+      const taxPct = config().empire.transferTaxPct
+      const priced = (await candidateListings(1500)).filter(isPricedSale)
+      const items = priced.filter(it => { const p = priceOf(it); return p + Math.round(p * taxPct / 100) <= e.capital })
+      // هیچ آگهیِ هم‌بودجه‌ای در کلِ بازار نیست → صادقانه ارزان‌ترین‌های واقعی را با پرچمِ «هنوز نمی‌رسد» نشان بده.
+      if (!items.length) {
+        const cheapest = [...priced].sort((a, x) => priceOf(a) - priceOf(x)).slice(0, 4)
+        if (!cheapest.length) return NextResponse.json({ ok: true, opportunities: [], locked: false })
+        return NextResponse.json({
+          ok: true, locked: true, capital: e.capital,
+          opportunities: cheapest.map((it, i) => ({ ...lite(it), recommended: i === 0, locked: true, reason: 'ارزان‌ترین فرصتِ واقعیِ فعلی — سرمایهٔ نقدِ تو هنوز به آن نمی‌رسد' })),
+        })
+      }
+      const stats = await forIds(items.slice(0, 400).map(i => i.id)).catch(() => ({} as Record<string, { views: number; contacts: number }>))
       const cityMatch = (it: Item) => e.answers.city && (it.location || '').includes(e.answers.city) ? 1 : 0
       const engagement = (it: Item) => (stats[it.id]?.views || 0) + 3 * (stats[it.id]?.contacts || 0)
       const byKind = new Map<AssetKind, Item[]>()
