@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { listItems } from '@/app/lib/scraper-store'
+import { displayReason } from '@/app/lib/moderation'
 import { recordView, recordContact, getStat, forIds } from '@/app/lib/listing-stats-store'
 import { ingest } from '@/app/lib/reos/events'
 
@@ -13,7 +14,8 @@ export async function GET(req: NextRequest) {
     if (!s) return NextResponse.json({ listings: [], totals: { views: 0, contacts: 0 } }, { status: 401 })
     const mine = (await listItems('listing')).filter(it => String(it.meta?.__ownerPhone || '') === s.phone)
     const stats = await forIds(mine.map(it => it.id))
-    const listings = mine.map(it => ({ id: it.id, title: it.title, location: it.location || '', price: it.price || '', image: it.image, views: stats[it.id].views, contacts: stats[it.id].contacts, lastView: stats[it.id].lastView }))
+    // وضعیتِ ممیزی + دلیلِ آن به پنلِ کاربر می‌رود — کاربر باید بداند آگهی‌اش چرا رد/معلق شده تا اصلاحش کند.
+    const listings = mine.map(it => ({ id: it.id, title: it.title, location: it.location || '', price: it.price || '', image: it.image, status: it.status || 'pending', modReason: displayReason(it), views: stats[it.id].views, contacts: stats[it.id].contacts, lastView: stats[it.id].lastView }))
       .sort((a, b) => (b.views + b.contacts * 3) - (a.views + a.contacts * 3))
     const totals = listings.reduce((t, l) => ({ views: t.views + l.views, contacts: t.contacts + l.contacts }), { views: 0, contacts: 0 })
     return NextResponse.json({ listings, totals }, { headers: { 'Cache-Control': 'no-store' } })

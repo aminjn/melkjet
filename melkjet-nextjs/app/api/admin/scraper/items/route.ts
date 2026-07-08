@@ -3,7 +3,7 @@ import { getSession } from '@/app/lib/session'
 import { listItems, setItemStatus, updateItem, deleteItem, deleteItems, addItemManual, getItemById, SourceType, ItemStatus, EditableItem } from '@/app/lib/scraper-store'
 import { clearEnrichment } from '@/app/lib/enrich-store'
 import { logAudit } from '@/app/lib/audit-store'
-import { teachFromAdmin } from '@/app/lib/moderation'
+import { teachFromAdmin, displayReason } from '@/app/lib/moderation'
 import { forIds } from '@/app/lib/listing-stats-store'
 import { getAccount } from '@/app/lib/account-store'
 
@@ -91,7 +91,8 @@ export async function GET(req: NextRequest) {
     if (!accCache.has(phone)) { const a = getAccount(phone) || getAccount('0' + phone.replace(/^0/, '')); accCache.set(phone, a ? { name: a.name || a.fullName || '', role: a.role || '' } : null) }
     return accCache.get(phone)
   }
-  let enriched = page.map(i => ({ ...i, stats: stats[i.id] || { views: 0, contacts: 0 }, ownerAccount: accountOf(i.phone) }))
+  // دلیلِ قابل‌فهمِ ممیزی: متن‌های عمومیِ قدیمیِ ML («ممیزیِ خودکارِ یادگیری‌شده») با دلیلِ واقعیِ مدل جایگزین می‌شوند.
+  let enriched = page.map(i => ({ ...i, aiReason: displayReason(i), stats: stats[i.id] || { views: 0, contacts: 0 }, ownerAccount: accountOf(i.phone) }))
   if (sort === 'views') enriched = [...enriched].sort((a, b) => b.stats.views - a.stats.views)
   if (sort === 'contacts') enriched = [...enriched].sort((a, b) => b.stats.contacts - a.stats.contacts)
   return NextResponse.json({ items: enriched, total: items.length, hoods, byStatus })

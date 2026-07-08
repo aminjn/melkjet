@@ -98,7 +98,14 @@ function money(n: number): string {
 const faDate = (ts: number) => { try { return new Date(ts).toLocaleDateString('fa-IR') } catch { return '' } }
 
 // گزارشِ مشاور: بازدید/تماسِ هر آگهی (واقعی) + خلاصهٔ CRM.
-interface ListingStatRow { id: string; title: string; location: string; price: string; image?: string; views: number; contacts: number; lastView?: number }
+interface ListingStatRow { id: string; title: string; location: string; price: string; image?: string; status?: string; modReason?: string; views: number; contacts: number; lastView?: number }
+// وضعیتِ ممیزی — کاربر باید بداند آگهی‌اش چرا رد/معلق شده تا اصلاحش کند (همان دلیلی که ادمین می‌بیند).
+const MOD_BADGE: Record<string, { label: string; color: string }> = {
+  approved: { label: 'تأیید شده', color: '#34d399' },
+  pending: { label: 'در انتظارِ بررسی', color: '#e7a14a' },
+  rejected: { label: 'رد شده', color: '#ef4444' },
+  duplicate: { label: 'تکراری', color: '#ef4444' },
+}
 function ReportsView({ stats }: { stats: Stats }) {
   const [rows, setRows] = useState<ListingStatRow[]>([])
   const [totals, setTotals] = useState({ views: 0, contacts: 0 })
@@ -179,8 +186,15 @@ function ReportsView({ stats }: { stats: Stats }) {
                     ? <img src={r.image} alt="" style={{ width: 46, height: 46, borderRadius: 9, objectFit: 'cover', flexShrink: 0 }} />
                     : <div style={{ width: 46, height: 46, borderRadius: 9, background: 'var(--line2)', flexShrink: 0 }} />}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</div>
+                      {r.status && MOD_BADGE[r.status] && <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, border: `1px solid ${MOD_BADGE[r.status].color}`, color: MOD_BADGE[r.status].color }}>{MOD_BADGE[r.status].label}</span>}
+                    </div>
                     <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 2 }}>{r.location || '—'}{r.lastView ? ` · آخرین بازدید: ${faDate(r.lastView)}` : ''}</div>
+                    {/* دلیلِ رد/تعلیق — همان دلیلی که ممیزی (AI/ML) ثبت کرده؛ کاربر می‌داند چه چیزی را اصلاح کند */}
+                    {(r.status === 'rejected' || r.status === 'duplicate' || r.status === 'pending') && r.modReason && (
+                      <div style={{ fontSize: 11, color: r.status === 'pending' ? '#e7a14a' : '#ef4444', marginTop: 4, lineHeight: 1.7 }}>ℹ️ {r.modReason}</div>
+                    )}
                     <div style={{ height: 4, borderRadius: 3, background: 'var(--line2)', marginTop: 7, overflow: 'hidden' }}>
                       <div style={{ width: `${Math.round((eng / maxEng) * 100)}%`, height: '100%', background: 'linear-gradient(90deg,var(--gold2),var(--gold))' }} />
                     </div>

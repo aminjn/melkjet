@@ -1,6 +1,6 @@
-import { pendingForModeration, setModeration, setModerationBatch, Item, ItemStatus } from './scraper-store'
+import { pendingForModeration, setModeration, setModerationBatch, type Item, type ItemStatus } from './scraper-store'
 import { chatCompleteSafe, agentModel } from './gapgpt'
-import { predict, learn, noteDecision } from './moderation-ml'
+import { predict, learn, noteDecision, explainPrediction } from './moderation-ml'
 import { getAdminData } from './admin-store'
 import { buildDupIndex, dupMasterInIndex, type DupIndex } from './listing-dedupe'
 
@@ -82,7 +82,13 @@ async function smartVerdict(it: Item, model: string | null, dupIndex?: DupIndex)
   const p = predict(it)
   if (p.confident && cfg.autoMl) {
     noteDecision('ml')
-    return { id: it.id, title: it.title, status: p.label, score: Math.round(p.prob * 100), via: 'ml', reason: `ممیزیِ خودکارِ یادگیری‌شده (اطمینان ${Math.round(p.prob * 100)}٪)` }
+    // دلیلِ قابل‌فهم از خودِ محاسبهٔ مدل (توضیح‌پذیری) — هم برای ادمین، هم برای پنلِ کاربر.
+    const ex = explainPrediction(it)
+    const conf = Math.round(p.prob * 100).toLocaleString('fa-IR')
+    const reason = p.label === 'rejected'
+      ? `ردِ خودکار: ${ex.reasons.length ? ex.reasons.join(' · ') : 'الگوی مشابهِ آگهی‌های ردشدهٔ قبلی'} (اطمینان ${conf}٪)`
+      : `تأییدِ خودکار — ${ex.reasons.length ? ex.reasons.join(' · ') : 'مشابهِ آگهی‌های سالمِ تأییدشده'} (اطمینان ${conf}٪)`
+    return { id: it.id, title: it.title, status: p.label, score: Math.round(p.prob * 100), via: 'ml', reason }
   }
   if (!model) return { id: it.id, title: it.title, status: 'pending', reason: 'در انتظارِ ممیزی (مدل تنظیم نشده و دادهٔ یادگیری کافی نیست)', score: 0, via: 'none' }
   const v = await getVerdict(it, model, cfg)
@@ -107,6 +113,21 @@ export async function moderateFields(
   const pseudo = { id: opts?.excludeId || '__prepublish__', type: 'listing', title: fields.title, price: fields.price, location: fields.location, excerpt: fields.excerpt, meta: fields.meta } as Item
   const v = await smartVerdict(pseudo, moderationModel())
   return { status: v.status, reason: v.reason, score: v.score, via: v.via }
+}
+
+// دلیلِ قابل‌نمایش: آگهی‌هایی که قبلاً با متنِ عمومیِ «ممیزیِ خودکارِ یادگیری‌شده» ذخیره شده‌اند،
+// موقعِ خواندن دلیلِ واقعی‌شان از خودِ مدل بازتولید می‌شود (هم پنلِ ادمین، هم پنلِ کاربر).
+export function displayReason(it: Pick<Item, 'title' | 'excerpt' | 'location' | 'price' | 'meta' | 'status' | 'aiReason'>): string {
+  const r = it.aiReason || ''
+  if (!/ممیزیِ خودکارِ یادگیری/.test(r)) return r
+  try {
+    const ex = explainPrediction(it)
+    if (!ex.reasons.length) return r
+    const conf = Math.round(ex.prob * 100).toLocaleString('fa-IR')
+    return it.status === 'rejected'
+      ? `ردِ خودکار: ${ex.reasons.join(' · ')} (اطمینان ${conf}٪)`
+      : `تأییدِ خودکار — ${ex.reasons.join(' · ')} (اطمینان ${conf}٪)`
+  } catch { return r }
 }
 
 // آموزشِ مدل از تصمیمِ دستیِ ادمین (تأیید/رد) — قوی‌ترین سیگنالِ یادگیری.

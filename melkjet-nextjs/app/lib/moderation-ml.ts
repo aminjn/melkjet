@@ -86,6 +86,43 @@ export function predict(it: Partial<Item>): MLPrediction {
   return { label, prob, ready, confident: ready && prob >= CONFIDENCE }
 }
 
+// ── توضیح‌پذیریِ تصمیمِ مدل (خواستهٔ صریح: «هوش مصنوعی که رد می‌کند باید دلیلش را بگوید») ──
+// وزنِ هر ویژگی = log-odds به سمتِ کلاسِ پیش‌بینی‌شده؛ پرچم‌های مهندسی‌شده به فارسیِ قابل‌فهم ترجمه می‌شوند
+// و واژه‌های متنی به «شباهت به آگهی‌های ردشده/تأییدشدهٔ قبلی». هیچ دلیلی از هوا نمی‌آید — همان محاسبهٔ خودِ مدل است.
+const FEATURE_FA: Record<string, string> = {
+  '#short': 'عنوانِ خیلی کوتاه',
+  '#long': 'عنوانِ خیلی بلند',
+  '#no_price': 'قیمت ثبت نشده',
+  '#no_area': 'متراژ مشخص نیست',
+  '#phone_in_text': 'شمارهٔ تماس داخلِ متن (نشانهٔ اسپم)',
+  '#contact_in_text': 'لینک یا آیدیِ تماس در توضیحات',
+  '#thin_desc': 'توضیحاتِ خیلی کوتاه و ناقص',
+  '#pbx': 'قیمتِ نامشخص یا نامعتبر',
+  '#pblo': 'قیمتِ غیرعادی پایین',
+}
+export function explainPrediction(it: Partial<Item>, top = 3): { label: MLabel; prob: number; reasons: string[] } {
+  const d = load()
+  const ap = d.approved, rj = d.rejected
+  const V = new Set([...Object.keys(ap.tok), ...Object.keys(rj.tok)]).size || 1
+  const p = predict(it)
+  const toward = p.label === 'rejected' ? rj : ap
+  const other = p.label === 'rejected' ? ap : rj
+  const w = (t: string) => Math.log(((toward.tok[t] || 0) + 1) / (toward.total + V)) - Math.log(((other.tok[t] || 0) + 1) / (other.total + V))
+  const scored = [...new Set(featuresOf(it))].map(t => ({ t, w: w(t) })).filter(x => x.w > 0).sort((a, b) => b.w - a.w)
+  const reasons: string[] = []
+  for (const x of scored) {
+    if (reasons.length >= top) break
+    if (x.t.startsWith('#')) { const fa = FEATURE_FA[x.t]; if (fa) reasons.push(fa) }
+  }
+  if (reasons.length < top) {
+    const words = scored.filter(x => !x.t.startsWith('#') && x.t.length >= 3).slice(0, 3).map(x => x.t)
+    if (words.length) reasons.push(p.label === 'rejected'
+      ? `شباهت به آگهی‌های ردشدهٔ قبلی (واژه‌های «${words.join('»، «')}»)`
+      : 'شباهت به آگهی‌های سالمِ تأییدشده')
+  }
+  return { label: p.label, prob: p.prob, reasons: reasons.slice(0, top) }
+}
+
 export function noteDecision(via: 'ml' | 'ai'): void {
   const d = load()
   if (via === 'ml') d.autoDecided++; else d.aiDecided++
