@@ -14,7 +14,7 @@ const digitsOf = (s: string) => s
   .replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
   .replace(/\D/g, '').slice(0, 15)
 
-type Opp = { id: string; title: string; hood: string; price: number; priceStr: string; image: string; area: number; rooms: number; ptype: string; kind: string; recommended: boolean; reason: string; locked?: boolean }
+type Opp = { id: string; title: string; hood: string; price: number; priceStr: string; image: string; area: number; rooms: number; ptype: string; kind: string; recommended: boolean; reason: string; locked?: boolean; why?: string[] }
 type St = any
 
 const card: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: 16 }
@@ -23,6 +23,47 @@ const btnGhost: React.CSSProperties = { background: 'transparent', color: 'var(-
 const chip = (on: boolean): React.CSSProperties => ({ padding: '10px 14px', borderRadius: 12, border: `1px solid ${on ? 'var(--gold)' : 'var(--line2)'}`, background: on ? 'rgba(212,175,55,.12)' : 'var(--bg2)', color: on ? 'var(--gold)' : 'var(--text)', cursor: 'pointer', fontSize: 13 })
 
 // ملک‌جت — دستیارِ هوشمندِ همراه؛ گفت‌وگوها متنِ قطعیِ سند است.
+// شمارشِ متحرکِ اعداد (جلد ۵۶ «پول فقط عدد نیست») — تغییرِ ارزش دیده می‌شود، نه فقط جایگزین.
+function CountUp({ value, format }: { value: number; format: (n: number) => string }) {
+  const [v, setV] = useState(value)
+  const prev = useRef(value)
+  useEffect(() => {
+    const from = prev.current, to = value
+    prev.current = value
+    if (from === to) return
+    const t0 = performance.now(), dur = 900
+    let raf = 0
+    const tick = (t: number) => {
+      const k = Math.min(1, (t - t0) / dur)
+      const eased = 1 - Math.pow(1 - k, 3)
+      setV(from + (to - from) * eased)
+      if (k < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [value])
+  return <>{format(Math.round(v))}</>
+}
+
+// جشنِ موفقیت (جلد ۵۶ «Achievement فقط Badge نیست») — پاشِشِ لحظه‌ای، بدونِ کتابخانه، موقعیت‌ها قطعی از ایندکس.
+function Burst({ seed }: { seed: number }) {
+  if (!seed) return null
+  const N = 14
+  return (
+    <div key={seed} style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 999 }}>
+      {Array.from({ length: N }, (_, i) => {
+        const a = (i / N) * Math.PI * 2
+        const r = 90 + (i % 4) * 36
+        return (
+          <span key={i} style={{ position: 'absolute', left: '50%', top: '38%', fontSize: 15 + (i % 3) * 7, ['--dx' as any]: `${Math.round(Math.cos(a) * r)}px`, ['--dy' as any]: `${Math.round(Math.sin(a) * r + 50)}px`, animation: 'empBurst .95s ease-out forwards' }}>
+            {['✨', '🪙', '⚡', '🎉'][i % 4]}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
 function MJ({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
@@ -68,6 +109,8 @@ export default function EmpirePage() {
   const [repayVal, setRepayVal] = useState('')
   const [mkt, setMkt] = useState<any>(null)                      // بازار سرمایه (جلد ۴۰)
   const [paper, setPaper] = useState<any>(null)                  // روزنامهٔ ملک‌جت (جلد ۵۲) + آرشیو رکوردها
+  const [burst, setBurst] = useState(0)                          // جشنِ موفقیت (جلد ۵۶)
+  const celebrate = () => { setBurst(Date.now()); setTimeout(() => setBurst(0), 1100) }
   const [fu, setFu] = useState<Record<string, string>>({})       // تعدادِ واحدِ صندوق (ورودی)
   const [cu, setCu] = useState<Record<string, string>>({})       // تعدادِ واحدِ مشارکت (ورودی)
   const [nego, setNego] = useState<Record<string, any>>({})   // نتیجهٔ مذاکره به‌ازای هر آگهی
@@ -142,7 +185,7 @@ export default function EmpirePage() {
     const texts = ['در حال بررسی سند...', 'در حال بررسی ارزش...', 'در حال تحلیل بازار...', '✍️ امضای قرارداد']
     for (let i = 0; i < texts.length; i++) { setBuyTxt(texts[i]); await new Promise(r => setTimeout(r, 900)) }
     const d = await api({ action: 'buy', listingId: o.id, negotiated })
-    if (d) { setSt(d); setStep('owned') } else setStep('opps')
+    if (d) { setSt(d); setStep('owned'); celebrate() } else setStep('opps')
   }
   async function doReject() {
     const d = await api({ action: 'reject' })
@@ -163,13 +206,13 @@ export default function EmpirePage() {
   async function doHunter() { setHunterRes(null); const d = await api({ action: 'hunterStart' }); if (d) setHunterPair(d.pair) }
   async function doHunterPick(id: string) { const d = await api({ action: 'hunterAnswer', pick: id }); if (d) { setHunterRes(d); setHunterPair([]); load() } }
   async function doAnalyze(listingId: string) { const d = await api({ action: 'analyze', listingId }); if (d) { setAnalysis(d.analysis); load() } }
-  async function doClaim(key: string) { const d = await api({ action: 'claim', key }); if (d) setSt(d) }
+  async function doClaim(key: string) { const d = await api({ action: 'claim', key }); if (d) { setSt(d); celebrate() } }
   async function doSell(a: any) {
     if (!confirm(`«${a.title.slice(0, 40)}» به قیمتِ روزِ ${faB(a.current || a.buyPrice)} تومان فروخته شود؟`)) return
     const d = await api({ action: 'sell', assetId: a.id })
-    if (d) setSt(d)
+    if (d) { setSt(d); if ((d.profit || 0) > 0) celebrate() }
   }
-  async function doChest() { const d = await api({ action: 'chest' }); if (d) { setChestReward(d.reward); load() } }
+  async function doChest() { const d = await api({ action: 'chest' }); if (d) { setChestReward(d.reward); celebrate(); load() } }
   async function doBoards() { const d = await api({ action: 'boards' }); if (d) setBoards(d) }
   async function doMarket() { const d = await api({ action: 'market' }); if (d) setMkt(d) }
   async function doNews() { const d = await api({ action: 'news' }); if (d) setPaper(d) }
@@ -180,8 +223,25 @@ export default function EmpirePage() {
   }
 
   // ══════════ رندر ══════════
+  // لایهٔ حس و حرکت (جلد ۵۶): «هیچ چیزی نباید ناگهانی ظاهر شود» — ورودِ پلکانی، میکرواینترکشن، جشنِ موفقیت.
   const wrap = (children: React.ReactNode) => (
-    <main dir="rtl" style={{ maxWidth: 860, margin: '0 auto', padding: '24px 16px 80px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <main dir="rtl" className="empRoot" style={{ maxWidth: 860, margin: '0 auto', padding: '24px 16px 80px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <style>{`
+        @keyframes empUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+        @keyframes empBurst{0%{transform:translate(0,0) scale(1);opacity:1}100%{transform:translate(var(--dx),var(--dy)) scale(.35);opacity:0}}
+        @keyframes empTwinkle{0%,100%{opacity:.25}50%{opacity:.9}}
+        .empRoot>*{animation:empUp .45s ease both}
+        .empRoot>*:nth-child(2){animation-delay:.05s}.empRoot>*:nth-child(3){animation-delay:.1s}
+        .empRoot>*:nth-child(4){animation-delay:.15s}.empRoot>*:nth-child(5){animation-delay:.2s}
+        .empRoot>*:nth-child(6){animation-delay:.25s}.empRoot>*:nth-child(7){animation-delay:.3s}
+        .empRoot>*:nth-child(n+8){animation-delay:.35s}
+        .empRoot button{transition:transform .15s ease,filter .15s ease,border-color .15s ease}
+        .empRoot button:hover:not(:disabled){transform:translateY(-1px);filter:brightness(1.07)}
+        .empRoot button:active:not(:disabled){transform:scale(.97)}
+        .empRoot details>div,.empRoot details>*:not(summary){animation:empUp .35s ease both}
+        @media (prefers-reduced-motion: reduce){.empRoot *{animation:none!important;transition:none!important}}
+      `}</style>
+      <Burst seed={burst} />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1 style={{ fontSize: 20, margin: 0 }}>🏛 امپراتوریِ من</h1>
         <Link href="/" style={{ color: 'var(--muted)', fontSize: 13, textDecoration: 'none' }}>← بازگشت به ملک‌جت</Link>
@@ -334,6 +394,10 @@ export default function EmpirePage() {
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>{o.hood}{o.area ? ` · ${fa(o.area)} متر` : ''}</div>
           <div style={{ fontSize: 13, color: 'var(--gold)', fontWeight: 700 }}>{faB(o.price)} تومان</div>
           <div style={{ fontSize: 11, color: 'var(--faint)' }}>{o.reason}{(o as any).url && <> · <a href={(o as any).url} target="_blank" rel="noreferrer" style={{ color: 'var(--gold)' }}>🔗 آگهیِ واقعی</a></>}</div>
+          {/* چراییِ پیشنهاد (جلد ۵۴ — AI Explainability): فقط سیگنال‌های واقعی */}
+          {(o.why || []).length > 0 && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {o.why!.map(w => <span key={w} style={{ fontSize: 10, color: 'var(--muted)', background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 999, padding: '2px 8px' }}>{w}</span>)}
+          </div>}
           {/* مذاکره (GDD جلد۱ مرحلهٔ ۵) — یک‌بار، نتیجه قطعی؛ فرصتِ خارج از بودجه فقط تماشایی است (صادقانه) */}
           {o.locked ? (
             <button style={{ ...btnGhost, padding: '8px 12px', fontSize: 12.5 }} onClick={() => setStep('dash')}>💰 هنوز نمی‌رسد — برو سرمایه بساز</button>
@@ -438,12 +502,46 @@ export default function EmpirePage() {
       </div>
     </details>}
 
-    {/* ارزشِ خالص (زنده از بازارِ واقعی) */}
+    {/* خطِ آسمانِ امپراتوری (جلد ۵۶ — قانونِ ۳: «تجربه به‌جای داده») — ارتفاعِ هر برج = ارزشِ روزِ واقعی */}
+    {(e.assets?.length || 0) > 0 && (() => {
+      const vals = e.assets.map((a: any) => a.current || a.buyPrice)
+      const max = Math.max(...vals)
+      return (
+        <div style={{ ...card, padding: '14px 16px 0', background: 'linear-gradient(180deg,#0a0d1c 0%,#121830 62%,#231803 100%)', borderColor: 'rgba(201,168,76,.5)', overflow: 'hidden', position: 'relative' }}>
+          {['12%', '30%', '55%', '74%', '90%'].map((left, i) => (
+            <span key={i} style={{ position: 'absolute', top: 10 + (i % 3) * 9, left, fontSize: 8, color: '#cfd6ff', animation: `empTwinkle ${2 + i * 0.6}s ease-in-out infinite` }}>✦</span>
+          ))}
+          <span style={{ position: 'absolute', top: 12, left: 18, fontSize: 20 }}>🌙</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+            <b style={{ fontSize: 13.5, color: '#ece5d8' }}>🌆 خطِ آسمانِ امپراتوریِ تو</b>
+            <span style={{ fontSize: 10.5, color: '#9aa0b8' }}>ارتفاعِ هر برج = ارزشِ روزِ واقعیِ همان دارایی</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 7, height: 112, marginTop: 12 }}>
+            {e.assets.map((a: any, i: number) => {
+              const h = 26 + Math.round((vals[i] / max) * 78)
+              return (
+                <div key={a.id} title={`${a.title?.slice(0, 60)} — ${faB(vals[i])} تومان`} style={{
+                  width: 30, height: h, borderRadius: '3px 3px 0 0', position: 'relative', cursor: 'default',
+                  background: 'linear-gradient(180deg,#262c47,#151827)', border: '1px solid #3c4468', borderBottom: 'none',
+                  backgroundImage: 'repeating-linear-gradient(0deg, rgba(255,214,120,.7) 0 2px, transparent 2px 8px), repeating-linear-gradient(90deg, transparent 0 5px, rgba(0,0,0,.4) 5px 10px)',
+                  animation: 'empUp .6s ease both', animationDelay: `${i * 80}ms`,
+                }}>
+                  <span style={{ position: 'absolute', top: -15, left: '50%', transform: 'translateX(-50%)', fontSize: 10 }}>{a.kind === 'land' ? '🏞' : a.kind === 'villa' ? '🏡' : a.kind === 'commercial' ? '🏬' : ''}</span>
+                </div>
+              )
+            })}
+          </div>
+          <div style={{ height: 3, margin: '0 -16px', background: 'linear-gradient(90deg,transparent,#c9a84c 30%,#c9a84c 70%,transparent)' }} />
+        </div>
+      )
+    })()}
+
+    {/* ارزشِ خالص (زنده از بازارِ واقعی) — اعداد با شمارشِ متحرک (جلد ۵۶) */}
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10 }}>
-      <div style={card}><div style={{ fontSize: 11, color: 'var(--muted)' }}>ارزشِ خالص</div><div style={{ fontSize: 17, fontWeight: 800, color: 'var(--gold)' }}>{faB(st.netWorth || 0)} تومان</div></div>
-      <div style={card}><div style={{ fontSize: 11, color: 'var(--muted)' }}>سرمایهٔ نقد</div><div style={{ fontSize: 17, fontWeight: 800 }}>{faB(e.capital)} تومان</div></div>
-      <div style={card}><div style={{ fontSize: 11, color: 'var(--muted)' }}>ارزشِ دارایی‌ها (زنده)</div><div style={{ fontSize: 17, fontWeight: 800 }}>{faB(st.assetsValue || 0)} تومان {st.growth ? <span style={{ fontSize: 12, color: st.growth > 0 ? '#7c6' : '#e88' }}>({st.growth > 0 ? '+' : ''}{st.growth.toLocaleString('fa-IR')}٪)</span> : null}</div></div>
-      {(e.realized || 0) !== 0 && <div style={card}><div style={{ fontSize: 11, color: 'var(--muted)' }}>سودِ تحقق‌یافته (فروش‌ها)</div><div style={{ fontSize: 17, fontWeight: 800, color: e.realized > 0 ? '#7c6' : '#e88' }}>{e.realized > 0 ? '+' : '−'}{faB(Math.abs(e.realized))} تومان</div></div>}
+      <div style={card}><div style={{ fontSize: 11, color: 'var(--muted)' }}>ارزشِ خالص</div><div style={{ fontSize: 17, fontWeight: 800, color: 'var(--gold)' }}><CountUp value={st.netWorth || 0} format={faB} /> تومان</div></div>
+      <div style={card}><div style={{ fontSize: 11, color: 'var(--muted)' }}>سرمایهٔ نقد</div><div style={{ fontSize: 17, fontWeight: 800 }}><CountUp value={e.capital} format={faB} /> تومان</div></div>
+      <div style={card}><div style={{ fontSize: 11, color: 'var(--muted)' }}>ارزشِ دارایی‌ها (زنده)</div><div style={{ fontSize: 17, fontWeight: 800 }}><CountUp value={st.assetsValue || 0} format={faB} /> تومان {st.growth ? <span style={{ fontSize: 12, color: st.growth > 0 ? '#7c6' : '#e88' }}>({st.growth > 0 ? '+' : ''}{st.growth.toLocaleString('fa-IR')}٪)</span> : null}</div></div>
+      {(e.realized || 0) !== 0 && <div style={card}><div style={{ fontSize: 11, color: 'var(--muted)' }}>سودِ تحقق‌یافته (فروش‌ها)</div><div style={{ fontSize: 17, fontWeight: 800, color: e.realized > 0 ? '#7c6' : '#e88' }}>{e.realized > 0 ? '+' : '−'}<CountUp value={Math.abs(e.realized)} format={faB} /> تومان</div></div>}
     </div>
 
     {st.suspense && <div style={{ ...card, borderColor: 'var(--gold)', fontSize: 13 }}>⏳ {st.suspense.text}</div>}

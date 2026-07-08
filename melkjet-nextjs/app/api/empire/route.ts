@@ -322,7 +322,7 @@ export async function POST(req: NextRequest) {
       const engagement = (it: Item) => (stats[it.id]?.views || 0) + 3 * (stats[it.id]?.contacts || 0)
       const byKind = new Map<AssetKind, Item[]>()
       for (const it of items) { const k = assetKindOf(ptypeOf(it)); if (!byKind.has(k)) byKind.set(k, []); byKind.get(k)!.push(it) }
-      const picks: Array<ReturnType<typeof lite> & { recommended: boolean; reason: string }> = []
+      const picks: Array<ReturnType<typeof lite> & { recommended: boolean; reason: string; why?: string[] }> = []
       const wanted: AssetKind[] = ['apartment', 'villa', 'commercial', 'land']
       // نوعِ برجسته از هویت (Identity Engine): investor→آپارتمان، builder→زمین، commercial→تجاری، luxury→ویلا.
       const id = e.identity
@@ -334,7 +334,14 @@ export async function POST(req: NextRequest) {
         const it = list[0]
         if (!it) continue
         const rec = k === domKind
-        picks.push({ ...lite(it), recommended: rec, reason: rec ? 'اگر جای تو بودم از اینجا شروع می‌کردم' : (cityMatch(it) ? `در شهرِ انتخابیِ تو` : 'فرصتِ فعال در بازار') })
+        // توضیح‌پذیریِ AI (جلد ۵۴ «AI Explainability»): چرا این پیشنهاد — فقط سیگنال‌های واقعی.
+        const why: string[] = []
+        if (cityMatch(it)) why.push(`در «${e.answers.city}» — شهرِ انتخابیِ تو`)
+        const s = stats[it.id]
+        if ((s?.views || 0) + (s?.contacts || 0) > 0) why.push(`استقبالِ واقعی: ${(s?.views || 0).toLocaleString('fa-IR')} بازدید${s?.contacts ? ` و ${s.contacts.toLocaleString('fa-IR')} تماس` : ''}`)
+        why.push(`${Math.max(1, Math.round(priceOf(it) / e.capital * 100)).toLocaleString('fa-IR')}٪ از سرمایهٔ نقدِ تو`)
+        if (rec) why.push(`هم‌راستا با پروفایلِ ${e.profile.title}`)
+        picks.push({ ...lite(it), recommended: rec, reason: rec ? 'اگر جای تو بودم از اینجا شروع می‌کردم' : (cityMatch(it) ? `در شهرِ انتخابیِ تو` : 'فرصتِ فعال در بازار'), why })
       }
       // اگر نوعِ برجسته در بازار نبود، اولین فرصت برجسته شود.
       if (picks.length && !picks.some(p => p.recommended)) { picks[0].recommended = true; picks[0].reason = 'اگر جای تو بودم از اینجا شروع می‌کردم' }
