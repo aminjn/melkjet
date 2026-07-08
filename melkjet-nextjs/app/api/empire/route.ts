@@ -9,6 +9,7 @@ import {
   getBrief, markBriefOpened, dayNumberOf,
   sellAsset, setLandPlan, chooseBusiness, accrueIncome, claimDailyChest, chestRewardOf,
   landProjection, empireScoreOf, listEmpiresPublic, applyUpkeep,
+  creditScoreOf, loanTermsFor, takeLoan, repayLoan, accrueLoanInterest,
   type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
 import { buildBriefFor } from '@/app/lib/empire-brief'
@@ -123,7 +124,10 @@ async function upkeepFor(userId: string, e: EmpireData, now = Date.now()): Promi
 // وضعیتِ کاملِ امپراتوری برای UI.
 async function stateOf(userId: string, e00: EmpireData) {
   const e0 = await upkeepFor(userId, e00).catch(() => e00)    // هزینهٔ مالکیت (GDD جلد۵)
-  const e = await accrueRentFor(userId, e0).catch(() => e0)   // درآمدِ اجاره/کسب‌وکار از بازارِ واقعی
+  const e1 = await accrueRentFor(userId, e0).catch(() => e0)  // درآمدِ اجاره/کسب‌وکار از بازارِ واقعی
+  // بهرهٔ روزشمارِ وام (جلد ۱۶) — روزی یک‌بار
+  const li = e1.loan ? await accrueLoanInterest(userId).catch(() => null) : null
+  const e = li?.ok && li.empire ? li.empire : e1
   const [prices, missions, total] = await Promise.all([livePrices(e), missionsOf(userId, e), empireCount()])
   const nw = netWorthOf(e, prices)
   const assets = e.assets.map(a => ({
@@ -141,8 +145,11 @@ async function stateOf(userId: string, e00: EmpireData) {
     await touchStreak(userId)
     streak = await getStreak(userId)
   } catch { /* نامه/استریک اختیاری است */ }
+  // بانک (جلد ۱۶): امتیازِ اعتباری از رفتارِ واقعی + شرایطِ وامِ در دسترس
+  const credit = creditScoreOf(e, streak?.streak || 0)
+  const bank = config().empire.bank.enabled ? { credit, loan: e.loan || null, terms: e.loan ? null : loanTermsFor(credit.score, Math.max(0, nw.netWorth)) } : null
   return {
-    enabled: true, empire: { ...e, assets }, level: empireLevel(e.xp), ...nw, missions,
+    enabled: true, empire: { ...e, assets }, level: empireLevel(e.xp), ...nw, missions, bank,
     empireScore: empireScoreOf(e, prices),
     chest: config().empire.chest.enabled ? { available: !e.claims['chest_' + today] } : null,
     othersBuilding: Math.max(0, total - 1),
@@ -388,6 +395,29 @@ export async function POST(req: NextRequest) {
         hoodLeague: { hood: myHood, rows: hoodLeague },
         total: rows.length,
       })
+    }
+
+    // بانک (جلد ۱۶): وام با سقف/نرخِ اعتباری — سرور خودش شرایط را از امتیازِ واقعی محاسبه می‌کند.
+    case 'loan': {
+      if (!config().empire.bank.enabled) return NextResponse.json({ error: 'بانک فعال نیست' }, { status: 403 })
+      const e = await getEmpire(userId)
+      if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      if (e.loan) return NextResponse.json({ error: 'یک وامِ فعال داری — اول تسویه کن' }, { status: 400 })
+      const prices = await livePrices(e)
+      const nw = netWorthOf(e, prices)
+      const credit = creditScoreOf(e, (await getStreak(userId).catch(() => ({ streak: 0 }))).streak)
+      const terms = loanTermsFor(credit.score, Math.max(0, nw.netWorth))
+      const amount = Math.round(Number(b.amount) || 0)
+      if (!terms.eligible) return NextResponse.json({ error: 'با این امتیازِ اعتباری فعلاً وام تعلق نمی‌گیرد' }, { status: 400 })
+      if (amount <= 0 || amount > terms.maxLoan) return NextResponse.json({ error: `سقفِ وامِ تو ${Math.round(terms.maxLoan / 1e6).toLocaleString('fa-IR')} میلیون تومان است` }, { status: 400 })
+      const r = await takeLoan(userId, amount, terms.ratePctYear, terms.termDays)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+    }
+    case 'repay': {
+      const r = await repayLoan(userId, Number(b.amount) || 0)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, paid: r.paid, settled: r.settled, ...(await stateOf(userId, r.empire!)) })
     }
 
     case 'journal': { const r = await addJournal(userId, String(b.text || '')); return r.ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: r.reason }, { status: 400 }) }

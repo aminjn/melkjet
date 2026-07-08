@@ -56,6 +56,8 @@ export interface EmpireData {
   timeline: TimelineDot[]     // تایم‌لاینِ زندگی (اولین نقطه: «به ملک‌جت پیوست»)
   journal: JournalEntry[]     // AI Journal (فصل ۳)
   guess: { tries: number; correct: number }           // Beat AI (مأموریت M3)
+  loan?: { amount: number; balance: number; ratePctYear: number; startedAt: number; dueAt: number; lastInterestAt: number }   // بانک (جلد ۱۶) — یک وامِ فعال
+  creditHist?: { taken: number; repaid: number; lateDays: number }   // سابقهٔ بازپرداخت — خوراکِ امتیازِ اعتباری
   stylePicks?: string[]                               // مأموریت M2 «سبکِ خودت را پیدا کن» (انتخابِ تصویری)
   hunter?: { a: string; b: string; better: string; at: number }   // جفتِ فعالِ Property Hunter (§6.4)
   claims: Record<string, number>                      // پاداش‌های یک‌بارمصرفِ دریافت‌شده (missionKey → ts)
@@ -179,6 +181,34 @@ export function empireScoreOf(e: Pick<EmpireData, 'assets' | 'capital' | 'guess'
   const badgePts = Math.min(100, e.badges.length * 25)
   const decisionPts = Math.min(50, Object.keys(e.claims).length * 10)
   return assetsPts + growthPts + knowledgePts + xpPts + badgePts + decisionPts
+}
+
+// امتیازِ اعتباری (GDD جلد ۱۶) ۰..۱۰۰۰ — فقط از رفتارِ واقعی: بازپرداخت، نظمِ حضور، سودِ تحقق‌یافته،
+// درآمد، دانشِ بازار (دقتِ حدس) و اهرمِ بدهی. باندها طبق سند: ۰-۳۰۰ پرریسک … ۸۰۱-۱۰۰۰ ممتاز.
+export function creditScoreOf(e: Pick<EmpireData, 'capital' | 'assets' | 'guess' | 'realized' | 'loan' | 'creditHist'>, streakDays = 0): { score: number; band: string } {
+  const h = e.creditHist || { taken: 0, repaid: 0, lateDays: 0 }
+  let s = 400                                                          // پایه: معمولی
+  s += Math.min(200, h.repaid * 50)                                    // هر بازپرداختِ کامل +۵۰ (سقف ۲۰۰)
+  s -= Math.min(300, h.lateDays * 10)                                  // هر روزِ دیرکرد −۱۰
+  s += Math.min(100, streakDays * 4)                                   // نظمِ حضور
+  const income = e.assets.reduce((x, a) => x + (a.income || 0), 0)
+  if ((e.realized || 0) + income > 0) s += Math.min(120, Math.round(((e.realized || 0) + income) / 100_000_000) * 10)   // هر ۱۰۰مِ سود/درآمد +۱۰
+  const acc = e.guess.tries ? e.guess.correct / e.guess.tries : 0
+  s += Math.round(acc * 80)                                            // دانشِ بازار
+  const assetsValue = e.assets.reduce((x, a) => x + a.buyPrice, 0)
+  const debt = e.loan?.balance || 0
+  if (debt > 0 && assetsValue + e.capital > 0) s -= Math.min(150, Math.round(debt / (assetsValue + e.capital) * 200))   // اهرمِ سنگین
+  const score = Math.max(0, Math.min(1000, Math.round(s)))
+  const band = score <= 300 ? 'ریسکِ بالا' : score <= 600 ? 'معمولی' : score <= 800 ? 'معتبر' : 'سرمایه‌گذارِ ممتاز'
+  return { score, band }
+}
+
+// شرایطِ وام از امتیازِ اعتباری — نرخِ بهتر برای اعتبارِ بالاتر (قطعی، تست‌پذیر).
+export function loanTermsFor(score: number, netWorth: number, cfg = config().empire.bank): { maxLoan: number; ratePctYear: number; termDays: number; eligible: boolean } {
+  const mult = score > 800 ? 0.75 : score > 600 ? 0.9 : score > 300 ? 1 : 1.4   // ضریبِ نرخ بر اساسِ باند
+  const capMult = score > 800 ? 1.2 : score > 600 ? 1 : score > 300 ? 0.7 : 0.3 // سقفِ وام بر اساسِ باند
+  const maxLoan = Math.max(0, Math.round(netWorth * (cfg.maxLoanPctOfNetWorth / 100) * capMult))
+  return { maxLoan, ratePctYear: Math.round(cfg.baseRatePctYear * mult * 10) / 10, termDays: cfg.termDays, eligible: cfg.enabled && maxLoan > 0 }
 }
 
 // جملهٔ AI Dream Engine از انتخاب‌های Dream Board (فصل ۳) — قطعی.
@@ -511,6 +541,62 @@ export async function claimDailyChest(userId: string, day: number, now = Date.no
   return { ok: true, reward }
 }
 
+// ══════════ بانک (GDD جلد ۱۶): وام با نرخِ اعتباری، بهرهٔ روزشمار، جریمهٔ دیرکرد ══════════
+// گرفتنِ وام — فقط یک وامِ فعال؛ سقف و نرخ از loanTermsFor (لایهٔ API محاسبه و پاس می‌دهد).
+export async function takeLoan(userId: string, amount: number, ratePctYear: number, termDays: number, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    if (e.loan) return 'یک وامِ فعال داری — اول تسویه کن'
+    if (!(amount > 0)) return 'مبلغِ نامعتبر'
+    e.capital += Math.round(amount)
+    e.loan = { amount: Math.round(amount), balance: Math.round(amount), ratePctYear, startedAt: now, dueAt: now + termDays * 864e5, lastInterestAt: now }
+    e.creditHist = e.creditHist || { taken: 0, repaid: 0, lateDays: 0 }
+    e.creditHist.taken += 1
+    e.timeline.push({ at: now, icon: '🏦', title: 'دریافتِ وام', detail: `${Math.round(amount / 1e6).toLocaleString('fa-IR')}م تومان · نرخ ${ratePctYear.toLocaleString('fa-IR')}٪ سالانه` })
+  })
+}
+
+// بهرهٔ روزشمار (بعد از سررسید ×۱.۵ + ثبتِ روزهای دیرکرد در سابقهٔ اعتباری). خروجی: بهرهٔ افزوده.
+export async function accrueLoanInterest(userId: string, now = Date.now()): Promise<{ ok: boolean; added?: number; empire?: EmpireData }> {
+  let added = 0
+  const r = await mutateEmpire(userId, e => {
+    if (!e.loan) return 'وامی نیست'
+    const days = Math.floor((now - e.loan.lastInterestAt) / 864e5)
+    if (days < 1) return 'زود است'
+    const overdueDays = Math.max(0, Math.floor((now - Math.max(e.loan.dueAt, e.loan.lastInterestAt)) / 864e5))
+    const normalDays = days - Math.min(days, overdueDays)
+    const daily = e.loan.ratePctYear / 100 / 365
+    added = Math.round(e.loan.balance * daily * normalDays + e.loan.balance * daily * 1.5 * Math.min(days, overdueDays))
+    e.loan.balance += added
+    e.loan.lastInterestAt = now
+    if (overdueDays > 0) { e.creditHist = e.creditHist || { taken: 0, repaid: 0, lateDays: 0 }; e.creditHist.lateDays += Math.min(days, overdueDays) }
+  })
+  if (!r.ok) return { ok: false }
+  return { ok: true, added, empire: r.empire }
+}
+
+// بازپرداخت از سرمایهٔ نقد — تسویهٔ کامل: پاداشِ XP + بهبودِ سابقهٔ اعتباری.
+export async function repayLoan(userId: string, amount: number, now = Date.now()): Promise<{ ok: boolean; reason?: string; paid?: number; settled?: boolean; empire?: EmpireData }> {
+  const cfg = config().empire.bank
+  let paid = 0, settled = false
+  const r = await mutateEmpire(userId, e => {
+    if (!e.loan) return 'وامی برای بازپرداخت نیست'
+    paid = Math.min(Math.max(0, Math.round(amount)), e.loan.balance, e.capital)
+    if (!(paid > 0)) return 'سرمایهٔ نقدِ کافی نیست'
+    e.capital -= paid
+    e.loan.balance -= paid
+    if (e.loan.balance <= 0) {
+      settled = true
+      e.loan = undefined
+      e.creditHist = e.creditHist || { taken: 0, repaid: 0, lateDays: 0 }
+      e.creditHist.repaid += 1
+      e.xp += cfg.repayXp
+      e.timeline.push({ at: now, icon: '✅', title: 'تسویهٔ کاملِ وام', detail: 'خوش‌حسابی در سابقهٔ اعتباری‌ات ثبت شد' })
+    }
+  })
+  if (!r.ok) return { ok: false, reason: r.reason }
+  return { ok: true, paid, settled, empire: r.empire }
+}
+
 // همهٔ امپراتوری‌ها برای جدول‌های رتبه (فصل ۵: ۵ لیدربرد) — نمایشِ عمومی فقط نام/نشان، بدونِ شماره‌تلفن.
 export async function listEmpiresPublic(limit = 300): Promise<EmpireData[]> {
   if (pgEnabled()) { await ensure(); const r = await pgTx(c => c.query(`SELECT data FROM reos_empire ORDER BY at DESC LIMIT $1`, [limit])); return r.rows.map(x => x.data as EmpireData) }
@@ -551,12 +637,12 @@ export async function briefStatsForDay(day: number): Promise<{ built: number; op
   return { built: rows.length, opened: rows.filter(b => b.openedAt).length }
 }
 
-// ارزشِ خالص (Real Asset Value، §6.2-3): سرمایهٔ نقد + ارزشِ روزِ دارایی‌ها از قیمتِ زندهٔ آگهیِ واقعی.
+// ارزشِ خالص (Real Asset Value، §6.2-3): نقد + ارزشِ روزِ دارایی‌ها − بدهیِ بانکی (جلد ۱۶).
 export function netWorthOf(e: EmpireData, livePrices: Record<string, number>): { netWorth: number; assetsValue: number; growth: number } {
   let assetsValue = 0, cost = 0
   for (const a of e.assets) { assetsValue += livePrices[a.listingId] || a.buyPrice; cost += a.buyPrice }
   const growth = cost ? Math.round(((assetsValue - cost) / cost) * 1000) / 10 : 0
-  return { netWorth: e.capital + assetsValue, assetsValue, growth }
+  return { netWorth: e.capital + assetsValue - (e.loan?.balance || 0), assetsValue, growth }
 }
 
 // شمارِ کلِ امپراتوری‌ها (برای «N نفر دیگر هم در حال ساخت‌اند» — فصل ۳، Neighbourhood Discovery).

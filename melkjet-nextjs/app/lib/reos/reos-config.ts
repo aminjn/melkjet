@@ -32,6 +32,7 @@ export interface ReosConfig {
     rentIncome: boolean
     maintenancePctYear: number
     chest: { enabled: boolean; maxCoins: number; maxXp: number }
+    bank: { enabled: boolean; maxLoanPctOfNetWorth: number; baseRatePctYear: number; termDays: number; repayXp: number }
   }
 }
 
@@ -69,6 +70,8 @@ export const DEFAULT_CONFIG: ReosConfig = {
     rentIncome: true,
     maintenancePctYear: 1,
     chest: { enabled: true, maxCoins: 100, maxXp: 50 },
+    // بانک (GDD جلد ۱۶): سقف و نرخِ وام تابعِ امتیازِ اعتباری؛ نرخِ پایه سالانه است، بهره روزشمار.
+    bank: { enabled: true, maxLoanPctOfNetWorth: 50, baseRatePctYear: 18, termDays: 90, repayXp: 40 },
   },
 }
 

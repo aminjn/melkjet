@@ -106,6 +106,7 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
           <Mini label="دارایی‌ها (آگهیِ واقعی)" value={fa(data.totals.assets)} />
           <Mini label="سودِ تحقق‌یافتهٔ کل" value={`${faB(data.totals.realized)} ت`} hint="از فروش‌ها" />
           <Mini label="درآمدِ اجاره/کسب‌وکار" value={`${faB(data.totals.incomes)} ت`} />
+          <Mini label="بدهیِ بانکیِ کل" value={`${faB(data.totals.debt || 0)} ت`} hint="ماندهٔ وام‌های فعال" />
           <Mini label="میانگینِ Empire Score" value={fa(data.avgScore)} />
           <Mini label="نامهٔ امروز" value={`${fa(data.briefs.built)} / ${fa(data.briefs.opened)}`} hint="ساخته / بازشده" />
         </div>
@@ -265,6 +266,14 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             <div style={sub}>♻️ گردشِ اقتصاد (ضدِ احتکار)</div>
             {row('درآمدِ اجاره (۱/۰)', cin('rentIncome'), 'از میانهٔ اجارهٔ واقعیِ هم‌محله‌ها')}
             {row('هزینهٔ مالکیت (٪ سالانه)', cin('maintenancePctYear'), 'نگهداری/مالیات — پول در گردش می‌ماند')}
+          </div>
+          <div style={card}>
+            <div style={sub}>🏦 بانک و اعتبار (جلد ۱۶)</div>
+            {row('بانک فعال (۱/۰)', cin('bank', 'enabled'))}
+            {row('سقفِ وام (٪ ارزشِ خالص)', cin('bank', 'maxLoanPctOfNetWorth'), 'باندِ اعتباری روی این سقف ضریب می‌گذارد')}
+            {row('نرخِ پایه (٪ سالانه)', cin('bank', 'baseRatePctYear'), 'ممتاز ×۰.۷۵ · معتبر ×۰.۹ · پرریسک ×۱.۴')}
+            {row('مهلتِ بازپرداخت (روز)', cin('bank', 'termDays'), 'بعد از سررسید: نرخ ×۱.۵ + ثبتِ دیرکرد')}
+            {row('XP تسویهٔ کامل', cin('bank', 'repayXp'))}
           </div>
         </div>
         <div><button style={btn} disabled={busy === 'cfg'} onClick={saveCfg}>💾 ذخیره و اعمالِ زنده</button></div>

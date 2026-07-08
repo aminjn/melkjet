@@ -45,7 +45,7 @@ import { follow, unfollow, isFollowing, followerCount, followingCount, following
 import { listFlags, getFlag, setFlag, flagEnabled } from '../app/lib/reos/flags.ts'
 import { registerModel as regModel, getChampion as champOf } from '../app/lib/reos/model-registry.ts'
 import { autoPromote, autoMLStatus } from '../app/lib/reos/automl.ts'
-import { createEmpire, getEmpire, renameEmpire, buyAsset, chooseAssetAction, recordGuess, claimEmpireMission, spendAiToken, setHunterPair, answerHunter, setStylePicks, bumpRejects, empireCount, netWorthOf as empNetWorth, saveBrief, getBrief, markBriefOpened, dayNumberOf, sellAsset, setLandPlan, chooseBusiness, accrueIncome, claimDailyChest, listEmpiresPublic, applyUpkeep, adminAdjustEmpire, deleteEmpire, briefStatsForDay } from '../app/lib/empire-store.ts'
+import { createEmpire, getEmpire, renameEmpire, buyAsset, chooseAssetAction, recordGuess, claimEmpireMission, spendAiToken, setHunterPair, answerHunter, setStylePicks, bumpRejects, empireCount, netWorthOf as empNetWorth, saveBrief, getBrief, markBriefOpened, dayNumberOf, sellAsset, setLandPlan, chooseBusiness, accrueIncome, claimDailyChest, listEmpiresPublic, applyUpkeep, adminAdjustEmpire, deleteEmpire, briefStatsForDay, takeLoan, repayLoan, accrueLoanInterest } from '../app/lib/empire-store.ts'
 
 if (!process.env.DATABASE_URL) { console.error('DATABASE_URL not set'); process.exit(2) }
 let pass = 0, fail = 0
@@ -919,6 +919,31 @@ async function main() {
     ok('آمارِ نامهٔ روز: ساخته/بازشده', bs.built >= 1 && bs.opened >= 1 && bs.opened <= bs.built)
     ok('حذفِ امپراتوری', (await deleteEmpire('0912empire4')) === true && (await getEmpire('0912empire4')) === null)
     ok('حذفِ دوباره → false', (await deleteEmpire('0912empire4')) === false)
+
+    // ── فاز ۶: بانک (جلد ۱۶) — چرخهٔ وام روی PG واقعی ──
+    const eL0 = await getEmpire(uid)
+    const capL0 = eL0.capital
+    const tl = await takeLoan(uid, 1_000_000_000, 18, 90)
+    ok('وام: سرمایه + مانده + سابقهٔ taken + تایم‌لاین', tl.ok && tl.empire.capital === capL0 + 1_000_000_000 && tl.empire.loan.balance === 1_000_000_000 && tl.empire.creditHist.taken === 1 && tl.empire.timeline.some(t => t.title === 'دریافتِ وام'))
+    ok('وامِ دوم با وامِ فعال رد می‌شود', (await takeLoan(uid, 1, 18, 90)).ok === false)
+    // بهرهٔ روزشمار: ۱۰ روزِ عادی روی مانده
+    const backDate = Date.now() - 10 * 864e5
+    const eBk = await getEmpire(uid); eBk.loan.lastInterestAt = backDate; eBk.loan.startedAt = backDate
+    // دست‌کاری مستقیم برای شبیه‌سازی گذرِ زمان (فقط تست)
+    const { pgTx } = await import('../app/lib/db.ts')
+    await pgTx(c => c.query(`UPDATE reos_empire SET data=$2 WHERE user_id=$1`, [uid, JSON.stringify(eBk)]))
+    const ai3 = await accrueLoanInterest(uid)
+    const expected = Math.round(1_000_000_000 * (18 / 100 / 365) * 10)
+    ok('بهرهٔ روزشمارِ ۱۰ روزه دقیق است', ai3.ok && ai3.added === expected && ai3.empire.loan.balance === 1_000_000_000 + expected)
+    ok('اجرای دوباره در همان روز بی‌اثر است', (await accrueLoanInterest(uid)).ok === false)
+    // بازپرداختِ جزئی و تسویهٔ کامل
+    const rp1 = await repayLoan(uid, 400_000_000)
+    ok('بازپرداختِ جزئی: کسر از نقد و مانده', rp1.ok && rp1.paid === 400_000_000 && !rp1.settled && rp1.empire.loan.balance === 600_000_000 + expected)
+    const eL1 = await getEmpire(uid)
+    const xpL = eL1.xp
+    const rp2 = await repayLoan(uid, eL1.loan.balance)
+    ok('تسویهٔ کامل: حذفِ وام + repaid+1 + XP', rp2.ok && rp2.settled && !rp2.empire.loan && rp2.empire.creditHist.repaid === 1 && rp2.empire.xp === xpL + 40)
+    ok('بازپرداخت بدونِ وام رد می‌شود', (await repayLoan(uid, 100)).ok === false)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

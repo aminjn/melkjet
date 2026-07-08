@@ -64,6 +64,8 @@ export default function EmpirePage() {
   const [chestReward, setChestReward] = useState<any>(null)
   const [boards, setBoards] = useState<any>(null)
   const [boardTab, setBoardTab] = useState('score')
+  const [loanVal, setLoanVal] = useState('')
+  const [repayVal, setRepayVal] = useState('')
   const suspended = useRef(false)
 
   const api = useCallback(async (body: any) => {
@@ -534,6 +536,38 @@ export default function EmpirePage() {
           </div>}
         </div>
       </div>
+    </div>}
+
+    {/* بانک (جلد ۱۶): امتیازِ اعتباری + وام */}
+    {st.bank && <div style={card}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+        <b style={{ fontSize: 14 }}>🏦 بانکِ امپراتوری</b>
+        <span style={{ fontSize: 12, color: 'var(--muted)' }}>امتیازِ اعتباری: <b style={{ color: st.bank.credit.score > 600 ? '#7c6' : st.bank.credit.score > 300 ? 'var(--gold)' : '#e88' }}>{fa(st.bank.credit.score)}</b> / ۱٬۰۰۰ · {st.bank.credit.band}</span>
+        <div style={{ flex: 1, minWidth: 120, height: 6, background: 'var(--line)', borderRadius: 3 }}><div style={{ width: `${st.bank.credit.score / 10}%`, height: 6, borderRadius: 3, background: st.bank.credit.score > 600 ? '#7c6' : st.bank.credit.score > 300 ? 'var(--gold)' : '#e88' }} /></div>
+      </div>
+      {st.bank.loan ? (
+        <div style={{ ...card, background: 'var(--bg2)' }}>
+          <div style={{ fontSize: 13 }}>💳 وامِ فعال: ماندهٔ <b style={{ color: 'var(--gold)' }}>{faB(st.bank.loan.balance)} تومان</b>
+            <span style={{ fontSize: 11, color: 'var(--muted)' }}> · نرخ {st.bank.loan.ratePctYear.toLocaleString('fa-IR')}٪ سالانه (روزشمار) · سررسید {new Date(st.bank.loan.dueAt).toLocaleDateString('fa-IR')}{Date.now() > st.bank.loan.dueAt && <b style={{ color: '#e88' }}> — دیرکرد! نرخ ×۱.۵</b>}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+            <input value={repayVal ? Number(repayVal).toLocaleString('fa-IR') : ''} onChange={ev => setRepayVal(digitsOf(ev.target.value))} placeholder="مبلغِ بازپرداخت (تومان)" inputMode="numeric" dir="ltr" style={{ flex: 1, minWidth: 150, padding: 9, borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--text)', fontSize: 13, textAlign: 'center' }} />
+            <button style={{ ...btn, padding: '8px 14px', fontSize: 13 }} disabled={busy || !repayVal} onClick={async () => { const d = await api({ action: 'repay', amount: Number(repayVal) }); if (d) { setSt(d); setRepayVal(''); if (d.settled) alert('🎉 وام کامل تسویه شد — خوش‌حسابی‌ات در سابقهٔ اعتباری ثبت شد.') } }}>بازپرداخت</button>
+            <button style={{ ...btnGhost, padding: '8px 12px', fontSize: 12 }} disabled={busy} onClick={async () => { const d = await api({ action: 'repay', amount: st.bank.loan.balance }); if (d) { setSt(d); if (d.settled) alert('🎉 وام کامل تسویه شد.') } }}>تسویهٔ کامل</button>
+          </div>
+        </div>
+      ) : st.bank.terms?.eligible ? (
+        <div style={{ ...card, background: 'var(--bg2)' }}>
+          <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>با اعتبارِ فعلی‌ات تا <b style={{ color: 'var(--gold)' }}>{faB(st.bank.terms.maxLoan)} تومان</b> وام می‌گیری · نرخ {st.bank.terms.ratePctYear.toLocaleString('fa-IR')}٪ سالانه · بازپرداخت تا {fa(st.bank.terms.termDays)} روز. اعتبارِ بالاتر = نرخِ بهتر و سقفِ بیشتر.</div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+            <input value={loanVal ? Number(loanVal).toLocaleString('fa-IR') : ''} onChange={ev => setLoanVal(digitsOf(ev.target.value))} placeholder="مبلغِ وام (تومان)" inputMode="numeric" dir="ltr" style={{ flex: 1, minWidth: 150, padding: 9, borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--text)', fontSize: 13, textAlign: 'center' }} />
+            <button style={{ ...btn, padding: '8px 14px', fontSize: 13 }} disabled={busy || !loanVal} onClick={async () => { const d = await api({ action: 'loan', amount: Number(loanVal) }); if (d) { setSt(d); setLoanVal('') } }}>دریافتِ وام</button>
+          </div>
+          {Number(loanVal) > 0 && <div style={{ fontSize: 11.5, color: 'var(--gold)', marginTop: 6 }}>درخواستِ تو: {faB(Number(loanVal))} تومان</div>}
+        </div>
+      ) : (
+        <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>با این امتیازِ اعتباری هنوز وام تعلق نمی‌گیرد — با حضورِ منظم، تسویهٔ به‌موقع و سودِ واقعی اعتبارت را بساز.</div>
+      )}
     </div>}
 
     {/* ۵ جدولِ رتبه (فصل ۵) + لیگِ محله (§7.2) */}
