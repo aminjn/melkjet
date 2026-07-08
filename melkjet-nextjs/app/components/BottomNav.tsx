@@ -60,7 +60,9 @@ const tabs = [
 // مسیرهای داشبورد/پنل — ناوبریِ پایینِ عمومی نباید آنجا دیده شود.
 // در این مسیرها تب‌بارِ پایین پنهان می‌شود. صفحهٔ آگهی هم جزوِ این‌هاست چون نوارِ اکشنِ
 // «چت / اطلاعات تماس» جای آن را می‌گیرد (مثلِ دیوار).
-const PANEL_ROUTES = ['/admin', '/agency', '/pros', '/builder', '/materials', '/owner', '/buyer', '/legal', '/architect', '/contractor', '/appraiser', '/lawfirm', '/finance', '/notary', '/crm', '/marketing', '/workflow', '/website-builder', '/content', '/plan-ai', '/property']
+// «/listing» آدرسِ کانونیِ جدیدِ صفحهٔ آگهی است (مهاجرتِ اسلاگ) — بدونِ آن، تب‌بار روی
+// نوارِ «چت/تماس» می‌نشست و می‌پوشاندش.
+const PANEL_ROUTES = ['/admin', '/agency', '/pros', '/builder', '/materials', '/owner', '/buyer', '/legal', '/architect', '/contractor', '/appraiser', '/lawfirm', '/finance', '/notary', '/crm', '/marketing', '/workflow', '/website-builder', '/content', '/plan-ai', '/property', '/listing']
 
 export default function BottomNav() {
   const path = usePathname()
