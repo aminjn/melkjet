@@ -5,10 +5,12 @@ import { useEffect, useState } from 'react'
 const FONT = 'Vazirmatn, system-ui, sans-serif'
 const fa = (n: number) => (n || 0).toLocaleString('fa-IR')
 type Twin = {
+  deal?: 'sale' | 'rent'
   valuation: { estimate: number; low: number; high: number; confidence: number; pricePerM: number }
   demand: number; liquidity: number; daysToSell: number; saleProbability: number
   priceVsMarket: number; rentalYield: number | null
   risk: { score: number; level: string; factors: string[] }; aiConfidence: number; trend: 'up' | 'down' | 'flat'; note: string
+  rent?: { deposit: number; monthly: number; fairMonthly: number; rentPerM: number; fairRentPerM: number; samples: number }
 }
 
 export default function ReosTwinCard({ propertyId }: { propertyId: string }) {
@@ -40,24 +42,47 @@ export default function ReosTwinCard({ propertyId }: { propertyId: string }) {
         <span style={{ marginInlineStart: 'auto', fontSize: 11, fontWeight: 700, color: 'var(--gold)', background: 'var(--bg2)', borderRadius: 999, padding: '3px 10px' }}>اطمینانِ AI {fa(d.aiConfidence)}٪</span>
       </div>
 
-      {d.valuation.estimate > 0 && (
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>ارزشِ برآوردی</div>
-          <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--gold)' }}>{fa(d.valuation.estimate)} <span style={{ fontSize: 12, color: 'var(--muted)' }}>تومان</span></div>
-          <div style={{ fontSize: 11.5, color: 'var(--faint)' }}>بازه: {fa(d.valuation.low)} تا {fa(d.valuation.high)} · اطمینان {fa(d.valuation.confidence)}٪</div>
-        </div>
+      {d.deal === 'rent' ? (
+        <>
+          {/* آگهیِ اجاره‌ای: تحلیلِ فروش بی‌معناست — مقایسه با اجاره‌بهای واقعیِ هم‌محله‌ها */}
+          {(d.rent?.fairMonthly || 0) > 0 && (d.rent?.samples || 0) > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>اجارهٔ منصفانهٔ برآوردی برای این متراژ</div>
+              <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--gold)' }}>{fa(d.rent!.fairMonthly)} <span style={{ fontSize: 12, color: 'var(--muted)' }}>تومان در ماه</span></div>
+              <div style={{ fontSize: 11.5, color: 'var(--faint)' }}>از میانهٔ اجارهٔ متریِ {fa(d.rent!.samples)} فایلِ واقعیِ هم‌محله ({fa(d.rent!.fairRentPerM)} ت/متر)</div>
+            </div>
+          )}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(110px,1fr))', gap: 10 }}>
+            {d.rent?.monthly ? tile('اجارهٔ این فایل', fa(d.rent.monthly) + ' ت/ماه', 'var(--text)', d.rent.rentPerM ? `${fa(d.rent.rentPerM)} ت/متر` : '') : null}
+            {d.rent?.deposit ? tile('ودیعه', fa(d.rent.deposit) + ' ت') : null}
+            {(d.rent?.samples || 0) > 0 && d.rent?.rentPerM ? tile('اجاره نسبت به محله', (d.priceVsMarket > 0 ? '+' : '') + fa(d.priceVsMarket) + '٪', d.priceVsMarket > 12 ? '#e74c3c' : d.priceVsMarket < -8 ? '#34d399' : 'var(--text)', d.priceVsMarket > 12 ? 'بالاتر از میانه' : d.priceVsMarket < -8 ? 'زیرِ میانه' : 'نزدیکِ میانه') : null}
+            {tile('نقدشوندگی', fa(d.liquidity) + '/۱۰', '#60a5fa')}
+            {tile('ریسک', d.risk.level, riskColor, d.risk.factors[0])}
+            {tile('روندِ منطقه', trendTxt.t, trendTxt.c)}
+          </div>
+          <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 12 }}>{d.note} · فایلِ اجاره‌ای است — مقایسه فقط با اجاره‌های واقعیِ همین محله انجام می‌شود.</div>
+        </>
+      ) : (
+        <>
+          {d.valuation.estimate > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>ارزشِ برآوردی</div>
+              <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--gold)' }}>{fa(d.valuation.estimate)} <span style={{ fontSize: 12, color: 'var(--muted)' }}>تومان</span></div>
+              <div style={{ fontSize: 11.5, color: 'var(--faint)' }}>بازه: {fa(d.valuation.low)} تا {fa(d.valuation.high)} · اطمینان {fa(d.valuation.confidence)}٪</div>
+            </div>
+          )}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(110px,1fr))', gap: 10 }}>
+            {tile('احتمالِ فروش (۴۵ روز)', fa(d.saleProbability) + '٪', d.saleProbability >= 60 ? '#34d399' : d.saleProbability >= 35 ? '#e7a14a' : '#e74c3c')}
+            {tile('زمانِ تخمینیِ فروش', fa(d.daysToSell) + ' روز')}
+            {tile('نقدشوندگی', fa(d.liquidity) + '/۱۰', '#60a5fa')}
+            {tile('نسبت به بازار', (d.priceVsMarket > 0 ? '+' : '') + fa(d.priceVsMarket) + '٪', d.priceVsMarket > 8 ? '#e74c3c' : d.priceVsMarket < -5 ? '#34d399' : 'var(--text)', d.priceVsMarket > 8 ? 'بالاتر از بازار' : d.priceVsMarket < -5 ? 'زیرِ بازار' : 'نزدیکِ بازار')}
+            {tile('ریسک', d.risk.level, riskColor, d.risk.factors[0])}
+            {tile('روندِ منطقه', trendTxt.t, trendTxt.c)}
+            {d.rentalYield != null ? tile('بازده اجاره', fa(d.rentalYield) + '٪', '#60a5fa') : null}
+          </div>
+          <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 12 }}>{d.note} · موتورِ REOS از بازدید/تماس و فایل‌های مشابه یاد می‌گیرد.</div>
+        </>
       )}
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(110px,1fr))', gap: 10 }}>
-        {tile('احتمالِ فروش (۴۵ روز)', fa(d.saleProbability) + '٪', d.saleProbability >= 60 ? '#34d399' : d.saleProbability >= 35 ? '#e7a14a' : '#e74c3c')}
-        {tile('زمانِ تخمینیِ فروش', fa(d.daysToSell) + ' روز')}
-        {tile('نقدشوندگی', fa(d.liquidity) + '/۱۰', '#60a5fa')}
-        {tile('نسبت به بازار', (d.priceVsMarket > 0 ? '+' : '') + fa(d.priceVsMarket) + '٪', d.priceVsMarket > 8 ? '#e74c3c' : d.priceVsMarket < -5 ? '#34d399' : 'var(--text)', d.priceVsMarket > 8 ? 'بالاتر از بازار' : d.priceVsMarket < -5 ? 'زیرِ بازار' : 'نزدیکِ بازار')}
-        {tile('ریسک', d.risk.level, riskColor, d.risk.factors[0])}
-        {tile('روندِ منطقه', trendTxt.t, trendTxt.c)}
-        {d.rentalYield != null ? tile('بازده اجاره', fa(d.rentalYield) + '٪', '#60a5fa') : null}
-      </div>
-      <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 12 }}>{d.note} · موتورِ REOS از بازدید/تماس و فایل‌های مشابه یاد می‌گیرد.</div>
     </div>
   )
 }

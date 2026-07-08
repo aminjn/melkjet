@@ -8,6 +8,16 @@ export function parseFaNum(s?: string | number): number {
   const t = String(s || '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[^\d]/g, '')
   return Number(t) || 0
 }
+// تفکیکِ قیمتِ اجاره‌ای «ودیعه X · اجارهٔ ماهانه Y» — parseFaNum روی کلِ رشته ارقامِ دو عدد را
+// به هم می‌چسباند و عددِ بی‌معنی می‌سازد؛ اینجا هر بخش جدا خوانده می‌شود (رهنِ کامل: فقط ودیعه).
+export function rentPartsOf(price?: string): { deposit: number; monthly: number } {
+  const s = String(price || '')
+  const grab = (re: RegExp) => { const m = s.match(re); return m ? parseFaNum(m[1]) : 0 }
+  return {
+    deposit: grab(/(?:ودیعه|رهن)[^\d۰-۹]*([\d,٬٫۰-۹]+)/),
+    monthly: grab(/اجاره[^\d۰-۹]*([\d,٬٫۰-۹]+)/),
+  }
+}
 export function tokenize(s?: string): string[] {
   return String(s || '').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(t => t.length > 1).slice(0, 40)
 }

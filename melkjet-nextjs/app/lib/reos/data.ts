@@ -6,7 +6,7 @@ import { getAgency } from '../agency-store'
 import { getAdvisor as getAdvisorProfile } from '../advisor-store'
 import { agencyAdvisorFiles } from '../agency-team'
 import { getFeatures, recentEvents, saveEmbeddings, getEmbedding, getEmbeddings, existingEmbeddingIds, nearestByVector } from './store'
-import { parseFaNum, tokenize, propertyVector, cosine } from './features'
+import { parseFaNum, rentPartsOf, tokenize, propertyVector, cosine } from './features'
 import type { PropertyEntity, UserEntity, AgentEntity, Intent } from './types'
 
 // ── Item (آگهیِ عمومی) → PropertyEntity ──
@@ -17,7 +17,8 @@ export function itemToProperty(it: Item, stat?: { views: number; contacts: numbe
   const features = m['امکانات'] ? String(m['امکانات']).split(/[،,]/).map(s => s.trim()).filter(Boolean) : []
   const ptype = m['نوع ملک'] || it.category || 'آپارتمان'
   return {
-    id: it.id, price: parseFaNum(it.price), rentMonthly: deal === 'rent' ? parseFaNum(it.price) : undefined,
+    // اجاره‌ای: parseFaNum روی کلِ «ودیعه X · اجاره Y» ارقامِ دو عدد را می‌چسباند → اجارهٔ ماهانه جدا پارس می‌شود.
+    id: it.id, price: parseFaNum(it.price), rentMonthly: deal === 'rent' ? rentPartsOf(it.price).monthly : undefined,
     deal, ptype, lat, lng, locationText: it.location || [m['شهر'], m['محله']].filter(Boolean).join('، '),
     area: parseFaNum(m['متراژ']) || undefined, rooms: parseFaNum(m['اتاق خواب']) || undefined,
     features, tokens: [...tokenize(ptype), ...tokenize(it.location), ...tokenize(it.title), ...features.flatMap(tokenize)],

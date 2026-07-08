@@ -1,12 +1,12 @@
 // REOS v4 · Property Digital Twin — هر ملک یک موجودیتِ زندهٔ تحلیلی.
 // ترکیبِ AVM + تقاضا (بازدید/تماسِ واقعی) + هوشِ بازار + مالی → پیش‌بینیِ فروش/نقدشوندگی/ریسک/اطمینان.
 // هستهٔ خالص (twinMetrics) تست‌پذیر؛ buildTwin از دادهٔ واقعی می‌سازد.
-import { getItemById } from '../scraper-store'
+import { getItemById, candidateListings, type Item } from '../scraper-store'
 import { forIds } from '../listing-stats-store'
 import { itemToProperty } from './data'
 import { valuate } from './avm'
 import { getMarketIntel } from './market-intel'
-import { demandScore, parseFaNum, clamp01 } from './features'
+import { demandScore, parseFaNum, rentPartsOf, clamp01 } from './features'
 import { rentalYield } from './investor'
 import { config } from './reos-config'
 import type { PropertyEntity } from './types'
@@ -53,11 +53,14 @@ export function completenessOf(p: PropertyEntity): number {
 
 export interface Twin {
   id: string; title?: string
+  deal: 'sale' | 'rent'
   valuation: { estimate: number; low: number; high: number; confidence: number; pricePerM: number }
   demand: number; liquidity: number; daysToSell: number; saleProbability: number
   priceVsMarket: number; rentalYield: number | null
   risk: { score: number; level: string; factors: string[] }
   aiConfidence: number; trend: 'up' | 'down' | 'flat'; note: string
+  // فقط برای آگهیِ اجاره‌ای: مقایسه با اجاره‌بهای واقعیِ هم‌محله‌ها (نه تحلیلِ فروش)
+  rent?: { deposit: number; monthly: number; fairMonthly: number; rentPerM: number; fairRentPerM: number; samples: number }
 }
 
 // ── ساختِ Twin از دادهٔ واقعی ──
@@ -67,6 +70,9 @@ export async function buildTwin(propertyId: string): Promise<Twin | null> {
   const stats = await forIds([propertyId]).catch(() => ({} as Record<string, { views: number; contacts: number }>))
   const stat = stats[propertyId] || { views: 0, contacts: 0 }
   const p = itemToProperty(it, stat)
+  // آگهیِ اجاره‌ای تحلیلِ فروش ندارد (AVM/احتمالِ فروش/ارزشِ برآوردی) — Twin اجاره‌ای می‌سازیم:
+  // اجارهٔ متریِ همین فایل در برابرِ میانهٔ اجارهٔ متریِ واقعیِ هم‌محله‌ها.
+  if (p.deal === 'rent') return buildRentTwin(it, p, demandScore(p))
   const avm = await valuate(propertyId).catch(() => null)
   const areaKey = [String(it.meta?.['شهر'] || '').trim(), String(it.meta?.['محله'] || it.location || '').trim()].filter(Boolean).join('|')
   const intel = areaKey ? await getMarketIntel(areaKey).catch(() => null) : null
@@ -77,12 +83,13 @@ export async function buildTwin(propertyId: string): Promise<Twin | null> {
   const priceVsMarket = actualPerM && fairPerM ? (actualPerM - fairPerM) / fairPerM : 0
   const days = daysToSell(demand, priceVsMarket)
   const completeness = completenessOf(p)
-  const monthlyRent = parseFaNum(String(it.meta?.['اجاره'] || it.meta?.['اجاره ماهیانه'] || '')) || (p.deal === 'rent' ? p.rentMonthly || 0 : 0)
+  // اینجا همیشه فروش است (اجاره‌ای بالاتر به buildRentTwin رفت)؛ اجارهٔ متا فقط برای بازدهِ اجارهٔ ملکِ فروشی.
+  const monthlyRent = parseFaNum(String(it.meta?.['اجاره'] || it.meta?.['اجاره ماهیانه'] || ''))
   const tw = config().twin   // آستانه‌ها از تنظیماتِ سوپرادمین
   const over = tw.overpricePct / 100, under = tw.underpricePct / 100
 
   return {
-    id: propertyId, title: it.title,
+    id: propertyId, title: it.title, deal: 'sale',
     valuation: { estimate: avm?.estimate || 0, low: avm?.low || 0, high: avm?.high || 0, confidence: avm?.confidence || 0, pricePerM: fairPerM },
     demand: Math.round(demand * 100) / 100,
     liquidity: liquidityScore(demand, intel?.liquidityIndex ?? 0.5),
@@ -94,5 +101,49 @@ export async function buildTwin(propertyId: string): Promise<Twin | null> {
     aiConfidence: aiConfidence(avm?.comps || 0, completeness),
     trend: intel?.trend || 'flat',
     note: priceVsMarket > over ? 'قیمت بالاتر از بازار — احتمالِ کاهش/مذاکره' : priceVsMarket < -under ? 'قیمتِ رقابتی — احتمالِ فروشِ سریع' : 'قیمتِ نزدیک به بازار',
+  }
+}
+
+// ── Twin اجاره‌ای: مقایسهٔ اجارهٔ متری با میانهٔ واقعیِ هم‌محله‌ها — هیچ سنجهٔ فروش نمایش داده نمی‌شود ──
+const hoodOfLoc = (loc?: string) => { const parts = String(loc || '').split(/[،,]/).map(x => x.trim()).filter(Boolean); return parts.length > 1 ? parts[parts.length - 1] : (parts[0] || '') }
+const median = (xs: number[]) => { if (!xs.length) return 0; const s = [...xs].sort((a, b) => a - b); return s[Math.floor(s.length / 2)] }
+
+async function buildRentTwin(it: Item, p: PropertyEntity, demand: number): Promise<Twin> {
+  const { deposit, monthly } = rentPartsOf(it.price)
+  const hood = hoodOfLoc(it.location)
+  // اجاره‌های واقعیِ هم‌محله (متراژدار) → میانهٔ اجارهٔ هر متر؛ بدونِ نمونهٔ کافی → مقایسه‌ای ادعا نمی‌شود.
+  const items = await candidateListings(600).catch(() => [] as Item[])
+  const perM: number[] = []
+  for (const x of items) {
+    if (x.id === it.id) continue
+    if (!/اجاره|رهن|ودیعه/.test(x.price || '') && (x.meta || {})['نوع معامله'] !== 'اجاره') continue
+    if (hood && hoodOfLoc(x.location) !== hood) continue
+    const a = parseFaNum((x.meta || {})['متراژ']) || 0
+    const r = rentPartsOf(x.price).monthly
+    if (a > 0 && r > 0) perM.push(r / a)
+  }
+  const fairRentPerM = Math.round(median(perM))
+  const myRentPerM = p.area && monthly ? Math.round(monthly / p.area) : 0
+  const rentVsMarket = myRentPerM && fairRentPerM ? (myRentPerM - fairRentPerM) / fairRentPerM : 0
+  const completeness = completenessOf(p)
+  const areaKey = [String(it.meta?.['شهر'] || '').trim(), String(it.meta?.['محله'] || it.location || '').trim()].filter(Boolean).join('|')
+  const intel = areaKey ? await getMarketIntel(areaKey).catch(() => null) : null
+  return {
+    id: it.id, title: it.title, deal: 'rent',
+    valuation: { estimate: 0, low: 0, high: 0, confidence: 0, pricePerM: 0 },
+    demand: Math.round(demand * 100) / 100,
+    liquidity: liquidityScore(demand, intel?.liquidityIndex ?? 0.5),
+    daysToSell: 0, saleProbability: 0,
+    priceVsMarket: Math.round(rentVsMarket * 1000) / 10,   // درصدِ اجاره نسبت به میانهٔ محله
+    rentalYield: null,
+    risk: riskProfile({ priceVsMarket: rentVsMarket, demand, completeness, ageDays: p.createdAt ? (Date.now() - p.createdAt) / 864e5 : 0 }),
+    aiConfidence: aiConfidence(perM.length, completeness),
+    trend: intel?.trend || 'flat',
+    note: !fairRentPerM || !myRentPerM
+      ? 'برای مقایسهٔ اجاره، نمونهٔ هم‌محلهٔ کافی در دسترس نیست'
+      : rentVsMarket > 0.12 ? 'اجاره بالاتر از میانهٔ محله — جای مذاکره دارد'
+      : rentVsMarket < -0.08 ? 'اجارهٔ رقابتی نسبت به محله'
+      : 'اجاره نزدیک به میانهٔ محله',
+    rent: { deposit, monthly, fairMonthly: p.area ? Math.round(fairRentPerM * p.area) : 0, rentPerM: myRentPerM, fairRentPerM, samples: perM.length },
   }
 }
