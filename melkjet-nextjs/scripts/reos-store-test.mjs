@@ -45,7 +45,7 @@ import { follow, unfollow, isFollowing, followerCount, followingCount, following
 import { listFlags, getFlag, setFlag, flagEnabled } from '../app/lib/reos/flags.ts'
 import { registerModel as regModel, getChampion as champOf } from '../app/lib/reos/model-registry.ts'
 import { autoPromote, autoMLStatus } from '../app/lib/reos/automl.ts'
-import { createEmpire, getEmpire, renameEmpire, buyAsset, chooseAssetAction, recordGuess, claimEmpireMission, spendAiToken, setHunterPair, answerHunter, setStylePicks, bumpRejects, empireCount, netWorthOf as empNetWorth, saveBrief, getBrief, markBriefOpened, dayNumberOf, sellAsset, setLandPlan, chooseBusiness, accrueIncome, claimDailyChest, listEmpiresPublic, applyUpkeep } from '../app/lib/empire-store.ts'
+import { createEmpire, getEmpire, renameEmpire, buyAsset, chooseAssetAction, recordGuess, claimEmpireMission, spendAiToken, setHunterPair, answerHunter, setStylePicks, bumpRejects, empireCount, netWorthOf as empNetWorth, saveBrief, getBrief, markBriefOpened, dayNumberOf, sellAsset, setLandPlan, chooseBusiness, accrueIncome, claimDailyChest, listEmpiresPublic, applyUpkeep, adminAdjustEmpire, deleteEmpire, briefStatsForDay } from '../app/lib/empire-store.ts'
 
 if (!process.env.DATABASE_URL) { console.error('DATABASE_URL not set'); process.exit(2) }
 let pass = 0, fail = 0
@@ -57,7 +57,7 @@ async function reset() {
   // ensure tables exist first (a no-op call triggers ensureReos), then truncate.
   await recordEvent({ type: 'user_searched', userId: '__warm__' }).catch(() => {})
   await saveEmbeddings('property', [{ id: '__warm__', embed: [0, 0] }]).catch(() => {})
-  for (const t of ['reos_events', 'reos_feature_store', 'reos_embeddings', 'reos_territory_scores', 'reos_territories', 'reos_territory_battles', 'reos_streaks', 'reos_xp', 'reos_missions', 'reos_wallet', 'reos_wallet_txn', 'reos_follows', 'reos_collections', 'reos_collection_items', 'reos_comments', 'reos_flags', 'reos_models', 'reos_empire', 'reos_daily_brief']) {
+  for (const t of ['reos_events', 'reos_feature_store', 'reos_embeddings', 'reos_territory_scores', 'reos_territories', 'reos_territory_battles', 'reos_streaks', 'reos_xp', 'reos_missions', 'reos_wallet', 'reos_wallet_txn', 'reos_follows', 'reos_collections', 'reos_collection_items', 'reos_comments', 'reos_flags', 'reos_models', 'reos_empire', 'reos_daily_brief', 'reos_promo_campaigns']) {
     await pool.query(`TRUNCATE ${t}`).catch(() => {})
   }
 }
@@ -908,6 +908,17 @@ async function main() {
     ok('هزینهٔ مالکیت: کسرِ اتمیک از سرمایه', up.ok && up.charged === 10_000_000 && up.empire.capital === capU - 10_000_000 && up.empire.lastUpkeepAt > 0)
     const up2 = await applyUpkeep('0912empire4', 999_999_999_999_999)
     ok('هزینهٔ مالکیت هرگز سرمایه را منفی نمی‌کند', up2.ok && up2.empire.capital === 0 && up2.charged <= 10_000_000_000)
+    // فاز ۵: عملیاتِ مرکزِ فرماندهی (GDD جلد ۹)
+    const eA = await getEmpire(uid)
+    const aj = await adminAdjustEmpire(uid, { coins: 100, xp: 50 }, 'جبرانِ رویداد')
+    ok('هدیهٔ ادمین: منابع + ثبتِ شفاف در تایم‌لاین', aj.ok && aj.empire.coins === eA.coins + 100 && aj.empire.xp === eA.xp + 50 && aj.empire.timeline.some(t => t.title === 'هدیهٔ ملک‌جت' && t.detail.includes('جبرانِ رویداد')))
+    const aj2 = await adminAdjustEmpire(uid, { coins: -999999 })
+    ok('کسرِ ادمین هرگز منابع را منفی نمی‌کند', aj2.ok && aj2.empire.coins === 0)
+    ok('تنظیمِ خالی رد می‌شود', (await adminAdjustEmpire(uid, {})).ok === false)
+    const bs = await briefStatsForDay(day)
+    ok('آمارِ نامهٔ روز: ساخته/بازشده', bs.built >= 1 && bs.opened >= 1 && bs.opened <= bs.built)
+    ok('حذفِ امپراتوری', (await deleteEmpire('0912empire4')) === true && (await getEmpire('0912empire4')) === null)
+    ok('حذفِ دوباره → false', (await deleteEmpire('0912empire4')) === false)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

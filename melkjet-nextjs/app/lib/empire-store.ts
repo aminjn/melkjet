@@ -517,6 +517,40 @@ export async function listEmpiresPublic(limit = 300): Promise<EmpireData[]> {
   return Object.values(fileLoad()).slice(0, limit)
 }
 
+// ══════════ عملیاتِ سوپرادمین — Empire Control Center (GDD جلد ۹) ══════════
+// تنظیمِ دستیِ منابعِ یک بازیکن (جبرانِ خطا/جایزهٔ رویداد) — اتمیک + ثبت در تایم‌لاینِ خودِ بازیکن (شفاف).
+export async function adminAdjustEmpire(userId: string, patch: { coins?: number; xp?: number; capital?: number; aiTokens?: number }, reason = '', now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const parts: string[] = []
+    if (patch.coins) { e.coins = Math.max(0, e.coins + Math.round(patch.coins)); parts.push(`${patch.coins > 0 ? '+' : ''}${Math.round(patch.coins)} کوین`) }
+    if (patch.xp) { e.xp = Math.max(0, e.xp + Math.round(patch.xp)); parts.push(`${patch.xp > 0 ? '+' : ''}${Math.round(patch.xp)} XP`) }
+    if (patch.capital) { e.capital = Math.max(0, e.capital + Math.round(patch.capital)); parts.push(`${patch.capital > 0 ? '+' : ''}${Math.round(patch.capital / 1e6)}م سرمایه`) }
+    if (patch.aiTokens) { e.aiTokens = Math.max(0, e.aiTokens + Math.round(patch.aiTokens)); parts.push(`${patch.aiTokens > 0 ? '+' : ''}${Math.round(patch.aiTokens)} ژتون`) }
+    if (!parts.length) return 'تغییری داده نشد'
+    e.timeline.push({ at: now, icon: '🎁', title: 'هدیهٔ ملک‌جت', detail: reason ? `${parts.join('، ')} — ${reason.slice(0, 60)}` : parts.join('، ') })
+  })
+}
+
+// حذفِ کاملِ یک امپراتوری (فقط سوپرادمین — برگشت‌ناپذیر).
+export async function deleteEmpire(userId: string): Promise<boolean> {
+  if (pgEnabled()) { await ensure(); const r = await pgTx(c => c.query(`DELETE FROM reos_empire WHERE user_id=$1`, [userId])); return (r.rowCount || 0) > 0 }
+  const db = fileLoad()
+  if (!db[userId]) return false
+  delete db[userId]; fileSave(db)
+  return true
+}
+
+// آمارِ نامه‌های یک روز (LiveOps: چند نامه ساخته/باز شده) — نرخِ بازشدنِ واقعی.
+export async function briefStatsForDay(day: number): Promise<{ built: number; opened: number }> {
+  if (pgEnabled()) {
+    await ensureBrief()
+    const r = await pgTx(c => c.query(`SELECT count(*)::int AS built, count(*) FILTER (WHERE data ? 'openedAt')::int AS opened FROM reos_daily_brief WHERE day=$1`, [day]))
+    return { built: r.rows[0]?.built || 0, opened: r.rows[0]?.opened || 0 }
+  }
+  const rows = Object.values(briefLoad()).filter(b => b.day === day)
+  return { built: rows.length, opened: rows.filter(b => b.openedAt).length }
+}
+
 // ارزشِ خالص (Real Asset Value، §6.2-3): سرمایهٔ نقد + ارزشِ روزِ دارایی‌ها از قیمتِ زندهٔ آگهیِ واقعی.
 export function netWorthOf(e: EmpireData, livePrices: Record<string, number>): { netWorth: number; assetsValue: number; growth: number } {
   let assetsValue = 0, cost = 0

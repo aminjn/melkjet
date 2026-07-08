@@ -10,6 +10,7 @@ import ArticleEditor from '@/app/components/ArticleEditor'
 import AdminSupportView from './AdminSupportView'
 import CatalogAdminView from './CatalogAdminView'
 import ReosAdminPanel from '@/app/components/ReosAdminPanel'
+import EmpireAdminPanel from '@/app/components/EmpireAdminPanel'
 import { listingHref } from '@/app/lib/listing-url'
 
 /* ─── Types ─────────────────────────────────────────────────── */
@@ -18,6 +19,7 @@ type View =
   | 'reports' | 'plans' | 'promos' | 'discounts' | 'ads' | 'users' | 'profiles' | 'roles' | 'connections'
   | 'tracker' | 'sms' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags' | 'support' | 'payment' | 'aicost' | 'smscost' | 'sitemap' | 'agencyintel'
   | 'reos' | 'suspension'
+  | 'empire' | 'empirePlayers' | 'empireEconomy' | 'empireMissions' | 'empireWorld' | 'empireLiveops' | 'empireAccess'
 
 interface NavItem { id: View; icon: string; label: string; badge?: string; badgeColor?: string; url?: string; accent?: boolean }
 interface NavSection { title: string; items: NavItem[] }
@@ -30,6 +32,19 @@ const sections: NavSection[] = [
       { id: 'overview', icon: '▦', label: 'نمای کلی' },
       { id: 'reos', icon: '✦', label: 'REOS — مغزِ هوشمند', accent: true },
       { id: 'reports',  icon: '◔', label: 'گزارش‌ها و Big Data' },
+    ],
+  },
+  {
+    // Empire Control Center (GDD جلد ۹) — بازی آن‌قدر بزرگ است که منو و زیرمنوهای خودش را دارد.
+    title: 'امپراتوری (بازی)',
+    items: [
+      { id: 'empire',         icon: '🏛', label: 'مرکزِ فرماندهی', accent: true },
+      { id: 'empirePlayers',  icon: '👥', label: 'بازیکنان و امپراتوری‌ها' },
+      { id: 'empireEconomy',  icon: '💰', label: 'اقتصاد و ارزها' },
+      { id: 'empireMissions', icon: '🎯', label: 'مأموریت‌ها و پاداش‌ها' },
+      { id: 'empireWorld',    icon: '🗺', label: 'دنیا و بازارِ واقعی' },
+      { id: 'empireLiveops',  icon: '✉️', label: 'LiveOps و نامهٔ روزانه' },
+      { id: 'empireAccess',   icon: '🚩', label: 'دسترسی و عرضهٔ تدریجی' },
     ],
   },
   {
@@ -134,6 +149,13 @@ const viewTitles: Record<View, string> = {
   flags:      'فیچر فلگ‌ها',
   reos:       'REOS — مغزِ هوشمندِ سیستم',
   suspension: 'تعلیق حساب‌ها (قوانین + بازبینی)',
+  empire:         'امپراتوری — مرکزِ فرماندهی',
+  empirePlayers:  'امپراتوری — بازیکنان',
+  empireEconomy:  'امپراتوری — اقتصاد و ارزها',
+  empireMissions: 'امپراتوری — مأموریت‌ها و پاداش‌ها',
+  empireWorld:    'امپراتوری — دنیا و بازارِ واقعی',
+  empireLiveops:  'امپراتوری — LiveOps و نامهٔ روزانه',
+  empireAccess:   'امپراتوری — دسترسی و عرضهٔ تدریجی',
 }
 
 /* ─── Shared sub-components ──────────────────────────────────── */
@@ -6111,6 +6133,13 @@ export default function SuperAdminPage() {
       case 'agencyintel': return <AgencyIntelView />
       case 'reos':       return <ReosAdminPanel />
       case 'suspension': return <SuspensionView />
+      case 'empire':         return <EmpireAdminPanel section="overview" />
+      case 'empirePlayers':  return <EmpireAdminPanel section="players" />
+      case 'empireEconomy':  return <EmpireAdminPanel section="economy" />
+      case 'empireMissions': return <EmpireAdminPanel section="missions" />
+      case 'empireWorld':    return <EmpireAdminPanel section="world" />
+      case 'empireLiveops':  return <EmpireAdminPanel section="liveops" />
+      case 'empireAccess':   return <EmpireAdminPanel section="access" />
       default:           return <SimpleView title={viewTitles[active]} />
     }
   }
