@@ -617,8 +617,14 @@ export default function EmpirePage() {
       {(e.realized || 0) !== 0 && <div style={card}><div style={{ fontSize: 11, color: 'var(--muted)' }}>سودِ تحقق‌یافته (فروش‌ها)</div><div style={{ fontSize: 17, fontWeight: 800, color: e.realized > 0 ? '#7c6' : '#e88' }}>{e.realized > 0 ? '+' : '−'}<CountUp value={Math.abs(e.realized)} format={faB} /> تومان</div></div>}
     </div>
 
-    {/* شرکتِ ساختمانی (جلد ۶۱): «از یک اتاقِ کوچک تا امپراتوری» — اعتبارِ ستاره‌ای از رفتارِ واقعی */}
-    {st.companyEnabled && (!st.company ? (
+    {/* شرکتِ ساختمانی (جلد ۶۱): «از یک اتاقِ کوچک تا امپراتوری» — سطح‌گشا (سند ۱۵: امکانات باز می‌شوند، نه اعداد) */}
+    {st.companyEnabled && !st.company && st.unlocks && !st.unlocks.company.ok && (
+      <div style={{ ...card, fontSize: 12.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: 20 }}>🔒</span>
+        <span><b style={{ color: 'var(--text)' }}>شرکتِ ساختمانی</b> از سطحِ {fa(st.unlocks.company.need)} باز می‌شود — الان سطحِ {fa(st.unlocks.level)} هستی. با تصمیم‌های واقعی XP بگیر؛ یک بازیِ تازه منتظرت است.</span>
+      </div>
+    )}
+    {st.companyEnabled && (!st.company && st.unlocks?.company.ok ? (
       <div style={{ ...card, borderColor: 'var(--gold)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
           <span style={{ fontSize: 22 }}>🏗</span>
@@ -632,7 +638,7 @@ export default function EmpirePage() {
           <button style={{ ...btn, padding: '8px 16px', fontSize: 13 }} disabled={busy || !co.name.trim()} onClick={async () => { const d = await api({ action: 'company', ...co }); if (d) { setSt(d); celebrate() } }}>ثبتِ شرکت</button>
         </div>
       </div>
-    ) : (
+    ) : st.company ? (
       <div style={{ ...card }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <span style={{ width: 14, height: 14, borderRadius: 4, background: st.company.color, display: 'inline-block' }} />
@@ -665,14 +671,17 @@ export default function EmpirePage() {
           </div>
         </div>}
       </div>
-    ))}
+    ) : null)}
 
     {st.suspense && <div style={{ ...card, borderColor: 'var(--gold)', fontSize: 13 }}>⏳ {st.suspense.text}</div>}
     {st.othersBuilding > 0 && <div style={{ fontSize: 12, color: 'var(--muted)' }}>🌍 {fa(st.othersBuilding)} نفرِ دیگر هم همین حالا در حالِ ساختِ امپراتوری‌شان هستند.</div>}
 
     {/* دارایی‌ها = Empire Map (فهرست) */}
     <div style={card}>
-      <div style={{ fontWeight: 700, marginBottom: 10 }}>🗺 دارایی‌های امپراتوری</div>
+      <div style={{ fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span>🗺 دارایی‌های امپراتوری</span>
+        {st.unlocks && <span title="ظرفیتِ پروژهٔ همزمانِ شرکت — با سطح رشد می‌کند" style={{ fontSize: 10.5, fontWeight: 400, padding: '2px 8px', borderRadius: 10, border: '1px solid var(--line2)', color: 'var(--muted)' }}>⛏ ظرفیتِ ساختِ همزمان: {fa(st.unlocks.projects.active)}/{fa(st.unlocks.projects.max)}</span>}
+      </div>
       {!e.assets?.length && <div style={{ fontSize: 13, color: 'var(--muted)' }}>هنوز دارایی نداری — <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 12 }} onClick={doSuggest}>اولین فرصت را ببین</button></div>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {(e.assets || []).map((a: any) => (
@@ -802,6 +811,16 @@ export default function EmpirePage() {
                   onClick={async () => { const d = await api({ action: 'stopRent', assetId: a.id, units: Number(pu[a.id]) }); if (d) { setSt(d); setPu({ ...pu, [a.id]: '' }) } }}>🔓 فسخِ اجاره</button>}
               </div>
               {a.construction.done && <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 4 }}>تصمیمِ توست: بفروش (سودِ یکجا) یا نگه‌دار و اجاره بده (جریانِ ماهانه از میانهٔ واقعیِ محله) — فروشِ یکجای تعدادِ زیاد، بازارِ خودت را اشباع می‌کند و ارزان‌تر می‌رود.</div>}
+              {/* خروج از پروژهٔ نیمه‌کاره (سند ۱۵ — فصل ۵): پروژهٔ در حالِ ساخت هم دارایی است؛ با پیش‌فروشِ فعال ممنوع */}
+              {!a.construction.done && a.construction.presold === 0 && <div style={{ marginTop: 8 }}>
+                <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 10.5, color: '#e88', borderColor: '#644' }} disabled={busy}
+                  onClick={async () => {
+                    const est = Math.round((a.buyPrice + a.construction.paid) * (st.unlocks?.projects?.exitPct || 85) / 100)
+                    if (!confirm(`از این پروژه خارج شوی؟ زمین و کارگاه یکجا به ~${faB(est)} تومان (${fa(st.unlocks?.projects?.exitPct || 85)}٪ بهای تمام‌شده، قبل از مالیات) واگذار می‌شود.`)) return
+                    const d = await api({ action: 'sellProject', assetId: a.id })
+                    if (d) { setSt(d); alert(`🏳 خروج انجام شد: ${faB(d.proceeds)} تومان نقد شد (${d.pnl >= 0 ? 'سود' : 'زیان'} ${faB(Math.abs(d.pnl))})`) }
+                  }}>🏳 فروشِ پروژهٔ نیمه‌کاره ({fa(st.unlocks?.projects?.exitPct || 85)}٪ بهای تمام‌شده)</button>
+              </div>}
             </div>}
           </div>
         ))}
@@ -1034,7 +1053,12 @@ export default function EmpirePage() {
     </details>
 
     {/* بازار سرمایه (جلد ۴۰): صندوقِ شاخصی + مشارکتِ جمعی + شاخص‌ها — همه از بازارِ واقعی */}
-    {st.capitalEnabled && <details style={card} onToggle={(ev: any) => { if (ev.currentTarget.open && !mkt) doMarket() }}>
+    {/* سطح‌گشایی (سند ۱۵): بازارِ سرمایه از سطحِ مشخصی باز می‌شود — قفل شفاف است، نه پنهان */}
+    {st.capitalEnabled && st.unlocks && !st.unlocks.capital.ok && <div style={{ ...card, fontSize: 12.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 10 }}>
+      <span style={{ fontSize: 20 }}>🔒</span>
+      <span><b style={{ color: 'var(--text)' }}>📊 بازارِ سرمایه</b> از سطحِ {fa(st.unlocks.capital.need)} باز می‌شود — الان سطحِ {fa(st.unlocks.level)} هستی.</span>
+    </div>}
+    {st.capitalEnabled && (!st.unlocks || st.unlocks.capital.ok) && <details style={card} onToggle={(ev: any) => { if (ev.currentTarget.open && !mkt) doMarket() }}>
       <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>📊 بازار سرمایه — صندوق‌ها و مشارکت‌ها</summary>
       {!mkt ? <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10 }}>در حال بارگذاری...</div> : (
         <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 14 }}>

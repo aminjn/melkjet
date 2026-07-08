@@ -327,6 +327,15 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             })}
           </div>
           <div style={card}>
+            <div style={sub}>📈 سطح‌گشایی و ظرفیت (سند ۱۵ — Progression)</div>
+            {row('بازارِ سرمایه از سطح', cin('unlocks', 'capitalLevel'), '«امکانات باز می‌شوند، نه اعداد»')}
+            {row('شرکتِ ساختمانی از سطح', cin('unlocks', 'companyLevel'))}
+            {row('سرمایه‌گذاریِ جمعی از سطح', cin('unlocks', 'crowdLevel'))}
+            {row('ظرفیتِ پایهٔ پروژهٔ همزمان', cin('unlocks', 'projectsBase'), 'ظرفیت = پایه + سطح ÷ گام')}
+            {row('گامِ رشدِ ظرفیت (هر چند سطح +۱)', cin('unlocks', 'projectsPerLevels'))}
+            {row('خروج از پروژهٔ نیمه‌کاره (٪ بهای تمام‌شده)', cin('unlocks', 'projectExitPct'), 'با پیش‌فروشِ فعال ممنوع؛ مالیات → خزانه')}
+          </div>
+          <div style={card}>
             <div style={sub}>🔥 فرصت‌های روزانه و اعتبارِ برند (سند ۱۴)</div>
             {row('فرصت‌های طلاییِ امروز فعال (۱/۰)', cin('deals', 'enabled'), 'Hook — آگهی‌های واقعی + شمارشِ معکوس')}
             {row('تعدادِ فرصت‌های روز', cin('deals', 'count'), 'انتخابِ قطعی از هشِ کاربر+روز')}

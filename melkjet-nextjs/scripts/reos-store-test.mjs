@@ -1199,6 +1199,41 @@ async function main() {
     ok('مذاکرهٔ تکراری روی همان آگهی شمرده نمی‌شود', (await bumpNegoTries(uc12, 'NEGO1')).ok === false && ((await getEmpire(uc12)).stats.negoTries || 0) === 1)
     const t2 = await bumpNegoTries(uc12, 'NEGO2')
     ok('آگهیِ جدید شمارنده را بالا می‌برد', t2.ok && (t2.empire.stats.negoTries || 0) === 2)
+
+    // ── فاز ۱۷ (سند ۱۵): خروج از پروژهٔ نیمه‌کاره — پروژهٔ در حالِ ساخت هم دارایی است ──
+    console.log('\n── Empire · خروج از پروژهٔ نیمه‌کاره (سند ۱۵) ──')
+    const { sellProject } = await import('../app/lib/empire-store.ts')
+    ok('بدونِ پروژه رد می‌شود', (await sellProject(uc12, 'nope', 85, 1)).ok === false)
+    await buyA(uc12, { id: 'LND3', title: 'زمینِ سوم', hood: 'ولنجک', price: 1_000_000_000, ptype: 'زمین' })
+    const land17 = (await getEmpire(uc12)).assets.find(x => x.listingId === 'LND3').id
+    await setLP(uc12, land17, 'build')
+    {
+      const eG = await getEmpire(uc12)
+      eG.assets.find(x => x.id === land17).permit = { requestedAt: Date.now(), days: 1, fee: 1, status: 'granted', grantedAt: Date.now() }
+      await pool.query(`UPDATE reos_empire SET data=$2 WHERE user_id=$1`, [uc12, JSON.stringify(eG)])
+    }
+    await startBuild(uc12, land17, plan15, { structure: 'concrete', quality: 'standard' })
+    // ۵۰۰م پرداختی + یک پیش‌فروشِ آزمایشی برای تستِ ممنوعیت
+    {
+      const eT = await getEmpire(uc12)
+      const cT = eT.assets.find(x => x.id === land17).construction
+      cT.paid = 500_000_000; cT.paidDays = 1; cT.presold = 1
+      await pool.query(`UPDATE reos_empire SET data=$2 WHERE user_id=$1`, [uc12, JSON.stringify(eT)])
+    }
+    ok('با پیش‌فروشِ فعال خروج ممنوع (تعهدِ تحویل)', (await sellProject(uc12, land17, 85, 1)).ok === false)
+    {
+      const eT = await getEmpire(uc12)
+      eT.assets.find(x => x.id === land17).construction.presold = 0
+      await pool.query(`UPDATE reos_empire SET data=$2 WHERE user_id=$1`, [uc12, JSON.stringify(eT)])
+    }
+    const e17 = await getEmpire(uc12)
+    const cap17 = e17.capital, tax17 = e17.taxPaid, real17 = e17.realized
+    const sp = await sellProject(uc12, land17, 85, 1)
+    // بها = ۱B زمین + ۵۰۰م پرداختی؛ ارزشِ خروج ۸۵٪ = ۱٬۲۷۵م؛ مالیات ۱٪ → خزانه
+    const expVal = Math.round(1_500_000_000 * 0.85), expTax = Math.round(expVal * 0.01)
+    ok('خروج: عایدی/مالیات/زیانِ تحقق‌یافته درست است', sp.ok && sp.proceeds === expVal - expTax && sp.pnl === expVal - expTax - 1_500_000_000
+      && sp.empire.capital === cap17 + sp.proceeds && sp.empire.taxPaid === tax17 + expTax && sp.empire.realized === real17 + sp.pnl)
+    ok('زمین و کارگاه با هم واگذار شدند', !sp.empire.assets.some(x => x.id === land17))
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

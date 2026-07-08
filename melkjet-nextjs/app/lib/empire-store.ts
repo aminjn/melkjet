@@ -1272,6 +1272,37 @@ export async function stopRentUnits(userId: string, assetId: string, units: numb
   })
 }
 
+// ظرفیتِ پروژهٔ همزمانِ شرکت (سند ۱۵ — فصل ۵ «منابع»: ظرفیت هم یک دارایی است): با سطح رشد می‌کند، شفاف.
+export const maxProjectsOf = (level: number, cfg: { projectsBase: number; projectsPerLevels: number }) =>
+  Math.max(1, Math.floor(cfg.projectsBase) + Math.floor(Math.max(1, level) / Math.max(1, cfg.projectsPerLevels)))
+
+// فروشِ پروژهٔ نیمه‌کاره (سند ۱۵ — فصل ۵ «پروژهٔ در حالِ ساخت هم دارایی است»): خروج به ٪ شفافی از بهای
+// تمام‌شده (زمین + پرداختی‌ها) — تصمیمِ واقعیِ بحرانِ نقدینگی. با پیش‌فروشِ فعال ممنوع (تعهدِ تحویل داری).
+export async function sellProject(userId: string, assetId: string, exitPct: number, taxPct: number, now = Date.now()): Promise<{ ok: boolean; reason?: string; proceeds?: number; pnl?: number; empire?: EmpireData }> {
+  let proceeds = 0, pnl = 0
+  const r = await mutateEmpire(userId, e => {
+    const i = e.assets.findIndex(x => x.id === assetId)
+    const a = e.assets[i]
+    const c = a?.construction
+    if (!a || !c) return 'پروژه‌ای در حالِ ساخت نیست'
+    if (c.done) return 'ساختمان تکمیل شده — واحدها را جدا بفروش'
+    if (c.presold > 0) return 'با پیش‌فروشِ فعال نمی‌توانی از پروژه خارج شوی — تعهدِ تحویل داری'
+    const base = a.buyPrice + c.paid
+    const value = Math.round(base * Math.max(10, Math.min(100, exitPct)) / 100)
+    const tax = Math.round(value * Math.max(0, taxPct) / 100)
+    proceeds = value - tax
+    pnl = proceeds - base
+    e.capital += proceeds
+    e.taxPaid = (e.taxPaid || 0) + tax
+    e.realized = (e.realized || 0) + pnl
+    e.assets.splice(i, 1)   // زمین و کارگاه با هم واگذار می‌شوند
+    e.timeline.push({ at: now, icon: '🏳', title: 'خروج از پروژهٔ نیمه‌کاره', detail: `${a.title.slice(0, 45)} · ${Math.abs(Math.round(pnl / 1e6)).toLocaleString('fa-IR')}م تومان ${pnl >= 0 ? 'سود' : 'زیان'}` })
+    e.journal.push({ at: now, text: 'از یک پروژه خارج شدی. گاهی بهترین تصمیم، بستنِ به‌موقعِ یک درِ اشتباه است — سرمایه‌ات آزاد شد.' })
+  })
+  if (!r.ok) return { ok: false, reason: r.reason }
+  return { ok: true, proceeds, pnl, empire: r.empire }
+}
+
 // صدورِ پروانه‌های سررسیدشده — روی هر بازدید سنجیده می‌شود؛ اولین پروانه نشانِ «First Permit» می‌دهد.
 export async function progressPermits(userId: string, now = Date.now()): Promise<{ ok: boolean; granted?: number; empire?: EmpireData }> {
   let granted = 0

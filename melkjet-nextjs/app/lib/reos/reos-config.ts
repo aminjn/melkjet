@@ -56,6 +56,9 @@ export interface ReosConfig {
     deals: { enabled: boolean; count: number }
     // GDD فصل ۴ بخش ۱۵: اعتبارِ ⭐ باید اثرِ واقعی داشته باشد — روی مذاکره و شرایطِ بانک.
     reputation: { negoBonusPerStar: number; loanRateCutPctPerStar: number }
+    // GDD فصل ۴ بخش ۱۹ (Progression): «اعداد نباید بزرگ‌تر شوند؛ امکانات باید بیشتر شوند» — قابلیت‌ها سطح‌گشا هستند
+    // + فصل ۵ (منابع): ظرفیتِ پروژهٔ همزمانِ شرکت با سطح رشد می‌کند؛ خروج از پروژهٔ نیمه‌کاره با ٪ شفاف.
+    unlocks: { capitalLevel: number; companyLevel: number; crowdLevel: number; projectsBase: number; projectsPerLevels: number; projectExitPct: number }
   }
 }
 
@@ -129,6 +132,9 @@ export const DEFAULT_CONFIG: ReosConfig = {
         parking: { costPct: 5, valuePct: 6 },
       },
     },
+    // سطح‌گشایی (سند ۱۵ / GDD فصل ۴ بخش ۱۹): بازارِ سرمایه از سطح ۳، شرکتِ ساختمانی از سطح ۴، مشارکتِ جمعی از سطح ۶؛
+    // ظرفیتِ پروژهٔ همزمان = ۱ + سطح ÷ ۱۰؛ خروج از پروژهٔ نیمه‌کاره به ۸۵٪ بهای تمام‌شده (منهای مالیات → خزانه).
+    unlocks: { capitalLevel: 3, companyLevel: 4, crowdLevel: 6, projectsBase: 1, projectsPerLevels: 10, projectExitPct: 85 },
     // Hook روزانه (سند ۱۴): N آگهیِ واقعیِ قطعی از هشِ کاربر+روز؛ بعضی واقعاً زیرِ میانهٔ محله‌اند، بعضی نه —
     // بازی قضاوت نمی‌کند؛ بازیکن فکر می‌کند یا ژتونِ تحلیل خرج می‌کند («اگر پاسخ واضح باشد، سیستم شکست خورده»).
     deals: { enabled: true, count: 5 },

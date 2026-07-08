@@ -19,7 +19,7 @@ import {
   startBuild, progressBuild, resolveBuildEvent, presellUnits, sellUnits,
   PROJECT_GOALS, goalPricePct, AMENITY_LABELS, amenityValueFactorOf, bulkPriceOf,
   projectLessonsOf, engineerEffectsOf, addAmenity, rentOutUnits, stopRentUnits,
-  negoMemoryOf, bumpNegoTries, dailyDealPickOf,
+  negoMemoryOf, bumpNegoTries, dailyDealPickOf, maxProjectsOf, sellProject,
   type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
 import {
@@ -127,6 +127,16 @@ const median = (xs: number[]) => { if (!xs.length) return 0; const s = [...xs].s
 
 // مهارتِ مؤثرِ مذاکره (سند ۱۴): هویت + شخصیتِ مالک + تیمِ مهندسی + حافظهٔ مذاکره + اعتبارِ ⭐ برند —
 // یک منبعِ واحد برای «مذاکره» و «خرید» تا نتیجهٔ هر دو یکی باشد.
+// سطح‌گشایی (سند ۱۵ — GDD فصل ۴ بخش ۱۹ «امکانات باید بیشتر شوند، نه اعداد»): فقط ورودی‌های جدید بسته‌اند؛
+// دارایی‌ها و خروج (فروش/بازخرید) هرگز قفل نمی‌شوند.
+async function lockedMsg(userId: string, needLevel: number, what: string): Promise<string | null> {
+  if (!(needLevel > 1)) return null
+  const e = await getEmpire(userId)
+  if (!e) return 'اول امپراتوری‌ات را بساز'
+  const lv = empireLevel(e.xp).level
+  return lv >= needLevel ? null : `${what} از سطحِ ${needLevel.toLocaleString('fa-IR')} باز می‌شود — الان سطحِ ${lv.toLocaleString('fa-IR')} هستی. با تصمیم‌های واقعی XP بگیر.`
+}
+
 function negoSkillOf(e: EmpireData, personaMod: number): { skill: number; memory: { mod: number; note: string | null }; repBonus: number } {
   const memory = negoMemoryOf(e.stats)
   const repBonus = e.company
@@ -330,6 +340,18 @@ async function stateOf(userId: string, e00: EmpireData) {
     collection: ['apartment', 'villa', 'commercial', 'land'].map(k => ({ kind: k, owned: e.assets.some(a => a.kind === k) })),
     capitalEnabled: config().empire.capital.enabled,
     dealsEnabled: config().empire.deals.enabled,   // Hook روزانه (سند ۱۴)
+    // سطح‌گشایی (سند ۱۵): چه چیزی از چه سطحی باز می‌شود + ظرفیتِ پروژهٔ همزمان — شفاف در UI
+    unlocks: (() => {
+      const u = config().empire.unlocks
+      const lv = empireLevel(e.xp).level
+      return {
+        level: lv,
+        capital: { need: u.capitalLevel, ok: lv >= u.capitalLevel },
+        company: { need: u.companyLevel, ok: lv >= u.companyLevel },
+        crowd: { need: u.crowdLevel, ok: lv >= u.crowdLevel },
+        projects: { max: maxProjectsOf(lv, u), active: e.assets.filter(x => x.construction && !x.construction.done).length, exitPct: u.projectExitPct },
+      }
+    })(),
     mastery: masteryOf(e),   // استادیِ چندمحوره (جلد ۴۹ فصل ۵) — از شمارنده‌های واقعیِ رفتار
     // شرکتِ ساختمانی (جلد ۶۱): اعتبارِ ستاره‌ای از رفتارِ واقعی + مهارتِ تیم
     companyEnabled: config().empire.company.enabled,
@@ -726,6 +748,8 @@ export async function POST(req: NextRequest) {
     case 'fundBuy': {
       const cfg = config().empire.capital
       if (!cfg.enabled) return NextResponse.json({ error: 'بازار سرمایه فعلاً فعال نیست' }, { status: 403 })
+      const lk = await lockedMsg(userId, config().empire.unlocks.capitalLevel, 'بازارِ سرمایه')
+      if (lk) return NextResponse.json({ error: lk }, { status: 403 })
       const units = Math.floor(Number(b.units) || 0)
       const state = await getMarketState()
       const f = state.funds.find(x => x.id === String(b.fundId || ''))
@@ -764,6 +788,8 @@ export async function POST(req: NextRequest) {
     case 'crowdJoin': {
       const cfg = config().empire.capital
       if (!cfg.enabled || !cfg.crowd.enabled) return NextResponse.json({ error: 'سرمایه‌گذاریِ جمعی فعلاً فعال نیست' }, { status: 403 })
+      const lk = await lockedMsg(userId, config().empire.unlocks.crowdLevel, 'سرمایه‌گذاریِ جمعی')
+      if (lk) return NextResponse.json({ error: lk }, { status: 403 })
       const units = Math.floor(Number(b.units) || 0)
       const it = await getItemById(String(b.listingId || ''))
       if (!it || it.type !== 'listing') return NextResponse.json({ error: 'آگهی یافت نشد' }, { status: 404 })
@@ -804,6 +830,8 @@ export async function POST(req: NextRequest) {
     case 'company': {
       const cfg = config().empire.company
       if (!cfg.enabled) return NextResponse.json({ error: 'ثبتِ شرکت فعلاً فعال نیست' }, { status: 403 })
+      const lk = await lockedMsg(userId, config().empire.unlocks.companyLevel, 'ثبتِ شرکتِ ساختمانی')
+      if (lk) return NextResponse.json({ error: lk }, { status: 403 })
       const r = await foundCompany(userId, { name: String(b.name || ''), kind: String(b.kind || ''), color: String(b.color || '') }, cfg.regFee)
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
@@ -876,6 +904,10 @@ export async function POST(req: NextRequest) {
       const e = await getEmpire(userId)
       const a = e?.assets.find(x => x.id === String(b.assetId || ''))
       if (!e || !a) return NextResponse.json({ error: 'دارایی یافت نشد' }, { status: 404 })
+      // ظرفیتِ پروژهٔ همزمان (سند ۱۵ — فصل ۵ «منابع»): ظرفیت هم یک دارایی است و با سطح رشد می‌کند
+      const active = e.assets.filter(x => x.construction && !x.construction.done).length
+      const maxP = maxProjectsOf(empireLevel(e.xp).level, config().empire.unlocks)
+      if (active >= maxP) return NextResponse.json({ error: `ظرفیتِ شرکتت ${maxP.toLocaleString('fa-IR')} پروژهٔ همزمان است — پروژه‌ای را تحویل بده یا با سطحِ بالاتر ظرفیت بگیر` }, { status: 400 })
       const it = await getItemById(a.listingId).catch(() => null)
       const landArea = it ? (parseFaNum((it.meta || {})['متراژ']) || 0) : 0
       const plan = buildPlanOf(String(b.structure || ''), String(b.quality || ''), landArea, cfg)
@@ -923,6 +955,12 @@ export async function POST(req: NextRequest) {
       const r = await sellUnits(userId, a.id, units, bulk.avgUnit > 0 ? bulk.avgUnit : unitPrice, config().empire.transferTaxPct)
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       return NextResponse.json({ ok: true, proceeds: r.proceeds, pnl: r.pnl, completed: r.completed, unitPrice, bulkDiscounted: bulk.discounted, samples, ...(await stateOf(userId, r.empire!)) })
+    }
+    // فروشِ پروژهٔ نیمه‌کاره (سند ۱۵ — فصل ۵ «پروژهٔ در حالِ ساخت هم دارایی است»): خروج به ٪ شفافِ بهای تمام‌شده.
+    case 'sellProject': {
+      const r = await sellProject(userId, String(b.assetId || ''), config().empire.unlocks.projectExitPct, config().empire.transferTaxPct)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, proceeds: r.proceeds, pnl: r.pnl, ...(await stateOf(userId, r.empire!)) })
     }
     // امکاناتِ میان‌ساخت (GDD فصل ۴ بخش ۴): هزینه = ٪ شفافی از هزینهٔ کلِ پروژه؛ ارزشِ فروش/اجاره بالاتر می‌رود.
     case 'amenity': {
