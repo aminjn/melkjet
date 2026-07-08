@@ -5,6 +5,7 @@ import Nav from '@/app/components/Nav'
 import PropertyMap from '@/app/components/PropertyMap'
 import PromoBadge from '@/app/components/PromoBadge'
 import CompareButton from '@/app/components/CompareButton'
+import LikeHeart, { useFav } from '@/app/components/home/LikeHeart'
 import ReosTwinCard from '@/app/components/ReosTwinCard'
 import { openAuth } from '@/app/components/AuthModal'
 
@@ -59,6 +60,7 @@ function ScoreRing({ value, label }: { value: number; label: string }) {
 
 export default function PropertyClient({ id }: { id: string }) {
   const [item, setItem] = useState<Item | null>(null)
+  const [saved, toggleSave] = useFav(item?.id)   // ذخیرهٔ واقعی (favorites + رویدادِ REOS برای کوئست)
   const [loading, setLoading] = useState(true)
   const [gallery, setGallery] = useState<string[]>([])
   const [activeImg, setActiveImg] = useState(0)
@@ -265,6 +267,8 @@ export default function PropertyClient({ id }: { id: string }) {
               <div style={{ gridRow: '1/3', position: 'relative', background: 'var(--surface)' }}>
                 {images.length ? <img src={images[activeImg]} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover', filter: dealStatus ? 'grayscale(0.5) brightness(0.72)' : 'none' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 56, opacity: 0.1 }}>🏠</div>}
                 {(item as any).promoKind && !dealStatus && <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 2 }}><PromoBadge kind={(item as any).promoKind} /></div>}
+                {/* ذخیرهٔ واقعیِ آگهی — همان سیگنالی که کوئستِ «۱ آگهی ذخیره کن» می‌خواند */}
+                {!dealStatus && <LikeHeart listingId={item.id} />}
                 {dealStatus && (
                   <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                     <span style={{ transform: 'rotate(-12deg)', background: dealStatus === 'sold' ? 'rgba(231,74,74,0.94)' : 'rgba(74,144,231,0.94)', color: '#fff', fontWeight: 900, fontSize: 34, padding: '12px 38px', borderRadius: 16, border: '3px solid rgba(255,255,255,0.9)', boxShadow: '0 10px 40px -8px rgba(0,0,0,0.7)', letterSpacing: '1px' }}>
@@ -527,8 +531,12 @@ export default function PropertyClient({ id }: { id: string }) {
                 )}
               </div>
 
-              {/* compare */}
+              {/* save + compare */}
               <div style={card}>
+                <button onClick={toggleSave}
+                  style={{ width: '100%', padding: '11px', borderRadius: 12, border: `1px solid ${saved ? 'var(--gold)' : 'var(--line2)'}`, background: saved ? 'var(--goldDim)' : 'var(--bg2)', color: saved ? 'var(--gold)' : 'var(--text)', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13.5, marginBottom: 8 }}>
+                  {saved ? '❤️ ذخیره شد — در «ذخیره‌های من»' : '🤍 ذخیرهٔ آگهی'}
+                </button>
                 <CompareButton variant="full" entry={{ kind: 'item', id: String(item.id), title: item.title, photo: (item.image && (String(item.image).startsWith('http') || String(item.image).startsWith('/'))) ? item.image : undefined, subtitle: item.location }} />
               </div>
 

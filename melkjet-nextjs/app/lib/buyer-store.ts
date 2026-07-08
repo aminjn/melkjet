@@ -15,6 +15,7 @@ export type OfferStatus = 'pending' | 'accepted' | 'rejected'
 export interface SavedProperty {
   id: string; title: string; ptype: string; location: string; area: number; rooms: number
   price: number; deal: DealType; addedAt: number
+  listingId?: string   // پیوند به آگهیِ واقعی — وقتی ذخیره از قلبِ کارت/صفحهٔ آگهی آمده باشد
 }
 export interface SavedSearch {
   id: string; query: string; ptype?: string; area?: string; priceMax?: number; alerts: boolean; createdAt: number
@@ -182,10 +183,20 @@ export async function buyerStats(o: string) {
 // ---- Saved properties ----
 export async function addSaved(o: string, input: Partial<SavedProperty>): Promise<SavedProperty> {
   let c!: SavedProperty
-  await mutate(o, b => { c = { id: id('s_'), title: String(input.title || 'ملک'), ptype: String(input.ptype || 'آپارتمان'), location: String(input.location || ''), area: Number(input.area) || 0, rooms: Number(input.rooms) || 0, price: Number(input.price) || 0, deal: input.deal === 'rent' ? 'rent' : 'sale', addedAt: Date.now() }; b.saved.unshift(c) })
+  await mutate(o, b => {
+    // ذخیرهٔ تکراری از روی همان آگهیِ واقعی ساخته نمی‌شود (قلبِ کارت چند بار زده شود، یک ردیف می‌ماند)
+    const dup = input.listingId ? b.saved.find(s => s.listingId === input.listingId) : undefined
+    if (dup) { c = dup; return }
+    c = { id: id('s_'), title: String(input.title || 'ملک'), ptype: String(input.ptype || 'آپارتمان'), location: String(input.location || ''), area: Number(input.area) || 0, rooms: Number(input.rooms) || 0, price: Number(input.price) || 0, deal: input.deal === 'rent' ? 'rent' : 'sale', addedAt: Date.now(), listingId: input.listingId ? String(input.listingId) : undefined }
+    b.saved.unshift(c)
+  })
   return c
 }
 export async function removeSaved(o: string, sid: string): Promise<void> { await mutate(o, b => { b.saved = b.saved.filter(s => s.id !== sid) }) }
+// حذف بر اساسِ آگهیِ واقعی — وقتی کاربر قلبِ ذخیره را برمی‌دارد.
+export async function removeSavedByListing(o: string, listingId: string): Promise<void> {
+  await mutate(o, b => { b.saved = b.saved.filter(s => s.listingId !== listingId) })
+}
 
 // ---- Saved searches ----
 export async function addSearch(o: string, input: { query: string; ptype?: string; area?: string; priceMax?: number; alerts?: boolean }): Promise<SavedSearch> {

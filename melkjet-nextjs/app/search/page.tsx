@@ -7,6 +7,7 @@ import Nav from '@/app/components/Nav'
 import PromoBadge from '@/app/components/PromoBadge'
 import BannerSlot from '@/app/components/BannerSlot'
 import CompareButton from '@/app/components/CompareButton'
+import LikeHeart from '@/app/components/home/LikeHeart'
 import NeighborhoodPicker from '@/app/components/NeighborhoodPicker'
 import { fetchContent, gradientFor, type ContentItem } from '@/app/lib/content-display'
 import { readLoc } from '@/app/components/LocationDetector'
@@ -648,7 +649,8 @@ function SearchPageInner() {
                   <Link href={listingHref(p.id, p.title, p.location)} style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}>
                     <div style={{ height: 156, background: p.image ? `center/cover no-repeat url(${p.image})` : p.img, position: 'relative', filter: p.dealStatus ? 'grayscale(0.55) brightness(0.7)' : 'none' }}>
                       <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 64, background: 'linear-gradient(to top,rgba(0,0,0,0.5),transparent)' }} />
-                      {isPromoted && !p.dealStatus && <div style={{ position: 'absolute', top: 10, left: 10 }}><PromoBadge kind={p.promoKind || 'ویژه'} /></div>}
+                      {!p.dealStatus && <LikeHeart listingId={p.id} />}
+                      {isPromoted && !p.dealStatus && <div style={{ position: 'absolute', top: 10, left: 44 }}><PromoBadge kind={p.promoKind || 'ویژه'} /></div>}
                       {p.dealStatus && (
                         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <span style={{ transform: 'rotate(-13deg)', background: p.dealStatus === 'sold' ? 'rgba(231,74,74,0.92)' : 'rgba(74,144,231,0.92)', color: '#fff', fontWeight: 900, fontSize: 17, padding: '7px 20px', borderRadius: 10, border: '2px solid rgba(255,255,255,0.85)', boxShadow: '0 6px 22px -6px rgba(0,0,0,0.6)', letterSpacing: '0.5px' }}>

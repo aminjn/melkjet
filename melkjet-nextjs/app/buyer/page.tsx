@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import JalaliDatePicker from '@/app/components/JalaliDatePicker'
+import { listingHref } from '@/app/lib/listing-url'
 import NumberInput from '@/app/components/NumberInput'
 import MessagesPanel from '@/app/components/MessagesPanel'
 import PlansPanel from '@/app/components/PlansPanel'
@@ -18,7 +19,7 @@ type Deal = 'sale' | 'rent'
 type ViewingStatus = 'scheduled' | 'done' | 'canceled'
 type OfferStatus = 'pending' | 'accepted' | 'rejected'
 
-interface Saved { id: string; title: string; ptype: string; location: string; area: number; rooms: number; price: number; deal: Deal; addedAt: number }
+interface Saved { id: string; title: string; ptype: string; location: string; area: number; rooms: number; price: number; deal: Deal; addedAt: number; listingId?: string }
 interface Search { id: string; query: string; ptype?: string; area?: string; priceMax?: number; alerts: boolean; createdAt: number }
 interface Viewing { id: string; propertyTitle: string; advisor?: string; date: string; status: ViewingStatus; createdAt: number }
 interface Offer { id: string; propertyTitle: string; amount: number; status: OfferStatus; createdAt: number }
@@ -167,7 +168,10 @@ function PropCard({ p, onRemove }: { p: Saved; onRemove: () => void }) {
       <div style={{ fontSize: 12, color: 'var(--muted)' }}>{fa(p.area)} متر{p.rooms ? ` · ${fa(p.rooms)} خواب` : ''}</div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
         <div style={{ fontWeight: 800, color: 'var(--gold)', fontSize: 14 }}>{p.deal === 'rent' ? 'ودیعه ' : ''}{money(p.price)}</div>
-        <button onClick={onRemove} style={{ ...actionBtn, color: '#ef4444', borderColor: 'color-mix(in srgb,#ef4444 30%,transparent)' }}>حذف</button>
+        <span style={{ display: 'flex', gap: 6 }}>
+          {p.listingId && <a href={listingHref(p.listingId, p.title, p.location)} style={{ ...actionBtn, textDecoration: 'none', color: 'var(--gold)' }}>مشاهده</a>}
+          <button onClick={onRemove} style={{ ...actionBtn, color: '#ef4444', borderColor: 'color-mix(in srgb,#ef4444 30%,transparent)' }}>حذف</button>
+        </span>
       </div>
     </div>
   )

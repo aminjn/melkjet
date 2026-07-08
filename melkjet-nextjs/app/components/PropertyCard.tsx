@@ -33,7 +33,7 @@ export default function PropertyCard({ id = '1', title, location, price, size, b
             {tag}
           </span>
         )}
-        <LikeHeart />
+        <LikeHeart listingId={id} />
         {score && (
           <span style={{ position: 'absolute', bottom: 12, left: 12, display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 999, background: 'rgba(20,18,14,0.7)', backdropFilter: 'blur(6px)', fontSize: 11.5, fontWeight: 700, color: '#fff' }}>
             <span style={{ color: 'var(--gold2)' }}>✦</span> امتیاز AI {score}
