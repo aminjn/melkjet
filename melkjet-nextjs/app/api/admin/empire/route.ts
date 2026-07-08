@@ -8,6 +8,9 @@ import {
 import { candidateListings, getItemById, type Item } from '@/app/lib/scraper-store'
 import { parseFaNum } from '@/app/lib/reos/features'
 import { logAudit } from '@/app/lib/audit-store'
+import { getMarketState, segmentQuote, marketIndices, psychologyOf, createFund, setFundEnabled, deleteFund } from '@/app/lib/empire-market'
+import { recentEvents } from '@/app/lib/reos/store'
+import { config, primeConfig } from '@/app/lib/reos/reos-config'
 
 async function guard() { const s = await getSession(); return s && s.role === 'super_admin' }
 async function actor() { const s = await getSession(); return (s as any)?.name || (s as any)?.phone || 'مدیر' }
@@ -47,6 +50,42 @@ export async function GET(req: NextRequest) {
     const prices = await livePriceMap()
     const assets = e.assets.map(a => ({ ...a, current: prices[a.listingId] || a.buyPrice }))
     return NextResponse.json({ empire: { ...e, assets }, row: rowOf(e, prices), level: empireLevel(e.xp) })
+  }
+
+  // کنسولِ سرمایه (جلد ۴۰ فصل ۱۹): صندوق‌ها + استخرهای مشارکت + شاخص‌ها + KPIها — همه از دادهٔ واقعی.
+  if (view === 'capital') {
+    await primeConfig()
+    const cfg = config().empire.capital
+    const [state, items, empires, evs] = await Promise.all([
+      getMarketState(), candidateListings(800).catch(() => [] as Item[]), listEmpiresPublic(500),
+      recentEvents({ limit: 400 }).catch(() => []),
+    ])
+    const priceMap: Record<string, number> = {}
+    for (const it of items) { const p = priceOf(it); if (p > 0) priceMap[it.id] = p }
+    const funds = state.funds.map(f => {
+      const q = segmentQuote(items, f.seg, cfg.fundMinSamples)
+      let aum = 0, holders = 0
+      for (const e of empires) { const h = (e.funds || []).find(x => x.fundId === f.id); if (h) { holders++; aum += q ? Math.round(h.units * q.unit) : h.cost } }
+      return { ...f, quote: q, aum, holders }
+    })
+    const pools = Object.values(state.pools).map(p => {
+      const live = priceMap[p.listingId] || 0
+      return { ...p, investors: Object.keys(p.investors).length, live, fundedPct: p.totalUnits ? Math.round(p.soldUnits / p.totalUnits * 100) : 0 }
+    })
+    // بخش‌های واقعیِ قابلِ‌صندوق‌شدن: شهرهایی با نمونهٔ کافی که هنوز صندوق ندارند
+    const idx = marketIndices(items)
+    const segments = idx.cities.filter(c => c.samples >= cfg.fundMinSamples && !state.funds.some(f => f.seg === c.city))
+    const poolsValue = pools.reduce((s, p) => s + p.soldUnits * p.unitToman, 0)
+    return NextResponse.json({
+      cfg, funds, pools, segments, indices: idx,
+      psychology: psychologyOf(evs.map(x => ({ type: x.type, at: x.at })), Date.now()),
+      kpis: {
+        marketCap: funds.reduce((s, f) => s + f.aum, 0) + poolsValue,
+        fundAum: funds.reduce((s, f) => s + f.aum, 0), poolsValue,
+        holders: new Set(empires.filter(e => (e.funds?.length || 0) + (e.crowd?.length || 0) > 0).map(e => e.userId)).size,
+        vol: state.vol,
+      },
+    })
   }
 
   const empires = await listEmpiresPublic(500)
@@ -132,6 +171,29 @@ export async function POST(req: NextRequest) {
     const ok = await deleteEmpire(String(b.userId || ''))
     if (!ok) return NextResponse.json({ error: 'امپراتوری یافت نشد' }, { status: 404 })
     logAudit(await actor(), 'حذفِ امپراتوری', String(b.userId || ''))
+    return NextResponse.json({ ok: true })
+  }
+  // ── کنسولِ سرمایه (جلد ۴۰): مدیریتِ صندوق‌های شاخصی ──
+  if (action === 'fundCreate') {
+    const r = await createFund(String(b.name || ''), String(b.seg || ''), Number(b.feePctYear))
+    if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+    logAudit(await actor(), 'ساختِ صندوقِ املاک', `${r.fund!.name} (${r.fund!.seg || 'کل بازار'})`)
+    return NextResponse.json({ ok: true, fund: r.fund })
+  }
+  if (action === 'fundToggle') {
+    const r = await setFundEnabled(String(b.id || ''), !!b.enabled)
+    if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+    logAudit(await actor(), 'تغییرِ وضعیتِ صندوق', `${b.id} → ${b.enabled ? 'فعال' : 'غیرفعال'}`)
+    return NextResponse.json({ ok: true })
+  }
+  if (action === 'fundDelete') {
+    // اگر کسی واحد دارد، حذف ممنوع — دارایی‌اش بی‌قیمت می‌ماند؛ اول باید همه بازخرید کنند (غیرفعالش کن).
+    const empires = await listEmpiresPublic(500)
+    if (empires.some(e => (e.funds || []).some(h => h.fundId === String(b.id || '') && h.units > 0)))
+      return NextResponse.json({ error: 'این صندوق دارندهٔ واحد دارد — اول غیرفعالش کن تا همه بازخرید کنند' }, { status: 400 })
+    const r = await deleteFund(String(b.id || ''))
+    if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+    logAudit(await actor(), 'حذفِ صندوقِ املاک', String(b.id || ''))
     return NextResponse.json({ ok: true })
   }
   // ساختِ فوریِ نامه‌های امروز (بدونِ انتظار برای cron)

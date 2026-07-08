@@ -66,6 +66,9 @@ export default function EmpirePage() {
   const [boardTab, setBoardTab] = useState('score')
   const [loanVal, setLoanVal] = useState('')
   const [repayVal, setRepayVal] = useState('')
+  const [mkt, setMkt] = useState<any>(null)                      // بازار سرمایه (جلد ۴۰)
+  const [fu, setFu] = useState<Record<string, string>>({})       // تعدادِ واحدِ صندوق (ورودی)
+  const [cu, setCu] = useState<Record<string, string>>({})       // تعدادِ واحدِ مشارکت (ورودی)
   const [nego, setNego] = useState<Record<string, any>>({})   // نتیجهٔ مذاکره به‌ازای هر آگهی
   const suspended = useRef(false)
 
@@ -167,6 +170,12 @@ export default function EmpirePage() {
   }
   async function doChest() { const d = await api({ action: 'chest' }); if (d) { setChestReward(d.reward); load() } }
   async function doBoards() { const d = await api({ action: 'boards' }); if (d) setBoards(d) }
+  async function doMarket() { const d = await api({ action: 'market' }); if (d) setMkt(d) }
+  // معاملهٔ بازار سرمایه: بعد از موفقیت، هم وضعیتِ کلی و هم نمای بازار تازه می‌شود.
+  async function doTrade(body: any, clear?: () => void) {
+    const d = await api(body)
+    if (d) { setSt(d); clear?.(); doMarket() }
+  }
 
   // ══════════ رندر ══════════
   const wrap = (children: React.ReactNode) => (
@@ -612,6 +621,97 @@ export default function EmpirePage() {
         <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>با این امتیازِ اعتباری هنوز وام تعلق نمی‌گیرد — با حضورِ منظم، تسویهٔ به‌موقع و سودِ واقعی اعتبارت را بساز.</div>
       )}
     </div>}
+
+    {/* بازار سرمایه (جلد ۴۰): صندوقِ شاخصی + مشارکتِ جمعی + شاخص‌ها — همه از بازارِ واقعی */}
+    {st.capitalEnabled && <details style={card} onToggle={(ev: any) => { if (ev.currentTarget.open && !mkt) doMarket() }}>
+      <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>📊 بازار سرمایه — صندوق‌ها و مشارکت‌ها</summary>
+      {!mkt ? <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10 }}>در حال بارگذاری...</div> : (
+        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* پرتفوی (فصل ۱۳) */}
+          {mkt.portfolio.total > 0 && <div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 6, fontSize: 12 }}>
+              <b>🧺 پرتفوی تو</b>
+              <span style={{ color: 'var(--muted)' }}>شاخصِ تنوع: <b style={{ color: mkt.portfolio.diversification >= 40 ? '#7c6' : 'var(--gold)' }}>{fa(mkt.portfolio.diversification)}</b>/۱۰۰</span>
+            </div>
+            <div style={{ display: 'flex', height: 10, borderRadius: 5, overflow: 'hidden', border: '1px solid var(--line)' }}>
+              {mkt.portfolio.parts.filter((p: any) => p.value > 0).map((p: any) => (
+                <div key={p.key} title={p.label} style={{ width: `${p.pct}%`, background: p.key === 'cash' ? 'var(--gold)' : p.key === 'properties' ? '#7c6' : p.key === 'funds' ? '#69c' : '#c9a' }} />
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 6, fontSize: 11.5, color: 'var(--muted)' }}>
+              {mkt.portfolio.parts.filter((p: any) => p.value > 0).map((p: any) => (
+                <span key={p.key}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: p.key === 'cash' ? 'var(--gold)' : p.key === 'properties' ? '#7c6' : p.key === 'funds' ? '#69c' : '#c9a', marginLeft: 4 }} />{p.label} {fa(p.pct)}٪ ({faB(p.value)})</span>
+              ))}
+            </div>
+          </div>}
+          {/* شاخص‌ها (فصل ۱۲) + روان‌شناسیِ بازار (فصل ۱۶) */}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 12 }}>
+            {mkt.indices.samples > 0 && <span style={{ ...card, padding: '6px 12px', background: 'var(--bg2)' }}>📈 شاخصِ کل: <b style={{ color: 'var(--gold)' }}>{faB(mkt.indices.overallPerM)}</b> ت/متر <span style={{ color: 'var(--faint)', fontSize: 10.5 }}>({fa(mkt.indices.samples)} آگهیِ واقعی)</span></span>}
+            {mkt.indices.rentSamples > 0 && <span style={{ ...card, padding: '6px 12px', background: 'var(--bg2)' }}>🔑 شاخصِ اجاره: <b style={{ color: 'var(--gold)' }}>{faB(mkt.indices.rentPerM)}</b> ت/متر</span>}
+            <span style={{ ...card, padding: '6px 12px', background: 'var(--bg2)' }}>🌡 نبضِ بازار: <b style={{ color: mkt.psychology.score >= 55 ? '#7c6' : mkt.psychology.score <= 45 ? '#e88' : 'var(--muted)' }}>{mkt.psychology.label}</b> ({fa(mkt.psychology.score)}/۱۰۰) <span style={{ color: 'var(--faint)', fontSize: 10.5 }}>از رفتارِ واقعیِ ۱۴ روز</span></span>
+          </div>
+          {/* صندوق‌های شاخصی (فصل ۸): هر واحد = یک مترِ مجازی از بازارِ واقعی */}
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>🏦 صندوق‌های املاک <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 400 }}>— هر واحد، یک «مترِ مجازی» از بازارِ واقعی؛ قیمتش با میانهٔ متریِ آگهی‌های واقعی بالا و پایین می‌رود و سودِ دوره‌ای از اجاره‌بهای واقعی می‌گیرد.</span></div>
+            {(mkt.funds || []).map((f: any) => (
+              <div key={f.id} style={{ ...card, background: 'var(--bg2)', marginBottom: 8 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 12.5 }}>
+                  <b>{f.name}</b><span style={{ color: 'var(--faint)', fontSize: 11 }}>{f.seg || 'کلِ بازار'}</span>
+                  {f.quote ? <>
+                    <span style={{ color: 'var(--muted)' }}>واحد: <b style={{ color: 'var(--gold)' }}>{faB(f.quote.unit)} ت</b></span>
+                    <span style={{ ...card, padding: '2px 8px', fontSize: 10.5, background: 'var(--surface)' }}>رتبه {f.quote.rating}</span>
+                    <span style={{ color: 'var(--muted)', fontSize: 11 }}>بازدهِ اجاره {Number(f.quote.yieldPctYear).toLocaleString('fa-IR')}٪ سالانه · کارمزد {Number(f.feePctYear).toLocaleString('fa-IR')}٪ · {fa(f.quote.samples)} نمونهٔ واقعی</span>
+                  </> : <span style={{ color: '#e88', fontSize: 11.5 }}>فعلاً نمونهٔ واقعیِ کافی برای قیمت‌گذاری نیست</span>}
+                </div>
+                {f.my && <div style={{ fontSize: 12, marginTop: 6 }}>سهمِ تو: <b>{fa(f.my.units)}</b> واحد · ارزشِ روز <b style={{ color: 'var(--gold)' }}>{faB(f.my.value)} ت</b> <span style={{ color: f.my.value >= f.my.cost ? '#7c6' : '#e88', fontSize: 11 }}>({f.my.value >= f.my.cost ? '+' : '−'}{faB(Math.abs(f.my.value - f.my.cost))})</span></div>}
+                {f.quote && <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <input value={fu[f.id] ? Number(fu[f.id]).toLocaleString('fa-IR') : ''} onChange={ev => setFu({ ...fu, [f.id]: digitsOf(ev.target.value) })} placeholder="تعدادِ واحد" inputMode="numeric" dir="ltr" style={{ width: 110, padding: 8, borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12.5, textAlign: 'center' }} />
+                  {Number(fu[f.id]) > 0 && <span style={{ fontSize: 11, color: 'var(--gold)' }}>≈ {faB(Number(fu[f.id]) * f.quote.unit)} ت</span>}
+                  {f.enabled && <button style={{ ...btn, padding: '7px 14px', fontSize: 12.5 }} disabled={busy || !Number(fu[f.id])} onClick={() => doTrade({ action: 'fundBuy', fundId: f.id, units: Number(fu[f.id]) }, () => setFu({ ...fu, [f.id]: '' }))}>خرید</button>}
+                  {f.my && <button style={{ ...btnGhost, padding: '7px 14px', fontSize: 12.5 }} disabled={busy || !Number(fu[f.id])} onClick={() => doTrade({ action: 'fundSell', fundId: f.id, units: Number(fu[f.id]) }, () => setFu({ ...fu, [f.id]: '' }))}>بازخرید</button>}
+                </div>}
+              </div>
+            ))}
+            {!(mkt.funds || []).length && <div style={{ fontSize: 12, color: 'var(--muted)' }}>هنوز صندوقی عرضه نشده — به‌محضِ عرضه همین‌جا می‌بینی.</div>}
+          </div>
+          {/* مشارکتِ جمعی (فصل ۷): مالکیتِ کسریِ آگهی‌های واقعیِ گران */}
+          {mkt.crowd?.enabled && <div>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>🤝 سرمایه‌گذاریِ جمعی <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 400 }}>— ملک‌های واقعیِ بزرگ‌تر از سرمایهٔ یک نفر؛ هر واحد {faB(mkt.crowd.unitToman)} تومان، ارزشِ سهمت با قیمتِ زندهٔ همان آگهی حرکت می‌کند.</span></div>
+            {(mkt.pools || []).map((p: any) => (
+              <div key={p.listingId} style={{ ...card, background: 'var(--bg2)', marginBottom: 8 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 12.5 }}>
+                  <b>{p.title.slice(0, 55)}</b><span style={{ color: 'var(--faint)', fontSize: 11 }}>{p.hood}</span>
+                  <a href={p.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: 'var(--gold)' }}>🔗 آگهیِ واقعی</a>
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6, fontSize: 11.5, color: 'var(--muted)', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 120, height: 6, background: 'var(--line)', borderRadius: 3 }}><div style={{ width: `${Math.min(100, Math.round(p.soldUnits / p.totalUnits * 100))}%`, height: 6, background: 'var(--gold)', borderRadius: 3 }} /></div>
+                  <span>{fa(p.soldUnits)}/{fa(p.totalUnits)} واحد · {fa(p.investors)} شریک · واحدِ روز <b style={{ color: 'var(--gold)' }}>{faB(p.unitNow)} ت</b></span>
+                </div>
+                {p.my && <div style={{ fontSize: 12, marginTop: 6 }}>سهمِ تو: <b>{fa(p.my.units)}</b> واحد · ارزشِ روز <b style={{ color: 'var(--gold)' }}>{faB(p.my.value)} ت</b> <span style={{ color: p.my.value >= p.my.cost ? '#7c6' : '#e88', fontSize: 11 }}>({p.my.value >= p.my.cost ? '+' : '−'}{faB(Math.abs(p.my.value - p.my.cost))})</span></div>}
+                <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <input value={cu[p.listingId] ? Number(cu[p.listingId]).toLocaleString('fa-IR') : ''} onChange={ev => setCu({ ...cu, [p.listingId]: digitsOf(ev.target.value) })} placeholder="تعدادِ واحد" inputMode="numeric" dir="ltr" style={{ width: 110, padding: 8, borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12.5, textAlign: 'center' }} />
+                  {p.available > 0 && <button style={{ ...btn, padding: '7px 14px', fontSize: 12.5 }} disabled={busy || !Number(cu[p.listingId])} onClick={() => doTrade({ action: 'crowdJoin', listingId: p.listingId, units: Number(cu[p.listingId]) }, () => setCu({ ...cu, [p.listingId]: '' }))}>پیوستن</button>}
+                  {p.my && <button style={{ ...btnGhost, padding: '7px 14px', fontSize: 12.5 }} disabled={busy || !Number(cu[p.listingId])} onClick={() => doTrade({ action: 'crowdExit', listingId: p.listingId, units: Number(cu[p.listingId]) }, () => setCu({ ...cu, [p.listingId]: '' }))}>خروج</button>}
+                </div>
+              </div>
+            ))}
+            {(mkt.candidates || []).length > 0 && <div style={{ marginTop: 4 }}>
+              <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>فرصت‌های تازه برای مشارکت (آگهی‌های واقعیِ بزرگ):</div>
+              {(mkt.candidates || []).map((c: any) => (
+                <div key={c.id} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 12, padding: '7px 0', borderBottom: '1px solid var(--line)' }}>
+                  <b>{c.title.slice(0, 50)}</b><span style={{ color: 'var(--faint)', fontSize: 11 }}>{c.hood} · {faB(c.price)} ت · {fa(c.totalUnits)} واحد</span>
+                  <a href={c.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: 'var(--gold)' }}>🔗</a>
+                  <span style={{ flex: 1 }} />
+                  <input value={cu[c.id] ? Number(cu[c.id]).toLocaleString('fa-IR') : ''} onChange={ev => setCu({ ...cu, [c.id]: digitsOf(ev.target.value) })} placeholder="واحد" inputMode="numeric" dir="ltr" style={{ width: 80, padding: 7, borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12, textAlign: 'center' }} />
+                  <button style={{ ...btn, padding: '6px 12px', fontSize: 12 }} disabled={busy || !Number(cu[c.id])} onClick={() => doTrade({ action: 'crowdJoin', listingId: c.id, units: Number(cu[c.id]) }, () => setCu({ ...cu, [c.id]: '' }))}>شریک شو</button>
+                </div>
+              ))}
+            </div>}
+            {!(mkt.pools || []).length && !(mkt.candidates || []).length && <div style={{ fontSize: 12, color: 'var(--muted)' }}>فعلاً ملکِ واقعیِ بزرگی برای مشارکت در بازار نیست — به‌محضِ ورود، همین‌جا ظاهر می‌شود.</div>}
+          </div>}
+        </div>
+      )}
+    </details>}
 
     {/* ۵ جدولِ رتبه (فصل ۵) + لیگِ محله (§7.2) */}
     <details style={card} onToggle={(ev: any) => { if (ev.currentTarget.open && !boards) doBoards() }}>

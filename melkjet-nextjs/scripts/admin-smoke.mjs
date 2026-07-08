@@ -16,7 +16,7 @@ import { SignJWT } from 'jose'
 
 const BASE = process.env.BASE || 'http://127.0.0.1:3001'
 const PUBLIC = process.env.PUBLIC === '0' ? '' : (process.env.PUBLIC || 'https://melkjet.com')
-const VIEWS = ('overview,reos,reports,empire,empirePlayers,empireEconomy,empireMissions,empireWorld,empireLiveops,empireAccess,'
+const VIEWS = ('overview,reos,reports,empire,empirePlayers,empireEconomy,empireCapital,empireMissions,empireWorld,empireLiveops,empireAccess,'
   + 'listings,moderation,products,catalog,articles,categories,studio,scraper,persiansaze,'
   + 'users,profiles,agencyintel,crm,roles,suspension,support,'
   + 'plans,payment,promos,discounts,ads,tracker,sms,aicost,smscost,'
@@ -106,7 +106,7 @@ const APIS = [
   '/api/admin/geo', '/api/admin/audit', '/api/admin/ai-cost', '/api/admin/sms-cost',
   '/api/admin/tracker-config', '/api/admin/agency-intel', '/api/admin/scraper/sources',
   '/api/admin/empire?view=overview', '/api/admin/empire?view=players', '/api/admin/empire?view=world',
-  '/api/admin/empire?view=liveops', '/api/reos/admin', '/api/reos/config', '/api/reos/flags',
+  '/api/admin/empire?view=liveops', '/api/admin/empire?view=capital', '/api/reos/admin', '/api/reos/config', '/api/reos/flags',
 ]
 let apiBad = 0
 for (const a of APIS) {

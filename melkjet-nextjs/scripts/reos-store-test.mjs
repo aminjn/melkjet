@@ -57,7 +57,7 @@ async function reset() {
   // ensure tables exist first (a no-op call triggers ensureReos), then truncate.
   await recordEvent({ type: 'user_searched', userId: '__warm__' }).catch(() => {})
   await saveEmbeddings('property', [{ id: '__warm__', embed: [0, 0] }]).catch(() => {})
-  for (const t of ['reos_events', 'reos_feature_store', 'reos_embeddings', 'reos_territory_scores', 'reos_territories', 'reos_territory_battles', 'reos_streaks', 'reos_xp', 'reos_missions', 'reos_wallet', 'reos_wallet_txn', 'reos_follows', 'reos_collections', 'reos_collection_items', 'reos_comments', 'reos_flags', 'reos_models', 'reos_empire', 'reos_daily_brief', 'reos_promo_campaigns']) {
+  for (const t of ['reos_events', 'reos_feature_store', 'reos_embeddings', 'reos_territory_scores', 'reos_territories', 'reos_territory_battles', 'reos_streaks', 'reos_xp', 'reos_missions', 'reos_wallet', 'reos_wallet_txn', 'reos_follows', 'reos_collections', 'reos_collection_items', 'reos_comments', 'reos_flags', 'reos_models', 'reos_empire', 'reos_daily_brief', 'reos_empire_market', 'reos_promo_campaigns']) {
     await pool.query(`TRUNCATE ${t}`).catch(() => {})
   }
 }
@@ -983,6 +983,59 @@ async function main() {
     const cbk = await claimComeback(u8, 60)
     ok('هدیهٔ بازگشت: کوین + پاک‌شدنِ پرچم', cbk.ok && cbk.empire.coins === coins8 + 60 && !cbk.empire.pendingComeback)
     ok('دریافتِ دوباره رد می‌شود', (await claimComeback(u8, 60)).ok === false)
+
+    // ── فاز ۹: بازار سرمایه (جلد ۴۰) — صندوقِ شاخصی + مشارکتِ جمعی؛ بقای پول در هر قدم ──
+    console.log('\n── Empire · Capital Market (جلد ۴۰) ──')
+    const { getMarketState, createFund, setFundEnabled, reservePoolUnits, releasePoolUnits, recordFundVolume } = await import('../app/lib/empire-market.ts')
+    const { buyFundUnits, sellFundUnits, accrueFundDividends, joinCrowd, exitCrowd } = await import('../app/lib/empire-store.ts')
+    // تعریفِ صندوق (کنسولِ سرمایه — فصل ۱۹)
+    const f1 = await createFund('صندوقِ املاکِ تهران', 'تهران', 2)
+    ok('ساختِ صندوق', f1.ok && f1.fund.id.startsWith('fnd_') && f1.fund.enabled)
+    ok('صندوقِ تکراری برای همان بخش رد می‌شود', (await createFund('x', 'تهران', 2)).ok === false)
+    await setFundEnabled(f1.fund.id, false)
+    ok('توقف/راه‌اندازیِ صندوق', (await getMarketState()).funds[0].enabled === false && (await setFundEnabled(f1.fund.id, true)).ok)
+    // خرید/ادغام/بازخریدِ واحد — اعدادِ دقیق (بقای پول)
+    const um = '0912market1'
+    await createEmpire(um, { answers: { city: 'تهران', tenB: 'سرمایه‌گذاری می‌کردم', risk: 50, ptype: 'آپارتمان', goal: 'رشدِ سرمایه' } })
+    const fb1 = await buyFundUnits(um, { id: f1.fund.id, name: f1.fund.name }, 10, 100_000_000, 20)
+    ok('خریدِ ۱۰ واحد: کسرِ نقد + XP + تایم‌لاین', fb1.ok && fb1.empire.capital === 9_000_000_000 && fb1.empire.funds[0].units === 10 && fb1.empire.funds[0].cost === 1_000_000_000 && fb1.empire.xp === 120 && fb1.empire.timeline.some(t => t.title.includes('سرمایه‌گذاری در')))
+    const fb2 = await buyFundUnits(um, { id: f1.fund.id, name: f1.fund.name }, 5, 120_000_000, 20)
+    ok('خریدِ دوم در همان صندوق ادغام می‌شود', fb2.ok && fb2.empire.funds.length === 1 && fb2.empire.funds[0].units === 15 && fb2.empire.funds[0].cost === 1_600_000_000 && fb2.empire.capital === 8_400_000_000)
+    ok('خرید بیش از نقد رد می‌شود', (await buyFundUnits(um, { id: f1.fund.id, name: 'x' }, 1000, 100_000_000, 0)).ok === false)
+    const fs1 = await sellFundUnits(um, f1.fund.id, 5, 110_000_000, 0)
+    ok('بازخریدِ جزئی: ارزشِ روز + سهمِ هزینه + سودِ تحقق‌یافته', fs1.ok && fs1.proceeds === 550_000_000 && fs1.pnl === 16_666_667 && fs1.empire.capital === 8_950_000_000 && fs1.empire.funds[0].units === 10 && fs1.empire.realized === 16_666_667)
+    ok('بازخرید بیش از موجودی رد می‌شود', (await sellFundUnits(um, f1.fund.id, 999, 110_000_000, 0)).ok === false)
+    const fs2 = await sellFundUnits(um, f1.fund.id, 10, 110_000_000, 10_000_000)
+    ok('بازخریدِ کامل: کارمزد → خزانه + حذفِ سطر', fs2.ok && fs2.proceeds === 1_090_000_000 && fs2.empire.capital === 10_040_000_000 && fs2.empire.taxPaid === 10_000_000 && !fs2.empire.funds.length && fs2.empire.realized === 40_000_000)
+    // سودِ دوره‌ای (فصل ۱۵): فقط روی واحدِ موجود؛ واریز به نقد + تایم‌لاین
+    await buyFundUnits(um, { id: f1.fund.id, name: f1.fund.name }, 2, 100_000_000, 0)
+    const dv = await accrueFundDividends(um, [{ fundId: f1.fund.id, amount: 5_000_000 }, { fundId: 'ghost', amount: 999 }])
+    ok('سودِ دوره‌ای: واریز + lastDivAt + نادیده‌گرفتنِ صندوقِ ناموجود', dv.ok && dv.empire.capital === 9_845_000_000 && dv.empire.funds[0].lastDivAt > 0 && dv.empire.timeline.some(t => t.title === 'سودِ دوره‌ایِ صندوق‌ها'))
+    await sellFundUnits(um, f1.fund.id, 2, 100_000_000, 0)
+    // مشارکتِ جمعی (فصل ۷): رزروِ اتمیکِ ظرفیت → کسرِ نقد + مالیات → خزانه
+    const rp = await reservePoolUnits('CL1', um, 10, { title: 'برجِ بزرگ', hood: 'زعفرانیه', unitToman: 500_000_000, totalUnits: 40 }, 12)
+    ok('رزروِ واحدهای مشارکت', rp.ok && rp.out.unitToman === 500_000_000)
+    const cj = await joinCrowd(um, { listingId: 'CL1', title: 'برجِ بزرگ', hood: 'زعفرانیه' }, 10, 500_000_000, 1)
+    ok('پیوستن: نقد − (سهم + مالیات) و مالیات → خزانه', cj.ok && cj.empire.capital === 10_045_000_000 - 5_050_000_000 && cj.empire.taxPaid === 60_000_000 && cj.empire.crowd[0].units === 10 && cj.empire.crowd[0].cost === 5_000_000_000)
+    const cx = await exitCrowd(um, 'CL1', 4, 550_000_000, 1)
+    ok('خروج: ارزشِ روزِ سهم − مالیات + سودِ تحقق‌یافته', cx.ok && cx.proceeds === 2_178_000_000 && cx.pnl === 178_000_000 && cx.empire.capital === 7_173_000_000 && cx.empire.taxPaid === 82_000_000 && cx.empire.crowd[0].units === 6)
+    const rl = await releasePoolUnits('CL1', um, 4)
+    ok('آزادسازیِ واحدها بعد از خروج', rl.ok && (await getMarketState()).pools.CL1.soldUnits === 6)
+    ok('آزادسازی بیش از سهم رد می‌شود', (await releasePoolUnits('CL1', um, 999)).ok === false)
+    // ظرفیتِ اتمیک: دو رزروِ همزمان که جمعشان از ظرفیت بیشتر است → دقیقاً یکی موفق (FOR UPDATE)
+    const init2 = { title: 'پروژهٔ دوم', hood: 'ولنجک', unitToman: 500_000_000, totalUnits: 30 }
+    const [ra, rb] = await Promise.all([
+      reservePoolUnits('CL2', 'raceA', 20, init2, 12),
+      reservePoolUnits('CL2', 'raceB', 20, init2, 12),
+    ])
+    ok('مسابقهٔ همزمانی: فقط یکی از دو رزروِ ۲۰تایی (ظرفیت ۳۰)', (ra.ok ? 1 : 0) + (rb.ok ? 1 : 0) === 1)
+    await releasePoolUnits('CL2', ra.ok ? 'raceA' : 'raceB', 20)
+    ok('استخرِ خالی جمع می‌شود', !(await getMarketState()).pools.CL2)
+    ok('سقفِ استخرهای فعال', (await reservePoolUnits('CL3', um, 1, init2, 1)).ok === false)
+    // حجمِ معاملات (KPI فصل ۲۰)
+    await recordFundVolume('buy', 123)
+    const vst = await getMarketState()
+    ok('ثبتِ حجمِ معاملات', vst.vol.buys >= 1 && vst.vol.buyToman >= 123)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

@@ -33,6 +33,10 @@ export interface EmpireAsset {
 export interface TimelineDot { at: number; icon: string; title: string; detail?: string }
 export interface JournalEntry { at: number; text: string }
 
+// بازار سرمایه (جلد ۴۰): واحدِ صندوق = «یک مترِ مجازی» از بازارِ واقعی؛ مشارکت = مالکیتِ کسریِ آگهیِ واقعی.
+export interface FundHolding { fundId: string; name: string; units: number; cost: number; boughtAt: number; lastDivAt?: number }
+export interface CrowdHolding { listingId: string; title: string; hood: string; units: number; cost: number; boughtAt: number }
+
 export interface EmpireData {
   userId: string
   no: number                  // Empire #N — شمارهٔ تولد
@@ -60,6 +64,8 @@ export interface EmpireData {
   creditHist?: { taken: number; repaid: number; lateDays: number }   // سابقهٔ بازپرداخت — خوراکِ امتیازِ اعتباری
   taxPaid?: number            // مالیاتِ نقل‌وانتقالِ پرداختی → خزانهٔ بازی (جلد ۵/۱۶)
   refBy?: number              // شمارهٔ امپراتوریِ دعوت‌کننده (§7.4 دعوتِ شراکتی)
+  funds?: FundHolding[]       // واحدهای صندوق‌های شاخصیِ املاک (جلد ۴۰ فصل ۸)
+  crowd?: CrowdHolding[]      // سهم‌های سرمایه‌گذاریِ جمعی روی آگهی‌های واقعی (جلد ۴۰ فصل ۷)
   stats?: { sellsProfitable: number; negoWins: number }   // شمارنده‌های مأموریت‌های مخفی (جلد ۲۶)
   snap?: { day: number; netWorth: number; prev: number }   // اسنپ‌شاتِ روزانه — «سود/زیانِ دیروز» (جلد ۲۶)
   pendingComeback?: number    // هدیهٔ بازگشت (Comeback Engine جلد ۲۶) — روزِ کشفِ غیبت
@@ -710,6 +716,107 @@ export async function repayLoan(userId: string, amount: number, now = Date.now()
   return { ok: true, paid, settled, empire: r.empire }
 }
 
+// ══════════ بازار سرمایه (جلد ۴۰): صندوقِ شاخصی + مشارکتِ جمعی — پول همیشه منبع و مقصد دارد ══════════
+// خریدِ واحدِ صندوق: سرمایهٔ نقد → واحد (به قیمتِ روزِ واقعیِ هر «مترِ مجازی» — لایهٔ API محاسبه می‌کند).
+export async function buyFundUnits(userId: string, fund: { id: string; name: string }, units: number, unitPrice: number, rewardXp: number, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    if (!(units >= 1) || !(unitPrice > 0)) return 'مقدارِ نامعتبر'
+    const cost = Math.round(units * unitPrice)
+    if (e.capital < cost) return 'سرمایهٔ نقدِ کافی نیست'
+    e.capital -= cost
+    e.funds = e.funds || []
+    const h = e.funds.find(x => x.fundId === fund.id)
+    if (h) { h.units += units; h.cost += cost; h.name = fund.name }
+    else e.funds.push({ fundId: fund.id, name: fund.name.slice(0, 60), units, cost, boughtAt: now, lastDivAt: now })
+    e.xp += Math.max(0, rewardXp)
+    e.timeline.push({ at: now, icon: '📊', title: `سرمایه‌گذاری در «${fund.name.slice(0, 40)}»`, detail: `${units.toLocaleString('fa-IR')} واحد (مترِ مجازی) · ${Math.round(cost / 1e6).toLocaleString('fa-IR')}م تومان` })
+  })
+}
+
+// بازخریدِ واحدِ صندوق (بازارِ ثانویه — فصل ۱۱): به ارزشِ روز؛ کارمزدِ مدیریت کسر و به خزانه می‌رود.
+export async function sellFundUnits(userId: string, fundId: string, units: number, unitPrice: number, fee: number, now = Date.now()): Promise<{ ok: boolean; reason?: string; proceeds?: number; pnl?: number; empire?: EmpireData }> {
+  let proceeds = 0, pnl = 0
+  const r = await mutateEmpire(userId, e => {
+    const h = (e.funds || []).find(x => x.fundId === fundId)
+    if (!h) return 'واحدی از این صندوق نداری'
+    if (!(units >= 1) || units > h.units) return `حداکثر ${h.units.toLocaleString('fa-IR')} واحد داری`
+    if (!(unitPrice > 0)) return 'قیمتِ روزِ این صندوق فعلاً در دسترس نیست'
+    const value = Math.round(units * unitPrice)
+    const f = Math.max(0, Math.min(Math.round(fee), value))
+    proceeds = value - f
+    const costShare = Math.round(h.cost * units / h.units)
+    pnl = proceeds - costShare
+    e.capital += proceeds
+    e.taxPaid = (e.taxPaid || 0) + f                       // کارمزد → خزانه (قانون ۶: هیچ پولی گم نمی‌شود)
+    e.realized = (e.realized || 0) + pnl
+    h.units -= units; h.cost -= costShare
+    if (h.units <= 0) e.funds = (e.funds || []).filter(x => x.fundId !== fundId)
+    const sign = pnl > 0 ? 'سود' : pnl < 0 ? 'زیان' : 'سربه‌سر'
+    e.timeline.push({ at: now, icon: '💹', title: `بازخریدِ ${units.toLocaleString('fa-IR')} واحدِ «${h.name.slice(0, 40)}»`, detail: `${sign} ${Math.abs(Math.round(pnl / 1e6)).toLocaleString('fa-IR')}م تومان` })
+  })
+  if (!r.ok) return { ok: false, reason: r.reason }
+  return { ok: true, proceeds, pnl, empire: r.empire }
+}
+
+// سودِ دوره‌ایِ صندوق (فصل ۱۵): هر واحد = یک مترِ مجازی → سودِ ماهانه = میانهٔ اجارهٔ واقعیِ هر متر (لایهٔ API).
+export async function accrueFundDividends(userId: string, accruals: Array<{ fundId: string; amount: number }>, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    let total = 0
+    for (const { fundId, amount } of accruals) {
+      if (!(amount > 0)) continue
+      const h = (e.funds || []).find(x => x.fundId === fundId)
+      if (!h) continue
+      h.lastDivAt = now
+      total += Math.round(amount)
+    }
+    if (total > 0) {
+      e.capital += total
+      e.timeline.push({ at: now, icon: '💵', title: 'سودِ دوره‌ایِ صندوق‌ها', detail: `${Math.round(total / 1e6).toLocaleString('fa-IR')}م تومان — از اجاره‌بهای واقعیِ بازار` })
+    }
+  })
+}
+
+// پیوستن به مشارکتِ جمعی (فصل ۷): سهمِ کسری از یک آگهیِ واقعیِ گران؛ مالیاتِ انتقال → خزانه.
+export async function joinCrowd(userId: string, pool: { listingId: string; title: string; hood: string }, units: number, unitToman: number, taxPct: number, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    if (!(units >= 1) || !(unitToman > 0)) return 'مقدارِ نامعتبر'
+    const cost = Math.round(units * unitToman)
+    const tax = Math.round(cost * (Math.max(0, taxPct) / 100))
+    if (e.capital < cost + tax) return tax > 0 ? 'سرمایه کافی نیست (سهم + مالیاتِ انتقال)' : 'سرمایهٔ نقدِ کافی نیست'
+    e.capital -= cost + tax
+    e.taxPaid = (e.taxPaid || 0) + tax
+    e.crowd = e.crowd || []
+    const h = e.crowd.find(x => x.listingId === pool.listingId)
+    if (h) { h.units += units; h.cost += cost }
+    else e.crowd.push({ listingId: pool.listingId, title: pool.title.slice(0, 120), hood: pool.hood.slice(0, 60), units, cost, boughtAt: now })
+    e.timeline.push({ at: now, icon: '🤝', title: 'سرمایه‌گذاریِ جمعی', detail: `${units.toLocaleString('fa-IR')} واحد از «${pool.title.slice(0, 50)}»` })
+  })
+}
+
+// خروج از مشارکت: به ارزشِ روزِ سهم (قیمتِ زندهٔ آگهی ÷ کلِ واحدها)؛ مالیاتِ انتقال → خزانه.
+export async function exitCrowd(userId: string, listingId: string, units: number, unitValueNow: number, taxPct: number, now = Date.now()): Promise<{ ok: boolean; reason?: string; proceeds?: number; pnl?: number; empire?: EmpireData }> {
+  let proceeds = 0, pnl = 0
+  const r = await mutateEmpire(userId, e => {
+    const h = (e.crowd || []).find(x => x.listingId === listingId)
+    if (!h) return 'سهمی در این مشارکت نداری'
+    if (!(units >= 1) || units > h.units) return `حداکثر ${h.units.toLocaleString('fa-IR')} واحد داری`
+    const value = Math.round(units * Math.max(0, unitValueNow))
+    const tax = Math.round(value * (Math.max(0, taxPct) / 100))
+    proceeds = value - tax
+    const costShare = Math.round(h.cost * units / h.units)
+    pnl = proceeds - costShare
+    e.capital += proceeds
+    e.taxPaid = (e.taxPaid || 0) + tax
+    e.realized = (e.realized || 0) + pnl
+    h.units -= units; h.cost -= costShare
+    if (h.units <= 0) e.crowd = (e.crowd || []).filter(x => x.listingId !== listingId)
+    const sign = pnl > 0 ? 'سود' : pnl < 0 ? 'زیان' : 'سربه‌سر'
+    e.timeline.push({ at: now, icon: '💸', title: `خروج از مشارکتِ «${h.title.slice(0, 40)}»`, detail: `${sign} ${Math.abs(Math.round(pnl / 1e6)).toLocaleString('fa-IR')}م تومان` })
+  })
+  if (!r.ok) return { ok: false, reason: r.reason }
+  return { ok: true, proceeds, pnl, empire: r.empire }
+}
+
 // همهٔ امپراتوری‌ها برای جدول‌های رتبه (فصل ۵: ۵ لیدربرد) — نمایشِ عمومی فقط نام/نشان، بدونِ شماره‌تلفن.
 export async function listEmpiresPublic(limit = 300): Promise<EmpireData[]> {
   if (pgEnabled()) { await ensure(); const r = await pgTx(c => c.query(`SELECT data FROM reos_empire ORDER BY at DESC LIMIT $1`, [limit])); return r.rows.map(x => x.data as EmpireData) }
@@ -750,12 +857,16 @@ export async function briefStatsForDay(day: number): Promise<{ built: number; op
   return { built: rows.length, opened: rows.filter(b => b.openedAt).length }
 }
 
-// ارزشِ خالص (Real Asset Value، §6.2-3): نقد + ارزشِ روزِ دارایی‌ها − بدهیِ بانکی (جلد ۱۶).
-export function netWorthOf(e: EmpireData, livePrices: Record<string, number>): { netWorth: number; assetsValue: number; growth: number } {
+// ارزشِ خالص (Real Asset Value، §6.2-3): نقد + ارزشِ روزِ دارایی‌ها + صندوق/مشارکت − بدهیِ بانکی (جلد ۱۶).
+// market (جلد ۴۰): fundUnit = قیمتِ روزِ هر واحدِ صندوق؛ crowdUnit = ارزشِ روزِ هر واحدِ مشارکت (اختیاری — بدونِ آن مبنای هزینه).
+export function netWorthOf(e: EmpireData, livePrices: Record<string, number>, market?: { fundUnit?: Record<string, number>; crowdUnit?: Record<string, number> }): { netWorth: number; assetsValue: number; growth: number; marketValue: number } {
   let assetsValue = 0, cost = 0
   for (const a of e.assets) { assetsValue += livePrices[a.listingId] || a.buyPrice; cost += a.buyPrice }
+  let marketValue = 0
+  for (const h of e.funds || []) { const u = market?.fundUnit?.[h.fundId]; marketValue += u && u > 0 ? Math.round(h.units * u) : h.cost }
+  for (const h of e.crowd || []) { const u = market?.crowdUnit?.[h.listingId]; marketValue += u && u > 0 ? Math.round(h.units * u) : h.cost }
   const growth = cost ? Math.round(((assetsValue - cost) / cost) * 1000) / 10 : 0
-  return { netWorth: e.capital + assetsValue - (e.loan?.balance || 0), assetsValue, growth }
+  return { netWorth: e.capital + assetsValue + marketValue - (e.loan?.balance || 0), assetsValue, growth, marketValue }
 }
 
 // شمارِ کلِ امپراتوری‌ها (برای «N نفر دیگر هم در حال ساخت‌اند» — فصل ۳، Neighbourhood Discovery).

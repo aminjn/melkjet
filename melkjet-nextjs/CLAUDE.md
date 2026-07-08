@@ -291,7 +291,7 @@ Tests: `node --import ./scripts/reos-loader.mjs scripts/reos-test.mjs` (unit) an
 `DATABASE_URL=postgres://reos:reos@127.0.0.1:5432/reos_test node --import
 ./scripts/reos-loader.mjs scripts/reos-store-test.mjs` (PG; start postgres first).
 Admin menus smoke test: `node scripts/admin-smoke.mjs` — uses a real browser when
-playwright is available (all 45 views, JS errors); otherwise auto-falls back to HTTP
+playwright is available (all 46 views, JS errors); otherwise auto-falls back to HTTP
 mode (admin page + every /_next/static chunk locally AND via https://melkjet.com to
 detect stale Arvan CDN chunks + 26 admin APIs for 5xx). On the server run it as-is;
 `PUBLIC=0` skips the CDN check, `HTTP_ONLY=1` forces HTTP mode.

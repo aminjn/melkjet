@@ -12,8 +12,13 @@ import {
   creditScoreOf, loanTermsFor, takeLoan, repayLoan, accrueLoanInterest,
   negotiationOutcome, questOf, nextDreamOf,
   applyHiddenBadges, HIDDEN_BADGES, snapshotNetWorth, markComeback, claimComeback,
+  buyFundUnits, sellFundUnits, accrueFundDividends, joinCrowd, exitCrowd,
   type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
+import {
+  getMarketState, segmentQuote, marketIndices, psychologyOf, fundFeeOf, portfolioOf,
+  reservePoolUnits, releasePoolUnits, recordFundVolume,
+} from '@/app/lib/empire-market'
 import { listingHref } from '@/app/lib/listing-url'
 import { recordEvent } from '@/app/lib/reos/store'
 import { buildBriefFor } from '@/app/lib/empire-brief'
@@ -159,6 +164,42 @@ async function upkeepFor(userId: string, e: EmpireData, now = Date.now()): Promi
   return r.ok && r.empire ? r.empire : e
 }
 
+// زمینهٔ بازار سرمایه (جلد ۴۰) برای دارنده‌های صندوق/مشارکت: قیمتِ روزِ هر واحد + اجارهٔ واقعیِ هر متر.
+async function marketCtx(e: EmpireData): Promise<{ fundUnit: Record<string, number>; crowdUnit: Record<string, number>; rentPerM: Record<string, number> } | null> {
+  const cfg = config().empire.capital
+  if (!cfg.enabled || !(e.funds?.length || e.crowd?.length)) return null
+  const [state, items] = await Promise.all([getMarketState(), candidateListings(600).catch(() => [] as Item[])])
+  const fundUnit: Record<string, number> = {}, rentPerM: Record<string, number> = {}, crowdUnit: Record<string, number> = {}
+  for (const h of e.funds || []) {
+    const f = state.funds.find(x => x.id === h.fundId)
+    if (!f) continue
+    const q = segmentQuote(items, f.seg, cfg.fundMinSamples)
+    if (q) { fundUnit[h.fundId] = q.unit; rentPerM[h.fundId] = q.rentPerM }
+  }
+  for (const h of e.crowd || []) {
+    const p = state.pools[h.listingId]
+    if (!p || !(p.totalUnits > 0)) continue
+    const it = await getItemById(h.listingId).catch(() => null)
+    const live = it ? priceOf(it) : 0
+    crowdUnit[h.listingId] = Math.round((live > 0 ? live : p.unitToman * p.totalUnits) / p.totalUnits)
+  }
+  return { fundUnit, crowdUnit, rentPerM }
+}
+
+// سودِ دوره‌ایِ صندوق‌ها (جلد ۴۰ فصل ۱۵): هر واحد = یک مترِ مجازی → سودِ ماهانه = میانهٔ اجارهٔ واقعیِ هر متر.
+// بدونِ دادهٔ اجاره در آن بخش → هیچ واریزی (صادقانه).
+async function accrueDividendsFor(userId: string, e: EmpireData, rentPerM: Record<string, number>, now = Date.now()): Promise<EmpireData> {
+  if (!config().empire.capital.dividends || !e.funds?.length) return e
+  const accruals = e.funds.map(h => {
+    const rm = rentPerM[h.fundId] || 0
+    const days = Math.floor((now - (h.lastDivAt || h.boughtAt)) / 864e5)
+    return { fundId: h.fundId, amount: rm > 0 && days >= 1 ? Math.round(h.units * rm * days / 30) : 0 }
+  }).filter(a => a.amount > 0)
+  if (!accruals.length) return e
+  const r = await accrueFundDividends(userId, accruals, now)
+  return r.ok && r.empire ? r.empire : e
+}
+
 // وضعیتِ کاملِ امپراتوری برای UI.
 async function stateOf(userId: string, e00: EmpireData) {
   // پیامِ بازگشت (فصل ۴): غیبتِ ۷+ روزه — قبل از هر جهشی سنجیده می‌شود تا سیگنال از بین نرود.
@@ -166,14 +207,17 @@ async function stateOf(userId: string, e00: EmpireData) {
   if (absentDays >= 7 && !e00.pendingComeback) await markComeback(userId, dayNumberOf(Date.now())).catch(() => {})
   const e0 = await upkeepFor(userId, e00).catch(() => e00)    // هزینهٔ مالکیت (GDD جلد۵)
   const e1 = await accrueRentFor(userId, e0).catch(() => e0)  // درآمدِ اجاره/کسب‌وکار از بازارِ واقعی
+  // بازار سرمایه (جلد ۴۰): قیمتِ روزِ واحدها + سودِ دوره‌ای از اجارهٔ واقعی
+  const mc = await marketCtx(e1).catch(() => null)
+  const e1b = mc ? await accrueDividendsFor(userId, e1, mc.rentPerM).catch(() => e1) : e1
   // بهرهٔ روزشمارِ وام (جلد ۱۶) — روزی یک‌بار
-  const li = e1.loan ? await accrueLoanInterest(userId).catch(() => null) : null
-  const e2 = li?.ok && li.empire ? li.empire : e1
+  const li = e1b.loan ? await accrueLoanInterest(userId).catch(() => null) : null
+  const e2 = li?.ok && li.empire ? li.empire : e1b
   // کشفِ مأموریت‌های مخفی (جلد ۲۶) — از رفتارِ واقعیِ همین لحظه
   const hb = await applyHiddenBadges(userId).catch(() => null)
   const e = hb?.ok && hb.empire ? hb.empire : e2
   const [prices, missions, total] = await Promise.all([livePrices(e), missionsOf(userId, e), empireCount()])
-  const nw = netWorthOf(e, prices)
+  const nw = netWorthOf(e, prices, mc || undefined)
   const assets = e.assets.map(a => ({
     ...a,
     current: prices[a.listingId] || a.buyPrice,
@@ -215,6 +259,7 @@ async function stateOf(userId: string, e00: EmpireData) {
     dayDelta,
     hiddenLeft: HIDDEN_BADGES.filter(b => !e.badges.includes(b.key)).length,
     collection: ['apartment', 'villa', 'commercial', 'land'].map(k => ({ kind: k, owned: e.assets.some(a => a.kind === k) })),
+    capitalEnabled: config().empire.capital.enabled,
   }
 }
 
@@ -458,11 +503,19 @@ export async function POST(req: NextRequest) {
     // ۵ جدولِ رتبه (فصل ۵) + لیگِ محله (فصل ۷ §7.2) — نمایشِ عمومی فقط نام/نشان.
     case 'boards': {
       const me = await getEmpire(userId)
-      const [empires, items] = await Promise.all([listEmpiresPublic(300), candidateListings(800).catch(() => [] as Item[])])
+      const [empires, items, mstate] = await Promise.all([listEmpiresPublic(300), candidateListings(800).catch(() => [] as Item[]), getMarketState().catch(() => null)])
       const prices: Record<string, number> = {}
       for (const it of items) { const p = priceOf(it); if (p > 0) prices[it.id] = p }
+      // ارزش‌گذاریِ سراسریِ بازار سرمایه (جلد ۴۰) — یک‌بار برای همهٔ بازیکنان (قیمتِ واحدها سراسری است)
+      const capCfg = config().empire.capital
+      const gFundUnit: Record<string, number> = {}, gCrowdUnit: Record<string, number> = {}
+      if (mstate && capCfg.enabled) {
+        for (const f of mstate.funds) { const q = segmentQuote(items, f.seg, capCfg.fundMinSamples); if (q) gFundUnit[f.id] = q.unit }
+        for (const p of Object.values(mstate.pools)) { if (p.totalUnits > 0) gCrowdUnit[p.listingId] = Math.round((prices[p.listingId] || p.unitToman * p.totalUnits) / p.totalUnits) }
+      }
+      const gMarket = { fundUnit: gFundUnit, crowdUnit: gCrowdUnit }
       const rows = empires.map(e => {
-        const nw = netWorthOf(e, prices)
+        const nw = netWorthOf(e, prices, gMarket)
         return { name: e.name, persona: e.persona, no: e.no, me: e.userId === userId, assets: e.assets.length, netWorth: nw.netWorth, growth: nw.growth, correct: e.guess.correct, score: empireScoreOf(e, prices), hoods: e.assets.map(a => a.hood).filter(Boolean) }
       })
       const top = (key: 'netWorth' | 'growth' | 'assets' | 'correct' | 'score', filter?: (r: typeof rows[0]) => boolean) =>
@@ -498,7 +551,7 @@ export async function POST(req: NextRequest) {
       if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
       if (e.loan) return NextResponse.json({ error: 'یک وامِ فعال داری — اول تسویه کن' }, { status: 400 })
       const prices = await livePrices(e)
-      const nw = netWorthOf(e, prices)
+      const nw = netWorthOf(e, prices, (await marketCtx(e).catch(() => null)) || undefined)
       const credit = creditScoreOf(e, (await getStreak(userId).catch(() => ({ streak: 0 }))).streak)
       const terms = loanTermsFor(credit.score, Math.max(0, nw.netWorth))
       const amount = Math.round(Number(b.amount) || 0)
@@ -512,6 +565,137 @@ export async function POST(req: NextRequest) {
       const r = await repayLoan(userId, Number(b.amount) || 0)
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       return NextResponse.json({ ok: true, paid: r.paid, settled: r.settled, ...(await stateOf(userId, r.empire!)) })
+    }
+
+    // ══════ بازار سرمایه (جلد ۴۰) — همه‌چیز از دادهٔ واقعی: صندوق = میانهٔ متریِ بازار، مشارکت = آگهیِ واقعی ══════
+    // نمای کاملِ بازار: شاخص‌ها + ترس/طمع + صندوق‌ها + استخرهای مشارکت + پرتفوی.
+    case 'market': {
+      const cfg = config().empire.capital
+      if (!cfg.enabled) return NextResponse.json({ error: 'بازار سرمایه فعلاً فعال نیست' }, { status: 403 })
+      const e = await getEmpire(userId)
+      if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      const [state, items, evs] = await Promise.all([
+        getMarketState(), candidateListings(800).catch(() => [] as Item[]),
+        recentEvents({ limit: 400 }).catch(() => []),
+      ])
+      const indices = marketIndices(items)
+      const psychology = psychologyOf(evs.map(x => ({ type: x.type, at: x.at })), Date.now())
+      // صندوق‌ها: فقط آن‌هایی که قیمتِ روزِ معتبر دارند (نمونهٔ واقعیِ کافی) یا کاربر در آن‌ها واحد دارد.
+      const funds = state.funds.map(f => {
+        const q = segmentQuote(items, f.seg, cfg.fundMinSamples)
+        const my = (e.funds || []).find(h => h.fundId === f.id)
+        return {
+          id: f.id, name: f.name, seg: f.seg, feePctYear: f.feePctYear, enabled: f.enabled, quote: q,
+          my: my ? { units: my.units, cost: my.cost, value: q ? Math.round(my.units * q.unit) : my.cost, boughtAt: my.boughtAt } : null,
+        }
+      }).filter(f => (f.enabled && f.quote) || f.my)
+      // استخرهای فعالِ مشارکت + سهمِ من
+      const pools = [] as any[]
+      for (const p of Object.values(state.pools)) {
+        const it = await getItemById(p.listingId).catch(() => null)
+        const live = it ? priceOf(it) : 0
+        const unitNow = p.totalUnits > 0 ? Math.round((live > 0 ? live : p.unitToman * p.totalUnits) / p.totalUnits) : 0
+        const my = (e.crowd || []).find(h => h.listingId === p.listingId)
+        pools.push({
+          listingId: p.listingId, title: p.title, hood: p.hood, unitToman: p.unitToman,
+          totalUnits: p.totalUnits, soldUnits: p.soldUnits, available: p.totalUnits - p.soldUnits,
+          investors: Object.keys(p.investors).length, live, unitNow,
+          url: listingHref(p.listingId, p.title, p.hood),
+          my: my ? { units: my.units, cost: my.cost, value: Math.round(my.units * unitNow) } : null,
+        })
+      }
+      // نامزدهای مشارکتِ جدید: آگهی‌های واقعیِ گران‌قیمت (فصل ۷ «پروژهٔ ۵۰۰ میلیاردی، هر واحد کوچک»)
+      const candidates = cfg.crowd.enabled
+        ? items.filter(it => isPricedSale(it) && priceOf(it) >= cfg.crowd.minPrice && !state.pools[it.id] && !e.assets.some(a => a.listingId === it.id))
+            .sort((a, x) => priceOf(x) - priceOf(a)).slice(0, 6)
+            .map(it => ({ ...lite(it), totalUnits: Math.ceil(priceOf(it) / cfg.crowd.unitToman), unitToman: cfg.crowd.unitToman }))
+        : []
+      // پرتفوی (فصل ۱۳) + شاخصِ تنوع
+      const prices = await livePrices(e)
+      const mc = await marketCtx(e).catch(() => null)
+      const nw = netWorthOf(e, prices, mc || undefined)
+      const fundsValue = (e.funds || []).reduce((s, h) => s + (mc?.fundUnit?.[h.fundId] ? Math.round(h.units * mc.fundUnit[h.fundId]) : h.cost), 0)
+      const crowdValue = (e.crowd || []).reduce((s, h) => s + (mc?.crowdUnit?.[h.listingId] ? Math.round(h.units * mc.crowdUnit[h.listingId]) : h.cost), 0)
+      const portfolio = portfolioOf({ cash: e.capital, properties: nw.assetsValue, funds: fundsValue, crowd: crowdValue, debt: e.loan?.balance || 0 })
+      return NextResponse.json({ ok: true, indices, psychology, funds, pools, candidates, portfolio, vol: state.vol, crowd: { enabled: cfg.crowd.enabled, unitToman: cfg.crowd.unitToman, minPrice: cfg.crowd.minPrice } })
+    }
+
+    // خریدِ واحدِ صندوق: قیمتِ هر واحد همین لحظه از میانهٔ متریِ واقعیِ همان بخش محاسبه می‌شود (سمتِ سرور).
+    case 'fundBuy': {
+      const cfg = config().empire.capital
+      if (!cfg.enabled) return NextResponse.json({ error: 'بازار سرمایه فعلاً فعال نیست' }, { status: 403 })
+      const units = Math.floor(Number(b.units) || 0)
+      const state = await getMarketState()
+      const f = state.funds.find(x => x.id === String(b.fundId || ''))
+      if (!f || !f.enabled) return NextResponse.json({ error: 'صندوق یافت نشد یا غیرفعال است' }, { status: 404 })
+      const items = await candidateListings(800).catch(() => [] as Item[])
+      const q = segmentQuote(items, f.seg, cfg.fundMinSamples)
+      if (!q) return NextResponse.json({ error: 'برای این صندوق فعلاً نمونهٔ واقعیِ کافی در بازار نیست' }, { status: 400 })
+      const r = await buyFundUnits(userId, { id: f.id, name: f.name }, units, q.unit, cfg.investRewardXp)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      recordFundVolume('buy', units * q.unit).catch(() => {})
+      return NextResponse.json({ ok: true, unit: q.unit, cost: Math.round(units * q.unit), ...(await stateOf(userId, r.empire!)) })
+    }
+
+    // بازخریدِ واحدِ صندوق (بازارِ ثانویه — فصل ۱۱): به ارزشِ روز؛ کارمزدِ مدیریت به‌نسبتِ روزهای نگه‌داری → خزانه.
+    case 'fundSell': {
+      const cfg = config().empire.capital
+      const units = Math.floor(Number(b.units) || 0)
+      const e = await getEmpire(userId)
+      const h = e?.funds?.find(x => x.fundId === String(b.fundId || ''))
+      if (!e || !h) return NextResponse.json({ error: 'واحدی از این صندوق نداری' }, { status: 404 })
+      const state = await getMarketState()
+      const f = state.funds.find(x => x.id === h.fundId)
+      if (!f) return NextResponse.json({ error: 'تعریفِ صندوق یافت نشد' }, { status: 404 })
+      const items = await candidateListings(800).catch(() => [] as Item[])
+      const q = segmentQuote(items, f.seg, cfg.fundMinSamples)
+      if (!q) return NextResponse.json({ error: 'قیمتِ روزِ این صندوق فعلاً قابل‌محاسبه نیست — بعداً دوباره امتحان کن' }, { status: 400 })
+      const heldDays = Math.floor((Date.now() - h.boughtAt) / 864e5)
+      const fee = fundFeeOf(units * q.unit, f.feePctYear, heldDays)
+      const r = await sellFundUnits(userId, f.id, units, q.unit, fee)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      recordFundVolume('sell', r.proceeds || 0).catch(() => {})
+      return NextResponse.json({ ok: true, proceeds: r.proceeds, pnl: r.pnl, fee, ...(await stateOf(userId, r.empire!)) })
+    }
+
+    // پیوستن به مشارکتِ جمعی (فصل ۷): سهمِ کسری از یک آگهیِ واقعیِ گران — ظرفیت اتمیک، مالیات → خزانه.
+    case 'crowdJoin': {
+      const cfg = config().empire.capital
+      if (!cfg.enabled || !cfg.crowd.enabled) return NextResponse.json({ error: 'سرمایه‌گذاریِ جمعی فعلاً فعال نیست' }, { status: 403 })
+      const units = Math.floor(Number(b.units) || 0)
+      const it = await getItemById(String(b.listingId || ''))
+      if (!it || it.type !== 'listing') return NextResponse.json({ error: 'آگهی یافت نشد' }, { status: 404 })
+      const price = priceOf(it)
+      if (!isPricedSale(it) || price < cfg.crowd.minPrice) return NextResponse.json({ error: 'این آگهی در سقفِ سرمایه‌گذاریِ جمعی نیست' }, { status: 400 })
+      const init = { title: it.title, hood: hoodOf(it.location), unitToman: cfg.crowd.unitToman, totalUnits: Math.ceil(price / cfg.crowd.unitToman) }
+      // اول رزروِ اتمیکِ ظرفیت، بعد کسرِ سرمایه؛ اگر سرمایه نرسید، رزرو آزاد می‌شود.
+      const res = await reservePoolUnits(it.id, userId, units, init, cfg.crowd.maxPools)
+      if (!res.ok) return NextResponse.json({ error: res.reason }, { status: 400 })
+      const unitToman = Number((res.out as { unitToman?: number } | undefined)?.unitToman) || cfg.crowd.unitToman
+      const r = await joinCrowd(userId, { listingId: it.id, title: it.title, hood: init.hood }, units, unitToman, config().empire.transferTaxPct)
+      if (!r.ok) { await releasePoolUnits(it.id, userId, units).catch(() => {}); return NextResponse.json({ error: r.reason }, { status: 400 }) }
+      recordFundVolume('buy', units * unitToman).catch(() => {})
+      recordEvent({ type: 'user_clicked_property', userId, propertyId: it.id, meta: { src: 'empire_crowd' } }).catch(() => {})
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+    }
+
+    // خروج از مشارکت: به ارزشِ روزِ سهم (قیمتِ زندهٔ آگهی ÷ کلِ واحدها) — بازارِ ثانویهٔ صادقانه.
+    case 'crowdExit': {
+      const units = Math.floor(Number(b.units) || 0)
+      const e = await getEmpire(userId)
+      const h = e?.crowd?.find(x => x.listingId === String(b.listingId || ''))
+      if (!e || !h) return NextResponse.json({ error: 'سهمی در این مشارکت نداری' }, { status: 404 })
+      const state = await getMarketState()
+      const p = state.pools[h.listingId]
+      if (!p || !(p.totalUnits > 0)) return NextResponse.json({ error: 'استخرِ این مشارکت یافت نشد' }, { status: 404 })
+      const it = await getItemById(h.listingId).catch(() => null)
+      const live = it ? priceOf(it) : 0
+      const unitNow = Math.round((live > 0 ? live : p.unitToman * p.totalUnits) / p.totalUnits)
+      const r = await exitCrowd(userId, h.listingId, units, unitNow, config().empire.transferTaxPct)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      await releasePoolUnits(h.listingId, userId, units).catch(() => {})
+      recordFundVolume('sell', r.proceeds || 0).catch(() => {})
+      return NextResponse.json({ ok: true, proceeds: r.proceeds, pnl: r.pnl, ...(await stateOf(userId, r.empire!)) })
     }
 
     case 'journal': { const r = await addJournal(userId, String(b.text || '')); return r.ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: r.reason }, { status: 400 }) }

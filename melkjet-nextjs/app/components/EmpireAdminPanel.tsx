@@ -14,7 +14,7 @@ const btn: React.CSSProperties = { background: 'var(--gold)', color: '#1a1503', 
 const btnGhost: React.CSSProperties = { background: 'transparent', color: 'var(--text)', border: '1px solid var(--line2)', borderRadius: 9, padding: '8px 16px', cursor: 'pointer', fontFamily: FONT, fontSize: 12.5 }
 const inpS: React.CSSProperties = { padding: '7px 10px', borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontFamily: FONT, fontSize: 12.5 }
 
-export type EmpireSection = 'overview' | 'players' | 'economy' | 'missions' | 'world' | 'liveops' | 'access'
+export type EmpireSection = 'overview' | 'players' | 'economy' | 'capital' | 'missions' | 'world' | 'liveops' | 'access'
 
 function Mini({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -36,6 +36,7 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
   const [cfg, setCfg] = useState<any>(null)      // بخشِ empire از کانفیگ
   const [flag, setFlag] = useState<any>(null)
   const [adj, setAdj] = useState({ coins: '', xp: '', capital: '', aiTokens: '', reason: '' })
+  const [fnd, setFnd] = useState({ name: '', seg: '', fee: '2' })   // فرمِ ساختِ صندوقِ جدید (جلد ۴۰)
 
   const flash = (t: string) => { setMsg(t); setTimeout(() => setMsg(''), 4000) }
   const loadView = useCallback((v: string, extra = '') =>
@@ -50,6 +51,7 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
     if (section === 'world') loadView('world').then(setData)
     if (section === 'liveops') { loadView('liveops').then(setData); loadCfg() }
     if (section === 'economy' || section === 'missions') { loadCfg(); loadView('overview').then(setData) }
+    if (section === 'capital') { loadView('capital').then(setData); loadCfg() }
     if (section === 'access') loadFlag()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [section, sort])
@@ -290,6 +292,102 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
       </>}
     </div>
   )
+
+  /* ══════════ 📊 کنسولِ سرمایه (جلد ۴۰ فصل ۱۹) ══════════ */
+  if (section === 'capital') {
+    // تنظیمِ کلیدهای تودرتوی empire.capital (سه سطح) — cin فقط دو سطح را پوشش می‌دهد.
+    const setCap = (path: string[], val: string) => setCfg((c: any) => {
+      if (!c) return c
+      const n = JSON.parse(JSON.stringify(c))
+      let o = n.capital = n.capital || {}
+      for (let i = 0; i < path.length - 1; i++) o = o[path[i]] = o[path[i]] || {}
+      o[path[path.length - 1]] = val === '' ? '' : (isNaN(Number(val)) ? val : Number(val))
+      return n
+    })
+    const capIn = (path: string[], w = 110) => {
+      let v: any = cfg?.capital
+      for (const p of path) v = v?.[p]
+      return <input value={String(v ?? '')} onChange={e => setCap(path, e.target.value)} style={{ ...inpS, width: w, textAlign: 'center' }} />
+    }
+    const reload = () => loadView('capital').then(setData)
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, fontFamily: FONT, direction: 'rtl' }}>
+        {head('📊 کنسولِ سرمایه (بازار سرمایه)', 'صندوق‌های شاخصیِ املاک (هر واحد = یک مترِ مجازی از بازارِ واقعی)، سرمایه‌گذاریِ جمعی روی آگهی‌های واقعی، شاخص‌ها و روان‌شناسیِ بازار — همه از دادهٔ زنده.')}
+        {!data ? loading : <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10 }}>
+            <Mini label="ارزشِ کلِ بازار (Market Cap)" value={`${faB(data.kpis.marketCap)} ت`} hint="صندوق‌ها + مشارکت‌ها" />
+            <Mini label="داراییِ صندوق‌ها (AUM)" value={`${faB(data.kpis.fundAum)} ت`} />
+            <Mini label="سرمایهٔ مشارکت‌ها" value={`${faB(data.kpis.poolsValue)} ت`} />
+            <Mini label="سرمایه‌گذارانِ فعال" value={fa(data.kpis.holders)} />
+            <Mini label="حجمِ معاملات" value={`${fa(data.kpis.vol.buys)} خرید / ${fa(data.kpis.vol.sells)} فروش`} hint={`${faB(data.kpis.vol.buyToman)} / ${faB(data.kpis.vol.sellToman)} ت`} />
+            <Mini label="روان‌شناسیِ بازار" value={`${fa(data.psychology.score)} — ${data.psychology.label}`} hint="از رفتارِ واقعیِ ۱۴ روز" />
+            <Mini label="شاخصِ کل (هر متر)" value={data.indices.samples ? `${faB(data.indices.overallPerM)} ت` : '—'} hint={`${fa(data.indices.samples)} نمونهٔ واقعی`} />
+            <Mini label="شاخصِ اجاره (هر متر)" value={data.indices.rentSamples ? `${faB(data.indices.rentPerM)} ت` : '—'} hint={`${fa(data.indices.rentSamples)} نمونه`} />
+          </div>
+          <div style={card}>
+            <div style={sub}>🏦 صندوق‌های شاخصیِ املاک (فصل ۸ REIT)</div>
+            {data.funds.map((f: any) => (
+              <div key={f.id} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 12.5, flexWrap: 'wrap' }}>
+                <b style={{ minWidth: 150 }}>{f.name}</b>
+                <span style={{ color: 'var(--muted)' }}>{f.seg || 'کلِ بازار'}</span>
+                {f.quote
+                  ? <span>واحد <b style={{ color: 'var(--gold)' }}>{faB(f.quote.unit)}</b> · {fa(f.quote.samples)} نمونه · رتبه <b>{f.quote.rating}</b> · بازدهِ اجاره {f.quote.yieldPctYear.toLocaleString('fa-IR')}٪</span>
+                  : <span style={{ color: '#e88' }}>نمونهٔ واقعیِ کافی نیست — قابلِ معامله نیست</span>}
+                <span style={{ flex: 1 }} />
+                <span style={{ color: 'var(--muted)' }}>AUM {faB(f.aum)} ت · {fa(f.holders)} دارنده · کارمزد {f.feePctYear.toLocaleString('fa-IR')}٪</span>
+                <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 11.5 }} disabled={busy === 'fundToggle'} onClick={async () => { if (await post({ action: 'fundToggle', id: f.id, enabled: !f.enabled }, 'اعمال شد ✓')) reload() }}>{f.enabled ? '⏸ غیرفعال' : '▶ فعال'}</button>
+                <button style={{ ...btnGhost, color: '#e88', borderColor: '#644', padding: '4px 10px', fontSize: 11.5 }} disabled={busy === 'fundDelete'} onClick={async () => { if (confirm(`صندوقِ «${f.name}» حذف شود؟`) && await post({ action: 'fundDelete', id: f.id }, 'حذف شد')) reload() }}>🗑</button>
+              </div>
+            ))}
+            {!data.funds.length && <div style={{ fontSize: 12, color: 'var(--muted)' }}>هنوز صندوقی ساخته نشده — از بخش‌های واقعیِ زیر بساز.</div>}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 12 }}>
+              <input value={fnd.name} onChange={e => setFnd({ ...fnd, name: e.target.value })} placeholder="نامِ صندوق (مثلاً صندوقِ املاکِ تهران)" style={{ ...inpS, minWidth: 220 }} />
+              <select value={fnd.seg} onChange={e => setFnd({ ...fnd, seg: e.target.value })} style={inpS as any}>
+                <option value="">کلِ بازار</option>
+                {data.segments.map((s: any) => <option key={s.city} value={s.city}>{s.city} ({fa(s.samples)} نمونه)</option>)}
+              </select>
+              <input value={fnd.fee} onChange={e => setFnd({ ...fnd, fee: e.target.value })} placeholder="کارمزد ٪" style={{ ...inpS, width: 90, textAlign: 'center' }} />
+              <button style={btn} disabled={busy === 'fundCreate'} onClick={async () => {
+                if (await post({ action: 'fundCreate', name: fnd.name, seg: fnd.seg, feePctYear: Number(fnd.fee) || 0 }, 'صندوق ساخته شد ✓')) { setFnd({ name: '', seg: '', fee: '2' }); reload() }
+              }}>+ ساختِ صندوق</button>
+            </div>
+          </div>
+          <div style={card}>
+            <div style={sub}>🤝 استخرهای سرمایه‌گذاریِ جمعی (فصل ۷) — روی آگهی‌های واقعی</div>
+            {data.pools.map((p: any) => (
+              <div key={p.listingId} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 12.5, flexWrap: 'wrap' }}>
+                <b style={{ minWidth: 180 }}>{p.title.slice(0, 45)}</b>
+                <span style={{ color: 'var(--muted)' }}>{p.hood}</span>
+                <span>{fa(p.soldUnits)}/{fa(p.totalUnits)} واحد ({p.fundedPct.toLocaleString('fa-IR')}٪)</span>
+                <span style={{ color: 'var(--muted)' }}>{fa(p.investors)} شریک · هر واحد {faB(p.unitToman)} ت</span>
+                <span style={{ flex: 1 }} />
+                <span style={{ color: p.live ? 'var(--gold)' : '#e88' }}>{p.live ? `قیمتِ زنده ${faB(p.live)} ت` : 'آگهی حذف شده (ارزش منجمد)'}</span>
+              </div>
+            ))}
+            {!data.pools.length && <div style={{ fontSize: 12, color: 'var(--muted)' }}>استخرِ فعالی نیست — بازیکنان از داخلِ «بازار سرمایه» روی آگهی‌های گرانِ واقعی استخر می‌سازند.</div>}
+          </div>
+          {cfg && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: 14 }}>
+            <div style={card}>
+              <div style={sub}>⚙️ تنظیمِ صندوق‌ها</div>
+              {row('بازار سرمایه فعال (۱/۰)', capIn(['enabled']))}
+              {row('حداقل نمونهٔ واقعی برای قیمت‌گذاری', capIn(['fundMinSamples']), 'کمتر از این → صندوق عرضه نمی‌شود (صادقانه)')}
+              {row('کارمزدِ پیش‌فرضِ صندوقِ جدید (٪ سالانه)', capIn(['fundFeePctYear']), 'در بازخرید کسر و به خزانه می‌رود')}
+              {row('سودِ دوره‌ای فعال (۱/۰)', capIn(['dividends']), 'از میانهٔ اجارهٔ واقعیِ همان بخش')}
+              {row('XP هر سرمایه‌گذاری', capIn(['investRewardXp']))}
+            </div>
+            <div style={card}>
+              <div style={sub}>⚙️ تنظیمِ سرمایه‌گذاریِ جمعی</div>
+              {row('فعال (۱/۰)', capIn(['crowd', 'enabled']))}
+              {row('ارزشِ هر واحد (تومان)', capIn(['crowd', 'unitToman'], 150), '«پروژهٔ بزرگ، واحدِ کوچک» — فصل ۷')}
+              {row('حداقل قیمتِ آگهیِ قابلِ‌مشارکت (تومان)', capIn(['crowd', 'minPrice'], 150), 'فقط ملک‌هایی که از خریدِ انفرادی بزرگ‌ترند')}
+              {row('سقفِ استخرهای فعال', capIn(['crowd', 'maxPools']))}
+              <div style={{ marginTop: 10 }}><button style={btn} disabled={busy === 'cfg'} onClick={saveCfg}>💾 ذخیره و اعمالِ زنده</button></div>
+            </div>
+          </div>}
+        </>}
+      </div>
+    )
+  }
 
   /* ══════════ 🎯 مأموریت‌ها و پاداش ══════════ */
   if (section === 'missions') return (

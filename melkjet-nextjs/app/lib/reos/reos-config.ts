@@ -36,6 +36,10 @@ export interface ReosConfig {
     transferTaxPct: number
     quests: { dailyXp: number; dailyCoins: number; weeklyXp: number; weeklyCoins: number }
     referralCoins: number
+    capital: {
+      enabled: boolean; fundFeePctYear: number; fundMinSamples: number; investRewardXp: number; dividends: boolean
+      crowd: { enabled: boolean; unitToman: number; minPrice: number; maxPools: number }
+    }
   }
 }
 
@@ -80,6 +84,12 @@ export const DEFAULT_CONFIG: ReosConfig = {
     // کوئستِ روزانه/هفتگیِ شخصی (GDD جلد ۲) + دعوتِ شراکتی (§7.4 — هر دو طرف پاداش می‌گیرند).
     quests: { dailyXp: 30, dailyCoins: 15, weeklyXp: 120, weeklyCoins: 60 },
     referralCoins: 200,
+    // بازار سرمایه (جلد ۴۰): صندوقِ شاخصی (واحد = یک مترِ مجازی از بازارِ واقعی) + مشارکتِ جمعی روی
+    // آگهی‌های واقعیِ گران. کارمزدِ مدیریت → خزانه؛ سودِ دوره‌ای از میانهٔ اجارهٔ واقعی؛ بدونِ نمونهٔ کافی، صندوق عرضه نمی‌شود.
+    capital: {
+      enabled: true, fundFeePctYear: 2, fundMinSamples: 8, investRewardXp: 20, dividends: true,
+      crowd: { enabled: true, unitToman: 500_000_000, minPrice: 20_000_000_000, maxPools: 12 },
+    },
   },
 }
 
