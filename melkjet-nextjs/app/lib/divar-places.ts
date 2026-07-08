@@ -55,61 +55,63 @@ export async function importCities(): Promise<{ count: number }> {
   return { count: cities.length }
 }
 
+// نامِ استانِ هر گروه از رویِ مرکزِ استانش پیدا می‌شود (نگاشتِ جغرافیاییِ واقعیِ ۳۱ مرکزِ استان).
+const PROVINCE_CAPITALS: Record<string, string> = {
+  'تهران': 'تهران', 'کرج': 'البرز', 'اصفهان': 'اصفهان', 'مشهد': 'خراسان رضوی', 'شیراز': 'فارس',
+  'تبریز': 'آذربایجان شرقی', 'ارومیه': 'آذربایجان غربی', 'اهواز': 'خوزستان', 'رشت': 'گیلان',
+  'ساری': 'مازندران', 'کرمان': 'کرمان', 'یزد': 'یزد', 'قم': 'قم', 'همدان': 'همدان',
+  'کرمانشاه': 'کرمانشاه', 'سنندج': 'کردستان', 'اردبیل': 'اردبیل', 'زنجان': 'زنجان', 'قزوین': 'قزوین',
+  'گرگان': 'گلستان', 'خرمآباد': 'لرستان', 'اراک': 'مرکزی', 'ایلام': 'ایلام', 'بوشهر': 'بوشهر',
+  'بندرعباس': 'هرمزگان', 'زاهدان': 'سیستان و بلوچستان', 'بیرجند': 'خراسان جنوبی',
+  'بجنورد': 'خراسان شمالی', 'سمنان': 'سمنان', 'شهرکرد': 'چهارمحال و بختیاری', 'یاسوج': 'کهگیلویه و بویراحمد',
+}
+const normCap = (s: string) => String(s || '').replace(/‌/g, '').replace(/\s+/g, '').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim()
+
 // درختِ کاملِ استان→شهرِ کلِ ایران از دیوار (مثلاً مازندران ~۷۰ شهر).
-// چند endpoint به‌ترتیب امتحان می‌شود؛ ذخیره تدریجی است تا قطعِ وسطِ کار داده را از دست ندهد.
-// اگر هیچ‌کدام استان ندهد، نمونهٔ خامِ اولین شهر برگردانده می‌شود تا شکلِ پاسخ عیب‌یابی شود.
+// شکلِ واقعیِ پاسخِ ‎/v8/places/cities‎ (از عیب‌یابیِ روی سرور): هر شهر «parent» عددی دارد
+// (تهران → parent:904) ولی نامِ استان در پاسخ نیست → شهرها با parent گروه‌بندی می‌شوند و
+// نامِ استانِ هر گروه از مرکزِ استانِ همان گروه درمی‌آید (ساری در گروه ⇒ کلِ گروه = مازندران).
 export async function importCitiesTree(): Promise<{ provinces: number; cities: number; note?: string; sample?: unknown }> {
-  const tryJson = async (url: string) => {
-    const r = await proxiedRequest(url, { method: 'GET', headers, proxyUrl: proxy(), timeout: 20000 }).catch(() => null)
-    if (!r || r.status !== 200) return null
-    try { return JSON.parse(r.body) } catch { return null }
-  }
-  const arr = (d: any, ...keys: string[]): any[] => {
-    if (Array.isArray(d)) return d
-    for (const k of keys) if (Array.isArray(d?.[k])) return d[k]
-    return []
-  }
-  // ۱) استان‌ها → شهرهای هر استان
-  for (const provUrl of ['https://api.divar.ir/v8/places/provinces', 'https://api.divar.ir/v8/places/states']) {
-    const pd = await tryJson(provUrl)
-    const provs = arr(pd, 'provinces', 'states', 'data')
-      .map((p: any) => ({ id: Number(p.id), name: String(p.name || p.title || '').trim() }))
-      .filter(p => p.id && p.name)
-    if (!provs.length) continue
-    const db = load()
-    db.cities = []
-    let citiesCount = 0
-    for (const p of provs) {
-      const cd = await tryJson(`${provUrl}/${p.id}/cities`)
-      const raw = arr(cd, 'cities', 'data')
-      for (const c of raw) {
-        const id = Number(c.id), name = String(c.name || c.title || '').trim()
-        if (id && name) { db.cities.push({ id, name, slug: c.slug || '', province: p.name }); citiesCount++ }
-      }
-      db.importedAt = Date.now()
-      save(db)   // ذخیرهٔ تدریجی
-      await new Promise(res => setTimeout(res, 150))
-    }
-    if (citiesCount) return { provinces: provs.length, cities: citiesCount }
-  }
-  // ۲) fallback: لیستِ تختِ شهرها (با پارسِ منعطفِ استان) + نمونهٔ خام برای عیب‌یابی
-  const res = await proxiedRequest('https://api.divar.ir/v8/places/cities', { method: 'GET', headers, proxyUrl: proxy(), timeout: 20000 })
+  const res = await proxiedRequest('https://api.divar.ir/v8/places/cities', { method: 'GET', headers, proxyUrl: proxy(), timeout: 25000 })
   if (res.status !== 200) throw new Error(`Divar HTTP ${res.status}`)
   const d = JSON.parse(res.body)
-  const raw: any[] = arr(d, 'cities', 'data')
-  const cities: DivarCity[] = raw.map((c: any) => ({
-    id: Number(c.id), name: String(c.name || c.title || '').trim(), slug: c.slug || '',
-    province: String(c.province?.name || c.province?.title || c.parent?.name || c.parent?.title || c.state?.name || '').trim() || undefined,
-  })).filter(c => c.id && c.name)
+  const raw: any[] = Array.isArray(d) ? d : (d.cities || d.data || [])
+  // اگر خودِ والدها (استان‌ها، level≠place2) هم در پاسخ باشند، نامشان مستقیم استفاده می‌شود.
+  const parentName = new Map<number, string>()
+  for (const c of raw) {
+    const lvl = String(c.level || '')
+    if (lvl && lvl !== 'place2') {
+      const id = Number(c.id), name = String(c.name || c.title || '').trim()
+      if (id && name) parentName.set(id, name)
+    }
+  }
+  const items = raw
+    .map((c: any) => ({ id: Number(c.id), name: String(c.name || c.title || '').trim(), slug: c.slug || '', parent: Number(c.parent) || 0, level: String(c.level || '') }))
+    .filter(c => c.id && c.name && (!c.level || c.level === 'place2'))
+  // گروه‌بندی با parent → نامِ استان از مرکزِ استانِ گروه
+  const groupProvince = new Map<number, string>()
+  for (const c of items) {
+    if (!c.parent || groupProvince.has(c.parent)) continue
+    const direct = parentName.get(c.parent)
+    if (direct) { groupProvince.set(c.parent, direct); continue }
+    // در همین گروه دنبالِ مرکزِ استان بگرد
+    const cap = items.find(x => x.parent === c.parent && PROVINCE_CAPITALS[normCap(x.name)])
+    if (cap) groupProvince.set(c.parent, PROVINCE_CAPITALS[normCap(cap.name)])
+  }
+  const cities: DivarCity[] = items.map(c => ({ id: c.id, name: c.name, slug: c.slug, province: c.parent ? groupProvince.get(c.parent) : undefined }))
   const db = load()
   db.cities = cities
   db.importedAt = Date.now()
   save(db)
   const withProv = cities.filter(c => c.province).length
+  const orphan = cities.length - withProv
   return {
-    provinces: new Set(cities.map(c => c.province).filter(Boolean)).size, cities: cities.length,
-    note: withProv ? undefined : 'پاسخِ دیوار استانِ شهرها را نمی‌دهد — نمونهٔ خام را بفرست تا endpoint درست ساخته شود',
-    sample: withProv ? undefined : raw[0],
+    provinces: new Set(cities.map(c => c.province).filter(Boolean)).size,
+    cities: cities.length,
+    note: withProv === 0
+      ? 'استانِ هیچ شهری تشخیص داده نشد — نمونهٔ خام را بفرست'
+      : orphan > 0 ? `${orphan.toLocaleString('fa-IR')} شهر بدونِ استان ماند (گروهِ بدونِ مرکزِ استان)` : undefined,
+    sample: withProv === 0 ? raw[0] : undefined,
   }
 }
 
