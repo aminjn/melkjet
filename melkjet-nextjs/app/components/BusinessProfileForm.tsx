@@ -54,16 +54,24 @@ export default function BusinessProfileForm() {
   const [pct, setPct] = useState(0)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
-  // لیست‌های استاندارد: تخصص/خدمت از سوپرادمین؛ شهر/محله از درختِ geo + آگهی‌های واقعی.
+  // لیست‌های استاندارد: تخصص/خدمت از سوپرادمین؛ استان→شهر از درختِ geo؛ محله از geo + آگهی‌های واقعی.
   const [opts, setOpts] = useState<{ specialties: string[]; services: string[] }>({ specialties: [], services: [] })
-  const [cities, setCities] = useState<string[]>([])
+  const [tree, setTree] = useState<Array<{ nameFa: string; cities: Array<{ nameFa: string }> }>>([])
   const [hoods, setHoods] = useState<string[]>([])
 
   useEffect(() => {
     fetch('/api/profile').then(r => r.ok ? r.json() : null).then(d => { if (d) { setP(d.profile); setIdentity(d.identity); setPct(d.completeness || 0) } }).catch(() => {})
     fetch('/api/profile/options').then(r => r.ok ? r.json() : null).then(d => { if (d) setOpts({ specialties: d.specialties || [], services: d.services || [] }) }).catch(() => {})
-    fetch('/api/locations?cities=1').then(r => r.ok ? r.json() : null).then(d => { if (d) setCities(d.cities || []) }).catch(() => {})
+    fetch('/api/locations').then(r => r.ok ? r.json() : null).then(d => { if (d) setTree(d.provinces || []) }).catch(() => {})
   }, [])
+  // اگر پروفایلِ قدیمی فقط شهر دارد، استانش از درخت پیدا و پر می‌شود.
+  useEffect(() => {
+    if (!p || p.province || !p.city || !tree.length) return
+    const prov = tree.find(pr => pr.cities.some(c => c.nameFa === p.city))
+    if (prov) setP((s: any) => ({ ...s, province: prov.nameFa }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tree, p?.city])
+  const provCities = (tree.find(pr => pr.nameFa === p?.province)?.cities || []).map(c => c.nameFa)
   // محله‌های شهرِ انتخابی — خودگسترنده از آگهی‌های واقعی (مشکلِ «محلاتِ مشهد فقط ۱۰ تاست» را می‌بندد).
   const city = p?.city || ''
   useEffect(() => {
@@ -152,12 +160,18 @@ export default function BusinessProfileForm() {
           <Field label="تلفنِ ثابت"><input value={p.landline} onChange={e => set('landline', e.target.value)} placeholder="۰۲۱…" style={{ ...inp, direction: 'ltr', textAlign: 'right' }} /></Field>
           <Field label="ایمیل"><input value={p.email} onChange={e => set('email', e.target.value)} style={{ ...inp, direction: 'ltr', textAlign: 'left' }} /></Field>
           <Field label="وب‌سایت"><input value={p.website} onChange={e => set('website', e.target.value)} placeholder="https://" style={{ ...inp, direction: 'ltr', textAlign: 'left' }} /></Field>
-          <Field label="استان"><input value={p.province} onChange={e => set('province', e.target.value)} style={inp} /></Field>
+          <Field label="استان">
+            <select value={p.province} onChange={e => { set('province', e.target.value); set('city', ''); set('neighborhood', ''); set('areas', []) }} style={{ ...inp, cursor: 'pointer' }}>
+              <option value="">انتخابِ استان…</option>
+              {p.province && !tree.some(pr => pr.nameFa === p.province) && <option value={p.province}>{p.province}</option>}
+              {tree.map(pr => <option key={pr.nameFa} value={pr.nameFa}>{pr.nameFa}</option>)}
+            </select>
+          </Field>
           <Field label="شهر">
-            <select value={p.city} onChange={e => { set('city', e.target.value); set('neighborhood', ''); set('areas', []) }} style={{ ...inp, cursor: 'pointer' }}>
-              <option value="">انتخابِ شهر…</option>
-              {p.city && !cities.includes(p.city) && <option value={p.city}>{p.city}</option>}
-              {cities.map(c => <option key={c} value={c}>{c}</option>)}
+            <select value={p.city} onChange={e => { set('city', e.target.value); set('neighborhood', ''); set('areas', []) }} style={{ ...inp, cursor: 'pointer' }} disabled={!p.province}>
+              <option value="">{p.province ? 'انتخابِ شهر…' : 'اول استان را انتخاب کن'}</option>
+              {p.city && !provCities.includes(p.city) && <option value={p.city}>{p.city}</option>}
+              {provCities.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </Field>
           <Field label="محله">
