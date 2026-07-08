@@ -911,6 +911,15 @@ function GeoView() {
             {r.unknown?.length > 0 && <span style={{ color: 'var(--muted)' }}> · هنوز بدونِ استان: {r.unknown.slice(0, 8).map((u: any) => u.city).join('، ')}{r.unknown.length > 8 ? ' و…' : ''} (شهر را در درخت بساز و دوباره اجرا کن)</span>}
           </span>)
         }} style={{ padding: '9px 18px', borderRadius: 10, background: 'transparent', color: 'var(--gold)', border: '1px solid var(--gold)', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>{enriching ? '…' : '⬇ همگام‌سازیِ محلاتِ رسمیِ دیوار'}</button>
+        <button disabled={enriching} title="اگر نسخهٔ مشخص‌ترِ یک محله هست (جنت‌آباد شمالی/جنوبی/مرکزی)، خودِ نامِ کلی (جنت‌آباد) حذف می‌شود" onClick={async () => {
+          if (!confirm('محله‌های «کلی» که نسخهٔ مشخص‌ترشان (شمالی/جنوبی/مرکزی/…) در همان شهر وجود دارد حذف شوند؟')) return
+          setEnriching(true); setEnrichMsg(null)
+          const r = await fetch('/api/admin/geo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'pruneGeneric' }) }).then(x => x.json()).catch(() => null)
+          setEnriching(false)
+          if (!r?.ok) { setEnrichMsg(<span style={{ color: '#e7674a' }}>{r?.error || 'خطا در اجرا'}</span>); return }
+          setProvinces(r.provinces)
+          setEnrichMsg(<span>🧹 <b style={{ color: 'var(--gold)' }}>{Number(r.removed).toLocaleString('fa-IR')}</b> محلهٔ کلی حذف شد{r.samples?.length ? <span style={{ color: 'var(--muted)' }}> — {r.samples.join('، ')}{Number(r.removed) > r.samples.length ? ' و…' : ''}</span> : null}</span>)
+        }} style={{ padding: '9px 18px', borderRadius: 10, background: 'transparent', color: '#e7a14a', border: '1px solid #e7a14a', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>{enriching ? '…' : '🧹 حذفِ محله‌های کلی (جنت‌آباد → شمالی/جنوبی)'}</button>
         {enrichMsg && <div style={{ width: '100%', fontSize: 12, lineHeight: 2 }}>{enrichMsg}</div>}
         <div style={{ width: '100%', fontSize: 11, color: 'var(--faint)' }}>
           دراپ‌داون‌های «شهر / محله / مناطقِ فعالیت» در پروفایل‌ها خودکار از هر سه منبع (درخت + دیوار + آگهی‌های واقعی) پر می‌شوند —

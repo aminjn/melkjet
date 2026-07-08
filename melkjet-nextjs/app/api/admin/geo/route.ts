@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import {
   getAll, addProvince, addCity, addDistrict, addNeighborhood, addNeighborhoodsBulk,
-  renameNode, deleteNode,
+  renameNode, deleteNode, pruneGenericNeighborhoods,
 } from '@/app/lib/geo-store'
 import { liveGeo, invalidateLiveGeo } from '@/app/lib/geo-live'
 import { invalidateLocations } from '@/app/lib/locations-store'
@@ -26,6 +26,13 @@ export async function POST(req: NextRequest) {
   // تکمیلِ خودکارِ محله‌ها از آگهی‌های واقعی: هر جفتِ «شهر، محله» با ≥۲ آگهی، اگر در درخت نبود،
   // به منطقهٔ «سایر محله‌ها»ی همان شهر اضافه می‌شود. شهرهای ناشناخته گزارش می‌شوند (ساخته نمی‌شوند —
   // چون جای استانشان معلوم نیست؛ ادمین خودش شهر را می‌سازد و دوباره اجرا می‌کند).
+  // حذفِ محله‌های کلی وقتی نسخهٔ مشخص‌ترشان هست (جنت‌آباد → شمالی/جنوبی/مرکزی) — «محلهٔ کلی نباید بماند».
+  if (b.action === 'pruneGeneric') {
+    const r = pruneGenericNeighborhoods()
+    invalidateLiveGeo()
+    invalidateLocations()
+    return NextResponse.json({ ok: true, removed: r.removed, samples: r.samples, provinces: getAll() })
+  }
   if (b.action === 'enrichFromListings') {
     invalidateLiveGeo()
     const live = await liveGeo()

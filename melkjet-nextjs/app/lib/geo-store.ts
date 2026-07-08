@@ -197,6 +197,7 @@ export function findNeighborhoodInGeo(
 
   let exact: { province: string; city: string; district: string; neighborhood: string } | null = null
   let fuzzy: { province: string; city: string; district: string; neighborhood: string } | null = null
+  let specific: { province: string; city: string; district: string; neighborhood: string } | null = null
   for (const p of db.provinces) {
     for (const c of p.cities) {
       const cityOk = !cityN || normName(c.name) === cityN || normName(c.name).includes(cityN) || cityN.includes(normName(c.name))
@@ -207,14 +208,44 @@ export function findNeighborhoodInGeo(
             const hit = { province: p.name, city: c.name, district: d.name, neighborhood: n }
             if (cityOk) return hit          // بهترین حالت: تطابقِ دقیق در همان شهر
             exact = exact || hit
-          } else if (cityOk && (nn.includes(nb) || nb.includes(nn))) {
+          } else if (cityOk && nn.includes(nb)) {
+            // ورودی کلی‌تر از ژئو («جنت‌آباد» در برابرِ «جنت‌آباد شمالی») — رفتارِ قبلی
             fuzzy = fuzzy || { province: p.name, city: c.name, district: d.name, neighborhood: n }
+          } else if (cityOk && nb.includes(nn)) {
+            // ورودی «دقیق‌تر» از ژئوست (دیوار «جنت‌آباد شمالی» می‌دهد، ژئو فقط «جنت‌آباد» دارد) —
+            // نامِ دقیقِ ورودی حفظ می‌شود؛ محلهٔ مشخص هرگز به نامِ کلی تقلیل نمی‌یابد.
+            specific = specific || { province: p.name, city: c.name, district: d.name, neighborhood: neighborhoodName.trim() }
           }
         }
       }
     }
   }
-  return exact || fuzzy
+  return exact || specific || fuzzy
+}
+
+// پاک‌سازیِ محله‌های کلی: اگر در همان شهر نسخهٔ مشخص‌ترِ یک محله هست (جنت‌آباد شمالی/جنوبی/مرکزی)،
+// خودِ نامِ کلی («جنت‌آباد») حذف می‌شود — نباید محله‌ای با نامِ کلی بماند.
+export function pruneGenericNeighborhoods(): { removed: number; samples: string[] } {
+  const db = load()
+  let removed = 0
+  const samples: string[] = []
+  for (const p of db.provinces) {
+    for (const c of p.cities) {
+      const all: string[] = []
+      for (const d of c.districts) for (const n of d.neighborhoods) all.push(normName(n))
+      for (const d of c.districts) {
+        d.neighborhoods = d.neighborhoods.filter(n => {
+          const nn = normName(n)
+          // نسخهٔ مشخص‌تر = همین نام + پسوندِ معنادار (حداقل ۳ نویسه، مثلِ «شمالی/جنوبی»)
+          const hasSpecific = nn.length >= 4 && all.some(x => x !== nn && x.startsWith(nn) && x.length >= nn.length + 3)
+          if (hasSpecific) { removed++; if (samples.length < 12) samples.push(`${c.name}: ${n}`) }
+          return !hasSpecific
+        })
+      }
+    }
+  }
+  if (removed > 0) save(db)
+  return { removed, samples }
 }
 
 // ─── تشخیصِ منطقه از روی آدرس (همان منطقِ آگهی‌ها) ───────────────────────────
