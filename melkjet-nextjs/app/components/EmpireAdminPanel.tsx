@@ -45,14 +45,19 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
   const loadFlag = useCallback(() => fetch('/api/reos/flags', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d) setFlag((d.flags || []).find((f: any) => f.key === 'empire') || null) }), [])
 
   useEffect(() => {
+    // پاسخِ دیرآمدهٔ بخشِ قبلی نباید در بخشِ فعلی بنشیند (روی دادهٔ بزرگِ پروداکشن،
+    // overview چند ثانیه طول می‌کشد؛ جابه‌جاییِ سریعِ منو → دادهٔ اشتباه → کرشِ رندر).
+    let alive = true
+    const put = (d: any) => { if (alive) setData(d) }
     setData(null); setSel(null)
-    if (section === 'overview') loadView('overview').then(setData)
-    if (section === 'players') loadView('players', `&sort=${sort}`).then(setData)
-    if (section === 'world') loadView('world').then(setData)
-    if (section === 'liveops') { loadView('liveops').then(setData); loadCfg() }
-    if (section === 'economy' || section === 'missions') { loadCfg(); loadView('overview').then(setData) }
-    if (section === 'capital') { loadView('capital').then(setData); loadCfg() }
+    if (section === 'overview') loadView('overview').then(put)
+    if (section === 'players') loadView('players', `&sort=${sort}`).then(put)
+    if (section === 'world') loadView('world').then(put)
+    if (section === 'liveops') { loadView('liveops').then(put); loadCfg() }
+    if (section === 'economy' || section === 'missions') { loadCfg(); loadView('overview').then(put) }
+    if (section === 'capital') { loadView('capital').then(put); loadCfg() }
     if (section === 'access') loadFlag()
+    return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [section, sort])
 
@@ -98,7 +103,7 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
   if (section === 'overview') return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, fontFamily: FONT, direction: 'rtl' }}>
       {head('🏛 مرکزِ فرماندهیِ امپراتوری', 'وضعیتِ زندهٔ کلِ بازی — همهٔ اعداد از دادهٔ واقعیِ بازیکنان و بازار.')}
-      {!data ? loading : <>
+      {!data?.totals ? loading : <>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 10 }}>
           <Mini label="امپراتوری‌ها" value={fa(data.empires)} hint={`${fa(data.newToday)} تولدِ امروز`} />
           <Mini label="فعالِ امروز" value={fa(data.activeToday)} hint={`${fa(data.active7d)} فعالِ ۷ روز`} />
@@ -148,7 +153,7 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
         </select>
         <button style={btn} onClick={() => loadView('players', `&q=${encodeURIComponent(q)}&sort=${sort}`).then(setData)}>جستجو</button>
       </div>
-      {!data ? loading : (
+      {!data?.rows ? loading : (
         <div style={{ ...card, padding: 0, overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
             <thead><tr style={{ color: 'var(--muted)', fontSize: 11.5 }}>
@@ -313,7 +318,7 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, fontFamily: FONT, direction: 'rtl' }}>
         {head('📊 کنسولِ سرمایه (بازار سرمایه)', 'صندوق‌های شاخصیِ املاک (هر واحد = یک مترِ مجازی از بازارِ واقعی)، سرمایه‌گذاریِ جمعی روی آگهی‌های واقعی، شاخص‌ها و روان‌شناسیِ بازار — همه از دادهٔ زنده.')}
-        {!data ? loading : <>
+        {!data?.kpis ? loading : <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10 }}>
             <Mini label="ارزشِ کلِ بازار (Market Cap)" value={`${faB(data.kpis.marketCap)} ت`} hint="صندوق‌ها + مشارکت‌ها" />
             <Mini label="داراییِ صندوق‌ها (AUM)" value={`${faB(data.kpis.fundAum)} ت`} />
@@ -427,7 +432,7 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
   if (section === 'world') return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, fontFamily: FONT, direction: 'rtl' }}>
       {head('🗺 دنیا و بازارِ واقعی', 'مانیتورِ همگام‌سازی بازی↔بازار (Sync Monitor)، نقشهٔ نفوذِ محله‌ها و برترین‌ها — دنیا روی آگهی‌های زندهٔ ملک‌جت نفس می‌کشد.')}
-      {!data ? loading : <>
+      {!data?.sync ? loading : <>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 10 }}>
           <Mini label="داراییِ متصل به آگهیِ زنده" value={fa(data.sync.live)} hint="قیمتِ روز از بازار" />
           <Mini label="داراییِ با آگهیِ حذف‌شده" value={fa(data.sync.dead)} hint="ارزش = قیمتِ خرید (منجمد)" />
@@ -466,7 +471,7 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
   if (section === 'liveops') return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, fontFamily: FONT, direction: 'rtl' }}>
       {head('✉️ LiveOps و نامهٔ روزانه', 'حلقهٔ بازگشتِ روزانه (AI Overnight): نامهٔ صبح از دادهٔ واقعیِ دیشبِ بازار ساخته می‌شود — اینجا نرخِ بازشدن را می‌بینی و دستی اجرا می‌کنی.')}
-      {!data ? loading : <>
+      {!data?.briefs ? loading : <>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 10 }}>
           {data.briefs.map((b: any) => <Mini key={b.day} label={`نامهٔ ${b.day}`} value={`${fa(b.built)} / ${fa(b.opened)}`} hint={`ساخته / بازشده${b.built ? ` — ${Math.round(b.opened / b.built * 100).toLocaleString('fa-IR')}٪` : ''}`} />)}
           <Mini label="صندوقچهٔ بازشدهٔ امروز" value={fa(data.chestToday)} hint={`از ${fa(data.empires)} امپراتوری`} />
