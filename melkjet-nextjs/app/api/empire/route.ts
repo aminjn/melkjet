@@ -23,6 +23,7 @@ import {
   applyLevelUpReward, setWeekSnap, setTitle, giveKudos, eventActive, streakMilestonesOf,
   buildingUnitsOf, assemblyUnitPriceOf, buyBuildingUnit, demolishAsset, boostBuild, boostPermit,
   proPersonaOf, designPlanOf, commissionDesign, boostDesign, resolveM100, renovateAsset, designBuildPlanOf,
+  activeCoinPacks, buyCosmetic, setCosmetic, offerOf, dismissOffer,
   type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
 import {
@@ -42,6 +43,11 @@ import { flagEnabled } from '@/app/lib/reos/flags'
 import { config, primeConfig } from '@/app/lib/reos/reos-config'
 
 const hoodOf = (loc?: string) => { const p = String(loc || '').split(/[،,]/).map(x => x.trim()).filter(Boolean); return p.length > 1 ? p[p.length - 1] : (p[0] || '') }
+// آیکنِ قاب/نشانِ فعالِ بازیکن (فاز ۳۳): ارزشِ آیتمِ ظاهری = دیده‌شدن توسطِ دیگران (سند ۲۲ فصل ۳)
+const cosmeticIconOf = (e: Pick<EmpireData, 'cosmetics'>, kind: 'frame' | 'flair') => {
+  const id = e.cosmetics?.[kind]
+  return id ? ((config().empire.cosmetics?.items || []).find(i => i.id === id)?.icon || '') : ''
+}
 const ptypeOf = (it: Item) => (it.meta || {})['نوع ملک'] || it.category || ''
 const priceOf = (it: Item) => parseFaNum(it.price)
 const isSale = (it: Item) => !/اجاره|رهن|ودیعه/.test(it.price || '') && (it.meta || {})['نوع معامله'] !== 'اجاره'
@@ -455,7 +461,16 @@ async function stateOf(userId: string, e00: EmpireData) {
     pros: config().empire.pros,                    // کارمزدِ نقش‌های حرفه‌ای (فاز ۲۹) — برای نمایشِ شفاف
     soundEnabled: config().empire.sound?.enabled !== false,   // 🔊 بازخوردِ صوتی (فاز ۳۲)
     // 🪙 فروشگاهِ کوین (فاز ۲۸): فقط بسته‌های فعال — قیمت‌ها شفاف؛ کوین هرگز قدرت نمی‌خرد
-    coinShop: config().empire.coinShop?.enabled ? { enabled: true, packs: (config().empire.coinShop.packs || []).filter(p => p.enabled && p.coins > 0 && p.priceToman > 0) } : { enabled: false, packs: [] },
+    // فاز ۳۳: بستهٔ زمان‌دار (until) بعدِ تاریخش خودکار حذف می‌شود — تایمرِ واقعی، نه نمایشی
+    coinShop: config().empire.coinShop?.enabled ? { enabled: true, packs: activeCoinPacks(config().empire.coinShop.packs || []) } : { enabled: false, packs: [] },
+    // 🎨 فروشگاهِ ظاهری (فاز ۳۳ — سند ۲۲ فصل ۳): قاب/نشان فقط برای نمایش؛ صفر اثرِ اقتصادی
+    cosmetics: config().empire.cosmetics?.enabled ? {
+      enabled: true,
+      items: (config().empire.cosmetics.items || []).filter(i => i.enabled && i.priceCoins > 0),
+      owned: e.cosmetics?.owned || [], frame: e.cosmetics?.frame || '', flair: e.cosmetics?.flair || '',
+    } : { enabled: false, items: [], owned: [], frame: '', flair: '' },
+    // 🎁 پیشنهادِ هوشمند (فاز ۳۳ — سند ۲۲ فصل ۹): حداکثر ۱ در روز، قطعی از رفتارِ واقعی، قابلِ‌بستن
+    offer: offerOf(e, dayNumberOf(Date.now()), config().empire.offers, config().empire.cosmetics?.enabled ? (config().empire.cosmetics.items || []).filter(i => i.enabled) : [], config().empire.coinShop?.enabled ? activeCoinPacks(config().empire.coinShop.packs || []) : []),
     // سطح‌گشایی (سند ۱۵): چه چیزی از چه سطحی باز می‌شود + ظرفیتِ پروژهٔ همزمان — شفاف در UI
     unlocks: (() => {
       const u = config().empire.unlocks
@@ -785,11 +800,11 @@ export async function POST(req: NextRequest) {
         const nw = netWorthOf(e, prices, gMarket)
         // «رشدِ این هفته» (سند ۱۶): دلتا از اسنپ‌شاتِ همین هفتهٔ خودِ بازیکن — بازیکنِ تازه هم شانس دارد
         const weekly = e.weekSnap && e.weekSnap.week === weekNow ? nw.netWorth - e.weekSnap.netWorth : null
-        return { name: e.name, title: e.title, persona: e.persona, no: e.no, me: e.userId === userId, assets: e.assets.length, netWorth: nw.netWorth, growth: nw.growth, correct: e.guess.correct, score: empireScoreOf(e, prices), weekly, hoods: e.assets.map(a => a.hood).filter(Boolean) }
+        return { name: e.name, title: e.title, persona: e.persona, no: e.no, me: e.userId === userId, assets: e.assets.length, netWorth: nw.netWorth, growth: nw.growth, correct: e.guess.correct, score: empireScoreOf(e, prices), weekly, hoods: e.assets.map(a => a.hood).filter(Boolean), frame: cosmeticIconOf(e, 'frame'), flair: cosmeticIconOf(e, 'flair') }
       })
       const top = (key: 'netWorth' | 'growth' | 'assets' | 'correct' | 'score' | 'weekly', filter?: (r: typeof rows[0]) => boolean) =>
         [...rows].filter(r => (!filter || filter(r)) && r[key] != null).sort((a, x) => ((x[key] as number) || 0) - ((a[key] as number) || 0)).slice(0, 10)
-          .map((r, i) => ({ rank: i + 1, name: r.name, title: r.title, persona: r.persona, no: r.no, me: r.me, value: r[key] }))
+          .map((r, i) => ({ rank: i + 1, name: r.name, title: r.title, persona: r.persona, no: r.no, me: r.me, value: r[key], frame: r.frame, flair: r.flair }))
       const myHood = me?.assets[0]?.hood || ''
       const hoodLeague = myHood ? top('score', r => r.hoods.includes(myHood)) : []
       // گذرنامهٔ امپراتوری (GDD جلد۶ «Empire Passport»): نفوذِ من در هر محله = سهمِ ارزشِ من از کلِ بازیکنان.
@@ -1360,6 +1375,7 @@ export async function POST(req: NextRequest) {
         ok: true,
         profile: {
           no: target.no, name: target.name, persona: target.persona, title: target.title,
+          frame: cosmeticIconOf(target, 'frame'), flair: cosmeticIconOf(target, 'flair'),
           level: empireLevel(target.xp), badges: target.badges, kudos: target.kudos || 0,
           score: empireScoreOf(target, tPrices), netWorth: tnw.netWorth, assets: target.assets.length,
           hoods: [...new Set(target.assets.map(a => a.hood).filter(Boolean))].slice(0, 8),
@@ -1379,6 +1395,29 @@ export async function POST(req: NextRequest) {
       const r = await giveKudos(userId, target)
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       return NextResponse.json({ ok: true, kudos: r.kudos })
+    }
+
+    // 🎨 فروشگاهِ ظاهری (فاز ۳۳ — سند ۲۲ فصل ۳): خرید با ملک‌کوین؛ فقط ظاهر، صفر اثرِ اقتصادی.
+    case 'cosmeticBuy': {
+      const shop = config().empire.cosmetics
+      if (!shop?.enabled) return NextResponse.json({ error: 'فروشگاهِ ظاهری فعال نیست' }, { status: 400 })
+      const item = (shop.items || []).find(i => i.enabled && i.priceCoins > 0 && i.id === String(b.id || ''))
+      if (!item) return NextResponse.json({ error: 'این آیتم موجود نیست' }, { status: 404 })
+      const r = await buyCosmetic(userId, item)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+    }
+    case 'cosmeticSet': {
+      const kind = b.kind === 'flair' ? 'flair' as const : 'frame' as const
+      const r = await setCosmetic(userId, kind, String(b.id || ''))
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+    }
+    // 🎁 بستنِ پیشنهادِ هوشمند با یک لمس (فاز ۳۳ — سند ۲۲ فصل ۹): تا cooldownDays برنمی‌گردد.
+    case 'offerDismiss': {
+      const r = await dismissOffer(userId, String(b.id || ''), dayNumberOf(Date.now()))
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true })
     }
 
     // عنوانِ فعال (سند ۱۶ بخش ۹): فقط از نشان‌های واقعاً کسب‌شده — در سربرگ و لیدربوردها نمایش داده می‌شود.

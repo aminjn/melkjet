@@ -402,6 +402,8 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
                 <input value={p.label || ''} onChange={ev => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.coinShop.packs[i].label = ev.target.value.slice(0, 40); return n })} placeholder="نامِ بسته" style={{ ...inpS, flex: 1, minWidth: 120 }} />
                 <input title="کوین" value={String(p.coins ?? '')} onChange={ev => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.coinShop.packs[i].coins = numOf(ev.target.value) || 0; return n })} style={{ ...inpS, width: 76, textAlign: 'center' }} />
                 <input title="قیمت (تومان)" value={String(p.priceToman ?? '')} onChange={ev => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.coinShop.packs[i].priceToman = numOf(ev.target.value) || 0; return n })} style={{ ...inpS, width: 110, textAlign: 'center' }} />
+                <input title="پایانِ بستهٔ زمان‌دار (YYYY-MM-DD میلادی؛ خالی = دائمی)" value={p.until || ''} placeholder="تا تاریخ" dir="ltr"
+                  onChange={ev => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.coinShop.packs[i].until = deFa(ev.target.value).replace(/[^\d-]/g, '').slice(0, 10); return n })} style={{ ...inpS, width: 100, textAlign: 'center' }} />
                 <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 11.5, color: p.enabled ? '#7c6' : 'var(--faint)' }}
                   onClick={() => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.coinShop.packs[i].enabled = !n.coinShop.packs[i].enabled; return n })}>{p.enabled ? 'فعال ✓' : 'خاموش'}</button>
                 <button style={{ ...btnGhost, padding: '4px 8px', fontSize: 11.5, color: '#e88', borderColor: '#644' }}
@@ -410,7 +412,34 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             ))}
             <button style={{ ...btnGhost, padding: '6px 14px', fontSize: 12, marginTop: 8 }}
               onClick={() => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.coinShop = n.coinShop || { enabled: true, packs: [] }; n.coinShop.packs.push({ id: 'p' + Date.now().toString(36), label: 'بستهٔ جدید', coins: 100, priceToman: 100000, enabled: true }); return n })}>+ بستهٔ جدید</button>
-            <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 6 }}>نام · کوین · قیمت (تومان) — بعد از «ذخیره» بلافاصله در فروشگاهِ بازیکن‌ها اعمال می‌شود. شارژ ایدمپوتنت است (رفرشِ callback دوبار شارژ نمی‌کند).</div>
+            <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 6 }}>نام · کوین · قیمت (تومان) · تا تاریخ (بستهٔ زمان‌دار — فاز ۳۳؛ خالی = دائمی) — بعد از «ذخیره» بلافاصله در فروشگاهِ بازیکن‌ها اعمال می‌شود. شارژ ایدمپوتنت است (رفرشِ callback دوبار شارژ نمی‌کند)؛ پرداختِ انجام‌شده حتی بعدِ انقضای بسته شارژ می‌شود.</div>
+          </div>
+          <div style={card}>
+            <div style={sub}>🎨 فروشگاهِ ظاهری (فاز ۳۳ — سند ۲۲ فصل ۳: فقط ظاهر، صفر اثرِ اقتصادی)</div>
+            {row('فروشگاهِ ظاهری فعال (۱/۰)', cin('cosmetics', 'enabled'), 'قاب/نشان با ملک‌کوین — در لیدربورد و پروفایل دیده می‌شود')}
+            {(cfg?.cosmetics?.items || []).map((p: any, i: number) => (
+              <div key={p.id || i} style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
+                <input title="آیکن (اموجی)" value={p.icon || ''} onChange={ev => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.cosmetics.items[i].icon = ev.target.value.slice(0, 4); return n })} style={{ ...inpS, width: 46, textAlign: 'center' }} />
+                <input value={p.label || ''} onChange={ev => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.cosmetics.items[i].label = ev.target.value.slice(0, 40); return n })} placeholder="نامِ آیتم" style={{ ...inpS, flex: 1, minWidth: 110 }} />
+                <select value={p.kind || 'frame'} onChange={ev => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.cosmetics.items[i].kind = ev.target.value; return n })} style={{ ...inpS, width: 120 }}>
+                  <option value="frame">قابِ پروفایل</option><option value="flair">نشانِ کنارِ نام</option>
+                </select>
+                <input title="قیمت (کوین)" value={String(p.priceCoins ?? '')} onChange={ev => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.cosmetics.items[i].priceCoins = numOf(ev.target.value) || 0; return n })} style={{ ...inpS, width: 76, textAlign: 'center' }} />
+                <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 11.5, color: p.enabled ? '#7c6' : 'var(--faint)' }}
+                  onClick={() => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.cosmetics.items[i].enabled = !n.cosmetics.items[i].enabled; return n })}>{p.enabled ? 'فعال ✓' : 'خاموش'}</button>
+                <button style={{ ...btnGhost, padding: '4px 8px', fontSize: 11.5, color: '#e88', borderColor: '#644' }}
+                  onClick={() => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.cosmetics.items.splice(i, 1); return n })}>🗑</button>
+              </div>
+            ))}
+            <button style={{ ...btnGhost, padding: '6px 14px', fontSize: 12, marginTop: 8 }}
+              onClick={() => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.cosmetics = n.cosmetics || { enabled: true, items: [] }; n.cosmetics.items.push({ id: 'cos' + Date.now().toString(36), label: 'آیتمِ جدید', icon: '⭐', kind: 'frame', priceCoins: 200, enabled: true }); return n })}>+ آیتمِ جدید</button>
+            <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 6 }}>آیکن · نام · نوع · قیمت (کوین) — قانونِ سند ۲۲: هیچ آیتمِ ظاهری روی اقتصاد، سرعتِ ساخت یا قدرتِ رقابتی اثر نمی‌گذارد. آیتمِ خاموش‌شده از دستِ خریدارانِ قبلی درنمی‌آید؛ فقط از فروش می‌افتد.</div>
+          </div>
+          <div style={card}>
+            <div style={sub}>🎁 پیشنهادِ هوشمند (فاز ۳۳ — سند ۲۲ فصل ۹: حداکثر ۱ در روز، قطعی از رفتارِ واقعی)</div>
+            {row('پیشنهادها فعال (۱/۰)', cin('offers', 'enabled'), 'کارتِ قابلِ‌بستن بالای صفحهٔ شهر — بدونِ پاپ‌آپ و تایمرِ ساختگی')}
+            {row('روزهای پنهان‌ماندن بعدِ بستن', cin('offers', 'cooldownDays'), '«عدمِ نمایشِ مجددِ همان پیشنهاد در مدتِ کوتاه»')}
+            {row('حداقل سنِ امپراتوری (روز)', cin('offers', 'minAgeDays'), 'روزهای اول هیچ پیشنهادی نمایش داده نمی‌شود — اول تجربه، بعد فروشگاه')}
           </div>
           <div style={card}>
             <div style={sub}>🤝 مذاکره (فاز ۲۷ — قبلاً هاردکد بود)</div>

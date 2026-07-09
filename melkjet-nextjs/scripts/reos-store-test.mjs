@@ -1471,6 +1471,33 @@ async function main() {
     ok('وام: کارشناسی از مبلغ کسر شد + servicesPaid', ln29.ok && ln29.empire.capital === eLoan29.capital + 1_000_000_000 - 2_000_000
       && (ln29.empire.servicesPaid || 0) === (eLoan29.servicesPaid || 0) + 2_000_000)
     await repayB(uc12, 2_000_000_000).catch(() => {})
+
+    // ── فاز ۳۳ (سند ۲۲ Monetization): فروشگاهِ ظاهری + بستنِ پیشنهاد — ماندگار در PG ──
+    console.log('\n── Empire · فاز ۳۳ (فروشگاهِ ظاهری: خرید/فعال‌سازی + بستنِ پیشنهاد) ──')
+    const { buyCosmetic, setCosmetic, dismissOffer, creditCoinPurchase: creditCP } = await import('../app/lib/empire-store.ts')
+    const frameG = { id: 'frame_gold', label: 'قابِ طلایی', icon: '🥇', kind: 'frame', priceCoins: 200 }
+    {
+      const eG = await getEmpire(uc12); eG.coins = 250
+      await pool.query(`UPDATE reos_empire SET data=$2 WHERE user_id=$1`, [uc12, JSON.stringify(eG)])
+    }
+    const cb1 = await buyCosmetic(uc12, frameG)
+    ok('خریدِ قاب: کوین کم شد + مالکیت + خودکار فعال', cb1.ok && cb1.empire.coins === 50
+      && cb1.empire.cosmetics.owned.includes('frame_gold') && cb1.empire.cosmetics.frame === 'frame_gold')
+    ok('خریدِ دوباره رد می‌شود (بدونِ کسرِ کوین)', (await buyCosmetic(uc12, frameG)).ok === false && (await getEmpire(uc12)).coins === 50)
+    ok('کوینِ ناکافی → خطای صادقانه', /کافی/.test((await buyCosmetic(uc12, { ...frameG, id: 'frame_diamond', priceCoins: 800 })).reason || ''))
+    const cs1 = await setCosmetic(uc12, 'frame', '')
+    ok('برداشتنِ قاب (id خالی)', cs1.ok && cs1.empire.cosmetics.frame === undefined)
+    ok('فعال‌کردنِ آیتمِ نداشته رد می‌شود', (await setCosmetic(uc12, 'flair', 'flair_crane')).ok === false)
+    ok('فعال‌کردنِ دوبارهٔ آیتمِ خریده', (await setCosmetic(uc12, 'frame', 'frame_gold')).ok && (await getEmpire(uc12)).cosmetics.frame === 'frame_gold')
+    // بستنِ پیشنهاد: روزِ بستن در PG می‌ماند (سند ۲۲ فصل ۹ — «عدمِ نمایشِ مجدد»)
+    const dm1 = await dismissOffer(uc12, 'off_first', 20_000)
+    ok('بستنِ پیشنهاد ثبت شد', dm1.ok && (await getEmpire(uc12)).offerHist.off_first === 20_000)
+    ok('شناسهٔ پیشنهادِ نامعتبر رد می‌شود', (await dismissOffer(uc12, 'x"; drop', 1)).ok === false)
+    // شارژِ ایدمپوتنت (فاز ۲۸، تکرارِ اطمینان در ۳۳): همان authority دوبار شارژ نمی‌کند
+    const c033 = (await getEmpire(uc12)).coins
+    await creditCP(uc12, { coins: 100, label: 'تست', authority: 'AUTH33' })
+    const cAgain = await creditCP(uc12, { coins: 100, label: 'تست', authority: 'AUTH33' })
+    ok('callbackِ دوباره → شارژِ دوباره نه', cAgain.ok === false && (await getEmpire(uc12)).coins === c033 + 100)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

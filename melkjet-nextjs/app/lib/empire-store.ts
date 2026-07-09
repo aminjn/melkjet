@@ -129,6 +129,8 @@ export interface EmpireData {
   pendingComeback?: number    // هدیهٔ بازگشت (Comeback Engine جلد ۲۶) — روزِ کشفِ غیبت
   stylePicks?: string[]                               // مأموریت M2 «سبکِ خودت را پیدا کن» (انتخابِ تصویری)
   hunter?: { a: string; b: string; better: string; at: number }   // جفتِ فعالِ Property Hunter (§6.4)
+  cosmetics?: { owned: string[]; frame?: string; flair?: string }   // فروشگاهِ ظاهری (فاز ۳۳ — سند ۲۲ فصل ۳): فقط نمایش، صفر اثرِ اقتصادی
+  offerHist?: Record<string, number>                  // پیشنهادِ بسته‌شده → روزِ بستن (فاز ۳۳ — سند ۲۲ فصل ۹: «عدمِ نمایشِ مجددِ همان پیشنهاد»)
   claims: Record<string, number>                      // پاداش‌های یک‌بارمصرفِ دریافت‌شده (missionKey → ts)
   realized: number            // سود/زیانِ تحقق‌یافته از فروشِ دارایی‌ها (چرخهٔ عمر — فصل ۵)
   rejects: number             // ردِ پیشنهادِ AI در خریدِ اول (۲ بار → کنترلِ آزاد)
@@ -1455,6 +1457,89 @@ export async function creditCoinPurchase(userId: string, opts: { coins: number; 
     e.claims[key] = now
     e.coins += Math.max(0, Math.round(opts.coins))
     e.timeline.push({ at: now, icon: '🪙', title: `شارژِ ملک‌کوین: ${Math.round(opts.coins).toLocaleString('fa-IR')} کوین (${opts.label.slice(0, 40)})`, detail: opts.refId ? `کدِ پیگیری ${opts.refId}` : undefined })
+  })
+}
+
+// ══════════ فاز ۳۳ (سند ۲۲ — فصل ۱۲ Monetization) ══════════
+
+// بسته‌های فعالِ فروشگاهِ کوین: بستهٔ زمان‌دار (فصل ۷ Bundles) تا پایانِ روزِ until معتبر است —
+// تایمر واقعی است (تاریخِ ادمین)، نه نمایشی («پیشنهادهای فریبنده با تایمرِ غیرواقعی» ممنوع).
+export function activeCoinPacks<T extends { enabled: boolean; coins: number; priceToman: number; until?: string }>(packs: T[], now = Date.now()): T[] {
+  return (packs || []).filter(p => {
+    if (!p.enabled || p.coins <= 0 || p.priceToman <= 0) return false
+    if (p.until && /^\d{4}-\d{2}-\d{2}$/.test(p.until)) return now <= Date.parse(p.until + 'T23:59:59')
+    return !p.until
+  })
+}
+
+// 🎨 خریدِ آیتمِ ظاهری با ملک‌کوین (فصل ۳ Cosmetic Store): «هیچ آیتمِ ظاهری روی اقتصاد، سرعتِ ساخت،
+// سود یا قدرتِ رقابتی اثر نمی‌گذارد» — فقط قاب/نشانِ نمایشی که دیگران در لیدربورد/پروفایل می‌بینند.
+export async function buyCosmetic(userId: string, item: { id: string; label: string; icon: string; kind: 'frame' | 'flair'; priceCoins: number }, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const c = e.cosmetics || (e.cosmetics = { owned: [] })
+    if (c.owned.includes(item.id)) return 'این آیتم را قبلاً خریده‌ای'
+    const price = Math.max(0, Math.round(item.priceCoins))
+    if (e.coins < price) return 'ملک‌کوینِ کافی نداری'
+    e.coins -= price
+    c.owned.push(item.id)
+    if (item.kind === 'frame' && !c.frame) c.frame = item.id
+    if (item.kind === 'flair' && !c.flair) c.flair = item.id
+    e.timeline.push({ at: now, icon: '🎨', title: `${item.label} به مجموعه‌ات اضافه شد (${price.toLocaleString('fa-IR')} کوین)` })
+  })
+}
+
+// فعال/غیرفعال‌کردنِ آیتمِ ظاهریِ خریداری‌شده (id خالی = برداشتن).
+export async function setCosmetic(userId: string, kind: 'frame' | 'flair', id: string) {
+  return mutateEmpire(userId, e => {
+    const c = e.cosmetics || (e.cosmetics = { owned: [] })
+    if (id && !c.owned.includes(id)) return 'این آیتم را نداری'
+    c[kind] = id || undefined
+  })
+}
+
+// 🎁 موتورِ پیشنهادِ هوشمند (فصل ۹ Special Offers): قطعی از رفتارِ واقعیِ بازیکن — حداکثر ۱ در روز،
+// قابلِ‌بستن با یک لمس، بدونِ تایمرِ ساختگی. قانون‌ها به‌ترتیبِ اولویت؛ اولین قانونِ برقرارِ بسته‌نشده برنده است.
+export type EmpireOffer = { id: string; icon: string; title: string; text: string; cta: string; goto: 'coins' | 'cosmetics' }
+export function offerOf(
+  e: Pick<EmpireData, 'createdAt' | 'claims' | 'coins' | 'xp' | 'stats' | 'cosmetics' | 'offerHist'>,
+  day: number,
+  cfg: { enabled: boolean; cooldownDays: number; minAgeDays: number },
+  catalog: Array<{ id: string; label: string; icon: string; kind: 'frame' | 'flair'; priceCoins: number; enabled: boolean }>,
+  packs: Array<{ id: string; label: string; coins: number; priceToman: number }>,
+): EmpireOffer | null {
+  if (!cfg.enabled) return null
+  if (day - dayNumberOf(e.createdAt) < Math.max(0, cfg.minAgeDays)) return null   // روزهای اول: هیچ پیشنهادی — اول تجربه، بعد فروشگاه
+  const items = (catalog || []).filter(i => i.enabled && i.priceCoins > 0)
+  const owned = e.cosmetics?.owned || []
+  const level = empireLevel(e.xp).level
+  const candidates: EmpireOffer[] = []
+  // ۱) اولین شارژ: هنوز هیچ خریدِ واقعی نداشته و کوینش کم است → کوچک‌ترین بستهٔ فعال (بدونِ تخفیفِ ساختگی)
+  const everPaid = Object.keys(e.claims || {}).some(k => k.startsWith('coinpay_'))
+  const cheapestPack = [...(packs || [])].sort((a, b) => a.priceToman - b.priceToman)[0]
+  if (!everPaid && cheapestPack && e.coins < cheapestPack.coins)
+    candidates.push({ id: 'off_first', icon: '🪙', title: 'اولین شارژِ ملک‌کوین', text: `کیفِ کوینت سبک است؛ ${cheapestPack.label} (${cheapestPack.coins.toLocaleString('fa-IR')} کوین) کوچک‌ترین راهِ شروع است — کوین فقط سرعت، تحلیل و ظاهر می‌خرد.`, cta: 'دیدنِ بسته‌ها', goto: 'coins' })
+  // ۲) قابِ پروفایل: به سطحِ ۵+ رسیده و هنوز هیچ قابی ندارد → ارزان‌ترین قاب (شخصی‌سازی، نه قدرت)
+  const cheapestFrame = items.filter(i => i.kind === 'frame' && !owned.includes(i.id)).sort((a, b) => a.priceCoins - b.priceCoins)[0]
+  if (level >= 5 && !owned.some(id => items.find(i => i.id === id)?.kind === 'frame') && cheapestFrame && !e.cosmetics?.frame)
+    candidates.push({ id: 'off_frame', icon: cheapestFrame.icon, title: `سطحِ ${level.toLocaleString('fa-IR')} مبارک`, text: `امپراتوری‌ات بزرگ شده؛ ${cheapestFrame.label} کنارِ نامت در لیدربورد دیده می‌شود — فقط ظاهر، صفر اثرِ اقتصادی.`, cta: 'فروشگاهِ ظاهری', goto: 'cosmetics' })
+  // ۳) شخصی‌سازی بر اساسِ سبکِ بازی (فصل ۷/۹): برج‌ساز → نشانِ ساخت؛ مذاکره‌گر → نشانِ مذاکره
+  const crane = items.find(i => i.id === 'flair_crane' && !owned.includes(i.id))
+  if ((e.stats?.projectsDelivered || 0) >= 1 && crane)
+    candidates.push({ id: 'off_build', icon: crane.icon, title: 'برای برج‌سازها', text: `${(e.stats?.projectsDelivered || 0).toLocaleString('fa-IR')} پروژه تحویل داده‌ای؛ ${crane.label} این سابقه را کنارِ نامت نشان می‌دهد.`, cta: 'فروشگاهِ ظاهری', goto: 'cosmetics' })
+  const falcon = items.find(i => i.id === 'flair_falcon' && !owned.includes(i.id))
+  if ((e.stats?.negoWins || 0) >= 3 && falcon)
+    candidates.push({ id: 'off_nego', icon: falcon.icon, title: 'برای مذاکره‌گرها', text: `${(e.stats?.negoWins || 0).toLocaleString('fa-IR')} مذاکرهٔ برنده داری؛ ${falcon.label} مخصوصِ همین سبکِ توست.`, cta: 'فروشگاهِ ظاهری', goto: 'cosmetics' })
+  // بسته‌شده‌ها تا cooldownDays پنهان می‌مانند؛ فقط اولین کاندیدِ باز نمایش داده می‌شود (حداکثر ۱ در روز)
+  const hist = e.offerHist || {}
+  return candidates.find(o => !(o.id in hist) || day - hist[o.id] >= Math.max(1, cfg.cooldownDays)) || null
+}
+
+// بستنِ پیشنهاد با یک لمس (فصل ۹): همان پیشنهاد تا cooldownDays روز برنمی‌گردد.
+export async function dismissOffer(userId: string, offerId: string, day: number) {
+  return mutateEmpire(userId, e => {
+    if (!/^off_[a-z]+$/.test(offerId)) return 'پیشنهادِ نامعتبر'
+    const h = e.offerHist || (e.offerHist = {})
+    h[offerId] = day
   })
 }
 

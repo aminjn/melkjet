@@ -3,16 +3,21 @@
 // POST { packId } → ساختِ پرداختِ زرین‌پال و redirect؛ GET = بازگشت از درگاه (verify + شارژِ ایدمپوتنت).
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { getEmpire, creditCoinPurchase } from '@/app/lib/empire-store'
+import { getEmpire, creditCoinPurchase, activeCoinPacks } from '@/app/lib/empire-store'
 import { requestPayment, verifyPayment, zarinpalConfigured } from '@/app/lib/zarinpal'
 import { config, primeConfig } from '@/app/lib/reos/reos-config'
 import { flagEnabled } from '@/app/lib/reos/flags'
 import { logAudit } from '@/app/lib/audit-store'
 
-function activePack(packId: string) {
+// فاز ۳۳ (بسته‌های زمان‌دار): شروعِ پرداخت فقط برای بستهٔ هنوز-معتبر؛ ولی callbackِ پرداختِ انجام‌شده
+// با forVerify تاریخِ until را نادیده می‌گیرد — پولی که رفته باید کوینش برسد، حتی اگر بسته همان لحظه منقضی شد.
+function activePack(packId: string, forVerify = false) {
   const shop = config().empire.coinShop
   if (!shop?.enabled) return null
-  return (shop.packs || []).find(p => p.enabled && p.id === packId && p.coins > 0 && p.priceToman > 0) || null
+  const pool = forVerify
+    ? (shop.packs || []).filter(p => p.enabled && p.coins > 0 && p.priceToman > 0)
+    : activeCoinPacks(shop.packs || [])
+  return pool.find(p => p.id === packId) || null
 }
 
 export async function POST(req: NextRequest) {
@@ -37,7 +42,7 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const authority = url.searchParams.get('Authority') || ''
   const status = url.searchParams.get('Status') || ''
-  const pack = activePack(url.searchParams.get('pack') || '')
+  const pack = activePack(url.searchParams.get('pack') || '', true)
   const origin = `${req.headers.get('x-forwarded-proto') || 'https'}://${req.headers.get('host')}`
   const fail = (reason: string) => NextResponse.redirect(`${origin}/empire?coins=fail&reason=${encodeURIComponent(reason)}`)
 

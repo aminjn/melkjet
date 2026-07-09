@@ -60,7 +60,12 @@ export interface ReosConfig {
     // فاز ۲۷ (قانون ۵: «پرداخت فقط برای سرعت/تحلیل/ظاهر»): ملک‌کوین زمانِ انتظار را می‌خرد — نه قدرت را.
     speed: { enabled: boolean; permitCoinsPerDay: number; buildCoinsPerDay: number }
     // فاز ۲۸: فروشگاهِ ملک‌کوین (زرین‌پال) — تنها نقطهٔ ورودِ پولِ واقعی؛ کوین هرگز قدرت نمی‌خرد (بدونِ P2W).
-    coinShop: { enabled: boolean; packs: Array<{ id: string; label: string; coins: number; priceToman: number; enabled: boolean }> }
+    // فاز ۳۳ (سند ۲۲ فصل ۷ Bundles): until = تاریخِ پایانِ بستهٔ زمان‌دار (YYYY-MM-DD؛ خالی = دائمی) — تایمرِ واقعی، نه نمایشی.
+    coinShop: { enabled: boolean; packs: Array<{ id: string; label: string; coins: number; priceToman: number; enabled: boolean; until?: string }> }
+    // فاز ۳۳ (سند ۲۲ فصل ۳ Cosmetic Store): آیتم‌های صرفاً ظاهری با ملک‌کوین — «هیچ آیتمِ ظاهری روی اقتصاد/سرعت/قدرت اثر نمی‌گذارد».
+    cosmetics: { enabled: boolean; items: Array<{ id: string; label: string; icon: string; kind: 'frame' | 'flair'; priceCoins: number; enabled: boolean }> }
+    // فاز ۳۳ (سند ۲۲ فصل ۹ Special Offers): موتورِ پیشنهادِ قطعی از رفتارِ واقعی — حداکثر ۱ در روز، قابلِ‌بستن، بدونِ تایمرِ ساختگی.
+    offers: { enabled: boolean; cooldownDays: number; minAgeDays: number }
     // فاز ۲۹: نقش‌های حرفه‌ایِ سایت در سناریو — تا آمدنِ متخصصانِ واقعی، «سیستم» بازی‌شان می‌کند؛ کارمزدها مصرفِ شفافِ پول (servicesPaid).
     pros: {
       notaryFeePct: number              // دفترخانه: حق‌الثبتِ سند در خرید (٪ قیمت)
@@ -192,6 +197,20 @@ export const DEFAULT_CONFIG: ReosConfig = {
         { id: 'gld', label: 'بستهٔ طلایی', coins: 800, priceToman: 500_000, enabled: true },
       ],
     },
+    // فروشگاهِ ظاهری (سند ۲۲ فصل ۳): قاب/نشان فقط برای نمایش — دیگران در لیدربورد و پروفایل می‌بینند؛ صفر اثرِ اقتصادی.
+    cosmetics: {
+      enabled: true,
+      items: [
+        { id: 'frame_gold', label: 'قابِ طلایی', icon: '🥇', kind: 'frame' as const, priceCoins: 200, enabled: true },
+        { id: 'frame_emerald', label: 'قابِ زمردی', icon: '🟢', kind: 'frame' as const, priceCoins: 300, enabled: true },
+        { id: 'frame_ruby', label: 'قابِ یاقوتی', icon: '🔴', kind: 'frame' as const, priceCoins: 300, enabled: true },
+        { id: 'frame_diamond', label: 'قابِ الماس', icon: '💎', kind: 'frame' as const, priceCoins: 800, enabled: true },
+        { id: 'flair_crane', label: 'نشانِ برج‌ساز', icon: '🏗', kind: 'flair' as const, priceCoins: 400, enabled: true },
+        { id: 'flair_falcon', label: 'نشانِ شاهینِ مذاکره', icon: '🦅', kind: 'flair' as const, priceCoins: 400, enabled: true },
+      ],
+    },
+    // پیشنهادِ هوشمند (سند ۲۲ فصل ۹): حداکثر ۱ در روز؛ بستن = cooldownDays روز پنهان؛ فقط از رفتارِ واقعی و قطعی.
+    offers: { enabled: true, cooldownDays: 5, minAgeDays: 2 },
     // مذاکره: همان رفتارِ قبلی به‌صورتِ پیش‌فرض (۲۵٪ پایه تا ۷۵٪ با مهارت؛ تخفیف ۲..۶٪) — حالا قابل‌تنظیم.
     nego: { baseChancePct: 25, discountMin: 2, discountMax: 6 },
     // نقش‌های حرفه‌ای (فاز ۲۹): اعدادِ عرفِ واقعیِ بازارِ ایران — همه knob.

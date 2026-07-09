@@ -585,9 +585,10 @@ export default function EmpirePage() {
   return wrap(<>
     {/* سربرگ = HUD چسبان (فصل ۹: همیشه در دسترس، کمتر از ۲۰٪ صفحه) */}
     <div style={{ ...card, position: 'sticky' as const, top: 8, zIndex: 40, display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center', boxShadow: '0 8px 24px -10px rgba(0,0,0,.45)' }}>
-      <div style={{ fontSize: 30 }}>{e.persona || '🏛'}</div>
+      {/* قاب/نشانِ ظاهری (فاز ۳۳ — سند ۲۲ فصل ۳): فقط نمایش؛ همین‌ها در لیدربورد هم کنارِ نامت دیده می‌شوند */}
+      {(() => { const ic = (st.cosmetics?.items || []).find((i: any) => i.id === st.cosmetics?.frame)?.icon; return <div style={{ fontSize: 30, position: 'relative' }}>{e.persona || '🏛'}{ic && <span style={{ position: 'absolute', top: -7, left: -9, fontSize: 14 }}>{ic}</span>}</div> })()}
       <div style={{ flex: 1, minWidth: 180 }}>
-        <div style={{ fontWeight: 800, fontSize: 16 }}>{e.name} <span style={{ fontSize: 11, color: 'var(--muted)' }}>#{fa(e.no)}</span>{e.title && <span style={{ fontSize: 10.5, marginRight: 8, padding: '2px 8px', borderRadius: 10, border: '1px solid var(--gold)', color: 'var(--gold)' }}>👑 {e.title}</span>}</div>
+        <div style={{ fontWeight: 800, fontSize: 16 }}>{e.name} {(() => { const ic = (st.cosmetics?.items || []).find((i: any) => i.id === st.cosmetics?.flair)?.icon; return ic ? <span title="نشانِ ظاهری">{ic} </span> : null })()}<span style={{ fontSize: 11, color: 'var(--muted)' }}>#{fa(e.no)}</span>{e.title && <span style={{ fontSize: 10.5, marginRight: 8, padding: '2px 8px', borderRadius: 10, border: '1px solid var(--gold)', color: 'var(--gold)' }}>👑 {e.title}</span>}</div>
         <div style={{ fontSize: 12, color: 'var(--muted)' }}>{e.profile?.title} · DNA: {e.dna} · دستیار: {e.mentor}</div>
         <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>سطح {fa(lv.level || 1)} · {lv.titleFa} ({lv.title})</span>
@@ -620,6 +621,19 @@ export default function EmpirePage() {
     </div>
 
     {gtab === 'city' && <>
+    {/* 🎁 پیشنهادِ هوشمند (فاز ۳۳ — سند ۲۲ فصل ۹): حداکثر ۱ در روز، از رفتارِ واقعیِ خودت، با یک لمس بسته می‌شود.
+        بدونِ تایمرِ ساختگی و بدونِ پاپ‌آپ — یک کارتِ ساده که «نه» هم جوابِ کاملاً قابلِ‌قبولی است. */}
+    {st.offer && <div style={{ ...card, borderColor: 'var(--goldDim)', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 22 }}>{st.offer.icon}</span>
+      <div style={{ flex: 1, minWidth: 200 }}>
+        <b style={{ fontSize: 13 }}>{st.offer.title}</b>
+        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{st.offer.text}</div>
+      </div>
+      <button style={{ ...btn, padding: '5px 14px', fontSize: 12 }} onClick={() => { setGtab('market'); setTimeout(() => document.getElementById(st.offer.goto === 'coins' ? 'coin-shop' : 'cosmetic-shop')?.scrollIntoView({ behavior: 'smooth' }), 120) }}>{st.offer.cta}</button>
+      <button title="بستن — تا چند روز برنمی‌گردد" style={{ ...btnGhost, padding: '5px 10px', fontSize: 12 }} disabled={busy}
+        onClick={async () => { await api({ action: 'offerDismiss', id: st.offer.id }); setSt((s: any) => ({ ...s, offer: null })) }}>✕</button>
+    </div>}
+
     {/* 🔥 فرصت‌های طلاییِ امروز (سند ۱۴ — Hook): آگهی‌های واقعی، شمارشِ معکوسِ واقعی؛ فردا فهرستِ دیگری می‌آید.
         کارت قضاوت نمی‌کند — بعضی واقعاً زیرِ قیمتِ محله‌اند، بعضی نه؛ فکرکردن (یا ژتونِ تحلیل) کارِ بازیکن است. */}
     {st.dealsEnabled && deals && (deals.deals || []).length > 0 && (() => {
@@ -1403,15 +1417,17 @@ export default function EmpirePage() {
 
     {gtab === 'market' && <>
     {/* 🪙 فروشگاهِ ملک‌کوین (فاز ۲۸): پولِ واقعی فقط «زمان/تحلیل» می‌خرد — هرگز قدرت (بدونِ P2W) */}
-    {st.coinShop?.enabled && (st.coinShop.packs || []).length > 0 && <div style={{ ...card, borderColor: 'var(--goldDim)' }}>
+    {st.coinShop?.enabled && (st.coinShop.packs || []).length > 0 && <div id="coin-shop" style={{ ...card, borderColor: 'var(--goldDim)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <b style={{ fontSize: 14 }}>🪙 فروشگاهِ ملک‌کوین</b>
-        <span style={{ fontSize: 11, color: 'var(--muted)' }}>کوین فقط سرعت (پیگیری/شیفتِ شبانه) و ژتونِ تحلیل می‌خرد — هرگز قدرت یا XP</span>
+        <span style={{ fontSize: 11, color: 'var(--muted)' }}>کوین فقط سرعت (پیگیری/شیفتِ شبانه)، ژتونِ تحلیل و ظاهر می‌خرد — هرگز قدرت یا XP</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: 8, marginTop: 10 }}>
         {st.coinShop.packs.map((p: any) => (
           <div key={p.id} style={{ ...card, background: 'var(--bg2)', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center', textAlign: 'center' }}>
             <b style={{ fontSize: 13 }}>{p.label}</b>
+            {/* بستهٔ زمان‌دار (فاز ۳۳ — سند ۲۲ فصل ۷): تاریخِ واقعیِ پایان، شفاف — نه تایمرِ نمایشی */}
+            {p.until && <span style={{ fontSize: 10, color: '#e7a14a' }}>⏳ فقط تا {new Date(p.until + 'T23:59:59').toLocaleDateString('fa-IR')}</span>}
             <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--gold)' }}>🪙 {fa(p.coins)}</div>
             <div style={{ fontSize: 12, color: 'var(--muted)' }}>{faB(p.priceToman)} تومان</div>
             <button style={{ ...btn, padding: '5px 16px', fontSize: 12 }} disabled={busy} onClick={async () => {
@@ -1427,6 +1443,37 @@ export default function EmpirePage() {
         ))}
       </div>
       <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 8 }}>پرداختِ امن با زرین‌پال · کوین بلافاصله بعد از تأییدِ درگاه به کیفت اضافه می‌شود و در تایم‌لاینت ثبت است.</div>
+    </div>}
+
+    {/* 🎨 فروشگاهِ ظاهری (فاز ۳۳ — سند ۲۲ فصل ۳): قاب و نشان با ملک‌کوین — «هیچ آیتمِ ظاهری روی اقتصاد،
+        سرعتِ ساخت یا قدرتِ رقابتی اثر نمی‌گذارد»؛ ارزشش این است که دیگران در لیدربورد می‌بینند. */}
+    {st.cosmetics?.enabled && (st.cosmetics.items || []).length > 0 && <div id="cosmetic-shop" style={card}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <b style={{ fontSize: 14 }}>🎨 فروشگاهِ ظاهری</b>
+        <span style={{ fontSize: 11, color: 'var(--muted)' }}>قاب و نشان کنارِ نامت در لیدربورد و پروفایل دیده می‌شود — فقط ظاهر، صفر اثرِ اقتصادی</span>
+        <span style={{ flex: 1 }} />
+        <span style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>🪙 {fa(e.coins)}</span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 8, marginTop: 10 }}>
+        {st.cosmetics.items.map((it: any) => {
+          const owned = (st.cosmetics.owned || []).includes(it.id)
+          const active = st.cosmetics[it.kind] === it.id
+          return <div key={it.id} style={{ ...card, background: 'var(--bg2)', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center', textAlign: 'center', borderColor: active ? 'var(--gold)' : undefined }}>
+            <span style={{ fontSize: 24 }}>{it.icon}</span>
+            <b style={{ fontSize: 12.5 }}>{it.label}</b>
+            <span style={{ fontSize: 10, color: 'var(--faint)' }}>{it.kind === 'frame' ? 'قابِ پروفایل' : 'نشانِ کنارِ نام'}</span>
+            {!owned && <button style={{ ...btn, padding: '4px 14px', fontSize: 12 }} disabled={busy} onClick={async () => {
+              const d = await api({ action: 'cosmeticBuy', id: it.id })
+              if (d) { setSt(d); celebrate() }
+            }}>🪙 {fa(it.priceCoins)}</button>}
+            {owned && <button style={{ ...(active ? btn : btnGhost), padding: '4px 14px', fontSize: 12 }} disabled={busy} onClick={async () => {
+              const d = await api({ action: 'cosmeticSet', kind: it.kind, id: active ? '' : it.id })
+              if (d) setSt(d)
+            }}>{active ? 'فعال ✓ (بردار)' : 'فعال کن'}</button>}
+          </div>
+        })}
+      </div>
+      <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 8 }}>خرید با ملک‌کوینِ کیفِ خودت انجام می‌شود و در تایم‌لاینت ثبت است · آیتمِ خریداری‌شده دائمی است.</div>
     </div>}
 
     {/* بانک (جلد ۱۶): امتیازِ اعتباری + وام */}
@@ -1642,8 +1689,8 @@ export default function EmpirePage() {
               <div key={r.no} title="مشاهدهٔ امپراتوری" onClick={async () => { const d = await api({ action: 'viewEmpire', no: r.no }); if (d) setPeek(d.profile) }}
                 style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, padding: '6px 10px', borderRadius: 8, cursor: 'pointer', background: r.me ? 'rgba(212,175,55,.10)' : 'var(--bg2)', border: r.me ? '1px solid var(--gold)' : '1px solid var(--line)' }}>
                 <b style={{ minWidth: 24, color: r.rank <= 3 ? 'var(--gold)' : 'var(--muted)' }}>{r.rank === 1 ? '🥇' : r.rank === 2 ? '🥈' : r.rank === 3 ? '🥉' : fa(r.rank)}</b>
-                <span>{r.persona || '🏛'}</span>
-                <span style={{ flex: 1 }}>{r.name}{r.title && <span style={{ fontSize: 9.5, color: 'var(--gold)', marginRight: 5 }}>👑 {r.title}</span>}{r.me && <span style={{ fontSize: 10, color: 'var(--gold)' }}> (تو)</span>}</span>
+                <span style={{ position: 'relative' }}>{r.persona || '🏛'}{r.frame && <span style={{ position: 'absolute', top: -6, left: -7, fontSize: 9 }}>{r.frame}</span>}</span>
+                <span style={{ flex: 1 }}>{r.name}{r.flair && <span title="نشانِ ظاهری"> {r.flair}</span>}{r.title && <span style={{ fontSize: 9.5, color: 'var(--gold)', marginRight: 5 }}>👑 {r.title}</span>}{r.me && <span style={{ fontSize: 10, color: 'var(--gold)' }}> (تو)</span>}</span>
                 <b style={{ color: 'var(--gold)', fontSize: 12 }}>{boardTab === 'invest' || boardTab === 'weekly' ? faB(r.value) : boardTab === 'growth' ? `${Number(r.value).toLocaleString('fa-IR')}٪` : fa(r.value)}</b>
               </div>
             ))}
@@ -1652,9 +1699,9 @@ export default function EmpirePage() {
           {/* پروفایلِ عمومیِ امپراتوری (سند ۱۷ — «بازدید از شهرِ دیگران»): بازیکن و اعدادِ واقعی */}
           {peek && <div style={{ ...card, background: 'var(--bg2)', marginTop: 10, fontSize: 12.5 }}>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 24 }}>{peek.persona || '🏛'}</span>
+              <span style={{ fontSize: 24, position: 'relative' }}>{peek.persona || '🏛'}{peek.frame && <span style={{ position: 'absolute', top: -6, left: -8, fontSize: 11 }}>{peek.frame}</span>}</span>
               <div style={{ flex: 1, minWidth: 150 }}>
-                <b style={{ fontSize: 14 }}>{peek.name} <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>#{fa(peek.no)}</span></b>
+                <b style={{ fontSize: 14 }}>{peek.name} {peek.flair && <span title="نشانِ ظاهری">{peek.flair} </span>}<span style={{ fontSize: 10.5, color: 'var(--muted)' }}>#{fa(peek.no)}</span></b>
                 {peek.title && <span style={{ fontSize: 10, marginRight: 6, padding: '2px 7px', borderRadius: 10, border: '1px solid var(--gold)', color: 'var(--gold)' }}>👑 {peek.title}</span>}
                 <div style={{ fontSize: 11, color: 'var(--muted)' }}>سطح {fa(peek.level?.level || 1)} · {peek.level?.titleFa} · عضو از {new Date(peek.memberSince).toLocaleDateString('fa-IR')}</div>
               </div>
