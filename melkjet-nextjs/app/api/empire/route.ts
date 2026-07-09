@@ -20,7 +20,7 @@ import {
   PROJECT_GOALS, goalPricePct, AMENITY_LABELS, amenityValueFactorOf, bulkPriceOf,
   projectLessonsOf, engineerEffectsOf, addAmenity, rentOutUnits, stopRentUnits,
   negoMemoryOf, bumpNegoTries, dailyDealPickOf, maxProjectsOf, sellProject,
-  applyLevelUpReward, setWeekSnap, setTitle,
+  applyLevelUpReward, setWeekSnap, setTitle, giveKudos,
   type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
 import {
@@ -1032,6 +1032,40 @@ export async function POST(req: NextRequest) {
         return { id: it.id, title: it.title, hood: hoodOf(it.location), price, perM: area > 0 ? Math.round(price / area) : 0, scrapedAt: it.scrapedAt || 0 }
       })
       return NextResponse.json({ ok: true, ...newsOf({ now: Date.now(), listings, empires, prices }) })
+    }
+
+    // بازدید از امپراتوریِ دیگران (سند ۱۷ — فصل ۷): پروفایلِ عمومیِ یک بازیکنِ واقعی از روی لیدربورد.
+    case 'viewEmpire': {
+      const no = Math.floor(Number(b.no) || 0)
+      if (!(no > 0)) return NextResponse.json({ error: 'شمارهٔ امپراتوری نامعتبر' }, { status: 400 })
+      const target = (await listEmpiresPublic(500)).find(x => x.no === no)
+      if (!target) return NextResponse.json({ error: 'این امپراتوری یافت نشد' }, { status: 404 })
+      const tPrices = await livePrices(target)
+      const tnw = netWorthOf(target, tPrices)
+      const me = await getEmpire(userId)
+      return NextResponse.json({
+        ok: true,
+        profile: {
+          no: target.no, name: target.name, persona: target.persona, title: target.title,
+          level: empireLevel(target.xp), badges: target.badges, kudos: target.kudos || 0,
+          score: empireScoreOf(target, tPrices), netWorth: tnw.netWorth, assets: target.assets.length,
+          hoods: [...new Set(target.assets.map(a => a.hood).filter(Boolean))].slice(0, 8),
+          skyline: target.assets.map(a => ({ v: tPrices[a.listingId] || a.buyPrice, kind: a.kind })).slice(0, 24),
+          company: target.company ? { name: target.company.name, color: target.company.color, stars: companyReputationOf(target, config().empire.build.repProjectScore).stars, delivered: target.stats?.projectsDelivered || 0 } : null,
+          memberSince: target.createdAt,
+          myKudos: !!me?.claims['kudos_' + target.no],
+          mine: target.userId === userId,
+        },
+      })
+    }
+    // 👏 تحسین (سند ۱۷): هر بازیکنِ واقعی یک‌بار برای هر امپراتوری — بدونِ پاداشِ پولی.
+    case 'kudos': {
+      const no = Math.floor(Number(b.no) || 0)
+      const target = (await listEmpiresPublic(500)).find(x => x.no === no)
+      if (!target) return NextResponse.json({ error: 'این امپراتوری یافت نشد' }, { status: 404 })
+      const r = await giveKudos(userId, target)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, kudos: r.kudos })
     }
 
     // عنوانِ فعال (سند ۱۶ بخش ۹): فقط از نشان‌های واقعاً کسب‌شده — در سربرگ و لیدربوردها نمایش داده می‌شود.

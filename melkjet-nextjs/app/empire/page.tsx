@@ -104,6 +104,7 @@ export default function EmpirePage() {
   const [analysis, setAnalysis] = useState<any>(null)
   const [chestReward, setChestReward] = useState<any>(null)
   const [boards, setBoards] = useState<any>(null)
+  const [peek, setPeek] = useState<any>(null)                    // پروفایلِ عمومیِ یک امپراتوریِ دیگر (سند ۱۷)
   const [boardTab, setBoardTab] = useState('score')
   const [loanVal, setLoanVal] = useState('')
   const [repayVal, setRepayVal] = useState('')
@@ -499,6 +500,7 @@ export default function EmpirePage() {
         <span style={{ ...card, padding: '6px 10px' }}>🪙 {fa(e.coins)}</span>
         <span style={{ ...card, padding: '6px 10px' }}>🤖 {fa(e.aiTokens)}</span>
         {st.streak && st.streak.streak > 0 && <span style={{ ...card, padding: '6px 10px' }} title="روزهای پیاپیِ حضور">🔥 {fa(st.streak.streak)}</span>}
+        {(e.kudos || 0) > 0 && <span style={{ ...card, padding: '6px 10px' }} title="تحسینِ بازیکنانِ واقعی">👏 {fa(e.kudos)}</span>}
       </div>
     </div>
 
@@ -1160,7 +1162,8 @@ export default function EmpirePage() {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {(boards.boards[boardTab] || []).map((r: any) => (
-              <div key={r.no} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, padding: '6px 10px', borderRadius: 8, background: r.me ? 'rgba(212,175,55,.10)' : 'var(--bg2)', border: r.me ? '1px solid var(--gold)' : '1px solid var(--line)' }}>
+              <div key={r.no} title="مشاهدهٔ امپراتوری" onClick={async () => { const d = await api({ action: 'viewEmpire', no: r.no }); if (d) setPeek(d.profile) }}
+                style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, padding: '6px 10px', borderRadius: 8, cursor: 'pointer', background: r.me ? 'rgba(212,175,55,.10)' : 'var(--bg2)', border: r.me ? '1px solid var(--gold)' : '1px solid var(--line)' }}>
                 <b style={{ minWidth: 24, color: r.rank <= 3 ? 'var(--gold)' : 'var(--muted)' }}>{r.rank === 1 ? '🥇' : r.rank === 2 ? '🥈' : r.rank === 3 ? '🥉' : fa(r.rank)}</b>
                 <span>{r.persona || '🏛'}</span>
                 <span style={{ flex: 1 }}>{r.name}{r.title && <span style={{ fontSize: 9.5, color: 'var(--gold)', marginRight: 5 }}>👑 {r.title}</span>}{r.me && <span style={{ fontSize: 10, color: 'var(--gold)' }}> (تو)</span>}</span>
@@ -1169,6 +1172,37 @@ export default function EmpirePage() {
             ))}
             {!(boards.boards[boardTab] || []).length && <div style={{ fontSize: 12, color: 'var(--muted)' }}>هنوز رقابتی شکل نگرفته — تو اولین باش!</div>}
           </div>
+          {/* پروفایلِ عمومیِ امپراتوری (سند ۱۷ — «بازدید از شهرِ دیگران»): بازیکن و اعدادِ واقعی */}
+          {peek && <div style={{ ...card, background: 'var(--bg2)', marginTop: 10, fontSize: 12.5 }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 24 }}>{peek.persona || '🏛'}</span>
+              <div style={{ flex: 1, minWidth: 150 }}>
+                <b style={{ fontSize: 14 }}>{peek.name} <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>#{fa(peek.no)}</span></b>
+                {peek.title && <span style={{ fontSize: 10, marginRight: 6, padding: '2px 7px', borderRadius: 10, border: '1px solid var(--gold)', color: 'var(--gold)' }}>👑 {peek.title}</span>}
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>سطح {fa(peek.level?.level || 1)} · {peek.level?.titleFa} · عضو از {new Date(peek.memberSince).toLocaleDateString('fa-IR')}</div>
+              </div>
+              {!peek.mine && <button style={{ ...btnGhost, padding: '5px 12px', fontSize: 12 }} disabled={busy || peek.myKudos}
+                onClick={async () => { const d = await api({ action: 'kudos', no: peek.no }); if (d) { setPeek({ ...peek, kudos: d.kudos, myKudos: true }); celebrate() } }}>
+                👏 {peek.myKudos ? 'تحسین کردی' : 'تحسین'} ({fa(peek.kudos || 0)})</button>}
+              <button style={{ ...btnGhost, padding: '5px 10px', fontSize: 12 }} onClick={() => setPeek(null)}>✕</button>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8, fontSize: 11.5, color: 'var(--muted)' }}>
+              <span>🏆 امتیاز {fa(peek.score || 0)}</span>
+              <span>💰 ارزشِ خالص {faB(peek.netWorth || 0)}</span>
+              <span>🏠 {fa(peek.assets || 0)} دارایی</span>
+              {peek.company && <span>🏗 «{peek.company.name}» {'⭐'.repeat(peek.company.stars || 1)}{peek.company.delivered ? ` · ${fa(peek.company.delivered)} تحویل` : ''}</span>}
+            </div>
+            {(peek.hoods || []).length > 0 && <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 5 }}>محله‌ها: {peek.hoods.join('، ')}</div>}
+            {(peek.skyline || []).length > 0 && (() => {
+              const mx = Math.max(...peek.skyline.map((x: any) => x.v))
+              return <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 44, marginTop: 8 }}>
+                {peek.skyline.map((x: any, i: number) => <div key={i} title={faB(x.v)} style={{ width: 10, height: Math.max(6, Math.round((x.v / Math.max(1, mx)) * 44)), borderRadius: '2px 2px 0 0', background: x.kind === 'land' ? '#8a7' : 'var(--gold)', opacity: 0.85 }} />)}
+              </div>
+            })()}
+            {(peek.badges || []).length > 0 && <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 8 }}>
+              {peek.badges.slice(0, 10).map((bd: string) => <span key={bd} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, border: '1px solid var(--line2)', color: 'var(--muted)' }}>{bd}</span>)}
+            </div>}
+          </div>}
           {boards.hoodLeague?.rows?.length > 0 && <div style={{ marginTop: 12 }}>
             <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>🏘 لیگِ محلهٔ {boards.hoodLeague.hood}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

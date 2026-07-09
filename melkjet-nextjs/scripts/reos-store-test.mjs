@@ -1185,6 +1185,18 @@ async function main() {
     const sr15 = await stopRentUnits(uc12, land15, 2)
     ok('فسخِ اجاره: واحدها دوباره آزاد شدند', sr15.ok && !sr15.empire.assets.find(x => x.id === land15).construction.rented)
     ok('فسخِ بدونِ واحدِ اجاره‌ای رد می‌شود', (await stopRentUnits(uc12, land15, 1)).ok === false)
+    // ── فاز ۱۹ (سند ۱۷ — فصل ۷): 👏 تحسین — یک‌بار به‌ازای هر بازیکنِ واقعی، بدونِ پاداشِ پولی ──
+    console.log('\n── Empire · تحسین (سند ۱۷) ──')
+    const { giveKudos } = await import('../app/lib/empire-store.ts')
+    const uK = '0912kudos19'
+    await createEmpire(uK, { answers: { city: 'تهران', tenB: 'سرمایه‌گذاری می‌کردم', risk: 50, ptype: 'آپارتمان', goal: 'رشدِ سرمایه' } })
+    const target19 = await getEmpire(uc12)
+    ok('تحسینِ خود ممنوع', (await giveKudos(uc12, target19)).ok === false)
+    const capK = (await getEmpire(uc12)).capital
+    const k1 = await giveKudos(uK, target19)
+    ok('تحسینِ اول: شمارنده +۱ و هیچ پولی جابه‌جا نشد', k1.ok && k1.kudos === ((target19.kudos || 0) + 1) && (await getEmpire(uc12)).capital === capK)
+    ok('تحسینِ تکراریِ همان بازیکن رد می‌شود', (await giveKudos(uK, await getEmpire(uc12))).ok === false)
+
     // ── فاز ۱۸ (سند ۱۶ — فصل ۶): پاداشِ سطح + اسنپ‌شاتِ هفتگی + عنوانِ فعال ──
     console.log('\n── Empire · سند ۱۶ (پاداشِ Level Up، هفتگی، Title) ──')
     const { applyLevelUpReward, setWeekSnap, setTitle } = await import('../app/lib/empire-store.ts')

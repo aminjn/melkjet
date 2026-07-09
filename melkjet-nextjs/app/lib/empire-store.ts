@@ -110,6 +110,7 @@ export interface EmpireData {
   weekSnap?: { week: number; netWorth: number }   // اسنپ‌شاتِ هفتگی — لیدربوردِ «رشدِ این هفته» (سند ۱۶: شانسِ بازیکنِ جدید)
   lastLevel?: number          // آخرین سطحِ پاداش‌گرفته — پاداشِ Level Up (سند ۱۶ فصل ۶ بخش ۱)
   title?: string              // عنوانِ (Title) فعال — فقط از نشان‌های واقعاً کسب‌شده (سند ۱۶ بخش ۹)
+  kudos?: number              // 👏 تحسینِ بازیکنانِ واقعی (سند ۱۷ — تعاملِ اجتماعی)؛ هر بازیکن یک‌بار
   pendingComeback?: number    // هدیهٔ بازگشت (Comeback Engine جلد ۲۶) — روزِ کشفِ غیبت
   stylePicks?: string[]                               // مأموریت M2 «سبکِ خودت را پیدا کن» (انتخابِ تصویری)
   hunter?: { a: string; b: string; better: string; at: number }   // جفتِ فعالِ Property Hunter (§6.4)
@@ -1332,6 +1333,26 @@ export async function setWeekSnap(userId: string, week: number, netWorth: number
     if (e.weekSnap && e.weekSnap.week >= week) return 'ثبت شده'
     e.weekSnap = { week, netWorth: Math.round(netWorth) }
   })
+}
+
+// 👏 تحسین (سند ۱۷ — فصل ۷ تعاملِ اجتماعی): هر بازیکنِ واقعی فقط یک‌بار برای هر امپراتوری.
+// هیچ پاداشِ پولی ندارد (بدونِ P2W) — فقط شمارنده و یک نقطهٔ تایم‌لاین برای گیرنده.
+export async function giveKudos(giverUserId: string, target: EmpireData, now = Date.now()): Promise<{ ok: boolean; reason?: string; kudos?: number }> {
+  if (target.userId === giverUserId) return { ok: false, reason: 'خودت را نمی‌توانی تحسین کنی 🙂' }
+  const g = await mutateEmpire(giverUserId, e => {
+    const key = 'kudos_' + target.no
+    if (e.claims[key]) return 'قبلاً این امپراتوری را تحسین کرده‌ای'
+    e.claims[key] = now
+  })
+  if (!g.ok) return { ok: false, reason: g.reason }
+  let kudos = 0
+  const r = await mutateEmpire(target.userId, e => {
+    e.kudos = (e.kudos || 0) + 1
+    kudos = e.kudos
+    e.timeline.push({ at: now, icon: '👏', title: 'یک سرمایه‌گذارِ واقعی امپراتوری‌ات را تحسین کرد', detail: `مجموعِ تحسین‌ها: ${e.kudos.toLocaleString('fa-IR')}` })
+  })
+  if (!r.ok) return { ok: false, reason: r.reason }
+  return { ok: true, kudos }
 }
 
 // عنوانِ فعال (سند ۱۶ بخش ۹): فقط از نشان‌های واقعاً کسب‌شده — هویت از رفتار، نه خرید.
