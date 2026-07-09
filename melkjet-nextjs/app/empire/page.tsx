@@ -3,7 +3,7 @@
 // معرفیِ ملک‌جت → ۵ سؤالِ شخصیتی → Dream Board → حکمِ هویتی → تولد + نام‌گذاری → هدیهٔ سرمایه →
 // ۴ فرصتِ واقعی (یکی برجسته) → متن‌های خرید + امضا → «تو مالک هستی» + پاداش → تصمیمِ معنادار → داشبورد.
 // قانونِ برندینگِ سند: هرگز «بازی» گفته نمی‌شود — «مسیرِ رشد / امپراتوری / سفرِ مالی».
-import { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import NeshanMap from '@/app/components/NeshanMap'
 import Link from 'next/link'
 
@@ -14,6 +14,26 @@ const digitsOf = (s: string) => s
   .replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
   .replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
   .replace(/\D/g, '').slice(0, 15)
+
+// حصارِ خطا (فاز ۳۱): اگر رندرِ بخشی از صفحه کرش کند، به‌جای «صفحهٔ مرده که هیچ دکمه‌ای کار نمی‌کند»
+// پیامِ دقیقِ خطا نشان داده می‌شود و خطا به لاگِ سرور هم می‌رود — ریشه‌یابی بدونِ کنسولِ کاربر.
+class ErrorFence extends React.Component<{ children: React.ReactNode }, { err: string }> {
+  state = { err: '' }
+  static getDerivedStateFromError(e: any) { return { err: String(e?.message || e).slice(0, 300) } }
+  componentDidCatch(e: any) {
+    try { navigator.sendBeacon?.('/api/client-log', new Blob([JSON.stringify({ msg: 'render: ' + String(e?.stack || e).slice(0, 500), url: location.href })], { type: 'application/json' })) } catch {}
+  }
+  render() {
+    if (!this.state.err) return this.props.children
+    return (
+      <div style={{ background: '#2a1010', border: '1px solid #a55', borderRadius: 14, padding: 16, color: '#f0c5c5', fontFamily: 'Vazirmatn, sans-serif', direction: 'rtl' as const }}>
+        <b>⚠️ بخشی از صفحه به خطا خورد</b>
+        <div style={{ fontSize: 11.5, marginTop: 6, direction: 'ltr' as const, textAlign: 'left' as const, opacity: .85 }}>{this.state.err}</div>
+        <button onClick={() => location.reload()} style={{ marginTop: 10, padding: '7px 16px', borderRadius: 9, border: '1px solid #a55', background: 'transparent', color: '#f0c5c5', cursor: 'pointer', fontFamily: 'inherit' }}>🔄 بارگذاریِ دوباره</button>
+      </div>
+    )
+  }
+}
 
 // شمارشِ معکوسِ ایزوله (فاز ۳۱): فقط همین کامپوننتِ کوچک هر ثانیه رندر می‌شود — نه کلِ صفحهٔ سنگین.
 // (رندرِ هرثانیهٔ کلِ صفحه باعث می‌شد کلیک‌ها وسطِ بازسازیِ DOM گم شوند: «ده بار باید بزنم»)
@@ -186,6 +206,20 @@ export default function EmpirePage() {
     return () => clearTimeout(t)
   }, [err])
 
+  // شنودِ خطاهای مرورگر (فاز ۳۱): کرشِ JS = «هیچ دکمه‌ای کار نمی‌کند» — حالا هم روی صفحه دیده می‌شود
+  // هم به لاگِ سرور می‌رود (pm2 logs، برچسبِ [client-error]) تا بدونِ کنسولِ کاربر ریشه‌یابی شود.
+  useEffect(() => {
+    const report = (msg: string) => {
+      setErr(`خطای صفحه: ${msg.slice(0, 160)}`)
+      try { navigator.sendBeacon?.('/api/client-log', new Blob([JSON.stringify({ msg, url: location.href })], { type: 'application/json' })) } catch {}
+    }
+    const onErr = (ev: ErrorEvent) => report(String(ev.message || ev.error))
+    const onRej = (ev: PromiseRejectionEvent) => report('promise: ' + String(ev.reason?.message || ev.reason))
+    window.addEventListener('error', onErr)
+    window.addEventListener('unhandledrejection', onRej)
+    return () => { window.removeEventListener('error', onErr); window.removeEventListener('unhandledrejection', onRej) }
+  }, [])
+
   // 🪙 بازگشت از درگاهِ کوین (فاز ۲۸): پیامِ نتیجه + پاک‌کردنِ query تا رفرش دوباره پیام ندهد.
   useEffect(() => {
     const q = new URLSearchParams(window.location.search)
@@ -330,7 +364,7 @@ export default function EmpirePage() {
       {err && <div style={{ position: 'fixed', bottom: 88, left: '50%', transform: 'translateX(-50%)', zIndex: 70, background: '#3a1212', border: '1px solid #a55', color: '#f0c5c5', padding: '10px 18px', borderRadius: 12, fontSize: 12.5, maxWidth: '92vw', boxShadow: '0 8px 28px -8px rgba(0,0,0,.6)' }}>⚠️ {err}</div>}
       {/* نشانگرِ درحال‌انجام: کلیکت گرفته شده — منتظرِ پاسخِ سرور است */}
       {busy && <div style={{ position: 'fixed', bottom: 88, right: 14, zIndex: 70, background: 'var(--surface)', border: '1px solid var(--goldDim)', color: 'var(--gold)', padding: '6px 12px', borderRadius: 10, fontSize: 11.5 }}>⏳ در حالِ انجام…</div>}
-      {children}
+      <ErrorFence>{children}</ErrorFence>
     </main>
   )
 
