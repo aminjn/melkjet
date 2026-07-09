@@ -737,19 +737,24 @@ export default function EmpirePage() {
             <b style={{ fontSize: 13.5, color: '#ece5d8' }}>🌆 خطِ آسمانِ امپراتوریِ تو</b>
             <span style={{ fontSize: 10.5, color: '#9aa0b8' }}>ارتفاعِ هر برج = ارزشِ روزِ واقعیِ همان دارایی</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 7, height: 112, marginTop: 12 }}>
+          {/* هر برج = یک دارایی: ارزشِ روز بالای برج، نامِ محله زیرش — دیگر نمودارِ گنگ نیست (فاز ۳۰) */}
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, marginTop: 12, overflowX: 'auto', paddingBottom: 2 }}>
             {e.assets.map((a: any, i: number) => {
-              const h = 26 + Math.round((vals[i] / max) * 78)
+              const h = 26 + Math.round((vals[i] / max) * 70)
+              const building = a.construction && !a.construction.done
               return (
-                <div key={a.id} title={`${a.title?.slice(0, 60)} — ${faB(vals[i])} تومان${a.construction && !a.construction.done ? ' · در حال ساخت' : ''}`} style={{
-                  width: 30, height: h, borderRadius: '3px 3px 0 0', position: 'relative', cursor: 'default',
-                  // برجِ در حالِ ساخت از ظاهر قابلِ تشخیص است (سند ۲۰ — Part 03): کم‌نور + قابِ نقطه‌چین + جرثقیل
-                  opacity: a.construction && !a.construction.done ? 0.55 : 1,
-                  background: 'linear-gradient(180deg,#262c47,#151827)', border: a.construction && !a.construction.done ? '1px dashed #8a7c4c' : '1px solid #3c4468', borderBottom: 'none',
-                  backgroundImage: 'repeating-linear-gradient(0deg, rgba(255,214,120,.7) 0 2px, transparent 2px 8px), repeating-linear-gradient(90deg, transparent 0 5px, rgba(0,0,0,.4) 5px 10px)',
-                  animation: 'empUp .6s ease both', animationDelay: `${i * 80}ms`,
-                }}>
-                  <span style={{ position: 'absolute', top: -15, left: '50%', transform: 'translateX(-50%)', fontSize: 10 }}>{a.construction && !a.construction.done ? '🏗' : a.kind === 'land' ? '🏞' : a.kind === 'villa' ? '🏡' : a.kind === 'commercial' ? '🏬' : ''}</span>
+                <div key={a.id} title={`${a.title?.slice(0, 60)} — ${faB(vals[i])} تومان${building ? ' · در حال ساخت' : ''}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, minWidth: 44 }}>
+                  <span style={{ fontSize: 9, color: '#f3d98a', whiteSpace: 'nowrap' }}>{faB(vals[i])}</span>
+                  <span style={{ fontSize: 11, lineHeight: 1 }}>{building ? '🏗' : a.kind === 'land' ? '🏞' : a.kind === 'villa' ? '🏡' : a.kind === 'commercial' ? '🏬' : '🏢'}</span>
+                  <div style={{
+                    width: 30, height: h, borderRadius: '3px 3px 0 0', cursor: 'default',
+                    // برجِ در حالِ ساخت از ظاهر قابلِ تشخیص است (سند ۲۰ — Part 03): کم‌نور + قابِ نقطه‌چین + جرثقیل
+                    opacity: building ? 0.55 : 1,
+                    background: 'linear-gradient(180deg,#262c47,#151827)', border: building ? '1px dashed #8a7c4c' : '1px solid #3c4468', borderBottom: 'none',
+                    backgroundImage: 'repeating-linear-gradient(0deg, rgba(255,214,120,.7) 0 2px, transparent 2px 8px), repeating-linear-gradient(90deg, transparent 0 5px, rgba(0,0,0,.4) 5px 10px)',
+                    animation: 'empUp .6s ease both', animationDelay: `${i * 80}ms`,
+                  }} />
+                  <span style={{ fontSize: 8.5, color: '#9aa0b8', maxWidth: 56, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{(a.hood || a.title || '').slice(0, 12)}</span>
                 </div>
               )
             })}

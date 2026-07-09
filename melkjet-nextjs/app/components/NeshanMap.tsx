@@ -7,11 +7,12 @@ import { useEffect, useRef, useState } from 'react'
 // icon/color: پینِ سفارشی (divIcon) — مثلاً 🏛 طلایی برای دارایی خودِ کاربر، 🔥 نارنجی برای فرصتِ روز، 🏞 سبز برای زمین.
 export interface MapPoint { id: string; lat: number; lng: number; title?: string; price?: string; icon?: string; color?: string }
 
-// مسیرِ رسمیِ مستنداتِ نشان (platform.neshan.org — Leaflet SDK v1.9.4). مسیرِ قدیمی (1.4.0/…/dist)
-// دیگر روی CDN جواب نمی‌داد و نقشهٔ تعاملی همه‌جا بی‌صدا به fallback می‌افتاد — چند نامزد به‌ترتیب امتحان می‌شود.
+// ⚠️ قانونِ کامپوننتِ مشترک: این نقشه در صفحهٔ ملک/سازنده‌ها/امپراتوری استفاده می‌شود — رفتارِ پیش‌فرضش
+// قفل است و هرگز عوض نمی‌شود؛ قابلیتِ جدید فقط با propِ جدید (opt-in). مسیرِ SDK همان مسیرِ اثبات‌شدهٔ
+// قدیمی است (تغییرش یک‌بار همهٔ نقشه‌های سایت را خاکستری کرد — فاز ۳۰)؛ v1.9.4 فقط نامزدِ پشتیبان است.
 const SDK_SOURCES = [
-  { css: 'https://static.neshan.org/sdk/leaflet/v1.9.4/neshan-sdk/v1.0.8/index.css', js: 'https://static.neshan.org/sdk/leaflet/v1.9.4/neshan-sdk/v1.0.8/index.js' },
   { css: 'https://static.neshan.org/sdk/leaflet/1.4.0/neshan-sdk-v1.0.8/dist/index.css', js: 'https://static.neshan.org/sdk/leaflet/1.4.0/neshan-sdk-v1.0.8/dist/index.js' },
+  { css: 'https://static.neshan.org/sdk/leaflet/v1.9.4/neshan-sdk/v1.0.8/index.css', js: 'https://static.neshan.org/sdk/leaflet/v1.9.4/neshan-sdk/v1.0.8/index.js' },
 ]
 const TEHRAN: [number, number] = [35.7559, 51.4105]
 
@@ -109,26 +110,14 @@ export default function NeshanMap({
       setTimeout(() => { try { mapRef.current?.invalidateSize?.() } catch {} }, 250)
       // حرکتِ خودِ کاربر (نه fit برنامه‌ای) → از این به بعد زوم/مرکزِ او محترم است و auto-fit خاموش می‌شود.
       try { mapRef.current.on('movestart zoomstart', () => { if (!programmaticRef.current) userMovedRef.current = true }) } catch {}
+      // برچسبِ پیش‌فرضِ «Leaflet» حذف می‌شود — اعتبارِ «نشان» سرِ جای خودش می‌ماند.
+      try { mapRef.current.attributionControl?.setPrefix?.('') } catch {}
       setReady(r => r + 1)
-      // نگهبانِ تایل (فاز ۲۸): اگر بعد از چند ثانیه هیچ کاشی‌ای لود نشد (کلید مجوزِ آن استایل را ندارد)،
-      // یک‌بار با استایلِ پایهٔ «neshan» دوباره می‌سازیم؛ اگر باز هم نشد، راهنمای دقیقِ مجوزِ کلید روی نقشه می‌آید.
-      const watchTiles = (attempt: number) => setTimeout(() => {
+      // نگهبانِ تایل: فقط «راهنما» — هیچ بازسازی/تغییرِ رفتاری (قانونِ کامپوننتِ مشترک، فاز ۳۰).
+      setTimeout(() => {
         if (dead || !ref.current || !mapRef.current) return
-        if (ref.current.querySelectorAll('.leaflet-tile-loaded').length > 0) return
-        if (attempt === 0) {
-          try { mapRef.current.remove() } catch {}
-          mapRef.current = null
-          try { if ((ref.current as any)._leaflet_id) { (ref.current as any)._leaflet_id = null; ref.current.innerHTML = '' } } catch {}
-          try {
-            mapRef.current = new L.Map(ref.current, { key, maptype: 'neshan', poi: true, traffic: false, center: center ? [center.lat, center.lng] : TEHRAN, zoom })
-            try { mapRef.current.on('movestart zoomstart', () => { if (!programmaticRef.current) userMovedRef.current = true }) } catch {}
-            fitKeyRef.current = ''; userMovedRef.current = false   // مارکرها روی نقشهٔ نو دوباره سوار شوند
-            setReady(r => r + 1)
-            watchTiles(1)
-          } catch { setTileHint(true) }
-        } else setTileHint(true)
-      }, 6000)
-      watchTiles(0)
+        if (ref.current.querySelectorAll('.leaflet-tile-loaded').length === 0) setTileHint(true)
+      }, 8000)
       // انتخابِ موقعیت با کلیک — جدا و غیرِمخرب: اگر بایندِ کلیک شکست بخورد، خودِ نقشه نباید خطا شود.
       if (onMapClick) {
         try {
