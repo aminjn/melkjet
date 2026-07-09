@@ -107,6 +107,9 @@ export interface EmpireData {
   stats?: { sellsProfitable: number; negoWins: number; negoTries?: number; projectsDelivered?: number; repProjects?: number }   // شمارنده‌های واقعیِ رفتار (جلد ۲۶/۷۲)
   projectHist?: ProjectReport[]   // کارنامهٔ پروژه‌های تحویل‌شده (GDD فصل ۴) — درسِ هر پروژه از اعدادِ واقعیِ خودش
   snap?: { day: number; netWorth: number; prev: number }   // اسنپ‌شاتِ روزانه — «سود/زیانِ دیروز» (جلد ۲۶)
+  weekSnap?: { week: number; netWorth: number }   // اسنپ‌شاتِ هفتگی — لیدربوردِ «رشدِ این هفته» (سند ۱۶: شانسِ بازیکنِ جدید)
+  lastLevel?: number          // آخرین سطحِ پاداش‌گرفته — پاداشِ Level Up (سند ۱۶ فصل ۶ بخش ۱)
+  title?: string              // عنوانِ (Title) فعال — فقط از نشان‌های واقعاً کسب‌شده (سند ۱۶ بخش ۹)
   pendingComeback?: number    // هدیهٔ بازگشت (Comeback Engine جلد ۲۶) — روزِ کشفِ غیبت
   stylePicks?: string[]                               // مأموریت M2 «سبکِ خودت را پیدا کن» (انتخابِ تصویری)
   hunter?: { a: string; b: string; better: string; at: number }   // جفتِ فعالِ Property Hunter (§6.4)
@@ -1301,6 +1304,43 @@ export async function sellProject(userId: string, assetId: string, exitPct: numb
   })
   if (!r.ok) return { ok: false, reason: r.reason }
   return { ok: true, proceeds, pnl, empire: r.empire }
+}
+
+// پاداشِ Level Up (سند ۱۶ فصل ۶ بخش ۱): رسیدن به سطحِ جدید (از XPِ واقعی) کوین می‌دهد — یک‌بار به‌ازای هر سطح.
+// اولین اجرا فقط سطحِ فعلی را ثبت می‌کند (بدونِ پاداشِ گذشته‌نگرِ یکجا برای بازیکن‌های قدیمی).
+export async function applyLevelUpReward(userId: string, coinsPerLevel: number, now = Date.now()): Promise<{ ok: boolean; gained?: number; level?: number; empire?: EmpireData }> {
+  let gained = 0, level = 0
+  const r = await mutateEmpire(userId, e => {
+    level = empireLevel(e.xp).level
+    if (!e.lastLevel) { e.lastLevel = level; return }   // ثبتِ اولیه — ذخیره می‌شود ولی پاداشی ندارد
+    if (level <= e.lastLevel) return 'سطحِ جدیدی نیست'
+    gained = (level - e.lastLevel) * Math.max(0, Math.round(coinsPerLevel))
+    e.lastLevel = level
+    if (gained > 0) {
+      e.coins += gained
+      e.timeline.push({ at: now, icon: '🎖', title: `رسیدن به سطحِ ${level.toLocaleString('fa-IR')}`, detail: `${gained.toLocaleString('fa-IR')} ملک‌کوین پاداشِ سطح` })
+    }
+  })
+  if (!r.ok) return { ok: false }
+  return { ok: true, gained, level, empire: r.empire }
+}
+
+// اسنپ‌شاتِ هفتگی (سند ۱۶ بخش ۷): مبنای لیدربوردِ «رشدِ این هفته» — هر بازیکن از نقطهٔ ورودِ خودش
+// در همین هفته سنجیده می‌شود، پس بازیکنِ تازه هم شانسِ رقابت دارد (قانونِ صریحِ سند).
+export async function setWeekSnap(userId: string, week: number, netWorth: number) {
+  return mutateEmpire(userId, e => {
+    if (e.weekSnap && e.weekSnap.week >= week) return 'ثبت شده'
+    e.weekSnap = { week, netWorth: Math.round(netWorth) }
+  })
+}
+
+// عنوانِ فعال (سند ۱۶ بخش ۹): فقط از نشان‌های واقعاً کسب‌شده — هویت از رفتار، نه خرید.
+export async function setTitle(userId: string, title: string) {
+  return mutateEmpire(userId, e => {
+    const t = String(title || '').trim()
+    if (t && !e.badges.includes(t)) return 'این عنوان را هنوز کسب نکرده‌ای'
+    e.title = t || undefined
+  })
 }
 
 // صدورِ پروانه‌های سررسیدشده — روی هر بازدید سنجیده می‌شود؛ اولین پروانه نشانِ «First Permit» می‌دهد.

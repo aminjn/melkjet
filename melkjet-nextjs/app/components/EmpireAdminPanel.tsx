@@ -264,6 +264,7 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             {row('پایهٔ منحنی (XP)', cin('levelCurve', 'base'), 'XP لازمِ سطحِ L = پایه × (L-1)^تندی')}
             {row('تندیِ منحنی', cin('levelCurve', 'exp'))}
             {row('XP فروشِ سودده', cin('sellProfitXp'))}
+            {row('کوینِ پاداشِ هر سطح', cin('levelUpCoins'), 'سند ۱۶ — Level Up باید حس شود')}
           </div>
           <div style={card}>
             <div style={sub}>🏞 سیستمِ زمین (برآوردهای شفاف)</div>

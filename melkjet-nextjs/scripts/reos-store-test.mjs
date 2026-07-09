@@ -1185,6 +1185,32 @@ async function main() {
     const sr15 = await stopRentUnits(uc12, land15, 2)
     ok('فسخِ اجاره: واحدها دوباره آزاد شدند', sr15.ok && !sr15.empire.assets.find(x => x.id === land15).construction.rented)
     ok('فسخِ بدونِ واحدِ اجاره‌ای رد می‌شود', (await stopRentUnits(uc12, land15, 1)).ok === false)
+    // ── فاز ۱۸ (سند ۱۶ — فصل ۶): پاداشِ سطح + اسنپ‌شاتِ هفتگی + عنوانِ فعال ──
+    console.log('\n── Empire · سند ۱۶ (پاداشِ Level Up، هفتگی، Title) ──')
+    const { applyLevelUpReward, setWeekSnap, setTitle } = await import('../app/lib/empire-store.ts')
+    const r18a = await applyLevelUpReward(uc12, 20)
+    ok('اولین اجرا فقط سطح را ثبت می‌کند (بدونِ پاداشِ گذشته‌نگر)', r18a.ok && (r18a.gained || 0) === 0 && (r18a.empire.lastLevel || 0) >= 1)
+    // XP را دستی بالا می‌بریم تا سطح واقعاً عوض شود
+    {
+      const eX = await getEmpire(uc12)
+      eX.xp += 100000
+      await pool.query(`UPDATE reos_empire SET data=$2 WHERE user_id=$1`, [uc12, JSON.stringify(eX)])
+    }
+    const coins18 = (await getEmpire(uc12)).coins
+    const r18b = await applyLevelUpReward(uc12, 20)
+    ok('سطحِ جدید → کوینِ پاداش به‌ازای هر سطح + تایم‌لاین', r18b.ok && (r18b.gained || 0) > 0 && r18b.empire.coins === coins18 + r18b.gained && (r18b.gained % 20) === 0)
+    ok('اجرای دوباره در همان سطح پاداش نمی‌دهد', (await applyLevelUpReward(uc12, 20)).ok === false)
+    // اسنپ‌شاتِ هفتگی: هفتهٔ جدید ثبت می‌شود، همان هفته دست نمی‌خورد
+    const w18 = 1000
+    ok('ثبتِ اسنپ‌شاتِ هفته', (await setWeekSnap(uc12, w18, 5_000_000_000)).ok === true)
+    ok('همان هفته دوباره ثبت نمی‌شود', (await setWeekSnap(uc12, w18, 9_000_000_000)).ok === false && (await getEmpire(uc12)).weekSnap.netWorth === 5_000_000_000)
+    ok('هفتهٔ بعد جایگزین می‌شود', (await setWeekSnap(uc12, w18 + 1, 6_000_000_000)).ok === true && (await getEmpire(uc12)).weekSnap.week === w18 + 1)
+    // عنوانِ فعال: فقط نشانِ کسب‌شده
+    ok('عنوانِ کسب‌نشده رد می‌شود', (await setTitle(uc12, 'NotABadge')).ok === false)
+    const badge18 = (await getEmpire(uc12)).badges[0]
+    ok('نشانِ کسب‌شده به‌عنوانِ Title می‌نشیند', !!badge18 && (await setTitle(uc12, badge18)).ok === true && (await getEmpire(uc12)).title === badge18)
+    ok('پاک‌کردنِ عنوان', (await setTitle(uc12, '')).ok === true && !(await getEmpire(uc12)).title)
+
     const s15b = await sellUnits(uc12, land15, 2, 1_000_000_000, 1)
     // پروژهٔ فاز ۱۳ (land12) هم موقعِ تحویلِ کامل کارنامه گرفته — پس اینجا دو کارنامه داریم
     ok('فروشِ ۲ واحدِ آخر: تحویلِ کامل + ثبتِ کارنامهٔ پروژه', s15b.ok && s15b.completed === true && (s15b.empire.projectHist || []).length === 2)

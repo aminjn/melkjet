@@ -486,7 +486,7 @@ export default function EmpirePage() {
     <div style={{ ...card, display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center' }}>
       <div style={{ fontSize: 30 }}>{e.persona || '🏛'}</div>
       <div style={{ flex: 1, minWidth: 180 }}>
-        <div style={{ fontWeight: 800, fontSize: 16 }}>{e.name} <span style={{ fontSize: 11, color: 'var(--muted)' }}>#{fa(e.no)}</span></div>
+        <div style={{ fontWeight: 800, fontSize: 16 }}>{e.name} <span style={{ fontSize: 11, color: 'var(--muted)' }}>#{fa(e.no)}</span>{e.title && <span style={{ fontSize: 10.5, marginRight: 8, padding: '2px 8px', borderRadius: 10, border: '1px solid var(--gold)', color: 'var(--gold)' }}>👑 {e.title}</span>}</div>
         <div style={{ fontSize: 12, color: 'var(--muted)' }}>{e.profile?.title} · DNA: {e.dna} · دستیار: {e.mentor}</div>
         <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>سطح {fa(lv.level || 1)} · {lv.titleFa} ({lv.title})</span>
@@ -1154,7 +1154,7 @@ export default function EmpirePage() {
       {!boards ? <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10 }}>در حال بارگذاری...</div> : (
         <div style={{ marginTop: 12 }}>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-            {[['score', '👑 امتیازِ امپراتوری'], ['invest', '💎 سرمایه‌گذارِ برتر'], ['growth', '🚀 رشدِ سریع'], ['builder', '🏗 سازنده'], ['explorer', '🧭 کاوشگر']].map(([k, l]) => (
+            {[['score', '👑 امتیازِ امپراتوری'], ['weekly', '📅 رشدِ این هفته'], ['invest', '💎 سرمایه‌گذارِ برتر'], ['growth', '🚀 رشدِ سریع'], ['builder', '🏗 سازنده'], ['explorer', '🧭 کاوشگر']].map(([k, l]) => (
               <button key={k} onClick={() => setBoardTab(k)} style={chip(boardTab === k)}>{l}</button>
             ))}
           </div>
@@ -1163,8 +1163,8 @@ export default function EmpirePage() {
               <div key={r.no} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, padding: '6px 10px', borderRadius: 8, background: r.me ? 'rgba(212,175,55,.10)' : 'var(--bg2)', border: r.me ? '1px solid var(--gold)' : '1px solid var(--line)' }}>
                 <b style={{ minWidth: 24, color: r.rank <= 3 ? 'var(--gold)' : 'var(--muted)' }}>{r.rank === 1 ? '🥇' : r.rank === 2 ? '🥈' : r.rank === 3 ? '🥉' : fa(r.rank)}</b>
                 <span>{r.persona || '🏛'}</span>
-                <span style={{ flex: 1 }}>{r.name}{r.me && <span style={{ fontSize: 10, color: 'var(--gold)' }}> (تو)</span>}</span>
-                <b style={{ color: 'var(--gold)', fontSize: 12 }}>{boardTab === 'invest' ? faB(r.value) : boardTab === 'growth' ? `${Number(r.value).toLocaleString('fa-IR')}٪` : fa(r.value)}</b>
+                <span style={{ flex: 1 }}>{r.name}{r.title && <span style={{ fontSize: 9.5, color: 'var(--gold)', marginRight: 5 }}>👑 {r.title}</span>}{r.me && <span style={{ fontSize: 10, color: 'var(--gold)' }}> (تو)</span>}</span>
+                <b style={{ color: 'var(--gold)', fontSize: 12 }}>{boardTab === 'invest' || boardTab === 'weekly' ? faB(r.value) : boardTab === 'growth' ? `${Number(r.value).toLocaleString('fa-IR')}٪` : fa(r.value)}</b>
               </div>
             ))}
             {!(boards.boards[boardTab] || []).length && <div style={{ fontSize: 12, color: 'var(--muted)' }}>هنوز رقابتی شکل نگرفته — تو اولین باش!</div>}
@@ -1241,7 +1241,14 @@ export default function EmpirePage() {
       </div>}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 14 }}>
         <span style={{ fontSize: 12, color: 'var(--muted)' }}>🏅 نشان‌ها:</span>
-        {(e.badges || []).map((bd: string) => <span key={bd} style={{ ...card, padding: '4px 10px', fontSize: 12, background: 'var(--bg2)' }}>{bd}</span>)}
+        {/* عنوانِ فعال (سند ۱۶): کلیک روی نشانِ کسب‌شده = انتخاب به‌عنوانِ Title — در سربرگ و لیدربوردها دیده می‌شود */}
+        {(e.badges || []).map((bd: string) => (
+          <button key={bd} disabled={busy} title={e.title === bd ? 'عنوانِ فعال — برای برداشتن دوباره بزن' : 'انتخاب به‌عنوانِ عنوانِ نمایشی'}
+            onClick={async () => { const d = await api({ action: 'setTitle', title: e.title === bd ? '' : bd }); if (d) setSt(d) }}
+            style={{ ...card, padding: '4px 10px', fontSize: 12, background: e.title === bd ? 'var(--goldDim)' : 'var(--bg2)', borderColor: e.title === bd ? 'var(--gold)' : 'var(--line)', color: e.title === bd ? 'var(--gold)' : 'var(--text)', cursor: 'pointer' }}>
+            {e.title === bd ? '👑 ' : ''}{bd}
+          </button>
+        ))}
         {st.hiddenLeft > 0 && <span style={{ fontSize: 11.5, color: 'var(--faint)' }}>🎖 {fa(st.hiddenLeft)} مأموریتِ مخفی در انتظارِ کشف...</span>}
         <span style={{ flex: 1 }} />
         <button style={{ ...btnGhost, fontSize: 12, padding: '6px 12px' }} onClick={async () => { const n = prompt('نامِ جدیدِ امپراتوری:', e.name); if (n != null) { const d = await api({ action: 'rename', name: n }); if (d) load() } }}>تغییرِ نام</button>

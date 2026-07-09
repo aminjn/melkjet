@@ -56,6 +56,8 @@ export interface ReosConfig {
     deals: { enabled: boolean; count: number }
     // GDD فصل ۴ بخش ۱۵: اعتبارِ ⭐ باید اثرِ واقعی داشته باشد — روی مذاکره و شرایطِ بانک.
     reputation: { negoBonusPerStar: number; loanRateCutPctPerStar: number }
+    // سند ۱۶ (فصل ۶ بخش ۱): پاداشِ رسیدن به هر سطحِ جدید (ملک‌کوین) — Level Up باید حس شود.
+    levelUpCoins: number
     // GDD فصل ۴ بخش ۱۹ (Progression): «اعداد نباید بزرگ‌تر شوند؛ امکانات باید بیشتر شوند» — قابلیت‌ها سطح‌گشا هستند
     // + فصل ۵ (منابع): ظرفیتِ پروژهٔ همزمانِ شرکت با سطح رشد می‌کند؛ خروج از پروژهٔ نیمه‌کاره با ٪ شفاف.
     unlocks: { capitalLevel: number; companyLevel: number; crowdLevel: number; projectsBase: number; projectsPerLevels: number; projectExitPct: number }
@@ -140,6 +142,8 @@ export const DEFAULT_CONFIG: ReosConfig = {
     deals: { enabled: true, count: 5 },
     // اعتبار = دارایی (سند ۱۴): هر ستارهٔ بالای ۱ → مذاکرهٔ راحت‌تر + نرخِ وامِ بهتر — شفاف و قطعی.
     reputation: { negoBonusPerStar: 2, loanRateCutPctPerStar: 3 },
+    // پاداشِ سطح (سند ۱۶): هر سطحِ جدید × این مقدار ملک‌کوین — بدونِ پاداشِ گذشته‌نگر برای قدیمی‌ها.
+    levelUpCoins: 20,
   },
 }
 

@@ -20,6 +20,7 @@ import {
   PROJECT_GOALS, goalPricePct, AMENITY_LABELS, amenityValueFactorOf, bulkPriceOf,
   projectLessonsOf, engineerEffectsOf, addAmenity, rentOutUnits, stopRentUnits,
   negoMemoryOf, bumpNegoTries, dailyDealPickOf, maxProjectsOf, sellProject,
+  applyLevelUpReward, setWeekSnap, setTitle,
   type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
 import {
@@ -277,7 +278,10 @@ async function stateOf(userId: string, e00: EmpireData) {
   const e2 = li?.ok && li.empire ? li.empire : e1b
   // کشفِ مأموریت‌های مخفی (جلد ۲۶) — از رفتارِ واقعیِ همین لحظه
   const hb = await applyHiddenBadges(userId).catch(() => null)
-  const e = hb?.ok && hb.empire ? hb.empire : e2
+  const e3 = hb?.ok && hb.empire ? hb.empire : e2
+  // پاداشِ Level Up (سند ۱۶): سطحِ جدید از XPِ واقعی → کوین + نقطهٔ تایم‌لاین (هر سطح یک‌بار)
+  const lvr = await applyLevelUpReward(userId, config().empire.levelUpCoins).catch(() => null)
+  const e = lvr?.ok && lvr.empire ? lvr.empire : e3
   const [prices, missions, total] = await Promise.all([livePrices(e), missionsOf(userId, e), empireCount()])
   const nw = netWorthOf(e, prices, mc || undefined)
   const assets = e.assets.map(a => ({
@@ -324,6 +328,9 @@ async function stateOf(userId: string, e00: EmpireData) {
   let dayDelta: number | null = null
   if (!e.snap || e.snap.day < today) { await snapshotNetWorth(userId, today, nw.netWorth).catch(() => {}); dayDelta = e.snap ? nw.netWorth - e.snap.netWorth : null }
   else dayDelta = nw.netWorth - e.snap.prev
+  // اسنپ‌شاتِ هفتگی (سند ۱۶): مبنای لیدربوردِ «رشدِ این هفته» — از نقطهٔ ورودِ خودِ بازیکن در این هفته
+  const thisWeek = Math.floor(today / 7)
+  if (!e.weekSnap || e.weekSnap.week < thisWeek) await setWeekSnap(userId, thisWeek, nw.netWorth).catch(() => {})
   return {
     enabled: true, empire: { ...e, assets }, level: empireLevel(e.xp), ...nw, missions, bank, quests,
     empireScore: empireScoreOf(e, prices),
@@ -637,13 +644,16 @@ export async function POST(req: NextRequest) {
         for (const p of Object.values(mstate.pools)) { if (p.totalUnits > 0) gCrowdUnit[p.listingId] = Math.round((prices[p.listingId] || p.unitToman * p.totalUnits) / p.totalUnits) }
       }
       const gMarket = { fundUnit: gFundUnit, crowdUnit: gCrowdUnit }
+      const weekNow = Math.floor(dayNumberOf(Date.now()) / 7)
       const rows = empires.map(e => {
         const nw = netWorthOf(e, prices, gMarket)
-        return { name: e.name, persona: e.persona, no: e.no, me: e.userId === userId, assets: e.assets.length, netWorth: nw.netWorth, growth: nw.growth, correct: e.guess.correct, score: empireScoreOf(e, prices), hoods: e.assets.map(a => a.hood).filter(Boolean) }
+        // «رشدِ این هفته» (سند ۱۶): دلتا از اسنپ‌شاتِ همین هفتهٔ خودِ بازیکن — بازیکنِ تازه هم شانس دارد
+        const weekly = e.weekSnap && e.weekSnap.week === weekNow ? nw.netWorth - e.weekSnap.netWorth : null
+        return { name: e.name, title: e.title, persona: e.persona, no: e.no, me: e.userId === userId, assets: e.assets.length, netWorth: nw.netWorth, growth: nw.growth, correct: e.guess.correct, score: empireScoreOf(e, prices), weekly, hoods: e.assets.map(a => a.hood).filter(Boolean) }
       })
-      const top = (key: 'netWorth' | 'growth' | 'assets' | 'correct' | 'score', filter?: (r: typeof rows[0]) => boolean) =>
-        [...rows].filter(r => !filter || filter(r)).sort((a, x) => (x[key] as number) - (a[key] as number)).slice(0, 10)
-          .map((r, i) => ({ rank: i + 1, name: r.name, persona: r.persona, no: r.no, me: r.me, value: r[key] }))
+      const top = (key: 'netWorth' | 'growth' | 'assets' | 'correct' | 'score' | 'weekly', filter?: (r: typeof rows[0]) => boolean) =>
+        [...rows].filter(r => (!filter || filter(r)) && r[key] != null).sort((a, x) => ((x[key] as number) || 0) - ((a[key] as number) || 0)).slice(0, 10)
+          .map((r, i) => ({ rank: i + 1, name: r.name, title: r.title, persona: r.persona, no: r.no, me: r.me, value: r[key] }))
       const myHood = me?.assets[0]?.hood || ''
       const hoodLeague = myHood ? top('score', r => r.hoods.includes(myHood)) : []
       // گذرنامهٔ امپراتوری (GDD جلد۶ «Empire Passport»): نفوذِ من در هر محله = سهمِ ارزشِ من از کلِ بازیکنان.
@@ -660,6 +670,7 @@ export async function POST(req: NextRequest) {
         boards: {
           invest: top('netWorth'), growth: top('growth', r => r.assets > 0), builder: top('assets'),
           explorer: top('correct'), score: top('score'),
+          weekly: top('weekly'),   // دوره‌ای (سند ۱۶): در کنارِ دائمی‌ها — شانسِ بازیکنِ جدید
         },
         hoodLeague: { hood: myHood, rows: hoodLeague },
         passport,
@@ -1021,6 +1032,13 @@ export async function POST(req: NextRequest) {
         return { id: it.id, title: it.title, hood: hoodOf(it.location), price, perM: area > 0 ? Math.round(price / area) : 0, scrapedAt: it.scrapedAt || 0 }
       })
       return NextResponse.json({ ok: true, ...newsOf({ now: Date.now(), listings, empires, prices }) })
+    }
+
+    // عنوانِ فعال (سند ۱۶ بخش ۹): فقط از نشان‌های واقعاً کسب‌شده — در سربرگ و لیدربوردها نمایش داده می‌شود.
+    case 'setTitle': {
+      const r = await setTitle(userId, String(b.title || ''))
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
     }
 
     case 'journal': { const r = await addJournal(userId, String(b.text || '')); return r.ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: r.reason }, { status: 400 }) }
