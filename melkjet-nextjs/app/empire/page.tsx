@@ -505,7 +505,7 @@ export default function EmpirePage() {
         <span style={{ ...card, padding: '6px 10px' }}>🪙 {fa(e.coins)}</span>
         <span style={{ ...card, padding: '6px 10px' }}>🤖 {fa(e.aiTokens)}</span>
         {st.streak && st.streak.streak > 0 && <span style={{ ...card, padding: '6px 10px' }} title="روزهای پیاپیِ حضور">🔥 {fa(st.streak.streak)}</span>}
-        {(e.kudos || 0) > 0 && <span style={{ ...card, padding: '6px 10px' }} title="تحسینِ بازیکنانِ واقعی">👏 {fa(e.kudos)}</span>}
+        {(e.kudos || 0) > 0 && <span style={{ ...card, padding: '6px 10px' }} title="تحسینِ امپراتورهای واقعی">👏 {fa(e.kudos)}</span>}
       </div>
     </div>
 
@@ -680,7 +680,7 @@ export default function EmpirePage() {
     {st.companyEnabled && !st.company && st.unlocks && !st.unlocks.company.ok && (
       <div style={{ ...card, fontSize: 12.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{ fontSize: 20 }}>🔒</span>
-        <span><b style={{ color: 'var(--text)' }}>شرکتِ ساختمانی</b> از سطحِ {fa(st.unlocks.company.need)} باز می‌شود — الان سطحِ {fa(st.unlocks.level)} هستی. با تصمیم‌های واقعی XP بگیر؛ یک بازیِ تازه منتظرت است.</span>
+        <span><b style={{ color: 'var(--text)' }}>شرکتِ ساختمانی</b> از سطحِ {fa(st.unlocks.company.need)} باز می‌شود — الان سطحِ {fa(st.unlocks.level)} هستی. با تصمیم‌های واقعی XP بگیر؛ فصلِ تازه‌ای از امپراتوری منتظرت است.</span>
       </div>
     )}
     {st.companyEnabled && (!st.company && st.unlocks?.company.ok ? (

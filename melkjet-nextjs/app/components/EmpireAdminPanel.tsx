@@ -8,6 +8,15 @@ const FONT = 'Vazirmatn, system-ui, sans-serif'
 const fa = (n: number) => (n || 0).toLocaleString('fa-IR')
 const faB = (n: number) => n >= 1e9 ? `${(Math.round(n / 1e8) / 10).toLocaleString('fa-IR')} میلیارد` : n >= 1e6 ? `${fa(Math.round(n / 1e6))} میلیون` : fa(Math.round(n))
 const faDate = (t: number) => t ? new Date(t).toLocaleDateString('fa-IR') : '—'
+// قانونِ digitsOf (تراکر §۱۰): رقمِ فارسی/عربی → لاتین، ٫ → نقطه، جداکنندهٔ هزارگان حذف — تا «۲۵» یا «۱٫۵» در knobها NaN نشود.
+const deFa = (s: string) => {
+  let t = s.replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+    .replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+    .replace(/٫/g, '.').replace(/[٬,\s]/g, '')
+  if ((t.match(/\./g) || []).length > 1) t = t.replace(/\./g, '')   // چند نقطه = جداکنندهٔ هزارگان
+  return t
+}
+const numOf = (v: string) => Number(deFa(v))
 const card: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18, fontFamily: FONT, direction: 'rtl' }
 const sub: React.CSSProperties = { fontSize: 13, fontWeight: 800, marginBottom: 8, color: 'var(--gold)' }
 const btn: React.CSSProperties = { background: 'var(--gold)', color: '#1a1503', border: 'none', borderRadius: 9, padding: '8px 16px', fontWeight: 800, cursor: 'pointer', fontFamily: FONT, fontSize: 12.5 }
@@ -70,7 +79,8 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
   const setC = (key: string, val: string, sk?: string) => setCfg((c: any) => {
     if (!c) return c
     const n = JSON.parse(JSON.stringify(c))
-    const num = val === '' ? '' : (isNaN(Number(val)) ? val : Number(val))
+    const dv = deFa(val)
+    const num = val === '' ? '' : (dv !== '' && !isNaN(Number(dv)) ? Number(dv) : val)
     if (sk) n[key][sk] = num; else n[key] = num
     return n
   })
@@ -226,7 +236,7 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             <input value={adj.reason} onChange={e => setAdj({ ...adj, reason: e.target.value })} placeholder="دلیل (در تایم‌لاینِ بازیکن ثبت می‌شود)" style={{ ...inpS, width: '100%', marginBottom: 8 }} />
             <div style={{ display: 'flex', gap: 8 }}>
               <button style={btn} disabled={busy === 'adjust'} onClick={async () => {
-                if (await post({ action: 'adjust', userId: sel.empire.userId, coins: Number(adj.coins) || 0, xp: Number(adj.xp) || 0, capital: Number(adj.capital) || 0, aiTokens: Number(adj.aiTokens) || 0, reason: adj.reason }, 'اعمال شد ✓')) { setAdj({ coins: '', xp: '', capital: '', aiTokens: '', reason: '' }); openPlayer(sel.empire.userId) }
+                if (await post({ action: 'adjust', userId: sel.empire.userId, coins: numOf(adj.coins) || 0, xp: numOf(adj.xp) || 0, capital: numOf(adj.capital) || 0, aiTokens: numOf(adj.aiTokens) || 0, reason: adj.reason }, 'اعمال شد ✓')) { setAdj({ coins: '', xp: '', capital: '', aiTokens: '', reason: '' }); openPlayer(sel.empire.userId) }
               }}>اعمال</button>
               <button style={{ ...btnGhost, color: '#e88', borderColor: '#644' }} disabled={busy === 'delete'} onClick={async () => {
                 if (!confirm(`امپراتوریِ «${sel.empire.name}» برای همیشه حذف شود؟ برگشت‌ناپذیر است.`)) return
@@ -295,7 +305,7 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             {(['baseDays', 'extraDaysMax', 'feePct', 'objectionPct', 'engineerSpeedupDays'] as const).map(k => {
               const labels: Record<string, [string, string?]> = { baseDays: ['پروانه: حداقلِ بررسی (روز)'], extraDaysMax: ['پروانه: حداکثر روزِ اضافه (هش)'], feePct: ['پروانه: عوارض (٪ ارزشِ زمین)', '→ خزانه'], objectionPct: ['پروانه: احتمالِ اعتراض (٪)'], engineerSpeedupDays: ['پروانه: تسریعِ مهندسِ ماهر (روز)', 'مهارتِ تیم ≥۶۰'] }
               const v = cfg?.company?.permit?.[k]
-              return row(labels[k][0], <input key={k} value={String(v ?? '')} onChange={ev => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.company = n.company || {}; n.company.permit = n.company.permit || {}; n.company.permit[k] = ev.target.value === '' ? '' : Number(ev.target.value); return n })} style={{ ...inpS, width: 110, textAlign: 'center' }} />, labels[k][1])
+              return row(labels[k][0], <input key={k} value={String(v ?? '')} onChange={ev => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.company = n.company || {}; n.company.permit = n.company.permit || {}; n.company.permit[k] = ev.target.value === '' ? '' : numOf(ev.target.value); return n })} style={{ ...inpS, width: 110, textAlign: 'center' }} />, labels[k][1])
             })}
           </div>
           <div style={card}>
@@ -320,7 +330,7 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             {row('تیمِ ماهر: کاهشِ هزینهٔ رویداد (٪)', cin('build', 'eventSkillCutPct'), 'مهارتِ تیم ≥۵۰ — روی کارتِ استخدام هم نوشته می‌شود')}
             {([['pool', 'استخر و سونا'], ['roof', 'روف‌گاردن'], ['gym', 'باشگاهِ ورزشی'], ['parking', 'پارکینگِ اضافه']] as const).map(([k, lbl]) => {
               const am = cfg?.build?.amenities?.[k] || {}
-              const set = (field: 'costPct' | 'valuePct', val: string) => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.build = n.build || {}; n.build.amenities = n.build.amenities || {}; n.build.amenities[k] = n.build.amenities[k] || {}; n.build.amenities[k][field] = val === '' ? '' : Number(val); return n })
+              const set = (field: 'costPct' | 'valuePct', val: string) => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.build = n.build || {}; n.build.amenities = n.build.amenities || {}; n.build.amenities[k] = n.build.amenities[k] || {}; n.build.amenities[k][field] = val === '' ? '' : numOf(val); return n })
               return row(`امکانات: ${lbl}`, <span key={k} style={{ display: 'flex', gap: 6 }}>
                 <input title="هزینه (٪ کلِ پروژه)" value={String(am.costPct ?? '')} onChange={ev => set('costPct', ev.target.value)} style={{ ...inpS, width: 52, textAlign: 'center' }} />
                 <input title="ارزش (+٪ قیمتِ واحد)" value={String(am.valuePct ?? '')} onChange={ev => set('valuePct', ev.target.value)} style={{ ...inpS, width: 52, textAlign: 'center' }} />
@@ -365,7 +375,8 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
       const n = JSON.parse(JSON.stringify(c))
       let o = n.capital = n.capital || {}
       for (let i = 0; i < path.length - 1; i++) o = o[path[i]] = o[path[i]] || {}
-      o[path[path.length - 1]] = val === '' ? '' : (isNaN(Number(val)) ? val : Number(val))
+      const dv = deFa(val)
+      o[path[path.length - 1]] = val === '' ? '' : (dv !== '' && !isNaN(Number(dv)) ? Number(dv) : val)
       return n
     })
     const capIn = (path: string[], w = 110) => {
@@ -412,7 +423,7 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
               </select>
               <input value={fnd.fee} onChange={e => setFnd({ ...fnd, fee: e.target.value })} placeholder="کارمزد ٪" style={{ ...inpS, width: 90, textAlign: 'center' }} />
               <button style={btn} disabled={busy === 'fundCreate'} onClick={async () => {
-                if (await post({ action: 'fundCreate', name: fnd.name, seg: fnd.seg, feePctYear: Number(fnd.fee) || 0 }, 'صندوق ساخته شد ✓')) { setFnd({ name: '', seg: '', fee: '2' }); reload() }
+                if (await post({ action: 'fundCreate', name: fnd.name, seg: fnd.seg, feePctYear: numOf(fnd.fee) || 0 }, 'صندوق ساخته شد ✓')) { setFnd({ name: '', seg: '', fee: '2' }); reload() }
               }}>+ ساختِ صندوق</button>
             </div>
           </div>
@@ -630,7 +641,7 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
       {!flag ? loading : (
         <div style={card}>
           {row('بازی فعال است (۱/۰)', <input value={flag.enabled ? '1' : '0'} onChange={e => setFlag({ ...flag, enabled: e.target.value === '1' })} style={{ ...inpS, width: 70, textAlign: 'center' }} />, 'خاموش = صفحهٔ /empire و کارتِ پنل‌ها برای همه بسته می‌شود')}
-          {row('عرضهٔ تدریجی (٪ کاربران)', <input value={String(flag.rolloutPct)} onChange={e => setFlag({ ...flag, rolloutPct: Number(e.target.value) || 0 })} style={{ ...inpS, width: 70, textAlign: 'center' }} />, 'سنجشِ قطعی — یک کاربر همیشه یک نتیجه می‌گیرد')}
+          {row('عرضهٔ تدریجی (٪ کاربران)', <input value={String(flag.rolloutPct)} onChange={e => setFlag({ ...flag, rolloutPct: numOf(e.target.value) || 0 })} style={{ ...inpS, width: 70, textAlign: 'center' }} />, 'سنجشِ قطعی — یک کاربر همیشه یک نتیجه می‌گیرد')}
           {row('فقط این شهرها (با ، جدا؛ خالی = همه)', <input value={(flag.cities || []).join('، ')} onChange={e => setFlag({ ...flag, cities: e.target.value.split(/[،,]/).map((x: string) => x.trim()).filter(Boolean) })} style={{ ...inpS, width: 240 }} />)}
           <div style={{ marginTop: 12 }}>
             <button style={btn} disabled={busy === 'flag'} onClick={async () => {
@@ -663,13 +674,13 @@ function EventComposer({ onAdd }: { onAdd: (ev: unknown) => void }) {
       <input value={t.rewardCoins} onChange={e => setT({ ...t, rewardCoins: e.target.value })} title="کوینِ پاداش" style={{ ...inpS, width: 62, textAlign: 'center' }} />
       <input value={t.rewardXp} onChange={e => setT({ ...t, rewardXp: e.target.value })} title="XP پاداش" style={{ ...inpS, width: 56, textAlign: 'center' }} />
       <input value={t.days} onChange={e => setT({ ...t, days: e.target.value })} title="مدت (روز)" style={{ ...inpS, width: 56, textAlign: 'center' }} />
-      <button style={{ ...btnGhost, padding: '7px 14px' }} disabled={!t.title.trim() || !(Number(t.target) > 0) || !(Number(t.days) > 0)} onClick={() => {
+      <button style={{ ...btnGhost, padding: '7px 14px' }} disabled={!t.title.trim() || !(numOf(t.target) > 0) || !(numOf(t.days) > 0)} onClick={() => {
         const now = Date.now()
         onAdd({
           id: 'ev' + now.toString(36), title: t.title.trim().slice(0, 60), desc: t.desc.trim().slice(0, 120), icon: t.icon.slice(0, 4) || '🎪',
-          metric: t.metric, target: Math.max(1, Math.floor(Number(t.target) || 1)),
-          rewardCoins: Math.max(0, Math.floor(Number(t.rewardCoins) || 0)), rewardXp: Math.max(0, Math.floor(Number(t.rewardXp) || 0)),
-          startAt: now, endAt: now + Math.max(1, Math.floor(Number(t.days) || 1)) * 864e5, enabled: true,
+          metric: t.metric, target: Math.max(1, Math.floor(numOf(t.target) || 1)),
+          rewardCoins: Math.max(0, Math.floor(numOf(t.rewardCoins) || 0)), rewardXp: Math.max(0, Math.floor(numOf(t.rewardXp) || 0)),
+          startAt: now, endAt: now + Math.max(1, Math.floor(numOf(t.days) || 1)) * 864e5, enabled: true,
         })
         setT({ ...t, title: '', desc: '' })
       }}>+ افزودن</button>
