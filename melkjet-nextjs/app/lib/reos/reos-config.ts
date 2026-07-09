@@ -58,6 +58,11 @@ export interface ReosConfig {
     reputation: { negoBonusPerStar: number; loanRateCutPctPerStar: number }
     // سند ۱۶ (فصل ۶ بخش ۱): پاداشِ رسیدن به هر سطحِ جدید (ملک‌کوین) — Level Up باید حس شود.
     levelUpCoins: number
+    // سند ۱۸ (فصل ۸ LiveOps): رویدادهای زندهٔ ادمین — بدونِ دیپلوی از پنل ساخته/زمان‌بندی می‌شوند؛
+    // پیشرفت فقط از رفتارِ واقعیِ REOS (بازدید/ذخیره/جستجو/محله‌ها) در بازهٔ رویداد.
+    events: Array<{ id: string; title: string; desc: string; icon: string; metric: 'views' | 'saves' | 'searches' | 'hoods'; target: number; rewardXp: number; rewardCoins: number; startAt: number; endAt: number; enabled: boolean }>
+    // سند ۱۸ (فصل ۸ بخش ۱): پاداشِ نقاطِ عطفِ ورودِ پیاپی (استریکِ واقعی) — روزهای ۷/۱۴/۲۱/۳۰.
+    streakBonus: { d7: number; d14: number; d21: number; d30: number }
     // GDD فصل ۴ بخش ۱۹ (Progression): «اعداد نباید بزرگ‌تر شوند؛ امکانات باید بیشتر شوند» — قابلیت‌ها سطح‌گشا هستند
     // + فصل ۵ (منابع): ظرفیتِ پروژهٔ همزمانِ شرکت با سطح رشد می‌کند؛ خروج از پروژهٔ نیمه‌کاره با ٪ شفاف.
     unlocks: { capitalLevel: number; companyLevel: number; crowdLevel: number; projectsBase: number; projectsPerLevels: number; projectExitPct: number }
@@ -144,6 +149,10 @@ export const DEFAULT_CONFIG: ReosConfig = {
     reputation: { negoBonusPerStar: 2, loanRateCutPctPerStar: 3 },
     // پاداشِ سطح (سند ۱۶): هر سطحِ جدید × این مقدار ملک‌کوین — بدونِ پاداشِ گذشته‌نگر برای قدیمی‌ها.
     levelUpCoins: 20,
+    // استودیوی رویداد (سند ۱۸): پیش‌فرض خالی — ادمین از کنسولِ LiveOps می‌سازد؛ نیازی به دیپلوی نیست.
+    events: [],
+    // پاداشِ نقاطِ عطفِ استریک (سند ۱۸ بخش ۱): ملک‌کوین در روزهای ۷/۱۴/۲۱/۳۰ِ ورودِ پیاپیِ واقعی.
+    streakBonus: { d7: 30, d14: 60, d21: 100, d30: 200 },
   },
 }
 

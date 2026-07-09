@@ -20,7 +20,7 @@ import {
   PROJECT_GOALS, goalPricePct, AMENITY_LABELS, amenityValueFactorOf, bulkPriceOf,
   projectLessonsOf, engineerEffectsOf, addAmenity, rentOutUnits, stopRentUnits,
   negoMemoryOf, bumpNegoTries, dailyDealPickOf, maxProjectsOf, sellProject,
-  applyLevelUpReward, setWeekSnap, setTitle, giveKudos,
+  applyLevelUpReward, setWeekSnap, setTitle, giveKudos, eventActive, streakMilestonesOf,
   type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
 import {
@@ -78,6 +78,31 @@ async function missionsOf(userId: string, e: EmpireData) {
     m3: { tries: e.guess.tries, correct: e.guess.correct, done: e.guess.tries >= 1, rewardXp: cfg.guessRewardXp, rewardCoins: cfg.guessRewardCoins },
     hunter: { active: !!e.hunter, claimed: !!e.claims['property_hunter'], rewardXp: cfg.missionRewardXp, rewardCoins: cfg.missionRewardCoins },
   }
+}
+
+// 🎪 رویدادهای زندهٔ ادمین (سند ۱۸ — LiveOps): تعریف از پنل بدونِ دیپلوی؛ پیشرفت فقط از رفتارِ واقعیِ
+// ثبت‌شدهٔ REOS در بازهٔ خودِ رویداد — هیچ شمارندهٔ ساختگی.
+async function liveEventsOf(userId: string, e: EmpireData, now = Date.now()) {
+  const defs = (config().empire.events || []).filter(d => eventActive(d, now))
+  if (!defs.length) return []
+  const evs = await recentEvents({ userId, limit: 300 }).catch(() => [])
+  const out = []
+  for (const d of defs) {
+    const win = evs.filter(x => x.at >= d.startAt && x.at < d.endAt)
+    const viewIds = [...new Set(win.filter(x => x.type === 'user_clicked_property' && x.propertyId).map(x => x.propertyId!))]
+    let progress = 0
+    if (d.metric === 'views') progress = viewIds.length
+    else if (d.metric === 'saves') progress = win.filter(x => x.type === 'user_saved_property').length
+    else if (d.metric === 'searches') progress = win.filter(x => x.type === 'user_searched').length
+    else if (d.metric === 'hoods') {
+      const hs = new Set<string>()
+      for (const id of viewIds.slice(0, 15)) { const it = await getItemById(id).catch(() => null); const h = it ? hoodOf(it.location) : ''; if (h) hs.add(h) }
+      progress = hs.size
+    }
+    progress = Math.min(Math.max(1, d.target), progress)
+    out.push({ id: d.id, title: d.title, desc: d.desc, icon: d.icon || '🎪', endAt: d.endAt, target: d.target, progress, done: progress >= d.target, claimed: !!e.claims['ev_' + d.id], rewardXp: d.rewardXp || 0, rewardCoins: d.rewardCoins || 0 })
+  }
+  return out
 }
 
 // کوئستِ روزانه/هفتگی (GDD جلد۲): تعریفِ قطعیِ چرخشی + پیشرفت از رویدادهای واقعیِ همان دوره.
@@ -321,6 +346,9 @@ async function stateOf(userId: string, e00: EmpireData) {
   const repArg = repStars > 1 ? { stars: repStars, cutPctPerStar: config().empire.reputation.loanRateCutPctPerStar } : undefined
   const bank = config().empire.bank.enabled ? { credit, loan: e.loan || null, terms: e.loan ? null : loanTermsFor(credit.score, Math.max(0, nw.netWorth), config().empire.bank, repArg) } : null
   const quests = await questsOf(userId, e).catch(() => null)
+  // 🎪 رویدادهای زندهٔ فعال (سند ۱۸) + پاداشِ نقاطِ عطفِ استریکِ واقعی (بخش ۱)
+  const liveEvents = await liveEventsOf(userId, e).catch(() => [])
+  const streakBonuses = streak ? streakMilestonesOf(streak.streak || 0, today, e.claims, config().empire.streakBonus) : []
   const chestAvailable = config().empire.chest.enabled && !e.claims['chest_' + today]
   // «امروز فقط N دقیقه لازم داری» (فصل ۴ Real Life Time Engine): از کارهای بازِ واقعی.
   const openActions = [quests?.daily && !quests.daily.claimed, quests?.weekly && !quests.weekly.claimed, chestAvailable, missions?.m1?.done && !missions.m1.claimed, brief && !brief.openedAt].filter(Boolean).length
@@ -333,6 +361,7 @@ async function stateOf(userId: string, e00: EmpireData) {
   if (!e.weekSnap || e.weekSnap.week < thisWeek) await setWeekSnap(userId, thisWeek, nw.netWorth).catch(() => {})
   return {
     enabled: true, empire: { ...e, assets }, level: empireLevel(e.xp), ...nw, missions, bank, quests,
+    liveEvents, streakBonuses,
     empireScore: empireScoreOf(e, prices),
     chest: config().empire.chest.enabled ? { available: chestAvailable } : null,
     othersBuilding: Math.max(0, total - 1),
@@ -552,7 +581,19 @@ export async function POST(req: NextRequest) {
       const ms = await missionsOf(userId, e)
       const qs = await questsOf(userId, e).catch(() => null)
       const key = String(b.key || '')
-      const def = key === 'm1_explore' ? (ms.m1.done ? { xp: ms.m1.rewardXp, coins: ms.m1.rewardCoins } : null)
+      // 🎪 رویدادِ زنده (سند ۱۸): سرور خودش پیشرفتِ واقعی را دوباره می‌سنجد — claim فقط با هدفِ کامل
+      let evDef: { xp: number; coins: number } | null = null
+      if (key.startsWith('ev_')) {
+        const le = (await liveEventsOf(userId, e).catch(() => [])).find(x => 'ev_' + x.id === key)
+        if (le && le.done) evDef = { xp: le.rewardXp, coins: le.rewardCoins }
+      } else if (key.startsWith('sm_')) {
+        // پاداشِ نقطهٔ عطفِ استریک (سند ۱۸ بخش ۱): از استریکِ واقعیِ همین دوره
+        const stk = await getStreak(userId).catch(() => ({ streak: 0 }))
+        const sb = streakMilestonesOf(stk.streak || 0, dayNumberOf(Date.now()), e.claims, config().empire.streakBonus).find(x => x.claimKey === key)
+        if (sb && sb.done) evDef = { xp: 0, coins: sb.coins }
+      }
+      const def = evDef ? evDef
+        : key === 'm1_explore' ? (ms.m1.done ? { xp: ms.m1.rewardXp, coins: ms.m1.rewardCoins } : null)
         : key === 'm2_style' ? (ms.m2.done ? { xp: ms.m2.rewardXp, coins: ms.m2.rewardCoins } : null)
         : qs && key === qs.daily.claimKey ? (qs.daily.done ? { xp: qs.daily.rewardXp, coins: qs.daily.rewardCoins } : null)
         : qs && key === qs.weekly.claimKey ? (qs.weekly.done ? { xp: qs.weekly.rewardXp, coins: qs.weekly.rewardCoins } : null)

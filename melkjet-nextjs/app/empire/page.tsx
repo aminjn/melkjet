@@ -548,6 +548,28 @@ export default function EmpirePage() {
       )
     })()}
 
+    {/* 🎪 رویدادهای زندهٔ ادمین (سند ۱۸ — LiveOps): بدونِ دیپلوی از پنل ساخته می‌شوند؛ پیشرفت از رفتارِ واقعی */}
+    {(st.liveEvents || []).map((ev: any) => (
+      <div key={ev.id} style={{ ...card, borderColor: ev.done && !ev.claimed ? 'var(--gold)' : 'var(--line)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 20 }}>{ev.icon}</span>
+          <div style={{ flex: 1, minWidth: 160 }}>
+            <b style={{ fontSize: 13.5 }}>{ev.title}</b>
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>{ev.desc}</div>
+          </div>
+          <span style={{ fontSize: 11, color: '#e7a14a' }}>⏳ تا {new Date(ev.endAt).toLocaleDateString('fa-IR')}</span>
+          {ev.claimed
+            ? <span style={{ fontSize: 11.5, color: '#7c6' }}>✓ پاداش دریافت شد</span>
+            : ev.done
+              ? <button style={{ ...btn, padding: '6px 14px', fontSize: 12 }} disabled={busy} onClick={() => doClaim('ev_' + ev.id)}>🎁 دریافتِ پاداش{ev.rewardCoins ? ` (${fa(ev.rewardCoins)} کوین)` : ''}</button>
+              : <span style={{ fontSize: 12, color: 'var(--muted)' }}>{fa(ev.progress)}/{fa(ev.target)}</span>}
+        </div>
+        <div style={{ height: 6, background: 'var(--line)', borderRadius: 4, marginTop: 8 }}>
+          <div style={{ width: `${Math.round((ev.progress / Math.max(1, ev.target)) * 100)}%`, height: 6, borderRadius: 4, background: ev.done ? '#7c6' : 'var(--gold)', transition: 'width .5s ease' }} />
+        </div>
+      </div>
+    ))}
+
     {/* پیامِ بازگشت (فصل ۴) + هدیهٔ بازگشت + پیام‌آغازیِ دستیار + نردبانِ رؤیا + زمانِ امروز */}
     {st.welcomeBack && <MJ><b>دلمان برایت تنگ شده بود.</b><br />در نبودت بازار حرکت کرده و ارزشِ دارایی‌هایت دوباره از قیمت‌های واقعی محاسبه شد. همهٔ سرمایه‌گذارهای بزرگ وقفه داشته‌اند — مهم برگشتن است.
       {st.welcomeBack.gift && <div style={{ marginTop: 8 }}><button style={{ ...btn, padding: '6px 14px', fontSize: 12.5 }} disabled={busy} onClick={async () => { const d = await api({ action: 'comeback' }); if (d) { setSt(d); alert(`🎁 هدیهٔ بازگشت: ${fa(d.coins)} ملک‌کوین`) } }}>🎁 دریافتِ هدیهٔ بازگشت</button></div>}
@@ -857,6 +879,19 @@ export default function EmpirePage() {
         ))}
       </div>
     </div>}
+
+    {/* 🔥 پاداشِ نقاطِ عطفِ استریک (سند ۱۸ بخش ۱): از ورودِ پیاپیِ واقعی — روزهای ۷/۱۴/۲۱/۳۰ */}
+    {(st.streakBonuses || []).some((sb: any) => sb.done && !sb.claimed) && (
+      <div style={{ ...card, borderColor: 'var(--gold)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 20 }}>🔥</span>
+        <b style={{ fontSize: 13 }}>پاداشِ استریکِ {fa(st.streak?.streak || 0)} روزه آماده است</b>
+        <span style={{ flex: 1 }} />
+        {st.streakBonuses.filter((sb: any) => sb.done && !sb.claimed).map((sb: any) => (
+          <button key={sb.claimKey} style={{ ...btn, padding: '6px 12px', fontSize: 12 }} disabled={busy}
+            onClick={() => doClaim(sb.claimKey)}>🎁 روزِ {fa(sb.days)} → {fa(sb.coins)} کوین</button>
+        ))}
+      </div>
+    )}
 
     {/* مأموریت‌ها — پیشرفت از رفتارِ واقعی */}
     {ms && <div style={card}>

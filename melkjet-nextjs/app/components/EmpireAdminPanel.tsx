@@ -587,6 +587,38 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
           {row('فعال (۱/۰)', cin('dailyBrief'))}
           <div style={{ marginTop: 10 }}><button style={btn} disabled={busy === 'cfg'} onClick={saveCfg}>💾 ذخیره</button></div>
         </div>}
+        {/* 🎪 استودیوی رویداد (سند ۱۸ — LiveOps): رویدادِ زمان‌دار بدونِ دیپلوی؛ پیشرفت از رفتارِ واقعیِ REOS */}
+        {cfg && <div style={card}>
+          <div style={sub}>🎪 استودیوی رویداد — بدونِ دیپلوی</div>
+          <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 10 }}>
+            رویدادِ زمان‌دار بساز؛ همان لحظه در داشبوردِ همهٔ بازیکنان ظاهر می‌شود. پیشرفت فقط از رفتارِ
+            واقعیِ ثبت‌شده (بازدید/ذخیره/جستجو/محله‌های متفاوت) در بازهٔ رویداد سنجیده می‌شود.
+          </div>
+          {(cfg.events || []).map((ev: any, i: number) => (
+            <div key={ev.id} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '8px 10px', borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--line)', marginBottom: 6, fontSize: 12 }}>
+              <span>{ev.icon || '🎪'}</span>
+              <b style={{ flex: 1, minWidth: 120 }}>{ev.title}</b>
+              <span style={{ color: 'var(--muted)' }}>{({ views: 'بازدید', saves: 'ذخیره', searches: 'جستجو', hoods: 'محله' } as any)[ev.metric] || ev.metric} × {fa(ev.target)}</span>
+              <span style={{ color: 'var(--muted)' }}>🎁 {fa(ev.rewardCoins || 0)} کوین{ev.rewardXp ? ` + ${fa(ev.rewardXp)} XP` : ''}</span>
+              <span style={{ color: Date.now() < ev.endAt ? '#e7a14a' : 'var(--faint)' }}>{new Date(ev.startAt).toLocaleDateString('fa-IR')} تا {new Date(ev.endAt).toLocaleDateString('fa-IR')}</span>
+              <button style={{ ...btnGhost, padding: '3px 9px', fontSize: 11, color: ev.enabled ? '#7c6' : 'var(--muted)' }}
+                onClick={() => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.events[i].enabled = !n.events[i].enabled; return n })}>{ev.enabled ? 'فعال ✓' : 'خاموش'}</button>
+              <button style={{ ...btnGhost, padding: '3px 9px', fontSize: 11, color: '#e88' }}
+                onClick={() => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.events.splice(i, 1); return n })}>حذف</button>
+            </div>
+          ))}
+          <EventComposer onAdd={(ev: any) => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.events = [...(n.events || []), ev]; return n })} />
+          <div style={{ marginTop: 10 }}><button style={btn} disabled={busy === 'cfg'} onClick={saveCfg}>💾 ذخیره و اجرای زنده</button></div>
+        </div>}
+        {/* پاداشِ نقاطِ عطفِ استریک (سند ۱۸ بخش ۱) */}
+        {cfg && <div style={card}>
+          <div style={sub}>🔥 پاداشِ ورودِ پیاپی (کوین)</div>
+          {row('روزِ ۷', cin('streakBonus', 'd7'))}
+          {row('روزِ ۱۴', cin('streakBonus', 'd14'))}
+          {row('روزِ ۲۱', cin('streakBonus', 'd21'))}
+          {row('روزِ ۳۰', cin('streakBonus', 'd30'))}
+          <div style={{ marginTop: 10 }}><button style={btn} disabled={busy === 'cfg'} onClick={saveCfg}>💾 ذخیره</button></div>
+        </div>}
       </>}
     </div>
   )
@@ -609,6 +641,39 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// 🎪 فرمِ ساختِ رویدادِ زنده (سند ۱۸ — LiveOps): عنوان/متریکِ واقعی/هدف/پاداش/مدت — بدونِ دیپلوی.
+function EventComposer({ onAdd }: { onAdd: (ev: unknown) => void }) {
+  const [t, setT] = useState({ title: '', desc: '', icon: '🎪', metric: 'views', target: '5', rewardCoins: '50', rewardXp: '20', days: '3' })
+  return (
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', padding: '10px 12px', borderRadius: 10, border: '1px dashed var(--line2)', marginTop: 8 }}>
+      <input value={t.icon} onChange={e => setT({ ...t, icon: e.target.value })} style={{ ...inpS, width: 44, textAlign: 'center' }} />
+      <input value={t.title} onChange={e => setT({ ...t, title: e.target.value })} placeholder="عنوانِ رویداد (مثلاً هفتهٔ کاوشِ محله‌ها)" style={{ ...inpS, flex: 1, minWidth: 170 }} />
+      <input value={t.desc} onChange={e => setT({ ...t, desc: e.target.value })} placeholder="توضیحِ کوتاه" style={{ ...inpS, flex: 1, minWidth: 150 }} />
+      <select value={t.metric} onChange={e => setT({ ...t, metric: e.target.value })} style={{ ...inpS, width: 140 }}>
+        <option value="views">بازدیدِ آگهیِ واقعی</option>
+        <option value="saves">ذخیرهٔ آگهی</option>
+        <option value="searches">جستجو</option>
+        <option value="hoods">محله‌های متفاوت</option>
+      </select>
+      <input value={t.target} onChange={e => setT({ ...t, target: e.target.value })} title="هدف" style={{ ...inpS, width: 56, textAlign: 'center' }} />
+      <input value={t.rewardCoins} onChange={e => setT({ ...t, rewardCoins: e.target.value })} title="کوینِ پاداش" style={{ ...inpS, width: 62, textAlign: 'center' }} />
+      <input value={t.rewardXp} onChange={e => setT({ ...t, rewardXp: e.target.value })} title="XP پاداش" style={{ ...inpS, width: 56, textAlign: 'center' }} />
+      <input value={t.days} onChange={e => setT({ ...t, days: e.target.value })} title="مدت (روز)" style={{ ...inpS, width: 56, textAlign: 'center' }} />
+      <button style={{ ...btnGhost, padding: '7px 14px' }} disabled={!t.title.trim() || !(Number(t.target) > 0) || !(Number(t.days) > 0)} onClick={() => {
+        const now = Date.now()
+        onAdd({
+          id: 'ev' + now.toString(36), title: t.title.trim().slice(0, 60), desc: t.desc.trim().slice(0, 120), icon: t.icon.slice(0, 4) || '🎪',
+          metric: t.metric, target: Math.max(1, Math.floor(Number(t.target) || 1)),
+          rewardCoins: Math.max(0, Math.floor(Number(t.rewardCoins) || 0)), rewardXp: Math.max(0, Math.floor(Number(t.rewardXp) || 0)),
+          startAt: now, endAt: now + Math.max(1, Math.floor(Number(t.days) || 1)) * 864e5, enabled: true,
+        })
+        setT({ ...t, title: '', desc: '' })
+      }}>+ افزودن</button>
+      <div style={{ width: '100%', fontSize: 10.5, color: 'var(--faint)' }}>هدف · کوین · XP · مدت(روز) — بعد از «ذخیره و اجرای زنده» بلافاصله برای بازیکن‌ها فعال می‌شود.</div>
     </div>
   )
 }

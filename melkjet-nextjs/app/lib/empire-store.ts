@@ -1335,6 +1335,21 @@ export async function setWeekSnap(userId: string, week: number, netWorth: number
   })
 }
 
+// 🎪 رویدادِ زندهٔ فعال (سند ۱۸ — LiveOps): فقط در بازهٔ تعریف‌شدهٔ ادمین و اگر روشن باشد.
+export interface LiveEventDef { id: string; title: string; desc: string; icon: string; metric: 'views' | 'saves' | 'searches' | 'hoods'; target: number; rewardXp: number; rewardCoins: number; startAt: number; endAt: number; enabled: boolean }
+export const eventActive = (d: Pick<LiveEventDef, 'enabled' | 'startAt' | 'endAt'>, now: number) =>
+  !!d.enabled && d.startAt <= now && now < d.endAt
+
+// پاداشِ نقاطِ عطفِ استریک (سند ۱۸ بخش ۱): از استریکِ «واقعی»؛ کلیدِ claim شاملِ روزِ شروعِ همین دوره است
+// تا با شکستنِ زنجیره و شروعِ دوباره، نقاطِ عطف دوباره قابلِ‌دریافت شوند.
+export function streakMilestonesOf(streak: number, today: number, claims: Record<string, number>, knobs: { d7: number; d14: number; d21: number; d30: number }) {
+  const runStart = today - Math.max(1, streak) + 1   // روزِ شروعِ این دورهٔ پیاپی
+  return ([[7, knobs.d7], [14, knobs.d14], [21, knobs.d21], [30, knobs.d30]] as const).map(([days, coins]) => {
+    const claimKey = `sm_${days}_${runStart}`
+    return { days, coins: Math.max(0, coins), done: streak >= days, claimed: !!claims[claimKey], claimKey }
+  })
+}
+
 // 👏 تحسین (سند ۱۷ — فصل ۷ تعاملِ اجتماعی): هر بازیکنِ واقعی فقط یک‌بار برای هر امپراتوری.
 // هیچ پاداشِ پولی ندارد (بدونِ P2W) — فقط شمارنده و یک نقطهٔ تایم‌لاین برای گیرنده.
 export async function giveKudos(giverUserId: string, target: EmpireData, now = Date.now()): Promise<{ ok: boolean; reason?: string; kudos?: number }> {
