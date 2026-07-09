@@ -23,7 +23,7 @@ import {
   applyLevelUpReward, setWeekSnap, setTitle, giveKudos, eventActive, streakMilestonesOf,
   buildingUnitsOf, assemblyUnitPriceOf, buyBuildingUnit, demolishAsset, boostBuild, boostPermit,
   proPersonaOf, designPlanOf, commissionDesign, boostDesign, resolveM100, renovateAsset, designBuildPlanOf,
-  activeCoinPacks, buyCosmetic, setCosmetic, offerOf, dismissOffer,
+  activeCoinPacks, buyCosmetic, setCosmetic, offerOf, dismissOffer, areaFromText,
   type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
 import {
@@ -243,6 +243,21 @@ async function hoodPerM(hood: string): Promise<{ perM: number; samples: number }
   return { perM: Math.round(median(rates)), samples: rates.length }
 }
 
+// متراژِ زمین وقتی فیلدِ متراژِ آگهی خالی است (فیدبکِ کاربر: بن‌بست ممنوع، برآوردِ شفاف از دادهٔ واقعی):
+// ۱) متایِ آگهی ۲) متنِ خودِ آگهی («کلنگی ۲۱۰ متری…») ۳) قیمت ÷ میانهٔ متریِ واقعیِ محله (وگرنه کلِ شهر).
+// برآورد همیشه با برچسبِ صادقانهٔ note به UI اعلام می‌شود — عددِ ساختگی نداریم، استنتاج از دادهٔ واقعی داریم.
+async function landAreaWithEstimate(a: { listingId: string; title?: string; buyPrice: number; hood: string; landAreaOverride?: number }, it: Item | null): Promise<{ area: number; note?: string }> {
+  if ((a.landAreaOverride || 0) > 0) return { area: a.landAreaOverride! }
+  const meta = it ? (parseFaNum((it.meta || {})['متراژ']) || 0) : 0
+  if (meta > 0) return { area: meta }
+  const t = areaFromText(it?.title, a.title)
+  if (t > 0) return { area: t, note: 'برآورد از متنِ آگهی' }
+  let { perM } = await hoodPerM(a.hood)
+  if (!(perM > 0)) ({ perM } = await hoodPerM(''))
+  if (perM > 0 && a.buyPrice > 0) return { area: Math.max(30, Math.round(a.buyPrice / perM)), note: 'برآورد از قیمتِ متریِ محله' }
+  return { area: 0 }
+}
+
 // واریزِ درآمدِ اجاره/کسب‌وکار: برآورد از میانهٔ اجارهٔ واقعیِ هم‌محله‌ها (Real Estate Simulation — فصل ۵).
 // بدونِ دادهٔ اجاره در محله/شهر → هیچ واریزی (صادقانه). حداقل یک روزِ کامل باید گذشته باشد.
 async function accrueRentFor(userId: string, e: EmpireData, now = Date.now()): Promise<EmpireData> {
@@ -368,7 +383,8 @@ async function stateOf(userId: string, e00: EmpireData) {
     const cur = a.demolishedAt ? a.buyPrice : Math.round(unitP * owned * (1 + (a.renovBoostPct || 0) / 100))
     // تجمیع: وضعیتِ ساختمان + قیمتِ واحدِ بعدی + شرط/هزینهٔ تخریب — همه شفاف
     const total = a.unitsTotal || info.units[a.listingId] || 0
-    const area = info.areas[a.listingId] || 0
+    // متراژ: فیلدِ آگهی → متنِ خودِ آگهی («۲۱۰ متری») — فیدبکِ کاربر: بن‌بستِ «متراژ ثبت نشده» ممنوع
+    const area = info.areas[a.listingId] || areaFromText(a.title) || 0
     const demolishCost = Math.max(1, Math.round(cur * asmCfg.demolishCostPct / 100))
     const assembly = asmCfg.enabled && !a.demolishedAt && !a.construction && (a.kind === 'apartment' || a.kind === 'commercial') && total >= 2 ? {
       total, owned, premiumPct: asmCfg.extraUnitPremiumPct,
@@ -1030,12 +1046,13 @@ export async function POST(req: NextRequest) {
       const a = e?.assets.find(x => x.id === String(b.assetId || ''))
       if (!e || !a) return NextResponse.json({ error: 'دارایی یافت نشد' }, { status: 404 })
       const it = await getItemById(a.listingId).catch(() => null)
-      const landArea = a.landAreaOverride || (it ? (parseFaNum((it.meta || {})['متراژ']) || 0) : 0)
-      if (!(landArea > 0)) return NextResponse.json({ error: 'متراژِ زمین در آگهیِ واقعی ثبت نشده' }, { status: 400 })
+      const la = await landAreaWithEstimate(a, it)
+      if (!(la.area > 0)) return NextResponse.json({ error: 'متراژِ این زمین نه در آگهی هست، نه از متن/قیمتش قابل‌برآورد بود' }, { status: 400 })
+      const landArea = la.area
       const probe = designPlanOf(landArea, 1, 1, { ...dc, buildFactor: config().empire.build.buildFactor })
       if (!probe.ok) return NextResponse.json({ error: probe.reason }, { status: 400 })
       return NextResponse.json({
-        ok: true, landArea, occupancyPct: dc.occupancyPct, footprint: probe.footprint,
+        ok: true, landArea, areaNote: la.note, occupancyPct: dc.occupancyPct, footprint: probe.footprint,
         legalFloors: probe.legalFloors, maxFloors: probe.maxFloors, minUnitArea: dc.minUnitArea,
         maxUnitsPerFloor: Math.max(1, Math.floor(probe.footprint / Math.max(1, dc.minUnitArea))),
         designDays: dc.designDays, architectFeePct: dc.architectFeePct, costPerM: config().empire.build.costPerM,
@@ -1051,7 +1068,7 @@ export async function POST(req: NextRequest) {
       const a = e?.assets.find(x => x.id === String(b.assetId || ''))
       if (!e || !a) return NextResponse.json({ error: 'دارایی یافت نشد' }, { status: 404 })
       const it = await getItemById(a.listingId).catch(() => null)
-      const landArea = a.landAreaOverride || (it ? (parseFaNum((it.meta || {})['متراژ']) || 0) : 0)
+      const landArea = (await landAreaWithEstimate(a, it)).area
       const d = designPlanOf(landArea, Math.round(Number(b.floors) || 0), Math.round(Number(b.unitsPerFloor) || 0), { ...dc, buildFactor: config().empire.build.buildFactor })
       if (!d.ok) return NextResponse.json({ error: d.reason }, { status: 400 })
       const fee = Math.max(1, Math.round(d.builtArea * config().empire.build.costPerM * Math.max(0, dc.architectFeePct) / 100))
@@ -1173,11 +1190,17 @@ export async function POST(req: NextRequest) {
       const unitP = (it ? priceOf(it) : 0) || Math.round(a.buyPrice / owned)
       const cur = unitP * owned
       const cost = Math.max(1, Math.round(cur * asm.demolishCostPct / 100))
-      const area = it ? (parseFaNum((it.meta || {})['متراژ']) || 0) : 0
+      // متراژِ واحد: متایِ آگهی → متنِ آگهی → قیمتِ واحد ÷ متریِ محله (بن‌بست ممنوع — برآوردِ شفاف از دادهٔ واقعی)
+      let area = (it ? (parseFaNum((it.meta || {})['متراژ']) || 0) : 0) || areaFromText(it?.title, a.title)
+      if (!(area > 0)) {
+        let { perM } = await hoodPerM(a.hood)
+        if (!(perM > 0)) ({ perM } = await hoodPerM(''))
+        if (perM > 0 && unitP > 0) area = Math.max(30, Math.round(unitP / perM))
+      }
       const total = a.unitsTotal || owned
       // برآوردِ زمین: ویلایی = متراژِ آگهی (عرصه)؛ ساختمان = کلِ بنا ÷ تراکمِ knob — شفاف در UI اعلام می‌شود.
       const landArea = a.kind === 'villa' ? area : Math.round(area * total / Math.max(1, config().empire.build.buildFactor))
-      if (!(landArea > 0)) return NextResponse.json({ error: 'متراژِ این ملک در آگهیِ واقعی ثبت نشده — زمینِ بعد از تخریب قابل‌برآورد نیست' }, { status: 400 })
+      if (!(landArea > 0)) return NextResponse.json({ error: 'متراژِ این ملک نه در آگهی هست، نه از متن/قیمتش قابل‌برآورد بود — تخریب فعلاً ممکن نیست' }, { status: 400 })
       const r = await demolishAsset(userId, a.id, { cost, landArea })
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
@@ -1194,8 +1217,8 @@ export async function POST(req: NextRequest) {
       if (a.permit?.status !== 'granted') return NextResponse.json({ error: 'اول پروانهٔ ساخت را بگیر' }, { status: 400 })
       const it = await getItemById(a.listingId).catch(() => null)
       // زمینِ حاصل از تخریب (فاز ۲۵): مساحتِ برآوردیِ خودش؛ نقشهٔ امضاشده هم متراژِ خودش را دارد
-      const landArea = a.landAreaOverride || a.design?.landArea || (it ? (parseFaNum((it.meta || {})['متراژ']) || 0) : 0)
-      if (!a.design && !(landArea > 0)) return NextResponse.json({ error: 'متراژِ این زمین در آگهیِ واقعی ثبت نشده — ساختِ آن قابل‌برآورد نیست' }, { status: 400 })
+      const landArea = a.design?.landArea || (await landAreaWithEstimate(a, it)).area
+      if (!a.design && !(landArea > 0)) return NextResponse.json({ error: 'متراژِ این زمین نه در آگهی هست، نه از متن/قیمتش قابل‌برآورد بود' }, { status: 400 })
       // فاز ۲۹: اگر نقشهٔ معمار هست، ابعاد از انتخابِ خودِ بازیکن می‌آید (طبقات × واحد در طبقه)
       const mkPlan = (sk: string, qk: string) => a.design ? designBuildPlanOf(sk, qk, landArea, a.design, cfg) : buildPlanOf(sk, qk, landArea, cfg)
       const options: any[] = []
@@ -1220,7 +1243,7 @@ export async function POST(req: NextRequest) {
       if (active >= maxP) return NextResponse.json({ error: `ظرفیتِ شرکتت ${maxP.toLocaleString('fa-IR')} پروژهٔ همزمان است — پروژه‌ای را تحویل بده یا با سطحِ بالاتر ظرفیت بگیر` }, { status: 400 })
       const it = await getItemById(a.listingId).catch(() => null)
       // نقشهٔ امضاشده خودکفاست — اگر آگهیِ زمین از استخر افتاده باشد، متراژ از خودِ نقشه می‌آید
-      const landArea = a.landAreaOverride || a.design?.landArea || (it ? (parseFaNum((it.meta || {})['متراژ']) || 0) : 0)
+      const landArea = a.design?.landArea || (await landAreaWithEstimate(a, it)).area
       const plan = a.design
         ? designBuildPlanOf(String(b.structure || ''), String(b.quality || ''), landArea, a.design, cfg)
         : buildPlanOf(String(b.structure || ''), String(b.quality || ''), landArea, cfg)
@@ -1333,7 +1356,7 @@ export async function POST(req: NextRequest) {
       const all = (await candidateListings(1500).catch(() => [] as Item[]))
         .filter(it => isPricedSale(it) && !owned.has(it.id)
           && assetKindOf(ptypeOf(it)) === 'land'
-          && (parseFaNum((it.meta || {})['متراژ']) || 0) > 0)   // متراژ لازمهٔ برآوردِ ساخت است (buildPlan)
+          && ((parseFaNum((it.meta || {})['متراژ']) || 0) > 0 || areaFromText(it.title) > 0))   // متراژ از فیلد یا متنِ آگهی — لازمهٔ برآوردِ ساخت
       const affordable = (it: Item) => { const p = priceOf(it); return p + Math.round(p * taxPct / 100) <= e.capital }
       const sorted = [...all].sort((a, x) => priceOf(a) - priceOf(x))
       // اول در حدِ سرمایه؛ بعد ارزان‌ترین‌های بالاتر با پرچمِ صادقانهٔ «هنوز نمی‌رسد»
@@ -1342,7 +1365,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         ok: true, total: all.length, capital: e.capital,
         lands: rows.map(it => {
-          const area = parseFaNum((it.meta || {})['متراژ']) || 0
+          const area = parseFaNum((it.meta || {})['متراژ']) || areaFromText(it.title) || 0
           const price = priceOf(it)
           return { ...lite(it), area, perM: area > 0 ? Math.round(price / area) : 0, locked: !affordable(it), lat: Number(it.meta?.['__lat']) || undefined, lng: Number(it.meta?.['__lng']) || undefined }
         }),

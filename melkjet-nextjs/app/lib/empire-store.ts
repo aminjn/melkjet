@@ -1460,6 +1460,22 @@ export async function creditCoinPurchase(userId: string, opts: { coins: number; 
   })
 }
 
+// متراژ از متنِ واقعیِ خودِ آگهی (فیدبکِ کاربر: «اگر تو آگهی نیست، از فرمول حساب کن»).
+// «کلنگی ۲۱۰ متری بر ۷ متری مفتح» → ۲۱۰: بزرگ‌ترین «N متر»ِ متن، چون برِ گذر همیشه از عرصه کوچک‌تر است؛
+// اعدادِ زیرِ ۳۰ (برِ کوچه) و بدونِ «متر» (سالِ ساخت و…) اصلاً کاندید نمی‌شوند.
+export function areaFromText(...texts: Array<string | undefined>): number {
+  let best = 0
+  for (const t of texts) {
+    if (!t) continue
+    const s = String(t).replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+    for (const m of s.matchAll(/(\d{2,6})\s*متر/g)) {
+      const n = Number(m[1])
+      if (n >= 30 && n <= 100_000 && n > best) best = n
+    }
+  }
+  return best
+}
+
 // ══════════ فاز ۳۳ (سند ۲۲ — فصل ۱۲ Monetization) ══════════
 
 // بسته‌های فعالِ فروشگاهِ کوین: بستهٔ زمان‌دار (فصل ۷ Bundles) تا پایانِ روزِ until معتبر است —

@@ -1110,7 +1110,7 @@ export default function EmpirePage() {
                 <div style={{ width: '100%', ...card, background: 'var(--surface)', fontSize: 12 }}>
                   <b>📐 طراحیِ نقشه با {inf.architect}</b>
                   <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
-                    زمین {fa(inf.landArea)} متر · سطحِ اشغال {fa(inf.occupancyPct)}٪ → هر طبقه {fa(inf.footprint)} متر · مجازِ قانونی: {fa(inf.legalFloors)} طبقه (حداکثرِ قابل‌ساخت {fa(inf.maxFloors)})
+                    زمین {fa(inf.landArea)} متر{inf.areaNote ? <span style={{ color: '#e7a14a' }}> ({inf.areaNote})</span> : null} · سطحِ اشغال {fa(inf.occupancyPct)}٪ → هر طبقه {fa(inf.footprint)} متر · مجازِ قانونی: {fa(inf.legalFloors)} طبقه (حداکثرِ قابل‌ساخت {fa(inf.maxFloors)})
                   </div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
                     <label style={{ fontSize: 11.5 }}>طبقات: <input value={dz.floors} onChange={ev => setDz({ ...dz, floors: digitsOf(ev.target.value) })} inputMode="numeric" style={{ width: 54, padding: 7, borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', textAlign: 'center' }} /></label>
