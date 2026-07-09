@@ -45,8 +45,11 @@ else
   sleep 5
 fi
 
-echo "→ build"
-NODE_OPTIONS="--max-old-space-size=2048" npm run build
+echo "→ build (با اولویتِ پایین — سایت در طولِ build زنده می‌ماند)"
+# nice/ionice: کامپایل تمامِ ۴ هسته را نمی‌بلعد؛ اینستنس‌های سرویس‌دهنده (۳۰۰۱-۳۰۰۳) گرسنه نمی‌مانند
+# و دیگر وسطِ دیپلوی ۵۰۴/Timeout نمی‌خوریم (نمودارِ CPU آروان سرِ دیپلوی ۷۰۰٪ می‌زد). build کمی کندتر
+# تمام می‌شود ولی ترافیکِ کاربر همیشه مقدم است.
+NODE_OPTIONS="--max-old-space-size=2048" nice -n 19 ionice -c3 npm run build
 
 echo "→ reload (rolling، بدونِ داون‌تایم)"
 pm2 reload ecosystem.config.js --update-env
