@@ -23,14 +23,15 @@ const tabs = [
     ),
   },
   {
-    href: '/directory',
-    label: 'دایرکتوری',
+    // امپراتوری به‌جای دایرکتوری (خواستهٔ صریح) — دایرکتوری از منوی «متخصصان» در دسترس می‌ماند.
+    href: '/empire',
+    label: 'امپراتوری',
     icon: (on: boolean) => (
       <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke={on ? 'var(--gold)' : 'var(--muted)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-        <circle cx="9" cy="7" r="4"/>
-        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        <path d="M3 21h18"/>
+        <path d="M5 21V8l4-3v16"/>
+        <path d="M9 21V5l6 4v12"/>
+        <path d="M15 21V9l4 3v9"/>
       </svg>
     ),
   },
