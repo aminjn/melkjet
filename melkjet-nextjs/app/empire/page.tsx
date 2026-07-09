@@ -203,13 +203,14 @@ export default function EmpirePage() {
     const t0 = Date.now()
     const d = await api({ action: 'suggest' })
     // «در حال بررسی آیندهٔ مالی شما...» ~۳ ثانیه — تحلیلِ واقعی همین الان انجام شد؛ فقط کمتر از ۳ث را پر می‌کنیم.
-    const wait = Math.max(0, 3000 - (Date.now() - t0))
+    const wait = Math.max(0, 1200 - (Date.now() - t0))   // سقفِ مکثِ نمایشی ~۱.۲ث (سند ۲۰: بدونِ معطلیِ اجباری)
     setTimeout(() => { if (d?.opportunities?.length) { setOpps(d.opportunities); setStep('opps') } else { setErr(d ? 'فعلاً آگهیِ قیمت‌دارِ مناسبی در بازار نیست — به‌محضِ ورودِ فرصتِ تازه همین‌جا می‌بینی' : (err || 'ارتباط با بازار برقرار نشد — دوباره تلاش کن')); setStep(st?.empire ? 'dash' : 'pitch') } }, wait)
   }
   async function doBuy(o: Opp, negotiated = false) {
     setStep('buying'); setOwned(o)
     const texts = ['در حال بررسی سند...', 'در حال بررسی ارزش...', 'در حال تحلیل بازار...', '✍️ امضای قرارداد']
-    for (let i = 0; i < texts.length; i++) { setBuyTxt(texts[i]); await new Promise(r => setTimeout(r, 900)) }
+    // سقفِ انیمیشنِ اجباری ۱.۵ ثانیه (سند ۲۰ — Art Direction): ۴ گام × ۳۵۰ms
+    for (let i = 0; i < texts.length; i++) { setBuyTxt(texts[i]); await new Promise(r => setTimeout(r, 350)) }
     const d = await api({ action: 'buy', listingId: o.id, negotiated })
     if (d) { setSt(d); setStep('owned'); celebrate() } else setStep(opps.length ? 'opps' : 'dash')
   }
@@ -619,13 +620,15 @@ export default function EmpirePage() {
             {e.assets.map((a: any, i: number) => {
               const h = 26 + Math.round((vals[i] / max) * 78)
               return (
-                <div key={a.id} title={`${a.title?.slice(0, 60)} — ${faB(vals[i])} تومان`} style={{
+                <div key={a.id} title={`${a.title?.slice(0, 60)} — ${faB(vals[i])} تومان${a.construction && !a.construction.done ? ' · در حال ساخت' : ''}`} style={{
                   width: 30, height: h, borderRadius: '3px 3px 0 0', position: 'relative', cursor: 'default',
-                  background: 'linear-gradient(180deg,#262c47,#151827)', border: '1px solid #3c4468', borderBottom: 'none',
+                  // برجِ در حالِ ساخت از ظاهر قابلِ تشخیص است (سند ۲۰ — Part 03): کم‌نور + قابِ نقطه‌چین + جرثقیل
+                  opacity: a.construction && !a.construction.done ? 0.55 : 1,
+                  background: 'linear-gradient(180deg,#262c47,#151827)', border: a.construction && !a.construction.done ? '1px dashed #8a7c4c' : '1px solid #3c4468', borderBottom: 'none',
                   backgroundImage: 'repeating-linear-gradient(0deg, rgba(255,214,120,.7) 0 2px, transparent 2px 8px), repeating-linear-gradient(90deg, transparent 0 5px, rgba(0,0,0,.4) 5px 10px)',
                   animation: 'empUp .6s ease both', animationDelay: `${i * 80}ms`,
                 }}>
-                  <span style={{ position: 'absolute', top: -15, left: '50%', transform: 'translateX(-50%)', fontSize: 10 }}>{a.kind === 'land' ? '🏞' : a.kind === 'villa' ? '🏡' : a.kind === 'commercial' ? '🏬' : ''}</span>
+                  <span style={{ position: 'absolute', top: -15, left: '50%', transform: 'translateX(-50%)', fontSize: 10 }}>{a.construction && !a.construction.done ? '🏗' : a.kind === 'land' ? '🏞' : a.kind === 'villa' ? '🏡' : a.kind === 'commercial' ? '🏬' : ''}</span>
                 </div>
               )
             })}
@@ -820,6 +823,14 @@ export default function EmpirePage() {
                 <span style={{ color: 'var(--muted)' }}>{fa(a.construction.paidDays)}/{fa(a.construction.days)} روز · هزینهٔ روزانه {faB(a.build?.dailyCost || 0)}</span>
                 <span style={{ flex: 1 }} />
                 <span style={{ color: 'var(--muted)' }}>پرداختی: {faB(a.construction.paid)} از {faB(a.construction.costTotal)}</span>
+              </div>
+              {/* استپرِ بصریِ مراحلِ ساخت (سند ۲۰ — Part 03): «هر مرحله از ظاهر قابلِ تشخیص باشد» — از پیشرفتِ واقعی */}
+              <div style={{ display: 'flex', gap: 3, marginTop: 8, flexWrap: 'wrap' }}>
+                {['تجهیز', 'خاکبرداری', 'فونداسیون', 'اسکلت', 'تأسیسات', 'نما', 'نازک‌کاری'].map((stg, si) => {
+                  const cur = a.construction.done ? 7 : Math.min(6, Math.floor(((a.build?.progressPct || 0) / 100) * 7))
+                  const done = si < cur, active = si === cur && !a.construction.done
+                  return <span key={stg} style={{ fontSize: 9, padding: '2px 7px', borderRadius: 8, border: `1px solid ${active ? 'var(--gold)' : done ? '#5a6' : 'var(--line2)'}`, color: active ? 'var(--gold)' : done ? '#7c6' : 'var(--faint)', fontWeight: active ? 700 : 400 }}>{done ? '✓ ' : ''}{stg}</span>
+                })}
               </div>
               <div style={{ height: 7, background: 'var(--line)', borderRadius: 4, marginTop: 6 }}>
                 <div style={{ width: `${a.build?.progressPct || 0}%`, height: 7, borderRadius: 4, background: a.construction.done ? '#7c6' : 'var(--gold)', transition: 'width .6s ease' }} />
