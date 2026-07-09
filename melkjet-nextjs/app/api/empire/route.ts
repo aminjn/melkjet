@@ -1039,7 +1039,8 @@ export async function POST(req: NextRequest) {
       const d = designPlanOf(landArea, Math.round(Number(b.floors) || 0), Math.round(Number(b.unitsPerFloor) || 0), { ...dc, buildFactor: config().empire.build.buildFactor })
       if (!d.ok) return NextResponse.json({ error: d.reason }, { status: 400 })
       const fee = Math.max(1, Math.round(d.builtArea * config().empire.build.costPerM * Math.max(0, dc.architectFeePct) / 100))
-      const r = await commissionDesign(userId, a.id, { floors: Math.round(Number(b.floors)), unitsPerFloor: Math.round(Number(b.unitsPerFloor)), legalFloors: d.legalFloors, footprint: d.footprint, unitArea: d.unitArea, illegalFloors: d.illegalFloors, fee, days: dc.designDays })
+      // متراژِ زمین داخلِ خودِ نقشه ذخیره می‌شود — کلنگ دیگر به زنده‌ماندنِ آگهیِ واقعی وابسته نیست
+      const r = await commissionDesign(userId, a.id, { floors: Math.round(Number(b.floors)), unitsPerFloor: Math.round(Number(b.unitsPerFloor)), legalFloors: d.legalFloors, footprint: d.footprint, unitArea: d.unitArea, illegalFloors: d.illegalFloors, fee, days: dc.designDays, landArea })
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       return NextResponse.json({ ok: true, fee, illegalFloors: d.illegalFloors, ...(await stateOf(userId, r.empire!)) })
     }
@@ -1176,9 +1177,9 @@ export async function POST(req: NextRequest) {
       if (!e || !a) return NextResponse.json({ error: 'دارایی یافت نشد' }, { status: 404 })
       if (a.permit?.status !== 'granted') return NextResponse.json({ error: 'اول پروانهٔ ساخت را بگیر' }, { status: 400 })
       const it = await getItemById(a.listingId).catch(() => null)
-      // زمینِ حاصل از تخریب (فاز ۲۵): مساحتِ برآوردیِ خودش، نه متراژِ واحدِ آگهیِ قدیمی
-      const landArea = a.landAreaOverride || (it ? (parseFaNum((it.meta || {})['متراژ']) || 0) : 0)
-      if (!(landArea > 0)) return NextResponse.json({ error: 'متراژِ این زمین در آگهیِ واقعی ثبت نشده — ساختِ آن قابل‌برآورد نیست' }, { status: 400 })
+      // زمینِ حاصل از تخریب (فاز ۲۵): مساحتِ برآوردیِ خودش؛ نقشهٔ امضاشده هم متراژِ خودش را دارد
+      const landArea = a.landAreaOverride || a.design?.landArea || (it ? (parseFaNum((it.meta || {})['متراژ']) || 0) : 0)
+      if (!a.design && !(landArea > 0)) return NextResponse.json({ error: 'متراژِ این زمین در آگهیِ واقعی ثبت نشده — ساختِ آن قابل‌برآورد نیست' }, { status: 400 })
       // فاز ۲۹: اگر نقشهٔ معمار هست، ابعاد از انتخابِ خودِ بازیکن می‌آید (طبقات × واحد در طبقه)
       const mkPlan = (sk: string, qk: string) => a.design ? designBuildPlanOf(sk, qk, landArea, a.design, cfg) : buildPlanOf(sk, qk, landArea, cfg)
       const options: any[] = []
@@ -1202,7 +1203,8 @@ export async function POST(req: NextRequest) {
       const maxP = maxProjectsOf(empireLevel(e.xp).level, config().empire.unlocks)
       if (active >= maxP) return NextResponse.json({ error: `ظرفیتِ شرکتت ${maxP.toLocaleString('fa-IR')} پروژهٔ همزمان است — پروژه‌ای را تحویل بده یا با سطحِ بالاتر ظرفیت بگیر` }, { status: 400 })
       const it = await getItemById(a.listingId).catch(() => null)
-      const landArea = a.landAreaOverride || (it ? (parseFaNum((it.meta || {})['متراژ']) || 0) : 0)
+      // نقشهٔ امضاشده خودکفاست — اگر آگهیِ زمین از استخر افتاده باشد، متراژ از خودِ نقشه می‌آید
+      const landArea = a.landAreaOverride || a.design?.landArea || (it ? (parseFaNum((it.meta || {})['متراژ']) || 0) : 0)
       const plan = a.design
         ? designBuildPlanOf(String(b.structure || ''), String(b.quality || ''), landArea, a.design, cfg)
         : buildPlanOf(String(b.structure || ''), String(b.quality || ''), landArea, cfg)

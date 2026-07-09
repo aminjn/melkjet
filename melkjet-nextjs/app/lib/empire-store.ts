@@ -39,7 +39,8 @@ export interface EmpireAsset {
   demolishedAt?: number       // تخریب‌شده → kind به 'land' برمی‌گردد؛ ارزش تا ساخت = بهای تمام‌شده
   landAreaOverride?: number   // مساحتِ زمینِ برآوردی بعد از تخریب — مبنای نقشهٔ ساخت به‌جای متراژِ واحدِ آگهی
   // طراحیِ معمار (فاز ۲۹): پیش از پروانه — طبقات/واحد در طبقه با تراکمِ قانونی؛ طبقهٔ مازاد = تخلفِ آگاهانه.
-  design?: { floors: number; unitsPerFloor: number; legalFloors: number; footprint: number; unitArea: number; illegalFloors: number; architectFee: number; startedAt: number; readyAt: number; architect: string }
+  // landArea داخلِ خودِ نقشه ذخیره می‌شود تا ساخت به زنده‌بودنِ آگهیِ واقعی وابسته نماند (آگهی‌ها می‌چرخند).
+  design?: { floors: number; unitsPerFloor: number; legalFloors: number; footprint: number; unitArea: number; illegalFloors: number; architectFee: number; startedAt: number; readyAt: number; architect: string; landArea?: number }
   // کمیسیونِ ماده۱۰۰ (فاز ۲۹): بعد از تکمیلِ ساختمانِ متخلف — جریمه/وکیل/تخریبِ طبقهٔ مازاد.
   m100?: { illegalArea: number; illegalUnits: number; fine: number; status: 'pending' | 'paid' | 'demolished'; lawyerTried?: boolean }
   renovBoostPct?: number      // بازسازی (فاز ۲۹): ارزش‌افزودهٔ جمع‌شده (٪، با سقفِ knob)
@@ -831,7 +832,7 @@ export function designPlanOf(landArea: number, floors: number, unitsPerFloor: nu
 }
 
 // قراردادِ معمار: حق‌الزحمه → servicesPaid؛ طراحی چند روزِ واقعی طول می‌کشد (قابلِ‌تسریع با کوین).
-export async function commissionDesign(userId: string, assetId: string, d: { floors: number; unitsPerFloor: number; legalFloors: number; footprint: number; unitArea: number; illegalFloors: number; fee: number; days: number }, now = Date.now()) {
+export async function commissionDesign(userId: string, assetId: string, d: { floors: number; unitsPerFloor: number; legalFloors: number; footprint: number; unitArea: number; illegalFloors: number; fee: number; days: number; landArea?: number }, now = Date.now()) {
   return mutateEmpire(userId, e => {
     const a = e.assets.find(x => x.id === assetId)
     if (!a) return 'دارایی یافت نشد'
@@ -842,7 +843,7 @@ export async function commissionDesign(userId: string, assetId: string, d: { flo
     e.capital -= d.fee
     e.servicesPaid = (e.servicesPaid || 0) + d.fee
     const architect = proPersonaOf('architect', assetId)
-    a.design = { floors: d.floors, unitsPerFloor: d.unitsPerFloor, legalFloors: d.legalFloors, footprint: d.footprint, unitArea: d.unitArea, illegalFloors: d.illegalFloors, architectFee: d.fee, startedAt: now, readyAt: now + Math.max(0, d.days) * 864e5, architect }
+    a.design = { floors: d.floors, unitsPerFloor: d.unitsPerFloor, legalFloors: d.legalFloors, footprint: d.footprint, unitArea: d.unitArea, illegalFloors: d.illegalFloors, architectFee: d.fee, startedAt: now, readyAt: now + Math.max(0, d.days) * 864e5, architect, landArea: d.landArea }
     e.identity.builder = Math.min(100, (e.identity.builder || 0) + 3)
     e.timeline.push({ at: now, icon: '📐', title: `قراردادِ طراحی با ${architect}`, detail: `${d.floors.toLocaleString('fa-IR')} طبقه × ${d.unitsPerFloor.toLocaleString('fa-IR')} واحد${d.illegalFloors > 0 ? ` · ⚠️ ${d.illegalFloors.toLocaleString('fa-IR')} طبقهٔ مازاد بر پروانه` : ''}` })
   })
@@ -1245,14 +1246,18 @@ export function buildPlanOf(structure: string, quality: string, landArea: number
   }
 }
 // نقشهٔ ساخت از طراحیِ معمار (فاز ۲۹): ابعادِ واقعیِ انتخابِ خودِ بازیکن — بنا/واحد/متراژ از design،
-// روزها و هزینه متناسب با بنا نسبت به مبنای knob (زمین × تراکم) مقیاس می‌شوند.
+// روزها و هزینه متناسب با بنا نسبت به مبنای «بنای قانونی» مقیاس می‌شوند.
+// خودکفا: به زنده‌بودنِ آگهیِ واقعی وابسته نیست — آگهی‌ها می‌چرخند اما نقشهٔ امضاشده ابعادش را دارد
+// (باگِ «سازه/کیفیت یا متراژ نامشخص» وقتی آگهیِ زمین بینِ طراحی و کلنگ از استخر می‌افتاد).
 export function designBuildPlanOf(structure: string, quality: string, landArea: number,
-  design: { footprint: number; floors: number; unitsPerFloor: number; unitArea: number },
+  design: { footprint: number; floors: number; unitsPerFloor: number; unitArea: number; legalFloors: number; landArea?: number },
   cfg: { buildFactor: number; costPerM: number; buildDays: number }): ReturnType<typeof buildPlanOf> {
   const s = BUILD_STRUCTURES[structure], q = BUILD_QUALITIES[quality]
-  if (!s || !q || !(landArea > 0)) return null
+  if (!s || !q) return null
   const builtArea = design.footprint * design.floors
-  const baseArea = Math.max(1, Math.round(landArea * Math.max(0.5, cfg.buildFactor)))
+  const la = landArea > 0 ? landArea : (design.landArea || 0)
+  // مبنای زمان: بنای قانونی — از زمین×تراکم اگر متراژ داریم، وگرنه از خودِ نقشه (footprint×طبقاتِ قانونی)
+  const baseArea = la > 0 ? Math.max(1, Math.round(la * Math.max(0.5, cfg.buildFactor))) : Math.max(1, design.footprint * Math.max(1, design.legalFloors))
   return {
     days: Math.max(3, Math.round(cfg.buildDays * s.daysMul * builtArea / baseArea)),
     builtArea, unitArea: design.unitArea, totalUnits: design.floors * design.unitsPerFloor,
