@@ -6,31 +6,39 @@ import { useEffect, useRef, useState } from 'react'
 
 export interface MapPoint { id: string; lat: number; lng: number; title?: string; price?: string }
 
-const SDK_CSS = 'https://static.neshan.org/sdk/leaflet/1.4.0/neshan-sdk-v1.0.8/dist/index.css'
-const SDK_JS = 'https://static.neshan.org/sdk/leaflet/1.4.0/neshan-sdk-v1.0.8/dist/index.js'
+// مسیرِ رسمیِ مستنداتِ نشان (platform.neshan.org — Leaflet SDK v1.9.4). مسیرِ قدیمی (1.4.0/…/dist)
+// دیگر روی CDN جواب نمی‌داد و نقشهٔ تعاملی همه‌جا بی‌صدا به fallback می‌افتاد — چند نامزد به‌ترتیب امتحان می‌شود.
+const SDK_SOURCES = [
+  { css: 'https://static.neshan.org/sdk/leaflet/v1.9.4/neshan-sdk/v1.0.8/index.css', js: 'https://static.neshan.org/sdk/leaflet/v1.9.4/neshan-sdk/v1.0.8/index.js' },
+  { css: 'https://static.neshan.org/sdk/leaflet/1.4.0/neshan-sdk-v1.0.8/dist/index.css', js: 'https://static.neshan.org/sdk/leaflet/1.4.0/neshan-sdk-v1.0.8/dist/index.js' },
+]
 const TEHRAN: [number, number] = [35.7559, 51.4105]
 
 let sdkPromise: Promise<any> | null = null
 function neshanReady(): any { const L = (window as any).L; return (L && L.Map && L.Marker) ? L : null }
-// لودرِ مقاومِ SDKِ نشان: تلاشِ مجدد، منتظرِ آماده‌شدنِ واقعیِ L.Map، و کش‌نکردنِ شکست
-// (تا اگر یک‌بار CDN هیک‌آپ کرد، دفعهٔ بعد دوباره تلاش شود — نه اینکه برای همیشه «sdk» بدهد).
+// لودرِ مقاومِ SDKِ نشان: نامزدها را به‌ترتیب امتحان می‌کند، منتظرِ آماده‌شدنِ واقعیِ L.Map می‌ماند،
+// و شکست را کش نمی‌کند (تا اگر یک‌بار CDN هیک‌آپ کرد، دفعهٔ بعد دوباره تلاش شود — نه اینکه برای همیشه «sdk» بدهد).
 function loadSdk(): Promise<any> {
   if (typeof window === 'undefined') return Promise.reject('ssr')
   const ready = neshanReady(); if (ready) return Promise.resolve(ready)
   if (sdkPromise) return sdkPromise
   sdkPromise = new Promise((resolve, reject) => {
-    if (!document.querySelector(`link[href="${SDK_CSS}"]`)) {
-      const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = SDK_CSS; document.head.appendChild(link)
-    }
-    let tries = 0
-    const retry = () => { if (tries >= 3) { sdkPromise = null; reject('sdk-load-failed') } else setTimeout(attempt, 700) }
-    const attempt = () => {
+    let idx = 0, tries = 0
+    const retry = () => {
       tries++
+      if (tries % 2 === 0) idx = (idx + 1) % SDK_SOURCES.length   // بعد از ۲ شکست، سراغِ نامزدِ بعدی
+      if (tries >= 2 * SDK_SOURCES.length) { sdkPromise = null; reject('sdk-load-failed') } else setTimeout(attempt, 700)
+    }
+    const attempt = () => {
       if (neshanReady()) { resolve(neshanReady()); return }
+      const src = SDK_SOURCES[idx]
+      if (!document.querySelector(`link[href="${src.css}"]`)) {
+        const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = src.css; document.head.appendChild(link)
+      }
       // اسکریپتِ موجود را دوباره اضافه نکن؛ اگر نبود، بساز.
-      let s = document.querySelector(`script[src="${SDK_JS}"]`) as HTMLScriptElement | null
+      let s = document.querySelector(`script[src="${src.js}"]`) as HTMLScriptElement | null
       if (!s) {
-        s = document.createElement('script'); s.src = SDK_JS; s.async = true
+        s = document.createElement('script'); s.src = src.js; s.async = true
         s.onerror = () => { try { s?.remove() } catch {} ; retry() }
         document.body.appendChild(s)
       }

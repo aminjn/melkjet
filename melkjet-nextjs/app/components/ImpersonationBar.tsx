@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
 
 // نوارِ شناورِ «شما در حال مشاهدهٔ پنلِ کاربر هستید» — وقتی سوپرادمین
 // با «ورود به پنل کاربر» وارد حساب دیگری شده باشد، در همهٔ صفحات دیده می‌شود.
@@ -7,6 +8,9 @@ interface ImpStatus { active: boolean; target?: string; name?: string }
 
 export default function ImpersonationBar() {
   const [st, setSt] = useState<ImpStatus | null>(null)
+  const pathname = usePathname()
+  // داخلِ /empire منوی خودِ بازی پایینِ صفحه است — این نوار بالاتر می‌نشیند تا منو را نپوشاند و کلیک‌پذیر بماند.
+  const lift = pathname?.startsWith('/empire')
 
   useEffect(() => {
     let cancelled = false
@@ -26,7 +30,7 @@ export default function ImpersonationBar() {
 
   return (
     <div style={{
-      position: 'fixed', bottom: 18, left: '50%', transform: 'translateX(-50%)',
+      position: 'fixed', bottom: lift ? 92 : 18, left: '50%', transform: 'translateX(-50%)',
       zIndex: 9999, display: 'flex', alignItems: 'center', gap: 14,
       background: 'linear-gradient(135deg,#3a2a00,#241a00)',
       border: '1px solid var(--gold)', borderRadius: 999,

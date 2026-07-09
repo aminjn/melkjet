@@ -1079,6 +1079,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, deals, expiresAt })
     }
 
+    // 🏗 بازارِ زمین (فاز ۲۴): دروازهٔ موتورِ ساخت — زمین‌های «واقعیِ» قیمت‌دار با متراژِ ثبت‌شده.
+    // بدونِ این ورودی، پروانه/کلنگ/پیش‌فروش هرگز در دسترس نبود (فرصت‌های روزانه اغلب آپارتمان‌اند).
+    case 'lands': {
+      const e = await getEmpire(userId)
+      if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      const taxPct = config().empire.transferTaxPct
+      const owned = new Set(e.assets.map(a => a.listingId))
+      const all = (await candidateListings(1500).catch(() => [] as Item[]))
+        .filter(it => isPricedSale(it) && !owned.has(it.id)
+          && assetKindOf(ptypeOf(it)) === 'land'
+          && (parseFaNum((it.meta || {})['متراژ']) || 0) > 0)   // متراژ لازمهٔ برآوردِ ساخت است (buildPlan)
+      const affordable = (it: Item) => { const p = priceOf(it); return p + Math.round(p * taxPct / 100) <= e.capital }
+      const sorted = [...all].sort((a, x) => priceOf(a) - priceOf(x))
+      // اول در حدِ سرمایه؛ بعد ارزان‌ترین‌های بالاتر با پرچمِ صادقانهٔ «هنوز نمی‌رسد»
+      const rows: Item[] = sorted.filter(affordable).slice(0, 6)
+      for (const it of sorted) { if (rows.length >= 8) break; if (!rows.includes(it)) rows.push(it) }
+      return NextResponse.json({
+        ok: true, total: all.length, capital: e.capital,
+        lands: rows.map(it => {
+          const area = parseFaNum((it.meta || {})['متراژ']) || 0
+          const price = priceOf(it)
+          return { ...lite(it), area, perM: area > 0 ? Math.round(price / area) : 0, locked: !affordable(it), lat: Number(it.meta?.['__lat']) || undefined, lng: Number(it.meta?.['__lng']) || undefined }
+        }),
+      })
+    }
+
     // روزنامهٔ ملک‌جت (جلد ۵۲) + آرشیوِ تمدن (جلد ۵۱ فصل ۹): خبر فقط از اتفاقِ واقعیِ دنیا.
     case 'news': {
       const [items, empires] = await Promise.all([candidateListings(800).catch(() => [] as Item[]), listEmpiresPublic(300)])

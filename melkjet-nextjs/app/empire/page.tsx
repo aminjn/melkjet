@@ -125,6 +125,7 @@ export default function EmpirePage() {
   const [cu, setCu] = useState<Record<string, string>>({})       // تعدادِ واحدِ مشارکت (ورودی)
   const [nego, setNego] = useState<Record<string, any>>({})   // نتیجهٔ مذاکره به‌ازای هر آگهی
   const [deals, setDeals] = useState<any>(null)                // فرصت‌های طلاییِ امروز (سند ۱۴ — Hook)
+  const [lands, setLands] = useState<any>(null)                // 🏞 بازارِ زمین (فاز ۲۴) — دروازهٔ موتورِ ساخت
   const [tick, setTick] = useState(0)                          // تیکِ شمارشِ معکوسِ واقعی
   const [dealAn, setDealAn] = useState('')                     // تحلیلِ کدام فرصتِ امروز نمایش داده شود
   const suspended = useRef(false)
@@ -165,6 +166,15 @@ export default function EmpirePage() {
     const t = setInterval(() => { setTick(x => x + 1); if (Date.now() >= deals.expiresAt) setDeals(null) }, 1000)
     return () => clearInterval(t)
   }, [deals?.expiresAt])
+
+  // 🏞 بازارِ زمین (فاز ۲۴): زمین‌های واقعیِ قابلِ‌خرید — بدونِ این ورودی، موتورِ ساخت هرگز دیده نمی‌شد.
+  useEffect(() => {
+    if (step !== 'dash' || lands) return
+    let alive = true
+    fetch('/api/empire', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'lands' }) })
+      .then(r => r.json()).then(d => { if (alive && d?.ok) setLands(d) }).catch(() => {})
+    return () => { alive = false }
+  }, [step, lands])
 
   // «هیچ جلسه‌ای بی‌دلیلِ برگشت تمام نشود» (فصل ۴): با ترکِ صفحه، تعلیقِ فردا ثبت می‌شود.
   useEffect(() => {
@@ -215,6 +225,18 @@ export default function EmpirePage() {
     for (let i = 0; i < texts.length; i++) { setBuyTxt(texts[i]); await new Promise(r => setTimeout(r, 350)) }
     const d = await api({ action: 'buy', listingId: o.id, negotiated })
     if (d) { setSt(d); setStep('owned'); celebrate() } else setStep(opps.length ? 'opps' : 'dash')
+  }
+  // خریدِ زمین از بازارِ زمین: خرید + برنامهٔ «ساخت» یکجا — و راهنمایی به قدمِ بعد (پروانه در پرتفوی).
+  async function doBuyLand(l: any, negotiated = false) {
+    const d = await api({ action: 'buy', listingId: l.id, negotiated })
+    if (!d) return
+    let d2 = d
+    const a = (d.empire?.assets || []).filter((x: any) => x.listingId === l.id).pop()
+    if (a) { const r = await api({ action: 'landPlan', assetId: a.id, plan: 'build' }); if (r) d2 = r }
+    setSt(d2); celebrate()
+    setLands((p: any) => p ? { ...p, lands: (p.lands || []).filter((x: any) => x.id !== l.id) } : p)
+    alert('🏞 زمین مالِ توست و برنامه‌اش «ساخت» شد.\nقدمِ بعد: 🏛 درخواستِ پروانهٔ ساخت — در صفحهٔ «پرتفوی» روی همین زمین.')
+    setGtab('portfolio')
   }
   async function doReject() {
     const d = await api({ action: 'reject' })
@@ -553,6 +575,88 @@ export default function EmpirePage() {
         </div>
       )
     })()}
+
+    {/* 🧭 مسیرِ برجِ اول (فاز ۲۴): موتورِ ساخت کامل بود اما از UI پیدا نمی‌شد — این کارت قدمِ بعدی را نشان می‌دهد
+        (قانونِ ۴ سؤالِ فصل ۹: وضعیت؟ فرصت؟ اقدامِ بعدی؟ کدام دکمه؟). بعد از تحویلِ برجِ اول محو می‌شود. */}
+    {(() => {
+      const as = e.assets || []
+      const s1 = as.some((a: any) => a.kind === 'land' && a.landPlan === 'build')
+      const s2 = as.some((a: any) => a.permit?.status === 'granted')
+      const s3 = as.some((a: any) => a.construction)
+      const s4 = as.some((a: any) => a.construction?.done) || (e.stats?.projectsDelivered || 0) > 0
+      if (s4) return null
+      const steps = [
+        { t: 'زمین بخر و برنامه‌اش «ساخت» باشد', done: s1, hint: 'از «🏞 بازارِ زمین» همین پایین' },
+        { t: 'پروانهٔ ساخت بگیر', done: s2, hint: 'در «پرتفوی» روی زمینت → 🏛 درخواستِ پروانه' },
+        { t: 'نقشه بریز و کلنگ بزن', done: s3, hint: 'بعد از صدورِ پروانه: سازه، کیفیت و هدفِ پروژه را انتخاب کن' },
+        { t: 'بساز، پیش‌فروش کن، تحویل بده', done: false, hint: 'کارگاهِ زنده در «پرتفوی» — هزینهٔ روزشمار، رویدادها، پیش‌فروش' },
+      ]
+      const cur = steps.findIndex(x => !x.done)
+      return (
+        <div style={{ ...card, borderColor: '#e7a14a' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <b style={{ fontSize: 14 }}>🧭 مسیرِ برجِ اول</b>
+            <span style={{ fontSize: 11, color: 'var(--muted)' }}>از زمینِ خالی تا تحویلِ پروژه — همه با قیمت‌ها و آگهی‌های واقعی</span>
+            <span style={{ flex: 1 }} />
+            <button style={{ ...btn, padding: '5px 14px', fontSize: 12 }}
+              onClick={() => { if (cur === 0) document.getElementById('land-market')?.scrollIntoView({ behavior: 'smooth' }); else setGtab('portfolio') }}>
+              {cur === 0 ? '🏞 برو به بازارِ زمین' : '💼 برو به پرتفوی'}
+            </button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+            {steps.map((s, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 12.5, opacity: s.done ? 0.65 : i === cur ? 1 : 0.5 }}>
+                <span style={{ color: s.done ? '#7c6' : i === cur ? 'var(--gold)' : 'var(--faint)', fontWeight: 800 }}>{s.done ? '✓' : fa(i + 1)}</span>
+                <span style={{ fontWeight: i === cur ? 800 : 500 }}>{s.t}</span>
+                {i === cur && <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>— {s.hint}</span>}
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 8 }}>
+            🏗 شرکتِ ساختمانی و تیمِ مهندسی اجباری نیست، اما مذاکره را قوی‌تر و پروانه را سریع‌تر می‌کند — ثبتش در «پرتفوی»{st.unlocks && !st.unlocks.company?.ok ? ` (از سطحِ ${fa(st.unlocks.company?.need || 0)} باز می‌شود)` : ''}.
+          </div>
+        </div>
+      )
+    })()}
+
+    {/* 🏞 بازارِ زمین (فاز ۲۴): زمین‌های واقعیِ قیمت‌دار با متراژِ ثبت‌شده — دروازهٔ موتورِ ساخت */}
+    {lands && (
+      <div id="land-market" style={card}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <b style={{ fontSize: 14 }}>🏞 بازارِ زمین — برای ساخت</b>
+          <span style={{ fontSize: 11, color: 'var(--muted)' }}>زمین‌های واقعیِ الانِ بازار؛ خرید = برنامهٔ «ساخت» و شروعِ مسیرِ برج</span>
+        </div>
+        {(lands.lands || []).length === 0
+          ? <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 10 }}>الان هیچ زمینِ قیمت‌دار با متراژِ ثبت‌شده در بازارِ واقعی نیست — به‌محضِ ورودِ آگهیِ زمینِ تازه، همین‌جا ظاهر می‌شود.</div>
+          : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(230px,1fr))', gap: 8, marginTop: 10 }}>
+            {lands.lands.map((l: any) => (
+              <div key={l.id} style={{ ...card, background: 'var(--bg2)', display: 'flex', flexDirection: 'column', gap: 5, opacity: l.locked ? 0.75 : 1 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, lineHeight: 1.7 }}>{l.title.slice(0, 55)}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>{l.hood}{l.area ? ` · ${fa(l.area)} متر` : ''}{l.perM ? ` · متری ${faB(l.perM)}` : ''}</div>
+                <div style={{ fontSize: 13, color: 'var(--gold)', fontWeight: 700 }}>{faB(l.price)} تومان</div>
+                {l.locked && <div style={{ fontSize: 10.5, color: '#e7a14a' }}>🔒 سرمایهٔ نقدت هنوز به این نمی‌رسد (با مالیاتِ انتقال)</div>}
+                {nego[l.id] && <div style={{ fontSize: 10.5, color: nego[l.id].success ? '#7c6' : 'var(--muted)' }}>
+                  🤝 {nego[l.id].owner?.name || 'مالک'}: {nego[l.id].success ? `${fa(nego[l.id].discountPct)}٪ تخفیف → ${faB(nego[l.id].finalPrice)}` : 'کوتاه نیامد'}
+                  {nego[l.id].memoryNote && <div style={{ color: '#e7a14a' }}>🧠 {nego[l.id].memoryNote}</div>}
+                </div>}
+                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 'auto' }}>
+                  {!nego[l.id] && <button style={{ ...btnGhost, padding: '4px 9px', fontSize: 11 }} disabled={busy}
+                    onClick={async () => { const d = await api({ action: 'negotiate', listingId: l.id }); if (d) setNego(p => ({ ...p, [l.id]: d })) }}>🤝 مذاکره</button>}
+                  <button style={{ ...btnGhost, padding: '4px 9px', fontSize: 11 }} disabled={busy || e.aiTokens <= 0} title="میانهٔ متریِ واقعیِ هم‌محله‌ها را نشان می‌دهد"
+                    onClick={async () => { setDealAn(l.id); await doAnalyze(l.id) }}>🤖 تحلیل (۱ ژتون)</button>
+                  <button style={{ ...btn, padding: '4px 10px', fontSize: 11 }} disabled={busy || l.locked}
+                    onClick={() => doBuyLand(l, !!nego[l.id]?.success)}>⛏ می‌خرم برای ساخت</button>
+                  {l.url && <a href={l.url} target="_blank" rel="noreferrer" style={{ ...btnGhost, padding: '4px 9px', fontSize: 11, textDecoration: 'none' }}>🔗</a>}
+                </div>
+                {dealAn === l.id && analysis && <div style={{ fontSize: 10.5, color: 'var(--muted)', borderTop: '1px solid var(--line)', paddingTop: 5 }}>
+                  <b style={{ color: 'var(--text)' }}>{analysis.verdict}</b>
+                  {analysis.samples > 0 && <div>متریِ این ملک {faB(analysis.minePerM)} · میانگینِ هم‌محله‌ها {faB(analysis.avgPerM)} (از {fa(analysis.samples)} آگهیِ واقعی)</div>}
+                </div>}
+              </div>
+            ))}
+          </div>}
+      </div>
+    )}
 
     {/* 🎪 رویدادهای زندهٔ ادمین (سند ۱۸ — LiveOps): بدونِ دیپلوی از پنل ساخته می‌شوند؛ پیشرفت از رفتارِ واقعی */}
     {(st.liveEvents || []).map((ev: any) => (
