@@ -54,6 +54,9 @@ export interface ReosConfig {
     }
     // GDD فصل ۴ بخش ۱۰ + پیوتِ «مدل B»: فرصت‌های محدودِ روزانه (Hook) از آگهی‌های واقعی با شمارشِ معکوسِ واقعی.
     deals: { enabled: boolean; count: number }
+    // فاز ۲۵ (تجمیع و تخریب): خریدِ واحدبه‌واحدِ ساختمانِ واقعی → تخریب فقط با مالکیتِ کامل → زمینِ قابلِ‌ساخت.
+    // total واحدها اول از متای واقعیِ آگهی («طبقه: X از Y»)، وگرنه قطعی از هش بینِ unitsMin..unitsMax.
+    assembly: { enabled: boolean; unitsMin: number; unitsMax: number; extraUnitPremiumPct: number; demolishCostPct: number }
     // GDD فصل ۴ بخش ۱۵: اعتبارِ ⭐ باید اثرِ واقعی داشته باشد — روی مذاکره و شرایطِ بانک.
     reputation: { negoBonusPerStar: number; loanRateCutPctPerStar: number }
     // سند ۱۶ (فصل ۶ بخش ۱): پاداشِ رسیدن به هر سطحِ جدید (ملک‌کوین) — Level Up باید حس شود.
@@ -145,6 +148,8 @@ export const DEFAULT_CONFIG: ReosConfig = {
     // Hook روزانه (سند ۱۴): N آگهیِ واقعیِ قطعی از هشِ کاربر+روز؛ بعضی واقعاً زیرِ میانهٔ محله‌اند، بعضی نه —
     // بازی قضاوت نمی‌کند؛ بازیکن فکر می‌کند یا ژتونِ تحلیل خرج می‌کند («اگر پاسخ واضح باشد، سیستم شکست خورده»).
     deals: { enabled: true, count: 5 },
+    // تجمیع و تخریب (فاز ۲۵): هر واحدِ اضافه با ٪ گران‌تر (مالک‌ها می‌فهمند دنبالِ تجمیعی)؛ تخریب = ٪ ارزشِ ساختمان.
+    assembly: { enabled: true, unitsMin: 3, unitsMax: 8, extraUnitPremiumPct: 10, demolishCostPct: 5 },
     // اعتبار = دارایی (سند ۱۴): هر ستارهٔ بالای ۱ → مذاکرهٔ راحت‌تر + نرخِ وامِ بهتر — شفاف و قطعی.
     reputation: { negoBonusPerStar: 2, loanRateCutPctPerStar: 3 },
     // پاداشِ سطح (سند ۱۶): هر سطحِ جدید × این مقدار ملک‌کوین — بدونِ پاداشِ گذشته‌نگر برای قدیمی‌ها.

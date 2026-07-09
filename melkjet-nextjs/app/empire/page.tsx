@@ -926,6 +926,31 @@ export default function EmpirePage() {
             {a.url && <a href={a.url} target="_blank" rel="noreferrer" style={{ ...btnGhost, padding: '4px 10px', fontSize: 12, textDecoration: 'none' }}>🔗 آگهیِ واقعی</a>}
             {!a.construction && <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 12, color: '#e88', borderColor: '#644' }} disabled={busy} onClick={() => doSell(a)}>💸 فروش</button>}
 
+            {/* 🧩 تجمیع و تخریب (فاز ۲۵): تک‌تکِ واحدهای ساختمان را بخر — تا همه مالِ تو نشد، تخریب ممکن نیست */}
+            {a.assembly && <div style={{ width: '100%', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', fontSize: 11, borderTop: '1px dashed var(--line)', paddingTop: 6, marginTop: 2 }}>
+              <span style={{ color: 'var(--muted)' }}>🧩 واحدهای ساختمان: <b style={{ color: a.assembly.canDemolish ? '#7c6' : 'var(--text)' }}>{fa(a.assembly.owned)} از {fa(a.assembly.total)}</b> مالِ تو</span>
+              {!a.assembly.canDemolish && <>
+                {nego['u' + a.id]
+                  ? <span style={{ color: nego['u' + a.id].success ? '#7c6' : 'var(--muted)' }}>🤝 {nego['u' + a.id].owner?.name || 'مالکِ واحد'}: {nego['u' + a.id].success ? `${fa(nego['u' + a.id].discountPct)}٪ تخفیف` : 'کوتاه نیامد'}</span>
+                  : <button style={{ ...btnGhost, padding: '3px 9px', fontSize: 10.5 }} disabled={busy}
+                      onClick={async () => { const d = await api({ action: 'negotiate', listingId: a.listingId, unit: a.assembly.owned + 1 }); if (d) setNego(p => ({ ...p, ['u' + a.id]: d })) }}>🤝 مذاکره با مالکِ واحدِ بعدی</button>}
+                <button style={{ ...btn, padding: '3px 10px', fontSize: 10.5 }} disabled={busy}
+                  onClick={async () => { const d = await api({ action: 'buyUnit', assetId: a.id, negotiated: !!nego['u' + a.id]?.success }); if (d) { setSt(d); celebrate(); setNego(p => { const q = { ...p }; delete q['u' + a.id]; return q }) } }}>
+                  🧩 خریدِ واحدِ بعدی ({faB(a.assembly.nextPrice)}{nego['u' + a.id]?.success ? ' − تخفیف' : ''})</button>
+                <span style={{ color: 'var(--faint)', fontSize: 10 }}>+{fa(a.assembly.premiumPct)}٪ پرمیوم — مالک‌ها می‌فهمند دنبالِ تجمیعی</span>
+              </>}
+              {a.assembly.canDemolish && <button style={{ ...btnGhost, padding: '3px 10px', fontSize: 10.5, color: '#e7a14a', borderColor: '#7a5a2a' }} disabled={busy}
+                onClick={async () => {
+                  if (!confirm(`کلِ ساختمان تخریب شود؟ زمینِ ~${fa(a.assembly.landArea)} متری می‌ماند (برآورد از بنا ÷ تراکم). هزینهٔ تخریب ${faB(a.assembly.demolishCost)} تومان.`)) return
+                  const d = await api({ action: 'demolish', assetId: a.id }); if (d) { setSt(d); celebrate() }
+                }}>🧨 تخریب → زمینِ ~{fa(a.assembly.landArea)} متری ({faB(a.assembly.demolishCost)})</button>}
+            </div>}
+            {a.villaDemolish && <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 11, color: '#e7a14a', borderColor: '#7a5a2a' }} disabled={busy}
+              onClick={async () => {
+                if (!confirm(`ویلا تخریب شود؟ زمینِ ${fa(a.villaDemolish.landArea)} متری (متراژِ خودِ آگهی) می‌ماند. هزینهٔ تخریب ${faB(a.villaDemolish.demolishCost)} تومان.`)) return
+                const d = await api({ action: 'demolish', assetId: a.id }); if (d) { setSt(d); celebrate() }
+              }}>🧨 تخریب → زمینِ {fa(a.villaDemolish.landArea)} متری ({faB(a.villaDemolish.demolishCost)})</button>}
+
             {/* پیش‌نمایشِ نقشهٔ ساخت (جلد ۶۴): سازه/کیفیت با روز و هزینهٔ شفاف */}
             {bplan?.assetId === a.id && !a.construction && <div style={{ width: '100%', ...card, background: 'var(--surface)', fontSize: 12 }}>
               <b>⛏ نقشهٔ ساخت</b> — زمین {fa(bplan.landArea)} متر → <b style={{ color: 'var(--gold)' }}>{fa(bplan.builtArea)} مترِ بنا · {fa(bplan.totalUnits)} واحدِ {fa(bplan.unitArea)} متری</b>

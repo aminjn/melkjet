@@ -33,6 +33,11 @@ export interface EmpireAsset {
   businessProb?: number       // ٪ موفقیت — از دادهٔ واقعی (رقابت + استقبالِ محله)
   income?: number             // درآمدِ جمع‌شدهٔ اجاره/کسب‌وکار (برآورد از بازارِ واقعی)
   lastAccrualAt?: number
+  // تجمیع و تخریب (فاز ۲۵): ساختمانِ آپارتمان/تجاری واحدبه‌واحد خریده می‌شود؛ تخریب فقط با مالکیتِ کامل.
+  unitsTotal?: number         // کلِ واحدهای ساختمان — از متای واقعیِ آگهی («طبقه: X از Y») یا قطعی از هش
+  unitsOwned?: number         // چند واحدش مالِ توست (خریدِ اولیه = ۱)؛ ارزش/فروش × همین ضریب
+  demolishedAt?: number       // تخریب‌شده → kind به 'land' برمی‌گردد؛ ارزش تا ساخت = بهای تمام‌شده
+  landAreaOverride?: number   // مساحتِ زمینِ برآوردی بعد از تخریب — مبنای نقشهٔ ساخت به‌جای متراژِ واحدِ آگهی
 }
 export interface TimelineDot { at: number; icon: string; title: string; detail?: string }
 export interface JournalEntry { at: number; text: string }
@@ -104,6 +109,7 @@ export interface EmpireData {
   crowd?: CrowdHolding[]      // سهم‌های سرمایه‌گذاریِ جمعی روی آگهی‌های واقعی (جلد ۴۰ فصل ۷)
   company?: Company           // شرکتِ ساختمانی (جلد ۶۱) — «از یک اتاقِ کوچک تا امپراتوری»
   wagesPaid?: number          // حقوقِ پرداختی به مهندس‌ها (مصرفِ شفافِ پول — قانون ۶)
+  demolitionPaid?: number     // هزینهٔ تخریب‌های پرداختی (فاز ۲۵ — مصرفِ شفافِ پول، مثلِ حقوق)
   stats?: { sellsProfitable: number; negoWins: number; negoTries?: number; projectsDelivered?: number; repProjects?: number }   // شمارنده‌های واقعیِ رفتار (جلد ۲۶/۷۲)
   projectHist?: ProjectReport[]   // کارنامهٔ پروژه‌های تحویل‌شده (GDD فصل ۴) — درسِ هر پروژه از اعدادِ واقعیِ خودش
   snap?: { day: number; netWorth: number; prev: number }   // اسنپ‌شاتِ روزانه — «سود/زیانِ دیروز» (جلد ۲۶)
@@ -649,7 +655,8 @@ export async function sellAsset(userId: string, assetId: string, livePrice: numb
     const i = e.assets.findIndex(x => x.id === assetId)
     if (i < 0) return 'دارایی یافت نشد'
     const a = e.assets[i]
-    salePrice = livePrice > 0 ? livePrice : a.buyPrice
+    // تجمیع (فاز ۲۵): فروش، کلِ ساختمان را می‌فروشد — قیمتِ روزِ واحد × واحدهای مالکیت‌شده؛ تخریب‌شده = بهای تمام‌شده.
+    salePrice = a.demolishedAt ? a.buyPrice : (livePrice > 0 ? livePrice * (a.unitsOwned || 1) : a.buyPrice)
     profit = salePrice - a.buyPrice
     const tax = Math.round(salePrice * (config().empire.transferTaxPct / 100))
     e.capital += salePrice - tax
@@ -681,6 +688,75 @@ export async function setLandPlan(userId: string, assetId: string, plan: LandPla
     if (plan === 'sell') e.identity.negotiation = Math.min(100, (e.identity.negotiation || 0) + 2)
     const lbl = plan === 'build' ? 'ساخت' : plan === 'partner' ? 'مشارکت' : 'فروشِ فوری'
     e.timeline.push({ at: now, icon: '🏗', title: `برنامهٔ زمین: ${lbl}`, detail: a.title.slice(0, 70) })
+  })
+}
+
+// ═══════ تجمیع و تخریب (فاز ۲۵): «اگر ۶ واحدی است، تک‌تک بخر؛ تا همه را نخریدی تخریب نمی‌شود» ═══════
+// کلِ واحدهای ساختمانِ یک آگهیِ واقعی: اول از متای واقعی («طبقه: ۲ از ۵» → ۵ طبقه ≈ ۵ واحد)،
+// وگرنه قطعی از هشِ آگهی بین unitsMin..unitsMax — همان دکترینِ شخصیتِ مالک (ضدسوءاستفاده، تست‌پذیر).
+export function buildingUnitsOf(listingId: string, meta: Record<string, string> | undefined, unitsMin: number, unitsMax: number): number {
+  const m = meta || {}
+  const floorTxt = String(m['طبقه'] || '')
+  const fm = floorTxt.match(/از\s*([\d۰-۹]+)/)
+  if (fm) {
+    const n = Number(fm[1].replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))))
+    if (n >= 2 && n <= 50) return n
+  }
+  const span = Math.max(1, unitsMax - unitsMin + 1)
+  const h = createHash('sha1').update(listingId + '|units').digest()
+  return unitsMin + (h[0] % span)
+}
+// قیمتِ واحدِ بعدی: قیمتِ روزِ واقعیِ همان آگهی + ٪ پرمیومِ تجمیع (مالک‌ها می‌فهمند دنبالِ تجمیعی — شفاف در UI).
+export function assemblyUnitPriceOf(livePrice: number, premiumPct: number): number {
+  return Math.max(1, Math.round(livePrice * (1 + Math.max(0, premiumPct) / 100)))
+}
+
+// خریدِ یک واحدِ دیگر از همان ساختمان — پول: قیمت از سرمایه کم می‌شود، مالیات → خزانه، بهای تمام‌شده رشد می‌کند.
+export async function buyBuildingUnit(userId: string, assetId: string, opts: { price: number; taxPct: number; total: number }, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    if (!a) return 'دارایی یافت نشد'
+    if (a.kind !== 'apartment' && a.kind !== 'commercial') return 'تجمیع فقط برای ساختمانِ آپارتمانی/تجاری است'
+    if (a.construction) return 'این ملک واردِ پروژهٔ ساخت شده'
+    if (a.demolishedAt) return 'این ساختمان تخریب شده'
+    if (!a.unitsTotal) { a.unitsTotal = Math.max(2, opts.total); a.unitsOwned = a.unitsOwned || 1 }
+    const owned = a.unitsOwned || 1
+    if (owned >= a.unitsTotal) return 'همهٔ واحدهای این ساختمان مالِ توست — حالا می‌توانی تخریب کنی'
+    const tax = Math.round(opts.price * opts.taxPct / 100)
+    if (e.capital < opts.price + tax) return 'سرمایهٔ نقدِ کافی نیست (قیمت + مالیاتِ انتقال)'
+    e.capital -= opts.price + tax
+    e.taxPaid = (e.taxPaid || 0) + tax
+    a.buyPrice += opts.price                       // بهای تمام‌شده = مجموعِ خریدِ همهٔ واحدها
+    a.unitsOwned = owned + 1
+    e.identity.builder = Math.min(100, (e.identity.builder || 0) + 2)
+    e.timeline.push({ at: now, icon: '🧩', title: `تجمیع: واحدِ ${(owned + 1).toLocaleString('fa-IR')} از ${a.unitsTotal.toLocaleString('fa-IR')} خریده شد`, detail: a.title.slice(0, 60) })
+    if (a.unitsOwned >= a.unitsTotal) e.timeline.push({ at: now, icon: '🏢', title: 'مالکیتِ کاملِ ساختمان!', detail: 'حالا می‌توانی تخریب کنی و برجِ خودت را بسازی' })
+  })
+}
+
+// تخریب: فقط با مالکیتِ کامل (ویلایی مستقیم) → دارایی زمین می‌شود؛ هزینهٔ تخریب مصرفِ شفافِ پول است.
+export async function demolishAsset(userId: string, assetId: string, opts: { cost: number; landArea: number }, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    if (!a) return 'دارایی یافت نشد'
+    if (a.kind === 'land') return 'زمین که تخریب نمی‌شود — پروانه بگیر و بساز'
+    if (a.construction) return 'این ملک واردِ پروژهٔ ساخت شده'
+    if (a.demolishedAt) return 'قبلاً تخریب شده'
+    if ((a.kind === 'apartment' || a.kind === 'commercial')) {
+      const total = a.unitsTotal || 0
+      if (!total || (a.unitsOwned || 1) < total) return `تا همهٔ واحدهای ساختمان را نخری نمی‌توانی تخریب کنی (${((a.unitsOwned || 1)).toLocaleString('fa-IR')} از ${(total || 0).toLocaleString('fa-IR')})`
+    }
+    if (e.capital < opts.cost) return 'سرمایهٔ نقدِ کافی برای هزینهٔ تخریب نیست'
+    e.capital -= opts.cost
+    e.demolitionPaid = (e.demolitionPaid || 0) + opts.cost
+    a.demolishedAt = now
+    a.kind = 'land'
+    a.landPlan = undefined                          // تصمیمِ بعدی با بازیکن: فروش / ساخت / مشارکت
+    a.business = undefined; a.businessProb = undefined; a.action = undefined
+    a.landAreaOverride = Math.max(20, Math.round(opts.landArea))
+    e.identity.builder = Math.min(100, (e.identity.builder || 0) + 5)
+    e.timeline.push({ at: now, icon: '🧨', title: `تخریب: ${a.title.slice(0, 50)}`, detail: `زمینِ ~${a.landAreaOverride.toLocaleString('fa-IR')} متری آماده شد · هزینهٔ تخریب ${Math.round(opts.cost / 1e6).toLocaleString('fa-IR')} میلیون` })
+    if (!e.badges.includes('First Demolition')) e.badges.push('First Demolition')
   })
 }
 
@@ -1555,7 +1631,10 @@ export function netWorthOf(e: EmpireData, livePrices: Record<string, number>, ma
       assetsValue += Math.round((a.buyPrice + c.paid) * frac)
       continue
     }
-    assetsValue += livePrices[a.listingId] || a.buyPrice
+    // تخریب‌شده و هنوز ساخته‌نشده: قیمتِ آگهیِ اولیه دیگر معنای «ارزشِ روز» ندارد — بهای تمام‌شده مبنا می‌ماند.
+    if (a.demolishedAt) { assetsValue += a.buyPrice; continue }
+    // تجمیع (فاز ۲۵): ارزش = قیمتِ روزِ واحد × تعدادِ واحدهای مالکیت‌شده
+    assetsValue += Math.round((livePrices[a.listingId] || a.buyPrice / (a.unitsOwned || 1)) * (a.unitsOwned || 1))
   }
   let marketValue = 0
   for (const h of e.funds || []) { const u = market?.fundUnit?.[h.fundId]; marketValue += u && u > 0 ? Math.round(h.units * u) : h.cost }

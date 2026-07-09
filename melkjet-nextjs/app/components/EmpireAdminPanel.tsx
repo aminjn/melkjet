@@ -199,6 +199,11 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
           <span style={{ fontSize: 22 }}>{sel.empire.persona || '🏛'}</span>
           <b style={{ fontSize: 15 }}>{sel.empire.name}</b>
           <span style={{ fontSize: 12, color: 'var(--muted)' }}>#{fa(sel.empire.no)} · {sel.empire.userId} · {sel.level.titleFa} (سطح {fa(sel.level.level)}) · {sel.empire.profile?.title} · DNA: {sel.empire.dna}</span>
+          <button style={{ ...btnGhost, fontSize: 11.5, padding: '4px 10px' }} disabled={busy === 'rename'} onClick={async () => {
+            const name = prompt('نامِ جدیدِ این امپراتوری:', sel.empire.name)
+            if (!name || name.trim() === sel.empire.name) return
+            if (await post({ action: 'rename', userId: sel.empire.userId, name: name.trim() }, 'نام عوض شد ✓')) openPlayer(sel.empire.userId)
+          }}>✏️ ویرایشِ نام</button>
           <span style={{ flex: 1 }} />
           <button style={{ ...btnGhost, fontSize: 11.5, padding: '4px 10px' }} onClick={() => setSel(null)}>✕ بستن</button>
         </div>
@@ -345,6 +350,14 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             {row('ظرفیتِ پایهٔ پروژهٔ همزمان', cin('unlocks', 'projectsBase'), 'ظرفیت = پایه + سطح ÷ گام')}
             {row('گامِ رشدِ ظرفیت (هر چند سطح +۱)', cin('unlocks', 'projectsPerLevels'))}
             {row('خروج از پروژهٔ نیمه‌کاره (٪ بهای تمام‌شده)', cin('unlocks', 'projectExitPct'), 'با پیش‌فروشِ فعال ممنوع؛ مالیات → خزانه')}
+          </div>
+          <div style={card}>
+            <div style={sub}>🧩 تجمیع و تخریب (فاز ۲۵)</div>
+            {row('تجمیع/تخریب فعال (۱/۰)', cin('assembly', 'enabled'), 'خریدِ واحدبه‌واحد → مالکیتِ کامل → تخریب → زمین')}
+            {row('حداقلِ واحدهای ساختمان (هش)', cin('assembly', 'unitsMin'), 'وقتی متای «طبقه: X از Y» در آگهی نباشد')}
+            {row('حداکثرِ واحدهای ساختمان (هش)', cin('assembly', 'unitsMax'))}
+            {row('پرمیومِ هر واحدِ بعدی (٪)', cin('assembly', 'extraUnitPremiumPct'), 'مالک‌ها می‌فهمند دنبالِ تجمیعی')}
+            {row('هزینهٔ تخریب (٪ ارزشِ روز)', cin('assembly', 'demolishCostPct'), 'مصرفِ شفافِ پول — demolitionPaid')}
           </div>
           <div style={card}>
             <div style={sub}>🔥 فرصت‌های روزانه و اعتبارِ برند (سند ۱۴)</div>

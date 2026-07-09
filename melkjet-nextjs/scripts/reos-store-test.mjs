@@ -1272,6 +1272,49 @@ async function main() {
     ok('خروج: عایدی/مالیات/زیانِ تحقق‌یافته درست است', sp.ok && sp.proceeds === expVal - expTax && sp.pnl === expVal - expTax - 1_500_000_000
       && sp.empire.capital === cap17 + sp.proceeds && sp.empire.taxPaid === tax17 + expTax && sp.empire.realized === real17 + sp.pnl)
     ok('زمین و کارگاه با هم واگذار شدند', !sp.empire.assets.some(x => x.id === land17))
+
+    // ── فاز ۲۵: تجمیع واحدها و تخریب — «تا همهٔ واحدها را نخری، تخریب نه» ──
+    console.log('\n── Empire · تجمیع و تخریب (فاز ۲۵) ──')
+    const { buyBuildingUnit, demolishAsset, netWorthOf: nwOf25, sellAsset: sell25 } = await import('../app/lib/empire-store.ts')
+    await buyA(uc12, { id: 'APT25', title: 'آپارتمانِ ۶۰ متری برای تجمیع', hood: 'جنت‌آباد شمالی', price: 1_000_000_000, ptype: 'آپارتمان' })
+    const apt25 = (await getEmpire(uc12)).assets.find(x => x.listingId === 'APT25').id
+    // ساختمانِ ۳ واحدی؛ قبل از مالکیتِ کامل تخریب ممنوع
+    {
+      const eT = await getEmpire(uc12)
+      eT.assets.find(x => x.id === apt25).unitsTotal = 3; eT.assets.find(x => x.id === apt25).unitsOwned = 1
+      await pool.query(`UPDATE reos_empire SET data=$2 WHERE user_id=$1`, [uc12, JSON.stringify(eT)])
+    }
+    const dRej = await demolishAsset(uc12, apt25, { cost: 1, landArea: 100 })
+    ok('تخریبِ ۱ از ۳ رد می‌شود (مالکیتِ کامل شرط است)', dRej.ok === false && /نخری/.test(dRej.reason || ''))
+    // خریدِ واحدِ دوم: پول از سرمایه، مالیات → خزانه، بهای تمام‌شده جمع می‌شود
+    const eB0 = await getEmpire(uc12)
+    const capB0 = eB0.capital, taxB0 = eB0.taxPaid || 0
+    const u2 = await buyBuildingUnit(uc12, apt25, { price: 1_100_000_000, taxPct: 1, total: 3 })
+    const a25 = u2.empire.assets.find(x => x.id === apt25)
+    ok('واحدِ ۲: کسرِ قیمت+مالیات، مالیات→خزانه، بهای تمام‌شده جمع شد',
+      u2.ok && a25.unitsOwned === 2 && u2.empire.capital === capB0 - 1_100_000_000 - 11_000_000
+      && (u2.empire.taxPaid || 0) === taxB0 + 11_000_000 && a25.buyPrice === 1_000_000_000 + 1_100_000_000)
+    // ارزش‌گذاری: قیمتِ روزِ واحد × واحدهای مالکیت‌شده
+    const nw2 = nwOf25(u2.empire, { APT25: 1_200_000_000 })
+    const nwSolo = nwOf25({ ...u2.empire, assets: u2.empire.assets.filter(x => x.id !== apt25) }, { APT25: 1_200_000_000 })
+    ok('netWorth: ساختمانِ ۲واحدی = ۲ × قیمتِ روزِ واحد', nw2.assetsValue - nwSolo.assetsValue === 2 * 1_200_000_000)
+    const u3 = await buyBuildingUnit(uc12, apt25, { price: 1_100_000_000, taxPct: 1, total: 3 })
+    ok('واحدِ ۳: مالکیتِ کامل', u3.ok && u3.empire.assets.find(x => x.id === apt25).unitsOwned === 3)
+    ok('واحدِ چهارم وجود ندارد — رد', (await buyBuildingUnit(uc12, apt25, { price: 1, taxPct: 1, total: 3 })).ok === false)
+    // تخریب: هزینه از سرمایه → demolitionPaid؛ دارایی زمین می‌شود با مساحتِ برآوردی؛ نشانِ First Demolition
+    const eD0 = await getEmpire(uc12)
+    const dm = await demolishAsset(uc12, apt25, { cost: 150_000_000, landArea: 82 })
+    const aD = dm.empire.assets.find(x => x.id === apt25)
+    ok('تخریب با مالکیتِ کامل: زمین + مساحتِ برآوردی + هزینه→demolitionPaid + نشان',
+      dm.ok && aD.kind === 'land' && aD.landAreaOverride === 82 && !aD.landPlan
+      && dm.empire.capital === eD0.capital - 150_000_000 && (dm.empire.demolitionPaid || 0) === 150_000_000
+      && dm.empire.badges.includes('First Demolition'))
+    ok('تخریبِ دوباره رد می‌شود', (await demolishAsset(uc12, apt25, { cost: 1, landArea: 10 })).ok === false)
+    // فروشِ دارایی تخریب‌شده = بهای تمام‌شده (قیمتِ آگهیِ قدیمی دیگر معنا ندارد)
+    const eS0 = await getEmpire(uc12)
+    const aS = eS0.assets.find(x => x.id === apt25)
+    const sD = await sell25(uc12, apt25, 9_999_999_999)
+    ok('فروشِ زمینِ تخریب‌شده به بهای تمام‌شده (نه قیمتِ آگهیِ قدیمی)', sD.ok && sD.salePrice === aS.buyPrice)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

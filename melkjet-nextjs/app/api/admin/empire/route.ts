@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import {
   listEmpiresPublic, getEmpire, adminAdjustEmpire, deleteEmpire, briefStatsForDay, dayNumberOf,
-  empireLevel, empireScoreOf, netWorthOf, type EmpireData,
+  empireLevel, empireScoreOf, netWorthOf, renameEmpire, type EmpireData,
 } from '@/app/lib/empire-store'
 import { candidateListings, getItemById, type Item } from '@/app/lib/scraper-store'
 import { parseFaNum } from '@/app/lib/reos/features'
@@ -182,6 +182,13 @@ export async function POST(req: NextRequest) {
     if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
     logAudit(await actor(), 'تنظیمِ منابعِ امپراتوری', `${b.userId} — ${b.reason || ''}`)
     return NextResponse.json({ ok: true })
+  }
+  // ویرایشِ نامِ امپراتوریِ یک بازیکن (نامِ نامناسب/درخواستِ خودِ کاربر) — با ثبت در ممیزی.
+  if (action === 'rename') {
+    const r = await renameEmpire(String(b.userId || ''), String(b.name || ''))
+    if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+    logAudit(await actor(), 'ویرایشِ نامِ امپراتوری', `${b.userId} → ${b.name}`)
+    return NextResponse.json({ ok: true, name: r.empire!.name })
   }
   if (action === 'delete') {
     const ok = await deleteEmpire(String(b.userId || ''))

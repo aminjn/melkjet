@@ -21,6 +21,7 @@ import {
   projectLessonsOf, engineerEffectsOf, addAmenity, rentOutUnits, stopRentUnits,
   negoMemoryOf, bumpNegoTries, dailyDealPickOf, maxProjectsOf, sellProject,
   applyLevelUpReward, setWeekSnap, setTitle, giveKudos, eventActive, streakMilestonesOf,
+  buildingUnitsOf, assemblyUnitPriceOf, buyBuildingUnit, demolishAsset,
   type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
 import {
@@ -144,10 +145,13 @@ async function livePrices(e: EmpireData): Promise<Record<string, number>> {
   return out
 }
 
-// قیمت + مختصاتِ واقعیِ دارایی‌ها در یک پاس — برای نقشهٔ شهر (Visual Pass، فصل ۹ «City Screen»).
-async function liveInfoOf(e: EmpireData): Promise<{ prices: Record<string, number>; coords: Record<string, { lat: number; lng: number }> }> {
+// قیمت + مختصات + واحدها/متراژِ واقعیِ دارایی‌ها در یک پاس — نقشهٔ شهر (فصل ۹) + تجمیع/تخریب (فاز ۲۵).
+async function liveInfoOf(e: EmpireData): Promise<{ prices: Record<string, number>; coords: Record<string, { lat: number; lng: number }>; units: Record<string, number>; areas: Record<string, number> }> {
+  const asm = config().empire.assembly
   const prices: Record<string, number> = {}
   const coords: Record<string, { lat: number; lng: number }> = {}
+  const units: Record<string, number> = {}
+  const areas: Record<string, number> = {}
   for (const a of e.assets) {
     const it = await getItemById(a.listingId).catch(() => null)
     if (!it) continue
@@ -155,8 +159,10 @@ async function liveInfoOf(e: EmpireData): Promise<{ prices: Record<string, numbe
     if (p > 0) prices[a.listingId] = p
     const lat = Number(it.meta?.['__lat']), lng = Number(it.meta?.['__lng'])
     if (lat && lng) coords[a.listingId] = { lat, lng }
+    units[a.listingId] = buildingUnitsOf(a.listingId, it.meta, asm.unitsMin, asm.unitsMax)
+    areas[a.listingId] = parseFaNum((it.meta || {})['متراژ']) || 0
   }
-  return { prices, coords }
+  return { prices, coords, units, areas }
 }
 
 // اجارهٔ ماهانهٔ یک آگهیِ اجاره‌ای («ودیعه X · اجاره Y» یا متنِ مشابه) — فقط بخشِ اجاره.
@@ -325,11 +331,31 @@ async function stateOf(userId: string, e00: EmpireData) {
   const [info, missions, total] = await Promise.all([liveInfoOf(e), missionsOf(userId, e), empireCount()])
   const prices = info.prices
   const nw = netWorthOf(e, prices, mc || undefined)
-  const assets = e.assets.map(a => ({
+  const asmCfg = config().empire.assembly
+  const assets = e.assets.map(a => {
+    const owned = a.unitsOwned || 1
+    const unitP = prices[a.listingId] || Math.round(a.buyPrice / owned)
+    // تخریب‌شده = بهای تمام‌شده تا ساخت؛ تجمیع‌شده = قیمتِ روزِ واحد × واحدهای مالکیت‌شده (فاز ۲۵)
+    const cur = a.demolishedAt ? a.buyPrice : unitP * owned
+    // تجمیع: وضعیتِ ساختمان + قیمتِ واحدِ بعدی + شرط/هزینهٔ تخریب — همه شفاف
+    const total = a.unitsTotal || info.units[a.listingId] || 0
+    const area = info.areas[a.listingId] || 0
+    const demolishCost = Math.max(1, Math.round(cur * asmCfg.demolishCostPct / 100))
+    const assembly = asmCfg.enabled && !a.demolishedAt && !a.construction && (a.kind === 'apartment' || a.kind === 'commercial') && total >= 2 ? {
+      total, owned, premiumPct: asmCfg.extraUnitPremiumPct,
+      nextPrice: owned < total ? assemblyUnitPriceOf(unitP, asmCfg.extraUnitPremiumPct) : 0,
+      canDemolish: owned >= total, demolishCost,
+      landArea: Math.max(20, Math.round(area * total / Math.max(1, config().empire.build.buildFactor))),
+    } : undefined
+    const villaDemolish = asmCfg.enabled && !a.demolishedAt && !a.construction && a.kind === 'villa' && area > 0 ? {
+      demolishCost, landArea: Math.max(20, Math.round(area)),
+    } : undefined
+    return {
     ...a,
-    current: prices[a.listingId] || a.buyPrice,
+    current: cur,
+    assembly, villaDemolish,
     lat: info.coords[a.listingId]?.lat, lng: info.coords[a.listingId]?.lng,   // برای پینِ نقشهٔ شهر
-    growthPct: a.buyPrice ? Math.round(((prices[a.listingId] || a.buyPrice) - a.buyPrice) / a.buyPrice * 1000) / 10 : 0,
+    growthPct: a.buyPrice ? Math.round((cur - a.buyPrice) / a.buyPrice * 1000) / 10 : 0,
     // زمینِ بدونِ برنامه → سه گزینهٔ سند (§6.7) با برآوردِ شفاف
     plans: a.kind === 'land' && !a.landPlan ? landProjection(prices[a.listingId] || a.buyPrice) : undefined,
     permitDue: a.permit?.status === 'pending' ? permitDueAt(a.permit) : undefined,   // شمارشِ معکوسِ پروانه (جلد ۶۳)
@@ -347,7 +373,7 @@ async function stateOf(userId: string, e00: EmpireData) {
       freeUnits: Math.max(0, a.construction.totalUnits - a.construction.presold - a.construction.sold - (a.construction.rented || 0)),
     } : undefined,
     url: listingHref(a.listingId, a.title, a.hood),   // پلِ بازی→واقعیت (جلد ۲۸)
-  }))
+  } })
   const today = dayNumberOf(Date.now())
   // نامهٔ امروزِ ملک‌جت (اگر cron هنوز نساخته، همین‌جا از دادهٔ واقعی ساخته می‌شود) + استریک (ورودِ امروز = حفظِ زنجیره)
   let brief = null, streak = null
@@ -509,9 +535,11 @@ export async function POST(req: NextRequest) {
       const e = await getEmpire(userId)
       if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
       // جلد ۶۲: «زمین قیمتِ ثابت ندارد؛ مالک دارد» — شخصیت + تیم + حافظهٔ مذاکره + اعتبارِ برند (سند ۱۴) روی شانس اثر دارند.
-      const persona = ownerPersonaOf(it.id)
+      // تجمیع (فاز ۲۵): هر واحدِ ساختمان مالکِ خودش را دارد — b.unit کلیدِ قطعیِ همان واحد می‌شود.
+      const negoKey = Number(b.unit) > 1 ? `${it.id}#u${Number(b.unit)}` : it.id
+      const persona = ownerPersonaOf(negoKey)
       const ns = negoSkillOf(e, persona.mod)
-      const out = negotiationOutcome(userId, it.id, ns.skill)
+      const out = negotiationOutcome(userId, negoKey, ns.skill)
       bumpNegoTries(userId, it.id).catch(() => {})   // حافظهٔ مذاکره: هر آگهی یک بار شمرده می‌شود
       const price = priceOf(it)
       return NextResponse.json({ ok: true, ...out, owner: { name: persona.name, age: persona.age, type: persona.type, desc: persona.desc }, memoryNote: ns.memory.note, repBonus: ns.repBonus || undefined, price, finalPrice: Math.round(price * (1 - out.discountPct / 100)) })
@@ -933,7 +961,8 @@ export async function POST(req: NextRequest) {
       const a = e?.assets.find(x => x.id === String(b.assetId || ''))
       if (!e || !a) return NextResponse.json({ error: 'دارایی یافت نشد' }, { status: 404 })
       const it = await getItemById(a.listingId).catch(() => null)
-      const landValue = it ? priceOf(it) : a.buyPrice
+      // تخریب‌شده (فاز ۲۵): قیمتِ آگهیِ واحدِ قدیمی دیگر ارزشِ زمین نیست — بهای تمام‌شدهٔ کلِ ساختمان مبناست.
+      const landValue = a.demolishedAt ? a.buyPrice : (it ? priceOf(it) : a.buyPrice)
       const terms = permitTermsOf(userId, a.id, config().empire.company.permit, teamSkillOf(e), landValue > 0 ? landValue : a.buyPrice)
       const r = await requestPermit(userId, a.id, terms)
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
@@ -941,6 +970,52 @@ export async function POST(req: NextRequest) {
     }
     case 'permitSettle': {
       const r = await settleObjection(userId, String(b.assetId || ''))
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+    }
+
+    // ══════ تجمیع و تخریب (فاز ۲۵): «۶ واحدی؟ تک‌تک بخر؛ تا همه مالِ تو نشد، تخریب نه» ══════
+    // خریدِ واحدِ بعدیِ همان ساختمان — قیمتِ روزِ واقعیِ آگهی + پرمیومِ تجمیع؛ مالکِ هر واحد شخصیتِ خودش را دارد.
+    case 'buyUnit': {
+      const asm = config().empire.assembly
+      if (!asm.enabled) return NextResponse.json({ error: 'تجمیع فعلاً فعال نیست' }, { status: 403 })
+      const e = await getEmpire(userId)
+      const a = e?.assets.find(x => x.id === String(b.assetId || ''))
+      if (!e || !a) return NextResponse.json({ error: 'دارایی یافت نشد' }, { status: 404 })
+      const it = await getItemById(a.listingId).catch(() => null)
+      const owned = a.unitsOwned || 1
+      const unitP = (it ? priceOf(it) : 0) || Math.round(a.buyPrice / owned)
+      const total = a.unitsTotal || buildingUnitsOf(a.listingId, it?.meta, asm.unitsMin, asm.unitsMax)
+      let price = assemblyUnitPriceOf(unitP, asm.extraUnitPremiumPct)
+      if (b.negotiated) {
+        // همان کلیدِ قطعیِ اکشنِ «مذاکره» با unit — تخفیفی که کاربر دیده، سرِ خرید هم همان است.
+        const negoKey = `${a.listingId}#u${owned + 1}`
+        const out = negotiationOutcome(userId, negoKey, negoSkillOf(e, ownerPersonaOf(negoKey).mod).skill)
+        if (out.success) price = Math.round(price * (1 - out.discountPct / 100))
+      }
+      const r = await buyBuildingUnit(userId, a.id, { price, taxPct: config().empire.transferTaxPct, total })
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      recordEvent({ type: 'user_clicked_property', userId, propertyId: a.listingId, meta: { src: 'empire_assembly' } }).catch(() => {})
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+    }
+    // تخریب: آپارتمان/تجاری فقط با مالکیتِ کاملِ واحدها؛ ویلایی مستقیم. هزینه = ٪ ارزشِ روز — مصرفِ شفافِ پول.
+    case 'demolish': {
+      const asm = config().empire.assembly
+      if (!asm.enabled) return NextResponse.json({ error: 'تخریب فعلاً فعال نیست' }, { status: 403 })
+      const e = await getEmpire(userId)
+      const a = e?.assets.find(x => x.id === String(b.assetId || ''))
+      if (!e || !a) return NextResponse.json({ error: 'دارایی یافت نشد' }, { status: 404 })
+      const it = await getItemById(a.listingId).catch(() => null)
+      const owned = a.unitsOwned || 1
+      const unitP = (it ? priceOf(it) : 0) || Math.round(a.buyPrice / owned)
+      const cur = unitP * owned
+      const cost = Math.max(1, Math.round(cur * asm.demolishCostPct / 100))
+      const area = it ? (parseFaNum((it.meta || {})['متراژ']) || 0) : 0
+      const total = a.unitsTotal || owned
+      // برآوردِ زمین: ویلایی = متراژِ آگهی (عرصه)؛ ساختمان = کلِ بنا ÷ تراکمِ knob — شفاف در UI اعلام می‌شود.
+      const landArea = a.kind === 'villa' ? area : Math.round(area * total / Math.max(1, config().empire.build.buildFactor))
+      if (!(landArea > 0)) return NextResponse.json({ error: 'متراژِ این ملک در آگهیِ واقعی ثبت نشده — زمینِ بعد از تخریب قابل‌برآورد نیست' }, { status: 400 })
+      const r = await demolishAsset(userId, a.id, { cost, landArea })
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
     }
@@ -955,7 +1030,8 @@ export async function POST(req: NextRequest) {
       if (!e || !a) return NextResponse.json({ error: 'دارایی یافت نشد' }, { status: 404 })
       if (a.permit?.status !== 'granted') return NextResponse.json({ error: 'اول پروانهٔ ساخت را بگیر' }, { status: 400 })
       const it = await getItemById(a.listingId).catch(() => null)
-      const landArea = it ? (parseFaNum((it.meta || {})['متراژ']) || 0) : 0
+      // زمینِ حاصل از تخریب (فاز ۲۵): مساحتِ برآوردیِ خودش، نه متراژِ واحدِ آگهیِ قدیمی
+      const landArea = a.landAreaOverride || (it ? (parseFaNum((it.meta || {})['متراژ']) || 0) : 0)
       if (!(landArea > 0)) return NextResponse.json({ error: 'متراژِ این زمین در آگهیِ واقعی ثبت نشده — ساختِ آن قابل‌برآورد نیست' }, { status: 400 })
       const options: any[] = []
       for (const [sk, s] of Object.entries(BUILD_STRUCTURES)) for (const [qk, q] of Object.entries(BUILD_QUALITIES)) {
@@ -978,7 +1054,7 @@ export async function POST(req: NextRequest) {
       const maxP = maxProjectsOf(empireLevel(e.xp).level, config().empire.unlocks)
       if (active >= maxP) return NextResponse.json({ error: `ظرفیتِ شرکتت ${maxP.toLocaleString('fa-IR')} پروژهٔ همزمان است — پروژه‌ای را تحویل بده یا با سطحِ بالاتر ظرفیت بگیر` }, { status: 400 })
       const it = await getItemById(a.listingId).catch(() => null)
-      const landArea = it ? (parseFaNum((it.meta || {})['متراژ']) || 0) : 0
+      const landArea = a.landAreaOverride || (it ? (parseFaNum((it.meta || {})['متراژ']) || 0) : 0)
       const plan = buildPlanOf(String(b.structure || ''), String(b.quality || ''), landArea, cfg)
       if (!plan) return NextResponse.json({ error: 'سازه/کیفیتِ نامعتبر یا متراژِ نامشخص' }, { status: 400 })
       const r = await startBuild(userId, a.id, plan, { structure: String(b.structure), quality: String(b.quality), goal: String(b.goal || '') })
