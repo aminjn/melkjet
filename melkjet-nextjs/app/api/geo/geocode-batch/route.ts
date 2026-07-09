@@ -21,7 +21,9 @@ async function geocodeOne(q: string, key: string): Promise<{ lat: number; lng: n
 export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({} as any))
   const queries: string[] = Array.isArray(b.queries) ? b.queries.map((s: any) => String(s).trim()).filter(Boolean).slice(0, 40) : []
-  const key = getAdminData().neshan?.serviceKey || getAdminData().neshan?.mapKey
+  const nzk = getAdminData().neshan
+  // ترجیحِ کلیدِ سرویس — REST با کلیدِ وب کار نمی‌کند (خودترمیمِ جابه‌جایی، فاز ۳۰)
+  const key = [nzk?.serviceKey, nzk?.mapKey].find(k => k && !/^web\./i.test(k)) || nzk?.serviceKey || nzk?.mapKey
   if (!key) return NextResponse.json({ results: {} }, { status: 404 })
   const uniq = Array.from(new Set(queries))
   const results: Record<string, { lat: number; lng: number } | null> = {}

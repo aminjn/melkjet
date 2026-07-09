@@ -11,7 +11,8 @@ export async function GET(req: NextRequest) {
   if (cache.has(q)) return NextResponse.json(cache.get(q) || {}, { headers: { 'Cache-Control': 'public, max-age=86400' } })
 
   const nz = getAdminData().neshan
-  const key = nz?.serviceKey || nz?.mapKey
+  // ترجیحِ کلیدِ سرویس — REST با کلیدِ وب کار نمی‌کند (خودترمیمِ جابه‌جایی، فاز ۳۰)
+  const key = [nz?.serviceKey, nz?.mapKey].find(k => k && !/^web\./i.test(k)) || nz?.serviceKey || nz?.mapKey
   if (!key) return NextResponse.json({}, { status: 404 })
 
   try {

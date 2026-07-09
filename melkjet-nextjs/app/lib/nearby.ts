@@ -14,7 +14,8 @@ async function neshanGet(url: string, key: string, timeout = 8000): Promise<{ st
 // مختصات → شهر/محله (با Neshan reverse). برای تشخیصِ خودکارِ منطقهٔ کاربر.
 export async function reverseGeocode(lat: number, lng: number): Promise<{ city?: string; neighborhood?: string; address?: string } | null> {
   const nz = getAdminData().neshan
-  const key = nz?.serviceKey || nz?.mapKey
+  // ترجیحِ کلیدِ سرویس (service.…) — سرویس‌های REST با کلیدِ وب کار نمی‌کنند (خودترمیمِ جابه‌جایی، فاز ۳۰)
+  const key = [nz?.serviceKey, nz?.mapKey].find(k => k && !/^web\./i.test(k)) || nz?.serviceKey || nz?.mapKey
   if (!key) return null
   try {
     const { status, json } = await neshanGet(`https://api.neshan.org/v5/reverse?lat=${lat}&lng=${lng}`, key)

@@ -20,10 +20,18 @@ export async function POST(req: NextRequest) {
   const data = getAdminData()
   const cur = data.neshan || { serviceKey: '' }
   // پشتیبانی از ذخیرهٔ مستقل هر کلید
-  const serviceKey = body.serviceKey !== undefined ? String(body.serviceKey).trim() : cur.serviceKey
-  const mapKey = body.mapKey !== undefined ? String(body.mapKey).trim() : cur.mapKey
+  let serviceKey = body.serviceKey !== undefined ? String(body.serviceKey).trim() : (cur.serviceKey || '')
+  let mapKey = body.mapKey !== undefined ? String(body.mapKey).trim() : (cur.mapKey || '')
   if (!serviceKey && !mapKey) return NextResponse.json({ error: 'حداقل یک کلید الزامی است' }, { status: 400 })
+  // ضدخطا (فاز ۳۰): نوعِ کلید از پیشوندش معلوم است (web./service.) — اگر جابه‌جا وارد شود، خودکار
+  // در فیلدِ درست ذخیره می‌شود؛ نقشهٔ سایت دیگر قربانیِ جابه‌جاییِ فیلدها نمی‌شود.
+  const isWeb = (k?: string) => !!k && /^web\./i.test(k)
+  if (isWeb(serviceKey) && !isWeb(mapKey)) {
+    const web = serviceKey
+    serviceKey = mapKey && !isWeb(mapKey) ? mapKey : (cur.serviceKey && !isWeb(cur.serviceKey) ? cur.serviceKey : '')
+    mapKey = web
+  }
   data.neshan = { serviceKey: serviceKey || '', mapKey: mapKey || undefined }
   saveAdminData(data)
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({ ok: true, swapped: isWeb(mapKey) && body.serviceKey !== undefined && isWeb(String(body.serviceKey).trim()) })
 }

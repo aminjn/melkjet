@@ -10,7 +10,8 @@ const clamp = (n: number, a: number, b: number) => Math.max(a, Math.min(b, n))
 export async function GET(req: NextRequest) {
   const sp = new URL(req.url).searchParams
   const nz = getAdminData().neshan
-  const key = nz?.mapKey || nz?.serviceKey
+  // نقشهٔ استاتیک تاریخاً با کلیدِ سرویس کار می‌کرد — ترجیح با کلیدِ غیرِ وب (خودترمیم، فاز ۳۰)
+  const key = [nz?.mapKey, nz?.serviceKey].find(k => k && !/^web\./i.test(k)) || nz?.mapKey || nz?.serviceKey
   if (!key) return new Response('no-neshan-key', { status: 404 })
 
   // مارکرها
