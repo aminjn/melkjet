@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import EmpireCard from '@/app/components/EmpireCard'
 import ReosPanelSection from '@/app/components/ReosPanelSection'
 import AssistantPanel from '@/app/components/AssistantPanel'
 import PlansPanel from '@/app/components/PlansPanel'
@@ -161,6 +162,7 @@ export default function AppraiserPage() {
       {!data ? <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--muted)' }}>در حال بارگذاری…</div> :
         view === 'dashboard' ? (
           <>
+            <div style={{ marginBottom: 16 }}><EmpireCard /></div>
             <div style={{ marginBottom: 18 }}><ReosPanelSection title="فایل‌های پیشنهادیِ REOS" subtitle="بر اساسِ تقاضای زندهٔ بازار" /></div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 14, marginBottom: 20 }}>
               <Kpi label="درخواست‌های باز" value={fa(s!.open)} accent="#8fbf7f" />

@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import AssistantPanel from '@/app/components/AssistantPanel'
 import ReosPanelSection from '@/app/components/ReosPanelSection'
+import EmpireCard from '@/app/components/EmpireCard'
 import ReosInvestorTool from '@/app/components/ReosInvestorTool'
 import CrmTool, { CRM_VIEWS, type CrmView } from '@/app/components/tools/CrmTool'
 import MarketingTool, { MARKETING_VIEWS, type MarketingView } from '@/app/components/tools/MarketingTool'
@@ -506,7 +507,7 @@ export default function BuilderPage() {
             <div style={{ textAlign: 'center', color: 'var(--muted)', padding: '80px 0', fontSize: 14 }}>در حال بارگذاری پروژه…</div>
           ) : (
             <>
-              {view === 'overview' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}><OverviewView project={project} s={s} onMilestone={(mid, status) => post({ action: 'milestone', pid, mid, status })} busy={busy} /><ReosInvestorTool defaultMode="construction" /><ReosPanelSection title="املاکِ پیشنهادیِ REOS" subtitle="فرصت‌های مرتبط با بازار" /></div>}
+              {view === 'overview' && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}><EmpireCard /><OverviewView project={project} s={s} onMilestone={(mid, status) => post({ action: 'milestone', pid, mid, status })} busy={busy} /><ReosInvestorTool defaultMode="construction" /><ReosPanelSection title="املاکِ پیشنهادیِ REOS" subtitle="فرصت‌های مرتبط با بازار" /></div>}
               {view === 'assistant' && (
                 <div style={{ height: 'calc(100vh - 130px)' }}>
                   <AssistantPanel panel="builder" title="دستیار هوشمند سازنده" subtitle="مشاور AI شخصیِ تو" suggestions={["استراتژی پیش‌فروش واحدها را بگو", "قیمت‌گذاری این پروژه را تحلیل کن", "متن بازاریابی برای پروژه بنویس", "چطور سرمایه‌گذار جذب کنم؟"]} />

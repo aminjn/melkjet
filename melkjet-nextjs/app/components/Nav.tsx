@@ -46,6 +46,7 @@ const MENUS: Menu[] = [
     { ic: '◆', label: 'دفترخانه', desc: 'سند و انتقال', href: '/directory?category=دفترخانه' },
   ] },
   { label: 'ابزار هوشمند', items: [
+    { ic: '🏛', label: 'امپراتوریِ ملکی', desc: 'مسیرِ رشدِ سرمایه با دارایی‌های واقعی', href: '/empire' },
     { ic: '📊', label: 'تحلیل بازار', desc: 'کلان‌داده و پیش‌بینی', href: '/market' },
     { ic: '🏠', label: 'پلان و مدل سه‌بعدی', desc: 'ساخت پلان از عکس', href: '/plan-ai' },
     { ic: '✦', label: 'دستیار و موتور مذاکره AI', desc: 'مشاوره و استراتژی', href: '/plan-ai' },
