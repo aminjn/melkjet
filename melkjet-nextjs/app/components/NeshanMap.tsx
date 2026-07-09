@@ -75,6 +75,7 @@ export default function NeshanMap({
   const [err, setErr] = useState<string>('')
   const [tick, setTick] = useState(0)   // برای تلاشِ مجددِ خودکار در صورتِ شکستِ گذرا
   const [ready, setReady] = useState(0) // نقشه ساخته شد → مارکرها سوار شوند (بدونِ اتکا به تغییرِ props)
+  const [tileHint, setTileHint] = useState(false)   // کاشی‌ها لود نشدند → راهنمای مجوزِ کلید (فاز ۲۸)
   const fitKeyRef = useRef('')          // امضای دادهٔ فعلیِ پین‌ها — رندرِ والد (هر ثانیه) دیگر نقشه را دست نمی‌زند
   const userMovedRef = useRef(false)    // بعد از اولین زوم/جابه‌جاییِ خودِ کاربر، هرگز auto-fit نکن (زوم نپَرد)
   const programmaticRef = useRef(false) // حرکتِ برنامه‌ای (fitBounds/setView) با حرکتِ کاربر اشتباه نشود
@@ -109,6 +110,25 @@ export default function NeshanMap({
       // حرکتِ خودِ کاربر (نه fit برنامه‌ای) → از این به بعد زوم/مرکزِ او محترم است و auto-fit خاموش می‌شود.
       try { mapRef.current.on('movestart zoomstart', () => { if (!programmaticRef.current) userMovedRef.current = true }) } catch {}
       setReady(r => r + 1)
+      // نگهبانِ تایل (فاز ۲۸): اگر بعد از چند ثانیه هیچ کاشی‌ای لود نشد (کلید مجوزِ آن استایل را ندارد)،
+      // یک‌بار با استایلِ پایهٔ «neshan» دوباره می‌سازیم؛ اگر باز هم نشد، راهنمای دقیقِ مجوزِ کلید روی نقشه می‌آید.
+      const watchTiles = (attempt: number) => setTimeout(() => {
+        if (dead || !ref.current || !mapRef.current) return
+        if (ref.current.querySelectorAll('.leaflet-tile-loaded').length > 0) return
+        if (attempt === 0) {
+          try { mapRef.current.remove() } catch {}
+          mapRef.current = null
+          try { if ((ref.current as any)._leaflet_id) { (ref.current as any)._leaflet_id = null; ref.current.innerHTML = '' } } catch {}
+          try {
+            mapRef.current = new L.Map(ref.current, { key, maptype: 'neshan', poi: true, traffic: false, center: center ? [center.lat, center.lng] : TEHRAN, zoom })
+            try { mapRef.current.on('movestart zoomstart', () => { if (!programmaticRef.current) userMovedRef.current = true }) } catch {}
+            fitKeyRef.current = ''; userMovedRef.current = false   // مارکرها روی نقشهٔ نو دوباره سوار شوند
+            setReady(r => r + 1)
+            watchTiles(1)
+          } catch { setTileHint(true) }
+        } else setTileHint(true)
+      }, 6000)
+      watchTiles(0)
       // انتخابِ موقعیت با کلیک — جدا و غیرِمخرب: اگر بایندِ کلیک شکست بخورد، خودِ نقشه نباید خطا شود.
       if (onMapClick) {
         try {
@@ -175,5 +195,12 @@ export default function NeshanMap({
       </div>
     )
   }
-  return <div ref={ref} style={{ width: '100%', height, borderRadius: 16, overflow: 'hidden', border: '1px solid var(--line)', background: 'var(--bg2)' }} />
+  return (
+    <div style={{ position: 'relative', width: '100%', height }}>
+      <div ref={ref} style={{ position: 'absolute', inset: 0, borderRadius: 16, overflow: 'hidden', border: '1px solid var(--line)', background: 'var(--bg2)' }} />
+      {tileHint && <div style={{ position: 'absolute', bottom: 10, right: 10, left: 10, zIndex: 500, pointerEvents: 'none', background: 'rgba(20,16,4,.9)', border: '1px solid var(--gold)', borderRadius: 10, padding: '8px 12px', fontSize: 11.5, color: '#f3d98a', textAlign: 'center' }}>
+        کاشی‌های نقشه بارگذاری نشد — در پنلِ توسعه‌دهندگانِ نشان، سرویسِ «نقشهٔ پویا (Web SDK)» را برای همین کلیدِ نقشه فعال کن (ادمین → اتصال‌ها → نشان → کلیدِ نقشه).
+      </div>}
+    </div>
+  )
 }

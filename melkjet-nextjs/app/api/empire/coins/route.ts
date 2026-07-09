@@ -1,0 +1,54 @@
+// 🪙 فروشگاهِ ملک‌کوین (فاز ۲۸) — تنها نقطهٔ ورودِ پولِ واقعی به مسیرِ رشد.
+// کوین فقط «سرعت/تحلیل/ظاهر» می‌خرد (قانون ۵) — هرگز قدرت، XP یا اعتبار (بدونِ P2W).
+// POST { packId } → ساختِ پرداختِ زرین‌پال و redirect؛ GET = بازگشت از درگاه (verify + شارژِ ایدمپوتنت).
+import { NextRequest, NextResponse } from 'next/server'
+import { getSession } from '@/app/lib/session'
+import { getEmpire, creditCoinPurchase } from '@/app/lib/empire-store'
+import { requestPayment, verifyPayment, zarinpalConfigured } from '@/app/lib/zarinpal'
+import { config, primeConfig } from '@/app/lib/reos/reos-config'
+import { flagEnabled } from '@/app/lib/reos/flags'
+import { logAudit } from '@/app/lib/audit-store'
+
+function activePack(packId: string) {
+  const shop = config().empire.coinShop
+  if (!shop?.enabled) return null
+  return (shop.packs || []).find(p => p.enabled && p.id === packId && p.coins > 0 && p.priceToman > 0) || null
+}
+
+export async function POST(req: NextRequest) {
+  await primeConfig()
+  const s = await getSession()
+  if (!s) return NextResponse.json({ error: 'اول وارد شو' }, { status: 401 })
+  if (!await flagEnabled('empire', { userId: s.phone, role: (s as any).role })) return NextResponse.json({ error: 'در دسترس نیست' }, { status: 403 })
+  const b = await req.json().catch(() => ({} as any))
+  const pack = activePack(String(b.packId || ''))
+  if (!pack) return NextResponse.json({ error: 'بسته یافت نشد یا غیرفعال است' }, { status: 404 })
+  if (!(await getEmpire(s.phone))) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+  if (!zarinpalConfigured()) return NextResponse.json({ error: 'درگاه پرداخت هنوز فعال نشده است (پنل → اتصال‌ها → زرین‌پال).' }, { status: 200 })
+  const origin = `${req.headers.get('x-forwarded-proto') || 'https'}://${req.headers.get('host')}`
+  const r = await requestPayment(pack.priceToman, `شارژ ${pack.coins} ملک‌کوین — ${pack.label}`, `${origin}/api/empire/coins?pack=${encodeURIComponent(pack.id)}`, s.phone)
+  if (!r.ok || !r.url) return NextResponse.json({ error: r.error || 'خطا در ایجاد پرداخت' }, { status: 200 })
+  return NextResponse.json({ ok: true, redirect: r.url })
+}
+
+// بازگشت از زرین‌پال: ?Authority=…&Status=OK|NOK&pack=…
+export async function GET(req: NextRequest) {
+  await primeConfig()
+  const url = new URL(req.url)
+  const authority = url.searchParams.get('Authority') || ''
+  const status = url.searchParams.get('Status') || ''
+  const pack = activePack(url.searchParams.get('pack') || '')
+  const origin = `${req.headers.get('x-forwarded-proto') || 'https'}://${req.headers.get('host')}`
+  const fail = (reason: string) => NextResponse.redirect(`${origin}/empire?coins=fail&reason=${encodeURIComponent(reason)}`)
+
+  if (status !== 'OK' || !authority) return fail('پرداخت لغو شد')
+  const s = await getSession()
+  if (!s) return NextResponse.redirect(`${origin}/auth?next=/empire`)
+  if (!pack) return fail('بستهٔ نامعتبر')
+  const v = await verifyPayment(authority, pack.priceToman)
+  if (!v.ok) return fail(v.error || 'تأیید ناموفق')
+  // شارژِ ایدمپوتنت (کلید = authority) — رفرشِ صفحهٔ بازگشت دوبار شارژ نمی‌کند.
+  const r = await creditCoinPurchase(s.phone, { coins: pack.coins, label: pack.label, authority, refId: v.refId })
+  if (r.ok) logAudit(s.phone, 'خریدِ ملک‌کوین', `${pack.label} — ${pack.coins} کوین · ref ${v.refId || '-'}`)
+  return NextResponse.redirect(`${origin}/empire?coins=ok&n=${pack.coins}`)
+}

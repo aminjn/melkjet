@@ -168,6 +168,16 @@ export default function EmpirePage() {
     return () => clearInterval(t)
   }, [deals?.expiresAt])
 
+  // 🪙 بازگشت از درگاهِ کوین (فاز ۲۸): پیامِ نتیجه + پاک‌کردنِ query تا رفرش دوباره پیام ندهد.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search)
+    const c = q.get('coins')
+    if (!c) return
+    if (c === 'ok') alert(`🪙 پرداخت موفق — ${Number(q.get('n') || 0).toLocaleString('fa-IR')} ملک‌کوین به کیفت اضافه شد.`)
+    else alert(`پرداخت ناموفق: ${q.get('reason') || 'لغو شد'}`)
+    window.history.replaceState({}, '', '/empire')
+  }, [])
+
   // 🏞 بازارِ زمین (فاز ۲۴): زمین‌های واقعیِ قابلِ‌خرید — بدونِ این ورودی، موتورِ ساخت هرگز دیده نمی‌شد.
   useEffect(() => {
     if (step !== 'dash' || lands) return
@@ -1231,6 +1241,33 @@ export default function EmpirePage() {
     </>}
 
     {gtab === 'market' && <>
+    {/* 🪙 فروشگاهِ ملک‌کوین (فاز ۲۸): پولِ واقعی فقط «زمان/تحلیل» می‌خرد — هرگز قدرت (بدونِ P2W) */}
+    {st.coinShop?.enabled && (st.coinShop.packs || []).length > 0 && <div style={{ ...card, borderColor: 'var(--goldDim)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <b style={{ fontSize: 14 }}>🪙 فروشگاهِ ملک‌کوین</b>
+        <span style={{ fontSize: 11, color: 'var(--muted)' }}>کوین فقط سرعت (پیگیری/شیفتِ شبانه) و ژتونِ تحلیل می‌خرد — هرگز قدرت یا XP</span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: 8, marginTop: 10 }}>
+        {st.coinShop.packs.map((p: any) => (
+          <div key={p.id} style={{ ...card, background: 'var(--bg2)', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center', textAlign: 'center' }}>
+            <b style={{ fontSize: 13 }}>{p.label}</b>
+            <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--gold)' }}>🪙 {fa(p.coins)}</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>{faB(p.priceToman)} تومان</div>
+            <button style={{ ...btn, padding: '5px 16px', fontSize: 12 }} disabled={busy} onClick={async () => {
+              setBusy(true)
+              try {
+                const r = await fetch('/api/empire/coins', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ packId: p.id }) })
+                const d = await r.json().catch(() => null)
+                if (d?.redirect) { window.location.href = d.redirect; return }
+                alert(d?.error || 'خطا در شروعِ پرداخت')
+              } finally { setBusy(false) }
+            }}>خرید</button>
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 8 }}>پرداختِ امن با زرین‌پال · کوین بلافاصله بعد از تأییدِ درگاه به کیفت اضافه می‌شود و در تایم‌لاینت ثبت است.</div>
+    </div>}
+
     {/* بانک (جلد ۱۶): امتیازِ اعتباری + وام */}
     {st.bank && <div style={card}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>

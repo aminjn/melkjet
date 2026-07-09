@@ -358,6 +358,24 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             {row('شیفتِ شبانهٔ کارگاه (کوین/روز)', cin('speed', 'buildCoinsPerDay'), 'هزینهٔ تومانیِ روز سرِ جایش می‌ماند + از رویدادها رد نمی‌شود')}
           </div>
           <div style={card}>
+            <div style={sub}>🪙 فروشگاهِ ملک‌کوین (فاز ۲۸ — زرین‌پال؛ کوین هرگز قدرت نمی‌خرد)</div>
+            {row('فروشگاه فعال (۱/۰)', cin('coinShop', 'enabled'), 'درگاه از «اتصال‌ها → زرین‌پال» تنظیم می‌شود')}
+            {(cfg?.coinShop?.packs || []).map((p: any, i: number) => (
+              <div key={p.id || i} style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
+                <input value={p.label || ''} onChange={ev => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.coinShop.packs[i].label = ev.target.value.slice(0, 40); return n })} placeholder="نامِ بسته" style={{ ...inpS, flex: 1, minWidth: 120 }} />
+                <input title="کوین" value={String(p.coins ?? '')} onChange={ev => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.coinShop.packs[i].coins = numOf(ev.target.value) || 0; return n })} style={{ ...inpS, width: 76, textAlign: 'center' }} />
+                <input title="قیمت (تومان)" value={String(p.priceToman ?? '')} onChange={ev => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.coinShop.packs[i].priceToman = numOf(ev.target.value) || 0; return n })} style={{ ...inpS, width: 110, textAlign: 'center' }} />
+                <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 11.5, color: p.enabled ? '#7c6' : 'var(--faint)' }}
+                  onClick={() => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.coinShop.packs[i].enabled = !n.coinShop.packs[i].enabled; return n })}>{p.enabled ? 'فعال ✓' : 'خاموش'}</button>
+                <button style={{ ...btnGhost, padding: '4px 8px', fontSize: 11.5, color: '#e88', borderColor: '#644' }}
+                  onClick={() => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.coinShop.packs.splice(i, 1); return n })}>🗑</button>
+              </div>
+            ))}
+            <button style={{ ...btnGhost, padding: '6px 14px', fontSize: 12, marginTop: 8 }}
+              onClick={() => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.coinShop = n.coinShop || { enabled: true, packs: [] }; n.coinShop.packs.push({ id: 'p' + Date.now().toString(36), label: 'بستهٔ جدید', coins: 100, priceToman: 100000, enabled: true }); return n })}>+ بستهٔ جدید</button>
+            <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 6 }}>نام · کوین · قیمت (تومان) — بعد از «ذخیره» بلافاصله در فروشگاهِ بازیکن‌ها اعمال می‌شود. شارژ ایدمپوتنت است (رفرشِ callback دوبار شارژ نمی‌کند).</div>
+          </div>
+          <div style={card}>
             <div style={sub}>🤝 مذاکره (فاز ۲۷ — قبلاً هاردکد بود)</div>
             {row('شانسِ پایه (٪)', cin('nego', 'baseChancePct'), 'شانس = پایه + مهارت ÷ ۲ — قطعی از هش')}
             {row('کفِ تخفیف (٪)', cin('nego', 'discountMin'))}

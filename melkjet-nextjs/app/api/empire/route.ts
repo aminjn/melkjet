@@ -420,6 +420,8 @@ async function stateOf(userId: string, e00: EmpireData) {
     capitalEnabled: config().empire.capital.enabled,
     dealsEnabled: config().empire.deals.enabled,   // Hook روزانه (سند ۱۴)
     speed: config().empire.speed,                  // زمان‌خری (فاز ۲۷): نرخِ کوین برای نمایشِ شفاف در UI
+    // 🪙 فروشگاهِ کوین (فاز ۲۸): فقط بسته‌های فعال — قیمت‌ها شفاف؛ کوین هرگز قدرت نمی‌خرد
+    coinShop: config().empire.coinShop?.enabled ? { enabled: true, packs: (config().empire.coinShop.packs || []).filter(p => p.enabled && p.coins > 0 && p.priceToman > 0) } : { enabled: false, packs: [] },
     // سطح‌گشایی (سند ۱۵): چه چیزی از چه سطحی باز می‌شود + ظرفیتِ پروژهٔ همزمان — شفاف در UI
     unlocks: (() => {
       const u = config().empire.unlocks

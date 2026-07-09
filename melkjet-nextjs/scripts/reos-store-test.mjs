@@ -1361,6 +1361,17 @@ async function main() {
     const cE = nb2.empire.assets.find(x => x.id === land27).construction
     ok('شیفتِ شبانه از رویدادِ ایستگاه فرار نمی‌کند (روی ۳۰٪ می‌ایستد)', nb2.ok && cE.paidDays === Math.ceil(cE.days * 0.3) && !!cE.pendingEvent)
     ok('با رویدادِ معطل، شیفتِ شبانه رد می‌شود', (await boostBuild(uc12, land27, 1, 10)).ok === false)
+
+    // ── فاز ۲۸: شارژِ کوینِ خریداری‌شده — ایدمپوتنت با authority ──
+    console.log('\n── Empire · فروشگاهِ کوین (فاز ۲۸: شارژِ ایدمپوتنت) ──')
+    const { creditCoinPurchase } = await import('../app/lib/empire-store.ts')
+    const coins0 = (await getEmpire(uc12)).coins
+    const cp1 = await creditCoinPurchase(uc12, { coins: 50, label: 'بستهٔ تست', authority: 'A-TEST-1', refId: 'r1' })
+    ok('شارژ اول: +۵۰ کوین + ثبت در تایم‌لاین', cp1.ok && cp1.empire.coins === coins0 + 50
+      && cp1.empire.timeline.some(t => t.icon === '🪙' && /شارژِ ملک‌کوین/.test(t.title)))
+    const cp2 = await creditCoinPurchase(uc12, { coins: 50, label: 'بستهٔ تست', authority: 'A-TEST-1' })
+    ok('رفرشِ callback دوباره شارژ نمی‌کند (کلیدِ authority)', cp2.ok === false && (await getEmpire(uc12)).coins === coins0 + 50)
+    ok('authorityِ جدید شارژِ جدید است', (await creditCoinPurchase(uc12, { coins: 10, label: 'x', authority: 'A-TEST-2' })).ok === true && (await getEmpire(uc12)).coins === coins0 + 60)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

@@ -1232,6 +1232,19 @@ export async function boostBuild(userId: string, assetId: string, days: number, 
   return { ok: true, advanced, empire: r.empire }
 }
 
+// 🪙 شارژِ ملک‌کوینِ خریداری‌شده (فاز ۲۸ — تنها نقطهٔ ورودِ پولِ واقعی به دنیای رشد؛ کوین فقط
+// سرعت/تحلیل/ظاهر می‌خرد، هرگز قدرت — بدونِ P2W). ایدمپوتنت با کلیدِ claims = authority تا
+// رفرشِ صفحهٔ بازگشتِ درگاه دوبار شارژ نکند.
+export async function creditCoinPurchase(userId: string, opts: { coins: number; label: string; authority: string; refId?: string }, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const key = 'coinpay_' + opts.authority
+    if (e.claims[key]) return 'این پرداخت قبلاً اعمال شده'
+    e.claims[key] = now
+    e.coins += Math.max(0, Math.round(opts.coins))
+    e.timeline.push({ at: now, icon: '🪙', title: `شارژِ ملک‌کوین: ${Math.round(opts.coins).toLocaleString('fa-IR')} کوین (${opts.label.slice(0, 40)})`, detail: opts.refId ? `کدِ پیگیری ${opts.refId}` : undefined })
+  })
+}
+
 // ⚡ پیگیریِ حضوریِ پروانه (فاز ۲۷): هر روز کوتاه‌شدنِ بررسی = کوین — انتظار قابلِ‌خرید است، نتیجه نه
 // (اعتراض/عوارض سرِ جای خودشان می‌مانند؛ فقط زمان کوتاه می‌شود).
 export async function boostPermit(userId: string, assetId: string, days: number, coinsPerDay: number, now = Date.now()): Promise<{ ok: boolean; reason?: string; cut?: number; empire?: EmpireData }> {

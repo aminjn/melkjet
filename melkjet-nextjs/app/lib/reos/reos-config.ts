@@ -59,6 +59,8 @@ export interface ReosConfig {
     assembly: { enabled: boolean; unitsMin: number; unitsMax: number; extraUnitPremiumPct: number; demolishCostPct: number }
     // فاز ۲۷ (قانون ۵: «پرداخت فقط برای سرعت/تحلیل/ظاهر»): ملک‌کوین زمانِ انتظار را می‌خرد — نه قدرت را.
     speed: { enabled: boolean; permitCoinsPerDay: number; buildCoinsPerDay: number }
+    // فاز ۲۸: فروشگاهِ ملک‌کوین (زرین‌پال) — تنها نقطهٔ ورودِ پولِ واقعی؛ کوین هرگز قدرت نمی‌خرد (بدونِ P2W).
+    coinShop: { enabled: boolean; packs: Array<{ id: string; label: string; coins: number; priceToman: number; enabled: boolean }> }
     // فاز ۲۷: شانس و بازهٔ تخفیفِ مذاکره — قبلاً هاردکد بود (۲۵٪ پایه، ۲..۶٪) و کاربر می‌دید؛ حالا knob.
     nego: { baseChancePct: number; discountMin: number; discountMax: number }
     // GDD فصل ۴ بخش ۱۵: اعتبارِ ⭐ باید اثرِ واقعی داشته باشد — روی مذاکره و شرایطِ بانک.
@@ -156,6 +158,15 @@ export const DEFAULT_CONFIG: ReosConfig = {
     assembly: { enabled: true, unitsMin: 3, unitsMax: 8, extraUnitPremiumPct: 10, demolishCostPct: 5 },
     // زمان‌خری (فاز ۲۷): پیگیریِ پروانه ۱۵ کوین/روز · شیفتِ شبانهٔ کارگاه ۱۰ کوین/روز (+ هزینهٔ تومانیِ خودِ روز).
     speed: { enabled: true, permitCoinsPerDay: 15, buildCoinsPerDay: 10 },
+    // فروشگاهِ کوین: بسته‌ها کاملاً از ادمین؛ درگاه = زرین‌پالِ «اتصال‌ها». کوین فقط سرعت/تحلیل/ظاهر می‌خرد.
+    coinShop: {
+      enabled: true,
+      packs: [
+        { id: 'brz', label: 'بستهٔ برنزی', coins: 100, priceToman: 100_000, enabled: true },
+        { id: 'slv', label: 'بستهٔ نقره‌ای', coins: 300, priceToman: 250_000, enabled: true },
+        { id: 'gld', label: 'بستهٔ طلایی', coins: 800, priceToman: 500_000, enabled: true },
+      ],
+    },
     // مذاکره: همان رفتارِ قبلی به‌صورتِ پیش‌فرض (۲۵٪ پایه تا ۷۵٪ با مهارت؛ تخفیف ۲..۶٪) — حالا قابل‌تنظیم.
     nego: { baseChancePct: 25, discountMin: 2, discountMax: 6 },
     // اعتبار = دارایی (سند ۱۴): هر ستارهٔ بالای ۱ → مذاکرهٔ راحت‌تر + نرخِ وامِ بهتر — شفاف و قطعی.
