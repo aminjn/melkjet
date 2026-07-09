@@ -126,6 +126,7 @@ export default function EmpirePage() {
   const [nego, setNego] = useState<Record<string, any>>({})   // نتیجهٔ مذاکره به‌ازای هر آگهی
   const [deals, setDeals] = useState<any>(null)                // فرصت‌های طلاییِ امروز (سند ۱۴ — Hook)
   const [lands, setLands] = useState<any>(null)                // 🏞 بازارِ زمین (فاز ۲۴) — دروازهٔ موتورِ ساخت
+  const [mapL, setMapL] = useState({ assets: true, deals: true, lands: true })   // لایه‌های نقشهٔ شهر (فاز ۲۶)
   const [tick, setTick] = useState(0)                          // تیکِ شمارشِ معکوسِ واقعی
   const [dealAn, setDealAn] = useState('')                     // تحلیلِ کدام فرصتِ امروز نمایش داده شود
   const suspended = useRef(false)
@@ -745,27 +746,42 @@ export default function EmpirePage() {
       )
     })()}
 
-    {/* 🗺 نقشهٔ شهر (فصل ۹ «City Screen» — Visual Pass): دارایی‌های تو + فرصت‌های طلاییِ امروز روی نقشهٔ واقعی */}
+    {/* 🗺 نقشهٔ شهر (فصل ۹ «City Screen» — نسخهٔ کامل، فاز ۲۶): پینِ متمایز برای هر نوع + لایه‌های قابل‌تغییر
+        + زوم/مرکزِ کاربر هرگز نمی‌پَرد (نگهبانِ داخلِ NeshanMap). کلیک روی دارایی → پرتفوی؛ فرصت/زمین → آگهیِ واقعی. */}
     {(() => {
-      const pts: { id: string; lat: number; lng: number; title?: string; price?: string }[] = []
-      for (const a of (e.assets || [])) if (a.lat && a.lng) pts.push({ id: 'a_' + a.id, lat: a.lat, lng: a.lng, title: `🏛 ${a.title?.slice(0, 40)}`, price: faB(a.current || a.buyPrice) })
-      for (const dl of (deals?.deals || [])) if (dl.lat && dl.lng) pts.push({ id: 'd_' + dl.id, lat: dl.lat, lng: dl.lng, title: `🔥 ${dl.title?.slice(0, 40)}`, price: faB(dl.price) })
-      if (!pts.length) return null
+      const aPts = (e.assets || []).filter((a: any) => a.lat && a.lng)
+      const dPts = (deals?.deals || []).filter((dl: any) => dl.lat && dl.lng)
+      const lPts = (lands?.lands || []).filter((l: any) => l.lat && l.lng)
+      if (!aPts.length && !dPts.length && !lPts.length) return null
+      const pts: { id: string; lat: number; lng: number; title?: string; price?: string; icon?: string; color?: string }[] = []
+      if (mapL.assets) for (const a of aPts) {
+        const building = a.construction && !a.construction.done
+        pts.push({ id: 'a_' + a.id, lat: a.lat, lng: a.lng, icon: building ? '🏗' : '🏛', color: building ? '#8a6d1f' : '#c9a84c', title: `${building ? '🏗 کارگاهِ تو' : '🏛 مالِ تو'} — ${a.title?.slice(0, 40)}`, price: faB(a.current || a.buyPrice) })
+      }
+      if (mapL.deals) for (const dl of dPts) pts.push({ id: 'd_' + dl.id, lat: dl.lat, lng: dl.lng, icon: '🔥', color: '#b3611f', title: `🔥 فرصتِ امروز — ${dl.title?.slice(0, 40)}`, price: faB(dl.price) })
+      if (mapL.lands) for (const l of lPts) pts.push({ id: 'l_' + l.id, lat: l.lat, lng: l.lng, icon: '🏞', color: '#3f7a4e', title: `🏞 زمین برای ساخت — ${l.title?.slice(0, 40)}`, price: faB(l.price) })
+      const chip = (on: boolean, color: string) => ({ fontSize: 10.5, padding: '4px 10px', borderRadius: 12, cursor: 'pointer', border: `1px solid ${on ? color : 'var(--line2)'}`, background: on ? color + '22' : 'transparent', color: on ? 'var(--text)' : 'var(--faint)', fontFamily: 'inherit' } as React.CSSProperties)
       return (
         <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', flexWrap: 'wrap' }}>
             <b style={{ fontSize: 13.5 }}>🗺 نقشهٔ شهرِ تو</b>
-            <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>🏛 دارایی‌های تو · 🔥 فرصت‌های امروز — روی هر پین بزن</span>
+            <span style={{ flex: 1 }} />
+            {/* لایه‌ها (فصل ۹): هر لایه روشن/خاموش — شمارِ واقعیِ هر نوع روی چیپ */}
+            <button style={chip(mapL.assets, '#c9a84c')} onClick={() => setMapL(m => ({ ...m, assets: !m.assets }))}>🏛 دارایی‌های من ({fa(aPts.length)})</button>
+            <button style={chip(mapL.deals, '#e7a14a')} onClick={() => setMapL(m => ({ ...m, deals: !m.deals }))}>🔥 فرصت‌های امروز ({fa(dPts.length)})</button>
+            <button style={chip(mapL.lands, '#5da36f')} onClick={() => setMapL(m => ({ ...m, lands: !m.lands }))}>🏞 زمین برای ساخت ({fa(lPts.length)})</button>
           </div>
-          <div style={{ height: 320 }}>
-            <NeshanMap theme="night" height={320} zoom={12}
-              center={{ lat: pts[0].lat, lng: pts[0].lng }}
+          <div style={{ height: 380 }}>
+            <NeshanMap theme="night" height={380} zoom={12}
+              center={pts.length ? { lat: pts[0].lat, lng: pts[0].lng } : undefined}
               points={pts}
               onSelect={(id: string) => {
-                if (id.startsWith('d_')) { const dl = (deals?.deals || []).find((x: any) => 'd_' + x.id === id); if (dl?.url) window.open(dl.url, '_blank') }
-                else { const a = (e.assets || []).find((x: any) => 'a_' + x.id === id); if (a?.url) window.open(a.url, '_blank') }
+                if (id.startsWith('a_')) { setGtab('portfolio'); window.scrollTo({ top: 0, behavior: 'smooth' }) }
+                else if (id.startsWith('d_')) { const dl = dPts.find((x: any) => 'd_' + x.id === id); if (dl?.url) window.open(dl.url, '_blank') }
+                else { const l = lPts.find((x: any) => 'l_' + x.id === id); if (l?.url) window.open(l.url, '_blank') }
               }} />
           </div>
+          <div style={{ padding: '8px 14px', fontSize: 10.5, color: 'var(--faint)' }}>پینِ 🏛 دارایی → صفحهٔ پرتفوی · 🏗 کارگاهِ در حالِ ساخت · 🔥/🏞 → آگهیِ واقعی · زوم و مرکزِ نقشه دستِ خودت می‌ماند</div>
         </div>
       )
     })()}

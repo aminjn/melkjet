@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 // نقشهٔ تعاملیِ نشان (داخلی) — مشترک در همهٔ صفحات. از Web SDK نشان استفاده می‌کند.
 // نقاط (آگهی‌ها) را با مارکر روی نقشه می‌گذارد و با کلیک به صفحهٔ ملک می‌رود.
 
-export interface MapPoint { id: string; lat: number; lng: number; title?: string; price?: string }
+// icon/color: پینِ سفارشی (divIcon) — مثلاً 🏛 طلایی برای دارایی خودِ کاربر، 🔥 نارنجی برای فرصتِ روز، 🏞 سبز برای زمین.
+export interface MapPoint { id: string; lat: number; lng: number; title?: string; price?: string; icon?: string; color?: string }
 
 // مسیرِ رسمیِ مستنداتِ نشان (platform.neshan.org — Leaflet SDK v1.9.4). مسیرِ قدیمی (1.4.0/…/dist)
 // دیگر روی CDN جواب نمی‌داد و نقشهٔ تعاملی همه‌جا بی‌صدا به fallback می‌افتاد — چند نامزد به‌ترتیب امتحان می‌شود.
@@ -73,6 +74,10 @@ export default function NeshanMap({
   const pickRef = useRef<any>(null)
   const [err, setErr] = useState<string>('')
   const [tick, setTick] = useState(0)   // برای تلاشِ مجددِ خودکار در صورتِ شکستِ گذرا
+  const [ready, setReady] = useState(0) // نقشه ساخته شد → مارکرها سوار شوند (بدونِ اتکا به تغییرِ props)
+  const fitKeyRef = useRef('')          // امضای دادهٔ فعلیِ پین‌ها — رندرِ والد (هر ثانیه) دیگر نقشه را دست نمی‌زند
+  const userMovedRef = useRef(false)    // بعد از اولین زوم/جابه‌جاییِ خودِ کاربر، هرگز auto-fit نکن (زوم نپَرد)
+  const programmaticRef = useRef(false) // حرکتِ برنامه‌ای (fitBounds/setView) با حرکتِ کاربر اشتباه نشود
 
   // ساختِ یک‌بارهٔ نقشه (با تلاشِ مجددِ خودکار تا ۲ بار در صورتِ خطای گذرا)
   useEffect(() => {
@@ -101,6 +106,9 @@ export default function NeshanMap({
       } catch { failSoft('init'); return }
       // اندازهٔ نقشه را بعد از چیدمان درست کن (کانتینرهایی که هنگام init هنوز اندازه نداشته‌اند).
       setTimeout(() => { try { mapRef.current?.invalidateSize?.() } catch {} }, 250)
+      // حرکتِ خودِ کاربر (نه fit برنامه‌ای) → از این به بعد زوم/مرکزِ او محترم است و auto-fit خاموش می‌شود.
+      try { mapRef.current.on('movestart zoomstart', () => { if (!programmaticRef.current) userMovedRef.current = true }) } catch {}
+      setReady(r => r + 1)
       // انتخابِ موقعیت با کلیک — جدا و غیرِمخرب: اگر بایندِ کلیک شکست بخورد، خودِ نقشه نباید خطا شود.
       if (onMapClick) {
         try {
@@ -118,31 +126,45 @@ export default function NeshanMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick])
 
-  // به‌روزرسانیِ مارکرها
+  // به‌روزرسانیِ مارکرها — فقط وقتی «دادهٔ» پین‌ها واقعاً عوض شده باشد. والدِ نقشه ممکن است هر ثانیه رندر شود
+  // (شمارشِ معکوس و…) و آرایهٔ points هویتِ تازه بگیرد؛ بدونِ این نگهبان، هر رندر = بازسازیِ مارکرها + پریدنِ زوم.
   useEffect(() => {
     const L = (typeof window !== 'undefined') ? (window as any).L : null
     const map = mapRef.current
     if (!L || !map) return
+    const valid = points.filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng) && Math.abs(p.lat) > 0.1)
+    const key = valid.map(p => `${p.id},${p.lat.toFixed(5)},${p.lng.toFixed(5)},${p.icon || ''}`).join('|')
+    if (key === fitKeyRef.current) return
+    fitKeyRef.current = key
     markersRef.current.forEach(m => { try { map.removeLayer(m) } catch {} })
     markersRef.current = []
-    const valid = points.filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng) && Math.abs(p.lat) > 0.1)
     for (const p of valid) {
       try {
-        const m = L.marker([p.lat, p.lng]).addTo(map)
+        // پینِ سفارشی: دارایی‌ِ خودِ کاربر/کارگاه/فرصت/زمین هر کدام شکل و رنگِ خودشان را دارند (فصل ۹ City Screen)
+        const opts = (p.icon || p.color) ? {
+          icon: L.divIcon({
+            className: 'mj-pin',
+            html: `<div style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50% 50% 50% 6px;background:${p.color || '#c9a84c'};border:2px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.5);font-size:16px;line-height:1">${p.icon || '📍'}</div>`,
+            iconSize: [32, 32], iconAnchor: [16, 30], popupAnchor: [0, -28],
+          }),
+        } : undefined
+        const m = L.marker([p.lat, p.lng], opts).addTo(map)
         if (p.title || p.price) m.bindPopup(`<div style="font-family:Vazirmatn,sans-serif;direction:rtl;font-size:12px"><b>${(p.title || '').slice(0, 60)}</b>${p.price ? `<br><span style="color:#c9a84c">${p.price}</span>` : ''}</div>`)
         if (onSelect) m.on('click', () => onSelect(p.id))
         markersRef.current.push(m)
       } catch {}
     }
-    if (valid.length > 1) {
-      try { map.fitBounds(L.latLngBounds(valid.map(p => [p.lat, p.lng])), { padding: [40, 40], maxZoom: 15 }) } catch {}
-    } else if (valid.length === 1) {
-      try { map.setView([valid[0].lat, valid[0].lng], 15) } catch {}
-    } else if (center) {
-      try { map.setView([center.lat, center.lng], zoom) } catch {}
-    }
+    // فیت فقط تا وقتی کاربر خودش زوم/جابه‌جا نکرده — زوم و مرکزِ کاربر هرگز نمی‌پَرد.
+    if (userMovedRef.current) return
+    programmaticRef.current = true
+    try {
+      if (valid.length > 1) map.fitBounds(L.latLngBounds(valid.map(p => [p.lat, p.lng])), { padding: [40, 40], maxZoom: 15 })
+      else if (valid.length === 1) map.setView([valid[0].lat, valid[0].lng], 15)
+      else if (center) map.setView([center.lat, center.lng], zoom)
+    } catch {}
+    setTimeout(() => { programmaticRef.current = false }, 600)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [points, center?.lat, center?.lng])
+  }, [points, ready, center?.lat, center?.lng])
 
   if (err) {
     // اگر SDKِ تعاملی بارگذاری نشد، به نقشهٔ استاتیک (که مطمئن است) برگرد.
