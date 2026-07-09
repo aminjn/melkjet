@@ -1064,7 +1064,12 @@ export default function EmpirePage() {
               const illegal = Math.max(0, floors - inf.legalFloors)
               const fee = Math.max(1, Math.round(builtArea * inf.costPerM * inf.architectFeePct / 100))
               const fineEst = illegal * inf.footprint * inf.finePerM2
-              const bad = floors > inf.maxFloors || unitArea < inf.minUnitArea
+              // دکمه هرگز «بی‌صدا» قفل نمی‌شود (فاز ۳۱): اگر عدد مشکل دارد، دلیلِ دقیق همین‌جا و سرِ کلیک گفته می‌شود.
+              const blockReason = floors > inf.maxFloors
+                ? `حتی با تخلف، بیشتر از ${fa(inf.maxFloors)} طبقه ممکن نیست (${fa(inf.legalFloors)} قانونی + ${fa(inf.maxFloors - inf.legalFloors)} طبقهٔ تخلف) — شهرداری وسطِ کار متوقف می‌کند`
+                : unitArea < inf.minUnitArea
+                ? `با ${fa(upf)} واحد در طبقه، هر واحد ${fa(unitArea)} متر می‌شود — کمتر از حداقلِ قانونیِ ${fa(inf.minUnitArea)} متر؛ تعدادِ واحد را کم کن`
+                : ''
               return (
                 <div style={{ width: '100%', ...card, background: 'var(--surface)', fontSize: 12 }}>
                   <b>📐 طراحیِ نقشه با {inf.architect}</b>
@@ -1077,11 +1082,14 @@ export default function EmpirePage() {
                     <span style={{ fontSize: 11, color: unitArea < inf.minUnitArea ? '#e88' : 'var(--muted)' }}>= {fa(floors * upf)} واحدِ {fa(unitArea)} متری · بنا {fa(builtArea)} متر</span>
                   </div>
                   {illegal > 0 && floors <= inf.maxFloors && <div style={{ fontSize: 11, color: '#e7a14a', marginTop: 6 }}>⚠️ {fa(illegal)} طبقهٔ مازاد بر تراکمِ قانونی — بعد از تکمیل، کمیسیونِ ماده۱۰۰: جریمهٔ برآوردی {faB(fineEst)} تومان یا تخریبِ طبقات</div>}
-                  {unitArea < inf.minUnitArea && <div style={{ fontSize: 11, color: '#e88', marginTop: 6 }}>واحدها از حداقلِ قانونیِ {fa(inf.minUnitArea)} متر کوچک‌تر می‌شوند — تعدادِ واحد را کم کن</div>}
+                  {blockReason && <div style={{ fontSize: 11.5, color: '#e88', marginTop: 6, fontWeight: 700 }}>🛑 {blockReason}</div>}
                   <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <button style={{ ...btn, padding: '6px 14px', fontSize: 12 }} disabled={busy || bad}
-                      onClick={async () => { const d = await api({ action: 'designStart', assetId: a.id, floors, unitsPerFloor: upf }); if (d) { setSt(d); setDz(null); celebrate() } }}>
-                      ✍️ امضای قرارداد ({faB(fee)} حق‌الزحمه · {fa(inf.designDays)} روز طراحی)</button>
+                    <button style={{ ...btn, padding: '6px 14px', fontSize: 12, opacity: blockReason ? 0.55 : 1 }} disabled={busy}
+                      onClick={async () => {
+                        if (blockReason) { setErr(blockReason); return }
+                        const d = await api({ action: 'designStart', assetId: a.id, floors, unitsPerFloor: upf }); if (d) { setSt(d); setDz(null); celebrate() }
+                      }}>
+                      ✍️ امضای قرارداد ({faB(fee)} حق‌الزحمه · {fa(inf.designDays)} روز طراحی{illegal > 0 && !blockReason ? ' · با تخلف' : ''})</button>
                     <button style={{ ...btnGhost, padding: '6px 12px', fontSize: 11.5 }} onClick={() => setDz(null)}>انصراف</button>
                   </div>
                 </div>
