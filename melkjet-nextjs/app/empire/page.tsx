@@ -127,6 +127,7 @@ export default function EmpirePage() {
   const [deals, setDeals] = useState<any>(null)                // فرصت‌های طلاییِ امروز (سند ۱۴ — Hook)
   const [lands, setLands] = useState<any>(null)                // 🏞 بازارِ زمین (فاز ۲۴) — دروازهٔ موتورِ ساخت
   const [mapL, setMapL] = useState({ assets: true, deals: true, lands: true })   // لایه‌های نقشهٔ شهر (فاز ۲۶)
+  const [dz, setDz] = useState<any>(null)                      // فرمِ قراردادِ معمار (فاز ۲۹): {assetId, info, floors, upf}
   const [tick, setTick] = useState(0)                          // تیکِ شمارشِ معکوسِ واقعی
   const [dealAn, setDealAn] = useState('')                     // تحلیلِ کدام فرصتِ امروز نمایش داده شود
   const suspended = useRef(false)
@@ -596,9 +597,11 @@ export default function EmpirePage() {
       const s3 = as.some((a: any) => a.construction)
       const s4 = as.some((a: any) => a.construction?.done) || (e.stats?.projectsDelivered || 0) > 0
       if (s4) return null
+      const sD = as.some((a: any) => a.design)
       const steps = [
         { t: 'زمین بخر و برنامه‌اش «ساخت» باشد', done: s1, hint: 'از «🏞 بازارِ زمین» همین پایین' },
-        { t: 'پروانهٔ ساخت بگیر', done: s2, hint: 'در «پرتفوی» روی زمینت → 🏛 درخواستِ پروانه' },
+        { t: 'با معمار نقشه بریز (طبقات و واحدها)', done: sD || s2 || s3, hint: 'در «پرتفوی» روی زمینت → 📐 قراردادِ معمار' },
+        { t: 'پروانهٔ ساخت بگیر', done: s2, hint: 'شهرداری روی نقشهٔ معمار پروانه می‌دهد — طبقهٔ مازاد = ماده۱۰۰' },
         { t: 'نقشه بریز و کلنگ بزن', done: s3, hint: 'بعد از صدورِ پروانه: سازه، کیفیت و هدفِ پروژه را انتخاب کن' },
         { t: 'بساز، پیش‌فروش کن، تحویل بده', done: false, hint: 'کارگاهِ زنده در «پرتفوی» — هزینهٔ روزشمار، رویدادها، پیش‌فروش' },
       ]
@@ -917,10 +920,19 @@ export default function EmpirePage() {
                     {p.label}{p.gainPct ? ` (+${fa(p.gainPct)}٪ برآورد)` : ''}</button>
                 ))}</span>
               : a.kind === 'land' && a.landPlan === 'build'
-              ? (/* پروانهٔ ساخت (جلد ۶۳): درخواست → بررسی → اعتراضِ احتمالی → صدور */
-                !a.permit
+              ? (/* فاز ۲۹: معمار → نقشه → پروانه → پیمانکار/کلنگ — مثلِ دنیای واقعی */
+                a.needsDesign
+                  ? <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 11.5, color: 'var(--gold)', borderColor: 'var(--goldDim)' }} disabled={busy}
+                      onClick={async () => { const d = await api({ action: 'designPlan', assetId: a.id }); if (d) setDz({ assetId: a.id, info: d, floors: String(d.legalFloors), upf: '2' }) }}>📐 قراردادِ معمار — طراحیِ نقشه</button>
+                  : a.design && a.designReadyInDays > 0
+                  ? <span style={{ fontSize: 11, color: 'var(--gold)', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                      📐 {a.design.architect} در حالِ طراحی — {fa(a.designReadyInDays)} روز مانده
+                      {st.speed?.enabled && <button style={{ ...btnGhost, padding: '2px 9px', fontSize: 10.5 }} disabled={busy || e.coins < (st.speed.permitCoinsPerDay || 0)}
+                        onClick={async () => { const d = await api({ action: 'designBoost', assetId: a.id, days: 1 }); if (d) setSt(d) }}>⚡ جلسهٔ فشرده: ۱− روز (🪙 {fa(st.speed.permitCoinsPerDay)})</button>}
+                    </span>
+                  : !a.permit
                   ? <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 11.5 }} disabled={busy}
-                      onClick={async () => { const d = await api({ action: 'permit', assetId: a.id }); if (d) { setSt(d); alert(`🏛 درخواست ثبت شد — بررسی تا ${fa(d.terms.days)} روز · عوارض ${faB(d.terms.fee)} تومان${d.terms.objection ? `\n⚠️ ${d.terms.objection.text}` : ''}`) } }}>🏛 درخواستِ پروانهٔ ساخت</button>
+                      onClick={async () => { const d = await api({ action: 'permit', assetId: a.id }); if (d) { setSt(d); alert(`🏛 درخواست ثبت شد — بررسی تا ${fa(d.terms.days)} روز · عوارض ${faB(d.terms.fee)} تومان${d.terms.objection ? `\n⚠️ ${d.terms.objection.text}` : ''}${a.design?.illegalFloors > 0 ? `\n⚠️ پروانه فقط ${fa(a.design.legalFloors)} طبقهٔ قانونی را پوشش می‌دهد — طبقاتِ مازاد بعد از تکمیل به ماده۱۰۰ می‌رود` : ''}`) } }}>🏛 درخواستِ پروانهٔ ساخت{a.design?.illegalFloors > 0 ? ' (نقشه با تخلف!)' : ''}</button>
                   : a.permit.status === 'granted' && !a.construction
                   ? <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                       <span style={{ fontSize: 11, color: '#7c6' }}>📜 پروانه ✓</span>
@@ -951,7 +963,11 @@ export default function EmpirePage() {
               ? <span style={{ fontSize: 11, color: 'var(--muted)' }}>🏪 {a.business} ({fa(a.businessProb || 0)}٪)</span>
               : a.action
               ? <span style={{ fontSize: 11, color: 'var(--muted)' }}>{a.action === 'renovate' ? '🛠 بازسازی' : a.action === 'rent' ? '💰 اجاره' : '📈 نگه‌داری'}</span>
-              : <span style={{ display: 'flex', gap: 4 }}>{[['renovate', '🛠'], ['rent', '💰'], ['hold', '📈']].map(([k, i]) => <button key={k} title={k} style={{ ...btnGhost, padding: '4px 8px', fontSize: 13 }} onClick={async () => { const d = await api({ action: 'assetAction', assetId: a.id, act: k }); if (d) setSt(d) }}>{i}</button>)}</span>}
+              : <span style={{ display: 'flex', gap: 4 }}>{[['renovate', '🛠', 'بازسازی'], ['rent', '💰', 'اجاره دادن'], ['hold', '📈', 'نگه داشتن']].map(([k, i, t]) => <button key={k} title={t} style={{ ...btnGhost, padding: '4px 8px', fontSize: 13 }} onClick={async () => {
+                  // اجاره (فاز ۲۹): از طریقِ مشاورِ املاک — کمیسیونِ عرفِ واقعی (٪ از یک ماه اجارهٔ میانهٔ محله)
+                  if (k === 'rent' && !confirm(`اجاره از طریقِ مشاورِ املاکِ محله انجام می‌شود — کمیسیون ${fa(st.pros?.advisorRentCommissionPct || 25)}٪ از یک ماه اجارهٔ میانهٔ واقعیِ محله. ادامه؟`)) return
+                  const d = await api({ action: 'assetAction', assetId: a.id, act: k }); if (d) { setSt(d); if (d.advisorFee) alert(`🤝 مشاور مستأجر پیدا کرد — کمیسیون ${faB(d.advisorFee)} تومان پرداخت شد؛ درآمدِ اجاره از میانهٔ واقعیِ محله شروع شد.`) }
+                }}>{i}</button>)}</span>}
             <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 12 }} disabled={busy || e.aiTokens <= 0} onClick={() => doAnalyze(a.listingId)}>تحلیلِ ملک‌جت (۱ ژتون)</button>
             {a.url && <a href={a.url} target="_blank" rel="noreferrer" style={{ ...btnGhost, padding: '4px 10px', fontSize: 12, textDecoration: 'none' }}>🔗 آگهیِ واقعی</a>}
             {!a.construction && <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 12, color: '#e88', borderColor: '#644' }} disabled={busy} onClick={() => doSell(a)}>💸 فروش</button>}
@@ -980,6 +996,64 @@ export default function EmpirePage() {
                 if (!confirm(`ویلا تخریب شود؟ زمینِ ${fa(a.villaDemolish.landArea)} متری (متراژِ خودِ آگهی) می‌ماند. هزینهٔ تخریب ${faB(a.villaDemolish.demolishCost)} تومان.`)) return
                 const d = await api({ action: 'demolish', assetId: a.id }); if (d) { setSt(d); celebrate() }
               }}>🧨 تخریب → زمینِ {fa(a.villaDemolish.landArea)} متری ({faB(a.villaDemolish.demolishCost)})</button>}
+
+            {/* 📐 فرمِ قراردادِ معمار (فاز ۲۹): طبقات/واحد با قوانینِ شفاف — طبقهٔ مازاد = تخلفِ آگاهانه با جریمهٔ اعلام‌شده */}
+            {dz?.assetId === a.id && (() => {
+              const inf = dz.info
+              const floors = Math.max(1, Math.round(Number(digitsOf(dz.floors)) || 0))
+              const upf = Math.max(1, Math.round(Number(digitsOf(dz.upf)) || 0))
+              const unitArea = Math.floor(inf.footprint / upf)
+              const builtArea = inf.footprint * floors
+              const illegal = Math.max(0, floors - inf.legalFloors)
+              const fee = Math.max(1, Math.round(builtArea * inf.costPerM * inf.architectFeePct / 100))
+              const fineEst = illegal * inf.footprint * inf.finePerM2
+              const bad = floors > inf.maxFloors || unitArea < inf.minUnitArea
+              return (
+                <div style={{ width: '100%', ...card, background: 'var(--surface)', fontSize: 12 }}>
+                  <b>📐 طراحیِ نقشه با {inf.architect}</b>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
+                    زمین {fa(inf.landArea)} متر · سطحِ اشغال {fa(inf.occupancyPct)}٪ → هر طبقه {fa(inf.footprint)} متر · مجازِ قانونی: {fa(inf.legalFloors)} طبقه (حداکثرِ قابل‌ساخت {fa(inf.maxFloors)})
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
+                    <label style={{ fontSize: 11.5 }}>طبقات: <input value={dz.floors} onChange={ev => setDz({ ...dz, floors: digitsOf(ev.target.value) })} inputMode="numeric" style={{ width: 54, padding: 7, borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', textAlign: 'center' }} /></label>
+                    <label style={{ fontSize: 11.5 }}>واحد در طبقه: <input value={dz.upf} onChange={ev => setDz({ ...dz, upf: digitsOf(ev.target.value) })} inputMode="numeric" style={{ width: 54, padding: 7, borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', textAlign: 'center' }} /></label>
+                    <span style={{ fontSize: 11, color: unitArea < inf.minUnitArea ? '#e88' : 'var(--muted)' }}>= {fa(floors * upf)} واحدِ {fa(unitArea)} متری · بنا {fa(builtArea)} متر</span>
+                  </div>
+                  {illegal > 0 && floors <= inf.maxFloors && <div style={{ fontSize: 11, color: '#e7a14a', marginTop: 6 }}>⚠️ {fa(illegal)} طبقهٔ مازاد بر تراکمِ قانونی — بعد از تکمیل، کمیسیونِ ماده۱۰۰: جریمهٔ برآوردی {faB(fineEst)} تومان یا تخریبِ طبقات</div>}
+                  {unitArea < inf.minUnitArea && <div style={{ fontSize: 11, color: '#e88', marginTop: 6 }}>واحدها از حداقلِ قانونیِ {fa(inf.minUnitArea)} متر کوچک‌تر می‌شوند — تعدادِ واحد را کم کن</div>}
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button style={{ ...btn, padding: '6px 14px', fontSize: 12 }} disabled={busy || bad}
+                      onClick={async () => { const d = await api({ action: 'designStart', assetId: a.id, floors, unitsPerFloor: upf }); if (d) { setSt(d); setDz(null); celebrate() } }}>
+                      ✍️ امضای قرارداد ({faB(fee)} حق‌الزحمه · {fa(inf.designDays)} روز طراحی)</button>
+                    <button style={{ ...btnGhost, padding: '6px 12px', fontSize: 11.5 }} onClick={() => setDz(null)}>انصراف</button>
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* ⚖️ کمیسیونِ ماده۱۰۰ (فاز ۲۹): جریمه به شهرداری / دفاعِ وکیل / تخریبِ طبقاتِ مازاد */}
+            {a.m100?.status === 'pending' && <div style={{ width: '100%', ...card, background: 'var(--bg2)', borderColor: '#e7a14a', fontSize: 12 }}>
+              ⚖️ <b>کمیسیونِ ماده۱۰۰ شهرداری</b> — {fa(a.m100.illegalUnits)} واحد / {fa(a.m100.illegalArea)} مترِ مازاد بر پروانه · جریمه: <b style={{ color: '#e7a14a' }}>{faB(a.m100.fine)} تومان</b>
+              <div style={{ fontSize: 10.5, color: 'var(--faint)', margin: '4px 0 6px' }}>تا حلِ پرونده، واحدهای مازاد سند نمی‌خورند و قابلِ‌فروش نیستند.</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button style={{ ...btn, padding: '5px 12px', fontSize: 11.5 }} disabled={busy}
+                  onClick={async () => { const d = await api({ action: 'm100', assetId: a.id, choice: 'pay' }); if (d) { setSt(d); celebrate() } }}>💰 پرداختِ جریمه → شهرداری</button>
+                {!a.m100.lawyerTried && <button style={{ ...btnGhost, padding: '5px 12px', fontSize: 11.5 }} disabled={busy}
+                  onClick={async () => { const d = await api({ action: 'm100', assetId: a.id, choice: 'lawyer' }); if (d) { setSt(d); alert(d.lawyerWon ? '🧑‍⚖️ دفاع پذیرفته شد — جریمه کم شد؛ حالا جریمهٔ جدید را بپرداز.' : '🧑‍⚖️ دفاع رد شد — حق‌الوکاله برنمی‌گردد.') } }}>🧑‍⚖️ وکیل بگیر (~{faB(Math.round(a.m100.fine * (st.pros?.lawyerFeePct || 10) / 100))})</button>}
+                <button style={{ ...btnGhost, padding: '5px 12px', fontSize: 11.5, color: '#e88', borderColor: '#644' }} disabled={busy}
+                  onClick={async () => { if (!confirm(`طبقاتِ مازاد تخریب شود؟ ${fa(a.m100.illegalUnits)} واحد از دست می‌رود.`)) return; const d = await api({ action: 'm100', assetId: a.id, choice: 'demolish' }); if (d) setSt(d) }}>🧨 تخریبِ طبقاتِ مازاد</button>
+              </div>
+            </div>}
+
+            {/* 🛠 بازسازیِ واقعی (فاز ۲۹): هزینهٔ الان، ارزش‌افزودهٔ شفاف — هر گزینه یک‌بار */}
+            {(a.renovOptions || []).length > 0 && <div style={{ width: '100%', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', fontSize: 11, borderTop: '1px dashed var(--line)', paddingTop: 6, marginTop: 2 }}>
+              <span style={{ color: 'var(--muted)' }}>🛠 بازسازی{(a.renovBoostPct || 0) > 0 ? <b style={{ color: '#7c6' }}> (+{fa(a.renovBoostPct)}٪ ارزش)</b> : ''}:</span>
+              {a.renovOptions.map((o: any) => o.done
+                ? <span key={o.key} style={{ fontSize: 10.5, color: '#7c6' }}>{o.icon} {o.label} ✓</span>
+                : <button key={o.key} style={{ ...btnGhost, padding: '3px 9px', fontSize: 10.5 }} disabled={busy}
+                    onClick={async () => { const d = await api({ action: 'renovate', assetId: a.id, option: o.key }); if (d) { setSt(d); celebrate() } }}>
+                    {o.icon} {o.label} ({faB(o.cost)} · +{fa(o.valuePct)}٪ ارزش)</button>)}
+            </div>}
 
             {/* پیش‌نمایشِ نقشهٔ ساخت (جلد ۶۴): سازه/کیفیت با روز و هزینهٔ شفاف */}
             {bplan?.assetId === a.id && !a.construction && <div style={{ width: '100%', ...card, background: 'var(--surface)', fontSize: 12 }}>

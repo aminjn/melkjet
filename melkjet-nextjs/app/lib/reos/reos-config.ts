@@ -61,6 +61,29 @@ export interface ReosConfig {
     speed: { enabled: boolean; permitCoinsPerDay: number; buildCoinsPerDay: number }
     // فاز ۲۸: فروشگاهِ ملک‌کوین (زرین‌پال) — تنها نقطهٔ ورودِ پولِ واقعی؛ کوین هرگز قدرت نمی‌خرد (بدونِ P2W).
     coinShop: { enabled: boolean; packs: Array<{ id: string; label: string; coins: number; priceToman: number; enabled: boolean }> }
+    // فاز ۲۹: نقش‌های حرفه‌ایِ سایت در سناریو — تا آمدنِ متخصصانِ واقعی، «سیستم» بازی‌شان می‌کند؛ کارمزدها مصرفِ شفافِ پول (servicesPaid).
+    pros: {
+      notaryFeePct: number              // دفترخانه: حق‌الثبتِ سند در خرید (٪ قیمت)
+      advisorRentCommissionPct: number  // مشاورِ املاک: کمیسیونِ اجاره (٪ از یک ماه اجاره — عرفِ واقعی ۲۵٪)
+      advisorSellCommissionPct: number  // مشاورِ املاک: کمیسیونِ فروش (٪ قیمتِ فروش)
+      lawyerFeePct: number              // وکیل: حق‌الوکالهٔ دفاعِ ماده۱۰۰ (٪ جریمهٔ اولیه)
+      lawyerCutPct: number              // اگر دفاع موفق شد: ٪ کاهشِ جریمه
+      lawyerWinChancePct: number        // شانسِ موفقیتِ دفاع (قطعی از هش)
+      appraisalFee: number              // کارشناسِ رسمی: هزینهٔ ارزیابیِ وام (تومان)
+    }
+    // فاز ۲۹: طراحیِ معمار پیش از پروانه — طبقات/واحد در طبقه با تراکمِ قانونی؛ طبقهٔ مازاد = تخلف (ماده۱۰۰).
+    design: {
+      enabled: boolean
+      occupancyPct: number   // سطحِ اشغالِ زمین (٪) — footprint = زمین × این
+      maxOverFloors: number  // حداکثر طبقهٔ مازادِ قابلِ‌ساخت (تخلفِ عمدی)
+      designDays: number     // مدتِ طراحیِ معمار (قابلِ‌تسریع با کوین)
+      architectFeePct: number // حق‌الزحمهٔ معمار (٪ برآوردِ هزینهٔ ساخت)
+      minUnitArea: number    // حداقل متراژِ قانونیِ هر واحد
+    }
+    // فاز ۲۹: کمیسیونِ ماده۱۰۰ شهرداری — جریمهٔ هر مترِ مازاد = costPerM × این ضریب → خزانه.
+    m100: { finePerM2Mult: number }
+    // فاز ۲۹: بازسازیِ واقعی — هزینهٔ الان (٪ ارزش)، ارزش‌افزودهٔ شفاف (٪)، با سقف.
+    renovation: { enabled: boolean; maxBoostPct: number; options: Record<string, { costPct: number; valuePct: number }> }
     // فاز ۲۷: شانس و بازهٔ تخفیفِ مذاکره — قبلاً هاردکد بود (۲۵٪ پایه، ۲..۶٪) و کاربر می‌دید؛ حالا knob.
     nego: { baseChancePct: number; discountMin: number; discountMax: number }
     // GDD فصل ۴ بخش ۱۵: اعتبارِ ⭐ باید اثرِ واقعی داشته باشد — روی مذاکره و شرایطِ بانک.
@@ -169,6 +192,14 @@ export const DEFAULT_CONFIG: ReosConfig = {
     },
     // مذاکره: همان رفتارِ قبلی به‌صورتِ پیش‌فرض (۲۵٪ پایه تا ۷۵٪ با مهارت؛ تخفیف ۲..۶٪) — حالا قابل‌تنظیم.
     nego: { baseChancePct: 25, discountMin: 2, discountMax: 6 },
+    // نقش‌های حرفه‌ای (فاز ۲۹): اعدادِ عرفِ واقعیِ بازارِ ایران — همه knob.
+    pros: { notaryFeePct: 0.5, advisorRentCommissionPct: 25, advisorSellCommissionPct: 0.5, lawyerFeePct: 10, lawyerCutPct: 40, lawyerWinChancePct: 50, appraisalFee: 2_000_000 },
+    design: { enabled: true, occupancyPct: 60, maxOverFloors: 2, designDays: 2, architectFeePct: 3, minUnitArea: 35 },
+    m100: { finePerM2Mult: 1.5 },
+    renovation: {
+      enabled: true, maxBoostPct: 25,
+      options: { kitchen: { costPct: 3, valuePct: 5 }, facade: { costPct: 4, valuePct: 6 }, full: { costPct: 10, valuePct: 15 } },
+    },
     // اعتبار = دارایی (سند ۱۴): هر ستارهٔ بالای ۱ → مذاکرهٔ راحت‌تر + نرخِ وامِ بهتر — شفاف و قطعی.
     reputation: { negoBonusPerStar: 2, loanRateCutPctPerStar: 3 },
     // پاداشِ سطح (سند ۱۶): هر سطحِ جدید × این مقدار ملک‌کوین — بدونِ پاداشِ گذشته‌نگر برای قدیمی‌ها.

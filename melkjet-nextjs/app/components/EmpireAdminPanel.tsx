@@ -352,6 +352,39 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             {row('خروج از پروژهٔ نیمه‌کاره (٪ بهای تمام‌شده)', cin('unlocks', 'projectExitPct'), 'با پیش‌فروشِ فعال ممنوع؛ مالیات → خزانه')}
           </div>
           <div style={card}>
+            <div style={sub}>🏛 نقش‌های حرفه‌ای (فاز ۲۹ — سیستم بازی می‌کند تا متخصصِ واقعی بیاید)</div>
+            {row('دفترخانه: حق‌الثبتِ خرید (٪ قیمت)', cin('pros', 'notaryFeePct'))}
+            {row('مشاور: کمیسیونِ اجاره (٪ یک ماه)', cin('pros', 'advisorRentCommissionPct'), 'عرفِ واقعی ~۲۵٪')}
+            {row('مشاور: کمیسیونِ فروش (٪ قیمت)', cin('pros', 'advisorSellCommissionPct'))}
+            {row('وکیلِ ماده۱۰۰: حق‌الوکاله (٪ جریمه)', cin('pros', 'lawyerFeePct'))}
+            {row('وکیل: کاهشِ جریمه اگر برنده شد (٪)', cin('pros', 'lawyerCutPct'))}
+            {row('وکیل: شانسِ موفقیت (٪)', cin('pros', 'lawyerWinChancePct'), 'قطعی از هش — یک‌بار برای هر پرونده')}
+            {row('کارشناسِ رسمیِ وام (تومان)', cin('pros', 'appraisalFee', 130), 'از مبلغِ وام کسر می‌شود')}
+          </div>
+          <div style={card}>
+            <div style={sub}>📐 طراحیِ معمار و تراکم (فاز ۲۹)</div>
+            {row('طراحی پیش از پروانه فعال (۱/۰)', cin('design', 'enabled'), 'معمار → نقشه → پروانه → پیمانکار/کلنگ')}
+            {row('سطحِ اشغالِ زمین (٪)', cin('design', 'occupancyPct'), 'هر طبقه = زمین × این')}
+            {row('حداکثر طبقهٔ مازادِ قابل‌انتخاب', cin('design', 'maxOverFloors'), 'تخلفِ آگاهانه → ماده۱۰۰')}
+            {row('مدتِ طراحی (روز)', cin('design', 'designDays'), 'قابلِ‌تسریع با کوین')}
+            {row('حق‌الزحمهٔ معمار (٪ هزینهٔ ساخت)', cin('design', 'architectFeePct'))}
+            {row('حداقل متراژِ قانونیِ واحد', cin('design', 'minUnitArea'))}
+            {row('ماده۱۰۰: جریمهٔ هر مترِ مازاد (× هزینهٔ ساختِ متر)', cin('m100', 'finePerM2Mult'), 'جریمه → خزانه (شهرداری)')}
+          </div>
+          <div style={card}>
+            <div style={sub}>🛠 بازسازی (فاز ۲۹)</div>
+            {row('بازسازی فعال (۱/۰)', cin('renovation', 'enabled'))}
+            {row('سقفِ ارزش‌افزوده (٪)', cin('renovation', 'maxBoostPct'))}
+            {([['kitchen', 'آشپزخانه و سرویس‌ها'], ['facade', 'نمای ساختمان'], ['full', 'بازسازیِ کامل']] as const).map(([k, lbl]) => {
+              const ro = cfg?.renovation?.options?.[k] || {}
+              const set = (field: 'costPct' | 'valuePct', val: string) => setCfg((c: any) => { const n = JSON.parse(JSON.stringify(c)); n.renovation = n.renovation || { options: {} }; n.renovation.options = n.renovation.options || {}; n.renovation.options[k] = n.renovation.options[k] || {}; n.renovation.options[k][field] = val === '' ? '' : numOf(val); return n })
+              return row(`گزینه: ${lbl}`, <span key={k} style={{ display: 'flex', gap: 6 }}>
+                <input title="هزینه (٪ ارزشِ روز)" value={String(ro.costPct ?? '')} onChange={ev => set('costPct', ev.target.value)} style={{ ...inpS, width: 52, textAlign: 'center' }} />
+                <input title="ارزش‌افزوده (+٪)" value={String(ro.valuePct ?? '')} onChange={ev => set('valuePct', ev.target.value)} style={{ ...inpS, width: 52, textAlign: 'center' }} />
+              </span>, 'هزینه ٪ ارزش · ارزش‌افزوده +٪')
+            })}
+          </div>
+          <div style={card}>
             <div style={sub}>⚡ سرعت و زمان (فاز ۲۷ — «پرداخت فقط برای سرعت»)</div>
             {row('زمان‌خری فعال (۱/۰)', cin('speed', 'enabled'), 'کوین فقط انتظار را کوتاه می‌کند، نه نتیجه را')}
             {row('پیگیریِ پروانه (کوین/روز)', cin('speed', 'permitCoinsPerDay'), 'هر روز کوتاه‌شدنِ بررسی')}

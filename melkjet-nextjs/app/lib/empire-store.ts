@@ -38,6 +38,12 @@ export interface EmpireAsset {
   unitsOwned?: number         // چند واحدش مالِ توست (خریدِ اولیه = ۱)؛ ارزش/فروش × همین ضریب
   demolishedAt?: number       // تخریب‌شده → kind به 'land' برمی‌گردد؛ ارزش تا ساخت = بهای تمام‌شده
   landAreaOverride?: number   // مساحتِ زمینِ برآوردی بعد از تخریب — مبنای نقشهٔ ساخت به‌جای متراژِ واحدِ آگهی
+  // طراحیِ معمار (فاز ۲۹): پیش از پروانه — طبقات/واحد در طبقه با تراکمِ قانونی؛ طبقهٔ مازاد = تخلفِ آگاهانه.
+  design?: { floors: number; unitsPerFloor: number; legalFloors: number; footprint: number; unitArea: number; illegalFloors: number; architectFee: number; startedAt: number; readyAt: number; architect: string }
+  // کمیسیونِ ماده۱۰۰ (فاز ۲۹): بعد از تکمیلِ ساختمانِ متخلف — جریمه/وکیل/تخریبِ طبقهٔ مازاد.
+  m100?: { illegalArea: number; illegalUnits: number; fine: number; status: 'pending' | 'paid' | 'demolished'; lawyerTried?: boolean }
+  renovBoostPct?: number      // بازسازی (فاز ۲۹): ارزش‌افزودهٔ جمع‌شده (٪، با سقفِ knob)
+  renovDone?: string[]        // کدام گزینه‌های بازسازی انجام شده (هر کدام یک‌بار)
 }
 export interface TimelineDot { at: number; icon: string; title: string; detail?: string }
 export interface JournalEntry { at: number; text: string }
@@ -60,6 +66,7 @@ export interface Construction {
   builtArea: number; unitArea: number; totalUnits: number
   costTotal: number; paid: number; paidDays: number; lastPayAt: number
   presold: number; sold: number; presaleRevenue: number
+  illegalUnits?: number        // واحدهای طبقاتِ مازادِ طراحی (فاز ۲۹) — تا حلِ ماده۱۰۰ قابلِ‌فروش/پیش‌فروش نیستند
   salesRevenue?: number        // عایدیِ فروشِ واحدها بعد از تکمیل (بعد از مالیات) — خوراکِ کارنامهٔ پروژه
   amenities?: string[]         // امکاناتِ میان‌ساخت (GDD فصل ۴ بخش ۴): استخر/روف‌گاردن/… — هزینهٔ واقعی، ارزشِ شفاف
   rented?: number              // واحدهای اجاره‌داده‌شده بعد از تکمیل («نگه‌دار و اجاره بده») — درآمد از میانهٔ واقعیِ محله
@@ -110,6 +117,7 @@ export interface EmpireData {
   company?: Company           // شرکتِ ساختمانی (جلد ۶۱) — «از یک اتاقِ کوچک تا امپراتوری»
   wagesPaid?: number          // حقوقِ پرداختی به مهندس‌ها (مصرفِ شفافِ پول — قانون ۶)
   demolitionPaid?: number     // هزینهٔ تخریب‌های پرداختی (فاز ۲۵ — مصرفِ شفافِ پول، مثلِ حقوق)
+  servicesPaid?: number       // کارمزدِ نقش‌های حرفه‌ای: دفترخانه/مشاور/معمار/وکیل/کارشناس (فاز ۲۹ — مصرفِ شفاف)
   stats?: { sellsProfitable: number; negoWins: number; negoTries?: number; projectsDelivered?: number; repProjects?: number }   // شمارنده‌های واقعیِ رفتار (جلد ۲۶/۷۲)
   projectHist?: ProjectReport[]   // کارنامهٔ پروژه‌های تحویل‌شده (GDD فصل ۴) — درسِ هر پروژه از اعدادِ واقعیِ خودش
   snap?: { day: number; netWorth: number; prev: number }   // اسنپ‌شاتِ روزانه — «سود/زیانِ دیروز» (جلد ۲۶)
@@ -532,17 +540,23 @@ export async function renameEmpire(userId: string, name: string) {
 }
 
 // خریدِ دارایی = انتخابِ یک آگهیِ واقعی با قیمتِ واقعی؛ سرمایهٔ شبیه‌سازی کم می‌شود (فصل ۳ + §6.5).
-export async function buyAsset(userId: string, listing: { id: string; title: string; hood: string; price: number; ptype?: string }, opts: { negotiated?: boolean } = {}, now = Date.now()) {
+export async function buyAsset(userId: string, listing: { id: string; title: string; hood: string; price: number; ptype?: string }, opts: { negotiated?: boolean; notaryFeePct?: number } = {}, now = Date.now()) {
   const cfg = config().empire
   return mutateEmpire(userId, e => {
     if (!listing.id || !(listing.price > 0)) return 'آگهیِ نامعتبر'
     if (e.assets.some(a => a.listingId === listing.id)) return 'این ملک از قبل در امپراتوریِ توست'
     // مالیاتِ نقل‌وانتقال (جلد ۵/۱۶): خرید = قیمت + مالیات؛ مالیات به خزانه می‌رود.
     const tax = Math.round(listing.price * (cfg.transferTaxPct / 100))
-    if (e.capital < listing.price + tax) return tax > 0 ? `سرمایه کافی نیست (قیمت + ${cfg.transferTaxPct.toLocaleString('fa-IR')}٪ مالیاتِ انتقال)` : 'سرمایهٔ کافی نیست'
+    // دفترخانه (فاز ۲۹): ثبتِ سند حق‌الثبت دارد — سیستم نقشِ دفترخانه را بازی می‌کند تا دفترخانهٔ واقعی بیاید.
+    const notary = Math.round(listing.price * Math.max(0, opts.notaryFeePct || 0) / 100)
+    if (e.capital < listing.price + tax + notary) return tax + notary > 0 ? `سرمایه کافی نیست (قیمت + مالیات${notary > 0 ? ' + حق‌الثبتِ دفترخانه' : ''})` : 'سرمایهٔ کافی نیست'
     const first = e.assets.length === 0
-    e.capital -= listing.price + tax
+    e.capital -= listing.price + tax + notary
     e.taxPaid = (e.taxPaid || 0) + tax
+    if (notary > 0) {
+      e.servicesPaid = (e.servicesPaid || 0) + notary
+      e.timeline.push({ at: now, icon: '📜', title: `سند در ${proPersonaOf('notary', listing.id)} ثبت شد`, detail: `حق‌الثبت ${Math.round(notary / 1e6).toLocaleString('fa-IR')}م تومان` })
+    }
     if (opts.negotiated) { e.stats = e.stats || { sellsProfitable: 0, negoWins: 0 }; e.stats.negoWins += 1 }
     e.assets.push({ id: 'ast_' + randomBytes(5).toString('hex'), listingId: listing.id, title: String(listing.title).slice(0, 120), hood: String(listing.hood || '').slice(0, 60), kind: assetKindOf(listing.ptype || ''), buyPrice: listing.price, boughtAt: now })
     // پاداشِ سند (فصل ۳): ‎+100 XP + Founder + First Owner + Builder Potential +2 + Investor Confidence +1‎
@@ -560,11 +574,19 @@ export async function buyAsset(userId: string, listing: { id: string; title: str
 }
 
 // تصمیمِ معنادار بعد از خرید (فصل ۳): بازسازی / اجاره دادن / نگه داشتن — شاخهٔ مأموریت و سیگنالِ هویتی.
-export async function chooseAssetAction(userId: string, assetId: string, action: AssetAction, now = Date.now()) {
+// اجاره (فاز ۲۹): از طریقِ مشاورِ املاک — کمیسیونِ واقعی → servicesPaid؛ سیستم نقشِ مشاور را بازی می‌کند.
+export async function chooseAssetAction(userId: string, assetId: string, action: AssetAction, opts: { fee?: number; feeLabel?: string } = {}, now = Date.now()) {
   return mutateEmpire(userId, e => {
     const a = e.assets.find(x => x.id === assetId)
     if (!a) return 'دارایی یافت نشد'
+    const fee = Math.max(0, Math.round(opts.fee || 0))
+    if (fee > 0 && e.capital < fee) return 'سرمایهٔ نقدِ کافی برای کمیسیونِ مشاور نیست'
     a.action = action; a.actionAt = now
+    if (fee > 0) {
+      e.capital -= fee
+      e.servicesPaid = (e.servicesPaid || 0) + fee
+      e.timeline.push({ at: now, icon: '🤝', title: `${proPersonaOf('advisor', assetId)} مستأجر پیدا کرد`, detail: `${opts.feeLabel || 'کمیسیون'}: ${Math.round(fee / 1e6).toLocaleString('fa-IR')}م تومان` })
+    }
     const lbl = action === 'renovate' ? 'بازسازی' : action === 'rent' ? 'اجاره دادن' : 'نگه داشتن'
     if (action === 'renovate') e.identity.builder = Math.min(100, (e.identity.builder || 0) + 3)
     if (action === 'rent') e.identity.commercial = Math.min(100, (e.identity.commercial || 0) + 3)
@@ -650,7 +672,7 @@ export async function answerHunter(userId: string, pick: string, now = Date.now(
 }
 
 // فروشِ دارایی (چرخهٔ عمر — فصل ۵): به قیمتِ روزِ واقعی؛ سود/زیان تحقق می‌یابد؛ سود → XP.
-export async function sellAsset(userId: string, assetId: string, livePrice: number, now = Date.now()): Promise<{ ok: boolean; reason?: string; profit?: number; salePrice?: number; empire?: EmpireData }> {
+export async function sellAsset(userId: string, assetId: string, livePrice: number, opts: { commissionPct?: number } = {}, now = Date.now()): Promise<{ ok: boolean; reason?: string; profit?: number; salePrice?: number; empire?: EmpireData }> {
   const cfg = config().empire
   let profit = 0, salePrice = 0
   const r = await mutateEmpire(userId, e => {
@@ -658,11 +680,19 @@ export async function sellAsset(userId: string, assetId: string, livePrice: numb
     if (i < 0) return 'دارایی یافت نشد'
     const a = e.assets[i]
     // تجمیع (فاز ۲۵): فروش، کلِ ساختمان را می‌فروشد — قیمتِ روزِ واحد × واحدهای مالکیت‌شده؛ تخریب‌شده = بهای تمام‌شده.
-    salePrice = a.demolishedAt ? a.buyPrice : (livePrice > 0 ? livePrice * (a.unitsOwned || 1) : a.buyPrice)
+    // بازسازی (فاز ۲۹): ارزش‌افزودهٔ بازسازی در قیمتِ فروش لحاظ می‌شود.
+    salePrice = a.demolishedAt ? a.buyPrice : (livePrice > 0 ? Math.round(livePrice * (a.unitsOwned || 1) * (1 + (a.renovBoostPct || 0) / 100)) : a.buyPrice)
     profit = salePrice - a.buyPrice
     const tax = Math.round(salePrice * (config().empire.transferTaxPct / 100))
-    e.capital += salePrice - tax
+    // مشاورِ املاک (فاز ۲۹): فروش از طریقِ مشاور — کمیسیون → servicesPaid؛ سیستم نقش را بازی می‌کند.
+    const commission = Math.round(salePrice * Math.max(0, opts.commissionPct || 0) / 100)
+    e.capital += salePrice - tax - commission
     e.taxPaid = (e.taxPaid || 0) + tax
+    if (commission > 0) {
+      e.servicesPaid = (e.servicesPaid || 0) + commission
+      profit -= commission
+      e.timeline.push({ at: now, icon: '🤝', title: `${proPersonaOf('advisor', assetId)} خریدار آورد`, detail: `کمیسیونِ فروش ${Math.round(commission / 1e6).toLocaleString('fa-IR')}م تومان` })
+    }
     e.realized = (e.realized || 0) + profit
     if (profit > 0) { e.xp += cfg.sellProfitXp; e.stats = e.stats || { sellsProfitable: 0, negoWins: 0 }; e.stats.sellsProfitable += 1 }
     e.assets.splice(i, 1)
@@ -762,6 +792,146 @@ export async function demolishAsset(userId: string, assetId: string, opts: { cos
   })
 }
 
+// ═══════ نقش‌های حرفه‌ایِ سایت در سناریو (فاز ۲۹) ═══════
+// تا وقتی متخصصانِ واقعیِ ملک‌جت (مشاور/دفترخانه/معمار/وکیل/کارشناس/پیمانکار) درگیرِ بازی شوند،
+// «سیستم» نقش‌ها را بازی می‌کند — شخصیتِ قطعی از هش (همان دکترینِ مالک) و کارمزدِ شفاف → servicesPaid.
+const PRO_NAMES: Record<string, string[]> = {
+  advisor: ['مشاورِ املاکِ آقای توکلی', 'مشاورِ املاکِ خانم رستگار', 'املاکِ آفتابِ محله', 'املاکِ مرکزی'],
+  notary: ['دفترخانهٔ اسنادِ رسمیِ ۱۲', 'دفترخانهٔ اسنادِ رسمیِ ۴۷', 'دفترخانهٔ اسنادِ رسمیِ ۸۳'],
+  architect: ['مهندس‌معمار خانم صدر', 'مهندس‌معمار آقای بهرامی', 'دفترِ معماریِ آتیه'],
+  contractor: ['پیمانکاریِ برادرانِ نوری', 'پیمانکاریِ سازهٔ پایدار', 'پیمانکاریِ آقای رحیمی'],
+  lawyer: ['وکیلِ پایه‌یک خانم موسوی', 'وکیلِ پایه‌یک آقای شریفی'],
+  appraiser: ['کارشناسِ رسمی آقای کاظمی', 'کارشناسِ رسمی خانم امیدی'],
+}
+export function proPersonaOf(role: string, seed: string): string {
+  const list = PRO_NAMES[role] || ['متخصصِ ملک‌جت']
+  const h = createHash('sha1').update(role + '|' + seed).digest()
+  return list[h[0] % list.length]
+}
+
+// طراحیِ معمار (فاز ۲۹): محاسبهٔ شفافِ نقشه از قوانینِ شهرسازیِ knob — سطحِ اشغال، تراکم، حداقل متراژِ واحد.
+// طبقهٔ بیش از حدِ قانونی «می‌شود» ساخت (تصمیمِ آگاهانهٔ بازیکن) — اما ماده۱۰۰ در انتظار است.
+export function designPlanOf(landArea: number, floors: number, unitsPerFloor: number,
+  cfg: { occupancyPct: number; buildFactor: number; maxOverFloors: number; minUnitArea: number }):
+  { ok: true; footprint: number; legalFloors: number; maxFloors: number; unitArea: number; illegalFloors: number; builtArea: number; totalUnits: number; illegalUnits: number; illegalArea: number } | { ok: false; reason: string } {
+  if (!(landArea > 0)) return { ok: false, reason: 'متراژِ زمین نامشخص است' }
+  const footprint = Math.max(20, Math.round(landArea * Math.max(10, Math.min(100, cfg.occupancyPct)) / 100))
+  const legalFloors = Math.max(1, Math.floor((landArea * Math.max(0.5, cfg.buildFactor)) / footprint))
+  const maxFloors = legalFloors + Math.max(0, cfg.maxOverFloors)
+  if (!(floors >= 1) || floors > maxFloors) return { ok: false, reason: `طبقات باید بین ۱ و ${maxFloors.toLocaleString('fa-IR')} باشد (مجازِ قانونی: ${legalFloors.toLocaleString('fa-IR')})` }
+  if (!(unitsPerFloor >= 1)) return { ok: false, reason: 'حداقل یک واحد در هر طبقه' }
+  const unitArea = Math.floor(footprint / unitsPerFloor)
+  if (unitArea < cfg.minUnitArea) return { ok: false, reason: `متراژِ هر واحد ${unitArea.toLocaleString('fa-IR')} متر می‌شود — کمتر از حداقلِ قانونیِ ${cfg.minUnitArea.toLocaleString('fa-IR')} متر` }
+  const illegalFloors = Math.max(0, floors - legalFloors)
+  return {
+    ok: true, footprint, legalFloors, maxFloors, unitArea, illegalFloors,
+    builtArea: footprint * floors, totalUnits: floors * unitsPerFloor,
+    illegalUnits: illegalFloors * unitsPerFloor, illegalArea: illegalFloors * footprint,
+  }
+}
+
+// قراردادِ معمار: حق‌الزحمه → servicesPaid؛ طراحی چند روزِ واقعی طول می‌کشد (قابلِ‌تسریع با کوین).
+export async function commissionDesign(userId: string, assetId: string, d: { floors: number; unitsPerFloor: number; legalFloors: number; footprint: number; unitArea: number; illegalFloors: number; fee: number; days: number }, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    if (!a) return 'دارایی یافت نشد'
+    if (a.kind !== 'land' || a.landPlan !== 'build') return 'اول زمین با برنامهٔ «ساخت» لازم است'
+    if (a.permit) return 'پروانه در جریان است — نقشه قبل از پروانه طراحی می‌شود'
+    if (a.design) return 'نقشهٔ این زمین قبلاً سفارش داده شده'
+    if (e.capital < d.fee) return 'سرمایهٔ نقدِ کافی برای حق‌الزحمهٔ معمار نیست'
+    e.capital -= d.fee
+    e.servicesPaid = (e.servicesPaid || 0) + d.fee
+    const architect = proPersonaOf('architect', assetId)
+    a.design = { floors: d.floors, unitsPerFloor: d.unitsPerFloor, legalFloors: d.legalFloors, footprint: d.footprint, unitArea: d.unitArea, illegalFloors: d.illegalFloors, architectFee: d.fee, startedAt: now, readyAt: now + Math.max(0, d.days) * 864e5, architect }
+    e.identity.builder = Math.min(100, (e.identity.builder || 0) + 3)
+    e.timeline.push({ at: now, icon: '📐', title: `قراردادِ طراحی با ${architect}`, detail: `${d.floors.toLocaleString('fa-IR')} طبقه × ${d.unitsPerFloor.toLocaleString('fa-IR')} واحد${d.illegalFloors > 0 ? ` · ⚠️ ${d.illegalFloors.toLocaleString('fa-IR')} طبقهٔ مازاد بر پروانه` : ''}` })
+  })
+}
+
+// ⚡ تسریعِ طراحی: مثلِ پیگیریِ پروانه — کوین فقط انتظار را کوتاه می‌کند.
+export async function boostDesign(userId: string, assetId: string, days: number, coinsPerDay: number, now = Date.now()) {
+  let cut = 0
+  const r = await mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    if (!a?.design || now >= a.design.readyAt) return 'طراحیِ در جریانی نیست'
+    for (let d = 0; d < days && a.design.readyAt > now; d++) {
+      if (e.coins < coinsPerDay) { if (!cut) return 'ملک‌کوینِ کافی نداری'; break }
+      e.coins -= Math.max(0, coinsPerDay)
+      a.design.readyAt = Math.max(now, a.design.readyAt - 864e5)
+      cut++
+    }
+    if (!cut) return 'روزی نمانده'
+    e.timeline.push({ at: now, icon: '⚡', title: `جلسهٔ فشرده با معمار: طراحی ${cut.toLocaleString('fa-IR')} روز جلو افتاد`, detail: a.title.slice(0, 50) })
+  })
+  if (!r.ok) return { ok: false as const, reason: r.reason }
+  return { ok: true as const, cut, empire: r.empire }
+}
+
+// ⚖️ کمیسیونِ ماده۱۰۰ (فاز ۲۹): جریمه → خزانه (شهرداری) / دفاعِ وکیل (قطعی از هش، یک‌بار) / تخریبِ طبقهٔ مازاد.
+export async function resolveM100(userId: string, assetId: string, choice: 'pay' | 'lawyer' | 'demolish',
+  ctx: { lawyerFee: number; lawyerCutPct: number; lawyerWinChancePct: number; demolishCost: number }, now = Date.now()) {
+  let lawyerWon: boolean | undefined
+  const r = await mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    if (!a?.m100 || a.m100.status !== 'pending') return 'پروندهٔ ماده۱۰۰ باز نیست'
+    if (choice === 'pay') {
+      if (e.capital < a.m100.fine) return 'سرمایهٔ نقدِ کافی برای جریمه نیست'
+      e.capital -= a.m100.fine
+      e.taxPaid = (e.taxPaid || 0) + a.m100.fine          // جریمه → خزانه (شهرداری)
+      a.m100.status = 'paid'
+      if (a.construction) a.construction.illegalUnits = 0  // واحدها قانونی و قابلِ‌فروش شدند
+      e.timeline.push({ at: now, icon: '⚖️', title: 'جریمهٔ ماده۱۰۰ پرداخت شد — واحدهای مازاد قانونی شدند', detail: `${Math.round(a.m100.fine / 1e6).toLocaleString('fa-IR')}م تومان → شهرداری` })
+    } else if (choice === 'lawyer') {
+      if (a.m100.lawyerTried) return 'وکیل یک‌بار دفاع کرده — رأیِ کمیسیون قطعی است'
+      if (e.capital < ctx.lawyerFee) return 'سرمایهٔ کافی برای حق‌الوکاله نیست'
+      e.capital -= ctx.lawyerFee
+      e.servicesPaid = (e.servicesPaid || 0) + ctx.lawyerFee
+      a.m100.lawyerTried = true
+      const h = createHash('sha1').update(userId + '|m100|' + assetId).digest()
+      lawyerWon = (h[0] % 100) < Math.max(0, Math.min(100, ctx.lawyerWinChancePct))
+      const lawyer = proPersonaOf('lawyer', assetId)
+      if (lawyerWon) {
+        a.m100.fine = Math.max(1, Math.round(a.m100.fine * (1 - Math.max(0, Math.min(90, ctx.lawyerCutPct)) / 100)))
+        e.timeline.push({ at: now, icon: '🧑‍⚖️', title: `${lawyer} در کمیسیون دفاع کرد — جریمه ${ctx.lawyerCutPct.toLocaleString('fa-IR')}٪ کم شد`, detail: `جریمهٔ جدید ${Math.round(a.m100.fine / 1e6).toLocaleString('fa-IR')}م تومان` })
+      } else {
+        e.timeline.push({ at: now, icon: '🧑‍⚖️', title: `دفاعِ ${lawyer} پذیرفته نشد — رأیِ کمیسیون ماند`, detail: 'حق‌الوکاله برنمی‌گردد؛ جریمه یا تخریب' })
+      }
+    } else {
+      // تخریبِ طبقاتِ مازاد: واحدها حذف، هزینهٔ تخریب پرداخت — پرونده بسته می‌شود.
+      const c = a.construction
+      if (!c) return 'کارگاهی نیست'
+      if (e.capital < ctx.demolishCost) return 'سرمایهٔ کافی برای هزینهٔ تخریب نیست'
+      e.capital -= ctx.demolishCost
+      e.demolitionPaid = (e.demolitionPaid || 0) + ctx.demolishCost
+      c.totalUnits = Math.max(1, c.totalUnits - a.m100.illegalUnits)
+      c.illegalUnits = 0
+      a.m100.status = 'demolished'
+      e.timeline.push({ at: now, icon: '🧨', title: `طبقاتِ مازاد تخریب شد (${a.m100.illegalUnits.toLocaleString('fa-IR')} واحد از دست رفت)`, detail: `هزینهٔ تخریب ${Math.round(ctx.demolishCost / 1e6).toLocaleString('fa-IR')}م تومان` })
+    }
+  })
+  if (!r.ok) return { ok: false as const, reason: r.reason }
+  return { ok: true as const, lawyerWon, empire: r.empire }
+}
+
+// 🛠 بازسازیِ واقعی (فاز ۲۹): هزینه به بهای تمام‌شده اضافه می‌شود، ارزشِ روز ٪ شفاف بالا می‌رود (با سقف).
+export async function renovateAsset(userId: string, assetId: string, option: string, ctx: { cost: number; valuePct: number; maxBoostPct: number }, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    if (!a) return 'دارایی یافت نشد'
+    if (a.kind === 'land' || a.demolishedAt) return 'زمین بازسازی ندارد — بساز'
+    if (a.construction) return 'این ملک واردِ پروژهٔ ساخت شده'
+    if ((a.renovDone || []).includes(option)) return 'این بخش قبلاً بازسازی شده'
+    if ((a.renovBoostPct || 0) >= ctx.maxBoostPct) return 'به سقفِ ارزش‌افزودهٔ بازسازی رسیده‌ای'
+    if (e.capital < ctx.cost) return 'سرمایهٔ نقدِ کافی نیست'
+    e.capital -= ctx.cost
+    a.buyPrice += ctx.cost                                 // سرمایه‌گذاری → بهای تمام‌شده (بقای پول)
+    a.renovBoostPct = Math.min(ctx.maxBoostPct, (a.renovBoostPct || 0) + Math.max(0, ctx.valuePct))
+    a.renovDone = [...(a.renovDone || []), option]
+    e.identity.builder = Math.min(100, (e.identity.builder || 0) + 2)
+    e.timeline.push({ at: now, icon: '🛠', title: `بازسازی انجام شد (+${ctx.valuePct.toLocaleString('fa-IR')}٪ ارزش)`, detail: `${a.title.slice(0, 50)} · هزینه ${Math.round(ctx.cost / 1e6).toLocaleString('fa-IR')}م` })
+  })
+}
+
 // لایهٔ کسب‌وکارِ تجاری (§6.9): انتخابِ کسب‌وکار برای ملکِ تجاری با ٪ موفقیتِ محاسبه‌شده از دادهٔ واقعی.
 export async function chooseBusiness(userId: string, assetId: string, business: string, prob: number, now = Date.now()) {
   return mutateEmpire(userId, e => {
@@ -820,11 +990,17 @@ export async function claimDailyChest(userId: string, day: number, now = Date.no
 
 // ══════════ بانک (GDD جلد ۱۶): وام با نرخِ اعتباری، بهرهٔ روزشمار، جریمهٔ دیرکرد ══════════
 // گرفتنِ وام — فقط یک وامِ فعال؛ سقف و نرخ از loanTermsFor (لایهٔ API محاسبه و پاس می‌دهد).
-export async function takeLoan(userId: string, amount: number, ratePctYear: number, termDays: number, now = Date.now()) {
+export async function takeLoan(userId: string, amount: number, ratePctYear: number, termDays: number, opts: { appraisalFee?: number } = {}, now = Date.now()) {
   return mutateEmpire(userId, e => {
     if (e.loan) return 'یک وامِ فعال داری — اول تسویه کن'
     if (!(amount > 0)) return 'مبلغِ نامعتبر'
-    e.capital += Math.round(amount)
+    // کارشناسِ رسمی (فاز ۲۹): بانک بدونِ ارزیابیِ کارشناس وام نمی‌دهد — هزینه از مبلغِ وام کسر می‌شود.
+    const fee = Math.max(0, Math.round(opts.appraisalFee || 0))
+    if (fee > 0) {
+      e.servicesPaid = (e.servicesPaid || 0) + fee
+      e.timeline.push({ at: now, icon: '📋', title: `${proPersonaOf('appraiser', userId)} وثیقه را ارزیابی کرد`, detail: `هزینهٔ کارشناسی ${Math.round(fee / 1e6 * 10) / 10}م تومان — از مبلغِ وام کسر شد` })
+    }
+    e.capital += Math.round(amount) - fee
     e.loan = { amount: Math.round(amount), balance: Math.round(amount), ratePctYear, startedAt: now, dueAt: now + termDays * 864e5, lastInterestAt: now }
     e.creditHist = e.creditHist || { taken: 0, repaid: 0, lateDays: 0 }
     e.creditHist.taken += 1
@@ -1008,12 +1184,17 @@ export async function applyWages(userId: string, now = Date.now()): Promise<{ ok
 }
 
 // درخواستِ پروانه (جلد ۶۳): فقط زمینِ با برنامهٔ «ساخت»؛ عوارض → خزانه؛ مهلت/اعتراض قطعی از هش.
-export async function requestPermit(userId: string, assetId: string, terms: { days: number; fee: number; objection: { text: string; extraDays: number; settleCost: number } | null }, now = Date.now()) {
+export async function requestPermit(userId: string, assetId: string, terms: { days: number; fee: number; objection: { text: string; extraDays: number; settleCost: number } | null }, opts: { requireDesign?: boolean } = {}, now = Date.now()) {
   return mutateEmpire(userId, e => {
     const a = e.assets.find(x => x.id === assetId)
     if (!a) return 'دارایی یافت نشد'
     if (a.kind !== 'land') return 'پروانه فقط برای زمین است'
     if (a.landPlan !== 'build') return 'اول برنامهٔ زمین را «ساخت» انتخاب کن'
+    // فاز ۲۹: پروانه روی «نقشهٔ معمار» صادر می‌شود — اول قراردادِ طراحی (API این را بر اساسِ config می‌خواهد).
+    if (opts.requireDesign) {
+      if (!a.design) return 'اول با معمار قراردادِ طراحیِ نقشه ببند — پروانه روی نقشه صادر می‌شود'
+      if (now < a.design.readyAt) return 'معمار هنوز مشغولِ طراحی است — صبر کن یا جلسهٔ فشرده بگذار'
+    }
     if (a.permit) return a.permit.status === 'granted' ? 'پروانهٔ این زمین صادر شده' : 'درخواستِ پروانه در حالِ بررسی است'
     if (e.capital < terms.fee) return 'سرمایهٔ کافی برای عوارضِ پروانه نیست'
     e.capital -= terms.fee
@@ -1063,6 +1244,23 @@ export function buildPlanOf(structure: string, quality: string, landArea: number
     qualityFactor: q.qualityFactor,
   }
 }
+// نقشهٔ ساخت از طراحیِ معمار (فاز ۲۹): ابعادِ واقعیِ انتخابِ خودِ بازیکن — بنا/واحد/متراژ از design،
+// روزها و هزینه متناسب با بنا نسبت به مبنای knob (زمین × تراکم) مقیاس می‌شوند.
+export function designBuildPlanOf(structure: string, quality: string, landArea: number,
+  design: { footprint: number; floors: number; unitsPerFloor: number; unitArea: number },
+  cfg: { buildFactor: number; costPerM: number; buildDays: number }): ReturnType<typeof buildPlanOf> {
+  const s = BUILD_STRUCTURES[structure], q = BUILD_QUALITIES[quality]
+  if (!s || !q || !(landArea > 0)) return null
+  const builtArea = design.footprint * design.floors
+  const baseArea = Math.max(1, Math.round(landArea * Math.max(0.5, cfg.buildFactor)))
+  return {
+    days: Math.max(3, Math.round(cfg.buildDays * s.daysMul * builtArea / baseArea)),
+    builtArea, unitArea: design.unitArea, totalUnits: design.floors * design.unitsPerFloor,
+    costTotal: Math.round(builtArea * cfg.costPerM * s.costMul * q.costMul),
+    qualityFactor: q.qualityFactor,
+  }
+}
+
 // هدفِ پروژه (GDD فصل ۴ بخش ۸): یک تصمیمِ استراتژیکِ سرِ کلنگ — اثرش شفاف و برگشت‌ناپذیر.
 export const PROJECT_GOALS: Record<string, { label: string; icon: string; desc: string }> = {
   fast: { label: 'فروشِ سریع', icon: '⚡', desc: 'کمی ارزان‌تر از میانهٔ واقعیِ محله می‌فروشی، اما سقفِ پیش‌فروش بالاتر است — نقدینگی زودتر برمی‌گردد' },
@@ -1155,14 +1353,17 @@ export async function startBuild(userId: string, assetId: string, plan: NonNulla
     if (a.permit?.status !== 'granted') return 'اول پروانهٔ ساخت را بگیر'
     if (a.construction) return 'ساختِ این پروژه شروع شده'
     const goal = meta.goal && PROJECT_GOALS[meta.goal] ? meta.goal : undefined
+    // فاز ۲۹: واحدهای طبقاتِ مازادِ نقشه از همان کلنگ «غیرمجاز» علامت می‌خورند — پیش‌فروش/فروششان بسته است تا ماده۱۰۰.
+    const illegalUnits = a.design ? Math.max(0, a.design.illegalFloors * a.design.unitsPerFloor) : 0
     a.construction = {
       startedAt: now, days: plan.days, days0: plan.days, goal,
       structure: meta.structure, quality: meta.quality, qualityFactor: plan.qualityFactor,
       builtArea: plan.builtArea, unitArea: plan.unitArea, totalUnits: plan.totalUnits,
       costTotal: plan.costTotal, paid: 0, paidDays: 0, lastPayAt: now,
       presold: 0, sold: 0, presaleRevenue: 0, eventsFired: 0,
+      illegalUnits: illegalUnits > 0 ? illegalUnits : undefined,
     }
-    e.timeline.push({ at: now, icon: '⛏', title: 'کلنگ‌زنی — ساخت آغاز شد', detail: `${a.title.slice(0, 45)} · ${plan.builtArea.toLocaleString('fa-IR')} مترِ بنا · ${plan.totalUnits.toLocaleString('fa-IR')} واحد${goal ? ` · هدف: ${PROJECT_GOALS[goal].label}` : ''}` })
+    e.timeline.push({ at: now, icon: '⛏', title: `کلنگ‌زنی با ${proPersonaOf('contractor', a.id)} — ساخت آغاز شد`, detail: `${a.title.slice(0, 45)} · ${plan.builtArea.toLocaleString('fa-IR')} مترِ بنا · ${plan.totalUnits.toLocaleString('fa-IR')} واحد${illegalUnits > 0 ? ` · ⚠️ ${illegalUnits.toLocaleString('fa-IR')} واحدِ مازاد بر پروانه` : ''}${goal ? ` · هدف: ${PROJECT_GOALS[goal].label}` : ''}` })
     e.journal.push({ at: now, text: 'اولین کلنگِ پروژه زده شد. از امروز کارگاه هر روز هزینه دارد — مدیریتِ پول، خودِ ساخت است.' })
   })
 }
@@ -1189,6 +1390,13 @@ function completeIfBuilt(e: EmpireData, a: EmpireAsset, now: number): boolean {
   const c = a.construction!
   if (!(c.paidDays >= c.days && !c.done)) return false
   c.done = true; c.doneAt = now
+  // ماده۱۰۰ (فاز ۲۹): ساختمانِ متخلف که تمام شد، شهرداری می‌فهمد — کمیسیون تشکیل می‌شود.
+  if ((c.illegalUnits || 0) > 0 && a.design && !a.m100) {
+    const illegalArea = a.design.illegalFloors * a.design.footprint
+    const fine = Math.max(1, Math.round(illegalArea * config().empire.build.costPerM * Math.max(0.1, config().empire.m100.finePerM2Mult)))
+    a.m100 = { illegalArea, illegalUnits: c.illegalUnits!, fine, status: 'pending' }
+    e.timeline.push({ at: now, icon: '⚖️', title: 'کمیسیونِ ماده۱۰۰ تشکیل شد', detail: `${a.design.illegalFloors.toLocaleString('fa-IR')} طبقهٔ مازاد بر پروانه — جریمه ${Math.round(fine / 1e6).toLocaleString('fa-IR')}م تومان یا تخریب` })
+  }
   // تحویلِ پیش‌فروش‌ها: سود/زیانشان همین‌جا تحقق می‌یابد (درآمدش قبلاً واردِ نقد شده بود).
   if (c.presold > 0) {
     const costShare = Math.round((a.buyPrice + c.paid) / c.totalUnits)
@@ -1322,7 +1530,9 @@ export async function presellUnits(userId: string, assetId: string, units: numbe
     if (!a || !c) return 'ساختی در جریان نیست'
     if (c.done) return 'ساختمان تکمیل شده — از فروشِ واحد استفاده کن'
     if ((c.paidDays / c.days) * 100 < minProgressPct) return `پیش‌فروش از ${minProgressPct.toLocaleString('fa-IR')}٪ پیشرفت باز می‌شود`
-    const maxPresell = Math.floor(c.totalUnits * maxPct / 100)
+    // فاز ۲۹: واحدهای طبقاتِ مازاد (تخلف) پیش‌فروش نمی‌شوند — سقف روی واحدهای «قانونی» است.
+    const legalUnits = Math.max(1, c.totalUnits - (c.illegalUnits || 0))
+    const maxPresell = Math.floor(legalUnits * maxPct / 100)
     if (!(units >= 1) || c.presold + units > maxPresell) return `سقفِ پیش‌فروش ${maxPresell.toLocaleString('fa-IR')} واحد است`
     if (!(unitPrice > 0)) return 'برای قیمت‌گذاری، نمونهٔ واقعیِ هم‌محله در دسترس نیست'
     revenue = Math.round(units * unitPrice)
@@ -1344,7 +1554,10 @@ export async function sellUnits(userId: string, assetId: string, units: number, 
     const c = a?.construction
     if (!a || !c) return 'پروژه‌ای یافت نشد'
     if (!c.done) return 'ساختمان هنوز تکمیل نشده'
-    const left = c.totalUnits - c.presold - c.sold - (c.rented || 0)
+    // فاز ۲۹: تا حلِ پروندهٔ ماده۱۰۰ (جریمه/تخریب)، واحدهای طبقاتِ مازاد سند نمی‌خورند و قابلِ‌فروش نیستند.
+    const blocked = a.m100?.status === 'pending' ? (c.illegalUnits || 0) : 0
+    const left = c.totalUnits - c.presold - c.sold - (c.rented || 0) - blocked
+    if (blocked > 0 && units > left && left >= 0) return `تا حلِ ماده۱۰۰، ${blocked.toLocaleString('fa-IR')} واحدِ مازاد قابلِ‌فروش نیست — فقط ${Math.max(0, left).toLocaleString('fa-IR')} واحدِ آزاد داری`
     if (!(units >= 1) || units > left) return (c.rented || 0) > 0
       ? `فقط ${Math.max(0, left).toLocaleString('fa-IR')} واحدِ آزاد مانده — ${(c.rented || 0).toLocaleString('fa-IR')} واحد اجاره است (اول اجاره را فسخ کن)`
       : `فقط ${Math.max(0, left).toLocaleString('fa-IR')} واحد باقی مانده`
@@ -1707,8 +1920,8 @@ export function netWorthOf(e: EmpireData, livePrices: Record<string, number>, ma
     }
     // تخریب‌شده و هنوز ساخته‌نشده: قیمتِ آگهیِ اولیه دیگر معنای «ارزشِ روز» ندارد — بهای تمام‌شده مبنا می‌ماند.
     if (a.demolishedAt) { assetsValue += a.buyPrice; continue }
-    // تجمیع (فاز ۲۵): ارزش = قیمتِ روزِ واحد × تعدادِ واحدهای مالکیت‌شده
-    assetsValue += Math.round((livePrices[a.listingId] || a.buyPrice / (a.unitsOwned || 1)) * (a.unitsOwned || 1))
+    // تجمیع (فاز ۲۵): ارزش = قیمتِ روزِ واحد × واحدهای مالکیت‌شده · بازسازی (فاز ۲۹): × (۱ + ارزش‌افزوده)
+    assetsValue += Math.round((livePrices[a.listingId] || a.buyPrice / (a.unitsOwned || 1)) * (a.unitsOwned || 1) * (1 + (a.renovBoostPct || 0) / 100))
   }
   let marketValue = 0
   for (const h of e.funds || []) { const u = market?.fundUnit?.[h.fundId]; marketValue += u && u > 0 ? Math.round(h.units * u) : h.cost }

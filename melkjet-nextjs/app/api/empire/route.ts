@@ -22,6 +22,7 @@ import {
   negoMemoryOf, bumpNegoTries, dailyDealPickOf, maxProjectsOf, sellProject,
   applyLevelUpReward, setWeekSnap, setTitle, giveKudos, eventActive, streakMilestonesOf,
   buildingUnitsOf, assemblyUnitPriceOf, buyBuildingUnit, demolishAsset, boostBuild, boostPermit,
+  proPersonaOf, designPlanOf, commissionDesign, boostDesign, resolveM100, renovateAsset, designBuildPlanOf,
   type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
 import {
@@ -171,6 +172,24 @@ function monthlyRentOf(it: Item): number {
   return m ? parseFaNum(m[1]) : 0
 }
 const median = (xs: number[]) => { if (!xs.length) return 0; const s = [...xs].sort((a, b) => a - b); return s[Math.floor(s.length / 2)] }
+
+// میانهٔ اجارهٔ ماهانهٔ واقعیِ محله (برای کمیسیونِ مشاورِ اجاره — فاز ۲۹)؛ نبود → میانهٔ کلِ شهر.
+async function hoodMonthlyRentOf(hood: string): Promise<number> {
+  const items = await candidateListings(500).catch(() => [] as Item[])
+  const all: number[] = [], hr: number[] = []
+  for (const it of items) {
+    if (isSale(it)) continue
+    const r = monthlyRentOf(it)
+    if (!(r > 0)) continue
+    all.push(r)
+    if (hoodOf(it.location) === hood) hr.push(r)
+  }
+  return median(hr) || median(all)
+}
+// برچسب‌های بازسازی (فاز ۲۹) — گزینه‌ها/اعدادش از config می‌آید.
+const RENOV_LABELS: Record<string, { label: string; icon: string }> = {
+  kitchen: { label: 'آشپزخانه و سرویس‌ها', icon: '🍳' }, facade: { label: 'نمای ساختمان', icon: '🏢' }, full: { label: 'بازسازیِ کامل', icon: '🛠' },
+}
 
 // مهارتِ مؤثرِ مذاکره (سند ۱۴): هویت + شخصیتِ مالک + تیمِ مهندسی + حافظهٔ مذاکره + اعتبارِ ⭐ برند —
 // یک منبعِ واحد برای «مذاکره» و «خرید» تا نتیجهٔ هر دو یکی باشد.
@@ -335,8 +354,8 @@ async function stateOf(userId: string, e00: EmpireData) {
   const assets = e.assets.map(a => {
     const owned = a.unitsOwned || 1
     const unitP = prices[a.listingId] || Math.round(a.buyPrice / owned)
-    // تخریب‌شده = بهای تمام‌شده تا ساخت؛ تجمیع‌شده = قیمتِ روزِ واحد × واحدهای مالکیت‌شده (فاز ۲۵)
-    const cur = a.demolishedAt ? a.buyPrice : unitP * owned
+    // تخریب‌شده = بهای تمام‌شده تا ساخت؛ تجمیع = × واحدها (فاز ۲۵)؛ بازسازی = × (۱+ارزش‌افزوده) (فاز ۲۹)
+    const cur = a.demolishedAt ? a.buyPrice : Math.round(unitP * owned * (1 + (a.renovBoostPct || 0) / 100))
     // تجمیع: وضعیتِ ساختمان + قیمتِ واحدِ بعدی + شرط/هزینهٔ تخریب — همه شفاف
     const total = a.unitsTotal || info.units[a.listingId] || 0
     const area = info.areas[a.listingId] || 0
@@ -350,10 +369,19 @@ async function stateOf(userId: string, e00: EmpireData) {
     const villaDemolish = asmCfg.enabled && !a.demolishedAt && !a.construction && a.kind === 'villa' && area > 0 ? {
       demolishCost, landArea: Math.max(20, Math.round(area)),
     } : undefined
+    // فاز ۲۹: زمینِ برنامهٔ ساخت بدونِ نقشه → نیازِ قراردادِ معمار (فرمِ طراحی در UI با designPlan پر می‌شود)
+    const needsDesign = config().empire.design.enabled && a.kind === 'land' && a.landPlan === 'build' && !a.design && !a.permit
+    // فاز ۲۹: گزینه‌های بازسازیِ واقعی با هزینه/ارزشِ شفاف — هر گزینه یک‌بار
+    const renovCfg = config().empire.renovation
+    const renovOptions = renovCfg.enabled && a.kind !== 'land' && !a.demolishedAt && !a.construction ? Object.entries(renovCfg.options).map(([k, v]) => ({
+      key: k, ...(RENOV_LABELS[k] || { label: k, icon: '🛠' }), costPct: v.costPct, valuePct: v.valuePct,
+      cost: Math.max(1, Math.round(cur * v.costPct / 100)), done: (a.renovDone || []).includes(k),
+    })) : undefined
     return {
     ...a,
     current: cur,
-    assembly, villaDemolish,
+    assembly, villaDemolish, needsDesign, renovOptions,
+    designReadyInDays: a.design && Date.now() < a.design.readyAt ? Math.max(1, Math.ceil((a.design.readyAt - Date.now()) / 864e5)) : 0,
     lat: info.coords[a.listingId]?.lat, lng: info.coords[a.listingId]?.lng,   // برای پینِ نقشهٔ شهر
     growthPct: a.buyPrice ? Math.round((cur - a.buyPrice) / a.buyPrice * 1000) / 10 : 0,
     // زمینِ بدونِ برنامه → سه گزینهٔ سند (§6.7) با برآوردِ شفاف
@@ -420,6 +448,7 @@ async function stateOf(userId: string, e00: EmpireData) {
     capitalEnabled: config().empire.capital.enabled,
     dealsEnabled: config().empire.deals.enabled,   // Hook روزانه (سند ۱۴)
     speed: config().empire.speed,                  // زمان‌خری (فاز ۲۷): نرخِ کوین برای نمایشِ شفاف در UI
+    pros: config().empire.pros,                    // کارمزدِ نقش‌های حرفه‌ای (فاز ۲۹) — برای نمایشِ شفاف
     // 🪙 فروشگاهِ کوین (فاز ۲۸): فقط بسته‌های فعال — قیمت‌ها شفاف؛ کوین هرگز قدرت نمی‌خرد
     coinShop: config().empire.coinShop?.enabled ? { enabled: true, packs: (config().empire.coinShop.packs || []).filter(p => p.enabled && p.coins > 0 && p.priceToman > 0) } : { enabled: false, packs: [] },
     // سطح‌گشایی (سند ۱۵): چه چیزی از چه سطحی باز می‌شود + ظرفیتِ پروژهٔ همزمان — شفاف در UI
@@ -561,7 +590,8 @@ export async function POST(req: NextRequest) {
         const out = e ? negotiationOutcome(userId, it.id, negoSkillOf(e, ownerPersonaOf(it.id).mod).skill) : { success: false, discountPct: 0 }
         if (out.success) { price = Math.round(price * (1 - out.discountPct / 100)); negotiatedWin = true }
       }
-      const r = await buyAsset(userId, { id: it.id, title: it.title, hood: hoodOf(it.location), price, ptype: ptypeOf(it) }, { negotiated: negotiatedWin })
+      // دفترخانه (فاز ۲۹): ثبتِ سند با حق‌الثبتِ knob — سیستم نقشِ دفترخانه را بازی می‌کند.
+      const r = await buyAsset(userId, { id: it.id, title: it.title, hood: hoodOf(it.location), price, ptype: ptypeOf(it) }, { negotiated: negotiatedWin, notaryFeePct: config().empire.pros.notaryFeePct })
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       // جلد ۲۸: رفتارِ بازی = دادهٔ رفتاری برای ML — تعامل با همین آگهیِ واقعی ثبت می‌شود.
       recordEvent({ type: 'user_clicked_property', userId, propertyId: it.id, meta: { src: 'empire_buy' } }).catch(() => {})
@@ -570,9 +600,20 @@ export async function POST(req: NextRequest) {
     case 'assetAction': {
       const act = String(b.act || '')
       if (!['renovate', 'rent', 'hold'].includes(act)) return NextResponse.json({ error: 'تصمیمِ نامعتبر' }, { status: 400 })
-      const r = await chooseAssetAction(userId, String(b.assetId || ''), act as any)
+      // اجاره (فاز ۲۹): از طریقِ مشاورِ املاک — کمیسیون = ٪ knob از یک ماه اجارهٔ میانهٔ واقعیِ محله.
+      let fee = 0
+      if (act === 'rent') {
+        const e0 = await getEmpire(userId)
+        const a0 = e0?.assets.find(x => x.id === String(b.assetId || ''))
+        if (a0) {
+          const monthly = await hoodMonthlyRentOf(a0.hood)
+          if (!(monthly > 0)) return NextResponse.json({ error: 'هیچ نمونهٔ اجارهٔ واقعی در بازار نیست — مشاور نمی‌تواند نرخ بدهد؛ بعداً امتحان کن' }, { status: 400 })
+          fee = Math.round(monthly * Math.max(0, config().empire.pros.advisorRentCommissionPct) / 100)
+        }
+      }
+      const r = await chooseAssetAction(userId, String(b.assetId || ''), act as any, fee > 0 ? { fee, feeLabel: 'کمیسیونِ اجاره (٪ یک ماه)' } : {})
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
-      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+      return NextResponse.json({ ok: true, advisorFee: fee || undefined, ...(await stateOf(userId, r.empire!)) })
     }
 
     // Beat AI (M3): آگهیِ واقعی بدونِ قیمت → حدس → مقایسه با قیمتِ واقعی.
@@ -679,7 +720,8 @@ export async function POST(req: NextRequest) {
       const a = e?.assets.find(x => x.id === String(b.assetId || ''))
       if (!e || !a) return NextResponse.json({ error: 'دارایی یافت نشد' }, { status: 404 })
       const it = await getItemById(a.listingId).catch(() => null)
-      const r = await sellAsset(userId, a.id, it ? priceOf(it) : 0)
+      // فروش از طریقِ مشاورِ املاک (فاز ۲۹): کمیسیونِ knob از قیمتِ فروش — سیستم نقش را بازی می‌کند.
+      const r = await sellAsset(userId, a.id, it ? priceOf(it) : 0, { commissionPct: config().empire.pros.advisorSellCommissionPct })
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       return NextResponse.json({ ok: true, profit: r.profit, salePrice: r.salePrice, ...(await stateOf(userId, r.empire!)) })
     }
@@ -781,7 +823,8 @@ export async function POST(req: NextRequest) {
       const amount = Math.round(Number(b.amount) || 0)
       if (!terms.eligible) return NextResponse.json({ error: 'با این امتیازِ اعتباری فعلاً وام تعلق نمی‌گیرد' }, { status: 400 })
       if (amount <= 0 || amount > terms.maxLoan) return NextResponse.json({ error: `سقفِ وامِ تو ${Math.round(terms.maxLoan / 1e6).toLocaleString('fa-IR')} میلیون تومان است` }, { status: 400 })
-      const r = await takeLoan(userId, amount, terms.ratePctYear, terms.termDays)
+      // کارشناسِ رسمی (فاز ۲۹): بانک بدونِ ارزیابی وام نمی‌دهد — هزینه از مبلغِ وام کسر می‌شود.
+      const r = await takeLoan(userId, amount, terms.ratePctYear, terms.termDays, { appraisalFee: config().empire.pros.appraisalFee })
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
     }
@@ -958,6 +1001,85 @@ export async function POST(req: NextRequest) {
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
     }
+    // ══════ طراحیِ معمار (فاز ۲۹): پیش از پروانه — طبقات/واحد با تراکمِ قانونی؛ مازاد = تخلفِ آگاهانه ══════
+    // محدوده‌های قانونیِ نقشه برای این زمین (برای فرمِ UI)
+    case 'designPlan': {
+      const dc = config().empire.design
+      if (!dc.enabled) return NextResponse.json({ error: 'طراحی فعلاً فعال نیست' }, { status: 403 })
+      const e = await getEmpire(userId)
+      const a = e?.assets.find(x => x.id === String(b.assetId || ''))
+      if (!e || !a) return NextResponse.json({ error: 'دارایی یافت نشد' }, { status: 404 })
+      const it = await getItemById(a.listingId).catch(() => null)
+      const landArea = a.landAreaOverride || (it ? (parseFaNum((it.meta || {})['متراژ']) || 0) : 0)
+      if (!(landArea > 0)) return NextResponse.json({ error: 'متراژِ زمین در آگهیِ واقعی ثبت نشده' }, { status: 400 })
+      const probe = designPlanOf(landArea, 1, 1, { ...dc, buildFactor: config().empire.build.buildFactor })
+      if (!probe.ok) return NextResponse.json({ error: probe.reason }, { status: 400 })
+      return NextResponse.json({
+        ok: true, landArea, occupancyPct: dc.occupancyPct, footprint: probe.footprint,
+        legalFloors: probe.legalFloors, maxFloors: probe.maxFloors, minUnitArea: dc.minUnitArea,
+        maxUnitsPerFloor: Math.max(1, Math.floor(probe.footprint / Math.max(1, dc.minUnitArea))),
+        designDays: dc.designDays, architectFeePct: dc.architectFeePct, costPerM: config().empire.build.costPerM,
+        finePerM2: Math.round(config().empire.build.costPerM * config().empire.m100.finePerM2Mult),
+        architect: proPersonaOf('architect', a.id),
+      })
+    }
+    // قراردادِ طراحی: انتخابِ طبقات/واحد → حق‌الزحمهٔ معمار → طراحی چند روز طول می‌کشد
+    case 'designStart': {
+      const dc = config().empire.design
+      if (!dc.enabled) return NextResponse.json({ error: 'طراحی فعلاً فعال نیست' }, { status: 403 })
+      const e = await getEmpire(userId)
+      const a = e?.assets.find(x => x.id === String(b.assetId || ''))
+      if (!e || !a) return NextResponse.json({ error: 'دارایی یافت نشد' }, { status: 404 })
+      const it = await getItemById(a.listingId).catch(() => null)
+      const landArea = a.landAreaOverride || (it ? (parseFaNum((it.meta || {})['متراژ']) || 0) : 0)
+      const d = designPlanOf(landArea, Math.round(Number(b.floors) || 0), Math.round(Number(b.unitsPerFloor) || 0), { ...dc, buildFactor: config().empire.build.buildFactor })
+      if (!d.ok) return NextResponse.json({ error: d.reason }, { status: 400 })
+      const fee = Math.max(1, Math.round(d.builtArea * config().empire.build.costPerM * Math.max(0, dc.architectFeePct) / 100))
+      const r = await commissionDesign(userId, a.id, { floors: Math.round(Number(b.floors)), unitsPerFloor: Math.round(Number(b.unitsPerFloor)), legalFloors: d.legalFloors, footprint: d.footprint, unitArea: d.unitArea, illegalFloors: d.illegalFloors, fee, days: dc.designDays })
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, fee, illegalFloors: d.illegalFloors, ...(await stateOf(userId, r.empire!)) })
+    }
+    // ⚡ جلسهٔ فشرده با معمار — کوین انتظارِ طراحی را کوتاه می‌کند (همان نرخِ پیگیریِ پروانه)
+    case 'designBoost': {
+      const sp = config().empire.speed
+      if (!sp.enabled) return NextResponse.json({ error: 'تسریع فعلاً فعال نیست' }, { status: 403 })
+      const r = await boostDesign(userId, String(b.assetId || ''), Math.max(1, Math.min(30, Number(b.days) || 1)), sp.permitCoinsPerDay)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, cut: r.cut, ...(await stateOf(userId, r.empire!)) })
+    }
+    // ⚖️ کمیسیونِ ماده۱۰۰: جریمه → شهرداری (خزانه) / وکیل (یک‌بار، قطعی از هش) / تخریبِ طبقاتِ مازاد
+    case 'm100': {
+      const choice = String(b.choice || '')
+      if (!['pay', 'lawyer', 'demolish'].includes(choice)) return NextResponse.json({ error: 'انتخابِ نامعتبر' }, { status: 400 })
+      const e = await getEmpire(userId)
+      const a = e?.assets.find(x => x.id === String(b.assetId || ''))
+      if (!e || !a?.m100) return NextResponse.json({ error: 'پروندهٔ ماده۱۰۰ باز نیست' }, { status: 404 })
+      const pc = config().empire.pros
+      const r = await resolveM100(userId, a.id, choice as any, {
+        lawyerFee: Math.max(1, Math.round(a.m100.fine * Math.max(0, pc.lawyerFeePct) / 100)),
+        lawyerCutPct: pc.lawyerCutPct, lawyerWinChancePct: pc.lawyerWinChancePct,
+        demolishCost: Math.max(1, Math.round(a.m100.illegalArea * config().empire.build.costPerM * 0.1)),   // تخریب ~۱۰٪ هزینهٔ ساختِ همان متراژ
+      })
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, lawyerWon: r.lawyerWon, ...(await stateOf(userId, r.empire!)) })
+    }
+    // 🛠 بازسازیِ واقعی: گزینه‌های knob — هزینهٔ الان (به بهای تمام‌شده)، ارزش‌افزودهٔ شفاف
+    case 'renovate': {
+      const rc = config().empire.renovation
+      if (!rc.enabled) return NextResponse.json({ error: 'بازسازی فعلاً فعال نیست' }, { status: 403 })
+      const opt = rc.options[String(b.option || '')]
+      if (!opt) return NextResponse.json({ error: 'گزینهٔ نامعتبر' }, { status: 400 })
+      const e = await getEmpire(userId)
+      const a = e?.assets.find(x => x.id === String(b.assetId || ''))
+      if (!e || !a) return NextResponse.json({ error: 'دارایی یافت نشد' }, { status: 404 })
+      const it = await getItemById(a.listingId).catch(() => null)
+      const cur = ((it ? priceOf(it) : 0) || Math.round(a.buyPrice / (a.unitsOwned || 1))) * (a.unitsOwned || 1)
+      const cost = Math.max(1, Math.round(cur * Math.max(0, opt.costPct) / 100))
+      const r = await renovateAsset(userId, a.id, String(b.option), { cost, valuePct: opt.valuePct, maxBoostPct: rc.maxBoostPct })
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, cost, ...(await stateOf(userId, r.empire!)) })
+    }
+
     // درخواستِ پروانه (جلد ۶۳): مهلت/عوارض/اعتراض قطعی از هش؛ عوارض → خزانه.
     case 'permit': {
       const e = await getEmpire(userId)
@@ -967,7 +1089,8 @@ export async function POST(req: NextRequest) {
       // تخریب‌شده (فاز ۲۵): قیمتِ آگهیِ واحدِ قدیمی دیگر ارزشِ زمین نیست — بهای تمام‌شدهٔ کلِ ساختمان مبناست.
       const landValue = a.demolishedAt ? a.buyPrice : (it ? priceOf(it) : a.buyPrice)
       const terms = permitTermsOf(userId, a.id, config().empire.company.permit, teamSkillOf(e), landValue > 0 ? landValue : a.buyPrice)
-      const r = await requestPermit(userId, a.id, terms)
+      // فاز ۲۹: پروانه روی نقشهٔ معمار صادر می‌شود — بدونِ طراحیِ آماده، درخواست رد می‌شود.
+      const r = await requestPermit(userId, a.id, terms, { requireDesign: config().empire.design.enabled })
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       return NextResponse.json({ ok: true, terms, ...(await stateOf(userId, r.empire!)) })
     }
@@ -1052,12 +1175,14 @@ export async function POST(req: NextRequest) {
       // زمینِ حاصل از تخریب (فاز ۲۵): مساحتِ برآوردیِ خودش، نه متراژِ واحدِ آگهیِ قدیمی
       const landArea = a.landAreaOverride || (it ? (parseFaNum((it.meta || {})['متراژ']) || 0) : 0)
       if (!(landArea > 0)) return NextResponse.json({ error: 'متراژِ این زمین در آگهیِ واقعی ثبت نشده — ساختِ آن قابل‌برآورد نیست' }, { status: 400 })
+      // فاز ۲۹: اگر نقشهٔ معمار هست، ابعاد از انتخابِ خودِ بازیکن می‌آید (طبقات × واحد در طبقه)
+      const mkPlan = (sk: string, qk: string) => a.design ? designBuildPlanOf(sk, qk, landArea, a.design, cfg) : buildPlanOf(sk, qk, landArea, cfg)
       const options: any[] = []
       for (const [sk, s] of Object.entries(BUILD_STRUCTURES)) for (const [qk, q] of Object.entries(BUILD_QUALITIES)) {
-        const p = buildPlanOf(sk, qk, landArea, cfg)
-        if (p) options.push({ structure: sk, structureLabel: s.label, quality: qk, qualityLabel: q.label, days: p.days, costTotal: p.costTotal, qualityFactor: p.qualityFactor })
+        const p = mkPlan(sk, qk)
+        if (p) options.push({ structure: sk, structureLabel: s.label, quality: qk, qualityLabel: q.label, days: p.days, costTotal: p.costTotal, qualityFactor: p.qualityFactor, contractor: proPersonaOf('contractor', a.id + sk) })
       }
-      const base = buildPlanOf('concrete', 'standard', landArea, cfg)!
+      const base = mkPlan('concrete', 'standard')!
       // هدفِ پروژه (GDD فصل ۴ بخش ۸): تصمیمِ استراتژیکِ سرِ کلنگ — اثرِ هر گزینه شفاف اعلام می‌شود
       const goals = Object.entries(PROJECT_GOALS).map(([k, g]) => ({ key: k, ...g, pricePct: goalPricePct(k, cfg), presaleBonusPp: k === 'fast' ? cfg.goalFastPresaleBonusPp : 0 }))
       return NextResponse.json({ ok: true, landArea, builtArea: base.builtArea, unitArea: base.unitArea, totalUnits: base.totalUnits, options, goals })
@@ -1074,7 +1199,9 @@ export async function POST(req: NextRequest) {
       if (active >= maxP) return NextResponse.json({ error: `ظرفیتِ شرکتت ${maxP.toLocaleString('fa-IR')} پروژهٔ همزمان است — پروژه‌ای را تحویل بده یا با سطحِ بالاتر ظرفیت بگیر` }, { status: 400 })
       const it = await getItemById(a.listingId).catch(() => null)
       const landArea = a.landAreaOverride || (it ? (parseFaNum((it.meta || {})['متراژ']) || 0) : 0)
-      const plan = buildPlanOf(String(b.structure || ''), String(b.quality || ''), landArea, cfg)
+      const plan = a.design
+        ? designBuildPlanOf(String(b.structure || ''), String(b.quality || ''), landArea, a.design, cfg)
+        : buildPlanOf(String(b.structure || ''), String(b.quality || ''), landArea, cfg)
       if (!plan) return NextResponse.json({ error: 'سازه/کیفیتِ نامعتبر یا متراژِ نامشخص' }, { status: 400 })
       const r = await startBuild(userId, a.id, plan, { structure: String(b.structure), quality: String(b.quality), goal: String(b.goal || '') })
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })

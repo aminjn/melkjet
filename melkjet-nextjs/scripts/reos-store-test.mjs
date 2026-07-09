@@ -1372,6 +1372,105 @@ async function main() {
     const cp2 = await creditCoinPurchase(uc12, { coins: 50, label: 'بستهٔ تست', authority: 'A-TEST-1' })
     ok('رفرشِ callback دوباره شارژ نمی‌کند (کلیدِ authority)', cp2.ok === false && (await getEmpire(uc12)).coins === coins0 + 50)
     ok('authorityِ جدید شارژِ جدید است', (await creditCoinPurchase(uc12, { coins: 10, label: 'x', authority: 'A-TEST-2' })).ok === true && (await getEmpire(uc12)).coins === coins0 + 60)
+
+    // ── فاز ۲۹: نقش‌های حرفه‌ای + طراحی/ماده۱۰۰ + بازسازی ──
+    console.log('\n── Empire · فاز ۲۹ (معمار → پروانه → تخلف → ماده۱۰۰ + کارمزدِ نقش‌ها) ──')
+    const { commissionDesign, designBuildPlanOf, resolveM100, renovateAsset, buyAsset: buyB, sellAsset: sellB, chooseAssetAction: actB, takeLoan: loanB, repayLoan: repayB } = await import('../app/lib/empire-store.ts')
+    {
+      const eG = await getEmpire(uc12); eG.capital = 50_000_000_000; delete eG.loan
+      await pool.query(`UPDATE reos_empire SET data=$2 WHERE user_id=$1`, [uc12, JSON.stringify(eG)])
+    }
+    await buyA(uc12, { id: 'LND29', title: 'زمینِ ۲۹', hood: 'ولنجک', price: 1_000_000_000, ptype: 'زمین' })
+    const land29 = (await getEmpire(uc12)).assets.find(x => x.listingId === 'LND29').id
+    await setLP(uc12, land29, 'build')
+    // پروانه با requireDesign بدونِ نقشه رد می‌شود
+    const pr0 = await requestPermit(uc12, land29, { days: 0, fee: 1, objection: null }, { requireDesign: true })
+    ok('پروانه بدونِ نقشهٔ معمار رد می‌شود', pr0.ok === false && /معمار/.test(pr0.reason || ''))
+    // قراردادِ معمار: ۵ طبقه × ۲ واحد روی زمینِ ۲۰۰م (اشغال ۶۰٪ → مجاز ۳) = ۲ طبقهٔ تخلف
+    const svc0 = (await getEmpire(uc12)).servicesPaid || 0
+    const cd = await commissionDesign(uc12, land29, { floors: 5, unitsPerFloor: 2, legalFloors: 3, footprint: 120, unitArea: 60, illegalFloors: 2, fee: 90_000_000, days: 0 })
+    ok('قراردادِ معمار: حق‌الزحمه → servicesPaid + نقشه ثبت شد', cd.ok && (cd.empire.servicesPaid || 0) === svc0 + 90_000_000
+      && cd.empire.assets.find(x => x.id === land29).design.illegalFloors === 2)
+    ok('قراردادِ دوباره رد می‌شود', (await commissionDesign(uc12, land29, { floors: 3, unitsPerFloor: 2, legalFloors: 3, footprint: 120, unitArea: 60, illegalFloors: 0, fee: 1, days: 0 })).ok === false)
+    ok('با نقشهٔ آماده، پروانه پذیرفته می‌شود', (await requestPermit(uc12, land29, { days: 0, fee: 1, objection: null }, { requireDesign: true })).ok === true)
+    {
+      const eG = await getEmpire(uc12)
+      const aa = eG.assets.find(x => x.id === land29); aa.permit.status = 'granted'
+      await pool.query(`UPDATE reos_empire SET data=$2 WHERE user_id=$1`, [uc12, JSON.stringify(eG)])
+    }
+    // کلنگ با نقشهٔ خودِ بازیکن: ۱۰ واحد که ۴تایش غیرمجاز است
+    const dsn = (await getEmpire(uc12)).assets.find(x => x.id === land29).design
+    const plan29 = designBuildPlanOf('concrete', 'standard', 200, dsn, bcfg)
+    ok('نقشهٔ ساخت از طراحی: ۶۰۰ مترِ بنا، ۱۰ واحدِ ۶۰متری', plan29 && plan29.builtArea === 600 && plan29.totalUnits === 10 && plan29.unitArea === 60)
+    const sb29 = await startBuild(uc12, land29, plan29, { structure: 'concrete', quality: 'standard' })
+    const c29 = sb29.empire.assets.find(x => x.id === land29).construction
+    ok('کلنگ: ۴ واحدِ مازاد علامت خورد', sb29.ok && c29.illegalUnits === 4)
+    // پیش‌فروش فقط روی واحدهای قانونی (۶ تا): سقفِ ۵۰٪ = ۳
+    {
+      const eG = await getEmpire(uc12)
+      const cc = eG.assets.find(x => x.id === land29).construction; cc.paidDays = 5
+      await pool.query(`UPDATE reos_empire SET data=$2 WHERE user_id=$1`, [uc12, JSON.stringify(eG)])
+    }
+    ok('پیش‌فروش روی واحدهای قانونی سقف می‌خورد', (await presellUnits(uc12, land29, 4, 1_000_000_000, 0, 50)).ok === false
+      && (await presellUnits(uc12, land29, 3, 1_000_000_000, 0, 50)).ok === true)
+    // تکمیل → کمیسیونِ ماده۱۰۰
+    {
+      const eG = await getEmpire(uc12)
+      const cc = eG.assets.find(x => x.id === land29).construction
+      cc.paidDays = cc.days; cc.lastPayAt = Date.now() - 2 * 864e5
+      await pool.query(`UPDATE reos_empire SET data=$2 WHERE user_id=$1`, [uc12, JSON.stringify(eG)])
+    }
+    await progressBuild(uc12)
+    const { config: liveCfg } = await import('../app/lib/reos/reos-config.ts')
+    const a29 = (await getEmpire(uc12)).assets.find(x => x.id === land29)
+    ok('تکمیلِ ساختمانِ متخلف → پروندهٔ ماده۱۰۰ (جریمه = مترِ مازاد × هزینه × ضریب)', a29.m100?.status === 'pending'
+      && a29.m100.illegalArea === 240 && a29.m100.illegalUnits === 4
+      && a29.m100.fine === Math.round(240 * liveCfg().empire.build.costPerM * liveCfg().empire.m100.finePerM2Mult))
+    ok('تا حلِ ماده۱۰۰، واحدهای مازاد فروخته نمی‌شوند', (await sellUnits(uc12, land29, 7, 1_000_000_000, 1)).ok === false)
+    // وکیل با شانسِ ۱۰۰٪ → جریمه کم می‌شود؛ بارِ دوم رد
+    const fine0 = a29.m100.fine
+    const lw = await resolveM100(uc12, land29, 'lawyer', { lawyerFee: 10_000_000, lawyerCutPct: 40, lawyerWinChancePct: 100, demolishCost: 1 })
+    ok('وکیل (شانس ۱۰۰٪): جریمه ۴۰٪ کم شد + حق‌الوکاله → servicesPaid', lw.ok && lw.lawyerWon === true
+      && lw.empire.assets.find(x => x.id === land29).m100.fine === Math.max(1, Math.round(fine0 * 0.6)))
+    ok('وکیلِ دوباره رد می‌شود', (await resolveM100(uc12, land29, 'lawyer', { lawyerFee: 1, lawyerCutPct: 40, lawyerWinChancePct: 100, demolishCost: 1 })).ok === false)
+    // پرداختِ جریمه → خزانه + آزادشدنِ واحدها
+    const eP0 = await getEmpire(uc12)
+    const fineNow = eP0.assets.find(x => x.id === land29).m100.fine
+    const pay = await resolveM100(uc12, land29, 'pay', { lawyerFee: 1, lawyerCutPct: 0, lawyerWinChancePct: 0, demolishCost: 1 })
+    ok('جریمه → خزانه (شهرداری) و واحدهای مازاد قانونی شدند', pay.ok
+      && pay.empire.taxPaid === (eP0.taxPaid || 0) + fineNow && pay.empire.assets.find(x => x.id === land29).construction.illegalUnits === 0)
+    ok('حالا همهٔ ۷ واحدِ مانده قابلِ‌فروش‌اند', (await sellUnits(uc12, land29, 7, 1_000_000_000, 1)).ok === true)
+    // بازسازی: هزینه → بهای تمام‌شده + ارزش‌افزوده با سقف
+    await buyB(uc12, { id: 'APT29', title: 'آپارتمانِ بازسازی', hood: 'ولنجک', price: 2_000_000_000, ptype: 'آپارتمان' }, { notaryFeePct: 1 })
+    const eN = await getEmpire(uc12)
+    ok('دفترخانه: حق‌الثبتِ ۱٪ → servicesPaid + تایم‌لاین', eN.timeline.some(t => t.icon === '📜'))
+    const apt29 = eN.assets.find(x => x.listingId === 'APT29').id
+    const rnv = await renovateAsset(uc12, apt29, 'kitchen', { cost: 100_000_000, valuePct: 5, maxBoostPct: 25 })
+    const aR = rnv.empire.assets.find(x => x.id === apt29)
+    ok('بازسازی: هزینه به بهای تمام‌شده + ۵٪ ارزش‌افزوده', rnv.ok && aR.renovBoostPct === 5 && aR.buyPrice === 2_000_000_000 + 100_000_000)
+    ok('گزینهٔ تکراری رد می‌شود', (await renovateAsset(uc12, apt29, 'kitchen', { cost: 1, valuePct: 5, maxBoostPct: 25 })).ok === false)
+    const nwR = nwOf25(rnv.empire, { APT29: 2_000_000_000 })
+    const nwR0 = nwOf25({ ...rnv.empire, assets: rnv.empire.assets.filter(x => x.id !== apt29) }, { APT29: 2_000_000_000 })
+    ok('netWorth: ارزش × (۱ + ارزش‌افزودهٔ بازسازی)', nwR.assetsValue - nwR0.assetsValue === Math.round(2_000_000_000 * 1.05))
+    // اجاره از طریقِ مشاور: کمیسیون → servicesPaid؛ فروش با کمیسیونِ مشاور
+    const svcA = (await getEmpire(uc12)).servicesPaid || 0
+    const rentA = await actB(uc12, apt29, 'rent', { fee: 25_000_000, feeLabel: 'کمیسیونِ اجاره' })
+    ok('اجاره با مشاور: کمیسیون کسر و ثبت شد', rentA.ok && (rentA.empire.servicesPaid || 0) === svcA + 25_000_000
+      && rentA.empire.timeline.some(t => /مستأجر پیدا کرد/.test(t.title)))
+    const eS29 = await getEmpire(uc12)
+    const capS = eS29.capital
+    const sA = await sellB(uc12, apt29, 2_000_000_000, { commissionPct: 1 })
+    // فروش: قیمت با بازسازی ×۱٫۰۵؛ مالیات (٪ config) + کمیسیونِ ۱٪ مشاور کسر
+    const gross = Math.round(2_000_000_000 * 1.05)
+    const taxS = Math.round(gross * liveCfg().empire.transferTaxPct / 100)
+    ok('فروش با مشاور: کمیسیون از عایدی کسر شد', sA.ok && sA.salePrice === gross
+      && sA.empire.capital === capS + gross - taxS - Math.round(gross * 0.01))
+    // وام با کارشناسِ رسمی: هزینه از مبلغ کسر می‌شود
+    const eLoan29 = await getEmpire(uc12)
+    const ln29 = await loanB(uc12, 1_000_000_000, 18, 90, { appraisalFee: 2_000_000 })
+    ok('وام: کارشناسی از مبلغ کسر شد + servicesPaid', ln29.ok && ln29.empire.capital === eLoan29.capital + 1_000_000_000 - 2_000_000
+      && (ln29.empire.servicesPaid || 0) === (eLoan29.servicesPaid || 0) + 2_000_000)
+    await repayB(uc12, 2_000_000_000).catch(() => {})
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)
