@@ -3,6 +3,11 @@ import { listItems, SourceType } from '@/app/lib/scraper-store'
 
 // Public read endpoint — feeds search, directory, store, home.
 // Returns all non-rejected, non-duplicate scraped items.
+// کشِ کوتاهِ در-حافظه (هر نمونهٔ pm2 مالِ خودش): این روت پرترافیک‌ترین مسیرِ عمومی است و از فیکسِ
+// جستجو (slim=1) تا ۱۰۰۰ آیتم map می‌کند — بدونِ کش، هر بازدیدِ /search کلِ این کار را تکرار می‌کرد.
+const RESP_CACHE = new Map<string, { at: number; body: string }>()
+const RESP_TTL = 20_000
+
 export async function GET(req: NextRequest) {
   const sp = new URL(req.url).searchParams
   const type = sp.get('type') as SourceType | null
@@ -12,6 +17,9 @@ export async function GET(req: NextRequest) {
   // آگهی‌ها را ببیند نه فقط ۸۰ تای آخر (باگِ «در پنل هست ولی در جستجو نیست»).
   const slim = sp.get('slim') === '1'
   const limit = Math.min(parseInt(sp.get('limit') || '60', 10) || 60, slim ? 1000 : 200)
+  const cacheKey = `${type || ''}|${category || ''}|${owner}|${slim ? 1 : 0}|${limit}`
+  const hit = RESP_CACHE.get(cacheKey)
+  if (hit && Date.now() - hit.at < RESP_TTL) return new NextResponse(hit.body, { headers: { 'Content-Type': 'application/json' } })
   const valid = type && ['listing', 'directory', 'product', 'article', 'price'].includes(type)
   let items = await listItems(valid ? type : undefined, { category, publicOnly: true })
   // پیش‌نویس‌های CMS نباید در فهرست عمومی بیایند
@@ -39,5 +47,8 @@ export async function GET(req: NextRequest) {
       hasPhone: !!(phone || (it as any).meta?.__ownerPhone),
     }
   })
-  return NextResponse.json({ items: safe, total: items.length })
+  const body = JSON.stringify({ items: safe, total: items.length })
+  RESP_CACHE.set(cacheKey, { at: Date.now(), body })
+  if (RESP_CACHE.size > 200) { const oldest = [...RESP_CACHE.entries()].sort((a, b) => a[1].at - b[1].at)[0]; if (oldest) RESP_CACHE.delete(oldest[0]) }
+  return new NextResponse(body, { headers: { 'Content-Type': 'application/json' } })
 }

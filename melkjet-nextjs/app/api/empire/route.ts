@@ -173,18 +173,31 @@ function monthlyRentOf(it: Item): number {
 }
 const median = (xs: number[]) => { if (!xs.length) return 0; const s = [...xs].sort((a, b) => a - b); return s[Math.floor(s.length / 2)] }
 
-// میانهٔ اجارهٔ ماهانهٔ واقعیِ محله (برای کمیسیونِ مشاورِ اجاره — فاز ۲۹)؛ نبود → میانهٔ کلِ شهر.
-async function hoodMonthlyRentOf(hood: string): Promise<number> {
+// جدولِ میانهٔ اجاره‌های واقعی — با کشِ ۱۰ دقیقه‌ای در حافظه: هر بازدیدِ داشبورد/تصمیمِ اجاره
+// نباید دوباره صدها آگهی را اسکن کند (اجاره‌های بازار در این بازه عوض نمی‌شوند).
+let RENT_CACHE: { at: number; byHood: Map<string, number>; global: number } | null = null
+async function rentTable(): Promise<{ byHood: Map<string, number>; global: number }> {
+  if (RENT_CACHE && Date.now() - RENT_CACHE.at < 600_000) return RENT_CACHE
   const items = await candidateListings(500).catch(() => [] as Item[])
-  const all: number[] = [], hr: number[] = []
+  const byHoodRaw = new Map<string, number[]>()
+  const all: number[] = []
   for (const it of items) {
     if (isSale(it)) continue
     const r = monthlyRentOf(it)
     if (!(r > 0)) continue
     all.push(r)
-    if (hoodOf(it.location) === hood) hr.push(r)
+    const h = hoodOf(it.location)
+    if (h) { if (!byHoodRaw.has(h)) byHoodRaw.set(h, []); byHoodRaw.get(h)!.push(r) }
   }
-  return median(hr) || median(all)
+  const byHood = new Map<string, number>()
+  for (const [h, xs] of byHoodRaw) byHood.set(h, median(xs))
+  RENT_CACHE = { at: Date.now(), byHood, global: median(all) }
+  return RENT_CACHE
+}
+// میانهٔ اجارهٔ ماهانهٔ واقعیِ محله (برای کمیسیونِ مشاورِ اجاره — فاز ۲۹)؛ نبود → میانهٔ کلِ شهر.
+async function hoodMonthlyRentOf(hood: string): Promise<number> {
+  const t = await rentTable()
+  return t.byHood.get(hood) || t.global
 }
 // برچسب‌های بازسازی (فاز ۲۹) — گزینه‌ها/اعدادش از config می‌آید.
 const RENOV_LABELS: Record<string, { label: string; icon: string }> = {
@@ -232,21 +245,12 @@ async function accrueRentFor(userId: string, e: EmpireData, now = Date.now()): P
   // «نگه‌دار و اجاره بده» (GDD فصل ۴): واحدهای اجاره‌رفتهٔ پروژه‌های تکمیل‌شده هم از میانهٔ واقعیِ محله درآمد دارند
   const bldRenters = e.assets.filter(a => a.construction?.done && (a.construction.rented || 0) > 0 && !(a.action === 'rent' || a.business))
   if (!earners.length && !bldRenters.length) return e
-  const items = await candidateListings(500).catch(() => [] as Item[])
-  const rentByHood = new Map<string, number[]>()
-  const allRents: number[] = []
-  for (const it of items) {
-    if (isSale(it)) continue
-    const r = monthlyRentOf(it)
-    if (!(r > 0)) continue
-    allRents.push(r)
-    const h = hoodOf(it.location)
-    if (h) { if (!rentByHood.has(h)) rentByHood.set(h, []); rentByHood.get(h)!.push(r) }
-  }
-  const globalMed = median(allRents)
+  // جدولِ اجاره‌های واقعی از کشِ ۱۰دقیقه‌ای (فاز ۳۰ کارایی) — قبلاً هر بازدید ۵۰۰ آگهی اسکن می‌شد.
+  const rt = await rentTable()
+  const globalMed = rt.global
   const accruals: Array<{ assetId: string; amount: number }> = []
   for (const a of earners) {
-    const monthly0 = median(rentByHood.get(a.hood) || []) || globalMed
+    const monthly0 = rt.byHood.get(a.hood) || globalMed
     if (!(monthly0 > 0)) continue
     const monthly = a.business ? Math.round(monthly0 * ((a.businessProb || 50) / 100) * 2) : monthly0   // کسب‌وکار: ~۲ برابرِ اجارهٔ مسکونی × احتمالِ موفقیت
     const since = a.lastAccrualAt || a.actionAt || a.boughtAt
@@ -256,7 +260,7 @@ async function accrueRentFor(userId: string, e: EmpireData, now = Date.now()): P
   }
   for (const a of bldRenters) {
     const c = a.construction!
-    const monthly0 = median(rentByHood.get(a.hood) || []) || globalMed
+    const monthly0 = rt.byHood.get(a.hood) || globalMed
     if (!(monthly0 > 0)) continue   // بدونِ نمونهٔ واقعیِ اجاره → هیچ واریزی (صادقانه)
     const monthly = Math.round(monthly0 * (c.rented || 0) * c.qualityFactor * amenityValueFactorOf(c, config().empire.build.amenities))
     const since = a.lastAccrualAt || c.rentStartAt || c.doneAt || a.boughtAt
