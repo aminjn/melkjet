@@ -144,6 +144,21 @@ async function livePrices(e: EmpireData): Promise<Record<string, number>> {
   return out
 }
 
+// قیمت + مختصاتِ واقعیِ دارایی‌ها در یک پاس — برای نقشهٔ شهر (Visual Pass، فصل ۹ «City Screen»).
+async function liveInfoOf(e: EmpireData): Promise<{ prices: Record<string, number>; coords: Record<string, { lat: number; lng: number }> }> {
+  const prices: Record<string, number> = {}
+  const coords: Record<string, { lat: number; lng: number }> = {}
+  for (const a of e.assets) {
+    const it = await getItemById(a.listingId).catch(() => null)
+    if (!it) continue
+    const p = priceOf(it)
+    if (p > 0) prices[a.listingId] = p
+    const lat = Number(it.meta?.['__lat']), lng = Number(it.meta?.['__lng'])
+    if (lat && lng) coords[a.listingId] = { lat, lng }
+  }
+  return { prices, coords }
+}
+
 // اجارهٔ ماهانهٔ یک آگهیِ اجاره‌ای («ودیعه X · اجاره Y» یا متنِ مشابه) — فقط بخشِ اجاره.
 function monthlyRentOf(it: Item): number {
   const m = (it.price || '').match(/اجاره[^\d۰-۹]*([\d,٬۰-۹]+)/)
@@ -307,11 +322,13 @@ async function stateOf(userId: string, e00: EmpireData) {
   // پاداشِ Level Up (سند ۱۶): سطحِ جدید از XPِ واقعی → کوین + نقطهٔ تایم‌لاین (هر سطح یک‌بار)
   const lvr = await applyLevelUpReward(userId, config().empire.levelUpCoins).catch(() => null)
   const e = lvr?.ok && lvr.empire ? lvr.empire : e3
-  const [prices, missions, total] = await Promise.all([livePrices(e), missionsOf(userId, e), empireCount()])
+  const [info, missions, total] = await Promise.all([liveInfoOf(e), missionsOf(userId, e), empireCount()])
+  const prices = info.prices
   const nw = netWorthOf(e, prices, mc || undefined)
   const assets = e.assets.map(a => ({
     ...a,
     current: prices[a.listingId] || a.buyPrice,
+    lat: info.coords[a.listingId]?.lat, lng: info.coords[a.listingId]?.lng,   // برای پینِ نقشهٔ شهر
     growthPct: a.buyPrice ? Math.round(((prices[a.listingId] || a.buyPrice) - a.buyPrice) / a.buyPrice * 1000) / 10 : 0,
     // زمینِ بدونِ برنامه → سه گزینهٔ سند (§6.7) با برآوردِ شفاف
     plans: a.kind === 'land' && !a.landPlan ? landProjection(prices[a.listingId] || a.buyPrice) : undefined,
@@ -1057,7 +1074,7 @@ export async function POST(req: NextRequest) {
         const it = byId.get(id)!
         const area = parseFaNum((it.meta || {})['متراژ']) || 0
         const price = priceOf(it)
-        return { id, title: it.title, hood: hoodOf(it.location), price, area, perM: area > 0 ? Math.round(price / area) : 0, url: listingHref(id, it.title, hoodOf(it.location)) }
+        return { id, title: it.title, hood: hoodOf(it.location), price, area, perM: area > 0 ? Math.round(price / area) : 0, lat: Number(it.meta?.['__lat']) || undefined, lng: Number(it.meta?.['__lng']) || undefined, url: listingHref(id, it.title, hoodOf(it.location)) }
       })
       return NextResponse.json({ ok: true, deals, expiresAt })
     }

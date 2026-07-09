@@ -4,6 +4,7 @@
 // ۴ فرصتِ واقعی (یکی برجسته) → متن‌های خرید + امضا → «تو مالک هستی» + پاداش → تصمیمِ معنادار → داشبورد.
 // قانونِ برندینگِ سند: هرگز «بازی» گفته نمی‌شود — «مسیرِ رشد / امپراتوری / سفرِ مالی».
 import { useCallback, useEffect, useRef, useState } from 'react'
+import NeshanMap from '@/app/components/NeshanMap'
 import Link from 'next/link'
 
 const fa = (n: number) => Math.round(n).toLocaleString('fa-IR')
@@ -105,6 +106,7 @@ export default function EmpirePage() {
   const [chestReward, setChestReward] = useState<any>(null)
   const [boards, setBoards] = useState<any>(null)
   const [peek, setPeek] = useState<any>(null)                    // پروفایلِ عمومیِ یک امپراتوریِ دیگر (سند ۱۷)
+  const [gtab, setGtab] = useState<'city' | 'portfolio' | 'missions' | 'market' | 'ranks'>('city')   // منوی بازی (Visual Pass)
   const [boardTab, setBoardTab] = useState('score')
   const [loanVal, setLoanVal] = useState('')
   const [repayVal, setRepayVal] = useState('')
@@ -486,8 +488,8 @@ export default function EmpirePage() {
   const lv = st.level || { titleFa: 'شهروند', title: 'Citizen', progress: 0, next: null }
   const ms = st.missions
   return wrap(<>
-    {/* سربرگ */}
-    <div style={{ ...card, display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center' }}>
+    {/* سربرگ = HUD چسبان (فصل ۹: همیشه در دسترس، کمتر از ۲۰٪ صفحه) */}
+    <div style={{ ...card, position: 'sticky' as const, top: 8, zIndex: 40, display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center', boxShadow: '0 8px 24px -10px rgba(0,0,0,.45)' }}>
       <div style={{ fontSize: 30 }}>{e.persona || '🏛'}</div>
       <div style={{ flex: 1, minWidth: 180 }}>
         <div style={{ fontWeight: 800, fontSize: 16 }}>{e.name} <span style={{ fontSize: 11, color: 'var(--muted)' }}>#{fa(e.no)}</span>{e.title && <span style={{ fontSize: 10.5, marginRight: 8, padding: '2px 8px', borderRadius: 10, border: '1px solid var(--gold)', color: 'var(--gold)' }}>👑 {e.title}</span>}</div>
@@ -507,6 +509,7 @@ export default function EmpirePage() {
       </div>
     </div>
 
+    {gtab === 'city' && <>
     {/* 🔥 فرصت‌های طلاییِ امروز (سند ۱۴ — Hook): آگهی‌های واقعی، شمارشِ معکوسِ واقعی؛ فردا فهرستِ دیگری می‌آید.
         کارت قضاوت نمی‌کند — بعضی واقعاً زیرِ قیمتِ محله‌اند، بعضی نه؛ فکرکردن (یا ژتونِ تحلیل) کارِ بازیکن است. */}
     {st.dealsEnabled && deals && (deals.deals || []).length > 0 && (() => {
@@ -638,6 +641,33 @@ export default function EmpirePage() {
       )
     })()}
 
+    {/* 🗺 نقشهٔ شهر (فصل ۹ «City Screen» — Visual Pass): دارایی‌های تو + فرصت‌های طلاییِ امروز روی نقشهٔ واقعی */}
+    {(() => {
+      const pts: { id: string; lat: number; lng: number; title?: string; price?: string }[] = []
+      for (const a of (e.assets || [])) if (a.lat && a.lng) pts.push({ id: 'a_' + a.id, lat: a.lat, lng: a.lng, title: `🏛 ${a.title?.slice(0, 40)}`, price: faB(a.current || a.buyPrice) })
+      for (const dl of (deals?.deals || [])) if (dl.lat && dl.lng) pts.push({ id: 'd_' + dl.id, lat: dl.lat, lng: dl.lng, title: `🔥 ${dl.title?.slice(0, 40)}`, price: faB(dl.price) })
+      if (!pts.length) return null
+      return (
+        <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px' }}>
+            <b style={{ fontSize: 13.5 }}>🗺 نقشهٔ شهرِ تو</b>
+            <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>🏛 دارایی‌های تو · 🔥 فرصت‌های امروز — روی هر پین بزن</span>
+          </div>
+          <div style={{ height: 320 }}>
+            <NeshanMap theme="night" height={320} zoom={12}
+              center={{ lat: pts[0].lat, lng: pts[0].lng }}
+              points={pts}
+              onSelect={(id: string) => {
+                if (id.startsWith('d_')) { const dl = (deals?.deals || []).find((x: any) => 'd_' + x.id === id); if (dl?.url) window.open(dl.url, '_blank') }
+                else { const a = (e.assets || []).find((x: any) => 'a_' + x.id === id); if (a?.url) window.open(a.url, '_blank') }
+              }} />
+          </div>
+        </div>
+      )
+    })()}
+    </>}
+
+    {gtab === 'portfolio' && <>
     {/* ارزشِ خالص (زنده از بازارِ واقعی) — اعداد با شمارشِ متحرک (جلد ۵۶) */}
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10 }}>
       <div style={card}><div style={{ fontSize: 11, color: 'var(--muted)' }}>ارزشِ خالص</div><div style={{ fontSize: 17, fontWeight: 800, color: 'var(--gold)' }}><CountUp value={st.netWorth || 0} format={faB} /> تومان</div></div>
@@ -702,9 +732,15 @@ export default function EmpirePage() {
       </div>
     ) : null)}
 
+    </>}
+
+    {gtab === 'city' && <>
     {st.suspense && <div style={{ ...card, borderColor: 'var(--gold)', fontSize: 13 }}>⏳ {st.suspense.text}</div>}
     {st.othersBuilding > 0 && <div style={{ fontSize: 12, color: 'var(--muted)' }}>🌍 {fa(st.othersBuilding)} نفرِ دیگر هم همین حالا در حالِ ساختِ امپراتوری‌شان هستند.</div>}
 
+    </>}
+
+    {gtab === 'portfolio' && <>
     {/* دارایی‌ها = Empire Map (فهرست) */}
     <div style={card}>
       <div style={{ fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -914,6 +950,9 @@ export default function EmpirePage() {
       </div>
     </div>}
 
+    </>}
+
+    {gtab === 'missions' && <>
     {/* 🔥 پاداشِ نقاطِ عطفِ استریک (سند ۱۸ بخش ۱): از ورودِ پیاپیِ واقعی — روزهای ۷/۱۴/۲۱/۳۰ */}
     {(st.streakBonuses || []).some((sb: any) => sb.done && !sb.claimed) && (
       <div style={{ ...card, borderColor: 'var(--gold)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -1030,6 +1069,9 @@ export default function EmpirePage() {
       </div>
     </div>}
 
+    </>}
+
+    {gtab === 'market' && <>
     {/* بانک (جلد ۱۶): امتیازِ اعتباری + وام */}
     {st.bank && <div style={card}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
@@ -1063,6 +1105,9 @@ export default function EmpirePage() {
       )}
     </div>}
 
+    </>}
+
+    {gtab === 'portfolio' && <>
     {/* گزارشِ مالیِ شرکت (جلد ۷۴ Economy Engine — Financial Reports): همه از شمارنده‌های واقعی */}
     <details style={card}>
       <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>📒 گزارشِ مالیِ شرکت</summary>
@@ -1094,6 +1139,9 @@ export default function EmpirePage() {
       })()}
     </details>
 
+    </>}
+
+    {gtab === 'market' && <>
     {/* روزنامهٔ ملک‌جت (جلد ۵۲): خبر از خودِ دنیای واقعی تولید می‌شود، نه اسکریپت + آرشیوِ رکوردها (جلد ۵۱) */}
     <details style={card} onToggle={(ev: any) => { if (ev.currentTarget.open && !paper) doNews() }}>
       <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>📰 روزنامهٔ ملک‌جت — اخبارِ زندهٔ دنیا</summary>
@@ -1219,6 +1267,9 @@ export default function EmpirePage() {
       )}
     </details>}
 
+    </>}
+
+    {gtab === 'ranks' && <>
     {/* ۵ جدولِ رتبه (فصل ۵) + لیگِ محله (§7.2) */}
     <details style={card} onToggle={(ev: any) => { if (ev.currentTarget.open && !boards) doBoards() }}>
       <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>🏅 جدول‌های رتبه و لیگِ محله</summary>
@@ -1357,5 +1408,20 @@ export default function EmpirePage() {
         <button style={{ ...btnGhost, fontSize: 12, padding: '6px 12px' }} onClick={async () => { const n = prompt('نامِ جدیدِ امپراتوری:', e.name); if (n != null) { const d = await api({ action: 'rename', name: n }); if (d) load() } }}>تغییرِ نام</button>
       </div>
     </div>
+    </>}
+
+    {/* 🎮 منوی بازی (فصل ۹ Main Menu — Visual Pass): پنج صفحهٔ اصلی، ثابت در پایین */}
+    <div style={{ height: 70 }} />
+    <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50, display: 'flex', justifyContent: 'center', padding: '8px 10px calc(8px + env(safe-area-inset-bottom))', pointerEvents: 'none' }}>
+      <div style={{ display: 'flex', gap: 2, background: 'var(--surface)', border: '1px solid var(--gold)', borderRadius: 16, padding: 5, boxShadow: '0 10px 34px -8px rgba(0,0,0,.55)', pointerEvents: 'auto' }}>
+        {([['city', '🏙', 'شهر'], ['portfolio', '💼', 'پرتفوی'], ['missions', '🎯', 'مأموریت‌ها'], ['market', '📊', 'بازار'], ['ranks', '🏆', 'رتبه‌ها']] as const).map(([k, ic, l]) => (
+          <button key={k} onClick={() => { setGtab(k); try { window.scrollTo({ top: 0 }) } catch {} }}
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, minWidth: 60, padding: '5px 8px', borderRadius: 12, border: 'none', cursor: 'pointer', background: gtab === k ? 'var(--goldDim)' : 'transparent', color: gtab === k ? 'var(--gold)' : 'var(--muted)', fontFamily: 'inherit', fontSize: 10.5, fontWeight: gtab === k ? 800 : 500 }}>
+            <span style={{ fontSize: 17 }}>{ic}</span>{l}
+          </button>
+        ))}
+      </div>
+    </div>
+
   </>)
 }

@@ -63,7 +63,7 @@ const tabs = [
 // «چت / اطلاعات تماس» جای آن را می‌گیرد (مثلِ دیوار).
 // «/listing» آدرسِ کانونیِ جدیدِ صفحهٔ آگهی است (مهاجرتِ اسلاگ) — بدونِ آن، تب‌بار روی
 // نوارِ «چت/تماس» می‌نشست و می‌پوشاندش.
-const PANEL_ROUTES = ['/admin', '/agency', '/pros', '/builder', '/materials', '/owner', '/buyer', '/legal', '/architect', '/contractor', '/appraiser', '/lawfirm', '/finance', '/notary', '/crm', '/marketing', '/workflow', '/website-builder', '/content', '/plan-ai', '/property', '/listing']
+const PANEL_ROUTES = ['/empire', '/admin', '/agency', '/pros', '/builder', '/materials', '/owner', '/buyer', '/legal', '/architect', '/contractor', '/appraiser', '/lawfirm', '/finance', '/notary', '/crm', '/marketing', '/workflow', '/website-builder', '/content', '/plan-ai', '/property', '/listing']
 
 export default function BottomNav() {
   const path = usePathname()
