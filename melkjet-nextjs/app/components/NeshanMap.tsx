@@ -113,10 +113,14 @@ export default function NeshanMap({
       // برچسبِ پیش‌فرضِ «Leaflet» حذف می‌شود — اعتبارِ «نشان» سرِ جای خودش می‌ماند.
       try { mapRef.current.attributionControl?.setPrefix?.('') } catch {}
       setReady(r => r + 1)
-      // نگهبانِ تایل: فقط «راهنما» — هیچ بازسازی/تغییرِ رفتاری (قانونِ کامپوننتِ مشترک، فاز ۳۰).
+      // نگهبانِ تایل (فاز ۳۰): SDK لود می‌شود اما اگر کلیدِ نقشه مجوزِ «نقشهٔ پویا (Web SDK)» نداشته باشد،
+      // کاشی‌ها هرگز نمی‌آیند و نقشه خاکستری می‌ماند. رفتارِ درست همان رفتارِ همیشگیِ سایت است:
+      // fallback (نقشهٔ استاتیک) اگر صفحه داده باشد؛ وگرنه راهنمای دقیقِ مجوزِ کلید روی نقشه.
       setTimeout(() => {
         if (dead || !ref.current || !mapRef.current) return
-        if (ref.current.querySelectorAll('.leaflet-tile-loaded').length === 0) setTileHint(true)
+        if (ref.current.querySelectorAll('.leaflet-tile-loaded').length > 0) return
+        if (fallback) { try { mapRef.current.remove() } catch {} ; mapRef.current = null; setErr('tiles') }
+        else setTileHint(true)
       }, 8000)
       // انتخابِ موقعیت با کلیک — جدا و غیرِمخرب: اگر بایندِ کلیک شکست بخورد، خودِ نقشه نباید خطا شود.
       if (onMapClick) {
