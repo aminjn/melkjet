@@ -92,6 +92,9 @@ export default function NeshanMap({
     fetch('/api/geo/mapkey').then(r => r.ok ? r.json() : null).then(async (d) => {
       const key = d?.key
       if (!key) { if (!dead) setErr('no-key'); return }   // کلید نیست = مشکلِ تنظیمات، تلاشِ مجدد بی‌فایده
+      // تشخیصِ قطعیِ نوعِ کلید: SDK نشان فقط با کلیدِ «وب» (web.…) کاشی می‌دهد؛ کلیدِ سرویس هرگز.
+      // (ریشهٔ نقشه‌های خاکستری: کلیدِ service در فیلدِ کلیدِ نقشه — فاز ۳۰)
+      if (!/^web\./i.test(String(key)) && !dead) setTileHint(true)
       let L: any
       try { L = await loadSdk() } catch { failSoft('sdk'); return }
       if (dead || !ref.current || mapRef.current) return
@@ -198,7 +201,7 @@ export default function NeshanMap({
     <div style={{ position: 'relative', width: '100%', height }}>
       <div ref={ref} style={{ position: 'absolute', inset: 0, borderRadius: 16, overflow: 'hidden', border: '1px solid var(--line)', background: 'var(--bg2)' }} />
       {tileHint && <div style={{ position: 'absolute', bottom: 10, right: 10, left: 10, zIndex: 500, pointerEvents: 'none', background: 'rgba(20,16,4,.9)', border: '1px solid var(--gold)', borderRadius: 10, padding: '8px 12px', fontSize: 11.5, color: '#f3d98a', textAlign: 'center' }}>
-        کاشی‌های نقشه بارگذاری نشد — در پنلِ توسعه‌دهندگانِ نشان، سرویسِ «نقشهٔ پویا (Web SDK)» را برای همین کلیدِ نقشه فعال کن (ادمین → اتصال‌ها → نشان → کلیدِ نقشه).
+        کلیدِ ثبت‌شده در «کلیدِ نقشه» از نوعِ سرویس (service.…) است — نقشهٔ تعاملی فقط با کلیدِ «وب» کار می‌کند. در پنلِ نشان یک کلیدِ جدید از نوعِ «وب» (دامنهٔ melkjet.com) بساز و در ادمین → اتصال‌ها → نشان → کلیدِ نقشه بگذار. تا آن موقع نقشه با کاشیِ جایگزین بالا می‌آید.
       </div>}
     </div>
   )
