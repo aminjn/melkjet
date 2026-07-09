@@ -113,14 +113,20 @@ export default function NeshanMap({
       // برچسبِ پیش‌فرضِ «Leaflet» حذف می‌شود — اعتبارِ «نشان» سرِ جای خودش می‌ماند.
       try { mapRef.current.attributionControl?.setPrefix?.('') } catch {}
       setReady(r => r + 1)
-      // نگهبانِ تایل (فاز ۳۰): SDK لود می‌شود اما اگر کلیدِ نقشه مجوزِ «نقشهٔ پویا (Web SDK)» نداشته باشد،
-      // کاشی‌ها هرگز نمی‌آیند و نقشه خاکستری می‌ماند. رفتارِ درست همان رفتارِ همیشگیِ سایت است:
-      // fallback (نقشهٔ استاتیک) اگر صفحه داده باشد؛ وگرنه راهنمای دقیقِ مجوزِ کلید روی نقشه.
+      // نگهبانِ تایل (فاز ۳۰ — «یک‌بار برای همیشه»): SDK لود می‌شود اما اگر کلیدِ نقشه مجوزِ
+      // «نقشهٔ پویا (Web SDK)» نداشته باشد، کاشیِ نشان هرگز نمی‌آید. نقشه دیگر تحتِ هیچ شرایطی
+      // خاکستری نمی‌ماند: آخرین سنگر = کاشی‌های OpenStreetMap روی همان نقشهٔ تعاملی (پین‌ها/زوم سالم).
+      // به‌محضِ فعال‌شدنِ مجوزِ کلید در پنلِ نشان، استایلِ نشان خودکار برمی‌گردد و این مسیر اجرا نمی‌شود.
       setTimeout(() => {
         if (dead || !ref.current || !mapRef.current) return
         if (ref.current.querySelectorAll('.leaflet-tile-loaded').length > 0) return
-        if (fallback) { try { mapRef.current.remove() } catch {} ; mapRef.current = null; setErr('tiles') }
-        else setTileHint(true)
+        try {
+          L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(mapRef.current)
+          console.warn('NeshanMap: کاشیِ نشان نیامد (مجوزِ Web SDK روی کلید؟) — موقتاً OSM')
+        } catch {
+          if (fallback) { try { mapRef.current.remove() } catch {} ; mapRef.current = null; setErr('tiles') }
+          else setTileHint(true)
+        }
       }, 8000)
       // انتخابِ موقعیت با کلیک — جدا و غیرِمخرب: اگر بایندِ کلیک شکست بخورد، خودِ نقشه نباید خطا شود.
       if (onMapClick) {
