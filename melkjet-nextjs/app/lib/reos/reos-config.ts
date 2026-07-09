@@ -57,6 +57,10 @@ export interface ReosConfig {
     // فاز ۲۵ (تجمیع و تخریب): خریدِ واحدبه‌واحدِ ساختمانِ واقعی → تخریب فقط با مالکیتِ کامل → زمینِ قابلِ‌ساخت.
     // total واحدها اول از متای واقعیِ آگهی («طبقه: X از Y»)، وگرنه قطعی از هش بینِ unitsMin..unitsMax.
     assembly: { enabled: boolean; unitsMin: number; unitsMax: number; extraUnitPremiumPct: number; demolishCostPct: number }
+    // فاز ۲۷ (قانون ۵: «پرداخت فقط برای سرعت/تحلیل/ظاهر»): ملک‌کوین زمانِ انتظار را می‌خرد — نه قدرت را.
+    speed: { enabled: boolean; permitCoinsPerDay: number; buildCoinsPerDay: number }
+    // فاز ۲۷: شانس و بازهٔ تخفیفِ مذاکره — قبلاً هاردکد بود (۲۵٪ پایه، ۲..۶٪) و کاربر می‌دید؛ حالا knob.
+    nego: { baseChancePct: number; discountMin: number; discountMax: number }
     // GDD فصل ۴ بخش ۱۵: اعتبارِ ⭐ باید اثرِ واقعی داشته باشد — روی مذاکره و شرایطِ بانک.
     reputation: { negoBonusPerStar: number; loanRateCutPctPerStar: number }
     // سند ۱۶ (فصل ۶ بخش ۱): پاداشِ رسیدن به هر سطحِ جدید (ملک‌کوین) — Level Up باید حس شود.
@@ -150,6 +154,10 @@ export const DEFAULT_CONFIG: ReosConfig = {
     deals: { enabled: true, count: 5 },
     // تجمیع و تخریب (فاز ۲۵): هر واحدِ اضافه با ٪ گران‌تر (مالک‌ها می‌فهمند دنبالِ تجمیعی)؛ تخریب = ٪ ارزشِ ساختمان.
     assembly: { enabled: true, unitsMin: 3, unitsMax: 8, extraUnitPremiumPct: 10, demolishCostPct: 5 },
+    // زمان‌خری (فاز ۲۷): پیگیریِ پروانه ۱۵ کوین/روز · شیفتِ شبانهٔ کارگاه ۱۰ کوین/روز (+ هزینهٔ تومانیِ خودِ روز).
+    speed: { enabled: true, permitCoinsPerDay: 15, buildCoinsPerDay: 10 },
+    // مذاکره: همان رفتارِ قبلی به‌صورتِ پیش‌فرض (۲۵٪ پایه تا ۷۵٪ با مهارت؛ تخفیف ۲..۶٪) — حالا قابل‌تنظیم.
+    nego: { baseChancePct: 25, discountMin: 2, discountMax: 6 },
     // اعتبار = دارایی (سند ۱۴): هر ستارهٔ بالای ۱ → مذاکرهٔ راحت‌تر + نرخِ وامِ بهتر — شفاف و قطعی.
     reputation: { negoBonusPerStar: 2, loanRateCutPctPerStar: 3 },
     // پاداشِ سطح (سند ۱۶): هر سطحِ جدید × این مقدار ملک‌کوین — بدونِ پاداشِ گذشته‌نگر برای قدیمی‌ها.

@@ -1315,6 +1315,52 @@ async function main() {
     const aS = eS0.assets.find(x => x.id === apt25)
     const sD = await sell25(uc12, apt25, 9_999_999_999)
     ok('فروشِ زمینِ تخریب‌شده به بهای تمام‌شده (نه قیمتِ آگهیِ قدیمی)', sD.ok && sD.salePrice === aS.buyPrice)
+
+    // ── فاز ۲۷: زمان‌خری — کوین انتظار را کوتاه می‌کند، نه نتیجه را ──
+    console.log('\n── Empire · زمان‌خری (فاز ۲۷: پیگیریِ پروانه + شیفتِ شبانه) ──')
+    const { boostPermit, boostBuild } = await import('../app/lib/empire-store.ts')
+    // پروانهٔ در انتظار روی یک زمینِ تازه
+    await buyA(uc12, { id: 'LND27', title: 'زمینِ ۲۷', hood: 'ولنجک', price: 1_000_000_000, ptype: 'زمین' })
+    const land27 = (await getEmpire(uc12)).assets.find(x => x.listingId === 'LND27').id
+    await setLP(uc12, land27, 'build')
+    ok('بدونِ پروانهٔ در انتظار رد می‌شود', (await boostPermit(uc12, land27, 1, 5)).ok === false)
+    {
+      const eG = await getEmpire(uc12)
+      eG.assets.find(x => x.id === land27).permit = { requestedAt: Date.now(), days: 3, fee: 1, status: 'pending' }
+      eG.coins = 12
+      await pool.query(`UPDATE reos_empire SET data=$2 WHERE user_id=$1`, [uc12, JSON.stringify(eG)])
+    }
+    const bp1 = await boostPermit(uc12, land27, 2, 5)
+    const ap1 = bp1.empire.assets.find(x => x.id === land27)
+    ok('پیگیری ۲ روز: کوین کم شد و روزهای بررسی کوتاه', bp1.ok && bp1.cut === 2 && ap1.permit.days === 1 && bp1.empire.coins === 2)
+    const bp2 = await boostPermit(uc12, land27, 2, 5)
+    ok('کوینِ ناکافی برای روزِ بعدی رد می‌شود', bp2.ok === false)
+    // شیفتِ شبانه روی کارگاهِ فعال
+    {
+      const eG = await getEmpire(uc12)
+      const aa = eG.assets.find(x => x.id === land27)
+      aa.permit.status = 'granted'; aa.permit.days = 0
+      eG.coins = 25; eG.capital = Math.max(eG.capital, 10_000_000_000)
+      await pool.query(`UPDATE reos_empire SET data=$2 WHERE user_id=$1`, [uc12, JSON.stringify(eG)])
+    }
+    await startBuild(uc12, land27, plan15, { structure: 'concrete', quality: 'standard' })
+    const eB27 = await getEmpire(uc12)
+    const c27 = eB27.assets.find(x => x.id === land27).construction
+    const daily27 = Math.max(1, Math.round(c27.costTotal / c27.days))
+    const nb1 = await boostBuild(uc12, land27, 2, 10)
+    const cN = nb1.empire.assets.find(x => x.id === land27).construction
+    ok('شیفتِ شبانه ۲ روز: کوین + هزینهٔ تومانیِ روزها هر دو کم شدند', nb1.ok && nb1.advanced === 2
+      && cN.paidDays === 2 && cN.paid === daily27 * 2
+      && nb1.empire.coins === 25 - 20 && nb1.empire.capital === eB27.capital - daily27 * 2)
+    // چک‌پوینتِ ۳۰٪ (روزِ ۳ از ۱۰): شیفتِ شبانه هم باید رویداد را روشن کند و بایستد
+    {
+      const eG = await getEmpire(uc12); eG.coins = 100
+      await pool.query(`UPDATE reos_empire SET data=$2 WHERE user_id=$1`, [uc12, JSON.stringify(eG)])
+    }
+    const nb2 = await boostBuild(uc12, land27, 5, 10)
+    const cE = nb2.empire.assets.find(x => x.id === land27).construction
+    ok('شیفتِ شبانه از رویدادِ ایستگاه فرار نمی‌کند (روی ۳۰٪ می‌ایستد)', nb2.ok && cE.paidDays === Math.ceil(cE.days * 0.3) && !!cE.pendingEvent)
+    ok('با رویدادِ معطل، شیفتِ شبانه رد می‌شود', (await boostBuild(uc12, land27, 1, 10)).ok === false)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

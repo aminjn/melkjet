@@ -277,12 +277,14 @@ export function loanTermsFor(score: number, netWorth: number, cfg = config().emp
 
 // مذاکره (GDD جلد۱، مرحلهٔ ۵ «تولد یک امپراتور») — قطعی از هش تا قابلِ‌سوءاستفاده نباشد:
 // شانسِ موفقیت با مهارتِ مذاکره بالا می‌رود؛ تخفیف ۲ تا ۶٪. همان کاربر/آگهی همیشه همان نتیجه.
-export function negotiationOutcome(userId: string, listingId: string, negotiationSkill: number): { success: boolean; discountPct: number } {
+export function negotiationOutcome(userId: string, listingId: string, negotiationSkill: number, cfg?: { baseChancePct: number; discountMin: number; discountMax: number }): { success: boolean; discountPct: number } {
+  const c = cfg || config().empire.nego || { baseChancePct: 25, discountMin: 2, discountMax: 6 }
   const h = createHash('sha1').update(userId + '|nego|' + listingId).digest()
   const roll = h.readUInt32BE(0) % 100
-  const chance = 25 + Math.round(Math.max(0, Math.min(100, negotiationSkill)) / 2)   // ۲۵٪ پایه تا ۷۵٪
+  const chance = c.baseChancePct + Math.round(Math.max(0, Math.min(100, negotiationSkill)) / 2)   // پایه + مهارت/۲
   if (roll >= chance) return { success: false, discountPct: 0 }
-  return { success: true, discountPct: 2 + (h.readUInt32BE(4) % 5) }                  // ۲..۶٪
+  const span = Math.max(1, c.discountMax - c.discountMin + 1)
+  return { success: true, discountPct: c.discountMin + (h.readUInt32BE(4) % span) }
 }
 
 // حافظهٔ مذاکره (سند ۱۴ / GDD فصل ۴ بخش ۹): «هر شخصیت حافظه دارد» — نسخهٔ ۱ از رفتارِ ثبت‌شدهٔ خودِ بازیکن.
@@ -1167,6 +1169,89 @@ export async function startBuild(userId: string, assetId: string, plan: NonNulla
 
 // پیشرفتِ روزشمار (جلد ۷۱ «Cash Flow Crisis»): هر روزِ ساخت باید «پرداخت» شود؛ بی‌پولی = توقفِ کارگاه.
 // در ایستگاه‌های ۳۰٪ و ۷۰٪ رویدادِ قطعی رخ می‌دهد و تا تصمیمِ بازیکن، پیشرفت می‌ایستد.
+// رویدادِ ایستگاهِ ۳۰٪/۷۰٪ اگر paidDays روی چک‌پوینت باشد — true یعنی کار تا تصمیمِ بازیکن می‌ایستد.
+// مشترک بین پیشرفتِ روزانه و شیفتِ شبانه (فاز ۲۷) تا کوین‌خرج نتواند از رویدادها فرار کند.
+function fireCheckpointEvent(e: EmpireData, a: EmpireAsset, now: number): boolean {
+  const c = a.construction!
+  const checkpoints = [Math.ceil(c.days * 0.3), Math.ceil(c.days * 0.7)]
+  const idx = checkpoints.indexOf(c.paidDays)
+  if (idx < 0 || c.eventsFired > idx) return false
+  c.eventsFired = idx + 1
+  const ev = buildEventOf(e.userId, a.id, idx, c.costTotal)
+  // تیمِ ماهر (مهارت ≥۵۰) هزینهٔ رویداد را کم می‌کند — همان اثری که روی کارتِ استخدام نوشته شده (GDD فصل ۴).
+  const cut = teamSkillOf(e) >= 50 ? Math.max(0, Math.min(90, config().empire.build.eventSkillCutPct)) : 0
+  c.pendingEvent = { ...ev, payCost: Math.max(1, Math.round(ev.payCost * (1 - cut / 100))), at: now }
+  e.timeline.push({ at: now, icon: '⚠️', title: 'اتفاق در کارگاه', detail: c.pendingEvent.text })
+  return true
+}
+// تکمیلِ پروژه وقتی همهٔ روزها پرداخت شد — تحویلِ پیش‌فروش‌ها، شمارنده‌ها، نشانِ First Tower.
+function completeIfBuilt(e: EmpireData, a: EmpireAsset, now: number): boolean {
+  const c = a.construction!
+  if (!(c.paidDays >= c.days && !c.done)) return false
+  c.done = true; c.doneAt = now
+  // تحویلِ پیش‌فروش‌ها: سود/زیانشان همین‌جا تحقق می‌یابد (درآمدش قبلاً واردِ نقد شده بود).
+  if (c.presold > 0) {
+    const costShare = Math.round((a.buyPrice + c.paid) / c.totalUnits)
+    e.realized = (e.realized || 0) + (c.presaleRevenue - costShare * c.presold)
+  }
+  e.stats = e.stats || { sellsProfitable: 0, negoWins: 0 }
+  e.stats.projectsDelivered = (e.stats.projectsDelivered || 0) + 1
+  if (c.goal === 'rep') e.stats.repProjects = (e.stats.repProjects || 0) + 1   // هدفِ «اعتبارِ برند» → امتیازِ اعتبارِ شرکت
+  if (!e.badges.includes('First Tower')) e.badges.push('First Tower')
+  e.timeline.push({ at: now, icon: '🏙', title: 'ساختمان تکمیل شد', detail: `${a.title.slice(0, 45)} — ${c.totalUnits.toLocaleString('fa-IR')} واحد آمادهٔ عرضه` })
+  e.journal.push({ at: now, text: 'خطِ آسمانِ شهر عوض شد — ساختمانِ تو حالا واقعی است. وقتِ فروش است.' })
+  return true
+}
+
+// ⚡ شیفتِ شبانه (فاز ۲۷ — قانون ۵ «پرداخت فقط برای سرعت»): روزهای کاری را همین حالا جلو می‌اندازد.
+// پول غیب نمی‌شود: هزینهٔ تومانیِ هر روز مثل همیشه از سرمایه کم می‌شود؛ ملک‌کوین فقط «زمان» می‌خرد.
+// از همان چک‌پوینت‌ها رد می‌شود — با کوین نمی‌توان از رویدادِ کارگاه فرار کرد.
+export async function boostBuild(userId: string, assetId: string, days: number, coinsPerDay: number, now = Date.now()): Promise<{ ok: boolean; reason?: string; advanced?: number; empire?: EmpireData }> {
+  let advanced = 0
+  const r = await mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    const c = a?.construction
+    if (!a || !c || c.done) return 'کارگاهِ فعالی نیست'
+    if (c.pendingEvent) return 'اول تکلیفِ اتفاقِ کارگاه را روشن کن — شیفتِ شبانه از رویداد رد نمی‌شود'
+    const dailyCost = Math.max(1, Math.round(c.costTotal / c.days))
+    for (let d = 0; d < days && c.paidDays < c.days; d++) {
+      if (e.coins < coinsPerDay) { if (!advanced) return 'ملک‌کوینِ کافی نداری'; break }
+      if (e.capital < dailyCost) { if (!advanced) return 'سرمایهٔ نقدِ کافی برای هزینهٔ روزِ جلوافتاده نیست'; break }
+      e.coins -= Math.max(0, coinsPerDay)
+      e.capital -= dailyCost
+      c.paid += dailyCost
+      c.paidDays += 1
+      advanced++
+      if (fireCheckpointEvent(e, a, now)) break
+    }
+    if (!advanced) return 'روزی برای جلوانداختن نمانده'
+    e.timeline.push({ at: now, icon: '⚡', title: `شیفتِ شبانه: ${advanced.toLocaleString('fa-IR')} روزِ کاری جلو افتاد`, detail: a.title.slice(0, 50) })
+    completeIfBuilt(e, a, now)
+  })
+  if (!r.ok) return { ok: false, reason: r.reason }
+  return { ok: true, advanced, empire: r.empire }
+}
+
+// ⚡ پیگیریِ حضوریِ پروانه (فاز ۲۷): هر روز کوتاه‌شدنِ بررسی = کوین — انتظار قابلِ‌خرید است، نتیجه نه
+// (اعتراض/عوارض سرِ جای خودشان می‌مانند؛ فقط زمان کوتاه می‌شود).
+export async function boostPermit(userId: string, assetId: string, days: number, coinsPerDay: number, now = Date.now()): Promise<{ ok: boolean; reason?: string; cut?: number; empire?: EmpireData }> {
+  let cut = 0
+  const r = await mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    if (!a?.permit || a.permit.status !== 'pending') return 'پروانهٔ در حالِ بررسی‌ای نیست'
+    for (let d = 0; d < days && a.permit.days > 0; d++) {
+      if (e.coins < coinsPerDay) { if (!cut) return 'ملک‌کوینِ کافی نداری'; break }
+      e.coins -= Math.max(0, coinsPerDay)
+      a.permit.days -= 1
+      cut++
+    }
+    if (!cut) return 'روزی از بررسی نمانده — پروانه در بازدیدِ بعدی صادر می‌شود'
+    e.timeline.push({ at: now, icon: '⚡', title: `پیگیریِ حضوری: بررسیِ پروانه ${cut.toLocaleString('fa-IR')} روز کوتاه شد`, detail: a.title.slice(0, 50) })
+  })
+  if (!r.ok) return { ok: false, reason: r.reason }
+  return { ok: true, cut, empire: r.empire }
+}
+
 export async function progressBuild(userId: string, now = Date.now()): Promise<{ ok: boolean; paid?: number; completedTitles?: string[]; empire?: EmpireData }> {
   let paidTotal = 0
   const completedTitles: string[] = []
@@ -1180,39 +1265,15 @@ export async function progressBuild(userId: string, now = Date.now()): Promise<{
       touched = true
       c.lastPayAt = now   // روزهای بی‌پول از دست می‌روند (توقفِ واقعی، نه بدهیِ پنهان)
       const dailyCost = Math.max(1, Math.round(c.costTotal / c.days))
-      const checkpoints = [Math.ceil(c.days * 0.3), Math.ceil(c.days * 0.7)]
       for (let d = 0; d < days && c.paidDays < c.days; d++) {
         if (e.capital < dailyCost) break                      // بحرانِ نقدینگی — کارگاه می‌ایستد
         e.capital -= dailyCost
         c.paid += dailyCost
         c.paidDays += 1
         paidTotal += dailyCost
-        const idx = checkpoints.indexOf(c.paidDays)
-        if (idx >= 0 && c.eventsFired <= idx) {
-          c.eventsFired = idx + 1
-          const ev = buildEventOf(e.userId, a.id, idx, c.costTotal)
-          // تیمِ ماهر (مهارت ≥۵۰) هزینهٔ رویداد را کم می‌کند — همان اثری که روی کارتِ استخدام نوشته شده (GDD فصل ۴).
-          const cut = teamSkillOf(e) >= 50 ? Math.max(0, Math.min(90, config().empire.build.eventSkillCutPct)) : 0
-          c.pendingEvent = { ...ev, payCost: Math.max(1, Math.round(ev.payCost * (1 - cut / 100))), at: now }
-          e.timeline.push({ at: now, icon: '⚠️', title: 'اتفاق در کارگاه', detail: c.pendingEvent.text })
-          break                                               // تا تصمیمِ بازیکن، کار می‌ایستد
-        }
+        if (fireCheckpointEvent(e, a, now)) break             // تا تصمیمِ بازیکن، کار می‌ایستد
       }
-      if (c.paidDays >= c.days && !c.done) {
-        c.done = true; c.doneAt = now
-        completedTitles.push(a.title)
-        // تحویلِ پیش‌فروش‌ها: سود/زیانشان همین‌جا تحقق می‌یابد (درآمدش قبلاً واردِ نقد شده بود).
-        if (c.presold > 0) {
-          const costShare = Math.round((a.buyPrice + c.paid) / c.totalUnits)
-          e.realized = (e.realized || 0) + (c.presaleRevenue - costShare * c.presold)
-        }
-        e.stats = e.stats || { sellsProfitable: 0, negoWins: 0 }
-        e.stats.projectsDelivered = (e.stats.projectsDelivered || 0) + 1
-        if (c.goal === 'rep') e.stats.repProjects = (e.stats.repProjects || 0) + 1   // هدفِ «اعتبارِ برند» → امتیازِ اعتبارِ شرکت
-        if (!e.badges.includes('First Tower')) e.badges.push('First Tower')
-        e.timeline.push({ at: now, icon: '🏙', title: 'ساختمان تکمیل شد', detail: `${a.title.slice(0, 45)} — ${c.totalUnits.toLocaleString('fa-IR')} واحد آمادهٔ عرضه` })
-        e.journal.push({ at: now, text: 'خطِ آسمانِ شهر عوض شد — ساختمانِ تو حالا واقعی است. وقتِ فروش است.' })
-      }
+      if (completeIfBuilt(e, a, now)) completedTitles.push(a.title)
     }
     if (!touched && !paidTotal) return 'ساختِ فعالی نیست'
   })

@@ -21,7 +21,7 @@ import {
   projectLessonsOf, engineerEffectsOf, addAmenity, rentOutUnits, stopRentUnits,
   negoMemoryOf, bumpNegoTries, dailyDealPickOf, maxProjectsOf, sellProject,
   applyLevelUpReward, setWeekSnap, setTitle, giveKudos, eventActive, streakMilestonesOf,
-  buildingUnitsOf, assemblyUnitPriceOf, buyBuildingUnit, demolishAsset,
+  buildingUnitsOf, assemblyUnitPriceOf, buyBuildingUnit, demolishAsset, boostBuild, boostPermit,
   type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
 import {
@@ -419,6 +419,7 @@ async function stateOf(userId: string, e00: EmpireData) {
     collection: ['apartment', 'villa', 'commercial', 'land'].map(k => ({ kind: k, owned: e.assets.some(a => a.kind === k) })),
     capitalEnabled: config().empire.capital.enabled,
     dealsEnabled: config().empire.deals.enabled,   // Hook روزانه (سند ۱۴)
+    speed: config().empire.speed,                  // زمان‌خری (فاز ۲۷): نرخِ کوین برای نمایشِ شفاف در UI
     // سطح‌گشایی (سند ۱۵): چه چیزی از چه سطحی باز می‌شود + ظرفیتِ پروژهٔ همزمان — شفاف در UI
     unlocks: (() => {
       const u = config().empire.unlocks
@@ -972,6 +973,22 @@ export async function POST(req: NextRequest) {
       const r = await settleObjection(userId, String(b.assetId || ''))
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+    }
+
+    // ══════ زمان‌خری (فاز ۲۷ — قانون ۵ «پرداخت فقط برای سرعت»): کوین انتظار را کوتاه می‌کند، نه نتیجه را ══════
+    case 'permitBoost': {
+      const sp = config().empire.speed
+      if (!sp.enabled) return NextResponse.json({ error: 'تسریع فعلاً فعال نیست' }, { status: 403 })
+      const r = await boostPermit(userId, String(b.assetId || ''), Math.max(1, Math.min(30, Number(b.days) || 1)), sp.permitCoinsPerDay)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, cut: r.cut, ...(await stateOf(userId, r.empire!)) })
+    }
+    case 'buildBoost': {
+      const sp = config().empire.speed
+      if (!sp.enabled) return NextResponse.json({ error: 'تسریع فعلاً فعال نیست' }, { status: 403 })
+      const r = await boostBuild(userId, String(b.assetId || ''), Math.max(1, Math.min(30, Number(b.days) || 1)), sp.buildCoinsPerDay)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, advanced: r.advanced, ...(await stateOf(userId, r.empire!)) })
     }
 
     // ══════ تجمیع و تخریب (فاز ۲۵): «۶ واحدی؟ تک‌تک بخر؛ تا همه مالِ تو نشد، تخریب نه» ══════

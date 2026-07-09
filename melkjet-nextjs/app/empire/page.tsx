@@ -920,7 +920,11 @@ export default function EmpirePage() {
                   : a.permit.status === 'granted'
                   ? <span style={{ fontSize: 11, color: '#7c6' }}>📜 پروانه ✓</span>
                   : <span style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11 }}>
-                      <span style={{ color: 'var(--gold)' }}>⏳ بررسیِ پروانه — {fa(Math.max(0, Math.ceil(((a.permitDue || 0) - Date.now()) / 864e5)))} روز مانده</span>
+                      <span style={{ color: 'var(--gold)' }}>⏳ بررسیِ پروانه — {fa(Math.max(0, Math.ceil(((a.permitDue || 0) - Date.now()) / 864e5)))} روز مانده
+                        {/* ⚡ پیگیریِ حضوری (فاز ۲۷): کوین انتظار را کوتاه می‌کند — اعتراض/عوارض سرِ جایشان */}
+                        {st.speed?.enabled && Math.ceil(((a.permitDue || 0) - Date.now()) / 864e5) > 0 && <button style={{ ...btnGhost, padding: '2px 9px', fontSize: 10.5, marginRight: 8, color: 'var(--gold)', borderColor: 'var(--goldDim)' }}
+                          disabled={busy || e.coins < (st.speed.permitCoinsPerDay || 0)}
+                          onClick={async () => { const d = await api({ action: 'permitBoost', assetId: a.id, days: 1 }); if (d) setSt(d) }}>⚡ پیگیری: ۱− روز (🪙 {fa(st.speed.permitCoinsPerDay)})</button>}</span>
                       {a.permit.objection && !a.permit.objection.settled && <span style={{ color: '#e7a14a' }}>⚠️ {a.permit.objection.text}
                         <button style={{ ...btnGhost, padding: '2px 8px', fontSize: 10.5, marginRight: 6 }} disabled={busy}
                           onClick={async () => { const d = await api({ action: 'permitSettle', assetId: a.id }); if (d) setSt(d) }}>🤝 توافق ({faB(a.permit.objection.settleCost)})</button>
@@ -1017,6 +1021,16 @@ export default function EmpirePage() {
                 <div style={{ width: `${a.build?.progressPct || 0}%`, height: 7, borderRadius: 4, background: a.construction.done ? '#7c6' : 'var(--gold)', transition: 'width .6s ease' }} />
               </div>
               {!a.construction.done && e.capital < (a.build?.dailyCost || 0) && <div style={{ color: '#e88', fontSize: 11.5, marginTop: 6 }}>🛑 بحرانِ نقدینگی — سرمایهٔ نقد به هزینهٔ روزانه نمی‌رسد؛ کارگاه ایستاده. پیش‌فروش کن، وام بگیر یا دارایی بفروش.</div>}
+              {/* ⚡ شیفتِ شبانه (فاز ۲۷ — قانون ۵ «پرداخت فقط برای سرعت»): کوین زمان می‌خرد، هزینهٔ تومانیِ روز سرِ جایش */}
+              {!a.construction.done && !a.construction.pendingEvent && st.speed?.enabled && (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
+                  <button style={{ ...btnGhost, padding: '4px 12px', fontSize: 11, color: 'var(--gold)', borderColor: 'var(--goldDim)' }}
+                    disabled={busy || e.coins < (st.speed.buildCoinsPerDay || 0) || e.capital < (a.build?.dailyCost || 0)}
+                    onClick={async () => { const d = await api({ action: 'buildBoost', assetId: a.id, days: 1 }); if (d) { setSt(d); celebrate() } }}>
+                    ⚡ شیفتِ شبانه: ۱ روزِ کاری همین حالا (🪙 {fa(st.speed.buildCoinsPerDay)} + هزینهٔ روز)</button>
+                  <span style={{ fontSize: 10, color: 'var(--faint)' }}>کوین فقط زمان می‌خرد — هزینهٔ ساخت و رویدادهای کارگاه سرِ جایشان‌اند</span>
+                </div>
+              )}
               {a.construction.pendingEvent && <div style={{ ...card, background: 'var(--bg2)', borderColor: '#e7a14a', marginTop: 8, fontSize: 12 }}>
                 ⚠️ <b>{a.construction.pendingEvent.text}</b> — تا تصمیم نگیری کارگاه ایستاده:
                 <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>

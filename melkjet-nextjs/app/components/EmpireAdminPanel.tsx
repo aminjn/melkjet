@@ -352,6 +352,18 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             {row('خروج از پروژهٔ نیمه‌کاره (٪ بهای تمام‌شده)', cin('unlocks', 'projectExitPct'), 'با پیش‌فروشِ فعال ممنوع؛ مالیات → خزانه')}
           </div>
           <div style={card}>
+            <div style={sub}>⚡ سرعت و زمان (فاز ۲۷ — «پرداخت فقط برای سرعت»)</div>
+            {row('زمان‌خری فعال (۱/۰)', cin('speed', 'enabled'), 'کوین فقط انتظار را کوتاه می‌کند، نه نتیجه را')}
+            {row('پیگیریِ پروانه (کوین/روز)', cin('speed', 'permitCoinsPerDay'), 'هر روز کوتاه‌شدنِ بررسی')}
+            {row('شیفتِ شبانهٔ کارگاه (کوین/روز)', cin('speed', 'buildCoinsPerDay'), 'هزینهٔ تومانیِ روز سرِ جایش می‌ماند + از رویدادها رد نمی‌شود')}
+          </div>
+          <div style={card}>
+            <div style={sub}>🤝 مذاکره (فاز ۲۷ — قبلاً هاردکد بود)</div>
+            {row('شانسِ پایه (٪)', cin('nego', 'baseChancePct'), 'شانس = پایه + مهارت ÷ ۲ — قطعی از هش')}
+            {row('کفِ تخفیف (٪)', cin('nego', 'discountMin'))}
+            {row('سقفِ تخفیف (٪)', cin('nego', 'discountMax'))}
+          </div>
+          <div style={card}>
             <div style={sub}>🧩 تجمیع و تخریب (فاز ۲۵)</div>
             {row('تجمیع/تخریب فعال (۱/۰)', cin('assembly', 'enabled'), 'خریدِ واحدبه‌واحد → مالکیتِ کامل → تخریب → زمین')}
             {row('حداقلِ واحدهای ساختمان (هش)', cin('assembly', 'unitsMin'), 'وقتی متای «طبقه: X از Y» در آگهی نباشد')}
