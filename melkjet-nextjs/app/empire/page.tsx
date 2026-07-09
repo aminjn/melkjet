@@ -116,6 +116,8 @@ export default function EmpirePage() {
   const [bplan, setBplan] = useState<any>(null)                  // پیش‌نمایشِ نقشهٔ ساخت (جلد ۶۴)
   const [bgoal, setBgoal] = useState('profit')                   // هدفِ پروژه (GDD فصل ۴): fast / profit / rep
   const [pu, setPu] = useState<Record<string, string>>({})       // تعدادِ واحدِ پیش‌فروش/فروش
+  const [pfKind, setPfKind] = useState('all')                    // فیلترِ پرتفوی (سند ۱۹ — Part 07)
+  const [pfSort, setPfSort] = useState<'new' | 'value' | 'growth'>('new')
   const celebrate = () => { setBurst(Date.now()); setTimeout(() => setBurst(0), 1100) }
   const [fu, setFu] = useState<Record<string, string>>({})       // تعدادِ واحدِ صندوق (ورودی)
   const [cu, setCu] = useState<Record<string, string>>({})       // تعدادِ واحدِ مشارکت (ورودی)
@@ -703,12 +705,33 @@ export default function EmpirePage() {
     {/* دارایی‌ها = Empire Map (فهرست) */}
     <div style={card}>
       <div style={{ fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <span>🗺 دارایی‌های امپراتوری</span>
+        <span>💼 پرتفوی امپراتوری</span>
+        {/* ارزشِ کلِ پرتفوی همیشه بالای کارت (سند ۱۹ — Part 07) — جمعِ ارزشِ روزِ واقعی */}
+        {(e.assets?.length || 0) > 0 && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 10, border: '1px solid var(--gold)', color: 'var(--gold)' }}>ارزشِ کل: {faB((e.assets || []).reduce((t: number, a: any) => t + (a.current || a.buyPrice), 0))} تومان</span>}
         {st.unlocks && <span title="ظرفیتِ پروژهٔ همزمانِ شرکت — با سطح رشد می‌کند" style={{ fontSize: 10.5, fontWeight: 400, padding: '2px 8px', borderRadius: 10, border: '1px solid var(--line2)', color: 'var(--muted)' }}>⛏ ظرفیتِ ساختِ همزمان: {fa(st.unlocks.projects.active)}/{fa(st.unlocks.projects.max)}</span>}
       </div>
+      {/* فیلتر و مرتب‌سازیِ پرتفوی (سند ۱۹): «در چند ثانیه بفهم چه داری و کدام مشکل دارد» */}
+      {(e.assets?.length || 0) > 1 && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10, fontSize: 11 }}>
+        {[['all', 'همه'], ['land', '🏞 زمین'], ['apartment', '🏢 آپارتمان'], ['commercial', '🏬 تجاری'], ['villa', '🏡 ویلا'], ['issue', '⚠️ مشکل‌دار']].map(([k, l]) => (
+          <button key={k} onClick={() => setPfKind(k)} style={{ ...btnGhost, padding: '3px 10px', fontSize: 11, borderColor: pfKind === k ? 'var(--gold)' : 'var(--line2)', color: pfKind === k ? 'var(--gold)' : 'var(--muted)' }}>{l}</button>
+        ))}
+        <span style={{ flex: 1 }} />
+        <select value={pfSort} onChange={ev => setPfSort(ev.target.value as any)} style={{ padding: '3px 8px', borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 11 }}>
+          <option value="new">جدیدترین</option>
+          <option value="value">باارزش‌ترین</option>
+          <option value="growth">بیشترین رشد</option>
+        </select>
+      </div>}
       {!e.assets?.length && <div style={{ fontSize: 13, color: 'var(--muted)' }}>هنوز دارایی نداری — <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 12 }} onClick={doSuggest}>اولین فرصت را ببین</button></div>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {(e.assets || []).map((a: any) => (
+        {(e.assets || [])
+          .filter((a: any) => {
+            // «مشکل‌دار» = تصمیمِ معطل: اتفاقِ کارگاه، اعتراضِ پروانه، یا کارگاهِ ایستاده به‌خاطرِ بی‌پولی
+            if (pfKind === 'issue') return !!a.construction?.pendingEvent || (a.permit?.objection && !a.permit.objection.settled) || (a.construction && !a.construction.done && e.capital < (a.build?.dailyCost || 0))
+            return pfKind === 'all' || a.kind === pfKind
+          })
+          .sort((a: any, b: any) => pfSort === 'value' ? (b.current || b.buyPrice) - (a.current || a.buyPrice) : pfSort === 'growth' ? (b.growthPct || 0) - (a.growthPct || 0) : (b.boughtAt || 0) - (a.boughtAt || 0))
+          .map((a: any) => (
           <div key={a.id} style={{ ...card, background: 'var(--bg2)', display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
             <span style={{ fontSize: 20 }}>{a.kind === 'land' ? '🏞' : a.kind === 'villa' ? '🏡' : a.kind === 'commercial' ? '🏬' : '🏢'}</span>
             <div style={{ flex: 1, minWidth: 160 }}>
