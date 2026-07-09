@@ -15,6 +15,23 @@ const digitsOf = (s: string) => s
   .replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
   .replace(/\D/g, '').slice(0, 15)
 
+// شمارشِ معکوسِ ایزوله (فاز ۳۱): فقط همین کامپوننتِ کوچک هر ثانیه رندر می‌شود — نه کلِ صفحهٔ سنگین.
+// (رندرِ هرثانیهٔ کلِ صفحه باعث می‌شد کلیک‌ها وسطِ بازسازیِ DOM گم شوند: «ده بار باید بزنم»)
+function Countdown({ until, onDone }: { until: number; onDone?: () => void }) {
+  const [left, setLeft] = useState(() => Math.max(0, until - Date.now()))
+  useEffect(() => {
+    const t = setInterval(() => {
+      const l = Math.max(0, until - Date.now())
+      setLeft(l)
+      if (l <= 0) { clearInterval(t); onDone?.() }
+    }, 1000)
+    return () => clearInterval(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [until])
+  const p2 = (n: number) => n.toLocaleString('fa-IR', { minimumIntegerDigits: 2 })
+  return <>{p2(Math.floor(left / 36e5))}:{p2(Math.floor(left / 6e4) % 60)}:{p2(Math.floor(left / 1000) % 60)}</>
+}
+
 type Opp = { id: string; title: string; hood: string; price: number; priceStr: string; image: string; area: number; rooms: number; ptype: string; kind: string; recommended: boolean; reason: string; locked?: boolean; why?: string[] }
 type St = any
 
@@ -128,7 +145,7 @@ export default function EmpirePage() {
   const [lands, setLands] = useState<any>(null)                // 🏞 بازارِ زمین (فاز ۲۴) — دروازهٔ موتورِ ساخت
   const [mapL, setMapL] = useState({ assets: true, deals: true, lands: true })   // لایه‌های نقشهٔ شهر (فاز ۲۶)
   const [dz, setDz] = useState<any>(null)                      // فرمِ قراردادِ معمار (فاز ۲۹): {assetId, info, floors, upf}
-  const [tick, setTick] = useState(0)                          // تیکِ شمارشِ معکوسِ واقعی
+  // (فاز ۳۱: تیکِ سراسری حذف شد — شمارشِ معکوس کامپوننتِ ایزولهٔ خودش را دارد تا کلِ صفحه هر ثانیه رندر نشود)
   const [dealAn, setDealAn] = useState('')                     // تحلیلِ کدام فرصتِ امروز نمایش داده شود
   const suspended = useRef(false)
 
@@ -162,12 +179,12 @@ export default function EmpirePage() {
       .then(r => r.json()).then(d => { if (alive && d?.ok) setDeals(d) }).catch(() => {})
     return () => { alive = false }
   }, [step, st?.dealsEnabled, deals])
-  // شمارشِ معکوسِ واقعی تا پایانِ روز — و با گذشتنِ مهلت، فهرستِ تازه گرفته می‌شود.
+  // خطاها هر جای صفحه که باشی دیده شوند (فاز ۳۱): توستِ شناور + پاک‌شدنِ خودکار — «دکمهٔ گیرکرده» تمام.
   useEffect(() => {
-    if (!deals?.expiresAt) return
-    const t = setInterval(() => { setTick(x => x + 1); if (Date.now() >= deals.expiresAt) setDeals(null) }, 1000)
-    return () => clearInterval(t)
-  }, [deals?.expiresAt])
+    if (!err) return
+    const t = setTimeout(() => setErr(''), 5000)
+    return () => clearTimeout(t)
+  }, [err])
 
   // 🪙 بازگشت از درگاهِ کوین (فاز ۲۸): پیامِ نتیجه + پاک‌کردنِ query تا رفرش دوباره پیام ندهد.
   useEffect(() => {
@@ -309,7 +326,10 @@ export default function EmpirePage() {
         <h1 style={{ fontSize: 20, margin: 0 }}>🏛 امپراتوریِ من</h1>
         <Link href="/" style={{ color: 'var(--muted)', fontSize: 13, textDecoration: 'none' }}>← بازگشت به ملک‌جت</Link>
       </div>
-      {err && <div style={{ ...card, borderColor: '#a33', color: '#e88', fontSize: 13 }}>{err}</div>}
+      {/* توستِ شناورِ خطا (فاز ۳۱): هر جای صفحه باشی، دلیلِ ردشدنِ اکشن را می‌بینی — «دکمهٔ گیرکرده» بی‌معنا می‌شود */}
+      {err && <div style={{ position: 'fixed', bottom: 88, left: '50%', transform: 'translateX(-50%)', zIndex: 70, background: '#3a1212', border: '1px solid #a55', color: '#f0c5c5', padding: '10px 18px', borderRadius: 12, fontSize: 12.5, maxWidth: '92vw', boxShadow: '0 8px 28px -8px rgba(0,0,0,.6)' }}>⚠️ {err}</div>}
+      {/* نشانگرِ درحال‌انجام: کلیکت گرفته شده — منتظرِ پاسخِ سرور است */}
+      {busy && <div style={{ position: 'fixed', bottom: 88, right: 14, zIndex: 70, background: 'var(--surface)', border: '1px solid var(--goldDim)', color: 'var(--gold)', padding: '6px 12px', borderRadius: 10, fontSize: 11.5 }}>⏳ در حالِ انجام…</div>}
       {children}
     </main>
   )
@@ -547,16 +567,14 @@ export default function EmpirePage() {
     {/* 🔥 فرصت‌های طلاییِ امروز (سند ۱۴ — Hook): آگهی‌های واقعی، شمارشِ معکوسِ واقعی؛ فردا فهرستِ دیگری می‌آید.
         کارت قضاوت نمی‌کند — بعضی واقعاً زیرِ قیمتِ محله‌اند، بعضی نه؛ فکرکردن (یا ژتونِ تحلیل) کارِ بازیکن است. */}
     {st.dealsEnabled && deals && (deals.deals || []).length > 0 && (() => {
-      void tick
-      const left = Math.max(0, (deals.expiresAt || 0) - Date.now())
-      const p2 = (n: number) => n.toLocaleString('fa-IR', { minimumIntegerDigits: 2 })
       return (
         <div style={{ ...card, borderColor: 'var(--gold)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <b style={{ fontSize: 14 }}>🔥 فرصت‌های طلاییِ امروز</b>
             <span style={{ fontSize: 11, color: 'var(--muted)' }}>بعضی واقعاً زیرِ قیمتِ محله‌اند، بعضی نه — تشخیصش با توست</span>
             <span style={{ flex: 1 }} />
-            <span style={{ fontSize: 13, color: '#e7a14a', fontWeight: 800 }}>⏳ {p2(Math.floor(left / 36e5))}:{p2(Math.floor(left / 6e4) % 60)}:{p2(Math.floor(left / 1000) % 60)}</span>
+            {/* شمارشِ معکوسِ ایزوله (فاز ۳۱) — فقط همین عدد هر ثانیه رندر می‌شود، نه کلِ صفحه */}
+            <span style={{ fontSize: 13, color: '#e7a14a', fontWeight: 800 }}>⏳ <Countdown until={deals.expiresAt || 0} onDone={() => setDeals(null)} /></span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(230px,1fr))', gap: 8, marginTop: 10 }}>
             {deals.deals.map((dl: any) => (
