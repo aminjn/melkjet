@@ -5,6 +5,7 @@
 // قانونِ برندینگِ سند: هرگز «بازی» گفته نمی‌شود — «مسیرِ رشد / امپراتوری / سفرِ مالی».
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import NeshanMap from '@/app/components/NeshanMap'
+import { sfx, sfxPrefs, setSfxPrefs } from '@/app/lib/empire-sound'
 import Link from 'next/link'
 
 const fa = (n: number) => Math.round(n).toLocaleString('fa-IR')
@@ -157,7 +158,11 @@ export default function EmpirePage() {
   const [pu, setPu] = useState<Record<string, string>>({})       // تعدادِ واحدِ پیش‌فروش/فروش
   const [pfKind, setPfKind] = useState('all')                    // فیلترِ پرتفوی (سند ۱۹ — Part 07)
   const [pfSort, setPfSort] = useState<'new' | 'value' | 'growth'>('new')
-  const celebrate = () => { setBurst(Date.now()); setTimeout(() => setBurst(0), 1100) }
+  // جشن = پاشِش + صدای موفقیت (سند ۲۱ Part 06: مثبت/منفی کاملاً متمایز)
+  const celebrate = () => { setBurst(Date.now()); setTimeout(() => setBurst(0), 1100); sfx('success', st?.soundEnabled !== false) }
+  const [snd, setSnd] = useState({ on: true, vol: 0.35 })   // 🔊 تنظیمِ صدای کاربر (فاز ۳۲) — از localStorage
+  const [sndOpen, setSndOpen] = useState(false)
+  useEffect(() => { setSnd(sfxPrefs()) }, [])
   const [fu, setFu] = useState<Record<string, string>>({})       // تعدادِ واحدِ صندوق (ورودی)
   const [cu, setCu] = useState<Record<string, string>>({})       // تعدادِ واحدِ مشارکت (ورودی)
   const [nego, setNego] = useState<Record<string, any>>({})   // نتیجهٔ مذاکره به‌ازای هر آگهی
@@ -202,8 +207,10 @@ export default function EmpirePage() {
   // خطاها هر جای صفحه که باشی دیده شوند (فاز ۳۱): توستِ شناور + پاک‌شدنِ خودکار — «دکمهٔ گیرکرده» تمام.
   useEffect(() => {
     if (!err) return
+    sfx('error', st?.soundEnabled !== false)   // صدای رد/خطا — کاملاً متمایز از موفقیت (سند ۲۱)
     const t = setTimeout(() => setErr(''), 5000)
     return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [err])
 
   // شنودِ خطاهای مرورگر (فاز ۳۱): کرشِ JS = «هیچ دکمه‌ای کار نمی‌کند» — حالا هم روی صفحه دیده می‌شود
@@ -225,7 +232,7 @@ export default function EmpirePage() {
     const q = new URLSearchParams(window.location.search)
     const c = q.get('coins')
     if (!c) return
-    if (c === 'ok') alert(`🪙 پرداخت موفق — ${Number(q.get('n') || 0).toLocaleString('fa-IR')} ملک‌کوین به کیفت اضافه شد.`)
+    if (c === 'ok') { sfx('coin'); alert(`🪙 پرداخت موفق — ${Number(q.get('n') || 0).toLocaleString('fa-IR')} ملک‌کوین به کیفت اضافه شد.`) }
     else alert(`پرداخت ناموفق: ${q.get('reason') || 'لغو شد'}`)
     window.history.replaceState({}, '', '/empire')
   }, [])
@@ -594,6 +601,21 @@ export default function EmpirePage() {
         <span style={{ ...card, padding: '6px 10px' }}>🤖 {fa(e.aiTokens)}</span>
         {st.streak && st.streak.streak > 0 && <span style={{ ...card, padding: '6px 10px' }} title="روزهای پیاپیِ حضور">🔥 {fa(st.streak.streak)}</span>}
         {(e.kudos || 0) > 0 && <span style={{ ...card, padding: '6px 10px' }} title="تحسینِ امپراتورهای واقعی">👏 {fa(e.kudos)}</span>}
+        {/* 🔊 تنظیمِ صدا (سند ۲۱ Part 05): خاموش/روشن + حجم، ذخیره روی دستگاه، تغییرِ فوری با صدای تست */}
+        {st.soundEnabled !== false && <span style={{ position: 'relative' }}>
+          <button title="صدای بازخورد" onClick={() => setSndOpen(o => !o)} style={{ ...card, padding: '6px 10px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>{snd.on && snd.vol > 0 ? '🔊' : '🔇'}</button>
+          {sndOpen && <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 60, ...card, padding: 12, width: 190, boxShadow: '0 10px 28px -8px rgba(0,0,0,.55)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
+              <b>صدای بازخورد</b>
+              <button onClick={() => { const on = !snd.on; setSnd(s => ({ ...s, on })); setSfxPrefs({ on }); if (on) sfx('coin') }} style={{ ...btnGhost, padding: '3px 10px', fontSize: 11 }}>{snd.on ? 'خاموش کن' : 'روشن کن'}</button>
+            </div>
+            <input type="range" min={0} max={100} value={Math.round(snd.vol * 100)}
+              onChange={ev => { const vol = Number(ev.target.value) / 100; setSnd(s => ({ ...s, vol })); setSfxPrefs({ vol }) }}
+              onPointerUp={() => sfx('coin')}
+              style={{ width: '100%', marginTop: 10, accentColor: 'var(--gold)' }} />
+            <div style={{ fontSize: 10, color: 'var(--faint)', marginTop: 4 }}>روی همین دستگاه ذخیره می‌شود · هیچ خبرِ مهمی فقط صوتی نیست</div>
+          </div>}
+        </span>}
       </div>
     </div>
 

@@ -84,6 +84,8 @@ export interface ReosConfig {
     m100: { finePerM2Mult: number }
     // فاز ۲۹: بازسازیِ واقعی — هزینهٔ الان (٪ ارزش)، ارزش‌افزودهٔ شفاف (٪)، با سقف.
     renovation: { enabled: boolean; maxBoostPct: number; options: Record<string, { costPct: number; valuePct: number }> }
+    // فاز ۳۲ (سند ۲۱ — فصل ۱۱ Audio): بازخوردِ صوتیِ سنتزشده؛ کاربر هم کنترلِ خاموش/حجمِ خودش را دارد.
+    sound: { enabled: boolean }
     // فاز ۲۷: شانس و بازهٔ تخفیفِ مذاکره — قبلاً هاردکد بود (۲۵٪ پایه، ۲..۶٪) و کاربر می‌دید؛ حالا knob.
     nego: { baseChancePct: number; discountMin: number; discountMax: number }
     // GDD فصل ۴ بخش ۱۵: اعتبارِ ⭐ باید اثرِ واقعی داشته باشد — روی مذاکره و شرایطِ بانک.
@@ -200,6 +202,8 @@ export const DEFAULT_CONFIG: ReosConfig = {
       enabled: true, maxBoostPct: 25,
       options: { kitchen: { costPct: 3, valuePct: 5 }, facade: { costPct: 4, valuePct: 6 }, full: { costPct: 10, valuePct: 15 } },
     },
+    // صدا (فاز ۳۲): کلیدِ سراسری — کاربر هم در HUD خاموش/حجم دارد (localStorage).
+    sound: { enabled: true },
     // اعتبار = دارایی (سند ۱۴): هر ستارهٔ بالای ۱ → مذاکرهٔ راحت‌تر + نرخِ وامِ بهتر — شفاف و قطعی.
     reputation: { negoBonusPerStar: 2, loanRateCutPctPerStar: 3 },
     // پاداشِ سطح (سند ۱۶): هر سطحِ جدید × این مقدار ملک‌کوین — بدونِ پاداشِ گذشته‌نگر برای قدیمی‌ها.

@@ -385,6 +385,10 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             })}
           </div>
           <div style={card}>
+            <div style={sub}>🔊 صدا (فاز ۳۲ — سند ۲۱ فصل Audio)</div>
+            {row('بازخوردِ صوتی فعال (۱/۰)', cin('sound', 'enabled'), 'سنتزِ WebAudio — بدونِ فایل؛ کاربر هم در HUD خاموش/حجم دارد')}
+          </div>
+          <div style={card}>
             <div style={sub}>⚡ سرعت و زمان (فاز ۲۷ — «پرداخت فقط برای سرعت»)</div>
             {row('زمان‌خری فعال (۱/۰)', cin('speed', 'enabled'), 'کوین فقط انتظار را کوتاه می‌کند، نه نتیجه را')}
             {row('پیگیریِ پروانه (کوین/روز)', cin('speed', 'permitCoinsPerDay'), 'هر روز کوتاه‌شدنِ بررسی')}
