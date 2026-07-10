@@ -78,7 +78,7 @@ export interface ReosConfig {
     bigDeal: { enabled: boolean; topPct: number; discountMax: number; baseChancePct: number; level: number }
     // فاز ۴۵ (سند ۲۹ Auction Saga): تالارِ مزایدهٔ هفته — گام/حملهٔ سنگین (٪ لنگر)، سقفِ راند، باندِ برآورد،
     // سقفِ رقبا، سقفِ نفوذِ کسب‌شده (٪)، سوختِ انتقام (٪ به سقفِ بودجهٔ رقیب به‌ازای هر برد)، XP برد/شرکت.
-    auction: { enabled: boolean; level: number; stepPct: number; powerPct: number; maxRounds: number; estBandPct: number; rivalsMax: number; influenceMax: number; revengePct: number; xpWin: number; xpTry: number }
+    auction: { enabled: boolean; level: number; stepPct: number; powerPct: number; maxRounds: number; estBandPct: number; rivalsMax: number; influenceMax: number; revengePct: number; xpWin: number; xpTry: number; nemesisWins: number }
     // فاز ۴۸: جوایزِ پولِ واقعی — نردبانِ مرحله‌ای (آستانهٔ ارزشِ خالص × رشدِ هندسیِ تند؛ جایزهٔ تومانی با رشدِ کند و سقف)
     // + استخرِ پایدار: سقفِ کلِ پرداخت = payoutPct٪ از درآمدِ واقعیِ تأییدشدهٔ درگاه + گاردهای ضدسوءاستفاده.
     rewards: { enabled: boolean; payoutPct: number; baseThresholdToman: number; thresholdGrowth: number; baseRewardToman: number; rewardGrowth: number; maxSteps: number; maxRewardToman: number; minLevel: number; minAccountDays: number; monthlyCapToman: number }
@@ -251,7 +251,7 @@ export const DEFAULT_CONFIG: ReosConfig = {
     // معاملهٔ بزرگِ هفته (سند ۲۸ Part 07): از topPct٪ گران‌ترین آگهی‌های واقعی؛ یک تلاش/هفته؛ تخفیف تا سقف.
     bigDeal: { enabled: true, topPct: 5, discountMax: 12, baseChancePct: 35, level: 5 },
     // تالارِ مزایدهٔ هفته (سند ۲۹ Auction Saga): یک ملکِ واقعی از باندِ میانیِ بازار؛ یک ورود/هفته؛ شروع زیرِ قیمت.
-    auction: { enabled: true, level: 6, stepPct: 4, powerPct: 12, maxRounds: 10, estBandPct: 18, rivalsMax: 4, influenceMax: 5, revengePct: 6, xpWin: 120, xpTry: 30 },
+    auction: { enabled: true, level: 6, stepPct: 4, powerPct: 12, maxRounds: 10, estBandPct: 18, rivalsMax: 4, influenceMax: 5, revengePct: 6, xpWin: 120, xpTry: 30, nemesisWins: 3 },
     // جوایزِ پولِ واقعی (فاز ۴۸): مرحلهٔ ۱ = ارزشِ خالصِ ۱۰۰ میلیارد → ۳م تومان؛ آستانه ×۴ هر مرحله، جایزه ×۱٫۵
     // (سقف ۲۰م)؛ سقفِ پرداختِ کل = ۴۰٪ درآمدِ واقعی (۵۰۰ خرج شد → حداکثر ۲۰۰ برگردد)؛ تأییدِ نهایی همیشه با ادمین.
     rewards: { enabled: true, payoutPct: 40, baseThresholdToman: 100_000_000_000, thresholdGrowth: 4, baseRewardToman: 3_000_000, rewardGrowth: 1.5, maxSteps: 10, maxRewardToman: 20_000_000, minLevel: 5, minAccountDays: 7, monthlyCapToman: 10_000_000 },

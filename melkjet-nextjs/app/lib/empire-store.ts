@@ -408,6 +408,50 @@ export async function applyHiddenBadges(userId: string, now = Date.now()) {
   })
 }
 
+// ══════════ فاز ۵۰ (سند ۳۰ فصل ۱۷ Part 20 — Collection System «The Hunt») ══════════
+// مجموعه‌های «آشکار» با پیشرفتِ قابلِ‌دیدن (برخلافِ مأموریت‌های مخفی) — همه از رفتار/داراییِ واقعی.
+// تکمیلِ مجموعه = نشانِ داستان‌دار که «عنوان» هم می‌شود (سیستمِ Title فاز ۱۸) — پاداشِ پرستیژی، نه پولی.
+export const COLLECTIONS: Array<{ key: string; icon: string; fa: string; titleFa: string; goal: number; progress: (e: EmpireData) => number }> = [
+  { key: 'کلکسیونرِ چهارگانه', icon: '🗂', fa: 'چهارگانهٔ املاک — مالکِ هر ۴ نوع دارایی (آپارتمان/ویلا/تجاری/زمین)', titleFa: 'کلکسیونرِ چهارگانه', goal: 4, progress: e => new Set(e.assets.map(a => a.kind)).size },
+  { key: 'فاتحِ محله‌ها', icon: '🗺', fa: 'فاتحِ محله‌ها — دارایی در ۳ محلهٔ متفاوتِ شهر', titleFa: 'فاتحِ محله‌ها', goal: 3, progress: e => new Set(e.assets.map(a => a.hood).filter(Boolean)).size },
+  { key: 'سلطانِ برج‌ها', icon: '🏗', fa: 'سلطانِ برج‌ها — ۲ پروژهٔ ساختِ تحویل‌داده', titleFa: 'سلطانِ برج‌ها', goal: 2, progress: e => e.stats?.projectsDelivered || 0 },
+  { key: 'شکارچیِ تالار', icon: '🔨', fa: 'شکارچیِ تالار — ۳ بردِ چکش در تالارِ مزایده', titleFa: 'شکارچیِ تالار', goal: 3, progress: e => e.stats?.auctionWins || 0 },
+  { key: 'امپراتورِ درآمد', icon: '💰', fa: 'امپراتورِ درآمد — ۵۰۰ میلیون تومان درآمدِ اجاره/کسب‌وکار', titleFa: 'امپراتورِ درآمد', goal: 500_000_000, progress: e => e.assets.reduce((s, a) => s + (a.income || 0), 0) },
+]
+export function collectionsOf(e: EmpireData): Array<{ key: string; icon: string; fa: string; titleFa: string; goal: number; have: number; done: boolean; earned: boolean }> {
+  return COLLECTIONS.map(c => {
+    const have = c.progress(e)
+    return { key: c.key, icon: c.icon, fa: c.fa, titleFa: c.titleFa, goal: c.goal, have: Math.min(have, c.goal), done: have >= c.goal, earned: e.badges.includes(c.key) }
+  })
+}
+// اعمالِ مجموعه‌های تازه‌کامل‌شده — نشان + تایم‌لاینِ جشن (مثلِ applyHiddenBadges، ولی برای هدف‌های آشکار).
+export async function applyCollections(userId: string, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const fresh = COLLECTIONS.filter(c => !e.badges.includes(c.key) && c.progress(e) >= c.goal)
+    if (!fresh.length) return 'مجموعهٔ تازه‌ای کامل نشده'
+    for (const c of fresh) {
+      e.badges.push(c.key)
+      e.timeline.push({ at: now, icon: '🏆', title: `مجموعه کامل شد: ${c.icon} ${c.key}`, detail: `${c.fa} — حالا می‌توانی عنوانِ «${c.titleFa}» را روی نامت بگذاری` })
+    }
+  })
+}
+
+// رکوردهای شخصی (Part 20 «⭐ رکوردها») — فقط از دادهٔ ثبت‌شدهٔ واقعیِ خودِ بازیکن؛ بدونِ داده = بدونِ رکورد.
+export function recordsOf(e: EmpireData): Array<{ icon: string; label: string; value: number; unit: 'toman' | 'count'; detail?: string }> {
+  const out: Array<{ icon: string; label: string; value: number; unit: 'toman' | 'count'; detail?: string }> = []
+  const maxBuy = e.assets.reduce((m, a) => a.buyPrice > m.v ? { v: a.buyPrice, t: a.nickname || a.title } : m, { v: 0, t: '' })
+  if (maxBuy.v > 0) out.push({ icon: '💎', label: 'گران‌ترین خرید', value: maxBuy.v, unit: 'toman', detail: maxBuy.t.slice(0, 40) })
+  const bestProject = (e.projectHist || []).reduce((m, r) => r.revenue > m.v ? { v: r.revenue, t: r.title } : m, { v: 0, t: '' })
+  if (bestProject.v > 0) out.push({ icon: '🏗', label: 'بزرگ‌ترین پروژهٔ تحویلی', value: bestProject.v, unit: 'toman', detail: bestProject.t.slice(0, 40) })
+  const bestPnl = (e.projectHist || []).reduce((m, r) => r.pnl > m ? r.pnl : m, 0)
+  if (bestPnl > 0) out.push({ icon: '📈', label: 'پرسودترین پروژه', value: bestPnl, unit: 'toman' })
+  if ((e.realized || 0) > 0) out.push({ icon: '💵', label: 'سودِ تحقق‌یافتهٔ کل', value: e.realized, unit: 'toman' })
+  if ((e.stats?.auctionWins || 0) > 0) out.push({ icon: '🔨', label: 'بردهای تالارِ مزایده', value: e.stats!.auctionWins!, unit: 'count' })
+  if ((e.stats?.negoWins || 0) > 0) out.push({ icon: '🤝', label: 'مذاکره‌های بردی', value: e.stats!.negoWins, unit: 'count' })
+  if ((e.stats?.crisisRecovered || 0) > 0) out.push({ icon: '🕊', label: 'عبور از بحران', value: e.stats!.crisisRecovered!, unit: 'count' })
+  return out
+}
+
 // اسنپ‌شاتِ روزانهٔ ارزشِ خالص (جلد ۲۶ «سودِ دیروز») — اولین بازدیدِ هر روز ثبت می‌شود.
 export async function snapshotNetWorth(userId: string, day: number, netWorth: number) {
   return mutateEmpire(userId, e => {
@@ -2055,6 +2099,16 @@ export async function markRewardClaimed(userId: string, step: number, amount: nu
     if (e.claims[key]) return 'برای این مرحله قبلاً درخواست داده‌ای'
     e.claims[key] = now
     e.timeline.push({ at: now, icon: '🎁', title: `درخواستِ جایزهٔ واقعیِ مرحلهٔ ${step.toLocaleString('fa-IR')} ثبت شد`, detail: `${Math.round(amount / 1e6).toLocaleString('fa-IR')}م تومان — پس از تأییدِ ملک‌جت به کیف‌پولت واریز می‌شود` })
+  })
+}
+
+// فاز ۵۰ (سند ۳۰ Part 23 — Nemesis): دشمنی از برخوردهای «واقعی» شکل می‌گیرد نه از پیش — اعلامِ یک‌باره در تایم‌لاین.
+export async function noteNemesis(userId: string, rivalKey: string, rivalName: string, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const key = `nem_${rivalKey}`
+    if (e.claims[key]) return 'قبلاً ثبت شده'
+    e.claims[key] = now
+    e.timeline.push({ at: now, icon: '💢', title: `«${rivalName}» حریفِ قسم‌خورده‌ات شد`, detail: 'بارها از جلویش برده‌ای — از این به بعد رسانه‌ها رقابتِ شما را دنبال می‌کنند و او سرِ میزِ مزایده دیگر اقتصادی فکر نمی‌کند' })
   })
 }
 

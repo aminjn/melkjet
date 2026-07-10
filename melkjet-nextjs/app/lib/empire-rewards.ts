@@ -80,6 +80,17 @@ export function rewardLadderOf(cfg: RewardsCfg): Array<{ step: number; threshold
   return out
 }
 
+// فاز ۵۰ (سند ۳۰ Ch19 Part 6 — Reward Forecast): برآوردِ صادقانه از سرعتِ رشدِ «واقعیِ» همین هفتهٔ خودِ بازیکن.
+// بدونِ رشدِ مثبت یا بدونِ مرجعِ زمانی → هیچ ادعایی (null)؛ عددِ ساختگی نداریم.
+export function rewardForecastOf(netWorth: number, threshold: number, refNetWorth: number, refDays: number): { left: number; perDay: number; days: number } | null {
+  const left = threshold - netWorth
+  if (left <= 0) return { left: 0, perDay: 0, days: 0 }
+  if (!(refDays > 0)) return null
+  const perDay = (netWorth - refNetWorth) / refDays
+  if (!(perDay > 0)) return null
+  return { left, perDay: Math.round(perDay), days: Math.max(1, Math.ceil(left / perDay)) }
+}
+
 // وضعیتِ استخر: pool = ٪ از درآمدِ واقعی؛ تعهد = پرداخت‌شده + در انتظارِ تأیید؛ available هرگز منفی نه.
 export function rewardPoolOf(db: Pick<RewardsDb, 'revenueTotal' | 'paidOut' | 'requests'>, payoutPct: number) {
   const pool = Math.floor(Math.max(0, db.revenueTotal) * Math.max(0, Math.min(100, payoutPct)) / 100)

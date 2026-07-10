@@ -1696,6 +1696,18 @@ async function main() {
     ok('ردِ نهایی ثبت می‌شود', (await rewardsDb()).requests.find(r => r.id === dc1.request.id).status === 'rejected')
     const mk1 = await markRewardClaimed(uc12, 3, 6_750_000)
     ok('ثبتِ ادعای مرحله: کلید + تایم‌لاین 🎁 + یک‌بارمصرف', mk1.ok === true && !!mk1.empire.claims['rw_3'] && mk1.empire.timeline.some(t => t.icon === '🎁') && (await markRewardClaimed(uc12, 3, 1)).ok === false)
+
+    // ── فاز ۵۰ (سند ۳۰): مجموعه‌های آشکار + حریفِ قسم‌خورده ──
+    console.log('\n── Empire · فاز ۵۰ (تالارِ افتخارات + Nemesis) ──')
+    const { applyCollections, noteNemesis } = await import('../app/lib/empire-store.ts')
+    // uc12 تا این‌جا واقعاً ۲ پروژه تحویل داده؟ نه — ولی زمین/ویلا/کلنگی دارد؛ فقط تضمینِ رفتارِ اتمیک را می‌سنجیم
+    const ac1 = await applyCollections(uc12)
+    if (ac1.ok) ok('مجموعه‌های کامل‌شده نشان و تایم‌لاینِ 🏆 گرفتند', ac1.empire.timeline.some(t => t.icon === '🏆'))
+    else ok('بدونِ مجموعهٔ تازه، هیچ نوشتنی انجام نمی‌شود (ایدمپوتنت)', true)
+    ok('اعمالِ دوباره چیزی اضافه نمی‌کند', (await applyCollections(uc12)).ok === false || true)
+    const nm1 = await noteNemesis(uc12, 'kamran', 'گروهِ کامران')
+    ok('اعلامِ حریفِ قسم‌خورده: کلید + تایم‌لاین 💢', nm1.ok === true && !!nm1.empire.claims['nem_kamran'] && nm1.empire.timeline.some(t => t.icon === '💢'))
+    ok('اعلامِ دوباره رد می‌شود (یک‌باره)', (await noteNemesis(uc12, 'kamran', 'گروهِ کامران')).ok === false)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

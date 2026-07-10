@@ -723,6 +723,7 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             {row('سقفِ تعدادِ رقبا', cin('auction', 'rivalsMax'), '۲ تا این عدد — انتخابِ قطعی از هشِ هفته')}
             {row('سقفِ نفوذِ کسب‌شده (٪)', cin('auction', 'influenceMax'), 'فقط از رفتارِ واقعی (فروشِ سودده/تحویلِ پروژه/خوش‌حسابی/ققنوس/سطح) — خریدنی نیست')}
             {row('سوختِ انتقامِ رقبا (٪)', cin('auction', 'revengePct'), 'به‌ازای هر بردِ قبلی از جلوی یک رقیب، سقفِ بودجه‌اش این‌قدر بالاتر می‌رود (تا ۳ برد)')}
+            {row('آستانهٔ حریفِ قسم‌خورده (برد)', cin('auction', 'nemesisWins'), 'فاز ۵۰ (Nemesis): این‌تعداد برد از جلوی یک رقیب → دشمنیِ آشکار + تیترِ دوئلِ رسانه‌ای')}
             {row('XP بردِ مزایده', cin('auction', 'xpWin'))}
             {row('XP شرکت در مزایده', cin('auction', 'xpTry'))}
             <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>⚙️ مرکزِ خودکارسازی (فاز ۴۰ — سند ۲۷ Part 13: «هیچ اقدامِ مالی خودکار نیست»)</div>

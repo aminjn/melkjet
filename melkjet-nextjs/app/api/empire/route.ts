@@ -51,8 +51,10 @@ import { ownerOfListing, claimListing, releaseListing, transferListing, myClanOf
 // فاز ۳۹ (سند ۲۶ فصل ۱۶ Cognitive AI): هوشِ سرمایه‌گذاری — ارزش‌گذاری/تصمیم‌یار/روندِ محله/سلامتِ مالی/اولویت‌ها؛ همه از دادهٔ واقعی.
 import { compStatsOf, valuationOf, decisionOf, marketIntelOf, cashflowOf, financialHealthOf, prioritiesOf, evalRules, RULE_TEMPLATES, tradeAskCheckOf, jvOfferCheckOf, crisisOf, rarityOf } from '@/app/lib/empire-intel'
 // فاز ۴۸ (جوایزِ پولِ واقعی): نردبان/استخر/صفِ تأیید + کیف‌پولِ یکپارچهٔ سایت (سطلِ «پاداش»)
-import { rewardLadderOf, requestPayout, userPayoutsOf } from '@/app/lib/empire-rewards'
+import { rewardLadderOf, requestPayout, userPayoutsOf, rewardForecastOf } from '@/app/lib/empire-rewards'
 import { bucketBalance } from '@/app/lib/reos/wallet'
+// فاز ۵۰ (سند ۳۰): تالارِ افتخارات (رکوردها/مجموعه‌ها) + حریفِ قسم‌خورده
+import { recordsOf, collectionsOf, applyCollections, COLLECTIONS, noteNemesis } from '@/app/lib/empire-store'
 import { loadSnapshots } from '@/app/lib/empire-metrics'
 
 const hoodOf = (loc?: string) => { const p = String(loc || '').split(/[،,]/).map(x => x.trim()).filter(Boolean); return p.length > 1 ? p[p.length - 1] : (p[0] || '') }
@@ -396,9 +398,12 @@ async function stateOf(userId: string, e00: EmpireData) {
   // کشفِ مأموریت‌های مخفی (جلد ۲۶) — از رفتارِ واقعیِ همین لحظه
   const hb = await applyHiddenBadges(userId).catch(() => null)
   const e3 = hb?.ok && hb.empire ? hb.empire : e2
+  // فاز ۵۰ (سند ۳۰ Part 20): مجموعه‌های آشکار — تکمیلِ تازه = نشان/عنوان + جشنِ تایم‌لاین
+  const cb = await applyCollections(userId).catch(() => null)
+  const e3b = cb?.ok && cb.empire ? cb.empire : e3
   // پاداشِ Level Up (سند ۱۶): سطحِ جدید از XPِ واقعی → کوین + نقطهٔ تایم‌لاین (هر سطح یک‌بار)
   const lvr = await applyLevelUpReward(userId, config().empire.levelUpCoins).catch(() => null)
-  const e = lvr?.ok && lvr.empire ? lvr.empire : e3
+  const e = lvr?.ok && lvr.empire ? lvr.empire : e3b
   const [info, missions, total] = await Promise.all([liveInfoOf(e), missionsOf(userId, e), empireCount()])
   const prices = info.prices
   const nw = netWorthOf(e, prices, mc || undefined)
@@ -1638,8 +1643,10 @@ export async function POST(req: NextRequest) {
       const rivalCards = setup.rivals.map(rv => {
         const d = AUCTION_RIVALS.find(x => x.key === rv.key)!
         const grudge = Math.min(3, Math.max(0, (e.rivalScore || {})[rv.key] || 0))
-        return { key: d.key, name: d.name, ceo: d.ceo, icon: d.icon, style: d.style, desc: d.desc, grudge }
+        // فاز ۵۰ (سند ۳۰ Part 23 — Nemesis): دشمنی از بردهای واقعیِ مکرر، نه از پیش‌نویسِ بازی
+        return { key: d.key, name: d.name, ceo: d.ceo, icon: d.icon, style: d.style, desc: d.desc, grudge, nemesis: ((e.rivalScore || {})[rv.key] || 0) >= Math.max(1, cfg.nemesisWins) }
       })
+      const nem50 = rivalCards.find(r => r.nemesis)
       return NextResponse.json({
         ok: true,
         auction: {
@@ -1655,6 +1662,7 @@ export async function POST(req: NextRequest) {
           mine: !!(owner && owner.userId === userId),
         },
         influence: infl,
+        duel: nem50 ? `تمام رسانه‌ها رقابتِ تو و «${nem50.name}» را دنبال می‌کنند — این دیگر فقط یک مزایده نیست` : null,
         entered: !!e.claims[`au_${week}`],
         run: run ? { ...run, anchor: run.done ? run.anchor : 0 } : null,   // لنگر (قیمتِ واقعی) تا پایان پنهان می‌ماند
         win: e.auctionWin && e.auctionWin.week === week ? e.auctionWin : null,
@@ -1689,6 +1697,13 @@ export async function POST(req: NextRequest) {
       })
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       recordEvent({ type: 'user_clicked_property', userId, propertyId: it.id, meta: { src: 'empire_auction' } }).catch(() => {})
+      // فاز ۵۰ (Part 23): اگر رقیبی که بارها از جلویش برده‌ای سرِ این میز است، دشمنیِ آشکار یک‌بار اعلام می‌شود
+      for (const rv of setup.rivals) {
+        if (((e.rivalScore || {})[rv.key] || 0) >= Math.max(1, cfg.nemesisWins)) {
+          const d50 = AUCTION_RIVALS.find(x => x.key === rv.key)
+          if (d50) noteNemesis(userId, rv.key, d50.name).catch(() => {})
+        }
+      }
       const run = r.empire!.auctionRun!
       return NextResponse.json({ ok: true, run: { ...run, anchor: 0 }, nextBid: { bid: auctionNextBidOf(run, 'bid', cfg), power: auctionNextBidOf(run, 'power', cfg) }, capital: r.empire!.capital })
     }
@@ -1712,6 +1727,24 @@ export async function POST(req: NextRequest) {
         nextBid: !run.done ? { bid: auctionNextBidOf(run, 'bid', cfg), power: auctionNextBidOf(run, 'power', cfg) } : null,
         win: r.empire!.auctionWin && r.empire!.auctionWin!.week === week ? r.empire!.auctionWin : null,
         capital: r.empire!.capital,
+      })
+    }
+
+    // 🏛 تالارِ افتخارات (فاز ۵۰ — سند ۳۰ Part 20 «The Hunt»): رکوردها/مجموعه‌ها/نشان‌ها — همه از رفتارِ ثبت‌شدهٔ واقعی.
+    case 'hall': {
+      const e0 = await getEmpire(userId)
+      if (!e0) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      const cbH = await applyCollections(userId).catch(() => null)
+      const e = cbH?.ok && cbH.empire ? cbH.empire : e0
+      const badgeFa: Record<string, string> = { Founder: 'بنیان‌گذار', CEO: 'مدیرعامل', 'First Permit': 'اولین پروانه', 'First Owner': 'اولین مالکیت', 'Golden Hammer': 'چکشِ طلایی', Phoenix: 'ققنوس' }
+      for (const hb2 of HIDDEN_BADGES) badgeFa[hb2.key] = hb2.fa.split(' — ')[0]
+      for (const c2 of COLLECTIONS) badgeFa[c2.key] = c2.titleFa
+      return NextResponse.json({
+        ok: true,
+        records: recordsOf(e),
+        collections: collectionsOf(e),
+        badges: e.badges.map(k => ({ key: k, fa: badgeFa[k] || k })),
+        title: e.title || '',
       })
     }
 
@@ -1739,8 +1772,12 @@ export async function POST(req: NextRequest) {
         }
       })
       const rewardBalance = await bucketBalance(userId, 'reward').catch(() => 0)
+      // فاز ۵۰ (سند ۳۰ Ch19 Part 6 — Reward Forecast): «فقط X مانده» + برآوردِ روز از رشدِ واقعیِ همین هفته
+      const target50 = ladder.find(x => !e.claims[`rw_${x.step}`])
+      const refDays50 = e.weekSnap ? Math.max(0, dayNumberOf(Date.now()) - e.weekSnap.week * 7) : 0
+      const forecast = target50 ? rewardForecastOf(nw, target50.threshold, e.weekSnap?.netWorth ?? nw, refDays50) : null
       return NextResponse.json({
-        ok: true, steps, netWorth: nw, rewardBalance,
+        ok: true, steps, netWorth: nw, rewardBalance, forecast,
         gate: gateOk ? null : `برای فعال‌شدنِ جوایز: حداقل سطحِ ${cfg.minLevel.toLocaleString('fa-IR')} و ${cfg.minAccountDays.toLocaleString('fa-IR')} روز عضویت لازم است (الان: سطح ${lv.toLocaleString('fa-IR')}، ${ageDays.toLocaleString('fa-IR')} روز)`,
       })
     }

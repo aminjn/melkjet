@@ -201,6 +201,8 @@ export default function EmpirePage() {
   const loadBd = async () => { const d = await api({ action: 'bigDeal' }); if (d) setBd(d) }
   // فاز ۴۸: مسیرِ جوایزِ واقعی — نردبان + کیف‌پولِ پاداش (تبِ مأموریت‌ها)
   const [rw, setRw] = useState<any>(null)
+  // فاز ۵۰ (سند ۳۰ Part 20): تالارِ افتخارات — رکوردها/مجموعه‌ها/نشان‌ها (تبِ رتبه‌ها)
+  const [hall, setHall] = useState<any>(null)
   // فاز ۴۵ (سند ۲۹ Auction Saga): تالارِ مزایدهٔ هفته — لابی، نبردِ زنده، برد/باخت
   const [au, setAu] = useState<any>(null)        // وضعیتِ مزایده از سرور (لابی + ران + برد)
   const [auRun, setAuRun] = useState<any>(null)  // رانِ زنده — بعد از هر حرکت از سرور می‌آید
@@ -314,6 +316,16 @@ export default function EmpirePage() {
     return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, gtab, rw])
+
+  // فاز ۵۰: تالارِ افتخارات — با بازشدنِ تبِ رتبه‌ها (تنبل، یک‌بار)
+  useEffect(() => {
+    if (step !== 'dash' || gtab !== 'ranks' || hall) return
+    let alive = true
+    fetch('/api/empire', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'hall' }) })
+      .then(r => r.json()).then(d => { if (alive && d?.ok) setHall(d) }).catch(() => {})
+    return () => { alive = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, gtab, hall])
 
   // فاز ۴۵: تالارِ مزایدهٔ هفته — یک‌بار با ورود به داشبورد؛ رانِ نیمه‌کاره هم از همین‌جا برمی‌گردد
   useEffect(() => {
@@ -913,15 +925,16 @@ export default function EmpirePage() {
             : <div style={{ fontSize: 12, color: '#e8c37a', marginTop: 5 }}>برآورد: ؟؟؟ <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>— {A.estNote}</span></div>}
           <div style={{ fontSize: 12, color: '#7ee0b8', marginTop: 3 }}>🔔 قیمتِ شروعِ تالار: <b>{faB(A.start)} تومان</b> — چکش کجا بایستد، دستِ شماست</div>
         </div>
-        {/* لابی (Part 2): رقبا با شخصیت + شایعه‌هایی که شاید دروغ باشند */}
+        {/* لابی (Part 2): رقبا با شخصیت + شایعه‌هایی که شاید دروغ باشند؛ فاز ۵۰: حریفِ قسم‌خورده از بردهای واقعیِ مکرر */}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
           {(A.rivals || []).map((rv: any) => (
             <span key={rv.key} title={`${rv.ceo} — ${rv.desc}${rv.grudge ? ` · ${fa(rv.grudge)} بار از جلویش برده‌ای؛ دنبالِ تلافی است` : ''}`}
-              style={{ fontSize: 11, border: `1px solid ${rv.grudge ? '#e08a7e' : 'var(--line2)'}`, borderRadius: 999, padding: '3px 10px', background: 'var(--bg2)', color: rv.grudge ? '#e08a7e' : 'var(--text)' }}>
-              {rv.icon} {rv.name} <span style={{ color: 'var(--muted)' }}>· {rv.style}</span>{rv.grudge ? ' 😤' : ''}
+              style={{ fontSize: 11, border: `1px solid ${rv.nemesis ? '#e05252' : rv.grudge ? '#e08a7e' : 'var(--line2)'}`, borderRadius: 999, padding: '3px 10px', background: rv.nemesis ? 'rgba(224,82,82,.1)' : 'var(--bg2)', color: rv.nemesis ? '#ff9d9d' : rv.grudge ? '#e08a7e' : 'var(--text)', boxShadow: rv.nemesis ? '0 0 10px rgba(224,82,82,.25)' : undefined, fontWeight: rv.nemesis ? 700 : 400 }}>
+              {rv.icon} {rv.name} <span style={{ color: 'var(--muted)', fontWeight: 400 }}>· {rv.style}</span>{rv.nemesis ? ' 💢 قسم‌خورده' : rv.grudge ? ' 😤' : ''}
             </span>
           ))}
         </div>
+        {au.duel && <div style={{ fontSize: 11.5, color: '#ff9d9d', fontWeight: 700, marginTop: 7 }}>🔥 {au.duel}</div>}
         {!live && !finished && (A.rumors || []).map((t: string, i: number) => (
           <div key={i} style={{ fontSize: 11.5, color: '#b7aef2', fontStyle: 'italic', marginTop: i ? 3 : 8 }}>🤫 {t}</div>
         ))}
@@ -1823,6 +1836,10 @@ export default function EmpirePage() {
           <div style={{ height: 8, background: 'var(--line)', borderRadius: 4, overflow: 'hidden' }}>
             <div style={{ width: `${pct}%`, height: 8, background: 'linear-gradient(90deg, var(--goldDim), var(--gold))', borderRadius: 4, boxShadow: '0 0 10px rgba(212,175,55,.4)' }} />
           </div>
+          {/* فاز ۵۰ (سند ۳۰ Ch19 Part 6 — Reward Forecast): «فقط X مانده» + برآوردِ روز از رشدِ واقعیِ همین هفته */}
+          {rw.forecast && rw.forecast.left > 0 && <div style={{ fontSize: 11, color: '#e8c37a', marginTop: 5 }}>
+            ⚡ فقط <b>{faB(rw.forecast.left)}</b> مانده{rw.forecast.days ? <span style={{ color: 'var(--muted)' }}> · با سرعتِ رشدِ همین هفته‌ات (روزی ~{faB(rw.forecast.perDay)})، برآورد <b style={{ color: '#e8c37a' }}>~{fa(Math.min(365, rw.forecast.days))} روز</b> تا این مرحله</span> : ''}
+          </div>}
         </div>}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 10 }}>
           {rw.steps.map((s: any) => (
@@ -2330,6 +2347,55 @@ export default function EmpirePage() {
 
     {gtab === 'ranks' && <>
     {tabHead('🏆', 'رتبه‌ها', 'رقابت و اتحاد با بازیکنانِ واقعی')}
+
+    {/* 🏛 تالارِ افتخارات (فاز ۵۰ — سند ۳۰ Part 20 «The Hunt»): هر چیزِ این اتاق را خودت به دست آورده‌ای —
+        رکوردهای واقعی، مجموعه‌های قابلِ‌تکمیل با عنوان‌گشایی، و گالریِ نشان‌ها (روان‌شناسیِ کلکسیون). */}
+    {hall?.ok && <div style={{ ...card, borderColor: 'var(--gold)', background: 'linear-gradient(165deg, rgba(212,175,55,.1), rgba(212,175,55,.02) 60%)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <b style={{ fontSize: 14 }}>🏛 تالارِ افتخارات</b>
+        <span style={{ fontSize: 11, color: 'var(--muted)' }}>هر چیزِ این اتاق را خودت به دست آورده‌ای — هیچ‌کدام خریدنی نیست</span>
+      </div>
+      {(hall.records || []).length > 0 && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 8, marginTop: 10 }}>
+        {hall.records.map((r: any, i: number) => (
+          <div key={i} style={{ background: 'var(--bg2)', border: '1px solid var(--goldDim)', borderRadius: 12, padding: '10px 12px', textAlign: 'center' }}>
+            <div style={{ fontSize: 20 }}>{r.icon}</div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--gold)', marginTop: 2 }}>{r.unit === 'toman' ? faB(r.value) : fa(r.value)}{r.unit === 'toman' ? ' ت' : ''}</div>
+            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{r.label}</div>
+            {r.detail && <div style={{ fontSize: 9.5, color: 'var(--faint)', marginTop: 2 }}>{r.detail}</div>}
+          </div>
+        ))}
+      </div>}
+      {!(hall.records || []).length && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>هنوز رکوردی ثبت نشده — اولین خرید، اولین رکوردت می‌شود.</div>}
+      <div style={{ fontSize: 12, fontWeight: 700, margin: '12px 0 6px' }}>🗃 مجموعه‌ها <span style={{ fontSize: 10.5, color: 'var(--muted)', fontWeight: 400 }}>— تکمیلِ هر مجموعه یک «عنوان» بازمی‌کند که می‌توانی روی نامت بگذاری</span></div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {(hall.collections || []).map((c: any) => (
+          <div key={c.key} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 11.5, padding: '6px 8px', borderRadius: 10, background: c.earned ? 'rgba(212,175,55,.08)' : 'var(--bg2)', border: c.earned ? '1px solid var(--goldDim)' : '1px solid transparent' }}>
+            <span style={{ fontSize: 16 }}>{c.icon}</span>
+            <span style={{ flex: 1, minWidth: 180 }}>{c.fa}</span>
+            {c.earned
+              ? <span style={{ color: 'var(--gold)', fontWeight: 800 }}>🏆 کامل شد — عنوانِ «{c.titleFa}» باز است</span>
+              : <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 90, height: 6, background: 'var(--line)', borderRadius: 3, overflow: 'hidden', display: 'inline-block' }}>
+                    <span style={{ display: 'block', width: `${Math.min(100, Math.round(c.have / c.goal * 100))}%`, height: 6, background: 'linear-gradient(90deg, var(--goldDim), var(--gold))' }} />
+                  </span>
+                  <span style={{ color: 'var(--muted)', fontSize: 10.5 }}>{c.goal >= 1e6 ? `${faB(c.have)} از ${faB(c.goal)}` : `${fa(c.have)} از ${fa(c.goal)}`}</span>
+                </span>}
+          </div>
+        ))}
+      </div>
+      {(hall.badges || []).length > 0 && <>
+        <div style={{ fontSize: 12, fontWeight: 700, margin: '12px 0 6px' }}>🎖 نشان‌ها ({fa(hall.badges.length)})</div>
+        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+          {hall.badges.map((bg: any) => (
+            <span key={bg.key} title={bg.key} style={{ fontSize: 10.5, border: '1px solid var(--goldDim)', color: hall.title === bg.key ? '#1a1503' : 'var(--gold)', background: hall.title === bg.key ? 'var(--gold)' : 'transparent', borderRadius: 999, padding: '3px 10px', cursor: 'pointer', fontWeight: hall.title === bg.key ? 800 : 400 }}
+              onClick={async () => { const d = await api({ action: 'setTitle', title: hall.title === bg.key ? '' : bg.key }); if (d) { setSt(d); setHall((h: any) => h ? { ...h, title: h.title === bg.key ? '' : bg.key } : h) } }}>
+              {bg.fa}{hall.title === bg.key ? ' ✓ عنوانِ فعال' : ''}
+            </span>
+          ))}
+        </div>
+        <div style={{ fontSize: 10, color: 'var(--faint)', marginTop: 6 }}>روی هر نشان بزن تا عنوانِ فعالِ کنارِ نامت شود — در لیدربورد و پروفایلِ عمومی دیده می‌شود.</div>
+      </>}
+    </div>}
     {/* ۵ جدولِ رتبه (فصل ۵) + لیگِ محله (§7.2) */}
     <details style={card} onToggle={(ev: any) => { if (ev.currentTarget.open && !boards) doBoards() }}>
       <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>🏅 جدول‌های رتبه و لیگِ محله</summary>
