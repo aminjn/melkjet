@@ -38,6 +38,7 @@ export interface RosterScrape {
   lastTotal?: number
   lastUnnamed?: number
   running?: boolean
+  runRequested?: boolean   // «همگام‌سازی الان» — کرونِ اینستنسِ ۰ برمی‌دارد
 }
 interface DB { scrapes: Record<string, RosterScrape> }
 
@@ -71,6 +72,20 @@ export async function addScrape(input: { slug: string; agencyName?: string; useA
   })
 }
 export async function removeScrape(id: string): Promise<void> { await mutate(db => { delete db.scrapes[id] }) }
+
+// «همگام‌سازیِ الان» — فقط پرچم می‌زند؛ کارِ سنگین را کرونِ اینستنسِ ۰ برمی‌دارد.
+export async function requestRun(id: string): Promise<boolean> {
+  return mutate(db => { const s = db.scrapes[id]; if (!s) return false; s.runRequested = true; return true })
+}
+const PERIOD: Record<RosterScrape['schedule'], number> = { off: 0, '6h': 6 * 3600_000, daily: 24 * 3600_000 }
+// اسکرپ‌هایی که باید سینک شوند (درخواستِ دستی یا زمان‌بندیِ سررسیده) و در حالِ اجرا نیستند.
+export async function listDueRosters(now: number): Promise<RosterScrape[]> {
+  return Object.values((await load()).scrapes).filter(s => {
+    if (s.running) return false
+    if (s.runRequested) return true
+    const p = PERIOD[s.schedule]; return !!p && (!s.lastRun || now - s.lastRun >= p)
+  })
+}
 async function patchScrape(id: string, patch: Partial<RosterScrape>): Promise<void> { await mutate(db => { if (db.scrapes[id]) Object.assign(db.scrapes[id], patch) }) }
 
 // ── ایمپورتِ یک خوشه (توکن‌ها) زیرِ یک owner — dedup-safe ──
@@ -104,7 +119,7 @@ async function importClusterTokens(owner: string, tokens: string[], sourceId: st
 export async function syncRoster(id: string, onProgress?: (done: number, total: number) => void): Promise<{ ok: boolean; error?: string; advisors: number; total: number; unnamed: number }> {
   const scrape = await getScrape(id)
   if (!scrape) return { ok: false, error: 'اسکرپ یافت نشد', advisors: 0, total: 0, unnamed: 0 }
-  await patchScrape(id, { running: true })
+  await patchScrape(id, { running: true, runRequested: false })
   try {
     const roster = await buildAgencyRoster(scrape.slug, { useAI: scrape.useAI, onProgress })
     if (!roster.ok) { await patchScrape(id, { running: false, lastRun: Date.now(), lastError: roster.error || 'خطا در خوشه‌بندی' }); return { ok: false, error: roster.error, advisors: 0, total: 0, unnamed: 0 } }
