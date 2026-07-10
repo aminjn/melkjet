@@ -84,9 +84,10 @@ export async function buildAgencyRoster(
   slugOrUrl: string,
   opts: { useAI?: boolean; maxDetails?: number; onProgress?: (done: number, total: number) => void } = {},
 ): Promise<AgencyRoster> {
-  const slug = (divarProfileSlug(slugOrUrl) || String(slugOrUrl || '').trim()).toLowerCase()
+  // توکنِ برندِ دیوار حساس به بزرگ/کوچکیِ حروف است — هرگز lowercase نکن.
+  const slug = (divarProfileSlug(slugOrUrl) || String(slugOrUrl || '').trim())
   const base: AgencyRoster = { ok: false, slug, total: 0, scanned: 0, advisors: [], unnamed: { tokens: [], posts: [] } }
-  if (!slug || !/^[a-z0-9_-]{2,}$/.test(slug)) return { ...base, error: 'slug/لینکِ برند نامعتبر است' }
+  if (!slug || !/^[A-Za-z0-9_-]{2,}$/.test(slug)) return { ...base, error: 'slug/لینکِ برند نامعتبر است' }
 
   const { posts, name, reason } = await fetchDivarProfileTokens(slug)
   if (!posts.length) return { ...base, agencyName: name, error: reason === 'unreachable' ? 'به دیوار نرسید (پروکسی؟)' : 'آگهی‌ای یافت نشد' }

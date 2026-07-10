@@ -50,7 +50,8 @@ function fileSave(db: DB) { writeFileSync(FILE, JSON.stringify(db, null, 2), 'ut
 async function load(): Promise<DB> { return pgEnabled() ? await kvGet<DB>(KV, empty()) : fileLoad() }
 async function mutate<R>(fn: (db: DB) => R): Promise<R> { if (pgEnabled()) return kvMutate<DB, R>(KV, empty(), fn); const db = fileLoad(); const r = fn(db); fileSave(db); return r }
 
-const cleanSlug = (s: string) => String(s || '').trim().toLowerCase().replace(/.*divar\.ir\/(?:pro|business(?:es)?)\//, '').replace(/[^a-z0-9_-].*$/, '')
+// توکنِ برندِ دیوار حساس به حروف است — فقط پیشوندِ URL و دنبالهٔ اضافی را می‌گیریم، بدونِ lowercase.
+const cleanSlug = (s: string) => String(s || '').trim().replace(/.*divar\.ir\/(?:pro|business(?:es)?)\//i, '').replace(/[^A-Za-z0-9_-].*$/, '')
 
 export async function listScrapes(): Promise<RosterScrape[]> {
   return Object.values((await load()).scrapes).sort((a, b) => b.createdAt - a.createdAt)
