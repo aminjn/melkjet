@@ -727,7 +727,7 @@ export default function EmpirePage() {
     </div>
 
     {gtab === 'city' && <>
-    {tabHead('🏙', 'شهر', 'فرصت‌های واقعیِ امروز، نقشه و مسیرِ برج')}
+    {tabHead('🏙', 'شهر', 'شهر پر از فرصتِ واقعی است — رؤیایت را از همین‌جا شروع کن')}
     {/* 🧭 اتاقِ تحلیل (فاز ۳۹ — سند ۲۶ فصل ۱۶): اولویت‌های امروز از وضعیتِ واقعی + سلامتِ مالی + جریانِ نقدی.
         فقط پیشنهاد می‌دهد — هیچ کاری را خودش انجام نمی‌دهد (قانونِ سند: تصمیم همیشه با خودت). */}
     {intel?.ok && (intel.priorities?.length > 0 || intel.health) && <div style={card}>
@@ -1053,19 +1053,28 @@ export default function EmpirePage() {
             {e.assets.map((a: any, i: number) => {
               const h = 26 + Math.round((vals[i] / max) * 70)
               const building = a.construction && !a.construction.done
+              // پاسِ جذابیت (۱۴+) + قانونِ ۱۳: رنگِ برج از نمای انتخابیِ خودِ بازیکن؛ بلندترین برج = 👑 نگینِ امپراتوری
+              const facadeBg: Record<string, string> = {
+                modern: 'linear-gradient(180deg,#2b4a6f,#16233a)', classic: 'linear-gradient(180deg,#5a5040,#2a2620)',
+                roman: 'linear-gradient(180deg,#6b5d49,#332d24)', green: 'linear-gradient(180deg,#2f5a3f,#152a1d)',
+              }
+              const bg = (a.construction?.facade && facadeBg[a.construction.facade]) || 'linear-gradient(180deg,#262c47,#151827)'
+              const crown = vals[i] === max && e.assets.length > 1 && !building
+              const label = a.nickname || a.construction?.name || a.hood || a.title || ''
               return (
-                <div key={a.id} title={`${a.title?.slice(0, 60)} — ${faB(vals[i])} تومان${building ? ' · در حال ساخت' : ''}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, minWidth: 44 }}>
-                  <span style={{ fontSize: 9, color: '#f3d98a', whiteSpace: 'nowrap' }}>{faB(vals[i])}</span>
+                <div key={a.id} title={`${a.nickname ? `«${a.nickname}» — ` : ''}${a.title?.slice(0, 60)} — ${faB(vals[i])} تومان${building ? ' · در حال ساخت' : ''}${crown ? ' · 👑 نگینِ امپراتوری' : ''}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, minWidth: 44 }}>
+                  <span style={{ fontSize: 9, color: '#f3d98a', whiteSpace: 'nowrap' }}>{crown ? '👑 ' : ''}{faB(vals[i])}</span>
                   <span style={{ fontSize: 11, lineHeight: 1 }}>{building ? '🏗' : a.kind === 'land' ? '🏞' : a.kind === 'villa' ? '🏡' : a.kind === 'commercial' ? '🏬' : '🏢'}</span>
                   <div style={{
                     width: 30, height: h, borderRadius: '3px 3px 0 0', cursor: 'default',
                     // برجِ در حالِ ساخت از ظاهر قابلِ تشخیص است (سند ۲۰ — Part 03): کم‌نور + قابِ نقطه‌چین + جرثقیل
                     opacity: building ? 0.55 : 1,
-                    background: 'linear-gradient(180deg,#262c47,#151827)', border: building ? '1px dashed #8a7c4c' : '1px solid #3c4468', borderBottom: 'none',
+                    background: bg, border: building ? '1px dashed #8a7c4c' : crown ? '1px solid #d4af37' : '1px solid #3c4468', borderBottom: 'none',
+                    boxShadow: crown ? '0 0 16px rgba(212,175,55,.35)' : undefined,
                     backgroundImage: 'repeating-linear-gradient(0deg, rgba(255,214,120,.7) 0 2px, transparent 2px 8px), repeating-linear-gradient(90deg, transparent 0 5px, rgba(0,0,0,.4) 5px 10px)',
                     animation: 'empUp .6s ease both', animationDelay: `${i * 80}ms`,
                   }} />
-                  <span style={{ fontSize: 8.5, color: '#9aa0b8', maxWidth: 56, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{(a.hood || a.title || '').slice(0, 12)}</span>
+                  <span style={{ fontSize: 8.5, color: a.nickname || a.construction?.name ? '#e9d9a3' : '#9aa0b8', maxWidth: 56, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label.slice(0, 12)}</span>
                 </div>
               )
             })}
@@ -1117,7 +1126,7 @@ export default function EmpirePage() {
     </>}
 
     {gtab === 'portfolio' && <>
-    {tabHead('💼', 'پرتفوی', 'دارایی‌های واقعی‌ات — زنده از بازار')}
+    {tabHead('💼', 'پرتفوی', 'هر دارایی یک تکه از رؤیای توست — زنده از بازارِ واقعی')}
     {/* ارزشِ خالص (زنده از بازارِ واقعی) — اعداد با شمارشِ متحرک (جلد ۵۶) */}
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10 }}>
       <div style={card}><div style={{ fontSize: 11, color: 'var(--muted)' }}>ارزشِ خالص</div><div style={{ fontSize: 17, fontWeight: 800, color: 'var(--gold)' }}><CountUp value={st.netWorth || 0} format={faB} /> تومان</div></div>
@@ -1221,10 +1230,18 @@ export default function EmpirePage() {
           })
           .sort((a: any, b: any) => pfSort === 'value' ? (b.current || b.buyPrice) - (a.current || a.buyPrice) : pfSort === 'growth' ? (b.growthPct || 0) - (a.growthPct || 0) : (b.boughtAt || 0) - (a.boughtAt || 0))
           .map((a: any) => (
-          <div key={a.id} style={{ ...card, background: 'var(--bg2)', display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-            <span style={{ fontSize: 20 }}>{a.kind === 'land' ? '🏞' : a.kind === 'villa' ? '🏡' : a.kind === 'commercial' ? '🏬' : '🏢'}</span>
+          <div key={a.id} style={{ ...card, background: 'var(--bg2)', display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
+            // جلوهٔ رشد (پاسِ جذابیتِ ۱۴+): هالهٔ سبز/قرمزِ ملایم از سود/زیانِ «واقعی» — یک نگاه، کلِ قصه
+            boxShadow: a.growthPct > 2 ? '0 0 14px rgba(110,220,160,.14)' : a.growthPct < -2 ? '0 0 14px rgba(230,120,110,.12)' : undefined }}>
+            <span style={{ fontSize: 26 }}>{a.kind === 'land' ? '🏞' : a.kind === 'villa' ? '🏡' : a.kind === 'commercial' ? '🏬' : '🏢'}</span>
             <div style={{ flex: 1, minWidth: 160 }}>
-              <div style={{ fontSize: 13, fontWeight: 700 }}>{a.title.slice(0, 55)}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={a.nickname ? { color: '#f0d47a' } : undefined}>{(a.nickname || a.title).slice(0, 55)}</span>
+                {/* قانونِ ۱۳ (رویاپردازی): اسمِ دلخواه روی هر دارایی — هویتی، صفر اثرِ اقتصادی */}
+                <button title="نام‌گذاریِ دارایی" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, opacity: .6 }} disabled={busy}
+                  onClick={async () => { const n = prompt('چه اسمی روی این دارایی می‌گذاری؟ (خالی = حذفِ نام)', a.nickname || ''); if (n === null) return; const d = await api({ action: 'nickname', assetId: a.id, name: n }); if (d) setSt(d) }}>✏️</button>
+              </div>
+              {a.nickname && <div style={{ fontSize: 10, color: 'var(--faint)' }}>{a.title.slice(0, 55)}</div>}
               <div style={{ fontSize: 11, color: 'var(--muted)' }}>{a.hood} · خرید: {faB(a.buyPrice)}</div>
             </div>
             <div style={{ fontSize: 12 }}>ارزشِ روز: <b style={{ color: 'var(--gold)' }}>{faB(a.current || a.buyPrice)}</b> {a.growthPct ? <span style={{ color: a.growthPct > 0 ? '#7c6' : '#e88' }}>({a.growthPct > 0 ? '+' : ''}{a.growthPct.toLocaleString('fa-IR')}٪)</span> : null}

@@ -47,6 +47,7 @@ export interface EmpireAsset {
   renovDone?: string[]        // کدام گزینه‌های بازسازی انجام شده (هر کدام یک‌بار)
   // فاز ۳۷ — بازارِ بازیکنان و مشارکتِ ساخت:
   forSale?: number            // قیمتِ عرضه به بازیکنانِ دیگر (۰/undefined = عرضه نشده)
+  nickname?: string           // قانونِ ۱۳ (رویاپردازی): نامِ دلخواهِ بازیکن روی دارایی — صرفاً هویتی، صفر اثرِ اقتصادی
   jvOffer?: { pct: number; amount: number }   // پیشنهادِ بازِ مشارکتِ ساخت: سهمِ ٪ در برابرِ آوردهٔ نقدی
   partners?: Array<{ userId: string; no: number; name: string; pct: number; paid: number; at: number }>   // شرکای پروژه — سهمشان از عایدیِ فروش خودکار تسویه می‌شود
 }
@@ -1405,6 +1406,16 @@ export const buildStageOf = (c: Pick<Construction, 'paidDays' | 'days'>) =>
   BUILD_STAGES[Math.min(BUILD_STAGES.length - 1, Math.floor((c.paidDays / Math.max(1, c.days)) * BUILD_STAGES.length))]
 
 // کلنگ‌زنی (جلد ۶۴): فقط زمینِ دارای پروانهٔ صادرشده.
+// نامِ دلخواهِ دارایی (قانونِ ۱۳): بازیکن روی خانه/زمین/برجش اسم می‌گذارد — هویتی، بدونِ هیچ اثرِ اقتصادی.
+export async function setAssetNickname(userId: string, assetId: string, name: string) {
+  return mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    if (!a) return 'دارایی یافت نشد'
+    const n = name.trim().slice(0, 24)
+    if (n) a.nickname = n; else delete a.nickname
+  })
+}
+
 // سبک‌های نما (قانونِ ۱۳ رویاپردازی): انتخابِ صرفاً هویتی/ظاهری سرِ کلنگ — هیچ اثری روی هزینه/زمان/قیمت ندارد (قانون ۵).
 export const BUILD_FACADES = [
   { key: 'modern', icon: '🏙', label: 'مدرن و شیشه‌ای' },

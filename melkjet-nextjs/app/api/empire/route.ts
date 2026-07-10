@@ -27,7 +27,7 @@ import {
   setForSale, tradeAsset, openPartnership, joinPartnership, settlePartnerShares, chargeClanFee,
   setAutoRule, delAutoRule, toggleAutoRule, recordRuleFires,
   bigDealPickOf, bigDealNegoOf, BIG_DEAL_STRATEGIES, noteCrisis, recordBigDealTry,
-  floorsOfMeta, legalFloorsOf, BUILD_FACADES,
+  floorsOfMeta, legalFloorsOf, BUILD_FACADES, setAssetNickname,
   type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
 import {
@@ -687,6 +687,13 @@ export async function POST(req: NextRequest) {
       recordEvent({ type: 'user_clicked_property', userId, propertyId: it.id, meta: { src: 'empire_buy' } }).catch(() => {})
       return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
     }
+    // 🏷 نامِ دلخواهِ دارایی (قانونِ ۱۳ رویاپردازی) — هویتی، صفر اثرِ اقتصادی؛ خالی = پاک‌کردن
+    case 'nickname': {
+      const r = await setAssetNickname(userId, String(b.assetId || ''), String(b.name || ''))
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+    }
+
     case 'assetAction': {
       const act = String(b.act || '')
       if (!['renovate', 'rent', 'hold'].includes(act)) return NextResponse.json({ error: 'تصمیمِ نامعتبر' }, { status: 400 })
