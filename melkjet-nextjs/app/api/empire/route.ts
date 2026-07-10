@@ -7,7 +7,7 @@ import {
   claimEmpireMission, spendAiToken, setSuspense, addJournal, bumpRejects, setPersona, setMentor,
   setStylePicks, setHunterPair, answerHunter, empireLevel, netWorthOf, empireCount, assetKindOf,
   getBrief, markBriefOpened, dayNumberOf,
-  sellAsset, setLandPlan, chooseBusiness, accrueIncome, claimDailyChest, chestRewardOf,
+  sellAsset, setLandPlan, chooseBusiness, accrueIncome, claimDailyChest, chestRewardOf, BUSINESS_TYPES,
   landProjection, empireScoreOf, listEmpiresPublic, applyUpkeep,
   creditScoreOf, loanTermsFor, takeLoan, repayLoan, accrueLoanInterest,
   negotiationOutcome, questOf, nextDreamOf,
@@ -398,7 +398,16 @@ async function stateOf(userId: string, e00: EmpireData) {
   const prices = info.prices
   const nw = netWorthOf(e, prices, mc || undefined)
   const asmCfg = config().empire.assembly
+  // فاز ۴۷ (فیدبک: «اجاره/کسب‌وکار مبهم است»): نرخِ شفافِ درآمدِ روزشمار — دقیقاً همان فرمول‌های accrueRentFor
+  const rt47 = await rentTable().catch(() => ({ at: 0, byHood: new Map<string, number>(), global: 0 }))
   const assets = e.assets.map(a => {
+    const rentM0 = rt47.byHood.get(a.hood) || rt47.global
+    const incomeMonthly = a.business ? Math.round(rentM0 * ((a.businessProb || 50) / 100) * 2)
+      : a.action === 'rent' ? rentM0
+      : a.construction?.done && (a.construction.rented || 0) > 0
+        ? Math.round(rentM0 * (a.construction.rented || 0) * a.construction.qualityFactor * amenityValueFactorOf(a.construction, config().empire.build.amenities))
+        : 0
+    const incomeSince = a.lastAccrualAt || a.actionAt || a.boughtAt
     const owned = a.unitsOwned || 1
     const unitP = prices[a.listingId] || Math.round(a.buyPrice / owned)
     // تخریب‌شده = بهای تمام‌شده تا ساخت؛ تجمیع = × واحدها (فاز ۲۵)؛ بازسازی = × (۱+ارزش‌افزوده) (فاز ۲۹)
@@ -428,6 +437,11 @@ async function stateOf(userId: string, e00: EmpireData) {
     return {
     ...a,
     current: cur,
+    // فاز ۴۷: شفافیتِ درآمد — ماهانه از میانهٔ واقعیِ اجارهٔ محله (کسب‌وکار: ×۲ × احتمالِ موفقیت)، روزشمار واریز می‌شود
+    incomeMonthly: incomeMonthly > 0 ? incomeMonthly : undefined,
+    incomeDaily: incomeMonthly > 0 ? Math.max(1, Math.round(incomeMonthly / 30)) : undefined,
+    rentSampled: rentM0 > 0,   // false = در محله/شهر نمونهٔ اجارهٔ واقعی نیست → صادقانه «واریزی نداریم»
+    incomeSinceH: (a.action === 'rent' || a.business) ? Math.max(0, Math.floor((Date.now() - incomeSince) / 36e5)) : undefined,   // ساعت از آخرین واریز — برای «قسطِ بعدی»
     assembly, villaDemolish, needsDesign, renovOptions,
     designReadyInDays: a.design && Date.now() < a.design.readyAt ? Math.max(1, Math.ceil((a.design.readyAt - Date.now()) / 864e5)) : 0,
     lat: info.coords[a.listingId]?.lat, lng: info.coords[a.listingId]?.lng,   // برای پینِ نقشهٔ شهر
@@ -494,6 +508,7 @@ async function stateOf(userId: string, e00: EmpireData) {
     hiddenLeft: HIDDEN_BADGES.filter(b => !e.badges.includes(b.key)).length,
     collection: ['apartment', 'villa', 'commercial', 'land'].map(k => ({ kind: k, owned: e.assets.some(a => a.kind === k) })),
     capitalEnabled: config().empire.capital.enabled,
+    bizTypes: BUSINESS_TYPES,   // فاز ۴۷: کسب‌وکارها از نقش‌های واقعیِ سایت — احتمالِ موفقیت از رقبای واقعیِ محله
     dealsEnabled: config().empire.deals.enabled,   // Hook روزانه (سند ۱۴)
     speed: config().empire.speed,                  // زمان‌خری (فاز ۲۷): نرخِ کوین برای نمایشِ شفاف در UI
     pros: config().empire.pros,                    // کارمزدِ نقش‌های حرفه‌ای (فاز ۲۹) — برای نمایشِ شفاف
@@ -909,7 +924,9 @@ export async function POST(req: NextRequest) {
       const { listItems } = await import('@/app/lib/scraper-store')
       const [all, dirs] = await Promise.all([candidateListings(400).catch(() => [] as Item[]), listItems('directory').catch(() => [] as Item[])])
       const hoodListings = all.filter(it => hoodOf(it.location) === a.hood).length
-      const competitors = dirs.filter(it => it.status !== 'rejected' && (it.location || '').includes(a.hood) && (it.title + ' ' + (it.category || '')).includes(biz.split(/[\s/]/)[0])).length
+      // فاز ۴۷: واژهٔ هم‌صنفیِ هر نوع (BUSINESS_TYPES.q) — «دفتر معماری» با «معماری» شمرده شود نه «دفتر»
+      const bizQ = BUSINESS_TYPES.find(t => t.key === biz)?.q || biz.split(/[\s/]/)[0]
+      const competitors = dirs.filter(it => it.status !== 'rejected' && (it.location || '').includes(a.hood) && (it.title + ' ' + (it.category || '')).includes(bizQ)).length
       const prob = Math.round(Math.max(20, Math.min(92, 45 + Math.min(30, hoodListings) - competitors * 5)))
       const r = await chooseBusiness(userId, a.id, biz, prob)
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })

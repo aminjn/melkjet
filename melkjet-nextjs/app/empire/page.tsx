@@ -1436,14 +1436,31 @@ export default function EmpirePage() {
               : a.kind === 'land' && a.landPlan
               ? <span style={{ fontSize: 11, color: 'var(--muted)' }}>{a.landPlan === 'partner' ? '🤝 مشارکت' : '💸 آمادهٔ فروش'}</span>
               : a.kind === 'commercial' && !a.business
-              ? <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>{['کافه', 'رستوران', 'فروشگاه', 'کلینیک', 'دفترِ خدماتی'].map(bz => (
-                  <button key={bz} style={{ ...btnGhost, padding: '4px 8px', fontSize: 11 }}
-                    onClick={async () => { const d = await api({ action: 'business', assetId: a.id, biz: bz }); if (d) { setSt(d); alert(`احتمالِ موفقیتِ ${bz} در ${a.hood || 'این محله'}: ${fa(d.prob)}٪ (از ${fa(d.signals.hoodListings)} آگهیِ فعال و ${fa(d.signals.competitors)} رقیبِ واقعی)`) } }}>{bz}</button>
-                ))}</span>
+              ? <span style={{ display: 'flex', flexDirection: 'column', gap: 5, width: '100%' }}>
+                  <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>چه کسب‌وکاری راه می‌اندازی؟ احتمالِ موفقیت از استقبال و رقبای «واقعیِ» همین محله حساب می‌شود:</span>
+                  <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>{(st.bizTypes || [{ key: 'کافه', icon: '☕' }, { key: 'رستوران', icon: '🍽' }, { key: 'فروشگاه', icon: '🛍' }, { key: 'کلینیک', icon: '🩺' }, { key: 'دفتر خدماتی', icon: '🗂' }]).map((bz: any) => (
+                    <button key={bz.key} style={{ ...btnGhost, padding: '4px 9px', fontSize: 10.5 }}
+                      onClick={async () => { const d = await api({ action: 'business', assetId: a.id, biz: bz.key }); if (d) { setSt(d); alert(`احتمالِ موفقیتِ ${bz.key} در ${a.hood || 'این محله'}: ${fa(d.prob)}٪ (از ${fa(d.signals.hoodListings)} آگهیِ فعال و ${fa(d.signals.competitors)} رقیبِ واقعی)`) } }}>{bz.icon} {bz.key}</button>
+                  ))}</span>
+                </span>
               : a.business
-              ? <span style={{ fontSize: 11, color: 'var(--muted)' }}>🏪 {a.business} ({fa(a.businessProb || 0)}٪)</span>
+              /* فاز ۴۷ (فیدبک: «کلینیک زدم، معلوم نیست درآمد دارد یا نه»): نرخِ روزشمارِ شفاف + جمعِ تا امروز */
+              ? <span style={{ fontSize: 11, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span style={{ color: 'var(--text)', fontWeight: 700 }}>🏪 {a.business} <span style={{ color: 'var(--muted)', fontWeight: 400 }}>· احتمالِ موفقیت {fa(a.businessProb || 0)}٪</span></span>
+                  {a.incomeMonthly > 0
+                    ? <span style={{ color: '#7ee0b8' }}>درآمدِ برآوردی: ماهانه {faB(a.incomeMonthly)} · روزشمار روزی {faB(a.incomeDaily)} — تا امروز {faB(a.income || 0)} واریز شده{a.incomeSinceH < 24 ? ` · قسطِ بعدی تا ${fa(24 - a.incomeSinceH)} ساعتِ دیگر` : ''}</span>
+                    : <span style={{ color: '#e8c37a' }}>در این محله/شهر نمونهٔ اجارهٔ واقعی نیست — فعلاً درآمدی واریز نمی‌شود (صادقانه)</span>}
+                </span>
+              : a.action === 'rent'
+              /* فاز ۴۷ (فیدبک: «اجاره مبهم است — روزشمار باشد»): اجاره‌بها از میانهٔ واقعیِ محله، واریزِ روزشمار */
+              ? <span style={{ fontSize: 11, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span style={{ color: 'var(--text)', fontWeight: 700 }}>💰 اجاره‌نامه فعال <span style={{ color: 'var(--muted)', fontWeight: 400 }}>· اجاره‌بها از میانهٔ واقعیِ محله</span></span>
+                  {a.incomeMonthly > 0
+                    ? <span style={{ color: '#7ee0b8' }}>ماهانه {faB(a.incomeMonthly)} · روزشمار روزی {faB(a.incomeDaily)} — تا امروز {faB(a.income || 0)} واریز شده{a.incomeSinceH < 24 ? ` · قسطِ بعدی تا ${fa(24 - a.incomeSinceH)} ساعتِ دیگر` : ''}</span>
+                    : <span style={{ color: '#e8c37a' }}>در این محله/شهر نمونهٔ اجارهٔ واقعی نیست — فعلاً واریزی نداریم (صادقانه)</span>}
+                </span>
               : a.action
-              ? <span style={{ fontSize: 11, color: 'var(--muted)' }}>{a.action === 'renovate' ? '🛠 بازسازی' : a.action === 'rent' ? '💰 اجاره' : '📈 نگه‌داری'}</span>
+              ? <span style={{ fontSize: 11, color: 'var(--muted)' }}>{a.action === 'renovate' ? '🛠 بازسازی' : '📈 نگه‌داری — رشدِ ارزش با بازارِ واقعی'}</span>
               : <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>{[['renovate', '🛠', 'بازسازی'], ['rent', '💰', 'اجاره با مشاور'], ['hold', '📈', 'نگه‌داشتن']].map(([k, i, t]) => <button key={k} style={{ ...btnGhost, padding: '4px 10px', fontSize: 11 }} onClick={async () => {
                   // اجاره (فاز ۲۹ + فیدبک): اول برگهٔ قراردادِ مشاور/آژانس با هزینهٔ تومانی — بعد امضا
                   if (k === 'rent') { openAgentQuote(a, 'rent'); return }
@@ -2158,6 +2175,16 @@ export default function EmpirePage() {
             {mkt.indices.samples > 0 && <span style={{ ...card, padding: '6px 12px', background: 'var(--bg2)' }}>📈 شاخصِ کل: <b style={{ color: 'var(--gold)' }}>{faB(mkt.indices.overallPerM)}</b> ت/متر <span style={{ color: 'var(--faint)', fontSize: 10.5 }}>({fa(mkt.indices.samples)} آگهیِ واقعی)</span></span>}
             {mkt.indices.rentSamples > 0 && <span style={{ ...card, padding: '6px 12px', background: 'var(--bg2)' }}>🔑 شاخصِ اجاره: <b style={{ color: 'var(--gold)' }}>{faB(mkt.indices.rentPerM)}</b> ت/متر</span>}
             <span style={{ ...card, padding: '6px 12px', background: 'var(--bg2)' }}>🌡 نبضِ بازار: <b style={{ color: mkt.psychology.score >= 55 ? '#7c6' : mkt.psychology.score <= 45 ? '#e88' : 'var(--muted)' }}>{mkt.psychology.label}</b> ({fa(mkt.psychology.score)}/۱۰۰) <span style={{ color: 'var(--faint)', fontSize: 10.5 }}>از رفتارِ واقعیِ ۱۴ روز</span></span>
+            {/* فاز ۴۷ (فیدبک): جمعِ کلِ سود/زیانِ صندوق‌ها و مشارکت‌ها — یک نگاه، کلِ قصه */}
+            {(() => {
+              const hs = [...(mkt.funds || []).map((f: any) => f.my), ...(mkt.pools || []).map((p: any) => p.my)].filter(Boolean)
+              if (!hs.length) return null
+              const cost = hs.reduce((t: number, h: any) => t + h.cost, 0), val = hs.reduce((t: number, h: any) => t + h.value, 0)
+              const d = val - cost, pct = cost > 0 ? Math.round(d / cost * 1000) / 10 : 0
+              return <span style={{ ...card, padding: '6px 12px', background: d >= 0 ? 'rgba(110,220,160,.07)' : 'rgba(230,120,110,.08)', borderColor: d >= 0 ? '#3d5c4d' : '#5c3d3d' }}>
+                💼 کلِ سرمایه‌گذاری‌هایت: دادی {faB(cost)} → الان <b style={{ color: 'var(--gold)' }}>{faB(val)}</b> · <b style={{ color: d >= 0 ? '#7ee0b8' : '#e88' }}>{d >= 0 ? '📈 سود' : '📉 زیان'} {faB(Math.abs(d))} ({fa(Math.abs(pct))}٪)</b>
+              </span>
+            })()}
           </div>
           {/* صندوق‌های شاخصی (فصل ۸): هر واحد = یک مترِ مجازی از بازارِ واقعی */}
           <div>
@@ -2172,7 +2199,16 @@ export default function EmpirePage() {
                     <span style={{ color: 'var(--muted)', fontSize: 11 }}>بازدهِ اجاره {Number(f.quote.yieldPctYear).toLocaleString('fa-IR')}٪ سالانه · کارمزد {Number(f.feePctYear).toLocaleString('fa-IR')}٪ · {fa(f.quote.samples)} نمونهٔ واقعی</span>
                   </> : <span style={{ color: '#e88', fontSize: 11.5 }}>فعلاً نمونهٔ واقعیِ کافی برای قیمت‌گذاری نیست</span>}
                 </div>
-                {f.my && <div style={{ fontSize: 12, marginTop: 6 }}>سهمِ تو: <b>{fa(f.my.units)}</b> واحد · ارزشِ روز <b style={{ color: 'var(--gold)' }}>{faB(f.my.value)} ت</b> <span style={{ color: f.my.value >= f.my.cost ? '#7c6' : '#e88', fontSize: 11 }}>({f.my.value >= f.my.cost ? '+' : '−'}{faB(Math.abs(f.my.value - f.my.cost))})</span></div>}
+                {/* فاز ۴۷ (فیدبک: «معلوم نیست سود می‌کنم یا ضرر»): جعبهٔ صریحِ سود/زیان — دادی/الان/فرق */}
+                {f.my && (() => { const d47 = f.my.value - f.my.cost; const pct47 = f.my.cost > 0 ? Math.round(d47 / f.my.cost * 1000) / 10 : 0; return (
+                  <div style={{ marginTop: 8, border: `1px solid ${d47 >= 0 ? '#3d5c4d' : '#5c3d3d'}`, background: d47 >= 0 ? 'rgba(110,220,160,.06)' : 'rgba(230,120,110,.07)', borderRadius: 10, padding: '7px 10px', fontSize: 11.5, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <span>سهمِ تو: <b>{fa(f.my.units)}</b> واحد</span>
+                    <span style={{ color: 'var(--muted)' }}>پولی که دادی: <b style={{ color: 'var(--text)' }}>{faB(f.my.cost)}</b></span>
+                    <span style={{ color: 'var(--muted)' }}>ارزشِ الان: <b style={{ color: 'var(--gold)' }}>{faB(f.my.value)}</b></span>
+                    <span style={{ color: d47 >= 0 ? '#7ee0b8' : '#e88', fontWeight: 800 }}>{d47 >= 0 ? '📈 در سودی' : '📉 در زیانی'}: {faB(Math.abs(d47))} ({fa(Math.abs(pct47))}٪)</span>
+                    <span style={{ color: 'var(--faint)', fontSize: 10 }}>سودِ دوره‌ایِ اجاره جداگانه و خودکار به نقدت واریز می‌شود</span>
+                  </div>
+                )})()}
                 {f.quote && <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                   <input value={fu[f.id] ? Number(fu[f.id]).toLocaleString('fa-IR') : ''} onChange={ev => setFu({ ...fu, [f.id]: digitsOf(ev.target.value) })} placeholder="تعدادِ واحد" inputMode="numeric" dir="ltr" style={{ width: 110, padding: 8, borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12.5, textAlign: 'center' }} />
                   {Number(fu[f.id]) > 0 && <span style={{ fontSize: 11, color: 'var(--gold)' }}>≈ {faB(Number(fu[f.id]) * f.quote.unit)} ت</span>}
@@ -2196,7 +2232,15 @@ export default function EmpirePage() {
                   <div style={{ flex: 1, minWidth: 120, height: 6, background: 'var(--line)', borderRadius: 3 }}><div style={{ width: `${Math.min(100, Math.round(p.soldUnits / p.totalUnits * 100))}%`, height: 6, background: 'var(--gold)', borderRadius: 3 }} /></div>
                   <span>{fa(p.soldUnits)}/{fa(p.totalUnits)} واحد · {fa(p.investors)} شریک · واحدِ روز <b style={{ color: 'var(--gold)' }}>{faB(p.unitNow)} ت</b></span>
                 </div>
-                {p.my && <div style={{ fontSize: 12, marginTop: 6 }}>سهمِ تو: <b>{fa(p.my.units)}</b> واحد · ارزشِ روز <b style={{ color: 'var(--gold)' }}>{faB(p.my.value)} ت</b> <span style={{ color: p.my.value >= p.my.cost ? '#7c6' : '#e88', fontSize: 11 }}>({p.my.value >= p.my.cost ? '+' : '−'}{faB(Math.abs(p.my.value - p.my.cost))})</span></div>}
+                {/* فاز ۴۷: همان جعبهٔ صریحِ سود/زیان برای استخرِ مشارکت — ارزش با قیمتِ زندهٔ همان آگهیِ واقعی */}
+                {p.my && (() => { const d47 = p.my.value - p.my.cost; const pct47 = p.my.cost > 0 ? Math.round(d47 / p.my.cost * 1000) / 10 : 0; return (
+                  <div style={{ marginTop: 8, border: `1px solid ${d47 >= 0 ? '#3d5c4d' : '#5c3d3d'}`, background: d47 >= 0 ? 'rgba(110,220,160,.06)' : 'rgba(230,120,110,.07)', borderRadius: 10, padding: '7px 10px', fontSize: 11.5, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <span>سهمِ تو: <b>{fa(p.my.units)}</b> واحد</span>
+                    <span style={{ color: 'var(--muted)' }}>پولی که دادی: <b style={{ color: 'var(--text)' }}>{faB(p.my.cost)}</b></span>
+                    <span style={{ color: 'var(--muted)' }}>ارزشِ الان: <b style={{ color: 'var(--gold)' }}>{faB(p.my.value)}</b></span>
+                    <span style={{ color: d47 >= 0 ? '#7ee0b8' : '#e88', fontWeight: 800 }}>{d47 >= 0 ? '📈 در سودی' : '📉 در زیانی'}: {faB(Math.abs(d47))} ({fa(Math.abs(pct47))}٪)</span>
+                  </div>
+                )})()}
                 <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                   <input value={cu[p.listingId] ? Number(cu[p.listingId]).toLocaleString('fa-IR') : ''} onChange={ev => setCu({ ...cu, [p.listingId]: digitsOf(ev.target.value) })} placeholder="تعدادِ واحد" inputMode="numeric" dir="ltr" style={{ width: 110, padding: 8, borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12.5, textAlign: 'center' }} />
                   {p.available > 0 && <button style={{ ...btn, padding: '7px 14px', fontSize: 12.5 }} disabled={busy || !Number(cu[p.listingId])} onClick={() => doTrade({ action: 'crowdJoin', listingId: p.listingId, units: Number(cu[p.listingId]) }, () => setCu({ ...cu, [p.listingId]: '' }))}>پیوستن</button>}
