@@ -7,7 +7,7 @@ import {
   claimEmpireMission, spendAiToken, setSuspense, addJournal, bumpRejects, setPersona, setMentor,
   setStylePicks, setHunterPair, answerHunter, empireLevel, netWorthOf, empireCount, assetKindOf,
   getBrief, markBriefOpened, dayNumberOf,
-  sellAsset, setLandPlan, chooseBusiness, accrueIncome, claimDailyChest, chestRewardOf, BUSINESS_TYPES,
+  sellAsset, setLandPlan, chooseBusiness, accrueIncome, claimDailyChest, chestRewardOf, BUSINESS_TYPES, assetMonthlyIncomeOf,
   landProjection, empireScoreOf, listEmpiresPublic, applyUpkeep,
   creditScoreOf, loanTermsFor, takeLoan, repayLoan, accrueLoanInterest,
   negotiationOutcome, questOf, nextDreamOf,
@@ -296,10 +296,11 @@ async function accrueRentFor(userId: string, e: EmpireData, now = Date.now()): P
   const rt = await rentTable()
   const globalMed = rt.global
   const accruals: Array<{ assetId: string; amount: number }> = []
+  // فاز ۴۹: فرمولِ واحد (assetMonthlyIncomeOf) — واحدهای تجمیعی درآمد را ضرب می‌کنند؛ نمایش = واریز.
   for (const a of earners) {
     const monthly0 = rt.byHood.get(a.hood) || globalMed
-    if (!(monthly0 > 0)) continue
-    const monthly = a.business ? Math.round(monthly0 * ((a.businessProb || 50) / 100) * 2) : monthly0   // کسب‌وکار: ~۲ برابرِ اجارهٔ مسکونی × احتمالِ موفقیت
+    const monthly = assetMonthlyIncomeOf(a, monthly0)
+    if (!(monthly > 0)) continue
     const since = a.lastAccrualAt || a.actionAt || a.boughtAt
     const days = Math.floor((now - since) / 864e5)
     if (days < 1) continue
@@ -308,8 +309,8 @@ async function accrueRentFor(userId: string, e: EmpireData, now = Date.now()): P
   for (const a of bldRenters) {
     const c = a.construction!
     const monthly0 = rt.byHood.get(a.hood) || globalMed
-    if (!(monthly0 > 0)) continue   // بدونِ نمونهٔ واقعیِ اجاره → هیچ واریزی (صادقانه)
-    const monthly = Math.round(monthly0 * (c.rented || 0) * c.qualityFactor * amenityValueFactorOf(c, config().empire.build.amenities))
+    const monthly = assetMonthlyIncomeOf(a, monthly0, amenityValueFactorOf(c, config().empire.build.amenities))
+    if (!(monthly > 0)) continue   // بدونِ نمونهٔ واقعیِ اجاره → هیچ واریزی (صادقانه)
     const since = a.lastAccrualAt || c.rentStartAt || c.doneAt || a.boughtAt
     const days = Math.floor((now - since) / 864e5)
     if (days < 1) continue
@@ -406,12 +407,9 @@ async function stateOf(userId: string, e00: EmpireData) {
   const rt47 = await rentTable().catch(() => ({ at: 0, byHood: new Map<string, number>(), global: 0 }))
   const assets = e.assets.map(a => {
     const rentM0 = rt47.byHood.get(a.hood) || rt47.global
-    const incomeMonthly = a.business ? Math.round(rentM0 * ((a.businessProb || 50) / 100) * 2)
-      : a.action === 'rent' ? rentM0
-      : a.construction?.done && (a.construction.rented || 0) > 0
-        ? Math.round(rentM0 * (a.construction.rented || 0) * a.construction.qualityFactor * amenityValueFactorOf(a.construction, config().empire.build.amenities))
-        : 0
-    const incomeSince = a.lastAccrualAt || a.actionAt || a.boughtAt
+    // فاز ۴۹: همان فرمولِ واحدِ واریز (assetMonthlyIncomeOf) — واحدهای تجمیعی ضرب می‌شوند
+    const incomeMonthly = assetMonthlyIncomeOf(a, rentM0, a.construction?.done ? amenityValueFactorOf(a.construction, config().empire.build.amenities) : 1)
+    const incomeSince = a.lastAccrualAt || a.actionAt || a.construction?.rentStartAt || a.construction?.doneAt || a.boughtAt
     const owned = a.unitsOwned || 1
     const unitP = prices[a.listingId] || Math.round(a.buyPrice / owned)
     // تخریب‌شده = بهای تمام‌شده تا ساخت؛ تجمیع = × واحدها (فاز ۲۵)؛ بازسازی = × (۱+ارزش‌افزوده) (فاز ۲۹)
@@ -445,7 +443,7 @@ async function stateOf(userId: string, e00: EmpireData) {
     incomeMonthly: incomeMonthly > 0 ? incomeMonthly : undefined,
     incomeDaily: incomeMonthly > 0 ? Math.max(1, Math.round(incomeMonthly / 30)) : undefined,
     rentSampled: rentM0 > 0,   // false = در محله/شهر نمونهٔ اجارهٔ واقعی نیست → صادقانه «واریزی نداریم»
-    incomeSinceH: (a.action === 'rent' || a.business) ? Math.max(0, Math.floor((Date.now() - incomeSince) / 36e5)) : undefined,   // ساعت از آخرین واریز — برای «قسطِ بعدی»
+    incomeSinceH: (a.action === 'rent' || a.business || (a.construction?.done && (a.construction.rented || 0) > 0)) ? Math.max(0, Math.floor((Date.now() - incomeSince) / 36e5)) : undefined,   // ساعت از آخرین واریز — برای «قسطِ بعدی»
     assembly, villaDemolish, needsDesign, renovOptions,
     designReadyInDays: a.design && Date.now() < a.design.readyAt ? Math.max(1, Math.ceil((a.design.readyAt - Date.now()) / 864e5)) : 0,
     lat: info.coords[a.listingId]?.lat, lng: info.coords[a.listingId]?.lng,   // برای پینِ نقشهٔ شهر

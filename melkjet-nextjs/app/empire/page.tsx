@@ -1458,7 +1458,7 @@ export default function EmpirePage() {
               : a.business
               /* فاز ۴۷ (فیدبک: «کلینیک زدم، معلوم نیست درآمد دارد یا نه»): نرخِ روزشمارِ شفاف + جمعِ تا امروز */
               ? <span style={{ fontSize: 11, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <span style={{ color: 'var(--text)', fontWeight: 700 }}>🏪 {a.business} <span style={{ color: 'var(--muted)', fontWeight: 400 }}>· احتمالِ موفقیت {fa(a.businessProb || 0)}٪</span></span>
+                  <span style={{ color: 'var(--text)', fontWeight: 700 }}>🏪 {a.business}{(a.unitsOwned || 1) > 1 && <span style={{ color: '#f0d47a' }}> در {fa(a.unitsOwned)} واحد (درآمد ×{fa(a.unitsOwned)})</span>} <span style={{ color: 'var(--muted)', fontWeight: 400 }}>· احتمالِ موفقیت {fa(a.businessProb || 0)}٪</span></span>
                   {a.incomeMonthly > 0
                     ? <span style={{ color: '#7ee0b8' }}>درآمدِ برآوردی: ماهانه {faB(a.incomeMonthly)} · روزشمار روزی {faB(a.incomeDaily)} — تا امروز {faB(a.income || 0)} واریز شده{a.incomeSinceH < 24 ? ` · قسطِ بعدی تا ${fa(24 - a.incomeSinceH)} ساعتِ دیگر` : ''}</span>
                     : <span style={{ color: '#e8c37a' }}>در این محله/شهر نمونهٔ اجارهٔ واقعی نیست — فعلاً درآمدی واریز نمی‌شود (صادقانه)</span>}
@@ -1466,7 +1466,7 @@ export default function EmpirePage() {
               : a.action === 'rent'
               /* فاز ۴۷ (فیدبک: «اجاره مبهم است — روزشمار باشد»): اجاره‌بها از میانهٔ واقعیِ محله، واریزِ روزشمار */
               ? <span style={{ fontSize: 11, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <span style={{ color: 'var(--text)', fontWeight: 700 }}>💰 اجاره‌نامه فعال <span style={{ color: 'var(--muted)', fontWeight: 400 }}>· اجاره‌بها از میانهٔ واقعیِ محله</span></span>
+                  <span style={{ color: 'var(--text)', fontWeight: 700 }}>💰 اجاره‌نامه فعال{(a.unitsOwned || 1) > 1 && <span style={{ color: '#f0d47a' }}> · {fa(a.unitsOwned)} واحد (درآمد ×{fa(a.unitsOwned)})</span>} <span style={{ color: 'var(--muted)', fontWeight: 400 }}>· اجاره‌بها از میانهٔ واقعیِ محله</span></span>
                   {a.incomeMonthly > 0
                     ? <span style={{ color: '#7ee0b8' }}>ماهانه {faB(a.incomeMonthly)} · روزشمار روزی {faB(a.incomeDaily)} — تا امروز {faB(a.income || 0)} واریز شده{a.incomeSinceH < 24 ? ` · قسطِ بعدی تا ${fa(24 - a.incomeSinceH)} ساعتِ دیگر` : ''}</span>
                     : <span style={{ color: '#e8c37a' }}>در این محله/شهر نمونهٔ اجارهٔ واقعی نیست — فعلاً واریزی نداریم (صادقانه)</span>}
@@ -1514,7 +1514,7 @@ export default function EmpirePage() {
 
             {/* 🧩 تجمیع و تخریب (فاز ۲۵): تک‌تکِ واحدهای ساختمان را بخر — تا همه مالِ تو نشد، تخریب ممکن نیست */}
             {a.assembly && <div style={{ width: '100%', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', fontSize: 11, borderTop: '1px dashed var(--line)', paddingTop: 6, marginTop: 2 }}>
-              <span style={{ color: 'var(--muted)' }}>🧩 واحدهای ساختمان: <b style={{ color: a.assembly.canDemolish ? '#7c6' : 'var(--text)' }}>{fa(a.assembly.owned)} از {fa(a.assembly.total)}</b> مالِ تو</span>
+              <span style={{ color: 'var(--muted)' }}>🧩 واحدهای ساختمان: <b style={{ color: a.assembly.canDemolish ? '#7c6' : 'var(--text)' }}>{fa(a.assembly.owned)} از {fa(a.assembly.total)}</b> مالِ تو{(a.business || a.action === 'rent') && <span style={{ color: '#7ee0b8' }}> · هر واحدِ تازه {a.business ? 'درآمدِ کسب‌وکار' : 'اجاره'} را هم ضرب می‌کند</span>}</span>
               {!a.assembly.canDemolish && <>
                 {nego['u' + a.id]
                   ? <span style={{ color: nego['u' + a.id].success ? '#7c6' : 'var(--muted)' }}>🤝 {nego['u' + a.id].owner?.name || 'مالکِ واحد'}: {nego['u' + a.id].success ? `${fa(nego['u' + a.id].discountPct)}٪ تخفیف` : 'کوتاه نیامد'}</span>
@@ -1745,6 +1745,10 @@ export default function EmpirePage() {
                 {a.construction.done && (a.build?.rented || 0) > 0 && <button style={{ ...btnGhost, padding: '5px 12px', fontSize: 11.5 }} disabled={busy || !Number(pu[a.id])}
                   onClick={async () => { const d = await api({ action: 'stopRent', assetId: a.id, units: Number(pu[a.id]) }); if (d) { setSt(d); setPu({ ...pu, [a.id]: '' }) } }}>🔓 فسخِ اجاره</button>}
               </div>
+              {/* فاز ۴۹ (فیدبک: «۱۲ واحد را اجاره دادم ولی نشان نمی‌دهد»): درآمدِ اجارهٔ واحدهای برج — همان عددِ واریز */}
+              {a.construction.done && (a.build?.rented || 0) > 0 && (a.incomeMonthly > 0
+                ? <div style={{ fontSize: 11.5, color: '#7ee0b8', marginTop: 6 }}>💰 اجارهٔ {fa(a.build.rented)} واحد: ماهانه {faB(a.incomeMonthly)} · روزشمار روزی {faB(a.incomeDaily)} — تا امروز {faB(a.income || 0)} واریز شده{a.incomeSinceH < 24 ? ` · قسطِ بعدی تا ${fa(24 - a.incomeSinceH)} ساعتِ دیگر` : ''}</div>
+                : <div style={{ fontSize: 11.5, color: '#e8c37a', marginTop: 6 }}>در این محله/شهر نمونهٔ اجارهٔ واقعی نیست — فعلاً واریزی نداریم (صادقانه)</div>)}
               {a.construction.done && <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 4 }}>تصمیمِ توست: بفروش (سودِ یکجا) یا نگه‌دار و اجاره بده (جریانِ ماهانه از میانهٔ واقعیِ محله) — فروشِ یکجای تعدادِ زیاد، بازارِ خودت را اشباع می‌کند و ارزان‌تر می‌رود.</div>}
               {/* خروج از پروژهٔ نیمه‌کاره (سند ۱۵ — فصل ۵): پروژهٔ در حالِ ساخت هم دارایی است؛ با پیش‌فروشِ فعال ممنوع */}
               {!a.construction.done && a.construction.presold === 0 && <div style={{ marginTop: 8 }}>

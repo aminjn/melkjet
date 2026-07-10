@@ -1026,6 +1026,23 @@ export async function chooseBusiness(userId: string, assetId: string, business: 
   })
 }
 
+// فاز ۴۹ (فیدبک: «۳ واحدِ دیگر خریدم، هیچ اثری ندارد» + «اجارهٔ ۱۲ واحد را نشان نمی‌دهد»):
+// یک منبعِ واحدِ نرخِ درآمدِ ماهانه — هم واریزِ روزشمار (accrueRentFor) و هم نمایش (stateOf) از همین می‌خوانند،
+// پس عددِ روی صفحه همیشه همان عددِ واریز است. واحدهای تجمیعی (unitsOwned) درآمد را «ضرب» می‌کنند:
+// ۴ واحدِ خریده = ۴ برابرِ اجاره/کسب‌وکار — پاداشِ واقعیِ تجمیع، بدونِ مدیریتِ واحدبه‌واحد (قانونِ ۹۰/۱۰).
+export function assetMonthlyIncomeOf(
+  a: Pick<EmpireAsset, 'business' | 'businessProb' | 'action' | 'unitsOwned' | 'construction'>,
+  rentMonthly0: number, amenityFactor = 1,
+): number {
+  if (!(rentMonthly0 > 0)) return 0
+  const units = Math.max(1, a.unitsOwned || 1)
+  if (a.business) return Math.round(rentMonthly0 * ((a.businessProb || 50) / 100) * 2 * units)   // کسب‌وکار: ~۲× اجارهٔ مسکونی × احتمالِ موفقیت
+  if (a.action === 'rent') return Math.round(rentMonthly0 * units)
+  if (a.construction?.done && (a.construction.rented || 0) > 0)
+    return Math.round(rentMonthly0 * (a.construction.rented || 0) * a.construction.qualityFactor * Math.max(0, amenityFactor))
+  return 0
+}
+
 // واریزِ درآمدِ اجاره/کسب‌وکار (برآورد از بازارِ واقعی — محاسبه در لایهٔ API، اعمالِ اتمیک اینجا).
 export async function accrueIncome(userId: string, accruals: Array<{ assetId: string; amount: number }>, now = Date.now()) {
   return mutateEmpire(userId, e => {
