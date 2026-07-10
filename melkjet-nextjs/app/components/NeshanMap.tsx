@@ -78,7 +78,8 @@ export default function NeshanMap({
   const [ready, setReady] = useState(0) // نقشه ساخته شد → مارکرها سوار شوند (بدونِ اتکا به تغییرِ props)
   const [tileHint, setTileHint] = useState(false)   // کاشی‌ها لود نشدند → راهنمای مجوزِ کلید (فاز ۲۸)
   const fitKeyRef = useRef('')          // امضای دادهٔ فعلیِ پین‌ها — رندرِ والد (هر ثانیه) دیگر نقشه را دست نمی‌زند
-  const userMovedRef = useRef(false)    // بعد از اولین زوم/جابه‌جاییِ خودِ کاربر، هرگز auto-fit نکن (زوم نپَرد)
+  const idsKeyRef = useRef('')          // مجموعهٔ idهای فعلی — تشخیصِ «دادهٔ اساساً جدید» (مثلاً محلهٔ دیگر در جستجو)
+  const userMovedRef = useRef(false)    // بعد از زوم/جابه‌جاییِ کاربر، روی «همان داده» auto-fit نکن (زوم نپَرد)
   const programmaticRef = useRef(false) // حرکتِ برنامه‌ای (fitBounds/setView) با حرکتِ کاربر اشتباه نشود
 
   // ساختِ یک‌بارهٔ نقشه (با تلاشِ مجددِ خودکار تا ۲ بار در صورتِ خطای گذرا)
@@ -158,6 +159,14 @@ export default function NeshanMap({
     const key = valid.map(p => `${p.id},${p.lat.toFixed(5)},${p.lng.toFixed(5)},${p.icon || ''}`).join('|')
     if (key === fitKeyRef.current) return
     fitKeyRef.current = key
+    // دادهٔ اساساً جدید (مثلاً انتخابِ محلهٔ دیگر در جستجو: بیش از نصفِ پین‌ها تازه‌اند) → قفلِ «کاربر جابه‌جا
+    // کرده» برداشته می‌شود تا نقشه به محتوای جدید برود. دادهٔ همان‌ها (رندرِ والد/لایهٔ زیرمجموعه) زوم را نمی‌پراند.
+    if (idsKeyRef.current && valid.length > 0) {
+      const prev = new Set(idsKeyRef.current.split('|'))
+      const overlap = valid.filter(p => prev.has(String(p.id))).length
+      if (overlap < valid.length / 2) userMovedRef.current = false
+    }
+    idsKeyRef.current = valid.map(p => String(p.id)).join('|')
     markersRef.current.forEach(m => { try { map.removeLayer(m) } catch {} })
     markersRef.current = []
     for (const p of valid) {
