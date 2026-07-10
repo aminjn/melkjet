@@ -71,9 +71,9 @@ export interface BrandAnalysis {
 
 // تحلیلِ یک برندِ دیوار (slug یا لینکِ pro). sample = چند آگهی برای شمارش‌شماره reveal شود.
 export async function analyzeBrand(slugOrUrl: string, sample = 20): Promise<BrandAnalysis> {
-  const slug = (divarProfileSlug(slugOrUrl) || String(slugOrUrl || '').trim()).toLowerCase()
+  const slug = (divarProfileSlug(slugOrUrl) || String(slugOrUrl || '').trim())   // برندِ دیوار حساس به حروف است
   const base: BrandAnalysis = { ok: false, slug, listings: 0, sampled: 0, revealed: 0, distinctPhones: 0, phones: [] }
-  if (!slug || !/^[a-z0-9_-]{2,}$/.test(slug)) return { ...base, error: 'slug/لینکِ برند نامعتبر است' }
+  if (!slug || !/^[A-Za-z0-9_-]{2,}$/.test(slug)) return { ...base, error: 'slug/لینکِ برند نامعتبر است' }
 
   const { posts, name, reason } = await fetchDivarProfileTokens(slug)
   if (!posts.length) return { ...base, name, error: reason === 'unreachable' ? 'به دیوار نرسید (پروکسی؟)' : 'آگهی‌ای یافت نشد' }

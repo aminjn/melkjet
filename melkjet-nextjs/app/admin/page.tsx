@@ -1750,6 +1750,95 @@ interface OwnCluster { slug: string; advisors: { phone: string; name: string; ty
 const PTYPE_LABEL: Record<string, string> = { pros: 'مشاور', agency: 'آژانس', builder: 'سازنده', architect: 'معمار', contractor: 'پیمانکار', materials: 'مصالح', legal: 'وکیل', lawfirm: 'دفتر حقوقی', finance: 'مالی', appraiser: 'کارشناس', notary: 'دفترخانه' }
 
 interface DivarPro { slug: string; url: string; name?: string; listingCount?: number; source: string }
+// ── پنلِ «رُسترِ آژانس»: یک لینک بده → مشاورها خودکار جدا و هر کدام حسابِ جدا ──
+function AgencyRosterPanel() {
+  const [scrapes, setScrapes] = useState<any[]>([])
+  const [slug, setSlug] = useState('')
+  const [name, setName] = useState('')
+  const [msg, setMsg] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [open, setOpen] = useState<string>('')
+  const [phones, setPhones] = useState<Record<string, string>>({})
+  const fa = (n: any) => (Number(n) || 0).toLocaleString('fa-IR')
+  const setPhone = (k: string, v: string) => setPhones(p => ({ ...p, [k]: v }))
+
+  const load = () => fetch('/api/admin/agency-roster', { cache: 'no-store' }).then(r => r.json()).then(j => { if (j.ok) setScrapes(j.scrapes || []) })
+  useEffect(() => { load() }, [])
+  useEffect(() => { if (!scrapes.some(s => s.running || s.runRequested)) return; const id = setInterval(load, 4000); return () => clearInterval(id) }, [scrapes])
+
+  const post = (body: any) => fetch('/api/admin/agency-roster', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json())
+  const add = async () => { if (!slug.trim()) return; setBusy(true); setMsg(''); try { const j = await post({ action: 'add', slug: slug.trim(), agencyName: name.trim() }); if (j.ok) { setSlug(''); setName(''); setMsg('✅ افزوده شد — «همگام‌سازی الان» را بزن'); load() } else setMsg('❌ ' + (j.error || 'خطا')) } finally { setBusy(false) } }
+  const sync = async (id: string) => { await post({ action: 'sync', id }); setMsg('⏳ در صفِ اینستنسِ ۰ — چند دقیقه بعد رفرش می‌شود'); load() }
+  const remove = async (id: string) => { if (!confirm('این اسکرپ حذف شود؟ (حساب‌ها و فایل‌های ساخته‌شده می‌مانند)')) return; await post({ action: 'remove', id }); load() }
+  const graduate = async (id: string, key: string) => {
+    const ph = (phones[`${id}:${key}`] || '').replace(/\D/g, '')
+    if (!/^09\d{9}$/.test(ph)) { setMsg('❌ شمارهٔ موبایلِ ۰۹... معتبر وارد کن'); return }
+    const j = await post({ action: 'graduate', id, key, phone: ph })
+    if (j.ok) { setMsg(`✅ حساب ساخته شد و ${fa(j.moved)} فایل منتقل شد`); load() } else setMsg('❌ ' + (j.error || 'خطا'))
+  }
+
+  const inp: React.CSSProperties = { direction: 'ltr', textAlign: 'left', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+  const phInp: React.CSSProperties = { ...inp, width: 130, padding: '6px 9px', fontSize: 12 }
+
+  return (
+    <Card>
+      <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 6 }}>🏢 رُسترِ آژانس — تفکیکِ خودکارِ مشاورها</div>
+      <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.9, margin: '0 0 12px' }}>
+        لینکِ یک آژانسِ دیوار (<span dir="ltr">divar.ir/pro/…</span>) را بده. سیستم همهٔ آگهی‌ها را می‌خواند، از روی <b>امضای داخلِ متن</b> مشاورها را خودکار جدا می‌کند، آگهی‌های <b>بی‌امضا</b> را به حسابِ خودِ آژانس می‌زند، و آپدیتِ روزانه را dedup-safe نگه می‌دارد (تکراری نمی‌سازد؛ آگهیِ حذف‌شده = فروخته/اجاره‌رفته). بعد برای هر مشاور شمارهٔ موبایل بده تا حسابِ واقعی ساخته و فایل‌هایش منتقل شوند.
+      </p>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
+        <input style={{ ...inp, flex: '1 1 260px' }} placeholder="لینک آژانس یا slug (مثل divar.ir/pro/rDkshXMm)" value={slug} onChange={e => setSlug(e.target.value)} />
+        <input style={{ ...inp, width: 150 }} placeholder="نام آژانس (اختیاری)" value={name} onChange={e => setName(e.target.value)} />
+        <GoldButton disabled={busy} onClick={add}>{busy ? '…' : '➕ افزودن آژانس'}</GoldButton>
+      </div>
+      {msg && <div style={{ fontSize: 12.5, color: 'var(--gold)', marginBottom: 8 }}>{msg}</div>}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {scrapes.map(s => (
+          <div key={s.id} style={{ border: '1px solid var(--line)', borderRadius: 12, padding: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <div style={{ fontWeight: 800, fontSize: 14 }}>{s.agencyName || s.slug}</div>
+              <span dir="ltr" style={{ fontSize: 11, color: 'var(--faint)' }}>{s.slug}</span>
+              {s.running && <span style={{ fontSize: 11, padding: '2px 9px', borderRadius: 999, background: 'rgba(201,168,76,0.15)', color: 'var(--gold)', fontWeight: 700 }}>در حال همگام‌سازی…</span>}
+              {!s.running && s.runRequested && <span style={{ fontSize: 11, padding: '2px 9px', borderRadius: 999, background: 'rgba(201,168,76,0.12)', color: 'var(--muted)' }}>در صف</span>}
+              {s.lastError && <span style={{ fontSize: 11, color: '#e06666' }}>خطا: {s.lastError}</span>}
+              <span style={{ marginInlineStart: 'auto', fontSize: 12, color: 'var(--muted)' }}>
+                {s.lastTotal != null ? `${fa(s.lastTotal)} آگهی · ${fa(s.advisors?.length || 0)} مشاور · ${fa(s.lastUnnamed || 0)} بی‌نام` : 'هنوز همگام نشده'}
+              </span>
+              <GoldButton disabled={s.running} onClick={() => sync(s.id)}>{s.running ? '…' : '🔄 همگام‌سازی الان'}</GoldButton>
+              <button onClick={() => setOpen(open === s.id ? '' : s.id)} style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '6px 10px', color: 'var(--text)', fontSize: 12, cursor: 'pointer' }}>{open === s.id ? 'بستن' : `مشاورها (${fa(s.advisors?.length || 0)})`}</button>
+              <button onClick={() => remove(s.id)} style={{ background: 'transparent', border: '1px solid var(--line2)', borderRadius: 8, padding: '6px 9px', color: '#e06666', fontSize: 12, cursor: 'pointer' }}>حذف</button>
+            </div>
+            {open === s.id && (
+              <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {(s.advisors || []).map((a: any) => (
+                  <div key={a.key} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '6px 8px', background: 'var(--bg2)', borderRadius: 8 }}>
+                    <span style={{ fontWeight: 700, fontSize: 13 }}>{a.name}</span>
+                    <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{fa(a.listingCount)} فایل</span>
+                    {a.phone
+                      ? <span dir="ltr" style={{ marginInlineStart: 'auto', fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>✅ {a.phone}</span>
+                      : <><input dir="ltr" style={{ ...phInp, marginInlineStart: 'auto' }} placeholder="09..." value={phones[`${s.id}:${a.key}`] || ''} onChange={e => setPhone(`${s.id}:${a.key}`, e.target.value)} />
+                        <button onClick={() => graduate(s.id, a.key)} style={{ background: 'var(--gold)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#1a1400', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>ساخت حساب</button></>}
+                  </div>
+                ))}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '6px 8px', background: 'var(--bg2)', borderRadius: 8, borderTop: '1px dashed var(--line2)' }}>
+                  <span style={{ fontWeight: 700, fontSize: 13 }}>🏢 بی‌نام (خودِ آژانس)</span>
+                  <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{fa(s.lastUnnamed || 0)} فایل</span>
+                  {s.agencyPhone
+                    ? <span dir="ltr" style={{ marginInlineStart: 'auto', fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>✅ {s.agencyPhone}</span>
+                    : <><input dir="ltr" style={{ ...phInp, marginInlineStart: 'auto' }} placeholder="09..." value={phones[`${s.id}:__agency__`] || ''} onChange={e => setPhone(`${s.id}:__agency__`, e.target.value)} />
+                      <button onClick={() => graduate(s.id, '__agency__')} style={{ background: 'var(--gold)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#1a1400', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>ساخت حساب آژانس</button></>}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+        {!scrapes.length && <div style={{ fontSize: 12.5, color: 'var(--faint)', padding: '8px 2px' }}>هنوز آژانسی اضافه نشده.</div>}
+      </div>
+    </Card>
+  )
+}
+
 function AgencyIntelView() {
   const [clusters, setClusters] = useState<OwnCluster[]>([])
   const [agencyCount, setAgencyCount] = useState(0)
@@ -1808,6 +1897,7 @@ function AgencyIntelView() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <AgencyRosterPanel />
       {/* کاوشگرِ pro دیوار */}
       <Card>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>

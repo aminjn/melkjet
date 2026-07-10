@@ -131,6 +131,7 @@ const MAX_ACTIVE_SYNCS = 2          // حداکثر همگام‌سازیِ هم
 const QUEUE_TICK_MS = 45 * 1000     // هر ۴۵ ثانیه صف را درین کن (پاسخ‌گوییِ خوب به کاربر)
 let queueRunning = false
 let moderating = false
+let rosterRunning = false
 
 async function queueTick(): Promise<void> {
   if (queueRunning) return
@@ -152,6 +153,18 @@ async function queueTick(): Promise<void> {
       moderating = true
       try { const { moderatePending } = await import('./moderation'); await moderatePending() }
       catch { /* اگر AI/مدل آماده نبود */ } finally { moderating = false }
+    }
+    // ۳) سینکِ «هوش آژانس»: یک اسکرپِ سررسیده در هر تیک (fire-and-forget؛ چند دقیقه طول می‌کشد،
+    //    قفلِ rosterRunning از هم‌پوشانی جلوگیری می‌کند تا دیوار بمباران نشود).
+    if (!rosterRunning) {
+      rosterRunning = true
+      ;(async () => {
+        try {
+          const { listDueRosters, syncRoster } = await import('./agency-roster-store')
+          const due = await listDueRosters(Date.now())
+          if (due.length) await syncRoster(due[0].id)
+        } catch { /* اسکرپِ بعدی در تیکِ بعد */ } finally { rosterRunning = false }
+      })()
     }
   } finally { queueRunning = false }
 }
