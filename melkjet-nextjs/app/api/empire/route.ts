@@ -14,7 +14,7 @@ import {
   applyHiddenBadges, HIDDEN_BADGES, snapshotNetWorth, markComeback, claimComeback,
   buyFundUnits, sellFundUnits, accrueFundDividends, joinCrowd, exitCrowd,
   companyReputationOf, hireCandidatesOf, teamSkillOf, ownerPersonaOf, permitTermsOf, permitDueAt,
-  foundCompany, hireEngineer, applyWages, requestPermit, settleObjection, progressPermits,
+  foundCompany, hireEngineer, applyWages, requestPermit, settleObjection, defendObjection, progressPermits,
   buildPlanOf, buildStageOf, BUILD_STRUCTURES, BUILD_QUALITIES,
   startBuild, progressBuild, resolveBuildEvent, presellUnits, sellUnits,
   PROJECT_GOALS, goalPricePct, AMENITY_LABELS, amenityValueFactorOf, bulkPriceOf,
@@ -1268,6 +1268,12 @@ export async function POST(req: NextRequest) {
     }
     case 'permitSettle': {
       const r = await settleObjection(userId, String(b.assetId || ''))
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+    }
+    // دفاع در کمیسیون (فیدبک: «دفاع قابلِ کلیک نیست») — انتخابِ رایگانِ صبر به‌جای غرامت؛ راهِ توافق بسته می‌شود.
+    case 'permitDefend': {
+      const r = await defendObjection(userId, String(b.assetId || ''))
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
     }

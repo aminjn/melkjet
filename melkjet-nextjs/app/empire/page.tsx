@@ -397,7 +397,11 @@ export default function EmpirePage() {
   // فروش/اجاره «فقط» از طریقِ مشاور یا آژانسِ املاک — اول برگهٔ قرارداد با نامِ طرف و هزینهٔ تومانی باز می‌شود.
   async function openAgentQuote(a: any, kind: 'sell' | 'rent') {
     const d = await api({ action: 'agentQuote', assetId: a.id, kind })
-    if (d) setAq({ assetId: a.id, title: a.title, kind, via: 'advisor', data: d })
+    if (d) {
+      setAq({ assetId: a.id, title: a.title, kind, via: 'advisor', data: d })
+      // موبایل: برگه پایینِ کارت باز می‌شود — حتماً جلوی چشم بیاید (فیدبک: «مشاور را نشان نمی‌دهد»)
+      setTimeout(() => document.getElementById('agent-quote-sheet')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 120)
+    }
   }
   async function signAgentDeal() {
     if (!aq) return
@@ -1361,22 +1365,29 @@ export default function EmpirePage() {
           })
           .sort((a: any, b: any) => pfSort === 'value' ? (b.current || b.buyPrice) - (a.current || a.buyPrice) : pfSort === 'growth' ? (b.growthPct || 0) - (a.growthPct || 0) : (b.boughtAt || 0) - (a.boughtAt || 0))
           .map((a: any) => (
-          <div key={a.id} style={{ ...card, background: 'var(--bg2)', display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
+          <div key={a.id} style={{ ...card, background: 'var(--bg2)', display: 'flex', flexDirection: 'column', gap: 8,
             // جلوهٔ رشد (پاسِ جذابیتِ ۱۴+): هالهٔ سبز/قرمزِ ملایم از سود/زیانِ «واقعی» — یک نگاه، کلِ قصه
             boxShadow: a.growthPct > 2 ? '0 0 14px rgba(110,220,160,.14)' : a.growthPct < -2 ? '0 0 14px rgba(230,120,110,.12)' : undefined }}>
-            <span style={{ fontSize: 26 }}>{a.kind === 'land' ? '🏞' : a.kind === 'villa' ? '🏡' : a.kind === 'commercial' ? '🏬' : '🏢'}</span>
-            <div style={{ flex: 1, minWidth: 160 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                <span style={a.nickname ? { color: '#f0d47a' } : undefined}>{(a.nickname || a.title).slice(0, 55)}</span>
-                {/* قانونِ ۱۳ (رویاپردازی): اسمِ دلخواه روی هر دارایی — هویتی، صفر اثرِ اقتصادی */}
-                <button title="نام‌گذاریِ دارایی" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, opacity: .6 }} disabled={busy}
-                  onClick={async () => { const n = prompt('چه اسمی روی این دارایی می‌گذاری؟ (خالی = حذفِ نام)', a.nickname || ''); if (n === null) return; const d = await api({ action: 'nickname', assetId: a.id, name: n }); if (d) setSt(d) }}>✏️</button>
+            {/* سطرِ ۱ — هویت و ارزش (نظمِ کارت، فیدبکِ مستقیم): راست نام و محله، چپ ارزشِ روز — دیگر هیچ‌چیز شناور نیست */}
+            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+              <span style={{ fontSize: 24, lineHeight: 1.3 }}>{a.kind === 'land' ? '🏞' : a.kind === 'villa' ? '🏡' : a.kind === 'commercial' ? '🏬' : '🏢'}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={a.nickname ? { color: '#f0d47a' } : undefined}>{(a.nickname || a.title).slice(0, 55)}</span>
+                  {/* قانونِ ۱۳ (رویاپردازی): اسمِ دلخواه روی هر دارایی — هویتی، صفر اثرِ اقتصادی */}
+                  <button title="نام‌گذاریِ دارایی" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, opacity: .6 }} disabled={busy}
+                    onClick={async () => { const n = prompt('چه اسمی روی این دارایی می‌گذاری؟ (خالی = حذفِ نام)', a.nickname || ''); if (n === null) return; const d = await api({ action: 'nickname', assetId: a.id, name: n }); if (d) setSt(d) }}>✏️</button>
+                </div>
+                {a.nickname && <div style={{ fontSize: 10, color: 'var(--faint)' }}>{a.title.slice(0, 55)}</div>}
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{a.hood} · خرید: {faB(a.buyPrice)}{a.income > 0 && <span style={{ color: '#7c6' }}> · درآمد {faB(a.income)}</span>}</div>
               </div>
-              {a.nickname && <div style={{ fontSize: 10, color: 'var(--faint)' }}>{a.title.slice(0, 55)}</div>}
-              <div style={{ fontSize: 11, color: 'var(--muted)' }}>{a.hood} · خرید: {faB(a.buyPrice)}</div>
+              <div style={{ textAlign: 'left', flexShrink: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--gold)', whiteSpace: 'nowrap' }}>{faB(a.current || a.buyPrice)}</div>
+                <div style={{ fontSize: 10, color: 'var(--muted)', whiteSpace: 'nowrap' }}>ارزشِ روز{a.growthPct ? <span style={{ color: a.growthPct > 0 ? '#7c6' : '#e88', fontWeight: 700 }}> {a.growthPct > 0 ? '+' : ''}{a.growthPct.toLocaleString('fa-IR')}٪</span> : ''}</div>
+              </div>
             </div>
-            <div style={{ fontSize: 12 }}>ارزشِ روز: <b style={{ color: 'var(--gold)' }}>{faB(a.current || a.buyPrice)}</b> {a.growthPct ? <span style={{ color: a.growthPct > 0 ? '#7c6' : '#e88' }}>({a.growthPct > 0 ? '+' : ''}{a.growthPct.toLocaleString('fa-IR')}٪)</span> : null}
-              {a.income > 0 && <span style={{ fontSize: 11, color: '#7c6', marginRight: 6 }}>· درآمد {faB(a.income)}</span>}</div>
+            {/* سطرِ ۲ — وضعیت و تصمیمِ جاری (مسیرِ زمین/کسب‌وکار/تصمیمِ سه‌گانه) */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             {/* زمین (§6.7): سه مسیر با برآوردِ شفاف؛ تجاری (§6.9): انتخابِ کسب‌وکار؛ بقیه: تصمیمِ سه‌گانه */}
             {a.kind === 'land' && !a.landPlan && a.plans
               ? <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>{a.plans.map((p: any) => (
@@ -1411,11 +1422,16 @@ export default function EmpirePage() {
                         {/* ⚡ پیگیریِ حضوری (فاز ۲۷): کوین انتظار را کوتاه می‌کند — اعتراض/عوارض سرِ جایشان */}
                         {st.speed?.enabled && Math.ceil(((a.permitDue || 0) - Date.now()) / 864e5) > 0 && <button style={{ ...btnGhost, padding: '2px 9px', fontSize: 10.5, marginRight: 8, color: 'var(--gold)', borderColor: 'var(--goldDim)' }}
                           disabled={busy || e.coins < (st.speed.permitCoinsPerDay || 0)}
-                          onClick={async () => { const d = await api({ action: 'permitBoost', assetId: a.id, days: 1 }); if (d) setSt(d) }}>⚡ پیگیری: ۱− روز (🪙 {fa(st.speed.permitCoinsPerDay)})</button>}</span>
-                      {a.permit.objection && !a.permit.objection.settled && <span style={{ color: '#e7a14a' }}>⚠️ {a.permit.objection.text}
-                        <button style={{ ...btnGhost, padding: '2px 8px', fontSize: 10.5, marginRight: 6 }} disabled={busy}
-                          onClick={async () => { const d = await api({ action: 'permitSettle', assetId: a.id }); if (d) setSt(d) }}>🤝 توافق ({faB(a.permit.objection.settleCost)})</button>
-                        <span style={{ color: 'var(--faint)', fontSize: 10 }}> یا دفاع در کمیسیون (+{fa(a.permit.objection.extraDays)} روز)</span></span>}
+                          onClick={async () => { const d = await api({ action: 'permitBoost', assetId: a.id, days: 1 }); if (d) setSt(d) }}>⚡ پیگیریِ حضوری: یک روز جلوتر (🪙 {fa(st.speed.permitCoinsPerDay)})</button>}</span>
+                      {/* اعتراض = دوراهیِ واقعی (فیدبک: «دفاع قابلِ کلیک نیست»): توافقِ پولیِ فوری، یا دفاعِ رایگانِ کُند — هر دو دکمهٔ واقعی */}
+                      {a.permit.objection && !a.permit.objection.settled && (a.permit.objection.defended
+                        ? <span style={{ color: '#b7aef2' }}>⚖️ دفاعت ثبت شد — در انتظارِ رأیِ کمیسیون (+{fa(a.permit.objection.extraDays)} روز به بررسی)</span>
+                        : <span style={{ color: '#e7a14a', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>⚠️ {a.permit.objection.text}
+                            <button style={{ ...btnGhost, padding: '3px 10px', fontSize: 10.5 }} disabled={busy} title="غرامت بده و اعتراض همین حالا بسته شود"
+                              onClick={async () => { const d = await api({ action: 'permitSettle', assetId: a.id }); if (d) setSt(d) }}>🤝 توافق ({faB(a.permit.objection.settleCost)})</button>
+                            <button style={{ ...btnGhost, padding: '3px 10px', fontSize: 10.5, color: '#b7aef2', borderColor: '#4d4670' }} disabled={busy} title="رایگان — ولی بررسی طولانی‌تر می‌شود و راهِ توافق بسته می‌شود"
+                              onClick={async () => { if (!confirm(`در کمیسیون دفاع کنی؟ رایگان است ولی بررسیِ پروانه +${fa(a.permit.objection.extraDays)} روز طول می‌کشد و دیگر جای توافق نیست.`)) return; const d = await api({ action: 'permitDefend', assetId: a.id }); if (d) setSt(d) }}>⚖️ دفاع در کمیسیون (+{fa(a.permit.objection.extraDays)} روز)</button>
+                          </span>)}
                     </span>)
               : a.kind === 'land' && a.landPlan
               ? <span style={{ fontSize: 11, color: 'var(--muted)' }}>{a.landPlan === 'partner' ? '🤝 مشارکت' : '💸 آمادهٔ فروش'}</span>
@@ -1428,17 +1444,22 @@ export default function EmpirePage() {
               ? <span style={{ fontSize: 11, color: 'var(--muted)' }}>🏪 {a.business} ({fa(a.businessProb || 0)}٪)</span>
               : a.action
               ? <span style={{ fontSize: 11, color: 'var(--muted)' }}>{a.action === 'renovate' ? '🛠 بازسازی' : a.action === 'rent' ? '💰 اجاره' : '📈 نگه‌داری'}</span>
-              : <span style={{ display: 'flex', gap: 4 }}>{[['renovate', '🛠', 'بازسازی'], ['rent', '💰', 'اجاره دادن'], ['hold', '📈', 'نگه داشتن']].map(([k, i, t]) => <button key={k} title={t} style={{ ...btnGhost, padding: '4px 8px', fontSize: 13 }} onClick={async () => {
+              : <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>{[['renovate', '🛠', 'بازسازی'], ['rent', '💰', 'اجاره با مشاور'], ['hold', '📈', 'نگه‌داشتن']].map(([k, i, t]) => <button key={k} style={{ ...btnGhost, padding: '4px 10px', fontSize: 11 }} onClick={async () => {
                   // اجاره (فاز ۲۹ + فیدبک): اول برگهٔ قراردادِ مشاور/آژانس با هزینهٔ تومانی — بعد امضا
                   if (k === 'rent') { openAgentQuote(a, 'rent'); return }
                   const d = await api({ action: 'assetAction', assetId: a.id, act: k }); if (d) setSt(d)
-                }}>{i}</button>)}</span>}
-            <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 12 }} disabled={busy || e.aiTokens <= 0} onClick={() => doAnalyze(a.listingId)}>تحلیلِ ملک‌جت (۱ ژتون)</button>
-            {a.url && <a href={a.url} target="_blank" rel="noreferrer" style={{ ...btnGhost, padding: '4px 10px', fontSize: 12, textDecoration: 'none' }}>🔗 آگهیِ واقعی</a>}
-            {!a.construction && <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 12, color: '#e88', borderColor: '#644' }} disabled={busy} onClick={() => openAgentQuote(a, 'sell')}>💸 فروش</button>}
+                }}>{i} {t}</button>)}</span>}
+            </div>
+            {/* سطرِ ۳ — اکشن‌های همیشگی: همیشه یک‌جا، یک‌شکل (نظمِ کارت — فیدبکِ مستقیم) */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', borderTop: '1px dashed var(--line)', paddingTop: 8 }}>
+              {a.url && <a href={a.url} target="_blank" rel="noreferrer" style={{ ...btnGhost, padding: '5px 12px', fontSize: 11.5, textDecoration: 'none' }}>🔗 آگهیِ واقعی</a>}
+              <button style={{ ...btnGhost, padding: '5px 12px', fontSize: 11.5 }} disabled={busy || e.aiTokens <= 0} onClick={() => doAnalyze(a.listingId)}>🧠 تحلیلِ ملک‌جت (۱ ژتون)</button>
+              <span style={{ flex: 1 }} />
+              {!a.construction && <button style={{ ...btnGhost, padding: '5px 14px', fontSize: 11.5, color: '#7ee0b8', borderColor: '#3d5c4d', fontWeight: 700 }} disabled={busy} onClick={() => openAgentQuote(a, 'sell')}>🏷 فروش با مشاور/آژانس</button>}
+            </div>
 
             {/* 🤝 برگهٔ قرارداد با مشاور/آژانس — نام + هزینهٔ تومانی، قبل از امضا (فیدبکِ مستقیم) */}
-            {aq && aq.assetId === a.id && <div style={{ width: '100%', border: '1px solid var(--goldDim)', borderRadius: 12, padding: 10, marginTop: 6, fontSize: 12, background: 'rgba(212,175,55,.05)' }}>
+            {aq && aq.assetId === a.id && <div id="agent-quote-sheet" style={{ width: '100%', border: '1px solid var(--gold)', borderRadius: 12, padding: 12, fontSize: 12, background: 'rgba(212,175,55,.07)', boxShadow: '0 6px 22px -8px rgba(212,175,55,.25)' }}>
               <b>🤝 {aq.kind === 'sell' ? 'قراردادِ فروش' : 'قراردادِ اجاره'} — از طریقِ چه کسی؟</b>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 7 }}>
                 {(aq.data.agents || []).map((g: any) => (

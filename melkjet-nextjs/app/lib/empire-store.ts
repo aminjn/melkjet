@@ -26,7 +26,7 @@ export interface EmpireAsset {
   actionAt?: number
   landPlan?: LandPlan         // سیستمِ زمین (§6.7): فروشِ فوری / ساخت / مشارکت
   // پروانهٔ ساخت (جلد ۶۳): درخواست → بررسی (مهلتِ قطعی از هش) → اعتراضِ احتمالی → صدور. عوارض → خزانه.
-  permit?: { requestedAt: number; days: number; fee: number; status: 'pending' | 'granted'; grantedAt?: number; objection?: { text: string; extraDays: number; settleCost: number; settled?: boolean } }
+  permit?: { requestedAt: number; days: number; fee: number; status: 'pending' | 'granted'; grantedAt?: number; objection?: { text: string; extraDays: number; settleCost: number; settled?: boolean; defended?: boolean } }
   // موتورِ ساخت (جلد ۶۴–۷۲): هزینهٔ روزشمار (بی‌پولی = توقف — جلد ۷۱)، رویدادهای قطعی، پیش‌فروش، فروشِ واحدها.
   construction?: Construction
   business?: string           // لایهٔ کسب‌وکارِ تجاری (§6.9): کافه/فروشگاه/…
@@ -1274,11 +1274,27 @@ export async function settleObjection(userId: string, assetId: string, now = Dat
     const ob = a?.permit?.objection
     if (!a || !a.permit || !ob) return 'اعتراضی در کار نیست'
     if (ob.settled) return 'اعتراض قبلاً حل شده'
+    if (ob.defended) return 'در کمیسیون دفاع کرده‌ای — دیگر جای توافق نیست؛ منتظرِ رأی بمان'
     if (e.capital < ob.settleCost) return 'سرمایهٔ کافی برای غرامت نیست'
     e.capital -= ob.settleCost
     e.taxPaid = (e.taxPaid || 0) + ob.settleCost
     ob.settled = true
     e.timeline.push({ at: now, icon: '🤝', title: 'اعتراضِ پروانه با توافق حل شد', detail: `${Math.round(ob.settleCost / 1e6).toLocaleString('fa-IR')}م تومان غرامت` })
+  })
+}
+
+// دفاع در کمیسیون (فیدبک: «دفاع قابلِ کلیک نیست») — تصمیمِ صریحِ دومِ اعتراض (قانون ۱۲: پول بده و تمام کن،
+// یا رایگان دفاع کن و صبرِ بیشتری بخر). دفاع پولی نمی‌گیرد؛ فقط روزهای اعتراض می‌مانَد و راهِ توافق بسته می‌شود.
+export async function defendObjection(userId: string, assetId: string, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    const ob = a?.permit?.objection
+    if (!a || !a.permit || !ob) return 'اعتراضی در کار نیست'
+    if (ob.settled) return 'اعتراض قبلاً با توافق حل شده'
+    if (ob.defended) return 'دفاعت از قبل ثبت شده — در انتظارِ رأیِ کمیسیون'
+    ob.defended = true
+    e.timeline.push({ at: now, icon: '⚖️', title: 'تصمیم: دفاع در کمیسیون', detail: `بدونِ غرامت — بررسیِ پروانه ${ob.extraDays.toLocaleString('fa-IR')} روز طولانی‌تر می‌شود` })
+    e.journal.push({ at: now, text: `به‌جای غرامت، راهِ دفاع را انتخاب کردی. صبر هم قیمتی دارد — ولی این‌بار پولش را نگه داشتی.` })
   })
 }
 

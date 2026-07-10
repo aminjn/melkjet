@@ -1650,6 +1650,22 @@ async function main() {
     ok('نشانِ مخفیِ «چکشِ طلایی» کشف شد', (await getE45(uc12)).badges.includes('Golden Hammer'))
     const c45 = await consumeAuctionWin(uc12)
     ok('مصرفِ برد بعد از خرید + مصرفِ دوباره رد می‌شود', c45.ok === true && !c45.empire.auctionWin && (await consumeAuctionWin(uc12)).ok === false)
+
+    // ── فاز ۴۶ (فیدبک: «دفاع قابلِ کلیک نیست»): دفاع در کمیسیون — تصمیمِ دومِ اعتراضِ پروانه ──
+    console.log('\n── Empire · فاز ۴۶ (دفاع در کمیسیونِ اعتراضِ پروانه) ──')
+    const { defendObjection } = await import('../app/lib/empire-store.ts')
+    await buyA(uc12, { id: 'LND46', title: 'زمینِ دفاع', hood: 'ولنجک', price: 1_000_000_000, ptype: 'زمین' })
+    const land46 = (await getEmpire(uc12)).assets.find(x => x.listingId === 'LND46').id
+    await setLP(uc12, land46, 'build')
+    ok('دفاع بدونِ اعتراض رد می‌شود', (await defendObjection(uc12, land46)).ok === false)
+    await requestPermit(uc12, land46, { days: 2, fee: 10_000_000, objection: { text: 'همسایه: نور', extraDays: 2, settleCost: 30_000_000 } })
+    const capD46 = (await getEmpire(uc12)).capital
+    const df46 = await defendObjection(uc12, land46)
+    ok('دفاع ثبت شد: رایگان + تایم‌لاین ⚖️', df46.ok === true && df46.empire.capital === capD46
+      && df46.empire.assets.find(x => x.id === land46).permit.objection.defended === true
+      && df46.empire.timeline.some(t => t.icon === '⚖️'))
+    ok('بعد از دفاع، توافق بسته است', (await settleObjection(uc12, land46)).ok === false)
+    ok('دفاعِ دوباره رد می‌شود', (await defendObjection(uc12, land46)).ok === false)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)
