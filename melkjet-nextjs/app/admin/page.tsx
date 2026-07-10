@@ -1733,7 +1733,7 @@ function AgencyRosterPanel() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <div style={{ fontWeight: 800, fontSize: 14 }}>{s.agencyName || s.slug}</div>
               <span dir="ltr" style={{ fontSize: 11, color: 'var(--faint)' }}>{s.slug}</span>
-              {s.running && <span style={{ fontSize: 11, padding: '2px 9px', borderRadius: 999, background: 'rgba(201,168,76,0.15)', color: 'var(--gold)', fontWeight: 700 }}>در حال همگام‌سازی…</span>}
+              {s.running && <span style={{ fontSize: 11, padding: '2px 9px', borderRadius: 999, background: 'rgba(201,168,76,0.15)', color: 'var(--gold)', fontWeight: 700 }}>در حال همگام‌سازی… {s.progress?.total ? `${fa(s.progress.done)}/${fa(s.progress.total)}` : ''}</span>}
               {!s.running && s.runRequested && <span style={{ fontSize: 11, padding: '2px 9px', borderRadius: 999, background: 'rgba(201,168,76,0.12)', color: 'var(--muted)' }}>در صف</span>}
               {s.lastError && <span style={{ fontSize: 11, color: '#e06666' }}>خطا: {s.lastError}</span>}
               <span style={{ marginInlineStart: 'auto', fontSize: 12, color: 'var(--muted)' }}>
