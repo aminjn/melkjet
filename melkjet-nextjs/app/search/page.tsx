@@ -431,7 +431,9 @@ function SearchPageInner() {
     const norm = (s: string) => (s || '').replace(/‌/g, '').replace(/\s/g, '')
     const gpsCityOk = !selectedCity || !userCity || norm(selectedCity) === norm(userCity) || norm(userCity).includes(norm(selectedCity)) || norm(selectedCity).includes(norm(userCity))
     // فقط وقتی «نزدیکِ من» روشن است روی موقعیتِ کاربر زوم کن؛ خاموش = نمای کلِ شهر.
-    if (userLoc && gpsCityOk && nearMe) return { center: userLoc, zoom: 14 }   // سطحِ محله
+    // انتخابِ صریحِ محله (چیپ/جستجو) بر GPS مقدم است — همان قانونی که فیلترِ آگهی‌ها دارد؛
+    // وگرنه با «نزدیکِ من»ِ روشن، نقشه روی محلهٔ خودِ کاربر گیر می‌کرد و به محلهٔ انتخابی نمی‌رفت.
+    if (userLoc && gpsCityOk && nearMe && !hood && !parsed.area) return { center: userLoc, zoom: 14 }   // سطحِ محله
     if (pins.length) {
       const lats = pins.map(p => p.lat), lngs = pins.map(p => p.lng)
       const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLng = Math.min(...lngs), maxLng = Math.max(...lngs)
@@ -443,7 +445,7 @@ function SearchPageInner() {
     if (mapCenter) return { center: mapCenter, zoom: 13 }
     if (userLoc) return { center: userLoc, zoom: 13 }
     return null
-  }, [pins, mapCenter, userLoc, selectedCity, userCity, nearMe])
+  }, [pins, mapCenter, userLoc, selectedCity, userCity, nearMe, hood, parsed.area])
 
   // چیپ‌های تشخیصِ AI — فقط مواردِ واقعاً تشخیص‌داده‌شده
   const aiChips = useMemo(() => {

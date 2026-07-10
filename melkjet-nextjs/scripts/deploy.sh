@@ -53,8 +53,14 @@ NODE_OPTIONS="--max-old-space-size=2048" nice -n 19 ionice -c3 npm run build
 
 # Economy QA (سند ۲۳ فصل ۱۳ Part 09): ممیزیِ knobهای زندهٔ اقتصادِ «امپراتوری» قبل از انتشار —
 # پولِ مجانی/سودِ غیرمنطقی/پاداشِ خارج از تعادل. هشدار می‌دهد ولی دیپلوی را متوقف نمی‌کند.
+# لودرِ TS به type-strippingِ Node 22+ نیاز دارد — روی Nodeِ قدیمی‌تر صادقانه رد می‌شویم (نه هشدارِ دروغِ «نقضِ تعادل»).
 echo "→ Economy QA (ممیزیِ تعادلِ اقتصاد)"
-node --import ./scripts/reos-loader.mjs scripts/economy-qa.mjs || echo "   ⚠⚠ تعادلِ اقتصاد نقض شده — بعد از دیپلوی حتماً در ادمین → امپراتوری اصلاح کن!"
+NODE_MAJOR=$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)
+if [ "$NODE_MAJOR" -ge 22 ]; then
+  node --import ./scripts/reos-loader.mjs scripts/economy-qa.mjs || echo "   ⚠⚠ تعادلِ اقتصاد نقض شده — بعد از دیپلوی حتماً در ادمین → امپراتوری اصلاح کن!"
+else
+  echo "   ⚠ Nodeِ سرور v$NODE_MAJOR است (نیاز: ۲۲+) — Economy QA این بار رد شد؛ برای اجرای خودکارش Node را ارتقا بده."
+fi
 
 echo "→ reload (rolling، بدونِ داون‌تایم)"
 pm2 reload ecosystem.config.js --update-env
