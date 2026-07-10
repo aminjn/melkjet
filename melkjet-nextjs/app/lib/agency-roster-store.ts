@@ -21,6 +21,7 @@ export interface RosterAdvisor {
   owner: string          // کلیدِ موقت (adv:slug:key) یا شمارهٔ موبایل پس از graduate
   phone?: string         // پس از graduate ست می‌شود
   listingCount: number
+  tokens?: string[]      // توکنِ آگهی‌های این مشاور (برای بازکردنِ لینکِ دیوار) — سقفِ ۱۰۰
   graduatedAt?: number
 }
 export interface RosterScrape {
@@ -37,7 +38,10 @@ export interface RosterScrape {
   lastError?: string
   lastTotal?: number
   lastUnnamed?: number
+  unnamedTokens?: string[]   // توکنِ آگهی‌های بی‌امضا (به آژانس) — سقفِ ۱۰۰
   running?: boolean
+  runStartedAt?: number    // برای تشخیصِ رانِ گیرکرده/مرده
+  progress?: { done: number; total: number }
   runRequested?: boolean   // «همگام‌سازی الان» — کرونِ اینستنسِ ۰ برمی‌دارد
 }
 interface DB { scrapes: Record<string, RosterScrape> }
@@ -54,8 +58,15 @@ async function mutate<R>(fn: (db: DB) => R): Promise<R> { if (pgEnabled()) retur
 // کاراکترهای نامرئیِ RTL/zero-width (که موقعِ کپی از مرورگرِ فارسی می‌چسبند) هم حذف می‌شوند.
 const cleanSlug = (s: string) => String(s || '').replace(/[​-‏‪-‮⁦-⁩﻿]/g, '').trim().replace(/.*divar\.ir\/(?:pro|business(?:es)?)\//i, '').replace(/[^A-Za-z0-9_-].*$/, '')
 
+// رانِ گیرکرده: running=true ولی خیلی وقت است شروع شده (پروسه مُرده/reload شده).
+const STALE_MS = 20 * 60 * 1000
+const isStale = (s: RosterScrape, now = Date.now()) => !!s.running && (!s.runStartedAt || now - s.runStartedAt > STALE_MS)
+
 export async function listScrapes(): Promise<RosterScrape[]> {
-  return Object.values((await load()).scrapes).sort((a, b) => b.createdAt - a.createdAt)
+  const now = Date.now()
+  return Object.values((await load()).scrapes)
+    .map(s => isStale(s, now) ? { ...s, running: false, lastError: s.lastError || 'همگام‌سازی نیمه‌کاره ماند — دوباره «همگام‌سازی الان» را بزنید' } : s)
+    .sort((a, b) => b.createdAt - a.createdAt)
 }
 export async function getScrape(id: string): Promise<RosterScrape | null> { return (await load()).scrapes[id] || null }
 
@@ -75,15 +86,15 @@ export async function addScrape(input: { slug: string; agencyName?: string; useA
 }
 export async function removeScrape(id: string): Promise<void> { await mutate(db => { delete db.scrapes[id] }) }
 
-// «همگام‌سازیِ الان» — فقط پرچم می‌زند؛ کارِ سنگین را کرونِ اینستنسِ ۰ برمی‌دارد.
+// «همگام‌سازیِ الان» — پرچم می‌زند و رانِ گیرکرده را آزاد می‌کند؛ کارِ سنگین را کرونِ اینستنسِ ۰ برمی‌دارد.
 export async function requestRun(id: string): Promise<boolean> {
-  return mutate(db => { const s = db.scrapes[id]; if (!s) return false; s.runRequested = true; return true })
+  return mutate(db => { const s = db.scrapes[id]; if (!s) return false; s.runRequested = true; if (isStale(s)) s.running = false; return true })
 }
 const PERIOD: Record<RosterScrape['schedule'], number> = { off: 0, '6h': 6 * 3600_000, daily: 24 * 3600_000 }
-// اسکرپ‌هایی که باید سینک شوند (درخواستِ دستی یا زمان‌بندیِ سررسیده) و در حالِ اجرا نیستند.
+// اسکرپ‌هایی که باید سینک شوند (درخواستِ دستی یا زمان‌بندیِ سررسیده) و در حالِ اجرا نیستند (یا رانشان مرده).
 export async function listDueRosters(now: number): Promise<RosterScrape[]> {
   return Object.values((await load()).scrapes).filter(s => {
-    if (s.running) return false
+    if (s.running && !isStale(s, now)) return false
     if (s.runRequested) return true
     const p = PERIOD[s.schedule]; return !!p && (!s.lastRun || now - s.lastRun >= p)
   })
@@ -121,10 +132,18 @@ async function importClusterTokens(owner: string, tokens: string[], sourceId: st
 export async function syncRoster(id: string, onProgress?: (done: number, total: number) => void): Promise<{ ok: boolean; error?: string; advisors: number; total: number; unnamed: number }> {
   const scrape = await getScrape(id)
   if (!scrape) return { ok: false, error: 'اسکرپ یافت نشد', advisors: 0, total: 0, unnamed: 0 }
-  await patchScrape(id, { running: true, runRequested: false })
+  await patchScrape(id, { running: true, runStartedAt: Date.now(), runRequested: false, progress: { done: 0, total: 0 }, lastError: '' })
+  let done = false
   try {
-    const roster = await buildAgencyRoster(scrape.slug, { useAI: scrape.useAI, onProgress })
-    if (!roster.ok) { await patchScrape(id, { running: false, lastRun: Date.now(), lastError: roster.error || 'خطا در خوشه‌بندی' }); return { ok: false, error: roster.error, advisors: 0, total: 0, unnamed: 0 } }
+    // پیشرفتِ زنده (throttleشده تا هر ۳ ثانیه یک نوشت) تا کاربر بفهمد گیر نکرده.
+    let lastWrite = 0
+    const prog = (d: number, t: number) => {
+      try { onProgress?.(d, t) } catch {}
+      const now = Date.now()
+      if (d === t || now - lastWrite > 3000) { lastWrite = now; patchScrape(id, { progress: { done: d, total: t } }).catch(() => {}) }
+    }
+    const roster = await buildAgencyRoster(scrape.slug, { useAI: scrape.useAI, onProgress: prog })
+    if (!roster.ok) { done = true; await patchScrape(id, { running: false, lastRun: Date.now(), lastError: roster.error || 'خطا در خوشه‌بندی' }); return { ok: false, error: roster.error, advisors: 0, total: 0, unnamed: 0 } }
 
     // رکوردِ هر مشاورِ کشف‌شده را می‌سازیم/به‌روز می‌کنیم (نامِ حساب‌های graduateشده دست‌نخورده می‌ماند).
     const freshByKey = new Map(roster.advisors.map(a => [a.key, a]))
@@ -133,6 +152,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
       let rec = recs.find(r => r.key === a.key)
       if (!rec) { rec = { key: a.key, name: a.name, owner: `adv:${scrape.slug}:${a.key}`, listingCount: 0 }; recs.push(rec) }
       else if (!rec.phone && a.name) rec.name = a.name
+      rec.tokens = a.tokens.slice(0, 100)   // لینکِ آگهی‌های دیوار برای بازبینی
     }
 
     // owner→tokens: هر مشاور آگهی‌های خودش؛ رکوردهای قدیمیِ غایب → توکنِ خالی (همه‌شان «رفته»)؛ آژانس → بی‌نام‌ها.
@@ -150,11 +170,17 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
       s.advisors = recs; s.agencyName = roster.agencyName || s.agencyName
       s.running = false; s.lastRun = Date.now(); s.lastError = ''
       s.lastTotal = roster.total; s.lastUnnamed = roster.unnamed.tokens.length
+      s.unnamedTokens = roster.unnamed.tokens.slice(0, 100)
     })
+    done = true
     return { ok: true, advisors: recs.length, total: roster.total, unnamed: roster.unnamed.tokens.length }
   } catch (e: any) {
+    done = true
     await patchScrape(id, { running: false, lastRun: Date.now(), lastError: e?.message || 'خطای داخلی' })
     return { ok: false, error: e?.message || 'خطا', advisors: 0, total: 0, unnamed: 0 }
+  } finally {
+    // تضمین: اگر جایی زودتر return شد یا خطای ناگرفته رخ داد، running قفل نماند.
+    if (!done) { try { await patchScrape(id, { running: false, lastError: 'همگام‌سازی ناتمام ماند' }) } catch {} }
   }
 }
 
