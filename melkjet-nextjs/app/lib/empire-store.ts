@@ -45,6 +45,10 @@ export interface EmpireAsset {
   m100?: { illegalArea: number; illegalUnits: number; fine: number; status: 'pending' | 'paid' | 'demolished'; lawyerTried?: boolean }
   renovBoostPct?: number      // بازسازی (فاز ۲۹): ارزش‌افزودهٔ جمع‌شده (٪، با سقفِ knob)
   renovDone?: string[]        // کدام گزینه‌های بازسازی انجام شده (هر کدام یک‌بار)
+  // فاز ۳۷ — بازارِ بازیکنان و مشارکتِ ساخت:
+  forSale?: number            // قیمتِ عرضه به بازیکنانِ دیگر (۰/undefined = عرضه نشده)
+  jvOffer?: { pct: number; amount: number }   // پیشنهادِ بازِ مشارکتِ ساخت: سهمِ ٪ در برابرِ آوردهٔ نقدی
+  partners?: Array<{ userId: string; no: number; name: string; pct: number; paid: number; at: number }>   // شرکای پروژه — سهمشان از عایدیِ فروش خودکار تسویه می‌شود
 }
 export interface TimelineDot { at: number; icon: string; title: string; detail?: string }
 export interface JournalEntry { at: number; text: string }
@@ -1474,6 +1478,164 @@ export function areaFromText(...texts: Array<string | undefined>): number {
     }
   }
   return best
+}
+
+// ══════════ فاز ۳۷ — بازارِ بازیکنان، مشارکتِ ساخت (درخواستِ مستقیم) ══════════
+
+// تراکنشِ اتمیکِ دو-کاربره: هر جابه‌جاییِ پول/دارایی بینِ دو بازیکن باید یا کامل انجام شود یا هیچ.
+// PG: هر دو ردیف با FOR UPDATE و به ترتیبِ userId قفل می‌شوند (بدونِ deadlock)؛ فایل: تک‌پروسه‌ایِ dev.
+async function twoUserTx(aId: string, bId: string, fn: (a: EmpireData, b: EmpireData) => void | string): Promise<{ ok: boolean; reason?: string; a?: EmpireData; b?: EmpireData }> {
+  if (!aId || !bId || aId === bId) return { ok: false, reason: 'دو طرفِ معامله نامعتبرند' }
+  if (pgEnabled()) {
+    await ensure()
+    return pgTx(async c => {
+      const [id1, id2] = [aId, bId].sort()
+      const r1 = await c.query(`SELECT data FROM reos_empire WHERE user_id=$1 FOR UPDATE`, [id1])
+      const r2 = await c.query(`SELECT data FROM reos_empire WHERE user_id=$1 FOR UPDATE`, [id2])
+      const byId: Record<string, EmpireData | undefined> = { [id1]: r1.rows[0]?.data, [id2]: r2.rows[0]?.data }
+      const a = byId[aId], b = byId[bId]
+      if (!a || !b) return { ok: false, reason: 'یکی از دو امپراتوری یافت نشد' }
+      const err = fn(a, b)
+      if (err) return { ok: false, reason: err }
+      const now = Date.now(); a.updatedAt = now; b.updatedAt = now
+      await c.query(`UPDATE reos_empire SET data=$2, at=$3 WHERE user_id=$1`, [a.userId, JSON.stringify(a), now])
+      await c.query(`UPDATE reos_empire SET data=$2, at=$3 WHERE user_id=$1`, [b.userId, JSON.stringify(b), now])
+      return { ok: true, a, b }
+    })
+  }
+  const db = fileLoad()
+  const a = db[aId], b = db[bId]
+  if (!a || !b) return { ok: false, reason: 'یکی از دو امپراتوری یافت نشد' }
+  const err = fn(a, b)
+  if (err) return { ok: false, reason: err }
+  const now = Date.now(); a.updatedAt = now; b.updatedAt = now
+  fileSave(db)
+  return { ok: true, a, b }
+}
+
+// تقسیمِ شفافِ پولِ معاملهٔ بازیکن‌بابازیکن (خالص، تست‌پذیر): خریدار قیمت+مالیات می‌دهد (مالیات → خزانهٔ خریدار)؛
+// فروشنده قیمت−کمیسیونِ مشاور می‌گیرد (کمیسیون → servicesPaid فروشنده) — بقای پول (قانون ۶).
+export function tradeSplitOf(price: number, taxPct: number, commissionPct: number) {
+  const p = Math.max(0, Math.round(price))
+  const tax = Math.round(p * Math.max(0, taxPct) / 100)
+  const commission = Math.round(p * Math.max(0, commissionPct) / 100)
+  return { price: p, tax, commission, buyerPays: p + tax, sellerGets: p - commission }
+}
+
+// عرضهٔ دارایی به بازیکنانِ دیگر (۰ = لغو). وسطِ ساخت یا با پروندهٔ بازِ ماده۱۰۰ سند نمی‌خورد.
+export async function setForSale(userId: string, assetId: string, price: number) {
+  return mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    if (!a) return 'دارایی یافت نشد'
+    if (a.construction && !a.construction.done) return 'وسطِ ساخت نمی‌شود به بازیکنان فروخت — اول پروژه را تحویل بده یا از «فروشِ پروژه» استفاده کن'
+    if (a.m100?.status === 'pending') return 'تا حلِ پروندهٔ ماده۱۰۰ سند نمی‌خورد'
+    if ((a.unitsOwned || 1) < (a.unitsTotal || a.unitsOwned || 1) && (a.unitsOwned || 0) > 0 && a.unitsTotal && a.unitsOwned !== a.unitsTotal) return 'تجمیعِ ناتمام را نمی‌شود عرضه کرد — یا کاملش کن یا واحدهایت را در بازارِ عادی بفروش'
+    const p = Math.max(0, Math.round(price))
+    a.forSale = p > 0 ? p : undefined
+    if (p > 0) e.timeline.push({ at: Date.now(), icon: '🏪', title: `«${a.title.slice(0, 50)}» در بازارِ بازیکنان عرضه شد`, detail: `${Math.round(p / 1e6).toLocaleString('fa-IR')}م تومان` })
+  })
+}
+
+// معاملهٔ بازیکن‌بابازیکن: دارایی با تمامِ ویژگی‌های واقعی‌اش (نقشه/بازسازی/واحدها) منتقل می‌شود؛
+// قراردادهای شخصیِ فروشنده (اجاره/کسب‌وکار/عرضه) پاک می‌شوند — مالکِ جدید خودش تصمیم می‌گیرد.
+export async function tradeAsset(sellerId: string, buyerId: string, assetId: string, opts: { taxPct: number; commissionPct: number }, now = Date.now()): Promise<{ ok: boolean; reason?: string; price?: number; profit?: number; listingId?: string }> {
+  let price = 0, profit = 0, listingId = ''
+  const r = await twoUserTx(sellerId, buyerId, (seller, buyer) => {
+    const i = seller.assets.findIndex(x => x.id === assetId)
+    const a = seller.assets[i]
+    if (!a || !(a.forSale! > 0)) return 'این دارایی دیگر در بازارِ بازیکنان نیست'
+    if (buyer.assets.some(x => x.listingId === a.listingId)) return 'این ملک از قبل در امپراتوریِ توست'
+    const s = tradeSplitOf(a.forSale!, opts.taxPct, opts.commissionPct)
+    if (buyer.capital < s.buyerPays) return 'سرمایه کافی نیست (قیمت + مالیاتِ انتقال)'
+    price = s.price; profit = s.price - a.buyPrice; listingId = a.listingId
+    // پول — بقای کامل
+    buyer.capital -= s.buyerPays
+    buyer.taxPaid = (buyer.taxPaid || 0) + s.tax
+    seller.capital += s.sellerGets
+    seller.servicesPaid = (seller.servicesPaid || 0) + s.commission
+    seller.realized = (seller.realized || 0) + profit
+    if (profit > 0) { seller.stats = seller.stats || { sellsProfitable: 0, negoWins: 0 }; seller.stats.sellsProfitable += 1 }
+    // دارایی — ویژگی‌های ملک منتقل، قراردادهای شخصی صفر
+    seller.assets.splice(i, 1)
+    buyer.assets.push({
+      ...a, buyPrice: s.price, boughtAt: now,
+      forSale: undefined, jvOffer: undefined, partners: undefined,
+      action: undefined, actionAt: undefined, business: undefined, businessProb: undefined,
+      income: undefined, lastAccrualAt: undefined,
+    })
+    seller.timeline.push({ at: now, icon: '🤝', title: `«${a.title.slice(0, 40)}» را به «${buyer.name}» فروختی`, detail: `${Math.round(s.sellerGets / 1e6).toLocaleString('fa-IR')}م تومان (پس از کمیسیونِ مشاور)` })
+    buyer.timeline.push({ at: now, icon: '🤝', title: `«${a.title.slice(0, 40)}» را از «${seller.name}» خریدی`, detail: `${Math.round(s.buyerPays / 1e6).toLocaleString('fa-IR')}م تومان (با مالیات)` })
+  })
+  return r.ok ? { ok: true, price, profit, listingId } : { ok: false, reason: r.reason }
+}
+
+// پیشنهادِ مشارکتِ ساخت (پروژهٔ مشترک): مالک سهمِ ٪ از عایدیِ فروشِ پروژه را در برابرِ آوردهٔ نقدی عرضه می‌کند.
+// قاعدهٔ شفاف: شریک = سرمایه‌گذار (آورده می‌دهد، سهمِ فروش می‌گیرد)؛ سازنده = مالک (هزینهٔ روزانهٔ کارگاه و اجاره با اوست).
+export async function openPartnership(userId: string, assetId: string, pct: number, amount: number, maxPct: number) {
+  return mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    if (!a) return 'دارایی یافت نشد'
+    const buildable = (a.kind === 'land' && a.landPlan === 'build') || (a.construction && !a.construction.done)
+    if (!buildable) return 'مشارکت فقط روی زمینِ آمادهٔ ساخت یا پروژهٔ در حالِ ساخت باز می‌شود'
+    const p = Math.round(pct), amt = Math.round(amount)
+    if (p <= 0) { a.jvOffer = undefined; return }
+    const already = (a.partners || []).reduce((s, x) => s + x.pct, 0)
+    if (already + p > Math.max(1, maxPct)) return `جمعِ سهمِ شرکا حداکثر ${Math.round(maxPct).toLocaleString('fa-IR')}٪ است (الان ${already.toLocaleString('fa-IR')}٪ واگذار شده)`
+    if (!(amt > 0)) return 'آوردهٔ نقدیِ شریک را مشخص کن'
+    a.jvOffer = { pct: p, amount: amt }
+    e.timeline.push({ at: Date.now(), icon: '🤝', title: `پیشنهادِ مشارکت روی «${a.title.slice(0, 40)}»`, detail: `${p.toLocaleString('fa-IR')}٪ در برابرِ ${Math.round(amt / 1e6).toLocaleString('fa-IR')}م تومان آورده` })
+  })
+}
+
+// پیوستن به مشارکت: آوردهٔ شریک → سرمایهٔ سازنده (تأمینِ مالیِ ساخت)؛ سهم روی دارایی ثبت می‌شود.
+export async function joinPartnership(ownerId: string, partnerId: string, assetId: string, now = Date.now()): Promise<{ ok: boolean; reason?: string; pct?: number; amount?: number }> {
+  let pct = 0, amount = 0
+  const r = await twoUserTx(ownerId, partnerId, (owner, partner) => {
+    const a = owner.assets.find(x => x.id === assetId)
+    if (!a || !a.jvOffer) return 'این پیشنهادِ مشارکت دیگر باز نیست'
+    if ((a.partners || []).some(x => x.userId === partner.userId)) return 'از قبل شریکِ همین پروژه‌ای'
+    if (partner.capital < a.jvOffer.amount) return 'سرمایه برای آوردهٔ مشارکت کافی نیست'
+    pct = a.jvOffer.pct; amount = a.jvOffer.amount
+    partner.capital -= amount
+    owner.capital += amount
+    a.partners = a.partners || []
+    a.partners.push({ userId: partner.userId, no: partner.no, name: partner.name, pct, paid: amount, at: now })
+    a.jvOffer = undefined
+    owner.timeline.push({ at: now, icon: '🤝', title: `«${partner.name}» شریکِ ${pct.toLocaleString('fa-IR')}٪ پروژه شد`, detail: `آورده ${Math.round(amount / 1e6).toLocaleString('fa-IR')}م تومان · ${a.title.slice(0, 40)}` })
+    partner.timeline.push({ at: now, icon: '🤝', title: `شریکِ ${pct.toLocaleString('fa-IR')}٪ پروژهٔ «${a.title.slice(0, 40)}» شدی`, detail: `آورده ${Math.round(amount / 1e6).toLocaleString('fa-IR')}م تومان — سهمت از هر فروش خودکار واریز می‌شود` })
+  })
+  return r.ok ? { ok: true, pct, amount } : { ok: false, reason: r.reason }
+}
+
+// هزینهٔ ثبتِ اتحاد (فاز ۳۷): اتمیک؛ هزینه → خزانه (بقای پول) + نقطهٔ تایم‌لاین.
+export async function chargeClanFee(userId: string, fee: number, clanName: string, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const f = Math.max(0, Math.round(fee))
+    if (e.capital < f) return 'سرمایه برای هزینهٔ ثبتِ اتحاد کافی نیست'
+    e.capital -= f
+    if (f > 0) e.taxPaid = (e.taxPaid || 0) + f
+    e.timeline.push({ at: now, icon: '🏰', title: `اتحادِ «${clanName.slice(0, 30)}» ثبت شد`, detail: f > 0 ? `هزینهٔ ثبت ${Math.round(f / 1e6).toLocaleString('fa-IR')}م تومان → خزانه` : undefined })
+  })
+}
+
+// تسویهٔ سهمِ شرکا از یک عایدیِ فروش (پیش‌فروش/فروشِ واحد/فروشِ پروژه): برای هر شریک یک انتقالِ اتمیک.
+// لیستِ شرکا از بیرون می‌آید تا بعد از «فروشِ کلِ پروژه» (که دارایی حذف می‌شود) هم تسویه ممکن باشد.
+export async function settlePartnerShares(ownerId: string, partners: Array<{ userId: string; no: number; name: string; pct: number }>, gross: number, label: string, now = Date.now()): Promise<Array<{ no: number; name: string; share: number }>> {
+  const out: Array<{ no: number; name: string; share: number }> = []
+  for (const p of partners) {
+    const share = Math.round(Math.max(0, gross) * p.pct / 100)
+    if (!(share > 0)) continue
+    const r = await twoUserTx(ownerId, p.userId, (o, pr) => {
+      if (o.capital < share) return 'موجودی برای تسویهٔ سهمِ شریک کافی نیست'
+      o.capital -= share
+      pr.capital += share
+      pr.realized = (pr.realized || 0) + share
+      o.timeline.push({ at: now, icon: '➗', title: `سهمِ ${p.pct.toLocaleString('fa-IR')}٪ «${p.name}» از ${label} تسویه شد`, detail: `${Math.round(share / 1e6).toLocaleString('fa-IR')}م تومان` })
+      pr.timeline.push({ at: now, icon: '➗', title: `سهمِ ${p.pct.toLocaleString('fa-IR')}٪ تو از ${label} رسید`, detail: `${Math.round(share / 1e6).toLocaleString('fa-IR')}م تومان` })
+    })
+    if (r.ok) out.push({ no: p.no, name: p.name, share })
+  }
+  return out
 }
 
 // سپرِ نرخِ درخواست (فاز ۳۴ — سند ۲۳ Part 04): شمارندهٔ پنجرهٔ یک‌دقیقه‌ای، خالص و تست‌پذیر.

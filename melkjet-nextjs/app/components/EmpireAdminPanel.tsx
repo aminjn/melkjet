@@ -578,6 +578,18 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             {row('حداقل سنِ امپراتوری (روز)', cin('offers', 'minAgeDays'), 'روزهای اول هیچ پیشنهادی نمایش داده نمی‌شود — اول تجربه، بعد فروشگاه')}
           </div>
           <div style={card}>
+            <div style={sub}>🏰 اجتماع: مالکیتِ انحصاری، بازارِ بازیکنان، مشارکت، اتحاد (فاز ۳۷)</div>
+            {row('مالکیتِ انحصاری (۱/۰)', cin('social', 'exclusiveEnabled'), 'هر آگهیِ واقعی فقط یک مالکِ بازیکن — دومی باید از خودش بخرد')}
+            {row('بازارِ بازیکنان فعال (۱/۰)', cin('social', 'tradeEnabled'), 'معاملهٔ مستقیمِ دارایی بینِ بازیکنان')}
+            {row('سطحِ بازشدنِ بازار/مشارکت', cin('unlocks', 'tradeLevel'), 'زیرِ این سطح فقط تماشا')}
+            {row('مشارکتِ ساخت فعال (۱/۰)', cin('social', 'jvEnabled'), 'سهمِ ٪ در برابرِ آوردهٔ نقدی — سهمِ فروش خودکار تسویه می‌شود')}
+            {row('سقفِ جمعِ سهمِ شرکا (٪)', cin('social', 'jvMaxPct'), 'سازنده همیشه سهامدارِ اصلی می‌مانَد')}
+            {row('اتحادها فعال (۱/۰)', cin('social', 'clanEnabled'))}
+            {row('سطحِ بازشدنِ اتحاد', cin('unlocks', 'clanLevel'))}
+            {row('هزینهٔ ثبتِ اتحاد (تومان)', cin('social', 'clanCreateFee'), '→ خزانه (بقای پول)')}
+            {row('ظرفیتِ هر اتحاد (نفر)', cin('social', 'clanMaxMembers'))}
+          </div>
+          <div style={card}>
             <div style={sub}>🛡 فنی (فاز ۳۴ — سند ۲۳ فصل ۱۳)</div>
             {row('سقفِ درخواست در دقیقه (هر بازیکن)', cin('api', 'rateLimitPerMin'), 'سپرِ سوءاستفاده از API مسیرِ رشد — بازیِ عادی به این سقف نمی‌رسد؛ ۰ = خاموش')}
             <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 6 }}>Economy QA: هر دیپلوی خودکار knobهای زندهٔ همین صفحه را ممیزی می‌کند (پولِ مجانی/سودِ غیرمنطقی/پاداشِ خارج از تعادل). اجرای دستی روی سرور: <code dir="ltr">node --import ./scripts/reos-loader.mjs scripts/economy-qa.mjs</code></div>

@@ -108,7 +108,9 @@ export interface ReosConfig {
     streakBonus: { d7: number; d14: number; d21: number; d30: number }
     // GDD فصل ۴ بخش ۱۹ (Progression): «اعداد نباید بزرگ‌تر شوند؛ امکانات باید بیشتر شوند» — قابلیت‌ها سطح‌گشا هستند
     // + فصل ۵ (منابع): ظرفیتِ پروژهٔ همزمانِ شرکت با سطح رشد می‌کند؛ خروج از پروژهٔ نیمه‌کاره با ٪ شفاف.
-    unlocks: { capitalLevel: number; companyLevel: number; crowdLevel: number; projectsBase: number; projectsPerLevels: number; projectExitPct: number }
+    unlocks: { capitalLevel: number; companyLevel: number; crowdLevel: number; projectsBase: number; projectsPerLevels: number; projectExitPct: number; tradeLevel: number; clanLevel: number }
+    // فاز ۳۷ (درخواستِ مستقیم): مالکیتِ انحصاریِ آگهی + بازارِ بازیکنان + مشارکتِ ساخت + اتحاد — همه سطح‌گشا.
+    social: { exclusiveEnabled: boolean; tradeEnabled: boolean; jvEnabled: boolean; jvMaxPct: number; clanEnabled: boolean; clanCreateFee: number; clanMaxMembers: number }
   }
 }
 
@@ -184,7 +186,9 @@ export const DEFAULT_CONFIG: ReosConfig = {
     },
     // سطح‌گشایی (سند ۱۵ / GDD فصل ۴ بخش ۱۹): بازارِ سرمایه از سطح ۳، شرکتِ ساختمانی از سطح ۴، مشارکتِ جمعی از سطح ۶؛
     // ظرفیتِ پروژهٔ همزمان = ۱ + سطح ÷ ۱۰؛ خروج از پروژهٔ نیمه‌کاره به ۸۵٪ بهای تمام‌شده (منهای مالیات → خزانه).
-    unlocks: { capitalLevel: 3, companyLevel: 4, crowdLevel: 6, projectsBase: 1, projectsPerLevels: 10, projectExitPct: 85 },
+    unlocks: { capitalLevel: 3, companyLevel: 4, crowdLevel: 6, projectsBase: 1, projectsPerLevels: 10, projectExitPct: 85, tradeLevel: 6, clanLevel: 8 },
+    // اجتماع (فاز ۳۷): یک آگهیِ واقعی = یک مالک؛ معامله و مشارکتِ ساخت بینِ بازیکنان؛ اتحاد با هزینهٔ ثبتِ → خزانه.
+    social: { exclusiveEnabled: true, tradeEnabled: true, jvEnabled: true, jvMaxPct: 49, clanEnabled: true, clanCreateFee: 100_000_000, clanMaxMembers: 20 },
     // Hook روزانه (سند ۱۴): N آگهیِ واقعیِ قطعی از هشِ کاربر+روز؛ بعضی واقعاً زیرِ میانهٔ محله‌اند، بعضی نه —
     // بازی قضاوت نمی‌کند؛ بازیکن فکر می‌کند یا ژتونِ تحلیل خرج می‌کند («اگر پاسخ واضح باشد، سیستم شکست خورده»).
     deals: { enabled: true, count: 5 },

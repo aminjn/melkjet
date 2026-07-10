@@ -24,6 +24,7 @@ import {
   buildingUnitsOf, assemblyUnitPriceOf, buyBuildingUnit, demolishAsset, boostBuild, boostPermit,
   proPersonaOf, designPlanOf, commissionDesign, boostDesign, resolveM100, renovateAsset, designBuildPlanOf,
   activeCoinPacks, buyCosmetic, setCosmetic, offerOf, dismissOffer, areaFromText, rateHit,
+  setForSale, tradeAsset, openPartnership, joinPartnership, settlePartnerShares, chargeClanFee,
   type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
 import {
@@ -41,6 +42,7 @@ import { recentEvents } from '@/app/lib/reos/store'
 import { forIds } from '@/app/lib/listing-stats-store'
 import { flagEnabled } from '@/app/lib/reos/flags'
 import { config, primeConfig } from '@/app/lib/reos/reos-config'
+import { ownerOfListing, claimListing, releaseListing, transferListing, myClanOf, listClans, createClan, joinClan, leaveClan, postClanMsg, clanView, deleteClanIfOwner } from '@/app/lib/empire-social'
 
 const hoodOf = (loc?: string) => { const p = String(loc || '').split(/[،,]/).map(x => x.trim()).filter(Boolean); return p.length > 1 ? p[p.length - 1] : (p[0] || '') }
 // سپرِ نرخِ درخواست (فاز ۳۴ — سند ۲۳): پنجرهٔ یک‌دقیقه‌ایِ هر بازیکن، در حافظهٔ همین اینستنس
@@ -498,6 +500,9 @@ async function stateOf(userId: string, e00: EmpireData) {
         capital: { need: u.capitalLevel, ok: lv >= u.capitalLevel },
         company: { need: u.companyLevel, ok: lv >= u.companyLevel },
         crowd: { need: u.crowdLevel, ok: lv >= u.crowdLevel },
+        // فاز ۳۷: بازارِ بازیکنان/مشارکتِ ساخت و اتحاد — سطح‌گشا (درخواستِ مستقیم)
+        trade: { need: u.tradeLevel, ok: lv >= u.tradeLevel, enabled: config().empire.social?.tradeEnabled !== false },
+        clan: { need: u.clanLevel, ok: lv >= u.clanLevel, enabled: config().empire.social?.clanEnabled !== false },
         projects: { max: maxProjectsOf(lv, u), active: e.assets.filter(x => x.construction && !x.construction.done).length, exitPct: u.projectExitPct },
       }
     })(),
@@ -629,16 +634,26 @@ export async function POST(req: NextRequest) {
       if (!it || it.type !== 'listing') return NextResponse.json({ error: 'آگهی یافت نشد' }, { status: 404 })
       let price = priceOf(it)
       if (!(price > 0) || !isSale(it)) return NextResponse.json({ error: 'این آگهی قیمتِ فروشِ مشخص ندارد' }, { status: 400 })
+      const me0 = await getEmpire(userId)
       let negotiatedWin = false
       if (b.negotiated) {
         // همان فرمولِ اکشنِ «مذاکره» (negoSkillOf) — تا تخفیفی که کاربر دیده، سرِ خرید هم همان باشد.
-        const e = await getEmpire(userId)
-        const out = e ? negotiationOutcome(userId, it.id, negoSkillOf(e, ownerPersonaOf(it.id).mod).skill) : { success: false, discountPct: 0 }
+        const out = me0 ? negotiationOutcome(userId, it.id, negoSkillOf(me0, ownerPersonaOf(it.id).mod).skill) : { success: false, discountPct: 0 }
         if (out.success) { price = Math.round(price * (1 - out.discountPct / 100)); negotiatedWin = true }
+      }
+      // فاز ۳۷ — مالکیتِ انحصاری: یک آگهیِ واقعی فقط یک مالکِ بازیکن دارد؛ ادعای اتمیک پیش از خرید.
+      const exclusive = config().empire.social?.exclusiveEnabled !== false
+      if (exclusive && me0) {
+        const claim = await claimListing(it.id, { userId, no: me0.no, name: me0.name })
+        if (!claim.ok) return NextResponse.json({ error: `این ملک را «${claim.by?.name}» (#${(claim.by?.no || 0).toLocaleString('fa-IR')}) زودتر خریده — هر آگهیِ واقعی فقط یک مالک دارد. اگر عرضه‌اش کند، در «🏪 بازارِ بازیکنان» می‌بینی‌اش` }, { status: 409 })
       }
       // دفترخانه (فاز ۲۹): ثبتِ سند با حق‌الثبتِ knob — سیستم نقشِ دفترخانه را بازی می‌کند.
       const r = await buyAsset(userId, { id: it.id, title: it.title, hood: hoodOf(it.location), price, ptype: ptypeOf(it) }, { negotiated: negotiatedWin, notaryFeePct: config().empire.pros.notaryFeePct })
-      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      if (!r.ok) {
+        // خریدِ ناموفق: ادعای تازه آزاد شود (اگر از قبل مالِ خودش بود، دست نمی‌خورَد)
+        if (exclusive && me0 && !me0.assets.some(a => a.listingId === it.id)) await releaseListing(it.id, userId).catch(() => {})
+        return NextResponse.json({ error: r.reason }, { status: 400 })
+      }
       // جلد ۲۸: رفتارِ بازی = دادهٔ رفتاری برای ML — تعامل با همین آگهیِ واقعی ثبت می‌شود.
       recordEvent({ type: 'user_clicked_property', userId, propertyId: it.id, meta: { src: 'empire_buy' } }).catch(() => {})
       return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
@@ -769,6 +784,8 @@ export async function POST(req: NextRequest) {
       // فروش از طریقِ مشاورِ املاک (فاز ۲۹): کمیسیونِ knob از قیمتِ فروش — سیستم نقش را بازی می‌کند.
       const r = await sellAsset(userId, a.id, it ? priceOf(it) : 0, { commissionPct: config().empire.pros.advisorSellCommissionPct })
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      // فاز ۳۷: فروش به بازار = آزادشدنِ مالکیتِ انحصاری — آگهی دوباره برای بقیه قابلِ‌خرید است.
+      await releaseListing(a.listingId, userId).catch(() => {})
       return NextResponse.json({ ok: true, profit: r.profit, salePrice: r.salePrice, ...(await stateOf(userId, r.empire!)) })
     }
 
@@ -1283,7 +1300,10 @@ export async function POST(req: NextRequest) {
       const maxPct = Math.min(90, cfg.presaleMaxPct + (c.goal === 'fast' ? Math.max(0, cfg.goalFastPresaleBonusPp) : 0))
       const r = await presellUnits(userId, a.id, Math.floor(Number(b.units) || 0), unitPrice, cfg.presaleMinPct, maxPct)
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
-      return NextResponse.json({ ok: true, revenue: r.revenue, unitPrice, samples, ...(await stateOf(userId, r.empire!)) })
+      // فاز ۳۷ — پروژهٔ مشترک: سهمِ شرکا از همین عایدی خودکار تسویه می‌شود (اتمیک، با تایم‌لاینِ دو طرف)
+      const shares = a.partners?.length ? await settlePartnerShares(userId, a.partners, r.revenue || 0, 'پیش‌فروش').catch(() => []) : []
+      const eF = shares.length ? await getEmpire(userId) : r.empire!
+      return NextResponse.json({ ok: true, revenue: r.revenue, unitPrice, samples, shares: shares.length ? shares : undefined, ...(await stateOf(userId, eF!)) })
     }
     // فروشِ واحد بعد از تکمیل (جلد ۷۲): قیمتِ کامل از میانهٔ متریِ واقعیِ همان لحظهٔ محله.
     case 'sellUnit': {
@@ -1300,13 +1320,21 @@ export async function POST(req: NextRequest) {
       const bulk = bulkPriceOf(unitPrice, units, cfg.bulkFreeUnits, cfg.bulkStepPct)
       const r = await sellUnits(userId, a.id, units, bulk.avgUnit > 0 ? bulk.avgUnit : unitPrice, config().empire.transferTaxPct)
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
-      return NextResponse.json({ ok: true, proceeds: r.proceeds, pnl: r.pnl, completed: r.completed, unitPrice, bulkDiscounted: bulk.discounted, samples, ...(await stateOf(userId, r.empire!)) })
+      const shares = a.partners?.length ? await settlePartnerShares(userId, a.partners, r.proceeds || 0, 'فروشِ واحدها').catch(() => []) : []
+      const eF = shares.length ? await getEmpire(userId) : r.empire!
+      return NextResponse.json({ ok: true, proceeds: r.proceeds, pnl: r.pnl, completed: r.completed, unitPrice, bulkDiscounted: bulk.discounted, samples, shares: shares.length ? shares : undefined, ...(await stateOf(userId, eF!)) })
     }
     // فروشِ پروژهٔ نیمه‌کاره (سند ۱۵ — فصل ۵ «پروژهٔ در حالِ ساخت هم دارایی است»): خروج به ٪ شفافِ بهای تمام‌شده.
     case 'sellProject': {
+      const e0 = await getEmpire(userId)
+      const a0 = e0?.assets.find(x => x.id === String(b.assetId || ''))
       const r = await sellProject(userId, String(b.assetId || ''), config().empire.unlocks.projectExitPct, config().empire.transferTaxPct)
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
-      return NextResponse.json({ ok: true, proceeds: r.proceeds, pnl: r.pnl, ...(await stateOf(userId, r.empire!)) })
+      // فاز ۳۷: سهمِ شرکای پروژه از عایدیِ خروج + آزادشدنِ مالکیتِ انحصاریِ آگهی
+      const shares = a0?.partners?.length ? await settlePartnerShares(userId, a0.partners, r.proceeds || 0, 'فروشِ پروژه').catch(() => []) : []
+      if (a0) await releaseListing(a0.listingId, userId).catch(() => {})
+      const eF = shares.length ? await getEmpire(userId) : r.empire!
+      return NextResponse.json({ ok: true, proceeds: r.proceeds, pnl: r.pnl, shares: shares.length ? shares : undefined, ...(await stateOf(userId, eF!)) })
     }
     // امکاناتِ میان‌ساخت (GDD فصل ۴ بخش ۴): هزینه = ٪ شفافی از هزینهٔ کلِ پروژه؛ ارزشِ فروش/اجاره بالاتر می‌رود.
     case 'amenity': {
@@ -1358,6 +1386,129 @@ export async function POST(req: NextRequest) {
 
     // 🏗 بازارِ زمین (فاز ۲۴): دروازهٔ موتورِ ساخت — زمین‌های «واقعیِ» قیمت‌دار با متراژِ ثبت‌شده.
     // بدونِ این ورودی، پروانه/کلنگ/پیش‌فروش هرگز در دسترس نبود (فرصت‌های روزانه اغلب آپارتمان‌اند).
+    // ══════ فاز ۳۷ — بازارِ بازیکنان، مشارکتِ ساخت، اتحاد (درخواستِ مستقیم — همه سطح‌گشا) ══════
+    // عرضهٔ دارایی به بازیکنانِ دیگر (قیمت ۰ = لغو)
+    case 'forSale': {
+      const soc = config().empire.social, u = config().empire.unlocks
+      if (soc?.tradeEnabled === false) return NextResponse.json({ error: 'بازارِ بازیکنان فعلاً فعال نیست' }, { status: 403 })
+      const me = await getEmpire(userId)
+      if (!me) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      if (empireLevel(me.xp).level < u.tradeLevel) return NextResponse.json({ error: `بازارِ بازیکنان از سطحِ ${u.tradeLevel.toLocaleString('fa-IR')} باز می‌شود — الان سطحِ ${empireLevel(me.xp).level.toLocaleString('fa-IR')} هستی` }, { status: 403 })
+      const r = await setForSale(userId, String(b.assetId || ''), Math.round(Number(b.price) || 0))
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+    }
+    // پیشنهادِ مشارکتِ ساخت: سهمِ ٪ در برابرِ آوردهٔ نقدی (pct ۰ = لغو)
+    case 'jvOpen': {
+      const soc = config().empire.social, u = config().empire.unlocks
+      if (soc?.jvEnabled === false) return NextResponse.json({ error: 'مشارکتِ ساخت فعلاً فعال نیست' }, { status: 403 })
+      const me = await getEmpire(userId)
+      if (!me) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      if (empireLevel(me.xp).level < u.tradeLevel) return NextResponse.json({ error: `مشارکتِ ساخت از سطحِ ${u.tradeLevel.toLocaleString('fa-IR')} باز می‌شود` }, { status: 403 })
+      const r = await openPartnership(userId, String(b.assetId || ''), Math.round(Number(b.pct) || 0), Math.round(Number(b.amount) || 0), soc?.jvMaxPct || 49)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+    }
+    // بازارِ بازیکنان: عرضه‌ها و مشارکت‌های بازِ بازیکنانِ واقعیِ دیگر — بدونِ افشای شماره (فقط نام و #)
+    case 'playerMarket': {
+      const me = await getEmpire(userId)
+      if (!me) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      const soc = config().empire.social, u = config().empire.unlocks
+      const empires = await listEmpiresPublic(500)
+      const sales: any[] = [], jvs: any[] = []
+      for (const e of empires) {
+        if (e.userId === userId) continue
+        for (const a of e.assets) {
+          if ((a.forSale || 0) > 0 && soc?.tradeEnabled !== false)
+            sales.push({ no: e.no, seller: e.name, assetId: a.id, title: a.title, hood: a.hood, kind: a.kind, price: a.forSale, renov: a.renovBoostPct || 0, designed: !!a.design })
+          if (a.jvOffer && soc?.jvEnabled !== false)
+            jvs.push({ no: e.no, owner: e.name, assetId: a.id, title: a.title, hood: a.hood, pct: a.jvOffer.pct, amount: a.jvOffer.amount, building: !!(a.construction && !a.construction.done) })
+        }
+      }
+      return NextResponse.json({ ok: true, unlocked: empireLevel(me.xp).level >= u.tradeLevel, need: u.tradeLevel, sales: sales.slice(0, 40), jvs: jvs.slice(0, 40) })
+    }
+    // خرید از بازیکنِ دیگر — تراکنشِ اتمیکِ دو-کاربره + انتقالِ مالکیتِ انحصاری
+    case 'tradeBuy': {
+      const soc = config().empire.social, u = config().empire.unlocks
+      if (soc?.tradeEnabled === false) return NextResponse.json({ error: 'بازارِ بازیکنان فعلاً فعال نیست' }, { status: 403 })
+      const me = await getEmpire(userId)
+      if (!me) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      if (empireLevel(me.xp).level < u.tradeLevel) return NextResponse.json({ error: `بازارِ بازیکنان از سطحِ ${u.tradeLevel.toLocaleString('fa-IR')} باز می‌شود` }, { status: 403 })
+      const seller = (await listEmpiresPublic(1000)).find(x => x.no === Math.floor(Number(b.no) || 0))
+      if (!seller) return NextResponse.json({ error: 'فروشنده یافت نشد' }, { status: 404 })
+      const r = await tradeAsset(seller.userId, userId, String(b.assetId || ''), { taxPct: config().empire.transferTaxPct, commissionPct: config().empire.pros.advisorSellCommissionPct })
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      if (r.listingId) {
+        await transferListing(r.listingId, seller.userId, { userId, no: me.no, name: me.name }).catch(() => {})
+        recordEvent({ type: 'user_clicked_property', userId, propertyId: r.listingId, meta: { src: 'empire_trade' } }).catch(() => {})
+      }
+      const eF = await getEmpire(userId)
+      return NextResponse.json({ ok: true, price: r.price, ...(await stateOf(userId, eF!)) })
+    }
+    // پیوستن به مشارکتِ ساختِ یک بازیکنِ دیگر (آورده → تأمینِ مالیِ پروژهٔ او؛ سهم از فروش‌ها خودکار)
+    case 'jvJoin': {
+      const soc = config().empire.social, u = config().empire.unlocks
+      if (soc?.jvEnabled === false) return NextResponse.json({ error: 'مشارکتِ ساخت فعلاً فعال نیست' }, { status: 403 })
+      const me = await getEmpire(userId)
+      if (!me) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      if (empireLevel(me.xp).level < u.tradeLevel) return NextResponse.json({ error: `مشارکتِ ساخت از سطحِ ${u.tradeLevel.toLocaleString('fa-IR')} باز می‌شود` }, { status: 403 })
+      const owner = (await listEmpiresPublic(1000)).find(x => x.no === Math.floor(Number(b.no) || 0))
+      if (!owner) return NextResponse.json({ error: 'سازنده یافت نشد' }, { status: 404 })
+      const r = await joinPartnership(owner.userId, userId, String(b.assetId || ''))
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      const eF = await getEmpire(userId)
+      return NextResponse.json({ ok: true, pct: r.pct, amount: r.amount, ...(await stateOf(userId, eF!)) })
+    }
+    // 🏰 اتحاد (کلن): فهرست/ساخت/پیوستن/خروج/پیام — هزینهٔ ثبت → خزانه؛ همه knob و سطح‌گشا
+    case 'clanList': {
+      const me = await getEmpire(userId)
+      if (!me) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      const soc = config().empire.social, u = config().empire.unlocks
+      const mine = await myClanOf(userId).catch(() => null)
+      return NextResponse.json({
+        ok: true, enabled: soc?.clanEnabled !== false,
+        unlocked: empireLevel(me.xp).level >= u.clanLevel, need: u.clanLevel,
+        createFee: soc?.clanCreateFee || 0, maxMembers: soc?.clanMaxMembers || 20,
+        mine: mine ? clanView(mine, userId) : null,
+        clans: await listClans(50).catch(() => []),
+      })
+    }
+    case 'clanCreate': {
+      const soc = config().empire.social, u = config().empire.unlocks
+      if (soc?.clanEnabled === false) return NextResponse.json({ error: 'اتحادها فعلاً فعال نیستند' }, { status: 403 })
+      const me = await getEmpire(userId)
+      if (!me) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      if (empireLevel(me.xp).level < u.clanLevel) return NextResponse.json({ error: `اتحاد از سطحِ ${u.clanLevel.toLocaleString('fa-IR')} باز می‌شود — الان سطحِ ${empireLevel(me.xp).level.toLocaleString('fa-IR')} هستی` }, { status: 403 })
+      const fee = Math.max(0, Math.round(soc?.clanCreateFee || 0))
+      if (me.capital < fee) return NextResponse.json({ error: `هزینهٔ ثبتِ اتحاد ${Math.round(fee / 1e6).toLocaleString('fa-IR')}م تومان است — سرمایه کافی نیست` }, { status: 400 })
+      const c = await createClan({ userId, no: me.no, name: me.name }, String(b.name || ''))
+      if (!c.ok) return NextResponse.json({ error: c.reason }, { status: 400 })
+      // هزینهٔ ثبت → خزانه (بقای پول)؛ اگر کسر شکست خورد، اتحادِ تازه پاک می‌شود
+      const charged = await chargeClanFee(userId, fee, c.clan!.name)
+      if (!charged.ok) { await deleteClanIfOwner(c.clan!.id, userId).catch(() => {}); return NextResponse.json({ error: charged.reason }, { status: 400 }) }
+      return NextResponse.json({ ok: true, clan: clanView(c.clan!, userId) })
+    }
+    case 'clanJoin': {
+      const soc = config().empire.social, u = config().empire.unlocks
+      if (soc?.clanEnabled === false) return NextResponse.json({ error: 'اتحادها فعلاً فعال نیستند' }, { status: 403 })
+      const me = await getEmpire(userId)
+      if (!me) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      if (empireLevel(me.xp).level < u.clanLevel) return NextResponse.json({ error: `اتحاد از سطحِ ${u.clanLevel.toLocaleString('fa-IR')} باز می‌شود` }, { status: 403 })
+      const r = await joinClan({ userId, no: me.no, name: me.name }, String(b.id || ''), soc?.clanMaxMembers || 20)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, clan: clanView(r.clan!, userId) })
+    }
+    case 'clanLeave': {
+      const r = await leaveClan(userId)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true })
+    }
+    case 'clanPost': {
+      const r = await postClanMsg(userId, String(b.text || ''))
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, clan: clanView(r.clan!, userId) })
+    }
+
     case 'lands': {
       const e = await getEmpire(userId)
       if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })

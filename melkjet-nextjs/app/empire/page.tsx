@@ -172,6 +172,15 @@ export default function EmpirePage() {
   const [dz, setDz] = useState<any>(null)                      // فرمِ قراردادِ معمار (فاز ۲۹): {assetId, info, floors, upf}
   // (فاز ۳۱: تیکِ سراسری حذف شد — شمارشِ معکوس کامپوننتِ ایزولهٔ خودش را دارد تا کلِ صفحه هر ثانیه رندر نشود)
   const [dealAn, setDealAn] = useState('')                     // تحلیلِ کدام فرصتِ امروز نمایش داده شود
+  // فاز ۳۷ — بازارِ بازیکنان + مشارکتِ ساخت + اتحاد (درخواستِ مستقیم؛ همه سطح‌گشا)
+  const [pmkt, setPmkt] = useState<any>(null)                  // عرضه‌ها و مشارکت‌های بازِ بازیکنانِ دیگر
+  const [clanD, setClanD] = useState<any>(null)                // اتحادِ من / فهرستِ اتحادها
+  const [fsIn, setFsIn] = useState<Record<string, string>>({}) // قیمتِ عرضه به بازیکنان (ورودی، به میلیون)
+  const [jvIn, setJvIn] = useState<Record<string, { pct: string; amount: string }>>({})
+  const [clanName, setClanName] = useState('')
+  const [clanMsg, setClanMsg] = useState('')
+  const loadPmkt = async () => { const d = await api({ action: 'playerMarket' }); if (d) setPmkt(d) }
+  const loadClan = async () => { const d = await api({ action: 'clanList' }); if (d) setClanD(d) }
   const suspended = useRef(false)
 
   const api = useCallback(async (body: any) => {
@@ -245,6 +254,14 @@ export default function EmpirePage() {
       .then(r => r.json()).then(d => { if (alive && d?.ok) setLands(d) }).catch(() => {})
     return () => { alive = false }
   }, [step, lands])
+
+  // فاز ۳۷: بازارِ بازیکنان با بازشدنِ تبِ «بازار» و اتحادها با تبِ «رتبه‌ها» بارگذاری می‌شوند (تنبل، یک‌بار)
+  useEffect(() => {
+    if (step !== 'dash') return
+    if (gtab === 'market' && !pmkt) loadPmkt()
+    if (gtab === 'ranks' && !clanD) loadClan()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, gtab])
 
   // «هیچ جلسه‌ای بی‌دلیلِ برگشت تمام نشود» (فصل ۴): با ترکِ صفحه، تعلیقِ فردا ثبت می‌شود.
   useEffect(() => {
@@ -1156,6 +1173,38 @@ export default function EmpirePage() {
                     {o.icon} {o.label} ({faB(o.cost)} · +{fa(o.valuePct)}٪ ارزش)</button>)}
             </div>}
 
+            {/* 🏪/🤝 فاز ۳۷: عرضه به بازیکنان + جذبِ شریکِ ساخت — سطح‌گشا (knob) */}
+            {st.unlocks?.trade?.enabled !== false && st.unlocks?.trade?.ok && !a.demolishedAt && <div style={{ width: '100%', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', fontSize: 11, borderTop: '1px dashed var(--line)', paddingTop: 6, marginTop: 2 }}>
+              {(a.forSale || 0) > 0
+                ? <span style={{ color: '#7aa2c9' }}>🏪 در بازارِ بازیکنان به {faB(a.forSale)} — <button style={{ ...btnGhost, padding: '2px 8px', fontSize: 10.5 }} disabled={busy} onClick={async () => { const d = await api({ action: 'forSale', assetId: a.id, price: 0 }); if (d) setSt(d) }}>لغوِ عرضه</button></span>
+                : (!a.construction || a.construction.done) && a.m100?.status !== 'pending' && <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center' }}>
+                    <span style={{ color: 'var(--muted)' }}>🏪 عرضه به بازیکنان:</span>
+                    <input value={fsIn[a.id] || ''} onChange={ev => setFsIn({ ...fsIn, [a.id]: digitsOf(ev.target.value) })} placeholder="قیمت (میلیون)" inputMode="numeric" style={{ width: 96, padding: 5, borderRadius: 7, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', textAlign: 'center', fontSize: 11 }} />
+                    <button style={{ ...btnGhost, padding: '3px 9px', fontSize: 10.5 }} disabled={busy} onClick={async () => {
+                      const m = Math.round(Number(digitsOf(fsIn[a.id] || '')) || 0)
+                      if (!(m > 0)) { setErr('قیمتِ عرضه را به میلیون تومان وارد کن'); return }
+                      const d = await api({ action: 'forSale', assetId: a.id, price: m * 1e6 })
+                      if (d) { setSt(d); setFsIn({ ...fsIn, [a.id]: '' }) }
+                    }}>عرضه</button>
+                  </span>}
+              {((a.kind === 'land' && a.landPlan === 'build') || (a.construction && !a.construction.done)) && (
+                a.jvOffer
+                  ? <span style={{ color: '#7c6' }}>🤝 شریک‌خواهی: {fa(a.jvOffer.pct)}٪ ↔ {faB(a.jvOffer.amount)} — <button style={{ ...btnGhost, padding: '2px 8px', fontSize: 10.5 }} disabled={busy} onClick={async () => { const d = await api({ action: 'jvOpen', assetId: a.id, pct: 0, amount: 0 }); if (d) setSt(d) }}>لغو</button></span>
+                  : <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center' }}>
+                      <span style={{ color: 'var(--muted)' }}>🤝 جذبِ شریک:</span>
+                      <input value={jvIn[a.id]?.pct || ''} onChange={ev => setJvIn({ ...jvIn, [a.id]: { pct: digitsOf(ev.target.value), amount: jvIn[a.id]?.amount || '' } })} placeholder="٪ سهم" inputMode="numeric" style={{ width: 56, padding: 5, borderRadius: 7, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', textAlign: 'center', fontSize: 11 }} />
+                      <input value={jvIn[a.id]?.amount || ''} onChange={ev => setJvIn({ ...jvIn, [a.id]: { pct: jvIn[a.id]?.pct || '', amount: digitsOf(ev.target.value) } })} placeholder="آورده (میلیون)" inputMode="numeric" style={{ width: 96, padding: 5, borderRadius: 7, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', textAlign: 'center', fontSize: 11 }} />
+                      <button style={{ ...btnGhost, padding: '3px 9px', fontSize: 10.5 }} disabled={busy} onClick={async () => {
+                        const pct = Math.round(Number(digitsOf(jvIn[a.id]?.pct || '')) || 0)
+                        const m = Math.round(Number(digitsOf(jvIn[a.id]?.amount || '')) || 0)
+                        if (!(pct > 0) || !(m > 0)) { setErr('سهمِ ٪ و آورده (میلیون تومان) را وارد کن'); return }
+                        const d = await api({ action: 'jvOpen', assetId: a.id, pct, amount: m * 1e6 })
+                        if (d) { setSt(d); setJvIn({ ...jvIn, [a.id]: { pct: '', amount: '' } }) }
+                      }}>باز کن</button>
+                    </span>)}
+              {(a.partners || []).length > 0 && <span style={{ color: 'var(--muted)' }}>شرکا: {a.partners.map((p: any) => `${p.name} ${fa(p.pct)}٪`).join('، ')} — سهمشان از هر فروش خودکار تسویه می‌شود</span>}
+            </div>}
+
             {/* پیش‌نمایشِ نقشهٔ ساخت (جلد ۶۴): سازه/کیفیت با روز و هزینهٔ شفاف */}
             {bplan?.assetId === a.id && !a.construction && <div style={{ width: '100%', ...card, background: 'var(--surface)', fontSize: 12 }}>
               <b>⛏ نقشهٔ ساخت</b> — زمین {fa(bplan.landArea)} متر → <b style={{ color: 'var(--gold)' }}>{fa(bplan.builtArea)} مترِ بنا · {fa(bplan.totalUnits)} واحدِ {fa(bplan.unitArea)} متری</b>
@@ -1476,6 +1525,63 @@ export default function EmpirePage() {
       <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 8 }}>خرید با ملک‌کوینِ کیفِ خودت انجام می‌شود و در تایم‌لاینت ثبت است · آیتمِ خریداری‌شده دائمی است.</div>
     </div>}
 
+    {/* 🏪 بازارِ بازیکنان + 🤝 مشارکتِ ساخت (فاز ۳۷ — درخواستِ مستقیم): هر آگهیِ واقعی فقط یک مالک دارد؛
+        معامله و شراکت فقط بینِ بازیکنانِ واقعی — از سطحِ مشخص (knob) باز می‌شود. */}
+    {st.unlocks?.trade?.enabled !== false && <div style={{ ...card, borderColor: '#7aa2c9' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <b style={{ fontSize: 14 }}>🏪 بازارِ بازیکنان و مشارکتِ ساخت</b>
+        <span style={{ fontSize: 11, color: 'var(--muted)' }}>ملک‌هایی که بازیکنانِ واقعی عرضه کرده‌اند + پروژه‌هایی که شریک می‌خواهند</span>
+        <span style={{ flex: 1 }} />
+        <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 11 }} disabled={busy} onClick={loadPmkt}>↻ تازه‌سازی</button>
+      </div>
+      {!st.unlocks?.trade?.ok && <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 10 }}>🔒 از سطحِ {fa(st.unlocks?.trade?.need || 0)} باز می‌شود — الان سطحِ {fa(st.unlocks?.level || 1)} هستی. با معامله و پروژه XP بگیر.</div>}
+      {st.unlocks?.trade?.ok && <>
+        {!pmkt && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10 }}>در حالِ بارگذاری…</div>}
+        {pmkt && !(pmkt.sales || []).length && !(pmkt.jvs || []).length && <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 10 }}>فعلاً هیچ بازیکنی ملکی عرضه نکرده و مشارکتی باز نیست — تو اولین باش: در «پرتفوی» روی دارایی‌ات «🏪 عرضه به بازیکنان» یا روی زمینت «🤝 جذبِ شریک» را بزن.</div>}
+        {(pmkt?.sales || []).length > 0 && <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, marginBottom: 6 }}>عرضه‌های بازیکنان</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {pmkt.sales.map((s: any) => (
+              <div key={s.assetId} style={{ ...card, background: 'var(--bg2)', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12.5 }}>
+                <span>{s.kind === 'land' ? '🏞' : s.kind === 'commercial' ? '🏪' : '🏠'}</span>
+                <div style={{ flex: 1, minWidth: 180 }}>
+                  <b>{s.title}</b>
+                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>{s.hood} · فروشنده: {s.seller} #{fa(s.no)}{s.renov > 0 && ` · بازسازی‌شده +${fa(s.renov)}٪`}{s.designed && ' · با نقشهٔ معمار'}</div>
+                </div>
+                <b style={{ color: 'var(--gold)' }}>{faB(s.price)}</b>
+                <button style={{ ...btn, padding: '5px 14px', fontSize: 12 }} disabled={busy} onClick={async () => {
+                  if (!confirm(`«${s.title}» از ${s.seller} به ${faB(s.price)} تومان (+ مالیاتِ انتقال) خریده شود؟`)) return
+                  const d = await api({ action: 'tradeBuy', no: s.no, assetId: s.assetId })
+                  if (d) { setSt(d); celebrate(); loadPmkt() }
+                }}>خرید</button>
+              </div>
+            ))}
+          </div>
+        </div>}
+        {(pmkt?.jvs || []).length > 0 && <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, marginBottom: 6 }}>🤝 پروژه‌های شریک‌خواه (مشارکتِ ساخت)</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {pmkt.jvs.map((j: any) => (
+              <div key={j.assetId} style={{ ...card, background: 'var(--bg2)', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12.5 }}>
+                <span>{j.building ? '🏗' : '🏞'}</span>
+                <div style={{ flex: 1, minWidth: 180 }}>
+                  <b>{j.title}</b>
+                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>{j.hood} · سازنده: {j.owner} #{fa(j.no)} · {j.building ? 'در حالِ ساخت' : 'آمادهٔ ساخت'}</div>
+                </div>
+                <span style={{ fontSize: 12 }}><b style={{ color: 'var(--gold)' }}>{fa(j.pct)}٪ سهم</b> در برابرِ <b>{faB(j.amount)}</b> آورده</span>
+                <button style={{ ...btn, padding: '5px 14px', fontSize: 12 }} disabled={busy} onClick={async () => {
+                  if (!confirm(`شریکِ ${fa(j.pct)}٪ پروژهٔ «${j.title}» شوی؟ آورده: ${faB(j.amount)} تومان. سهمت از هر فروش/پیش‌فروش خودکار واریز می‌شود؛ هزینهٔ روزانهٔ کارگاه با سازنده است.`)) return
+                  const d = await api({ action: 'jvJoin', no: j.no, assetId: j.assetId })
+                  if (d) { setSt(d); celebrate(); loadPmkt() }
+                }}>شریک شو</button>
+              </div>
+            ))}
+          </div>
+        </div>}
+        <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 8 }}>قانونِ شهر: هر آگهیِ واقعی فقط یک مالک دارد — اگر ملکی را بازیکنی خریده باشد، فقط از خودش می‌توانی بخری. مالیاتِ انتقال با خریدار، کمیسیونِ مشاور با فروشنده.</div>
+      </>}
+    </div>}
+
     {/* بانک (جلد ۱۶): امتیازِ اعتباری + وام */}
     {st.bank && <div style={card}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
@@ -1753,6 +1859,70 @@ export default function EmpirePage() {
         </div>
       )}
     </details>
+
+    {/* 🏰 اتحاد (فاز ۳۷ — درخواستِ مستقیم): با هم باشید، با هم پیام بگذارید — از سطحِ knob به بعد */}
+    {st.unlocks?.clan?.enabled !== false && <div style={{ ...card, borderColor: '#9a7ac9' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <b style={{ fontSize: 14 }}>🏰 اتحاد</b>
+        <span style={{ fontSize: 11, color: 'var(--muted)' }}>هم‌پیمان شو — اعضای واقعی، پیام‌های واقعی</span>
+        <span style={{ flex: 1 }} />
+        <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 11 }} disabled={busy} onClick={loadClan}>↻</button>
+      </div>
+      {!st.unlocks?.clan?.ok && <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 10 }}>🔒 اتحاد از سطحِ {fa(st.unlocks?.clan?.need || 0)} باز می‌شود — الان سطحِ {fa(st.unlocks?.level || 1)} هستی.</div>}
+      {st.unlocks?.clan?.ok && <>
+        {!clanD && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10 }}>در حالِ بارگذاری…</div>}
+        {clanD?.mine ? <div style={{ marginTop: 10 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <b style={{ fontSize: 14, color: '#c9a8f0' }}>🏰 {clanD.mine.name}</b>
+            <span style={{ fontSize: 11, color: 'var(--muted)' }}>{fa(clanD.mine.members.length)} عضو</span>
+            <span style={{ flex: 1 }} />
+            <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 11, color: '#e88', borderColor: '#644' }} disabled={busy}
+              onClick={async () => { if (!confirm('از اتحاد خارج شوی؟')) return; const d = await api({ action: 'clanLeave' }); if (d) loadClan() }}>خروج</button>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+            {clanD.mine.members.map((m: any) => <span key={m.no} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 10, border: `1px solid ${m.me ? 'var(--gold)' : 'var(--line2)'}` }}>{m.leader && '👑 '}{m.name} <span style={{ color: 'var(--faint)' }}>#{fa(m.no)}</span></span>)}
+          </div>
+          <div style={{ ...card, background: 'var(--bg2)', marginTop: 10, maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {!(clanD.mine.msgs || []).length && <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>هنوز پیامی نیست — تو شروع کن.</div>}
+            {(clanD.mine.msgs || []).map((m: any, i: number) => (
+              <div key={i} style={{ fontSize: 12, textAlign: m.me ? 'left' : 'right' }}>
+                <span style={{ display: 'inline-block', padding: '5px 10px', borderRadius: 10, background: m.me ? 'rgba(212,175,55,.12)' : 'var(--surface)', border: '1px solid var(--line)' }}>
+                  <b style={{ fontSize: 10.5, color: 'var(--gold)' }}>{m.name}</b> {m.text}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+            <input value={clanMsg} onChange={ev => setClanMsg(ev.target.value)} placeholder="پیام به هم‌پیمان‌ها…" maxLength={240}
+              onKeyDown={async ev => { if (ev.key === 'Enter' && clanMsg.trim()) { const d = await api({ action: 'clanPost', text: clanMsg }); if (d) { setClanMsg(''); setClanD({ ...clanD, mine: d.clan }) } } }}
+              style={{ flex: 1, padding: 8, borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 12 }} />
+            <button style={{ ...btn, padding: '6px 14px', fontSize: 12 }} disabled={busy || !clanMsg.trim()}
+              onClick={async () => { const d = await api({ action: 'clanPost', text: clanMsg }); if (d) { setClanMsg(''); setClanD({ ...clanD, mine: d.clan }) } }}>ارسال</button>
+          </div>
+        </div> : clanD && <div style={{ marginTop: 10 }}>
+          {(clanD.clans || []).length > 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+            {clanD.clans.map((c: any) => (
+              <div key={c.id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5, padding: '6px 10px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--line)' }}>
+                <b style={{ flex: 1 }}>🏰 {c.name}</b>
+                <span style={{ fontSize: 11, color: 'var(--muted)' }}>{fa(c.members)} / {fa(clanD.maxMembers)} عضو</span>
+                <button style={{ ...btnGhost, padding: '4px 12px', fontSize: 11.5 }} disabled={busy}
+                  onClick={async () => { const d = await api({ action: 'clanJoin', id: c.id }); if (d) { celebrate(); loadClan() } }}>پیوستن</button>
+              </div>
+            ))}
+          </div>}
+          {!(clanD.clans || []).length && <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>هنوز هیچ اتحادی ساخته نشده — اولین اتحادِ شهر را تو بساز.</div>}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input value={clanName} onChange={ev => setClanName(ev.target.value)} placeholder="نامِ اتحادِ جدید" maxLength={30}
+              style={{ flex: 1, minWidth: 160, padding: 8, borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 12 }} />
+            <button style={{ ...btn, padding: '6px 14px', fontSize: 12 }} disabled={busy || !clanName.trim()} onClick={async () => {
+              if (!confirm(`اتحادِ «${clanName.trim()}» با هزینهٔ ثبتِ ${faB(clanD.createFee || 0)} تومان (→ خزانه) ساخته شود؟`)) return
+              const d = await api({ action: 'clanCreate', name: clanName })
+              if (d) { setClanName(''); celebrate(); loadClan() }
+            }}>🏰 ساختِ اتحاد ({faB(clanD.createFee || 0)})</button>
+          </div>
+        </div>}
+      </>}
+    </div>}
 
     {/* تایم‌لاینِ زندگی + دفترچهٔ ملک‌جت */}
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 12 }}>

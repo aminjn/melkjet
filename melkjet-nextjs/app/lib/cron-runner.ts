@@ -64,6 +64,8 @@ async function tick(): Promise<{ due: number; synced: number }> {
       try { const { runEmpireBriefs } = await import('./empire-brief'); const nb = await runEmpireBriefs(); if (nb) console.log(`[empire] daily briefs built: ${nb}`) } catch { /* نامهٔ امپراتوری */ }
       // 📊 رصدخانهٔ اقتصاد (فاز ۳۵ — سند ۲۴): اسنپ‌شاتِ روزانهٔ بازار/اقتصاد — ایدمپوتنت (همان روز = تازه‌سازی)
       try { const { takeDailySnapshot } = await import('./empire-metrics'); const sn = await takeDailySnapshot(); console.log(`[empire] econ snapshot day ${sn.day}: ${sn.players} players, perM ${sn.perM}`) } catch { /* رصدخانه */ }
+      // 🏰 دفترِ مالکیتِ انحصاری (فاز ۳۷): پرکردنِ جاهای خالی از دارایی‌های موجود — ایدمپوتنت، عطف به ماسبق نمی‌شود
+      try { const { rebuildOwnersRegistry } = await import('./empire-social'); const { listEmpiresPublic } = await import('./empire-store'); const n = await rebuildOwnersRegistry(await listEmpiresPublic(2000)); if (n) console.log(`[empire] owners registry backfilled: ${n}`) } catch { /* دفترِ مالکیت */ }
     }
     due = listDueSources(Date.now())
     for (const { phone, source } of due) {
