@@ -56,10 +56,15 @@ function Countdown({ until, onDone }: { until: number; onDone?: () => void }) {
 type Opp = { id: string; title: string; hood: string; price: number; priceStr: string; image: string; area: number; rooms: number; ptype: string; kind: string; recommended: boolean; reason: string; locked?: boolean; why?: string[] }
 type St = any
 
-const card: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: 16 }
-const btn: React.CSSProperties = { background: 'var(--gold)', color: '#1a1503', border: 'none', borderRadius: 10, padding: '10px 18px', fontWeight: 700, cursor: 'pointer', fontSize: 14 }
-const btnGhost: React.CSSProperties = { background: 'transparent', color: 'var(--text)', border: '1px solid var(--line2)', borderRadius: 10, padding: '10px 18px', cursor: 'pointer', fontSize: 14 }
-const chip = (on: boolean): React.CSSProperties => ({ padding: '10px 14px', borderRadius: 12, border: `1px solid ${on ? 'var(--gold)' : 'var(--line2)'}`, background: on ? 'rgba(212,175,55,.12)' : 'var(--bg2)', color: on ? 'var(--gold)' : 'var(--text)', cursor: 'pointer', fontSize: 13 })
+// 🎨 پوستهٔ «پروتوتایپِ کامل» (فایلِ طراحیِ کاربر): کارتِ شیشه‌ای، طلاییِ سه‌درجه، قرص‌ها، فونتِ سِریفِ نمایشی.
+// فقط ظاهر — هیچ منطقی اینجا نیست.
+const DISPLAY = "'Markazi Text', Vazirmatn, serif"   // اگر فونت نبود، به Vazirmatn برمی‌گردد
+const card: React.CSSProperties = { background: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 16, padding: 16 }
+const btn: React.CSSProperties = { background: 'linear-gradient(135deg,#d4af37,#f0d47a)', color: '#1a1503', border: 'none', borderRadius: 12, padding: '10px 18px', fontWeight: 800, cursor: 'pointer', fontSize: 14, boxShadow: '0 6px 22px rgba(212,175,55,.28)' }
+const btnGhost: React.CSSProperties = { background: 'rgba(255,255,255,.05)', color: 'var(--text)', border: '1px solid rgba(255,255,255,.12)', borderRadius: 12, padding: '10px 18px', cursor: 'pointer', fontSize: 14 }
+const chip = (on: boolean): React.CSSProperties => ({ padding: '9px 16px', borderRadius: 99, border: `1px solid ${on ? 'rgba(212,175,55,.55)' : 'rgba(255,255,255,.12)'}`, background: on ? 'rgba(212,175,55,.14)' : 'rgba(255,255,255,.04)', color: on ? '#f0d47a' : 'var(--text)', cursor: 'pointer', fontSize: 13, fontWeight: on ? 700 : 400 })
+// قرصِ منابعِ HUD (پروتوتایپ): کوچک، گرد، شیشه‌ای — طلایی برای کوین
+const pill = (gold = false): React.CSSProperties => ({ fontSize: 11, padding: '3px 10px', borderRadius: 99, whiteSpace: 'nowrap', background: gold ? 'rgba(212,175,55,.12)' : 'rgba(255,255,255,.05)', border: `1px solid ${gold ? 'rgba(212,175,55,.35)' : 'rgba(255,255,255,.1)'}`, color: gold ? '#f0d47a' : 'var(--text)', fontWeight: gold ? 700 : 500 })
 
 // ملک‌جت — دستیارِ هوشمندِ همراه؛ گفت‌وگوها متنِ قطعیِ سند است.
 // شمارشِ متحرکِ اعداد (جلد ۵۶ «پول فقط عدد نیست») — تغییرِ ارزش دیده می‌شود، نه فقط جایگزین.
@@ -360,14 +365,28 @@ export default function EmpirePage() {
     if (d) { setSt(d); clear?.(); doMarket() }
   }
 
+  // 🎨 تیترِ سِریفِ هر تب (پروتوتایپِ کامل — دسته‌بندیِ روشنِ پنج بخش)
+  const tabHead = (icon: string, t: string, d: string) => (
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '2px 2px -4px' }}>
+      <span style={{ fontSize: 20 }}>{icon}</span>
+      <span style={{ fontFamily: DISPLAY, fontSize: 26, color: '#f4e7bd', fontWeight: 700, lineHeight: 1 }}>{t}</span>
+      <span style={{ fontSize: 11, color: 'var(--muted)' }}>{d}</span>
+    </div>
+  )
+
   // ══════════ رندر ══════════
-  // لایهٔ حس و حرکت (جلد ۵۶): «هیچ چیزی نباید ناگهانی ظاهر شود» — ورودِ پلکانی، میکرواینترکشن، جشنِ موفقیت.
+  // لایهٔ حس و حرکت (جلد ۵۶): «هیچ چیزی نباید ناگهانی ظاهر نشود» — ورودِ پلکانی، میکرواینترکشن، جشنِ موفقیت.
   const wrap = (children: React.ReactNode) => (
     <main dir="rtl" className="empRoot" style={{ maxWidth: 860, margin: '0 auto', padding: '24px 16px 80px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* 🎨 پس‌زمینهٔ پوستهٔ جدید (فایلِ طراحی): شعاعیِ سرمه‌ای → تاریک */}
+      <div style={{ position: 'fixed', inset: 0, zIndex: -1, background: 'radial-gradient(ellipse 90% 70% at 50% 0%,#141b2b,#0a0c11 70%)' }} />
       <style>{`
         @keyframes empUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
         @keyframes empBurst{0%{transform:translate(0,0) scale(1);opacity:1}100%{transform:translate(var(--dx),var(--dy)) scale(.35);opacity:0}}
         @keyframes empTwinkle{0%,100%{opacity:.25}50%{opacity:.9}}
+        @keyframes empGlow{0%,100%{box-shadow:0 0 14px rgba(212,175,55,.25)}50%{box-shadow:0 0 28px rgba(212,175,55,.55)}}
+        @keyframes empShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+        @keyframes empGlowText{0%,100%{text-shadow:0 0 14px rgba(212,175,55,.35)}50%{text-shadow:0 0 26px rgba(212,175,55,.7)}}
         .empRoot>*{animation:empUp .45s ease both}
         .empRoot>*:nth-child(2){animation-delay:.05s}.empRoot>*:nth-child(3){animation-delay:.1s}
         .empRoot>*:nth-child(4){animation-delay:.15s}.empRoot>*:nth-child(5){animation-delay:.2s}
@@ -601,27 +620,37 @@ export default function EmpirePage() {
   const ms = st.missions
   return wrap(<>
     {/* سربرگ = HUD چسبان (فصل ۹: همیشه در دسترس، کمتر از ۲۰٪ صفحه) */}
-    <div style={{ ...card, position: 'sticky' as const, top: 8, zIndex: 40, display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center', boxShadow: '0 8px 24px -10px rgba(0,0,0,.45)' }}>
-      {/* قاب/نشانِ ظاهری (فاز ۳۳ — سند ۲۲ فصل ۳): فقط نمایش؛ همین‌ها در لیدربورد هم کنارِ نامت دیده می‌شوند */}
-      {(() => { const ic = (st.cosmetics?.items || []).find((i: any) => i.id === st.cosmetics?.frame)?.icon; return <div style={{ fontSize: 30, position: 'relative' }}>{e.persona || '🏛'}{ic && <span style={{ position: 'absolute', top: -7, left: -9, fontSize: 14 }}>{ic}</span>}</div> })()}
+    <div style={{ ...card, position: 'sticky' as const, top: 8, zIndex: 40, display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', background: 'rgba(20,27,43,.82)', backdropFilter: 'blur(8px)', boxShadow: '0 12px 34px -12px rgba(0,0,0,.6), 0 0 0 1px rgba(212,175,55,.12)' }}>
+      {/* 🎨 HUD پوستهٔ جدید (پروتوتایپِ کامل): آواتار با حلقهٔ طلاییِ گرادیانی + قرص‌های منابع */}
+      {(() => { const ic = (st.cosmetics?.items || []).find((i: any) => i.id === st.cosmetics?.frame)?.icon; return (
+        <div style={{ width: 50, height: 50, borderRadius: '50%', padding: 2, background: 'linear-gradient(135deg,#d4af37,#f4e7bd,#8a6d1f)', flex: 'none', position: 'relative' }}>
+          <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: '#1a2030', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>{e.persona || '🏛'}</div>
+          {ic && <span style={{ position: 'absolute', top: -7, left: -7, fontSize: 15 }}>{ic}</span>}
+        </div>) })()}
       <div style={{ flex: 1, minWidth: 180 }}>
-        <div style={{ fontWeight: 800, fontSize: 16 }}>{e.name} {(() => { const ic = (st.cosmetics?.items || []).find((i: any) => i.id === st.cosmetics?.flair)?.icon; return ic ? <span title="نشانِ ظاهری">{ic} </span> : null })()}<span style={{ fontSize: 11, color: 'var(--muted)' }}>#{fa(e.no)}</span>{e.title && <span style={{ fontSize: 10.5, marginRight: 8, padding: '2px 8px', borderRadius: 10, border: '1px solid var(--gold)', color: 'var(--gold)' }}>👑 {e.title}</span>}</div>
-        <div style={{ fontSize: 12, color: 'var(--muted)' }}>{e.profile?.title} · DNA: {e.dna} · دستیار: {e.mentor}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: 800, fontSize: 16, fontFamily: DISPLAY }}>{e.name}</span>
+          {(() => { const ic = (st.cosmetics?.items || []).find((i: any) => i.id === st.cosmetics?.flair)?.icon; return ic ? <span title="نشانِ ظاهری">{ic}</span> : null })()}
+          <span style={{ fontSize: 11, color: 'var(--muted)' }}>#{fa(e.no)}</span>
+          <span style={{ fontSize: 9.5, color: '#f0d47a', border: '1px solid rgba(212,175,55,.45)', borderRadius: 99, padding: '1px 8px', whiteSpace: 'nowrap' }}>✦ {lv.titleFa}</span>
+          {e.title && <span style={{ fontSize: 10, padding: '1px 8px', borderRadius: 99, border: '1px solid rgba(212,175,55,.45)', color: '#f0d47a' }}>👑 {e.title}</span>}
+        </div>
+        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{e.profile?.title} · DNA: {e.dna} · دستیار: {e.mentor}</div>
         <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>سطح {fa(lv.level || 1)} · {lv.titleFa} ({lv.title})</span>
-          <div style={{ flex: 1, height: 5, background: 'var(--line)', borderRadius: 3 }}><div style={{ width: `${(lv.progress || 0) * 100}%`, height: 5, background: 'var(--gold)', borderRadius: 3 }} /></div>
-          <span style={{ fontSize: 11, color: 'var(--muted)' }}>⚡ {fa(e.xp)}{lv.next ? ` / ${fa(lv.next)}` : ''}</span>
+          <span style={{ fontSize: 11, color: '#f0d47a', fontWeight: 700, whiteSpace: 'nowrap' }}>سطح {fa(lv.level || 1)}</span>
+          <div style={{ flex: 1, height: 4, background: 'rgba(255,255,255,.09)', borderRadius: 99, overflow: 'hidden' }}><div style={{ width: `${(lv.progress || 0) * 100}%`, height: '100%', background: 'linear-gradient(90deg,#8a6d1f,#d4af37)' }} /></div>
+          <span style={{ fontSize: 10.5, color: 'var(--muted)', whiteSpace: 'nowrap' }}>⚡ {fa(e.xp)}{lv.next ? ` / ${fa(lv.next)}` : ''}</span>
         </div>
       </div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 12 }}>
-        <span style={{ ...card, padding: '6px 10px' }} title="Empire Score">🏆 {fa(st.empireScore || 0)}</span>
-        <span style={{ ...card, padding: '6px 10px' }}>🪙 {fa(e.coins)}</span>
-        <span style={{ ...card, padding: '6px 10px' }}>🤖 {fa(e.aiTokens)}</span>
-        {st.streak && st.streak.streak > 0 && <span style={{ ...card, padding: '6px 10px' }} title="روزهای پیاپیِ حضور">🔥 {fa(st.streak.streak)}</span>}
-        {(e.kudos || 0) > 0 && <span style={{ ...card, padding: '6px 10px' }} title="تحسینِ امپراتورهای واقعی">👏 {fa(e.kudos)}</span>}
+      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', fontSize: 12, justifyContent: 'flex-end' }}>
+        <span style={pill()} title="Empire Score">🏆 {fa(st.empireScore || 0)}</span>
+        <span style={pill(true)}>🪙 {fa(e.coins)}</span>
+        <span style={pill()}>🤖 {fa(e.aiTokens)}</span>
+        {st.streak && st.streak.streak > 0 && <span style={pill()} title="روزهای پیاپیِ حضور">🔥 {fa(st.streak.streak)}</span>}
+        {(e.kudos || 0) > 0 && <span style={pill()} title="تحسینِ امپراتورهای واقعی">👏 {fa(e.kudos)}</span>}
         {/* 🔊 تنظیمِ صدا (سند ۲۱ Part 05): خاموش/روشن + حجم، ذخیره روی دستگاه، تغییرِ فوری با صدای تست */}
         {st.soundEnabled !== false && <span style={{ position: 'relative' }}>
-          <button title="صدای بازخورد" onClick={() => setSndOpen(o => !o)} style={{ ...card, padding: '6px 10px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>{snd.on && snd.vol > 0 ? '🔊' : '🔇'}</button>
+          <button title="صدای بازخورد" onClick={() => setSndOpen(o => !o)} style={{ ...pill(), cursor: 'pointer', fontFamily: 'inherit' }}>{snd.on && snd.vol > 0 ? '🔊' : '🔇'}</button>
           {sndOpen && <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 60, ...card, padding: 12, width: 190, boxShadow: '0 10px 28px -8px rgba(0,0,0,.55)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
               <b>صدای بازخورد</b>
@@ -638,6 +667,7 @@ export default function EmpirePage() {
     </div>
 
     {gtab === 'city' && <>
+    {tabHead('🏙', 'شهر', 'فرصت‌های واقعیِ امروز، نقشه و مسیرِ برج')}
     {/* 🎁 پیشنهادِ هوشمند (فاز ۳۳ — سند ۲۲ فصل ۹): حداکثر ۱ در روز، از رفتارِ واقعیِ خودت، با یک لمس بسته می‌شود.
         بدونِ تایمرِ ساختگی و بدونِ پاپ‌آپ — یک کارتِ ساده که «نه» هم جوابِ کاملاً قابلِ‌قبولی است. */}
     {st.offer && <div style={{ ...card, borderColor: 'var(--goldDim)', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -911,6 +941,7 @@ export default function EmpirePage() {
     </>}
 
     {gtab === 'portfolio' && <>
+    {tabHead('💼', 'پرتفوی', 'دارایی‌های واقعی‌ات — زنده از بازار')}
     {/* ارزشِ خالص (زنده از بازارِ واقعی) — اعداد با شمارشِ متحرک (جلد ۵۶) */}
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10 }}>
       <div style={card}><div style={{ fontSize: 11, color: 'var(--muted)' }}>ارزشِ خالص</div><div style={{ fontSize: 17, fontWeight: 800, color: 'var(--gold)' }}><CountUp value={st.netWorth || 0} format={faB} /> تومان</div></div>
@@ -1346,6 +1377,7 @@ export default function EmpirePage() {
     </>}
 
     {gtab === 'missions' && <>
+    {tabHead('🎯', 'مأموریت‌ها', 'پاداش فقط از کارِ واقعی')}
     {/* 🔥 پاداشِ نقاطِ عطفِ استریک (سند ۱۸ بخش ۱): از ورودِ پیاپیِ واقعی — روزهای ۷/۱۴/۲۱/۳۰ */}
     {(st.streakBonuses || []).some((sb: any) => sb.done && !sb.claimed) && (
       <div style={{ ...card, borderColor: 'var(--gold)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -1465,6 +1497,7 @@ export default function EmpirePage() {
     </>}
 
     {gtab === 'market' && <>
+    {tabHead('📊', 'بازار', 'سرمایه، صندوق‌ها، فروشگاه‌ها و بازارِ بازیکنان')}
     {/* 🪙 فروشگاهِ ملک‌کوین (فاز ۲۸): پولِ واقعی فقط «زمان/تحلیل» می‌خرد — هرگز قدرت (بدونِ P2W) */}
     {st.coinShop?.enabled && (st.coinShop.packs || []).length > 0 && <div id="coin-shop" style={{ ...card, borderColor: 'var(--goldDim)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -1780,6 +1813,7 @@ export default function EmpirePage() {
     </>}
 
     {gtab === 'ranks' && <>
+    {tabHead('🏆', 'رتبه‌ها', 'رقابت و اتحاد با بازیکنانِ واقعی')}
     {/* ۵ جدولِ رتبه (فصل ۵) + لیگِ محله (§7.2) */}
     <details style={card} onToggle={(ev: any) => { if (ev.currentTarget.open && !boards) doBoards() }}>
       <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>🏅 جدول‌های رتبه و لیگِ محله</summary>
@@ -1987,10 +2021,11 @@ export default function EmpirePage() {
     {/* 🎮 منوی بازی (فصل ۹ Main Menu — Visual Pass): پنج صفحهٔ اصلی، ثابت در پایین */}
     <div style={{ height: 70 }} />
     <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50, display: 'flex', justifyContent: 'center', padding: '8px 10px calc(8px + env(safe-area-inset-bottom))', pointerEvents: 'none' }}>
-      <div style={{ display: 'flex', gap: 2, background: 'var(--surface)', border: '1px solid var(--gold)', borderRadius: 16, padding: 5, boxShadow: '0 10px 34px -8px rgba(0,0,0,.55)', pointerEvents: 'auto' }}>
+      {/* 🎨 نوارِ تبِ شیشه‌ای (پروتوتایپِ کامل): blur + تبِ فعالِ طلاییِ گرادیانی */}
+      <div style={{ display: 'flex', gap: 4, background: 'rgba(20,27,43,.72)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 18, padding: 6, boxShadow: '0 12px 40px -8px rgba(0,0,0,.6), 0 0 0 1px rgba(212,175,55,.1)', backdropFilter: 'blur(8px)', pointerEvents: 'auto' }}>
         {([['city', '🏙', 'شهر'], ['portfolio', '💼', 'پرتفوی'], ['missions', '🎯', 'مأموریت‌ها'], ['market', '📊', 'بازار'], ['ranks', '🏆', 'رتبه‌ها']] as const).map(([k, ic, l]) => (
           <button key={k} onClick={() => { setGtab(k); try { window.scrollTo({ top: 0 }) } catch {} }}
-            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, minWidth: 60, padding: '5px 8px', borderRadius: 12, border: 'none', cursor: 'pointer', background: gtab === k ? 'var(--goldDim)' : 'transparent', color: gtab === k ? 'var(--gold)' : 'var(--muted)', fontFamily: 'inherit', fontSize: 10.5, fontWeight: gtab === k ? 800 : 500 }}>
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, minWidth: 60, padding: '6px 8px', borderRadius: 13, border: 'none', cursor: 'pointer', background: gtab === k ? 'linear-gradient(135deg,rgba(212,175,55,.28),rgba(240,212,122,.16))' : 'transparent', color: gtab === k ? '#f0d47a' : 'var(--muted)', fontFamily: 'inherit', fontSize: 10.5, fontWeight: gtab === k ? 800 : 500, boxShadow: gtab === k ? 'inset 0 0 0 1px rgba(212,175,55,.4)' : 'none' }}>
             <span style={{ fontSize: 17 }}>{ic}</span>{l}
           </button>
         ))}
