@@ -60,7 +60,11 @@ async function aiCanonical(items: { i: number; title: string; desc: string }[]):
   if (!model) return {}
   const list = items.map(it => `${it.i}) ${(it.title || '').slice(0, 60)} :: ${(it.desc || '').replace(/\s+/g, ' ').slice(0, 180)}`).join('\n')
   const sys = 'تو نامِ «مشاور/آگهی‌کنندهٔ» هر آگهیِ ملکی را از متن درمی‌آوری. فقط نامِ شخص (فارسی، حداکثر ۲ کلمه) یا نامِ برندِ امضا. اگر امضایی نبود، خالی بگذار. خروجی فقط JSON: [{"i":<شماره>,"name":"<نام یا خالی>"}]'
-  const out = await chatCompleteSafe(model, [{ role: 'system', content: sys }, { role: 'user', content: list }], { temperature: 0, max_tokens: 700 }, provider)
+  // timeout سخت: اگر GapGPT کند/بی‌پاسخ بود، کلِ سینک هنگ نکند (فقط این دسته را رد می‌کنیم).
+  const out = await Promise.race([
+    chatCompleteSafe(model, [{ role: 'system', content: sys }, { role: 'user', content: list }], { temperature: 0, max_tokens: 700 }, provider),
+    new Promise<string>(r => setTimeout(() => r(''), 25000)),
+  ])
   const map: Record<number, string> = {}
   try {
     const j = JSON.parse((out.match(/\[[\s\S]*\]/) || ['[]'])[0])

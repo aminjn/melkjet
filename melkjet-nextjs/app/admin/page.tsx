@@ -1684,6 +1684,24 @@ interface OwnCluster { slug: string; advisors: { phone: string; name: string; ty
 const PTYPE_LABEL: Record<string, string> = { pros: 'مشاور', agency: 'آژانس', builder: 'سازنده', architect: 'معمار', contractor: 'پیمانکار', materials: 'مصالح', legal: 'وکیل', lawfirm: 'دفتر حقوقی', finance: 'مالی', appraiser: 'کارشناس', notary: 'دفترخانه' }
 
 interface DivarPro { slug: string; url: string; name?: string; listingCount?: number; source: string }
+// لینکِ آگهی‌های یک مشاور در دیوار (برای بازبینی + برداشتِ دستیِ شماره).
+function DivarLinks({ tokens }: { tokens?: string[] }) {
+  if (!tokens || !tokens.length) return null
+  return (
+    <details>
+      <summary style={{ cursor: 'pointer', fontSize: 11, color: 'var(--gold)', userSelect: 'none' }}>🔗 دیدنِ {(tokens.length).toLocaleString('fa-IR')} آگهی در دیوار</summary>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+        {tokens.map(t => (
+          <a key={t} href={`https://divar.ir/v/${t}`} target="_blank" rel="noreferrer"
+            style={{ fontSize: 11, direction: 'ltr', padding: '3px 8px', borderRadius: 6, background: 'var(--surface)', border: '1px solid var(--line2)', color: 'var(--text)', textDecoration: 'none' }}>
+            {t} ↗
+          </a>
+        ))}
+      </div>
+    </details>
+  )
+}
+
 // ── پنلِ «رُسترِ آژانس»: یک لینک بده → مشاورها خودکار جدا و هر کدام حسابِ جدا ──
 function AgencyRosterPanel() {
   const [scrapes, setScrapes] = useState<any[]>([])
@@ -1746,22 +1764,28 @@ function AgencyRosterPanel() {
             {open === s.id && (
               <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {(s.advisors || []).map((a: any) => (
-                  <div key={a.key} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '6px 8px', background: 'var(--bg2)', borderRadius: 8 }}>
-                    <span style={{ fontWeight: 700, fontSize: 13 }}>{a.name}</span>
-                    <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{fa(a.listingCount)} فایل</span>
-                    {a.phone
-                      ? <span dir="ltr" style={{ marginInlineStart: 'auto', fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>✅ {a.phone}</span>
-                      : <><input dir="ltr" style={{ ...phInp, marginInlineStart: 'auto' }} placeholder="09..." value={phones[`${s.id}:${a.key}`] || ''} onChange={e => setPhone(`${s.id}:${a.key}`, e.target.value)} />
-                        <button onClick={() => graduate(s.id, a.key)} style={{ background: 'var(--gold)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#1a1400', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>ساخت حساب</button></>}
+                  <div key={a.key} style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '6px 8px', background: 'var(--bg2)', borderRadius: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontWeight: 700, fontSize: 13 }}>{a.name}</span>
+                      <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{fa(a.listingCount)} فایل</span>
+                      {a.phone
+                        ? <span dir="ltr" style={{ marginInlineStart: 'auto', fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>✅ {a.phone}</span>
+                        : <><input dir="ltr" style={{ ...phInp, marginInlineStart: 'auto' }} placeholder="09..." value={phones[`${s.id}:${a.key}`] || ''} onChange={e => setPhone(`${s.id}:${a.key}`, e.target.value)} />
+                          <button onClick={() => graduate(s.id, a.key)} style={{ background: 'var(--gold)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#1a1400', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>ساخت حساب</button></>}
+                    </div>
+                    <DivarLinks tokens={a.tokens} />
                   </div>
                 ))}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '6px 8px', background: 'var(--bg2)', borderRadius: 8, borderTop: '1px dashed var(--line2)' }}>
-                  <span style={{ fontWeight: 700, fontSize: 13 }}>🏢 بی‌نام (خودِ آژانس)</span>
-                  <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{fa(s.lastUnnamed || 0)} فایل</span>
-                  {s.agencyPhone
-                    ? <span dir="ltr" style={{ marginInlineStart: 'auto', fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>✅ {s.agencyPhone}</span>
-                    : <><input dir="ltr" style={{ ...phInp, marginInlineStart: 'auto' }} placeholder="09..." value={phones[`${s.id}:__agency__`] || ''} onChange={e => setPhone(`${s.id}:__agency__`, e.target.value)} />
-                      <button onClick={() => graduate(s.id, '__agency__')} style={{ background: 'var(--gold)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#1a1400', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>ساخت حساب آژانس</button></>}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '6px 8px', background: 'var(--bg2)', borderRadius: 8, borderTop: '1px dashed var(--line2)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 700, fontSize: 13 }}>🏢 بی‌نام (خودِ آژانس)</span>
+                    <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{fa(s.lastUnnamed || 0)} فایل</span>
+                    {s.agencyPhone
+                      ? <span dir="ltr" style={{ marginInlineStart: 'auto', fontSize: 12, color: 'var(--gold)', fontWeight: 700 }}>✅ {s.agencyPhone}</span>
+                      : <><input dir="ltr" style={{ ...phInp, marginInlineStart: 'auto' }} placeholder="09..." value={phones[`${s.id}:__agency__`] || ''} onChange={e => setPhone(`${s.id}:__agency__`, e.target.value)} />
+                        <button onClick={() => graduate(s.id, '__agency__')} style={{ background: 'var(--gold)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#1a1400', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>ساخت حساب آژانس</button></>}
+                  </div>
+                  <DivarLinks tokens={s.unnamedTokens} />
                 </div>
               </div>
             )}

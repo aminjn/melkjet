@@ -21,6 +21,7 @@ export interface RosterAdvisor {
   owner: string          // کلیدِ موقت (adv:slug:key) یا شمارهٔ موبایل پس از graduate
   phone?: string         // پس از graduate ست می‌شود
   listingCount: number
+  tokens?: string[]      // توکنِ آگهی‌های این مشاور (برای بازکردنِ لینکِ دیوار) — سقفِ ۱۰۰
   graduatedAt?: number
 }
 export interface RosterScrape {
@@ -37,6 +38,7 @@ export interface RosterScrape {
   lastError?: string
   lastTotal?: number
   lastUnnamed?: number
+  unnamedTokens?: string[]   // توکنِ آگهی‌های بی‌امضا (به آژانس) — سقفِ ۱۰۰
   running?: boolean
   runStartedAt?: number    // برای تشخیصِ رانِ گیرکرده/مرده
   progress?: { done: number; total: number }
@@ -150,6 +152,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
       let rec = recs.find(r => r.key === a.key)
       if (!rec) { rec = { key: a.key, name: a.name, owner: `adv:${scrape.slug}:${a.key}`, listingCount: 0 }; recs.push(rec) }
       else if (!rec.phone && a.name) rec.name = a.name
+      rec.tokens = a.tokens.slice(0, 100)   // لینکِ آگهی‌های دیوار برای بازبینی
     }
 
     // owner→tokens: هر مشاور آگهی‌های خودش؛ رکوردهای قدیمیِ غایب → توکنِ خالی (همه‌شان «رفته»)؛ آژانس → بی‌نام‌ها.
@@ -167,6 +170,7 @@ export async function syncRoster(id: string, onProgress?: (done: number, total: 
       s.advisors = recs; s.agencyName = roster.agencyName || s.agencyName
       s.running = false; s.lastRun = Date.now(); s.lastError = ''
       s.lastTotal = roster.total; s.lastUnnamed = roster.unnamed.tokens.length
+      s.unnamedTokens = roster.unnamed.tokens.slice(0, 100)
     })
     done = true
     return { ok: true, advisors: recs.length, total: roster.total, unnamed: roster.unnamed.tokens.length }
