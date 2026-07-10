@@ -825,22 +825,60 @@ export function proPersonaOf(role: string, seed: string): string {
 
 // طراحیِ معمار (فاز ۲۹): محاسبهٔ شفافِ نقشه از قوانینِ شهرسازیِ knob — سطحِ اشغال، تراکم، حداقل متراژِ واحد.
 // طبقهٔ بیش از حدِ قانونی «می‌شود» ساخت (تصمیمِ آگاهانهٔ بازیکن) — اما ماده۱۰۰ در انتظار است.
+// ── ضابطهٔ واقعیِ طبقاتِ مجاز (فیدبکِ مستقیمِ کاربر: «قوانینِ ساخت بر اساسِ متراژ و منطقه واقعی نیست») ──
+// عرفِ طرحِ تفصیلی: طبقاتِ مجاز پلکانی با متراژِ زمین (زمینِ کوچک ۲ طبقه … زمینِ بزرگ برج) +
+// تعدیلِ «منطقه» از عرفِ واقعیِ ساختِ محله (میانهٔ «طبقه: X از Y» آگهی‌های واقعیِ هم‌محله) با سقفِ knob.
+// همهٔ آستانه‌ها knob ادمین‌اند؛ عرفِ محله فقط وقتی حساب می‌شود که نمونهٔ واقعیِ کافی باشد (نه عددِ ساختگی).
+
+// «طبقه: X از Y» متای واقعیِ آگهی → تعدادِ کلِ طبقاتِ ساختمان (همان الگوی buildingUnitsOf).
+export function floorsOfMeta(meta: Record<string, string> | undefined): number | null {
+  const fm = String((meta || {})['طبقه'] || '').match(/از\s*([\d۰-۹]+)/)
+  if (!fm) return null
+  const n = Number(fm[1].replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))))
+  return n >= 2 && n <= 50 ? n : null
+}
+
+export interface FloorRuleCfg { tierA: number; tierAFloors: number; tierB: number; tierBFloors: number; tierC: number; tierCFloors: number; tierD: number; tierDFloors: number; bigFloors: number; hoodBonusMax: number }
+export function legalFloorsOf(landArea: number, hoodFloors: number | null, cfg: FloorRuleCfg): { floors: number; areaFloors: number; hoodApplied: boolean } {
+  const areaFloors = landArea < cfg.tierA ? cfg.tierAFloors
+    : landArea < cfg.tierB ? cfg.tierBFloors
+    : landArea < cfg.tierC ? cfg.tierCFloors
+    : landArea < cfg.tierD ? cfg.tierDFloors
+    : cfg.bigFloors
+  // منطقه: اگر عرفِ واقعیِ ساختِ محله بلندتر است، تا سقفِ hoodBonusMax طبقه بالاتر مجاز می‌شود (پهنهٔ متراکم‌تر)
+  if (hoodFloors && hoodFloors > areaFloors) {
+    return { floors: Math.min(hoodFloors, areaFloors + Math.max(0, cfg.hoodBonusMax)), areaFloors, hoodApplied: true }
+  }
+  return { floors: Math.max(1, areaFloors), areaFloors, hoodApplied: false }
+}
+
 export function designPlanOf(landArea: number, floors: number, unitsPerFloor: number,
-  cfg: { occupancyPct: number; buildFactor: number; maxOverFloors: number; minUnitArea: number }):
-  { ok: true; footprint: number; legalFloors: number; maxFloors: number; unitArea: number; illegalFloors: number; builtArea: number; totalUnits: number; illegalUnits: number; illegalArea: number } | { ok: false; reason: string } {
+  cfg: { occupancyPct: number; buildFactor: number; maxOverFloors: number; minUnitArea: number; parkingAreaPerUnit?: number; parkingLevels?: number },
+  legalFloorsOverride?: number):
+  { ok: true; footprint: number; legalFloors: number; maxFloors: number; unitArea: number; illegalFloors: number; builtArea: number; totalUnits: number; illegalUnits: number; illegalArea: number; parkingCap: number | null } | { ok: false; reason: string } {
   if (!(landArea > 0)) return { ok: false, reason: 'متراژِ زمین نامشخص است' }
   const footprint = Math.max(20, Math.round(landArea * Math.max(10, Math.min(100, cfg.occupancyPct)) / 100))
-  const legalFloors = Math.max(1, Math.floor((landArea * Math.max(0.5, cfg.buildFactor)) / footprint))
+  // طبقاتِ مجاز: از ضابطهٔ متراژ/منطقه (legalFloorsOf در caller)؛ فرمولِ قدیمیِ تراکم فقط fallbackِ سازگاری.
+  const legalFloors = legalFloorsOverride && legalFloorsOverride >= 1
+    ? Math.round(legalFloorsOverride)
+    : Math.max(1, Math.floor((landArea * Math.max(0.5, cfg.buildFactor)) / footprint))
   const maxFloors = legalFloors + Math.max(0, cfg.maxOverFloors)
   if (!(floors >= 1) || floors > maxFloors) return { ok: false, reason: `طبقات باید بین ۱ و ${maxFloors.toLocaleString('fa-IR')} باشد (مجازِ قانونی: ${legalFloors.toLocaleString('fa-IR')})` }
   if (!(unitsPerFloor >= 1)) return { ok: false, reason: 'حداقل یک واحد در هر طبقه' }
   const unitArea = Math.floor(footprint / unitsPerFloor)
   if (unitArea < cfg.minUnitArea) return { ok: false, reason: `متراژِ هر واحد ${unitArea.toLocaleString('fa-IR')} متر می‌شود — کمتر از حداقلِ قانونیِ ${cfg.minUnitArea.toLocaleString('fa-IR')} متر` }
+  // ضابطهٔ واقعیِ «هر واحد یک پارکینگ»: ظرفیتِ پارکینگ = مساحتِ قابلِ‌پارکِ همکف/زیرزمین ÷ سرانهٔ هر خودرو.
+  const totalUnits = floors * unitsPerFloor
+  const perCar = Math.max(0, cfg.parkingAreaPerUnit ?? 0)
+  const parkingCap = perCar > 0 ? Math.max(1, Math.floor(footprint / perCar)) * Math.max(1, cfg.parkingLevels ?? 1) : null
+  if (parkingCap !== null && totalUnits > parkingCap) {
+    return { ok: false, reason: `برای ${totalUnits.toLocaleString('fa-IR')} واحد پارکینگ کافی نمی‌شود — ضابطهٔ «هر واحد یک پارکینگ» فقط ${parkingCap.toLocaleString('fa-IR')} واحد اجازه می‌دهد (همکف/زیرزمین)` }
+  }
   const illegalFloors = Math.max(0, floors - legalFloors)
   return {
     ok: true, footprint, legalFloors, maxFloors, unitArea, illegalFloors,
-    builtArea: footprint * floors, totalUnits: floors * unitsPerFloor,
-    illegalUnits: illegalFloors * unitsPerFloor, illegalArea: illegalFloors * footprint,
+    builtArea: footprint * floors, totalUnits,
+    illegalUnits: illegalFloors * unitsPerFloor, illegalArea: illegalFloors * footprint, parkingCap,
   }
 }
 

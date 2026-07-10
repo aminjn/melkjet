@@ -27,6 +27,7 @@ import {
   setForSale, tradeAsset, openPartnership, joinPartnership, settlePartnerShares, chargeClanFee,
   setAutoRule, delAutoRule, toggleAutoRule, recordRuleFires,
   bigDealPickOf, bigDealNegoOf, BIG_DEAL_STRATEGIES, noteCrisis, recordBigDealTry,
+  floorsOfMeta, legalFloorsOf,
   type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
 import {
@@ -237,6 +238,17 @@ function negoSkillOf(e: EmpireData, personaMod: number): { skill: number; memory
     ? Math.max(0, companyReputationOf(e, config().empire.build.repProjectScore).stars - 1) * Math.max(0, config().empire.reputation.negoBonusPerStar)
     : 0
   return { skill: (e.identity.negotiation || 0) + personaMod + Math.round(teamSkillOf(e) / 10) + memory.mod + repBonus, memory, repBonus }
+}
+
+// عرفِ واقعیِ ساختِ محله (ضابطهٔ «منطقه» — فیدبکِ کاربر): میانهٔ کلِ طبقاتِ ساختمان‌ها از متای واقعیِ
+// «طبقه: X از Y» آگهی‌های هم‌محله؛ کمتر از ۳ نمونهٔ واقعی → بدونِ تعدیل (نه عددِ ساختگی).
+async function hoodFloorsNorm(hood: string): Promise<number | null> {
+  if (!hood) return null
+  const items = await candidateListings(600).catch(() => [] as Item[])
+  const fs = items.filter(x => hoodOf(x.location) === hood).map(x => floorsOfMeta(x.meta)).filter((n): n is number => !!n)
+  if (fs.length < 3) return null
+  const s = [...fs].sort((a, b) => a - b)
+  return s[Math.floor(s.length / 2)]
 }
 
 // میانهٔ قیمتِ هر مترِ فروش در یک محله (از آگهی‌های واقعی) — مبنای قیمت‌گذاریِ پیش‌فروش/فروشِ واحد (جلد ۷۱/۷۲).
@@ -1104,12 +1116,17 @@ export async function POST(req: NextRequest) {
       const la = await landAreaWithEstimate(a, it)
       if (!(la.area > 0)) return NextResponse.json({ error: 'متراژِ این زمین نه در آگهی هست، نه از متن/قیمتش قابل‌برآورد بود' }, { status: 400 })
       const landArea = la.area
-      const probe = designPlanOf(landArea, 1, 1, { ...dc, buildFactor: config().empire.build.buildFactor })
+      // ضابطهٔ واقعی (فیدبکِ کاربر): طبقاتِ مجاز پلکانی با متراژ + تعدیل از عرفِ واقعیِ ساختِ همین محله.
+      const hoodNorm = await hoodFloorsNorm(a.hood)
+      const lf = legalFloorsOf(landArea, hoodNorm, dc)
+      const probe = designPlanOf(landArea, 1, 1, { ...dc, buildFactor: config().empire.build.buildFactor }, lf.floors)
       if (!probe.ok) return NextResponse.json({ error: probe.reason }, { status: 400 })
+      const ruleNote = `ضابطه: اشغال ${dc.occupancyPct.toLocaleString('fa-IR')}٪ زمین · زمینِ ${landArea.toLocaleString('fa-IR')} متری → ${lf.areaFloors.toLocaleString('fa-IR')} طبقهٔ مجاز${lf.hoodApplied ? ` · عرفِ ساختِ ${a.hood || 'محله'} (میانهٔ ${hoodNorm!.toLocaleString('fa-IR')} طبقه از آگهی‌های واقعی) → ${lf.floors.toLocaleString('fa-IR')} طبقه` : ''} · هر واحد یک پارکینگ`
       return NextResponse.json({
         ok: true, landArea, areaNote: la.note, occupancyPct: dc.occupancyPct, footprint: probe.footprint,
         legalFloors: probe.legalFloors, maxFloors: probe.maxFloors, minUnitArea: dc.minUnitArea,
         maxUnitsPerFloor: Math.max(1, Math.floor(probe.footprint / Math.max(1, dc.minUnitArea))),
+        parkingCap: probe.parkingCap, ruleNote, hoodFloors: hoodNorm, areaFloors: lf.areaFloors,
         designDays: dc.designDays, architectFeePct: dc.architectFeePct, costPerM: config().empire.build.costPerM,
         finePerM2: Math.round(config().empire.build.costPerM * config().empire.m100.finePerM2Mult),
         architect: proPersonaOf('architect', a.id),
@@ -1124,7 +1141,9 @@ export async function POST(req: NextRequest) {
       if (!e || !a) return NextResponse.json({ error: 'دارایی یافت نشد' }, { status: 404 })
       const it = await getItemById(a.listingId).catch(() => null)
       const landArea = (await landAreaWithEstimate(a, it)).area
-      const d = designPlanOf(landArea, Math.round(Number(b.floors) || 0), Math.round(Number(b.unitsPerFloor) || 0), { ...dc, buildFactor: config().empire.build.buildFactor })
+      // همان ضابطه‌ای که در پیش‌نمایش دیده (متراژ + عرفِ محله) — تا عددِ قرارداد با عددِ نمایش یکی باشد.
+      const lfS = legalFloorsOf(landArea, await hoodFloorsNorm(a.hood), dc)
+      const d = designPlanOf(landArea, Math.round(Number(b.floors) || 0), Math.round(Number(b.unitsPerFloor) || 0), { ...dc, buildFactor: config().empire.build.buildFactor }, lfS.floors)
       if (!d.ok) return NextResponse.json({ error: d.reason }, { status: 400 })
       const fee = Math.max(1, Math.round(d.builtArea * config().empire.build.costPerM * Math.max(0, dc.architectFeePct) / 100))
       // متراژِ زمین داخلِ خودِ نقشه ذخیره می‌شود — کلنگ دیگر به زنده‌ماندنِ آگهیِ واقعی وابسته نیست

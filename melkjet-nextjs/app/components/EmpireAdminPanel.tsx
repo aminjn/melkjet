@@ -504,7 +504,16 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             {row('حداکثر طبقهٔ مازادِ قابل‌انتخاب', cin('design', 'maxOverFloors'), 'تخلفِ آگاهانه → ماده۱۰۰')}
             {row('مدتِ طراحی (روز)', cin('design', 'designDays'), 'قابلِ‌تسریع با کوین')}
             {row('حق‌الزحمهٔ معمار (٪ هزینهٔ ساخت)', cin('design', 'architectFeePct'))}
-            {row('حداقل متراژِ قانونیِ واحد', cin('design', 'minUnitArea'))}
+            {row('حداقل متراژِ قانونیِ واحد', cin('design', 'minUnitArea'), 'حدنصابِ تفکیکِ طرحِ تفصیلی')}
+            <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>📏 ضابطهٔ طبقاتِ مجاز (متراژ + عرفِ واقعیِ محله — فیدبکِ کاربر)</div>
+            {row('آستانهٔ ردهٔ ۱ (متر) / طبقات', <span style={{ display: 'flex', gap: 6 }}>{cin('design', 'tierA', 70)}{cin('design', 'tierAFloors', 50)}</span>, 'زمینِ کوچک‌تر از این متراژ → این تعداد طبقه')}
+            {row('آستانهٔ ردهٔ ۲ / طبقات', <span style={{ display: 'flex', gap: 6 }}>{cin('design', 'tierB', 70)}{cin('design', 'tierBFloors', 50)}</span>)}
+            {row('آستانهٔ ردهٔ ۳ / طبقات', <span style={{ display: 'flex', gap: 6 }}>{cin('design', 'tierC', 70)}{cin('design', 'tierCFloors', 50)}</span>)}
+            {row('آستانهٔ ردهٔ ۴ / طبقات', <span style={{ display: 'flex', gap: 6 }}>{cin('design', 'tierD', 70)}{cin('design', 'tierDFloors', 50)}</span>)}
+            {row('زمینِ بزرگ (≥ ردهٔ ۴): طبقات', cin('design', 'bigFloors'), 'برج‌سازی با طرحِ ویژه')}
+            {row('سقفِ تعدیلِ عرفِ محله (+طبقه)', cin('design', 'hoodBonusMax'), 'میانهٔ «طبقه: X از Y» آگهی‌های واقعیِ هم‌محله؛ کمتر از ۳ نمونه = بدونِ تعدیل')}
+            {row('سرانهٔ پارکینگِ هر واحد (متر)', cin('design', 'parkingAreaPerUnit'), 'ضابطهٔ «هر واحد یک پارکینگ»؛ ۰ = خاموش')}
+            {row('طبقاتِ قابلِ‌پارک', cin('design', 'parkingLevels'), 'همکف + زیرزمین = ۲')}
             {row('ماده۱۰۰: جریمهٔ هر مترِ مازاد (× هزینهٔ ساختِ متر)', cin('m100', 'finePerM2Mult'), 'جریمه → خزانه (شهرداری)')}
           </div>
           <div style={card}>

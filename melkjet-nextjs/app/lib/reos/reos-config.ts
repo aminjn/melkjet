@@ -89,11 +89,20 @@ export interface ReosConfig {
     // فاز ۲۹: طراحیِ معمار پیش از پروانه — طبقات/واحد در طبقه با تراکمِ قانونی؛ طبقهٔ مازاد = تخلف (ماده۱۰۰).
     design: {
       enabled: boolean
-      occupancyPct: number   // سطحِ اشغالِ زمین (٪) — footprint = زمین × این
+      occupancyPct: number   // سطحِ اشغالِ زمین (٪) — footprint = زمین × این (عرفِ طرحِ تفصیلی: ۶۰٪)
       maxOverFloors: number  // حداکثر طبقهٔ مازادِ قابلِ‌ساخت (تخلفِ عمدی)
       designDays: number     // مدتِ طراحیِ معمار (قابلِ‌تسریع با کوین)
       architectFeePct: number // حق‌الزحمهٔ معمار (٪ برآوردِ هزینهٔ ساخت)
-      minUnitArea: number    // حداقل متراژِ قانونیِ هر واحد
+      minUnitArea: number    // حداقل متراژِ قانونیِ هر واحد (حدنصابِ تفکیکِ طرحِ تفصیلی)
+      // ضابطهٔ واقعیِ طبقاتِ مجاز (فیدبکِ کاربر): پلکانی با متراژِ زمین + تعدیل از عرفِ واقعیِ ساختِ محله.
+      tierA: number; tierAFloors: number   // زمینِ کوچک‌تر از tierA متر → tierAFloors طبقه
+      tierB: number; tierBFloors: number
+      tierC: number; tierCFloors: number
+      tierD: number; tierDFloors: number
+      bigFloors: number                    // زمینِ ≥ tierD → این تعداد (برج‌سازی با طرحِ ویژه)
+      hoodBonusMax: number                 // سقفِ طبقاتِ اضافه به اعتبارِ عرفِ بلندمرتبهٔ محله
+      parkingAreaPerUnit: number           // سرانهٔ پارکینگِ هر واحد (متر — با مانور)؛ ۰ = ضابطهٔ پارکینگ خاموش
+      parkingLevels: number                // طبقاتِ قابلِ‌پارک (همکف + زیرزمین = ۲)
     }
     // فاز ۲۹: کمیسیونِ ماده۱۰۰ شهرداری — جریمهٔ هر مترِ مازاد = costPerM × این ضریب → خزانه.
     m100: { finePerM2Mult: number }
@@ -239,7 +248,8 @@ export const DEFAULT_CONFIG: ReosConfig = {
     nego: { baseChancePct: 25, discountMin: 2, discountMax: 6 },
     // نقش‌های حرفه‌ای (فاز ۲۹): اعدادِ عرفِ واقعیِ بازارِ ایران — همه knob.
     pros: { notaryFeePct: 0.5, advisorRentCommissionPct: 25, advisorSellCommissionPct: 0.5, lawyerFeePct: 10, lawyerCutPct: 40, lawyerWinChancePct: 50, appraisalFee: 2_000_000 },
-    design: { enabled: true, occupancyPct: 60, maxOverFloors: 2, designDays: 2, architectFeePct: 3, minUnitArea: 35 },
+    // ضابطهٔ طبقات = عرفِ رایجِ طرحِ تفصیلی: <۱۵۰م→۲ط، <۲۵۰→۳ط، <۵۰۰→۴ط، <۱۰۰۰→۵ط، بزرگ‌تر→۶ط؛ محلهٔ بلندمرتبه تا +۲.
+    design: { enabled: true, occupancyPct: 60, maxOverFloors: 2, designDays: 2, architectFeePct: 3, minUnitArea: 35, tierA: 150, tierAFloors: 2, tierB: 250, tierBFloors: 3, tierC: 500, tierCFloors: 4, tierD: 1000, tierDFloors: 5, bigFloors: 6, hoodBonusMax: 2, parkingAreaPerUnit: 25, parkingLevels: 2 },
     m100: { finePerM2Mult: 1.5 },
     renovation: {
       enabled: true, maxBoostPct: 25,
