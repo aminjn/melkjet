@@ -160,6 +160,8 @@ export default function EmpirePage() {
   const [hireL, setHireL] = useState<any>(null)                  // نامزدهای استخدامِ هفته
   const [bplan, setBplan] = useState<any>(null)                  // پیش‌نمایشِ نقشهٔ ساخت (جلد ۶۴)
   const [bgoal, setBgoal] = useState('profit')                   // هدفِ پروژه (GDD فصل ۴): fast / profit / rep
+  const [bname, setBname] = useState('')                         // قانونِ ۱۳ (رویاپردازی): نامِ پروژه — انتخابِ خودِ بازیکن
+  const [bfacade, setBfacade] = useState('modern')               // سبکِ نما — ظاهری/رویایی، صفر اثرِ اقتصادی
   const [pu, setPu] = useState<Record<string, string>>({})       // تعدادِ واحدِ پیش‌فروش/فروش
   const [pfKind, setPfKind] = useState('all')                    // فیلترِ پرتفوی (سند ۱۹ — Part 07)
   const [pfSort, setPfSort] = useState<'new' | 'value' | 'growth'>('new')
@@ -193,6 +195,8 @@ export default function EmpirePage() {
   const [ruleTh, setRuleTh] = useState('')
   // فاز ۴۱ (سند ۲۸ Part 07): معاملهٔ بزرگِ هفته — یک ملکِ واقعیِ شهری، یک تلاشِ مذاکره در هفته
   const [bd, setBd] = useState<any>(null)
+  // 🤝 برگهٔ قرارداد با مشاور/آژانس (فیدبک: «کاربر نمی‌بیند چه هزینه‌ای می‌دهد») — قبل از فروش/اجاره
+  const [aq, setAq] = useState<any>(null)   // { assetId, kind: 'sell'|'rent', via, data }
   const [bdRes, setBdRes] = useState<any>(null)
   const loadBd = async () => { const d = await api({ action: 'bigDeal' }); if (d) setBd(d) }
   const suspended = useRef(false)
@@ -377,12 +381,17 @@ export default function EmpirePage() {
   async function doHunterPick(id: string) { const d = await api({ action: 'hunterAnswer', pick: id }); if (d) { setHunterRes(d); setHunterPair([]); load() } }
   async function doAnalyze(listingId: string) { const d = await api({ action: 'analyze', listingId }); if (d) { setAnalysis(d.analysis); load() } }
   async function doClaim(key: string) { const d = await api({ action: 'claim', key }); if (d) { setSt(d); celebrate() } }
-  async function doSell(a: any) {
-    // فروش همیشه از طریقِ مشاور/آژانسِ املاک انجام می‌شود (فاز ۲۹) — کمیسیونش شفاف به بازیکن گفته می‌شود.
-    const sc = st?.pros?.advisorSellCommissionPct ?? 1
-    if (!confirm(`«${a.title.slice(0, 40)}» از طریقِ مشاور/آژانسِ املاکِ محله به قیمتِ روزِ ${faB(a.current || a.buyPrice)} تومان فروخته شود؟ (کمیسیونِ فروش ${fa(sc)}٪ از مبلغ کم می‌شود)`)) return
-    const d = await api({ action: 'sell', assetId: a.id })
-    if (d) { setSt(d); if ((d.profit || 0) > 0) celebrate() }
+  // فروش/اجاره «فقط» از طریقِ مشاور یا آژانسِ املاک — اول برگهٔ قرارداد با نامِ طرف و هزینهٔ تومانی باز می‌شود.
+  async function openAgentQuote(a: any, kind: 'sell' | 'rent') {
+    const d = await api({ action: 'agentQuote', assetId: a.id, kind })
+    if (d) setAq({ assetId: a.id, title: a.title, kind, via: 'advisor', data: d })
+  }
+  async function signAgentDeal() {
+    if (!aq) return
+    const d = aq.kind === 'sell'
+      ? await api({ action: 'sell', assetId: aq.assetId, via: aq.via })
+      : await api({ action: 'assetAction', assetId: aq.assetId, act: 'rent', via: aq.via })
+    if (d) { setSt(d); setAq(null); if (aq.kind === 'sell' ? (d.profit || 0) > 0 : true) celebrate() }
   }
   async function doChest() { const d = await api({ action: 'chest' }); if (d) { setChestReward(d.reward); celebrate(); load() } }
   async function doBoards() { const d = await api({ action: 'boards' }); if (d) setBoards(d) }
@@ -1245,7 +1254,7 @@ export default function EmpirePage() {
                   ? <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                       <span style={{ fontSize: 11, color: '#7c6' }}>📜 پروانه ✓</span>
                       <button style={{ ...btn, padding: '4px 12px', fontSize: 11.5 }} disabled={busy}
-                        onClick={async () => { const d = await api({ action: 'buildPlan', assetId: a.id }); if (d) setBplan({ assetId: a.id, ...d }) }}>⛏ شروعِ ساخت</button>
+                        onClick={async () => { const d = await api({ action: 'buildPlan', assetId: a.id }); if (d) { setBplan({ assetId: a.id, ...d }); setBname(d.suggestedName || ''); setBfacade('modern') } }}>⛏ شروعِ ساخت</button>
                     </span>
                   : a.permit.status === 'granted'
                   ? <span style={{ fontSize: 11, color: '#7c6' }}>📜 پروانه ✓</span>
@@ -1272,13 +1281,38 @@ export default function EmpirePage() {
               : a.action
               ? <span style={{ fontSize: 11, color: 'var(--muted)' }}>{a.action === 'renovate' ? '🛠 بازسازی' : a.action === 'rent' ? '💰 اجاره' : '📈 نگه‌داری'}</span>
               : <span style={{ display: 'flex', gap: 4 }}>{[['renovate', '🛠', 'بازسازی'], ['rent', '💰', 'اجاره دادن'], ['hold', '📈', 'نگه داشتن']].map(([k, i, t]) => <button key={k} title={t} style={{ ...btnGhost, padding: '4px 8px', fontSize: 13 }} onClick={async () => {
-                  // اجاره (فاز ۲۹): از طریقِ مشاورِ املاک — کمیسیونِ عرفِ واقعی (٪ از یک ماه اجارهٔ میانهٔ محله)
-                  if (k === 'rent' && !confirm(`اجاره از طریقِ مشاورِ املاکِ محله انجام می‌شود — کمیسیون ${fa(st.pros?.advisorRentCommissionPct || 25)}٪ از یک ماه اجارهٔ میانهٔ واقعیِ محله. ادامه؟`)) return
-                  const d = await api({ action: 'assetAction', assetId: a.id, act: k }); if (d) { setSt(d); if (d.advisorFee) alert(`🤝 مشاور مستأجر پیدا کرد — کمیسیون ${faB(d.advisorFee)} تومان پرداخت شد؛ درآمدِ اجاره از میانهٔ واقعیِ محله شروع شد.`) }
+                  // اجاره (فاز ۲۹ + فیدبک): اول برگهٔ قراردادِ مشاور/آژانس با هزینهٔ تومانی — بعد امضا
+                  if (k === 'rent') { openAgentQuote(a, 'rent'); return }
+                  const d = await api({ action: 'assetAction', assetId: a.id, act: k }); if (d) setSt(d)
                 }}>{i}</button>)}</span>}
             <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 12 }} disabled={busy || e.aiTokens <= 0} onClick={() => doAnalyze(a.listingId)}>تحلیلِ ملک‌جت (۱ ژتون)</button>
             {a.url && <a href={a.url} target="_blank" rel="noreferrer" style={{ ...btnGhost, padding: '4px 10px', fontSize: 12, textDecoration: 'none' }}>🔗 آگهیِ واقعی</a>}
-            {!a.construction && <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 12, color: '#e88', borderColor: '#644' }} disabled={busy} onClick={() => doSell(a)}>💸 فروش</button>}
+            {!a.construction && <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 12, color: '#e88', borderColor: '#644' }} disabled={busy} onClick={() => openAgentQuote(a, 'sell')}>💸 فروش</button>}
+
+            {/* 🤝 برگهٔ قرارداد با مشاور/آژانس — نام + هزینهٔ تومانی، قبل از امضا (فیدبکِ مستقیم) */}
+            {aq && aq.assetId === a.id && <div style={{ width: '100%', border: '1px solid var(--goldDim)', borderRadius: 12, padding: 10, marginTop: 6, fontSize: 12, background: 'rgba(212,175,55,.05)' }}>
+              <b>🤝 {aq.kind === 'sell' ? 'قراردادِ فروش' : 'قراردادِ اجاره'} — از طریقِ چه کسی؟</b>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 7 }}>
+                {(aq.data.agents || []).map((g: any) => (
+                  <button key={g.via} style={chip(aq.via === g.via)} onClick={() => setAq({ ...aq, via: g.via })}>{g.icon} {g.name}</button>
+                ))}
+              </div>
+              <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 3, color: 'var(--muted)' }}>
+                {aq.kind === 'sell' ? <>
+                  <div>قیمتِ {aq.data.priceIsLive ? 'روزِ واقعیِ آگهی' : 'خرید (آگهی دیگر فعال نیست)'}: <b style={{ color: 'var(--text)' }}>{faB(aq.data.price)} تومان</b></div>
+                  <div>کمیسیونِ {aq.via === 'agency' ? 'آژانس' : 'مشاور'} ({fa(aq.data.commissionPct)}٪): <b style={{ color: '#e8c37a' }}>{faB(aq.data.commission)} تومان</b></div>
+                  <div>دریافتیِ خالصِ تو: <b style={{ color: '#7ee0b8' }}>{faB(aq.data.net)} تومان</b></div>
+                </> : <>
+                  <div>اجارهٔ ماهانه (میانهٔ واقعیِ محله): <b style={{ color: 'var(--text)' }}>{faB(aq.data.monthly)} تومان</b></div>
+                  <div>کمیسیونِ {aq.via === 'agency' ? 'آژانس' : 'مشاور'} ({fa(aq.data.commissionPct)}٪ از یک ماه — یک‌بار): <b style={{ color: '#e8c37a' }}>{faB(aq.data.fee)} تومان</b></div>
+                  <div style={{ color: 'var(--faint)' }}>بعد از امضا، درآمدِ اجاره از میانهٔ واقعیِ محله به‌مرور واریز می‌شود.</div>
+                </>}
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 9 }}>
+                <button style={{ ...btn, padding: '6px 14px', fontSize: 12 }} disabled={busy} onClick={signAgentDeal}>✍️ امضای قرارداد و {aq.kind === 'sell' ? 'فروش' : 'اجاره'}</button>
+                <button style={{ ...btnGhost, padding: '6px 12px', fontSize: 12 }} onClick={() => setAq(null)}>انصراف</button>
+              </div>
+            </div>}
 
             {/* 🧩 تجمیع و تخریب (فاز ۲۵): تک‌تکِ واحدهای ساختمان را بخر — تا همه مالِ تو نشد، تخریب ممکن نیست */}
             {a.assembly && <div style={{ width: '100%', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', fontSize: 11, borderTop: '1px dashed var(--line)', paddingTop: 6, marginTop: 2 }}>
@@ -1407,7 +1441,21 @@ export default function EmpirePage() {
 
             {/* پیش‌نمایشِ نقشهٔ ساخت (جلد ۶۴): سازه/کیفیت با روز و هزینهٔ شفاف */}
             {bplan?.assetId === a.id && !a.construction && <div style={{ width: '100%', ...card, background: 'var(--surface)', fontSize: 12 }}>
-              <b>⛏ نقشهٔ ساخت</b> — زمین {fa(bplan.landArea)} متر → <b style={{ color: 'var(--gold)' }}>{fa(bplan.builtArea)} مترِ بنا · {fa(bplan.totalUnits)} واحدِ {fa(bplan.unitArea)} متری</b>
+              <b style={{ fontSize: 14 }}>⛏ رؤیای این زمین را بساز</b>
+              <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 3 }}>زمین {fa(bplan.landArea)} متر → <b style={{ color: 'var(--gold)' }}>{fa(bplan.builtArea)} مترِ بنا · {fa(bplan.totalUnits)} واحدِ {fa(bplan.unitArea)} متری</b>{bplan.hood ? ` در ${bplan.hood}` : ''}</div>
+              {/* قانونِ ۱۳ (رویاپردازی — دستورِ مستقیم): نامِ پروژه و سبکِ نما دستِ خودِ بازیکن؛ صرفاً هویتی (قانون ۵) */}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
+                <label style={{ fontSize: 11.5 }}>🏷 نامِ پروژه‌ات: <input value={bname} onChange={ev => setBname(ev.target.value.slice(0, 28))} placeholder={bplan.suggestedName || 'برجِ رؤیایی'} style={{ width: 180, padding: 7, borderRadius: 8, border: '1px solid var(--goldDim)', background: 'var(--bg2)', color: 'var(--gold)', fontWeight: 700 }} /></label>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 7 }}>
+                <span style={{ fontSize: 11, color: 'var(--muted)', alignSelf: 'center' }}>🎨 نمای برج:</span>
+                {(bplan.facades || []).map((f: any) => (
+                  <button key={f.key} style={chip(bfacade === f.key)} onClick={() => setBfacade(f.key)}>{f.icon} {f.label}</button>
+                ))}
+              </div>
+              {(bname || bfacade) && <div style={{ fontSize: 11.5, color: '#f4e7bd', marginTop: 7 }}>
+                🌆 «{bname || bplan.suggestedName}» — {fa(bplan.totalUnits)} واحد با نمای {(bplan.facades || []).find((f: any) => f.key === bfacade)?.label || ''}{bplan.hood ? ` در قلبِ ${bplan.hood}` : ''}؛ حالا فقط انتخابِ سازه مانده تا کلنگ بخورد.
+              </div>}
               {/* هدفِ پروژه (GDD فصل ۴ بخش ۸): تصمیمِ استراتژیک قبل از کلنگ — اثرش شفاف است */}
               {(bplan.goals || []).length > 0 && <div style={{ marginTop: 8 }}>
                 <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>هدفِ این پروژه چیست؟ (روی قیمت‌گذاری و پیش‌فروش اثر دارد)</div>
@@ -1424,19 +1472,21 @@ export default function EmpirePage() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 6, marginTop: 8 }}>
                 {(bplan.options || []).map((o: any) => (
                   <button key={o.structure + o.quality} style={{ ...btnGhost, textAlign: 'right', padding: '8px 10px', fontSize: 11.5 }} disabled={busy}
-                    onClick={async () => { const d = await api({ action: 'startBuild', assetId: a.id, structure: o.structure, quality: o.quality, goal: bgoal }); if (d) { setSt(d); setBplan(null); celebrate() } }}>
+                    onClick={async () => { const d = await api({ action: 'startBuild', assetId: a.id, structure: o.structure, quality: o.quality, goal: bgoal, name: bname, facade: bfacade }); if (d) { setSt(d); setBplan(null); celebrate() } }}>
                     <b>{o.structureLabel} · {o.qualityLabel}</b>
                     <div style={{ color: 'var(--muted)', fontSize: 10.5 }}>{fa(o.days)} روز · هزینهٔ کل {faB(o.costTotal)} تومان</div>
+                    {o.estSale > 0 && <div style={{ color: o.estProfit > 0 ? '#7ee0b8' : '#e8c37a', fontSize: 10.5 }}>فروشِ برآوردی ~{faB(o.estSale)} · {o.estProfit > 0 ? `سودِ برآوردی ~${faB(o.estProfit)}` : `زیر هزینه (${faB(Math.abs(o.estProfit))}−)`}</div>}
                   </button>
                 ))}
               </div>
-              <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 6 }}>هزینه روزشمار از سرمایهٔ نقد کم می‌شود — پول تمام شود، کارگاه می‌ایستد (خودِ ساخت، مدیریتِ پول است).</div>
+              <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 6 }}>{bplan.estNote ? `📊 ${bplan.estNote} · ` : ''}هزینه روزشمار از سرمایهٔ نقد کم می‌شود — پول تمام شود، کارگاه می‌ایستد (خودِ ساخت، مدیریتِ پول است).</div>
             </div>}
 
             {/* کارگاهِ زنده (جلد ۶۴–۷۲): پیشرفت، مرحله، رویداد، پیش‌فروش، فروشِ واحد */}
             {a.construction && <div style={{ width: '100%', ...card, background: 'var(--surface)', fontSize: 12 }}>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                <b>{a.construction.done ? '🏙 ساختمان تکمیل شد' : `🏗 ${a.build?.stage || 'کارگاه'}`}</b>
+                <b>{a.construction.done ? `🏙 ${a.construction.name ? `«${a.construction.name}» تکمیل شد` : 'ساختمان تکمیل شد'}` : `🏗 ${a.construction.name ? `«${a.construction.name}» — ` : ''}${a.build?.stage || 'کارگاه'}`}</b>
+                {a.construction.facade && <span style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: 10, border: '1px solid var(--line2)', color: 'var(--muted)' }}>🎨 نمای {({ modern: 'مدرن', classic: 'کلاسیک', roman: 'رومی', green: 'سبز' } as any)[a.construction.facade] || a.construction.facade}</span>}
                 {a.build?.goalLabel && <span style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: 10, border: '1px solid var(--line2)', color: 'var(--gold)' }}>🎯 {a.build.goalLabel}</span>}
                 {(a.build?.amenities || []).map((am: string) => <span key={am} style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: 10, border: '1px solid var(--line2)', color: '#7c6' }}>{am} ✓</span>)}
                 <span style={{ color: 'var(--muted)' }}>{fa(a.construction.paidDays)}/{fa(a.construction.days)} روز · هزینهٔ روزانه {faB(a.build?.dailyCost || 0)}</span>

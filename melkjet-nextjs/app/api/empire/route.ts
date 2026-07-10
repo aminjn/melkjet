@@ -27,7 +27,7 @@ import {
   setForSale, tradeAsset, openPartnership, joinPartnership, settlePartnerShares, chargeClanFee,
   setAutoRule, delAutoRule, toggleAutoRule, recordRuleFires,
   bigDealPickOf, bigDealNegoOf, BIG_DEAL_STRATEGIES, noteCrisis, recordBigDealTry,
-  floorsOfMeta, legalFloorsOf,
+  floorsOfMeta, legalFloorsOf, BUILD_FACADES,
   type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
 import {
@@ -703,6 +703,11 @@ export async function POST(req: NextRequest) {
       }
       const r = await chooseAssetAction(userId, String(b.assetId || ''), act as any, fee > 0 ? { fee, feeLabel: 'کمیسیونِ اجاره (٪ یک ماه)' } : {})
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      if (act === 'rent' && fee > 0) {
+        const viaR = String(b.via || 'advisor') === 'agency' ? 'agency' : 'advisor'
+        const aR = r.empire!.assets.find(x => x.id === String(b.assetId || ''))
+        await addJournal(userId, `«${(aR?.title || '').slice(0, 30)}» از طریقِ ${proPersonaOf(viaR, String(b.assetId || ''))} اجاره داده شد — کمیسیون ${Math.round(fee / 1e6).toLocaleString('fa-IR')}م تومان`).catch(() => {})
+      }
       return NextResponse.json({ ok: true, advisorFee: fee || undefined, ...(await stateOf(userId, r.empire!)) })
     }
 
@@ -815,6 +820,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, tokensLeft: t.empire!.aiTokens, analysis: { hood, samples: rates.length, avgPerM: Math.round(avg), minePerM: Math.round(mine), diffPct, verdict, valuation, decision } })
     }
 
+    // 🤝 پیش‌فاکتورِ مشاور/آژانس (فیدبکِ مستقیم: «کاربر نمی‌بیند چه هزینه‌ای می‌دهد»):
+    // پیش از فروش/اجاره، دو کانالِ واقعیِ محله (مشاورِ املاک و آژانسِ املاک — پرسونای قطعی از هش) با
+    // کمیسیونِ «به تومان» نشان داده می‌شود؛ اجاره از میانهٔ اجارهٔ واقعیِ هم‌محله‌ها. بدونِ داده → پیامِ صادقانه.
+    case 'agentQuote': {
+      const e = await getEmpire(userId)
+      const a = e?.assets.find(x => x.id === String(b.assetId || ''))
+      if (!e || !a) return NextResponse.json({ error: 'دارایی یافت نشد' }, { status: 404 })
+      const kind = String(b.kind || 'sell')
+      const pros = config().empire.pros
+      const agents = [
+        { via: 'advisor', icon: '🧑‍💼', name: proPersonaOf('advisor', a.id) },
+        { via: 'agency', icon: '🏢', name: proPersonaOf('agency', a.id) },
+      ]
+      if (kind === 'rent') {
+        const monthly = await hoodMonthlyRentOf(a.hood)
+        if (!(monthly > 0)) return NextResponse.json({ error: `در «${a.hood || 'این محله'}» هنوز نمونهٔ اجارهٔ واقعی نداریم — مشاور نمی‌تواند نرخ بدهد؛ بعداً امتحان کن` }, { status: 400 })
+        const fee = Math.round(monthly * Math.max(0, pros.advisorRentCommissionPct) / 100)
+        return NextResponse.json({ ok: true, kind, agents, monthly, commissionPct: pros.advisorRentCommissionPct, fee, note: `کمیسیون = ${pros.advisorRentCommissionPct.toLocaleString('fa-IR')}٪ از یک ماه اجارهٔ میانهٔ واقعیِ محله` })
+      }
+      const it = await getItemById(a.listingId).catch(() => null)
+      const live = it ? priceOf(it) : 0
+      const price = live > 0 ? live : a.buyPrice
+      const commission = Math.round(price * Math.max(0, pros.advisorSellCommissionPct) / 100)
+      return NextResponse.json({ ok: true, kind, agents, price, priceIsLive: live > 0, commissionPct: pros.advisorSellCommissionPct, commission, net: price - commission })
+    }
+
     // فروش (چرخهٔ عمر — فصل ۵): به قیمتِ روزِ واقعیِ آگهی؛ سود → XP، زیانِ اول → درسِ آموزشی.
     case 'sell': {
       const e = await getEmpire(userId)
@@ -824,9 +855,14 @@ export async function POST(req: NextRequest) {
       // فروش از طریقِ مشاورِ املاک (فاز ۲۹): کمیسیونِ knob از قیمتِ فروش — سیستم نقش را بازی می‌کند.
       const r = await sellAsset(userId, a.id, it ? priceOf(it) : 0, { commissionPct: config().empire.pros.advisorSellCommissionPct })
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      // ردِ شفافِ کانالِ فروش (فیدبکِ کاربر): چه کسی فروخت و چقدر کمیسیون گرفت — در دفترچهٔ امپراتوری.
+      const via = String(b.via || 'advisor') === 'agency' ? 'agency' : 'advisor'
+      const agentName = proPersonaOf(via, a.id)
+      const commission = Math.round((r.salePrice || 0) * Math.max(0, config().empire.pros.advisorSellCommissionPct) / 100)
+      await addJournal(userId, `«${a.title.slice(0, 30)}» از طریقِ ${agentName} فروخته شد — کمیسیون ${Math.round(commission / 1e6).toLocaleString('fa-IR')}م تومان`).catch(() => {})
       // فاز ۳۷: فروش به بازار = آزادشدنِ مالکیتِ انحصاری — آگهی دوباره برای بقیه قابلِ‌خرید است.
       await releaseListing(a.listingId, userId).catch(() => {})
-      return NextResponse.json({ ok: true, profit: r.profit, salePrice: r.salePrice, ...(await stateOf(userId, r.empire!)) })
+      return NextResponse.json({ ok: true, profit: r.profit, salePrice: r.salePrice, agent: agentName, commission, ...(await stateOf(userId, r.empire!)) })
     }
 
     // سیستمِ زمین (§6.7): فروشِ فوری / ساخت / مشارکت.
@@ -1303,7 +1339,25 @@ export async function POST(req: NextRequest) {
       const base = mkPlan('concrete', 'standard')!
       // هدفِ پروژه (GDD فصل ۴ بخش ۸): تصمیمِ استراتژیکِ سرِ کلنگ — اثرِ هر گزینه شفاف اعلام می‌شود
       const goals = Object.entries(PROJECT_GOALS).map(([k, g]) => ({ key: k, ...g, pricePct: goalPricePct(k, cfg), presaleBonusPp: k === 'fast' ? cfg.goalFastPresaleBonusPp : 0 }))
-      return NextResponse.json({ ok: true, landArea, builtArea: base.builtArea, unitArea: base.unitArea, totalUnits: base.totalUnits, options, goals })
+      // قانونِ ۱۳ (رویاپردازی): برآوردِ «رؤیا» از دادهٔ واقعی — فروشِ کلِ برآوردی و سودِ برآوردیِ هر گزینه
+      // از میانهٔ متریِ واقعیِ محله (بدونِ نمونهٔ کافی → بدونِ عدد، نه عددِ ساختگی) + نام و نمای انتخابی.
+      let { perM: dreamPerM, samples: dreamN } = await hoodPerM(a.hood)
+      if (!(dreamPerM > 0)) ({ perM: dreamPerM, samples: dreamN } = await hoodPerM(''))
+      const illegal43 = a.design ? Math.max(0, a.design.illegalFloors * a.design.unitsPerFloor) : 0
+      for (const o of options) {
+        const pl = mkPlan(o.structure, o.quality)
+        if (dreamPerM > 0 && pl) {
+          const sellable = Math.max(0, pl.totalUnits - illegal43)
+          const estSale = Math.round(dreamPerM * pl.unitArea * pl.qualityFactor) * sellable
+          o.estSale = estSale
+          o.estProfit = estSale - pl.costTotal
+        }
+      }
+      return NextResponse.json({
+        ok: true, landArea, builtArea: base.builtArea, unitArea: base.unitArea, totalUnits: base.totalUnits, options, goals,
+        facades: BUILD_FACADES, suggestedName: `برجِ ${e.name}`.slice(0, 28), hood: a.hood,
+        estNote: dreamPerM > 0 ? `برآورد از میانهٔ متریِ واقعیِ ${dreamN.toLocaleString('fa-IR')} آگهی — قولِ قطعی نیست` : 'برای برآوردِ فروش هنوز نمونهٔ قیمتیِ کافی در بازار نداریم',
+      })
     }
     case 'startBuild': {
       const cfg = config().empire.build
@@ -1322,7 +1376,7 @@ export async function POST(req: NextRequest) {
         ? designBuildPlanOf(String(b.structure || ''), String(b.quality || ''), landArea, a.design, cfg)
         : buildPlanOf(String(b.structure || ''), String(b.quality || ''), landArea, cfg)
       if (!plan) return NextResponse.json({ error: 'سازه/کیفیتِ نامعتبر یا متراژِ نامشخص' }, { status: 400 })
-      const r = await startBuild(userId, a.id, plan, { structure: String(b.structure), quality: String(b.quality), goal: String(b.goal || '') })
+      const r = await startBuild(userId, a.id, plan, { structure: String(b.structure), quality: String(b.quality), goal: String(b.goal || ''), name: String(b.name || ''), facade: String(b.facade || '') })
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
     }

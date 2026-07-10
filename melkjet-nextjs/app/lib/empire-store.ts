@@ -64,6 +64,8 @@ export interface Company { name: string; kind: string; color: string; foundedAt:
 // پروژهٔ ساخت (جلد ۶۴–۷۲): پیشرفت = روزهای «پرداخت‌شده» — پول نباشد، کارگاه می‌ایستد (جلد ۷۱).
 export interface Construction {
   startedAt: number
+  name?: string                // قانونِ رویاپردازی (قانون ۱۳): نامی که بازیکن روی پروژه‌اش می‌گذارد — صرفاً هویتی، صفر اثرِ اقتصادی
+  facade?: string              // سبکِ نمای انتخابی (BUILD_FACADES) — ظاهری/رویایی، صفر اثرِ اقتصادی
   days: number                 // کلِ روزهای ساخت (رویدادِ «صبر» اضافه‌اش می‌کند)
   days0?: number               // روزهای برنامهٔ اولیه — برای «تحلیلِ پس از پروژه» (GDD فصل ۴)
   goal?: string                // هدفِ پروژه (GDD فصل ۴ بخش ۸): fast / profit / rep — روی قیمت و پیش‌فروش اثرِ شفاف دارد
@@ -810,7 +812,8 @@ export async function demolishAsset(userId: string, assetId: string, opts: { cos
 // تا وقتی متخصصانِ واقعیِ ملک‌جت (مشاور/دفترخانه/معمار/وکیل/کارشناس/پیمانکار) درگیرِ بازی شوند،
 // «سیستم» نقش‌ها را بازی می‌کند — شخصیتِ قطعی از هش (همان دکترینِ مالک) و کارمزدِ شفاف → servicesPaid.
 const PRO_NAMES: Record<string, string[]> = {
-  advisor: ['مشاورِ املاکِ آقای توکلی', 'مشاورِ املاکِ خانم رستگار', 'املاکِ آفتابِ محله', 'املاکِ مرکزی'],
+  advisor: ['مشاورِ املاکِ آقای توکلی', 'مشاورِ املاکِ خانم رستگار', 'مشاورِ املاکِ آقای عظیمی', 'مشاورِ املاکِ خانم پناهی'],
+  agency: ['آژانسِ املاکِ آفتابِ محله', 'آژانسِ املاکِ مرکزی', 'آژانسِ املاکِ کاخ', 'آژانسِ املاکِ سبز'],
   notary: ['دفترخانهٔ اسنادِ رسمیِ ۱۲', 'دفترخانهٔ اسنادِ رسمیِ ۴۷', 'دفترخانهٔ اسنادِ رسمیِ ۸۳'],
   architect: ['مهندس‌معمار خانم صدر', 'مهندس‌معمار آقای بهرامی', 'دفترِ معماریِ آتیه'],
   contractor: ['پیمانکاریِ برادرانِ نوری', 'پیمانکاریِ سازهٔ پایدار', 'پیمانکاریِ آقای رحیمی'],
@@ -1402,7 +1405,15 @@ export const buildStageOf = (c: Pick<Construction, 'paidDays' | 'days'>) =>
   BUILD_STAGES[Math.min(BUILD_STAGES.length - 1, Math.floor((c.paidDays / Math.max(1, c.days)) * BUILD_STAGES.length))]
 
 // کلنگ‌زنی (جلد ۶۴): فقط زمینِ دارای پروانهٔ صادرشده.
-export async function startBuild(userId: string, assetId: string, plan: NonNullable<ReturnType<typeof buildPlanOf>>, meta: { structure: string; quality: string; goal?: string }, now = Date.now()) {
+// سبک‌های نما (قانونِ ۱۳ رویاپردازی): انتخابِ صرفاً هویتی/ظاهری سرِ کلنگ — هیچ اثری روی هزینه/زمان/قیمت ندارد (قانون ۵).
+export const BUILD_FACADES = [
+  { key: 'modern', icon: '🏙', label: 'مدرن و شیشه‌ای' },
+  { key: 'classic', icon: '🏛', label: 'کلاسیک با سنگِ سفید' },
+  { key: 'roman', icon: '🏰', label: 'رومی' },
+  { key: 'green', icon: '🌿', label: 'سبز با تراس‌های گیاهی' },
+] as const
+
+export async function startBuild(userId: string, assetId: string, plan: NonNullable<ReturnType<typeof buildPlanOf>>, meta: { structure: string; quality: string; goal?: string; name?: string; facade?: string }, now = Date.now()) {
   return mutateEmpire(userId, e => {
     const a = e.assets.find(x => x.id === assetId)
     if (!a) return 'دارایی یافت نشد'
@@ -1411,15 +1422,17 @@ export async function startBuild(userId: string, assetId: string, plan: NonNulla
     const goal = meta.goal && PROJECT_GOALS[meta.goal] ? meta.goal : undefined
     // فاز ۲۹: واحدهای طبقاتِ مازادِ نقشه از همان کلنگ «غیرمجاز» علامت می‌خورند — پیش‌فروش/فروششان بسته است تا ماده۱۰۰.
     const illegalUnits = a.design ? Math.max(0, a.design.illegalFloors * a.design.unitsPerFloor) : 0
+    const dreamName = (meta.name || '').trim().slice(0, 28) || undefined
+    const facade = BUILD_FACADES.some(f => f.key === meta.facade) ? meta.facade : undefined
     a.construction = {
-      startedAt: now, days: plan.days, days0: plan.days, goal,
+      startedAt: now, days: plan.days, days0: plan.days, goal, name: dreamName, facade,
       structure: meta.structure, quality: meta.quality, qualityFactor: plan.qualityFactor,
       builtArea: plan.builtArea, unitArea: plan.unitArea, totalUnits: plan.totalUnits,
       costTotal: plan.costTotal, paid: 0, paidDays: 0, lastPayAt: now,
       presold: 0, sold: 0, presaleRevenue: 0, eventsFired: 0,
       illegalUnits: illegalUnits > 0 ? illegalUnits : undefined,
     }
-    e.timeline.push({ at: now, icon: '⛏', title: `کلنگ‌زنی با ${proPersonaOf('contractor', a.id)} — ساخت آغاز شد`, detail: `${a.title.slice(0, 45)} · ${plan.builtArea.toLocaleString('fa-IR')} مترِ بنا · ${plan.totalUnits.toLocaleString('fa-IR')} واحد${illegalUnits > 0 ? ` · ⚠️ ${illegalUnits.toLocaleString('fa-IR')} واحدِ مازاد بر پروانه` : ''}${goal ? ` · هدف: ${PROJECT_GOALS[goal].label}` : ''}` })
+    e.timeline.push({ at: now, icon: '⛏', title: `کلنگ‌زنیِ ${dreamName ? `«${dreamName}»` : 'پروژه'} با ${proPersonaOf('contractor', a.id)} — ساخت آغاز شد`, detail: `${a.title.slice(0, 45)} · ${plan.builtArea.toLocaleString('fa-IR')} مترِ بنا · ${plan.totalUnits.toLocaleString('fa-IR')} واحد${illegalUnits > 0 ? ` · ⚠️ ${illegalUnits.toLocaleString('fa-IR')} واحدِ مازاد بر پروانه` : ''}${goal ? ` · هدف: ${PROJECT_GOALS[goal].label}` : ''}` })
     e.journal.push({ at: now, text: 'اولین کلنگِ پروژه زده شد. از امروز کارگاه هر روز هزینه دارد — مدیریتِ پول، خودِ ساخت است.' })
   })
 }
