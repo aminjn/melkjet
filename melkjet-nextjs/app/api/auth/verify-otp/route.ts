@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   const { phone, code } = await req.json()
   if (!phone || !code) return NextResponse.json({ error: 'اطلاعات ناقص' }, { status: 400 })
 
-  const result = verifyOTP(phone, code)
+  const result = await verifyOTP(phone, code)
   if (result === 'expired') return NextResponse.json({ error: 'کد منقضی شده، دوباره ارسال کنید' }, { status: 400 })
   if (result === 'too_many') return NextResponse.json({ error: 'تعداد تلاش‌ها بیش از حد' }, { status: 429 })
   if (result === 'invalid') return NextResponse.json({ error: 'کد اشتباه است' }, { status: 400 })

@@ -36,6 +36,6 @@ export async function POST(req: NextRequest) {
   upsertPending({ phone, nationalId: nid, firstName: i.firstName, lastName: i.lastName, gender: i.gender, fatherName: i.fatherName, birthDate: i.birthDate || jbd, birthPlace: i.birthPlace, idNumber: i.idNumber, idSerial: i.idSerial, birthPlaceCode: i.birthPlaceCode, fullName: i.fullName, issuancePlace: i.issuancePlace, issuancePlaceCode: i.issuancePlaceCode, officeCode: i.officeCode, raw: i.raw, matched: true, createdAt: Date.now() })
 
   const sent = await sendOtpSms(phone)
-  if (!sent.ok) return NextResponse.json({ error: sent.error }, { status: 200 })
-  return NextResponse.json({ ok: true, name: `${i.firstName || ''} ${i.lastName || ''}`.trim(), dev: sent.dev, code: sent.code })
+  if (!sent.ok) return NextResponse.json({ error: sent.error, retryIn: sent.retryIn }, { status: 200 })
+  return NextResponse.json({ ok: true, name: `${i.firstName || ''} ${i.lastName || ''}`.trim(), dev: sent.dev, code: sent.code, retryIn: sent.retryIn })
 }

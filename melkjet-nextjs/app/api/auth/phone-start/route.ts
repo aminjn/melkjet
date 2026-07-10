@@ -19,8 +19,8 @@ export async function POST(req: NextRequest) {
 
   if (isSuper || !shahkarOn || (acc && verified)) {
     const r = await sendOtpSms(phone)
-    if (!r.ok) return NextResponse.json({ error: r.error }, { status: 200 })
-    return NextResponse.json({ ok: true, exists: !!acc, otpSent: true, dev: r.dev, code: r.code })
+    if (!r.ok) return NextResponse.json({ error: r.error, retryIn: r.retryIn }, { status: 200 })
+    return NextResponse.json({ ok: true, exists: !!acc, otpSent: true, dev: r.dev, code: r.code, retryIn: r.retryIn })
   }
   // جدید یا تأییدنشده → احرازِ شاهکار (OTP بعد از احراز فرستاده می‌شود)
   return NextResponse.json({ ok: true, exists: !!acc, needsShahkar: true })

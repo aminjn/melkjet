@@ -1599,6 +1599,19 @@ async function main() {
     const dl40 = await delAutoRule(uc12, rid40)
     ok('حذفِ قانون', dl40.ok === true && dl40.empire.autoRules.length === 1 && (await delAutoRule(uc12, 'ghost')).ok === false)
 
+    // ── فیکسِ OTP (باگِ «کد اشتباه است»): ذخیرهٔ اشتراکی در PG + کولداونِ سمتِ سرور ──
+    console.log('\n── OTP · ذخیرهٔ اشتراکی + کولداون + سقفِ تلاش ──')
+    const { setOTP, verifyOTP, canSendOTP } = await import('../app/lib/otp-store.ts')
+    const ph = '09121110000'
+    ok('پیش از ارسال: مجاز', (await canSendOTP(ph)).ok === true)
+    await setOTP(ph, '123456')
+    ok('بلافاصله بعدِ ارسال: کولداون با retryIn', (await canSendOTP(ph)).ok === false && (await canSendOTP(ph)).retryIn > 0)
+    ok('کدِ درست از هر پروسه‌ای valid است (ذخیره در PG، نه حافظهٔ اینستنس)', (await verifyOTP(ph, '123456')) === 'valid')
+    ok('کدِ مصرف‌شده دوباره کار نمی‌کند', (await verifyOTP(ph, '123456')) === 'invalid')
+    await setOTP(ph, '654321')
+    for (let i = 0; i < 5; i++) await verifyOTP(ph, '000000')
+    ok('بعد از ۵ تلاشِ غلط: too_many (حتی با کدِ درست)', (await verifyOTP(ph, '654321')) === 'too_many')
+
     // ── فاز ۴۱ (سند ۲۸): معاملهٔ بزرگ — یک تلاش/هفته + تخفیفِ سمتِ سرور؛ بحران — ورود/خروج و ققنوس ──
     console.log('\n── Empire · فاز ۴۱ (تلاشِ هفتگیِ Big Deal + چرخهٔ بحران/ققنوس) ──')
     const { recordBigDealTry, noteCrisis } = await import('../app/lib/empire-store.ts')

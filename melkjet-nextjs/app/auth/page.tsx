@@ -48,8 +48,8 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  function startCountdown() {
-    setCountdown(120)
+  function startCountdown(secs = 120) {
+    setCountdown(secs)
     const t = setInterval(() => {
       setCountdown(c => { if (c <= 1) { clearInterval(t); return 0 } return c - 1 })
     }, 1000)
@@ -62,9 +62,9 @@ export default function AuthPage() {
     try {
       const res = await fetch('/api/auth/phone-start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) })
       const data = await res.json()
-      if (!res.ok || data.error) { setError(data.error || 'خطا'); return }
+      if (!res.ok || data.error) { if (data.retryIn) { setOtpStep('enter-code'); startCountdown(data.retryIn); setError(data.error || '') } else setError(data.error || 'خطا'); return }
       if (data.needsShahkar) { setOtpStep('shahkar'); return }  // کاربرِ جدید/تأییدنشده → احرازِ شاهکار
-      setOtpStep('enter-code'); setCode(data.code || ''); setDevCode(data.dev ? (data.code || '') : ''); startCountdown()
+      setOtpStep('enter-code'); setCode(data.code || ''); setDevCode(data.dev ? (data.code || '') : ''); startCountdown(data.retryIn || 120)
     } catch { setError('خطا در اتصال به سرور') }
     finally { setLoading(false) }
   }
@@ -79,12 +79,12 @@ export default function AuthPage() {
       const data = await res.json()
       if (!res.ok || data.error) { setError(data.error || 'خطا در تأییدِ هویت'); return }
       setName(data.name || ''); setNameVerified(true)
-      setOtpStep('enter-code'); setCode(data.code || ''); setDevCode(data.dev ? (data.code || '') : ''); startCountdown()
+      setOtpStep('enter-code'); setCode(data.code || ''); setDevCode(data.dev ? (data.code || '') : ''); startCountdown(data.retryIn || 120)
     } catch { setError('خطا در اتصال به سرور') } finally { setLoading(false) }
   }
   async function resendCode() {
     setError('')
-    try { const r = await fetch('/api/auth/send-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) }); const d = await r.json(); if (d.dev) setDevCode(d.code || ''); startCountdown() } catch {}
+    try { const r = await fetch('/api/auth/send-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) }); const d = await r.json(); if (d.dev) setDevCode(d.code || ''); if (d.error) setError(d.error); startCountdown(d.retryIn || 120) } catch {}
   }
 
   async function verifyOTP() {

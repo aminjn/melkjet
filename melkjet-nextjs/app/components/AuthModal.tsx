@@ -54,7 +54,7 @@ export default function AuthModal() {
   }, [open])
 
   const success = () => { setOpen(false); window.dispatchEvent(new CustomEvent('mj-auth-success')) }
-  function startCountdown() { setCountdown(120); const t = setInterval(() => setCountdown(c => { if (c <= 1) { clearInterval(t); return 0 } return c - 1 }), 1000) }
+  function startCountdown(secs = 120) { setCountdown(secs); const t = setInterval(() => setCountdown(c => { if (c <= 1) { clearInterval(t); return 0 } return c - 1 }), 1000) }
 
   async function sendOTP() {
     setError(''); if (!/^09[0-9]{9}$/.test(phone)) { setError('شماره موبایل معتبر نیست — مثال: 09123456789'); return }
@@ -62,9 +62,9 @@ export default function AuthModal() {
     try {
       const res = await fetch('/api/auth/phone-start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) })
       const data = await res.json()
-      if (!res.ok || data.error) { setError(data.error || 'خطا'); return }
+      if (!res.ok || data.error) { if (data.retryIn) { setOtpStep('enter-code'); startCountdown(data.retryIn); setError(data.error || '') } else setError(data.error || 'خطا'); return }
       if (data.needsShahkar) { setOtpStep('shahkar'); return }  // کاربرِ جدید → تأییدِ هویتِ شاهکار
-      setOtpStep('enter-code'); setCode(data.code || ''); setDevCode(data.dev ? (data.code || '') : ''); startCountdown()
+      setOtpStep('enter-code'); setCode(data.code || ''); setDevCode(data.dev ? (data.code || '') : ''); startCountdown(data.retryIn || 120)
     } catch { setError('خطا در اتصال به سرور') } finally { setLoading(false) }
   }
   async function submitShahkar() {
@@ -78,12 +78,12 @@ export default function AuthModal() {
       const data = await res.json()
       if (!res.ok || data.error) { setError(data.error || 'خطا در تأییدِ هویت'); return }
       setName(data.name || ''); setNameVerified(true)
-      setOtpStep('enter-code'); setCode(data.code || ''); setDevCode(data.dev ? (data.code || '') : ''); startCountdown()
+      setOtpStep('enter-code'); setCode(data.code || ''); setDevCode(data.dev ? (data.code || '') : ''); startCountdown(data.retryIn || 120)
     } catch { setError('خطا در اتصال به سرور') } finally { setLoading(false) }
   }
   async function resend() {
     setError('')
-    try { const r = await fetch('/api/auth/send-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) }); const d = await r.json(); if (d.dev) setDevCode(d.code || ''); startCountdown() } catch {}
+    try { const r = await fetch('/api/auth/send-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) }); const d = await r.json(); if (d.dev) setDevCode(d.code || ''); if (d.error) setError(d.error); startCountdown(d.retryIn || 120) } catch {}
   }
   async function verifyOTP() {
     setError(''); if (code.length !== 6) { setError('کد ۶ رقمی را وارد کنید'); return }

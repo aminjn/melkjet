@@ -378,7 +378,9 @@ export default function EmpirePage() {
   async function doAnalyze(listingId: string) { const d = await api({ action: 'analyze', listingId }); if (d) { setAnalysis(d.analysis); load() } }
   async function doClaim(key: string) { const d = await api({ action: 'claim', key }); if (d) { setSt(d); celebrate() } }
   async function doSell(a: any) {
-    if (!confirm(`«${a.title.slice(0, 40)}» به قیمتِ روزِ ${faB(a.current || a.buyPrice)} تومان فروخته شود؟`)) return
+    // فروش همیشه از طریقِ مشاور/آژانسِ املاک انجام می‌شود (فاز ۲۹) — کمیسیونش شفاف به بازیکن گفته می‌شود.
+    const sc = st?.pros?.advisorSellCommissionPct ?? 1
+    if (!confirm(`«${a.title.slice(0, 40)}» از طریقِ مشاور/آژانسِ املاکِ محله به قیمتِ روزِ ${faB(a.current || a.buyPrice)} تومان فروخته شود؟ (کمیسیونِ فروش ${fa(sc)}٪ از مبلغ کم می‌شود)`)) return
     const d = await api({ action: 'sell', assetId: a.id })
     if (d) { setSt(d); if ((d.profit || 0) > 0) celebrate() }
   }
