@@ -135,6 +135,9 @@ export interface EmpireData {
   hunter?: { a: string; b: string; better: string; at: number }   // جفتِ فعالِ Property Hunter (§6.4)
   cosmetics?: { owned: string[]; frame?: string; flair?: string }   // فروشگاهِ ظاهری (فاز ۳۳ — سند ۲۲ فصل ۳): فقط نمایش، صفر اثرِ اقتصادی
   offerHist?: Record<string, number>                  // پیشنهادِ بسته‌شده → روزِ بستن (فاز ۳۳ — سند ۲۲ فصل ۹: «عدمِ نمایشِ مجددِ همان پیشنهاد»)
+  // فاز ۴۰ (سند ۲۷ Part 13 — مرکزِ خودکارسازی): قوانینِ قابل‌تعریفِ خودِ بازیکن — فقط اطلاع/پیشنهاد، هرگز اجرا.
+  autoRules?: Array<{ id: string; kind: string; threshold: number; level: 'notify' | 'recommend'; enabled: boolean; createdAt: number }>
+  ruleLog?: Array<{ at: number; icon: string; text: string }>   // ثبتِ فعال‌شدن‌ها (Part 13 «Log») — هر قانون حداکثر یک‌بار در روز
   claims: Record<string, number>                      // پاداش‌های یک‌بارمصرفِ دریافت‌شده (missionKey → ts)
   realized: number            // سود/زیانِ تحقق‌یافته از فروشِ دارایی‌ها (چرخهٔ عمر — فصل ۵)
   rejects: number             // ردِ پیشنهادِ AI در خریدِ اول (۲ بار → کنترلِ آزاد)
@@ -1636,6 +1639,52 @@ export async function settlePartnerShares(ownerId: string, partners: Array<{ use
     if (r.ok) out.push({ no: p.no, name: p.name, share })
   }
   return out
+}
+
+// ══════════ فاز ۴۰ (سند ۲۷ Part 13 — مرکزِ خودکارسازی) ══════════
+// قوانینِ قابل‌تعریفِ بازیکن: فقط notify/recommend — «هیچ اقدامِ مالی کاملاً خودکار انجام نمی‌شود» (قانونِ سختِ سند).
+// ارزیابیِ شرط‌ها در empire-intel (خالص)؛ این‌جا فقط CRUD اتمیک + ثبتِ فعال‌شدن (هر قانون حداکثر یک‌بار در روز).
+
+export async function setAutoRule(userId: string, rule: { id?: string; kind: string; threshold: number; level: 'notify' | 'recommend' }, maxRules: number, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    if (!(rule.threshold > 0)) return 'آستانهٔ قانون باید بزرگ‌تر از صفر باشد'
+    e.autoRules = e.autoRules || []
+    const ex = rule.id ? e.autoRules.find(r => r.id === rule.id) : undefined
+    if (ex) { ex.threshold = rule.threshold; ex.level = rule.level; return }
+    if (e.autoRules.length >= Math.max(1, maxRules)) return `حداکثر ${Math.max(1, maxRules).toLocaleString('fa-IR')} قانونِ فعال می‌توانی داشته باشی — یکی را حذف کن`
+    e.autoRules.push({ id: 'r' + now.toString(36) + Math.floor(now % 997), kind: rule.kind, threshold: rule.threshold, level: rule.level, enabled: true, createdAt: now })
+  })
+}
+
+export async function delAutoRule(userId: string, ruleId: string) {
+  return mutateEmpire(userId, e => {
+    const before = (e.autoRules || []).length
+    e.autoRules = (e.autoRules || []).filter(r => r.id !== ruleId)
+    if (e.autoRules.length === before) return 'قانون یافت نشد'
+  })
+}
+
+export async function toggleAutoRule(userId: string, ruleId: string) {
+  return mutateEmpire(userId, e => {
+    const r = (e.autoRules || []).find(x => x.id === ruleId)
+    if (!r) return 'قانون یافت نشد'
+    r.enabled = !r.enabled
+  })
+}
+
+// ثبتِ فعال‌شدنِ قانون‌ها در دفترِ ثبت (Part 13 «Log») — کلیدِ روزانهٔ claims جلوی تکرارِ همان قانون در همان روز را می‌گیرد.
+export async function recordRuleFires(userId: string, alerts: Array<{ ruleId: string; icon: string; text: string }>, day: number, logCap = 30, now = Date.now()) {
+  if (!alerts.length) return { ok: true }
+  return mutateEmpire(userId, e => {
+    for (const a of alerts) {
+      const key = `rl_${a.ruleId}_${day}`
+      if (e.claims[key]) continue
+      e.claims[key] = now
+      e.ruleLog = e.ruleLog || []
+      e.ruleLog.unshift({ at: now, icon: a.icon, text: a.text })
+    }
+    if (e.ruleLog && e.ruleLog.length > logCap) e.ruleLog = e.ruleLog.slice(0, logCap)
+  })
 }
 
 // سپرِ نرخِ درخواست (فاز ۳۴ — سند ۲۳ Part 04): شمارندهٔ پنجرهٔ یک‌دقیقه‌ای، خالص و تست‌پذیر.

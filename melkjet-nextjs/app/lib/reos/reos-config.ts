@@ -72,6 +72,8 @@ export interface ReosConfig {
     metrics: { enabled: boolean; inflationAlertPct: number; dauDropAlertPct: number; concentrationAlertPct: number; capGrowthAlertPct: number }
     // فاز ۳۹ (سند ۲۶ فصل ۱۶ Cognitive AI): هوشِ سرمایه‌گذاری — ارزش‌گذاری/تصمیم‌یار/روندِ محله‌ها/سلامتِ مالی؛ همهٔ آستانه‌ها زنده.
     intel: { enabled: boolean; minComps: number; fairBandPct: number; expensivePct: number; bubblePct: number; trendDays: number; loanSoonDays: number; liqHigh: number; liqMid: number }
+    // فاز ۴۰ (سند ۲۷ Part 13): مرکزِ خودکارسازی — قوانینِ قابل‌تعریفِ بازیکن (فقط اطلاع/پیشنهاد، هرگز اجرا).
+    automation: { enabled: boolean; maxRules: number; logCap: number }
     // فاز ۲۹: نقش‌های حرفه‌ایِ سایت در سناریو — تا آمدنِ متخصصانِ واقعی، «سیستم» بازی‌شان می‌کند؛ کارمزدها مصرفِ شفافِ پول (servicesPaid).
     pros: {
       notaryFeePct: number              // دفترخانه: حق‌الثبتِ سند در خرید (٪ قیمت)
@@ -227,6 +229,8 @@ export const DEFAULT_CONFIG: ReosConfig = {
     metrics: { enabled: true, inflationAlertPct: 15, dauDropAlertPct: 40, concentrationAlertPct: 70, capGrowthAlertPct: 50 },
     // هوشِ سرمایه‌گذاری (سند ۲۶ فصل ۱۶): حداقلِ نمونهٔ واقعی برای ارزش‌گذاری + باندهای قضاوتِ قیمت + روند/سررسید/عمقِ بازار.
     intel: { enabled: true, minComps: 4, fairBandPct: 8, expensivePct: 20, bubblePct: 35, trendDays: 7, loanSoonDays: 7, liqHigh: 15, liqMid: 6 },
+    // خودکارسازی (سند ۲۷ Part 13): سقفِ قوانینِ هر بازیکن و طولِ دفترِ ثبت — «هیچ اقدامِ مالی خودکار نیست».
+    automation: { enabled: true, maxRules: 8, logCap: 30 },
     // مذاکره: همان رفتارِ قبلی به‌صورتِ پیش‌فرض (۲۵٪ پایه تا ۷۵٪ با مهارت؛ تخفیف ۲..۶٪) — حالا قابل‌تنظیم.
     nego: { baseChancePct: 25, discountMin: 2, discountMax: 6 },
     // نقش‌های حرفه‌ای (فاز ۲۹): اعدادِ عرفِ واقعیِ بازارِ ایران — همه knob.

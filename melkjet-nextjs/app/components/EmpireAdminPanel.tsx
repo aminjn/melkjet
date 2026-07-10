@@ -600,6 +600,10 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             {row('هشدارِ سررسیدِ وام (روز مانده)', cin('intel', 'loanSoonDays'), 'در «اولویت‌های امروز» بازیکن')}
             {row('عرضهٔ «پرتحرک» (تعداد آگهی)', cin('intel', 'liqHigh'), 'نمونهٔ هم‌محلهٔ بیشتر از این = بازارِ پرتحرک')}
             {row('عرضهٔ «معمولی» (تعداد آگهی)', cin('intel', 'liqMid'), 'کمتر از این = بازارِ کم‌عمق')}
+            <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>⚙️ مرکزِ خودکارسازی (فاز ۴۰ — سند ۲۷ Part 13: «هیچ اقدامِ مالی خودکار نیست»)</div>
+            {row('خودکارسازی فعال (۱/۰)', cin('automation', 'enabled'), 'قوانینِ قابل‌تعریفِ بازیکن — فقط اطلاع/پیشنهاد، هرگز اجرا')}
+            {row('سقفِ قوانینِ هر بازیکن', cin('automation', 'maxRules'))}
+            {row('طولِ دفترِ ثبتِ فعال‌شدن‌ها', cin('automation', 'logCap'), 'هر قانون حداکثر یک‌بار در روز ثبت می‌شود')}
           </div>
           <div style={card}>
             <div style={sub}>🛡 فنی (فاز ۳۴ — سند ۲۳ فصل ۱۳)</div>

@@ -25,6 +25,7 @@ import {
   proPersonaOf, designPlanOf, commissionDesign, boostDesign, resolveM100, renovateAsset, designBuildPlanOf,
   activeCoinPacks, buyCosmetic, setCosmetic, offerOf, dismissOffer, areaFromText, rateHit,
   setForSale, tradeAsset, openPartnership, joinPartnership, settlePartnerShares, chargeClanFee,
+  setAutoRule, delAutoRule, toggleAutoRule, recordRuleFires,
   type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
 import {
@@ -44,7 +45,7 @@ import { flagEnabled } from '@/app/lib/reos/flags'
 import { config, primeConfig } from '@/app/lib/reos/reos-config'
 import { ownerOfListing, claimListing, releaseListing, transferListing, myClanOf, listClans, createClan, joinClan, leaveClan, postClanMsg, clanView, deleteClanIfOwner } from '@/app/lib/empire-social'
 // فاز ۳۹ (سند ۲۶ فصل ۱۶ Cognitive AI): هوشِ سرمایه‌گذاری — ارزش‌گذاری/تصمیم‌یار/روندِ محله/سلامتِ مالی/اولویت‌ها؛ همه از دادهٔ واقعی.
-import { compStatsOf, valuationOf, decisionOf, marketIntelOf, cashflowOf, financialHealthOf, prioritiesOf } from '@/app/lib/empire-intel'
+import { compStatsOf, valuationOf, decisionOf, marketIntelOf, cashflowOf, financialHealthOf, prioritiesOf, evalRules, RULE_TEMPLATES, tradeAskCheckOf, jvOfferCheckOf } from '@/app/lib/empire-intel'
 import { loadSnapshots } from '@/app/lib/empire-metrics'
 
 const hoodOf = (loc?: string) => { const p = String(loc || '').split(/[،,]/).map(x => x.trim()).filter(Boolean); return p.length > 1 ? p[p.length - 1] : (p[0] || '') }
@@ -1409,13 +1410,49 @@ export async function POST(req: NextRequest) {
       const snaps = await loadSnapshots(60).catch(() => [])
       const flow = cashflowOf(e)
       const health = financialHealthOf(e, netWorthOf(e, {}).netWorth, flow)
+      // فاز ۴۰ (سند ۲۷ Part 13): ارزیابیِ قوانینِ خودِ بازیکن روی وضعیت/قیمت‌های واقعی — فقط هشدار/پیشنهاد.
+      const auCfg = config().empire.automation
+      let rules = null
+      if (auCfg.enabled) {
+        const prices: Record<string, number> = {}
+        for (const a of e.assets) {
+          const it = await getItemById(a.listingId).catch(() => null)
+          const p = it ? priceOf(it) : 0
+          if (p > 0) prices[a.listingId] = p
+        }
+        const alerts = evalRules(e, e.autoRules || [], prices)
+        await recordRuleFires(userId, alerts, dayNumberOf(Date.now()), auCfg.logCap).catch(() => {})
+        rules = { templates: RULE_TEMPLATES, list: e.autoRules || [], alerts, log: (e.ruleLog || []).slice(0, 10), max: auCfg.maxRules }
+      }
       return NextResponse.json({
         ok: true,
         market: marketIntelOf(snaps, iCfg),
-        flow, health,
+        flow, health, rules,
         priorities: prioritiesOf(e, Date.now(), iCfg),
         capital: e.capital,
       })
+    }
+
+    // ⚙️ مرکزِ خودکارسازی (فاز ۴۰ — سند ۲۷ Part 13): CRUD قوانینِ بازیکن — «هیچ اقدامِ مالی خودکار انجام نمی‌شود».
+    case 'ruleSet': {
+      const auCfg = config().empire.automation
+      if (!auCfg.enabled) return NextResponse.json({ error: 'خودکارسازی فعلاً فعال نیست' }, { status: 403 })
+      const kind = String(b.kind || '')
+      if (!RULE_TEMPLATES.some(t => t.kind === kind)) return NextResponse.json({ error: 'نوعِ قانون نامعتبر است' }, { status: 400 })
+      const level = b.level === 'recommend' ? 'recommend' as const : 'notify' as const
+      const r = await setAutoRule(userId, { id: b.id ? String(b.id) : undefined, kind, threshold: Number(b.threshold) || 0, level }, auCfg.maxRules)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, list: r.empire!.autoRules || [] })
+    }
+    case 'ruleDel': {
+      const r = await delAutoRule(userId, String(b.ruleId || ''))
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, list: r.empire!.autoRules || [] })
+    }
+    case 'ruleToggle': {
+      const r = await toggleAutoRule(userId, String(b.ruleId || ''))
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, list: r.empire!.autoRules || [] })
     }
 
     // 🏗 بازارِ زمین (فاز ۲۴): دروازهٔ موتورِ ساخت — زمین‌های «واقعیِ» قیمت‌دار با متراژِ ثبت‌شده.
@@ -1453,10 +1490,12 @@ export async function POST(req: NextRequest) {
       for (const e of empires) {
         if (e.userId === userId) continue
         for (const a of e.assets) {
+          // فاز ۴۰ (سند ۲۷ Part 21 — هوشِ قرارداد): تحلیلِ پیش از امضا از اعدادِ «واقعیِ» خودِ قرارداد —
+          // قیمتِ درخواستی در برابرِ قیمتِ خریدِ ثبت‌شدهٔ فروشنده؛ آورده در برابرِ سهمِ منصفانه از هزینهٔ واقعیِ ساخت.
           if ((a.forSale || 0) > 0 && soc?.tradeEnabled !== false)
-            sales.push({ no: e.no, seller: e.name, assetId: a.id, title: a.title, hood: a.hood, kind: a.kind, price: a.forSale, renov: a.renovBoostPct || 0, designed: !!a.design })
+            sales.push({ no: e.no, seller: e.name, assetId: a.id, title: a.title, hood: a.hood, kind: a.kind, price: a.forSale, renov: a.renovBoostPct || 0, designed: !!a.design, check: config().empire.intel.enabled ? tradeAskCheckOf(a.forSale!, a.buyPrice) : null })
           if (a.jvOffer && soc?.jvEnabled !== false)
-            jvs.push({ no: e.no, owner: e.name, assetId: a.id, title: a.title, hood: a.hood, pct: a.jvOffer.pct, amount: a.jvOffer.amount, building: !!(a.construction && !a.construction.done) })
+            jvs.push({ no: e.no, owner: e.name, assetId: a.id, title: a.title, hood: a.hood, pct: a.jvOffer.pct, amount: a.jvOffer.amount, building: !!(a.construction && !a.construction.done), check: config().empire.intel.enabled ? jvOfferCheckOf(a.jvOffer.pct, a.jvOffer.amount, a.construction && !a.construction.done ? a.construction.costTotal : null) : null })
         }
       }
       return NextResponse.json({ ok: true, unlocked: empireLevel(me.xp).level >= u.tradeLevel, need: u.tradeLevel, sales: sales.slice(0, 40), jvs: jvs.slice(0, 40) })

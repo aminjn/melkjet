@@ -188,6 +188,9 @@ export default function EmpirePage() {
   const loadClan = async () => { const d = await api({ action: 'clanList' }); if (d) setClanD(d) }
   // فاز ۳۹ (سند ۲۶ فصل ۱۶): هوشِ سرمایه‌گذاری — اولویت‌های امروز/سلامتِ مالی/جریانِ نقدی/روندِ محله‌ها
   const [intel, setIntel] = useState<any>(null)
+  // فاز ۴۰ (سند ۲۷ Part 13): فرمِ ساختِ قانونِ خودکار — فقط اطلاع/پیشنهاد، هرگز اجرا
+  const [ruleKind, setRuleKind] = useState('cashBelow')
+  const [ruleTh, setRuleTh] = useState('')
   const suspended = useRef(false)
 
   const api = useCallback(async (body: any) => {
@@ -714,9 +717,47 @@ export default function EmpirePage() {
       {intel.priorities?.length > 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 8, fontSize: 12 }}>
         {intel.priorities.map((p: any, i: number) => <div key={i} style={{ display: 'flex', gap: 6 }}><span>{p.icon}</span><span style={{ color: 'var(--text)' }}>{p.text}</span></div>)}
       </div>}
+      {/* فاز ۴۰ (سند ۲۷ Part 13): هشدارهای قوانینِ خودِ بازیکن — از وضعیت/قیمت‌های واقعی؛ فقط اطلاع/پیشنهاد */}
+      {(intel.rules?.alerts || []).length > 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 8, fontSize: 12 }}>
+        {intel.rules.alerts.map((a: any, i: number) => <div key={i} style={{ display: 'flex', gap: 6 }}><span>{a.icon}</span><span style={{ color: '#e8c37a' }}>{a.text}</span></div>)}
+      </div>}
       {intel.health?.reasons?.length > 0 && <details style={{ marginTop: 6 }}>
         <summary style={{ cursor: 'pointer', fontSize: 11, color: 'var(--muted)' }}>چرا این ارزیابی؟ (از وضعیتِ واقعیِ خودت)</summary>
         <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 4 }}>{intel.health.reasons.map((r: string, i: number) => <div key={i}>• {r}</div>)}</div>
+      </details>}
+      {/* ⚙️ قوانینِ خودکارِ من (فاز ۴۰ — سند ۲۷ Part 13): بازیکن خودش قانون می‌سازد؛ سیستم هرگز چیزی اجرا نمی‌کند */}
+      {intel.rules && <details style={{ marginTop: 6 }}>
+        <summary style={{ cursor: 'pointer', fontSize: 11.5, color: 'var(--muted)' }}>⚙️ قوانینِ خودکارِ من ({fa((intel.rules.list || []).length)} از {fa(intel.rules.max)}) — فقط هشدار و پیشنهاد؛ هیچ خرید/فروشی خودکار نیست</summary>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8, fontSize: 12 }}>
+          {(intel.rules.list || []).map((r: any) => {
+            const t = (intel.rules.templates || []).find((x: any) => x.kind === r.kind)
+            return <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--line)', paddingBottom: 5, opacity: r.enabled ? 1 : 0.45 }}>
+              <span>{t?.icon || '⚙️'}</span>
+              <span style={{ flex: 1, minWidth: 160 }}>{(t?.label || r.kind).replace('…', fa(r.threshold))} <span style={{ color: 'var(--faint)', fontSize: 10.5 }}>({r.level === 'recommend' ? 'پیشنهاد بده' : 'فقط خبر بده'})</span></span>
+              <button style={{ ...btnGhost, padding: '3px 9px', fontSize: 10.5 }} disabled={busy} onClick={async () => { const d = await api({ action: 'ruleToggle', ruleId: r.id }); if (d) setIntel((x: any) => ({ ...x, rules: { ...x.rules, list: d.list } })) }}>{r.enabled ? 'توقف' : 'فعال'}</button>
+              <button style={{ ...btnGhost, padding: '3px 9px', fontSize: 10.5 }} disabled={busy} onClick={async () => { const d = await api({ action: 'ruleDel', ruleId: r.id }); if (d) setIntel((x: any) => ({ ...x, rules: { ...x.rules, list: d.list } })) }}>✕</button>
+            </div>
+          })}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <select value={ruleKind} onChange={ev => setRuleKind(ev.target.value)} style={{ padding: 7, borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 11.5, maxWidth: 300 }}>
+              {(intel.rules.templates || []).map((t: any) => <option key={t.kind} value={t.kind}>{t.icon} {t.label}</option>)}
+            </select>
+            <input value={ruleTh} onChange={ev => setRuleTh(digitsOf(ev.target.value))} inputMode="numeric"
+              placeholder={String((intel.rules.templates || []).find((t: any) => t.kind === ruleKind)?.defaultThreshold ?? '')}
+              style={{ width: 64, padding: 7, borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', textAlign: 'center', fontSize: 12 }} />
+            <span style={{ fontSize: 10.5, color: 'var(--faint)' }}>{(intel.rules.templates || []).find((t: any) => t.kind === ruleKind)?.unit}</span>
+            <button style={{ ...btnGhost, padding: '5px 12px', fontSize: 11.5 }} disabled={busy} onClick={async () => {
+              const tpl = (intel.rules.templates || []).find((t: any) => t.kind === ruleKind)
+              const th = Number(digitsOf(ruleTh)) || tpl?.defaultThreshold || 0
+              const d = await api({ action: 'ruleSet', kind: ruleKind, threshold: th, level: ruleKind === 'profitAbove' ? 'recommend' : 'notify' })
+              if (d) { setRuleTh(''); setIntel((x: any) => ({ ...x, rules: { ...x.rules, list: d.list } })) }
+            }}>+ افزودنِ قانون</button>
+          </div>
+          {(intel.rules.log || []).length > 0 && <div style={{ fontSize: 10.5, color: 'var(--faint)' }}>
+            <b style={{ color: 'var(--muted)' }}>دفترِ ثبت (آخرین فعال‌شدن‌ها):</b>
+            {intel.rules.log.slice(0, 5).map((l: any, i: number) => <div key={i}>{l.icon} {l.text} — {new Date(l.at).toLocaleDateString('fa-IR')}</div>)}
+          </div>}
+        </div>
       </details>}
     </div>}
     {/* 🎁 پیشنهادِ هوشمند (فاز ۳۳ — سند ۲۲ فصل ۹): حداکثر ۱ در روز، از رفتارِ واقعیِ خودت، با یک لمس بسته می‌شود.
@@ -1655,6 +1696,7 @@ export default function EmpirePage() {
                 <div style={{ flex: 1, minWidth: 180 }}>
                   <b>{s.title}</b>
                   <div style={{ fontSize: 11, color: 'var(--muted)' }}>{s.hood} · فروشنده: {s.seller} #{fa(s.no)}{s.renov > 0 && ` · بازسازی‌شده +${fa(s.renov)}٪`}{s.designed && ' · با نقشهٔ معمار'}</div>
+                  {s.check?.note && <div style={{ fontSize: 10.5, color: (s.check.diffPct ?? 0) > 25 ? '#e8c37a' : 'var(--faint)', marginTop: 2 }}>🧾 {s.check.note}</div>}
                 </div>
                 <b style={{ color: 'var(--gold)' }}>{faB(s.price)}</b>
                 <button style={{ ...btn, padding: '5px 14px', fontSize: 12 }} disabled={busy} onClick={async () => {
@@ -1675,6 +1717,7 @@ export default function EmpirePage() {
                 <div style={{ flex: 1, minWidth: 180 }}>
                   <b>{j.title}</b>
                   <div style={{ fontSize: 11, color: 'var(--muted)' }}>{j.hood} · سازنده: {j.owner} #{fa(j.no)} · {j.building ? 'در حالِ ساخت' : 'آمادهٔ ساخت'}</div>
+                  {j.check?.note && <div style={{ fontSize: 10.5, color: (j.check.diffPct ?? 0) > 10 ? '#e8c37a' : 'var(--faint)', marginTop: 2 }}>🧾 {j.check.note}</div>}
                 </div>
                 <span style={{ fontSize: 12 }}><b style={{ color: 'var(--gold)' }}>{fa(j.pct)}٪ سهم</b> در برابرِ <b>{faB(j.amount)}</b> آورده</span>
                 <button style={{ ...btn, padding: '5px 14px', fontSize: 12 }} disabled={busy} onClick={async () => {

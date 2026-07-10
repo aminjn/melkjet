@@ -1577,6 +1577,27 @@ async function main() {
     const gotSn = await loadSnapshots(10)
     ok('اسنپ‌شات‌ها ماندگار و مرتب به روزند', gotSn.length >= 2 && gotSn[gotSn.length - 1].day === 20001 && gotSn.some(s => s.day === 20000))
     ok('همان روز = upsert (نه ردیفِ تکراری) و آخرین مقدار می‌ماند', gotSn.filter(s => s.day === 20001).length === 1 && gotSn.find(s => s.day === 20001).perM === 120)
+
+    // ── فاز ۴۰ (سند ۲۷ Part 13): مرکزِ خودکارسازی — CRUD اتمیکِ قوانین + دفترِ ثبتِ روزانه ──
+    console.log('\n── Empire · فاز ۴۰ (قوانینِ خودکار: CRUD + ثبتِ یک‌بار-در-روز) ──')
+    const { setAutoRule, delAutoRule, toggleAutoRule, recordRuleFires } = await import('../app/lib/empire-store.ts')
+    const ra40 = await setAutoRule(uc12, { kind: 'cashBelow', threshold: 2, level: 'notify' }, 2)
+    ok('ساختِ قانون', ra40.ok === true && ra40.empire.autoRules.length === 1 && ra40.empire.autoRules[0].enabled === true)
+    ok('آستانهٔ صفر رد می‌شود', (await setAutoRule(uc12, { kind: 'loanDue', threshold: 0, level: 'notify' }, 2)).ok === false)
+    await setAutoRule(uc12, { kind: 'loanDue', threshold: 7, level: 'recommend' }, 2)
+    ok('سقفِ قوانین اجرا می‌شود', (await setAutoRule(uc12, { kind: 'assetDrop', threshold: 10, level: 'notify' }, 2)).ok === false)
+    const rid40 = ra40.empire.autoRules[0].id
+    const up40 = await setAutoRule(uc12, { id: rid40, kind: 'cashBelow', threshold: 5, level: 'recommend' }, 2)
+    ok('ویرایشِ قانونِ موجود (بدونِ ردیفِ جدید)', up40.ok === true && up40.empire.autoRules.length === 2 && up40.empire.autoRules.find(r => r.id === rid40).threshold === 5)
+    const tg40 = await toggleAutoRule(uc12, rid40)
+    ok('توقف/فعال‌سازی', tg40.ok === true && tg40.empire.autoRules.find(r => r.id === rid40).enabled === false)
+    const fA40 = await recordRuleFires(uc12, [{ ruleId: rid40, icon: '💧', text: 'تستِ فعال‌شدن' }], 30000, 30)
+    const fB40 = await recordRuleFires(uc12, [{ ruleId: rid40, icon: '💧', text: 'تستِ فعال‌شدنِ تکراری' }], 30000, 30)
+    ok('ثبتِ فعال‌شدن + همان روز تکرار نمی‌شود', fA40.ok === true && fA40.empire.ruleLog.length === 1 && fB40.empire.ruleLog.length === 1)
+    const fC40 = await recordRuleFires(uc12, [{ ruleId: rid40, icon: '💧', text: 'روزِ بعد' }], 30001, 30)
+    ok('روزِ بعد دوباره ثبت می‌شود (جدیدترین اول)', fC40.empire.ruleLog.length === 2 && fC40.empire.ruleLog[0].text === 'روزِ بعد')
+    const dl40 = await delAutoRule(uc12, rid40)
+    ok('حذفِ قانون', dl40.ok === true && dl40.empire.autoRules.length === 1 && (await delAutoRule(uc12, 'ghost')).ok === false)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

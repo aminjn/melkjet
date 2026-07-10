@@ -201,6 +201,82 @@ export function financialHealthOf(e: Pick<EmpireData, 'capital' | 'assets' | 'lo
   return { score, band, reasons }
 }
 
+// ── مرکزِ خودکارسازی (فاز ۴۰ — سند ۲۷ Part 13): قوانینِ قابل‌تعریفِ بازیکن ─────────────
+// قانونِ سختِ خودِ سند: «هیچ اقدامِ مالی/خرید/فروش/ساخت کاملاً خودکار انجام نمی‌شود» —
+// این‌جا فقط دو سطح داریم: notify (اطلاع بده) و recommend (پیشنهاد بده). اجرا هرگز.
+// همهٔ شرط‌ها از وضعیت/قیمت‌های «واقعی» ارزیابی می‌شوند؛ آستانه را خودِ بازیکن تعیین می‌کند.
+export interface AutoRule { id: string; kind: string; threshold: number; level: 'notify' | 'recommend'; enabled: boolean; createdAt: number }
+export const RULE_TEMPLATES: Array<{ kind: string; icon: string; label: string; unit: string; defaultThreshold: number }> = [
+  { kind: 'cashBelow', icon: '💧', label: 'اگر نقدینگی کمتر از … شد، خبرم کن', unit: 'میلیارد تومان', defaultThreshold: 2 },
+  { kind: 'profitAbove', icon: '📈', label: 'اگر سودِ یک دارایی از …٪ گذشت، فروش را پیشنهاد بده', unit: '٪', defaultThreshold: 20 },
+  { kind: 'assetDrop', icon: '📉', label: 'اگر ارزشِ یک دارایی …٪ زیرِ قیمتِ خرید رفت، هشدار بده', unit: '٪', defaultThreshold: 10 },
+  { kind: 'projectDelay', icon: '🏗', label: 'اگر کارگاهی بیش از … روز از برنامه عقب ماند، هشدار بده', unit: 'روز', defaultThreshold: 10 },
+  { kind: 'loanDue', icon: '🏦', label: 'اگر تا سررسیدِ وام کمتر از … روز ماند، یادآوری کن', unit: 'روز', defaultThreshold: 7 },
+]
+export interface RuleAlert { ruleId: string; kind: string; icon: string; text: string; level: 'notify' | 'recommend' }
+export function evalRules(
+  e: Pick<EmpireData, 'capital' | 'assets' | 'loan'>,
+  rules: AutoRule[],
+  livePrices: Record<string, number>,
+  now = Date.now(),
+): RuleAlert[] {
+  const out: RuleAlert[] = []
+  for (const r of rules) {
+    if (!r.enabled || !(r.threshold > 0)) continue
+    if (r.kind === 'cashBelow' && e.capital < r.threshold * 1e9)
+      out.push({ ruleId: r.id, kind: r.kind, icon: '💧', text: `قانونِ تو: نقدینگی (${faB(e.capital)} تومان) زیرِ آستانهٔ ${fa(r.threshold)} میلیارد رفت`, level: r.level })
+    if (r.kind === 'profitAbove') for (const a of e.assets) {
+      const p = livePrices[a.listingId]
+      if (p && a.buyPrice > 0 && p >= a.buyPrice * (1 + r.threshold / 100)) {
+        out.push({ ruleId: r.id, kind: r.kind, icon: '📈', text: `قانونِ تو: «${a.title.slice(0, 22)}» ${fa(Math.round((p - a.buyPrice) / a.buyPrice * 100))}٪ بالای قیمتِ خرید است — فروش را بسنج`, level: r.level }); break
+      }
+    }
+    if (r.kind === 'assetDrop') for (const a of e.assets) {
+      const p = livePrices[a.listingId]
+      if (p && a.buyPrice > 0 && p <= a.buyPrice * (1 - r.threshold / 100)) {
+        out.push({ ruleId: r.id, kind: r.kind, icon: '📉', text: `قانونِ تو: ارزشِ روزِ «${a.title.slice(0, 22)}» ${fa(Math.round((a.buyPrice - p) / a.buyPrice * 100))}٪ زیرِ قیمتِ خرید است`, level: r.level }); break
+      }
+    }
+    if (r.kind === 'projectDelay') for (const a of e.assets) {
+      const c = a.construction
+      if (!c || c.done) continue
+      const stalled = Math.floor((now - c.startedAt) / 864e5) - c.paidDays
+      if (stalled > r.threshold) { out.push({ ruleId: r.id, kind: r.kind, icon: '🏗', text: `قانونِ تو: کارگاهِ «${a.title.slice(0, 22)}» ${fa(stalled)} روز از برنامه عقب است`, level: r.level }); break }
+    }
+    if (r.kind === 'loanDue' && e.loan && e.loan.balance > 0) {
+      const left = Math.ceil((e.loan.dueAt - now) / 864e5)
+      if (left <= r.threshold) out.push({ ruleId: r.id, kind: r.kind, icon: '🏦', text: left <= 0 ? `قانونِ تو: سررسیدِ وام گذشته (${faB(e.loan.balance)} تومان)` : `قانونِ تو: ${fa(left)} روز تا سررسیدِ وام (${faB(e.loan.balance)} تومان)`, level: r.level })
+    }
+  }
+  return out
+}
+
+// ── هوشِ قرارداد (فاز ۴۰ — سند ۲۷ Part 21): تحلیلِ پیش از امضا — فقط از اعدادِ واقعیِ خودِ قرارداد ─────────────
+// معاملهٔ بازیکنان: قیمتِ درخواستی در برابرِ قیمتِ خریدِ «واقعیِ» خودِ فروشنده (در دفترِ بازی ثبت است).
+export function tradeAskCheckOf(ask: number, sellerBuyPrice: number): { diffPct: number | null; note: string } {
+  if (!(ask > 0) || !(sellerBuyPrice > 0)) return { diffPct: null, note: 'قیمتِ خریدِ فروشنده نامشخص است' }
+  const diffPct = Math.round((ask - sellerBuyPrice) / sellerBuyPrice * 100)
+  return {
+    diffPct,
+    note: diffPct > 0 ? `فروشنده ${fa(diffPct)}٪ بالاتر از قیمتِ خریدِ خودش می‌فروشد`
+      : diffPct < 0 ? `فروشنده ${fa(Math.abs(diffPct))}٪ زیرِ قیمتِ خریدِ خودش می‌فروشد — بپرس چرا`
+      : 'فروشنده دقیقاً به قیمتِ خریدِ خودش می‌فروشد',
+  }
+}
+// مشارکتِ ساخت: آوردهٔ خواسته‌شده در برابرِ سهمِ منصفانه از هزینهٔ واقعیِ پروژه (سهمِ ٪ × هزینهٔ ساخت).
+export function jvOfferCheckOf(pct: number, amount: number, projectCost: number | null): { fair: number | null; diffPct: number | null; note: string } {
+  if (!(pct > 0) || !(amount > 0)) return { fair: null, diffPct: null, note: 'شرایطِ پیشنهاد ناقص است' }
+  if (!projectCost || !(projectCost > 0)) return { fair: null, diffPct: null, note: 'هزینهٔ ساخت هنوز نامشخص است (کلنگ نخورده) — سهمِ منصفانه بعد از نقشه/کلنگ قابلِ‌سنجش است' }
+  const fair = Math.round(projectCost * pct / 100)
+  const diffPct = Math.round((amount - fair) / fair * 100)
+  return {
+    fair, diffPct,
+    note: Math.abs(diffPct) <= 10 ? `آورده تقریباً برابرِ سهمِ منصفانه از هزینهٔ ساخت است (${faB(fair)} تومان)`
+      : diffPct > 0 ? `آورده ${fa(diffPct)}٪ بیشتر از سهمِ منصفانهٔ هزینهٔ ساخت (${faB(fair)} تومان) است — سازنده سود می‌کند`
+      : `آورده ${fa(Math.abs(diffPct))}٪ کمتر از سهمِ منصفانهٔ هزینهٔ ساخت (${faB(fair)} تومان) است — برای شریک جذاب است`,
+  }
+}
+
 // ── اولویت‌های امروز (Part 11: حداکثر ۵ اقدامِ مهم — همه از «وضعیتِ واقعیِ» همین لحظه) ─────────────
 export function prioritiesOf(e: EmpireData, now = Date.now(), cfg?: Pick<IntelCfg, 'loanSoonDays'>): Array<{ icon: string; text: string }> {
   const out: Array<{ icon: string; text: string }> = []
