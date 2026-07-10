@@ -51,7 +51,8 @@ async function load(): Promise<DB> { return pgEnabled() ? await kvGet<DB>(KV, em
 async function mutate<R>(fn: (db: DB) => R): Promise<R> { if (pgEnabled()) return kvMutate<DB, R>(KV, empty(), fn); const db = fileLoad(); const r = fn(db); fileSave(db); return r }
 
 // توکنِ برندِ دیوار حساس به حروف است — فقط پیشوندِ URL و دنبالهٔ اضافی را می‌گیریم، بدونِ lowercase.
-const cleanSlug = (s: string) => String(s || '').trim().replace(/.*divar\.ir\/(?:pro|business(?:es)?)\//i, '').replace(/[^A-Za-z0-9_-].*$/, '')
+// کاراکترهای نامرئیِ RTL/zero-width (که موقعِ کپی از مرورگرِ فارسی می‌چسبند) هم حذف می‌شوند.
+const cleanSlug = (s: string) => String(s || '').replace(/[​-‏‪-‮⁦-⁩﻿]/g, '').trim().replace(/.*divar\.ir\/(?:pro|business(?:es)?)\//i, '').replace(/[^A-Za-z0-9_-].*$/, '')
 
 export async function listScrapes(): Promise<RosterScrape[]> {
   return Object.values((await load()).scrapes).sort((a, b) => b.createdAt - a.createdAt)
@@ -61,7 +62,7 @@ export async function getScrape(id: string): Promise<RosterScrape | null> { retu
 // ساختِ یک اسکرپِ آژانس (فقط ثبت — سینکِ واقعی را کرون/دکمه می‌زند).
 export async function addScrape(input: { slug: string; agencyName?: string; useAI?: boolean; schedule?: RosterScrape['schedule'] }): Promise<{ ok: boolean; error?: string; scrape?: RosterScrape }> {
   const slug = cleanSlug(input.slug)
-  if (!slug || !/^[a-z0-9_-]{2,}$/.test(slug)) return { ok: false, error: 'لینک/slugِ آژانس نامعتبر است' }
+  if (!slug || !/^[A-Za-z0-9_-]{2,}$/.test(slug)) return { ok: false, error: 'لینک/slugِ آژانس نامعتبر است' }
   return mutate(db => {
     if (Object.values(db.scrapes).some(s => s.slug === slug)) return { ok: false, error: 'این آژانس از قبل اضافه شده است' }
     const s: RosterScrape = {
