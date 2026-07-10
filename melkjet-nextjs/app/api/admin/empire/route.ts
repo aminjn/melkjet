@@ -10,6 +10,7 @@ import { parseFaNum } from '@/app/lib/reos/features'
 import { logAudit } from '@/app/lib/audit-store'
 import { getMarketState, segmentQuote, marketIndices, psychologyOf, createFund, setFundEnabled, deleteFund } from '@/app/lib/empire-market'
 import { engagementStats, churnRisk } from '@/app/lib/empire-engage'
+import { loadSnapshots, takeDailySnapshot, economyHealthOf, iesOf } from '@/app/lib/empire-metrics'
 import { recentEvents } from '@/app/lib/reos/store'
 import { config, primeConfig } from '@/app/lib/reos/reos-config'
 
@@ -35,6 +36,7 @@ function rowOf(e: EmpireData, prices: Record<string, number>) {
     debt: e.loan?.balance || 0, taxPaid: e.taxPaid || 0,
     assets: e.assets.length, incomes: e.assets.reduce((s, a) => s + (a.income || 0), 0),
     score: empireScoreOf(e, prices), badges: e.badges, guess: e.guess,
+    ies: iesOf(e, dayNumberOf(Date.now())),   // درگیریِ واقعی در اقتصاد (فاز ۳۵ — سند ۲۴ Part 07)
     createdAt: e.createdAt, updatedAt: e.updatedAt,
   }
 }
@@ -87,6 +89,14 @@ export async function GET(req: NextRequest) {
         vol: state.vol,
       },
     })
+  }
+
+  // 📊 رصدخانهٔ اقتصاد (فاز ۳۵ — سند ۲۴): تاریخچهٔ روزانهٔ بازارِ واقعی + اقتصادِ بازیکنان + هشدارهای سلامت.
+  if (view === 'metrics') {
+    await primeConfig()
+    const mCfg = config().empire.metrics
+    const snaps = await loadSnapshots(90)
+    return NextResponse.json({ enabled: mCfg.enabled, snaps: snaps.slice(-30), total: snaps.length, health: economyHealthOf(snaps, mCfg) })
   }
 
   // کنسولِ تعامل و بازگشت (جلد ۴۹ فصل ۱۹/۲۰): DAU/WAU/MAU و Retention از ردِ فعالیتِ واقعیِ بازیکنان.
@@ -177,6 +187,13 @@ export async function POST(req: NextRequest) {
   const action = String(b.action || '')
 
   // تنظیمِ منابعِ یک بازیکن (هدیه/جبران) — در تایم‌لاینِ خودِ بازیکن هم شفاف ثبت می‌شود.
+  // 📸 اسنپ‌شاتِ دستیِ رصدخانه (فاز ۳۵): همان کارِ کرانِ روزانه، همین حالا — ایدمپوتنت.
+  if (action === 'snapshotNow') {
+    const sn = await takeDailySnapshot()
+    logAudit(await actor(), 'اسنپ‌شاتِ رصدخانهٔ اقتصاد', `روز ${sn.day} · ${sn.players} بازیکن · متری ${sn.perM}`)
+    return NextResponse.json({ ok: true, snap: sn })
+  }
+
   if (action === 'adjust') {
     const r = await adminAdjustEmpire(String(b.userId || ''), { coins: Number(b.coins) || 0, xp: Number(b.xp) || 0, capital: Number(b.capital) || 0, aiTokens: Number(b.aiTokens) || 0 }, String(b.reason || ''))
     if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })

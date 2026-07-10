@@ -1498,6 +1498,17 @@ async function main() {
     await creditCP(uc12, { coins: 100, label: 'تست', authority: 'AUTH33' })
     const cAgain = await creditCP(uc12, { coins: 100, label: 'تست', authority: 'AUTH33' })
     ok('callbackِ دوباره → شارژِ دوباره نه', cAgain.ok === false && (await getEmpire(uc12)).coins === c033 + 100)
+
+    // ── فاز ۳۵ (سند ۲۴ Analytics): رصدخانهٔ اقتصاد — ماندگاریِ اسنپ‌شاتِ روزانه در PG ──
+    console.log('\n── Empire · فاز ۳۵ (رصدخانه: upsert روزانه + ترتیب) ──')
+    const { saveSnapshot, loadSnapshots } = await import('../app/lib/empire-metrics.ts')
+    const snapA = { day: 20000, at: 1, players: 2, newToday: 0, dau: 1, wau: 2, capital: 10, coins: 5, netWorth: 20, treasury: 1, wages: 0, services: 0, assets: 3, listings: 9, perM: 100, perMSamples: 3, hoods: [], top10Pct: 60 }
+    await saveSnapshot(snapA)
+    await saveSnapshot({ ...snapA, day: 20001, perM: 110 })
+    await saveSnapshot({ ...snapA, day: 20001, perM: 120 })   // اجرای دوباره در همان روز
+    const gotSn = await loadSnapshots(10)
+    ok('اسنپ‌شات‌ها ماندگار و مرتب به روزند', gotSn.length >= 2 && gotSn[gotSn.length - 1].day === 20001 && gotSn.some(s => s.day === 20000))
+    ok('همان روز = upsert (نه ردیفِ تکراری) و آخرین مقدار می‌ماند', gotSn.filter(s => s.day === 20001).length === 1 && gotSn.find(s => s.day === 20001).perM === 120)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

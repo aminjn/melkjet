@@ -23,7 +23,7 @@ const btn: React.CSSProperties = { background: 'var(--gold)', color: '#1a1503', 
 const btnGhost: React.CSSProperties = { background: 'transparent', color: 'var(--text)', border: '1px solid var(--line2)', borderRadius: 9, padding: '8px 16px', cursor: 'pointer', fontFamily: FONT, fontSize: 12.5 }
 const inpS: React.CSSProperties = { padding: '7px 10px', borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontFamily: FONT, fontSize: 12.5 }
 
-export type EmpireSection = 'overview' | 'players' | 'economy' | 'capital' | 'missions' | 'engage' | 'world' | 'liveops' | 'access'
+export type EmpireSection = 'overview' | 'players' | 'economy' | 'capital' | 'missions' | 'engage' | 'world' | 'liveops' | 'access' | 'metrics'
 
 function Mini({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -66,6 +66,7 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
     if (section === 'economy' || section === 'missions') { loadCfg(); loadView('overview').then(put) }
     if (section === 'capital') { loadView('capital').then(put); loadCfg() }
     if (section === 'engage') loadView('engage').then(put)
+    if (section === 'metrics') { loadView('metrics').then(put); loadCfg() }
     if (section === 'access') loadFlag()
     return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -109,6 +110,84 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
     </div>
   )
   const loading = <div style={{ ...card, color: 'var(--muted)', textAlign: 'center', padding: 30 }}>در حال بارگذاری…</div>
+
+  /* ══════════ 📊 رصدخانهٔ اقتصاد (فاز ۳۵ — سند ۲۴ Analytics) ══════════ */
+  if (section === 'metrics') {
+    const h = data?.health
+    const snaps: any[] = data?.snaps || []
+    const last = snaps[snaps.length - 1]
+    const dayFa = (d: number) => new Date(d * 864e5).toLocaleDateString('fa-IR')
+    const trend = (v: number | null, suffix = '٪') => v === null ? <span style={{ color: 'var(--faint)' }}>— (تاریخچه کافی نیست)</span>
+      : <b style={{ color: v > 0 ? '#7c6' : v < 0 ? '#e88' : 'var(--muted)' }}>{v > 0 ? '▲' : v < 0 ? '▼' : ''} {Math.abs(v).toLocaleString('fa-IR')}{suffix}</b>
+    const reload = () => loadView('metrics').then(setData)
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, fontFamily: FONT, direction: 'rtl' }}>
+        {head('📊 رصدخانهٔ اقتصاد', 'سند ۲۴ (Analytics & Big Data): تاریخچهٔ روزانهٔ بازارِ واقعی + اقتصادِ بازیکنان — تورم، DAU، تمرکزِ ثروت و هشدارهای سلامت. «آنچه اندازه‌گیری نشود، قابل‌بهبود نیست.»')}
+        {!data ? loading : <>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button style={btn} disabled={busy === 'snapshotNow'} onClick={async () => { if (await post({ action: 'snapshotNow' }, 'اسنپ‌شاتِ امروز ثبت شد ✓')) reload() }}>📸 ثبتِ اسنپ‌شاتِ الان</button>
+          <span style={{ fontSize: 11, color: 'var(--muted)' }}>کرانِ روزانه خودش ثبت می‌کند (ایدمپوتنت — همان روز فقط تازه می‌شود) · {fa(data.total || 0)} روز تاریخچه</span>
+        </div>
+        {!snaps.length && <div style={{ ...card, color: 'var(--muted)' }}>هنوز هیچ اسنپ‌شاتی ثبت نشده — «📸 ثبتِ اسنپ‌شاتِ الان» را بزن یا منتظرِ کرانِ روزانه بمان. روندها (تورم/رشد) از دومین روز به بعد معنا پیدا می‌کنند؛ چیزی جعل نمی‌شود.</div>}
+        {last && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 10 }}>
+          <Mini label="بازیکنان" value={fa(last.players)} hint={`${fa(last.newToday)} تولدِ امروز`} />
+          <Mini label="فعالِ امروز (DAU)" value={fa(last.dau)} hint={`هفته: ${fa(last.wau)}`} />
+          <Mini label="سرمایهٔ نقدِ کل" value={faB(last.capital)} />
+          <Mini label="ارزشِ خالصِ کل" value={faB(last.netWorth)} />
+          <Mini label="ملک‌کوینِ کل" value={fa(last.coins)} />
+          <Mini label="خزانه (مالیات)" value={faB(last.treasury)} hint={`حقوق ${faB(last.wages)} · خدمات ${faB(last.services)}`} />
+          <Mini label="میانهٔ متریِ بازارِ واقعی" value={faB(last.perM)} hint={`${fa(last.perMSamples)} آگهیِ نمونه`} />
+          <Mini label="تمرکزِ ثروت" value={`${fa(last.top10Pct)}٪`} hint="سهمِ ۱۰٪ بالایی" />
+        </div>}
+        {h?.ready && <div style={card}>
+          <div style={sub}>روندها (از تاریخچهٔ واقعی — نه شبیه‌سازی)</div>
+          {row('تورمِ بازار — ۷ روزه (میانهٔ متری)', trend(h.inflation7))}
+          {row('تورمِ بازار — ۳۰ روزه', trend(h.inflation30))}
+          {row('رشدِ نقدینگیِ بازیکنان — ۷ روزه', trend(h.capGrowth7), 'رشدِ ناگهانی = جایی پول چاپ می‌شود')}
+          {row('DAU نسبت به هفتهٔ قبل', h.dau7 === null ? trend(null) : <b>{fa(h.dau7)} → {fa(h.dau)}</b>)}
+        </div>}
+        {h?.alerts?.length ? <div style={{ ...card, borderColor: '#a55' }}>
+          <div style={{ ...sub, color: '#e88' }}>🚨 هشدارهای سلامتِ اقتصاد</div>
+          {h.alerts.map((a: any, i: number) => <div key={i} style={{ fontSize: 12.5, padding: '6px 0', borderBottom: '1px solid var(--line)' }}>{a.icon} {a.text}</div>)}
+        </div> : snaps.length >= 2 ? <div style={{ ...card, color: '#7c6', fontSize: 12.5 }}>✓ هیچ هشداری فعال نیست — اقتصاد در محدودهٔ آستانه‌های تنظیم‌شده است.</div> : null}
+        {snaps.length > 0 && <div style={{ ...card, overflowX: 'auto' }}>
+          <div style={sub}>تاریخچهٔ روزانه (آخرین {fa(Math.min(14, snaps.length))} ثبت)</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead><tr style={{ color: 'var(--muted)', fontSize: 11 }}>{['روز', 'بازیکن', 'DAU', 'میانهٔ متری', 'سرمایهٔ نقد', 'ارزشِ خالص', 'خزانه', 'تمرکز٪', 'آگهی‌ها'].map(x => <th key={x} style={{ padding: '8px 10px', textAlign: 'right', borderBottom: '1px solid var(--line)' }}>{x}</th>)}</tr></thead>
+            <tbody>{[...snaps].slice(-14).reverse().map((s: any) => (
+              <tr key={s.day} style={{ borderBottom: '1px solid var(--line)' }}>
+                <td style={{ padding: '7px 10px' }}>{dayFa(s.day)}</td>
+                <td style={{ padding: '7px 10px' }}>{fa(s.players)}</td>
+                <td style={{ padding: '7px 10px' }}>{fa(s.dau)}</td>
+                <td style={{ padding: '7px 10px', color: 'var(--gold)' }}>{faB(s.perM)}</td>
+                <td style={{ padding: '7px 10px' }}>{faB(s.capital)}</td>
+                <td style={{ padding: '7px 10px' }}>{faB(s.netWorth)}</td>
+                <td style={{ padding: '7px 10px' }}>{faB(s.treasury)}</td>
+                <td style={{ padding: '7px 10px' }}>{fa(s.top10Pct)}</td>
+                <td style={{ padding: '7px 10px' }}>{fa(s.listings)}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>}
+        {last && (last.hoods || []).length > 0 && <div style={card}>
+          <div style={sub}>مناطقِ داغِ بازارِ واقعی (میانهٔ متریِ امروز — پرنمونه‌ترین محله‌ها)</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {last.hoods.map((x: any) => <span key={x.hood} style={{ fontSize: 11.5, padding: '5px 10px', borderRadius: 10, border: '1px solid var(--line2)' }}><b>{x.hood}</b> · {faB(x.perM)}/متر <span style={{ color: 'var(--faint)' }}>({fa(x.samples)})</span></span>)}
+          </div>
+        </div>}
+        {cfg && <div style={card}>
+          <div style={sub}>⚙️ آستانه‌های هشدار (قانون ۴: هر عدد knob است)</div>
+          {row('رصدخانه فعال (۱/۰)', cin('metrics', 'enabled'))}
+          {row('آستانهٔ تورم/سقوطِ ۷روزه (٪)', cin('metrics', 'inflationAlertPct'))}
+          {row('آستانهٔ افتِ DAU (٪)', cin('metrics', 'dauDropAlertPct'))}
+          {row('آستانهٔ تمرکزِ ثروت (٪)', cin('metrics', 'concentrationAlertPct'))}
+          {row('آستانهٔ رشدِ نقدینگیِ ۷روزه (٪)', cin('metrics', 'capGrowthAlertPct'), 'بالاتر از این = هشدارِ «جایی پول چاپ می‌شود»')}
+          <button style={{ ...btn, marginTop: 10 }} disabled={busy === 'cfg'} onClick={saveCfg}>ذخیرهٔ آستانه‌ها</button>
+        </div>}
+        </>}
+      </div>
+    )
+  }
 
   /* ══════════ 📊 نمای کلی ══════════ */
   if (section === 'overview') return (
@@ -168,7 +247,7 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
         <div style={{ ...card, padding: 0, overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
             <thead><tr style={{ color: 'var(--muted)', fontSize: 11.5 }}>
-              {['بازیکن', 'مرحله', 'دارایی', 'سرمایهٔ نقد', 'ارزشِ خالص', '🪙', '⚡', '🏆', 'تولد', 'آخرین فعالیت', ''].map(h => <th key={h} style={{ padding: '10px 12px', textAlign: 'right', borderBottom: '1px solid var(--line)' }}>{h}</th>)}
+              {['بازیکن', 'مرحله', 'دارایی', 'سرمایهٔ نقد', 'ارزشِ خالص', '🪙', '⚡', '🏆', 'IES', 'تولد', 'آخرین فعالیت', ''].map(h => <th key={h} style={{ padding: '10px 12px', textAlign: 'right', borderBottom: '1px solid var(--line)' }}>{h}</th>)}
             </tr></thead>
             <tbody>
               {data.rows.map((r: any) => (
@@ -181,6 +260,7 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
                   <td style={{ padding: '9px 12px' }}>{fa(r.coins)}</td>
                   <td style={{ padding: '9px 12px' }}>{fa(r.xp)}</td>
                   <td style={{ padding: '9px 12px' }}>{fa(r.score)}</td>
+                  <td style={{ padding: '9px 12px', color: (r.ies || 0) >= 60 ? '#7c6' : (r.ies || 0) >= 25 ? 'var(--gold)' : 'var(--faint)', fontWeight: 700 }} title="Investment Engagement Score — درگیریِ واقعی در اقتصاد (سند ۲۴)">{fa(r.ies || 0)}</td>
                   <td style={{ padding: '9px 12px', color: 'var(--faint)', fontSize: 11 }}>{faDate(r.createdAt)}</td>
                   <td style={{ padding: '9px 12px', color: 'var(--faint)', fontSize: 11 }}>{faDate(r.updatedAt)}</td>
                   <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
@@ -188,7 +268,7 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
                   </td>
                 </tr>
               ))}
-              {!data.rows.length && <tr><td colSpan={11} style={{ padding: 20, textAlign: 'center', color: 'var(--muted)' }}>بازیکنی یافت نشد.</td></tr>}
+              {!data.rows.length && <tr><td colSpan={12} style={{ padding: 20, textAlign: 'center', color: 'var(--muted)' }}>بازیکنی یافت نشد.</td></tr>}
             </tbody>
           </table>
         </div>

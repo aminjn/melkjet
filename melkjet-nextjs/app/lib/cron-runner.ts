@@ -62,6 +62,8 @@ async function tick(): Promise<{ due: number; synced: number }> {
       try { const { dedupeListings } = await import('./listing-dedupe'); const dd = await dedupeListings(); if (dd.removed) console.log(`[dedupe] ${dd.removed} duplicate listings hidden (${dd.kept} kept)`) } catch { /* ضدتکراری */ }
       // نامهٔ روزانهٔ ملک‌جت برای امپراتوری‌ها (سند فصل ۴: AI Overnight → کنجکاویِ صبح)
       try { const { runEmpireBriefs } = await import('./empire-brief'); const nb = await runEmpireBriefs(); if (nb) console.log(`[empire] daily briefs built: ${nb}`) } catch { /* نامهٔ امپراتوری */ }
+      // 📊 رصدخانهٔ اقتصاد (فاز ۳۵ — سند ۲۴): اسنپ‌شاتِ روزانهٔ بازار/اقتصاد — ایدمپوتنت (همان روز = تازه‌سازی)
+      try { const { takeDailySnapshot } = await import('./empire-metrics'); const sn = await takeDailySnapshot(); console.log(`[empire] econ snapshot day ${sn.day}: ${sn.players} players, perM ${sn.perM}`) } catch { /* رصدخانه */ }
     }
     due = listDueSources(Date.now())
     for (const { phone, source } of due) {

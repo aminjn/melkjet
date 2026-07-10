@@ -68,6 +68,8 @@ export interface ReosConfig {
     offers: { enabled: boolean; cooldownDays: number; minAgeDays: number }
     // فاز ۳۴ (سند ۲۳ فصل ۱۳ Technical — Part 04): سقفِ درخواستِ هر بازیکن در دقیقه روی API مسیرِ رشد؛ ۰ = خاموش.
     api: { rateLimitPerMin: number }
+    // فاز ۳۵ (سند ۲۴ فصل ۱۴ Analytics — Part 06): آستانه‌های هشدارِ سلامتِ اقتصاد روی تاریخچهٔ روزانه.
+    metrics: { enabled: boolean; inflationAlertPct: number; dauDropAlertPct: number; concentrationAlertPct: number; capGrowthAlertPct: number }
     // فاز ۲۹: نقش‌های حرفه‌ایِ سایت در سناریو — تا آمدنِ متخصصانِ واقعی، «سیستم» بازی‌شان می‌کند؛ کارمزدها مصرفِ شفافِ پول (servicesPaid).
     pros: {
       notaryFeePct: number              // دفترخانه: حق‌الثبتِ سند در خرید (٪ قیمت)
@@ -215,6 +217,8 @@ export const DEFAULT_CONFIG: ReosConfig = {
     offers: { enabled: true, cooldownDays: 5, minAgeDays: 2 },
     // سپرِ API (سند ۲۳ Part 04): بازیِ عادی به این سقف نمی‌رسد؛ فقط جلوی اسکریپت/سوءاستفاده را می‌گیرد.
     api: { rateLimitPerMin: 120 },
+    // رصدخانهٔ اقتصاد (سند ۲۴ Part 06): هشدار وقتی تورمِ ۷روزه/افتِ DAU/تمرکزِ ثروت/رشدِ نقدینگی از آستانه بگذرد.
+    metrics: { enabled: true, inflationAlertPct: 15, dauDropAlertPct: 40, concentrationAlertPct: 70, capGrowthAlertPct: 50 },
     // مذاکره: همان رفتارِ قبلی به‌صورتِ پیش‌فرض (۲۵٪ پایه تا ۷۵٪ با مهارت؛ تخفیف ۲..۶٪) — حالا قابل‌تنظیم.
     nego: { baseChancePct: 25, discountMin: 2, discountMax: 6 },
     // نقش‌های حرفه‌ای (فاز ۲۹): اعدادِ عرفِ واقعیِ بازارِ ایران — همه knob.

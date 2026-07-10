@@ -19,7 +19,7 @@ type View =
   | 'reports' | 'plans' | 'promos' | 'discounts' | 'ads' | 'users' | 'profiles' | 'roles' | 'connections'
   | 'tracker' | 'sms' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags' | 'support' | 'payment' | 'aicost' | 'smscost' | 'sitemap' | 'agencyintel'
   | 'reos' | 'suspension'
-  | 'empire' | 'empirePlayers' | 'empireEconomy' | 'empireCapital' | 'empireMissions' | 'empireEngage' | 'empireWorld' | 'empireLiveops' | 'empireAccess'
+  | 'empire' | 'empirePlayers' | 'empireEconomy' | 'empireCapital' | 'empireMissions' | 'empireEngage' | 'empireWorld' | 'empireLiveops' | 'empireAccess' | 'empireMetrics'
 
 interface NavItem { id: View; icon: string; label: string; badge?: string; badgeColor?: string; url?: string; accent?: boolean }
 interface NavSection { title: string; items: NavItem[] }
@@ -44,6 +44,7 @@ const sections: NavSection[] = [
       { id: 'empireCapital',  icon: '📊', label: 'بازار سرمایه' },
       { id: 'empireMissions', icon: '🎯', label: 'مأموریت‌ها و پاداش‌ها' },
       { id: 'empireEngage',   icon: '📈', label: 'تعامل و بازگشت' },
+      { id: 'empireMetrics',  icon: '🔭', label: 'رصدخانهٔ اقتصاد' },
       { id: 'empireWorld',    icon: '🗺', label: 'دنیا و بازارِ واقعی' },
       { id: 'empireLiveops',  icon: '✉️', label: 'LiveOps و نامهٔ روزانه' },
       { id: 'empireAccess',   icon: '🚩', label: 'دسترسی و عرضهٔ تدریجی' },
@@ -156,6 +157,7 @@ const viewTitles: Record<View, string> = {
   empireEconomy:  'امپراتوری — اقتصاد و ارزها',
   empireCapital:  'امپراتوری — بازار سرمایه',
   empireEngage:   'امپراتوری — تعامل و بازگشت',
+  empireMetrics:  'امپراتوری — رصدخانهٔ اقتصاد',
   empireMissions: 'امپراتوری — مأموریت‌ها و پاداش‌ها',
   empireWorld:    'امپراتوری — دنیا و بازارِ واقعی',
   empireLiveops:  'امپراتوری — LiveOps و نامهٔ روزانه',
@@ -6252,6 +6254,7 @@ export default function SuperAdminPage() {
       case 'empireEconomy':  return <EmpireAdminPanel section="economy" />
       case 'empireCapital':  return <EmpireAdminPanel section="capital" />
       case 'empireEngage':   return <EmpireAdminPanel section="engage" />
+      case 'empireMetrics':  return <EmpireAdminPanel section="metrics" />
       case 'empireMissions': return <EmpireAdminPanel section="missions" />
       case 'empireWorld':    return <EmpireAdminPanel section="world" />
       case 'empireLiveops':  return <EmpireAdminPanel section="liveops" />
