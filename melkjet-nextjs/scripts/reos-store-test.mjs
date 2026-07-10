@@ -1666,6 +1666,36 @@ async function main() {
       && df46.empire.timeline.some(t => t.icon === '⚖️'))
     ok('بعد از دفاع، توافق بسته است', (await settleObjection(uc12, land46)).ok === false)
     ok('دفاعِ دوباره رد می‌شود', (await defendObjection(uc12, land46)).ok === false)
+
+    // ── فاز ۴۸ (جوایزِ پولِ واقعی): درآمدِ ایدمپوتنت → ادعا با گاردها → تأیید/رد اتمیک → کیف‌پول ──
+    console.log('\n── Empire · فاز ۴۸ (استخرِ جوایز + صفِ تأیید + کیف‌پول) ──')
+    const { recordRealRevenue, requestPayout, decidePayout, revertApproval, rewardsDb, rewardPoolOf: poolOf48 } = await import('../app/lib/empire-rewards.ts')
+    const { markRewardClaimed } = await import('../app/lib/empire-store.ts')
+    const { creditBucket, bucketBalance } = await import('../app/lib/reos/wallet.ts')
+    await pool.query(`DELETE FROM kv WHERE key='empire_rewards'`)
+    const rv1 = await recordRealRevenue('0912buyer1', 5_000_000, 'auth_test_1')
+    const rv2 = await recordRealRevenue('0912buyer1', 5_000_000, 'auth_test_1')   // همان ref
+    await recordRealRevenue('0912buyer2', 5_000_000, 'auth_test_2')
+    const db48 = await rewardsDb()
+    ok('ثبتِ درآمدِ واقعی ایدمپوتنت است (۲ پرداخت = ۱۰م، نه ۱۵م)', rv1.ok && rv2.dup === true && db48.revenueTotal === 10_000_000)
+    ok('استخر = ٪ از درآمد', poolOf48(db48, 40).pool === 4_000_000)
+    const rin = { userId: uc12, no: 1, name: 'تستی', step: 1, amount: 3_000_000, netWorth: 100e9, level: 8, ageDays: 30 }
+    const rq1 = await requestPayout(rin, 40, 10_000_000)
+    ok('درخواستِ معتبر ثبت می‌شود (در ظرفیتِ ۴م)', rq1.ok === true && rq1.request.status === 'pending')
+    ok('درخواستِ تکراریِ همان مرحله رد می‌شود', (await requestPayout(rin, 40, 10_000_000)).ok === false)
+    ok('بیش از ظرفیتِ استخر رد می‌شود (۳م معلق + ۳م جدید > ۴م)', (await requestPayout({ ...rin, userId: 'u48b', step: 1 }, 40, 10_000_000)).ok === false)
+    ok('سقفِ ماهانهٔ کاربر رد می‌کند', (await requestPayout({ ...rin, step: 2, amount: 9_000_000 }, 90, 10_000_000)).ok === false)
+    const balBefore48 = await bucketBalance(uc12, 'reward')
+    const dc1 = await decidePayout(rq1.request.id, true, 'تسترِ ادمین')
+    ok('تأیید: تعهدِ قطعی + قفلِ دوباره', dc1.ok === true && (await rewardsDb()).paidOut === 3_000_000 && (await decidePayout(rq1.request.id, true, 'x')).ok === false)
+    await creditBucket(uc12, 'reward', dc1.request.amount, 'جایزهٔ تست — مرحلهٔ ۱')
+    ok('واریز به سطلِ پاداشِ کیف‌پولِ سایت', (await bucketBalance(uc12, 'reward')) === balBefore48 + 3_000_000)
+    const rvA = await revertApproval(dc1.request.id)
+    ok('برگشتِ اضطراری: تعهد آزاد و درخواست به صف برمی‌گردد', rvA.ok === true && (await rewardsDb()).paidOut === 0)
+    await decidePayout(dc1.request.id, false, 'تسترِ ادمین', 'تستِ رد')
+    ok('ردِ نهایی ثبت می‌شود', (await rewardsDb()).requests.find(r => r.id === dc1.request.id).status === 'rejected')
+    const mk1 = await markRewardClaimed(uc12, 3, 6_750_000)
+    ok('ثبتِ ادعای مرحله: کلید + تایم‌لاین 🎁 + یک‌بارمصرف', mk1.ok === true && !!mk1.empire.claims['rw_3'] && mk1.empire.timeline.some(t => t.icon === '🎁') && (await markRewardClaimed(uc12, 3, 1)).ok === false)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

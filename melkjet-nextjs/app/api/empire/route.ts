@@ -28,6 +28,7 @@ import {
   setAutoRule, delAutoRule, toggleAutoRule, recordRuleFires,
   bigDealPickOf, bigDealNegoOf, BIG_DEAL_STRATEGIES, noteCrisis, recordBigDealTry,
   auctionPickOf, auctionSetupOf, auctionInfluenceOf, auctionNextBidOf, startAuction, applyAuctionMove, consumeAuctionWin, AUCTION_RIVALS,
+  markRewardClaimed,
   floorsOfMeta, legalFloorsOf, BUILD_FACADES, setAssetNickname,
   type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
@@ -49,6 +50,9 @@ import { config, primeConfig } from '@/app/lib/reos/reos-config'
 import { ownerOfListing, claimListing, releaseListing, transferListing, myClanOf, listClans, createClan, joinClan, leaveClan, postClanMsg, clanView, deleteClanIfOwner } from '@/app/lib/empire-social'
 // فاز ۳۹ (سند ۲۶ فصل ۱۶ Cognitive AI): هوشِ سرمایه‌گذاری — ارزش‌گذاری/تصمیم‌یار/روندِ محله/سلامتِ مالی/اولویت‌ها؛ همه از دادهٔ واقعی.
 import { compStatsOf, valuationOf, decisionOf, marketIntelOf, cashflowOf, financialHealthOf, prioritiesOf, evalRules, RULE_TEMPLATES, tradeAskCheckOf, jvOfferCheckOf, crisisOf, rarityOf } from '@/app/lib/empire-intel'
+// فاز ۴۸ (جوایزِ پولِ واقعی): نردبان/استخر/صفِ تأیید + کیف‌پولِ یکپارچهٔ سایت (سطلِ «پاداش»)
+import { rewardLadderOf, requestPayout, userPayoutsOf } from '@/app/lib/empire-rewards'
+import { bucketBalance } from '@/app/lib/reos/wallet'
 import { loadSnapshots } from '@/app/lib/empire-metrics'
 
 const hoodOf = (loc?: string) => { const p = String(loc || '').split(/[،,]/).map(x => x.trim()).filter(Boolean); return p.length > 1 ? p[p.length - 1] : (p[0] || '') }
@@ -1711,6 +1715,60 @@ export async function POST(req: NextRequest) {
         win: r.empire!.auctionWin && r.empire!.auctionWin!.week === week ? r.empire!.auctionWin : null,
         capital: r.empire!.capital,
       })
+    }
+
+    // 🎁 مسیرِ جوایزِ واقعی (فاز ۴۸): نردبانِ مرحله‌ای از ارزشِ خالصِ واقعی → جایزهٔ تومانی به کیف‌پولِ سایت.
+    case 'rewards': {
+      const cfg = config().empire.rewards
+      if (!cfg.enabled) return NextResponse.json({ error: 'مسیرِ جوایز فعلاً فعال نیست' }, { status: 403 })
+      const e = await getEmpire(userId)
+      if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      const info = await liveInfoOf(e)
+      const nw = netWorthOf(e, info.prices).netWorth
+      const ladder = rewardLadderOf(cfg)
+      const mine = await userPayoutsOf(userId).catch(() => ({} as Record<number, string>))
+      const lv = empireLevel(e.xp).level
+      const ageDays = Math.floor((Date.now() - e.createdAt) / 864e5)
+      const gateOk = lv >= cfg.minLevel && ageDays >= cfg.minAccountDays
+      const steps = ladder.map(s => {
+        const claimed = !!e.claims[`rw_${s.step}`]
+        const st = mine[s.step]   // pending/approved/rejected
+        const prevOk = s.step === 1 || !!e.claims[`rw_${s.step - 1}`]
+        return {
+          ...s,
+          status: st === 'approved' ? 'paid' : st === 'rejected' ? 'rejected' : claimed ? 'pending'
+            : nw >= s.threshold && prevOk && gateOk ? 'claimable' : 'locked',
+        }
+      })
+      const rewardBalance = await bucketBalance(userId, 'reward').catch(() => 0)
+      return NextResponse.json({
+        ok: true, steps, netWorth: nw, rewardBalance,
+        gate: gateOk ? null : `برای فعال‌شدنِ جوایز: حداقل سطحِ ${cfg.minLevel.toLocaleString('fa-IR')} و ${cfg.minAccountDays.toLocaleString('fa-IR')} روز عضویت لازم است (الان: سطح ${lv.toLocaleString('fa-IR')}، ${ageDays.toLocaleString('fa-IR')} روز)`,
+      })
+    }
+    // ادعای جایزهٔ یک مرحله → صفِ تأییدِ انسانیِ ادمین؛ گاردها: سطح/سنِ اکانت/ترتیبِ مراحل/ظرفیتِ استخر/سقفِ ماهانه.
+    case 'rewardClaim': {
+      const cfg = config().empire.rewards
+      if (!cfg.enabled) return NextResponse.json({ error: 'مسیرِ جوایز فعلاً فعال نیست' }, { status: 403 })
+      const e = await getEmpire(userId)
+      if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      const step = Math.floor(Number(b.step) || 0)
+      const ladder = rewardLadderOf(cfg)
+      const s = ladder.find(x => x.step === step)
+      if (!s) return NextResponse.json({ error: 'مرحلهٔ نامعتبر' }, { status: 400 })
+      const lv = empireLevel(e.xp).level
+      const ageDays = Math.floor((Date.now() - e.createdAt) / 864e5)
+      if (lv < cfg.minLevel) return NextResponse.json({ error: `جوایز از سطحِ ${cfg.minLevel.toLocaleString('fa-IR')} فعال می‌شود` }, { status: 403 })
+      if (ageDays < cfg.minAccountDays) return NextResponse.json({ error: `جوایز از ${cfg.minAccountDays.toLocaleString('fa-IR')} روز عضویت فعال می‌شود` }, { status: 403 })
+      if (step > 1 && !e.claims[`rw_${step - 1}`]) return NextResponse.json({ error: 'مراحل به ترتیب باز می‌شوند — اول مرحلهٔ قبلی را بگیر' }, { status: 400 })
+      if (e.claims[`rw_${step}`]) return NextResponse.json({ error: 'برای این مرحله قبلاً درخواست داده‌ای' }, { status: 400 })
+      const info = await liveInfoOf(e)
+      const nw = netWorthOf(e, info.prices).netWorth
+      if (nw < s.threshold) return NextResponse.json({ error: `هنوز به آستانهٔ این مرحله نرسیده‌ای (${Math.round(s.threshold / 1e9).toLocaleString('fa-IR')} میلیارد)` }, { status: 400 })
+      const rq = await requestPayout({ userId, no: e.no, name: e.name, step, amount: s.reward, netWorth: nw, level: lv, ageDays }, cfg.payoutPct, cfg.monthlyCapToman)
+      if (!rq.ok) return NextResponse.json({ error: rq.reason }, { status: 400 })
+      await markRewardClaimed(userId, step, s.reward).catch(() => {})
+      return NextResponse.json({ ok: true, request: rq.request, note: 'درخواستت ثبت شد — پس از تأییدِ ملک‌جت، مبلغ به کیف‌پولت واریز می‌شود' })
     }
 
     // 🧭 هوشِ سرمایه‌گذاری (فاز ۳۹ — سند ۲۶ فصل ۱۶): روندِ محله‌ها از تاریخچهٔ واقعیِ رصدخانه +

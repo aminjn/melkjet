@@ -2031,6 +2031,16 @@ export function auctionMoveOf(userId: string, run: AuctionRun, move: 'bid' | 'po
   return r
 }
 
+// فاز ۴۸ (جوایزِ پولِ واقعی): ثبتِ یک‌بارهٔ ادعای هر مرحله + نقطهٔ تایم‌لاین — دفترِ درخواست‌ها در empire-rewards.
+export async function markRewardClaimed(userId: string, step: number, amount: number, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const key = `rw_${step}`
+    if (e.claims[key]) return 'برای این مرحله قبلاً درخواست داده‌ای'
+    e.claims[key] = now
+    e.timeline.push({ at: now, icon: '🎁', title: `درخواستِ جایزهٔ واقعیِ مرحلهٔ ${step.toLocaleString('fa-IR')} ثبت شد`, detail: `${Math.round(amount / 1e6).toLocaleString('fa-IR')}م تومان — پس از تأییدِ ملک‌جت به کیف‌پولت واریز می‌شود` })
+  })
+}
+
 // مصرفِ بردِ مزایده بعد از خریدِ موفق — تا همان برد دوبار خرجِ خرید نشود.
 export async function consumeAuctionWin(userId: string) {
   return mutateEmpire(userId, e => { if (!e.auctionWin) return 'بردِ مزایده‌ای در کار نیست'; delete e.auctionWin })

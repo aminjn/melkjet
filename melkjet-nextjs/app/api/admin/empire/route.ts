@@ -55,6 +55,28 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ empire: { ...e, assets }, row: rowOf(e, prices), level: empireLevel(e.xp) })
   }
 
+  // 🎁 جوایزِ پولِ واقعی (فاز ۴۸): استخر (٪ از درآمدِ واقعی) + نردبانِ زنده + صفِ تأیید — سبک، بدونِ اسکنِ سنگین.
+  if (view === 'rewards') {
+    await primeConfig()
+    const cfg = config().empire.rewards
+    const { rewardsDb, rewardLadderOf, rewardPoolOf } = await import('@/app/lib/empire-rewards')
+    const db = await rewardsDb()
+    const pool = rewardPoolOf(db, cfg.payoutPct)
+    return NextResponse.json({
+      cfg,
+      revenueTotal: db.revenueTotal,
+      revenueRecent: db.revenueLog.slice(0, 12),
+      pool,
+      ladder: rewardLadderOf(cfg),
+      requests: db.requests.slice(0, 120),
+      counts: {
+        pending: db.requests.filter(r => r.status === 'pending').length,
+        approved: db.requests.filter(r => r.status === 'approved').length,
+        rejected: db.requests.filter(r => r.status === 'rejected').length,
+      },
+    })
+  }
+
   // کنسولِ سرمایه (جلد ۴۰ فصل ۱۹): صندوق‌ها + استخرهای مشارکت + شاخص‌ها + KPIها — همه از دادهٔ واقعی.
   if (view === 'capital') {
     await primeConfig()
@@ -263,6 +285,23 @@ export async function POST(req: NextRequest) {
     const made = await runEmpireBriefs()
     logAudit(await actor(), 'اجرای دستیِ نامهٔ روزانهٔ امپراتوری', `${made} نامه`)
     return NextResponse.json({ ok: true, made })
+  }
+  // ── 🎁 جوایزِ پولِ واقعی (فاز ۴۸): تصمیمِ انسانی — تأیید = واریز به سطلِ «پاداشِ» کیف‌پولِ سایت ──
+  if (action === 'rewardDecide') {
+    const { decidePayout, revertApproval } = await import('@/app/lib/empire-rewards')
+    const approve = !!b.approve
+    const d = await decidePayout(String(b.id || ''), approve, await actor(), String(b.note || ''))
+    if (!d.ok || !d.request) return NextResponse.json({ error: d.reason }, { status: 400 })
+    if (approve) {
+      const { creditBucket } = await import('@/app/lib/reos/wallet')
+      const c = await creditBucket(d.request.userId, 'reward', d.request.amount, `جایزهٔ مسیرِ رشدِ ملک‌جت — مرحلهٔ ${d.request.step}`).catch(() => ({ ok: false as const, balance: 0 }))
+      if (!c.ok) { await revertApproval(d.request.id).catch(() => {}); return NextResponse.json({ error: 'واریز به کیف‌پول ناموفق بود — درخواست به صف برگشت' }, { status: 500 }) }
+      // خبرِ خوش در دفترچهٔ خودِ بازیکن
+      const { addJournal } = await import('@/app/lib/empire-store')
+      await addJournal(d.request.userId, `🎉 جایزهٔ مرحلهٔ ${d.request.step.toLocaleString('fa-IR')} تأیید شد — ${Math.round(d.request.amount / 1e6).toLocaleString('fa-IR')}م تومان به کیف‌پولِ ملک‌جتت واریز شد.`).catch(() => {})
+    }
+    logAudit(await actor(), approve ? 'تأییدِ جایزهٔ واقعی' : 'ردِ جایزهٔ واقعی', `${d.request.name} (#${d.request.no}) — مرحلهٔ ${d.request.step} · ${Math.round(d.request.amount / 1e6)}م تومان`)
+    return NextResponse.json({ ok: true, request: d.request })
   }
   return NextResponse.json({ error: 'عملیات نامعتبر' }, { status: 400 })
 }

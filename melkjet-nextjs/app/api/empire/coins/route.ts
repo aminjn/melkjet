@@ -8,6 +8,7 @@ import { requestPayment, verifyPayment, zarinpalConfigured } from '@/app/lib/zar
 import { config, primeConfig } from '@/app/lib/reos/reos-config'
 import { flagEnabled } from '@/app/lib/reos/flags'
 import { logAudit } from '@/app/lib/audit-store'
+import { recordRealRevenue } from '@/app/lib/empire-rewards'
 
 // فاز ۳۳ (بسته‌های زمان‌دار): شروعِ پرداخت فقط برای بستهٔ هنوز-معتبر؛ ولی callbackِ پرداختِ انجام‌شده
 // با forVerify تاریخِ until را نادیده می‌گیرد — پولی که رفته باید کوینش برسد، حتی اگر بسته همان لحظه منقضی شد.
@@ -54,6 +55,10 @@ export async function GET(req: NextRequest) {
   if (!v.ok) return fail(v.error || 'تأیید ناموفق')
   // شارژِ ایدمپوتنت (کلید = authority) — رفرشِ صفحهٔ بازگشت دوبار شارژ نمی‌کند.
   const r = await creditCoinPurchase(s.phone, { coins: pack.coins, label: pack.label, authority, refId: v.refId })
-  if (r.ok) logAudit(s.phone, 'خریدِ ملک‌کوین', `${pack.label} — ${pack.coins} کوین · ref ${v.refId || '-'}`)
+  if (r.ok) {
+    logAudit(s.phone, 'خریدِ ملک‌کوین', `${pack.label} — ${pack.coins} کوین · ref ${v.refId || '-'}`)
+    // فاز ۴۸: همین درآمدِ واقعیِ تأییدشده، خوراکِ استخرِ جوایزِ پولِ واقعی است (ایدمپوتنت با همان authority)
+    recordRealRevenue(s.phone, pack.priceToman, authority).catch(() => {})
+  }
   return NextResponse.redirect(`${origin}/empire?coins=ok&n=${pack.coins}`)
 }

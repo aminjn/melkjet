@@ -199,6 +199,8 @@ export default function EmpirePage() {
   const [aq, setAq] = useState<any>(null)   // { assetId, kind: 'sell'|'rent', via, data }
   const [bdRes, setBdRes] = useState<any>(null)
   const loadBd = async () => { const d = await api({ action: 'bigDeal' }); if (d) setBd(d) }
+  // فاز ۴۸: مسیرِ جوایزِ واقعی — نردبان + کیف‌پولِ پاداش (تبِ مأموریت‌ها)
+  const [rw, setRw] = useState<any>(null)
   // فاز ۴۵ (سند ۲۹ Auction Saga): تالارِ مزایدهٔ هفته — لابی، نبردِ زنده، برد/باخت
   const [au, setAu] = useState<any>(null)        // وضعیتِ مزایده از سرور (لابی + ران + برد)
   const [auRun, setAuRun] = useState<any>(null)  // رانِ زنده — بعد از هر حرکت از سرور می‌آید
@@ -302,6 +304,16 @@ export default function EmpirePage() {
       .then(r => r.json()).then(d => { if (alive && d?.ok) setBd(d) }).catch(() => {})
     return () => { alive = false }
   }, [step, bd])
+
+  // فاز ۴۸: مسیرِ جوایزِ واقعی — با بازشدنِ تبِ مأموریت‌ها (تنبل، یک‌بار)
+  useEffect(() => {
+    if (step !== 'dash' || gtab !== 'missions' || rw) return
+    let alive = true
+    fetch('/api/empire', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'rewards' }) })
+      .then(r => r.json()).then(d => { if (alive && d?.ok) setRw(d) }).catch(() => {})
+    return () => { alive = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, gtab, rw])
 
   // فاز ۴۵: تالارِ مزایدهٔ هفته — یک‌بار با ورود به داشبورد؛ رانِ نیمه‌کاره هم از همین‌جا برمی‌گردد
   useEffect(() => {
@@ -1784,6 +1796,50 @@ export default function EmpirePage() {
 
     {gtab === 'missions' && <>
     {tabHead('🎯', 'مأموریت‌ها', 'پاداش فقط از کارِ واقعی')}
+
+    {/* 🎁 مسیرِ جوایزِ واقعی (فاز ۴۸): ارزشِ خالصت را بالا ببر → جایزهٔ تومانیِ «واقعی» به کیف‌پولِ ملک‌جت.
+        استخرِ جوایز از درآمدِ واقعیِ خودِ سایت پر می‌شود؛ پرداختِ نهایی با تأییدِ ملک‌جت. */}
+    {rw?.ok && (rw.steps || []).length > 0 && (() => {
+      const next = rw.steps.find((s: any) => s.status === 'claimable' || s.status === 'locked')
+      const pct = next ? Math.min(100, Math.round(rw.netWorth / next.threshold * 100)) : 100
+      const stChip: Record<string, [string, string]> = { paid: ['✓ واریز شد', '#7ee0b8'], pending: ['⏳ در انتظارِ تأیید', '#e8c37a'], rejected: ['✕ تأیید نشد', '#e88'], locked: ['🔒', 'var(--faint)'] }
+      return <div style={{ ...card, borderColor: 'var(--gold)', background: 'linear-gradient(160deg, rgba(212,175,55,.08), rgba(212,175,55,.02) 65%)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <b style={{ fontSize: 14 }}>🎁 مسیرِ جوایزِ واقعی</b>
+          <span style={{ fontSize: 11, color: 'var(--muted)' }}>امپراتوری‌ات را بزرگ کن — جایزهٔ تومانیِ واقعی بگیر</span>
+          <span style={{ flex: 1 }} />
+          <span style={{ fontSize: 11.5, border: '1px solid var(--goldDim)', borderRadius: 999, padding: '3px 12px', color: 'var(--gold)', fontWeight: 800 }}>👛 کیف‌پول: {faB(rw.rewardBalance || 0)} تومان</span>
+        </div>
+        {rw.gate && <div style={{ fontSize: 11.5, color: '#e8c37a', marginTop: 8 }}>🔒 {rw.gate}</div>}
+        {next && <div style={{ marginTop: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>
+            <span>ارزشِ خالصِ الان: <b style={{ color: 'var(--text)' }}>{faB(rw.netWorth)}</b></span>
+            <span>هدفِ بعدی: <b style={{ color: 'var(--gold)' }}>{faB(next.threshold)}</b></span>
+          </div>
+          <div style={{ height: 8, background: 'var(--line)', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{ width: `${pct}%`, height: 8, background: 'linear-gradient(90deg, var(--goldDim), var(--gold))', borderRadius: 4, boxShadow: '0 0 10px rgba(212,175,55,.4)' }} />
+          </div>
+        </div>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 10 }}>
+          {rw.steps.map((s: any) => (
+            <div key={s.step} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 12, padding: '6px 8px', borderRadius: 10, background: s.status === 'claimable' ? 'rgba(212,175,55,.08)' : 'var(--bg2)', border: s.status === 'claimable' ? '1px solid var(--gold)' : '1px solid transparent' }}>
+              <span style={{ color: 'var(--muted)', width: 62 }}>مرحلهٔ {fa(s.step)}</span>
+              <span style={{ flex: 1, minWidth: 150 }}>ارزشِ خالصِ {faB(s.threshold)} تومان</span>
+              <b style={{ color: 'var(--gold)' }}>🏆 {faB(s.reward)} تومانِ واقعی</b>
+              {s.status === 'claimable'
+                ? <button style={{ ...btn, padding: '5px 14px', fontSize: 11.5 }} disabled={busy}
+                    onClick={async () => {
+                      if (!confirm(`درخواستِ جایزهٔ مرحلهٔ ${fa(s.step)} (${faB(s.reward)} تومان) ثبت شود؟ پس از تأییدِ ملک‌جت به کیف‌پولت واریز می‌شود.`)) return
+                      const d = await api({ action: 'rewardClaim', step: s.step })
+                      if (d) { celebrate(); setRw(null) }
+                    }}>دریافتِ جایزه</button>
+                : <span style={{ fontSize: 11, color: stChip[s.status]?.[1] || 'var(--faint)', fontWeight: 700 }}>{stChip[s.status]?.[0] || ''}</span>}
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 8 }}>جوایز پس از تأییدِ ملک‌جت به سطلِ «پاداشِ» کیف‌پولت واریز می‌شوند · مراحل به‌ترتیب باز می‌شوند · ظرفیتِ جوایز دوره‌ای است و از درآمدِ واقعیِ ملک‌جت تأمین می‌شود.</div>
+      </div>
+    })()}
     {/* 🔥 پاداشِ نقاطِ عطفِ استریک (سند ۱۸ بخش ۱): از ورودِ پیاپیِ واقعی — روزهای ۷/۱۴/۲۱/۳۰ */}
     {(st.streakBonuses || []).some((sb: any) => sb.done && !sb.claimed) && (
       <div style={{ ...card, borderColor: 'var(--gold)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>

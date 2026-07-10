@@ -23,7 +23,7 @@ const btn: React.CSSProperties = { background: 'var(--gold)', color: '#1a1503', 
 const btnGhost: React.CSSProperties = { background: 'transparent', color: 'var(--text)', border: '1px solid var(--line2)', borderRadius: 9, padding: '8px 16px', cursor: 'pointer', fontFamily: FONT, fontSize: 12.5 }
 const inpS: React.CSSProperties = { padding: '7px 10px', borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontFamily: FONT, fontSize: 12.5 }
 
-export type EmpireSection = 'overview' | 'players' | 'economy' | 'capital' | 'missions' | 'engage' | 'world' | 'liveops' | 'access' | 'metrics' | 'ai'
+export type EmpireSection = 'overview' | 'players' | 'economy' | 'capital' | 'missions' | 'engage' | 'world' | 'liveops' | 'access' | 'metrics' | 'ai' | 'rewards'
 
 function Mini({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -68,6 +68,7 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
     if (section === 'engage') loadView('engage').then(put)
     if (section === 'metrics') { loadView('metrics').then(put); loadCfg() }
     if (section === 'ai') { loadView('ai').then(put); loadFlag() }
+    if (section === 'rewards') { loadView('rewards').then(put); loadCfg() }
     if (section === 'access') loadFlag()
     return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -111,6 +112,100 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
     </div>
   )
   const loading = <div style={{ ...card, color: 'var(--muted)', textAlign: 'center', padding: 30 }}>در حال بارگذاری…</div>
+
+  /* ══════════ 🎁 جوایزِ پولِ واقعی و کیف‌پول (فاز ۴۸) ══════════ */
+  if (section === 'rewards') {
+    if (!data) return loading
+    const pool = data.pool || { pool: 0, paidOut: 0, pending: 0, available: 0 }
+    const rw = cfg?.rewards
+    // پیش‌نمایشِ زندهٔ نردبان از همان knobهای در حالِ ویرایش — قبل از ذخیره ببین چه می‌سازی
+    const preview = (() => {
+      if (!rw) return []
+      const out: Array<{ step: number; threshold: number; reward: number }> = []
+      const steps = Math.max(1, Math.min(30, Number(rw.maxSteps) || 10))
+      for (let k = 1; k <= steps; k++) out.push({
+        step: k,
+        threshold: Math.round((Number(rw.baseThresholdToman) || 0) * Math.pow(Math.max(1.1, Number(rw.thresholdGrowth) || 4), k - 1)),
+        reward: Math.min(Math.max(1, Number(rw.maxRewardToman) || 1), Math.round((Number(rw.baseRewardToman) || 0) * Math.pow(Math.max(1, Number(rw.rewardGrowth) || 1), k - 1))),
+      })
+      return out
+    })()
+    const stLabel: Record<string, [string, string]> = { pending: ['در انتظار', '#e8c37a'], approved: ['✓ واریز شد', '#7ee0b8'], rejected: ['✕ رد شد', '#e88'] }
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, fontFamily: FONT, direction: 'rtl' }}>
+        {head('🎁 جوایزِ پولِ واقعی و کیف‌پول', 'مسیرِ مرحله‌ایِ رشد → جایزهٔ تومانی به سطلِ «پاداشِ» کیف‌پولِ سایت. سقفِ کلِ پرداخت = درصدی از درآمدِ واقعیِ تأییدشدهٔ درگاه — مدل ساختاری ضررده نمی‌شود. پرداختِ نهایی همیشه با تأییدِ شما.')}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 10 }}>
+          <Mini label="درآمدِ واقعیِ ثبت‌شده" value={`${faB(data.revenueTotal || 0)} ت`} hint="جمعِ خریدهای تأییدشدهٔ درگاه (کوین)" />
+          <Mini label={`استخرِ جوایز (${fa(rw?.payoutPct ?? 0)}٪)`} value={`${faB(pool.pool)} ت`} hint="سقفِ کلِ قابلِ‌پرداخت" />
+          <Mini label="پرداخت‌شده" value={`${faB(pool.paidOut)} ت`} hint={`${fa(data.counts?.approved || 0)} جایزهٔ تأییدشده`} />
+          <Mini label="در انتظارِ تأیید" value={`${faB(pool.pending)} ت`} hint={`${fa(data.counts?.pending || 0)} درخواست`} />
+          <Mini label="ظرفیتِ آزادِ استخر" value={`${faB(pool.available)} ت`} hint="درخواستِ بیش از این خودکار رد می‌شود" />
+        </div>
+
+        {/* صفِ تأیید — پولِ واقعی: تصمیمِ انسانی با اسنپ‌شاتِ متریک‌های لحظهٔ ادعا */}
+        <div style={card}>
+          <div style={sub}>📥 صفِ درخواست‌ها ({fa(data.counts?.pending || 0)} در انتظار)</div>
+          {!(data.requests || []).length && <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>هنوز درخواستی ثبت نشده.</div>}
+          {(data.requests || []).map((r: any) => (
+            <div key={r.id} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', padding: '9px 0', borderBottom: '1px solid var(--line)', fontSize: 12.5 }}>
+              <b>{r.name}</b><span style={{ color: 'var(--faint)', fontSize: 11 }}>#{fa(r.no)} · {r.userId}</span>
+              <span>مرحلهٔ {fa(r.step)}</span>
+              <b style={{ color: 'var(--gold)' }}>{faB(r.amount)} ت</b>
+              <span style={{ color: 'var(--muted)', fontSize: 11 }} title="اسنپ‌شاتِ لحظهٔ ادعا — برای تشخیصِ رشدِ غیرطبیعی">ارزشِ خالص {faB(r.netWorth)} · سطح {fa(r.level)} · {fa(r.ageDays)} روز عضو</span>
+              <span style={{ color: 'var(--faint)', fontSize: 11 }}>{faDate(r.at)}</span>
+              <span style={{ flex: 1 }} />
+              {r.status === 'pending' ? <>
+                <button style={{ ...btn, padding: '6px 14px', fontSize: 12 }} disabled={busy === 'rewardDecide'}
+                  onClick={async () => { if (!confirm(`تأیید و واریزِ ${faB(r.amount)} تومان به کیف‌پولِ «${r.name}»؟`)) return; if (await post({ action: 'rewardDecide', id: r.id, approve: true }, 'تأیید و واریز شد ✓')) loadView('rewards').then(setData) }}>✓ تأیید و واریز</button>
+                <button style={{ ...btnGhost, padding: '6px 12px', fontSize: 12, color: '#e88', borderColor: '#644' }} disabled={busy === 'rewardDecide'}
+                  onClick={async () => { const note = prompt('دلیلِ رد (به کاربر نمایش داده نمی‌شود؛ برای سابقهٔ خودتان):') || ''; if (await post({ action: 'rewardDecide', id: r.id, approve: false, note }, 'رد شد')) loadView('rewards').then(setData) }}>✕ رد</button>
+              </> : <span style={{ color: stLabel[r.status]?.[1], fontWeight: 700, fontSize: 12 }}>{stLabel[r.status]?.[0]}{r.by ? ` · ${r.by}` : ''}</span>}
+            </div>
+          ))}
+        </div>
+
+        {/* تنظیمات — همه زنده؛ پیش‌نمایشِ نردبان همان لحظه آپدیت می‌شود */}
+        {rw && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(340px,1fr))', gap: 14 }}>
+          <div style={card}>
+            <div style={sub}>⚙️ فرمولِ نردبان و استخر</div>
+            {row('مسیرِ جوایز فعال (۱/۰)', cin('rewards', 'enabled'), 'خاموش = کارتِ جوایز از دیدِ بازیکنان پنهان می‌شود')}
+            {row('سهمِ استخر از درآمدِ واقعی (٪)', cin('rewards', 'payoutPct'), 'نمونه: ۴۰٪ یعنی از هر ۵۰۰م تومان خرجِ کاربران، حداکثر ۲۰۰م جایزه برمی‌گردد')}
+            {row('آستانهٔ مرحلهٔ ۱ (تومانِ ارزشِ خالص)', cin('rewards', 'baseThresholdToman', 150), 'پیش‌فرض ۱۰۰٬۰۰۰٬۰۰۰٬۰۰۰ = ۱۰۰ میلیارد')}
+            {row('ضریبِ رشدِ آستانه (×)', cin('rewards', 'thresholdGrowth'), 'هر مرحله این‌قدر سخت‌تر — «همه زود به مراحلِ بعد نرسند»')}
+            {row('جایزهٔ مرحلهٔ ۱ (تومان)', cin('rewards', 'baseRewardToman', 130), 'پیش‌فرض ۳٬۰۰۰٬۰۰۰ = ۳ میلیون')}
+            {row('ضریبِ رشدِ جایزه (×)', cin('rewards', 'rewardGrowth'), 'کندتر از رشدِ آستانه نگهش دار تا مدل همیشه به‌صرفه بماند')}
+            {row('تعدادِ مراحل', cin('rewards', 'maxSteps'))}
+            {row('سقفِ جایزهٔ هر مرحله (تومان)', cin('rewards', 'maxRewardToman', 130))}
+            <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>🛡 گاردهای ضدسوءاستفاده</div>
+            {row('حداقل سطحِ بازیکن', cin('rewards', 'minLevel'), 'زیرِ این سطح دکمهٔ ادعا قفل است')}
+            {row('حداقل سنِ اکانت (روز)', cin('rewards', 'minAccountDays'))}
+            {row('سقفِ جایزهٔ ماهانهٔ هر بازیکن (تومان)', cin('rewards', 'monthlyCapToman', 130))}
+            <button style={{ ...btn, marginTop: 10 }} disabled={busy === 'cfg'} onClick={saveCfg}>💾 ذخیره و اعمالِ زنده</button>
+            <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 8 }}>واریز به سطلِ «پاداشِ» کیف‌پولِ یکپارچهٔ سایت (reos wallet) انجام می‌شود و در دفترِ تراکنشِ کاربر ثبت است. هیچ پرداختی بدونِ کلیکِ «تأیید» شما انجام نمی‌شود.</div>
+          </div>
+          <div style={card}>
+            <div style={sub}>🪜 پیش‌نمایشِ زندهٔ نردبان (با همین اعدادِ بالا)</div>
+            {preview.map(s => (
+              <div key={s.step} style={{ display: 'flex', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--line)', fontSize: 12.5, alignItems: 'center' }}>
+                <span style={{ width: 68, color: 'var(--muted)' }}>مرحلهٔ {fa(s.step)}</span>
+                <span style={{ flex: 1 }}>ارزشِ خالصِ <b>{faB(s.threshold)}</b> تومان</span>
+                <b style={{ color: 'var(--gold)' }}>{faB(s.reward)} تومان</b>
+              </div>
+            ))}
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>جمعِ جایزهٔ یک بازیکن که همهٔ مراحل را کامل کند: <b style={{ color: 'var(--gold)' }}>{faB(preview.reduce((t, s) => t + s.reward, 0))} تومان</b> — و تازه همین هم فقط تا سقفِ ظرفیتِ استخر پرداخت می‌شود.</div>
+            {(data.revenueRecent || []).length > 0 && <>
+              <div style={{ ...sub, marginTop: 14 }}>💳 آخرین درآمدهای واقعیِ ثبت‌شده</div>
+              {(data.revenueRecent || []).map((v: any, i: number) => (
+                <div key={i} style={{ display: 'flex', gap: 8, fontSize: 11.5, color: 'var(--muted)', padding: '4px 0', borderBottom: '1px solid var(--line)' }}>
+                  <span>{faDate(v.at)}</span><span dir="ltr">{v.phone}</span><span style={{ flex: 1 }} /><b style={{ color: 'var(--text)' }}>{faB(v.amount)} ت</b>
+                </div>
+              ))}
+            </>}
+          </div>
+        </div>}
+      </div>
+    )
+  }
 
   /* ══════════ 🧠 هوشِ مصنوعی (فاز ۳۶ — سند ۲۵ AI Platform) ══════════ */
   if (section === 'ai') {
