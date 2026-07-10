@@ -23,7 +23,7 @@ import {
   applyLevelUpReward, setWeekSnap, setTitle, giveKudos, eventActive, streakMilestonesOf,
   buildingUnitsOf, assemblyUnitPriceOf, buyBuildingUnit, demolishAsset, boostBuild, boostPermit,
   proPersonaOf, designPlanOf, commissionDesign, boostDesign, resolveM100, renovateAsset, designBuildPlanOf,
-  activeCoinPacks, buyCosmetic, setCosmetic, offerOf, dismissOffer, areaFromText,
+  activeCoinPacks, buyCosmetic, setCosmetic, offerOf, dismissOffer, areaFromText, rateHit,
   type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
 import {
@@ -43,6 +43,8 @@ import { flagEnabled } from '@/app/lib/reos/flags'
 import { config, primeConfig } from '@/app/lib/reos/reos-config'
 
 const hoodOf = (loc?: string) => { const p = String(loc || '').split(/[،,]/).map(x => x.trim()).filter(Boolean); return p.length > 1 ? p[p.length - 1] : (p[0] || '') }
+// سپرِ نرخِ درخواست (فاز ۳۴ — سند ۲۳): پنجرهٔ یک‌دقیقه‌ایِ هر بازیکن، در حافظهٔ همین اینستنس
+const RATE_BUCKET = new Map<string, { m: number; n: number }>()
 // آیکنِ قاب/نشانِ فعالِ بازیکن (فاز ۳۳): ارزشِ آیتمِ ظاهری = دیده‌شدن توسطِ دیگران (سند ۲۲ فصل ۳)
 const cosmeticIconOf = (e: Pick<EmpireData, 'cosmetics'>, kind: 'frame' | 'flair') => {
   const id = e.cosmetics?.[kind]
@@ -525,6 +527,14 @@ export async function POST(req: NextRequest) {
   if (!s) return NextResponse.json({ error: 'برای ساختِ امپراتوری وارد شوید' }, { status: 401 })
   const userId = String(s.phone)
   if (!await flagEnabled('empire', { userId, role: (s as any).role })) return NextResponse.json({ error: 'این بخش فعلاً در دسترس نیست' }, { status: 403 })
+  // سپرِ API (فاز ۳۴ — سند ۲۳ Part 04): بازیِ عادی هرگز به سقف نمی‌رسد؛ فقط اسکریپت/سوءاستفاده را می‌بندد.
+  {
+    const limit = config().empire.api?.rateLimitPerMin ?? 120
+    const r = rateHit(RATE_BUCKET.get(userId), Math.floor(Date.now() / 60_000), limit)
+    RATE_BUCKET.set(userId, r.state)
+    if (RATE_BUCKET.size > 5000) RATE_BUCKET.clear()
+    if (r.limited) return NextResponse.json({ error: 'تعدادِ درخواست‌ها زیاد شد — یک دقیقه صبر کن و دوباره امتحان کن' }, { status: 429 })
+  }
   const b = await req.json().catch(() => ({} as any))
   const action = String(b.action || '')
 

@@ -442,6 +442,11 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             {row('حداقل سنِ امپراتوری (روز)', cin('offers', 'minAgeDays'), 'روزهای اول هیچ پیشنهادی نمایش داده نمی‌شود — اول تجربه، بعد فروشگاه')}
           </div>
           <div style={card}>
+            <div style={sub}>🛡 فنی (فاز ۳۴ — سند ۲۳ فصل ۱۳)</div>
+            {row('سقفِ درخواست در دقیقه (هر بازیکن)', cin('api', 'rateLimitPerMin'), 'سپرِ سوءاستفاده از API مسیرِ رشد — بازیِ عادی به این سقف نمی‌رسد؛ ۰ = خاموش')}
+            <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 6 }}>Economy QA: هر دیپلوی خودکار knobهای زندهٔ همین صفحه را ممیزی می‌کند (پولِ مجانی/سودِ غیرمنطقی/پاداشِ خارج از تعادل). اجرای دستی روی سرور: <code dir="ltr">node --import ./scripts/reos-loader.mjs scripts/economy-qa.mjs</code></div>
+          </div>
+          <div style={card}>
             <div style={sub}>🤝 مذاکره (فاز ۲۷ — قبلاً هاردکد بود)</div>
             {row('شانسِ پایه (٪)', cin('nego', 'baseChancePct'), 'شانس = پایه + مهارت ÷ ۲ — قطعی از هش')}
             {row('کفِ تخفیف (٪)', cin('nego', 'discountMin'))}

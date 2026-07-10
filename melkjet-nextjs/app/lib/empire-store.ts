@@ -1476,6 +1476,14 @@ export function areaFromText(...texts: Array<string | undefined>): number {
   return best
 }
 
+// سپرِ نرخِ درخواست (فاز ۳۴ — سند ۲۳ Part 04): شمارندهٔ پنجرهٔ یک‌دقیقه‌ای، خالص و تست‌پذیر.
+// limit ≤ 0 یعنی خاموش. state قبلی همان دقیقه → شمارش بالا؛ دقیقهٔ جدید → پنجرهٔ تازه.
+export function rateHit(state: { m: number; n: number } | undefined, nowMin: number, limit: number): { state: { m: number; n: number }; limited: boolean } {
+  if (limit <= 0) return { state: { m: nowMin, n: 0 }, limited: false }
+  const s = state && state.m === nowMin ? { m: nowMin, n: state.n + 1 } : { m: nowMin, n: 1 }
+  return { state: s, limited: s.n > limit }
+}
+
 // ══════════ فاز ۳۳ (سند ۲۲ — فصل ۱۲ Monetization) ══════════
 
 // بسته‌های فعالِ فروشگاهِ کوین: بستهٔ زمان‌دار (فصل ۷ Bundles) تا پایانِ روزِ until معتبر است —

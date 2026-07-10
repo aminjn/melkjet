@@ -66,6 +66,8 @@ export interface ReosConfig {
     cosmetics: { enabled: boolean; items: Array<{ id: string; label: string; icon: string; kind: 'frame' | 'flair'; priceCoins: number; enabled: boolean }> }
     // فاز ۳۳ (سند ۲۲ فصل ۹ Special Offers): موتورِ پیشنهادِ قطعی از رفتارِ واقعی — حداکثر ۱ در روز، قابلِ‌بستن، بدونِ تایمرِ ساختگی.
     offers: { enabled: boolean; cooldownDays: number; minAgeDays: number }
+    // فاز ۳۴ (سند ۲۳ فصل ۱۳ Technical — Part 04): سقفِ درخواستِ هر بازیکن در دقیقه روی API مسیرِ رشد؛ ۰ = خاموش.
+    api: { rateLimitPerMin: number }
     // فاز ۲۹: نقش‌های حرفه‌ایِ سایت در سناریو — تا آمدنِ متخصصانِ واقعی، «سیستم» بازی‌شان می‌کند؛ کارمزدها مصرفِ شفافِ پول (servicesPaid).
     pros: {
       notaryFeePct: number              // دفترخانه: حق‌الثبتِ سند در خرید (٪ قیمت)
@@ -211,6 +213,8 @@ export const DEFAULT_CONFIG: ReosConfig = {
     },
     // پیشنهادِ هوشمند (سند ۲۲ فصل ۹): حداکثر ۱ در روز؛ بستن = cooldownDays روز پنهان؛ فقط از رفتارِ واقعی و قطعی.
     offers: { enabled: true, cooldownDays: 5, minAgeDays: 2 },
+    // سپرِ API (سند ۲۳ Part 04): بازیِ عادی به این سقف نمی‌رسد؛ فقط جلوی اسکریپت/سوءاستفاده را می‌گیرد.
+    api: { rateLimitPerMin: 120 },
     // مذاکره: همان رفتارِ قبلی به‌صورتِ پیش‌فرض (۲۵٪ پایه تا ۷۵٪ با مهارت؛ تخفیف ۲..۶٪) — حالا قابل‌تنظیم.
     nego: { baseChancePct: 25, discountMin: 2, discountMax: 6 },
     // نقش‌های حرفه‌ای (فاز ۲۹): اعدادِ عرفِ واقعیِ بازارِ ایران — همه knob.
