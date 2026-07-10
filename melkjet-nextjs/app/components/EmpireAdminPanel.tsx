@@ -23,7 +23,7 @@ const btn: React.CSSProperties = { background: 'var(--gold)', color: '#1a1503', 
 const btnGhost: React.CSSProperties = { background: 'transparent', color: 'var(--text)', border: '1px solid var(--line2)', borderRadius: 9, padding: '8px 16px', cursor: 'pointer', fontFamily: FONT, fontSize: 12.5 }
 const inpS: React.CSSProperties = { padding: '7px 10px', borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontFamily: FONT, fontSize: 12.5 }
 
-export type EmpireSection = 'overview' | 'players' | 'economy' | 'capital' | 'missions' | 'engage' | 'world' | 'liveops' | 'access' | 'metrics'
+export type EmpireSection = 'overview' | 'players' | 'economy' | 'capital' | 'missions' | 'engage' | 'world' | 'liveops' | 'access' | 'metrics' | 'ai'
 
 function Mini({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -67,6 +67,7 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
     if (section === 'capital') { loadView('capital').then(put); loadCfg() }
     if (section === 'engage') loadView('engage').then(put)
     if (section === 'metrics') { loadView('metrics').then(put); loadCfg() }
+    if (section === 'ai') { loadView('ai').then(put); loadFlag() }
     if (section === 'access') loadFlag()
     return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -110,6 +111,61 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
     </div>
   )
   const loading = <div style={{ ...card, color: 'var(--muted)', textAlign: 'center', padding: 30 }}>در حال بارگذاری…</div>
+
+  /* ══════════ 🧠 هوشِ مصنوعی (فاز ۳۶ — سند ۲۵ AI Platform) ══════════ */
+  if (section === 'ai') {
+    const CONSTITUTION: Array<[string, string]> = [
+      ['LLM هرگز تصمیمِ اقتصادی نمی‌گیرد — فقط توضیح می‌دهد', 'ساختاری: همهٔ مکانیک‌ها قطعی/قاعده‌مندند (هش/فرمول)؛ GapGPT فقط متن'],
+      ['هر پیشنهاد قابلِ‌رد است و تصمیمِ نهایی با بازیکن', 'فرصت‌ها/تحلیل‌ها فقط اطلاع می‌دهند؛ ردِ پیشنهادِ AI حتی مأموریت دارد (rejects)'],
+      ['AI برتریِ ناعادلانه نمی‌سازد (بدونِ P2W)', 'قانون ۵ تراکر + Economy QA در هر دیپلوی'],
+      ['تورم/تعادلِ اقتصاد زیرِ نظرِ دائم', 'رصدخانهٔ اقتصاد (فاز ۳۵) + آستانه‌های هشدارِ knob'],
+      ['هر تصمیم قابلِ‌توضیح (Explainability)', 'ستونِ «چرا» در فرصت‌ها (فاز ۱۱) + اطمینان٪ + دلایلِ عددیِ واقعی'],
+      ['هیچ knobِ اقتصادی خودکار تغییر نمی‌کند — Level 0/1', 'تغییرِ اقتصاد فقط از ادمین (انسان)؛ سیستم فقط پیشنهاد/هشدار می‌دهد'],
+      ['Kill Switch در دسترس', 'فلگِ «empire» (بخشِ دسترسی) + فلگ‌های لایه‌های REOS — خاموشیِ فوری'],
+      ['همهٔ اقدام‌ها Audit دارند', 'REOS event log تغییرناپذیر + audit ادمین + تایم‌لاینِ بازیکن'],
+    ]
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, fontFamily: FONT, direction: 'rtl' }}>
+        {head('🧠 هوشِ مصنوعی', 'سند ۲۵ (AI Platform): داشبوردِ انسانیِ AI — سیستم چند پیشنهاد/تحلیل داده و بازیکنانِ واقعی چقدر عمل کرده‌اند؛ + سطوحِ اختیار و قانونِ اساسیِ AI')}
+        {!data ? loading : <>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(160px,1fr))', gap: 10 }}>
+          <Mini label="اقدام از مسیرِ پیشنهاد (۷ روز)" value={fa(data.usage?.total || 0)} hint="خرید/تحلیل/حدس/مشارکت/تجمیع" />
+          <Mini label="خرید از فرصت‌ها" value={fa(data.usage?.buy || 0)} hint="۷ روزِ اخیر" />
+          <Mini label="تحلیلِ ژتونی" value={fa(data.usage?.analyze || 0)} hint={`موجودیِ ژتونِ بازیکنان: ${fa(data.aiTokens || 0)}`} />
+          <Mini label="حدسِ قیمت (Beat AI)" value={fa(data.usage?.guess || 0)} />
+          <Mini label="نامهٔ روزانه — امروز" value={`${fa(data.briefs?.today?.opened || 0)} / ${fa(data.briefs?.today?.made || data.briefs?.today?.built || 0)}`} hint="بازشده / ساخته‌شده" />
+          <Mini label="نامهٔ روزانه — دیروز" value={`${fa(data.briefs?.yesterday?.opened || 0)} / ${fa(data.briefs?.yesterday?.made || data.briefs?.yesterday?.built || 0)}`} hint="بازشده / ساخته‌شده" />
+          <Mini label="پیشنهادِ هوشمند: بسته‌شده" value={fa(data.offersDismissed || 0)} hint="«نه» هم جوابِ محترمی است" />
+          <Mini label="آیتم‌های ظاهریِ فروخته" value={fa(data.cosmeticsOwned || 0)} />
+        </div>
+        <div style={card}>
+          <div style={sub}>🎚 سطوحِ اختیارِ AI (سند ۲۵ Part 10 — وضعِ فعلیِ ملک‌جت)</div>
+          {[
+            ['Level 0 — فقط انسان', 'قوانینِ اقتصاد، نرخ‌ها، ارزها، مالیات — همه فقط از knobهای همین پنل تغییر می‌کنند؛ سیستم هرگز خودش عددی را عوض نمی‌کند', '#7c6'],
+            ['Level 1 — پیشنهادِ AI، تأییدِ انسان', 'هشدارهای رصدخانه/Economy QA فقط اطلاع می‌دهند؛ اقدام با ادمین است', '#7c6'],
+            ['Level 2 — خودمختاریِ محدود', 'پیشنهادِ فرصت/مأموریت/آیتم به بازیکن — قطعی از دادهٔ واقعی، قابلِ‌رد، بدونِ اثرِ اقتصادیِ خودکار', '#7c6'],
+            ['Level 3 — خودمختارِ کامل', 'فقط ترتیبِ نمایش/اعلان/اولویتِ هشدار (بی‌خطر)', '#7c6'],
+          ].map(([t, d, c]) => (
+            <div key={t as string} style={{ display: 'flex', gap: 8, padding: '7px 0', borderBottom: '1px solid var(--line)', fontSize: 12.5, alignItems: 'baseline' }}>
+              <b style={{ color: c as string, minWidth: 210 }}>{t}</b><span style={{ color: 'var(--muted)' }}>{d}</span>
+            </div>
+          ))}
+          <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 8 }}>Kill Switch: فلگِ «empire» در بخشِ «🚩 دسترسی» {flag ? (flag.enabled === false ? '· الان: خاموش ⛔' : '· الان: روشن ✓') : ''} — خاموش‌کردنش کلِ مسیرِ رشد را فوراً می‌بندد.</div>
+        </div>
+        <div style={card}>
+          <div style={sub}>📜 قانونِ اساسیِ AI ملک‌جت (سند ۲۵ Part 10 — هر اصل با ضامنِ اجراییِ واقعی‌اش)</div>
+          {CONSTITUTION.map(([p, how]) => (
+            <div key={p} style={{ padding: '7px 0', borderBottom: '1px solid var(--line)', fontSize: 12.5 }}>
+              <b>✓ {p}</b>
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{how}</div>
+            </div>
+          ))}
+          <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 8 }}>زیرساختِ ML واقعی (Feature Store، آموزش از رویدادها، champion/challenger با rollback) در REOS فعال است — بخشِ «REOS» همین پنل.</div>
+        </div>
+        </>}
+      </div>
+    )
+  }
 
   /* ══════════ 📊 رصدخانهٔ اقتصاد (فاز ۳۵ — سند ۲۴ Analytics) ══════════ */
   if (section === 'metrics') {

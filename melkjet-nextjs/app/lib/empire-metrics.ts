@@ -136,6 +136,21 @@ export function economyHealthOf(
   return { ready: true, inflation7, inflation30, capGrowth7, dau: last.dau, dau7: w?.dau ?? null, alerts }
 }
 
+// 🧠 مصرفِ واقعیِ هوشِ سیستم (فاز ۳۶ — سند ۲۵ Part 10 «Human Dashboard»): چند اقدامِ واقعی از
+// مسیرِ پیشنهاد/تحلیلِ سیستم انجام شده؟ — از رویدادهای واقعیِ REOS (srcهای empire_*)، پنجرهٔ ۷ روزه.
+export function aiUsageOf(events: Array<{ at: number; meta?: Record<string, unknown> }>, now = Date.now()) {
+  const since = now - 7 * 864e5
+  const out = { buy: 0, analyze: 0, guess: 0, crowd: 0, assembly: 0, total: 0 }
+  for (const ev of events) {
+    if (ev.at < since) continue
+    const src = String(ev.meta?.['src'] || '')
+    if (!src.startsWith('empire_')) continue
+    const k = src.slice('empire_'.length) as keyof typeof out
+    if (k in out && k !== 'total') { out[k]++; out.total++ }
+  }
+  return out
+}
+
 // IES — Investment Engagement Score (پیشنهادِ Part 07): «نه فقط آنلاین است یا نه؛ چقدر واقعاً درگیرِ
 // اقتصاد شده؟» — ترکیبِ قطعی از شمارنده‌های واقعیِ رفتار، ۰..۱۰۰.
 export function iesOf(e: EmpireData, today: number): number {

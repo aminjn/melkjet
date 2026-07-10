@@ -10,7 +10,7 @@ import { parseFaNum } from '@/app/lib/reos/features'
 import { logAudit } from '@/app/lib/audit-store'
 import { getMarketState, segmentQuote, marketIndices, psychologyOf, createFund, setFundEnabled, deleteFund } from '@/app/lib/empire-market'
 import { engagementStats, churnRisk } from '@/app/lib/empire-engage'
-import { loadSnapshots, takeDailySnapshot, economyHealthOf, iesOf } from '@/app/lib/empire-metrics'
+import { loadSnapshots, takeDailySnapshot, economyHealthOf, iesOf, aiUsageOf } from '@/app/lib/empire-metrics'
 import { recentEvents } from '@/app/lib/reos/store'
 import { config, primeConfig } from '@/app/lib/reos/reos-config'
 
@@ -88,6 +88,27 @@ export async function GET(req: NextRequest) {
         holders: new Set(empires.filter(e => (e.funds?.length || 0) + (e.crowd?.length || 0) > 0).map(e => e.userId)).size,
         vol: state.vol,
       },
+    })
+  }
+
+  // 🧠 داشبوردِ انسانیِ AI (فاز ۳۶ — سند ۲۵ Part 10): «امروز سیستم چند پیشنهاد داد؟ چندتا عمل شد؟»
+  // — همه از رویدادهای واقعی و شمارنده‌های واقعیِ بازیکنان؛ هیچ عددِ ساختگی.
+  if (view === 'ai') {
+    const today = dayNumberOf(Date.now())
+    const [empires, evs, b0, b1] = await Promise.all([
+      listEmpiresPublic(1000),
+      recentEvents({ type: 'user_clicked_property', limit: 2000 }).catch(() => []),
+      briefStatsForDay(today), briefStatsForDay(today - 1),
+    ])
+    const usage = aiUsageOf(evs.map(e => ({ at: e.at, meta: e.meta })))
+    const offersDismissed = empires.reduce((s, e) => s + Object.keys(e.offerHist || {}).length, 0)
+    const cosmeticsOwned = empires.reduce((s, e) => s + (e.cosmetics?.owned?.length || 0), 0)
+    return NextResponse.json({
+      usage,                                                     // اقدام‌های ۷ روزِ اخیر از مسیرِ پیشنهاد/تحلیلِ سیستم
+      aiTokens: empires.reduce((s, e) => s + e.aiTokens, 0),     // موجودیِ ژتونِ تحلیلِ بازیکنان
+      briefs: { today: b0, yesterday: b1 },                      // نامهٔ روزانه: ساخته/بازشده (نرخِ واقعی)
+      offersDismissed, cosmeticsOwned,
+      players: empires.length,
     })
   }
 
