@@ -27,6 +27,7 @@ import {
   setForSale, tradeAsset, openPartnership, joinPartnership, settlePartnerShares, chargeClanFee,
   setAutoRule, delAutoRule, toggleAutoRule, recordRuleFires,
   bigDealPickOf, bigDealNegoOf, BIG_DEAL_STRATEGIES, noteCrisis, recordBigDealTry,
+  auctionPickOf, auctionSetupOf, auctionInfluenceOf, auctionNextBidOf, startAuction, applyAuctionMove, consumeAuctionWin, AUCTION_RIVALS,
   floorsOfMeta, legalFloorsOf, BUILD_FACADES, setAssetNickname,
   type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
@@ -670,6 +671,18 @@ export async function POST(req: NextRequest) {
         price = Math.round(price * (1 - win.discountPct / 100))
         negotiatedWin = true
       }
+      // فاز ۴۵ (سند ۲۹ Auction Saga): خریدِ برندهٔ چکش — قیمت همان قیمتِ نهاییِ تالار است (سرور ذخیره کرده)؛
+      // ممکن است زیرِ قیمتِ آگهی باشد (پاداشِ نبرد) یا بالاترش (ریسکِ گران‌خری — عمداً واقعی).
+      let auctionBuy = false
+      if (b.auction && me0) {
+        const week45 = Math.floor(dayNumberOf(Date.now()) / 7)
+        const win45 = me0.auctionWin
+        if (!config().empire.auction.enabled || !win45 || win45.week !== week45 || win45.listingId !== it.id) {
+          return NextResponse.json({ error: 'بردِ معتبرِ مزایده روی این ملک نداری — اول چکش باید به نامت بخورد' }, { status: 400 })
+        }
+        price = win45.price
+        auctionBuy = true
+      }
       // فاز ۳۷ — مالکیتِ انحصاری: یک آگهیِ واقعی فقط یک مالکِ بازیکن دارد؛ ادعای اتمیک پیش از خرید.
       const exclusive = config().empire.social?.exclusiveEnabled !== false
       if (exclusive && me0) {
@@ -685,6 +698,10 @@ export async function POST(req: NextRequest) {
       }
       // جلد ۲۸: رفتارِ بازی = دادهٔ رفتاری برای ML — تعامل با همین آگهیِ واقعی ثبت می‌شود.
       recordEvent({ type: 'user_clicked_property', userId, propertyId: it.id, meta: { src: 'empire_buy' } }).catch(() => {})
+      if (auctionBuy) {
+        await consumeAuctionWin(userId).catch(() => {})
+        await addJournal(userId, `سندِ «${it.title.slice(0, 30)}» بعد از نبردِ تالارِ مزایده به نامت خورد — این معامله داستان دارد.`).catch(() => {})
+      }
       return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
     }
     // 🏷 نامِ دلخواهِ دارایی (قانونِ ۱۳ رویاپردازی) — هویتی، صفر اثرِ اقتصادی؛ خالی = پاک‌کردن
@@ -1560,6 +1577,117 @@ export async function POST(req: NextRequest) {
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       recordEvent({ type: 'user_clicked_property', userId, propertyId: it.id, meta: { src: 'empire_bigdeal' } }).catch(() => {})
       return NextResponse.json({ ok: true, ...out, price: priceOf(it), discounted: out.success ? Math.round(priceOf(it) * (1 - out.discountPct / 100)) : null })
+    }
+
+    // 🏛 تالارِ مزایدهٔ هفته (فاز ۴۵ — سند ۲۹ Auction Saga): یک ملکِ واقعی از باندِ میانیِ بازار، برای همه یکی.
+    // «ارزشِ واقعی هیچ‌وقت گفته نمی‌شود» → فقط برآوردِ بازه‌ای از نمونه‌های واقعیِ محله؛ قیمتِ آگهی تا چکش پنهان است.
+    case 'auction': {
+      const cfg = config().empire.auction
+      if (!cfg.enabled) return NextResponse.json({ error: 'تالارِ مزایده فعلاً بسته است' }, { status: 403 })
+      const e = await getEmpire(userId)
+      if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      const week = Math.floor(dayNumberOf(Date.now()) / 7)
+      const items = await candidateListings(800).catch(() => [] as Item[])
+      const pricedIds = items.filter(isPricedSale).map(it => ({ id: it.id, price: priceOf(it) }))
+      const bdPick = bigDealPickOf(week, pricedIds, config().empire.bigDeal.topPct)
+      const pickId = auctionPickOf(week, pricedIds, bdPick)
+      const it = pickId ? items.find(x => x.id === pickId) : null
+      if (!it) return NextResponse.json({ ok: true, auction: null, note: 'این هفته آگهیِ قیمت‌دارِ کافی برای برپاییِ تالار نداریم' })
+      const anchor = priceOf(it)
+      const setup = auctionSetupOf(week, it.id, anchor, e.rivalScore || {}, cfg)
+      // برآوردِ بازه‌ای از نمونه‌های واقعیِ هم‌محله (قانون ۱: فقط دادهٔ واقعی، با برچسبِ «برآورد») — نه قیمتِ آگهی.
+      const area = parseFaNum((it.meta || {})['متراژ']) || 0
+      const hood = hoodOf(it.location)
+      const rates: number[] = []
+      for (const x of items) {
+        if (!isPricedSale(x) || hoodOf(x.location) !== hood || x.id === it.id) continue
+        const a2 = parseFaNum((x.meta || {})['متراژ']) || 0
+        if (a2 > 0) rates.push(priceOf(x) / a2)
+      }
+      const medOf = (rs: number[]) => { const s = [...rs].sort((x, y) => x - y); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2 }
+      const est = area > 0 && rates.length >= config().empire.intel.minComps ? Math.round(medOf(rates) * area) : null
+      const estBand = est ? { lo: Math.round(est * (1 - cfg.estBandPct / 100)), hi: Math.round(est * (1 + cfg.estBandPct / 100)), samples: rates.length } : null
+      const owner = await ownerOfListing(it.id).catch(() => null)
+      const infl = auctionInfluenceOf(e, cfg.influenceMax)
+      const run = e.auctionRun && e.auctionRun.week === week ? e.auctionRun : null
+      const rivalCards = setup.rivals.map(rv => {
+        const d = AUCTION_RIVALS.find(x => x.key === rv.key)!
+        const grudge = Math.min(3, Math.max(0, (e.rivalScore || {})[rv.key] || 0))
+        return { key: d.key, name: d.name, ceo: d.ceo, icon: d.icon, style: d.style, desc: d.desc, grudge }
+      })
+      return NextResponse.json({
+        ok: true,
+        auction: {
+          id: it.id, title: it.title, hood, area,
+          url: listingHref(it.id, it.title, hoodOf(it.location)),
+          type: { key: setup.type.key, fa: setup.type.fa, icon: setup.type.icon, desc: setup.type.desc, influence: setup.type.influence },
+          start: setup.start, estBand,
+          estNote: estBand ? `برآوردِ کارشناسی از ${estBand.samples.toLocaleString('fa-IR')} نمونهٔ واقعیِ همین محله — عددِ دقیق را هیچ‌کس نمی‌داند` : 'نمونهٔ واقعیِ کافی در این محله نیست — برآوردی در کار نیست؛ چشم‌بسته واردِ نبرد می‌شوی',
+          rivals: rivalCards,
+          rumors: setup.rumors.map(r => r.text),
+          expiresAt: (week + 1) * 7 * 864e5,
+          soldTo: owner && owner.userId !== userId ? { name: owner.name, no: owner.no } : null,
+          mine: !!(owner && owner.userId === userId),
+        },
+        influence: infl,
+        entered: !!e.claims[`au_${week}`],
+        run: run ? { ...run, anchor: run.done ? run.anchor : 0 } : null,   // لنگر (قیمتِ واقعی) تا پایان پنهان می‌ماند
+        win: e.auctionWin && e.auctionWin.week === week ? e.auctionWin : null,
+        nextBid: run && !run.done ? { bid: auctionNextBidOf(run, 'bid', cfg), power: auctionNextBidOf(run, 'power', cfg) } : null,
+        unlocked: empireLevel(e.xp).level >= cfg.level, need: cfg.level,
+        capital: e.capital,
+      })
+    }
+    // ورود به تالار: یک ورود در هفته — خودِ «شرکت کنم یا نه؟» اولین تصمیمِ سند است.
+    case 'auctionEnter': {
+      const cfg = config().empire.auction
+      if (!cfg.enabled) return NextResponse.json({ error: 'تالارِ مزایده فعلاً بسته است' }, { status: 403 })
+      const e = await getEmpire(userId)
+      if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      const gate = await lockedMsg(userId, cfg.level, 'تالارِ مزایده')
+      if (gate) return NextResponse.json({ error: gate }, { status: 403 })
+      const week = Math.floor(dayNumberOf(Date.now()) / 7)
+      const items = await candidateListings(800).catch(() => [] as Item[])
+      const pricedIds = items.filter(isPricedSale).map(it => ({ id: it.id, price: priceOf(it) }))
+      const bdPick = bigDealPickOf(week, pricedIds, config().empire.bigDeal.topPct)
+      const pickId = auctionPickOf(week, pricedIds, bdPick)
+      const it = pickId ? items.find(x => x.id === pickId) : null
+      if (!it) return NextResponse.json({ error: 'مزایدهٔ این هفته در دسترس نیست' }, { status: 404 })
+      const owner = await ownerOfListing(it.id).catch(() => null)
+      if (owner && owner.userId !== userId) return NextResponse.json({ error: `دیر رسیدی — «${owner.name}» (#${(owner.no || 0).toLocaleString('fa-IR')}) زودتر این ملک را خریده` }, { status: 409 })
+      const anchor = priceOf(it)
+      const setup = auctionSetupOf(week, it.id, anchor, e.rivalScore || {}, cfg)
+      const r = await startAuction(userId, week, {
+        week, listingId: it.id, title: it.title, hood: hoodOf(it.location),
+        type: setup.type.key, anchor, start: setup.start,
+        rivals: setup.rivals, rumors: setup.rumors, at: Date.now(),
+      })
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      recordEvent({ type: 'user_clicked_property', userId, propertyId: it.id, meta: { src: 'empire_auction' } }).catch(() => {})
+      const run = r.empire!.auctionRun!
+      return NextResponse.json({ ok: true, run: { ...run, anchor: 0 }, nextBid: { bid: auctionNextBidOf(run, 'bid', cfg), power: auctionNextBidOf(run, 'power', cfg) }, capital: r.empire!.capital })
+    }
+    // یک حرکت در تالار: bid/power/wait/quit — سبک از رفتار تفسیر می‌شود؛ نتیجه قطعی و سمتِ سرور.
+    case 'auctionMove': {
+      const cfg = config().empire.auction
+      if (!cfg.enabled) return NextResponse.json({ error: 'تالارِ مزایده فعلاً بسته است' }, { status: 403 })
+      const move = String(b.move || '')
+      if (!['bid', 'power', 'wait', 'quit'].includes(move)) return NextResponse.json({ error: 'حرکتِ نامعتبر' }, { status: 400 })
+      const e = await getEmpire(userId)
+      if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      const week = Math.floor(dayNumberOf(Date.now()) / 7)
+      const infl = auctionInfluenceOf(e, cfg.influenceMax)
+      const r = await applyAuctionMove(userId, week, move as 'bid' | 'power' | 'wait' | 'quit', infl.pct, cfg)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      const run = r.empire!.auctionRun!
+      if (run.done && run.won) await applyHiddenBadges(userId).catch(() => {})
+      return NextResponse.json({
+        ok: true,
+        run: { ...run, anchor: run.done ? run.anchor : 0 },
+        nextBid: !run.done ? { bid: auctionNextBidOf(run, 'bid', cfg), power: auctionNextBidOf(run, 'power', cfg) } : null,
+        win: r.empire!.auctionWin && r.empire!.auctionWin!.week === week ? r.empire!.auctionWin : null,
+        capital: r.empire!.capital,
+      })
     }
 
     // 🧭 هوشِ سرمایه‌گذاری (فاز ۳۹ — سند ۲۶ فصل ۱۶): روندِ محله‌ها از تاریخچهٔ واقعیِ رصدخانه +

@@ -126,9 +126,13 @@ export interface EmpireData {
   wagesPaid?: number          // حقوقِ پرداختی به مهندس‌ها (مصرفِ شفافِ پول — قانون ۶)
   demolitionPaid?: number     // هزینهٔ تخریب‌های پرداختی (فاز ۲۵ — مصرفِ شفافِ پول، مثلِ حقوق)
   servicesPaid?: number       // کارمزدِ نقش‌های حرفه‌ای: دفترخانه/مشاور/معمار/وکیل/کارشناس (فاز ۲۹ — مصرفِ شفاف)
-  stats?: { sellsProfitable: number; negoWins: number; negoTries?: number; projectsDelivered?: number; repProjects?: number; crisisRecovered?: number }   // شمارنده‌های واقعیِ رفتار (جلد ۲۶/۷۲؛ crisisRecovered: فاز ۴۱ — عبور از بحران)
+  stats?: { sellsProfitable: number; negoWins: number; negoTries?: number; projectsDelivered?: number; repProjects?: number; crisisRecovered?: number; auctionWins?: number; auctionTries?: number }   // شمارنده‌های واقعیِ رفتار (جلد ۲۶/۷۲؛ crisisRecovered: فاز ۴۱؛ auction*: فاز ۴۵)
   crisis?: { at: number }     // فاز ۴۱ (سند ۲۸ Part 13): در وضعیتِ بحرانی است — ورود/خروجش در تایم‌لاین ثبت می‌شود
   bigDealWin?: { week: number; discountPct: number }   // فاز ۴۱ (Part 07): تخفیفِ بردهٔ مذاکرهٔ بزرگِ همین هفته — سمتِ سرور، ضدِ دستکاری
+  // فاز ۴۵ (سند ۲۹ — Auction Saga): وضعیتِ زندهٔ تالارِ مزایدهٔ هفته — کاملاً سمتِ سرور، هر حرکت قطعی از هش.
+  auctionRun?: AuctionRun
+  auctionWin?: { week: number; listingId: string; price: number }   // برندهٔ چکش — تا خرید (یا آخرِ هفته) معتبر؛ ضدِ دستکاری
+  rivalScore?: Record<string, number>   // حافظهٔ رقبا (سند ۲۹ Part 5): چند بار از جلوی هر رقیب ملک را برده‌ای → انتقام
   projectHist?: ProjectReport[]   // کارنامهٔ پروژه‌های تحویل‌شده (GDD فصل ۴) — درسِ هر پروژه از اعدادِ واقعیِ خودش
   snap?: { day: number; netWorth: number; prev: number }   // اسنپ‌شاتِ روزانه — «سود/زیانِ دیروز» (جلد ۲۶)
   weekSnap?: { week: number; netWorth: number }   // اسنپ‌شاتِ هفتگی — لیدربوردِ «رشدِ این هفته» (سند ۱۶: شانسِ بازیکنِ جدید)
@@ -385,6 +389,8 @@ export const HIDDEN_BADGES: Array<{ key: string; fa: string; earned: (e: EmpireD
   { key: 'Trusted Borrower', fa: 'خوش‌حسابِ افسانه‌ای — ۲ تسویه بدونِ دیرکرد', earned: e => (e.creditHist?.repaid || 0) >= 2 && (e.creditHist?.lateDays || 0) === 0 },
   // فاز ۴۱ (سند ۲۸ Part 13 — پیشنهادِ «Phoenix» خودِ سند): عبور از بحران بخشی از هویتِ امپراتوری می‌شود.
   { key: 'Phoenix', fa: 'ققنوس — از یک بحرانِ تمام‌عیار زنده بیرون آمد', earned: e => (e.stats?.crisisRecovered || 0) >= 1 },
+  // فاز ۴۵ (سند ۲۹ Auction Saga): برد در تالار داستان می‌سازد — «اون برج لعنتی رو یادت هست؟».
+  { key: 'Golden Hammer', fa: 'چکشِ طلایی — در تالارِ مزایده چکش به نامش کوبیده شد', earned: e => (e.stats?.auctionWins || 0) >= 1 },
 ]
 export function earnedHiddenBadges(e: EmpireData): string[] {
   return HIDDEN_BADGES.filter(b => !e.badges.includes(b.key) && b.earned(e)).map(b => b.key)
@@ -1774,7 +1780,269 @@ export async function noteCrisis(userId: string, active: boolean, now = Date.now
   })
 }
 
-// ══════════ فاز ۴۰ (سند ۲۷ Part 13 — مرکزِ خودکارسازی) ══════════
+// ══════════ فاز ۴۵ (سند ۲۹ — Auction Saga: «هر پیشنهاد یک حمله است، نه یک عدد») ══════════
+// مزایدهٔ هفتگی روی یک آگهیِ «واقعی» (متمایز از معاملهٔ بزرگ): برآوردِ بازه‌ای نه عددِ دقیق، رقبای شخصیت‌دار
+// با بودجهٔ پنهان + حافظه/انتقام، شایعاتِ لابی (هیچ‌کدام صددرصد قابلِ اعتماد نیست)، نبردِ نوبتیِ پیشنهاد —
+// سبکِ بازیکن «از رفتارش» تفسیر می‌شود نه از منو (تصمیمِ صریحِ سند). همه‌چیز قطعی از هش (قانون ۷)؛
+// «نفوذ» فقط از رفتارِ واقعیِ بازیکن کسب می‌شود، خریدنی نیست (قانون ۵ + سندِ «Auction Influence»).
+
+export interface AuctionRival {
+  key: string; name: string; ceo: string; icon: string; style: string; desc: string
+  aggro: number      // ۰..۱۰۰ — چقدر زود و تند پیشنهاد می‌دهد
+  patience: number   // ۰..۱۰۰ — چقدر در سکوت می‌ماند و آخرِ کار ضربه می‌زند
+  budgetLo: number; budgetHi: number   // سقفِ بودجهٔ پنهان: ٪ از قیمتِ لنگر (بازهٔ قطعی از هش)
+  fear: number       // ۰..۱۰۰ — احتمالِ جاخالی در برابرِ «پیشنهادِ سنگین»
+}
+export const AUCTION_RIVALS: AuctionRival[] = [
+  { key: 'kamran', name: 'گروهِ کامران', ceo: 'کامران', icon: '🦁', style: 'عجول و آتشی', desc: 'زود وارد می‌شود و تند بالا می‌برد — اگر عصبی شود، دیگر اقتصادی فکر نمی‌کند', aggro: 85, patience: 15, budgetLo: 88, budgetHi: 118, fear: 30 },
+  { key: 'naseri', name: 'هلدینگِ ناصری', ceo: 'ناصری', icon: '🦉', style: 'صبورِ خاموش', desc: 'تا آخرین لحظه ساکت می‌ماند؛ کارش خسته‌کردنِ بقیه است', aggro: 25, patience: 90, budgetLo: 95, budgetHi: 128, fear: 10 },
+  { key: 'ofogh', name: 'شرکتِ افق', ceo: 'خانمِ افشار', icon: '🌅', style: 'وسواسِ محله', desc: 'پولِ بی‌حساب ندارد، ولی روی محله‌هایی که دوست دارد بیش از ارزش هم می‌پردازد', aggro: 55, patience: 45, budgetLo: 78, budgetHi: 132, fear: 45 },
+  { key: 'atlas', name: 'هلدینگِ اطلس', ceo: 'مهندس اطلسی', icon: '🧊', style: 'سردِ منطقی', desc: 'ذره‌ای احساساتی نیست — قیمت از حسابش رد شود، همان لحظه بیرون می‌رود', aggro: 45, patience: 55, budgetLo: 84, budgetHi: 106, fear: 5 },
+  { key: 'sepehr', name: 'گروهِ سپهر', ceo: 'سپهری', icon: '🦅', style: 'شکارچیِ لحظهٔ آخر', desc: 'در سکوت می‌آید و در ثانیه‌های آخر ضربه می‌زند', aggro: 35, patience: 80, budgetLo: 90, budgetHi: 124, fear: 15 },
+]
+
+// «همه مزایده‌ها یکسان نیستند» (سند ۲۹ Part 1): هر نوع، قیمتِ شروع و قواعدِ خودش را دارد.
+export const AUCTION_TYPES = [
+  { key: 'bank', fa: 'مزایدهٔ بانکی', icon: '🏦', desc: 'بانک برای وصولِ طلب می‌فروشد — قیمتِ شروعِ پایین، رقابتِ داغ', startPct: 62, influence: false },
+  { key: 'gov', fa: 'مزایدهٔ دولتی', icon: '🏛', desc: 'فروشنده فقط به قیمت نگاه نمی‌کند — سابقه و نفوذِ شرکت‌ها هم امتیاز دارد', startPct: 70, influence: true },
+  { key: 'corp', fa: 'مزایدهٔ شرکتی', icon: '🏢', desc: 'یک شرکت در حالِ کوچک‌سازی است — رقبای حرفه‌ای سرِ میزند', startPct: 72, influence: false },
+  { key: 'estate', fa: 'مزایدهٔ ماترک', icon: '🕯', desc: 'وارث‌ها برای فروش عجله دارند — قیمتِ شروع وسوسه‌کننده است', startPct: 66, influence: false },
+  { key: 'urgent', fa: 'مزایدهٔ اضطراری', icon: '⚡', desc: 'فروشِ فوری — همه‌چیز سریع‌تر از همیشه پیش می‌رود', startPct: 60, influence: false },
+] as const
+
+export interface AuctionRun {
+  week: number; listingId: string; title: string; hood: string
+  type: string             // کلیدِ AUCTION_TYPES
+  anchor: number           // قیمتِ واقعیِ آگهی — تا پایان «پنهان» است و آخرِ کار رو می‌شود
+  start: number; price: number
+  leader: string           // 'me' | کلیدِ رقیب | '' (هنوز پیشنهادی نیست)
+  round: number
+  calls: number            // شمارشِ چکش در سکوت: «بار اول… بار دوم… بار سوم»
+  rivals: Array<{ key: string; ceiling: number; out?: boolean }>
+  rumors: Array<{ text: string; about: string; truth: boolean }>
+  log: Array<{ icon: string; text: string }>
+  done?: boolean; won?: boolean; final?: number
+  at: number
+}
+
+// انتخابِ ملکِ مزایدهٔ هفته: شهری و قطعی (مثلِ معاملهٔ بزرگ ولی با نمکِ متفاوت) از باندِ میانیِ بازار —
+// معاملهٔ بزرگ سگمنتِ لوکس را دارد؛ مزایده باید برای همهٔ سطح‌ها دست‌یافتنی باشد.
+export function auctionPickOf(week: number, items: Array<{ id: string; price: number }>, excludeId?: string | null): string | null {
+  const priced = items.filter(x => x.price > 0 && x.id !== excludeId)
+  if (!priced.length) return null
+  const sorted = [...priced].sort((a, b) => a.price - b.price)
+  const lo = Math.floor(sorted.length * 0.2), hi = Math.max(lo + 1, Math.ceil(sorted.length * 0.8))
+  const pool = sorted.slice(lo, hi)
+  return pool
+    .map(x => ({ id: x.id, r: createHash('sha1').update(`auction|${week}|${x.id}`).digest().readUInt32BE(0) }))
+    .sort((a, b) => a.r - b.r)[0].id
+}
+
+// صحنه‌چینیِ قطعیِ مزایده: نوع + رقبا (۲..سقف) + سقفِ بودجهٔ پنهانِ هرکدام + شایعاتِ لابی.
+// حافظه/انتقام (سند Part 5): هر بار که از جلوی رقیبی برده‌ای، سقفش بالاتر می‌رود — «دیگر اقتصادی فکر نمی‌کند».
+export function auctionSetupOf(week: number, listingId: string, anchor: number, rivalScore: Record<string, number>,
+  cfg: { rivalsMax: number; revengePct: number }): { type: typeof AUCTION_TYPES[number]; start: number; rivals: Array<{ key: string; ceiling: number }>; rumors: Array<{ text: string; about: string; truth: boolean }> } {
+  const h = createHash('sha1').update(`auction|${week}|${listingId}|setup`).digest()
+  const type = AUCTION_TYPES[h.readUInt32BE(0) % AUCTION_TYPES.length]
+  const start = Math.max(1, Math.round(anchor * type.startPct / 100))
+  const count = Math.max(2, Math.min(cfg.rivalsMax, 2 + (h.readUInt32BE(4) % Math.max(1, cfg.rivalsMax - 1))))
+  const picked = AUCTION_RIVALS
+    .map(r => ({ r, o: createHash('sha1').update(`auction|${week}|${listingId}|${r.key}`).digest().readUInt32BE(0) }))
+    .sort((a, b) => a.o - b.o).slice(0, count)
+  const rivals = picked.map(({ r }) => {
+    const rh = createHash('sha1').update(`auction|${week}|${listingId}|${r.key}|budget`).digest()
+    const pct = r.budgetLo + (rh.readUInt32BE(0) % Math.max(1, r.budgetHi - r.budgetLo + 1))
+    const grudge = Math.min(3, Math.max(0, rivalScore[r.key] || 0))
+    return { key: r.key, ceiling: Math.round(anchor * pct / 100 * (1 + grudge * Math.max(0, cfg.revengePct) / 100)) }
+  })
+  // شایعات (Part 2 لابی): دربارهٔ ۲ رقیب؛ هر شایعه با هش یا راست است یا دروغ — بعد از چکش رو می‌شود.
+  const rumors = rivals.slice(0, 2).map((rv, i) => {
+    const def = AUCTION_RIVALS.find(x => x.key === rv.key)!
+    const lie = (h.readUInt32BE(8 + i * 4) % 100) < 40
+    const rich = rv.ceiling >= anchor
+    const claimRich = lie ? !rich : rich
+    return {
+      text: claimRich
+        ? `یک نفر آرام کنارت می‌گوید: «شنیدم ${def.name} این هفته دستِ پُر آمده…»`
+        : `خبرنگاری زیرِ لب می‌گوید: «می‌گویند ${def.name} سقفِ بودجه‌اش را بسته…»`,
+      about: rv.key, truth: !lie,
+    }
+  })
+  return { type, start, rivals, rumors }
+}
+
+// نفوذِ کسب‌شده (سندِ «Auction Influence» + Part 18: بهترین امتیازها earned هستند، نه خریدنی):
+// همه از شمارنده‌های واقعیِ رفتارِ خودِ بازیکن — در مزایده‌های دولتی، رقیب باید با همین حاشیه از تو بالاتر برود.
+export function auctionInfluenceOf(e: Pick<EmpireData, 'stats' | 'creditHist' | 'xp'>, max: number): { pct: number; reasons: string[] } {
+  const reasons: string[] = []
+  let pct = 0
+  if ((e.stats?.sellsProfitable || 0) >= 3) { pct++; reasons.push('سابقهٔ فروش‌های سودده — بازار حرفه‌ای می‌داندت') }
+  if ((e.stats?.projectsDelivered || 0) >= 1) { pct++; reasons.push('پروژهٔ تحویل‌داده — خوش‌قولی در ساخت') }
+  if ((e.creditHist?.repaid || 0) >= 1 && (e.creditHist?.lateDays || 0) === 0) { pct++; reasons.push('خوش‌حسابِ بانک — بدونِ یک روز دیرکرد') }
+  if ((e.stats?.crisisRecovered || 0) >= 1) { pct++; reasons.push('از بحران زنده بیرون آمده‌ای — اعتبارِ مقاومت') }
+  if (empireLevel(e.xp).level >= 10) { pct++; reasons.push('قدمتِ امپراتوری — نامت را می‌شناسند') }
+  return { pct: Math.min(Math.max(0, max), pct), reasons }
+}
+
+// قیمتِ پیشنهادِ بعدیِ بازیکن — یک منبعِ واحد برای موتور، گاردِ سرمایه و دکمه‌های UI.
+export function auctionNextBidOf(run: Pick<AuctionRun, 'anchor' | 'price' | 'start' | 'leader'>, move: 'bid' | 'power', cfg: { stepPct: number; powerPct: number }): number {
+  const step = Math.max(1, Math.round(run.anchor * Math.max(1, cfg.stepPct) / 100))
+  const raise = move === 'power' ? Math.max(step * 2, Math.round(run.anchor * Math.max(1, cfg.powerPct) / 100)) : step
+  return run.leader ? run.price + raise : (move === 'power' ? run.start + raise : run.start)
+}
+
+// یک حرکتِ بازیکن + واکنشِ قطعیِ رقبا — خالص (state جدید برمی‌گرداند، چیزی را تغییر نمی‌دهد).
+// سبک از «رفتار» تفسیر می‌شود (تصمیمِ صریحِ سند: منوی Bid Style نه): bid=گامِ عادی، power=حملهٔ سنگین،
+// wait=سکوت (چکش می‌شمارد؛ رقبا شاید با هم بجنگند)، quit=خروجِ آگاهانه.
+export function auctionMoveOf(userId: string, run: AuctionRun, move: 'bid' | 'power' | 'wait' | 'quit', influencePct: number,
+  cfg: { stepPct: number; powerPct: number; maxRounds: number }): AuctionRun {
+  const r: AuctionRun = JSON.parse(JSON.stringify(run))
+  if (r.done) return r
+  const step = Math.max(1, Math.round(r.anchor * Math.max(1, cfg.stepPct) / 100))
+  const h = createHash('sha1').update(`${userId}|au|${r.week}|${r.listingId}|${r.round}|${move}`).digest()
+  const typeDef = AUCTION_TYPES.find(t => t.key === r.type) || AUCTION_TYPES[0]
+  const infl = typeDef.influence ? Math.max(0, influencePct) : 0
+  const defOf = (k: string) => AUCTION_RIVALS.find(x => x.key === k)!
+  const active = () => r.rivals.filter(x => !x.out)
+  const finish = (won: boolean) => { r.done = true; r.won = won; r.final = r.price }
+
+  if (move === 'quit') {
+    r.log.push({ icon: '🚪', text: 'کیفت را برداشتی و از تالار بیرون آمدی — همه برگشتند و نگاهت کردند' })
+    finish(false)
+    return r
+  }
+  if (move === 'bid' || move === 'power') {
+    r.price = auctionNextBidOf(r, move, cfg)
+    r.leader = 'me'; r.calls = 0
+    r.log.push(move === 'power'
+      ? { icon: '⚡', text: `حملهٔ سنگین! دستت را بالا بردی: ${Math.round(r.price / 1e6).toLocaleString('fa-IR')}م — سالن یک لحظه ساکت شد` }
+      : { icon: '🖐', text: `پیشنهاد دادی: ${Math.round(r.price / 1e6).toLocaleString('fa-IR')}م تومان` })
+    // ترسِ حملهٔ سنگین: بعضی رقبا همان لحظه جا خالی می‌دهند (قطعی از هش + شخصیت).
+    if (move === 'power') {
+      active().forEach((rv, i) => {
+        const d = defOf(rv.key)
+        if ((h.readUInt32BE(4 + i * 4) % 100) < d.fear || rv.ceiling < r.price) {
+          rv.out = true
+          r.log.push({ icon: '💨', text: `${d.icon} ${d.name} سرش را تکان داد و از رقابت بیرون رفت` })
+        }
+      })
+    }
+  }
+  if (move === 'wait') {
+    if (!r.leader) {
+      r.log.push({ icon: '🤫', text: 'دست‌به‌سینه فقط نگاه می‌کنی — مجری منتظرِ اولین پیشنهاد است' })
+    } else {
+      r.calls++
+      r.log.push({ icon: '🔨', text: r.calls === 1 ? 'مجری: «بار اول…»' : r.calls === 2 ? 'مجری: «بار دوم…»' : 'مجری چکش را بالا برد…' })
+    }
+  }
+  // واکنشِ رقبا (حداکثر ۲ پیشنهاد در هر نوبت تا ریتم حفظ شود — قانونِ سند: هر چند ثانیه یک اتفاق).
+  let rivalBids = 0
+  const order = active().map((rv, i) => ({ rv, p: createHash('sha1').update(`${userId}|au|${r.week}|${r.round}|${rv.key}`).digest().readUInt32BE(0) })).sort((a, b) => a.p - b.p)
+  for (const { rv } of order) {
+    if (rivalBids >= 2 || r.done) break
+    const d = defOf(rv.key)
+    const next = (r.leader ? r.price : r.start) + (r.leader ? step : 0)
+    const effCeil = r.leader === 'me' ? Math.round(rv.ceiling * (1 - infl / 100)) : rv.ceiling
+    if (next > effCeil) {
+      if (!rv.out && r.price > rv.ceiling * 0.92 && (h.readUInt32BE(16) % 2) === 0) {
+        rv.out = true
+        r.log.push({ icon: '🚶', text: `${d.icon} ${d.name} آرام بلند شد و رفت — انگار حسابش تمام شده بود` })
+      }
+      continue
+    }
+    // شخصیت: عجول‌ها زود می‌پرند؛ صبورها فقط وقتی چکش نزدیک است یا راندهای آخر.
+    const urge = d.aggro + (r.calls > 0 ? d.patience : 0) + (r.round >= cfg.maxRounds - 2 ? 30 : 0)
+    const roll = createHash('sha1').update(`${userId}|au|${r.week}|${r.round}|${rv.key}|roll`).digest().readUInt32BE(0) % 100
+    if (roll < urge) {
+      r.price = next
+      r.leader = rv.key
+      r.calls = 0
+      rivalBids++
+      r.log.push({ icon: d.icon, text: `${d.name} (${d.ceo}) پاسخ داد: ${Math.round(r.price / 1e6).toLocaleString('fa-IR')}م` })
+    }
+  }
+  // سرنخِ اتاق (Reading The Room): نزدیک به سقف → عصبی؛ عدد نمی‌گوییم، رفتار می‌گوییم.
+  for (const rv of active()) {
+    const d = defOf(rv.key)
+    if (r.price > rv.ceiling * 0.85 && (h.readUInt32BE(12) % 3) === 0) {
+      r.log.push({ icon: '👀', text: `${d.ceo} مدام با تلفن حرف می‌زند و عصبی راه می‌رود…` })
+      break
+    }
+  }
+  r.round++
+  // چکش: سه بارِ مجری در سکوت، یا حذفِ همهٔ رقبا وقتی تو صدرنشینی، یا سقفِ راندها.
+  if (r.calls >= 3 && r.leader) finish(r.leader === 'me')
+  else if (r.leader === 'me' && active().length === 0) { r.log.push({ icon: '🔨', text: 'مجری نگاهی به سالنِ ساکت انداخت و چکش را کوبید' }); finish(true) }
+  else if (r.round >= Math.max(4, cfg.maxRounds)) {
+    r.log.push({ icon: '🔨', text: 'وقتِ تالار تمام شد — چکش روی آخرین پیشنهاد کوبیده شد' })
+    finish(r.leader === 'me')
+  }
+  if (r.done) {
+    const est = r.anchor
+    if (r.won) r.log.push({ icon: '🏆', text: `چکش کوبیده شد — «${r.title.slice(0, 30)}» مالِ توست: ${Math.round((r.final || 0) / 1e6).toLocaleString('fa-IR')}م تومان` })
+    else if (r.leader && r.leader !== 'me') {
+      const d = defOf(r.leader)
+      r.log.push({ icon: '😔', text: `${d.name} برنده شد — ${(r.final || 0) > est ? 'ولی گران‌تر از قیمتِ واقعیِ آگهی خرید؛ شاید برندهٔ واقعی تویی' : 'این بار او زرنگ‌تر بود'}` })
+    }
+    // پرده‌برداری از شایعات: «هیچ خبری کاملاً قابلِ اعتماد نبود».
+    for (const rm of r.rumors) {
+      const d = defOf(rm.about)
+      r.log.push({ icon: rm.truth ? '✅' : '🎭', text: rm.truth ? `آن شایعه دربارهٔ ${d.name} درست بود` : `شایعهٔ ${d.name} دروغ بود — یکی می‌خواست بازی‌ات بدهد` })
+    }
+    r.log.push({ icon: '📜', text: `قیمتِ واقعیِ آگهی حالا رو شد: ${Math.round(r.anchor / 1e6).toLocaleString('fa-IR')}م تومان` })
+  }
+  return r
+}
+
+// مصرفِ بردِ مزایده بعد از خریدِ موفق — تا همان برد دوبار خرجِ خرید نشود.
+export async function consumeAuctionWin(userId: string) {
+  return mutateEmpire(userId, e => { if (!e.auctionWin) return 'بردِ مزایده‌ای در کار نیست'; delete e.auctionWin })
+}
+
+// ورود به تالار — اتمیک: یک ورود در هفته (کلیدِ claims)؛ ران تا پایان قابلِ ادامه است.
+export async function startAuction(userId: string, week: number, run: Omit<AuctionRun, 'round' | 'calls' | 'leader' | 'log' | 'price'>, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    if (e.auctionRun && e.auctionRun.week === week && !e.auctionRun.done) return 'همین حالا داخلِ تالاری — نبرد را تمام کن'
+    if (e.claims[`au_${week}`]) return 'این هفته واردِ تالار شده‌ای — مزایدهٔ بعدی هفتهٔ دیگر است'
+    e.claims[`au_${week}`] = now
+    e.auctionRun = { ...run, price: run.start, leader: '', round: 0, calls: 0, log: [{ icon: '🏛', text: 'واردِ تالار شدی — نورِ سالن کم شد و همهمه خوابید' }] }
+    e.stats = e.stats || { sellsProfitable: 0, negoWins: 0 }
+    e.stats.auctionTries = (e.stats.auctionTries || 0) + 1
+    e.timeline.push({ at: now, icon: '🏛', title: `واردِ تالارِ مزایده شدی: «${run.title.slice(0, 28)}»`, detail: 'رقبا سرِ میزند — هر حرکتت خوانده می‌شود' })
+  })
+}
+
+// یک حرکت در تالار — اتمیک: نتیجه با موتورِ خالص محاسبه و همان‌جا قفل می‌شود؛ برد → auctionWin ضدِ دستکاری.
+export async function applyAuctionMove(userId: string, week: number, move: 'bid' | 'power' | 'wait' | 'quit', influencePct: number,
+  cfg: { stepPct: number; powerPct: number; maxRounds: number; xpWin: number; xpTry: number }, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const run = e.auctionRun
+    if (!run || run.week !== week) return 'مزایدهٔ فعالی نداری — اول واردِ تالار شو'
+    if (run.done) return 'این مزایده تمام شده'
+    if ((move === 'bid' || move === 'power') && auctionNextBidOf(run, move, cfg) > e.capital) return 'سرمایه‌ات به این قیمت نمی‌رسد — پیشنهادی که نتوانی بپردازی، بلوفِ خطرناکی است'
+    const next = auctionMoveOf(userId, run, move, influencePct, cfg)
+    e.auctionRun = next
+    if (next.done) {
+      e.xp += Math.max(0, next.won ? cfg.xpWin : cfg.xpTry)
+      if (next.won) {
+        e.auctionWin = { week, listingId: next.listingId, price: next.final || next.price }
+        e.stats = e.stats || { sellsProfitable: 0, negoWins: 0 }
+        e.stats.auctionWins = (e.stats.auctionWins || 0) + 1
+        // حافظهٔ رقبا: از جلوی هر رقیبِ حاضر بردی — دفعهٔ بعد شخصی‌ترش می‌کنند.
+        e.rivalScore = e.rivalScore || {}
+        for (const rv of next.rivals) e.rivalScore[rv.key] = (e.rivalScore[rv.key] || 0) + 1
+        const over = (next.final || 0) > next.anchor
+        e.timeline.push({ at: now, icon: '🏆', title: `چکشِ تالار به نامِ تو کوبیده شد: «${next.title.slice(0, 28)}»`, detail: over ? 'رسانه‌ها: «گران خرید» — حالا باید ثابت کنی اشتباه می‌کنند' : 'رسانه‌ها: «با هوش خرید، نه فقط با پول»' })
+        e.journal.push({ at: now, text: over ? `مزایده را بردی ولی بالاتر از قیمتِ آگهی — بازار حواسش هست.` : `مزایده را زیرِ قیمتِ آگهی بردی. این همان معامله‌هایی است که ازش داستان می‌سازند.` })
+      } else {
+        const walked = next.log.some(l => l.icon === '🚪')
+        const overpaidRival = !!next.leader && next.leader !== 'me' && (next.final || 0) > next.anchor
+        e.timeline.push({ at: now, icon: walked ? '🚪' : '😔', title: walked ? 'آگاهانه از مزایده بیرون آمدی' : 'مزایدهٔ این هفته را واگذار کردی', detail: overpaidRival ? 'رقیب گران‌تر از قیمتِ واقعی خرید — کنار کشیدنت حرفه‌ای بود' : 'هفتهٔ بعد تالار دوباره باز می‌شود' })
+      }
+    }
+  })
+}
 // قوانینِ قابل‌تعریفِ بازیکن: فقط notify/recommend — «هیچ اقدامِ مالی کاملاً خودکار انجام نمی‌شود» (قانونِ سختِ سند).
 // ارزیابیِ شرط‌ها در empire-intel (خالص)؛ این‌جا فقط CRUD اتمیک + ثبتِ فعال‌شدن (هر قانون حداکثر یک‌بار در روز).
 

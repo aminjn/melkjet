@@ -199,6 +199,10 @@ export default function EmpirePage() {
   const [aq, setAq] = useState<any>(null)   // { assetId, kind: 'sell'|'rent', via, data }
   const [bdRes, setBdRes] = useState<any>(null)
   const loadBd = async () => { const d = await api({ action: 'bigDeal' }); if (d) setBd(d) }
+  // فاز ۴۵ (سند ۲۹ Auction Saga): تالارِ مزایدهٔ هفته — لابی، نبردِ زنده، برد/باخت
+  const [au, setAu] = useState<any>(null)        // وضعیتِ مزایده از سرور (لابی + ران + برد)
+  const [auRun, setAuRun] = useState<any>(null)  // رانِ زنده — بعد از هر حرکت از سرور می‌آید
+  const [auNext, setAuNext] = useState<any>(null) // مبلغِ دقیقِ پیشنهاد/حملهٔ بعدی (همان فرمولِ سرور)
   const suspended = useRef(false)
 
   const api = useCallback(async (body: any) => {
@@ -298,6 +302,15 @@ export default function EmpirePage() {
       .then(r => r.json()).then(d => { if (alive && d?.ok) setBd(d) }).catch(() => {})
     return () => { alive = false }
   }, [step, bd])
+
+  // فاز ۴۵: تالارِ مزایدهٔ هفته — یک‌بار با ورود به داشبورد؛ رانِ نیمه‌کاره هم از همین‌جا برمی‌گردد
+  useEffect(() => {
+    if (step !== 'dash' || au) return
+    let alive = true
+    fetch('/api/empire', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'auction' }) })
+      .then(r => r.json()).then(d => { if (alive && d?.ok) { setAu(d); if (d.run) setAuRun(d.run); if (d.nextBid) setAuNext(d.nextBid) } }).catch(() => {})
+    return () => { alive = false }
+  }, [step, au])
 
   // «هیچ جلسه‌ای بی‌دلیلِ برگشت تمام نشود» (فصل ۴): با ترکِ صفحه، تعلیقِ فردا ثبت می‌شود.
   useEffect(() => {
@@ -850,6 +863,124 @@ export default function EmpirePage() {
       })()}
       {bd.tried && bd.wonPct === 0 && !bdRes && !bd.deal.soldTo && !bd.deal.mine && <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted)' }}>🚪 مذاکرهٔ این هفته‌ات شکست خورد — هفتهٔ بعد فرصتِ تازه‌ای می‌آید.</div>}
     </div>}
+
+    {/* 🏛 تالارِ مزایدهٔ هفته (فاز ۴۵ — سند ۲۹ Auction Saga): یک ملکِ واقعی برای همه یکی — لابیِ شایعه‌ها،
+        نبردِ زندهٔ پیشنهاد با رقبای شخصیت‌دار (بودجهٔ پنهان + حافظه/انتقام)؛ ارزشِ دقیق را هیچ‌کس نمی‌داند. */}
+    {au?.ok && au.auction && (() => {
+      const A = au.auction
+      const run = auRun
+      const live = !!(run && !run.done)
+      const finished = !!(run && run.done)
+      const rivalOf = (k: string) => (A.rivals || []).find((r: any) => r.key === k)
+      const leaderName = run ? (run.leader === 'me' ? 'تو' : run.leader ? (rivalOf(run.leader)?.name || 'رقیب') : 'هنوز کسی') : ''
+      const capital = Number(au.capital) || 0
+      const doMove = async (m: string) => {
+        const d = await api({ action: 'auctionMove', move: m })
+        if (!d) return
+        setAuRun(d.run); setAuNext(d.nextBid)
+        setAu((s: any) => s ? { ...s, win: d.win, capital: d.capital ?? s.capital, entered: true } : s)
+        if (d.run?.done) { if (d.run.won) celebrate(); else sfx('warn', st?.soundEnabled !== false) }
+      }
+      return <div style={{ ...card, borderColor: '#9b8cf0', background: 'linear-gradient(165deg, rgba(155,140,240,.08), rgba(155,140,240,.02) 60%)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <b style={{ fontSize: 14 }}>🏛 تالارِ مزایدهٔ هفته</b>
+          <span style={{ fontSize: 11, color: '#b7aef2', border: '1px solid rgba(155,140,240,.4)', borderRadius: 999, padding: '2px 10px', fontWeight: 700 }} title={A.type.desc}>{A.type.icon} {A.type.fa}</span>
+          <span style={{ flex: 1 }} />
+          <span style={{ fontSize: 13, color: '#9b8cf0', fontWeight: 800 }}>⏳ <Countdown until={A.expiresAt || 0} onDone={() => { setAu(null); setAuRun(null) }} /></span>
+        </div>
+        <div style={{ marginTop: 10, fontSize: 13 }}>
+          <b>{A.title.slice(0, 70)}</b>
+          <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 3 }}>{A.hood}{A.area ? ` · ${fa(A.area)} متر` : ''} · {A.type.desc}</div>
+          {/* «ارزشِ واقعی هیچ‌وقت گفته نمی‌شود» — فقط برآوردِ بازه‌ای از نمونه‌های واقعیِ محله (قانون ۱) */}
+          {A.estBand
+            ? <div style={{ fontSize: 13.5, color: 'var(--gold)', fontWeight: 800, marginTop: 5 }}>برآورد: {faB(A.estBand.lo)} تا {faB(A.estBand.hi)} تومان <span style={{ fontSize: 10.5, color: 'var(--muted)', fontWeight: 400 }}>({A.estNote})</span></div>
+            : <div style={{ fontSize: 12, color: '#e8c37a', marginTop: 5 }}>برآورد: ؟؟؟ <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>— {A.estNote}</span></div>}
+          <div style={{ fontSize: 12, color: '#7ee0b8', marginTop: 3 }}>🔔 قیمتِ شروعِ تالار: <b>{faB(A.start)} تومان</b> — چکش کجا بایستد، دستِ شماست</div>
+        </div>
+        {/* لابی (Part 2): رقبا با شخصیت + شایعه‌هایی که شاید دروغ باشند */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+          {(A.rivals || []).map((rv: any) => (
+            <span key={rv.key} title={`${rv.ceo} — ${rv.desc}${rv.grudge ? ` · ${fa(rv.grudge)} بار از جلویش برده‌ای؛ دنبالِ تلافی است` : ''}`}
+              style={{ fontSize: 11, border: `1px solid ${rv.grudge ? '#e08a7e' : 'var(--line2)'}`, borderRadius: 999, padding: '3px 10px', background: 'var(--bg2)', color: rv.grudge ? '#e08a7e' : 'var(--text)' }}>
+              {rv.icon} {rv.name} <span style={{ color: 'var(--muted)' }}>· {rv.style}</span>{rv.grudge ? ' 😤' : ''}
+            </span>
+          ))}
+        </div>
+        {!live && !finished && (A.rumors || []).map((t: string, i: number) => (
+          <div key={i} style={{ fontSize: 11.5, color: '#b7aef2', fontStyle: 'italic', marginTop: i ? 3 : 8 }}>🤫 {t}</div>
+        ))}
+        {au.influence?.pct > 0 && <div style={{ fontSize: 11, color: '#7ee0b8', marginTop: 7 }} title={(au.influence.reasons || []).join(' · ')}>
+          ⭐ نفوذِ کسب‌شده‌ات: {fa(au.influence.pct)}٪ — {A.type.influence ? 'در این مزایده فروشنده به نامت اعتماد دارد؛ رقبا باید بیشتر خرج کنند' : 'در مزایده‌های دولتی به کارت می‌آید'}
+        </div>}
+        {A.soldTo && <div style={{ fontSize: 12, color: '#e8c37a', marginTop: 8 }}>🔒 این ملک را «{A.soldTo.name}» (#{fa(A.soldTo.no)}) زودتر خریده — تالارِ این هفته تعطیل شد.</div>}
+        {A.mine && <div style={{ fontSize: 12, color: '#7ee0b8', marginTop: 8 }}>👑 مالِ توست — این هفته چیزی برای جنگیدن نمانده.</div>}
+        {!A.soldTo && !A.mine && !au.unlocked && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>🔒 از سطحِ {fa(au.need)} باز می‌شود — با تصمیم‌های واقعی XP بگیر.</div>}
+        {/* تصمیمِ اول (سند: «آیا اصلاً شرکت کنم؟») — یک ورود در هفته */}
+        {!A.soldTo && !A.mine && au.unlocked && !au.entered && !run && <div style={{ marginTop: 10 }}>
+          <button style={{ ...btn, padding: '8px 18px', fontSize: 12.5 }} disabled={busy}
+            onClick={async () => {
+              if (!confirm('فقط «یک» ورود در هفته داری — گاهی بهترین تصمیم شرکت‌نکردن است. واردِ تالار شوی؟')) return
+              const d = await api({ action: 'auctionEnter' })
+              if (d) { setAuRun(d.run); setAuNext(d.nextBid); setAu((s: any) => s ? { ...s, entered: true, capital: d.capital ?? s.capital } : s); sfx('build', st?.soundEnabled !== false) }
+            }}>🚪 ورود به تالار</button>
+          <span style={{ fontSize: 11, color: 'var(--muted)', marginRight: 8 }}>نورِ سالن کم می‌شود؛ هر حرکتت خوانده خواهد شد…</span>
+        </div>}
+        {au.entered && !run && !au.win && !A.soldTo && !A.mine && <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted)' }}>🚪 مزایدهٔ این هفته‌ات تمام شده — هفتهٔ بعد تالار دوباره باز می‌شود.</div>}
+        {/* 🎬 سالنِ زنده (Part 4 Live Bidding): هر حرکت یک تصمیم — قیمتِ بزرگ، صدرنشین، چکش، و رفتارِ رقبا به‌جای عدد */}
+        {run && <div style={{ marginTop: 12, border: '1px solid rgba(155,140,240,.45)', borderRadius: 14, padding: '14px 14px 12px', background: 'radial-gradient(ellipse 120% 90% at 50% 0%, #191330, #0b0916 78%)', boxShadow: '0 10px 34px -12px rgba(90,70,200,.45)' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, color: '#b7aef2' }}>{finished ? (run.won ? '🏆 چکش کوبیده شد' : '🔨 مزایده تمام شد') : `راندِ ${fa((run.round || 0) + 1)} · صدر: ${leaderName}${run.leader === 'me' ? ' ✅' : ''}`}</span>
+            <span style={{ flex: 1 }} />
+            {!finished && run.calls > 0 && <span style={{ fontSize: 12, color: '#e8c37a', fontWeight: 800 }}>🔨 {run.calls === 1 ? 'بار اول…' : run.calls === 2 ? 'بار دوم…' : 'آخرین لحظه…'}</span>}
+          </div>
+          <div style={{ textAlign: 'center', margin: '10px 0 4px' }}>
+            <div style={{ fontSize: 26, fontWeight: 900, color: run.leader === 'me' ? '#f0d47a' : '#fff', textShadow: run.leader === 'me' ? '0 0 22px rgba(240,212,122,.45)' : '0 0 18px rgba(155,140,240,.35)' }}>
+              {run.leader ? `${faB(run.price)} تومان` : `${faB(run.start)} تومان`}
+            </div>
+            <div style={{ fontSize: 10.5, color: 'var(--muted)' }}>{run.leader ? 'آخرین پیشنهادِ روی میز' : 'قیمتِ پایه — مجری منتظرِ اولین دست است'}</div>
+          </div>
+          {/* رفتارِ رقبا = سرنخ، نه عدد (Reading The Room) */}
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', justifyContent: 'center', margin: '8px 0' }}>
+            {(run.rivals || []).map((rv: any) => {
+              const d0 = rivalOf(rv.key)
+              return <span key={rv.key} style={{ fontSize: 10.5, borderRadius: 999, padding: '2px 9px', border: '1px solid', borderColor: rv.out ? '#5a5a66' : run.leader === rv.key ? '#f0d47a' : 'rgba(155,140,240,.5)', color: rv.out ? '#77778a' : run.leader === rv.key ? '#f0d47a' : '#cfc8f5', textDecoration: rv.out ? 'line-through' : 'none', opacity: rv.out ? .6 : 1 }}>
+                {d0?.icon} {d0?.name}{run.leader === rv.key ? ' 👑' : ''}{rv.out ? ' · رفت' : ''}
+              </span>
+            })}
+          </div>
+          <div style={{ maxHeight: 150, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4, background: 'rgba(0,0,0,.25)', borderRadius: 10, padding: '8px 10px' }}>
+            {(run.log || []).slice(-9).map((l: any, i: number) => (
+              <div key={i} style={{ fontSize: 11.5, color: i === (run.log || []).slice(-9).length - 1 ? '#fff' : 'var(--muted)', lineHeight: 1.8 }}>{l.icon} {l.text}</div>
+            ))}
+          </div>
+          {live && auNext && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10, justifyContent: 'center' }}>
+            <button style={{ ...btn, padding: '8px 14px', fontSize: 12 }} disabled={busy || auNext.bid > capital} title={auNext.bid > capital ? 'سرمایه‌ات به این قیمت نمی‌رسد' : 'پیشنهادِ یک گام بالاتر'}
+              onClick={() => doMove('bid')}>🖐 پیشنهاد — {faB(auNext.bid)}</button>
+            <button style={{ ...btnGhost, padding: '8px 14px', fontSize: 12, borderColor: '#e08a7e', color: '#e08a7e' }} disabled={busy || auNext.power > capital} title="جهشِ بزرگ برای ترساندنِ رقبا — گران ولی مؤثر"
+              onClick={() => doMove('power')}>⚡ حملهٔ سنگین — {faB(auNext.power)}</button>
+            <button style={{ ...btnGhost, padding: '8px 14px', fontSize: 12 }} disabled={busy} title="بگذار رقبا با هم بجنگند؛ ولی اگر مجری سه بار بشمارد، چکش می‌خورد"
+              onClick={() => doMove('wait')}>🤫 صبر</button>
+            <button style={{ ...btnGhost, padding: '8px 14px', fontSize: 12, color: 'var(--muted)' }} disabled={busy} title="کنار کشیدن هم یک تصمیمِ حرفه‌ای است"
+              onClick={() => { if (confirm('از مزایده بیرون بروی؟ گاهی برندهٔ واقعی همانی است که به‌موقع رفت.')) doMove('quit') }}>🚪 خروج</button>
+          </div>}
+          {finished && <div style={{ marginTop: 10, textAlign: 'center' }}>
+            {run.won && au.win && <>
+              <div style={{ fontSize: 13, color: '#f0d47a', fontWeight: 800 }}>🏆 «{A.title.slice(0, 40)}» با چکشِ {faB(au.win.price)} تومان به نامت خورد</div>
+              <div style={{ fontSize: 11, color: (au.win.price <= run.anchor) ? '#7ee0b8' : '#e08a7e', marginTop: 3 }}>
+                {au.win.price <= run.anchor ? `زیرِ قیمتِ آگهی (${faB(run.anchor)}) بستی — رسانه‌ها: «با هوش خرید، نه فقط با پول»` : `بالاتر از قیمتِ آگهی (${faB(run.anchor)}) — حالا باید ثابت کنی که می‌ارزید`}
+              </div>
+              <button style={{ ...btn, padding: '8px 18px', fontSize: 12.5, marginTop: 8 }} disabled={busy}
+                onClick={async () => {
+                  if (!confirm(`سندِ «${A.title.slice(0, 40)}» به ${faB(au.win.price)} تومان (+ مالیات و ثبت) به نامت بخورد؟`)) return
+                  const d = await api({ action: 'buy', listingId: A.id, auction: true })
+                  if (d) { setSt(d); celebrate(); setAu(null); setAuRun(null); setAuNext(null) }
+                }}>📜 امضای سند و پرداخت</button>
+            </>}
+            {!run.won && <div style={{ fontSize: 12, color: 'var(--muted)' }}>این هفته چکش به نامِ تو نخورد — ولی تالار داستانش را یادش می‌مانَد. هفتهٔ بعد دوباره باز است.</div>}
+          </div>}
+        </div>}
+      </div>
+    })()}
 
     {/* 🔥 فرصت‌های طلاییِ امروز (سند ۱۴ — Hook): آگهی‌های واقعی، شمارشِ معکوسِ واقعی؛ فردا فهرستِ دیگری می‌آید.
         کارت قضاوت نمی‌کند — بعضی واقعاً زیرِ قیمتِ محله‌اند، بعضی نه؛ فکرکردن (یا ژتونِ تحلیل) کارِ بازیکن است. */}

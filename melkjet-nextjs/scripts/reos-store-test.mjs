@@ -1626,6 +1626,30 @@ async function main() {
     const c41b = await noteCrisis(uc12, false)
     ok('خروج از بحران: شمارندهٔ ققنوس + پاک‌شدنِ پرچم', c41b.ok === true && !c41b.empire.crisis && (c41b.empire.stats?.crisisRecovered || 0) >= 1 && c41b.empire.timeline.some(t => t.icon === '🕊'))
     ok('خروجِ بدونِ بحران بی‌اثر است', (await noteCrisis(uc12, false)).ok === false)
+
+    // ── فاز ۴۵ (سند ۲۹ Auction Saga): یک ورود/هفته + نبردِ اتمیک + بردِ سمتِ سرور + حافظهٔ رقبا ──
+    console.log('\n── Empire · فاز ۴۵ (تالارِ مزایده: ورود/حرکت/برد/مصرف) ──')
+    const { startAuction, applyAuctionMove, consumeAuctionWin, applyHiddenBadges: badges45, getEmpire: getE45 } = await import('../app/lib/empire-store.ts')
+    const auCfg45 = { stepPct: 4, powerPct: 12, maxRounds: 10, xpWin: 120, xpTry: 30 }
+    // رقبای سقف‌پایین → با یک پیشنهاد + ۳ سکوت، چکش قطعاً به نامِ بازیکن می‌خورد
+    const runIn45 = { week: 700, listingId: 'au-l1', title: 'برجِ چکش', hood: 'تست', type: 'bank', anchor: 1_000_000, start: 620_000, rivals: [{ key: 'kamran', ceiling: 100_000 }, { key: 'atlas', ceiling: 120_000 }], rumors: [{ text: 'شایعهٔ تست', about: 'kamran', truth: true }], at: Date.now() }
+    const s45 = await startAuction(uc12, 700, runIn45)
+    ok('ورود به تالار: کلیدِ هفته + ران + شمارندهٔ شرکت', s45.ok === true && !!s45.empire.claims['au_700'] && s45.empire.auctionRun?.week === 700 && (s45.empire.stats?.auctionTries || 0) >= 1)
+    ok('ورودِ دوم در همان هفته رد می‌شود (رانِ باز)', (await startAuction(uc12, 700, runIn45)).ok === false)
+    const xp45a = s45.empire.xp
+    const m45a = await applyAuctionMove(uc12, 700, 'bid', 0, auCfg45)
+    ok('پیشنهاد: صدرنشینی + قیمتِ پایه', m45a.ok === true && m45a.empire.auctionRun.leader === 'me' && m45a.empire.auctionRun.price === 620_000)
+    ok('حرکت با هفتهٔ اشتباه رد می‌شود', (await applyAuctionMove(uc12, 701, 'bid', 0, auCfg45)).ok === false)
+    let m45 = m45a
+    for (let i = 0; i < 3 && !m45.empire.auctionRun.done; i++) m45 = await applyAuctionMove(uc12, 700, 'wait', 0, auCfg45)
+    const run45 = m45.empire.auctionRun
+    ok('سه سکوت → چکش: برد + قیمتِ نهایی', run45.done === true && run45.won === true && run45.final === 620_000)
+    ok('بردِ سمتِ سرور (ضدِ دستکاری) + XP + حافظهٔ رقبا', m45.empire.auctionWin?.week === 700 && m45.empire.auctionWin?.price === 620_000 && m45.empire.xp === xp45a + 120 && (m45.empire.rivalScore?.kamran || 0) >= 1 && (m45.empire.stats?.auctionWins || 0) >= 1)
+    ok('حرکت روی مزایدهٔ تمام‌شده رد می‌شود', (await applyAuctionMove(uc12, 700, 'bid', 0, auCfg45)).ok === false)
+    await badges45(uc12)
+    ok('نشانِ مخفیِ «چکشِ طلایی» کشف شد', (await getE45(uc12)).badges.includes('Golden Hammer'))
+    const c45 = await consumeAuctionWin(uc12)
+    ok('مصرفِ برد بعد از خرید + مصرفِ دوباره رد می‌شود', c45.ok === true && !c45.empire.auctionWin && (await consumeAuctionWin(uc12)).ok === false)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

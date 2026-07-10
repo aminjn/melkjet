@@ -618,6 +618,18 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             {row('سقفِ تخفیفِ مذاکره (٪)', cin('bigDeal', 'discountMax'))}
             {row('شانسِ پایهٔ مذاکره (٪)', cin('bigDeal', 'baseChancePct'), '+ مهارت ÷ ۲ + تیپِ مالک ± استراتژی')}
             {row('سطحِ بازشدن', cin('bigDeal', 'level'))}
+            <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>🏛 تالارِ مزایدهٔ هفته (فاز ۴۵ — سند ۲۹ Auction Saga)</div>
+            {row('تالارِ مزایده فعال (۱/۰)', cin('auction', 'enabled'), 'هفته‌ای یک ملکِ واقعی از باندِ میانیِ بازار — یک ورود در هفته؛ رقبا قطعی از هش')}
+            {row('سطحِ بازشدنِ تالار', cin('auction', 'level'))}
+            {row('گامِ پیشنهاد (٪ قیمتِ آگهی)', cin('auction', 'stepPct'), 'هر «پیشنهاد» این‌قدر روی قیمت می‌گذارد')}
+            {row('حملهٔ سنگین (٪ قیمتِ آگهی)', cin('auction', 'powerPct'), 'جهشِ بزرگ برای ترساندنِ رقبا — گران ولی مؤثر')}
+            {row('سقفِ راندهای تالار', cin('auction', 'maxRounds'), 'وقتِ تالار تمام شود، چکش روی آخرین پیشنهاد می‌خورد')}
+            {row('باندِ برآوردِ کارشناسی (±٪)', cin('auction', 'estBandPct'), 'بازهٔ نمایش دورِ برآوردِ نمونه‌های واقعیِ محله — عددِ دقیق هرگز گفته نمی‌شود')}
+            {row('سقفِ تعدادِ رقبا', cin('auction', 'rivalsMax'), '۲ تا این عدد — انتخابِ قطعی از هشِ هفته')}
+            {row('سقفِ نفوذِ کسب‌شده (٪)', cin('auction', 'influenceMax'), 'فقط از رفتارِ واقعی (فروشِ سودده/تحویلِ پروژه/خوش‌حسابی/ققنوس/سطح) — خریدنی نیست')}
+            {row('سوختِ انتقامِ رقبا (٪)', cin('auction', 'revengePct'), 'به‌ازای هر بردِ قبلی از جلوی یک رقیب، سقفِ بودجه‌اش این‌قدر بالاتر می‌رود (تا ۳ برد)')}
+            {row('XP بردِ مزایده', cin('auction', 'xpWin'))}
+            {row('XP شرکت در مزایده', cin('auction', 'xpTry'))}
             <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>⚙️ مرکزِ خودکارسازی (فاز ۴۰ — سند ۲۷ Part 13: «هیچ اقدامِ مالی خودکار نیست»)</div>
             {row('خودکارسازی فعال (۱/۰)', cin('automation', 'enabled'), 'قوانینِ قابل‌تعریفِ بازیکن — فقط اطلاع/پیشنهاد، هرگز اجرا')}
             {row('سقفِ قوانینِ هر بازیکن', cin('automation', 'maxRules'))}

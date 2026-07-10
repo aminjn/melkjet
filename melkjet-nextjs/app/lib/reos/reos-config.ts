@@ -76,6 +76,9 @@ export interface ReosConfig {
     automation: { enabled: boolean; maxRules: number; logCap: number }
     // فاز ۴۱ (سند ۲۸ فصل ۱۷ Part 07): معاملهٔ بزرگِ هفته — یک ملکِ واقعیِ گران از سگمنتِ بالای بازار، شهری و رقابتی.
     bigDeal: { enabled: boolean; topPct: number; discountMax: number; baseChancePct: number; level: number }
+    // فاز ۴۵ (سند ۲۹ Auction Saga): تالارِ مزایدهٔ هفته — گام/حملهٔ سنگین (٪ لنگر)، سقفِ راند، باندِ برآورد،
+    // سقفِ رقبا، سقفِ نفوذِ کسب‌شده (٪)، سوختِ انتقام (٪ به سقفِ بودجهٔ رقیب به‌ازای هر برد)، XP برد/شرکت.
+    auction: { enabled: boolean; level: number; stepPct: number; powerPct: number; maxRounds: number; estBandPct: number; rivalsMax: number; influenceMax: number; revengePct: number; xpWin: number; xpTry: number }
     // فاز ۲۹: نقش‌های حرفه‌ایِ سایت در سناریو — تا آمدنِ متخصصانِ واقعی، «سیستم» بازی‌شان می‌کند؛ کارمزدها مصرفِ شفافِ پول (servicesPaid).
     pros: {
       notaryFeePct: number              // دفترخانه: حق‌الثبتِ سند در خرید (٪ قیمت)
@@ -244,6 +247,8 @@ export const DEFAULT_CONFIG: ReosConfig = {
     automation: { enabled: true, maxRules: 8, logCap: 30 },
     // معاملهٔ بزرگِ هفته (سند ۲۸ Part 07): از topPct٪ گران‌ترین آگهی‌های واقعی؛ یک تلاش/هفته؛ تخفیف تا سقف.
     bigDeal: { enabled: true, topPct: 5, discountMax: 12, baseChancePct: 35, level: 5 },
+    // تالارِ مزایدهٔ هفته (سند ۲۹ Auction Saga): یک ملکِ واقعی از باندِ میانیِ بازار؛ یک ورود/هفته؛ شروع زیرِ قیمت.
+    auction: { enabled: true, level: 6, stepPct: 4, powerPct: 12, maxRounds: 10, estBandPct: 18, rivalsMax: 4, influenceMax: 5, revengePct: 6, xpWin: 120, xpTry: 30 },
     // مذاکره: همان رفتارِ قبلی به‌صورتِ پیش‌فرض (۲۵٪ پایه تا ۷۵٪ با مهارت؛ تخفیف ۲..۶٪) — حالا قابل‌تنظیم.
     nego: { baseChancePct: 25, discountMin: 2, discountMax: 6 },
     // نقش‌های حرفه‌ای (فاز ۲۹): اعدادِ عرفِ واقعیِ بازارِ ایران — همه knob.
