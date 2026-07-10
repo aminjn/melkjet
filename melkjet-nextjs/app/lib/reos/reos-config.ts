@@ -70,6 +70,8 @@ export interface ReosConfig {
     api: { rateLimitPerMin: number }
     // فاز ۳۵ (سند ۲۴ فصل ۱۴ Analytics — Part 06): آستانه‌های هشدارِ سلامتِ اقتصاد روی تاریخچهٔ روزانه.
     metrics: { enabled: boolean; inflationAlertPct: number; dauDropAlertPct: number; concentrationAlertPct: number; capGrowthAlertPct: number }
+    // فاز ۳۹ (سند ۲۶ فصل ۱۶ Cognitive AI): هوشِ سرمایه‌گذاری — ارزش‌گذاری/تصمیم‌یار/روندِ محله‌ها/سلامتِ مالی؛ همهٔ آستانه‌ها زنده.
+    intel: { enabled: boolean; minComps: number; fairBandPct: number; expensivePct: number; bubblePct: number; trendDays: number; loanSoonDays: number; liqHigh: number; liqMid: number }
     // فاز ۲۹: نقش‌های حرفه‌ایِ سایت در سناریو — تا آمدنِ متخصصانِ واقعی، «سیستم» بازی‌شان می‌کند؛ کارمزدها مصرفِ شفافِ پول (servicesPaid).
     pros: {
       notaryFeePct: number              // دفترخانه: حق‌الثبتِ سند در خرید (٪ قیمت)
@@ -223,6 +225,8 @@ export const DEFAULT_CONFIG: ReosConfig = {
     api: { rateLimitPerMin: 120 },
     // رصدخانهٔ اقتصاد (سند ۲۴ Part 06): هشدار وقتی تورمِ ۷روزه/افتِ DAU/تمرکزِ ثروت/رشدِ نقدینگی از آستانه بگذرد.
     metrics: { enabled: true, inflationAlertPct: 15, dauDropAlertPct: 40, concentrationAlertPct: 70, capGrowthAlertPct: 50 },
+    // هوشِ سرمایه‌گذاری (سند ۲۶ فصل ۱۶): حداقلِ نمونهٔ واقعی برای ارزش‌گذاری + باندهای قضاوتِ قیمت + روند/سررسید/عمقِ بازار.
+    intel: { enabled: true, minComps: 4, fairBandPct: 8, expensivePct: 20, bubblePct: 35, trendDays: 7, loanSoonDays: 7, liqHigh: 15, liqMid: 6 },
     // مذاکره: همان رفتارِ قبلی به‌صورتِ پیش‌فرض (۲۵٪ پایه تا ۷۵٪ با مهارت؛ تخفیف ۲..۶٪) — حالا قابل‌تنظیم.
     nego: { baseChancePct: 25, discountMin: 2, discountMax: 6 },
     // نقش‌های حرفه‌ای (فاز ۲۹): اعدادِ عرفِ واقعیِ بازارِ ایران — همه knob.

@@ -590,6 +590,18 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             {row('ظرفیتِ هر اتحاد (نفر)', cin('social', 'clanMaxMembers'))}
           </div>
           <div style={card}>
+            <div style={sub}>🧭 هوشِ سرمایه‌گذاری (فاز ۳۹ — سند ۲۶ فصل ۱۶ Cognitive AI)</div>
+            {row('تحلیلِ هوشمند فعال (۱/۰)', cin('intel', 'enabled'), 'ارزش‌گذاری + «اگر بخری» + روندِ محله‌ها + سلامتِ مالی/اولویت‌ها — فقط پیشنهاد، هرگز اجرا')}
+            {row('حداقل نمونهٔ هم‌محله برای ارزش‌گذاری', cin('intel', 'minComps'), 'کمتر از این → صادقانه «داده کافی نیست» (بدونِ اعتمادِ ساختگی)')}
+            {row('باندِ قیمتِ منصفانه (±٪)', cin('intel', 'fairBandPct'), 'اختلاف با میانهٔ واقعیِ محله کمتر از این = 🟢')}
+            {row('آستانهٔ «بیش از حد گران» (٪)', cin('intel', 'expensivePct'), 'بینِ باندِ منصفانه و این = 🟡؛ بالاتر = 🟠')}
+            {row('آستانهٔ «احتمالِ حباب» (٪)', cin('intel', 'bubblePct'), 'بالاتر از این = 🔴')}
+            {row('بازهٔ روندگیریِ محله‌ها (روز)', cin('intel', 'trendDays'), 'مقایسهٔ اسنپ‌شاتِ امروزِ رصدخانه با این‌قدر روز قبل')}
+            {row('هشدارِ سررسیدِ وام (روز مانده)', cin('intel', 'loanSoonDays'), 'در «اولویت‌های امروز» بازیکن')}
+            {row('عرضهٔ «پرتحرک» (تعداد آگهی)', cin('intel', 'liqHigh'), 'نمونهٔ هم‌محلهٔ بیشتر از این = بازارِ پرتحرک')}
+            {row('عرضهٔ «معمولی» (تعداد آگهی)', cin('intel', 'liqMid'), 'کمتر از این = بازارِ کم‌عمق')}
+          </div>
+          <div style={card}>
             <div style={sub}>🛡 فنی (فاز ۳۴ — سند ۲۳ فصل ۱۳)</div>
             {row('سقفِ درخواست در دقیقه (هر بازیکن)', cin('api', 'rateLimitPerMin'), 'سپرِ سوءاستفاده از API مسیرِ رشد — بازیِ عادی به این سقف نمی‌رسد؛ ۰ = خاموش')}
             <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 6 }}>Economy QA: هر دیپلوی خودکار knobهای زندهٔ همین صفحه را ممیزی می‌کند (پولِ مجانی/سودِ غیرمنطقی/پاداشِ خارج از تعادل). اجرای دستی روی سرور: <code dir="ltr">node --import ./scripts/reos-loader.mjs scripts/economy-qa.mjs</code></div>

@@ -43,6 +43,9 @@ import { forIds } from '@/app/lib/listing-stats-store'
 import { flagEnabled } from '@/app/lib/reos/flags'
 import { config, primeConfig } from '@/app/lib/reos/reos-config'
 import { ownerOfListing, claimListing, releaseListing, transferListing, myClanOf, listClans, createClan, joinClan, leaveClan, postClanMsg, clanView, deleteClanIfOwner } from '@/app/lib/empire-social'
+// فاز ۳۹ (سند ۲۶ فصل ۱۶ Cognitive AI): هوشِ سرمایه‌گذاری — ارزش‌گذاری/تصمیم‌یار/روندِ محله/سلامتِ مالی/اولویت‌ها؛ همه از دادهٔ واقعی.
+import { compStatsOf, valuationOf, decisionOf, marketIntelOf, cashflowOf, financialHealthOf, prioritiesOf } from '@/app/lib/empire-intel'
+import { loadSnapshots } from '@/app/lib/empire-metrics'
 
 const hoodOf = (loc?: string) => { const p = String(loc || '').split(/[،,]/).map(x => x.trim()).filter(Boolean); return p.length > 1 ? p[p.length - 1] : (p[0] || '') }
 // سپرِ نرخِ درخواست (فاز ۳۴ — سند ۲۳): پنجرهٔ یک‌دقیقه‌ایِ هر بازیکن، در حافظهٔ همین اینستنس
@@ -772,7 +775,18 @@ export async function POST(req: NextRequest) {
         : diffPct > 8 ? `قیمتِ هر متر حدود ${Math.abs(diffPct)}٪ بالاتر از میانگینِ ${rates.length} آگهیِ هم‌محله است — جای چانه‌زنی دارد.`
         : diffPct < -8 ? `قیمتِ هر متر حدود ${Math.abs(diffPct)}٪ پایین‌تر از میانگینِ ${rates.length} آگهیِ هم‌محله است — فرصتِ قابلِ‌بررسی.`
         : `قیمت با میانگینِ ${rates.length} آگهیِ هم‌محله هم‌خوان است (اختلاف ${Math.abs(diffPct)}٪).`
-      return NextResponse.json({ ok: true, tokensLeft: t.empire!.aiTokens, analysis: { hood, samples: rates.length, avgPerM: Math.round(avg), minePerM: Math.round(mine), diffPct, verdict } })
+      // فاز ۳۹ (سند ۲۶ Part 03+05): ارزش‌گذاریِ کامل (منصفانه/نشان/سناریو از پراکندگیِ واقعی/Confidence از حجمِ داده)
+      // + تصمیم‌یارِ «اگر بخری» از وضعیتِ مالیِ واقعیِ خودِ بازیکن. متراژِ جاافتاده → برآوردِ شفاف از متنِ آگهی (فاز ۳۴).
+      const iCfg = config().empire.intel
+      let valuation = null, decision = null
+      if (iCfg.enabled) {
+        const fresh = twins.filter(x => (Date.now() - (x.scrapedAt || 0)) < 14 * 864e5).length
+        const vArea = area > 0 ? area : areaFromText(it.title)
+        valuation = valuationOf(price, vArea, compStatsOf(rates, fresh), iCfg)
+        const me = t.empire!
+        decision = decisionOf({ capital: me.capital, loanBalance: me.loan?.balance || 0, netWorth: netWorthOf(me, {}).netWorth, dailyBurn: Math.max(0, cashflowOf(me).dailyOut) }, price, iCfg)
+      }
+      return NextResponse.json({ ok: true, tokensLeft: t.empire!.aiTokens, analysis: { hood, samples: rates.length, avgPerM: Math.round(avg), minePerM: Math.round(mine), diffPct, verdict, valuation, decision } })
     }
 
     // فروش (چرخهٔ عمر — فصل ۵): به قیمتِ روزِ واقعیِ آگهی؛ سود → XP، زیانِ اول → درسِ آموزشی.
@@ -1382,6 +1396,26 @@ export async function POST(req: NextRequest) {
         return { id, title: it.title, hood: hoodOf(it.location), price, area, perM: area > 0 ? Math.round(price / area) : 0, lat: Number(it.meta?.['__lat']) || undefined, lng: Number(it.meta?.['__lng']) || undefined, url: listingHref(id, it.title, hoodOf(it.location)) }
       })
       return NextResponse.json({ ok: true, deals, expiresAt })
+    }
+
+    // 🧭 هوشِ سرمایه‌گذاری (فاز ۳۹ — سند ۲۶ فصل ۱۶): روندِ محله‌ها از تاریخچهٔ واقعیِ رصدخانه +
+    // جریانِ نقدی/سلامتِ مالی از جریان‌های ثبت‌شدهٔ خودِ بازیکن + حداکثر ۵ اولویتِ امروز از وضعیتِ واقعی.
+    // فقط «پیشنهاددهنده» است (قانونِ سند: AI تصمیم نمی‌گیرد) — هیچ اکشنی را خودش اجرا نمی‌کند.
+    case 'intel': {
+      const iCfg = config().empire.intel
+      if (!iCfg.enabled) return NextResponse.json({ error: 'تحلیلِ هوشمند فعلاً فعال نیست' }, { status: 403 })
+      const e = await getEmpire(userId)
+      if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      const snaps = await loadSnapshots(60).catch(() => [])
+      const flow = cashflowOf(e)
+      const health = financialHealthOf(e, netWorthOf(e, {}).netWorth, flow)
+      return NextResponse.json({
+        ok: true,
+        market: marketIntelOf(snaps, iCfg),
+        flow, health,
+        priorities: prioritiesOf(e, Date.now(), iCfg),
+        capital: e.capital,
+      })
     }
 
     // 🏗 بازارِ زمین (فاز ۲۴): دروازهٔ موتورِ ساخت — زمین‌های «واقعیِ» قیمت‌دار با متراژِ ثبت‌شده.

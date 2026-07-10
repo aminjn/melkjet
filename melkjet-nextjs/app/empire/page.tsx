@@ -186,6 +186,8 @@ export default function EmpirePage() {
   const [clanMsg, setClanMsg] = useState('')
   const loadPmkt = async () => { const d = await api({ action: 'playerMarket' }); if (d) setPmkt(d) }
   const loadClan = async () => { const d = await api({ action: 'clanList' }); if (d) setClanD(d) }
+  // فاز ۳۹ (سند ۲۶ فصل ۱۶): هوشِ سرمایه‌گذاری — اولویت‌های امروز/سلامتِ مالی/جریانِ نقدی/روندِ محله‌ها
+  const [intel, setIntel] = useState<any>(null)
   const suspended = useRef(false)
 
   const api = useCallback(async (body: any) => {
@@ -267,6 +269,15 @@ export default function EmpirePage() {
     if (gtab === 'ranks' && !clanD) loadClan()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, gtab])
+
+  // فاز ۳۹: تحلیلِ هوشمند یک‌بار با ورود به داشبورد (شهر) بارگذاری می‌شود — سبک و فقط‌خواندنی
+  useEffect(() => {
+    if (step !== 'dash' || intel) return
+    let alive = true
+    fetch('/api/empire', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'intel' }) })
+      .then(r => r.json()).then(d => { if (alive && d?.ok) setIntel(d) }).catch(() => {})
+    return () => { alive = false }
+  }, [step, intel])
 
   // «هیچ جلسه‌ای بی‌دلیلِ برگشت تمام نشود» (فصل ۴): با ترکِ صفحه، تعلیقِ فردا ثبت می‌شود.
   useEffect(() => {
@@ -373,6 +384,28 @@ export default function EmpirePage() {
       <span style={{ fontSize: 11, color: 'var(--muted)' }}>{d}</span>
     </div>
   )
+
+  // فاز ۳۹ (سند ۲۶ Part 03+05): برگهٔ ارزش‌گذاری + «اگر بخری» — یک رندرِ مشترک برای همهٔ جاهایی که تحلیل نشان می‌دهیم.
+  // Confidence و سناریوها همیشه با برچسبِ «برآورد» — قولِ قطعی نمی‌دهیم (قانونِ سند + قانونِ ۱: بدونِ عددِ ساختگی).
+  const intelView = (an: any) => {
+    const v = an?.valuation, d = an?.decision
+    if (!v && !d) return null
+    const tone = (t: string) => t === 'good' ? '#7ee0b8' : t === 'warn' ? '#e8c37a' : '#e08a7e'
+    return <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 5 }}>
+      {v && !v.ready && v.note && <div style={{ color: 'var(--muted)' }}>🧭 {v.note}</div>}
+      {v?.ready && <>
+        <div><b style={{ color: tone(v.badge.tone) }}>{v.badge.icon} {v.badge.label}</b> · ارزشِ منصفانه (برآورد): <b style={{ color: 'var(--text)' }}>{faB(v.fair)}</b> تومان · امتیازِ سرمایه‌گذاری: <b style={{ color: 'var(--gold)' }}>{fa(v.score)}/۱۰۰</b></div>
+        <div style={{ color: 'var(--muted)' }}>بازهٔ واقعیِ محله: {faB(v.scenarios.pess)} تا {faB(v.scenarios.opt)} · عرضهٔ محله: {v.liquidity.label} · اطمینانِ داده: {fa(v.confidence)}٪</div>
+        {v.reasons?.length > 0 && <div style={{ color: 'var(--faint)' }}>{v.reasons.map((r: string, i: number) => <div key={i}>• {r}</div>)}</div>}
+      </>}
+      {d && <div style={{ borderTop: '1px dashed var(--line)', paddingTop: 4 }}>
+        <b style={{ color: 'var(--text)' }}>اگر بخری:</b>{' '}
+        {d.can ? <>نقدِ باقی‌مانده {faB(d.afterCapital)} تومان.</> : null}
+        {(d.warnings || []).map((w: string, i: number) => <div key={i} style={{ color: '#e8c37a' }}>⚠ {w}</div>)}
+        {(d.notes || []).map((n: string, i: number) => <div key={i} style={{ color: 'var(--muted)' }}>· {n}</div>)}
+      </div>}
+    </div>
+  }
 
   // ══════════ رندر ══════════
   // لایهٔ حس و حرکت (جلد ۵۶): «هیچ چیزی نباید ناگهانی ظاهر نشود» — ورودِ پلکانی، میکرواینترکشن، جشنِ موفقیت.
@@ -668,6 +701,24 @@ export default function EmpirePage() {
 
     {gtab === 'city' && <>
     {tabHead('🏙', 'شهر', 'فرصت‌های واقعیِ امروز، نقشه و مسیرِ برج')}
+    {/* 🧭 اتاقِ تحلیل (فاز ۳۹ — سند ۲۶ فصل ۱۶): اولویت‌های امروز از وضعیتِ واقعی + سلامتِ مالی + جریانِ نقدی.
+        فقط پیشنهاد می‌دهد — هیچ کاری را خودش انجام نمی‌دهد (قانونِ سند: تصمیم همیشه با خودت). */}
+    {intel?.ok && (intel.priorities?.length > 0 || intel.health) && <div style={card}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <b style={{ fontSize: 13 }}>🧭 اتاقِ تحلیل</b>
+        {intel.health && <span style={{ ...pill(), color: intel.health.score >= 50 ? '#7ee0b8' : '#e8c37a' }}>سلامتِ مالی: {fa(intel.health.score)}/۱۰۰ · {intel.health.band}</span>}
+        {intel.flow && (intel.flow.dailyIn > 0 || intel.flow.dailyOut > 0) && <span style={{ ...pill(), color: intel.flow.net >= 0 ? '#7ee0b8' : '#e08a7e' }}>
+          جریانِ روزانه: {intel.flow.net >= 0 ? '+' : '−'}{faB(Math.abs(intel.flow.net))} تومان{intel.flow.runwayDays !== null ? ` · دوامِ نقد ${fa(intel.flow.runwayDays)} روز` : ''}
+        </span>}
+      </div>
+      {intel.priorities?.length > 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 8, fontSize: 12 }}>
+        {intel.priorities.map((p: any, i: number) => <div key={i} style={{ display: 'flex', gap: 6 }}><span>{p.icon}</span><span style={{ color: 'var(--text)' }}>{p.text}</span></div>)}
+      </div>}
+      {intel.health?.reasons?.length > 0 && <details style={{ marginTop: 6 }}>
+        <summary style={{ cursor: 'pointer', fontSize: 11, color: 'var(--muted)' }}>چرا این ارزیابی؟ (از وضعیتِ واقعیِ خودت)</summary>
+        <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 4 }}>{intel.health.reasons.map((r: string, i: number) => <div key={i}>• {r}</div>)}</div>
+      </details>}
+    </div>}
     {/* 🎁 پیشنهادِ هوشمند (فاز ۳۳ — سند ۲۲ فصل ۹): حداکثر ۱ در روز، از رفتارِ واقعیِ خودت، با یک لمس بسته می‌شود.
         بدونِ تایمرِ ساختگی و بدونِ پاپ‌آپ — یک کارتِ ساده که «نه» هم جوابِ کاملاً قابلِ‌قبولی است. */}
     {st.offer && <div style={{ ...card, borderColor: 'var(--goldDim)', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -715,6 +766,7 @@ export default function EmpirePage() {
                 {dealAn === dl.id && analysis && <div style={{ fontSize: 10.5, color: 'var(--muted)', borderTop: '1px solid var(--line)', paddingTop: 5 }}>
                   <b style={{ color: 'var(--text)' }}>{analysis.verdict}</b>
                   {analysis.samples > 0 && <div>متریِ این ملک {faB(analysis.minePerM)} · میانگینِ هم‌محله‌ها {faB(analysis.avgPerM)} (از {fa(analysis.samples)} آگهیِ واقعی)</div>}
+                  {intelView(analysis)}
                 </div>}
               </div>
             ))}
@@ -800,6 +852,7 @@ export default function EmpirePage() {
                 {dealAn === l.id && analysis && <div style={{ fontSize: 10.5, color: 'var(--muted)', borderTop: '1px solid var(--line)', paddingTop: 5 }}>
                   <b style={{ color: 'var(--text)' }}>{analysis.verdict}</b>
                   {analysis.samples > 0 && <div>متریِ این ملک {faB(analysis.minePerM)} · میانگینِ هم‌محله‌ها {faB(analysis.avgPerM)} (از {fa(analysis.samples)} آگهیِ واقعی)</div>}
+                  {intelView(analysis)}
                 </div>}
               </div>
             ))}
@@ -1346,6 +1399,7 @@ export default function EmpirePage() {
       {analysis && <div style={{ ...card, background: 'var(--bg2)', marginTop: 10, fontSize: 13 }}>
         <b>🤖 تحلیلِ ملک‌جت — {analysis.hood || 'محله'}:</b> {analysis.verdict}
         {analysis.samples > 0 && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>میانگینِ متری هم‌محله‌ها: {faB(analysis.avgPerM)} تومان · این ملک: {faB(analysis.minePerM)} تومان (از {fa(analysis.samples)} آگهیِ واقعی)</div>}
+        <div style={{ fontSize: 11 }}>{intelView(analysis)}</div>
       </div>}
       {e.assets?.length > 0 && <div style={{ marginTop: 10 }}><button style={{ ...btnGhost, fontSize: 12, padding: '6px 12px' }} onClick={doSuggest}>+ فرصتِ بعدی</button></div>}
     </div>
@@ -1498,6 +1552,27 @@ export default function EmpirePage() {
 
     {gtab === 'market' && <>
     {tabHead('📊', 'بازار', 'سرمایه، صندوق‌ها، فروشگاه‌ها و بازارِ بازیکنان')}
+    {/* 🧭 روندِ محله‌ها (فاز ۳۹ — سند ۲۶ Part 04): از تاریخچهٔ روزانهٔ واقعیِ رصدخانه — تا دو اسنپ‌شات نباشد، هیچ روندی ادعا نمی‌شود. */}
+    {intel?.ok && intel.market && <div style={card}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <b style={{ fontSize: 13 }}>🧭 روندِ بازارِ واقعی</b>
+        {intel.market.ready && intel.market.city.pct !== null && <span style={{ ...pill(), color: intel.market.city.pct >= 0 ? '#7ee0b8' : '#e08a7e' }}>
+          میانهٔ متریِ شهر در {fa(intel.market.sinceDays)} روز: {intel.market.city.pct >= 0 ? '▲' : '▼'} {fa(Math.abs(intel.market.city.pct))}٪
+        </span>}
+      </div>
+      {!intel.market.ready && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 6 }}>{intel.market.note}</div>}
+      {intel.market.ready && (intel.market.rising.length > 0 || intel.market.falling.length > 0) && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(210px,1fr))', gap: 8, marginTop: 10, fontSize: 12 }}>
+        {intel.market.rising.map((h: any) => <div key={'r' + h.hood} style={{ ...card, background: 'var(--bg2)', padding: 10 }}>
+          <b style={{ color: '#7ee0b8' }}>▲ {h.hood}</b>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>متری {faB(h.perM)} تومان · رشدِ {fa(h.pct)}٪ در {fa(intel.market.sinceDays)} روز</div>
+        </div>)}
+        {intel.market.falling.map((h: any) => <div key={'f' + h.hood} style={{ ...card, background: 'var(--bg2)', padding: 10 }}>
+          <b style={{ color: '#e08a7e' }}>▼ {h.hood}</b>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>متری {faB(h.perM)} تومان · افتِ {fa(Math.abs(h.pct))}٪ در {fa(intel.market.sinceDays)} روز</div>
+        </div>)}
+      </div>}
+      {intel.market.ready && intel.market.rising.length === 0 && intel.market.falling.length === 0 && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 6 }}>در این بازه هیچ محله‌ای با نمونهٔ کافی جابه‌جاییِ معنادار نداشته — بازار آرام است.</div>}
+    </div>}
     {/* 🪙 فروشگاهِ ملک‌کوین (فاز ۲۸): پولِ واقعی فقط «زمان/تحلیل» می‌خرد — هرگز قدرت (بدونِ P2W) */}
     {st.coinShop?.enabled && (st.coinShop.packs || []).length > 0 && <div id="coin-shop" style={{ ...card, borderColor: 'var(--goldDim)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
