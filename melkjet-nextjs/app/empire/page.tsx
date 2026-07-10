@@ -191,6 +191,10 @@ export default function EmpirePage() {
   // فاز ۴۰ (سند ۲۷ Part 13): فرمِ ساختِ قانونِ خودکار — فقط اطلاع/پیشنهاد، هرگز اجرا
   const [ruleKind, setRuleKind] = useState('cashBelow')
   const [ruleTh, setRuleTh] = useState('')
+  // فاز ۴۱ (سند ۲۸ Part 07): معاملهٔ بزرگِ هفته — یک ملکِ واقعیِ شهری، یک تلاشِ مذاکره در هفته
+  const [bd, setBd] = useState<any>(null)
+  const [bdRes, setBdRes] = useState<any>(null)
+  const loadBd = async () => { const d = await api({ action: 'bigDeal' }); if (d) setBd(d) }
   const suspended = useRef(false)
 
   const api = useCallback(async (body: any) => {
@@ -281,6 +285,15 @@ export default function EmpirePage() {
       .then(r => r.json()).then(d => { if (alive && d?.ok) setIntel(d) }).catch(() => {})
     return () => { alive = false }
   }, [step, intel])
+
+  // فاز ۴۱: معاملهٔ بزرگِ هفته — یک‌بار با ورود به داشبورد
+  useEffect(() => {
+    if (step !== 'dash' || bd) return
+    let alive = true
+    fetch('/api/empire', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'bigDeal' }) })
+      .then(r => r.json()).then(d => { if (alive && d?.ok) setBd(d) }).catch(() => {})
+    return () => { alive = false }
+  }, [step, bd])
 
   // «هیچ جلسه‌ای بی‌دلیلِ برگشت تمام نشود» (فصل ۴): با ترکِ صفحه، تعلیقِ فردا ثبت می‌شود.
   useEffect(() => {
@@ -707,6 +720,13 @@ export default function EmpirePage() {
     {/* 🧭 اتاقِ تحلیل (فاز ۳۹ — سند ۲۶ فصل ۱۶): اولویت‌های امروز از وضعیتِ واقعی + سلامتِ مالی + جریانِ نقدی.
         فقط پیشنهاد می‌دهد — هیچ کاری را خودش انجام نمی‌دهد (قانونِ سند: تصمیم همیشه با خودت). */}
     {intel?.ok && (intel.priorities?.length > 0 || intel.health) && <div style={card}>
+      {/* فاز ۴۱ (سند ۲۸ Part 13): اتاقِ بحران — از سیگنال‌های واقعی؛ خروج از آن نشانِ «ققنوس» دارد */}
+      {intel.crisis?.active && <div style={{ border: '1px solid rgba(224,138,126,.5)', background: 'rgba(224,138,126,.08)', borderRadius: 12, padding: '8px 12px', marginBottom: 10, fontSize: 12 }}>
+        <b style={{ color: '#e08a7e' }}>🚨 وضعیتِ بحرانی — سطحِ {intel.crisis.level}</b>
+        {intel.crisis.surviveDays !== null && <span style={{ color: 'var(--muted)' }}> · دوامِ نقد: {fa(intel.crisis.surviveDays)} روز</span>}
+        <div style={{ color: 'var(--muted)', marginTop: 4 }}>{intel.crisis.reasons.map((r41: string, i: number) => <div key={i}>• {r41}</div>)}</div>
+        <div style={{ color: 'var(--faint)', marginTop: 4 }}>تصمیم‌های نجات همین پایین‌اند (فروشِ دارایی، پیش‌فروش، تسویهٔ وام…) — از بحران بیرون بیایی، در تایم‌لاینت ثبت می‌شود.</div>
+      </div>}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <b style={{ fontSize: 13 }}>🧭 اتاقِ تحلیل</b>
         {intel.health && <span style={{ ...pill(), color: intel.health.score >= 50 ? '#7ee0b8' : '#e8c37a' }}>سلامتِ مالی: {fa(intel.health.score)}/۱۰۰ · {intel.health.band}</span>}
@@ -773,6 +793,53 @@ export default function EmpirePage() {
         onClick={async () => { await api({ action: 'offerDismiss', id: st.offer.id }); setSt((s: any) => ({ ...s, offer: null })) }}>✕</button>
     </div>}
 
+    {/* 🔥 معاملهٔ بزرگِ هفته (فاز ۴۱ — سند ۲۸ فصل ۱۷ Part 07): یک ملکِ واقعیِ گران، برای همهٔ بازیکنان یکی —
+        یک تلاشِ مذاکره در هفته با انتخابِ استراتژی؛ اولین برنده‌ای که بخرد مالک می‌شود (مالکیتِ انحصاری). */}
+    {bd?.ok && bd.deal && <div style={{ ...card, borderColor: '#e08a7e', background: 'rgba(224,138,126,.04)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <b style={{ fontSize: 14 }}>💎 معاملهٔ بزرگِ هفته</b>
+        <span style={{ fontSize: 11, color: 'var(--muted)' }}>برای همه همین یکی است — هر کس زودتر ببرد و بخرد، مالک می‌شود</span>
+        <span style={{ flex: 1 }} />
+        <span style={{ fontSize: 13, color: '#e08a7e', fontWeight: 800 }}>⏳ <Countdown until={bd.deal.expiresAt || 0} onDone={() => setBd(null)} /></span>
+      </div>
+      <div style={{ marginTop: 10, fontSize: 13 }}>
+        <b>{bd.deal.title.slice(0, 70)}</b>
+        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 3 }}>{bd.deal.hood} · مالک: {bd.deal.owner.name} ({bd.deal.owner.type} — {bd.deal.owner.desc})</div>
+        <div style={{ fontSize: 15, color: 'var(--gold)', fontWeight: 800, marginTop: 4 }}>{faB(bd.deal.price)} تومان</div>
+      </div>
+      {bd.deal.soldTo && <div style={{ fontSize: 12, color: '#e8c37a', marginTop: 8 }}>🔒 فروخته شد — «{bd.deal.soldTo.name}» (#{fa(bd.deal.soldTo.no)}) زودتر بست. هفتهٔ بعد معاملهٔ تازه‌ای می‌آید.</div>}
+      {bd.deal.mine && <div style={{ fontSize: 12, color: '#7ee0b8', marginTop: 8 }}>👑 مالِ توست — معاملهٔ بزرگِ این هفته را تو بردی.</div>}
+      {!bd.deal.soldTo && !bd.deal.mine && !bd.unlocked && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>🔒 از سطحِ {fa(bd.need)} باز می‌شود — با تصمیم‌های واقعی XP بگیر.</div>}
+      {!bd.deal.soldTo && !bd.deal.mine && bd.unlocked && !bd.tried && !bdRes && <div style={{ marginTop: 10 }}>
+        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 6 }}>استراتژیِ مذاکره‌ات را انتخاب کن — فقط «یک» تلاش در هفته داری:</div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {(bd.strategies || []).map((s41: any) => (
+            <button key={s41.key} style={{ ...btnGhost, padding: '7px 12px', fontSize: 12 }} disabled={busy} title={s41.desc}
+              onClick={async () => {
+                if (!confirm(`استراتژیِ «${s41.label}»؟ ${s41.desc} — تلاشِ این هفته مصرف می‌شود.`)) return
+                const d = await api({ action: 'bigDealNego', strategy: s41.key })
+                if (d) { setBdRes(d); if (d.success) celebrate(); else sfx('error', st?.soundEnabled !== false) }
+              }}>{s41.icon} {s41.label}</button>
+          ))}
+        </div>
+      </div>}
+      {(bdRes || (bd.tried && bd.wonPct > 0)) && !bd.deal.soldTo && !bd.deal.mine && (() => {
+        const won = bdRes ? bdRes.success : bd.wonPct > 0
+        const pct = bdRes ? bdRes.discountPct : bd.wonPct
+        const finalPrice = Math.round(bd.deal.price * (1 - pct / 100))
+        return won ? <div style={{ marginTop: 10, fontSize: 12.5 }}>
+          <div style={{ color: '#7ee0b8', fontWeight: 700 }}>🏆 مذاکره را بردی — {fa(pct)}٪ تخفیف تا آخرِ هفته: <b>{faB(finalPrice)} تومان</b></div>
+          <button style={{ ...btn, padding: '7px 16px', fontSize: 12.5, marginTop: 6 }} disabled={busy}
+            onClick={async () => {
+              if (!confirm(`«${bd.deal.title.slice(0, 40)}» به ${faB(finalPrice)} تومان (+ مالیات و ثبت) خریده شود؟`)) return
+              const d = await api({ action: 'buy', listingId: bd.deal.id, bigDeal: true })
+              if (d) { setSt(d); celebrate(); setBd(null); setBdRes(null) }
+            }}>👑 خریدِ معاملهٔ بزرگ</button>
+        </div> : <div style={{ marginTop: 10, fontSize: 12, color: 'var(--muted)' }}>🚪 مالک کوتاه نیامد{bdRes ? ` (شانسِ تو ${fa(bdRes.chancePct)}٪ بود)` : ''} — این هفته از دست رفت؛ هفتهٔ بعد معاملهٔ تازه‌ای می‌آید.</div>
+      })()}
+      {bd.tried && bd.wonPct === 0 && !bdRes && !bd.deal.soldTo && !bd.deal.mine && <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted)' }}>🚪 مذاکرهٔ این هفته‌ات شکست خورد — هفتهٔ بعد فرصتِ تازه‌ای می‌آید.</div>}
+    </div>}
+
     {/* 🔥 فرصت‌های طلاییِ امروز (سند ۱۴ — Hook): آگهی‌های واقعی، شمارشِ معکوسِ واقعی؛ فردا فهرستِ دیگری می‌آید.
         کارت قضاوت نمی‌کند — بعضی واقعاً زیرِ قیمتِ محله‌اند، بعضی نه؛ فکرکردن (یا ژتونِ تحلیل) کارِ بازیکن است. */}
     {st.dealsEnabled && deals && (deals.deals || []).length > 0 && (() => {
@@ -790,6 +857,10 @@ export default function EmpirePage() {
               <div key={dl.id} style={{ ...card, background: 'var(--bg2)', display: 'flex', flexDirection: 'column', gap: 5 }}>
                 <div style={{ fontSize: 12.5, fontWeight: 700, lineHeight: 1.7 }}>{dl.title.slice(0, 55)}</div>
                 <div style={{ fontSize: 11, color: 'var(--muted)' }}>{dl.hood}{dl.area ? ` · ${fa(dl.area)} متر` : ''}{dl.perM ? ` · متری ${faB(dl.perM)}` : ''}</div>
+                {/* فاز ۴۱ (سند ۲۸ Part 10): درجهٔ کمیابیِ صادقانه — فقط از فاصلهٔ واقعی با میانهٔ محله؛ بی‌داده = بی‌برچسب */}
+                {dl.rarity && dl.rarity.stars >= 2 && <div style={{ fontSize: 10.5, color: dl.rarity.stars >= 3 ? '#f0d47a' : '#7ee0b8', fontWeight: 700 }}>
+                  {'✦'.repeat(dl.rarity.stars)} {dl.rarity.label} — متری {fa(Math.abs(dl.rarity.diffPct))}٪ زیرِ میانهٔ محله
+                </div>}
                 <div style={{ fontSize: 13, color: 'var(--gold)', fontWeight: 700 }}>{faB(dl.price)} تومان</div>
                 {nego[dl.id] && <div style={{ fontSize: 10.5, color: nego[dl.id].success ? '#7c6' : 'var(--muted)' }}>
                   🤝 {nego[dl.id].owner?.name || 'مالک'}: {nego[dl.id].success ? `${fa(nego[dl.id].discountPct)}٪ تخفیف → ${faB(nego[dl.id].finalPrice)}` : 'کوتاه نیامد'}

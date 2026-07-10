@@ -123,7 +123,9 @@ export interface EmpireData {
   wagesPaid?: number          // حقوقِ پرداختی به مهندس‌ها (مصرفِ شفافِ پول — قانون ۶)
   demolitionPaid?: number     // هزینهٔ تخریب‌های پرداختی (فاز ۲۵ — مصرفِ شفافِ پول، مثلِ حقوق)
   servicesPaid?: number       // کارمزدِ نقش‌های حرفه‌ای: دفترخانه/مشاور/معمار/وکیل/کارشناس (فاز ۲۹ — مصرفِ شفاف)
-  stats?: { sellsProfitable: number; negoWins: number; negoTries?: number; projectsDelivered?: number; repProjects?: number }   // شمارنده‌های واقعیِ رفتار (جلد ۲۶/۷۲)
+  stats?: { sellsProfitable: number; negoWins: number; negoTries?: number; projectsDelivered?: number; repProjects?: number; crisisRecovered?: number }   // شمارنده‌های واقعیِ رفتار (جلد ۲۶/۷۲؛ crisisRecovered: فاز ۴۱ — عبور از بحران)
+  crisis?: { at: number }     // فاز ۴۱ (سند ۲۸ Part 13): در وضعیتِ بحرانی است — ورود/خروجش در تایم‌لاین ثبت می‌شود
+  bigDealWin?: { week: number; discountPct: number }   // فاز ۴۱ (Part 07): تخفیفِ بردهٔ مذاکرهٔ بزرگِ همین هفته — سمتِ سرور، ضدِ دستکاری
   projectHist?: ProjectReport[]   // کارنامهٔ پروژه‌های تحویل‌شده (GDD فصل ۴) — درسِ هر پروژه از اعدادِ واقعیِ خودش
   snap?: { day: number; netWorth: number; prev: number }   // اسنپ‌شاتِ روزانه — «سود/زیانِ دیروز» (جلد ۲۶)
   weekSnap?: { week: number; netWorth: number }   // اسنپ‌شاتِ هفتگی — لیدربوردِ «رشدِ این هفته» (سند ۱۶: شانسِ بازیکنِ جدید)
@@ -378,6 +380,8 @@ export const HIDDEN_BADGES: Array<{ key: string; fa: string; earned: (e: EmpireD
   { key: 'Collector', fa: 'کلکسیونر — مالکِ هر ۴ نوع دارایی', earned: e => new Set(e.assets.map(a => a.kind)).size >= 4 },
   { key: 'Landlord', fa: 'مالکِ درآمدساز — ۱۰۰ میلیون درآمدِ اجاره', earned: e => e.assets.reduce((s, a) => s + (a.income || 0), 0) >= 100_000_000 },
   { key: 'Trusted Borrower', fa: 'خوش‌حسابِ افسانه‌ای — ۲ تسویه بدونِ دیرکرد', earned: e => (e.creditHist?.repaid || 0) >= 2 && (e.creditHist?.lateDays || 0) === 0 },
+  // فاز ۴۱ (سند ۲۸ Part 13 — پیشنهادِ «Phoenix» خودِ سند): عبور از بحران بخشی از هویتِ امپراتوری می‌شود.
+  { key: 'Phoenix', fa: 'ققنوس — از یک بحرانِ تمام‌عیار زنده بیرون آمد', earned: e => (e.stats?.crisisRecovered || 0) >= 1 },
 ]
 export function earnedHiddenBadges(e: EmpireData): string[] {
   return HIDDEN_BADGES.filter(b => !e.badges.includes(b.key) && b.earned(e)).map(b => b.key)
@@ -1639,6 +1643,73 @@ export async function settlePartnerShares(ownerId: string, partners: Array<{ use
     if (r.ok) out.push({ no: p.no, name: p.name, share })
   }
   return out
+}
+
+// ══════════ فاز ۴۱ (سند ۲۸ فصل ۱۷ — Tycoon نه ERP) ══════════
+// Part 07 «Big Deals»: معاملاتِ عادی جریانِ همیشگی‌اند؛ هفته‌ای «یک» ملکِ واقعیِ گران‌قیمت برای همهٔ
+// بازیکنان رویدادِ ویژه می‌شود — انتخابِ قطعیِ «شهری» (نه per-user) تا رقابتِ واقعی بر سرِ همان یک ملک باشد
+// (مالکیتِ انحصاریِ فاز ۳۷: اولین برنده صاحبش می‌شود). یک تلاشِ مذاکره در هفته؛ استراتژی دستِ بازیکن.
+
+export function bigDealPickOf(week: number, items: Array<{ id: string; price: number }>, topPct: number): string | null {
+  const priced = items.filter(x => x.price > 0)
+  if (!priced.length) return null
+  const sorted = [...priced].sort((a, b) => b.price - a.price)
+  const pool = sorted.slice(0, Math.max(1, Math.ceil(sorted.length * Math.max(1, topPct) / 100)))
+  return pool
+    .map(x => ({ id: x.id, r: createHash('sha1').update(`bigdeal|${week}|${x.id}`).digest().readUInt32BE(0) }))
+    .sort((a, b) => a.r - b.r)[0].id
+}
+
+// سه استراتژیِ سند (تهاجمی/متعادل/محافظه‌کار): مبادلهٔ شفافِ شانس↔تخفیف — تصمیم با بازیکن، نتیجه قطعی از هش.
+export const BIG_DEAL_STRATEGIES = [
+  { key: 'bold', icon: '⚔️', label: 'تهاجمی', desc: 'پیشنهادِ پایین — یا تخفیفِ بزرگ یا شکست', chanceMod: -15, discountMult: 1.6 },
+  { key: 'balanced', icon: '⚖️', label: 'متعادل', desc: 'تعادلِ شانس و تخفیف', chanceMod: 0, discountMult: 1 },
+  { key: 'safe', icon: '🛡', label: 'محافظه‌کار', desc: 'شانسِ بالا — تخفیفِ کوچک‌تر', chanceMod: 15, discountMult: 0.5 },
+] as const
+
+export function bigDealNegoOf(userId: string, listingId: string, week: number, strategy: string, skill: number,
+  cfg: { baseChancePct: number; discountMax: number }): { success: boolean; discountPct: number; chancePct: number; strategy: string } {
+  const st = BIG_DEAL_STRATEGIES.find(s => s.key === strategy) || BIG_DEAL_STRATEGIES[1]
+  const persona = ownerPersonaOf(listingId)
+  const chancePct = Math.max(5, Math.min(90, Math.round(cfg.baseChancePct + skill / 2 + st.chanceMod + persona.mod)))
+  const h = createHash('sha1').update(`${userId}|bigdeal|${week}|${listingId}|${st.key}`).digest()
+  const success = (h.readUInt32BE(0) % 100) < chancePct
+  const base = 1 + (h.readUInt32BE(4) % Math.max(1, cfg.discountMax))
+  const discountPct = success ? Math.max(1, Math.min(cfg.discountMax, Math.round(base * st.discountMult))) : 0
+  return { success, discountPct, chancePct, strategy: st.key }
+}
+
+// ثبتِ اتمیکِ تلاشِ هفتگی: کلیدِ claims جلوی تلاشِ دوم را می‌گیرد؛ تخفیفِ برنده سمتِ سرور ذخیره می‌شود
+// (بازتولید با استراتژیِ ارسالیِ کلاینت سرِ خرید = درِ سوءاستفاده؛ پس همین‌جا قفل می‌شود).
+export async function recordBigDealTry(userId: string, week: number, title: string, success: boolean, discountPct: number, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const key = `bd_${week}`
+    if (e.claims[key]) return 'این هفته تلاشِ مذاکره‌ات را کرده‌ای'
+    e.claims[key] = now
+    if (success) {
+      e.bigDealWin = { week, discountPct }
+      e.timeline.push({ at: now, icon: '🔥', title: `مذاکرهٔ معاملهٔ بزرگ را بردی: «${title.slice(0, 28)}»`, detail: `${discountPct.toLocaleString('fa-IR')}٪ تخفیف — تا آخرِ هفته اعتبار دارد` })
+    } else {
+      e.timeline.push({ at: now, icon: '🚪', title: 'مذاکرهٔ معاملهٔ بزرگِ این هفته شکست خورد', detail: 'هفتهٔ بعد فرصتِ تازه‌ای می‌آید' })
+    }
+  })
+}
+
+// ── فاز ۴۱ Part 13: ورود/خروجِ وضعیتِ بحرانی — تشخیص در empire-intel (crisisOf)؛ این‌جا فقط ثبتِ اتمیک ──
+// خروج از بحران = «ققنوس»: شمارندهٔ واقعی + تایم‌لاین (پیشنهادِ سند: بحران داستان بسازد، نه فقط باخت).
+export async function noteCrisis(userId: string, active: boolean, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    if (active && !e.crisis) {
+      e.crisis = { at: now }
+      e.timeline.push({ at: now, icon: '🚨', title: 'واردِ وضعیتِ بحرانی شدی', detail: 'اتاقِ تحلیل تصمیم‌های نجات را نشان می‌دهد' })
+    } else if (!active && e.crisis) {
+      const days = Math.max(1, Math.round((now - e.crisis.at) / 864e5))
+      delete e.crisis
+      e.stats = e.stats || { sellsProfitable: 0, negoWins: 0 }
+      e.stats.crisisRecovered = (e.stats.crisisRecovered || 0) + 1
+      e.timeline.push({ at: now, icon: '🕊', title: 'از بحران بیرون آمدی', detail: `${days.toLocaleString('fa-IR')} روز دوام آوردی — این هم بخشی از هویتِ امپراتوری‌ات شد` })
+    } else return 'بدونِ تغییر'
+  })
 }
 
 // ══════════ فاز ۴۰ (سند ۲۷ Part 13 — مرکزِ خودکارسازی) ══════════

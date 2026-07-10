@@ -277,6 +277,53 @@ export function jvOfferCheckOf(pct: number, amount: number, projectCost: number 
   }
 }
 
+// ── حالتِ بحران (فاز ۴۱ — سند ۲۸ فصل ۱۷ Part 13): «بحران یعنی چند سیستم همزمان خراب شوند» ─────────────
+// همه از وضعیتِ واقعی: دوامِ نقد، وامِ سررسیدگذشته/نزدیک، کارگاه‌های ازکارافتاده. سطح‌ها: زرد/نارنجی/قرمز.
+// قانونِ سند: «بحران‌ها تصادفی نیستند — نتیجهٔ تصمیم‌های قبلی‌اند» — این تابع فقط جمعِ سیگنال‌های واقعی است.
+export interface Crisis { active: boolean; level: '' | 'زرد' | 'نارنجی' | 'قرمز'; reasons: string[]; surviveDays: number | null }
+export function crisisOf(
+  e: Pick<EmpireData, 'capital' | 'assets' | 'loan'>,
+  flow: Cashflow,
+  now = Date.now(),
+  cfg?: { crisisRunwayDays?: number; crisisStalledDays?: number },
+): Crisis {
+  const runwayLimit = cfg?.crisisRunwayDays ?? 10
+  const stalledGrace = cfg?.crisisStalledDays ?? 5
+  let severity = 0
+  const reasons: string[] = []
+  if (flow.runwayDays !== null && flow.runwayDays <= runwayLimit) {
+    severity += 2
+    reasons.push(`نقدِ شرکت با خرجِ روزانهٔ فعلی فقط ${fa(flow.runwayDays)} روز دوام می‌آورد`)
+  }
+  if (e.loan && e.loan.balance > 0) {
+    const left = Math.ceil((e.loan.dueAt - now) / 864e5)
+    if (left <= 0) { severity += 2; reasons.push(`سررسیدِ وام گذشته — ${faB(e.loan.balance)} تومان بدهیِ معوق`) }
+    else if (left <= 3 && e.capital < e.loan.balance) { severity += 1; reasons.push(`${fa(left)} روز تا سررسیدِ وام و نقدِ کافی برای تسویه نداری`) }
+  }
+  let stalled = 0
+  for (const a of e.assets) {
+    const c = a.construction
+    if (c && !c.done && Math.floor((now - c.startedAt) / 864e5) - c.paidDays > stalledGrace) stalled++
+  }
+  if (stalled > 0) {
+    severity += Math.min(2, stalled)
+    reasons.push(`${fa(stalled)} کارگاه از بی‌پولی خوابیده است`)
+  }
+  const level = severity >= 4 ? 'قرمز' as const : severity >= 3 ? 'نارنجی' as const : severity >= 2 ? 'زرد' as const : '' as const
+  return { active: severity >= 2, level, reasons, surviveDays: flow.runwayDays }
+}
+
+// ── کمیابیِ صادقانهٔ فرصت‌ها (فاز ۴۱ — سند ۲۸ Part 10 «Rare Level») ─────────────
+// درجهٔ کمیابی فقط از فاصلهٔ واقعیِ قیمتِ متری با میانهٔ محله — بدونِ نمونهٔ کافی، هیچ برچسبی (نه عددِ ساختگی).
+export function rarityOf(perM: number, hoodMedian: number, samples: number, minComps: number): { label: string; stars: number; diffPct: number } | null {
+  if (!(perM > 0) || !(hoodMedian > 0) || samples < minComps) return null
+  const diffPct = Math.round((perM - hoodMedian) / hoodMedian * 100)
+  if (diffPct <= -20) return { label: 'نایاب', stars: 4, diffPct }
+  if (diffPct <= -10) return { label: 'کمیاب', stars: 3, diffPct }
+  if (diffPct <= -5) return { label: 'ویژه', stars: 2, diffPct }
+  return { label: 'عادی', stars: 1, diffPct }
+}
+
 // ── اولویت‌های امروز (Part 11: حداکثر ۵ اقدامِ مهم — همه از «وضعیتِ واقعیِ» همین لحظه) ─────────────
 export function prioritiesOf(e: EmpireData, now = Date.now(), cfg?: Pick<IntelCfg, 'loanSoonDays'>): Array<{ icon: string; text: string }> {
   const out: Array<{ icon: string; text: string }> = []

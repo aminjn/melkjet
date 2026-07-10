@@ -1598,6 +1598,21 @@ async function main() {
     ok('روزِ بعد دوباره ثبت می‌شود (جدیدترین اول)', fC40.empire.ruleLog.length === 2 && fC40.empire.ruleLog[0].text === 'روزِ بعد')
     const dl40 = await delAutoRule(uc12, rid40)
     ok('حذفِ قانون', dl40.ok === true && dl40.empire.autoRules.length === 1 && (await delAutoRule(uc12, 'ghost')).ok === false)
+
+    // ── فاز ۴۱ (سند ۲۸): معاملهٔ بزرگ — یک تلاش/هفته + تخفیفِ سمتِ سرور؛ بحران — ورود/خروج و ققنوس ──
+    console.log('\n── Empire · فاز ۴۱ (تلاشِ هفتگیِ Big Deal + چرخهٔ بحران/ققنوس) ──')
+    const { recordBigDealTry, noteCrisis } = await import('../app/lib/empire-store.ts')
+    const t41a = await recordBigDealTry(uc12, 500, 'برجِ آزمون', true, 9)
+    ok('بردِ مذاکره: تخفیف سمتِ سرور ذخیره شد', t41a.ok === true && t41a.empire.bigDealWin?.week === 500 && t41a.empire.bigDealWin?.discountPct === 9)
+    ok('تلاشِ دوم در همان هفته رد می‌شود', (await recordBigDealTry(uc12, 500, 'برجِ آزمون', true, 12)).ok === false)
+    const t41b = await recordBigDealTry(uc12, 501, 'برجِ دیگر', false, 0)
+    ok('هفتهٔ بعد تلاشِ تازه؛ شکست تخفیفی نمی‌گذارد ولی بردِ قبلی دست‌نخورده می‌ماند', t41b.ok === true && t41b.empire.bigDealWin?.week === 500)
+    const c41a = await noteCrisis(uc12, true)
+    ok('ورود به بحران: پرچم + تایم‌لاین', c41a.ok === true && !!c41a.empire.crisis && c41a.empire.timeline.some(t => t.icon === '🚨'))
+    ok('ورودِ تکراری بی‌اثر است', (await noteCrisis(uc12, true)).ok === false)
+    const c41b = await noteCrisis(uc12, false)
+    ok('خروج از بحران: شمارندهٔ ققنوس + پاک‌شدنِ پرچم', c41b.ok === true && !c41b.empire.crisis && (c41b.empire.stats?.crisisRecovered || 0) >= 1 && c41b.empire.timeline.some(t => t.icon === '🕊'))
+    ok('خروجِ بدونِ بحران بی‌اثر است', (await noteCrisis(uc12, false)).ok === false)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

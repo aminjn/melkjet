@@ -26,6 +26,7 @@ import {
   activeCoinPacks, buyCosmetic, setCosmetic, offerOf, dismissOffer, areaFromText, rateHit,
   setForSale, tradeAsset, openPartnership, joinPartnership, settlePartnerShares, chargeClanFee,
   setAutoRule, delAutoRule, toggleAutoRule, recordRuleFires,
+  bigDealPickOf, bigDealNegoOf, BIG_DEAL_STRATEGIES, noteCrisis, recordBigDealTry,
   type EmpireData, type AssetKind, type LandPlan,
 } from '@/app/lib/empire-store'
 import {
@@ -45,7 +46,7 @@ import { flagEnabled } from '@/app/lib/reos/flags'
 import { config, primeConfig } from '@/app/lib/reos/reos-config'
 import { ownerOfListing, claimListing, releaseListing, transferListing, myClanOf, listClans, createClan, joinClan, leaveClan, postClanMsg, clanView, deleteClanIfOwner } from '@/app/lib/empire-social'
 // فاز ۳۹ (سند ۲۶ فصل ۱۶ Cognitive AI): هوشِ سرمایه‌گذاری — ارزش‌گذاری/تصمیم‌یار/روندِ محله/سلامتِ مالی/اولویت‌ها؛ همه از دادهٔ واقعی.
-import { compStatsOf, valuationOf, decisionOf, marketIntelOf, cashflowOf, financialHealthOf, prioritiesOf, evalRules, RULE_TEMPLATES, tradeAskCheckOf, jvOfferCheckOf } from '@/app/lib/empire-intel'
+import { compStatsOf, valuationOf, decisionOf, marketIntelOf, cashflowOf, financialHealthOf, prioritiesOf, evalRules, RULE_TEMPLATES, tradeAskCheckOf, jvOfferCheckOf, crisisOf, rarityOf } from '@/app/lib/empire-intel'
 import { loadSnapshots } from '@/app/lib/empire-metrics'
 
 const hoodOf = (loc?: string) => { const p = String(loc || '').split(/[،,]/).map(x => x.trim()).filter(Boolean); return p.length > 1 ? p[p.length - 1] : (p[0] || '') }
@@ -644,6 +645,18 @@ export async function POST(req: NextRequest) {
         // همان فرمولِ اکشنِ «مذاکره» (negoSkillOf) — تا تخفیفی که کاربر دیده، سرِ خرید هم همان باشد.
         const out = me0 ? negotiationOutcome(userId, it.id, negoSkillOf(me0, ownerPersonaOf(it.id).mod).skill) : { success: false, discountPct: 0 }
         if (out.success) { price = Math.round(price * (1 - out.discountPct / 100)); negotiatedWin = true }
+      }
+      // فاز ۴۱ (سند ۲۸ Part 07): خریدِ معاملهٔ بزرگِ هفته با تخفیفِ بردهٔ ذخیره‌شده در سرور — فقط روی همان ملکِ هفته.
+      if (b.bigDeal && me0) {
+        const bdCfg = config().empire.bigDeal
+        const week = Math.floor(dayNumberOf(Date.now()) / 7)
+        const win = me0.bigDealWin
+        if (!bdCfg.enabled || !win || win.week !== week) return NextResponse.json({ error: 'تخفیفِ معتبرِ معاملهٔ بزرگ نداری — اول مذاکره را ببر' }, { status: 400 })
+        const items41 = await candidateListings(800).catch(() => [] as Item[])
+        const pick41 = bigDealPickOf(week, items41.filter(isPricedSale).map(x => ({ id: x.id, price: priceOf(x) })), bdCfg.topPct)
+        if (pick41 !== it.id) return NextResponse.json({ error: 'این آگهی معاملهٔ بزرگِ این هفته نیست' }, { status: 400 })
+        price = Math.round(price * (1 - win.discountPct / 100))
+        negotiatedWin = true
       }
       // فاز ۳۷ — مالکیتِ انحصاری: یک آگهیِ واقعی فقط یک مالکِ بازیکن دارد؛ ادعای اتمیک پیش از خرید.
       const exclusive = config().empire.social?.exclusiveEnabled !== false
@@ -1389,14 +1402,84 @@ export async function POST(req: NextRequest) {
       const day = dayNumberOf(Date.now())
       const expiresAt = (day + 1) * 864e5   // همان مرزِ روزِ صندوقچه/کوئست — فردا فرصت‌های دیگری می‌آیند
       if (!pool.length) return NextResponse.json({ ok: true, deals: [], expiresAt })
+      // فاز ۴۱ (سند ۲۸ Part 10 «Rare Level»): میانهٔ متریِ هر محله از همین آگهی‌های واقعی — برچسبِ کمیابیِ صادقانه.
+      const hoodRates = new Map<string, number[]>()
+      for (const it of items) {
+        if (!isPricedSale(it)) continue
+        const a2 = parseFaNum((it.meta || {})['متراژ']) || 0
+        if (!(a2 > 0)) continue
+        const h2 = hoodOf(it.location)
+        if (!h2) continue
+        if (!hoodRates.has(h2)) hoodRates.set(h2, [])
+        hoodRates.get(h2)!.push(priceOf(it) / a2)
+      }
+      const medOf = (rs: number[]) => { const s = [...rs].sort((x, y) => x - y); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2 }
       const byId = new Map(pool.map(it => [it.id, it] as const))
       const deals = dailyDealPickOf(userId, day, pool.map(it => it.id), cfg.count).map(id => {
         const it = byId.get(id)!
         const area = parseFaNum((it.meta || {})['متراژ']) || 0
         const price = priceOf(it)
-        return { id, title: it.title, hood: hoodOf(it.location), price, area, perM: area > 0 ? Math.round(price / area) : 0, lat: Number(it.meta?.['__lat']) || undefined, lng: Number(it.meta?.['__lng']) || undefined, url: listingHref(id, it.title, hoodOf(it.location)) }
+        const perM = area > 0 ? Math.round(price / area) : 0
+        const rates = hoodRates.get(hoodOf(it.location)) || []
+        const rarity = rarityOf(perM, rates.length ? medOf(rates) : 0, rates.length, config().empire.intel.minComps)
+        return { id, title: it.title, hood: hoodOf(it.location), price, area, perM, rarity, lat: Number(it.meta?.['__lat']) || undefined, lng: Number(it.meta?.['__lng']) || undefined, url: listingHref(id, it.title, hoodOf(it.location)) }
       })
       return NextResponse.json({ ok: true, deals, expiresAt })
+    }
+
+    // 🔥 معاملهٔ بزرگِ هفته (فاز ۴۱ — سند ۲۸ فصل ۱۷ Part 07 «Big Deals»): یک ملکِ واقعی از سگمنتِ گرانِ بازار،
+    // برای «همه» یکی است (انتخابِ قطعیِ شهری از هشِ هفته) — رقابتِ واقعی: اولین برندهٔ مذاکره که بخرد، مالک می‌شود.
+    case 'bigDeal': {
+      const cfg = config().empire.bigDeal
+      if (!cfg.enabled) return NextResponse.json({ error: 'معاملهٔ بزرگ فعلاً فعال نیست' }, { status: 403 })
+      const e = await getEmpire(userId)
+      if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      const week = Math.floor(dayNumberOf(Date.now()) / 7)
+      const items = await candidateListings(800).catch(() => [] as Item[])
+      const pickId = bigDealPickOf(week, items.filter(isPricedSale).map(it => ({ id: it.id, price: priceOf(it) })), cfg.topPct)
+      const it = pickId ? items.find(x => x.id === pickId) : null
+      if (!it) return NextResponse.json({ ok: true, deal: null, note: 'این هفته آگهیِ قیمت‌دارِ کافی برای انتخابِ معاملهٔ بزرگ نداریم' })
+      const owner = await ownerOfListing(it.id).catch(() => null)
+      const persona = ownerPersonaOf(it.id)
+      const tried = !!e.claims[`bd_${week}`]
+      const wonPct = e.bigDealWin?.week === week ? e.bigDealWin.discountPct : 0
+      const unlocked = empireLevel(e.xp).level >= cfg.level
+      return NextResponse.json({
+        ok: true,
+        deal: {
+          id: it.id, title: it.title, hood: hoodOf(it.location), price: priceOf(it),
+          url: listingHref(it.id, it.title, hoodOf(it.location)),
+          owner: { name: persona.name, type: persona.type, desc: persona.desc },
+          expiresAt: (week + 1) * 7 * 864e5,
+          soldTo: owner && owner.userId !== userId ? { name: owner.name, no: owner.no } : null,
+          mine: !!(owner && owner.userId === userId),
+        },
+        unlocked, need: cfg.level,
+        tried, wonPct, strategies: BIG_DEAL_STRATEGIES,
+      })
+    }
+    // مذاکرهٔ معاملهٔ بزرگ: یک تلاش در هفته؛ استراتژی (شانس↔تخفیف) دستِ بازیکن؛ نتیجه قطعی از هش + تیپِ مالک + مهارت.
+    case 'bigDealNego': {
+      const cfg = config().empire.bigDeal
+      if (!cfg.enabled) return NextResponse.json({ error: 'معاملهٔ بزرگ فعلاً فعال نیست' }, { status: 403 })
+      const e = await getEmpire(userId)
+      if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      const gate = await lockedMsg(userId, cfg.level, 'معاملهٔ بزرگ')
+      if (gate) return NextResponse.json({ error: gate }, { status: 403 })
+      const week = Math.floor(dayNumberOf(Date.now()) / 7)
+      if (e.claims[`bd_${week}`]) return NextResponse.json({ error: 'این هفته تلاشِ مذاکره‌ات را کرده‌ای — هفتهٔ بعد معاملهٔ بزرگِ تازه‌ای می‌آید' }, { status: 400 })
+      const items = await candidateListings(800).catch(() => [] as Item[])
+      const pickId = bigDealPickOf(week, items.filter(isPricedSale).map(it => ({ id: it.id, price: priceOf(it) })), cfg.topPct)
+      const it = pickId ? items.find(x => x.id === pickId) : null
+      if (!it) return NextResponse.json({ error: 'معاملهٔ بزرگِ این هفته در دسترس نیست' }, { status: 404 })
+      const owner = await ownerOfListing(it.id).catch(() => null)
+      if (owner && owner.userId !== userId) return NextResponse.json({ error: `دیر رسیدی — «${owner.name}» (#${(owner.no || 0).toLocaleString('fa-IR')}) زودتر آن را خریده` }, { status: 409 })
+      const persona = ownerPersonaOf(it.id)
+      const out = bigDealNegoOf(userId, it.id, week, String(b.strategy || 'balanced'), negoSkillOf(e, persona.mod).skill, cfg)
+      const r = await recordBigDealTry(userId, week, it.title, out.success, out.discountPct)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      recordEvent({ type: 'user_clicked_property', userId, propertyId: it.id, meta: { src: 'empire_bigdeal' } }).catch(() => {})
+      return NextResponse.json({ ok: true, ...out, price: priceOf(it), discounted: out.success ? Math.round(priceOf(it) * (1 - out.discountPct / 100)) : null })
     }
 
     // 🧭 هوشِ سرمایه‌گذاری (فاز ۳۹ — سند ۲۶ فصل ۱۶): روندِ محله‌ها از تاریخچهٔ واقعیِ رصدخانه +
@@ -1410,6 +1493,12 @@ export async function POST(req: NextRequest) {
       const snaps = await loadSnapshots(60).catch(() => [])
       const flow = cashflowOf(e)
       const health = financialHealthOf(e, netWorthOf(e, {}).netWorth, flow)
+      // فاز ۴۱ (سند ۲۸ Part 13): تشخیصِ بحران از سیگنال‌های واقعی + ثبتِ ورود/خروج (خروج = شمارندهٔ ققنوس + نشانِ مخفی)
+      const crisis = crisisOf(e, flow, Date.now(), iCfg)
+      if (crisis.active !== !!e.crisis) {
+        await noteCrisis(userId, crisis.active).catch(() => {})
+        if (!crisis.active) await applyHiddenBadges(userId).catch(() => {})
+      }
       // فاز ۴۰ (سند ۲۷ Part 13): ارزیابیِ قوانینِ خودِ بازیکن روی وضعیت/قیمت‌های واقعی — فقط هشدار/پیشنهاد.
       const auCfg = config().empire.automation
       let rules = null
@@ -1427,7 +1516,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         ok: true,
         market: marketIntelOf(snaps, iCfg),
-        flow, health, rules,
+        flow, health, rules, crisis,
         priorities: prioritiesOf(e, Date.now(), iCfg),
         capital: e.capital,
       })

@@ -600,6 +600,15 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             {row('هشدارِ سررسیدِ وام (روز مانده)', cin('intel', 'loanSoonDays'), 'در «اولویت‌های امروز» بازیکن')}
             {row('عرضهٔ «پرتحرک» (تعداد آگهی)', cin('intel', 'liqHigh'), 'نمونهٔ هم‌محلهٔ بیشتر از این = بازارِ پرتحرک')}
             {row('عرضهٔ «معمولی» (تعداد آگهی)', cin('intel', 'liqMid'), 'کمتر از این = بازارِ کم‌عمق')}
+            <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>🚨 اتاقِ بحران (فاز ۴۱ — سند ۲۸ Part 13: بحران = نتیجهٔ تصمیم‌ها، نه تصادف)</div>
+            {row('آستانهٔ دوامِ نقد (روز)', cin('intel', 'crisisRunwayDays'), 'دوامِ نقدِ کمتر از این = سیگنالِ بحران')}
+            {row('آستانهٔ خوابِ کارگاه (روز)', cin('intel', 'crisisStalledDays'), 'کارگاهِ بیش از این عقب‌مانده = سیگنالِ بحران')}
+            <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>💎 معاملهٔ بزرگِ هفته (فاز ۴۱ — سند ۲۸ Part 07: Big Deals)</div>
+            {row('معاملهٔ بزرگ فعال (۱/۰)', cin('bigDeal', 'enabled'), 'هفته‌ای یک ملکِ واقعیِ گران، شهری و رقابتی — اولین برنده مالک می‌شود')}
+            {row('سگمنتِ گران (٪ بالای بازار)', cin('bigDeal', 'topPct'), 'انتخابِ قطعی از این درصدِ گران‌ترین آگهی‌های قیمت‌دار')}
+            {row('سقفِ تخفیفِ مذاکره (٪)', cin('bigDeal', 'discountMax'))}
+            {row('شانسِ پایهٔ مذاکره (٪)', cin('bigDeal', 'baseChancePct'), '+ مهارت ÷ ۲ + تیپِ مالک ± استراتژی')}
+            {row('سطحِ بازشدن', cin('bigDeal', 'level'))}
             <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>⚙️ مرکزِ خودکارسازی (فاز ۴۰ — سند ۲۷ Part 13: «هیچ اقدامِ مالی خودکار نیست»)</div>
             {row('خودکارسازی فعال (۱/۰)', cin('automation', 'enabled'), 'قوانینِ قابل‌تعریفِ بازیکن — فقط اطلاع/پیشنهاد، هرگز اجرا')}
             {row('سقفِ قوانینِ هر بازیکن', cin('automation', 'maxRules'))}
