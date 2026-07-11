@@ -5488,6 +5488,7 @@ function PaymentView() {
 function AiCostView() {
   const [c, setC] = useState<any>(null)
   const [saved, setSaved] = useState('')
+  const [pasteBox, setPasteBox] = useState('')   // فاز ۸۴: ورودِ گروهیِ قیمت‌ها از جدولِ گپ
   const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 9, padding: '8px 10px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
   const lab: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', marginBottom: 5, display: 'block', fontWeight: 600 }
   const load = () => fetch('/api/admin/ai-cost').then(r => r.ok ? r.json() : null).then(d => { if (d) setC(d) }).catch(() => {})
@@ -5615,6 +5616,47 @@ function AiCostView() {
           <div style={{ fontSize: 13.5, fontWeight: 800 }}>هزینهٔ مدل‌ها ($ به‌ازای هر ۱میلیون توکن — تصویری: به‌ازای هر تصویر/۱M)</div>
           <OutlineButton onClick={async () => { setSaved('در حال دریافت از API…'); const r = await fetch('/api/admin/ai-cost', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'syncModels' }) }); const d = await r.json().catch(() => ({})); if (d?.ok) { setC(d); setSaved(`✓ ${fa(d.updated || 0)} مدل به‌روز و ${fa(d.added || 0)} مدلِ جدید از API گرفته شد`) } else setSaved(d?.error || 'خطا در دریافت'); setTimeout(() => setSaved(''), 5000) }} style={{ fontSize: 12.5, padding: '7px 14px' }}>🔄 دریافتِ خودکارِ قیمت‌ها از API</OutlineButton>
         </div>
+        {/* فاز ۸۴ (فیدبک: «چرا قیمت‌ها را نمی‌آورد؟»): API گپ برای خیلی از مدل‌ها قیمت برنمی‌گرداند — تنها منبعِ
+            کامل، جدولِ صفحهٔ قیمتِ خودِ سایتِ گپ است. کلِ آن جدول را کپی کن و این‌جا پیست کن؛ قیمت‌ها یک‌جا می‌نشیند. */}
+        <details style={{ marginBottom: 12, background: 'var(--bg2)', border: '1px dashed var(--line2)', borderRadius: 10, padding: '10px 12px' }}>
+          <summary style={{ cursor: 'pointer', fontSize: 12.5, fontWeight: 700 }}>📥 ورودِ گروهیِ قیمت‌ها با کپی/پیست از جدولِ سایتِ گپ <span style={{ fontSize: 10.5, color: 'var(--muted)', fontWeight: 400 }}>— برای مدل‌هایی که API قیمتشان را نمی‌دهد</span></summary>
+          <div style={{ fontSize: 11, color: 'var(--muted)', margin: '8px 0 6px', lineHeight: 1.9 }}>صفحهٔ «قیمتِ مدل‌ها»ی سایتِ گپ را باز کن، کلِ جدول را انتخاب و کپی کن (Ctrl+A روی جدول کافی است) و این‌جا پیست کن — هر سطری که با نامِ مدل شروع شود و بعدش دو عددِ دلاری بیاید، خوانده می‌شود.</div>
+          <textarea value={pasteBox} onChange={e => setPasteBox(e.target.value)} placeholder={'مثال:\ngpt-4o-mini\nOpenAI\n0.15\n0.6\n...'} dir="ltr"
+            style={{ width: '100%', minHeight: 120, boxSizing: 'border-box', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 9, padding: 10, color: 'var(--text)', fontSize: 12, fontFamily: 'monospace' }} />
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+            <GoldButton onClick={() => {
+              // پارسِ متنِ پیست‌شده: توکن‌بندی خط‌به‌خط؛ «شناسهٔ مدل» = خطی شبیهِ slug؛ دو عددِ بعدی (زیر ۱۰۰۰) = ورودی/خروجی $
+              const faDigits = (t: string) => t.replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٬،,]/g, '')
+              const lines = pasteBox.split(/\n+/).map(l => l.trim()).filter(Boolean)
+              const found: Record<string, { inUsd: number; outUsd: number }> = {}
+              for (let li = 0; li < lines.length; li++) {
+                const idc = lines[li].replace(/\s*🖼\s*$/, '')
+                if (!/^[a-z][\w.\/-]{2,}$/i.test(idc) || /^\d+$/.test(idc)) continue
+                const nums: number[] = []
+                for (let k = li + 1; k < Math.min(li + 6, lines.length) && nums.length < 2; k++) {
+                  const t = faDigits(lines[k])
+                  if (/^[a-z][\w.\/-]{2,}$/i.test(lines[k]) && !/^[\d.]+$/.test(t)) { if (nums.length) break; continue }   // نامِ تأمین‌کننده
+                  const n = Number(t)
+                  if (isFinite(n) && n >= 0 && n < 1000 && /^[\d.]+$/.test(t)) nums.push(n)
+                  else if (nums.length) break
+                }
+                if (nums.length >= 1) found[idc] = { inUsd: nums[0] || 0, outUsd: nums[1] || 0 }
+              }
+              const ids = Object.keys(found)
+              if (!ids.length) { setSaved('✕ هیچ سطرِ قابل‌خواندنی پیدا نشد — کلِ جدول (نامِ مدل + اعداد) را پیست کن'); setTimeout(() => setSaved(''), 5000); return }
+              let matched = 0
+              const models2 = c.models.map((m: any) => {
+                const f = found[m.id] || found[m.label]
+                if (f && (f.inUsd > 0 || f.outUsd > 0)) { matched++; return { ...m, inUsd: f.inUsd, outUsd: f.outUsd } }
+                return m
+              })
+              setC({ ...c, models: models2 })
+              setSaved(`✓ ${fa(ids.length)} سطر خوانده شد؛ ${fa(matched)} مدلِ جدول قیمت گرفت — حالا «ذخیره» را بزن تا ثبت شود`)
+              setTimeout(() => setSaved(''), 8000)
+            }}>📥 خواندنِ قیمت‌ها از متن</GoldButton>
+            <span style={{ fontSize: 10.5, color: 'var(--faint)' }}>فقط مدل‌هایی که در جدولِ پایین هستند به‌روز می‌شوند؛ قیمت‌ها همان قیمت‌های واقعیِ اعلامیِ گپ‌اند که خودت پیست کرده‌ای.</span>
+          </div>
+        </details>
         <div style={{ maxHeight: 460, overflowY: 'auto' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 0.8fr 0.8fr 1fr', gap: 8, padding: '6px 8px', fontSize: 11.5, fontWeight: 700, color: 'var(--muted)', position: 'sticky', top: 0, background: 'var(--surface)' }}>
             <div>مدل</div><div>تأمین‌کننده</div><div>ورودی $</div><div>خروجی $</div><div>هزینهٔ ۱M (تومان)</div>
