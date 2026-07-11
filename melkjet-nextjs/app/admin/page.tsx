@@ -4073,14 +4073,20 @@ function APIView() {
       // اگر جواب نداد، ارزانِ بعدی — مدلِ خراب هرگز انتخاب نمی‌شود.
       const skipped78: string[] = []
       let cheapest: any = null
-      for (const cand of priced.slice(0, 4)) {
-        setEcoMsg(`در حال تستِ زندهٔ «${cand.id}»…`)
+      const cands78 = priced.slice(0, 4)
+      for (let i78 = 0; i78 < cands78.length; i78++) {
+        const cand = cands78[i78]
+        setEcoMsg(`تستِ زندهٔ ${(i78 + 1).toLocaleString('fa-IR')} از ${cands78.length.toLocaleString('fa-IR')}: «${cand.id}» (حداکثر ~۲۵ ثانیه)…`)
         try {
-          const tr = await fetch('/api/admin/ai/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: cand.id }) })
+          // فاز ۷۸: سقفِ زمانیِ سمتِ کلاینت — دکمه هرگز بی‌نهایت «در حال اعمال» نمی‌ماند
+          const ab = new AbortController()
+          const tmr = setTimeout(() => ab.abort(), 25000)
+          const tr = await fetch('/api/admin/ai/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: cand.id }), signal: ab.signal })
+          clearTimeout(tmr)
           const td = await tr.json().catch(() => null)
           if (td?.ok) { cheapest = cand; break }
-          skipped78.push(`${cand.id} (${String(td?.error || 'بی‌پاسخ').slice(0, 60)})`)
-        } catch { skipped78.push(`${cand.id} (خطای شبکه)`) }
+          skipped78.push(`${cand.id} (${String(td?.error || 'بی‌پاسخ').slice(0, 80)})`)
+        } catch { skipped78.push(`${cand.id} (بی‌پاسخ در ۲۵ ثانیه)`) }
       }
       if (!cheapest) { setEcoMsg(`✕ هیچ‌کدام از ${Math.min(4, priced.length).toLocaleString('fa-IR')} مدلِ ارزانِ اول جوابِ تستِ زنده را ندادند: ${skipped78.join('، ')}`); return }
       const visionRe = /(gpt-4o|gpt-4\.1|gpt-5|gemini|claude|qwen.*vl|vision)/i

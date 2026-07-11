@@ -36,7 +36,9 @@ export async function POST(req: NextRequest) {
 
   const m = (model && String(model)) || 'gpt-4o-mini'
   try {
-    const text = await chatComplete(m, [{ role: 'user', content: 'به فارسی فقط بنویس: تست موفق بود.' }], { max_tokens: 30 }, prov)
+    // فاز ۷۸: تایم‌اوتِ کوتاه (۲۰ث) تا تستِ مدلِ خراب، صفحه را دقیقه‌ها معطل نکند + پاسخِ خالی = مردود
+    const text = await chatComplete(m, [{ role: 'user', content: 'به فارسی فقط بنویس: تست موفق بود.' }], { max_tokens: 30, timeoutMs: 20000 }, prov)
+    if (!String(text || '').trim()) return NextResponse.json({ ok: false, model: m, error: 'مدل پاسخِ خالی برگرداند — قابلِ‌استفاده نیست' }, { status: 200 })
     return NextResponse.json({ ok: true, model: m, text })
   } catch (e: any) {
     return NextResponse.json({ ok: false, model: m, error: e?.message || 'خطا' }, { status: 200 })

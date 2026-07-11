@@ -82,7 +82,7 @@ export async function listModelsWithPricing(provider?: string): Promise<ApiModel
   }).filter(m => m.id && (m.inUsd > 0 || m.outUsd > 0))
 }
 
-export async function chatComplete(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number; src?: string } = {}, provider?: string): Promise<string> {
+export async function chatComplete(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number; src?: string; timeoutMs?: number } = {}, provider?: string): Promise<string> {
   const { base, key } = cfg(provider)
   // فاز ۵۷: src صریح مقدم است — در بیلدِ پروداکشن stack مسیرِ app/ را ندارد و «ناشناخته» می‌شد
   const src54 = opts.src || callerSrcOf(new Error().stack), t54 = Date.now()
@@ -91,7 +91,7 @@ export async function chatComplete(model: string, messages: { role: string; cont
       method: 'POST',
       headers: { 'content-type': 'application/json', Authorization: `Bearer ${key}`, accept: 'application/json' },
       body: JSON.stringify({ model, messages, temperature: opts.temperature ?? 0.7, max_tokens: opts.max_tokens }),
-    }, 90000)
+    }, Math.max(5000, opts.timeoutMs || 90000))
     if (res.status !== 200) throw new Error(`گپ HTTP ${res.status}: ${res.body.slice(0, 300)}`)
     const d = JSON.parse(res.body)
     recordAiUse({ src: src54, model, kind: 'text', tokens: Number(d.usage?.total_tokens) || 0, ok: true, ms: Date.now() - t54 }).catch(() => {})
@@ -125,16 +125,29 @@ export async function chatCompleteSafe(model: string, messages: { role: string; 
 
 // مثلِ chatCompleteSafe ولی تعدادِ توکنِ مصرف‌شده را هم برمی‌گرداند (برای محاسبهٔ مصرفِ کاربر)
 async function chatCompleteRaw(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number; src?: string } = {}, provider?: string): Promise<{ text: string; tokens: number }> {
+  // فاز ۷۸: مسیرِ چت/اعتبارِ کاربر هم مدارشکن + ثبتِ خطا + fallback دارد — مدلِ خراب تجربهٔ کاربر را نمی‌کُشد
+  if (model !== 'gpt-4o-mini' && modelDown(model)) model = 'gpt-4o-mini'
   const { base, key } = cfg(provider)
-  const res = await gapHttp(`${base}/chat/completions`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', Authorization: `Bearer ${key}`, accept: 'application/json' },
-    body: JSON.stringify({ model, messages, temperature: opts.temperature ?? 0.7, max_tokens: opts.max_tokens }),
-  }, 90000)
-  if (res.status !== 200) throw new Error(`گپ HTTP ${res.status}: ${res.body.slice(0, 300)}`)
-  const d = JSON.parse(res.body)
-  recordAiUse({ src: opts.src || callerSrcOf(new Error().stack), model, kind: 'text', tokens: Number(d.usage?.total_tokens) || 0, ok: true, ms: 0 }).catch(() => {})   // فاز ۵۴
-  return { text: d.choices?.[0]?.message?.content || '', tokens: Number(d.usage?.total_tokens) || 0 }
+  const attempt = async (m: string) => {
+    const res = await gapHttp(`${base}/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', Authorization: `Bearer ${key}`, accept: 'application/json' },
+      body: JSON.stringify({ model: m, messages, temperature: opts.temperature ?? 0.7, max_tokens: opts.max_tokens }),
+    }, 90000)
+    if (res.status !== 200) throw new Error(`گپ HTTP ${res.status}: ${res.body.slice(0, 300)}`)
+    const d = JSON.parse(res.body)
+    recordAiUse({ src: opts.src || callerSrcOf(new Error().stack), model: m, kind: 'text', tokens: Number(d.usage?.total_tokens) || 0, ok: true, ms: 0 }).catch(() => {})   // فاز ۵۴
+    noteModelResult(m, true)
+    return { text: d.choices?.[0]?.message?.content || '', tokens: Number(d.usage?.total_tokens) || 0 }
+  }
+  try {
+    return await attempt(model)
+  } catch (e: any) {
+    noteModelResult(model, false)
+    recordAiUse({ src: opts.src || callerSrcOf(new Error().stack), model, kind: 'text', tokens: 0, ok: false, ms: 0, err: e?.message || String(e) }).catch(() => {})
+    if (model !== 'gpt-4o-mini') return await attempt('gpt-4o-mini')
+    throw e
+  }
 }
 export async function chatCompleteUsage(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number; src?: string } = {}, provider?: string): Promise<{ text: string; tokens: number }> {
   try { return await chatCompleteRaw(model, messages, opts, provider) }
@@ -217,7 +230,7 @@ export async function generateImageSafe(model: string | undefined, prompt: strin
 // خودکار «ناشناخته» می‌شد — منبعِ صریح تنها راهِ قطعی است.
 export function aiFor(src: string) {
   return {
-    chatComplete: (model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number } = {}, provider?: string) =>
+    chatComplete: (model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number; timeoutMs?: number } = {}, provider?: string) =>
       chatComplete(model, messages, { ...opts, src }, provider),
     chatCompleteSafe: (model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number } = {}, provider?: string) =>
       chatCompleteSafe(model, messages, { ...opts, src }, provider),
