@@ -1,5 +1,5 @@
 import { getAdminData } from './admin-store'
-import { recordAiUse, callerSrcOf } from './ai-usage-store'   // فاز ۵۴: دفترِ جزءبه‌جزِ مصرفِ AI
+import { recordAiUse, callerSrcOf, noteModelResult, modelDown } from './ai-usage-store'   // فاز ۵۴: دفترِ جزءبه‌جزِ مصرفِ AI
 import { DEFAULT_GAP_BASE } from './ai-agents'
 import { shecanRequest } from './shecan-https'
 
@@ -95,9 +95,12 @@ export async function chatComplete(model: string, messages: { role: string; cont
     if (res.status !== 200) throw new Error(`گپ HTTP ${res.status}: ${res.body.slice(0, 300)}`)
     const d = JSON.parse(res.body)
     recordAiUse({ src: src54, model, kind: 'text', tokens: Number(d.usage?.total_tokens) || 0, ok: true, ms: Date.now() - t54 }).catch(() => {})
+    noteModelResult(model, true)
     return d.choices?.[0]?.message?.content || ''
-  } catch (e) {
-    recordAiUse({ src: src54, model, kind: 'text', tokens: 0, ok: false, ms: Date.now() - t54 }).catch(() => {})
+  } catch (e: any) {
+    // فاز ۷۸: متنِ خطا در دفترِ مصرف ثبت می‌شود + مدارشکنِ مدلِ خراب
+    noteModelResult(model, false)
+    recordAiUse({ src: src54, model, kind: 'text', tokens: 0, ok: false, ms: Date.now() - t54, err: e?.message || String(e) }).catch(() => {})
     throw e
   }
 }
@@ -105,6 +108,11 @@ export async function chatComplete(model: string, messages: { role: string; cont
 // Like chatComplete, but if the chosen model fails (e.g. 503/unavailable on
 // GapGPT), retry once with a known-good cheap model so the feature still works.
 export async function chatCompleteSafe(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number; src?: string } = {}, provider?: string): Promise<string> {
+  // فاز ۷۸ (مدارشکن): مدلی که چند بارِ پیاپی شکست خورده، تا مدتی مستقیم دور زده می‌شود —
+  // دیگر هر درخواست یک تماسِ سوخته + تأخیرِ ۹۰ثانیه‌ای خرجِ مدلِ خراب نمی‌کند.
+  if (model !== 'gpt-4o-mini' && modelDown(model)) {
+    return await chatComplete('gpt-4o-mini', messages, opts, provider)
+  }
   try {
     return await chatComplete(model, messages, opts, provider)
   } catch (e) {

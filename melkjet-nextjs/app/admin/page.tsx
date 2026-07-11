@@ -4069,7 +4069,20 @@ function APIView() {
       const costOf = (m: any) => { const i = Number(m.inUsd) || 0, o2 = Number(m.outUsd) || 0; return basis === 'sum' ? i + o2 : basis === 'avg' ? (i + o2) / 2 : (o2 || i) }
       const priced = (d.models || []).filter((m: any) => m.type === 'text' && costOf(m) > 0 && models.includes(m.id)).sort((a: any, b: any) => costOf(a) - costOf(b))
       if (!priced.length) { setEcoMsg('✕ هیچ مدلِ قیمت‌داری با لیستِ زندهٔ درگاه هم‌خوان نیست — اول در «هزینه و قیمت‌گذاریِ AI» دکمهٔ دریافتِ قیمت‌ها را بزن.'); return }
-      const cheapest = priced[0]
+      // فاز ۷۸ (فیدبک: qwen ارزان بود ولی همهٔ تماس‌هایش خطا می‌داد): کاندید اول تستِ «زنده» می‌شود؛
+      // اگر جواب نداد، ارزانِ بعدی — مدلِ خراب هرگز انتخاب نمی‌شود.
+      const skipped78: string[] = []
+      let cheapest: any = null
+      for (const cand of priced.slice(0, 4)) {
+        setEcoMsg(`در حال تستِ زندهٔ «${cand.id}»…`)
+        try {
+          const tr = await fetch('/api/admin/ai/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: cand.id }) })
+          const td = await tr.json().catch(() => null)
+          if (td?.ok) { cheapest = cand; break }
+          skipped78.push(`${cand.id} (${String(td?.error || 'بی‌پاسخ').slice(0, 60)})`)
+        } catch { skipped78.push(`${cand.id} (خطای شبکه)`) }
+      }
+      if (!cheapest) { setEcoMsg(`✕ هیچ‌کدام از ${Math.min(4, priced.length).toLocaleString('fa-IR')} مدلِ ارزانِ اول جوابِ تستِ زنده را ندادند: ${skipped78.join('، ')}`); return }
       const visionRe = /(gpt-4o|gpt-4\.1|gpt-5|gemini|claude|qwen.*vl|vision)/i
       const cheapVision = priced.find((m: any) => visionRe.test(m.id)) || cheapest
       for (const ag of AGENTS) {
@@ -4078,7 +4091,7 @@ function APIView() {
         await fetch('/api/admin/ai/agents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agentId: ag.id, text: pick, textProvider: '' }) })
       }
       const usd = (m: any) => `${costOf(m)}$/1M`
-      setEcoMsg(`✓ همهٔ ${AGENTS.length} ایجنتِ متنی روی ارزان‌ترین مدل رفتند: «${cheapest.id}» (${usd(cheapest)})${cheapVision.id !== cheapest.id ? ` · تحلیلِ تصویر: «${cheapVision.id}» (${usd(cheapVision)})` : ''} — مدل‌های تولیدِ تصویر تغییری نکردند. برگشت: «تخصیص خودکار مدل پیشنهادی».`)
+      setEcoMsg(`✓ همهٔ ${AGENTS.length} ایجنتِ متنی روی ارزان‌ترین مدلِ «سالم» رفتند: «${cheapest.id}» (${usd(cheapest)})${cheapVision.id !== cheapest.id ? ` · تحلیلِ تصویر: «${cheapVision.id}» (${usd(cheapVision)})` : ''}${skipped78.length ? ` · ردشده در تستِ زنده: ${skipped78.join('، ')}` : ''} — مدل‌های تولیدِ تصویر تغییری نکردند. برگشت: «تخصیص خودکار مدل پیشنهادی».`)
     } catch { setEcoMsg('✕ خطا در ارتباط') } finally { setEcoBusy(false) }
   }
 
@@ -5505,6 +5518,7 @@ function AiCostView() {
                 <span dir="ltr" style={{ color: 'var(--faint)' }}>{r.model}</span>
                 <b>{fa(r.tokens)}</b>
                 <span style={{ color: 'var(--faint)' }}>{new Date(r.at).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}</span>
+                {!r.ok && r.err && <span dir="ltr" title={r.err} style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#e88', fontSize: 10 }}>{r.err}</span>}
               </div>
             ))}
           </div>

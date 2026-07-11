@@ -1464,6 +1464,11 @@ export default function EmpirePage() {
       {wd.gov && <div style={{ marginTop: 8, background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 10, padding: '8px 12px', fontSize: 11.5, lineHeight: 2 }}>
         <div>🏛 <b>مصوبهٔ این هفته:</b> {wd.gov.now} <span style={{ color: 'var(--faint)', fontSize: 10 }}>· مالیاتِ مؤثرِ انتقال: {fa(wd.gov.taxNow)}٪</span></div>
         <div style={{ color: 'var(--muted)' }}>📣 <b>اعلامِ پیشاپیش — هفتهٔ بعد:</b> {wd.gov.next} <span style={{ color: 'var(--faint)', fontSize: 10 }}>· الان برنامه‌ریزی کن</span></div>
+        {/* فاز ۷۸: مصوبه فقط خبر نیست — همان‌جا اقدام کن */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+          <button style={{ ...btn, padding: '4px 12px', fontSize: 11 }} onClick={() => { setGtab('city'); setCityV('deals'); try { window.scrollTo({ top: 0 }) } catch {} }}>🔥 با این نرخ برو سراغِ فرصت‌های امروز</button>
+          <button style={{ ...btnGhost, padding: '4px 12px', fontSize: 11 }} onClick={() => { setGtab('market'); setMktV('players'); try { window.scrollTo({ top: 0 }) } catch {} }}>🏪 بازارِ بازیکنان</button>
+        </div>
       </div>}
       {(wd.history || []).length > 0 ? <>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 10 }}>
@@ -1501,7 +1506,10 @@ export default function EmpirePage() {
           {wd.rumors.current.map((r: any) => (
             <div key={r.id} style={{ background: 'var(--bg2)', border: '1px dashed var(--line2)', borderRadius: 10, padding: '8px 11px', fontSize: 11.5 }}>
               <div>👂 {r.text}</div>
-              <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3 }}>منبع: {r.sourceFa} · اعتبارِ ادعایی {fa(r.credPct)}٪{r.verdict ? (r.verdict === 'true' ? ' · ✓ درست از آب درآمد' : ' · ✗ غلط بود') : ' · هنوز ارزیابی نشده'}</div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 10, color: 'var(--muted)', marginTop: 3 }}>
+                <span>منبع: {r.sourceFa} · اعتبارِ ادعایی {fa(r.credPct)}٪{r.verdict ? (r.verdict === 'true' ? ' · ✓ درست از آب درآمد' : ' · ✗ غلط بود') : ' · هنوز ارزیابی نشده'}</span>
+                {r.hood && <a href={`/listings?q=${encodeURIComponent(r.hood)}`} target="_blank" rel="noreferrer" style={{ color: 'var(--gold)', textDecoration: 'none', fontWeight: 700 }}>🔎 خودت قضاوت کن — آگهی‌های واقعیِ {r.hood}</a>}
+              </div>
             </div>
           ))}
         </div>
@@ -1513,12 +1521,13 @@ export default function EmpirePage() {
       </>}
       {/* 🏙 شهرهای دنیا (فاز ۶۸ — چندشهری v1): آمارِ زندهٔ هر شهر از آگهی‌های واقعی — شهرِ جدید با داده‌اش خودکار ظاهر می‌شود */}
       {(wd.cities || []).length > 0 && <>
-        <div style={{ fontSize: 12, fontWeight: 700, margin: '12px 0 6px' }}>🏙 شهرهای دنیا <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 400 }}>— داراییِ واقعی در ۲ شهر = مجموعهٔ «فاتحِ شهرها»</span></div>
+        <div style={{ fontSize: 12, fontWeight: 700, margin: '12px 0 6px' }}>🏙 شهرهای دنیا <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 400 }}>— کلیک روی هر شهر = آگهی‌های واقعی‌اش · داراییِ واقعی در ۲ شهر = مجموعهٔ «فاتحِ شهرها»</span></div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {wd.cities.map((c: any) => (
-            <span key={c.city} style={{ fontSize: 10.5, border: '1px solid var(--line2)', borderRadius: 12, padding: '5px 12px', color: 'var(--muted)' }}>
-              <b style={{ color: 'var(--text)' }}>{c.city}</b> · {fa(c.listings)} آگهیِ فعال · میانهٔ قیمت {faB(c.medianPrice)}
-            </span>
+            <a key={c.city} href={`/listings?q=${encodeURIComponent(c.city)}`} target="_blank" rel="noreferrer" title={`دیدنِ ${fa(c.listings)} آگهیِ واقعیِ ${c.city}`}
+              style={{ fontSize: 10.5, border: '1px solid var(--line2)', borderRadius: 12, padding: '5px 12px', color: 'var(--muted)', textDecoration: 'none', cursor: 'pointer' }}>
+              <b style={{ color: 'var(--text)' }}>{c.city}</b> · {fa(c.listings)} آگهیِ فعال · میانهٔ قیمت {faB(c.medianPrice)} <span style={{ color: 'var(--gold)' }}>↗</span>
+            </a>
           ))}
         </div>
       </>}

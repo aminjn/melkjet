@@ -7,7 +7,7 @@ import path from 'path'
 import { pgEnabled, kvGet, kvMutate } from './db'
 
 export interface AiCell { calls: number; tokens: number; errors: number; ms: number }
-export interface AiRecent { at: number; src: string; model: string; kind: string; tokens: number; ok: boolean; ms: number }
+export interface AiRecent { at: number; src: string; model: string; kind: string; tokens: number; ok: boolean; ms: number; err?: string }   // فاز ۷۸: متنِ خطا هم ثبت می‌شود — «چرا qwen کار نمی‌کند» باید از خودِ دفتر معلوم باشد
 interface AiDb { days: Record<string, Record<string, AiCell>>; recent: AiRecent[] }
 
 const FILE = path.join(process.cwd(), '.ai-usage-data.json')
@@ -48,7 +48,7 @@ async function mutate<R>(fn: (d: AiDb) => R): Promise<R> {
 }
 
 // ثبتِ یک فراخوانی — fire-and-forget از gapgpt (خطای ثبت هرگز خودِ فیچر را خراب نمی‌کند).
-export async function recordAiUse(e: { src?: string; model: string; kind: 'text' | 'vision' | 'image'; tokens: number; ok: boolean; ms: number }): Promise<void> {
+export async function recordAiUse(e: { src?: string; model: string; kind: 'text' | 'vision' | 'image'; tokens: number; ok: boolean; ms: number; err?: string }): Promise<void> {
   const src = (e.src || 'ناشناخته').slice(0, 80)
   await mutate(d => {
     const day = dayOf()
@@ -58,9 +58,24 @@ export async function recordAiUse(e: { src?: string; model: string; kind: 'text'
     c.calls++; c.tokens += Math.max(0, Math.round(e.tokens) || 0); c.ms += Math.max(0, Math.round(e.ms) || 0)
     if (!e.ok) c.errors++
     d.days[day][key] = c
-    d.recent.unshift({ at: Date.now(), src, model: e.model, kind: e.kind, tokens: Math.max(0, Math.round(e.tokens) || 0), ok: e.ok, ms: Math.round(e.ms) || 0 })
+    d.recent.unshift({ at: Date.now(), src, model: e.model, kind: e.kind, tokens: Math.max(0, Math.round(e.tokens) || 0), ok: e.ok, ms: Math.round(e.ms) || 0, err: e.ok ? undefined : String(e.err || '').slice(0, 160) || undefined })
     d.recent = d.recent.slice(0, 200)
   })
+}
+
+// فاز ۷۸ — مدارشکنِ مدل: مدلی که N بارِ پیاپی شکست خورده تا مدتی «خراب» شمرده می‌شود و chatCompleteSafe
+// مستقیم سراغِ مدلِ جایگزین می‌رود — نه تماسِ سوخته، نه تأخیرِ اضافه. درون-حافظه‌ای per-instance (سبک و بدونِ IO).
+const FAIL_TRIP = 4            // چند شکستِ پیاپی تا قطعِ مدار
+const DOWN_MS = 10 * 60_000    // مدتِ کنارگذاشتن
+const health78 = new Map<string, { fails: number; downUntil: number }>()
+export function noteModelResult(model: string, ok: boolean): void {
+  const h = health78.get(model) || { fails: 0, downUntil: 0 }
+  if (ok) { h.fails = 0; h.downUntil = 0 } else { h.fails++; if (h.fails >= FAIL_TRIP) h.downUntil = Date.now() + DOWN_MS }
+  health78.set(model, h)
+}
+export function modelDown(model: string): boolean {
+  const h = health78.get(model)
+  return !!h && h.downUntil > Date.now()
 }
 
 // خلاصهٔ جزءبه‌جز برای پنلِ ادمین: به تفکیکِ منبع (کدام فیچر)، مدل، و روز — همه از دادهٔ ثبت‌شدهٔ واقعی.
