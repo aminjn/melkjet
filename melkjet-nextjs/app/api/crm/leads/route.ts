@@ -9,7 +9,6 @@ import { sendServiceSms } from '@/app/lib/sms'
 export async function GET(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
-  { const pg51 = requireModule(s as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const sp = new URL(req.url).searchParams
   const leads = await listLeads(s.phone)
   if (sp.get('analytics')) {

@@ -15,7 +15,6 @@ const roleOf = (v: string) => (ROLES.includes(v) ? v : '')
 export async function GET(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای مشاهده وارد شوید' }, { status: 401 })
-  { const pg51 = requireModule(s as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const role = roleOf(new URL(req.url).searchParams.get('role') || '')
   if (!role) return NextResponse.json({ error: 'نقشِ نامعتبر' }, { status: 400 })
   const owner = s.phone

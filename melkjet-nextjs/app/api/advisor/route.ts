@@ -47,7 +47,6 @@ async function syncAgencyLeads(advisorPhone: string): Promise<void> {
 export async function GET() {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای مشاهده وارد شوید' }, { status: 401 })
-  { const pg51 = requireModule(s as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const o = s.phone
   await syncAgencyLeads(o)   // لیدهای تخصیص‌یافتهٔ آژانس را قبل از خواندن، در پنلِ مشاور بساز
   const [stats, leads, listings, appts, commissions] = await Promise.all([advisorStats(o), listLeads(o), listListings(o), listAppts(o), listCommissions(o)])

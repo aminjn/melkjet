@@ -15,7 +15,6 @@ const { chatCompleteSafe } = aiFor('پنلِ مصالح')   // فاز ۵۷: من
 export async function GET() {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای مشاهده وارد شوید' }, { status: 401 })
-  { const pg51 = requireModule(s as any, 'store'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const owner = s.phone
   return NextResponse.json({
     stats: await shopStats(owner),

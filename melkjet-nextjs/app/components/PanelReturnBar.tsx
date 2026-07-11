@@ -33,24 +33,21 @@ export default function PanelReturnBar({ tool }: { tool: string }) {
   }, [])
   if (!dash) return null
   const label = DASH_LABEL[dash] || 'پنل من'
-  // قفلِ پلن: فقط وقتی enforcement روشن است و پلنِ کاربر ماژولِ این صفحه را ندارد (سوپرادمین معاف)
+  // فاز ۵۸ («اول ببین، بعد پول بده»): دیگر قفلِ تمام‌صفحه نیست — مشاهده آزاد است و
+  // اقدام‌ها در API قفل‌اند؛ این‌جا فقط بنرِ غیرمسدودکنندهٔ ارتقا نشان داده می‌شود.
   const need = typeof window !== 'undefined' ? TOOL_PERM[Object.keys(TOOL_PERM).find(k => window.location.pathname.startsWith(k)) || ''] : undefined
-  if (need && access && access.enforce && !access.isAdmin && !(access.permissions || []).includes(need.perm)) {
-    return (
-      <div dir="rtl" style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'rgba(8,9,12,.94)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-        <div style={{ maxWidth: 420, textAlign: 'center', background: 'var(--surface, #14161c)', border: '1px solid var(--goldDim, #8a743a)', borderRadius: 18, padding: '34px 26px', boxShadow: '0 16px 48px -12px rgba(0,0,0,.6)' }}>
-          <div style={{ fontSize: 42 }}>🔒</div>
-          <div style={{ fontSize: 17, fontWeight: 800, marginTop: 10, color: 'var(--text, #eee)' }}>«{need.label}» در پلنِ فعلی‌ات نیست</div>
-          <div style={{ fontSize: 12.5, color: 'var(--muted, #9aa)', marginTop: 8, lineHeight: 2 }}>پلنِ فعلی: <b>{access.planName || 'رایگان'}</b> — برای فعال‌شدنِ این بخش، پلنت را ارتقا بده؛ همهٔ داده‌هایت سرِ جایش می‌ماند.</div>
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 18, flexWrap: 'wrap' }}>
-            <a href="/pricing" style={{ background: 'linear-gradient(140deg,var(--gold2,#e8c96a),var(--gold,#d4af37))', color: '#16140f', borderRadius: 12, padding: '10px 22px', fontWeight: 800, fontSize: 13, textDecoration: 'none' }}>⭐ مشاهدهٔ پلن‌ها و ارتقا</a>
-            <a href={dash} style={{ border: '1px solid var(--line2, #333)', color: 'var(--text, #eee)', borderRadius: 12, padding: '10px 18px', fontSize: 13, textDecoration: 'none' }}>بازگشت به {label}</a>
-          </div>
-        </div>
+  const banner = need && access && access.enforce && !access.isAdmin && !(access.permissions || []).includes(need.perm) ? (
+    <div dir="rtl" style={{ position: 'fixed', bottom: 14, left: '50%', transform: 'translateX(-50%)', zIndex: 9990, width: 'min(640px, calc(100vw - 24px))', background: 'var(--surface, #14161c)', border: '1px solid var(--goldDim, #8a743a)', borderRadius: 14, padding: '11px 16px', boxShadow: '0 12px 36px -10px rgba(0,0,0,.55)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 18, lineHeight: 1 }}>👀</span>
+      <div style={{ flex: 1, minWidth: 180 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--text, #eee)' }}>«{need.label}» در پلنِ فعلی‌ات ({access.planName || 'رایگان'}) فعال نیست</div>
+        <div style={{ fontSize: 11, color: 'var(--muted, #9aa)', marginTop: 2 }}>مشاهده آزاد است — برای انجامِ عملیات، پلن را ارتقا بده.</div>
       </div>
-    )
-  }
-  return (
+      <a href="/pricing" style={{ background: 'linear-gradient(140deg,var(--gold2,#e8c96a),var(--gold,#d4af37))', color: '#16140f', borderRadius: 10, padding: '8px 16px', fontWeight: 800, fontSize: 12, textDecoration: 'none', whiteSpace: 'nowrap' }}>⭐ ارتقا</a>
+    </div>
+  ) : null
+  return (<>
+    {banner}
     <a
       href={dash}
       dir="rtl"
@@ -67,5 +64,5 @@ export default function PanelReturnBar({ tool }: { tool: string }) {
       <span>بازگشت به {label}</span>
       <span style={{ opacity: .6, fontWeight: 600 }}>• {tool}</span>
     </a>
-  )
+  </>)
 }

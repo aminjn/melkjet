@@ -15,7 +15,6 @@ import { getAccount, dashForRole } from '@/app/lib/account-store'
 export async function GET(req: NextRequest) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  { const pg51 = requireModule(session as any, 'automation'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const id = new URL(req.url).searchParams.get('id')
   if (id) {
     const workflow = getWorkflow(session.phone, id)

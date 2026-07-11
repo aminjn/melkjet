@@ -1,10 +1,12 @@
 'use client'
 import { useEffect, useState } from 'react'
 
-// فاز ۵۵ — قفلِ سراسریِ داشبورد بر اساسِ پلن (فیدبک: «هر کسی وارد می‌شود همه‌چیز دارد»).
-// فقط روی مسیرهای داشبوردِ نقش‌ها فعال می‌شود (روی صفحاتِ عمومی هیچ fetch اضافه‌ای نمی‌زند).
-// تصمیمِ قفل کاملاً سمتِ سرور است (access.dashLocked در /api/auth/profile — از اجتماعِ ماژول‌های
-// پلن‌های فعالِ همان داشبورد)؛ این‌جا فقط نمایش است. سوپرادمین و حالتِ خاموشِ enforce معاف‌اند.
+// فاز ۵۸ (فیدبک: «خیلی بد است مستقیم برود توی پلن‌ها؛ اول باید یک چیزی ببیند بعد پول بدهد»):
+// دیگر قفلِ تمام‌صفحه نیست — کاربرِ بدونِ پلن واردِ پنلش می‌شود و همه‌چیز را «می‌بیند»
+// (GETها آزادند)، فقط اقدام‌ها در API قفل‌اند. این کامپوننت صرفاً بنرِ غیرمسدودکنندهٔ
+// «حالتِ مشاهده» را پایینِ داشبورد نشان می‌دهد، با دکمهٔ ارتقا و قابلِ بستن.
+// تصمیمِ قفل سمتِ سرور است (access.dashLocked از /api/auth/profile — اجتماعِ ماژول‌های
+// پلن‌های فعالِ همان داشبورد)؛ سوپرادمین و حالتِ خاموشِ enforce معاف‌اند.
 const DASH_PATHS: Record<string, string> = {
   '/pros': 'پنل مشاور', '/agency': 'پنل آژانس', '/builder': 'پنل سازنده', '/materials': 'پنل فروشگاه',
   '/buyer': 'پنل من', '/owner': 'پنل مالک', '/legal': 'پنل حقوقی', '/architect': 'پنل معمار',
@@ -15,11 +17,13 @@ const DASH_PATHS: Record<string, string> = {
 export default function PlanLock() {
   const [access, setAccess] = useState<any>(null)
   const [path, setPath] = useState('')
+  const [hidden, setHidden] = useState(false)
   useEffect(() => {
     const p = window.location.pathname
     setPath(p)
     const hit = Object.keys(DASH_PATHS).some(k => p === k || p.startsWith(k + '/'))
     if (!hit) return
+    try { if (sessionStorage.getItem('mj_planbanner_hide') === '1') setHidden(true) } catch {}
     let cancelled = false
     fetch('/api/auth/profile', { cache: 'no-store' })
       .then(r => r.ok ? r.json() : null)
@@ -27,26 +31,20 @@ export default function PlanLock() {
       .catch(() => {})
     return () => { cancelled = true }
   }, [])
-  if (!access || !access.dashLocked) return null
+  if (hidden || !access || !access.dashLocked) return null
   const dashKey = Object.keys(DASH_PATHS).find(k => path === k || path.startsWith(k + '/'))
-  // قفل فقط روی داشبوردِ خودِ کاربر — صفحاتِ دیگر گیت‌های خودشان را دارند
+  // بنر فقط روی داشبوردِ خودِ کاربر — صفحاتِ دیگر گیت‌های خودشان را دارند
   if (!dashKey || dashKey !== access.dashboard) return null
-  const label = DASH_PATHS[dashKey] || 'پنل'
+  const dismiss = () => { setHidden(true); try { sessionStorage.setItem('mj_planbanner_hide', '1') } catch {} }
   return (
-    <div dir="rtl" style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'rgba(8,9,12,.95)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ maxWidth: 440, textAlign: 'center', background: 'var(--surface, #14161c)', border: '1px solid var(--goldDim, #8a743a)', borderRadius: 18, padding: '36px 28px', boxShadow: '0 16px 48px -12px rgba(0,0,0,.6)' }}>
-        <div style={{ fontSize: 44 }}>🔒</div>
-        <div style={{ fontSize: 17.5, fontWeight: 800, marginTop: 12, color: 'var(--text, #eee)' }}>{label} با پلنِ فعال باز می‌شود</div>
-        <div style={{ fontSize: 12.5, color: 'var(--muted, #9aa)', marginTop: 10, lineHeight: 2.1 }}>
-          پلنِ فعلی: <b style={{ color: 'var(--text, #ddd)' }}>{access.planName || 'بدون پلن'}</b>
-          {access.paid && access.expiresAt ? ' (منقضی‌شده)' : ''} — برای استفاده از امکاناتِ این پنل یکی از پلن‌ها را فعال کن.
-          همهٔ داده‌هایت محفوظ می‌ماند و بلافاصله بعد از فعال‌سازی همین‌جا در دسترس است.
-        </div>
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20, flexWrap: 'wrap' }}>
-          <a href="/pricing" style={{ background: 'linear-gradient(140deg,var(--gold2,#e8c96a),var(--gold,#d4af37))', color: '#16140f', borderRadius: 12, padding: '11px 24px', fontWeight: 800, fontSize: 13.5, textDecoration: 'none' }}>⭐ مشاهدهٔ پلن‌ها و فعال‌سازی</a>
-          <a href="/" style={{ border: '1px solid var(--line2, #333)', color: 'var(--text, #eee)', borderRadius: 12, padding: '11px 18px', fontSize: 13, textDecoration: 'none' }}>بازگشت به سایت</a>
-        </div>
+    <div dir="rtl" style={{ position: 'fixed', bottom: 14, left: '50%', transform: 'translateX(-50%)', zIndex: 9990, width: 'min(680px, calc(100vw - 24px))', background: 'var(--surface, #14161c)', border: '1px solid var(--goldDim, #8a743a)', borderRadius: 14, padding: '12px 16px', boxShadow: '0 12px 36px -10px rgba(0,0,0,.55)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 20, lineHeight: 1 }}>👀</span>
+      <div style={{ flex: 1, minWidth: 200 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text, #eee)' }}>حالتِ مشاهده — پلنِ فعال نداری</div>
+        <div style={{ fontSize: 11.5, color: 'var(--muted, #9aa)', marginTop: 2, lineHeight: 1.9 }}>همه‌چیز را می‌توانی ببینی؛ برای «انجامِ» کارها (ثبت، ارسال، ایمپورت، AI و…) یکی از پلن‌ها را فعال کن. داده‌هایت همیشه محفوظ است.</div>
       </div>
+      <a href="/pricing" style={{ background: 'linear-gradient(140deg,var(--gold2,#e8c96a),var(--gold,#d4af37))', color: '#16140f', borderRadius: 10, padding: '9px 18px', fontWeight: 800, fontSize: 12.5, textDecoration: 'none', whiteSpace: 'nowrap' }}>⭐ مشاهدهٔ پلن‌ها</a>
+      <button onClick={dismiss} title="بستن" style={{ background: 'transparent', border: '1px solid var(--line2, #333)', color: 'var(--muted, #9aa)', borderRadius: 8, width: 28, height: 28, cursor: 'pointer', fontSize: 14, lineHeight: 1, flexShrink: 0 }}>×</button>
     </div>
   )
 }

@@ -6,7 +6,6 @@ import { getCrmSettings, setCrmSettings } from '@/app/lib/crm-settings-store'
 export async function GET() {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
-  { const pg51 = requireModule(s as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   return NextResponse.json({ settings: await getCrmSettings(s.phone) })
 }
 

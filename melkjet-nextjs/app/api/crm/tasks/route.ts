@@ -7,7 +7,6 @@ import { getSession } from '@/app/lib/session'
 export async function GET() {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  { const pg51 = requireModule(session as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   return NextResponse.json({ tasks: await listTasks(session.phone) })
 }
 

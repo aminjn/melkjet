@@ -18,7 +18,6 @@ const dashFor = (phone: string, role?: string) => role === 'super_admin' ? '/pro
 export async function GET(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای مشاهده وارد شوید' }, { status: 401 })
-  { const pg51 = requireModule(s as any, 'marketing'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   await ensurePromoPricing()
   const sp = new URL(req.url).searchParams
   // نمای سوپرادمین: همهٔ پکیج‌ها + همهٔ سفارش‌ها
