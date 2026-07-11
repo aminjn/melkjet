@@ -163,3 +163,18 @@ export async function seasonFinalOf(id: string): Promise<Array<{ no: number; nam
   const d = await load()
   return d.seasons?.[id] || null
 }
+
+// ── فاز ۶۸ (چندشهری v1 — «شخصیتِ شهر از خودِ بازارِ واقعی»): شهرها داینامیک از location آگهی‌های واقعی ──
+// location = «شهر، محله» → شهر بخشِ اول؛ تک‌بخشی (مثل «کیش») خودش شهر است. شهرِ جدید با رسیدنِ داده‌اش خودکار ظاهر می‌شود.
+export function cityOf(loc?: string): string {
+  const p = String(loc || '').split(/[،,]/).map(x => x.trim()).filter(Boolean)
+  return p[0] || ''
+}
+export function cityStatsOf(list: Array<{ city: string; price: number }>): Array<{ city: string; listings: number; medianPrice: number }> {
+  const by = new Map<string, number[]>()
+  for (const x of list) { if (!x.city || !(x.price > 0)) continue; const a = by.get(x.city) || []; a.push(x.price); by.set(x.city, a) }
+  return [...by.entries()].map(([city, prices]) => {
+    const sorted = [...prices].sort((a, b) => a - b)
+    return { city, listings: prices.length, medianPrice: sorted[Math.floor(sorted.length / 2)] }
+  }).sort((a, b) => b.listings - a.listings).slice(0, 8)
+}

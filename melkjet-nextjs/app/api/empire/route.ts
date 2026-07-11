@@ -57,7 +57,7 @@ import { bucketBalance } from '@/app/lib/reos/wallet'
 // فاز ۵۰ (سند ۳۰): تالارِ افتخارات (رکوردها/مجموعه‌ها) + حریفِ قسم‌خورده
 import { recordsOf, collectionsOf, applyCollections, COLLECTIONS, noteNemesis } from '@/app/lib/empire-store'
 import { roleLayerOf, legacyScoreOf, storyOf, dreamProgressOf, dreamSuggestionsOf, addCustomDream, applyDreams, wondersUpdate, DREAM_METRICS } from '@/app/lib/empire-store'
-import { worldYearOf, worldHistory, rumorsMaintain, appendWorldEvent } from '@/app/lib/empire-world'   // فاز ۶۳: دنیای زنده
+import { worldYearOf, worldHistory, rumorsMaintain, appendWorldEvent, cityOf, cityStatsOf } from '@/app/lib/empire-world'   // فاز ۶۳/۶۸: دنیای زنده + چندشهری
 import { npcMaintain, npcDb, npcOwnerOf, npcSellToPlayer, npcView, NPC_USER_PREFIX } from '@/app/lib/empire-npc'   // فاز ۶۵: شرکت‌های سیستمیِ زنده
 import { seasonBaseline, seasonValueOf, SEASON_METRIC_FA, claimSeasonReward } from '@/app/lib/empire-store'   // فاز ۶۶: موتورِ فصل
 import { followEmpire } from '@/app/lib/empire-store'   // فاز ۶۷: فیدِ تعاملی
@@ -759,7 +759,7 @@ export async function POST(req: NextRequest) {
         if (!claim.ok) return NextResponse.json({ error: `این ملک را «${claim.by?.name}» (#${(claim.by?.no || 0).toLocaleString('fa-IR')}) زودتر خریده — هر آگهیِ واقعی فقط یک مالک دارد. اگر عرضه‌اش کند، در «🏪 بازارِ بازیکنان» می‌بینی‌اش` }, { status: 409 })
       }
       // دفترخانه (فاز ۲۹): ثبتِ سند با حق‌الثبتِ knob — سیستم نقشِ دفترخانه را بازی می‌کند.
-      const r = await buyAsset(userId, { id: it.id, title: it.title, hood: hoodOf(it.location), price, ptype: ptypeOf(it) }, { negotiated: negotiatedWin, notaryFeePct: config().empire.pros.notaryFeePct })
+      const r = await buyAsset(userId, { id: it.id, title: it.title, hood: hoodOf(it.location), city: String(it.meta?.['شهر'] || '') || cityOf(it.location), price, ptype: ptypeOf(it) }, { negotiated: negotiatedWin, notaryFeePct: config().empire.pros.notaryFeePct })
       if (!r.ok) {
         // خریدِ ناموفق: ادعای تازه آزاد شود (اگر از قبل مالِ خودش بود، دست نمی‌خورَد) + ادعای NPC برگردد
         if (exclusive && me0 && !me0.assets.some(a => a.listingId === it.id)) await releaseListing(it.id, userId).catch(() => {})
@@ -1874,17 +1874,17 @@ export async function POST(req: NextRequest) {
       const npc = await (async () => {
         try {
           const items = (await candidateListings(600)).filter(isPricedSale)
-          const cands = items.map(x => ({ id: x.id, title: x.title, hood: hoodOf(x.location), price: priceOf(x) }))
+          const cands = items.map(x => ({ id: x.id, title: x.title, hood: hoodOf(x.location), price: priceOf(x), city: String(x.meta?.['شهر'] || '') || cityOf(x.location) }))
           const r = await npcMaintain(day, cands)
           for (const bgh of r.bought) appendWorldEvent({ icon: bgh.icon, title: `${bgh.name} «${bgh.title.slice(0, 40)}» را در ${bgh.hood || 'شهر'} خرید`, kind: 'npc' }, day).catch(() => {})
           for (const sl of r.sold) appendWorldEvent({ icon: '💰', title: `${sl.name} «${sl.title.slice(0, 40)}» را ${sl.pnl >= 0 ? 'با سود' : 'با زیان'} فروخت`, kind: 'npc' }, day).catch(() => {})
-          return npcView(r.db)
-        } catch { return [] }
+          return { companies: npcView(r.db), cities: cityStatsOf(cands.map(x => ({ city: x.city, price: x.price }))) }
+        } catch { return { companies: [], cities: [] } }
       })()
       // فاز ۶۷ (فیدِ تعاملی): وضعیتِ دنبال‌شده‌ها و تبریک‌های خودم — تا فید همان‌جا قابلِ‌تعامل باشد
       const me67 = await getEmpire(userId).catch(() => null)
       return NextResponse.json({
-        ok: true, day, year: worldYearOf(day), history: await worldHistory(60).catch(() => []), rumors, companies: npc,
+        ok: true, day, year: worldYearOf(day), history: await worldHistory(60).catch(() => []), rumors, companies: npc.companies, cities: npc.cities,
         following: me67?.following || [], myNo: me67?.no || 0,
         kudosGiven: me67 ? Object.keys(me67.claims).filter(k => k.startsWith('kudos_')).map(k => Number(k.slice(6))) : [],
       })

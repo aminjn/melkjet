@@ -47,6 +47,7 @@ export interface EmpireAsset {
   renovBoostPct?: number      // بازسازی (فاز ۲۹): ارزش‌افزودهٔ جمع‌شده (٪، با سقفِ knob)
   renovDone?: string[]        // کدام گزینه‌های بازسازی انجام شده (هر کدام یک‌بار)
   // فاز ۳۷ — بازارِ بازیکنان و مشارکتِ ساخت:
+  city?: string               // فاز ۶۸ (چندشهری v1): شهرِ واقعیِ آگهی — از location؛ دارایی‌های قدیمی ندارند (صادقانه شمرده نمی‌شوند)
   forSale?: number            // قیمتِ عرضه به بازیکنانِ دیگر (۰/undefined = عرضه نشده)
   p2pAuction?: { minBid: number; endDay: number; startedDay: number; bids: Array<{ userId: string; no: number; name: string; amount: number; at: number }> }   // فاز ۶۴: مزایدهٔ بینِ بازیکنانِ واقعی
   nickname?: string           // قانونِ ۱۳ (رویاپردازی): نامِ دلخواهِ بازیکن روی دارایی — صرفاً هویتی، صفر اثرِ اقتصادی
@@ -422,6 +423,7 @@ export const COLLECTIONS: Array<{ key: string; icon: string; fa: string; titleFa
   { key: 'سلطانِ برج‌ها', icon: '🏗', fa: 'سلطانِ برج‌ها — ۲ پروژهٔ ساختِ تحویل‌داده', titleFa: 'سلطانِ برج‌ها', goal: 2, progress: e => e.stats?.projectsDelivered || 0 },
   { key: 'شکارچیِ تالار', icon: '🔨', fa: 'شکارچیِ تالار — ۳ بردِ چکش در تالارِ مزایده', titleFa: 'شکارچیِ تالار', goal: 3, progress: e => e.stats?.auctionWins || 0 },
   { key: 'امپراتورِ درآمد', icon: '💰', fa: 'امپراتورِ درآمد — ۵۰۰ میلیون تومان درآمدِ اجاره/کسب‌وکار', titleFa: 'امپراتورِ درآمد', goal: 500_000_000, progress: e => e.assets.reduce((s, a) => s + (a.income || 0), 0) },
+  { key: 'فاتحِ شهرها', icon: '🏙', fa: 'فاتحِ شهرها — داراییِ واقعی در ۲ شهرِ متفاوت', titleFa: 'فاتحِ شهرها', goal: 2, progress: e => new Set(e.assets.map(a => a.city).filter(Boolean)).size },   // فاز ۶۸ (چندشهری v1)
 ]
 export function collectionsOf(e: EmpireData): Array<{ key: string; icon: string; fa: string; titleFa: string; goal: number; have: number; done: boolean; earned: boolean }> {
   return COLLECTIONS.map(c => {
@@ -829,7 +831,7 @@ export async function renameEmpire(userId: string, name: string) {
 }
 
 // خریدِ دارایی = انتخابِ یک آگهیِ واقعی با قیمتِ واقعی؛ سرمایهٔ شبیه‌سازی کم می‌شود (فصل ۳ + §6.5).
-export async function buyAsset(userId: string, listing: { id: string; title: string; hood: string; price: number; ptype?: string }, opts: { negotiated?: boolean; notaryFeePct?: number } = {}, now = Date.now()) {
+export async function buyAsset(userId: string, listing: { id: string; title: string; hood: string; price: number; ptype?: string; city?: string }, opts: { negotiated?: boolean; notaryFeePct?: number } = {}, now = Date.now()) {
   const cfg = config().empire
   return mutateEmpire(userId, e => {
     if (!listing.id || !(listing.price > 0)) return 'آگهیِ نامعتبر'
@@ -847,7 +849,7 @@ export async function buyAsset(userId: string, listing: { id: string; title: str
       e.timeline.push({ at: now, icon: '📜', title: `سند در ${proPersonaOf('notary', listing.id)} ثبت شد`, detail: `حق‌الثبت ${Math.round(notary / 1e6).toLocaleString('fa-IR')}م تومان` })
     }
     if (opts.negotiated) { e.stats = e.stats || { sellsProfitable: 0, negoWins: 0 }; e.stats.negoWins += 1 }
-    e.assets.push({ id: 'ast_' + randomBytes(5).toString('hex'), listingId: listing.id, title: String(listing.title).slice(0, 120), hood: String(listing.hood || '').slice(0, 60), kind: assetKindOf(listing.ptype || ''), buyPrice: listing.price, boughtAt: now })
+    e.assets.push({ id: 'ast_' + randomBytes(5).toString('hex'), listingId: listing.id, title: String(listing.title).slice(0, 120), hood: String(listing.hood || '').slice(0, 60), city: String(listing.city || '').slice(0, 40) || undefined, kind: assetKindOf(listing.ptype || ''), buyPrice: listing.price, boughtAt: now })
     // پاداشِ سند (فصل ۳): ‎+100 XP + Founder + First Owner + Builder Potential +2 + Investor Confidence +1‎
     e.xp += cfg.buyRewardXp
     if (first) {

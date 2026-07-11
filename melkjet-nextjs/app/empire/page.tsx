@@ -1437,6 +1437,18 @@ export default function EmpirePage() {
           ))}
         </div>}
       </>}
+      {/* 🏙 شهرهای دنیا (فاز ۶۸ — چندشهری v1): آمارِ زندهٔ هر شهر از آگهی‌های واقعی — شهرِ جدید با داده‌اش خودکار ظاهر می‌شود */}
+      {(wd.cities || []).length > 0 && <>
+        <div style={{ fontSize: 12, fontWeight: 700, margin: '12px 0 6px' }}>🏙 شهرهای دنیا <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 400 }}>— داراییِ واقعی در ۲ شهر = مجموعهٔ «فاتحِ شهرها»</span></div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {wd.cities.map((c: any) => (
+            <span key={c.city} style={{ fontSize: 10.5, border: '1px solid var(--line2)', borderRadius: 12, padding: '5px 12px', color: 'var(--muted)' }}>
+              <b style={{ color: 'var(--text)' }}>{c.city}</b> · {fa(c.listings)} آگهیِ فعال · میانهٔ قیمت {faB(c.medianPrice)}
+            </span>
+          ))}
+        </div>
+      </>}
+
       {/* 🏢 شرکت‌های زندهٔ شهر (فاز ۶۵ — NPC Civilization v1): رقبای واقعی‌نما که هر روز روی آگهی‌های واقعی معامله می‌کنند */}
       {(wd.companies || []).length > 0 && <>
         <div style={{ fontSize: 12, fontWeight: 700, margin: '12px 0 6px' }}>🏢 شرکت‌های شهر <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 400 }}>— هر روز خودشان معامله می‌کنند؛ اگر ملکی را زودتر بخرند، برای خریدنش باید سراغِ خودشان بروی</span></div>
