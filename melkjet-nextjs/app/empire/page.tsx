@@ -822,7 +822,7 @@ export default function EmpirePage() {
       ['today', '⚡', 'امروز'],
       ['deals', '🔥', 'فرصت‌ها', (st.dealsEnabled && deals?.deals?.length) || 0],
       ['lands', '🏞', 'زمین و ساخت', lands?.lands?.length || 0],
-      ['events', '🎪', 'رویدادهای هفته', (bd?.deal ? 1 : 0) + (au?.auction ? 1 : 0)],
+      ['events', '🎪', 'رویدادها', (bd?.deal ? 1 : 0) + (au?.auction ? 1 : 0)],
       ['map', '🗺', 'نقشه و آسمان'],
     ], cityV, setCityV)}
     {cityV === 'today' && <>
@@ -907,14 +907,14 @@ export default function EmpirePage() {
     {cityV === 'events' && <>
     {/* فاز ۷۲ (صداقت): اگر هفتهٔ جاری هنوز رویدادی نساخته، صادقانه بگو — نه کارتِ خالیِ گنگ */}
     {!bd?.deal && !au?.auction && <div style={card}>
-      <b style={{ fontSize: 13.5 }}>🎪 رویدادهای هفته</b>
-      <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>معاملهٔ بزرگ و تالارِ مزایده هر هفته از آگهی‌های «واقعیِ» همان هفته ساخته می‌شوند — رویدادِ این هفته هنوز شکل نگرفته یا داده‌ٔ کافی نیامده. سری بعد که بیایی، اینجا خبری هست.</div>
+      <b style={{ fontSize: 13.5 }}>🎪 رویدادها</b>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>معاملهٔ بزرگ و تالارِ مزایده در هر دوره از آگهی‌های «واقعیِ» همان دوره ساخته می‌شوند — رویدادِ این دوره هنوز شکل نگرفته یا دادهٔ کافی نیامده. سری بعد که بیایی، اینجا خبری هست.</div>
     </div>}
     {/* 🔥 معاملهٔ بزرگِ هفته (فاز ۴۱ — سند ۲۸ فصل ۱۷ Part 07): یک ملکِ واقعیِ گران، برای همهٔ بازیکنان یکی —
         یک تلاشِ مذاکره در هفته با انتخابِ استراتژی؛ اولین برنده‌ای که بخرد مالک می‌شود (مالکیتِ انحصاری). */}
     {bd?.ok && bd.deal && <div style={{ ...card, borderColor: '#e08a7e', background: 'rgba(224,138,126,.04)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <b style={{ fontSize: 14 }}>💎 معاملهٔ بزرگِ هفته</b>
+        <b style={{ fontSize: 14 }}>💎 معاملهٔ بزرگِ {bd.deal.periodFa || 'هفته'}</b>
         <span style={{ fontSize: 11, color: 'var(--muted)' }}>برای همه همین یکی است — هر کس زودتر ببرد و بخرد، مالک می‌شود</span>
         <span style={{ flex: 1 }} />
         <span style={{ fontSize: 13, color: '#e08a7e', fontWeight: 800 }}>⏳ <Countdown until={bd.deal.expiresAt || 0} onDone={() => setBd(null)} /></span>
@@ -924,11 +924,11 @@ export default function EmpirePage() {
         <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 3 }}>{bd.deal.hood} · مالک: {bd.deal.owner.name} ({bd.deal.owner.type} — {bd.deal.owner.desc})</div>
         <div style={{ fontSize: 15, color: 'var(--gold)', fontWeight: 800, marginTop: 4 }}>{faB(bd.deal.price)} تومان</div>
       </div>
-      {bd.deal.soldTo && <div style={{ fontSize: 12, color: '#e8c37a', marginTop: 8 }}>🔒 فروخته شد — «{bd.deal.soldTo.name}» (#{fa(bd.deal.soldTo.no)}) زودتر بست. هفتهٔ بعد معاملهٔ تازه‌ای می‌آید.</div>}
+      {bd.deal.soldTo && <div style={{ fontSize: 12, color: '#e8c37a', marginTop: 8 }}>🔒 فروخته شد — «{bd.deal.soldTo.name}» (#{fa(bd.deal.soldTo.no)}) زودتر بست. دورِ بعد معاملهٔ تازه‌ای می‌آید.</div>}
       {bd.deal.mine && <div style={{ fontSize: 12, color: '#7ee0b8', marginTop: 8 }}>👑 مالِ توست — معاملهٔ بزرگِ این هفته را تو بردی.</div>}
       {!bd.deal.soldTo && !bd.deal.mine && !bd.unlocked && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>🔒 از سطحِ {fa(bd.need)} باز می‌شود — با تصمیم‌های واقعی XP بگیر.</div>}
       {!bd.deal.soldTo && !bd.deal.mine && bd.unlocked && !bd.tried && !bdRes && <div style={{ marginTop: 10 }}>
-        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 6 }}>استراتژیِ مذاکره‌ات را انتخاب کن — فقط «یک» تلاش در هفته داری:</div>
+        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 6 }}>استراتژیِ مذاکره‌ات را انتخاب کن — فقط «یک» تلاش در هر دوره داری:</div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {(bd.strategies || []).map((s41: any) => (
             <button key={s41.key} style={{ ...btnGhost, padding: '7px 12px', fontSize: 12 }} disabled={busy} title={s41.desc}
@@ -952,9 +952,9 @@ export default function EmpirePage() {
               const d = await api({ action: 'buy', listingId: bd.deal.id, bigDeal: true })
               if (d) { setSt(d); celebrate(); setBd(null); setBdRes(null) }
             }}>👑 خریدِ معاملهٔ بزرگ</button>
-        </div> : <div style={{ marginTop: 10, fontSize: 12, color: 'var(--muted)' }}>🚪 مالک کوتاه نیامد{bdRes ? ` (شانسِ تو ${fa(bdRes.chancePct)}٪ بود)` : ''} — این هفته از دست رفت؛ هفتهٔ بعد معاملهٔ تازه‌ای می‌آید.</div>
+        </div> : <div style={{ marginTop: 10, fontSize: 12, color: 'var(--muted)' }}>🚪 مالک کوتاه نیامد{bdRes ? ` (شانسِ تو ${fa(bdRes.chancePct)}٪ بود)` : ''} — این دوره از دست رفت؛ دورِ بعد معاملهٔ تازه‌ای می‌آید.</div>
       })()}
-      {bd.tried && bd.wonPct === 0 && !bdRes && !bd.deal.soldTo && !bd.deal.mine && <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted)' }}>🚪 مذاکرهٔ این هفته‌ات شکست خورد — هفتهٔ بعد فرصتِ تازه‌ای می‌آید.</div>}
+      {bd.tried && bd.wonPct === 0 && !bdRes && !bd.deal.soldTo && !bd.deal.mine && <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted)' }}>🚪 مذاکرهٔ این دوره‌ات شکست خورد — دورِ بعد فرصتِ تازه‌ای می‌آید.</div>}
     </div>}
 
     {/* 🏛 تالارِ مزایدهٔ هفته (فاز ۴۵ — سند ۲۹ Auction Saga): یک ملکِ واقعی برای همه یکی — لابیِ شایعه‌ها،
@@ -976,7 +976,7 @@ export default function EmpirePage() {
       }
       return <div style={{ ...card, borderColor: '#9b8cf0', background: 'linear-gradient(165deg, rgba(155,140,240,.08), rgba(155,140,240,.02) 60%)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <b style={{ fontSize: 14 }}>🏛 تالارِ مزایدهٔ هفته</b>
+          <b style={{ fontSize: 14 }}>🏛 تالارِ مزایدهٔ {A.periodFa || 'هفته'}</b>
           <span style={{ fontSize: 11, color: '#b7aef2', border: '1px solid rgba(155,140,240,.4)', borderRadius: 999, padding: '2px 10px', fontWeight: 700 }} title={A.type.desc}>{A.type.icon} {A.type.fa}</span>
           <span style={{ flex: 1 }} />
           <span style={{ fontSize: 13, color: '#9b8cf0', fontWeight: 800 }}>⏳ <Countdown until={A.expiresAt || 0} onDone={() => { setAu(null); setAuRun(null) }} /></span>
@@ -1006,20 +1006,20 @@ export default function EmpirePage() {
         {au.influence?.pct > 0 && <div style={{ fontSize: 11, color: '#7ee0b8', marginTop: 7 }} title={(au.influence.reasons || []).join(' · ')}>
           ⭐ نفوذِ کسب‌شده‌ات: {fa(au.influence.pct)}٪ — {A.type.influence ? 'در این مزایده فروشنده به نامت اعتماد دارد؛ رقبا باید بیشتر خرج کنند' : 'در مزایده‌های دولتی به کارت می‌آید'}
         </div>}
-        {A.soldTo && <div style={{ fontSize: 12, color: '#e8c37a', marginTop: 8 }}>🔒 این ملک را «{A.soldTo.name}» (#{fa(A.soldTo.no)}) زودتر خریده — تالارِ این هفته تعطیل شد.</div>}
-        {A.mine && <div style={{ fontSize: 12, color: '#7ee0b8', marginTop: 8 }}>👑 مالِ توست — این هفته چیزی برای جنگیدن نمانده.</div>}
+        {A.soldTo && <div style={{ fontSize: 12, color: '#e8c37a', marginTop: 8 }}>🔒 این ملک را «{A.soldTo.name}» (#{fa(A.soldTo.no)}) زودتر خریده — تالارِ این دوره تعطیل شد.</div>}
+        {A.mine && <div style={{ fontSize: 12, color: '#7ee0b8', marginTop: 8 }}>👑 مالِ توست — این دوره چیزی برای جنگیدن نمانده.</div>}
         {!A.soldTo && !A.mine && !au.unlocked && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>🔒 از سطحِ {fa(au.need)} باز می‌شود — با تصمیم‌های واقعی XP بگیر.</div>}
         {/* تصمیمِ اول (سند: «آیا اصلاً شرکت کنم؟») — یک ورود در هفته */}
         {!A.soldTo && !A.mine && au.unlocked && !au.entered && !run && <div style={{ marginTop: 10 }}>
           <button style={{ ...btn, padding: '8px 18px', fontSize: 12.5 }} disabled={busy}
             onClick={async () => {
-              if (!confirm('فقط «یک» ورود در هفته داری — گاهی بهترین تصمیم شرکت‌نکردن است. واردِ تالار شوی؟')) return
+              if (!confirm('فقط «یک» ورود در هر دوره داری — گاهی بهترین تصمیم شرکت‌نکردن است. واردِ تالار شوی؟')) return
               const d = await api({ action: 'auctionEnter' })
               if (d) { setAuRun(d.run); setAuNext(d.nextBid); setAu((s: any) => s ? { ...s, entered: true, capital: d.capital ?? s.capital } : s); sfx('build', st?.soundEnabled !== false) }
             }}>🚪 ورود به تالار</button>
           <span style={{ fontSize: 11, color: 'var(--muted)', marginRight: 8 }}>نورِ سالن کم می‌شود؛ هر حرکتت خوانده خواهد شد…</span>
         </div>}
-        {au.entered && !run && !au.win && !A.soldTo && !A.mine && <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted)' }}>🚪 مزایدهٔ این هفته‌ات تمام شده — هفتهٔ بعد تالار دوباره باز می‌شود.</div>}
+        {au.entered && !run && !au.win && !A.soldTo && !A.mine && <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted)' }}>🚪 مزایدهٔ این دوره‌ات تمام شده — دورِ بعد تالار دوباره باز می‌شود.</div>}
         {/* 🎬 سالنِ زنده (Part 4 Live Bidding): هر حرکت یک تصمیم — قیمتِ بزرگ، صدرنشین، چکش، و رفتارِ رقبا به‌جای عدد */}
         {run && live && <div style={{ marginTop: 12, border: '1px solid rgba(155,140,240,.45)', borderRadius: 14, padding: '14px 14px 12px', background: 'radial-gradient(ellipse 120% 90% at 50% 0%, #191330, #0b0916 78%)', boxShadow: '0 10px 34px -12px rgba(90,70,200,.45)' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
@@ -1072,7 +1072,7 @@ export default function EmpirePage() {
                 if (d) { setSt(d); celebrate(); setAu(null); setAuRun(null); setAuNext(null) }
               }}>📜 امضای سند و پرداخت</button>
           </> : <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-            🔨 مزایدهٔ این هفته‌ات تمام شد{run.leader && run.leader !== 'me' ? ` — چکش روی ${faB(run.price)} تومان برای ${leaderName} خورد` : ''}. تالار داستانت را یادش می‌مانَد؛ بازگشاییِ تالار: ⏳ <Countdown until={A.expiresAt || 0} />
+            🔨 مزایدهٔ این دوره‌ات تمام شد{run.leader && run.leader !== 'me' ? ` — چکش روی ${faB(run.price)} تومان برای ${leaderName} خورد` : ''}. تالار داستانت را یادش می‌مانَد؛ بازگشاییِ تالار: ⏳ <Countdown until={A.expiresAt || 0} />
           </div>}
         </div>}
       </div>

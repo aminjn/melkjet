@@ -139,6 +139,12 @@ async function liveEventsOf(userId: string, e: EmpireData, now = Date.now()) {
 }
 
 // کوئستِ روزانه/هفتگی (GDD جلد۲): تعریفِ قطعیِ چرخشی + پیشرفت از رویدادهای واقعیِ همان دوره.
+// فاز ۷۶ (قانون ۴): دورهٔ برگزاریِ معاملهٔ بزرگ و تالارِ مزایده دیگر «هفتهٔ» هاردکد نیست —
+// knob ادمین (periodDays): ۷=هفتگی، ۱=هر روز رویدادِ تازه. انتخابِ ملک/تخفیف/مهلت/یک‌تلاش‌در‌دوره همه با همین می‌چرخند.
+const bdPeriodDays = () => Math.max(1, Math.floor(Number(config().empire.bigDeal.periodDays) || 7))
+const auPeriodDays = () => Math.max(1, Math.floor(Number(config().empire.auction.periodDays) || 7))
+const periodFa = (d: number) => d === 7 ? 'هفته' : d === 1 ? 'روز' : `دورهٔ ${d.toLocaleString('fa-IR')}روزه`
+
 async function questsOf(userId: string, e: EmpireData, now = Date.now()) {
   const cfg = config().empire.quests
   const day = dayNumberOf(now), week = Math.floor(day / 7)
@@ -729,7 +735,7 @@ export async function POST(req: NextRequest) {
       // فاز ۴۱ (سند ۲۸ Part 07): خریدِ معاملهٔ بزرگِ هفته با تخفیفِ بردهٔ ذخیره‌شده در سرور — فقط روی همان ملکِ هفته.
       if (b.bigDeal && me0) {
         const bdCfg = config().empire.bigDeal
-        const week = Math.floor(dayNumberOf(Date.now()) / 7)
+        const week = Math.floor(dayNumberOf(Date.now()) / bdPeriodDays())
         const win = me0.bigDealWin
         if (!bdCfg.enabled || !win || win.week !== week) return NextResponse.json({ error: 'تخفیفِ معتبرِ معاملهٔ بزرگ نداری — اول مذاکره را ببر' }, { status: 400 })
         const items41 = await candidateListings(800).catch(() => [] as Item[])
@@ -742,7 +748,7 @@ export async function POST(req: NextRequest) {
       // ممکن است زیرِ قیمتِ آگهی باشد (پاداشِ نبرد) یا بالاترش (ریسکِ گران‌خری — عمداً واقعی).
       let auctionBuy = false
       if (b.auction && me0) {
-        const week45 = Math.floor(dayNumberOf(Date.now()) / 7)
+        const week45 = Math.floor(dayNumberOf(Date.now()) / auPeriodDays())
         const win45 = me0.auctionWin
         if (!config().empire.auction.enabled || !win45 || win45.week !== week45 || win45.listingId !== it.id) {
           return NextResponse.json({ error: 'بردِ معتبرِ مزایده روی این ملک نداری — اول چکش باید به نامت بخورد' }, { status: 400 })
@@ -1620,7 +1626,7 @@ export async function POST(req: NextRequest) {
       if (!cfg.enabled) return NextResponse.json({ error: 'معاملهٔ بزرگ فعلاً فعال نیست' }, { status: 403 })
       const e = await getEmpire(userId)
       if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
-      const week = Math.floor(dayNumberOf(Date.now()) / 7)
+      const week = Math.floor(dayNumberOf(Date.now()) / bdPeriodDays())
       const items = await candidateListings(800).catch(() => [] as Item[])
       const pickId = bigDealPickOf(week, items.filter(isPricedSale).map(it => ({ id: it.id, price: priceOf(it) })), cfg.topPct)
       const it = pickId ? items.find(x => x.id === pickId) : null
@@ -1636,7 +1642,8 @@ export async function POST(req: NextRequest) {
           id: it.id, title: it.title, hood: hoodOf(it.location), price: priceOf(it),
           url: listingHref(it.id, it.title, hoodOf(it.location)),
           owner: { name: persona.name, type: persona.type, desc: persona.desc },
-          expiresAt: (week + 1) * 7 * 864e5,
+          expiresAt: (week + 1) * bdPeriodDays() * 864e5,
+          periodDays: bdPeriodDays(), periodFa: periodFa(bdPeriodDays()),
           soldTo: owner && owner.userId !== userId ? { name: owner.name, no: owner.no } : null,
           mine: !!(owner && owner.userId === userId),
         },
@@ -1652,8 +1659,8 @@ export async function POST(req: NextRequest) {
       if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
       const gate = await lockedMsg(userId, cfg.level, 'معاملهٔ بزرگ')
       if (gate) return NextResponse.json({ error: gate }, { status: 403 })
-      const week = Math.floor(dayNumberOf(Date.now()) / 7)
-      if (e.claims[`bd_${week}`]) return NextResponse.json({ error: 'این هفته تلاشِ مذاکره‌ات را کرده‌ای — هفتهٔ بعد معاملهٔ بزرگِ تازه‌ای می‌آید' }, { status: 400 })
+      const week = Math.floor(dayNumberOf(Date.now()) / bdPeriodDays())
+      if (e.claims[`bd_${week}`]) return NextResponse.json({ error: `در این ${periodFa(bdPeriodDays())} تلاشِ مذاکره‌ات را کرده‌ای — ${periodFa(bdPeriodDays())}ٔ بعد معاملهٔ بزرگِ تازه‌ای می‌آید` }, { status: 400 })
       const items = await candidateListings(800).catch(() => [] as Item[])
       const pickId = bigDealPickOf(week, items.filter(isPricedSale).map(it => ({ id: it.id, price: priceOf(it) })), cfg.topPct)
       const it = pickId ? items.find(x => x.id === pickId) : null
@@ -1675,7 +1682,7 @@ export async function POST(req: NextRequest) {
       if (!cfg.enabled) return NextResponse.json({ error: 'تالارِ مزایده فعلاً بسته است' }, { status: 403 })
       const e = await getEmpire(userId)
       if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
-      const week = Math.floor(dayNumberOf(Date.now()) / 7)
+      const week = Math.floor(dayNumberOf(Date.now()) / auPeriodDays())
       const items = await candidateListings(800).catch(() => [] as Item[])
       const pricedIds = items.filter(isPricedSale).map(it => ({ id: it.id, price: priceOf(it) }))
       const bdPick = bigDealPickOf(week, pricedIds, config().empire.bigDeal.topPct)
@@ -1716,7 +1723,8 @@ export async function POST(req: NextRequest) {
           estNote: estBand ? `برآوردِ کارشناسی از ${estBand.samples.toLocaleString('fa-IR')} نمونهٔ واقعیِ همین محله — عددِ دقیق را هیچ‌کس نمی‌داند` : 'نمونهٔ واقعیِ کافی در این محله نیست — برآوردی در کار نیست؛ چشم‌بسته واردِ نبرد می‌شوی',
           rivals: rivalCards,
           rumors: setup.rumors.map(r => r.text),
-          expiresAt: (week + 1) * 7 * 864e5,
+          expiresAt: (week + 1) * auPeriodDays() * 864e5,
+          periodDays: auPeriodDays(), periodFa: periodFa(auPeriodDays()),
           soldTo: owner && owner.userId !== userId ? { name: owner.name, no: owner.no } : null,
           mine: !!(owner && owner.userId === userId),
         },
@@ -1738,7 +1746,7 @@ export async function POST(req: NextRequest) {
       if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
       const gate = await lockedMsg(userId, cfg.level, 'تالارِ مزایده')
       if (gate) return NextResponse.json({ error: gate }, { status: 403 })
-      const week = Math.floor(dayNumberOf(Date.now()) / 7)
+      const week = Math.floor(dayNumberOf(Date.now()) / auPeriodDays())
       const items = await candidateListings(800).catch(() => [] as Item[])
       const pricedIds = items.filter(isPricedSale).map(it => ({ id: it.id, price: priceOf(it) }))
       const bdPick = bigDealPickOf(week, pricedIds, config().empire.bigDeal.topPct)
@@ -1774,7 +1782,7 @@ export async function POST(req: NextRequest) {
       if (!['bid', 'power', 'wait', 'quit'].includes(move)) return NextResponse.json({ error: 'حرکتِ نامعتبر' }, { status: 400 })
       const e = await getEmpire(userId)
       if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
-      const week = Math.floor(dayNumberOf(Date.now()) / 7)
+      const week = Math.floor(dayNumberOf(Date.now()) / auPeriodDays())
       const infl = auctionInfluenceOf(e, cfg.influenceMax)
       const r = await applyAuctionMove(userId, week, move as 'bid' | 'power' | 'wait' | 'quit', infl.pct, cfg)
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
