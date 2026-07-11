@@ -1359,7 +1359,7 @@ export default function EmpirePage() {
             <b style={{ fontSize: 13.5 }}>🗺 نقشهٔ شهرِ تو</b>
             <span style={{ flex: 1 }} />
             {/* لایه‌ها (فصل ۹): هر لایه روشن/خاموش — شمارِ واقعیِ هر نوع روی چیپ */}
-            <button style={chip(mapL.assets, '#c9a84c')} onClick={() => setMapL(m => ({ ...m, assets: !m.assets }))}>🏛 دارایی‌های من ({fa(aPts.length)})</button>
+            <button style={chip(mapL.assets, '#c9a84c')} onClick={() => setMapL(m => ({ ...m, assets: !m.assets }))}>🏛 دارایی‌های من ({aPts.length < (e.assets || []).length ? `${fa(aPts.length)} از ${fa((e.assets || []).length)}` : fa(aPts.length)})</button>
             <button style={chip(mapL.deals, '#e7a14a')} onClick={() => setMapL(m => ({ ...m, deals: !m.deals }))}>🔥 فرصت‌های امروز ({fa(dPts.length)})</button>
             <button style={chip(mapL.lands, '#5da36f')} onClick={() => setMapL(m => ({ ...m, lands: !m.lands }))}>🏞 زمین برای ساخت ({fa(lPts.length)})</button>
           </div>
@@ -1373,7 +1373,7 @@ export default function EmpirePage() {
                 else { const l = lPts.find((x: any) => 'l_' + x.id === id); if (l?.url) window.open(l.url, '_blank') }
               }} />
           </div>
-          <div style={{ padding: '8px 14px', fontSize: 10.5, color: 'var(--faint)' }}>پینِ 🏛 دارایی → صفحهٔ پرتفوی · 🏗 کارگاهِ در حالِ ساخت · 🔥/🏞 → آگهیِ واقعی · زوم و مرکزِ نقشه دستِ خودت می‌ماند</div>
+          <div style={{ padding: '8px 14px', fontSize: 10.5, color: 'var(--faint)' }}>پینِ 🏛 دارایی → صفحهٔ پرتفوی · 🏗 کارگاهِ در حالِ ساخت · 🔥/🏞 → آگهیِ واقعی · زوم و مرکزِ نقشه دستِ خودت می‌ماند{aPts.length < (e.assets || []).length ? ` · ${fa((e.assets || []).length - aPts.length)} داراییِ تو روی نقشه نیست چون آگهیِ واقعی‌اش مختصات ثبت نکرده بود` : ''}</div>
         </div>
       )
     })()}
@@ -1541,7 +1541,25 @@ export default function EmpirePage() {
                 <span>💰 نقد {faB(c.capital)}</span>
                 {c.realized !== 0 && <span style={{ color: c.realized > 0 ? '#7c6' : '#e88' }}>{c.realized > 0 ? '📈 سود' : '📉 زیانِ'} {faB(Math.abs(c.realized))}</span>}
               </div>
-              {(c.holdings || []).length > 0 && <div style={{ marginTop: 5, fontSize: 9.5, color: 'var(--faint)' }}>{c.holdings.map((h: any) => h.hood || h.title).filter(Boolean).slice(0, 3).join('، ')}{c.assets > 3 ? ' و…' : ''}</div>}
+              {/* فاز ۷۳: املاکِ شرکت قابلِ‌خریدند — واگذاریِ شفاف به قیمتِ روزِ همان آگهیِ واقعی (فاز ۶۵ سرورش را ساخته بود، دکمه نداشت) */}
+              {(c.holdings || []).length > 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+                {c.holdings.map((h: any) => (
+                  <div key={h.listingId} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 10, background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 8, padding: '5px 8px' }}>
+                    <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={h.title}>🏠 {h.title}{h.hood ? ` · ${h.hood}` : ''}</span>
+                    {h.price > 0
+                      ? <>
+                        <b style={{ color: 'var(--gold)', whiteSpace: 'nowrap' }}>{faB(h.price)}</b>
+                        <button style={{ ...btn, padding: '3px 10px', fontSize: 10 }} disabled={busy} onClick={async () => {
+                          if (!confirm(`«${h.title}» از ${c.name} به قیمتِ روزِ آگهی (${faB(h.price)} تومان + مالیات و ثبت) خریده شود؟ واگذاری شفاف است — بدونِ سورپرایزِ قیمتی.`)) return
+                          const d = await api({ action: 'buy', listingId: h.listingId })
+                          if (d) { setSt(d); celebrate(); setWd(null) }
+                        }}>🤝 بخر</button>
+                      </>
+                      : <span style={{ color: 'var(--faint)', whiteSpace: 'nowrap' }} title="این آگهی فعلاً در بازارِ زنده نیست — واگذاری فقط روی آگهیِ فعال">آگهی فعال نیست</span>}
+                  </div>
+                ))}
+                {c.assets > (c.holdings || []).length && <div style={{ fontSize: 9, color: 'var(--faint)' }}>و {fa(c.assets - c.holdings.length)} ملکِ دیگر…</div>}
+              </div>}
               {(c.log || []).slice(0, 2).map((l: any, i: number) => <div key={i} style={{ fontSize: 9.5, color: 'var(--muted)', marginTop: 3 }}>{l.icon} {l.text}</div>)}
             </div>
           ))}
@@ -2404,7 +2422,8 @@ export default function EmpirePage() {
                   <div style={{ fontSize: 11, marginTop: 2 }}>{au.top > 0 ? <>بالاترین: <b style={{ color: au.myTop ? 'var(--gold)' : 'var(--text)' }}>{faB(au.top)}</b> ({au.myTop ? 'تو! 👑' : au.topBy})</> : <>پایه: <b>{faB(au.minBid)}</b></>}</div>
                   {au.check?.note && <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 2 }}>🧾 {au.check.note}</div>}
                 </div>
-                <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center' }}>
+                {au.mine && <span style={{ fontSize: 10.5, fontWeight: 800, color: 'var(--gold)', border: '1px solid var(--goldDim)', borderRadius: 999, padding: '3px 10px' }}>👑 مزایدهٔ خودت — لغو از کارتِ دارایی در پرتفوی</span>}
+                {!au.mine && <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center' }}>
                   <input value={bidIn[au.assetId] || ''} onChange={ev => setBidIn({ ...bidIn, [au.assetId]: digitsOf(ev.target.value) })} placeholder="پیشنهاد (میلیون)" inputMode="numeric" style={{ width: 104, padding: 6, borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--text)', textAlign: 'center', fontSize: 11.5 }} />
                   <button style={{ ...btn, padding: '5px 14px', fontSize: 12 }} disabled={busy} onClick={async () => {
                     const m = Math.round(Number(digitsOf(bidIn[au.assetId] || '')) || 0)
@@ -2412,7 +2431,7 @@ export default function EmpirePage() {
                     const d = await api({ action: 'p2pAuctionBid', no: au.no, assetId: au.assetId, amount: m * 1e6 })
                     if (d?.ok) { setBidIn({ ...bidIn, [au.assetId]: '' }); celebrate(); loadPmkt() }
                   }}>پیشنهاد</button>
-                </span>
+                </span>}
               </div>
             ))}
           </div>
@@ -2429,11 +2448,12 @@ export default function EmpirePage() {
                   {s.check?.note && <div style={{ fontSize: 10.5, color: (s.check.diffPct ?? 0) > 25 ? '#e8c37a' : 'var(--faint)', marginTop: 2 }}>🧾 {s.check.note}</div>}
                 </div>
                 <b style={{ color: 'var(--gold)' }}>{faB(s.price)}</b>
-                <button style={{ ...btn, padding: '5px 14px', fontSize: 12 }} disabled={busy} onClick={async () => {
+                {s.mine ? <span style={{ fontSize: 10.5, fontWeight: 800, color: 'var(--gold)', border: '1px solid var(--goldDim)', borderRadius: 999, padding: '3px 10px' }}>👑 عرضهٔ خودت</span>
+                : <button style={{ ...btn, padding: '5px 14px', fontSize: 12 }} disabled={busy} onClick={async () => {
                   if (!confirm(`«${s.title}» از ${s.seller} به ${faB(s.price)} تومان (+ مالیاتِ انتقال) خریده شود؟`)) return
                   const d = await api({ action: 'tradeBuy', no: s.no, assetId: s.assetId })
                   if (d) { setSt(d); celebrate(); loadPmkt() }
-                }}>خرید</button>
+                }}>خرید</button>}
               </div>
             ))}
           </div>
@@ -2450,11 +2470,12 @@ export default function EmpirePage() {
                   {j.check?.note && <div style={{ fontSize: 10.5, color: (j.check.diffPct ?? 0) > 10 ? '#e8c37a' : 'var(--faint)', marginTop: 2 }}>🧾 {j.check.note}</div>}
                 </div>
                 <span style={{ fontSize: 12 }}><b style={{ color: 'var(--gold)' }}>{fa(j.pct)}٪ سهم</b> در برابرِ <b>{faB(j.amount)}</b> آورده</span>
-                <button style={{ ...btn, padding: '5px 14px', fontSize: 12 }} disabled={busy} onClick={async () => {
+                {j.mine ? <span style={{ fontSize: 10.5, fontWeight: 800, color: 'var(--gold)', border: '1px solid var(--goldDim)', borderRadius: 999, padding: '3px 10px' }}>👑 پروژهٔ خودت</span>
+                : <button style={{ ...btn, padding: '5px 14px', fontSize: 12 }} disabled={busy} onClick={async () => {
                   if (!confirm(`شریکِ ${fa(j.pct)}٪ پروژهٔ «${j.title}» شوی؟ آورده: ${faB(j.amount)} تومان. سهمت از هر فروش/پیش‌فروش خودکار واریز می‌شود؛ هزینهٔ روزانهٔ کارگاه با سازنده است.`)) return
                   const d = await api({ action: 'jvJoin', no: j.no, assetId: j.assetId })
                   if (d) { setSt(d); celebrate(); loadPmkt() }
-                }}>شریک شو</button>
+                }}>شریک شو</button>}
               </div>
             ))}
           </div>

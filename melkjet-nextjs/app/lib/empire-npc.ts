@@ -160,7 +160,7 @@ export function npcView(d: NpcDb, count = config().empire.npc.count) {
   return d.companies.slice(0, Math.max(0, count)).map(c => ({
     id: c.id, name: c.name, icon: c.icon, styleFa: c.styleFa,
     capital: c.capital, realized: c.realized, assets: c.assets.length,
-    holdings: c.assets.slice(0, 5).map(a => ({ title: a.title.slice(0, 40), hood: a.hood, cost: a.cost, boughtDay: a.boughtDay })),
+    holdings: c.assets.slice(0, 5).map(a => ({ listingId: a.listingId, title: a.title.slice(0, 40), hood: a.hood, cost: a.cost, boughtDay: a.boughtDay })),   // فاز ۷۳: listingId تا بازیکن بتواند از خودِ شرکت بخرد
     log: c.log.slice(0, 4),
   }))
 }

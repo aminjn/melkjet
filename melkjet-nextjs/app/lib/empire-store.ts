@@ -23,6 +23,7 @@ export interface EmpireAsset {
   kind: AssetKind
   buyPrice: number            // تومان در لحظهٔ خرید
   boughtAt: number
+  lat?: number; lng?: number  // فاز ۷۳: مختصاتِ آگهی در لحظهٔ خرید — تا اگر آگهی از بازار رفت، پینِ نقشه نمیرد
   action?: AssetAction        // تصمیمِ معنادارِ بعد از خرید (بازسازی/اجاره/نگه‌داشتن)
   actionAt?: number
   landPlan?: LandPlan         // سیستمِ زمین (§6.7): فروشِ فوری / ساخت / مشارکت
@@ -901,7 +902,7 @@ export async function renameEmpire(userId: string, name: string) {
 }
 
 // خریدِ دارایی = انتخابِ یک آگهیِ واقعی با قیمتِ واقعی؛ سرمایهٔ شبیه‌سازی کم می‌شود (فصل ۳ + §6.5).
-export async function buyAsset(userId: string, listing: { id: string; title: string; hood: string; price: number; ptype?: string; city?: string }, opts: { negotiated?: boolean; notaryFeePct?: number } = {}, now = Date.now()) {
+export async function buyAsset(userId: string, listing: { id: string; title: string; hood: string; price: number; ptype?: string; city?: string; lat?: number; lng?: number }, opts: { negotiated?: boolean; notaryFeePct?: number } = {}, now = Date.now()) {
   const cfg = config().empire
   return mutateEmpire(userId, e => {
     if (!listing.id || !(listing.price > 0)) return 'آگهیِ نامعتبر'
@@ -919,7 +920,7 @@ export async function buyAsset(userId: string, listing: { id: string; title: str
       e.timeline.push({ at: now, icon: '📜', title: `سند در ${proPersonaOf('notary', listing.id)} ثبت شد`, detail: `حق‌الثبت ${Math.round(notary / 1e6).toLocaleString('fa-IR')}م تومان` })
     }
     if (opts.negotiated) { e.stats = e.stats || { sellsProfitable: 0, negoWins: 0 }; e.stats.negoWins += 1 }
-    e.assets.push({ id: 'ast_' + randomBytes(5).toString('hex'), listingId: listing.id, title: String(listing.title).slice(0, 120), hood: String(listing.hood || '').slice(0, 60), city: String(listing.city || '').slice(0, 40) || undefined, kind: assetKindOf(listing.ptype || ''), buyPrice: listing.price, boughtAt: now })
+    e.assets.push({ id: 'ast_' + randomBytes(5).toString('hex'), listingId: listing.id, title: String(listing.title).slice(0, 120), hood: String(listing.hood || '').slice(0, 60), city: String(listing.city || '').slice(0, 40) || undefined, kind: assetKindOf(listing.ptype || ''), buyPrice: listing.price, boughtAt: now, lat: Number(listing.lat) || undefined, lng: Number(listing.lng) || undefined })
     // پاداشِ سند (فصل ۳): ‎+100 XP + Founder + First Owner + Builder Potential +2 + Investor Confidence +1‎
     e.xp += cfg.buyRewardXp
     if (first) {

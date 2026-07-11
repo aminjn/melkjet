@@ -819,8 +819,10 @@ async function main() {
     // فاز ۷۲: نرخِ مالیات ثابت نیست — مصوبهٔ قطعیِ همان هفتهٔ واقعی (فاز ۷۰) رویش اثر می‌گذارد؛ انتظار از همان تابعِ زنده محاسبه می‌شود
     const taxPctNow = effectiveTransferTaxPct(dayNumberOf(Date.now()))
     const tax4B = Math.round(4_000_000_000 * taxPctNow / 100)
-    const b1 = await buyAsset(uid, { id: 'LST1', title: 'آپارتمان ۱۰۰ متری پونک', hood: 'پونک', price: 4_000_000_000, ptype: 'آپارتمان' })
+    const b1 = await buyAsset(uid, { id: 'LST1', title: 'آپارتمان ۱۰۰ متری پونک', hood: 'پونک', price: 4_000_000_000, ptype: 'آپارتمان', lat: 35.7219, lng: 51.3347 })
     ok('خریدِ اول: کسرِ قیمت + مالیاتِ مؤثر + XP + First Owner', b1.ok && b1.empire.capital === 10_000_000_000 - 4_000_000_000 - tax4B && b1.empire.taxPaid === tax4B && b1.empire.xp === 200 && b1.empire.badges.includes('First Owner'))
+    // فاز ۷۳: مختصاتِ آگهی در لحظهٔ خرید ماندگار می‌شود — پینِ نقشه به زنده‌بودنِ آگهی وابسته نمی‌ماند
+    ok('خرید: مختصاتِ لحظهٔ خرید روی دارایی ذخیره شد', b1.empire.assets[0].lat === 35.7219 && b1.empire.assets[0].lng === 51.3347)
     ok('خریدِ اول: هویت +۲ builder/+۱ investor (سند فصل۳)', b1.empire.identity.builder === e.identity.builder + 2 && b1.empire.identity.investor === Math.min(100, e.identity.investor + 1))
     const b2 = await buyAsset(uid, { id: 'LST1', title: 'x', hood: 'x', price: 1, ptype: '' })
     ok('خریدِ تکراریِ همان آگهی رد می‌شود', b2.ok === false)

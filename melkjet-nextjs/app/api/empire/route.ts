@@ -471,7 +471,7 @@ async function stateOf(userId: string, e00: EmpireData) {
     incomeSinceH: (a.action === 'rent' || a.business || (a.construction?.done && (a.construction.rented || 0) > 0)) ? Math.max(0, Math.floor((Date.now() - incomeSince) / 36e5)) : undefined,   // ساعت از آخرین واریز — برای «قسطِ بعدی»
     assembly, villaDemolish, needsDesign, renovOptions,
     designReadyInDays: a.design && Date.now() < a.design.readyAt ? Math.max(1, Math.ceil((a.design.readyAt - Date.now()) / 864e5)) : 0,
-    lat: info.coords[a.listingId]?.lat, lng: info.coords[a.listingId]?.lng,   // برای پینِ نقشهٔ شهر
+    lat: info.coords[a.listingId]?.lat ?? a.lat, lng: info.coords[a.listingId]?.lng ?? a.lng,   // پینِ نقشه: زنده از آگهی، وگرنه مختصاتِ لحظهٔ خرید (فاز ۷۳)
     growthPct: a.buyPrice ? Math.round((cur - a.buyPrice) / a.buyPrice * 1000) / 10 : 0,
     // زمینِ بدونِ برنامه → سه گزینهٔ سند (§6.7) با برآوردِ شفاف
     plans: a.kind === 'land' && !a.landPlan ? landProjection(prices[a.listingId] || a.buyPrice) : undefined,
@@ -760,7 +760,7 @@ export async function POST(req: NextRequest) {
         if (!claim.ok) return NextResponse.json({ error: `این ملک را «${claim.by?.name}» (#${(claim.by?.no || 0).toLocaleString('fa-IR')}) زودتر خریده — هر آگهیِ واقعی فقط یک مالک دارد. اگر عرضه‌اش کند، در «🏪 بازارِ بازیکنان» می‌بینی‌اش` }, { status: 409 })
       }
       // دفترخانه (فاز ۲۹): ثبتِ سند با حق‌الثبتِ knob — سیستم نقشِ دفترخانه را بازی می‌کند.
-      const r = await buyAsset(userId, { id: it.id, title: it.title, hood: hoodOf(it.location), city: String(it.meta?.['شهر'] || '') || cityOf(it.location), price, ptype: ptypeOf(it) }, { negotiated: negotiatedWin, notaryFeePct: config().empire.pros.notaryFeePct })
+      const r = await buyAsset(userId, { id: it.id, title: it.title, hood: hoodOf(it.location), city: String(it.meta?.['شهر'] || '') || cityOf(it.location), price, ptype: ptypeOf(it), lat: Number(it.meta?.['__lat']) || undefined, lng: Number(it.meta?.['__lng']) || undefined }, { negotiated: negotiatedWin, notaryFeePct: config().empire.pros.notaryFeePct })
       if (!r.ok) {
         // خریدِ ناموفق: ادعای تازه آزاد شود (اگر از قبل مالِ خودش بود، دست نمی‌خورَد) + ادعای NPC برگردد
         if (exclusive && me0 && !me0.assets.some(a => a.listingId === it.id)) await releaseListing(it.id, userId).catch(() => {})
@@ -1880,7 +1880,11 @@ export async function POST(req: NextRequest) {
           const r = await npcMaintain(day, cands)
           for (const bgh of r.bought) appendWorldEvent({ icon: bgh.icon, title: `${bgh.name} «${bgh.title.slice(0, 40)}» را در ${bgh.hood || 'شهر'} خرید`, kind: 'npc' }, day).catch(() => {})
           for (const sl of r.sold) appendWorldEvent({ icon: '💰', title: `${sl.name} «${sl.title.slice(0, 40)}» را ${sl.pnl >= 0 ? 'با سود' : 'با زیان'} فروخت`, kind: 'npc' }, day).catch(() => {})
-          return { companies: npcView(r.db), cities: cityStatsOf(cands.map(x => ({ city: x.city, price: x.price }))) }
+          // فاز ۷۳: قیمتِ «روزِ» آگهی روی دارایی‌های شرکت — واگذاری شفاف به همان قیمتِ آگهی است؛ آگهیِ رفته از بازار قابلِ‌خرید نیست
+          const price73: Record<string, number> = {}
+          for (const x of cands) price73[x.id] = x.price
+          const companies73 = npcView(r.db).map(c => ({ ...c, holdings: (c.holdings || []).map((h: any) => ({ ...h, price: price73[h.listingId] || 0 })) }))
+          return { companies: companies73, cities: cityStatsOf(cands.map(x => ({ city: x.city, price: x.price }))) }
         } catch { return { companies: [], cities: [] } }
       })()
       // فاز ۶۷ (فیدِ تعاملی): وضعیتِ دنبال‌شده‌ها و تبریک‌های خودم — تا فید همان‌جا قابلِ‌تعامل باشد
@@ -2105,17 +2109,17 @@ export async function POST(req: NextRequest) {
       const dayPM = dayNumberOf(Date.now())
       const sales: any[] = [], jvs: any[] = [], auctions: any[] = []
       for (const e of empires) {
-        if (e.userId === userId) continue
+        const mine73 = e.userId === userId   // فاز ۷۳: عرضه/مزایدهٔ خودت هم در بازار دیده می‌شود (با نشانِ «مالِ تو») — پیش‌تر بازار برای تک‌بازیکن همیشه خالی بود
         for (const a of e.assets) {
           // فاز ۴۰ (سند ۲۷ Part 21 — هوشِ قرارداد): تحلیلِ پیش از امضا از اعدادِ «واقعیِ» خودِ قرارداد —
           // قیمتِ درخواستی در برابرِ قیمتِ خریدِ ثبت‌شدهٔ فروشنده؛ آورده در برابرِ سهمِ منصفانه از هزینهٔ واقعیِ ساخت.
           if ((a.forSale || 0) > 0 && soc?.tradeEnabled !== false)
-            sales.push({ no: e.no, seller: e.name, assetId: a.id, title: a.title, hood: a.hood, kind: a.kind, price: a.forSale, renov: a.renovBoostPct || 0, designed: !!a.design, check: config().empire.intel.enabled ? tradeAskCheckOf(a.forSale!, a.buyPrice) : null })
+            sales.push({ no: e.no, seller: e.name, mine: mine73, assetId: a.id, title: a.title, hood: a.hood, kind: a.kind, price: a.forSale, renov: a.renovBoostPct || 0, designed: !!a.design, check: config().empire.intel.enabled ? tradeAskCheckOf(a.forSale!, a.buyPrice) : null })
           if (a.jvOffer && soc?.jvEnabled !== false)
-            jvs.push({ no: e.no, owner: e.name, assetId: a.id, title: a.title, hood: a.hood, pct: a.jvOffer.pct, amount: a.jvOffer.amount, building: !!(a.construction && !a.construction.done), check: config().empire.intel.enabled ? jvOfferCheckOf(a.jvOffer.pct, a.jvOffer.amount, a.construction && !a.construction.done ? a.construction.costTotal : null) : null })
+            jvs.push({ no: e.no, owner: e.name, mine: mine73, assetId: a.id, title: a.title, hood: a.hood, pct: a.jvOffer.pct, amount: a.jvOffer.amount, building: !!(a.construction && !a.construction.done), check: config().empire.intel.enabled ? jvOfferCheckOf(a.jvOffer.pct, a.jvOffer.amount, a.construction && !a.construction.done ? a.construction.costTotal : null) : null })
           // فاز ۶۴: مزایده‌های زندهٔ بازیکنانِ واقعی — با بالاترین پیشنهاد و مهلتِ باقی‌مانده
           if (a.p2pAuction && soc?.p2pAuctionEnabled !== false && dayPM <= a.p2pAuction.endDay)
-            auctions.push({ no: e.no, seller: e.name, assetId: a.id, title: a.title, hood: a.hood, kind: a.kind, minBid: a.p2pAuction.minBid, top: a.p2pAuction.bids[0]?.amount || 0, topBy: a.p2pAuction.bids[0]?.name || '', myTop: a.p2pAuction.bids[0]?.userId === userId, bids: a.p2pAuction.bids.length, daysLeft: a.p2pAuction.endDay - dayPM, check: config().empire.intel.enabled ? tradeAskCheckOf(a.p2pAuction.bids[0]?.amount || a.p2pAuction.minBid, a.buyPrice) : null })
+            auctions.push({ no: e.no, seller: e.name, mine: mine73, assetId: a.id, title: a.title, hood: a.hood, kind: a.kind, minBid: a.p2pAuction.minBid, top: a.p2pAuction.bids[0]?.amount || 0, topBy: a.p2pAuction.bids[0]?.name || '', myTop: a.p2pAuction.bids[0]?.userId === userId, bids: a.p2pAuction.bids.length, daysLeft: a.p2pAuction.endDay - dayPM, check: config().empire.intel.enabled ? tradeAskCheckOf(a.p2pAuction.bids[0]?.amount || a.p2pAuction.minBid, a.buyPrice) : null })
         }
       }
       return NextResponse.json({ ok: true, unlocked: empireLevel(me.xp).level >= u.tradeLevel, need: u.tradeLevel, sales: sales.slice(0, 40), jvs: jvs.slice(0, 40), auctions: auctions.slice(0, 40), auctionStepPct: soc.p2pAuctionStepPct })
