@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
-import { chatCompleteSafe, agentModel, agentProvider } from './gapgpt'
+import { aiFor, agentModel, agentProvider } from './gapgpt'
+const { chatCompleteSafe } = aiFor('غنی‌سازیِ سازنده‌ها')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 import { computeNearby } from './nearby'
 
 // ─── هوشِ صفحهٔ عمومیِ پروژه: دسترسی‌های واقعی (نشان) + تحلیلِ سرمایه‌گذاری (AI) ──

@@ -133,7 +133,7 @@ export async function runLLM(
 // callerِ واقعی — GapGPT (توکن‌شمار). فقط در runtime؛ در تست، mock تزریق می‌شود.
 const realCaller: LlmCaller = async (model, messages, opts, provider) => {
   const { chatCompleteUsage } = await import('../gapgpt')
-  const r = await chatCompleteUsage(model, messages, opts, provider)
+  const r = await chatCompleteUsage(model, messages, { ...(opts || {}), src: 'REOS (مغزِ هوشمند)' } as any, provider)   // فاز ۵۷
   return { text: r.text, tokens: r.tokens }
 }
 

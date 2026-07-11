@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { getAdminData } from '@/app/lib/admin-store'
-import { chatCompleteUsage, agentModel } from '@/app/lib/gapgpt'
+import { aiFor, agentModel } from '@/app/lib/gapgpt'
+const { chatCompleteUsage } = aiFor('موتورِ مذاکره')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 import { recordOp } from '@/app/lib/comm-store'
 
 // تولیدِ پیامِ مذاکره با هوش مصنوعی، بر اساسِ «قواعدِ» تنظیم‌شده در سوپرادمین.

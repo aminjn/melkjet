@@ -1,4 +1,5 @@
-import { chatCompleteSafe, agentModel } from './gapgpt'
+import { aiFor, agentModel } from './gapgpt'
+const { chatCompleteSafe } = aiFor('تحلیلِ هوشمندِ آگهی')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 import { knowledgeFor } from './market-data'
 
 export interface AnalyzePayload {

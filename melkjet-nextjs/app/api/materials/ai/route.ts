@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { chatCompleteSafe, agentModel, agentProvider } from '@/app/lib/gapgpt'
+import { aiFor, agentModel, agentProvider } from '@/app/lib/gapgpt'
+const { chatCompleteSafe } = aiFor('AI فروشگاهِ مصالح')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 // دستیارِ هوش مصنوعیِ ساختِ محصولِ مصالح: توضیحات، مشخصاتِ فنی، پیشنهادِ قیمت، برچسب‌ها.
 export const dynamic = 'force-dynamic'

@@ -6,7 +6,8 @@ import { listLeads, getLead, followUpNeeded, STAGE_LABEL } from '@/app/lib/leads
 import { listItems } from '@/app/lib/scraper-store'
 import { getAccount } from '@/app/lib/account-store'
 import { matchListingsForLead } from '@/app/lib/crm-matching'
-import { agentModel, agentProvider, chatCompleteSafe } from '@/app/lib/gapgpt'
+import { aiFor, agentModel, agentProvider } from '@/app/lib/gapgpt'
+const { chatCompleteSafe } = aiFor('هوشِ CRM')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 // دستیارِ هوشمندِ فروش. همه چیز پایهٔ heuristic دارد (بدونِ AI هم کار می‌کند)؛
 // اگر مدلِ AI تنظیم باشد، یک توصیهٔ کوتاهِ طبیعی هم اضافه می‌شود.

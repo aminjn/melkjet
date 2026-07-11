@@ -1,6 +1,7 @@
 import { getAdvisor } from './advisor-store'
 import { getAdvisorMembership, listAgencyMembers } from './agency-link-store'
-import { chatCompleteSafe, agentModel } from './gapgpt'
+import { aiFor, agentModel } from './gapgpt'
+const { chatCompleteSafe } = aiFor('تشخیصِ آگهیِ تکراری')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 // تشخیصِ «آگهیِ تکراری» — هنگامِ ثبت/ایمپورتِ آگهی توسط مشاور یا آژانس.
 // ابتدا با heuristic (محله/متراژ/قیمت/اتاق/عنوان) نامزد پیدا می‌شود، سپس در صورتِ

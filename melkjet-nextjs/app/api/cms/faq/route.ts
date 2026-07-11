@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { chatCompleteSafe, agentModel } from '@/app/lib/gapgpt'
+import { aiFor, agentModel } from '@/app/lib/gapgpt'
+const { chatCompleteSafe } = aiFor('پرسش‌وپاسخِ مقاله (CMS)')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 // تولید سؤالات متداول (FAQ) برای یک مقاله — انسان‌نما و سئو، خروجی JSON.
 const SYS = `تو کارشناس املاک ایران هستی. برای موضوع داده‌شده ۵ تا ۷ «سؤال متداول» واقعی و پرتکرار کاربران بنویس با پاسخ‌های دقیق، کاربردی و طبیعی (نه ماشینی). فقط یک JSON معتبر برگردان:

@@ -1,6 +1,7 @@
 import { getAdminData } from './admin-store'
 import { shecanRequest } from './shecan-https'
-import { chatCompleteSafe, agentModel } from './gapgpt'
+import { aiFor, agentModel } from './gapgpt'
+const { chatCompleteSafe } = aiFor('دسترسی‌های اطراف')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 // همهٔ تماس‌های نشان از DNS شکن داخل برنامه عبور می‌کنند (مثل GapGPT) تا مستقل از
 // resolv.conf سرور همیشه به api.neshan.org برسند.

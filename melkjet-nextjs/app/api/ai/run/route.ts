@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAndBumpUsage } from '@/app/lib/plan-usage'
-import { chatCompleteUsage, generateImage, agentModel } from '@/app/lib/gapgpt'
+import { aiFor, agentModel } from '@/app/lib/gapgpt'
+const { chatCompleteUsage, generateImage } = aiFor('ابزارهای AI کاربران')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 import { getSession } from '@/app/lib/session'
 import { canUseToken, recordOp } from '@/app/lib/comm-store'
 

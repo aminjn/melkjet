@@ -12,6 +12,11 @@ export const ENRICH_V = 4
 const inflight = new Map<string, Promise<Enrichment>>()
 // اگر تحلیلِ AI شکست بخورد، تا این مدت دوباره تلاش نمی‌شود (تا هر بار بازکردنِ آگهی AI صدا نزند).
 const ANALYSIS_COOLDOWN = 6 * 60 * 60 * 1000
+// فاز ۵۷ (فیدبک: «کلیدِ گپ را عوض کردم، تحلیل نمی‌آید»): هر تلاشِ شکست‌خورده (کلیدِ نامعتبر/شبکه/
+// پاسخِ خراب — از جمله مهرهای قدیمیِ بدونِ فیلدِ جدید) کول‌داونِ کوتاه می‌گیرد تا بعد از رفعِ
+// مشکل، تحلیل خودش ظرفِ چند دقیقه برگردد؛ کول‌داونِ بلند فقط مالِ حالتِ موفق است (بازتولید نکن).
+const ANALYSIS_ERR_COOLDOWN = 10 * 60 * 1000
+const cooldownOf = (c: Enrichment) => ((c.analysisOk || c.analysisErr === false) ? ANALYSIS_COOLDOWN : ANALYSIS_ERR_COOLDOWN)
 
 async function generate(id: string): Promise<Enrichment> {
   const it = await getItemById(id)
@@ -39,14 +44,15 @@ async function generate(id: string): Promise<Enrichment> {
   if (!cur.analysisOk) {
     // تحلیل فقط یک‌بار (و در صورتِ شکست، با کول‌داون) تلاش می‌شود — نه در هر بازکردنِ آگهی.
     const tried = cur.analysisTriedAt || 0
-    if (Date.now() - tried >= ANALYSIS_COOLDOWN) {
+    if (Date.now() - tried >= cooldownOf(cur)) {
       cur = patchEnrichment(id, { v: ENRICH_V, analysisTriedAt: Date.now() })
       const a = await analyzeListing({
         title: it.title, price: it.price, location: it.location,
         facts: cur.facts || [], description: cur.description || it.excerpt || '',
         meta: it.meta, amenities: cur.amenities || [],
       })
-      if (a.analysis) cur = patchEnrichment(id, { v: ENRICH_V, analysis: a.analysis, analysisOk: true })
+      if (a.analysis) cur = patchEnrichment(id, { v: ENRICH_V, analysis: a.analysis, analysisOk: true, analysisErr: false })
+      else cur = patchEnrichment(id, { v: ENRICH_V, analysisErr: true })   // فاز ۵۷: کول‌داونِ کوتاه برای شکستِ سرویسی
     }
   }
   return cur
@@ -57,7 +63,7 @@ export function isEnriched(id: string): boolean {
   if (!c || c.v !== ENRICH_V || !c.baseDone) return false
   if (c.analysisOk) return true
   // تحلیل اخیراً تلاش شده ولی هنوز نشده → تا پایانِ کول‌داون دوباره گرم نکن (جلوگیری از تکرارِ AI).
-  return !!c.analysisTriedAt && (Date.now() - c.analysisTriedAt < ANALYSIS_COOLDOWN)
+  return !!c.analysisTriedAt && (Date.now() - c.analysisTriedAt < cooldownOf(c))
 }
 
 /** غنی‌سازی را تولید یا از کش برمی‌گرداند (با حذفِ درخواست‌های هم‌زمانِ تکراری). */

@@ -1,5 +1,6 @@
 import { fetchDivarProfileTokens, fetchDivarPost, divarProfileSlug, type BrandPost } from './divar-post'
-import { resolveAgent, chatCompleteSafe } from './gapgpt'
+import { aiFor, resolveAgent } from './gapgpt'
+const { chatCompleteSafe } = aiFor('رصدِ مشاورانِ آژانس')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 // ── خوشه‌بندیِ آگهی‌های یک آژانسِ دیوار به تفکیکِ مشاور، از روی «امضای» داخلِ آگهی ──
 // ورودی: لینک/slugِ آژانس. خروجی: هر مشاورِ متمایز (بر اساسِ اسمِ امضاشده) + آگهی‌هایش،

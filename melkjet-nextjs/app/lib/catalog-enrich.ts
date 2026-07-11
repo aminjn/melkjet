@@ -3,7 +3,8 @@
 // اسکرپِ بعدی هم فقط جاهای خالی چک و پُر می‌شوند.
 import { productsNeedingEnrich, setProductEnrichment, type CatalogProduct } from './catalog-store'
 import { listCategories } from './catalog-store'
-import { chatCompleteSafe, agentModel, agentProvider } from './gapgpt'
+import { aiFor, agentModel, agentProvider } from './gapgpt'
+const { chatCompleteSafe } = aiFor('غنی‌سازیِ کاتالوگ')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 function catName(id: string) { return listCategories().find(c => c.id === id)?.name || '' }
 

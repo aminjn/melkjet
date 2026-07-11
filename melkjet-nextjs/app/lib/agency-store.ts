@@ -4,7 +4,8 @@ import { randomBytes } from 'crypto'
 import { getProfile, saveProfile } from './profile-store'
 import { getAccount } from './account-store'
 import { pgEnabled, kvGet, kvMutate } from './db'
-import { chatCompleteSafe, agentModel, agentProvider } from './gapgpt'
+import { aiFor, agentModel, agentProvider } from './gapgpt'
+const { chatCompleteSafe } = aiFor('پنلِ آژانس (تحلیل)')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 // استور پنل «آژانس املاک» — per-owner (هر کاربر فقط دادهٔ خودش).
 // دومَحاله: اگر DATABASE_URL ست باشد → Postgres (نوشتنِ اتمیک)، وگرنه فایل.

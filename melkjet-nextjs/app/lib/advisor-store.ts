@@ -3,7 +3,8 @@ import { join } from 'path'
 import { randomBytes } from 'crypto'
 import { addUserListing, deleteItem, getItemById, setItemDealStatus } from './scraper-store'
 import { pgEnabled, kvGet, kvMutate } from './db'
-import { chatCompleteSafe, agentModel, agentProvider } from './gapgpt'
+import { aiFor, agentModel, agentProvider } from './gapgpt'
+const { chatCompleteSafe } = aiFor('پنلِ مشاور')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 // استور پنل «مشاور املاک» — per-owner (هر کاربر فقط دادهٔ خودش).
 // دومَحاله: اگر DATABASE_URL ست باشد → Postgres (نوشتنِ اتمیک)، وگرنه فایل.

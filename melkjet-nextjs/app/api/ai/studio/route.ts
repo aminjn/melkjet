@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { chatCompleteSafe, chatVisionSafe, generateImageSafe, resolveAgent } from '@/app/lib/gapgpt'
+import { aiFor, resolveAgent } from '@/app/lib/gapgpt'
+const { chatCompleteSafe, chatVisionSafe, generateImageSafe } = aiFor('استودیوی AI')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 import { renderFloorPlanSVG, renderIsoSVG, svgDataUrl, type PlanLayout, type PlanRoom } from '@/app/lib/floorplan-svg'
 import { uploadToImgbb } from '@/app/lib/img-host'
 import { getAdminData } from '@/app/lib/admin-store'

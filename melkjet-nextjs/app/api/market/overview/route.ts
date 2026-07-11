@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { marketOverview } from '@/app/lib/market-stats'
-import { chatCompleteSafe, agentModel, agentProvider } from '@/app/lib/gapgpt'
+import { aiFor, agentModel, agentProvider } from '@/app/lib/gapgpt'
+const { chatCompleteSafe } = aiFor('نمای بازار')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 export const dynamic = 'force-dynamic'
 

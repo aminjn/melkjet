@@ -8,7 +8,8 @@ import {
   type OrderStatus,
 } from '@/app/lib/materials-store'
 import { demandForecast, priceInsights } from '@/app/lib/materials-ai'
-import { agentModel, agentProvider, chatCompleteSafe } from '@/app/lib/gapgpt'
+import { aiFor, agentModel, agentProvider } from '@/app/lib/gapgpt'
+const { chatCompleteSafe } = aiFor('پنلِ مصالح')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 // همهٔ دادهٔ پنل بازار مصالح، مخصوص کاربرِ واردشده (per-profile).
 export async function GET() {

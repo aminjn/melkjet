@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { listChats, getChat, newChat, addMessage, renameChat, deleteChat } from '@/app/lib/assistant-store'
-import { agentModel, chatCompleteSafe } from '@/app/lib/gapgpt'
+import { aiFor, agentModel } from '@/app/lib/gapgpt'
+const { chatCompleteSafe } = aiFor('دستیارِ ملک‌جت')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 export const maxDuration = 60
 

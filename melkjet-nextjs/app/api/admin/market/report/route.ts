@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { listPoints } from '@/app/lib/market-data'
-import { chatCompleteSafe, agentModel } from '@/app/lib/gapgpt'
+import { aiFor, agentModel } from '@/app/lib/gapgpt'
+const { chatCompleteSafe } = aiFor('گزارشِ بازار (ادمین)')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 // Generate a market analysis report from the dataset using AI.
 export async function POST() {

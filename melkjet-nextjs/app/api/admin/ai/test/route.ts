@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { chatComplete, generateImage } from '@/app/lib/gapgpt'
+import { aiFor } from '@/app/lib/gapgpt'
+const { chatComplete, generateImage } = aiFor('تستِ اتصالِ AI (ادمین)')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 import { generateVideo } from '@/app/lib/ai-video'
 
 export const runtime = 'nodejs'

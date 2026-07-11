@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { addPoints } from '@/app/lib/market-data'
-import { chatCompleteSafe, agentModel } from '@/app/lib/gapgpt'
+import { aiFor, agentModel } from '@/app/lib/gapgpt'
+const { chatCompleteSafe } = aiFor('ورودِ دادهٔ بازار (ادمین)')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 // Extract structured market data points from a document's text using AI, then store them.
 export async function POST(req: NextRequest) {

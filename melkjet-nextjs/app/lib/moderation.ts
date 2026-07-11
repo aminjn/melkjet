@@ -1,5 +1,6 @@
 import { pendingForModeration, setModeration, setModerationBatch, type Item, type ItemStatus } from './scraper-store'
-import { chatCompleteSafe, agentModel } from './gapgpt'
+import { aiFor, agentModel } from './gapgpt'
+const { chatCompleteSafe } = aiFor('بازبینیِ خودکارِ آگهی')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 import { predict, learn, noteDecision, explainPrediction, rejectEvidenceOf } from './moderation-ml'
 import { getAdminData } from './admin-store'
 import { buildDupIndex, dupMasterInIndex, type DupIndex } from './listing-dedupe'

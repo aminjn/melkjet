@@ -82,9 +82,10 @@ export async function listModelsWithPricing(provider?: string): Promise<ApiModel
   }).filter(m => m.id && (m.inUsd > 0 || m.outUsd > 0))
 }
 
-export async function chatComplete(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number } = {}, provider?: string): Promise<string> {
+export async function chatComplete(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number; src?: string } = {}, provider?: string): Promise<string> {
   const { base, key } = cfg(provider)
-  const src54 = callerSrcOf(new Error().stack), t54 = Date.now()   // فاز ۵۴: چه کسی صدا زد؟
+  // فاز ۵۷: src صریح مقدم است — در بیلدِ پروداکشن stack مسیرِ app/ را ندارد و «ناشناخته» می‌شد
+  const src54 = opts.src || callerSrcOf(new Error().stack), t54 = Date.now()
   try {
     const res = await gapHttp(`${base}/chat/completions`, {
       method: 'POST',
@@ -103,7 +104,7 @@ export async function chatComplete(model: string, messages: { role: string; cont
 
 // Like chatComplete, but if the chosen model fails (e.g. 503/unavailable on
 // GapGPT), retry once with a known-good cheap model so the feature still works.
-export async function chatCompleteSafe(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number } = {}, provider?: string): Promise<string> {
+export async function chatCompleteSafe(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number; src?: string } = {}, provider?: string): Promise<string> {
   try {
     return await chatComplete(model, messages, opts, provider)
   } catch (e) {
@@ -115,7 +116,7 @@ export async function chatCompleteSafe(model: string, messages: { role: string; 
 }
 
 // مثلِ chatCompleteSafe ولی تعدادِ توکنِ مصرف‌شده را هم برمی‌گرداند (برای محاسبهٔ مصرفِ کاربر)
-async function chatCompleteRaw(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number } = {}, provider?: string): Promise<{ text: string; tokens: number }> {
+async function chatCompleteRaw(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number; src?: string } = {}, provider?: string): Promise<{ text: string; tokens: number }> {
   const { base, key } = cfg(provider)
   const res = await gapHttp(`${base}/chat/completions`, {
     method: 'POST',
@@ -124,23 +125,23 @@ async function chatCompleteRaw(model: string, messages: { role: string; content:
   }, 90000)
   if (res.status !== 200) throw new Error(`گپ HTTP ${res.status}: ${res.body.slice(0, 300)}`)
   const d = JSON.parse(res.body)
-  recordAiUse({ src: callerSrcOf(new Error().stack), model, kind: 'text', tokens: Number(d.usage?.total_tokens) || 0, ok: true, ms: 0 }).catch(() => {})   // فاز ۵۴
+  recordAiUse({ src: opts.src || callerSrcOf(new Error().stack), model, kind: 'text', tokens: Number(d.usage?.total_tokens) || 0, ok: true, ms: 0 }).catch(() => {})   // فاز ۵۴
   return { text: d.choices?.[0]?.message?.content || '', tokens: Number(d.usage?.total_tokens) || 0 }
 }
-export async function chatCompleteUsage(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number } = {}, provider?: string): Promise<{ text: string; tokens: number }> {
+export async function chatCompleteUsage(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number; src?: string } = {}, provider?: string): Promise<{ text: string; tokens: number }> {
   try { return await chatCompleteRaw(model, messages, opts, provider) }
   catch (e) { if (model !== 'gpt-4o-mini') return await chatCompleteRaw('gpt-4o-mini', messages, opts, provider); throw e }
 }
 
-export async function generateImage(model: string, prompt: string, size = '1024x1024', provider?: string): Promise<string> {
+export async function generateImage(model: string, prompt: string, size = '1024x1024', provider?: string, src?: string): Promise<string> {
   const { base, key } = cfg(provider)
   const res = await gapHttp(`${base}/images/generations`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', Authorization: `Bearer ${key}`, accept: 'application/json' },
     body: JSON.stringify({ model, prompt, size, n: 1 }),
   }, 120000)
-  if (res.status !== 200) { recordAiUse({ src: callerSrcOf(new Error().stack), model, kind: 'image', tokens: 0, ok: false, ms: 0 }).catch(() => {}); throw new Error(`گپ تصویر HTTP ${res.status}: ${res.body.slice(0, 300)}`) }
-  recordAiUse({ src: callerSrcOf(new Error().stack), model, kind: 'image', tokens: 0, ok: true, ms: 0 }).catch(() => {})   // فاز ۵۴
+  if (res.status !== 200) { recordAiUse({ src: src || callerSrcOf(new Error().stack), model, kind: 'image', tokens: 0, ok: false, ms: 0 }).catch(() => {}); throw new Error(`گپ تصویر HTTP ${res.status}: ${res.body.slice(0, 300)}`) }
+  recordAiUse({ src: src || callerSrcOf(new Error().stack), model, kind: 'image', tokens: 0, ok: true, ms: 0 }).catch(() => {})   // فاز ۵۴
   const d = JSON.parse(res.body)
   const first = d.data?.[0] || {}
   // مدل‌هایی مثلِ gpt-image-1 خروجی را به‌صورتِ b64_json می‌دهند (بدون url) — به data URL تبدیل می‌کنیم.
@@ -151,7 +152,7 @@ export async function generateImage(model: string, prompt: string, size = '1024x
 
 // تحلیل تصویر (چندوجهی): تصاویر را همراه یک پرامپت متنی به مدل بینایی می‌دهد.
 // images آرایه‌ای از data URL یا URL تصویر است (فرمت OpenAI vision).
-export async function chatVision(model: string, prompt: string, images: string[], opts: { max_tokens?: number; timeout?: number } = {}, provider?: string): Promise<string> {
+export async function chatVision(model: string, prompt: string, images: string[], opts: { max_tokens?: number; timeout?: number; src?: string } = {}, provider?: string): Promise<string> {
   const { base, key } = cfg(provider)
   const content: any[] = [{ type: 'text', text: prompt }]
   for (const img of images.slice(0, 8)) if (img) content.push({ type: 'image_url', image_url: { url: img } })
@@ -160,9 +161,9 @@ export async function chatVision(model: string, prompt: string, images: string[]
     headers: { 'content-type': 'application/json', Authorization: `Bearer ${key}`, accept: 'application/json' },
     body: JSON.stringify({ model, messages: [{ role: 'user', content }], max_tokens: opts.max_tokens ?? 700, temperature: 0.4 }),
   }, opts.timeout ?? 45000)
-  if (res.status !== 200) { recordAiUse({ src: callerSrcOf(new Error().stack), model, kind: 'vision', tokens: 0, ok: false, ms: 0 }).catch(() => {}); throw new Error(`گپ بینایی HTTP ${res.status}: ${res.body.slice(0, 300)}`) }
+  if (res.status !== 200) { recordAiUse({ src: opts.src || callerSrcOf(new Error().stack), model, kind: 'vision', tokens: 0, ok: false, ms: 0 }).catch(() => {}); throw new Error(`گپ بینایی HTTP ${res.status}: ${res.body.slice(0, 300)}`) }
   const d = JSON.parse(res.body)
-  recordAiUse({ src: callerSrcOf(new Error().stack), model, kind: 'vision', tokens: Number(d.usage?.total_tokens) || 0, ok: true, ms: 0 }).catch(() => {})   // فاز ۵۴
+  recordAiUse({ src: opts.src || callerSrcOf(new Error().stack), model, kind: 'vision', tokens: Number(d.usage?.total_tokens) || 0, ok: true, ms: 0 }).catch(() => {})   // فاز ۵۴
   return d.choices?.[0]?.message?.content || ''
 }
 
@@ -170,7 +171,7 @@ export async function chatVision(model: string, prompt: string, images: string[]
 // کوتاه نگه داشته‌ایم تا مجموع زمان از حد تایم‌اوت پراکسی رد نشود.
 const VISION_FALLBACKS = ['gpt-4o', 'gpt-4o-mini']
 
-export async function chatVisionSafe(model: string | undefined, prompt: string, images: string[], opts: { max_tokens?: number; timeout?: number } = {}, provider?: string): Promise<{ text: string; model: string }> {
+export async function chatVisionSafe(model: string | undefined, prompt: string, images: string[], opts: { max_tokens?: number; timeout?: number; src?: string } = {}, provider?: string): Promise<{ text: string; model: string }> {
   const candidates: string[] = []
   for (const m of [model, ...VISION_FALLBACKS]) if (m && !candidates.includes(m)) candidates.push(m)
   let lastErr: any = null
@@ -189,15 +190,38 @@ const IMAGE_FALLBACKS = ['gpt-image-1', 'dall-e-3', 'flux', 'dall-e-2']
 
 // مثل generateImage ولی اگر مدلِ انتخابی نامعتبر بود (۴۰۴/خطای آپ‌استریم)، خودکار
 // مدل‌های تصویرِ معتبر را امتحان می‌کند تا قابلیت با تنظیمِ اشتباهِ مدل از کار نیفتد.
-export async function generateImageSafe(model: string | undefined, prompt: string, size = '1024x1024', provider?: string): Promise<{ url: string; model: string }> {
+export async function generateImageSafe(model: string | undefined, prompt: string, size = '1024x1024', provider?: string, src?: string): Promise<{ url: string; model: string }> {
   const candidates: string[] = []
   for (const m of [model, ...IMAGE_FALLBACKS]) if (m && !candidates.includes(m)) candidates.push(m)
   let lastErr: any = null
   for (const m of candidates) {
     try {
-      const url = await generateImage(m, prompt, size, provider)
+      const url = await generateImage(m, prompt, size, provider, src)
       if (url) return { url, model: m }
     } catch (e) { lastErr = e }
   }
   throw lastErr || new Error('هیچ مدل تصویری پاسخ نداد')
+}
+
+// ── فاز ۵۷ (فیدبک: «همه ناشناخته است») — منبعِ صریحِ مصرف ──────────────────
+// هر ماژول یک‌بار aiFor('نامِ فارسیِ فیچر') می‌سازد و همان توابعِ همیشگی را صدا می‌زند؛
+// برچسب به دفترِ مصرفِ AI می‌رود. در بیلدِ پروداکشن stack مسیرِ app/ را ندارد و تشخیصِ
+// خودکار «ناشناخته» می‌شد — منبعِ صریح تنها راهِ قطعی است.
+export function aiFor(src: string) {
+  return {
+    chatComplete: (model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number } = {}, provider?: string) =>
+      chatComplete(model, messages, { ...opts, src }, provider),
+    chatCompleteSafe: (model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number } = {}, provider?: string) =>
+      chatCompleteSafe(model, messages, { ...opts, src }, provider),
+    chatCompleteUsage: (model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number } = {}, provider?: string) =>
+      chatCompleteUsage(model, messages, { ...opts, src }, provider),
+    chatVision: (model: string, prompt: string, images: string[], opts: { max_tokens?: number; timeout?: number } = {}, provider?: string) =>
+      chatVision(model, prompt, images, { ...opts, src }, provider),
+    chatVisionSafe: (model: string | undefined, prompt: string, images: string[], opts: { max_tokens?: number; timeout?: number } = {}, provider?: string) =>
+      chatVisionSafe(model, prompt, images, { ...opts, src }, provider),
+    generateImage: (model: string, prompt: string, size = '1024x1024', provider?: string) =>
+      generateImage(model, prompt, size, provider, src),
+    generateImageSafe: (model: string | undefined, prompt: string, size = '1024x1024', provider?: string) =>
+      generateImageSafe(model, prompt, size, provider, src),
+  }
 }

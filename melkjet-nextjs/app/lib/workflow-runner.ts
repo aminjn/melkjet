@@ -2,7 +2,8 @@ import { allWorkflows, type Workflow, type WorkflowNode } from './workflow-store
 import { getAdvisor, addAppt, setLeadStage, updateLead } from './advisor-store'
 import { sendServiceSms } from './sms'
 import { getWfState, setWfState } from './workflow-runner-store'
-import { chatCompleteSafe, resolveAgent } from './gapgpt'
+import { aiFor, resolveAgent } from './gapgpt'
+const { chatCompleteSafe } = aiFor('اتوماسیون')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 import { getAdminData } from './admin-store'
 import { sendMail } from './smtp'
 import { getProfile } from './profile-store'

@@ -14,6 +14,7 @@ export interface Enrichment {
   analysis?: any
   analysisOk?: boolean   // آیا تحلیل AI یک‌بار با موفقیت تولید شده؟ (تا دیگر بازتولید نشود)
   analysisTriedAt?: number  // آخرین باری که تحلیل AI تلاش شد (کول‌داونِ تلاشِ مجدد در صورتِ شکست)
+  analysisErr?: boolean  // فاز ۵۷: شکستِ آخر «خطای سرویس» بود (کلید/شبکه) → کول‌داونِ کوتاه تا بعدِ رفعِ مشکل خودکار ترمیم شود
   baseDone?: boolean     // آیا بخش‌های غیر-AI (دیوار/نشان) یک‌بار محاسبه شده؟
   enrichedAt?: number
 }

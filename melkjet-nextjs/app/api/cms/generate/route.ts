@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { chatCompleteSafe, agentModel } from '@/app/lib/gapgpt'
+import { aiFor, agentModel } from '@/app/lib/gapgpt'
+const { chatCompleteSafe } = aiFor('تولیدِ مقاله (CMS)')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 import { slugify } from '@/app/lib/scraper-store'
 
 // نویسندهٔ مقالهٔ سئو-محورِ انسان‌نما. طوری می‌نویسد که شبیه نوشتهٔ یک کارشناس واقعی

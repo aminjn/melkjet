@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { normalizeForCompare, type CompareItem } from '@/app/lib/compare-normalize'
-import { chatCompleteSafe, agentModel, agentProvider } from '@/app/lib/gapgpt'
+import { aiFor, agentModel, agentProvider } from '@/app/lib/gapgpt'
+const { chatCompleteSafe } = aiFor('مقایسهٔ ملک')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 export const dynamic = 'force-dynamic'
 

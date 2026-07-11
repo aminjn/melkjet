@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { agentModel, agentProvider, chatCompleteSafe } from '@/app/lib/gapgpt'
+import { aiFor, agentModel, agentProvider } from '@/app/lib/gapgpt'
+const { chatCompleteSafe } = aiFor('AI میزِ حرفه‌ای‌ها')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 // ابزارهای AI تخصصیِ هر شغل (طبقِ سندِ نقش‌ها). هر ابزار یک system-prompt دارد؛
 // ورودیِ کاربر (متنِ قرارداد/مشخصاتِ ملک/…) به GapGPT داده و نتیجهٔ ساخت‌یافته برمی‌گردد.

@@ -8,7 +8,8 @@ import {
   getBuyer, listConversations, startConversation, addChatMessage, getConversation,
   upsertPropertyConversation, listAiChats, getAiChat, newAiChat, addAiChatMessage, renameAiChat, deleteAiChat,
 } from '@/app/lib/buyer-store'
-import { agentModel, chatCompleteSafe } from '@/app/lib/gapgpt'
+import { aiFor, agentModel } from '@/app/lib/gapgpt'
+const { chatCompleteSafe } = aiFor('پنلِ خریدار')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 
 export const maxDuration = 60
 

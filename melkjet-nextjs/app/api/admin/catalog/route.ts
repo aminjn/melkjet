@@ -8,7 +8,8 @@ import {
   deleteProducts, setImagesForScope,
 } from '@/app/lib/catalog-store'
 import { hasCap } from '@/app/lib/account-store'
-import { generateImage, agentModel, agentProvider } from '@/app/lib/gapgpt'
+import { aiFor, agentModel, agentProvider } from '@/app/lib/gapgpt'
+const { generateImage } = aiFor('کاتالوگِ مصالح (ادمین)')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
 import { enrichCatalogBatch } from '@/app/lib/catalog-enrich'
 
 // مدیریتِ کاتالوگِ مرجع — سوپرادمین یا کاربرِ دارای دسترسیِ «catalog».
