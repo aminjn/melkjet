@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireModule } from '@/app/lib/plan-gate'
 import { getSession } from '@/app/lib/session'
 import { listProjects, getProject, addProject, updateProject, addUnit, updateUnit, deleteUnit, addInvestor, deleteInvestor, updateMilestone, ensureImported, setProjectFinance, setUnitPlan, toggleUnitStage, projectStats } from '@/app/lib/builder-store'
 import { sellThroughForecast, suggestUnitPrice, projectInsights } from '@/app/lib/builder-ai'
@@ -44,6 +45,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای تغییر باید وارد شوید' }, { status: 401 })
+  { const pg51 = requireModule(s as any, 'units'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const o = s.phone
   const b = await req.json().catch(() => ({}))
   const a = b.action

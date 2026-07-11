@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import {
   listPlans, addPlan, updatePlan, deletePlan,
-  type PlanPatch,
+  type PlanPatch, planEnforcement, setPlanEnforcement,
 } from '@/app/lib/plan-store'
 
 async function guard() {
@@ -13,13 +13,15 @@ async function guard() {
 // GET → { plans }  (all plans, ordered)
 export async function GET() {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
-  return NextResponse.json({ plans: listPlans() })
+  return NextResponse.json({ plans: listPlans(), enforce: planEnforcement() })
 }
 
 // POST { name, priceMonthly, priceYearly, features?, highlighted?, cta?, order?, active? } → { plan }
 export async function POST(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const b = await req.json().catch(() => ({}))
+  // فاز ۵۱: کلیدِ سراسریِ اعمالِ پلن‌ها — روشن = گیتِ واقعیِ APIها و پنل‌ها؛ خاموش = رفتارِ آزادِ قبلی
+  if (b.action === 'setEnforce') return NextResponse.json({ ok: true, enforce: setPlanEnforcement(!!b.enforce) })
   const name = String(b.name || '').trim()
   if (!name) return NextResponse.json({ error: 'نام پلن الزامی است' }, { status: 400 })
   const plan = addPlan({

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireModule } from '@/app/lib/plan-gate'
 import { getSite, getSiteByOwner, saveSite } from '@/app/lib/sites-store'
 import { getSession } from '@/app/lib/session'
 
@@ -33,6 +34,7 @@ function normIncomingBlock(b: { id: number; type: string; props?: Record<string,
 export async function POST(req: NextRequest) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  { const pg51 = requireModule(session as any, 'website'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const body = await req.json().catch(() => ({}))
 
   // Pages: prefer body.pages; fall back to a legacy single body.blocks array.

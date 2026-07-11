@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireModule } from '@/app/lib/plan-gate'
 import { getSession } from '@/app/lib/session'
 import {
   agencyStats, listAgents, listListings, listLeads, listDeals, getAgency,
@@ -54,6 +55,7 @@ import { checkDuplicate, advisorScope } from '@/app/lib/duplicate-check'
 export async function GET() {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای مشاهده وارد شوید' }, { status: 401 })
+  { const pg51 = requireModule(s as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const o = s.phone
   // مهاجرتِ یک‌بارهٔ لینکِ لیدهای قدیمی از «نام» به «آیدیِ پروفایل» (فقط وقتی لازم است می‌نویسد).
   try {
@@ -98,6 +100,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای انجام این عملیات وارد شوید' }, { status: 401 })
+  { const pg51 = requireModule(s as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const o = s.phone
   const b = await req.json().catch(() => ({} as any))
   switch (b.action as string) {

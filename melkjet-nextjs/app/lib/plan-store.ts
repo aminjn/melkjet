@@ -49,7 +49,7 @@ export interface Plan {
   createdAt: number
 }
 
-interface DB { plans: Plan[]; v?: number }
+interface DB { plans: Plan[]; v?: number; enforce?: boolean }
 function id() { return randomBytes(6).toString('hex') }
 function load(): DB {
   if (existsSync(DATA_FILE)) {
@@ -125,6 +125,10 @@ function seed(): DB {
   ]
   return { plans, v: SEED_V }
 }
+
+// فاز ۵۱ (اعمالِ پلن‌ها): کلیدِ سراسریِ enforcement — پیش‌فرض خاموش تا رول‌اوت امن باشد؛ از پنلِ پلن‌ها روشن می‌شود.
+export function planEnforcement(): boolean { return load().enforce === true }
+export function setPlanEnforcement(v: boolean): boolean { const db = load(); db.enforce = v === true; save(db); return db.enforce! }
 
 export function listPlans(): Plan[] { return load().plans.sort((a, b) => a.order - b.order) }
 export function listActive(): Plan[] { return load().plans.filter(p => p.active).sort((a, b) => a.order - b.order) }

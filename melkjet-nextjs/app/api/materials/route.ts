@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireModule } from '@/app/lib/plan-gate'
 import { getSession } from '@/app/lib/session'
 import {
   shopStats, listProducts, listOrders, listInquiries,
@@ -13,6 +14,7 @@ import { agentModel, agentProvider, chatCompleteSafe } from '@/app/lib/gapgpt'
 export async function GET() {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای مشاهده وارد شوید' }, { status: 401 })
+  { const pg51 = requireModule(s as any, 'store'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const owner = s.phone
   return NextResponse.json({
     stats: await shopStats(owner),
@@ -25,6 +27,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای انجام این عملیات وارد شوید' }, { status: 401 })
+  { const pg51 = requireModule(s as any, 'store'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const owner = s.phone
   const b = await req.json().catch(() => ({} as any))
   const action = b.action as string

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireModule } from '@/app/lib/plan-gate'
 import { getSession } from '@/app/lib/session'
 import {
   proStats, listRequests, listRecords,
@@ -14,6 +15,7 @@ const roleOf = (v: string) => (ROLES.includes(v) ? v : '')
 export async function GET(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای مشاهده وارد شوید' }, { status: 401 })
+  { const pg51 = requireModule(s as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const role = roleOf(new URL(req.url).searchParams.get('role') || '')
   if (!role) return NextResponse.json({ error: 'نقشِ نامعتبر' }, { status: 400 })
   const owner = s.phone
@@ -27,6 +29,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای انجام این عملیات وارد شوید' }, { status: 401 })
+  { const pg51 = requireModule(s as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const owner = s.phone
   const b = await req.json().catch(() => ({} as any))
   const role = roleOf(String(b.role || ''))

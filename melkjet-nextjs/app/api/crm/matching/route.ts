@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireModule } from '@/app/lib/plan-gate'
 import { getSession } from '@/app/lib/session'
 import { getLead, listLeads, linkListing } from '@/app/lib/leads-store'
 import { listItems } from '@/app/lib/scraper-store'
@@ -20,6 +21,7 @@ async function ownerListings(phone: string) {
 export async function GET(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
+  { const pg51 = requireModule(s as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const sp = new URL(req.url).searchParams
   const leadId = sp.get('leadId'); const listingId = sp.get('listingId')
   if (leadId) {
@@ -41,6 +43,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
+  { const pg51 = requireModule(s as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const b = await req.json().catch(() => ({}))
   if (!b.leadId || !b.listingId) return NextResponse.json({ error: 'leadId و listingId لازم است' }, { status: 400 })
   const lead = await linkListing(s.phone, String(b.leadId), String(b.listingId), b.add !== false)

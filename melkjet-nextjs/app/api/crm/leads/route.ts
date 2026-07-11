@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireModule } from '@/app/lib/plan-gate'
 import { getSession } from '@/app/lib/session'
 import { listLeads, addLead, updateLead, deleteLead, leadAnalytics, followUpNeeded, addActivity } from '@/app/lib/leads-store'
 import { getCrmSettings } from '@/app/lib/crm-settings-store'
@@ -8,6 +9,7 @@ import { sendServiceSms } from '@/app/lib/sms'
 export async function GET(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
+  { const pg51 = requireModule(s as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const sp = new URL(req.url).searchParams
   const leads = await listLeads(s.phone)
   if (sp.get('analytics')) {
@@ -25,6 +27,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
+  { const pg51 = requireModule(s as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const b = await req.json().catch(() => ({}))
   if (!b.name || !String(b.name).trim()) {
     return NextResponse.json({ error: 'نام الزامی است' }, { status: 400 })
@@ -54,6 +57,7 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
+  { const pg51 = requireModule(s as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const b = await req.json().catch(() => ({}))
   if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
   const { id, ...patch } = b
@@ -66,6 +70,7 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
+  { const pg51 = requireModule(s as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const id = new URL(req.url).searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 })
   await deleteLead(s.phone, id)

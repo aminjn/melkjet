@@ -3,6 +3,8 @@ import { chatCompleteSafe, chatVisionSafe, generateImageSafe, resolveAgent } fro
 import { renderFloorPlanSVG, renderIsoSVG, svgDataUrl, type PlanLayout, type PlanRoom } from '@/app/lib/floorplan-svg'
 import { uploadToImgbb } from '@/app/lib/img-host'
 import { getAdminData } from '@/app/lib/admin-store'
+import { getSession } from '@/app/lib/session'
+import { requireModule } from '@/app/lib/plan-gate'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -42,6 +44,9 @@ function extractJson(s: string): any | null {
 // استودیو: اگر عکس آپلود شده باشد، چیدمانِ واقعی را با مدل بینایی استخراج و نقشه را
 // خودمان قطعی رسم می‌کنیم (بازسازی وضع موجود). در غیر این صورت با مدل تصویر یک پلان می‌سازد.
 export async function POST(req: NextRequest) {
+  const sess = await getSession()
+  if (!sess) return NextResponse.json({ error: 'برای استفاده از استودیو وارد شوید' }, { status: 401 })
+  { const pg51 = requireModule(sess as any, 'ai_studio'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const b = await req.json().catch(() => ({}))
   const area = Number(String(b.area || '').replace(/[^\d]/g, '')) || 100
   const bedrooms = String(b.bedrooms || '2')

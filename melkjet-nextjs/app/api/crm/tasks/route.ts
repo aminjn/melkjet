@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireModule } from '@/app/lib/plan-gate'
 import { listTasks, addTask, toggleTask, deleteTask, updateTask, type Priority } from '@/app/lib/crm-store'
 import { getSession } from '@/app/lib/session'
 
@@ -6,12 +7,14 @@ import { getSession } from '@/app/lib/session'
 export async function GET() {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  { const pg51 = requireModule(session as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   return NextResponse.json({ tasks: await listTasks(session.phone) })
 }
 
 export async function POST(req: NextRequest) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  { const pg51 = requireModule(session as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const body = await req.json().catch(() => ({}))
   const title = String(body.title || '').trim()
   if (!title) return NextResponse.json({ error: 'عنوان وظیفه خالی است' }, { status: 400 })
@@ -25,6 +28,7 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  { const pg51 = requireModule(session as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const body = await req.json().catch(() => ({}))
   const id = String(body.id || '')
   if (!id) return NextResponse.json({ error: 'شناسه نامعتبر' }, { status: 400 })
@@ -49,6 +53,7 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  { const pg51 = requireModule(session as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const id = new URL(req.url).searchParams.get('id') || ''
   if (!id) return NextResponse.json({ error: 'شناسه نامعتبر' }, { status: 400 })
   await deleteTask(session.phone, id)

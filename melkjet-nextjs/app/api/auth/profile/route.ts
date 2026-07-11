@@ -3,6 +3,7 @@ import { getSession } from '@/app/lib/session'
 import { getAccount, setProfile, dashForRole, isValidRole } from '@/app/lib/account-store'
 import { getProfile, completeness } from '@/app/lib/profile-store'
 import { ensureCronStarted } from '@/app/lib/cron-runner'
+import { resolveAccess } from '@/app/lib/plan-gate'
 
 // حساب کاربری فعلی
 export async function GET() {
@@ -13,7 +14,9 @@ export async function GET() {
   const isSuper = s.role === 'super_admin'
   const dash = isSuper ? '/admin' : dashForRole(a?.role)
   const profileCompletion = completeness(getProfile(s.phone))
-  return NextResponse.json({ account: a, phone: s.phone, role: s.role, dash, name: a?.name || '', suspended: !!a?.suspended, profileCompletion })
+  // فاز ۵۱ (اعمالِ پلن‌ها): خلاصهٔ دسترسیِ پلن برای UI — قفل/بنرِ ارتقا از همین ساخته می‌شود
+  const access = (() => { try { const x = resolveAccess(s as any); return { enforce: x.enforce, isAdmin: x.isAdmin, planName: x.planName, paid: x.paid, expiresAt: x.expiresAt, permissions: x.permissions } } catch { return null } })()
+  return NextResponse.json({ account: a, phone: s.phone, role: s.role, dash, name: a?.name || '', suspended: !!a?.suspended, profileCompletion, access })
 }
 
 // تکمیل پروفایل (آنبوردینگ): نام + نقش

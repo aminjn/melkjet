@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireModule } from '@/app/lib/plan-gate'
 import { getSession } from '@/app/lib/session'
 import { listPackages, setPackages, getCredit, grantCredit, createOrder, createPlanOrder, createPromoOrder, createBundleOrder, createPromoCreditOrder, getPromoWallet, listOrders, approveOrder, rejectOrder, getTokenUsage } from '@/app/lib/comm-store'
 import { listActive, getPlan } from '@/app/lib/plan-store'
@@ -17,6 +18,7 @@ const dashFor = (phone: string, role?: string) => role === 'super_admin' ? '/pro
 export async function GET(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای مشاهده وارد شوید' }, { status: 401 })
+  { const pg51 = requireModule(s as any, 'marketing'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   await ensurePromoPricing()
   const sp = new URL(req.url).searchParams
   // نمای سوپرادمین: همهٔ پکیج‌ها + همهٔ سفارش‌ها
@@ -36,6 +38,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای انجام این عملیات وارد شوید' }, { status: 401 })
+  { const pg51 = requireModule(s as any, 'marketing'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   await ensurePromoPricing()
   const b = await req.json().catch(() => ({} as any))
   const act = String(b.action || '')

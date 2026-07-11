@@ -5169,7 +5169,16 @@ function PlansView() {
   const [creating, setCreating] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [roleFilter, setRoleFilter] = useState('')
-  const load = () => fetch('/api/admin/plans').then(r => r.ok ? r.json() : { plans: [] }).then(d => setPlans(d.plans || []))
+  const [enforce, setEnforce] = useState<boolean | null>(null)
+  const load = () => fetch('/api/admin/plans').then(r => r.ok ? r.json() : { plans: [] }).then(d => { setPlans(d.plans || []); if (typeof d.enforce === 'boolean') setEnforce(d.enforce) })
+  const toggleEnforce = async () => {
+    const next = !enforce
+    if (!confirm(next
+      ? 'اعمالِ پلن‌ها روشن شود؟ از این لحظه هر کاربر فقط به ماژول‌های پلنِ خودش (یا پلنِ رایگانِ نقشش) دسترسی دارد؛ بقیهٔ بخش‌ها قفل با دکمهٔ «ارتقا» می‌شود. سوپرادمین همیشه معاف است.'
+      : 'اعمالِ پلن‌ها خاموش شود؟ همه دوباره به همه‌چیز دسترسی خواهند داشت (رفتارِ قبلی).')) return
+    await fetch('/api/admin/plans', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'setEnforce', enforce: next }) })
+    load()
+  }
   useEffect(() => {
     load()
     fetch('/api/admin/roles').then(r => r.ok ? r.json() : null).then(d => { if (d?.roles) setRoles(d.roles); if (d?.permissions) setPerms(d.permissions) })
@@ -5196,8 +5205,18 @@ function PlansView() {
             <span style={{ fontSize: 26 }}>👑</span>
             <div><div style={{ fontWeight: 900, fontSize: 18 }}>پلن‌ها و اشتراک</div><div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3 }}>پلن بساز و به نقش نسبت بده؛ با انتخابِ نقش، ماژول‌های همان نقش می‌آید تا انتخاب کنی. وقتی کاربری بخرد، پلن به حسابش وصل می‌شود و در «مشترکین» شمرده می‌شود.</div></div>
           </div>
-          <GoldButton onClick={() => { setEditingId(null); setCreating(true) }}>＋ پلن جدید</GoldButton>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* فاز ۵۱: کلیدِ اعمالِ واقعیِ پلن‌ها — تا روشن نشود، هیچ قفلی اعمال نمی‌شود (رول‌اوتِ امن) */}
+            {enforce !== null && <button onClick={toggleEnforce} style={{ display: 'flex', alignItems: 'center', gap: 8, background: enforce ? 'rgba(110,220,160,.12)' : 'var(--bg2)', border: `1px solid ${enforce ? '#3d8f63' : 'var(--line2)'}`, color: enforce ? '#7ee0b8' : 'var(--muted)', borderRadius: 12, padding: '9px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5, fontWeight: 800 }}>
+              <span style={{ width: 34, height: 18, borderRadius: 999, background: enforce ? '#2f8f5f' : 'var(--line2)', position: 'relative', display: 'inline-block', transition: 'background .2s' }}>
+                <span style={{ position: 'absolute', top: 2, right: enforce ? 2 : 18, width: 14, height: 14, borderRadius: '50%', background: '#fff', transition: 'right .2s' }} />
+              </span>
+              اعمالِ پلن‌ها: {enforce ? 'روشن ✓' : 'خاموش'}
+            </button>}
+            <GoldButton onClick={() => { setEditingId(null); setCreating(true) }}>＋ پلن جدید</GoldButton>
+          </div>
         </div>
+        {enforce === false && <div style={{ fontSize: 11.5, color: '#e8c37a', marginTop: 10 }}>⚠️ اعمالِ پلن‌ها خاموش است — الان هر کاربرِ واردشده به همهٔ بخش‌ها دسترسی دارد. با روشن‌کردنِ کلیدِ بالا، دسترسی‌ها دقیقاً طبقِ «ماژول‌های» هر پلن قفل می‌شود (کاربرِ بدونِ پلن → پلنِ رایگانِ نقشِ خودش).</div>}
       </Card>
 
       {/* فیلترِ نقش — برای مدیریتِ آسان */}

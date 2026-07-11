@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireModule } from '@/app/lib/plan-gate'
 import { getSession } from '@/app/lib/session'
 import { getLead, addActivity } from '@/app/lib/leads-store'
 import { sendServiceSms } from '@/app/lib/sms'
@@ -10,6 +11,7 @@ import { getAdminData } from '@/app/lib/admin-store'
 export async function POST(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
+  { const pg51 = requireModule(s as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const b = await req.json().catch(() => ({}))
   const lead = await getLead(s.phone, String(b.leadId || ''))
   if (!lead) return NextResponse.json({ error: 'لید یافت نشد' }, { status: 404 })

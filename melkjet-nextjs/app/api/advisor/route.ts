@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireModule } from '@/app/lib/plan-gate'
 import { getSession } from '@/app/lib/session'
 import { warmEnrichment } from '@/app/lib/enrich-warm'
 import { checkDuplicate, advisorScope } from '@/app/lib/duplicate-check'
@@ -46,6 +47,7 @@ async function syncAgencyLeads(advisorPhone: string): Promise<void> {
 export async function GET() {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای مشاهده وارد شوید' }, { status: 401 })
+  { const pg51 = requireModule(s as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const o = s.phone
   await syncAgencyLeads(o)   // لیدهای تخصیص‌یافتهٔ آژانس را قبل از خواندن، در پنلِ مشاور بساز
   const [stats, leads, listings, appts, commissions] = await Promise.all([advisorStats(o), listLeads(o), listListings(o), listAppts(o), listCommissions(o)])
@@ -55,6 +57,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای انجام این عملیات وارد شوید' }, { status: 401 })
+  { const pg51 = requireModule(s as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const o = s.phone
   const b = await req.json().catch(() => ({} as any))
   switch (b.action as string) {

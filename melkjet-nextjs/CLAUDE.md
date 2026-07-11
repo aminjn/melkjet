@@ -186,8 +186,17 @@ media files in `.media/` + `.media-index.json`.
 - Roles are **dynamic** (role-store, 8 builtin seeds): each has a default dashboard, a `planId`
   that unlocks it, and a `permissions[]` list. Managed in admin → «نقش‌ها و دسترسی».
 - Users managed in admin → «کاربران» (search/filter by role+plan, inline assign, bulk).
-- **NOT YET DONE: runtime plan-gating** — locking the paid % of each dashboard based on the
-  user's plan/role permissions. Data model is ready; enforcement per-panel is pending.
+- **Runtime plan-gating (فاز ۵۱ — DONE v1):** `app/lib/plan-gate.ts` = the single access gate.
+  Effective permissions come ONLY from the user's **active plan** (`activePlan` — expiry-aware);
+  no plan → the free plan of their role's dashboard; no free plan → no module permissions.
+  Enforced in 17 tool APIs (`requireModule(s, '<perm>')` → 403 `{code:'plan', upgrade:'/pricing'}`):
+  crm/* → 'crm', workflow → 'automation', sites → 'website', comm → 'marketing',
+  advisor(+divar)/agency/prodesk → 'crm', builder → 'units', materials → 'store', ai/studio → 'ai_studio'.
+  UI: `/api/auth/profile` returns `access` summary; PanelReturnBar shows a full-page 🔒 upgrade
+  overlay on /crm /marketing /workflow /website-builder when the module is missing.
+  **Kill-switch:** admin → پلن‌ها → «اعمالِ پلن‌ها» toggle (plan-store `enforce`, default OFF —
+  turning it on is the moment gating actually starts). Super admin always exempt.
+  Still pending: quota enforcement (سقف‌های مصرفِ هر پلن) + plan purchase via Zarinpal.
 
 ## Integrations (exact, hard-won)
 - **IPPanel SMS** (domestic, via shecan-https):

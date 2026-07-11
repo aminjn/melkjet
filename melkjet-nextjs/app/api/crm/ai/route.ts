@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireModule } from '@/app/lib/plan-gate'
 import { getSession } from '@/app/lib/session'
 import { listLeads, getLead, followUpNeeded, STAGE_LABEL } from '@/app/lib/leads-store'
 import { listItems } from '@/app/lib/scraper-store'
@@ -23,6 +24,7 @@ async function aiText(prompt: string): Promise<string | null> {
 export async function POST(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
+  { const pg51 = requireModule(s as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const b = await req.json().catch(() => ({}))
   const action = String(b.action || 'next')
 

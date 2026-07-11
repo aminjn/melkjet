@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireModule } from '@/app/lib/plan-gate'
 import { getSession } from '@/app/lib/session'
 import { addActivity, getLead, ActivityType } from '@/app/lib/leads-store'
 
@@ -8,6 +9,7 @@ const TYPES: ActivityType[] = ['created', 'call', 'visit', 'message', 'sms', 'em
 export async function GET(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
+  { const pg51 = requireModule(s as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const leadId = new URL(req.url).searchParams.get('leadId') || ''
   const lead = await getLead(s.phone, leadId)
   if (!lead) return NextResponse.json({ error: 'یافت نشد' }, { status: 404 })
@@ -18,6 +20,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
+  { const pg51 = requireModule(s as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   const b = await req.json().catch(() => ({}))
   if (!b.leadId) return NextResponse.json({ error: 'شناسهٔ لید الزامی است' }, { status: 400 })
   const type: ActivityType = TYPES.includes(b.type) ? b.type : 'note'

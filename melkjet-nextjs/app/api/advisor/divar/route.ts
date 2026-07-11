@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireModule } from '@/app/lib/plan-gate'
 import { getSession } from '@/app/lib/session'
 import { getDivar, updateDivarConfig, removeImport, addSource, updateSource, removeSource, getSource } from '@/app/lib/advisor-divar-store'
 import { importDivarInput, startBackgroundSync, clearDivarImports, resumeJob } from '@/app/lib/advisor-divar-import'
@@ -9,6 +10,7 @@ import { ensureCronStarted } from '@/app/lib/cron-runner'
 export async function GET() {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای مشاهده وارد شوید' }, { status: 401 })
+  { const pg51 = requireModule(s as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   ensureCronStarted()
   return NextResponse.json({ config: getDivar(s.phone), job: getJobNormalized(s.phone) }, { headers: { 'Cache-Control': 'no-store' } })
 }
@@ -16,6 +18,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'برای انجام این عملیات وارد شوید' }, { status: 401 })
+  { const pg51 = requireModule(s as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
   ensureCronStarted()
   const o = s.phone
   const b = await req.json().catch(() => ({} as any))
