@@ -4073,22 +4073,39 @@ function APIView() {
       // اگر جواب نداد، ارزانِ بعدی — مدلِ خراب هرگز انتخاب نمی‌شود.
       const skipped78: string[] = []
       let cheapest: any = null
-      const cands78 = priced.slice(0, 4)
-      for (let i78 = 0; i78 < cands78.length; i78++) {
-        const cand = cands78[i78]
-        setEcoMsg(`تستِ زندهٔ ${(i78 + 1).toLocaleString('fa-IR')} از ${cands78.length.toLocaleString('fa-IR')}: «${cand.id}» (حداکثر ~۲۵ ثانیه)…`)
+      // فاز ۸۱: جستجوی عمیق‌تر — تا ۸ کاندید، و بعد از هر شکست کلِ همان «خانوادهٔ» مدل رد می‌شود
+      // (وقتی gapgpt-qwen-3.5 بی‌پاسخ است، ۳.۶ و thinkingهایش هم تقریباً قطعاً همان‌طورند — وقت تلف نکن)
+      const famOf = (id: string) => id.toLowerCase().replace(/[-_.](thinking|latest|mini|turbo|fp8|instruct)\b/g, '').replace(/[\d.]+/g, '').replace(/[-_/]+$/, '')
+      const deadFams = new Set<string>()
+      const testOne = async (id: string): Promise<{ ok: boolean; err: string }> => {
         try {
-          // فاز ۷۸: سقفِ زمانیِ سمتِ کلاینت — دکمه هرگز بی‌نهایت «در حال اعمال» نمی‌ماند
           const ab = new AbortController()
           const tmr = setTimeout(() => ab.abort(), 25000)
-          const tr = await fetch('/api/admin/ai/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: cand.id }), signal: ab.signal })
+          const tr = await fetch('/api/admin/ai/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: id }), signal: ab.signal })
           clearTimeout(tmr)
           const td = await tr.json().catch(() => null)
-          if (td?.ok) { cheapest = cand; break }
-          skipped78.push(`${cand.id} (${String(td?.error || 'بی‌پاسخ').slice(0, 80)})`)
-        } catch { skipped78.push(`${cand.id} (بی‌پاسخ در ۲۵ ثانیه)`) }
+          return td?.ok ? { ok: true, err: '' } : { ok: false, err: String(td?.error || 'بی‌پاسخ').slice(0, 80) }
+        } catch { return { ok: false, err: 'بی‌پاسخ در ۲۵ ثانیه' } }
       }
-      if (!cheapest) { setEcoMsg(`✕ هیچ‌کدام از ${Math.min(4, priced.length).toLocaleString('fa-IR')} مدلِ ارزانِ اول جوابِ تستِ زنده را ندادند: ${skipped78.join('، ')}`); return }
+      let tried78 = 0
+      for (const cand of priced) {
+        if (tried78 >= 8) break
+        if (deadFams.has(famOf(cand.id))) { skipped78.push(`${cand.id} (هم‌خانوادهٔ مدلِ خراب — رد شد)`); continue }
+        tried78++
+        setEcoMsg(`تستِ زندهٔ «${cand.id}» (تلاشِ ${tried78.toLocaleString('fa-IR')} از حداکثر ۸ · هر کدام تا ~۲۵ ثانیه)…`)
+        const r78 = await testOne(cand.id)
+        if (r78.ok) { cheapest = cand; break }
+        deadFams.add(famOf(cand.id))
+        skipped78.push(`${cand.id} (${r78.err})`)
+      }
+      // آخرین راهِ تضمینی: mini (شناخته‌شده‌ترین مدلِ ارزانِ پایدار) — اگر آن هم مرده باشد، صادقانه هیچ
+      if (!cheapest && models.includes('gpt-4o-mini') && !priced.some((m: any) => m.id === 'gpt-4o-mini' && skipped78.some(k => k.startsWith('gpt-4o-mini')))) {
+        setEcoMsg('هیچ‌کدام از ارزان‌ها جواب ندادند — تستِ آخرین راه: «gpt-4o-mini»…')
+        const r78 = await testOne('gpt-4o-mini')
+        if (r78.ok) cheapest = priced.find((m: any) => m.id === 'gpt-4o-mini') || { id: 'gpt-4o-mini', inUsd: 0, outUsd: 0 }
+        else skipped78.push(`gpt-4o-mini (${r78.err})`)
+      }
+      if (!cheapest) { setEcoMsg(`✕ هیچ مدلِ سالمی پیدا نشد — به نظر می‌رسد خودِ درگاه مشکل دارد. ردشده‌ها: ${skipped78.join('، ')}`); return }
       const visionRe = /(gpt-4o|gpt-4\.1|gpt-5|gemini|claude|qwen.*vl|vision)/i
       const cheapVision = priced.find((m: any) => visionRe.test(m.id)) || cheapest
       for (const ag of AGENTS) {
@@ -4096,7 +4113,7 @@ function APIView() {
         setAssign(a => ({ ...a, [ag.id]: { ...a[ag.id], text: pick, textProvider: '' } }))
         await fetch('/api/admin/ai/agents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agentId: ag.id, text: pick, textProvider: '' }) })
       }
-      const usd = (m: any) => `${costOf(m)}$/1M`
+      const usd = (m: any) => costOf(m) > 0 ? `${costOf(m)}$/1M` : 'قیمتِ ثبت‌نشده'
       setEcoMsg(`✓ همهٔ ${AGENTS.length} ایجنتِ متنی روی ارزان‌ترین مدلِ «سالم» رفتند: «${cheapest.id}» (${usd(cheapest)})${cheapVision.id !== cheapest.id ? ` · تحلیلِ تصویر: «${cheapVision.id}» (${usd(cheapVision)})` : ''}${skipped78.length ? ` · ردشده در تستِ زنده: ${skipped78.join('، ')}` : ''} — مدل‌های تولیدِ تصویر تغییری نکردند. برگشت: «تخصیص خودکار مدل پیشنهادی».`)
     } catch { setEcoMsg('✕ خطا در ارتباط') } finally { setEcoBusy(false) }
   }
