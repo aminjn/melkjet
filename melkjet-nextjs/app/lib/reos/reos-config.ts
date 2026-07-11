@@ -89,6 +89,9 @@ export interface ReosConfig {
     world: { daysPerYear: number; historyCap: number; rumorsPerWeek: number; rumorCredMin: number; rumorCredMax: number; heatWActive: number; heatWEvent: number; heatWAuction: number; heatLow: number; heatHigh: number }
     // فاز ۶۵ (NPC Civilization v1): شرکت‌های سیستمیِ زنده — تعداد، سرمایهٔ شروع، شانسِ حرکتِ روزانه، سقفِ دارایی.
     npc: { enabled: boolean; count: number; startCapital: number; actChancePct: number; maxAssets: number }
+    // فاز ۶۶ (Season Engine v1): فصلِ فعالِ دنیا — تمِ داستانی + متریکِ واقعی (growth/projects/auctionWins/income)
+    // + جایزهٔ کوینِ رتبه‌های ۱..۳ سرِ پایانِ فصل. «هیچ متایی دائمی نیست» — ادمین فصلِ بعد را همین‌جا تعریف می‌کند.
+    season: { enabled: boolean; id: string; name: string; icon: string; story: string; startDay: number; lengthDays: number; metric: string; r1: number; r2: number; r3: number }
     // فاز ۲۹: نقش‌های حرفه‌ایِ سایت در سناریو — تا آمدنِ متخصصانِ واقعی، «سیستم» بازی‌شان می‌کند؛ کارمزدها مصرفِ شفافِ پول (servicesPaid).
     pros: {
       notaryFeePct: number              // دفترخانه: حق‌الثبتِ سند در خرید (٪ قیمت)
@@ -268,6 +271,7 @@ export const DEFAULT_CONFIG: ReosConfig = {
     world: { daysPerYear: 90, historyCap: 400, rumorsPerWeek: 2, rumorCredMin: 55, rumorCredMax: 85, heatWActive: 6, heatWEvent: 15, heatWAuction: 10, heatLow: 35, heatHigh: 85 },
     // شرکت‌های زندهٔ شهر: ۶ شرکت، هر کدام روزی حداکثر یک حرکتِ قطعی روی آگهی‌های واقعی — حلقهٔ پولیِ بسته.
     npc: { enabled: true, count: 6, startCapital: 300_000_000_000, actChancePct: 55, maxAssets: 10 },
+    season: { enabled: true, id: 'S1', name: 'فصلِ آغاز', icon: '🌱', story: 'اولین فصلِ این دنیا — هر فصل قهرمانانِ خودش را در تاریخ ثبت می‌کند.', startDay: 0, lengthDays: 90, metric: 'growth', r1: 500, r2: 300, r3: 150 },
     // مذاکره: همان رفتارِ قبلی به‌صورتِ پیش‌فرض (۲۵٪ پایه تا ۷۵٪ با مهارت؛ تخفیف ۲..۶٪) — حالا قابل‌تنظیم.
     nego: { baseChancePct: 25, discountMin: 2, discountMax: 6 },
     // نقش‌های حرفه‌ای (فاز ۲۹): اعدادِ عرفِ واقعیِ بازارِ ایران — همه knob.

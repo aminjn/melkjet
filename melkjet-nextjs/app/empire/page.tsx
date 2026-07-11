@@ -209,6 +209,8 @@ export default function EmpirePage() {
   const [hall, setHall] = useState<any>(null)
   // فاز ۶۲ (فصل ۲۰ Part 7): فرمِ رؤیای شخصی — متریکِ واقعی + هدفِ عددی
   const [dreamForm, setDreamForm] = useState({ metric: 'netWorth', target: '', label: '' })
+  // فاز ۶۶ (Season v1): فصلِ فعالِ دنیا — جدول + جایزهٔ پایانِ فصل
+  const [szn, setSzn] = useState<any>(null)
   // فاز ۶۳ (فصل ۲۱ دنیای زنده): سالِ دنیا + کتابِ تاریخ + شایعاتِ هفته — تنبل، با بازشدنِ تبِ شهر
   const [wd, setWd] = useState<any>(null)
   // فاز ۴۵ (سند ۲۹ Auction Saga): تالارِ مزایدهٔ هفته — لابی، نبردِ زنده، برد/باخت
@@ -331,6 +333,8 @@ export default function EmpirePage() {
     let alive = true
     fetch('/api/empire', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'hall' }) })
       .then(r => r.json()).then(d => { if (alive && d?.ok) setHall(d) }).catch(() => {})
+    fetch('/api/empire', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'season' }) })
+      .then(r => r.json()).then(d => { if (alive && d?.ok) setSzn(d) }).catch(() => {})
     return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, gtab, hall])
@@ -2547,6 +2551,33 @@ export default function EmpirePage() {
 
     {gtab === 'ranks' && <>
     {tabHead('🏆', 'رتبه‌ها', 'رقابت و اتحاد با بازیکنانِ واقعی')}
+
+    {/* 🌱 فصلِ دنیا (فاز ۶۶ — Season Engine v1): «هیچ متایی دائمی نیست» — هر فصل تم و قهرمانِ خودش */}
+    {szn?.enabled && <div style={{ ...card, borderColor: szn.ended ? 'var(--line2)' : 'var(--gold)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <b style={{ fontSize: 14 }}>{szn.icon} {szn.name}</b>
+        <span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 10px', borderRadius: 10, border: '1px solid var(--goldDim)', color: szn.ended ? 'var(--muted)' : 'var(--gold)' }}>{szn.ended ? 'فصل تمام شد' : `⏳ ${fa(szn.daysLeft)} روز مانده`}</span>
+        <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>معیارِ فصل: {szn.metricFa}</span>
+      </div>
+      <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 6, lineHeight: 1.9 }}>{szn.story}</div>
+      {szn.mine && <div style={{ marginTop: 8, fontSize: 12, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ padding: '3px 12px', borderRadius: 10, background: 'rgba(212,175,55,.1)', border: '1px solid var(--goldDim)', color: 'var(--gold)', fontWeight: 800 }}>رتبهٔ تو: {fa(szn.mine.rank)}</span>
+        <span style={{ color: 'var(--muted)', fontSize: 11 }}>{szn.metricFa}: <b style={{ color: szn.mine.value >= 0 ? 'var(--text)' : '#e88' }}>{szn.unit === 'toman' ? faB(szn.mine.value) : fa(szn.mine.value)}</b></span>
+        {szn.ended && szn.myReward > 0 && !szn.claimed && <button style={{ ...btn, padding: '5px 14px', fontSize: 12 }} disabled={busy} onClick={async () => { const d = await api({ action: 'seasonClaim' }); if (d?.ok) { setSt(d); setSzn({ ...szn, claimed: true }); celebrate(); alert(`🏁 جایزهٔ فصل: ${fa(d.coins)} ملک‌کوین`) } }}>🏁 دریافتِ جایزهٔ فصل ({fa(szn.myReward)} کوین)</button>}
+        {szn.ended && szn.claimed && <span style={{ fontSize: 11, color: '#7c6' }}>✓ جایزهٔ فصل را گرفتی</span>}
+      </div>}
+      {(szn.table || []).length > 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 10 }}>
+        {szn.table.map((r: any) => (
+          <div key={r.no} style={{ display: 'flex', gap: 8, fontSize: 11.5, padding: '4px 10px', borderRadius: 8, background: r.rank <= 3 ? 'rgba(212,175,55,.06)' : 'transparent' }}>
+            <b style={{ minWidth: 22, color: r.rank <= 3 ? 'var(--gold)' : 'var(--muted)' }}>{['🥇', '🥈', '🥉'][r.rank - 1] || fa(r.rank)}</b>
+            <span style={{ flex: 1 }}>{r.name} <span style={{ color: 'var(--faint)', fontSize: 9.5 }}>#{fa(r.no)}</span></span>
+            <b>{szn.unit === 'toman' ? faB(r.value) : fa(r.value)}</b>
+          </div>
+        ))}
+      </div>}
+      {!(szn.table || []).length && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 8 }}>هنوز کسی واردِ این فصل نشده — تو اولین باش؛ پیشرفتت از همین لحظهٔ ورود شمرده می‌شود.</div>}
+      <div style={{ fontSize: 9.5, color: 'var(--faint)', marginTop: 8 }}>جایزهٔ رتبه‌های ۱ تا ۳: {(szn.rewards || []).map((x: number) => fa(x)).join(' / ')} ملک‌کوین · پیشرفتِ همه از دلتای «واقعیِ» همین فصل است، نه ثروتِ قبلی — شانسِ تازه‌واردها برابر است.</div>
+    </div>}
 
     {/* 🏛 تالارِ افتخارات (فاز ۵۰ — سند ۳۰ Part 20 «The Hunt»): هر چیزِ این اتاق را خودت به دست آورده‌ای —
         رکوردهای واقعی، مجموعه‌های قابلِ‌تکمیل با عنوان‌گشایی، و گالریِ نشان‌ها (روان‌شناسیِ کلکسیون). */}

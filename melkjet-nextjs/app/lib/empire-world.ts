@@ -18,19 +18,19 @@ export interface WorldRumor {
   madeAt: number; madeDay: number; basePerM: number
   verdict?: 'true' | 'false'; resolvedPerM?: number
 }
-interface WorldDb { events: WorldEvent[]; rumors: WorldRumor[] }
+interface WorldDb { events: WorldEvent[]; rumors: WorldRumor[]; seasons?: Record<string, Array<{ no: number; name: string; value: number; rank: number }>> }
 
 const FILE = join(process.cwd(), '.empire-world-data.json')
 const KV = 'empire_world'
 const EMPTY: WorldDb = { events: [], rumors: [] }
 
 async function load(): Promise<WorldDb> {
-  if (pgEnabled()) { const d = await kvGet<WorldDb>(KV, EMPTY).catch(() => EMPTY); return { events: d.events || [], rumors: d.rumors || [] } }
-  try { if (existsSync(FILE)) { const d = JSON.parse(readFileSync(FILE, 'utf-8')); return { events: d.events || [], rumors: d.rumors || [] } } } catch {}
-  return { events: [], rumors: [] }
+  if (pgEnabled()) { const d = await kvGet<WorldDb>(KV, EMPTY).catch(() => EMPTY); return { events: d.events || [], rumors: d.rumors || [], seasons: d.seasons || {} } }
+  try { if (existsSync(FILE)) { const d = JSON.parse(readFileSync(FILE, 'utf-8')); return { events: d.events || [], rumors: d.rumors || [], seasons: d.seasons || {} } } } catch {}
+  return { events: [], rumors: [], seasons: {} }
 }
 async function mutate<R>(fn: (d: WorldDb) => R): Promise<R> {
-  if (pgEnabled()) return kvMutate<WorldDb, R>(KV, EMPTY, raw => { const d = { events: raw.events || [], rumors: raw.rumors || [] }; const out = fn(d); Object.assign(raw as WorldDb, d); return out })
+  if (pgEnabled()) return kvMutate<WorldDb, R>(KV, EMPTY, raw => { const d = { events: raw.events || [], rumors: raw.rumors || [], seasons: raw.seasons || {} }; const out = fn(d); Object.assign(raw as WorldDb, d); return out })
   const d = await load()
   const out = fn(d)
   writeFileSync(FILE, JSON.stringify(d))
@@ -149,4 +149,17 @@ export async function rumorsMaintain(day: number, hoodsNow: Array<{ hood: string
       trust: sourceTrustOf(d.rumors),
     }
   })
+}
+
+// ── فاز ۶۶ (Season Engine v1): نتیجهٔ نهاییِ فصل — یک‌بار، سرِ اولین خواندنِ بعد از پایان، منجمد می‌شود ──
+export async function seasonFinalize(id: string, rows: Array<{ no: number; name: string; value: number; rank: number }>): Promise<Array<{ no: number; name: string; value: number; rank: number }>> {
+  return mutate(d => {
+    d.seasons = d.seasons || {}
+    if (!d.seasons[id]) d.seasons[id] = rows.slice(0, 20)
+    return d.seasons[id]
+  })
+}
+export async function seasonFinalOf(id: string): Promise<Array<{ no: number; name: string; value: number; rank: number }> | null> {
+  const d = await load()
+  return d.seasons?.[id] || null
 }

@@ -142,6 +142,7 @@ export interface EmpireData {
   title?: string              // عنوانِ (Title) فعال — فقط از نشان‌های واقعاً کسب‌شده (سند ۱۶ بخش ۹)
   kudos?: number              // 👏 تحسینِ بازیکنانِ واقعی (سند ۱۷ — تعاملِ اجتماعی)؛ هر بازیکن یک‌بار
   dreamsCustom?: Array<{ id: string; label: string; metric: string; target: number; createdAt: number; doneAt?: number }>   // فاز ۶۲ (فصل ۲۰ Part 7): رؤیاهای شخصیِ خودِ بازیکن — هدفِ عددی روی متریکِ واقعی
+  seasonSnap?: { id: string; day: number; netWorth: number; projects: number; auctionWins: number; income: number }   // فاز ۶۶ (Season v1): بیس‌لاینِ ورود به فصل — پیشرفتِ فصل = دلتای واقعی از همین نقطه
   pendingComeback?: number    // هدیهٔ بازگشت (Comeback Engine جلد ۲۶) — روزِ کشفِ غیبت
   stylePicks?: string[]                               // مأموریت M2 «سبکِ خودت را پیدا کن» (انتخابِ تصویری)
   hunter?: { a: string; b: string; better: string; at: number }   // جفتِ فعالِ Property Hunter (§6.4)
@@ -453,6 +454,39 @@ export function recordsOf(e: EmpireData): Array<{ icon: string; label: string; v
   if ((e.stats?.negoWins || 0) > 0) out.push({ icon: '🤝', label: 'مذاکره‌های بردی', value: e.stats!.negoWins, unit: 'count' })
   if ((e.stats?.crisisRecovered || 0) > 0) out.push({ icon: '🕊', label: 'عبور از بحران', value: e.stats!.crisisRecovered!, unit: 'count' })
   return out
+}
+
+// ══════════ فاز ۶۶ (صف #۲ — Season Engine v1): فصلِ دنیا ══════════
+// بیس‌لاینِ ورود به فصل: اولین دیدارِ بازیکن در بازهٔ فصل ثبت می‌شود؛ پیشرفت = دلتای «واقعی» از همین نقطه.
+export async function seasonBaseline(userId: string, id: string, day: number, netWorth: number) {
+  return mutateEmpire(userId, e => {
+    if (e.seasonSnap?.id === id) return 'از قبل در فصل است'
+    e.seasonSnap = { id, day, netWorth, projects: e.stats?.projectsDelivered || 0, auctionWins: e.stats?.auctionWins || 0, income: e.assets.reduce((s2, a) => s2 + (a.income || 0), 0) }
+    e.timeline.push({ at: Date.now(), icon: '🌱', title: 'واردِ فصلِ تازهٔ دنیا شد', detail: 'پیشرفتِ فصل از همین لحظه شمرده می‌شود' })
+  })
+}
+export const SEASON_METRIC_FA: Record<string, string> = {
+  growth: 'رشدِ ارزشِ خالص', projects: 'پروژه‌های تحویلی', auctionWins: 'بردهای تالارِ مزایده', income: 'درآمدِ انباشته از اجاره/کسب‌وکار',
+}
+// مقدارِ فصلیِ خالص — همه دلتای واقعی نسبت به بیس‌لاین؛ رشد می‌تواند منفی هم باشد (صادقانه).
+export function seasonValueOf(e: EmpireData, currentNetWorth: number, metric: string): number {
+  const s = e.seasonSnap
+  if (!s) return 0
+  if (metric === 'projects') return Math.max(0, (e.stats?.projectsDelivered || 0) - s.projects)
+  if (metric === 'auctionWins') return Math.max(0, (e.stats?.auctionWins || 0) - s.auctionWins)
+  if (metric === 'income') return Math.max(0, e.assets.reduce((x, a) => x + (a.income || 0), 0) - s.income)
+  return currentNetWorth - s.netWorth
+}
+
+// جایزهٔ فصل — فقط رتبه‌های برترِ نتیجهٔ «منجمدشده»؛ یک‌بار با کلیدِ claims (کوین، نه پول — بدونِ اثرِ P2W).
+export async function claimSeasonReward(userId: string, id: string, rank: number, coins: number, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const key = 'season_' + id
+    if (e.claims[key]) return 'جایزهٔ این فصل را گرفته‌ای'
+    e.claims[key] = now
+    e.coins += Math.max(0, Math.round(coins))
+    e.timeline.push({ at: now, icon: '🏁', title: `قهرمانِ فصل — رتبهٔ ${rank.toLocaleString('fa-IR')}`, detail: `${coins.toLocaleString('fa-IR')} ملک‌کوین جایزهٔ فصل` })
+  })
 }
 
 // ══════════ فاز ۶۲ (سند ۳۱ — فصل ۲۰ End Game) ══════════

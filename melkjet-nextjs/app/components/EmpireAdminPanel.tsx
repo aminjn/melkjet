@@ -1036,6 +1036,19 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
         {cfg && <div style={card}>
           <div style={sub}>تنظیمِ نامهٔ روزانه</div>
           {row('فعال (۱/۰)', cin('dailyBrief'))}
+          {/* فاز ۶۶ (Season Engine v1): فصلِ فعالِ دنیا — عوض‌کردنِ id یعنی شروعِ فصلِ جدید */}
+          <div style={{ fontSize: 11, color: 'var(--muted)', margin: '12px 0 2px', fontWeight: 700 }}>🌱 فصلِ دنیا (Season)</div>
+          {row('فعال (۱/۰)', cin('season', 'enabled'))}
+          {row('شناسهٔ فصل', cin('season', 'id'), 'عوضش کنی، فصلِ جدید با بیس‌لاینِ تازه شروع می‌شود (S1 → S2)')}
+          {row('نامِ فصل', cin('season', 'name', 150))}
+          {row('آیکون', cin('season', 'icon', 60))}
+          {row('داستانِ فصل', cin('season', 'story', 240))}
+          {row('روزِ شروع (dayNumber)', cin('season', 'startDay'))}
+          {row('طولِ فصل (روز)', cin('season', 'lengthDays'))}
+          {row('معیار', cin('season', 'metric', 120), 'growth یا projects یا auctionWins یا income')}
+          {row('جایزهٔ رتبهٔ ۱ (کوین)', cin('season', 'r1'))}
+          {row('جایزهٔ رتبهٔ ۲ (کوین)', cin('season', 'r2'))}
+          {row('جایزهٔ رتبهٔ ۳ (کوین)', cin('season', 'r3'))}
           <div style={{ marginTop: 10 }}><button style={btn} disabled={busy === 'cfg'} onClick={saveCfg}>💾 ذخیره</button></div>
         </div>}
         {/* 🎪 استودیوی رویداد (سند ۱۸ — LiveOps): رویدادِ زمان‌دار بدونِ دیپلوی؛ پیشرفت از رفتارِ واقعیِ REOS */}

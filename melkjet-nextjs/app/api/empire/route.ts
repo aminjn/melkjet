@@ -59,6 +59,8 @@ import { recordsOf, collectionsOf, applyCollections, COLLECTIONS, noteNemesis } 
 import { roleLayerOf, legacyScoreOf, storyOf, dreamProgressOf, dreamSuggestionsOf, addCustomDream, applyDreams, wondersUpdate, DREAM_METRICS } from '@/app/lib/empire-store'
 import { worldYearOf, worldHistory, rumorsMaintain, appendWorldEvent } from '@/app/lib/empire-world'   // فاز ۶۳: دنیای زنده
 import { npcMaintain, npcDb, npcOwnerOf, npcSellToPlayer, npcView, NPC_USER_PREFIX } from '@/app/lib/empire-npc'   // فاز ۶۵: شرکت‌های سیستمیِ زنده
+import { seasonBaseline, seasonValueOf, SEASON_METRIC_FA, claimSeasonReward } from '@/app/lib/empire-store'   // فاز ۶۶: موتورِ فصل
+import { seasonFinalize, seasonFinalOf } from '@/app/lib/empire-world'
 import { loadSnapshots } from '@/app/lib/empire-metrics'
 
 const hoodOf = (loc?: string) => { const p = String(loc || '').split(/[،,]/).map(x => x.trim()).filter(Boolean); return p.length > 1 ? p[p.length - 1] : (p[0] || '') }
@@ -1809,6 +1811,55 @@ export async function POST(req: NextRequest) {
         layer: roleLayerOf(e, nwH),
         myNo: e.no,
       })
+    }
+
+    // 🌱 فصلِ دنیا (فاز ۶۶ — Season Engine v1): دوره‌ای با تمِ داستانی + متریکِ واقعی + جوایزِ رتبه‌ایِ پایانِ فصل.
+    case 'season': {
+      const sc = config().empire.season
+      if (!sc.enabled) return NextResponse.json({ ok: true, enabled: false })
+      const me = await getEmpire(userId)
+      if (!me) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      const day = dayNumberOf(Date.now())
+      const endDay = sc.startDay + sc.lengthDays
+      const active = day >= sc.startDay && day < endDay
+      const ended = day >= endDay
+      if (active && me.seasonSnap?.id !== sc.id) {
+        const pr66 = await livePrices(me)
+        await seasonBaseline(userId, sc.id, day, netWorthOf(me, pr66).netWorth).catch(() => {})
+      }
+      const meNow = (await getEmpire(userId)) || me
+      // جدولِ فصل از اسنپ‌شاتِ روزانهٔ «واقعیِ» خودِ بازیکنان (snap) — بدونِ قیمت‌گیریِ سنگینِ ۵۰۰نفره
+      const emps66 = (await listEmpiresPublic(500)).filter(x => x.seasonSnap?.id === sc.id)
+      const rows66 = emps66.map(x => ({ no: x.no, name: x.name, value: seasonValueOf(x, x.snap?.netWorth ?? x.seasonSnap!.netWorth, sc.metric) }))
+        .sort((a, b) => b.value - a.value).map((r, i) => ({ ...r, rank: i + 1 }))
+      const finals = ended ? await seasonFinalize(sc.id, rows66).catch(() => rows66.slice(0, 20)) : null
+      const table = (finals || rows66).slice(0, 10)
+      const mine66 = (finals || rows66).find(r => r.no === meNow.no) || null
+      const rewards66 = [sc.r1, sc.r2, sc.r3]
+      return NextResponse.json({
+        ok: true, enabled: true, id: sc.id, name: sc.name, icon: sc.icon, story: sc.story,
+        metricFa: SEASON_METRIC_FA[sc.metric] || sc.metric, unit: sc.metric === 'projects' || sc.metric === 'auctionWins' ? 'count' : 'toman',
+        startDay: sc.startDay, endDay, daysLeft: Math.max(0, endDay - day), active, ended,
+        table, mine: mine66, rewards: rewards66,
+        myReward: ended && mine66 && mine66.rank <= 3 ? rewards66[mine66.rank - 1] || 0 : 0,
+        claimed: !!meNow.claims['season_' + sc.id],
+      })
+    }
+    case 'seasonClaim': {
+      const sc = config().empire.season
+      const day = dayNumberOf(Date.now())
+      if (!sc.enabled || day < sc.startDay + sc.lengthDays) return NextResponse.json({ error: 'فصل هنوز تمام نشده' }, { status: 400 })
+      const finals = await seasonFinalOf(sc.id)
+      if (!finals) return NextResponse.json({ error: 'نتیجهٔ فصل هنوز بسته نشده — اول جدولِ فصل را باز کن' }, { status: 400 })
+      const me = await getEmpire(userId)
+      if (!me) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      const mine = finals.find(r => r.no === me.no)
+      const rewards = [sc.r1, sc.r2, sc.r3]
+      if (!mine || mine.rank > rewards.length) return NextResponse.json({ error: 'جایزهٔ فصل فقط برای رتبه‌های برتر است — فصلِ بعد مالِ توست' }, { status: 400 })
+      const r = await claimSeasonReward(userId, sc.id, mine.rank, rewards[mine.rank - 1] || 0)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      if (mine.rank === 1) appendWorldEvent({ icon: '🏁', title: `${me.name} قهرمانِ ${sc.name} شد`, kind: 'season' }, day).catch(() => {})
+      return NextResponse.json({ ok: true, coins: rewards[mine.rank - 1] || 0, ...(await stateOf(userId, r.empire!)) })
     }
 
     // 🗞 دنیای زنده (فاز ۶۳ — فصل ۲۱): سالِ دنیا + کتابِ تاریخ + شایعاتِ منصفانهٔ هفته — همه از دادهٔ واقعی.
