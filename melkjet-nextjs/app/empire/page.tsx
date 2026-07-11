@@ -1391,6 +1391,11 @@ export default function EmpirePage() {
         <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 10, border: '1px solid var(--goldDim)', color: 'var(--gold)' }}>سالِ {fa(wd.year.year)} — روزِ {fa(wd.year.dayOfYear)}</span>
         <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>دنیا حتی وقتی نیستی هم حرکت می‌کند — این‌ها واقعاً رخ داده‌اند</span>
       </div>
+      {/* 🏛 مصوبهٔ شهر (فاز ۷۰ — دولتِ زنده): این هفته + اعلامِ پیشاپیشِ هفتهٔ بعد (Future Engine — بدونِ غافلگیریِ ناعادلانه) */}
+      {wd.gov && <div style={{ marginTop: 8, background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 10, padding: '8px 12px', fontSize: 11.5, lineHeight: 2 }}>
+        <div>🏛 <b>مصوبهٔ این هفته:</b> {wd.gov.now} <span style={{ color: 'var(--faint)', fontSize: 10 }}>· مالیاتِ مؤثرِ انتقال: {fa(wd.gov.taxNow)}٪</span></div>
+        <div style={{ color: 'var(--muted)' }}>📣 <b>اعلامِ پیشاپیش — هفتهٔ بعد:</b> {wd.gov.next} <span style={{ color: 'var(--faint)', fontSize: 10 }}>· الان برنامه‌ریزی کن</span></div>
+      </div>}
       {(wd.history || []).length > 0 ? <>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 10 }}>
           {wd.history.slice(0, 6).map((h: any, i: number) => {
@@ -1843,6 +1848,12 @@ export default function EmpirePage() {
                 <div style={{ width: `${a.build?.progressPct || 0}%`, height: 7, borderRadius: 4, background: a.construction.done ? '#7c6' : 'var(--gold)', transition: 'width .6s ease' }} />
               </div>
               {!a.construction.done && e.capital < (a.build?.dailyCost || 0) && <div style={{ color: '#e88', fontSize: 11.5, marginTop: 6 }}>🛑 بحرانِ نقدینگی — سرمایهٔ نقد به هزینهٔ روزانه نمی‌رسد؛ کارگاه ایستاده. پیش‌فروش کن، وام بگیر یا دارایی بفروش.</div>}
+              {/* 🛡 بیمهٔ کارگاه (فاز ۷۰): حقِ بیمهٔ شفاف → پوششِ ٪ هزینهٔ اتفاق‌های کارگاه */}
+              {a.construction && !a.construction.done && !a.construction.insured && <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 10.5, borderColor: 'var(--goldDim)', color: 'var(--gold)' }} disabled={busy} onClick={async () => {
+                if (!confirm(`کارگاهِ «${(a.nickname || a.title).slice(0, 40)}» بیمه شود؟ حقِ بیمه ≈ ${faB(Math.round((a.construction.costTotal || 0) * 0.03))} تومان — هزینهٔ اتفاق‌های کارگاه تا ۷۰٪ پوشش داده می‌شود.`)) return
+                const d = await api({ action: 'insureBuild', assetId: a.id }); if (d) { setSt(d); celebrate() }
+              }}>🛡 بیمهٔ کارگاه</button>}
+              {a.construction && !a.construction.done && a.construction.insured && <span style={{ fontSize: 10.5, color: '#7c6' }}>🛡 کارگاه بیمه است</span>}
               {/* ⚡ شیفتِ شبانه (فاز ۲۷ — قانون ۵ «پرداخت فقط برای سرعت»): کوین زمان می‌خرد، هزینهٔ تومانیِ روز سرِ جایش */}
               {!a.construction.done && !a.construction.pendingEvent && st.speed?.enabled && (
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>

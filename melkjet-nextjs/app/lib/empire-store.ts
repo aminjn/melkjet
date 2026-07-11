@@ -7,7 +7,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes, createHash } from 'crypto'
 import { config } from './reos/reos-config'
-import { appendWorldEvent } from './empire-world'   // فاز ۶۳: کتابِ تاریخِ دنیا (فقط رخدادِ واقعی)
+import { appendWorldEvent, govDecreeOf } from './empire-world'   // فاز ۶۳/۷۰: کتابِ تاریخِ دنیا + مصوبهٔ هفته
 
 export type AssetKind = 'apartment' | 'villa' | 'commercial' | 'land'
 export type AssetAction = 'renovate' | 'rent' | 'hold'
@@ -84,6 +84,7 @@ export interface Construction {
   rentStartAt?: number
   eventsFired: number
   pendingEvent?: { text: string; payCost: number; extraDays: number; at: number }
+  insured?: boolean           // فاز ۷۰: بیمهٔ کارگاه — هزینهٔ رویدادها coveragePct٪ کمتر
   done?: boolean; doneAt?: number
 }
 
@@ -129,6 +130,7 @@ export interface EmpireData {
   wagesPaid?: number          // حقوقِ پرداختی به مهندس‌ها (مصرفِ شفافِ پول — قانون ۶)
   demolitionPaid?: number     // هزینهٔ تخریب‌های پرداختی (فاز ۲۵ — مصرفِ شفافِ پول، مثلِ حقوق)
   servicesPaid?: number       // کارمزدِ نقش‌های حرفه‌ای: دفترخانه/مشاور/معمار/وکیل/کارشناس (فاز ۲۹ — مصرفِ شفاف)
+  insurancePaid?: number      // فاز ۷۰: حقِ بیمهٔ کارگاه‌های پرداختی (مصرفِ شفافِ پول — قانون ۶)
   stats?: { sellsProfitable: number; negoWins: number; negoTries?: number; projectsDelivered?: number; repProjects?: number; crisisRecovered?: number; auctionWins?: number; auctionTries?: number }   // شمارنده‌های واقعیِ رفتار (جلد ۲۶/۷۲؛ crisisRecovered: فاز ۴۱؛ auction*: فاز ۴۵)
   crisis?: { at: number }     // فاز ۴۱ (سند ۲۸ Part 13): در وضعیتِ بحرانی است — ورود/خروجش در تایم‌لاین ثبت می‌شود
   bigDealWin?: { week: number; discountPct: number }   // فاز ۴۱ (Part 07): تخفیفِ بردهٔ مذاکرهٔ بزرگِ همین هفته — سمتِ سرور، ضدِ دستکاری
@@ -305,6 +307,8 @@ export function loanTermsFor(score: number, netWorth: number, cfg = config().emp
   // اعتبارِ برند اثرِ واقعی دارد (سند ۱۴ / GDD فصل ۴ بخش ۱۵): هر ⭐ بالای ۱، ٪ کاهشِ نرخ — کفِ نصفِ نرخِ باند.
   const repCutPct = rep && rep.stars > 1 ? Math.max(0, rep.stars - 1) * Math.max(0, rep.cutPctPerStar) : 0
   if (repCutPct > 0) rate = Math.max(cfg.baseRatePctYear * mult * 0.5, rate * (1 - repCutPct / 100))
+  // فاز ۷۰ (دولتِ زنده): مصوبهٔ هفته روی نرخِ وام — همان عددی که بازیکن می‌بیند، همان هم اجرا می‌شود
+  rate = Math.max(0.5, rate + govDecreeOf(Math.floor(dayNumberOf(Date.now()) / 7)).loanDelta)
   return { maxLoan, ratePctYear: Math.round(rate * 10) / 10, termDays: cfg.termDays, eligible: cfg.enabled && maxLoan > 0, repCutPct: repCutPct > 0 ? repCutPct : undefined }
 }
 
@@ -479,6 +483,32 @@ export function seasonValueOf(e: EmpireData, currentNetWorth: number, metric: st
   if (metric === 'auctionWins') return Math.max(0, (e.stats?.auctionWins || 0) - s.auctionWins)
   if (metric === 'income') return Math.max(0, e.assets.reduce((x, a) => x + (a.income || 0), 0) - s.income)
   return currentNetWorth - s.netWorth
+}
+
+// فاز ۷۰ (دولتِ زنده): مالیاتِ مؤثرِ این هفته = پایهٔ knob + مصوبهٔ قطعیِ هفته (کف صفر) — یک نقطهٔ حقیقت.
+export function effectiveTransferTaxPct(day = dayNumberOf(Date.now())): number {
+  const base = config().empire.transferTaxPct
+  const d = govDecreeOf(Math.floor(day / 7))
+  return Math.max(0, Math.round((base + d.taxDelta) * 100) / 100)
+}
+
+// 🛡 بیمهٔ کارگاه (فاز ۷۰ — صفِ GDD): حقِ بیمه ٪ هزینهٔ ساخت (مصرفِ شفاف → insurancePaid)؛
+// پوشش: هزینهٔ رویدادهای کارگاه coveragePct٪ کمتر — قبل از وقوع باید بیمه کرده باشی.
+export async function insureBuild(userId: string, assetId: string, now = Date.now()) {
+  const ic = config().empire.insurance
+  if (!ic?.enabled) return { ok: false as const, reason: 'بیمهٔ کارگاه فعلاً فعال نیست' }
+  return mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    const c = a?.construction
+    if (!a || !c || c.done) return 'کارگاهِ فعالی روی این دارایی نیست'
+    if (c.insured) return 'این کارگاه از قبل بیمه است'
+    const premium = Math.max(1, Math.round(c.costTotal * (ic.premiumPct / 100)))
+    if (e.capital < premium) return `حقِ بیمه ${Math.round(premium / 1e6).toLocaleString('fa-IR')}م تومان است — سرمایه کافی نیست`
+    e.capital -= premium
+    e.insurancePaid = (e.insurancePaid || 0) + premium
+    c.insured = true
+    e.timeline.push({ at: now, icon: '🛡', title: `کارگاهِ «${a.title.slice(0, 40)}» بیمه شد`, detail: `حقِ بیمه ${Math.round(premium / 1e6).toLocaleString('fa-IR')}م — ${ic.coveragePct.toLocaleString('fa-IR')}٪ هزینهٔ اتفاق‌های کارگاه پوشش داده می‌شود` })
+  })
 }
 
 // دنبال‌کردن (فاز ۶۷ — World Feed تعاملی): toggle با سقف — فقط هایلایتِ فید، صفر اثرِ اقتصادی.
@@ -837,7 +867,7 @@ export async function buyAsset(userId: string, listing: { id: string; title: str
     if (!listing.id || !(listing.price > 0)) return 'آگهیِ نامعتبر'
     if (e.assets.some(a => a.listingId === listing.id)) return 'این ملک از قبل در امپراتوریِ توست'
     // مالیاتِ نقل‌وانتقال (جلد ۵/۱۶): خرید = قیمت + مالیات؛ مالیات به خزانه می‌رود.
-    const tax = Math.round(listing.price * (cfg.transferTaxPct / 100))
+    const tax = Math.round(listing.price * (effectiveTransferTaxPct() / 100))   // فاز ۷۰: مصوبهٔ هفته اعمال می‌شود
     // دفترخانه (فاز ۲۹): ثبتِ سند حق‌الثبت دارد — سیستم نقشِ دفترخانه را بازی می‌کند تا دفترخانهٔ واقعی بیاید.
     const notary = Math.round(listing.price * Math.max(0, opts.notaryFeePct || 0) / 100)
     if (e.capital < listing.price + tax + notary) return tax + notary > 0 ? `سرمایه کافی نیست (قیمت + مالیات${notary > 0 ? ' + حق‌الثبتِ دفترخانه' : ''})` : 'سرمایهٔ کافی نیست'
@@ -974,7 +1004,7 @@ export async function sellAsset(userId: string, assetId: string, livePrice: numb
     // بازسازی (فاز ۲۹): ارزش‌افزودهٔ بازسازی در قیمتِ فروش لحاظ می‌شود.
     salePrice = a.demolishedAt ? a.buyPrice : (livePrice > 0 ? Math.round(livePrice * (a.unitsOwned || 1) * (1 + (a.renovBoostPct || 0) / 100)) : a.buyPrice)
     profit = salePrice - a.buyPrice
-    const tax = Math.round(salePrice * (config().empire.transferTaxPct / 100))
+    const tax = Math.round(salePrice * (effectiveTransferTaxPct() / 100))   // فاز ۷۰
     // مشاورِ املاک (فاز ۲۹): فروش از طریقِ مشاور — کمیسیون → servicesPaid؛ سیستم نقش را بازی می‌کند.
     const commission = Math.round(salePrice * Math.max(0, opts.commissionPct || 0) / 100)
     e.capital += salePrice - tax - commission
@@ -1788,7 +1818,10 @@ function fireCheckpointEvent(e: EmpireData, a: EmpireAsset, now: number): boolea
   const ev = buildEventOf(e.userId, a.id, idx, c.costTotal)
   // تیمِ ماهر (مهارت ≥۵۰) هزینهٔ رویداد را کم می‌کند — همان اثری که روی کارتِ استخدام نوشته شده (GDD فصل ۴).
   const cut = teamSkillOf(e) >= 50 ? Math.max(0, Math.min(90, config().empire.build.eventSkillCutPct)) : 0
-  c.pendingEvent = { ...ev, payCost: Math.max(1, Math.round(ev.payCost * (1 - cut / 100))), at: now }
+  // فاز ۷۰: بیمهٔ کارگاه — بعد از تخفیفِ تیم، coveragePct٪ باقیِ هزینه را بیمه می‌دهد (شفاف در متن)
+  const insCut = c.insured && config().empire.insurance?.enabled ? Math.max(0, Math.min(95, config().empire.insurance.coveragePct)) : 0
+  const payCost70 = Math.max(1, Math.round(ev.payCost * (1 - cut / 100) * (1 - insCut / 100)))
+  c.pendingEvent = { ...ev, text: insCut > 0 ? `${ev.text} — 🛡 بیمه ${insCut.toLocaleString('fa-IR')}٪ هزینه را پوشش داد` : ev.text, payCost: payCost70, at: now }
   e.timeline.push({ at: now, icon: '⚠️', title: 'اتفاق در کارگاه', detail: c.pendingEvent.text })
   return true
 }

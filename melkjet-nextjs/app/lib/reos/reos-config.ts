@@ -92,6 +92,11 @@ export interface ReosConfig {
     // فاز ۶۶ (Season Engine v1): فصلِ فعالِ دنیا — تمِ داستانی + متریکِ واقعی (growth/projects/auctionWins/income)
     // + جایزهٔ کوینِ رتبه‌های ۱..۳ سرِ پایانِ فصل. «هیچ متایی دائمی نیست» — ادمین فصلِ بعد را همین‌جا تعریف می‌کند.
     season: { enabled: boolean; id: string; name: string; icon: string; story: string; startDay: number; lengthDays: number; metric: string; r1: number; r2: number; r3: number }
+    // فاز ۷۰ (دولتِ زنده — فصل ۲۱ «دولت هر روز تصمیم می‌گیرد» + Future Engine «اعلامِ پیشاپیش»):
+    // مصوبهٔ هفتگیِ قطعی از هش در دامنه‌های محدودِ knob — همیشه یک هفته زودتر اعلام می‌شود (انصاف).
+    gov: { enabled: boolean; chancePct: number; maxTaxDelta: number; maxLoanDelta: number }
+    // بیمهٔ کارگاه (صفِ GDD): حقِ بیمه ٪ هزینهٔ ساخت → پوششِ ٪ هزینهٔ رویدادهای کارگاه.
+    insurance: { enabled: boolean; premiumPct: number; coveragePct: number }
     // فاز ۲۹: نقش‌های حرفه‌ایِ سایت در سناریو — تا آمدنِ متخصصانِ واقعی، «سیستم» بازی‌شان می‌کند؛ کارمزدها مصرفِ شفافِ پول (servicesPaid).
     pros: {
       notaryFeePct: number              // دفترخانه: حق‌الثبتِ سند در خرید (٪ قیمت)
@@ -272,6 +277,8 @@ export const DEFAULT_CONFIG: ReosConfig = {
     // شرکت‌های زندهٔ شهر: ۶ شرکت، هر کدام روزی حداکثر یک حرکتِ قطعی روی آگهی‌های واقعی — حلقهٔ پولیِ بسته.
     npc: { enabled: true, count: 6, startCapital: 300_000_000_000, actChancePct: 55, maxAssets: 10 },
     season: { enabled: true, id: 'S1', name: 'فصلِ آغاز', icon: '🌱', story: 'اولین فصلِ این دنیا — هر فصل قهرمانانِ خودش را در تاریخ ثبت می‌کند.', startDay: 0, lengthDays: 90, metric: 'growth', r1: 500, r2: 300, r3: 150 },
+    gov: { enabled: true, chancePct: 60, maxTaxDelta: 0.5, maxLoanDelta: 2 },
+    insurance: { enabled: true, premiumPct: 3, coveragePct: 70 },
     // مذاکره: همان رفتارِ قبلی به‌صورتِ پیش‌فرض (۲۵٪ پایه تا ۷۵٪ با مهارت؛ تخفیف ۲..۶٪) — حالا قابل‌تنظیم.
     nego: { baseChancePct: 25, discountMin: 2, discountMax: 6 },
     // نقش‌های حرفه‌ای (فاز ۲۹): اعدادِ عرفِ واقعیِ بازارِ ایران — همه knob.

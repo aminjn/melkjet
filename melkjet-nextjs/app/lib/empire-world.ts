@@ -178,3 +178,22 @@ export function cityStatsOf(list: Array<{ city: string; price: number }>): Array
     return { city, listings: prices.length, medianPrice: sorted[Math.floor(sorted.length / 2)] }
   }).sort((a, b) => b.listings - a.listings).slice(0, 8)
 }
+
+// ── فاز ۷۰ (دولتِ زنده + Future Engine): مصوبهٔ هفتهٔ شهر — قطعی از هشِ هفته (قانون ۷)، در دامنه‌های
+// محدودِ knob، و همیشه «یک هفته زودتر» اعلام می‌شود تا هیچ بازیکنی غافلگیرِ ناعادلانه نشود (انصافِ سند). ──
+export interface GovDecree { kind: 'tax' | 'loan' | 'none'; taxDelta: number; loanDelta: number; fa: string }
+export function govDecreeOf(week: number, g = config().empire.gov): GovDecree {
+  if (!g?.enabled) return { kind: 'none', taxDelta: 0, loanDelta: 0, fa: 'بدونِ مصوبهٔ جدید' }
+  if (h32(`gov|${week}`) % 100 >= Math.max(0, Math.min(100, g.chancePct))) return { kind: 'none', taxDelta: 0, loanDelta: 0, fa: 'بدونِ مصوبهٔ جدید — نرخ‌ها سرِ جای خودشان' }
+  const kind: 'tax' | 'loan' = h32(`govk|${week}`) % 2 === 0 ? 'tax' : 'loan'
+  const sign = h32(`govs|${week}`) % 2 === 0 ? 1 : -1
+  // گام‌های ربعِ واحد در بازهٔ [۰٫۲۵ .. max] — عددِ کوچک و قابلِ‌فهم، نه شوکِ اقتصادی
+  const stepsT = Math.max(1, Math.round(Math.max(0.25, g.maxTaxDelta) / 0.25))
+  const stepsL = Math.max(1, Math.round(Math.max(0.5, g.maxLoanDelta) / 0.5))
+  if (kind === 'tax') {
+    const d = sign * (1 + (h32(`govm|${week}`) % stepsT)) * 0.25
+    return { kind, taxDelta: d, loanDelta: 0, fa: `مالیاتِ نقل‌وانتقال این هفته ${d > 0 ? '+' : '−'}${Math.abs(d).toLocaleString('fa-IR')} واحدِ درصد` }
+  }
+  const d = sign * (1 + (h32(`govm|${week}`) % stepsL)) * 0.5
+  return { kind, taxDelta: 0, loanDelta: d, fa: `نرخِ وامِ بانک این هفته ${d > 0 ? '+' : '−'}${Math.abs(d).toLocaleString('fa-IR')} واحدِ درصد` }
+}

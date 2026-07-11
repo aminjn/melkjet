@@ -60,7 +60,8 @@ import { roleLayerOf, legacyScoreOf, storyOf, dreamProgressOf, dreamSuggestionsO
 import { worldYearOf, worldHistory, rumorsMaintain, appendWorldEvent, cityOf, cityStatsOf } from '@/app/lib/empire-world'   // فاز ۶۳/۶۸: دنیای زنده + چندشهری
 import { npcMaintain, npcDb, npcOwnerOf, npcSellToPlayer, npcView, NPC_USER_PREFIX } from '@/app/lib/empire-npc'   // فاز ۶۵: شرکت‌های سیستمیِ زنده
 import { seasonBaseline, seasonValueOf, SEASON_METRIC_FA, claimSeasonReward } from '@/app/lib/empire-store'   // فاز ۶۶: موتورِ فصل
-import { followEmpire } from '@/app/lib/empire-store'   // فاز ۶۷: فیدِ تعاملی
+import { followEmpire, effectiveTransferTaxPct, insureBuild } from '@/app/lib/empire-store'   // فاز ۶۷/۷۰
+import { govDecreeOf } from '@/app/lib/empire-world'   // فاز ۷۰: مصوبهٔ هفته
 import { seasonFinalize, seasonFinalOf } from '@/app/lib/empire-world'
 import { loadSnapshots } from '@/app/lib/empire-metrics'
 
@@ -386,7 +387,7 @@ async function stateOf(userId: string, e00: EmpireData) {
   {
     const day64 = dayNumberOf(Date.now())
     if (e00.assets.some(a => a.p2pAuction && day64 > a.p2pAuction.endDay)) {
-      const settled = await settleP2pAuctions(userId, day64, { taxPct: config().empire.transferTaxPct, commissionPct: config().empire.pros.advisorSellCommissionPct }).catch(() => [])
+      const settled = await settleP2pAuctions(userId, day64, { taxPct: effectiveTransferTaxPct(), commissionPct: config().empire.pros.advisorSellCommissionPct }).catch(() => [])
       for (const s64 of settled) if (s64.winner) {
         if (s64.listingId) await transferListing(s64.listingId, userId, s64.winner).catch(() => {})
         appendWorldEvent({ icon: '🔨', title: `مزایدهٔ بازیکنان چکش خورد — «${s64.title.slice(0, 40)}» به ${s64.winner.name}`, kind: 'p2pAuction', no: s64.winner.no }, day64).catch(() => {})
@@ -646,7 +647,7 @@ export async function POST(req: NextRequest) {
       if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
       // کلِ بازار را می‌گردیم (نه فقط ۳۰۰ آگهیِ اخیر — آن‌ها ممکن است همه گران‌تر از سرمایه باشند)؛
       // «در حدِ سرمایه» یعنی قیمت + مالیاتِ انتقال، تا فرصتی پیشنهاد نشود که خریدش رد شود.
-      const taxPct = config().empire.transferTaxPct
+      const taxPct = effectiveTransferTaxPct()
       const priced = (await candidateListings(1500)).filter(isPricedSale)
       const items = priced.filter(it => { const p = priceOf(it); return p + Math.round(p * taxPct / 100) <= e.capital })
       // هیچ آگهیِ هم‌بودجه‌ای در کلِ بازار نیست → صادقانه ارزان‌ترین‌های واقعی را با پرچمِ «هنوز نمی‌رسد» نشان بده.
@@ -1187,7 +1188,7 @@ export async function POST(req: NextRequest) {
       const res = await reservePoolUnits(it.id, userId, units, init, cfg.crowd.maxPools)
       if (!res.ok) return NextResponse.json({ error: res.reason }, { status: 400 })
       const unitToman = Number((res.out as { unitToman?: number } | undefined)?.unitToman) || cfg.crowd.unitToman
-      const r = await joinCrowd(userId, { listingId: it.id, title: it.title, hood: init.hood }, units, unitToman, config().empire.transferTaxPct)
+      const r = await joinCrowd(userId, { listingId: it.id, title: it.title, hood: init.hood }, units, unitToman, effectiveTransferTaxPct())
       if (!r.ok) { await releasePoolUnits(it.id, userId, units).catch(() => {}); return NextResponse.json({ error: r.reason }, { status: 400 }) }
       recordFundVolume('buy', units * unitToman).catch(() => {})
       recordEvent({ type: 'user_clicked_property', userId, propertyId: it.id, meta: { src: 'empire_crowd' } }).catch(() => {})
@@ -1206,7 +1207,7 @@ export async function POST(req: NextRequest) {
       const it = await getItemById(h.listingId).catch(() => null)
       const live = it ? priceOf(it) : 0
       const unitNow = Math.round((live > 0 ? live : p.unitToman * p.totalUnits) / p.totalUnits)
-      const r = await exitCrowd(userId, h.listingId, units, unitNow, config().empire.transferTaxPct)
+      const r = await exitCrowd(userId, h.listingId, units, unitNow, effectiveTransferTaxPct())
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       await releasePoolUnits(h.listingId, userId, units).catch(() => {})
       recordFundVolume('sell', r.proceeds || 0).catch(() => {})
@@ -1394,7 +1395,7 @@ export async function POST(req: NextRequest) {
         const out = negotiationOutcome(userId, negoKey, negoSkillOf(e, ownerPersonaOf(negoKey).mod).skill)
         if (out.success) price = Math.round(price * (1 - out.discountPct / 100))
       }
-      const r = await buyBuildingUnit(userId, a.id, { price, taxPct: config().empire.transferTaxPct, total })
+      const r = await buyBuildingUnit(userId, a.id, { price, taxPct: effectiveTransferTaxPct(), total })
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       recordEvent({ type: 'user_clicked_property', userId, propertyId: a.listingId, meta: { src: 'empire_assembly' } }).catch(() => {})
       return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
@@ -1530,7 +1531,7 @@ export async function POST(req: NextRequest) {
       const unitPrice = Math.round(perM * c.unitArea * c.qualityFactor * amenityValueFactorOf(c, cfg.amenities) * (goalPricePct(c.goal, cfg) / 100))
       // اشباعِ عرضهٔ خودِ بازیکن (GDD فصل ۴ بخش ۵): فروشِ یکجای زیاد → هر واحدِ اضافه کمی ارزان‌تر — تصمیمِ سرعت/سود
       const bulk = bulkPriceOf(unitPrice, units, cfg.bulkFreeUnits, cfg.bulkStepPct)
-      const r = await sellUnits(userId, a.id, units, bulk.avgUnit > 0 ? bulk.avgUnit : unitPrice, config().empire.transferTaxPct)
+      const r = await sellUnits(userId, a.id, units, bulk.avgUnit > 0 ? bulk.avgUnit : unitPrice, effectiveTransferTaxPct())
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       const shares = a.partners?.length ? await settlePartnerShares(userId, a.partners, r.proceeds || 0, 'فروشِ واحدها').catch(() => []) : []
       const eF = shares.length ? await getEmpire(userId) : r.empire!
@@ -1540,7 +1541,7 @@ export async function POST(req: NextRequest) {
     case 'sellProject': {
       const e0 = await getEmpire(userId)
       const a0 = e0?.assets.find(x => x.id === String(b.assetId || ''))
-      const r = await sellProject(userId, String(b.assetId || ''), config().empire.unlocks.projectExitPct, config().empire.transferTaxPct)
+      const r = await sellProject(userId, String(b.assetId || ''), config().empire.unlocks.projectExitPct, effectiveTransferTaxPct())
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       // فاز ۳۷: سهمِ شرکای پروژه از عایدیِ خروج + آزادشدنِ مالکیتِ انحصاریِ آگهی
       const shares = a0?.partners?.length ? await settlePartnerShares(userId, a0.partners, r.proceeds || 0, 'فروشِ پروژه').catch(() => []) : []
@@ -1883,12 +1884,24 @@ export async function POST(req: NextRequest) {
       })()
       // فاز ۶۷ (فیدِ تعاملی): وضعیتِ دنبال‌شده‌ها و تبریک‌های خودم — تا فید همان‌جا قابلِ‌تعامل باشد
       const me67 = await getEmpire(userId).catch(() => null)
+      // فاز ۷۰ (دولتِ زنده + Future Engine): مصوبهٔ این هفته + اعلامِ پیشاپیشِ هفتهٔ بعد + ثبت در کتابِ تاریخ
+      const week70 = Math.floor(day / 7)
+      const govNow = govDecreeOf(week70), govNext = govDecreeOf(week70 + 1)
+      if (govNow.kind !== 'none') appendWorldEvent({ icon: '🏛', title: `مصوبهٔ هفتهٔ ${week70.toLocaleString('fa-IR')}: ${govNow.fa}`, kind: 'gov' }, day).catch(() => {})
       return NextResponse.json({
         ok: true, day, year: worldYearOf(day), history: await worldHistory(60).catch(() => []), rumors, companies: npc.companies, cities: npc.cities,
+        gov: { now: govNow.fa, next: govNext.fa, taxNow: effectiveTransferTaxPct(day) },
         following: me67?.following || [], myNo: me67?.no || 0,
         kudosGiven: me67 ? Object.keys(me67.claims).filter(k => k.startsWith('kudos_')).map(k => Number(k.slice(6))) : [],
       })
     }
+    // 🛡 بیمهٔ کارگاه (فاز ۷۰): حقِ بیمهٔ شفاف → پوششِ ٪ هزینهٔ اتفاق‌های کارگاه
+    case 'insureBuild': {
+      const r = await insureBuild(userId, String(b.assetId || ''))
+      if (!r.ok) return NextResponse.json({ error: (r as any).reason || 'بیمه انجام نشد' }, { status: 400 })
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, (r as any).empire!)) })
+    }
+
     // ⭐ دنبال‌کردن (فاز ۶۷ — World Feed تعاملی): فقط هایلایتِ فید؛ صفر اثرِ اقتصادی
     case 'follow': {
       const r = await followEmpire(userId, Math.floor(Number(b.no) || 0), b.on !== false)
@@ -2110,7 +2123,7 @@ export async function POST(req: NextRequest) {
       if (empireLevel(me.xp).level < u.tradeLevel) return NextResponse.json({ error: `بازارِ بازیکنان از سطحِ ${u.tradeLevel.toLocaleString('fa-IR')} باز می‌شود` }, { status: 403 })
       const seller = (await listEmpiresPublic(1000)).find(x => x.no === Math.floor(Number(b.no) || 0))
       if (!seller) return NextResponse.json({ error: 'فروشنده یافت نشد' }, { status: 404 })
-      const r = await tradeAsset(seller.userId, userId, String(b.assetId || ''), { taxPct: config().empire.transferTaxPct, commissionPct: config().empire.pros.advisorSellCommissionPct })
+      const r = await tradeAsset(seller.userId, userId, String(b.assetId || ''), { taxPct: effectiveTransferTaxPct(), commissionPct: config().empire.pros.advisorSellCommissionPct })
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       if (r.listingId) {
         await transferListing(r.listingId, seller.userId, { userId, no: me.no, name: me.name }).catch(() => {})
@@ -2186,7 +2199,7 @@ export async function POST(req: NextRequest) {
     case 'lands': {
       const e = await getEmpire(userId)
       if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
-      const taxPct = config().empire.transferTaxPct
+      const taxPct = effectiveTransferTaxPct()
       const owned = new Set(e.assets.map(a => a.listingId))
       const all = (await candidateListings(1500).catch(() => [] as Item[]))
         .filter(it => isPricedSale(it) && !owned.has(it.id)
