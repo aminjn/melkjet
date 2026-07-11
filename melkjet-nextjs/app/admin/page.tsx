@@ -4038,6 +4038,34 @@ function APIView() {
     await fetch('/api/admin/ai/agents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agentId, [slot]: model }) })
   }
 
+  // حالتِ صرفه‌جویی: ارزان‌ترین مدلِ متنی از قیمت‌های «واقعیِ» ثبت‌شده در «هزینه و قیمت‌گذاریِ AI»
+  // (سینکِ هفتگی از خودِ API) که در لیستِ زندهٔ درگاه هم موجود باشد — برای ایجنت‌های تصویری‌خوان
+  // (ImageAgent/FraudAgent) ارزان‌ترین مدلِ «بینا» انتخاب می‌شود تا تحلیلِ عکس نشکند. مدل‌های تولیدِ تصویر دست نمی‌خورند.
+  const [ecoMsg, setEcoMsg] = useState('')
+  const [ecoBusy, setEcoBusy] = useState(false)
+  const ecoAssign = async () => {
+    setEcoBusy(true); setEcoMsg('در حال یافتنِ ارزان‌ترین مدل از قیمت‌های واقعی…')
+    try {
+      const r = await fetch('/api/admin/ai-cost')
+      if (!r.ok) { setEcoMsg('✕ خطا در خواندنِ قیمت‌ها'); return }
+      const d = await r.json()
+      const basis = d.costBasis || 'output'
+      const costOf = (m: any) => { const i = Number(m.inUsd) || 0, o2 = Number(m.outUsd) || 0; return basis === 'sum' ? i + o2 : basis === 'avg' ? (i + o2) / 2 : (o2 || i) }
+      const priced = (d.models || []).filter((m: any) => m.type === 'text' && costOf(m) > 0 && models.includes(m.id)).sort((a: any, b: any) => costOf(a) - costOf(b))
+      if (!priced.length) { setEcoMsg('✕ هیچ مدلِ قیمت‌داری با لیستِ زندهٔ درگاه هم‌خوان نیست — اول در «هزینه و قیمت‌گذاریِ AI» دکمهٔ دریافتِ قیمت‌ها را بزن.'); return }
+      const cheapest = priced[0]
+      const visionRe = /(gpt-4o|gpt-4\.1|gpt-5|gemini|claude|qwen.*vl|vision)/i
+      const cheapVision = priced.find((m: any) => visionRe.test(m.id)) || cheapest
+      for (const ag of AGENTS) {
+        const pick = (ag.id === 'image' || ag.id === 'fraud') ? cheapVision.id : cheapest.id
+        setAssign(a => ({ ...a, [ag.id]: { ...a[ag.id], text: pick, textProvider: '' } }))
+        await fetch('/api/admin/ai/agents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agentId: ag.id, text: pick, textProvider: '' }) })
+      }
+      const usd = (m: any) => `${costOf(m)}$/1M`
+      setEcoMsg(`✓ همهٔ ${AGENTS.length} ایجنتِ متنی روی ارزان‌ترین مدل رفتند: «${cheapest.id}» (${usd(cheapest)})${cheapVision.id !== cheapest.id ? ` · تحلیلِ تصویر: «${cheapVision.id}» (${usd(cheapVision)})` : ''} — مدل‌های تولیدِ تصویر تغییری نکردند. برگشت: «تخصیص خودکار مدل پیشنهادی».`)
+    } catch { setEcoMsg('✕ خطا در ارتباط') } finally { setEcoBusy(false) }
+  }
+
   const autoAssign = async () => {
     const has = (re: RegExp) => models.find(m => re.test(m.toLowerCase()))
     const textPick = has(/gpt-4o(?!-mini)/) || has(/gpt-4\.1(?!-mini)/) || has(/gemini-2\.5-pro/) || has(/claude.*sonnet/) || models.find(m => categorizeModel(m) === 'text') || ''
@@ -4141,7 +4169,9 @@ function APIView() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, flexWrap: 'wrap', gap: 8 }}>
           <div style={{ fontWeight: 700, fontSize: 14 }}>تخصیص مدل به ایجنت‌ها ({AGENTS.length})</div>
           <GoldButton onClick={autoAssign} style={{ fontSize: 12.5, padding: '7px 14px' }}>🎯 تخصیص خودکار مدل پیشنهادی</GoldButton>
+          <OutlineButton onClick={ecoAssign} style={{ fontSize: 12.5, padding: '7px 14px' }}>{ecoBusy ? '⏳ در حال اعمال…' : '💸 حالتِ صرفه‌جویی — همه روی ارزان‌ترین مدل'}</OutlineButton>
         </div>
+        {ecoMsg && <div style={{ fontSize: 12, color: ecoMsg.startsWith('✓') ? '#5fd98a' : ecoMsg.startsWith('✕') ? '#e7674a' : 'var(--muted)', marginBottom: 10, lineHeight: 1.9 }}>{ecoMsg}</div>}
         <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 16 }}>برای هر ایجنت، ارائه‌دهنده (گپ یا aval) و مدل را انتخاب کن. ایجنت‌های متن+تصویر (مثل استودیو) دو مدل می‌گیرند.</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {AGENTS.map(ag => (
