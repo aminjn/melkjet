@@ -57,7 +57,7 @@ import { bucketBalance } from '@/app/lib/reos/wallet'
 // فاز ۵۰ (سند ۳۰): تالارِ افتخارات (رکوردها/مجموعه‌ها) + حریفِ قسم‌خورده
 import { recordsOf, collectionsOf, applyCollections, COLLECTIONS, noteNemesis } from '@/app/lib/empire-store'
 import { roleLayerOf, legacyScoreOf, storyOf, dreamProgressOf, dreamSuggestionsOf, addCustomDream, applyDreams, wondersUpdate, DREAM_METRICS, biographyOf } from '@/app/lib/empire-store'
-import { worldYearOf, worldHistory, rumorsMaintain, appendWorldEvent, cityOf, cityStatsOf, occasionOf } from '@/app/lib/empire-world'   // فاز ۶۳/۶۸/۷۱
+import { worldYearOf, worldEpochOf, worldHistory, rumorsMaintain, appendWorldEvent, cityOf, cityStatsOf, occasionOf } from '@/app/lib/empire-world'   // فاز ۶۳/۶۸/۷۱
 import { npcMaintain, npcDb, npcOwnerOf, npcSellToPlayer, npcView, NPC_USER_PREFIX } from '@/app/lib/empire-npc'   // فاز ۶۵: شرکت‌های سیستمیِ زنده
 import { seasonBaseline, seasonValueOf, SEASON_METRIC_FA, claimSeasonReward } from '@/app/lib/empire-store'   // فاز ۶۶: موتورِ فصل
 import { followEmpire, effectiveTransferTaxPct, insureBuild } from '@/app/lib/empire-store'   // فاز ۶۷/۷۰
@@ -1888,9 +1888,13 @@ export async function POST(req: NextRequest) {
       // فاز ۷۰ (دولتِ زنده + Future Engine): مصوبهٔ این هفته + اعلامِ پیشاپیشِ هفتهٔ بعد + ثبت در کتابِ تاریخ
       const week70 = Math.floor(day / 7)
       const govNow = govDecreeOf(week70), govNext = govDecreeOf(week70 + 1)
-      if (govNow.kind !== 'none') appendWorldEvent({ icon: '🏛', title: `مصوبهٔ هفتهٔ ${week70.toLocaleString('fa-IR')}: ${govNow.fa}`, kind: 'gov' }, day).catch(() => {})
+      // فاز ۷۲: عمرِ دنیا از روزِ تولدش شمرده می‌شود (نه مبدأ unix) — «سالِ ۲۳۰» بی‌معنا بود؛ مصوبه هم یک‌بار در هفته ثبت می‌شود (روزِ آغازِ هفته)، نه هر روز
+      const epoch72 = await worldEpochOf(day)
+      const relDay = Math.max(0, day - epoch72)
+      const relWeek = Math.floor(relDay / 7) + 1
+      if (govNow.kind !== 'none') appendWorldEvent({ icon: '🏛', title: `مصوبهٔ هفتهٔ ${relWeek.toLocaleString('fa-IR')}ِ دنیا: ${govNow.fa}`, kind: 'gov' }, Math.max(epoch72, week70 * 7)).catch(() => {})
       return NextResponse.json({
-        ok: true, day, year: worldYearOf(day), history: await worldHistory(60).catch(() => []), rumors, companies: npc.companies, cities: npc.cities,
+        ok: true, day, year: worldYearOf(relDay), history: await worldHistory(60).catch(() => []), rumors, companies: npc.companies, cities: npc.cities,
         gov: { now: govNow.fa, next: govNext.fa, taxNow: effectiveTransferTaxPct(day) },
         occasion: occasionOf(),   // فاز ۷۱: مناسبتِ واقعیِ تقویم — فقط حال‌وهوا
         following: me67?.following || [], myNo: me67?.no || 0,

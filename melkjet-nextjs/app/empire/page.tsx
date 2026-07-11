@@ -9,6 +9,10 @@ import { sfx, sfxPrefs, setSfxPrefs } from '@/app/lib/empire-sound'
 import Link from 'next/link'
 
 const fa = (n: number) => Math.round(n).toLocaleString('fa-IR')
+// فاز ۷۲ (صداقتِ اعداد): «۱۸۶,۱۹۲ روز» بی‌معناست — دوامِ بالای ۳ سال یعنی خرجِ روزانه عملاً صفر
+const faDays = (d: number) => d > 1095 ? 'بیش از ۳ سال (خرجِ روزانه ناچیز)' : `${fa(d)} روز`
+// روزِ نسبیِ رخدادهای دنیا — «روزِ ۲۰,۶۴۵» گنگ بود؛ فاصله تا امروزِ دنیا معنا دارد
+const agoFa = (evDay: number, curDay: number) => { const df = Math.max(0, curDay - evDay); return df === 0 ? 'امروز' : df === 1 ? 'دیروز' : `${fa(df)} روز پیش` }
 const faB = (n: number) => n >= 1e9 ? `${(Math.round(n / 1e8) / 10).toLocaleString('fa-IR')} میلیارد` : n >= 1e6 ? `${fa(n / 1e6)} میلیون` : fa(n)
 // ورودیِ عددی: رقم‌های فارسی/عربی → لاتین، بقیهٔ کاراکترها (نقطه/ویرگول/فاصله) حذف — تا «۲۰.۰۰۰.۰۰۰.۰۰۰» صفر نشود.
 const digitsOf = (s: string) => s
@@ -50,7 +54,24 @@ function Countdown({ until, onDone }: { until: number; onDone?: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [until])
   const p2 = (n: number) => n.toLocaleString('fa-IR', { minimumIntegerDigits: 2 })
+  // فاز ۷۲: شمارشِ چندروزه با «روز و ساعت» خوانا می‌شود؛ ساعت:دقیقه:ثانیه فقط برای زیرِ ۴۸ ساعت (هیجانِ واقعی)
+  const dd = Math.floor(left / 864e5)
+  if (dd >= 2) return <>{dd.toLocaleString('fa-IR')} روز و {(Math.floor(left / 36e5) % 24).toLocaleString('fa-IR')} ساعت</>
   return <>{p2(Math.floor(left / 36e5))}:{p2(Math.floor(left / 6e4) % 60)}:{p2(Math.floor(left / 1000) % 60)}</>
+}
+
+// فاز ۷۲: نوارِ زیرصفحه‌های هر تب — چیپِ فعالِ طلایی + شمارِ واقعی داخلِ پرانتز (نه عددِ ساختگی)
+function subNav(items: Array<[string, string, string, number?]>, cur: string, set: (k: any) => void) {
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '2px 0 2px' }}>
+      {items.map(([k, ic, l, cnt]) => (
+        <button key={k} onClick={() => { set(k); try { window.scrollTo({ top: 0 }) } catch {} }}
+          style={{ fontSize: 11.5, padding: '7px 13px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', fontWeight: cur === k ? 800 : 500, border: `1px solid ${cur === k ? 'rgba(212,175,55,.55)' : 'var(--line2)'}`, background: cur === k ? 'linear-gradient(135deg,rgba(212,175,55,.24),rgba(240,212,122,.12))' : 'var(--bg2)', color: cur === k ? '#f0d47a' : 'var(--muted)' }}>
+          {ic} {l}{typeof cnt === 'number' && cnt > 0 ? ` (${fa(cnt)})` : ''}
+        </button>
+      ))}
+    </div>
+  )
 }
 
 type Opp = { id: string; title: string; hood: string; price: number; priceStr: string; image: string; area: number; rooms: number; ptype: string; kind: string; recommended: boolean; reason: string; locked?: boolean; why?: string[] }
@@ -149,7 +170,12 @@ export default function EmpirePage() {
   const [chestReward, setChestReward] = useState<any>(null)
   const [boards, setBoards] = useState<any>(null)
   const [peek, setPeek] = useState<any>(null)                    // پروفایلِ عمومیِ یک امپراتوریِ دیگر (سند ۱۷)
-  const [gtab, setGtab] = useState<'city' | 'portfolio' | 'missions' | 'market' | 'ranks'>('city')   // منوی بازی (Visual Pass)
+  const [gtab, setGtab] = useState<'city' | 'world' | 'portfolio' | 'missions' | 'market' | 'ranks'>('city')   // منوی بازی (Visual Pass)
+  // فاز ۷۲ (پایانِ اسکرولِ بی‌پایان): هر تب زیرصفحه‌های کوتاه دارد — هر لحظه فقط یک موضوع روی صفحه است
+  const [cityV, setCityV] = useState<'today' | 'deals' | 'lands' | 'events' | 'map'>('today')
+  const [mktV, setMktV] = useState<'capital' | 'players' | 'bank' | 'shop'>('capital')
+  const [rankV, setRankV] = useState<'compete' | 'hall' | 'clan'>('compete')
+  const [misV, setMisV] = useState<'quests' | 'rewards' | 'dreams'>('quests')
   const [boardTab, setBoardTab] = useState('score')
   const [loanVal, setLoanVal] = useState('')
   const [repayVal, setRepayVal] = useState('')
@@ -339,9 +365,9 @@ export default function EmpirePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, gtab, hall])
 
-  // فاز ۶۳: دنیای زنده (سالِ دنیا/کتابِ تاریخ/شایعات) — با بازشدنِ تبِ شهر (تنبل، یک‌بار)
+  // فاز ۶۳/۷۲: دنیای زنده (سالِ دنیا/کتابِ تاریخ/شایعات) — با بازشدنِ تبِ «دنیا» (تنبل، یک‌بار)
   useEffect(() => {
-    if (step !== 'dash' || gtab !== 'city' || wd) return
+    if (step !== 'dash' || gtab !== 'world' || wd) return
     let alive = true
     fetch('/api/empire', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'world' }) })
       .then(r => r.json()).then(d => { if (alive && d?.ok) setWd(d) }).catch(() => {})
@@ -791,13 +817,22 @@ export default function EmpirePage() {
 
     {gtab === 'city' && <>
     {tabHead('🏙', 'شهر', 'شهر پر از فرصتِ واقعی است — رؤیایت را از همین‌جا شروع کن')}
+    {/* فاز ۷۲: زیرصفحه‌های شهر — به‌جای یک طومارِ بی‌پایان، هر لحظه یک موضوع (قانونِ ۴ سؤالِ فصل ۹) */}
+    {subNav([
+      ['today', '⚡', 'امروز'],
+      ['deals', '🔥', 'فرصت‌ها', (st.dealsEnabled && deals?.deals?.length) || 0],
+      ['lands', '🏞', 'زمین و ساخت', lands?.lands?.length || 0],
+      ['events', '🎪', 'رویدادهای هفته', (bd?.deal ? 1 : 0) + (au?.auction ? 1 : 0)],
+      ['map', '🗺', 'نقشه و آسمان'],
+    ], cityV, setCityV)}
+    {cityV === 'today' && <>
     {/* 🧭 اتاقِ تحلیل (فاز ۳۹ — سند ۲۶ فصل ۱۶): اولویت‌های امروز از وضعیتِ واقعی + سلامتِ مالی + جریانِ نقدی.
         فقط پیشنهاد می‌دهد — هیچ کاری را خودش انجام نمی‌دهد (قانونِ سند: تصمیم همیشه با خودت). */}
     {intel?.ok && (intel.priorities?.length > 0 || intel.health) && <div style={card}>
       {/* فاز ۴۱ (سند ۲۸ Part 13): اتاقِ بحران — از سیگنال‌های واقعی؛ خروج از آن نشانِ «ققنوس» دارد */}
       {intel.crisis?.active && <div style={{ border: '1px solid rgba(224,138,126,.5)', background: 'rgba(224,138,126,.08)', borderRadius: 12, padding: '8px 12px', marginBottom: 10, fontSize: 12 }}>
         <b style={{ color: '#e08a7e' }}>🚨 وضعیتِ بحرانی — سطحِ {intel.crisis.level}</b>
-        {intel.crisis.surviveDays !== null && <span style={{ color: 'var(--muted)' }}> · دوامِ نقد: {fa(intel.crisis.surviveDays)} روز</span>}
+        {intel.crisis.surviveDays !== null && <span style={{ color: 'var(--muted)' }}> · دوامِ نقد: {faDays(intel.crisis.surviveDays)}</span>}
         <div style={{ color: 'var(--muted)', marginTop: 4 }}>{intel.crisis.reasons.map((r41: string, i: number) => <div key={i}>• {r41}</div>)}</div>
         <div style={{ color: 'var(--faint)', marginTop: 4 }}>تصمیم‌های نجات همین پایین‌اند (فروشِ دارایی، پیش‌فروش، تسویهٔ وام…) — از بحران بیرون بیایی، در تایم‌لاینت ثبت می‌شود.</div>
       </div>}
@@ -805,7 +840,7 @@ export default function EmpirePage() {
         <b style={{ fontSize: 13 }}>🧭 اتاقِ تحلیل</b>
         {intel.health && <span style={{ ...pill(), color: intel.health.score >= 50 ? '#7ee0b8' : '#e8c37a' }}>سلامتِ مالی: {fa(intel.health.score)}/۱۰۰ · {intel.health.band}</span>}
         {intel.flow && (intel.flow.dailyIn > 0 || intel.flow.dailyOut > 0) && <span style={{ ...pill(), color: intel.flow.net >= 0 ? '#7ee0b8' : '#e08a7e' }}>
-          جریانِ روزانه: {intel.flow.net >= 0 ? '+' : '−'}{faB(Math.abs(intel.flow.net))} تومان{intel.flow.runwayDays !== null ? ` · دوامِ نقد ${fa(intel.flow.runwayDays)} روز` : ''}
+          جریانِ روزانه: {intel.flow.net >= 0 ? '+' : '−'}{faB(Math.abs(intel.flow.net))} تومان{intel.flow.runwayDays !== null ? ` · دوامِ نقد ${faDays(intel.flow.runwayDays)}` : ''}
         </span>}
       </div>
       {intel.priorities?.length > 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 8, fontSize: 12 }}>
@@ -862,11 +897,19 @@ export default function EmpirePage() {
         <b style={{ fontSize: 13 }}>{st.offer.title}</b>
         <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{st.offer.text}</div>
       </div>
-      <button style={{ ...btn, padding: '5px 14px', fontSize: 12 }} onClick={() => { setGtab('market'); setTimeout(() => document.getElementById(st.offer.goto === 'coins' ? 'coin-shop' : 'cosmetic-shop')?.scrollIntoView({ behavior: 'smooth' }), 120) }}>{st.offer.cta}</button>
+      <button style={{ ...btn, padding: '5px 14px', fontSize: 12 }} onClick={() => { setGtab('market'); setMktV('shop'); setTimeout(() => document.getElementById(st.offer.goto === 'coins' ? 'coin-shop' : 'cosmetic-shop')?.scrollIntoView({ behavior: 'smooth' }), 120) }}>{st.offer.cta}</button>
       <button title="بستن — تا چند روز برنمی‌گردد" style={{ ...btnGhost, padding: '5px 10px', fontSize: 12 }} disabled={busy}
         onClick={async () => { await api({ action: 'offerDismiss', id: st.offer.id }); setSt((s: any) => ({ ...s, offer: null })) }}>✕</button>
     </div>}
 
+    </>}
+
+    {cityV === 'events' && <>
+    {/* فاز ۷۲ (صداقت): اگر هفتهٔ جاری هنوز رویدادی نساخته، صادقانه بگو — نه کارتِ خالیِ گنگ */}
+    {!bd?.deal && !au?.auction && <div style={card}>
+      <b style={{ fontSize: 13.5 }}>🎪 رویدادهای هفته</b>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>معاملهٔ بزرگ و تالارِ مزایده هر هفته از آگهی‌های «واقعیِ» همان هفته ساخته می‌شوند — رویدادِ این هفته هنوز شکل نگرفته یا داده‌ٔ کافی نیامده. سری بعد که بیایی، اینجا خبری هست.</div>
+    </div>}
     {/* 🔥 معاملهٔ بزرگِ هفته (فاز ۴۱ — سند ۲۸ فصل ۱۷ Part 07): یک ملکِ واقعیِ گران، برای همهٔ بازیکنان یکی —
         یک تلاشِ مذاکره در هفته با انتخابِ استراتژی؛ اولین برنده‌ای که بخرد مالک می‌شود (مالکیتِ انحصاری). */}
     {bd?.ok && bd.deal && <div style={{ ...card, borderColor: '#e08a7e', background: 'rgba(224,138,126,.04)' }}>
@@ -944,7 +987,7 @@ export default function EmpirePage() {
           {/* «ارزشِ واقعی هیچ‌وقت گفته نمی‌شود» — فقط برآوردِ بازه‌ای از نمونه‌های واقعیِ محله (قانون ۱) */}
           {A.estBand
             ? <div style={{ fontSize: 13.5, color: 'var(--gold)', fontWeight: 800, marginTop: 5 }}>برآورد: {faB(A.estBand.lo)} تا {faB(A.estBand.hi)} تومان <span style={{ fontSize: 10.5, color: 'var(--muted)', fontWeight: 400 }}>({A.estNote})</span></div>
-            : <div style={{ fontSize: 12, color: '#e8c37a', marginTop: 5 }}>برآورد: ؟؟؟ <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>— {A.estNote}</span></div>}
+            : <div style={{ fontSize: 12, color: '#e8c37a', marginTop: 5 }}>برآورد: پنهان 🤫 <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>— {A.estNote}</span></div>}
           <div style={{ fontSize: 12, color: '#7ee0b8', marginTop: 3 }}>🔔 قیمتِ شروعِ تالار: <b>{faB(A.start)} تومان</b> — چکش کجا بایستد، دستِ شماست</div>
         </div>
         {/* لابی (Part 2): رقبا با شخصیت + شایعه‌هایی که شاید دروغ باشند؛ فاز ۵۰: حریفِ قسم‌خورده از بردهای واقعیِ مکرر */}
@@ -978,9 +1021,9 @@ export default function EmpirePage() {
         </div>}
         {au.entered && !run && !au.win && !A.soldTo && !A.mine && <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted)' }}>🚪 مزایدهٔ این هفته‌ات تمام شده — هفتهٔ بعد تالار دوباره باز می‌شود.</div>}
         {/* 🎬 سالنِ زنده (Part 4 Live Bidding): هر حرکت یک تصمیم — قیمتِ بزرگ، صدرنشین، چکش، و رفتارِ رقبا به‌جای عدد */}
-        {run && <div style={{ marginTop: 12, border: '1px solid rgba(155,140,240,.45)', borderRadius: 14, padding: '14px 14px 12px', background: 'radial-gradient(ellipse 120% 90% at 50% 0%, #191330, #0b0916 78%)', boxShadow: '0 10px 34px -12px rgba(90,70,200,.45)' }}>
+        {run && live && <div style={{ marginTop: 12, border: '1px solid rgba(155,140,240,.45)', borderRadius: 14, padding: '14px 14px 12px', background: 'radial-gradient(ellipse 120% 90% at 50% 0%, #191330, #0b0916 78%)', boxShadow: '0 10px 34px -12px rgba(90,70,200,.45)' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 11, color: '#b7aef2' }}>{finished ? (run.won ? '🏆 چکش کوبیده شد' : '🔨 مزایده تمام شد') : `راندِ ${fa((run.round || 0) + 1)} · صدر: ${leaderName}${run.leader === 'me' ? ' ✅' : ''}`}</span>
+            <span style={{ fontSize: 11, color: '#b7aef2' }}>{`راندِ ${fa((run.round || 0) + 1)} · صدر: ${leaderName}${run.leader === 'me' ? ' ✅' : ''}`}</span>
             <span style={{ flex: 1 }} />
             {!finished && run.calls > 0 && <span style={{ fontSize: 12, color: '#e8c37a', fontWeight: 800 }}>🔨 {run.calls === 1 ? 'بار اول…' : run.calls === 2 ? 'بار دوم…' : 'آخرین لحظه…'}</span>}
           </div>
@@ -1014,25 +1057,34 @@ export default function EmpirePage() {
             <button style={{ ...btnGhost, padding: '8px 14px', fontSize: 12, color: 'var(--muted)' }} disabled={busy} title="کنار کشیدن هم یک تصمیمِ حرفه‌ای است"
               onClick={() => { if (confirm('از مزایده بیرون بروی؟ گاهی برندهٔ واقعی همانی است که به‌موقع رفت.')) doMove('quit') }}>🚪 خروج</button>
           </div>}
-          {finished && <div style={{ marginTop: 10, textAlign: 'center' }}>
-            {run.won && au.win && <>
-              <div style={{ fontSize: 13, color: '#f0d47a', fontWeight: 800 }}>🏆 «{A.title.slice(0, 40)}» با چکشِ {faB(au.win.price)} تومان به نامت خورد</div>
-              <div style={{ fontSize: 11, color: (au.win.price <= run.anchor) ? '#7ee0b8' : '#e08a7e', marginTop: 3 }}>
-                {au.win.price <= run.anchor ? `زیرِ قیمتِ آگهی (${faB(run.anchor)}) بستی — رسانه‌ها: «با هوش خرید، نه فقط با پول»` : `بالاتر از قیمتِ آگهی (${faB(run.anchor)}) — حالا باید ثابت کنی که می‌ارزید`}
-              </div>
-              <button style={{ ...btn, padding: '8px 18px', fontSize: 12.5, marginTop: 8 }} disabled={busy}
-                onClick={async () => {
-                  if (!confirm(`سندِ «${A.title.slice(0, 40)}» به ${faB(au.win.price)} تومان (+ مالیات و ثبت) به نامت بخورد؟`)) return
-                  const d = await api({ action: 'buy', listingId: A.id, auction: true })
-                  if (d) { setSt(d); celebrate(); setAu(null); setAuRun(null); setAuNext(null) }
-                }}>📜 امضای سند و پرداخت</button>
-            </>}
-            {!run.won && <div style={{ fontSize: 12, color: 'var(--muted)' }}>این هفته چکش به نامِ تو نخورد — ولی تالار داستانش را یادش می‌مانَد. هفتهٔ بعد دوباره باز است.</div>}
+        </div>}
+        {/* فاز ۷۲ (صداقتِ صحنه): مزایدهٔ تمام‌شده دیگر تختهٔ مردهٔ نبرد را نشان نمی‌دهد — فقط نتیجه + وعدهٔ هفتهٔ بعد */}
+        {finished && <div style={{ marginTop: 12, textAlign: 'center', background: 'rgba(0,0,0,.22)', border: '1px solid var(--line2)', borderRadius: 12, padding: '12px 14px' }}>
+          {run.won && au.win ? <>
+            <div style={{ fontSize: 13, color: '#f0d47a', fontWeight: 800 }}>🏆 «{A.title.slice(0, 40)}» با چکشِ {faB(au.win.price)} تومان به نامت خورد</div>
+            <div style={{ fontSize: 11, color: (au.win.price <= run.anchor) ? '#7ee0b8' : '#e08a7e', marginTop: 3 }}>
+              {au.win.price <= run.anchor ? `زیرِ قیمتِ آگهی (${faB(run.anchor)}) بستی — رسانه‌ها: «با هوش خرید، نه فقط با پول»` : `بالاتر از قیمتِ آگهی (${faB(run.anchor)}) — حالا باید ثابت کنی که می‌ارزید`}
+            </div>
+            <button style={{ ...btn, padding: '8px 18px', fontSize: 12.5, marginTop: 8 }} disabled={busy}
+              onClick={async () => {
+                if (!confirm(`سندِ «${A.title.slice(0, 40)}» به ${faB(au.win.price)} تومان (+ مالیات و ثبت) به نامت بخورد؟`)) return
+                const d = await api({ action: 'buy', listingId: A.id, auction: true })
+                if (d) { setSt(d); celebrate(); setAu(null); setAuRun(null); setAuNext(null) }
+              }}>📜 امضای سند و پرداخت</button>
+          </> : <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+            🔨 مزایدهٔ این هفته‌ات تمام شد{run.leader && run.leader !== 'me' ? ` — چکش روی ${faB(run.price)} تومان برای ${leaderName} خورد` : ''}. تالار داستانت را یادش می‌مانَد؛ بازگشاییِ تالار: ⏳ <Countdown until={A.expiresAt || 0} />
           </div>}
         </div>}
       </div>
     })()}
 
+    </>}
+
+    {cityV === 'deals' && <>
+    {(!st.dealsEnabled || !deals || !(deals.deals || []).length) && <div style={card}>
+      <b style={{ fontSize: 13.5 }}>🔥 فرصت‌های طلاییِ امروز</b>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>فرصت‌های امروز از آگهی‌های واقعیِ همین روزِ بازار انتخاب می‌شوند — الان فهرستِ تازه‌ای نیست؛ فردا فهرستِ دیگری می‌آید.</div>
+    </div>}
     {/* 🔥 فرصت‌های طلاییِ امروز (سند ۱۴ — Hook): آگهی‌های واقعی، شمارشِ معکوسِ واقعی؛ فردا فهرستِ دیگری می‌آید.
         کارت قضاوت نمی‌کند — بعضی واقعاً زیرِ قیمتِ محله‌اند، بعضی نه؛ فکرکردن (یا ژتونِ تحلیل) کارِ بازیکن است. */}
     {st.dealsEnabled && deals && (deals.deals || []).length > 0 && (() => {
@@ -1080,6 +1132,9 @@ export default function EmpirePage() {
       )
     })()}
 
+    </>}
+
+    {cityV === 'lands' && <>
     {/* 🧭 مسیرِ برجِ اول (فاز ۲۴): موتورِ ساخت کامل بود اما از UI پیدا نمی‌شد — این کارت قدمِ بعدی را نشان می‌دهد
         (قانونِ ۴ سؤالِ فصل ۹: وضعیت؟ فرصت؟ اقدامِ بعدی؟ کدام دکمه؟). بعد از تحویلِ برجِ اول محو می‌شود. */}
     {(() => {
@@ -1165,6 +1220,11 @@ export default function EmpirePage() {
       </div>
     )}
 
+    </>}
+
+    {cityV === 'today' && <>
+    {st.suspense && <div style={{ ...card, borderColor: 'var(--gold)', fontSize: 13 }}>⏳ {st.suspense.text}</div>}
+    {st.othersBuilding > 0 && <div style={{ fontSize: 12, color: 'var(--muted)' }}>🌍 {fa(st.othersBuilding)} نفرِ دیگر هم همین حالا در حالِ ساختِ امپراتوری‌شان هستند.</div>}
     {/* 🎪 رویدادهای زندهٔ ادمین (سند ۱۸ — LiveOps): بدونِ دیپلوی از پنل ساخته می‌شوند؛ پیشرفت از رفتارِ واقعی */}
     {(st.liveEvents || []).map((ev: any) => (
       <div key={ev.id} style={{ ...card, borderColor: ev.done && !ev.claimed ? 'var(--gold)' : 'var(--line)' }}>
@@ -1221,6 +1281,13 @@ export default function EmpirePage() {
       </div>
     </details>}
 
+    </>}
+
+    {cityV === 'map' && <>
+    {(e.assets || []).length === 0 && !(deals?.deals || []).length && !(lands?.lands || []).length && <div style={card}>
+      <b style={{ fontSize: 13.5 }}>🗺 نقشه و خطِ آسمان</b>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>با اولین دارایی، برجِ تو در خطِ آسمان بالا می‌رود و پینش روی نقشهٔ واقعیِ شهر می‌نشیند.</div>
+    </div>}
     {/* خطِ آسمانِ امپراتوری (جلد ۵۶ — قانونِ ۳: «تجربه به‌جای داده») — ارتفاعِ هر برج = ارزشِ روزِ واقعی */}
     {(e.assets?.length || 0) > 0 && (() => {
       const vals = e.assets.map((a: any) => a.current || a.buyPrice)
@@ -1311,6 +1378,7 @@ export default function EmpirePage() {
       )
     })()}
     </>}
+    </>}
 
     {gtab === 'portfolio' && <>
     {tabHead('💼', 'پرتفوی', 'هر دارایی یک تکه از رؤیای توست — زنده از بازارِ واقعی')}
@@ -1380,10 +1448,8 @@ export default function EmpirePage() {
 
     </>}
 
-    {gtab === 'city' && <>
-    {st.suspense && <div style={{ ...card, borderColor: 'var(--gold)', fontSize: 13 }}>⏳ {st.suspense.text}</div>}
-    {st.othersBuilding > 0 && <div style={{ fontSize: 12, color: 'var(--muted)' }}>🌍 {fa(st.othersBuilding)} نفرِ دیگر هم همین حالا در حالِ ساختِ امپراتوری‌شان هستند.</div>}
-
+    {gtab === 'world' && <>
+    {tabHead('🌍', 'دنیا', 'کتابِ تاریخ، شایعات، شهرها، شرکت‌ها و روزنامه — همه از رخدادهای واقعی')}
     {/* 🗞 دنیای زنده (فاز ۶۳ — سند ۳۲ فصل ۲۱): سالِ دنیا + کتابِ تاریخ + شایعاتِ منصفانه — همه از رخدادِ واقعی */}
     {wd?.ok && <div style={card}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -1413,7 +1479,7 @@ export default function EmpirePage() {
                   style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, opacity: (wd.kudosGiven || []).includes(h.no) ? 0.4 : 1 }}>👏</button>}
                 {h.no && h.no !== wd.myNo && <button title={followed ? 'لغوِ دنبال‌کردن' : 'دنبال‌کردن — خبرهایش در فید هایلایت می‌شود'} disabled={busy} onClick={async () => { const d = await api({ action: 'follow', no: h.no, on: !followed }); if (d?.ok) setWd({ ...wd, following: d.following }) }}
                   style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, color: followed ? 'var(--gold)' : 'var(--faint)' }}>{followed ? '★' : '☆'}</button>}
-                <span style={{ color: 'var(--faint)', fontSize: 9.5, whiteSpace: 'nowrap' }}>روزِ {fa(h.day)}</span>
+                <span style={{ color: 'var(--faint)', fontSize: 9.5, whiteSpace: 'nowrap' }}>{agoFa(h.day, wd.day)}</span>
               </div>
             )
           })}
@@ -1423,7 +1489,7 @@ export default function EmpirePage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
             {wd.history.slice(6).map((h: any, i: number) => (
               <div key={i} style={{ display: 'flex', gap: 8, fontSize: 11, alignItems: 'baseline', color: 'var(--muted)' }}>
-                <span>{h.icon}</span><span style={{ flex: 1 }}>{h.title}</span><span style={{ color: 'var(--faint)', fontSize: 9.5 }}>روزِ {fa(h.day)}</span>
+                <span>{h.icon}</span><span style={{ flex: 1 }}>{h.title}</span><span style={{ color: 'var(--faint)', fontSize: 9.5 }}>{agoFa(h.day, wd.day)}</span>
               </div>
             ))}
           </div>
@@ -1954,7 +2020,13 @@ export default function EmpirePage() {
 
     {gtab === 'missions' && <>
     {tabHead('🎯', 'مأموریت‌ها', 'پاداش فقط از کارِ واقعی')}
+    {subNav([
+      ['quests', '🎯', 'مأموریت‌ها'],
+      ['rewards', '🎁', 'جوایزِ واقعی'],
+      ['dreams', '🌠', 'رؤیاها', (st.endgame?.dreams || []).length],
+    ], misV, setMisV)}
 
+    {misV === 'rewards' && <>
     {/* 🎁 مسیرِ جوایزِ واقعی (فاز ۴۸): ارزشِ خالصت را بالا ببر → جایزهٔ تومانیِ «واقعی» به کیف‌پولِ ملک‌جت.
         استخرِ جوایز از درآمدِ واقعیِ خودِ سایت پر می‌شود؛ پرداختِ نهایی با تأییدِ ملک‌جت. */}
     {rw?.ok && (rw.steps || []).length > 0 && (() => {
@@ -2002,6 +2074,9 @@ export default function EmpirePage() {
         <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 8 }}>جوایز پس از تأییدِ ملک‌جت به سطلِ «پاداشِ» کیف‌پولت واریز می‌شوند · مراحل به‌ترتیب باز می‌شوند · ظرفیتِ جوایز دوره‌ای است و از درآمدِ واقعیِ ملک‌جت تأمین می‌شود.</div>
       </div>
     })()}
+    </>}
+
+    {misV === 'quests' && <>
     {/* 🔥 پاداشِ نقاطِ عطفِ استریک (سند ۱۸ بخش ۱): از ورودِ پیاپیِ واقعی — روزهای ۷/۱۴/۲۱/۳۰ */}
     {(st.streakBonuses || []).some((sb: any) => sb.done && !sb.claimed) && (
       <div style={{ ...card, borderColor: 'var(--gold)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -2015,6 +2090,9 @@ export default function EmpirePage() {
       </div>
     )}
 
+    </>}
+
+    {misV === 'dreams' && <>
     {/* 🌠 تختهٔ رؤیاها (فاز ۶۲ — فصل ۲۰ Part 7 Dreams Engine): «هر بازیکن همیشه یک رؤیای بزرگ جلوی چشمش داشته باشد»
         — رؤیای شخصیِ خودت را بساز؛ پیشرفت از عددِ واقعیِ امپراتوری اندازه می‌خورد؛ تحقق = نشانِ اختصاصی. */}
     {st.endgame && <div style={{ ...card, borderColor: 'var(--goldDim)' }}>
@@ -2066,6 +2144,9 @@ export default function EmpirePage() {
       </div>
     </div>}
 
+    </>}
+
+    {misV === 'quests' && <>
     {/* مأموریت‌ها — پیشرفت از رفتارِ واقعی */}
     {ms && <div style={card}>
       <div style={{ fontWeight: 700, marginBottom: 10 }}>🎯 مأموریت‌های مسیر</div>
@@ -2170,9 +2251,18 @@ export default function EmpirePage() {
     </div>}
 
     </>}
+    </>}
 
     {gtab === 'market' && <>
     {tabHead('📊', 'بازار', 'سرمایه، صندوق‌ها، فروشگاه‌ها و بازارِ بازیکنان')}
+    {subNav([
+      ['capital', '📈', 'سرمایه و روندها'],
+      ['players', '🏪', 'بازارِ بازیکنان'],
+      ['bank', '🏦', 'بانک'],
+      ['shop', '🪙', 'فروشگاه'],
+    ], mktV, setMktV)}
+
+    {mktV === 'capital' && <>
     {/* 🧭 روندِ محله‌ها (فاز ۳۹ — سند ۲۶ Part 04): از تاریخچهٔ روزانهٔ واقعیِ رصدخانه — تا دو اسنپ‌شات نباشد، هیچ روندی ادعا نمی‌شود. */}
     {intel?.ok && intel.market && <div style={card}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -2194,6 +2284,9 @@ export default function EmpirePage() {
       </div>}
       {intel.market.ready && intel.market.rising.length === 0 && intel.market.falling.length === 0 && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 6 }}>در این بازه هیچ محله‌ای با نمونهٔ کافی جابه‌جاییِ معنادار نداشته — بازار آرام است.</div>}
     </div>}
+    </>}
+
+    {mktV === 'shop' && <>
     {/* 🪙 فروشگاهِ ملک‌کوین (فاز ۲۸): پولِ واقعی فقط «زمان/تحلیل» می‌خرد — هرگز قدرت (بدونِ P2W) */}
     {st.coinShop?.enabled && (st.coinShop.packs || []).length > 0 && <div id="coin-shop" style={{ ...card, borderColor: 'var(--goldDim)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -2283,6 +2376,9 @@ export default function EmpirePage() {
       <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 8 }}>خرید با ملک‌کوینِ کیفِ خودت انجام می‌شود و در تایم‌لاینت ثبت است · آیتمِ خریداری‌شده دائمی است.</div>
     </div>}
 
+    </>}
+
+    {mktV === 'players' && <>
     {/* 🏪 بازارِ بازیکنان + 🤝 مشارکتِ ساخت (فاز ۳۷ — درخواستِ مستقیم): هر آگهیِ واقعی فقط یک مالک دارد؛
         معامله و شراکت فقط بینِ بازیکنانِ واقعی — از سطحِ مشخص (knob) باز می‌شود. */}
     {st.unlocks?.trade?.enabled !== false && <div style={{ ...card, borderColor: '#7aa2c9' }}>
@@ -2367,6 +2463,9 @@ export default function EmpirePage() {
       </>}
     </div>}
 
+    </>}
+
+    {mktV === 'bank' && <>
     {/* بانک (جلد ۱۶): امتیازِ اعتباری + وام */}
     {st.bank && <div style={card}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
@@ -2399,6 +2498,7 @@ export default function EmpirePage() {
         <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>با این امتیازِ اعتباری هنوز وام تعلق نمی‌گیرد — با حضورِ منظم، تسویهٔ به‌موقع و سودِ واقعی اعتبارت را بساز.</div>
       )}
     </div>}
+    </>}
 
     </>}
 
@@ -2436,8 +2536,8 @@ export default function EmpirePage() {
 
     </>}
 
-    {gtab === 'market' && <>
-    {/* روزنامهٔ ملک‌جت (جلد ۵۲): خبر از خودِ دنیای واقعی تولید می‌شود، نه اسکریپت + آرشیوِ رکوردها (جلد ۵۱) */}
+    {gtab === 'world' && <>
+    {/* روزنامهٔ ملک‌جت (جلد ۵۲) — فاز ۷۲: خانه‌اش تبِ «دنیا»ست، کنارِ کتابِ تاریخ و شایعات */}
     <details style={card} onToggle={(ev: any) => { if (ev.currentTarget.open && !paper) doNews() }}>
       <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>📰 روزنامهٔ ملک‌جت — اخبارِ زندهٔ دنیا</summary>
       {!paper ? <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10 }}>در حال بارگذاری...</div> : (
@@ -2465,7 +2565,9 @@ export default function EmpirePage() {
         </div>
       )}
     </details>
+    </>}
 
+    {gtab === 'market' && mktV === 'capital' && <>
     {/* بازار سرمایه (جلد ۴۰): صندوقِ شاخصی + مشارکتِ جمعی + شاخص‌ها — همه از بازارِ واقعی */}
     {/* سطح‌گشایی (سند ۱۵): بازارِ سرمایه از سطحِ مشخصی باز می‌شود — قفل شفاف است، نه پنهان */}
     {st.capitalEnabled && st.unlocks && !st.unlocks.capital.ok && <div style={{ ...card, fontSize: 12.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -2593,6 +2695,13 @@ export default function EmpirePage() {
 
     {gtab === 'ranks' && <>
     {tabHead('🏆', 'رتبه‌ها', 'رقابت و اتحاد با بازیکنانِ واقعی')}
+    {subNav([
+      ['compete', '🏆', 'رقابت و جدول‌ها'],
+      ['hall', '🏛', 'تالارِ افتخارات'],
+      ['clan', '🏰', 'اتحاد'],
+    ], rankV, setRankV)}
+
+    {rankV === 'compete' && <>
 
     {/* 🌱 فصلِ دنیا (فاز ۶۶ — Season Engine v1): «هیچ متایی دائمی نیست» — هر فصل تم و قهرمانِ خودش */}
     {szn?.enabled && <div style={{ ...card, borderColor: szn.ended ? 'var(--line2)' : 'var(--gold)' }}>
@@ -2621,6 +2730,9 @@ export default function EmpirePage() {
       <div style={{ fontSize: 9.5, color: 'var(--faint)', marginTop: 8 }}>جایزهٔ رتبه‌های ۱ تا ۳: {(szn.rewards || []).map((x: number) => fa(x)).join(' / ')} ملک‌کوین · پیشرفتِ همه از دلتای «واقعیِ» همین فصل است، نه ثروتِ قبلی — شانسِ تازه‌واردها برابر است.</div>
     </div>}
 
+    </>}
+
+    {rankV === 'hall' && <>
     {/* 🏛 تالارِ افتخارات (فاز ۵۰ — سند ۳۰ Part 20 «The Hunt»): هر چیزِ این اتاق را خودت به دست آورده‌ای —
         رکوردهای واقعی، مجموعه‌های قابلِ‌تکمیل با عنوان‌گشایی، و گالریِ نشان‌ها (روان‌شناسیِ کلکسیون). */}
     {hall?.ok && <div style={{ ...card, borderColor: 'var(--gold)', background: 'linear-gradient(165deg, rgba(212,175,55,.1), rgba(212,175,55,.02) 60%)' }}>
@@ -2737,6 +2849,9 @@ export default function EmpirePage() {
         </div>
       </details>}
     </div>}
+    </>}
+
+    {rankV === 'compete' && <>
     {/* ۵ جدولِ رتبه (فصل ۵) + لیگِ محله (§7.2) */}
     <details style={card} onToggle={(ev: any) => { if (ev.currentTarget.open && !boards) doBoards() }}>
       <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>🏅 جدول‌های رتبه و لیگِ محله</summary>
@@ -2837,6 +2952,9 @@ export default function EmpirePage() {
       )}
     </details>
 
+    </>}
+
+    {rankV === 'clan' && <>
     {/* 🏰 اتحاد (فاز ۳۷ — درخواستِ مستقیم): با هم باشید، با هم پیام بگذارید — از سطحِ knob به بعد */}
     {st.unlocks?.clan?.enabled !== false && <div style={{ ...card, borderColor: '#9a7ac9' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -2901,6 +3019,9 @@ export default function EmpirePage() {
       </>}
     </div>}
 
+    </>}
+
+    {rankV === 'hall' && <>
     {/* تایم‌لاینِ زندگی + دفترچهٔ ملک‌جت */}
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 12 }}>
       <div style={card}>
@@ -2960,15 +3081,16 @@ export default function EmpirePage() {
       </div>
     </div>
     </>}
+    </>}
 
     {/* 🎮 منوی بازی (فصل ۹ Main Menu — Visual Pass): پنج صفحهٔ اصلی، ثابت در پایین */}
     <div style={{ height: 70 }} />
     <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50, display: 'flex', justifyContent: 'center', padding: '8px 10px calc(8px + env(safe-area-inset-bottom))', pointerEvents: 'none' }}>
       {/* 🎨 نوارِ تبِ شیشه‌ای (پروتوتایپِ کامل): blur + تبِ فعالِ طلاییِ گرادیانی */}
       <div style={{ display: 'flex', gap: 4, background: 'rgba(20,27,43,.72)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 18, padding: 6, boxShadow: '0 12px 40px -8px rgba(0,0,0,.6), 0 0 0 1px rgba(212,175,55,.1)', backdropFilter: 'blur(8px)', pointerEvents: 'auto' }}>
-        {([['city', '🏙', 'شهر'], ['portfolio', '💼', 'پرتفوی'], ['missions', '🎯', 'مأموریت‌ها'], ['market', '📊', 'بازار'], ['ranks', '🏆', 'رتبه‌ها']] as const).map(([k, ic, l]) => (
+        {([['city', '🏙', 'شهر'], ['world', '🌍', 'دنیا'], ['portfolio', '💼', 'پرتفوی'], ['missions', '🎯', 'مأموریت‌ها'], ['market', '📊', 'بازار'], ['ranks', '🏆', 'رتبه‌ها']] as const).map(([k, ic, l]) => (
           <button key={k} onClick={() => { setGtab(k); try { window.scrollTo({ top: 0 }) } catch {} }}
-            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, minWidth: 60, padding: '6px 8px', borderRadius: 13, border: 'none', cursor: 'pointer', background: gtab === k ? 'linear-gradient(135deg,rgba(212,175,55,.28),rgba(240,212,122,.16))' : 'transparent', color: gtab === k ? '#f0d47a' : 'var(--muted)', fontFamily: 'inherit', fontSize: 10.5, fontWeight: gtab === k ? 800 : 500, boxShadow: gtab === k ? 'inset 0 0 0 1px rgba(212,175,55,.4)' : 'none' }}>
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, minWidth: 48, padding: '6px 7px', borderRadius: 13, border: 'none', cursor: 'pointer', background: gtab === k ? 'linear-gradient(135deg,rgba(212,175,55,.28),rgba(240,212,122,.16))' : 'transparent', color: gtab === k ? '#f0d47a' : 'var(--muted)', fontFamily: 'inherit', fontSize: 10.5, fontWeight: gtab === k ? 800 : 500, boxShadow: gtab === k ? 'inset 0 0 0 1px rgba(212,175,55,.4)' : 'none' }}>
             <span style={{ fontSize: 17 }}>{ic}</span>{l}
           </button>
         ))}

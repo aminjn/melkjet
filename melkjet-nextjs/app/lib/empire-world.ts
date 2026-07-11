@@ -18,19 +18,19 @@ export interface WorldRumor {
   madeAt: number; madeDay: number; basePerM: number
   verdict?: 'true' | 'false'; resolvedPerM?: number
 }
-interface WorldDb { events: WorldEvent[]; rumors: WorldRumor[]; seasons?: Record<string, Array<{ no: number; name: string; value: number; rank: number }>> }
+interface WorldDb { events: WorldEvent[]; rumors: WorldRumor[]; seasons?: Record<string, Array<{ no: number; name: string; value: number; rank: number }>>; epoch?: number }   // epoch = روزِ تولدِ دنیا (فاز ۷۲) — سالِ دنیا از این روز شمرده می‌شود، نه از مبدأ unix
 
 const FILE = join(process.cwd(), '.empire-world-data.json')
 const KV = 'empire_world'
 const EMPTY: WorldDb = { events: [], rumors: [] }
 
 async function load(): Promise<WorldDb> {
-  if (pgEnabled()) { const d = await kvGet<WorldDb>(KV, EMPTY).catch(() => EMPTY); return { events: d.events || [], rumors: d.rumors || [], seasons: d.seasons || {} } }
-  try { if (existsSync(FILE)) { const d = JSON.parse(readFileSync(FILE, 'utf-8')); return { events: d.events || [], rumors: d.rumors || [], seasons: d.seasons || {} } } } catch {}
+  if (pgEnabled()) { const d = await kvGet<WorldDb>(KV, EMPTY).catch(() => EMPTY); return { events: d.events || [], rumors: d.rumors || [], seasons: d.seasons || {}, epoch: d.epoch } }
+  try { if (existsSync(FILE)) { const d = JSON.parse(readFileSync(FILE, 'utf-8')); return { events: d.events || [], rumors: d.rumors || [], seasons: d.seasons || {}, epoch: d.epoch } } } catch {}
   return { events: [], rumors: [], seasons: {} }
 }
 async function mutate<R>(fn: (d: WorldDb) => R): Promise<R> {
-  if (pgEnabled()) return kvMutate<WorldDb, R>(KV, EMPTY, raw => { const d = { events: raw.events || [], rumors: raw.rumors || [], seasons: raw.seasons || {} }; const out = fn(d); Object.assign(raw as WorldDb, d); return out })
+  if (pgEnabled()) return kvMutate<WorldDb, R>(KV, EMPTY, raw => { const d: WorldDb = { events: raw.events || [], rumors: raw.rumors || [], seasons: raw.seasons || {}, epoch: raw.epoch }; const out = fn(d); Object.assign(raw as WorldDb, d); return out })
   const d = await load()
   const out = fn(d)
   writeFileSync(FILE, JSON.stringify(d))
@@ -41,6 +41,16 @@ async function mutate<R>(fn: (d: WorldDb) => R): Promise<R> {
 export function worldYearOf(day: number, daysPerYear = config().empire.world.daysPerYear): { year: number; dayOfYear: number } {
   const dpy = Math.max(1, daysPerYear)
   return { year: Math.floor(Math.max(0, day) / dpy) + 1, dayOfYear: (Math.max(0, day) % dpy) + 1 }
+}
+
+// روزِ تولدِ دنیا (فاز ۷۲): بارِ اول که دنیا دیده می‌شود ثبت می‌شود (یا قدیمی‌ترین رخدادِ ثبت‌شده).
+// سال/هفتهٔ دنیا از این مبدأ شمرده می‌شود تا «سالِ ۲۳۰» بی‌معنا نمایش داده نشود — صادقانه: دنیا از روزِ راه‌افتادنش عمر دارد.
+export async function worldEpochOf(day: number): Promise<number> {
+  return mutate(d => {
+    const oldest = d.events.length ? Math.min(...d.events.map(e => e.day)) : day
+    if (typeof d.epoch !== 'number' || d.epoch > Math.min(day, oldest)) d.epoch = Math.min(day, oldest)
+    return d.epoch
+  }).catch(() => day)
 }
 
 // ── کتابِ تاریخِ دنیا (Part 1 World Memory + Part 2 Timeline) ──

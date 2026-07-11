@@ -45,7 +45,7 @@ import { follow, unfollow, isFollowing, followerCount, followingCount, following
 import { listFlags, getFlag, setFlag, flagEnabled } from '../app/lib/reos/flags.ts'
 import { registerModel as regModel, getChampion as champOf } from '../app/lib/reos/model-registry.ts'
 import { autoPromote, autoMLStatus } from '../app/lib/reos/automl.ts'
-import { createEmpire, getEmpire, renameEmpire, buyAsset, chooseAssetAction, recordGuess, claimEmpireMission, spendAiToken, setHunterPair, answerHunter, setStylePicks, bumpRejects, empireCount, netWorthOf as empNetWorth, saveBrief, getBrief, markBriefOpened, dayNumberOf, sellAsset, setLandPlan, chooseBusiness, accrueIncome, claimDailyChest, listEmpiresPublic, applyUpkeep, adminAdjustEmpire, deleteEmpire, briefStatsForDay, takeLoan, repayLoan, accrueLoanInterest , openP2pAuction, cancelP2pAuction, bidP2pAuction, settleP2pAuctions, followEmpire } from '../app/lib/empire-store.ts'
+import { createEmpire, getEmpire, renameEmpire, buyAsset, chooseAssetAction, recordGuess, claimEmpireMission, spendAiToken, setHunterPair, answerHunter, setStylePicks, bumpRejects, empireCount, netWorthOf as empNetWorth, saveBrief, getBrief, markBriefOpened, dayNumberOf, sellAsset, setLandPlan, chooseBusiness, accrueIncome, claimDailyChest, listEmpiresPublic, applyUpkeep, adminAdjustEmpire, deleteEmpire, briefStatsForDay, takeLoan, repayLoan, accrueLoanInterest, effectiveTransferTaxPct , openP2pAuction, cancelP2pAuction, bidP2pAuction, settleP2pAuctions, followEmpire } from '../app/lib/empire-store.ts'
 
 if (!process.env.DATABASE_URL) { console.error('DATABASE_URL not set'); process.exit(2) }
 let pass = 0, fail = 0
@@ -815,9 +815,12 @@ async function main() {
     ok('تولد: نشانِ Founder + اولین نقطهٔ تایم‌لاین', e.badges.includes('Founder') && e.timeline[0].title === 'به ملک‌جت پیوست')
     ok('تولد: هویت + حکم + منتور', e.identity.investor > 0 && e.profile.title === 'Investor Profile' && e.mentor === 'ملک‌جت')
     ok('createEmpire ایدمپوتنت (دوباره → همان)', (await createEmpire(uid, { answers: {} })).no === e.no)
-    // خرید: سرمایه کم می‌شود (+ ۱٪ مالیاتِ انتقال → خزانه) + پاداشِ سند
+    // خرید: سرمایه کم می‌شود (+ مالیاتِ مؤثرِ انتقال → خزانه) + پاداشِ سند
+    // فاز ۷۲: نرخِ مالیات ثابت نیست — مصوبهٔ قطعیِ همان هفتهٔ واقعی (فاز ۷۰) رویش اثر می‌گذارد؛ انتظار از همان تابعِ زنده محاسبه می‌شود
+    const taxPctNow = effectiveTransferTaxPct(dayNumberOf(Date.now()))
+    const tax4B = Math.round(4_000_000_000 * taxPctNow / 100)
     const b1 = await buyAsset(uid, { id: 'LST1', title: 'آپارتمان ۱۰۰ متری پونک', hood: 'پونک', price: 4_000_000_000, ptype: 'آپارتمان' })
-    ok('خریدِ اول: کسرِ قیمت + ۱٪ مالیات + XP + First Owner', b1.ok && b1.empire.capital === 5_960_000_000 && b1.empire.taxPaid === 40_000_000 && b1.empire.xp === 200 && b1.empire.badges.includes('First Owner'))
+    ok('خریدِ اول: کسرِ قیمت + مالیاتِ مؤثر + XP + First Owner', b1.ok && b1.empire.capital === 10_000_000_000 - 4_000_000_000 - tax4B && b1.empire.taxPaid === tax4B && b1.empire.xp === 200 && b1.empire.badges.includes('First Owner'))
     ok('خریدِ اول: هویت +۲ builder/+۱ investor (سند فصل۳)', b1.empire.identity.builder === e.identity.builder + 2 && b1.empire.identity.investor === Math.min(100, e.identity.investor + 1))
     const b2 = await buyAsset(uid, { id: 'LST1', title: 'x', hood: 'x', price: 1, ptype: '' })
     ok('خریدِ تکراریِ همان آگهی رد می‌شود', b2.ok === false)
@@ -886,7 +889,8 @@ async function main() {
     const eb = await getEmpire(uid)
     const xpBefore = eb.xp, capB2 = eb.capital
     const sl = await sellAsset(uid, landId, 2_500_000_000)
-    ok('فروشِ سودده: قیمتِ روز − ۱٪ مالیات، realized=سودِ اقتصادی، XP+', sl.ok && sl.profit === 500_000_000 && sl.empire.capital === capB2 + 2_500_000_000 - 25_000_000 && sl.empire.realized === 500_000_000 && sl.empire.xp === xpBefore + 50 && !sl.empire.assets.some(x => x.id === landId))
+    const taxSell = Math.round(2_500_000_000 * effectiveTransferTaxPct(dayNumberOf(Date.now())) / 100)
+    ok('فروشِ سودده: قیمتِ روز − مالیاتِ مؤثر، realized=سودِ اقتصادی، XP+', sl.ok && sl.profit === 500_000_000 && sl.empire.capital === capB2 + 2_500_000_000 - taxSell && sl.empire.realized === 500_000_000 && sl.empire.xp === xpBefore + 50 && !sl.empire.assets.some(x => x.id === landId))
     const sl2 = await sellAsset(uid, cmrId, 1_000_000_000)
     ok('فروشِ زیان‌ده: realized منفی + درسِ اولین شکست', sl2.ok && sl2.profit === -500_000_000 && sl2.empire.claims['first_loss'] > 0 && sl2.empire.journal.some(j => j.text.includes('اولین فروشِ با زیان')))
     ok('فروشِ داراییِ ناموجود رد می‌شود', (await sellAsset(uid, landId, 1)).ok === false)
@@ -1513,7 +1517,7 @@ async function main() {
     const sA = await sellB(uc12, apt29, 2_000_000_000, { commissionPct: 1 })
     // فروش: قیمت با بازسازی ×۱٫۰۵؛ مالیات (٪ config) + کمیسیونِ ۱٪ مشاور کسر
     const gross = Math.round(2_000_000_000 * 1.05)
-    const taxS = Math.round(gross * liveCfg().empire.transferTaxPct / 100)
+    const taxS = Math.round(gross * effectiveTransferTaxPct(dayNumberOf(Date.now())) / 100)   // فاز ۷۲: مصوبه-آگاه
     ok('فروش با مشاور: کمیسیون از عایدی کسر شد', sA.ok && sA.salePrice === gross
       && sA.empire.capital === capS + gross - taxS - Math.round(gross * 0.01))
     // وام با کارشناسِ رسمی: هزینه از مبلغ کسر می‌شود
