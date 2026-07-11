@@ -5625,7 +5625,9 @@ function AiCostView() {
               <span style={{ color: 'var(--muted)', fontSize: 11 }}>{m.provider}</span>
               <input style={{ ...inp, padding: '5px 6px' }} type="number" step="0.01" value={m.inUsd} onChange={e => setModel(i, { inUsd: Number(e.target.value) || 0 })} />
               <input style={{ ...inp, padding: '5px 6px' }} type="number" step="0.01" value={m.outUsd} onChange={e => setModel(i, { outUsd: Number(e.target.value) || 0 })} />
-              <span style={{ color: 'var(--gold)', fontSize: 11.5 }}>{fa(costTomanPerM(m))}</span>
+              {costTomanPerM(m) > 0
+                ? <span style={{ color: 'var(--gold)', fontSize: 11.5 }}>{fa(costTomanPerM(m))}</span>
+                : <span title="گپ برای این مدل قیمت برنمی‌گرداند — از جدولِ قیمتِ سایتِ گپ دستی وارد کن تا در حالتِ صرفه‌جویی شرکت کند" style={{ color: '#e7a14a', fontSize: 10.5 }}>قیمت ثبت نشده ✍</span>}
             </div>
           ))}
         </div>

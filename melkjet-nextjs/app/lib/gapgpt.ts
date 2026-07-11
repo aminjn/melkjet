@@ -79,7 +79,10 @@ export async function listModelsWithPricing(provider?: string): Promise<ApiModel
       : /embedding/i.test(id) ? 'embedding'
       : (/image|dall-?e|imagen|z-image|flash-image/i.test(id) || (imgUsd > 0 && !outUsd)) ? 'image' : 'text'
     return { id, label: String(m.name || id), provider: String(m.owned_by || m.provider || (id.split(/[:/]/)[0])), type, inUsd: inUsd || imgUsd, outUsd: outUsd || imgUsd }
-  }).filter(m => m.id && (m.inUsd > 0 || m.outUsd > 0))
+  }).filter(m => m.id && (m.inUsd > 0 || m.outUsd > 0 || m.type === 'text' || m.type === 'image'))
+  // فاز ۸۳ (فیدبک: «همهٔ مدل‌های گپ در جدولِ قیمت نیست»): گپ برای خیلی از مدل‌ها فیلدِ pricing
+  // برنمی‌گرداند — قبلاً کلاً حذف می‌شدند و ادمین حتی نمی‌توانست دستی قیمت بدهد. حالا با قیمتِ ۰
+  // (= «ثبت‌نشده») می‌آیند تا در جدول دیده و دستی پر شوند؛ تا قیمت نگیرند در صرفه‌جویی شرکت نمی‌کنند.
 }
 
 export async function chatComplete(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number; src?: string; timeoutMs?: number } = {}, provider?: string): Promise<string> {

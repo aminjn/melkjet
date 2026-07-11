@@ -84,7 +84,8 @@ export function syncModels(fetched: { id: string; label?: string; provider?: str
   for (const f of fetched) {
     if (!f.id) continue
     const ex = byId.get(f.id)
-    if (ex) { ex.inUsd = Number(f.inUsd) || 0; ex.outUsd = Number(f.outUsd) || 0; if (f.label) ex.label = f.label; if (f.provider) ex.provider = f.provider; if (f.type) ex.type = f.type as any; updated++ }
+    // فاز ۸۳: سینک هرگز قیمتِ واردشدهٔ دستی را صفر نمی‌کند — فقط قیمتِ «واقعیِ» تازه جایگزین می‌شود
+    if (ex) { if (Number(f.inUsd) > 0) ex.inUsd = Number(f.inUsd); if (Number(f.outUsd) > 0) ex.outUsd = Number(f.outUsd); if (f.label) ex.label = f.label; if (f.provider) ex.provider = f.provider; if (f.type) ex.type = f.type as any; updated++ }
     else { c.models.push({ id: f.id, label: f.label || f.id, provider: f.provider || '', type: (['text', 'image', 'audio', 'embedding'].includes(f.type as any) ? f.type : 'text') as any, inUsd: Number(f.inUsd) || 0, outUsd: Number(f.outUsd) || 0 }); added++ }
   }
   save(c); return { updated, added }
