@@ -27,12 +27,14 @@ export async function POST(req: NextRequest) {
   // مرحلهٔ ۱ (بدونِ receipt): اطلاعاتِ کارت برمی‌گردد؛ مرحلهٔ ۲ (با receipt): سفارشِ «در انتظارِ تأیید» ثبت می‌شود
   // و پس از تأییدِ مدیر، پلن با مدتِ اعتبار خودکار فعال می‌شود (approveOrder).
   const card = enabledGateways().find(g => g.type === 'card2card')
-  const wantZarinpal = String(b.gateway || '') === 'zarinpal' && zarinpalConfigured()
+  // فاز ۶۹: زرین‌پال فقط وقتی هم کلیدش تنظیم است هم درگاهش در پنلِ «پرداخت» فعال شده (تاگلِ ادمین)
+  const zarinpalReady = zarinpalConfigured() && !!enabledGateways().find(g => g.type === 'zarinpal')
+  const wantZarinpal = String(b.gateway || '') === 'zarinpal' && zarinpalReady
   if (card && !wantZarinpal) {
     const receipt = String(b.receipt || '').trim().slice(0, 60)
     if (!receipt) {
       return NextResponse.json({
-        ok: true, card2card: true, amount,
+        ok: true, card2card: true, amount, zarinpal: zarinpalReady,
         card: { label: card.label, cardNumber: card.cardNumber || '', iban: card.iban || '', accountNumber: card.accountNumber || '', holderName: card.holderName || '', bank: card.bank || '', note: card.note || '' },
       })
     }
@@ -41,7 +43,7 @@ export async function POST(req: NextRequest) {
     if (!r.ok) return NextResponse.json({ error: 'ثبتِ سفارش ناموفق بود' }, { status: 400 })
     return NextResponse.json({ ok: true, pending: true, orderId: r.order?.id, message: 'درخواستِ خریدت ثبت شد — پس از تأییدِ واریزی توسطِ ملک‌جت، پلن خودکار فعال می‌شود.' })
   }
-  if (!zarinpalConfigured()) {
+  if (!zarinpalReady) {
     return NextResponse.json({ error: 'روشِ پرداختی فعال نیست — در پنل، درگاهِ کارت‌به‌کارت یا زرین‌پال را فعال کنید.' }, { status: 200 })
   }
 

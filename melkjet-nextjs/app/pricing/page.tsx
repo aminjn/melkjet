@@ -300,7 +300,7 @@ export default function PricingPage() {
   }, [])
 
   // فاز ۵۳ («فعلاً کل سایت با شماره کارت»): چک‌اوتِ کارت‌به‌کارت — کارت/شبا از تنظیماتِ ادمین + کدِ رهگیری
-  const [checkout, setCheckout] = useState<{ plan: CardPlan; amount: number; card: any } | null>(null)
+  const [checkout, setCheckout] = useState<{ plan: CardPlan; amount: number; card: any; zarinpal?: boolean } | null>(null)
   const [receipt, setReceipt] = useState('')
   const [sendingReceipt, setSendingReceipt] = useState(false)
 
@@ -311,7 +311,7 @@ export default function PricingPage() {
       const r = await fetch('/api/payment/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ planId: plan.id, annual }) })
       const d = await r.json().catch(() => ({}))
       if (r.status === 401 || d.needLogin) { router.push('/auth?next=/pricing'); return }
-      if (d.card2card) { setCheckout({ plan, amount: d.amount, card: d.card }); setReceipt(''); return }
+      if (d.card2card) { setCheckout({ plan, amount: d.amount, card: d.card, zarinpal: !!d.zarinpal }); setReceipt(''); return }
       if (d.redirect) { window.location.href = d.redirect; return }
       if (d.ok) { setPayBanner({ ok: true, text: '✓ پلن فعال شد.' }); window.scrollTo({ top: 0, behavior: 'smooth' }); return }
       alert(d.error || 'خطا در شروع پرداخت')
@@ -349,6 +349,15 @@ export default function PricingPage() {
               <button disabled={sendingReceipt} onClick={submitReceipt} style={{ flex: 1, background: 'linear-gradient(140deg,var(--gold2,#e8c96a),var(--gold))', color: '#16140f', border: 'none', borderRadius: 12, padding: '12px 0', fontWeight: 900, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>{sendingReceipt ? 'در حالِ ثبت…' : 'واریز کردم — ثبتِ درخواست'}</button>
               <button onClick={() => setCheckout(null)} style={{ border: '1px solid var(--line2)', background: 'transparent', color: 'var(--text)', borderRadius: 12, padding: '12px 18px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>انصراف</button>
             </div>
+            {/* فاز ۶۹: اگر ادمین درگاهِ زرین‌پال را هم فعال کرده، پرداختِ آنلاینِ فوری گزینهٔ دوم است */}
+            {checkout.zarinpal && <button onClick={async () => {
+              try {
+                const r = await fetch('/api/payment/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ planId: checkout.plan.id, annual, gateway: 'zarinpal' }) })
+                const d = await r.json().catch(() => ({}))
+                if (d.redirect) { window.location.href = d.redirect; return }
+                alert(d.error || 'خطا در اتصال به درگاه')
+              } catch { alert('اتصال به سرور برقرار نشد') }
+            }} style={{ width: '100%', marginTop: 10, border: '1px solid var(--gold)', background: 'transparent', color: 'var(--gold)', borderRadius: 12, padding: '11px 0', fontWeight: 800, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>⚡ پرداختِ آنلاین و فعال‌سازیِ فوری (زرین‌پال)</button>}
             <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 10 }}>پس از تأییدِ واریزی توسطِ ملک‌جت (معمولاً کمتر از چند ساعت)، پلن خودکار روی حسابت فعال می‌شود.</div>
           </div>
         </div>

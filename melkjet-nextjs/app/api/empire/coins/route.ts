@@ -35,12 +35,13 @@ export async function POST(req: NextRequest) {
   // فاز ۵۳ («فعلاً کل سایت با شماره کارت»): مسیرِ پیش‌فرض = کارت‌به‌کارت با کدِ رهگیری و تأییدِ مدیر؛
   // پس از تأیید، کوین خودکار شارژ و درآمدِ واقعی برای استخرِ جوایز ثبت می‌شود (approveOrder).
   const card = enabledGateways().find(g => g.type === 'card2card')
-  const wantZarinpal = String(b.gateway || '') === 'zarinpal' && zarinpalConfigured()
+  const zarinpalReady = zarinpalConfigured() && !!enabledGateways().find(g => g.type === 'zarinpal')   // فاز ۶۹: تاگلِ ادمین هم شرط است
+  const wantZarinpal = String(b.gateway || '') === 'zarinpal' && zarinpalReady
   if (card && !wantZarinpal) {
     const receipt = String(b.receipt || '').trim().slice(0, 60)
     if (!receipt) {
       return NextResponse.json({
-        ok: true, card2card: true, amount: pack.priceToman,
+        ok: true, card2card: true, amount: pack.priceToman, zarinpal: zarinpalReady,
         card: { label: card.label, cardNumber: card.cardNumber || '', iban: card.iban || '', accountNumber: card.accountNumber || '', holderName: card.holderName || '', bank: card.bank || '', note: card.note || '' },
       })
     }
@@ -49,7 +50,7 @@ export async function POST(req: NextRequest) {
     logAudit(s.phone, 'سفارشِ کارت‌به‌کارتِ ملک‌کوین', `${pack.label} · ${pack.coins} کوین · رهگیری ${receipt}`)
     return NextResponse.json({ ok: true, pending: true, orderId: r.order?.id, message: 'درخواستت ثبت شد — پس از تأییدِ واریزی، ملک‌کوین‌ها خودکار به کیفت اضافه می‌شوند.' })
   }
-  if (!zarinpalConfigured()) return NextResponse.json({ error: 'روشِ پرداختی فعال نیست — در پنل، کارت‌به‌کارت یا زرین‌پال را فعال کنید.' }, { status: 200 })
+  if (!zarinpalReady) return NextResponse.json({ error: 'روشِ پرداختی فعال نیست — در پنل، کارت‌به‌کارت یا زرین‌پال را فعال کنید.' }, { status: 200 })
   const origin = `${req.headers.get('x-forwarded-proto') || 'https'}://${req.headers.get('host')}`
   const r = await requestPayment(pack.priceToman, `شارژ ${pack.coins} ملک‌کوین — ${pack.label}`, `${origin}/api/empire/coins?pack=${encodeURIComponent(pack.id)}`, s.phone)
   if (!r.ok || !r.url) return NextResponse.json({ error: r.error || 'خطا در ایجاد پرداخت' }, { status: 200 })

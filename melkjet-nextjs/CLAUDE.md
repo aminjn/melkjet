@@ -270,14 +270,15 @@ media files in `.media/` + `.media-index.json`.
 - **Website-builder**: template picker is now a responsive popup («قالب‌ها» button) with real
   mini-mockup previews, locked to the user's profile (10/profile, ~70 total).
 
-## PENDING (next sessions) — the per-panel design-match work
-The OTHER role dashboards are still mostly mock and need the SAME treatment the builder/materials
-got (real backend + rebuild to match the user's Figma screenshots): **owner** (seller/investor),
-**buyer**, **pros** (advisor), **agency**. (DONE: builder, materials.)
-Process per panel: user sends a screenshot → build a file-store + `/api/<role>` → rebuild the page
-to match the design with all sections functional → wire plan-gating for paid sections → build/commit.
-Also pending: **payment gateway** (Zarinpal — config-gated like SMS, then unlock plans/roles on
-purchase) and **runtime plan-gating enforcement** inside dashboards.
+## PENDING — updated (فاز ۶۹ audit; older notes here were stale)
+All role dashboards are REAL now (owner/buyer/pros/agency/builder/materials + 7 prodesk roles —
+Sales OS, per-owner isolation, plan gating). Payments are DONE: card-to-card default site-wide +
+Zarinpal as second option when its gateway toggle (admin → پرداخت) AND keys are set — both for
+plans (/pricing modal) and coins (empire shop); plan-gating enforcement is live (فاز ۵۱–۵۸).
+Persiansaze weekly reveal cron + auto account creation are wired (persiansaze-cron.ts).
+Actually pending: consortium/mega-project co-op (needs active population), Creator Store /
+Business Club / VIP / CEO Pass (need the user's pricing decisions), full AI Live Director
+(deliberately kept suggest-only), Visual Bible Pass 2 (needs user approval), Node 22 on server.
 
 ## How to continue across context limits
 1. All work is pushed to git (`origin/main`). A fresh session starts from the repo + this file.
@@ -309,8 +310,8 @@ HTTP/1.1 → WAF 401; only HTTP/2 works).
 - **API**: `app/api/admin/persiansaze/route.ts` (GET status/profiles/profile; POST save-config/scrape/reveal/rebuild-profiles — scrape & reveal spawn the scripts in background with lock files).
 - **Admin UI**: `PersianSazeView` in `app/admin/page.tsx`, nav id `persiansaze` («سازنده‌ها (پرشین سازه)»).
   Current data: 19,879 projects, 16,150 unique receptors. Profiles built per real constructor.id with name+phone+projects.
-- **PENDING**: weekly cron auto-reveal (cron-runner) + create MelkJet سازنده accounts from revealed
-  builders (name+phone) + region/phase name lookups (regionId-100=Tehran district for city 1).
+- **DONE (was pending)**: weekly cron auto-reveal + auto account creation (`persiansaze-cron.ts` —
+  maybeRunReveal/maybeCreateAccounts on instance-0 cron) + region/phase labels (regionLabel/phaseLabel).
 
 ---
 

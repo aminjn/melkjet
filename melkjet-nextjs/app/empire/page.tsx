@@ -2199,7 +2199,7 @@ export default function EmpirePage() {
               try {
                 const r = await fetch('/api/empire/coins', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ packId: p.id }) })
                 const d = await r.json().catch(() => null)
-                if (d?.card2card) { setCoinCk({ pack: p, amount: d.amount, card: d.card }); setCoinReceipt(''); return }
+                if (d?.card2card) { setCoinCk({ pack: p, amount: d.amount, card: d.card, zarinpal: !!d.zarinpal }); setCoinReceipt(''); return }
                 if (d?.redirect) { window.location.href = d.redirect; return }
                 alert(d?.error || 'خطا در شروعِ پرداخت')
               } finally { setBusy(false) }
@@ -2227,6 +2227,13 @@ export default function EmpirePage() {
           }}>واریز کردم — ثبت</button>
           <button style={{ ...btnGhost, padding: '8px 12px', fontSize: 12 }} onClick={() => setCoinCk(null)}>انصراف</button>
         </div>
+        {/* فاز ۶۹: اگر درگاهِ زرین‌پال هم فعال است، پرداختِ آنلاینِ فوری */}
+        {coinCk.zarinpal && <button style={{ width: '100%', marginTop: 8, border: '1px solid var(--gold)', background: 'transparent', color: 'var(--gold)', borderRadius: 10, padding: '9px 0', fontWeight: 800, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }} disabled={busy} onClick={async () => {
+          const r = await fetch('/api/empire/coins', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ packId: coinCk.pack.id, gateway: 'zarinpal' }) })
+          const d = await r.json().catch(() => null)
+          if (d?.redirect) { window.location.href = d.redirect; return }
+          alert(d?.error || 'خطا در اتصال به درگاه')
+        }}>⚡ پرداختِ آنلاین و شارژِ فوری (زرین‌پال)</button>}
       </div>}
       <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 8 }}>پرداختِ کارت‌به‌کارت با کدِ رهگیری (پس از تأییدِ ملک‌جت، کوین خودکار اضافه می‌شود) — همه‌چیز در تایم‌لاینت ثبت است.</div>
     </div>}
