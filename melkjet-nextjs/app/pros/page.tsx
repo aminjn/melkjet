@@ -625,7 +625,10 @@ export default function ProsPage() {
     try {
       const r = await fetch('/api/advisor')
       if (r.status === 401) { setUnauth(true); setLoading(false); return }
-      const d = await r.json(); setData(d); setUnauth(false)
+      const d = await r.json().catch(() => null)
+      // فاز ۵۵: جوابِ غیرموفق (مثلاً 403ِ گیتِ پلن) داده نیست — PlanLock سراسری قفل را نشان می‌دهد؛ کرش نکن
+      if (!r.ok || !d || !d.stats) { return }
+      setData(d); setUnauth(false)
       const p = d.stats.profile || {}
       setProf({ name: p.name || '', agency: p.agency || '', title: p.title || '', bio: p.bio || '', phone: p.phone || '', areas: p.areas || '', experience: p.experience || '', photo: p.photo || '', specialties: Array.isArray(p.specialties) ? p.specialties : [] })
     } catch {} finally { setLoading(false) }

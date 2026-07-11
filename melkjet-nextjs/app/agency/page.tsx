@@ -374,7 +374,10 @@ export default function AgencyPage() {
     try {
       const r = await fetch('/api/agency')
       if (r.status === 401) { setUnauth(true); setLoading(false); return }
-      const d = await r.json(); setData(d); setUnauth(false)
+      const d = await r.json().catch(() => null)
+      // فاز ۵۵: جوابِ غیرموفق (مثلاً 403ِ گیتِ پلن) داده نیست — PlanLock سراسری قفل را نشان می‌دهد؛ کرش نکن
+      if (!r.ok || !d || !d.stats) { return }
+      setData(d); setUnauth(false)
       setProf({ name: d.stats.profile.name || '', branches: d.stats.profile.branches || '' })
     } catch {} finally { setLoading(false) }
   }, [])

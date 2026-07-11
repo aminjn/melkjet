@@ -5206,7 +5206,7 @@ function PlansView() {
             <div><div style={{ fontWeight: 900, fontSize: 18 }}>پلن‌ها و اشتراک</div><div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3 }}>پلن بساز و به نقش نسبت بده؛ با انتخابِ نقش، ماژول‌های همان نقش می‌آید تا انتخاب کنی. وقتی کاربری بخرد، پلن به حسابش وصل می‌شود و در «مشترکین» شمرده می‌شود.</div></div>
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            {/* فاز ۵۱: کلیدِ اعمالِ واقعیِ پلن‌ها — تا روشن نشود، هیچ قفلی اعمال نمی‌شود (رول‌اوتِ امن) */}
+            {/* فاز ۵۵: اعمالِ پلن‌ها پیش‌فرض «روشن» است — این کلید فقط برای خاموش‌کردنِ اضطراری است */}
             {enforce !== null && <button onClick={toggleEnforce} style={{ display: 'flex', alignItems: 'center', gap: 8, background: enforce ? 'rgba(110,220,160,.12)' : 'var(--bg2)', border: `1px solid ${enforce ? '#3d8f63' : 'var(--line2)'}`, color: enforce ? '#7ee0b8' : 'var(--muted)', borderRadius: 12, padding: '9px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5, fontWeight: 800 }}>
               <span style={{ width: 34, height: 18, borderRadius: 999, background: enforce ? '#2f8f5f' : 'var(--line2)', position: 'relative', display: 'inline-block', transition: 'background .2s' }}>
                 <span style={{ position: 'absolute', top: 2, right: enforce ? 2 : 18, width: 14, height: 14, borderRadius: '50%', background: '#fff', transition: 'right .2s' }} />

@@ -13,6 +13,7 @@ export interface PlanAccess {
   roleName: string; dashboard: string
   planId: string; planName: string; planTier: string; paid: boolean; expiresAt?: number
   permissions: string[]; quotas: Record<string, number>
+  dashModules: string[]; dashLocked: boolean
 }
 
 export const PERM_LABEL: Record<string, string> = Object.fromEntries(PERMISSIONS.map(p => [p.id, p.label]))
@@ -24,6 +25,15 @@ export function effectivePermsOf(
 ): { permissions: string[]; quotas: Record<string, number> } {
   const src = plan || freePlan
   return { permissions: [...(src?.permissions || [])], quotas: { ...(src?.quotas || {}) } }
+}
+
+// فاز ۵۵ — قفلِ کلِ داشبورد، کاملاً داینامیک (هیچ نگاشتِ هاردکدی از داشبورد→ماژول):
+// «universe» = اجتماعِ ماژول‌هایی که پلن‌های فعالِ همان داشبورد باز می‌کنند. اگر universe خالی باشد
+// (مثل /buyer که پلن‌هایش فقط سهمیه‌ای‌اند) داشبورد ماژول‌محور نیست → هرگز قفل نمی‌شود. وگرنه
+// کاربری که «هیچ‌کدام» از آن ماژول‌ها را ندارد، عملاً هیچ‌چیزِ آن پنل را نمی‌تواند استفاده کند → قفلِ تمام‌صفحه.
+export function panelLockOf(userPerms: string[], dashPlans: Array<Pick<Plan, 'permissions'>>): { locked: boolean; modules: string[] } {
+  const modules = [...new Set(dashPlans.flatMap(p => p.permissions || []))]
+  return { modules, locked: modules.length > 0 && !userPerms.some(p => modules.includes(p)) }
 }
 
 export function resolveAccess(session: { phone: string; role?: string }): PlanAccess {
@@ -38,12 +48,16 @@ export function resolveAccess(session: { phone: string; role?: string }): PlanAc
   const actives = (() => { try { return listActive() } catch { return [] as Plan[] } })()
   const freePlan = actives.find(p => p.priceMonthly === 0 && p.dashboard === dash) || actives.find(p => p.priceMonthly === 0) || null
   const eff = effectivePermsOf(plan, freePlan)
+  const enforce = planEnforcement()
+  // فاز ۵۵: قفلِ کلِ داشبورد از پلن‌های فعالِ همان داشبورد (داینامیک — ادمین پلنِ رایگانِ ماژول‌دار بسازد، باز می‌شود)
+  const lock = panelLockOf(eff.permissions, actives.filter(p => p.dashboard === dash))
   return {
-    phone, isAdmin, enforce: planEnforcement(),
+    phone, isAdmin, enforce,
     roleName: role?.name || '', dashboard: dash,
     planId: plan?.id || freePlan?.id || '', planName: plan?.name || freePlan?.name || 'رایگان',
     planTier: plan?.tier || (plan ? '' : 'free'), paid: !!plan, expiresAt: ap?.expiresAt,
     permissions: eff.permissions, quotas: eff.quotas,
+    dashModules: lock.modules, dashLocked: enforce && !isAdmin && lock.locked,
   }
 }
 

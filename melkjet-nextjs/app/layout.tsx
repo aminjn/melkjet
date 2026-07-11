@@ -8,6 +8,7 @@ import LocationDetector from './components/LocationDetector'
 import Tracker from './components/Tracker'
 import AuthModal from './components/AuthModal'
 import SuspensionGate from './components/SuspensionGate'
+import PlanLock from './components/PlanLock'
 import CompareBar from './components/CompareBar'
 import SupportLauncher from './components/SupportLauncher'
 import LegalAssistant from './components/LegalAssistant'
@@ -61,6 +62,7 @@ export default function RootLayout({
         <ImpersonationBar />
         <AuthModal />
         <SuspensionGate />
+        <PlanLock />
         <CompareBar />
         <SupportLauncher />
         <LegalAssistant />

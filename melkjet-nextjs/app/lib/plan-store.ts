@@ -126,8 +126,9 @@ function seed(): DB {
   return { plans, v: SEED_V }
 }
 
-// فاز ۵۱ (اعمالِ پلن‌ها): کلیدِ سراسریِ enforcement — پیش‌فرض خاموش تا رول‌اوت امن باشد؛ از پنلِ پلن‌ها روشن می‌شود.
-export function planEnforcement(): boolean { return load().enforce === true }
+// فاز ۵۵ (فیدبک: «هر کسی وارد می‌شود همه‌چیز دارد») — پیش‌فرض «روشن»: پلن‌ها از همان لحظهٔ دیپلوی
+// واقعاً اعمال می‌شوند. کلیدِ پنلِ پلن‌ها فقط کلیدِ اضطراری برای خاموش‌کردن است.
+export function planEnforcement(): boolean { return load().enforce !== false }
 export function setPlanEnforcement(v: boolean): boolean { const db = load(); db.enforce = v === true; save(db); return db.enforce! }
 
 export function listPlans(): Plan[] { return load().plans.sort((a, b) => a.order - b.order) }

@@ -194,8 +194,16 @@ media files in `.media/` + `.media-index.json`.
   advisor(+divar)/agency/prodesk → 'crm', builder → 'units', materials → 'store', ai/studio → 'ai_studio'.
   UI: `/api/auth/profile` returns `access` summary; PanelReturnBar shows a full-page 🔒 upgrade
   overlay on /crm /marketing /workflow /website-builder when the module is missing.
-  **Kill-switch:** admin → پلن‌ها → «اعمالِ پلن‌ها» toggle (plan-store `enforce`, default OFF —
-  turning it on is the moment gating actually starts). Super admin always exempt.
+  **Kill-switch (فاز ۵۵):** enforcement is ON BY DEFAULT (`planEnforcement()` = `enforce !== false`);
+  admin → پلن‌ها → «اعمالِ پلن‌ها» toggle is now only the emergency OFF switch. Super admin always exempt.
+  **Dashboard-level lock (فاز ۵۵):** `panelLockOf(userPerms, dashPlans)` in plan-gate — universe =
+  union of permissions across the dashboard's active plans; a user holding NONE of them gets
+  `access.dashLocked` → global `app/components/PlanLock.tsx` (mounted in root layout, fetches
+  profile only on dashboard paths) shows a full-page 🔒 + /pricing CTA. Dashboards whose plans
+  define no permissions (e.g. /buyer — quota-only plans) never hard-lock. Fully dynamic: an admin
+  adding a free plan with modules to a dashboard unlocks it. Dashboard loaders (pros/agency/
+  materials/buyer/owner) treat non-ok API responses (403 plan gate) as no-data instead of
+  crashing («iT is not iterable» bug when enforce was first switched on).
   **Quota enforcement (فاز ۵۲ — DONE):** `requireQuota(s, key, currentCount)` for stock caps
   (count read live from the owning store — no parallel counters): leads (crm+advisor+agency),
   files (advisor+agency listings), agents, products, projects/units/investors (builder),

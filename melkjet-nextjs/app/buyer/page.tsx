@@ -216,9 +216,11 @@ export default function BuyerPage() {
     try {
       const r = await fetch('/api/buyer')
       if (r.status === 401) { setUnauth(true); setLoading(false); return }
-      const d = await r.json()
+      const d = await r.json().catch(() => null)
+      // فاز ۵۵: جوابِ غیرموفق (مثلاً 403ِ گیتِ پلن) داده نیست — PlanLock سراسری قفل را نشان می‌دهد؛ کرش نکن
+      if (!r.ok || !d || d.error) { return }
       setData(d); setUnauth(false)
-      const p = d.profile || d.stats.profile || {}
+      const p = d.profile || d.stats?.profile || {}
       setProf({ name: p.name || '', email: p.email || '', bio: p.bio || '', budget: String(p.budget || ''), prefType: p.prefType || '', dealType: p.dealType === 'rent' ? 'rent' : p.dealType === 'both' ? 'both' : 'sale', rooms: String(p.rooms || ''), areaMin: String(p.areaMin || ''), areaMax: String(p.areaMax || ''), areas: p.areas || '' })
     } catch {} finally { setLoading(false) }
   }, [])
