@@ -180,6 +180,30 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             {row('حداقل سطحِ بازیکن', cin('rewards', 'minLevel'), 'زیرِ این سطح دکمهٔ ادعا قفل است')}
             {row('حداقل سنِ اکانت (روز)', cin('rewards', 'minAccountDays'))}
             {row('سقفِ جایزهٔ ماهانهٔ هر بازیکن (تومان)', cin('rewards', 'monthlyCapToman', 130))}
+            {/* فاز ۶۲ (سند ۳۱ — فصل ۲۰ End Game): نردبانِ لایه‌ها + میراث + شگفتی‌ها + رؤیاها — همه knob */}
+            <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>🪜 End Game — آستانهٔ لایه‌های نقش (تومانِ ارزشِ خالص)</div>
+            {row('لایهٔ ۲ · مشاورِ بازار', cin('endgame', 'l2', 140))}
+            {row('لایهٔ ۳ · شرکتِ ساختمانی', cin('endgame', 'l3', 140), '+ شرطِ واقعی: یک پروژهٔ تحویلی')}
+            {row('لایهٔ ۴ · هولدینگ', cin('endgame', 'l4', 140), '+ ۳ پروژه و ۵ دارایی')}
+            {row('لایهٔ ۵ · سرمایه‌گذارِ کلان', cin('endgame', 'l5', 140), '+ حضور در بازارِ سرمایه')}
+            {row('لایهٔ ۶ · سازندهٔ شهر', cin('endgame', 'l6', 140), '+ ۶ پروژهٔ تحویلی')}
+            {row('لایهٔ ۷ · فاتحِ شهر', cin('endgame', 'l7', 140), '+ دارایی در ۵ محله')}
+            {row('لایهٔ ۸ · توسعه‌دهندهٔ افسانه‌ای', cin('endgame', 'l8', 140))}
+            <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>🏛 وزن‌های شاخصِ میراث</div>
+            {row('امتیازِ هر پروژهٔ تحویلی', cin('endgame', 'legacyBuild'))}
+            {row('هر چند تومان دستمزد = ۱ امتیاز', cin('endgame', 'legacyJobsPer', 130))}
+            {row('هر چند تومان مالیات = ۱ امتیاز', cin('endgame', 'legacyTaxPer', 130))}
+            {row('ضریبِ میانگینِ کیفیتِ ساخت', cin('endgame', 'legacyQuality'))}
+            {row('امتیازِ هر تحسین (👏)', cin('endgame', 'legacySocial'))}
+            {row('امتیازِ هر نشان', cin('endgame', 'legacyBadge'))}
+            <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>🌍 حداقلِ ثبتِ شگفتی‌های دنیا</div>
+            {row('امپراتوریِ درآمد (تومان)', cin('endgame', 'wonderMinIncome', 130))}
+            {row('سازندهٔ برتر (پروژه)', cin('endgame', 'wonderMinProjects'))}
+            {row('سلطانِ مزایده (برد)', cin('endgame', 'wonderMinAuction'))}
+            {row('محبوب‌ترین (تحسین)', cin('endgame', 'wonderMinKudos'))}
+            {row('بزرگ‌ترین کارفرما (تومان)', cin('endgame', 'wonderMinWages', 130))}
+            {row('میراثِ برتر (امتیاز)', cin('endgame', 'wonderMinLegacy'))}
+            {row('سقفِ رؤیاهای فعالِ هر بازیکن', cin('endgame', 'dreamsMax'))}
             <button style={{ ...btn, marginTop: 10 }} disabled={busy === 'cfg'} onClick={saveCfg}>💾 ذخیره و اعمالِ زنده</button>
             <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 8 }}>واریز به سطلِ «پاداشِ» کیف‌پولِ یکپارچهٔ سایت (reos wallet) انجام می‌شود و در دفترِ تراکنشِ کاربر ثبت است. هیچ پرداختی بدونِ کلیکِ «تأیید» شما انجام نمی‌شود.</div>
           </div>

@@ -55,6 +55,7 @@ import { rewardLadderOf, requestPayout, userPayoutsOf, rewardForecastOf } from '
 import { bucketBalance } from '@/app/lib/reos/wallet'
 // فاز ۵۰ (سند ۳۰): تالارِ افتخارات (رکوردها/مجموعه‌ها) + حریفِ قسم‌خورده
 import { recordsOf, collectionsOf, applyCollections, COLLECTIONS, noteNemesis } from '@/app/lib/empire-store'
+import { roleLayerOf, legacyScoreOf, storyOf, dreamProgressOf, dreamSuggestionsOf, addCustomDream, applyDreams, wondersUpdate, DREAM_METRICS } from '@/app/lib/empire-store'
 import { loadSnapshots } from '@/app/lib/empire-metrics'
 
 const hoodOf = (loc?: string) => { const p = String(loc || '').split(/[،,]/).map(x => x.trim()).filter(Boolean); return p.length > 1 ? p[p.length - 1] : (p[0] || '') }
@@ -499,8 +500,18 @@ async function stateOf(userId: string, e00: EmpireData) {
   // اسنپ‌شاتِ هفتگی (سند ۱۶): مبنای لیدربوردِ «رشدِ این هفته» — از نقطهٔ ورودِ خودِ بازیکن در این هفته
   const thisWeek = Math.floor(today / 7)
   if (!e.weekSnap || e.weekSnap.week < thisWeek) await setWeekSnap(userId, thisWeek, nw.netWorth).catch(() => {})
+  // فاز ۶۲ (فصل ۲۰): تحققِ رؤیاهای شخصی از عددِ واقعیِ همین لحظه + لایهٔ نقش + تختهٔ رؤیاها
+  const dr62 = await applyDreams(userId, nw.netWorth).catch(() => null)
+  const e62 = dr62?.ok && dr62.empire ? dr62.empire : e
+  const endgame = {
+    layer: roleLayerOf(e62, nw.netWorth),
+    dreams: dreamProgressOf(e62, nw.netWorth),
+    suggestions: dreamSuggestionsOf(e62),
+    metrics: Object.entries(DREAM_METRICS).map(([k, m]) => ({ key: k, fa: m.fa, unit: m.unit })),
+    dreamsMax: config().empire.endgame.dreamsMax,
+  }
   return {
-    enabled: true, empire: { ...e, assets }, level: empireLevel(e.xp), ...nw, missions, bank, quests,
+    enabled: true, empire: { ...e, assets }, level: empireLevel(e.xp), ...nw, missions, bank, quests, endgame,
     liveEvents, streakBonuses,
     empireScore: empireScoreOf(e, prices),
     chest: config().empire.chest.enabled ? { available: chestAvailable } : null,
@@ -1739,13 +1750,29 @@ export async function POST(req: NextRequest) {
       const badgeFa: Record<string, string> = { Founder: 'بنیان‌گذار', CEO: 'مدیرعامل', 'First Permit': 'اولین پروانه', 'First Owner': 'اولین مالکیت', 'Golden Hammer': 'چکشِ طلایی', Phoenix: 'ققنوس' }
       for (const hb2 of HIDDEN_BADGES) badgeFa[hb2.key] = hb2.fa.split(' — ')[0]
       for (const c2 of COLLECTIONS) badgeFa[c2.key] = c2.titleFa
+      // فاز ۶۲ (فصل ۲۰): میراث + مستندِ مسیر + شگفتی‌های دنیا + لایهٔ نقش — همه از دادهٔ واقعی
+      const infoH = await liveInfoOf(e)
+      const nwH = netWorthOf(e, infoH.prices).netWorth
+      const wonders = await wondersUpdate(dayNumberOf(Date.now())).catch(() => [])
       return NextResponse.json({
         ok: true,
         records: recordsOf(e),
         collections: collectionsOf(e),
         badges: e.badges.map(k => ({ key: k, fa: badgeFa[k] || k })),
         title: e.title || '',
+        legacy: legacyScoreOf(e),
+        story: storyOf(e),
+        wonders,
+        layer: roleLayerOf(e, nwH),
+        myNo: e.no,
       })
+    }
+
+    // 🌠 رؤیای شخصی (فاز ۶۲ — فصل ۲۰ Part 7): بازیکن هدفِ خودش را می‌سازد؛ پیشرفت از متریکِ واقعی.
+    case 'dreamAdd': {
+      const r = await addCustomDream(userId, { label: String(b.label || ''), metric: String(b.metric || ''), target: Number(b.target) })
+      if (!r.ok) return NextResponse.json({ error: (r as any).error || (r as any).reason || 'ثبت نشد' }, { status: 400 })
+      return NextResponse.json({ ok: true })
     }
 
     // 🎁 مسیرِ جوایزِ واقعی (فاز ۴۸): نردبانِ مرحله‌ای از ارزشِ خالصِ واقعی → جایزهٔ تومانی به کیف‌پولِ سایت.

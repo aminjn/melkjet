@@ -2,7 +2,7 @@
 // قانونِ ۲ سند: هیچ دادهٔ جعلی — دارایی‌ها آگهی‌های واقعیِ سایت‌اند و ارزششان زنده محاسبه می‌شود.
 // چهار نوع ارزش (فصل ۶): XP (غیرقابل‌خرید)، Melk Coin (ارزِ داخلی)، Real Asset (تومان)، Reputation (از REOS trust).
 // ذخیره dual-mode: PG (جدولِ reos_empire، هر کاربر یک ردیف) یا فایلِ ‎.empire-data.json‎.
-import { pgEnabled, pgTx } from './db'
+import { pgEnabled, pgTx, kvGet, kvSet } from './db'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes, createHash } from 'crypto'
@@ -139,6 +139,7 @@ export interface EmpireData {
   lastLevel?: number          // آخرین سطحِ پاداش‌گرفته — پاداشِ Level Up (سند ۱۶ فصل ۶ بخش ۱)
   title?: string              // عنوانِ (Title) فعال — فقط از نشان‌های واقعاً کسب‌شده (سند ۱۶ بخش ۹)
   kudos?: number              // 👏 تحسینِ بازیکنانِ واقعی (سند ۱۷ — تعاملِ اجتماعی)؛ هر بازیکن یک‌بار
+  dreamsCustom?: Array<{ id: string; label: string; metric: string; target: number; createdAt: number; doneAt?: number }>   // فاز ۶۲ (فصل ۲۰ Part 7): رؤیاهای شخصیِ خودِ بازیکن — هدفِ عددی روی متریکِ واقعی
   pendingComeback?: number    // هدیهٔ بازگشت (Comeback Engine جلد ۲۶) — روزِ کشفِ غیبت
   stylePicks?: string[]                               // مأموریت M2 «سبکِ خودت را پیدا کن» (انتخابِ تصویری)
   hunter?: { a: string; b: string; better: string; at: number }   // جفتِ فعالِ Property Hunter (§6.4)
@@ -450,6 +451,172 @@ export function recordsOf(e: EmpireData): Array<{ icon: string; label: string; v
   if ((e.stats?.negoWins || 0) > 0) out.push({ icon: '🤝', label: 'مذاکره‌های بردی', value: e.stats!.negoWins, unit: 'count' })
   if ((e.stats?.crisisRecovered || 0) > 0) out.push({ icon: '🕊', label: 'عبور از بحران', value: e.stats!.crisisRecovered!, unit: 'count' })
   return out
+}
+
+// ══════════ فاز ۶۲ (سند ۳۱ — فصل ۲۰ End Game) ══════════
+// Part 1 — نردبانِ بی‌پایان (Role Evolution): «بعد از ۳۰۰ ساعت نباید همان کارهای ساعتِ اول را بکند؛ نقشش عوض شود».
+// لایهٔ نقش از مقیاسِ واقعیِ امپراتوری (ارزشِ خالص + شرطِ ساختاریِ واقعی)؛ آستانه‌ها همه knob (endgame.l2..l8).
+export const ROLE_LAYERS: Array<{ icon: string; fa: string; extra?: (e: EmpireData) => boolean; extraFa?: string }> = [
+  { icon: '🎯', fa: 'معامله‌گر' },
+  { icon: '🏠', fa: 'مشاورِ بازار' },
+  { icon: '🏗', fa: 'شرکتِ ساختمانی', extra: e => (e.stats?.projectsDelivered || 0) >= 1, extraFa: 'یک پروژهٔ تحویلی' },
+  { icon: '🏢', fa: 'هولدینگ', extra: e => (e.stats?.projectsDelivered || 0) >= 3 && e.assets.length >= 5, extraFa: '۳ پروژهٔ تحویلی + ۵ دارایی' },
+  { icon: '🌐', fa: 'سرمایه‌گذارِ کلان', extra: e => (e.funds?.length || 0) + (e.crowd?.length || 0) > 0, extraFa: 'حضور در بازارِ سرمایه (صندوق/مشارکت)' },
+  { icon: '🏙', fa: 'سازندهٔ شهر', extra: e => (e.stats?.projectsDelivered || 0) >= 6, extraFa: '۶ پروژهٔ تحویلی' },
+  { icon: '🗺', fa: 'فاتحِ شهر', extra: e => new Set(e.assets.map(a => a.hood).filter(Boolean)).size >= 5, extraFa: 'دارایی در ۵ محلهٔ متفاوت' },
+  { icon: '👑', fa: 'توسعه‌دهندهٔ افسانه‌ای' },
+]
+export function roleLayerOf(e: EmpireData, netWorth: number, g = config().empire.endgame): { idx: number; icon: string; fa: string; next: null | { fa: string; icon: string; needToman: number; extraFa?: string; extraOk: boolean } } {
+  const ths = [0, g.l2, g.l3, g.l4, g.l5, g.l6, g.l7, g.l8]
+  let idx = 0
+  for (let i = 1; i < ROLE_LAYERS.length; i++) {
+    if (netWorth >= (ths[i] || Infinity) && (!ROLE_LAYERS[i].extra || ROLE_LAYERS[i].extra!(e))) idx = i
+    else break
+  }
+  const n = idx + 1 < ROLE_LAYERS.length ? ROLE_LAYERS[idx + 1] : null
+  return { idx, icon: ROLE_LAYERS[idx].icon, fa: ROLE_LAYERS[idx].fa, next: n ? { fa: n.fa, icon: n.icon, needToman: ths[idx + 1] || 0, extraFa: n.extraFa, extraOk: !n.extra || n.extra(e) } : null }
+}
+
+// Part 2 — شاخصِ میراث (Legacy Score): «پول تنها معیارِ موفقیت نیست» — همه از دادهٔ ثبت‌شدهٔ واقعی؛ وزن‌ها knob.
+export function legacyScoreOf(e: EmpireData, g = config().empire.endgame): { score: number; parts: Array<{ icon: string; fa: string; value: number; unit: 'toman' | 'count'; pts: number }> } {
+  const qMap: Record<string, number> = { 'اقتصادی': 40, 'استاندارد': 70, 'لوکس': 95 }
+  const hist = e.projectHist || []
+  const qAvg = hist.length ? Math.round(hist.reduce((s, r) => s + (qMap[r.quality] ?? 60), 0) / hist.length) : 0
+  const parts: Array<{ icon: string; fa: string; value: number; unit: 'toman' | 'count'; pts: number }> = [
+    { icon: '🏗', fa: 'پروژه‌های تحویلی', value: e.stats?.projectsDelivered || 0, unit: 'count', pts: (e.stats?.projectsDelivered || 0) * g.legacyBuild },
+    { icon: '👷', fa: 'دستمزدِ پرداختی (اشتغال)', value: e.wagesPaid || 0, unit: 'toman', pts: Math.floor((e.wagesPaid || 0) / Math.max(1, g.legacyJobsPer)) },
+    { icon: '🏛', fa: 'مالیاتِ پرداختی (سهم در شهر)', value: e.taxPaid || 0, unit: 'toman', pts: Math.floor((e.taxPaid || 0) / Math.max(1, g.legacyTaxPer)) },
+    { icon: '⭐', fa: 'میانگینِ کیفیتِ ساخت', value: qAvg, unit: 'count', pts: qAvg * g.legacyQuality },
+    { icon: '👏', fa: 'تحسینِ بازیکنانِ واقعی', value: e.kudos || 0, unit: 'count', pts: (e.kudos || 0) * g.legacySocial },
+    { icon: '🎖', fa: 'نشان‌های کسب‌شده', value: (e.badges || []).length, unit: 'count', pts: (e.badges || []).length * g.legacyBadge },
+  ]
+  return { score: parts.reduce((sm, x) => sm + x.pts, 0), parts }
+}
+
+// Part 2 — «مستندِ مسیر» (Player History): اولین‌های واقعیِ خودِ بازیکن از تایم‌لاینِ ثبت‌شده — چیزی ساخته نمی‌شود؛
+// «انسان‌ها عاشقِ داستانِ خودشان‌اند» — اولین رخدادِ هر نوع (آیکون) به ترتیبِ زمان.
+export function storyOf(e: EmpireData): TimelineDot[] {
+  const first = new Map<string, TimelineDot>()
+  for (const t of e.timeline || []) if (!first.has(t.icon)) first.set(t.icon, t)
+  return [...first.values()].sort((a, b) => a.at - b.at).slice(0, 24)
+}
+
+// Part 7 — موتورِ رؤیاها (Dreams Engine): متریک‌های واقعیِ قابلِ هدف‌گذاری — پیشرفتِ رؤیا از عددِ واقعی اندازه می‌خورد.
+export const DREAM_METRICS: Record<string, { fa: string; unit: 'toman' | 'count'; of: (e: EmpireData, netWorth: number) => number }> = {
+  netWorth: { fa: 'ارزشِ خالص', unit: 'toman', of: (_e, nw) => nw },
+  assets: { fa: 'تعدادِ دارایی', unit: 'count', of: e => e.assets.length },
+  towers: { fa: 'پروژهٔ تحویلی', unit: 'count', of: e => e.stats?.projectsDelivered || 0 },
+  auctionWins: { fa: 'بردِ تالارِ مزایده', unit: 'count', of: e => e.stats?.auctionWins || 0 },
+  income: { fa: 'درآمدِ انباشته از اجاره/کسب‌وکار', unit: 'toman', of: e => e.assets.reduce((s, a) => s + (a.income || 0), 0) },
+  realized: { fa: 'سودِ تحقق‌یافته', unit: 'toman', of: e => Math.max(0, e.realized || 0) },
+  hoods: { fa: 'محله‌های حضور', unit: 'count', of: e => new Set(e.assets.map(a => a.hood).filter(Boolean)).size },
+  kudos: { fa: 'تحسینِ بازیکنان', unit: 'count', of: e => e.kudos || 0 },
+}
+export function dreamProgressOf(e: EmpireData, netWorth: number) {
+  return (e.dreamsCustom || []).map(d => {
+    const m = DREAM_METRICS[d.metric]
+    const have = m ? m.of(e, netWorth) : 0
+    return { ...d, unit: m?.unit || ('count' as const), metricFa: m?.fa || d.metric, have: Math.min(have, d.target), pct: Math.min(100, Math.floor((have / Math.max(1, d.target)) * 100)), done: !!d.doneAt || have >= d.target }
+  })
+}
+// پیشنهادِ رؤیا از «سبکِ واقعیِ» خودِ بازیکن — قاعده‌مند و قطعی (نه ادعای AI): قدمِ بعدیِ همان رفتاری که بیشتر داشته.
+export function dreamSuggestionsOf(e: EmpireData): Array<{ label: string; metric: string; target: number }> {
+  const out: Array<{ label: string; metric: string; target: number }> = []
+  const aw = e.stats?.auctionWins || 0, pd = e.stats?.projectsDelivered || 0
+  const hoods = new Set(e.assets.map(a => a.hood).filter(Boolean)).size
+  if (aw > 0) out.push({ label: `شکارچیِ افسانه‌ای — ${(aw + 3).toLocaleString('fa-IR')} بردِ چکش`, metric: 'auctionWins', target: aw + 3 })
+  if (pd > 0) out.push({ label: `سازندهٔ شهر — ${(pd + 2).toLocaleString('fa-IR')} پروژهٔ تحویلی`, metric: 'towers', target: pd + 2 })
+  if (hoods > 0) out.push({ label: `فاتحِ محله‌ها — حضور در ${(hoods + 2).toLocaleString('fa-IR')} محله`, metric: 'hoods', target: hoods + 2 })
+  if (out.length < 3 && e.assets.length >= 0) out.push({ label: `مالکِ ${(e.assets.length + 2).toLocaleString('fa-IR')} داراییِ واقعی`, metric: 'assets', target: e.assets.length + 2 })
+  return out.slice(0, 3)
+}
+export async function addCustomDream(userId: string, input: { label?: string; metric: string; target: number }, now = Date.now()) {
+  const m = DREAM_METRICS[input.metric]
+  const target = Math.floor(Number(input.target) || 0)
+  if (!m) return { ok: false as const, error: 'متریکِ رؤیا نامعتبر است' }
+  if (target <= 0) return { ok: false as const, error: 'هدفِ رؤیا باید عددی مثبت باشد' }
+  const maxN = config().empire.endgame.dreamsMax
+  return mutateEmpire(userId, e => {
+    const list = e.dreamsCustom || []
+    if (list.filter(d => !d.doneAt).length >= maxN) return `حداکثر ${maxN.toLocaleString('fa-IR')} رؤیای فعال می‌توانی داشته باشی — اول یکی را محقق کن`
+    const label = String(input.label || '').trim().slice(0, 60) || `${m.fa}: ${target.toLocaleString('fa-IR')}`
+    e.dreamsCustom = [...list, { id: 'dr' + now.toString(36) + String(list.length), label, metric: input.metric, target, createdAt: now }]
+    e.timeline.push({ at: now, icon: '🌠', title: 'رؤیای تازه ثبت شد', detail: label })
+  })
+}
+// تحققِ رؤیاها: هدفِ رسیده → مهرِ انجام + نشانِ اختصاصی + جشنِ تایم‌لاین (Badge/عنوانِ سندِ ۳۱).
+export async function applyDreams(userId: string, netWorth: number, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const fresh = (e.dreamsCustom || []).filter(d => !d.doneAt && (DREAM_METRICS[d.metric] ? DREAM_METRICS[d.metric].of(e, netWorth) : 0) >= d.target)
+    if (!fresh.length) return 'رؤیای تازه‌ای محقق نشده'
+    for (const d of fresh) {
+      d.doneAt = now
+      const key = `🌠 ${d.label}`.slice(0, 60)
+      if (!e.badges.includes(key)) e.badges.push(key)
+      e.timeline.push({ at: now, icon: '🌠', title: 'رؤیا محقق شد!', detail: d.label })
+    }
+  })
+}
+
+// Part 4 — شگفتی‌های دنیا (World Wonders): رکوردهای سراسریِ سرور — کمیاب، با پلاکِ دائمی، و قابلِ‌گرفتن.
+// «انواعِ مختلفِ افتخار» تا فقط ثروتمندترین برنده نباشد؛ حداقل‌ها knob؛ رکورد فقط با عددِ اکیداً بزرگ‌تر می‌شکند.
+export interface WonderHolder { no: number; name: string; value: number; sinceDay: number }
+export interface WondersDb { cats: Record<string, WonderHolder>; hist: Record<string, Array<WonderHolder & { toDay: number }>> }
+export const WONDER_DEFS: Array<{ key: string; icon: string; fa: string; unit: 'toman' | 'count'; metric: (e: EmpireData) => number; min: (g: ReturnType<typeof config>['empire']['endgame']) => number }> = [
+  { key: 'income', icon: '💰', fa: 'بزرگ‌ترین امپراتوریِ درآمد', unit: 'toman', metric: e => e.assets.reduce((s, a) => s + (a.income || 0), 0), min: g => g.wonderMinIncome },
+  { key: 'towers', icon: '🏗', fa: 'سازندهٔ برترِ شهر', unit: 'count', metric: e => e.stats?.projectsDelivered || 0, min: g => g.wonderMinProjects },
+  { key: 'auction', icon: '🔨', fa: 'سلطانِ تالارِ مزایده', unit: 'count', metric: e => e.stats?.auctionWins || 0, min: g => g.wonderMinAuction },
+  { key: 'kudos', icon: '👏', fa: 'محبوب‌ترین امپراتوری', unit: 'count', metric: e => e.kudos || 0, min: g => g.wonderMinKudos },
+  { key: 'employer', icon: '👷', fa: 'بزرگ‌ترین کارفرمای شهر', unit: 'toman', metric: e => e.wagesPaid || 0, min: g => g.wonderMinWages },
+  { key: 'legacy', icon: '🏛', fa: 'میراثِ برتر', unit: 'count', metric: e => legacyScoreOf(e).score, min: g => g.wonderMinLegacy },
+]
+// خالص و تست‌پذیر: نگه‌داشتنِ رکورد تا وقتی «اکیداً بزرگ‌تر» نیامده؛ عوض‌شدن = پلاکِ قبلی به تاریخچه (Former World Wonder).
+export function wondersCompute(list: EmpireData[], prev: WondersDb, day: number, g = config().empire.endgame): { db: WondersDb; changed: Array<{ key: string; fa: string; icon: string; holder: WonderHolder }> } {
+  const db: WondersDb = { cats: { ...(prev.cats || {}) }, hist: { ...(prev.hist || {}) } }
+  const changed: Array<{ key: string; fa: string; icon: string; holder: WonderHolder }> = []
+  for (const w of WONDER_DEFS) {
+    const min = w.min(g)
+    let best: { e: EmpireData; v: number } | null = null
+    for (const e of list) { const v = w.metric(e); if (v >= min && (!best || v > best.v)) best = { e, v } }
+    if (!best) continue
+    const cur = db.cats[w.key]
+    if (!cur) {
+      db.cats[w.key] = { no: best.e.no, name: best.e.name, value: best.v, sinceDay: day }
+      changed.push({ key: w.key, fa: w.fa, icon: w.icon, holder: db.cats[w.key] })
+    } else if (cur.no === best.e.no) {
+      if (best.v > cur.value) db.cats[w.key] = { ...cur, value: best.v }
+    } else if (best.v > cur.value) {
+      db.hist[w.key] = [{ ...cur, toDay: day }, ...(db.hist[w.key] || [])].slice(0, 10)
+      db.cats[w.key] = { no: best.e.no, name: best.e.name, value: best.v, sinceDay: day }
+      changed.push({ key: w.key, fa: w.fa, icon: w.icon, holder: db.cats[w.key] })
+    }
+  }
+  return { db, changed }
+}
+const WONDERS_FILE = join(process.cwd(), '.empire-wonders.json')
+const WONDERS_KV = 'empire_wonders'
+async function wondersLoad(): Promise<WondersDb> {
+  if (pgEnabled()) return kvGet<WondersDb>(WONDERS_KV, { cats: {}, hist: {} }).catch(() => ({ cats: {}, hist: {} }))
+  try { if (existsSync(WONDERS_FILE)) return JSON.parse(readFileSync(WONDERS_FILE, 'utf-8')) } catch {}
+  return { cats: {}, hist: {} }
+}
+async function wondersSave(db: WondersDb) {
+  if (pgEnabled()) { await kvSet(WONDERS_KV, db); return }
+  writeFileSync(WONDERS_FILE, JSON.stringify(db))
+}
+// به‌روزرسانی + نمای پلاک‌ها — دارندهٔ جدید در تایم‌لاینِ خودش جشن می‌گیرد («یک اتفاقِ جهانی، نه یک ساختمانِ دیگر»).
+export async function wondersUpdate(day: number, now = Date.now()) {
+  const prev = await wondersLoad()
+  const emps = await listEmpiresPublic(500)
+  const { db, changed } = wondersCompute(emps, prev, day)
+  if (JSON.stringify(db) !== JSON.stringify(prev)) await wondersSave(db).catch(() => {})
+  for (const c of changed) {
+    const holder = emps.find(x => x.no === c.holder.no)
+    if (holder) await mutateEmpire(holder.userId, e => {
+      e.timeline.push({ at: now, icon: '🌍', title: `شگفتیِ دنیا از آنِ توست: ${c.icon} ${c.fa}`, detail: 'تا وقتی کسی رکوردِ اکیداً بزرگ‌تری نسازد، این پلاک به نامِ توست' })
+    }).catch(() => {})
+  }
+  return WONDER_DEFS.map(w => ({ key: w.key, icon: w.icon, fa: w.fa, unit: w.unit, min: w.min(config().empire.endgame), holder: db.cats[w.key] || null, formers: (db.hist[w.key] || []).slice(0, 3) }))
 }
 
 // اسنپ‌شاتِ روزانهٔ ارزشِ خالص (جلد ۲۶ «سودِ دیروز») — اولین بازدیدِ هر روز ثبت می‌شود.

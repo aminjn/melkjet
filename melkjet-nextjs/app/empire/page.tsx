@@ -206,6 +206,8 @@ export default function EmpirePage() {
   const [rw, setRw] = useState<any>(null)
   // فاز ۵۰ (سند ۳۰ Part 20): تالارِ افتخارات — رکوردها/مجموعه‌ها/نشان‌ها (تبِ رتبه‌ها)
   const [hall, setHall] = useState<any>(null)
+  // فاز ۶۲ (فصل ۲۰ Part 7): فرمِ رؤیای شخصی — متریکِ واقعی + هدفِ عددی
+  const [dreamForm, setDreamForm] = useState({ metric: 'netWorth', target: '', label: '' })
   // فاز ۴۵ (سند ۲۹ Auction Saga): تالارِ مزایدهٔ هفته — لابی، نبردِ زنده، برد/باخت
   const [au, setAu] = useState<any>(null)        // وضعیتِ مزایده از سرور (لابی + ران + برد)
   const [auRun, setAuRun] = useState<any>(null)  // رانِ زنده — بعد از هر حرکت از سرور می‌آید
@@ -1877,6 +1879,57 @@ export default function EmpirePage() {
       </div>
     )}
 
+    {/* 🌠 تختهٔ رؤیاها (فاز ۶۲ — فصل ۲۰ Part 7 Dreams Engine): «هر بازیکن همیشه یک رؤیای بزرگ جلوی چشمش داشته باشد»
+        — رؤیای شخصیِ خودت را بساز؛ پیشرفت از عددِ واقعیِ امپراتوری اندازه می‌خورد؛ تحقق = نشانِ اختصاصی. */}
+    {st.endgame && <div style={{ ...card, borderColor: 'var(--goldDim)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <b style={{ fontSize: 14 }}>🌠 تختهٔ رؤیاها</b>
+        <span style={{ fontSize: 11, color: 'var(--muted)' }}>رؤیای خودت را تعریف کن — سیستم فقط اندازه می‌گیرد و جشن؛ تحمیل نمی‌کند</span>
+      </div>
+      {(st.endgame.dreams || []).length > 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+        {st.endgame.dreams.map((d: any) => (
+          <div key={d.id} style={{ background: d.done ? 'rgba(212,175,55,.08)' : 'var(--bg2)', border: `1px solid ${d.done ? 'var(--goldDim)' : 'var(--line)'}`, borderRadius: 12, padding: '9px 12px' }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 12 }}>
+              <span style={{ fontWeight: 700, flex: 1, minWidth: 160 }}>{d.done ? '✅' : '🌠'} {d.label}</span>
+              <span style={{ fontSize: 10.5, color: d.done ? 'var(--gold)' : 'var(--muted)' }}>{d.done ? 'محقق شد — نشانش در تالارِ افتخارات است' : `${d.unit === 'toman' ? faB(d.have) : fa(d.have)} از ${d.unit === 'toman' ? faB(d.target) : fa(d.target)}${d.unit === 'toman' ? ' ت' : ''}`}</span>
+            </div>
+            {!d.done && <div style={{ height: 5, background: 'var(--line)', borderRadius: 3, marginTop: 7, overflow: 'hidden' }}>
+              <div style={{ width: `${d.pct}%`, height: 5, background: 'linear-gradient(90deg, var(--goldDim), var(--gold))', borderRadius: 3 }} />
+            </div>}
+          </div>
+        ))}
+      </div>}
+      {(st.endgame.suggestions || []).length > 0 && <div style={{ marginTop: 10 }}>
+        <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>پیشنهاد از سبکِ واقعیِ خودت (قدمِ بعدیِ همان کاری که بیشتر کرده‌ای):</div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {st.endgame.suggestions.map((sg: any, i: number) => (
+            <button key={i} disabled={busy} onClick={async () => { const d = await api({ action: 'dreamAdd', metric: sg.metric, target: sg.target, label: sg.label }); if (d?.ok) load() }}
+              style={{ fontSize: 11, border: '1px solid var(--goldDim)', color: 'var(--gold)', background: 'transparent', borderRadius: 999, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit' }}>＋ {sg.label}</button>
+          ))}
+        </div>
+      </div>}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'end', marginTop: 12, background: 'var(--bg2)', border: '1px dashed var(--line2)', borderRadius: 12, padding: 10 }}>
+        <div style={{ flex: 1, minWidth: 150 }}>
+          <div style={{ fontSize: 10.5, color: 'var(--muted)', marginBottom: 4 }}>رؤیای شخصیِ خودت — روی چه چیزی؟</div>
+          <select value={dreamForm.metric} onChange={ev => setDreamForm({ ...dreamForm, metric: ev.target.value })} style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 9, padding: '7px 10px', color: 'var(--text)', fontSize: 12, fontFamily: 'inherit' }}>
+            {(st.endgame.metrics || []).map((m: any) => <option key={m.key} value={m.key}>{m.fa}</option>)}
+          </select>
+        </div>
+        <div style={{ width: 130 }}>
+          <div style={{ fontSize: 10.5, color: 'var(--muted)', marginBottom: 4 }}>هدف (عدد{(st.endgame.metrics || []).find((m: any) => m.key === dreamForm.metric)?.unit === 'toman' ? '، تومان' : ''})</div>
+          <input value={dreamForm.target} onChange={ev => setDreamForm({ ...dreamForm, target: ev.target.value })} inputMode="numeric" placeholder="مثلاً ۱۰"
+            style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 9, padding: '7px 10px', color: 'var(--text)', fontSize: 12, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+        </div>
+        <button disabled={busy} onClick={async () => {
+          const t = Math.floor(Number(String(dreamForm.target).replace(/[۰-۹]/g, c => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(c))).replace(/[^\d]/g, '')))
+          if (!(t > 0)) { setErr('هدفِ رؤیا را عددی بنویس'); return }
+          const d = await api({ action: 'dreamAdd', metric: dreamForm.metric, target: t, label: dreamForm.label })
+          if (d?.ok) { setDreamForm({ metric: dreamForm.metric, target: '', label: '' }); load() }
+        }} style={{ ...btn, padding: '8px 16px', fontSize: 12 }}>🌠 ثبتِ رؤیا</button>
+        <div style={{ width: '100%', fontSize: 10, color: 'var(--faint)' }}>حداکثر {fa(st.endgame.dreamsMax)} رؤیای فعال · تحققِ هر رؤیا یک نشانِ اختصاصی به تالارِ افتخاراتت اضافه می‌کند.</div>
+      </div>
+    </div>}
+
     {/* مأموریت‌ها — پیشرفت از رفتارِ واقعی */}
     {ms && <div style={card}>
       <div style={{ fontWeight: 700, marginBottom: 10 }}>🎯 مأموریت‌های مسیر</div>
@@ -2420,6 +2473,60 @@ export default function EmpirePage() {
         </div>
         <div style={{ fontSize: 10, color: 'var(--faint)', marginTop: 6 }}>روی هر نشان بزن تا عنوانِ فعالِ کنارِ نامت شود — در لیدربورد و پروفایلِ عمومی دیده می‌شود.</div>
       </>}
+
+      {/* فاز ۶۲ — Part 1 نردبانِ بی‌پایان: لایهٔ نقشِ فعلی + شرطِ واقعیِ لایهٔ بعد */}
+      {hall.layer && <div style={{ marginTop: 14, background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 12, padding: '10px 12px', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 22 }}>{hall.layer.icon}</span>
+        <span style={{ flex: 1, minWidth: 170 }}>
+          <b style={{ fontSize: 13 }}>لایهٔ نقشِ تو: {hall.layer.fa}</b>
+          {hall.layer.next
+            ? <span style={{ display: 'block', fontSize: 10.5, color: 'var(--muted)', marginTop: 2 }}>لایهٔ بعد: {hall.layer.next.icon} {hall.layer.next.fa} — ارزشِ خالصِ {faB(hall.layer.next.needToman)} ت{hall.layer.next.extraFa ? ` + ${hall.layer.next.extraFa}${hall.layer.next.extraOk ? ' ✓' : ''}` : ''}</span>
+            : <span style={{ display: 'block', fontSize: 10.5, color: 'var(--gold)', marginTop: 2 }}>به بالاترین لایهٔ شناخته‌شده رسیده‌ای — «هر قله فقط تپهٔ قلهٔ بعدی است»</span>}
+        </span>
+      </div>}
+
+      {/* Part 2 — شاخصِ میراث: «دو نفر با ثروتِ برابر، میراثِ کاملاً متفاوت» */}
+      {hall.legacy && <>
+        <div style={{ fontSize: 12, fontWeight: 700, margin: '12px 0 6px' }}>🏛 شاخصِ میراث: <span style={{ color: 'var(--gold)' }}>{fa(hall.legacy.score)}</span> <span style={{ fontSize: 10.5, color: 'var(--muted)', fontWeight: 400 }}>— آنچه برای شهر ساخته‌ای، نه فقط آنچه داری</span></div>
+        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+          {hall.legacy.parts.filter((pp: any) => pp.pts > 0).map((pp: any, i: number) => (
+            <span key={i} style={{ fontSize: 10.5, border: '1px solid var(--line2)', borderRadius: 999, padding: '3px 10px', color: 'var(--muted)' }}>{pp.icon} {pp.fa}: <b style={{ color: 'var(--text)' }}>{fa(pp.pts)}</b></span>
+          ))}
+          {hall.legacy.parts.every((pp: any) => pp.pts <= 0) && <span style={{ fontSize: 11, color: 'var(--muted)' }}>هنوز میراثی ثبت نشده — اولین پروژهٔ تحویلی، اولین امتیازِ میراث است.</span>}
+        </div>
+      </>}
+
+      {/* Part 4 — شگفتی‌های دنیا: رکوردهای سراسری با پلاکِ دارنده؛ فقط با عددِ اکیداً بزرگ‌تر گرفته می‌شود */}
+      {(hall.wonders || []).length > 0 && <>
+        <div style={{ fontSize: 12, fontWeight: 700, margin: '12px 0 6px' }}>🌍 شگفتی‌های دنیا <span style={{ fontSize: 10.5, color: 'var(--muted)', fontWeight: 400 }}>— پلاکِ هر رکورد به نامِ دارنده می‌ماند تا کسی بزرگ‌ترش را بسازد</span></div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(190px,1fr))', gap: 8 }}>
+          {hall.wonders.map((w: any) => (
+            <div key={w.key} style={{ background: w.holder && w.holder.no === hall.myNo ? 'rgba(212,175,55,.1)' : 'var(--bg2)', border: `1px solid ${w.holder && w.holder.no === hall.myNo ? 'var(--gold)' : 'var(--line)'}`, borderRadius: 12, padding: '10px 12px' }}>
+              <div style={{ fontSize: 11.5, fontWeight: 800 }}>{w.icon} {w.fa}</div>
+              {w.holder ? <>
+                <div style={{ fontSize: 11, color: 'var(--gold)', marginTop: 4 }}>🏷 {w.holder.name}{w.holder.no === hall.myNo ? ' — تو!' : ''}</div>
+                <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{w.unit === 'toman' ? faB(w.holder.value) + ' ت' : fa(w.holder.value)} · از روزِ {fa(w.holder.sinceDay)}</div>
+                {(w.formers || []).length > 0 && <div style={{ fontSize: 9.5, color: 'var(--faint)', marginTop: 3 }}>دارندگانِ پیشین: {w.formers.map((f: any) => f.name).join('، ')}</div>}
+              </> : <div style={{ fontSize: 10.5, color: 'var(--muted)', marginTop: 4 }}>هنوز کسی ثبتش نکرده — حداقلِ ثبت: {w.unit === 'toman' ? faB(w.min) + ' ت' : fa(w.min)}</div>}
+            </div>
+          ))}
+        </div>
+      </>}
+
+      {/* Part 2 — مستندِ مسیر (Player History): «انسان‌ها عاشقِ داستانِ خودشان‌اند» — اولین‌های واقعیِ تو */}
+      {(hall.story || []).length > 0 && <details style={{ marginTop: 12 }}>
+        <summary style={{ cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>🎞 مستندِ مسیرِ تو ({fa(hall.story.length)} «اولین») — داستانِ واقعیِ خودت را مرور کن</summary>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 8 }}>
+          {hall.story.map((t: any, i: number) => (
+            <div key={i} style={{ display: 'flex', gap: 8, fontSize: 11, alignItems: 'baseline' }}>
+              <span>{t.icon}</span>
+              <span style={{ color: 'var(--text)' }}>{t.title}</span>
+              {t.detail && <span style={{ color: 'var(--faint)', fontSize: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260 }}>{t.detail}</span>}
+              <span style={{ marginInlineStart: 'auto', color: 'var(--faint)', fontSize: 9.5, direction: 'ltr' }}>{new Date(t.at).toLocaleDateString('fa-IR')}</span>
+            </div>
+          ))}
+        </div>
+      </details>}
     </div>}
     {/* ۵ جدولِ رتبه (فصل ۵) + لیگِ محله (§7.2) */}
     <details style={card} onToggle={(ev: any) => { if (ev.currentTarget.open && !boards) doBoards() }}>

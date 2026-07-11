@@ -82,6 +82,9 @@ export interface ReosConfig {
     // فاز ۴۸: جوایزِ پولِ واقعی — نردبانِ مرحله‌ای (آستانهٔ ارزشِ خالص × رشدِ هندسیِ تند؛ جایزهٔ تومانی با رشدِ کند و سقف)
     // + استخرِ پایدار: سقفِ کلِ پرداخت = payoutPct٪ از درآمدِ واقعیِ تأییدشدهٔ درگاه + گاردهای ضدسوءاستفاده.
     rewards: { enabled: boolean; payoutPct: number; baseThresholdToman: number; thresholdGrowth: number; baseRewardToman: number; rewardGrowth: number; maxSteps: number; maxRewardToman: number; minLevel: number; minAccountDays: number; monthlyCapToman: number }
+    // فاز ۶۲ (سند ۳۱ — فصل ۲۰ End Game): آستانهٔ لایه‌های نقش (l2..l8، تومانِ ارزشِ خالص) + وزن‌های شاخصِ میراث
+    // + حداقلِ ثبتِ هر «شگفتیِ دنیا» + سقفِ رؤیاهای شخصیِ فعال — همه knob، هیچ عددی در کد.
+    endgame: { l2: number; l3: number; l4: number; l5: number; l6: number; l7: number; l8: number; legacyBuild: number; legacyJobsPer: number; legacyTaxPer: number; legacyQuality: number; legacySocial: number; legacyBadge: number; wonderMinIncome: number; wonderMinProjects: number; wonderMinAuction: number; wonderMinKudos: number; wonderMinWages: number; wonderMinLegacy: number; dreamsMax: number }
     // فاز ۲۹: نقش‌های حرفه‌ایِ سایت در سناریو — تا آمدنِ متخصصانِ واقعی، «سیستم» بازی‌شان می‌کند؛ کارمزدها مصرفِ شفافِ پول (servicesPaid).
     pros: {
       notaryFeePct: number              // دفترخانه: حق‌الثبتِ سند در خرید (٪ قیمت)
@@ -255,6 +258,8 @@ export const DEFAULT_CONFIG: ReosConfig = {
     // جوایزِ پولِ واقعی (فاز ۴۸): مرحلهٔ ۱ = ارزشِ خالصِ ۱۰۰ میلیارد → ۳م تومان؛ آستانه ×۴ هر مرحله، جایزه ×۱٫۵
     // (سقف ۲۰م)؛ سقفِ پرداختِ کل = ۴۰٪ درآمدِ واقعی (۵۰۰ خرج شد → حداکثر ۲۰۰ برگردد)؛ تأییدِ نهایی همیشه با ادمین.
     rewards: { enabled: true, payoutPct: 40, baseThresholdToman: 100_000_000_000, thresholdGrowth: 4, baseRewardToman: 3_000_000, rewardGrowth: 1.5, maxSteps: 10, maxRewardToman: 20_000_000, minLevel: 5, minAccountDays: 7, monthlyCapToman: 10_000_000 },
+    // End Game (فصل ۲۰): لایه‌ها از ۱۰ میلیارد شروع و تا ۲۰ تریلیون؛ میراث: هر پروژه ۱۲۰ امتیاز، هر ۱۰۰م دستمزد ۱ امتیاز و…
+    endgame: { l2: 10_000_000_000, l3: 50_000_000_000, l4: 200_000_000_000, l5: 500_000_000_000, l6: 2_000_000_000_000, l7: 5_000_000_000_000, l8: 20_000_000_000_000, legacyBuild: 120, legacyJobsPer: 100_000_000, legacyTaxPer: 200_000_000, legacyQuality: 2, legacySocial: 15, legacyBadge: 25, wonderMinIncome: 200_000_000, wonderMinProjects: 3, wonderMinAuction: 3, wonderMinKudos: 5, wonderMinWages: 1_000_000_000, wonderMinLegacy: 500, dreamsMax: 6 },
     // مذاکره: همان رفتارِ قبلی به‌صورتِ پیش‌فرض (۲۵٪ پایه تا ۷۵٪ با مهارت؛ تخفیف ۲..۶٪) — حالا قابل‌تنظیم.
     nego: { baseChancePct: 25, discountMin: 2, discountMax: 6 },
     // نقش‌های حرفه‌ای (فاز ۲۹): اعدادِ عرفِ واقعیِ بازارِ ایران — همه knob.
