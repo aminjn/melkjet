@@ -557,6 +557,7 @@ async function stateOf(userId: string, e00: EmpireData) {
     minutesToday: openActions * 3,
     dayDelta,
     hiddenLeft: HIDDEN_BADGES.filter(b => !e.badges.includes(b.key)).length,
+    hiddenHints: HIDDEN_BADGES.filter(b => !e.badges.includes(b.key)).map(b => b.hint),   // فاز ۷۴: فقط سرنخ — نه نام، نه شرط
     collection: ['apartment', 'villa', 'commercial', 'land'].map(k => ({ kind: k, owned: e.assets.some(a => a.kind === k) })),
     capitalEnabled: config().empire.capital.enabled,
     bizTypes: BUSINESS_TYPES,   // فاز ۴۷: کسب‌وکارها از نقش‌های واقعیِ سایت — احتمالِ موفقیت از رقبای واقعیِ محله

@@ -392,16 +392,18 @@ export function nextDreamOf(e: Pick<EmpireData, 'assets' | 'realized' | 'creditH
 
 // مأموریت‌های مخفی (GDD جلد ۲۶ «بازی همه مأموریت‌ها را نشان نمی‌دهد»): نشانِ داستان‌دار،
 // فقط با رفتارِ واقعی کشف می‌شوند؛ تا کشف نشده‌اند نامشان هم دیده نمی‌شود.
-export const HIDDEN_BADGES: Array<{ key: string; fa: string; earned: (e: EmpireData) => boolean }> = [
-  { key: 'Elite Seller', fa: 'فروشندهٔ نخبه — ۳ فروشِ سودده', earned: e => (e.stats?.sellsProfitable || 0) >= 3 },
-  { key: 'Master Negotiator', fa: 'استادِ مذاکره — ۳ خریدِ با تخفیف', earned: e => (e.stats?.negoWins || 0) >= 3 },
-  { key: 'Collector', fa: 'کلکسیونر — مالکِ هر ۴ نوع دارایی', earned: e => new Set(e.assets.map(a => a.kind)).size >= 4 },
-  { key: 'Landlord', fa: 'مالکِ درآمدساز — ۱۰۰ میلیون درآمدِ اجاره', earned: e => e.assets.reduce((s, a) => s + (a.income || 0), 0) >= 100_000_000 },
-  { key: 'Trusted Borrower', fa: 'خوش‌حسابِ افسانه‌ای — ۲ تسویه بدونِ دیرکرد', earned: e => (e.creditHist?.repaid || 0) >= 2 && (e.creditHist?.lateDays || 0) === 0 },
+// فاز ۷۴: هر مأموریتِ مخفی یک «سرنخِ معمایی» دارد — جهت را نشان می‌دهد، نام/شرط/عدد را لو نمی‌دهد
+// (جلد ۲۶: «بازی همه مأموریت‌ها را نشان نمی‌دهد» + قانونِ ۱۴: کشف باید لذت بسازد، نه بن‌بست).
+export const HIDDEN_BADGES: Array<{ key: string; fa: string; hint: string; earned: (e: EmpireData) => boolean }> = [
+  { key: 'Elite Seller', fa: 'فروشندهٔ نخبه — ۳ فروشِ سودده', hint: 'فروختن هم هنر است — آن‌که چند بار با سود از میز بلند شود، شهر حسابِ کارَش را می‌کند.', earned: e => (e.stats?.sellsProfitable || 0) >= 3 },
+  { key: 'Master Negotiator', fa: 'استادِ مذاکره — ۳ خریدِ با تخفیف', hint: 'کسی که سرِ میزِ مذاکره کوتاه نمی‌آید و باز هم برمی‌گردد، بالاخره اسمش سرِ زبان‌ها می‌افتد.', earned: e => (e.stats?.negoWins || 0) >= 3 },
+  { key: 'Collector', fa: 'کلکسیونر — مالکِ هر ۴ نوع دارایی', hint: 'بعضی‌ها به یک نوع ملک قانع نیستند — از خاکِ خالی تا ویترینِ مغازه.', earned: e => new Set(e.assets.map(a => a.kind)).size >= 4 },
+  { key: 'Landlord', fa: 'مالکِ درآمدساز — ۱۰۰ میلیون درآمدِ اجاره', hint: 'صاحب‌خانه‌ای که ماه‌به‌ماه دستش پر می‌شود، بی‌سروصدا ثروتمند می‌شود.', earned: e => e.assets.reduce((s, a) => s + (a.income || 0), 0) >= 100_000_000 },
+  { key: 'Trusted Borrower', fa: 'خوش‌حسابِ افسانه‌ای — ۲ تسویه بدونِ دیرکرد', hint: 'بانک به کسی که همیشه سرِ وقت برمی‌گردد، جورِ دیگری نگاه می‌کند.', earned: e => (e.creditHist?.repaid || 0) >= 2 && (e.creditHist?.lateDays || 0) === 0 },
   // فاز ۴۱ (سند ۲۸ Part 13 — پیشنهادِ «Phoenix» خودِ سند): عبور از بحران بخشی از هویتِ امپراتوری می‌شود.
-  { key: 'Phoenix', fa: 'ققنوس — از یک بحرانِ تمام‌عیار زنده بیرون آمد', earned: e => (e.stats?.crisisRecovered || 0) >= 1 },
+  { key: 'Phoenix', fa: 'ققنوس — از یک بحرانِ تمام‌عیار زنده بیرون آمد', hint: 'بعضی‌ها از خاکستر برمی‌خیزند — ولی اول باید سوخت.', earned: e => (e.stats?.crisisRecovered || 0) >= 1 },
   // فاز ۴۵ (سند ۲۹ Auction Saga): برد در تالار داستان می‌سازد — «اون برج لعنتی رو یادت هست؟».
-  { key: 'Golden Hammer', fa: 'چکشِ طلایی — در تالارِ مزایده چکش به نامش کوبیده شد', earned: e => (e.stats?.auctionWins || 0) >= 1 },
+  { key: 'Golden Hammer', fa: 'چکشِ طلایی — در تالارِ مزایده چکش به نامش کوبیده شد', hint: 'در تالار، چکش فقط برای یک نفر می‌خورَد.', earned: e => (e.stats?.auctionWins || 0) >= 1 },
 ]
 export function earnedHiddenBadges(e: EmpireData): string[] {
   return HIDDEN_BADGES.filter(b => !e.badges.includes(b.key) && b.earned(e)).map(b => b.key)

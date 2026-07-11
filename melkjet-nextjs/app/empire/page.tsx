@@ -3096,7 +3096,15 @@ export default function EmpirePage() {
             {e.title === bd ? '👑 ' : ''}{bd}
           </button>
         ))}
-        {st.hiddenLeft > 0 && <span style={{ fontSize: 11.5, color: 'var(--faint)' }}>🎖 {fa(st.hiddenLeft)} مأموریتِ مخفی در انتظارِ کشف...</span>}
+        {st.hiddenLeft > 0 && <details style={{ display: 'inline-block' }}>
+          <summary style={{ fontSize: 11.5, color: 'var(--faint)', cursor: 'pointer', listStyle: 'none' }}>🎖 {fa(st.hiddenLeft)} مأموریتِ مخفی در انتظارِ کشف... <span style={{ color: 'var(--gold)' }}>(سرنخ‌ها 🤫)</span></summary>
+          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {(st.hiddenHints || []).map((h74: string, i: number) => (
+              <div key={i} style={{ fontSize: 11.5, color: 'var(--muted)', fontStyle: 'italic', background: 'var(--bg2)', border: '1px dashed var(--line2)', borderRadius: 10, padding: '7px 11px' }}>🕯 {h74}</div>
+            ))}
+            <div style={{ fontSize: 10, color: 'var(--faint)' }}>هیچ دکمه‌ای ندارند — با خودِ بازی کشف می‌شوند؛ لحظهٔ کشف، نشانش با داستان در تایم‌لاینت ثبت می‌شود.</div>
+          </div>
+        </details>}
         <span style={{ flex: 1 }} />
         <button style={{ ...btnGhost, fontSize: 12, padding: '6px 12px' }} onClick={async () => { const n = prompt('نامِ جدیدِ امپراتوری:', e.name); if (n != null) { const d = await api({ action: 'rename', name: n }); if (d) load() } }}>تغییرِ نام</button>
       </div>
