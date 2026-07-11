@@ -4067,16 +4067,20 @@ function APIView() {
       const d = await r.json()
       const basis = d.costBasis || 'output'
       const costOf = (m: any) => { const i = Number(m.inUsd) || 0, o2 = Number(m.outUsd) || 0; return basis === 'sum' ? i + o2 : basis === 'avg' ? (i + o2) / 2 : (o2 || i) }
+      const usd = (m: any) => costOf(m) > 0 ? `${costOf(m)}$/1M` : 'قیمتِ ثبت‌نشده'
       const priced = (d.models || []).filter((m: any) => m.type === 'text' && costOf(m) > 0 && models.includes(m.id)).sort((a: any, b: any) => costOf(a) - costOf(b))
       if (!priced.length) { setEcoMsg('✕ هیچ مدلِ قیمت‌داری با لیستِ زندهٔ درگاه هم‌خوان نیست — اول در «هزینه و قیمت‌گذاریِ AI» دکمهٔ دریافتِ قیمت‌ها را بزن.'); return }
       // فاز ۷۸ (فیدبک: qwen ارزان بود ولی همهٔ تماس‌هایش خطا می‌داد): کاندید اول تستِ «زنده» می‌شود؛
       // اگر جواب نداد، ارزانِ بعدی — مدلِ خراب هرگز انتخاب نمی‌شود.
       const skipped78: string[] = []
       let cheapest: any = null
-      // فاز ۸۱: جستجوی عمیق‌تر — تا ۸ کاندید، و بعد از هر شکست کلِ همان «خانوادهٔ» مدل رد می‌شود
-      // (وقتی gapgpt-qwen-3.5 بی‌پاسخ است، ۳.۶ و thinkingهایش هم تقریباً قطعاً همان‌طورند — وقت تلف نکن)
+      // فاز ۸۱/۸۲: جستجوی عمیق — تا ۸ کاندید؛ خانوادهٔ مدل فقط وقتی یک‌جا رد می‌شود که شکستش «بی‌پاسخی/تایم‌اوت»
+      // باشد (نشانهٔ خوابیدنِ کلِ خانواده در درگاه) — خطای HTTP مثل 404 فقط همان یک مدل را رد می‌کند.
       const famOf = (id: string) => id.toLowerCase().replace(/[-_.](thinking|latest|mini|turbo|fp8|instruct)\b/g, '').replace(/[\d.]+/g, '').replace(/[-_/]+$/, '')
       const deadFams = new Set<string>()
+      // فاز ۸۲ (فیدبک: «چرا ۵.۲؟ مگر قیمت چک نمی‌کند؟»): کارنامهٔ کاملِ رتبه‌بندی نگه داشته می‌شود تا در پیامِ
+      // نهایی معلوم باشد هر مدلِ ارزان‌تر دقیقاً چرا کنار رفت — هیچ انتخابی بی‌دلیلِ قابل‌دیدن نیست.
+      const ledger82: string[] = []
       const testOne = async (id: string): Promise<{ ok: boolean; err: string }> => {
         try {
           const ab = new AbortController()
@@ -4090,12 +4094,14 @@ function APIView() {
       let tried78 = 0
       for (const cand of priced) {
         if (tried78 >= 8) break
-        if (deadFams.has(famOf(cand.id))) { skipped78.push(`${cand.id} (هم‌خانوادهٔ مدلِ خراب — رد شد)`); continue }
+        if (deadFams.has(famOf(cand.id))) { ledger82.push(`${cand.id} (${usd(cand)}) — هم‌خانوادهٔ مدلِ بی‌پاسخ، رد شد`); skipped78.push(`${cand.id} (هم‌خانواده)`); continue }
         tried78++
-        setEcoMsg(`تستِ زندهٔ «${cand.id}» (تلاشِ ${tried78.toLocaleString('fa-IR')} از حداکثر ۸ · هر کدام تا ~۲۵ ثانیه)…`)
+        setEcoMsg(`تستِ زندهٔ «${cand.id}» — ${usd(cand)} (تلاشِ ${tried78.toLocaleString('fa-IR')} از حداکثر ۸ · تا ~۲۵ ثانیه)…`)
         const r78 = await testOne(cand.id)
         if (r78.ok) { cheapest = cand; break }
-        deadFams.add(famOf(cand.id))
+        // فاز ۸۲: فقط بی‌پاسخی خانواده را می‌کُشد؛ 404/خطای مشخص فقط همین مدل را
+        if (/بی‌پاسخ/.test(r78.err)) deadFams.add(famOf(cand.id))
+        ledger82.push(`${cand.id} (${usd(cand)}) — ${r78.err}`)
         skipped78.push(`${cand.id} (${r78.err})`)
       }
       // آخرین راهِ تضمینی: mini (شناخته‌شده‌ترین مدلِ ارزانِ پایدار) — اگر آن هم مرده باشد، صادقانه هیچ
@@ -4113,8 +4119,7 @@ function APIView() {
         setAssign(a => ({ ...a, [ag.id]: { ...a[ag.id], text: pick, textProvider: '' } }))
         await fetch('/api/admin/ai/agents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agentId: ag.id, text: pick, textProvider: '' }) })
       }
-      const usd = (m: any) => costOf(m) > 0 ? `${costOf(m)}$/1M` : 'قیمتِ ثبت‌نشده'
-      setEcoMsg(`✓ همهٔ ${AGENTS.length} ایجنتِ متنی روی ارزان‌ترین مدلِ «سالم» رفتند: «${cheapest.id}» (${usd(cheapest)})${cheapVision.id !== cheapest.id ? ` · تحلیلِ تصویر: «${cheapVision.id}» (${usd(cheapVision)})` : ''}${skipped78.length ? ` · ردشده در تستِ زنده: ${skipped78.join('، ')}` : ''} — مدل‌های تولیدِ تصویر تغییری نکردند. برگشت: «تخصیص خودکار مدل پیشنهادی».`)
+      setEcoMsg(`✓ همهٔ ${AGENTS.length} ایجنتِ متنی روی ارزان‌ترین مدلِ «سالمِ» موجود رفتند: «${cheapest.id}» (${usd(cheapest)})${cheapVision.id !== cheapest.id ? ` · تحلیلِ تصویر: «${cheapVision.id}» (${usd(cheapVision)})` : ''}${ledger82.length ? ` — ارزان‌ترهایی که کنار رفتند و دلیلش: ${ledger82.join(' · ')}` : ''} — فقط مدل‌هایی شرکت داده می‌شوند که هم قیمتِ ثبت‌شده دارند و هم در لیستِ زندهٔ درگاه‌اند؛ اگر مدلِ ارزانی را نمی‌بینی، در «هزینه و قیمت‌گذاریِ AI» دکمهٔ دریافتِ قیمت‌ها را بزن تا قیمتش بیاید. مدل‌های تولیدِ تصویر تغییری نکردند؛ برگشت: «تخصیص خودکار مدل پیشنهادی».`)
     } catch { setEcoMsg('✕ خطا در ارتباط') } finally { setEcoBusy(false) }
   }
 
