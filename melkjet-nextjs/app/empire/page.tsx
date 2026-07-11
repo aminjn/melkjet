@@ -1424,6 +1424,30 @@ export default function EmpirePage() {
           ))}
         </div>}
       </>}
+      {/* 🏢 شرکت‌های زندهٔ شهر (فاز ۶۵ — NPC Civilization v1): رقبای واقعی‌نما که هر روز روی آگهی‌های واقعی معامله می‌کنند */}
+      {(wd.companies || []).length > 0 && <>
+        <div style={{ fontSize: 12, fontWeight: 700, margin: '12px 0 6px' }}>🏢 شرکت‌های شهر <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 400 }}>— هر روز خودشان معامله می‌کنند؛ اگر ملکی را زودتر بخرند، برای خریدنش باید سراغِ خودشان بروی</span></div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(210px,1fr))', gap: 8 }}>
+          {wd.companies.map((c: any) => (
+            <div key={c.id} style={{ background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 12, padding: '10px 12px' }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={{ fontSize: 20 }}>{c.icon}</span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 800 }}>{c.name}</div>
+                  <div style={{ fontSize: 9.5, color: 'var(--muted)' }}>{c.styleFa}</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6, fontSize: 10, color: 'var(--muted)' }}>
+                <span>🏠 {fa(c.assets)} ملک</span>
+                <span>💰 نقد {faB(c.capital)}</span>
+                {c.realized !== 0 && <span style={{ color: c.realized > 0 ? '#7c6' : '#e88' }}>{c.realized > 0 ? '📈 سود' : '📉 زیانِ'} {faB(Math.abs(c.realized))}</span>}
+              </div>
+              {(c.holdings || []).length > 0 && <div style={{ marginTop: 5, fontSize: 9.5, color: 'var(--faint)' }}>{c.holdings.map((h: any) => h.hood || h.title).filter(Boolean).slice(0, 3).join('، ')}{c.assets > 3 ? ' و…' : ''}</div>}
+              {(c.log || []).slice(0, 2).map((l: any, i: number) => <div key={i} style={{ fontSize: 9.5, color: 'var(--muted)', marginTop: 3 }}>{l.icon} {l.text}</div>)}
+            </div>
+          ))}
+        </div>
+      </>}
     </div>}
 
     </>}

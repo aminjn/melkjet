@@ -58,6 +58,7 @@ import { bucketBalance } from '@/app/lib/reos/wallet'
 import { recordsOf, collectionsOf, applyCollections, COLLECTIONS, noteNemesis } from '@/app/lib/empire-store'
 import { roleLayerOf, legacyScoreOf, storyOf, dreamProgressOf, dreamSuggestionsOf, addCustomDream, applyDreams, wondersUpdate, DREAM_METRICS } from '@/app/lib/empire-store'
 import { worldYearOf, worldHistory, rumorsMaintain, appendWorldEvent } from '@/app/lib/empire-world'   // فاز ۶۳: دنیای زنده
+import { npcMaintain, npcDb, npcOwnerOf, npcSellToPlayer, npcView, NPC_USER_PREFIX } from '@/app/lib/empire-npc'   // فاز ۶۵: شرکت‌های سیستمیِ زنده
 import { loadSnapshots } from '@/app/lib/empire-metrics'
 
 const hoodOf = (loc?: string) => { const p = String(loc || '').split(/[،,]/).map(x => x.trim()).filter(Boolean); return p.length > 1 ? p[p.length - 1] : (p[0] || '') }
@@ -744,6 +745,10 @@ export async function POST(req: NextRequest) {
         price = win45.price
         auctionBuy = true
       }
+      // فاز ۶۵: اگر ملک در مالکیتِ شرکتِ سیستمی است، به همان قیمتِ آگهی واگذار می‌کند (شفاف — بدونِ سورپرایزِ قیمتی)
+      const npcD65 = await npcDb().catch(() => null)
+      const npcOwner65 = npcD65 ? npcOwnerOf(npcD65, it.id) : null
+      if (npcOwner65) await releaseListing(it.id, NPC_USER_PREFIX + npcOwner65.id).catch(() => {})
       // فاز ۳۷ — مالکیتِ انحصاری: یک آگهیِ واقعی فقط یک مالکِ بازیکن دارد؛ ادعای اتمیک پیش از خرید.
       const exclusive = config().empire.social?.exclusiveEnabled !== false
       if (exclusive && me0) {
@@ -753,9 +758,16 @@ export async function POST(req: NextRequest) {
       // دفترخانه (فاز ۲۹): ثبتِ سند با حق‌الثبتِ knob — سیستم نقشِ دفترخانه را بازی می‌کند.
       const r = await buyAsset(userId, { id: it.id, title: it.title, hood: hoodOf(it.location), price, ptype: ptypeOf(it) }, { negotiated: negotiatedWin, notaryFeePct: config().empire.pros.notaryFeePct })
       if (!r.ok) {
-        // خریدِ ناموفق: ادعای تازه آزاد شود (اگر از قبل مالِ خودش بود، دست نمی‌خورَد)
+        // خریدِ ناموفق: ادعای تازه آزاد شود (اگر از قبل مالِ خودش بود، دست نمی‌خورَد) + ادعای NPC برگردد
         if (exclusive && me0 && !me0.assets.some(a => a.listingId === it.id)) await releaseListing(it.id, userId).catch(() => {})
+        if (npcOwner65) await claimListing(it.id, { userId: NPC_USER_PREFIX + npcOwner65.id, no: 9000, name: npcOwner65.name }).catch(() => {})
         return NextResponse.json({ error: r.reason }, { status: 400 })
+      }
+      // فاز ۶۵: دفترِ شرکتِ سیستمی فروش را ثبت می‌کند (حلقهٔ بستهٔ خودش) + رخدادِ دنیا
+      if (npcOwner65) {
+        const day65 = dayNumberOf(Date.now())
+        await npcSellToPlayer(npcOwner65.id, it.id, price, me0?.name || '', day65).catch(() => {})
+        appendWorldEvent({ icon: '🤝', title: `${npcOwner65.name} «${it.title.slice(0, 40)}» را به ${me0?.name || 'یک بازیکن'} واگذار کرد`, kind: 'npc' }, day65).catch(() => {})
       }
       // جلد ۲۸: رفتارِ بازی = دادهٔ رفتاری برای ML — تعامل با همین آگهیِ واقعی ثبت می‌شود.
       recordEvent({ type: 'user_clicked_property', userId, propertyId: it.id, meta: { src: 'empire_buy' } }).catch(() => {})
@@ -1806,7 +1818,18 @@ export async function POST(req: NextRequest) {
       const lastSnap = snaps[snaps.length - 1]
       const hoods = (lastSnap?.hoods || []).map((h: any) => ({ hood: h.hood, perM: h.perM }))
       const rumors = await rumorsMaintain(day, hoods).catch(() => ({ current: [], recent: [], trust: [] }))
-      return NextResponse.json({ ok: true, day, year: worldYearOf(day), history: await worldHistory(60).catch(() => []), rumors })
+      // فاز ۶۵: تیکِ روزانهٔ شرکت‌های سیستمی روی آگهی‌های «واقعی» — معاملاتشان به کتابِ تاریخ می‌رود
+      const npc = await (async () => {
+        try {
+          const items = (await candidateListings(600)).filter(isPricedSale)
+          const cands = items.map(x => ({ id: x.id, title: x.title, hood: hoodOf(x.location), price: priceOf(x) }))
+          const r = await npcMaintain(day, cands)
+          for (const bgh of r.bought) appendWorldEvent({ icon: bgh.icon, title: `${bgh.name} «${bgh.title.slice(0, 40)}» را در ${bgh.hood || 'شهر'} خرید`, kind: 'npc' }, day).catch(() => {})
+          for (const sl of r.sold) appendWorldEvent({ icon: '💰', title: `${sl.name} «${sl.title.slice(0, 40)}» را ${sl.pnl >= 0 ? 'با سود' : 'با زیان'} فروخت`, kind: 'npc' }, day).catch(() => {})
+          return npcView(r.db)
+        } catch { return [] }
+      })()
+      return NextResponse.json({ ok: true, day, year: worldYearOf(day), history: await worldHistory(60).catch(() => []), rumors, companies: npc })
     }
 
     // 🌠 رؤیای شخصی (فاز ۶۲ — فصل ۲۰ Part 7): بازیکن هدفِ خودش را می‌سازد؛ پیشرفت از متریکِ واقعی.
