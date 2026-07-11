@@ -11,7 +11,7 @@ import { join } from 'path'
 import { pgEnabled, kvGet, kvMutate } from './db'
 import { config } from './reos/reos-config'
 
-export interface WorldEvent { at: number; day: number; icon: string; title: string; detail?: string; kind: string }
+export interface WorldEvent { at: number; day: number; icon: string; title: string; detail?: string; kind: string; no?: number }   // no = شمارهٔ امپراتوری/شرکتِ مرتبط (فاز ۶۷: فیدِ تعاملی)
 export interface WorldRumor {
   id: string; week: number; hood: string; dir: 1 | -1
   source: string; sourceFa: string; credPct: number; text: string
@@ -45,11 +45,11 @@ export function worldYearOf(day: number, daysPerYear = config().empire.world.day
 
 // ── کتابِ تاریخِ دنیا (Part 1 World Memory + Part 2 Timeline) ──
 // فقط رخدادِ واقعی؛ dedupe با (روز + عنوان) تا retry تراکنش/چند-instance رخداد را دوبار ننویسد.
-export async function appendWorldEvent(ev: { icon: string; title: string; detail?: string; kind: string }, day: number, now = Date.now()): Promise<void> {
+export async function appendWorldEvent(ev: { icon: string; title: string; detail?: string; kind: string; no?: number }, day: number, now = Date.now()): Promise<void> {
   const cap = Math.max(50, config().empire.world.historyCap)
   await mutate(d => {
     if (d.events.some(x => x.day === day && x.title === ev.title)) return
-    d.events.unshift({ at: now, day, icon: ev.icon, title: String(ev.title).slice(0, 120), detail: ev.detail ? String(ev.detail).slice(0, 160) : undefined, kind: ev.kind })
+    d.events.unshift({ at: now, day, icon: ev.icon, title: String(ev.title).slice(0, 120), detail: ev.detail ? String(ev.detail).slice(0, 160) : undefined, kind: ev.kind, no: ev.no })
     d.events = d.events.slice(0, cap)
   }).catch(() => {})
 }

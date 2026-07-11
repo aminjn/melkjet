@@ -45,7 +45,7 @@ import { follow, unfollow, isFollowing, followerCount, followingCount, following
 import { listFlags, getFlag, setFlag, flagEnabled } from '../app/lib/reos/flags.ts'
 import { registerModel as regModel, getChampion as champOf } from '../app/lib/reos/model-registry.ts'
 import { autoPromote, autoMLStatus } from '../app/lib/reos/automl.ts'
-import { createEmpire, getEmpire, renameEmpire, buyAsset, chooseAssetAction, recordGuess, claimEmpireMission, spendAiToken, setHunterPair, answerHunter, setStylePicks, bumpRejects, empireCount, netWorthOf as empNetWorth, saveBrief, getBrief, markBriefOpened, dayNumberOf, sellAsset, setLandPlan, chooseBusiness, accrueIncome, claimDailyChest, listEmpiresPublic, applyUpkeep, adminAdjustEmpire, deleteEmpire, briefStatsForDay, takeLoan, repayLoan, accrueLoanInterest , openP2pAuction, cancelP2pAuction, bidP2pAuction, settleP2pAuctions } from '../app/lib/empire-store.ts'
+import { createEmpire, getEmpire, renameEmpire, buyAsset, chooseAssetAction, recordGuess, claimEmpireMission, spendAiToken, setHunterPair, answerHunter, setStylePicks, bumpRejects, empireCount, netWorthOf as empNetWorth, saveBrief, getBrief, markBriefOpened, dayNumberOf, sellAsset, setLandPlan, chooseBusiness, accrueIncome, claimDailyChest, listEmpiresPublic, applyUpkeep, adminAdjustEmpire, deleteEmpire, briefStatsForDay, takeLoan, repayLoan, accrueLoanInterest , openP2pAuction, cancelP2pAuction, bidP2pAuction, settleP2pAuctions, followEmpire } from '../app/lib/empire-store.ts'
 
 if (!process.env.DATABASE_URL) { console.error('DATABASE_URL not set'); process.exit(2) }
 let pass = 0, fail = 0
@@ -950,6 +950,16 @@ async function main() {
       const s2 = await settleP2pAuctions(sA, day64 + 10, { taxPct: 1, commissionPct: 0.5 })
       const sA2 = await getEmpire(sA)
       ok('بدونِ پیشنهاد → مزایده صادقانه بی‌برنده بسته می‌شود و دارایی می‌ماند', s2.length === 1 && !s2[0].winner && sA2.assets.some(x => x.listingId === 'P2PA2') && !sA2.assets.find(x => x.listingId === 'P2PA2').p2pAuction)
+      // فاز ۶۷ (فیدِ تعاملی): دنبال‌کردن — toggle + خود-دنبالی ممنوع
+      {
+      const eB2 = await getEmpire(bB)
+      const f1 = await followEmpire(bB, 9001, true)
+      ok('دنبال‌کردنِ شرکت/امپراتوری ثبت می‌شود', f1.ok && f1.empire.following.includes(9001))
+      ok('دنبال‌کردنِ تکراری رد می‌شود', (await followEmpire(bB, 9001, true)).ok === false)
+      ok('خودت را نمی‌شود دنبال کرد', (await followEmpire(bB, eB2.no, true)).ok === false)
+      const f2 = await followEmpire(bB, 9001, false)
+      ok('لغوِ دنبال‌کردن', f2.ok && !f2.empire.following.includes(9001))
+      }
       for (const u of [sA, bB, bC]) await deleteEmpire(u)
     }
     ok('هدیهٔ ادمین: منابع + ثبتِ شفاف در تایم‌لاین', aj.ok && aj.empire.coins === eA.coins + 100 && aj.empire.xp === eA.xp + 50 && aj.empire.timeline.some(t => t.title === 'هدیهٔ ملک‌جت' && t.detail.includes('جبرانِ رویداد')))

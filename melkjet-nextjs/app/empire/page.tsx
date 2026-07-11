@@ -1393,13 +1393,22 @@ export default function EmpirePage() {
       </div>
       {(wd.history || []).length > 0 ? <>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 10 }}>
-          {wd.history.slice(0, 6).map((h: any, i: number) => (
-            <div key={i} style={{ display: 'flex', gap: 8, fontSize: 11.5, alignItems: 'baseline' }}>
-              <span>{h.icon}</span>
-              <span style={{ flex: 1, minWidth: 0 }}>{h.title}{h.detail && <span style={{ color: 'var(--faint)', fontSize: 10 }}> — {h.detail}</span>}</span>
-              <span style={{ color: 'var(--faint)', fontSize: 9.5, whiteSpace: 'nowrap' }}>روزِ {fa(h.day)}</span>
-            </div>
-          ))}
+          {wd.history.slice(0, 6).map((h: any, i: number) => {
+            {/* فاز ۶۷ (World Feed تعاملی): خبرِ دنبال‌شده هایلایت + تبریک و دنبال‌کردن از همان‌جا */}
+            const followed = h.no && (wd.following || []).includes(h.no)
+            const isPlayer = h.no && h.no < 9000 && h.no !== wd.myNo
+            return (
+              <div key={i} style={{ display: 'flex', gap: 8, fontSize: 11.5, alignItems: 'center', flexWrap: 'wrap', padding: followed ? '4px 8px' : '0', borderRadius: 8, background: followed ? 'rgba(212,175,55,.07)' : 'transparent', border: followed ? '1px solid var(--goldDim)' : 'none' }}>
+                <span>{h.icon}</span>
+                <span style={{ flex: 1, minWidth: 140 }}>{followed && <b style={{ color: 'var(--gold)', fontSize: 9.5 }}>⭐ دنبال‌شده · </b>}{h.title}{h.detail && <span style={{ color: 'var(--faint)', fontSize: 10 }}> — {h.detail}</span>}</span>
+                {isPlayer && <button title={(wd.kudosGiven || []).includes(h.no) ? 'قبلاً تبریک گفته‌ای' : 'تبریک به این امپراتوری'} disabled={busy || (wd.kudosGiven || []).includes(h.no)} onClick={async () => { const d = await api({ action: 'kudos', no: h.no }); if (d?.ok) { setWd({ ...wd, kudosGiven: [...(wd.kudosGiven || []), h.no] }); celebrate() } }}
+                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, opacity: (wd.kudosGiven || []).includes(h.no) ? 0.4 : 1 }}>👏</button>}
+                {h.no && h.no !== wd.myNo && <button title={followed ? 'لغوِ دنبال‌کردن' : 'دنبال‌کردن — خبرهایش در فید هایلایت می‌شود'} disabled={busy} onClick={async () => { const d = await api({ action: 'follow', no: h.no, on: !followed }); if (d?.ok) setWd({ ...wd, following: d.following }) }}
+                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, color: followed ? 'var(--gold)' : 'var(--faint)' }}>{followed ? '★' : '☆'}</button>}
+                <span style={{ color: 'var(--faint)', fontSize: 9.5, whiteSpace: 'nowrap' }}>روزِ {fa(h.day)}</span>
+              </div>
+            )
+          })}
         </div>
         {(wd.history || []).length > 6 && <details style={{ marginTop: 8 }}>
           <summary style={{ cursor: 'pointer', fontSize: 11.5, color: 'var(--gold)' }}>📜 کتابِ تاریخِ دنیا ({fa(wd.history.length)} رخداد)</summary>

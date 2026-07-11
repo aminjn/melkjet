@@ -60,6 +60,7 @@ import { roleLayerOf, legacyScoreOf, storyOf, dreamProgressOf, dreamSuggestionsO
 import { worldYearOf, worldHistory, rumorsMaintain, appendWorldEvent } from '@/app/lib/empire-world'   // فاز ۶۳: دنیای زنده
 import { npcMaintain, npcDb, npcOwnerOf, npcSellToPlayer, npcView, NPC_USER_PREFIX } from '@/app/lib/empire-npc'   // فاز ۶۵: شرکت‌های سیستمیِ زنده
 import { seasonBaseline, seasonValueOf, SEASON_METRIC_FA, claimSeasonReward } from '@/app/lib/empire-store'   // فاز ۶۶: موتورِ فصل
+import { followEmpire } from '@/app/lib/empire-store'   // فاز ۶۷: فیدِ تعاملی
 import { seasonFinalize, seasonFinalOf } from '@/app/lib/empire-world'
 import { loadSnapshots } from '@/app/lib/empire-metrics'
 
@@ -388,7 +389,7 @@ async function stateOf(userId: string, e00: EmpireData) {
       const settled = await settleP2pAuctions(userId, day64, { taxPct: config().empire.transferTaxPct, commissionPct: config().empire.pros.advisorSellCommissionPct }).catch(() => [])
       for (const s64 of settled) if (s64.winner) {
         if (s64.listingId) await transferListing(s64.listingId, userId, s64.winner).catch(() => {})
-        appendWorldEvent({ icon: '🔨', title: `مزایدهٔ بازیکنان چکش خورد — «${s64.title.slice(0, 40)}» به ${s64.winner.name}`, kind: 'p2pAuction' }, day64).catch(() => {})
+        appendWorldEvent({ icon: '🔨', title: `مزایدهٔ بازیکنان چکش خورد — «${s64.title.slice(0, 40)}» به ${s64.winner.name}`, kind: 'p2pAuction', no: s64.winner.no }, day64).catch(() => {})
       }
       if (settled.length) e00 = (await getEmpire(userId)) || e00
     }
@@ -519,7 +520,7 @@ async function stateOf(userId: string, e00: EmpireData) {
   if (!e.weekSnap || e.weekSnap.week < thisWeek) await setWeekSnap(userId, thisWeek, nw.netWorth).catch(() => {})
   // فاز ۶۳ (فصل ۲۱ Part 2): تحویلِ تازهٔ پروژه → کتابِ تاریخِ دنیا (رخدادِ واقعی؛ dedupe داخلی)
   if ((e.stats?.projectsDelivered || 0) > (e00.stats?.projectsDelivered || 0))
-    appendWorldEvent({ icon: '🏙', title: `برجِ تازه‌ای به خطِ آسمانِ شهر اضافه شد — ${e.name}`, kind: 'delivery' }, today).catch(() => {})
+    appendWorldEvent({ icon: '🏙', title: `برجِ تازه‌ای به خطِ آسمانِ شهر اضافه شد — ${e.name}`, kind: 'delivery', no: e.no }, today).catch(() => {})
   // فاز ۶۳ (Part 2 «در نبودِ شما»): گزارشِ واقعیِ غیبت — تغییرِ میانهٔ متریِ بازار (رصدخانه) + رخدادهای دنیا
   let away: null | { days: number; perMDeltaPct: number | null; happened: Array<{ icon: string; title: string }> } = null
   if (absentDays >= 7 || e.pendingComeback) {
@@ -769,7 +770,7 @@ export async function POST(req: NextRequest) {
       if (npcOwner65) {
         const day65 = dayNumberOf(Date.now())
         await npcSellToPlayer(npcOwner65.id, it.id, price, me0?.name || '', day65).catch(() => {})
-        appendWorldEvent({ icon: '🤝', title: `${npcOwner65.name} «${it.title.slice(0, 40)}» را به ${me0?.name || 'یک بازیکن'} واگذار کرد`, kind: 'npc' }, day65).catch(() => {})
+        appendWorldEvent({ icon: '🤝', title: `${npcOwner65.name} «${it.title.slice(0, 40)}» را به ${me0?.name || 'یک بازیکن'} واگذار کرد`, kind: 'npc', no: me0?.no }, day65).catch(() => {})
       }
       // جلد ۲۸: رفتارِ بازی = دادهٔ رفتاری برای ML — تعامل با همین آگهیِ واقعی ثبت می‌شود.
       recordEvent({ type: 'user_clicked_property', userId, propertyId: it.id, meta: { src: 'empire_buy' } }).catch(() => {})
@@ -778,7 +779,7 @@ export async function POST(req: NextRequest) {
         await addJournal(userId, `سندِ «${it.title.slice(0, 30)}» بعد از نبردِ تالارِ مزایده به نامت خورد — این معامله داستان دارد.`).catch(() => {})
         // فاز ۶۳: بردِ چکش یک رخدادِ «دنیا»ست — در کتابِ تاریخ ثبت می‌شود
         const w63 = r.empire ? r.empire.name : ''
-        appendWorldEvent({ icon: '🔨', title: `چکشِ تالارِ مزایده کوبیده شد — ${w63}`, detail: it.title.slice(0, 60), kind: 'auction' }, dayNumberOf(Date.now())).catch(() => {})
+        appendWorldEvent({ icon: '🔨', title: `چکشِ تالارِ مزایده کوبیده شد — ${w63}`, detail: it.title.slice(0, 60), kind: 'auction', no: r.empire?.no }, dayNumberOf(Date.now())).catch(() => {})
       }
       return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
     }
@@ -1858,7 +1859,7 @@ export async function POST(req: NextRequest) {
       if (!mine || mine.rank > rewards.length) return NextResponse.json({ error: 'جایزهٔ فصل فقط برای رتبه‌های برتر است — فصلِ بعد مالِ توست' }, { status: 400 })
       const r = await claimSeasonReward(userId, sc.id, mine.rank, rewards[mine.rank - 1] || 0)
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
-      if (mine.rank === 1) appendWorldEvent({ icon: '🏁', title: `${me.name} قهرمانِ ${sc.name} شد`, kind: 'season' }, day).catch(() => {})
+      if (mine.rank === 1) appendWorldEvent({ icon: '🏁', title: `${me.name} قهرمانِ ${sc.name} شد`, kind: 'season', no: me.no }, day).catch(() => {})
       return NextResponse.json({ ok: true, coins: rewards[mine.rank - 1] || 0, ...(await stateOf(userId, r.empire!)) })
     }
 
@@ -1880,7 +1881,19 @@ export async function POST(req: NextRequest) {
           return npcView(r.db)
         } catch { return [] }
       })()
-      return NextResponse.json({ ok: true, day, year: worldYearOf(day), history: await worldHistory(60).catch(() => []), rumors, companies: npc })
+      // فاز ۶۷ (فیدِ تعاملی): وضعیتِ دنبال‌شده‌ها و تبریک‌های خودم — تا فید همان‌جا قابلِ‌تعامل باشد
+      const me67 = await getEmpire(userId).catch(() => null)
+      return NextResponse.json({
+        ok: true, day, year: worldYearOf(day), history: await worldHistory(60).catch(() => []), rumors, companies: npc,
+        following: me67?.following || [], myNo: me67?.no || 0,
+        kudosGiven: me67 ? Object.keys(me67.claims).filter(k => k.startsWith('kudos_')).map(k => Number(k.slice(6))) : [],
+      })
+    }
+    // ⭐ دنبال‌کردن (فاز ۶۷ — World Feed تعاملی): فقط هایلایتِ فید؛ صفر اثرِ اقتصادی
+    case 'follow': {
+      const r = await followEmpire(userId, Math.floor(Number(b.no) || 0), b.on !== false)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, following: r.empire?.following || [] })
     }
 
     // 🌠 رؤیای شخصی (فاز ۶۲ — فصل ۲۰ Part 7): بازیکن هدفِ خودش را می‌سازد؛ پیشرفت از متریکِ واقعی.

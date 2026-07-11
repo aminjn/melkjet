@@ -143,6 +143,7 @@ export interface EmpireData {
   kudos?: number              // 👏 تحسینِ بازیکنانِ واقعی (سند ۱۷ — تعاملِ اجتماعی)؛ هر بازیکن یک‌بار
   dreamsCustom?: Array<{ id: string; label: string; metric: string; target: number; createdAt: number; doneAt?: number }>   // فاز ۶۲ (فصل ۲۰ Part 7): رؤیاهای شخصیِ خودِ بازیکن — هدفِ عددی روی متریکِ واقعی
   seasonSnap?: { id: string; day: number; netWorth: number; projects: number; auctionWins: number; income: number }   // فاز ۶۶ (Season v1): بیس‌لاینِ ورود به فصل — پیشرفتِ فصل = دلتای واقعی از همین نقطه
+  following?: number[]        // فاز ۶۷ (World Feed تعاملی): شماره‌های امپراتوری/شرکت‌هایی که دنبال می‌کند — خبرشان در فید هایلایت می‌شود
   pendingComeback?: number    // هدیهٔ بازگشت (Comeback Engine جلد ۲۶) — روزِ کشفِ غیبت
   stylePicks?: string[]                               // مأموریت M2 «سبکِ خودت را پیدا کن» (انتخابِ تصویری)
   hunter?: { a: string; b: string; better: string; at: number }   // جفتِ فعالِ Property Hunter (§6.4)
@@ -478,6 +479,22 @@ export function seasonValueOf(e: EmpireData, currentNetWorth: number, metric: st
   return currentNetWorth - s.netWorth
 }
 
+// دنبال‌کردن (فاز ۶۷ — World Feed تعاملی): toggle با سقف — فقط هایلایتِ فید، صفر اثرِ اقتصادی.
+export async function followEmpire(userId: string, no: number, on: boolean, maxFollow = 50) {
+  return mutateEmpire(userId, e => {
+    const list = e.following || []
+    if (on) {
+      if (list.includes(no)) return 'از قبل دنبال می‌کنی'
+      if (list.length >= maxFollow) return `حداکثر ${maxFollow.toLocaleString('fa-IR')} دنبال‌شده می‌توانی داشته باشی`
+      if (no === e.no) return 'خودت را نمی‌شود دنبال کرد'
+      e.following = [...list, no]
+    } else {
+      if (!list.includes(no)) return 'در فهرستِ دنبال‌شده‌ها نیست'
+      e.following = list.filter(x => x !== no)
+    }
+  })
+}
+
 // جایزهٔ فصل — فقط رتبه‌های برترِ نتیجهٔ «منجمدشده»؛ یک‌بار با کلیدِ claims (کوین، نه پول — بدونِ اثرِ P2W).
 export async function claimSeasonReward(userId: string, id: string, rank: number, coins: number, now = Date.now()) {
   return mutateEmpire(userId, e => {
@@ -652,7 +669,7 @@ export async function wondersUpdate(day: number, now = Date.now()) {
       e.timeline.push({ at: now, icon: '🌍', title: `شگفتیِ دنیا از آنِ توست: ${c.icon} ${c.fa}`, detail: 'تا وقتی کسی رکوردِ اکیداً بزرگ‌تری نسازد، این پلاک به نامِ توست' })
     }).catch(() => {})
     // فاز ۶۳: ثبت در کتابِ تاریخِ دنیا — «یک اتفاقِ جهانی، نه یک ساختمانِ دیگر»
-    await appendWorldEvent({ icon: c.icon, title: `${c.fa} دست‌به‌دست شد — پلاکِ جدید: ${c.holder.name}`, kind: 'wonder' }, day, now).catch(() => {})
+    await appendWorldEvent({ icon: c.icon, title: `${c.fa} دست‌به‌دست شد — پلاکِ جدید: ${c.holder.name}`, kind: 'wonder', no: c.holder.no }, day, now).catch(() => {})
   }
   return WONDER_DEFS.map(w => ({ key: w.key, icon: w.icon, fa: w.fa, unit: w.unit, min: w.min(config().empire.endgame), holder: db.cats[w.key] || null, formers: (db.hist[w.key] || []).slice(0, 3) }))
 }
