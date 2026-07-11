@@ -5276,10 +5276,13 @@ function PlansView() {
             <div className="mjsa-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               {groups.get(gk)!.map(p => (
           <Card key={p.id} style={{ position: 'relative', borderColor: editingId === p.id ? 'var(--gold)' : (p.highlighted ? 'var(--gold)' : 'var(--line2)'), boxShadow: p.highlighted ? '0 10px 30px -14px rgba(212,175,55,.5)' : 'none', background: p.highlighted ? 'linear-gradient(160deg, rgba(212,175,55,.08), var(--surface) 60%)' : 'var(--surface)', opacity: p.active ? 1 : .55 }}>
-            {(p.badge || p.highlighted) && <span style={{ position: 'absolute', top: 14, insetInlineStart: 14, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 10.5, fontWeight: 800, borderRadius: 999, padding: '3px 11px' }}>{p.badge || 'محبوب'}</span>}
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span style={{ fontSize: 16.5, fontWeight: 900 }}>{p.name}</span>
-              <div style={{ textAlign: 'left' }}><span style={{ fontSize: 18, fontWeight: 900, color: 'var(--gold)' }}>{fa(p.priceMonthly)}</span><span style={{ fontSize: 11, color: 'var(--faint)' }}> ت/ماه</span><div style={{ fontSize: 11, color: 'var(--faint)' }}>{fa(p.priceYearly)} ت/سال</div></div>
+            {/* فاز ۵۹ (فیدبکِ گرافیک): بادج دیگر absolute نیست که روی نامِ پلن بیفتد — کنارِ نام می‌نشیند */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
+                <span style={{ fontSize: 16.5, fontWeight: 900, overflowWrap: 'anywhere' }}>{p.name}</span>
+                {(p.badge || p.highlighted) && <span style={{ background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 10.5, fontWeight: 800, borderRadius: 999, padding: '3px 11px', whiteSpace: 'nowrap', flexShrink: 0 }}>{p.badge || 'محبوب'}</span>}
+              </span>
+              <div style={{ textAlign: 'left', flexShrink: 0 }}><span style={{ fontSize: 18, fontWeight: 900, color: 'var(--gold)' }}>{fa(p.priceMonthly)}</span><span style={{ fontSize: 11, color: 'var(--faint)' }}> ت/ماه</span><div style={{ fontSize: 11, color: 'var(--faint)' }}>{fa(p.priceYearly)} ت/سال</div></div>
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11.5, color: 'var(--gold)' }}>● {groupLabel(p)}</span>
