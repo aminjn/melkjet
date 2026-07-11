@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
 
 // فاز ۵۸ (فیدبک: «خیلی بد است مستقیم برود توی پلن‌ها؛ اول باید یک چیزی ببیند بعد پول بدهد»):
 // دیگر قفلِ تمام‌صفحه نیست — کاربرِ بدونِ پلن واردِ پنلش می‌شود و همه‌چیز را «می‌بیند»
@@ -16,13 +17,13 @@ const DASH_PATHS: Record<string, string> = {
 
 export default function PlanLock() {
   const [access, setAccess] = useState<any>(null)
-  const [path, setPath] = useState('')
   const [hidden, setHidden] = useState(false)
+  // فاز ۶۱: مسیر با usePathname تا با ناوبریِ کلاینتی به‌روز بماند —
+  // قبلاً یک‌بار موقعِ mount خوانده می‌شد و بنر بعد از رفتن به صفحاتِ دیگر (مثلاً بازی) می‌ماند.
+  const path = usePathname() || ''
+  const hit = Object.keys(DASH_PATHS).some(k => path === k || path.startsWith(k + '/'))
   useEffect(() => {
-    const p = window.location.pathname
-    setPath(p)
-    const hit = Object.keys(DASH_PATHS).some(k => p === k || p.startsWith(k + '/'))
-    if (!hit) return
+    if (!hit) { setAccess(null); return }
     try { if (sessionStorage.getItem('mj_planbanner_hide') === '1') setHidden(true) } catch {}
     let cancelled = false
     fetch('/api/auth/profile', { cache: 'no-store' })
@@ -30,7 +31,7 @@ export default function PlanLock() {
       .then(d => { if (!cancelled && d?.access) setAccess(d.access) })
       .catch(() => {})
     return () => { cancelled = true }
-  }, [])
+  }, [path, hit])
   if (hidden || !access || !access.dashLocked) return null
   const dashKey = Object.keys(DASH_PATHS).find(k => path === k || path.startsWith(k + '/'))
   // بنر فقط روی داشبوردِ خودِ کاربر — صفحاتِ دیگر گیت‌های خودشان را دارند

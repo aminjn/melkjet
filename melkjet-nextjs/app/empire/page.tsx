@@ -635,7 +635,7 @@ export default function EmpirePage() {
 
   // ── اسکنِ بازار (متنِ سند + تحلیلِ واقعی) ──
   if (step === 'scan') return (
-    <main dir="rtl" style={{ minHeight: '70vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 18, background: '#0a0a0c' }}>
+    <main dir="rtl" className="empRoot" style={{ minHeight: '70vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 18, background: '#0a0a0c' }}>
       <div style={{ fontSize: 40 }}>🔮</div>
       <div style={{ color: '#eee', fontSize: 17, fontWeight: 700 }}>در حال بررسی آیندهٔ مالی شما...</div>
       <div style={{ color: '#888', fontSize: 12 }}>هوشِ ملک‌جت در همین لحظه فرصت‌های واقعیِ بازار {city || st?.empire?.answers?.city || ''} را می‌سنجد</div>
@@ -687,7 +687,7 @@ export default function EmpirePage() {
 
   // ── خرید: متن‌های سند + امضا ──
   if (step === 'buying') return (
-    <main dir="rtl" style={{ minHeight: '70vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 18 }}>
+    <main dir="rtl" className="empRoot" style={{ minHeight: '70vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 18, background: 'var(--bg)' }}>
       <div style={{ fontSize: 36 }}>{buyTxt.includes('امضا') ? '✍️' : '📜'}</div>
       <div style={{ fontSize: 17, fontWeight: 700 }}>{buyTxt}</div>
       <div style={{ fontSize: 12, color: 'var(--muted)' }}>{owned?.title.slice(0, 60)}</div>
