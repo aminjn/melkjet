@@ -199,6 +199,9 @@ export default function EmpirePage() {
   const [aq, setAq] = useState<any>(null)   // { assetId, kind: 'sell'|'rent', via, data }
   const [bdRes, setBdRes] = useState<any>(null)
   const loadBd = async () => { const d = await api({ action: 'bigDeal' }); if (d) setBd(d) }
+  // فاز ۵۳ («فعلاً کل سایت با شماره کارت»): چک‌اوتِ کارت‌به‌کارتِ کوین — کارت از تنظیماتِ ادمین + کدِ رهگیری
+  const [coinCk, setCoinCk] = useState<any>(null)   // { pack, amount, card }
+  const [coinReceipt, setCoinReceipt] = useState('')
   // فاز ۴۸: مسیرِ جوایزِ واقعی — نردبان + کیف‌پولِ پاداش (تبِ مأموریت‌ها)
   const [rw, setRw] = useState<any>(null)
   // فاز ۵۰ (سند ۳۰ Part 20): تالارِ افتخارات — رکوردها/مجموعه‌ها/نشان‌ها (تبِ رتبه‌ها)
@@ -2021,6 +2024,7 @@ export default function EmpirePage() {
               try {
                 const r = await fetch('/api/empire/coins', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ packId: p.id }) })
                 const d = await r.json().catch(() => null)
+                if (d?.card2card) { setCoinCk({ pack: p, amount: d.amount, card: d.card }); setCoinReceipt(''); return }
                 if (d?.redirect) { window.location.href = d.redirect; return }
                 alert(d?.error || 'خطا در شروعِ پرداخت')
               } finally { setBusy(false) }
@@ -2028,7 +2032,28 @@ export default function EmpirePage() {
           </div>
         ))}
       </div>
-      <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 8 }}>پرداختِ امن با زرین‌پال · کوین بلافاصله بعد از تأییدِ درگاه به کیفت اضافه می‌شود و در تایم‌لاینت ثبت است.</div>
+      {/* فاز ۵۳: چک‌اوتِ کارت‌به‌کارتِ کوین */}
+      {coinCk && <div style={{ border: '1px solid var(--gold)', borderRadius: 14, padding: 14, marginTop: 10, background: 'rgba(212,175,55,.06)' }}>
+        <b style={{ fontSize: 13 }}>💳 پرداختِ کارت‌به‌کارت — {coinCk.pack.label} ({fa(coinCk.pack.coins)} کوین)</b>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>مبلغِ قابلِ‌واریز: <b style={{ color: 'var(--gold)' }}>{faB(coinCk.amount)} تومان</b></div>
+        <div style={{ background: 'var(--bg2)', border: '1px dashed var(--line2)', borderRadius: 10, padding: 10, marginTop: 8, fontSize: 12.5, lineHeight: 2.1 }}>
+          {coinCk.card.cardNumber && <div>شمارهٔ کارت: <b dir="ltr" style={{ letterSpacing: 2, color: 'var(--gold)', userSelect: 'all' }}>{coinCk.card.cardNumber}</b></div>}
+          {coinCk.card.iban && <div>شبا: <b dir="ltr" style={{ userSelect: 'all' }}>{coinCk.card.iban}</b></div>}
+          {coinCk.card.holderName && <div>به نامِ: <b>{coinCk.card.holderName}</b>{coinCk.card.bank ? ` — ${coinCk.card.bank}` : ''}</div>}
+          {coinCk.card.note && <div style={{ fontSize: 11, color: 'var(--muted)' }}>{coinCk.card.note}</div>}
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+          <input value={coinReceipt} onChange={ev => setCoinReceipt(ev.target.value)} placeholder="کدِ رهگیری / ۴ رقمِ آخرِ کارتِ خودت" style={{ flex: 1, minWidth: 180, padding: '9px 12px', borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 12.5 }} />
+          <button style={{ ...btn, padding: '8px 16px', fontSize: 12 }} disabled={busy || !coinReceipt.trim()} onClick={async () => {
+            const r = await fetch('/api/empire/coins', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ packId: coinCk.pack.id, receipt: coinReceipt.trim() }) })
+            const d = await r.json().catch(() => null)
+            if (d?.pending) { setCoinCk(null); alert(`✓ ${d.message || 'درخواستت ثبت شد — پس از تأییدِ واریزی، کوین‌ها خودکار اضافه می‌شوند.'}`) }
+            else alert(d?.error || 'ثبتِ سفارش ناموفق بود')
+          }}>واریز کردم — ثبت</button>
+          <button style={{ ...btnGhost, padding: '8px 12px', fontSize: 12 }} onClick={() => setCoinCk(null)}>انصراف</button>
+        </div>
+      </div>}
+      <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 8 }}>پرداختِ کارت‌به‌کارت با کدِ رهگیری (پس از تأییدِ ملک‌جت، کوین خودکار اضافه می‌شود) — همه‌چیز در تایم‌لاینت ثبت است.</div>
     </div>}
 
     {/* 🎨 فروشگاهِ ظاهری (فاز ۳۳ — سند ۲۲ فصل ۳): قاب و نشان با ملک‌کوین — «هیچ آیتمِ ظاهری روی اقتصاد،

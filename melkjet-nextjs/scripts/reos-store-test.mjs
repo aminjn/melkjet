@@ -1720,6 +1720,20 @@ async function main() {
     // enforce خاموش است → گیت قفل نمی‌کند ولی مصرف شمرده می‌شود (برای گزارش/آینده)
     const u52a = await requireAndBumpUsage({ phone: '0912test52', role: 'buyer' }, 'aiRequests', 1)
     ok('با enforce خاموش: مجاز + شمارش', u52a === null && (await usageOf('0912test52', 'aiRequests')) === 1)
+
+    // ── فاز ۵۳ (کارت‌به‌کارتِ سراسری): سفارشِ کوین → تأییدِ مدیر → شارژِ کوین + ثبتِ درآمدِ واقعی ──
+    console.log('\n── Payments · فاز ۵۳ (سفارشِ کارت‌به‌کارتِ کوین) ──')
+    const { createCoinOrder, approveOrder: approve53 } = await import('../app/lib/comm-store.ts')
+    const { rewardsDb: rdb53 } = await import('../app/lib/empire-rewards.ts')
+    const co1 = await createCoinOrder(uc12, { id: 'pk1', label: 'بستهٔ تست', coins: 70, priceToman: 250_000 }, { gateway: 'card2card', receipt: '1234' })
+    ok('سفارشِ کوین در انتظارِ تأیید ثبت شد', co1.ok === true && co1.order.status === 'pending' && co1.order.kind === 'coins' && co1.order.receipt === '1234')
+    const coinsBefore53 = (await getE45(uc12)).coins
+    const revBefore53 = (await rdb53()).revenueTotal
+    const ap53 = await approve53(co1.order.id)
+    ok('تأییدِ مدیر: کوین شارژ شد (ایدمپوتنت با شناسهٔ سفارش)', ap53.ok === true && (await getE45(uc12)).coins === coinsBefore53 + 70)
+    ok('درآمدِ واقعی برای استخرِ جوایز ثبت شد', (await rdb53()).revenueTotal === revBefore53 + 250_000)
+    await approve53(co1.order.id)
+    ok('تأییدِ دوباره، دوبار شارژ نمی‌کند', (await getE45(uc12)).coins === coinsBefore53 + 70 && (await rdb53()).revenueTotal === revBefore53 + 250_000)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

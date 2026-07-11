@@ -299,6 +299,11 @@ export default function PricingPage() {
     else if (pay === 'failed') setPayBanner({ ok: false, text: `پرداخت انجام نشد${sp.get('reason') ? ` — ${sp.get('reason')}` : ''}.` })
   }, [])
 
+  // فاز ۵۳ («فعلاً کل سایت با شماره کارت»): چک‌اوتِ کارت‌به‌کارت — کارت/شبا از تنظیماتِ ادمین + کدِ رهگیری
+  const [checkout, setCheckout] = useState<{ plan: CardPlan; amount: number; card: any } | null>(null)
+  const [receipt, setReceipt] = useState('')
+  const [sendingReceipt, setSendingReceipt] = useState(false)
+
   // شروع خرید/ارتقای پلن
   const buy = async (plan: CardPlan) => {
     if (/تماس/.test(plan.cta)) { router.push('/contact'); return }
@@ -306,15 +311,48 @@ export default function PricingPage() {
       const r = await fetch('/api/payment/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ planId: plan.id, annual }) })
       const d = await r.json().catch(() => ({}))
       if (r.status === 401 || d.needLogin) { router.push('/auth?next=/pricing'); return }
+      if (d.card2card) { setCheckout({ plan, amount: d.amount, card: d.card }); setReceipt(''); return }
       if (d.redirect) { window.location.href = d.redirect; return }
       if (d.ok) { setPayBanner({ ok: true, text: '✓ پلن فعال شد.' }); window.scrollTo({ top: 0, behavior: 'smooth' }); return }
       alert(d.error || 'خطا در شروع پرداخت')
     } catch { alert('اتصال به سرور برقرار نشد') }
   }
+  const submitReceipt = async () => {
+    if (!checkout || !receipt.trim()) { alert('کدِ رهگیری/چهار رقمِ آخرِ کارت را وارد کنید'); return }
+    setSendingReceipt(true)
+    try {
+      const r = await fetch('/api/payment/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ planId: checkout.plan.id, annual, receipt: receipt.trim() }) })
+      const d = await r.json().catch(() => ({}))
+      if (d.pending) { setCheckout(null); setPayBanner({ ok: true, text: `✓ ${d.message || 'درخواستت ثبت شد — پس از تأییدِ واریزی، پلن خودکار فعال می‌شود.'}` }); window.scrollTo({ top: 0, behavior: 'smooth' }); return }
+      alert(d.error || 'ثبتِ سفارش ناموفق بود')
+    } catch { alert('اتصال به سرور برقرار نشد') } finally { setSendingReceipt(false) }
+  }
 
   return (
     <div dir="rtl" style={{ background: 'var(--bg)', minHeight: '100vh', color: 'var(--text)' }}>
       <Nav />
+
+      {/* فاز ۵۳: چک‌اوتِ کارت‌به‌کارت */}
+      {checkout && (
+        <div dir="rtl" style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(8,9,12,.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => setCheckout(null)}>
+          <div onClick={ev => ev.stopPropagation()} style={{ maxWidth: 440, width: '100%', background: 'var(--surface)', border: '1px solid var(--goldDim)', borderRadius: 18, padding: 24, boxShadow: '0 16px 48px -12px rgba(0,0,0,.6)' }}>
+            <div style={{ fontSize: 16, fontWeight: 900 }}>💳 پرداختِ کارت‌به‌کارت — پلنِ «{checkout.plan.name}»</div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 6 }}>مبلغِ قابلِ‌واریز: <b style={{ color: 'var(--gold)', fontSize: 15 }}>{(checkout.amount || 0).toLocaleString('fa-IR')} تومان</b></div>
+            <div style={{ background: 'var(--bg2)', border: '1px dashed var(--line2)', borderRadius: 12, padding: 14, marginTop: 12, fontSize: 13, lineHeight: 2.2 }}>
+              {checkout.card.cardNumber && <div>شمارهٔ کارت: <b dir="ltr" style={{ letterSpacing: 2, color: 'var(--gold)', userSelect: 'all' }}>{checkout.card.cardNumber}</b></div>}
+              {checkout.card.iban && <div>شبا: <b dir="ltr" style={{ userSelect: 'all' }}>{checkout.card.iban}</b></div>}
+              {checkout.card.holderName && <div>به نامِ: <b>{checkout.card.holderName}</b>{checkout.card.bank ? ` — ${checkout.card.bank}` : ''}</div>}
+              {checkout.card.note && <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{checkout.card.note}</div>}
+            </div>
+            <input value={receipt} onChange={ev => setReceipt(ev.target.value)} placeholder="کدِ رهگیری / چهار رقمِ آخرِ کارتِ خودتان" style={{ width: '100%', boxSizing: 'border-box', marginTop: 12, padding: '11px 13px', borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 13.5 }} />
+            <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+              <button disabled={sendingReceipt} onClick={submitReceipt} style={{ flex: 1, background: 'linear-gradient(140deg,var(--gold2,#e8c96a),var(--gold))', color: '#16140f', border: 'none', borderRadius: 12, padding: '12px 0', fontWeight: 900, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>{sendingReceipt ? 'در حالِ ثبت…' : 'واریز کردم — ثبتِ درخواست'}</button>
+              <button onClick={() => setCheckout(null)} style={{ border: '1px solid var(--line2)', background: 'transparent', color: 'var(--text)', borderRadius: 12, padding: '12px 18px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>انصراف</button>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 10 }}>پس از تأییدِ واریزی توسطِ ملک‌جت (معمولاً کمتر از چند ساعت)، پلن خودکار روی حسابت فعال می‌شود.</div>
+          </div>
+        </div>
+      )}
 
       {payBanner && (
         <div style={{ maxWidth: 1280, margin: '18px auto 0', padding: '0 24px' }}>

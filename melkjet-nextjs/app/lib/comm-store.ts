@@ -16,7 +16,7 @@ export type Channel = 'sms' | 'email' | 'token'
 export interface CommPackage { id: string; channel: Channel; name: string; credits: number; price: number; active: boolean; createdAt: number }
 export interface Credit { sms: number; email: number; token: number }
 export type OrderStatus = 'pending' | 'paid' | 'rejected'
-export type OrderKind = 'package' | 'plan' | 'promo' | 'promo_credit'
+export type OrderKind = 'package' | 'plan' | 'promo' | 'promo_credit' | 'coins'
 export interface CommOrder { id: string; owner: string; kind: OrderKind; name: string; price: number; status: OrderStatus; createdAt: number; paidAt?: number; packageId?: string; channel?: Channel; credits?: number; planId?: string; gateway?: string; receipt?: string; period?: string; slot?: string; targetId?: string; days?: number; targetName?: string; promoTarget?: 'profile' | 'listing'; bundleId?: string; promoKind?: string; areas?: string[] }
 
 interface DB { packages: CommPackage[]; credits: Record<string, Credit>; orders: CommOrder[]; usage?: Record<string, { token: number }>; promoWallet?: Record<string, number>; pkgSeeded?: boolean; seedV?: number }
@@ -300,6 +300,15 @@ export async function listOrders(owner?: string): Promise<CommOrder[]> {
   const os = owner ? db.orders.filter(o => o.owner === owner) : db.orders
   return [...os].sort((a, b) => b.createdAt - a.createdAt)
 }
+// فاز ۵۳ (پرداختِ سراسریِ کارت‌به‌کارت): سفارشِ خریدِ ملک‌کوین — پس از تأییدِ مدیر، کوین شارژ و درآمدِ واقعی ثبت می‌شود.
+export async function createCoinOrder(owner: string, pack: { id: string; label: string; coins: number; priceToman: number }, pay?: { gateway?: string; receipt?: string }): Promise<{ ok: boolean; order?: CommOrder }> {
+  return withDb(db => {
+    const order: CommOrder = { id: id('ord_'), owner, kind: 'coins', packageId: pack.id, name: `${pack.label} — ${pack.coins.toLocaleString('fa-IR')} ملک‌کوین`, credits: Math.max(1, Math.round(pack.coins)), price: Math.max(0, Math.round(pack.priceToman)), status: 'pending', createdAt: Date.now(), gateway: pay?.gateway, receipt: pay?.receipt }
+    db.orders.unshift(order)
+    return { ok: true, order }
+  })
+}
+
 export async function approveOrder(orderId: string): Promise<{ ok: boolean; error?: string }> {
   const res = await withDb(db => {
     applySeed(db)
@@ -319,6 +328,9 @@ export async function approveOrder(orderId: string): Promise<{ ok: boolean; erro
       // شارژِ کیفِ پولِ پروموت: مبلغِ اعتبار (credits) به کیفِ پول اضافه می‌شود.
       if (!db.promoWallet) db.promoWallet = {}
       db.promoWallet[o.owner] = Math.max(0, (Number(db.promoWallet[o.owner]) || 0) + (Number(o.credits) || 0))
+    } else if (o.kind === 'coins') {
+      // شارژِ کوین + ثبتِ درآمدِ واقعی بیرون از تراکنش (storeهای جدا) — ایدمپوتنت با شناسهٔ سفارش
+      return { ok: true as const, coins: { owner: o.owner, coins: Number(o.credits) || 0, label: o.name, price: Number(o.price) || 0, orderId: o.id } }
     } else if (o.kind === 'promo') {
       // بیرون از تراکنش فعال می‌شود (promotion-store جداست + پروموتِ آگهی async است).
       return { ok: true as const, promo: promoPayload(o) }
@@ -332,6 +344,15 @@ export async function approveOrder(orderId: string): Promise<{ ok: boolean; erro
   // فعال‌سازیِ پروموت پس از تراکنش.
   const pr = (res as any).promo
   if (pr) { await activatePromo(pr); try { const { invalidateHomeCache } = await import('./home-data'); invalidateHomeCache() } catch {} }
+  // فاز ۵۳: شارژِ کوینِ تأییدشده (ایدمپوتنت با authority=شناسهٔ سفارش) + خوراکِ استخرِ جوایزِ واقعی
+  const cn = (res as any).coins
+  if (cn && cn.coins > 0) {
+    try {
+      const { creditCoinPurchase } = await import('./empire-store')
+      await creditCoinPurchase(cn.owner, { coins: cn.coins, label: cn.label, authority: cn.orderId, refId: cn.orderId })
+    } catch {}
+    try { const { recordRealRevenue } = await import('./empire-rewards'); if (cn.price > 0) await recordRealRevenue(cn.owner, cn.price, cn.orderId) } catch {}
+  }
   return { ok: res.ok, error: (res as any).error }
 }
 

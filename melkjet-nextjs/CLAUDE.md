@@ -204,7 +204,14 @@ media files in `.media/` + `.media-index.json`.
   `requireAndBumpUsage`): sms/email (per recipient), divarImports, aiRequests (crm/ai + ai/run),
   contactReveals. Semantics: quota >0 = cap; −1/0/undefined = unlimited (plan-store contract).
   All caps come from the plan record — zero hardcoded numbers. Same enforce toggle governs both.
-  Still pending: plan purchase via Zarinpal (admin assigns plans manually for now).
+  **Plan/coin purchase (فاز ۵۳ — card-to-card everywhere, per user's request):** the default
+  checkout site-wide is کارت‌به‌کارت (gateway seeded enabled in payment-store; admin fills card/شبا
+  in پرداخت settings). Flow: buy → API returns `card2card:true` + card info → user submits receipt
+  (کد رهگیری) → pending CommOrder (kind 'plan' with period, or new kind 'coins') → admin approves
+  in سفارش‌های شارژ → auto-activation: plan via setPlan(+duration,+aiCredits) / coins via
+  creditCoinPurchase (idempotent authority=orderId) + recordRealRevenue → reward pool.
+  Zarinpal stays available only when explicitly chosen (`gateway:'zarinpal'`) and configured.
+  UIs: /pricing checkout modal + empire coin-shop inline card panel.
 
 ## Integrations (exact, hard-won)
 - **IPPanel SMS** (domestic, via shecan-https):
