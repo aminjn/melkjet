@@ -14,11 +14,17 @@ const CONFIDENCE = 0.92    // آستانهٔ اطمینان تا مدل خودش
 
 export type MLabel = 'approved' | 'rejected'
 interface ClassStat { docs: number; total: number; tok: Record<string, number> }
-interface MLData { v: number; approved: ClassStat; rejected: ClassStat; autoDecided: number; aiDecided: number; adminTaught: number; updatedAt: number }
+interface MLData {
+  v: number; approved: ClassStat; rejected: ClassStat
+  autoDecided: number; aiDecided: number; adminTaught: number; updatedAt: number
+  // فاز ۷۷ (اندازه‌گیری): اصلاح‌های ادمین + پنجرهٔ ارزیابیِ اخیر — «مدل به چه نقطه‌ای رسیده» باید عدد داشته باشد
+  corrections: number                                        // چند بار ادمین تصمیمِ خودکار را برگرداند (سیگنالِ خطای مدل)
+  recent: Array<{ at: number; pred: MLabel; final: MLabel }> // آخرین بازبینی‌های انسانی: پیش‌بینیِ سیستم در برابرِ حکمِ نهایی
+}
 
 function cls(): ClassStat { return { docs: 0, total: 0, tok: {} } }
-function empty(): MLData { return { v: MODEL_V, approved: cls(), rejected: cls(), autoDecided: 0, aiDecided: 0, adminTaught: 0, updatedAt: 0 } }
-function load(): MLData { const d = readJsonCached<MLData | null>(FILE, null); return d && d.v === MODEL_V ? d : empty() }
+function empty(): MLData { return { v: MODEL_V, approved: cls(), rejected: cls(), autoDecided: 0, aiDecided: 0, adminTaught: 0, updatedAt: 0, corrections: 0, recent: [] } }
+function load(): MLData { const d = readJsonCached<MLData | null>(FILE, null); if (!d || d.v !== MODEL_V) return empty(); d.corrections = d.corrections || 0; d.recent = Array.isArray(d.recent) ? d.recent : []; return d }
 function save(d: MLData) { writeJsonCached(FILE, d) }
 
 // پاک‌کردنِ کاملِ مدلِ یادگیرنده — وقتی مدل «مسموم» شده (از دادهٔ غلطِ قبلی رد یاد گرفته)
@@ -62,7 +68,7 @@ export function learn(it: Partial<Item>, label: MLabel, teacher: 'ai' | 'admin' 
   if (label !== 'approved' && label !== 'rejected') return
   const d = load()
   const c = d[label]
-  const reps = teacher === 'admin' ? 2 : 1   // تصحیحِ ادمین دوبار شمرده می‌شود
+  const reps = teacher === 'admin' ? 3 : 1   // فاز ۷۷: حکمِ ادمین ۳ برابرِ AI وزن دارد — «دستی می‌زنم که یاد بگیرد» باید واقعاً اثر کند
   for (let r = 0; r < reps; r++) {
     c.docs++
     for (const t of featuresOf(it)) { c.tok[t] = (c.tok[t] || 0) + 1; c.total++ }
@@ -70,6 +76,33 @@ export function learn(it: Partial<Item>, label: MLabel, teacher: 'ai' | 'admin' 
   if (teacher === 'admin') d.adminTaught++
   d.updatedAt = Date.now()
   save(d)
+}
+
+// فاز ۷۷: از-یاد-بردن — وقتی ادمین تصمیمِ خودکار را برمی‌گرداند، فقط «یادگیریِ کلاسِ درست» کافی نیست؛
+// شمارشِ همان ویژگی‌ها از کلاسِ غلط هم کم می‌شود تا الگوی مسموم (مثلِ «گول/نخور» در آگهی‌های سالم) واقعاً پاک شود.
+export function unlearn(it: Partial<Item>, label: MLabel, reps = 1): void {
+  const d = load()
+  const c = d[label]
+  for (let r = 0; r < reps; r++) {
+    if (c.docs > 0) c.docs--
+    for (const t of featuresOf(it)) { if ((c.tok[t] || 0) > 0) { c.tok[t]--; c.total = Math.max(0, c.total - 1); if (!c.tok[t]) delete c.tok[t] } }
+  }
+  d.updatedAt = Date.now()
+  save(d)
+}
+
+// یادگیریِ اصلاحی از حکمِ ادمین: اگر حکمِ قبلیِ سیستم برعکس بود، اول از کلاسِ غلط unlearn می‌شود (۲ بار —
+// هم‌وزنِ آموزشِ اشتباهِ قبلی + یک گام جلوتر)، بعد با وزنِ ادمین در کلاسِ درست یاد می‌گیرد. هر بازبینیِ انسانی
+// در پنجرهٔ recent ثبت می‌شود تا «دقتِ مدل روی داوریِ انسانی» قابلِ‌اندازه‌گیری باشد.
+export function correctFromAdmin(it: Partial<Item>, final: MLabel, prev?: MLabel): void {
+  const d0 = load()
+  const flipped = !!prev && prev !== final
+  d0.recent.push({ at: Date.now(), pred: prev || final, final })
+  d0.recent = d0.recent.slice(-300)
+  if (flipped) d0.corrections++
+  save(d0)
+  if (flipped) unlearn(it, prev!, 2)
+  learn(it, final, 'admin')
 }
 
 export interface MLPrediction { label: MLabel; prob: number; ready: boolean; confident: boolean }
@@ -151,9 +184,18 @@ export function noteDecision(via: 'ml' | 'ai'): void {
 export function mlStats() {
   const d = load()
   const ready = d.approved.docs >= MIN_PER_CLASS && d.rejected.docs >= MIN_PER_CLASS
+  // فاز ۷۷: دقتِ مدل روی داوریِ انسانیِ اخیر — تنها معیارِ صادقانهٔ «به کجا رسیده»: چند درصدِ بازبینی‌های
+  // انسانیِ اخیر با پیش‌بینیِ سیستم هم‌نظر بودند. بدونِ بازبینیِ انسانی، عددی ادعا نمی‌شود.
+  const win = d.recent.slice(-100)
+  const agree = win.filter(x => x.pred === x.final).length
   return {
     approvedSamples: d.approved.docs, rejectedSamples: d.rejected.docs,
+    vocab: new Set([...Object.keys(d.approved.tok), ...Object.keys(d.rejected.tok)]).size,
     ready, minPerClass: MIN_PER_CLASS, confidence: CONFIDENCE,
-    autoDecided: d.autoDecided, aiDecided: d.aiDecided, adminTaught: d.adminTaught, updatedAt: d.updatedAt,
+    autoDecided: d.autoDecided, aiDecided: d.aiDecided, adminTaught: d.adminTaught,
+    corrections: d.corrections,
+    recentReviewed: win.length,
+    recentAgreePct: win.length ? Math.round((agree / win.length) * 100) : null,
+    updatedAt: d.updatedAt,
   }
 }

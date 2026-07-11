@@ -2829,7 +2829,23 @@ function ModerationView() {
                     ? '✅ آماده است — مدل می‌تواند بخشی از تصمیم‌ها را خودش بگیرد.'
                     : `⏳ در حالِ یادگیری — برای آماده‌شدن حداقل ${fa(ml.minPerClass)} تأیید و ${fa(ml.minPerClass)} رد لازم است (فعلاً: ${fa(ml.approvedSamples)} تأیید، ${fa(ml.rejectedSamples)} رد).`}
                 </div>
-                <div style={{ color: 'var(--faint)', marginTop: 4 }}>تصمیمِ خودکارِ ML: {fa(ml.autoDecided)} · تصمیمِ AI: {fa(ml.aiDecided)} · آموزش از تصمیمِ دستیِ شما: {fa(ml.adminTaught)}</div>
+                {/* فاز ۷۷: کارنامهٔ قابل‌اندازه‌گیری — «مدل به کجا رسیده» با عدد، نه حس */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 8, marginTop: 10 }}>
+                  {[
+                    ['نمونهٔ یادگرفته', `✓${fa(ml.approvedSamples)} · ✕${fa(ml.rejectedSamples)}`, 'آگهی‌های تأیید/ردی که مدل از آن‌ها الگو گرفته'],
+                    ['واژگانِ شناخته', fa(ml.vocab || 0), 'ویژگی‌های متمایزی که مدل می‌شناسد'],
+                    ['دقت روی داوریِ شما', ml.recentAgreePct == null ? 'هنوز داده نیست' : `${fa(ml.recentAgreePct)}٪ از ${fa(ml.recentReviewed)} بازبینی`, 'چند درصدِ بازبینی‌های انسانیِ اخیر با پیش‌بینیِ سیستم هم‌نظر بود — تنها معیارِ صادقانهٔ پیشرفت'],
+                    ['اصلاحِ دستیِ شما', fa(ml.corrections || 0), 'چند بار تصمیمِ خودکار را برگرداندی — هر برگشت، مدل از کلاسِ غلط «از یاد می‌بَرد» و درست را ۳ برابر یاد می‌گیرد'],
+                    ['سهمِ تصمیم', `ML ${fa(ml.autoDecided)} · AI ${fa(ml.aiDecided)}`, 'هر چه ML بیشتر، هزینهٔ AI کمتر'],
+                    ['آموزشِ دستیِ کل', fa(ml.adminTaught), 'تصمیم‌های دستی‌ای که مدل از آن‌ها آموخته'],
+                  ].map(([t77, v77, d77]) => (
+                    <div key={t77 as string} title={d77 as string} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 9, padding: '8px 10px' }}>
+                      <div style={{ fontSize: 10.5, color: 'var(--faint)' }}>{t77}</div>
+                      <div style={{ fontSize: 12.5, fontWeight: 800, marginTop: 2 }}>{v77}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ color: 'var(--faint)', fontSize: 10.5, marginTop: 6 }}>قانونِ ردِ خودکار (فاز ۷۷): فقط نشانهٔ اسپمِ واقعی (شماره/لینکِ تماس در متن) مجوزِ ردِ بی‌انسان دارد — قیمتِ نامعتبر/توضیحِ کوتاه/شباهتِ واژه‌ای حداکثر به صفِ بازبینیِ خودت می‌آید. برگرداندنِ هر تصمیم، مدل را واقعاً اصلاح می‌کند (unlearn از کلاسِ غلط).</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
                   <span style={{ color: 'var(--faint)', fontSize: 11 }}>هر بار که دستی «تأیید» یا «رد» می‌زنی، مدل قوی‌تر یاد می‌گیرد.</span>
                   <button onClick={resetMlModel} style={{ fontSize: 11.5, padding: '5px 12px', borderRadius: 8, border: '1px solid #e7674a', color: '#e7674a', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', marginInlineStart: 'auto' }}>♻️ ریستِ مدلِ یادگیرنده</button>

@@ -111,7 +111,7 @@ export async function PATCH(req: NextRequest) {
   }
   if (b.status && ['pending', 'approved', 'duplicate', 'rejected'].includes(b.status)) {
     // مدلِ یادگیرنده از تصمیمِ دستیِ ادمین یاد بگیرد (قوی‌ترین سیگنال) — قبل از تغییرِ وضعیت آیتم را بگیر.
-    if (b.status === 'approved' || b.status === 'rejected') { const it = await getItemById(b.id); if (it && it.type === 'listing') teachFromAdmin(it, b.status as ItemStatus) }
+    if (b.status === 'approved' || b.status === 'rejected') { const it = await getItemById(b.id); if (it && it.type === 'listing') teachFromAdmin(it, b.status as ItemStatus, it.status) }   // فاز ۷۷: حکمِ قبلی هم می‌رود تا برگشتِ تصمیم «یادگیریِ اصلاحی» شود
     await setItemStatus(b.id, b.status as ItemStatus)
     logAudit(await actor(), `تغییر وضعیت به ${b.status}`, b.id)
     return NextResponse.json({ ok: true })

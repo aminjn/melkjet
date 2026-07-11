@@ -1,7 +1,7 @@
 import { pendingForModeration, setModeration, setModerationBatch, type Item, type ItemStatus } from './scraper-store'
 import { aiFor, agentModel } from './gapgpt'
 const { chatCompleteSafe } = aiFor('بازبینیِ خودکارِ آگهی')   // فاز ۵۷: منبعِ صریح در دفترِ مصرفِ AI
-import { predict, learn, noteDecision, explainPrediction, rejectEvidenceOf } from './moderation-ml'
+import { predict, learn, noteDecision, explainPrediction, rejectEvidenceOf, correctFromAdmin } from './moderation-ml'
 import { getAdminData } from './admin-store'
 import { buildDupIndex, dupMasterInIndex, type DupIndex } from './listing-dedupe'
 
@@ -34,6 +34,7 @@ function buildSys(criteria: string): string {
 {"verdict":"approve|reject|review","score":0-100,"reason":"علت کوتاه فارسی (یک جمله)"}
 معیارها:
 ${criteria}
+توجهِ مهم: عبارت‌های بازاریابیِ رایجِ آگهی‌های واقعی مثل «گولِ آگهی‌های فیک را نخورید»، «قیمتِ واقعی»، «بدونِ واسطه» ادعای اصالتِ خودِ آگهی‌اند، نه نشانهٔ تقلب — به‌خاطرِ خودِ این عبارت‌ها reject نده. reject فقط با نشانهٔ واقعی: تناقضِ جدیِ قیمت/مشخصات، شماره/لینکِ تماس داخلِ متن برای دورزدنِ سایت، یا محتوای نامرتبط با املاک. اگر مطمئن نیستی review بده، نه reject.
 همیشه reason را پر کن و امتیاز را دقیق و منصفانه بده.`
 }
 
@@ -85,9 +86,15 @@ async function smartVerdict(it: Item, model: string | null, dupIndex?: DupIndex)
     // فاز ۵۴ (فیدبک: ردِ الکی روی واژهٔ «فرشته»): ردِ خودکار فقط با نشانهٔ «ساختاری» (شماره/لینک در متن،
     // قیمتِ نامعتبر و…) مجاز است — شباهتِ صرفاً واژه‌ای حداکثر به صفِ بازبینیِ انسانی می‌فرستد، نه رد.
     if (p.label === 'rejected') {
+      // فاز ۷۷ (سخت‌گیریِ بیشتر روی ردِ خودکار): فقط نشانهٔ «اسپمِ» واقعی (شماره/لینکِ تماس در متن) مجوزِ
+      // ردِ بی‌انسان است. قیمتِ نامعتبر/توضیحِ کوتاه/شباهتِ واژه‌ای در آگهی‌های واقعیِ سالم هم فراوان‌اند
+      // (اجارهٔ توافقی، «گولِ آگهیِ فیک را نخور») — این‌ها فقط به صفِ بازبینیِ انسانی می‌روند.
       const ev = rejectEvidenceOf(it)
-      if (ev.wordsOnly) {
-        return { id: it.id, title: it.title, status: 'pending', score: Math.round(p.prob * 100), via: 'ml', reason: 'در صفِ بازبینیِ انسانی — مدل فقط شباهتِ واژه‌ای با آگهی‌های ردشدهٔ قبلی دید و طبقِ قانون، شباهتِ واژه‌ای به‌تنهایی مجوزِ رد نیست' }
+      const spam = ev.hard.filter(t => t === '#phone_in_text' || t === '#contact_in_text')
+      if (!spam.length) {
+        return { id: it.id, title: it.title, status: 'pending', score: Math.round(p.prob * 100), via: 'ml', reason: ev.wordsOnly
+          ? 'در صفِ بازبینیِ انسانی — مدل فقط شباهتِ واژه‌ای با آگهی‌های ردشدهٔ قبلی دید و طبقِ قانون، شباهتِ واژه‌ای به‌تنهایی مجوزِ رد نیست'
+          : `در صفِ بازبینیِ انسانی — نشانهٔ کیفیت/قیمت (${ev.hardFa.join('، ')}) بدونِ نشانهٔ اسپم، مجوزِ ردِ خودکار نیست` }
       }
     }
     noteDecision('ml')
@@ -140,8 +147,12 @@ export function displayReason(it: Pick<Item, 'title' | 'excerpt' | 'location' | 
 }
 
 // آموزشِ مدل از تصمیمِ دستیِ ادمین (تأیید/رد) — قوی‌ترین سیگنالِ یادگیری.
-export function teachFromAdmin(it: Item, status: ItemStatus) {
-  if (status === 'approved' || status === 'rejected') { try { learn(it, status, 'admin') } catch {} }
+// فاز ۷۷: اگر حکمِ قبلیِ سیستم برعکس بود، «یادگیریِ اصلاحی» می‌شود: از کلاسِ غلط unlearn + آموزشِ پروزنِ
+// کلاسِ درست + ثبت در پنجرهٔ ارزیابی — تا اصلاحِ دستیِ ادمین واقعاً مدل را برگرداند و قابلِ‌اندازه‌گیری باشد.
+export function teachFromAdmin(it: Item, status: ItemStatus, prev?: ItemStatus) {
+  if (status !== 'approved' && status !== 'rejected') return
+  const prevLabel = prev === 'approved' || prev === 'rejected' ? prev : undefined
+  try { correctFromAdmin(it, status, prevLabel) } catch { try { learn(it, status, 'admin') } catch {} }
 }
 
 // Run AI calls with limited concurrency (verdicts are read-only; one atomic write at the end).
