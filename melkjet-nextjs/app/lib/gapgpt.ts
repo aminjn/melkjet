@@ -115,17 +115,39 @@ export async function fetchGapSitePricing(): Promise<{ list: ApiModelPrice[]; no
   const scanText = (txt: string) => {
     // JSONهای خالص
     try { deepScan(JSON.parse(txt)) } catch {}
-    // __NEXT_DATA__ / بلاب‌های JSON داخلِ HTML (بزرگ‌ترین آبجکت‌ها)
+    // __NEXT_DATA__ / بلاب‌های JSON داخلِ HTML
     for (const m of txt.matchAll(/<script[^>]*>\s*(\{[\s\S]*?\})\s*<\/script>/g)) { try { deepScan(JSON.parse(m[1])) } catch {} }
-    // رشته‌های escape شدهٔ flight (self.__next_f.push("...")) — unescape و دوباره الگوگیری
+    // رشته‌های escape شدهٔ flight (self.__next_f.push("...")) — unescape و الگوگیری
     const un = txt.replace(/\\"/g, '"')
-    // الگوی متنی: "id":"gpt-x" ... input/prompt: 1.25 ... output/completion: 10
     for (const m of un.matchAll(/"(?:id|model|slug)"\s*:\s*"([\w.\/-]{3,60})"([^{}]{0,400}?)"(?:input|prompt)[^"]*"\s*:\s*"?\$?([\d.]+)"?([^{}]{0,200}?)"(?:output|completion)[^"]*"\s*:\s*"?\$?([\d.]+)"?/g)) {
       put(m[1], scale(m[3]), scale(m[5]))
     }
+    // فاز ۸۶: پارسِ سطریِ خودِ جدولِ HTML — همان منطقی که با پیستِ واقعیِ کاربر راستی‌آزمایی شد:
+    // تگ‌ها → خطِ جدید؛ خطِ slug = مدل؛ اعدادِ دلاریِ بعدی (زیر ۱۰۰۰) = [ورودی، (کش)، خروجی] → اولی و آخری
+    const plain = un.replace(/<script[\s\S]*?<\/script>/g, ' ').replace(/<style[\s\S]*?<\/style>/g, ' ').replace(/<[^>]+>/g, '\n')
+    const rows = plain.split(/\n+/).map(l => l.trim()).filter(Boolean)
+    // شناسهٔ مدل حتماً رقم/نقطه/خط‌تیره دارد (gpt-5.4) — «OpenAI/Anthropic/…» فقط حروف‌اند و مدل نیستند
+    const isModel = (t: string) => slugRe.test(t) && /[\d./-]/.test(t)
+    for (let li = 0; li < rows.length; li++) {
+      const idc = rows[li].replace(/\s*🖼\s*$/, '')
+      if (!isModel(idc)) continue
+      const nums: number[] = []
+      for (let k = li + 1; k < Math.min(li + 8, rows.length) && nums.length < 3; k++) {
+        const t = rows[k].replace(/[$,\s٬،]/g, '').replace(/[۰-۹]/g, dg => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(dg)))
+        if (t === '-' || t === '–') continue
+        if (/^[\d.]+$/.test(t)) { const n = Number(t); if (n >= 0 && n < 1000) nums.push(n); else if (nums.length) break }
+        else if (isModel(rows[k])) break                                    // مدلِ بعدی
+        else if (/^[A-Za-z]/.test(rows[k])) { if (nums.length) break }      // نامِ تأمین‌کننده — رد شو
+      }
+      if (nums.length >= 2) put(idc, nums[0], nums[nums.length - 1])       // [ورودی، (کش)، خروجی] → اولی و آخری
+    }
   }
+  // فاز ۸۶: جدولِ صفحه ۴صفحه‌ای است — هر ۴ صفحه + نسخهٔ RSC هم امتحان می‌شود
   const urls = [
     'https://gapgpt.app/platform-v2/pricing',
+    'https://gapgpt.app/platform-v2/pricing?page=2',
+    'https://gapgpt.app/platform-v2/pricing?page=3',
+    'https://gapgpt.app/platform-v2/pricing?page=4',
     'https://api.gapgpt.app/v1/pricing',
     'https://gapgpt.app/api/pricing',
     'https://api.gapgpt.app/v1/models/pricing',
@@ -136,7 +158,7 @@ export async function fetchGapSitePricing(): Promise<{ list: ApiModelPrice[]; no
       const before = out.size
       if (res.status === 200 && res.body) scanText(res.body)
       tried.push(`${u.replace('https://', '')}: HTTP ${res.status}${out.size > before ? ` → ${out.size - before} قیمت` : ''}`)
-      if (out.size >= 10) break   // به‌قدرِ کافی گرفتیم
+      if (out.size >= 10 && u.includes('page=4')) break   // هر ۴ صفحهٔ جدول خوانده شد
     } catch (e: any) { tried.push(`${u.replace('https://', '')}: ${String(e?.message || e).slice(0, 60)}`) }
   }
   return { list: [...out.values()], note: tried.join(' · ') }

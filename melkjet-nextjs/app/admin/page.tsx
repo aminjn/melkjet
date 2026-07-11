@@ -5593,7 +5593,7 @@ function AiCostView() {
           <div style={{ marginTop: 10, borderTop: '1px solid var(--line)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" checked={c.autoSync !== false} onChange={e => setC({ ...c, autoSync: e.target.checked })} /> دریافتِ <b>روزانهٔ خودکارِ</b> قیمتِ مدل‌ها از API + صفحهٔ قیمتِ سایتِ گپ (بدونِ کارِ دستی)</label>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" checked={c.autoReprice !== false} onChange={e => setC({ ...c, autoReprice: e.target.checked })} /> پس از هر سینک، قیمتِ بسته‌های توکن هم خودکار به‌روز شود</label>
-            <div style={{ fontSize: 11, color: 'var(--faint)' }}>{c.lastSyncAt ? `آخرین سینکِ خودکار: ${new Date(c.lastSyncAt).toLocaleDateString('fa-IR')}` : 'هنوز سینکِ خودکاری انجام نشده'}</div>
+            <div style={{ fontSize: 11, color: 'var(--faint)' }}>{c.lastSyncAt ? `آخرین سینکِ خودکار: ${new Date(c.lastSyncAt).toLocaleDateString('fa-IR')}` : 'هنوز سینکِ خودکاری انجام نشده'}{c.lastSyncNote && <div style={{ fontSize: 10, marginTop: 2 }} title={c.lastSyncNote}>📋 {c.lastSyncNote}</div>}</div>
           </div>
         </Card>
         <Card>

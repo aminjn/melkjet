@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
       const site = await fetchGapSitePricing().catch(e => ({ list: [], note: String(e?.message || e) }))
       const all = [...fetched, ...site.list]
       if (!all.length) return NextResponse.json({ error: `هیچ منبعی قیمت نداد — ${site.note || 'API هم خالی بود'}` }, { status: 400 })
-      const r = syncModels(all)
+      const r = syncModels(all, `دستی: API ${fetched.length} · سایت ${site.list.length}${site.note ? ` (${site.note})` : ''}`)
       return NextResponse.json({ ok: true, ...getCostConfig(), tokenSellPrice: tokenSellPriceToman(), ...r, sitePriced: site.list.length, siteNote: site.note })
     } catch (e: any) { return NextResponse.json({ error: e?.message || 'خطا در دریافت از API' }, { status: 500 }) }
   }

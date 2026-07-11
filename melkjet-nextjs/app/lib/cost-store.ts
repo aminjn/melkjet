@@ -20,6 +20,7 @@ export interface CostConfig {
   autoReprice?: boolean   // پس از سینک، قیمتِ بسته‌های توکن هم خودکار به‌روز شود
   lastSyncAt?: number
   v?: number
+  lastSyncNote?: string   // فاز ۸۶: گزارشِ آخرین سینک (منبع‌ها + تعداد قیمت) — تا شکستِ استخراج ساکت نماند
 }
 
 function seedModels(): ModelCost[] {
@@ -78,7 +79,7 @@ export function setCostConfig(patch: Partial<CostConfig>): CostConfig {
   save(c); return c
 }
 // ادغامِ قیمت‌های دریافت‌شده از API با فهرستِ مدل‌ها (به‌روزرسانی + افزودنِ مدلِ جدید).
-export function syncModels(fetched: { id: string; label?: string; provider?: string; type?: string; inUsd: number; outUsd: number }[]): { updated: number; added: number } {
+export function syncModels(fetched: { id: string; label?: string; provider?: string; type?: string; inUsd: number; outUsd: number }[], note?: string): { updated: number; added: number } {
   const c = load(); const byId = new Map(c.models.map(m => [m.id, m]))
   let updated = 0, added = 0
   for (const f of fetched) {
@@ -88,6 +89,7 @@ export function syncModels(fetched: { id: string; label?: string; provider?: str
     if (ex) { if (Number(f.inUsd) > 0) ex.inUsd = Number(f.inUsd); if (Number(f.outUsd) > 0) ex.outUsd = Number(f.outUsd); if (f.label) ex.label = f.label; if (f.provider) ex.provider = f.provider; if (f.type) ex.type = f.type as any; updated++ }
     else { c.models.push({ id: f.id, label: f.label || f.id, provider: f.provider || '', type: (['text', 'image', 'audio', 'embedding'].includes(f.type as any) ? f.type : 'text') as any, inUsd: Number(f.inUsd) || 0, outUsd: Number(f.outUsd) || 0 }); added++ }
   }
+  if (note !== undefined) c.lastSyncNote = String(note).slice(0, 400)
   save(c); return { updated, added }
 }
 // سینکِ هفتگیِ خودکارِ قیمت‌ها از API (از کرونِ اینستنسِ ۰). قیمتِ مدل‌ها را می‌گیرد،
@@ -107,7 +109,7 @@ export async function maybeAutoSyncCost(now = Date.now()): Promise<boolean> {
     const fetched = await listModelsWithPricing().catch(() => [])
     const site = await fetchGapSitePricing().catch(() => ({ list: [] as any[], note: '' }))
     if (fetched.length || site.list.length) {
-      syncModels([...fetched, ...site.list])
+      syncModels([...fetched, ...site.list], `خودکار: API ${fetched.length} · سایت ${site.list.length}${site.note ? ` (${site.note})` : ''}`)
       if (load().autoReprice !== false) {
         const { repriceTokenPackages } = await import('./comm-store')
         repriceTokenPackages(tokenSellPriceToman(), load().roundTo)
