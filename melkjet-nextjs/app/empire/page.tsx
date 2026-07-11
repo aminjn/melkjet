@@ -176,6 +176,14 @@ export default function EmpirePage() {
   const [mktV, setMktV] = useState<'capital' | 'players' | 'bank' | 'shop'>('capital')
   const [rankV, setRankV] = useState<'compete' | 'hall' | 'clan'>('compete')
   const [misV, setMisV] = useState<'quests' | 'rewards' | 'dreams'>('quests')
+  // فاز ۸۰: بازارِ شهر/محله «داخلِ» دنیا — کلیک روی شهر/شایعه دیگر از بازی بیرون نمی‌بَرد
+  const [cityMkt, setCityMkt] = useState<{ title: string; total: number; items: any[]; loading?: boolean } | null>(null)
+  const openCityMkt = async (q: { city?: string; hood?: string }) => {
+    setCityMkt({ title: q.hood || q.city || '', total: 0, items: [], loading: true })
+    const d = await api({ action: 'cityMarket', ...q })
+    if (d?.ok) setCityMkt({ title: d.title, total: d.total, items: d.items || [] })
+    else setCityMkt(null)
+  }
   const [boardTab, setBoardTab] = useState('score')
   const [loanVal, setLoanVal] = useState('')
   const [repayVal, setRepayVal] = useState('')
@@ -1508,7 +1516,7 @@ export default function EmpirePage() {
               <div>👂 {r.text}</div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 10, color: 'var(--muted)', marginTop: 3 }}>
                 <span>منبع: {r.sourceFa} · اعتبارِ ادعایی {fa(r.credPct)}٪{r.verdict ? (r.verdict === 'true' ? ' · ✓ درست از آب درآمد' : ' · ✗ غلط بود') : ' · هنوز ارزیابی نشده'}</span>
-                {r.hood && <a href={`/listings?q=${encodeURIComponent(r.hood)}`} target="_blank" rel="noreferrer" style={{ color: 'var(--gold)', textDecoration: 'none', fontWeight: 700 }}>🔎 خودت قضاوت کن — آگهی‌های واقعیِ {r.hood}</a>}
+                {r.hood && <button onClick={() => openCityMkt({ hood: r.hood })} style={{ color: 'var(--gold)', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit', fontSize: 10, padding: 0 }}>🔎 خودت قضاوت کن — بازارِ {r.hood} همین‌جا</button>}
               </div>
             </div>
           ))}
@@ -1521,16 +1529,53 @@ export default function EmpirePage() {
       </>}
       {/* 🏙 شهرهای دنیا (فاز ۶۸ — چندشهری v1): آمارِ زندهٔ هر شهر از آگهی‌های واقعی — شهرِ جدید با داده‌اش خودکار ظاهر می‌شود */}
       {(wd.cities || []).length > 0 && <>
-        <div style={{ fontSize: 12, fontWeight: 700, margin: '12px 0 6px' }}>🏙 شهرهای دنیا <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 400 }}>— کلیک روی هر شهر = آگهی‌های واقعی‌اش · داراییِ واقعی در ۲ شهر = مجموعهٔ «فاتحِ شهرها»</span></div>
+        <div style={{ fontSize: 12, fontWeight: 700, margin: '12px 0 6px' }}>🏙 شهرهای دنیا <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 400 }}>— کلیک روی هر شهر = بازارش همین‌جا با مذاکره/تحلیل/خرید · داراییِ واقعی در ۲ شهر = مجموعهٔ «فاتحِ شهرها»</span></div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {wd.cities.map((c: any) => (
-            <a key={c.city} href={`/listings?q=${encodeURIComponent(c.city)}`} target="_blank" rel="noreferrer" title={`دیدنِ ${fa(c.listings)} آگهیِ واقعیِ ${c.city}`}
-              style={{ fontSize: 10.5, border: '1px solid var(--line2)', borderRadius: 12, padding: '5px 12px', color: 'var(--muted)', textDecoration: 'none', cursor: 'pointer' }}>
-              <b style={{ color: 'var(--text)' }}>{c.city}</b> · {fa(c.listings)} آگهیِ فعال · میانهٔ قیمت {faB(c.medianPrice)} <span style={{ color: 'var(--gold)' }}>↗</span>
-            </a>
+            <button key={c.city} onClick={() => openCityMkt({ city: c.city })} title={`بازارِ ${c.city} همین‌جا باز می‌شود — با مذاکره/تحلیل/خرید`}
+              style={{ fontSize: 10.5, border: `1px solid ${cityMkt?.title === c.city ? 'var(--gold)' : 'var(--line2)'}`, borderRadius: 12, padding: '5px 12px', color: 'var(--muted)', background: cityMkt?.title === c.city ? 'rgba(212,175,55,.08)' : 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>
+              <b style={{ color: 'var(--text)' }}>{c.city}</b> · {fa(c.listings)} آگهیِ فعال · میانهٔ قیمت {faB(c.medianPrice)} <span style={{ color: 'var(--gold)' }}>▾</span>
+            </button>
           ))}
         </div>
       </>}
+
+      {/* فاز ۸۰: بازارِ شهر/محله داخلِ دنیا — آگهیِ واقعی + همان اقدام‌های بازی؛ کاربر هرگز از بازی خارج نمی‌شود */}
+      {cityMkt && <div style={{ marginTop: 10, background: 'var(--bg2)', border: '1px solid var(--goldDim)', borderRadius: 12, padding: '10px 12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <b style={{ fontSize: 12.5 }}>🛒 بازارِ {cityMkt.title}</b>
+          {!cityMkt.loading && <span style={{ fontSize: 10, color: 'var(--muted)' }}>{fa(cityMkt.total)} آگهیِ واقعیِ قیمت‌دار{cityMkt.total > cityMkt.items.length ? ` · ${fa(cityMkt.items.length)} تای اول` : ''}</span>}
+          <span style={{ flex: 1 }} />
+          <button onClick={() => setCityMkt(null)} style={{ ...btnGhost, padding: '2px 10px', fontSize: 11 }}>✕ بستن</button>
+        </div>
+        {cityMkt.loading && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 8 }}>در حالِ آوردنِ آگهی‌های واقعی…</div>}
+        {!cityMkt.loading && cityMkt.items.length === 0 && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 8 }}>الان آگهیِ قیمت‌دارِ فعالی این‌جا نیست — با ورودِ آگهیِ تازه همین‌جا پر می‌شود.</div>}
+        {!cityMkt.loading && cityMkt.items.length > 0 && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(230px,1fr))', gap: 8, marginTop: 8 }}>
+          {cityMkt.items.map((dl: any) => (
+            <div key={dl.id} style={{ ...card, background: 'var(--bg)', display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.7 }}>{dl.title.slice(0, 55)}</div>
+              <div style={{ fontSize: 10.5, color: 'var(--muted)' }}>{dl.hood}{dl.area ? ` · ${fa(dl.area)} متر` : ''}{dl.perM ? ` · متری ${faB(dl.perM)}` : ''}</div>
+              <div style={{ fontSize: 12.5, color: 'var(--gold)', fontWeight: 700 }}>{faB(dl.price)} تومان</div>
+              {nego[dl.id] && <div style={{ fontSize: 10.5, color: nego[dl.id].success ? '#7c6' : 'var(--muted)' }}>
+                🤝 {nego[dl.id].owner?.name || 'مالک'}: {nego[dl.id].success ? `${fa(nego[dl.id].discountPct)}٪ تخفیف → ${faB(nego[dl.id].finalPrice)}` : 'کوتاه نیامد'}
+              </div>}
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 'auto' }}>
+                {!nego[dl.id] && <button style={{ ...btnGhost, padding: '4px 9px', fontSize: 11 }} disabled={busy}
+                  onClick={async () => { const d = await api({ action: 'negotiate', listingId: dl.id }); if (d) setNego(p => ({ ...p, [dl.id]: d })) }}>🤝 مذاکره</button>}
+                <button style={{ ...btnGhost, padding: '4px 9px', fontSize: 11 }} disabled={busy || e.aiTokens <= 0} title="میانهٔ متریِ واقعیِ هم‌محله‌ها"
+                  onClick={async () => { setDealAn(dl.id); await doAnalyze(dl.id) }}>🤖 تحلیل (۱ ژتون)</button>
+                <button style={{ ...btn, padding: '4px 10px', fontSize: 11 }} disabled={busy}
+                  onClick={() => doBuy({ id: dl.id, title: dl.title, hood: dl.hood, price: nego[dl.id]?.success ? nego[dl.id].finalPrice : dl.price, area: dl.area } as any, !!nego[dl.id]?.success)}>می‌خرم</button>
+              </div>
+              {dealAn === dl.id && analysis && <div style={{ fontSize: 10.5, color: 'var(--muted)', borderTop: '1px solid var(--line)', paddingTop: 5 }}>
+                <b style={{ color: 'var(--text)' }}>{analysis.verdict}</b>
+                {analysis.samples > 0 && <div>متریِ این ملک {faB(analysis.minePerM)} · میانگینِ هم‌محله‌ها {faB(analysis.avgPerM)} (از {fa(analysis.samples)} آگهیِ واقعی)</div>}
+              </div>}
+            </div>
+          ))}
+        </div>}
+        <div style={{ fontSize: 9.5, color: 'var(--faint)', marginTop: 6 }}>همه آگهی‌های واقعیِ همین لحظهٔ بازارند — خرید یعنی مالکیتِ انحصاری در دنیا؛ داراییِ واقعی در ۲ شهر = مجموعهٔ «فاتحِ شهرها».</div>
+      </div>}
 
       {/* 🏢 شرکت‌های زندهٔ شهر (فاز ۶۵ — NPC Civilization v1): رقبای واقعی‌نما که هر روز روی آگهی‌های واقعی معامله می‌کنند */}
       {(wd.companies || []).length > 0 && <>

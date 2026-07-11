@@ -1875,6 +1875,22 @@ export async function POST(req: NextRequest) {
     }
 
     // 🗞 دنیای زنده (فاز ۶۳ — فصل ۲۱): سالِ دنیا + کتابِ تاریخ + شایعاتِ منصفانهٔ هفته — همه از دادهٔ واقعی.
+    // فاز ۸۰ (فیدبک: «کلیک روی شهر از بازی بیرونم می‌بَرد»): بازارِ داخلِ بازی برای یک شهر/محله —
+    // همان آگهی‌های واقعی، ولی داخلِ دنیا با دکمه‌های مذاکره/تحلیل/خرید (هیچ خروجی از بازی).
+    case 'cityMarket': {
+      const qCity = String(b.city || '').trim(), qHood = String(b.hood || '').trim()
+      if (!qCity && !qHood) return NextResponse.json({ error: 'شهر یا محله را بده' }, { status: 400 })
+      const items = (await candidateListings(800).catch(() => [] as Item[])).filter(isPricedSale)
+      const match = items.filter(it => qHood
+        ? hoodOf(it.location) === qHood || (it.location || '').includes(qHood)
+        : (String(it.meta?.['شهر'] || '') || cityOf(it.location)) === qCity)
+      const rows = match.slice(0, 12).map(it => {
+        const area = parseFaNum((it.meta || {})['متراژ']) || 0
+        const price = priceOf(it)
+        return { id: it.id, title: it.title, hood: hoodOf(it.location), price, area, perM: area > 0 ? Math.round(price / area) : 0, url: listingHref(it.id, it.title, hoodOf(it.location)) }
+      })
+      return NextResponse.json({ ok: true, title: qHood || qCity, total: match.length, items: rows })
+    }
     case 'world': {
       const day = dayNumberOf(Date.now())
       const snaps = await loadSnapshots(2).catch(() => [] as any[])
