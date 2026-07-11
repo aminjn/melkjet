@@ -4217,6 +4217,17 @@ function APIView() {
 /* ─── کاربران: مدیریت کامل حساب‌ها ───────────────────────────── */
 interface Account { phone: string; name?: string; role?: string; plan?: string; onboarded: boolean; createdAt: number; lastLogin?: number }
 interface IdName { id: string; name: string }
+// فاز ۷۵: پلن با هویتِ مخاطبش — نام‌های تکراری (Pro/Basic/Starter برای چند نقش) بدونِ گروه گیج‌کننده بود
+interface PlanOpt { id: string; name: string; dashboard?: string; roleName?: string }
+const PLAN_DASH_FA: Record<string, string> = { '/buyer': 'کاربر عادی', '/owner': 'مالک', '/pros': 'مشاور املاک', '/agency': 'آژانس املاک', '/builder': 'سازنده', '/materials': 'مصالح‌فروش', '/legal': 'حقوقی', '/architect': 'معمار', '/contractor': 'پیمانکار', '/appraiser': 'کارشناس رسمی', '/lawfirm': 'دفتر حقوقی', '/finance': 'بانک و بیمه', '/notary': 'دفترخانه' }
+const planGroupFa = (p: PlanOpt) => p.roleName || PLAN_DASH_FA[p.dashboard || ''] || (p.dashboard ? p.dashboard : 'عمومی')
+function planOptions(plans: PlanOpt[]) {
+  const groups = new Map<string, PlanOpt[]>()
+  for (const p of plans) { const g = planGroupFa(p); if (!groups.has(g)) groups.set(g, []); groups.get(g)!.push(p) }
+  return [...groups.entries()].map(([g, list]) => (
+    <optgroup key={g} label={`— ${g}`}>{list.map(p => <option key={p.id} value={p.id}>{p.name} · {g}</option>)}</optgroup>
+  ))
+}
 
 const RMETA: Record<string, { c: string; ic: string }> = {
   '/buyer': { c: '#5b9bd5', ic: '🔑' }, '/pros': { c: '#c9a84c', ic: '🤝' },
@@ -4248,7 +4259,7 @@ function RefetchIdentityBtn({ phone, onDone }: { phone: string; onDone: (acc: an
   return <button onClick={run} disabled={busy} title="بازخوانیِ همهٔ فیلدها از سامانهٔ شاهکار" style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold)', background: 'var(--goldDim)', border: '1px solid var(--gold)', borderRadius: 999, padding: '3px 11px', cursor: busy ? 'default' : 'pointer', fontFamily: 'inherit', opacity: busy ? 0.6 : 1 }}>{busy ? '… بازخوانی' : '↻ بازخوانی از شاهکار'}</button>
 }
 
-function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete, onSuspend, onAccountUpdate }: { user: any; roles: IdName[]; plans: IdName[]; onClose: () => void; onPatch: (phone: string, patch: any) => void; onDelete: (phone: string) => void; onSuspend: (phone: string, suspend: boolean) => void; onAccountUpdate: (acc: any) => void }) {
+function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete, onSuspend, onAccountUpdate }: { user: any; roles: IdName[]; plans: PlanOpt[]; onClose: () => void; onPatch: (phone: string, patch: any) => void; onDelete: (phone: string) => void; onSuspend: (phone: string, suspend: boolean) => void; onAccountUpdate: (acc: any) => void }) {
   const [detail, setDetail] = useState<any>(null)
   const [edit, setEdit] = useState({ name: user.name || '', role: user.role || '', plan: user.plan || '' })
   const [saved, setSaved] = useState(false)
@@ -4400,7 +4411,7 @@ function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete, onSuspend,
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
               <div style={{ gridColumn: '1 / -1' }}><label style={lab}>نام</label><input style={inp} value={edit.name} onChange={e => setEdit({ ...edit, name: e.target.value })} /></div>
               <div><label style={lab}>نقش</label><select style={inp} value={edit.role} onChange={e => setEdit({ ...edit, role: e.target.value })}><option value="">— بدون نقش</option>{roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></div>
-              <div><label style={lab}>پلن</label><select style={inp} value={edit.plan} onChange={e => setEdit({ ...edit, plan: e.target.value })}><option value="">بدون پلن</option>{plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+              <div><label style={lab}>پلن</label><select style={inp} value={edit.plan} onChange={e => setEdit({ ...edit, plan: e.target.value })}><option value="">بدون پلن</option>{planOptions(plans)}</select></div>
             </div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <GoldButton onClick={save}>ذخیرهٔ تغییرات</GoldButton>
@@ -4427,7 +4438,7 @@ function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete, onSuspend,
               {user.plan && user.planExpiresAt ? ` انقضای پلنِ فعلی: ${new Date(user.planExpiresAt).toLocaleDateString('fa-IR')}.` : user.plan ? ' پلنِ فعلی بدونِ انقضاست.' : ''}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px auto', gap: 10, alignItems: 'end' }}>
-              <div><label style={lab}>پلن</label><select style={inp} value={gift.plan} onChange={e => setGift({ ...gift, plan: e.target.value })}><option value="">— انتخابِ پلن</option>{plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+              <div><label style={lab}>پلن</label><select style={inp} value={gift.plan} onChange={e => setGift({ ...gift, plan: e.target.value })}><option value="">— انتخابِ پلن</option>{planOptions(plans)}</select></div>
               <div><label style={lab}>مدت (روز)</label><input style={inp} type="number" min={1} value={gift.days} onChange={e => setGift({ ...gift, days: e.target.value })} /></div>
               <button onClick={doGift} disabled={gifting} style={{ background: gifting ? 'var(--bg2)' : 'linear-gradient(140deg,var(--gold2),var(--gold))', border: 'none', color: gifting ? 'var(--muted)' : '#16140f', borderRadius: 10, padding: '10px 18px', cursor: gifting ? 'wait' : 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 800, whiteSpace: 'nowrap' }}>{gifting ? '…' : '🎁 فعال‌سازیِ رایگان'}</button>
             </div>
@@ -4439,7 +4450,7 @@ function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete, onSuspend,
 }
 
 // پاپ‌آپِ سادهٔ ساختِ کاربر — فقط شماره (و نقش/پلنِ اختیاری). بقیه در اولین ورودِ خودِ کاربر با شاهکار خودکار پر می‌شود.
-function CreateUserPopup({ roles, plans, onClose, onCreated }: { roles: IdName[]; plans: IdName[]; onClose: () => void; onCreated: () => void }) {
+function CreateUserPopup({ roles, plans, onClose, onCreated }: { roles: IdName[]; plans: PlanOpt[]; onClose: () => void; onCreated: () => void }) {
   const [phone, setPhone] = useState(''); const [role, setRole] = useState(''); const [plan, setPlan] = useState('')
   const [busy, setBusy] = useState(false); const [error, setError] = useState('')
   const inp: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '11px 13px', color: 'var(--text)', fontSize: 13.5, fontFamily: 'inherit', outline: 'none' }
@@ -4466,7 +4477,7 @@ function CreateUserPopup({ roles, plans, onClose, onCreated }: { roles: IdName[]
           <div><label style={lab}>شماره موبایل *</label><input style={{ ...inp, direction: 'ltr', textAlign: 'right' }} placeholder="۰۹۱۲۳۴۵۶۷۸۹" value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))} autoFocus /></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div><label style={lab}>نقش (اختیاری)</label><select style={inp} value={role} onChange={e => setRole(e.target.value)}><option value="">— بدون نقش</option>{roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></div>
-            <div><label style={lab}>پلن (اختیاری)</label><select style={inp} value={plan} onChange={e => setPlan(e.target.value)}><option value="">بدون پلن</option>{plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+            <div><label style={lab}>پلن (اختیاری)</label><select style={inp} value={plan} onChange={e => setPlan(e.target.value)}><option value="">بدون پلن</option>{planOptions(plans)}</select></div>
           </div>
           {error && <div style={{ fontSize: 12.5, color: '#e7674a' }}>{error}</div>}
         </div>
@@ -4483,7 +4494,7 @@ function CreateUserPopup({ roles, plans, onClose, onCreated }: { roles: IdName[]
 function UsersView() {
   const [users, setUsers] = useState<any[]>([])
   const [roles, setRoles] = useState<IdName[]>([])
-  const [plans, setPlans] = useState<IdName[]>([])
+  const [plans, setPlans] = useState<PlanOpt[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [q, setQ] = useState('')
@@ -4568,7 +4579,7 @@ function UsersView() {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <input style={{ ...inp, flex: 1, minWidth: 160 }} placeholder="جستجو با شماره یا نام…" value={q} onChange={e => setQ(e.target.value)} />
           <select style={inp} value={roleFilter} onChange={e => setRoleFilter(e.target.value)}><option value="">همه نقش‌ها</option>{roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select>
-          <select style={inp} value={planFilter} onChange={e => setPlanFilter(e.target.value)}><option value="">همه پلن‌ها</option><option value="__none">بدون پلن</option>{plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+          <select style={inp} value={planFilter} onChange={e => setPlanFilter(e.target.value)}><option value="">همه پلن‌ها</option><option value="__none">بدون پلن</option>{planOptions(plans)}</select>
           <OutlineButton onClick={load}>بازخوانی</OutlineButton>
           <GoldButton onClick={() => setCreating(true)}>＋ کاربر جدید</GoldButton>
         </div>
@@ -4577,7 +4588,7 @@ function UsersView() {
           {sel.size > 0 && <>
             <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{sel.size.toLocaleString('fa-IR')} انتخاب‌شده:</span>
             <select style={{ ...inp, padding: '5px 10px', fontSize: 12 }} value="" onChange={e => { if (e.target.value !== '') bulkAssign({ role: e.target.value === '__none' ? '' : e.target.value }) }}><option value="">تخصیصِ نقش…</option><option value="__none">— بدون نقش</option>{roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select>
-            <select style={{ ...inp, padding: '5px 10px', fontSize: 12 }} value="" onChange={e => { if (e.target.value !== '') bulkAssign({ plan: e.target.value === '__none' ? '' : e.target.value }) }}><option value="">تخصیصِ پلن…</option><option value="__none">— بدون پلن</option>{plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+            <select style={{ ...inp, padding: '5px 10px', fontSize: 12 }} value="" onChange={e => { if (e.target.value !== '') bulkAssign({ plan: e.target.value === '__none' ? '' : e.target.value }) }}><option value="">تخصیصِ پلن…</option><option value="__none">— بدون پلن</option>{planOptions(plans)}</select>
             <button onClick={bulkDel} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.4)', color: '#e7674a', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>حذف</button>
           </>}
         </div>
@@ -4620,7 +4631,7 @@ function UsersView() {
                         </div>
                       </td>
                       <td style={td}><select style={{ ...cellSel, color: m.c, borderColor: m.c + '66' }} value={u.role || ''} onChange={e => patchOne(u.phone, { role: e.target.value })}><option value="">— بدون نقش</option>{roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></td>
-                      <td style={td}><select style={{ ...cellSel, color: u.plan ? '#a99bf0' : 'var(--muted)' }} value={u.plan || ''} onChange={e => patchOne(u.phone, { plan: e.target.value })}><option value="">بدون پلن</option>{plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></td>
+                      <td style={td}><select style={{ ...cellSel, color: u.plan ? '#a99bf0' : 'var(--muted)' }} value={u.plan || ''} onChange={e => patchOne(u.phone, { plan: e.target.value })}><option value="">بدون پلن</option>{planOptions(plans)}</select></td>
                       <td style={{ ...td, textAlign: 'center' }}>{u.identityVerifiedAt
                         ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, fontWeight: 700, color: '#5fd98a', background: 'rgba(95,217,138,.12)', border: '1px solid rgba(95,217,138,.4)', borderRadius: 999, padding: '3px 10px' }}>✓ احراز شده</span>
                         : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, fontWeight: 700, color: '#e7894a', background: 'rgba(231,137,74,.12)', border: '1px solid rgba(231,137,74,.4)', borderRadius: 999, padding: '3px 10px' }}>⏳ احراز نشده</span>}</td>
@@ -4967,7 +4978,7 @@ const dashLabel = (v: string) => DASHBOARD_OPTIONS.find(d => d.value === v)?.lab
 function RolesView() {
   const [roles, setRoles] = useState<Role[]>([])
   const [perms, setPerms] = useState<PermDef[]>([])
-  const [plans, setPlans] = useState<IdName[]>([])
+  const [plans, setPlans] = useState<PlanOpt[]>([])
   const [loading, setLoading] = useState(true)
   const [showNew, setShowNew] = useState(false)
   const [editing, setEditing] = useState<string | null>(null)
@@ -4990,7 +5001,7 @@ function RolesView() {
       fetch('/api/admin/plans').then(r => r.ok ? r.json() : null),
     ])
     if (rr) { setRoles(rr.roles || []); setPerms(rr.permissions || []) }
-    if (pr) setPlans((pr.plans || []).map((p: any) => ({ id: p.id, name: p.name })))
+    if (pr) setPlans((pr.plans || []).map((p: any) => ({ id: p.id, name: p.name, dashboard: p.dashboard || '' })))
     setLoading(false)
   }
   useEffect(() => { load() }, [])
@@ -5045,7 +5056,7 @@ function RolesView() {
               <div><label style={lab}>پلن آنلاک‌کننده</label>
                 <select style={inp} value={form.planId} onChange={e => setForm({ ...form, planId: e.target.value })}>
                   <option value="">رایگان (بدون پلن)</option>
-                  {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  {planOptions(plans)}
                 </select>
               </div>
             </div>
@@ -5116,7 +5127,7 @@ function RolesView() {
                       <div><label style={lab}>پلن آنلاک‌کننده</label>
                         <select style={inp} value={role.planId || ''} onChange={e => patch(role.id, { planId: e.target.value || undefined })}>
                           <option value="">رایگان (بدون پلن)</option>
-                          {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                          {planOptions(plans)}
                         </select>
                       </div>
                     </div>

@@ -17,7 +17,8 @@ export async function GET() {
   const roleList = listRoles()
   const roles = roleList.map(r => ({ id: r.id, name: r.name }))
   const planList = listPlans()
-  const plans = planList.map(p => ({ id: p.id, name: p.name }))
+  // نام‌های تکراریِ پلن‌ها (Pro/Basic/Starter برای چند نقش) بدونِ مخاطب گیج‌کننده بود — نقش/داشبوردِ هر پلن هم می‌رود
+  const plans = planList.map(p => ({ id: p.id, name: p.name, dashboard: p.dashboard || '', roleName: p.roleId ? (roleList.find(r => r.id === p.roleId)?.name || '') : '' }))
   const roleNameOf = (rid?: string) => { if (!rid) return ''; const r = roleList.find(x => x.id === rid || x.name === rid); return r?.name || rid }
   const planNameOf = (pid?: string) => { if (!pid) return ''; const p = planList.find(x => x.id === pid); return p?.name || pid }
   // شمارشِ آگهیِ هر مالک
