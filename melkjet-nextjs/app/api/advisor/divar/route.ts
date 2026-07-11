@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAndBumpUsage } from '@/app/lib/plan-usage'
 import { requireModule } from '@/app/lib/plan-gate'
 import { getSession } from '@/app/lib/session'
 import { getDivar, updateDivarConfig, removeImport, addSource, updateSource, removeSource, getSource } from '@/app/lib/advisor-divar-store'
@@ -36,6 +37,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, removed: r.removed, config: getDivar(o) })
     }
     case 'sync': {
+      { const u52 = await requireAndBumpUsage(s as any, 'divarImports', 1); if (u52) return NextResponse.json(u52, { status: 403 }) }   // فاز ۵۲: سهمیهٔ ماهانهٔ پلن
       // در پس‌زمینه اجرا می‌شود و تا پایان ادامه می‌یابد حتی اگر کاربر صفحه را ببندد.
       const r = startBackgroundSync(o, undefined, undefined, 'همگام‌سازیِ دیوار')
       return NextResponse.json({ ok: true, ...r, job: getJob(o), config: getDivar(o) })

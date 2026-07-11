@@ -1708,6 +1708,18 @@ async function main() {
     const nm1 = await noteNemesis(uc12, 'kamran', 'گروهِ کامران')
     ok('اعلامِ حریفِ قسم‌خورده: کلید + تایم‌لاین 💢', nm1.ok === true && !!nm1.empire.claims['nem_kamran'] && nm1.empire.timeline.some(t => t.icon === '💢'))
     ok('اعلامِ دوباره رد می‌شود (یک‌باره)', (await noteNemesis(uc12, 'kamran', 'گروهِ کامران')).ok === false)
+
+    // ── فاز ۵۲ (سقف‌های مصرف): شمارندهٔ ماهانهٔ اشتراکی — اتمیک و سطل‌بندی‌شده ──
+    console.log('\n── Plans · فاز ۵۲ (شمارندهٔ مصرفِ ماهانه) ──')
+    const { bumpUsage, usageOf, requireAndBumpUsage } = await import('../app/lib/plan-usage.ts')
+    await pool.query(`DELETE FROM kv WHERE key='plan_usage'`)
+    await bumpUsage('0912test52', 'sms', 3)
+    await bumpUsage('0912test52', 'sms', 2)
+    ok('شمارشِ تجمعیِ ماهِ جاری', (await usageOf('0912test52', 'sms')) === 5)
+    ok('کلیدهای دیگر جدا شمرده می‌شوند', (await usageOf('0912test52', 'email')) === 0)
+    // enforce خاموش است → گیت قفل نمی‌کند ولی مصرف شمرده می‌شود (برای گزارش/آینده)
+    const u52a = await requireAndBumpUsage({ phone: '0912test52', role: 'buyer' }, 'aiRequests', 1)
+    ok('با enforce خاموش: مجاز + شمارش', u52a === null && (await usageOf('0912test52', 'aiRequests')) === 1)
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} REOS PG integration: ${pass} passed, ${fail} failed\n`)

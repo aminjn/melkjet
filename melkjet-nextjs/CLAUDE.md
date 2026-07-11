@@ -196,7 +196,15 @@ media files in `.media/` + `.media-index.json`.
   overlay on /crm /marketing /workflow /website-builder when the module is missing.
   **Kill-switch:** admin → پلن‌ها → «اعمالِ پلن‌ها» toggle (plan-store `enforce`, default OFF —
   turning it on is the moment gating actually starts). Super admin always exempt.
-  Still pending: quota enforcement (سقف‌های مصرفِ هر پلن) + plan purchase via Zarinpal.
+  **Quota enforcement (فاز ۵۲ — DONE):** `requireQuota(s, key, currentCount)` for stock caps
+  (count read live from the owning store — no parallel counters): leads (crm+advisor+agency),
+  files (advisor+agency listings), agents, products, projects/units/investors (builder),
+  sitePages, savedSearches, contacts, crmCustomers (pros clients). Monthly consumables via
+  `app/lib/plan-usage.ts` (dual-mode kv `plan_usage`, YYYY-MM buckets, atomic
+  `requireAndBumpUsage`): sms/email (per recipient), divarImports, aiRequests (crm/ai + ai/run),
+  contactReveals. Semantics: quota >0 = cap; −1/0/undefined = unlimited (plan-store contract).
+  All caps come from the plan record — zero hardcoded numbers. Same enforce toggle governs both.
+  Still pending: plan purchase via Zarinpal (admin assigns plans manually for now).
 
 ## Integrations (exact, hard-won)
 - **IPPanel SMS** (domestic, via shecan-https):

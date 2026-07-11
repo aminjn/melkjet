@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAndBumpUsage } from '@/app/lib/plan-usage'
 import { getSession } from '@/app/lib/session'
 import { getAdminData } from '@/app/lib/admin-store'
 import { sendMail } from '@/app/lib/smtp'
@@ -18,6 +19,7 @@ export async function POST(req: NextRequest) {
   if (!subject) return NextResponse.json({ error: 'موضوع ایمیل خالی است' }, { status: 400 })
   if (!bodyHtml) return NextResponse.json({ error: 'متن ایمیل خالی است' }, { status: 400 })
   if (!recipients.length) return NextResponse.json({ error: 'ایمیل معتبری وارد نشده' }, { status: 400 })
+  { const u52 = await requireAndBumpUsage(s as any, 'email', recipients.length); if (u52) return NextResponse.json(u52, { status: 403 }) }   // فاز ۵۲: سهمیهٔ ماهانهٔ پلن
   if (recipients.length > 500) return NextResponse.json({ error: 'حداکثر ۵۰۰ گیرنده در هر ارسال' }, { status: 400 })
 
   const cfg = getAdminData().smtp

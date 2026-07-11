@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireModule } from '@/app/lib/plan-gate'
+import { requireModule, requireQuota } from '@/app/lib/plan-gate'
 import { getSite, getSiteByOwner, saveSite } from '@/app/lib/sites-store'
 import { getSession } from '@/app/lib/session'
 
@@ -55,6 +55,7 @@ export async function POST(req: NextRequest) {
     ? { primary: String(body.theme.primary || ''), font: body.theme.font ? String(body.theme.font) : undefined }
     : undefined
 
+  { const q52 = requireQuota(session as any, 'sitePages', 0, (pages?.length || 1)); if (q52) return NextResponse.json(q52, { status: 403 }) }   // فاز ۵۲: سقفِ داینامیکِ پلن
   const site = await saveSite({
     slug: body.slug ? String(body.slug) : undefined,
     title: String(body.title || ''),

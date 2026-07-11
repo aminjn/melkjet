@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireModule } from '@/app/lib/plan-gate'
+import { requireModule, requireQuota } from '@/app/lib/plan-gate'
 import { getSession } from '@/app/lib/session'
 import { listLeads, addLead, updateLead, deleteLead, leadAnalytics, followUpNeeded, addActivity } from '@/app/lib/leads-store'
 import { getCrmSettings } from '@/app/lib/crm-settings-store'
@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
   if (!b.name || !String(b.name).trim()) {
     return NextResponse.json({ error: 'نام الزامی است' }, { status: 400 })
   }
+  { const q52 = requireQuota(s as any, 'leads', (await listLeads(s.phone)).length); if (q52) return NextResponse.json(q52, { status: 403 }) }   // فاز ۵۲: سقفِ داینامیکِ پلن
   const lead = await addLead(s.phone, {
     name: b.name, phone: b.phone, need: b.need,
     budget: b.budget, area: b.area, region: b.region, dealType: b.dealType,

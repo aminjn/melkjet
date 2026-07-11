@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireModule } from '@/app/lib/plan-gate'
+import { requireModule, requireQuota } from '@/app/lib/plan-gate'
 import { getSession } from '@/app/lib/session'
 import { listProjects, getProject, addProject, updateProject, addUnit, updateUnit, deleteUnit, addInvestor, deleteInvestor, updateMilestone, ensureImported, setProjectFinance, setUnitPlan, toggleUnitStage, projectStats } from '@/app/lib/builder-store'
 import { sellThroughForecast, suggestUnitPrice, projectInsights } from '@/app/lib/builder-ai'
@@ -50,12 +50,21 @@ export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({}))
   const a = b.action
   try {
-    if (a === 'project') return NextResponse.json({ ok: true, project: await addProject(o, String(b.name || 'پروژهٔ جدید'), String(b.location || '')) })
+    if (a === 'project') {
+      { const q52 = requireQuota(s as any, 'projects', (await listProjects(o)).length, 1); if (q52) return NextResponse.json(q52, { status: 403 }) }   // فاز ۵۲: سقفِ داینامیکِ پلن
+      return NextResponse.json({ ok: true, project: await addProject(o, String(b.name || 'پروژهٔ جدید'), String(b.location || '')) })
+    }
     if (a === 'updateProject') return NextResponse.json({ ok: true, project: await updateProject(o, b.pid, b.patch || {}) })
-    if (a === 'addUnit') return NextResponse.json({ ok: true, unit: await addUnit(o, b.pid, { number: String(b.number || ''), floor: Number(b.floor) || 1, area: Number(b.area) || 0, price: Number(b.price) || 0, status: b.status || 'available', buyer: b.buyer }) })
+    if (a === 'addUnit') {
+      { const q52 = requireQuota(s as any, 'units', (await listProjects(o)).reduce((t, p) => t + (p.units || []).length, 0), 1); if (q52) return NextResponse.json(q52, { status: 403 }) }   // فاز ۵۲: سقفِ داینامیکِ پلن
+      return NextResponse.json({ ok: true, unit: await addUnit(o, b.pid, { number: String(b.number || ''), floor: Number(b.floor) || 1, area: Number(b.area) || 0, price: Number(b.price) || 0, status: b.status || 'available', buyer: b.buyer }) })
+    }
     if (a === 'updateUnit') return NextResponse.json({ ok: true, unit: await updateUnit(o, b.pid, b.uid, b.patch || {}) })
     if (a === 'deleteUnit') { await deleteUnit(o, b.pid, b.uid); return NextResponse.json({ ok: true }) }
-    if (a === 'addInvestor') return NextResponse.json({ ok: true, investor: await addInvestor(o, b.pid, { name: String(b.name || ''), phone: b.phone, amount: Number(b.amount) || 0, units: Number(b.units) || 0 }) })
+    if (a === 'addInvestor') {
+      { const q52 = requireQuota(s as any, 'investors', (await listProjects(o)).reduce((t, p) => t + (p.investors || []).length, 0), 1); if (q52) return NextResponse.json(q52, { status: 403 }) }   // فاز ۵۲: سقفِ داینامیکِ پلن
+      return NextResponse.json({ ok: true, investor: await addInvestor(o, b.pid, { name: String(b.name || ''), phone: b.phone, amount: Number(b.amount) || 0, units: Number(b.units) || 0 }) })
+    }
     if (a === 'deleteInvestor') { await deleteInvestor(o, b.pid, b.vid); return NextResponse.json({ ok: true }) }
     if (a === 'milestone') { await updateMilestone(o, b.pid, b.mid, b.status); return NextResponse.json({ ok: true }) }
 

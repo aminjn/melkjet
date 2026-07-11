@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireModule } from '@/app/lib/plan-gate'
+import { requireModule, requireQuota } from '@/app/lib/plan-gate'
 import { getSession } from '@/app/lib/session'
 import {
   agencyStats, listAgents, listListings, listLeads, listDeals, getAgency,
@@ -104,10 +104,14 @@ export async function POST(req: NextRequest) {
   const o = s.phone
   const b = await req.json().catch(() => ({} as any))
   switch (b.action as string) {
-    case 'addAgent': if (!b.name) return NextResponse.json({ error: 'نام الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, agent: await addAgent(o, { name: String(b.name), phone: b.phone }) })
+    case 'addAgent': {
+      { const q52 = requireQuota(s as any, 'agents', (await listAgents(o)).length); if (q52) return NextResponse.json(q52, { status: 403 }) }   // فاز ۵۲: سقفِ داینامیکِ پلن
+      if (!b.name) return NextResponse.json({ error: 'نام الزامی است' }, { status: 400 }); return NextResponse.json({ ok: true, agent: await addAgent(o, { name: String(b.name), phone: b.phone }) })
+    }
     case 'toggleAgent': { const g = await toggleAgent(o, String(b.id)); return g ? NextResponse.json({ ok: true, agent: g }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'deleteAgent': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); await deleteAgent(o, String(b.id)); return NextResponse.json({ ok: true })
     case 'addListing': {
+      { const q52 = requireQuota(s as any, 'files', (await listListings(o)).length); if (q52) return NextResponse.json(q52, { status: 403 }) }   // فاز ۵۲: سقفِ داینامیکِ پلن
       const listing = await addListing(o, b)
       let duplicate: { id: string; title: string; ownerName: string } | undefined
       try {
@@ -135,6 +139,7 @@ export async function POST(req: NextRequest) {
       try { await advDeleteListing(o, String(b.id)) } catch {}   // اگر فایلِ ایمپورت‌شده بود، از advisor-store هم حذف شود
       return NextResponse.json({ ok: true })
     case 'addLead': {
+      { const q52 = requireQuota(s as any, 'leads', (await listLeads(o)).length); if (q52) return NextResponse.json(q52, { status: 403 }) }   // فاز ۵۲: سقفِ داینامیکِ پلن
       if (!b.name) return NextResponse.json({ error: 'نام الزامی است' }, { status: 400 })
       const lead = await addLead(o, b)
       let welcomed = false

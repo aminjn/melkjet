@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireQuota } from '@/app/lib/plan-gate'
 import { getSession } from '@/app/lib/session'
 import { listForOwner, addSearch, removeBySig, removeById, sigOf } from '@/app/lib/saved-search-store'
 
@@ -17,6 +18,7 @@ export async function POST(req: NextRequest) {
   const c = { city: b.city ? String(b.city) : undefined, area: b.area ? String(b.area) : undefined, deal: deal as 'sale' | 'rent' | 'presale', kind: b.kind ? String(b.kind) : undefined, priceMax: b.priceMax ? Number(b.priceMax) : undefined, label: b.label ? String(b.label) : undefined }
   if (b.action === 'remove') { await removeBySig(s.phone, sigOf(c)); return NextResponse.json({ ok: true, on: false }) }
   if (b.action === 'removeId') { if (b.id) await removeById(s.phone, String(b.id)); return NextResponse.json({ ok: true }) }
+  { const q52 = requireQuota(s as any, 'savedSearches', (await listForOwner(s.phone)).length, 1); if (q52) return NextResponse.json(q52, { status: 403 }) }   // فاز ۵۲: سقفِ داینامیکِ پلن
   const saved = await addSearch(s.phone, c)
   return NextResponse.json({ ok: true, on: true, search: saved })
 }

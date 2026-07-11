@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireModule } from '@/app/lib/plan-gate'
+import { requireModule, requireQuota } from '@/app/lib/plan-gate'
 import { getSession } from '@/app/lib/session'
 import { warmEnrichment } from '@/app/lib/enrich-warm'
 import { checkDuplicate, advisorScope } from '@/app/lib/duplicate-check'
@@ -62,6 +62,7 @@ export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({} as any))
   switch (b.action as string) {
     case 'addLead': {
+      { const q52 = requireQuota(s as any, 'leads', (await listLeads(o)).length); if (q52) return NextResponse.json(q52, { status: 403 }) }   // فاز ۵۲: سقفِ داینامیکِ پلن
       const lead = await addLead(o, b)
       // اتوماسیون: لیدِ جدید با شماره → پیامکِ خوش‌آمدِ خودکار (اگر فعال باشد).
       let welcomed = false
@@ -85,6 +86,7 @@ export async function POST(req: NextRequest) {
     case 'aiInsights': { const r = await advisorAiInsights(o); return NextResponse.json({ ok: true, ...r }) }
     case 'leadAdvice': { if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); const advice = await advisorLeadAdvice(o, String(b.id)); return NextResponse.json({ ok: true, advice }) }
     case 'addListing': {
+      { const q52 = requireQuota(s as any, 'files', (await listListings(o)).length); if (q52) return NextResponse.json(q52, { status: 403 }) }   // فاز ۵۲: سقفِ داینامیکِ پلن
       const listing = await addListing(o, b)
       let duplicate: { id: string; title: string; ownerName: string } | undefined
       try {

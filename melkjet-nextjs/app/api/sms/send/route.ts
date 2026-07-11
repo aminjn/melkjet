@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAndBumpUsage } from '@/app/lib/plan-usage'
 import { getSession } from '@/app/lib/session'
 import { getAdminData } from '@/app/lib/admin-store'
 import { shecanRequest } from '@/app/lib/shecan-https'
@@ -26,6 +27,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'سرویس پیامک تنظیم نشده — در پنل سوپرادمین کلید و خط IPPanel را وارد کنید.' }, { status: 400 })
   }
 
+  { const u52 = await requireAndBumpUsage(s as any, 'sms', recipients.length); if (u52) return NextResponse.json(u52, { status: 403 }) }   // فاز ۵۲: سهمیهٔ ماهانهٔ پلن
   // کسرِ اعتبارِ پیامک (اگر سیستمِ پکیج روشن باشد؛ سوپرادمین معاف)
   const gate = await chargeSend(s.phone, s.role, 'sms', recipients.length)
   if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: 200 })

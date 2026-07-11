@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAndBumpUsage } from '@/app/lib/plan-usage'
 import { chatCompleteUsage, generateImage, agentModel } from '@/app/lib/gapgpt'
 import { getSession } from '@/app/lib/session'
 import { canUseToken, recordOp } from '@/app/lib/comm-store'
@@ -29,6 +30,7 @@ export async function POST(req: NextRequest) {
   if (sess && !(await canUseToken(sess.phone, sess.role))) {
     return NextResponse.json({ error: 'اعتبارِ توکنِ هوش مصنوعی شما تمام شده — از بخش «پلن‌ها و اشتراک» توکن تهیه کنید.' }, { status: 402 })
   }
+  if (sess) { const u52 = await requireAndBumpUsage(sess as any, 'aiRequests', 1); if (u52) return NextResponse.json(u52, { status: 403 }) }   // فاز ۵۲: سهمیهٔ ماهانهٔ پلن
 
   try {
     const system = SYSTEMS[agent] || SYSTEMS.chat

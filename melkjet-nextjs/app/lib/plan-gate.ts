@@ -6,7 +6,7 @@
 //  • کلیدِ enforce (پنلِ پلن‌ها) برای رول‌اوتِ امن: خاموش = هیچ قفلی (رفتارِ قبلی)، روشن = اعمالِ واقعی.
 import { getAccount, activePlan } from './account-store'
 import { listRoles, PERMISSIONS } from './role-store'
-import { getPlan, listActive, planEnforcement, type Plan } from './plan-store'
+import { getPlan, listActive, planEnforcement, QUOTA_KEYS, type Plan } from './plan-store'
 
 export interface PlanAccess {
   phone: string; isAdmin: boolean; enforce: boolean
@@ -44,6 +44,30 @@ export function resolveAccess(session: { phone: string; role?: string }): PlanAc
     planId: plan?.id || freePlan?.id || '', planName: plan?.name || freePlan?.name || 'رایگان',
     planTier: plan?.tier || (plan ? '' : 'free'), paid: !!plan, expiresAt: ap?.expiresAt,
     permissions: eff.permissions, quotas: eff.quotas,
+  }
+}
+
+// ── فاز ۵۲: سقف‌های مصرف (quotas) — همه از خودِ پلن، داینامیک؛ هیچ عددی در کد ──
+export const QUOTA_LABEL: Record<string, string> = Object.fromEntries(QUOTA_KEYS.map(q => [q.id, q.label]))
+
+// سقفِ مؤثرِ یک کلید: >۰ = سقف؛ −۱ یا ۰/تعریف‌نشده = نامحدود (همان قراردادِ plan-store).
+export function quotaCapOf(access: Pick<PlanAccess, 'quotas'>, key: string): number | null {
+  const q = access.quotas[key]
+  return typeof q === 'number' && q > 0 ? q : null
+}
+
+// null = مجاز؛ وگرنه بدنهٔ 403 با code:'plan' — «current» تعدادِ فعلیِ واقعی از خودِ store همان بخش می‌آید
+// (عددِ نمایش = عددِ واقعی، نه شمارندهٔ موازی). سوپرادمین و حالتِ خاموشِ enforce همیشه معاف.
+export function requireQuota(session: { phone: string; role?: string }, key: string, current: number, adding = 1):
+  null | { error: string; code: 'plan'; need: string; needLabel: string; plan: string; upgrade: string; cap: number; current: number } {
+  const a = resolveAccess(session)
+  if (!a.enforce || a.isAdmin) return null
+  const cap = quotaCapOf(a, key)
+  if (cap === null || current + Math.max(1, adding) <= cap) return null
+  const label = QUOTA_LABEL[key] || key
+  return {
+    error: `به سقفِ پلنِ فعلی‌ات رسیدی — ${cap.toLocaleString('fa-IR')} ${label} در پلنِ «${a.planName}». برای ادامه پلن را ارتقا بده.`,
+    code: 'plan', need: key, needLabel: label, plan: a.planName, upgrade: '/pricing', cap, current,
   }
 }
 

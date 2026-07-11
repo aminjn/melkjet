@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireModule } from '@/app/lib/plan-gate'
+import { requireModule, requireQuota } from '@/app/lib/plan-gate'
 import { getSession } from '@/app/lib/session'
 import {
   shopStats, listProducts, listOrders, listInquiries,
@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
 
   switch (action) {
     case 'addProduct': {
+      { const q52 = requireQuota(s as any, 'products', (await listProducts(owner)).length); if (q52) return NextResponse.json(q52, { status: 403 }) }   // فاز ۵۲: سقفِ داینامیکِ پلن
       // یا از کاتالوگِ مرجع انتخاب شده (catalogId) یا دستی با نام. بقیهٔ فیلدها در store پاک‌سازی می‌شوند.
       if (!b.catalogId && !b.name) return NextResponse.json({ error: 'کالا را از کاتالوگ انتخاب کنید یا نام را وارد کنید' }, { status: 400 })
       // گِیتِ ضدتکراری: همان کالا (کاتالوگ یا نام+واحد) قبلاً در فروشگاهِ شما ثبت شده → ویرایشِ همان.

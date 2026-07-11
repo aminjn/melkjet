@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireQuota } from '@/app/lib/plan-gate'
 import {
   listTasks, addTask, toggleTask, deleteTask,
   listClients, addClient, deleteClient,
@@ -22,6 +23,7 @@ export async function POST(req: NextRequest) {
   if (body.kind === 'client') {
     const name = String(body.name || '').trim()
     if (!name) return NextResponse.json({ error: 'نام مشتری خالی است' }, { status: 400 })
+    { const q52 = requireQuota(session as any, 'crmCustomers', (await listClients()).length); if (q52) return NextResponse.json(q52, { status: 403 }) }   // فاز ۵۲: سقفِ داینامیکِ پلن
     const client = await addClient({
       name,
       phone: body.phone ? String(body.phone) : undefined,

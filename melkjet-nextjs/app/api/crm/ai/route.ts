@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAndBumpUsage } from '@/app/lib/plan-usage'
 import { requireModule } from '@/app/lib/plan-gate'
 import { getSession } from '@/app/lib/session'
 import { listLeads, getLead, followUpNeeded, STAGE_LABEL } from '@/app/lib/leads-store'
@@ -25,6 +26,7 @@ export async function POST(req: NextRequest) {
   const s = await getSession()
   if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 401 })
   { const pg51 = requireModule(s as any, 'crm'); if (pg51) return NextResponse.json(pg51, { status: 403 }) }   // فاز ۵۱: اعمالِ پلن
+  { const u52 = await requireAndBumpUsage(s as any, 'aiRequests', 1); if (u52) return NextResponse.json(u52, { status: 403 }) }   // فاز ۵۲: سهمیهٔ ماهانهٔ پلن
   const b = await req.json().catch(() => ({}))
   const action = String(b.action || 'next')
 

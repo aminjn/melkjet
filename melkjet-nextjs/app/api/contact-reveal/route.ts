@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAndBumpUsage } from '@/app/lib/plan-usage'
 import { getSession } from '@/app/lib/session'
 import { getProfile } from '@/app/lib/persiansaze-store'
 import { getPublic } from '@/app/lib/builder-public-store'
@@ -16,6 +17,7 @@ export async function POST(req: NextRequest) {
   const prof = getProfile(builderId)
   if (!prof) return NextResponse.json({ error: 'سازنده پیدا نشد' }, { status: 404 })
 
+  { const u52 = await requireAndBumpUsage(s as any, 'contactReveals', 1); if (u52) return NextResponse.json(u52, { status: 403 }) }   // فاز ۵۲: سهمیهٔ ماهانهٔ پلن
   const phone = getPublic(builderId).phonePublic || (prof.phones || [])[0] || ''
   if (!phone) return NextResponse.json({ error: 'شماره‌ای ثبت نشده است' }, { status: 404 })
 

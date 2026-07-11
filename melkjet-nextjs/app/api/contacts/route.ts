@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireQuota } from '@/app/lib/plan-gate'
 import { getSession } from '@/app/lib/session'
 import { listContacts, listGroups, addContact, updateContact, deleteContact, bulkAddContacts, importFromLeads, recipientsForGroup, addGroup, deleteGroup, assignGroup } from '@/app/lib/contacts-store'
 
@@ -21,7 +22,10 @@ export async function POST(req: NextRequest) {
   const o = s.phone
   const b = await req.json().catch(() => ({} as any))
   switch (b.action as string) {
-    case 'add': return NextResponse.json({ ok: true, contact: await addContact(o, b) })
+    case 'add': {
+      { const q52 = requireQuota(s as any, 'contacts', (await listContacts(o)).length); if (q52) return NextResponse.json(q52, { status: 403 }) }   // فاز ۵۲: سقفِ داینامیکِ پلن
+      return NextResponse.json({ ok: true, contact: await addContact(o, b) })
+    }
     case 'update': { if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); const c = await updateContact(o, String(b.id), b.patch || {}); return c ? NextResponse.json({ ok: true, contact: c }) : NextResponse.json({ error: 'یافت نشد' }, { status: 404 }) }
     case 'delete': if (!b.id) return NextResponse.json({ error: 'شناسه الزامی است' }, { status: 400 }); await deleteContact(o, String(b.id)); return NextResponse.json({ ok: true })
     case 'bulk': { const rows = Array.isArray(b.rows) ? b.rows : []; const r = await bulkAddContacts(o, rows, Array.isArray(b.groups) ? b.groups : (b.group ? [String(b.group)] : [])); return NextResponse.json({ ok: true, ...r, groups: await listGroups(o) }) }
