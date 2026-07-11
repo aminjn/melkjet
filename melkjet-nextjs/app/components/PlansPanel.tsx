@@ -230,10 +230,16 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
           {plans.map(p => {
             const price = priceOf(p)
             const hl = p.highlighted
+            // فاز ۶۰ (فیدبک): پلنِ فعالِ کاربر روی کارتِ خودش مشخص شود؛ بادج هم دیگر روی نام نیفتد
+            const isActive = activeplan?.plan === p.id
             return (
-              <div key={p.id} style={{ position: 'relative', display: 'flex', flexDirection: 'column', borderRadius: 18, padding: 22, background: hl ? 'linear-gradient(160deg, rgba(212,175,55,.1), var(--surface) 60%)' : 'var(--surface)', border: `1.5px solid ${hl ? 'var(--gold)' : 'var(--line)'}`, boxShadow: hl ? '0 12px 36px -12px rgba(212,175,55,.45)' : 'none', transform: hl ? 'translateY(-2px)' : 'none' }}>
-                {(p.badge || hl) && <div style={{ position: 'absolute', top: 14, insetInlineStart: 14, background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 11, fontWeight: 800, borderRadius: 999, padding: '3px 12px' }}>{p.badge || 'محبوب'}</div>}
-                <div style={{ fontSize: 17, fontWeight: 900, marginBottom: 4 }}>{p.name}</div>
+              <div key={p.id} style={{ position: 'relative', display: 'flex', flexDirection: 'column', borderRadius: 18, padding: 22, background: isActive ? 'linear-gradient(160deg, rgba(95,217,138,.09), var(--surface) 60%)' : hl ? 'linear-gradient(160deg, rgba(212,175,55,.1), var(--surface) 60%)' : 'var(--surface)', border: `1.5px solid ${isActive ? '#3d8f63' : hl ? 'var(--gold)' : 'var(--line)'}`, boxShadow: isActive ? '0 12px 36px -12px rgba(95,217,138,.4)' : hl ? '0 12px 36px -12px rgba(212,175,55,.45)' : 'none', transform: hl && !isActive ? 'translateY(-2px)' : 'none' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+                  <span style={{ fontSize: 17, fontWeight: 900, overflowWrap: 'anywhere' }}>{p.name}</span>
+                  {isActive
+                    ? <span style={{ background: 'rgba(95,217,138,.15)', color: '#5fd98a', border: '1px solid rgba(95,217,138,.45)', fontSize: 11, fontWeight: 800, borderRadius: 999, padding: '3px 12px', whiteSpace: 'nowrap', flexShrink: 0 }}>✓ پلنِ فعالِ شما</span>
+                    : (p.badge || hl) && <span style={{ background: 'linear-gradient(135deg,var(--gold2),var(--gold))', color: '#16140f', fontSize: 11, fontWeight: 800, borderRadius: 999, padding: '3px 12px', whiteSpace: 'nowrap', flexShrink: 0 }}>{p.badge || 'محبوب'}</span>}
+                </div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, margin: '12px 0 4px' }}>
                   <span style={{ fontSize: 30, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-1px' }}>{price > 0 ? fa(price) : 'رایگان'}</span>
                   {price > 0 && <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{p.currency || 'تومان'} / {periodLabel}</span>}
@@ -247,9 +253,13 @@ export default function PlansPanel({ dashboard, channels = ['token', 'sms', 'ema
                     </div>
                   ))}
                 </div>
-                {activeplan ? (
+                {isActive ? (
+                  <div style={{ marginTop: 'auto', padding: '11px', borderRadius: 11, border: '1px solid rgba(95,217,138,.45)', background: 'rgba(95,217,138,.08)', color: '#5fd98a', fontWeight: 800, fontSize: 12.5, textAlign: 'center', lineHeight: 1.7 }}>
+                    ● فعال{activeplan?.expiresAt ? ` — ${daysLeftLabel(activeplan.expiresAt)}` : ''}
+                  </div>
+                ) : activeplan ? (
                   <div style={{ marginTop: 'auto', padding: '11px', borderRadius: 11, border: '1px dashed var(--line2)', background: 'var(--bg2)', color: 'var(--muted)', fontWeight: 700, fontSize: 12, textAlign: 'center', lineHeight: 1.7 }}>
-                    پلنِ فعال دارید{activeplan.expiresAt ? ` — ${daysLeftLabel(activeplan.expiresAt)}` : ''}<br /><span style={{ fontSize: 11, color: 'var(--faint)' }}>پس از پایان می‌توانید تهیه کنید</span>
+                    پلنِ دیگری فعال دارید{activeplan.expiresAt ? ` — ${daysLeftLabel(activeplan.expiresAt)}` : ''}<br /><span style={{ fontSize: 11, color: 'var(--faint)' }}>پس از پایان می‌توانید تهیه کنید</span>
                   </div>
                 ) : (
                   <button onClick={() => buyPlan(p)} disabled={!!busy} style={{ marginTop: 'auto', padding: '11px', borderRadius: 11, border: hl ? 'none' : '1px solid var(--gold)', background: hl ? 'linear-gradient(135deg,var(--gold2),var(--gold))' : 'transparent', color: hl ? '#16140f' : 'var(--gold)', fontWeight: 800, fontSize: 13.5, cursor: 'pointer', fontFamily: FONT, opacity: busy === 'plan_' + p.id ? 0.6 : 1 }}>{busy === 'plan_' + p.id ? 'در حال ثبت…' : (p.cta || 'تهیهٔ اشتراک')}</button>
