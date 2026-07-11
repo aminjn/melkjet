@@ -45,7 +45,7 @@ import { follow, unfollow, isFollowing, followerCount, followingCount, following
 import { listFlags, getFlag, setFlag, flagEnabled } from '../app/lib/reos/flags.ts'
 import { registerModel as regModel, getChampion as champOf } from '../app/lib/reos/model-registry.ts'
 import { autoPromote, autoMLStatus } from '../app/lib/reos/automl.ts'
-import { createEmpire, getEmpire, renameEmpire, buyAsset, chooseAssetAction, recordGuess, claimEmpireMission, spendAiToken, setHunterPair, answerHunter, setStylePicks, bumpRejects, empireCount, netWorthOf as empNetWorth, saveBrief, getBrief, markBriefOpened, dayNumberOf, sellAsset, setLandPlan, chooseBusiness, accrueIncome, claimDailyChest, listEmpiresPublic, applyUpkeep, adminAdjustEmpire, deleteEmpire, briefStatsForDay, takeLoan, repayLoan, accrueLoanInterest } from '../app/lib/empire-store.ts'
+import { createEmpire, getEmpire, renameEmpire, buyAsset, chooseAssetAction, recordGuess, claimEmpireMission, spendAiToken, setHunterPair, answerHunter, setStylePicks, bumpRejects, empireCount, netWorthOf as empNetWorth, saveBrief, getBrief, markBriefOpened, dayNumberOf, sellAsset, setLandPlan, chooseBusiness, accrueIncome, claimDailyChest, listEmpiresPublic, applyUpkeep, adminAdjustEmpire, deleteEmpire, briefStatsForDay, takeLoan, repayLoan, accrueLoanInterest , openP2pAuction, cancelP2pAuction, bidP2pAuction, settleP2pAuctions } from '../app/lib/empire-store.ts'
 
 if (!process.env.DATABASE_URL) { console.error('DATABASE_URL not set'); process.exit(2) }
 let pass = 0, fail = 0
@@ -911,6 +911,47 @@ async function main() {
     // فاز ۵: عملیاتِ مرکزِ فرماندهی (GDD جلد ۹)
     const eA = await getEmpire(uid)
     const aj = await adminAdjustEmpire(uid, { coins: 100, xp: 50 }, 'جبرانِ رویداد')
+
+    // ── فاز ۶۴: مزایدهٔ بینِ بازیکنانِ واقعی — چرخهٔ کامل: بگذار → پیشنهاد → چکش (تسویهٔ اتمیک) ──
+    {
+      const sA = '0912p2pSell', bB = '0912p2pBuy1', bC = '0912p2pBuy2'
+      await createEmpire(sA, { answers: { city: 'تهران', tenB: 'سرمایه‌گذاری می‌کردم', risk: 50, ptype: 'آپارتمان', goal: 'x' } })
+      await createEmpire(bB, { answers: { city: 'تهران', tenB: 'سرمایه‌گذاری می‌کردم', risk: 50, ptype: 'آپارتمان', goal: 'x' } })
+      await createEmpire(bC, { answers: { city: 'تهران', tenB: 'سرمایه‌گذاری می‌کردم', risk: 50, ptype: 'آپارتمان', goal: 'x' } })
+      const buy64 = await buyAsset(sA, { id: 'P2PA1', title: 'واحد مزایده‌ای', hood: 'پونک', price: 2_000_000_000, ptype: 'آپارتمان' })
+      const aid64 = buy64.empire.assets.find(x => x.listingId === 'P2PA1').id
+      const day64 = 100
+      const op = await openP2pAuction(sA, aid64, 2_500_000_000, 3, 7, day64)
+      ok('مزایده باز می‌شود (پایه + مهلتِ سقف‌دار)', op.ok && op.empire.assets[0].p2pAuction.endDay === 103)
+      const eB = await getEmpire(bB), eC = await getEmpire(bC)
+      const bid1 = await bidP2pAuction(sA, { userId: bB, no: eB.no, name: eB.name, capital: eB.capital }, aid64, 2_400_000_000, 5, day64 + 1)
+      ok('پیشنهادِ زیرِ پایه رد می‌شود', bid1.ok === false)
+      const bid2 = await bidP2pAuction(sA, { userId: bB, no: eB.no, name: eB.name, capital: eB.capital }, aid64, 2_500_000_000, 5, day64 + 1)
+      ok('پیشنهادِ معتبر ثبت می‌شود', bid2.ok && bid2.top === 2_500_000_000)
+      const bid3 = await bidP2pAuction(sA, { userId: bC, no: eC.no, name: eC.name, capital: eC.capital }, aid64, 2_550_000_000, 5, day64 + 2)
+      ok('پیشنهادِ کمتر از گامِ ۵٪ رد می‌شود', bid3.ok === false && String(bid3.reason).startsWith('حداقلِ'))
+      const bid4 = await bidP2pAuction(sA, { userId: bC, no: eC.no, name: eC.name, capital: eC.capital }, aid64, 2_700_000_000, 5, day64 + 2)
+      ok('پیشنهادِ بالاتر صدرنشین می‌شود', bid4.ok && bid4.top === 2_700_000_000)
+      const cx = await cancelP2pAuction(sA, aid64)
+      ok('بعد از اولین پیشنهاد لغو ممکن نیست', cx.ok === false)
+      const bidLate = await bidP2pAuction(sA, { userId: bB, no: eB.no, name: eB.name, capital: eB.capital }, aid64, 3_000_000_000, 5, day64 + 9)
+      ok('بعد از مهلت پیشنهاد بسته است', bidLate.ok === false)
+      const sc0 = (await getEmpire(sA)).capital, bc0 = (await getEmpire(bC)).capital
+      const settled = await settleP2pAuctions(sA, day64 + 4, { taxPct: 1, commissionPct: 0.5 })
+      const winner = settled[0]
+      ok('چکش: بالاترین پیشنهادِ واقعی می‌بَرد', settled.length === 1 && winner.winner?.userId === bC && winner.price === 2_700_000_000)
+      const sA1 = await getEmpire(sA), bC1 = await getEmpire(bC)
+      ok('تسویهٔ اتمیک: پول جابه‌جا و بقا برقرار (فروشنده + خریدار − مالیات/کمیسیون)', sA1.assets.length === 0 && bC1.assets.some(x => x.listingId === 'P2PA1') && sA1.capital > sc0 && bC1.capital === bc0 - Math.round(2_700_000_000 * 1.01))
+      ok('داراییِ منتقل‌شده بدونِ مزایده/عرضه است', !bC1.assets.find(x => x.listingId === 'P2PA1').p2pAuction)
+      // مزایدهٔ بدونِ پیشنهاد → بستهٔ بی‌برنده
+      const buy65 = await buyAsset(sA, { id: 'P2PA2', title: 'واحد بی‌مشتری', hood: 'پونک', price: 1_000_000_000, ptype: 'آپارتمان' })
+      const aid65 = buy65.empire.assets.find(x => x.listingId === 'P2PA2').id
+      await openP2pAuction(sA, aid65, 9_000_000_000, 2, 7, day64)
+      const s2 = await settleP2pAuctions(sA, day64 + 10, { taxPct: 1, commissionPct: 0.5 })
+      const sA2 = await getEmpire(sA)
+      ok('بدونِ پیشنهاد → مزایده صادقانه بی‌برنده بسته می‌شود و دارایی می‌ماند', s2.length === 1 && !s2[0].winner && sA2.assets.some(x => x.listingId === 'P2PA2') && !sA2.assets.find(x => x.listingId === 'P2PA2').p2pAuction)
+      for (const u of [sA, bB, bC]) await deleteEmpire(u)
+    }
     ok('هدیهٔ ادمین: منابع + ثبتِ شفاف در تایم‌لاین', aj.ok && aj.empire.coins === eA.coins + 100 && aj.empire.xp === eA.xp + 50 && aj.empire.timeline.some(t => t.title === 'هدیهٔ ملک‌جت' && t.detail.includes('جبرانِ رویداد')))
     const aj2 = await adminAdjustEmpire(uid, { coins: -999999 })
     ok('کسرِ ادمین هرگز منابع را منفی نمی‌کند', aj2.ok && aj2.empire.coins === 0)

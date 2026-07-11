@@ -181,6 +181,7 @@ export default function EmpirePage() {
   const [dealAn, setDealAn] = useState('')                     // تحلیلِ کدام فرصتِ امروز نمایش داده شود
   // فاز ۳۷ — بازارِ بازیکنان + مشارکتِ ساخت + اتحاد (درخواستِ مستقیم؛ همه سطح‌گشا)
   const [pmkt, setPmkt] = useState<any>(null)                  // عرضه‌ها و مشارکت‌های بازِ بازیکنانِ دیگر
+  const [bidIn, setBidIn] = useState<Record<string, string>>({})   // فاز ۶۴: پیشنهادِ من روی مزایدهٔ بازیکنان (میلیون)
   const [clanD, setClanD] = useState<any>(null)                // اتحادِ من / فهرستِ اتحادها
   const [fsIn, setFsIn] = useState<Record<string, string>>({}) // قیمتِ عرضه به بازیکنان (ورودی، به میلیون)
   const [jvIn, setJvIn] = useState<Record<string, { pct: string; amount: string }>>({})
@@ -1688,9 +1689,11 @@ export default function EmpirePage() {
 
             {/* 🏪/🤝 فاز ۳۷: عرضه به بازیکنان + جذبِ شریکِ ساخت — سطح‌گشا (knob) */}
             {st.unlocks?.trade?.enabled !== false && st.unlocks?.trade?.ok && !a.demolishedAt && <div style={{ width: '100%', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', fontSize: 11, borderTop: '1px dashed var(--line)', paddingTop: 6, marginTop: 2 }}>
-              {(a.forSale || 0) > 0
+              {a.p2pAuction && <span style={{ color: 'var(--gold)' }}>🔨 در مزایدهٔ بازیکنان — پایه {faB(a.p2pAuction.minBid)}{(a.p2pAuction.bids || []).length > 0 ? ` · بالاترین ${faB(a.p2pAuction.bids[0].amount)} (${a.p2pAuction.bids[0].name})` : ' · هنوز پیشنهادی نیامده'} · چکش روزِ {fa(a.p2pAuction.endDay)}
+                {!(a.p2pAuction.bids || []).length && <button style={{ ...btnGhost, padding: '2px 8px', fontSize: 10.5, marginInlineStart: 6 }} disabled={busy} onClick={async () => { const d = await api({ action: 'p2pAuctionCancel', assetId: a.id }); if (d) setSt(d) }}>لغو</button>}</span>}
+              {!a.p2pAuction && (a.forSale || 0) > 0
                 ? <span style={{ color: '#7aa2c9' }}>🏪 در بازارِ بازیکنان به {faB(a.forSale)} — <button style={{ ...btnGhost, padding: '2px 8px', fontSize: 10.5 }} disabled={busy} onClick={async () => { const d = await api({ action: 'forSale', assetId: a.id, price: 0 }); if (d) setSt(d) }}>لغوِ عرضه</button></span>
-                : (!a.construction || a.construction.done) && a.m100?.status !== 'pending' && <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center' }}>
+                : !a.p2pAuction && (!a.construction || a.construction.done) && a.m100?.status !== 'pending' && <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center' }}>
                     <span style={{ color: 'var(--muted)' }}>🏪 عرضه به بازیکنان:</span>
                     <input value={fsIn[a.id] || ''} onChange={ev => setFsIn({ ...fsIn, [a.id]: digitsOf(ev.target.value) })} placeholder="قیمت (میلیون)" inputMode="numeric" style={{ width: 96, padding: 5, borderRadius: 7, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', textAlign: 'center', fontSize: 11 }} />
                     <button style={{ ...btnGhost, padding: '3px 9px', fontSize: 10.5 }} disabled={busy} onClick={async () => {
@@ -1699,6 +1702,13 @@ export default function EmpirePage() {
                       const d = await api({ action: 'forSale', assetId: a.id, price: m * 1e6 })
                       if (d) { setSt(d); setFsIn({ ...fsIn, [a.id]: '' }) }
                     }}>عرضه</button>
+                    <button title="مزایده بینِ بازیکنانِ واقعی — همان قیمت به‌عنوانِ پایه، چکش بعد از ۳ روز" style={{ ...btnGhost, padding: '3px 9px', fontSize: 10.5, borderColor: 'var(--goldDim)', color: 'var(--gold)' }} disabled={busy} onClick={async () => {
+                      const m = Math.round(Number(digitsOf(fsIn[a.id] || '')) || 0)
+                      if (!(m > 0)) { setErr('قیمتِ پایهٔ مزایده را به میلیون تومان در همان کادر بنویس'); return }
+                      if (!confirm(`«${(a.nickname || a.title).slice(0, 40)}» با پایهٔ ${fa(m)}م تومان به مزایدهٔ بازیکنان برود؟ چکش ۳ روزِ دیگر — بالاترین پیشنهاد می‌بَرد.`)) return
+                      const d = await api({ action: 'p2pAuctionOpen', assetId: a.id, minBid: m * 1e6, days: 3 })
+                      if (d) { setSt(d); setFsIn({ ...fsIn, [a.id]: '' }); celebrate() }
+                    }}>🔨 مزایده</button>
                   </span>}
               {((a.kind === 'land' && a.landPlan === 'build') || (a.construction && !a.construction.done)) && (
                 a.jvOffer
@@ -2215,7 +2225,32 @@ export default function EmpirePage() {
       {!st.unlocks?.trade?.ok && <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 10 }}>🔒 از سطحِ {fa(st.unlocks?.trade?.need || 0)} باز می‌شود — الان سطحِ {fa(st.unlocks?.level || 1)} هستی. با معامله و پروژه XP بگیر.</div>}
       {st.unlocks?.trade?.ok && <>
         {!pmkt && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10 }}>در حالِ بارگذاری…</div>}
-        {pmkt && !(pmkt.sales || []).length && !(pmkt.jvs || []).length && <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 10 }}>فعلاً هیچ بازیکنی ملکی عرضه نکرده و مشارکتی باز نیست — تو اولین باش: در «پرتفوی» روی دارایی‌ات «🏪 عرضه به بازیکنان» یا روی زمینت «🤝 جذبِ شریک» را بزن.</div>}
+        {pmkt && !(pmkt.sales || []).length && !(pmkt.jvs || []).length && !(pmkt.auctions || []).length && <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 10 }}>فعلاً هیچ بازیکنی ملکی عرضه نکرده، مزایده‌ای باز نیست و مشارکتی هم نیست — تو اولین باش: در «پرتفوی» روی دارایی‌ات «🏪 عرضه» یا «🔨 مزایده» را بزن.</div>}
+        {(pmkt?.auctions || []).length > 0 && <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, marginBottom: 6 }}>🔨 مزایده‌های زندهٔ بازیکنان <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 400 }}>— بالاترین پیشنهاد سرِ چکش می‌بَرد؛ هر پیشنهاد حداقل {fa(pmkt.auctionStepPct || 5)}٪ بالاتر از قبلی</span></div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {pmkt.auctions.map((au: any) => (
+              <div key={au.assetId} style={{ ...card, background: 'var(--bg2)', borderColor: au.myTop ? 'var(--gold)' : 'var(--line)', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12.5 }}>
+                <span>{au.kind === 'land' ? '🏞' : au.kind === 'commercial' ? '🏪' : '🏠'}</span>
+                <div style={{ flex: 1, minWidth: 180 }}>
+                  <b>{au.title}</b>
+                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>{au.hood} · فروشنده: {au.seller} #{fa(au.no)} · ⏳ {fa(au.daysLeft)} روز تا چکش · {fa(au.bids)} پیشنهاد</div>
+                  <div style={{ fontSize: 11, marginTop: 2 }}>{au.top > 0 ? <>بالاترین: <b style={{ color: au.myTop ? 'var(--gold)' : 'var(--text)' }}>{faB(au.top)}</b> ({au.myTop ? 'تو! 👑' : au.topBy})</> : <>پایه: <b>{faB(au.minBid)}</b></>}</div>
+                  {au.check?.note && <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 2 }}>🧾 {au.check.note}</div>}
+                </div>
+                <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center' }}>
+                  <input value={bidIn[au.assetId] || ''} onChange={ev => setBidIn({ ...bidIn, [au.assetId]: digitsOf(ev.target.value) })} placeholder="پیشنهاد (میلیون)" inputMode="numeric" style={{ width: 104, padding: 6, borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--surface)', color: 'var(--text)', textAlign: 'center', fontSize: 11.5 }} />
+                  <button style={{ ...btn, padding: '5px 14px', fontSize: 12 }} disabled={busy} onClick={async () => {
+                    const m = Math.round(Number(digitsOf(bidIn[au.assetId] || '')) || 0)
+                    if (!(m > 0)) { setErr('پیشنهادت را به میلیون تومان بنویس'); return }
+                    const d = await api({ action: 'p2pAuctionBid', no: au.no, assetId: au.assetId, amount: m * 1e6 })
+                    if (d?.ok) { setBidIn({ ...bidIn, [au.assetId]: '' }); celebrate(); loadPmkt() }
+                  }}>پیشنهاد</button>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>}
         {(pmkt?.sales || []).length > 0 && <div style={{ marginTop: 10 }}>
           <div style={{ fontSize: 12.5, fontWeight: 800, marginBottom: 6 }}>عرضه‌های بازیکنان</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -2643,6 +2678,26 @@ export default function EmpirePage() {
             {(peek.badges || []).length > 0 && <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 8 }}>
               {peek.badges.slice(0, 10).map((bd: string) => <span key={bd} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, border: '1px solid var(--line2)', color: 'var(--muted)' }}>{bd}</span>)}
             </div>}
+            {/* فاز ۶۴ (ممیزی): لایهٔ نقش + میراث + رکوردها + پرتفویِ کاملِ قابلِ‌دیدن — «کاربرها همدیگر را ببینند» */}
+            {(peek.layer || peek.legacy > 0) && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8, fontSize: 11 }}>
+              {peek.layer && <span style={{ padding: '3px 10px', borderRadius: 10, border: '1px solid var(--goldDim)', color: 'var(--gold)' }}>{peek.layer.icon} لایهٔ نقش: {peek.layer.fa}</span>}
+              {peek.legacy > 0 && <span style={{ padding: '3px 10px', borderRadius: 10, border: '1px solid var(--line2)', color: 'var(--muted)' }}>🏛 میراث: {fa(peek.legacy)}</span>}
+            </div>}
+            {(peek.records || []).length > 0 && <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 6 }}>
+              {peek.records.map((r: any, i: number) => <span key={i} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, background: 'var(--surface)', border: '1px solid var(--line)', color: 'var(--muted)' }}>{r.icon} {r.label}: <b style={{ color: 'var(--text)' }}>{r.unit === 'toman' ? faB(r.value) : fa(r.value)}</b></span>)}
+            </div>}
+            {(peek.portfolio || []).length > 0 && <details style={{ marginTop: 8 }}>
+              <summary style={{ cursor: 'pointer', fontSize: 11.5, fontWeight: 700, color: 'var(--gold)' }}>💼 پرتفویِ {peek.name} ({fa(peek.portfolio.length)} دارایی)</summary>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: 6, marginTop: 8 }}>
+                {peek.portfolio.map((pa: any, i: number) => (
+                  <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, padding: '8px 10px', fontSize: 10.5 }}>
+                    <div style={{ fontWeight: 700, fontSize: 11 }}>{pa.kind === 'land' ? '🏞' : pa.kind === 'commercial' ? '🏪' : pa.kind === 'villa' ? '🏡' : '🏠'} {pa.title}</div>
+                    <div style={{ color: 'var(--muted)', marginTop: 2 }}>{pa.hood}{pa.units > 1 ? ` · ${fa(pa.units)} واحد` : ''}{pa.business ? ` · ${pa.business}` : ''}</div>
+                    <div style={{ color: 'var(--gold)', marginTop: 2 }}>{faB(pa.value)} تومان{pa.forSale > 0 ? ' · 🏪 در بازار' : ''}{pa.inAuction ? ' · 🔨 در مزایده' : ''}</div>
+                  </div>
+                ))}
+              </div>
+            </details>}
           </div>}
           {boards.hoodLeague?.rows?.length > 0 && <div style={{ marginTop: 12 }}>
             <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>🏘 لیگِ محلهٔ {boards.hoodLeague.hood}</div>

@@ -25,6 +25,7 @@ import {
   proPersonaOf, designPlanOf, commissionDesign, boostDesign, resolveM100, renovateAsset, designBuildPlanOf,
   activeCoinPacks, buyCosmetic, setCosmetic, offerOf, dismissOffer, areaFromText, rateHit,
   setForSale, tradeAsset, openPartnership, joinPartnership, settlePartnerShares, chargeClanFee,
+  openP2pAuction, cancelP2pAuction, bidP2pAuction, settleP2pAuctions,
   setAutoRule, delAutoRule, toggleAutoRule, recordRuleFires,
   bigDealPickOf, bigDealNegoOf, BIG_DEAL_STRATEGIES, noteCrisis, recordBigDealTry,
   auctionPickOf, auctionSetupOf, auctionInfluenceOf, auctionNextBidOf, startAuction, applyAuctionMove, consumeAuctionWin, AUCTION_RIVALS,
@@ -377,6 +378,18 @@ async function accrueDividendsFor(userId: string, e: EmpireData, rentPerM: Recor
 
 // وضعیتِ کاملِ امپراتوری برای UI.
 async function stateOf(userId: string, e00: EmpireData) {
+  // فاز ۶۴: چکشِ مزایده‌های پایان‌یافتهٔ بازیکن — تسویهٔ اتمیک با بالاترین پیشنهادِ واقعی + انتقالِ مالکیتِ انحصاری
+  {
+    const day64 = dayNumberOf(Date.now())
+    if (e00.assets.some(a => a.p2pAuction && day64 > a.p2pAuction.endDay)) {
+      const settled = await settleP2pAuctions(userId, day64, { taxPct: config().empire.transferTaxPct, commissionPct: config().empire.pros.advisorSellCommissionPct }).catch(() => [])
+      for (const s64 of settled) if (s64.winner) {
+        if (s64.listingId) await transferListing(s64.listingId, userId, s64.winner).catch(() => {})
+        appendWorldEvent({ icon: '🔨', title: `مزایدهٔ بازیکنان چکش خورد — «${s64.title.slice(0, 40)}» به ${s64.winner.name}`, kind: 'p2pAuction' }, day64).catch(() => {})
+      }
+      if (settled.length) e00 = (await getEmpire(userId)) || e00
+    }
+  }
   // پیامِ بازگشت (فصل ۴): غیبتِ ۷+ روزه — قبل از هر جهشی سنجیده می‌شود تا سیگنال از بین نرود.
   const absentDays = Math.floor((Date.now() - (e00.updatedAt || e00.createdAt)) / 864e5)
   if (absentDays >= 7 && !e00.pendingComeback) await markComeback(userId, dayNumberOf(Date.now())).catch(() => {})
@@ -1937,6 +1950,35 @@ export async function POST(req: NextRequest) {
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
     }
+    // 🔨 مزایدهٔ بینِ بازیکنانِ واقعی (فاز ۶۴): بگذار/لغو/پیشنهاد — چکش خودکار سرِ مهلت، تسویهٔ اتمیک
+    case 'p2pAuctionOpen': {
+      const soc = config().empire.social, u = config().empire.unlocks
+      if (soc?.p2pAuctionEnabled === false) return NextResponse.json({ error: 'مزایدهٔ بازیکنان فعلاً فعال نیست' }, { status: 403 })
+      const me = await getEmpire(userId)
+      if (!me) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      if (empireLevel(me.xp).level < u.tradeLevel) return NextResponse.json({ error: `بازارِ بازیکنان از سطحِ ${u.tradeLevel.toLocaleString('fa-IR')} باز می‌شود` }, { status: 403 })
+      const r = await openP2pAuction(userId, String(b.assetId || ''), Math.round(Number(b.minBid) || 0), Math.floor(Number(b.days) || 3), soc.p2pAuctionMaxDays, dayNumberOf(Date.now()))
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+    }
+    case 'p2pAuctionCancel': {
+      const r = await cancelP2pAuction(userId, String(b.assetId || ''))
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+    }
+    case 'p2pAuctionBid': {
+      const soc = config().empire.social, u = config().empire.unlocks
+      if (soc?.p2pAuctionEnabled === false) return NextResponse.json({ error: 'مزایدهٔ بازیکنان فعلاً فعال نیست' }, { status: 403 })
+      const me = await getEmpire(userId)
+      if (!me) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      if (empireLevel(me.xp).level < u.tradeLevel) return NextResponse.json({ error: `بازارِ بازیکنان از سطحِ ${u.tradeLevel.toLocaleString('fa-IR')} باز می‌شود` }, { status: 403 })
+      const seller = (await listEmpiresPublic(1000)).find(x => x.no === Math.floor(Number(b.no) || 0))
+      if (!seller) return NextResponse.json({ error: 'فروشنده یافت نشد' }, { status: 404 })
+      const r = await bidP2pAuction(seller.userId, { userId, no: me.no, name: me.name, capital: me.capital }, String(b.assetId || ''), Math.round(Number(b.amount) || 0), soc.p2pAuctionStepPct, dayNumberOf(Date.now()))
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, top: r.top })
+    }
+
     // پیشنهادِ مشارکتِ ساخت: سهمِ ٪ در برابرِ آوردهٔ نقدی (pct ۰ = لغو)
     case 'jvOpen': {
       const soc = config().empire.social, u = config().empire.unlocks
@@ -1954,7 +1996,8 @@ export async function POST(req: NextRequest) {
       if (!me) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
       const soc = config().empire.social, u = config().empire.unlocks
       const empires = await listEmpiresPublic(500)
-      const sales: any[] = [], jvs: any[] = []
+      const dayPM = dayNumberOf(Date.now())
+      const sales: any[] = [], jvs: any[] = [], auctions: any[] = []
       for (const e of empires) {
         if (e.userId === userId) continue
         for (const a of e.assets) {
@@ -1964,9 +2007,12 @@ export async function POST(req: NextRequest) {
             sales.push({ no: e.no, seller: e.name, assetId: a.id, title: a.title, hood: a.hood, kind: a.kind, price: a.forSale, renov: a.renovBoostPct || 0, designed: !!a.design, check: config().empire.intel.enabled ? tradeAskCheckOf(a.forSale!, a.buyPrice) : null })
           if (a.jvOffer && soc?.jvEnabled !== false)
             jvs.push({ no: e.no, owner: e.name, assetId: a.id, title: a.title, hood: a.hood, pct: a.jvOffer.pct, amount: a.jvOffer.amount, building: !!(a.construction && !a.construction.done), check: config().empire.intel.enabled ? jvOfferCheckOf(a.jvOffer.pct, a.jvOffer.amount, a.construction && !a.construction.done ? a.construction.costTotal : null) : null })
+          // فاز ۶۴: مزایده‌های زندهٔ بازیکنانِ واقعی — با بالاترین پیشنهاد و مهلتِ باقی‌مانده
+          if (a.p2pAuction && soc?.p2pAuctionEnabled !== false && dayPM <= a.p2pAuction.endDay)
+            auctions.push({ no: e.no, seller: e.name, assetId: a.id, title: a.title, hood: a.hood, kind: a.kind, minBid: a.p2pAuction.minBid, top: a.p2pAuction.bids[0]?.amount || 0, topBy: a.p2pAuction.bids[0]?.name || '', myTop: a.p2pAuction.bids[0]?.userId === userId, bids: a.p2pAuction.bids.length, daysLeft: a.p2pAuction.endDay - dayPM, check: config().empire.intel.enabled ? tradeAskCheckOf(a.p2pAuction.bids[0]?.amount || a.p2pAuction.minBid, a.buyPrice) : null })
         }
       }
-      return NextResponse.json({ ok: true, unlocked: empireLevel(me.xp).level >= u.tradeLevel, need: u.tradeLevel, sales: sales.slice(0, 40), jvs: jvs.slice(0, 40) })
+      return NextResponse.json({ ok: true, unlocked: empireLevel(me.xp).level >= u.tradeLevel, need: u.tradeLevel, sales: sales.slice(0, 40), jvs: jvs.slice(0, 40), auctions: auctions.slice(0, 40), auctionStepPct: soc.p2pAuctionStepPct })
     }
     // خرید از بازیکنِ دیگر — تراکنشِ اتمیکِ دو-کاربره + انتقالِ مالکیتِ انحصاری
     case 'tradeBuy': {
@@ -2109,6 +2155,11 @@ export async function POST(req: NextRequest) {
           memberSince: target.createdAt,
           myKudos: !!me?.claims['kudos_' + target.no],
           mine: target.userId === userId,
+          // فاز ۶۴ (ممیزی): پرتفویِ قابلِ‌دیدنِ بازیکن + لایهٔ نقش + میراث + رکوردها — «کاربرها همدیگر را ببینند»
+          portfolio: target.assets.filter(a => !a.demolishedAt).slice(0, 20).map(a => ({ title: (a.nickname || a.title).slice(0, 40), kind: a.kind, hood: a.hood, value: tPrices[a.listingId] || a.buyPrice, units: a.unitsOwned || 1, business: a.business || '', forSale: a.forSale || 0, inAuction: !!a.p2pAuction })),
+          layer: roleLayerOf(target, tnw.netWorth),
+          legacy: legacyScoreOf(target).score,
+          records: recordsOf(target).slice(0, 4),
         },
       })
     }

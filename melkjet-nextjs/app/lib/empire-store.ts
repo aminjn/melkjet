@@ -48,6 +48,7 @@ export interface EmpireAsset {
   renovDone?: string[]        // کدام گزینه‌های بازسازی انجام شده (هر کدام یک‌بار)
   // فاز ۳۷ — بازارِ بازیکنان و مشارکتِ ساخت:
   forSale?: number            // قیمتِ عرضه به بازیکنانِ دیگر (۰/undefined = عرضه نشده)
+  p2pAuction?: { minBid: number; endDay: number; startedDay: number; bids: Array<{ userId: string; no: number; name: string; amount: number; at: number }> }   // فاز ۶۴: مزایدهٔ بینِ بازیکنانِ واقعی
   nickname?: string           // قانونِ ۱۳ (رویاپردازی): نامِ دلخواهِ بازیکن روی دارایی — صرفاً هویتی، صفر اثرِ اقتصادی
   jvOffer?: { pct: number; amount: number }   // پیشنهادِ بازِ مشارکتِ ساخت: سهمِ ٪ در برابرِ آوردهٔ نقدی
   partners?: Array<{ userId: string; no: number; name: string; pct: number; paid: number; at: number }>   // شرکای پروژه — سهمشان از عایدیِ فروش خودکار تسویه می‌شود
@@ -1880,14 +1881,16 @@ export async function setForSale(userId: string, assetId: string, price: number)
 
 // معاملهٔ بازیکن‌بابازیکن: دارایی با تمامِ ویژگی‌های واقعی‌اش (نقشه/بازسازی/واحدها) منتقل می‌شود؛
 // قراردادهای شخصیِ فروشنده (اجاره/کسب‌وکار/عرضه) پاک می‌شوند — مالکِ جدید خودش تصمیم می‌گیرد.
-export async function tradeAsset(sellerId: string, buyerId: string, assetId: string, opts: { taxPct: number; commissionPct: number }, now = Date.now()): Promise<{ ok: boolean; reason?: string; price?: number; profit?: number; listingId?: string }> {
+export async function tradeAsset(sellerId: string, buyerId: string, assetId: string, opts: { taxPct: number; commissionPct: number; auctionPrice?: number }, now = Date.now()): Promise<{ ok: boolean; reason?: string; price?: number; profit?: number; listingId?: string }> {
   let price = 0, profit = 0, listingId = ''
   const r = await twoUserTx(sellerId, buyerId, (seller, buyer) => {
     const i = seller.assets.findIndex(x => x.id === assetId)
     const a = seller.assets[i]
-    if (!a || !(a.forSale! > 0)) return 'این دارایی دیگر در بازارِ بازیکنان نیست'
+    // فاز ۶۴: تسویهٔ چکشِ مزایدهٔ بازیکنان از همین مسیرِ اتمیک — قیمت = پیشنهادِ برنده، نه forSale
+    const ask = opts.auctionPrice && a?.p2pAuction ? opts.auctionPrice : (a?.forSale || 0)
+    if (!a || !(ask > 0)) return 'این دارایی دیگر در بازارِ بازیکنان نیست'
     if (buyer.assets.some(x => x.listingId === a.listingId)) return 'این ملک از قبل در امپراتوریِ توست'
-    const s = tradeSplitOf(a.forSale!, opts.taxPct, opts.commissionPct)
+    const s = tradeSplitOf(ask, opts.taxPct, opts.commissionPct)
     if (buyer.capital < s.buyerPays) return 'سرمایه کافی نیست (قیمت + مالیاتِ انتقال)'
     price = s.price; profit = s.price - a.buyPrice; listingId = a.listingId
     // پول — بقای کامل
@@ -1901,7 +1904,7 @@ export async function tradeAsset(sellerId: string, buyerId: string, assetId: str
     seller.assets.splice(i, 1)
     buyer.assets.push({
       ...a, buyPrice: s.price, boughtAt: now,
-      forSale: undefined, jvOffer: undefined, partners: undefined,
+      forSale: undefined, jvOffer: undefined, partners: undefined, p2pAuction: undefined,
       action: undefined, actionAt: undefined, business: undefined, businessProb: undefined,
       income: undefined, lastAccrualAt: undefined,
     })
@@ -1909,6 +1912,74 @@ export async function tradeAsset(sellerId: string, buyerId: string, assetId: str
     buyer.timeline.push({ at: now, icon: '🤝', title: `«${a.title.slice(0, 40)}» را از «${seller.name}» خریدی`, detail: `${Math.round(s.buyerPays / 1e6).toLocaleString('fa-IR')}م تومان (با مالیات)` })
   })
   return r.ok ? { ok: true, price, profit, listingId } : { ok: false, reason: r.reason }
+}
+
+// ══════════ فاز ۶۴ — مزایدهٔ بینِ بازیکنانِ «واقعی» (ممیزی: «مزایده بین کاربرها نیست») ══════════
+// مکملِ بازارِ ثابت‌قیمت: مالک با «قیمتِ پایه + مهلتِ چندروزه» می‌گذارد؛ بازیکنانِ واقعی روی هم پیشنهاد
+// می‌دهند (گامِ حداقلی knob)؛ پایانِ مهلت = چکش: بالاترین پیشنهادی که «سرِ چکش هم» پولش را دارد می‌بَرد —
+// تسویه روی همان تراکنشِ اتمیکِ دو-کاربره (بقای کامل پول + مالیات/کمیسیون) + انتقالِ مالکیتِ انحصاری.
+export async function openP2pAuction(userId: string, assetId: string, minBid: number, days: number, maxDays: number, day: number) {
+  return mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    if (!a) return 'دارایی یافت نشد'
+    if (a.construction && !a.construction.done) return 'وسطِ ساخت نمی‌شود به مزایده گذاشت — اول تحویل بده'
+    if (a.m100?.status === 'pending') return 'تا حلِ پروندهٔ ماده۱۰۰ سند نمی‌خورد'
+    if (a.p2pAuction) return 'همین حالا در مزایده است'
+    const mb = Math.round(minBid), d = Math.min(Math.max(1, Math.floor(days) || 1), Math.max(1, maxDays))
+    if (!(mb > 0)) return 'قیمتِ پایه را مشخص کن'
+    a.forSale = undefined
+    a.p2pAuction = { minBid: mb, endDay: day + d, startedDay: day, bids: [] }
+    e.timeline.push({ at: Date.now(), icon: '🔨', title: `«${a.title.slice(0, 40)}» به مزایدهٔ بازیکنان رفت`, detail: `پایه ${Math.round(mb / 1e6).toLocaleString('fa-IR')}م تومان — چکش روزِ ${(day + d).toLocaleString('fa-IR')}` })
+  })
+}
+export async function cancelP2pAuction(userId: string, assetId: string) {
+  return mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    if (!a?.p2pAuction) return 'در مزایده نیست'
+    if (a.p2pAuction.bids.length) return 'بعد از اولین پیشنهاد نمی‌شود لغو کرد — تا چکش صبر کن'
+    a.p2pAuction = undefined
+  })
+}
+// پیشنهاد روی داراییِ یک بازیکنِ دیگر — قواعدِ شفاف: بالاتر از پایه و از پیشنهادِ قبلی + گامِ knob؛ سرمایه همان لحظه چک می‌شود.
+export async function bidP2pAuction(sellerId: string, bidder: { userId: string; no: number; name: string; capital: number }, assetId: string, amount: number, stepPct: number, day: number): Promise<{ ok: boolean; reason?: string; top?: number }> {
+  let top = 0
+  const r = await mutateEmpire(sellerId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    if (!a?.p2pAuction) return 'این مزایده دیگر باز نیست'
+    if (day > a.p2pAuction.endDay) return 'مهلتِ این مزایده تمام شده — منتظرِ چکش باش'
+    if (bidder.userId === sellerId) return 'روی داراییِ خودت نمی‌شود پیشنهاد داد'
+    const cur = a.p2pAuction.bids[0]?.amount || 0
+    const minNext = Math.max(a.p2pAuction.minBid, cur > 0 ? Math.ceil(cur * (1 + Math.max(0, stepPct) / 100)) : a.p2pAuction.minBid)
+    const amt = Math.round(amount)
+    if (!(amt >= minNext)) return `حداقلِ پیشنهاد ${Math.round(minNext / 1e6).toLocaleString('fa-IR')}م تومان است`
+    if (bidder.capital < amt) return 'سرمایه‌ات از پیشنهادت کمتر است'
+    a.p2pAuction.bids = [{ userId: bidder.userId, no: bidder.no, name: bidder.name, amount: amt, at: Date.now() }, ...a.p2pAuction.bids.filter(x => x.userId !== bidder.userId)].slice(0, 20)
+    top = amt
+  })
+  return r.ok ? { ok: true, top } : { ok: false, reason: r.reason }
+}
+// چکش: بالاترین پیشنهادی که «هنوز» پولش را دارد؛ اگر هیچ‌کس نتوانست، مزایده صادقانه بی‌نتیجه بسته می‌شود.
+export async function settleP2pAuctions(sellerId: string, day: number, opts: { taxPct: number; commissionPct: number }, now = Date.now()): Promise<Array<{ assetId: string; title: string; winner?: { no: number; name: string; userId: string }; price?: number; listingId?: string }>> {
+  const seller = await getEmpire(sellerId)
+  if (!seller) return []
+  const ended = seller.assets.filter(a => a.p2pAuction && day > a.p2pAuction.endDay)
+  const results: Array<{ assetId: string; title: string; winner?: { no: number; name: string; userId: string }; price?: number; listingId?: string }> = []
+  for (const a of ended) {
+    const bids = [...(a.p2pAuction!.bids || [])].sort((x, y) => y.amount - x.amount)
+    let done = false
+    for (const bid of bids) {
+      const r = await tradeAsset(sellerId, bid.userId, a.id, { ...opts, auctionPrice: bid.amount }, now)
+      if (r.ok) { results.push({ assetId: a.id, title: a.title, winner: { no: bid.no, name: bid.name, userId: bid.userId }, price: r.price, listingId: r.listingId }); done = true; break }
+    }
+    if (!done) {
+      await mutateEmpire(sellerId, e => {
+        const x = e.assets.find(y => y.id === a.id)
+        if (x?.p2pAuction) { x.p2pAuction = undefined; e.timeline.push({ at: now, icon: '🔨', title: `مزایدهٔ «${a.title.slice(0, 40)}» بدونِ برنده بسته شد`, detail: bids.length ? 'هیچ پیشنهاددهنده‌ای سرِ چکش پولِ کافی نداشت' : 'در مهلتِ مزایده پیشنهادی نیامد' }) }
+      }).catch(() => {})
+      results.push({ assetId: a.id, title: a.title })
+    }
+  }
+  return results
 }
 
 // پیشنهادِ مشارکتِ ساخت (پروژهٔ مشترک): مالک سهمِ ٪ از عایدیِ فروشِ پروژه را در برابرِ آوردهٔ نقدی عرضه می‌کند.
