@@ -98,15 +98,16 @@ declare global { // eslint-disable-next-line no-var
 export async function maybeAutoSyncCost(now = Date.now()): Promise<boolean> {
   const c = load()
   if (c.autoSync === false) return false
-  const WEEK = 7 * 24 * 3600 * 1000
-  if ((c.lastSyncAt || 0) && now - (c.lastSyncAt || 0) < WEEK) return false
+  const DAY = 24 * 3600 * 1000   // فاز ۸۵: سینکِ خودکار روزانه شد (قبلاً هفتگی) — «خودش هر روز آپدیت کند»
+  if ((c.lastSyncAt || 0) && now - (c.lastSyncAt || 0) < DAY) return false
   if (globalThis.__mjCostSyncing) return false
   globalThis.__mjCostSyncing = true
   try {
-    const { listModelsWithPricing } = await import('./gapgpt')
-    const fetched = await listModelsWithPricing()
-    if (fetched.length) {
-      syncModels(fetched)
+    const { listModelsWithPricing, fetchGapSitePricing } = await import('./gapgpt')
+    const fetched = await listModelsWithPricing().catch(() => [])
+    const site = await fetchGapSitePricing().catch(() => ({ list: [] as any[], note: '' }))
+    if (fetched.length || site.list.length) {
+      syncModels([...fetched, ...site.list])
       if (load().autoReprice !== false) {
         const { repriceTokenPackages } = await import('./comm-store')
         repriceTokenPackages(tokenSellPriceToman(), load().roundTo)

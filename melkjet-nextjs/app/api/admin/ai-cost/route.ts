@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { getCostConfig, setCostConfig, tokenSellPriceToman, syncModels } from '@/app/lib/cost-store'
 import { repriceTokenPackages } from '@/app/lib/comm-store'
-import { listModelsWithPricing } from '@/app/lib/gapgpt'
+import { listModelsWithPricing, fetchGapSitePricing } from '@/app/lib/gapgpt'
 import { aiUsageSummary } from '@/app/lib/ai-usage-store'
 
 async function guard() { const s = await getSession(); return s && s.role === 'super_admin' }
@@ -19,10 +19,13 @@ export async function POST(req: NextRequest) {
   // دریافتِ خودکارِ قیمت‌ها از API (تا دستی وارد نشود)
   if (b.action === 'syncModels') {
     try {
-      const fetched = await listModelsWithPricing()
-      if (!fetched.length) return NextResponse.json({ error: 'API قیمتی برنگرداند — شاید این درگاه قیمت را ارائه نمی‌دهد.' }, { status: 400 })
-      const r = syncModels(fetched)
-      return NextResponse.json({ ok: true, ...getCostConfig(), tokenSellPrice: tokenSellPriceToman(), ...r })
+      // فاز ۸۵: دو منبعِ واقعی با هم — APIِ خودِ درگاه + صفحهٔ قیمتِ سایتِ گپ (برای مدل‌هایی که API قیمتشان را نمی‌دهد)
+      const fetched = await listModelsWithPricing().catch(() => [])
+      const site = await fetchGapSitePricing().catch(e => ({ list: [], note: String(e?.message || e) }))
+      const all = [...fetched, ...site.list]
+      if (!all.length) return NextResponse.json({ error: `هیچ منبعی قیمت نداد — ${site.note || 'API هم خالی بود'}` }, { status: 400 })
+      const r = syncModels(all)
+      return NextResponse.json({ ok: true, ...getCostConfig(), tokenSellPrice: tokenSellPriceToman(), ...r, sitePriced: site.list.length, siteNote: site.note })
     } catch (e: any) { return NextResponse.json({ error: e?.message || 'خطا در دریافت از API' }, { status: 500 }) }
   }
   const c = setCostConfig(b)

@@ -85,6 +85,63 @@ export async function listModelsWithPricing(provider?: string): Promise<ApiModel
   // (= «ثبت‌نشده») می‌آیند تا در جدول دیده و دستی پر شوند؛ تا قیمت نگیرند در صرفه‌جویی شرکت نمی‌کنند.
 }
 
+// فاز ۸۵ (فیدبک: «قرار بود خودش اتومات بگیرد و هر روز آپدیت کند»): APIِ گپ برای خیلی از مدل‌ها قیمت
+// نمی‌فرستد؛ تنها منبعِ کامل صفحهٔ قیمتِ سایتِ خودِ گپ است. این تابع سمتِ سرور همان صفحه/چند endpoint
+// محتمل را می‌کِشد و با اسکنِ عمیقِ JSONهای داخلِ صفحه (__NEXT_DATA__/flight/blobها) قیمت‌ها را درمی‌آورد.
+// هر منبع که جواب داد در note گزارش می‌شود — اگر ساختارِ سایتِ گپ عوض شود، از همان پیام معلوم می‌شود.
+export async function fetchGapSitePricing(): Promise<{ list: ApiModelPrice[]; note: string }> {
+  const tried: string[] = []
+  const out = new Map<string, ApiModelPrice>()
+  const scale = (v: any) => { const n = Number(String(v ?? '').replace(/[$,\s]/g, '')); if (!isFinite(n) || n <= 0) return 0; return n < 0.1 ? n * 1_000_000 : n }
+  const slugRe = /^[a-z][\w.\/-]{2,60}$/i
+  const put = (id: string, inU: number, outU: number, provider = '') => {
+    if (!slugRe.test(id) || (!inU && !outU)) return
+    const type: ApiModelPrice['type'] = /image|dall-?e|imagen|z-image|flash-image/i.test(id) ? 'image' : 'text'
+    const ex = out.get(id)
+    if (!ex || (inU && !ex.inUsd) || (outU && !ex.outUsd)) out.set(id, { id, label: id, provider, type, inUsd: inU || ex?.inUsd || 0, outUsd: outU || ex?.outUsd || 0 })
+  }
+  // اسکنِ عمیقِ هر مقدارِ JSON: هر آبجکتی که «شناسهٔ مدل + فیلدِ قیمتِ ورودی/خروجی» داشته باشد
+  const deepScan = (v: any) => {
+    if (!v) return
+    if (Array.isArray(v)) { for (const x of v) deepScan(x); return }
+    if (typeof v === 'object') {
+      const id = String(v.id || v.model || v.slug || v.name || '')
+      const inU = scale(v.input ?? v.input_price ?? v.inputPrice ?? v.prompt ?? v.prompt_price ?? v.in)
+      const outU = scale(v.output ?? v.output_price ?? v.outputPrice ?? v.completion ?? v.completion_price ?? v.out)
+      if (id && (inU || outU)) put(id, inU, outU, String(v.provider || v.owned_by || v.vendor || ''))
+      for (const k of Object.keys(v)) deepScan(v[k])
+    }
+  }
+  const scanText = (txt: string) => {
+    // JSONهای خالص
+    try { deepScan(JSON.parse(txt)) } catch {}
+    // __NEXT_DATA__ / بلاب‌های JSON داخلِ HTML (بزرگ‌ترین آبجکت‌ها)
+    for (const m of txt.matchAll(/<script[^>]*>\s*(\{[\s\S]*?\})\s*<\/script>/g)) { try { deepScan(JSON.parse(m[1])) } catch {} }
+    // رشته‌های escape شدهٔ flight (self.__next_f.push("...")) — unescape و دوباره الگوگیری
+    const un = txt.replace(/\\"/g, '"')
+    // الگوی متنی: "id":"gpt-x" ... input/prompt: 1.25 ... output/completion: 10
+    for (const m of un.matchAll(/"(?:id|model|slug)"\s*:\s*"([\w.\/-]{3,60})"([^{}]{0,400}?)"(?:input|prompt)[^"]*"\s*:\s*"?\$?([\d.]+)"?([^{}]{0,200}?)"(?:output|completion)[^"]*"\s*:\s*"?\$?([\d.]+)"?/g)) {
+      put(m[1], scale(m[3]), scale(m[5]))
+    }
+  }
+  const urls = [
+    'https://gapgpt.app/platform-v2/pricing',
+    'https://api.gapgpt.app/v1/pricing',
+    'https://gapgpt.app/api/pricing',
+    'https://api.gapgpt.app/v1/models/pricing',
+  ]
+  for (const u of urls) {
+    try {
+      const res = await gapHttp(u, { method: 'GET', headers: { accept: 'text/html,application/json', 'user-agent': 'Mozilla/5.0 (melkjet-pricing-sync)' } }, 25000)
+      const before = out.size
+      if (res.status === 200 && res.body) scanText(res.body)
+      tried.push(`${u.replace('https://', '')}: HTTP ${res.status}${out.size > before ? ` → ${out.size - before} قیمت` : ''}`)
+      if (out.size >= 10) break   // به‌قدرِ کافی گرفتیم
+    } catch (e: any) { tried.push(`${u.replace('https://', '')}: ${String(e?.message || e).slice(0, 60)}`) }
+  }
+  return { list: [...out.values()], note: tried.join(' · ') }
+}
+
 export async function chatComplete(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number; src?: string; timeoutMs?: number } = {}, provider?: string): Promise<string> {
   const { base, key } = cfg(provider)
   // فاز ۵۷: src صریح مقدم است — در بیلدِ پروداکشن stack مسیرِ app/ را ندارد و «ناشناخته» می‌شد
