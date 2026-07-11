@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listAccounts, adminUpdate, deleteAccount, bulkUpdate, bulkDelete, createAccount, setSuspended, setCap } from '@/app/lib/account-store'
+import { listAccounts, adminUpdate, deleteAccount, bulkUpdate, bulkDelete, createAccount, setSuspended, setCap, setPlan } from '@/app/lib/account-store'
 import { saveProfile, getProfile, completeness } from '@/app/lib/profile-store'
 import { listRoles, dashForRoleId } from '@/app/lib/role-store'
-import { listPlans } from '@/app/lib/plan-store'
-import { getCredit, getTokenUsage } from '@/app/lib/comm-store'
+import { listPlans, getPlan } from '@/app/lib/plan-store'
+import { getCredit, getTokenUsage, grantCredit } from '@/app/lib/comm-store'
+import { logAudit } from '@/app/lib/audit-store'
 import { listItems } from '@/app/lib/scraper-store'
 import { listTasks } from '@/app/lib/crm-store'
 import { listLeads } from '@/app/lib/leads-store'
@@ -44,8 +45,32 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  const s = await getSession()
+  if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const b = await req.json().catch(() => ({}))
+  // فاز ۵۶ (فیدبک: «هر پلنی را برای هر کاربر چند روزِ خاص رایگان بدهم»): هدیهٔ پلنِ زمان‌دار.
+  // همان مسیرِ فعال‌سازیِ خریدِ تأییدشده (setPlan با انقضا + شارژِ اعتبارِ AI پلن)، فقط بدونِ پول.
+  if (b.grantPlan !== undefined) {
+    const phones: string[] = (Array.isArray(b.phones) ? b.phones : [b.phone]).map((p: any) => String(p || '')).filter(Boolean)
+    if (!phones.length) return NextResponse.json({ error: 'شماره الزامی است' }, { status: 400 })
+    const planId = String(b.grantPlan || '')
+    if (!planId) {   // پس‌گرفتنِ پلن (بدون پلن)
+      for (const ph of phones) setPlan(ph, '')
+      logAudit(s.phone, 'پس‌گرفتنِ پلنِ کاربر', phones.join('، '))
+      return NextResponse.json({ ok: true, granted: phones.length })
+    }
+    const plan = getPlan(planId)
+    if (!plan) return NextResponse.json({ error: 'پلن یافت نشد' }, { status: 404 })
+    const days = Math.trunc(Number(b.days))
+    if (!(days >= 1)) return NextResponse.json({ error: 'تعدادِ روز معتبر نیست (حداقل ۱)' }, { status: 400 })
+    const ai = Number(plan.aiCredits) || 0
+    for (const ph of phones) {
+      setPlan(ph, planId, days * 864e5)
+      if (ai > 0) { try { await grantCredit(ph, 'token', ai) } catch {} }
+    }
+    logAudit(s.phone, `هدیهٔ پلن «${plan.name}» برای ${days} روز${ai > 0 ? ` + ${ai.toLocaleString('fa-IR')} اعتبارِ AI` : ''}`, phones.join('، '))
+    return NextResponse.json({ ok: true, granted: phones.length, expiresAt: Date.now() + days * 864e5 })
+  }
   // عملیات دسته‌جمعی
   if (Array.isArray(b.phones)) { bulkUpdate(b.phones, b.patch || {}); return NextResponse.json({ ok: true }) }
   if (!b.phone) return NextResponse.json({ error: 'شماره الزامی است' }, { status: 400 })

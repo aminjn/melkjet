@@ -4222,6 +4222,23 @@ function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete, onSuspend,
   const [detail, setDetail] = useState<any>(null)
   const [edit, setEdit] = useState({ name: user.name || '', role: user.role || '', plan: user.plan || '' })
   const [saved, setSaved] = useState(false)
+  // فاز ۵۶: هدیهٔ پلنِ زمان‌دار — هر پلن، هر مدت، رایگان
+  const [gift, setGift] = useState({ plan: user.plan || '', days: '30' })
+  const [gifting, setGifting] = useState(false)
+  const doGift = async () => {
+    if (!gift.plan) { alert('اول پلن را انتخاب کن'); return }
+    const days = Math.trunc(Number(String(gift.days).replace(/[۰-۹]/g, c => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(c)))))
+    if (!(days >= 1)) { alert('تعدادِ روز را وارد کن (حداقل ۱)'); return }
+    const pName = plans.find(p => p.id === gift.plan)?.name || ''
+    if (!confirm(`پلن «${pName}» برای ${days.toLocaleString('fa-IR')} روز رایگان به ${user.name || user.phone} داده شود؟ اعتبارِ AI پلن هم شارژ می‌شود.`)) return
+    setGifting(true)
+    try {
+      const r = await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: user.phone, grantPlan: gift.plan, days }) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { alert(d.error || 'خطا در فعال‌سازی'); return }
+      onAccountUpdate({ phone: user.phone, plan: gift.plan, planName: pName, planExpiresAt: d.expiresAt })
+    } finally { setGifting(false) }
+  }
   useEffect(() => { fetch(`/api/admin/profiles?phone=${encodeURIComponent(user.phone)}`).then(r => r.ok ? r.json() : null).then(setDetail).catch(() => {}) }, [user.phone])
   useEffect(() => { const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }; window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey) }, [onClose])
   const m = RMETA[user.dashboard || ''] || RMETA['']
@@ -4244,6 +4261,7 @@ function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete, onSuspend,
               <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
                 <UChip label={user.roleName || 'بدون نقش'} color={m.c} icon={m.ic} />
                 <UChip label={user.planName || 'بدون پلن'} color="#a99bf0" icon="👑" />
+                {user.plan && user.planExpiresAt && <UChip label={user.planExpiresAt > Date.now() ? `تا ${new Date(user.planExpiresAt).toLocaleDateString('fa-IR')} (${Math.ceil((user.planExpiresAt - Date.now()) / 864e5).toLocaleString('fa-IR')} روز)` : 'منقضی‌شده'} color={user.planExpiresAt > Date.now() ? '#7ec8e3' : '#e7674a'} icon="⏳" />}
                 {user.suspended && <UChip label="معلق" color="#e7674a" icon="⛔" />}
                 {user.dashboard && <a href={user.dashboard} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: 'var(--muted)', textDecoration: 'none', border: '1px solid var(--line2)', borderRadius: 999, padding: '3px 10px' }}>پنل ↗</a>}
               </div>
@@ -4368,6 +4386,20 @@ function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete, onSuspend,
               ) })()}
               <button onClick={() => { onDelete(user.phone); onClose() }} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.4)', color: '#e7674a', borderRadius: 10, padding: '9px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>حذفِ کاربر</button>
               {saved && <span style={{ fontSize: 12.5, color: '#5fd98a' }}>✓ ذخیره شد</span>}
+            </div>
+          </div>
+
+          {/* فاز ۵۶: هدیهٔ پلنِ زمان‌دار — همان مسیرِ فعال‌سازیِ خرید، بدونِ پول */}
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 14, padding: 16 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 800, marginBottom: 4 }}>🎁 هدیهٔ پلنِ زمان‌دار</div>
+            <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.9 }}>
+              پلنِ انتخابی برای مدتِ مشخص رایگان فعال می‌شود (با اعتبارِ AI همان پلن) و در پایانِ مدت خودکار غیرفعال می‌شود.
+              {user.plan && user.planExpiresAt ? ` انقضای پلنِ فعلی: ${new Date(user.planExpiresAt).toLocaleDateString('fa-IR')}.` : user.plan ? ' پلنِ فعلی بدونِ انقضاست.' : ''}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px auto', gap: 10, alignItems: 'end' }}>
+              <div><label style={lab}>پلن</label><select style={inp} value={gift.plan} onChange={e => setGift({ ...gift, plan: e.target.value })}><option value="">— انتخابِ پلن</option>{plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+              <div><label style={lab}>مدت (روز)</label><input style={inp} type="number" min={1} value={gift.days} onChange={e => setGift({ ...gift, days: e.target.value })} /></div>
+              <button onClick={doGift} disabled={gifting} style={{ background: gifting ? 'var(--bg2)' : 'linear-gradient(140deg,var(--gold2),var(--gold))', border: 'none', color: gifting ? 'var(--muted)' : '#16140f', borderRadius: 10, padding: '10px 18px', cursor: gifting ? 'wait' : 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 800, whiteSpace: 'nowrap' }}>{gifting ? '…' : '🎁 فعال‌سازیِ رایگان'}</button>
             </div>
           </div>
         </div>

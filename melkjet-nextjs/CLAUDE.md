@@ -186,6 +186,9 @@ media files in `.media/` + `.media-index.json`.
 - Roles are **dynamic** (role-store, 8 builtin seeds): each has a default dashboard, a `planId`
   that unlocks it, and a `permissions[]` list. Managed in admin → «نقش‌ها و دسترسی».
 - Users managed in admin → «کاربران» (search/filter by role+plan, inline assign, bulk).
+  **Timed plan gift (فاز ۵۶):** UserDrawer card «🎁 هدیهٔ پلنِ زمان‌دار» → PATCH /api/admin/users
+  `{phone, grantPlan: planId, days}` = setPlan with expiry + grantCredit of the plan's aiCredits +
+  logAudit; `grantPlan: ''` revokes. Header chip shows expiry/remaining days (planExpiresAt).
 - **Runtime plan-gating (فاز ۵۱ — DONE v1):** `app/lib/plan-gate.ts` = the single access gate.
   Effective permissions come ONLY from the user's **active plan** (`activePlan` — expiry-aware);
   no plan → the free plan of their role's dashboard; no free plan → no module permissions.
