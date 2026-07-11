@@ -1,4 +1,5 @@
 import { getAdminData } from './admin-store'
+import { recordAiUse, callerSrcOf } from './ai-usage-store'   // فاز ۵۴: دفترِ جزءبه‌جزِ مصرفِ AI
 import { DEFAULT_GAP_BASE } from './ai-agents'
 import { shecanRequest } from './shecan-https'
 
@@ -83,14 +84,21 @@ export async function listModelsWithPricing(provider?: string): Promise<ApiModel
 
 export async function chatComplete(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number } = {}, provider?: string): Promise<string> {
   const { base, key } = cfg(provider)
-  const res = await gapHttp(`${base}/chat/completions`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', Authorization: `Bearer ${key}`, accept: 'application/json' },
-    body: JSON.stringify({ model, messages, temperature: opts.temperature ?? 0.7, max_tokens: opts.max_tokens }),
-  }, 90000)
-  if (res.status !== 200) throw new Error(`گپ HTTP ${res.status}: ${res.body.slice(0, 300)}`)
-  const d = JSON.parse(res.body)
-  return d.choices?.[0]?.message?.content || ''
+  const src54 = callerSrcOf(new Error().stack), t54 = Date.now()   // فاز ۵۴: چه کسی صدا زد؟
+  try {
+    const res = await gapHttp(`${base}/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', Authorization: `Bearer ${key}`, accept: 'application/json' },
+      body: JSON.stringify({ model, messages, temperature: opts.temperature ?? 0.7, max_tokens: opts.max_tokens }),
+    }, 90000)
+    if (res.status !== 200) throw new Error(`گپ HTTP ${res.status}: ${res.body.slice(0, 300)}`)
+    const d = JSON.parse(res.body)
+    recordAiUse({ src: src54, model, kind: 'text', tokens: Number(d.usage?.total_tokens) || 0, ok: true, ms: Date.now() - t54 }).catch(() => {})
+    return d.choices?.[0]?.message?.content || ''
+  } catch (e) {
+    recordAiUse({ src: src54, model, kind: 'text', tokens: 0, ok: false, ms: Date.now() - t54 }).catch(() => {})
+    throw e
+  }
 }
 
 // Like chatComplete, but if the chosen model fails (e.g. 503/unavailable on
@@ -116,6 +124,7 @@ async function chatCompleteRaw(model: string, messages: { role: string; content:
   }, 90000)
   if (res.status !== 200) throw new Error(`گپ HTTP ${res.status}: ${res.body.slice(0, 300)}`)
   const d = JSON.parse(res.body)
+  recordAiUse({ src: callerSrcOf(new Error().stack), model, kind: 'text', tokens: Number(d.usage?.total_tokens) || 0, ok: true, ms: 0 }).catch(() => {})   // فاز ۵۴
   return { text: d.choices?.[0]?.message?.content || '', tokens: Number(d.usage?.total_tokens) || 0 }
 }
 export async function chatCompleteUsage(model: string, messages: { role: string; content: string }[], opts: { temperature?: number; max_tokens?: number } = {}, provider?: string): Promise<{ text: string; tokens: number }> {
@@ -130,7 +139,8 @@ export async function generateImage(model: string, prompt: string, size = '1024x
     headers: { 'content-type': 'application/json', Authorization: `Bearer ${key}`, accept: 'application/json' },
     body: JSON.stringify({ model, prompt, size, n: 1 }),
   }, 120000)
-  if (res.status !== 200) throw new Error(`گپ تصویر HTTP ${res.status}: ${res.body.slice(0, 300)}`)
+  if (res.status !== 200) { recordAiUse({ src: callerSrcOf(new Error().stack), model, kind: 'image', tokens: 0, ok: false, ms: 0 }).catch(() => {}); throw new Error(`گپ تصویر HTTP ${res.status}: ${res.body.slice(0, 300)}`) }
+  recordAiUse({ src: callerSrcOf(new Error().stack), model, kind: 'image', tokens: 0, ok: true, ms: 0 }).catch(() => {})   // فاز ۵۴
   const d = JSON.parse(res.body)
   const first = d.data?.[0] || {}
   // مدل‌هایی مثلِ gpt-image-1 خروجی را به‌صورتِ b64_json می‌دهند (بدون url) — به data URL تبدیل می‌کنیم.
@@ -150,8 +160,9 @@ export async function chatVision(model: string, prompt: string, images: string[]
     headers: { 'content-type': 'application/json', Authorization: `Bearer ${key}`, accept: 'application/json' },
     body: JSON.stringify({ model, messages: [{ role: 'user', content }], max_tokens: opts.max_tokens ?? 700, temperature: 0.4 }),
   }, opts.timeout ?? 45000)
-  if (res.status !== 200) throw new Error(`گپ بینایی HTTP ${res.status}: ${res.body.slice(0, 300)}`)
+  if (res.status !== 200) { recordAiUse({ src: callerSrcOf(new Error().stack), model, kind: 'vision', tokens: 0, ok: false, ms: 0 }).catch(() => {}); throw new Error(`گپ بینایی HTTP ${res.status}: ${res.body.slice(0, 300)}`) }
   const d = JSON.parse(res.body)
+  recordAiUse({ src: callerSrcOf(new Error().stack), model, kind: 'vision', tokens: Number(d.usage?.total_tokens) || 0, ok: true, ms: 0 }).catch(() => {})   // فاز ۵۴
   return d.choices?.[0]?.message?.content || ''
 }
 

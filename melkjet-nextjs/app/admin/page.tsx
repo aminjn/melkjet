@@ -5370,8 +5370,54 @@ function AiCostView() {
   const sellPerToken = ref ? (basisUsd(ref) / 1e6) * c.usdToman * (1 + (Number(c.profitPercent) || 0) / 100) : 0
   const costTomanPerM = (m: any) => basisUsd(m) * c.usdToman   // هزینهٔ هر ۱M توکن طبقِ مبنای انتخابی (تومان)
   const UNIT_LABEL: Record<string, string> = { image: 'هر تصویرِ AI', render3d: 'هر رندرِ سه‌بعدی', divarImport: 'هر ایمپورتِ دیوار', contactReveal: 'هر تماسِ آشکارشده', sms: 'هر پیامک', email: 'هر ایمیل' }
+  // فاز ۵۴: هزینهٔ برآوردیِ هر منبع = توکن × نرخِ فروشِ محاسبه‌شده (شفاف، از همین صفحه)
+  const u = c.usage
+  const tomanOf = (tokens: number) => Math.round((Number(tokens) || 0) * sellPerToken)
+  const SRC_FA: Record<string, string> = { 'app/lib/moderation': 'ممیزیِ آگهی‌ها', 'app/lib/enrich': 'تحلیلِ صفحهٔ ملک (enrich)', 'app/lib/nearby': 'دسترسی‌های اطراف', 'app/api/crm/ai/route': 'هوشِ CRM', 'app/api/ai/run/route': 'اجرای عمومی AI', 'app/api/cms': 'ابزارهای مقاله/محتوا', 'app/lib/empire-brief': 'نامهٔ روزانهٔ مسیرِ رشد', 'app/lib/materials-ai': 'هوشِ بازارِ مصالح', 'app/api/prodesk/ai/route': 'هوشِ میزِ متخصص', 'app/api/ai/studio/route': 'استودیوی پلان/سه‌بعدی' }
+  const srcFa = (src: string) => SRC_FA[Object.keys(SRC_FA).find(k => src.startsWith(k)) || ''] || src
   return (
     <div style={{ animation: 'fade .35s ease' }}>
+      {/* فاز ۵۴ (فیدبک: «مصرفِ توکن بالا رفته — جزءبه‌جز بگو کجاست»): دفترِ زندهٔ مصرف از نقطهٔ خفگیِ gapgpt */}
+      {u && <Card style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4 }}>📊 مصرفِ جزءبه‌جزِ AI (۳۰ روزِ اخیر)</div>
+        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 10 }}>هر فراخوانیِ واقعیِ مدل (متن/بینایی/تصویر) از یک نقطه ثبت می‌شود — هیچ مصرفی از قلم نمی‌افتد. هزینهٔ تومانی = توکن × نرخِ محاسبه‌شدهٔ همین صفحه (برآورد).</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10, marginBottom: 12 }}>
+          <div style={{ background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 12, padding: '10px 12px' }}><div style={{ fontSize: 11, color: 'var(--muted)' }}>امروز</div><div style={{ fontSize: 16, fontWeight: 900, color: 'var(--gold)' }}>{fa(u.today.tokens)} توکن</div><div style={{ fontSize: 10.5, color: 'var(--faint)' }}>{fa(u.today.calls)} تماس · ~{fa(tomanOf(u.today.tokens))} تومان</div></div>
+          <div style={{ background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 12, padding: '10px 12px' }}><div style={{ fontSize: 11, color: 'var(--muted)' }}>۳۰ روز</div><div style={{ fontSize: 16, fontWeight: 900, color: 'var(--gold)' }}>{fa(u.total.tokens)} توکن</div><div style={{ fontSize: 10.5, color: 'var(--faint)' }}>{fa(u.total.calls)} تماس · ~{fa(tomanOf(u.total.tokens))} تومان</div></div>
+          <div style={{ background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 12, padding: '10px 12px' }}><div style={{ fontSize: 11, color: 'var(--muted)' }}>خطاها (۳۰ روز)</div><div style={{ fontSize: 16, fontWeight: 900, color: u.total.errors > 0 ? '#e88' : 'var(--text)' }}>{fa(u.total.errors)}</div><div style={{ fontSize: 10.5, color: 'var(--faint)' }}>تماسِ ناموفقِ مدل</div></div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 14 }}>
+          <div>
+            <div style={{ fontSize: 12.5, fontWeight: 800, marginBottom: 6 }}>🧩 کدام بخشِ سایت چقدر مصرف کرده؟</div>
+            {(u.bySrc || []).slice(0, 12).map((r: any) => (
+              <div key={r.src} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '5px 0', borderBottom: '1px solid var(--line)', fontSize: 12 }}>
+                <span style={{ flex: 1, minWidth: 0 }} title={r.src}>{srcFa(r.src)}</span>
+                <b style={{ color: 'var(--gold)' }}>{fa(r.tokens)}</b><span style={{ color: 'var(--faint)', fontSize: 10.5 }}>توکن · {fa(r.calls)} تماس · ~{fa(tomanOf(r.tokens))} ت{r.errors ? ` · ${fa(r.errors)} خطا` : ''}</span>
+              </div>
+            ))}
+            {!(u.bySrc || []).length && <div style={{ fontSize: 12, color: 'var(--muted)' }}>هنوز مصرفی ثبت نشده — از این لحظه هر فراخوانی شمرده می‌شود.</div>}
+          </div>
+          <div>
+            <div style={{ fontSize: 12.5, fontWeight: 800, marginBottom: 6 }}>🤖 به تفکیکِ مدل</div>
+            {(u.byModel || []).slice(0, 10).map((r: any) => (
+              <div key={r.model} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '5px 0', borderBottom: '1px solid var(--line)', fontSize: 12 }}>
+                <span dir="ltr" style={{ flex: 1 }}>{r.model}</span>
+                <b style={{ color: 'var(--gold)' }}>{fa(r.tokens)}</b><span style={{ color: 'var(--faint)', fontSize: 10.5 }}>توکن · {fa(r.calls)} تماس</span>
+              </div>
+            ))}
+            <div style={{ fontSize: 12.5, fontWeight: 800, margin: '12px 0 6px' }}>🕐 آخرین تماس‌ها</div>
+            {(u.recent || []).slice(0, 10).map((r: any, i: number) => (
+              <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 0', borderBottom: '1px solid var(--line)', fontSize: 11 }}>
+                <span style={{ color: r.ok ? '#7c6' : '#e88' }}>{r.ok ? '✓' : '✕'}</span>
+                <span style={{ flex: 1, minWidth: 0, color: 'var(--muted)' }} title={r.src}>{srcFa(r.src)}</span>
+                <span dir="ltr" style={{ color: 'var(--faint)' }}>{r.model}</span>
+                <b>{fa(r.tokens)}</b>
+                <span style={{ color: 'var(--faint)' }}>{new Date(r.at).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>}
       <Card style={{ marginBottom: 14, background: 'linear-gradient(120deg, rgba(212,175,55,.1), transparent 60%), var(--surface)', borderColor: 'rgba(201,168,76,.4)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

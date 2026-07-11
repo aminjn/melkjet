@@ -3,12 +3,15 @@ import { getSession } from '@/app/lib/session'
 import { getCostConfig, setCostConfig, tokenSellPriceToman, syncModels } from '@/app/lib/cost-store'
 import { repriceTokenPackages } from '@/app/lib/comm-store'
 import { listModelsWithPricing } from '@/app/lib/gapgpt'
+import { aiUsageSummary } from '@/app/lib/ai-usage-store'
 
 async function guard() { const s = await getSession(); return s && s.role === 'super_admin' }
 
 export async function GET() {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
-  return NextResponse.json({ ...getCostConfig(), tokenSellPrice: tokenSellPriceToman() }, { headers: { 'Cache-Control': 'no-store' } })
+  // فاز ۵۴: دفترِ جزءبه‌جزِ مصرفِ AI — روز/منبع/مدل/آخرین تماس‌ها
+  const usage = await aiUsageSummary(30).catch(() => null)
+  return NextResponse.json({ ...getCostConfig(), tokenSellPrice: tokenSellPriceToman(), usage }, { headers: { 'Cache-Control': 'no-store' } })
 }
 export async function POST(req: NextRequest) {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })

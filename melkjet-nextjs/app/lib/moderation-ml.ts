@@ -27,17 +27,25 @@ export function resetMl(): void { save(empty()) }
 
 function faToEn(s: string): string { return (s || '').replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))) }
 function norm(s: string): string { return (s || '').replace(/‌/g, '').replace(/\s+/g, ' ').trim().toLocaleLowerCase() }
-const STOP = new Set(['در', 'با', 'و', 'به', 'از', 'که', 'این', 'برای', 'یک', 'را', 'های', 'می', 'تا', 'رو', 'هم', 'یا', 'شده', 'است'])
+// فاز ۵۴ (فیدبک: «به‌خاطرِ واژهٔ فرشته رد کرد!»): واژه‌های عمومی/بازاریابی/دامنهٔ املاک از ویژگی‌ها حذف —
+// این‌ها در آگهیِ سالم و ناسالم یکسان می‌آیند و فقط مدل را گمراه می‌کنند.
+const STOP = new Set(['در', 'با', 'و', 'به', 'از', 'که', 'این', 'برای', 'یک', 'را', 'های', 'می', 'تا', 'رو', 'هم', 'یا', 'شده', 'است',
+  'ببینید', 'اعتبار', 'پیشنهاد', 'ویژه', 'فروش', 'اجاره', 'خرید', 'آپارتمان', 'ملک', 'واحد', 'برج', 'پروژه', 'سند', 'طبقه', 'متر', 'متری', 'متراژ',
+  'قیمت', 'تومان', 'میلیارد', 'میلیون', 'امکانات', 'کامل', 'عالی', 'لوکس', 'شیک', 'نوساز', 'بسیار', 'جهت', 'مورد', 'بدون', 'دارای', 'داخل',
+  'روی', 'بین', 'اگر', 'ولی', 'باشد', 'باشید', 'کنید', 'هست', 'هستش', 'میباشد', 'شما', 'تماس', 'بگیرید', 'مشاور', 'املاک', 'آماده', 'تحویل',
+  'شرکت', 'سازنده', 'رسمی', 'قرارداد', 'ساعات', 'پاسخگویی', 'صبح', 'الی', 'تهران'])
 
 // ویژگی‌های یک آگهی: کلماتِ عنوان/توضیحات/موقعیت + نشانه‌های مهندسی‌شده (اسپم/کیفیت).
 export function featuresOf(it: Partial<Item>): string[] {
   const title = it.title || ''
   const ex = (it.excerpt || '').slice(0, 800)
-  const words = norm(`${title} ${ex} ${it.location || ''}`).split(/[\s,،.\/\-+*()!؟?:؛]+/).filter(t => t.length >= 2 && !STOP.has(t)).slice(0, 90)
+  const words = norm(`${title} ${ex} ${it.location || ''}`).split(/[\s,،.\/\-+*()!؟?:؛]+/).filter(t => t.length >= 3 && !STOP.has(t)).slice(0, 90)
   const f = [...words]
   if (title.length < 12) f.push('#short'); else if (title.length > 55) f.push('#long')
   f.push(it.price ? '#has_price' : '#no_price')
-  f.push(/متر|متراژ/.test(title + (it.meta?.['متراژ'] || '')) ? '#has_area' : '#no_area')
+  // فاز ۵۴ (فیکسِ باگ): وجودِ فیلدِ متراژ یعنی متراژ دارد — قبلاً واژهٔ «متر» را در «مقدارِ عددی» می‌گشت
+  // و هر آگهیِ متراژدار #no_area می‌گرفت (یکی از پایه‌های ردهای الکی).
+  f.push(/متر|متراژ/.test(title) || !!String(it.meta?.['متراژ'] || '').trim() ? '#has_area' : '#no_area')
   if (/(?:^|\D)0?9\d{9}/.test(faToEn(ex + ' ' + title))) f.push('#phone_in_text')     // شمارهٔ تماس در متن = نشانهٔ اسپم
   if (/https?:\/\/|www\.|@\w|تلگرام|واتساپ|اینستا/.test(ex)) f.push('#contact_in_text')
   if (it.meta?.['نوع معامله']) f.push('#has_deal')
@@ -121,6 +129,17 @@ export function explainPrediction(it: Partial<Item>, top = 3): { label: MLabel; 
       : 'شباهت به آگهی‌های سالمِ تأییدشده')
   }
   return { label: p.label, prob: p.prob, reasons: reasons.slice(0, top) }
+}
+
+// فاز ۵۴ — قانونِ سختِ جدید: «شباهتِ صرفاً واژه‌ای هرگز حقِ ردِ خودکار ندارد». این تابع می‌گوید شواهدِ
+// ردِ مدل شاملِ کدام نشانه‌های ساختاری (#phone_in_text، #pbx و…) است؛ اگر هیچ، رد فقط واژه‌ای است.
+export function rejectEvidenceOf(it: Partial<Item>): { hard: string[]; hardFa: string[]; wordsOnly: boolean } {
+  const d = load()
+  const ap = d.approved, rj = d.rejected
+  const V = new Set([...Object.keys(ap.tok), ...Object.keys(rj.tok)]).size || 1
+  const w = (t: string) => Math.log(((rj.tok[t] || 0) + 1) / (rj.total + V)) - Math.log(((ap.tok[t] || 0) + 1) / (ap.total + V))
+  const hard = [...new Set(featuresOf(it))].filter(t => t.startsWith('#') && FEATURE_FA[t] && w(t) > 0)
+  return { hard, hardFa: hard.map(t => FEATURE_FA[t]), wordsOnly: hard.length === 0 }
 }
 
 export function noteDecision(via: 'ml' | 'ai'): void {

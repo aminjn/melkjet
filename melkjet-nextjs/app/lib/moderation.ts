@@ -1,6 +1,6 @@
 import { pendingForModeration, setModeration, setModerationBatch, type Item, type ItemStatus } from './scraper-store'
 import { chatCompleteSafe, agentModel } from './gapgpt'
-import { predict, learn, noteDecision, explainPrediction } from './moderation-ml'
+import { predict, learn, noteDecision, explainPrediction, rejectEvidenceOf } from './moderation-ml'
 import { getAdminData } from './admin-store'
 import { buildDupIndex, dupMasterInIndex, type DupIndex } from './listing-dedupe'
 
@@ -81,10 +81,18 @@ async function smartVerdict(it: Item, model: string | null, dupIndex?: DupIndex)
   }
   const p = predict(it)
   if (p.confident && cfg.autoMl) {
+    // فاز ۵۴ (فیدبک: ردِ الکی روی واژهٔ «فرشته»): ردِ خودکار فقط با نشانهٔ «ساختاری» (شماره/لینک در متن،
+    // قیمتِ نامعتبر و…) مجاز است — شباهتِ صرفاً واژه‌ای حداکثر به صفِ بازبینیِ انسانی می‌فرستد، نه رد.
+    if (p.label === 'rejected') {
+      const ev = rejectEvidenceOf(it)
+      if (ev.wordsOnly) {
+        return { id: it.id, title: it.title, status: 'pending', score: Math.round(p.prob * 100), via: 'ml', reason: 'در صفِ بازبینیِ انسانی — مدل فقط شباهتِ واژه‌ای با آگهی‌های ردشدهٔ قبلی دید و طبقِ قانون، شباهتِ واژه‌ای به‌تنهایی مجوزِ رد نیست' }
+      }
+    }
     noteDecision('ml')
     // دلیلِ قابل‌فهم از خودِ محاسبهٔ مدل (توضیح‌پذیری) — هم برای ادمین، هم برای پنلِ کاربر.
     const ex = explainPrediction(it)
-    const conf = Math.round(p.prob * 100).toLocaleString('fa-IR')
+    const conf = Math.min(99, Math.round(p.prob * 100)).toLocaleString('fa-IR')
     const reason = p.label === 'rejected'
       ? `ردِ خودکار: ${ex.reasons.length ? ex.reasons.join(' · ') : 'الگوی مشابهِ آگهی‌های ردشدهٔ قبلی'} (اطمینان ${conf}٪)`
       : `تأییدِ خودکار — ${ex.reasons.length ? ex.reasons.join(' · ') : 'مشابهِ آگهی‌های سالمِ تأییدشده'} (اطمینان ${conf}٪)`
