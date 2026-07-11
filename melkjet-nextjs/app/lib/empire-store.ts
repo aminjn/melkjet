@@ -586,6 +586,46 @@ export function storyOf(e: EmpireData): TimelineDot[] {
   return [...first.values()].sort((a, b) => a.at - b.at).slice(0, 24)
 }
 
+// فاز ۷۱ (سند ۳۳ — Player Identity Engine «The Biography»): کتابِ زندگیِ روایی — فصل‌ها از دادهٔ ثبت‌شدهٔ
+// «واقعیِ» خودِ بازیکن، قاعده‌مند و قطعی (بدونِ هزینهٔ AI). «بازی خاطره را ثبت می‌کند، نه فقط می‌سازد.»
+export function biographyOf(e: EmpireData): Array<{ icon: string; title: string; text: string }> {
+  const ch: Array<{ icon: string; title: string; text: string }> = []
+  const firstOf = (icon: string) => (e.timeline || []).find(t => t.icon === icon)
+  const faD = (ts: number) => new Date(ts).toLocaleDateString('fa-IR')
+  const pathFa = e.path && PATHS[e.path] ? PATHS[e.path].label : ''
+  ch.push({ icon: '🌅', title: 'فصلِ آغاز', text: `«${e.name}» در ${faD(e.createdAt)} متولد شد${pathFa ? ` — با مسیرِ «${pathFa}»` : ''}${e.dream?.sentence ? ` و یک رؤیا: «${e.dream.sentence.slice(0, 80)}»` : ''}.` })
+  const buy1 = firstOf('🏠') || firstOf('🔑')
+  if (buy1) ch.push({ icon: '🔑', title: 'اولین مالکیت', text: `${faD(buy1.at)} — ${buy1.title}${buy1.detail ? ` (${buy1.detail.slice(0, 60)})` : ''}. از همین‌جا همه‌چیز شروع شد.` })
+  const crisis = firstOf('🚨')
+  if (crisis) {
+    const phoenix = e.badges.includes('Phoenix')
+    ch.push({ icon: phoenix ? '🕊' : '🚨', title: phoenix ? 'سقوط و بازگشت' : 'روزهای سخت', text: phoenix ? `${faD(crisis.at)} واردِ بحران شد — اما برگشت. نشانِ «ققنوس» گواهِ همان روزهاست؛ نقطهٔ عطفی که مسیرش را عوض کرد.` : `${faD(crisis.at)} سخت‌ترین روزهایش را دید — این فصل هنوز تمام نشده.` })
+  }
+  const tower1 = firstOf('🏙')
+  if (tower1) ch.push({ icon: '🏙', title: 'اولین برج', text: `${faD(tower1.at)} — خطِ آسمانِ شهر برای اولین بار با نامِ او عوض شد: ${tower1.detail || tower1.title}` })
+  const hammer = firstOf('🔨')
+  if (hammer) ch.push({ icon: '🔨', title: 'تالارِ مزایده', text: `${faD(hammer.at)} اولین چکش به نامش خورد${(e.stats?.auctionWins || 0) > 1 ? ` — و تا امروز ${(e.stats!.auctionWins!).toLocaleString('fa-IR')} برد در تالار دارد` : ''}.` })
+  const season = firstOf('🏁')
+  if (season) ch.push({ icon: '🏁', title: 'قهرمانی', text: `${faD(season.at)} — ${season.title}. نامش در نتیجهٔ منجمدِ آن فصل برای همیشه ثبت است.` })
+  const wonder = firstOf('🌍')
+  if (wonder) ch.push({ icon: '🌍', title: 'شگفتیِ دنیا', text: `${faD(wonder.at)} — ${wonder.title.slice(0, 90)}` })
+  // Personality Evolution (سند ۳۳): شخصیت از «رفتارِ واقعی»، نه پرسش‌نامه
+  const traits: string[] = []
+  if ((e.creditHist?.taken || 0) > 0 && (e.insurancePaid || 0) > 0) traits.push('اهلِ ریسکِ حساب‌شده — وام می‌گیرد ولی بیمه هم می‌کند')
+  else if ((e.creditHist?.taken || 0) >= 2) traits.push('ریسک‌پذیر — اهرمِ بانک ابزارِ همیشگی‌اش است')
+  else if ((e.insurancePaid || 0) > 0) traits.push('محتاط — پیش از طوفان چتر می‌خرد')
+  const nt = e.stats?.negoTries || 0, nw2 = e.stats?.negoWins || 0
+  if (nt >= 3) traits.push(nw2 / nt >= 0.5 ? `مذاکره‌کنندهٔ قهار (${Math.round((nw2 / nt) * 100).toLocaleString('fa-IR')}٪ برد)` : 'مذاکره را رها نمی‌کند، حتی بعد از شکست')
+  if ((e.stats?.auctionTries || 0) >= 3) traits.push('عاشقِ هیجانِ تالار')
+  if ((e.stats?.projectsDelivered || 0) >= 2) traits.push('سازنده — بیشتر از خریدن، ساختن را دوست دارد')
+  if (traits.length) ch.push({ icon: '🧭', title: 'شخصیت — از رفتارِ واقعی', text: traits.join('؛ ') + '.' })
+  // اثرِ اجتماعی (سند ۳۳: «آمارِ خشک نه، داستان»)
+  const unitsDelivered = (e.projectHist || []).reduce((s2, r) => s2 + (r.units || 0), 0)
+  if (unitsDelivered > 0) ch.push({ icon: '🏘', title: 'اثر بر شهر', text: `تا امروز ${unitsDelivered.toLocaleString('fa-IR')} واحدِ مسکونی تحویل داده — خانه‌هایی که حالا بخشی از خطِ آسمانِ شهرند.` })
+  if ((e.wagesPaid || 0) > 0) ch.push({ icon: '👷', title: 'کارفرما', text: `${Math.round((e.wagesPaid || 0) / 1e6).toLocaleString('fa-IR')} میلیون تومان دستمزدِ تیمِ مهندسی‌اش شده — امپراتوری یعنی آدم‌ها.` })
+  return ch
+}
+
 // Part 7 — موتورِ رؤیاها (Dreams Engine): متریک‌های واقعیِ قابلِ هدف‌گذاری — پیشرفتِ رؤیا از عددِ واقعی اندازه می‌خورد.
 export const DREAM_METRICS: Record<string, { fa: string; unit: 'toman' | 'count'; of: (e: EmpireData, netWorth: number) => number }> = {
   netWorth: { fa: 'ارزشِ خالص', unit: 'toman', of: (_e, nw) => nw },

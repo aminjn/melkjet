@@ -1391,6 +1391,9 @@ export default function EmpirePage() {
         <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 10, border: '1px solid var(--goldDim)', color: 'var(--gold)' }}>سالِ {fa(wd.year.year)} — روزِ {fa(wd.year.dayOfYear)}</span>
         <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>دنیا حتی وقتی نیستی هم حرکت می‌کند — این‌ها واقعاً رخ داده‌اند</span>
       </div>
+      {/* 🎑 مناسبتِ واقعیِ تقویم (فاز ۷۱ — Real World Integration lite): دنیا با زندگیِ واقعی نفس می‌کشد */}
+      {wd.occasion && <div style={{ marginTop: 8, fontSize: 12, color: 'var(--gold)', background: 'rgba(212,175,55,.07)', border: '1px solid var(--goldDim)', borderRadius: 10, padding: '7px 12px' }}>{wd.occasion.icon} {wd.occasion.text}</div>}
+
       {/* 🏛 مصوبهٔ شهر (فاز ۷۰ — دولتِ زنده): این هفته + اعلامِ پیشاپیشِ هفتهٔ بعد (Future Engine — بدونِ غافلگیریِ ناعادلانه) */}
       {wd.gov && <div style={{ marginTop: 8, background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 10, padding: '8px 12px', fontSize: 11.5, lineHeight: 2 }}>
         <div>🏛 <b>مصوبهٔ این هفته:</b> {wd.gov.now} <span style={{ color: 'var(--faint)', fontSize: 10 }}>· مالیاتِ مؤثرِ انتقال: {fa(wd.gov.taxNow)}٪</span></div>
@@ -2704,6 +2707,20 @@ export default function EmpirePage() {
           ))}
         </div>
       </>}
+
+      {/* 📖 کتابِ زندگی (فاز ۷۱ — سند ۳۳ The Biography): روایتِ قاعده‌مند از دادهٔ واقعی — «بازی خاطره را ثبت می‌کند» */}
+      {(hall.biography || []).length > 0 && <details style={{ marginTop: 12 }}>
+        <summary style={{ cursor: 'pointer', fontSize: 12, fontWeight: 700, color: 'var(--gold)' }}>📖 کتابِ زندگیِ تو ({fa(hall.biography.length)} فصل)</summary>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+          {hall.biography.map((b2: any, i: number) => (
+            <div key={i} style={{ background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 12, padding: '10px 14px' }}>
+              <div style={{ fontSize: 12, fontWeight: 800 }}>{b2.icon} {b2.title}</div>
+              <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4, lineHeight: 2 }}>{b2.text}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: 9.5, color: 'var(--faint)', marginTop: 6 }}>هر فصل از رفتار و رخدادهای «واقعیِ» خودت نوشته شده — با هر نقطهٔ عطفِ تازه، فصلِ تازه‌ای اضافه می‌شود.</div>
+      </details>}
 
       {/* Part 2 — مستندِ مسیر (Player History): «انسان‌ها عاشقِ داستانِ خودشان‌اند» — اولین‌های واقعیِ تو */}
       {(hall.story || []).length > 0 && <details style={{ marginTop: 12 }}>

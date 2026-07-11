@@ -56,8 +56,8 @@ import { rewardLadderOf, requestPayout, userPayoutsOf, rewardForecastOf } from '
 import { bucketBalance } from '@/app/lib/reos/wallet'
 // فاز ۵۰ (سند ۳۰): تالارِ افتخارات (رکوردها/مجموعه‌ها) + حریفِ قسم‌خورده
 import { recordsOf, collectionsOf, applyCollections, COLLECTIONS, noteNemesis } from '@/app/lib/empire-store'
-import { roleLayerOf, legacyScoreOf, storyOf, dreamProgressOf, dreamSuggestionsOf, addCustomDream, applyDreams, wondersUpdate, DREAM_METRICS } from '@/app/lib/empire-store'
-import { worldYearOf, worldHistory, rumorsMaintain, appendWorldEvent, cityOf, cityStatsOf } from '@/app/lib/empire-world'   // فاز ۶۳/۶۸: دنیای زنده + چندشهری
+import { roleLayerOf, legacyScoreOf, storyOf, dreamProgressOf, dreamSuggestionsOf, addCustomDream, applyDreams, wondersUpdate, DREAM_METRICS, biographyOf } from '@/app/lib/empire-store'
+import { worldYearOf, worldHistory, rumorsMaintain, appendWorldEvent, cityOf, cityStatsOf, occasionOf } from '@/app/lib/empire-world'   // فاز ۶۳/۶۸/۷۱
 import { npcMaintain, npcDb, npcOwnerOf, npcSellToPlayer, npcView, NPC_USER_PREFIX } from '@/app/lib/empire-npc'   // فاز ۶۵: شرکت‌های سیستمیِ زنده
 import { seasonBaseline, seasonValueOf, SEASON_METRIC_FA, claimSeasonReward } from '@/app/lib/empire-store'   // فاز ۶۶: موتورِ فصل
 import { followEmpire, effectiveTransferTaxPct, insureBuild } from '@/app/lib/empire-store'   // فاز ۶۷/۷۰
@@ -1809,6 +1809,7 @@ export async function POST(req: NextRequest) {
         title: e.title || '',
         legacy: legacyScoreOf(e),
         story: storyOf(e),
+        biography: biographyOf(e),   // فاز ۷۱ (سند ۳۳): کتابِ زندگیِ روایی از دادهٔ واقعی
         wonders,
         layer: roleLayerOf(e, nwH),
         myNo: e.no,
@@ -1891,6 +1892,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         ok: true, day, year: worldYearOf(day), history: await worldHistory(60).catch(() => []), rumors, companies: npc.companies, cities: npc.cities,
         gov: { now: govNow.fa, next: govNext.fa, taxNow: effectiveTransferTaxPct(day) },
+        occasion: occasionOf(),   // فاز ۷۱: مناسبتِ واقعیِ تقویم — فقط حال‌وهوا
         following: me67?.following || [], myNo: me67?.no || 0,
         kudosGiven: me67 ? Object.keys(me67.claims).filter(k => k.startsWith('kudos_')).map(k => Number(k.slice(6))) : [],
       })

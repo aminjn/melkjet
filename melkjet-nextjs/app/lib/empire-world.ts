@@ -197,3 +197,19 @@ export function govDecreeOf(week: number, g = config().empire.gov): GovDecree {
   const d = sign * (1 + (h32(`govm|${week}`) % stepsL)) * 0.5
   return { kind, taxDelta: 0, loanDelta: d, fa: `نرخِ وامِ بانک این هفته ${d > 0 ? '+' : '−'}${Math.abs(d).toLocaleString('fa-IR')} واحدِ درصد` }
 }
+
+// ── فاز ۷۱ (سند ۳۳ — Real World Integration lite): مناسبت‌های «واقعیِ» تقویم؛ دنیا با زندگیِ واقعی نفس می‌کشد ──
+// از تقویمِ رسمیِ فارسی (Intl fa-IR-u-ca-persian) — هیچ رویدادِ ساختگی؛ فقط حال‌وهوا، صفر اثرِ اقتصادی.
+export function occasionOf(now = new Date()): { icon: string; text: string } | null {
+  let m = 0, d = 0
+  try {
+    const parts = new Intl.DateTimeFormat('en-US-u-ca-persian', { month: 'numeric', day: 'numeric' }).formatToParts(now)
+    m = Number(parts.find(x => x.type === 'month')?.value || 0)
+    d = Number(parts.find(x => x.type === 'day')?.value || 0)
+  } catch { return null }
+  if (m === 1 && d >= 1 && d <= 4) return { icon: '🌸', text: 'نوروز است — شهر رختِ نو پوشیده؛ سالِ نو مبارک' }
+  if (m === 9 && d === 30) return { icon: '🍉', text: 'شبِ یلداست — بلندترین شبِ سال؛ شهر چراغانی است' }
+  if (m === 12 && d >= 25) return { icon: '🧹', text: 'روزهای پایانِ سال — شهر در تکاپوی خانه‌تکانی و جابه‌جایی است' }
+  if (now.getDay() === 5) return { icon: '🌿', text: 'جمعه است — شهر آرام‌تر نفس می‌کشد' }
+  return null
+}
