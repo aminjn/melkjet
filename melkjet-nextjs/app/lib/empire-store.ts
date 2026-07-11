@@ -7,6 +7,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { randomBytes, createHash } from 'crypto'
 import { config } from './reos/reos-config'
+import { appendWorldEvent } from './empire-world'   // فاز ۶۳: کتابِ تاریخِ دنیا (فقط رخدادِ واقعی)
 
 export type AssetKind = 'apartment' | 'villa' | 'commercial' | 'land'
 export type AssetAction = 'renovate' | 'rent' | 'hold'
@@ -615,6 +616,8 @@ export async function wondersUpdate(day: number, now = Date.now()) {
     if (holder) await mutateEmpire(holder.userId, e => {
       e.timeline.push({ at: now, icon: '🌍', title: `شگفتیِ دنیا از آنِ توست: ${c.icon} ${c.fa}`, detail: 'تا وقتی کسی رکوردِ اکیداً بزرگ‌تری نسازد، این پلاک به نامِ توست' })
     }).catch(() => {})
+    // فاز ۶۳: ثبت در کتابِ تاریخِ دنیا — «یک اتفاقِ جهانی، نه یک ساختمانِ دیگر»
+    await appendWorldEvent({ icon: c.icon, title: `${c.fa} دست‌به‌دست شد — پلاکِ جدید: ${c.holder.name}`, kind: 'wonder' }, day, now).catch(() => {})
   }
   return WONDER_DEFS.map(w => ({ key: w.key, icon: w.icon, fa: w.fa, unit: w.unit, min: w.min(config().empire.endgame), holder: db.cats[w.key] || null, formers: (db.hist[w.key] || []).slice(0, 3) }))
 }

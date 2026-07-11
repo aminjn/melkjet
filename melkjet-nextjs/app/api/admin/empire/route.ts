@@ -199,7 +199,17 @@ export async function GET(req: NextRequest) {
     const today = dayNumberOf(Date.now())
     const [t0, t1, t2] = await Promise.all([briefStatsForDay(today), briefStatsForDay(today - 1), briefStatsForDay(today - 2)])
     const chestToday = empires.filter(e => e.claims['chest_' + today]).length
-    return NextResponse.json({ briefs: [{ day: 'امروز', ...t0 }, { day: 'دیروز', ...t1 }, { day: 'پریروز', ...t2 }], chestToday, empires: empires.length })
+    // فاز ۶۳ (فصل ۲۱ Part 5 Heat Index): دمای دنیا از فعالیتِ «واقعیِ» امروز — فقط پیشنهاد، هرگز اجرا (Level 0/1)
+    const { worldHeatOf, worldHistory } = await import('@/app/lib/empire-world')
+    const nowH = Date.now()
+    const hist = await worldHistory(80).catch(() => [])
+    const heat = worldHeatOf({
+      activePlayers: empires.filter(e => nowH - e.updatedAt < 864e5).length,
+      eventsToday: hist.filter(h => h.day === today).length,
+      auctionsLive: empires.filter(e => e.auctionRun && !e.auctionRun.done && e.auctionRun.week === Math.floor(today / 7)).length,
+      liveOpsActive: 0,
+    })
+    return NextResponse.json({ briefs: [{ day: 'امروز', ...t0 }, { day: 'دیروز', ...t1 }, { day: 'پریروز', ...t2 }], chestToday, empires: empires.length, heat, worldEventsRecent: hist.slice(0, 10) })
   }
 
   // overview — آمارِ زندهٔ کلِ اقتصادِ بازی

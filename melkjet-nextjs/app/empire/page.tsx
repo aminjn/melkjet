@@ -208,6 +208,8 @@ export default function EmpirePage() {
   const [hall, setHall] = useState<any>(null)
   // فاز ۶۲ (فصل ۲۰ Part 7): فرمِ رؤیای شخصی — متریکِ واقعی + هدفِ عددی
   const [dreamForm, setDreamForm] = useState({ metric: 'netWorth', target: '', label: '' })
+  // فاز ۶۳ (فصل ۲۱ دنیای زنده): سالِ دنیا + کتابِ تاریخ + شایعاتِ هفته — تنبل، با بازشدنِ تبِ شهر
+  const [wd, setWd] = useState<any>(null)
   // فاز ۴۵ (سند ۲۹ Auction Saga): تالارِ مزایدهٔ هفته — لابی، نبردِ زنده، برد/باخت
   const [au, setAu] = useState<any>(null)        // وضعیتِ مزایده از سرور (لابی + ران + برد)
   const [auRun, setAuRun] = useState<any>(null)  // رانِ زنده — بعد از هر حرکت از سرور می‌آید
@@ -331,6 +333,16 @@ export default function EmpirePage() {
     return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, gtab, hall])
+
+  // فاز ۶۳: دنیای زنده (سالِ دنیا/کتابِ تاریخ/شایعات) — با بازشدنِ تبِ شهر (تنبل، یک‌بار)
+  useEffect(() => {
+    if (step !== 'dash' || gtab !== 'city' || wd) return
+    let alive = true
+    fetch('/api/empire', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'world' }) })
+      .then(r => r.json()).then(d => { if (alive && d?.ok) setWd(d) }).catch(() => {})
+    return () => { alive = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, gtab, wd])
 
   // فاز ۴۵: تالارِ مزایدهٔ هفته — یک‌بار با ورود به داشبورد؛ رانِ نیمه‌کاره هم از همین‌جا برمی‌گردد
   useEffect(() => {
@@ -1172,6 +1184,11 @@ export default function EmpirePage() {
 
     {/* پیامِ بازگشت (فصل ۴) + هدیهٔ بازگشت + پیام‌آغازیِ دستیار + نردبانِ رؤیا + زمانِ امروز */}
     {st.welcomeBack && <MJ><b>دلمان برایت تنگ شده بود.</b><br />در نبودت بازار حرکت کرده و ارزشِ دارایی‌هایت دوباره از قیمت‌های واقعی محاسبه شد. همهٔ سرمایه‌گذارهای بزرگ وقفه داشته‌اند — مهم برگشتن است.
+      {st.away && (st.away.perMDeltaPct !== null || (st.away.happened || []).length > 0) && <div style={{ marginTop: 8, fontSize: 12, lineHeight: 2 }}>
+        <b>در نبودِ تو ({fa(st.away.days)} روز):</b>
+        {st.away.perMDeltaPct !== null && <div>📈 میانهٔ متریِ بازار {st.away.perMDeltaPct >= 0 ? `${fa(Math.abs(st.away.perMDeltaPct))}٪ رشد کرد` : `${fa(Math.abs(st.away.perMDeltaPct))}٪ افت کرد`}</div>}
+        {(st.away.happened || []).map((h: any, i: number) => <div key={i}>{h.icon} {h.title}</div>)}
+      </div>}
       {st.welcomeBack.gift && <div style={{ marginTop: 8 }}><button style={{ ...btn, padding: '6px 14px', fontSize: 12.5 }} disabled={busy} onClick={async () => { const d = await api({ action: 'comeback' }); if (d) { setSt(d); alert(`🎁 هدیهٔ بازگشت: ${fa(d.coins)} ملک‌کوین`) } }}>🎁 دریافتِ هدیهٔ بازگشت</button></div>}
     </MJ>}
     {st.mentorLine && !st.welcomeBack && <MJ>{st.mentorLine}</MJ>}
@@ -1361,6 +1378,52 @@ export default function EmpirePage() {
     {gtab === 'city' && <>
     {st.suspense && <div style={{ ...card, borderColor: 'var(--gold)', fontSize: 13 }}>⏳ {st.suspense.text}</div>}
     {st.othersBuilding > 0 && <div style={{ fontSize: 12, color: 'var(--muted)' }}>🌍 {fa(st.othersBuilding)} نفرِ دیگر هم همین حالا در حالِ ساختِ امپراتوری‌شان هستند.</div>}
+
+    {/* 🗞 دنیای زنده (فاز ۶۳ — سند ۳۲ فصل ۲۱): سالِ دنیا + کتابِ تاریخ + شایعاتِ منصفانه — همه از رخدادِ واقعی */}
+    {wd?.ok && <div style={card}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <b style={{ fontSize: 14 }}>🗞 دنیای زنده</b>
+        <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 10, border: '1px solid var(--goldDim)', color: 'var(--gold)' }}>سالِ {fa(wd.year.year)} — روزِ {fa(wd.year.dayOfYear)}</span>
+        <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>دنیا حتی وقتی نیستی هم حرکت می‌کند — این‌ها واقعاً رخ داده‌اند</span>
+      </div>
+      {(wd.history || []).length > 0 ? <>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 10 }}>
+          {wd.history.slice(0, 6).map((h: any, i: number) => (
+            <div key={i} style={{ display: 'flex', gap: 8, fontSize: 11.5, alignItems: 'baseline' }}>
+              <span>{h.icon}</span>
+              <span style={{ flex: 1, minWidth: 0 }}>{h.title}{h.detail && <span style={{ color: 'var(--faint)', fontSize: 10 }}> — {h.detail}</span>}</span>
+              <span style={{ color: 'var(--faint)', fontSize: 9.5, whiteSpace: 'nowrap' }}>روزِ {fa(h.day)}</span>
+            </div>
+          ))}
+        </div>
+        {(wd.history || []).length > 6 && <details style={{ marginTop: 8 }}>
+          <summary style={{ cursor: 'pointer', fontSize: 11.5, color: 'var(--gold)' }}>📜 کتابِ تاریخِ دنیا ({fa(wd.history.length)} رخداد)</summary>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
+            {wd.history.slice(6).map((h: any, i: number) => (
+              <div key={i} style={{ display: 'flex', gap: 8, fontSize: 11, alignItems: 'baseline', color: 'var(--muted)' }}>
+                <span>{h.icon}</span><span style={{ flex: 1 }}>{h.title}</span><span style={{ color: 'var(--faint)', fontSize: 9.5 }}>روزِ {fa(h.day)}</span>
+              </div>
+            ))}
+          </div>
+        </details>}
+      </> : <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 8 }}>کتابِ تاریخِ این دنیا هنوز خالی است — اولین شگفتی، اولین برج، اولین چکش… تاریخ را بازیکنانِ واقعی می‌نویسند.</div>}
+      {(wd.rumors?.current || []).length > 0 && <>
+        <div style={{ fontSize: 12, fontWeight: 700, margin: '12px 0 6px' }}>👂 شایعاتِ این هفته <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 400 }}>— شایعه است، نه خبر؛ بعد از ۷ روز با قیمتِ واقعیِ بازار ارزیابی می‌شود</span></div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {wd.rumors.current.map((r: any) => (
+            <div key={r.id} style={{ background: 'var(--bg2)', border: '1px dashed var(--line2)', borderRadius: 10, padding: '8px 11px', fontSize: 11.5 }}>
+              <div>👂 {r.text}</div>
+              <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3 }}>منبع: {r.sourceFa} · اعتبارِ ادعایی {fa(r.credPct)}٪{r.verdict ? (r.verdict === 'true' ? ' · ✓ درست از آب درآمد' : ' · ✗ غلط بود') : ' · هنوز ارزیابی نشده'}</div>
+            </div>
+          ))}
+        </div>
+        {(wd.rumors.trust || []).some((t: any) => t.total > 0) && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+          {wd.rumors.trust.filter((t: any) => t.total > 0).map((t: any) => (
+            <span key={t.source} style={{ fontSize: 10, border: '1px solid var(--line2)', borderRadius: 999, padding: '2px 9px', color: 'var(--muted)' }}>سابقهٔ {t.sourceFa}: {fa(t.truePct)}٪ درست از {fa(t.total)} شایعه</span>
+          ))}
+        </div>}
+      </>}
+    </div>}
 
     </>}
 

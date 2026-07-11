@@ -1017,6 +1017,18 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
           {data.briefs.map((b: any) => <Mini key={b.day} label={`نامهٔ ${b.day}`} value={`${fa(b.built)} / ${fa(b.opened)}`} hint={`ساخته / بازشده${b.built ? ` — ${Math.round(b.opened / b.built * 100).toLocaleString('fa-IR')}٪` : ''}`} />)}
           <Mini label="صندوقچهٔ بازشدهٔ امروز" value={fa(data.chestToday)} hint={`از ${fa(data.empires)} امپراتوری`} />
         </div>
+        {/* فاز ۶۳ (سند ۳۲ فصل ۲۱ Part 5 Heat Index): دمای دنیا از فعالیتِ واقعیِ امروز — فقط «پیشنهاد»، اجرا با شما */}
+        {data.heat && <div style={{ ...card, borderColor: data.heat.mood === 'سرد' ? '#7ec8e3' : data.heat.mood === 'داغ' ? '#e7674a' : 'var(--line2)' }}>
+          <div style={sub}>🌡 دمای دنیا: {fa(data.heat.score)}٪ — {data.heat.mood}</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+            {data.heat.parts.map((pp: any, i: number) => <span key={i} style={{ fontSize: 11, border: '1px solid var(--line2)', borderRadius: 999, padding: '3px 10px', color: 'var(--muted)' }}>{pp.fa}: <b>{fa(pp.value)}</b></span>)}
+          </div>
+          {(data.heat.suggestions || []).map((sg: string, i: number) => <div key={i} style={{ fontSize: 12, color: 'var(--gold)', padding: '3px 0' }}>💡 {sg}</div>)}
+          {(data.worldEventsRecent || []).length > 0 && <>
+            <div style={{ fontSize: 11.5, fontWeight: 700, margin: '10px 0 4px' }}>📜 آخرین رخدادهای کتابِ تاریخِ دنیا</div>
+            {data.worldEventsRecent.map((h: any, i: number) => <div key={i} style={{ fontSize: 11.5, color: 'var(--muted)', padding: '2px 0' }}>{h.icon} {h.title} <span style={{ color: 'var(--faint)', fontSize: 10 }}>· روزِ {fa(h.day)}</span></div>)}
+          </>}
+        </div>}
         <div style={{ ...card, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <div style={{ flex: 1, fontSize: 12.5, color: 'var(--muted)' }}>نامه‌ها هر ۶ ساعت خودکار (cron اینستنس ۰) ساخته می‌شوند — برای تستِ فوری، همین حالا بساز:</div>
           <button style={btn} disabled={busy === 'runBriefs'} onClick={() => post({ action: 'runBriefs' }, 'نامه‌های امروز ساخته شد ✓')}>▶ ساختِ نامه‌های امروز</button>

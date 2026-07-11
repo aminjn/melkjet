@@ -56,6 +56,7 @@ import { bucketBalance } from '@/app/lib/reos/wallet'
 // فاز ۵۰ (سند ۳۰): تالارِ افتخارات (رکوردها/مجموعه‌ها) + حریفِ قسم‌خورده
 import { recordsOf, collectionsOf, applyCollections, COLLECTIONS, noteNemesis } from '@/app/lib/empire-store'
 import { roleLayerOf, legacyScoreOf, storyOf, dreamProgressOf, dreamSuggestionsOf, addCustomDream, applyDreams, wondersUpdate, DREAM_METRICS } from '@/app/lib/empire-store'
+import { worldYearOf, worldHistory, rumorsMaintain, appendWorldEvent } from '@/app/lib/empire-world'   // فاز ۶۳: دنیای زنده
 import { loadSnapshots } from '@/app/lib/empire-metrics'
 
 const hoodOf = (loc?: string) => { const p = String(loc || '').split(/[،,]/).map(x => x.trim()).filter(Boolean); return p.length > 1 ? p[p.length - 1] : (p[0] || '') }
@@ -500,6 +501,19 @@ async function stateOf(userId: string, e00: EmpireData) {
   // اسنپ‌شاتِ هفتگی (سند ۱۶): مبنای لیدربوردِ «رشدِ این هفته» — از نقطهٔ ورودِ خودِ بازیکن در این هفته
   const thisWeek = Math.floor(today / 7)
   if (!e.weekSnap || e.weekSnap.week < thisWeek) await setWeekSnap(userId, thisWeek, nw.netWorth).catch(() => {})
+  // فاز ۶۳ (فصل ۲۱ Part 2): تحویلِ تازهٔ پروژه → کتابِ تاریخِ دنیا (رخدادِ واقعی؛ dedupe داخلی)
+  if ((e.stats?.projectsDelivered || 0) > (e00.stats?.projectsDelivered || 0))
+    appendWorldEvent({ icon: '🏙', title: `برجِ تازه‌ای به خطِ آسمانِ شهر اضافه شد — ${e.name}`, kind: 'delivery' }, today).catch(() => {})
+  // فاز ۶۳ (Part 2 «در نبودِ شما»): گزارشِ واقعیِ غیبت — تغییرِ میانهٔ متریِ بازار (رصدخانه) + رخدادهای دنیا
+  let away: null | { days: number; perMDeltaPct: number | null; happened: Array<{ icon: string; title: string }> } = null
+  if (absentDays >= 7 || e.pendingComeback) {
+    const awayDays = Math.max(absentDays, 7)
+    const [snaps63, hist63] = await Promise.all([loadSnapshots(awayDays + 1).catch(() => [] as any[]), worldHistory(30).catch(() => [])])
+    const first = snaps63[0], last = snaps63[snaps63.length - 1]
+    const perMDeltaPct = first && last && first.perM > 0 && first.day !== last.day ? Math.round(((last.perM - first.perM) / first.perM) * 1000) / 10 : null
+    const sinceTs = Date.now() - awayDays * 864e5
+    away = { days: awayDays, perMDeltaPct, happened: hist63.filter(h => h.at >= sinceTs).slice(0, 3).map(h => ({ icon: h.icon, title: h.title })) }
+  }
   // فاز ۶۲ (فصل ۲۰): تحققِ رؤیاهای شخصی از عددِ واقعیِ همین لحظه + لایهٔ نقش + تختهٔ رؤیاها
   const dr62 = await applyDreams(userId, nw.netWorth).catch(() => null)
   const e62 = dr62?.ok && dr62.empire ? dr62.empire : e
@@ -521,6 +535,7 @@ async function stateOf(userId: string, e00: EmpireData) {
     nextDream: nextDreamOf(e),
     mentorLine: mentorLineOf(e, bank, missions, chestAvailable),
     welcomeBack: absentDays >= 7 || e.pendingComeback ? { days: Math.max(absentDays, 7), gift: !!e.pendingComeback } : null,
+    away,   // فاز ۶۳: «در نبودِ شما» — همه از دادهٔ واقعی (رصدخانه + کتابِ تاریخ)
     minutesToday: openActions * 3,
     dayDelta,
     hiddenLeft: HIDDEN_BADGES.filter(b => !e.badges.includes(b.key)).length,
@@ -734,6 +749,9 @@ export async function POST(req: NextRequest) {
       if (auctionBuy) {
         await consumeAuctionWin(userId).catch(() => {})
         await addJournal(userId, `سندِ «${it.title.slice(0, 30)}» بعد از نبردِ تالارِ مزایده به نامت خورد — این معامله داستان دارد.`).catch(() => {})
+        // فاز ۶۳: بردِ چکش یک رخدادِ «دنیا»ست — در کتابِ تاریخ ثبت می‌شود
+        const w63 = r.empire ? r.empire.name : ''
+        appendWorldEvent({ icon: '🔨', title: `چکشِ تالارِ مزایده کوبیده شد — ${w63}`, detail: it.title.slice(0, 60), kind: 'auction' }, dayNumberOf(Date.now())).catch(() => {})
       }
       return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
     }
@@ -1766,6 +1784,16 @@ export async function POST(req: NextRequest) {
         layer: roleLayerOf(e, nwH),
         myNo: e.no,
       })
+    }
+
+    // 🗞 دنیای زنده (فاز ۶۳ — فصل ۲۱): سالِ دنیا + کتابِ تاریخ + شایعاتِ منصفانهٔ هفته — همه از دادهٔ واقعی.
+    case 'world': {
+      const day = dayNumberOf(Date.now())
+      const snaps = await loadSnapshots(2).catch(() => [] as any[])
+      const lastSnap = snaps[snaps.length - 1]
+      const hoods = (lastSnap?.hoods || []).map((h: any) => ({ hood: h.hood, perM: h.perM }))
+      const rumors = await rumorsMaintain(day, hoods).catch(() => ({ current: [], recent: [], trust: [] }))
+      return NextResponse.json({ ok: true, day, year: worldYearOf(day), history: await worldHistory(60).catch(() => []), rumors })
     }
 
     // 🌠 رؤیای شخصی (فاز ۶۲ — فصل ۲۰ Part 7): بازیکن هدفِ خودش را می‌سازد؛ پیشرفت از متریکِ واقعی.
