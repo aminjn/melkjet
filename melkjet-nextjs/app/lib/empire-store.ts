@@ -263,6 +263,16 @@ export async function moveCapital(userId: string, delta: number, icon: string, t
   })
 }
 
+// فاز ۱۰۷ (فروشگاهِ سازندگان): واریزِ شفافِ کوین (سهمِ سازنده از فروشِ طرحش) — همیشه با ردِ تایم‌لاین.
+export async function grantCoins(userId: string, coins: number, title: string, now = Date.now()) {
+  const c = Math.max(0, Math.round(coins))
+  if (!c) return { ok: true as const }
+  return mutateEmpire(userId, e => {
+    e.coins += c
+    e.timeline.push({ at: now, icon: '🎨', title: title.slice(0, 90), detail: `+${c.toLocaleString('fa-IR')} ملک‌کوین` })
+  })
+}
+
 // ── فاز ۱۰۳ (جلد ۳): Prestige + درختِ مهارت ─────────────────────────────────
 // بازتولد: XP و سرمایه و دارایی‌ها صفر می‌شوند؛ کوین (پولِ پرداختی)، claims (پاداش‌های
 // یک‌بارمصرف — جلوی دوباره‌گیریِ جایزهٔ واقعی)، میراث و تایم‌لاین می‌مانند. هر بازتولد

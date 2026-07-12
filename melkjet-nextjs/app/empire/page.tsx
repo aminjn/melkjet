@@ -2539,6 +2539,10 @@ export default function EmpirePage() {
       <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 8 }}>خرید با ملک‌کوینِ کیفِ خودت انجام می‌شود و در تایم‌لاینت ثبت است · آیتمِ خریداری‌شده دائمی است.</div>
     </div>}
 
+    {/* 🎨 فروشگاهِ سازندگان (فاز ۱۰۷ — سند ۲۲ Creator Store): طرحِ خودت را بساز؛ پس از تأییدِ ملک‌جت
+        در همین فروشگاه فروخته می‌شود و سهمِ هر فروش به کوینت می‌آید. فقط ظاهر — صفر اثرِ اقتصادی. */}
+    {st.cosmetics?.enabled && st.creator?.enabled && <CreatorStudioCard st={st} api={api} busy={busy} />}
+
     </>}
 
     {mktV === 'players' && <>
@@ -3435,6 +3439,57 @@ function PrestigeCard({ api, busy, onDone }: { api: (b: object) => Promise<any>;
         })}
       </div>
       <div style={{ fontSize: 9.5, color: 'var(--faint)', marginTop: 8 }}>اثرها کوچک و شفاف‌اند و فقط با «بازتولدِ» واقعی به‌دست می‌آیند — خریدنی نیستند.</div>
+    </div>
+  )
+}
+
+// 🎨 فروشگاهِ سازندگان (فاز ۱۰۷): فرمِ ثبتِ طرحِ ظاهری + وضعیتِ طرح‌های خودم — تأییدِ انسانیِ ملک‌جت، سهمِ فروش به کوینِ سازنده.
+function CreatorStudioCard({ st, api, busy }: { st: any; api: (b: object) => Promise<any>; busy: boolean }) {
+  const [mine, setMine] = useState<any[] | null>(null)
+  const [kind, setKind] = useState<'frame' | 'flair'>('frame')
+  const [icon, setIcon] = useState('')
+  const [label, setLabel] = useState('')
+  const [price, setPrice] = useState('')
+  useEffect(() => { api({ action: 'creatorMine' }).then(d => { if (d?.mine) setMine(d.mine) }) // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const fa2 = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
+  const cr = st.creator || {}
+  const inp: React.CSSProperties = { background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 10, padding: '8px 10px', color: 'var(--text)', fontSize: 12.5, fontFamily: 'inherit', outline: 'none' }
+  const stFa: Record<string, [string, string]> = { pending: ['در انتظارِ بررسیِ ملک‌جت', 'var(--gold)'], approved: ['✓ در فروشگاه', '#7ee0b8'], rejected: ['✕ تأیید نشد', '#e88'] }
+  return (
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 16 }}>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <b style={{ fontSize: 14 }}>🎨 آیتمِ خودت را بساز</b>
+        <span style={{ fontSize: 11, color: 'var(--muted)' }}>طرحت بعد از تأییدِ ملک‌جت در همین فروشگاه فروخته می‌شود — {fa2(cr.sharePct || 0)}٪ هر فروش به کوینت واریز می‌شود</span>
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10, alignItems: 'center' }}>
+        <select value={kind} onChange={e => setKind(e.target.value === 'flair' ? 'flair' : 'frame')} style={{ ...inp, width: 130 }} aria-label="نوعِ آیتم">
+          <option value="frame">قابِ پروفایل</option>
+          <option value="flair">نشانِ کنارِ نام</option>
+        </select>
+        <input value={icon} onChange={e => setIcon(e.target.value)} placeholder="ایموجی (مثلاً 🐆)" style={{ ...inp, width: 120, textAlign: 'center' }} maxLength={4} />
+        <input value={label} onChange={e => setLabel(e.target.value)} placeholder="نامِ آیتم (۲ تا ۳۰ کاراکتر)" style={{ ...inp, flex: 1, minWidth: 170 }} maxLength={30} />
+        <input value={price} onChange={e => setPrice(e.target.value.replace(/[^\d۰-۹]/g, ''))} placeholder={`قیمت (${fa2(cr.minPriceCoins || 0)}–${fa2(cr.maxPriceCoins || 0)} کوین)`} style={{ ...inp, width: 160, textAlign: 'center' }} inputMode="numeric" />
+        <button style={{ background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }} disabled={busy} onClick={async () => {
+          const p = Number(String(price).replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))))
+          const d = await api({ action: 'creatorSubmit', kind, icon: icon.trim(), label: label.trim(), priceCoins: p })
+          if (d?.ok) { setMine(d.mine || null); setIcon(''); setLabel(''); setPrice(''); alert('طرحت ثبت شد — بعد از بررسیِ ملک‌جت خبرش در دفترچه‌ات می‌آید ✓') }
+        }}>ثبتِ طرح</button>
+      </div>
+      {(mine || []).length > 0 && <div style={{ marginTop: 10 }}>
+        <div style={{ fontSize: 11.5, color: 'var(--muted)', fontWeight: 700, marginBottom: 4 }}>طرح‌های من</div>
+        {(mine || []).map((m: any) => (
+          <div key={m.id} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '6px 0', borderBottom: '1px solid var(--line)', fontSize: 12 }}>
+            <span style={{ fontSize: 17 }}>{m.icon}</span>
+            <b>{m.label}</b>
+            <span style={{ color: 'var(--faint)', fontSize: 10.5 }}>{m.kind === 'frame' ? 'قاب' : 'نشان'} · {fa2(m.priceCoins)} کوین</span>
+            {m.status === 'approved' && m.sales > 0 && <span style={{ color: 'var(--muted)', fontSize: 10.5 }}>{fa2(m.sales)} فروش · +{fa2(m.earnedCoins)} کوین سهمِ تو</span>}
+            <span style={{ flex: 1 }} />
+            <span style={{ color: stFa[m.status]?.[1] || 'var(--muted)', fontWeight: 700, fontSize: 11 }}>{stFa[m.status]?.[0] || m.status}{m.status === 'rejected' && m.note ? ` — ${m.note}` : ''}</span>
+          </div>
+        ))}
+      </div>}
+      <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 8 }}>آیتمِ ظاهری فقط دیده‌شدن است — روی اقتصاد، سرعت یا قدرتِ هیچ‌کس اثر ندارد.</div>
     </div>
   )
 }

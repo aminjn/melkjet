@@ -164,6 +164,38 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
           ))}
         </div>
 
+        {/* 🎨 فروشگاهِ سازندگان (فاز ۱۰۷): صفِ تأییدِ انسانیِ طرح‌های بازیکنان + کارنامهٔ فروش */}
+        <div style={card}>
+          <div style={sub}>🎨 فروشگاهِ سازندگان ({fa(data.creator?.pending || 0)} طرح در انتظار)</div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>بازیکنان قاب/نشانِ ظاهری طراحی می‌کنند؛ تأییدِ شما = فروش در فروشگاهِ ظاهری. سهمِ سازنده از هر فروش به کوینِ او واریز می‌شود؛ باقی از گردش حذف می‌شود (چاهِ کوین). فقط ظاهر — صفر اثرِ اقتصادی.</div>
+          {!(data.creator?.items || []).length && <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>هنوز طرحی ثبت نشده.</div>}
+          {(data.creator?.items || []).map((c: any) => (
+            <div key={c.id} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', padding: '9px 0', borderBottom: '1px solid var(--line)', fontSize: 12.5 }}>
+              <span style={{ fontSize: 20 }}>{c.icon}</span>
+              <b>{c.label}</b>
+              <span style={{ color: 'var(--faint)', fontSize: 11 }}>{c.kind === 'frame' ? 'قاب' : 'نشان'} · {fa(c.priceCoins)} کوین · سازنده: {c.by?.name} (#{fa(c.by?.no)})</span>
+              {c.status === 'approved' && <span style={{ color: 'var(--muted)', fontSize: 11 }}>{fa(c.sales)} فروش · {fa(c.earnedCoins)} کوین سهمِ سازنده</span>}
+              <span style={{ color: 'var(--faint)', fontSize: 11 }}>{faDate(c.at)}</span>
+              <span style={{ flex: 1 }} />
+              {c.status === 'pending' ? <>
+                <button style={{ ...btn, padding: '6px 14px', fontSize: 12 }} disabled={busy === 'creatorDecide'}
+                  onClick={async () => { if (await post({ action: 'creatorDecide', id: c.id, approve: true }, 'تأیید شد — از این لحظه در فروشگاه است ✓')) loadView('rewards').then(setData) }}>✓ تأیید</button>
+                <button style={{ ...btnGhost, padding: '6px 12px', fontSize: 12, color: '#e88', borderColor: '#644' }} disabled={busy === 'creatorDecide'}
+                  onClick={async () => { const note = prompt('دلیلِ رد (به سازنده نمایش داده می‌شود):') || ''; if (await post({ action: 'creatorDecide', id: c.id, approve: false, note }, 'رد شد')) loadView('rewards').then(setData) }}>✕ رد</button>
+              </> : <span style={{ color: c.status === 'approved' ? '#7ee0b8' : '#e88', fontWeight: 700, fontSize: 12 }}>{c.status === 'approved' ? '✓ در فروشگاه' : '✕ رد شد'}</span>}
+            </div>
+          ))}
+          {cfg?.creator && <>
+            <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>⚙️ تنظیماتِ فروشگاهِ سازندگان — زنده</div>
+            {row('فروشگاهِ سازندگان فعال (۱/۰)', cin('creator', 'enabled'), 'خاموش = فرمِ ثبتِ طرح و آیتم‌های سازندگان از فروشگاه پنهان می‌شود')}
+            {row('سهمِ سازنده از هر فروش (٪)', cin('creator', 'sharePct'), 'باقی از گردش حذف می‌شود — چاهِ شفافِ کوین')}
+            {row('کفِ قیمتِ طرح (کوین)', cin('creator', 'minPriceCoins'))}
+            {row('سقفِ قیمتِ طرح (کوین)', cin('creator', 'maxPriceCoins'))}
+            {row('حداکثر طرحِ در انتظار برای هر بازیکن', cin('creator', 'maxPendingPerUser'), 'جلوی سیلِ طرح‌های تکراری را می‌گیرد')}
+            <div style={{ marginTop: 10 }}><button style={btn} disabled={busy === 'cfg'} onClick={saveCfg}>💾 ذخیره و اعمالِ زنده</button></div>
+          </>}
+        </div>
+
         {/* تنظیمات — همه زنده؛ پیش‌نمایشِ نردبان همان لحظه آپدیت می‌شود */}
         {rw && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(340px,1fr))', gap: 14 }}>
           <div style={card}>

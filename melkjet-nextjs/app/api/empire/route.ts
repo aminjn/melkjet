@@ -52,6 +52,8 @@ import { flagEnabled } from '@/app/lib/reos/flags'
 import { config, primeConfig } from '@/app/lib/reos/reos-config'
 import { ownerOfListing, claimListing, releaseListing, transferListing, myClanOf, listClans, createClan, joinClan, leaveClan, postClanMsg, clanView, deleteClanIfOwner } from '@/app/lib/empire-social'
 import { sendDm, dmThread, createDuel, acceptDuel, resolveDuels, myDuels, markDuelRewarded, clanDeposit, clanWithdraw, clanProjectStart, clanProjectJoin, clanProjectSell } from '@/app/lib/empire-social'   // فاز ۱۰۲
+import { submitCreatorItem, myCreatorItems, approvedCreatorItems, recordCreatorSale, creatorIconOf, creatorShareOf, type CreatorCfg } from '@/app/lib/empire-creator'   // فاز ۱۰۷
+import { grantCoins } from '@/app/lib/empire-store'
 // فاز ۳۹ (سند ۲۶ فصل ۱۶ Cognitive AI): هوشِ سرمایه‌گذاری — ارزش‌گذاری/تصمیم‌یار/روندِ محله/سلامتِ مالی/اولویت‌ها؛ همه از دادهٔ واقعی.
 import { compStatsOf, valuationOf, decisionOf, marketIntelOf, cashflowOf, financialHealthOf, prioritiesOf, evalRules, RULE_TEMPLATES, tradeAskCheckOf, jvOfferCheckOf, crisisOf, rarityOf } from '@/app/lib/empire-intel'
 // فاز ۴۸ (جوایزِ پولِ واقعی): نردبان/استخر/صفِ تأیید + کیف‌پولِ یکپارچهٔ سایت (سطلِ «پاداش»)
@@ -74,7 +76,9 @@ const RATE_BUCKET = new Map<string, { m: number; n: number }>()
 // آیکنِ قاب/نشانِ فعالِ بازیکن (فاز ۳۳): ارزشِ آیتمِ ظاهری = دیده‌شدن توسطِ دیگران (سند ۲۲ فصل ۳)
 const cosmeticIconOf = (e: Pick<EmpireData, 'cosmetics'>, kind: 'frame' | 'flair') => {
   const id = e.cosmetics?.[kind]
-  return id ? ((config().empire.cosmetics?.items || []).find(i => i.id === id)?.icon || '') : ''
+  if (!id) return ''
+  // فاز ۱۰۷: آیتم‌های ساختِ بازیکنان (cr_) از کشِ همگامِ فروشگاهِ سازندگان خوانده می‌شوند
+  return (config().empire.cosmetics?.items || []).find(i => i.id === id)?.icon || creatorIconOf(id) || ''
 }
 const ptypeOf = (it: Item) => (it.meta || {})['نوع ملک'] || it.category || ''
 const priceOf = (it: Item) => parseFaNum(it.price)
@@ -597,9 +601,17 @@ async function stateOf(userId: string, e00: EmpireData) {
     // 🎨 فروشگاهِ ظاهری (فاز ۳۳ — سند ۲۲ فصل ۳): قاب/نشان فقط برای نمایش؛ صفر اثرِ اقتصادی
     cosmetics: config().empire.cosmetics?.enabled ? {
       enabled: true,
-      items: (config().empire.cosmetics.items || []).filter(i => i.enabled && i.priceCoins > 0),
+      items: [
+        ...(config().empire.cosmetics.items || []).filter(i => i.enabled && i.priceCoins > 0),
+        // فاز ۱۰۷ (Creator Store): طرح‌های تأییدشدهٔ بازیکنان — با نامِ سازنده، همان قیمتِ کوینیِ خودش
+        ...(config().empire.creator?.enabled ? (await approvedCreatorItems()).map(c => ({ id: 'cr_' + c.id, label: `${c.label} — ساختهٔ ${c.by.name}`, icon: c.icon, kind: c.kind, priceCoins: c.priceCoins, enabled: true })) : []),
+      ],
       owned: e.cosmetics?.owned || [], frame: e.cosmetics?.frame || '', flair: e.cosmetics?.flair || '',
     } : { enabled: false, items: [], owned: [], frame: '', flair: '' },
+    // 🎨 فروشگاهِ سازندگان (فاز ۱۰۷): تنظیماتِ فرمِ «آیتمِ خودت را بساز» — همه knob ادمین
+    creator: config().empire.creator?.enabled && config().empire.cosmetics?.enabled
+      ? { enabled: true, sharePct: config().empire.creator.sharePct, minPriceCoins: config().empire.creator.minPriceCoins, maxPriceCoins: config().empire.creator.maxPriceCoins }
+      : { enabled: false },
     // 🎁 پیشنهادِ هوشمند (فاز ۳۳ — سند ۲۲ فصل ۹): حداکثر ۱ در روز، قطعی از رفتارِ واقعی، قابلِ‌بستن
     offer: offerOf(e, dayNumberOf(Date.now()), config().empire.offers, config().empire.cosmetics?.enabled ? (config().empire.cosmetics.items || []).filter(i => i.enabled) : [], config().empire.coinShop?.enabled ? activeCoinPacks(config().empire.coinShop.packs || []) : []),
     // سطح‌گشایی (سند ۱۵): چه چیزی از چه سطحی باز می‌شود + ظرفیتِ پروژهٔ همزمان — شفاف در UI
@@ -2578,11 +2590,44 @@ export async function POST(req: NextRequest) {
     case 'cosmeticBuy': {
       const shop = config().empire.cosmetics
       if (!shop?.enabled) return NextResponse.json({ error: 'فروشگاهِ ظاهری فعال نیست' }, { status: 400 })
-      const item = (shop.items || []).find(i => i.enabled && i.priceCoins > 0 && i.id === String(b.id || ''))
+      const id = String(b.id || '')
+      // فاز ۱۰۷: آیتمِ ساختِ بازیکن (cr_) — خرید + سهمِ سازنده به کوینِ او؛ باقی از گردش حذف (چاهِ شفاف)
+      if (id.startsWith('cr_')) {
+        const crCfg = config().empire.creator
+        if (!crCfg?.enabled) return NextResponse.json({ error: 'فروشگاهِ سازندگان فعال نیست' }, { status: 400 })
+        const cr = (await approvedCreatorItems()).find(c => 'cr_' + c.id === id)
+        if (!cr) return NextResponse.json({ error: 'این آیتم موجود نیست' }, { status: 404 })
+        const r = await buyCosmetic(userId, { id, label: `${cr.label} — ساختهٔ ${cr.by.name}`, icon: cr.icon, kind: cr.kind, priceCoins: cr.priceCoins })
+        if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+        const share = creatorShareOf(cr.priceCoins, crCfg.sharePct)
+        if (share > 0 && cr.by.userId !== userId) {
+          await grantCoins(cr.by.userId, share, `فروشِ طرحِ «${cr.label}» — سهمِ سازنده`).catch(() => {})
+          await recordCreatorSale(cr.id, share).catch(() => {})
+        } else await recordCreatorSale(cr.id, 0).catch(() => {})
+        return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+      }
+      const item = (shop.items || []).find(i => i.enabled && i.priceCoins > 0 && i.id === id)
       if (!item) return NextResponse.json({ error: 'این آیتم موجود نیست' }, { status: 404 })
       const r = await buyCosmetic(userId, item)
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+    }
+    // 🎨 فروشگاهِ سازندگان (فاز ۱۰۷ — سند ۲۲ Creator Store): ثبتِ طرح → صفِ تأییدِ انسانیِ ادمین.
+    case 'creatorSubmit': {
+      const crCfg = config().empire.creator as CreatorCfg
+      if (!crCfg?.enabled || !config().empire.cosmetics?.enabled) return NextResponse.json({ error: 'فروشگاهِ سازندگان فعال نیست' }, { status: 400 })
+      const e = await getEmpire(userId)
+      if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      const r = await submitCreatorItem(
+        { userId, no: e.no, name: e.name },
+        { kind: String(b.kind || ''), icon: String(b.icon || ''), label: String(b.label || ''), priceCoins: Number(b.priceCoins) || 0 },
+        crCfg,
+      )
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, item: r.item, mine: await myCreatorItems(userId) })
+    }
+    case 'creatorMine': {
+      return NextResponse.json({ ok: true, mine: await myCreatorItems(userId) })
     }
     case 'cosmeticSet': {
       const kind = b.kind === 'flair' ? 'flair' as const : 'frame' as const

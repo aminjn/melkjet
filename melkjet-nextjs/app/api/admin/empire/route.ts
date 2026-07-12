@@ -74,6 +74,12 @@ export async function GET(req: NextRequest) {
         approved: db.requests.filter(r => r.status === 'approved').length,
         rejected: db.requests.filter(r => r.status === 'rejected').length,
       },
+      // 🎨 فروشگاهِ سازندگان (فاز ۱۰۷): صفِ تأییدِ طرح‌های بازیکنان + کارنامهٔ فروش
+      creator: await (async () => {
+        const { listCreatorItems } = await import('@/app/lib/empire-creator')
+        const items = await listCreatorItems()
+        return { items: items.slice(0, 60), pending: items.filter(i => i.status === 'pending').length }
+      })(),
     })
   }
 
@@ -295,6 +301,19 @@ export async function POST(req: NextRequest) {
     const made = await runEmpireBriefs()
     logAudit(await actor(), 'اجرای دستیِ نامهٔ روزانهٔ امپراتوری', `${made} نامه`)
     return NextResponse.json({ ok: true, made })
+  }
+  // ── 🎨 فروشگاهِ سازندگان (فاز ۱۰۷): تصمیمِ انسانی روی طرحِ بازیکن — تأیید = فروش در فروشگاهِ ظاهری ──
+  if (action === 'creatorDecide') {
+    const { decideCreatorItem } = await import('@/app/lib/empire-creator')
+    const approve = !!b.approve
+    const r = await decideCreatorItem(String(b.id || ''), approve, String(b.note || ''))
+    if (!r.ok || !r.item) return NextResponse.json({ error: r.reason }, { status: 400 })
+    const { addJournal } = await import('@/app/lib/empire-store')
+    await addJournal(r.item.by.userId, approve
+      ? `🎨 طرحِ «${r.item.label}» تأیید شد و در فروشگاهِ ظاهری فروخته می‌شود — سهمِ هر فروش به کوینت واریز می‌شود.`
+      : `طرحِ «${r.item.label}» تأیید نشد${r.item.note ? ` — ${r.item.note}` : ''}. طرحِ تازه‌ای بفرست.`).catch(() => {})
+    logAudit(await actor(), approve ? 'تأییدِ طرحِ سازنده' : 'ردِ طرحِ سازنده', `${r.item.label} (${r.item.icon}) — ${r.item.by.name} (#${r.item.by.no}) · ${r.item.priceCoins} کوین`)
+    return NextResponse.json({ ok: true, item: r.item })
   }
   // ── 🎁 جوایزِ پولِ واقعی (فاز ۴۸): تصمیمِ انسانی — تأیید = واریز به سطلِ «پاداشِ» کیف‌پولِ سایت ──
   if (action === 'rewardDecide') {

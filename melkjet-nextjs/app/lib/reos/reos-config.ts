@@ -64,6 +64,8 @@ export interface ReosConfig {
     coinShop: { enabled: boolean; packs: Array<{ id: string; label: string; coins: number; priceToman: number; enabled: boolean; until?: string }> }
     // فاز ۳۳ (سند ۲۲ فصل ۳ Cosmetic Store): آیتم‌های صرفاً ظاهری با ملک‌کوین — «هیچ آیتمِ ظاهری روی اقتصاد/سرعت/قدرت اثر نمی‌گذارد».
     cosmetics: { enabled: boolean; items: Array<{ id: string; label: string; icon: string; kind: 'frame' | 'flair'; priceCoins: number; enabled: boolean }> }
+    // فاز ۱۰۷ (سند ۲۲ Creator Store): بازیکنان طرحِ ظاهری می‌سازند؛ تأییدِ انسانیِ ادمین → فروش در فروشگاه؛ سهمِ سازنده به کوینِ او (باقی = چاهِ کوین).
+    creator: { enabled: boolean; sharePct: number; minPriceCoins: number; maxPriceCoins: number; maxPendingPerUser: number }
     // فاز ۳۳ (سند ۲۲ فصل ۹ Special Offers): موتورِ پیشنهادِ قطعی از رفتارِ واقعی — حداکثر ۱ در روز، قابلِ‌بستن، بدونِ تایمرِ ساختگی.
     offers: { enabled: boolean; cooldownDays: number; minAgeDays: number }
     // فاز ۳۴ (سند ۲۳ فصل ۱۳ Technical — Part 04): سقفِ درخواستِ هر بازیکن در دقیقه روی API مسیرِ رشد؛ ۰ = خاموش.
@@ -265,6 +267,8 @@ export const DEFAULT_CONFIG: ReosConfig = {
         { id: 'flair_falcon', label: 'نشانِ شاهینِ مذاکره', icon: '🦅', kind: 'flair' as const, priceCoins: 400, enabled: true },
       ],
     },
+    // فروشگاهِ سازندگان (فاز ۱۰۷ — سند ۲۲ Creator Store): طرحِ بازیکن + تأییدِ انسانی + سهمِ سازنده؛ فقط ظاهر، صفر قدرت.
+    creator: { enabled: true, sharePct: 70, minPriceCoins: 20, maxPriceCoins: 500, maxPendingPerUser: 3 },
     // پیشنهادِ هوشمند (سند ۲۲ فصل ۹): حداکثر ۱ در روز؛ بستن = cooldownDays روز پنهان؛ فقط از رفتارِ واقعی و قطعی.
     offers: { enabled: true, cooldownDays: 5, minAgeDays: 2 },
     // سپرِ API (سند ۲۳ Part 04): بازیِ عادی به این سقف نمی‌رسد؛ فقط جلوی اسکریپت/سوءاستفاده را می‌گیرد.
