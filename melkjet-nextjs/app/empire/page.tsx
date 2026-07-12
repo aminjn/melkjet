@@ -1830,7 +1830,7 @@ export default function EmpirePage() {
               ? (/* فاز ۲۹: معمار → نقشه → پروانه → پیمانکار/کلنگ — مثلِ دنیای واقعی */
                 a.needsDesign
                   ? <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 11.5, color: 'var(--gold)', borderColor: 'var(--goldDim)' }} disabled={busy}
-                      onClick={async () => { const d = await api({ action: 'designPlan', assetId: a.id }); if (d) setDz({ assetId: a.id, info: d, floors: String(d.legalFloors), upf: '2' }) }}>📐 قراردادِ معمار — طراحیِ نقشه</button>
+                      onClick={async () => { const d = await api({ action: 'designPlan', assetId: a.id }); if (d) setDz({ assetId: a.id, info: d, floors: String(d.legalFloors), upf: '2', use: 'residential' }) }}>📐 قراردادِ معمار — طراحیِ نقشه</button>
                   : a.design && a.designReadyInDays > 0
                   ? <span style={{ fontSize: 11, color: 'var(--gold)', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                       📐 {a.design.architect} در حالِ طراحی — {fa(a.designReadyInDays)} روز مانده
@@ -1844,7 +1844,7 @@ export default function EmpirePage() {
                   ? <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                       <span style={{ fontSize: 11, color: '#7c6' }}>📜 پروانه ✓</span>
                       <button style={{ ...btn, padding: '4px 12px', fontSize: 11.5 }} disabled={busy}
-                        onClick={async () => { const d = await api({ action: 'buildPlan', assetId: a.id }); if (d) { setBplan({ assetId: a.id, ...d }); setBname(d.suggestedName || ''); setBfacade('modern'); setBuse('residential') } }}>⛏ شروعِ ساخت</button>
+                        onClick={async () => { const d = await api({ action: 'buildPlan', assetId: a.id }); if (d) { setBplan({ assetId: a.id, ...d }); setBname(d.suggestedName || ''); setBfacade('modern'); setBuse(d.fixedUse || 'residential') } }}>⛏ شروعِ ساخت</button>
                     </span>
                   : a.permit.status === 'granted'
                   ? <span style={{ fontSize: 11, color: '#7c6' }}>📜 پروانه ✓</span>
@@ -1980,6 +1980,20 @@ export default function EmpirePage() {
                   </div>
                   {/* ضابطهٔ واقعی (فیدبکِ کاربر): توضیحِ شفافِ اینکه طبقاتِ مجاز از کجا آمد — متراژ + عرفِ واقعیِ محله + پارکینگ */}
                   {inf.ruleNote && <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 4 }}>📐 {inf.ruleNote}{inf.parkingCap ? ` (ظرفیتِ پارکینگ: ${fa(inf.parkingCap)} واحد)` : ''}</div>}
+                  {/* فاز ۱۱۳ (فیدبکِ مستقیم): کاربری همین‌جا، سرِ قراردادِ معمار انتخاب می‌شود و تا پروانه/کلنگ/فروش می‌ماند */}
+                  {(inf.uses || []).length > 0 && <div style={{ marginTop: 8 }}>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>کاربریِ پروژه چه باشد؟ (در نقشه و پروانه ثبت می‌شود — قیمتِ فروش از آگهی‌های واقعیِ همان کاربری)</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {inf.uses.map((u: any) => (
+                        <button key={u.key} disabled={!(u.perM > 0)} onClick={() => u.perM > 0 && setDz({ ...dz, use: u.key })}
+                          title={u.perM > 0 ? `متریِ ${u.label}: ${faB(u.perM)} تومان (${fa(u.samples)} آگهیِ ${u.scope === 'hood' ? 'همین محله' : 'کلِ بازار'})` : 'نمونهٔ قیمتیِ واقعی نداریم'}
+                          style={{ ...btnGhost, padding: '6px 12px', fontSize: 11.5, opacity: u.perM > 0 ? 1 : .4, cursor: u.perM > 0 ? 'pointer' : 'not-allowed', borderColor: (dz.use || 'residential') === u.key ? 'var(--gold)' : 'var(--line2)', color: (dz.use || 'residential') === u.key ? 'var(--gold)' : 'var(--text)' }}>
+                          {u.icon} {u.label} <span style={{ fontSize: 10, color: 'var(--faint)' }}>{u.perM > 0 ? `متری ~${faB(u.perM)}` : 'نمونه نداریم'}{u.costFactor !== 1 ? ` · هزینهٔ ساخت ×${(u.costFactor).toLocaleString('fa-IR')}` : ''}</span>
+                        </button>
+                      ))}
+                    </div>
+                    {(() => { const u = (inf.uses || []).find((x: any) => x.key === (dz.use || 'residential')); return u && u.scope === 'market' ? <div style={{ fontSize: 10.5, color: '#e8c37a', marginTop: 4 }}>نمونهٔ {u.label} در این محله کم بود — برآورد از {fa(u.samples)} آگهیِ {u.label} کلِ بازار.</div> : null })()}
+                  </div>}
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
                     <label style={{ fontSize: 11.5 }}>طبقات: <input value={dz.floors} onChange={ev => setDz({ ...dz, floors: digitsOf(ev.target.value) })} inputMode="numeric" style={{ width: 54, padding: 7, borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', textAlign: 'center' }} /></label>
                     <label style={{ fontSize: 11.5 }}>واحد در طبقه: <input value={dz.upf} onChange={ev => setDz({ ...dz, upf: digitsOf(ev.target.value) })} inputMode="numeric" style={{ width: 54, padding: 7, borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', textAlign: 'center' }} /></label>
@@ -1991,7 +2005,7 @@ export default function EmpirePage() {
                     <button style={{ ...btn, padding: '6px 14px', fontSize: 12, opacity: blockReason ? 0.55 : 1 }} disabled={busy}
                       onClick={async () => {
                         if (blockReason) { setErr(blockReason); return }
-                        const d = await api({ action: 'designStart', assetId: a.id, floors, unitsPerFloor: upf }); if (d) { setSt(d); setDz(null); celebrate() }
+                        const d = await api({ action: 'designStart', assetId: a.id, floors, unitsPerFloor: upf, use: dz.use || 'residential' }); if (d) { setSt(d); setDz(null); celebrate() }
                       }}>
                       ✍️ امضای قرارداد ({faB(fee)} حق‌الزحمه · {fa(inf.designDays)} روز طراحی{illegal > 0 && !blockReason ? ' · با تخلف' : ''})</button>
                     <button style={{ ...btnGhost, padding: '6px 12px', fontSize: 11.5 }} onClick={() => setDz(null)}>انصراف</button>
@@ -2080,7 +2094,10 @@ export default function EmpirePage() {
                 ))}
               </div>
               {/* فاز ۱۱۲ (فیدبکِ مستقیم): کاربریِ پروژه — قیمتِ هر کاربری از آگهی‌های واقعیِ همان نوع؛ بدونِ نمونه = صادقانه بسته */}
-              {(bplan.uses || []).length > 0 && <div style={{ marginTop: 8 }}>
+              {bplan.fixedUse && (() => { const u = (bplan.uses || []).find((x: any) => x.key === bplan.fixedUse); return <div style={{ marginTop: 8, fontSize: 11.5 }}>
+                کاربریِ ثبت‌شده در نقشه و پروانه: <b style={{ color: 'var(--gold)' }}>{u ? `${u.icon} ${u.label}` : bplan.fixedUse}</b>{u && u.perM > 0 ? <span style={{ color: 'var(--faint)', fontSize: 10.5 }}> · متری ~{faB(u.perM)} ({fa(u.samples)} آگهیِ {u.scope === 'hood' ? 'همین محله' : 'کلِ بازار'})</span> : null} — سرِ کلنگ عوض نمی‌شود.
+              </div> })()}
+              {!bplan.fixedUse && (bplan.uses || []).length > 0 && <div style={{ marginTop: 8 }}>
                 <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>کاربریِ پروژه چه باشد؟ (قیمتِ فروش از آگهی‌های واقعیِ همان کاربری — هزینهٔ ساخت هم فرق می‌کند)</div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {bplan.uses.map((u: any) => (

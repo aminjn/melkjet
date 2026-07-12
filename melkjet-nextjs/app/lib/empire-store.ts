@@ -42,7 +42,7 @@ export interface EmpireAsset {
   landAreaOverride?: number   // مساحتِ زمینِ برآوردی بعد از تخریب — مبنای نقشهٔ ساخت به‌جای متراژِ واحدِ آگهی
   // طراحیِ معمار (فاز ۲۹): پیش از پروانه — طبقات/واحد در طبقه با تراکمِ قانونی؛ طبقهٔ مازاد = تخلفِ آگاهانه.
   // landArea داخلِ خودِ نقشه ذخیره می‌شود تا ساخت به زنده‌بودنِ آگهیِ واقعی وابسته نماند (آگهی‌ها می‌چرخند).
-  design?: { floors: number; unitsPerFloor: number; legalFloors: number; footprint: number; unitArea: number; illegalFloors: number; architectFee: number; startedAt: number; readyAt: number; architect: string; landArea?: number }
+  design?: { floors: number; unitsPerFloor: number; legalFloors: number; footprint: number; unitArea: number; illegalFloors: number; architectFee: number; startedAt: number; readyAt: number; architect: string; landArea?: number; use?: string }   // use: فاز ۱۱۳ — کاربری از قراردادِ معمار تا کلنگ
   // کمیسیونِ ماده۱۰۰ (فاز ۲۹): بعد از تکمیلِ ساختمانِ متخلف — جریمه/وکیل/تخریبِ طبقهٔ مازاد.
   m100?: { illegalArea: number; illegalUnits: number; fine: number; status: 'pending' | 'paid' | 'demolished'; lawyerTried?: boolean }
   renovBoostPct?: number      // بازسازی (فاز ۲۹): ارزش‌افزودهٔ جمع‌شده (٪، با سقفِ knob)
@@ -1337,7 +1337,7 @@ export function designPlanOf(landArea: number, floors: number, unitsPerFloor: nu
 }
 
 // قراردادِ معمار: حق‌الزحمه → servicesPaid؛ طراحی چند روزِ واقعی طول می‌کشد (قابلِ‌تسریع با کوین).
-export async function commissionDesign(userId: string, assetId: string, d: { floors: number; unitsPerFloor: number; legalFloors: number; footprint: number; unitArea: number; illegalFloors: number; fee: number; days: number; landArea?: number }, now = Date.now()) {
+export async function commissionDesign(userId: string, assetId: string, d: { floors: number; unitsPerFloor: number; legalFloors: number; footprint: number; unitArea: number; illegalFloors: number; fee: number; days: number; landArea?: number; use?: string }, now = Date.now()) {
   return mutateEmpire(userId, e => {
     const a = e.assets.find(x => x.id === assetId)
     if (!a) return 'دارایی یافت نشد'
@@ -1348,9 +1348,9 @@ export async function commissionDesign(userId: string, assetId: string, d: { flo
     e.capital -= d.fee
     e.servicesPaid = (e.servicesPaid || 0) + d.fee
     const architect = proPersonaOf('architect', assetId)
-    a.design = { floors: d.floors, unitsPerFloor: d.unitsPerFloor, legalFloors: d.legalFloors, footprint: d.footprint, unitArea: d.unitArea, illegalFloors: d.illegalFloors, architectFee: d.fee, startedAt: now, readyAt: now + Math.max(0, d.days) * 864e5, architect, landArea: d.landArea }
+    a.design = { floors: d.floors, unitsPerFloor: d.unitsPerFloor, legalFloors: d.legalFloors, footprint: d.footprint, unitArea: d.unitArea, illegalFloors: d.illegalFloors, architectFee: d.fee, startedAt: now, readyAt: now + Math.max(0, d.days) * 864e5, architect, landArea: d.landArea, use: d.use && d.use !== 'residential' ? d.use : undefined }
     e.identity.builder = Math.min(100, (e.identity.builder || 0) + 3)
-    e.timeline.push({ at: now, icon: '📐', title: `قراردادِ طراحی با ${architect}`, detail: `${d.floors.toLocaleString('fa-IR')} طبقه × ${d.unitsPerFloor.toLocaleString('fa-IR')} واحد${d.illegalFloors > 0 ? ` · ⚠️ ${d.illegalFloors.toLocaleString('fa-IR')} طبقهٔ مازاد بر پروانه` : ''}` })
+    e.timeline.push({ at: now, icon: '📐', title: `قراردادِ طراحی با ${architect}`, detail: `کاربریِ ${BUILD_USE_FA[d.use || 'residential']} · ${d.floors.toLocaleString('fa-IR')} طبقه × ${d.unitsPerFloor.toLocaleString('fa-IR')} واحد${d.illegalFloors > 0 ? ` · ⚠️ ${d.illegalFloors.toLocaleString('fa-IR')} طبقهٔ مازاد بر پروانه` : ''}` })
   })
 }
 

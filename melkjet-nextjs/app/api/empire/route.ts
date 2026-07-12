@@ -1366,6 +1366,11 @@ export async function POST(req: NextRequest) {
         designDays: dc.designDays, architectFeePct: dc.architectFeePct, costPerM: config().empire.build.costPerM,
         finePerM2: Math.round(config().empire.build.costPerM * config().empire.m100.finePerM2Mult),
         architect: proPersonaOf('architect', a.id),
+        // فاز ۱۱۳ (فیدبکِ مستقیم): کاربری از همین قراردادِ معمار انتخاب می‌شود — متریِ واقعیِ هر کاربری برای تصمیمِ آگاهانه
+        uses: await Promise.all(BUILD_USES.map(async u => {
+          const pm = await usePerM(a.hood, u.key)
+          return { key: u.key, label: u.label, icon: u.icon, costFactor: useCostFactorOf(u.key === 'residential' ? undefined : u.key), perM: pm.perM, samples: pm.samples, scope: pm.scope }
+        })),
       })
     }
     // قراردادِ طراحی: انتخابِ طبقات/واحد → حق‌الزحمهٔ معمار → طراحی چند روز طول می‌کشد
@@ -1381,9 +1386,14 @@ export async function POST(req: NextRequest) {
       const lfS = legalFloorsOf(landArea, await hoodFloorsNorm(a.hood), dc)
       const d = designPlanOf(landArea, Math.round(Number(b.floors) || 0), Math.round(Number(b.unitsPerFloor) || 0), { ...dc, buildFactor: config().empire.build.buildFactor }, lfS.floors)
       if (!d.ok) return NextResponse.json({ error: d.reason }, { status: 400 })
+      // فاز ۱۱۳: کاربریِ انتخابی در نقشه ثبت می‌شود و تا پروانه/کلنگ/فروش همراهِ پروژه می‌ماند
+      const use113 = String(b.use || 'residential')
+      if (!BUILD_USES.some(u => u.key === use113)) return NextResponse.json({ error: 'کاربریِ نامعتبر' }, { status: 400 })
+      if (use113 !== 'residential' && !((await usePerM(a.hood, use113)).perM > 0))
+        return NextResponse.json({ error: `برای کاربریِ ${BUILD_USE_FA[use113]} هنوز نمونهٔ قیمتیِ واقعیِ کافی در بازار نداریم — فعلاً کاربریِ دیگری انتخاب کن` }, { status: 400 })
       const fee = Math.max(1, Math.round(d.builtArea * config().empire.build.costPerM * Math.max(0, dc.architectFeePct) / 100))
       // متراژِ زمین داخلِ خودِ نقشه ذخیره می‌شود — کلنگ دیگر به زنده‌ماندنِ آگهیِ واقعی وابسته نیست
-      const r = await commissionDesign(userId, a.id, { floors: Math.round(Number(b.floors)), unitsPerFloor: Math.round(Number(b.unitsPerFloor)), legalFloors: d.legalFloors, footprint: d.footprint, unitArea: d.unitArea, illegalFloors: d.illegalFloors, fee, days: dc.designDays, landArea })
+      const r = await commissionDesign(userId, a.id, { floors: Math.round(Number(b.floors)), unitsPerFloor: Math.round(Number(b.unitsPerFloor)), legalFloors: d.legalFloors, footprint: d.footprint, unitArea: d.unitArea, illegalFloors: d.illegalFloors, fee, days: dc.designDays, landArea, use: use113 })
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       return NextResponse.json({ ok: true, fee, illegalFloors: d.illegalFloors, ...(await stateOf(userId, r.empire!)) })
     }
@@ -1569,6 +1579,7 @@ export async function POST(req: NextRequest) {
         ok: true, materialsFactor: (cfg as { materialsFactor?: number }).materialsFactor || 1,
         landArea, builtArea: base.builtArea, unitArea: base.unitArea, totalUnits: base.totalUnits, options, goals, uses,
         sellableUnits: Math.max(0, base.totalUnits - illegal43),
+        fixedUse: a.design?.use || null,   // فاز ۱۱۳: کاربریِ ثبت‌شده در نقشه/پروانه — سرِ کلنگ عوض نمی‌شود
         facades: BUILD_FACADES, suggestedName: `برجِ ${e.name}`.slice(0, 28), hood: a.hood,
         estNote: dreamPerM > 0 ? `برآورد از میانهٔ متریِ واقعیِ ${dreamN.toLocaleString('fa-IR')} آگهی — قولِ قطعی نیست` : 'برای برآوردِ فروش هنوز نمونهٔ قیمتیِ کافی در بازار نداریم',
       })
@@ -1591,7 +1602,7 @@ export async function POST(req: NextRequest) {
         : buildPlanOf(String(b.structure || ''), String(b.quality || ''), landArea, cfg)
       if (!plan) return NextResponse.json({ error: 'سازه/کیفیتِ نامعتبر یا متراژِ نامشخص' }, { status: 400 })
       // فاز ۱۱۲ — کاربریِ انتخابیِ بازیکن: هزینه × ضریبِ knob؛ کاربریِ بدونِ نمونهٔ قیمتیِ واقعی صادقانه بسته است
-      const use112 = String(b.use || 'residential')
+      const use112 = String(a.design?.use || b.use || 'residential')   // فاز ۱۱۳: کاربریِ نقشه/پروانه مقدم است
       if (!BUILD_USES.some(u => u.key === use112)) return NextResponse.json({ error: 'کاربریِ نامعتبر' }, { status: 400 })
       if (use112 !== 'residential') {
         const pm112 = await usePerM(a.hood, use112)
