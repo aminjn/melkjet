@@ -2061,6 +2061,7 @@ function SitemapView() {
   const [d, setD] = useState<SmData | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState('')
+  const [probe, setProbe] = useState<any>(null)   // فاز ۸۹: نتیجهٔ تستِ واکشیِ عمومی
   const [maxUrls, setMaxUrls] = useState(10000)
   const [sections, setSections] = useState<Record<string, boolean>>({})
   const [msg, setMsg] = useState('')
@@ -2138,9 +2139,28 @@ function SitemapView() {
           <GoldButton disabled={!!busy} onClick={() => post({ maxUrls, sections }, 'save')}>{busy === 'save' ? '...' : 'ذخیرهٔ تنظیمات'}</GoldButton>
           <OutlineButton onClick={() => post({ action: 'regenerate' }, 'regenerate')}>{busy === 'regenerate' ? '...' : '🔄 بازتولید و بررسیِ شاردِ جدید'}</OutlineButton>
           <OutlineButton onClick={() => post({ action: 'ping' }, 'ping')}>{busy === 'ping' ? '...' : '📣 Ping گوگل/بینگ'}</OutlineButton>
+          <OutlineButton onClick={async () => { setBusy('probe'); setProbe(null); try { const r = await fetch('/api/admin/seo/sitemaps', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'probe' }) }); const d = await r.json(); if (d?.ok) setProbe(d) } finally { setBusy('') } }}>{busy === 'probe' ? '⏳ در حال تست…' : '🩺 تستِ واکشیِ عمومی (مثلِ گوگل)'}</OutlineButton>
           <OutlineButton onClick={load}>تازه‌سازی</OutlineButton>
         </div>
         {msg && <div style={{ marginTop: 12, fontSize: 12.5, color: msg.startsWith('خطا') ? '#e7674a' : 'var(--gold)' }}>{msg}</div>}
+        {/* فاز ۸۹: نتیجهٔ تستِ واکشی از دامنهٔ عمومی با UA گوگل‌بات — تفکیکِ مشکلِ لبه (Arvan) از اپ */}
+        {probe && <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: probe.summary?.startsWith('✓') ? '#5fd98a' : '#e7a14a', marginBottom: 8, lineHeight: 1.9 }}>{probe.summary}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 320, overflowY: 'auto' }}>
+            {(probe.probe || []).map((r89: any, i: number) => (
+              <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 11, flexWrap: 'wrap', background: 'var(--bg2)', borderRadius: 8, padding: '6px 10px' }}>
+                <span style={{ fontWeight: 800, color: r89.status === 200 && r89.xml ? '#5fd98a' : '#e7674a' }}>{r89.status || '✕'}</span>
+                <span dir="ltr" style={{ flex: 1, minWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--muted)' }}>{r89.url}</span>
+                <span style={{ color: 'var(--faint)' }}>{(r89.ms || 0).toLocaleString('fa-IR')}ms · {(r89.bytes || 0).toLocaleString('fa-IR')}B</span>
+                {r89.redirect && <span style={{ color: '#e7a14a' }} dir="ltr">→ {r89.redirect}</span>}
+                {r89.challenge && <span style={{ color: '#e7674a', fontWeight: 700 }}>صفحهٔ چالش/WAF!</span>}
+                {!r89.xml && r89.status === 200 && !r89.challenge && <span style={{ color: '#e7674a' }}>خروجی XML نیست</span>}
+                {r89.error && <span style={{ color: '#e7674a' }}>{r89.error}</span>}
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 6 }}>اگر این‌جا همه سبز است ولی GSC هنوز «Couldn't fetch» می‌گوید، یعنی لبهٔ آروان IPهای خارجی (گوگل‌بات) را می‌بندد — در پنلِ آروان: DDoS/WAF را برای مسیرِ /sitemaps و /sitemap.xml خاموش یا گوگل‌بات را whitelist کن.</div>
+        </div>}
       </Card>
 
       {/* جدولِ شاردها */}

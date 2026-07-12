@@ -25,6 +25,34 @@ export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({} as Record<string, any>))
   const actor = (s as any).name || (s as any).phone || 'مدیر'
 
+  // فاز ۸۹ (فیدبک: GSC همهٔ شاردها را «Couldn't fetch» می‌گوید): تستِ واکشیِ «عمومی» — از خودِ سرور،
+  // با UA گوگل‌بات، ایندکس + شاردها از دامنهٔ عمومی (پشتِ Arvan) کشیده می‌شوند تا معلوم شود گوگل چه می‌بیند:
+  // status/زمان/حجم/ریدایرکت/بوی صفحهٔ چالشِ WAF. مشکلِ لبه (CDN/WAF) از مشکلِ اپ تفکیک می‌شود.
+  if (b.action === 'probe') {
+    const shards = await shardList()
+    const urls = [`${BASE}/sitemap.xml`, `${BASE}/robots.txt`, ...shards.slice(0, Math.min(15, shards.length)).map(x => `${BASE}/sitemaps/${x.name}.xml`)]
+    const results: any[] = []
+    for (const u of urls) {
+      const t0 = Date.now()
+      try {
+        const r = await fetch(u, { headers: { 'user-agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)', accept: 'application/xml,text/xml,*/*' }, redirect: 'manual', signal: AbortSignal.timeout(20000), cache: 'no-store' })
+        const body = await r.text().catch(() => '')
+        const challenge = /arvan|captcha|challenge|access denied|cf-|ddos/i.test(body.slice(0, 800)) && !body.includes('<urlset') && !body.includes('<sitemapindex')
+        results.push({
+          url: u, status: r.status, ms: Date.now() - t0, bytes: body.length,
+          redirect: r.status >= 300 && r.status < 400 ? (r.headers.get('location') || '') : '',
+          xml: body.includes('<urlset') || body.includes('<sitemapindex') || u.endsWith('robots.txt'),
+          challenge,
+          contentType: r.headers.get('content-type') || '',
+        })
+      } catch (e: any) { results.push({ url: u, status: 0, ms: Date.now() - t0, bytes: 0, redirect: '', xml: false, challenge: false, error: String(e?.message || e).slice(0, 120) }) }
+    }
+    const bad = results.filter(r => r.status !== 200 || !r.xml)
+    return NextResponse.json({ ok: true, probe: results, summary: bad.length === 0
+      ? '✓ همهٔ نمونه‌ها از دامنهٔ عمومی با UA گوگل‌بات سالم برگشتند — اگر GSC هنوز Couldn\'t fetch می‌گوید، مشکل سمتِ مسدودسازیِ IPهای خارجی (WAF/DDoS آروان) است، نه اپ'
+      : `⚠ ${bad.length.toLocaleString('fa-IR')} از ${results.length.toLocaleString('fa-IR')} نمونه مشکل دارد — جزئیات در جدول` })
+  }
+
   // بازتولید + بررسیِ شاردِ جدید (هشدار می‌دهد)
   if (b.action === 'regenerate') {
     const r = await checkNewShards()
