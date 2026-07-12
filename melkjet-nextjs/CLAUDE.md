@@ -276,9 +276,13 @@ Sales OS, per-owner isolation, plan gating). Payments are DONE: card-to-card def
 Zarinpal as second option when its gateway toggle (admin → پرداخت) AND keys are set — both for
 plans (/pricing modal) and coins (empire shop); plan-gating enforcement is live (فاز ۵۱–۵۸).
 Persiansaze weekly reveal cron + auto account creation are wired (persiansaze-cron.ts).
-Actually pending: consortium/mega-project co-op (needs active population), Creator Store /
-Business Club / VIP / CEO Pass (need the user's pricing decisions), full AI Live Director
-(deliberately kept suggest-only), Visual Bible Pass 2 (needs user approval), Node 22 on server.
+Actually pending (فاز ۱۰۹ audit): Business Club / CEO Pass (pricing decisions), full AI Live
+Director (deliberately kept suggest-only), Node 22 on server (`sudo bash scripts/upgrade-node22.sh`),
+population-gated items (real-time WebSocket auction, global chat). DONE since the last audit:
+consortium (فاز ۱۰۲), VIP «حساب حرفه‌ای» (فاز ۱۰۶ — admin creates a plan with the `vip`
+permission and sets its own price), Creator Store (فاز ۱۰۷ — admin approval queue in the
+Empire rewards tab, creator share knob), Visual Bible Pass 2 v1 (فاز ۱۰۹ — living skyline),
+mobile perf (فازهای ۹۵–۹۹، ۱۰۸ — SSR search + image optimizer + DeferredShell).
 
 ## How to continue across context limits
 1. All work is pushed to git (`origin/main`). A fresh session starts from the repo + this file.
