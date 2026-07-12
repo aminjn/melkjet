@@ -24,7 +24,7 @@ export interface Visitor {
 }
 interface DB { visitors: Record<string, Visitor> }
 
-const MAX_EVENTS = 50
+const MAX_EVENTS = 200   // فاز ۹۱: سقفِ ۵۰ برای کاربرِ فعال کم بود
 function fileLoad(): DB { if (existsSync(DATA_FILE)) { try { const d = JSON.parse(readFileSync(DATA_FILE, 'utf-8')); return { visitors: d.visitors || {} } } catch {} } return { visitors: {} } }
 function fileSave(db: DB) { writeFileSync(DATA_FILE, JSON.stringify(db, null, 2), 'utf-8') }
 
@@ -103,12 +103,34 @@ export async function markSent(vid: string, ok: boolean): Promise<void> {
 
 // فاز ۸۸ (فیدبک: «ترکر جایی نشان نمی‌دهد کدام کاربر کدام صفحه‌ها رفته»): فهرستِ بازدیدکننده‌های اخیر
 // با تاریخچهٔ صفحه‌هایشان — برای نمای ادمین. مرتب بر اساسِ آخرین بازدید؛ رویدادها از انتها (تازه‌ترین‌ها).
-export async function recentVisitors(limit = 60, eventsTail = 25): Promise<Array<{ vid: string; phone?: string; firstSeen: number; lastSeen: number; total: number; events: TrackEvent[] }>> {
+// فاز ۹۱ (فیدبک: «هر کاربر چند ردیفِ تکراری دارد»): کاربرِ شناخته‌شده با «همهٔ» کوکی‌هایش یک ردیف می‌شود
+// (کلید = شماره؛ ناشناس‌ها همچنان per-vid). رویدادهای تکراریِ پشتِ‌سرِهمِ همان URL ادغام می‌شوند.
+export async function recentVisitors(limit = 60, eventsTail = 40): Promise<Array<{ vid: string; phone?: string; devices: number; firstSeen: number; lastSeen: number; total: number; events: TrackEvent[] }>> {
   const db = await load()
-  return Object.values(db.visitors)
+  const byKey = new Map<string, { vid: string; phone?: string; devices: number; firstSeen: number; lastSeen: number; total: number; events: TrackEvent[] }>()
+  for (const v of Object.values(db.visitors)) {
+    const key = v.phone || `vid:${v.vid}`
+    const ex = byKey.get(key)
+    if (ex) {
+      ex.devices++
+      ex.firstSeen = Math.min(ex.firstSeen, v.firstSeen)
+      ex.lastSeen = Math.max(ex.lastSeen, v.lastSeen)
+      ex.total += v.events.length
+      ex.events.push(...v.events)
+    } else {
+      byKey.set(key, { vid: v.vid.slice(0, 10), phone: v.phone, devices: 1, firstSeen: v.firstSeen, lastSeen: v.lastSeen, total: v.events.length, events: [...v.events] })
+    }
+  }
+  return [...byKey.values()]
     .sort((a, b) => b.lastSeen - a.lastSeen)
     .slice(0, Math.max(1, limit))
-    .map(v => ({ vid: v.vid.slice(0, 10), phone: v.phone, firstSeen: v.firstSeen, lastSeen: v.lastSeen, total: v.events.length, events: v.events.slice(-eventsTail).reverse() }))
+    .map(g => {
+      const sorted = g.events.sort((a, b) => b.at - a.at)
+      // ادغامِ بازدیدهای پیاپیِ همان مسیر (رفرش/برگشت) — سیرِ حرکت خوانا می‌شود
+      const dedup: TrackEvent[] = []
+      for (const e of sorted) { const prev = dedup[dedup.length - 1]; if (!prev || prev.url !== e.url) dedup.push(e); if (dedup.length >= eventsTail) break }
+      return { ...g, events: dedup }
+    })
 }
 
 // تاریخچهٔ بازدیدِ یک کاربرِ مشخص (همهٔ vidهای وصل‌شده به این شماره) — برای کشوی کاربر.

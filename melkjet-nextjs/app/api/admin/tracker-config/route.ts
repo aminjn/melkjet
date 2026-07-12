@@ -36,7 +36,14 @@ export async function GET(req: NextRequest) {
     throttleHours: t.throttleHours ?? 6,
     paths: t.paths || '',
     stats: await stats(),
-    visitors: await recentVisitors(60),   // فاز ۸۸: چه کسی کجا رفت — با تاریخچهٔ صفحه‌ها
+    visitors: await (async () => {   // فاز ۸۸/۹۱: چه کسی کجا رفت — یک ردیف per کاربر + نامِ حساب
+      const vs = await recentVisitors(60)
+      try {
+        const { listAccounts } = await import('@/app/lib/account-store')
+        const nameOf = new Map(listAccounts().map((a: any) => [a.phone, a.name || '']))
+        return vs.map(v => ({ ...v, name: v.phone ? (nameOf.get(v.phone) || '') : '' }))
+      } catch { return vs }
+    })(),
     shortener: { configured: !!sh?.apiKey, masked: sh?.apiKey ? '***' + sh.apiKey.slice(-4) : '', siteBase: sh?.siteBase || 'https://melkjet.com', domain: sh?.domain || '' },
     links: await listLinks(100),
     linkStats: await linkStats(),

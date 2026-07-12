@@ -3482,16 +3482,16 @@ function TrackerConfig() {
             {visitors.map((v: any) => (
               <details key={v.vid} style={{ background: 'var(--bg2)', borderRadius: 9, padding: '8px 11px' }}>
                 <summary style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', listStyle: 'none' }}>
-                  <span style={{ fontSize: 12.5, color: v.phone ? '#5fd98a' : 'var(--faint)', fontWeight: 700, direction: 'ltr' }}>{v.phone || `ناشناس‌${v.vid}`}</span>
-                  <span style={{ fontSize: 11, color: 'var(--muted)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.events?.[0]?.title || v.events?.[0]?.url || '—'}</span>
+                  <span style={{ fontSize: 12.5, color: v.phone ? '#5fd98a' : 'var(--faint)', fontWeight: 700 }}>{v.name ? `${v.name} · ` : ''}<span dir="ltr">{v.phone || `ناشناس‌${v.vid}`}</span>{(v.devices || 1) > 1 ? ` · ${fa(v.devices)} دستگاه` : ''}</span>
+                  <span dir="ltr" style={{ fontSize: 11, color: 'var(--muted)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>{(v.events?.[0]?.url || '—').split('?')[0]}</span>
                   <span style={{ fontSize: 10.5, color: 'var(--faint)', whiteSpace: 'nowrap' }}>{fa(v.total)} بازدید · {new Date(v.lastSeen).toLocaleString('fa-IR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                 </summary>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 8, borderTop: '1px solid var(--line)', paddingTop: 8 }}>
                   {(v.events || []).map((e88: any, i: number) => (
                     <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 11.5, flexWrap: 'wrap' }}>
                       <span style={{ color: 'var(--faint)', whiteSpace: 'nowrap', fontSize: 10 }}>{new Date(e88.at).toLocaleString('fa-IR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                      <span style={{ flex: 1, minWidth: 120 }}>{e88.title || '—'}</span>
-                      <a href={e88.url} target="_blank" rel="noreferrer" dir="ltr" style={{ color: 'var(--gold)', fontSize: 10, textDecoration: 'none', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e88.url}</a>
+                      <a href={e88.url} target="_blank" rel="noreferrer" dir="ltr" style={{ color: 'var(--gold)', fontSize: 11, textDecoration: 'none', flex: 1, minWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>{(e88.url || '').split('?')[0] || '—'}</a>
+                      {e88.title && e88.title !== 'اکوسیستم هوشمند املاک' && <span style={{ color: 'var(--muted)', fontSize: 10.5, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e88.title}</span>}
                     </div>
                   ))}
                   {v.total > (v.events || []).length && <div style={{ fontSize: 10, color: 'var(--faint)' }}>… و {fa(v.total - v.events.length)} بازدیدِ قدیمی‌تر</div>}
