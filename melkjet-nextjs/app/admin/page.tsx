@@ -4,6 +4,7 @@ import { DEAL_TYPES, PROPERTY_KINDS, PROVINCES, citiesOf, neighborhoodsOf } from
 import { DIVAR_CATEGORIES, DIVAR_CITIES } from '@/app/lib/divar-meta'
 import { AGENTS, categorizeModel, CATEGORY_LABEL, FALLBACK_MODELS, DEFAULT_GAP_BASE, type ModelCategory } from '@/app/lib/ai-agents'
 import { buildIdentityRows } from '@/app/lib/identity-labels'
+import type { SiteConfig as SiteCfg98, SitePage as SitePage98 } from '@/app/lib/site-defaults'
 import PlanStudio from '@/app/components/PlanStudio'
 import ImageUpload from '@/app/components/ImageUpload'
 import ArticleEditor from '@/app/components/ArticleEditor'
@@ -18,7 +19,7 @@ type View =
   | 'overview' | 'scraper' | 'persiansaze' | 'listings' | 'products' | 'catalog' | 'geo' | 'moderation' | 'content' | 'studio' | 'articles' | 'categories' | 'crm' | 'api'
   | 'reports' | 'plans' | 'promos' | 'discounts' | 'ads' | 'users' | 'profiles' | 'roles' | 'connections'
   | 'tracker' | 'sms' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags' | 'support' | 'payment' | 'aicost' | 'smscost' | 'sitemap' | 'agencyintel'
-  | 'reos' | 'suspension'
+  | 'reos' | 'suspension' | 'site'
   | 'empire' | 'empirePlayers' | 'empireEconomy' | 'empireCapital' | 'empireMissions' | 'empireEngage' | 'empireWorld' | 'empireLiveops' | 'empireAccess' | 'empireMetrics' | 'empireAi' | 'empireRewards'
 
 interface NavItem { id: View; icon: string; label: string; badge?: string; badgeColor?: string; url?: string; accent?: boolean }
@@ -61,6 +62,7 @@ const sections: NavSection[] = [
       { id: 'catalog',     icon: '🧱', label: 'کاتالوگِ مصالح' },
       { id: 'articles',    icon: '✎',  label: 'مقالات' },
       { id: 'categories',  icon: '☰',  label: 'دسته‌بندی‌ها' },
+      { id: 'site',        icon: '🌐', label: 'تنظیماتِ سایت و صفحه‌ها' },
       { id: 'studio',      icon: '◳',  label: 'استودیو پلان و ۳بعدی' },
     ],
   },
@@ -115,6 +117,7 @@ const sections: NavSection[] = [
 ]
 
 const viewTitles: Record<View, string> = {
+  site:       'تنظیماتِ سایت و صفحه‌ها',
   support:    'پشتیبانی — تیکت‌ها',
   overview:   'نمای کلی سیستم',
   scraper:    'موتور اسکرپی هوشمند',
@@ -6225,6 +6228,159 @@ function PromosView() {
 }
 
 // ─── Banner ads ────────────────────────────────────────────────────────────
+// ── فاز ۹۸: تنظیماتِ سایت و صفحه‌های عمومی (فوتر + درباره/قوانین/حریم/سؤالات + صفحه‌های سفارشی) ──
+function SiteView() {
+  const [cfg, setCfg] = useState<SiteCfg98 | null>(null)
+  const [saved, setSaved] = useState('')
+  const [err, setErr] = useState('')
+  const [editSlug, setEditSlug] = useState<string | null>(null)
+  const [pDraft, setPDraft] = useState<{ slug: string; title: string; body: string; show: boolean }>({ slug: '', title: '', body: '', show: true })
+  const [newMode, setNewMode] = useState(false)
+
+  const load = () => fetch('/api/admin/site').then(r => r.ok ? r.json() : null).then(d => { if (d?.config) setCfg(d.config) })
+  useEffect(() => { load() }, [])
+
+  const post = async (body: object, okMsg: string) => {
+    setErr(''); setSaved('')
+    const r = await fetch('/api/admin/site', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const d = await r.json().catch(() => ({}))
+    if (!r.ok) { setErr(d.error || 'خطا'); return false }
+    if (d.config) setCfg(d.config)
+    setSaved(okMsg); setTimeout(() => setSaved(''), 2500)
+    return true
+  }
+
+  if (!cfg) return <div style={{ padding: 40, color: 'var(--muted)' }}>در حال بارگذاری…</div>
+  const f = cfg.footer
+  const setF = (k: string, v: string) => setCfg({ ...cfg, footer: { ...f, [k]: v } })
+  const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
+  const lbl: React.CSSProperties = { fontSize: 12, color: 'var(--muted)', marginBottom: 5, display: 'block' }
+  const card: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: 18, marginBottom: 18 }
+  const btn: React.CSSProperties = { padding: '9px 20px', borderRadius: 10, border: 'none', background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }
+  const ghost: React.CSSProperties = { padding: '7px 13px', borderRadius: 9, border: '1px solid var(--line2)', background: 'transparent', color: 'var(--muted)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }
+
+  const setCol = (ci: number, patch: Partial<{ h: string }>) => {
+    const cols = f.cols.map((c, i) => i === ci ? { ...c, ...patch } : c)
+    setCfg({ ...cfg, footer: { ...f, cols } })
+  }
+  const setLink = (ci: number, li: number, k: 't' | 'href', v: string) => {
+    const cols = f.cols.map((c, i) => i !== ci ? c : { ...c, links: c.links.map((l, j) => j === li ? { ...l, [k]: v } : l) })
+    setCfg({ ...cfg, footer: { ...f, cols } })
+  }
+
+  return (
+    <div style={{ maxWidth: 900 }}>
+      {(saved || err) && <div style={{ position: 'sticky', top: 0, zIndex: 5, marginBottom: 12, padding: '9px 14px', borderRadius: 10, fontSize: 13, background: err ? 'rgba(231,74,74,.12)' : 'rgba(95,217,138,.12)', border: `1px solid ${err ? 'rgba(231,74,74,.4)' : 'rgba(95,217,138,.4)'}`, color: err ? '#e7674a' : '#5fd98a' }}>{err || saved}</div>}
+
+      {/* ── فوتر ── */}
+      <div style={card}>
+        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>🦶 فوترِ کلِ سایت</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>در همهٔ صفحه‌های عمومی نمایش داده می‌شود؛ هر چیزی خالی باشد نشان داده نمی‌شود.</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+          <div style={{ gridColumn: '1 / -1' }}><span style={lbl}>متنِ معرفی (زیرِ لوگو)</span><textarea style={{ ...inp, height: 56, resize: 'vertical' }} value={f.blurb} onChange={e => setF('blurb', e.target.value)} /></div>
+          <div><span style={lbl}>متنِ کپی‌رایت</span><input style={inp} value={f.copyright} onChange={e => setF('copyright', e.target.value)} /></div>
+          <div><span style={lbl}>شعارِ پایین</span><input style={inp} value={f.tagline} onChange={e => setF('tagline', e.target.value)} /></div>
+          <div><span style={lbl}>تلفن</span><input style={{ ...inp, direction: 'ltr' }} value={f.phone} onChange={e => setF('phone', e.target.value)} placeholder="۰۲۱-..." /></div>
+          <div><span style={lbl}>ایمیل</span><input style={{ ...inp, direction: 'ltr' }} value={f.email} onChange={e => setF('email', e.target.value)} placeholder="info@melkjet.com" /></div>
+          <div style={{ gridColumn: '1 / -1' }}><span style={lbl}>نشانی</span><input style={inp} value={f.address} onChange={e => setF('address', e.target.value)} /></div>
+          <div><span style={lbl}>اینستاگرام (لینک کامل)</span><input style={{ ...inp, direction: 'ltr' }} value={f.instagram} onChange={e => setF('instagram', e.target.value)} placeholder="https://instagram.com/..." /></div>
+          <div><span style={lbl}>تلگرام (لینک کامل)</span><input style={{ ...inp, direction: 'ltr' }} value={f.telegram} onChange={e => setF('telegram', e.target.value)} placeholder="https://t.me/..." /></div>
+          <div><span style={lbl}>واتساپ (لینک کامل)</span><input style={{ ...inp, direction: 'ltr' }} value={f.whatsapp} onChange={e => setF('whatsapp', e.target.value)} placeholder="https://wa.me/98..." /></div>
+        </div>
+        <div style={{ fontSize: 13, fontWeight: 700, margin: '14px 0 8px' }}>ستون‌های لینک</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 12 }}>
+          {f.cols.map((c, ci) => (
+            <div key={ci} style={{ border: '1px solid var(--line)', borderRadius: 12, padding: 12, background: 'var(--bg2)' }}>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                <input style={{ ...inp, fontWeight: 700 }} value={c.h} onChange={e => setCol(ci, { h: e.target.value })} placeholder="عنوانِ ستون" />
+                <button style={ghost} title="حذفِ ستون" onClick={() => setCfg({ ...cfg, footer: { ...f, cols: f.cols.filter((_, i) => i !== ci) } })}>✕</button>
+              </div>
+              {c.links.map((l, li) => (
+                <div key={li} style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                  <input style={{ ...inp, flex: 1.2 }} value={l.t} onChange={e => setLink(ci, li, 't', e.target.value)} placeholder="متن" />
+                  <input style={{ ...inp, flex: 1, direction: 'ltr', fontSize: 12 }} value={l.href} onChange={e => setLink(ci, li, 'href', e.target.value)} placeholder="/about" />
+                  <button style={ghost} onClick={() => setCfg({ ...cfg, footer: { ...f, cols: f.cols.map((cc, i) => i !== ci ? cc : { ...cc, links: cc.links.filter((_, j) => j !== li) }) } })}>✕</button>
+                </div>
+              ))}
+              <button style={ghost} onClick={() => setCfg({ ...cfg, footer: { ...f, cols: f.cols.map((cc, i) => i !== ci ? cc : { ...cc, links: [...cc.links, { t: '', href: '' }] }) } })}>+ لینک</button>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+          <button style={btn} onClick={() => post({ action: 'save', footer: f }, '✓ فوتر ذخیره شد — بعد از رفرش در کلِ سایت اعمال می‌شود')}>ذخیرهٔ فوتر</button>
+          <button style={ghost} onClick={() => setCfg({ ...cfg, footer: { ...f, cols: [...f.cols, { h: '', links: [] }] } })}>+ ستونِ جدید</button>
+        </div>
+      </div>
+
+      {/* ── تماس با ما ── */}
+      <div style={card}>
+        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>☎ صفحهٔ «تماس با ما»</div>
+        <span style={lbl}>متنِ بالای صفحه</span>
+        <textarea style={{ ...inp, height: 56, resize: 'vertical', marginBottom: 10 }} value={cfg.contact.intro} onChange={e => setCfg({ ...cfg, contact: { ...cfg.contact, intro: e.target.value } })} />
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--muted)', marginBottom: 12, cursor: 'pointer' }}>
+          <input type="checkbox" checked={cfg.contact.formEnabled !== false} onChange={e => setCfg({ ...cfg, contact: { ...cfg.contact, formEnabled: e.target.checked } })} style={{ accentColor: 'var(--gold)' }} />
+          فرمِ ارسالِ پیام نمایش داده شود
+        </label>
+        <div style={{ fontSize: 11.5, color: 'var(--faint)', marginBottom: 12 }}>تلفن/ایمیل/نشانی از همان بخشِ فوترِ بالا خوانده می‌شود (یک منبع).</div>
+        <button style={btn} onClick={() => post({ action: 'save', contact: cfg.contact }, '✓ تنظیماتِ تماس ذخیره شد')}>ذخیرهٔ تماس</button>
+      </div>
+
+      {/* ── صفحه‌های عمومی ── */}
+      <div style={card}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+          <div style={{ fontSize: 15, fontWeight: 800 }}>📄 صفحه‌های عمومی</div>
+          <button style={ghost} onClick={() => { setNewMode(true); setEditSlug(null); setPDraft({ slug: '', title: '', body: '', show: true }) }}>+ صفحهٔ جدید</button>
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>درباره/قوانین/حریم خصوصی/سؤالات متداول + هر صفحهٔ سفارشی که بسازی (آدرس: /page/اسلاگ). نگارش: خطِ خالی = پاراگرافِ نو، «## » تیتر، «- » بولت، **پررنگ**.</div>
+        <div style={{ display: 'grid', gap: 8 }}>
+          {cfg.pages.map((pg: SitePage98) => {
+            const href = pg.system ? `/${pg.slug}` : `/page/${pg.slug}`
+            const editing = editSlug === pg.slug
+            return (
+              <div key={pg.slug} style={{ border: `1px solid ${editing ? 'var(--gold)' : 'var(--line)'}`, borderRadius: 12, background: 'var(--bg2)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', cursor: 'pointer' }} onClick={() => { setNewMode(false); setEditSlug(editing ? null : pg.slug); setPDraft({ slug: pg.slug, title: pg.title, body: pg.body, show: pg.show !== false }) }}>
+                  <span style={{ fontWeight: 700, fontSize: 13.5 }}>{pg.title}</span>
+                  <a href={href} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 11.5, color: 'var(--goldText)', textDecoration: 'none', direction: 'ltr' }}>{href} ↗</a>
+                  <span style={{ flex: 1 }} />
+                  {pg.system && <span style={{ fontSize: 10.5, color: 'var(--faint)', border: '1px solid var(--line2)', borderRadius: 999, padding: '2px 8px' }}>سیستمی</span>}
+                  <span style={{ fontSize: 11, color: pg.show !== false ? '#5fd98a' : '#e7a14a' }}>{pg.show !== false ? 'نمایش' : 'پنهان'}</span>
+                </div>
+                {editing && (
+                  <div style={{ padding: '0 14px 14px', display: 'grid', gap: 10 }}>
+                    <div><span style={lbl}>عنوان</span><input style={inp} value={pDraft.title} onChange={e => setPDraft({ ...pDraft, title: e.target.value })} /></div>
+                    <div><span style={lbl}>متنِ صفحه</span><textarea style={{ ...inp, height: 260, resize: 'vertical', lineHeight: 1.9 }} value={pDraft.body} onChange={e => setPDraft({ ...pDraft, body: e.target.value })} /></div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: 'var(--muted)', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={pDraft.show} onChange={e => setPDraft({ ...pDraft, show: e.target.checked })} style={{ accentColor: 'var(--gold)' }} /> نمایش در سایت
+                      </label>
+                      <button style={btn} onClick={async () => { if (await post({ action: 'page', page: pDraft }, '✓ صفحه ذخیره شد')) setEditSlug(null) }}>ذخیرهٔ صفحه</button>
+                      {!pg.system && <button style={{ ...ghost, color: '#e7674a', borderColor: 'rgba(231,74,74,.4)' }} onClick={async () => { if (confirm(`صفحهٔ «${pg.title}» حذف شود؟`) && await post({ action: 'deletePage', slug: pg.slug }, '✓ صفحه حذف شد')) setEditSlug(null) }}>حذفِ صفحه</button>}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+        {newMode && (
+          <div style={{ marginTop: 12, border: '1px solid var(--gold)', borderRadius: 12, padding: 14, background: 'var(--bg2)', display: 'grid', gap: 10 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 800 }}>صفحهٔ جدید</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div><span style={lbl}>اسلاگ (انگلیسی — آدرس می‌شود /page/اسلاگ)</span><input style={{ ...inp, direction: 'ltr' }} value={pDraft.slug} onChange={e => setPDraft({ ...pDraft, slug: e.target.value })} placeholder="jobs" /></div>
+              <div><span style={lbl}>عنوان</span><input style={inp} value={pDraft.title} onChange={e => setPDraft({ ...pDraft, title: e.target.value })} placeholder="فرصت‌های همکاری" /></div>
+            </div>
+            <div><span style={lbl}>متنِ صفحه</span><textarea style={{ ...inp, height: 180, resize: 'vertical', lineHeight: 1.9 }} value={pDraft.body} onChange={e => setPDraft({ ...pDraft, body: e.target.value })} /></div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button style={btn} onClick={async () => { if (await post({ action: 'page', page: pDraft }, '✓ صفحه ساخته شد')) setNewMode(false) }}>ساختِ صفحه</button>
+              <button style={ghost} onClick={() => setNewMode(false)}>انصراف</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function AdsView() {
   const [banners, setBanners] = useState<any[]>([])
   const [f, setF] = useState({ title: '', image: '', link: '', placement: 'home' })
@@ -6652,6 +6808,7 @@ export default function SuperAdminPage() {
       case 'promos':     return <PromotionsView />
       case 'discounts':  return <PromosView />
       case 'ads':        return <AdsView />
+      case 'site':       return <SiteView />
       case 'settings':   return <SettingsView />
       case 'flags':      return <FlagsView />
       case 'health':     return <HealthView />

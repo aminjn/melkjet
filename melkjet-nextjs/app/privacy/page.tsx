@@ -4,12 +4,12 @@ import PageBody from '@/app/components/PageBody'
 import { pageOf } from '@/app/lib/site-store'
 import { notFound } from 'next/navigation'
 
-export const metadata = { title: 'قوانین و شرایط استفاده' }
+export const metadata = { title: 'حریم خصوصی' }
 export const dynamic = 'force-dynamic'
 
-export default function TermsPage() {
+export default function PrivacyPage() {
   // فاز ۹۸: متن از تنظیماتِ سوپرادمین
-  const page = pageOf('terms')
+  const page = pageOf('privacy')
   if (!page) notFound()
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
