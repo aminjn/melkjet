@@ -744,6 +744,7 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             {row('تصاحبِ خصمانه فعال (۱/۰)', cin('npc', 'takeoverEnabled'), 'خریدِ کلِ شرکتِ NPC با ارزش‌گذاریِ شفاف — فقط NPC، هرگز بازیکنِ واقعی')}
             {row('سطحِ بازشدنِ تصاحب', cin('npc', 'takeoverLevel'))}
             {row('حقِ تقدمِ تصاحب (٪)', cin('npc', 'takeoverPremiumPct'), 'روی جمعِ خزانه + ارزشِ روزِ املاک')}
+            {row('هوای واقعیِ شهر فعال (۱/۰)', cin('weatherEnabled'), 'فاز ۱۰۴: Open-Meteo — در دسترس نبود = هیچ (عددِ ساختگی هرگز)')}
             <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>🌌 بازتولد و درختِ مهارت (فاز ۱۰۳ — جلد ۳ Prestige)</div>
             {row('بازتولد فعال (۱/۰)', cin('prestige', 'enabled'), 'XP/سرمایه/دارایی از نو؛ کوین و claims و میراث می‌مانند')}
             {row('سطحِ لازم برای بازتولد', cin('prestige', 'minLevel'))}

@@ -1963,6 +1963,7 @@ export async function POST(req: NextRequest) {
         ok: true, day, year: worldYearOf(relDay), history: await worldHistory(60).catch(() => []), rumors, companies: npc.companies, cities: npc.cities,
         gov: { now: govNow.fa, next: govNext.fa, taxNow: effectiveTransferTaxPct(day) },
         occasion: occasionOf(),   // فاز ۷۱: مناسبتِ واقعیِ تقویم — فقط حال‌وهوا
+        weather: config().empire.weatherEnabled !== false ? await (await import('@/app/lib/weather')).weatherOf('تهران').catch(() => null) : null,   // فاز ۱۰۴: هوای واقعی (Open-Meteo) — در دسترس نبود = هیچ
         following: me67?.following || [], myNo: me67?.no || 0,
         // فاز ۱۰۱ (NPC v2): رسانهٔ شهر + شهروندانِ آماری (برچسبِ برآورد در UI) + جنگِ من + تنظیماتِ تصاحب
         media: npc.media || [], citizens: citizensOf(hoods),

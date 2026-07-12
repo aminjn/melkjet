@@ -1609,6 +1609,13 @@ export default function EmpirePage() {
       </div>}
 
       {/* فاز ۱۰۱ (NPC v2): رسانهٔ شهر — تیترها فقط از حرکت‌های واقعاً رخ‌داده */}
+      {/* فاز ۱۰۴: هوای واقعیِ شهر — اگر سرویس در دسترس نبود چیزی نشان داده نمی‌شود */}
+      {wd.weather && <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center', background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 999, padding: '5px 14px', marginTop: 12, fontSize: 12 }}>
+        <span style={{ fontSize: 16 }}>{wd.weather.icon}</span>
+        <b>{wd.weather.label}</b>
+        <span style={{ color: 'var(--gold)', fontWeight: 800 }}>{fa(wd.weather.tempC)}°</span>
+        <span style={{ color: 'var(--faint)', fontSize: 9.5 }}>{wd.weather.city} — هوای واقعی</span>
+      </div>}
       {(wd.media || []).length > 0 && <div style={{ background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 12, padding: '10px 14px', marginTop: 12 }}>
         <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 6 }}>📻 رسانهٔ شهر <span style={{ fontSize: 9.5, color: 'var(--faint)', fontWeight: 400 }}>— از معاملاتِ شرکت‌ها و روندِ واقعیِ محله‌ها</span></div>
         {wd.media.map((m: any, i: number) => <div key={i} style={{ fontSize: 11, color: 'var(--muted)', padding: '3px 0' }}>{m.icon} {m.text}</div>)}
@@ -3041,6 +3048,14 @@ export default function EmpirePage() {
       {/* 📖 کتابِ زندگی (فاز ۷۱ — سند ۳۳ The Biography): روایتِ قاعده‌مند از دادهٔ واقعی — «بازی خاطره را ثبت می‌کند» */}
       {(hall.biography || []).length > 0 && <details style={{ marginTop: 12 }}>
         <summary style={{ cursor: 'pointer', fontSize: 12, fontWeight: 700, color: 'var(--gold)' }}>📖 کتابِ زندگیِ تو ({fa(hall.biography.length)} فصل)</summary>
+        {/* فاز ۱۰۴: خروجیِ چاپی/PDF — پنجرهٔ چاپِ مرورگر، بدونِ هیچ وابستگی */}
+        <button style={{ ...btnGhost, padding: '3px 10px', fontSize: 10.5, marginTop: 6 }} onClick={() => {
+          const rows = (hall.biography as any[]).map(ch => `<div class="ch"><div class="t">${ch.icon} ${ch.title}</div><div class="x">${ch.text}</div></div>`).join('')
+          const w = window.open('', '_blank')
+          if (!w) return
+          w.document.write(`<!doctype html><html dir="rtl" lang="fa"><head><meta charset="utf-8"><title>کتابِ زندگیِ ${st.hud?.name || ''} — ملک‌جت</title><style>body{font-family:'Vazirmatn',Tahoma,sans-serif;max-width:700px;margin:0 auto;padding:32px;color:#1a1712}h1{font-size:22px;border-bottom:2px solid #b8960e;padding-bottom:10px}.ch{margin:18px 0;page-break-inside:avoid}.t{font-weight:800;font-size:15px;margin-bottom:4px}.x{font-size:13px;line-height:2;color:#444}.f{margin-top:30px;font-size:11px;color:#999;text-align:center}</style></head><body><h1>📖 کتابِ زندگیِ ${st.hud?.name || 'امپراتور'}</h1>${rows}<div class="f">ملک‌جت — melkjet.com · همهٔ فصل‌ها از رویدادهای واقعیِ مسیرِ توست</div><script>window.print()</script></body></html>`)
+          w.document.close()
+        }}>🖨 نسخهٔ چاپی / PDF</button>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
           {hall.biography.map((b2: any, i: number) => (
             <div key={i} style={{ background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 12, padding: '10px 14px' }}>
