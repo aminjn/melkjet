@@ -54,6 +54,8 @@ import { ownerOfListing, claimListing, releaseListing, transferListing, myClanOf
 import { sendDm, dmThread, createDuel, acceptDuel, resolveDuels, myDuels, markDuelRewarded, clanDeposit, clanWithdraw, clanProjectStart, clanProjectJoin, clanProjectSell } from '@/app/lib/empire-social'   // فاز ۱۰۲
 import { submitCreatorItem, myCreatorItems, approvedCreatorItems, recordCreatorSale, creatorIconOf, creatorShareOf, type CreatorCfg } from '@/app/lib/empire-creator'   // فاز ۱۰۷
 import { grantCoins } from '@/app/lib/empire-store'
+import { setAssetFacade } from '@/app/lib/empire-store'   // فاز ۱۰۹
+import { isValidFacade } from '@/app/lib/empire-visual'   // فاز ۱۰۹
 // فاز ۳۹ (سند ۲۶ فصل ۱۶ Cognitive AI): هوشِ سرمایه‌گذاری — ارزش‌گذاری/تصمیم‌یار/روندِ محله/سلامتِ مالی/اولویت‌ها؛ همه از دادهٔ واقعی.
 import { compStatsOf, valuationOf, decisionOf, marketIntelOf, cashflowOf, financialHealthOf, prioritiesOf, evalRules, RULE_TEMPLATES, tradeAskCheckOf, jvOfferCheckOf, crisisOf, rarityOf } from '@/app/lib/empire-intel'
 // فاز ۴۸ (جوایزِ پولِ واقعی): نردبان/استخر/صفِ تأیید + کیف‌پولِ یکپارچهٔ سایت (سطلِ «پاداش»)
@@ -595,6 +597,7 @@ async function stateOf(userId: string, e00: EmpireData) {
     speed: config().empire.speed,                  // زمان‌خری (فاز ۲۷): نرخِ کوین برای نمایشِ شفاف در UI
     pros: config().empire.pros,                    // کارمزدِ نقش‌های حرفه‌ای (فاز ۲۹) — برای نمایشِ شفاف
     soundEnabled: config().empire.sound?.enabled !== false,   // 🔊 بازخوردِ صوتی (فاز ۳۲)
+    visual: config().empire.visual || { dayNight: true, weatherFx: true, streetLife: true, facades: true },   // 🎨 فاز ۱۰۹ (Visual Pass 2)
     // 🪙 فروشگاهِ کوین (فاز ۲۸): فقط بسته‌های فعال — قیمت‌ها شفاف؛ کوین هرگز قدرت نمی‌خرد
     // فاز ۳۳: بستهٔ زمان‌دار (until) بعدِ تاریخش خودکار حذف می‌شود — تایمرِ واقعی، نه نمایشی
     coinShop: config().empire.coinShop?.enabled ? { enabled: true, packs: activeCoinPacks(config().empire.coinShop.packs || []) } : { enabled: false, packs: [] },
@@ -822,6 +825,22 @@ export async function POST(req: NextRequest) {
         appendWorldEvent({ icon: '🔨', title: `چکشِ تالارِ مزایده کوبیده شد — ${w63}`, detail: it.title.slice(0, 60), kind: 'auction', no: r.empire?.no }, dayNumberOf(Date.now())).catch(() => {})
       }
       return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+    }
+    // 🎨 سبکِ نمای برج (فاز ۱۰۹ — Visual Pass 2 / جلد ۶۸): فقط ظاهرِ خطِ آسمان؛ صفر اثرِ اقتصادی
+    case 'facadeSet': {
+      if (config().empire.visual?.facades === false) return NextResponse.json({ error: 'انتخابِ نما فعال نیست' }, { status: 400 })
+      const fc = String(b.facade || '')
+      if (!isValidFacade(fc)) return NextResponse.json({ error: 'سبکِ نما نامعتبر است' }, { status: 400 })
+      const r = await setAssetFacade(userId, String(b.assetId || ''), fc)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+    }
+    // 🌦 هوای واقعیِ شهرِ خطِ آسمان (فاز ۱۰۹): همان weatherOf فاز ۱۰۴ — در دسترس نبود = هیچ
+    case 'weather': {
+      if (config().empire.weatherEnabled === false || config().empire.visual?.weatherFx === false)
+        return NextResponse.json({ ok: true, weather: null })
+      const w = await (await import('@/app/lib/weather')).weatherOf(String(b.city || 'تهران')).catch(() => null)
+      return NextResponse.json({ ok: true, weather: w })
     }
     // 🏷 نامِ دلخواهِ دارایی (قانونِ ۱۳ رویاپردازی) — هویتی، صفر اثرِ اقتصادی؛ خالی = پاک‌کردن
     case 'nickname': {

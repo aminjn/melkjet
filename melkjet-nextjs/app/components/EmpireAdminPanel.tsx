@@ -777,6 +777,11 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             {row('سطحِ بازشدنِ تصاحب', cin('npc', 'takeoverLevel'))}
             {row('حقِ تقدمِ تصاحب (٪)', cin('npc', 'takeoverPremiumPct'), 'روی جمعِ خزانه + ارزشِ روزِ املاک')}
             {row('هوای واقعیِ شهر فعال (۱/۰)', cin('weatherEnabled'), 'فاز ۱۰۴: Open-Meteo — در دسترس نبود = هیچ (عددِ ساختگی هرگز)')}
+            <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>🎨 پاسِ بصری ۲ (فاز ۱۰۹) — شهرِ زندهٔ خطِ آسمان</div>
+            {row('شب/روزِ واقعی (۱/۰)', cin('visual', 'dayNight'), 'آسمانِ خطِ آسمان از ساعتِ واقعیِ کاربر: سپیده/روز/غروب/شب')}
+            {row('جلوهٔ هوای واقعی (۱/۰)', cin('visual', 'weatherFx'), 'باران/برف/ابر/رعد از هوای واقعیِ Open-Meteo — در دسترس نبود = هیچ')}
+            {row('زندگیِ خیابان (۱/۰)', cin('visual', 'streetLife'), 'خودروهای متحرک زیرِ برج‌ها — تعداد از شمارِ دارایی‌های واقعیِ بازیکن (سقف ۵)')}
+            {row('انتخابِ نمای برج (۱/۰)', cin('visual', 'facades'), 'قانونِ ۱۳ (رویاپردازی): سبکِ نما فقط ظاهرِ خطِ آسمان — صفر اثرِ اقتصادی')}
             <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>🌌 بازتولد و درختِ مهارت (فاز ۱۰۳ — جلد ۳ Prestige)</div>
             {row('بازتولد فعال (۱/۰)', cin('prestige', 'enabled'), 'XP/سرمایه/دارایی از نو؛ کوین و claims و میراث می‌مانند')}
             {row('سطحِ لازم برای بازتولد', cin('prestige', 'minLevel'))}

@@ -295,6 +295,19 @@ body { padding-bottom: env(safe-area-inset-bottom); }
 @keyframes mjfloat{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-14px,18px) scale(1.06)}}
 @media(prefers-reduced-motion:reduce){.mjh-orb{animation:none!important}}
 
+/* فاز ۱۰۹ (Visual Pass 2): شهرِ زندهٔ خطِ آسمان — خودرو/باران/برف/ابر/رعد؛ با احترامِ کامل به reduced-motion */
+@keyframes empDrive{from{left:-7%}to{left:104%}}
+.empCar{animation:empDrive linear infinite}
+@keyframes empRainFall{from{background-position:0 0}to{background-position:-30px 56px}}
+.empRain{background-image:repeating-linear-gradient(105deg,rgba(165,195,255,.28) 0 1px,transparent 1px 15px);animation:empRainFall .55s linear infinite}
+@keyframes empSnowFall{from{transform:translateY(-10px);opacity:.95}to{transform:translateY(150px);opacity:.15}}
+.empSnow{animation:empSnowFall linear infinite}
+@keyframes empCloudDrift{0%,100%{transform:translateX(0)}50%{transform:translateX(16px)}}
+.empCloud{animation:empCloudDrift 9s ease-in-out infinite}
+@keyframes empFlash{0%,91%,95%,100%{background:transparent}93%{background:rgba(255,255,215,.16)}}
+.empFlash{animation:empFlash 6s linear infinite}
+@media(prefers-reduced-motion:reduce){.empRain,.empCloud,.empFlash{animation:none!important}.empCar,.empSnow{display:none!important}}
+
 /* بازار مصالح — چیدمانِ فیلترِ کناری (موبایل: کشویی) */
 @media(max-width:860px){
   .mjb-layout{grid-template-columns:1fr!important}

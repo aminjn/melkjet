@@ -52,6 +52,7 @@ export interface EmpireAsset {
   forSale?: number            // قیمتِ عرضه به بازیکنانِ دیگر (۰/undefined = عرضه نشده)
   p2pAuction?: { minBid: number; endDay: number; startedDay: number; bids: Array<{ userId: string; no: number; name: string; amount: number; at: number }> }   // فاز ۶۴: مزایدهٔ بینِ بازیکنانِ واقعی
   nickname?: string           // قانونِ ۱۳ (رویاپردازی): نامِ دلخواهِ بازیکن روی دارایی — صرفاً هویتی، صفر اثرِ اقتصادی
+  facade?: string             // فاز ۱۰۹ (Visual Pass 2 — جلد ۶۸): سبکِ نمای برج در خطِ آسمان؛ هویتی، صفر اثرِ اقتصادی
   jvOffer?: { pct: number; amount: number }   // پیشنهادِ بازِ مشارکتِ ساخت: سهمِ ٪ در برابرِ آوردهٔ نقدی
   partners?: Array<{ userId: string; no: number; name: string; pct: number; paid: number; at: number }>   // شرکای پروژه — سهمشان از عایدیِ فروش خودکار تسویه می‌شود
 }
@@ -1915,6 +1916,15 @@ export async function setAssetNickname(userId: string, assetId: string, name: st
     if (!a) return 'دارایی یافت نشد'
     const n = name.trim().slice(0, 24)
     if (n) a.nickname = n; else delete a.nickname
+  })
+}
+
+// فاز ۱۰۹ (Visual Pass 2): سبکِ نمای برج — فقط ظاهرِ خطِ آسمان؛ اعتبارسنجیِ id در API انجام می‌شود.
+export async function setAssetFacade(userId: string, assetId: string, facade: string) {
+  return mutateEmpire(userId, e => {
+    const a = e.assets.find(x => x.id === assetId)
+    if (!a) return 'دارایی یافت نشد'
+    if (facade) a.facade = facade; else delete a.facade
   })
 }
 

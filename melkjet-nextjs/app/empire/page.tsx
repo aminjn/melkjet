@@ -210,6 +210,11 @@ export default function EmpirePage() {
   const [deals, setDeals] = useState<any>(null)                // فرصت‌های طلاییِ امروز (سند ۱۴ — Hook)
   const [lands, setLands] = useState<any>(null)                // 🏞 بازارِ زمین (فاز ۲۴) — دروازهٔ موتورِ ساخت
   const [mapL, setMapL] = useState({ assets: true, deals: true, lands: true })   // لایه‌های نقشهٔ شهر (فاز ۲۶)
+  const [wx, setWx] = useState<any>(null)   // فاز ۱۰۹ (Visual Pass 2): هوای واقعیِ شهر برای خطِ آسمان — نبود = هیچ
+  useEffect(() => {
+    fetch('/api/empire', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'weather' }) })
+      .then(r => r.ok ? r.json() : null).then(d => { if (d?.weather) setWx(d.weather) }).catch(() => {})
+  }, [])
   const [dz, setDz] = useState<any>(null)                      // فرمِ قراردادِ معمار (فاز ۲۹): {assetId, info, floors, upf}
   // (فاز ۳۱: تیکِ سراسری حذف شد — شمارشِ معکوس کامپوننتِ ایزولهٔ خودش را دارد تا کلِ صفحه هر ثانیه رندر نشود)
   const [dealAn, setDealAn] = useState('')                     // تحلیلِ کدام فرصتِ امروز نمایش داده شود
@@ -1322,14 +1327,38 @@ export default function EmpirePage() {
     {(e.assets?.length || 0) > 0 && (() => {
       const vals = e.assets.map((a: any) => a.current || a.buyPrice)
       const max = Math.max(...vals)
+      // فاز ۱۰۹ (Visual Pass 2): شهرِ زنده — فازِ آسمان از ساعتِ واقعی، جلوهٔ هوای واقعی، زندگیِ خیابان از دارایی‌های واقعی
+      const vis = st.visual || {}
+      const hr = new Date().getHours()
+      const phase = vis.dayNight === false ? 'night' : (hr >= 5 && hr < 7 ? 'dawn' : hr >= 7 && hr < 17 ? 'day' : hr >= 17 && hr < 20 ? 'dusk' : 'night')
+      const sky: Record<string, string> = {
+        dawn: 'linear-gradient(180deg,#2a2f52 0%,#8a5470 62%,#231803 100%)',
+        day: 'linear-gradient(180deg,#27466b 0%,#5c85ad 62%,#231803 100%)',
+        dusk: 'linear-gradient(180deg,#2e2450 0%,#8a4a33 62%,#231803 100%)',
+        night: 'linear-gradient(180deg,#0a0d1c 0%,#121830 62%,#231803 100%)',
+      }
+      const skyIcon = phase === 'day' ? '☀️' : phase === 'dawn' ? '🌅' : phase === 'dusk' ? '🌇' : '🌙'
+      const fx = vis.weatherFx === false ? null : (wx?.icon === '🌧' ? 'rain' : wx?.icon === '❄️' ? 'snow' : wx?.icon === '⛈' ? 'storm' : wx?.icon === '🌫' ? 'mist' : null)
+      const clouds = vis.weatherFx !== false && wx && ['☁️', '🌤', '⛈', '🌧'].includes(wx.icon)
+      const cars = vis.streetLife === false ? 0 : Math.min(5, e.assets.length)
       return (
-        <div style={{ ...card, padding: '14px 16px 0', background: 'linear-gradient(180deg,#0a0d1c 0%,#121830 62%,#231803 100%)', borderColor: 'rgba(201,168,76,.5)', overflow: 'hidden', position: 'relative' }}>
-          {['12%', '30%', '55%', '74%', '90%'].map((left, i) => (
+        <div style={{ ...card, padding: '14px 16px 0', background: sky[phase], borderColor: 'rgba(201,168,76,.5)', overflow: 'hidden', position: 'relative' }}>
+          {phase === 'night' && ['12%', '30%', '55%', '74%', '90%'].map((left, i) => (
             <span key={i} style={{ position: 'absolute', top: 10 + (i % 3) * 9, left, fontSize: 8, color: '#cfd6ff', animation: `empTwinkle ${2 + i * 0.6}s ease-in-out infinite` }}>✦</span>
           ))}
-          <span style={{ position: 'absolute', top: 12, left: 18, fontSize: 20 }}>🌙</span>
+          <span style={{ position: 'absolute', top: 12, left: 18, fontSize: 20 }}>{skyIcon}</span>
+          {clouds && ['16%', '52%'].map((l, i) => (
+            <span key={'c' + i} className="empCloud" style={{ position: 'absolute', top: 8 + i * 12, left: l, fontSize: 15, opacity: .85, animationDelay: `${i * 4}s` }}>☁️</span>
+          ))}
+          {(fx === 'rain' || fx === 'storm') && <div className="empRain" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />}
+          {fx === 'storm' && <div className="empFlash" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />}
+          {fx === 'snow' && ['8%', '24%', '41%', '60%', '76%', '92%'].map((l, i) => (
+            <span key={'s' + i} className="empSnow" style={{ position: 'absolute', top: -8, left: l, fontSize: 9, color: '#dfe8ff', animationDuration: `${5 + i}s`, animationDelay: `${i * .8}s` }}>❄</span>
+          ))}
+          {fx === 'mist' && <div style={{ position: 'absolute', inset: 0, background: 'rgba(220,225,235,.10)', pointerEvents: 'none' }} />}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
             <b style={{ fontSize: 13.5, color: '#ece5d8' }}>🌆 خطِ آسمانِ امپراتوریِ تو</b>
+            {wx && <span title={`هوای واقعیِ ${wx.city} — Open-Meteo`} style={{ fontSize: 11, color: '#dfe4f5', background: 'rgba(255,255,255,.08)', border: '1px solid rgba(255,255,255,.15)', borderRadius: 10, padding: '2px 8px' }}>{wx.icon} {(Number(wx.tempC) || 0).toLocaleString('fa-IR')}° {wx.label}</span>}
             <span style={{ fontSize: 10.5, color: '#9aa0b8' }}>ارتفاعِ هر برج = ارزشِ روزِ واقعیِ همان دارایی</span>
           </div>
           {/* هر برج = یک دارایی: ارزشِ روز بالای برج، نامِ محله زیرش — دیگر نمودارِ گنگ نیست (فاز ۳۰) */}
@@ -1342,7 +1371,7 @@ export default function EmpirePage() {
                 modern: 'linear-gradient(180deg,#2b4a6f,#16233a)', classic: 'linear-gradient(180deg,#5a5040,#2a2620)',
                 roman: 'linear-gradient(180deg,#6b5d49,#332d24)', green: 'linear-gradient(180deg,#2f5a3f,#152a1d)',
               }
-              const bg = (a.construction?.facade && facadeBg[a.construction.facade]) || 'linear-gradient(180deg,#262c47,#151827)'
+              const bg = facadeBg[a.facade || a.construction?.facade || ''] || 'linear-gradient(180deg,#262c47,#151827)'   // فاز ۱۰۹: نمای انتخابیِ خودِ دارایی مقدم است
               const crown = vals[i] === max && e.assets.length > 1 && !building
               const label = a.nickname || a.construction?.name || a.hood || a.title || ''
               return (
@@ -1363,6 +1392,11 @@ export default function EmpirePage() {
               )
             })}
           </div>
+          {cars > 0 && <div aria-hidden style={{ position: 'relative', height: 15, margin: '2px -16px 0', overflow: 'hidden' }}>
+            {Array.from({ length: cars }, (_, i) => (
+              <span key={i} className="empCar" style={{ position: 'absolute', bottom: 0, fontSize: 11, animationDuration: `${9 + i * 2.6}s`, animationDelay: `${i * 1.7}s` }}>{['🚗', '🚕', '🚙', '🚌', '🛵'][i % 5]}</span>
+            ))}
+          </div>}
           <div style={{ height: 3, margin: '0 -16px', background: 'linear-gradient(90deg,transparent,#c9a84c 30%,#c9a84c 70%,transparent)' }} />
         </div>
       )
@@ -1757,6 +1791,15 @@ export default function EmpirePage() {
                   {/* قانونِ ۱۳ (رویاپردازی): اسمِ دلخواه روی هر دارایی — هویتی، صفر اثرِ اقتصادی */}
                   <button title="نام‌گذاریِ دارایی" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, opacity: .6 }} disabled={busy}
                     onClick={async () => { const n = prompt('چه اسمی روی این دارایی می‌گذاری؟ (خالی = حذفِ نام)', a.nickname || ''); if (n === null) return; const d = await api({ action: 'nickname', assetId: a.id, name: n }); if (d) setSt(d) }}>✏️</button>
+                  {/* فاز ۱۰۹ (Visual Pass 2 — جلد ۶۸): سبکِ نمای برج در خطِ آسمان؛ هر کلیک = سبکِ بعدی — فقط ظاهر */}
+                  {st.visual?.facades !== false && a.kind !== 'land' && (() => {
+                    const fcs = [['', 'پیش‌فرض'], ['modern', 'مدرن'], ['classic', 'کلاسیک'], ['roman', 'رومی'], ['green', 'سبز']]
+                    const cur = a.facade || ''
+                    const curFa = (fcs.find(f => f[0] === cur) || fcs[0])[1]
+                    const next = fcs[(fcs.findIndex(f => f[0] === cur) + 1) % fcs.length]
+                    return <button title={`نمای برج در خطِ آسمان: ${curFa} — کلیک: ${next[1]}`} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, opacity: .6 }} disabled={busy}
+                      onClick={async () => { const d = await api({ action: 'facadeSet', assetId: a.id, facade: next[0] }); if (d) setSt(d) }}>🎨</button>
+                  })()}
                 </div>
                 {a.nickname && <div style={{ fontSize: 10, color: 'var(--faint)' }}>{a.title.slice(0, 55)}</div>}
                 <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{a.hood} · خرید: {faB(a.buyPrice)}{a.income > 0 && <span style={{ color: '#7c6' }}> · درآمد {faB(a.income)}</span>}</div>
