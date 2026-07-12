@@ -446,7 +446,7 @@ function SearchPageInner() {
     // فقط وقتی «نزدیکِ من» روشن است روی موقعیتِ کاربر زوم کن؛ خاموش = نمای کلِ شهر.
     // انتخابِ صریحِ محله (چیپ/جستجو) بر GPS مقدم است — همان قانونی که فیلترِ آگهی‌ها دارد؛
     // وگرنه با «نزدیکِ من»ِ روشن، نقشه روی محلهٔ خودِ کاربر گیر می‌کرد و به محلهٔ انتخابی نمی‌رفت.
-    if (userLoc && gpsCityOk && nearMe && !hood && !parsed.area) return { center: userLoc, zoom: 14 }   // سطحِ محله
+    // فاز ۹۳: مرکزِ نقشه هرگز موقعیتِ (نادقیقِ) کاربر نیست — فقط پین‌های واقعی/شهرِ انتخابی
     if (pins.length) {
       const lats = pins.map(p => p.lat), lngs = pins.map(p => p.lng)
       const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLng = Math.min(...lngs), maxLng = Math.max(...lngs)
@@ -456,7 +456,7 @@ function SearchPageInner() {
       return { center, zoom }
     }
     if (mapCenter) return { center: mapCenter, zoom: 13 }
-    if (userLoc) return { center: userLoc, zoom: 13 }
+
     return null
   }, [pins, mapCenter, userLoc, selectedCity, userCity, nearMe, hood, parsed.area])
 
@@ -500,13 +500,7 @@ function SearchPageInner() {
             {activeFilterCount > 0 && <span style={{ minWidth: 18, height: 18, borderRadius: 9, background: 'var(--gold)', color: '#16140f', fontSize: 10.5, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{toPersianDigits(activeFilterCount)}</span>}
           </button>
 
-          {/* «نزدیکِ من» — وقتی GPS داریم و کاربر محله‌ای نخواسته؛ روشن = فقط محدودهٔ کاربر */}
-          {userLoc && !hood && !parsed.area && (
-            <button className="mjs-hide-sm" onClick={() => setNearMe(v => !v)} title={nearMe ? 'فقط آگهی‌های نزدیکِ شما — برای دیدنِ کلِ شهر بزنید' : 'نمایشِ آگهی‌های نزدیکِ موقعیتِ شما'}
-              style={{ height: 48, padding: '0 14px', borderRadius: 12, display: 'flex', alignItems: 'center', gap: 6, background: nearMe ? 'var(--goldDim)' : 'var(--surface)', border: `1px solid ${nearMe ? 'var(--gold)' : 'var(--line2)'}`, color: nearMe ? 'var(--gold)' : 'var(--text)', fontSize: 13.5, cursor: 'pointer', fontFamily: 'inherit', fontWeight: nearMe ? 700 : 400, whiteSpace: 'nowrap' }}>
-              <span>📍</span>{nearMe ? `نزدیکِ من${userArea ? ` · ${userArea}` : ''}` : 'نزدیکِ من'}
-            </button>
-          )}
+          {/* فاز ۹۳: دکمهٔ «نزدیکِ من» حذف شد — موقعیتِ تشخیصیِ کاربر نادقیق بود و جای غلط نشان می‌داد */}
           <NeighborhoodPicker value={hood} onChange={setHood} city={selectedCity} fallback={hoodOptions.map(o => o.h)} />
           <select className="mjs-hide-sm" value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ height: 48, padding: '0 12px', borderRadius: 12, background: 'var(--surface)', border: '1px solid var(--line2)', color: 'var(--text)', fontSize: 13.5, cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }}>
             <option>پیشنهاد ملک‌جت</option><option>ارزان‌ترین</option><option>گران‌ترین</option><option>جدیدترین</option>

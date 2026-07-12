@@ -15,7 +15,7 @@ export default function LocationDetector() {
   useEffect(() => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) return
     // فاز ۹۳ (فیدبک: «هر سری دارد از طرف لوکیشن می‌گیرد»): فقط وقتی کوکی نداریم یک‌بار می‌گیریم؛
-    // کوکیِ mj_loc تا ۳۰ روز معتبر است و با انقضایش دوبارهٔ بعدی خودکار انجام می‌شود.
+    // کوکیِ mj_loc یک سال معتبر است — واقعاً یک‌بار. شهرِ انتخابیِ دستیِ کاربر (mj_city) همیشه بر تشخیص مقدم است.
     if (readLoc()?.lat) return
     let done = false
     const ok = async (pos: GeolocationPosition) => {
@@ -25,7 +25,7 @@ export default function LocationDetector() {
         const r = await fetch(`/api/geo/locate?lat=${latitude}&lng=${longitude}`)
         const d = await r.json()
         const val = JSON.stringify({ city: d.city || '', neighborhood: d.neighborhood || '', lat: latitude, lng: longitude, at: Date.now() })
-        document.cookie = `mj_loc=${encodeURIComponent(val)};path=/;max-age=${30 * 86400};SameSite=Lax`
+        document.cookie = `mj_loc=${encodeURIComponent(val)};path=/;max-age=${365 * 86400};SameSite=Lax`   // فاز ۹۳: یک‌بار دسترسی، یک سال ماندگار
         // بارِ اول: اگر کاربر هنوز شهری انتخاب نکرده، شهرِ تشخیص‌داده‌شده را پیش‌فرض بگذار
         if (d.city && !/(?:^|; )mj_city=[^;]+/.test(document.cookie)) {
           document.cookie = `mj_city=${encodeURIComponent(d.city)};path=/;max-age=${365 * 86400};SameSite=Lax`
