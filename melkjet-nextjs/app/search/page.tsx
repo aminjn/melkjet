@@ -227,7 +227,11 @@ function SearchPageInner() {
 
   useEffect(() => {
     let alive = true
-    fetchContent('listing', undefined, 1000, true).then((d) => { if (alive) { setProperties(d.map(toProperty)); setLoading(false) } })   // کلِ استخر (slim) — نه فقط ۸۰ تای آخر
+    // فاز ۹۴ (LCP ۸ث): واکشیِ دومرحله‌ای — اول ۶۰ تای اول (پاسخِ کوچک → کارت‌ها و تصویرِ LCP فوری)،
+    // بعد کلِ استخر در پس‌زمینه برای فیلترها/نقشه. تا وقتی فهرستِ کامل نیامده، همان ۶۰ تا نمایش داده می‌شود.
+    let gotFull = false
+    fetchContent('listing', undefined, 60, true).then((d) => { if (alive && !gotFull) { setProperties(d.map(toProperty)); setLoading(false) } })
+    fetchContent('listing', undefined, 1000, true).then((d) => { if (alive) { gotFull = true; setProperties(d.map(toProperty)); setLoading(false) } })
     fetch('/api/promotions?slot=search_top', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : { items: [] })).then((d) => { if (alive) setPromoted(((d.items || []) as ContentItem[]).map(toProperty)) }).catch(() => {})
     return () => { alive = false }
   }, [])
