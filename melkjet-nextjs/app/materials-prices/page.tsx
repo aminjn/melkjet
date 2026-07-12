@@ -19,6 +19,7 @@ export default function MaterialPrices() {
   const [cats, setCats] = useState<string[]>([])
   const [refRows, setRefRows] = useState<RefRow[]>([])
   const [sellerRows, setSellerRows] = useState<SellerRow[]>([])
+  const [idx, setIdx] = useState<{ ok: boolean; index: number; weekDeltaPct: number | null; monthDeltaPct: number | null; items: number } | null>(null)   // فاز ۱۰۰
 
   useEffect(() => {
     setLoading(true)
@@ -31,6 +32,7 @@ export default function MaterialPrices() {
         if (d?.ok) {
           setCats(d.categories || [])
           if (tab === 'ref') setRefRows(d.rows || []); else setSellerRows(d.rows || [])
+          if (d.indexState) setIdx(d.indexState)
         }
         setLoading(false)
       }).catch(() => setLoading(false))
@@ -53,6 +55,16 @@ export default function MaterialPrices() {
           </div>
           <Link href="/stores" style={{ fontSize: 13, color: 'var(--gold)', textDecoration: 'none', border: '1px solid var(--gold)', borderRadius: 9, padding: '8px 16px', whiteSpace: 'nowrap' }}>🧱 فروشگاه‌های مصالح ↗</Link>
         </div>
+        {/* فاز ۱۰۰ (جلد ۴۳): شاخصِ مصالحِ ملک‌جت — پایه ۱۰۰ از اولین روزِ با پوششِ کافی؛ همه از قیمت‌های واقعیِ فروشندگان */}
+        {idx?.ok && (
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: '10px 16px', marginBottom: 16, fontSize: 13 }}>
+            <span style={{ fontWeight: 800 }}>🧱 شاخصِ مصالحِ ملک‌جت:</span>
+            <b style={{ color: 'var(--goldText)', fontSize: 17 }}>{fa(idx.index)}</b>
+            {typeof idx.weekDeltaPct === 'number' && <span style={{ color: idx.weekDeltaPct > 0 ? '#e06a5a' : idx.weekDeltaPct < 0 ? '#3f9e63' : 'var(--muted)', fontWeight: 700 }}>{idx.weekDeltaPct > 0 ? '▲' : idx.weekDeltaPct < 0 ? '▼' : '—'} {fa(Math.abs(idx.weekDeltaPct))}٪ هفته</span>}
+            {typeof idx.monthDeltaPct === 'number' && <span style={{ color: 'var(--muted)' }}>{idx.monthDeltaPct > 0 ? '▲' : idx.monthDeltaPct < 0 ? '▼' : '—'} {fa(Math.abs(idx.monthDeltaPct))}٪ ماه</span>}
+            <span style={{ color: 'var(--faint)', fontSize: 11.5 }}>پایه ۱۰۰ · از قیمتِ واقعیِ {fa(idx.items)} کالای فعالِ فروشندگان — روزانه به‌روز می‌شود</span>
+          </div>
+        )}
 
         {/* tabs */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>

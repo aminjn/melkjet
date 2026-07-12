@@ -41,6 +41,7 @@ import { masteryOf, newsOf } from '@/app/lib/empire-engage'
 import { listingHref } from '@/app/lib/listing-url'
 import { recordEvent } from '@/app/lib/reos/store'
 import { buildBriefFor } from '@/app/lib/empire-brief'
+import { materialsIndexState, materialsFactorOf } from '@/app/lib/materials-index'
 import { touchStreak, getStreak } from '@/app/lib/reos/achievements'
 import { candidateListings, getItemById, type Item } from '@/app/lib/scraper-store'
 import { parseFaNum } from '@/app/lib/reos/features'
@@ -141,6 +142,13 @@ async function liveEventsOf(userId: string, e: EmpireData, now = Date.now()) {
 // کوئستِ روزانه/هفتگی (GDD جلد۲): تعریفِ قطعیِ چرخشی + پیشرفت از رویدادهای واقعیِ همان دوره.
 // فاز ۷۶ (قانون ۴): دورهٔ برگزاریِ معاملهٔ بزرگ و تالارِ مزایده دیگر «هفتهٔ» هاردکد نیست —
 // knob ادمین (periodDays): ۷=هفتگی، ۱=هر روز رویدادِ تازه. انتخابِ ملک/تخفیف/مهلت/یک‌تلاش‌در‌دوره همه با همین می‌چرخند.
+// فاز ۱۰۰ (جلد ۴۳): cfg ساخت با ضریبِ شاخصِ مصالحِ واقعیِ روز (پوشش ناکافی → ضریب ۱)
+function buildCfgWithMaterials() {
+  const base = config().empire.build
+  const mi = config().empire.materialsIndex
+  const factor = materialsFactorOf(materialsIndexState(mi.minItems), mi)
+  return { ...base, costPerM: Math.round(base.costPerM * factor), materialsFactor: factor }
+}
 const bdPeriodDays = () => Math.max(1, Math.floor(Number(config().empire.bigDeal.periodDays) || 7))
 const auPeriodDays = () => Math.max(1, Math.floor(Number(config().empire.auction.periodDays) || 7))
 const periodFa = (d: number) => d === 7 ? 'هفته' : d === 1 ? 'روز' : `دورهٔ ${d.toLocaleString('fa-IR')}روزه`
@@ -1098,6 +1106,9 @@ export async function POST(req: NextRequest) {
         recentEvents({ limit: 400 }).catch(() => []),
       ])
       const indices = marketIndices(items)
+      const miCfg = config().empire.materialsIndex
+      const matState = materialsIndexState(miCfg.minItems)
+      const materials = { ...matState, factor: materialsFactorOf(matState, miCfg), enabled: miCfg.enabled }
       const psychology = psychologyOf(evs.map(x => ({ type: x.type, at: x.at })), Date.now())
       // صندوق‌ها: فقط آن‌هایی که قیمتِ روزِ معتبر دارند (نمونهٔ واقعیِ کافی) یا کاربر در آن‌ها واحد دارد.
       const funds = state.funds.map(f => {
@@ -1136,7 +1147,7 @@ export async function POST(req: NextRequest) {
       const fundsValue = (e.funds || []).reduce((s, h) => s + (mc?.fundUnit?.[h.fundId] ? Math.round(h.units * mc.fundUnit[h.fundId]) : h.cost), 0)
       const crowdValue = (e.crowd || []).reduce((s, h) => s + (mc?.crowdUnit?.[h.listingId] ? Math.round(h.units * mc.crowdUnit[h.listingId]) : h.cost), 0)
       const portfolio = portfolioOf({ cash: e.capital, properties: nw.assetsValue, funds: fundsValue, crowd: crowdValue, debt: e.loan?.balance || 0 })
-      return NextResponse.json({ ok: true, indices, psychology, funds, pools, candidates, portfolio, vol: state.vol, crowd: { enabled: cfg.crowd.enabled, unitToman: cfg.crowd.unitToman, minPrice: cfg.crowd.minPrice } })
+      return NextResponse.json({ ok: true, indices, materials, psychology, funds, pools, candidates, portfolio, vol: state.vol, crowd: { enabled: cfg.crowd.enabled, unitToman: cfg.crowd.unitToman, minPrice: cfg.crowd.minPrice } })
     }
 
     // خریدِ واحدِ صندوق: قیمتِ هر واحد همین لحظه از میانهٔ متریِ واقعیِ همان بخش محاسبه می‌شود (سمتِ سرور).
@@ -1438,7 +1449,7 @@ export async function POST(req: NextRequest) {
     // ══════ موتورِ ساخت (جلد ۶۴–۷۲): کلنگ → هزینهٔ روزشمار → رویداد → پیش‌فروش → تکمیل → فروشِ واحد ══════
     // پیش‌نمایشِ نقشهٔ ساخت: همهٔ ترکیب‌های سازه/کیفیت با روز و هزینهٔ شفاف.
     case 'buildPlan': {
-      const cfg = config().empire.build
+      const cfg = buildCfgWithMaterials()   // فاز ۱۰۰: هزینهٔ متر با ضریبِ شاخصِ مصالحِ واقعی
       if (!cfg.enabled) return NextResponse.json({ error: 'ساخت فعلاً فعال نیست' }, { status: 403 })
       const e = await getEmpire(userId)
       const a = e?.assets.find(x => x.id === String(b.assetId || ''))
@@ -1473,13 +1484,14 @@ export async function POST(req: NextRequest) {
         }
       }
       return NextResponse.json({
-        ok: true, landArea, builtArea: base.builtArea, unitArea: base.unitArea, totalUnits: base.totalUnits, options, goals,
+        ok: true, materialsFactor: (cfg as { materialsFactor?: number }).materialsFactor || 1,
+        landArea, builtArea: base.builtArea, unitArea: base.unitArea, totalUnits: base.totalUnits, options, goals,
         facades: BUILD_FACADES, suggestedName: `برجِ ${e.name}`.slice(0, 28), hood: a.hood,
         estNote: dreamPerM > 0 ? `برآورد از میانهٔ متریِ واقعیِ ${dreamN.toLocaleString('fa-IR')} آگهی — قولِ قطعی نیست` : 'برای برآوردِ فروش هنوز نمونهٔ قیمتیِ کافی در بازار نداریم',
       })
     }
     case 'startBuild': {
-      const cfg = config().empire.build
+      const cfg = buildCfgWithMaterials()   // فاز ۱۰۰: همان ضریبی که در برآورد دیده شد
       if (!cfg.enabled) return NextResponse.json({ error: 'ساخت فعلاً فعال نیست' }, { status: 403 })
       const e = await getEmpire(userId)
       const a = e?.assets.find(x => x.id === String(b.assetId || ''))

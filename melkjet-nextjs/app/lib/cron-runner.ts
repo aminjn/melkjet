@@ -63,6 +63,8 @@ async function tick(): Promise<{ due: number; synced: number }> {
       // نامهٔ روزانهٔ ملک‌جت برای امپراتوری‌ها (سند فصل ۴: AI Overnight → کنجکاویِ صبح)
       try { const { runEmpireBriefs } = await import('./empire-brief'); const nb = await runEmpireBriefs(); if (nb) console.log(`[empire] daily briefs built: ${nb}`) } catch { /* نامهٔ امپراتوری */ }
       // 📊 رصدخانهٔ اقتصاد (فاز ۳۵ — سند ۲۴): اسنپ‌شاتِ روزانهٔ بازار/اقتصاد — ایدمپوتنت (همان روز = تازه‌سازی)
+      // 🧱 شاخصِ مصالح (فاز ۱۰۰ — جلد ۴۳): اسنپ‌شاتِ روزانه از قیمت‌های واقعیِ بازارِ مصالح
+      try { const { maybeSnapshotMaterialsIndex } = await import('./materials-index'); const { config: cfg100 } = await import('./reos/reos-config'); const ms = await maybeSnapshotMaterialsIndex(Date.now(), cfg100().empire.materialsIndex.minItems); if (ms) console.log(`[materials] index snapshot day ${ms.day}: ${ms.items} items, median ${ms.overall}`) } catch { /* شاخصِ مصالح */ }
       try { const { takeDailySnapshot } = await import('./empire-metrics'); const sn = await takeDailySnapshot(); console.log(`[empire] econ snapshot day ${sn.day}: ${sn.players} players, perM ${sn.perM}`) } catch { /* رصدخانه */ }
       // 🏰 دفترِ مالکیتِ انحصاری (فاز ۳۷): پرکردنِ جاهای خالی از دارایی‌های موجود — ایدمپوتنت، عطف به ماسبق نمی‌شود
       try { const { rebuildOwnersRegistry } = await import('./empire-social'); const { listEmpiresPublic } = await import('./empire-store'); const n = await rebuildOwnersRegistry(await listEmpiresPublic(2000)); if (n) console.log(`[empire] owners registry backfilled: ${n}`) } catch { /* دفترِ مالکیت */ }

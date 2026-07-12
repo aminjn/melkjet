@@ -731,6 +731,11 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>🚨 اتاقِ بحران (فاز ۴۱ — سند ۲۸ Part 13: بحران = نتیجهٔ تصمیم‌ها، نه تصادف)</div>
             {row('آستانهٔ دوامِ نقد (روز)', cin('intel', 'crisisRunwayDays'), 'دوامِ نقدِ کمتر از این = سیگنالِ بحران')}
             {row('آستانهٔ خوابِ کارگاه (روز)', cin('intel', 'crisisStalledDays'), 'کارگاهِ بیش از این عقب‌مانده = سیگنالِ بحران')}
+            <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>🧱 شاخصِ قیمتِ مصالح (فاز ۱۰۰ — جلد ۴۳: از قیمت‌های واقعیِ بازارِ مصالحِ سایت)</div>
+            {row('اثر روی هزینهٔ ساخت فعال (۱/۰)', cin('materialsIndex', 'enabled'), 'ضریبِ هزینهٔ متر = شاخص ÷ ۱۰۰ (با کف/سقفِ زیر)؛ بدونِ پوششِ کافی همیشه ۱')}
+            {row('حداقلِ پوشش (تعداد کالا)', cin('materialsIndex', 'minItems'), 'کمتر از این = «دادهٔ کافی نیست» و ضریب ۱ — عددِ ساختگی هرگز')}
+            {row('کفِ ضریبِ ساخت', cin('materialsIndex', 'clampMin'), 'مثلاً ۰٫۸۵ یعنی حتی با سقوطِ شاخص، هزینه بیش از ۱۵٪ ارزان نمی‌شود')}
+            {row('سقفِ ضریبِ ساخت', cin('materialsIndex', 'clampMax'), 'مثلاً ۱٫۲ یعنی حتی با جهشِ شاخص، هزینه بیش از ۲۰٪ گران نمی‌شود')}
             <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>💎 معاملهٔ بزرگِ هفته (فاز ۴۱ — سند ۲۸ Part 07: Big Deals)</div>
             {row('معاملهٔ بزرگ فعال (۱/۰)', cin('bigDeal', 'enabled'), 'در هر دوره یک ملکِ واقعیِ گران، شهری و رقابتی — اولین برنده مالک می‌شود')}
             {row('دورهٔ برگزاری (روز)', cin('bigDeal', 'periodDays'), '۷ = هفتگی؛ ۱ = هر روز معاملهٔ تازه — انتخابِ ملک، تخفیفِ برده، مهلت و «یک تلاش در دوره» همه با همین می‌چرخند')}

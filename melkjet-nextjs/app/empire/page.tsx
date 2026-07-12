@@ -2674,6 +2674,12 @@ export default function EmpirePage() {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 12 }}>
             {mkt.indices.samples > 0 && <span style={{ ...card, padding: '6px 12px', background: 'var(--bg2)' }}>📈 شاخصِ کل: <b style={{ color: 'var(--gold)' }}>{faB(mkt.indices.overallPerM)}</b> ت/متر <span style={{ color: 'var(--faint)', fontSize: 10.5 }}>({fa(mkt.indices.samples)} آگهیِ واقعی)</span></span>}
             {mkt.indices.rentSamples > 0 && <span style={{ ...card, padding: '6px 12px', background: 'var(--bg2)' }}>🔑 شاخصِ اجاره: <b style={{ color: 'var(--gold)' }}>{faB(mkt.indices.rentPerM)}</b> ت/متر</span>}
+            {/* فاز ۱۰۰ (جلد ۴۳): شاخصِ مصالح از قیمت‌های واقعیِ بازارِ مصالحِ سایت — روی هزینهٔ ساخت اثر دارد */}
+            {mkt.materials?.ok
+              ? <span style={{ ...card, padding: '6px 12px', background: 'var(--bg2)' }}>🧱 شاخصِ مصالح: <b style={{ color: 'var(--gold)' }}>{fa(mkt.materials.index)}</b>
+                {typeof mkt.materials.weekDeltaPct === 'number' && <b style={{ color: mkt.materials.weekDeltaPct > 0 ? '#e88' : mkt.materials.weekDeltaPct < 0 ? '#7c6' : 'var(--muted)', marginInlineStart: 4 }}>{mkt.materials.weekDeltaPct > 0 ? '▲' : mkt.materials.weekDeltaPct < 0 ? '▼' : ''}{fa(Math.abs(mkt.materials.weekDeltaPct))}٪ هفته</b>}
+                <span style={{ color: 'var(--faint)', fontSize: 10.5 }}> ({fa(mkt.materials.items)} کالای واقعی{mkt.materials.factor !== 1 ? ` · ضریبِ ساخت ×${mkt.materials.factor.toLocaleString('fa-IR')}` : ''})</span></span>
+              : mkt.materials?.enabled && <span style={{ ...card, padding: '6px 12px', background: 'var(--bg2)', color: 'var(--faint)' }}>🧱 شاخصِ مصالح: هنوز دادهٔ قیمتیِ کافی از بازارِ مصالح ثبت نشده</span>}
             <span style={{ ...card, padding: '6px 12px', background: 'var(--bg2)' }}>🌡 نبضِ بازار: <b style={{ color: mkt.psychology.score >= 55 ? '#7c6' : mkt.psychology.score <= 45 ? '#e88' : 'var(--muted)' }}>{mkt.psychology.label}</b> ({fa(mkt.psychology.score)}/۱۰۰) <span style={{ color: 'var(--faint)', fontSize: 10.5 }}>از رفتارِ واقعیِ ۱۴ روز</span></span>
             {/* فاز ۴۷ (فیدبک): جمعِ کلِ سود/زیانِ صندوق‌ها و مشارکت‌ها — یک نگاه، کلِ قصه */}
             {(() => {
