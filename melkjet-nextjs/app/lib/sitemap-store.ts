@@ -37,11 +37,16 @@ function chunk<T>(arr: T[], size: number): T[][] {
 const iso = (ts?: number) => (ts ? new Date(ts).toISOString() : undefined)
 const dealOf = (it: Item): 'sale' | 'rent' =>
   (it.meta?.['نوع معامله'] === 'اجاره' || /اجاره|رهن|ودیعه/.test(`${it.price || ''} ${it.title || ''}`)) ? 'rent' : 'sale'
-const cityOf = (it: Item): string => {
-  const c = it.meta?.['شهر'] || (it.location || '').split(/[،,]/)[0] || ''
-  const s = slugify(String(c).trim())
-  return s || 'other'
+// فاز ۹۰ (فیدبک: «خودِ آگهی شارد شده!»): تکهٔ اولِ location گاهی متنِ زمانِ اسکرپ است
+// («۱۸ ساعت پیش در مرواریدشهر») — کلیدِ شهر باید صادقانه فیلتر شود؛ نامعتبر → شاردِ other.
+const BAD_CITY_RE = /(ساعت|دقیقه|روز|هفته|ماه|لحظه|پیش|قبل|امروز|دیروز|فوری)/
+export function cityKeyOf(metaCity: string | undefined, location: string | undefined): string {
+  let c = String(metaCity || (location || '').split(/[،,]/)[0] || '').trim().replace(/^در\s+/, '')
+  if (!c || BAD_CITY_RE.test(c) || /[0-9۰-۹]/.test(c) || c.length > 24 || c.split(/\s+/).length > 3) return 'other'
+  const s = slugify(c)
+  return s && s.length <= 40 ? s : 'other'
 }
+const cityOf = (it: Item): string => cityKeyOf(it.meta?.['شهر'], it.location)
 
 // کشِ کوتاهِ درون‌حافظه‌ای تا ایندکس/شاردها/داشبورد دوباره‌سازی نکنند.
 let CACHE: { at: number; shards: Shard[] } | null = null
