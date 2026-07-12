@@ -157,6 +157,8 @@ export interface EmpireData {
   autoRules?: Array<{ id: string; kind: string; threshold: number; level: 'notify' | 'recommend'; enabled: boolean; createdAt: number }>
   ruleLog?: Array<{ at: number; icon: string; text: string }>   // ثبتِ فعال‌شدن‌ها (Part 13 «Log») — هر قانون حداکثر یک‌بار در روز
   claims: Record<string, number>                      // پاداش‌های یک‌بارمصرفِ دریافت‌شده (missionKey → ts)
+  // فاز ۱۰۳ (جلد ۳ — Prestige): بازتولدِ داوطلبانه با امتیازِ مهارتِ دائمی؛ claims/کوین/میراث حفظ می‌شود
+  prestige?: { count: number; points: number; spent: Record<string, number>; at?: number }
   realized: number            // سود/زیانِ تحقق‌یافته از فروشِ دارایی‌ها (چرخهٔ عمر — فصل ۵)
   rejects: number             // ردِ پیشنهادِ AI در خریدِ اول (۲ بار → کنترلِ آزاد)
   suspense?: { text: string; dueAt: number }          // «Never End A Session» (فصل ۴)
@@ -258,6 +260,62 @@ export async function moveCapital(userId: string, delta: number, icon: string, t
     if (d < 0 && e.capital < -d) return 'سرمایهٔ نقدِ کافی نیست'
     e.capital += d
     e.timeline.push({ at: now, icon, title: title.slice(0, 90), detail: `${d > 0 ? '+' : '−'}${Math.abs(d).toLocaleString('fa-IR')} تومان` })
+  })
+}
+
+// ── فاز ۱۰۳ (جلد ۳): Prestige + درختِ مهارت ─────────────────────────────────
+// بازتولد: XP و سرمایه و دارایی‌ها صفر می‌شوند؛ کوین (پولِ پرداختی)، claims (پاداش‌های
+// یک‌بارمصرف — جلوی دوباره‌گیریِ جایزهٔ واقعی)، میراث و تایم‌لاین می‌مانند. هر بازتولد
+// امتیازِ مهارتِ «دائمی» می‌دهد که در سه شاخه خرج می‌شود — اثرها کوچک و شفاف‌اند (بدونِ P2W).
+export const SKILL_BRANCHES = [
+  { id: 'nego', icon: '🤝', name: 'استادِ مذاکره', effectFa: (v: number) => `+${v} واحد شانسِ مذاکره` },
+  { id: 'build', icon: '🏗', name: 'مهندسِ ارشد', effectFa: (v: number) => `−${v}٪ هزینهٔ ساخت` },
+  { id: 'market', icon: '📈', name: 'نبضِ بازار', effectFa: (v: number) => `+${v}٪ درآمدِ اجاره/کسب‌وکار` },
+] as const
+
+export function prestigeEffectsOf(pr: EmpireData['prestige'], cfg = config().empire.prestige) {
+  const sp = pr?.spent || {}
+  return {
+    negoPp: (sp.nego || 0) * cfg.negoPpPerPoint,
+    buildCostPct: Math.min(30, (sp.build || 0) * cfg.buildCostPctPerPoint),
+    marketIncomePct: (sp.market || 0) * cfg.marketIncomePctPerPoint,
+  }
+}
+
+export async function doPrestige(userId: string, now = Date.now()) {
+  const cfg = config().empire.prestige
+  let released: string[] = []
+  const r = await mutateEmpire(userId, e => {
+    if (!cfg.enabled) return 'بازتولد فعلاً فعال نیست'
+    if (empireLevel(e.xp).level < cfg.minLevel) return `بازتولد از سطحِ ${cfg.minLevel.toLocaleString('fa-IR')} باز می‌شود`
+    if (e.assets.some(a => a.construction && !a.construction.done)) return 'اول کارگاه‌های فعال را تحویل بده'
+    if ((e.loan?.balance || 0) > 0) return 'اول بدهیِ بانک را تسویه کن'
+    released = e.assets.map(a => a.listingId)
+    e.assets = []
+    e.xp = 0
+    e.capital = config().empire.giftToman
+    e.prestige = {
+      count: (e.prestige?.count || 0) + 1,
+      points: (e.prestige?.points || 0) + Math.max(1, cfg.pointsPerPrestige),
+      spent: e.prestige?.spent || {},
+      at: now,
+    }
+    e.timeline.push({ at: now, icon: '🌌', title: `بازتولدِ ${e.prestige.count.toLocaleString('fa-IR')} — امپراتوری از نو، مهارت‌ها ماندگار`, detail: `+${cfg.pointsPerPrestige.toLocaleString('fa-IR')} امتیازِ مهارت` })
+  })
+  return { ...r, released }
+}
+
+export async function spendSkillPoint(userId: string, branch: string, now = Date.now()) {
+  const cfg = config().empire.prestige
+  if (!SKILL_BRANCHES.some(b => b.id === branch)) return { ok: false as const, reason: 'شاخهٔ نامعتبر' }
+  return mutateEmpire(userId, e => {
+    const pr = e.prestige
+    if (!pr || pr.points <= 0) return 'امتیازِ مهارتی نداری — با بازتولد به‌دست می‌آید'
+    if ((pr.spent[branch] || 0) >= cfg.maxPerBranch) return 'این شاخه به سقف رسیده'
+    pr.points -= 1
+    pr.spent[branch] = (pr.spent[branch] || 0) + 1
+    const b = SKILL_BRANCHES.find(x => x.id === branch)!
+    e.timeline.push({ at: now, icon: b.icon, title: `مهارتِ «${b.name}» ارتقا گرفت`, detail: b.effectFa(prestigeEffectsOf(pr, cfg)[branch === 'nego' ? 'negoPp' : branch === 'build' ? 'buildCostPct' : 'marketIncomePct'] as number) })
   })
 }
 
@@ -1406,9 +1464,10 @@ export async function chooseBusiness(userId: string, assetId: string, business: 
 // ۴ واحدِ خریده = ۴ برابرِ اجاره/کسب‌وکار — پاداشِ واقعیِ تجمیع، بدونِ مدیریتِ واحدبه‌واحد (قانونِ ۹۰/۱۰).
 export function assetMonthlyIncomeOf(
   a: Pick<EmpireAsset, 'business' | 'businessProb' | 'action' | 'unitsOwned' | 'construction'>,
-  rentMonthly0: number, amenityFactor = 1,
+  rentMonthly0: number, amenityFactor = 1, skillFactor = 1,   // فاز ۱۰۳: «نبضِ بازار»
 ): number {
   if (!(rentMonthly0 > 0)) return 0
+  rentMonthly0 = rentMonthly0 * Math.max(1, skillFactor)
   const units = Math.max(1, a.unitsOwned || 1)
   if (a.business) return Math.round(rentMonthly0 * ((a.businessProb || 50) / 100) * 2 * units)   // کسب‌وکار: ~۲× اجارهٔ مسکونی × احتمالِ موفقیت
   if (a.action === 'rent') return Math.round(rentMonthly0 * units)

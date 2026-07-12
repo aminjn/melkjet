@@ -76,6 +76,8 @@ export interface ReosConfig {
     automation: { enabled: boolean; maxRules: number; logCap: number }
     // فاز ۴۱ (سند ۲۸ فصل ۱۷ Part 07): معاملهٔ بزرگِ هفته — یک ملکِ واقعیِ گران از سگمنتِ بالای بازار، شهری و رقابتی.
     bigDeal: { enabled: boolean; periodDays: number; topPct: number; discountMax: number; baseChancePct: number; level: number }
+    // فاز ۱۰۳ (جلد ۳): Prestige — بازتولدِ داوطلبانه با امتیازِ مهارتِ دائمی (اثرهای کوچکِ شفاف)
+    prestige: { enabled: boolean; minLevel: number; pointsPerPrestige: number; maxPerBranch: number; negoPpPerPoint: number; buildCostPctPerPoint: number; marketIncomePctPerPoint: number }
     // فاز ۱۰۰ (جلد ۴۳): شاخصِ قیمتِ مصالح از بازارِ واقعی → ضریبِ هزینهٔ ساخت (با کف/سقف)
     materialsIndex: { enabled: boolean; minItems: number; clampMin: number; clampMax: number }
     // فاز ۴۵ (سند ۲۹ Auction Saga): تالارِ مزایدهٔ هفته — گام/حملهٔ سنگین (٪ لنگر)، سقفِ راند، باندِ برآورد،
@@ -273,6 +275,7 @@ export const DEFAULT_CONFIG: ReosConfig = {
     automation: { enabled: true, maxRules: 8, logCap: 30 },
     // معاملهٔ بزرگِ هفته (سند ۲۸ Part 07): از topPct٪ گران‌ترین آگهی‌های واقعی؛ یک تلاش/هفته؛ تخفیف تا سقف.
     bigDeal: { enabled: true, periodDays: 7, topPct: 5, discountMax: 12, baseChancePct: 35, level: 5 },   // periodDays: دورهٔ برگزاری (۷=هفتگی، ۱=روزانه) — فاز ۷۶
+    prestige: { enabled: true, minLevel: 30, pointsPerPrestige: 3, maxPerBranch: 5, negoPpPerPoint: 2, buildCostPctPerPoint: 2, marketIncomePctPerPoint: 3 },   // فاز ۱۰۳
     materialsIndex: { enabled: true, minItems: 5, clampMin: 0.85, clampMax: 1.2 },   // فاز ۱۰۰: پوششِ حداقلی + کف/سقفِ ضریبِ ساخت
     // تالارِ مزایدهٔ هفته (سند ۲۹ Auction Saga): یک ملکِ واقعی از باندِ میانیِ بازار؛ یک ورود/هفته؛ شروع زیرِ قیمت.
     auction: { enabled: true, periodDays: 7, level: 6, stepPct: 4, powerPct: 12, maxRounds: 10, estBandPct: 18, rivalsMax: 4, influenceMax: 5, revengePct: 6, xpWin: 120, xpTry: 30, nemesisWins: 3 },

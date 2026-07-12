@@ -1412,6 +1412,8 @@ export default function EmpirePage() {
 
     {gtab === 'portfolio' && <>
     {tabHead('💼', 'پرتفوی', 'هر دارایی یک تکه از رؤیای توست — زنده از بازارِ واقعی')}
+    {/* فاز ۱۰۳ (جلد ۳): Prestige + درختِ مهارت — بازتولدِ داوطلبانه با مهارتِ ماندگار */}
+    <PrestigeCard api={api} busy={busy} onDone={(d: any) => { setSt(d); celebrate() }} />
     {/* ارزشِ خالص (زنده از بازارِ واقعی) — اعداد با شمارشِ متحرک (جلد ۵۶) */}
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10 }}>
       <div style={card}><div style={{ fontSize: 11, color: 'var(--muted)' }}>ارزشِ خالص</div><div style={{ fontSize: 17, fontWeight: 800, color: 'var(--gold)' }}><CountUp value={st.netWorth || 0} format={faB} /> تومان</div></div>
@@ -3375,4 +3377,49 @@ export default function EmpirePage() {
     </div>
 
   </>)
+}
+
+
+// فاز ۱۰۳: کارتِ بازتولد و درختِ مهارت — همه‌چیز شفاف: چه می‌ماند، چه صفر می‌شود، هر امتیاز چه می‌کند.
+function PrestigeCard({ api, busy, onDone }: { api: (b: object) => Promise<any>; busy: boolean; onDone: (d: any) => void }) {
+  const [pv, setPv] = useState<any>(null)
+  useEffect(() => { api({ action: 'prestige' }).then(d => { if (d?.preview) setPv(d) }) // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  if (!pv) return null
+  const hasAny = (pv.me?.count || 0) > 0 || (pv.me?.points || 0) > 0
+  if (!pv.eligible && !hasAny) return null   // تا نزدیکِ سطحِ لازم، بی‌سروصدا
+  const fa2 = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
+  return (
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 16, marginBottom: 14 }}>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <b style={{ fontSize: 14 }}>🌌 بازتولد و مهارت‌های ماندگار</b>
+        {pv.me.count > 0 && <span style={{ fontSize: 11, color: 'var(--gold)' }}>دورِ {fa2(pv.me.count + 1)}</span>}
+        <span style={{ fontSize: 11, color: 'var(--muted)' }}>امتیازِ آزاد: <b style={{ color: 'var(--gold)' }}>{fa2(pv.me.points)}</b></span>
+        <span style={{ flex: 1 }} />
+        {pv.eligible && <button disabled={busy} style={{ padding: '6px 16px', borderRadius: 10, border: 'none', background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', fontWeight: 800, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }} onClick={async () => {
+          if (!confirm(`بازتولد؟\n${pv.keep}\n+${fa2(pv.pointsPer)} امتیازِ مهارتِ دائمی می‌گیری.`)) return
+          const d = await api({ action: 'prestige', confirm: true })
+          if (d) { onDone(d); const d2 = await api({ action: 'prestige' }); if (d2?.preview) setPv(d2) }
+        }}>🌌 بازتولد</button>}
+        {!pv.eligible && <span style={{ fontSize: 10.5, color: 'var(--faint)' }}>بازتولدِ بعدی از سطحِ {fa2(pv.minLevel)}</span>}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 8, marginTop: 10 }}>
+        {(pv.branches || []).map((br: any) => {
+          const lvl = pv.me.spent?.[br.id] || 0
+          const effNow = br.id === 'nego' ? pv.effects.negoPp : br.id === 'build' ? pv.effects.buildCostPct : pv.effects.marketIncomePct
+          return (
+            <div key={br.id} style={{ background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 12, padding: '9px 12px' }}>
+              <div style={{ fontSize: 12, fontWeight: 800 }}>{br.icon} {br.name} <span style={{ color: 'var(--faint)', fontWeight: 400 }}>{fa2(lvl)}/{fa2(pv.maxPerBranch)}</span></div>
+              <div style={{ fontSize: 10.5, color: 'var(--muted)', margin: '3px 0 6px' }}>{br.id === 'nego' ? `+${fa2(br.per)} واحد شانسِ مذاکره به‌ازای هر امتیاز` : br.id === 'build' ? `−${fa2(br.per)}٪ هزینهٔ ساخت به‌ازای هر امتیاز` : `+${fa2(br.per)}٪ درآمدِ اجاره به‌ازای هر امتیاز`}{effNow > 0 ? ` — الان: ${fa2(effNow)}` : ''}</div>
+              <button disabled={busy || pv.me.points <= 0 || lvl >= pv.maxPerBranch} style={{ padding: '4px 12px', borderRadius: 9, border: '1px solid var(--line2)', background: pv.me.points > 0 && lvl < pv.maxPerBranch ? 'var(--goldDim)' : 'transparent', color: pv.me.points > 0 && lvl < pv.maxPerBranch ? 'var(--gold)' : 'var(--faint)', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }} onClick={async () => {
+                const d = await api({ action: 'skillSpend', branch: br.id })
+                if (d) { onDone(d); const d2 = await api({ action: 'prestige' }); if (d2?.preview) setPv(d2) }
+              }}>+ ارتقا</button>
+            </div>
+          )
+        })}
+      </div>
+      <div style={{ fontSize: 9.5, color: 'var(--faint)', marginTop: 8 }}>اثرها کوچک و شفاف‌اند و فقط با «بازتولدِ» واقعی به‌دست می‌آیند — خریدنی نیستند.</div>
+    </div>
+  )
 }

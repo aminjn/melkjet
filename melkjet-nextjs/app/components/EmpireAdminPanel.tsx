@@ -744,6 +744,14 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             {row('تصاحبِ خصمانه فعال (۱/۰)', cin('npc', 'takeoverEnabled'), 'خریدِ کلِ شرکتِ NPC با ارزش‌گذاریِ شفاف — فقط NPC، هرگز بازیکنِ واقعی')}
             {row('سطحِ بازشدنِ تصاحب', cin('npc', 'takeoverLevel'))}
             {row('حقِ تقدمِ تصاحب (٪)', cin('npc', 'takeoverPremiumPct'), 'روی جمعِ خزانه + ارزشِ روزِ املاک')}
+            <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>🌌 بازتولد و درختِ مهارت (فاز ۱۰۳ — جلد ۳ Prestige)</div>
+            {row('بازتولد فعال (۱/۰)', cin('prestige', 'enabled'), 'XP/سرمایه/دارایی از نو؛ کوین و claims و میراث می‌مانند')}
+            {row('سطحِ لازم برای بازتولد', cin('prestige', 'minLevel'))}
+            {row('امتیازِ مهارت به‌ازای هر بازتولد', cin('prestige', 'pointsPerPrestige'))}
+            {row('سقفِ هر شاخه', cin('prestige', 'maxPerBranch'))}
+            {row('مذاکره: واحد به‌ازای هر امتیاز', cin('prestige', 'negoPpPerPoint'))}
+            {row('ساخت: ٪ تخفیف به‌ازای هر امتیاز', cin('prestige', 'buildCostPctPerPoint'), 'سقفِ کل ۳۰٪')}
+            {row('بازار: ٪ درآمد به‌ازای هر امتیاز', cin('prestige', 'marketIncomePctPerPoint'))}
             <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>👥 لایهٔ اجتماعی (فاز ۱۰۲ — دوستان/دوئل/خزانه/کنسرسیوم)</div>
             {row('گفتگوی دوستان فعال (۱/۰)', cin('social', 'dmEnabled'), 'فقط بینِ فالویِ دوطرفه')}
             {row('سقفِ طولِ پیام', cin('social', 'dmMaxLen'))}

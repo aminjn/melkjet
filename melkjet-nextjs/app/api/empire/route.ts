@@ -42,7 +42,7 @@ import { listingHref } from '@/app/lib/listing-url'
 import { recordEvent } from '@/app/lib/reos/store'
 import { buildBriefFor } from '@/app/lib/empire-brief'
 import { materialsIndexState, materialsFactorOf } from '@/app/lib/materials-index'
-import { grantWarReward, absorbNpcAssets, moveCapital } from '@/app/lib/empire-store'
+import { grantWarReward, absorbNpcAssets, moveCapital, doPrestige, spendSkillPoint, prestigeEffectsOf, SKILL_BRANCHES } from '@/app/lib/empire-store'
 import { touchStreak, getStreak } from '@/app/lib/reos/achievements'
 import { candidateListings, getItemById, type Item } from '@/app/lib/scraper-store'
 import { parseFaNum } from '@/app/lib/reos/features'
@@ -145,11 +145,13 @@ async function liveEventsOf(userId: string, e: EmpireData, now = Date.now()) {
 // فاز ۷۶ (قانون ۴): دورهٔ برگزاریِ معاملهٔ بزرگ و تالارِ مزایده دیگر «هفتهٔ» هاردکد نیست —
 // knob ادمین (periodDays): ۷=هفتگی، ۱=هر روز رویدادِ تازه. انتخابِ ملک/تخفیف/مهلت/یک‌تلاش‌در‌دوره همه با همین می‌چرخند.
 // فاز ۱۰۰ (جلد ۴۳): cfg ساخت با ضریبِ شاخصِ مصالحِ واقعیِ روز (پوشش ناکافی → ضریب ۱)
-function buildCfgWithMaterials() {
+function buildCfgWithMaterials(prestige?: { count: number; points: number; spent: Record<string, number> }) {
   const base = config().empire.build
   const mi = config().empire.materialsIndex
   const factor = materialsFactorOf(materialsIndexState(mi.minItems), mi)
-  return { ...base, costPerM: Math.round(base.costPerM * factor), materialsFactor: factor }
+  // فاز ۱۰۳: مهارتِ «مهندسِ ارشد» — تخفیفِ کوچکِ شفاف روی هزینهٔ متر
+  const skill = prestige ? 1 - prestigeEffectsOf(prestige).buildCostPct / 100 : 1
+  return { ...base, costPerM: Math.round(base.costPerM * factor * skill), materialsFactor: factor }
 }
 const bdPeriodDays = () => Math.max(1, Math.floor(Number(config().empire.bigDeal.periodDays) || 7))
 const auPeriodDays = () => Math.max(1, Math.floor(Number(config().empire.auction.periodDays) || 7))
@@ -268,7 +270,9 @@ function negoSkillOf(e: EmpireData, personaMod: number): { skill: number; memory
   const repBonus = e.company
     ? Math.max(0, companyReputationOf(e, config().empire.build.repProjectScore).stars - 1) * Math.max(0, config().empire.reputation.negoBonusPerStar)
     : 0
-  return { skill: (e.identity.negotiation || 0) + personaMod + Math.round(teamSkillOf(e) / 10) + memory.mod + repBonus, memory, repBonus }
+  // فاز ۱۰۳: مهارتِ دائمیِ «استادِ مذاکره» از Prestige — چون شانس = پایه + مهارت/۲، هر واحدِ اثر ۲ برابر در skill می‌نشیند
+  const prestigePp = prestigeEffectsOf(e.prestige).negoPp * 2
+  return { skill: (e.identity.negotiation || 0) + personaMod + Math.round(teamSkillOf(e) / 10) + memory.mod + repBonus + prestigePp, memory, repBonus }
 }
 
 // عرفِ واقعیِ ساختِ محله (ضابطهٔ «منطقه» — فیدبکِ کاربر): میانهٔ کلِ طبقاتِ ساختمان‌ها از متای واقعیِ
@@ -321,11 +325,12 @@ async function accrueRentFor(userId: string, e: EmpireData, now = Date.now()): P
   // جدولِ اجاره‌های واقعی از کشِ ۱۰دقیقه‌ای (فاز ۳۰ کارایی) — قبلاً هر بازدید ۵۰۰ آگهی اسکن می‌شد.
   const rt = await rentTable()
   const globalMed = rt.global
+  const skill103 = 1 + prestigeEffectsOf(e.prestige).marketIncomePct / 100   // فاز ۱۰۳: «نبضِ بازار»
   const accruals: Array<{ assetId: string; amount: number }> = []
   // فاز ۴۹: فرمولِ واحد (assetMonthlyIncomeOf) — واحدهای تجمیعی درآمد را ضرب می‌کنند؛ نمایش = واریز.
   for (const a of earners) {
     const monthly0 = rt.byHood.get(a.hood) || globalMed
-    const monthly = assetMonthlyIncomeOf(a, monthly0)
+    const monthly = assetMonthlyIncomeOf(a, monthly0, 1, skill103)
     if (!(monthly > 0)) continue
     const since = a.lastAccrualAt || a.actionAt || a.boughtAt
     const days = Math.floor((now - since) / 864e5)
@@ -335,7 +340,7 @@ async function accrueRentFor(userId: string, e: EmpireData, now = Date.now()): P
   for (const a of bldRenters) {
     const c = a.construction!
     const monthly0 = rt.byHood.get(a.hood) || globalMed
-    const monthly = assetMonthlyIncomeOf(a, monthly0, amenityValueFactorOf(c, config().empire.build.amenities))
+    const monthly = assetMonthlyIncomeOf(a, monthly0, amenityValueFactorOf(c, config().empire.build.amenities), skill103)
     if (!(monthly > 0)) continue   // بدونِ نمونهٔ واقعیِ اجاره → هیچ واریزی (صادقانه)
     const since = a.lastAccrualAt || c.rentStartAt || c.doneAt || a.boughtAt
     const days = Math.floor((now - since) / 864e5)
@@ -449,7 +454,7 @@ async function stateOf(userId: string, e00: EmpireData) {
   const assets = e.assets.map(a => {
     const rentM0 = rt47.byHood.get(a.hood) || rt47.global
     // فاز ۴۹: همان فرمولِ واحدِ واریز (assetMonthlyIncomeOf) — واحدهای تجمیعی ضرب می‌شوند
-    const incomeMonthly = assetMonthlyIncomeOf(a, rentM0, a.construction?.done ? amenityValueFactorOf(a.construction, config().empire.build.amenities) : 1)
+    const incomeMonthly = assetMonthlyIncomeOf(a, rentM0, a.construction?.done ? amenityValueFactorOf(a.construction, config().empire.build.amenities) : 1, 1 + prestigeEffectsOf(e.prestige).marketIncomePct / 100)
     const incomeSince = a.lastAccrualAt || a.actionAt || a.construction?.rentStartAt || a.construction?.doneAt || a.boughtAt
     const owned = a.unitsOwned || 1
     const unitP = prices[a.listingId] || Math.round(a.buyPrice / owned)
@@ -1451,7 +1456,8 @@ export async function POST(req: NextRequest) {
     // ══════ موتورِ ساخت (جلد ۶۴–۷۲): کلنگ → هزینهٔ روزشمار → رویداد → پیش‌فروش → تکمیل → فروشِ واحد ══════
     // پیش‌نمایشِ نقشهٔ ساخت: همهٔ ترکیب‌های سازه/کیفیت با روز و هزینهٔ شفاف.
     case 'buildPlan': {
-      const cfg = buildCfgWithMaterials()   // فاز ۱۰۰: هزینهٔ متر با ضریبِ شاخصِ مصالحِ واقعی
+      const cfgPre = await getEmpire(userId)
+      const cfg = buildCfgWithMaterials(cfgPre?.prestige)   // فاز ۱۰۰ + ۱۰۳: شاخصِ مصالح × مهارتِ ساخت
       if (!cfg.enabled) return NextResponse.json({ error: 'ساخت فعلاً فعال نیست' }, { status: 403 })
       const e = await getEmpire(userId)
       const a = e?.assets.find(x => x.id === String(b.assetId || ''))
@@ -1493,7 +1499,7 @@ export async function POST(req: NextRequest) {
       })
     }
     case 'startBuild': {
-      const cfg = buildCfgWithMaterials()   // فاز ۱۰۰: همان ضریبی که در برآورد دیده شد
+      const cfg = buildCfgWithMaterials((await getEmpire(userId))?.prestige)   // فاز ۱۰۰ + ۱۰۳: همان ضریبِ برآورد
       if (!cfg.enabled) return NextResponse.json({ error: 'ساخت فعلاً فعال نیست' }, { status: 403 })
       const e = await getEmpire(userId)
       const a = e?.assets.find(x => x.id === String(b.assetId || ''))
@@ -2156,6 +2162,33 @@ export async function POST(req: NextRequest) {
       await releaseListing(r.listingId!, 'clan:' + clan.id).catch(() => {})
       appendWorldEvent({ icon: '💰', title: `اتحادِ «${clan.name}» کنسرسیومش را به قیمتِ روز فروخت`, kind: 'npc' }, dayNumberOf(Date.now())).catch(() => {})
       return NextResponse.json({ ok: true, soldFor: live, payouts: r.payouts })
+    }
+    // 🌌 فاز ۱۰۳ (جلد ۳): Prestige — بازتولد با امتیازِ مهارتِ دائمی + خرجِ درختِ مهارت
+    case 'prestige': {
+      const cfgP = config().empire.prestige
+      const e = await getEmpire(userId)
+      if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      if (!b.confirm) {
+        const eff = prestigeEffectsOf(e.prestige)
+        return NextResponse.json({
+          ok: true, preview: true, eligible: empireLevel(e.xp).level >= cfgP.minLevel, minLevel: cfgP.minLevel,
+          pointsPer: cfgP.pointsPerPrestige, maxPerBranch: cfgP.maxPerBranch,
+          keep: 'کوین، نشان‌ها، میراث و تاریخچه می‌مانند؛ XP و سرمایه و دارایی‌ها از نو',
+          me: { count: e.prestige?.count || 0, points: e.prestige?.points || 0, spent: e.prestige?.spent || {} },
+          effects: eff,
+          branches: SKILL_BRANCHES.map(br => ({ id: br.id, icon: br.icon, name: br.name, per: br.id === 'nego' ? cfgP.negoPpPerPoint : br.id === 'build' ? cfgP.buildCostPctPerPoint : cfgP.marketIncomePctPerPoint })),
+        })
+      }
+      const r = await doPrestige(userId)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      for (const lid of r.released) await releaseListing(lid, userId).catch(() => {})
+      appendWorldEvent({ icon: '🌌', title: `«${e.name}» بازتولد شد — دورِ ${((e.prestige?.count || 0) + 1).toLocaleString('fa-IR')} با مهارت‌های ماندگار`, kind: 'npc' }, dayNumberOf(Date.now())).catch(() => {})
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
+    }
+    case 'skillSpend': {
+      const r = await spendSkillPoint(userId, String(b.branch || ''))
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
     }
     // 🛡 بیمهٔ کارگاه (فاز ۷۰): حقِ بیمهٔ شفاف → پوششِ ٪ هزینهٔ اتفاق‌های کارگاه
     case 'insureBuild': {
