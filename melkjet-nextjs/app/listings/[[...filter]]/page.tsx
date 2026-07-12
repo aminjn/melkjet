@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import Nav from '@/app/components/Nav'
 import Footer from '@/app/components/Footer'
+import CardImg from '@/app/components/CardImg'
 import { listItems } from '@/app/lib/scraper-store'
 import { gradientFor } from '@/app/lib/content-display'
 import { listingHref } from '@/app/lib/listing-url'
@@ -63,9 +64,11 @@ export default async function Listings({ params }: { params: Promise<{ filter?: 
           <div style={{ background: 'var(--surface)', border: '1px dashed var(--line2)', borderRadius: 16, padding: 40, textAlign: 'center', color: 'var(--muted)' }}>آگهیِ فعالی در این دسته نیست.</div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 16 }}>
-            {items.slice(0, 48).map(it => (
+            {items.slice(0, 48).map((it, i) => (
               <Link key={it.id} href={it.url || listingHref(it.id, it.title, it.location)} style={{ display: 'block', textDecoration: 'none', color: 'inherit', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden' }}>
-                <div style={{ height: 152, background: it.image ? `center/cover no-repeat url(${it.image})` : gradientFor(it.title) }} />
+                <div style={{ height: 152, position: 'relative', overflow: 'hidden', background: it.image ? undefined : gradientFor(it.title) }}>
+                  {it.image && <CardImg src={it.image} alt={it.title} eager={i < 3} priority={i < 2 ? 'high' : undefined} />}
+                </div>
                 <div style={{ padding: '13px 15px' }}>
                   <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--gold)' }}>{money(it.price) || '—'}</div>
                   <div style={{ fontSize: 13, fontWeight: 700, marginTop: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.title}</div>

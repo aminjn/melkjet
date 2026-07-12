@@ -7,6 +7,7 @@ import Nav from '@/app/components/Nav'
 import PromoBadge from '@/app/components/PromoBadge'
 import BannerSlot from '@/app/components/BannerSlot'
 import CompareButton from '@/app/components/CompareButton'
+import CardImg from '@/app/components/CardImg'
 import LikeHeart from '@/app/components/home/LikeHeart'
 import NeighborhoodPicker from '@/app/components/NeighborhoodPicker'
 import { fetchContent, gradientFor, type ContentItem } from '@/app/lib/content-display'
@@ -661,8 +662,7 @@ function SearchPageInner() {
                 <div key={p.id} onMouseEnter={() => setHoveredCard(p.id)} onMouseLeave={() => setHoveredCard(null)} style={{ borderRadius: 14, border: `1px solid ${isHov ? 'var(--gold)' : 'var(--line)'}`, background: 'var(--surface)', overflow: 'hidden', cursor: 'pointer', transition: 'transform 0.18s, box-shadow 0.18s, border-color 0.18s', transform: isHov ? 'translateY(-4px)' : 'none', boxShadow: isHov ? '0 12px 40px -12px rgba(201,168,76,0.22)' : '0 2px 10px -4px rgba(0,0,0,0.3)' }}>
                   <Link href={listingHref(p.id, p.title, p.location)} style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}>
                     <div style={{ height: 156, background: p.img, position: 'relative', overflow: 'hidden', filter: p.dealStatus ? 'grayscale(0.55) brightness(0.7)' : 'none' }}>
-                      {p.image && <img src={p.image} alt={p.title} loading={index < 4 ? 'eager' : 'lazy'} fetchPriority={index < 2 ? 'high' : 'low'} decoding="async"
-                        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
+                      {p.image && <CardImg src={p.image} alt={p.title} eager={index < 4} priority={index < 2 ? 'high' : 'low'} />}
                       <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 64, background: 'linear-gradient(to top,rgba(0,0,0,0.5),transparent)' }} />
                       {!p.dealStatus && <LikeHeart listingId={p.id} />}
                       {isPromoted && !p.dealStatus && <div style={{ position: 'absolute', top: 10, left: 44 }}><PromoBadge kind={p.promoKind || 'ویژه'} /></div>}
