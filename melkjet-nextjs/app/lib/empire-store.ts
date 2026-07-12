@@ -250,6 +250,17 @@ export async function grantWarReward(userId: string, xp: number, title: string, 
   })
 }
 
+// فاز ۱۰۲ (لایهٔ اجتماعی): جابه‌جاییِ شفافِ سرمایهٔ نقد (واریز/دریافتِ خزانه، کنسرسیوم، تقسیمِ فروش)
+// — کسر فقط با موجودیِ کافی؛ همیشه با ردِ تایم‌لاین.
+export async function moveCapital(userId: string, delta: number, icon: string, title: string, now = Date.now()) {
+  const d = Math.round(delta)
+  return mutateEmpire(userId, e => {
+    if (d < 0 && e.capital < -d) return 'سرمایهٔ نقدِ کافی نیست'
+    e.capital += d
+    e.timeline.push({ at: now, icon, title: title.slice(0, 90), detail: `${d > 0 ? '+' : '−'}${Math.abs(d).toLocaleString('fa-IR')} تومان` })
+  })
+}
+
 // تصاحبِ خصمانهٔ شرکتِ NPC: پرداختِ ارزش‌گذاریِ شفاف از سرمایهٔ نقد، دریافتِ همهٔ املاکِ شرکت
 // به قیمتِ روزِ واقعیِ هرکدام (پایهٔ سود/زیانِ آینده). بقای پول: پرداختی سرمایهٔ شرکتِ بازگشته می‌شود.
 export async function absorbNpcAssets(userId: string, valuation: number, assets: Array<{ listingId: string; title: string; hood: string; cost: number }>, npcName: string, now = Date.now()) {

@@ -42,7 +42,7 @@ import { listingHref } from '@/app/lib/listing-url'
 import { recordEvent } from '@/app/lib/reos/store'
 import { buildBriefFor } from '@/app/lib/empire-brief'
 import { materialsIndexState, materialsFactorOf } from '@/app/lib/materials-index'
-import { grantWarReward, absorbNpcAssets } from '@/app/lib/empire-store'
+import { grantWarReward, absorbNpcAssets, moveCapital } from '@/app/lib/empire-store'
 import { touchStreak, getStreak } from '@/app/lib/reos/achievements'
 import { candidateListings, getItemById, type Item } from '@/app/lib/scraper-store'
 import { parseFaNum } from '@/app/lib/reos/features'
@@ -51,6 +51,7 @@ import { forIds } from '@/app/lib/listing-stats-store'
 import { flagEnabled } from '@/app/lib/reos/flags'
 import { config, primeConfig } from '@/app/lib/reos/reos-config'
 import { ownerOfListing, claimListing, releaseListing, transferListing, myClanOf, listClans, createClan, joinClan, leaveClan, postClanMsg, clanView, deleteClanIfOwner } from '@/app/lib/empire-social'
+import { sendDm, dmThread, createDuel, acceptDuel, resolveDuels, myDuels, markDuelRewarded, clanDeposit, clanWithdraw, clanProjectStart, clanProjectJoin, clanProjectSell } from '@/app/lib/empire-social'   // فاز ۱۰۲
 // فاز ۳۹ (سند ۲۶ فصل ۱۶ Cognitive AI): هوشِ سرمایه‌گذاری — ارزش‌گذاری/تصمیم‌یار/روندِ محله/سلامتِ مالی/اولویت‌ها؛ همه از دادهٔ واقعی.
 import { compStatsOf, valuationOf, decisionOf, marketIntelOf, cashflowOf, financialHealthOf, prioritiesOf, evalRules, RULE_TEMPLATES, tradeAskCheckOf, jvOfferCheckOf, crisisOf, rarityOf } from '@/app/lib/empire-intel'
 // فاز ۴۸ (جوایزِ پولِ واقعی): نردبان/استخر/صفِ تأیید + کیف‌پولِ یکپارچهٔ سایت (سطلِ «پاداش»)
@@ -2002,6 +2003,159 @@ export async function POST(req: NextRequest) {
       }
       appendWorldEvent({ icon: '🏳️', title: `«${e.name}» شرکتِ ${c.name} را تصاحب کرد — ${assetsSnapshot.length.toLocaleString('fa-IR')} ملک دست‌به‌دست شد`, kind: 'npc' }, day).catch(() => {})
       return NextResponse.json({ ok: true, valuation: val.total, got: assetsSnapshot.length, ...(await stateOf(userId, pay.empire!)) })
+    }
+    // ══════ فاز ۱۰۲ — لایهٔ اجتماعی: دوستان + گفتگو + دوئل + خزانه/کنسرسیومِ اتحاد ══════
+    // دوست = فالویِ دوطرفه؛ داوریِ دوئل‌های سررسیده هم همین‌جا (با جایزهٔ XP یک‌باره).
+    case 'social': {
+      const soc = config().empire.social
+      const e = await getEmpire(userId)
+      if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      const empires = await listEmpiresPublic(2000)
+      const byNo = new Map(empires.map(x => [x.no, x]))
+      const friends = (e.following || [])
+        .map(no => byNo.get(no))
+        .filter((x): x is NonNullable<typeof x> => !!x && x.userId !== userId && (x.following || []).includes(e.no))
+        .map(x => ({ no: x.no, name: x.name, title: x.title, assets: x.assets.length }))
+      // داوریِ دوئل‌های سررسیده — رشدِ واقعیِ هر طرف از قیمت‌های روز
+      const week = Math.floor(dayNumberOf(Date.now()) / 7)
+      const items102 = (await candidateListings(800)).filter(isPricedSale)
+      const prices102: Record<string, number> = {}
+      for (const it of items102) { const pz = priceOf(it); if (pz > 0) prices102[it.id] = pz }
+      const npcD = await npcDb()
+      const done = await resolveDuels(week, uid => { const em = empires.find(x => x.userId === uid); return em ? netWorthOf(em, prices102, { fundUnit: {}, crowdUnit: {} }).netWorth : 0 }, id => { const cc = npcD.companies.find(x => x.id === id); return cc ? { realized: cc.realized } : null }).catch(() => [])
+      for (const dd of done) {
+        const winner = dd.winner === 'a' ? dd.a : dd.winner === 'b' ? dd.b : null
+        if (winner && !dd.rewarded && (await markDuelRewarded(dd.id).catch(() => false))) {
+          await grantWarReward(winner.userId, soc.duelXpWin, `دوئلِ هفته را بردی (${(dd.aGrowth ?? 0).toLocaleString('fa-IR')}٪ در برابرِ ${(dd.bGrowth ?? 0).toLocaleString('fa-IR')}٪)`, `+${soc.duelXpWin.toLocaleString('fa-IR')} XP`).catch(() => {})
+        }
+      }
+      return NextResponse.json({ ok: true, friends, myNo: e.no, duels: await myDuels(userId, week), duelCfg: { enabled: soc.duelEnabled, xpWin: soc.duelXpWin }, dmEnabled: soc.dmEnabled })
+    }
+    case 'dmThread': {
+      const soc = config().empire.social
+      if (!soc.dmEnabled) return NextResponse.json({ error: 'گفتگو فعلاً فعال نیست' }, { status: 403 })
+      const e = await getEmpire(userId)
+      const other = (await listEmpiresPublic(2000)).find(x => x.no === Number(b.withNo))
+      if (!e || !other) return NextResponse.json({ error: 'کاربر پیدا نشد' }, { status: 404 })
+      const mutual = (e.following || []).includes(other.no) && (other.following || []).includes(e.no)
+      if (!mutual) return NextResponse.json({ error: 'گفتگو فقط بینِ دوستان (دنبال‌کردنِ دوطرفه) باز است' }, { status: 403 })
+      return NextResponse.json({ ok: true, msgs: await dmThread(userId, other.userId), withName: other.name, myNo: e.no })
+    }
+    case 'dmSend': {
+      const soc = config().empire.social
+      if (!soc.dmEnabled) return NextResponse.json({ error: 'گفتگو فعلاً فعال نیست' }, { status: 403 })
+      const e = await getEmpire(userId)
+      const other = (await listEmpiresPublic(2000)).find(x => x.no === Number(b.withNo))
+      if (!e || !other) return NextResponse.json({ error: 'کاربر پیدا نشد' }, { status: 404 })
+      const mutual = (e.following || []).includes(other.no) && (other.following || []).includes(e.no)
+      if (!mutual) return NextResponse.json({ error: 'گفتگو فقط بینِ دوستان' }, { status: 403 })
+      const r = await sendDm({ userId, no: e.no, name: e.name }, other.userId, String(b.text || ''), { maxLen: soc.dmMaxLen, cooldownSec: soc.dmCooldownSec })
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, msgs: await dmThread(userId, other.userId) })
+    }
+    case 'duelStart': {
+      const soc = config().empire.social
+      if (!soc.duelEnabled) return NextResponse.json({ error: 'دوئل فعلاً فعال نیست' }, { status: 403 })
+      const e = await getEmpire(userId)
+      if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      const week = Math.floor(dayNumberOf(Date.now()) / 7)
+      const items102 = (await candidateListings(800)).filter(isPricedSale)
+      const prices102: Record<string, number> = {}
+      for (const it of items102) { const pz = priceOf(it); if (pz > 0) prices102[it.id] = pz }
+      const myNw = netWorthOf(e, prices102, { fundUnit: {}, crowdUnit: {} }).netWorth
+      if (b.npcId) {
+        const cc = (await npcDb()).companies.find(x => x.id === String(b.npcId))
+        if (!cc) return NextResponse.json({ error: 'شرکت پیدا نشد' }, { status: 404 })
+        const r = await createDuel({ userId, no: e.no, name: e.name }, { npcId: cc.id, npcName: cc.name, realized: cc.realized, capital: cc.capital }, week, myNw)
+        if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+        return NextResponse.json({ ok: true, duel: r.duel, note: `تا پایانِ هفته: رشدِ ارزشِ خالصِ تو در برابرِ سودِ واقعاً محقق‌شدهٔ ${cc.name} — برد ${soc.duelXpWin.toLocaleString('fa-IR')} XP` })
+      }
+      const other = (await listEmpiresPublic(2000)).find(x => x.no === Number(b.opponentNo))
+      if (!other || other.userId === userId) return NextResponse.json({ error: 'حریف پیدا نشد' }, { status: 404 })
+      const mutual = (e.following || []).includes(other.no) && (other.following || []).includes(e.no)
+      if (!mutual) return NextResponse.json({ error: 'دوئل فقط با دوستان (دنبال‌کردنِ دوطرفه)' }, { status: 403 })
+      const r = await createDuel({ userId, no: e.no, name: e.name }, { userId: other.userId, no: other.no, name: other.name }, week, myNw)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, duel: r.duel, note: 'دعوت فرستاده شد — با پذیرشِ حریف، مسابقهٔ رشدِ این هفته شروع می‌شود' })
+    }
+    case 'duelAccept': {
+      const e = await getEmpire(userId)
+      if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      const items102 = (await candidateListings(800)).filter(isPricedSale)
+      const prices102: Record<string, number> = {}
+      for (const it of items102) { const pz = priceOf(it); if (pz > 0) prices102[it.id] = pz }
+      const myNw = netWorthOf(e, prices102, { fundUnit: {}, crowdUnit: {} }).netWorth
+      const r = await acceptDuel(String(b.id || ''), { userId, no: e.no, name: e.name }, myNw)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true })
+    }
+    // خزانهٔ هلدینگ: واریزِ عضو (کسر از سرمایه؛ شکستِ ثبت = برگشتِ فوری) / برداشتِ بنیان‌گذار
+    case 'clanDeposit': {
+      const soc = config().empire.social
+      if (!soc.holdingEnabled) return NextResponse.json({ error: 'خزانهٔ اتحاد فعلاً فعال نیست' }, { status: 403 })
+      const e = await getEmpire(userId)
+      const amt = Math.round(Number(b.amount) || 0)
+      if (!e || amt <= 0) return NextResponse.json({ error: 'مبلغ نامعتبر' }, { status: 400 })
+      const take = await moveCapital(userId, -amt, '🏦', 'واریز به خزانهٔ اتحاد')
+      if (!take.ok) return NextResponse.json({ error: take.reason }, { status: 400 })
+      const r = await clanDeposit(userId, { no: e.no, name: e.name }, amt)
+      if (!r.ok) { await moveCapital(userId, amt, '↩️', 'برگشتِ واریزِ ناموفقِ خزانه'); return NextResponse.json({ error: r.reason }, { status: 400 }) }
+      return NextResponse.json({ ok: true, treasury: r.treasury, ...(await stateOf(userId, take.empire!)) })
+    }
+    case 'clanWithdraw': {
+      const e = await getEmpire(userId)
+      const amt = Math.round(Number(b.amount) || 0)
+      if (!e || amt <= 0) return NextResponse.json({ error: 'مبلغ نامعتبر' }, { status: 400 })
+      const r = await clanWithdraw(userId, { no: e.no, name: e.name }, amt)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      const back = await moveCapital(userId, amt, '🏦', 'برداشت از خزانهٔ اتحاد')
+      return NextResponse.json({ ok: true, treasury: r.treasury, ...(back.empire ? await stateOf(userId, back.empire) : {}) })
+    }
+    // کنسرسیومِ اتحاد روی آگهیِ واقعی: شروع → سهم‌گذاری (کسرِ اتمیک + برگشتِ سرریز) → تکمیل = مالکیتِ اتحاد → فروش به قیمتِ روز و تقسیمِ نسبتی
+    case 'clanProjectStart': {
+      const soc = config().empire.social
+      if (!soc.consortiumEnabled) return NextResponse.json({ error: 'کنسرسیوم فعلاً فعال نیست' }, { status: 403 })
+      const it = await getItemById(String(b.listingId || '')).catch(() => null)
+      const pz = it ? priceOf(it) : 0
+      if (!it || !(pz > 0)) return NextResponse.json({ error: 'آگهیِ فعالِ قیمت‌دار پیدا نشد' }, { status: 404 })
+      const r = await clanProjectStart(userId, { id: it.id, title: it.title, hood: hoodOf(it.location), price: pz })
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, project: r.project })
+    }
+    case 'clanProjectJoin': {
+      const e = await getEmpire(userId)
+      const amt = Math.round(Number(b.amount) || 0)
+      if (!e || amt <= 0) return NextResponse.json({ error: 'مبلغ نامعتبر' }, { status: 400 })
+      const take = await moveCapital(userId, -amt, '🏗', 'سهم‌گذاری در کنسرسیومِ اتحاد')
+      if (!take.ok) return NextResponse.json({ error: take.reason }, { status: 400 })
+      const r = await clanProjectJoin(userId, { no: e.no, name: e.name }, String(b.projectId || ''), amt)
+      if (!r.ok) { await moveCapital(userId, amt, '↩️', 'برگشتِ سهمِ ناموفقِ کنسرسیوم'); return NextResponse.json({ error: r.reason }, { status: 400 }) }
+      // اگر فقط بخشی جا شد (سقفِ کنسرسیوم)، مابه‌التفاوت همین‌جا برمی‌گردد
+      if (r.reason && r.reason.includes('جا داشت')) {
+        const m = r.reason.match(/[\d٬,]+/)
+        const put = m ? Number(String(m[0]).replace(/[٬,]/g, '')) : amt
+        if (put < amt) await moveCapital(userId, amt - put, '↩️', 'برگشتِ سرریزِ کنسرسیوم')
+      }
+      if (r.completed) {
+        const clan = await myClanOf(userId)
+        if (clan) await claimListing(r.project!.listingId, { userId: 'clan:' + clan.id, no: 0, name: clan.name }).catch(() => {})
+        appendWorldEvent({ icon: '🏛', title: `اتحادی با کنسرسیوم «${r.project!.title.slice(0, 36)}» را خرید`, kind: 'npc' }, dayNumberOf(Date.now())).catch(() => {})
+      }
+      return NextResponse.json({ ok: true, project: r.project, completed: !!r.completed, note: r.reason })
+    }
+    case 'clanProjectSell': {
+      const clan = await myClanOf(userId)
+      if (!clan) return NextResponse.json({ error: 'عضوِ اتحادی نیستی' }, { status: 400 })
+      const pr = (clan.projects || []).find(x => x.id === String(b.projectId || ''))
+      if (!pr) return NextResponse.json({ error: 'کنسرسیوم پیدا نشد' }, { status: 404 })
+      const it = await getItemById(pr.listingId).catch(() => null)
+      const live = it ? priceOf(it) : 0
+      const r = await clanProjectSell(userId, pr.id, live)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      for (const po of r.payouts || []) await moveCapital(po.userId, po.amount, '💰', `سهمِ فروشِ کنسرسیوم «${(r.title || '').slice(0, 40)}»`).catch(() => {})
+      await releaseListing(r.listingId!, 'clan:' + clan.id).catch(() => {})
+      appendWorldEvent({ icon: '💰', title: `اتحادِ «${clan.name}» کنسرسیومش را به قیمتِ روز فروخت`, kind: 'npc' }, dayNumberOf(Date.now())).catch(() => {})
+      return NextResponse.json({ ok: true, soldFor: live, payouts: r.payouts })
     }
     // 🛡 بیمهٔ کارگاه (فاز ۷۰): حقِ بیمهٔ شفاف → پوششِ ٪ هزینهٔ اتفاق‌های کارگاه
     case 'insureBuild': {

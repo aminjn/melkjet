@@ -151,7 +151,9 @@ export interface ReosConfig {
     // + فصل ۵ (منابع): ظرفیتِ پروژهٔ همزمانِ شرکت با سطح رشد می‌کند؛ خروج از پروژهٔ نیمه‌کاره با ٪ شفاف.
     unlocks: { capitalLevel: number; companyLevel: number; crowdLevel: number; projectsBase: number; projectsPerLevels: number; projectExitPct: number; tradeLevel: number; clanLevel: number }
     // فاز ۳۷ (درخواستِ مستقیم): مالکیتِ انحصاریِ آگهی + بازارِ بازیکنان + مشارکتِ ساخت + اتحاد — همه سطح‌گشا.
-    social: { exclusiveEnabled: boolean; tradeEnabled: boolean; jvEnabled: boolean; jvMaxPct: number; clanEnabled: boolean; clanCreateFee: number; clanMaxMembers: number; p2pAuctionEnabled: boolean; p2pAuctionStepPct: number; p2pAuctionMaxDays: number }
+    social: { exclusiveEnabled: boolean; tradeEnabled: boolean; jvEnabled: boolean; jvMaxPct: number; clanEnabled: boolean; clanCreateFee: number; clanMaxMembers: number; p2pAuctionEnabled: boolean; p2pAuctionStepPct: number; p2pAuctionMaxDays: number
+      // فاز ۱۰۲: گفتگوی دوستان + دوئلِ هفتگی + خزانه/کنسرسیومِ اتحاد
+      dmEnabled: boolean; dmMaxLen: number; dmCooldownSec: number; duelEnabled: boolean; duelXpWin: number; holdingEnabled: boolean; consortiumEnabled: boolean }
   }
 }
 
@@ -229,7 +231,8 @@ export const DEFAULT_CONFIG: ReosConfig = {
     // ظرفیتِ پروژهٔ همزمان = ۱ + سطح ÷ ۱۰؛ خروج از پروژهٔ نیمه‌کاره به ۸۵٪ بهای تمام‌شده (منهای مالیات → خزانه).
     unlocks: { capitalLevel: 3, companyLevel: 4, crowdLevel: 6, projectsBase: 1, projectsPerLevels: 10, projectExitPct: 85, tradeLevel: 6, clanLevel: 8 },
     // اجتماع (فاز ۳۷): یک آگهیِ واقعی = یک مالک؛ معامله و مشارکتِ ساخت بینِ بازیکنان؛ اتحاد با هزینهٔ ثبتِ → خزانه.
-    social: { exclusiveEnabled: true, tradeEnabled: true, jvEnabled: true, jvMaxPct: 49, clanEnabled: true, clanCreateFee: 100_000_000, clanMaxMembers: 20, p2pAuctionEnabled: true, p2pAuctionStepPct: 5, p2pAuctionMaxDays: 7 },
+    social: { exclusiveEnabled: true, tradeEnabled: true, jvEnabled: true, jvMaxPct: 49, clanEnabled: true, clanCreateFee: 100_000_000, clanMaxMembers: 20, p2pAuctionEnabled: true, p2pAuctionStepPct: 5, p2pAuctionMaxDays: 7,
+      dmEnabled: true, dmMaxLen: 300, dmCooldownSec: 5, duelEnabled: true, duelXpWin: 100, holdingEnabled: true, consortiumEnabled: true },   // فاز ۱۰۲
     // Hook روزانه (سند ۱۴): N آگهیِ واقعیِ قطعی از هشِ کاربر+روز؛ بعضی واقعاً زیرِ میانهٔ محله‌اند، بعضی نه —
     // بازی قضاوت نمی‌کند؛ بازیکن فکر می‌کند یا ژتونِ تحلیل خرج می‌کند («اگر پاسخ واضح باشد، سیستم شکست خورده»).
     deals: { enabled: true, count: 5 },

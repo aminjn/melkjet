@@ -744,6 +744,14 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             {row('تصاحبِ خصمانه فعال (۱/۰)', cin('npc', 'takeoverEnabled'), 'خریدِ کلِ شرکتِ NPC با ارزش‌گذاریِ شفاف — فقط NPC، هرگز بازیکنِ واقعی')}
             {row('سطحِ بازشدنِ تصاحب', cin('npc', 'takeoverLevel'))}
             {row('حقِ تقدمِ تصاحب (٪)', cin('npc', 'takeoverPremiumPct'), 'روی جمعِ خزانه + ارزشِ روزِ املاک')}
+            <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>👥 لایهٔ اجتماعی (فاز ۱۰۲ — دوستان/دوئل/خزانه/کنسرسیوم)</div>
+            {row('گفتگوی دوستان فعال (۱/۰)', cin('social', 'dmEnabled'), 'فقط بینِ فالویِ دوطرفه')}
+            {row('سقفِ طولِ پیام', cin('social', 'dmMaxLen'))}
+            {row('فاصلهٔ دو پیام (ثانیه)', cin('social', 'dmCooldownSec'))}
+            {row('دوئلِ هفتگی فعال (۱/۰)', cin('social', 'duelEnabled'), 'متریک = رشدِ واقعیِ ارزشِ خالص — «تصمیمِ بهتر، نه پولِ بیشتر»')}
+            {row('جایزهٔ بردِ دوئل (XP)', cin('social', 'duelXpWin'))}
+            {row('خزانهٔ اتحاد فعال (۱/۰)', cin('social', 'holdingEnabled'))}
+            {row('کنسرسیوم فعال (۱/۰)', cin('social', 'consortiumEnabled'), 'خریدِ جمعیِ آگهیِ واقعی با سهم‌های شفاف')}
             <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>🧱 شاخصِ قیمتِ مصالح (فاز ۱۰۰ — جلد ۴۳: از قیمت‌های واقعیِ بازارِ مصالحِ سایت)</div>
             {row('اثر روی هزینهٔ ساخت فعال (۱/۰)', cin('materialsIndex', 'enabled'), 'ضریبِ هزینهٔ متر = شاخص ÷ ۱۰۰ (با کف/سقفِ زیر)؛ بدونِ پوششِ کافی همیشه ۱')}
             {row('حداقلِ پوشش (تعداد کالا)', cin('materialsIndex', 'minItems'), 'کمتر از این = «دادهٔ کافی نیست» و ضریب ۱ — عددِ ساختگی هرگز')}
