@@ -4372,9 +4372,10 @@ function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete, onSuspend,
 
         <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 18 }}>
           {/* KPI cards from profile detail */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+          {/* فاز ۸۷ (فیدبک: «جدول‌ها بعضی وقت‌ها به‌هم می‌ریزد»): ستون‌ها با عرضِ صفحه جمع می‌شوند و عدد از کاشی بیرون نمی‌زند */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(105px,1fr))', gap: 10 }}>
             {[['آگهی', user.listings], ['لید', user.leads], ['وظیفه', user.tasks], ['مصرف توکن', user.tokenUsed], ['اعتبار پیامک', user.credit?.sms], ['اعتبار توکن', user.credit?.token]].map(([l, v]: any) => (
-              <div key={l} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: 13 }}><div style={{ fontSize: 11, color: 'var(--muted)' }}>{l}</div><div style={{ fontSize: 20, fontWeight: 900, color: 'var(--gold)', marginTop: 4 }}>{fa(v || 0)}</div></div>
+              <div key={l} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: 13, minWidth: 0 }}><div style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l}</div><div style={{ fontSize: 20, fontWeight: 900, color: 'var(--gold)', marginTop: 4, overflowWrap: 'anywhere' }}>{fa(v || 0)}</div></div>
             ))}
           </div>
 
@@ -4393,9 +4394,9 @@ function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete, onSuspend,
                   </div>
                 </div>
                 {idRows.length > 0 ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12.5 }} className="mjsa-idgrid">
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(215px,1fr))', gap: 8, fontSize: 12.5 }} className="mjsa-idgrid">
                     {idRows.map(r => (
-                      <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, background: 'var(--bg2)', borderRadius: 8, padding: '7px 10px' }}><span style={{ color: 'var(--muted)', whiteSpace: 'nowrap' }}>{r.label}</span><span style={{ fontWeight: 700, direction: r.ltr ? 'ltr' : 'rtl', textAlign: r.ltr ? 'left' : 'right', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.value}</span></div>
+                      <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', background: 'var(--bg2)', borderRadius: 8, padding: '7px 10px', minWidth: 0 }}><span style={{ color: 'var(--muted)', whiteSpace: 'nowrap' }}>{r.label}</span><span title={String(r.value)} style={{ fontWeight: 700, direction: r.ltr ? 'ltr' : 'rtl', textAlign: r.ltr ? 'left' : 'right', minWidth: 0, overflowWrap: 'anywhere', wordBreak: String(r.value).length > 24 ? 'break-all' : 'normal' }}>{r.value}</span></div>
                     ))}
                   </div>
                 ) : <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.9 }}>این کاربر هنوز هویتش را با شاهکار تأیید نکرده است. وقتی خودش وارد شود و احراز کند (با احرازِ فعالِ شاهکار)، همهٔ فیلدهای هویتی این‌جا خودکار پر می‌شود.</div>}
