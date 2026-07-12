@@ -147,7 +147,8 @@ export interface ReosConfig {
     levelUpCoins: number
     // سند ۱۸ (فصل ۸ LiveOps): رویدادهای زندهٔ ادمین — بدونِ دیپلوی از پنل ساخته/زمان‌بندی می‌شوند؛
     // پیشرفت فقط از رفتارِ واقعیِ REOS (بازدید/ذخیره/جستجو/محله‌ها) در بازهٔ رویداد.
-    events: Array<{ id: string; title: string; desc: string; icon: string; metric: 'views' | 'saves' | 'searches' | 'hoods'; target: number; rewardXp: number; rewardCoins: number; startAt: number; endAt: number; enabled: boolean }>
+    // فاز ۱۰۵ (Quest Studio کامل): + متریک‌های گیم‌پلی (خرید/تحویلِ پروژه/پروانه — از تایم‌استمپ‌های واقعی) + گیتِ سطح
+    events: Array<{ id: string; title: string; desc: string; icon: string; metric: 'views' | 'saves' | 'searches' | 'hoods' | 'buys' | 'projects' | 'permits'; target: number; rewardXp: number; rewardCoins: number; startAt: number; endAt: number; enabled: boolean; minLevel?: number }>
     // سند ۱۸ (فصل ۸ بخش ۱): پاداشِ نقاطِ عطفِ ورودِ پیاپی (استریکِ واقعی) — روزهای ۷/۱۴/۲۱/۳۰.
     streakBonus: { d7: number; d14: number; d21: number; d30: number }
     // GDD فصل ۴ بخش ۱۹ (Progression): «اعداد نباید بزرگ‌تر شوند؛ امکانات باید بیشتر شوند» — قابلیت‌ها سطح‌گشا هستند

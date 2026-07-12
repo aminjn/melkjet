@@ -119,7 +119,8 @@ async function missionsOf(userId: string, e: EmpireData) {
 // 🎪 رویدادهای زندهٔ ادمین (سند ۱۸ — LiveOps): تعریف از پنل بدونِ دیپلوی؛ پیشرفت فقط از رفتارِ واقعیِ
 // ثبت‌شدهٔ REOS در بازهٔ خودِ رویداد — هیچ شمارندهٔ ساختگی.
 async function liveEventsOf(userId: string, e: EmpireData, now = Date.now()) {
-  const defs = (config().empire.events || []).filter(d => eventActive(d, now))
+  const lvl105 = empireLevel(e.xp).level
+  const defs = (config().empire.events || []).filter(d => eventActive(d, now) && lvl105 >= ((d as { minLevel?: number }).minLevel || 0))
   if (!defs.length) return []
   const evs = await recentEvents({ userId, limit: 300 }).catch(() => [])
   const out = []
@@ -135,6 +136,10 @@ async function liveEventsOf(userId: string, e: EmpireData, now = Date.now()) {
       for (const id of viewIds.slice(0, 15)) { const it = await getItemById(id).catch(() => null); const h = it ? hoodOf(it.location) : ''; if (h) hs.add(h) }
       progress = hs.size
     }
+    // فاز ۱۰۵ (Quest Studio): متریک‌های گیم‌پلی — از تایم‌استمپ‌های واقعیِ خودِ امپراتوری، نه شمارندهٔ ساختگی
+    else if (d.metric === 'buys') progress = e.assets.filter(a => a.boughtAt >= d.startAt && a.boughtAt < d.endAt).length
+    else if (d.metric === 'projects') progress = e.assets.filter(a => (a.construction?.doneAt || 0) >= d.startAt && (a.construction?.doneAt || 0) < d.endAt).length
+    else if (d.metric === 'permits') progress = e.assets.filter(a => (a.permit?.grantedAt || 0) >= d.startAt && (a.permit?.grantedAt || 0) < d.endAt).length
     progress = Math.min(Math.max(1, d.target), progress)
     out.push({ id: d.id, title: d.title, desc: d.desc, icon: d.icon || '🎪', endAt: d.endAt, target: d.target, progress, done: progress >= d.target, claimed: !!e.claims['ev_' + d.id], rewardXp: d.rewardXp || 0, rewardCoins: d.rewardCoins || 0 })
   }

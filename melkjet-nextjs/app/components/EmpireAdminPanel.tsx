@@ -1092,14 +1092,14 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
         {cfg && <div style={card}>
           <div style={sub}>🎪 استودیوی رویداد — بدونِ دیپلوی</div>
           <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 10 }}>
-            رویدادِ زمان‌دار بساز؛ همان لحظه در داشبوردِ همهٔ بازیکنان ظاهر می‌شود. پیشرفت فقط از رفتارِ
-            واقعیِ ثبت‌شده (بازدید/ذخیره/جستجو/محله‌های متفاوت) در بازهٔ رویداد سنجیده می‌شود.
+            مأموریت/رویدادِ زمان‌دار بساز؛ همان لحظه در داشبوردِ بازیکنانِ واجدِ سطح ظاهر می‌شود. پیشرفت فقط از
+            رفتار/اقدامِ واقعی (بازدید/ذخیره/جستجو/محله + خریدِ ملک/تحویلِ پروژه/پروانه) در بازهٔ رویداد سنجیده می‌شود — Quest Studio (فاز ۱۰۵).
           </div>
           {(cfg.events || []).map((ev: any, i: number) => (
             <div key={ev.id} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '8px 10px', borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--line)', marginBottom: 6, fontSize: 12 }}>
               <span>{ev.icon || '🎪'}</span>
               <b style={{ flex: 1, minWidth: 120 }}>{ev.title}</b>
-              <span style={{ color: 'var(--muted)' }}>{({ views: 'بازدید', saves: 'ذخیره', searches: 'جستجو', hoods: 'محله' } as any)[ev.metric] || ev.metric} × {fa(ev.target)}</span>
+              <span style={{ color: 'var(--muted)' }}>{({ views: 'بازدید', saves: 'ذخیره', searches: 'جستجو', hoods: 'محله', buys: 'خریدِ ملک', projects: 'تحویلِ پروژه', permits: 'پروانه' } as any)[ev.metric] || ev.metric} × {fa(ev.target)}{ev.minLevel ? ` · از سطحِ ${fa(ev.minLevel)}` : ''}</span>
               <span style={{ color: 'var(--muted)' }}>🎁 {fa(ev.rewardCoins || 0)} کوین{ev.rewardXp ? ` + ${fa(ev.rewardXp)} XP` : ''}</span>
               <span style={{ color: Date.now() < ev.endAt ? '#e7a14a' : 'var(--faint)' }}>{new Date(ev.startAt).toLocaleDateString('fa-IR')} تا {new Date(ev.endAt).toLocaleDateString('fa-IR')}</span>
               <button style={{ ...btnGhost, padding: '3px 9px', fontSize: 11, color: ev.enabled ? '#7c6' : 'var(--muted)' }}
@@ -1148,7 +1148,7 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
 
 // 🎪 فرمِ ساختِ رویدادِ زنده (سند ۱۸ — LiveOps): عنوان/متریکِ واقعی/هدف/پاداش/مدت — بدونِ دیپلوی.
 function EventComposer({ onAdd }: { onAdd: (ev: unknown) => void }) {
-  const [t, setT] = useState({ title: '', desc: '', icon: '🎪', metric: 'views', target: '5', rewardCoins: '50', rewardXp: '20', days: '3' })
+  const [t, setT] = useState({ title: '', desc: '', icon: '🎪', metric: 'views', target: '5', rewardCoins: '50', rewardXp: '20', days: '3', minLevel: '0' })
   return (
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', padding: '10px 12px', borderRadius: 10, border: '1px dashed var(--line2)', marginTop: 8 }}>
       <input value={t.icon} onChange={e => setT({ ...t, icon: e.target.value })} style={{ ...inpS, width: 44, textAlign: 'center' }} />
@@ -1159,7 +1159,11 @@ function EventComposer({ onAdd }: { onAdd: (ev: unknown) => void }) {
         <option value="saves">ذخیرهٔ آگهی</option>
         <option value="searches">جستجو</option>
         <option value="hoods">محله‌های متفاوت</option>
+        <option value="buys">خریدِ ملکِ واقعی (گیم‌پلی)</option>
+        <option value="projects">تحویلِ پروژهٔ ساخت</option>
+        <option value="permits">گرفتنِ پروانهٔ ساخت</option>
       </select>
+      <input value={t.minLevel} onChange={e => setT({ ...t, minLevel: e.target.value })} title="حداقلِ سطح (۰ = همه)" style={{ ...inpS, width: 56, textAlign: 'center' }} />
       <input value={t.target} onChange={e => setT({ ...t, target: e.target.value })} title="هدف" style={{ ...inpS, width: 56, textAlign: 'center' }} />
       <input value={t.rewardCoins} onChange={e => setT({ ...t, rewardCoins: e.target.value })} title="کوینِ پاداش" style={{ ...inpS, width: 62, textAlign: 'center' }} />
       <input value={t.rewardXp} onChange={e => setT({ ...t, rewardXp: e.target.value })} title="XP پاداش" style={{ ...inpS, width: 56, textAlign: 'center' }} />
@@ -1170,7 +1174,7 @@ function EventComposer({ onAdd }: { onAdd: (ev: unknown) => void }) {
           id: 'ev' + now.toString(36), title: t.title.trim().slice(0, 60), desc: t.desc.trim().slice(0, 120), icon: t.icon.slice(0, 4) || '🎪',
           metric: t.metric, target: Math.max(1, Math.floor(numOf(t.target) || 1)),
           rewardCoins: Math.max(0, Math.floor(numOf(t.rewardCoins) || 0)), rewardXp: Math.max(0, Math.floor(numOf(t.rewardXp) || 0)),
-          startAt: now, endAt: now + Math.max(1, Math.floor(numOf(t.days) || 1)) * 864e5, enabled: true,
+          startAt: now, endAt: now + Math.max(1, Math.floor(numOf(t.days) || 1)) * 864e5, enabled: true, minLevel: Math.max(0, Math.floor(numOf(t.minLevel) || 0)),
         })
         setT({ ...t, title: '', desc: '' })
       }}>+ افزودن</button>
