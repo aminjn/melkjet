@@ -72,6 +72,7 @@ export interface Construction {
   startedAt: number
   name?: string                // قانونِ رویاپردازی (قانون ۱۳): نامی که بازیکن روی پروژه‌اش می‌گذارد — صرفاً هویتی، صفر اثرِ اقتصادی
   facade?: string              // سبکِ نمای انتخابی (BUILD_FACADES) — ظاهری/رویایی، صفر اثرِ اقتصادی
+  use?: string                 // فاز ۱۱۲ (فیدبکِ مستقیم): کاربریِ پروژه (BUILD_USES) — قیمت از آگهی‌های واقعیِ همان کاربری، هزینه با ضریبِ knob
   days: number                 // کلِ روزهای ساخت (رویدادِ «صبر» اضافه‌اش می‌کند)
   days0?: number               // روزهای برنامهٔ اولیه — برای «تحلیلِ پس از پروژه» (GDD فصل ۴)
   goal?: string                // هدفِ پروژه (GDD فصل ۴ بخش ۸): fast / profit / rep — روی قیمت و پیش‌فروش اثرِ شفاف دارد
@@ -1936,7 +1937,26 @@ export const BUILD_FACADES = [
   { key: 'green', icon: '🌿', label: 'سبز با تراس‌های گیاهی' },
 ] as const
 
-export async function startBuild(userId: string, assetId: string, plan: NonNullable<ReturnType<typeof buildPlanOf>>, meta: { structure: string; quality: string; goal?: string; name?: string; facade?: string }, now = Date.now()) {
+// فاز ۱۱۲ — کاربریِ پروژه (فیدبکِ مستقیم: «کاربر باید بتواند مسکونی/تجاری/اداری/ویلایی انتخاب کند»):
+// قیمت‌گذاریِ هر کاربری از آگهی‌های واقعیِ همان نوع (محله → کلِ بازار)؛ هزینهٔ ساخت با ضریبِ knob هر کاربری.
+export const BUILD_USES = [
+  { key: 'residential', label: 'مسکونی', icon: '🏢' },
+  { key: 'commercial', label: 'تجاری', icon: '🏬' },
+  { key: 'office', label: 'اداری', icon: '🏛' },
+  { key: 'villa', label: 'ویلایی', icon: '🏡' },
+] as const
+// تطبیقِ خالصِ «نوع ملکِ» آگهیِ واقعی با کاربری — مسکونی = هر چیزِ غیرِ تجاری/اداری/ویلا/زمین
+export function useMatch(use: string, ptype: string): boolean {
+  const p = String(ptype || '')
+  if (use === 'commercial') return /تجاری|مغازه/.test(p)
+  if (use === 'office') return /اداری|دفتر/.test(p)
+  if (use === 'villa') return /ویلا/.test(p)
+  if (use === 'residential') return !/تجاری|مغازه|اداری|دفتر|ویلا|زمین|کلنگی|باغ/.test(p)
+  return false
+}
+export const BUILD_USE_FA: Record<string, string> = Object.fromEntries(BUILD_USES.map(u => [u.key, u.label]))
+
+export async function startBuild(userId: string, assetId: string, plan: NonNullable<ReturnType<typeof buildPlanOf>>, meta: { structure: string; quality: string; goal?: string; name?: string; facade?: string; use?: string }, now = Date.now()) {
   return mutateEmpire(userId, e => {
     const a = e.assets.find(x => x.id === assetId)
     if (!a) return 'دارایی یافت نشد'
@@ -1947,15 +1967,16 @@ export async function startBuild(userId: string, assetId: string, plan: NonNulla
     const illegalUnits = a.design ? Math.max(0, a.design.illegalFloors * a.design.unitsPerFloor) : 0
     const dreamName = (meta.name || '').trim().slice(0, 28) || undefined
     const facade = BUILD_FACADES.some(f => f.key === meta.facade) ? meta.facade : undefined
+    const use = BUILD_USES.some(u => u.key === meta.use) && meta.use !== 'residential' ? meta.use : undefined   // فاز ۱۱۲؛ مسکونی = پیش‌فرض (رفتارِ قبلی)
     a.construction = {
-      startedAt: now, days: plan.days, days0: plan.days, goal, name: dreamName, facade,
+      startedAt: now, days: plan.days, days0: plan.days, goal, name: dreamName, facade, use,
       structure: meta.structure, quality: meta.quality, qualityFactor: plan.qualityFactor,
       builtArea: plan.builtArea, unitArea: plan.unitArea, totalUnits: plan.totalUnits,
       costTotal: plan.costTotal, paid: 0, paidDays: 0, lastPayAt: now,
       presold: 0, sold: 0, presaleRevenue: 0, eventsFired: 0,
       illegalUnits: illegalUnits > 0 ? illegalUnits : undefined,
     }
-    e.timeline.push({ at: now, icon: '⛏', title: `کلنگ‌زنیِ ${dreamName ? `«${dreamName}»` : 'پروژه'} با ${proPersonaOf('contractor', a.id)} — ساخت آغاز شد`, detail: `${a.title.slice(0, 45)} · ${plan.builtArea.toLocaleString('fa-IR')} مترِ بنا · ${plan.totalUnits.toLocaleString('fa-IR')} واحد${illegalUnits > 0 ? ` · ⚠️ ${illegalUnits.toLocaleString('fa-IR')} واحدِ مازاد بر پروانه` : ''}${goal ? ` · هدف: ${PROJECT_GOALS[goal].label}` : ''}` })
+    e.timeline.push({ at: now, icon: '⛏', title: `کلنگ‌زنیِ ${dreamName ? `«${dreamName}»` : 'پروژه'} با ${proPersonaOf('contractor', a.id)} — ساخت آغاز شد`, detail: `${a.title.slice(0, 45)} · کاربریِ ${BUILD_USE_FA[use || 'residential']} · ${plan.builtArea.toLocaleString('fa-IR')} مترِ بنا · ${plan.totalUnits.toLocaleString('fa-IR')} واحد${illegalUnits > 0 ? ` · ⚠️ ${illegalUnits.toLocaleString('fa-IR')} واحدِ مازاد بر پروانه` : ''}${goal ? ` · هدف: ${PROJECT_GOALS[goal].label}` : ''}` })
     e.journal.push({ at: now, text: 'اولین کلنگِ پروژه زده شد. از امروز کارگاه هر روز هزینه دارد — مدیریتِ پول، خودِ ساخت است.' })
   })
 }

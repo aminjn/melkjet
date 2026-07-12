@@ -50,6 +50,9 @@ export interface ReosConfig {
       // GDD فصل ۴ (گیم‌پلی تصمیم‌محور): هدفِ پروژه، امکاناتِ میان‌ساخت، اشباعِ فروشِ عمده، اثرِ تیمِ ماهر.
       goalFastPricePct: number; goalFastPresaleBonusPp: number; goalRepPricePct: number; repProjectScore: number
       bulkFreeUnits: number; bulkStepPct: number; eventSkillCutPct: number
+      // فاز ۱۱۲ (کاربریِ پروژه): ضریبِ هزینهٔ ساختِ هر کاربری نسبت به مسکونی + حداقل نمونهٔ واقعیِ محله برای قیمتِ محلی
+      useCost: { commercial: number; office: number; villa: number }
+      useMinSamples: number
       amenities: Record<string, { costPct: number; valuePct: number }>
     }
     // GDD فصل ۴ بخش ۱۰ + پیوتِ «مدل B»: فرصت‌های محدودِ روزانه (Hook) از آگهی‌های واقعی با شمارشِ معکوسِ واقعی.
@@ -232,6 +235,8 @@ export const DEFAULT_CONFIG: ReosConfig = {
       // تیمِ ماهر (مهارت ≥۵۰) هزینهٔ رویدادِ کارگاه را eventSkillCutPct٪ کم می‌کند — همان اثرِ روی کارتِ استخدام.
       goalFastPricePct: 96, goalFastPresaleBonusPp: 15, goalRepPricePct: 97, repProjectScore: 10,
       bulkFreeUnits: 3, bulkStepPct: 2, eventSkillCutPct: 20,
+      useCost: { commercial: 1.35, office: 1.2, villa: 1.15 },   // فاز ۱۱۲ — تأسیسات/اسکلتِ تجاری‌واداری گران‌تر
+      useMinSamples: 3,
       amenities: {
         pool: { costPct: 6, valuePct: 8 },
         roof: { costPct: 3, valuePct: 4 },

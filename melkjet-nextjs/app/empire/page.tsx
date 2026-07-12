@@ -196,6 +196,7 @@ export default function EmpirePage() {
   const [bgoal, setBgoal] = useState('profit')                   // هدفِ پروژه (GDD فصل ۴): fast / profit / rep
   const [bname, setBname] = useState('')                         // قانونِ ۱۳ (رویاپردازی): نامِ پروژه — انتخابِ خودِ بازیکن
   const [bfacade, setBfacade] = useState('modern')               // سبکِ نما — ظاهری/رویایی، صفر اثرِ اقتصادی
+  const [buse, setBuse] = useState('residential')                // فاز ۱۱۲: کاربریِ پروژه — قیمت از آگهی‌های واقعیِ همان کاربری
   const [pu, setPu] = useState<Record<string, string>>({})       // تعدادِ واحدِ پیش‌فروش/فروش
   const [pfKind, setPfKind] = useState('all')                    // فیلترِ پرتفوی (سند ۱۹ — Part 07)
   const [pfSort, setPfSort] = useState<'new' | 'value' | 'growth'>('new')
@@ -1843,7 +1844,7 @@ export default function EmpirePage() {
                   ? <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                       <span style={{ fontSize: 11, color: '#7c6' }}>📜 پروانه ✓</span>
                       <button style={{ ...btn, padding: '4px 12px', fontSize: 11.5 }} disabled={busy}
-                        onClick={async () => { const d = await api({ action: 'buildPlan', assetId: a.id }); if (d) { setBplan({ assetId: a.id, ...d }); setBname(d.suggestedName || ''); setBfacade('modern') } }}>⛏ شروعِ ساخت</button>
+                        onClick={async () => { const d = await api({ action: 'buildPlan', assetId: a.id }); if (d) { setBplan({ assetId: a.id, ...d }); setBname(d.suggestedName || ''); setBfacade('modern'); setBuse('residential') } }}>⛏ شروعِ ساخت</button>
                     </span>
                   : a.permit.status === 'granted'
                   ? <span style={{ fontSize: 11, color: '#7c6' }}>📜 پروانه ✓</span>
@@ -2078,6 +2079,20 @@ export default function EmpirePage() {
                   <button key={f.key} style={chip(bfacade === f.key)} onClick={() => setBfacade(f.key)}>{f.icon} {f.label}</button>
                 ))}
               </div>
+              {/* فاز ۱۱۲ (فیدبکِ مستقیم): کاربریِ پروژه — قیمتِ هر کاربری از آگهی‌های واقعیِ همان نوع؛ بدونِ نمونه = صادقانه بسته */}
+              {(bplan.uses || []).length > 0 && <div style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>کاربریِ پروژه چه باشد؟ (قیمتِ فروش از آگهی‌های واقعیِ همان کاربری — هزینهٔ ساخت هم فرق می‌کند)</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {bplan.uses.map((u: any) => (
+                    <button key={u.key} disabled={!(u.perM > 0)} onClick={() => u.perM > 0 && setBuse(u.key)}
+                      title={u.perM > 0 ? `متریِ ${u.label}: ${faB(u.perM)} تومان (${fa(u.samples)} آگهیِ ${u.scope === 'hood' ? 'همین محله' : 'کلِ بازار'})` : 'نمونهٔ قیمتیِ واقعی نداریم'}
+                      style={{ ...btnGhost, padding: '6px 12px', fontSize: 11.5, opacity: u.perM > 0 ? 1 : .4, cursor: u.perM > 0 ? 'pointer' : 'not-allowed', borderColor: buse === u.key ? 'var(--gold)' : 'var(--line2)', color: buse === u.key ? 'var(--gold)' : 'var(--text)' }}>
+                      {u.icon} {u.label} <span style={{ fontSize: 10, color: 'var(--faint)' }}>{u.perM > 0 ? `متری ~${faB(u.perM)}` : 'نمونه نداریم'}{u.costFactor !== 1 ? ` · هزینه ×${(u.costFactor).toLocaleString('fa-IR')}` : ''}</span>
+                    </button>
+                  ))}
+                </div>
+                {(() => { const u = (bplan.uses || []).find((x: any) => x.key === buse); return u && u.scope === 'market' ? <div style={{ fontSize: 10.5, color: '#e8c37a', marginTop: 4 }}>در «{bplan.hood}» نمونهٔ {u.label} کم بود — برآورد از {fa(u.samples)} آگهیِ {u.label} کلِ بازار است.</div> : null })()}
+              </div>}
               {(bname || bfacade) && <div style={{ fontSize: 11.5, color: '#f4e7bd', marginTop: 7 }}>
                 🌆 «{bname || bplan.suggestedName}» — {fa(bplan.totalUnits)} واحد با نمای {(bplan.facades || []).find((f: any) => f.key === bfacade)?.label || ''}{bplan.hood ? ` در قلبِ ${bplan.hood}` : ''}؛ حالا فقط انتخابِ سازه مانده تا کلنگ بخورد.
               </div>}
@@ -2095,14 +2110,21 @@ export default function EmpirePage() {
                 <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 4 }}>{(bplan.goals.find((g: any) => g.key === bgoal) || {}).desc}</div>
               </div>}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 6, marginTop: 8 }}>
-                {(bplan.options || []).map((o: any) => (
+                {(bplan.options || []).map((o: any) => {
+                  // فاز ۱۱۲: برآوردِ نمایشیِ گزینه با کاربریِ انتخابی — عددِ قطعیِ هزینه را سرور موقعِ کلنگ می‌سازد
+                  const u = (bplan.uses || []).find((x: any) => x.key === buse)
+                  const cost = u ? Math.round(o.costTotal * (u.costFactor || 1)) : o.costTotal
+                  const estSale = u && u.perM > 0 ? Math.round(u.perM * bplan.unitArea * o.qualityFactor) * (bplan.sellableUnits ?? bplan.totalUnits) : o.estSale
+                  const estProfit = estSale > 0 ? estSale - cost : 0
+                  return (
                   <button key={o.structure + o.quality} style={{ ...btnGhost, textAlign: 'right', padding: '8px 10px', fontSize: 11.5 }} disabled={busy}
-                    onClick={async () => { const d = await api({ action: 'startBuild', assetId: a.id, structure: o.structure, quality: o.quality, goal: bgoal, name: bname, facade: bfacade }); if (d) { setSt(d); setBplan(null); celebrate() } }}>
+                    onClick={async () => { const d = await api({ action: 'startBuild', assetId: a.id, structure: o.structure, quality: o.quality, goal: bgoal, name: bname, facade: bfacade, use: buse }); if (d) { setSt(d); setBplan(null); celebrate() } }}>
                     <b>{o.structureLabel} · {o.qualityLabel}</b>
-                    <div style={{ color: 'var(--muted)', fontSize: 10.5 }}>{fa(o.days)} روز · هزینهٔ کل {faB(o.costTotal)} تومان</div>
-                    {o.estSale > 0 && <div style={{ color: o.estProfit > 0 ? '#7ee0b8' : '#e8c37a', fontSize: 10.5 }}>فروشِ برآوردی ~{faB(o.estSale)} · {o.estProfit > 0 ? `سودِ برآوردی ~${faB(o.estProfit)}` : `زیر هزینه (${faB(Math.abs(o.estProfit))}−)`}</div>}
+                    <div style={{ color: 'var(--muted)', fontSize: 10.5 }}>{fa(o.days)} روز · هزینهٔ کل {faB(cost)} تومان</div>
+                    {estSale > 0 && <div style={{ color: estProfit > 0 ? '#7ee0b8' : '#e8c37a', fontSize: 10.5 }}>فروشِ برآوردی ~{faB(estSale)} · {estProfit > 0 ? `سودِ برآوردی ~${faB(estProfit)}` : `زیر هزینه (${faB(Math.abs(estProfit))}−)`}</div>}
                   </button>
-                ))}
+                  )
+                })}
               </div>
               <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 6 }}>{bplan.estNote ? `📊 ${bplan.estNote} · ` : ''}هزینه روزشمار از سرمایهٔ نقد کم می‌شود — پول تمام شود، کارگاه می‌ایستد (خودِ ساخت، مدیریتِ پول است).</div>
             </div>}

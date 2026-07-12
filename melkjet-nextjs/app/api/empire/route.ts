@@ -56,6 +56,7 @@ import { submitCreatorItem, myCreatorItems, approvedCreatorItems, recordCreatorS
 import { grantCoins } from '@/app/lib/empire-store'
 import { setAssetFacade } from '@/app/lib/empire-store'   // فاز ۱۰۹
 import { grantPassCosmetics } from '@/app/lib/empire-store'   // فاز ۱۱۰ (CEO Pass)
+import { BUILD_USES, BUILD_USE_FA, useMatch } from '@/app/lib/empire-store'   // فاز ۱۱۲ (کاربریِ پروژه)
 import { requireModule } from '@/app/lib/plan-gate'   // فاز ۱۱۰: مالکیتِ گذرنامه از پلنِ فعالِ سایت
 import { chatView, postChatMsg, reportChatMsg, type ChatCfg } from '@/app/lib/empire-chat'   // فاز ۱۱۱
 import { isValidFacade } from '@/app/lib/empire-visual'   // فاز ۱۰۹
@@ -312,6 +313,34 @@ async function hoodPerM(hood: string): Promise<{ perM: number; samples: number }
     if (a > 0 && p >= MIN_SALE) rates.push(p / a)
   }
   return { perM: Math.round(median(rates)), samples: rates.length }
+}
+
+// فاز ۱۱۲ — میانهٔ متری به تفکیکِ کاربری، از آگهی‌های واقعیِ همان نوع: اول محله؛ نمونه کم بود، کلِ بازار
+// (با اعلامِ شفافِ دامنه). هیچ ضریبِ ساختگی روی «ارزش» نیست — فقط دادهٔ واقعی.
+async function usePerM(hood: string, use: string): Promise<{ perM: number; samples: number; scope: 'hood' | 'market' | 'none' }> {
+  const minS = Math.max(1, config().empire.build.useMinSamples || 3)
+  const items = await candidateListings(600).catch(() => [] as Item[])
+  const calc = (inHood: boolean) => {
+    const rates: number[] = []
+    for (const x of items) {
+      if (!isSale(x) || !useMatch(use, ptypeOf(x))) continue
+      if (inHood && hood && hoodOf(x.location) !== hood) continue
+      const a = parseFaNum((x.meta || {})['متراژ']) || 0
+      const p = priceOf(x)
+      if (a > 0 && p >= MIN_SALE) rates.push(p / a)
+    }
+    return { perM: Math.round(median(rates)), samples: rates.length }
+  }
+  const h = calc(true)
+  if (h.samples >= minS && h.perM > 0) return { ...h, scope: 'hood' }
+  const m = calc(false)
+  if (m.samples >= minS && m.perM > 0) return { ...m, scope: 'market' }
+  return { perM: 0, samples: m.samples, scope: 'none' }
+}
+// ضریبِ هزینهٔ ساختِ کاربری (مسکونی = ۱؛ بقیه knob ادمین)
+const useCostFactorOf = (use?: string) => {
+  const uc = config().empire.build.useCost
+  return use === 'commercial' ? Math.max(0.5, uc?.commercial || 1) : use === 'office' ? Math.max(0.5, uc?.office || 1) : use === 'villa' ? Math.max(0.5, uc?.villa || 1) : 1
 }
 
 // متراژِ زمین وقتی فیلدِ متراژِ آگهی خالی است (فیدبکِ کاربر: بن‌بست ممنوع، برآوردِ شفاف از دادهٔ واقعی):
@@ -1531,9 +1560,15 @@ export async function POST(req: NextRequest) {
           o.estProfit = estSale - pl.costTotal
         }
       }
+      // فاز ۱۱۲ — کاربری‌ها: متریِ واقعیِ هر کاربری در همین محله (نمونه کم → کلِ بازار، با اعلامِ دامنه) + ضریبِ هزینه
+      const uses = await Promise.all(BUILD_USES.map(async u => {
+        const pm = u.key === 'residential' ? { perM: dreamPerM, samples: dreamN, scope: (dreamPerM > 0 ? 'hood' : 'none') as 'hood' | 'market' | 'none' } : await usePerM(a.hood, u.key)
+        return { key: u.key, label: u.label, icon: u.icon, costFactor: useCostFactorOf(u.key === 'residential' ? undefined : u.key), perM: pm.perM, samples: pm.samples, scope: pm.scope }
+      }))
       return NextResponse.json({
         ok: true, materialsFactor: (cfg as { materialsFactor?: number }).materialsFactor || 1,
-        landArea, builtArea: base.builtArea, unitArea: base.unitArea, totalUnits: base.totalUnits, options, goals,
+        landArea, builtArea: base.builtArea, unitArea: base.unitArea, totalUnits: base.totalUnits, options, goals, uses,
+        sellableUnits: Math.max(0, base.totalUnits - illegal43),
         facades: BUILD_FACADES, suggestedName: `برجِ ${e.name}`.slice(0, 28), hood: a.hood,
         estNote: dreamPerM > 0 ? `برآورد از میانهٔ متریِ واقعیِ ${dreamN.toLocaleString('fa-IR')} آگهی — قولِ قطعی نیست` : 'برای برآوردِ فروش هنوز نمونهٔ قیمتیِ کافی در بازار نداریم',
       })
@@ -1555,7 +1590,15 @@ export async function POST(req: NextRequest) {
         ? designBuildPlanOf(String(b.structure || ''), String(b.quality || ''), landArea, a.design, cfg)
         : buildPlanOf(String(b.structure || ''), String(b.quality || ''), landArea, cfg)
       if (!plan) return NextResponse.json({ error: 'سازه/کیفیتِ نامعتبر یا متراژِ نامشخص' }, { status: 400 })
-      const r = await startBuild(userId, a.id, plan, { structure: String(b.structure), quality: String(b.quality), goal: String(b.goal || ''), name: String(b.name || ''), facade: String(b.facade || '') })
+      // فاز ۱۱۲ — کاربریِ انتخابیِ بازیکن: هزینه × ضریبِ knob؛ کاربریِ بدونِ نمونهٔ قیمتیِ واقعی صادقانه بسته است
+      const use112 = String(b.use || 'residential')
+      if (!BUILD_USES.some(u => u.key === use112)) return NextResponse.json({ error: 'کاربریِ نامعتبر' }, { status: 400 })
+      if (use112 !== 'residential') {
+        const pm112 = await usePerM(a.hood, use112)
+        if (!(pm112.perM > 0)) return NextResponse.json({ error: `برای کاربریِ ${BUILD_USE_FA[use112]} هنوز نمونهٔ قیمتیِ واقعیِ کافی در بازار نداریم — فعلاً کاربریِ دیگری انتخاب کن` }, { status: 400 })
+        plan.costTotal = Math.round(plan.costTotal * useCostFactorOf(use112))
+      }
+      const r = await startBuild(userId, a.id, plan, { structure: String(b.structure), quality: String(b.quality), goal: String(b.goal || ''), name: String(b.name || ''), facade: String(b.facade || ''), use: use112 })
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
     }
@@ -1572,8 +1615,9 @@ export async function POST(req: NextRequest) {
       const e = await getEmpire(userId)
       const a = e?.assets.find(x => x.id === String(b.assetId || ''))
       if (!e || !a?.construction) return NextResponse.json({ error: 'ساختی در جریان نیست' }, { status: 404 })
-      const { perM, samples } = await hoodPerM(a.hood)
-      if (!samples || !(perM > 0)) return NextResponse.json({ error: `برای قیمت‌گذاری در «${a.hood || 'این محله'}» نمونهٔ واقعیِ کافی نیست` }, { status: 400 })
+      // فاز ۱۱۲: قیمتِ کاربریِ غیرمسکونی از آگهی‌های واقعیِ همان کاربری (محله → کلِ بازار)
+      const { perM, samples } = a.construction.use ? await usePerM(a.hood, a.construction.use) : await hoodPerM(a.hood)
+      if (!samples || !(perM > 0)) return NextResponse.json({ error: `برای قیمت‌گذاریِ ${a.construction.use ? `کاربریِ ${BUILD_USE_FA[a.construction.use]}` : `«${a.hood || 'این محله'}»`} نمونهٔ واقعیِ کافی نیست` }, { status: 400 })
       const c = a.construction
       // قیمت = میانهٔ واقعی × کیفیت × امکانات × هدفِ پروژه − تخفیفِ پیش‌فروش؛ هدفِ «فروشِ سریع» سقفِ پیش‌فروش را بالا می‌برد
       const unitPrice = Math.round(perM * c.unitArea * c.qualityFactor * amenityValueFactorOf(c, cfg.amenities) * (goalPricePct(c.goal, cfg) / 100) * (1 - cfg.presaleDiscountPct / 100))
@@ -1591,8 +1635,9 @@ export async function POST(req: NextRequest) {
       const e = await getEmpire(userId)
       const a = e?.assets.find(x => x.id === String(b.assetId || ''))
       if (!e || !a?.construction) return NextResponse.json({ error: 'پروژه‌ای یافت نشد' }, { status: 404 })
-      const { perM, samples } = await hoodPerM(a.hood)
-      if (!samples || !(perM > 0)) return NextResponse.json({ error: `برای قیمت‌گذاری در «${a.hood || 'این محله'}» نمونهٔ واقعیِ کافی نیست` }, { status: 400 })
+      // فاز ۱۱۲: قیمتِ کاربریِ غیرمسکونی از آگهی‌های واقعیِ همان کاربری (محله → کلِ بازار)
+      const { perM, samples } = a.construction.use ? await usePerM(a.hood, a.construction.use) : await hoodPerM(a.hood)
+      if (!samples || !(perM > 0)) return NextResponse.json({ error: `برای قیمت‌گذاریِ ${a.construction.use ? `کاربریِ ${BUILD_USE_FA[a.construction.use]}` : `«${a.hood || 'این محله'}»`} نمونهٔ واقعیِ کافی نیست` }, { status: 400 })
       const c = a.construction
       const units = Math.floor(Number(b.units) || 0)
       const unitPrice = Math.round(perM * c.unitArea * c.qualityFactor * amenityValueFactorOf(c, cfg.amenities) * (goalPricePct(c.goal, cfg) / 100))

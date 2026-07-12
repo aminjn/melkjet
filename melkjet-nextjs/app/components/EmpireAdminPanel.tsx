@@ -91,6 +91,18 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
     const v = cfg ? (sk ? cfg[key]?.[sk] : cfg[key]) : ''
     return <input value={String(v ?? '')} onChange={e => setC(key, e.target.value, sk)} style={{ ...inpS, width: w, textAlign: 'center' }} />
   }
+  // فاز ۱۱۲: ورودیِ سه‌سطحی (مثل build.useCost.commercial)
+  const cin3 = (k1: string, k2: string, k3: string, w = 110) => {
+    const v = cfg?.[k1]?.[k2]?.[k3]
+    return <input value={String(v ?? '')} onChange={e => setCfg((c: any) => {
+      if (!c) return c
+      const n = JSON.parse(JSON.stringify(c))
+      const dv = deFa(e.target.value)
+      n[k1] = n[k1] || {}; n[k1][k2] = n[k1][k2] || {}
+      n[k1][k2][k3] = e.target.value === '' ? '' : (dv !== '' && !isNaN(Number(dv)) ? Number(dv) : e.target.value)
+      return n
+    })} style={{ ...inpS, width: w, textAlign: 'center' }} />
+  }
   const row = (label: string, el: React.ReactNode, hint?: string) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid var(--line)' }}>
       <span style={{ flex: 1, fontSize: 12.5 }}>{label}{hint && <div style={{ fontSize: 10.5, color: 'var(--faint)' }}>{hint}</div>}</span>{el}
@@ -606,6 +618,11 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             {row('تراکمِ ساخت (بنا ÷ زمین)', cin('build', 'buildFactor'), 'مثلاً ۲٫۲ = ۲۲۰٪')}
             {row('متراژِ هر واحد (متر)', cin('build', 'unitArea'))}
             {row('هزینهٔ ساختِ هر متر (تومان)', cin('build', 'costPerM', 140), 'روزشمار از نقد کم می‌شود')}
+            <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>🏬 کاربریِ پروژه (فاز ۱۱۲) — قیمتِ فروش از آگهی‌های واقعیِ همان کاربری؛ این‌ها فقط ضریبِ هزینهٔ ساخت‌اند (مسکونی = ۱)</div>
+            {row('ضریبِ هزینهٔ تجاری (×)', cin3('build', 'useCost', 'commercial'), 'اسکلت/تأسیساتِ تجاری گران‌تر از مسکونی')}
+            {row('ضریبِ هزینهٔ اداری (×)', cin3('build', 'useCost', 'office'))}
+            {row('ضریبِ هزینهٔ ویلایی (×)', cin3('build', 'useCost', 'villa'))}
+            {row('حداقل نمونهٔ واقعیِ محله برای قیمتِ محلی', cin('build', 'useMinSamples'), 'کمتر از این → قیمت از آگهی‌های همان کاربری در کلِ بازار (با اعلامِ شفاف)')}
             {row('مدتِ ساختِ پایه (روز)', cin('build', 'buildDays'), 'بتنی ×۱ · فلزی ×۰٫۷۵ · ترکیبی ×۰٫۹')}
             {row('شروعِ پیش‌فروش از (٪ پیشرفت)', cin('build', 'presaleMinPct'))}
             {row('سقفِ پیش‌فروش (٪ واحدها)', cin('build', 'presaleMaxPct'))}
