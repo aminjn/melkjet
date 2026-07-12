@@ -37,6 +37,7 @@ function Mini({ label, value, hint }: { label: string; value: string; hint?: str
 
 export default function EmpireAdminPanel({ section }: { section: EmpireSection }) {
   const [data, setData] = useState<any>(null)
+  const [sitePlans, setSitePlans] = useState<any[] | null>(null)   // فاز ۱۱۴: پلن‌های سایتِ متصل به گذرنامهٔ فصل
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState('')
   const [q, setQ] = useState('')
@@ -62,7 +63,7 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
     if (section === 'overview') loadView('overview').then(put)
     if (section === 'players') loadView('players', `&sort=${sort}`).then(put)
     if (section === 'world') loadView('world').then(put)
-    if (section === 'liveops') { loadView('liveops').then(put); loadCfg() }
+    if (section === 'liveops') { loadView('liveops').then(put); loadCfg(); fetch('/api/admin/plans').then(r => r.ok ? r.json() : null).then(d => { if (alive && d?.plans) setSitePlans(d.plans) }).catch(() => {}) }
     if (section === 'economy' || section === 'missions') { loadCfg(); loadView('overview').then(put) }
     if (section === 'capital') { loadView('capital').then(put); loadCfg() }
     if (section === 'engage') loadView('engage').then(put)
@@ -1181,6 +1182,15 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
           {row('نامِ قابِ فصل', cin('pass', 'frameLabel', 150), 'نامِ فصل خودکار به انتهایش می‌چسبد')}
           {row('آیکنِ نشانِ فصل', cin('pass', 'flairIcon', 60))}
           {row('نامِ نشانِ فصل', cin('pass', 'flairLabel', 150))}
+          {/* فاز ۱۱۴ (سؤالِ مستقیم: «پلن‌ها مگر مالِ اینجا نیست؟»): قیمت/فروشِ گذرنامه عمداً در سیستمِ واحدِ
+              پلن‌های سایت است (تنها درِ ورودِ پولِ واقعی) — اینجا فقط وضعیتِ زنده‌اش را می‌بینی. */}
+          {(() => {
+            if (!sitePlans) return <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 6 }}>در حالِ خواندنِ پلن‌های سایت…</div>
+            const pp = sitePlans.filter((pl: any) => pl.active !== false && (pl.permissions || []).includes('season_pass'))
+            return pp.length > 0
+              ? <div style={{ fontSize: 11.5, color: '#7ee0b8', marginTop: 6 }}>✓ {pp.length.toLocaleString('fa-IR')} پلنِ فعالِ دارای گذرنامه: {pp.map((pl: any) => `«${pl.name}»${pl.priceMonthly ? ` (${Number(pl.priceMonthly).toLocaleString('fa-IR')} ت/ماه)` : ''}`).join('، ')} — کاربرانِ این پلن‌ها آیتم‌های فصل را می‌گیرند.</div>
+              : <div style={{ fontSize: 11.5, color: '#e7a14a', marginTop: 6 }}>⚠️ هنوز هیچ پلنِ فعالی مجوزِ «گذرنامهٔ فصل» ندارد — کارتِ گذرنامه برای همه قفل می‌ماند. مسیر: منوی ادمین → «پلن‌ها و اشتراک» → پلنِ جدید/ویرایش → تیکِ «گذرنامهٔ فصل (CEO Pass)» + قیمتِ دلخواه. (VIP و باشگاهِ کسب‌وکار هم همان‌جا هستند چون قابلیتِ سایت‌اند، نه اینجا.)</div>
+          })()}
           <div style={{ marginTop: 10 }}><button style={btn} disabled={busy === 'cfg'} onClick={saveCfg}>💾 ذخیره</button></div>
         </div>}
         {/* 🎪 استودیوی رویداد (سند ۱۸ — LiveOps): رویدادِ زمان‌دار بدونِ دیپلوی؛ پیشرفت از رفتارِ واقعیِ REOS */}
