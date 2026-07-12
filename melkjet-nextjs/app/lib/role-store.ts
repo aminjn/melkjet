@@ -63,7 +63,9 @@ export const PERMISSIONS: { id: string; label: string }[] = [
   { id: 'investors', label: 'سرمایه‌گذاران' },
   { id: 'store', label: 'فروشگاه/مصالح' },
   { id: 'ai_studio', label: 'استودیو AI (پلان/سه‌بعدی)' },
-  { id: 'vip', label: 'حسابِ حرفه‌ای (VIP — هوشِ بازار)' },   // فاز ۱۰۶: «اطلاعاتِ بهتر، نه قدرت» — سند ۲۲
+  { id: 'vip', label: 'حسابِ حرفه‌ای (VIP — هوشِ بازار)' },
+  { id: 'club', label: 'باشگاهِ کسب‌وکار (Business Club)' },
+  { id: 'season_pass', label: 'گذرنامهٔ فصل (CEO Pass)' },   // فاز ۱۰۶: «اطلاعاتِ بهتر، نه قدرت» — سند ۲۲
 ]
 
 function mkRole(name: string, dashboard: string, permissions: string[]): Role {

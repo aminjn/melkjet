@@ -2999,6 +2999,29 @@ export default function EmpirePage() {
         ))}
       </div>}
       {!(szn.table || []).length && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 8 }}>هنوز کسی واردِ این فصل نشده — تو اولین باش؛ پیشرفتت از همین لحظهٔ ورود شمرده می‌شود.</div>}
+      {/* 👔 گذرنامهٔ فصل (فاز ۱۱۰ — CEO Pass): فقط آیتم‌های ظاهریِ انحصاریِ همین فصل — No P2W؛ قیمت = پلنِ ادمین */}
+      {szn.pass?.enabled && <div style={{ marginTop: 12, padding: '12px 14px', borderRadius: 12, border: '1px dashed var(--goldDim)', background: 'rgba(212,175,55,.04)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <b style={{ fontSize: 12.5 }}>👔 گذرنامهٔ {szn.name}</b>
+          <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>آیتم‌های ظاهریِ انحصاریِ همین فصل — فقط دیده‌شدن، صفر قدرت</span>
+          <span style={{ flex: 1 }} />
+          <span style={{ fontSize: 14 }}>{szn.pass.frameIcon} {szn.pass.flairIcon}</span>
+        </div>
+        {!szn.pass.owned && <div style={{ marginTop: 8, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, color: 'var(--muted)' }}>«{szn.pass.frameLabel}» و «{szn.pass.flairLabel}» مخصوصِ دارندگانِ گذرنامه است — بعدِ این فصل هرگز برنمی‌گردند.</span>
+          <a href={szn.pass.upgrade || '/pricing'} style={{ fontSize: 11.5, fontWeight: 800, color: 'var(--gold)', textDecoration: 'none', border: '1px solid var(--goldDim)', borderRadius: 10, padding: '4px 12px' }}>مشاهدهٔ پلن‌ها ←</a>
+        </div>}
+        {szn.pass.owned && !szn.pass.claimed && !szn.ended && <button style={{ ...btn, padding: '6px 16px', fontSize: 12, marginTop: 8 }} disabled={busy} onClick={async () => {
+          const d = await api({ action: 'passClaim' })
+          if (d?.ok) { setSt(d); setSzn({ ...szn, pass: { ...szn.pass, claimed: true } }); celebrate() }
+        }}>👔 دریافتِ آیتم‌های انحصاریِ فصل</button>}
+        {szn.pass.owned && szn.pass.claimed && <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: '#7c6' }}>✓ آیتم‌های این فصل در مجموعه‌ات است</span>
+          <button style={{ ...btnGhost, padding: '3px 10px', fontSize: 10.5 }} disabled={busy} onClick={async () => { const d = await api({ action: 'cosmeticSet', kind: 'frame', id: szn.pass.frameId }); if (d) setSt(d) }}>{szn.pass.frameIcon} فعال‌کردنِ قاب</button>
+          <button style={{ ...btnGhost, padding: '3px 10px', fontSize: 10.5 }} disabled={busy} onClick={async () => { const d = await api({ action: 'cosmeticSet', kind: 'flair', id: szn.pass.flairId }); if (d) setSt(d) }}>{szn.pass.flairIcon} فعال‌کردنِ نشان</button>
+        </div>}
+        {szn.pass.owned && !szn.pass.claimed && szn.ended && <div style={{ marginTop: 8, fontSize: 11, color: 'var(--muted)' }}>این فصل بسته شد — آیتم‌های فصلِ بعد را از همان روزِ اول بگیر.</div>}
+      </div>}
       <div style={{ fontSize: 9.5, color: 'var(--faint)', marginTop: 8 }}>جایزهٔ رتبه‌های ۱ تا ۳: {(szn.rewards || []).map((x: number) => fa(x)).join(' / ')} ملک‌کوین · پیشرفتِ همه از دلتای «واقعیِ» همین فصل است، نه ثروتِ قبلی — شانسِ تازه‌واردها برابر است.</div>
     </div>}
 

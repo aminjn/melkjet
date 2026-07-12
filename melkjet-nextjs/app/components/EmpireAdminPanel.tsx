@@ -1123,6 +1123,12 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
           {row('جایزهٔ رتبهٔ ۱ (کوین)', cin('season', 'r1'))}
           {row('جایزهٔ رتبهٔ ۲ (کوین)', cin('season', 'r2'))}
           {row('جایزهٔ رتبهٔ ۳ (کوین)', cin('season', 'r3'))}
+          <div style={{ fontSize: 11, color: 'var(--muted)', margin: '12px 0 2px', fontWeight: 700 }}>👔 گذرنامهٔ فصل — CEO Pass (فاز ۱۱۰؛ قیمت = پلنِ سایت با مجوزِ «گذرنامهٔ فصل»)</div>
+          {row('گذرنامه فعال (۱/۰)', cin('pass', 'enabled'), 'فقط آیتم‌های ظاهریِ انحصاریِ هر فصل — No P2W؛ بدونِ پلنِ دارای مجوز، کارتش قفل است')}
+          {row('آیکنِ قابِ فصل', cin('pass', 'frameIcon', 60))}
+          {row('نامِ قابِ فصل', cin('pass', 'frameLabel', 150), 'نامِ فصل خودکار به انتهایش می‌چسبد')}
+          {row('آیکنِ نشانِ فصل', cin('pass', 'flairIcon', 60))}
+          {row('نامِ نشانِ فصل', cin('pass', 'flairLabel', 150))}
           <div style={{ marginTop: 10 }}><button style={btn} disabled={busy === 'cfg'} onClick={saveCfg}>💾 ذخیره</button></div>
         </div>}
         {/* 🎪 استودیوی رویداد (سند ۱۸ — LiveOps): رویدادِ زمان‌دار بدونِ دیپلوی؛ پیشرفت از رفتارِ واقعیِ REOS */}

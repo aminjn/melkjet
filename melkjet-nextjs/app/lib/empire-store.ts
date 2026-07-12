@@ -2723,6 +2723,23 @@ export async function buyCosmetic(userId: string, item: { id: string; label: str
   })
 }
 
+// فاز ۱۱۰ (CEO Pass — سند ۲۲ Part 04): آیتم‌های ظاهریِ انحصاریِ فصل برای دارندهٔ گذرنامه —
+// هر فصل فقط یک‌بار (claims)؛ فقط ظاهر، صفر اثرِ اقتصادی. آیکن‌ها از knob ادمین خوانده می‌شوند.
+export async function grantPassCosmetics(userId: string, seasonId: string, seasonName: string, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    const key = 'pass_' + seasonId
+    if (e.claims[key]) return 'آیتم‌های این فصل را قبلاً گرفته‌ای'
+    e.claims[key] = now
+    const c = e.cosmetics || (e.cosmetics = { owned: [] })
+    const frameId = key + '_frame', flairId = key + '_flair'
+    if (!c.owned.includes(frameId)) c.owned.push(frameId)
+    if (!c.owned.includes(flairId)) c.owned.push(flairId)
+    if (!c.frame) c.frame = frameId
+    if (!c.flair) c.flair = flairId
+    e.timeline.push({ at: now, icon: '👔', title: `آیتم‌های انحصاریِ گذرنامهٔ «${seasonName.slice(0, 30)}» به مجموعه‌ات اضافه شد` })
+  })
+}
+
 // فعال/غیرفعال‌کردنِ آیتمِ ظاهریِ خریداری‌شده (id خالی = برداشتن).
 export async function setCosmetic(userId: string, kind: 'frame' | 'flair', id: string) {
   return mutateEmpire(userId, e => {

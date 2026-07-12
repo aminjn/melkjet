@@ -104,6 +104,8 @@ export interface ReosConfig {
     // فاز ۶۶ (Season Engine v1): فصلِ فعالِ دنیا — تمِ داستانی + متریکِ واقعی (growth/projects/auctionWins/income)
     // + جایزهٔ کوینِ رتبه‌های ۱..۳ سرِ پایانِ فصل. «هیچ متایی دائمی نیست» — ادمین فصلِ بعد را همین‌جا تعریف می‌کند.
     season: { enabled: boolean; id: string; name: string; icon: string; story: string; startDay: number; lengthDays: number; metric: string; r1: number; r2: number; r3: number }
+    // فاز ۱۱۰ (سند ۲۲ Part 04 — CEO Pass): گذرنامهٔ فصل — فقط آیتم‌های ظاهریِ انحصاریِ هر فصل (No P2W)؛ قیمت = پلنِ ادمین با مجوزِ season_pass
+    pass: { enabled: boolean; frameIcon: string; frameLabel: string; flairIcon: string; flairLabel: string }
     // فاز ۷۰ (دولتِ زنده — فصل ۲۱ «دولت هر روز تصمیم می‌گیرد» + Future Engine «اعلامِ پیشاپیش»):
     // مصوبهٔ هفتگیِ قطعی از هش در دامنه‌های محدودِ knob — همیشه یک هفته زودتر اعلام می‌شود (انصاف).
     gov: { enabled: boolean; chancePct: number; maxTaxDelta: number; maxLoanDelta: number }
@@ -301,6 +303,7 @@ export const DEFAULT_CONFIG: ReosConfig = {
       warDays: 7, warBuyPoints: 10, warXpPerPoint: 50, warXpWin: 150,
       takeoverEnabled: true, takeoverLevel: 12, takeoverPremiumPct: 15 },   // فاز ۱۰۱
     season: { enabled: true, id: 'S1', name: 'فصلِ آغاز', icon: '🌱', story: 'اولین فصلِ این دنیا — هر فصل قهرمانانِ خودش را در تاریخ ثبت می‌کند.', startDay: 0, lengthDays: 90, metric: 'growth', r1: 500, r2: 300, r3: 150 },
+    pass: { enabled: true, frameIcon: '👔', frameLabel: 'قابِ CEO', flairIcon: '💼', flairLabel: 'نشانِ مدیرعامل' },   // فاز ۱۱۰ (CEO Pass)
     gov: { enabled: true, chancePct: 60, maxTaxDelta: 0.5, maxLoanDelta: 2 },
     insurance: { enabled: true, premiumPct: 3, coveragePct: 70 },
     // مذاکره: همان رفتارِ قبلی به‌صورتِ پیش‌فرض (۲۵٪ پایه تا ۷۵٪ با مهارت؛ تخفیف ۲..۶٪) — حالا قابل‌تنظیم.

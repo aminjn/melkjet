@@ -55,6 +55,8 @@ import { sendDm, dmThread, createDuel, acceptDuel, resolveDuels, myDuels, markDu
 import { submitCreatorItem, myCreatorItems, approvedCreatorItems, recordCreatorSale, creatorIconOf, creatorShareOf, type CreatorCfg } from '@/app/lib/empire-creator'   // فاز ۱۰۷
 import { grantCoins } from '@/app/lib/empire-store'
 import { setAssetFacade } from '@/app/lib/empire-store'   // فاز ۱۰۹
+import { grantPassCosmetics } from '@/app/lib/empire-store'   // فاز ۱۱۰ (CEO Pass)
+import { requireModule } from '@/app/lib/plan-gate'   // فاز ۱۱۰: مالکیتِ گذرنامه از پلنِ فعالِ سایت
 import { isValidFacade } from '@/app/lib/empire-visual'   // فاز ۱۰۹
 // فاز ۳۹ (سند ۲۶ فصل ۱۶ Cognitive AI): هوشِ سرمایه‌گذاری — ارزش‌گذاری/تصمیم‌یار/روندِ محله/سلامتِ مالی/اولویت‌ها؛ همه از دادهٔ واقعی.
 import { compStatsOf, valuationOf, decisionOf, marketIntelOf, cashflowOf, financialHealthOf, prioritiesOf, evalRules, RULE_TEMPLATES, tradeAskCheckOf, jvOfferCheckOf, crisisOf, rarityOf } from '@/app/lib/empire-intel'
@@ -79,7 +81,8 @@ const RATE_BUCKET = new Map<string, { m: number; n: number }>()
 const cosmeticIconOf = (e: Pick<EmpireData, 'cosmetics'>, kind: 'frame' | 'flair') => {
   const id = e.cosmetics?.[kind]
   if (!id) return ''
-  // فاز ۱۰۷: آیتم‌های ساختِ بازیکنان (cr_) از کشِ همگامِ فروشگاهِ سازندگان خوانده می‌شوند
+  // فاز ۱۰۷: آیتم‌های ساختِ بازیکنان (cr_) از کشِ همگام؛ فاز ۱۱۰: آیتم‌های گذرنامهٔ فصل (pass_) از knob ادمین
+  if (id.startsWith('pass_')) return id.endsWith('_frame') ? (config().empire.pass?.frameIcon || '👔') : (config().empire.pass?.flairIcon || '💼')
   return (config().empire.cosmetics?.items || []).find(i => i.id === id)?.icon || creatorIconOf(id) || ''
 }
 const ptypeOf = (it: Item) => (it.meta || {})['نوع ملک'] || it.category || ''
@@ -1911,7 +1914,33 @@ export async function POST(req: NextRequest) {
         table, mine: mine66, rewards: rewards66,
         myReward: ended && mine66 && mine66.rank <= 3 ? rewards66[mine66.rank - 1] || 0 : 0,
         claimed: !!meNow.claims['season_' + sc.id],
+        // 👔 گذرنامهٔ فصل (فاز ۱۱۰ — CEO Pass): مالکیت از پلنِ فعالِ سایت (مجوزِ season_pass — قیمت دستِ ادمین)؛ فقط ظاهر
+        pass: (() => {
+          const pc = config().empire.pass
+          if (!pc?.enabled) return { enabled: false }
+          const gate = requireModule({ phone: userId, role: (s as { role?: string }).role }, 'season_pass')
+          return {
+            enabled: true, owned: !gate, upgrade: gate?.upgrade || '/pricing',
+            claimed: !!meNow.claims['pass_' + sc.id],
+            frameId: 'pass_' + sc.id + '_frame', flairId: 'pass_' + sc.id + '_flair',
+            frameIcon: pc.frameIcon, frameLabel: `${pc.frameLabel} — ${sc.name}`,
+            flairIcon: pc.flairIcon, flairLabel: `${pc.flairLabel} — ${sc.name}`,
+          }
+        })(),
       })
+    }
+    // 👔 دریافتِ آیتم‌های انحصاریِ گذرنامهٔ فصل (فاز ۱۱۰): یک‌بار در هر فصل؛ فقط ظاهر — No P2W
+    case 'passClaim': {
+      const sc = config().empire.season
+      const pc = config().empire.pass
+      if (!pc?.enabled || !sc.enabled) return NextResponse.json({ error: 'گذرنامهٔ فصل فعال نیست' }, { status: 400 })
+      const day110 = dayNumberOf(Date.now())
+      if (day110 < sc.startDay || day110 >= sc.startDay + sc.lengthDays) return NextResponse.json({ error: 'فصل فعال نیست — آیتم‌های گذرنامه فقط در طولِ فصل داده می‌شوند' }, { status: 400 })
+      const gate110 = requireModule({ phone: userId, role: (s as { role?: string }).role }, 'season_pass')
+      if (gate110) return NextResponse.json(gate110, { status: 403 })
+      const r = await grantPassCosmetics(userId, sc.id, sc.name)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, ...(await stateOf(userId, r.empire!)) })
     }
     case 'seasonClaim': {
       const sc = config().empire.season
