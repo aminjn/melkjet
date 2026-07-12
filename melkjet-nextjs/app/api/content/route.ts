@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listItems, SourceType } from '@/app/lib/scraper-store'
+import { slimListing } from '@/app/lib/listing-slim'
 
 // Public read endpoint — feeds search, directory, store, home.
 // Returns all non-rejected, non-duplicate scraped items.
@@ -34,18 +35,10 @@ export async function GET(req: NextRequest) {
   // featured first, then newest
   items.sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0) || b.scrapedAt - a.scrapedAt)
   // شماره هرگز در فهرستِ عمومی نمی‌رود؛ فقط با ورود از /api/listing-reveal دیده و ثبت می‌شود.
-  const SLIM_META = ['متراژ', 'طبقه', 'سال ساخت', 'ساخت', 'نوع معامله', 'نوع ملک', 'اتاق خواب', '__lat', '__lng', '__dealStatus']
   const safe = items.slice(0, limit).map(it => {
     const { phone, ...rest } = it as any
     if (!slim) return { ...rest, hasPhone: !!(phone || (it as any).meta?.__ownerPhone) }
-    const meta: Record<string, string> = {}
-    for (const k of SLIM_META) { const v = it.meta?.[k]; if (v) meta[k] = v }
-    return {
-      id: it.id, type: it.type, sourceName: it.sourceName, category: it.category, tags: it.tags,
-      title: it.title, price: it.price, location: it.location, image: it.image, url: it.url,
-      excerpt: (it.excerpt || '').slice(0, 200), scrapedAt: it.scrapedAt, featured: it.featured, meta,
-      hasPhone: !!(phone || (it as any).meta?.__ownerPhone),
-    }
+    return slimListing(it)   // فاز ۹۹: منبعِ مشترک با SSR جستجو
   })
   const body = JSON.stringify({ items: safe, total: items.length })
   RESP_CACHE.set(cacheKey, { at: Date.now(), body })
