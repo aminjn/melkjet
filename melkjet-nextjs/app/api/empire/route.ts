@@ -42,6 +42,7 @@ import { listingHref } from '@/app/lib/listing-url'
 import { recordEvent } from '@/app/lib/reos/store'
 import { buildBriefFor } from '@/app/lib/empire-brief'
 import { materialsIndexState, materialsFactorOf } from '@/app/lib/materials-index'
+import { grantWarReward, absorbNpcAssets } from '@/app/lib/empire-store'
 import { touchStreak, getStreak } from '@/app/lib/reos/achievements'
 import { candidateListings, getItemById, type Item } from '@/app/lib/scraper-store'
 import { parseFaNum } from '@/app/lib/reos/features'
@@ -59,7 +60,7 @@ import { bucketBalance } from '@/app/lib/reos/wallet'
 import { recordsOf, collectionsOf, applyCollections, COLLECTIONS, noteNemesis } from '@/app/lib/empire-store'
 import { roleLayerOf, legacyScoreOf, storyOf, dreamProgressOf, dreamSuggestionsOf, addCustomDream, applyDreams, wondersUpdate, DREAM_METRICS, biographyOf } from '@/app/lib/empire-store'
 import { worldYearOf, worldEpochOf, worldHistory, rumorsMaintain, appendWorldEvent, cityOf, cityStatsOf, occasionOf } from '@/app/lib/empire-world'   // فاز ۶۳/۶۸/۷۱
-import { npcMaintain, npcDb, npcOwnerOf, npcSellToPlayer, npcView, NPC_USER_PREFIX } from '@/app/lib/empire-npc'   // فاز ۶۵: شرکت‌های سیستمیِ زنده
+import { npcMaintain, npcDb, npcOwnerOf, npcSellToPlayer, npcView, NPC_USER_PREFIX, startNpcWar, resolveNpcWar, markWarRewarded, npcWarsOf, npcValuationOf, takeoverNpc, citizensOf, cityMediaOf } from '@/app/lib/empire-npc'   // فاز ۶۵ + ۱۰۱: تمدنِ NPC
 import { seasonBaseline, seasonValueOf, SEASON_METRIC_FA, claimSeasonReward } from '@/app/lib/empire-store'   // فاز ۶۶: موتورِ فصل
 import { followEmpire, effectiveTransferTaxPct, insureBuild } from '@/app/lib/empire-store'   // فاز ۶۷/۷۰
 import { govDecreeOf } from '@/app/lib/empire-world'   // فاز ۷۰: مصوبهٔ هفته
@@ -1908,6 +1909,8 @@ export async function POST(req: NextRequest) {
       const snaps = await loadSnapshots(2).catch(() => [] as any[])
       const lastSnap = snaps[snaps.length - 1]
       const hoods = (lastSnap?.hoods || []).map((h: any) => ({ hood: h.hood, perM: h.perM }))
+      const prevSnap = snaps.length > 1 ? snaps[snaps.length - 2] : null
+      const hoodsPrev101 = (prevSnap?.hoods || []).map((h: any) => ({ hood: h.hood, perM: h.perM }))
       const rumors = await rumorsMaintain(day, hoods).catch(() => ({ current: [], recent: [], trust: [] }))
       // فاز ۶۵: تیکِ روزانهٔ شرکت‌های سیستمی روی آگهی‌های «واقعی» — معاملاتشان به کتابِ تاریخ می‌رود
       const npc = await (async () => {
@@ -1921,11 +1924,26 @@ export async function POST(req: NextRequest) {
           const price73: Record<string, number> = {}
           for (const x of cands) price73[x.id] = x.price
           const companies73 = npcView(r.db).map(c => ({ ...c, holdings: (c.holdings || []).map((h: any) => ({ ...h, price: price73[h.listingId] || 0 })) }))
-          return { companies: companies73, cities: cityStatsOf(cands.map(x => ({ city: x.city, price: x.price }))) }
-        } catch { return { companies: [], cities: [] } }
+          return { companies: companies73, cities: cityStatsOf(cands.map(x => ({ city: x.city, price: x.price }))), media: cityMediaOf(day, { bought: r.bought, sold: r.sold }, hoods, hoodsPrev101) }
+        } catch { return { companies: [], cities: [], media: [] as Array<{ icon: string; text: string }> } }
       })()
       // فاز ۶۷ (فیدِ تعاملی): وضعیتِ دنبال‌شده‌ها و تبریک‌های خودم — تا فید همان‌جا قابلِ‌تعامل باشد
       const me67 = await getEmpire(userId).catch(() => null)
+      // فاز ۱۰۱: جنگِ شرکتی — اگر دوره تمام شده، همین‌جا داوری و جایزهٔ برد (یک‌بار) داده می‌شود
+      const npcCfg101 = config().empire.npc
+      let war101 = null as Awaited<ReturnType<typeof resolveNpcWar>> | null
+      if (me67) {
+        war101 = await resolveNpcWar(userId, day, {
+          xpNow: me67.xp,
+          buysInHood: (hood, fromDay, toDay) => me67.assets.filter(a => a.hood === hood && Math.floor(a.boughtAt / 86400000) >= fromDay && Math.floor(a.boughtAt / 86400000) < toDay).length,
+        }, npcCfg101).catch(() => null)
+        if (war101?.result === 'win' && !war101.rewarded) {
+          if (await markWarRewarded(userId).catch(() => false)) {
+            await grantWarReward(userId, npcCfg101.warXpWin, `رقابتِ ${war101.hood} را از «${(npcView(await npcDb()).find(c => c.id === war101!.npcId)?.name) || 'شرکت'}» بردی`, `+${npcCfg101.warXpWin.toLocaleString('fa-IR')} XP`).catch(() => {})
+            appendWorldEvent({ icon: '⚔️', title: `یک امپراتور رقابتِ ${war101.hood} را از ${npcView(await npcDb()).find(c => c.id === war101!.npcId)?.name || 'شرکتِ شهر'} برد`, kind: 'npc' }, day).catch(() => {})
+          }
+        }
+      }
       // فاز ۷۰ (دولتِ زنده + Future Engine): مصوبهٔ این هفته + اعلامِ پیشاپیشِ هفتهٔ بعد + ثبت در کتابِ تاریخ
       const week70 = Math.floor(day / 7)
       const govNow = govDecreeOf(week70), govNext = govDecreeOf(week70 + 1)
@@ -1939,8 +1957,51 @@ export async function POST(req: NextRequest) {
         gov: { now: govNow.fa, next: govNext.fa, taxNow: effectiveTransferTaxPct(day) },
         occasion: occasionOf(),   // فاز ۷۱: مناسبتِ واقعیِ تقویم — فقط حال‌وهوا
         following: me67?.following || [], myNo: me67?.no || 0,
+        // فاز ۱۰۱ (NPC v2): رسانهٔ شهر + شهروندانِ آماری (برچسبِ برآورد در UI) + جنگِ من + تنظیماتِ تصاحب
+        media: npc.media || [], citizens: citizensOf(hoods),
+        war: war101, wars: await npcWarsOf(userId).catch(() => []),
+        npcCfg: { warDays: npcCfg101.warDays, warXpWin: npcCfg101.warXpWin, takeoverEnabled: npcCfg101.takeoverEnabled, takeoverLevel: npcCfg101.takeoverLevel, takeoverPremiumPct: npcCfg101.takeoverPremiumPct, myLevel: me67 ? empireLevel(me67.xp).level : 0 },
         kudosGiven: me67 ? Object.keys(me67.claims).filter(k => k.startsWith('kudos_')).map(k => Number(k.slice(6))) : [],
       })
+    }
+    // ⚔️ فاز ۱۰۱: شروعِ جنگِ شرکتی با یک شرکتِ NPC بر سرِ محله‌ای که آن‌جا حضور دارد
+    case 'npcWarStart': {
+      const g = config().empire.npc
+      if (!g.enabled) return NextResponse.json({ error: 'شرکت‌های شهر فعلاً فعال نیستند' }, { status: 403 })
+      const e = await getEmpire(userId)
+      if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      const day = dayNumberOf(Date.now())
+      const r = await startNpcWar(userId, String(b.npcId || ''), String(b.hood || ''), day, e.xp, g.warDays)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, war: r.war, note: `تا ${g.warDays.toLocaleString('fa-IR')} روز: هر خریدِ واقعی در ${r.war!.hood} ${g.warBuyPoints.toLocaleString('fa-IR')} امتیاز، هر ${g.warXpPerPoint.toLocaleString('fa-IR')} XP یک امتیاز — بردن ${g.warXpWin.toLocaleString('fa-IR')} XP دارد` })
+    }
+    // 🏳️ فاز ۱۰۱: تصاحبِ خصمانهٔ شرکتِ NPC — ارزش‌گذاریِ شفاف؛ پولِ پرداختی سرمایهٔ شرکتِ بازگشته می‌شود
+    case 'npcTakeover': {
+      const g = config().empire.npc
+      if (!g.enabled || !g.takeoverEnabled) return NextResponse.json({ error: 'تصاحبِ شرکت فعلاً فعال نیست' }, { status: 403 })
+      const e = await getEmpire(userId)
+      if (!e) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      if (empireLevel(e.xp).level < g.takeoverLevel) return NextResponse.json({ error: `تصاحبِ شرکت از سطحِ ${g.takeoverLevel.toLocaleString('fa-IR')} باز می‌شود` }, { status: 403 })
+      const d101 = await npcDb()
+      const c = d101.companies.find(x => x.id === String(b.npcId || ''))
+      if (!c) return NextResponse.json({ error: 'شرکت پیدا نشد' }, { status: 404 })
+      const items101 = (await candidateListings(600)).filter(isPricedSale)
+      const priceNow = new Map(items101.map(x => [x.id, priceOf(x)]))
+      const val = npcValuationOf(c, id => priceNow.get(id) || 0, g.takeoverPremiumPct)
+      if (!b.confirm) return NextResponse.json({ ok: true, preview: true, valuation: val.total, assetsValue: val.assetsValue, capital: c.capital, assets: c.assets.length, premiumPct: g.takeoverPremiumPct })
+      const day = dayNumberOf(Date.now())
+      // اول برداشتِ پول و انتقالِ دارایی‌ها (اتمیک روی امپراتوریِ بازیکن)…
+      const assetsSnapshot = c.assets.map(a => ({ listingId: a.listingId, title: a.title, hood: a.hood, cost: priceNow.get(a.listingId) || a.cost }))
+      const pay = await absorbNpcAssets(userId, val.total, assetsSnapshot, c.name)
+      if (!pay.ok) return NextResponse.json({ error: pay.reason }, { status: 400 })
+      // …بعد انحلال/بازگشتِ شرکت؛ اگر این مرحله شکست بخورد، دارایی نزدِ هر دو نمی‌ماند چون claim جابه‌جا می‌شود
+      await takeoverNpc(c.id, val.total, e.name, day)
+      for (const a of assetsSnapshot) {
+        await releaseListing(a.listingId, NPC_USER_PREFIX + c.id).catch(() => {})
+        await claimListing(a.listingId, { userId, no: e.no, name: e.name }).catch(() => {})
+      }
+      appendWorldEvent({ icon: '🏳️', title: `«${e.name}» شرکتِ ${c.name} را تصاحب کرد — ${assetsSnapshot.length.toLocaleString('fa-IR')} ملک دست‌به‌دست شد`, kind: 'npc' }, day).catch(() => {})
+      return NextResponse.json({ ok: true, valuation: val.total, got: assetsSnapshot.length, ...(await stateOf(userId, pay.empire!)) })
     }
     // 🛡 بیمهٔ کارگاه (فاز ۷۰): حقِ بیمهٔ شفاف → پوششِ ٪ هزینهٔ اتفاق‌های کارگاه
     case 'insureBuild': {

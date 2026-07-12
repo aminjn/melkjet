@@ -731,6 +731,19 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>🚨 اتاقِ بحران (فاز ۴۱ — سند ۲۸ Part 13: بحران = نتیجهٔ تصمیم‌ها، نه تصادف)</div>
             {row('آستانهٔ دوامِ نقد (روز)', cin('intel', 'crisisRunwayDays'), 'دوامِ نقدِ کمتر از این = سیگنالِ بحران')}
             {row('آستانهٔ خوابِ کارگاه (روز)', cin('intel', 'crisisStalledDays'), 'کارگاهِ بیش از این عقب‌مانده = سیگنالِ بحران')}
+            <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>🏢 شرکت‌های شهر — تمدنِ NPC (فاز ۶۵ + ۱۰۱)</div>
+            {row('شرکت‌های شهر فعال (۱/۰)', cin('npc', 'enabled'), 'شرکت‌های سیستمی هر روز قطعی از هش روی آگهی‌های واقعی معامله می‌کنند')}
+            {row('تعدادِ شرکت‌ها', cin('npc', 'count'), 'حداکثر ۶ شخصیتِ تعریف‌شده')}
+            {row('سرمایهٔ شروعِ هر شرکت (تومان)', cin('npc', 'startCapital'))}
+            {row('شانسِ حرکتِ روزانه (٪)', cin('npc', 'actChancePct'))}
+            {row('سقفِ داراییِ هر شرکت', cin('npc', 'maxAssets'))}
+            {row('دورهٔ جنگِ شرکتی (روز)', cin('npc', 'warDays'), 'رقابتِ بازیکن با یک شرکت بر سرِ یک محله')}
+            {row('امتیازِ هر خریدِ واقعی در محله', cin('npc', 'warBuyPoints'))}
+            {row('XP لازم برای هر امتیاز', cin('npc', 'warXpPerPoint'))}
+            {row('جایزهٔ بردِ جنگ (XP)', cin('npc', 'warXpWin'), 'فقط XP — هیچ پولی جابه‌جا نمی‌شود')}
+            {row('تصاحبِ خصمانه فعال (۱/۰)', cin('npc', 'takeoverEnabled'), 'خریدِ کلِ شرکتِ NPC با ارزش‌گذاریِ شفاف — فقط NPC، هرگز بازیکنِ واقعی')}
+            {row('سطحِ بازشدنِ تصاحب', cin('npc', 'takeoverLevel'))}
+            {row('حقِ تقدمِ تصاحب (٪)', cin('npc', 'takeoverPremiumPct'), 'روی جمعِ خزانه + ارزشِ روزِ املاک')}
             <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>🧱 شاخصِ قیمتِ مصالح (فاز ۱۰۰ — جلد ۴۳: از قیمت‌های واقعیِ بازارِ مصالحِ سایت)</div>
             {row('اثر روی هزینهٔ ساخت فعال (۱/۰)', cin('materialsIndex', 'enabled'), 'ضریبِ هزینهٔ متر = شاخص ÷ ۱۰۰ (با کف/سقفِ زیر)؛ بدونِ پوششِ کافی همیشه ۱')}
             {row('حداقلِ پوشش (تعداد کالا)', cin('materialsIndex', 'minItems'), 'کمتر از این = «دادهٔ کافی نیست» و ضریب ۱ — عددِ ساختگی هرگز')}

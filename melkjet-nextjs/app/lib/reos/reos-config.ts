@@ -90,7 +90,10 @@ export interface ReosConfig {
     // فاز ۶۳ (سند ۳۲ — فصل ۲۱ Live World): سالِ دنیا + سقفِ کتابِ تاریخ + شایعاتِ منصفانه + وزن/آستانه‌های دمای دنیا.
     world: { daysPerYear: number; historyCap: number; rumorsPerWeek: number; rumorCredMin: number; rumorCredMax: number; heatWActive: number; heatWEvent: number; heatWAuction: number; heatLow: number; heatHigh: number }
     // فاز ۶۵ (NPC Civilization v1): شرکت‌های سیستمیِ زنده — تعداد، سرمایهٔ شروع، شانسِ حرکتِ روزانه، سقفِ دارایی.
-    npc: { enabled: boolean; count: number; startCapital: number; actChancePct: number; maxAssets: number }
+    npc: { enabled: boolean; count: number; startCapital: number; actChancePct: number; maxAssets: number
+      // فاز ۱۰۱ (NPC v2): جنگِ شرکتی + تصاحبِ خصمانهٔ شرکت‌های NPC (نه بازیکنانِ واقعی)
+      warDays: number; warBuyPoints: number; warXpPerPoint: number; warXpWin: number
+      takeoverEnabled: boolean; takeoverLevel: number; takeoverPremiumPct: number }
     // فاز ۶۶ (Season Engine v1): فصلِ فعالِ دنیا — تمِ داستانی + متریکِ واقعی (growth/projects/auctionWins/income)
     // + جایزهٔ کوینِ رتبه‌های ۱..۳ سرِ پایانِ فصل. «هیچ متایی دائمی نیست» — ادمین فصلِ بعد را همین‌جا تعریف می‌کند.
     season: { enabled: boolean; id: string; name: string; icon: string; story: string; startDay: number; lengthDays: number; metric: string; r1: number; r2: number; r3: number }
@@ -278,7 +281,9 @@ export const DEFAULT_CONFIG: ReosConfig = {
     // دنیای زنده (فصل ۲۱): سالِ دنیا = ۹۰ روزِ واقعی؛ ۲ شایعه/هفته با اعتبارِ ۵۵..۸۵٪؛ دما فقط «پیشنهاد» به ادمین.
     world: { daysPerYear: 90, historyCap: 400, rumorsPerWeek: 2, rumorCredMin: 55, rumorCredMax: 85, heatWActive: 6, heatWEvent: 15, heatWAuction: 10, heatLow: 35, heatHigh: 85 },
     // شرکت‌های زندهٔ شهر: ۶ شرکت، هر کدام روزی حداکثر یک حرکتِ قطعی روی آگهی‌های واقعی — حلقهٔ پولیِ بسته.
-    npc: { enabled: true, count: 6, startCapital: 300_000_000_000, actChancePct: 55, maxAssets: 10 },
+    npc: { enabled: true, count: 6, startCapital: 300_000_000_000, actChancePct: 55, maxAssets: 10,
+      warDays: 7, warBuyPoints: 10, warXpPerPoint: 50, warXpWin: 150,
+      takeoverEnabled: true, takeoverLevel: 12, takeoverPremiumPct: 15 },   // فاز ۱۰۱
     season: { enabled: true, id: 'S1', name: 'فصلِ آغاز', icon: '🌱', story: 'اولین فصلِ این دنیا — هر فصل قهرمانانِ خودش را در تاریخ ثبت می‌کند.', startDay: 0, lengthDays: 90, metric: 'growth', r1: 500, r2: 300, r3: 150 },
     gov: { enabled: true, chancePct: 60, maxTaxDelta: 0.5, maxLoanDelta: 2 },
     insurance: { enabled: true, premiumPct: 3, coveragePct: 70 },

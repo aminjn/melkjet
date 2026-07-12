@@ -1577,6 +1577,36 @@ export default function EmpirePage() {
         <div style={{ fontSize: 9.5, color: 'var(--faint)', marginTop: 6 }}>همه آگهی‌های واقعیِ همین لحظهٔ بازارند — خرید یعنی مالکیتِ انحصاری در دنیا؛ داراییِ واقعی در ۲ شهر = مجموعهٔ «فاتحِ شهرها».</div>
       </div>}
 
+      {/* فاز ۱۰۱ (NPC v2): رسانهٔ شهر — تیترها فقط از حرکت‌های واقعاً رخ‌داده */}
+      {(wd.media || []).length > 0 && <div style={{ background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 12, padding: '10px 14px', marginTop: 12 }}>
+        <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 6 }}>📻 رسانهٔ شهر <span style={{ fontSize: 9.5, color: 'var(--faint)', fontWeight: 400 }}>— از معاملاتِ شرکت‌ها و روندِ واقعیِ محله‌ها</span></div>
+        {wd.media.map((m: any, i: number) => <div key={i} style={{ fontSize: 11, color: 'var(--muted)', padding: '3px 0' }}>{m.icon} {m.text}</div>)}
+      </div>}
+
+      {/* فاز ۱۰۱: جنگِ شرکتیِ من — وضعیتِ زنده یا نتیجهٔ آخرین رقابت */}
+      {wd.war && <div style={{ background: 'var(--bg2)', border: `1px solid ${wd.war.result === 'win' ? 'rgba(95,217,138,.5)' : wd.war.result === 'loss' ? 'rgba(231,74,74,.4)' : 'var(--gold)'}`, borderRadius: 12, padding: '10px 14px', marginTop: 12 }}>
+        <div style={{ fontSize: 12, fontWeight: 800 }}>⚔️ رقابتِ {wd.war.hood}{!wd.war.result && <span style={{ color: 'var(--muted)', fontWeight: 400 }}> — در جریان تا روزِ {fa(wd.war.endDay - wd.day)} دیگر</span>}</div>
+        {wd.war.result
+          ? <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{wd.war.result === 'win' ? `🏆 بردی! ${fa(wd.war.playerScore || 0)} به ${fa(wd.war.npcScore || 0)} — جایزهٔ XP گرفتی` : `این بار شرکت برد (${fa(wd.war.npcScore || 0)} به ${fa(wd.war.playerScore || 0)}) — با خریدِ واقعی در محله و XP بیشتر دوباره حمله کن`}</div>
+          : <div style={{ fontSize: 10.5, color: 'var(--muted)', marginTop: 4 }}>هر خریدِ واقعی در این محله و هر XPِ تازه امتیازت را بالا می‌برد — امتیازِ شرکت قطعی و قابلِ‌دستکاری نیست.</div>}
+      </div>}
+
+      {/* فاز ۱۰۱: شهروندانِ شهر — برآوردِ آماری از قیمت/عرضهٔ «واقعیِ» محله‌ها (هیچ آدمِ ساختگی‌ای معامله نمی‌کند) */}
+      {(wd.citizens || []).length > 0 && <>
+        <div style={{ fontSize: 12, fontWeight: 700, margin: '12px 0 6px' }}>👥 شهروندانِ شهر <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 400 }}>— برآوردِ آماری از قیمت‌های واقعیِ محله‌ها؛ کجا تقاضا هست</span></div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: 8 }}>
+          {wd.citizens.map((seg: any) => (
+            <div key={seg.id} style={{ background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 12, padding: '9px 12px' }}>
+              <div style={{ fontSize: 11.5, fontWeight: 800 }}>{seg.icon} {seg.name}</div>
+              <div style={{ fontSize: 9.5, color: 'var(--muted)', margin: '3px 0 5px' }}>{seg.desc}</div>
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                {seg.hoods.map((h: string) => <span key={h} style={{ fontSize: 10, background: 'var(--goldDim)', color: 'var(--gold)', borderRadius: 999, padding: '2px 8px' }}>{h}</span>)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </>}
+
       {/* 🏢 شرکت‌های زندهٔ شهر (فاز ۶۵ — NPC Civilization v1): رقبای واقعی‌نما که هر روز روی آگهی‌های واقعی معامله می‌کنند */}
       {(wd.companies || []).length > 0 && <>
         <div style={{ fontSize: 12, fontWeight: 700, margin: '12px 0 6px' }}>🏢 شرکت‌های شهر <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 400 }}>— هر روز خودشان معامله می‌کنند؛ اگر ملکی را زودتر بخرند، برای خریدنش باید سراغِ خودشان بروی</span></div>
@@ -1615,6 +1645,29 @@ export default function EmpirePage() {
                 {c.assets > (c.holdings || []).length && <div style={{ fontSize: 9, color: 'var(--faint)' }}>و {fa(c.assets - c.holdings.length)} ملکِ دیگر…</div>}
               </div>}
               {(c.log || []).slice(0, 2).map((l: any, i: number) => <div key={i} style={{ fontSize: 9.5, color: 'var(--muted)', marginTop: 3 }}>{l.icon} {l.text}</div>)}
+              {/* فاز ۱۰۱ (NPC v2): رقابتِ محله‌ای + تصاحبِ خصمانه — هر دو با قواعدِ شفاف */}
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 7, borderTop: '1px dashed var(--line)', paddingTop: 6 }}>
+                {(c.holdings || []).length > 0 && !wd.war && <button style={{ ...btnGhost, padding: '3px 9px', fontSize: 10 }} disabled={busy} title="یک دوره رقابت بر سرِ محله‌ای که این شرکت آن‌جا ملک دارد — امتیازت از خریدهای واقعی و XP می‌آید" onClick={async () => {
+                  const hoods101 = Array.from(new Set((c.holdings || []).map((h: any) => h.hood).filter(Boolean))) as string[]
+                  if (!hoods101.length) { alert('این شرکت فعلاً محلهٔ مشخصی ندارد'); return }
+                  let hood = hoods101[0]
+                  if (hoods101.length > 1) {
+                    const pick = prompt(`رقابت بر سرِ کدام محله؟\n${hoods101.map((h, i) => `${i + 1}. ${h}`).join('\n')}\n(شماره را بنویس)`)
+                    const n101 = Number(pick)
+                    if (!pick || !(n101 >= 1 && n101 <= hoods101.length)) return
+                    hood = hoods101[n101 - 1]
+                  }
+                  const d = await api({ action: 'npcWarStart', npcId: c.id, hood })
+                  if (d) { alert(d.note || 'رقابت آغاز شد'); setWd(null) }
+                }}>⚔️ رقابت</button>}
+                {wd.npcCfg?.takeoverEnabled && <button style={{ ...btnGhost, padding: '3px 9px', fontSize: 10, color: wd.npcCfg.myLevel >= wd.npcCfg.takeoverLevel ? undefined : 'var(--faint)' }} disabled={busy} title={wd.npcCfg.myLevel >= wd.npcCfg.takeoverLevel ? 'کلِ شرکت را با ارزش‌گذاریِ شفاف بخر — همهٔ املاکش مالِ تو می‌شود' : `از سطحِ ${fa(wd.npcCfg.takeoverLevel)} باز می‌شود`} onClick={async () => {
+                  const pv = await api({ action: 'npcTakeover', npcId: c.id })
+                  if (!pv?.preview) return
+                  if (!confirm(`تصاحبِ «${c.name}»:\n• ${fa(pv.assets)} ملک به ارزشِ روزِ ${faB(pv.assetsValue)}\n• خزانهٔ شرکت ${faB(pv.capital)}\n• حقِ تقدم ${fa(pv.premiumPct)}٪\nجمع: ${faB(pv.valuation)} تومان از سرمایهٔ نقدت. همهٔ املاک به قیمتِ روز به پرتفویت می‌آید و شرکت با مدیریتِ تازه از نو شروع می‌کند.`)) return
+                  const d = await api({ action: 'npcTakeover', npcId: c.id, confirm: true })
+                  if (d) { setSt(d); celebrate(); setWd(null) }
+                }}>🏳️ تصاحب</button>}
+              </div>
             </div>
           ))}
         </div>

@@ -241,6 +241,28 @@ export function assetKindOf(ptype: string): AssetKind {
   return 'apartment'
 }
 
+// ── فاز ۱۰۱ (NPC v2) ──────────────────────────────────────────────────────────
+// جایزهٔ بردِ جنگِ شرکتی: فقط XP و ثبتِ تایم‌لاین — هیچ پولی جابه‌جا نمی‌شود (بدونِ P2W).
+export async function grantWarReward(userId: string, xp: number, title: string, detail: string, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    e.xp += Math.max(0, Math.round(xp))
+    e.timeline.push({ at: now, icon: '⚔️', title: title.slice(0, 80), detail: detail.slice(0, 120) })
+  })
+}
+
+// تصاحبِ خصمانهٔ شرکتِ NPC: پرداختِ ارزش‌گذاریِ شفاف از سرمایهٔ نقد، دریافتِ همهٔ املاکِ شرکت
+// به قیمتِ روزِ واقعیِ هرکدام (پایهٔ سود/زیانِ آینده). بقای پول: پرداختی سرمایهٔ شرکتِ بازگشته می‌شود.
+export async function absorbNpcAssets(userId: string, valuation: number, assets: Array<{ listingId: string; title: string; hood: string; cost: number }>, npcName: string, now = Date.now()) {
+  return mutateEmpire(userId, e => {
+    if (e.capital < valuation) return 'سرمایهٔ نقدِ کافی برای تصاحب نیست'
+    e.capital -= Math.max(0, Math.round(valuation))
+    for (const a of assets) {
+      e.assets.push({ id: 'ast_' + randomBytes(5).toString('hex'), listingId: a.listingId, title: String(a.title).slice(0, 120), hood: String(a.hood || '').slice(0, 60), kind: 'apartment', buyPrice: Math.max(0, a.cost), boughtAt: now })
+    }
+    e.timeline.push({ at: now, icon: '🏳️', title: `شرکتِ «${npcName}» را تصاحب کردی`, detail: `${assets.length.toLocaleString('fa-IR')} ملک به پرتفویت اضافه شد` })
+  })
+}
+
 // Beat AI (M3): حدسِ قیمت — در بازهٔ تلورانس = درست.
 export function guessOutcome(actual: number, guess: number, tolerancePct = config().empire.guessTolerancePct): { correct: boolean; deltaPct: number } {
   if (!actual || !guess) return { correct: false, deltaPct: 100 }
