@@ -739,6 +739,12 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
           </div>
           <div style={card}>
             <div style={sub}>🏰 اجتماع: مالکیتِ انحصاری، بازارِ بازیکنان، مشارکت، اتحاد (فاز ۳۷)</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>💬 گفت‌وگوی سراسریِ شهر (فاز ۱۱۱)</div>
+            {row('گفت‌وگوی شهر فعال (۱/۰)', cin('chat', 'enabled'), 'polling سبک — سازگار با ۴ فورک؛ نظارت در بخشِ «دنیا»')}
+            {row('حداکثر طولِ پیام', cin('chat', 'maxLen'))}
+            {row('کول‌داونِ هر بازیکن (ثانیه)', cin('chat', 'cooldownSec'), 'ضدِ اسپم — هر بازیکن هر این‌قدر ثانیه یک پیام')}
+            {row('حداقل سطحِ ارسال', cin('chat', 'minLevel'), 'زیرِ این سطح فقط می‌خوانند — جلوی اکانتِ یک‌بارمصرف')}
+            {row('سقفِ پیام‌های نگه‌داشته', cin('chat', 'keep'))}
             {row('مالکیتِ انحصاری (۱/۰)', cin('social', 'exclusiveEnabled'), 'هر آگهیِ واقعی فقط یک مالکِ بازیکن — دومی باید از خودش بخرد')}
             {row('بازارِ بازیکنان فعال (۱/۰)', cin('social', 'tradeEnabled'), 'معاملهٔ مستقیمِ دارایی بینِ بازیکنان')}
             {row('سطحِ بازشدنِ بازار/مشارکت', cin('unlocks', 'tradeLevel'), 'زیرِ این سطح فقط تماشا')}
@@ -1052,6 +1058,35 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
           <Mini label="داراییِ متصل به آگهیِ زنده" value={fa(data.sync.live)} hint="قیمتِ روز از بازار" />
           <Mini label="داراییِ با آگهیِ حذف‌شده" value={fa(data.sync.dead)} hint="ارزش = قیمتِ خرید (منجمد)" />
           <Mini label="محله‌های دارای نفوذ" value={fa(data.hoods.length)} />
+        </div>
+        {/* 💬 نظارتِ گفت‌وگوی شهر (فاز ۱۱۱): پیام‌های اخیر + گزارش‌ها + حذف/سکوت — تصمیمِ انسانی */}
+        <div style={card}>
+          <div style={sub}>💬 نظارتِ گفت‌وگوی شهر ({fa((data.chat?.msgs || []).filter((m: any) => m.reports > 0 && !m.del).length)} پیامِ گزارش‌شده)</div>
+          {!(data.chat?.msgs || []).length && <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>هنوز پیامی در گفت‌وگوی شهر نیست.</div>}
+          {(data.chat?.msgs || []).map((m: any) => (
+            <div key={m.id} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '6px 0', borderBottom: '1px solid var(--line)', fontSize: 12, opacity: m.del ? .45 : 1 }}>
+              <b>{m.name}</b><span style={{ color: 'var(--faint)', fontSize: 10 }}>#{fa(m.no)} · {m.userId}</span>
+              <span style={{ flex: 1, minWidth: 160 }}>{m.del ? '— حذف شد —' : m.text}</span>
+              {m.reports > 0 && !m.del && <b style={{ color: '#e7a14a', fontSize: 11 }}>⚑ {fa(m.reports)} گزارش</b>}
+              <span style={{ color: 'var(--faint)', fontSize: 10 }}>{faDate(m.at)}</span>
+              {!m.del && <>
+                <button style={{ ...btnGhost, padding: '3px 10px', fontSize: 11, color: '#e88', borderColor: '#644' }} disabled={busy === 'chatDelete'}
+                  onClick={async () => { if (await post({ action: 'chatDelete', id: m.id }, 'پیام حذف شد')) loadView('world').then(setData) }}>حذف</button>
+                <button style={{ ...btnGhost, padding: '3px 10px', fontSize: 11 }} disabled={busy === 'chatMute'}
+                  onClick={async () => { const h = Number(prompt('چند ساعت سکوت؟ (۰ = رفعِ سکوت)', '24')); if (isNaN(h)) return; if (await post({ action: 'chatMute', userId: m.userId, hours: h }, h > 0 ? 'ساکت شد' : 'رفعِ سکوت شد')) loadView('world').then(setData) }}>🔇 سکوت</button>
+              </>}
+            </div>
+          ))}
+          {(data.chat?.mutes || []).length > 0 && <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--muted)', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            سکوت‌های فعال:
+            {data.chat.mutes.map((mu: any) => (
+              <span key={mu.userId} style={{ border: '1px solid var(--line2)', borderRadius: 10, padding: '2px 10px' }}>{mu.userId} تا {faDate(mu.until)}
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e88', fontSize: 11, marginInlineStart: 6 }} disabled={busy === 'chatMute'}
+                  onClick={async () => { if (await post({ action: 'chatMute', userId: mu.userId, hours: 0 }, 'رفعِ سکوت شد')) loadView('world').then(setData) }}>✕</button>
+              </span>
+            ))}
+          </div>}
+          <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 8 }}>knobهای ضدِ اسپم (طول/کول‌داون/سطح) در بخشِ «اقتصاد» است · هر حذف/سکوت در دفترِ ممیزی ثبت می‌شود.</div>
         </div>
         <div style={card}>
           <div style={sub}>🔥 نقشهٔ نفوذِ محله‌ها (بر اساسِ ارزشِ واقعیِ دارایی‌های بازیکنان)</div>

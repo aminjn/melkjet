@@ -57,6 +57,7 @@ import { grantCoins } from '@/app/lib/empire-store'
 import { setAssetFacade } from '@/app/lib/empire-store'   // فاز ۱۰۹
 import { grantPassCosmetics } from '@/app/lib/empire-store'   // فاز ۱۱۰ (CEO Pass)
 import { requireModule } from '@/app/lib/plan-gate'   // فاز ۱۱۰: مالکیتِ گذرنامه از پلنِ فعالِ سایت
+import { chatView, postChatMsg, reportChatMsg, type ChatCfg } from '@/app/lib/empire-chat'   // فاز ۱۱۱
 import { isValidFacade } from '@/app/lib/empire-visual'   // فاز ۱۰۹
 // فاز ۳۹ (سند ۲۶ فصل ۱۶ Cognitive AI): هوشِ سرمایه‌گذاری — ارزش‌گذاری/تصمیم‌یار/روندِ محله/سلامتِ مالی/اولویت‌ها؛ همه از دادهٔ واقعی.
 import { compStatsOf, valuationOf, decisionOf, marketIntelOf, cashflowOf, financialHealthOf, prioritiesOf, evalRules, RULE_TEMPLATES, tradeAskCheckOf, jvOfferCheckOf, crisisOf, rarityOf } from '@/app/lib/empire-intel'
@@ -2078,6 +2079,30 @@ export async function POST(req: NextRequest) {
     }
     // ══════ فاز ۱۰۲ — لایهٔ اجتماعی: دوستان + گفتگو + دوئل + خزانه/کنسرسیومِ اتحاد ══════
     // دوست = فالویِ دوطرفه؛ داوریِ دوئل‌های سررسیده هم همین‌جا (با جایزهٔ XP یک‌باره).
+    // 💬 گفت‌وگوی سراسریِ شهر (فاز ۱۱۱ — فصل‌های ۸/۱۰): polling سبک؛ ضدِ اسپم + نظارتِ ادمین
+    case 'chat': {
+      const cc = config().empire.chat as ChatCfg
+      if (!cc?.enabled) return NextResponse.json({ ok: true, enabled: false })
+      const e111 = await getEmpire(userId)
+      if (!e111) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      const lvl111 = empireLevel(e111.xp).level
+      return NextResponse.json({ ok: true, enabled: true, minLevel: cc.minLevel, canPost: lvl111 >= cc.minLevel, cooldownSec: cc.cooldownSec, maxLen: cc.maxLen, ...(await chatView(userId)) })
+    }
+    case 'chatSend': {
+      const cc = config().empire.chat as ChatCfg
+      if (!cc?.enabled) return NextResponse.json({ error: 'گفت‌وگوی شهر فعال نیست' }, { status: 400 })
+      const e111 = await getEmpire(userId)
+      if (!e111) return NextResponse.json({ error: 'اول امپراتوری‌ات را بساز' }, { status: 400 })
+      if (empireLevel(e111.xp).level < cc.minLevel) return NextResponse.json({ error: `گفت‌وگوی شهر از سطحِ ${cc.minLevel.toLocaleString('fa-IR')} باز می‌شود — چند قدم دیگر مانده` }, { status: 400 })
+      const r = await postChatMsg({ userId, no: e111.no, name: e111.name }, String(b.text || ''), cc)
+      if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+      return NextResponse.json({ ok: true, ...(await chatView(userId)) })
+    }
+    case 'chatReport': {
+      await reportChatMsg(userId, String(b.id || ''))
+      return NextResponse.json({ ok: true, ...(await chatView(userId)) })
+    }
+
     case 'social': {
       const soc = config().empire.social
       const e = await getEmpire(userId)

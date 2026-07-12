@@ -229,6 +229,12 @@ export default function EmpirePage() {
   const loadPmkt = async () => { const d = await api({ action: 'playerMarket' }); if (d) setPmkt(d) }
   // فاز ۱۰۲ (لایهٔ اجتماعی): دوستان (فالوی دوطرفه) + دوئلِ هفتگی + گفتگو
   const [soc, setSoc] = useState<any>(null)
+  const [cht, setCht] = useState<any>(null)      // فاز ۱۱۱: گفت‌وگوی سراسریِ شهر
+  const [chtTxt, setChtTxt] = useState('')
+  const loadCht = async () => {
+    const d = await fetch('/api/empire', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'chat' }) }).then(r => r.ok ? r.json() : null).catch(() => null)
+    if (d?.ok) setCht(d)
+  }
   const [dmWith, setDmWith] = useState<{ no: number; name: string } | null>(null)
   const [dmMsgs, setDmMsgs] = useState<any[]>([])
   const [dmText, setDmText] = useState('')
@@ -342,6 +348,7 @@ export default function EmpirePage() {
     if (step !== 'dash') return
     if (gtab === 'market' && !pmkt) loadPmkt()
     if (gtab === 'market' && mktV === 'players' && !soc) loadSoc()
+    if (gtab === 'market' && mktV === 'players' && !cht) loadCht()
     if (gtab === 'ranks' && !clanD) loadClan()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, gtab])
@@ -349,7 +356,7 @@ export default function EmpirePage() {
   // فاز ۱۰۲: «زندهٔ» بی‌سرور — تا وقتی بازارِ بازیکنان باز است، هر ۸ ثانیه عرضه/مزایده‌ها و هر ۶ ثانیه گفتگو تازه می‌شود
   useEffect(() => {
     if (gtab !== 'market' || mktV !== 'players') return
-    const t = setInterval(() => { loadPmkt() }, 8000)
+    const t = setInterval(() => { loadPmkt(); loadCht() }, 8000)
     return () => clearInterval(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gtab, mktV])
@@ -2589,6 +2596,39 @@ export default function EmpirePage() {
     </>}
 
     {mktV === 'players' && <>
+    {/* 💬 گفت‌وگوی سراسریِ شهر (فاز ۱۱۱ — فصل‌های ۸/۱۰): polling سبک؛ ضدِ اسپم + گزارش + نظارتِ ملک‌جت */}
+    {cht?.enabled && <div style={card}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <b style={{ fontSize: 14 }}>💬 گفت‌وگوی شهر</b>
+        <span style={{ fontSize: 11, color: 'var(--muted)' }}>حرفِ همهٔ فعالانِ شهر — با احترام؛ گزارش‌ها را ملک‌جت بررسی می‌کند</span>
+        <span style={{ flex: 1 }} />
+        <button style={{ ...btnGhost, padding: '4px 10px', fontSize: 11 }} disabled={busy} onClick={loadCht}>↻</button>
+      </div>
+      <div style={{ maxHeight: 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+        {(cht.msgs || []).length === 0 && <div style={{ fontSize: 12, color: 'var(--muted)' }}>هنوز حرفی زده نشده — تو شروع کن.</div>}
+        {(cht.msgs || []).map((m: any) => (
+          <div key={m.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12, padding: '5px 8px', borderRadius: 10, background: m.mine ? 'rgba(212,175,55,.07)' : 'var(--bg2)' }}>
+            <b style={{ color: m.mine ? 'var(--gold)' : 'var(--text)', whiteSpace: 'nowrap' }}>{m.name} <span style={{ color: 'var(--faint)', fontSize: 9.5, fontWeight: 400 }}>#{fa(m.no)}</span></b>
+            <span style={{ flex: 1, lineHeight: 1.8, wordBreak: 'break-word' }}>{m.text}</span>
+            <span style={{ color: 'var(--faint)', fontSize: 9 }}>{new Date(m.at).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}</span>
+            {!m.mine && <button title={m.reported ? 'گزارش شد' : 'گزارش به ملک‌جت'} style={{ background: 'none', border: 'none', cursor: m.reported ? 'default' : 'pointer', fontSize: 10, opacity: m.reported ? .9 : .45, color: m.reported ? '#e7a14a' : 'inherit' }} disabled={busy || m.reported}
+              onClick={async () => { const d = await api({ action: 'chatReport', id: m.id }); if (d?.ok) setCht({ ...cht, ...d }) }}>⚑</button>}
+          </div>
+        ))}
+      </div>
+      {cht.mutedUntil > 0 && <div style={{ fontSize: 11, color: '#e7a14a', marginTop: 8 }}>به تشخیصِ ملک‌جت فعلاً امکانِ ارسال نداری (تا {new Date(cht.mutedUntil).toLocaleDateString('fa-IR')}) — خواندن آزاد است.</div>}
+      {!cht.canPost && !cht.mutedUntil && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>ارسالِ پیام از سطحِ {fa(cht.minLevel)} باز می‌شود — خواندن آزاد است.</div>}
+      {cht.canPost && !cht.mutedUntil && <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+        <input value={chtTxt} onChange={e => setChtTxt(e.target.value)} maxLength={cht.maxLen || 240} placeholder={`پیام به شهر… (هر ${fa(cht.cooldownSec || 15)} ثانیه یکی)`}
+          style={{ flex: 1, background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 12.5, fontFamily: 'inherit', outline: 'none' }}
+          onKeyDown={async e => { if (e.key === 'Enter' && chtTxt.trim()) { const d = await api({ action: 'chatSend', text: chtTxt }); if (d?.ok) { setCht({ ...cht, ...d }); setChtTxt('') } } }} />
+        <button style={{ ...btn, padding: '8px 18px', fontSize: 12.5 }} disabled={busy || !chtTxt.trim()} onClick={async () => {
+          const d = await api({ action: 'chatSend', text: chtTxt })
+          if (d?.ok) { setCht({ ...cht, ...d }); setChtTxt('') }
+        }}>ارسال</button>
+      </div>}
+    </div>}
+
     {/* فاز ۱۰۲: دوستان (فالوی دوطرفه) + دوئلِ هفتگی + گفتگوی دوستان */}
     <div style={{ ...card, borderColor: '#7ac9a2' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>

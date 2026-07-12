@@ -198,7 +198,9 @@ export async function GET(req: NextRequest) {
     }
     const hoods = [...hoodMap.entries()].map(([hood, h]) => ({ hood, assets: h.assets, value: h.value, players: h.players.size })).sort((a, b) => b.value - a.value).slice(0, 30)
     const top = [...rows].sort((a, b) => b.score - a.score).slice(0, 10)
-    return NextResponse.json({ sync: { live, dead }, hoods, top })
+    // 💬 نظارتِ گفت‌وگوی شهر (فاز ۱۱۱): آخرین پیام‌ها + سکوت‌های فعال
+    const { chatModList } = await import('@/app/lib/empire-chat')
+    return NextResponse.json({ sync: { live, dead }, hoods, top, chat: await chatModList() })
   }
 
   if (view === 'liveops') {
@@ -301,6 +303,20 @@ export async function POST(req: NextRequest) {
     const made = await runEmpireBriefs()
     logAudit(await actor(), 'اجرای دستیِ نامهٔ روزانهٔ امپراتوری', `${made} نامه`)
     return NextResponse.json({ ok: true, made })
+  }
+  // ── 💬 نظارتِ گفت‌وگوی شهر (فاز ۱۱۱): حذفِ پیام + سکوتِ زمان‌دارِ کاربر ──
+  if (action === 'chatDelete') {
+    const { adminDeleteChatMsg } = await import('@/app/lib/empire-chat')
+    await adminDeleteChatMsg(String(b.id || ''))
+    logAudit(await actor(), 'حذفِ پیامِ گفت‌وگوی شهر', String(b.id || ''))
+    return NextResponse.json({ ok: true })
+  }
+  if (action === 'chatMute') {
+    const { adminMuteChat } = await import('@/app/lib/empire-chat')
+    const hours = Number(b.hours) || 0
+    await adminMuteChat(String(b.userId || ''), hours)
+    logAudit(await actor(), hours > 0 ? 'سکوتِ کاربر در گفت‌وگوی شهر' : 'رفعِ سکوتِ گفت‌وگوی شهر', `${b.userId} · ${hours} ساعت`)
+    return NextResponse.json({ ok: true })
   }
   // ── 🎨 فروشگاهِ سازندگان (فاز ۱۰۷): تصمیمِ انسانی روی طرحِ بازیکن — تأیید = فروش در فروشگاهِ ظاهری ──
   if (action === 'creatorDecide') {
