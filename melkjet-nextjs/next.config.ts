@@ -7,6 +7,8 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [{ protocol: "https", hostname: "**.divarcdn.com" }],
     qualities: [60, 75],
+    // فاز ۹۷: AVIF ~۳۰-۴۰٪ کوچک‌تر از webp؛ فقط بارِ اولِ هر تصویر encode می‌شود (کشِ دیسک)
+    formats: ["image/avif", "image/webp"],
     minimumCacheTTL: 604800, // ۷ روز
   },
   // Cache headers to stop the CDN serving stale HTML after a new build (which

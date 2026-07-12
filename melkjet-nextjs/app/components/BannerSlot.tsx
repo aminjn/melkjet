@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { previewSrc } from '@/app/lib/img-preview'
 
 interface PublicBanner {
   id: string
@@ -11,6 +12,7 @@ interface PublicBanner {
 
 export default function BannerSlot({ placement }: { placement: string }) {
   const [banner, setBanner] = useState<PublicBanner | null>(null)
+  const [rawImg, setRawImg] = useState(false) // اگر بهینه‌ساز در دسترس نبود → آدرسِ اصلی
 
   useEffect(() => {
     let alive = true
@@ -52,9 +54,11 @@ export default function BannerSlot({ placement }: { placement: string }) {
       }}
     >
       <img
-        src={banner.image}
+        src={rawImg ? banner.image : previewSrc(banner.image, 1080)}
         alt={banner.title}
         loading="lazy"
+        decoding="async"
+        onError={() => { if (!rawImg) setRawImg(true) }}
         style={{
           display: 'block',
           width: '100%',

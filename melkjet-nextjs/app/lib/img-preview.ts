@@ -6,10 +6,12 @@
 // فقط دامنه‌های مجاز در next.config (divarcdn) بازنویسی می‌شوند؛ بقیه دست‌نخورده.
 
 const DIVAR_CDN = /^https:\/\/([a-z0-9-]+\.)+divarcdn\.com\//i
+// آپلودهای خودمان (بنر/مدیا) — مسیرِ لوکال، بدونِ نیاز به remotePatterns
+const LOCAL_MEDIA = /^\/api\/media\//
 
 // w باید عضو deviceSizes/imageSizes پیش‌فرض Next باشد و q عضو qualities در next.config
-export function previewSrc(url: string | undefined, w: 384 | 640 = 640, q: 60 | 75 = 60): string {
+export function previewSrc(url: string | undefined, w: 384 | 640 | 1080 = 640, q: 60 | 75 = 60): string {
   if (!url) return ''
-  if (!DIVAR_CDN.test(url)) return url
+  if (!DIVAR_CDN.test(url) && !LOCAL_MEDIA.test(url)) return url
   return `/_next/image?url=${encodeURIComponent(url)}&w=${w}&q=${q}`
 }
