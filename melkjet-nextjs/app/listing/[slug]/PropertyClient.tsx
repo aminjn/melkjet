@@ -2,7 +2,6 @@
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import Nav from '@/app/components/Nav'
-import PropertyMap from '@/app/components/PropertyMap'
 import PromoBadge from '@/app/components/PromoBadge'
 import CompareButton from '@/app/components/CompareButton'
 import LikeHeart, { useFav } from '@/app/components/home/LikeHeart'
@@ -67,7 +66,6 @@ export default function PropertyClient({ id }: { id: string }) {
   const [facts, setFacts] = useState<Fact[]>([])
   const [aiAmenities, setAiAmenities] = useState<string[]>([])
   const [divarAmenities, setDivarAmenities] = useState<string[]>([])
-  const [geo, setGeo] = useState<{ lat: number; lng: number } | null>(null)
   const [nearby, setNearby] = useState<{ type?: string; name?: string; time: string }[]>([])
   const [analysis, setAnalysis] = useState<Analysis | null>(null)
   const [market, setMarket] = useState<{ stats: { avg: number; count: number; trend: { month: string; avg: number }[] } | null; value?: number } | null>(null)
@@ -131,7 +129,6 @@ export default function PropertyClient({ id }: { id: string }) {
       const g = it.meta?.['__gallery']
       if (g) { const imgs = g.split(/[\n,]+/).map(s => s.trim()).filter(Boolean); if (imgs.length) setGallery(imgs) }
       const mlat = Number(it.meta?.['__lat']); const mlng = Number(it.meta?.['__lng'])
-      if (mlat && mlng) setGeo({ lat: mlat, lng: mlng })
       // real market stats (price/m² of the neighbourhood, from our scraped data)
       const mq = new URLSearchParams({ city: it.meta?.['شهر'] || '', district: it.meta?.['محله'] || '', price: it.price || '', title: it.title || '' })
       fetch(`/api/market/stats?${mq}`).then(r => r.ok ? r.json() : null).then(setMarket).catch(() => {})
@@ -154,7 +151,6 @@ export default function PropertyClient({ id }: { id: string }) {
           if (e.gallery?.length) setGallery(e.gallery)
           if (e.facts?.length) setFacts(e.facts)
           if (e.amenities?.length) setDivarAmenities(e.amenities)
-          if (e.geo) setGeo(e.geo)
           if (e.nearby?.length) setNearby(e.nearby)
           // اگر دسترسی‌ها در کش نبود ولی مختصات داریم، همان‌جا با نشان (فاصله/زمانِ واقعی) بساز.
           else {
@@ -443,14 +439,6 @@ export default function PropertyClient({ id }: { id: string }) {
                   </div>
                 </div>
               ) : null}
-
-              {/* map */}
-              {geo && (
-                <div style={card}>
-                  <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>موقعیت روی نقشه</div>
-                  <PropertyMap lat={geo.lat} lng={geo.lng} />
-                </div>
-              )}
 
               {/* loan calculator */}
               {item.price && (

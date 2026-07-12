@@ -2,7 +2,7 @@
 import { useEffect } from 'react'
 
 // موقعیتِ کاربر را خودکار تشخیص می‌دهد و در کوکیِ mj_loc ذخیره می‌کند (چه لاگین چه نه).
-// هر بار که اپ باز می‌شود دوباره چک می‌شود؛ صفحاتِ پابلیک بر اساس آن مرتب‌سازی می‌کنند.
+// فقط بارِ اول (تا وقتی کوکی معتبر است) گرفته می‌شود؛ صفحاتِ پابلیک بر اساس آن مرتب‌سازی می‌کنند.
 
 export function readLoc(): { city?: string; neighborhood?: string; lat?: number; lng?: number } | null {
   if (typeof document === 'undefined') return null
@@ -14,6 +14,9 @@ export function readLoc(): { city?: string; neighborhood?: string; lat?: number;
 export default function LocationDetector() {
   useEffect(() => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) return
+    // فاز ۹۳ (فیدبک: «هر سری دارد از طرف لوکیشن می‌گیرد»): فقط وقتی کوکی نداریم یک‌بار می‌گیریم؛
+    // کوکیِ mj_loc تا ۳۰ روز معتبر است و با انقضایش دوبارهٔ بعدی خودکار انجام می‌شود.
+    if (readLoc()?.lat) return
     let done = false
     const ok = async (pos: GeolocationPosition) => {
       if (done) return; done = true
