@@ -1,17 +1,11 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import BottomNav from './components/BottomNav'
-import PWAInstall from './components/PWAInstall'
 import SessionKeeper from './components/SessionKeeper'
-import ImpersonationBar from './components/ImpersonationBar'
 import LocationDetector from './components/LocationDetector'
 import Tracker from './components/Tracker'
 import AuthModal from './components/AuthModal'
-import SuspensionGate from './components/SuspensionGate'
-import PlanLock from './components/PlanLock'
-import CompareBar from './components/CompareBar'
-import SupportLauncher from './components/SupportLauncher'
-import LegalAssistant from './components/LegalAssistant'
+import DeferredShell from './components/DeferredShell'
 
 export const metadata: Metadata = {
   title: 'ملک‌جت - اکوسیستم هوشمند املاک',
@@ -52,6 +46,7 @@ export default function RootLayout({
         {/* فونت‌ها کاملاً لوکال‌اند (public/fonts) — هیچ وابستگی به گوگل. @font-face در globals.css */}
         <link rel="preload" href="/fonts/Vazirmatn-Regular.woff2" as="font" type="font/woff2" crossOrigin="" />
         <link rel="preload" href="/fonts/Vazirmatn-Bold.woff2" as="font" type="font/woff2" crossOrigin="" />
+        <link rel="preload" href="/fonts/Vazirmatn-ExtraBold.woff2" as="font" type="font/woff2" crossOrigin="" />
         <link rel="apple-touch-icon" href="/icon-192.png" />
       </head>
       <body style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
@@ -59,15 +54,10 @@ export default function RootLayout({
         <LocationDetector />
         <Tracker />
         {children}
-        <ImpersonationBar />
         <AuthModal />
-        <SuspensionGate />
-        <PlanLock />
-        <CompareBar />
-        <SupportLauncher />
-        <LegalAssistant />
         <BottomNav />
-        <PWAInstall />
+        {/* فاز ۱۰۸: هفت overlay غیرِحیاتی بعد از idle/اولین تعامل mount می‌شوند (TBT موبایل) */}
+        <DeferredShell />
       </body>
     </html>
   )
