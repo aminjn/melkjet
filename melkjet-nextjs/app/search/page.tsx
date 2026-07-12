@@ -232,9 +232,13 @@ function SearchPageInner() {
     // بعد کلِ استخر در پس‌زمینه برای فیلترها/نقشه. تا وقتی فهرستِ کامل نیامده، همان ۶۰ تا نمایش داده می‌شود.
     let gotFull = false
     fetchContent('listing', undefined, 60, true).then((d) => { if (alive && !gotFull) { setProperties(d.map(toProperty)); setLoading(false) } })
-    fetchContent('listing', undefined, 1000, true).then((d) => { if (alive) { gotFull = true; setProperties(d.map(toProperty)); setLoading(false) } })
+    // فاز ۹۶ (TBT): دانلود/parse فهرستِ کامل با LCP رقابت نکند — چند ثانیه بعد از رندرِ اول
+    const t96 = setTimeout(() => {
+      if (!alive) return
+      fetchContent('listing', undefined, 1000, true).then((d) => { if (alive) { gotFull = true; setProperties(d.map(toProperty)); setLoading(false) } })
+    }, 2500)
     fetch('/api/promotions?slot=search_top', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : { items: [] })).then((d) => { if (alive) setPromoted(((d.items || []) as ContentItem[]).map(toProperty)) }).catch(() => {})
-    return () => { alive = false }
+    return () => { alive = false; clearTimeout(t96) }
   }, [])
 
   // با هر تغییرِ نتیجه‌ها از اول ۲۴ تا؛ نگهبانِ انتهای لیست خودکار ۲۴ تای بعدی را می‌آورد
@@ -507,7 +511,7 @@ function SearchPageInner() {
 
           {/* فاز ۹۳: دکمهٔ «نزدیکِ من» حذف شد — موقعیتِ تشخیصیِ کاربر نادقیق بود و جای غلط نشان می‌داد */}
           <NeighborhoodPicker value={hood} onChange={setHood} city={selectedCity} fallback={hoodOptions.map(o => o.h)} />
-          <select className="mjs-hide-sm" value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ height: 48, padding: '0 12px', borderRadius: 12, background: 'var(--surface)', border: '1px solid var(--line2)', color: 'var(--text)', fontSize: 13.5, cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }}>
+          <select aria-label="مرتب‌سازی" className="mjs-hide-sm" value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ height: 48, padding: '0 12px', borderRadius: 12, background: 'var(--surface)', border: '1px solid var(--line2)', color: 'var(--text)', fontSize: 13.5, cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }}>
             <option>پیشنهاد ملک‌جت</option><option>ارزان‌ترین</option><option>گران‌ترین</option><option>جدیدترین</option>
           </select>
         </div>
@@ -533,7 +537,7 @@ function SearchPageInner() {
         {/* چیپ‌های تشخیص AI — فقط وقتی چیزی واقعاً از متن تشخیص داده شده */}
         {aiChips.length > 0 && (
           <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 12px', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ fontSize: 11.5, color: 'var(--faint)', marginLeft: 4 }}>تشخیص هوشمند:</span>
+            <span style={{ fontSize: 11.5, color: 'var(--muted)', marginLeft: 4 }}>تشخیص هوشمند:</span>
             {aiChips.map(tag => (
               <span key={tag.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 11px', borderRadius: 999, background: 'var(--goldDim)', border: '1px solid rgba(201,168,76,0.28)', fontSize: 12.5, color: 'var(--text)' }}>
                 <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{tag.label}:</span>
@@ -556,7 +560,7 @@ function SearchPageInner() {
                 ))}
               </div>
               <span style={{ ...lab, marginInlineStart: 12 }}>نوع ملک:</span>
-              <select value={kind} onChange={e => setKind(e.target.value)} style={{ height: 36, padding: '0 12px', borderRadius: 9, background: 'var(--bg)', border: '1px solid var(--line2)', color: 'var(--text)', fontSize: 13, cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }}>
+              <select aria-label="نوع ملک" value={kind} onChange={e => setKind(e.target.value)} style={{ height: 36, padding: '0 12px', borderRadius: 9, background: 'var(--bg)', border: '1px solid var(--line2)', color: 'var(--text)', fontSize: 13, cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }}>
                 <option value="">همه</option>
                 {PROPERTY_KINDS.map(k => <option key={k} value={k}>{k}</option>)}
               </select>
@@ -566,24 +570,24 @@ function SearchPageInner() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={lab}>قیمت:</span>
-                <select value={priceMin || ''} onChange={e => setPriceMin(+e.target.value || 0)} style={selInput}>
+                <select aria-label="حداقل قیمت" value={priceMin || ''} onChange={e => setPriceMin(+e.target.value || 0)} style={selInput}>
                   <option value="">از (حداقل)</option>
                   {PRICE_OPTS.map(v => <option key={v} value={v}>از {priceLabel(v)}</option>)}
                 </select>
-                <span style={{ color: 'var(--faint)' }}>تا</span>
-                <select value={priceMax < PRICE_MAX ? priceMax : ''} onChange={e => { const v = +e.target.value || 0; setPriceMax(v > 0 ? v : PRICE_MAX) }} style={selInput}>
+                <span style={{ color: 'var(--muted)' }}>تا</span>
+                <select aria-label="حداکثر قیمت" value={priceMax < PRICE_MAX ? priceMax : ''} onChange={e => { const v = +e.target.value || 0; setPriceMax(v > 0 ? v : PRICE_MAX) }} style={selInput}>
                   <option value="">بدون سقف</option>
                   {PRICE_OPTS.map(v => <option key={v} value={v}>تا {priceLabel(v)}</option>)}
                 </select>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={lab}>متراژ:</span>
-                <select value={areaMin || ''} onChange={e => setAreaMin(+e.target.value || 0)} style={selInput}>
+                <select aria-label="حداقل متراژ" value={areaMin || ''} onChange={e => setAreaMin(+e.target.value || 0)} style={selInput}>
                   <option value="">از (حداقل)</option>
                   {AREA_OPTS.map(v => <option key={v} value={v}>از {toPersianDigits(v)} متر</option>)}
                 </select>
-                <span style={{ color: 'var(--faint)' }}>تا</span>
-                <select value={areaMax || ''} onChange={e => setAreaMax(+e.target.value || 0)} style={selInput}>
+                <span style={{ color: 'var(--muted)' }}>تا</span>
+                <select aria-label="حداکثر متراژ" value={areaMax || ''} onChange={e => setAreaMax(+e.target.value || 0)} style={selInput}>
                   <option value="">تا (حداکثر)</option>
                   {AREA_OPTS.map(v => <option key={v} value={v}>تا {toPersianDigits(v)} متر</option>)}
                 </select>
@@ -602,14 +606,14 @@ function SearchPageInner() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={lab}>حداقل طبقه:</span>
-                <select value={floorMin || ''} onChange={e => setFloorMin(+e.target.value || 0)} style={selInput}>
+                <select aria-label="حداقل طبقه" value={floorMin || ''} onChange={e => setFloorMin(+e.target.value || 0)} style={selInput}>
                   <option value="">همه</option>
                   {FLOOR_OPTS.map(v => <option key={v} value={v}>طبقه {toPersianDigits(v)} به بالا</option>)}
                 </select>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={lab}>ساخت از سال:</span>
-                <select value={yearMin || ''} onChange={e => setYearMin(+e.target.value || 0)} style={selInput}>
+                <select aria-label="حداقل سال ساخت" value={yearMin || ''} onChange={e => setYearMin(+e.target.value || 0)} style={selInput}>
                   <option value="">همه</option>
                   {YEAR_OPTS.map(v => <option key={v} value={v}>{toPersianDigits(v)} به بعد</option>)}
                 </select>
@@ -632,15 +636,15 @@ function SearchPageInner() {
       </div>
 
       {/* محتوای اصلی */}
-      <div className="mjs-grid" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 48px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, alignItems: 'start', minHeight: 'calc(100vh - 200px)' }}>
+      <main className="mjs-grid" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 48px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, alignItems: 'start', minHeight: 'calc(100vh - 200px)' }}>
         <div style={{ paddingTop: 20, paddingLeft: 12 }}>
           {/* روی موبایل نقشه پیش‌فرض نشان داده نمی‌شود (فضای آگهی‌ها را نمی‌گیرد)؛ با دکمهٔ
               شناورِ «نقشه» به‌صورتِ تمام‌صفحه باز می‌شود — مثلِ دیوار. */}
           {/* «آگهی جدید اومد خبرم کن» */}
           <NotifyBar count={shownProperties.length} criteria={{ city: selectedCity, area: mapArea || prefArea, deal: (dealType === 'پیش‌فروش' ? 'presale' : (dealType === 'اجاره' || dealType === 'رهن') ? 'rent' : 'sale'), kind: fKind, priceMax: fBudgetMax }} />
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-            <div style={{ fontSize: 14, color: 'var(--muted)' }}><span style={{ color: 'var(--gold)', fontWeight: 800, fontSize: 16 }}>{toPersianDigits(shownProperties.length)}</span> ملک پیدا شد{selectedCity ? <span style={{ color: 'var(--faint)' }}> · {selectedCity}</span> : ''}</div>
-            <div style={{ fontSize: 13, color: 'var(--faint)' }}>مرتب‌سازی: <span style={{ color: 'var(--muted)' }}>{sortBy}</span></div>
+            <div style={{ fontSize: 14, color: 'var(--muted)' }}><span style={{ color: 'var(--gold)', fontWeight: 800, fontSize: 16 }}>{toPersianDigits(shownProperties.length)}</span> ملک پیدا شد{selectedCity ? <span style={{ color: 'var(--muted)' }}> · {selectedCity}</span> : ''}</div>
+            <div style={{ fontSize: 13, color: 'var(--muted)' }}>مرتب‌سازی: <span style={{ color: 'var(--text)' }}>{sortBy}</span></div>
           </div>
 
           {(loading || shownProperties.length === 0) && (
@@ -682,8 +686,8 @@ function SearchPageInner() {
                       </div>
                       <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--gold)', marginBottom: 10 }}>{p.price}<span style={{ fontSize: 11, fontWeight: 500, color: 'var(--muted)', marginRight: 4 }}>تومان</span></div>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center', paddingTop: 10, borderTop: '1px solid var(--line)', fontSize: 12, color: 'var(--muted)' }}>
-                        <span>{p.size} م²</span><span style={{ color: 'var(--faint)' }}>·</span>
-                        <span>{p.beds} خواب</span><span style={{ color: 'var(--faint)' }}>·</span>
+                        <span>{p.size} م²</span><span aria-hidden="true" style={{ color: 'var(--muted)' }}>·</span>
+                        <span>{p.beds} خواب</span><span aria-hidden="true" style={{ color: 'var(--muted)' }}>·</span>
                         <span>ساخت {p.year}</span>
                         <div style={{ flex: 1 }} />
                         <CompareButton entry={{ kind: 'item', id: String(p.id), title: p.title, photo: p.image, subtitle: p.location }} />
@@ -709,7 +713,7 @@ function SearchPageInner() {
           <style>{`@media (max-width: 768px) { .map-panel { display: none !important; } }`}</style>
           <SearchMap view={mapView} pins={pins} city={mapArea || selectedCity || userArea} />
         </div>
-      </div>
+      </main>
 
       {/* موبایل: دکمهٔ شناورِ «نقشه» (فقط وقتی نقشه بسته است) */}
       {!mapOpenMobile && (
@@ -875,7 +879,7 @@ function SearchMap({ view, pins, city }: { view: MapView; pins: { id: string; la
       style={{ position: 'relative', width: '100%', height: '100%', borderRadius: 16, overflow: 'hidden', border: '1px solid var(--line)', background: 'var(--bg2)', cursor: drag.current ? 'grabbing' : 'grab', userSelect: 'none', touchAction: 'none' }}>
       <div style={{ position: 'absolute', inset: 0, transform: `translate(${off.x}px,${off.y}px)` }}>
         {src && !err ? (
-          <img src={src} alt="نقشهٔ منطقه" draggable={false} onError={() => setErr(true)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', pointerEvents: 'none' }} />
+          <img src={src} alt="نقشهٔ منطقه" draggable={false} loading="lazy" decoding="async" onError={() => setErr(true)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', pointerEvents: 'none' }} />
         ) : (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: 'var(--muted)', fontSize: 13, padding: 24, lineHeight: 1.9 }}>
             {err ? 'نقشه به «کلید نقشهٔ نشان» (web.…) نیاز دارد — پنل سوپرادمین → اتصال‌ها → نشان → کلید نقشه' : 'برای نمایشِ نقشه، موقعیتِ شما یا مختصاتِ آگهی‌ها لازم است.'}

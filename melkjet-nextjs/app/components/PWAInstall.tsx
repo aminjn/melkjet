@@ -62,11 +62,13 @@ export default function PWAInstall() {
       {/* Close */}
       <button
         onClick={dismiss}
+        aria-label="بستن"
         style={{
-          position: 'absolute', top: 10, left: 12,
+          position: 'absolute', top: 6, left: 8,
+          width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'none', border: 'none',
           color: 'var(--muted)', cursor: 'pointer',
-          fontSize: 18, lineHeight: 1, padding: 2,
+          fontSize: 18, lineHeight: 1, padding: 0,
         }}
       >×</button>
 
