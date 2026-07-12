@@ -3350,12 +3350,13 @@ function NegotiationConfig() {
 function TrackerConfig() {
   const [f, setF] = useState({ enabled: false, template: '', pattern: '', patternVar: 'message', delayMin: 2, throttleHours: 6, paths: '', shortenerKey: '', siteBase: '', shortenerDomain: '' })
   const [st, setSt] = useState<any>(null)
+  const [visitors, setVisitors] = useState<any[]>([])   // فاز ۸۸: چه کسی کجا رفت
   const [shMasked, setShMasked] = useState('')
   const [links, setLinks] = useState<any[]>([])
   const [linkSt, setLinkSt] = useState<any>(null)
   const [msg, setMsg] = useState('')
   const [refreshing, setRefreshing] = useState(false)
-  const load = (refresh = false) => { if (refresh) setRefreshing(true); return fetch('/api/admin/tracker-config' + (refresh ? '?refresh=1' : '')).then(r => r.ok ? r.json() : null).then(d => { if (d) { setF(p => ({ ...p, enabled: !!d.enabled, template: d.template || '', pattern: d.pattern || '', patternVar: d.patternVar || 'message', delayMin: d.delayMin ?? 2, throttleHours: d.throttleHours ?? 6, paths: d.paths || '', shortenerKey: '', siteBase: d.shortener?.siteBase || 'https://melkjet.com', shortenerDomain: d.shortener?.domain || '' })); setSt(d.stats); setShMasked(d.shortener?.masked || ''); setLinks(d.links || []); setLinkSt(d.linkStats) } }).finally(() => setRefreshing(false)) }
+  const load = (refresh = false) => { if (refresh) setRefreshing(true); return fetch('/api/admin/tracker-config' + (refresh ? '?refresh=1' : '')).then(r => r.ok ? r.json() : null).then(d => { if (d) { setF(p => ({ ...p, enabled: !!d.enabled, template: d.template || '', pattern: d.pattern || '', patternVar: d.patternVar || 'message', delayMin: d.delayMin ?? 2, throttleHours: d.throttleHours ?? 6, paths: d.paths || '', shortenerKey: '', siteBase: d.shortener?.siteBase || 'https://melkjet.com', shortenerDomain: d.shortener?.domain || '' })); setSt(d.stats); setVisitors(d.visitors || []); setShMasked(d.shortener?.masked || ''); setLinks(d.links || []); setLinkSt(d.linkStats) } }).finally(() => setRefreshing(false)) }
   useEffect(() => { load() }, [])
   const save = async () => { setMsg(''); const r = await fetch('/api/admin/tracker-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(f) }); const d = await r.json(); setMsg(r.ok ? '✓ ذخیره شد' : `⚠ ${d.error || 'خطا'}`); if (r.ok) load() }
   const inp: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
@@ -3452,18 +3453,30 @@ function TrackerConfig() {
         )}
       </Card>
 
-      {st?.recent?.length > 0 && (
+      {/* فاز ۸۸ (فیدبک: «جایی نشان نمی‌دهد کدام کاربر کدام صفحه‌ها رفته»): تاریخچهٔ صفحه‌به‌صفحهٔ هر بازدیدکننده */}
+      {visitors.length > 0 && (
         <Card>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>آخرین بازدیدکننده‌ها</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {st.recent.map((v: any) => (
-              <div key={v.vid} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, background: 'var(--bg2)', borderRadius: 9, padding: '8px 11px', flexWrap: 'wrap' }}>
-                <div style={{ fontSize: 12.5, minWidth: 0, flex: 1 }}>
-                  <span style={{ color: v.phone ? '#5fd98a' : 'var(--faint)', fontWeight: 700, direction: 'ltr', display: 'inline-block' }}>{v.phone || `ناشناس‌${v.vid}`}</span>
-                  <span style={{ color: 'var(--muted)', marginInlineStart: 8 }}>· {v.lastTitle || '—'}</span>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>👣 چه کسی کجا رفت — بازدیدکننده‌های اخیر</div>
+          <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 10 }}>روی هر نفر بزن تا صفحه‌به‌صفحه ببینی کجاها رفته. کاربرِ لاگین‌کرده با شماره‌اش دیده می‌شود؛ همین تاریخچه در کشوی هر کاربر (منوی کاربران) هم هست.</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 440, overflowY: 'auto' }}>
+            {visitors.map((v: any) => (
+              <details key={v.vid} style={{ background: 'var(--bg2)', borderRadius: 9, padding: '8px 11px' }}>
+                <summary style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', listStyle: 'none' }}>
+                  <span style={{ fontSize: 12.5, color: v.phone ? '#5fd98a' : 'var(--faint)', fontWeight: 700, direction: 'ltr' }}>{v.phone || `ناشناس‌${v.vid}`}</span>
+                  <span style={{ fontSize: 11, color: 'var(--muted)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.events?.[0]?.title || v.events?.[0]?.url || '—'}</span>
+                  <span style={{ fontSize: 10.5, color: 'var(--faint)', whiteSpace: 'nowrap' }}>{fa(v.total)} بازدید · {new Date(v.lastSeen).toLocaleString('fa-IR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                </summary>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 8, borderTop: '1px solid var(--line)', paddingTop: 8 }}>
+                  {(v.events || []).map((e88: any, i: number) => (
+                    <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 11.5, flexWrap: 'wrap' }}>
+                      <span style={{ color: 'var(--faint)', whiteSpace: 'nowrap', fontSize: 10 }}>{new Date(e88.at).toLocaleString('fa-IR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                      <span style={{ flex: 1, minWidth: 120 }}>{e88.title || '—'}</span>
+                      <a href={e88.url} target="_blank" rel="noreferrer" dir="ltr" style={{ color: 'var(--gold)', fontSize: 10, textDecoration: 'none', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e88.url}</a>
+                    </div>
+                  ))}
+                  {v.total > (v.events || []).length && <div style={{ fontSize: 10, color: 'var(--faint)' }}>… و {fa(v.total - v.events.length)} بازدیدِ قدیمی‌تر</div>}
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--faint)' }}>{fa(v.events)} بازدید{v.sentCount ? ` · ${fa(v.sentCount)} پیامک` : ''}</div>
-              </div>
+              </details>
             ))}
           </div>
         </Card>
@@ -4318,6 +4331,9 @@ function RefetchIdentityBtn({ phone, onDone }: { phone: string; onDone: (acc: an
 
 function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete, onSuspend, onAccountUpdate }: { user: any; roles: IdName[]; plans: PlanOpt[]; onClose: () => void; onPatch: (phone: string, patch: any) => void; onDelete: (phone: string) => void; onSuspend: (phone: string, suspend: boolean) => void; onAccountUpdate: (acc: any) => void }) {
   const [detail, setDetail] = useState<any>(null)
+  // فاز ۸۸: تاریخچهٔ بازدیدِ همین کاربر از ترکر (تنبل)
+  const [visits88, setVisits88] = useState<any>(null)
+  useEffect(() => { let alive = true; fetch(`/api/admin/tracker-config?phone=${encodeURIComponent(user.phone)}`).then(r => r.ok ? r.json() : null).then(d => { if (alive && d?.ok) setVisits88(d.visits) }).catch(() => {}); return () => { alive = false } }, [user.phone])
   const [edit, setEdit] = useState({ name: user.name || '', role: user.role || '', plan: user.plan || '' })
   const [saved, setSaved] = useState(false)
   // فاز ۵۶: هدیهٔ پلنِ زمان‌دار — هر پلن، هر مدت، رایگان
@@ -4378,6 +4394,22 @@ function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete, onSuspend,
               <div key={l} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: 13, minWidth: 0 }}><div style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l}</div><div style={{ fontSize: 20, fontWeight: 900, color: 'var(--gold)', marginTop: 4, overflowWrap: 'anywhere' }}>{fa(v || 0)}</div></div>
             ))}
           </div>
+
+          {/* فاز ۸۸: کدام صفحه‌ها را دیده — از ترکرِ بازدید (کوکیِ دائمی + اتصالِ شماره پس از لاگین) */}
+          <details style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: '11px 13px' }}>
+            <summary style={{ cursor: 'pointer', fontSize: 13, fontWeight: 800 }}>👣 بازدیدهای سایت {visits88 ? <span style={{ fontSize: 11, color: 'var(--faint)', fontWeight: 600 }}>({(visits88.total || 0).toLocaleString('fa-IR')} بازدیدِ ثبت‌شده{visits88.lastSeen ? ` · آخرین: ${new Date(visits88.lastSeen).toLocaleString('fa-IR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ''})</span> : <span style={{ fontSize: 11, color: 'var(--faint)', fontWeight: 600 }}>(در حال بارگذاری…)</span>}</summary>
+            {visits88 && ((visits88.events || []).length === 0
+              ? <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>بازدیدی به این شماره وصل نشده — اتصالِ شماره به کوکیِ ترکر از لحظهٔ اولین لاگینِ کاربر برقرار می‌شود؛ بازدیدهای قبل از لاگین «ناشناس» می‌مانند (در منوی «ترکر» دیده می‌شوند).</div>
+              : <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8, maxHeight: 260, overflowY: 'auto' }}>
+                {(visits88.events || []).map((e88: any, i88: number) => (
+                  <div key={i88} style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 11.5, flexWrap: 'wrap', borderBottom: '1px solid var(--line)', paddingBottom: 3 }}>
+                    <span style={{ color: 'var(--faint)', whiteSpace: 'nowrap', fontSize: 10 }}>{new Date(e88.at).toLocaleString('fa-IR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                    <span style={{ flex: 1, minWidth: 120 }}>{e88.title || '—'}</span>
+                    <a href={e88.url} target="_blank" rel="noreferrer" dir="ltr" style={{ color: 'var(--gold)', fontSize: 10, textDecoration: 'none', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e88.url}</a>
+                  </div>
+                ))}
+              </div>)}
+          </details>
 
           {/* هویتِ شاهکار — همهٔ فیلدهای برگشتی از سامانه */}
           {(() => {

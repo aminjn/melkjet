@@ -101,6 +101,24 @@ export async function markSent(vid: string, ok: boolean): Promise<void> {
   })
 }
 
+// فاز ۸۸ (فیدبک: «ترکر جایی نشان نمی‌دهد کدام کاربر کدام صفحه‌ها رفته»): فهرستِ بازدیدکننده‌های اخیر
+// با تاریخچهٔ صفحه‌هایشان — برای نمای ادمین. مرتب بر اساسِ آخرین بازدید؛ رویدادها از انتها (تازه‌ترین‌ها).
+export async function recentVisitors(limit = 60, eventsTail = 25): Promise<Array<{ vid: string; phone?: string; firstSeen: number; lastSeen: number; total: number; events: TrackEvent[] }>> {
+  const db = await load()
+  return Object.values(db.visitors)
+    .sort((a, b) => b.lastSeen - a.lastSeen)
+    .slice(0, Math.max(1, limit))
+    .map(v => ({ vid: v.vid.slice(0, 10), phone: v.phone, firstSeen: v.firstSeen, lastSeen: v.lastSeen, total: v.events.length, events: v.events.slice(-eventsTail).reverse() }))
+}
+
+// تاریخچهٔ بازدیدِ یک کاربرِ مشخص (همهٔ vidهای وصل‌شده به این شماره) — برای کشوی کاربر.
+export async function visitsOfPhone(phone: string, eventsTail = 40): Promise<{ total: number; lastSeen: number | null; events: Array<TrackEvent & { vid: string }> }> {
+  const db = await load()
+  const mine = Object.values(db.visitors).filter(v => v.phone === phone)
+  const events = mine.flatMap(v => v.events.map(e => ({ ...e, vid: v.vid.slice(0, 8) }))).sort((a, b) => b.at - a.at).slice(0, eventsTail)
+  return { total: mine.reduce((s2, v) => s2 + v.events.length, 0), lastSeen: mine.length ? Math.max(...mine.map(v => v.lastSeen)) : null, events }
+}
+
 export async function stats() {
   const db = await load()
   const vs = Object.values(db.visitors)
