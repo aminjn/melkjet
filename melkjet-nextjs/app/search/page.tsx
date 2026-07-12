@@ -219,6 +219,9 @@ function SearchPageInner() {
 
   const [hoveredCard, setHoveredCard] = useState<string | null>(null)
   const [properties, setProperties] = useState<PropertyT[]>([])
+  // فاز ۹۲ (پرفورمنس: رندرِ ۱۰۰۰ کارت + ۱۰۰۰ تصویرِ background = ۴۴MB و LCP ~۱۰ث): رندرِ تدریجیِ ۲۴تایی
+  const [visN, setVisN] = useState(24)
+  const moreRef = useRef<HTMLDivElement>(null)
   const [promoted, setPromoted] = useState<PropertyT[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -227,6 +230,16 @@ function SearchPageInner() {
     fetchContent('listing', undefined, 1000, true).then((d) => { if (alive) { setProperties(d.map(toProperty)); setLoading(false) } })   // کلِ استخر (slim) — نه فقط ۸۰ تای آخر
     fetch('/api/promotions?slot=search_top', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : { items: [] })).then((d) => { if (alive) setPromoted(((d.items || []) as ContentItem[]).map(toProperty)) }).catch(() => {})
     return () => { alive = false }
+  }, [])
+
+  // با هر تغییرِ نتیجه‌ها از اول ۲۴ تا؛ نگهبانِ انتهای لیست خودکار ۲۴ تای بعدی را می‌آورد
+  useEffect(() => { setVisN(24) }, [dealType, kind, beds, priceMin, priceMax, areaMin, areaMax, floorMin, yearMin, checkedAmenities, searchTerm, selectedCity])
+  useEffect(() => {
+    const el = moreRef.current
+    if (!el) return
+    const io = new IntersectionObserver(es => { if (es[0]?.isIntersecting) setVisN(n => n + 24) }, { rootMargin: '600px' })
+    io.observe(el)
+    return () => io.disconnect()
   }, [])
 
   const toggleAmenity = (a: string) => setCheckedAmenities(prev => prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a])
@@ -641,7 +654,7 @@ function SearchPageInner() {
           )}
 
           <div className="mjs-cards" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-            {shownProperties.map((p, index) => {
+            {shownProperties.slice(0, visN).map((p, index) => {
               const isHov = hoveredCard === p.id
               const isPromoted = promotedIdSet.has(p.id)
               const cards = []
@@ -649,7 +662,9 @@ function SearchPageInner() {
               cards.push(
                 <div key={p.id} onMouseEnter={() => setHoveredCard(p.id)} onMouseLeave={() => setHoveredCard(null)} style={{ borderRadius: 14, border: `1px solid ${isHov ? 'var(--gold)' : 'var(--line)'}`, background: 'var(--surface)', overflow: 'hidden', cursor: 'pointer', transition: 'transform 0.18s, box-shadow 0.18s, border-color 0.18s', transform: isHov ? 'translateY(-4px)' : 'none', boxShadow: isHov ? '0 12px 40px -12px rgba(201,168,76,0.22)' : '0 2px 10px -4px rgba(0,0,0,0.3)' }}>
                   <Link href={listingHref(p.id, p.title, p.location)} style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}>
-                    <div style={{ height: 156, background: p.image ? `center/cover no-repeat url(${p.image})` : p.img, position: 'relative', filter: p.dealStatus ? 'grayscale(0.55) brightness(0.7)' : 'none' }}>
+                    <div style={{ height: 156, background: p.img, position: 'relative', overflow: 'hidden', filter: p.dealStatus ? 'grayscale(0.55) brightness(0.7)' : 'none' }}>
+                      {p.image && <img src={p.image} alt={p.title} loading={index < 4 ? 'eager' : 'lazy'} fetchPriority={index < 2 ? 'high' : 'low'} decoding="async"
+                        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
                       <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 64, background: 'linear-gradient(to top,rgba(0,0,0,0.5),transparent)' }} />
                       {!p.dealStatus && <LikeHeart listingId={p.id} />}
                       {isPromoted && !p.dealStatus && <div style={{ position: 'absolute', top: 10, left: 44 }}><PromoBadge kind={p.promoKind || 'ویژه'} /></div>}
@@ -683,6 +698,12 @@ function SearchPageInner() {
               return cards
             })}
           </div>
+          {/* فاز ۹۲: نگهبانِ اسکرول — ۲۴ کارتِ بعدی خودکار می‌آید؛ تصویر/JS فقط به‌اندازهٔ دیده‌شده مصرف می‌شود */}
+          {visN < shownProperties.length && (
+            <div ref={moreRef} style={{ textAlign: 'center', padding: '18px 0', fontSize: 12.5, color: 'var(--muted)' }}>
+              در حالِ آوردنِ نتایجِ بعدی… ({(shownProperties.length - visN).toLocaleString('fa-IR')} آگهیِ دیگر)
+            </div>
+          )}
         </div>
 
         {/* نقشهٔ واقعیِ نشان — فقط دسکتاپ (کنارِ نتایج، چسبان) */}
