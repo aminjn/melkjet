@@ -6918,7 +6918,7 @@ export default function SuperAdminPage() {
             </div>
             <div>
               <div style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-.5px', color: 'var(--text)' }}>ملک‌جت</div>
-              <div style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 600, marginTop: 1 }}>سوپر ادمین</div>
+              <div style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 600, marginTop: 1 }}>{staffOnly ? 'پنلِ پرسنل' : 'سوپر ادمین'}</div>
             </div>
           </div>
         </div>
@@ -6975,8 +6975,8 @@ export default function SuperAdminPage() {
         <div style={{ borderTop: '1px solid var(--line)', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg,#e7674a,#c9a84c)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 15, color: '#fff', flexShrink: 0 }}>م</div>
           <div style={{ flex: 1, overflow: 'hidden' }}>
-            <div style={{ fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>مدیر سیستم</div>
-            <div style={{ fontSize: 11, color: 'var(--faint)' }}>superadmin@melkjet.ir</div>
+            <div style={{ fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{staffOnly ? 'پرسنلِ ملک‌جت' : 'مدیر سیستم'}</div>
+            <div style={{ fontSize: 11, color: 'var(--faint)' }}>{staffOnly ? `${staffOnly.length.toLocaleString('fa-IR')} بخشِ فعال` : 'superadmin@melkjet.ir'}</div>
           </div>
           <button style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--faint)', fontSize: 16, padding: 4 }}>⏻</button>
         </div>
