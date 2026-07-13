@@ -58,6 +58,11 @@ export async function PATCH(req: NextRequest) {
     const secs = (Array.isArray(b.adminSections) ? b.adminSections : []).map((x: unknown) => String(x)).filter((x: string) => STAFF_GRANTABLE_IDS.has(x))
     const a115 = setAdminSections(phone115, secs)
     if (!a115) return NextResponse.json({ error: 'کاربر یافت نشد' }, { status: 404 })
+    // فاز ۱۱۹: اعطای دسترسی = نقشِ داخلیِ «کارمندانِ ملک‌جت» خودکار می‌نشیند (در فهرستِ کاربران معلوم است چه کسی پرسنل است)
+    const { setProfile: setProfile119 } = await import('@/app/lib/account-store')
+    const { roleByDashboard } = await import('@/app/lib/role-store')
+    if (secs.length && a115.role !== 'staff') setProfile119(phone115, { role: 'staff' })
+    if (!secs.length && a115.role === 'staff') setProfile119(phone115, { role: roleByDashboard('/buyer')?.id || '' })   // لغوِ کامل → برگشت به کاربرِ عادی
     logAudit(s.phone, secs.length ? 'اعطای دسترسیِ پنلِ ادمین (پرسنل)' : 'لغوِ دسترسیِ پنلِ ادمین', `${phone115} → ${secs.join('، ') || 'هیچ'}`)
     return NextResponse.json({ ok: true, adminSections: a115.adminSections || [] })
   }

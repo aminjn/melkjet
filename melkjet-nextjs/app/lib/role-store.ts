@@ -7,6 +7,7 @@ const FILE = join(process.cwd(), '.role-data.json')
 export interface Role {
   id: string
   name: string
+  hidden?: boolean           // فاز ۱۱۹: نقشِ داخلی (کارمندان) — در آنبوردینگ/فهرستِ عمومی دیده نمی‌شود؛ فقط سوپرادمین می‌دهد
   dashboard: string          // مسیر داشبورد پیش‌فرض این نقش
   planId?: string            // پلنی که این نقش/دسترسی را باز می‌کند (خالی = رایگان/پیش‌فرض)
   permissions: string[]      // کلید قابلیت‌های مجاز (برای گیت آینده)
@@ -41,6 +42,11 @@ function load(): DB {
       // اطمینان از وجودِ نقش‌های متخصصِ خدماتی روی نصب‌های قدیمی (اگر نبودند، اضافه کن).
       for (const seed of proDefaults()) {
         if (!db.roles.some(r => r.dashboard === seed.dashboard || r.name === seed.name)) { db.roles.push(seed); migrated = true }
+      }
+      // فاز ۱۱۹ — نقشِ داخلیِ «کارمندانِ ملک‌جت»: مخفی از عموم؛ داشبورد = پنلِ مدیریت؛ فقط سوپرادمین اعطا می‌کند.
+      if (!db.roles.some(r => r.id === 'staff' || r.name === 'کارمندانِ ملک‌جت')) {
+        db.roles.push({ id: 'staff', name: 'کارمندانِ ملک‌جت', dashboard: '/admin', permissions: [], builtin: true, hidden: true, active: true, createdAt: Date.now() })
+        migrated = true
       }
       if (migrated) save(db)
       return db
@@ -99,6 +105,10 @@ function defaults(): Role[] {
 
 export function listRoles(activeOnly = false): Role[] {
   return load().roles.filter(r => !activeOnly || r.active)
+}
+// فاز ۱۱۹ — فهرستِ عمومی (آنبوردینگ/پروفایل): نقش‌های مخفی (کارمندان) هرگز اینجا نمی‌آیند
+export function listPublicRoles(): Role[] {
+  return load().roles.filter(r => r.active && !r.hidden)
 }
 export function getRole(rid: string): Role | null { return load().roles.find(r => r.id === rid) || null }
 export function roleByDashboard(dash: string): Role | null { return load().roles.find(r => r.dashboard === dash) || null }

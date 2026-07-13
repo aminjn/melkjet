@@ -198,7 +198,8 @@ export function dashForRole(role?: string): string { return dashForRoleId(role) 
 
 // آیا این نقش معتبر است؟ (برای آنبوردینگ)
 export function isValidRole(role: string): boolean {
-  return listRoles(true).some(r => r.id === role || r.name === role)
+  // فاز ۱۱۹: نقش‌های مخفی (کارمندان) از مسیرِ عمومیِ پروفایل قابلِ‌انتخاب نیستند — فقط سوپرادمین می‌دهد
+  return listRoles(true).some(r => (r.id === role || r.name === role) && !r.hidden)
 }
 
 // فاز ۱۱۵ — اعطا/لغوِ دسترسیِ پرسنل به بخش‌های پنلِ ادمین (فقط سوپرادمین صدا می‌زند؛ گارد در API)
