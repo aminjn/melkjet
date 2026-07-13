@@ -29,19 +29,23 @@ export default function StaffCrmView() {
   const [actDue, setActDue] = useState('')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
+  const [mine, setMine] = useState(false)          // «فقط کارهای من»
+  const [stats, setStats] = useState<any>(null)
+  const [prof, setProf] = useState<any>(null)      // پروندهٔ ۳۶۰ (تیکت/سفارش/امپراتوری/علاقه‌مندی)
+  const [smsTxt, setSmsTxt] = useState('')
 
   const load = useCallback(() => {
-    fetch(`/api/admin/staff-crm?q=${encodeURIComponent(q)}&status=${status}`, { cache: 'no-store' })
+    fetch(`/api/admin/staff-crm?q=${encodeURIComponent(q)}&status=${status}&mine=${mine ? 1 : 0}`, { cache: 'no-store' })
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.ok) { setRows(d.rows); setTotal(d.total); setDueToday(d.dueToday || []) } })
+      .then(d => { if (d?.ok) { setRows(d.rows); setTotal(d.total); setDueToday(d.dueToday || []); setStats(d.stats || null) } })
       .catch(() => {})
-  }, [q, status])
+  }, [q, status, mine])
   useEffect(() => { load() }, [load])
 
   const openCustomer = async (r: any) => {
-    setSel(r); setEntry(null); setActText(''); setActDue('')
+    setSel(r); setEntry(null); setProf(null); setActText(''); setActDue(''); setSmsTxt('')
     const d = await fetch('/api/admin/staff-crm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'entry', phone: r.phone }) }).then(x => x.ok ? x.json() : null).catch(() => null)
-    if (d?.ok) setEntry(d.entry)
+    if (d?.ok) { setEntry(d.entry); setProf(d) }
   }
   const post = async (body: object) => {
     setBusy(true)
@@ -58,6 +62,16 @@ export default function StaffCrmView() {
         <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>هر کاربرِ واقعیِ سایت یک پرونده است؛ پرسنل تماس/پیگیری/یادداشت ثبت می‌کنند و یادآوری‌ها این‌جا سررسید می‌شوند. هر ثبت با نامِ ثبت‌کننده است.</div>
         {msg && <div style={{ marginTop: 6, fontSize: 12.5, color: '#e88' }}>{msg}</div>}
       </div>
+
+      {/* KPIهای واقعی */}
+      {stats && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 10 }}>
+        {[['کلِ مشتریان', stats.total, 'var(--text)'], ['عضوِ این هفته', stats.newWeek, '#5fd98a'], ['در حالِ پیگیری', stats.follow, '#e7a14a'], ['مشتری شده', stats.customer, '#5fd98a'], ['پیگیریِ سررسید', stats.due, stats.due > 0 ? '#e88' : 'var(--muted)']].map(([l, v, c], i) => (
+          <div key={i} style={{ ...card, padding: '12px 14px', textAlign: 'center' }}>
+            <div style={{ fontSize: 20, fontWeight: 900, color: c as string }}>{fa(v as number)}</div>
+            <div style={{ fontSize: 10.5, color: 'var(--muted)', marginTop: 2 }}>{l}</div>
+          </div>
+        ))}
+      </div>}
 
       {/* صفِ کارِ امروز */}
       {dueToday.length > 0 && <div style={{ ...card, borderColor: '#e7a14a' }}>
@@ -81,6 +95,7 @@ export default function StaffCrmView() {
             {st ? (STAFF_CRM_STATUS_FA as any)[st] : 'همه'}
           </button>
         ))}
+        <button onClick={() => setMine(m => !m)} style={{ ...btnGhost, borderColor: mine ? 'var(--gold)' : 'var(--line2)', color: mine ? 'var(--gold)' : 'var(--text)' }}>👤 فقط کارهای من</button>
         <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{fa(total)} مشتری</span>
         <span style={{ flex: 1 }} />
         <button style={btnGhost} onClick={load}>↻ تازه‌سازی</button>
@@ -121,7 +136,63 @@ export default function StaffCrmView() {
             <span style={{ flex: 1 }} />
             <button style={{ ...btnGhost, padding: '3px 10px' }} onClick={() => setSel(null)}>✕</button>
           </div>
-          <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{sel.role || '—'}{sel.plan ? ` · پلنِ ${sel.plan}` : ''} · عضویت از {faDate(sel.createdAt)} · آخرین ورود {faDate(sel.lastLogin)}</div>
+          <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{prof?.account?.role || sel.role || '—'}{prof?.account?.fullName ? ` · ${prof.account.fullName} ✅` : ''} · عضویت از {faDate(prof?.account?.createdAt || sel.createdAt)} · آخرین ورود {faDate(prof?.account?.lastLogin || sel.lastLogin)}</div>
+
+          {/* اقدامِ فوری: تماسِ مستقیم + پیامکِ واقعی */}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <a href={`tel:${sel.phone}`} style={{ ...btn, textDecoration: 'none', display: 'inline-block' }}>📞 تماس با {sel.phone}</a>
+            <button style={btnGhost} onClick={() => { navigator.clipboard?.writeText(sel.phone).catch(() => {}) }}>⧉ کپیِ شماره</button>
+          </div>
+          <div style={{ ...card, background: 'var(--bg2)' }}>
+            <b style={{ fontSize: 12.5 }}>📲 ارسالِ پیامکِ واقعی</b>
+            <textarea value={smsTxt} onChange={e => setSmsTxt(e.target.value)} rows={2} maxLength={320} placeholder="متنِ پیامک به این مشتری… (با خطِ خدماتیِ ملک‌جت ارسال و در تایم‌لاین ثبت می‌شود)" style={{ ...inp, width: '100%', marginTop: 8, resize: 'vertical' }} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+              <span style={{ fontSize: 10, color: 'var(--faint)' }}>{fa(smsTxt.length)}/۳۲۰</span>
+              <span style={{ flex: 1 }} />
+              <button style={btn} disabled={busy || !smsTxt.trim()} onClick={async () => {
+                if (!confirm(`پیامک به ${sel.phone} ارسال شود؟`)) return
+                const d = await post({ action: 'sms', phone: sel.phone, text: smsTxt })
+                if (d) { setEntry(d.entry); setSmsTxt(''); setMsg('✓ پیامک ارسال و در تایم‌لاین ثبت شد'); setTimeout(() => setMsg(''), 4000); load() }
+              }}>ارسالِ پیامک</button>
+            </div>
+          </div>
+
+          {/* پروندهٔ ۳۶۰ درجه — ردپاهای واقعیِ این مشتری در کلِ سیستم */}
+          {prof && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div style={{ ...card, background: 'var(--bg2)', padding: 12 }}>
+              <div style={{ fontSize: 11, color: 'var(--muted)' }}>پلن و اشتراک</div>
+              <div style={{ fontSize: 12.5, fontWeight: 800, marginTop: 4 }}>{prof.account.plan || 'بدونِ پلن'}</div>
+              {prof.account.planExpiresAt > 0 && <div style={{ fontSize: 10.5, color: prof.account.planExpiresAt < Date.now() ? '#e88' : 'var(--muted)' }}>انقضا: {faDate(prof.account.planExpiresAt)}{prof.account.planExpiresAt < Date.now() ? ' — منقضی! فرصتِ تمدید' : ''}</div>}
+              {prof.pendingOrders > 0 && <div style={{ fontSize: 10.5, color: '#e7a14a', marginTop: 3 }}>⚠️ {fa(prof.pendingOrders)} سفارشِ در انتظارِ تأیید</div>}
+            </div>
+            <div style={{ ...card, background: 'var(--bg2)', padding: 12 }}>
+              <div style={{ fontSize: 11, color: 'var(--muted)' }}>تیکت‌های پشتیبانی</div>
+              <div style={{ fontSize: 12.5, fontWeight: 800, marginTop: 4 }}>{fa(prof.tickets.total)} تیکت{prof.tickets.open > 0 ? ` · ${fa(prof.tickets.open)} باز` : ''}</div>
+              {(prof.tickets.last || []).slice(0, 2).map((t: any, i: number) => <div key={i} style={{ fontSize: 10.5, color: 'var(--muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.status === 'open' ? '🟠' : t.status === 'answered' ? '🟡' : '⚪'} {t.subject}</div>)}
+            </div>
+            <div style={{ ...card, background: 'var(--bg2)', padding: 12 }}>
+              <div style={{ fontSize: 11, color: 'var(--muted)' }}>علاقه‌مندی‌ها</div>
+              <div style={{ fontSize: 12.5, fontWeight: 800, marginTop: 4 }}>{fa(prof.interests.favorites)} ملکِ ذخیره‌شده</div>
+              <div style={{ fontSize: 10.5, color: 'var(--muted)' }}>{fa(prof.interests.savedSearches)} جستجوی ذخیره‌شده</div>
+            </div>
+            <div style={{ ...card, background: 'var(--bg2)', padding: 12 }}>
+              <div style={{ fontSize: 11, color: 'var(--muted)' }}>مسیرِ رشد (امپراتوری)</div>
+              {prof.empire
+                ? <><div style={{ fontSize: 12.5, fontWeight: 800, marginTop: 4 }}>سطحِ {fa(prof.empire.level)} · {fa(prof.empire.assets)} دارایی</div><div style={{ fontSize: 10.5, color: 'var(--muted)' }}>🪙 {fa(prof.empire.coins)} کوین — کاربرِ درگیر</div></>
+                : <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>هنوز شروع نکرده — فرصتِ دعوت</div>}
+            </div>
+          </div>}
+          {prof && (prof.orders || []).length > 0 && <div style={{ ...card, background: 'var(--bg2)', padding: 12 }}>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>سفارش‌ها و خریدها</div>
+            {prof.orders.map((o: any, i: number) => (
+              <div key={i} style={{ display: 'flex', gap: 8, fontSize: 11.5, padding: '4px 0', borderBottom: '1px solid var(--line)' }}>
+                <span style={{ flex: 1 }}>{o.name}</span>
+                <span style={{ color: 'var(--muted)' }}>{fa(o.price)} ت</span>
+                <b style={{ color: o.status === 'paid' ? '#5fd98a' : o.status === 'pending' ? '#e7a14a' : '#e88' }}>{o.status === 'paid' ? 'پرداخت شد' : o.status === 'pending' ? 'در انتظار' : 'رد شد'}</b>
+                <span style={{ color: 'var(--faint)', fontSize: 10 }}>{faDate(o.at)}</span>
+              </div>
+            ))}
+          </div>}
 
           {/* وضعیت + مسئول */}
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>

@@ -82,7 +82,6 @@ const sections: NavSection[] = [
       { id: 'profiles',    icon: '👁', label: 'پروفایل‌ها' },
       { id: 'agencyintel', icon: '🏢', label: 'هوشِ آژانس' },
       { id: 'staffCrm',    icon: '📞', label: 'CRM مرکزی (مشتریان)', accent: true },
-      { id: 'crm',         icon: '◈',  label: 'CRM (پنلِ شخصی)' },
       { id: 'roles',       icon: '🛡', label: 'نقش‌ها و دسترسی' },
       { id: 'suspension',  icon: '⛔', label: 'تعلیق حساب‌ها' },
       { id: 'support',     icon: '🛟', label: 'پشتیبانی' },
