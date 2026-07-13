@@ -31,6 +31,7 @@ export const STAFF_GRANTABLE: Array<{ id: string; label: string }> = [
   { id: 'sitemap', label: '🧭 سایت‌مپ و SEO' },
   { id: 'reports', label: '◔ گزارش‌ها و Big Data' },
   { id: 'audit', label: '❖ لاگِ ممیزی' },
+  { id: 'impersonate', label: '👤 ورود به محیطِ کاربر (impersonate)' },
 ]
 export const STAFF_GRANTABLE_IDS = new Set(STAFF_GRANTABLE.map(x => x.id))
 
@@ -70,6 +71,7 @@ export const API_SECTIONS: Record<string, string[]> = {
   market: ['reports'],
   audit: ['audit'],
   system: ['reports'],
+  impersonate: ['impersonate'],
 }
 
 // آیا این نشستِ پرسنل به این مسیرِ /api/admin/... می‌رسد؟ (سوپرادمین جدا و همیشه آزاد است)

@@ -75,8 +75,8 @@ export async function getRealSession(): Promise<SessionPayload | null> {
 export async function getSession(): Promise<SessionPayload | null> {
   const real = await getRealSession()
   if (!real) return null
-  // فقط سوپرادمین می‌تواند جای کاربرِ دیگری بنشیند.
-  if (real.role === 'super_admin') {
+  // سوپرادمین + پرسنلِ دارای بخشِ «ورود به محیطِ کاربر» (فاز ۱۲۱ — اعطا در کشوی کاربر)
+  if (real.role === 'super_admin' || (real.staff || []).includes('impersonate')) {
     const cookieStore = await cookies()
     const impToken = cookieStore.get(IMPERSONATE_COOKIE)?.value
     if (impToken) {

@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRealSession, createImpersonationToken, verifyImpersonation, IMPERSONATE_COOKIE } from '@/app/lib/session'
 import { getAccount, dashForRole } from '@/app/lib/account-store'
+import { logAudit } from '@/app/lib/audit-store'
+
+// فاز ۱۲۱: سوپرادمین همیشه؛ پرسنل فقط با بخشِ اعطاشدهٔ «ورود به محیطِ کاربر»
+const allowed = (real: { role: string; staff?: string[] } | null) =>
+  !!real && (real.role === 'super_admin' || (real.staff || []).includes('impersonate'))
 import { getRole, dashForRoleId } from '@/app/lib/role-store'
 import { cookies } from 'next/headers'
 
@@ -19,7 +24,7 @@ export async function GET() {
   const real = await getRealSession()
   const store = await cookies()
   const tok = store.get(IMPERSONATE_COOKIE)?.value
-  if (!real || real.role !== 'super_admin' || !tok) return NextResponse.json({ active: false })
+  if (!allowed(real) || !tok) return NextResponse.json({ active: false })
   const target = await verifyImpersonation(tok)
   if (!target) return NextResponse.json({ active: false })
   // حالتِ پیش‌نمایشِ نقش (بدون کاربرِ واقعی)
@@ -46,7 +51,7 @@ export async function GET() {
 // body: { phone } برای کاربرِ واقعی، یا { role } برای پیش‌نمایشِ نقش با دادهٔ نمونه.
 export async function POST(req: NextRequest) {
   const real = await getRealSession()
-  if (!real || real.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  if (!real || !allowed(real)) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const b = await req.json().catch(() => ({} as { phone?: string; role?: string }))
 
   // ── پیش‌نمایشِ نقش ──
@@ -68,6 +73,10 @@ export async function POST(req: NextRequest) {
   if (phone === real.phone) return NextResponse.json({ error: 'این حساب خود شماست' }, { status: 400 })
   const a = getAccount(phone)
   if (!a) return NextResponse.json({ error: 'پروفایل یافت نشد' }, { status: 404 })
+  // فاز ۱۲۱ — گاردِ امنیتی: پرسنل هرگز واردِ محیطِ سوپرادمین یا پرسنلِ دیگر نمی‌شوند + هر ورود در ممیزی
+  if (real.role !== 'super_admin' && (phone === '09122862184' || (a.adminSections || []).length > 0))
+    return NextResponse.json({ error: 'ورود به محیطِ مدیر یا همکارِ دیگر مجاز نیست' }, { status: 403 })
+  logAudit(real.phone, 'ورود به محیطِ کاربر', `${a.name || ''} (${phone})`)
 
   const token = await createImpersonationToken(phone)
   const res = NextResponse.json({ ok: true, dashboard: dashForRole(a.role) })
