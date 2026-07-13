@@ -1306,33 +1306,54 @@ export function legalFloorsOf(landArea: number, hoodFloors: number | null, cfg: 
   return { floors: Math.max(1, areaFloors), areaFloors, hoodApplied: false }
 }
 
+// فاز ۱۲۶ — نامِ واحدِ هر کاربری (فرم، تایم‌لاین، پیام‌های ضابطه)
+export const BUILD_USE_UNIT_FA: Record<string, string> = { residential: 'واحد', commercial: 'مغازه', office: 'واحدِ اداری', villa: 'ویلا' }
+
+export interface UseDesignCfg { occupancyPct: number; buildFactor: number; maxOverFloors: number; minUnitArea: number; parkingAreaPerUnit?: number; parkingLevels?: number; comMaxFloors?: number; comMinShopArea?: number; comUnitsPerSpot?: number; offMinUnitArea?: number; villaMaxFloors?: number }
+
+// فاز ۱۲۶ (فیدبکِ مستقیم: «برای هر کاربری گزینه‌های متفاوت بیاید») — ضابطهٔ مؤثرِ هر کاربری، همه از knob:
+// تجاری = پاساژِ کم‌طبقه با حدنصابِ مغازه و سهمِ پارکینگِ گروهی؛ اداری = حدنصابِ کوچک‌ترِ واحد؛ ویلا = بنایِ تک‌واحدی.
+export function useRuleOf(use: string | undefined, cfg: Omit<UseDesignCfg, 'buildFactor'>): { floorsCap: number | null; minUnitArea: number; unitsPerSpot: number; singleUnit: boolean; unitFa: string } {
+  const u = use || 'residential'
+  if (u === 'commercial') return { floorsCap: (cfg.comMaxFloors ?? 0) >= 1 ? Math.round(cfg.comMaxFloors!) : null, minUnitArea: Math.max(1, cfg.comMinShopArea ?? cfg.minUnitArea), unitsPerSpot: Math.max(1, Math.round(cfg.comUnitsPerSpot ?? 1)), singleUnit: false, unitFa: BUILD_USE_UNIT_FA.commercial }
+  if (u === 'office') return { floorsCap: null, minUnitArea: Math.max(1, cfg.offMinUnitArea ?? cfg.minUnitArea), unitsPerSpot: 1, singleUnit: false, unitFa: BUILD_USE_UNIT_FA.office }
+  if (u === 'villa') return { floorsCap: (cfg.villaMaxFloors ?? 0) >= 1 ? Math.round(cfg.villaMaxFloors!) : 2, minUnitArea: 1, unitsPerSpot: 1, singleUnit: true, unitFa: BUILD_USE_UNIT_FA.villa }
+  return { floorsCap: null, minUnitArea: Math.max(1, cfg.minUnitArea), unitsPerSpot: 1, singleUnit: false, unitFa: BUILD_USE_UNIT_FA.residential }
+}
+
 export function designPlanOf(landArea: number, floors: number, unitsPerFloor: number,
-  cfg: { occupancyPct: number; buildFactor: number; maxOverFloors: number; minUnitArea: number; parkingAreaPerUnit?: number; parkingLevels?: number },
-  legalFloorsOverride?: number):
+  cfg: UseDesignCfg,
+  legalFloorsOverride?: number, use?: string):
   { ok: true; footprint: number; legalFloors: number; maxFloors: number; unitArea: number; illegalFloors: number; builtArea: number; totalUnits: number; illegalUnits: number; illegalArea: number; parkingCap: number | null } | { ok: false; reason: string } {
   if (!(landArea > 0)) return { ok: false, reason: 'متراژِ زمین نامشخص است' }
+  const rule = useRuleOf(use, cfg)
   const footprint = Math.max(20, Math.round(landArea * Math.max(10, Math.min(100, cfg.occupancyPct)) / 100))
   // طبقاتِ مجاز: از ضابطهٔ متراژ/منطقه (legalFloorsOf در caller)؛ فرمولِ قدیمیِ تراکم فقط fallbackِ سازگاری.
-  const legalFloors = legalFloorsOverride && legalFloorsOverride >= 1
+  let legalFloors = legalFloorsOverride && legalFloorsOverride >= 1
     ? Math.round(legalFloorsOverride)
     : Math.max(1, Math.floor((landArea * Math.max(0.5, cfg.buildFactor)) / footprint))
+  // فاز ۱۲۶: سقفِ کاربری — پاساژ تا comMaxFloors، ویلا تا villaMaxFloors (فلت/دوبلکس/تریپلکس)
+  if (rule.floorsCap !== null) legalFloors = Math.max(1, Math.min(legalFloors, rule.floorsCap))
   const maxFloors = legalFloors + Math.max(0, cfg.maxOverFloors)
-  if (!(floors >= 1) || floors > maxFloors) return { ok: false, reason: `طبقات باید بین ۱ و ${maxFloors.toLocaleString('fa-IR')} باشد (مجازِ قانونی: ${legalFloors.toLocaleString('fa-IR')})` }
-  if (!(unitsPerFloor >= 1)) return { ok: false, reason: 'حداقل یک واحد در هر طبقه' }
-  const unitArea = Math.floor(footprint / unitsPerFloor)
-  if (unitArea < cfg.minUnitArea) return { ok: false, reason: `متراژِ هر واحد ${unitArea.toLocaleString('fa-IR')} متر می‌شود — کمتر از حداقلِ قانونیِ ${cfg.minUnitArea.toLocaleString('fa-IR')} متر` }
-  // ضابطهٔ واقعیِ «هر واحد یک پارکینگ»: ظرفیتِ پارکینگ = مساحتِ قابلِ‌پارکِ همکف/زیرزمین ÷ سرانهٔ هر خودرو.
-  const totalUnits = floors * unitsPerFloor
+  if (!(floors >= 1) || floors > maxFloors) return { ok: false, reason: `طبقات باید بین ۱ و ${maxFloors.toLocaleString('fa-IR')} باشد (مجازِ قانونی برای ${BUILD_USE_FA[use || 'residential'] || 'مسکونی'}: ${legalFloors.toLocaleString('fa-IR')})` }
+  // فاز ۱۲۶: ویلا همیشه یک بنای تک‌واحدی است — «واحد در طبقه» برایش معنا ندارد
+  if (rule.singleUnit) unitsPerFloor = 1
+  if (!(unitsPerFloor >= 1)) return { ok: false, reason: `حداقل یک ${rule.unitFa} در هر طبقه` }
+  const unitArea = rule.singleUnit ? footprint * floors : Math.floor(footprint / unitsPerFloor)
+  if (!rule.singleUnit && unitArea < rule.minUnitArea) return { ok: false, reason: `متراژِ هر ${rule.unitFa} ${unitArea.toLocaleString('fa-IR')} متر می‌شود — کمتر از حدنصابِ تفکیکِ ${rule.minUnitArea.toLocaleString('fa-IR')} متر برای ${BUILD_USE_FA[use || 'residential'] || 'مسکونی'}` }
+  // ضابطهٔ واقعیِ پارکینگ: ظرفیت = مساحتِ قابلِ‌پارکِ همکف/زیرزمین ÷ سرانهٔ هر خودرو؛ تجاری با سهمِ knob (هر N مغازه یک پارکینگ)، ویلا در محوطهٔ خودش.
+  const totalUnits = rule.singleUnit ? 1 : floors * unitsPerFloor
   const perCar = Math.max(0, cfg.parkingAreaPerUnit ?? 0)
   const parkingCap = perCar > 0 ? Math.max(1, Math.floor(footprint / perCar)) * Math.max(1, cfg.parkingLevels ?? 1) : null
-  if (parkingCap !== null && totalUnits > parkingCap) {
-    return { ok: false, reason: `برای ${totalUnits.toLocaleString('fa-IR')} واحد پارکینگ کافی نمی‌شود — ضابطهٔ «هر واحد یک پارکینگ» فقط ${parkingCap.toLocaleString('fa-IR')} واحد اجازه می‌دهد (همکف/زیرزمین)` }
+  const spotsNeeded = rule.singleUnit ? 1 : Math.ceil(totalUnits / rule.unitsPerSpot)
+  if (parkingCap !== null && spotsNeeded > parkingCap) {
+    return { ok: false, reason: `برای ${totalUnits.toLocaleString('fa-IR')} ${rule.unitFa} پارکینگ کافی نمی‌شود — ضابطهٔ ${rule.unitsPerSpot > 1 ? `«هر ${rule.unitsPerSpot.toLocaleString('fa-IR')} ${rule.unitFa} یک پارکینگ»` : `«هر ${rule.unitFa} یک پارکینگ»`} فقط ${(parkingCap * rule.unitsPerSpot).toLocaleString('fa-IR')} ${rule.unitFa} اجازه می‌دهد (همکف/زیرزمین)` }
   }
   const illegalFloors = Math.max(0, floors - legalFloors)
   return {
     ok: true, footprint, legalFloors, maxFloors, unitArea, illegalFloors,
     builtArea: footprint * floors, totalUnits,
-    illegalUnits: illegalFloors * unitsPerFloor, illegalArea: illegalFloors * footprint, parkingCap,
+    illegalUnits: rule.singleUnit ? 0 : illegalFloors * unitsPerFloor, illegalArea: illegalFloors * footprint, parkingCap,
   }
 }
 
@@ -1350,7 +1371,11 @@ export async function commissionDesign(userId: string, assetId: string, d: { flo
     const architect = proPersonaOf('architect', assetId)
     a.design = { floors: d.floors, unitsPerFloor: d.unitsPerFloor, legalFloors: d.legalFloors, footprint: d.footprint, unitArea: d.unitArea, illegalFloors: d.illegalFloors, architectFee: d.fee, startedAt: now, readyAt: now + Math.max(0, d.days) * 864e5, architect, landArea: d.landArea, use: d.use && d.use !== 'residential' ? d.use : undefined }
     e.identity.builder = Math.min(100, (e.identity.builder || 0) + 3)
-    e.timeline.push({ at: now, icon: '📐', title: `قراردادِ طراحی با ${architect}`, detail: `کاربریِ ${BUILD_USE_FA[d.use || 'residential']} · ${d.floors.toLocaleString('fa-IR')} طبقه × ${d.unitsPerFloor.toLocaleString('fa-IR')} واحد${d.illegalFloors > 0 ? ` · ⚠️ ${d.illegalFloors.toLocaleString('fa-IR')} طبقهٔ مازاد بر پروانه` : ''}` })
+    // فاز ۱۲۶: شرحِ قرارداد به زبانِ همان کاربری — ویلای تک‌واحدی «طبقه × واحد» ندارد
+    const desc126 = d.use === 'villa'
+      ? `ویلای ${d.floors.toLocaleString('fa-IR')} طبقه (${d.floors >= 3 ? 'تریپلکس' : d.floors === 2 ? 'دوبلکس' : 'فلت'}) · ${(d.footprint * d.floors).toLocaleString('fa-IR')} مترِ بنا`
+      : `${d.floors.toLocaleString('fa-IR')} طبقه × ${d.unitsPerFloor.toLocaleString('fa-IR')} ${BUILD_USE_UNIT_FA[d.use || 'residential'] || 'واحد'}`
+    e.timeline.push({ at: now, icon: '📐', title: `قراردادِ طراحی با ${architect}`, detail: `کاربریِ ${BUILD_USE_FA[d.use || 'residential']} · ${desc126}${d.illegalFloors > 0 ? ` · ⚠️ ${d.illegalFloors.toLocaleString('fa-IR')} طبقهٔ مازاد بر پروانه` : ''}` })
   })
 }
 
@@ -1809,7 +1834,7 @@ export function buildPlanOf(structure: string, quality: string, landArea: number
 // خودکفا: به زنده‌بودنِ آگهیِ واقعی وابسته نیست — آگهی‌ها می‌چرخند اما نقشهٔ امضاشده ابعادش را دارد
 // (باگِ «سازه/کیفیت یا متراژ نامشخص» وقتی آگهیِ زمین بینِ طراحی و کلنگ از استخر می‌افتاد).
 export function designBuildPlanOf(structure: string, quality: string, landArea: number,
-  design: { footprint: number; floors: number; unitsPerFloor: number; unitArea: number; legalFloors: number; landArea?: number },
+  design: { footprint: number; floors: number; unitsPerFloor: number; unitArea: number; legalFloors: number; landArea?: number; use?: string },
   cfg: { buildFactor: number; costPerM: number; buildDays: number }): ReturnType<typeof buildPlanOf> {
   const s = BUILD_STRUCTURES[structure], q = BUILD_QUALITIES[quality]
   if (!s || !q) return null
@@ -1819,7 +1844,8 @@ export function designBuildPlanOf(structure: string, quality: string, landArea: 
   const baseArea = la > 0 ? Math.max(1, Math.round(la * Math.max(0.5, cfg.buildFactor))) : Math.max(1, design.footprint * Math.max(1, design.legalFloors))
   return {
     days: Math.max(3, Math.round(cfg.buildDays * s.daysMul * builtArea / baseArea)),
-    builtArea, unitArea: design.unitArea, totalUnits: design.floors * design.unitsPerFloor,
+    // فاز ۱۲۶: ویلا یک بنایِ تک‌واحدی است — کلِ بنا یک «واحد» با متراژِ کل (قیمت/اجاره از متریِ ویلاییِ واقعی × کلِ بنا)
+    builtArea, unitArea: design.use === 'villa' ? builtArea : design.unitArea, totalUnits: design.use === 'villa' ? 1 : design.floors * design.unitsPerFloor,
     costTotal: Math.round(builtArea * cfg.costPerM * s.costMul * q.costMul),
     qualityFactor: q.qualityFactor,
   }
@@ -1964,7 +1990,8 @@ export async function startBuild(userId: string, assetId: string, plan: NonNulla
     if (a.construction) return 'ساختِ این پروژه شروع شده'
     const goal = meta.goal && PROJECT_GOALS[meta.goal] ? meta.goal : undefined
     // فاز ۲۹: واحدهای طبقاتِ مازادِ نقشه از همان کلنگ «غیرمجاز» علامت می‌خورند — پیش‌فروش/فروششان بسته است تا ماده۱۰۰.
-    const illegalUnits = a.design ? Math.max(0, a.design.illegalFloors * a.design.unitsPerFloor) : 0
+    // فاز ۱۲۶: ویلا تک‌واحدی است — تخلفِ طبقه‌اش جریمهٔ متراژی دارد (ماده۱۰۰)، نه واحدِ غیرمجاز.
+    const illegalUnits = a.design && a.design.use !== 'villa' ? Math.max(0, a.design.illegalFloors * a.design.unitsPerFloor) : 0
     const dreamName = (meta.name || '').trim().slice(0, 28) || undefined
     const facade = BUILD_FACADES.some(f => f.key === meta.facade) ? meta.facade : undefined
     const use = BUILD_USES.some(u => u.key === meta.use) && meta.use !== 'residential' ? meta.use : undefined   // فاز ۱۱۲؛ مسکونی = پیش‌فرض (رفتارِ قبلی)

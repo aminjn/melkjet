@@ -143,6 +143,12 @@ export interface ReosConfig {
       hoodBonusMax: number                 // سقفِ طبقاتِ اضافه به اعتبارِ عرفِ بلندمرتبهٔ محله
       parkingAreaPerUnit: number           // سرانهٔ پارکینگِ هر واحد (متر — با مانور)؛ ۰ = ضابطهٔ پارکینگ خاموش
       parkingLevels: number                // طبقاتِ قابلِ‌پارک (همکف + زیرزمین = ۲)
+      // فاز ۱۲۶ (فیدبکِ مستقیم: «برای هر کاربری گزینه‌های متفاوت بیاید»): ضابطهٔ جداگانهٔ هر کاربری.
+      comMaxFloors: number                 // تجاری: سقفِ طبقاتِ مغازه/پاساژ (عرف: همکف + یک طبقه)
+      comMinShopArea: number               // تجاری: حدنصابِ تفکیکِ هر مغازه (متر)
+      comUnitsPerSpot: number              // تجاری: چند مغازه به‌ازای یک پارکینگ (عرفِ ضابطهٔ تجاری)
+      offMinUnitArea: number               // اداری: حدنصابِ تفکیکِ هر واحدِ اداری (متر — کوچک‌تر از مسکونی مجاز است)
+      villaMaxFloors: number               // ویلایی: سقفِ طبقاتِ ویلا (۱=فلت، ۲=دوبلکس، ۳=تریپلکس)
     }
     // فاز ۲۹: کمیسیونِ ماده۱۰۰ شهرداری — جریمهٔ هر مترِ مازاد = costPerM × این ضریب → خزانه.
     m100: { finePerM2Mult: number }
@@ -319,7 +325,7 @@ export const DEFAULT_CONFIG: ReosConfig = {
     // نقش‌های حرفه‌ای (فاز ۲۹): اعدادِ عرفِ واقعیِ بازارِ ایران — همه knob.
     pros: { notaryFeePct: 0.5, advisorRentCommissionPct: 25, advisorSellCommissionPct: 0.5, lawyerFeePct: 10, lawyerCutPct: 40, lawyerWinChancePct: 50, appraisalFee: 2_000_000 },
     // ضابطهٔ طبقات = عرفِ رایجِ طرحِ تفصیلی: <۱۵۰م→۲ط، <۲۵۰→۳ط، <۵۰۰→۴ط، <۱۰۰۰→۵ط، بزرگ‌تر→۶ط؛ محلهٔ بلندمرتبه تا +۲.
-    design: { enabled: true, occupancyPct: 60, maxOverFloors: 2, designDays: 2, architectFeePct: 3, minUnitArea: 35, tierA: 150, tierAFloors: 2, tierB: 250, tierBFloors: 3, tierC: 500, tierCFloors: 4, tierD: 1000, tierDFloors: 5, bigFloors: 6, hoodBonusMax: 2, parkingAreaPerUnit: 25, parkingLevels: 2 },
+    design: { enabled: true, occupancyPct: 60, maxOverFloors: 2, designDays: 2, architectFeePct: 3, minUnitArea: 35, tierA: 150, tierAFloors: 2, tierB: 250, tierBFloors: 3, tierC: 500, tierCFloors: 4, tierD: 1000, tierDFloors: 5, bigFloors: 6, hoodBonusMax: 2, parkingAreaPerUnit: 25, parkingLevels: 2, comMaxFloors: 2, comMinShopArea: 15, comUnitsPerSpot: 3, offMinUnitArea: 25, villaMaxFloors: 3 },
     m100: { finePerM2Mult: 1.5 },
     renovation: {
       enabled: true, maxBoostPct: 25,

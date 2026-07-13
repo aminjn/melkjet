@@ -683,6 +683,12 @@ export default function EmpireAdminPanel({ section }: { section: EmpireSection }
             {row('سقفِ تعدیلِ عرفِ محله (+طبقه)', cin('design', 'hoodBonusMax'), 'میانهٔ «طبقه: X از Y» آگهی‌های واقعیِ هم‌محله؛ کمتر از ۳ نمونه = بدونِ تعدیل')}
             {row('سرانهٔ پارکینگِ هر واحد (متر)', cin('design', 'parkingAreaPerUnit'), 'ضابطهٔ «هر واحد یک پارکینگ»؛ ۰ = خاموش')}
             {row('طبقاتِ قابلِ‌پارک', cin('design', 'parkingLevels'), 'همکف + زیرزمین = ۲')}
+            <div style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 2px', fontWeight: 700 }}>🏬 ضابطهٔ هر کاربری (فاز ۱۲۶ — فرمِ معمار برای تجاری/اداری/ویلایی متفاوت است)</div>
+            {row('تجاری: سقفِ طبقاتِ پاساژ', cin('design', 'comMaxFloors'), 'عرف: همکف + یک طبقه = ۲')}
+            {row('تجاری: حدنصابِ هر مغازه (متر)', cin('design', 'comMinShopArea'))}
+            {row('تجاری: چند مغازه به‌ازای یک پارکینگ', cin('design', 'comUnitsPerSpot'), 'پارکینگِ گروهیِ ضابطهٔ تجاری')}
+            {row('اداری: حدنصابِ هر واحدِ اداری (متر)', cin('design', 'offMinUnitArea'), 'کوچک‌تر از حدنصابِ مسکونی مجاز است')}
+            {row('ویلایی: سقفِ طبقاتِ ویلا', cin('design', 'villaMaxFloors'), '۱=فلت، ۲=دوبلکس، ۳=تریپلکس — ویلا همیشه یک واحدِ مستقل است')}
             {row('ماده۱۰۰: جریمهٔ هر مترِ مازاد (× هزینهٔ ساختِ متر)', cin('m100', 'finePerM2Mult'), 'جریمه → خزانه (شهرداری)')}
           </div>
           <div style={card}>

@@ -1959,18 +1959,24 @@ export default function EmpirePage() {
             {/* 📐 فرمِ قراردادِ معمار (فاز ۲۹): طبقات/واحد با قوانینِ شفاف — طبقهٔ مازاد = تخلفِ آگاهانه با جریمهٔ اعلام‌شده */}
             {dz?.assetId === a.id && (() => {
               const inf = dz.info
+              // فاز ۱۲۶ (فیدبک: «برای هر کاربری گزینه‌های متفاوت بیاید»): ضابطه و فرم از مشخصاتِ همان کاربری
+              const spec = (inf.uses || []).find((x: any) => x.key === (dz.use || 'residential')) || { legalFloors: inf.legalFloors, maxFloors: inf.maxFloors, minUnitArea: inf.minUnitArea, unitsPerSpot: 1, singleUnit: false, unitFa: 'واحد', label: 'مسکونی' }
               const floors = Math.max(1, Math.round(Number(digitsOf(dz.floors)) || 0))
-              const upf = Math.max(1, Math.round(Number(digitsOf(dz.upf)) || 0))
-              const unitArea = Math.floor(inf.footprint / upf)
+              const upf = spec.singleUnit ? 1 : Math.max(1, Math.round(Number(digitsOf(dz.upf)) || 0))
               const builtArea = inf.footprint * floors
-              const illegal = Math.max(0, floors - inf.legalFloors)
+              const unitArea = spec.singleUnit ? builtArea : Math.floor(inf.footprint / upf)
+              const totalUnits = spec.singleUnit ? 1 : floors * upf
+              const illegal = Math.max(0, floors - spec.legalFloors)
               const fee = Math.max(1, Math.round(builtArea * inf.costPerM * inf.architectFeePct / 100))
               const fineEst = illegal * inf.footprint * inf.finePerM2
+              const spotsNeeded = spec.singleUnit ? 1 : Math.ceil(totalUnits / Math.max(1, spec.unitsPerSpot))
               // دکمه هرگز «بی‌صدا» قفل نمی‌شود (فاز ۳۱): اگر عدد مشکل دارد، دلیلِ دقیق همین‌جا و سرِ کلیک گفته می‌شود.
-              const blockReason = floors > inf.maxFloors
-                ? `حتی با تخلف، بیشتر از ${fa(inf.maxFloors)} طبقه ممکن نیست (${fa(inf.legalFloors)} قانونی + ${fa(inf.maxFloors - inf.legalFloors)} طبقهٔ تخلف) — شهرداری وسطِ کار متوقف می‌کند`
-                : unitArea < inf.minUnitArea
-                ? `با ${fa(upf)} واحد در طبقه، هر واحد ${fa(unitArea)} متر می‌شود — کمتر از حداقلِ قانونیِ ${fa(inf.minUnitArea)} متر؛ تعدادِ واحد را کم کن`
+              const blockReason = floors > spec.maxFloors
+                ? `حتی با تخلف، بیشتر از ${fa(spec.maxFloors)} طبقه برای ${spec.label} ممکن نیست (${fa(spec.legalFloors)} قانونی + ${fa(spec.maxFloors - spec.legalFloors)} طبقهٔ تخلف) — شهرداری وسطِ کار متوقف می‌کند`
+                : !spec.singleUnit && unitArea < spec.minUnitArea
+                ? `با ${fa(upf)} ${spec.unitFa} در طبقه، هر ${spec.unitFa} ${fa(unitArea)} متر می‌شود — کمتر از حدنصابِ ${fa(spec.minUnitArea)} متر برای ${spec.label}؛ تعداد را کم کن`
+                : inf.parkingCap && spotsNeeded > inf.parkingCap
+                ? `برای ${fa(totalUnits)} ${spec.unitFa} پارکینگ کافی نمی‌شود — ضابطهٔ ${spec.unitsPerSpot > 1 ? `«هر ${fa(spec.unitsPerSpot)} ${spec.unitFa} یک پارکینگ»` : `«هر ${spec.unitFa} یک پارکینگ»`} فقط ${fa(inf.parkingCap * Math.max(1, spec.unitsPerSpot))} ${spec.unitFa} اجازه می‌دهد`
                 : ''
               return (
                 <div style={{ width: '100%', ...card, background: 'var(--surface)', fontSize: 12 }}>
@@ -1985,7 +1991,7 @@ export default function EmpirePage() {
                     <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>کاربریِ پروژه چه باشد؟ (در نقشه و پروانه ثبت می‌شود — قیمتِ فروش از آگهی‌های واقعیِ همان کاربری)</div>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       {inf.uses.map((u: any) => (
-                        <button key={u.key} disabled={!(u.perM > 0)} onClick={() => u.perM > 0 && setDz({ ...dz, use: u.key })}
+                        <button key={u.key} disabled={!(u.perM > 0)} onClick={() => u.perM > 0 && setDz({ ...dz, use: u.key, floors: String(u.legalFloors || inf.legalFloors), upf: u.singleUnit ? '1' : dz.upf || '2' })}
                           title={u.perM > 0 ? `متریِ ${u.label}: ${faB(u.perM)} تومان (${fa(u.samples)} آگهیِ ${u.scope === 'hood' ? 'همین محله' : 'کلِ بازار'})` : 'نمونهٔ قیمتیِ واقعی نداریم'}
                           style={{ ...btnGhost, padding: '6px 12px', fontSize: 11.5, opacity: u.perM > 0 ? 1 : .4, cursor: u.perM > 0 ? 'pointer' : 'not-allowed', borderColor: (dz.use || 'residential') === u.key ? 'var(--gold)' : 'var(--line2)', color: (dz.use || 'residential') === u.key ? 'var(--gold)' : 'var(--text)' }}>
                           {u.icon} {u.label} <span style={{ fontSize: 10, color: 'var(--faint)' }}>{u.perM > 0 ? `متری ~${faB(u.perM)}` : 'نمونه نداریم'}{u.costFactor !== 1 ? ` · هزینهٔ ساخت ×${(u.costFactor).toLocaleString('fa-IR')}` : ''}</span>
@@ -1994,12 +2000,28 @@ export default function EmpirePage() {
                     </div>
                     {(() => { const u = (inf.uses || []).find((x: any) => x.key === (dz.use || 'residential')); return u && u.scope === 'market' ? <div style={{ fontSize: 10.5, color: '#e8c37a', marginTop: 4 }}>نمونهٔ {u.label} در این محله کم بود — برآورد از {fa(u.samples)} آگهیِ {u.label} کلِ بازار.</div> : null })()}
                   </div>}
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
-                    <label style={{ fontSize: 11.5 }}>طبقات: <input value={dz.floors} onChange={ev => setDz({ ...dz, floors: digitsOf(ev.target.value) })} inputMode="numeric" style={{ width: 54, padding: 7, borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', textAlign: 'center' }} /></label>
-                    <label style={{ fontSize: 11.5 }}>واحد در طبقه: <input value={dz.upf} onChange={ev => setDz({ ...dz, upf: digitsOf(ev.target.value) })} inputMode="numeric" style={{ width: 54, padding: 7, borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', textAlign: 'center' }} /></label>
-                    <span style={{ fontSize: 11, color: unitArea < inf.minUnitArea ? '#e88' : 'var(--muted)' }}>= {fa(floors * upf)} واحدِ {fa(unitArea)} متری · بنا {fa(builtArea)} متر</span>
-                  </div>
-                  {illegal > 0 && floors <= inf.maxFloors && <div style={{ fontSize: 11, color: '#e7a14a', marginTop: 6 }}>⚠️ {fa(illegal)} طبقهٔ مازاد بر تراکمِ قانونی — بعد از تکمیل، کمیسیونِ ماده۱۰۰: جریمهٔ برآوردی {faB(fineEst)} تومان یا تخریبِ طبقات</div>}
+                  {spec.singleUnit ? (
+                    /* فاز ۱۲۶ — ویلایی: بنایِ تک‌واحدی؛ فقط طبقاتِ ویلا (فلت/دوبلکس/تریپلکس تا سقفِ ضابطه) */
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
+                      <span style={{ fontSize: 11.5 }}>طبقاتِ ویلا:</span>
+                      {Array.from({ length: Math.max(1, spec.maxFloors) }, (_, i) => i + 1).map(n => (
+                        <button key={n} onClick={() => setDz({ ...dz, floors: String(n), upf: '1' })}
+                          style={{ ...btnGhost, padding: '6px 12px', fontSize: 11.5, borderColor: floors === n ? 'var(--gold)' : 'var(--line2)', color: floors === n ? 'var(--gold)' : 'var(--text)' }}>
+                          {fa(n)} {n === 1 ? '(فلت)' : n === 2 ? '(دوبلکس)' : n === 3 ? '(تریپلکس)' : ''}{n > spec.legalFloors ? ' ⚠️' : ''}
+                        </button>
+                      ))}
+                      <span style={{ fontSize: 11, color: 'var(--muted)' }}>= یک ویلای {fa(floors)} طبقهٔ {fa(builtArea)} متری با محوطهٔ {fa(Math.max(0, inf.landArea - inf.footprint))} متری</span>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
+                      <label style={{ fontSize: 11.5 }}>طبقات{(dz.use || 'residential') === 'commercial' ? ' (پاساژ)' : ''}: <input value={dz.floors} onChange={ev => setDz({ ...dz, floors: digitsOf(ev.target.value) })} inputMode="numeric" style={{ width: 54, padding: 7, borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', textAlign: 'center' }} /></label>
+                      <label style={{ fontSize: 11.5 }}>{spec.unitFa} در طبقه: <input value={dz.upf} onChange={ev => setDz({ ...dz, upf: digitsOf(ev.target.value) })} inputMode="numeric" style={{ width: 54, padding: 7, borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--bg2)', color: 'var(--text)', textAlign: 'center' }} /></label>
+                      <span style={{ fontSize: 11, color: unitArea < spec.minUnitArea ? '#e88' : 'var(--muted)' }}>= {fa(totalUnits)} {spec.unitFa}ِ {fa(unitArea)} متری · بنا {fa(builtArea)} متر</span>
+                      {spec.unitsPerSpot > 1 && <span style={{ fontSize: 10.5, color: 'var(--faint)' }}>🅿 هر {fa(spec.unitsPerSpot)} {spec.unitFa} یک پارکینگ</span>}
+                      {(dz.use || 'residential') !== 'residential' && <span style={{ fontSize: 10.5, color: 'var(--faint)' }}>حدنصابِ هر {spec.unitFa}: {fa(spec.minUnitArea)} متر</span>}
+                    </div>
+                  )}
+                  {illegal > 0 && floors <= spec.maxFloors && <div style={{ fontSize: 11, color: '#e7a14a', marginTop: 6 }}>⚠️ {fa(illegal)} طبقهٔ مازاد بر تراکمِ قانونیِ {spec.label} — بعد از تکمیل، کمیسیونِ ماده۱۰۰: جریمهٔ برآوردی {faB(fineEst)} تومان یا تخریبِ طبقات</div>}
                   {blockReason && <div style={{ fontSize: 11.5, color: '#e88', marginTop: 6, fontWeight: 700 }}>🛑 {blockReason}</div>}
                   <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                     <button style={{ ...btn, padding: '6px 14px', fontSize: 12, opacity: blockReason ? 0.55 : 1 }} disabled={busy}

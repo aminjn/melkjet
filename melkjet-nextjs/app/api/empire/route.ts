@@ -22,7 +22,7 @@ import {
   negoMemoryOf, bumpNegoTries, dailyDealPickOf, maxProjectsOf, sellProject,
   applyLevelUpReward, setWeekSnap, setTitle, giveKudos, eventActive, streakMilestonesOf,
   buildingUnitsOf, assemblyUnitPriceOf, buyBuildingUnit, demolishAsset, boostBuild, boostPermit,
-  proPersonaOf, designPlanOf, commissionDesign, boostDesign, resolveM100, renovateAsset, designBuildPlanOf,
+  proPersonaOf, designPlanOf, useRuleOf, BUILD_USE_UNIT_FA, commissionDesign, boostDesign, resolveM100, renovateAsset, designBuildPlanOf,
   activeCoinPacks, buyCosmetic, setCosmetic, offerOf, dismissOffer, areaFromText, rateHit,
   setForSale, tradeAsset, openPartnership, joinPartnership, settlePartnerShares, chargeClanFee,
   openP2pAuction, cancelP2pAuction, bidP2pAuction, settleP2pAuctions,
@@ -1369,7 +1369,15 @@ export async function POST(req: NextRequest) {
         // فاز ۱۱۳ (فیدبکِ مستقیم): کاربری از همین قراردادِ معمار انتخاب می‌شود — متریِ واقعیِ هر کاربری برای تصمیمِ آگاهانه
         uses: await Promise.all(BUILD_USES.map(async u => {
           const pm = await usePerM(a.hood, u.key)
-          return { key: u.key, label: u.label, icon: u.icon, costFactor: useCostFactorOf(u.key === 'residential' ? undefined : u.key), perM: pm.perM, samples: pm.samples, scope: pm.scope }
+          // فاز ۱۲۶ (فیدبک: «برای هر کاربری گزینه‌های متفاوت بیاید») — مشخصاتِ فرمِ همین کاربری از ضابطهٔ knobدار
+          const rule = useRuleOf(u.key, dc)
+          const legalU = rule.floorsCap !== null ? Math.max(1, Math.min(lf.floors, rule.floorsCap)) : lf.floors
+          return {
+            key: u.key, label: u.label, icon: u.icon, costFactor: useCostFactorOf(u.key === 'residential' ? undefined : u.key), perM: pm.perM, samples: pm.samples, scope: pm.scope,
+            legalFloors: legalU, maxFloors: legalU + Math.max(0, dc.maxOverFloors), minUnitArea: rule.minUnitArea,
+            unitsPerSpot: rule.unitsPerSpot, singleUnit: rule.singleUnit, unitFa: rule.unitFa,
+            maxUnitsPerFloor: rule.singleUnit ? 1 : Math.max(1, Math.floor(probe.footprint / Math.max(1, rule.minUnitArea))),
+          }
         })),
       })
     }
@@ -1383,17 +1391,19 @@ export async function POST(req: NextRequest) {
       const it = await getItemById(a.listingId).catch(() => null)
       const landArea = (await landAreaWithEstimate(a, it)).area
       // همان ضابطه‌ای که در پیش‌نمایش دیده (متراژ + عرفِ محله) — تا عددِ قرارداد با عددِ نمایش یکی باشد.
-      const lfS = legalFloorsOf(landArea, await hoodFloorsNorm(a.hood), dc)
-      const d = designPlanOf(landArea, Math.round(Number(b.floors) || 0), Math.round(Number(b.unitsPerFloor) || 0), { ...dc, buildFactor: config().empire.build.buildFactor }, lfS.floors)
-      if (!d.ok) return NextResponse.json({ error: d.reason }, { status: 400 })
       // فاز ۱۱۳: کاربریِ انتخابی در نقشه ثبت می‌شود و تا پروانه/کلنگ/فروش همراهِ پروژه می‌ماند
       const use113 = String(b.use || 'residential')
       if (!BUILD_USES.some(u => u.key === use113)) return NextResponse.json({ error: 'کاربریِ نامعتبر' }, { status: 400 })
       if (use113 !== 'residential' && !((await usePerM(a.hood, use113)).perM > 0))
         return NextResponse.json({ error: `برای کاربریِ ${BUILD_USE_FA[use113]} هنوز نمونهٔ قیمتیِ واقعیِ کافی در بازار نداریم — فعلاً کاربریِ دیگری انتخاب کن` }, { status: 400 })
+      const lfS = legalFloorsOf(landArea, await hoodFloorsNorm(a.hood), dc)
+      // فاز ۱۲۶: اعتبارسنجی با ضابطهٔ همان کاربری (سقفِ طبقاتِ تجاری/ویلا، حدنصابِ مغازه/دفتر، پارکینگِ گروهی، ویلای تک‌واحدی)
+      const upf126 = use113 === 'villa' ? 1 : Math.round(Number(b.unitsPerFloor) || 0)
+      const d = designPlanOf(landArea, Math.round(Number(b.floors) || 0), upf126, { ...dc, buildFactor: config().empire.build.buildFactor }, lfS.floors, use113)
+      if (!d.ok) return NextResponse.json({ error: d.reason }, { status: 400 })
       const fee = Math.max(1, Math.round(d.builtArea * config().empire.build.costPerM * Math.max(0, dc.architectFeePct) / 100))
       // متراژِ زمین داخلِ خودِ نقشه ذخیره می‌شود — کلنگ دیگر به زنده‌ماندنِ آگهیِ واقعی وابسته نیست
-      const r = await commissionDesign(userId, a.id, { floors: Math.round(Number(b.floors)), unitsPerFloor: Math.round(Number(b.unitsPerFloor)), legalFloors: d.legalFloors, footprint: d.footprint, unitArea: d.unitArea, illegalFloors: d.illegalFloors, fee, days: dc.designDays, landArea, use: use113 })
+      const r = await commissionDesign(userId, a.id, { floors: Math.round(Number(b.floors)), unitsPerFloor: upf126, legalFloors: d.legalFloors, footprint: d.footprint, unitArea: d.unitArea, illegalFloors: d.illegalFloors, fee, days: dc.designDays, landArea, use: use113 })
       if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
       return NextResponse.json({ ok: true, fee, illegalFloors: d.illegalFloors, ...(await stateOf(userId, r.empire!)) })
     }
@@ -1560,7 +1570,7 @@ export async function POST(req: NextRequest) {
       // از میانهٔ متریِ واقعیِ محله (بدونِ نمونهٔ کافی → بدونِ عدد، نه عددِ ساختگی) + نام و نمای انتخابی.
       let { perM: dreamPerM, samples: dreamN } = await hoodPerM(a.hood)
       if (!(dreamPerM > 0)) ({ perM: dreamPerM, samples: dreamN } = await hoodPerM(''))
-      const illegal43 = a.design ? Math.max(0, a.design.illegalFloors * a.design.unitsPerFloor) : 0
+      const illegal43 = a.design ? (a.design.use === 'villa' ? 0 : Math.max(0, a.design.illegalFloors * a.design.unitsPerFloor)) : 0   // فاز ۱۲۶: ویلا تک‌واحدی است — تخلفِ طبقه با جریمهٔ متراژ (ماده۱۰۰) حساب می‌شود، نه کسرِ واحد
       for (const o of options) {
         const pl = mkPlan(o.structure, o.quality)
         if (dreamPerM > 0 && pl) {
