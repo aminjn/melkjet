@@ -82,6 +82,7 @@ const sections: NavSection[] = [
       { id: 'profiles',    icon: '👁', label: 'پروفایل‌ها' },
       { id: 'agencyintel', icon: '🏢', label: 'هوشِ آژانس' },
       { id: 'staffCrm',    icon: '📞', label: 'CRM مرکزی (مشتریان)', accent: true },
+      { id: 'crm',         icon: '👁',  label: 'نظارت بر CRM کاربران' },
       { id: 'roles',       icon: '🛡', label: 'نقش‌ها و دسترسی' },
       { id: 'suspension',  icon: '⛔', label: 'تعلیق حساب‌ها' },
       { id: 'support',     icon: '🛟', label: 'پشتیبانی' },
@@ -129,7 +130,7 @@ const viewTitles: Record<View, string> = {
   listings:   'مدیریت آگهی‌ها و محتوا',
   products:   'مدیریت محصولات فروشگاه',
   categories: 'دسته‌بندی‌ها',
-  crm:        'CRM و مدیریت لیدهای کاربران',
+  crm:        'نظارت بر CRM کاربران — لیدهای کلِ سیستم',
   profiles:   'همه پروفایل‌ها',
   connections: 'اتصال‌ها و سرویس‌ها',
   geo:        'مدیریت مناطق و محله‌ها',
@@ -3891,63 +3892,83 @@ function ProductsView() {
 
 // ─── Super-admin CRM control center ────────────────────────────────────────
 function CrmAdminView() {
+  // فاز ۱۲۰ (فیدبکِ مستقیم): نظارتِ سراسری بر CRMهایی که خودِ کاربران (مشاوران/آژانس‌ها) استفاده می‌کنند —
+  // تجمیعِ لیدهای «همهٔ» کاربران + بازکردنِ CRM هر کاربر (فقط‌خواندنی — دادهٔ خودِ اوست).
   const [data, setData] = useState<any>(null)
-  const load = () => fetch('/api/admin/crm').then(r => r.ok ? r.json() : null).then(setData)
+  const [own, setOwn] = useState<any>(null)   // CRM بازشدهٔ یک کاربر
+  const load = () => fetch('/api/admin/crm', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(setData)
   useEffect(() => { load() }, [])
-  const del = async (kind: string, id: string) => { if (!confirm('حذف شود؟')) return; await fetch(`/api/admin/crm?kind=${kind}&id=${id}`, { method: 'DELETE' }); load() }
-  const STAGE: Record<string, { l: string; c: string }> = { new: { l: 'لید جدید', c: '#7a8fae' }, review: { l: 'بررسی', c: '#e7a14a' }, offered: { l: 'پیشنهاد', c: 'var(--gold)' }, contract: { l: 'قرارداد', c: '#5fd98a' }, lost: { l: 'ازدست‌رفته', c: '#e7674a' } }
-  const setStage = async (id: string, stage: string) => { await fetch('/api/admin/crm', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'lead', id, stage }) }); load() }
+  const openOwner = (phone: string) => {
+    setOwn({ loading: true, phone })
+    fetch(`/api/admin/crm?owner=${encodeURIComponent(phone)}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => setOwn(d?.ok ? d : null))
+  }
+  const STG: Record<string, { l: string; c: string }> = { new: { l: 'جدید', c: '#7a8fae' }, contacted: { l: 'تماس', c: '#7a8fae' }, review: { l: 'بررسی', c: '#e7a14a' }, sent: { l: 'ارسالِ فایل', c: '#e7a14a' }, offered: { l: 'پیشنهاد', c: 'var(--gold)' }, visited: { l: 'بازدید', c: 'var(--gold)' }, negotiation: { l: 'مذاکره', c: 'var(--gold)' }, contract: { l: 'قرارداد', c: '#5fd98a' }, won: { l: 'بسته شد ✓', c: '#5fd98a' }, lost: { l: 'ازدست‌رفته', c: '#e7674a' } }
+  const faN = (n: number) => (Number(n) || 0).toLocaleString('fa-IR')
+  const faD = (t?: number) => t ? new Date(t).toLocaleDateString('fa-IR') : '—'
   if (!data) return <Card>در حال بارگذاری…</Card>
   const s = data.stats || {}
   return (
     <div style={{ animation: 'fade .35s ease' }}>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.9 }}>
+        این‌جا CRMهای خودِ کاربران (مشاوران/آژانس‌ها/نقش‌های حرفه‌ای) را می‌بینی — همان لیدهایی که در پنل‌های خودشان ثبت می‌کنند. مشاهدهٔ کامل، بدونِ دست‌کاری در دادهٔ کاربر. برای CRM تیمِ خودت روی مشتریانِ سایت → «CRM مرکزی (مشتریان)».
+      </div>
       <div className="mjsa-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 18 }}>
-        <KPI label="کل لیدها" value={(s.totalLeads || 0).toLocaleString('fa-IR')} icon="◈" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" trend={`${(s.byStage?.contract || 0).toLocaleString('fa-IR')} قرارداد`} />
-        <KPI label="وظایف باز" value={(s.openTasks || 0).toLocaleString('fa-IR')} icon="✓" iconBg="var(--goldDim)" iconColor="var(--gold)" trend={`${(s.totalTasks || 0).toLocaleString('fa-IR')} کل`} />
-        <KPI label="مشتریان" value={(s.totalClients || 0).toLocaleString('fa-IR')} icon="♛" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" trend="ثبت‌شده" />
-        <KPI label="در مذاکره" value={((s.byStage?.offered || 0) + (s.byStage?.review || 0)).toLocaleString('fa-IR')} icon="◴" iconBg="rgba(231,161,74,.15)" iconColor="#e7a14a" trend="بررسی+پیشنهاد" />
+        <KPI label="کلِ لیدهای سیستم" value={faN(s.totalLeads)} icon="◈" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" trend={`${faN(s.weekLeads)} این هفته`} />
+        <KPI label="کاربرانِ دارای CRM فعال" value={faN(s.owners)} icon="👥" iconBg="var(--goldDim)" iconColor="var(--gold)" trend="مشاور/آژانس/حرفه‌ای" />
+        <KPI label="لیدِ داغ" value={faN(s.hot)} icon="🔥" iconBg="rgba(231,161,74,.15)" iconColor="#e7a14a" trend={`${faN(s.openTasks)} وظیفهٔ باز`} />
+        <KPI label="تبدیل‌شده/قرارداد" value={faN(s.won)} icon="♛" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" trend="کلِ سیستم" />
       </div>
-      <Card style={{ marginBottom: 14 }}>
-        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>لیدها ({(data.leads || []).length.toLocaleString('fa-IR')})</div>
-        {(data.leads || []).length === 0 ? <div style={{ color: 'var(--muted)', fontSize: 13, padding: '12px 0' }}>هنوز لیدی ثبت نشده. لیدها از پنل CRM مشاوران ثبت می‌شوند.</div> : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {(data.leads || []).map((l: any) => (
-              <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg2)', borderRadius: 10, padding: '10px 12px', flexWrap: 'wrap' }}>
-                <div style={{ flex: 1, minWidth: 150 }}><div style={{ fontSize: 13.5, fontWeight: 600 }}>{l.name}</div><div style={{ fontSize: 12, color: 'var(--muted)' }}>{[l.need, l.budget, l.phone].filter(Boolean).join(' · ')}</div></div>
-                <select value={l.stage} onChange={e => setStage(l.id, e.target.value)} style={{ background: 'var(--surface)', border: `1px solid ${STAGE[l.stage]?.c || 'var(--line2)'}`, color: STAGE[l.stage]?.c || 'var(--text)', borderRadius: 8, padding: '5px 9px', fontFamily: 'inherit', fontSize: 12 }}>{Object.entries(STAGE).map(([k, v]) => <option key={k} value={k}>{v.l}</option>)}</select>
-                <button onClick={() => del('lead', l.id)} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.35)', color: '#e7674a', borderRadius: 8, padding: '4px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>×</button>
-              </div>
-            ))}
+      <Card>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>CRM کاربران ({faN((data.owners || []).length)} کاربرِ فعال)</div>
+        {!(data.owners || []).length && <div style={{ color: 'var(--muted)', fontSize: 13, padding: '12px 0' }}>هنوز هیچ کاربری در پنلِ خودش لیدی ثبت نکرده — به‌محضِ اولین ثبت، این‌جا دیده می‌شود.</div>}
+        {(data.owners || []).map((o: any) => (
+          <div key={o.phone} onClick={() => openOwner(o.phone)} style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', padding: '10px 4px', borderBottom: '1px solid var(--line)', fontSize: 12.5, cursor: 'pointer' }}>
+            <b style={{ minWidth: 140 }}>{o.name || 'بی‌نام'} <span style={{ color: 'var(--faint)', fontSize: 10.5, direction: 'ltr', display: 'inline-block' }}>{o.phone}</span></b>
+            <span style={{ color: 'var(--muted)' }}>{faN(o.leads)} لید</span>
+            {o.hot > 0 && <span style={{ color: '#e7a14a' }}>🔥 {faN(o.hot)} داغ</span>}
+            {o.won > 0 && <span style={{ color: '#5fd98a' }}>✓ {faN(o.won)} بسته</span>}
+            {o.week > 0 && <span style={{ color: 'var(--muted)', fontSize: 11 }}>+{faN(o.week)} این هفته</span>}
+            <span style={{ flex: 1 }} />
+            <span style={{ color: 'var(--faint)', fontSize: 11 }}>آخرین فعالیت: {faD(o.lastAt)}</span>
+            <span style={{ color: 'var(--gold)', fontSize: 11 }}>مشاهدهٔ CRM ←</span>
           </div>
-        )}
+        ))}
       </Card>
-      <div className="mjsa-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        <Card>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>وظایف ({(data.tasks || []).length.toLocaleString('fa-IR')})</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {(data.tasks || []).slice(0, 30).map((t: any) => (
-              <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, background: 'var(--bg2)', borderRadius: 8, padding: '8px 10px' }}>
-                <span style={{ color: t.done ? '#5fd98a' : 'var(--faint)' }}>{t.done ? '✓' : '○'}</span>
-                <span style={{ flex: 1, textDecoration: t.done ? 'line-through' : 'none', color: t.done ? 'var(--muted)' : 'var(--text)' }}>{t.title}</span>
-                <button onClick={() => del('task', t.id)} style={{ background: 'transparent', border: 'none', color: '#e7674a', cursor: 'pointer', fontSize: 14 }}>×</button>
+
+      {own && <div onClick={() => setOwn(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 300, display: 'flex', justifyContent: 'flex-start' }}>
+        <div onClick={e => e.stopPropagation()} style={{ width: 'min(560px, 96vw)', height: '100%', overflowY: 'auto', background: 'var(--surface)', borderInlineEnd: '1px solid var(--line)', padding: 18 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+            <b style={{ fontSize: 15 }}>CRM «{own.owner?.name || own.phone}»</b>
+            <span style={{ color: 'var(--faint)', fontSize: 11, direction: 'ltr' }}>{own.owner?.phone || own.phone}</span>
+            <span style={{ flex: 1 }} />
+            <button onClick={() => setOwn(null)} style={{ background: 'transparent', border: '1px solid var(--line2)', color: 'var(--text)', borderRadius: 10, padding: '3px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>✕</button>
+          </div>
+          <div style={{ fontSize: 10.5, color: 'var(--faint)', marginBottom: 12 }}>فقط مشاهده — این داده مالِ خودِ کاربر است و از این‌جا تغییری نمی‌کند.</div>
+          {own.loading && <div style={{ color: 'var(--muted)', fontSize: 13 }}>در حال بارگذاری…</div>}
+          {(own.leads || []).map((l: any) => (
+            <div key={l.id} style={{ padding: '9px 0', borderBottom: '1px solid var(--line)', fontSize: 12.5 }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <b>{l.name}</b>
+                {l.phone && <span style={{ color: 'var(--faint)', fontSize: 10.5, direction: 'ltr', display: 'inline-block' }}>{l.phone}</span>}
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: (STG[l.stage] || {}).c || 'var(--muted)' }}>{(STG[l.stage] || {}).l || l.stage}</span>
+                {l.status === 'hot' && <span style={{ fontSize: 10.5, color: '#e7a14a' }}>🔥 داغ</span>}
+                <span style={{ flex: 1 }} />
+                <span style={{ color: 'var(--faint)', fontSize: 10.5 }}>امتیاز {faN(l.score)} · {faN(l.acts)} فعالیت · {faD(l.at)}</span>
+              </div>
+              {(l.need || l.budgetText || l.region) && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>{[l.need, l.budgetText, l.region].filter(Boolean).join(' · ')}</div>}
+            </div>
+          ))}
+          {own.leads && !own.leads.length && <div style={{ color: 'var(--muted)', fontSize: 13 }}>این کاربر هنوز لیدی ندارد.</div>}
+          {(own.tasks || []).length > 0 && <div style={{ marginTop: 14 }}>
+            <b style={{ fontSize: 13 }}>وظایفِ این کاربر ({faN(own.tasks.length)})</b>
+            {own.tasks.map((t: any, i: number) => (
+              <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12, padding: '5px 0', borderBottom: '1px solid var(--line)' }}>
+                <span>{t.done ? '✅' : '⬜'}</span><span style={{ flex: 1 }}>{t.title}</span><span style={{ color: 'var(--faint)', fontSize: 10.5 }}>{t.due || faD(t.createdAt)}</span>
               </div>
             ))}
-            {(data.tasks || []).length === 0 && <div style={{ color: 'var(--muted)', fontSize: 12.5 }}>وظیفه‌ای نیست.</div>}
-          </div>
-        </Card>
-        <Card>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>مشتریان ({(data.clients || []).length.toLocaleString('fa-IR')})</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {(data.clients || []).slice(0, 30).map((c: any) => (
-              <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, background: 'var(--bg2)', borderRadius: 8, padding: '8px 10px' }}>
-                <span style={{ flex: 1 }}>{c.name}{c.phone && <span style={{ color: 'var(--faint)', marginInlineStart: 6, direction: 'ltr' }}>{c.phone}</span>}</span>
-                <button onClick={() => del('client', c.id)} style={{ background: 'transparent', border: 'none', color: '#e7674a', cursor: 'pointer', fontSize: 14 }}>×</button>
-              </div>
-            ))}
-            {(data.clients || []).length === 0 && <div style={{ color: 'var(--muted)', fontSize: 12.5 }}>مشتری‌ای نیست.</div>}
-          </div>
-        </Card>
-      </div>
+          </div>}
+        </div>
+      </div>}
     </div>
   )
 }

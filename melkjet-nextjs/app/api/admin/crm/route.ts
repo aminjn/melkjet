@@ -9,24 +9,56 @@ async function guard() {
   return s && (s.role === 'super_admin' || (s.staff || []).length > 0) ? s : null
 }
 
-// GET → aggregated super-admin CRM control center (scoped to the admin's own records).
-export async function GET() {
+// فاز ۱۲۰ (فیدبکِ مستقیم: «CRM که خودشان استفاده می‌کنند را در سوپرادمین ببینم») — نظارتِ سراسری:
+// تجمیعِ لیدها/وظایفِ «همهٔ» کاربرانِ سیستم + drill-down فقط‌خواندنیِ CRM هر کاربر. قبلاً فقط دادهٔ
+// اکانتِ خودِ ادمین را می‌خواند و همیشه صفر بود — ریشهٔ گزارشِ «به کلِ سیستم وصل نیست».
+export async function GET(req: NextRequest) {
   const s = await guard()
   if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
-  const leads = await listLeads(s.phone)
-  const tasks = await listTasks(s.phone)
-  const clients = await listClients()
-  const analytics = await leadAnalytics(s.phone)
+  const { listAllLeads } = await import('@/app/lib/leads-store')
+  const { listAllTasks } = await import('@/app/lib/crm-store')
+  const { getAccount } = await import('@/app/lib/account-store')
+  const owner = new URL(req.url).searchParams.get('owner') || ''
+
+  // drill-down: CRM کاملِ یک کاربرِ مشخص — فقط‌خواندنی
+  if (owner) {
+    const [leads, tasks] = await Promise.all([listLeads(owner), listTasks(owner)])
+    const a = getAccount(owner)
+    return NextResponse.json({
+      ok: true, owner: { phone: owner, name: a?.name || '' },
+      leads: leads.slice(0, 200).map(l => ({ id: l.id, name: l.name, phone: l.phone || '', need: l.need || '', budgetText: l.budgetText || '', region: l.region || '', stage: l.stage, status: l.status, score: l.score, at: l.lastActivityAt || l.updatedAt || l.createdAt, acts: (l.activities || []).length })),
+      tasks: tasks.slice(0, 50).map(t => ({ title: t.title, done: !!t.done, due: t.due || '', createdAt: t.createdAt })),
+    })
+  }
+
+  // نمای سراسری: همهٔ لیدهای سیستم گروه‌بندی‌شده به‌ازای هر کاربر
+  const [allLeads, allTasks, clients] = await Promise.all([listAllLeads(), listAllTasks(), listClients()])
+  const now = Date.now(), weekAgo = now - 7 * 864e5
+  const byOwner = new Map<string, { leads: number; hot: number; won: number; week: number; lastAt: number }>()
+  for (const l of allLeads) {
+    const o = l.owner || '؟'
+    const g = byOwner.get(o) || { leads: 0, hot: 0, won: 0, week: 0, lastAt: 0 }
+    g.leads++
+    if (l.status === 'hot') g.hot++
+    if (l.stage === 'won' || l.status === 'converted') g.won++
+    if ((l.createdAt || 0) >= weekAgo) g.week++
+    g.lastAt = Math.max(g.lastAt, l.lastActivityAt || l.updatedAt || l.createdAt || 0)
+    byOwner.set(o, g)
+  }
+  const owners = [...byOwner.entries()].map(([phone, g]) => {
+    const a = getAccount(phone)
+    return { phone, name: a?.name || '', ...g }
+  }).sort((a, b) => b.lastAt - a.lastAt)
   const stats = {
-    totalLeads: leads.length,
-    byStage: analytics.byStage,
-    conversionRate: analytics.conversionRate,
-    revenue: analytics.revenue,
-    totalTasks: tasks.length,
-    openTasks: tasks.filter(t => !t.done).length,
+    totalLeads: allLeads.length,
+    weekLeads: allLeads.filter(l => (l.createdAt || 0) >= weekAgo).length,
+    hot: allLeads.filter(l => l.status === 'hot').length,
+    won: allLeads.filter(l => l.stage === 'won' || l.status === 'converted').length,
+    owners: owners.length,
+    openTasks: allTasks.filter(t => !t.done).length,
     totalClients: clients.length,
   }
-  return NextResponse.json({ leads, tasks, clients, stats })
+  return NextResponse.json({ ok: true, stats, owners: owners.slice(0, 300) })
 }
 
 // PATCH { kind:'lead', id, ...patch } → { lead }

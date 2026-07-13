@@ -100,6 +100,8 @@ function defaults(): Role[] {
     mkRole('تأمین‌کنندهٔ مصالح', '/materials', ['store', 'marketing', 'website']),
     mkRole('مشاور حقوقی', '/legal', ['content', 'website']),
     ...proDefaults(),
+    // فاز ۱۱۹ — نقشِ داخلیِ کارمندان (نصبِ تازه هم باید داشته باشد؛ مهاجرتِ پایین فقط نصب‌های قدیمی را می‌گیرد)
+    { id: 'staff', name: 'کارمندانِ ملک‌جت', dashboard: '/admin', permissions: [], builtin: true, hidden: true, active: true, createdAt: Date.now() },
   ]
 }
 

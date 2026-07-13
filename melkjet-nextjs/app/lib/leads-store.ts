@@ -145,6 +145,11 @@ export function scoreOf(l: Lead): number {
   return Math.max(0, Math.min(100, Math.round(s)))
 }
 
+// فاز ۱۲۰ — نظارتِ سوپرادمین: همهٔ لیدهای همهٔ کاربرانِ سیستم (فقط‌خواندنی در پنلِ ادمین)
+export async function listAllLeads(): Promise<Lead[]> {
+  return (await load()).leads.map(migrate).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+}
+
 export async function listLeads(owner: string): Promise<Lead[]> {
   return (await load()).leads.filter(l => l.owner === owner).map(migrate).sort((a, b) => (b.score - a.score) || (b.updatedAt - a.updatedAt))
 }

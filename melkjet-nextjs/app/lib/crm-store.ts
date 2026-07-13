@@ -35,6 +35,11 @@ async function mutate<R>(fn: (db: DB) => R): Promise<R> {
   const db = fileLoad(); const r = fn(db); fileSave(db); return r
 }
 
+// فاز ۱۲۰ — نظارتِ سوپرادمین: همهٔ وظایفِ همهٔ کاربران
+export async function listAllTasks(): Promise<Task[]> {
+  return (await load()).tasks.sort((a, b) => b.createdAt - a.createdAt)
+}
+
 export async function listTasks(owner: string): Promise<Task[]> {
   return (await load()).tasks.filter(t => t.owner === owner).sort((a, b) => b.createdAt - a.createdAt)
 }
