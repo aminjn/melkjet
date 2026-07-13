@@ -33,15 +33,21 @@ export default function StaffCrmView() {
   const [stats, setStats] = useState<any>(null)
   const [prof, setProf] = useState<any>(null)      // پروندهٔ ۳۶۰ (تیکت/سفارش/امپراتوری/علاقه‌مندی)
   const [smsTxt, setSmsTxt] = useState('')
-  const [tab, setTab] = useState<'customers' | 'follow' | 'report'>('customers')   // فاز ۱۲۲: زیرمنو
+  const [tab, setTab] = useState<'customers' | 'tasks' | 'follow' | 'report'>('customers')   // فاز ۱۲۲/۱۲۳: زیرمنو
   const [upcoming, setUpcoming] = useState<any[]>([])
   const [doneRecent, setDoneRecent] = useState<any[]>([])
   const [report, setReport] = useState<any[]>([])
+  const [tasks, setTasks] = useState<any[]>([])          // فاز ۱۲۳: وظایفِ تیمی
+  const [meName, setMeName] = useState('')
+  const [tTitle, setTTitle] = useState('')
+  const [tAssign, setTAssign] = useState('')
+  const [tPhone, setTPhone] = useState('')
+  const [tDue, setTDue] = useState('')
 
   const load = useCallback(() => {
     fetch(`/api/admin/staff-crm?q=${encodeURIComponent(q)}&status=${status}&mine=${mine ? 1 : 0}`, { cache: 'no-store' })
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.ok) { setRows(d.rows); setTotal(d.total); setDueToday(d.dueToday || []); setStats(d.stats || null); setUpcoming(d.upcoming || []); setDoneRecent(d.doneRecent || []); setReport(d.report || []) } })
+      .then(d => { if (d?.ok) { setRows(d.rows); setTotal(d.total); setDueToday(d.dueToday || []); setStats(d.stats || null); setUpcoming(d.upcoming || []); setDoneRecent(d.doneRecent || []); setReport(d.report || []); setTasks(d.tasks || []); setMeName(d.meName || '') } })
       .catch(() => {})
   }, [q, status, mine])
   useEffect(() => { load() }, [load])
@@ -79,10 +85,56 @@ export default function StaffCrmView() {
 
       {/* فاز ۱۲۲ — زیرمنو */}
       <div style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--line)', paddingBottom: 8 }}>
-        {([['customers', '📋 مشتریان'], ['follow', `⏰ پیگیری‌ها${dueToday.length ? ` (${fa(dueToday.length)})` : ''}`], ['report', '📊 گزارشِ عملکرد']] as const).map(([k, l]) => (
+        {([['customers', '📋 مشتریان'], ['tasks', `✅ وظایف${tasks.filter((t: any) => !t.done).length ? ` (${fa(tasks.filter((t: any) => !t.done).length)})` : ''}`], ['follow', `⏰ پیگیری‌ها${dueToday.length ? ` (${fa(dueToday.length)})` : ''}`], ['report', '📊 گزارشِ عملکرد']] as const).map(([k, l]) => (
           <button key={k} onClick={() => setTab(k)} style={{ ...btnGhost, fontWeight: tab === k ? 800 : 400, borderColor: tab === k ? 'var(--gold)' : 'var(--line2)', color: tab === k ? 'var(--gold)' : 'var(--text)' }}>{l}</button>
         ))}
       </div>
+
+      {/* ── تبِ وظایف (فاز ۱۲۳): تعریفِ تسکِ تیمی با مسئول/مشتری/سررسید ── */}
+      {tab === 'tasks' && <>
+        <div style={{ ...card, borderColor: 'var(--goldDim)' }}>
+          <b style={{ fontSize: 13.5 }}>➕ تعریفِ وظیفهٔ جدید</b>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginTop: 10 }}>
+            <label style={{ fontSize: 11, color: 'var(--muted)', flex: 2, minWidth: 220 }}>عنوانِ وظیفه *<br />
+              <input value={tTitle} onChange={e => setTTitle(e.target.value)} maxLength={160} placeholder="مثلاً: تماس با آقای سمیعی برای تمدیدِ پلن" style={{ ...inp, width: '100%', marginTop: 4 }} /></label>
+            <label style={{ fontSize: 11, color: 'var(--muted)', minWidth: 130 }}>مسئول (نامِ همکار)<br />
+              <input value={tAssign} onChange={e => setTAssign(e.target.value)} placeholder={meName || 'خالی = همه'} style={{ ...inp, width: '100%', marginTop: 4 }} /></label>
+            <label style={{ fontSize: 11, color: 'var(--muted)', minWidth: 150 }}>مشتریِ مرتبط (شماره — اختیاری)<br />
+              <input value={tPhone} onChange={e => setTPhone(e.target.value.replace(/[^\d]/g, ''))} placeholder="09…" style={{ ...inp, width: '100%', marginTop: 4, direction: 'ltr' }} /></label>
+            <label style={{ fontSize: 11, color: 'var(--muted)' }}>سررسید<br />
+              <input type="datetime-local" value={tDue} onChange={e => setTDue(e.target.value)} style={{ ...inp, marginTop: 4 }} /></label>
+            <button style={btn} disabled={busy || !tTitle.trim()} onClick={async () => {
+              const d = await post({ action: 'taskAdd', title: tTitle, assignedTo: tAssign, forPhone: tPhone, dueAt: tDue ? new Date(tDue).getTime() : undefined })
+              if (d) { setTasks(d.tasks || []); setTTitle(''); setTAssign(''); setTPhone(''); setTDue('') }
+            }}>ثبتِ وظیفه</button>
+          </div>
+        </div>
+        <div style={card}>
+          <b style={{ fontSize: 13.5 }}>وظایفِ باز ({fa(tasks.filter((t: any) => !t.done).length)})</b>
+          {!tasks.filter((t: any) => !t.done).length && <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 8 }}>وظیفهٔ بازی نیست — با فرمِ بالا برای خودت یا همکارانت تسک بساز.</div>}
+          {tasks.filter((t: any) => !t.done).map((t: any) => (
+            <div key={t.id} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 12.5 }}>
+              <input type="checkbox" checked={false} disabled={busy} onChange={async () => { const d = await post({ action: 'taskToggle', id: t.id }); if (d) setTasks(d.tasks || []) }} style={{ width: 16, height: 16, accentColor: 'var(--gold)', cursor: 'pointer' }} />
+              <span style={{ flex: 1, minWidth: 180 }}>{t.title}</span>
+              {t.assignedTo && <span style={{ fontSize: 10.5, border: '1px solid var(--goldDim)', color: 'var(--gold)', borderRadius: 9, padding: '1px 9px' }}>👤 {t.assignedTo}</span>}
+              {t.forPhone && <span style={{ fontSize: 10.5, color: 'var(--gold)', cursor: 'pointer' }} onClick={() => { setTab('customers'); openCustomer(rows.find(r => r.phone === t.forPhone) || { phone: t.forPhone, name: t.forName }) }}>🗂 {t.forName || t.forPhone}</span>}
+              {t.dueAt && <span style={{ fontSize: 10.5, color: t.dueAt < Date.now() ? '#e88' : 'var(--muted)' }}>⏰ {faDT(t.dueAt)}</span>}
+              <span style={{ fontSize: 9.5, color: 'var(--faint)' }}>ثبتِ {String(t.by).split(' (')[0]}</span>
+              <button title="حذف" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e88', fontSize: 12 }} disabled={busy} onClick={async () => { if (!confirm('این وظیفه حذف شود؟')) return; const d = await post({ action: 'taskDelete', id: t.id }); if (d) setTasks(d.tasks || []) }}>🗑</button>
+            </div>
+          ))}
+        </div>
+        {tasks.filter((t: any) => t.done).length > 0 && <div style={card}>
+          <b style={{ fontSize: 13.5, color: 'var(--muted)' }}>انجام‌شده‌ها ({fa(tasks.filter((t: any) => t.done).length)})</b>
+          {tasks.filter((t: any) => t.done).slice(0, 25).map((t: any) => (
+            <div key={t.id} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--line)', fontSize: 12, color: 'var(--muted)' }}>
+              <input type="checkbox" checked disabled={busy} onChange={async () => { const d = await post({ action: 'taskToggle', id: t.id }); if (d) setTasks(d.tasks || []) }} style={{ width: 15, height: 15, accentColor: 'var(--gold)', cursor: 'pointer' }} />
+              <span style={{ flex: 1, textDecoration: 'line-through' }}>{t.title}</span>
+              <span style={{ fontSize: 10 }}>✓ {String(t.doneBy || '').split(' (')[0]} · {faDT(t.doneAt)}</span>
+            </div>
+          ))}
+        </div>}
+      </>}
 
       {/* ── تبِ پیگیری‌ها ── */}
       {tab === 'follow' && <>
@@ -178,7 +230,7 @@ export default function StaffCrmView() {
             <thead><tr style={{ color: 'var(--muted)', textAlign: 'right', background: 'var(--bg2)' }}>
               <th style={{ padding: 10 }}>مشتری</th><th style={{ padding: 10 }}>نقش</th><th style={{ padding: 10 }}>پلن</th>
               <th style={{ padding: 10 }} title="فایل‌ها/آگهی‌های خودش در پنلش">فایل</th><th style={{ padding: 10 }} title="لیدهای خودش در CRM پنلش">لید</th>
-              <th style={{ padding: 10 }}>آخرین ورود</th><th style={{ padding: 10 }}>وضعیت</th><th style={{ padding: 10 }}>مسئول</th><th style={{ padding: 10 }}>آخرین فعالیت</th>
+              <th style={{ padding: 10 }}>آخرین ورود</th><th style={{ padding: 10 }}>وضعیت</th><th style={{ padding: 10 }}>مسئول</th><th style={{ padding: 10 }}>آخرین فعالیت</th><th style={{ padding: 10 }}></th>
             </tr></thead>
             <tbody>
               {rows.map(r => (
@@ -192,6 +244,7 @@ export default function StaffCrmView() {
                   <td style={{ padding: 10 }}><span style={{ color: ST_COLOR[r.status], fontWeight: 700 }}>{(STAFF_CRM_STATUS_FA as any)[r.status]}</span></td>
                   <td style={{ padding: 10, color: 'var(--muted)' }}>{r.assignedTo || '—'}</td>
                   <td style={{ padding: 10, color: 'var(--faint)', fontSize: 11 }}>{r.lastActText || '—'}</td>
+                  <td style={{ padding: 10 }}><button style={{ ...btn, padding: '5px 14px', fontSize: 11.5 }} onClick={e => { e.stopPropagation(); openCustomer(r) }}>➕ پرونده و ثبت</button></td>
                 </tr>
               ))}
               {!rows.length && <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: 'var(--muted)' }}>مشتری‌ای با این فیلتر نیست.</td></tr>}

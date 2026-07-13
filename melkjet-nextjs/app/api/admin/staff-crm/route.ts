@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
 import { listAccounts, getAccount } from '@/app/lib/account-store'
 import { listRoles } from '@/app/lib/role-store'
-import { staffCrmAll, addStaffAct, setStaffStatus, assignStaff, markActDone, type StaffCrmStatus } from '@/app/lib/staff-crm-store'
+import { staffCrmAll, addStaffAct, setStaffStatus, assignStaff, markActDone, listStaffTasks, addStaffTask, toggleStaffTask, deleteStaffTask, type StaffCrmStatus } from '@/app/lib/staff-crm-store'
 import { logAudit } from '@/app/lib/audit-store'
 import { listByOwner } from '@/app/lib/ticket-store'
 import { getPrefs } from '@/app/lib/user-store'
@@ -97,16 +97,43 @@ export async function GET(req: NextRequest) {
     g.total++; g.lastAt = Math.max(g.lastAt, a.at)
   }
   const report = Object.entries(perf).map(([name, g]) => ({ name, ...g })).sort((a, b) => b.total - a.total)
-  return NextResponse.json({ ok: true, rows: rows.slice(0, 400), total: rows.length, dueToday, upcoming, doneRecent, report, stats })
+  // فاز ۱۲۳ — وظایفِ تیمی
+  const tasks = await listStaffTasks()
+  return NextResponse.json({ ok: true, rows: rows.slice(0, 400), total: rows.length, dueToday, upcoming, doneRecent, report, stats, tasks: tasks.slice(0, 120), meName })
 }
 
 export async function POST(req: NextRequest) {
   const s = await guard()
   if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const b = await req.json().catch(() => ({}))
+  const action = String(b.action || '')
+
+  // ── فاز ۱۲۳: وظایفِ تیمی (مستقل از مشتری — الزامِ phone ندارند) ──
+  if (action === 'taskAdd') {
+    const title = String(b.title || '').trim()
+    if (!title) return NextResponse.json({ error: 'عنوانِ وظیفه را بنویس' }, { status: 400 })
+    const forPhone = String(b.forPhone || '').trim()
+    const forAcc = forPhone ? getAccount(forPhone) : null
+    if (forPhone && !forAcc) return NextResponse.json({ error: 'مشتریِ مرتبط یافت نشد' }, { status: 404 })
+    const t = await addStaffTask({
+      title, by: await byName(s.phone),
+      assignedTo: String(b.assignedTo || '').trim().slice(0, 40) || undefined,
+      forPhone: forPhone || undefined, forName: forAcc?.name || undefined,
+      dueAt: Number(b.dueAt) > Date.now() - 864e5 ? Number(b.dueAt) : undefined,
+    })
+    return NextResponse.json({ ok: true, task: t, tasks: await listStaffTasks() })
+  }
+  if (action === 'taskToggle') {
+    await toggleStaffTask(String(b.id || ''), await byName(s.phone))
+    return NextResponse.json({ ok: true, tasks: await listStaffTasks() })
+  }
+  if (action === 'taskDelete') {
+    await deleteStaffTask(String(b.id || ''))
+    return NextResponse.json({ ok: true, tasks: await listStaffTasks() })
+  }
+
   const phone = String(b.phone || '')
   if (!phone || !getAccount(phone)) return NextResponse.json({ error: 'مشتری (اکانتِ سایت) یافت نشد' }, { status: 404 })
-  const action = String(b.action || '')
 
   if (action === 'act') {
     const kind = ['call', 'follow', 'note', 'sms'].includes(String(b.kind)) ? String(b.kind) as 'call' | 'follow' | 'note' | 'sms' : 'note'
