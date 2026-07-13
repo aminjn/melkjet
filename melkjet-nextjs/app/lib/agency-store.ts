@@ -282,6 +282,14 @@ export async function addDeal(o: string, input: { title: string; amount: number;
   return c
 }
 
+// فاز ۱۲۲ — نظارتِ سوپرادمین: خلاصهٔ کارِ همهٔ آژانس‌ها
+export async function agencyWorkSummary(): Promise<Record<string, { leads: number; listings: number; agents: number; deals: number }>> {
+  const db = await load()
+  const out: Record<string, { leads: number; listings: number; agents: number; deals: number }> = {}
+  for (const [o, a] of Object.entries(db.agencies)) out[o] = { leads: (a.leads || []).length, listings: (a.listings || []).length, agents: (a.agents || []).length, deals: (a.deals || []).length }
+  return out
+}
+
 export async function listAgents(o: string): Promise<Agent[]> { return (await getAgency(o)).agents }
 export async function listListings(o: string): Promise<Listing[]> { return (await getAgency(o)).listings }
 export async function listLeads(o: string): Promise<Lead[]> { return (await getAgency(o)).leads }

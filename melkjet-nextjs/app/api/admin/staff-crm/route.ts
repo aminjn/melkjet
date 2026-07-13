@@ -9,6 +9,9 @@ import { getPrefs } from '@/app/lib/user-store'
 import { listOrders } from '@/app/lib/comm-store'
 import { getEmpire, empireLevel } from '@/app/lib/empire-store'
 import { sendServiceSms } from '@/app/lib/sms'
+import { advisorWorkSummary } from '@/app/lib/advisor-store'
+import { agencyWorkSummary } from '@/app/lib/agency-store'
+import { listAllLeads } from '@/app/lib/leads-store'
 
 // 📞 فاز ۱۱۶ — CRM مرکزیِ پرسنل: مشتری = اکانتِ واقعیِ سایت؛ پرسنل تماس/پیگیری/یادداشت ثبت می‌کنند.
 // دسترسی: سوپرادمین یا پرسنلِ دارای بخشِ staffCrm (اجرای اصلی در proxy؛ اینجا دفاعِ دوم).
@@ -31,6 +34,14 @@ export async function GET(req: NextRequest) {
   const roleFa = new Map(listRoles().map(r => [r.id, r.name]))
   const crm = await staffCrmAll()
   const now = Date.now()
+  // فاز ۱۲۲: داراییِ کاریِ هر مشتری بر اساسِ نقشش (فایل/لید/قرار) — از استورهای واقعیِ خودشان
+  const [advW, agW, allLeads] = await Promise.all([
+    advisorWorkSummary().catch(() => ({} as Record<string, { leads: number; listings: number; appts: number }>)),
+    agencyWorkSummary().catch(() => ({} as Record<string, { leads: number; listings: number; agents: number; deals: number }>)),
+    listAllLeads().catch(() => []),
+  ])
+  const crmLeadsByOwner: Record<string, number> = {}
+  for (const l of allLeads) { const o = l.owner || ''; if (o) crmLeadsByOwner[o] = (crmLeadsByOwner[o] || 0) + 1 }
 
   const rows = listAccounts()
     .map(a => {
@@ -41,6 +52,9 @@ export async function GET(req: NextRequest) {
         phone: a.phone, name: a.name || '', role: roleFa.get(a.role || '') || a.role || '',
         plan: a.plan || '', lastLogin: a.lastLogin || a.createdAt, createdAt: a.createdAt,
         status: e?.status || 'new', assignedTo: e?.assignedTo || '', acts: e?.acts.length || 0,
+        files: (advW[a.phone]?.listings || 0) + (agW[a.phone]?.listings || 0),
+        leads: (crmLeadsByOwner[a.phone] || 0) + (advW[a.phone]?.leads || 0) + (agW[a.phone]?.leads || 0),
+        appts: advW[a.phone]?.appts || 0,
         lastActAt: lastAct?.at || 0, lastActText: lastAct ? `${lastAct.by.split(' (')[0]}: ${lastAct.text.slice(0, 60)}` : '',
         dueCount: due.length,
       }
@@ -65,7 +79,25 @@ export async function GET(req: NextRequest) {
     customer: rows.filter(r => r.status === 'customer').length,
     due: dueToday.length,
   }
-  return NextResponse.json({ ok: true, rows: rows.slice(0, 400), total: rows.length, dueToday, stats })
+  // تبِ «پیگیری‌ها»: همهٔ یادآوری‌های آینده (باز) + انجام‌شده‌های اخیر
+  const upcoming = Object.entries(crm).flatMap(([phone, e]) =>
+    e.acts.filter(x => x.dueAt && !x.done && x.dueAt > now + 864e5)
+      .map(x => ({ phone, name: rows.find(r => r.phone === phone)?.name || '', at: x.at, dueAt: x.dueAt!, text: x.text, by: x.by })))
+    .sort((a, b) => a.dueAt - b.dueAt).slice(0, 80)
+  const doneRecent = Object.entries(crm).flatMap(([phone, e]) =>
+    e.acts.filter(x => x.dueAt && x.done)
+      .map(x => ({ phone, name: rows.find(r => r.phone === phone)?.name || '', dueAt: x.dueAt!, text: x.text, by: x.by })))
+    .sort((a, b) => b.dueAt - a.dueAt).slice(0, 40)
+  // گزارشِ عملکردِ پرسنل: هر همکار چند تماس/پیامک/یادداشت/پیگیری ثبت کرده (پاسخ‌گویی)
+  const perf: Record<string, { calls: number; sms: number; notes: number; follows: number; total: number; lastAt: number }> = {}
+  for (const e of Object.values(crm)) for (const a of e.acts) {
+    const k = a.by.split(' (')[0]
+    const g = perf[k] || (perf[k] = { calls: 0, sms: 0, notes: 0, follows: 0, total: 0, lastAt: 0 })
+    if (a.kind === 'call') g.calls++; else if (a.kind === 'sms') g.sms++; else if (a.kind === 'follow') g.follows++; else g.notes++
+    g.total++; g.lastAt = Math.max(g.lastAt, a.at)
+  }
+  const report = Object.entries(perf).map(([name, g]) => ({ name, ...g })).sort((a, b) => b.total - a.total)
+  return NextResponse.json({ ok: true, rows: rows.slice(0, 400), total: rows.length, dueToday, upcoming, doneRecent, report, stats })
 }
 
 export async function POST(req: NextRequest) {

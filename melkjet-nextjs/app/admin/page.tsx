@@ -3914,7 +3914,7 @@ function CrmAdminView() {
       </div>
       <div className="mjsa-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 18 }}>
         <KPI label="کلِ لیدهای سیستم" value={faN(s.totalLeads)} icon="◈" iconBg="rgba(91,155,213,.15)" iconColor="#5b9bd5" trend={`${faN(s.weekLeads)} این هفته`} />
-        <KPI label="کاربرانِ دارای CRM فعال" value={faN(s.owners)} icon="👥" iconBg="var(--goldDim)" iconColor="var(--gold)" trend="مشاور/آژانس/حرفه‌ای" />
+        <KPI label="کاربرانِ دارای کارِ فعال" value={faN(s.owners)} icon="👥" iconBg="var(--goldDim)" iconColor="var(--gold)" trend={`${faN(s.files || 0)} فایل/آگهی`} />
         <KPI label="لیدِ داغ" value={faN(s.hot)} icon="🔥" iconBg="rgba(231,161,74,.15)" iconColor="#e7a14a" trend={`${faN(s.openTasks)} وظیفهٔ باز`} />
         <KPI label="تبدیل‌شده/قرارداد" value={faN(s.won)} icon="♛" iconBg="rgba(95,217,138,.15)" iconColor="#5fd98a" trend="کلِ سیستم" />
       </div>
@@ -3924,6 +3924,11 @@ function CrmAdminView() {
         {(data.owners || []).map((o: any) => (
           <div key={o.phone} onClick={() => openOwner(o.phone)} style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', padding: '10px 4px', borderBottom: '1px solid var(--line)', fontSize: 12.5, cursor: 'pointer' }}>
             <b style={{ minWidth: 140 }}>{o.name || 'بی‌نام'} <span style={{ color: 'var(--faint)', fontSize: 10.5, direction: 'ltr', display: 'inline-block' }}>{o.phone}</span></b>
+            {o.role && <span style={{ fontSize: 10.5, color: 'var(--faint)', border: '1px solid var(--line2)', borderRadius: 8, padding: '1px 8px' }}>{o.role}</span>}
+            {o.files > 0 && <span style={{ color: 'var(--gold)' }}>📁 {faN(o.files)} فایل</span>}
+            {o.appts > 0 && <span style={{ color: 'var(--muted)' }}>📅 {faN(o.appts)} قرار</span>}
+            {o.agents > 0 && <span style={{ color: 'var(--muted)' }}>🧑‍💼 {faN(o.agents)} مشاور</span>}
+            {o.deals > 0 && <span style={{ color: '#5fd98a' }}>🤝 {faN(o.deals)} معامله</span>}
             <span style={{ color: 'var(--muted)' }}>{faN(o.leads)} لید</span>
             {o.hot > 0 && <span style={{ color: '#e7a14a' }}>🔥 {faN(o.hot)} داغ</span>}
             {o.won > 0 && <span style={{ color: '#5fd98a' }}>✓ {faN(o.won)} بسته</span>}

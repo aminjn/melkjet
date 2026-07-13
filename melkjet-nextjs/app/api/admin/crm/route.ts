@@ -31,8 +31,13 @@ export async function GET(req: NextRequest) {
     })
   }
 
-  // نمای سراسری: همهٔ لیدهای سیستم گروه‌بندی‌شده به‌ازای هر کاربر
-  const [allLeads, allTasks, clients] = await Promise.all([listAllLeads(), listAllTasks(), listClients()])
+  // نمای سراسری: همهٔ لیدها + فایل‌ها/قرارهای مشاوران و آژانس‌ها — «هر چیزی که هر نقش دارد»
+  const { advisorWorkSummary } = await import('@/app/lib/advisor-store')
+  const { agencyWorkSummary } = await import('@/app/lib/agency-store')
+  const [allLeads, allTasks, clients, advW, agW] = await Promise.all([
+    listAllLeads(), listAllTasks(), listClients(),
+    advisorWorkSummary().catch(() => ({})), agencyWorkSummary().catch(() => ({})),
+  ])
   const now = Date.now(), weekAgo = now - 7 * 864e5
   const byOwner = new Map<string, { leads: number; hot: number; won: number; week: number; lastAt: number }>()
   for (const l of allLeads) {
@@ -45,16 +50,29 @@ export async function GET(req: NextRequest) {
     g.lastAt = Math.max(g.lastAt, l.lastActivityAt || l.updatedAt || l.createdAt || 0)
     byOwner.set(o, g)
   }
+  // مالکانی که فقط فایل/قرار دارند (بدونِ لیدِ Sales OS) هم باید دیده شوند
+  for (const o of [...Object.keys(advW), ...Object.keys(agW)]) if (!byOwner.has(o)) byOwner.set(o, { leads: 0, hot: 0, won: 0, week: 0, lastAt: 0 })
+  const roleFa2 = new Map((await import('@/app/lib/role-store')).listRoles().map(r => [r.id, r.name]))
   const owners = [...byOwner.entries()].map(([phone, g]) => {
     const a = getAccount(phone)
-    return { phone, name: a?.name || '', ...g }
-  }).sort((a, b) => b.lastAt - a.lastAt)
+    const aw = (advW as Record<string, { leads: number; listings: number; appts: number }>)[phone]
+    const gw = (agW as Record<string, { leads: number; listings: number; agents: number; deals: number }>)[phone]
+    return {
+      phone, name: a?.name || '', role: roleFa2.get(a?.role || '') || a?.role || '', ...g,
+      leads: g.leads + (aw?.leads || 0) + (gw?.leads || 0),
+      files: (aw?.listings || 0) + (gw?.listings || 0),
+      appts: aw?.appts || 0, agents: gw?.agents || 0, deals: gw?.deals || 0,
+    }
+  }).filter(o => o.leads + o.files + o.appts + o.agents + o.deals > 0)
+    .sort((a, b) => (b.leads + b.files) - (a.leads + a.files))
+  const sumF = owners.reduce((t, o) => t + o.files, 0)
   const stats = {
-    totalLeads: allLeads.length,
+    totalLeads: owners.reduce((t, o) => t + o.leads, 0),
     weekLeads: allLeads.filter(l => (l.createdAt || 0) >= weekAgo).length,
     hot: allLeads.filter(l => l.status === 'hot').length,
     won: allLeads.filter(l => l.stage === 'won' || l.status === 'converted').length,
     owners: owners.length,
+    files: sumF,
     openTasks: allTasks.filter(t => !t.done).length,
     totalClients: clients.length,
   }

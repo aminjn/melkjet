@@ -33,11 +33,15 @@ export default function StaffCrmView() {
   const [stats, setStats] = useState<any>(null)
   const [prof, setProf] = useState<any>(null)      // پروندهٔ ۳۶۰ (تیکت/سفارش/امپراتوری/علاقه‌مندی)
   const [smsTxt, setSmsTxt] = useState('')
+  const [tab, setTab] = useState<'customers' | 'follow' | 'report'>('customers')   // فاز ۱۲۲: زیرمنو
+  const [upcoming, setUpcoming] = useState<any[]>([])
+  const [doneRecent, setDoneRecent] = useState<any[]>([])
+  const [report, setReport] = useState<any[]>([])
 
   const load = useCallback(() => {
     fetch(`/api/admin/staff-crm?q=${encodeURIComponent(q)}&status=${status}&mine=${mine ? 1 : 0}`, { cache: 'no-store' })
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.ok) { setRows(d.rows); setTotal(d.total); setDueToday(d.dueToday || []); setStats(d.stats || null) } })
+      .then(d => { if (d?.ok) { setRows(d.rows); setTotal(d.total); setDueToday(d.dueToday || []); setStats(d.stats || null); setUpcoming(d.upcoming || []); setDoneRecent(d.doneRecent || []); setReport(d.report || []) } })
       .catch(() => {})
   }, [q, status, mine])
   useEffect(() => { load() }, [load])
@@ -73,6 +77,72 @@ export default function StaffCrmView() {
         ))}
       </div>}
 
+      {/* فاز ۱۲۲ — زیرمنو */}
+      <div style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--line)', paddingBottom: 8 }}>
+        {([['customers', '📋 مشتریان'], ['follow', `⏰ پیگیری‌ها${dueToday.length ? ` (${fa(dueToday.length)})` : ''}`], ['report', '📊 گزارشِ عملکرد']] as const).map(([k, l]) => (
+          <button key={k} onClick={() => setTab(k)} style={{ ...btnGhost, fontWeight: tab === k ? 800 : 400, borderColor: tab === k ? 'var(--gold)' : 'var(--line2)', color: tab === k ? 'var(--gold)' : 'var(--text)' }}>{l}</button>
+        ))}
+      </div>
+
+      {/* ── تبِ پیگیری‌ها ── */}
+      {tab === 'follow' && <>
+        <div style={{ ...card, borderColor: dueToday.length ? '#e7a14a' : 'var(--line)' }}>
+          <b style={{ fontSize: 13.5 }}>⏰ سررسیدِ امروز و گذشته ({fa(dueToday.length)})</b>
+          {!dueToday.length && <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 8 }}>هیچ پیگیریِ عقب‌افتاده‌ای نیست — آفرین به تیم 👏</div>}
+          {dueToday.map((d: any, i: number) => (
+            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '6px 0', borderBottom: '1px solid var(--line)', fontSize: 12 }}>
+              <b style={{ cursor: 'pointer', color: 'var(--gold)' }} onClick={() => { setTab('customers'); openCustomer(rows.find(r => r.phone === d.phone) || { phone: d.phone, name: d.name }) }}>{d.name || d.phone}</b>
+              <span style={{ flex: 1 }}>{d.text.slice(0, 80)}</span>
+              <span style={{ color: 'var(--faint)', fontSize: 10.5 }}>سررسید {faDT(d.dueAt)} · {d.by.split(' (')[0]}</span>
+              <button style={{ ...btnGhost, padding: '3px 10px', fontSize: 11 }} disabled={busy} onClick={async () => { if (await post({ action: 'done', phone: d.phone, actAt: d.at })) load() }}>✓ انجام شد</button>
+            </div>
+          ))}
+        </div>
+        <div style={card}>
+          <b style={{ fontSize: 13.5 }}>📅 پیگیری‌های آینده ({fa(upcoming.length)})</b>
+          {!upcoming.length && <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 8 }}>یادآوریِ آینده‌ای ثبت نشده — در پروندهٔ هر مشتری با «یادآوریِ پیگیری» بساز.</div>}
+          {upcoming.map((d: any, i: number) => (
+            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '6px 0', borderBottom: '1px solid var(--line)', fontSize: 12 }}>
+              <b style={{ cursor: 'pointer', color: 'var(--gold)' }} onClick={() => { setTab('customers'); openCustomer(rows.find(r => r.phone === d.phone) || { phone: d.phone, name: d.name }) }}>{d.name || d.phone}</b>
+              <span style={{ flex: 1 }}>{d.text.slice(0, 80)}</span>
+              <span style={{ color: 'var(--muted)', fontSize: 10.5 }}>⏰ {faDT(d.dueAt)} · {d.by.split(' (')[0]}</span>
+            </div>
+          ))}
+        </div>
+        {doneRecent.length > 0 && <div style={card}>
+          <b style={{ fontSize: 13.5, color: 'var(--muted)' }}>✓ انجام‌شده‌های اخیر ({fa(doneRecent.length)})</b>
+          {doneRecent.map((d: any, i: number) => (
+            <div key={i} style={{ display: 'flex', gap: 8, fontSize: 11.5, padding: '5px 0', borderBottom: '1px solid var(--line)', color: 'var(--muted)' }}>
+              <span>✅ {d.name || d.phone}</span><span style={{ flex: 1 }}>{d.text.slice(0, 80)}</span><span style={{ fontSize: 10 }}>{d.by.split(' (')[0]}</span>
+            </div>
+          ))}
+        </div>}
+      </>}
+
+      {/* ── تبِ گزارشِ عملکرد ── */}
+      {tab === 'report' && <div style={card}>
+        <b style={{ fontSize: 13.5 }}>📊 عملکردِ پرسنل — از ثبت‌های واقعی</b>
+        <div style={{ fontSize: 11, color: 'var(--muted)', margin: '4px 0 10px' }}>هر همکار چند تماس/پیامک/پیگیری/یادداشت ثبت کرده — پاسخ‌گویی و سنجشِ کار.</div>
+        {!report.length && <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>هنوز هیچ فعالیتی ثبت نشده — با اولین ثبتِ تماس/پیگیری، این گزارش ساخته می‌شود.</div>}
+        {report.length > 0 && <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+            <thead><tr style={{ color: 'var(--muted)', textAlign: 'right', background: 'var(--bg2)' }}>
+              <th style={{ padding: 10 }}>همکار</th><th style={{ padding: 10 }}>📞 تماس</th><th style={{ padding: 10 }}>✉️ پیامک</th><th style={{ padding: 10 }}>⏰ پیگیری</th><th style={{ padding: 10 }}>📝 یادداشت</th><th style={{ padding: 10 }}>جمع</th><th style={{ padding: 10 }}>آخرین فعالیت</th>
+            </tr></thead>
+            <tbody>{report.map((r: any) => (
+              <tr key={r.name} style={{ borderTop: '1px solid var(--line)' }}>
+                <td style={{ padding: 10, fontWeight: 700 }}>{r.name}</td>
+                <td style={{ padding: 10 }}>{fa(r.calls)}</td><td style={{ padding: 10 }}>{fa(r.sms)}</td>
+                <td style={{ padding: 10 }}>{fa(r.follows)}</td><td style={{ padding: 10 }}>{fa(r.notes)}</td>
+                <td style={{ padding: 10, fontWeight: 800, color: 'var(--gold)' }}>{fa(r.total)}</td>
+                <td style={{ padding: 10, color: 'var(--muted)', fontSize: 11 }}>{faDT(r.lastAt)}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>}
+      </div>}
+
+      {tab === 'customers' && <>
       {/* صفِ کارِ امروز */}
       {dueToday.length > 0 && <div style={{ ...card, borderColor: '#e7a14a' }}>
         <b style={{ fontSize: 13.5 }}>⏰ پیگیری‌های سررسید ({fa(dueToday.length)})</b>
@@ -107,6 +177,7 @@ export default function StaffCrmView() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
             <thead><tr style={{ color: 'var(--muted)', textAlign: 'right', background: 'var(--bg2)' }}>
               <th style={{ padding: 10 }}>مشتری</th><th style={{ padding: 10 }}>نقش</th><th style={{ padding: 10 }}>پلن</th>
+              <th style={{ padding: 10 }} title="فایل‌ها/آگهی‌های خودش در پنلش">فایل</th><th style={{ padding: 10 }} title="لیدهای خودش در CRM پنلش">لید</th>
               <th style={{ padding: 10 }}>آخرین ورود</th><th style={{ padding: 10 }}>وضعیت</th><th style={{ padding: 10 }}>مسئول</th><th style={{ padding: 10 }}>آخرین فعالیت</th>
             </tr></thead>
             <tbody>
@@ -115,6 +186,8 @@ export default function StaffCrmView() {
                   <td style={{ padding: 10 }}><b>{r.name || 'بی‌نام'}</b> <span style={{ color: 'var(--faint)', fontSize: 10.5, direction: 'ltr', display: 'inline-block' }}>{r.phone}</span>{r.dueCount > 0 && <span style={{ color: '#e7a14a', fontSize: 10.5 }}> · ⏰{fa(r.dueCount)}</span>}</td>
                   <td style={{ padding: 10, color: 'var(--muted)' }}>{r.role || '—'}</td>
                   <td style={{ padding: 10, color: 'var(--muted)' }}>{r.plan || '—'}</td>
+                  <td style={{ padding: 10, color: r.files > 0 ? 'var(--gold)' : 'var(--faint)', fontWeight: r.files > 0 ? 700 : 400 }}>{r.files > 0 ? fa(r.files) : '—'}</td>
+                  <td style={{ padding: 10, color: r.leads > 0 ? '#5fd98a' : 'var(--faint)', fontWeight: r.leads > 0 ? 700 : 400 }}>{r.leads > 0 ? fa(r.leads) : '—'}</td>
                   <td style={{ padding: 10, color: 'var(--muted)' }}>{faDate(r.lastLogin)}</td>
                   <td style={{ padding: 10 }}><span style={{ color: ST_COLOR[r.status], fontWeight: 700 }}>{(STAFF_CRM_STATUS_FA as any)[r.status]}</span></td>
                   <td style={{ padding: 10, color: 'var(--muted)' }}>{r.assignedTo || '—'}</td>
@@ -126,6 +199,8 @@ export default function StaffCrmView() {
           </table>
         </div>
       </div>
+
+      </>}
 
       {/* کشوی پرونده */}
       {sel && <div onClick={() => setSel(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 300, display: 'flex', justifyContent: 'flex-start' }}>

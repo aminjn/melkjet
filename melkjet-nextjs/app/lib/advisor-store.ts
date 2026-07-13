@@ -346,6 +346,14 @@ export async function setCommissionStatus(o: string, cid: string, status: CommSt
   return res
 }
 
+// فاز ۱۲۲ — نظارتِ سوپرادمین: خلاصهٔ کارِ همهٔ مشاوران (owner → شمارِ لید/فایل/قرار)
+export async function advisorWorkSummary(): Promise<Record<string, { leads: number; listings: number; appts: number }>> {
+  const db = await load()
+  const out: Record<string, { leads: number; listings: number; appts: number }> = {}
+  for (const [o, a] of Object.entries(db.advisors)) out[o] = { leads: (a.leads || []).length, listings: (a.listings || []).length, appts: (a.appts || []).length }
+  return out
+}
+
 export async function listLeads(o: string): Promise<Lead[]> { return (await getAdvisor(o)).leads }
 export async function listListings(o: string): Promise<Listing[]> { return (await getAdvisor(o)).listings }
 export async function listAppts(o: string): Promise<Appt[]> { return (await getAdvisor(o)).appts }
