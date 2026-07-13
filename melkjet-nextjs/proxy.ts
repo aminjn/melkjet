@@ -32,8 +32,10 @@ export async function proxy(req: NextRequest) {
     const { payload } = await jwtVerify(token, secret)
     if (payload.phone === SUPER_ADMIN_PHONE) return NextResponse.next()
     const staff = Array.isArray(payload.staff) ? (payload.staff as string[]) : []
-    if (!staff.length) return deny()
+    // صفحهٔ /admin: کاربرِ واردشدهٔ بدونِ دسترسی را layout با صفحهٔ صریحِ «⛔ عدمِ دسترسی» جواب می‌دهد
+    // (فیدبکِ مستقیم) — API ولی همین‌جا بسته می‌شود.
     if (isAdminPage) return NextResponse.next()
+    if (!staff.length) return deny()
     return staffApiAllowed(staff, path) ? NextResponse.next() : deny()
   } catch {
     return isAdminApi

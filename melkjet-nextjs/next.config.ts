@@ -21,6 +21,22 @@ const nextConfig: NextConfig = {
         headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
       },
       {
+        // پنلِ مدیریت — هرگز و در هیچ لایه‌ای (CDN/مرورگر) ذخیره نشود؛ سوراخِ «هر اکانتی پنل را می‌بیند»
+        // وقتی رخ می‌دهد که CDN همین HTML را کش کند و درخواست اصلاً به گاردهای سرور نرسد.
+        source: "/admin/:path*",
+        headers: [
+          { key: "Cache-Control", value: "no-store, no-cache, private, max-age=0" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+        ],
+      },
+      {
+        source: "/admin",
+        headers: [
+          { key: "Cache-Control", value: "no-store, no-cache, private, max-age=0" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+        ],
+      },
+      {
         // API routes (auth/session/data) — NEVER cache or store at the edge.
         // `no-cache` alone lets some CDNs (Arvan) treat the response as
         // cacheable-with-revalidation and STRIP Set-Cookie, which silently
