@@ -4,7 +4,7 @@ import { listPros, proStats } from '@/app/lib/divar-pro-store'
 import { startDiscovery, probeDivar } from '@/app/lib/divar-pro-discovery'
 import { logAudit } from '@/app/lib/audit-store'
 
-async function guard() { const s = await getSession(); return s && s.role === 'super_admin' ? s : null }
+async function guard() { const s = await getSession(); return s && (s.role === 'super_admin' || (s.staff || []).length > 0) ? s : null }
 
 // GET → فهرستِ pro‌ها + وضعیت. ?export=links → متنِ همهٔ لینک‌ها (برای دانلود/کپی).
 export async function GET(req: NextRequest) {

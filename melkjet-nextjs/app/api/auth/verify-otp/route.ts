@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
   if (vid && vid.length >= 8) { try { await linkPhone(vid, phone) } catch {}; try { attachPhone(vid, phone) } catch {} }
   // کاربر جدید یا بدون نقش → باید آنبورد شود؛ وگرنه مستقیم به داشبورد نقشش
   const needsOnboarding = !isSuper && (isNew || !account.onboarded)
-  const redirect = isSuper ? '/admin' : (needsOnboarding ? '' : dashForRole(account.role))
+  const redirect = isSuper ? '/admin' : (account.adminSections?.length ? '/admin' : (needsOnboarding ? '' : dashForRole(account.role)))   // فاز ۱۱۵: پرسنل → پنل
 
   const res = NextResponse.json({ ok: true, role, isNew, needsOnboarding, name: account.name || '', nameVerified: !!account.identityVerifiedAt, profileRole: account.role || '', redirect, token })
   // مهم: مطمئن می‌شویم CDN این پاسخ (که کوکی ورود را ست می‌کند) را کش/حذف نکند

@@ -16,7 +16,7 @@ export async function GET() {
   const profileCompletion = completeness(getProfile(s.phone))
   // فاز ۵۱ (اعمالِ پلن‌ها): خلاصهٔ دسترسیِ پلن برای UI — قفل/بنرِ ارتقا از همین ساخته می‌شود
   const access = (() => { try { const x = resolveAccess(s as any); return { enforce: x.enforce, isAdmin: x.isAdmin, planName: x.planName, paid: x.paid, expiresAt: x.expiresAt, permissions: x.permissions, quotas: x.quotas, dashboard: x.dashboard, dashModules: x.dashModules, dashLocked: x.dashLocked } } catch { return null } })()
-  return NextResponse.json({ account: a, phone: s.phone, role: s.role, dash, name: a?.name || '', suspended: !!a?.suspended, profileCompletion, access })
+  return NextResponse.json({ account: a, phone: s.phone, role: s.role, staff: s.staff || [], dash, name: a?.name || '', suspended: !!a?.suspended, profileCompletion, access })   // staff: فاز ۱۱۵
 }
 
 // تکمیل پروفایل (آنبوردینگ): نام + نقش

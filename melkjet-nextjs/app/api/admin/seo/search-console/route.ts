@@ -4,7 +4,7 @@ import { getAdminData, saveAdminData } from '@/app/lib/admin-store'
 import { scConfig, scConfigured, scTest, scPerformance, scSitemaps, scInspect, scDiagnose, parseServiceAccount } from '@/app/lib/search-console'
 import { logAudit } from '@/app/lib/audit-store'
 
-async function guard() { const s = await getSession(); return s && s.role === 'super_admin' ? s : null }
+async function guard() { const s = await getSession(); return s && (s.role === 'super_admin' || (s.staff || []).length > 0) ? s : null }
 
 // وضعیتِ اتصال + خلاصهٔ پیکربندی (سبک — بدونِ صدازدنِ API).
 export async function GET() {

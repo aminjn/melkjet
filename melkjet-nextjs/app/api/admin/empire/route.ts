@@ -14,7 +14,7 @@ import { loadSnapshots, takeDailySnapshot, economyHealthOf, iesOf, aiUsageOf } f
 import { recentEvents } from '@/app/lib/reos/store'
 import { config, primeConfig } from '@/app/lib/reos/reos-config'
 
-async function guard() { const s = await getSession(); return s && s.role === 'super_admin' }
+async function guard() { const s = await getSession(); return s && (s.role === 'super_admin' || (s.staff || []).length > 0) }
 async function actor() { const s = await getSession(); return (s as any)?.name || (s as any)?.phone || 'مدیر' }
 
 const priceOf = (it: Item) => parseFaNum(it.price)

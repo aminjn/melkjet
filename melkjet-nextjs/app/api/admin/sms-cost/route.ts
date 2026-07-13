@@ -3,7 +3,7 @@ import { getSession } from '@/app/lib/session'
 import { getSmsCostConfig, setSmsCostConfig, smsSellPriceToman, smsCostRial } from '@/app/lib/sms-cost-store'
 import { repriceSmsPackages } from '@/app/lib/comm-store'
 
-async function guard() { const s = await getSession(); return s && s.role === 'super_admin' }
+async function guard() { const s = await getSession(); return s && (s.role === 'super_admin' || (s.staff || []).length > 0) }
 
 export async function GET() {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })

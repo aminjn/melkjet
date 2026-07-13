@@ -6,7 +6,7 @@ import os from 'node:os'
 import { pgStats } from '@/app/lib/db'
 
 // آمار واقعی سیستم: پراسس، حافظه، و وضعیت فایل‌های دادهٔ پروژه.
-async function guard() { const s = await getSession(); return s && s.role === 'super_admin' }
+async function guard() { const s = await getSession(); return s && (s.role === 'super_admin' || (s.staff || []).length > 0) }
 
 function countRecords(file: string): number {
   try {

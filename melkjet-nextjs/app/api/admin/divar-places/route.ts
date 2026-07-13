@@ -4,7 +4,7 @@ import { getCities, getDistricts, placesSummary, importCities, importDistricts, 
 
 async function guard() {
   const s = await getSession()
-  return s && s.role === 'super_admin'
+  return s && (s.role === 'super_admin' || (s.staff || []).length > 0)
 }
 
 // GET            → summary + cities

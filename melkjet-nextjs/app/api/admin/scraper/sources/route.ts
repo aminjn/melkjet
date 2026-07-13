@@ -23,7 +23,7 @@ function sanitizeMeta(raw: any): Record<string, string> | undefined {
 
 async function guard() {
   const s = await getSession()
-  return s && s.role === 'super_admin'
+  return s && (s.role === 'super_admin' || (s.staff || []).length > 0)
 }
 
 export async function GET() {

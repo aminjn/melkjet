@@ -9,7 +9,7 @@ import { logAudit } from '@/app/lib/audit-store'
 // body { purge: true }: همهٔ آیتم‌های علامت‌خوردهٔ «duplicate» برای همیشه حذفِ فیزیکی می‌شوند.
 export async function POST(req: NextRequest) {
   const s = await getSession()
-  if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  if (!s || !(s.role === 'super_admin' || (s.staff || []).length > 0)) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const b = await req.json().catch(() => ({} as { purge?: boolean }))
   const actor = (s as { name?: string }).name || s.phone || 'مدیر'
 

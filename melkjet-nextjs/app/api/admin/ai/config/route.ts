@@ -5,7 +5,7 @@ import { DEFAULT_GAP_BASE } from '@/app/lib/ai-agents'
 
 async function guard() {
   const s = await getSession()
-  return s && s.role === 'super_admin'
+  return s && (s.role === 'super_admin' || (s.staff || []).length > 0)
 }
 
 const mask = (k?: string) => (k ? '***' + k.slice(-4) : '')

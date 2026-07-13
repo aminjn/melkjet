@@ -7,7 +7,7 @@ const { chatCompleteSafe } = aiFor('گزارشِ بازار (ادمین)')   // 
 // Generate a market analysis report from the dataset using AI.
 export async function POST() {
   const s = await getSession()
-  if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  if (!s || !(s.role === 'super_admin' || (s.staff || []).length > 0)) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const pts = listPoints().slice(0, 200)
   if (!pts.length) return NextResponse.json({ error: 'دیتاست خالی است' }, { status: 400 })
   const model = agentModel('summary', 'text') || agentModel('content', 'text') || 'gpt-4o-mini'

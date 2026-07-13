@@ -13,6 +13,7 @@ const secret = new TextEncoder().encode(
 export interface SessionPayload {
   phone: string
   role: 'super_admin' | 'user'
+  staff?: string[]            // فاز ۱۱۵: بخش‌های مجازِ پنلِ ادمین برای پرسنل (اعطا توسطِ سوپرادمین)
   // وقتی سوپرادمین در حال مشاهدهٔ پنلِ کاربرِ دیگری است:
   impersonating?: boolean
   realPhone?: string
@@ -20,7 +21,16 @@ export interface SessionPayload {
 
 export async function createSession(phone: string): Promise<string> {
   const role = phone === SUPER_ADMIN_PHONE ? 'super_admin' : 'user'
-  return new SignJWT({ phone, role })
+  // فاز ۱۱۵: بخش‌های اعطاشدهٔ پنلِ ادمین (پرسنل) داخلِ خودِ توکن — proxy بدونِ store اجرایش می‌کند
+  let staff: string[] | undefined
+  if (role !== 'super_admin') {
+    try {
+      const { getAccount } = await import('./account-store')
+      const secs = getAccount(phone)?.adminSections
+      if (secs?.length) staff = secs.slice(0, 40)
+    } catch {}
+  }
+  return new SignJWT({ phone, role, ...(staff ? { staff } : {}) })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('30d')

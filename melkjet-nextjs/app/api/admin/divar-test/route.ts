@@ -7,7 +7,7 @@ import { getAdminData } from '@/app/lib/admin-store'
 // فقط سوپرادمین. استفاده: /api/admin/divar-test?slug=ENFJqAgo
 export async function GET(req: NextRequest) {
   const s = await getSession()
-  if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  if (!s || !(s.role === 'super_admin' || (s.staff || []).length > 0)) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const slug = (new URL(req.url).searchParams.get('slug') || 'ENFJqAgo').trim()
   const proxyUrl = getAdminData().divar?.proxyUrl || '(در ادمین تنظیم نشده)'
   const t0 = Date.now()

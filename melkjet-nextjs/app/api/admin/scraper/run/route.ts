@@ -7,7 +7,7 @@ import { dedupeListings } from '@/app/lib/listing-dedupe'
 
 async function guard() {
   const s = await getSession()
-  return s && s.role === 'super_admin'
+  return s && (s.role === 'super_admin' || (s.staff || []).length > 0)
 }
 
 // Run one source (by id) or all enabled sources. Returns per-source results.

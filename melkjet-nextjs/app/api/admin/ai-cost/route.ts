@@ -5,7 +5,7 @@ import { repriceTokenPackages } from '@/app/lib/comm-store'
 import { listModelsWithPricing, fetchGapSitePricing } from '@/app/lib/gapgpt'
 import { aiUsageSummary } from '@/app/lib/ai-usage-store'
 
-async function guard() { const s = await getSession(); return s && s.role === 'super_admin' }
+async function guard() { const s = await getSession(); return s && (s.role === 'super_admin' || (s.staff || []).length > 0) }
 
 export async function GET() {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })

@@ -3,7 +3,7 @@ import { getSession } from '@/app/lib/session'
 import { PROMO_SLOTS, listPromotions, addPromotion, updatePromotion, deletePromotion } from '@/app/lib/promotion-store'
 import { logAudit } from '@/app/lib/audit-store'
 
-async function guard() { const s = await getSession(); return s && s.role === 'super_admin' }
+async function guard() { const s = await getSession(); return s && (s.role === 'super_admin' || (s.staff || []).length > 0) }
 async function actor() { const s = await getSession(); return (s as any)?.name || (s as any)?.phone || 'مدیر' }
 
 export async function GET() {

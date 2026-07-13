@@ -10,7 +10,7 @@ import {
 
 export const runtime = 'nodejs'
 
-async function guard() { const s = await getSession(); return s && s.role === 'super_admin' }
+async function guard() { const s = await getSession(); return s && (s.role === 'super_admin' || (s.staff || []).length > 0) }
 
 const LOG_FILE = path.join(process.cwd(), '.persiansaze-scrape.log')
 const LOCK_FILE = path.join(process.cwd(), '.persiansaze-scrape.lock')

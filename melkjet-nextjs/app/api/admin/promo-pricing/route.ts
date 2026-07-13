@@ -5,7 +5,7 @@ import { auctionConfig } from '@/app/lib/auction-store'
 import { getPromoPricing, setPromoPricing } from '@/app/lib/promo-pricing-store'
 import { logAudit } from '@/app/lib/audit-store'
 
-async function guard() { const s = await getSession(); return s && s.role === 'super_admin' }
+async function guard() { const s = await getSession(); return s && (s.role === 'super_admin' || (s.staff || []).length > 0) }
 
 // GET → کاتالوگِ پیش‌فرضِ همهٔ قیمت‌ها + overrideهایِ فعلیِ ادمین (برای پُرکردنِ فرم).
 export async function GET() {

@@ -7,7 +7,7 @@ const { chatCompleteSafe } = aiFor('ورودِ دادهٔ بازار (ادمین
 // Extract structured market data points from a document's text using AI, then store them.
 export async function POST(req: NextRequest) {
   const s = await getSession()
-  if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  if (!s || !(s.role === 'super_admin' || (s.staff || []).length > 0)) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const b = await req.json().catch(() => ({}))
   const text = String(b.text || '').slice(0, 16000)
   const source = String(b.source || 'سند').slice(0, 80)

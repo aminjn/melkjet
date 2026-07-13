@@ -11,7 +11,7 @@ import { SUPER_ADMIN_PHONE } from '@/app/lib/session'
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
-async function guard() { const s = await getSession(); return s && s.role === 'super_admin' }
+async function guard() { const s = await getSession(); return s && (s.role === 'super_admin' || (s.staff || []).length > 0) }
 
 // حساب‌های کسب‌وکاری‌ای که سوپرادمین ساخته (مشاور/آژانس/سازنده/…) با شمارهٔ معتبر.
 // onlyNew=true → فقط آن‌هایی که هنوز وارد نشده‌اند (تازه برایشان پنل ساخته شده).

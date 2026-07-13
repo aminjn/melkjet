@@ -7,7 +7,7 @@ import { mlStats } from '@/app/lib/moderation-ml'
 // GET → وضعیتِ مدلِ یادگیرندهٔ ممیزی (چند نمونه دیده، آماده هست، چند تصمیمِ خودکار زده).
 export async function GET() {
   const s = await getSession()
-  if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  if (!s || !(s.role === 'super_admin' || (s.staff || []).length > 0)) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   return NextResponse.json({ ok: true, ml: mlStats(), hasAiModel: !!moderationModel() })
 }
 
@@ -15,7 +15,7 @@ export async function GET() {
 // مدل تنظیم‌نشده هم مشکلی نیست: مدلِ یادگیرنده اگر آماده باشد خودش تصمیم می‌گیرد.
 export async function POST(req: NextRequest) {
   const s = await getSession()
-  if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  if (!s || !(s.role === 'super_admin' || (s.staff || []).length > 0)) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const b = await req.json().catch(() => ({}))
   const model = moderationModel()
 

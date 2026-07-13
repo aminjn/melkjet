@@ -6,7 +6,7 @@ import type { Source } from '@/app/lib/scraper-store'
 // Dry-run a source config without saving. Returns a preview of extracted items.
 export async function POST(req: NextRequest) {
   const s = await getSession()
-  if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  if (!s || !(s.role === 'super_admin' || (s.staff || []).length > 0)) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
 
   const b = await req.json().catch(() => ({}))
   if (!b.url) return NextResponse.json({ error: 'آدرس الزامی است' }, { status: 400 })

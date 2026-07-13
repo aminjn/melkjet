@@ -12,6 +12,8 @@ import AdminSupportView from './AdminSupportView'
 import CatalogAdminView from './CatalogAdminView'
 import ReosAdminPanel from '@/app/components/ReosAdminPanel'
 import EmpireAdminPanel from '@/app/components/EmpireAdminPanel'
+import StaffCrmView from '@/app/components/StaffCrmView'
+import { STAFF_GRANTABLE } from '@/app/lib/admin-access'
 import { listingHref } from '@/app/lib/listing-url'
 
 /* ─── Types ─────────────────────────────────────────────────── */
@@ -19,7 +21,7 @@ type View =
   | 'overview' | 'scraper' | 'persiansaze' | 'listings' | 'products' | 'catalog' | 'geo' | 'moderation' | 'content' | 'studio' | 'articles' | 'categories' | 'crm' | 'api'
   | 'reports' | 'plans' | 'promos' | 'discounts' | 'ads' | 'users' | 'profiles' | 'roles' | 'connections'
   | 'tracker' | 'sms' | 'settings' | 'health' | 'servers' | 'queue' | 'audit' | 'flags' | 'support' | 'payment' | 'aicost' | 'smscost' | 'sitemap' | 'agencyintel'
-  | 'reos' | 'suspension' | 'site'
+  | 'reos' | 'suspension' | 'site' | 'staffCrm'
   | 'empire' | 'empirePlayers' | 'empireEconomy' | 'empireCapital' | 'empireMissions' | 'empireEngage' | 'empireWorld' | 'empireLiveops' | 'empireAccess' | 'empireMetrics' | 'empireAi' | 'empireRewards'
 
 interface NavItem { id: View; icon: string; label: string; badge?: string; badgeColor?: string; url?: string; accent?: boolean }
@@ -79,7 +81,8 @@ const sections: NavSection[] = [
       { id: 'users',       icon: '◍',  label: 'کاربران' },
       { id: 'profiles',    icon: '👁', label: 'پروفایل‌ها' },
       { id: 'agencyintel', icon: '🏢', label: 'هوشِ آژانس' },
-      { id: 'crm',         icon: '◈',  label: 'CRM' },
+      { id: 'staffCrm',    icon: '📞', label: 'CRM مرکزی (مشتریان)', accent: true },
+      { id: 'crm',         icon: '◈',  label: 'CRM (پنلِ شخصی)' },
       { id: 'roles',       icon: '🛡', label: 'نقش‌ها و دسترسی' },
       { id: 'suspension',  icon: '⛔', label: 'تعلیق حساب‌ها' },
       { id: 'support',     icon: '🛟', label: 'پشتیبانی' },
@@ -117,6 +120,7 @@ const sections: NavSection[] = [
 ]
 
 const viewTitles: Record<View, string> = {
+  staffCrm:   'CRM مرکزی — مشتریانِ سایت',
   site:       'تنظیماتِ سایت و صفحه‌ها',
   support:    'پشتیبانی — تیکت‌ها',
   overview:   'نمای کلی سیستم',
@@ -4556,6 +4560,9 @@ function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete, onSuspend,
               <button onClick={doGift} disabled={gifting} style={{ background: gifting ? 'var(--bg2)' : 'linear-gradient(140deg,var(--gold2),var(--gold))', border: 'none', color: gifting ? 'var(--muted)' : '#16140f', borderRadius: 10, padding: '10px 18px', cursor: gifting ? 'wait' : 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 800, whiteSpace: 'nowrap' }}>{gifting ? '…' : '🎁 فعال‌سازیِ رایگان'}</button>
             </div>
           </div>
+
+          {/* فاز ۱۱۵ — دسترسیِ پرسنل به پنلِ مدیریت: تیکِ بخش‌ها → داخلِ توکنِ ورودِ کاربر می‌نشیند */}
+          <StaffAccessCard user={user} />
         </div>
       </div>
     </div>
@@ -6752,6 +6759,20 @@ function SimpleView({ title }: { title: string }) {
 /* ─── Main SuperAdmin Page ───────────────────────────────────── */
 export default function SuperAdminPage() {
   const [active, setActive] = useState<View>('overview')
+  // فاز ۱۱۵ — پرسنل: منو به بخش‌های اعطاشده محدود می‌شود (اجرای اصلی در proxy است؛ این فقط UX)
+  const [staffOnly, setStaffOnly] = useState<string[] | null>(null)
+  useEffect(() => {
+    fetch('/api/auth/profile', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => {
+      if (!d) return
+      if (d.role !== 'super_admin' && Array.isArray(d.staff) && d.staff.length) {
+        setStaffOnly(d.staff)
+        if (!d.staff.includes('overview')) setActive((d.staff.includes('staffCrm') ? 'staffCrm' : d.staff[0]) as View)
+      }
+    }).catch(() => {})
+  }, [])
+  const visibleSections = staffOnly
+    ? sections.map(g => ({ ...g, items: g.items.filter(i => staffOnly.includes(i.id)) })).filter(g => g.items.length > 0)
+    : sections
   const [navOpen, setNavOpen] = useState(false)   // کشوی منوی موبایل
   // پشتیبانی از /admin?view=… (مثلاً ریدایرکتِ /reos-admin) — بدونِ شکستنِ لینک‌های قدیمی.
   useEffect(() => {
@@ -6779,7 +6800,9 @@ export default function SuperAdminPage() {
   }, [])
 
   function renderView() {
+    if (staffOnly && !staffOnly.includes(active)) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>دسترسی به این بخش برای شما فعال نیست — از مدیر بخواه در کشوی کاربرت فعالش کند.</div>
     switch (active) {
+      case 'staffCrm':   return <StaffCrmView />
       case 'overview':   return <OverviewView />
       case 'scraper':    return <ScraperView />
       case 'persiansaze': return <PersianSazeView />
@@ -6862,7 +6885,7 @@ export default function SuperAdminPage() {
 
         {/* Nav sections (آکاردئون: هر گروه قابلِ جمع‌شدن) */}
         <nav style={{ flex: 1, paddingBottom: 8 }}>
-          {sections.map(sec => {
+          {visibleSections.map(sec => {
             const open = openSecs.has(sec.title)
             const hasActive = sec.items.some(i => i.id === active)
             return (
@@ -6976,6 +6999,45 @@ export default function SuperAdminPage() {
           .mjsa-overlay.mjsa-open{display:block}
         }
       `}</style>
+    </div>
+  )
+}
+
+
+// 🛡 فاز ۱۱۵ — کارتِ اعطای دسترسیِ پرسنل (فقط سوپرادمین؛ API هم همین را سخت می‌گیرد)
+function StaffAccessCard({ user }: { user: any }) {
+  const [secs, setSecs] = useState<string[]>(user.adminSections || [])
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  useEffect(() => { setSecs(user.adminSections || []) }, [user.phone])   // eslint-disable-line react-hooks/exhaustive-deps
+  const toggle = (id: string) => setSecs(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id])
+  const save = async () => {
+    setBusy(true)
+    const r = await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: user.phone, adminSections: secs }) })
+    const d = await r.json().catch(() => null)
+    setBusy(false)
+    setMsg(r.ok ? '✓ ذخیره شد — این همکار باید یک‌بار خارج و دوباره وارد شود تا دسترسی فعال شود.' : (d?.error || 'خطا'))
+    setTimeout(() => setMsg(''), 6000)
+  }
+  return (
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 14, padding: 16 }}>
+      <div style={{ fontSize: 13.5, fontWeight: 800, marginBottom: 4 }}>🛡 دسترسیِ پنلِ مدیریت (پرسنل)</div>
+      <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.9 }}>
+        بخش‌هایی که تیک بزنی برای این کاربر در پنلِ مدیریت باز می‌شود (منو و APIها فقط همان بخش‌ها). بخش‌های حساس (نقش‌ها، درگاه‌ها، اتصال‌ها و کلیدها، امپراتوری) همیشه فقط برای سوپرادمین است. بعد از تغییر، همکار باید یک‌بار خارج و دوباره وارد شود.
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 6 }}>
+        {STAFF_GRANTABLE.map(p => (
+          <label key={p.id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, cursor: 'pointer', padding: '5px 8px', borderRadius: 8, background: secs.includes(p.id) ? 'rgba(212,175,55,.08)' : 'transparent', border: `1px solid ${secs.includes(p.id) ? 'var(--goldDim)' : 'var(--line)'}` }}>
+            <input type="checkbox" checked={secs.includes(p.id)} onChange={() => toggle(p.id)} style={{ width: 14, height: 14, accentColor: 'var(--gold)', cursor: 'pointer' }} />
+            {p.label}
+          </label>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10 }}>
+        <button onClick={save} disabled={busy} style={{ background: 'linear-gradient(140deg,var(--gold2),var(--gold))', border: 'none', color: '#16140f', borderRadius: 10, padding: '9px 18px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5, fontWeight: 800 }}>{busy ? '…' : '💾 ذخیرهٔ دسترسی‌ها'}</button>
+        {secs.length > 0 && <button onClick={() => setSecs([])} style={{ background: 'transparent', border: '1px solid var(--line2)', color: 'var(--muted)', borderRadius: 10, padding: '8px 14px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>لغوِ همه</button>}
+        {msg && <span style={{ fontSize: 12, color: msg.startsWith('✓') ? '#5fd98a' : '#e88' }}>{msg}</span>}
+      </div>
     </div>
   )
 }

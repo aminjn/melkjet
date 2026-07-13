@@ -10,7 +10,7 @@ import { listItems } from '@/app/lib/scraper-store'
 import { listTasks } from '@/app/lib/crm-store'
 import { listLeads } from '@/app/lib/leads-store'
 
-async function guard() { const s = await getSession(); return s && s.role === 'super_admin' }
+async function guard() { const s = await getSession(); return s && (s.role === 'super_admin' || (s.staff || []).length > 0) }
 
 export async function GET() {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
@@ -49,6 +49,18 @@ export async function PATCH(req: NextRequest) {
   const s = await getSession()
   if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const b = await req.json().catch(() => ({}))
+  // فاز ۱۱۵ — اعطای دسترسیِ پرسنل به بخش‌های پنلِ ادمین (فقط سوپرادمینِ واقعی؛ هرگز پرسنل):
+  if (b.adminSections !== undefined) {
+    const { setAdminSections } = await import('@/app/lib/account-store')
+    const { STAFF_GRANTABLE_IDS } = await import('@/app/lib/admin-access')
+    const phone115 = String(b.phone || '')
+    if (!phone115) return NextResponse.json({ error: 'شماره الزامی است' }, { status: 400 })
+    const secs = (Array.isArray(b.adminSections) ? b.adminSections : []).map((x: unknown) => String(x)).filter((x: string) => STAFF_GRANTABLE_IDS.has(x))
+    const a115 = setAdminSections(phone115, secs)
+    if (!a115) return NextResponse.json({ error: 'کاربر یافت نشد' }, { status: 404 })
+    logAudit(s.phone, secs.length ? 'اعطای دسترسیِ پنلِ ادمین (پرسنل)' : 'لغوِ دسترسیِ پنلِ ادمین', `${phone115} → ${secs.join('، ') || 'هیچ'}`)
+    return NextResponse.json({ ok: true, adminSections: a115.adminSections || [] })
+  }
   // فاز ۵۶ (فیدبک: «هر پلنی را برای هر کاربر چند روزِ خاص رایگان بدهم»): هدیهٔ پلنِ زمان‌دار.
   // همان مسیرِ فعال‌سازیِ خریدِ تأییدشده (setPlan با انقضا + شارژِ اعتبارِ AI پلن)، فقط بدونِ پول.
   if (b.grantPlan !== undefined) {

@@ -5,7 +5,7 @@ import { logAudit } from '@/app/lib/audit-store'
 
 // مدیریتِ لیستِ استانداردِ تخصص‌ها/خدماتِ پروفایل (سوپرادمین) — ورودیِ آزادِ کاربر برای ML
 // قابل‌اندازه‌گیری نیست؛ کاربر فقط از این لیست انتخاب می‌کند.
-async function guard() { const s = await getSession(); return s && s.role === 'super_admin' }
+async function guard() { const s = await getSession(); return s && (s.role === 'super_admin' || (s.staff || []).length > 0) }
 
 export async function GET() {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })

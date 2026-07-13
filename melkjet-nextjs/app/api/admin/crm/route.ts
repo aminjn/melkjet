@@ -6,7 +6,7 @@ import { listLeads, updateLead, deleteLead, leadAnalytics, LeadPatch } from '@/a
 
 async function guard() {
   const s = await getSession()
-  return s && s.role === 'super_admin' ? s : null
+  return s && (s.role === 'super_admin' || (s.staff || []).length > 0) ? s : null
 }
 
 // GET → aggregated super-admin CRM control center (scoped to the admin's own records).

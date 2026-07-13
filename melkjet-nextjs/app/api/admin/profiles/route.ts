@@ -15,7 +15,7 @@ import { getShop } from '@/app/lib/materials-store'
 
 import { getProfile, completeness } from '@/app/lib/profile-store'
 
-async function guard() { const s = await getSession(); return s && s.role === 'super_admin' }
+async function guard() { const s = await getSession(); return s && (s.role === 'super_admin' || (s.staff || []).length > 0) }
 
 // فعالیتِ واقعی (بدون seed) که در همهٔ نقش‌ها مشترک است.
 async function commonActivity(phone: string) {

@@ -8,6 +8,7 @@ export interface Account {
   phone: string; name?: string; role?: string; plan?: string; onboarded: boolean; createdAt: number; lastLogin?: number
   // اشتراک: زمانِ شروع/پایانِ پلنِ فعال (برای جلوگیری از خریدِ دوباره تا پایان)
   planStartedAt?: number; planExpiresAt?: number
+  adminSections?: string[]   // فاز ۱۱۵ (پرسنل): بخش‌های مجازِ پنلِ ادمین — اعطا فقط توسطِ سوپرادمین
   // هویتِ تأییدشدهٔ شاهکار (پس از تأیید غیرقابلِ‌تغییر است)
   nationalId?: string; firstName?: string; lastName?: string; gender?: string; fatherName?: string; birthDate?: string; birthPlace?: string; idNumber?: string; idSerial?: string; birthPlaceCode?: string; fullName?: string; issuancePlace?: string; issuancePlaceCode?: string; officeCode?: string; identityVerifiedAt?: number
   // کلِ پاسخِ هویتیِ شاهکار — تا هیچ فیلدی از دست نرود
@@ -198,4 +199,15 @@ export function dashForRole(role?: string): string { return dashForRoleId(role) 
 // آیا این نقش معتبر است؟ (برای آنبوردینگ)
 export function isValidRole(role: string): boolean {
   return listRoles(true).some(r => r.id === role || r.name === role)
+}
+
+// فاز ۱۱۵ — اعطا/لغوِ دسترسیِ پرسنل به بخش‌های پنلِ ادمین (فقط سوپرادمین صدا می‌زند؛ گارد در API)
+export function setAdminSections(phone: string, sections: string[]): Account | null {
+  const db = load()
+  const a = db[phone]
+  if (!a) return null
+  const clean = [...new Set(sections.map(x => String(x).trim()).filter(Boolean))].slice(0, 40)
+  if (clean.length) a.adminSections = clean; else delete a.adminSections
+  save(db)
+  return a
 }

@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 async function guard() {
   const s = await getSession()
   if (!s) return null
-  if (s.role === 'super_admin' || hasCap(s.phone, 'catalog')) return s
+  if ((s.role === 'super_admin' || (s.staff || []).length > 0) || hasCap(s.phone, 'catalog')) return s
   return null
 }
 const srcOf = (v: any) => (isSource(String(v)) ? String(v) : 'hypersaz')

@@ -3,7 +3,7 @@ import { getSession } from '@/app/lib/session'
 import { listScrapes, addScrape, removeScrape, requestRun, graduateAdvisor, getScrape } from '@/app/lib/agency-roster-store'
 import { logAudit } from '@/app/lib/audit-store'
 
-async function guard() { const s = await getSession(); return s && s.role === 'super_admin' ? s : null }
+async function guard() { const s = await getSession(); return s && (s.role === 'super_admin' || (s.staff || []).length > 0) ? s : null }
 const who = (s: any) => s?.name || s?.phone || 'مدیر'
 
 // GET → فهرستِ اسکرپ‌های آژانس (هر کدام با مشاورهایش).

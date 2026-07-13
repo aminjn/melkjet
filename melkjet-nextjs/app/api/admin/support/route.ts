@@ -3,7 +3,7 @@ import { getSession } from '@/app/lib/session'
 import { listAll, getTicket, adminReply, setStatus, markReadByAdmin, adminUnreadCount, type TicketStatus } from '@/app/lib/ticket-store'
 
 export const dynamic = 'force-dynamic'
-async function guard() { const s = await getSession(); return !!(s && s.role === 'super_admin') }
+async function guard() { const s = await getSession(); return !!(s && (s.role === 'super_admin' || (s.staff || []).length > 0)) }
 
 // همهٔ تیکت‌ها برای سوپرادمین + شمارشِ خوانده‌نشده (نوتیف).
 export async function GET(req: NextRequest) {
