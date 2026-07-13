@@ -6,7 +6,7 @@ import { getIdentity, isValidNationalId, podConfigured, podMissing } from '@/app
 // بازخوانیِ کاملِ هویت از شاهکار برای یک کاربرِ احرازشده — همهٔ فیلدها را دوباره می‌گیرد و ذخیره می‌کند.
 export async function POST(req: NextRequest) {
   const s = await getSession()
-  if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  if (!s || !(s.role === 'super_admin' || (s.staff || []).includes('users'))) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })   // فاز ۱۲۴: پرسنلِ بخشِ کاربران هم
   if (!podConfigured()) return NextResponse.json({ error: 'سرویسِ شاهکار پیکربندی نشده: ' + podMissing().join('، ') }, { status: 400 })
   const b = await req.json().catch(() => ({} as any))
   const phone = String(b.phone || '')

@@ -202,6 +202,15 @@ export function isValidRole(role: string): boolean {
   return listRoles(true).some(r => (r.id === role || r.name === role) && !r.hidden)
 }
 
+// فاز ۱۲۴ — حسابِ محافظت‌شده: سوپرادمین یا هر دارندهٔ دسترسیِ پنل (پرسنل).
+// پرسنل هرگز نمی‌تواند این حساب‌ها را ویرایش/تعلیق/حذف کند — جلوی خراب‌کاری/ارتقای اختیار.
+export const SUPER_ADMIN_PHONE = '09122862184'
+export function isProtectedAccount(phone: string): boolean {
+  if (phone === SUPER_ADMIN_PHONE) return true
+  const a = load()[phone]
+  return !!(a && (a.adminSections || []).length)
+}
+
 // فاز ۱۱۵ — اعطا/لغوِ دسترسیِ پرسنل به بخش‌های پنلِ ادمین (فقط سوپرادمین صدا می‌زند؛ گارد در API)
 export function setAdminSections(phone: string, sections: string[]): Account | null {
   const db = load()

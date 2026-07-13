@@ -4659,7 +4659,9 @@ function UsersView() {
   const patchOne = async (phone: string, patch: { name?: string; role?: string; plan?: string }) => {
     setUsers(us => us.map(u => u.phone === phone ? { ...u, ...patch, onboarded: patch.role !== undefined ? true : u.onboarded } : u))
     if (viewUser?.phone === phone) setViewUser((v: any) => ({ ...v, ...patch }))
-    await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, patch }) })
+    // فاز ۱۲۴: خطای سرور دیگر بلعیده نمی‌شود — «ذخیره شد»ِ الکی همان چیزی بود که کاربر را گمراه می‌کرد
+    const r = await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, patch }) })
+    if (!r.ok) { const d = await r.json().catch(() => ({} as any)); alert(d.error || 'ذخیره نشد — خطای سرور') }
     load()
   }
   const delOne = async (phone: string) => {
@@ -6791,7 +6793,9 @@ export default function SuperAdminPage() {
       if (!d) return
       if (d.role !== 'super_admin' && Array.isArray(d.staff) && d.staff.length) {
         setStaffOnly(d.staff)
-        if (!d.staff.includes('overview')) setActive((d.staff.includes('staffCrm') ? 'staffCrm' : d.staff[0]) as View)
+        // فاز ۱۲۴: ?view= معتبرِ خودِ پرسنل نباید توسط پیش‌فرض بازنویسی شود (دیپ‌لینک به بخش‌های مجاز)
+        const qv124 = new URLSearchParams(window.location.search).get('view')
+        if (!d.staff.includes('overview') && !(qv124 && d.staff.includes(qv124))) setActive((d.staff.includes('staffCrm') ? 'staffCrm' : d.staff[0]) as View)
       }
     }).catch(() => {})
   }, [])

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listAccounts, adminUpdate, deleteAccount, bulkUpdate, bulkDelete, createAccount, setSuspended, setCap, setPlan } from '@/app/lib/account-store'
+import { listAccounts, adminUpdate, deleteAccount, bulkUpdate, bulkDelete, createAccount, setSuspended, setCap, setPlan, isProtectedAccount } from '@/app/lib/account-store'
 import { saveProfile, getProfile, completeness } from '@/app/lib/profile-store'
 import { listRoles, dashForRoleId } from '@/app/lib/role-store'
 import { listPlans, getPlan } from '@/app/lib/plan-store'
@@ -10,7 +10,17 @@ import { listItems } from '@/app/lib/scraper-store'
 import { listTasks } from '@/app/lib/crm-store'
 import { listLeads } from '@/app/lib/leads-store'
 
-async function guard() { const s = await getSession(); return s && (s.role === 'super_admin' || (s.staff || []).length > 0) }
+async function guard() { const s = await getSession(); return s && (s.role === 'super_admin' || (s.staff || []).length > 0) ? s : null }
+
+// فاز ۱۲۴ — حساب‌های محافظت‌شده: پرسنل هرگز نمی‌تواند سوپرادمین یا پرسنلِ دیگر (دارندهٔ دسترسیِ پنل) را تغییر/تعلیق/حذف کند
+function protectedTarget(actorRole: string | undefined, phones: unknown[]): string | null {
+  if (actorRole === 'super_admin') return null
+  for (const ph of phones.map(p => String(p || '')).filter(Boolean)) {
+    if (isProtectedAccount(ph)) return ph
+  }
+  return null
+}
+const PROTECTED_ERR = (ph: string) => NextResponse.json({ error: `حسابِ ${ph} محافظت‌شده است (سوپرادمین/پرسنل) — فقط سوپرادمین می‌تواند آن را تغییر دهد` }, { status: 403 })
 
 export async function GET() {
   if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
@@ -46,11 +56,16 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  // فاز ۱۲۴ — پرسنلِ دارای بخشِ «کاربران» هم می‌تواند ویرایش کند (ریشهٔ «ذخیره نمی‌شود»)؛
+  // اما اعطای دسترسیِ پنل (adminSections) و دست‌زدن به حساب‌های محافظت‌شده همچنان فقط سوپرادمینِ واقعی.
   const s = await getSession()
-  if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  if (!s || !(s.role === 'super_admin' || (s.staff || []).length > 0)) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const b = await req.json().catch(() => ({}))
+  const prot = protectedTarget(s.role, Array.isArray(b.phones) ? b.phones : [b.phone])
+  if (prot) return PROTECTED_ERR(prot)
   // فاز ۱۱۵ — اعطای دسترسیِ پرسنل به بخش‌های پنلِ ادمین (فقط سوپرادمینِ واقعی؛ هرگز پرسنل):
   if (b.adminSections !== undefined) {
+    if (s.role !== 'super_admin') return NextResponse.json({ error: 'اعطای دسترسیِ پنل فقط کارِ سوپرادمین است' }, { status: 403 })
     const { setAdminSections } = await import('@/app/lib/account-store')
     const { STAFF_GRANTABLE_IDS } = await import('@/app/lib/admin-access')
     const phone115 = String(b.phone || '')
@@ -90,21 +105,33 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ ok: true, granted: phones.length, expiresAt: Date.now() + days * 864e5 })
   }
   // عملیات دسته‌جمعی
-  if (Array.isArray(b.phones)) { bulkUpdate(b.phones, b.patch || {}); return NextResponse.json({ ok: true }) }
+  if (Array.isArray(b.phones)) { bulkUpdate(b.phones, b.patch || {}); logAudit(s.phone, 'ویرایشِ گروهیِ کاربران', `${b.phones.length} حساب`); return NextResponse.json({ ok: true }) }
   if (!b.phone) return NextResponse.json({ error: 'شماره الزامی است' }, { status: 400 })
-  if (b.suspend !== undefined) { setSuspended(String(b.phone), !!b.suspend); return NextResponse.json({ ok: true }) }
+  if (b.suspend !== undefined) { setSuspended(String(b.phone), !!b.suspend); logAudit(s.phone, b.suspend ? 'تعلیقِ کاربر' : 'رفعِ تعلیقِ کاربر', String(b.phone)); return NextResponse.json({ ok: true }) }
   // دادن/گرفتنِ دسترسیِ ویژه (مثلِ 'catalog' برای مدیریتِ کاتالوگ و اسکرپِ هایپرساز)
   if (b.cap) { const a = setCap(String(b.phone), String(b.cap), !!b.on); if (!a) return NextResponse.json({ error: 'کاربر یافت نشد' }, { status: 404 }); return NextResponse.json({ ok: true, user: a }) }
   const a = adminUpdate(b.phone, b.patch || {})
   if (!a) return NextResponse.json({ error: 'کاربر یافت نشد' }, { status: 404 })
+  logAudit(s.phone, 'ویرایشِ کاربر', `${b.phone} → ${Object.keys(b.patch || {}).join('، ') || '—'}`)
   return NextResponse.json({ ok: true, user: a })
 }
 
 export async function DELETE(req: NextRequest) {
-  if (!await guard()) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  const s = await guard()
+  if (!s) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
   const phone = new URL(req.url).searchParams.get('phone')
-  if (phone) { deleteAccount(phone); return NextResponse.json({ ok: true }) }
+  if (phone) {
+    const prot = protectedTarget(s.role, [phone])
+    if (prot) return PROTECTED_ERR(prot)
+    deleteAccount(phone); logAudit(s.phone, 'حذفِ کاربر', phone)
+    return NextResponse.json({ ok: true })
+  }
   const b = await req.json().catch(() => ({}))
-  if (Array.isArray(b.phones)) { bulkDelete(b.phones); return NextResponse.json({ ok: true }) }
+  if (Array.isArray(b.phones)) {
+    const prot = protectedTarget(s.role, b.phones)
+    if (prot) return PROTECTED_ERR(prot)
+    bulkDelete(b.phones); logAudit(s.phone, 'حذفِ گروهیِ کاربران', `${b.phones.length} حساب`)
+    return NextResponse.json({ ok: true })
+  }
   return NextResponse.json({ error: 'شماره الزامی است' }, { status: 400 })
 }
