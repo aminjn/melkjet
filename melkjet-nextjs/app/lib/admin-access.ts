@@ -9,7 +9,7 @@
 export const STAFF_GRANTABLE: Array<{ id: string; label: string }> = [
   { id: 'staffCrm', label: '📞 CRM مرکزی (مشتریانِ سایت)' },
   { id: 'support', label: '🛟 پشتیبانی (تیکت‌ها)' },
-  { id: 'crm', label: '◈ CRM (پنلِ شخصیِ ادمین)' },
+  { id: 'crm', label: '👁 نظارت بر CRM کاربران (همهٔ لیدهای سیستم)' },
   { id: 'users', label: '◍ کاربران' },
   { id: 'profiles', label: '👁 پروفایل‌ها' },
   { id: 'agencyintel', label: '🏢 هوشِ آژانس' },
