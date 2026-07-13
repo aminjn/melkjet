@@ -8,14 +8,14 @@ import { mlStats, resetMl } from '@/app/lib/moderation-ml'
 // AI بر اساسِ این‌ها تصمیم می‌گیرد و ML از تصمیم‌ها یاد می‌گیرد تا کم‌کم خودش انجام دهد.
 export async function GET() {
   const s = await getSession()
-  if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  if (!s || !(s.role === 'super_admin' || (s.staff || []).includes('moderation'))) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })   // فاز ۱۲۵: پرسنلِ بخشِ مربوط هم
   const cfg = modConfig()
   return NextResponse.json({ config: cfg, defaultCriteria: DEFAULT_CRITERIA, ml: mlStats() })
 }
 
 export async function POST(req: NextRequest) {
   const s = await getSession()
-  if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  if (!s || !(s.role === 'super_admin' || (s.staff || []).includes('moderation'))) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })   // فاز ۱۲۵: پرسنلِ بخشِ مربوط هم
   const b = await req.json().catch(() => ({} as any))
   // ریستِ مدلِ یادگیرنده (وقتی مسموم شده و همه‌چیز را رد می‌کند).
   if (b.resetMl) { resetMl(); return NextResponse.json({ ok: true, reset: true, ml: mlStats() }) }

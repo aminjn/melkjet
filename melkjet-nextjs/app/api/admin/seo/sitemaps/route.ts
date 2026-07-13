@@ -9,7 +9,7 @@ const SECTIONS = ['static', 'blog', 'listings', 'locations', 'projects', 'provid
 // مرکزِ سایت‌مپ (سوپرادمین): فهرستِ شاردها + تنظیماتِ سقف/بخش‌ها + هشدارِ شاردِ جدید.
 export async function GET() {
   const s = await getSession()
-  if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  if (!s || !(s.role === 'super_admin' || (s.staff || []).includes('sitemap'))) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })   // فاز ۱۲۵: پرسنلِ بخشِ مربوط هم
   const shards = await shardList()
   const total = shards.reduce((n, x) => n + x.count, 0)
   return NextResponse.json({
@@ -21,7 +21,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const s = await getSession()
-  if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  if (!s || !(s.role === 'super_admin' || (s.staff || []).includes('sitemap'))) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })   // فاز ۱۲۵: پرسنلِ بخشِ مربوط هم
   const b = await req.json().catch(() => ({} as Record<string, any>))
   const actor = (s as any).name || (s as any).phone || 'مدیر'
 

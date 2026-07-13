@@ -4381,7 +4381,11 @@ function RefetchIdentityBtn({ phone, onDone }: { phone: string; onDone: (acc: an
   return <button onClick={run} disabled={busy} title="بازخوانیِ همهٔ فیلدها از سامانهٔ شاهکار" style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold)', background: 'var(--goldDim)', border: '1px solid var(--gold)', borderRadius: 999, padding: '3px 11px', cursor: busy ? 'default' : 'pointer', fontFamily: 'inherit', opacity: busy ? 0.6 : 1 }}>{busy ? '… بازخوانی' : '↻ بازخوانی از شاهکار'}</button>
 }
 
-function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete, onSuspend, onAccountUpdate }: { user: any; roles: IdName[]; plans: PlanOpt[]; onClose: () => void; onPatch: (phone: string, patch: any) => void; onDelete: (phone: string) => void; onSuspend: (phone: string, suspend: boolean) => void; onAccountUpdate: (acc: any) => void }) {
+function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete, onSuspend, onAccountUpdate, meStaff }: { user: any; roles: IdName[]; plans: PlanOpt[]; onClose: () => void; onPatch: (phone: string, patch: any) => void; onDelete: (phone: string) => void; onSuspend: (phone: string, suspend: boolean) => void; onAccountUpdate: (acc: any) => void; meStaff?: string[] | null }) {
+  // فاز ۱۲۵ — صداقتِ UI برای پرسنل: حسابِ محافظت‌شده = سوپرادمین یا پرسنلِ دیگر؛ دکمه‌هایی که API برایشان 403 می‌دهد اصلاً نشان داده نمی‌شوند
+  const isProt125 = user.phone === '09122862184' || (Array.isArray(user.adminSections) && user.adminSections.length > 0)
+  const staffBlocked125 = !!meStaff && isProt125
+  const canImpersonate125 = !meStaff || (meStaff.includes('impersonate') && !isProt125)
   const [detail, setDetail] = useState<any>(null)
   // فاز ۸۸: تاریخچهٔ بازدیدِ همین کاربر از ترکر (تنبل)
   const [visits88, setVisits88] = useState<any>(null)
@@ -4555,9 +4559,12 @@ function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete, onSuspend,
               <div><label style={lab}>نقش</label><select style={inp} value={edit.role} onChange={e => setEdit({ ...edit, role: e.target.value })}><option value="">— بدون نقش</option>{roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></div>
               <div><label style={lab}>پلن</label><select style={inp} value={edit.plan} onChange={e => setEdit({ ...edit, plan: e.target.value })}><option value="">بدون پلن</option>{planOptions(plans)}</select></div>
             </div>
+            {staffBlocked125 ? (
+              <div style={{ fontSize: 12.5, color: 'var(--muted)', background: 'var(--bg2)', border: '1px dashed var(--line2)', borderRadius: 10, padding: '10px 14px' }}>🛡 حسابِ محافظت‌شده (سوپرادمین/پرسنل) — فقط سوپرادمین می‌تواند آن را تغییر دهد</div>
+            ) : (
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <GoldButton onClick={save}>ذخیرهٔ تغییرات</GoldButton>
-              <button onClick={async () => { const r = await fetch('/api/admin/impersonate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: user.phone }) }); const d = await r.json(); if (d.ok) window.location.href = d.dashboard || '/buyer'; else alert(d.error || 'خطا') }} style={{ background: 'var(--goldDim)', border: '1px solid var(--gold)', color: 'var(--gold)', borderRadius: 10, padding: '9px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 700 }}>↪ ورود به محیطِ کاربر</button>
+              {canImpersonate125 && <button onClick={async () => { const r = await fetch('/api/admin/impersonate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: user.phone }) }); const d = await r.json(); if (d.ok) window.location.href = d.dashboard || '/buyer'; else alert(d.error || 'خطا') }} style={{ background: 'var(--goldDim)', border: '1px solid var(--gold)', color: 'var(--gold)', borderRadius: 10, padding: '9px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 700 }}>↪ ورود به محیطِ کاربر</button>}
               {user.suspended
                 ? <button onClick={() => onSuspend(user.phone, false)} style={{ background: 'rgba(95,217,138,.12)', border: '1px solid rgba(95,217,138,.45)', color: '#5fd98a', borderRadius: 10, padding: '9px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 700 }}>✓ رفعِ تعلیق</button>
                 : <button onClick={() => { if (confirm(`پنلِ ${user.name || user.phone} معلق شود؟`)) onSuspend(user.phone, true) }} style={{ background: 'transparent', border: '1px solid rgba(231,137,74,.45)', color: '#e7894a', borderRadius: 10, padding: '9px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>⛔ تعلیقِ پنل</button>}
@@ -4570,10 +4577,11 @@ function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete, onSuspend,
               <button onClick={() => { onDelete(user.phone); onClose() }} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.4)', color: '#e7674a', borderRadius: 10, padding: '9px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>حذفِ کاربر</button>
               {saved && <span style={{ fontSize: 12.5, color: '#5fd98a' }}>✓ ذخیره شد</span>}
             </div>
+            )}
           </div>
 
           {/* فاز ۵۶: هدیهٔ پلنِ زمان‌دار — همان مسیرِ فعال‌سازیِ خرید، بدونِ پول */}
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 14, padding: 16 }}>
+          {!staffBlocked125 && <div style={{ background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 14, padding: 16 }}>
             <div style={{ fontSize: 13.5, fontWeight: 800, marginBottom: 4 }}>🎁 هدیهٔ پلنِ زمان‌دار</div>
             <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.9 }}>
               پلنِ انتخابی برای مدتِ مشخص رایگان فعال می‌شود (با اعتبارِ AI همان پلن) و در پایانِ مدت خودکار غیرفعال می‌شود.
@@ -4584,10 +4592,10 @@ function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete, onSuspend,
               <div><label style={lab}>مدت (روز)</label><input style={inp} type="number" min={1} value={gift.days} onChange={e => setGift({ ...gift, days: e.target.value })} /></div>
               <button onClick={doGift} disabled={gifting} style={{ background: gifting ? 'var(--bg2)' : 'linear-gradient(140deg,var(--gold2),var(--gold))', border: 'none', color: gifting ? 'var(--muted)' : '#16140f', borderRadius: 10, padding: '10px 18px', cursor: gifting ? 'wait' : 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 800, whiteSpace: 'nowrap' }}>{gifting ? '…' : '🎁 فعال‌سازیِ رایگان'}</button>
             </div>
-          </div>
+          </div>}
 
-          {/* فاز ۱۱۵ — دسترسیِ پرسنل به پنلِ مدیریت: تیکِ بخش‌ها → داخلِ توکنِ ورودِ کاربر می‌نشیند */}
-          <StaffAccessCard user={user} />
+          {/* فاز ۱۱۵ — دسترسیِ پرسنل به پنلِ مدیریت: تیکِ بخش‌ها → داخلِ توکنِ ورودِ کاربر می‌نشیند (فاز ۱۲۵: فقط سوپرادمین می‌بیند) */}
+          {!meStaff && <StaffAccessCard user={user} />}
         </div>
       </div>
     </div>
@@ -4647,6 +4655,9 @@ function UsersView() {
   const [planFilter, setPlanFilter] = useState('')
   const [sel, setSel] = useState<Set<string>>(new Set())
   const [viewUser, setViewUser] = useState<any>(null)
+  // فاز ۱۲۵ — صداقتِ UI: پرسنل نباید دکمه/کارتی ببیند که برایش کار نمی‌کند (اعطای دسترسی، impersonateِ اعطانشده، حساب‌های محافظت‌شده)
+  const [meStaff, setMeStaff] = useState<string[] | null>(null)
+  useEffect(() => { fetch('/api/auth/profile', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => { if (d && Array.isArray(d.staff) && d.role !== 'super_admin') setMeStaff(d.staff) }).catch(() => {}) }, [])
 
   const load = async () => {
     setLoading(true)
@@ -4812,7 +4823,7 @@ function UsersView() {
         </div>
       </Card>
 
-      {viewUser && <UserDrawer user={viewUser} roles={roles} plans={plans} onClose={() => setViewUser(null)} onPatch={patchOne} onDelete={delOne} onSuspend={suspendOne} onAccountUpdate={(acc) => { setViewUser((v: any) => ({ ...v, ...acc })); setUsers(us => us.map(u => u.phone === acc.phone ? { ...u, ...acc } : u)) }} />}
+      {viewUser && <UserDrawer user={viewUser} roles={roles} plans={plans} meStaff={meStaff} onClose={() => setViewUser(null)} onPatch={patchOne} onDelete={delOne} onSuspend={suspendOne} onAccountUpdate={(acc) => { setViewUser((v: any) => ({ ...v, ...acc })); setUsers(us => us.map(u => u.phone === acc.phone ? { ...u, ...acc } : u)) }} />}
       {creating && <CreateUserPopup roles={roles} plans={plans} onClose={() => setCreating(false)} onCreated={load} />}
     </div>
   )

@@ -5,14 +5,14 @@ import { processProfileGate } from '@/app/lib/profile-gate-runner'
 
 export async function GET() {
   const s = await getSession()
-  if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  if (!s || !(s.role === 'super_admin' || (s.staff || []).some(x => x === 'profiles' || x === 'sms'))) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })   // فاز ۱۲۵: پرسنلِ بخشِ مربوط هم
   const g = getAdminData().profileGate || {}
   return NextResponse.json({ enabled: !!g.enabled, minPercent: g.minPercent ?? 70, graceDays: g.graceDays ?? 3, pattern: g.pattern || '', patternVar: g.patternVar || 'message' })
 }
 
 export async function POST(req: NextRequest) {
   const s = await getSession()
-  if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  if (!s || !(s.role === 'super_admin' || (s.staff || []).some(x => x === 'profiles' || x === 'sms'))) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })   // فاز ۱۲۵: پرسنلِ بخشِ مربوط هم
   const b = await req.json().catch(() => ({} as any))
   const data = getAdminData()
   const cur = data.profileGate || {}

@@ -46,7 +46,7 @@ export const API_SECTIONS: Record<string, string[]> = {
   'shahkar-refetch': ['users'],
   profiles: ['profiles'],
   'profile-options': ['profiles'],
-  'profile-gate-config': ['profiles'],
+  'profile-gate-config': ['profiles', 'sms'],   // فاز ۱۲۵: کارتش داخلِ نمای پیامک هم هست
   'divar-pros': ['profiles', 'agencyintel'],
   'agency-intel': ['agencyintel'],
   'agency-roster': ['agencyintel'],
@@ -61,7 +61,9 @@ export const API_SECTIONS: Record<string, string[]> = {
   promos: ['discounts'],
   promotions: ['promos'],
   'promo-pricing': ['promos'],
-  'tracker-config': ['tracker'],
+  'tracker-config': ['tracker', 'users'],   // فاز ۱۲۵: بازدیدهای سایتِ کاربر داخلِ کشوی کاربران هم خوانده می‌شود
+  'alerts-config': ['sms'],
+  'negotiation-config': ['sms'],
   outreach: ['tracker', 'sms'],
   'sms-cost': ['sms'],
   'ai-cost': ['reports'],

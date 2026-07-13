@@ -6,14 +6,14 @@ import { countAll } from '@/app/lib/push-store'
 // تنظیماتِ هشدارِ «آگهی جدید اومد خبرم کن» (سوپرادمین): پترنِ پیامک.
 export async function GET() {
   const s = await getSession()
-  if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  if (!s || !(s.role === 'super_admin' || (s.staff || []).includes('sms'))) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })   // فاز ۱۲۵: پرسنلِ بخشِ مربوط هم
   const a = getAdminData().alerts || {}
   return NextResponse.json({ enabled: !!a.enabled, pattern: a.pattern || '', patternVar: a.patternVar || 'message', pushSubscribers: countAll() })
 }
 
 export async function POST(req: NextRequest) {
   const s = await getSession()
-  if (!s || s.role !== 'super_admin') return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })
+  if (!s || !(s.role === 'super_admin' || (s.staff || []).includes('sms'))) return NextResponse.json({ error: 'دسترسی غیرمجاز' }, { status: 403 })   // فاز ۱۲۵: پرسنلِ بخشِ مربوط هم
   const b = await req.json().catch(() => ({} as any))
   const data = getAdminData()
   data.alerts = {
