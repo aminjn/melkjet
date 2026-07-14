@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/app/lib/session'
-import { listAccounts, setSuspended, setFlagged } from '@/app/lib/account-store'
+import { listAccounts, setSuspended, setFlagged, setGateExempt } from '@/app/lib/account-store'
 
 function admin(s: { role?: string; phone?: string } | null) { return !!s && (s.role === 'super_admin' || s.phone === '09122862184') }
 
@@ -29,8 +29,9 @@ export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({})) as { action?: string; phone?: string; reason?: string }
   const phone = String(b.phone || '').trim()
   if (!phone) return NextResponse.json({ error: 'phone لازم است' }, { status: 400 })
-  if (b.action === 'suspend') { setSuspended(phone, true, b.reason || 'تعلیق توسط سوپرادمین'); return NextResponse.json({ ok: true }) }
-  if (b.action === 'unsuspend') { setSuspended(phone, false); return NextResponse.json({ ok: true }) }
+  // فاز ۱۲۷ — رفعِ تعلیقِ دستی چسبنده است: معافیت از موتورِ تعلیقِ خودکارِ گیتِ پروفایل (تعلیقِ دستی معافیت را برمی‌دارد)
+  if (b.action === 'suspend') { setSuspended(phone, true, b.reason || 'تعلیق توسط سوپرادمین'); setGateExempt(phone, false); return NextResponse.json({ ok: true }) }
+  if (b.action === 'unsuspend') { setSuspended(phone, false); setGateExempt(phone, true); return NextResponse.json({ ok: true }) }
   if (b.action === 'clearFlag') { setFlagged(phone, false); return NextResponse.json({ ok: true }) }
   return NextResponse.json({ error: 'action نامعتبر' }, { status: 400 })
 }

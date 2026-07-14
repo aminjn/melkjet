@@ -15,6 +15,8 @@ export interface Account {
   identityRaw?: Record<string, unknown>
   // تعلیقِ پنل به‌خاطرِ پروفایلِ ناقص (بدونِ reason) یا تعلیقِ ضدتقلب/ادمین (با reason → ورود مسدود)
   suspended?: boolean; profileWarnAt?: number; suspendReason?: string; suspendedAt?: number
+  // فاز ۱۲۷ (فیدبک: «رفع تعلیق می‌کنم دوباره تعلیق می‌شود»): رفعِ تعلیقِ دستیِ ادمین = معافیتِ ماندگار از تعلیقِ خودکار
+  gateExempt?: boolean
   // پرچمِ بررسیِ ضدتقلب (هنوز معلق نشده — در صفِ بازبینیِ سوپرادمین)
   flagged?: boolean; flagReason?: string; flaggedAt?: number
   // دسترسی‌های ویژه که سوپرادمین می‌دهد (مثلِ 'catalog' برای مدیریتِ کاتالوگ و اسکرپِ هایپرساز)
@@ -170,6 +172,12 @@ export function setSuspended(phone: string, val: boolean, reason?: string) {
   a.suspendedAt = val ? Date.now() : undefined
   if (!val) a.profileWarnAt = undefined
   if (val) { a.flagged = undefined; a.flagReason = undefined; a.flaggedAt = undefined }   // تعلیق پرچم را می‌بلعد
+  save(db)
+}
+// فاز ۱۲۷ — معافیت از تعلیقِ خودکار: وقتی ادمین دستی رفعِ تعلیق می‌کند، موتورِ گیتِ پروفایل دیگر سراغش نمی‌رود.
+export function setGateExempt(phone: string, on: boolean) {
+  const db = load(); const a = db[phone]; if (!a) return
+  a.gateExempt = on || undefined
   save(db)
 }
 // پرچمِ بازبینیِ ضدتقلب (تعلیق نیست؛ فقط در صفِ بررسیِ سوپرادمین می‌نشیند).

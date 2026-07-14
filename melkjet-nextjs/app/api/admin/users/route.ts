@@ -107,7 +107,21 @@ export async function PATCH(req: NextRequest) {
   // عملیات دسته‌جمعی
   if (Array.isArray(b.phones)) { bulkUpdate(b.phones, b.patch || {}); logAudit(s.phone, 'ویرایشِ گروهیِ کاربران', `${b.phones.length} حساب`); return NextResponse.json({ ok: true }) }
   if (!b.phone) return NextResponse.json({ error: 'شماره الزامی است' }, { status: 400 })
-  if (b.suspend !== undefined) { setSuspended(String(b.phone), !!b.suspend); logAudit(s.phone, b.suspend ? 'تعلیقِ کاربر' : 'رفعِ تعلیقِ کاربر', String(b.phone)); return NextResponse.json({ ok: true }) }
+  if (b.suspend !== undefined) {
+    setSuspended(String(b.phone), !!b.suspend)
+    // فاز ۱۲۷ — رفعِ تعلیقِ دستی باید بماند: معافیت از موتورِ تعلیقِ خودکار (و تعلیقِ دستی معافیت را برمی‌دارد)
+    const { setGateExempt } = await import('@/app/lib/account-store')
+    setGateExempt(String(b.phone), !b.suspend)
+    logAudit(s.phone, b.suspend ? 'تعلیقِ کاربر' : 'رفعِ تعلیقِ کاربر (معاف از تعلیقِ خودکار)', String(b.phone))
+    return NextResponse.json({ ok: true })
+  }
+  // فاز ۱۲۷ — کنترلِ مستقیمِ معافیت از تعلیقِ خودکار (چیپِ کشوی کاربر)
+  if (b.gateExempt !== undefined) {
+    const { setGateExempt } = await import('@/app/lib/account-store')
+    setGateExempt(String(b.phone), !!b.gateExempt)
+    logAudit(s.phone, b.gateExempt ? 'معافیت از تعلیقِ خودکار' : 'لغوِ معافیت از تعلیقِ خودکار', String(b.phone))
+    return NextResponse.json({ ok: true })
+  }
   // دادن/گرفتنِ دسترسیِ ویژه (مثلِ 'catalog' برای مدیریتِ کاتالوگ و اسکرپِ هایپرساز)
   if (b.cap) { const a = setCap(String(b.phone), String(b.cap), !!b.on); if (!a) return NextResponse.json({ error: 'کاربر یافت نشد' }, { status: 404 }); return NextResponse.json({ ok: true, user: a }) }
   const a = adminUpdate(b.phone, b.patch || {})

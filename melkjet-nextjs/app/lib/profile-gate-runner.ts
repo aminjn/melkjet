@@ -1,9 +1,8 @@
-import { listAccounts, setSuspended, setProfileWarn } from './account-store'
+import { listAccounts, setSuspended, setProfileWarn, SUPER_ADMIN_PHONE } from './account-store'
 import { getProfile, completeness } from './profile-store'
 import { getAdminData } from './admin-store'
 import { dashForRoleId } from './role-store'
 import { shecanRequest } from './shecan-https'
-import { SUPER_ADMIN_PHONE } from './session'
 
 // fullText برای حالتِ آزاد (خطِ تبلیغاتی)؛ varValue مقدارِ کوتاهِ متغیرِ پترن (خطِ خدماتی).
 async function sendGateSms(phone: string, fullText: string, varValue: string, cfg: any) {
@@ -33,6 +32,7 @@ export async function processProfileGate(now = Date.now()): Promise<{ checked: n
   for (const a of listAccounts()) {
     if (a.phone === SUPER_ADMIN_PHONE || !a.role) continue
     if (dashForRoleId(a.role) === '/buyer') continue   // کاربرانِ عادی پروفایلِ کسب‌وکار ندارند
+    if (a.gateExempt) continue   // فاز ۱۲۷: رفعِ تعلیقِ دستیِ ادمین = معافیتِ ماندگار — دیگر نه هشدار، نه تعلیقِ دوباره
     checked++
     const pct = completeness(getProfile(a.phone))
     if (pct >= minPercent) {

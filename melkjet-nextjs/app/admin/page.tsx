@@ -4566,8 +4566,12 @@ function UserDrawer({ user, roles, plans, onClose, onPatch, onDelete, onSuspend,
               <GoldButton onClick={save}>ذخیرهٔ تغییرات</GoldButton>
               {canImpersonate125 && <button onClick={async () => { const r = await fetch('/api/admin/impersonate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: user.phone }) }); const d = await r.json(); if (d.ok) window.location.href = d.dashboard || '/buyer'; else alert(d.error || 'خطا') }} style={{ background: 'var(--goldDim)', border: '1px solid var(--gold)', color: 'var(--gold)', borderRadius: 10, padding: '9px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 700 }}>↪ ورود به محیطِ کاربر</button>}
               {user.suspended
-                ? <button onClick={() => onSuspend(user.phone, false)} style={{ background: 'rgba(95,217,138,.12)', border: '1px solid rgba(95,217,138,.45)', color: '#5fd98a', borderRadius: 10, padding: '9px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 700 }}>✓ رفعِ تعلیق</button>
+                ? <button onClick={() => onSuspend(user.phone, false)} style={{ background: 'rgba(95,217,138,.12)', border: '1px solid rgba(95,217,138,.45)', color: '#5fd98a', borderRadius: 10, padding: '9px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 700 }}>✓ رفعِ تعلیق (ماندگار)</button>
                 : <button onClick={() => { if (confirm(`پنلِ ${user.name || user.phone} معلق شود؟`)) onSuspend(user.phone, true) }} style={{ background: 'transparent', border: '1px solid rgba(231,137,74,.45)', color: '#e7894a', borderRadius: 10, padding: '9px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>⛔ تعلیقِ پنل</button>}
+              {/* فاز ۱۲۷ — معافیت از تعلیقِ خودکار: با رفعِ تعلیقِ دستی خودکار می‌نشیند؛ اینجا دیدنی و قابلِ‌لغو است */}
+              {!user.suspended && user.gateExempt && <button title="این حساب با رفعِ تعلیقِ دستی از چرخهٔ تعلیقِ خودکارِ پروفایلِ ناقص معاف شده — با کلیک، معافیت لغو و به چرخهٔ خودکار برمی‌گردد"
+                onClick={async () => { if (!confirm('معافیت از تعلیقِ خودکار لغو شود؟ (اگر پروفایلش ناقص بماند ممکن است دوباره خودکار معلق شود)')) return; const r = await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: user.phone, gateExempt: false }) }); if (r.ok) onAccountUpdate({ phone: user.phone, gateExempt: false }); else alert('خطا در ذخیره') }}
+                style={{ background: 'rgba(95,217,138,.10)', border: '1px dashed rgba(95,217,138,.45)', color: '#5fd98a', borderRadius: 10, padding: '9px 14px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>🛡 معاف از تعلیقِ خودکار — لغو</button>}
               {(() => { const has = Array.isArray(user.caps) && user.caps.includes('catalog'); return (
                 <button onClick={async () => { const on = !has; await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: user.phone, cap: 'catalog', on }) }); onAccountUpdate({ phone: user.phone, caps: on ? [...(user.caps || []), 'catalog'] : (user.caps || []).filter((c: string) => c !== 'catalog') }) }}
                   style={{ background: has ? 'rgba(95,217,138,.12)' : 'transparent', border: `1px solid ${has ? 'rgba(95,217,138,.45)' : 'var(--gold)'}`, color: has ? '#5fd98a' : 'var(--gold)', borderRadius: 10, padding: '9px 16px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: has ? 700 : 400 }}>
@@ -4681,9 +4685,11 @@ function UsersView() {
     await fetch(`/api/admin/users?phone=${encodeURIComponent(phone)}`, { method: 'DELETE' })
   }
   const suspendOne = async (phone: string, suspend: boolean) => {
-    setUsers(us => us.map(u => u.phone === phone ? { ...u, suspended: suspend } : u))
-    if (viewUser?.phone === phone) setViewUser((v: any) => ({ ...v, suspended: suspend }))
-    await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, suspend }) })
+    // فاز ۱۲۷: رفعِ تعلیقِ دستی = معافیتِ ماندگار از تعلیقِ خودکار (سرور هم همین را ثبت می‌کند)
+    setUsers(us => us.map(u => u.phone === phone ? { ...u, suspended: suspend, gateExempt: !suspend } : u))
+    if (viewUser?.phone === phone) setViewUser((v: any) => ({ ...v, suspended: suspend, gateExempt: !suspend }))
+    const r = await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, suspend }) })
+    if (!r.ok) { const d = await r.json().catch(() => ({} as any)); alert(d.error || 'ذخیره نشد — خطای سرور') }
     load()
   }
 
