@@ -4745,9 +4745,11 @@ function UsersView() {
   }
 
   // فاز ۱۴۳ (فیدبک: «ادغام هم نمی‌شود!»): حسابِ ادغام‌شده دیگر در لیست نمی‌آید — یک نفر، یک ردیف.
-  const mergedCount = users.filter(u => u.mergedInto).length
+  // ادغام‌های قدیمی (قبل از فیلدِ mergedInto) از روی دلیلِ تعلیق شناسایی می‌شوند.
+  const isMerged143 = (u: any) => !!u.mergedInto || /^ادغام‌شده/.test(u.suspendReason || '')
+  const mergedCount = users.filter(isMerged143).length
   const filtered = users.filter(u => {
-    if (u.mergedInto) return false
+    if (isMerged143(u)) return false
     if (q.trim()) { const t = q.trim(); if (!(u.phone.includes(t) || (u.name || '').includes(t))) return false }
     if (roleFilter && u.role !== roleFilter) return false
     if (planFilter === '__none') { if (u.plan) return false }
