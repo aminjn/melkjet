@@ -209,8 +209,15 @@ body {
 @media(max-width:540px){.mjr-grid{grid-template-columns:1fr!important}}
 
 /* Directory */
-@media(max-width:860px){.mjdir-cats{overflow-x:auto!important}.mjdir-grid{grid-template-columns:1fr 1fr!important}}
-@media(max-width:480px){.mjdir-grid{grid-template-columns:1fr!important}}
+/* فاز ۱۳۰ — دایرکتوری: موبایل = سایدبار بالای نتایج با اسکرولِ افقیِ چیپ‌ها، کارت‌ها تک‌ستونه */
+@media(max-width:900px){
+  .mjdir-body{grid-template-columns:1fr!important}
+  .mjdir-side{position:static!important}
+  .mjdir-cats{flex-direction:row!important;overflow-x:auto!important;padding-bottom:4px}
+  .mjdir-cats button{width:auto!important;white-space:nowrap}
+  .mjdir-grid{grid-template-columns:1fr 1fr!important}
+}
+@media(max-width:560px){.mjdir-grid{grid-template-columns:1fr!important}}
 
 /* Store */
 @media(max-width:860px){.mjst-grid{grid-template-columns:1fr 1fr!important}.mjst-2col{grid-template-columns:1fr!important}}

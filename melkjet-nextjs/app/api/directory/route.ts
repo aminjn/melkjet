@@ -3,6 +3,7 @@ import { listAccounts } from '@/app/lib/account-store'
 import { listRoles } from '@/app/lib/role-store'
 import { getProfile } from '@/app/lib/profile-store'
 import { getAdvisor } from '@/app/lib/advisor-store'
+import { listReviews } from '@/app/lib/reviews-store'
 
 // دایرکتوریِ متخصصانِ «ثبت‌شده در سایت» — تا کاربران واقعیِ نقش‌دار (مشاور/آژانس/سازنده/
 // مصالح/حقوقی) در دایرکتوری دیده شوند و به پروفایلِ عمومی‌شان لینک شوند.
@@ -24,9 +25,34 @@ const ROLE_CAT: Record<string, string> = {
 }
 
 export async function GET(req: NextRequest) {
-  const category = (new URL(req.url).searchParams.get('category') || '').trim()
+  const url = new URL(req.url)
+  const category = (url.searchParams.get('category') || '').trim()
   const roles = listRoles()
   const roleName = (rid?: string) => { if (!rid) return ''; const r = roles.find(x => x.id === rid || x.name === rid); return r?.name || rid }
+
+  // فاز ۱۳۰ — شمارشِ واقعیِ هر دسته برای سایدبارِ دایرکتوری (اکانت‌های نقش‌دار + سازنده‌های پرشین‌سازه + اسکرپ)
+  if (url.searchParams.get('counts') === '1') {
+    const counts: Record<string, number> = {}
+    for (const a of listAccounts()) {
+      const cat = ROLE_CAT[roleName(a.role)]
+      if (!cat) continue
+      const p = getProfile(a.phone)
+      if (!(p.businessName || p.displayName || a.name || '').trim()) continue
+      counts[cat] = (counts[cat] || 0) + 1
+    }
+    try {
+      const { getProfiles } = await import('@/app/lib/persiansaze-store')
+      counts['سازنده'] = (counts['سازنده'] || 0) + Object.values(getProfiles()).filter((b: any) => b?.name).length
+    } catch {}
+    try {
+      const { listItems } = await import('@/app/lib/scraper-store')
+      for (const it of await listItems('directory', { publicOnly: true })) {
+        const c = String((it as any).category || '').trim()
+        if (c) counts[c] = (counts[c] || 0) + 1
+      }
+    } catch {}
+    return NextResponse.json({ counts }, { headers: { 'Cache-Control': 'no-store, private' } })
+  }
 
   const items: any[] = []
 
@@ -62,6 +88,7 @@ export async function GET(req: NextRequest) {
           excerpt: pc ? `${pc.toLocaleString('fa-IR')} پروژه` : '',
           tags: pc ? [`${pc.toLocaleString('fa-IR')} پروژه`] : [],
           hasPhone: !!(b.phone || (b.phones && b.phones.length)),
+          stats: { projects: pc },   // فاز ۱۳۰ — پروژه‌های واقعیِ ثبت‌شدهٔ سازنده
           url: `/builders/${encodeURIComponent(b.id)}`,
           revealKind: 'builder', revealId: String(b.id),   // شمارهٔ سازنده از /api/contact-reveal
           scrapedAt: 0, status: 'approved', registered: true,
@@ -105,11 +132,17 @@ export async function GET(req: NextRequest) {
       profileComplete: !!(name && (photo || specialties.length) && hasPhone),
       responsive: hasPhone,
     })
+    // فاز ۱۳۰ — آمارِ واقعیِ کارت (هیچ عددی ساختگی نیست): نظرها/امتیاز از نظراتِ تأییدشده، معامله از آگهی‌های فروخته/اجاره‌رفته، عضویت از createdAt
+    const revs = listReviews(a.phone)
+    const rated = revs.filter(r => Number(r.rating) >= 1)
+    const avgRating = rated.length ? Math.round(rated.reduce((t, r) => t + Number(r.rating), 0) / rated.length * 10) / 10 : 0
+    const memberYears = a.createdAt ? Math.max(0, Math.floor((Date.now() - a.createdAt) / (365.25 * 864e5))) : 0
     items.push({
       id: a.phone, sourceName: 'ملک‌جت', type: 'directory', category: cat,
       title: name, location: city, image: photo, excerpt: tagline,
       tags: specialties.slice(0, 4), hasPhone, url: `/profile/${encodeURIComponent(a.phone)}`,
       badges,
+      stats: { reviews: revs.length, rating: avgRating, deals: agg.sold, listings: agg.count, memberYears, memberSince: a.createdAt || 0 },
       // شماره از /api/listing-reveal با kind=advisor — برای هر اکانت (مشاور یا غیرِ آن) خودِ
       // شمارهٔ اکانت را برمی‌گرداند (اگر پروفایلِ مشاور نباشد). شناسه = تلفنِ اکانت.
       revealKind: 'advisor', revealId: a.phone,
