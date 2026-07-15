@@ -1165,6 +1165,57 @@ function Ga4Config() {
   )
 }
 
+// فاز ۱۴۸ (فیدبک: «راهی بذار ماشین لرنینگ را بسنجم») — سنجشِ زندهٔ مدل با آگهیِ فرضی، بدونِ ذخیره/آموزش.
+function MlTester() {
+  const [tTitle, setTTitle] = useState('')
+  const [tDesc, setTDesc] = useState('')
+  const [tPrice, setTPrice] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [res, setRes] = useState<any>(null)
+  const run = async () => {
+    if (!tTitle.trim() || busy) return
+    setBusy(true)
+    try {
+      const r = await fetch('/api/admin/moderation-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ test: { title: tTitle, excerpt: tDesc, price: tPrice } }) })
+      const d = await r.json().catch(() => ({}))
+      setRes(d.ok ? d.test : { error: d.error || 'خطا' })
+    } catch { setRes({ error: 'خطا در ارتباط' }) } finally { setBusy(false) }
+  }
+  const V: Record<string, { fa: string; color: string; hint: string }> = {
+    'reject-rule': { fa: 'ردِ خودکار (قاعدهٔ تماس)', color: '#e7674a', hint: 'مدرکِ قطعیِ شماره/لینک/آیدی در متن پیدا شد' },
+    'auto-approve': { fa: 'تأییدِ خودکار', color: '#5fd98a', hint: 'مدل مطمئن است که آگهیِ سالم است' },
+    'human-review': { fa: 'صفِ بازبینیِ انسانی', color: '#e7a14a', hint: 'مدل به رد مشکوک است ولی طبقِ قانون خودش رد نمی‌کند — تصمیم با توست' },
+    'ai-or-review': { fa: 'بررسیِ AI / بازبینی', color: 'var(--muted)', hint: 'مدل هنوز مطمئن نیست — هوش مصنوعی یا بازبینیِ انسانی داوری می‌کند' },
+  }
+  const inp148: React.CSSProperties = { width: '100%', background: 'var(--bg2)', border: '1px solid var(--line2)', borderRadius: 10, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+  return (
+    <Card style={{ marginBottom: 14 }}>
+      <div style={{ fontWeight: 700, fontSize: 14 }}>🧪 سنجشِ مدل — همین حالا امتحانش کن</div>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3, lineHeight: 1.7 }}>یک آگهیِ فرضی بنویس و ببین سیستم چه حکمی می‌دهد و چرا — هیچ‌چیز ذخیره یا آموزش داده نمی‌شود. برای سنجشِ یادگیری: قبل و بعد از تأیید/ردِ دستیِ آگهی‌های مشابه، همین متن را دوباره بسنج و تغییرِ درصد را ببین.</div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+        <input value={tTitle} onChange={e => setTTitle(e.target.value)} placeholder="عنوانِ آگهی (مثلاً: آپارتمان ۸۵ متری تمیز در سعادت‌آباد)" style={{ ...inp148, flex: 2, minWidth: 260 }} />
+        <input value={tPrice} onChange={e => setTPrice(e.target.value)} placeholder="قیمت (مثلاً ۵٬۰۰۰٬۰۰۰٬۰۰۰ تومان)" style={{ ...inp148, flex: 1, minWidth: 170 }} />
+      </div>
+      <textarea value={tDesc} onChange={e => setTDesc(e.target.value)} rows={2} placeholder="توضیحاتِ آگهی (اختیاری)" style={{ ...inp148, marginTop: 8, resize: 'vertical' }} />
+      <div style={{ marginTop: 10, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <GoldButton onClick={run} disabled={busy || !tTitle.trim()}>{busy ? '⏳ در حال سنجش…' : '🧪 بسنج'}</GoldButton>
+        {res && !res.error && (() => { const v = V[res.verdict] || V['ai-or-review']; return (
+          <span style={{ fontSize: 13, fontWeight: 800, color: v.color, border: `1px solid ${v.color}`, borderRadius: 9, padding: '4px 12px' }}>{v.fa}</span>
+        ) })()}
+      </div>
+      {res && res.error && <div style={{ marginTop: 10, fontSize: 12.5, color: '#e7674a' }}>⚠ {res.error}</div>}
+      {res && !res.error && (
+        <div style={{ marginTop: 12, background: 'var(--bg2)', borderRadius: 10, padding: 12, fontSize: 12.5, lineHeight: 2 }}>
+          <div style={{ color: 'var(--faint)' }}>{(V[res.verdict] || V['ai-or-review']).hint}</div>
+          <div>🧠 پیش‌بینیِ مدلِ یادگیرنده: <b style={{ color: res.ml.label === 'approved' ? '#5fd98a' : '#e7a14a' }}>{res.ml.label === 'approved' ? 'سالم' : 'مشکوک به رد'}</b> با احتمالِ <b>{Number(res.ml.prob).toLocaleString('fa-IR')}٪</b>{!res.ml.ready && ' (مدل هنوز آماده نیست — نمونهٔ کافی ندیده)'}{res.ml.ready && !res.ml.confident && ' (زیرِ آستانهٔ اطمینان — خودش تصمیم نمی‌گیرد)'}</div>
+          {res.contact && res.contact.length > 0 && <div style={{ color: '#e7674a' }}>📵 مدرکِ تماس در متن: {res.contact.join(' · ')}</div>}
+          {res.reasons && res.reasons.length > 0 && <div style={{ color: 'var(--muted)' }}>دلایلِ مدل: {res.reasons.join(' · ')}</div>}
+        </div>
+      )}
+    </Card>
+  )
+}
+
 function ScraperView() {
   const [tab, setTab] = useState<ScrTab>('listing')
   const [sources, setSources] = useState<ScrSource[]>([])
@@ -2990,6 +3041,8 @@ function ModerationView() {
           <OutlineButton onClick={requeueRejected} disabled={requeueBusy} style={{ borderColor: 'var(--gold)', color: 'var(--gold)', opacity: requeueBusy ? 0.6 : 1 }}>{requeueBusy ? '⏳ در حال بازممیزی…' : '🔁 بازممیزی'}</OutlineButton>
         </div>
       </Card>
+
+      <MlTester />
 
       <Card>
         <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>آخرین تصمیم‌های هوش مصنوعی</div>

@@ -25,6 +25,22 @@ export async function POST(req: NextRequest) {
     const requeued = await requeueAutoRejected()
     return NextResponse.json({ ok: true, requeued })
   }
+  // فاز ۱۴۸ (فیدبک: «راهی بذار ماشین لرنینگ را بسنجم») — سنجشِ زندهٔ یک آگهیِ فرضی، بدونِ هیچ ذخیره/آموزشی:
+  // پیش‌بینیِ مدل + دلایل + مدرکِ تماس + حکمی که پایپ‌لاین می‌گرفت. قبل/بعدِ آموزشِ دستی قابلِ مقایسه است.
+  if (b.test && typeof b.test === 'object') {
+    const t = b.test as { title?: string; excerpt?: string; price?: string }
+    const pseudo = { title: String(t.title || '').slice(0, 200), excerpt: String(t.excerpt || '').slice(0, 1200), price: String(t.price || '').slice(0, 60), meta: {} }
+    const { predict, explainPrediction, contactEvidenceOf } = await import('@/app/lib/moderation-ml')
+    const cfgNow = modConfig()
+    const ml = predict(pseudo)
+    const ex = explainPrediction(pseudo)
+    const contact = cfgNow.autoRejectContact ? contactEvidenceOf(pseudo) : []
+    const verdict = contact.length ? 'reject-rule'
+      : (ml.confident && cfgNow.autoMl && ml.label === 'approved') ? 'auto-approve'
+      : (ml.confident && cfgNow.autoMl && ml.label === 'rejected') ? 'human-review'
+      : 'ai-or-review'
+    return NextResponse.json({ ok: true, test: { verdict, contact, ml: { label: ml.label, prob: Math.round(ml.prob * 100), ready: ml.ready, confident: ml.confident }, reasons: ex.reasons } })
+  }
   const data = getAdminData()
   const cur = data.moderation || {}
   const clamp = (n: any, d: number) => { const x = Number(n); return Number.isFinite(x) ? Math.max(0, Math.min(100, Math.round(x))) : d }

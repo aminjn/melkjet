@@ -166,7 +166,12 @@ export function displayReason(it: Pick<Item, 'title' | 'excerpt' | 'location' | 
 // کلاسِ درست + ثبت در پنجرهٔ ارزیابی — تا اصلاحِ دستیِ ادمین واقعاً مدل را برگرداند و قابلِ‌اندازه‌گیری باشد.
 export function teachFromAdmin(it: Item, status: ItemStatus, prev?: ItemStatus) {
   if (status !== 'approved' && status !== 'rejected') return
-  const prevLabel = prev === 'approved' || prev === 'rejected' ? prev : undefined
+  let prevLabel = prev === 'approved' || prev === 'rejected' ? prev : undefined
+  // فاز ۱۴۸ (فیدبک: «با واژهٔ تمیز رد می‌کند، تأیید می‌کنم، باز یاد نمی‌گیرد») — آیتم‌های صفِ بازبینی
+  // وضعیتِ pending دارند، پس «برگشتِ تصمیم» تشخیص داده نمی‌شد و unlearn هرگز اجرا نمی‌شد.
+  // مبنای درست، اختلافِ «پیش‌بینیِ فعلیِ مدل» با حکمِ ادمین است: مدل رد می‌گفت و ادمین تأیید کرد
+  // → اصلاح؛ ویژگی‌های مسموم (مثل «تمیز») از کلاسِ رد unlearn می‌شوند.
+  if (!prevLabel) { try { const p = predict(it); if (p.ready && p.label !== status) prevLabel = p.label } catch {} }
   try { correctFromAdmin(it, status, prevLabel) } catch { try { learn(it, status, 'admin') } catch {} }
 }
 
