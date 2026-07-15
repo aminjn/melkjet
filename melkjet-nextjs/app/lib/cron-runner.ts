@@ -139,6 +139,8 @@ async function queueTick(): Promise<void> {
   if (queueRunning) return
   queueRunning = true
   try {
+    // فاز ۱۳۱ — ضربانِ کارگر: پنلِ تشخیصِ مشاور از رویش می‌فهمد کارگرِ اینستنسِ ۰ زنده است
+    try { const { touchQueueHeartbeat } = await import('./advisor-divar-job'); touchQueueHeartbeat() } catch {}
     // ۱) درین‌کردنِ صف با سقفِ همزمانی: اول هولدشده‌ها (ادامه)، بعد صفِ جدید.
     let active = countActiveJobs()
     if (active < MAX_ACTIVE_SYNCS) {

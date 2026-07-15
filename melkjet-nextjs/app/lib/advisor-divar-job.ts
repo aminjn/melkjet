@@ -12,6 +12,8 @@ export interface DivarJob {
   pending?: any[]; gone?: any[]; liveTokens?: string[]; sourceId?: string   // liveTokens: توکن‌های زندهٔ این اجرا — ضدِ مهرِ اشتباهِ «فروخته» روی بازنشرها
   // صف: کاربر فقط «در صف» می‌گذارد؛ کارگرِ اینستنسِ ۰ آن را برمی‌دارد و اجرا می‌کند.
   queued?: boolean; cfg?: any; queuedAt?: number
+  // فاز ۱۳۱ — ژورنالِ زندهٔ مراحل (برای پنلِ «لایو» مشاور): هر مرحله/خطا با ساعت ثبت می‌شود.
+  log?: string[]
 }
 const EMPTY: DivarJob = { running: false, total: 0, done: 0, imported: 0, updated: 0, skipped: 0, failed: 0, sold: 0 }
 
@@ -40,6 +42,25 @@ export function countActiveJobs(): number {
 }
 
 export function getJob(o: string): DivarJob { return { ...EMPTY, ...(load()[o] || {}) } }
+
+// فاز ۱۳۱ — یک خطِ ژورنال با ساعتِ محلیِ سرور؛ سقفِ ۴۰ خط تا فایل سبک بماند.
+export function appendJobLog(o: string, line: string): void {
+  const db = load(); const cur = { ...EMPTY, ...(db[o] || {}) }
+  const t = new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  cur.log = [...(cur.log || []), `${t} — ${line}`].slice(-40)
+  db[o] = cur; save(db)
+}
+
+// فاز ۱۳۱ — ضربانِ کارگرِ صف (اینستنسِ ۰): هر تیکِ queueTick این را می‌زند؛
+// پنلِ تشخیص از رویش می‌فهمد کارگر زنده است یا نه (ریشهٔ رایجِ «هیچ اتفاقی نمی‌افتد»).
+const HEARTBEAT_FILE = join(process.cwd(), '.cron-heartbeat.json')
+export function touchQueueHeartbeat(): void {
+  try { writeFileSync(HEARTBEAT_FILE, JSON.stringify({ queueTickAt: Date.now(), instance: process.env.NODE_APP_INSTANCE ?? '' }), 'utf-8') } catch {}
+}
+export function queueHeartbeat(): { at: number; instance: string } | null {
+  try { if (existsSync(HEARTBEAT_FILE)) { const d = JSON.parse(readFileSync(HEARTBEAT_FILE, 'utf-8')); return { at: Number(d.queueTickAt) || 0, instance: String(d.instance ?? '') } } } catch {}
+  return null
+}
 export function setJob(o: string, patch: Partial<DivarJob>): DivarJob {
   const db = load(); const cur = { ...EMPTY, ...(db[o] || {}) }; const next = { ...cur, ...patch }; db[o] = next; save(db); return next
 }

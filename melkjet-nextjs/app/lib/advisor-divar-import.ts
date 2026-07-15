@@ -3,7 +3,7 @@ import { addListing, updateListing, publishListing, setListingStatus, deleteList
 import { findNeighborhoodInGeo } from './geo-store'
 import { warmEnrichment } from './enrich-warm'
 import { getDivar, hasToken, recordImport, removeImport, markRun, markSourceRun, clearImports, type AdvisorDivar } from './advisor-divar-store'
-import { getJob, setJob, isStale } from './advisor-divar-job'
+import { getJob, setJob, isStale , appendJobLog } from './advisor-divar-job'
 import { scrapeDivar } from './divar'
 import type { Source } from './scraper-store'
 
@@ -363,13 +363,17 @@ export async function runBatch(o: string): Promise<void> {
       consecutiveFail = r.ok ? 0 : consecutiveFail + 1
     }
     setJob(o, { pending, imported, updated, skipped, done: total - pending.length, lastProgressAt: Date.now() })
+    const done131 = total - pending.length
+    if (done131 % 20 < BATCH_CONC || !pending.length) appendJobLog(o, `📦 ${done131.toLocaleString('fa-IR')} از ${total.toLocaleString('fa-IR')} — جدید ${imported.toLocaleString('fa-IR')} · به‌روز ${updated.toLocaleString('fa-IR')} · ردشده ${skipped.toLocaleString('fa-IR')}`)
     if (consecutiveFail >= 12) {   // ~۳ دستهٔ کاملاً ناموفق = اتصال قطع → هولد و ادامهٔ بعدی
+      appendJobLog(o, '⚠️ چند دستهٔ پیاپی ناموفق — اتصالِ دیوار موقتاً قطع شد؛ کار «هولد» شد و چند دقیقهٔ دیگر خودکار ادامه می‌یابد')
       setJob(o, { running: false, paused: true, note: 'اتصالِ دیوار موقتاً قطع شد — چند دقیقهٔ دیگر خودکار ادامه می‌یابد.', lastProgressAt: Date.now() })
       return
     }
   }
 
   if (pending.length) {   // بودجهٔ این دور تمام شد ولی آگهی مانده → هولد؛ کرون ادامه می‌دهد.
+    appendJobLog(o, `⏸ بودجهٔ این دور تمام شد (${(total - pending.length).toLocaleString('fa-IR')} از ${total.toLocaleString('fa-IR')}) — چند دقیقهٔ دیگر خودکار ادامه می‌یابد`)
     setJob(o, { running: false, paused: true, pending, imported, updated, skipped, done: total - pending.length, note: `متوقفِ موقت — ${total - pending.length} از ${total} انجام شد؛ چند دقیقهٔ دیگر خودکار ادامه می‌یابد.`, lastProgressAt: Date.now() })
     return
   }
@@ -387,6 +391,7 @@ export async function runBatch(o: string): Promise<void> {
     sold = await markGone(o, gone as any)
   } catch {}
   if (sourceId) { try { markSourceRun(o, sourceId, imported, '') } catch {} }
+  appendJobLog(o, `🏁 همگام‌سازی کامل شد — جدید ${imported.toLocaleString('fa-IR')} · به‌روز ${updated.toLocaleString('fa-IR')} · فروخته/اجاره‌رفته ${sold.toLocaleString('fa-IR')} · ردشده ${skipped.toLocaleString('fa-IR')}`)
   setJob(o, { running: false, paused: false, pending: [], gone: [], imported, updated, skipped, sold, done: total, finishedAt: Date.now(), note: '', error: '' })
 }
 
@@ -404,7 +409,9 @@ export function startBackgroundSync(o: string, cfgIn?: AdvisorDivar, sourceId?: 
     running: false, paused: false, total: 0, done: 0, imported: 0, updated: 0, skipped: 0, failed: 0, sold: 0,
     error: '', note: 'در صفِ پردازش…', label: label || 'همگام‌سازیِ دیوار',
     startedAt: Date.now(), lastProgressAt: Date.now(), finishedAt: undefined, pending: [], gone: [], sourceId,
+    log: [],
   })
+  appendJobLog(o, '⏳ در صفِ سرور قرار گرفت — کارگرِ پردازش حداکثر تا ۴۵ ثانیهٔ دیگر برمی‌دارد')
   return { started: true, queued: true }
 }
 
@@ -418,6 +425,8 @@ export async function driveJob(o: string): Promise<void> {
   const cfgIn = j.cfg as AdvisorDivar | undefined
   const sourceId = j.sourceId
   setJob(o, { queued: false, running: true, paused: false, note: '', startedAt: Date.now(), lastProgressAt: Date.now() })
+  appendJobLog(o, '🚚 کارگرِ صف کار را برداشت (اینستنسِ ۰) — شروعِ اجرا')
+  appendJobLog(o, '🌐 در حال خواندنِ فهرستِ آگهی‌ها از دیوار (از مسیرِ پروکسیِ تنظیم‌شده در ادمین)…')
   try {
     const prep = await Promise.race([
       prepareSync(o, cfgIn, sourceId),
@@ -426,9 +435,12 @@ export async function driveJob(o: string): Promise<void> {
     // liveTokens هم ذخیره می‌شود تا در پایانِ اجرا (runBatch) فایل‌هایی که با توکنِ جدید بازنشر
     // شده‌اند و موتورِ شباهت به همان فایل نگاشتشان کرده، اشتباهاً «فروخته» مهر نخورند.
     setJob(o, { total: prep.items.length, pending: prep.items, gone: prep.gone, liveTokens: prep.items.map(i => i.token), sourceId, lastProgressAt: Date.now() })
+    appendJobLog(o, `✅ فهرست خوانده شد: ${prep.items.length.toLocaleString('fa-IR')} آگهیِ زنده${prep.gone.length ? ` · ${prep.gone.length.toLocaleString('fa-IR')} فایلِ حذف‌شده از دیوار (نامزدِ مهرِ فروخته)` : ''}`)
+    appendJobLog(o, '📦 شروعِ ایمپورت/به‌روزرسانیِ آگهی‌ها…')
     await runBatch(o)
   } catch (e: any) {
     if (sourceId) { try { markSourceRun(o, sourceId, 0, e?.message || 'خطا یا وقفه') } catch {} }
+    appendJobLog(o, `❌ ${e?.message || 'خطای داخلی هنگامِ همگام‌سازی'}`)
     setJob(o, { running: false, paused: false, queued: false, pending: [], finishedAt: Date.now(), error: e?.message || 'خطای داخلی هنگامِ همگام‌سازی' })
   }
 }
@@ -438,6 +450,7 @@ export function resumeJob(o: string): boolean {
   const j = getJob(o)
   if (j.running || !j.paused || !(j.pending || []).length) return false
   setJob(o, { running: true, paused: false, lastProgressAt: Date.now(), note: 'در حالِ ادامه…' })
+  appendJobLog(o, '▶️ ادامهٔ کارِ هولدشده…')
   ;(async () => {
     try { await runBatch(o) }
     catch (e: any) { setJob(o, { running: false, paused: true, note: 'وقفه — دوباره تلاش می‌شود.', error: e?.message || 'خطا' }) }

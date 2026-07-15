@@ -29,6 +29,9 @@ export default function DivarImport({ onChange, entity = 'شما' }: { onChange?
   const [selId, setSelId] = useState<string | null>(null)   // اسکرپِ انتخاب‌شده برای ویرایش
   const [showFiles, setShowFiles] = useState(false)
   const [job, setJob] = useState<any>(null)                 // وضعیتِ همگام‌سازیِ پس‌زمینه
+  const [probe, setProbe] = useState<any>(null)             // فاز ۱۳۱: نتیجهٔ «تستِ زندهٔ اتصال»
+  const [probing, setProbing] = useState(false)
+  const [showLog, setShowLog] = useState(true)
 
   const refresh = useCallback(async () => {
     try { const r = await fetch('/api/advisor/divar', { cache: 'no-store' }); if (r.ok) { const d = await r.json(); setCfg(d.config); setJob(d.job || null) } } catch {}
@@ -47,7 +50,7 @@ export default function DivarImport({ onChange, entity = 'شما' }: { onChange?
 
   // تا وقتی کار «در حال اجرا» یا «هولد» است پیشرفت را بپا (اسکرپِ بزرگ چند دور طول می‌کشد).
   useEffect(() => {
-    if (!job?.running && !job?.paused) return
+    if (!job?.running && !job?.paused && !job?.queued) return
     const t = setInterval(async () => {
       try {
         const r = await fetch('/api/advisor/divar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'jobStatus' }) })
@@ -55,13 +58,13 @@ export default function DivarImport({ onChange, entity = 'شما' }: { onChange?
         if (d?.ok) {
           setJob(d.job)
           // فقط وقتی کاملاً تمام شد (نه هولد) پیام پایان بده.
-          if (!d.job.running && !d.job.paused) { clearInterval(t); setMsg(finalMsg(d.job)); setShowFiles(true); refresh(); onChange?.() }
+          if (!d.job.running && !d.job.paused && !d.job.queued) { clearInterval(t); setMsg(finalMsg(d.job)); setShowFiles(true); refresh(); onChange?.() }
         }
       } catch {}
     }, 2500)
     return () => clearInterval(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [job?.running, job?.paused])
+  }, [job?.running, job?.paused, job?.queued])
 
   const post = useCallback(async (body: Record<string, unknown>): Promise<any> => {
     setBusy(true); setMsg('')
@@ -129,11 +132,35 @@ export default function DivarImport({ onChange, entity = 'شما' }: { onChange?
         </div>
       </div>
 
-      {/* نوارِ پیشرفتِ همگام‌سازیِ پس‌زمینه (در حال اجرا یا هولد) */}
-      {(job?.running || job?.paused) && (
+      {/* فاز ۱۳۱ — تشخیصِ زنده: تستِ اتصال + ژورنالِ مراحل */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button disabled={probing} onClick={async () => {
+          setProbing(true); setProbe(null)
+          try { const r = await fetch('/api/advisor/divar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'probe' }) }); setProbe(await r.json()) }
+          catch { setProbe({ ok: false, steps: [{ id: 'net', label: 'اتصال به سرورِ ملک‌جت', ok: false, detail: 'پاسخی نیامد' }] }) }
+          finally { setProbing(false) }
+        }} style={{ background: 'transparent', border: '1px solid var(--line2)', color: 'var(--text)', borderRadius: 10, padding: '8px 16px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+          {probing ? '🩺 در حال تستِ زنده…' : '🩺 تستِ زندهٔ اتصالِ دیوار'}
+        </button>
+        <span style={{ fontSize: 11, color: 'var(--faint)' }}>اگر همگام‌سازی کار نمی‌کند، این تست دقیقاً می‌گوید کجا می‌شکند</span>
+      </div>
+      {probe?.steps && (
+        <div style={{ ...card, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {probe.steps.map((st: any) => (
+            <div key={st.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 9, fontSize: 12.5 }}>
+              <span style={{ flexShrink: 0, fontWeight: 800, color: st.ok === true ? '#5fd98a' : st.ok === false ? '#e7674a' : 'var(--faint)' }}>{st.ok === true ? '✓' : st.ok === false ? '✗' : '○'}</span>
+              <span style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{st.label}:</span>
+              <span style={{ color: st.ok === false ? '#e7674a' : 'var(--muted)', lineHeight: 1.8 }}>{st.detail}{typeof st.ms === 'number' ? ` (${Math.round(st.ms / 100) / 10} ثانیه)` : ''}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* نوارِ پیشرفتِ همگام‌سازیِ پس‌زمینه (در صف، در حال اجرا یا هولد) */}
+      {(job?.running || job?.paused || job?.queued) && (
         <div style={{ ...card, padding: '12px 14px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>
-            <span style={{ color: job.paused ? '#e7a14a' : 'var(--gold)' }}>{job.paused ? '⏸' : '⏳'} {job.label || 'همگام‌سازیِ دیوار'} {job.paused ? 'متوقفِ موقت' : 'در حال اجرا…'}</span>
+            <span style={{ color: job.paused ? '#e7a14a' : 'var(--gold)' }}>{job.queued ? '🕐' : job.paused ? '⏸' : '⏳'} {job.label || 'همگام‌سازیِ دیوار'} {job.queued ? 'در صفِ سرور (تا ۴۵ ثانیه)' : job.paused ? 'متوقفِ موقت' : 'در حال اجرا…'}</span>
             <span style={{ color: 'var(--muted)' }}>{job.total ? `${(job.done || 0).toLocaleString('fa-IR')} از ${(job.total).toLocaleString('fa-IR')}` : 'در حالِ خواندنِ فهرست…'}</span>
           </div>
           <div style={{ height: 7, borderRadius: 999, background: 'var(--line)', overflow: 'hidden' }}>
@@ -141,12 +168,34 @@ export default function DivarImport({ onChange, entity = 'شما' }: { onChange?
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 11, color: 'var(--faint)' }}>{job.note || 'می‌توانید این صفحه را ببندید — همگام‌سازی روی سرور تا پایان ادامه می‌یابد.'}</span>
+            <button onClick={() => setShowLog(v => !v)} style={{ background: 'transparent', border: 'none', color: 'var(--gold)', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>{showLog ? 'بستنِ ژورنال' : 'ژورنالِ زنده'}</button>
             <span style={{ display: 'flex', gap: 8 }}>
               {job.paused && <button onClick={async () => { const d = await post({ action: 'resumeJob' }); if (d?.job) setJob(d.job) }} style={{ background: 'transparent', border: '1px solid var(--gold)', color: 'var(--gold)', borderRadius: 9, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>ادامهٔ الان</button>}
               <button onClick={async () => { const d = await post({ action: 'stopJob' }); if (d?.job) { setJob(d.job); setMsg('همگام‌سازی متوقف شد. می‌توانید دوباره شروع کنید.') } }} style={{ background: 'transparent', border: '1px solid rgba(231,103,74,.4)', color: '#e7674a', borderRadius: 9, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>توقف و شروعِ مجدد</button>
             </span>
           </div>
+          {/* فاز ۱۳۱ — ژورنالِ زندهٔ مراحل: دقیقاً می‌بینی سرور در چه مرحله‌ای است و اگر خطا خورد، کجا */}
+          {showLog && (job.log || []).length > 0 && (
+            <div dir="rtl" style={{ marginTop: 10, background: 'var(--bg2)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', maxHeight: 180, overflowY: 'auto', display: 'flex', flexDirection: 'column-reverse', gap: 4 }}>
+              {[...(job.log as string[])].reverse().map((l, i) => (
+                <div key={i} style={{ fontSize: 11.5, lineHeight: 1.9, color: l.includes('❌') || l.includes('⚠️') ? '#e7674a' : l.includes('🏁') || l.includes('✅') ? '#5fd98a' : 'var(--muted)' }}>{l}</div>
+              ))}
+            </div>
+          )}
         </div>
+      )}
+      {/* ژورنالِ آخرین اجرا حتی بعد از پایان/خطا هم دیدنی بماند — برای تشخیصِ علت */}
+      {!(job?.running || job?.paused || job?.queued) && (job?.log || []).length > 0 && (job?.error || job?.finishedAt) && (
+        <details style={{ ...card, padding: '10px 14px' }}>
+          <summary style={{ fontSize: 12, color: job?.error ? '#e7674a' : 'var(--muted)', cursor: 'pointer', fontWeight: 700 }}>
+            {job?.error ? `⚠ آخرین اجرا با خطا تمام شد: ${job.error}` : '📜 ژورنالِ آخرین همگام‌سازی'}
+          </summary>
+          <div dir="rtl" style={{ marginTop: 8, maxHeight: 200, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {(job.log as string[]).map((l, i) => (
+              <div key={i} style={{ fontSize: 11.5, lineHeight: 1.9, color: l.includes('❌') || l.includes('⚠️') ? '#e7674a' : l.includes('🏁') || l.includes('✅') ? '#5fd98a' : 'var(--muted)' }}>{l}</div>
+            ))}
+          </div>
+        </details>
       )}
       {msg && <div style={{ ...card, padding: '10px 14px', fontSize: 12.5, lineHeight: 1.7, color: msg.startsWith('✓') || msg.startsWith('⏳') ? 'var(--gold)' : '#ef4444' }}>{msg}</div>}
 
