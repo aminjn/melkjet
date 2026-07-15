@@ -420,6 +420,13 @@ export function startBackgroundSync(o: string, cfgIn?: AdvisorDivar, sourceId?: 
 export async function driveJob(o: string): Promise<void> {
   const j = getJob(o)
   if (j.running && !isStale(j)) return
+  // فاز ۱۳۴ — بازپس‌گیریِ زامبی: running کهنه با آگهیِ مانده → هولد و ادامه (قبلاً تا بازدیدِ صاحبش برای همیشه گیر می‌ماند)
+  if (j.running && isStale(j) && (j.pending || []).length) {
+    appendJobLog(o, '♻️ کارِ نیمه‌کارهٔ رهاشده توسطِ کارگر بازیابی شد — ادامه…')
+    setJob(o, { running: false, paused: true, pausedAt: 0 })
+    resumeJob(o)
+    return
+  }
   if (j.paused && (j.pending || []).length) { resumeJob(o); return }
   if (!j.queued) return
   const cfgIn = j.cfg as AdvisorDivar | undefined

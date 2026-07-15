@@ -40,7 +40,12 @@ export function queueOrder(): string[] {
   const rows: { phone: string; at: number }[] = []
   for (const phone of Object.keys(db)) {
     const j = db[phone]
-    if (!j || j.running) continue
+    if (!j) continue
+    if (j.running) {
+      // فاز ۱۳۴: زامبی — running ولی مدت‌هاست بی‌پیشرفت (ورکر ری‌استارت/هنگ)؛ اگر آگهیِ مانده دارد، خودِ کارگر ادامه‌اش بدهد
+      if (isStale(j) && Array.isArray(j.pending) && j.pending.length) rows.push({ phone, at: j.startedAt || j.queuedAt || 0 })
+      continue
+    }
     if (j.queued) rows.push({ phone, at: j.queuedAt || 0 })
     else if (j.paused && Array.isArray(j.pending) && j.pending.length && Date.now() - (j.pausedAt || 0) >= 60_000)
       rows.push({ phone, at: j.startedAt || j.queuedAt || 0 })
