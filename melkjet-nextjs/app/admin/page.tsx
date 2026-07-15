@@ -2967,6 +2967,19 @@ function ModerationView() {
         </div>
       </Card>
 
+      {/* فاز ۱۴۶ (فیدبک: «این دکمه کجاست؟ نمی‌بینم») — بازممیزی قبلاً فقط داخلِ کارتِ جمع‌شدهٔ
+          معیارها بود؛ حالا کارتِ مستقل و همیشه‌پیدا، کنارِ پاک‌سازیِ تکراری‌ها. */}
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 14 }}>🔁 بازممیزیِ ردشده‌ها و تکراری‌های خودکار</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3, maxWidth: 560, lineHeight: 1.6 }}>همهٔ آگهی‌هایی که «به‌صورتِ خودکار» رد یا تکراری شده‌اند به صفِ ممیزی برمی‌گردند تا با قوانینِ جدید (رد فقط با مدرکِ قطعیِ تماس؛ تکرار با وتوی شهر/طبقه/نوعِ ملک/GPS و کفِ شواهد) از نو داوری شوند. آگهی‌های سالمِ حذف‌شده برمی‌گردند؛ تکراری/ردیِ واقعی دوباره همان می‌شود. حکم‌های دستیِ خودت دست نمی‌خورند.</div>
+            {cfgMsg && cfgMsg.includes('بازممیزی') && <div style={{ fontSize: 12.5, color: cfgMsg.startsWith('✓') ? '#5fd98a' : '#e7674a', marginTop: 8, fontWeight: 600 }}>{cfgMsg}</div>}
+          </div>
+          <OutlineButton onClick={requeueRejected} style={{ borderColor: 'var(--gold)', color: 'var(--gold)' }}>🔁 بازممیزی</OutlineButton>
+        </div>
+      </Card>
+
       <Card>
         <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>آخرین تصمیم‌های هوش مصنوعی</div>
         {loading ? (
