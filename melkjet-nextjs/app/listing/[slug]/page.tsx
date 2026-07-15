@@ -40,21 +40,52 @@ export default async function ListingPage({ params }: { params: Promise<{ slug: 
   const loc = it.location || ''
   const area = num(it.meta?.['متراژ'])
   const rooms = num(it.meta?.['اتاق خواب'])
+  const city = (it.meta?.['شهر'] || '').trim()
+  const canonical = `https://melkjet.com/listing/${slug}`
+  const isRent = it.meta?.['نوع معامله'] === 'اجاره' || /اجاره|رهن|ودیعه/.test(`${it.price || ''} ${it.title || ''}`)
+  // قیمتِ فروش برای اسکیما — فقط اگر یک عددِ واقعی باشد (اجاره = ودیعه+اجاره، یک عدد نیست؛ «توافقی» = عدد ندارد).
+  // schema.org کدِ «تومان» ندارد؛ عدد به ریال (×۱۰) با IRR می‌رود تا واقعی بماند.
+  const priceToman = isRent ? undefined : num(it.price)
+  const offerRial = priceToman && priceToman >= 1_000_000 ? priceToman * 10 : undefined
 
-  const ld: Record<string, unknown> = {
-    '@context': 'https://schema.org', '@type': 'Apartment',
-    name: it.title, description: it.excerpt || undefined,
-    image: it.image || undefined, address: loc || undefined,
+  // فاز ۱۳۷ (سئوی آگهی‌ها): اسکیمای کاملِ RealEstateListing — همه از دادهٔ واقعیِ آگهی.
+  const about: Record<string, unknown> = {
+    '@type': 'Apartment', name: it.title,
     numberOfRooms: rooms || undefined,
     floorSize: area ? { '@type': 'QuantitativeValue', value: area, unitCode: 'MTK' } : undefined,
-    url: `https://melkjet.com/listing/${slug}`,
+    address: { '@type': 'PostalAddress', addressLocality: city || loc || undefined, addressCountry: 'IR' },
   }
-  Object.keys(ld).forEach(k => ld[k] === undefined && delete ld[k])
+  const ld: Record<string, unknown> = {
+    '@context': 'https://schema.org', '@type': 'RealEstateListing',
+    name: it.title, description: it.excerpt || undefined,
+    image: it.image || undefined, url: canonical,
+    datePosted: it.scrapedAt ? new Date(it.scrapedAt).toISOString() : undefined,
+    about,
+    offers: offerRial ? { '@type': 'Offer', price: offerRial, priceCurrency: 'IRR', url: canonical } : undefined,
+  }
+  const clean = (o: Record<string, unknown>) => { Object.keys(o).forEach(k => o[k] === undefined && delete o[k]); return o }
+  clean(about); clean(about.address as Record<string, unknown>); clean(ld)
+
+  const crumbs = [
+    { name: 'خانه', item: 'https://melkjet.com/' },
+    { name: 'آگهی‌ها', item: 'https://melkjet.com/listings' },
+    { name: isRent ? 'رهن و اجاره' : 'خرید و فروش', item: `https://melkjet.com/listings/${isRent ? 'rent' : 'sale'}` },
+    { name: it.title, item: canonical },
+  ]
+  const breadcrumbLd = {
+    '@context': 'https://schema.org', '@type': 'BreadcrumbList',
+    itemListElement: crumbs.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.name, item: c.item })),
+  }
+
+  // فاز ۱۳۷: نشانِ پروموت سرورساید (به‌جای فچِ جداگانهٔ کلاینت) تا آیتمِ کامل در HTML اولیه باشد.
+  let promoKind: string | undefined
+  try { const { promotedListingKinds } = await import('@/app/lib/promotion-store'); promoKind = (await promotedListingKinds()).get(String(it.id))?.kind } catch {}
 
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
-      <PropertyClient id={id} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
+      <PropertyClient id={id} initial={promoKind ? { ...it, promoted: true, promoKind } as any : (it as any)} />
     </>
   )
 }

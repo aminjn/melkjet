@@ -58,10 +58,12 @@ function ScoreRing({ value, label }: { value: number; label: string }) {
   )
 }
 
-export default function PropertyClient({ id }: { id: string }) {
-  const [item, setItem] = useState<Item | null>(null)
+// فاز ۱۳۷ (سئو): آیتم سرورساید از page.tsx می‌آید (initial) تا HTML اولیه برای گوگل
+// محتوای کامل داشته باشد — نه پوستهٔ خالی که بعد از هیدریشن از API پر می‌شود.
+export default function PropertyClient({ id, initial }: { id: string; initial?: Item | null }) {
+  const [item, setItem] = useState<Item | null>(initial || null)
   const [saved, toggleSave] = useFav(item?.id)   // ذخیرهٔ واقعی (favorites + رویدادِ REOS برای کوئست)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!initial)
   const [gallery, setGallery] = useState<string[]>([])
   const [activeImg, setActiveImg] = useState(0)
   const [facts, setFacts] = useState<Fact[]>([])
@@ -121,8 +123,8 @@ export default function PropertyClient({ id }: { id: string }) {
 
   useEffect(() => {
     if (!id) return
-    fetch(`/api/content/item?id=${id}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : { item: null }).then(d => {
-      const it: Item | null = d.item
+    // آیتمِ سرورساید داریم → فچِ دوباره لازم نیست؛ مستقیم بقیهٔ داده‌ها (بازار/مشابه/غنی‌سازی) را بار کن.
+    const hydrate = (it: Item | null) => {
       setItem(it); setLoading(false)
       if (!it) return
       // ثبتِ بازدید (باز شدنِ آگهی) — برای گزارشِ صاحبِ آگهی
@@ -174,7 +176,10 @@ export default function PropertyClient({ id }: { id: string }) {
         }).catch(() => setAiError('خطا در ارتباط با هوش مصنوعی'))
       }
       loadEnrich()
-    }).catch(() => setLoading(false))
+    }
+    if (initial) hydrate(initial)
+    else fetch(`/api/content/item?id=${id}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : { item: null }).then(d => hydrate(d.item)).catch(() => setLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
 
@@ -510,7 +515,7 @@ export default function PropertyClient({ id }: { id: string }) {
                     <div><div style={{ fontWeight: 700, fontSize: 13.5 }}>{item.owner}</div><div style={{ fontSize: 11.5, color: 'var(--muted)' }}>مالک / مشاور آگهی</div></div>
                   </div>
                 )}
-                <div style={{ fontSize: 11.5, color: 'var(--faint)', marginBottom: 14 }}>منبع: {item.sourceName} · {timeAgo(item.scrapedAt)}</div>
+                <div style={{ fontSize: 11.5, color: 'var(--faint)', marginBottom: 14 }}>منبع: {item.sourceName} · <span suppressHydrationWarning>{timeAgo(item.scrapedAt)}</span></div>
                 {revealed && (contactPhone || (phone && /^\d/.test(phone))) ? (
                   <a href={`tel:${contactPhone || phone}`} style={{ display: 'block', textAlign: 'center', padding: '13px', borderRadius: 12, background: 'linear-gradient(140deg,var(--gold2),var(--gold))', color: '#16140f', textDecoration: 'none', fontWeight: 800, direction: 'ltr' }}>☎ تماس — {contactPhone || phone}</a>
                 ) : revealed && gettingPhone ? (

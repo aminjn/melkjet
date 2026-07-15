@@ -250,7 +250,10 @@ export async function checkNewShards(): Promise<{ added: string[]; total: number
   const removed = prev.filter(n => !names.includes(n))
   if (added.length || removed.length || !data.seo?.sitemap?.snapshotAt) {
     data.seo = data.seo || {}
-    data.seo.sitemap = { ...(data.seo.sitemap || {}), knownShards: names, snapshotAt: Date.now(), totalUrls: list.reduce((n, s) => n + s.count, 0) }
+    // فاز ۱۳۷ (GSC «۱ خطا»): شاردِ حذف‌شده «بازنشسته» می‌شود تا URLِ قدیمی‌اش ۴۰۴ ندهد
+    // (گوگل نامِ ثبت‌شده را ماه‌ها می‌خوانَد)؛ اگر دوباره آگهی بگیرد از بازنشستگی درمی‌آید.
+    const retiredShards = mergeRetiredShards(data.seo?.sitemap?.retiredShards || [], removed, names)
+    data.seo.sitemap = { ...(data.seo.sitemap || {}), knownShards: names, retiredShards, snapshotAt: Date.now(), totalUrls: list.reduce((n, s) => n + s.count, 0) }
     saveAdminData(data as any)
     if (added.length) {
       try {
@@ -269,6 +272,21 @@ export async function checkNewShards(): Promise<{ added: string[]; total: number
 export function snapshotMeta(): { snapshotAt?: number; totalUrls?: number } {
   const s = (getAdminData() as Record<string, any>).seo?.sitemap || {}
   return { snapshotAt: s.snapshotAt, totalUrls: s.totalUrls }
+}
+
+// فاز ۱۳۷ — دفترِ بازنشستگیِ شاردها: حذف‌شده‌ها می‌مانند، بازگشته‌ها خارج می‌شوند (سقفِ ۵۰۰).
+export function mergeRetiredShards(prevRetired: string[], removed: string[], current: string[]): string[] {
+  return [...new Set([...prevRetired, ...removed])].filter(n => !current.includes(n)).sort().slice(-500)
+}
+
+// فاز ۱۳۷ — آیا این نام، شاردی است که قبلاً وجود داشته یا شاردِ پویای آگهی است؟
+// چنین نامی هرگز نباید ۴۰۴ بدهد: urlsetِ خالیِ معتبر (۲۰۰) می‌دهیم تا GSC خطا نگیرد
+// و خودش به‌مرور آن را کنار بگذارد. الگوی listings-* هم پوشش داده می‌شود چون بین
+// ناپدیدشدنِ شارد و تیکِ بعدیِ کرون (که بازنشستگی را ثبت می‌کند) فاصله هست.
+export function isRetiredShard(name: string): boolean {
+  const s = (getAdminData() as Record<string, any>).seo?.sitemap || {}
+  if (Array.isArray(s.retiredShards) && s.retiredShards.includes(name)) return true
+  return /^listings-[a-z0-9-]+-(sale|rent)-\d+$/.test(name)
 }
 
 // ── پیش‌محاسبهٔ slugِ پروژه‌ها/متخصصان (کرونِ instance صفر) تا سایت‌مپ فقط‌خواندنی و سریع بماند ──

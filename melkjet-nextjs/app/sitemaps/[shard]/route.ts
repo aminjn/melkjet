@@ -1,4 +1,4 @@
-import { getShard, renderedShard, renderShardXml } from '@/app/lib/sitemap-store'
+import { getShard, isRetiredShard, renderedShard, renderShardXml } from '@/app/lib/sitemap-store'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,6 +10,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ shard: 
   const cached = await renderedShard(name)
   if (cached != null) return new Response(cached, { headers })
   const s = await getShard(name)
-  if (!s) return new Response('Not found', { status: 404 })
-  return new Response(renderShardXml(s.entries), { headers })
+  if (s) return new Response(renderShardXml(s.entries), { headers })
+  // فاز ۱۳۷: شاردی که قبلاً منتشر شده ولی با چرخشِ آگهی‌ها خالی/حذف شده — گوگل هنوز
+  // نامش را می‌خوانَد؛ ۴۰۴ در GSC «خطا» ثبت می‌شود. urlsetِ خالیِ معتبر (۲۰۰) می‌دهیم.
+  if (isRetiredShard(name)) return new Response(renderShardXml([]), { headers })
+  return new Response('Not found', { status: 404 })
 }
