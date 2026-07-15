@@ -69,10 +69,11 @@ export function countActiveJobs(): number {
 
 export function getJob(o: string): DivarJob { return { ...EMPTY, ...(load()[o] || {}) } }
 
-// فاز ۱۳۱ — یک خطِ ژورنال با ساعتِ محلیِ سرور؛ سقفِ ۴۰ خط تا فایل سبک بماند.
+// فاز ۱۳۱ — یک خطِ ژورنال؛ سقفِ ۴۰ خط تا فایل سبک بماند.
+// فاز ۱۳۶ (فیدبک: «ساعت‌ها با ساعتِ کاربر هماهنگ نیست»): ساعتِ تهران، نه ساعتِ UTCِ سرور.
 export function appendJobLog(o: string, line: string): void {
   const db = load(); const cur = { ...EMPTY, ...(db[o] || {}) }
-  const t = new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  const t = new Date().toLocaleTimeString('fa-IR', { timeZone: 'Asia/Tehran', hour: '2-digit', minute: '2-digit', second: '2-digit' })
   cur.log = [...(cur.log || []), `${t} — ${line}`].slice(-40)
   db[o] = cur; save(db)
 }
