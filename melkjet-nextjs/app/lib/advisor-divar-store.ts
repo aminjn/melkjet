@@ -149,15 +149,29 @@ export function markRun(o: string, count: number, error?: string) {
 
 const SCHEDULE_MS: Record<DivarSchedule, number> = { off: 0, hourly: 3600_000, '6h': 6 * 3600_000, daily: 24 * 3600_000 }
 
+// فاز ۱۳۵ — ساعتِ تهران (ایران DST ندارد؛ آفستِ ثابت +۳:۳۰): برای پنجرهٔ شبانهٔ سینکِ روزانه.
+export function tehranHourOf(now: number): number {
+  return Math.floor(((now + 3.5 * 3600_000) % 86400_000) / 3600_000)
+}
+
 // همهٔ منابعی که سینکِ خودکارشان فعال است و زمانش رسیده (برای کران).
+// فاز ۱۳۵ (فیدبک: «روزانه کلِ روز دارد اسکرپ می‌کند — سایت داون می‌شود؛ همه ۱۲ شب»):
+// «روزانه» فقط در پنجرهٔ شبِ ۰۰ تا ۰۶ به وقتِ تهران due می‌شود — همهٔ روزانه‌ها سرِ ۱۲ شب
+// واردِ صفِ FIFO می‌شوند و در ساعاتِ خلوت درین می‌شوند؛ کلیکِ دستیِ «الان» همچنان فوری است.
+// گاردِ ۱۸ساعته نمی‌گذارد در همان پنجره دوباره اجرا شود.
 export function listDueSources(now: number): { phone: string; source: DivarSource }[] {
   const db = load()
   const out: { phone: string; source: DivarSource }[] = []
+  const nightWindow = tehranHourOf(now) < 6
   for (const phone of Object.keys(db.advisors)) {
     const cur = migrate({ ...seed(), ...db.advisors[phone] })
     for (const s of cur.sources) {
       const period = SCHEDULE_MS[s.schedule]
       if (!period || !s.searchUrl) continue
+      if (s.schedule === 'daily') {
+        if (nightWindow && (!s.lastRun || now - s.lastRun >= 18 * 3600_000)) out.push({ phone, source: s })
+        continue
+      }
       if (!s.lastRun || now - s.lastRun >= period) out.push({ phone, source: s })
     }
   }

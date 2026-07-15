@@ -79,7 +79,7 @@ export default function DivarImport({ onChange, entity = 'شما' }: { onChange?
 
   const faDate = (ts?: number) => ts ? new Date(ts).toLocaleString('fa-IR', { dateStyle: 'short', timeStyle: 'short' }) : '—'
   const SCHEDULES: { v: Sched; label: string }[] = [
-    { v: 'off', label: 'خاموش (دستی)' }, { v: 'hourly', label: 'هر ساعت' }, { v: '6h', label: 'هر ۶ ساعت' }, { v: 'daily', label: 'روزانه' },
+    { v: 'off', label: 'خاموش (دستی)' }, { v: 'hourly', label: 'هر ساعت' }, { v: '6h', label: 'هر ۶ ساعت' }, { v: 'daily', label: 'روزانه (هر شب ساعت ۱۲ — خارج از ساعتِ شلوغی)' },
   ]
 
   const sources = cfg?.sources || []
