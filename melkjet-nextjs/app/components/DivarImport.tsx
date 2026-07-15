@@ -160,7 +160,7 @@ export default function DivarImport({ onChange, entity = 'شما' }: { onChange?
       {(job?.running || job?.paused || job?.queued) && (
         <div style={{ ...card, padding: '12px 14px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>
-            <span style={{ color: job.paused ? '#e7a14a' : 'var(--gold)' }}>{job.queued ? '🕐' : job.paused ? '⏸' : '⏳'} {job.label || 'همگام‌سازیِ دیوار'} {job.queued ? 'در صفِ سرور (تا ۴۵ ثانیه)' : job.paused ? 'متوقفِ موقت' : 'در حال اجرا…'}</span>
+            <span style={{ color: job.paused ? '#e7a14a' : 'var(--gold)' }}>{job.queued ? '🕐' : job.paused ? '⏸' : '⏳'} {job.label || 'همگام‌سازیِ دیوار'} {job.queued ? (job.queuePos > 1 || job.queueActive > 0 ? `در صفِ سرور — نوبتِ ${Number(job.queuePos || 1).toLocaleString('fa-IR')}${job.queueActive ? ` (${Number(job.queueActive).toLocaleString('fa-IR')} کار در حال اجرا)` : ''}` : 'در صفِ سرور (تا ۴۵ ثانیه)') : job.paused ? 'متوقفِ موقت' : 'در حال اجرا…'}</span>
             <span style={{ color: 'var(--muted)' }}>{job.total ? `${(job.done || 0).toLocaleString('fa-IR')} از ${(job.total).toLocaleString('fa-IR')}` : 'در حالِ خواندنِ فهرست…'}</span>
           </div>
           <div style={{ height: 7, borderRadius: 999, background: 'var(--line)', overflow: 'hidden' }}>

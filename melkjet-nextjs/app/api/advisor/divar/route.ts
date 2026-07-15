@@ -46,7 +46,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, ...r, job: getJob(o), config: getDivar(o) })
     }
     case 'jobStatus': {
-      return NextResponse.json({ ok: true, job: getJobNormalized(o) })
+      const j = getJobNormalized(o)
+      // فاز ۱۳۴ — شفافیتِ صف: اگر منتظر است، بگو نوبتِ چندم است و چند کار در حال اجراست (نه «تا ۴۵ ثانیه»ی گمراه‌کننده)
+      let queuePos = 0, queueActive = 0
+      if (j.queued || (j.paused && (j.pending || []).length)) {
+        const { queueOrder, countActiveJobs } = await import('@/app/lib/advisor-divar-job')
+        queuePos = queueOrder().indexOf(o) + 1
+        queueActive = countActiveJobs()
+      }
+      return NextResponse.json({ ok: true, job: { ...j, queuePos, queueActive } })
     }
     // فاز ۱۳۱ — «تستِ زندهٔ اتصال»: همان زنجیرهٔ واقعیِ سینک را قدم‌به‌قدم چک می‌کند و می‌گوید کجا می‌شکند.
     case 'probe': {
@@ -88,13 +96,14 @@ export async function POST(req: NextRequest) {
         steps.push({ id: 'divar', label: 'تماسِ زنده با دیوار', ok: null, detail: links.length ? 'لینک‌ها از نوعِ جستجو هستند — تستِ زنده فقط با لینکِ «پروفایلِ کارشناس» (divar.ir/pro/…) ممکن است؛ خودِ همگام‌سازی با لینکِ جستجو هم کار می‌کند' : 'برای تستِ زنده، لینکِ «پروفایلِ کارشناسِ» دیوار را در اسکرپ‌ها بگذار' })
       }
       // ۴) کارگرِ صف (اینستنسِ ۰) — ریشهٔ رایجِ «می‌زنم و هیچ اتفاقی نمی‌افتد»
-      const { queueHeartbeat } = await import('@/app/lib/advisor-divar-job')
+      const { queueHeartbeat, queueOrder, countActiveJobs } = await import('@/app/lib/advisor-divar-job')
       const hb = queueHeartbeat()
       const age = hb ? Math.round((Date.now() - hb.at) / 1000) : -1
+      const qLen = queueOrder().length, qActive = countActiveJobs()
       steps.push(!hb
         ? { id: 'worker', label: 'کارگرِ صفِ سرور', ok: false, detail: 'هیچ ضربانی ثبت نشده — اینستنسِ ۰ (pm2) بالا نیامده یا این نسخه هنوز رویش دیپلوی نشده' }
         : age <= 120
-          ? { id: 'worker', label: 'کارگرِ صفِ سرور', ok: true, detail: `فعال — آخرین تیک ${age.toLocaleString('fa-IR')} ثانیه پیش` }
+          ? { id: 'worker', label: 'کارگرِ صفِ سرور', ok: true, detail: `فعال — آخرین تیک ${age.toLocaleString('fa-IR')} ثانیه پیش · در حال اجرا: ${qActive.toLocaleString('fa-IR')} · در صف: ${qLen.toLocaleString('fa-IR')}` }
           : { id: 'worker', label: 'کارگرِ صفِ سرور', ok: false, detail: `آخرین تیک ${Math.round(age / 60).toLocaleString('fa-IR')} دقیقه پیش — اینستنسِ ۰ هنگ کرده/ری‌استارت لازم دارد (pm2 reload)` })
       return NextResponse.json({ ok: steps.every(st => st.ok !== false), steps })
     }

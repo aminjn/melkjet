@@ -144,7 +144,8 @@ async function queueTick(): Promise<void> {
     // ۱) درین‌کردنِ صف با سقفِ همزمانی: اول هولدشده‌ها (ادامه)، بعد صفِ جدید.
     let active = countActiveJobs()
     if (active < MAX_ACTIVE_SYNCS) {
-      const queue = [...listPausedJobs(), ...listQueuedJobs()]
+      const { queueOrder } = await import('./advisor-divar-job')   // فاز ۱۳۴: FIFO منصفانه + کول‌داونِ هولدها
+      const queue = queueOrder()
       for (const phone of queue) {
         if (active >= MAX_ACTIVE_SYNCS) break
         active++

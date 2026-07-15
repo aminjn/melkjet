@@ -367,14 +367,14 @@ export async function runBatch(o: string): Promise<void> {
     if (done131 % 20 < BATCH_CONC || !pending.length) appendJobLog(o, `📦 ${done131.toLocaleString('fa-IR')} از ${total.toLocaleString('fa-IR')} — جدید ${imported.toLocaleString('fa-IR')} · به‌روز ${updated.toLocaleString('fa-IR')} · ردشده ${skipped.toLocaleString('fa-IR')}`)
     if (consecutiveFail >= 12) {   // ~۳ دستهٔ کاملاً ناموفق = اتصال قطع → هولد و ادامهٔ بعدی
       appendJobLog(o, '⚠️ چند دستهٔ پیاپی ناموفق — اتصالِ دیوار موقتاً قطع شد؛ کار «هولد» شد و چند دقیقهٔ دیگر خودکار ادامه می‌یابد')
-      setJob(o, { running: false, paused: true, note: 'اتصالِ دیوار موقتاً قطع شد — چند دقیقهٔ دیگر خودکار ادامه می‌یابد.', lastProgressAt: Date.now() })
+      setJob(o, { running: false, paused: true, pausedAt: Date.now(), note: 'اتصالِ دیوار موقتاً قطع شد — چند دقیقهٔ دیگر خودکار ادامه می‌یابد.', lastProgressAt: Date.now() })
       return
     }
   }
 
   if (pending.length) {   // بودجهٔ این دور تمام شد ولی آگهی مانده → هولد؛ کرون ادامه می‌دهد.
     appendJobLog(o, `⏸ بودجهٔ این دور تمام شد (${(total - pending.length).toLocaleString('fa-IR')} از ${total.toLocaleString('fa-IR')}) — چند دقیقهٔ دیگر خودکار ادامه می‌یابد`)
-    setJob(o, { running: false, paused: true, pending, imported, updated, skipped, done: total - pending.length, note: `متوقفِ موقت — ${total - pending.length} از ${total} انجام شد؛ چند دقیقهٔ دیگر خودکار ادامه می‌یابد.`, lastProgressAt: Date.now() })
+    setJob(o, { running: false, paused: true, pausedAt: Date.now(), pending, imported, updated, skipped, done: total - pending.length, note: `متوقفِ موقت — ${total - pending.length} از ${total} انجام شد؛ چند دقیقهٔ دیگر خودکار ادامه می‌یابد.`, lastProgressAt: Date.now() })
     return
   }
 
@@ -453,7 +453,7 @@ export function resumeJob(o: string): boolean {
   appendJobLog(o, '▶️ ادامهٔ کارِ هولدشده…')
   ;(async () => {
     try { await runBatch(o) }
-    catch (e: any) { setJob(o, { running: false, paused: true, note: 'وقفه — دوباره تلاش می‌شود.', error: e?.message || 'خطا' }) }
+    catch (e: any) { setJob(o, { running: false, paused: true, pausedAt: Date.now(), note: 'وقفه — دوباره تلاش می‌شود.', error: e?.message || 'خطا' }) }
   })()
   return true
 }
